@@ -157,3 +157,12 @@ from the physical word and admits zero. These components do not yet supply
 the complete helper's whole-World relation. Replay the nine modules named
 in the dead-helper report; `binary-probe peer-nonnull` exercises 21 cases
 with actual service bodies and two undefined-value seeds.
+
+
+`PeerIncrementFinishHistory.increment_finish_history` composes the actual
+live increment through RET and exports the post-increment memory frame at
+every later decision and cut. `PeerLiveZeroHistory` supplies the preceding
+nonzero guard/callback. The full live entry and whole-World correspondence
+remain open. To replay imports as well, run one module per invocation:
+`capped -- lake env leanchecker --fresh PeerLiveZeroHistory` and
+`capped -- lake env leanchecker --fresh PeerDeadEntryHistory` in `binary/`.

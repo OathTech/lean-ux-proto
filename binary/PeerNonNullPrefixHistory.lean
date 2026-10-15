@@ -55,6 +55,7 @@ theorem nonnull_prefix_history (fetch : Int64 → Option Decoded)
       t.machine.data.regs.rsp = body.regs.rsp ∧
       t.machine.data.regs.rbx = body.regs.rbx ∧
       t.machine.data.regs.rbp = count.toUInt64 ∧
+      t.machine.data.regs.r13 = body.regs.rbx+0x420 ∧
       CallsReady coverage preempt t.machine.data ∧
       EqualOutside (scanWrites body coverage) body.dmem t.machine.data.dmem ∧
       t.history.getLast? = some t.machine ∧
@@ -103,6 +104,7 @@ theorem nonnull_prefix_history (fetch : Int64 → Option Decoded)
   obtain ⟨earlier, recorded₁, cuts₁⟩ := (trace₁.trans trace₂).extension
   obtain ⟨later, recorded₂, cuts₂⟩ := trace₃.extension
   refine ⟨pc₃, trace₃.frame.stack.trans trace₂.frame.stack, bx₃.trans bx₂, bp₃,
+    by simpa only [loaded, bx₂] using trace₃.frame.output,
     trace₃.frame.ready, combine _ trace₃.frame.memory, trace₃.last, af, ?_, earlier ++ later, ?_, ?_⟩
   · simpa only [event, machine₁] using trace₃.observed
   · rw [recorded₂, recorded₁, List.append_assoc]

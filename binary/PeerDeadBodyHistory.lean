@@ -49,7 +49,7 @@ theorem dead_body_history (fetch : Int64 → Option Decoded)
   have start :=  nonnull_prefix_history fetch agree contract traceCmp body nonnull 0 field
     coverage preempt ready fieldSeparate rxSection history events observed last
   apply eventually_trans (historyStep fetch) _ _ _ start
-  rintro atZero ⟨pc, stack, _, bp, ready₂, memory, last₂, af, observed₂, prefixTail, prefixRecorded, prefixCuts⟩
+  rintro atZero ⟨pc, stack, _, bp, _, ready₂, memory, last₂, af, observed₂, prefixTail, prefixRecorded, prefixCuts⟩
   let nullPoint : MachineState := ⟨tested (.low .rbx .W64) body af, Image.PeerGet.entry+0x1b⟩
   let nullEvent := LookupObservation.decision rxSection .peerGetMaybeZeroNull false nullPoint
   have zero : atZero.machine.data.regs.get (.low .rbp .W32) = 0 := by

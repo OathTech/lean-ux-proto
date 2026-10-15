@@ -937,3 +937,67 @@ The final preservation argument must account for the output word, selected
 peer count, owner word, stack, KCOV and preempt-count writes. A generic
 frame lemma is useful only once its concrete component relations and read
 footprints are proved. The audit does not establish whole-World R.
+
+
+## Live increment and return histories, 2026-10-15
+
+`PeerIncrementHistory.increment_history` retains the seven actual
+successors from +0x44 to +0x5b. CMPXCHG's equal-subtraction flags survive
+through SETE; SETE changes R15B only. XOR introduces its independently
+quantified AF, retained by both following MOVs. The final-state equation
+explicitly corrects the older endpoint abstraction's omitted flags.
+R15D can contain nonzero upper bytes: the comparison setup copies those
+bytes, and the byte callback observes only SIL, as the C instrumentation
+requires. No canonical R15 or undefined-flag premise was added.
+
+`PeerIncrementFinishHistory.increment_finish_history` composes that
+increment, the byte callback, retry and sign guards, all remaining
+callbacks and the actual RET. It derives the final incremented count
+using both directions of separation: count writes preserve KCOV state,
+and callback writes preserve the count. It exports physical post-increment
+memory framing at all four decision points and every appended cut. Those
+frames retain the exact incremented word for the future pending-increment
+phase of R; the mirror has not updated its peer at those decisions yet.
+`PeerLiveZeroHistory` supplies the preceding nonzero guard and PC callback.
+The nonnull prefix now exports its derived R13 refcount-address equation.
+
+Independent review found two issues, both corrected and re-reviewed: a
+comment overstated count-word preservation without separation, and an
+interface discarded the stronger post-increment memory frame needed at
+correspondence points. Review found no further correctness defect. The
+live function's entry-to-increment composition, whole-World R, accepted
+helper theorem, lookup theorem, witnessed Pre and transport remain open.
+The trust base is unchanged, dead peers remain admitted, and no whole-R
+region or function is certified. Supporting history lemmas do not count
+as completed regions in the milestone's rate.
+
+Validation: capped full-parallel build passed (248 jobs); all 351 printed
+axiom lists were standard-only; source audit passed for 93 Lean files.
+The concrete actual-service nonnull probe again passed 21 cases, two
+undefined-value seeds, 9982 instructions. Initial elaboration failures,
+a heartbeat/step-limit failure in the monolithic increment attempt, and a
+rejected multi-module `leanchecker --fresh` invocation were failures, then
+corrected. The increment proof now composes small instruction lemmas.
+No KILLED outcome was counted as a pass. Mirror/runtime are unchanged;
+the recorded three-way checks and last fast tier still apply.
+
+The trust-gate audit found no forbidden constructs in the 108 project
+modules of the then-current proof import closure. Kraken's unsafe concrete
+evaluator/pretty-printer and example sorries are outside that closure.
+Axiom output alone does not audit explicit theorem hypotheses; the named
+contracts and headline statements still require the charter's independent
+surface review. Before the milestone, the binary proof roots must join the
+separate package's default targets for `lake check`, which checks defaults;
+currently its default executable omits many proofs. Source inspection also
+suggests the checker's sandbox does not expose the parent-directory path
+dependencies. This packaging issue is untested, not a confirmed sandbox
+permission failure. The final external gate still remains owed.
+
+
+Fresh kernel replay passed, including imported declarations, separately for
+`PeerLiveZeroHistory` and `PeerDeadEntryHistory`. The live root was replayed
+again after the review's strengthened statement. Reproduce in `binary/`
+with `capped -- lake env leanchecker --fresh PeerLiveZeroHistory` and a
+separate invocation for `PeerDeadEntryHistory`. The concrete command is
+`LEANUX_QEMU_SLOTS=16 capped -- binary/.lake/build/bin/binary-probe
+peer-nonnull` from the worktree root. No main update or push.
