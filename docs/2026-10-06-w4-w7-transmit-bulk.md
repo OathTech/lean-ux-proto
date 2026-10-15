@@ -2090,6 +2090,27 @@ Branch `task/w47` continued on the merge of `task/dispatch-order`
   all true). `NAPI_PLACEMENTS_MAX` and `napi_placements` are gone; the
   report's `napi_irq_placements` is now `napi_before_put_sections`, the
   NET_RX ordinals taken from the before-put run, per trace.
+- **The ceiling, as the load corrected it [AGENT 2026-10-15].** The
+  mirror's parser bounded `napi_irq_before_put` at 8 entries, a budget
+  from when open placements were one to three per trace; the protocol's
+  ceiling on `napi_irq_ambiguous` had been raised to the trace's
+  injected-message count on 2026-10-13 (the receive twin of the W7 tier
+  opens about a thousand), but the mirror's bound was not, and the
+  selection at that scale was never exercised, because the twin's all-after
+  run agreed outright on every quiet box. On a loaded box the kernel takes
+  the (c') placement at a few of its polls (two of 2,049 sections at the
+  claim points of 2026-10-15: the worker's put reading 859 and 192 where
+  the all-after run read 860 and 193) and nearly every poll follows its
+  enqueue directly (1,018 open placements), so the before-put run was
+  refused by the parser and the trace failed. The ceiling is now the
+  records': `Env.napiIrqExit` opens a poll only where the next record is a
+  NET_RX section start, so the vector may name no more polls than the
+  records hold section starts, none without records (`Leanux/Runner.lean`,
+  exact and fail-closed); `section_agreement` buckets the operation's
+  records by section and by condition site in one pass so the per-poll
+  agreement costs the section's records, not a scan per poll. The rule is
+  unchanged: no record tells (c') from after-the-put, the kernel's own
+  comparison rows do, and the selection is replayed once as the evidence.
 - **The rule, as the data corrected it.** The design said the (c')
   placement changes only the operands inside the poll's section. The first
   replay of `rx_roam_v6` (one open poll) showed it also changes the
