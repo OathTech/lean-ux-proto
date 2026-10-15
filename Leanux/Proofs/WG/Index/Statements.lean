@@ -18,6 +18,7 @@ import Leanux.Proofs.WG.Index.ReceiveSource
 import Leanux.Proofs.WG.Index.TimerSource
 import Leanux.Proofs.WG.Index.FlushSource
 import Leanux.Proofs.WG.Index.SessionCoherenceSource
+import Leanux.Proofs.WG.Index.SessionAllocationSource
 
 /-! H2's original-operation table contracts. Reachable owner/peer-word
 coherence remains a separate obligation. -/
@@ -589,5 +590,19 @@ theorem original_begin_session_coherence (pid : PeerId) (d : Device) (p : Peer)
       (fun ok s => ∃ final, s.wg.device = some final ∧ DeviceTablesSafe final ∧
         (ok = true → SessionInstalled pid d p final)) :=
   beginSession_coherence pid d p resident safe self fresh
+
+/-- Every normal original session return preserves the resident-key allocation
+bound. Its cursor advances exactly once on true and stays unchanged on false;
+the allocation identity was absent from the entry store. Initial caller
+residency and store boundedness are static premises, not reachable-state claims.
+No slot-freshness, self peer-word or readiness premise is required. Rotation
+may erase the new key, so final residency and completion are not asserted. -/
+theorem original_begin_session_allocation (pid : PeerId) (d : Device) (p : Peer)
+    (resident : d.peers[pid]? = some p) (bound : KeypairStoreBounded d) :
+    Campaign2.Ensures (beginSession pid) (fun s => s.wg.device = some d)
+      (fun ok s => ∃ final, s.wg.device = some final ∧ KeypairStoreBounded final ∧
+        final.nextKeypairId = d.nextKeypairId + (if ok then 1 else 0) ∧
+        d.keypairs[d.nextKeypairId]? = none) :=
+  beginSession_allocation pid d p resident bound
 
 end Leanux.Proofs.WG.Index
