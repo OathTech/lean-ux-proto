@@ -3,6 +3,7 @@ import Leanux.Proofs.WG.Progress.CutClaims
 import Leanux.Proofs.WG.Progress.FlushQueueClaims
 import Leanux.Proofs.WG.Progress.PowSource
 import Leanux.Proofs.WG.Progress.DrainClaims
+import Leanux.Proofs.WG.Progress.PollBoundClaims
 
 /-! Projected H5 contracts. Inspection adapters report the exact original
 outcomes from the same concrete entry; their totality is not a claim that the
@@ -472,5 +473,25 @@ theorem original_drain_to_empty (d : Device)
     Ensures (drainHandshakeSendWq none) (fun entry => entry.wg.device = some d)
       (fun _ final => flushQueues final = some ([], [])) :=
   source_drain_to_empty d enough
+
+/-- The original rxPoll has this exact phase audit, preserving callback errors
+and the historical state before completion. For budget ≤ MAX_QUEUED_PACKETS+1,
+every returned loop prefix reaches a queue-test stop or the requested budget;
+the poll's own loop-exhaustion guard is therefore false at that actual cut.
+A queue-test stop includes an uncrypted head, not only an empty queue. The
+count measures cleanup-completed iterations, not callback or internal steps.
+Zero budget takes the original early return; normal positive-budget completion
+returns less than budget. Actual prefix and completion failures remain possible,
+including the unsupported repoll and same-text failures inside callbacks.
+Inspection keeps its entry state and does not promise poll/callback completion,
+physical queue depletion, or global scheduler progress. -/
+theorem original_poll_loop_bound (pid : PeerId) (budget : Nat)
+    (toStack : List (List UInt8) → M Unit) :
+    ((do let audit ← observedPollBound pid budget toStack
+         pure (erasePollBoundAudit audit)) = inspect (rxPoll pid budget toStack)) ∧
+    (budget ≤ MAX_QUEUED_PACKETS + 1 →
+      Returns (observedPollBound pid budget toStack) (fun _ => True)
+        (fun audit _ => PollBoundFacts budget audit)) :=
+  ⟨observedPollBound_source pid budget toStack, source_poll_bound pid budget toStack⟩
 
 end Leanux.Proofs.WG.Progress
