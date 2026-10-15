@@ -6,6 +6,7 @@ import Leanux.Proofs.WG.Config.RoundTripReturns
 import Leanux.Proofs.WG.Config.Fwmark
 import Leanux.Proofs.WG.Config.ClearedSources
 import Leanux.Proofs.WG.Config.SocketPorts
+import Leanux.Proofs.WG.Config.FwmarkEffects
 
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise
@@ -264,7 +265,8 @@ theorem original_fwmark_clears_listed_peers (d : Device) (mark : Nat) (net : d.c
   setDevice_fwmark_sources d mark net
 
 /-- Socket replacement returns normally, installs both supplied socket
-pointers, and changes the incoming port exactly when IPv4 receives a new socket.
+pointers, and takes the incoming port from the supplied IPv4 socket,
+preserving it when that socket is absent.
 Every other device field is preserved. -/
 theorem original_socket_reinit (new4 new6 : Option Nat) (d : Device) :
     Returns (socketReinit new4 new6) (fun w => w.k.wg = some d)
@@ -283,5 +285,17 @@ theorem original_nonzero_socket_init (port : Nat) (nonzero : port ≠ 0)
         else ret = 0 ∧ w.k.wg = some
           { d with sock4 := some port, sock6 := some port, incomingPort := port }) :=
   socketInit_nonzero_returns port nonzero d bound net
+
+/-- On normal completion, a fwmark-only outer set changes each listed peer
+only by clearing local source addresses and its cached destination and possibly
+updating the cache-reset timestamp. Unlisted peer entries are unchanged.
+The mark/generation writes and every other device field are also specified. -/
+theorem original_fwmark_peer_store_effects (d : Device) (mark : Nat) (net : d.creatingNet = true) :
+    Ensures (wgSetDevice (fwmarkAttrs d mark))
+      (fun w => w.k.wg = some d ∧ selectsDevice w d)
+      (fun ret w => ret = 0 ∧ w.k.wg.map withoutPeers = some
+        (withoutPeers { d with fwmark := mark, deviceUpdateGen := d.deviceUpdateGen + 1 }) ∧
+        clearedPeers d w.k d.peerList) :=
+  setDevice_fwmark_effects d mark net
 
 end Leanux.Proofs.WG.Config

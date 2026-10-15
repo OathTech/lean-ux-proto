@@ -122,7 +122,7 @@ review and capped scoped proof builds; ordinary elaboration failures repaired.
 
 ## H4 — Configuration semantics (in progress)
 
-Twenty-three terminal declarations cover configuration leaves, peer flags, bounded
+Twenty-four terminal declarations cover configuration leaves, peer flags, bounded
 readback, normal-return guarantees, one sequential partial-error case, and
 fwmark/cache frames. `Validation`, `Identity` and `Port` prove invalid allowed-IP
 rejection, exact allowed-IP serialization, private-identity normalization,
@@ -150,8 +150,12 @@ cache-slot removal, and preservation of other peers and other device fields.
 `Fwmark` proves a fwmark-only outer set writes the mark and increments the
 generation, preserving every other device field outside the peer store.
 `ClearedSources` joins the literal loop to the outer setter and proves every
-listed peer ends with cleared source fields and no cache slot. These fwmark
-contracts concern normal completion. `SocketPorts` proves actual normal return
+listed peer ends with cleared source fields and no cache slot. `FwmarkEffects`
+strengthens this to exact pointwise peer-store effects: unlisted peers are
+unchanged, listed peers retain all other fields, and duplicate list entries
+retain the last reset timestamp. Reset timestamps are existential; their record
+provenance and consumption are not proved. These fwmark contracts concern normal
+completion. `SocketPorts` proves actual normal return
 and an exact device update for socket replacement and for initialization at a
 nonzero port in an existing namespace: conflicts return `-EADDRINUSE` without
 a device change, success replaces both sockets and the incoming port.
@@ -168,7 +172,10 @@ equations. The coordinator can unify them after landing; no existing shared
 lemma is changed. Independent review found the first full-room dump premise
 could not apply after the caller's headers; the sufficient-tailroom theorem
 resolves that finding. Review of the normal-return and partial-error increment
-found no defect. Actual outer dump composition remains open.
+found no defect. The fwmark/socket review found one wording error: a supplied
+IPv4 socket assigns its port, which need not change the previous value. The
+statement documentation now says assignment/preservation. No further defects
+were found. Actual outer dump composition remains open.
 
 Remaining: running-port composition, port-zero draws, complete private-key effects, full peer
 removal/replacement and allowed-IP ownership, other partial-error combinations,
@@ -176,7 +183,7 @@ and general dump chunks/coalescing. Deferred removal work can change other
 peers' dynamic state, so no unrestricted removal frame is claimed. No H4
 mirror mismatch or mirror-team request; ranked mirror suggestions: none.
 
-Validation: all twenty-three statements pass scoped build, standard-axiom inspection
+Validation: all twenty-four statements pass scoped build, standard-axiom inspection
 (only `propext`, `Classical.choice`, `Quot.sound`), and `capped --
 scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Config.Statements`.
 The full proof gate fails in inherited `CounterWindow.Refinement`; token/import
