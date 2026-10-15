@@ -2,931 +2,380 @@
 
 ## Current checkpoint
 
-Work is on `proofs/campaign-2` in `.worktrees/proofs-campaign-2`, over mirror
-`de62c9d`, Lean v4.35.0. It is **lagging main's representation batch
-`cb2348e`**; no merge or push has occurred during this resumption.
-**None of H1–H6 is complete.** Scoped validation passes; the full proof gate
-remains failed in inherited campaign-1 files.
+Branch `proofs/campaign-2`, worktree `.worktrees/proofs-campaign-2`,
+Lean v4.35.0, mirror **`de62c9d`**. The proofs are **lagging main's
+representation batch `cb2348e`**. No merge or push during this resumption.
+**None of H1–H6 is complete.** The historical H5 backlog finding is complete;
+the other H5 clauses and corrected-main carry remain open.
 
-| Result | Headlines | Established checkpoint | Still open |
+| Result | Headlines | Established scope | Remaining charter core |
 | --- | ---: | --- | --- |
-| H1 Noise | 20 | State/slot contracts, ordered clearing and rotation, static release budgets, full normal session effects and consecutive first-match confirmation | Whole-call edge coverage, session totality, exposed derivation-clock provenance, allocation-lifetime confirmation; reinstallation transport awaits shared-scope decision |
-| H2 Index | 52 | Exact index operations and successful-lookup provenance and unique normal-empty classification, original caller table safety, successful session publication coherence, session store bound and distinct allocation IDs across actual consecutive calls | Reachable hashed uniqueness and owner/peer-word residency through driver entries; outer-removal and ingress frame scopes await decision |
-| H3 Roaming | 13 | Data publication/first-poll join, both authenticated handshake cuts and inspection retaining them through continuation failure, plus every poll iteration’s designated endpoint-setter attempt | AEAD provenance across queue/callback changes, broader caller coverage and final endpoint preservation |
-| H4 Configuration | 77 | Configuration leaves/flags, bounded public readback, port/fwmark/key effects, normal live-key removal and private-key collision composition, full REMOVE_ME, witness-free normal REPLACE_ALLOWEDIPS and remove-all and flag-only REPLACE_PEERS phase effects, empty-root insertion, exact root transfer and actual peer-dump readback, including arbitrary finite IPv4 suffix split/resume/coalescing | Collision completion, queued cleanup effects, mixed attributes, global ownership and general multipart readback |
-| H5 Progress | 33 | Historical backlog counterexample, source-connected scheduling inspections, cut/pow/drain/poll bounds | Whole-worker record decrease, full operation-end coverage and global termination/progress |
-| H6 Timers | 45 | Local arm/delete rules, recorded delays, actual retry/send pairs, consecutive same-peer count bound and immediate give-up boundary, total pending-zero-key give-up, both response session hooks, data-completion sends, receive-data hooks and outgoing and accepted-handshake receive traversal compositions | Complete caller/site coverage, scheduler episodes and session-relative arm counting |
+| H1 Noise | 20 | State/slot edges, clearing/rotation, session effects, consecutive confirmation | Whole-call edges, totality, allocation-lifetime confirmation |
+| H2 Index | 52 | Exact index operations, all normal lookup outcomes, caller table safety, session coherence/allocation sequence | Reachable hashed uniqueness and owner/peer residency through all driver entries |
+| H3 Roaming | 13 | Authenticated handshake cuts, decrypt/first-poll join, complete poll setter-attempt audit | Queue/callback authentication invariant, broader caller coverage, final endpoint |
+| H4 Configuration | 77 | Leaves/flags, effective bounded readback, removal/replacement phase effects, root insertion/transfer, finite IPv4 suffix readback | Global ownership, queued cleanup/completion, mixed attributes, full getter pagination |
+| H5 Progress | 33 | Historical backlog finding, scheduling inspections, cut/pow/drain/poll bounds | Whole-worker record decrease, operation-end coverage, global progress |
+| H6 Timers | 45 | Seven local arm sites, recorded delays, caller hook compositions, retry bound/give-up | Complete caller coverage, scheduler episodes, session-relative counting |
 
-Total: **240 headlines**. The factoring checkpoint `69f988a` preserved all 153
-then-existing headlines. Recent mathematical checkpoints include `a2923a1`
-(H1 consecutive confirmation) and `7b34fa4` (H6 response-session timer hook).
+**240 headlines**; latest increment `62e8694`. Scoped checks pass.
+The full proof gate remains **failed in inherited campaign-1 files**.
 
-[USER 2026-10-15] Resume before the split lands; factor claims over a
-WireGuard-only view and separate frames, then continue the charter. On the
-eventual split, delete frames made trivial or unstatable and retype substantive
-claims. No shared-layer edits, merge or push. This supersedes the earlier pause
-at `aeece72` and earlier authority to merge the index fix, which already landed
-on this branch at `de62c9d`.
+[USER 2026-10-15] Resume before the split: factor claims over a WireGuard-only
+view, separate frames, then continue. Delete frames made trivial or unstatable
+by the future types; retype substantive claims. No shared-layer edits, merge or
+push. This supersedes the pause at `aeece72`; the earlier index-fix merge
+authority was already exercised at `de62c9d`.
 
-[USER 2026-10-15] Shared layers remain campaign 1's. Necessary local variants
-must be named for the shared lemma and live in result directories. Report an
-overlap larger than “a few” before copying it. The
-[six-family outer-removal request](2026-10-15-campaign-2-shared-frame-request.md)
-is **pending**; those variants have not been implemented. The
-[follow-up inventory](2026-10-15-campaign-2-shared-frame-followup.md) reports H1's
-six-family reinstallation transport (three named variants checked, three not
-implemented), H2's additional nine-family ingress minimum, and H4's dependence
-on three already-pending outer-removal families. These larger carries are deferred
-pending the user's scope decision; no layer is split into batches to bypass it.
+[USER 2026-10-15] Shared layers remain campaign 1's. Only a few necessary named
+local variants may be added; report larger overlaps before copying them.
+The [six-family outer-removal request](2026-10-15-campaign-2-shared-frame-request.md)
+and [follow-up inventory](2026-10-15-campaign-2-shared-frame-followup.md) remain
+pending. The latter covers six H1 reinstallation families (three checked,
+three unimplemented), nine additional H2 ingress families, and H4's dependence
+on three already-pending removal families. These carries are deferred, not
+split into batches to bypass the rule.
 
-[USER 2026-10-14] Write mirror-team requests in this tree and notify the user.
-The [three existing requests](2026-10-14-campaign-2-mirror-requests.md) have been
-reported; no new request arises from the latest increments.
+[USER 2026-10-14] Write mirror-team requests here and notify the user.
+The [three requests](2026-10-14-campaign-2-mirror-requests.md) were notified;
+the latest increments add none.
 
-[AGENT 2026-10-15] Use a genuine WG data projection and a separately named
-ambient context, with universal execution contracts over concrete realizations.
-Keep normal return, total return and exact outcomes distinct. Observations start
-at the actual same entry and compose through actual successors; independent
-existential runs are never spliced. Inspection totality is not original-operation
-success. Public statements name neither `World` nor `Kernel`.
+[AGENT 2026-10-15] Use a WG data projection plus separate ambient context,
+with execution contracts universal over concrete realizations. Distinguish
+normal-return effects, total original return and total inspection. Compose
+observations through actual successors; never splice independent existential
+runs. Errors have no final state. Public statements name neither `World`
+nor `Kernel`.
 
-### Claims, frames and the split boundary
+## Claims, frames and the split boundary
 
-Paths below are under `Leanux/Proofs/WG/`; `.lean` is implicit. Public claims
-remain the six result `Statements` modules. Their concrete source proofs are
-connections to the current executable mirror, not replacement interpreters.
+Factoring checkpoint `69f988a` preserved all 153 then-existing headlines.
+Paths below are relative to `Leanux/Proofs/WG/`; suffix `.lean` is implicit.
+Each result's `Statements` contains public projected claims.
+`Campaign2/View` is data-only; `Campaign2/Bridge` defines projection and
+universal execution contracts.
 
-| Area | Data / claims / source connections | Separate frame support |
+| Result directory | Substantive files | Separate structural frame files |
 | --- | --- | --- |
-| Common C2 | `Campaign2/View` is data-only; `Campaign2/Bridge` defines projection and universal execution contracts. | No shared campaign-1 layer is changed. |
-| H1 | `Noise/Model`, `Statements`, `Slots`, `StateEdges`, `ConsumeEdges`, `ClearModel`, `ClearEffects`, `ClearSource`, `RotationModel`, `RotationEffects`, `RotationSource`, `SessionModel`, `SessionSource`, `ConfirmationSequenceModel`, `ConfirmationSequenceEffects`, `ConfirmationSequenceSource`, `RestartModel`; `Execution` holds the concrete monad connection; `AccessSource` holds accessor read/write contracts, reexported by `Basic`. | `KernelFrames`, `PeerFrames`, `SlotFrames`, `ClearFrames`, `RotationFrames`, `SessionFrames`; standalone `RestartFrames` holds the three checked next-slot/cursor variants. |
-| H2 | `Index/View`, `LookupProvenanceSource`, `LookupNoneModel`, `LookupNoneSource`, `TableModel`, `OwnerWordModel`, `AllocationModel`, `ReleaseModel`, `LifecycleModel` and pure release effects/bounds; `Statements`, `HandshakeClaims`, `OwnerUpdateClaims`, `LifecycleSource`, `LinkSource`, `SendSource`, `DispatchSource`, `ResponseSource`, `ConsumeSource`, `StagedSource`, `ReceiveOperations`, `ReceiveSource`, `ClearSource`, `TimerSource`, `FlushSource`, `SessionCoherenceModel`, `SessionCoherenceEffects`, `SessionCoherenceSource`, `SessionAllocationEffects`, `SessionAllocationSource`, `SessionSequenceModel`, `SessionSequenceEffects`, `SessionSequenceSource` and the other operation/source modules. | `IndexFieldFrames`, `OwnerFieldFrames`, `StoreFieldFrames`, `LifecycleFrames`, `NewlinkFrames`, `SendFrames`, `DispatchFrames`, `ResponseFrames`, `ConsumeFrames`, `StagedFrames`, `ReceiveFrames`, `ClearFrames`, `TimerFrames`, `FlushFrames`, `SessionCoherenceFrames`, `SessionAllocationFrames`; the old `HandshakeFrames` and `OwnerFrames` paths are import-only reexports, not duplicated lemmas. |
-| H3 | `Roaming/Model`, `View`, `Statements`, `EndpointClaims`, `EndpointSource`, `Authentication`, `PublicationModel`, `PublicationSource`, `PublicationClaims`, `PollEndpointModel`, `PollEndpointSource`, `PollEndpointClaims`, `PollAttemptModel`, `PollAttemptSource`, `PollAttemptAuditSource`, `PollAttemptClaims`, `ResponseModel`, `ResponseCryptoSource`, `ResponseConsumeSource`, `ResponseLookupSource`, `ResponseCallSource`, `ResponseCallClaims`, `InitiationModel`, `InitiationCryptoSource`, `InitiationLookupSource`, `InitiationConsumeSource`, `InitiationCallSource`, `InitiationCallClaims`, `HandshakeAuditModel`, `HandshakeAuditSource`, `HandshakeAuditClaims`. | `Roaming/Frames`, `PublicationFrames`, `PollEndpointFrames`; `Basic` reexports the endpoint source connection. The response and initiation increments reuse existing accessor/read/clock support without new frames. |
-| H4 | `Config/Model`, `AllowedRemovalModel`, `AllowedPairsModel`, `AllowedPairsEffects`, `AllowedRemovalConverseSource`, `AllowedRemovalConverseClaims`, `QuietModel`, `LiveRemovalModel`, `LiveRemovalSource`, `CollisionModel`, `CollisionRemovalSource`, `CollisionRequestSource`, `AllowedInsertModel`, `AllowedInsertSource`, `AllowedReadbackSource`, `AllowedRoundTripSource`, `AllowedTransferModel`, `AllowedPlacementSource`, `AllowedTransferOperations`, `AllowedTransferSource`, `AllowedTransferRequestSource`, `AllowedTransferReadbackSource`, `RemoveFlagModel`, `RemoveFlagEffects`, `RemoveFlagSource`, `RemoveFlagRequestSource`, `ReplacementConverseSource`, `ReplacementConverseRequestSource`, `RemoveAllModel`, `RemoveAllEffects`, `RemoveAllSource`, `RemoveAllObservationSource`, `ReplacePeersRequestSource`, `ReplacePeersRequestClaims`, `MultipartModel`, `MultipartSource`, `MultipartClaims`, `SuffixReadbackModel`, `SuffixReadbackSource`, `SuffixReadbackClaims`, `ClaimView`, `Statements`, `SourceClaims`, `ObservationBridge`, and existing substantive effect/source modules. | `ConcreteFrames` isolates six whole-kernel endpoint contracts; `OperationFrames` isolates seven generic helpers; `ReadbackFrames` retains socket/fixture preservation; `AllowedListFrames`, `AllowedRootFrames`, `AllowedRemovalFrames`, `AllowedPairsFrames`, `QuietFrames`, `LiveRemovalFrames`, `KeyFieldFrames`, `CollisionFrames`, `AllowedInsertFrames`, `RemoveAllFrames` isolate within-WG preservation. |
-| H5 | `Progress/Model`, `View`, `Statements`, `SourceClaims`, `ObservationBridge`; `ControlLaws` is generic state/error control and `ControlSource` connects it exactly to the original worker; the scheduler/source modules retain actual execution factors. `CutModel`, `CutSource` and `CutClaims` establish original cut-loop progress; `FlushQueueModel`, `FlushQueueSource` and `FlushQueueClaims` establish original flush effects and count decrease; `PowModel` and `PowSource` connect a finite evaluator to the original arithmetic loop. `DrainModel`, `DrainOperations`, `DrainSelectionSource`, `DrainAuditSource`, `DrainEffects` and `DrainClaims` connect a phase audit and queue bound to the original workqueue drain. `PollBoundModel`, `PollBoundEffects`, `PollStepSource`, `PollLoopSource`, `PollBoundSource` and `PollBoundClaims` connect the actual receive poll to its budget audit; no new structural frames. | `StackFrames` isolates caller-guard preservation; `CutFrames` isolates record/error-location preservation; `FlushQueueFrames` isolates queue preservation through worker bodies and release. Probe/filter/no-work contracts also establish outputs and remain substantive source claims. |
-| H6 | `TimerDiscipline/Model`, `View`, `SendView`, `Statements`, `ObservationBridge`, `ObservationClaims`, `SourceClaims`, `SendDispatchModel`, `SendDispatchClaims`, `RetryDispatchModel`, `RetryDispatchClaims`, `RetryRearmModel`, `RetryRearmClaims`, `RetrySequenceModel`, `RetrySequenceClaims`, `RetryBoundarySource`, `RetryBoundaryClaims`, `PendingGiveUpModel`, `PendingGiveUpSource`, `ResponseSessionModel`, `ResponseSessionEffects`, `ResponseSessionClaims`, `OutgoingResponseSessionModel`, `OutgoingResponseSessionClaims`, `DataDoneModel`, `DataDoneClaims`, `RxDataTimersModel`, `RxDataTimersClaims`, `ResponseTraversalModel`, `ResponseTraversalClaims`, `InitiationTraversalModel`, `InitiationTraversalClaims`, `ReceiveTraversalModel`, `ReceiveTraversalClaims`, and `*Source` operational proofs. | `SourceFrames`, `RecordedFrames`, `RecordedJitterFrames`, `SectionFrames`, `SelectionFrames`, `RetryFrames`, `JitterFrames`, `InitiationFrames`, `InitiationPreservationFrames`, `SendCutFrames`, `SendPeerFrames`, `SendSocketFrames`, `SendBufferFrame`, `SendWorkerFrame`, `SendDispatchFrames`, `RetryDispatchFrames`, `RetryRearmFrames`, `WorkStateFrames`, `ResponseSessionFrames`. |
+| `Noise` | `Model`, `Slots`, state/consume edges; clear, rotation, session and confirmation-sequence `Model/Effects/Source` families; `Execution`, `AccessSource`, `RestartModel` | `KernelFrames`, `PeerFrames`, `SlotFrames`, `ClearFrames`, `RotationFrames`, `SessionFrames`, standalone `RestartFrames` |
+| `Index` | View/table/owner/allocation/release models; lookup provenance and empty-result source; lifecycle/caller operation sources; session coherence/allocation/sequence effects and sources | `IndexFieldFrames`, `OwnerFieldFrames`, `StoreFieldFrames`, `LifecycleFrames`, `NewlinkFrames`, `SendFrames`, `DispatchFrames`, `ResponseFrames`, `ConsumeFrames`, `StagedFrames`, `ReceiveFrames`, `ClearFrames`, `TimerFrames`, `FlushFrames`, `SessionCoherenceFrames`, `SessionAllocationFrames` |
+| `Roaming` | Endpoint/authentication claims; publication, poll endpoint/attempt, response, initiation and handshake-audit model/source/claim families | `Frames`, `PublicationFrames`, `PollEndpointFrames` |
+| `Config` | `ClaimView`, models/effects/source claims, observation bridge; allowed-IP removal/insertion/transfer, collision, removal flags, remove-all/replacement, multipart/suffix readback families | `ConcreteFrames`, `OperationFrames`, `ReadbackFrames`, `AllowedListFrames`, `AllowedRootFrames`, `AllowedRemovalFrames`, `AllowedPairsFrames`, `QuietFrames`, `LiveRemovalFrames`, `KeyFieldFrames`, `CollisionFrames`, `AllowedInsertFrames`, `RemoveAllFrames` |
+| `Progress` | Model/view/source/observation claims; control/scheduler sources; cut, flush-queue, pow, drain and poll-bound model/source/effect/claim families | `StackFrames`, `CutFrames`, `FlushQueueFrames` |
+| `TimerDiscipline` | Model/view/send-view/observation claims; recorded, send/retry/rearm/sequence/boundary, pending-give-up, session, data and traversal model/source/effect/claim families | `SourceFrames`, `RecordedFrames`, `RecordedJitterFrames`, `SectionFrames`, `SelectionFrames`, `RetryFrames`, `JitterFrames`, `InitiationFrames`, `InitiationPreservationFrames`, `SendCutFrames`, `SendPeerFrames`, `SendSocketFrames`, `SendBufferFrame`, `SendWorkerFrame`, `SendDispatchFrames`, `RetryDispatchFrames`, `RetryRearmFrames`, `WorkStateFrames`, `ResponseSessionFrames` |
 
-A compound exact effect is not a disposable frame merely because its name
-contains “frame”: mark/generation updates, cleared-peer accumulation, reference
-decrements and dump/UDP payload results remain substantive claims. The seven
-H4 dump/UDP helpers with arbitrary kernel predicates are concrete source
-contracts that also establish outputs. After the mirror split, delete only
-structural preservation made trivial or unstatable; retain and retype those
-outputs and meaningful within-WG preservation. H6's reference-decrement proof
-is therefore in `SendWorkerSource`, separate from send preservation.
+`Index/HandshakeFrames` and `OwnerFrames` are import-only reexports.
+`Noise/Basic` reexports access contracts; `Roaming/Basic` reexports endpoint
+source. Standalone `Noise/RestartFrames` is outside the headline import closure.
+`Progress/ControlLaws` is generic control, not a structural frame layer.
+
+Delete only preservation made trivial by the split. Compound effects that
+also establish outputs—generation/deadness, ordered release, cleared-peer
+accumulation, dump/UDP payloads—remain substantive. In particular, H4's
+arbitrary-kernel-predicate dump/UDP helpers retain output obligations, and H6's
+reference decrement belongs in `SendWorkerSource`, separate from preservation.
+Source factors are proved equal to original operations; they are not substitutes
+for the mirror.
 
 ## H1 — Noise session state machine
 
-The original state-edge, slot, clearing, rotation, confirmation and session
-contracts are checked. Create/consume initiation can restart from any prior
-state; the claim is the code's edges, not a single linear handshake. An
-initiator with an existing next key demotes that next key to previous and puts
-old current; without next it demotes current. Responder installation goes to
-next. Slots are optional values, not a bound of three on the entire key store:
-outstanding packet references can retain keys.
+Checked state edges allow initiation creation/consumption to restart from any
+prior state: the machine is not a single linear handshake. Optional next/current/
+previous slots do not bound the entire retained key store to three. Initiator
+rotation with an existing next key demotes next and puts old current; without
+next it demotes current. Responder installation goes to next.
 
-`ClearRun`, `RotationRun` and `ConfirmationEffect` preserve exact ordered
-writes, puts, unhashing, reference changes and possible erasure. Normal effects
-derive their execution evidence from the original call. Separate total-return
-contracts use static `ClearReady`, counting every repeated release. Aliases are
-allowed; no owner/peer equality, global reference ownership or fresh allocation
-is silently assumed.
+Exact clear/rotation/confirmation effects retain ordered writes, releases,
+unhashing and erasure. Normal effects derive evidence from the actual call;
+total contracts additionally use static `ClearReady`, counting repeated
+releases. Aliases are allowed. An old next/current alias with one reference can
+leave a slot naming an erased key; this is an arbitrary-state invariant boundary,
+not an accepted-run finding.
 
-`SessionEffect` covers the complete original `beginSession`. False returns
-preserve Device and allocation counter even if records were consumed. True
-returns derive the accepted tag, live peer, non-NULL handshake peer word,
-counter increment, allocation overwrite, role/remote-index and KDF fields,
-handshake zeroing, ordered rotation and actual hashed-handshake replacement.
-Birthdate remains existential; exposed derivation-clock provenance is open.
-H4's expiry contracts supply slot validity, zero/unhash and actual reset-clock
-observations without duplicate H1 proofs.
+Complete normal `beginSession` effects cover allocation, KDF fields,
+role/remote index, handshake zeroing, rotation and hashed replacement.
+False returns preserve device and allocation cursor, though records may be
+consumed. True-return birthdate is existential; exposed derivation-clock
+provenance and total completion remain open.
 
-This does not establish retained-slot residency. For example, old next=current
-may name a key with one reference and a non-NULL peer word, with previous empty.
-Initiator rotation demotes next and releases current, leaving previous naming
-the erased key. Confirmation can similarly release an old previous alias of
-the received key. These are local invariant boundaries, **not accepted-run
-findings**. Live-slot coherence belongs at completed rotation cuts, not every
-primitive assignment.
+For consecutive actual `receivedWithKeypair` calls, the first ID matching
+initial next is the sole true result, with the exact confirmation effect;
+no match leaves the device unchanged. Duplicates are allowed. Total completion
+adds the previous-key release budget only if a match occurs. This is not
+confirmation once per allocation lifetime.
 
-The actual finite `ids.mapM (receivedWithKeypair pid)` sequence now has normal
-and total contracts. On normal return, the first input matching the initial next
-slot is the sole true result and supplies the exact single `ConfirmationEffect`;
-all other calls return false. If nothing matches, the device is unchanged.
-Result length is preserved. Normal effects need only the initial resident peer;
-total completion adds `ClearReady d [p.keypairPrevious]` only when some input
-matches the initial next slot. Later duplicate IDs remain allowed, and a match
-leaves next empty. These are consecutive calls without another installation,
-not confirmation once per allocation lifetime.
-
-Whole-run edge ownership, session totality, reachable allocation/slot coherence
-and confirmation once per allocation lifetime remain open. Exact source-call
-observers with event completeness and structural execution derivations were
-both considered; equal endpoints cannot justify an empty event history.
-Campaign 1's existing snapshot omits the required tags/slots.
-
-[AGENT 2026-10-15] Do not add a mixed begin/confirm-only sequence as a new
-lifetime result: after a successful session zeroes the handshake tag, that
-sequence cannot install another session for the same peer. Genuine repeated
-installation needs the actual consume/create operations. Cursor, store-bound
-and surviving-next preservation through their rejected paths and failed-reference
-release remains the concrete missing support; slot confirmation alone does not
-establish key residency when aliases can erase the key.
-
-The next candidate uses actual initiation consumption and response creation
-between session/confirmation calls. Independent design critique found the initial
-next-ID-below-cursor premise sufficient for the proposed within-sequence numeric
-ID uniqueness, while leaving key residency and full driver reachability open.
-This is a design assessment, not a proved mixed-sequence result. Closed standalone
-support now records a deletion-aware cursor/next predicate (`RestartModel`) and
-pure insert/erase consequences plus three named variants (`RestartFrames`). The
-remaining release/consumer/creator transports make six overlapping shared
-families overall, so the implementation stopped at that boundary and is reported
-in the follow-up inventory. No executor or headline was added. The standalone
-support is not imported by `Noise.Statements`; reproduce its own scoped checks
-explicitly as below.
+[AGENT 2026-10-15] A begin/confirm-only sequence cannot model repeated
+installation after successful begin zeroes the handshake tag. A genuine mixed
+history needs actual consume/create operations. Three checked restart variants
+preserve the relevant cursor/next predicate; release/consumer/creator transport
+would complete six shared families and awaits the reported scope decision.
+The proposed initial-next-below-cursor condition is design analysis, not a
+proved mixed-history result. Whole-call coverage, reachable slot/key coherence
+and lifetime confirmation remain open.
 
 ## H2 — Session index uniqueness
 
-[AGENT 2026-10-15] Interpret “no two live sessions share an index” as no two
-**simultaneously hashed receiving-index owners within a device** sharing it.
-Unhashed objects retained by references do not reserve their former number.
-The C unhashes before release and does not clear the stale numeric field
-(`noise.c:131–139`, `peerlookup.c:192–197`); insertion tests currently hashed
-entries (`peerlookup.c:119–163`). In the mirror, local ownership is in
-`Device.indexTable`; `remoteIndex` is the separate peer-supplied namespace.
-This is a source-grounded statement clarification, not a mirror counterexample.
+[AGENT 2026-10-15] “Live” means simultaneously hashed receiving-index owners
+within one device. Unhashed retained objects do not reserve their stale number:
+C unhashes before release (`noise.c:131–139`, `peerlookup.c:192–197`) and
+insertion tests hashed entries (`peerlookup.c:119–163`). Remote indices occupy
+a separate peer-supplied namespace. Numeric uniqueness, owner uniqueness and
+owner/peer-word residency are distinct obligations.
 
-Numeric-index uniqueness and embedded-owner uniqueness are separate invariants.
-Owner identity and its optional peer word are also distinct. Lookup stops at
-the first equal index, including a disallowed kind. Returned ownership comes
-from that original row; matched-entry contracts cover NULL, zero-reference
-store-back of NULL, and bounded positive-reference acquisition. They require
-the relevant owner/peer residency; absent/disallowed rows have separate total
-contracts. No owner=referenced-peer equality is assumed.
+Lookup stops at the first equal index even if its kind is disallowed.
+Every normal successful lookup derives that permitted row, its resident owner
+and referenced peer, positive bounded reference acquisition, and the exact
+ordered acquisition/store effect. Every normal empty result has exactly one
+cause: absent/disallowed first row; resident owner with NULL word; or resident
+referenced peer with zero references. The first leaves the device unchanged;
+the others retain the exact NULL store, including same-value insertion.
+Missing owners, dangling peers and overflow are errors, not empty results.
+No table uniqueness, owner=peer identity or deadness premise is smuggled in.
 
-A normally returning successful original lookup now derives the first equal-index
-permitted row, the initial owner word and resident peer, positive reference count
-and non-overflowing acquisition. Its exact final device retains acquisition and
-owner-word store in order, including aliases. Only the entry device is assumed;
-table uniqueness, owner/peer coherence, an `isDead` condition and completion are
-not asserted. The exact effect is reused on the same concrete run by determinism,
-not by joining independent executions. No new frame module is needed.
+Removal, keypair-specialized removal (`indexRemove (.keypair id)`), replacement,
+insertion and release have exact contracts. Replacement preserves numeric
+uniqueness; owner uniqueness additionally needs a fresh destination owner.
+Insertion removes the previous owner row before installing a fresh number.
+Recorded collision/retry/exhaustion contracts retain their contiguous-record
+premises; the two-call corpus-draw instance is not general runner coverage.
 
-Every normally returned empty original lookup now derives exactly one cause:
-the first equal-index row is absent or disallowed; its resident owner stores
-NULL; or its stored peer is resident with zero references. The first case leaves
-the device unchanged. The other two preserve the exact original owner-word
-clear, including the NULL case's same-value map insertion. Missing owner objects,
-dangling peer references and reference-overflow failures are not normal empty
-results. Together with successful-result inversion, this classifies all normal
-lookup returns without assuming table uniqueness, coherence or an `isDead` flag.
-It does not establish completion or reachable lifetime ownership. The new pure
-cause model and source proof add no frames or shared variants.
+`TablesSafe` combines numeric/owner uniqueness and the hashed-owner allocation
+bound. Normal preservation covers lifecycle, send/consume/receive iterations,
+clear/timer/drain and post-death removal paths. Session publication coherence
+additionally requires a self handshake peer word and exclusion of the allocated
+ID from actual rotation releases. True return then leaves a resident one-reference
+key in the selected slot, uniquely published at the old handshake index.
 
-Removal, specialized keypair removal, replacement, allocation and release have
-exact contracts. The landed keypair removal operation is
-`indexRemove (.keypair id)`, not a separate declaration. Replacement preserves
-numeric indices; owner uniqueness additionally needs a fresh destination owner.
-Insertion first removes the old owner row and then installs a fresh index.
-Recorded-collision results retain their contiguous draw/layout hypotheses,
-arbitrary suffixes, retries and exact exhausted-stream error. The corpus-draw
-two-call instance does not constitute general runner coverage. Errors expose
-no final state.
+Original consecutive `beginSession` calls preserve an initially bounded key
+store and derive fresh consecutive allocation IDs for true returns. Cursor
+advance equals their count; caller residency comes from actual normal reads.
+Rotation aliases may still erase the new key. There is no retained-key lifetime
+or completion claim.
 
-`TablesSafe` combines both uniqueness properties with the hashed-key-owner
-allocation bound. It is preserved on normal return through original lifecycle,
-creation/deletion, initiation/response sending and consumption, staged/keepalive
-sending, handshake reception, receive iteration, clear workers, timer dispatch,
-workqueue draining, timer stop and post-death removal. These contracts do not
-promise readiness or completion.
-
-The session-coherence headline combines the exact H1 effect and table invariant
-from the same original run. With an initially resident caller, a self handshake
-peer word and exclusion of the allocation ID from its actual rotation releases,
-a true return leaves the key resident with one reference, places it in the
-role-selected slot and uniquely publishes it at the former handshake index.
-Other aliases and overwriting an unhashed object remain allowed.
-`TablesSafe` bounds hashed owners, not every stored key or live slot; these
-static premises are not yet reachable invariants.
-
-The complete original `beginSession` now preserves `KeypairStoreBounded` on
-normal return from a resident caller and a bounded entry store. Its allocation
-cursor increases by exactly one on true and stays unchanged on false; the
-candidate allocation ID was absent from the entry store. This follows through
-the actual allocation, derivation writes, ordered rotation/releases and index
-replacement. It needs no slot-freshness, self peer-word, table-safety or readiness
-premise. The new key can still be erased by a rotation alias; final residency,
-completion and reachable boundedness are not claimed.
-
-The actual finite `pids.mapM beginSession` sequence now has unconditional
-observation erasure, including errors. On normal return from an initial device
-and bounded store, actual entry snapshots supply every successful allocation ID;
-those IDs are exactly the consecutive range starting at the entry cursor and
-are pairwise distinct. Each call entry retains store boundedness and candidate
-freshness; the final cursor advances by the number of true results. Input peer
-order and result length are preserved. Caller residency is derived from each
-normal original run's first peer read, so no all-callers-resident premise or
-preservation frame is needed. Calls are consecutive, with no interleaved
-handshake installation; stopped runs retain their original error, not a partial
-observation list. This is not retained-key lifetime or final residency.
-
-The remaining charter core is reachable hashed-table uniqueness and owner-object/
-peer-word residency at actual lookup cuts through driver entry points. Outer
-`peerRemove`/`peerRemoveAll` table closure awaits the documented six-family
-decision; no workaround copies that layer. Data ingress/workers also have
-uncovered paths; the follow-up inventory identifies nine immediate ingress
-families (160–230 preservation lines plus 70–120 composition lines) and a larger
-decrypt/NAPI layer (preliminary 250–400 preservation lines plus composition).
-These are unimplemented, pending the scope decision. Most existing shared
-contracts omit the index-table observation rather than being individually false
-from the owner representation change.
-[AGENT 2026-10-15] Treat full reference/slot lifetimes, broader record layouts
-and a complete corpus-runner witness as supporting extensions, not separate H2
-deliverables; prioritize the actual driver invariant and lookup identity clauses.
+Reachable invariants through every driver entry remain open. Outer removal
+awaits six shared families; ingress needs nine more (160–230 preservation lines
+plus 70–120 composition), with decrypt/NAPI estimated at another 250–400
+preservation lines. Most shared contracts omit the observation rather than
+being false. [AGENT 2026-10-15] Full reference lifetimes, broader record layouts
+and whole-runner witnesses are supporting extensions, not separate H2 targets.
 
 ## H3 — Endpoint roaming
 
-[AGENT 2026-10-14] “Endpoint changes only” means remote roaming:
-family, address, port and IPv6 scope. Local source caches legitimately change
-during routing/clearing, and `endpoint_eq` ignores flowinfo. Full-record
-get-after-set is not claimed; `n1_flowinfo_only.json` exercises the distinction.
+[AGENT 2026-10-14] Roaming concerns remote family/address/port/IPv6 scope.
+Local source caches legitimately change; endpoint equality ignores flowinfo
+(`n1_flowinfo_only.json`). Authentication needs actual consume/AEAD evidence,
+not MAC admission or a CRYPTED label alone. The outer source is not an AEAD
+input; roaming precedes later inner-packet checks and does not imply delivery.
 
-Source conversion and original endpoint setters are checked. Authentication
-requires actual consume/AEAD evidence, not tag endpoints or MAC admission alone.
-The outer source address is not an AEAD input. Data roaming occurs before later
-inner-packet checks; these contracts do not assert delivery.
+Decrypt publication retains actual plaintext/key provenance before callbacks.
+The first-poll join uses the same execution and matching packet identity,
+plus the actual true counter-check result. It does not establish a general
+queue invariant, replay-window correctness or packet-peer/key-owner equality.
 
-For a CRYPTED publication, the decrypt publication cut retains actual AEAD
-plaintext and historical key provenance before the original callback; dead
-publications do not assert plaintext provenance. The first-poll endpoint cut
-includes the original budget and an actual true counter-check result, not a
-proved counter-window invariant. Their join is from the same execution
-and conditional on matching the actual packet identity. It neither supplies a
-general queue invariant nor assumes packet-peer/key-owner equality. Softirq and
-stack callbacks remain arbitrary; there is no final endpoint or scheduler claim.
+Both original handshake callers have exact pre-setter cuts. Response facts
+derive MAC admission, owner/reference lookup, DH checks, derived AEAD key/AAD,
+empty plaintext and consumer commit. Initiation facts derive both AEAD results,
+public-key lookup/acquisition, precomputed DH, timestamp `memcmp`, wrapped signed
+flood comparison and commit. Separate inspections retain these certificates
+through setter or later failure; their original outcome is exact. A cut records
+an attempted setter, not completed mutation or an error's final state.
 
-For response-kind packets, exact source and decorated-observation equations
-connect the full original caller to the actual pre-setter cut. A missing cut selects a
-pure suffix; a present cut invokes the setter immediately and retains session,
-timer, keepalive, statistics and release continuations. For a present cut on
-normal full return, the contract derives actual under-load/MAC admission,
-separately recorded owner/reference,
-same-entry lookup, both DH checks, exact derived AEAD key/AAD, empty plaintext,
-and consumer state recheck/commit. Cutting before the setter matters because
-its later cache-reset read can fail after the endpoint write.
-
-For initiation-kind packets, the corresponding exact caller factor and same-entry
-decorated transcript reach the actual pre-setter cut. A present cut on normal
-full return derives MAC/under-load admission, both actual AEAD results with
-their exact derived keys and associated data, first-match public-key lookup
-and bounded reference acquisition, the supplying precomputed-DH peer read,
-the timestamp's `memcmp` ordering, the wrapped signed flood comparison, and
-the committed initiation fields and consumption-clock update. It assumes
-neither fixed plaintext lengths nor coherence between the table key and the
-resident peer's stored remote static key. Original failed-reference puts,
-rejection/error paths, response send, timers, statistics and final release
-remain in the exact source equation.
-
-A separate inspection now retains both handshake certificates through failed
-continuations. It runs the actual prefix once, then the suffix from that exact
-concrete successor, returning both projected outcomes at its unchanged entry.
-First-component equality with the original prefix excludes a vacuous certificate;
-second-component equality with inspection of the full original caller retains
-its exact success or error. A prefix error is the full-call error; a no-cut
-prefix completes through its pure suffix; a present cut retains authentication
-facts even if the setter or later continuation fails. Error outcomes have no
-final state. This is total inspection and erasure of inspection data, not
-operational receiver execution or a guarantee that the endpoint write completes.
-
-General queue provenance, netlink/whole-run caller exclusion and final endpoint
-preservation remain open. Forged crypted packets in arbitrary states are not
-accepted-run findings. Exact consume transcripts were chosen over a larger
-crypto-dataflow frame layer; neither handshake caller needed new shared variants.
-
-The complete original receive poll now has a failure-retaining audit of every
-attempted iteration at its designated `consumeDataDone` endpoint-setter site.
-Each record contains the actual iteration entry, admission outcome and, when
-admission succeeds, the actual continuation outcome. The next iteration uses the
-real suffix successor, including arbitrary callback effects. A prefix error,
-setter/cache-reset error, later cleanup error or completion error retains all
-records already reached. Exact source equality and audit erasure preserve the
-whole original budget test, loop and completion. Checked head/endpoint equations
-and the recursive definition establish retention, not merely final-outcome equality.
-
-Every reached endpoint attempt derives residency at that iteration's entry and
-packet read, matching peer, CRYPTED status, actual true counter result and the
-endpoint converted from that packet's supported source. The cut is before the
-setter: it asserts an attempt, not a successful mutation or a failed operation's
-final state. This extends beyond the former first-iteration scope. It classifies
-only this designated site; arbitrary callback writes are outside the claim.
-CRYPTED/counter admission does not independently establish AEAD provenance. A
-persistent packet-provenance invariant across queues and callbacks remains open,
-as do final endpoint preservation, delivery and whole-driver coverage. The four
-new modules contain observation data, source/audit correspondence and claims;
-no new structural frame or shared variant is needed.
+The whole original poll now audits every attempted iteration at its designated
+`consumeDataDone` setter site. Records retain actual entry/prefix/continuation
+outcomes, including failures; subsequent iterations use actual successors.
+Each reached cut derives a resident packet with packet.peer equal to the selected peer ID, CRYPTED status, true counter
+result and supported source endpoint. Source equality, audit head equations and
+recursion establish retention beyond mere final-outcome equality.
+Arbitrary callback writes are outside this site's classification. Persistent
+AEAD provenance through queues/callbacks, other callers and final endpoint
+preservation remain open.
 
 ## H4 — Configuration semantics
 
-[AGENT 2026-10-15] Clarify the charter's “allowed-IP removal flag” for the
-pinned Linux 6.12.110. There is no per-entry allowed-IP flag: its UAPI
-(`include/uapi/linux/wireguard.h:188–194`) lists family, address and CIDR,
-and `netlink.c:329–355` only validates and inserts. The earlier
-[W1/W2 design note, section 2.1](2026-10-06-w1-w2-netlink.md) already records
-that `WGALLOWEDIP_A_FLAGS` does not exist in this version. Supported removal
-semantics use peer `REMOVE_ME`/`REPLACE_ALLOWEDIPS` and device `REPLACE_PEERS`.
-Those obligations, insertion/ownership transfer and effective readback remain
-in scope; no per-prefix removal behavior is invented. Independent source
-review confirmed this statement/version correction, not a mirror omission
-or an accepted-run finding.
+[AGENT 2026-10-15] Linux 6.12.110 has no per-allowed-IP removal flag:
+UAPI `wireguard.h:188–194`, `netlink.c:329–355`, and
+[W1/W2 §2.1](2026-10-06-w1-w2-netlink.md). The obligations use peer REMOVE_ME/
+REPLACE_ALLOWEDIPS and device REPLACE_PEERS. This is a statement/version
+correction, not a mirror omission.
 
-[AGENT 2026-10-14] Get-after-set means the effective configuration: private-key
-clamping, allowed-IP masking, an allocated zero port and ignored flowinfo follow
-the C's operations. Set is not transactional: earlier updates survive a later
-parse error. The claims retain those outcomes rather than asserting raw-input
-identity or rollback.
+[AGENT 2026-10-14] Readback means effective clamped/masked/allocated values,
+not raw input. Set is nontransactional. Leaves cover validation, no-ops,
+removal precedence, identity/cookie keys, peer scalars and expiry. Bounded public
+scalar readback uses one resident stopped-device peer, bounded positive reference,
+matching selector/key, no allowed IPs, sufficient room and idle socket 7.
+168 bytes suffice for the peer fixed part; the outer getter also needs envelope room.
 
-Checked leaves include validation/flag errors, absent remove/update-only and
-self-key no-ops, removal precedence, identity and cookie precomputation, peer
-scalars and expiry. The bounded public readback composes scalar set with the
-original getter, including a later malformed entry: one resident peer on a
-stopped device, a positive reference count with its temporary increment below
-2^31, matching public-key and interface selection, no allowed IPs, sufficient
-chunk room, and idle socket 7 with an empty queue. A fixed peer dump needs at
-least 168 bytes; the complete getter additionally budgets device and nest
-overhead. General multipart dump composition is open.
+Port contracts distinguish unchanged/nonzero/zero allocation and failure.
+Recorded draws remain premises; an occupied first candidate is an outside-domain
+stop, not proved retry. Source/cache clearing can precede bind failure; equal
+outer requests still increment generation. Fwmark preserves remote destinations.
+Private-key effects retain clamping, precomputation, expiry and staged sending;
+aggregate timestamps remain existential.
+[AGENT 2026-10-15] Collision composition starts after optional self-peer removal:
+its flush may change survivors under the old identity. Normal collision effects
+use actual acquisition, caller put, removal and installation over that baseline.
 
-Port effects distinguish stopped devices, existing creating namespaces,
-unchanged ports, nonzero replacement and zero-port allocation. Supplied-record
-zero-port return/collision contracts retain their explicit draw assumptions.
-An occupied first recorded candidate is an outside-domain stop, not ordinary
-bind failure or proved retry. Bind failure retains preceding source/cache
-clears; equal outer-port requests still increment generation. Fwmark effects
-preserve remote destinations while clearing source/cache fields; reset
-timestamps remain existential, including duplicate-list effects.
-Private-key installation composes identity/cookie keys with ordered per-peer
-precomputation, expiry and optional staged sending; full outer effects cover
-the noncolliding request. Normal-return effects are not completion guarantees.
-Existential expiry timestamps and actual reset-clock observations remain
-separate contracts. The unchanged-key arm compares raw requested bytes with
-stored clamped bytes.
+Allowed-IP removal has witness-based total contracts and normal converses under
+initial peer residency and `NodePairs` (two child slots per resident node).
+This is representation shape, not topology, ownership or acyclicity.
+Live-key removal retains aliases/multiplicity and reference-count effects.
+Full REMOVE_ME derives acquisition, removal and caller release under positive
+counts, shape and empty send/clear queues; final erasure occurs exactly when
+the original peer reference count was one. Later peer attributes are bypassed,
+while invalid flags/protocol are rejected first. The singleton device wrapper
+retains selection and generation. Normal REPLACE_ALLOWEDIPS derives its witness,
+empties the selected peer's allowed-IP list and balances the lookup reference;
+these converses do not promise queued-work completion.
 
-[AGENT 2026-10-15] Compose private-key updates from a baseline after optional
-self-peer removal: removal may flush other peers’ work under the old identity,
-so an unrestricted surviving-peer frame against request-entry state would be
-false. Prove the key-only block before composing later peer attributes.
+Original remove-all frees allowed IPs, captures the actual post-free peer list,
+marks all selected peers dead, then cleans up that same list. Shape and listed
+residency at the post-free cut yield first-pass residency/deadness even with
+duplicates. Flag-only REPLACE_PEERS composes selection/generation and guarantees
+a cut on normal selected-device return. Cleanup stays opaque. Initial-to-post-free
+transport uses three already-pending shared families; no renamed copies were added.
 
-Allowed-IP removal has total contracts under supplied `RemovalEffect` witnesses
-and normal converses deriving those witnesses from an initially resident named
-peer under `NodePairs` (every resident node has two child slots). This is a static representation condition, not proved
-reachable trie validity, ownership or acyclicity. Peer death removes list/public
-identity membership and sets deadness. Live-key removal admits aliases under
-multiplicity-aware release budgets, positive peer references/count and empty
-send/clear work queues. The outer total removal still takes a supplied
-`RemovalEffect`; the after-death contract additionally requires initial deadness.
-The final release may retain a dead peer when references remain. The normal
-converse does not import these totality premises.
+Empty-root insertion preserves exact allocation failure/success and sequence
+effects; paired actual dumps serialize the masked prefix or omit allowed IPs
+after -ENOMEM. Exact root-leaf transfer permits duplicate lists/same-peer
+reassignment, retains ordered owner/filter/append writes, and totally reads back
+donor/destination with explicit room/cursor premises. These are peer-serialization
+claims, not global ownership or full socket getters. One named
+`hiddenAlloc_sameKernel_node_spec_variant` avoids importing the inherited
+counter failure; the shared original is unchanged.
 
-The empty-list REPLACE_ALLOWEDIPS device request now also derives its removal
-witness from the actual normal execution, under initial `NodePairs` and a stopped
-device. Lookup matching/residency, positive reference and its increment bound
-remain explicit. The exact final effect retains generation, lookup acquisition,
-ordered removal, balanced release and sequence change; the peer remains with an
-empty allowed-IP list and its original reference count/identity, and processed
-nodes are absent or unowned. No supplied removal run, root-only restriction or
-global trie invariant is assumed. This extends the earlier witness-based total
-claim with a normal-return converse; arbitrary structures are not asserted to
-complete. The two new source-composition files add no frames or variants.
-
-The normal full single-peer removal contract now derives both the structural
-removal and ordered clear effects from the same actual run. Its premises are
-initial residency, `NodePairs`, positive peer reference/device counts and empty
-send/clear queues. It takes neither a supplied `RemovalEffect` nor `ClearReady`;
-these normal effects do not promise completion.
-
-The original `peerRemoveAll` now has a checked two-pass factor and exact
-observer. It runs the original allowed-IP free, selects the actual post-free
-peer list once, completes the make-dead pass, then cleans up that same list.
-Under two-child node shape and listed-peer residency at the post-free cut, the
-first pass preserves every initially resident peer and marks precisely the
-selected identities dead, allowing duplicate selections and already-dead peers.
-All selected peers are therefore resident and dead at the captured cut before
-cleanup. These are conditional facts about the actual cut, not an initial-state
-proof of free’s trie behavior. Queued cleanup remains original and opaque; no
-quiet-queue, reference, key-slot or no-duplicate premise is used for the first
-pass. Normal full return supplies the certificate, while exact erasure preserves
-errors. Final cleanup effects and completion remain open. `RemoveAllFrames` isolates two within-WireGuard preservation helpers; the
-model, induction effects and source/observation files are separate. No shared
-variant was copied, and this result does not circumvent the pending H2 request.
-Moving these assumptions to the initial state needs the already-pending
-`subtree`/`rootRemovePeerLists`/`free` families; the follow-up inventory records
-that dependency without implementing renamed H4 copies.
-
-A flag-only `WGDEVICE_F_REPLACE_PEERS` request now composes this certificate with
-the original interface lookup, generation update and branch records. Exact
-erasure to `wgSetDevice` is unconditional and preserves errors. Any present cut
-on normal return has result zero and the remove-all facts. Under the existing
-index-only selector's resident-device/fixture-selection premise, every normal
-full return has a present cut. This avoids presupposing that removal was reached.
-The facts still require two-slot node shape and listed-peer residency at the
-actual post-free cut; they do not establish these from the initial request or
-prove final erasure, completion, mixed attributes or free's global ownership
-behavior. The two `ReplacePeersRequest*` files contain source correspondence and
-projected claims; no new frame or shared-layer variant is needed.
-
-A changed private-key-only request also has an exact normal collision effect.
-The generated public key must select the named resident peer; its reference
-count is positive and its temporary increment below 2^31. The request retains
-the same node-shape, positive device-count and empty-queue conditions, with
-matching device selection. Lookup acquisition and the immediate caller put
-remain two ordered store writes, restoring the original reference count before
-removal without assuming structural map equality. The resulting removal witness
-and live-key cleanup are followed by identity/cookie/per-peer installation over
-the actual post-removal baseline, including that baseline's staged-send test
-and peer list. Normal outer return is zero. Final removal may erase the peer
-or retain it dead when references remain; no aggregate clock provenance is
-inferred from existential timestamps.
-
-The actual `setPeerCmd` REMOVE_ME path now derives lookup acquisition, full
-removal and the caller’s final release in their original order. Initial public
-key, valid flags containing REMOVE_ME, supported protocol, first lookup match,
-resident positive reference below the increment bound, `NodePairs`, positive
-device count and empty send/clear queues are explicit. Later PSK, endpoint,
-allowed-IP and keepalive attributes are unrestricted because their installation
-is bypassed. Invalid flags/protocol are still rejected before removal. The
-intermediate reference count is the original count; final erasure occurs exactly
-when it was one, otherwise the surviving count is one less. The exact acquired
-map insertion is retained, with no structural map-equality shortcut. A singleton
-original `wgSetDevice` request carries this effect after interface selection and
-the generation increment. Neither theorem assumes a supplied removal/clear run
-or promises completion with queued work. No new frames or shared variants were
-needed. The four new files separate the effect model and its consequences from
-peer-command and device-request source composition.
-
-Valid IPv4/IPv6 insertion into the selected empty root now has exact normal
-allocation-failure and success effects. Both increment the sequence; success
-retains allocation, peer-list append, parent and root writes in order. The cursor
-may overwrite an existing node: no freshness or global topology is assumed.
-Composing the actual setter with the actual peer dump reads back one masked,
-fixed-width serialized prefix on success and fixed attributes without an
-`allowed_ips` attribute after `-ENOMEM`. The named peer’s allowed-IP list is
-initially empty; cursor freshness, zero-or-incremented matching sequence and
-sufficient room are explicit. Source exceptions remain exceptions. This is
-peer-dump scope, not outer socket/multipart or ownership coverage.
-
-`AllowedInsertFrames.hiddenAlloc_sameKernel_node_spec_variant` is one local,
-cited variant of campaign 1’s `Keypairs/OrdinaryHot.hiddenAlloc_sameKernel`;
-importing that shared module exposed the inherited counter-refinement failure.
-It preserves the original allocation loop and reuses C2 hidden-read support.
-No existing shared lemma was changed or deferred six-family variant copied.
-
-Exact transfer of an existing root leaf now returns zero totally under its
-resident-node/destination and matching raw address/CIDR premises. The original
-sequence increment, node-owner write, global list filtering and destination
-append remain ordered. Stored address, prefix fields, parent/children, roots and
-allocation cursor are retained. Arbitrary prior owners, duplicate list entries
-and same-peer reassignment are allowed; no allocation or live-reference premise
-is needed. The source factor preserves the untouched fallback branches.
-
-A total paired readback composes the actual setter, donor dump and destination
-dump, threading the real buffer/context. Here the node’s old owner is the
-distinct resident donor, its list filters to empty (it may already be empty),
-and the destination list starts empty. The donor emits fixed attributes; the
-destination emits the stored masked prefix. The donor dump resets the allowed-IP
-cursor and sequence, preserving other context fields, so no initial sequence
-premise is needed. Initial cursor freshness and sufficient room are explicit,
-and room consumption is exact. This remains root-leaf and peer-serialization
-scope; all six new modules are substantive effects/source connections, without
-new structural frames.
-
-The cancelled-nest finding below is internal accounting, not a demonstrated
-output mismatch. Total collision completion, final queued-cleanup effects and
-completion, initial-to-post-free shape/residency transport, mixed attributes,
-global ownership and general getter round trips remain open. No deferred shared-frame family was copied for these effects.
-
-The original peer getter now has a total two-fragment readback contract for two
-distinct resident IPv4 nodes and a peer with no endpoint. With a fresh cursor,
-sequence zero and first buffer room 168, the first call emits fixed attributes
-and the first IP, splits at the second node, and leaves zero room. The second
-call consumes the actual returned context; room at least 72 suffices to emit
-only the public key and second IP, then reset the allowed-IP cursor and sequence.
-The original coalescer consumes these actual fragments and produces the ordered
-two-IP peer. Device state remains unchanged. The data flags, device header and
-DONE envelope are supplied by this proof composition; they are not derived from
-an outer device/socket dump. Other peers may exist and are not traversed here.
-There is no complete-device, arbitrary-pagination, setter-composition or
-concurrent-update claim. The three new files contain model/source/claim content,
-with no structural frames or shared variants.
-
-The two-call readback now generalizes to an arbitrary finite IPv4 suffix. For
-`a :: b :: tail`, the first 168-byte call emits `a` and splits at `b`; the actual
-returned context feeds a second call with room at least
-`44 + 28 * (1 + tail.length)`, which emits the whole remaining suffix in order
-and clears cursor/sequence. Coalescing uses these actual fragments. Only `a ≠ b`
-is needed to select the intended first cursor occurrence; later repeated IDs
-are allowed because the second call fits all of them. Nodes need only residency
-and width 32, not ownership, trie shape or address bounds. Exact source factors
-preserve cancellation, sequence changes, stale-cursor errors and failed-IP room
-restoration before imposing the total-return premises. Device/header/flags/DONE
-and capacities are still supplied, with no outer socket or other-peer traversal
-claim. The new model/source/claims files add no frames.
+Two actual peer-getter calls now cover `a :: b :: tail` with only `a ≠ b`,
+resident width-32 nodes and no endpoint. First room 168 emits a and splits at b.
+The actual returned context feeds room at least `44 + 28 * (1 + tail.length)`,
+emitting the whole suffix, clearing allowed-IP cursor/sequence and consuming exact
+room. Later repeated IDs are allowed. Original coalescing uses actual fragments;
+device remains unchanged. Header, flags, DONE and capacities are supplied.
+Other peers, outer pagination, concurrent updates and setter composition are
+not covered. Global ownership, mixed attributes, final queued cleanup and total
+collision completion remain open.
 
 ## H5 — Termination and progress
 
-The literal no-pending-at-completion claim is historically refuted on this
-branch by the accepted constructed batch-backlog witness below. This is a
-completed historical finding: original `executeTrace` acceptance and the backlog
-equations are kernel-checked with `decide +kernel`. The auxiliary two-syscall
-runner's correspondence to the original runner threading is source-reviewed,
-not a separate equality theorem. Runnable backlog is established by the original
-activation work predicate. Whole H5 remains open: the positive clauses and the
-carry to main's corrected completion refusal still need proofs. The remaining
-proofs distinguish original executions, generic worker laws and total
-inspections. Probing an activation does not establish successful execution after
-detachment; scheduler claims retain actual dispatch/resumption, NAPI and
-caller-stack busy/idle/error branches. Nested callback refill remains an
-obstacle to the old queue-occupancy bound.
+The accepted constructed backlog witness below refutes historical
+no-pending-at-completion. Original acceptance and backlog equations are
+kernel-checked; the auxiliary two-syscall runner's threading correspondence is
+currently source-reviewed, not a separate equality theorem. Runnable backlog
+uses the original activation predicate. Main's corrected refusal is not yet
+carried. Total inspection never implies successful dispatch or drain.
 
-The recorded cut proof derives its budget before ambient stripping and includes
-the final empty/non-cut observation. Prefix-only allocation acceptance gives
-total return; allocation rejection keeps its exact original stop. Original
-send/clear flush effects erase one matching queue occurrence, allow duplicates
-and retain final reference release, including peer deletion.
+Source-connected scheduler claims retain actual dispatch/resumption, caller
+busy/idle/error and NAPI branches. Cut budgets are derived before ambient
+stripping and include the final empty/non-cut observation; allocation rejection
+keeps the original error. Send/clear flush removes one queue occurrence,
+allows duplicates and retains final reference release/deletion.
 
-The whole-drain audit has unconditional exact correspondence with the original
-4096-turn drain, preserving selection priority, hidden/placeholder behavior,
-all errors and successful final state. It is an inspection at unchanged entry,
-with the original outcome inside its datum. Below 4096 initial queued items,
-actual selector membership and original flush effects bound loop turns begun
-by count+one and exclude only the drain's own exhaustion. Selector/worker errors
-are tagged by their actual call, not their text, and have no final-state field.
-Normal completion with `upTo = none`, under the stated resident-device and
-queue-count entry premises, leaves both queues empty; requested-clear completion
-may leave other work. Exactly 4096 removals leave no extra turn to
-observe empty queues: this is a source boundary, not an accepted witness.
+The exact 4096-turn drain audit includes original outcomes. Below 4096 queued
+items, actual selection/flush effects bound turns begun by count+one and exclude
+only its own exhaustion. Worker/selector errors remain possible. Normal full
+drain under resident-device/count premises empties both queues; requested-clear
+may leave other work. Exactly 4096 removals leave no extra empty-observation
+turn: a boundary, not an accepted finding.
 
-The original modular-exponentiation loop has a finite evaluator with sufficient
-fuel `e + 1`, proved by its checked fixed-point equation and induction. Zero
-exponent and zero modulus preserve the original behavior: it returns 1 at
-exponent zero even modulo 1, so unrestricted equality with stock `Nat.powMod`
-would be a statement artefact. This is local operational adequacy, not an
-algebraic, compiler or whole-run theorem.
-
-Whole-worker record decrease, full operation-end coverage, detached-activation
-progress and global termination remain open. No successful drain/dispatch or
-complete scheduler run is inferred from total inspection.
-
-The original receive poll now has an exact phase audit, including all prefix
-and completion errors. With requested budget at most `MAX_QUEUED_PACKETS + 1`,
-a normally returned loop prefix reaches its queue-test stop or its budget, so
-the original finish-time exhaustion guard is false. Each continued iteration
-increments the local count; arbitrary callback effects need no queue-preservation
-premise. The queue-test stop includes an uncrypted head, not just an empty queue.
-Zero budget takes the original early return; normal positive-budget completion
-returns less than budget. The original unsupported repoll remains. Counts cover
-cleanup-completed iterations, not callback/internal work; inspection retains a
-historical finish cut and does not promise successful poll or callback completion.
+Finite modular-power adequacy uses fuel `e + 1` and a checked fixed-point
+equation. Original exponent zero returns 1 even modulo 1; unrestricted equality
+with stock `Nat.powMod` would be a statement artefact. Poll audit under requested
+budget at most MAX_QUEUED_PACKETS+1 excludes its finish-time exhaustion on normal
+prefix return: each continued iteration increments count despite arbitrary
+callbacks. Queue-test stop can mean an uncrypted head. Unsupported repoll remains.
+Neither local result proves callback/internal work termination. Whole-worker
+record decrease, full operation boundaries and global progress remain open.
 
 ## H6 — Timer discipline
 
-Local contracts cover the original arm/delete guards and all seven concrete
-arming sites, exact wrapped caller-read-plus-delay equations, traversal/session/
-data/handshake hooks, and jitter below 83. Recorded arming uses the actual caller
-read and arm record; arm-record mode may still permit placeholders. The separate
-finite supplied-record jitter success/exhaustion claims require contiguous
-rejected/accepted records and exclude ambient interleavings/placeholders. No
-distribution claim is made.
+Local contracts cover all seven concrete arm sites, actual clock-plus-delay
+wrapping and jitter below 83. Finite supplied-record jitter success/exhaustion
+requires contiguous draws; general arm-record mode can permit placeholders.
+There is no distribution claim. The applicable running/live/interval guards qualify each arm;
+a final timer value alone does not prove an arm event.
 
-Persistent keepalive remains conditional on its interval and running/live
-guards. A final timer value alone does not prove an arm event occurred.
-`createDataDone` invokes traversal once per encrypted item/list before its
-per-packet send loop (`Data.lean:181–194`, C `send.c:242–260`), not once per
-individual packet or necessarily a successful transmission. Zero-key firing
-queues asynchronous clearing; it does not immediately prove key erasure.
+From a resident device and initially empty send queue, original timer/send pairs derive same-peer selection, entry attempts ≤18,
+enqueue/reference acquisition, detach, increment and worker release. Consecutive
+successful same-peer pairs from zero number at most 19. This excludes 20 such
+pairs, not a twentieth callback. The immediate original callback after 19 has
+exact all-outcome give-up behavior; normal return preserves identity/count and
+empty queue. No intervening scheduler action or later invocation is inferred.
 
-The exact original timer/send pair starts with a resident device and empty
-send queue. Successful selection derives the same peer, retry eligibility,
-entry attempts at most 18, fresh enqueue/reference acquisition and timer detach.
-The callback increments attempts; the worker preserves that count, releases the
-acquired reference and leaves an empty queue and false pending flag. This is
-not a proof of global reference ownership or network transmission.
+Above the limit with zero-key already pending, give-up is total: retain its
+expiry, delete send-keepalive, purge staged packets, add their length to dropped,
+and append exact true-give-up/false-zero-key-absent decisions. Hidden records,
+clocks, attempts and device queues stay unchanged. No running/live/record-mode
+premise is needed.
 
-Conditional rearming uses the actual before-arm state, its running/live and
-arm-record conditions, actual caller read and bounded jitter. Exact expiry
-survives retained release and section stop; the clock-gap conclusion stays at
-its established pre-release cut. Consecutive successful pairs use adjacent
-actual states. When all select the same initially resident peer, attempts grow
-by their length and a nonempty sequence is bounded by 19 from zero. This
-excludes 20 such successful pairs, not a twentieth timer callback. An empty
-sequence preserves the whole snapshot.
+Both response callers observe actual session results; the session-derived hook
+is reached exactly on true. Traversal compositions cover outgoing initiation,
+outgoing response, common initiation/response receive tails, data completion and
+data receipt in their stated contexts. Data completion traverses once per
+encrypted item/list before its per-packet send loop (`Data.lean:181–194`,
+C `send.c:242–260`), not per packet/transmission. Successful nonkeepalive sends
+control data-sent; nonzero received length controls data-received. Guarded
+recorded expiry is established at each actual hook cut. These normal caller
+certificates do not retain later failures or promise final expiry/delivery.
+Common response traversal does not require session success.
 
-At the actual exit of 19 such pairs from zero, the immediately invoked original
-retransmit callback now has an all-outcome give-up contract. For every concrete
-realization of that projected exit, it agrees with the original comparison/log
-followed by the entire give-up tail, including any later arm-record error. No
-arm-record-mode premise is needed to decide the branch. If the callback returns
-normally, the send queue remains empty and the resident peer retains its
-allocation identity and attempt count 19. This is a direct continuation at the
-same boundary, without an intervening scheduler/environment action; it does not
-assert another timer was armed, selected or invoked, or that give-up completes.
-`RetryBoundarySource` and `RetryBoundaryClaims` add substantive source/continuation
-contracts, using existing separate frame support without new frames or variants.
-
-The incoming response caller now has exact source and decorated-observation
-correspondence, retaining errors and the unchanged continuation. On normal full
-return, a present response cut records the actual session entry, returned Bool
-and H1 `SessionEffect`. The session-derived hook is invoked exactly when that
-Bool is true; that case derives the allocation-counter increment and a resident
-live peer without an initial readiness or liveness premise. Running-device and
-arm-record conditions at the actual hook entry give the wrapped zero-key expiry
-from its caller read and `clockGap` immediately after the hook. Hook invocation
-is distinct from a guarded arm. Rejected normal callers may have no cut; later
-caller failure does not retain prefix evidence in this returned observer, and
-no final caller expiry preservation is claimed.
-
-The outgoing `sendHandshakeResponse` now has the matching exact source and
-transcript contract. Its cut retains the actual MAC-added message and session
-result, using the outgoing `respSessionBegun` decision. Response-creation
-rejection yields no cut; a present cut records true or false session completion,
-with the hook reached exactly on true. The same conditional recorded-arm facts
-hold at that hook. The later traversal/authenticated-send hooks, second clock
-and last-sent write, and socket send remain in the original continuation.
-No transmission, final expiry or retained failed-call cut is claimed.
-
-The original `createDataDone` now has an exact decorated execution, including
-errors. On normal full return its packet IDs retain input order and duplicates;
-actual successful non-keepalive sends determine whether the data-sent hook is
-invoked. Traversal precedes the entire list, including an empty list. Each hook
-carries its actual before/after snapshots and recorded clock path. Running/live,
-recorded-mode and interval/pending conditions at that hook give exact wrapped
-expiry; data-sent also gives bounded jitter. Hook invocation is distinct from
-arming. Authenticated-sent deletion, loop markers and `keepKeyFresh` execute
-unchanged. No transmission, final-expiry preservation or failed-call certificate
-retention is claimed. All three new modules contain data, effects and source
-connections; no structural frame was added.
-
-The original `consumeDataDone` now has an exact decorated execution preserving
-its optional packet result and all errors. On normal full return, traversal is
-observed at its actual cut and the data-received hook is invoked exactly for a
-nonzero packet length. The receipt effect distinguishes the pending timer,
-running device and live peer branches, including the request for another
-keepalive. Its recorded-arm conclusion gives the exact wrapped expiry at the
-hook cut. Endpoint update, confirmation, staged sends and key refresh remain
-the original prelude; the original packet validation and routing suffix remain
-unchanged. This accepts a raw packet argument and establishes timer discipline,
-not authentication or delivery. It does not retain cuts after a later failure
-or preserve expiry through the remaining caller. The three new modules contain
-observations, source correspondence and claims; no structural frames were added.
-
-The outgoing response sender now also observes traversal after the original
-response/session prefix. Its presence is exactly the prefix’s present/true
-session result, and its before-state equals that prefix’s end. The certificate
-retains the session/zero-key facts and derives guarded recorded persistent
-expiry at the actual traversal cut. Authenticated-sent deletion, the later
-clock/write and socket send remain unchanged. Exact observer erasure includes
-errors; the normal certificate does not retain cuts after later failure or
-promise transmission/final expiry. The model, source and claims files add no
-frames. The initiation sender now has the analogous exact source factor and observer: its
-original rate check, creation and MAC prefix yields an optional message, and
-traversal is invoked exactly for a present message. Guarded recorded expiry is
-proved at that hook; the later deletion, clock/write, socket send and retransmit
-arm remain original. The three new initiation files add no frames. The common
-handshake receive tail now has exact decorated original calls for both initiation
-and response messages. A present cut carries the actual MAC/consumer certificate
-and selected peer, followed by traversal’s guarded recorded expiry at its own
-cut. The original endpoint setter, response send or session/keepalive branch,
-statistics, deletion and final release remain unchanged. Response traversal does
-not require beginSession to return true. Rejected paths may have no cut; full-call
-errors do not retain it. The three receive files add no frames. These contracts
-cover the five listed traversal sites in their stated caller contexts; there is
-no global event enumeration, cookie/other-type exclusion or reachability theorem.
-
-Complete traversal caller coverage, scheduler retry episodes and whole-run
-arm-site/session counting remain open. The give-up path also arms
-zero-key material; covering both session-derived hooks cannot prove once-per-session.
-No H6 mirror mismatch has been established.
-
-Above the retry limit, the original callback now has a total exact contract
-when the resident peer's zero-key timer is already pending. It preserves that
-expiry, deletes send-keepalive, purges staged packets and adds their original
-length to txDropped. It appends exactly the true give-up comparison (including
-operands) and false zero-key-absent decision, both with the entry section stamp.
-All other projected fields are retained, including hidden records, clocks,
-attempts, and device work queues. No running/live-peer/record-mode assumption or
-successful-return premise is needed. The source equation evaluates the actual
-callback and contains no clock/arm read; no new structural frames are added.
-This does not establish a once-per-session count. The source has both the
-session-derived arm and give-up cleanup of a partial exchange; a session-relative
-claim needs a mixed-history allocation identity and timer lifecycle invariant.
+Zero-key firing queues clearing; it does not immediately erase keys.
+Give-up can also arm zero-key for a partial exchange, so two session-hook proofs
+cannot establish once-per-session. Complete caller coverage, scheduler episodes
+and mixed-history/session-relative arm counts remain open. No H6 mismatch found.
 
 ## Findings and mirror requests
 
-All requests are in the [mirror-team document](2026-10-14-campaign-2-mirror-requests.md).
-The mirror and kernel were not edited. No finding has been classified as a
-kernel defect or sent upstream.
+The [request document](2026-10-14-campaign-2-mirror-requests.md) ranks all three
+changes as altitude-preserving. No mirror/kernel edit or upstream report occurred.
 
-| Finding | Evidence and limit | Status / ranked change |
+| Finding | Evidence and limit | Status |
 | --- | --- | --- |
-| H5 batch backlog | Kernel-checked accepted constructed fixture trace, plus separate replay summary. Not a captured Linux run. | Historical over `de62c9d`; main `9db558b` adds the completion guard. Carry and corrected-refusal proof remain pending. H5 request 1, altitude-preserving. |
-| H5 nested queue refill | Evaluated initialized prefix and source review; operation 4 reaches the worker occupancy-budget invariant, with later suffix incomplete. Not an accepted complete trace or kernel-proved prefix. | H5 request 2: callback-aware activation bound, altitude-preserving. |
-| H4 dump cancellation | Accepted getter and kernel-checked internal room 3720 versus source-derived C room 3724. Concrete empty-list case; dead-cursor extension is inspection only. No demonstrated compared-output difference. | H4 request 1 (document request 3): restore pre-nest cancellation snapshot, altitude-preserving. |
+| H5 batch backlog | Kernel-checked accepted constructed fixture trace and backlog, separate replay summary; not captured Linux | Historical over de62c9d. Main `9db558b` adds completion guard; corrected refusal/carry open |
+| H5 nested refill | Evaluated initialized prefix/source review; operation 4 reaches worker occupancy-budget invariant; later suffix incomplete | Neither accepted complete trace nor kernel-proved prefix; callback-aware bound requested |
+| H4 dump cancellation | Accepted getter, kernel-checked internal room 3720 versus source-derived C 3724 | Restore pre-nest snapshot; no demonstrated compared-output mismatch. Dead-cursor extension only inspected |
 
-Other local alias examples, the 4096-turn boundary and statement-domain
-qualifications are not accepted-run findings. H1, H2, H3 and H6 have no ranked
-mirror-change request at this checkpoint.
+Alias examples, statement qualifications and the 4096 boundary are not
+accepted-run findings. H1/H2/H3/H6 have no ranked mirror-change request.
 
-## Validation, effort and trust limitations
+## Validation and trust limitations
 
-Standalone H1 restart support additionally passed a 116-job scoped build,
-standard-axiom inspection of all seven declarations and fresh stock kernel
-replay of `Noise.RestartFrames` (exit 0). Root reviewed the small insert/erase
-and named-variant proofs. One Lean draft failed on map normalization and retained
-read handling; its corrected build and later naming-correction build passed.
-One Python quoting error preceded any write or Lean launch. No infrastructure
-retry or resource-limit change occurred. These files add no headline and are
-outside the six Statements import closures.
+Latest six-target build: **425 jobs**, all **240 headlines** standard axioms
+only (`propext`, `Classical.choice`, `Quot.sound`); token/import/root/default/
+projected-name checks pass. Latest Config build: 215 jobs, 77 headlines plus
+13 suffix support declarations, fresh stock kernel replay exit 0. Independent
+read-only source review found no issue. Earlier closed increments also passed
+affected scoped builds, axiom checks and fresh replay; counts, corrected draft
+failures and review dispositions are in their commits. Reviews did not rerun
+reported validation. All review findings were fixed, including unconditional
+source correspondence, explicit supplied dump envelopes and cursor-reset scope.
+Standalone H1 restart support separately passed 116 jobs, seven declarations
+and fresh replay; it adds no headline.
 
-All headline declarations use only `propext`, `Classical.choice` and
-`Quot.sound`; structural/token checks pass. Source factoring, ordered effects,
-WP composition and finite induction were used without changing mirror
-definitions. Ordinary elaboration/normalization failures were corrected;
-their detailed iterations remain in commit history, not duplicated here.
-
-Each checkpoint below passed its scoped build, standard-axiom checks, fresh
-stock kernel replay (exit 0). Independent review has passed through the H6
-receive-data increment and now the H4 remove-all/REPLACE_PEERS request increments.
-The latter independent read-only pass found no correctness/source-correspondence
-issue; selection guarantees a present cut on normal return and the report keeps
-post-free assumptions explicit. Separate independent read-only passes also found
-no correctness/source-correspondence findings in H4 REMOVE_ME/replacement-converse
-and the three H6 outgoing/common-receive traversal increments. They checked the
-original caller ordering, exact effect/source relations, projection boundary and
-report scope. The H4 pass confirmed the already-recorded commit-wording
-correction from “empty peer list” to the selected peer's allowed-IP list. These
-reviews did not rerun the reported build, axiom or kernel-replay checks.
-An independent read-only pass also found no issue in the immediate H6 retry
-boundary: all-outcome equality retains the comparison and give-up tail, normal
-effects retain count/identity/empty queue, and no scheduled twentieth callback is
-asserted. Its fresh stock kernel replay subsequently passed (exit 0).
-Counts record the check at
-that increment, not the current number of declarations. Earlier H1 confirmation
-had 140 build jobs/20 headlines; H3 response 59 jobs; H2 coherence 206 jobs;
-H5 drain 196 jobs/32 headlines plus four source equations. Earlier H4/H6 checks
-remain recorded in their commits, and affected shared C2 changes were rechecked.
-
-| Increment | Build jobs | Headlines + support checked | Corrected Lean drafts |
-| --- | ---: | ---: | ---: |
-| H6 incoming response | 207 | 36 + 4 | 5 |
-| H4 removal/collision | 185 | 66 + 5 | 5 |
-| H3 initiation | 73 | 10 + 4 | 19 |
-| H2 session allocation | 209 | 49 + 7 | 1 |
-| H6 outgoing response | 210 | 37 + 4 | 3 |
-| H3 failure-retaining inspection | 76 | 12 + 7 | 2 |
-| H3 whole-poll setter attempts | 80 | 13 + 12 | 2 |
-| H2 allocation sequence | 212 | 50 + 6 | 4 |
-| H4 insertion/readback | 190 | 68 + 11 | 14 |
-| H5 receive-poll bound | 210 | 33 + 15 | 10 |
-| H6 data completion | 213 | 38 + 5 | 9 |
-| H4 root transfer/readback | 196 | 70 + 8 | 5 |
-| H2 successful lookup | 213 | 51 + 3 | 1 |
-| H2 normal empty lookup | 215 | 52 + 3 | 1 |
-| H6 receive-data timers | 216 | 39 + 3 | 4 |
-| H4 REMOVE_ME request | 200 | 72 + 6 | 9 |
-| H4 replacement converse | 202 | 73 + 3 | 3 |
-| H6 outgoing response traversal | 219 | 40 + 5 | 3 |
-| H6 outgoing initiation traversal | 222 | 41 + 3 | 0 |
-| H6 common receive traversal | 231 | 43 + 9 | 1 |
-| H4 remove-all phase order | 207 | 74 + 10 | 4 |
-| H4 REPLACE_PEERS request | 209 | 75 + 4 | 3 |
-| H4 two-fragment readback | 212 | 76 + 10 | 7 |
-| H4 finite IPv4 suffix readback | 215 | 77 + 13 | 10 |
-| H6 immediate retry boundary | 233 | 44 + 3 | 3 |
-| H6 pending-zero-key give-up | 235 | 45 + 2 | 4 |
-
-The counted drafts were source/elaboration corrections, not infrastructure retries.
-The separate duplicate-build process error below is not counted as a corrected draft.
-Failed recovery declarations containing `sorryAx` were never accepted. H3
-initiation's count includes one diagnostic build; H4 insertion includes the
-avoided inherited counter import and one deterministic elaboration-limit failure.
-H3 inspection had two prototype failures and no implementation failures; H2
-sequence had two of each; H5 poll had two prototype/eight implementation failures.
-H6 data completion had seven prototype/two implementation failures plus one
-JavaScript typo before Lean launched. H4 root transfer had one prototype/four
-implementation failures, including two broad simplifier-limit failures resolved
-by exact source factoring. H2 lookup had one prototype tactic-availability
-failure and no implementation failures. H6 receive-data timers had two prototype
-and two implementation normalization failures. H4 REMOVE_ME had one pure-effect,
-four peer-source and four device-wrapper draft failures, including one diagnostic
-build and three simplifier-limit failures. The wrapper initially retained the
-DeviceRef default name alongside an index; using the existing index-only selector
-corrected that statement-constructor mistake without changing limits or the mirror.
-Its preceding bounded prototype passed on the first invocation. The replacement
-converse had two constant-normalization draft failures and one explicit-sequence
-projection mismatch; no limit failure or retry. H6 outgoing traversal had one
-unit-erasure and two read-contract composition draft failures. The outgoing
-initiation increment built without failed drafts; common receive traversal had
-one branch/bind normalization failure. H4 remove-all had four drafts failing on
-map/shape normalization, Boolean membership, loop normalization and a missing
-model import; no infrastructure retry or resource-limit increase. H4 REPLACE_PEERS
-had three source drafts fail on helper/constant normalization and broad
-congruence hitting the unchanged deterministic heartbeat limit. Explicitly typed
-continuation congruence and a checked Boolean constant resolved these; the
-claims and selected-device strengthening built without failures.
-
-**Process error:** after observing the second REPLACE_PEERS source draft fail,
-a single orchestration cell unconditionally launched the dependent claims build,
-which repeated that unchanged source failure. This was neither an infrastructure
-outcome nor a permitted retry. It is recorded separately from the corrected
-drafts; subsequent dependent builds were launched only after inspecting success.
-No limit was raised, and neither failed output was accepted.
-H6 immediate retry boundary had three source drafts fail: a missing namespace
-for the total-return contract and two normalization attempts around the exact
-state/error bind. A direct concrete run equality resolved these without changed
-limits. Its claims and headline built on their first invocations. Successful outputs were reused when only
-wrapped/zero-axiom output parsing needed correction; no resource limit increased.
-
-H4 multipart had seven failed corrected drafts across ten implementation builds:
-syntax, side-condition/WP normalization, one deterministic heartbeat limit,
-JSON lookup and bind normalization. A small exact resume factor resolved the
-heartbeat failure without increasing limits; the headline build passed first
-invocation. Fresh Config replay exited zero. Independent source review found no
-correctness issue and requested explicit disclosure of the supplied envelope and
-untraversed other peers; the headline and report now state both limitations.
-No infrastructure retry, cap change or mirror/shared edit occurred.
-
-H2 empty-result inversion had one failed draft due to unavailable unique-existence
-notation; the theorem uses explicit existence and uniqueness instead. The
-corrected source and headline builds passed, as did fresh Index replay (exit 0).
-Independent read-only review found no correctness/source/scope issue, including
-the first-row stopping rule and exact NULL store.
-
-H6 pending-zero-key give-up had four failed corrected drafts: a reserved binder,
-record layout syntax, the remaining record layout plus conjunction unpacking,
-and concrete monadic run normalization. Explicit run simplification followed by
-definitional equality closed it with unchanged limits. Its headline build passed
-first invocation. Independent read-only review found no correctness/source/scope
-issue in the exact state and decision-log effect. No infrastructure rerun was
-needed for this increment.
-
-H3 whole-poll attempt inspection passed after two corrected draft failures
-(reserved field name and let/projection normalization), with six scoped build
-invocations in total. The headline build, standard-axiom checks and fresh
-Roaming replay passed (exit 0). Independent read-only review found no issue in
-source correspondence, per-iteration state threading, attempt retention or scope.
-No infrastructure retry, resource-limit increase or new frame was needed.
-
-H4 finite suffix readback used twelve implementation build invocations with ten
-corrected failures (source/loop normalization, staged WP composition, tuple
-inference, arithmetic and list membership). Its Config build, all 77 headlines
-plus 13 support axiom checks and fresh replay passed. Independent read-only
-review found no source/correctness/scope issue. No infrastructure retry, cap or
-limit increase, new frame or shared edit occurred.
-
-Review dispositions: H5 drain and H2 sequence made source correspondence
-unconditional and kept bounds only on effects; H3 initiation distinguished
-`memcmp` replay ordering from signed wrapping clocks; H4 readback clarified the
-peer’s allowed-IP list; H4 transfer clarified that only the allowed-IP cursor
-and sequence reset. All findings were fixed. H5 drain's staged EOF whitespace
-was corrected in the next commit. Both pre-adjustment and changed-interface H2
-sequence replays passed; this was source-driven revalidation, not a retry.
-The six-target scoped build passes together (425 jobs), with existing unused-simp
-and deprecated-tactic warnings. Combined inspection covers all 240 headlines. This does **not**
-constitute a passing full gate.
-
-The full gate was last actually run at `69f988a` and **failed** in inherited
+Full gate last actually ran at **`69f988a`: failed** in inherited
 `WG/CounterWindow/Refinement.lean` and `WG/ReplayWindow/Counterexamples.lean`
-(counter operands and index-owner carries). Campaign 1 owns those repairs.
-No existing shared lemma was edited.
+(counter operands/index-owner carries). Campaign 1 owns repair. Scoped passes
+are not a full-gate pass; existing shared lemmas were not edited.
 
-**Two infrastructure incidents, one rerun each:** at `84355d1`, a combined
-import overlapped an active rebuild and found `ReceiveFrames.olean` absent.
-At the normal-empty-lookup checkpoint, root again incorrectly parallelized the
-combined import check with the six-target build; the latter rebuilt the
-comment-changed Config Statements module, so the check failed on its temporarily
-missing object file. In each case one rerun after confirmed build completion
-passed. The second incident's six-target build passed 416 jobs and its sole
-rerun checked all 237 headlines. These failures were not accepted as passes.
-Combined import/axiom checks are henceforth sequentially dependent on a completed
-build, even for docstring changes. This is separate from the duplicate failed
-source-build process error above. There have been no memory-cap hits, cap
-increases, guest runs or guest timeouts.
+**Two infrastructure failures, one rerun each:** `84355d1` import overlapped
+rebuild and missed ReceiveFrames.olean; `9019ca8` repeated that orchestration
+mistake while Config Statements rebuilt, missing its object. Each sole rerun
+after confirmed build completion passed. Build and dependent import/axiom
+checks are now sequential, including docstring changes.
 
-A bounded read-only trial kernel-checked one original
-`curve25519 (List.replicate 32 17) basePoint` equation through the finite
-evaluator bridge (`decide +kernel`, about 0.334 s, standard axioms). Candidate
-bytes from ordinary evaluation were not proof. The **single reduction trial of
-`executeTrace QueueRefill.concreteTrace` failed**, exit 1, at stock simplifier
-step exhaustion, using the checked original-pow rewrite. This was capped stdin
-with 32 threads, unchanged limits and a 120-second trial budget. Its
-failed recovery declaration printed `sorryAx`; no theorem or source file was
-obtained or committed. There was no retry, timeout, limit increase or rebuild.
-This does not show the target equation false or establish full-prefix throughput.
+**Separate process violation at `314d13e`:** an unconditional dependent build
+repeated an unchanged failed REPLACE_PEERS source draft. This was not
+infrastructure or a permitted retry. Launch control was corrected; neither
+failure was accepted. There have been no cap hits/increases, guests or guest
+timeouts. Ordinary corrected elaboration failures remain failures, documented
+in commits; deterministic limits were not raised.
 
-Stock trust-surface annotations are recorded explicitly: `repeatM` uses
-`implemented_by repeatM.erased`, and stock `Nat.powMod` has an external
-implementation annotation. The finite proof uses logical definitions, a checked
-fixed-point equation and induction, not those executable overrides as oracles.
-No project axiom or forbidden trusted-code declaration was added.
+One bounded trial kernel-checked original curve25519 through the finite power
+bridge (about 0.334 s). A separate single full QueueRefill reduction trial failed
+at stock simplifier-step exhaustion with exit 1; its recovery printed sorryAx.
+No theorem was obtained/committed, no retry or limit increase occurred.
+The small bridge proves neither full-prefix throughput nor trace acceptance.
+
+Stock `repeatM` has `implemented_by repeatM.erased`; stock `Nat.powMod`
+has an external implementation annotation. Proofs use logical definitions,
+checked equations and induction, not executable overrides as oracles.
+No project axiom or forbidden trusted declaration was added.
 
 Reproduce scoped validation with the six targets (default memory cap unchanged):
 
