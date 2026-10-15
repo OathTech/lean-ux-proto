@@ -449,7 +449,7 @@ local instance : Labels := Image.linkedLabels
 
 def run (initial : MachineState) (seed : UInt64) : Except String (MachineState × Nat) := do
   let mut r : Run := {state := initial}
-  for n in [:200] do
+  for n in [:1000] do
     if r.state.pc == Int64.ofNat stopAddr then return (r.state, n)
     let some decoded := pinnedFetch r.state.pc
       | throw s!"missing pinned instruction {r.state.pc.toBitVec.toNat}"
@@ -542,9 +542,63 @@ def peerNull : Except String Nat := do
       checkMemory expected after.data.dmem
       total := total + n
   return total
+/-- Nonnull helper paths with actual decoded callback bodies. Expected
+    coverage and comparison records are explicit path observations; expected
+    peer memory is one unchanged or incremented word. No test proves Pre. -/
+def peerNonnull : Except String Nat := do
+  let mut total := 0
+  for old in [0, 1, 0x7ffffffe] do
+    for (mode, capacity) in [(2, 1024), (3, 1024), (0, 1024), (2, 0), (3, 0), (2, 3), (3, 6)] do
+      let base := fixture mode 0 capacity 0
+      let memory := base.data.dmem.storeBytes (.ofNat 64 (stackAddr-64)) (List.replicate 64 0)
+      let memory := put memory (0x600000+0x420) 4 old
+      let regs := {base.data.regs with rdi := 0x600000, rbx := 0x8000000000000011, r15 := 0xfedcba9876543210}
+      let before := {base with pc := Image.PeerGet.entry, data := {base.data with dmem := memory, regs}}
+      let mut expected := memory
+      for (value, n) in [before.data.regs.r15, before.data.regs.r14, before.data.regs.r13,
+          before.data.regs.r12, before.data.regs.rbp, before.data.regs.rbx].zipIdx do
+        expected := put expected (stackAddr-(n+1)*8) 8 value.toNat
+      expected := put expected (stackAddr-56) 8 (Image.PeerGet.entry+0xa2).toBitVec.toNat
+      if old != 0 then expected := put expected (0x600000+0x420) 4 (old+1)
+      let pcs : List Nat := if old == 0 then [0x12, 0x20, 0x32, 0xb5, 0xc3, 0xd4, 0xa2]
+        else [0x12, 0x20, 0x32, 0x44, 0x6e, 0x80, 0x94, 0xa2]
+      if mode == 2 then
+        let mut count := 0
+        for offset in pcs do
+          if count+1 < capacity then
+            count := count+1
+            expected := put expected coverageAddr 8 count
+            expected := put expected (coverageAddr+8*count) 8
+              (Image.PeerGet.entry+Int64.ofNat offset).toBitVec.toNat
+      let comparisons : List (Nat × Nat × Nat) := if old == 0 then
+          [(5, 0, 0x3b), (5, 0, 0xbe), (5, 1, 0xcf), (5, 0, 0xdd)]
+        else [(5, old, 0x3b), (1, 1, 0x60), (5, old, 0x77), (5, old+1, 0x8a), (5, old, 0x9d)]
+      if mode == 3 then
+        let mut count := 0
+        for (tag, arg, offset) in comparisons do
+          if 4*count+5 ≤ capacity then
+            expected := put expected (coverageAddr+8*(4*count+1)) 8 tag
+            expected := put expected (coverageAddr+8*(4*count+2)) 8 0
+            expected := put expected (coverageAddr+8*(4*count+3)) 8 arg
+            expected := put expected (coverageAddr+8*(4*count+4)) 8
+              (Image.PeerGet.entry+Int64.ofNat offset).toBitVec.toNat
+            count := count+1
+            expected := put expected coverageAddr 8 count
+      for seed in [0, 0xffffffffffffffff] do
+        let (after, n) ← run before seed
+        checkABI before after
+        unless after.data.regs.rax == (if old == 0 then 0 else 0x600000) do
+          throw s!"nonnull peer-get result mismatch: count={old}, mode={mode}, capacity={capacity}"
+        checkMemory expected after.data.dmem
+        total := total+n
+  return total
 end ServiceTests
 
 def main (args : List String) : IO UInt32 := do
+  if args == ["peer-nonnull"] then
+    match ServiceTests.peerNonnull with
+    | .error message => IO.eprintln message; return 1
+    | .ok n => IO.println s!"PASS: 21 nonnull peer-get cases, two undefined-value seeds, {n} instructions"; return 0
   if args == ["peer-null"] then
     match ServiceTests.peerNull with
     | .error message => IO.eprintln message; return 1

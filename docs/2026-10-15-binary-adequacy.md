@@ -446,3 +446,54 @@ correspondence theorem, whole-World `R`, the composed bucket loop,
 simulation/transport theorem are still outstanding. No milestone rate is
 inferred from these supporting lemmas. The mirror-lane landing paste has
 not arrived; main has not been merged, and finding 1 is unchanged.
+
+## Nonnull helper execution, 2026-10-15
+
+`PeerDeadEntry.dead_entry_to_return` executes the complete nonnull,
+zero-refcount helper path. `PeerLiveEntry.live_entry_to_return` executes the
+accepted nonzero-count path, returning the original pointer and establishing
+the exact four-byte count increment. Both restore the entry ABI and give
+byte-level memory frames. Together with the null case these cover the
+physical endpoint cases of an accepted helper run. They do not yet prove
+whole-World correspondence at the intervening decision points, and are not
+the charter's complete helper simulation theorem.
+
+`PeerComparisons` carries the exact pushed return word as well as callback
+readiness and memory framing. `PeerLoad` composes the nonnull guard, physical
+refcount load, and initial comparison. `PeerDeadCallbacks` and
+`PeerLiveCallbacks` compose the instrumentation sequences and actual branch
+instructions. `PeerIncrement` proves the CMPXCHG/comparison composition;
+`PeerIncrementFinish` connects it through the signed checks and return.
+The old/new sign bounds are ordinary bitvector consequences of the mirror's
+accepted-count bound. They are used only on the live path. Zero counts are
+admitted by the dead path; finding 1 and its two-lookup witnesses remain
+unchanged. No assumption or service contract was added to `TrustBase.lean`.
+
+Validation: full-parallel `BinaryProofs` and executable build passed (199
+jobs); `leanchecker` replayed all ten new proof modules; all 159 printed
+axiom dependencies in the build were standard, and the source audit found
+no forbidden token in 45 binary Lean files. The fast tier passed 124 tests
+with one skip (24.227 seconds). `capped --
+binary/.lake/build/bin/binary-probe peer-nonnull` passed 21 configurations
+with two undefined-value seeds, executing 9,982 instructions. It checks the
+entire memory and ABI against explicit expected PC/comparison records,
+counts zero, one and `0x7ffffffe`, high-bit saved registers, disabled
+capture, both capture modes, empty and partially filled capacities. This
+uses actual service bodies and synthetic physical entries; it is not a
+captured kernel entry or a formal witness for `Pre_lookup`. Several draft
+proof builds failed elaboration and were corrected before the completed
+build and replay; none is counted as a pass.
+
+The whole-World audit identifies routing state, pending work and NET_RX
+pending state as physical, and work/timer address associations as naming
+knowledge derived from execution history. These must not become arbitrary
+supplied environment fields. The lookup output slot also needs an ABI
+postcondition apart from `R`. These remain implementation obligations.
+
+Milestone 1 is still open: actual-history correspondence for peer-get,
+whole-World `R`, the bucket-loop composition, `Pre_lookup` with its
+satisfying execution witness, and the function simulation/transport remain.
+No function is certified and no R-region rate is inferred from endpoint
+supporting lemmas. The milestone report still owes the measured rate and
+the trust base verbatim. No mirror landing paste has arrived; no main merge
+or push has occurred.

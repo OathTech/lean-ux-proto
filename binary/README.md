@@ -23,7 +23,7 @@ LEANUX_QEMU_SLOTS=16 capped -- /usr/bin/python3 binary/run.py --trace d1_second_
 capped -- /usr/bin/python3 binary/census.py
 cd binary
 capped -- lake build BinaryProofs
-capped -- lake env leanchecker TrustBase ServiceImage ServiceComposition KcovInvariant KcovExecution PeerCall PeerStart PeerReturn PeerFinish PeerNull PeerNullEntry FixtureKnowledge StackFrame BucketLoop Execution History HistoryRegions RegionExecution MirrorLoop MirrorPeer MirrorHistory LookupObservation Memory Image ImageLayout Layouts Regions PeerRegions PeerPrologue Prologue BucketEntry Representation KeypairRepresentation Symbolic
+capped -- lake env leanchecker TrustBase ServiceImage ServiceComposition KcovInvariant KcovExecution PeerCall PeerStart PeerReturn PeerFinish PeerNull PeerNullEntry PeerComparisons PeerLoad PeerDeadCallbacks PeerDeadFinish PeerDeadEntry PeerIncrement PeerLiveCallbacks PeerLiveFinish PeerIncrementFinish PeerLiveEntry FixtureKnowledge StackFrame BucketLoop Execution History HistoryRegions RegionExecution MirrorLoop MirrorPeer MirrorHistory LookupObservation Memory Image ImageLayout Layouts Regions PeerRegions PeerPrologue Prologue BucketEntry Representation KeypairRepresentation Symbolic
 ```
 
 Generated state, census and comparison output go under `.tmp/binary-tv`;
@@ -60,6 +60,7 @@ KCOV comparison writes and ABI/memory contracts:
 ```sh
 capped -- binary/.lake/build/bin/binary-probe service-tests
 capped -- binary/.lake/build/bin/binary-probe peer-null
+capped -- binary/.lake/build/bin/binary-probe peer-nonnull
 capped -- /usr/bin/python3 binary/generate.py
 ```
 
@@ -75,4 +76,9 @@ through actual fetched instructions and the named PC callback contract.
 `peer-null` executes that path with real callbacks in four configurations,
 checking the complete memory and restored ABI under two undefined-value
 seeds. It is a synthetic test, not a witnessed `Pre_lookup` or a kernel
-entry snapshot. Non-null paths and whole-function correspondence remain open.
+entry snapshot. `PeerDeadEntry.dead_entry_to_return` and
+`PeerLiveEntry.live_entry_to_return` cover the nonnull zero-count and accepted
+nonzero-count paths, respectively. The live proof establishes the exact
+four-byte increment. `peer-nonnull` checks both paths, including the largest
+accepted count, active/disabled/full buffers and both capture modes, against
+the decoded service bodies. Whole-function correspondence remains open.
