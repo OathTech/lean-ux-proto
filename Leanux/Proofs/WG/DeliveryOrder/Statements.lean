@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Queues.RxRunnerHistory
 import Leanux.Proofs.WG.Queues.FullRing
 import Leanux.Proofs.WG.Queues.RingOccurrences
 import Leanux.Proofs.WG.Queues.EnqueueAdmission
@@ -1300,8 +1301,9 @@ theorem original_environment_deferred_joint (call : Lifetimes.EnvDeferredCall) :
 /-- Every remaining original environment caller, including observation, uses its
 concrete stamped timer/traffic path or an inspected poll-free control observer.
 The same incoming audit history projects directly, with failed-prefix uniqueness
-and normal release boundaries. Initialized syscall/Runner composition, successful
-stack delivery and joint receive-pipeline conservation remain separate obligations. -/
+and normal release boundaries. The initialized syscall/Runner composition follows
+below; successful stack delivery and joint receive-pipeline conservation remain
+separate obligations. -/
 theorem original_environment_remaining_joint (call : Lifetimes.EnvRemainingCall) :
     ErasesPrefix (Queues.RxHistory.remaining call) call.original ∧
     ProjectsUnder Lifetimes.AuditInv Queues.RxHistory.auditEvent
@@ -1314,5 +1316,49 @@ theorem original_environment_remaining_joint (call : Lifetimes.EnvRemainingCall)
     Queues.RxHistory.remaining_preserves call,
     fun w hi => (Queues.RxHistory.remaining_preserves call w []
       (Queues.RxHistory.boundary_initial w hi)).choose_spec.2.1⟩
+
+/-- Every original dispatch/syscall arm and fixture holder-close boundary has
+exact source and same-history audit correspondence. Normal negative errno still
+runs the original worker/timer suffix; failed prefixes retain entry uniqueness. -/
+theorem original_syscall_family_joint (call : Lifetimes.SyscallAuditCall) :
+    ErasesPrefix (Queues.RxHistory.syscallFamily call) call.original ∧
+    ProjectsUnder Lifetimes.AuditInv Queues.RxHistory.auditEvent
+      (Queues.RxHistory.syscallFamily call) call.observed ∧
+    PrefixPreserves Queues.RxHistory.BoundaryInv Queues.RxHistory.BoundarySafe
+      (Queues.RxHistory.syscallFamily call) ∧
+    ∀ w, Lifetimes.AllocationInv [] w →
+      Queues.RxHistory.BoundarySafe (runPrefix (Queues.RxHistory.syscallFamily call) w []).2 :=
+  ⟨Queues.RxHistory.syscallFamily_erases call, Queues.RxHistory.syscallFamily_projects call,
+    Queues.RxHistory.syscallFamily_preserves call,
+    fun w hi => (Queues.RxHistory.syscallFamily_preserves call w []
+      (Queues.RxHistory.boundary_initial w hi)).choose_spec.2.1⟩
+
+/-- Every typed initialized Runner trace and both flags retain distinct committed
+callback-entry allocation stamps, even on Stop, and exactly the existing full R2
+audit/probe history. Copied trials remain isolated. No parser, length, success,
+drain, credit or progress premise is added. Callback entry does not assert stack
+completion, and receive-pipeline conservation remains a separate obligation. -/
+theorem initialized_runner_joint (trace : Leanux.Runner.Trace) (placeholders floodExact : Bool) :
+    Logged.ErasesOuter (Queues.RxHistory.executeTraceHistory trace placeholders floodExact)
+      (Leanux.Runner.executeTrace trace placeholders floodExact) ∧
+    Queues.RxHistory.BoundarySafe
+      (Logged.runPrefixOuter (Queues.RxHistory.executeTraceHistory trace placeholders floodExact) []).2 ∧
+    Logged.runPrefixOuter (Lifetimes.executeTraceAudit trace placeholders floodExact) [] =
+      ((Logged.runPrefixOuter (Queues.RxHistory.executeTraceHistory trace placeholders floodExact) []).1,
+       Queues.RxHistory.auditHistory
+         (Logged.runPrefixOuter (Queues.RxHistory.executeTraceHistory trace placeholders floodExact) []).2) ∧
+    ∀ p ∈ Lifetimes.probeEntries (Queues.RxHistory.auditHistory
+        (Logged.runPrefixOuter (Queues.RxHistory.executeTraceHistory trace placeholders floodExact) []).2),
+      Lifetimes.AllocationInv p.history p.world ∧
+      (p.world.suspended.filterM Leanux.Env.Activation.consistent).run p.world =
+        (p.world.suspended.filterM (fun a => Lifetimes.activationTrialDecision a p.world p.history)).map
+          (fun ys => (ys, p.world)) ∧
+      ∀ a ∈ p.world.suspended,
+        Lifetimes.LifetimeEvent.Safe
+          (runPrefix (Lifetimes.activationRunPrefix a) p.world p.history).2 :=
+  ⟨Queues.RxHistory.executeTraceHistory_erases trace placeholders floodExact,
+    Queues.RxHistory.executeTraceHistory_safe trace placeholders floodExact,
+    Queues.RxHistory.executeTraceHistory_projects trace placeholders floodExact,
+    Queues.RxHistory.executeTraceHistory_trials trace placeholders floodExact⟩
 
 end Leanux.Proofs.WG.DeliveryOrder
