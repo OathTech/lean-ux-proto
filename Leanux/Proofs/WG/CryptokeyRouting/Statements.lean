@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.AllowedIps.RoutingEnvTimersFrames
 import Leanux.Proofs.WG.AllowedIps.RoutingHandshakeReceiveFrames
 import Leanux.Proofs.WG.AllowedIps.RoutingMaintenanceFrames
 import Leanux.Proofs.WG.AllowedIps.RoutingRxFrames
@@ -66,8 +67,10 @@ all fixture/prefill modes. Concrete TX/Stack/RX, receive admission, NAPI, crypt
 iterations, timer callbacks and device open/up/namespace exit preserve routing
 through whole-call lifts, permitting peer deletion. Session creation, incoming
 Noise/cookie handling and the concrete handshake receive iteration now have
-original routing frames too. Enclosing scheduler/Env/syscall
-and Runner execution, and packet authorization, remain separate.
+original routing frames too. Complete activation runs, dispatch, scheduling and
+nested rescheduling, deferred workers and both environment timer modes now
+retain routing. Remaining Env/syscall and Runner execution, and packet
+authorization, remain separate.
 Actual local parser output now discharges address shape for the setAllowedip
 guards and its selected bounded insertion. Complete original free normally
 clears both represented families and every resident list, preserving the other
@@ -2081,7 +2084,8 @@ routing on normal return, including ordinary negative errors. Peer deletion is
 allowed, and subsequent cached writes are justified by actual source getters.
 Whole-call lifts retain the existing journal and optional routing state; no
 resident-owner, reference-credit, saved-list, successful-drain or fixture premise
-is needed. Timer scheduling and enclosing Runner execution remain separate. -/
+is needed. Timer scheduling is composed separately below; enclosing Runner
+execution remains separate. -/
 theorem original_timer_device_routing (initial : FlatTable × FlatTable)
     (pid : WG.PeerId) (timer : WG.PeerTimer) :
     RetainsRoutingCall (WG.timerCallback pid timer) ∧
@@ -2136,8 +2140,8 @@ theorem original_handshake_receive_routing_frames (msg : List UInt8) (src : WG.S
 /-- Silent whole-call handshake lifts erase exactly to the originals on every
 input. Normal returns preserve optional routing/flat agreement; every outcome
 leaves the completion journal unchanged, retaining prior history safety on Stop
-without a failed World. No packet authorization, enclosing scheduler or Runner
-closure follows from these local caller contracts. -/
+without a failed World. Scheduler composition is supplied below; no packet
+authorization or Runner closure follows from these local caller contracts. -/
 theorem original_handshake_routing_completion (initial : FlatTable × FlatTable)
     (msg : List UInt8) (src : WG.SkbSource) :
     (Logged.ErasesPrefix (Logged.liftPrefix (Event := RoutingCompletion) (WG.consumeInitiation msg))
@@ -2172,5 +2176,91 @@ theorem original_handshake_routing_completion (initial : FlatTable × FlatTable)
   exact ⟨lift _ (consumeInitiation_routing msg), lift _ (consumeResponse_routing msg),
     lift _ (cookieMessageConsume_routing msg), lift _ (receiveHandshakePacket_routing msg src),
     lift _ receiveStep_routing, lift _ actualReceiveIter_routing⟩
+
+/-- The actual pre-encryption helper, all activation iterations and complete
+scheduler retain routing on normal return from arbitrary Worlds. Exact source
+scheduler erasure supplies this frame, including copied consistency trials and
+their original Stops; there is no successful-trial or entry-invariant premise.
+Silent whole-call lifts preserve optional routing on normal return and retain
+prior safe completion histories on Stop, without a failed World. -/
+theorem original_scheduler_routing (initial : FlatTable × FlatTable)
+    (pid : WG.PeerId) (a : Activation) (worker : Worker) (stack : Option Worker) :
+    RetainsRoutingCall (Env.cryptAhead pid) ∧
+    RetainsRoutingCall (Env.Activation.iter a) ∧
+    RetainsRoutingCall (Env.Activation.run a) ∧
+    RetainsRoutingCall (Env.dispatch worker) ∧
+    RetainsRoutingCall (Env.schedule stack) ∧
+    RetainsRoutingCall (Env.nestedResched worker) ∧
+    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+      (Logged.liftPrefix (Env.Activation.run a)) ∧
+    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+      (Logged.liftPrefix (Env.dispatch worker)) ∧
+    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+      (Logged.liftPrefix (Env.schedule stack)) ∧
+    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+      (Logged.liftPrefix (Env.nestedResched worker)) :=
+  ⟨cryptAhead_routing pid, activationIter_routing a, activationRun_routing a,
+    dispatch_routing worker, schedule_routing stack, nestedResched_routing worker,
+    global_completion_lift initial _ (activationRun_routing a),
+    global_completion_lift initial _ (dispatch_routing worker),
+    global_completion_lift initial _ (schedule_routing stack),
+    global_completion_lift initial _ (nestedResched_routing worker)⟩
+
+/-- Actual deferred crypt/send/clear workers and transmit completion retain
+routing and surviving peer lists. Queue membership supplies no residency premise;
+the original fresh getters justify setters or Stop. The existing bounded drain
+contract is included without a drain-success assumption. Whole-call lifts keep
+the journal unchanged on every outcome and optional state only on normal return. -/
+theorem original_environment_worker_routing (initial : FlatTable × FlatTable)
+    (what : String) (queues : List Bool) (upTo : Option WG.PeerId) :
+    Framing.SameView routingView (Env.requireDrained what queues) ∧
+    RetainsRoutingCall Env.runCryptWorkers ∧
+    RetainsRoutingCall Env.runOneSendWorker ∧
+    RetainsRoutingCall Env.runOneClearWorker ∧
+    RetainsRoutingCall Env.runSendWorkers ∧
+    RetainsRoutingCall Env.afterXmit ∧
+    RetainsRoutingCall (WG.drainHandshakeSendWq upTo) ∧
+    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+      (Logged.liftPrefix Env.runCryptWorkers) ∧
+    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+      (Logged.liftPrefix Env.runSendWorkers) ∧
+    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+      (Logged.liftPrefix Env.afterXmit) :=
+  ⟨requireDrained_routing what queues, runCryptWorkers_routing, runOneSendWorker_routing,
+    runOneClearWorker_routing, runSendWorkers_routing, afterXmit_routing,
+    drainHandshakeSendWq_routing upTo,
+    global_completion_lift initial _ runCryptWorkers_routing,
+    global_completion_lift initial _ runSendWorkers_routing,
+    global_completion_lift initial _ afterXmit_routing⟩
+
+/-- Recorded timer dispatch, the original placeholder pass and enclosing idle/
+advance calls retain routing on normal return. All concrete timer callbacks are
+discharged; no due-entry residency, saved-list validity or progress assumption is
+added. Whole-call lifts retain prior safe history on Stop, with no failed World,
+packet authorization or initialized enclosing Runner claim. -/
+theorem original_environment_timer_routing (initial : FlatTable × FlatTable)
+    (worker : Worker) (pid : WG.PeerId) (timer : WG.PeerTimer) (jHi : UInt64) (ticks : Nat) :
+    RetainsRoutingCall (Env.runTimerSection worker (WG.timerCallback pid timer)) ∧
+    RetainsRoutingCall (Env.fireTimer worker jHi) ∧
+    RetainsRoutingCall (Env.runTimers jHi) ∧
+    RetainsRoutingCall (Env.runTimersPlaceholder jHi) ∧
+    RetainsRoutingCall Env.idleTimers ∧
+    Framing.SameView routingView (Env.advance ticks) ∧
+    RetainsRoutingCall Env.afterAdvance ∧
+    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+      (Logged.liftPrefix (Env.runTimers jHi)) ∧
+    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+      (Logged.liftPrefix (Env.runTimersPlaceholder jHi)) ∧
+    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+      (Logged.liftPrefix Env.idleTimers) ∧
+    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+      (Logged.liftPrefix Env.afterAdvance) :=
+  ⟨runTimerSection_routing worker _ (timerCallback_routing pid timer),
+    fireTimer_routing worker jHi, runTimers_routing jHi, runTimersPlaceholder_routing jHi,
+    idleTimers_routing, advance_routing ticks, afterAdvance_routing,
+    global_completion_lift initial _ (runTimers_routing jHi),
+    global_completion_lift initial _ (runTimersPlaceholder_routing jHi),
+    global_completion_lift initial _ idleTimers_routing,
+    global_completion_lift initial _ afterAdvance_routing⟩
 
 end Leanux.Proofs.WG.CryptokeyRouting
