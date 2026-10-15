@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Config.SocketReadbackClaims
 import Leanux.Proofs.WG.Config.SourceClaims
 import Leanux.Proofs.WG.Config.SuffixReadbackClaims
 import Leanux.Proofs.WG.Config.ClaimView
@@ -1179,5 +1180,32 @@ theorem original_ipv4_suffix_readback (d : Device) (p : Peer) (nodes : NodeId �
          .ok (suffixJson d p nodes (a :: b :: tail)))) :=
   suffixPeerDump_returns d p nodes a b tail pid ctx firstSkb secondSkb
     resident listed distinct endpoint readable fresh sequence firstRoom secondRoom
+
+/-- The original socket getter selects one resident peer and serializes a
+finite IPv4 list across two real 3776-byte chunks. The first callback fills
+its prefix and suspends at b; the first receive runs the resumed callback,
+which returns DATA, and the enclosing socket dump appends DONE and finalizes.
+The second receive finishes the original
+4096-iteration drain. Original coalescing checks the repeated device metadata
+and continuation guards. The device is unchanged; the socket is empty and
+idle, with cleared cursors, zero dump errno and the device generation.
+Capacity and residency are explicit premises, not a reachable-state bound;
+only b is excluded from the first prefix, with no global Nodup requirement. -/
+theorem original_socket_multipart_readback (pid : PeerId) (d : Device) (p : Peer)
+    (nodes : NodeId → AipNode) (front : List NodeId) (b : NodeId) (tail : List NodeId)
+    (sock : NlSock) (peers : d.peerList = [pid]) (resident : d.peers[pid]? = some p)
+    (listed : p.allowedipsList = front ++ b :: tail) (nonempty : front ≠ [])
+    (absent : b ∉ front) (readable : Ipv4Residents d nodes (front ++ b :: tail))
+    (endpoint : p.endpoint = none)
+    (firstFits : devicePrefixSpace d + 140 + 28 * front.length ≤ NLMSG_GOODSIZE)
+    (firstFull : NLMSG_GOODSIZE < devicePrefixSpace d + 140 + 28 * (front.length + 1))
+    (lastFits : devicePrefixSpace d + 44 + 28 * (b :: tail).length + 20 ≤ NLMSG_GOODSIZE)
+    (idle : sock.cbRunning = false) (empty : sock.queue = []) :
+    Campaign2.Returns (wgGetDevice (byIndex d))
+      (fun s => s.wg.device = some d ∧ s.wg.nlSock7 = sock ∧ ClaimView.selectsDevice s d)
+      (fun q s => q = .ok (suffixJson d p nodes (front ++ b :: tail)) ∧
+        s.wg.device = some d ∧ s.wg.nlSock7 = socketReadbackFinal sock d) :=
+  socketReadback_returns pid d p nodes front b tail sock peers resident listed nonempty
+    absent readable endpoint firstFits firstFull lastFits idle empty
 
 end Leanux.Proofs.WG.Config

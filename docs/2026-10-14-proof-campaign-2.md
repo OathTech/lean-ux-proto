@@ -13,12 +13,12 @@ the other H5 clauses and corrected-main carry remain open.
 | H1 Noise | 20 | State/slot edges, clearing/rotation, session effects, consecutive confirmation | Whole-call edges, totality, allocation-lifetime confirmation |
 | H2 Index | 52 | Exact index operations, all normal lookup outcomes, caller table safety, session coherence/allocation sequence | Reachable hashed uniqueness and owner/peer residency through all driver entries |
 | H3 Roaming | 13 | Authenticated handshake cuts, decrypt/first-poll join, complete poll setter-attempt audit | Queue/callback authentication invariant, broader caller coverage, final endpoint |
-| H4 Configuration | 77 | Leaves/flags, effective bounded readback, removal/replacement phase effects, root insertion/transfer, finite IPv4 suffix readback | Global ownership, queued cleanup/completion, mixed attributes, full getter pagination |
+| H4 Configuration | 78 | Leaves/flags, effective bounded readback, removal/replacement phase effects, root insertion/transfer, finite IPv4 suffix and actual two-chunk socket readback | Global ownership, queued cleanup/completion, mixed attributes, general getter pagination |
 | H5 Progress | 35 | Accepted operation boundaries, actual final-boundary backlog, scheduling inspections, cut/pow/drain/poll bounds | Whole-worker record decrease, global progress, corrected-main carry |
 | H6 Timers | 45 | Seven local arm sites, recorded delays, caller hook compositions, retry bound/give-up | Complete caller coverage, scheduler episodes, session-relative counting |
 
-**242 headlines**; latest checked increment: H5 accepted operation boundaries and
-backlog bridge. Scoped checks pass.
+**243 headlines**; latest checked increment: H4 original two-chunk socket getter.
+Scoped checks pass.
 The full proof gate remains **failed in inherited campaign-1 files**.
 
 [USER 2026-10-15] Resume before the split: factor claims over a WireGuard-only
@@ -60,7 +60,7 @@ universal execution contracts.
 | `Noise` | `Model`, `Slots`, state/consume edges; clear, rotation, session and confirmation-sequence `Model/Effects/Source` families; `Execution`, `AccessSource`, `RestartModel` | `KernelFrames`, `PeerFrames`, `SlotFrames`, `ClearFrames`, `RotationFrames`, `SessionFrames`, standalone `RestartFrames` |
 | `Index` | View/table/owner/allocation/release models; lookup provenance and empty-result source; lifecycle/caller operation sources; session coherence/allocation/sequence effects and sources | `IndexFieldFrames`, `OwnerFieldFrames`, `StoreFieldFrames`, `LifecycleFrames`, `NewlinkFrames`, `SendFrames`, `DispatchFrames`, `ResponseFrames`, `ConsumeFrames`, `StagedFrames`, `ReceiveFrames`, `ClearFrames`, `TimerFrames`, `FlushFrames`, `SessionCoherenceFrames`, `SessionAllocationFrames` |
 | `Roaming` | Endpoint/authentication claims; publication, poll endpoint/attempt, response, initiation and handshake-audit model/source/claim families | `Frames`, `PublicationFrames`, `PollEndpointFrames` |
-| `Config` | `ClaimView`, models/effects/source claims, observation bridge; allowed-IP removal/insertion/transfer, collision, removal flags, remove-all/replacement, multipart/suffix readback families | `ConcreteFrames`, `OperationFrames`, `ReadbackFrames`, `AllowedListFrames`, `AllowedRootFrames`, `AllowedRemovalFrames`, `AllowedPairsFrames`, `QuietFrames`, `LiveRemovalFrames`, `KeyFieldFrames`, `CollisionFrames`, `AllowedInsertFrames`, `RemoveAllFrames` |
+| `Config` | `ClaimView`, models/effects/source claims, observation bridge; allowed-IP removal/insertion/transfer, collision, removal flags, remove-all/replacement, multipart/suffix readback families; `SocketReadbackModel/Claims` and five substantive `SocketReadback*Source` files | `ConcreteFrames`, `OperationFrames`, `ReadbackFrames`, `AllowedListFrames`, `AllowedRootFrames`, `AllowedRemovalFrames`, `AllowedPairsFrames`, `QuietFrames`, `LiveRemovalFrames`, `KeyFieldFrames`, `CollisionFrames`, `AllowedInsertFrames`, `RemoveAllFrames` |
 | `Progress` | Model/view/source/observation claims; control/scheduler sources; cut, flush-queue, pow, drain and poll-bound model/source/effect/claim families; `RunnerBoundaryModel/Claims` are projected; `RunnerBoundarySource`, `RunnerBoundaryAuditSource` and `BacklogSource` connect the actual runner | `StackFrames`, `CutFrames`, `FlushQueueFrames` |
 | `TimerDiscipline` | Model/view/send-view/observation claims; recorded, send/retry/rearm/sequence/boundary, pending-give-up, session, data and traversal model/source/effect/claim families | `SourceFrames`, `RecordedFrames`, `RecordedJitterFrames`, `SectionFrames`, `SelectionFrames`, `RetryFrames`, `JitterFrames`, `InitiationFrames`, `InitiationPreservationFrames`, `SendCutFrames`, `SendPeerFrames`, `SendSocketFrames`, `SendBufferFrame`, `SendWorkerFrame`, `SendDispatchFrames`, `RetryDispatchFrames`, `RetryRearmFrames`, `WorkStateFrames`, `ResponseSessionFrames` |
 
@@ -249,9 +249,18 @@ The actual returned context feeds room at least `44 + 28 * (1 + tail.length)`,
 emitting the whole suffix, clearing allowed-IP cursor/sequence and consuming exact
 room. Later repeated IDs are allowed. Original coalescing uses actual fragments;
 device remains unchanged. Header, flags, DONE and capacities are supplied.
-Other peers, outer pagination, concurrent updates and setter composition are
-not covered. Global ownership, mixed attributes, final queued cleanup and total
-collision completion remain open.
+The complete original socket getter additionally covers one resident peer with
+no endpoint and a finite IPv4 list split into a nonempty fitting prefix and a
+remaining suffix. Capacity inequalities force two actual chunks of capacity
+3776 and leave room for DONE. The continuation ID is absent from the first
+prefix; other duplicates remain allowed. Original start creates the first DATA;
+the first receive invokes the resumed callback and queues DATA plus DONE; the
+second receive and original drain/coalescer return the entire ordered list,
+checking repeated device metadata. The device is unchanged, and the socket ends
+idle/empty with cleared cursors, zero dump errno and current generation.
+Multi-peer/general pagination, concurrent updates, setter composition and
+reachability are not established. Global ownership, mixed attributes, final
+queued cleanup and total collision completion remain open.
 
 ## H5 — Termination and progress
 
@@ -349,12 +358,14 @@ accepted-run findings. H1/H2/H3/H6 have no ranked mirror-change request.
 
 ## Validation and trust limitations
 
-Latest six-target build: **430 jobs**, all **242 headlines** standard axioms
+Latest six-target build: **437 jobs**, all **243 headlines** standard axioms
 only (`propext`, `Classical.choice`, `Quot.sound`); token/import/root/default/
-projected-name checks pass. Latest Progress build: 215 jobs, 35 headlines and 15 new support declarations
-checked. Fresh stock kernel replay passed (exit 0). Independent
-read-only review found no issue. The preceding Config suffix increment passed
-215 jobs, 77 headlines plus 13 support declarations and fresh replay exit 0. Earlier closed increments also passed
+projected-name checks pass. Latest Config build: 222 jobs, 78 headlines and 24
+new support declarations checked; fresh stock kernel replay passed (exit 0).
+Independent review found a headline attribution error, corrected: the callback
+returns DATA; the enclosing socket dump appends DONE and finalizes.
+The preceding Progress increment passed 215 jobs, 35 headlines plus 15 supports
+and fresh replay exit 0. Earlier closed increments also passed
 affected scoped builds, axiom checks and fresh replay; counts, corrected draft
 failures and review dispositions are in their commits. Reviews did not rerun
 reported validation. All review findings were fixed, including unconditional
