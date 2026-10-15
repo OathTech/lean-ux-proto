@@ -4,8 +4,9 @@
 
 Work on `proofs/campaign` in `.worktrees/proofs-campaign` follows [the charter](2026-10-13-charter-proof-campaign.md),
 with representation batch `cb2348e` carried and validated. All seven rows are current there, including the local R4
-packet-to-receipt link extension and local R3 owner-acquisition material frame. Session/material/RX-origin receipts
-and local support are retained; initialized R3 packet authorization
+packet-to-receipt link extension, local R3 owner-acquisition material frame and initialized R4 linkage.
+Session/material/RX-origin receipts and local support
+are retained; initialized R3 packet authorization
 and R4 receive-pipeline conservation remain open. The [register](proofs.md#results) holds pins/counts; the
 [model map](proofs.md#layers) supplies refinement details. No main integration, push, differential check or guest run
 was made by this campaign.
@@ -15,43 +16,51 @@ was made by this campaign.
 | R1 | Replay uniqueness proved; inclusive-floor correction witnessed. |
 | R2 | Initialized allocation-identity access safety proved, including failures/trials; affiliation/credits separate. |
 | R3 | Parsed initialized routing histories, local lookup/affiliation cuts and actual session/RX-origin receipts; initialized packet binding open. |
-| R4 | Initialized entry uniqueness and callback completion; chronology refuted; receive-pipeline conservation open. |
+| R4 | Initialized entry/completion uniqueness and packet/receipt linkage; chronology refuted; receive-pipeline conservation open. |
 | R5 | Accepted age/post-zero/wire-nonce counterexamples; thirteen positive local contracts. |
 | R6 | Cookie exclusion proved; literal MAX=18 refuted, without a replacement universal bound. |
 
-**Current owner-acquisition material retention (validated).** One grouped export
-preserves all 496 preceding terminal bodies, giving 497 declarations (495 theorems/two definitions; 127 R3/119 R4).
-The actual owner read, peer borrow and fresh owner store establish normal receiving-material retention through
-`acquireOwner` and the complete original `indexLookup`, including a None return that clears the peer word. The
-keypair-owner endpoint retains every other full record field; handshake-owner writes leave the material view equal.
-No affiliation, non-NULL, credit, owner-residency, index uniqueness or slot-distinctness premise is supplied.
-The existing access observer preserves supplied session support on normal return and receipt validity on Stop;
-original erasure is unconditional. A Stop has no returned World. Initialized origin, whole-admission/caller
-propagation, peer identity and authentication remain open.
+**Current initialized packet/receipt linkage (validated).** Two grouped exports preserve all
+497 preceding terminal bodies, giving 499 declarations (497 theorems/two definitions; 127 R3/121 R4).
+The unchanged concrete NAPI/crypt/scheduler, Env/syscall and Runner observers preserve HistoryLinked and separate
+HistoryReceiptsValid. Empty initialization derives both for every typed Trace and both placeholder settings,
+including failed prefill and later Stops. Actual selected packet/stamp/peer and whole-receipt/Entry order hold in the
+committed history, alongside unchanged exact original erasure, full R2 audit/probes, completion and distinctness.
+Global order does not label same-poll boundaries; the stronger fresh local suffix contract remains separate.
+Key/session authentication, inbox arrival, reference protection and admission/carrier conservation remain open.
 
-[AGENT 2026-10-15] Derive this frame by exact read/borrow/fresh-store decomposition. Full-key view equality across
-the borrow identifies the setter's fresh record with the original record; use the existing literal index factor
-and history adapter rather than a second observer hierarchy or an affiliation premise.
+[AGENT 2026-10-15] Factor the existing concrete caller proof spine over a proof-only Protocol, instantiated separately
+for linkage and receipt validity. Its audit rule uses the actual focused suffix; lifetime events become access events
+and copied-trial probe markers remain outside committed receipt order. This adds no operational hierarchy or stronger
+BoundaryInv/Closed/AuditInv. A generic audit frame alone does not establish hidden-poll coverage.
 
-**Owner-frame effort.** Acceptance 11:15:31 UTC; 60 minutes/24 capped calls, reserve at 12:00:31 or call 18,
-deadline 12:15:31. Core call 5 PASS354 was collected by the next measured clock 11:20:19; scoped call 6 PASS430
-was collected at 11:21:09. The first four builds failed on ordinary case/substitution, type inference and product
-projection normalization goals. No source admission, recovery-placeholder/kernel diagnostic, proof-limit change,
-cap hit, interruption or infrastructure retry occurred. Full call 7 PASS493 was collected by the measured clock
-11:22:42 (7m11s after acceptance). Exact call 8 PASS was collected at 11:24:14: four-file scope, all 496 prior
-bodies unchanged, one new group, 497 total/127 R3/119 R4, forbidden tokens/imports, tracked/new whitespace/EOF,
-mirror/index and seven pins. Its document hashes precede only the disclosed ledger/status updates. Independent
-frozen review was clear with no findings at 11:25:21 UTC (11:21:26–11:25:21, 3m55s), with metadata reconciliation
-clear at 11:27:51. Ownership returned at 11:27:27, 11m56s after acceptance. The coordinated 493-job build/
-497-declaration permitted-axiom gate, fresh stock kernel replay, 60-job default build and 103 tests (21.794s,
-one skip) pass. Replay started only after the gate's build was collected. Both Lean files retain their frozen
-built hashes; later edits are documentation metadata only. The unchanged executable, 23 model-replay tests
-and historical recipes remain validated by the representation carry and were not rerun for this proof-only
-extension. Command-local LEAN_NUM_THREADS=32 and
-LEANUX_QEMU_SLOTS=16 retain the existing 32G cap and per-compiler -j1. Nine capped calls are collected: seven builds
-(three PASS/four FAIL) and two passing exact checks (8/9). Final check 9 reconciles the final documentation hashes
-and review metadata with the unchanged Lean freeze. Logs and the named temporary checker remain ephemeral
-for the coordinator checkpoint. No active job remains.
+**Linkage-propagation effort.** Acceptance 11:33:52 UTC; 75 minutes/36 capped calls, reserve at 12:33:52 or call 28,
+deadline 12:48:52. Call 1 failed a missing audit-suffix list annotation and printed rejected recovery goals plus
+`declaration uses sorry` warnings; no source admission. Call 3 failed a stale completion identifier and unconstrained
+protocol inference. Corrections retain the original semantic contracts and default proof limits. Calls 2/4/5/6 pass
+caller/Runner/scoped/full builds (350/399/406/496 jobs); full collection measured 11:40:25, 6m33s after acceptance.
+Nine capped calls comprise six builds (four PASS/two ordinary FAIL) and three exact checks (7/8/9). Exact scope, all 497
+prior bodies, 499/121 R4/127 R3 census, token/import/EOF/mirror/index checks and frozen hashes pass; check 7 was collected
+at 11:43:02. Review finding 1 identified a stale “current extension” owner-frame reference; it now names the preceding
+R3 checkpoint. Check 9 reconciles the correction/ledger. Independent frozen review was clear at 11:45:24 UTC
+(11:42:50–11:45:24, 2m34s), after that wording fix. Ownership returned at 11:45:10, 11m18s after acceptance.
+The coordinated 496-job build/499-declaration permitted-axiom gate, fresh stock kernel replay, 60-job default
+build and 103 tests (21.481s, one skip) pass. Replay started only after the gate's build was collected.
+The first coordinator final-metadata check failed because the R4 register row still said validation pending;
+the row was corrected before the next check. All four Lean files retain their frozen built hashes; later edits
+are documentation metadata only. The unchanged
+executable, 23 model-replay tests and historical recipes remain validated by the representation carry.
+No cap hit, interruption, kernel diagnostic or infrastructure
+retry occurred. Command-local LEAN_NUM_THREADS=32 permits Lake job parallelism, while the existing per-compiler -j1
+and 32G memory cap remain unchanged; LEANUX_QEMU_SLOTS=16 is retained. No runtime replay recipe was rerun for this
+proof-only propagation. No active job remains.
+
+**Preceding owner/material frame (`41df9916`, validated).** The actual owner read/borrow/fresh store and whole index
+lookup retain receiving material, including NULL store-back, without affiliation/credit/residency premises. The supplied-
+history adapter preserves normal support and receipt truth on Stop; initialized session origin remains open. Its scoped/
+full builds (430/493), 497-declaration gate, fresh kernel replay, default60 and 103 tests (21.794s, one skip) passed.
+The commit records seven builds (three PASS/four ordinary FAIL), two worker exact checks, six coordinated passes,
+review/effort and the coordinator's stale-heading edit failure. No source admission or limit change occurred.
 
 **Preceding packet-to-receipt link (`0b1cd078`, validated).** Two terminal groups preserve all 494
 preceding bodies, giving 496 declarations (494 theorems/two definitions; 126 R3/119 R4). Scoped/full builds pass
@@ -524,8 +533,11 @@ appends its consumed receipt only after hc. A delayed callback needs no current 
 The original `ConsumePayloadValid`, `BoundaryInv` and completion protocol are unchanged. New HistoryLinked means
 ordered receipt linkage, not validity of every check or Stack witness. Fresh suffixes cannot borrow incoming metadata;
 persistent promotion retains the exact prior audit seed/probes, and finite polls preserve explicit incoming linkage.
-These local contracts need no allocation or World premise. Initialized caller propagation, key/session/public-key
-identity, admission credits and carrier conservation remain open.
+These local contracts need no allocation or World premise. The new `RxLinkCallers`/`RxLinkEnvironment`/`RxLinkRunner`
+proofs propagate linkage and separate checked-receipt validity through the existing concrete callers. Every typed Trace
+and both placeholder settings derive them from empty initialization, also on Stop. Their global committed order retains
+full receipts and the exact R2/probe history, but does not identify poll-local segments. Key/session/public-key identity,
+admission credits and carrier conservation remain open.
 
 Independent review checked two potentially false joins. The standalone consume helper accepts arbitrary skb/stamp
 labels, so its SelectedAt/peer premises must be discharged by the literal poll; they are. Earlier removal plus final
@@ -546,7 +558,7 @@ See [receipt source factors](../Leanux/Proofs/WG/Queues/RxDispositionReceipts.le
 | [Joint projection](../Leanux/Proofs/WG/Queues/RxPollJointProjection.lean), stamp phase/support/history | Same execution's original/GRO/lifetime correspondence, actual read support, uniqueness and normal release. |
 | [Consume link](../Leanux/Proofs/WG/Queues/RxConsumeLink.lean), [poll/receipt link](../Leanux/Proofs/WG/Queues/RxPollReceiptLink.lean) | Actual selected cell at consume entry; strict read/removal/receipt/Entry order in fresh suffixes, persistent and finite-poll linkage. |
 | [Callback completion](../Leanux/Proofs/WG/Queues/RxPollCompletion.lean) | Ordered entry/normal-return pairs; failed prefixes retain at most one unfinished entry. |
-| Concrete caller spine, [Runner history](../Leanux/Proofs/WG/Queues/RxRunnerHistory.lean), [completion](../Leanux/Proofs/WG/Queues/RxCompletionRunner.lean) | Same-history full R2 audit, isolated trials, actual returned Worlds, initialized entry uniqueness and return pairing. |
+| Concrete caller spine, [Runner history](../Leanux/Proofs/WG/Queues/RxRunnerHistory.lean), [completion](../Leanux/Proofs/WG/Queues/RxCompletionRunner.lean), [linkage](../Leanux/Proofs/WG/Queues/RxLinkRunner.lean) | Same-history full R2 audit, isolated trials, actual returned Worlds, initialized entry/completion uniqueness and packet/receipt linkage. |
 | Borrow/TX disposition, [endpoints](../Leanux/Proofs/WG/Queues/TxDispositionEndpoints.lean) | Adjacent repayment and original admission/publication/removal/disposal cuts. |
 
 [AGENT 2026-10-14] Prove receive-to-stack duplicate freedom before conservation, plus named W7 drops. Universal outgoing
@@ -623,10 +635,11 @@ poll's last-put candidate Stops at a later getter. No kernel bug claim.
 
 **Remaining obligations.** Affiliation/credits, worker-local ownership and RX
 conservation, including relevant TX callbacks. Stores/rings/queues/locals/GRO overlap; counts cannot be added. Named
-rejection, validation, keepalive, purge/free and handoff dispositions need proof. Queue idleness does not empty
+rejection, validation, keepalive, purge/free and handoff dispositions still need initialized admission-to-carrier composition
+beyond the proved local post-removal partition. Queue idleness does not empty
 stores/peer queues; finite prefixes retain pending obligations. W7 item/mark transport remains open.
 
-**Effort/process/review.** Current propagation grant 06:11:24, acceptance 06:12:04. The first Env build failed on
+**Effort/process/review.** Earlier callback-propagation grant 06:11:24, acceptance 06:12:04. The first Env build failed on
 an unqualified batch type and broad tactic searches reaching the existing 200k heartbeat limit; rejected elaboration
 printed `declaration uses sorry`. Explicit constructor proofs repaired it without source admission or raised limits.
 The existing Runner observer is reused, and its history-only completion proof closes at the default limit.

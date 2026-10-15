@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Queues.RxLinkRunner
 import Leanux.Proofs.WG.Queues.RxPollReceiptLink
 import Leanux.Proofs.WG.Queues.RxPollDisposition
 import Leanux.Proofs.WG.Queues.RxRunnerHistory
@@ -1543,8 +1544,8 @@ theorem original_poll_packet_receipt_links (pid : PeerId) (budget : Nat)
 old probe interleaving, promoting only the actual new linked suffix. The local
 link has no World premise; preserving an entire old receipt history requires
 that history's explicit linkage. The existing R2 projection retains its
-original AuditInv premise. This does not propagate origin through initialized
-callers, prove key/session identity, inbox delivery or admission conservation. -/
+original AuditInv premise. Initialized caller linkage is exported below; this
+local contract does not prove key/session identity, inbox delivery or admission conservation. -/
 theorem persistent_poll_packet_receipt_links (pid : PeerId) (budget : Nat)
     (calls : List (PeerId × Nat)) (w : World) (h : List Queues.RxHistory.Event) :
     Logged.ErasesPrefix (Queues.RxHistory.observePoll pid budget)
@@ -1564,5 +1565,59 @@ theorem persistent_poll_packet_receipt_links (pid : PeerId) (budget : Nat)
   ⟨Queues.RxHistory.observePoll_erases pid budget, Queues.RxHistory.observePoll_projects pid budget,
     Queues.RxLink.observePoll_link pid budget, Queues.RxLink.polls_link calls,
     Queues.RxLink.observePoll_link_suffix pid budget w h⟩
+
+
+/-- Concrete Env/syscall callers preserve source/history linkage and independently
+checked consume/branch receipts. Each history-only premise is explicit for an
+arbitrary incoming journal; neither requires a World, allocation or credit
+premise. These are the unchanged observers with the original erasure/audit
+contracts above. Focused audit framing alone is not hidden-poll coverage. -/
+theorem original_caller_packet_receipt_linkage (deferred : Lifetimes.EnvDeferredCall)
+    (remaining : Lifetimes.EnvRemainingCall) (syscall : Lifetimes.SyscallAuditCall) :
+    (Queues.RxLink.Preserves Queues.RxLink.HistoryLinked (Queues.RxHistory.deferred deferred) ∧
+      Queues.RxLink.Preserves Queues.RxLink.HistoryReceiptsValid (Queues.RxHistory.deferred deferred)) ∧
+    (Queues.RxLink.Preserves Queues.RxLink.HistoryLinked (Queues.RxHistory.remaining remaining) ∧
+      Queues.RxLink.Preserves Queues.RxLink.HistoryReceiptsValid (Queues.RxHistory.remaining remaining)) ∧
+    (Queues.RxLink.Preserves Queues.RxLink.HistoryLinked (Queues.RxHistory.syscallFamily syscall) ∧
+      Queues.RxLink.Preserves Queues.RxLink.HistoryReceiptsValid (Queues.RxHistory.syscallFamily syscall)) :=
+  ⟨⟨Queues.RxLink.deferred_preserves deferred, Queues.RxLink.deferred_preserves deferred⟩,
+    ⟨Queues.RxLink.remaining_preserves remaining, Queues.RxLink.remaining_preserves remaining⟩,
+    ⟨Queues.RxLink.syscallFamily_preserves syscall, Queues.RxLink.syscallFamily_preserves syscall⟩⟩
+
+/-- Every typed Trace and both placeholder settings have actual selected
+packet/stamp/peer linkage and strict whole-receipt/Entry order in the same
+committed history, even on Stop. Empty initialization discharges receipt truth
+and linkage; the exact original result and full R2 audit/probes are unchanged.
+The global order does not label individual poll boundaries: the stronger fresh
+same-poll suffix theorem remains separate. Completed Stack calls retain their
+actual receipts and distinct stamps, but key/session authentication, inbox
+arrival and admission/carrier conservation are not conclusions. -/
+theorem initialized_runner_packet_receipt_linkage (trace : Leanux.Runner.Trace)
+    (placeholders : Bool) :
+    Logged.ErasesOuter (Queues.RxHistory.executeTraceHistory trace placeholders)
+      (Leanux.Runner.executeTrace trace placeholders) ∧
+    Logged.runPrefixOuter (Lifetimes.executeTraceAudit trace placeholders) [] =
+      ((Logged.runPrefixOuter (Queues.RxHistory.executeTraceHistory trace placeholders) []).1,
+        Queues.RxHistory.auditHistory
+          (Logged.runPrefixOuter (Queues.RxHistory.executeTraceHistory trace placeholders) []).2) ∧
+    let out := Logged.runPrefixOuter (Queues.RxHistory.executeTraceHistory trace placeholders) []
+    let events := out.2.filterMap Queues.RxLink.historyEvent
+    let callbacks := out.2.filterMap Queues.RxCompletion.historyEvent
+    Queues.RxLink.HistoryLinked out.2 ∧ Queues.RxLink.HistoryReceiptsValid out.2 ∧
+    (∀ event ∈ events, ∃ before after,
+      events = before ++ [event] ++ after ∧ Queues.RxLink.EventLink [] before event) ∧
+    Queues.RxHistory.BoundarySafe out.2 ∧
+    Queues.RxCompletion.CompletionPrefix Queues.RxCompletion.historyEvent out.2 ∧
+    (∀ e r, Queues.RxCompletion.Step.completed e r ∈ callbacks →
+      r.Valid (Leanux.Env.Stack.receive e.tag.bytes)) ∧
+    ((callbacks.filterMap Queues.RxCompletion.completed).map Queues.RxJoint.Entry.stamp).Nodup ∧
+    (∀ result, out.1 = .ok result →
+      Queues.RxCompletion.Closed Queues.RxCompletion.historyEvent out.2 ∧
+      Queues.RxHistory.entries out.2 = callbacks.filterMap Queues.RxCompletion.completed) := by
+  have old := initialized_runner_callback_completion trace placeholders
+  have linked := Queues.RxLink.executeTraceHistory_linkage trace placeholders
+  exact ⟨old.1, Queues.RxHistory.executeTraceHistory_projects trace placeholders,
+    linked.1, linked.2, Queues.RxLink.executeTraceHistory_ordered trace placeholders,
+    Queues.RxHistory.executeTraceHistory_safe trace placeholders, old.2⟩
 
 end Leanux.Proofs.WG.DeliveryOrder
