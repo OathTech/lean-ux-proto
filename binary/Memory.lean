@@ -92,6 +92,18 @@ theorem EqualOutside.loadInt {before after : Mem 64} {writes : BitVec 64 → Pro
   unfold Mem.loadInt
   rw [eq.loadBytes base length disjoint]
 
+/-- Applying the same physical store to two framed memories retains their
+    original difference footprint; stored bytes agree even if it overlaps. -/
+theorem EqualOutside.storeInt {before after : Mem 64} {writes : BitVec 64 → Prop}
+    (same : EqualOutside writes before after) (base : BitVec 64) (length : Nat) (value : Int) :
+    EqualOutside writes (before.storeInt base length value) (after.storeInt base length value) := by
+  intro address outside
+  simp only [Mem.storeInt, Mem.storeBytes, Std.ExtHashMap.get?_eq_getElem?,
+    Std.ExtHashMap.union_eq, Std.ExtHashMap.getElem?_union]
+  rw [show before[address]? = after[address]? from same address outside]
+
+#print axioms EqualOutside.storeInt
+
 #print axioms storeInt_frame
 #print axioms EqualOutside.loadInt
 

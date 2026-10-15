@@ -1001,3 +1001,34 @@ with `capped -- lake env leanchecker --fresh PeerLiveZeroHistory` and a
 separate invocation for `PeerDeadEntryHistory`. The concrete command is
 `LEANUX_QEMU_SLOTS=16 capped -- binary/.lake/build/bin/binary-probe
 peer-nonnull` from the worktree root. No main update or push.
+
+
+## Complete live helper instruction history, 2026-10-15
+
+`PeerLiveEntryHistory.live_entry_history` now executes the accepted nonzero
+helper path from entry through the actual RET, retaining all six decisions,
+the original zero-test operands, the exact count increment and restored ABI.
+`PeerLiveBodyHistory` and `PeerLiveSuffixHistory` compose the physical load,
+nonzero guard, callbacks and increment. Each decision has its physical
+memory frame: null/zero against entry memory, later decisions against the
+entry memory with the refcount increment. The tail history segment begins
+at the increment sequence and includes pre-store successors; only its
+anchored cuts are all post-increment. No whole-World conclusion is claimed.
+
+`EqualOutside.storeInt` proves that identical stores preserve an existing
+frame, including overlapping or wrapping stores. Independent read-only
+review found no correctness defect; its wording caveat about the tail
+segment was corrected. All three accepted helper paths now have complete
+physical histories. The accepted helper's whole-World theorem, lookup
+composition, witnessed Pre_lookup and transport remain open. TrustBase.lean
+is unchanged; zero whole-R regions are certified, so these supporting
+lemmas do not increase the milestone rate.
+
+Validation: capped full-parallel build passed (251 jobs), 355 printed axiom
+lists were standard-only, source audit passed for 96 Lean files, and fresh
+kernel replay of `PeerLiveEntryHistory` with imports passed. Reproduce with
+`capped -- lake env leanchecker --fresh PeerLiveEntryHistory` in `binary/`.
+Initial targeted elaboration failures were corrected before the full build.
+The last nonnull concrete probe (21 cases, two seeds, 9982 instructions),
+three-way checks and fast tier remain applicable: no runtime or mirror
+code changed. No main update or push.

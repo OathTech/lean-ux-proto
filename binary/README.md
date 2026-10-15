@@ -166,3 +166,12 @@ nonzero guard/callback. The full live entry and whole-World correspondence
 remain open. To replay imports as well, run one module per invocation:
 `capped -- lake env leanchecker --fresh PeerLiveZeroHistory` and
 `capped -- lake env leanchecker --fresh PeerDeadEntryHistory` in `binary/`.
+
+
+`PeerLiveEntryHistory.live_entry_history` now composes the accepted live
+helper entry through RET, retaining all six decision states and the exact
+physical increment. Null/zero cuts frame entry memory; later cuts frame
+the incremented memory. Together with null/dead histories this covers all
+accepted physical helper paths. The whole-World accepted helper theorem
+and lookup adequacy remain open. Replay imports with one root:
+`capped -- lake env leanchecker --fresh PeerLiveEntryHistory` in `binary/`.
