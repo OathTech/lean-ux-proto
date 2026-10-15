@@ -2059,3 +2059,30 @@ Measured follow-on interval: 06:48:56 to 07:03:24 UTC, 868 seconds. It adds
 conditional callback proofs and a helper relation-frame lemma, with zero
 new certified anchored regions/functions (zero per agent-day). These proofs
 were hand-finished; the implementation is not an automated grind-rate result.
+
+
+### Main refresh and history wrappers, 07:10 UTC
+
+[USER 2026-10-15] Merge the representation batch at cb2348e at a natural
+point. It was merged into task/binary-tv as 61ce4a1; main was not advanced.
+The charter now carries the minimal WireGuard frame wording. No binary
+lookup proof repair was needed for the queue/runner representation changes;
+no claim is made about campaign 1's separate lagging results.
+
+The default binary build passed after the merge (291 jobs), then passed
+with the conditional callback-history wrappers (294 jobs). The recorded
+same-bucket miss three-way comparison and exact 191-instruction witness
+both passed against the merged mirror. Fresh kernel replays passed for
+LookupWitness and LookupCallPhase with their imports; their printed axioms
+remain standard only. No KILLED banner or timeout occurred in these checks.
+
+`LookupCoverageHistory` and `LookupCallHistory` retain the existing named
+service contract's NoAnchoredReentry in the actual appended service
+history, alongside its return and observations. `LookupCallPhase` proves
+phase preservation from that fact and explicit exclusion of the two phase
+trigger PCs. No-cut evidence alone is not used to justify it. The next
+integration step is to replace the old stronger callback invariant through
+the bucket and helper histories, deriving comparison eligibility at the
+actual nonempty-bucket branch. The helper's CMPXCHG/cut composition,
+function theorem and transport remain open. TrustBase and its quoted text
+above are unchanged; certified-function throughput remains zero.
