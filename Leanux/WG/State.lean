@@ -99,7 +99,9 @@ def freeRxSkb (id : SkbId) : M Unit := do
     excluded ordinary simultaneous initiation (a peer's initiation arriving
     while wg0's own is queued, `corpus/wireguard/p_sim_init_*`). A section
     record the scheduler cannot place is a hidden mismatch, as before. The
-    callers and `World.queuedThisCall` remain for a later cleanup. -/
+    callers remain for a later cleanup; `World.queuedThisCall` is no longer
+    written (the Send audit's F7, 2026-10-15), its resets stay until the
+    proof tree's frames over it are carried. -/
 def requireNotPending (_pid : PeerId) (_what : String) : M Unit := pure ()
 
 /-- Short-circuit `&&` and `||` over decisions: the right operand runs only

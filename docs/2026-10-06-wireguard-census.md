@@ -36,7 +36,7 @@ and profound arms inside modeled functions.
 | P11 | `wg_check_packet_protocol`, `skb_valid_dst`, `skb_share_check` false in `wg_xmit` | Only AF_PACKET produces these, and `CONFIG_PACKET` is unset. A config change would lift this. |
 | P12 | The exact depth of a flood, the trylock path, a full ring | Scheduling-driven. A capture of `handshake_queue_len` would lift this. |
 | P13 | Kworker items pending across syscalls | Not deterministically reachable. The within-syscall case is W3. |
-| P14 | Structurally dead arms | `hmac` long key, null ephemeral, `!peer` in `add`, the `WARN_ON`, too many fragments |
+| P14 | Structurally dead arms | `hmac` long key, null ephemeral, `!peer` in `add`, the `WARN_ON`, too many fragments; the AEAD's `WARN_ON(src_len > INT_MAX)` in `encrypt_packet` (chacha20poly1305.c:236-237: a plaintext is at most 65535 + 15 bytes; the Send audit's F5, 2026-10-15) |
 
 ## In-reach workstreams
 

@@ -428,6 +428,24 @@ and the two data-only operations have no anchored coverage by construction. One
 exclusion is missing rather than stale: `dstCacheHit` is undeclared because
 `net/core/dst_cache.c` is not anchored (item 8 deferral); anchoring it is a small stream.
 
+### 5.7 List-primitive internals, at the altitude (added 2026-10-15)
+
+The inlined tests inside the kernel's list and queue primitives are not
+choice points of the mirror, whose state is list-shaped: `hlist_add_head_rcu`'s
+`if (first)` (rculist.h, at peerlookup.c:39, :157), `hlist_replace_rcu`'s
+`if (new->next)` (at :178), `skb_queue_splice_init`'s and
+`skb_queue_splice`'s `!skb_queue_empty` (send.c:351, :407; the first is the
+test at :353, the second is always true after it), `__skb_queue_purge`'s
+dequeue loop (:338, which only frees), and `skb_orphan`'s
+`if (skb->destructor)` (:400, which releases the sending socket's buffer
+charge below WireGuard's boundary, unobservable under the fixture's
+`SO_SNDBUFFORCE`). The `hlist_unhashed` test of `hlist_del_init_rcu` is the
+exception: it decides whether an entry leaves a table, and the mirror
+reports it at every remove and insert (`.idxRemoveHashed`,
+`.idxInsertHashed`, `.pubkeyRemoveHashed`). From the Send audit's F4 and the
+Peer audit's altitude note (`docs/2026-10-15-audit-send.md`,
+`docs/2026-10-15-audit-peer.md`).
+
 ## 6. The anchored-file boundary
 
 41 files are anchored (`kcov.json` `files`): a decision may be declared in

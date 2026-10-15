@@ -1137,4 +1137,37 @@ def decisionsJson : Json :=
             ("assigned", toJson c.assigned)]
         | none => .null)]).toArray
 
+/-! The Send audit's F1 (2026-10-15), held at compile time. At the encrypt
+    worker's ring poll the pending NET_RX runs after `ptr_ring_consume_bh`'s
+    discard (send.c:293; ptr_ring.h:264-303), so a poll that produces into the
+    ring (a key confirmation's flush of staged packets) at a physically full
+    ring finds the slot the batch rule has just cleared, as Linux does. The
+    instance: fifteen items consumed without a clearing (tail 0, head 15,
+    slots 0 to 14 still occupied), then 1009 produced, the producer back at
+    the occupied slot 0; the poll's produce at the next ring poll succeeds in
+    the C's order and met the occupied slot (`-EPIPE`, the list dropped) in
+    the mirror's former order. The schedule needs the 17.17 placement with a
+    full ring, which no capture holds; the instance is the state itself. -/
+private def f1Ring : WG.PtrRing (List WG.SkbId) :=
+  let r0 := (List.range 15).foldl (fun r i => r.produce [i]) (WG.PtrRing.init WG.MAX_QUEUED_PACKETS)
+  let r1 := (List.range 15).foldl (fun r _ => r.consume.2) r0
+  (List.range 1009).foldl (fun r i => r.produce [100 + i]) r1
+
+private def f1World : World :=
+  { k := { initialKernel 8 with wg := some { ifindex := 3, ifname := "wg0", encryptQueue := f1Ring } }, env := harnessEnv,
+    timing := { advanceWait := 0, traceBound := 0 } }
+
+/-- The poll's produce (`wg_queue_enqueue_per_device_and_peer`, queueing.h:174):
+    `-EPIPE` at a full ring, else the item in the producer's slot. -/
+private def f1Poll : M Unit := do
+  let d ← WG.getDev
+  if d.encryptQueue.full then return
+  WG.modifyDev fun d => { d with encryptQueue := d.encryptQueue.produce [9999] }
+
+#guard f1Ring.full
+#guard f1Ring.consumerHead == 15 && f1Ring.consumerTail == 0 && f1Ring.producer == 0
+#guard match (WG.encryptRingPoll f1Poll).run f1World with
+  | .ok (some [100], w) => (w.k.wg.map fun d => (d.encryptQueue.slots[0]?).getD none) == some (some [9999])
+  | _ => false
+
 end Leanux.Runner
