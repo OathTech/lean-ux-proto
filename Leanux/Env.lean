@@ -67,11 +67,13 @@ Fixture facts the epoll mirror depends on, none of them kernel state:
 
 /-- `loop_check_gen` at the start of every trace, relative (design 3.5). -/
 def LOOP_CHECK_GEN_BASE : Nat := 2
-/-- `/proc/sys/fs/epoll/max_user_watches` on the e1 oracle (the same as on
-    W9): `((totalram - totalhigh) / 25 << PAGE_SHIFT) / EP_ITEM_COST`
-    (fs/eventpoll.c:2814-2815). Re-measured at every oracle change, with
-    harness/linux.py `EXPECTED_MAX_USER_WATCHES`. -/
-def MAX_USER_WATCHES : Nat := 53092
+/-- `/proc/sys/fs/epoll/max_user_watches` on the s5 oracle with the
+    harness's fixed-size initramfs image (harness/linux.py `INITRAMFS_BYTES`,
+    so the trace's size no longer moves it): `((totalram - totalhigh) / 25
+    << PAGE_SHIFT) / EP_ITEM_COST` (fs/eventpoll.c:2814-2815), computed before
+    the initramfs is freed. 53092 on W9 and e1 unpadded; re-measured at every
+    oracle change, with harness/linux.py `EXPECTED_MAX_USER_WATCHES`. -/
+def MAX_USER_WATCHES : Nat := 52958
 
 /-- L (docs/2026-10-05-l-lifecycle.md, section 2.3): the ports where a
     wildcard UDP bind of wg0's conflicts with a fixture socket (no
