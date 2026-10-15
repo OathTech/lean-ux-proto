@@ -638,3 +638,20 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   precondition and relation are never narrowed to accommodate one. First
   instance: the index lookup's dead-peer store (peerlookup.c), found by the
   grind at milestone 1 [AGENT: the fix on task/index-lookup-fix].
+- **2026-10-15 [USER]** Lane C, the anchoring question (design note U1):
+  `fib_frontend.c`, `fib_semantics.c` and `route.c` are anchored with cut
+  lists and the per-caller cut for the helpers IPv6 shares, in C2 and C3.
+  This revises the boundary decision of 2026-10-07 for routing (the line is
+  now drawn by function name in the cut lists, one layer down, under that
+  decision's own "unless this breaks important things": campaign 3's
+  end-to-end routing composition) and reverses the `ip_error` deferral of
+  2026-10-08 (the input corpus reaches it). "Agree on the anchoring
+  question."
+- **2026-10-15 [USER]** Lane C, IPv6 (design note U2): deferred, "might be a
+  task later"; IPv6 routing stays environment, and campaign 3's routing
+  composition is stated for IPv4 in its charter.
+- **2026-10-15 [AGENT, coordinator]** Lane C's tactical decisions as the
+  revised note recommends: three landings with C1 first (U3); the
+  `hash_mix` global-hash walk treated as a decision cut (U6). The module's
+  home `Leanux/Net/` (U4) and the AGENTS.md mirror-list change it needs (U5)
+  are built on that assumption and put to the user at the landing.
