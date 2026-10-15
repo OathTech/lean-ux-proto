@@ -582,6 +582,7 @@ class TimerWheelFiring(unittest.TestCase):
         # keep the advance (site 101) and the end-of-wait read (128): the firing and the work it queued are gone
         t['hidden'][4] = [r for r in op if r[0] in (101, 128)]
         out = replay_raw(t)
+        self.assertIsNotNone(out, 'a due timer without its section was accepted (E1 item 3)')
         self.assertIn('hidden-input records disagree', out)
         self.assertIn('did not fire', out)
 
@@ -592,5 +593,6 @@ class TimerWheelFiring(unittest.TestCase):
         t['hidden'][4] = [r for r in op if r[0] in (101, 128)]
         t['hidden'][5] = block + t['hidden'][5]   # the pass ran after the read, in the next operation's wait
         out = replay_raw(t)
+        self.assertIsNotNone(out, 'a deferred timer softirq was accepted (E2)')
         self.assertIn('unsupported', out)
         self.assertIn('deferred past the end-of-wait read', out)

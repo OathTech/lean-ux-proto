@@ -916,7 +916,54 @@ and E2 by lookahead in `Leanux/Env.lean`, the two traces, the unit tests
 capture (`TimerWheelFiring`, 3 tests). The five unit-test modules: 127
 tests OK. The suite, control and mutant figures:
 
-SUITE_FIGURES
+**The suite.** The `wireguard` suite on s5 with the finished model and the
+two new traces: 263 traces, 1802 operations, status **pass**, 263
+agreements, 0 failures (4 chunk splits on the contended host, no trace
+rerun). `d3_two_passes` runs its two passes in one wait (the stream
+`WWNTWWNTWWN`: the batch's workers, then the keepalive's pass with its
+workers and NET_RX, then the second pass); `d3_keepalive_rearm_catchup`
+records the lag (a base clock of 4294896320 against `mod_timer`'s read of
+4294898126, 1806 ticks) and the re-arm on level 3, then the persistent
+keepalive's firing in the same pass (`TTWWNNW`). An earlier run of the
+suite, before `requireNothingDue` was guarded for a trace without wg0,
+stopped 79 lifecycle traces with "no WireGuard device" and lost 9 traces to
+`trace_exceeds_rekey_bound` under a host load of 50; both are in the
+history of this branch, neither in the figures above.
+
+**The probe on the clean dump.** 867 arms; 766 base-clock records (one per
+arm that locked the base; 101 same-expires returns wrote none), 35 of them
+one ahead of `mod_timer`'s read and 1 behind (the catch-up trace's lag);
+608 enqueue records, 607 of 607 compared equal to the probe's arithmetic
+(159 same-slot re-arms wrote none; 94 moves and every fresh placement
+wrote one); 49 of 49 firings predicted as next in 42 of 42 operations, six
+of them multi-timer passes; 0 due timers without a section; the between
+zone 2 of 2; 122 deletions at the C's sites. The probe's one problem is its
+own: `l_remove_readd_queued` removes a peer by `wg_set` and re-adds it at
+the same address, a `wg_timers_stop` the probe's header says it does not
+model, so it took the fresh arm's enqueue record for one on a kept slot;
+the mirror, which performs that deletion, agrees on the trace.
+
+**The timer control.** `tc_advance_wait0` with the guest variant
+`advance-wait-0` on s5: rejected, `hidden_mismatch` ("a record of site 104
+was not consumed" at the `wg_get`), inside its accepted set and as section
+6 derives: with `J_end = after` the pass bound is `before`, nothing is due
+at the advance, and the keepalive's section lands in the next operation.
+
+**The mutants**, each run once on s5 by `scripts/wg-mutants.py`, then the
+entries removed as the rule says (none replaces a sentinel's channel):
+
+| Mutant | Subset | Result |
+| --- | --- | --- |
+| B3-M1, `calc_index` rounding down | `d3_persistent_k` | rejected, hidden mismatch (the kind-314 bucket expiry) |
+| B3-M2, `LVL_START(4)` as 135001 | `d3_persistent_k` | rejected, hidden mismatch (the kind-314 slot at the zero-key arm) |
+| B3-M3, FIFO within a slot | `w12_retransmit_lifo` | rejected, hidden mismatch (the section names the other peer's timer) |
+| B3-M4, the must-fire direction dropped (`requireNothingDue` a no-op) | the evaluator control `TimerWheelFiring` | rejected: the two altered-capture tests do not pass under the mutant (the capture with the section removed and the one with it moved are both accepted), and pass after the revert |
+| B3-M5, the same-slot path gone | `d2_padding_mtu` | rejected, hidden mismatch (a kind-314 record expected where the kernel kept the slot). On its first subset, `d3_persistent_k`, it **survived**: those traces' re-arms all move slots (every 1250-tick re-arm lands in a new 64-tick bucket), so the channel has no witness there; `d2_padding_mtu` has five same-slot re-arms |
+| B3-M6, `expires` as the due test | `d3_between_zone` | rejected, hidden mismatch (the zero-key timer "did not fire", its section never appearing) |
+| B3-M7, the base clock taken as `mod_timer`'s read | `d3_keepalive_rearm_catchup` | rejected, hidden mismatch (the kind-314 slot: level 2 computed, level 3 recorded) |
+
+The unit tests: the five modules, 127 tests OK (1 skipped, as before);
+`leanux-timer-wheel-tests`, 23 checks, 0 failures.
 
 ### 15.4 The proof frames for the integration record (read-only)
 
