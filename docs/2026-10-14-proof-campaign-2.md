@@ -30,11 +30,11 @@ No independent existential projected runs are spliced together.
 | H3 Roaming | 8 contracts, including decrypt publication and its same-execution first-poll endpoint connection | Public projection complete; first selected packet provenance is conditional on matching publication identity. General queue provenance and complete caller coverage remain open. |
 | H4 Configuration | 62 contracts, including live-key removal with empty work queues, and the internal dump-accounting finding | Public projection and frame separation complete. Queued-work removal, private-key collision, mixed attributes, global ownership and general dump composition remain open. |
 | H5 Progress | 27 contracts, including original cut-loop budget adequacy, and the accepted batch-backlog counterexample | Public projection and frame separation complete; the recorded cut cannot exhaust its budget. Whole-worker record decrease, full loop coverage and probe/detach composition remain open. The backlog witness is historical over `de62c9d`: main's batch guard now addresses request 1. |
-| H6 Timers | 32 timer/worker contracts, including original retransmit-timer/send-worker composition | Public projection and frame separation complete; a successful pair from an empty send queue derives the retry bound, reference acquisition/release, final empty queue and cleared pending flag. Complete retry episodes and whole-run arming/session counts remain open. |
+| H6 Timers | 33 timer/worker contracts, including original retransmit-timer/send-worker composition and conditional recorded rearming | Public projection and frame separation complete; a successful pair from an empty send queue derives the retry bound, reference acquisition/release, final empty queue and cleared pending flag. Conditional rearming preserves the exact expiry through release and section stop. Complete retry episodes and whole-run arming/session counts remain open. |
 
 Projection/frame factoring completed at `69f988a` for all six results, preserving
 all 153 existing headline names before new mathematics. The following H2 lifecycle/sender
-and H6 dispatch increments, H3 publication/poll provenance, H5 cut-loop progress, H1 ordered clearing and H4 live-key removal bring the total to 180. No public statement directly names `World` or
+and H6 dispatch/rearm increments, H3 publication/poll provenance, H5 cut-loop progress, H1 ordered clearing and H4 live-key removal bring the total to 181. No public statement directly names `World` or
 `Kernel`.
 The full proof gate remains failed in inherited campaign-1 counter-window and
 index carries; those files have not been edited. Scoped validation does not
@@ -55,7 +55,7 @@ connections to the current executable mirror, not replacement interpreters.
 | H3 | `Roaming/Model`, `View`, `Statements`, `EndpointClaims`, `EndpointSource`, `Authentication`, `PublicationModel`, `PublicationSource`, `PublicationClaims`, `PollEndpointModel`, `PollEndpointSource`, `PollEndpointClaims`. | `Roaming/Frames`, `PublicationFrames`, `PollEndpointFrames`; `Basic` reexports the endpoint source connection. |
 | H4 | `Config/Model`, `AllowedRemovalModel`, `QuietModel`, `LiveRemovalModel`, `LiveRemovalSource`, `ClaimView`, `Statements`, `SourceClaims`, `ObservationBridge`, and existing substantive effect/source modules. | `ConcreteFrames` isolates six whole-kernel endpoint contracts; `OperationFrames` isolates seven generic helpers; `ReadbackFrames` retains socket/fixture preservation; `AllowedListFrames`, `AllowedRootFrames`, `AllowedRemovalFrames`, `QuietFrames`, `LiveRemovalFrames`, `KeyFieldFrames` isolate within-WG preservation. |
 | H5 | `Progress/Model`, `View`, `Statements`, `SourceClaims`, `ObservationBridge`; `ControlLaws` is generic state/error control and `ControlSource` connects it exactly to the original worker; the scheduler/source modules retain actual execution factors. `CutModel`, `CutSource` and `CutClaims` establish original cut-loop progress. | `StackFrames` isolates caller-guard preservation; `CutFrames` isolates record/error-location preservation. Probe/filter/no-work contracts also establish outputs and remain substantive source claims. |
-| H6 | `TimerDiscipline/Model`, `View`, `SendView`, `Statements`, `ObservationBridge`, `ObservationClaims`, `SourceClaims`, `SendDispatchModel`, `SendDispatchClaims`, `RetryDispatchModel`, `RetryDispatchClaims`, and `*Source` operational proofs. | `SourceFrames`, `RecordedFrames`, `RecordedJitterFrames`, `SectionFrames`, `SelectionFrames`, `RetryFrames`, `JitterFrames`, `InitiationFrames`, `InitiationPreservationFrames`, `SendCutFrames`, `SendPeerFrames`, `SendSocketFrames`, `SendBufferFrame`, `SendWorkerFrame`, `SendDispatchFrames`, `RetryDispatchFrames`, `WorkStateFrames`. |
+| H6 | `TimerDiscipline/Model`, `View`, `SendView`, `Statements`, `ObservationBridge`, `ObservationClaims`, `SourceClaims`, `SendDispatchModel`, `SendDispatchClaims`, `RetryDispatchModel`, `RetryDispatchClaims`, `RetryRearmModel`, `RetryRearmClaims`, and `*Source` operational proofs. | `SourceFrames`, `RecordedFrames`, `RecordedJitterFrames`, `SectionFrames`, `SelectionFrames`, `RetryFrames`, `JitterFrames`, `InitiationFrames`, `InitiationPreservationFrames`, `SendCutFrames`, `SendPeerFrames`, `SendSocketFrames`, `SendBufferFrame`, `SendWorkerFrame`, `SendDispatchFrames`, `RetryDispatchFrames`, `RetryRearmFrames`, `WorkStateFrames`. |
 
 A compound exact effect is not a disposable frame merely because its name
 contains “frame”: mark/generation updates, cleared-peer accumulation, reference
@@ -913,9 +913,10 @@ check: both the C and the mirror's own design require restoring pre-nest room.
 gives the witness and reproduction command. Ranked mirror suggestion 1:
 correct the saved cancellation snapshot (altitude-preserving).
 
-Validation of the preceding sixty-statement checkpoint: scoped build and standard-axiom inspection passed
-(only `propext`, `Classical.choice`, `Quot.sound`), and `capped --
-scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Config.Statements`.
+Validation of the preceding sixty-statement checkpoint: scoped build,
+standard-axiom inspection (only `propext`, `Classical.choice`, `Quot.sound`),
+and fresh replay all passed. Replay command: `capped -- scripts/in-bundle lake
+env leanchecker --fresh Leanux.Proofs.WG.Config.Statements`.
 The full proof gate fails in inherited `CounterWindow.Refinement` and
 `ReplayWindow.Counterexamples` after the index landing; token/import
 checks pass. Effort includes repaired proof-elaboration failures, including two
@@ -1262,6 +1263,34 @@ Independent review closed after moving the net dispatch-effect theorem from
 Frames to Source and updating the headline's scope wording. Ordinary source
 elaboration corrections did not weaken the contract. No cap failure or guest
 run; the full gate remains failed in the unchanged inherited shared files.
+
+`RetryRearmSource` now decorates that same original timer/send pair with the
+actual initiation prefix and pre-release state. Its exact projection retains
+the old retry certificate, including the empty queue, pending flag and acquired
+reference's release. The new headline has the same entry premises: resident
+device and empty send queue. If the observed prefix reaches the arm hook with
+a running device, live selected peer and arm-record mode, the actual caller
+read and bounded jitter determine the exact wrapped retransmit expiry. That
+expiry survives peer release and section stop. The clock-gap claim remains at
+the pre-release snapshot, where it was established. These conditions concern
+the actual before-arm cut; neither reaching the hook nor successful network
+transmission is promised.
+
+`RetryRearmModel` and `RetryRearmClaims` hold the projected certificate and its
+source connection. `RetryRearmFrames` isolates expiry preservation through
+retained peer release. The retained-reference premise is derived from the
+original retry execution, not added to the public statement. No shared layer
+or routing proof was copied.
+
+H6 now has 33 headlines and the campaign 181. The capped full-parallel scoped
+build passed (162 jobs), all 33 H6 headlines use only the three standard axioms,
+and fresh stock kernel replay passed. All 181 campaign headlines import and
+pass standard-axiom inspection together; the gate token and import/root/default
+checks pass. Independent review closed without findings. Reproduce with
+`LEAN_NUM_THREADS=32 capped -- scripts/in-bundle lake build Leanux.Proofs.WG.TimerDiscipline.Statements`
+and `capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.TimerDiscipline.Statements`.
+No cap failure, guest run or infrastructure rerun. The full gate remains failed
+in unchanged inherited shared files, last run at `69f988a`.
 
 Completed retry-episode counting and source-complete caller coverage for
 traversal/session derivation remain open. The dispatch claims do not establish

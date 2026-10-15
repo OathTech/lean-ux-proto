@@ -1,6 +1,7 @@
 import Leanux.Proofs.WG.TimerDiscipline.ObservationClaims
 import Leanux.Proofs.WG.TimerDiscipline.SendDispatchClaims
 import Leanux.Proofs.WG.TimerDiscipline.RetryDispatchClaims
+import Leanux.Proofs.WG.TimerDiscipline.RetryRearmClaims
 
 /-! The public H6 interface names only WireGuard and explicit execution
 observations. Concrete source connections and residual frames are separate.
@@ -397,5 +398,21 @@ theorem original_retry_dispatch (d : Device) (horizon : UInt64)
       (fun s => s.wg.device = some d)
       (RetryDispatchCertificate d horizon) :=
   source_retry_dispatch d horizon empty
+
+/-- A normal original timer/send pair retains the retry certificate, including
+final empty queue, cleared pending flag and acquired/released reference, and
+exposes its actual initiation prefix and pre-release state. If that prefix
+reaches the arm hook with a running device, live selected peer and arm-record
+mode, the original caller read plus rekey delay and bounded jitter determines
+the exact wrapped retransmit expiry. That expiry survives retained release and
+section stop; the clock-gap fact stays at the actual pre-release snapshot.
+These are conditions at beforeArm, not added assumptions at retry entry.
+Exact projection/erasure retain original errors. Reaching the hook and successful
+network transmission are not guaranteed, and a full retry episode remains open. -/
+theorem original_retry_rearm (d : Device) (horizon : UInt64)
+    (empty : d.sendWorkQueue = []) :
+    Campaign2.Ensures (observedRetryRearm horizon)
+      (fun s => s.wg.device = some d) (RetryRearmCertificate d horizon) :=
+  source_retry_rearm d horizon empty
 
 end Leanux.Proofs.WG.TimerDiscipline
