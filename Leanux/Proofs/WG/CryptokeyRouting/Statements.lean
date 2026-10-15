@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Packets.RxOriginCuts
 import Leanux.Proofs.WG.Packets.RoutingCuts
 import Leanux.Proofs.WG.Packets.AffiliationCuts
 import Leanux.Proofs.WG.Configuration.RunnerRouting
@@ -2527,5 +2528,65 @@ theorem original_packet_routing_source_cuts (pid : PeerId) (pkt : RxPacket)
   ⟨Packets.consumeDataDone_factor pid pkt endpoint, Packets.wgXmit_factor family addr packets mtu,
     fun w v bytes xs hi hr => Packets.consumeDataDone_authorized pid pkt endpoint w v bytes xs hi hr,
     fun v4 w v xs hi hr => Packets.wgXmit_authorized v4 addr packets mtu w v xs hi hr⟩
+
+/-- Local source-shaped session receipts: exact original erasure on all
+inputs, exact R2 projection under its existing AllocationInv, and truthful
+partial receipt histories on Stops from valid incoming receipt history. A Some front receipt links the actual entry,
+nullable handshake word, allocation and peer read to the completed derivation.
+This does not establish initialized session provenance or later residency. -/
+theorem original_session_material_receipts (pid : PeerId) :
+    Logged.ErasesPrefix (SessionOrigin.observed pid) (WG.beginSession pid) ∧
+    Logged.ProjectsUnder Lifetimes.AllocationInv MaterialOrigin.life?
+      (SessionOrigin.observed pid) (Lifetimes.beginSessionPrefix pid) ∧
+    Logged.PrefixPreserves (fun h _ => MaterialOrigin.Valid SessionOrigin.Receipt.Valid h)
+      (MaterialOrigin.Valid SessionOrigin.Receipt.Valid) (SessionOrigin.observed pid) ∧
+    (∀ ctx w v, (SessionOrigin.front pid).run w = .ok (some ctx, v) →
+      ∃ readWorld initWorld deriveWorld,
+        SessionOrigin.Entered pid ctx w readWorld ∧
+        (WG.getPeer pid).run readWorld = .ok (ctx.peer, readWorld) ∧
+        (SessionOrigin.initKey ctx.slot (ctx.state == WG.HANDSHAKE_CONSUMED_RESPONSE) ctx.peer.remoteIndex).run readWorld = .ok ((), initWorld) ∧
+        (branch .sessionInitiator (ctx.state == WG.HANDSHAKE_CONSUMED_RESPONSE)).run initWorld = .ok (ctx.initiator, deriveWorld) ∧
+        (WG.deriveKeys ctx.slot ctx.initiator ctx.peer.chainingKey).run deriveWorld = .ok ((), v) ∧
+        MaterialOrigin.Derivation ctx.slot ctx.initiator ctx.peer.chainingKey deriveWorld v) ∧
+    (∀ (w : World) (d : Device) (word : Option PeerId) (id : KeypairId), id < d.nextKeypairId →
+      (Lifetimes.keyAllocationDevice d (w.k.keypairCounter + 1) word).nextKeypairId = d.nextKeypairId + 1 ∧
+      (Lifetimes.keyAllocationDevice d (w.k.keypairCounter + 1) word).ifindex = d.ifindex ∧
+      (Lifetimes.keyAllocationDevice d (w.k.keypairCounter + 1) word).keypairs[d.nextKeypairId]? =
+        some {internalId := w.k.keypairCounter + 1, peer := word} ∧
+      (Lifetimes.keyAllocationDevice d (w.k.keypairCounter + 1) word).keypairs[id]? = d.keypairs[id]?) :=
+  ⟨SessionOrigin.observed_erases pid, SessionOrigin.observed_projects pid,
+    SessionOrigin.observed_valid pid, SessionOrigin.front_material pid, MaterialOrigin.allocation_fields⟩
+
+/-- Local RX admission/decrypt receipts occur in the original consume and
+worker source paths. They retain the complete allocated/stored packet and
+exact index/acquisition/peer-check chain. Successful decryption changes only
+nonce/bytes and uses the actual resident receiving material. Erasure
+is unconditional; receipt validity is preserved from valid incoming
+history (including empty), independently of the AllocationInv required by R2 projection. Initialized session matching, unique original ciphertext and
+receipt-to-poll/Stack transport are separate obligations. -/
+theorem original_rx_origin_receipts (msg : List UInt8) (src : SkbSource) (ds : Nat) :
+    Logged.ErasesPrefix (RxOrigin.consume msg src ds) (WG.consumeData msg src ds) ∧
+    Logged.ProjectsUnder Lifetimes.AllocationInv MaterialOrigin.life?
+      (RxOrigin.consume msg src ds) (Lifetimes.consumeDataPrefix msg src ds) ∧
+    Logged.PrefixPreserves (fun h _ => MaterialOrigin.Valid RxOrigin.Receipt.Valid h)
+      (MaterialOrigin.Valid RxOrigin.Receipt.Valid) (RxOrigin.consume msg src ds) ∧
+    Logged.ErasesPrefix RxOrigin.prepare Queues.RxWorkers.prepareSource ∧
+    Logged.ProjectsUnder Lifetimes.AllocationInv MaterialOrigin.life?
+      RxOrigin.prepare Queues.RxWorkers.preparePrefix ∧
+    Logged.PrefixPreserves (fun h _ => MaterialOrigin.Valid RxOrigin.Receipt.Valid h)
+      (MaterialOrigin.Valid RxOrigin.Receipt.Valid) RxOrigin.prepare ∧
+    (∀ ctx w v, (RxOrigin.admitSource msg src ds).run w = .ok (some ctx, v) →
+      RxOrigin.Admitted msg src ds ctx w v) ∧
+    (∀ id (r : Logged.RunWitness (RxPacket × Option RxPacket)) out,
+      r.Valid (RxOrigin.readDecrypt id) → r.value.2 = some out →
+      ∃ d k, r.before.k.wg = some d ∧ d.rxSkbs[id]? = some r.value.1 ∧
+        d.keypairs[r.value.1.keypair]? = some k ∧ k.receiving.isValid = true ∧
+        (WG.decryptPacket r.value.1).run r.before = .ok (some out, r.after) ∧
+        out = {r.value.1 with nonce := WG.u64le r.value.1.bytes 8, bytes := out.bytes} ∧
+        WG.aeadDecrypt k.receiving.key (WG.counterNonce (WG.u64le r.value.1.bytes 8))
+          (r.value.1.bytes.drop 16) [] = some out.bytes) :=
+  ⟨RxOrigin.consume_erases msg src ds, RxOrigin.consume_projects msg src ds,
+    RxOrigin.consume_valid msg src ds, RxOrigin.prepare_erases, RxOrigin.prepare_projects,
+    RxOrigin.prepare_valid, RxOrigin.admission_execution msg src ds, RxOrigin.decrypt_receipt⟩
 
 end Leanux.Proofs.WG.CryptokeyRouting

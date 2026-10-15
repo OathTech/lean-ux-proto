@@ -3,7 +3,8 @@
 ## Progress
 
 Work on `proofs/campaign` in `.worktrees/proofs-campaign` follows [the charter](2026-10-13-charter-proof-campaign.md),
-over unchanged mirror `de62c9d`. Local R3 lookup/address/source cuts compile; initialized R3 packet authorization
+over unchanged mirror `de62c9d`, now lagging representation batch `cb2348e` pending merge/carry. Local R3
+session/material/RX-origin receipts compile; initialized R3 packet authorization
 and R4 receive-pipeline conservation remain open. The [register](proofs.md#results) holds pins/counts; the
 [model map](proofs.md#layers) supplies refinement details. No main integration, push, differential check or guest run
 was made by this campaign.
@@ -12,14 +13,18 @@ was made by this campaign.
 | --- | --- |
 | R1 | Replay uniqueness proved; inclusive-floor correction witnessed. |
 | R2 | Initialized allocation-identity access safety proved, including failures/trials; affiliation/credits separate. |
-| R3 | Parsed initialized routing histories, local nullable affiliation and actual lookup/handoff cuts; initialized packet binding open. |
+| R3 | Parsed initialized routing histories, local lookup/affiliation cuts and actual session/RX-origin receipts; initialized packet binding open. |
 | R4 | Initialized entry uniqueness and callback completion; chronology refuted; receive-pipeline conservation open. |
 | R5 | Accepted age/post-zero/wire-nonce counterexamples; thirteen positive local contracts. |
 | R6 | Cookie exclusion proved; literal MAX=18 refuted, without a replacement universal bound. |
 
-**Validation.** Initialized R4 callback-completion propagation passes scoped/full builds (337/483 jobs), the
+**Validation.** The new local origin tranche passes scoped/full builds (426/486 jobs), with 489 terminal
+declarations (487 theorems/two definitions; 124 R3/114 R4), retaining all 487 preceding bodies. The 489-declaration
+permitted-axiom gate, fresh stock kernel replay, 60-job default build and 124 tests (24.066s, one skip) pass.
+Exact source checks and independent frozen source review pass after wording fixes. These are local contracts, not a
+new initialized origin result. The preceding `65e6a6d` initialized R4 callback-completion propagation passed scoped/full builds (337/483 jobs), the
 487-declaration permitted-axiom gate, fresh stock kernel replay, the 60-job default build and 124 tests
-(24.017s, one skip). Independent frozen review and exact source checks pass. Current source has 487 declarations
+(24.017s, one skip). Its independent frozen review and exact source checks passed, covering 487 declarations
 (485 theorems/two definitions; 122 R3/114 R4), retaining all 485 preceding terminal bodies. The preceding `ce12402`
 R3 source-cut checkpoint passed scoped/full builds (401/480 jobs), the 485-declaration permitted-axiom gate,
 fresh stock kernel replay, the 60-job default build and 124 tests (22.976s, one skip). Baseline `1a5542d` passed the
@@ -236,6 +241,29 @@ World chain and the original packet list with its supplied MTU. Handoff is stage
 transmission. [AGENT 2026-10-15] Reuse local source factors and existing routing frames; add no Runner observer or
 initial-trace premise. Arbitrary mixed-family packet lists are not silently treated as constructor output.
 
+**Local historical origin cuts.** [MaterialOrigin](../Leanux/Proofs/WG/Keypairs/MaterialOrigin.lean) records exact
+allocation/frontier equations, receiving-material field rules and actual clock/KDF/getter/store derivation steps.
+[SessionOrigin](../Leanux/Proofs/WG/Keypairs/SessionOrigin.lean) observes allocation before later failures and normal
+front completion before zeroing/rotation/index replacement. Only a Some front receipt denotes derivation: its
+connected entry-state/nullable-word/allocation/peer-read chain retains the actual remoteStatic/chainingKey record
+and consecutive initializer/derive Worlds. Material is resident at the derivation cut; later deletion is allowed.
+The field rules do not establish a global material invariant or initialized handshake self-word compatibility.
+
+[RxOriginCuts](../Leanux/Proofs/WG/Packets/RxOriginCuts.lean) observes the complete admission front through allocation
+before enqueue, plus the immediate allocation itself. Its Some receipt exposes actual index lookup, key acquisition,
+peer check and full packet construction; a normal dropped front supplies no allocation claim. ENOSPC cleanup and later
+Stops retain earlier receipts. The worker captures its actual stored getter/decrypt run once, before payload/state
+publication. Successful decrypt identifies the resident key and exact AEAD equation and changes only nonce/bytes;
+publication's concrete setter changes only state. No assumption identifies every input with allocation-time ciphertext.
+
+Original erasure is unconditional. Exact full R2 result/World-or-Stop/history projection requires the existing
+AllocationInv on the same input World's projected incoming history. Receipt validity is preserved from valid incoming
+history (empty qualifies), independently of AllocationInv.
+[AGENT 2026-10-15] Reuse captureObserved and existing R2 source cuts with a shared receipt journal; retain the local
+projection domain rather than add invalid-history append infrastructure. No initialized origin premise or new Runner
+hierarchy was introduced. Session-to-later-key allocation matching, peer public-key provenance, packet transport to
+poll/Stack, copied trials and initialized identity closure remain open. A snapshot or raw peer winner does not settle them.
+
 **Remaining obligations.** Initialized syscall/Runner composition preserves ordinary-negative cleanup and Stops; parser
 shape follows the operation cursor. Local entry agreement still needs connection to earlier actual initialized lookup
 history. Historical session/key/public-key ownership and packet origin, initialized RX/TX identity binding and
@@ -265,6 +293,27 @@ default build and units passed on their first calls. Root's source/scope/body/to
 final register selector incorrectly included the separate claim table and failed; the corrected remaining pin check
 passed for all seven rows. This was a check-script defect, not an infrastructure retry. No source changed after the
 worker's successful builds; subsequent edits only reconcile report/register metadata.
+
+**Origin-cut effort/review.** Lease 06:31:39, measured acceptance 06:35:01 UTC. Session foundation PASS call 7;
+concrete front PASS call 9; complete RX chain PASS call 15 collected 07:01:59. Scoped call 18 PASS426 collected
+07:05:47; first full call 19 PASS486 collected by 07:06:53; final full call 20 PASS486 collected 07:09:55
+after the validity docstring correction. Final worker ledger: 21 capped calls, 20 builds with
+9 PASS (2/7/9/11/14/15/18/19/20) and 11 FAIL (1/3–6/8/10/12–13/16–17), plus exact check 21 PASS
+collected 07:11:53. It verifies six paths, 487 unchanged prior bodies, 489/124 R3/114 R4, tokens/imports,
+whitespace/EOF, empty index, mirror de62c9d and seven lagging rows; its doc hashes precede this final metadata edit. Four deterministic
+200k-heartbeat diagnostics occurred across calls 3/4/10; call 4 also rejected downstream kernel unknown constants.
+Call 10's wrong type name caused recovery `declaration uses sorry` diagnostics; call 12 printed a recovery placeholder
+after an unknown identifier. Remaining failures were syntax, inference, source-normalization or ordinary proof goals.
+No source admission, limit/cap change, interruption or infrastructure rerun. Review corrected the None-front wording
+and device-only frontier wording, and qualified validity preservation to valid incoming histories. Root review required
+connected session and RX admission prefixes, now explicit.
+Independent preliminary review 06:48:33–06:54:29 and frozen review 07:06:53–07:14:42 are clear after the four
+wording/census findings were fixed. The coordinator's five concurrent checks all passed on their first calls:
+486-job/489-declaration permitted-axiom gate, fresh stock kernel replay, 60-job default build, 124 tests
+(24.066s, one skip), and exact scope/body/import/token/pin checks. The exact check covers the final reviewed source
+and documentation before these validation-only edits. All exits were collected by 07:22:06; no guest/differential
+run, cap increase, interruption or infrastructure rerun. The representation carry is next; all seven register rows
+retain de62c9d and are lagging cb2348e.
 
 **Ranked mirror suggestions.** None. Integer-address refinement needs no production restructure; C byte-layout
 correspondence remains informal.
