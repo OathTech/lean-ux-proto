@@ -10,6 +10,7 @@ import Leanux.Proofs.WG.Index.LookupMiss
 import Leanux.Proofs.WG.Index.LifecycleSource
 import Leanux.Proofs.WG.Index.LinkSource
 import Leanux.Proofs.WG.Index.SendSource
+import Leanux.Proofs.WG.Index.DispatchSource
 
 /-! H2's original-operation table contracts. Reachable owner/peer-word
 coherence remains a separate obligation. -/
@@ -416,5 +417,15 @@ theorem original_handshake_send_worker_tables (pid : PeerId) :
     Campaign2.Ensures (handshakeSendWorker pid) View.TablesSafe
       (fun _ s => View.TablesSafe s) :=
   handshakeSendWorker_tables pid
+
+/-- Every normal return of original environment send-worker dispatch preserves
+optional-device table uniqueness and its hashed-keypair allocation bound.
+The actual selection, dequeue, pending check and section reads execute around
+the worker body. No resident-peer or reference-count premise is required;
+completion on arbitrary records and stopped prefixes are not asserted. -/
+theorem original_send_dispatch_tables :
+    Campaign2.Ensures Env.runOneSendWorker View.TablesSafe
+      (fun _ s => View.TablesSafe s) :=
+  runOneSendWorker_tables
 
 end Leanux.Proofs.WG.Index
