@@ -528,7 +528,8 @@ def validate_trace(trace):
             # holds MAX_QUEUED_INCOMING_HANDSHAKES = 4096, so a count at the ring's
             # size (B1's twins: 4096 invalid and one leading valid, the last send
             # dropped at a full slot) is the largest that adds an arm, and the
-            # report's MAX_BRANCHES bounds the labels (about 37 a packet);
+            # report's MAX_BRANCHES bounds the labels (about 65 a packet with
+            # lane C's lookup per send);
             # Leanux/Runner.lean has the same bound
             _integer(op["count"], 1, 4096, f"ops[{i}].count")
             _integer(op["port"], 1, 65535, f"ops[{i}].port")

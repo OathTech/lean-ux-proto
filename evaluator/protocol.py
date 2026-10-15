@@ -237,8 +237,12 @@ def parse_batch(traces, output, max_bytes=32 * 1024 * 1024):
 # The mirror's branches per trace (W4: raised from 4096 for multi-packet items;
 # the W7 full-ring tier: a 1024-item wg_batch reports 126,531 labels on the
 # wrap trace, docs/2026-10-13-w7-full-ring-tier.md, so 2^18 with headroom
-# for the 1025-item trace)
-MAX_BRANCHES = 262144
+# for the 1025-item trace; lane C, 2026-10-15: the flood reports one trie
+# lookup per send, about 30 more labels a packet, and e_ring_full's
+# 4096-packet flood reports 267,448, so 2^19 with the same headroom; a
+# harness budget on the report's size beside parse_batch's bytes, not a
+# check rule)
+MAX_BRANCHES = 524288
 
 SEMANTIC_ERRNOS = {'eventfd2': {12, 22, 24}, 'dup': {9, 12, 24}, 'dup3': {9, 12, 22},
                    'close': {9}, 'fcntl': {1, 9, 12, 22},
