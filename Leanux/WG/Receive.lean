@@ -33,7 +33,6 @@ def MESSAGE_HANDSHAKE_RESPONSE : Nat := 2
 def MESSAGE_HANDSHAKE_COOKIE : Nat := 3
 def MESSAGE_DATA : Nat := 4
 def MESSAGE_MINIMUM_LENGTH : Nat := 32
-def MAX_QUEUED_INCOMING_HANDSHAKES : Nat := 4096
 
 /-- `SKB_TYPE_LE32`: the first little-endian 32-bit word (type and reserved
     bytes). -/
@@ -345,13 +344,15 @@ def receiveHandshakePacket (msg : List UInt8) (src : SkbSource) : M Unit := do
     the ring poll (`false` when empty) and the handshake packet consumed.
     The environment runs the worker when the queued work runs. -/
 def receiveStep : M Bool := do
-  match (← getDev).handshakeQueue with
-  | [] => do
+  -- `ptr_ring_consume_bh` (ptr_ring.h:361-370): the peek, and on an item the
+  -- discard that leaves its slot occupied until the batch rule clears it
+  match (← getDev).handshakeQueue.consume with
+  | (none, _) => do
     _ ← branch .workerConsumed false
     return false
-  | (msg, src) :: _ =>
+  | (some (msg, src), ring) =>
     _ ← branch .workerConsumed true   -- ptr_ring_consume_bh: the ring slot is taken first
-    modifyDev fun d => { d with handshakeQueue := d.handshakeQueue.drop 1 }
+    modifyDev fun d => { d with handshakeQueue := ring }
     receiveHandshakePacket msg src
     -- dev_kfree_skb; atomic_dec(&handshake_queue_len) (receive.c:215)
     modifyDev fun d => { d with handshakeQueueLen := d.handshakeQueueLen - 1 }
@@ -359,10 +360,12 @@ def receiveStep : M Bool := do
 
 /-- The whole loop: `receiveStep` per item, then `condResched`
     (receive.c:216: other kworkers may run here, the environment decides;
-    W7 phase 2 interleaves the iterations, `workerIter`). -/
+    W7 phase 2 interleaves the iterations, `workerIter`). The C's loop is
+    unbounded and ends at the first NULL poll; the fuel is the ring's
+    capacity plus that poll (a full ring takes 4097 iterations). -/
 def handshakeReceiveWorker (condResched : M Unit) : M Unit :=
   workerLoop .receiveWorker none receiveStep condResched
-    MAX_QUEUED_INCOMING_HANDSHAKES "the handshake queue did not drain"
+    (MAX_QUEUED_INCOMING_HANDSHAKES + 1) "the handshake queue did not drain"
 
 /-- wg_queue_enqueue_per_device_and_peer (queueing.h:157-178) for the
     decrypt queue and the peer's `rx_queue`: 0, `-ENOSPC` when the peer's
@@ -483,13 +486,16 @@ def packetReceive (msg : List UInt8) (src : SkbSource) : M Unit := do
     -- (no CONFIG_SMP, no CONFIG_DEBUG_SPINLOCK) `arch_spin_trylock` is
     -- `({ barrier(); (void)(lock); 1; })` (include/linux/spinlock_up.h:56):
     -- it always succeeds, and `__ptr_ring_produce` runs as the plain path's
-    -- `ptr_ring_produce_bh` does (B4, section 2.5). An SMP oracle would need
-    -- a record here.
+    -- `ptr_ring_produce_bh` does (B4, section 2.5; reached from the 2,050th
+    -- packet of a flood, which runs exactly since B4 part 2). An SMP oracle
+    -- would need a record here.
     _ ← branch .rxQueueBusy ((← getDev).handshakeQueueLen > MAX_QUEUED_INCOMING_HANDSHAKES / 2)
-    -- ptr_ring_produce_bh fails when the ring (MAX_QUEUED_INCOMING_HANDSHAKES) is full
-    if ← branch .rxProduceFailed ((← getDev).handshakeQueue.length ≥ MAX_QUEUED_INCOMING_HANDSHAKES) then return   -- drop
-    -- atomic_inc(&wg->handshake_queue_len) (receive.c:567)
-    modifyDev fun d => { d with handshakeQueue := d.handshakeQueue ++ [(msg, src)],
+    -- `__ptr_ring_produce` (ptr_ring.h:104-116) fails when the producer's
+    -- slot is occupied (`PtrRing.full`): the packet is dropped (:561-565,
+    -- dev_kfree_skb at :585) and the counter is not touched (B1)
+    if ← branch .rxProduceFailed (← getDev).handshakeQueue.full then return   -- drop
+    -- the produce, then atomic_inc(&wg->handshake_queue_len) (receive.c:567)
+    modifyDev fun d => { d with handshakeQueue := d.handshakeQueue.produce (msg, src),
                                 handshakeQueueLen := d.handshakeQueueLen + 1 }
     cpumaskNextOnline
     -- queue_work_on(cpu, handshake_receive_wq, ...): queued iff not pending,

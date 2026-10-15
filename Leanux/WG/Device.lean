@@ -91,10 +91,13 @@ def wgStop : M Unit := do
   _ ← branch .stopPeersIter false
   -- `while ((skb = ptr_ring_consume(&wg->handshake_queue.ring)) != NULL)`:
   -- a message queued for a receive worker that has not run
-  if !(← getDev).handshakeQueue.isEmpty then
+  if !(← getDev).handshakeQueue.empty then
     unsupported "wg_stop with handshake messages queued for the receive worker (its timing)"
   _ ← branch .stopDrainIter false
-  modifyDev fun d => { d with handshakeQueue := [], handshakeQueueLen := 0 }   -- atomic_set(&wg->handshake_queue_len, 0)
+  -- the loop's one poll of an empty ring changes no cursor: the ring's
+  -- carried slots persist across down and up (B1 design, section 2);
+  -- atomic_set(&wg->handshake_queue_len, 0)
+  modifyDev fun d => { d with handshakeQueueLen := 0 }
   socketReinit none none
 
 /-- `dev_change_flags` without IFF_UP on an up device: `__dev_close_many`
@@ -280,12 +283,12 @@ def wgDestruct : M Unit := do
   -- the handshake ring too (device.c:255 would run its receive worker before
   -- the purge at :258): unreachable, since wg_stop stops `unsupported` on a
   -- nonempty ring and a device never brought up receives nothing
-  if !d.handshakeQueue.isEmpty then
+  if !d.handshakeQueue.empty then
     invariant "wg_destruct with handshake messages queued (wg_stop drains the ring)"
   mayHaveSlept
-  -- wg_packet_queue_free: the handshake ring is purged; the crypt rings are
-  -- empty (WARN_ON otherwise)
-  modifyDev fun d => { d with handshakeQueue := [], handshakeQueueLen := 0 }
+  -- wg_packet_queue_free: the handshake ring is purged and freed with the
+  -- device; the crypt rings are empty (WARN_ON otherwise)
+  modifyDev fun d => { d with handshakeQueueLen := 0 }
   mayHaveSlept   -- rcu_barrier()
   ratelimiterUninit
   -- memzero_explicit(&wg->static_identity); kvfree ×2; free_netdev: the

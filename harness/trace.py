@@ -168,8 +168,13 @@ if set(OPCODES) != set(FIELDS):
     raise AssertionError(f"OPCODES and FIELDS name different operations: {set(OPCODES) ^ set(FIELDS)}")
 # The guest's KCOV area in words, task and remote (harness/guest.c CAPACITY):
 # KCOV stops at CAPACITY - 1 PCs or (CAPACITY - 1) // 4 comparison records,
-# and the guest fails an operation whose area filled.
+# and the guest fails an operation whose area filled. The comparison child's
+# task area is twice that (guest.c TASK_CMP_CAPACITY; B1, a flood past the
+# handshake ring's 4096 slots has about 1.41 M task-side comparison records):
+# its limit is (KCOV_TASK_CMP_CAPACITY - 1) // 4 records, and a merged
+# comparison row (task and remote) stays below the sum of the two limits.
 KCOV_CAPACITY = 4 * 1024 * 1024
+KCOV_TASK_CMP_CAPACITY = 8 * 1024 * 1024
 # The optional top-level `net_fixture` (L): "bare" starts a network trace
 # without wg0; absent, the fixture creates a down wg0. W8: "foreign-creator"
 # creates wg0 from a second namespace C (its creating namespace), which holds
@@ -442,10 +447,12 @@ def validate_trace(trace):
             _integer(op["ticks"], 1, 2**31, f"ops[{i}].ticks")
         if name == "wg_flood":
             # B4 (2.4): the flood runs exactly in the mirror; the handshake ring
-            # holds MAX_QUEUED_INCOMING_HANDSHAKES = 4096 (a fuller batch would
-            # take the produce-failed arm) and the report's MAX_BRANCHES bounds
-            # the labels; Leanux/Runner.lean has the same bound
-            _integer(op["count"], 1, 4000, f"ops[{i}].count")
+            # holds MAX_QUEUED_INCOMING_HANDSHAKES = 4096, so a count at the ring's
+            # size (B1's twins: 4096 invalid and one leading valid, the last send
+            # dropped at a full slot) is the largest that adds an arm, and the
+            # report's MAX_BRANCHES bounds the labels (about 37 a packet);
+            # Leanux/Runner.lean has the same bound
+            _integer(op["count"], 1, 4096, f"ops[{i}].count")
             _integer(op["port"], 1, 65535, f"ops[{i}].port")
             # the leading valids and the optional control are 148-byte (296-hex)
             # handshake initiations (the guest submits them as fixed-size slots)

@@ -2975,6 +2975,10 @@ def Decision.repeatable : Decision → Bool
   -- more than once" and "opposite outcome covered" no longer fire anywhere;
   -- their per-packet order rests on the record stream.
   | .hsUnderLoad | .macInvalid | .hsLoadedCookieOk | .hsMacNoCookie | .hsNeedsCookieMac | .rxQueueBusy
+  -- ... and the produce at a full ring (B1's twins e_ring_full and
+  -- e_ring_carry: 4096 produces succeed and the last send is dropped, both
+  -- outcomes in one flood)
+  | .rxProduceFailed
   -- ... and the consume path when two leading initiations from one source
   -- are bundled (e_underload_ratelimit*): the second is dropped by noise.c's
   -- own 50/s test (flood=1, no peer, the handshake's reference put back)

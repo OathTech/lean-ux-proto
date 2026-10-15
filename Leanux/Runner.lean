@@ -659,11 +659,11 @@ private def parseOperation (j : Json) (prior : Array Operation) : Except String 
         pure n
       | .error _ => pure 4
     -- B4 (2.4): the flood runs exactly, so its size is bounded by the
-    -- handshake ring (MAX_QUEUED_INCOMING_HANDSHAKES, 4096: a fuller batch
-    -- would take the produce-failed arm, out of reach by this bound) and
-    -- the report's MAX_BRANCHES; harness/trace.py has the same bound
-    let count ← natField j "count" 4000
-    if count == 0 then throw "count: expected 1-4000"
+    -- handshake ring (MAX_QUEUED_INCOMING_HANDSHAKES, 4096: B1's twins fill
+    -- it and drop one send at a full slot) and the report's MAX_BRANCHES;
+    -- harness/trace.py has the same bound
+    let count ← natField j "count" 4096
+    if count == 0 then throw "count: expected 1-4096"
     let port ← natField j "port" 65535
     if port == 0 then throw "port: expected 1-65535"
     let messages ← match j.getObjVal? "messages" with

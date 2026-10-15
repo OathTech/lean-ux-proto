@@ -770,7 +770,7 @@ def inject (family port : Nat) (msg : List UInt8) (tos : Nat := 0) (ll : Bool :=
   runCryptWorkers
   let d ← getDev
   requireDrained "the datagram queued"
-    [!d.handshakeQueue.isEmpty, !d.decryptQueue.empty, !d.encryptQueue.empty, !d.txWorkQueue.isEmpty]
+    [!d.handshakeQueue.empty, !d.decryptQueue.empty, !d.encryptQueue.empty, !d.txWorkQueue.isEmpty]
   return msg.length   -- udp_sendmsg returns the datagram's length
 
 /-! ## W7 stream B: `wg_batch` (docs/2026-10-06-w4-w7-transmit-bulk.md, 5.5) -/
@@ -816,7 +816,7 @@ def afterBatch : M Unit := do
   -- violation, not a completion fact.
   requireDrained "the batch queued"
     [!d.decryptQueue.empty, !d.encryptQueue.empty, !d.txWorkQueue.isEmpty, !d.sendWorkQueue.isEmpty,
-     !d.handshakeQueue.isEmpty, d.handshakeQueueLen != 0]
+     !d.handshakeQueue.empty, d.handshakeQueueLen != 0]
   deliverSent
 
 /-- `wg_batch`: the fixture's sender submits `items` as one `io_uring_enter`,
@@ -872,8 +872,12 @@ def batch (items : List BatchItem) : M Int := do
     merged-injection control), then `count` copies of the guest's invalid
     template (148 bytes: type 1, a MAC1 of 0xff; an environment fact). Each
     send is the producer, run exactly as a `wg_batch`'s inject items are
-    (`batch`): `wg_packet_receive` in a `net_rx_action` section, the ring
-    produce, the counter's increment, the first packet's queue record. The
+    (`batch`): `wg_packet_receive` in a `net_rx_action` section, B1's ring
+    produce (`__ptr_ring_produce`: a full slot drops the packet and leaves
+    the counter, receive.c:561-565), the counter's increment, the first
+    packet's queue record; the worker consumes from the ring
+    (`ptr_ring_consume_bh`, the batch rule) and ends at its first empty
+    poll, where the C has it. The
     sends run inline in the trace task and the kworkers wait for the call to
     return, so a worker section between two producers' records mismatches.
     Then the deferred units, by the records (`afterBatch`): the receive
@@ -902,7 +906,7 @@ def flood (count port family : Nat) (messages : List (List UInt8)) : M Int := do
   -- the receive worker drained the flood within the guest's wait (B4, 2.3:
   -- `afterBatch`'s drain check does not list the handshake queue)
   let d ← getDev
-  requireDrained "the flood queued" [!d.handshakeQueue.isEmpty, d.handshakeQueueLen != 0]
+  requireDrained "the flood queued" [!d.handshakeQueue.empty, d.handshakeQueueLen != 0]
   return 0
 
 /-! ## W8: the creating namespace's teardown (docs/2026-10-06-w8-w9-netns-routing.md, 3.2) -/

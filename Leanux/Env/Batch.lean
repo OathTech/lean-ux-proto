@@ -143,7 +143,7 @@ def Activation.hasWork (a : Activation) : M Bool := do
   match a.worker with
   | .encryptWorker => return !d.encryptQueue.empty
   | .decryptWorker => return !d.decryptQueue.empty
-  | .receiveWorker => return !d.handshakeQueue.isEmpty
+  | .receiveWorker => return !d.handshakeQueue.empty
   | .txWorker =>
     let some pid := a.pid | invariant "a tx activation without its peer"
     let some item := (← getPeer pid).txQueue.all.head? | return false
@@ -220,7 +220,7 @@ def Activation.occupancy (a : Activation) : M Nat := do
   match a.worker with
   | .encryptWorker => return d.encryptQueue.count
   | .decryptWorker => return d.decryptQueue.count
-  | .receiveWorker => return d.handshakeQueue.length
+  | .receiveWorker => return d.handshakeQueue.count
   | .txWorker =>
     let some pid := a.pid | invariant "a tx activation without its peer"
     return (← getPeer pid).txQueue.all.length
@@ -265,7 +265,7 @@ def dispatch (w : Worker) : M Bool := do
   match w with
   | .encryptWorker => if d.encryptQueue.empty then return false
   | .decryptWorker => if d.decryptQueue.empty then return false
-  | .receiveWorker => if d.handshakeQueue.isEmpty then return false
+  | .receiveWorker => if d.handshakeQueue.empty then return false
   | .txWorker =>
     let some headPid := d.txWorkQueue.head? | return false
     let p ← match ← peekUnit .txWorker with
@@ -308,7 +308,7 @@ def schedule (stack : Option Worker := none) : M Unit := do
       let d ← getDev
       let next := [Worker.receiveWorker, .decryptWorker, .encryptWorker, .txWorker].find? fun w =>
         match w with
-        | .receiveWorker => !d.handshakeQueue.isEmpty
+        | .receiveWorker => !d.handshakeQueue.empty
         | .decryptWorker => !d.decryptQueue.empty
         | .encryptWorker => !d.encryptQueue.empty
         | _ => !d.txWorkQueue.isEmpty

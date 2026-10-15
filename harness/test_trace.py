@@ -10,7 +10,7 @@ import shutil
 import subprocess
 import unittest
 
-from .trace import (FIELDS, KCOV_CAPACITY, OPCODES, RESERVED_OPCODES, InvalidTrace, UnsupportedTrace, filter_may_kill, loads_trace,
+from .trace import (FIELDS, KCOV_CAPACITY, KCOV_TASK_CMP_CAPACITY, OPCODES, RESERVED_OPCODES, InvalidTrace, UnsupportedTrace, filter_may_kill, loads_trace,
                     serialize_wire, validate_trace)
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -522,6 +522,11 @@ class LifecycleWireTests(unittest.TestCase):
         match = re.search(r"#define CAPACITY \((\d+)UL \* 1024\)", guest)
         self.assertIsNotNone(match)
         self.assertEqual(int(match.group(1)) * 1024, KCOV_CAPACITY)
+        # B1: the comparison child's task area and its own limit
+        match = re.search(r"#define TASK_CMP_CAPACITY \((\d+)UL \* 1024\)", guest)
+        self.assertIsNotNone(match)
+        self.assertEqual(int(match.group(1)) * 1024, KCOV_TASK_CMP_CAPACITY)
+        self.assertGreater(KCOV_TASK_CMP_CAPACITY, KCOV_CAPACITY)
 
 
 if __name__ == '__main__':
