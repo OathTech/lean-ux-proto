@@ -26,7 +26,7 @@ No independent existential projected runs are spliced together.
 | Result | Existing mathematical checkpoint | Factoring / remaining mathematics |
 | --- | --- | --- |
 | H1 Noise | 11 local state/slot contracts | Public projection complete; whole-call edge coverage and lifetime confirmation remain open. |
-| H2 Index | 32 contracts, including lifecycle boundaries and original initiation sender/worker/dispatch | Public projection complete: 14 total contracts, 16 normal-return contracts, 1 exact stop and 1 projected initializer theorem; reachable coherence, broader records and the corpus runner composition remain open. |
+| H2 Index | 33 contracts, including lifecycle boundaries, both handshake senders and original worker/dispatch | Public projection complete: 14 total contracts, 17 normal-return contracts, 1 exact stop and 1 projected initializer theorem; reachable coherence, broader records and the corpus runner composition remain open. |
 | H3 Roaming | 6 contracts, including original decrypt-worker publication provenance | Public projection complete; carrying provenance through poll execution and complete caller coverage remain open. |
 | H4 Configuration | 60 contracts and the reachable internal dump-accounting finding | Public projection and frame separation complete. Queued/live-keypair removal, private-key collision, mixed attributes, global ownership and general dump composition remain open. |
 | H5 Progress | 25 contracts and the accepted batch-backlog counterexample | Public projection and frame separation complete; productive-record decrease, full loop coverage and probe/detach composition remain open. The backlog witness is historical over `de62c9d`: main's batch guard now addresses request 1. |
@@ -34,7 +34,7 @@ No independent existential projected runs are spliced together.
 
 Projection/frame factoring completed at `69f988a` for all six results, preserving
 all 153 existing headline names before new mathematics. The following H2 lifecycle/sender
-and H6 dispatch increments, plus H3 publication provenance, bring the total to 165. No public statement directly names `World` or
+and H6 dispatch increments, plus H3 publication provenance, bring the total to 166. No public statement directly names `World` or
 `Kernel`.
 The full proof gate remains failed in inherited campaign-1 counter-window and
 index carries; those files have not been edited. Scoped validation does not
@@ -51,7 +51,7 @@ connections to the current executable mirror, not replacement interpreters.
 | --- | --- | --- |
 | Common C2 | `Campaign2/View` is data-only; `Campaign2/Bridge` defines projection and universal execution contracts. | No shared campaign-1 layer is changed. |
 | H1 | `Noise/Model`, `Statements`, `Slots`, `StateEdges`, `ConsumeEdges`; `Execution` holds the concrete monad connection; `AccessSource` holds accessor read/write contracts, reexported by `Basic`. | `KernelFrames`, `PeerFrames`, `SlotFrames`. |
-| H2 | `Index/View`, `TableModel`, `OwnerWordModel`, `AllocationModel`, `ReleaseModel`, `LifecycleModel` and pure release effects/bounds; `Statements`, `HandshakeClaims`, `OwnerUpdateClaims`, `LifecycleSource`, `LinkSource`, `SendSource`, `DispatchSource` and the other operation/source modules. | `IndexFieldFrames`, `OwnerFieldFrames`, `StoreFieldFrames`, `LifecycleFrames`, `NewlinkFrames`, `SendFrames`, `DispatchFrames`; the old `HandshakeFrames` and `OwnerFrames` paths are import-only reexports, not duplicated lemmas. |
+| H2 | `Index/View`, `TableModel`, `OwnerWordModel`, `AllocationModel`, `ReleaseModel`, `LifecycleModel` and pure release effects/bounds; `Statements`, `HandshakeClaims`, `OwnerUpdateClaims`, `LifecycleSource`, `LinkSource`, `SendSource`, `DispatchSource`, `ResponseSource` and the other operation/source modules. | `IndexFieldFrames`, `OwnerFieldFrames`, `StoreFieldFrames`, `LifecycleFrames`, `NewlinkFrames`, `SendFrames`, `DispatchFrames`, `ResponseFrames`; the old `HandshakeFrames` and `OwnerFrames` paths are import-only reexports, not duplicated lemmas. |
 | H3 | `Roaming/Model`, `View`, `Statements`, `EndpointClaims`, `EndpointSource`, `Authentication`, `PublicationModel`, `PublicationSource`, `PublicationClaims`. | `Roaming/Frames`, `PublicationFrames`; `Basic` reexports the endpoint source connection. |
 | H4 | `Config/Model`, `AllowedRemovalModel`, `QuietModel`, `ClaimView`, `Statements`, `SourceClaims`, `ObservationBridge`, and existing substantive effect/source modules. | `ConcreteFrames` isolates six whole-kernel endpoint contracts; `OperationFrames` isolates seven generic helpers; `ReadbackFrames` retains socket/fixture preservation; `AllowedListFrames`, `AllowedRootFrames`, `AllowedRemovalFrames`, `QuietFrames`, `KeyFieldFrames` isolate within-WG preservation. |
 | H5 | `Progress/Model`, `View`, `Statements`, `SourceClaims`, `ObservationBridge`; `ControlLaws` is generic state/error control and `ControlSource` connects it exactly to the original worker; the scheduler/source modules retain actual execution factors. | `StackFrames` isolates caller-guard preservation. Probe/filter/no-work contracts also establish outputs and remain substantive source claims. |
@@ -407,8 +407,8 @@ axioms. Independent read-only review found no outstanding mathematical or scope
 defect. Ordinary elaboration failures were corrected; the direct expanded
 release proof was replaced by exact removal plus a refcount frame. No cap
 failure or infrastructure rerun. The full gate remains the inherited failure
-recorded above. Response sending, whole-caller coverage and reachable
-owner/store coherence remain open for H2.
+recorded above. At that checkpoint, response sending, whole-caller coverage and
+reachable owner/store coherence remained open for H2.
 
 `DispatchSource` additionally composes original `Env.runOneSendWorker` through
 its exact selection/dequeue factor and actual section reads around the proved
@@ -421,6 +421,20 @@ import/axiom inspection of all 164 headlines passed with only standard axioms.
 Independent read-only review found no issue; the previous 31 H2 statements are
 unchanged. No failed build iteration, cap failure or infrastructure rerun in this
 increment. The inherited full-gate failure is unchanged.
+
+`ResponseSource` now composes original `sendHandshakeResponse`, including both
+timestamp updates, response creation, session installation and the timer/send
+suffix. Creation and installation combine their numeric and owner/bound
+contracts over the same original runs. `ResponseFrames` adds only the
+session-derived timer frame. The new normal-return headline needs no additional
+residency or reference-count premise and covers normal early returns; it does
+not guarantee transmission, completion or resident-store freshness. This brings
+H2 to 33 and the campaign to 166. The scoped build passed (176 jobs), all 33 H2
+axiom checks and fresh stock replay passed, and all 166 campaign headlines
+import and pass axiom inspection together. Independent read-only review found
+no defect. One ordinary map/discard proof mismatch was corrected; no cap failure
+or infrastructure rerun. Previous headlines, mirror and shared layers are
+unchanged. Whole-caller coverage and reachable owner/store coherence remain open.
 
 The table invariant is about hashed entries; this checkpoint does not establish
 all-driver reachable-session uniqueness or owner-store coherence through every

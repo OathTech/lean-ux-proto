@@ -11,6 +11,7 @@ import Leanux.Proofs.WG.Index.LifecycleSource
 import Leanux.Proofs.WG.Index.LinkSource
 import Leanux.Proofs.WG.Index.SendSource
 import Leanux.Proofs.WG.Index.DispatchSource
+import Leanux.Proofs.WG.Index.ResponseSource
 
 /-! H2's original-operation table contracts. Reachable owner/peer-word
 coherence remains a separate obligation. -/
@@ -427,5 +428,15 @@ theorem original_send_dispatch_tables :
     Campaign2.Ensures Env.runOneSendWorker View.TablesSafe
       (fun _ s => View.TablesSafe s) :=
   runOneSendWorker_tables
+
+/-- Every normal return of original handshake-response sending preserves
+optional-device index/owner uniqueness and the hashed-keypair allocation bound.
+This composes response creation, session installation and the send/timer suffix,
+including their normal early returns. It adds no residency or reference-count
+premise and asserts neither successful transmission nor arbitrary-record completion. -/
+theorem original_send_handshake_response_tables (pid : PeerId) :
+    Campaign2.Ensures (sendHandshakeResponse pid) View.TablesSafe
+      (fun _ s => View.TablesSafe s) :=
+  sendHandshakeResponse_tables pid
 
 end Leanux.Proofs.WG.Index
