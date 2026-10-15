@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Progress.PlaceholderTurn
 import Leanux.Proofs.WG.Progress.RecordedTurn
 import Leanux.Proofs.WG.Progress.BatchBacklog
 import Leanux.Proofs.WG.Progress.Scheduler
@@ -244,5 +245,38 @@ theorem original_turn_napi (stack : Option Worker) (initial afterPeek final : Wo
       result = if nextAfter == some (HiddenSite.sectionStart .netRx).info.id then turnReturn else turnContinue := by
   rw [turn_napi stack initial afterPeek next d records peek noStart device poll] at run
   exact napiTurn_execution afterPeek final result run
+
+/-- In recordless mode with a resident device, the original scheduler returns
+unchanged when the receive, decrypt, encrypt and transmit readiness tests are
+all empty. It does not inspect suspended activations, NAPI, timers or send work
+on this branch, so this is not global work emptiness. -/
+theorem original_recordless_turn_empty (stack : Option Worker) (initial : World) (d : WG.Device)
+    (records : initial.hidden = none) (device : initial.k.wg = some d)
+    (empty : d.handshakeQueue.isEmpty = true ∧ d.decryptQueue.empty = true ∧
+      d.encryptQueue.empty = true ∧ d.txWorkQueue.isEmpty = true) :
+    (scheduleTurn stack).run initial = .ok (turnReturn, initial) :=
+  turn_placeholder_empty stack initial d records device empty
+
+/-- A recordless turn selects in original receive/decrypt/encrypt/transmit
+priority and continues normally exactly when original dispatch executes its
+activation. Recordless mode alone does not enable placeholders or promise a
+successful hidden-input read; this is not a fairness or termination claim. -/
+theorem original_recordless_turn_runs (stack : Option Worker) (worker : Worker)
+    (initial final : World) (d : WG.Device) (records : initial.hidden = none)
+    (device : initial.k.wg = some d) (selected : placeholderSelection d = some worker) :
+    (scheduleTurn stack).run initial = .ok (turnContinue, final) ↔ DispatchRun worker initial final := by
+  rw [turn_placeholder_dispatch stack worker initial d records device selected]
+  exact placeholderDispatch_success_iff worker initial final
+
+/-- A selected recordless dispatch failure propagates its exact stop through
+the original scheduler turn. In particular, absent records do not authorize
+placeholder execution when the original hidden reader rejects it. -/
+theorem original_recordless_turn_error (stack : Option Worker) (worker : Worker)
+    (initial : World) (d : WG.Device) (err : Stop) (records : initial.hidden = none)
+    (device : initial.k.wg = some d) (selected : placeholderSelection d = some worker)
+    (failed : (Leanux.Env.dispatch worker).run initial = .error err) :
+    (scheduleTurn stack).run initial = .error err := by
+  rw [turn_placeholder_dispatch stack worker initial d records device selected]
+  exact placeholderDispatch_error worker initial err failed
 
 end Leanux.Proofs.WG.Progress

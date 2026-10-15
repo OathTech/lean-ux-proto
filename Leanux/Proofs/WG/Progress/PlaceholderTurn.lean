@@ -1,0 +1,94 @@
+import Leanux.Proofs.WG.Progress.ScheduleTurn
+
+set_option autoImplicit false
+set_option pp.structureInstances false
+
+namespace Leanux.Proofs.WG.Progress
+open Leanux Leanux.WG Leanux.Env
+
+/-- The original recordless dispatch priority. -/
+def placeholderSelection (d : Device) : Option Worker :=
+  [Worker.receiveWorker, .decryptWorker, .encryptWorker, .txWorker].find? fun worker =>
+    match worker with
+    | .receiveWorker => !d.handshakeQueue.isEmpty
+    | .decryptWorker => !d.decryptQueue.empty
+    | .encryptWorker => !d.encryptQueue.empty
+    | _ => !d.txWorkQueue.isEmpty
+
+def placeholderDispatch (worker : Worker) : M TurnResult := do
+  if !(← dispatch worker) then invariant s!"{worker.symbol} has work but was not dispatched"
+  return turnContinue
+
+def placeholderTurn (d : Device) : M TurnResult := do
+  let some worker := placeholderSelection d | return turnReturn
+  placeholderDispatch worker
+
+theorem turn_placeholder (stack : Option Worker) (initial : World) (d : Device)
+    (records : initial.hidden = none) (device : initial.k.wg = some d) :
+    (scheduleTurn stack).run initial = (placeholderTurn d).run initial := by
+  have hd : getDev.run initial = .ok (d, initial) := by
+    simp [getDev, getK, StateT.run, bind, pure, get, getThe, MonadStateOf.get,
+      StateT.bind, StateT.pure, StateT.get, Except.bind, Except.pure, device]
+  have hok {α β : Type} (x : α) (f : α → Except Stop β) :
+      (Except.ok x >>= f) = f x := rfl
+  simp only [scheduleTurn, StateT.run_bind, StateT.run_get, pure_bind,
+    records, Option.isNone_none, ite_true, hd, hok]
+  rfl
+
+theorem placeholder_none_iff (d : Device) : placeholderSelection d = none ↔
+    d.handshakeQueue.isEmpty = true ∧ d.decryptQueue.empty = true ∧
+      d.encryptQueue.empty = true ∧ d.txWorkQueue.isEmpty = true := by
+  cases h1 : d.handshakeQueue.isEmpty <;> cases h2 : d.decryptQueue.empty <;>
+    cases h3 : d.encryptQueue.empty <;> cases h4 : d.txWorkQueue.isEmpty <;>
+    simp [placeholderSelection, h1, h2, h3, h4]
+
+theorem turn_placeholder_empty (stack : Option Worker) (initial : World) (d : Device)
+    (records : initial.hidden = none) (device : initial.k.wg = some d)
+    (empty : d.handshakeQueue.isEmpty = true ∧ d.decryptQueue.empty = true ∧
+      d.encryptQueue.empty = true ∧ d.txWorkQueue.isEmpty = true) :
+    (scheduleTurn stack).run initial = .ok (turnReturn, initial) := by
+  rw [turn_placeholder stack initial d records device]
+  have selection := (placeholder_none_iff d).mpr empty
+  simp only [placeholderTurn, selection]
+  rfl
+
+theorem placeholderDispatch_success_iff (worker : Worker) (initial final : World) :
+    (placeholderDispatch worker).run initial = .ok (turnContinue, final) ↔
+      DispatchRun worker initial final := by
+  rw [← dispatch_success_iff]
+  simp only [placeholderDispatch, StateT.run_bind]
+  cases hd : (dispatch worker).run initial with
+  | error err =>
+    change (Except.error err = Except.ok (turnContinue, final)) ↔ (Except.error err = Except.ok (true, final))
+    simp
+  | ok pair =>
+    obtain ⟨dispatched, afterDispatch⟩ := pair
+    cases dispatched
+    · change (Except.error (Stop.invariant _) = Except.ok (turnContinue, final)) ↔
+        (Except.ok (false, afterDispatch) = Except.ok (true, final))
+      simp
+    · change (Except.ok (turnContinue, afterDispatch) = Except.ok (turnContinue, final)) ↔
+        (Except.ok (true, afterDispatch) = Except.ok (true, final))
+      simp
+
+theorem turn_placeholder_dispatch (stack : Option Worker) (worker : Worker)
+    (initial : World) (d : Device) (records : initial.hidden = none)
+    (device : initial.k.wg = some d) (selected : placeholderSelection d = some worker) :
+    (scheduleTurn stack).run initial = (placeholderDispatch worker).run initial := by
+  rw [turn_placeholder stack initial d records device]
+  simp only [placeholderTurn, selected]
+
+theorem placeholderDispatch_false (worker : Worker) (initial afterDispatch : World)
+    (empty : (dispatch worker).run initial = .ok (false, afterDispatch)) :
+    (placeholderDispatch worker).run initial =
+      .error (.invariant s!"{worker.symbol} has work but was not dispatched") := by
+  rw [placeholderDispatch, StateT.run_bind, empty]
+  rfl
+
+theorem placeholderDispatch_error (worker : Worker) (initial : World) (err : Stop)
+    (failed : (dispatch worker).run initial = .error err) :
+    (placeholderDispatch worker).run initial = .error err := by
+  rw [placeholderDispatch, StateT.run_bind, failed]
+  rfl
+
+end Leanux.Proofs.WG.Progress

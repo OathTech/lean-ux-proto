@@ -624,7 +624,16 @@ records can be consumed. Independent read-only review found no defect. These
 contracts do not assert poll-state framing, queue drainage, productive record
 decrease or whole-loop completion.
 
-The twenty-two H5 statements pass scoped build, standard-axiom inspection and
+`PlaceholderTurn` closes the recordless branch factor with its exact
+receive/decrypt/encrypt/transmit priority. Three terminals establish unchanged
+return when those four readiness checks are empty, actual dispatch execution
+on normal continuation and exact dispatch-error propagation. The original
+false-dispatch invariant remains in the factor. Recordless mode does not imply
+enabled placeholders; the four empty checks do not cover suspended activations,
+NAPI, timers or send work. Independent read-only review found no defect. These
+results provide neither fairness nor the productive-turn measure.
+
+The twenty-five H5 statements pass scoped build, standard-axiom inspection and
 stock kernel replay (`leanchecker --fresh Leanux.Proofs.WG.Progress.Statements`,
 through the capped bundle). The
 full gate was rerun and fails at the same inherited counter refinement; token
