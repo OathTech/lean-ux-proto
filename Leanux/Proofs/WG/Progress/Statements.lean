@@ -5,6 +5,7 @@ import Leanux.Proofs.WG.Progress.PowSource
 import Leanux.Proofs.WG.Progress.DrainClaims
 import Leanux.Proofs.WG.Progress.PollBoundClaims
 import Leanux.Proofs.WG.Progress.RunnerBoundaryClaims
+import Leanux.Proofs.WG.Progress.IndexProgressClaims
 
 /-! Projected H5 contracts. Inspection adapters report the exact original
 outcomes from the same concrete entry; their totality is not a claim that the
@@ -520,5 +521,42 @@ theorem original_poll_loop_bound (pid : PeerId) (budget : Nat)
       Returns (observedPollBound pid budget toStack) (fun _ => True)
         (fun audit _ => PollBoundFacts budget audit)) :=
   ⟨observedPollBound_source pid budget toStack, source_poll_bound pid budget toStack⟩
+
+/-- Exact original insertion over any finite supplied record list. Passive
+records are skipped without validating their payloads; malformed/missing draws
+retain the original hidden-input error. Search is over the table after removing
+this owner's old rows. Success records the exact inserted table and unused
+suffix. No owner-residency or table-uniqueness premise is required. -/
+theorem original_index_record_outcome (owner : IndexOwner) (d : Device) (records : List HiddenRecord) :
+    Campaign2.Observes (indexInsert owner)
+      (fun s => s.wg.device = some d ∧ s.ambient.hidden = some records)
+      (fun _ outcome =>
+        match resolveIndexSearch (Index.removeOwner owner d.indexTable) records with
+        | .error error => outcome = .error error
+        | .ok (index, rest) => ∃ final,
+          outcome = .ok (index, final) ∧
+          final.wg.device = some {d with indexTable :=
+            {index, owner} :: Index.removeOwner owner d.indexTable} ∧
+          final.ambient.hidden = some rest) :=
+  index_record_outcome owner d records
+
+/-- The record-derived budget suffices for arbitrary supplied records, including
+ambient records and malformed input. Every outcome is either an explicit hidden
+input error or a successful fresh index with a strictly shorter suffix; neither
+this loop's budget-exhaustion nor stolen-index stop is possible. This excludes
+recordless placeholder/domain-filter execution and makes no scheduler-progress
+or table-wide uniqueness claim. -/
+theorem original_index_record_progress (owner : IndexOwner) (d : Device) (records : List HiddenRecord) :
+    Campaign2.Observes (indexInsert owner)
+      (fun s => s.wg.device = some d ∧ s.ambient.hidden = some records)
+      (fun _ outcome =>
+        (∃ message, outcome = .error (.hidden message)) ∨
+        ∃ index rest final, outcome = .ok (index, final) ∧
+          (Index.removeOwner owner d.indexTable).any (·.index == index) = false ∧
+          rest.IsSuffix records ∧ rest.length < records.length ∧
+          final.wg.device = some {d with indexTable :=
+            {index, owner} :: Index.removeOwner owner d.indexTable} ∧
+          final.ambient.hidden = some rest) :=
+  index_record_progress owner d records
 
 end Leanux.Proofs.WG.Progress

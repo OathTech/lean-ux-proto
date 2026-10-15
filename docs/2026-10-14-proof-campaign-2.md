@@ -14,11 +14,11 @@ the other H5 clauses and corrected-main carry remain open.
 | H2 Index | 52 | Exact index operations, all normal lookup outcomes, caller table safety, session coherence/allocation sequence | Reachable hashed uniqueness and owner/peer residency through all driver entries |
 | H3 Roaming | 13 | Authenticated handshake cuts, decrypt/first-poll join, complete poll setter-attempt audit | Queue/callback authentication invariant, broader caller coverage, final endpoint |
 | H4 Configuration | 78 | Leaves/flags, effective bounded readback, removal/replacement phase effects, root insertion/transfer, finite IPv4 suffix and actual two-chunk socket readback | Global ownership, queued cleanup/completion, mixed attributes, general getter pagination |
-| H5 Progress | 35 | Accepted operation boundaries, actual final-boundary backlog, scheduling inspections, cut/pow/drain/poll bounds | Whole-worker record decrease, global progress, corrected-main carry |
+| H5 Progress | 37 | Accepted operation boundaries, actual final-boundary backlog, scheduling inspections, cut/pow/drain/poll bounds, arbitrary supplied-record index-loop adequacy | Whole-worker record decrease, global progress, corrected-main carry |
 | H6 Timers | 45 | Seven local arm sites, recorded delays, caller hook compositions, retry bound/give-up | Complete caller coverage, scheduler episodes, session-relative counting |
 
-**243 headlines**; latest checked increment: H4 original two-chunk socket getter.
-Scoped checks pass.
+**245 headlines**; latest increment: H5 arbitrary supplied-record index insertion.
+Scoped builds, axioms and fresh replay pass; independent review found no issue.
 The full proof gate remains **failed in inherited campaign-1 files**.
 
 [USER 2026-10-15] Resume before the split: factor claims over a WireGuard-only
@@ -61,7 +61,7 @@ universal execution contracts.
 | `Index` | View/table/owner/allocation/release models; lookup provenance and empty-result source; lifecycle/caller operation sources; session coherence/allocation/sequence effects and sources | `IndexFieldFrames`, `OwnerFieldFrames`, `StoreFieldFrames`, `LifecycleFrames`, `NewlinkFrames`, `SendFrames`, `DispatchFrames`, `ResponseFrames`, `ConsumeFrames`, `StagedFrames`, `ReceiveFrames`, `ClearFrames`, `TimerFrames`, `FlushFrames`, `SessionCoherenceFrames`, `SessionAllocationFrames` |
 | `Roaming` | Endpoint/authentication claims; publication, poll endpoint/attempt, response, initiation and handshake-audit model/source/claim families | `Frames`, `PublicationFrames`, `PollEndpointFrames` |
 | `Config` | `ClaimView`, models/effects/source claims, observation bridge; allowed-IP removal/insertion/transfer, collision, removal flags, remove-all/replacement, multipart/suffix readback families; `SocketReadbackModel/Claims` and five substantive `SocketReadback*Source` files | `ConcreteFrames`, `OperationFrames`, `ReadbackFrames`, `AllowedListFrames`, `AllowedRootFrames`, `AllowedRemovalFrames`, `AllowedPairsFrames`, `QuietFrames`, `LiveRemovalFrames`, `KeyFieldFrames`, `CollisionFrames`, `AllowedInsertFrames`, `RemoveAllFrames` |
-| `Progress` | Model/view/source/observation claims; control/scheduler sources; cut, flush-queue, pow, drain and poll-bound model/source/effect/claim families; `RunnerBoundaryModel/Claims` are projected; `RunnerBoundarySource`, `RunnerBoundaryAuditSource` and `BacklogSource` connect the actual runner | `StackFrames`, `CutFrames`, `FlushQueueFrames` |
+| `Progress` | Model/view/source/observation claims; control/scheduler sources; cut, flush-queue, pow, drain and poll-bound model/source/effect/claim families; `RunnerBoundaryModel/Claims` and `IndexProgressModel/Claims` are projected; their `Source` files, `RunnerBoundaryAuditSource` and `BacklogSource` connect original operations | `StackFrames`, `CutFrames`, `FlushQueueFrames` |
 | `TimerDiscipline` | Model/view/send-view/observation claims; recorded, send/retry/rearm/sequence/boundary, pending-give-up, session, data and traversal model/source/effect/claim families | `SourceFrames`, `RecordedFrames`, `RecordedJitterFrames`, `SectionFrames`, `SelectionFrames`, `RetryFrames`, `JitterFrames`, `InitiationFrames`, `InitiationPreservationFrames`, `SendCutFrames`, `SendPeerFrames`, `SendSocketFrames`, `SendBufferFrame`, `SendWorkerFrame`, `SendDispatchFrames`, `RetryDispatchFrames`, `RetryRearmFrames`, `WorkStateFrames`, `ResponseSessionFrames` |
 
 `Index/HandshakeFrames` and `OwnerFrames` are import-only reexports.
@@ -138,6 +138,8 @@ uniqueness; owner uniqueness additionally needs a fresh destination owner.
 Insertion removes the previous owner row before installing a fresh number.
 Recorded collision/retry/exhaustion contracts retain their contiguous-record
 premises; the two-call corpus-draw instance is not general runner coverage.
+H5 now also proves exact insertion outcomes and budget adequacy for arbitrary
+finite supplied records, including passive and malformed records.
 
 `TablesSafe` combines numeric/owner uniqueness and the hashed-owner allocation
 bound. Normal preservation covers lifecycle, send/consume/receive iterations,
@@ -305,6 +307,17 @@ callbacks. Queue-test stop can mean an uncrypted head. Unsupported repoll remain
 Neither local result proves callback/internal work termination. Whole-worker
 record decrease, detached-activation progress and global progress remain open.
 
+For arbitrary finite supplied records and a resident device, original index
+insertion now agrees with a terminating record resolver after unhashing this
+owner's old rows. Each collision consumes a strictly shorter suffix, so the
+original record-derived budget suffices. Outcomes are exactly an original
+hidden-input error or the first fresh index with the exact inserted device
+table and unused suffix. The second bucket walk cannot find a stolen index.
+Passive records are skipped without payload validation, as in the original
+read; wrong-site, malformed and missing input retain their original errors.
+No table uniqueness or owner residency is assumed. Recordless placeholder/
+domain-filter execution and global scheduler progress remain outside this claim.
+
 ## H6 — Timer discipline
 
 Local contracts cover all seven concrete arm sites, actual clock-plus-delay
@@ -358,14 +371,15 @@ accepted-run findings. H1/H2/H3/H6 have no ranked mirror-change request.
 
 ## Validation and trust limitations
 
-Latest six-target build: **437 jobs**, all **243 headlines** standard axioms
+Latest six-target build: **440 jobs**, all **245 headlines** standard axioms
 only (`propext`, `Classical.choice`, `Quot.sound`); token/import/root/default/
-projected-name checks pass. Latest Config build: 222 jobs, 78 headlines and 24
+projected-name checks pass. Latest Progress build: 219 jobs, 37 headlines and 11
 new support declarations checked; fresh stock kernel replay passed (exit 0).
-Independent review found a headline attribution error, corrected: the callback
-returns DATA; the enclosing socket dump appends DONE and finalizes.
-The preceding Progress increment passed 215 jobs, 35 headlines plus 15 supports
-and fresh replay exit 0. Earlier closed increments also passed
+Independent read-only review found no issue.
+The preceding Config increment passed 222 jobs, 78 headlines plus 24 supports
+and fresh replay exit 0. Its review found a headline attribution error, corrected:
+the callback returns DATA; the enclosing socket dump appends DONE and finalizes.
+Earlier closed increments also passed
 affected scoped builds, axiom checks and fresh replay; counts, corrected draft
 failures and review dispositions are in their commits. Reviews did not rerun
 reported validation. All review findings were fixed, including unconditional
