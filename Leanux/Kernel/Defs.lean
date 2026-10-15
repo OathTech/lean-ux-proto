@@ -1546,6 +1546,10 @@ structure World where
       base clock past that step (`base->clk++`, timer.c:2416); `none`
       outside a callback. -/
   timerPassStep : Option UInt64 := none
+  /-- B3 (section 3.4): the last `wg_advance`'s `{before, after}`, for the
+      pass bound after the advance (`J_pass = before` when the end-of-wait
+      read equals `after`: no tick has followed the jump). -/
+  lastAdvance : Option (UInt64 × UInt64) := none
   /-- B3 (section 3.4, E2): the later operations' records, for the lookahead
       that tells a deferred timer softirq (its section appears later) from a
       due timer that never fires; `none` without records. -/

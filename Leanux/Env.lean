@@ -304,10 +304,13 @@ def afterXmit : M Unit := do
 
 Timer sections are accepted at the idle points, where the guest sleeps:
 inside `wg_advance`'s wait and in the waits after `wg_set`, `wg_up`,
-`wg_inject`, `wg_xmit` and before `wg_observe`. Which timers fired, and in
-what order, is captured by their sections; a section is accepted iff its
-timer is pending and could be due (`fireTimer`). A timer section anywhere
-else is a hidden mismatch: the mirror cannot run a callback mid-body. -/
+`wg_inject`, `wg_xmit` and before `wg_observe`. B3
+(docs/2026-10-15-design-b3-timer-wheel.md, section 3.4): which timers fire,
+and in what order, is the wheel's semantics (`Leanux/Kernel/TimerWheel.lean`),
+checked against the sections in both directions (E1, `runTimers`;
+`requireNothingDue`), with E2's lookahead telling a deferred softirq from a
+timer that never fires. A timer section anywhere else is a hidden mismatch:
+the mirror cannot run a callback mid-body. -/
 
 /-- The site of the next record that is not ambient, without consuming
     anything (unlike `peekHiddenSite`). -/
@@ -348,62 +351,64 @@ def timerWorker (t : PeerTimer) : M Worker := do
   | some w => return w
   | none => invariant "a peer timer without a callback unit"
 
-/-- `call_timer_fn` of callback `w`, whose section the next record starts.
-    The start record names the timer (its address, from the arm record:
-    docs/2026-10-11-dispatch-order.md), which must be of that callback's
-    kind, pending and due: `expires < jHi` (a timer fires no earlier than
-    `expires + 1`, by a softirq whose `jiffies` is at most `jHi`). So several
-    peers' timers of one kind due in one pass run in the order the records
-    show (W12, docs/2026-10-06-w3-w12.md Part II: the wheel's order is
-    `bucket_expiry` ascending, higher level first at one step, LIFO within a
-    bucket, which the records carry and the mirror need not reconstruct).
-    Without a name (the domain filter's placeholders) exactly one due peer
-    is taken; several stay outside that prediction. A section with no due
-    timer is a hidden mismatch. The timer is detached before the call
-    (`expire_timers`, timer.c:1828-1829). -/
-def fireTimer (w : Worker) (jHi : UInt64) : M Unit := do
-  let some t := w.timer? | invariant s!"{w.symbol} is not a timer callback"
-  let d ← getDev
-  let due := d.peerList.filter fun pid =>
-    match d.peers.get? pid >>= (·.timer t) with
-    | some e => timeBefore e jHi   -- `time_before(expires, jHi)`, the C's comparison (review item 8)
-    | none => false
-  -- dispatch order (docs/2026-10-11-dispatch-order.md): the timer the
-  -- section names, by the address its arm record carried
-  let named ← match ← peekUnit w with
-    | some u =>
-      match (← get).timerUnits.find? (·.1 == u) with
-      | some (_, pid, t') =>
-        if t' != t then throw (.hidden s!"a section of {w.symbol} for another timer of peer {pid}")
-        pure (some pid)
-      | none => throw (.hidden s!"a section of {w.symbol} for a timer the mirror never armed ({u})")
-    | none => pure none
-  match named with
-  | some pid =>
-    if !due.contains pid then
-      throw (.hidden s!"a section of {w.symbol} for peer {pid}, whose timer is not pending with expires before jiffies {jHi}")
-    delTimer pid t
-    runTimerSection w (WG.timerCallback pid t)
-  | none =>
-    match due with
-    | [pid] =>
-      delTimer pid t
-      runTimerSection w (WG.timerCallback pid t)
-    | [] => throw (.hidden s!"a section of {w.symbol}, but no peer's timer is pending with expires before jiffies {jHi}")
-    | _ => unsupported s!"several peers' timers for {w.symbol} due in one pass (their order)"
+/-- B3, E2's lookahead (docs/2026-10-15-design-b3-timer-wheel.md, section
+    3.4): whether a section of callback `w` for the timer at `unit` (its
+    address from the arm record; 0 when unknown) appears later in the trace's
+    records: this operation's remainder, then the later operations
+    (`World.hiddenAhead`). -/
+def sectionAppearsLater (w : Worker) (unit : Nat) : M Bool := do
+  let s ← get
+  let startId := (HiddenSite.sectionStart w).info.id
+  let names (r : HiddenRecord) : Bool :=
+    r.site == startId && (unit == 0 || r.bytes.length < 16 || WG.recordWord r.bytes 1 == unit)
+  return (s.hidden.getD []).any names || (s.hiddenAhead.getD []).any (·.any names)
 
-/-- The timer sections the records show at an idle point, and the work they
-    queue, in record order (docs/2026-10-05-d3-timers.md, section 5.3):
-    `call_timer_fn` of each due timer (`fireTimer`), then the handshake send
-    worker and the clear work (FIFO on `handshake_send_wq`, ordered by
-    their records), the encrypt and tx workers, and the loopback delivery
-    of what they send. Work queued before the idle point has run already
-    (each operation runs its own); a worker section here without queued
-    work is left to the caller, whose records then mismatch. Whether a
-    timer fired. Work a timer queued that has not run when the records end
-    outlived the guest's wait: outside the domain. Without records (the
-    domain filter) nothing fires here. -/
-def runTimers (jHi : UInt64) : M Bool := do
+/-- E1, item 3, at an end-of-wait read with pass bound `jPass`: no pending
+    modeled timer's bucket is due. One that is, is either the timer softirq
+    deferred past the read (its section appears later in the stream:
+    `unsupported`, outside the fixture's timing domain, like the two-read gap
+    above one tick) or a timer that never fires (a hidden mismatch: a bucket
+    the mirror predicted, a deletion it missed, or a kernel that did not run
+    it). E2. -/
+def requireNothingDue (jPass : UInt64) : M Unit := do
+  let d ← getDev
+  let some (pid, t, we) := TimerWheel.nextDue d jPass | return
+  let w ← timerWorker t
+  let unit := (((← get).timerUnits.find? fun e => e.2.1 == pid && e.2.2 == t).map (·.1)).getD 0
+  if ← sectionAppearsLater w unit then
+    unsupported s!"a due timer's softirq deferred past the end-of-wait read: peer {pid}'s {repr t} timer (bucket expiry {we.bucketExpiry}, the read {jPass}) fires later in the stream"
+  throw (.hidden s!"a due timer did not fire: peer {pid}'s {repr t} timer, bucket expiry {we.bucketExpiry}, pending at the end-of-wait read {jPass}")
+
+/-- E1, item 2: the records leave a step whose other pending timer is still
+    due (the C runs a collected bucket to its end, `expire_timers`,
+    timer.c:1813-1852): a hidden mismatch. -/
+def requireStepComplete (b : UInt64) : M Unit := do
+  if let some (pid, t) := TimerWheel.anotherAtStep (← getDev) b then
+    throw (.hidden s!"a timer step split: peer {pid}'s {repr t} timer at bucket expiry {b} is still pending when the records leave the step")
+
+/-- B3, E1 (docs/2026-10-15-design-b3-timer-wheel.md, section 3.4): the
+    passes of an idle point whose pass bound is `jPass`, as the section
+    stream places them, each constrained by the wheel:
+    1. a timer section must be the earliest pending modeled bucket
+       (`TimerWheel.nextDue`: ascending bucket expiry, the highest level
+       first at one step, the newest enqueue first within a slot), due by
+       `jPass`, and must name that timer (dispatch order); the timer is
+       detached before the call (`expire_timers`, timer.c:1829) and the
+       wheel is scanned afresh after the callback (a sibling the callback
+       deleted does not run; one re-armed into its own slot keeps its bucket
+       expiry and runs; one moved does not);
+    2. a non-timer record may follow a step only when no other pending
+       modeled timer sits at that step (a step is never split); the work
+       between passes (the send and clear workers, the crypt workers, FIFO on
+       their queues, ordered by their records) may arm or delete;
+    3. at the read nothing is due (`requireNothingDue`, by the caller);
+    4. no section runs a timer whose bucket is not due (item 1).
+    A `T W N T` stream of two buckets due at different ticks of one wait is
+    accepted; the environment's only freedom is where each pass's tick
+    landed. Returns whether a timer fired. Work a timer queued that has not
+    run when the records end outlived the guest's wait: outside the domain.
+    Without records (the domain filter) nothing fires here. -/
+def runTimers (jPass : UInt64) : M Bool := do
   modify fun w => { w with queuedThisCall := [] }   -- the guest slept
   -- L: without wg0 (bare fixture, or after wg_delete) no WireGuard timer
   -- exists; a timer section in the records stays unconsumed and mismatches
@@ -411,24 +416,52 @@ def runTimers (jHi : UInt64) : M Bool := do
   if (← getK).wg.isNone then return false
   let startOf (w : Worker) := (HiddenSite.sectionStart w).info.id
   let mut fired := false
+  let mut step : Option UInt64 := none
   -- record-driven (review item 7): every turn consumes a section or breaks
   for _ in [0:(← recordBudget)] do
     let some site ← peekNextSite | break
     let d ← getDev
     if let some w := timerSectionOf site then
       if w == .clearPeerWorker then
+        if let some b := step then
+          requireStepComplete b
+          step := none
         if d.clearWorkQueue.isEmpty then break
         runOneClearWorker
       else
-        fireTimer w jHi
+        let some (pid, t, we) := TimerWheel.nextDue d jPass
+          | throw (.hidden s!"a section of {w.symbol}, but no modeled timer's bucket is due by jiffies {jPass}")
+        let expected ← timerWorker t
+        if w != expected then
+          throw (.hidden s!"the wheel runs peer {pid}'s {repr t} timer next ({expected.symbol}, bucket expiry {we.bucketExpiry}); the records show a section of {w.symbol}")
+        -- dispatch order (docs/2026-10-11-dispatch-order.md): the timer the
+        -- section names, by the address its arm record carried
+        if let some u ← peekUnit w then
+          match (← get).timerUnits.find? (·.1 == u) with
+          | some (_, pid', t') =>
+            if pid' != pid || t' != t then
+              throw (.hidden s!"the wheel runs peer {pid}'s {repr t} timer next; the section names peer {pid'}'s {repr t'}")
+          | none => throw (.hidden s!"a section of {w.symbol} for a timer the mirror never armed ({u})")
+        if let some b := step then
+          if b != we.bucketExpiry then requireStepComplete b
+        delTimer pid t
+        modify fun s => { s with timerPassStep := some we.bucketExpiry }
+        runTimerSection w (WG.timerCallback pid t)
+        modify fun s => { s with timerPassStep := none }
+        step := some we.bucketExpiry
         fired := true
-    else if !fired then break
-    else if site == startOf .sendWorker && !d.sendWorkQueue.isEmpty then runOneSendWorker
     else
-      -- the crypt work a timer queued, as the records order it, and a crypt
-      -- activation the records resume after a section (`schedule`)
-      runCryptWorkers
-      if (← peekNextSite) == some site then break
+      if let some b := step then
+        requireStepComplete b
+        step := none
+      if !fired then break
+      else if site == startOf .sendWorker && !d.sendWorkQueue.isEmpty then runOneSendWorker
+      else
+        -- the crypt work a timer queued, as the records order it, and a crypt
+        -- activation the records resume after a section (`schedule`)
+        runCryptWorkers
+        if (← peekNextSite) == some site then break
+  if let some b := step then requireStepComplete b
   if fired then
     deliverSent
     let d ← getDev
@@ -436,9 +469,9 @@ def runTimers (jHi : UInt64) : M Bool := do
       unsupported "work a timer queued outlived the guest's wait"
   return fired
 
-/-- The domain filter's stand-in for an advance's timer pass (no records):
-    every pending timer with `expires < jHi` fires, earliest first (bucket
-    order), then the crypt workers, the send workers and the clear work. A
+/-- The domain filter's stand-in for an idle point's passes (no records):
+    every pending modeled timer whose bucket is due fires, in the wheel's
+    order, then the crypt workers, the send workers and the clear work. A
     prediction for the filter's verdict only; the check follows the
     records. -/
 def runTimersPlaceholder (jHi : UInt64) : M Unit := do
@@ -447,15 +480,7 @@ def runTimersPlaceholder (jHi : UInt64) : M Unit := do
   -- the filter's own loop (review item 7): one turn per pending timer at most
   let pending := (← getDev).peers.size * PeerTimer.all.length
   for _ in [0:pending + 1] do
-    let d ← getDev
-    let due := d.peerList.flatMap fun pid =>
-      match d.peers.get? pid with
-      | some p => PeerTimer.all.filterMap fun t => (p.timer t).bind fun e => if timeBefore e jHi then some (e, pid, t) else none
-      | none => []
-    let first := due.foldl (fun acc c => match acc with
-      | some a => if timeBefore c.1 a.1 then some c else some a
-      | none => some c) none
-    let some (_, pid, t) := first | break
+    let some (pid, t, _) := TimerWheel.nextDue (← getDev) jHi | break
     delTimer pid t
     runTimerSection (← timerWorker t) (WG.timerCallback pid t)
   runCryptWorkers
@@ -468,20 +493,24 @@ def runTimersPlaceholder (jHi : UInt64) : M Unit := do
     `wg_xmit` and `wg_batch`, and before `wg_observe`), where a timer may
     fire naturally. Review item 7: the guest reads `jiffies` at the end of
     the wait (kind 310, `HiddenSite.jiffiesEnd`, in the remote stream after
-    the wait's sections), so a callback that ran did so at a tick with
-    `jiffies ≤ J_end`, and a timer with recorded expiry `e` fired only if
-    `e < J_end`: the window's end is exact, read ahead of the sections it
-    bounds and consumed after them. No record of the read in the operation
+    the wait's sections), read ahead of the sections it bounds and consumed
+    after them. B3: the read is the pass bound `J_pass` of E1 (a tick
+    between the last pass and the read would have run another pass before
+    the task resumed, `__irq_exit_rcu`, softirq.c:661-662, but for E2's
+    deferral), so every modeled bucket due by it has fired, in the wheel's
+    order, and none beyond it has. No record of the read in the operation
     is a hidden mismatch (a capture without the instrument). Without records
     (the domain filter) the filter's prediction uses `Timing`'s constants. -/
 def idleTimers : M Unit := do
   let w ← get
   if w.hidden.isNone then
-    discard <| runTimers (w.jiffiesLast.getD 0 + w.timing.traceBound.toUInt64 + w.timing.advanceWait.toUInt64)
+    let jHi := w.jiffiesLast.getD 0 + w.timing.traceBound.toUInt64 + w.timing.advanceWait.toUInt64
+    if w.hiddenPlaceholders then runTimersPlaceholder jHi else discard <| runTimers jHi
     return
   let some jEnd ← peekSiteU64 .jiffiesEnd
     | throw (.hidden "no end-of-wait jiffies record (kind 310) in this operation")
   discard <| runTimers jEnd
+  requireNothingDue jEnd
   let j ← hiddenJiffies .jiffiesEnd
   if j != jEnd then invariant "the end-of-wait jiffies record changed between the peek and the read"
   modify fun w => { w with jiffiesLast := some j }
@@ -506,13 +535,19 @@ def advance (ticks : Nat) : M Int := do
   -- is exact modulo 2^64, as the kernel's
   if j1 - j0 != ticks.toUInt64 then
     throw (.hidden s!"the advance moved jiffies from {j0} to {j1}, not by {ticks}")
-  modify fun w => { w with jiffiesLast := some j1 }
+  modify fun w => { w with jiffiesLast := some j1, lastAdvance := some (j0, j1) }
   return 0
 
 /-- The guest's wait after `wg_advance`'s ioctl (stream K, section 13.3: until
     the monotonic clock has absorbed the advance, then `ADVANCE_WAIT_US`):
     the next tick raises `TIMER_SOFTIRQ`, the due callbacks run in sections,
-    then the work they queue, all in this operation's records. -/
+    then the work they queue, all in this operation's records. B3 (E1): the
+    jump itself raises nothing (`leanux_time_advance` moves `jiffies_64` with
+    interrupts off; the softirq is raised by the next real tick,
+    timer.c:2502-2504), so a pass over what the jump made due has run only if
+    a tick followed it, which the read shows as `J_end > after`; with
+    `J_end = after` the pass bound is `before` and the sections land in the
+    next operation (the timer control `tc_advance_wait0`). -/
 def afterAdvance : M Unit := do
   let w ← get
   if w.hidden.isNone then
@@ -523,7 +558,10 @@ def afterAdvance : M Unit := do
   -- review item 7: the window ends at the recorded end of the advance's wait
   let some jEnd ← peekSiteU64 .jiffiesEnd
     | throw (.hidden "no end-of-wait jiffies record (kind 310) in this wg_advance")
-  discard <| runTimers jEnd
+  let some (j0, j1) := w.lastAdvance | invariant "afterAdvance without an advance"
+  let jPass := if timeAfter jEnd j1 then jEnd else j0
+  discard <| runTimers jPass
+  requireNothingDue jPass
   let j ← hiddenJiffies .jiffiesEnd
   if j != jEnd then invariant "the end-of-wait jiffies record changed between the peek and the read"
   modify fun w => { w with jiffiesLast := some j }
