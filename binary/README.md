@@ -200,3 +200,20 @@ permits shared credentials/signal objects. Task works, SIGSYS disposition
 and filter contents remain separate. Regenerate its offsets with capped
 `binary/task_layouts.py`; replay with `capped -- lake env leanchecker --fresh
 TaskHeap` in `binary/`.
+
+
+`LookupPeerCallHistory`, `LookupResultHistory` and `LookupReturnHistory`
+retain the actual helper call, owner store/NULL guard, output store and
+lookup epilogue. They admit NULL/dead peers and establish physical histories;
+whole-World composition remains open. Replay each module separately with
+`capped -- lake env leanchecker --fresh MODULE` in `binary/`.
+
+
+`LookupPrologueHistory`/`LookupStackFrame`/`LookupStartHistory` retain and
+frame entry saves, argument copies and the first callback. `LookupBucketHistory`
+and `LookupBucketFrame` cover the BH increment, bucket-head read and changed
+callback state. `LookupBhHistory` records argument setup and the named
+BH-enable service execution. `OwnerPending` relates the old source owner
+word through the actual helper-return snapshot until idxPeerAlive. These
+components do not establish the whole-World simulation. The standalone
+package now builds BinaryProofs by default, including for lake check export.

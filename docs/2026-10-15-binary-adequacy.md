@@ -1162,3 +1162,121 @@ kernel replay of TaskHeap with imports passed. Regenerate offsets with
 `capped -- lake env leanchecker --fresh TaskHeap`. No mirror/runtime change,
 trust-base addition, domain restriction, whole-R certification, main update
 or push. The function-level milestone and its final report remain open.
+
+
+## Lookup helper-call, result and return histories, 2026-10-15
+
+`LookupPeerCallHistory` executes the owner-word load and actual helper CALL,
+including its pushed return address, mapped-stack requirement, frame and
+observed call. `LookupResultHistory` executes the owner's write of the
+helper result before the NULL test, retaining both branches and each
+successor, then separately executes the successful out-parameter store.
+`LookupReturnHistory` retains all seven epilogue instructions: MOV of the
+entry result into RAX, five saved-register pops, and RET from the actual
+stack word. These are physical histories, not whole-World simulation.
+
+Independent review checked the actual oracle disassembly and found no local
+defect. Two integration details remain explicit: at +0xc0 the owner word
+is already changed while the latest source event is still helper-return,
+so R needs a pending-owner phase tied to the actual +0xba return snapshot;
+the idxPeerAlive event then commits the source setter. Also, R15 is never
+pushed by lookup and must be preserved through its body/helper/services.
+The five-word epilogue cannot establish entry R15 equality by itself.
+Callback preservation of saved RBP/R13, output readiness, and separation
+of stack, object, output and coverage writes remain composition obligations.
+Finding 1 stays recorded and no NULL/dead-peer exclusion was introduced.
+
+The task-work audit found no current accepted-path ordering defect. C
+detaches an entire batch, whereas the mirror pops one callback at a time.
+The physical relation needs the remaining detached tail (from the actual
+execution cursor, excluding the current callback) followed by the queued
+next batch, not only task->task_works. Current modeled successful fputFinal
+callbacks appear to preserve taskWorks: epRemove increments a positive
+reference, preserves it through removal and drops a count of at least two;
+the other modeled releases contain no deferred fput enqueue. The source
+framing theorem is still owed. Unknown/fixture callbacks need concrete
+effect classification; filtering their nodes out alone does not prove
+order or frame preservation. A future enqueue with a detached tail would
+expose the different order and must not be hidden by a premise.
+
+
+## Lookup entry and bucket header histories, 2026-10-15
+
+`LookupPrologueHistory` and `LookupStackFrame` retain the actual interleaved
+register saves/copies and the instrumentation CALL, read back the six saved
+words and preserve the original caller return word. `LookupStartHistory`
+composes the first callback's actual history and derives body readiness,
+argument registers and R15 preservation. Independent review confirmed the
+48-byte write footprint. The five saved-register words plus original return
+word need preservation through the body; the sixth word below them is
+reusable CALL storage and must not be fixed to its first value. The local
+start theorem does not by itself protect the original return word against
+an overlapping active KCOV buffer; function composition must establish it.
+
+`LookupBucketHistory` retains the BH-count addition, zero-extending query
+copy, low-13-bit mask and bucket-head load, with universally quantified AF
+and the head read from post-store memory. Independent review confirmed the
+actual opcodes and modular flags. A nested BH count remains allowed. For
+later enable with RSI=512, readiness checks the updated count's hardirq
+mask, not only the original count's: original 0xfe00 carries into that mask
+after +512. The named BhEnableReady predicate already expresses the exact
+condition; this is a composition obligation, not a mirror defect.
+
+The first start adaptation used a seventh-write frame lemma against the
+lookup's six writes and timed out during unification. Correcting that index
+closed it under the original heartbeat limit. Other initial elaboration
+failures were corrected; no failed attempt was counted as a successful build.
+
+
+`LookupBucketFrame` derives the updated KCOV state and callback readiness
+after the BH store, and frames the linked bucket's physical reads. The
+bucket array's separate head-pointer load still needs its own derivation.
+`LookupBhHistory` executes argument setup and the actual BH-enable CALL,
+derives post-push readiness, and composes the existing named service
+contract into the same history. It proves exact count subtraction and the
+stack/preempt write footprint. Independent review found no local defect;
+balance requires connecting this count to the header's incremented count.
+
+`OwnerPending.PendingAt` is the owner-word phase component for +0xbd/+0xc0/
++0xc3. It takes the old word from the last actual helper-return snapshot,
+while current memory holds that snapshot's RAX; the pre-decision prefix
+emits no new event. Fixed names determine the old source word uniquely.
+This is not a complete control invariant: composition must tie the current
+state to the executed result-region prefix and establish its register
+equations. Nor does word uniqueness imply uniqueness of the owner or whole
+Device. Dead/NULL source words remain admitted.
+
+[AGENT 2026-10-15] Include BinaryProofs in this standalone package's default
+targets so a later lake check exports the proof modules as well as the probe.
+The mirror package's defaults are unchanged. This corrects the previously
+recorded packaging gap; it introduces no semantic assumption.
+
+
+The owner component also connects the physical result store to both landed
+source setters (`handshake_result_at`, `keypair_result_at`). It reloads the
+owner from the helper-return World, retaining an aliased increment, and
+permits NULL. This is the post-setter word equation; before idxPeerAlive the
+matched source World still uses the pending interpretation.
+
+Validation of this batch: capped full-parallel/default build passed (268
+jobs), all 433 printed axiom lists were standard-only, all ten new Lean
+sources passed the forbidden-construct scan (prior 103-source audit remains
+applicable). Separate capped fresh kernel replays passed for
+LookupResultHistory, LookupReturnHistory, LookupPeerCallHistory,
+LookupPrologueHistory, LookupStartHistory, LookupBucketHistory,
+LookupBucketFrame, LookupBhHistory and OwnerPending, including imports. The
+final two OwnerPending setter lemmas were then checked by a module replay;
+its unchanged imports had already passed fresh replay. Reproduce with
+`capped -- lake env leanchecker --fresh MODULE`, one module per invocation
+in binary/. The runtime, mirror, pinned image and TrustBase.lean are
+unchanged, so the earlier concrete/three-way and runtime-unit results still
+apply. No KILLED or timeout was counted as a pass.
+
+Measured checkpoint interval: 6f4d49a at 2026-10-15 04:25:31 UTC through
+04:54:28 UTC, 1,737 wall-clock seconds. Whole-World R-region certifications
+added: 0; function certifications added: 0; measured certification rate:
+0 per hour. The supporting execution/field lemmas above are not substituted
+for that count. Milestone 1, its witnessed Pre_lookup, whole-World relation,
+complete helper/loop/function simulation and generic transport remain open.
+No property is claimed transported. The final milestone report still owes
+TrustBase.lean verbatim and the campaign's measured rate.
