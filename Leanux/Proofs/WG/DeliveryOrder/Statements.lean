@@ -21,6 +21,7 @@ import Leanux.Proofs.WG.Queues.RxPollComposition
 import Leanux.Proofs.WG.Queues.RxNapiHistory
 import Leanux.Proofs.WG.Queues.RxActivationHistory
 import Leanux.Proofs.WG.Queues.RxScheduleHistory
+import Leanux.Proofs.WG.Queues.RxEnvBatchHistory
 
 /-! R4 queue components: physical-ring refusal, original prev_queue FIFO laws,
 and successful-endpoint receive-queue helper frames. Whole recorded-schedule delivery,
@@ -1199,5 +1200,83 @@ theorem original_nested_reschedule_joint (self : Worker) :
   ⟨Queues.RxHistory.nestedResched_erases self, Queues.RxHistory.nestedResched_projects self,
     Queues.RxHistory.nestedResched_preserves self,
     fun w hi => (Queues.RxHistory.nestedResched_preserves self w [] (Queues.RxHistory.boundary_initial w hi)).choose_spec.2.1⟩
+
+/-- The actual deferred crypt/send continuations retain all reached scheduler
+calls. Focused send/drain leaves are poll-free, with exact R2 access histories.
+All failure prefixes retain entry uniqueness; normal boundaries restore releases. -/
+theorem original_deferred_workers_joint :
+    (ErasesPrefix Queues.RxHistory.runCryptWorkers (Leanux.Env.runCryptWorkers) ∧
+    ProjectsUnder Lifetimes.AuditInv Queues.RxHistory.auditEvent Queues.RxHistory.runCryptWorkers Lifetimes.runCryptWorkersAudit ∧
+    PrefixPreserves Queues.RxHistory.BoundaryInv Queues.RxHistory.BoundarySafe Queues.RxHistory.runCryptWorkers ∧
+    ∀ w, Lifetimes.AllocationInv [] w →
+      Queues.RxHistory.BoundarySafe (runPrefix Queues.RxHistory.runCryptWorkers w []).2) ∧
+    (ErasesPrefix Queues.RxHistory.runSendWorkers (Leanux.Env.runSendWorkers) ∧
+    ProjectsUnder Lifetimes.AuditInv Queues.RxHistory.auditEvent Queues.RxHistory.runSendWorkers Lifetimes.runSendWorkersAudit ∧
+    PrefixPreserves Queues.RxHistory.BoundaryInv Queues.RxHistory.BoundarySafe Queues.RxHistory.runSendWorkers ∧
+    ∀ w, Lifetimes.AllocationInv [] w →
+      Queues.RxHistory.BoundarySafe (runPrefix Queues.RxHistory.runSendWorkers w []).2) ∧
+    (ErasesPrefix Queues.RxHistory.afterXmit (Leanux.Env.afterXmit) ∧
+    ProjectsUnder Lifetimes.AuditInv Queues.RxHistory.auditEvent Queues.RxHistory.afterXmit Lifetimes.afterXmitAudit ∧
+    PrefixPreserves Queues.RxHistory.BoundaryInv Queues.RxHistory.BoundarySafe Queues.RxHistory.afterXmit ∧
+    ∀ w, Lifetimes.AllocationInv [] w →
+      Queues.RxHistory.BoundarySafe (runPrefix Queues.RxHistory.afterXmit w []).2) :=
+  ⟨⟨Queues.RxHistory.runCryptWorkers_erases, Queues.RxHistory.runCryptWorkers_projects, Queues.RxHistory.runCryptWorkers_preserves,
+    fun w hi => (Queues.RxHistory.runCryptWorkers_preserves w [] (Queues.RxHistory.boundary_initial w hi)).choose_spec.2.1⟩,
+  ⟨Queues.RxHistory.runSendWorkers_erases, Queues.RxHistory.runSendWorkers_projects, Queues.RxHistory.runSendWorkers_preserves,
+    fun w hi => (Queues.RxHistory.runSendWorkers_preserves w [] (Queues.RxHistory.boundary_initial w hi)).choose_spec.2.1⟩,
+  ⟨Queues.RxHistory.afterXmit_erases, Queues.RxHistory.afterXmit_projects, Queues.RxHistory.afterXmit_preserves,
+    fun w hi => (Queues.RxHistory.afterXmit_preserves w [] (Queues.RxHistory.boundary_initial w hi)).choose_spec.2.1⟩⟩
+
+/-- Original injection preserves its namespace and destination guards, NET_RX
+receive section and deferred scheduler. The direct R2 audit projection uses the
+same incoming journal, including prior consistency probes. -/
+theorem original_inject_joint (family port : Nat) (msg : List UInt8) (tos : Nat) (ll : Bool) (dest : Nat) :
+    ErasesPrefix (Queues.RxHistory.inject family port msg tos ll dest) (Leanux.Env.inject family port msg tos ll dest) ∧
+    ProjectsUnder Lifetimes.AuditInv Queues.RxHistory.auditEvent (Queues.RxHistory.inject family port msg tos ll dest) (Lifetimes.injectAudit family port msg tos ll dest) ∧
+    PrefixPreserves Queues.RxHistory.BoundaryInv Queues.RxHistory.BoundarySafe (Queues.RxHistory.inject family port msg tos ll dest) ∧
+    ∀ w, Lifetimes.AllocationInv [] w →
+      Queues.RxHistory.BoundarySafe (runPrefix (Queues.RxHistory.inject family port msg tos ll dest) w []).2 :=
+  ⟨Queues.RxHistory.inject_erases family port msg tos ll dest, Queues.RxHistory.inject_projects family port msg tos ll dest, Queues.RxHistory.inject_preserves family port msg tos ll dest,
+    fun w hi => (Queues.RxHistory.inject_preserves family port msg tos ll dest w [] (Queues.RxHistory.boundary_initial w hi)).choose_spec.2.1⟩
+
+/-- Both original flood modes observe each actual nested receive reschedule.
+The hidden-none shortcut, queue replacement, record cuts and late threshold Stop
+are retained. No drain, progress, credit or history-neutrality premise is added. -/
+theorem original_flood_joint (count port family : Nat) (messages : List (List UInt8)) :
+    ErasesPrefix (Queues.RxHistory.flood count port family messages) (Leanux.Env.flood count port family messages) ∧
+    ProjectsUnder Lifetimes.AuditInv Queues.RxHistory.auditEvent (Queues.RxHistory.flood count port family messages) (Lifetimes.floodAudit count port family messages) ∧
+    PrefixPreserves Queues.RxHistory.BoundaryInv Queues.RxHistory.BoundarySafe (Queues.RxHistory.flood count port family messages) ∧
+    ∀ w, Lifetimes.AllocationInv [] w →
+      Queues.RxHistory.BoundarySafe (runPrefix (Queues.RxHistory.flood count port family messages) w []).2 :=
+  ⟨Queues.RxHistory.flood_erases count port family messages, Queues.RxHistory.flood_projects count port family messages, Queues.RxHistory.flood_preserves count port family messages,
+    fun w hi => (Queues.RxHistory.flood_preserves count port family messages w [] (Queues.RxHistory.boundary_initial w hi)).choose_spec.2.1⟩
+
+/-- Original batch continuation, item and complete submission preserve CQEs,
+captured device scalars and actual scheduler calls. Ingress and its stamped inline
+poll remain inside the same NET_RX wrapper, including callback failure before
+cleanup. These local entry contracts do not establish initialized Env/Runner
+coverage, successful stack delivery or receive-pipeline conservation. -/
+theorem original_batch_joint (d : Device) (cqes : List Int) (item : Leanux.Env.BatchItem) (items : List Leanux.Env.BatchItem) :
+    (ErasesPrefix Queues.RxHistory.afterBatch (Leanux.Env.afterBatch) ∧
+    ProjectsUnder Lifetimes.AuditInv Queues.RxHistory.auditEvent Queues.RxHistory.afterBatch Lifetimes.afterBatchAudit ∧
+    PrefixPreserves Queues.RxHistory.BoundaryInv Queues.RxHistory.BoundarySafe Queues.RxHistory.afterBatch ∧
+    ∀ w, Lifetimes.AllocationInv [] w →
+      Queues.RxHistory.BoundarySafe (runPrefix Queues.RxHistory.afterBatch w []).2) ∧
+    (ErasesPrefix (Queues.RxHistory.batchItem d cqes item) (Environment.batchItemSource d cqes item) ∧
+    ProjectsUnder Lifetimes.AuditInv Queues.RxHistory.auditEvent (Queues.RxHistory.batchItem d cqes item) (Lifetimes.batchItemAudit d cqes item) ∧
+    PrefixPreserves Queues.RxHistory.BoundaryInv Queues.RxHistory.BoundarySafe (Queues.RxHistory.batchItem d cqes item) ∧
+    ∀ w, Lifetimes.AllocationInv [] w →
+      Queues.RxHistory.BoundarySafe (runPrefix (Queues.RxHistory.batchItem d cqes item) w []).2) ∧
+    (ErasesPrefix (Queues.RxHistory.batch items) (Leanux.Env.batch items) ∧
+    ProjectsUnder Lifetimes.AuditInv Queues.RxHistory.auditEvent (Queues.RxHistory.batch items) (Lifetimes.batchAudit items) ∧
+    PrefixPreserves Queues.RxHistory.BoundaryInv Queues.RxHistory.BoundarySafe (Queues.RxHistory.batch items) ∧
+    ∀ w, Lifetimes.AllocationInv [] w →
+      Queues.RxHistory.BoundarySafe (runPrefix (Queues.RxHistory.batch items) w []).2) :=
+  ⟨⟨Queues.RxHistory.afterBatch_erases, Queues.RxHistory.afterBatch_projects, Queues.RxHistory.afterBatch_preserves,
+    fun w hi => (Queues.RxHistory.afterBatch_preserves w [] (Queues.RxHistory.boundary_initial w hi)).choose_spec.2.1⟩,
+  ⟨Queues.RxHistory.batchItem_erases d cqes item, Queues.RxHistory.batchItem_projects d cqes item, Queues.RxHistory.batchItem_preserves d cqes item,
+    fun w hi => (Queues.RxHistory.batchItem_preserves d cqes item w [] (Queues.RxHistory.boundary_initial w hi)).choose_spec.2.1⟩,
+  ⟨Queues.RxHistory.batch_erases items, Queues.RxHistory.batch_projects items, Queues.RxHistory.batch_preserves items,
+    fun w hi => (Queues.RxHistory.batch_preserves items w [] (Queues.RxHistory.boundary_initial w hi)).choose_spec.2.1⟩⟩
 
 end Leanux.Proofs.WG.DeliveryOrder
