@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Queues.RxConsumeProtection
 import Leanux.Proofs.WG.Queues.RxIngressProtection
 import Leanux.Proofs.WG.Queues.RxLinkRunner
 import Leanux.Proofs.WG.Queues.RxPollReceiptLink
@@ -1695,5 +1696,40 @@ theorem original_rx_cleanup_credit_discharge :
     exact ⟨v,by simpa only [cleanup_poll_guard _ _ _ _ guard] using hv,iv,sv,pv⟩
   · intro ctx c cs loans w a b hr hi hs hq phase slot owner hk
     exact enospc_discharge ctx hr hi hs hq phase slot owner hk
+
+/-- Full original staged transmission preserves the same supplied RX inventory,
+queue assignment and funded reservations on normal return. Nullable current-key
+compatibility supplies the actual acquisition owner. The returned delta names
+appended TX-batch/send-work occurrences and their exact reference balance; it is
+not a TX packet-ownership invariant or an output key-compatibility frame. No
+failed World, retrospective slack, or initialized conservation is asserted. -/
+theorem original_staged_send_rx_protection (pid : PeerId) (w v : World)
+    (cs : List Carrier) (loans : List Owner)
+    (hc : CurrentCompatible pid w) (hi : Inventory cs w)
+    (hq : QueueOwners cs w) (hp : Protected cs loans w)
+    (hr : (sendStagedPackets pid).run w = .ok ((),v)) :
+    ∃ delta, Handoff w v [] [] delta ∧ Inventory cs v ∧ QueueOwners cs v ∧
+      Protected cs loans v ∧ Protected cs (loans ++ delta.owners) v := by
+  obtain ⟨delta,hd⟩ := staged_send_handoff pid hc hr
+  exact ⟨delta,hd,hd.protect hi hq hp⟩
+
+/-- Full original consumeDataDone, including promotion, staged send, timers and
+actual lookup repayment, preserves the same supplied RX ledger on every normal
+endpoint (Some and None). Only the packet key's nullable, validity-independent
+owner compatibility is required; actual promotion supplies the staged call's
+current-key condition. The source-derived queue/reference delta retains funded
+handoffs. This does not cover arbitrary Stack/IRQ callbacks, the later poll
+caller's surviving reference, output key compatibility, or initialized carrier
+conservation; Stops have no claimed endpoint World. -/
+theorem original_consume_data_done_rx_protection (pid : PeerId) (pkt : RxPacket)
+    (endpoint : Endpoint) (w v : World) (result : Option (List UInt8))
+    (cs : List Carrier) (loans : List Owner)
+    (hc : KeyCompatible pid pkt.keypair w) (hi : Inventory cs w)
+    (hq : QueueOwners cs w) (hp : Protected cs loans w)
+    (hr : (consumeDataDone pid pkt endpoint).run w = .ok (result,v)) :
+    ∃ delta, Handoff w v [] [] delta ∧ Inventory cs v ∧ QueueOwners cs v ∧
+      Protected cs loans v ∧ Protected cs (loans ++ delta.owners) v := by
+  obtain ⟨delta,hd⟩ := consumeDataDone_handoff pid pkt endpoint hc hr
+  exact ⟨delta,hd,hd.protect hi hq hp⟩
 
 end Leanux.Proofs.WG.DeliveryOrder
