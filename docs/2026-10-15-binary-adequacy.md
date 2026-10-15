@@ -1032,3 +1032,64 @@ Initial targeted elaboration failures were corrected before the full build.
 The last nonnull concrete probe (21 cases, two seeds, 9982 instructions),
 three-way checks and fast tier remain applicable: no runtime or mirror
 code changed. No main update or push.
+
+
+## Concrete heap and fixed-context components, 2026-10-15
+
+`IndexHeap.Chain` relates each bucket head and each embedded node's next
+and pprev words to the exact ordered entries. It projects to the existing
+`BucketShape` used by the instruction loop, and `Table` supplies that
+relation for all 8192 buckets. Framing includes backward links and the
+device's table pointer. `Unhashed` leaves stale forward pointers alone.
+The mutation fold preserves insertion publication and in-place replacement
+exactly; it is a deterministic history parameter, not proof that its events
+were executed. Binding it to fixed incoming provenance, owner membership
+and injective allocation-lifetime names remains open. No positive-count or
+nonnull peer-word restriction was added.
+
+`EndpointHeap` decodes active IPv4/IPv6 fields using the pinned DWARF
+layout and exact byte order. AF_UNSPEC alone represents no endpoint;
+inactive union bytes need not be mapped or zero. Its frame and functionality
+lemmas are proved. IPv4 scope/flowinfo and IPv6 srcIf are canonical mirror
+defaults, not physical zero fields. Review confirmed this representation
+and noted that canonicality needs an invariant: normal constructors supply
+it, but the standalone setPeerEndpoint action accepts arbitrary endpoints.
+The relation must not claim to represent those arbitrary values. The
+generator checks endpoint field widths and table size and emits the new
+offsets; independent capped DWARF re-extraction confirmed them.
+
+`WorldContext` fixes supplied configuration, external fixture state, incoming
+history and knowledge for the invocation. Only the decision log advances,
+from the actual observer's events. Kernel state is excluded from the context.
+Functionality remains conditional on the concrete physical component, which
+is not yet complete. The endpoint wrapper binds all events to the observer;
+`ObservedPoint` uses an explicit event cursor and the selected actual machine
+state, so two source decisions emitted at one compiled edge remain distinct.
+Independent review caught this cursor requirement while the wrapper was being
+written; it is implemented. Incoming context provenance, actual execution
+and ordered cursor composition remain integration obligations, never facts
+obtained by copying an incoming World.
+
+Validation: capped full-parallel build passed (254 jobs), all 374 printed
+axiom lists were standard-only, and source audit passed for 99 Lean files.
+The first DWARF extraction failed on sockaddr's unrelated flexible array;
+extraction now asks for its family width specifically. A misspelled Lean
+lemma and a missing generated extensionality theorem also failed targeted
+builds and were corrected. No failure was counted as a pass. Mirror and
+runtime are unchanged, so existing three-way checks and fast-tier results
+still apply. TrustBase.lean is unchanged; the whole-World R, witnessed
+Pre_lookup, helper/lookup adequacy and transport remain open. Zero whole-R
+regions are certified.
+
+
+Fresh kernel replay passed with imports for `IndexHeap`, `EndpointHeap` and
+`WorldContext`, each in its own capped `lake env leanchecker --fresh MODULE`
+invocation from `binary/`. The cache audit also confirmed a documented
+compatibility abstraction: `dstCacheRecords=false` forces pre-W9 misses and
+consumes no cache records (Kernel/Defs.lean and the W8/W9 design). After a
+physical stale-slot clear and failed route lookup, that mode can retain a
+historical mirror slot. This is not an established Rule Zero mirror defect,
+but current-pointer equality is insufficient for R in that mode. Its whole
+logical cache needs an explicit history projection. Future send adequacy
+still owes actual hit/miss agreement; that projection alone proves none.
+No domain restriction was added.

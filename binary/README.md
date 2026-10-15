@@ -175,3 +175,12 @@ the incremented memory. Together with null/dead histories this covers all
 accepted physical helper paths. The whole-World accepted helper theorem
 and lookup adequacy remain open. Replay imports with one root:
 `capped -- lake env leanchecker --fresh PeerLiveEntryHistory` in `binary/`.
+
+
+`IndexHeap` now supplies exact hlist forward/backward links, all-bucket
+framing and projection to `BucketShape`. Its mutation fold still needs actual
+incoming provenance and owner/lifetime naming. `EndpointHeap` decodes active
+endpoint fields with exact byte order and leaves inactive union bytes alone.
+`WorldContext` derives decision logs from observed events under one fixed
+nonphysical context; its event cursor handles compiler-merged decisions.
+These remain components of the unfinished whole-World R.

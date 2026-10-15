@@ -170,6 +170,30 @@ def main():
             ('pubkey_hashtable', 'pubkeyTable', ['key'])]:
         text += [f'def {prefix}Size : Nat := {o[record]["size"]}']
         text += [f'def {prefix}_{field} : Nat := {o[record]["members"][field]}' for field in fields]
+    # Pointer-shaped relations consume these DWARF offsets separately.
+    for record, prefix, fields in [
+            ('index_hashtable', 'indexTable', ['hashtable']),
+            ('wg_device', 'device', ['index_hashtable']),
+            ('wg_peer', 'peer', ['endpoint']),
+            ('endpoint', 'endpoint', ['addr', 'addr4', 'addr6', 'src4', 'src_if4', 'src6']),
+            ('sockaddr', 'sockaddr', ['sa_family']),
+            ('sockaddr_in', 'sockaddr4', ['sin_family', 'sin_port', 'sin_addr']),
+            ('sockaddr_in6', 'sockaddr6', ['sin6_family', 'sin6_port', 'sin6_flowinfo', 'sin6_addr', 'sin6_scope_id'])]:
+        if record not in {'wg_device', 'wg_peer'}:
+            text += [f'def {prefix}Size : Nat := {o[record]["size"]}']
+        text += [f'def {prefix}_{field} : Nat := {o[record]["members"][field]}' for field in fields]
+    for record, field, width in [
+            ('wg_peer', 'endpoint', 44), ('endpoint', 'src4', 4),
+            ('endpoint', 'src6', 16), ('endpoint', 'src_if4', 4),
+            ('sockaddr', 'sa_family', 2),
+            ('sockaddr_in', 'sin_family', 2), ('sockaddr_in', 'sin_port', 2),
+            ('sockaddr_in', 'sin_addr', 4), ('sockaddr_in6', 'sin6_family', 2),
+            ('sockaddr_in6', 'sin6_port', 2), ('sockaddr_in6', 'sin6_flowinfo', 4),
+            ('sockaddr_in6', 'sin6_addr', 16), ('sockaddr_in6', 'sin6_scope_id', 4)]:
+        if o[record]['member_sizes'][field] != width:
+            raise ValueError(f'{record}.{field}: unexpected endpoint field width')
+    if o['index_hashtable']['size'] != 8192 * o['hlist_head']['size']:
+        raise ValueError('index bucket count differs from the mirror')
     with ORACLE.open('rb') as stream:
         dwarf = ELFFile(stream).get_dwarf_info()
         found = []
