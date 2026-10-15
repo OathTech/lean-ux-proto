@@ -173,8 +173,8 @@ def depth(n=None):
     return 0 if n is None or n.leaf else 1 + max(depth(c) for c in n.children if c is not None)
 SEQ = [  # boot: lo up (devinet.c:1601-1613 -> fib_add_ifaddr :1123-1159), then wg0's address and the default route (route_into_wg0, guest.c:1212-1294)
     (0x7f000001, 32, 'local 127.0.0.1 (lo host route, :1140)'),
-    (0x7f000000, 8, 'local 127.0.0.0/8 (lo prefix route, :1150-1153: RTN_LOCAL on loopback)'),
-    (0x7fffffff, 32, 'broadcast 127.255.255.255 (:1155-1157)'),
+    (0x7f000000, 8, 'local 127.0.0.0/8 (lo prefix route, :1155-1158: RTN_LOCAL on loopback)'),
+    (0x7fffffff, 32, 'broadcast 127.255.255.255 (:1161-1164)'),
     (0x0afffe01, 32, 'local 10.255.254.1 (wg0 host route; /32 so no prefix or broadcast route)'),
     (0x00000000, 0, 'unicast default via wg0 (main; route_into_wg0)'),
 ]
