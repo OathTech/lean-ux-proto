@@ -696,6 +696,13 @@ cap changes or guests. Reproduce with the preceding capped Index build and
 fresh-replay commands. The full gate remains the inherited failure last observed
 at `69f988a`; no new mirror finding or team request arose.
 
+[AGENT 2026-10-15] Outer `peerRemove`/`peerRemoveAll` table closure is deferred
+for the user's shared-frame decision: six structural operation families need
+local variants because campaign 1's snapshot omits the index table/cursor.
+The [concrete overlap and alternatives](2026-10-15-campaign-2-shared-frame-request.md)
+are recorded before implementation. No shared edit or variant copying has been
+made for this increment. Independent H5/H3 work continues.
+
 ## H3 — Endpoint roaming (in progress)
 
 [AGENT 2026-10-14] Observe the remote destination `(family, address, port,
