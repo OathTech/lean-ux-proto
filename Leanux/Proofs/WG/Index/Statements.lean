@@ -1,6 +1,8 @@
 import Leanux.Proofs.WG.Index.DrawRecords
 import Leanux.Proofs.WG.Index.Allocation
 import Leanux.Proofs.WG.Index.CorpusDraws
+import Leanux.Proofs.WG.Index.HandshakeFrames
+import Leanux.Proofs.WG.Index.LookupMiss
 
 /-! H2's original-operation table contracts. Reachable owner/peer-word
 coherence remains a separate obligation. -/
@@ -183,5 +185,34 @@ theorem original_keypair_create_index_fresh (peer : Option PeerId) (d : Device)
     exact ⟨rfl, hd, hc, store_bound_absent d store, bounded_fresh d owners,
       created_peer_word d counter peer, created_bounded d counter peer owners,
       created_store_bounded d counter peer store⟩
+
+/-- Every normal completion of original initiation creation preserves
+numeric index uniqueness, including its recorded insertion path. -/
+theorem original_create_initiation_indices (pid : PeerId) :
+    Ensures (createInitiation pid) IndicesSafe (fun _ w => IndicesSafe w) :=
+  (ensures_iff _ _ _).mpr (createInitiation_indices_spec pid)
+
+/-- Every normal completion of original response creation preserves
+numeric index uniqueness, including its recorded insertion path. -/
+theorem original_create_response_indices (pid : PeerId) :
+    Ensures (createResponse pid) IndicesSafe (fun _ w => IndicesSafe w) :=
+  (ensures_iff _ _ _).mpr (createResponse_indices_spec pid)
+
+/-- Every normal completion of original session installation preserves
+numeric index uniqueness through allocation, slot rotation, displaced-key
+removal and handshake-to-keypair replacement. -/
+theorem original_begin_session_indices (pid : PeerId) :
+    Ensures (beginSession pid) IndicesSafe (fun _ w => IndicesSafe w) :=
+  (ensures_iff _ _ _).mpr (beginSession_indices_spec pid)
+
+/-- If the first equal-index entry is absent or has a disallowed kind,
+original lookup returns nothing and leaves the whole device unchanged. It
+does not skip a disallowed equal-index row in search of a later row. -/
+theorem original_index_lookup_miss (kinds : List IndexKind) (index : Nat) (d : Device)
+    (noMatch : ∀ e, d.indexTable.find? (·.index == index) = some e →
+      kinds.contains e.kind = false) :
+    Returns (indexLookup kinds index) (fun w => w.k.wg = some d)
+      (fun result w => result = none ∧ w.k.wg = some d) :=
+  indexLookup_miss kinds index d noMatch
 
 end Leanux.Proofs.WG.Index

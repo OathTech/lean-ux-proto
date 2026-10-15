@@ -120,11 +120,12 @@ composing reachable-state coherence. The landed representation keeps owner
 identity in each table row and its optional peer word in the owner object.
 The two are not interchangeable on arbitrary states.
 
-Eleven terminal statements cover removal, the keypair-removal specialization,
+Fifteen terminal statements cover removal, the keypair-removal specialization,
 handshake replacement, normally completed insertion, lookup owner/table
 provenance, total matched-entry NULL/zero-reference/live lookup effects, and
 recorded collision-prefix completion, a corpus-draw two-call instance and
-bounded allocation freshness. Removal and replacement return under device residency. Replacement
+bounded allocation freshness, three original handshake-operation numeric
+uniqueness contracts, and total absent/disallowed lookup. Removal and replacement return under device residency. Replacement
 preserves numeric indices and every owner object's peer word; preserving owner
 uniqueness additionally requires the destination keypair not already hashed.
 Insertion first removes this owner's old row, then inserts a fresh numeric
@@ -146,7 +147,10 @@ the owner and stored peer identity, increments the reference, then stores back
 the word. The exact post-state retains the increment when handshake-owner and
 referenced-peer identities alias. Missing objects and reference overflow are
 excluded by explicit premises matching the original stops. These local effects
-remain separate from reachable owner/peer coherence.
+remain separate from reachable owner/peer coherence. `LookupMiss` also proves
+that no first matching entry, or a disallowed kind on that first match, returns
+nothing and leaves the entire device unchanged; lookup does not continue past
+a disallowed equal-index entry.
 `Collision` proves bucket walking tests exact numeric membership in the whole
 table. `Insert` factors the original draw loop and proves freshness on normal
 completion by induction over its budgeted iterations. `DrawRecords` proves
@@ -158,7 +162,9 @@ refer to the table after unhashing the inserting owner; repeated collisions
 and arbitrary trailing records are allowed. Independent review found no
 correctness issue and prompted the explicit “contiguous” qualification.
 Interspersed ambient records, streams without a fresh draw, explicit branch-log
-counting and the `s2_index_collision` runner instance remain open. `CorpusDraws` instantiates two original insertions from an empty table with
+counting and the `s2_index_collision` runner instance remain open.
+
+`CorpusDraws` instantiates two original insertions from an empty table with
 `s2_index_collision`'s three steering values (0x0a0b0c0d twice, then
 0x11223344), preserving an arbitrary unused suffix. This is local operation
 composition: the actual runner has other operations between those insertions.
@@ -172,14 +178,22 @@ timeouts; factoring the generic two-call proof before applying concrete draws
 resolved that elaboration problem. These were failed proof iterations, not
 infrastructure outcomes or successful checks.
 
-The table invariant is about hashed
-entries; this checkpoint does not yet establish all-driver reachable-session
+`HandshakeFrames` composes numeric uniqueness through original
+`createInitiation`, `createResponse` and `beginSession`, including allocation,
+slot rotation, displaced-key removals and owner replacement. These contracts
+cover normal completion, including early returns; they do not characterize
+stopped prefixes. Independent review found no correctness issue and confirmed
+that numeric uniqueness needs no destination-owner freshness premise for
+replacement: labels change while numbers remain fixed. These new result-local
+index contracts do not edit or copy campaign 1's shared receive-state layer.
+
+The table invariant is about hashed entries; this checkpoint does not yet establish all-driver reachable-session
 uniqueness or initialize/preserve owner-store coherence through every caller.
 
 Independent read-only review found no semantic defect. Its wording finding was
 fixed: the terminal lookup docstring now describes its exported provenance
 postcondition, leaving stronger first-selection semantics to the internal
-scan contract. The eleven statements pass scoped build, standard-axiom inspection
+scan contract. The fifteen statements pass scoped build, standard-axiom inspection
 and fresh stock kernel replay (`capped -- scripts/in-bundle lake env leanchecker
 --fresh Leanux.Proofs.WG.Index.Statements`). The full proof gate still fails in
 inherited `CounterWindow.Refinement` and `ReplayWindow.Counterexamples`;
