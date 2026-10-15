@@ -727,3 +727,17 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   `unsupported` only with the lookahead (U4); the per-timer layout with an
   enqueue stamp (U5) [AGENT, fork of the coordinator: the design; the
   Claude Opus 5.5 review at 6fe87f2].
+- **2026-10-15 [USER]** The simulation relation `R` of the binary adequacy
+  charter is minimal, a frame property: exactly what the simulation needs,
+  over the WireGuard projection of the World, each clause justified by an
+  anchored function's read or write or by a field a landed result observes;
+  everything a function does not touch is a frame theorem, never a relation
+  clause ("surely it's actively bad for the invariant to carry a load of
+  gunk that relates states that don't matter. Morally, we want to strip the
+  relation to exactly what the simulation needs (that's a kind of frame
+  property)"; "the right way to prove the theorem is minimally").
+  Definitions built for state outside `R` are parked under `binary/attic/`,
+  off the proof path, for a possible later milestone. The charter's first
+  wording ("relates the whole mirror world") was the coordinator's error,
+  read literally by the grind [AGENT, coordinator]; the amendment is in the
+  charter's section 1.
