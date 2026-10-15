@@ -24,7 +24,7 @@ def type_bytes(die):
 def layouts(kernel):
     wanted = {'index_hashtable', 'index_hashtable_entry', 'hlist_node', 'hlist_head',
               'allowedips_node', 'allowedips', 'pcpu_hot', 'wg_peer', 'kref', 'refcount_struct',
-              'noise_keypair', 'noise_keypairs', 'noise_replay_counter', 'noise_symmetric_key', 'noise_handshake', 'wg_device', 'cookie_checker', 'pubkey_hashtable'}
+              'noise_keypair', 'noise_keypairs', 'noise_replay_counter', 'noise_symmetric_key', 'noise_handshake', 'wg_device', 'cookie', 'cookie_checker', 'pubkey_hashtable'}
     result = {}
     with open(kernel, 'rb') as stream:
         dwarf = ELFFile(stream).get_dwarf_info()
@@ -53,6 +53,8 @@ def layouts(kernel):
                         if 'DW_AT_name' in child.attributes:
                             field = child.attributes['DW_AT_name'].value.decode()
                             members[field] = base + offset
+                            if name in {'wg_peer', 'noise_handshake', 'cookie'}:
+                                member_sizes[field] = type_bytes(child.get_DIE_from_attribute('DW_AT_type'))
                             if (name, field) in {('cookie_checker', 'secret'), ('cookie_checker', 'secret_birthdate'),
                                                  ('pubkey_hashtable', 'key'), ('wg_device', 'peer_hashtable')}:
                                 member_sizes[field] = type_bytes(child.get_DIE_from_attribute('DW_AT_type'))

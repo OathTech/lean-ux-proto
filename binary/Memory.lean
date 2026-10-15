@@ -38,6 +38,23 @@ def InRange (base : BitVec 64) (length : Nat) (address : BitVec 64) : Prop :=
 def EqualOutside (writes : BitVec 64 → Prop) (before after : Mem 64) : Prop :=
   ∀ address, ¬ writes address → before.get? address = after.get? address
 
+/-- Disjoint offsets in one allocation remain disjoint even when its base
+    wraps modulo the architectural address width. -/
+theorem InRange.offset_disjoint (base : BitVec 64) (i ni j nj : Nat)
+    (ibound : i+ni ≤ 2^64) (jbound : j+nj ≤ 2^64)
+    (apart : i+ni ≤ j ∨ j+nj ≤ i) (a : BitVec 64)
+    (inside : InRange (base + .ofNat 64 i) ni a) :
+    ¬InRange (base + .ofNat 64 j) nj a := by
+  rintro ⟨y, hy, ey⟩
+  obtain ⟨x, hx, ex⟩ := inside
+  have same : base + .ofNat 64 (i+x) = base + .ofNat 64 (j+y) := by
+    simpa only [BitVec.ofNat_add, BitVec.add_assoc] using ex.symm.trans ey
+  have words := congrArg BitVec.toNat ((BitVec.add_right_inj base).mp same)
+  simp only [BitVec.toNat_ofNat] at words
+  rw [Nat.mod_eq_of_lt (show i+x < 2^64 by omega),
+    Nat.mod_eq_of_lt (show j+y < 2^64 by omega)] at words
+  rcases apart with h | h <;> omega
+
 theorem storeInt_frame (m : Mem 64) (base : BitVec 64) (length : Nat) (v : Int) :
     EqualOutside (InRange base length) m (m.storeInt base length v) := by
   intro address outside
@@ -79,4 +96,5 @@ theorem EqualOutside.loadInt {before after : Mem 64} {writes : BitVec 64 → Pro
 #print axioms EqualOutside.loadInt
 
 #print axioms storeInt_defined
+#print axioms InRange.offset_disjoint
 end Binary

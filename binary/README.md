@@ -23,7 +23,7 @@ LEANUX_QEMU_SLOTS=16 capped -- /usr/bin/python3 binary/run.py --trace d1_second_
 capped -- /usr/bin/python3 binary/census.py
 cd binary
 capped -- lake build BinaryProofs
-capped -- lake env leanchecker TrustBase ServiceImage ServiceComposition KcovInvariant KcovExecution PeerCall PeerStart PeerReturn PeerFinish PeerNull PeerNullEntry PeerComparisons PeerLoad PeerDeadCallbacks PeerDeadFinish PeerDeadEntry PeerIncrement PeerLiveCallbacks PeerLiveFinish PeerIncrementFinish PeerLiveEntry FixtureKnowledge StackFrame BucketLoop Execution History HistoryRegions RegionExecution MirrorLoop MirrorPeer MirrorHistory LookupObservation Memory Image ImageLayout Layouts Regions PeerRegions PeerPrologue Prologue BucketEntry Representation KeypairRepresentation Symbolic
+capped -- lake env leanchecker LookupLoads PeerScalars WorldParts KcovHistory PeerAccepted ServiceObservation TrustBase ServiceImage ServiceComposition KcovInvariant KcovExecution PeerCall PeerStart PeerReturn PeerFinish PeerNull PeerNullEntry PeerComparisons PeerLoad PeerDeadCallbacks PeerDeadFinish PeerDeadEntry PeerIncrement PeerLiveCallbacks PeerLiveFinish PeerIncrementFinish PeerLiveEntry FixtureKnowledge StackFrame BucketLoop Execution History HistoryRegions RegionExecution MirrorLoop MirrorPeer MirrorHistory LookupObservation Memory Image ImageLayout Layouts Regions PeerRegions PeerPrologue Prologue BucketEntry Representation KeypairRepresentation Symbolic
 ```
 
 Generated state, census and comparison output go under `.tmp/binary-tv`;
@@ -82,3 +82,11 @@ nonzero-count paths, respectively. The live proof establishes the exact
 four-byte increment. `peer-nonnull` checks both paths, including the largest
 accepted count, active/disabled/full buffers and both capture modes, against
 the decoded service bodies. Whole-function correspondence remains open.
+
+`WorldParts` is an exhaustive field decomposition, not the whole-world
+relation. `PeerScalars` supplies 29 DWARF-derived stable peer equations and
+physical framing; pointer/queue/work/timer components remain open.
+`ServiceObservation` and `KcovHistory` retain callback histories and cuts.
+`BucketShape` reads only index/type/next, with no restriction on owner peer
+words. `LookupLoads` and `BucketLoop.tail_iteration` preserve the actual
+intermediate instruction states needed for the pending loop composition.

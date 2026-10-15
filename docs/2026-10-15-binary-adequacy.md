@@ -497,3 +497,63 @@ No function is certified and no R-region rate is inferred from endpoint
 supporting lemmas. The milestone report still owes the measured rate and
 the trust base verbatim. No mirror landing paste has arrived; no main merge
 or push has occurred.
+
+## World decomposition and retained execution history, 2026-10-15
+
+`WorldParts` partitions all 49 current World fields into physical kernel
+state, supplied configuration, external fixture state, execution history,
+and naming knowledge. Its round-trip theorem checks exhaustiveness, not
+physical representation. `PeerMirror.peer_run` gives the exact accepted
+source post-world; `peer_parts` proves which of these components change.
+`PeerAccepted.accepted_nonnull_to_return` now derives the arithmetic bound
+from actual mirror acceptance and covers both nonnull endpoint cases with
+the exact final count and return value. It is still an endpoint theorem.
+
+`PeerScalars` generates physical equations for 29 stable peer fields from
+DWARF, including the handshake and cookie arrays and serial CPU sentinel.
+Its frame theorem admits changes to both the refcount and the embedded
+handshake entry's peer word; offset separation is proved modulo 64 bits.
+The opaque fixture keys remain governed by `FixtureKnowledge`, not zero
+physical bytes. A read-only review found the missing `serialWorkCpu`
+equation; it is now included (`none` encodes `nr_cpumask_bits = 1` in this
+image). The other 17 peer fields still need their pointer/queue/timer/work
+relations; `handshakePending` and `napiScheduled` are physical obligations.
+Past user-output fields need actual copy/event provenance, as documented.
+These are open representation obligations, not assumptions of a result.
+
+`BucketShape` now states only the index, kind and intrusive-list next fields
+read by the loop. It imposes no condition on an entry's peer word. The
+owning nullable word and alias equality must be supplied separately by the
+whole-world relation after the mirror repair. `tail_iteration` composes the
+actual next-node load and guard, preserving the remaining-list invariant
+and every instruction successor. `LookupLoads` retains the container-of
+cut and all three index-load/argument MOV states, including the comparison
+call cut; its kind-guard observation includes the merged `idxFound` event.
+The recursive whole-loop theorem remains open.
+
+`ServiceObservation` and `KcovHistory` retain actual callback histories,
+prove that their interiors add no anchored observations or cuts, and keep
+the return-state relation as an explicit caller obligation. This uses the
+existing named no-reentry service contract; no new service contract or
+assumption was added to `TrustBase.lean`.
+
+Validation: full-parallel build passed (206 jobs); kernel replay passed
+for the eleven changed/new proof modules; all 190 printed axiom dependency
+lists were standard, and the source audit found no forbidden token in 51
+binary Lean files. The fast tier passed 124 tests with one skip (24.306
+seconds). Initial generated framing and instruction-history attempts failed
+Lean's resource limits or elaboration; the final frame proof uses named
+symbolic-offset lemmas and builds in 1.2 seconds at the default heartbeat
+limit. Failed attempts are not counted as passes. Reproduce with
+`capped -- lake build BinaryProofs binary-probe` in `binary/`, then
+`capped -- lake env leanchecker History Memory WorldParts MirrorPeer
+ServiceObservation KcovHistory PeerAccepted PeerScalars Representation
+BucketLoop LookupLoads`. Regenerate scalar equations with
+`capped -- /usr/bin/python3 binary/generate.py` from the worktree root.
+
+Milestone 1 is not complete. Whole-World physical representation, helper
+correspondence at every cut, recursive bucket-loop composition, witnessed
+`Pre_lookup`, and the function simulation/transport theorem remain open.
+Finding 1 is unchanged; no state was excluded to close it. The milestone
+report still owes the measured R-region rate and `TrustBase.lean` verbatim.
+No function or transported property is claimed. No main merge or push.

@@ -128,6 +128,47 @@ def observeHistory {Error Checkpoint : Type}
     let later ← observeHistory edge (t :: rest)
     return here ++ later
 
+/-- Join two actual histories at their shared state, counting each edge
+    once. Observation errors propagate through either half. -/
+theorem observeHistory_splice {Error Checkpoint : Type}
+    (edge : MachineState → MachineState → Except Error (List Checkpoint))
+    (front : List MachineState) (shared : MachineState) (back : List MachineState) :
+    observeHistory edge (front ++ shared :: back) = (do
+      let first ← observeHistory edge (front ++ [shared])
+      let second ← observeHistory edge (shared :: back)
+      pure (first ++ second)) := by
+  induction front with
+  | nil =>
+    change observeHistory edge (shared :: back) = (do
+      let first ← Except.ok []
+      let second ← observeHistory edge (shared :: back)
+      pure (first ++ second))
+    cases observeHistory edge (shared :: back) <;> rfl
+  | cons s front ih =>
+    cases front with
+    | nil =>
+      simp only [List.cons_append, List.nil_append, observeHistory]
+      cases edge s shared <;> cases observeHistory edge (shared :: back) <;>
+        first | rfl | exact congrArg Except.ok (by simp : _ = _)
+    | cons t front =>
+      simp only [List.cons_append] at ih ⊢
+      change (do
+        let here ← edge s t
+        let later ← observeHistory edge (t :: (front ++ shared :: back))
+        pure (here ++ later)) = (do
+        let first ← (do
+          let here ← edge s t
+          let later ← observeHistory edge (t :: (front ++ [shared]))
+          pure (here ++ later))
+        let second ← observeHistory edge (shared :: back)
+        pure (first ++ second))
+      rw [ih]
+      cases edge s t <;> cases observeHistory edge (t :: (front ++ [shared])) <;>
+        cases observeHistory edge (shared :: back) <;>
+        first | rfl | exact congrArg Except.ok (List.append_assoc _ _ _).symm
+
+#print axioms observeHistory_splice
+
 /-- A successful full observation cannot hide an earlier observation error
     or change an already emitted prefix. This supports stuttering-cut facts
     against the fixed complete source run. -/

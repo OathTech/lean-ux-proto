@@ -9,6 +9,7 @@ from elftools.dwarf.dwarf_expr import DWARFExprParser
 
 from census import ORACLE, ROOT, extract
 from layouts import layouts, type_bytes
+from peer_layouts import generate_peer_scalars
 
 
 def main():
@@ -238,6 +239,7 @@ def main():
         '  m.loadInt (a + .ofNat 64 (keypair_entry + entry_peer)) 8 = some peerWord.toNat',
         'end Binary.Layouts', '']
     (ROOT / 'binary/Layouts.lean').write_text('\n'.join(text))
+    generate_peer_scalars(ROOT, o)
 
 
 if __name__ == '__main__':

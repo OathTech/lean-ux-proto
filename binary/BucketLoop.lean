@@ -37,18 +37,18 @@ theorem next_load (fetch : Int64 → Option Decoded)
     full loop invariant, not a whole-function simulation. -/
 theorem next_load_bucket (fetch : Int64 → Option Decoded)
     (agree : ∀ p i, Image.fetch p = some i → fetch p = some i)
-    (peers : Leanux.WG.PeerId → Address) (s : MachineData)
+    (s : MachineData)
     (entry : Leanux.WG.IndexEntry) (rest : List (Address × Leanux.WG.IndexEntry))
     (history : List MachineState)
-    (bucket : Bucket peers s.dmem (s.regs.rbx.toBitVec + 8)
+    (bucket : BucketShape s.dmem (s.regs.rbx.toBitVec + 8)
       ((s.regs.rbx.toBitVec, entry) :: rest)) :
     historySteps fetch 1
       (fun t => t.machine.pc = Image.Lookup.entry + 0x67 ∧
         t.machine.data.dmem = s.dmem ∧
-        Bucket peers t.machine.data.dmem t.machine.data.regs.rbx.toBitVec rest ∧
+        BucketShape t.machine.data.dmem t.machine.data.regs.rbx.toBitVec rest ∧
         t.history = history ++ [t.machine])
       ⟨⟨s, Image.Lookup.entry + 0x63⟩, history⟩ := by
-  obtain ⟨next, loaded, tail⟩ := bucket_tail peers s.dmem _ _ _ _ bucket
+  obtain ⟨next, loaded, tail⟩ := bucket_tail s.dmem _ _ _ _ bucket
   simp only [Layouts.node_next, BitVec.add_zero] at loaded
   apply historySteps_mono fetch 1 _ _ _ _
     (next_load fetch agree s (.ofBitVec next) history loaded)
@@ -84,6 +84,49 @@ theorem next_walk_observation (rxSection : Nat) (s : MachineData) (af : Bool) :
   by_cases h : s.regs.get (.low .rbx .W64) = 0#64 <;>
     simp [observeHistory, LookupObservation.edge, LookupObservation.choice,
       walkExit, walkPoints, Image.Lookup.entry, Image.PeerGet.entry, h] <;> rfl
+
+/-- The physical loop invariant survives the tail load and the following
+    guard as one actual three-instruction execution. The remaining list,
+    including an empty list, determines the guard; peer words are unread. -/
+theorem tail_iteration (fetch : Int64 → Option Decoded)
+    (agree : ∀ p i, Image.fetch p = some i → fetch p = some i)
+    (s : MachineData) (entry : Leanux.WG.IndexEntry)
+    (rest : List (Address × Leanux.WG.IndexEntry)) (history : List MachineState)
+    (bucket : BucketShape s.dmem (s.regs.rbx.toBitVec + 8)
+      ((s.regs.rbx.toBitVec, entry) :: rest)) :
+    historySteps fetch 3 (fun t => ∃ next : UInt64, ∃ af : Bool,
+      t.machine = walkExit (nextData s next) af ∧
+      t.history = history ++ [⟨nextData s next, Image.Lookup.entry + 0x67⟩,
+        ⟨tested (.low .rbx .W64) (nextData s next) af, Image.Lookup.entry + 0x6a⟩,
+        walkExit (nextData s next) af] ∧
+      BucketShape t.machine.data.dmem next.toBitVec rest ∧
+      t.machine.data.dmem = s.dmem ∧
+      (next = 0 ↔ rest = []))
+      ⟨⟨s, Image.Lookup.entry + 0x63⟩, history⟩ := by
+  obtain ⟨next, loaded, tail⟩ := bucket_tail _ _ _ _ _ bucket
+  simp only [Layouts.node_next, BitVec.add_zero] at loaded
+  rw [show 3 = 1+2 from rfl, historySteps_add]
+  apply historySteps_mono fetch 1 _ _ _ _
+    (next_load fetch agree s (.ofBitVec next) history loaded)
+  rintro t ⟨machine, recorded⟩
+  have state : t = ⟨⟨nextData s (.ofBitVec next), Image.Lookup.entry + 0x67⟩,
+      history ++ [⟨nextData s (.ofBitVec next), Image.Lookup.entry + 0x67⟩]⟩ := by
+    cases t
+    simp_all
+  rw [state]
+  apply historySteps_mono fetch 2 _ _ _ _
+    (next_bucket_guard fetch agree (nextData s (.ofBitVec next)) _)
+  rintro u ⟨af, machine, recorded⟩
+  refine ⟨.ofBitVec next, af, machine, ?_, ?_, ?_, ?_⟩
+  · simpa only [List.append_assoc, List.cons_append, List.nil_append, walkExit] using recorded
+  · rw [machine]
+    exact tail
+  · rw [machine]
+    rfl
+  · rw [← UInt64.toBitVec_inj]
+    exact tail.head_zero_iff
+
+#print axioms tail_iteration
 
 #print axioms first_walk_observation
 #print axioms next_walk_observation
