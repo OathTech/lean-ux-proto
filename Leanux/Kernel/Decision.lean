@@ -500,7 +500,7 @@ inductive Decision where
   | ftiMatchIterate | ftiMatchSlen | ftiMatchTb | ftiMatchDscp | ftiMatchPrio | ftiMatchType
   | ftiMatchInfo | ftiReplace | ftiReplaceMatch | ftiReplaceSame | ftiReplaceNoAlias | ftiReplaceFirst
   | ftiReplaceNotifyErr | ftiReplaceAccessed | ftiMatch | ftiAppend | ftiCreate | ftiNoAlias
-  | ftiInsertErr | ftiNoLeaf | ftiFirst | ftiNotifyErr | ftiDefault | ftdNoLeaf
+  | ftiInsertErr | ftiRefind | ftiNoLeaf | ftiFirst | ftiNotifyErr | ftiDefault | ftdNoLeaf
   | ftdNoAlias | ftdIterate | ftdSlen | ftdTb | ftdDscp | ftdTypeZero
   | ftdTypeEq | ftdScopeNowhere | ftdScopeEq | ftdPrefsrcZero | ftdPrefsrcEq | ftdProtocolZero
   | ftdProtocolEq | ftdNhMatch | ftdMetricsMatch | ftdNotFound | ftdDefault | ftdAccessed
@@ -2360,119 +2360,120 @@ def Decision.info : Decision → DecisionInfo
   | .sendSignalCopyInfo => d "__send_signal_locked.case_copy_siginfo" "kernel/signal.c" 1145 [(1145, 1145)] []
   -- seccomp stream U: delegated to `Leanux.Seccomp.SDecision.info`
   -- net/ipv4/fib_trie.c (lane C): spans from the C of 6.12.110, section 8 of the design note
-  | .ftlEmptyTrie => { d "fib_table_lookup.empty" ftr 1443 [(1444, 1445)] [(1454, 1454)] with terminal := [true] }
-  | .ftlIndexMismatch => d "fib_table_lookup.index_mismatch" ftr 1470 [(1471, 1471)] [(1474, 1474)]
-  | .ftlLeaf => d "fib_table_lookup.leaf" ftr 1474 [(1475, 1475)] [(1480, 1480)]
-  | .ftlSlenGtPos => d "fib_table_lookup.slen_gt_pos" ftr 1480 [(1481, 1482)] []
-  | .ftlNullChild => d "fib_table_lookup.null_child" ftr 1486 [(1487, 1487)] []
+  | .ftlEmptyTrie => { d "fib_table_lookup.empty" ftr 1443 [] [(1454, 1454)] with terminal := [true] }
+  | .ftlIndexMismatch => d "fib_table_lookup.index_mismatch" ftr 1470 [] [(1474, 1474)]
+  | .ftlLeaf => d "fib_table_lookup.leaf" ftr 1474 [] [(1480, 1480)]
+  | .ftlSlenGtPos => d "fib_table_lookup.slen_gt_pos" ftr 1480 [] []
+  | .ftlNullChild => d "fib_table_lookup.null_child" ftr 1486 [] []
   | .ftlPrefixMismatch => d "fib_table_lookup.prefix_mismatch" ftr 1499 [] []
-  | .ftlSlenEqPos => d "fib_table_lookup.slen_eq_pos" ftr 1499 [] []
-  | .ftlStep2Leaf => d "fib_table_lookup.step2_leaf" ftr 1503 [(1504, 1504)] []
+  | .ftlSlenEqPos => d "fib_table_lookup.slen_eq_pos" ftr 1499 [] [(1503, 1503)]
+  | .ftlStep2Leaf => d "fib_table_lookup.step2_leaf" ftr 1503 [] [(1493, 1493)]
   | .ftlChildNull => d "fib_table_lookup.child_null" ftr 1511 [] []
-  | .ftlBacktraceAscend => d "fib_table_lookup.backtrace_ascend" ftr 1522 [(1523, 1523)] [(1543, 1543)]
-  | .ftlRoot => { d "fib_table_lookup.root" ftr 1529 [(1530, 1532)] [(1538, 1539)] with terminal := [true] }
-  | .ftlAliasIterate => d "fib_table_lookup.alias" ftr 1555 [(1560, 1561)] [(1628, 1628)]
-  | .ftlAliasSuffix => d "fib_table_lookup.alias_suffix" ftr 1561 [(1562, 1562)] [(1564, 1564)]
+  | .ftlBacktraceAscend => d "fib_table_lookup.backtrace_ascend" ftr 1522 [(1529, 1529)] [(1543, 1543)]
+  | .ftlRoot => { d "fib_table_lookup.root" ftr 1529 [] [(1538, 1538)] with terminal := [true] }
+  | .ftlAliasIterate => d "fib_table_lookup.alias" ftr 1555 [(1556, 1556)] []
+  | .ftlAliasSuffix => d "fib_table_lookup.alias_suffix" ftr 1561 [] [(1564, 1564)]
   | .ftlAliasDscp => d "fib_table_lookup.alias_dscp" ftr 1564 [] []
-  | .ftlDscpMismatch => d "fib_table_lookup.dscp_mismatch" ftr 1564 [(1565, 1565)] []
-  | .ftlInfoDead => d "fib_table_lookup.info_dead" ftr 1567 [(1568, 1568)] [(1569, 1569)]
-  | .ftlScope => d "fib_table_lookup.scope" ftr 1569 [(1570, 1570)] [(1571, 1572)]
+  | .ftlDscpMismatch => d "fib_table_lookup.dscp_mismatch" ftr 1564 [] []
+  | .ftlInfoDead => d "fib_table_lookup.info_dead" ftr 1567 [] [(1569, 1569)]
+  | .ftlScope => d "fib_table_lookup.scope" ftr 1569 [] [(1571, 1572)]
   | .ftlNotAccessed => d "fib_table_lookup.not_accessed" ftr 1571 [] []
-  | .ftlErrorType => { d "fib_table_lookup.error_type" ftr 1573 [(1578, 1579)] [(1581, 1581)] with terminal := [true] }
-  | .ftlInfoFlagsDead => d "fib_table_lookup.info_flags_dead" ftr 1581 [(1582, 1582)] [(1584, 1584)]
-  | .ftlNhObject => d "fib_table_lookup.nh_object" ftr 1584 [(1585, 1594)] [(1597, 1597)]
+  | .ftlErrorType => { d "fib_table_lookup.error_type" ftr 1573 [] [(1581, 1581)] with terminal := [true] }
+  | .ftlInfoFlagsDead => d "fib_table_lookup.info_flags_dead" ftr 1581 [] [(1584, 1584)]
+  | .ftlNhObject => d "fib_table_lookup.nh_object" ftr 1584 [(1585, 1586)] [(1597, 1597)]
   | .ftlNhIterate => d "fib_table_lookup.nexthop" ftr 1597 [(1598, 1598)] []
-  | .ftlNhGood => d "fib_table_lookup.nexthop_good" ftr 1600 [(1601, 1601)] [(1603, 1603)]
+  | .ftlNhGood => d "fib_table_lookup.nexthop_good" ftr 1600 [] [(1603, 1603)]
   | .ftlNoref => { d "fib_table_lookup.noref" ftr 1603 [(1604, 1604)] [] with terminal := [true, false] }
-  | .nhcDead => { d "fib_lookup_good_nhc.dead" ftr 1411 [(1412, 1412)] [(1414, 1414)] with terminal := [true] }
+  | .nhcDead => { d "fib_lookup_good_nhc.dead" ftr 1411 [] [(1414, 1414)] with terminal := [true] }
   | .nhcIgnoreLinkdown => d "fib_lookup_good_nhc.ignore_linkdown" ftr 1414 [] []
-  | .nhcLinkdownFlag => d "fib_lookup_good_nhc.linkdown_flag" ftr 1414 [] []
-  | .nhcLinkstate => { d "fib_lookup_good_nhc.linkstate" ftr 1415 [(1416, 1416)] [] with terminal := [true] }
+  | .nhcLinkdownFlag => d "fib_lookup_good_nhc.linkdown_flag" ftr 1414 [(1416, 1416)] []
+  | .nhcLinkstate => { d "fib_lookup_good_nhc.linkstate" ftr 1415 [] [] with terminal := [true] }
   | .nhcOif => d "fib_lookup_good_nhc.oif" ftr 1419 [] []
-  | .nhcOifMismatch => { d "fib_lookup_good_nhc.oif_mismatch" ftr 1419 [(1420, 1420)] [] with terminal := [true, false] }
-  | .ffnNull => { d "fib_find_node.null" ftr 946 [(947, 947)] [(949, 949)] with terminal := [true] }
-  | .ffnIndexMismatch => { d "fib_find_node.index_mismatch" ftr 965 [(966, 967)] [] with terminal := [true] }
+  | .nhcOifMismatch => { d "fib_lookup_good_nhc.oif_mismatch" ftr 1419 [] [] with terminal := [true, false] }
+  | .ffnNull => { d "fib_find_node.null" ftr 946 [] [(949, 949)] with terminal := [true] }
+  | .ffnIndexMismatch => { d "fib_find_node.index_mismatch" ftr 965 [] [(971, 971)] with terminal := [true] }
   | .ffnTnode => { d "fib_find_node.tnode" ftr 971 [] [] with terminal := [false] }
-  | .ffaNull => { d "fib_find_alias.null" ftr 989 [(990, 990)] [(992, 992)] with terminal := [true] }
-  | .ffaIterate => { d "fib_find_alias.alias" ftr 992 [(997, 997)] [(1013, 1013)] with terminal := [false] }
-  | .ffaSlenLess => d "fib_find_alias.slen_less" ftr 997 [(998, 998)] [(999, 999)]
-  | .ffaSlenNe => { d "fib_find_alias.slen_ne" ftr 999 [(1000, 1000)] [(1001, 1001)] with terminal := [true] }
-  | .ffaTbGreater => d "fib_find_alias.tb_greater" ftr 1001 [(1002, 1002)] [(1003, 1003)]
-  | .ffaTbNe => { d "fib_find_alias.tb_ne" ftr 1003 [(1004, 1004)] [(1005, 1005)] with terminal := [true] }
-  | .ffaFindFirst => { d "fib_find_alias.find_first" ftr 1005 [(1006, 1006)] [(1007, 1007)] with terminal := [true] }
-  | .ffaDscpGreater => d "fib_find_alias.dscp_greater" ftr 1007 [(1008, 1008)] [(1009, 1009)]
-  | .ffaPrio => { d "fib_find_alias.priority" ftr 1009 [(1010, 1010)] [] with terminal := [true] }
-  | .ffaDscpLess => { d "fib_find_alias.dscp_less" ftr 1009 [(1010, 1010)] [] with terminal := [true] }
-  | .finNoLeaf => { d "fib_insert_node.no_leaf" ftr 1116 [(1117, 1117)] [(1120, 1120)] with terminal := [true] }
+  | .ffaNull => { d "fib_find_alias.null" ftr 989 [] [(992, 992)] with terminal := [true] }
+  | .ffaIterate => { d "fib_find_alias.alias" ftr 992 [(997, 997)] [] with terminal := [false] }
+  | .ffaSlenLess => d "fib_find_alias.slen_less" ftr 997 [] [(999, 999)]
+  | .ffaSlenNe => { d "fib_find_alias.slen_ne" ftr 999 [] [(1001, 1001)] with terminal := [true] }
+  | .ffaTbGreater => d "fib_find_alias.tb_greater" ftr 1001 [] [(1003, 1003)]
+  | .ffaTbNe => { d "fib_find_alias.tb_ne" ftr 1003 [] [(1005, 1005)] with terminal := [true] }
+  | .ffaFindFirst => { d "fib_find_alias.find_first" ftr 1005 [] [(994, 994)] with terminal := [true] }
+  | .ffaDscpGreater => d "fib_find_alias.dscp_greater" ftr 1007 [] []
+  | .ffaPrio => { d "fib_find_alias.priority" ftr 1009 [] [] with terminal := [true] }
+  | .ffaDscpLess => { d "fib_find_alias.dscp_less" ftr 1009 [] [] with terminal := [true] }
+  | .finNoLeaf => { d "fib_insert_node.no_leaf" ftr 1116 [] [(1120, 1120)] with terminal := [true] }
   | .finSlotTaken => d "fib_insert_node.slot_taken" ftr 1128 [(1131, 1131)] []
-  | .finNoTnode => { d "fib_insert_node.no_tnode" ftr 1132 [(1133, 1133)] [(1136, 1137)] with terminal := [true] }
-  | .fiaNoLeaf => { d "fib_insert_alias.no_leaf" ftr 1164 [(1165, 1165)] [(1167, 1167)] with terminal := [true] }
+  | .finNoTnode => { d "fib_insert_node.no_tnode" ftr 1132 [(1155, 1155)] [(1136, 1136)] with terminal := [true] }
+  | .fiaNoLeaf => { d "fib_insert_alias.no_leaf" ftr 1164 [(1148, 1150)] [(1167, 1167)] with terminal := [true] }
   | .fiaBefore => d "fib_insert_alias.before" ftr 1167 [(1168, 1168)] [(1172, 1172)]
-  | .fiaIterate => d "fib_insert_alias.alias" ftr 1172 [(1173, 1173)] [(1181, 1181)]
-  | .fiaSlenLess => d "fib_insert_alias.slen_less" ftr 1173 [(1174, 1174)] [(1175, 1175)]
+  | .fiaIterate => d "fib_insert_alias.alias" ftr 1172 [(1173, 1173)] []
+  | .fiaSlenLess => d "fib_insert_alias.slen_less" ftr 1173 [] [(1175, 1175)]
   | .fiaSlenEq => d "fib_insert_alias.slen_eq" ftr 1175 [(1176, 1176)] []
-  | .fiaTbGreater => d "fib_insert_alias.tb_greater" ftr 1176 [(1177, 1177)] []
+  | .fiaTbGreater => d "fib_insert_alias.tb_greater" ftr 1176 [] []
   | .fiaFound => d "fib_insert_alias.found" ftr 1181 [(1182, 1182)] [(1184, 1184)]
-  | .fiaSuffix => d "fib_insert_alias.suffix" ftr 1188 [(1189, 1190)] []
-  | .ftiInfoErr => { d "fib_table_insert.info_error" ftr 1219 [(1220, 1221)] [(1224, 1225)] with terminal := [true] }
+  | .fiaSuffix => d "fib_insert_alias.suffix" ftr 1188 [(1189, 1189)] []
+  | .ftiInfoErr => { d "fib_table_insert.info_error" ftr 1219 [(1220, 1220)] [(1224, 1224)] with terminal := [true] }
   | .ftiLeaf => d "fib_table_insert.leaf" ftr 1226 [] []
-  | .ftiHasAlias => d "fib_table_insert.has_alias" ftr 1238 [] []
-  | .ftiDscpEq => d "fib_table_insert.dscp_eq" ftr 1238 [] []
-  | .ftiPrioEq => d "fib_table_insert.priority_eq" ftr 1239 [(1242, 1243)] []
-  | .ftiExcl => { d "fib_table_insert.excl" ftr 1243 [(1244, 1244)] [(1246, 1246)] with terminal := [true] }
-  | .ftiMatchIterate => d "fib_table_insert.match_alias" ftr 1255 [(1256, 1256)] [(1269, 1269)]
-  | .ftiMatchSlen => d "fib_table_insert.match_slen" ftr 1256 [] []
-  | .ftiMatchTb => d "fib_table_insert.match_tb" ftr 1257 [] []
-  | .ftiMatchDscp => d "fib_table_insert.match_dscp" ftr 1258 [(1259, 1259)] [(1260, 1260)]
-  | .ftiMatchPrio => d "fib_table_insert.match_priority" ftr 1260 [(1261, 1261)] [(1262, 1262)]
+  | .ftiHasAlias => d "fib_table_insert.has_alias" ftr 1238 [(1238, 1238)] []
+  | .ftiDscpEq => d "fib_table_insert.dscp_eq" ftr 1238 [(1239, 1239)] []
+  | .ftiPrioEq => d "fib_table_insert.priority_eq" ftr 1239 [] []
+  | .ftiExcl => { d "fib_table_insert.excl" ftr 1243 [] [(1255, 1256)] with terminal := [true] }
+  | .ftiMatchIterate => d "fib_table_insert.match_alias" ftr 1255 [(1256, 1256)] []
+  | .ftiMatchSlen => d "fib_table_insert.match_slen" ftr 1256 [] [(1257, 1257)]
+  | .ftiMatchTb => d "fib_table_insert.match_tb" ftr 1257 [] [(1258, 1258)]
+  | .ftiMatchDscp => d "fib_table_insert.match_dscp" ftr 1258 [] [(1260, 1260)]
+  | .ftiMatchPrio => d "fib_table_insert.match_priority" ftr 1260 [] [(1262, 1262)]
   | .ftiMatchType => d "fib_table_insert.match_type" ftr 1262 [] []
-  | .ftiMatchInfo => d "fib_table_insert.match_info" ftr 1263 [(1264, 1265)] []
-  | .ftiReplace => d "fib_table_insert.replace" ftr 1269 [(1273, 1274)] [(1330, 1330)]
-  | .ftiReplaceMatch => d "fib_table_insert.replace_match" ftr 1275 [(1276, 1276)] [(1280, 1281)]
-  | .ftiReplaceSame => { d "fib_table_insert.replace_same" ftr 1276 [(1277, 1277)] [] with terminal := [true, false] }
-  | .ftiReplaceNoAlias => { d "fib_table_insert.replace_no_alias" ftr 1282 [(1283, 1283)] [(1285, 1285)] with terminal := [true] }
-  | .ftiReplaceFirst => d "fib_table_insert.replace_first" ftr 1300 [(1304, 1305)] []
-  | .ftiReplaceNotifyErr => { d "fib_table_insert.replace_notify_error" ftr 1308 [(1309, 1311)] [] with terminal := [true] }
+  | .ftiMatchInfo => d "fib_table_insert.match_info" ftr 1263 [] []
+  | .ftiReplace => d "fib_table_insert.replace" ftr 1269 [(1275, 1275)] []
+  | .ftiReplaceMatch => d "fib_table_insert.replace_match" ftr 1275 [(1276, 1276)] [(1281, 1281)]
+  | .ftiReplaceSame => { d "fib_table_insert.replace_same" ftr 1276 [] [] with terminal := [true, false] }
+  | .ftiReplaceNoAlias => { d "fib_table_insert.replace_no_alias" ftr 1282 [] [(1285, 1285)] with terminal := [true] }
+  | .ftiReplaceFirst => d "fib_table_insert.replace_first" ftr 1300 [(1305, 1305)] []
+  | .ftiReplaceNotifyErr => { d "fib_table_insert.replace_notify_error" ftr 1308 [(1309, 1309)] [(1315, 1315)] with terminal := [true] }
   | .ftiReplaceAccessed => { d "fib_table_insert.replace_accessed" ftr 1321 [(1322, 1322)] [] with terminal := [true, false] }
-  | .ftiMatch => { d "fib_table_insert.match" ftr 1330 [(1331, 1331)] [(1333, 1333)] with terminal := [true] }
-  | .ftiAppend => d "fib_table_insert.append" ftr 1333 [(1334, 1334)] [(1336, 1336)]
-  | .ftiCreate => { d "fib_table_insert.create" ftr 1339 [(1340, 1340)] [(1342, 1343)] with terminal := [true] }
-  | .ftiNoAlias => { d "fib_table_insert.no_alias" ftr 1345 [(1346, 1346)] [(1348, 1348)] with terminal := [true] }
-  | .ftiInsertErr => { d "fib_table_insert.insert_error" ftr 1361 [(1362, 1362)] [(1365, 1365)] with terminal := [true] }
-  | .ftiNoLeaf => { d "fib_table_insert.no_leaf" ftr 1366 [(1367, 1368)] [(1371, 1371)] with terminal := [true] }
-  | .ftiFirst => d "fib_table_insert.first" ftr 1371 [(1375, 1376)] []
-  | .ftiNotifyErr => { d "fib_table_insert.notify_error" ftr 1378 [(1379, 1379)] [] with terminal := [true] }
+  | .ftiMatch => { d "fib_table_insert.match" ftr 1330 [] [(1333, 1333)] with terminal := [true] }
+  | .ftiAppend => d "fib_table_insert.append" ftr 1333 [] []
+  | .ftiCreate => { d "fib_table_insert.create" ftr 1339 [] [(1344, 1344)] with terminal := [true] }
+  | .ftiNoAlias => { d "fib_table_insert.no_alias" ftr 1345 [] [(1348, 1348)] with terminal := [true] }
+  | .ftiInsertErr => { d "fib_table_insert.insert_error" ftr 1361 [] [(1365, 1365)] with terminal := [true] }
+  | .ftiRefind => d "fib_table_insert.refind" ftr 1365 [] []
+  | .ftiNoLeaf => { d "fib_table_insert.no_leaf" ftr 1366 [] [(1371, 1371)] with terminal := [true] }
+  | .ftiFirst => d "fib_table_insert.first" ftr 1371 [(1376, 1376)] []
+  | .ftiNotifyErr => { d "fib_table_insert.notify_error" ftr 1378 [(1392, 1392)] [] with terminal := [true] }
   | .ftiDefault => d "fib_table_insert.default" ftr 1382 [(1383, 1383)] []
-  | .ftdNoLeaf => { d "fib_table_delete.no_leaf" ftr 1708 [(1709, 1709)] [(1711, 1712)] with terminal := [true] }
-  | .ftdNoAlias => { d "fib_table_delete.no_alias" ftr 1713 [(1714, 1714)] [(1719, 1720)] with terminal := [true] }
-  | .ftdIterate => d "fib_table_delete.alias" ftr 1720 [(1723, 1723)] [(1742, 1742)]
-  | .ftdSlen => d "fib_table_delete.slen" ftr 1723 [] []
-  | .ftdTb => d "fib_table_delete.tb" ftr 1724 [] []
-  | .ftdDscp => d "fib_table_delete.dscp" ftr 1725 [(1726, 1726)] [(1728, 1728)]
+  | .ftdNoLeaf => { d "fib_table_delete.no_leaf" ftr 1708 [] [(1711, 1711)] with terminal := [true] }
+  | .ftdNoAlias => { d "fib_table_delete.no_alias" ftr 1713 [] [(1720, 1721)] with terminal := [true] }
+  | .ftdIterate => d "fib_table_delete.alias" ftr 1720 [(1721, 1721)] []
+  | .ftdSlen => d "fib_table_delete.slen" ftr 1723 [] [(1724, 1724)]
+  | .ftdTb => d "fib_table_delete.tb" ftr 1724 [] [(1725, 1725)]
+  | .ftdDscp => d "fib_table_delete.dscp" ftr 1725 [] [(1728, 1728)]
   | .ftdTypeZero => d "fib_table_delete.type_zero" ftr 1728 [] []
   | .ftdTypeEq => d "fib_table_delete.type_eq" ftr 1728 [] []
-  | .ftdScopeNowhere => d "fib_table_delete.scope_nowhere" ftr 1729 [] []
+  | .ftdScopeNowhere => d "fib_table_delete.scope_nowhere" ftr 1729 [] [(1730, 1730)]
   | .ftdScopeEq => d "fib_table_delete.scope_eq" ftr 1730 [] []
-  | .ftdPrefsrcZero => d "fib_table_delete.prefsrc_zero" ftr 1731 [] []
+  | .ftdPrefsrcZero => d "fib_table_delete.prefsrc_zero" ftr 1731 [] [(1732, 1732)]
   | .ftdPrefsrcEq => d "fib_table_delete.prefsrc_eq" ftr 1732 [] []
-  | .ftdProtocolZero => d "fib_table_delete.protocol_zero" ftr 1733 [] []
+  | .ftdProtocolZero => d "fib_table_delete.protocol_zero" ftr 1733 [] [(1734, 1734)]
   | .ftdProtocolEq => d "fib_table_delete.protocol_eq" ftr 1734 [] []
-  | .ftdNhMatch => d "fib_table_delete.nh_match" ftr 1735 [] []
-  | .ftdMetricsMatch => d "fib_table_delete.metrics_match" ftr 1736 [(1737, 1738)] []
-  | .ftdNotFound => { d "fib_table_delete.not_found" ftr 1742 [(1743, 1743)] [(1745, 1745)] with terminal := [true] }
+  | .ftdNhMatch => d "fib_table_delete.nh_match" ftr 1735 [(1736, 1736)] []
+  | .ftdMetricsMatch => d "fib_table_delete.metrics_match" ftr 1736 [] []
+  | .ftdNotFound => { d "fib_table_delete.not_found" ftr 1742 [] [(1745, 1745)] with terminal := [true] }
   | .ftdDefault => d "fib_table_delete.default" ftr 1749 [(1750, 1750)] []
   | .ftdAccessed => d "fib_table_delete.accessed" ftr 1754 [(1755, 1755)] []
-  | .fraEmpty => { d "fib_remove_alias.empty" ftr 1645 [(1646, 1646)] [(1655, 1655)] with terminal := [true] }
-  | .fraSuffixEq => d "fib_remove_alias.suffix_eq" ftr 1646 [(1647, 1647)] []
-  | .fraLast => { d "fib_remove_alias.last" ftr 1655 [(1656, 1656)] [(1659, 1660)] with terminal := [true] }
+  | .fraEmpty => d "fib_remove_alias.empty" ftr 1645 [(1646, 1646)] [(1655, 1655)]
+  | .fraSuffixEq => d "fib_remove_alias.suffix_eq" ftr 1646 [] []
+  | .fraLast => { d "fib_remove_alias.last" ftr 1655 [] [(1659, 1659)] with terminal := [true] }
   | .usIterate => d "update_suffix.child" ftr 726 [(727, 727)] []
   | .usNull => d "update_suffix.null" ftr 729 [] []
-  | .usSlenLe => d "update_suffix.slen_le" ftr 729 [] [(733, 735)]
-  | .usMax => d "update_suffix.max" ftr 738 [(739, 739)] []
+  | .usSlenLe => d "update_suffix.slen_le" ftr 729 [] [(733, 733)]
+  | .usMax => d "update_suffix.max" ftr 738 [] []
   | .npsSlenGtPos => d "node_pull_suffix.slen_gt_pos" ftr 917 [] []
   | .npsSlenGt => d "node_pull_suffix.slen_gt" ftr 917 [(918, 918)] []
-  | .npsSame => d "node_pull_suffix.same" ftr 919 [(920, 920)] [(922, 923)]
-  | .nphLoop => d "node_push_suffix.slen_lt" ftr 929 [(930, 931)] []
+  | .npsSame => d "node_pull_suffix.same" ftr 919 [] [(922, 922)]
+  | .nphLoop => d "node_push_suffix.slen_lt" ftr 929 [(930, 930)] []
   | .pcNull => d "put_child.null" ftr 427 [] []
   | .pcHad => d "put_child.had" ftr 427 [(428, 428)] []
   | .pcHasNew => d "put_child.has_new" ftr 429 [] []
@@ -2488,68 +2489,69 @@ def Decision.info : Decision → DecisionInfo
   | .tfTnode => d "tnode_full.tnode" ftr 412 [] []
   | .eciWrap => d "empty_child_inc.wrap" ftr 342 [(343, 343)] []
   | .ecdWrap => d "empty_child_dec.wrap" ftr 348 [(349, 349)] []
-  | .tnAllocFail => { d "tnode_new.alloc_failed" ftr 387 [(388, 388)] [(393, 393)] with terminal := [true] }
+  | .tnAllocFail => { d "tnode_new.alloc_failed" ftr 387 [] [(393, 393)] with terminal := [true] }
   | .tnKeylength => d "tnode_new.keylength" ftr 393 [(394, 394)] [(396, 396)]
   | .tnShift => d "tnode_new.shift" ftr 399 [] []
-  | .taBitsMax => { d "tnode_alloc.bits_max" ftr 326 [(327, 327)] [(330, 330)] with terminal := [true] }
+  | .taBitsMax => { d "tnode_alloc.bits_max" ftr 326 [] [(330, 330)] with terminal := [true] }
   | .taPage => { d "tnode_alloc.page" ftr 332 [(333, 333)] [(335, 335)] with terminal := [true, false] }
-  | .lnAllocFail => { d "leaf_new.alloc_failed" ftr 360 [(361, 361)] [(364, 364)] with terminal := [true] }
+  | .lnAllocFail => { d "leaf_new.alloc_failed" ftr 360 [] [(364, 364)] with terminal := [true] }
   | .siUsed => d "should_inflate.used" ftr 816 [] []
   | .siPos => d "should_inflate.pos" ftr 816 [] []
   | .siRatio => d "should_inflate.ratio" ftr 816 [] []
   | .shUsed => d "should_halve.used" ftr 830 [] []
   | .shBits => d "should_halve.bits" ftr 830 [] []
   | .shRatio => d "should_halve.ratio" ftr 830 [] []
-  | .scKeylength => d "should_collapse.keylength" ftr 840 [(841, 841)] []
-  | .scUsed => d "should_collapse.used" ftr 844 [] []
-  | .rszInflateWork => d "resize.inflate_work" ftr 869 [] []
-  | .rszInflateFailed => d "resize.inflate_failed" ftr 871 [(875, 875)] [(878, 879)]
-  | .rszInflated => { d "resize.inflated" ftr 886 [(887, 887)] [(892, 892)] with terminal := [true] }
-  | .rszHalveWork => d "resize.halve_work" ftr 892 [] []
-  | .rszHalveFailed => d "resize.halve_failed" ftr 894 [(898, 898)] [(901, 902)]
-  | .rszCollapse => { d "resize.collapse" ftr 906 [(907, 907)] [(910, 910)] with terminal := [true, false] }
-  | .inflNoTnode => { d "inflate.no_tnode" ftr 547 [(548, 548)] [(551, 551)] with terminal := [true] }
-  | .inflIterate => d "inflate.child" ftr 558 [(559, 559)] [(625, 625)]
-  | .inflNull => d "inflate.null" ftr 564 [(565, 565)] [(568, 568)]
-  | .inflNotFull => d "inflate.not_full" ftr 568 [(569, 570)] [(574, 574)]
-  | .inflBits1 => d "inflate.bits_one" ftr 577 [(578, 580)] [(597, 597)]
-  | .inflNode1Fail => { d "inflate.node1_failed" ftr 598 [(599, 599)] [(600, 600)] with terminal := [true] }
-  | .inflNode0Fail => { d "inflate.node0_failed" ftr 603 [(604, 604)] [(605, 605)] with terminal := [true] }
-  | .inflSplit => d "inflate.split" ftr 608 [(609, 612)] [(616, 617)]
-  | .hvNoTnode => { d "halve.no_tnode" ftr 642 [(643, 643)] [(646, 646)] with terminal := [true] }
-  | .hvIterate => d "halve.pair" ftr 653 [(654, 655)] [(680, 680)]
-  | .hvOneEmpty => d "halve.one_empty" ftr 659 [(660, 661)] [(665, 665)]
-  | .hvNoInode => { d "halve.no_inode" ftr 666 [(667, 667)] [(668, 668)] with terminal := [true] }
+  | .scKeylength => d "should_collapse.keylength" ftr 840 [] []
+  | .scUsed => d "should_collapse.used" ftr 844 [] []   -- the compare is attributed to resize:906 (rszCollapse)
+  | .rszInflateWork => d "resize.inflate_work" ftr 869 [(870, 870)] []
+  | .rszInflateFailed => d "resize.inflate_failed" ftr 871 [] [(878, 878)]
+  | .rszInflated => { d "resize.inflated" ftr 886 [] [(892, 892)] with terminal := [true] }
+  | .rszHalveWork => d "resize.halve_work" ftr 892 [(893, 893)] []
+  | .rszHalveFailed => d "resize.halve_failed" ftr 894 [] [(901, 901)]
+  -- `if (should_collapse(tn))`: the inlined `used < 2` is attributed to this line by DWARF
+  | .rszCollapse => { d "resize.collapse" ftr 906 [] [] with terminal := [true, false] }
+  | .inflNoTnode => { d "inflate.no_tnode" ftr 547 [] [(551, 551)] with terminal := [true] }
+  | .inflIterate => d "inflate.child" ftr 558 [(559, 559)] []
+  | .inflNull => d "inflate.null" ftr 564 [] [(568, 568)]
+  | .inflNotFull => d "inflate.not_full" ftr 568 [(569, 569)] [(574, 574)]
+  | .inflBits1 => d "inflate.bits_one" ftr 577 [(578, 578)] [(597, 597)]
+  | .inflNode1Fail => { d "inflate.node1_failed" ftr 598 [] [(600, 600)] with terminal := [true] }
+  | .inflNode0Fail => { d "inflate.node0_failed" ftr 603 [] [(605, 605)] with terminal := [true] }
+  | .inflSplit => d "inflate.split" ftr 608 [(609, 609)] [(616, 616)]
+  | .hvNoTnode => { d "halve.no_tnode" ftr 642 [] [(646, 646)] with terminal := [true] }
+  | .hvIterate => d "halve.pair" ftr 653 [(654, 654)] [(680, 680)]
+  | .hvOneEmpty => d "halve.one_empty" ftr 659 [(660, 660)] [(665, 665)]
+  | .hvNoInode => { d "halve.no_inode" ftr 666 [(683, 683)] [(668, 668)] with terminal := [true] }
   | .collNull => d "collapse.null" ftr 695 [] []
-  | .collIndex => d "collapse.index" ftr 695 [(696, 696)] [(699, 699)]
-  | .pcrRoot => { d "put_child_root.root" ftr 472 [(473, 473)] [(475, 475)] with terminal := [true, false] }
+  | .collIndex => d "collapse.index" ftr 695 [(696, 696)] []
+  | .pcrRoot => { d "put_child_root.root" ftr 472 [(473, 473)] [] with terminal := [true, false] }
   | .ucIterate => d "update_children.child" ftr 452 [(453, 453)] []
-  | .ucNull => d "update_children.null" ftr 455 [(456, 456)] [(462, 462)]
+  | .ucNull => d "update_children.null" ftr 455 [] [(462, 462)]
   | .ucParentIs => d "update_children.parent_is" ftr 462 [(463, 463)] [(465, 465)]
   | .replIterate => d "replace.child" ftr 526 [(527, 527)] [(534, 534)]
   | .replFull => d "replace.full" ftr 530 [(531, 531)] []
-  | .tfrLoop => d "tnode_free.node" ftr 494 [(495, 497)] [(502, 502)]
+  | .tfrLoop => d "tnode_free.node" ftr 494 [(495, 495)] [(502, 502)]
   | .tfrSync => d "tnode_free.sync" ftr 502 [(503, 504)] []
-  | .ftfClimb => d "fib_table_flush.climb" ftr 2021 [(2022, 2022)] [(2040, 2040)]
-  | .ftfRoot => { d "fib_table_flush.root" ftr 2025 [(2026, 2026)] [(2029, 2029)] with terminal := [true] }
+  | .ftfClimb => d "fib_table_flush.climb" ftr 2021 [(2022, 2022)] []
+  | .ftfRoot => { d "fib_table_flush.root" ftr 2025 [] [(2029, 2029)] with terminal := [true] }
   | .ftfSuffix => d "fib_table_flush.suffix" ftr 2029 [(2030, 2030)] []
-  | .ftfNull => d "fib_table_flush.null" ftr 2041 [(2042, 2042)] [(2044, 2044)]
-  | .ftfTnode => d "fib_table_flush.tnode" ftr 2044 [(2046, 2047)] [(2052, 2052)]
-  | .ftfAliasIterate => d "fib_table_flush.alias" ftr 2052 [(2055, 2055)] [(2083, 2083)]
+  | .ftfNull => d "fib_table_flush.null" ftr 2041 [] [(2044, 2044)]
+  | .ftfTnode => d "fib_table_flush.tnode" ftr 2044 [(2047, 2047)] [(2052, 2052)]
+  | .ftfAliasIterate => d "fib_table_flush.alias" ftr 2052 [] [(2083, 2083)]
   | .ftfNoInfo => d "fib_table_flush.no_info" ftr 2055 [] []
-  | .ftfOtherTable => d "fib_table_flush.other_table" ftr 2055 [] []
+  | .ftfOtherTable => d "fib_table_flush.other_table" ftr 2055 [] [(2056, 2056)]
   | .ftfNotDead => d "fib_table_flush.not_dead" ftr 2056 [] []
-  | .ftfNoError => d "fib_table_flush.no_error" ftr 2057 [(2058, 2059)] [(2065, 2065)]
+  | .ftfNoError => d "fib_table_flush.no_error" ftr 2057 [] []
   | .ftfNotFlushAll => d "fib_table_flush.not_flush_all" ftr 2065 [] []
   | .ftfErrorType => d "fib_table_flush.error_type" ftr 2065 [] []
-  | .ftfErrorNotDead => d "fib_table_flush.error_not_dead" ftr 2066 [(2067, 2068)] [(2071, 2071)]
-  | .ftfPfsrcRemoved => d "fib_table_flush.pfsrc_removed" ftr 2073 [(2074, 2075)] [(2076, 2076)]
+  | .ftfErrorNotDead => d "fib_table_flush.error_not_dead" ftr 2066 [] []
+  | .ftfPfsrcRemoved => d "fib_table_flush.pfsrc_removed" ftr 2073 [(2074, 2074)] []
   | .ftfEmptied => d "fib_table_flush.emptied" ftr 2085 [(2086, 2087)] []
-  | .fnaNotFirst => { d "fib_notify_alias_delete.not_first" ftr 1674 [(1675, 1675)] [(1680, 1681)] with terminal := [true] }
+  | .fnaNotFirst => { d "fib_notify_alias_delete.not_first" ftr 1674 [] [(1680, 1680)] with terminal := [true] }
   | .trbLoop => d "trie_rebalance.not_root" ftr 1106 [(1107, 1107)] []
-  | .fnaHasNext => d "fib_notify_alias_delete.has_next" ftr 1682 [] [(1686, 1687)]
+  | .fnaHasNext => d "fib_notify_alias_delete.has_next" ftr 1682 [(1682, 1682)] []
   | .fnaNextSlen => d "fib_notify_alias_delete.next_slen" ftr 1682 [] []
-  | .fnaNextTb => d "fib_notify_alias_delete.next_tb" ftr 1682 [(1683, 1684)] []
+  | .fnaNextTb => d "fib_notify_alias_delete.next_tb" ftr 1682 [] []
   | .uBasicsFilterNull => ofS .basicsFilterNull
   | .uBasicsLenZero => ofS .basicsLenZero
   | .uBasicsLenOverMax => ofS .basicsLenOverMax
@@ -3009,14 +3011,12 @@ def Decision.comparison : Decision → Option Comparison
   | .ftlAliasDscp => some ⟨.ne, true, none, false⟩
   | .ftlInfoDead => some ⟨.ne, true, none, false⟩
   | .ftlScope => some ⟨.lt, false, none, false⟩
-  | .ftlNotAccessed => some ⟨.eq, true, none, false⟩
   | .ftlErrorType => some ⟨.lt, true, none, false⟩
   | .ftlInfoFlagsDead => some ⟨.ne, true, none, false⟩
   | .ftlNhIterate => some ⟨.lt, false, none, false⟩
   | .ftlNhGood => some ⟨.eq, true, none, false⟩
   | .ftlNoref => some ⟨.eq, true, none, false⟩
   | .nhcDead => some ⟨.ne, true, none, false⟩
-  | .nhcIgnoreLinkdown => some ⟨.eq, true, none, false⟩
   | .nhcOif => some ⟨.ne, true, none, false⟩
   | .ffnIndexMismatch => some ⟨.ge, false, none, false⟩
   | .ffnTnode => some ⟨.ne, true, none, false⟩
@@ -3055,7 +3055,6 @@ def Decision.comparison : Decision → Option Comparison
   | .usSlenLe => some ⟨.le, false, none, false⟩
   | .usMax => some ⟨.ge, false, none, false⟩
   | .npsSlenGtPos => some ⟨.gt, false, none, false⟩
-  | .npsSlenGt => some ⟨.gt, false, none, false⟩
   | .npsSame => some ⟨.eq, false, none, false⟩
   | .nphLoop => some ⟨.lt, false, none, false⟩
   | .pcSlen => some ⟨.lt, false, none, false⟩
@@ -3069,8 +3068,8 @@ def Decision.comparison : Decision → Option Comparison
   | .shBits => some ⟨.gt, true, none, false⟩
   | .shRatio => some ⟨.lt, false, none, false⟩
   | .scKeylength => some ⟨.eq, true, none, false⟩
-  | .scUsed => some ⟨.lt, true, some 906, false⟩
   | .rszInflated => some ⟨.ne, true, none, false⟩
+  | .rszCollapse => some ⟨.lt, true, none, false⟩
   | .collIndex => some ⟨.ne, true, none, false⟩
   | .pcrRoot => some ⟨.ge, true, none, false⟩
   | .ftfClimb => some ⟨.eq, true, none, false⟩
@@ -3624,7 +3623,7 @@ def Decision.repeatable : Decision → Bool
   | .ftiMatchIterate | .ftiMatchSlen | .ftiMatchTb | .ftiMatchDscp | .ftiMatchPrio | .ftiMatchType
   | .ftiMatchInfo | .ftiReplace | .ftiReplaceMatch | .ftiReplaceSame | .ftiReplaceNoAlias | .ftiReplaceFirst
   | .ftiReplaceNotifyErr | .ftiReplaceAccessed | .ftiMatch | .ftiAppend | .ftiCreate | .ftiNoAlias
-  | .ftiInsertErr | .ftiNoLeaf | .ftiFirst | .ftiNotifyErr | .ftiDefault | .ftdNoLeaf
+  | .ftiInsertErr | .ftiRefind | .ftiNoLeaf | .ftiFirst | .ftiNotifyErr | .ftiDefault | .ftdNoLeaf
   | .ftdNoAlias | .ftdIterate | .ftdSlen | .ftdTb | .ftdDscp | .ftdTypeZero
   | .ftdTypeEq | .ftdScopeNowhere | .ftdScopeEq | .ftdPrefsrcZero | .ftdPrefsrcEq | .ftdProtocolZero
   | .ftdProtocolEq | .ftdNhMatch | .ftdMetricsMatch | .ftdNotFound | .ftdDefault | .ftdAccessed

@@ -22,6 +22,12 @@ tree reference counts.
 
 namespace Leanux.Net.Fib
 
+/-- The `__be32` word of a host-order IPv4 address: the C compares addresses
+    in network byte order (`fib_prefsrc`, `fc_prefsrc`), so a recorded
+    operand is this word. -/
+def be32 (x : Nat) : Nat :=
+  x % 256 * 2 ^ 24 + x / 2 ^ 8 % 256 * 2 ^ 16 + x / 2 ^ 16 % 256 * 2 ^ 8 + x / 2 ^ 24 % 256
+
 open Std
 
 abbrev KEYLENGTH : Nat := 32

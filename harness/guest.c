@@ -1398,7 +1398,8 @@ static const char *fibt_read(const char *id)
             memset(n, 0, sizeof(*n));
             n->tnode = 0; n->first_child = n->next_sibling = -1; n->first_alias = n_aliases;
             if (sscanf(body + 4, "%19[0-9.]", n->addr) != 1) fail(id, -1, "environment_failure", "fib_trie_leaf_line");
-            n->depth = (spaces - 2) / 3;
+            /* a leaf prints at its parent's depth plus one (seq_indent(iter->depth)) */
+            n->depth = (spaces - 2) / 3 + 1;
             goto link;
         } else if (body[0] == '/') {
             if (n_nodes == 0 || fibt_nodes[n_nodes - 1].tnode || n_aliases >= FIBT_MAX_ALIASES)
@@ -2234,6 +2235,8 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
     if (setrlimit(RLIMIT_NOFILE, &limit) || getrlimit(RLIMIT_NOFILE, &actual) || actual.rlim_cur != t->rlimit || actual.rlim_max != t->rlimit)
         fail(t->id, -1, "environment_failure", "rlimit_nofile");
     if (!comparisons) {
+        /* read the trie before the record starts, so a parse failure is a clean error line */
+        const char *fib_trie = t->net ? fibt_read(t->id) : "null";
         printf("LEANUX_FIXTURE {\"id\":\"%s\",\"reserved\":[%s],\"free\":[%u,%u],\"rlimit\":[%u,%u]", t->id,
                t->net == 3 ? "0,1,2,3,4,5,6,7,8,9" : (t->stepped || t->child) ? "0,1,2,3,4,5,6,7,8" : "0,1,2,3,4,5,6,7",
                t->net == 3 ? 10 : (t->stepped || t->child) ? 9 : 8, t->rlimit - 1, t->rlimit, t->rlimit);
@@ -2241,7 +2244,7 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
          * fixture adds the injector (8) and the pin (9) */
         if (t->net)
             printf(",\"net\":{\"auto_flowlabels\":%ld,\"icmp_ratelimit\":%ld,\"icmp6_ratelimit\":%ld,\"lo_link_local\":\"fe80::ffff:1\",\"fib_trie\":%s}",
-                   net_sysctl[0], net_sysctl[1], net_sysctl[2], fibt_read(t->id));
+                   net_sysctl[0], net_sysctl[1], net_sysctl[2], fib_trie);
         printf("}\n");
     }
     /* Per-task coverage stays enabled from here to exit: KCOV_DISABLE resets

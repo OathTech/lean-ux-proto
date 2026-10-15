@@ -218,12 +218,14 @@ def shouldHalve (tp tn : KeyVector) : M Bool := do
   if !(← branchCmp .shBits (tn.bits > 1) tn.bits 1) then return false
   branchCmp .shRatio (100 * used < threshold) (100 * used) threshold
 
-/-- `should_collapse(tn)` (:833-845). -/
-def shouldCollapse (tn : KeyVector) : M Bool := do
+/-- `should_collapse(tn)` (:833-845): the outcome and `used`; the `used < 2`
+    compare is recorded at the caller's line (`resize:906`, `.rszCollapse`). -/
+def shouldCollapse (tn : KeyVector) : M (Bool × Nat) := do
   let mut used : Nat := tn.childLength - tn.emptyChildren
   if ← branchCmp .scKeylength (tn.bits == KEYLENGTH) tn.bits KEYLENGTH then
     if tn.fullChildren != 0 then used := used - KEY_MAX
-  branchCmp .scUsed (used < 2) used 2
+  let r ← branch .scUsed (used < 2)
+  return (r, used)
 
 /-- `update_children(tn)` (:447-468): the parent pointers of the new node's
     children. A child created in this resize step (`fresh`) already names
@@ -302,7 +304,8 @@ def resizeAt : Nat → KeyVector → Nat → M KeyVector
       maxWork := maxWork - 1
       let some tn' := tp.child cindex | invariant "resize: the halved node is gone"
       tn := tn'
-  if ← branch .rszCollapse (← shouldCollapse tn) then collapse tp cindex tn
+  let (sc, used) ← shouldCollapse tn
+  if ← branchCmp .rszCollapse sc used 2 then collapse tp cindex tn
   else return tp
 
 /-- `replace(t, oldtnode, tn)` (:508-535): link the new node in the old one's
@@ -469,7 +472,8 @@ def nodePullSuffix (p : Path) (slen0 : Nat) : M Unit := do
   let mut nodeSlen : Nat := tn.slen
   for _ in [0:KEYLENGTH + 2] do
     if !(← branchCmp .npsSlenGtPos (nodeSlen > tn.pos) nodeSlen tn.pos) then break
-    if !(← branchCmp .npsSlenGt (nodeSlen > slen) nodeSlen slen) then break
+    -- at the 1647 site (`slen = tp->pos`) the compiler folds this compare into the first
+    if !(← branch .npsSlenGt (nodeSlen > slen)) then break
     let tn' ← updateSuffix tn
     setNode path (some tn')
     slen := tn'.slen
@@ -654,7 +658,7 @@ structure Result where
     `ip_ignore_linkdown` operand is false at once. -/
 def lookupGoodNhc (fi : FibInfo) (flow : Flow) : M Bool := do
   if ← branchCmp .nhcDead (fi.nhFlags &&& RTNH_F_DEAD != 0) (fi.nhFlags &&& RTNH_F_DEAD) 0 then return false
-  if ← branchCmp .nhcIgnoreLinkdown false 0 0 then
+  if ← branch .nhcIgnoreLinkdown false then
     if ← branch .nhcLinkdownFlag (fi.nhFlags &&& RTNH_F_LINKDOWN != 0) then
       if ← branch .nhcLinkstate !flow.ignoreLinkstate then return false
   if ← branchCmp .nhcOif (flow.oif != 0) flow.oif 0 then
@@ -764,7 +768,7 @@ def tableLookup (flow : Flow) : M (Except Int Result) := do
       if ← branchCmp .ftlInfoDead fi.dead (if fi.dead then 1 else 0) 0 then i := i + 1; continue
       if ← branchCmp .ftlScope (fi.scope < flow.scope) fi.scope flow.scope then i := i + 1; continue
       -- `fib_alias_accessed(fa)`: `if (!(fa->fa_state & FA_S_ACCESSED)) fa->fa_state |= FA_S_ACCESSED;`
-      if ← branchCmp .ftlNotAccessed (!fa.accessed) (if fa.accessed then 1 else 0) 0 then
+      if ← branch .ftlNotAccessed (!fa.accessed) then
         let leaf ← nodeAt leafPath
         let fas' := leaf.aliases.set i { fa with accessed := true }
         setNode leafPath (some (leaf.withAliases fas'))

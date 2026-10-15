@@ -304,9 +304,8 @@ def dispatch : Syscall → M Int
     | .error e => return e   -- refused by the sender's IP layer before any output
     | .ok (pkts, mtu) =>
       Env.xmitMulticastLoop family addr
-      -- lane C: `ip_finish_output2`'s neighbour for the next hop on wg0,
-      -- classified by a lookup of the local table at its creation (arp.c:242)
-      if family == 4 then Net.neighbourClassify WG0_IFINDEX addr
+      -- lane C: `ip_finish_output2` on wg0: the device's one neighbour
+      if family == 4 then Net.neighbourClassify WG0_IFINDEX
       let ret ← WG.wgXmit family addr pkts mtu
       return if ret == 0 then payload.length else ret
   | .wgSetMtu mtu => socketCallOn SENDER_FD (Env.setMtu mtu)

@@ -93,10 +93,21 @@ def reply4 (dst : Nat) (bytes : List UInt8) : M Unit := do
   -- the ehash secret, and the reply's own skb allocations (ip_append_data:
   -- `AllocSite.ipAppendDataSkb`, recorded when a chunk arms the ranges)
   skipCut ([.inetEhashSecret] ++ allocCuts)
-  -- W4: `wg_xmit` reads `dst_mtu` (device.c:173): the fixture's route MTU to
-  -- the destination if `net_fixture.routes` names one, else `dev->mtu`
-  let mtu := (((← get).routes.find? fun (f, a, _) => f == 4 && a == dst).map (·.2.2)).getD (← getDev).mtu
-  discard <| WG.wgXmit 4 dst [{ bytes, csum := none, mtu }] mtu
+  -- lane C: `ip_send_unicast_reply` (ip_output.c:1603-1677) routes the reply
+  -- from the segment's destination (an interface address, `__ip_dev_find`'s
+  -- found arm) to its source; a route error drops it (:1631-1632). W4:
+  -- `wg_xmit` reads `dst_mtu` (device.c:173): the route's metric when the
+  -- fixture's route carries one, else `dev->mtu`. `ip_finish_output2` on
+  -- wg0: the device's one neighbour (`Net.neighbourClassify`).
+  let saddr := WG.beAt bytes 12 4
+  match ← Net.routeOutput4 saddr dst with
+  | .error _ => return
+  | .ok r =>
+    if r.dev != WG0_IFINDEX then unsupported "a stack reply routed away from wg0"
+    let devMtu := (← getDev).mtu
+    let mtu := if r.mtu != 0 then r.mtu else devMtu
+    Net.neighbourClassify WG0_IFINDEX
+    discard <| WG.wgXmit 4 dst [{ bytes, csum := none, mtu }] mtu
 
 /-- The IPv4 input predicate (2.2) for an inner packet of `pkt.length`
     bytes, which `wg_packet_consume_data_done` trimmed to `tot_len` and

@@ -291,6 +291,8 @@ def _check_observation(result, trace):
         # wait digest; seccomp W (design 6.1): a probe's sigsys and child records
         fields = fields | {"read": {"digest"}, "epoll_wait": {"digest"}, "write": {"sigpipe"}, "pipe2": {"fds"},
                            "seccomp_probe": {"sigsys", "child"}}.get(op["op"], set())
+        if op["op"] in FIB_TRIE_OPS:
+            fields = fields | {"fib_trie"}   # lane C: the trie after a table-changing operation
         if type(observation) is not dict or set(observation) != fields:
             raise ValueError("operation observation fields")
         ret, error, data = observation["ret"], observation["errno"], observation["bytes"]

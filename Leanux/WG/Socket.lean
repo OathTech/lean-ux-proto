@@ -243,6 +243,8 @@ def send4 (e : Endpoint) (cache : Option PeerId) (bytes : List UInt8) (ds : Nat)
       if ← branch .send4CacheSet cache.isSome then dstCacheSet cache.get! r.src gen r.dev
       route := some r
   let some r := route | invariant "send4 without a route"
+  -- lane C: `ip_finish_output2` on the route's device: its one neighbour
+  Net.Fib.inSocketNs (Net.neighbourClassify r.dev)
   tunnelXmit e bytes ds r exactRx
   return 0
 

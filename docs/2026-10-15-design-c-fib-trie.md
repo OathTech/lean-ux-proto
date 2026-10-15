@@ -399,10 +399,25 @@ devinet.c, outside the lane; the module consumes them where the C does.
   input route (`ipRouteInputSlow`'s sequence from the martian tests
   through `fib_lookup` to the `RTN_LOCAL` delivery, the `-EHOSTUNREACH`
   drop and the martian destination, consumed by the receive predicate in
-  place of rows 5 to 13); the neighbour constructor's classification at
-  the first transmit to a next hop on a device (`inetDevAddrType` from the
-  environment's transmit, with `World.neighbours`); `fib_del_ifaddr`'s
-  classification; `fib_valid_prefsrc`'s for the corpus's prefix routes.
+  place of rows 5 to 13); the ICMP error of a refused transmit
+  (`__icmp_send`, icmp.c:780: `icmp_route_lookup`'s output route to the
+  dropped packet's source with a zero source, :512, then, `xfrm_lookup`
+  being the identity without XFRM, the classification of that destination
+  on the packet's device, :525; a route error sends nothing, `out_unlock`);
+  the TCP RST the stack answers a segment with (`ip_send_unicast_reply`,
+  ip_output.c:1631: the output route from the segment's destination to its
+  source, a route error dropping the reply); the fixture's datagrams to
+  wg0's port (the injector's and the batch sender's `udp_sendmsg`: the
+  output route to loopback in the socket's namespace, whose source the
+  environment's `senderSource` states and the mirror checks against the
+  route); `fib_del_ifaddr`'s classification; `fib_valid_prefsrc`'s for the
+  corpus's prefix routes. The neighbour constructor's classification is
+  not a consumer on this fixture: lo is a loopback device and wg0 a
+  point-to-point one, and for both `__ipv4_neigh_lookup_noref` keys the
+  one neighbour per device at `INADDR_ANY` (arp.h:38-44), which
+  `arp_constructor` classifies at address 0 (arp.c:233-242), the zeronet
+  early return of `__inet_dev_addr_type` (fib_frontend.c:215), no lookup;
+  `World.neighbours` records the device's one entry, per namespace.
   `__ip_dev_find`'s fallback is unreachable on this fixture (a source
   that is not an interface address never reaches `send4`, whose sources
   are learned from received datagrams' local destinations, nor the
@@ -551,6 +566,31 @@ nothing in", `evaluator/check.py:1166-1176`): that is why the callers of
 3.2 are C1 consumers, mirrored unanchored until their files are anchored,
 and why none of them can be a cut.
 
+Conventions the build settled against the accepted image (`scripts/probes/c-fib-arms.py`
+derives, per conditional jump of a listed function,
+the first instrumentation point of each arm and whether every block on the
+way has one predecessor):
+
+- a witness line is one whose every point lies on that outcome's arm, in
+  the checker's return-PC-minus-one attribution; the merged return block of
+  a function (`fib_lookup_good_nhc:1412`, `fib_table_lookup:1445`,
+  `fib_find_alias:1009`, `resize:907`) is covered on every call and
+  witnesses nothing, and a loop's exit line shared with a `break`
+  (`update_suffix:742`) is not the exit arm's witness; an outcome without
+  an exclusive line in its function's window is unobservable (the loader's
+  40/60-line window keeps spans in their function, so an inlined helper's
+  lines witness only the helper's own decisions);
+- a condition the compiler folds leaves one record: `node_pull_suffix`'s
+  second compare at its 1647 site (`slen = tp->pos`) is the first, so only
+  `slen_gt_pos` declares a comparison; a bit test (`fa_state &
+  FA_S_ACCESSED`, `ip_ignore_linkdown`) records none;
+- addresses the C compares as `__be32` (`fib_prefsrc`, `fc_prefsrc`) are
+  reported as their big-endian word (`Net.Fib.be32`);
+- the fixture's requests after an operation's coverage capture
+  (`route_into_wg0`, after the wait) run outside the window:
+  `Env.outsideWindow` discards their steps, as the boot's tables are
+  discarded by the runner (9.3).
+
 For `fib_frontend.c`, `fib_semantics.c` and `route.c` (U1): anchoring them
 lists the reached functions the module mirrors and cuts the rest by name
 (`__inet_bind`'s and the multicast joins' early-return classifications,
@@ -696,11 +736,16 @@ transcribes the C's insert and resize and prints the fixture's trie.
 The lookup's callers inside the window, from a per-operation query over
 the dump (`.tmp`, reproducible from the probe's data): the output route
 (497 operations); the input route (40, the `d2_rx_*` and `d3` receive
-traces); `arp_constructor`'s classification of a unicast next hop at the
-neighbour's creation (6 operations in 4 traces: the `wg_xmit` transmits
-of `b1_basic`, `b1_other_endpoint`, `b1_trie_routing`, `b1_v6` to new
-destinations; the other 192 `arp_constructor` runs classify the
-multicast group at `wg_up` and return early); `fib_del_ifaddr`'s
+traces); `arp_constructor`'s classification at a device's first output
+(every run classifies address 0, the key of a loopback or point-to-point
+device's one neighbour, and returns early: the measurement's "6
+operations in 4 traces" were the ICMP error replies of those transmits,
+`__icmp_send`'s own classification at icmp.c:525, found when the build's
+first run disagreed on them); the ICMP error reply's output route (the
+same operations) and the TCP RST reply's (the `w6_rst_*` injections); the
+fixture's datagram to wg0's port in every `wg_inject` (the injector's
+`udp_sendmsg`, 106 operations in 57 traces, missed by the measurement,
+which read the task stream's callers of the sender only); `fib_del_ifaddr`'s
 classification (10: `wg_delete`, `wg_set_mtu 0`, `wg_netns_close`,
 `wg_deladdr`). `__inet_bind` (196 operations) and the multicast joins
 return early with no lookup; `__ip_dev_find` is covered only on its

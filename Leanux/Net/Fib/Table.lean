@@ -118,13 +118,13 @@ def findInfo (fi : FibInfo) : M (Option FibInfoId) := do
 def releaseInfo (id : FibInfoId) : M Unit := do
   let some fi := (← getTable).infos.get? id | invariant "fib_release_info: no such info"
   if fi.treeref ≤ 1 then
-    modifyK fun k => { k with fib4 := { k.fib4 with infos := k.fib4.infos.erase id } }
+    modifyTable fun t => { t with infos := t.infos.erase id }
   else
-    modifyK fun k => { k with fib4 := { k.fib4 with infos := k.fib4.infos.insert id { fi with treeref := fi.treeref - 1 } } }
+    modifyTable fun t => { t with infos := t.infos.insert id { fi with treeref := fi.treeref - 1 } }
 
 def modifyInfo (id : FibInfoId) (f : FibInfo → FibInfo) : M Unit := do
   let some fi := (← getTable).infos.get? id | invariant "no such fib_info"
-  modifyK fun k => { k with fib4 := { k.fib4 with infos := k.fib4.infos.insert id (f fi) } }
+  modifyTable fun t => { t with infos := t.infos.insert id (f fi) }
 
 /-- `fib_valid_prefsrc(cfg, fib_prefsrc)` (fib_semantics.c:1391-1412). -/
 def validPrefsrc (cfg : Config) (prefsrc : Nat) : M Bool := do
@@ -309,11 +309,10 @@ def tableInsert (cfg : Config) : M Int := do
   let r ← insertAlias tpPath lPath newFa fa key
   if ← branch .ftiInsertErr (r != 0) then return ← out r
   -- `l = l ? l : fib_find_node(t, &tp, key);`
-  let lp ← match lPath with
-    | some lp => pure (some lp)
-    | none => do
+  let lp ← if ← branch .ftiRefind lPath.isNone then do
       let (_, leaf') ← findNode key
       pure (leaf'.map (·.1))
+    else pure lPath
   if ← branch .ftiNoLeaf lp.isNone then invariant "fib_table_insert: the alias was inserted but its leaf is not found"
   let some lp := lp | invariant "fib_table_insert: unreachable"
   let leafNode ← nodeAt lp
@@ -371,8 +370,8 @@ def tableDelete (cfg : Config) : M Int := do
       if ← branch .ftdScopeNowhere (cfg.scope == RT_SCOPE_NOWHERE) then pure ()
       else if !(← branchCmp .ftdScopeEq (fi.scope == cfg.scope) fi.scope cfg.scope) then ok := false
     if ok then
-      if ← branchCmp .ftdPrefsrcZero (cfg.prefsrc == 0) cfg.prefsrc 0 then pure ()
-      else if !(← branchCmp .ftdPrefsrcEq (fi.prefsrc == cfg.prefsrc) fi.prefsrc cfg.prefsrc) then ok := false
+      if ← branchCmp .ftdPrefsrcZero (cfg.prefsrc == 0) (be32 cfg.prefsrc) 0 then pure ()
+      else if !(← branchCmp .ftdPrefsrcEq (fi.prefsrc == cfg.prefsrc) (be32 fi.prefsrc) (be32 cfg.prefsrc)) then ok := false
     if ok then
       if ← branchCmp .ftdProtocolZero (cfg.protocol == 0) cfg.protocol 0 then pure ()
       else if !(← branchCmp .ftdProtocolEq (fi.protocol == cfg.protocol) fi.protocol cfg.protocol) then ok := false
@@ -514,8 +513,9 @@ def fibFlush : M Unit := do
   if a + b > 0 then rtCacheFlush
 
 /-- `arp_ifdown(dev)` → `neigh_ifdown`: the device's neighbour entries go. -/
-def arpIfdown (dev : Nat) : M Unit :=
-  modify fun w => { w with neighbours := w.neighbours.filter fun (d, _, _) => d != dev }
+def arpIfdown (dev : Nat) : M Unit := do
+  let ns := (← get).fibCreatorNs
+  modify fun w => { w with neighbours := w.neighbours.filter fun (n, d, _) => !(n == ns && d == dev) }
 
 /-- `fib_disable_ip(dev, event, force)` (fib_frontend.c:1436-1444). -/
 def disableIp (dev : Nat) (force : Bool) : M Unit := do

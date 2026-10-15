@@ -1602,13 +1602,16 @@ structure World where
   addrs6 : List Nat := []
   defaultRoute6 : Bool := false
   ipv6Gen : Nat := 0
-  /-- Lane C: the IPv4 neighbour entries the stack created on first use of a
-      next hop (`ip_finish_output2` → `__neigh_create` → `arp_constructor`,
-      arp.c:242: the address classified by a lookup of the local table), as
-      (ifindex, address, type); never collected on this fixture
-      (`neigh_periodic_work` returns below `gc_thresh1`, neighbour.c:980)
-      and removed by `arp_ifdown` at the device's down and unregister. -/
-  neighbours : List (Nat × Nat × Nat) := []
+  /-- Lane C: the IPv4 neighbour entries the stack created at a device's
+      first output (`ip_finish_output2` → `__neigh_create` → `arp_constructor`):
+      on a loopback or point-to-point device (every device of this fixture)
+      the key is `INADDR_ANY`, one entry per device, classified at address 0
+      (arp.c:233-242; the zeronet early return of `__inet_dev_addr_type`), as
+      (in the creating namespace, ifindex, type); never collected on this
+      fixture (`neigh_periodic_work` returns below `gc_thresh1`,
+      neighbour.c:980) and removed by `arp_ifdown` at the device's down and
+      unregister. -/
+  neighbours : List (Bool × Nat × Nat) := []
   /-- Lane C: which namespace's table the trie functions address: the
       device namespace D (`Kernel.fib4`), or the creating namespace C
       (`Kernel.fib4C`) while `send4`/`send6` and C's teardown run in the

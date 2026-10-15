@@ -38,7 +38,7 @@ def routeOutput4 (saddr daddr : Nat) : M (Except Int Route) := do
     -- `fib_lookup` maps -EAGAIN to -ENETUNREACH (ip_fib.h:325-326); no oif
     return .error (if err == -11 then -101 else err)
   | .ok res =>
-    let some fi := (← getK).fib4.infos.get? res.info | invariant "ip_route_output: an alias without its info"
+    let some fi := (← getTable).infos.get? res.info | invariant "ip_route_output: an alias without its info"
     if res.type == .local then
       -- :2833-2841: the prefsrc or the destination; the loopback device
       if saddr == 0 then saddr := if fi.prefsrc != 0 then fi.prefsrc else daddr
@@ -84,14 +84,18 @@ def routeInput4 (saddr daddr : Nat) : M InputVerdict := do
     -- type is a martian destination
     return .notLocal
 
-/-- The neighbour constructor's address classification at a next hop's
-    first use on `dev` (`ip_finish_output2` → `__neigh_create` →
-    `arp_constructor`, arp.c:242: `inet_addr_type_dev_table`), recorded in
-    the environment's neighbour set; nothing for an existing entry. -/
-def neighbourClassify (dev nexthop : Nat) : M Unit := do
+/-- `ip_finish_output2`'s neighbour for a packet on `dev` (`ip_neigh_gw4` →
+    `__ipv4_neigh_lookup_noref`, arp.h:38-44): on a loopback or
+    point-to-point device (every device of this fixture: lo, wg0) the key is
+    `INADDR_ANY`, one neighbour per device, created at the device's first
+    output and classified by `arp_constructor` (arp.c:233-242) as
+    `inet_addr_type_dev_table(net, dev, 0)`: the zeronet early return
+    (fib_frontend.c:215), no lookup. Nothing for an existing entry. -/
+def neighbourClassify (dev : Nat) : M Unit := do
   let w ← get
-  if w.neighbours.any (fun (d, a, _) => d == dev && a == nexthop) then return
-  let t ← inetDevAddrType (some dev) nexthop
-  modify fun w => { w with neighbours := w.neighbours ++ [(dev, nexthop, t.code)] }
+  let ns := w.fibCreatorNs
+  if w.neighbours.any (fun (n, d, _) => n == ns && d == dev) then return
+  let t ← inetDevAddrType (some dev) 0
+  modify fun w => { w with neighbours := w.neighbours ++ [(ns, dev, t.code)] }
 
 end Leanux.Net

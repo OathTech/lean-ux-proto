@@ -1,4 +1,5 @@
 import Leanux.WG.Netlink
+import Leanux.Net.Route
 
 /-!
 # drivers/net/wireguard/device.c — bringing wg0 up and transmitting
@@ -348,7 +349,21 @@ def wgXmit (family addr : Nat) (pkts : List Packet) (mtu : Nat) : M Int := do
     -- `__dev_queue_xmit`'s `rcu_read_unlock_bh` (`loopbackSend`).
     if !(← branch .xmitErrorInet (family == 4)) then _ ← branch .xmitErrorInet6 (family == 6)
     let drawn ← skipCutSites ([.icmpCredit, .ipIdentKey, .ipIdentReserve, .flowHashSecret] ++ allocCuts)
-    loopbackSend [] (drawn.contains (HiddenSite.icmpCredit).info.id)
+    let mut sent := drawn.contains (HiddenSite.icmpCredit).info.id
+    -- lane C: once the global credit was drawn, `__icmp_send` routes the
+    -- error to the dropped packet's source (icmp.c:780, `icmp_route_lookup`:
+    -- :512 with a zero source; `xfrm_lookup` is the identity without XFRM,
+    -- so :525 classifies the destination on the packet's device); a route
+    -- error is `out_unlock`, nothing sent. The error's loopback delivery
+    -- creates lo's one neighbour (`Net.neighbourClassify`).
+    if family == 4 && sent then
+      let src := ((first.bytes.drop 12).take 4).foldl (fun acc b => acc * 256 + b.toNat) 0
+      match ← Net.routeOutput4 0 src with
+      | .error _ => sent := false
+      | .ok _ =>
+        _ ← Net.Fib.inetDevAddrType (some WG0_IFINDEX) src
+        Net.neighbourClassify LO_IFINDEX
+    loopbackSend [] sent
     modifyDev fun d => { d with txErrors := d.txErrors + 1 }   -- DEV_STATS_INC(dev, tx_errors)
     return ret
   let peer ← lookupDst family addr

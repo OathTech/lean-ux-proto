@@ -607,6 +607,17 @@ def setMtu (mtu : Nat) : M Int := do
                              ipv6Gen := if mtu < 1280 then w.ipv6Gen + 1 else w.ipv6Gen }
   return ret
 
+/-- A fixture request the guest issues after the operation's coverage
+    capture (`harness/guest.c`: `route_into_wg0` follows the capture at the
+    syscall's return): its choice points are outside the window, so the steps
+    it records are discarded, as the boot's are (`Runner`). Its state
+    changes, its environment calls and a stop stand. -/
+def outsideWindow (m : M α) : M α := do
+  let steps := (← get).steps
+  let r ← m
+  modify fun w => { w with steps }
+  return r
+
 /-- W9 (design 14.3b): `route_into_wg0` after a successful flag-changing
     `wg_up`, once the operation's wait is over: wg0's addresses (the IPv4
     one may survive a down) and the default routes; every table change
@@ -618,10 +629,18 @@ def routeIntoWg0 : M Unit := do
   let addrAlready := (← get).addrs4.contains WG0_ADDR4
   -- lane C: the IPv4 requests on the trie (`Net.Fib.routeIntoWg0`): the
   -- address through the inetaddr chain, the default route and the W4
-  -- routes through `fib_table_insert`, each a `rt_cache_flush`
-  modify fun w => { w with routesPending := false, addrs4 := [WG0_ADDR4] }
-  let routes4 := (← get).routes.filterMap fun (f, a, m) => if f == 4 then some (a, m) else none
-  Net.Fib.routeIntoWg0 addrAlready WG0_ADDR4 routes4
+  -- routes through `fib_table_insert`, each a `rt_cache_flush`. The guest
+  -- issues them after the operation's coverage capture (the design note,
+  -- 9.1), so their choice points are outside the window
+  -- W4: below IPV4_MIN_MTU the in_device is gone (`setMtu`), and the guest's
+  -- address add is refused (-ENOBUFS, devinet.c:888), its route adds with it
+  -- (-ENODEV): nothing enters the tables until a later MTU change and up
+  let down4 := (← getDev).mtu < 68
+  modify fun w => { w with routesPending := false }
+  if !down4 then
+    modify fun w => { w with addrs4 := [WG0_ADDR4] }
+    let routes4 := (← get).routes.filterMap fun (f, a, m) => if f == 4 then some (a, m) else none
+    outsideWindow (Net.Fib.routeIntoWg0 addrAlready WG0_ADDR4 routes4)
   modify fun w => { w with addrs6 := [WG0_ADDR6], defaultRoute6 := true, ipv6Gen := w.ipv6Gen + 1 }
 
 /-- `wg_down`: `SIOCSIFFLAGS` without `IFF_UP`. `-ENODEV` without wg0; a
@@ -808,6 +827,16 @@ def inject (family port : Nat) (msg : List UInt8) (tos : Nat := 0) (ll : Bool :=
   for pid in d.peerList do requireNotPending pid "receiving while a handshake is queued"
   fixtureSend
   let src ← senderSource family dest tos ll
+  -- lane C: the injector's `udp_sendmsg` routes the datagram in its own
+  -- namespace (`ip_route_output_flow`, a wildcard source): a local route
+  -- whose source is the one `senderSource` states; the loopback output
+  -- creates lo's one neighbour
+  if family == 4 then
+    match ← Net.Fib.inSocketNs (Net.routeOutput4 0 src.daddr) with
+    | .error _ => invariant "wg_inject: the injector's datagram has no route"
+    | .ok r =>
+      if r.dev != LO_IFINDEX || r.src != src.saddr then invariant "wg_inject: the route disagrees with the sender source"
+      Net.Fib.inSocketNs (Net.neighbourClassify LO_IFINDEX)
   runWorker .netRx (WG.wgReceive msg src)
   -- the queued work runs before the guest's wait ends: the receive worker,
   -- the decrypt worker with the NAPI poll its packet schedules, and the
@@ -949,6 +978,13 @@ def batch (items : List BatchItem) : M Int := do
       if port != d.incomingPort then unsupported "a batch datagram to a port other than wg0's"
       fixtureSend
       let src ← senderSource family 0
+      -- lane C: the sender's route to loopback and lo's one neighbour
+      if family == 4 then
+        match ← Net.routeOutput4 0 src.daddr with
+        | .error _ => invariant "wg_batch: the datagram to wg0's port has no route"
+        | .ok r =>
+          if r.dev != LO_IFINDEX || r.src != src.saddr then invariant "wg_batch: the route disagrees with the sender source"
+          Net.neighbourClassify LO_IFINDEX
       runWorker .netRx do
         WG.wgReceive msg src
         pollScheduledInline
@@ -969,9 +1005,8 @@ def batch (items : List BatchItem) : M Int := do
         | .error e => cqes := cqes ++ [e]
         | .ok (pkts, mtu) =>
           xmitMulticastLoop family addr
-          -- lane C: `ip_finish_output2`'s neighbour for the next hop on wg0,
-          -- classified by a lookup at its creation (arp.c:242)
-          if family == 4 then Net.neighbourClassify WG0_IFINDEX addr
+          -- lane C: `ip_finish_output2` on wg0: the device's one neighbour
+          if family == 4 then Net.neighbourClassify WG0_IFINDEX
           let ret ← WG.wgXmit family addr pkts mtu
           cqes := cqes ++ [if ret == 0 then (payload.length : Int) else ret]
   modify fun w => { w with extraOut := [("cqes", Lean.toJson cqes)] }
