@@ -6,6 +6,7 @@ import Leanux.Proofs.WG.Progress.DrainClaims
 import Leanux.Proofs.WG.Progress.PollBoundClaims
 import Leanux.Proofs.WG.Progress.RunnerBoundaryClaims
 import Leanux.Proofs.WG.Progress.IndexProgressClaims
+import Leanux.Proofs.WG.Progress.JitterProgressClaims
 
 /-! Projected H5 contracts. Inspection adapters report the exact original
 outcomes from the same concrete entry; their totality is not a claim that the
@@ -558,5 +559,31 @@ theorem original_index_record_progress (owner : IndexOwner) (d : Device) (record
             {index, owner} :: Index.removeOwner owner d.indexTable} ∧
           final.ambient.hidden = some rest) :=
   index_record_progress owner d records
+
+/-- Exact total outcome of either original timer jitter site over arbitrary
+finite supplied records, including passive records and malformed input. Success
+preserves the entire projected state except the unused record suffix. -/
+theorem original_jitter_record_outcome (site : TimerDiscipline.JitterSite) (records : List HiddenRecord) :
+    Campaign2.Observes (jitterBelowRekeyTimeout site.hiddenSite)
+      (fun s => s.ambient.hidden = some records)
+      (fun entry outcome => outcome =
+        match resolveJitterSearch site records with
+        | .error error => .error error
+        | .ok (jitter, rest) => .ok (jitter,
+            {entry with ambient := {entry.ambient with hidden := some rest}})) :=
+  jitter_record_outcome site records
+
+/-- The original record-derived jitter budget suffices: an explicit hidden-input
+error or a jitter below HZ / 3 with strictly fewer records. This excludes
+recordless execution and makes no distribution or scheduler-progress claim. -/
+theorem original_jitter_record_progress (site : TimerDiscipline.JitterSite) (records : List HiddenRecord) :
+    Campaign2.Observes (jitterBelowRekeyTimeout site.hiddenSite)
+      (fun s => s.ambient.hidden = some records)
+      (fun entry outcome =>
+        (∃ message, outcome = .error (.hidden message)) ∨
+        ∃ jitter rest, outcome = .ok (jitter,
+            {entry with ambient := {entry.ambient with hidden := some rest}}) ∧
+          jitter < HZ / 3 ∧ rest.IsSuffix records ∧ rest.length < records.length) :=
+  jitter_record_progress site records
 
 end Leanux.Proofs.WG.Progress

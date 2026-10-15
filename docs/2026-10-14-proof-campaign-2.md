@@ -14,10 +14,10 @@ the other H5 clauses and corrected-main carry remain open.
 | H2 Index | 52 | Exact index operations, all normal lookup outcomes, caller table safety, session coherence/allocation sequence | Reachable hashed uniqueness and owner/peer residency through all driver entries |
 | H3 Roaming | 13 | Authenticated handshake cuts, decrypt/first-poll join, complete poll setter-attempt audit | Queue/callback authentication invariant, broader caller coverage, final endpoint |
 | H4 Configuration | 78 | Leaves/flags, effective bounded readback, removal/replacement phase effects, root insertion/transfer, finite IPv4 suffix and actual two-chunk socket readback | Global ownership, queued cleanup/completion, mixed attributes, general getter pagination |
-| H5 Progress | 37 | Accepted operation boundaries, actual final-boundary backlog, scheduling inspections, cut/pow/drain/poll bounds, arbitrary supplied-record index-loop adequacy | Whole-worker record decrease, global progress, corrected-main carry |
+| H5 Progress | 39 | Accepted operation boundaries, actual final-boundary backlog, scheduling inspections, cut/pow/drain/poll bounds, arbitrary supplied-record index/jitter-loop adequacy | Whole-worker record decrease, global progress, corrected-main carry |
 | H6 Timers | 46 | Seven local arm sites, recorded delays, caller hook compositions, retry bound, pending/absent-zero-key give-up | Complete caller coverage, scheduler episodes, session-relative counting |
 
-**246 headlines**; latest increment: H6 recorded absent-zero-key give-up.
+**248 headlines**; latest increment: H5 arbitrary supplied-record jitter progress.
 Scoped builds, axioms and fresh replay pass; independent review found no issue.
 The full proof gate remains **failed in inherited campaign-1 files**.
 
@@ -61,7 +61,7 @@ universal execution contracts.
 | `Index` | View/table/owner/allocation/release models; lookup provenance and empty-result source; lifecycle/caller operation sources; session coherence/allocation/sequence effects and sources | `IndexFieldFrames`, `OwnerFieldFrames`, `StoreFieldFrames`, `LifecycleFrames`, `NewlinkFrames`, `SendFrames`, `DispatchFrames`, `ResponseFrames`, `ConsumeFrames`, `StagedFrames`, `ReceiveFrames`, `ClearFrames`, `TimerFrames`, `FlushFrames`, `SessionCoherenceFrames`, `SessionAllocationFrames` |
 | `Roaming` | Endpoint/authentication claims; publication, poll endpoint/attempt, response, initiation and handshake-audit model/source/claim families | `Frames`, `PublicationFrames`, `PollEndpointFrames` |
 | `Config` | `ClaimView`, models/effects/source claims, observation bridge; allowed-IP removal/insertion/transfer, collision, removal flags, remove-all/replacement, multipart/suffix readback families; `SocketReadbackModel/Claims` and five substantive `SocketReadback*Source` files | `ConcreteFrames`, `OperationFrames`, `ReadbackFrames`, `AllowedListFrames`, `AllowedRootFrames`, `AllowedRemovalFrames`, `AllowedPairsFrames`, `QuietFrames`, `LiveRemovalFrames`, `KeyFieldFrames`, `CollisionFrames`, `AllowedInsertFrames`, `RemoveAllFrames` |
-| `Progress` | Model/view/source/observation claims; control/scheduler sources; cut, flush-queue, pow, drain and poll-bound model/source/effect/claim families; `RunnerBoundaryModel/Claims` and `IndexProgressModel/Claims` are projected; their `Source` files, `RunnerBoundaryAuditSource` and `BacklogSource` connect original operations | `StackFrames`, `CutFrames`, `FlushQueueFrames` |
+| `Progress` | Model/view/source/observation claims; control/scheduler sources; cut, flush-queue, pow, drain and poll-bound model/source/effect/claim families; `RunnerBoundaryModel/Claims`, `IndexProgressModel/Claims` and `JitterProgressModel/Claims` are projected; their `Source` files, `RunnerBoundaryAuditSource` and `BacklogSource` connect original operations | `StackFrames`, `CutFrames`, `FlushQueueFrames` |
 | `TimerDiscipline` | Model/view/send-view/observation claims; recorded, send/retry/rearm/sequence/boundary, pending-give-up, session, data and traversal model/source/effect/claim families; `AbsentGiveUpModel/Claims` and substantive `AbsentGiveUpSource` | `SourceFrames`, `RecordedFrames`, `RecordedJitterFrames`, `SectionFrames`, `SelectionFrames`, `RetryFrames`, `JitterFrames`, `InitiationFrames`, `InitiationPreservationFrames`, `SendCutFrames`, `SendPeerFrames`, `SendSocketFrames`, `SendBufferFrame`, `SendWorkerFrame`, `SendDispatchFrames`, `RetryDispatchFrames`, `RetryRearmFrames`, `WorkStateFrames`, `ResponseSessionFrames` |
 
 `Index/HandshakeFrames` and `OwnerFrames` are import-only reexports.
@@ -318,11 +318,21 @@ read; wrong-site, malformed and missing input retain their original errors.
 No table uniqueness or owner residency is assumed. Recordless placeholder/
 domain-filter execution and global scheduler progress remain outside this claim.
 
+Both original timer jitter sites now have the analogous total contract for any
+finite supplied record list. Each successful draw consumes a strict suffix,
+including skipped passive records; rejected draws recurse on that suffix.
+The original length-plus-one budget therefore reaches either the first accepted
+jitter below `HZ / 3` or the exact original missing/malformed/wrong-site error.
+Success preserves the entire projected state except the unused record suffix.
+No device-residency premise is needed. Recordless execution, distribution,
+arming and scheduler progress are separate claims.
+
 ## H6 — Timer discipline
 
 Local contracts cover all seven concrete arm sites, actual clock-plus-delay
-wrapping and jitter below 83. Finite supplied-record jitter success/exhaustion
-requires contiguous draws; general arm-record mode can permit placeholders.
+wrapping and jitter below 83. H6's finite draw certificates require contiguous
+draws; H5 additionally proves arbitrary supplied-record jitter outcomes and
+budget adequacy. General arm-record mode can permit placeholders.
 There is no distribution claim. The applicable running/live/interval guards qualify each arm;
 a final timer value alone does not prove an arm event.
 
@@ -380,9 +390,12 @@ accepted-run findings. H1/H2/H3/H6 have no ranked mirror-change request.
 
 ## Validation and trust limitations
 
-Latest six-target build: **443 jobs**, all **246 headlines** standard axioms
+Latest six-target build: **446 jobs**, all **248 headlines** standard axioms
 only (`propext`, `Classical.choice`, `Quot.sound`); token/import/root/default/
-projected-name checks pass. Latest TimerDiscipline build: 238 jobs, 46 headlines
+projected-name checks pass. Latest Progress build: 223 jobs, 39 headlines and
+nine new support declarations checked; fresh stock kernel replay passed
+(exit 0). Independent read-only review found no issue.
+The preceding TimerDiscipline build: 238 jobs, 46 headlines
 and 12 new support declarations checked; fresh stock kernel replay passed
 (exit 0). Independent read-only review found no issue.
 The preceding Progress build: 219 jobs, 37 headlines and 11
