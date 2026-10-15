@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.TimerDiscipline.FireReadyClaims
 import Leanux.Proofs.WG.TimerDiscipline.SendReadyClaims
 import Leanux.Proofs.WG.TimerDiscipline.RetransmitReadyClaims
 import Leanux.Proofs.WG.TimerDiscipline.AbsentGiveUpClaims
@@ -750,5 +751,34 @@ theorem original_send_initiation_ready (pid : PeerId) (d : Device) (p : Peer)
   SendReady.sendInitiation_projected pid d p resident rate last ephemeral clock tailClock rateLen lastLen expired identity
     word nonnull randomWidth width secretNonNull pubOk dhOk collisions fresh rest allCollide isFresh
     createdPeer createdResident cookieInvalid interval endpoint running alive tailLen input valid
+
+/-- The original timer dispatcher selects a named due retransmit timer, detaches
+it, consumes its section records and runs the ready callback. Static readiness
+and explicit records suffice for success: no callback-success premise is used.
+The exact projection includes the attempt increment, endpoint/cache reset,
+acquired reference and queued send work, fired symbol, section-start pending-work
+filter, decisions and unused record suffix. This does not claim send completion
+or rearming by the later worker. -/
+theorem original_fire_retry_ready (d : Device) (p : Peer) (pid : PeerId) (horizon : UInt64)
+    (start cache clock queue stop : List UInt8) (suffix : List HiddenRecord)
+    (resident : d.peers[pid]? = some p) (due : pid ∈ duePeers d .retransmitHandshake horizon)
+    (startLen : start.length=16) (stopLen : stop.length=8)
+    (cacheLen : cache.length=8) (clockLen : clock.length=8) (queueLen : queue.length=16)
+    (nonzero : recordWordOf start 1 ≠ 0)
+    (limit : p.timerHandshakeAttempts ≤ MAX_TIMER_HANDSHAKES)
+    (alive : p.isDead=false) (pending : p.handshakePending=false)
+    (positive : 0<p.refcount) (bounded : p.refcount+1<2^31)
+    (expired : p.lastSentHandshake + REKEY_TIMEOUT.toInt64*NSEC_PER_SEC64 ≤ (RetryReady.word clock).toInt64) :
+    Campaign2.Observes (Env.fireTimer .timerRetransmit horizon)
+      (fun s => s.wg.device=some d ∧
+        s.ambient.hidden=some (FireReady.suppliedRecords start cache clock queue stop suffix) ∧
+        s.wg.armRecords=true ∧ s.wg.dstCacheRecords=true ∧
+        s.wg.timerUnits.find? (·.1 == recordWordOf start 1) =
+          some (recordWordOf start 1,pid,.retransmitHandshake) ∧
+        s.ambient.unitPeers.find? (fun e => e.2.1 == Worker.sendWorker.index && e.2.2 == pid) =
+          some (recordWordOf queue 0,Worker.sendWorker.index,pid))
+      (fun entry outcome => outcome=.ok ((),FireReady.fireView entry d p pid cache clock suffix)) :=
+  FireReady.fire_outcome d p pid horizon start cache clock queue stop suffix resident due
+    startLen stopLen cacheLen clockLen queueLen nonzero limit alive pending positive bounded expired
 
 end Leanux.Proofs.WG.TimerDiscipline

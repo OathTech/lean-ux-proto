@@ -15,10 +15,10 @@ the other H5 clauses and corrected-main carry remain open.
 | H3 Roaming | 13 | Authenticated handshake cuts, decrypt/first-poll join, complete poll setter-attempt audit | Queue/callback authentication invariant, broader caller coverage, final endpoint |
 | H4 Configuration | 79 | Leaves/flags, effective bounded readback, removal/replacement phase effects, root insertion/transfer, actual two-chunk getter and scalar set/get composition | Global ownership, queued cleanup/completion, mixed attributes, general getter pagination |
 | H5 Progress | 42 | Accepted operation boundaries, actual final-boundary backlog, scheduling inspections, cut/pow/drain/poll bounds, arbitrary supplied-record index/jitter-loop adequacy, cookie activation, scheduled resumption and full bounded receive schedule | Whole-worker record decrease, global progress, corrected-main carry |
-| H6 Timers | 48 | Seven local arm sites, recorded delays, caller hook compositions, retry bound, pending/absent-zero-key give-up, total recorded retransmit hook and initiation send | Complete caller coverage, scheduler episodes, session-relative counting |
+| H6 Timers | 49 | Seven local arm sites, recorded delays, caller hook compositions, retry bound, pending/absent-zero-key give-up, total recorded retransmit hook, initiation send and retry timer dispatch | Complete caller coverage, scheduler episodes, session-relative counting |
 
-**256 headlines**; latest increment: total original initiation send through
-recorded retransmit rearming from static readiness.
+**257 headlines**; latest increment: total original retry timer dispatch from
+static guards and supplied section/cache/clock/queue records.
 Scoped builds, axioms and fresh replay pass; independent review found no issue.
 The full proof gate remains **failed in inherited campaign-1 files**.
 
@@ -63,7 +63,7 @@ universal execution contracts.
 | `Roaming` | Endpoint/authentication claims; publication, poll endpoint/attempt, response, initiation and handshake-audit model/source/claim families | `Frames`, `PublicationFrames`, `PollEndpointFrames` |
 | `Config` | `ClaimView`, models/effects/source claims, observation bridge; allowed-IP removal/insertion/transfer, collision, removal flags, remove-all/replacement, multipart/suffix readback families; `SocketReadbackModel/Claims` and five substantive `SocketReadback*Source` files; `ScalarSocketReadbackClaims/Source` compose original set/get | `ConcreteFrames`, `OperationFrames`, `ReadbackFrames`, `AllowedListFrames`, `AllowedRootFrames`, `AllowedRemovalFrames`, `AllowedPairsFrames`, `QuietFrames`, `LiveRemovalFrames`, `KeyFieldFrames`, `CollisionFrames`, `AllowedInsertFrames`, `RemoveAllFrames` |
 | `Progress` | Model/view/source/observation claims; control/scheduler sources; cut, flush-queue, pow, drain and poll-bound model/source/effect/claim families; `RunnerBoundaryModel/Claims`, `IndexProgressModel/Claims` and `JitterProgressModel/Claims` are projected; their `Source` files, `RunnerBoundaryAuditSource` and `BacklogSource` connect original operations; `CookieActivationModel/Source/Loop/Claims`, `CookieSchedulerSource` and `CookieScheduleModel/Source/Claims` | `StackFrames`, `CutFrames`, `FlushQueueFrames`, `CookieActivationFrames`, `CookieScheduleFrames` |
-| `TimerDiscipline` | Model/view/send-view/observation claims; recorded, send/retry/rearm/sequence/boundary, pending-give-up, session, data and traversal model/source/effect/claim families; `AbsentGiveUpModel/Claims` and substantive `AbsentGiveUpSource`; `RetransmitReadyModel/Source/Claims`, `SendReadyModel/Source/Claims` | `SourceFrames`, `RecordedFrames`, `RecordedJitterFrames`, `SectionFrames`, `SelectionFrames`, `RetryFrames`, `JitterFrames`, `InitiationFrames`, `InitiationPreservationFrames`, `SendCutFrames`, `SendPeerFrames`, `SendSocketFrames`, `SendBufferFrame`, `SendWorkerFrame`, `SendDispatchFrames`, `RetryDispatchFrames`, `RetryRearmFrames`, `WorkStateFrames`, `ResponseSessionFrames`, `SendReadyFrames` |
+| `TimerDiscipline` | Model/view/send-view/observation claims; recorded, send/retry/rearm/sequence/boundary, pending-give-up, session, data and traversal model/source/effect/claim families; `AbsentGiveUpModel/Claims` and substantive `AbsentGiveUpSource`; `RetransmitReadyModel/Source/Claims`, `SendReadyModel/Source/Claims`, `RetryReadyModel/Source`, `FireReadyModel/Source/Claims` | `SourceFrames`, `RecordedFrames`, `RecordedJitterFrames`, `SectionFrames`, `SelectionFrames`, `RetryFrames`, `JitterFrames`, `InitiationFrames`, `InitiationPreservationFrames`, `SendCutFrames`, `SendPeerFrames`, `SendSocketFrames`, `SendBufferFrame`, `SendWorkerFrame`, `SendDispatchFrames`, `RetryDispatchFrames`, `RetryRearmFrames`, `WorkStateFrames`, `ResponseSessionFrames`, `SendReadyFrames`, `FireReadyFrames` |
 
 `Index/HandshakeFrames` and `OwnerFrames` are import-only reexports.
 `Noise/Basic` reexports access contracts; `Roaming/Basic` reexports endpoint
@@ -422,6 +422,21 @@ new allocation-mode frames adapt campaign 2's own mode frames; no shared layer i
 copied. No successful intermediate execution is assumed. Broader endpoint/cookie/
 keepalive cases, dispatcher composition and the full retry history remain open.
 
+The original retransmit `fireTimer` now completes from a recorded nonzero timer
+identity whose first matching registration names a due peer, with attempts at
+most 18. Static live/not-pending, signed age and bounded positive-reference guards,
+recorded cache mode and a matching existing send-work identity establish callback
+success. The five explicit records are section start, cache-reset clock, age-test
+clock, queue record and section stop; the suffix is arbitrary. Selection may occur
+among several due peers. The exact projected result includes timer detachment,
+attempt increment, endpoint-source/cache clearing, acquired reference, queued send
+work, eight callback decisions, fired symbol and the section-start pending-work
+filter. Registrations and all other projected fields are preserved. Queue
+consistency and timer-registration provenance are not inferred from the entry
+guards. This ends at dispatch completion; the later worker's send/rearm and complete
+retry history still require composition. Retaining the pending-work filter corrected
+a draft statement assumption, not the mirror.
+
 From a resident device and initially empty send queue, original timer/send pairs derive same-peer selection, entry attempts ≤18,
 enqueue/reference acquisition, detach, increment and worker release. Consecutive
 successful same-peer pairs from zero number at most 19. This excludes 20 such
@@ -476,20 +491,26 @@ accepted-run findings. H1/H2/H3/H6 have no ranked mirror-change request.
 
 ## Validation and trust limitations
 
-Latest six-target build passed **473 jobs**. All **256 headlines** and 11 new
-send-ready supports use only the three standard axioms; token/import/root/default/
-projected-name checks pass. Independent read-only review found no issues.
-Fresh TimerDiscipline replay passed. Author Source and Statements builds passed
-153 and 255 jobs; root normalized formatting before the final six-target build.
+Latest six-target build passed **479 jobs**. All **257 headlines** and 12 new
+retry/fire-ready supports use only the three standard axioms; token/import/root/
+default/projected-name checks pass. Independent read-only review found no issues.
+Fresh TimerDiscipline replay passed. Root normalized new-file whitespace and
+passed the staged whitespace check before the final build.
 
-Send-tail work: four prefix/no-endpoint stdin compilations, two passes and two
-corrected failures; five tail/rearm compilations, one pass and four corrected
-failures (record indentation twice, premature result inference, unsynthesized
-placeholder). Allocation-mode frames passed their first stdin compilation. Full
-send composition used four stdin compilations, one pass and three corrected
-failures (record indentation and rate-prefix simplifier premises). Both packaging
-builds passed. These increments used stock heartbeat limits, unchanged memory
-caps and no infrastructure or unchanged-source diagnostic reruns.
+Retry callback: seven capped stdin compilations, one pass and six corrected
+failures (syntax, numeric/Boolean guard normalization and a tactic-name error).
+Packaging took three builds: two corrected projected-model field/layout failures,
+then 26 jobs passed. Timer scaffold: eight stdin compilations, one pass and seven
+corrected failures; one JavaScript typo occurred before compiler launch. Static
+callback specialization: three stdin compilations, two passes and one corrected
+layout failure. Fire packaging: four builds, three passes and one corrected
+headline namespace failure; final Statements build passed 261 jobs. Full outputs
+were captured; no limits or memory caps were raised and no infrastructure or
+unchanged-source diagnostic reruns occurred in this increment.
+
+The preceding initiation-send checkpoint `b90f9bb` passed 473 build jobs, all
+256 headlines and 11 supports on standard axioms, fresh TimerDiscipline replay
+and independent review. Its prototype and packaging counts are in that commit.
 
 The preceding cookie-schedule checkpoint `8055612` passed 469 build jobs, all
 255 headlines, 15 new and four existing supports on standard axioms, fresh
