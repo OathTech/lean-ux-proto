@@ -11,6 +11,8 @@ import Leanux.Proofs.WG.Config.DevicePorts
 import Leanux.Proofs.WG.Config.RandomPort
 import Leanux.Proofs.WG.Config.ZeroPort
 import Leanux.Proofs.WG.Config.RecordedPort
+import Leanux.Proofs.WG.Config.ExpiryEffects
+import Leanux.Proofs.WG.Config.ExpiryClock
 
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise
@@ -403,5 +405,76 @@ theorem original_zero_socket_collision_stop (w : World) (d : Device) (a b c e : 
     ∃ site, (socketInit 0).run w = .error
       (.outsideDomain site "the random port draw collides with a bound port") :=
   socketInit_zero_collision w d a b c e rest device net records collision
+
+/-- Cookie-key precomputation returns normally. It changes only the device
+cookie-encryption and MAC1 keys, to the specified public-key hashes when identity
+exists and to zero otherwise. -/
+theorem original_cookie_precomputation_return (d : Device) :
+    Returns cookiePrecomputeDeviceKeys (fun w => w.k.wg = some d)
+      (fun _ w => w.k.wg = some (cookieKeysAfter d)) :=
+  cookiePrecompute_returns d
+
+/-- Identity installation returns normally, clamps the private bytes and
+sets the public identity as specified, preserving all other device fields. -/
+theorem original_identity_install_return (key : Key) (d : Device) :
+    Returns (setStaticIdentityPrivateKey key) (fun w => w.k.wg = some d)
+      (fun _ w => w.k.wg = some { d with staticIdentity := identityAfter key d.staticIdentity }) :=
+  setStaticIdentity_returns key d
+
+/-- A private-key-only request equal byte-for-byte to the stored private key
+returns normally and changes only the device generation. Equality is against
+the raw request, not a normalized equivalence class of keys. -/
+theorem original_unchanged_private_key_return (d : Device) (key : Key)
+    (same : d.staticIdentity.staticPrivate = key) :
+    Returns (wgSetDevice (privateKeyAttrs d key))
+      (fun w => w.k.wg = some d ∧ selectsDevice w d)
+      (fun ret w => ret = 0 ∧ w.k.wg = some { d with deviceUpdateGen := d.deviceUpdateGen + 1 }) :=
+  setDevice_private_unchanged d key same
+
+/-- Static-static precomputation for a resident peer returns normally with
+the exact ordered peer-store updates, including the intermediate DH write
+before zeroing a null result. All surrounding device fields are preserved. -/
+theorem original_static_precomputation_return (pid : PeerId) (d : Device) (p : Peer)
+    (resident : d.peers[pid]? = some p) :
+    Returns (precomputeStaticStatic pid) (fun w => w.k.wg = some d)
+      (fun _ w => w.k.wg = some (precomputeDevice d pid p)) :=
+  precomputeStaticStatic_returns pid d p resident
+
+/-- Normal completion of expiry removes the peer's handshake entries, zeros
+handshake fields, preserves its slots, and invalidates next/current sending keys.
+The exact store transformation preserves all other fields except last-sent time.
+Its existential clock parameter does not constrain that time or prove clock-read
+provenance. Missing keypair targets can stop; no return guarantee is claimed. -/
+theorem original_expiry_store_effects (pid : PeerId) (d : Device) (p : Peer)
+    (resident : d.peers[pid]? = some p) :
+    Ensures (expireCurrentPeerKeypairs pid) (fun w => w.k.wg = some d)
+      (fun _ w => ∃ now, w.k.wg = some (expiredDevice d pid p now)) :=
+  expireCurrent_exact pid d p resident
+
+/-- On normal completion, expiry changes only sending validity in current
+and next keypair entries. Every other keypair field and lookup is preserved.
+Aliased slots are covered by the union of the two target identities. -/
+theorem original_expiry_keypair_fields (pid : PeerId) (d : Device) (p : Peer)
+    (resident : d.peers[pid]? = some p) (q : KeypairId) :
+    Ensures (expireCurrentPeerKeypairs pid) (fun w => w.k.wg = some d)
+      (fun _ w => (w.k.wg.bind fun dev => dev.keypairs[q]?) = (d.keypairs[q]?).map fun k =>
+        if p.keypairNext = some q ∨ p.keypairCurrent = some q then
+          { k with sending := { k.sending with isValid := false } } else k) := by
+  intro w ret v hp hr
+  obtain ⟨now, hv⟩ := expireCurrent_exact pid d p resident w ret v hp hr
+  simpa [hv] using expiredDevice_keypair d pid p now q
+
+/-- Every normally completed original expiry run has an actual prefix and
+reset-clock read whose returned value determines the final store, including
+last-sent time minus six seconds in wrapping Int64 arithmetic. The read is tied
+to that run; this is not merely an unconstrained existential timestamp. -/
+theorem original_expiry_clock_relation (pid : PeerId) (d : Device) (p : Peer)
+    (resident : d.peers[pid]? = some p) (w v : World) (device : w.k.wg = some d)
+    (run : (expireCurrentPeerKeypairs pid).run w = .ok ((), v)) :
+    ∃ now before after,
+      (expiryReadPrefix pid).run w = .ok ((), before) ∧
+      (hiddenClock64 .resetLastSent).run before = .ok (now, after) ∧
+      v.k.wg = some (expiredDevice d pid p now) :=
+  expireCurrent_clock pid d p resident w v device run
 
 end Leanux.Proofs.WG.Config

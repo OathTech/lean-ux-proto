@@ -122,7 +122,7 @@ review and capped scoped proof builds; ordinary elaboration failures repaired.
 
 ## H4 — Configuration semantics (in progress)
 
-Thirty-two terminal declarations cover configuration leaves, peer flags, bounded
+Thirty-nine terminal declarations cover configuration leaves, peer flags, bounded
 readback, normal-return guarantees, one sequential partial-error case, and
 fwmark/cache frames. `Validation`, `Identity` and `Port` prove invalid allowed-IP
 rejection, exact allowed-IP serialization, private-identity normalization,
@@ -175,6 +175,28 @@ preservation and proves an occupied first candidate raises the mirror's declared
 outside-domain collision stop. This is a modeled-domain boundary, not a kernel
 bind-error or collision-retry claim.
 
+`PrivateKey` adds actual-return guarantees for identity installation, cookie-key
+precomputation and an unchanged-key-only outer request. Unchanged means the raw
+requested bytes equal the stored clamped bytes; repeating an unclamped request
+can execute the update again. `Precomputation` preserves the complete surrounding
+device and models the ordered peer-store writes, including DH output followed
+by zeroing when necessary. `ExpiryEffects` gives the exact normal-completion
+store transformation: handshake entries removed, handshake fields zeroed, slots
+preserved, and next/current sending validity cleared without changing other
+keypair fields. Its pointwise theorem handles aliased IDs. Missing targets stop
+the original operation; the pure transformation's missing-target fallback is
+not an executable-equivalence or return guarantee. The weak existential-time
+contract leaves last-sent time unrestricted. `ExpiryClock` separately closes
+that gap by exposing the actual prefix and reset-clock read from the original
+run and using the returned clock in the final state, with wrapping arithmetic.
+Independent review confirmed that relation. The read may use placeholders where
+enabled; captured-record provenance is not established by this theorem.
+
+[AGENT 2026-10-15] Compose private-key updates from a baseline after optional
+self-peer removal: removal may flush other peers' work under the old identity,
+so an unrestricted surviving-peer frame against the initial request state would
+be false. Prove the key-only block before composing later peer attributes.
+
 [AGENT 2026-10-14] Get-after-set means the effective configuration established
 by the C: keys are clamped, prefixes masked, running port-zero may allocate a
 port, and flowinfo-only endpoint changes are ignored. The configured flag is
@@ -192,15 +214,18 @@ IPv4 socket assigns its port, which need not change the previous value. The
 statement documentation now says assignment/preservation. No further defects
 were found. Independent review of the port composition and recorded-draw
 increment and subsequent outer-zero/record-tail/collision increment found no
-defect. Actual outer dump composition remains open.
+defect. Review of the identity/precomputation/expiry leaves found no semantic
+defect and identified the weak existential-time and missing-target scope limits
+recorded above. Actual outer dump composition remains open.
 
-Remaining: complete private-key effects, full peer
+Remaining: private-key collision removal, the peer-list fold, optional
+post-expiry staged sending and outer composition; full peer
 removal/replacement and allowed-IP ownership, other partial-error combinations,
 and general dump chunks/coalescing. Deferred removal work can change other
 peers' dynamic state, so no unrestricted removal frame is claimed. No H4
 mirror mismatch or mirror-team request; ranked mirror suggestions: none.
 
-Validation: all thirty-two statements pass scoped build, standard-axiom inspection
+Validation: all thirty-nine statements pass scoped build, standard-axiom inspection
 (only `propext`, `Classical.choice`, `Quot.sound`), and `capped --
 scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Config.Statements`.
 The full proof gate fails in inherited `CounterWindow.Refinement`; token/import
