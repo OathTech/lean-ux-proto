@@ -9,15 +9,22 @@ obligations. H6 has eleven local timer contracts; whole-run site coverage and
 retry/session counting remain open.
 H2 was unblocked by the user's landing notice for `de62c9d` on 2026-10-15.
 Main was merged into this branch at `5033f7a`. No result is claimed complete.
-The existing 89 campaign-2 terminal declarations build over `de62c9d` and
+The existing campaign-2 terminal declarations build over `de62c9d` and
 pass standard-axiom inspection. The changed Noise and configuration modules
 also pass fresh stock kernel replay. The full gate remains failed in inherited
-campaign-1 files; the shared-frame ownership clarification is pending.
+campaign-1 files; campaign 1 owns their repair.
 
 [USER 2026-10-15] The index-lookup fix has landed at `de62c9d`; merge main
 into the campaign branch, carry the index frames and permit H2 to start.
 Guest slots default to 16; concurrent capped runs are allowed. No merge to
 main or push.
+
+[USER 2026-10-15] “Pay the frames” means campaign 2's own results. Existing
+shared lemmas remain campaign 1's. Any necessary local replacements belong
+inside the result directory, named as variants of the shared lemma; report
+rather than copy a layer if more than a few would be needed. Scoped validation
+continues with inherited breakage recorded. The existing standalone C2 contracts
+suffice for this carry, so no shared-layer copy is needed.
 
 [AGENT 2026-10-15] Carry the local Noise, expiry and staged-send contracts
 through the embedded-owner representation. The internal expiry-prefix total
@@ -104,6 +111,52 @@ The full proof gate remains failed as described above. No cap hit, mirror edit,
 differential check or guest run.
 
 Ranked mirror suggestions: none at this checkpoint.
+
+## H2 — Session index uniqueness (in progress)
+
+[AGENT 2026-10-15] Separate numeric-index uniqueness from embedded-owner
+uniqueness, then prove exact contracts over the original operations before
+composing reachable-state coherence. The landed representation keeps owner
+identity in each table row and its optional peer word in the owner object.
+The two are not interchangeable on arbitrary states.
+
+Five terminal statements cover removal, the keypair-removal specialization,
+handshake replacement, normally completed insertion, and lookup owner/table
+provenance. Removal and replacement return under device residency. Replacement
+preserves numeric indices and every owner object's peer word; preserving owner
+uniqueness additionally requires the destination keypair not already hashed.
+Insertion first removes this owner's old row, then inserts a fresh numeric
+index at the head, preserving both uniqueness properties. No unconditional
+insertion-success claim is made for absent or exhausted draws. The landed
+mirror has no `indexRemoveKeypair` declaration: its operation is now
+`indexRemove (.keypair id)`, also used by `keypairPut` after a peer-word
+dereference. The removal statement does not claim a NULL dereference succeeds.
+
+`LookupSource` proves the original scan stops at the first equal numeric
+index, including a disallowed kind; `Lookup` composes that scan with the
+original reference-acquisition/store-back suffix. The current terminal lookup
+postcondition says any returned owner comes from an initial row at the
+requested index and allowed kind, and the table is unchanged. It does not yet
+relate the returned peer ID to the stored peer word or state reference-count
+or NULL-store effects. Those are separate from the reachable coherence work.
+`Collision` proves bucket walking tests exact numeric membership in the whole
+table. `Insert` factors the original draw loop and proves freshness on normal
+completion by induction over its budgeted iterations. Total recorded-prefix
+completion, exact record consumption, retry-event correspondence and the
+`s2_index_collision` instance remain open. The table invariant is about hashed
+entries; this checkpoint does not yet establish all-driver reachable-session
+uniqueness or initialize/preserve owner-store coherence through every caller.
+
+Independent read-only review found no semantic defect. Its wording finding was
+fixed: the terminal lookup docstring now describes its exported provenance
+postcondition, leaving stronger first-selection semantics to the internal
+scan contract. The five statements pass scoped build, standard-axiom inspection
+and fresh stock kernel replay (`capped -- scripts/in-bundle lake env leanchecker
+--fresh Leanux.Proofs.WG.Index.Statements`). The full proof gate still fails in
+inherited `CounterWindow.Refinement` and `ReplayWindow.Counterexamples`;
+token/import checks pass. The subsequent shared index frames remain campaign
+1's carry. No mirror edit, cap hit, infrastructure rerun, guest or differential
+run. No new mirror-team request at this checkpoint.
 
 ## H3 — Endpoint roaming (in progress)
 

@@ -1,5 +1,6 @@
 import Leanux.Proofs.WG.ReplayWindow.Statements
 import Leanux.Proofs.WG.ReplayWindow.Counterexamples
+import Leanux.Proofs.WG.Index.Statements
 import Leanux.Proofs.WG.Noise.Statements
 import Leanux.Proofs.WG.Roaming.Statements
 import Leanux.Proofs.WG.Config.Statements
