@@ -26,15 +26,16 @@ No independent existential projected runs are spliced together.
 | Result | Existing mathematical checkpoint | Factoring / remaining mathematics |
 | --- | --- | --- |
 | H1 Noise | 11 local state/slot contracts | Public projection complete; whole-call edge coverage and lifetime confirmation remain open. |
-| H2 Index | 23 original-operation uniqueness, lookup, collision-draw and release contracts | Public projection complete, retaining 13 total contracts, 9 normal-return contracts and 1 exact stop; reachable coherence, broader records and the corpus runner composition remain open. |
+| H2 Index | 26 contracts, now including initializer/setup/destruction boundaries | Public projection complete: 14 total contracts, 10 normal-return contracts, 1 exact stop and 1 projected initializer theorem; reachable coherence, broader records and the corpus runner composition remain open. |
 | H3 Roaming | 5 endpoint/authentication leaf contracts | Public projection complete; authentication provenance and complete caller coverage remain open. |
 | H4 Configuration | 60 contracts and the reachable internal dump-accounting finding | Public projection and frame separation complete. Queued/live-keypair removal, private-key collision, mixed attributes, global ownership and general dump composition remain open. |
 | H5 Progress | 25 contracts and the accepted batch-backlog counterexample | Public projection and frame separation complete; productive-record decrease, full loop coverage and probe/detach composition remain open. The backlog witness is historical over `de62c9d`: main's batch guard now addresses request 1. |
 | H6 Timers | 29 local timer/worker contracts | Public projection and generic frame separation complete; environment worker selection/dequeue, complete retry episodes and whole-run arming/session counts remain open. |
 
-Projection/frame factoring is complete for all six results. All 153 existing
-headline names remain, and no public statement directly names `World` or
-`Kernel`. No new mathematical result was started during this factoring checkpoint.
+Projection/frame factoring completed at `69f988a` for all six results, preserving
+all 153 existing headline names before new mathematics. The following H2 lifecycle
+increment brings the total to 156. No public statement directly names `World` or
+`Kernel`.
 The full proof gate remains failed in inherited campaign-1 counter-window and
 index carries; those files have not been edited. Scoped validation does not
 constitute a passing full gate. The report's earlier results concern their
@@ -50,7 +51,7 @@ connections to the current executable mirror, not replacement interpreters.
 | --- | --- | --- |
 | Common C2 | `Campaign2/View` is data-only; `Campaign2/Bridge` defines projection and universal execution contracts. | No shared campaign-1 layer is changed. |
 | H1 | `Noise/Model`, `Statements`, `Slots`, `StateEdges`, `ConsumeEdges`; `Execution` holds the concrete monad connection; `AccessSource` holds accessor read/write contracts, reexported by `Basic`. | `KernelFrames`, `PeerFrames`, `SlotFrames`. |
-| H2 | `Index/View`, `TableModel`, `OwnerWordModel`, `AllocationModel`, `ReleaseModel` and pure release effects/bounds; `Statements`, `HandshakeClaims`, `OwnerUpdateClaims` and the other operation/source modules. | `IndexFieldFrames`, `OwnerFieldFrames`, `StoreFieldFrames`; the old `HandshakeFrames` and `OwnerFrames` paths are import-only reexports, not duplicated lemmas. |
+| H2 | `Index/View`, `TableModel`, `OwnerWordModel`, `AllocationModel`, `ReleaseModel`, `LifecycleModel` and pure release effects/bounds; `Statements`, `HandshakeClaims`, `OwnerUpdateClaims`, `LifecycleSource` and the other operation/source modules. | `IndexFieldFrames`, `OwnerFieldFrames`, `StoreFieldFrames`, `LifecycleFrames`; the old `HandshakeFrames` and `OwnerFrames` paths are import-only reexports, not duplicated lemmas. |
 | H3 | `Roaming/Model`, `View`, `Statements`, `EndpointClaims`, `EndpointSource`, `Authentication`. | `Roaming/Frames`; `Basic` reexports the endpoint source connection. |
 | H4 | `Config/Model`, `AllowedRemovalModel`, `QuietModel`, `ClaimView`, `Statements`, `SourceClaims`, `ObservationBridge`, and existing substantive effect/source modules. | `ConcreteFrames` isolates six whole-kernel endpoint contracts; `OperationFrames` isolates seven generic helpers; `ReadbackFrames` retains socket/fixture preservation; `AllowedListFrames`, `AllowedRootFrames`, `AllowedRemovalFrames`, `QuietFrames`, `KeyFieldFrames` isolate within-WG preservation. |
 | H5 | `Progress/Model`, `View`, `Statements`, `SourceClaims`, `ObservationBridge`; `ControlLaws` is generic state/error control and `ControlSource` connects it exactly to the original worker; the scheduler/source modules retain actual execution factors. | `StackFrames` isolates caller-guard preservation. Probe/filter/no-work contracts also establish outputs and remain substantive source claims. |
@@ -148,9 +149,10 @@ against the mirror. The original charter wording â€œas the code implements themâ
 requires all of them. Confirmation's once-per-lifetime property will require
 allocation/slot provenance, beyond an immediate second-call result.
 
-Architecture: `Basic` defines a peer/slot projection and normal-execution
-contracts; `Slots` proves all rotation arms, confirmation, clearing and exact
-handshake zeroing; `KernelFrames` and `PeerFrames` isolate hidden-input,
+Architecture after factoring: `Model` defines the slot projection, `Execution`
+the concrete normal-execution connection, and `AccessSource` the accessor
+contracts reexported by `Basic`; public `Statements` use the common snapshot.
+`Slots` proves all rotation arms, confirmation, clearing and exact handshake zeroing; `KernelFrames` and `PeerFrames` isolate hidden-input,
 allocation and index-operation frames; `StateEdges` and `ConsumeEdges` prove
 tag endpoints. Eleven terminal statements cover these local contracts.
 The consume statements establish the returned peer's tag, not failed-prefix
@@ -320,13 +322,38 @@ original retirement of worker/timer identities executes, but the terminals
 export device effects rather than a World frame. Independent read-only review
 found no defect; dangling references from other objects remain outside scope.
 
-The table invariant is about hashed entries; this checkpoint does not yet establish all-driver reachable-session
-uniqueness or initialize/preserve owner-store coherence through every caller.
+`LifecycleModel` adds `View.TablesSafe`, which permits device absence and
+requires numeric uniqueness, embedded-owner uniqueness and the hashed-keypair
+allocation bound whenever a device exists. `LifecycleSource` projects the
+original `Runner.initialKernel` core into an arbitrary observation: all fixture
+flag combinations establish the invariant, without constructing a concrete run
+or constraining unrelated observed context. Original `wgSetup` returns its
+empty device and establishes the invariant without a precondition. Every normal
+completion of original `wgDestruct` leaves no device, hence satisfies it. The
+exact original destruction prefix is retained; its stopping behavior and
+intermediate states are not proved safe by this endpoint result.
+`LifecycleFrames` contains the one device-preservation lemma for dispatch-unit
+retirement. No broad framing layer was copied.
+
+The three lifecycle headlines bring H2 to 26. Independent read-only review
+found no semantic issue; all prior 23 headlines are unchanged. The scoped Index
+build passed (104 jobs), all 26 headline axiom checks passed, and fresh stock
+kernel replay passed. A combined import/axiom inspection of all 156 campaign
+headlines also passed with only the three standard axioms. Ordinary syntax and
+monadic-association proof errors were corrected without weakening statements;
+no infrastructure rerun or cap failure. The full gate's last run at `69f988a`
+failed in the unchanged inherited modules, as recorded above. `wgCreate` and
+`wgDelete` composition, internal destruction preservation, all caller coverage,
+owner/peer-word coherence and broader retry correspondence remain open.
+
+The table invariant is about hashed entries; this checkpoint does not establish
+all-driver reachable-session uniqueness or owner-store coherence through every
+caller. Initialization of the table invariant now has its original-source anchor.
 
 Independent read-only review found no semantic defect. Its wording finding was
 fixed: the terminal lookup docstring now describes its exported provenance
 postcondition, leaving stronger first-selection semantics to the internal
-scan contract. The twenty-three statements pass scoped build, standard-axiom inspection
+scan contract. The earlier twenty-three-statement checkpoint passed scoped build, standard-axiom inspection
 and fresh stock kernel replay (`capped -- scripts/in-bundle lake env leanchecker
 --fresh Leanux.Proofs.WG.Index.Statements`). The full proof gate still fails in
 inherited `CounterWindow.Refinement` and `ReplayWindow.Counterexamples`;

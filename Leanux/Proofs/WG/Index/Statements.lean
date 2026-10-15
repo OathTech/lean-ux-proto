@@ -7,6 +7,7 @@ import Leanux.Proofs.WG.Index.ReleaseBounds
 import Leanux.Proofs.WG.Index.CorpusDraws
 import Leanux.Proofs.WG.Index.OwnerCreation
 import Leanux.Proofs.WG.Index.LookupMiss
+import Leanux.Proofs.WG.Index.LifecycleSource
 
 /-! H2's original-operation table contracts. Reachable owner/peer-word
 coherence remains a separate obligation. -/
@@ -339,5 +340,37 @@ theorem original_peer_release_allocation_bounds (pid : PeerId) (d : Device) (p :
   obtain ⟨ret, final, run, device⟩ := peerPut_exact pid d p resident live w pre
   exact ⟨ret, final, run, device, releasedPeer_keypairs pid d p, releasedPeer_next pid d p,
     releasedPeer_owners_bounded pid d p owners, releasedPeer_store_bounded pid d p store⟩
+
+/-- The original runner initializer establishes the optional-device table
+invariant for every fixture-flag combination. Only its core projection is
+installed here; the remaining observed context is arbitrary. This is an
+initial-state theorem, not preservation through a runner trace. -/
+theorem original_initial_kernel_tables (rlimit : Nat)
+    (net bare foreign stepped seccompChild : Bool) (s : Campaign2.Snapshot) :
+    View.TablesSafe (initialSnapshot rlimit net bare foreign stepped seccompChild s) :=
+  initialSnapshot_safe rlimit net bare foreign stepped seccompChild s
+
+/-- Original setup always installs its empty device table and establishes
+numeric uniqueness, owner uniqueness and the hashed-keypair allocation bound.
+No pre-existing device or invariant is required. -/
+theorem original_setup_tables : Campaign2.Returns wgSetup (fun _ => True)
+    (fun _ s => s.wg.device = some setupDevice ∧ View.TablesSafe s) := by
+  intro w pre
+  obtain ⟨result, final, run, device⟩ := wgSetup_device w pre
+  refine ⟨result, final, run, device, ?_⟩
+  intro d present
+  change final.k.wg = some d at present
+  rw [device] at present
+  cases present
+  exact setupDevice_safe
+
+/-- Every normal completion of original destruction leaves no device, hence
+the optional-device table invariant holds. This does not promise destruction
+completes, preserve intermediate states, or establish whole-driver coverage. -/
+theorem original_destruct_tables : Campaign2.Ensures wgDestruct (fun _ => True)
+    (fun _ s => s.wg.device = none ∧ View.TablesSafe s) := by
+  intro w result final pre run
+  have absent := wgDestruct_absent w result final pre run
+  exact ⟨absent, absent_tables_safe _ absent⟩
 
 end Leanux.Proofs.WG.Index
