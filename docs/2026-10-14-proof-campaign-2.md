@@ -27,14 +27,14 @@ No independent existential projected runs are spliced together.
 | --- | --- | --- |
 | H1 Noise | 11 local state/slot contracts | Public projection complete; whole-call edge coverage and lifetime confirmation remain open. |
 | H2 Index | 32 contracts, including lifecycle boundaries and original initiation sender/worker/dispatch | Public projection complete: 14 total contracts, 16 normal-return contracts, 1 exact stop and 1 projected initializer theorem; reachable coherence, broader records and the corpus runner composition remain open. |
-| H3 Roaming | 5 endpoint/authentication leaf contracts | Public projection complete; authentication provenance and complete caller coverage remain open. |
+| H3 Roaming | 6 contracts, including original decrypt-worker publication provenance | Public projection complete; carrying provenance through poll execution and complete caller coverage remain open. |
 | H4 Configuration | 60 contracts and the reachable internal dump-accounting finding | Public projection and frame separation complete. Queued/live-keypair removal, private-key collision, mixed attributes, global ownership and general dump composition remain open. |
 | H5 Progress | 25 contracts and the accepted batch-backlog counterexample | Public projection and frame separation complete; productive-record decrease, full loop coverage and probe/detach composition remain open. The backlog witness is historical over `de62c9d`: main's batch guard now addresses request 1. |
 | H6 Timers | 31 timer/worker contracts, including original environment send dispatch | Public projection and frame separation complete; selection/dequeue/section composition proved under the count premise. Complete retry episodes and whole-run arming/session counts remain open. |
 
 Projection/frame factoring completed at `69f988a` for all six results, preserving
 all 153 existing headline names before new mathematics. The following H2 lifecycle/sender
-and H6 dispatch increments bring the total to 164. No public statement directly names `World` or
+and H6 dispatch increments, plus H3 publication provenance, bring the total to 165. No public statement directly names `World` or
 `Kernel`.
 The full proof gate remains failed in inherited campaign-1 counter-window and
 index carries; those files have not been edited. Scoped validation does not
@@ -52,7 +52,7 @@ connections to the current executable mirror, not replacement interpreters.
 | Common C2 | `Campaign2/View` is data-only; `Campaign2/Bridge` defines projection and universal execution contracts. | No shared campaign-1 layer is changed. |
 | H1 | `Noise/Model`, `Statements`, `Slots`, `StateEdges`, `ConsumeEdges`; `Execution` holds the concrete monad connection; `AccessSource` holds accessor read/write contracts, reexported by `Basic`. | `KernelFrames`, `PeerFrames`, `SlotFrames`. |
 | H2 | `Index/View`, `TableModel`, `OwnerWordModel`, `AllocationModel`, `ReleaseModel`, `LifecycleModel` and pure release effects/bounds; `Statements`, `HandshakeClaims`, `OwnerUpdateClaims`, `LifecycleSource`, `LinkSource`, `SendSource`, `DispatchSource` and the other operation/source modules. | `IndexFieldFrames`, `OwnerFieldFrames`, `StoreFieldFrames`, `LifecycleFrames`, `NewlinkFrames`, `SendFrames`, `DispatchFrames`; the old `HandshakeFrames` and `OwnerFrames` paths are import-only reexports, not duplicated lemmas. |
-| H3 | `Roaming/Model`, `View`, `Statements`, `EndpointClaims`, `EndpointSource`, `Authentication`. | `Roaming/Frames`; `Basic` reexports the endpoint source connection. |
+| H3 | `Roaming/Model`, `View`, `Statements`, `EndpointClaims`, `EndpointSource`, `Authentication`, `PublicationModel`, `PublicationSource`, `PublicationClaims`. | `Roaming/Frames`, `PublicationFrames`; `Basic` reexports the endpoint source connection. |
 | H4 | `Config/Model`, `AllowedRemovalModel`, `QuietModel`, `ClaimView`, `Statements`, `SourceClaims`, `ObservationBridge`, and existing substantive effect/source modules. | `ConcreteFrames` isolates six whole-kernel endpoint contracts; `OperationFrames` isolates seven generic helpers; `ReadbackFrames` retains socket/fixture preservation; `AllowedListFrames`, `AllowedRootFrames`, `AllowedRemovalFrames`, `QuietFrames`, `KeyFieldFrames` isolate within-WG preservation. |
 | H5 | `Progress/Model`, `View`, `Statements`, `SourceClaims`, `ObservationBridge`; `ControlLaws` is generic state/error control and `ControlSource` connects it exactly to the original worker; the scheduler/source modules retain actual execution factors. | `StackFrames` isolates caller-guard preservation. Probe/filter/no-work contracts also establish outputs and remain substantive source claims. |
 | H6 | `TimerDiscipline/Model`, `View`, `SendView`, `Statements`, `ObservationBridge`, `ObservationClaims`, `SourceClaims`, `SendDispatchModel`, `SendDispatchClaims`, and `*Source` operational proofs. | `SourceFrames`, `RecordedFrames`, `RecordedJitterFrames`, `SectionFrames`, `SelectionFrames`, `RetryFrames`, `JitterFrames`, `InitiationFrames`, `InitiationPreservationFrames`, `SendCutFrames`, `SendPeerFrames`, `SendSocketFrames`, `SendBufferFrame`, `SendWorkerFrame`, `SendDispatchFrames`. |
@@ -202,6 +202,22 @@ uniqueness, then prove exact contracts over the original operations before
 composing reachable-state coherence. The landed representation keeps owner
 identity in each table row and its optional peer word in the owner object.
 The two are not interchangeable on arbitrary states.
+
+[AGENT 2026-10-15] Clarify the charter's “no two live sessions, handshake or
+keypair, share an index” as: within a device, no two simultaneously hashed
+handshake/keypair entries own the same receiving index; lookup returns that
+indexed owner and its acquired peer reference, or nothing. Unhashed objects
+retained by references do not reserve their former index. This retains the
+lookup-ownership meaning rather than asserting lifetime-wide numeric uniqueness.
+In the C, `noise.c:131–139` unhashes before dropping the reference;
+`peerlookup.c:192–197` unlinks without clearing the old numeric field, and
+insertion at `peerlookup.c:119–163` tests currently hashed entries. Replacement
+also unhashes the handshake while copying its index to the keypair. The mirror
+has no local receiving-index field in `Keypair`: local ownership lives in
+`Device.indexTable`; `remoteIndex` is the separate peer-supplied namespace.
+This is a source-grounded statement clarification, not a mirror finding or an
+accepted runner counterexample. Table uniqueness alone still does not establish
+resident-owner, reference-lifetime or whole-driver reachable coherence.
 
 The first twenty terminal statements cover removal, the keypair-removal specialization,
 handshake replacement, normally completed insertion, lookup owner/table
@@ -446,8 +462,32 @@ authenticated malformed inner packets and keepalives may roam. Outer source
 identity is not authenticated by the data AEAD. Cookie messages do not roam.
 These source observations are not yet theorems about the whole receive path.
 
-Remaining work: derive crypted-publication provenance from successful AEAD,
-carry it through queue/poll execution, cover the handshake and netlink callers,
+`PublicationSource` now factors the complete original `decryptStep` at the
+publication point before `irqExit`, retaining arbitrary original callbacks and
+their order. Its observer inspects the prefix from the same concrete entry and
+then executes the original step; discarding the observation is exactly the
+original operation, including every error. On normal completion, the consumed
+flag agrees with whether the prefix produced a publication cut. For a consumed
+packet, `PublicationClaims` derives the actual ring selection and input after
+the first softirq, the resident key read by `decryptPacket`, and the packet
+slot at publication. A CRYPTED slot contains the AEAD plaintext, preserves the
+input source/peer/keypair fields and has the decoded input counter as its nonce.
+No authentication premise is assumed. The callback may subsequently consume or
+free that packet; final residency and equality of packet peer with key owner
+are not claimed. `PublicationModel` holds the projected certificate and
+`PublicationFrames` isolates the generic read and refcount-check frames.
+
+This sixth terminal statement passes scoped build (48 jobs), inspection of all
+six Roaming headline axioms (the standard three only), and fresh stock kernel
+replay, through the capped bundle. All 165 campaign headlines also import and
+pass axiom inspection together. Independent read-only review found no
+mathematical or source-linkage defect; two minor findings were fixed: place the
+generic read helper in the frame file, and make the CRYPTED condition explicit
+in the nonce/field documentation. No cap hit or infrastructure rerun. The full
+gate remains failed in the inherited shared carries noted above.
+
+Remaining work: carry the publication provenance through queue/poll execution,
+cover the handshake and netlink callers,
 and frame remote destinations across the remaining runner operations. Arbitrary
 Worlds may contain forged crypted packets; they are not accepted-run findings.
 Callbacks require their actual concrete framing contracts, not an assumed

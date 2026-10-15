@@ -1,6 +1,7 @@
 import Leanux.Proofs.WG.Campaign2.Bridge
 import Leanux.Proofs.WG.Roaming.View
 import Leanux.Proofs.WG.Roaming.Authentication
+import Leanux.Proofs.WG.Roaming.PublicationClaims
 
 namespace Leanux.Proofs.WG.Roaming
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise
@@ -49,5 +50,19 @@ theorem original_decryption_authentication (pkt : RxPacket) (key : Keypair) :
         aeadDecrypt key.receiving.key (counterNonce (u64le pkt.bytes 8))
           (pkt.bytes.drop 16) [] = some plain.bytes) :=
   decryptPacket_authenticated pkt key
+
+/-- Every normal original decrypt step has its exact prefix observation.
+If it consumed a packet, the pre-irqExit publication is CRYPTED only with
+the AEAD plaintext under the key read after the initial softirq. For a
+CRYPTED publication, the outer source, packet peer and keypair are preserved,
+and the nonce equals the decoded counter at that cut.
+Both callbacks are arbitrary and execute in the original order; no final
+packet residency, peer/owner equality, endpoint effect or runner coverage is
+claimed. Discarding the observation is exactly the original decryptStep,
+including errors, by observedDecryptStep_erase. -/
+theorem original_decrypt_publication_authentication (softirq irqExit : M Unit) :
+    Campaign2.Ensures (observedDecryptStep softirq irqExit) (fun _ => True)
+      (fun result _ => PublicationObservation result) :=
+  observedDecryptStep_authenticated softirq irqExit
 
 end Leanux.Proofs.WG.Roaming
