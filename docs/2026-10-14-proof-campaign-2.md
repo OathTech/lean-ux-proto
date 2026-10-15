@@ -631,8 +631,13 @@ stock kernel replay (exit 0). Independent review has passed through the H6
 receive-data increment and now the H4 remove-all/REPLACE_PEERS request increments.
 The latter independent read-only pass found no correctness/source-correspondence
 issue; selection guarantees a present cut on normal return and the report keeps
-post-free assumptions explicit. H4 REMOVE_ME/replacement-converse and H6
-outgoing/common-receive traversal reviews are in progress.
+post-free assumptions explicit. Separate independent read-only passes also found
+no correctness/source-correspondence findings in H4 REMOVE_ME/replacement-converse
+and the three H6 outgoing/common-receive traversal increments. They checked the
+original caller ordering, exact effect/source relations, projection boundary and
+report scope. The H4 pass confirmed the already-recorded commit-wording
+correction from “empty peer list” to the selected peer's allowed-IP list. These
+reviews did not rerun the reported build, axiom or kernel-replay checks.
 Counts record the check at
 that increment, not the current number of declarations. Earlier H1 confirmation
 had 140 build jobs/20 headlines; H3 response 59 jobs; H2 coherence 206 jobs;
