@@ -1,5 +1,6 @@
 import Leanux.Proofs.WG.Index.DrawRecords
-import Leanux.Proofs.WG.Index.PeerWords
+import Leanux.Proofs.WG.Index.Allocation
+import Leanux.Proofs.WG.Index.CorpusDraws
 
 /-! H2's original-operation table contracts. Reachable owner/peer-word
 coherence remains a separate obligation. -/
@@ -141,5 +142,46 @@ theorem original_index_insert_recorded (owner : IndexOwner) (d : Device)
   have absent := List.any_eq_false.mp isFresh e member
   have different : e.index ≠ fresh.value := by simpa using absent
   exact Ne.symm different
+
+/-- Two original insertions from an empty table consume the three index
+values steered by s2_index_collision: the second retries the first value and
+returns the third. This is a local composition, not an accepted runner trace. -/
+theorem original_index_insert_corpus_draws (first second : PeerId)
+    (different : first ≠ second) (d : Device) (empty : d.indexTable = [])
+    (rest : List HiddenRecord) :
+    Returns (corpusInsertPair first second)
+      (fun w => w.k.wg = some d ∧ w.hidden = some
+        (corpusCollisionDraw.record :: corpusCollisionDraw.record :: corpusFreshDraw.record :: rest))
+      (fun result w => result = (0x0a0b0c0d, 0x11223344) ∧
+        w.k.wg = some { d with indexTable :=
+          [{ index := 0x11223344, owner := .handshake second },
+           { index := 0x0a0b0c0d, owner := .handshake first }] } ∧
+        w.hidden = some rest) :=
+  corpusInsertPair_returns first second different d empty rest
+
+/-- Bounds on resident and hashed keypair identities make a successful
+original allocation fresh in both stores. It copies the supplied peer word,
+leaves the index table untouched, and preserves those bounds. Allocation
+failure returns no keypair and preserves the device and allocation counter. -/
+theorem original_keypair_create_index_fresh (peer : Option PeerId) (d : Device)
+    (counter : Nat) (owners : KeypairOwnersBounded d) (store : KeypairStoreBounded d) :
+    Ensures (keypairCreate peer) (fun w => w.k.wg = some d ∧ w.k.keypairCounter = counter)
+      (fun result w => match result with
+        | none => w.k.wg = some d ∧ w.k.keypairCounter = counter
+        | some id => id = d.nextKeypairId ∧
+          w.k.wg = some (createdDevice d counter peer) ∧ w.k.keypairCounter = counter + 1 ∧
+          d.keypairs[id]? = none ∧ (∀ e ∈ d.indexTable, e.owner ≠ .keypair id) ∧
+          ownerWord (createdDevice d counter peer) (.keypair id) = some peer ∧
+          KeypairOwnersBounded (createdDevice d counter peer) ∧
+          KeypairStoreBounded (createdDevice d counter peer)) := by
+  intro w result final pre run
+  have effect := keypairCreate_exact peer d counter w result final pre run
+  cases result with
+  | none => exact effect
+  | some id =>
+    obtain ⟨rfl, hd, hc⟩ := effect
+    exact ⟨rfl, hd, hc, store_bound_absent d store, bounded_fresh d owners,
+      created_peer_word d counter peer, created_bounded d counter peer owners,
+      created_store_bounded d counter peer store⟩
 
 end Leanux.Proofs.WG.Index

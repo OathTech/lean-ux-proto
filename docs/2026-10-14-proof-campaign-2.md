@@ -120,10 +120,11 @@ composing reachable-state coherence. The landed representation keeps owner
 identity in each table row and its optional peer word in the owner object.
 The two are not interchangeable on arbitrary states.
 
-Nine terminal statements cover removal, the keypair-removal specialization,
+Eleven terminal statements cover removal, the keypair-removal specialization,
 handshake replacement, normally completed insertion, lookup owner/table
 provenance, total matched-entry NULL/zero-reference/live lookup effects, and
-recorded collision-prefix completion. Removal and replacement return under device residency. Replacement
+recorded collision-prefix completion, a corpus-draw two-call instance and
+bounded allocation freshness. Removal and replacement return under device residency. Replacement
 preserves numeric indices and every owner object's peer word; preserving owner
 uniqueness additionally requires the destination keypair not already hashed.
 Insertion first removes this owner's old row, then inserts a fresh numeric
@@ -157,14 +158,28 @@ refer to the table after unhashing the inserting owner; repeated collisions
 and arbitrary trailing records are allowed. Independent review found no
 correctness issue and prompted the explicit “contiguous” qualification.
 Interspersed ambient records, streams without a fresh draw, explicit branch-log
-counting and the `s2_index_collision` runner instance remain open. The table invariant is about hashed
+counting and the `s2_index_collision` runner instance remain open. `CorpusDraws` instantiates two original insertions from an empty table with
+`s2_index_collision`'s three steering values (0x0a0b0c0d twice, then
+0x11223344), preserving an arbitrary unused suffix. This is local operation
+composition: the actual runner has other operations between those insertions.
+`Allocation` proves the original keypair allocator's exact normal effects,
+copying its optional peer word and establishing freshness from explicit bounds
+on resident and hashed keypair IDs. Both bounds are preserved. Their
+initialization and preservation through all callers remain obligations.
+Independent review found no correctness issue in these two increments.
+The concrete composition initially failed kernel checking with deterministic
+timeouts; factoring the generic two-call proof before applying concrete draws
+resolved that elaboration problem. These were failed proof iterations, not
+infrastructure outcomes or successful checks.
+
+The table invariant is about hashed
 entries; this checkpoint does not yet establish all-driver reachable-session
 uniqueness or initialize/preserve owner-store coherence through every caller.
 
 Independent read-only review found no semantic defect. Its wording finding was
 fixed: the terminal lookup docstring now describes its exported provenance
 postcondition, leaving stronger first-selection semantics to the internal
-scan contract. The nine statements pass scoped build, standard-axiom inspection
+scan contract. The eleven statements pass scoped build, standard-axiom inspection
 and fresh stock kernel replay (`capped -- scripts/in-bundle lake env leanchecker
 --fresh Leanux.Proofs.WG.Index.Statements`). The full proof gate still fails in
 inherited `CounterWindow.Refinement` and `ReplayWindow.Counterexamples`;
