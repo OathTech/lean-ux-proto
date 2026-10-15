@@ -1,8 +1,9 @@
 import Leanux.Proofs.WG.Queues.RxWorkerHistory
 
 /-! The transmit pre-step and one activation iteration retain concrete NAPI
-callbacks in the persistent journal. Poll-free TX/receive bodies use their
-existing lifetime observers. Scheduler loops and copied trials are not covered. -/
+callbacks in the persistent journal. Poll-free TX bodies retain their existing
+lifetime focus; the receive-worker adapter also records actual session cuts.
+Scheduler loops and copied trials are not covered here. -/
 namespace Leanux.Proofs.WG.Queues.RxHistory
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing Lifetimes
 
@@ -109,7 +110,7 @@ def activationIteration (a : Activation) : Obs IterResult := do
     cryptAhead pid
     mixed (txIterPrefix pid (liftPrefix (Env.condResched .txWorker)))
   | .decryptWorker => decryptIteration
-  | .receiveWorker => mixed (receiveIterPrefix (liftPrefix (Env.condResched .receiveWorker)))
+  | .receiveWorker => Origins.HistoryAdapters.receiveIteration
   | w => mixed (liftPrefix (invariant s!"{w.symbol} is not a draining worker"))
 
 theorem activationIteration_erases (a : Activation) :
@@ -120,7 +121,7 @@ theorem activationIteration_erases (a : Activation) :
     | with_reducible exact decryptIteration_erases
     | with_reducible exact cryptAhead_erases _
     | with_reducible exact mixed_erases (txIterPrefix_erases _ (erasesPrefix_lift _))
-    | with_reducible exact mixed_erases (receiveIterPrefix_erases (erasesPrefix_lift _))
+    | with_reducible exact Origins.HistoryAdapters.receiveIteration_erases
     | with_reducible exact mixed_erases (erasesPrefix_lift _)
     | with_reducible apply erasesPrefix_bind
     | (with_reducible split; all_goals try simp_all only [Option.some.injEq, Prod.mk.injEq, reduceCtorEq]; all_goals try subst_vars)
@@ -134,7 +135,7 @@ theorem activationIteration_preserves (a : Activation) :
     | with_reducible exact decryptIteration_preserves
     | with_reducible exact cryptAhead_preserves _
     | with_reducible exact mixed_preserves (tx_allocation _)
-    | with_reducible exact mixed_preserves receive_allocation
+    | with_reducible exact Origins.HistoryAdapters.receiveIteration_preserves
     | with_reducible exact mixed_preserves (AmbientContracts.drop (allocationAmbient.invariant (fun _ => True) _))
     | with_reducible apply PrefixPreserves.bind
     | (with_reducible split; all_goals try simp_all only [Option.some.injEq, Prod.mk.injEq, reduceCtorEq]; all_goals try subst_vars)
@@ -150,7 +151,7 @@ theorem activationIteration_projects (a : Activation) :
     | with_reducible exact cryptAheadPrefix_allocation _
     | with_reducible exact tx_allocation _
     | with_reducible exact mixed_projects (tx_allocation _)
-    | with_reducible exact mixed_projects receive_allocation
+    | with_reducible exact Origins.HistoryAdapters.receiveIteration_projects
     | with_reducible exact mixed_projects (AmbientContracts.drop (allocationAmbient.invariant (fun _ => True) _))
     | with_reducible apply projectsFocus_bind
     | (with_reducible split; all_goals try simp_all only [Option.some.injEq, Prod.mk.injEq, reduceCtorEq]; all_goals try subst_vars)

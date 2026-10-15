@@ -9,23 +9,23 @@ open Leanux Leanux.WG Leanux.Env Leanux.Proofs.Logged Leanux.Proofs.Framing Life
 
 /-- The original worker callback is reached only after a handled receive item. -/
 def handshakeReceiveWorker : Obs Unit :=
-  workerLoopPrefix .receiveWorker none (mixed receiveStepPrefix) (nestedResched .receiveWorker)
+  workerLoopPrefix .receiveWorker none Origins.HistoryAdapters.receiveStep (nestedResched .receiveWorker)
     (MAX_QUEUED_INCOMING_HANDSHAKES + 1) "the handshake queue did not drain"
 
 theorem handshakeReceiveWorker_erases : ErasesPrefix handshakeReceiveWorker
     (Leanux.WG.handshakeReceiveWorker (Env.nestedResched .receiveWorker)) :=
-  workerLoopPrefix_erases _ _ (mixed_erases receiveStepPrefix_erases)
+  workerLoopPrefix_erases _ _ Origins.HistoryAdapters.receiveStep_erases
     (nestedResched_erases _) _ _
 
 theorem handshakeReceiveWorker_preserves : PrefixPreserves BoundaryInv BoundarySafe handshakeReceiveWorker :=
   workerLoopPrefix_preserves _ _ (fun _ _ hi => hi.safe)
-    (mixed_preserves (HandshakeReceiveCall.allocation .step)) (nestedResched_preserves _) _ _
+    Origins.HistoryAdapters.receiveStep_preserves (nestedResched_preserves _) _ _
 
 theorem handshakeReceiveWorker_projects : ProjectsUnder AuditInv auditEvent handshakeReceiveWorker
     (handshakeReceiveWorkerAudit (nestedReschedAudit .receiveWorker)) := by
   have hs : PrefixPreserves AllocationInv LifetimeEvent.Safe receiveStepPrefix :=
     HandshakeReceiveCall.allocation .step
-  have hp := mixed_projects hs
+  have hp := Origins.HistoryAdapters.receiveStep_projects
   have ha := auditFocus_preserves hs
   unfold handshakeReceiveWorker handshakeReceiveWorkerAudit workerLoopPrefix workerIterPrefix
   repeat' first

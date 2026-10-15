@@ -5,6 +5,7 @@
 Work on `proofs/campaign` in `.worktrees/proofs-campaign` follows [the charter](2026-10-13-charter-proof-campaign.md),
 with representation batch `cb2348e` carried and validated. All seven rows are current there, including the local R4
 packet-to-receipt link extension, local R3 owner-acquisition material frame and initialized R4 linkage.
+The session/decrypt source injection is validated with the original caller, audit and R4 contracts preserved.
 Session/material/RX-origin receipts and local support
 are retained; initialized R3 packet authorization
 and R4 receive-pipeline conservation remain open. The [register](proofs.md#results) holds pins/counts; the
@@ -20,19 +21,59 @@ was made by this campaign.
 | R5 | Accepted age/post-zero/wire-nonce counterexamples; thirteen positive local contracts. |
 | R6 | Cookie exclusion proved; literal MAX=18 refuted, without a replacement universal bound. |
 
-**Current initialized packet/receipt linkage (validated).** Two grouped exports preserve all
-497 preceding terminal bodies, giving 499 declarations (497 theorems/two definitions; 127 R3/121 R4).
-The unchanged concrete NAPI/crypt/scheduler, Env/syscall and Runner observers preserve HistoryLinked and separate
-HistoryReceiptsValid. Empty initialization derives both for every typed Trace and both placeholder settings,
-including failed prefill and later Stops. Actual selected packet/stamp/peer and whole-receipt/Entry order hold in the
-committed history, alongside unchanged exact original erasure, full R2 audit/probes, completion and distinctness.
-Global order does not label same-poll boundaries; the stronger fresh local suffix contract remains separate.
-Key/session authentication, inbox arrival, reference protection and admission/carrier conservation remain open.
+**Current R3 session/decrypt source injection (validated).** Two grouped exports
+preserve all 499 preceding terminal bodies, giving 501 declarations (499 theorems/two definitions; 129 R3/121 R4).
+The existing persistent RX journal now carries session and decrypt receipts at the actual source cuts. Both receive
+entrances use the same literal handshake factors; the crypt worker captures its stored getter/decrypt once before
+publication. Original erasure is unconditional. Same-input R2 projection retains the full incoming audit/probe history
+under its existing predicates. Existing R4 boundary, completion, receipt-validity and linkage meanings are unchanged.
+Local injected cuts preserve origin receipt validity from a valid incoming journal; fabricated receipts are not repaired.
+Actual ingress admission receipts, initialized material support/configured identity, earlier routing alignment and
+copied-trial origin receipts remain open. This is committed caller injection, not initialized packet authorization.
 
-[AGENT 2026-10-15] Factor the existing concrete caller proof spine over a proof-only Protocol, instantiated separately
-for linkage and receipt validity. Its audit rule uses the actual focused suffix; lifetime events become access events
-and copied-trial probe markers remain outside committed receipt order. This adds no operational hierarchy or stronger
-BoundaryInv/Closed/AuditInv. A generic audit frame alone does not establish hidden-poll coverage.
+[AGENT 2026-10-15] Extract receipt data without renaming it, reuse the existing persistent journal and literal
+callback-parametric handshake factors, and move elementary focus contracts below the caller cycle. Extend the
+internal RxLink.Protocol with an explicit origin-leaf preservation obligation guarded by the lower validity contract;
+its two existing concrete R4 instances discharge that obligation. This is a local generic API strengthening, not an
+inferred arbitrary-predicate frame. No new observer/Runner hierarchy or stronger BoundaryInv/Closed/AuditInv is added.
+Two after-MAC proofs use theorem-local 800,000 heartbeats, matching the existing handshake source proof's bounded
+fanout after deterministic default-200,000 failures. No file-wide/global limit or 32G memory-cap change was made.
+
+**Source-injection effort.** Acceptance 11:56:21 UTC; 90 minutes/48 capped calls, reserve at 13:11:21 or call 40,
+deadline 13:26:21. Scoped call 22 passes 457 jobs, collected 12:47:08. The 23 builds comprise three PASS
+(calls 4/22/23) and 20 ordinary FAIL. Calls 1–3 repaired moved imports/source normalization (call 2 also hit default 200k); 5–12 repaired adapter
+normalization, annotations, refolding and conditional proof composition (call 8 hit default 200k, call 11 the simp-step limit); 13 exposed default-200k projection/append
+failures and dependent kernel unknown-constant diagnostics. Calls 14–16 failed an attempted generic continuation cut,
+which was removed completely; 17/18 repaired validity/suffix type annotations. Call 18 printed rejected recovery
+placeholders. Call 19 failed the completion normal/Stop predicate composition; the existing Closed→CompletionPrefix
+bridge repaired it. Call 20 exposed default-200k completion proof search and dependent kernel unknown constants;
+replacing generic origin search with the concrete prepare leaf solved it without another limit change. Call 21 failed
+a terminal type namespace and printed rejected recovery placeholders. No source admission, cap hit, interruption or
+infrastructure retry occurred. Full call 23 passes 499 jobs, collected 12:49:54 UTC, 53m33s after acceptance.
+Exact check 24 passes all 18 paths, all 499 prior bodies, the 501/129 R3/121 R4 census, tokens/imports,
+tracked/new-file whitespace and EOF, empty index, mirror identity and seven current pins. Its printed document hashes
+precede only this final ledger/review update; the 16 Lean hashes remain fixed. Final metadata check 25 repeats those
+checks and records the final manifest: the worker sequence has 25 capped calls (23 builds, three PASS/20 FAIL, plus
+checks 24/25). Independent frozen review is clear at 12:56:13 UTC: final read 12:54:17–12:56:13 (1m56), after
+the source pass 12:31:51–12:38:41 (6m50). Finding 1 is individually fixed and verified: the activation header now
+distinguishes the enriched receive adapter from TX lifetime focus. Final metadata reconciliation was clear
+12:58:10–12:58:26 (16s). Ownership returned at 12:58:45, 62m24s after acceptance; all 25 exits were collected.
+The coordinated 499-job build/501-declaration permitted-axiom gate, fresh stock kernel replay, 60-job default
+build and 103 tests (21.627s, one skip) pass. Kernel replay started only after gate collection and was collected
+at 13:02:12 UTC. Exact scope, all 499 prior bodies, 16 frozen Lean hashes, census, mirror and seven current pins
+pass; final metadata is checked separately after this record. The coordinator's six capped calls are gate,
+unit tests, pending-metadata exact check, fresh replay, default build and final-metadata exact check.
+No coordinator failure, cap hit, interruption or infrastructure retry occurred. Command-local LEAN_NUM_THREADS=32
+and LEANUX_QEMU_SLOTS=16 retain the existing per-compiler -j1 and unchanged 32G cap. The unchanged executable,
+23 model-replay tests and eleven historical recipes retain their representation-carry validation; they were not
+rerun for this proof-only injection. No active job remains.
+
+**Preceding initialized R4 linkage (`c0bff5e`, validated).** The existing caller/Runner spine derives HistoryLinked
+and separate HistoryReceiptsValid from empty initialization for every typed Trace and both placeholder settings,
+including failed prefill and later Stops. Actual selected packet/stamp/peer and whole-receipt/Entry order hold in the
+committed history with exact original result, full R2 audit/probes and completion distinctness. Global order does not
+label same-poll boundaries. Key/session authentication, inbox arrival, reference protection and admission/carrier
+conservation remain open. Its measured effort and validation follow.
 
 **Linkage-propagation effort.** Acceptance 11:33:52 UTC; 75 minutes/36 capped calls, reserve at 12:33:52 or call 28,
 deadline 12:48:52. Call 1 failed a missing audit-suffix list annotation and printed rejected recovery goals plus
@@ -450,7 +491,18 @@ entry support, not an initialized-history provenance theorem. Normal Some-front 
 decrypt retains the actual stored packet, material and AEAD transformation, without equating packet.peer to that peer.
 [Origins/IndexMaterial](../Leanux/Proofs/WG/Origins/IndexMaterial.lean) derives the concrete owner-acquisition and
 index-lookup frame, including nullable store-back, and reuses the existing access adapter for supplied support.
-Whole-admission/caller propagation and initialized provenance remain unfinished.
+Whole-admission and stateful material-support propagation, plus initialized provenance, remain unfinished.
+
+**Actual caller injection.** [ReceiptTypes](../Leanux/Proofs/WG/Origins/ReceiptTypes.lean) keeps existing qualified
+receipt/context names while removing the import cycle. [HandshakeSources](../Leanux/Proofs/WG/Origins/HandshakeSources.lean)
+has exact original and lifetime-observer factors for response, after-MAC, reception and captured-ring receiveStep.
+[HistoryAdapters](../Leanux/Proofs/WG/Origins/HistoryAdapters.lean) focuses actual session/decrypt runs once into the
+existing RX history. The decryptStep prepare cut and both activation/whole receive-worker entrances are wired to it;
+normal tail/decrement and Stop bypass order remain original. All prior audit/probe history survives projection.
+Old metadata decoders erase session/RX receipts; the linkage decoder retains lifetime access events. Its concrete
+Protocol instances preserve the existing R4 predicates. Copied scheduler trials retain their isolated R2 observer;
+this extension does not claim their session/decrypt receipts. Available admission receipt types do not mean ingress
+admission has been injected. Local validity and source linkage do not establish initialized material support.
 
 **Remaining obligations.** Initialized syscall/Runner composition preserves ordinary-negative cleanup and Stops; parser
 shape follows the operation cursor. Local entry agreement still needs connection to earlier actual initialized lookup

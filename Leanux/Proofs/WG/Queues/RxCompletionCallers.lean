@@ -18,6 +18,17 @@ theorem audit_quiet (a : AuditM α) : Preserves historyEvent (RxHistory.audit a)
 theorem mixed_quiet (a : MixedM α) : Preserves historyEvent (RxHistory.mixed a) :=
   audit_quiet _
 
+theorem origin_quiet (a : PrefixM Origins.Event α) :
+    Preserves historyEvent (Origins.HistoryAdapters.focus a) :=
+  quiet (Origins.HistoryAdapters.focus_other historyEvent (by intro e; cases e <;> rfl) a)
+    (Appends.focus _ _ _)
+
+theorem prepare_quiet : Preserves historyEvent Origins.HistoryAdapters.prepare :=
+  origin_quiet _
+
+theorem receiveIteration_quiet : Preserves historyEvent Origins.HistoryAdapters.receiveIteration :=
+  workerIterPrefix_preserves _ _ closed_safe (origin_quiet _) (lift_quiet _)
+
 theorem napiSoftirq_preserves : Preserves historyEvent RxHistory.napiSoftirq :=
   RxNapi.softirq_preserves closed_safe (fun _ _ _ _ hi => hi)
     (audit_quiet _) observePoll_preserves
@@ -34,6 +45,8 @@ macro "completion_steps" : tactic => `(tactic|
   repeat' first
     | with_reducible exact audit_quiet _
     | with_reducible exact mixed_quiet _
+    | exact prepare_quiet
+    | exact receiveIteration_quiet
     | with_reducible exact lift_quiet _
     | with_reducible exact PrefixPreserves.pure closed_safe _
     | with_reducible apply PrefixPreserves.range _ _ _ closed_safe

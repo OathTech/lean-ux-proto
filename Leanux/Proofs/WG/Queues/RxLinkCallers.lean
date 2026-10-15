@@ -22,6 +22,9 @@ supply source coverage for an arbitrary operation hidden inside an audit. -/
 class Protocol (P : List RxHistory.Event → Prop) : Prop where
   audit : ∀ {α : Type} (a : AuditM α), Preserves P (RxHistory.audit a)
   poll : ∀ pid budget, Preserves P (RxHistory.observePoll pid budget)
+  origin : ∀ {α : Type} (a : PrefixM Origins.Event α),
+    PrefixPreserves (fun h _ => Origins.Valid h) Origins.Valid a →
+    Preserves P (Origins.HistoryAdapters.focus a)
 
 theorem audit_from_suffix (P : List RxHistory.Event → Prop)
     (hp : ∀ h (s : List AuditEvent), P h → P (h ++ s.map RxHistory.Event.audit))
@@ -72,8 +75,39 @@ theorem observePoll_receipts (pid : PeerId) (budget : Nat) :
   rw [he]
   cases (runPrefix (RxJoint.poll pid budget) w (RxJoint.seed (RxHistory.prior h))).1 <;> trivial
 
-instance linkedProtocol : Protocol HistoryLinked := ⟨linked_audit,observePoll_link⟩
-instance receiptsProtocol : Protocol HistoryReceiptsValid := ⟨receipts_audit,observePoll_receipts⟩
+theorem linked_origin (a : PrefixM Origins.Event α) :
+    Preserves HistoryLinked (Origins.HistoryAdapters.focus a) := by
+  apply Origins.HistoryAdapters.focus_history
+  intro h s hi
+  unfold HistoryLinked at hi ⊢
+  rw [List.filterMap_append]
+  apply linked_append_quiet hi
+  intro e he pre
+  obtain ⟨x,hx,he⟩ := List.mem_filterMap.mp he
+  obtain ⟨x,_,rfl⟩ := List.mem_map.mp hx
+  cases x <;> simp only [Origins.HistoryAdapters.encode,historyEvent,Option.some.injEq,reduceCtorEq] at he
+  subst e
+  trivial
+
+theorem receipts_origin (a : PrefixM Origins.Event α) :
+    Preserves HistoryReceiptsValid (Origins.HistoryAdapters.focus a) := by
+  apply Origins.HistoryAdapters.focus_history
+  intro h s hi
+  unfold HistoryReceiptsValid at hi ⊢
+  rw [List.filterMap_append]
+  apply (RxDisposition.valid_append _ _).mpr
+  refine ⟨hi,?_⟩
+  intro e he
+  obtain ⟨x,hx,he⟩ := List.mem_filterMap.mp he
+  obtain ⟨x,_,rfl⟩ := List.mem_map.mp hx
+  cases x <;> simp only [Origins.HistoryAdapters.encode,historyEvent,Option.some.injEq,reduceCtorEq] at he
+  subst e
+  trivial
+
+instance linkedProtocol : Protocol HistoryLinked :=
+  ⟨linked_audit,observePoll_link,fun a _ => linked_origin a⟩
+instance receiptsProtocol : Protocol HistoryReceiptsValid :=
+  ⟨receipts_audit,observePoll_receipts,fun a _ => receipts_origin a⟩
 
 variable {P : List RxHistory.Event → Prop} [Protocol P]
 
@@ -88,6 +122,15 @@ theorem lift_quiet (a : M α) : Preserves P (liftPrefix a) := by
   refine ⟨[],by simp,hi,?_⟩
   simp only [runPrefix_lift]
   cases a.run w <;> trivial
+
+theorem prepare_quiet : Preserves P Origins.HistoryAdapters.prepare :=
+  Protocol.origin _ Origins.HistoryAdapters.localPrepare_valid
+
+theorem receiveStep_quiet : Preserves P Origins.HistoryAdapters.receiveStep :=
+  Protocol.origin _ Origins.HistoryAdapters.localStep_valid
+
+theorem receiveIteration_quiet : Preserves P Origins.HistoryAdapters.receiveIteration :=
+  Origins.HistoryAdapters.receiveIteration_history P receiveStep_quiet
 
 theorem napiSoftirq_preserves : Preserves P RxHistory.napiSoftirq :=
   RxNapi.softirq_preserves history_safe (fun _ _ _ _ hi => hi)
@@ -105,6 +148,8 @@ macro "link_steps" : tactic => `(tactic|
   repeat' first
     | with_reducible exact audit_quiet _
     | with_reducible exact mixed_quiet _
+    | exact prepare_quiet
+    | exact receiveIteration_quiet
     | with_reducible exact lift_quiet _
     | with_reducible exact PrefixPreserves.pure history_safe _
     | with_reducible apply PrefixPreserves.range _ _ _ history_safe

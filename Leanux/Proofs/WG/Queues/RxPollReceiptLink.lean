@@ -235,6 +235,7 @@ theorem poll_ordered_links (pid : PeerId) (budget : Nat) (w : World) (prior : Li
 /-- Decode only committed poll/access events; audit probe markers remain in
 the actual persistent history and are irrelevant to receipt ordering. -/
 def historyEvent : RxHistory.Event → Option RxJoint.Event
+  | .session _ | .rx _ => none
   | .audit (.lifetime e) => some (.access e)
   | .audit (.probe _) => none
   | .removed n skb stamp => some (.removed n skb stamp)

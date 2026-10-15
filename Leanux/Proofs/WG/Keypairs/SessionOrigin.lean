@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Origins.ReceiptTypes
 import Leanux.Proofs.WG.Keypairs.MaterialOrigin
 import Leanux.Proofs.Logged.RxPoll
 
@@ -8,13 +9,6 @@ None records only a rejected/refused front. No later residency is asserted. -/
 namespace Leanux.Proofs.WG.SessionOrigin
 open Leanux Leanux.WG Leanux.Proofs.Logged Lifetimes MaterialOrigin
 set_option pp.structureInstances false
-
-structure Context where
-  slot : KeypairId
-  state : Nat
-  word : Option PeerId
-  peer : Peer
-  initiator : Bool
 
 /-- Shared source-shaped front. Its last effect is the actual derivation. -/
 def frontWith {m : Type → Type} [Monad m]
@@ -149,10 +143,6 @@ theorem tail_allocation (pid kp : Nat) :
     | with_reducible apply PrefixPreserves.bind
     | (intro_forall; try dsimp only)
     | split
-
-inductive Receipt where
-  | allocation (word : Option PeerId) (run : RunWitness (Option KeypairId))
-  | material (pid : PeerId) (run : RunWitness (Option Context))
 
 def Receipt.Valid : Receipt → Prop
   | .allocation word r => r.Valid (keypairCreate word)

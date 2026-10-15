@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Origins.ReceiptTypes
 import Leanux.Proofs.WG.Queues.RxPollCaptureSupport
 import Leanux.Proofs.WG.Lifetimes.Audit
 
@@ -10,6 +11,8 @@ namespace Leanux.Proofs.WG.Queues.RxHistory
 open Leanux Leanux.WG Leanux.Proofs.Logged Lifetimes
 
 inductive Event where
+  | session (receipt : SessionOrigin.Receipt)
+  | rx (receipt : RxOrigin.Receipt)
   | audit (event : AuditEvent)
   | removed (occurrence : Nat) (skb : SkbId) (stamp : PacketStamp)
   | checkedState (occurrence : Nat) (skb : SkbId) (stamp : PacketStamp)

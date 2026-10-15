@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.Queues.RxCompletionEnvironment
+import Leanux.Proofs.WG.Queues.RxLinkEnvironment
 import Leanux.Proofs.WG.Origins.IndexMaterial
 import Leanux.Proofs.WG.Origins.SessionMaterial
 import Leanux.Proofs.WG.Packets.RxOriginCuts
@@ -2689,5 +2691,65 @@ theorem original_index_material_retention (kinds : List IndexKind) (index : Nat)
     Origins.acquireOwner_keypair_effect, Origins.indexLookup_retains kinds index,
     MaterialOrigin.access_erases (Lifetimes.indexLookupPrefix_erases kinds index),
     Origins.indexLookup_support kinds index⟩
+
+/-- Actual persistent caller source cuts use the enriched adapters once. Both
+handshake session branches share the literal original source factor; the decrypt
+cut captures the stored getter/decrypt before publication. Erasure covers arbitrary
+incoming histories and all original results/Stops. Copied trials and admission
+receipt injection are not asserted by these committed caller equations. -/
+theorem original_origin_history_injection :
+    Origins.HistoryAdapters.ops.session = Origins.localSession ∧
+    (∀ pid, Origins.HandshakeSources.responseWith Origins.HandshakeSources.original pid =
+      WG.sendHandshakeResponse pid) ∧
+    (∀ msg src loaded mac,
+      Origins.HandshakeSources.afterMacWith Origins.HandshakeSources.original msg src loaded mac =
+        Cookies.afterMac msg src loaded mac) ∧
+    Queues.RxHistory.decryptStep =
+      Queues.RxWorkers.decryptWith Origins.HistoryAdapters.prepare
+        (fun pid => Queues.RxHistory.mixed (Lifetimes.peerPutMixed (some pid)))
+        Queues.RxHistory.napiSoftirq Queues.RxHistory.napiIrqExit ∧
+    (∀ a : Activation, a.worker = .receiveWorker →
+      Queues.RxHistory.activationIteration a = Origins.HistoryAdapters.receiveIteration) ∧
+    Queues.RxHistory.handshakeReceiveWorker =
+      Logged.workerLoopPrefix .receiveWorker none Origins.HistoryAdapters.receiveStep
+        (Queues.RxHistory.nestedResched .receiveWorker)
+        (WG.MAX_QUEUED_INCOMING_HANDSHAKES + 1) "the handshake queue did not drain" ∧
+    Logged.ErasesPrefix Queues.RxHistory.decryptStep (WG.decryptStep Env.napiSoftirq Env.napiIrqExit) ∧
+    (∀ a, Logged.ErasesPrefix (Queues.RxHistory.activationIteration a) (Env.Activation.iter a)) ∧
+    Logged.ErasesPrefix Queues.RxHistory.handshakeReceiveWorker
+      (WG.handshakeReceiveWorker (Env.nestedResched .receiveWorker)) := by
+  refine ⟨rfl, Origins.HandshakeSources.response_original, Origins.HandshakeSources.afterMac_original,
+    rfl, ?_, rfl, Queues.RxHistory.decryptStep_erases,
+    Queues.RxHistory.activationIteration_erases, Queues.RxHistory.handshakeReceiveWorker_erases⟩
+  intro a ha
+  simp only [Queues.RxHistory.activationIteration, ha]
+
+/-- Same-input full R2 audit/probe projection is conditional on the existing
+AuditInv. The injected cuts preserve receipt validity from valid incoming history;
+they do not repair fabricated receipts. Existing R4 completion/linkage predicates
+retain their meanings under the actual metadata suffix. These local contracts do
+not establish initialized material support, admission origin or peer identity. -/
+theorem original_origin_history_projection :
+    Logged.ProjectsUnder Lifetimes.AuditInv Queues.RxHistory.auditEvent Queues.RxHistory.decryptStep
+      (Lifetimes.auditFocus (Lifetimes.decryptStepPrefix Lifetimes.napiSoftirqPrefix Lifetimes.napiIrqExitPrefix)) ∧
+    (∀ a, Logged.ProjectsUnder Lifetimes.AuditInv Queues.RxHistory.auditEvent
+      (Queues.RxHistory.activationIteration a) (Lifetimes.auditFocus (Lifetimes.activationIterPrefix a))) ∧
+    Logged.ProjectsUnder Lifetimes.AuditInv Queues.RxHistory.auditEvent Queues.RxHistory.handshakeReceiveWorker
+      (Lifetimes.handshakeReceiveWorkerAudit (Lifetimes.nestedReschedAudit .receiveWorker)) ∧
+    Logged.PrefixPreserves (fun h _ => Origins.HistoryAdapters.Valid h) Origins.HistoryAdapters.Valid
+      Origins.HistoryAdapters.prepare ∧
+    Logged.PrefixPreserves (fun h _ => Origins.HistoryAdapters.Valid h) Origins.HistoryAdapters.Valid
+      Origins.HistoryAdapters.receiveStep ∧
+    Logged.PrefixPreserves (fun h _ => Origins.HistoryAdapters.Valid h) Origins.HistoryAdapters.Valid
+      Origins.HistoryAdapters.receiveIteration ∧
+    (∀ (α : Type) (a : Logged.PrefixM Origins.Event α),
+      Queues.RxCompletion.Preserves Queues.RxCompletion.historyEvent (Origins.HistoryAdapters.focus a) ∧
+      Queues.RxLink.Preserves Queues.RxLink.HistoryLinked (Origins.HistoryAdapters.focus a) ∧
+      Queues.RxLink.Preserves Queues.RxLink.HistoryReceiptsValid (Origins.HistoryAdapters.focus a)) :=
+  ⟨Queues.RxHistory.decryptStep_projects, Queues.RxHistory.activationIteration_projects,
+    Queues.RxHistory.handshakeReceiveWorker_projects, Origins.HistoryAdapters.prepare_valid,
+    Origins.HistoryAdapters.receiveStep_valid, Origins.HistoryAdapters.receiveIteration_valid,
+    fun _ a => ⟨Queues.RxCompletion.origin_quiet a, Queues.RxLink.linked_origin a,
+      Queues.RxLink.receipts_origin a⟩⟩
 
 end Leanux.Proofs.WG.CryptokeyRouting

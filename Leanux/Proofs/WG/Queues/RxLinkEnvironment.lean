@@ -30,7 +30,7 @@ theorem afterXmit_preserves : Preserves P RxHistory.afterXmit := by
     | link_steps
 
 theorem handshakeReceiveWorker_preserves : Preserves P RxHistory.handshakeReceiveWorker :=
-  workerLoopPrefix_preserves _ _ history_safe (mixed_quiet _)
+  workerLoopPrefix_preserves _ _ history_safe receiveStep_quiet
     (nestedResched_preserves _) _ _
 
 theorem inject_preserves (family port : Nat) (msg : List UInt8) (tos : Nat) (ll : Bool) (dest : Nat) :
