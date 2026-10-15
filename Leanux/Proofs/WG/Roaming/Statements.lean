@@ -4,6 +4,7 @@ import Leanux.Proofs.WG.Roaming.Authentication
 import Leanux.Proofs.WG.Roaming.PublicationClaims
 import Leanux.Proofs.WG.Roaming.PollEndpointClaims
 import Leanux.Proofs.WG.Roaming.ResponseCallClaims
+import Leanux.Proofs.WG.Roaming.InitiationCallClaims
 
 namespace Leanux.Proofs.WG.Roaming
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise
@@ -122,5 +123,34 @@ theorem original_response_endpoint_authentication (msg : List UInt8) (src : SkbS
     · intro w pre
       rw [observedResponseHandshake_source msg src kind]
     · exact observedResponseHandshake_facts msg src kind
+
+/-- For initiation-kind packets, the complete original caller factors at its
+actual endpoint setter. A missing cut takes a pure suffix; a present cut starts
+the original setter and retains response sending and the common continuation.
+The observation is exactly that same prefix/suffix execution's cut. On normal
+full completion, a present cut records actual MAC admission, both AEAD plaintexts
+under the specified derived keys/AAD, the public-key table's first matching
+lookup and acquired reference, the supplying peer reads, the memcmp replay check, signed wrapping
+flood/consumption checks, and commit. No equality between the decrypted
+static key and the resident peer's remoteStatic, fixed plaintext length, final
+endpoint preservation or failed-full-call prefix retention is asserted. The
+outer source is an argument to the actual setter, not an AEAD input. Discarding
+the observation is unconditionally the original caller, including errors, by
+observedInitiationHandshake_erase. -/
+theorem original_initiation_endpoint_authentication (msg : List UInt8) (src : SkbSource)
+    (kind : messageType msg = MESSAGE_HANDSHAKE_INITIATION) :
+    Campaign2.AgreesOn (fun _ => True) (receiveHandshakePacket msg src)
+      (initiationCallPrefix msg src >>= initiationCallSuffix msg src) ∧
+    Campaign2.AgreesOn (fun _ => True) (observedInitiationHandshake msg src)
+      (initiationCallTranscript msg src) ∧
+    Campaign2.Ensures (observedInitiationHandshake msg src) (fun _ => True)
+      (fun observed _ => InitiationCallObservation msg observed) := by
+  constructor
+  · intro w pre
+    rw [receiveHandshakePacket_initiation msg src kind]
+  · constructor
+    · intro w pre
+      rw [observedInitiationHandshake_source msg src kind]
+    · exact observedInitiationHandshake_facts msg src kind
 
 end Leanux.Proofs.WG.Roaming
