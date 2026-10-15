@@ -317,6 +317,37 @@ class NetnsExitYield(unittest.TestCase):
         self.assertIn('the record is site 999', replay_raw(trace) or '')
 
 
+# Campaign 2's batch-backlog witness (.worktrees/proofs-campaign-2/docs/
+# 2026-10-14-campaign-2-mirror-requests.md, section 1; its typed form in the
+# campaign's Leanux/Proofs/WG/Progress/BatchBacklog.lean): a constructed record
+# stream, not a capture. `wg_up` with an all-zero port draw (32768) and
+# jiffies-end 100; then a `wg_batch` of one 64-byte cookie-shaped injection
+# whose records are a NET_RX section with the receive worker's queue record
+# and jiffies-end 101, and no receive-worker section. The batch's completion
+# guard (Env.afterBatch) omitted the handshake receive queue, so the mirror
+# accepted the operation with a packet queued and its worker pending, where
+# the injection path's drain check refuses it. Refused since 2026-10-15 (the
+# environment's completion rule; the mirror modules untouched). A guest run
+# cannot host this witness: the kernel always dispatches the worker.
+def _word(n, width=8):
+    return n.to_bytes(width, 'little').hex()
+
+
+BATCH_BACKLOG = {
+    "version": 1, "id": "campaign2-pending-handshake",
+    "ops": [{"op": "wg_up"},
+            {"op": "wg_batch", "wait_ms": 100,
+             "items": [{"kind": "inject", "family": 4, "port": 32768, "message": "03000000" + "00" * 60}]}],
+    "hidden": [[[125, _word(0)], [128, _word(100)]],
+               [[48, _word(0) + _word(0)], [301, _word(1) + _word(0)], [49, _word(0)], [128, _word(101)]]],
+    "arm_records": True}
+
+
+class BatchBacklog(unittest.TestCase):
+    def test_queued_receive_worker_without_its_section_is_refused(self):
+        self.assertIn("work the batch queued outlived the guest's wait", replay_raw(BATCH_BACKLOG) or '')
+
+
 def _replay_prepared(trace):
     """Run the model on a trace whose caller reads are already in place (no second synthesis)."""
     if not MODEL.is_file():

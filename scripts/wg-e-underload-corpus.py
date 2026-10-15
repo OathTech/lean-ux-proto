@@ -39,6 +39,7 @@ DEVICE, PEER, PORT = d1.DEVICE, d1.PEER, d1.PORT
 BARE = {"net_fixture": "bare"}
 CREATE = {"op": "wg_create"}
 UP = {"op": "wg_up"}
+DOWN = {"op": "wg_down"}
 OBSERVE = {"op": "wg_observe"}
 GET = {"op": "wg_get"}
 # Just above the 512 threshold: io_uring runs the sends inline in the trace task
@@ -116,6 +117,28 @@ def traces():
         "e_underload_flood": base_ops() + [flood(), OBSERVE, GET],
         # one leading valid under load -> exactly one byte-exact cookie reply
         "e_underload_cookie": base_ops() + [flood(leading=[v1]), OBSERVE, GET],
+        # B1 (docs/2026-10-15-design-b1-handshake-ring.md, section 7): the
+        # handshake ring's capacity. A fresh 4096-slot ring takes 4096 of the
+        # 4097 sends; the worker's first packet reads the counter at 4096, and
+        # the tail is 4095 packets (the mirror's per-packet contract predicts
+        # it). The trace ends at the flood: the 4.5 s bound counts to the end
+        # of the last operation, and the comparison child is at 0.67 s there.
+        "e_ring_full": base_ops() + [flood(leading=[v1], count=4096)],
+        # the batch rule and the carry across wg_stop: 537 packets consumed
+        # leave slots 528 to 536 occupied (537 = 33 * 16 + 9; at a batch of 32
+        # the last 25 would be carried), a wg_down/wg_up leaves the cursors as
+        # they are (device.c:130 polls an empty ring once), and the second
+        # flood takes 4087 of its 4088 sends (4071 at batch 32; 4088 at batch
+        # 1). The first stage crosses the threshold (537, not 25): the
+        # comparison child reruns the trace in the coverage child's boot, and
+        # the kernel-global `last_under_load` (receive.c:100) the coverage
+        # child's second flood left behind makes a below-threshold first
+        # packet read the decay clock in that child only (receive.c:117), a
+        # record the mirror cannot predict (the same leak chunk isolation
+        # keeps between traces, here between the two children of one trace);
+        # a first stage under load from the queue depth reads the clocks the
+        # mirror predicts in both children.
+        "e_ring_carry": base_ops() + [flood(leading=[v1], count=536), DOWN, UP, flood(leading=[v1], count=4087)],
         # two leading valids under load -> two byte-exact cookie replies
         "e_underload_two_replies": base_ops() + [flood(leading=[v1, v2]), OBSERVE, GET],
         # make_cookie's secret rotation (cookie.c:96-102, COOKIE_SECRET_MAX_AGE
@@ -188,12 +211,20 @@ def ratelimit_traces():
     # and its token compare by the operands; only the first response is steered.
     two = flood(leading=[rl_initiation(d1.PEER_EPHEMERAL, 1, d1.PEER_INDEX),
                          rl_initiation(d1.PEER_EPHEMERAL_2, 2, d1.PEER_INDEX_2)])
-    steer = [["cookie_secret", RL_SECRET.hex()],
-             ["resp_ephemeral", d1.RESP_EPHEMERAL.hex()], ["index_draw", d1.le32(RL_INDEX_1)]]
+    steer = RL_STEER
     expect = ["wg_receive_handshake_packet.initiation=1", "wg_ratelimiter_allow.entry_matches=1",
               "wg_ratelimiter_allow.inet=1"]
     return {"e_underload_ratelimit": dict(ops=[CREATE, configure_peer(), UP, two, OBSERVE, GET],
                                           steer=steer, expect=expect)}
+
+
+# The ratelimiter traces' schedule, in encounter order: the cookie secret
+# (wg_create), then the entry allocation at the first initiation's insert
+# (ratelimiter.c:138, kind 305: a `draw` entry, which arms the trace's chunk
+# for the site so the mirror consumes its record; B4, docs/2026-10-15-
+# design-b4-load-ratelimiter.md 4.3), then the response's ephemeral and index.
+RL_STEER = [["cookie_secret", RL_SECRET.hex()], ["kmemCacheAllocRlEntry", "draw"],
+            ["resp_ephemeral", d1.RESP_EPHEMERAL.hex()], ["index_draw", d1.le32(RL_INDEX_1)]]
 
 
 def write_suite(subdir, cases):
@@ -255,8 +286,7 @@ def ratelimit6_traces():
     the sixth is denied: VALID_MAC_WITH_COOKIE_BUT_RATELIMITED, an invalid MAC
     under load, dropped (`.macRatelimited=1`, `.rlAllow=0`). The receive
     audit's F12; the pre-release review's limitations table."""
-    steer = [["cookie_secret", RL_SECRET.hex()],
-             ["resp_ephemeral", d1.RESP_EPHEMERAL.hex()], ["index_draw", d1.le32(RL_INDEX_1)]]
+    steer = RL_STEER
     two = flood(leading=[rl_initiation6(d1.PEER_EPHEMERAL, 1, d1.PEER_INDEX),
                          rl_initiation6(d1.PEER_EPHEMERAL_2, 2, d1.PEER_INDEX_2)], family=6)
     six = flood(leading=[rl_initiation6(bytes([0x60 + i]) * 32, i + 1, 0x0600_0000 + i) for i in range(6)],
@@ -275,13 +305,26 @@ def ratelimit6_traces():
     }
 
 
+def busy_traces():
+    """The producer's busy test (receive.c:554, `handshake_queue_len >
+    MAX_QUEUED_INCOMING_HANDSHAKES / 2` = 2048): the k-th send of the batch
+    sees k - 1 queued, so a flood of 2,100 takes the trylock arm from its
+    2,050th packet. On this configuration the trylock always succeeds
+    (include/linux/spinlock_up.h:56: no CONFIG_SMP, no CONFIG_DEBUG_SPINLOCK)
+    and the packet is produced under it (B4, section 2.5). The mirror runs
+    the producer per packet only with the exact flood (B4's part 2); until
+    then the arm's coverage is the kernel's alone."""
+    return {"e_underload_busy": base_ops() + [flood(count=2100), OBSERVE, GET]}
+
+
 def main():
     write_suite("wireguard", traces())
     write_suite("wireguard", boundary_traces())
+    write_suite("wireguard", busy_traces())
     write_steered("wireguard", ratelimit_traces())
     write_steered("wireguard", ratelimit6_traces())
     write_suite("underload-controls", controls())
-    print(f"wrote {len(traces()) + len(boundary_traces())} + {len(ratelimit_traces()) + len(ratelimit6_traces())} "
+    print(f"wrote {len(traces()) + len(boundary_traces()) + len(busy_traces())} + {len(ratelimit_traces()) + len(ratelimit6_traces())} "
           f"wireguard and {len(controls())} control traces")
 
 

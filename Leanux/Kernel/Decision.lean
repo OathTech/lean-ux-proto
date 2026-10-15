@@ -1237,7 +1237,16 @@ def Decision.info : Decision → DecisionInfo
   | .addMacCookieValid => d "wg_cookie_add_mac_to_packet.cookie_valid" wck 170 [(171, 171)] []
   | .addMacCookieFresh => d "wg_cookie_add_mac_to_packet.cookie_fresh" wck 171 [(173, 174)] []
   | .cookieSecretExpired => d "make_cookie.secret_expired" wck 96 [(97, 101)] []
-  | .cookieProtoIp => d "make_cookie.ipv4" wck 107 [(108, 109)] []
+  -- In the built kernel the IPv4 arm (108-109) has no cookie.c point of its
+  -- own: its block's entry is attributed to include/linux/ip.h (`ip_hdr`),
+  -- and the only PC attributed to :108 (0xffffffff813a2255 in s4) is the
+  -- IPv6 arm's block entry, covered by every IPv6 make_cookie. The IPv6 arm
+  -- witnesses :110 (the `else if` compare) and :111 (its blake2s_update);
+  -- the IPv4 arm is unobservable, like the initiation arm of receive.c:134-164
+  -- (docs/2026-10-05-e-dos.md, the last appendix). Found by the exact flood
+  -- (B4 part 2, 2026-10-15): the flood's control flow was skipped before,
+  -- and no inject trace reaches make_cookie over IPv6.
+  | .cookieProtoIp => d "make_cookie.ipv4" wck 107 [] [(110, 111)]
   | .cookieProtoIpv6 => d "make_cookie.ipv6" wck 110 [(111, 112)] []
   -- drivers/net/wireguard/send.c
   | .respCreated => d "wg_packet_send_handshake_response.created" wsd 94 [(95, 106)] []
@@ -2957,6 +2966,24 @@ def Decision.comparison : Decision → Option Comparison
     allowed IPs or trie nodes. Only these may be reported more than
     once in one operation. -/
 def Decision.repeatable : Decision → Bool
+  -- B4 (docs/2026-10-15-design-b4-load-ratelimiter.md, 2.3, U1): a flood
+  -- runs the handshake producer and the receive worker once per packet, and
+  -- these take both outcomes in one operation (the leading valids against
+  -- the invalid tail; the first packets at or over the threshold against
+  -- the rest; the busy test from the 2,050th packet). A declared
+  -- repeatable decision applies in every operation: for these, "reported
+  -- more than once" and "opposite outcome covered" no longer fire anywhere;
+  -- their per-packet order rests on the record stream.
+  | .hsUnderLoad | .macInvalid | .hsLoadedCookieOk | .hsMacNoCookie | .hsNeedsCookieMac | .rxQueueBusy
+  -- ... and the produce at a full ring (B1's twins e_ring_full and
+  -- e_ring_carry: 4096 produces succeed and the last send is dropped, both
+  -- outcomes in one flood)
+  | .rxProduceFailed
+  -- ... and the consume path when two leading initiations from one source
+  -- are bundled (e_underload_ratelimit*): the second is dropped by noise.c's
+  -- own 50/s test (flood=1, no peer, the handshake's reference put back)
+  -- where the first was consumed (found by the prototype run, 2026-10-15)
+  | .consumeFlood | .consumeFailedPut | .hsInitNoPeer
   | .idxInsertHashed | .idxRemoveHashed
   -- iput runs once per inode an operation releases (a netns close puts several)
   | .iputLastReference | .iputLazytime

@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "id": "e_underload_busy",
+  "net_fixture": "bare",
+  "ops": [
+    {
+      "op": "wg_create"
+    },
+    {
+      "op": "wg_set",
+      "config": {
+        "private_key": "1111111111111111111111111111111111111111111111111111111111111111",
+        "listen_port": 51820,
+        "peers": []
+      }
+    },
+    {
+      "op": "wg_up"
+    },
+    {
+      "op": "wg_flood",
+      "count": 2100,
+      "port": 51820
+    },
+    {
+      "op": "wg_observe"
+    },
+    {
+      "op": "wg_get"
+    }
+  ]
+}

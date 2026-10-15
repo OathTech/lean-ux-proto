@@ -122,7 +122,7 @@ ip)` hash is a declared cut.
 
 | Item | C | Lean | Class | Finding |
 |---|---|---|---|---|
-| F13 | :138 `kmem_cache_alloc(entry_cache, GFP_KERNEL)` | 156 `envOk .ratelimiterEntry` | 5 | The allocation outcome comes from the environment oracle (the pipes-era `EnvSite`), not from a kind-305 record as `docs/2026-10-05-a-alloc.md` §6 declares for E's sites (`replySkb` and `skbCowDataRx` on this same path use `hiddenAlloc`). The arm is `unsupported`, so the verdict cannot differ. Internal. |
+| F13 | :138 `kmem_cache_alloc(entry_cache, GFP_KERNEL)` | 156 `envOk .ratelimiterEntry` | 5 | The allocation outcome comes from the environment oracle (the pipes-era `EnvSite`), not from a kind-305 record as `docs/2026-10-05-a-alloc.md` §6 declares for E's sites (`replySkb` and `skbCowDataRx` on this same path use `hiddenAlloc`). The arm is `unsupported`, so the verdict cannot differ. Internal. | **Fixed 2026-10-15 (B4):** the site is `AllocSite.kmemCacheAllocRlEntry`, consumed by `hiddenAlloc`; the arm is the C's `err_oom` drop. The reason given below was wrong: the kind-305 hook is generic, not a list.
 | F12 | :100-106 the IPv6 table, keyed by the source `/64`; `:108-109 return false` | 139-140 `unsupported "the ratelimiter on a non-IPv4 handshake"` | 4 | Explicit and fail-noisy, but the reason ("arm C is IPv4") is in the code only; no design doc records the IPv6 ratelimiter as excluded. Internal. |
 
 ## 9. `wg_packet_send_handshake_cookie` (send.c:110-122), `wg_cookie_message_create` (cookie.c:180-196), `wg_socket_send_buffer_as_reply_to_skb` (socket.c:203-233) — Receive.lean:186-216
@@ -329,5 +329,5 @@ conditional" cannot override its own omissions.
 | F9 | fixed: `.hsUnderLoad` declared with its operands (receive.c:112-113, the counter against 512); the boundary traces `e_underload_511/512/513` | task/review-receive |
 | F10 | deferred: the 4096-slot handshake `ptr_ring` as a `List` with a length full-test; unreachable inside the domain (the trylock arm at > 2048 stops first); a representation task named in the audit wave's integration record | f45bde8 |
 | F12 | fixed: the IPv6 ratelimiter table (`.rlProtoIp6`, `table6` keyed by the source /64), `e_underload_ratelimit6` and `_deny`; a `wg_flood` with `family: 6` | task/review-receive |
-| F13 | justified, follow-on named: `kmem_cache_alloc(entry_cache)` is not in the kind-305 hook's list, so `envOk .ratelimiterEntry` is the environment's success and the failure arm stops; a record-only site is the follow-on | E design §11 |
+| F13 | fixed (B4, 2026-10-15): `AllocSite.kmemCacheAllocRlEntry` over the generic kind-305 hook, armed by the ratelimiter traces' `draw` entries; the `-ENOMEM` arm is the C's `err_oom` drop, reached only by steering a class the host does not enable. The earlier reason ("not in the kind-305 hook's list") was wrong: there is no list; the site's row in `harness/steer.py` and its constructor were missing | task/design-b4 |
 | F14 | justified: store-hygiene `invariant`s with no C counterpart, fail-noisy on a mirror defect only | internal |
