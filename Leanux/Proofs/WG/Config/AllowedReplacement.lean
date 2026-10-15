@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Config.AllowedRootFrames
 import Leanux.Proofs.WG.Config.AllowedRootRemoval
 import Leanux.Proofs.WG.Config.ScalarReturns
 import Leanux.Proofs.WG.Config.DeviceScalars

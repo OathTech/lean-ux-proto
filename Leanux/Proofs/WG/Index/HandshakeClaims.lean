@@ -42,16 +42,6 @@ theorem indexReplace_indices_spec (pid : PeerId) (kp : KeypairId) :
   · exact unique
   · exact replace_indices pid kp _ unique
 
-theorem keypairCreate_indices_spec (peer : Option PeerId) :
-    ⦃fun w => ⌜IndicesSafe w⌝⦄ keypairCreate peer ⦃⇓? _ w => ⌜IndicesSafe w⌝⦄ := by
-  apply (ensures_iff _ _ _).mp
-  intro w result final pre run
-  obtain ⟨d, device, unique⟩ := pre
-  have effect := keypairCreate_exact peer d w.k.keypairCounter w result final ⟨device, rfl⟩ run
-  cases result with
-  | none => exact ⟨d, effect.1, unique⟩
-  | some id => exact ⟨_, effect.2.1, unique⟩
-
 theorem keypairPut_indices_spec (kp : Option KeypairId) (now : Bool) :
     ⦃fun w => ⌜IndicesSafe w⌝⦄ keypairPut kp now ⦃⇓? _ w => ⌜IndicesSafe w⌝⦄ := by
   have hr := indexRemove_indices_spec

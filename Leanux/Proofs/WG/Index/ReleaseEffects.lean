@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Index.StoreFieldFrames
 import Leanux.Proofs.WG.Index.ReleaseModel
 
 set_option autoImplicit false
@@ -21,13 +22,6 @@ theorem released_keypair (d : Device) (id : KeypairId) (k : Keypair) (now : Bool
       if k.refcount = 1 then none else some { k with refcount := k.refcount - 1 } := by
   cases now <;> by_cases last : k.refcount = 1 <;>
     simp [releasedDevice, unhashKeypair, last]
-
-theorem released_other_keypair (d : Device) (id other : KeypairId) (k : Keypair) (now : Bool)
-    (different : id ≠ other) :
-    (releasedDevice d id k now).keypairs[other]? = d.keypairs[other]? := by
-  cases now <;> by_cases last : k.refcount = 1 <;>
-    simp [releasedDevice, unhashKeypair, last, Std.TreeMap.getElem?_insert,
-      Std.TreeMap.getElem?_erase, different]
 
 theorem released_indices (d : Device) (id : KeypairId) (k : Keypair) (now : Bool)
     (unique : UniqueIndices d.indexTable) :

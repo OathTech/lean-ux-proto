@@ -1,16 +1,10 @@
-import Leanux.Proofs.WG.Progress.ScheduleTurn
+import Leanux.Proofs.WG.Progress.StackFrames
 
 set_option autoImplicit false
 set_option pp.structureInstances false
 
 namespace Leanux.Proofs.WG.Progress
 open Leanux Leanux.WG Leanux.Env Leanux.Proofs.WG.Noise Std.Do
-
-theorem hasWork_world (a : Activation) (initial : World) :
-    Ensures (Activation.hasWork a) (fun w => w = initial) (fun _ w => w = initial) := by
-  rw [ensures_iff]
-  mvcgen [Activation.hasWork, getDev, getPeer, getTxSkb, getK, invariant]
-  all_goals simp_all
 
 def resumptionAmbiguity (w : World) : Stop :=
   .outsideDomain (match w.steps.back? with

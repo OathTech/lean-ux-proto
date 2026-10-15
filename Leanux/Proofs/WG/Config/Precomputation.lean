@@ -35,10 +35,5 @@ theorem precomputeDevice_peer (pid : PeerId) (d : Device) (p : Peer) :
   split <;> simp_all [withPeer]
   split <;> simp_all [withPeer]
 
-theorem precomputeDevice_other (pid q : PeerId) (d : Device) (p : Peer) (other : q ≠ pid) :
-    (precomputeDevice d pid p).peers[q]? = d.peers[q]? := by
-  simp only [precomputeDevice]
-  split <;> simp_all [withPeer, Std.TreeMap.getElem?_insert, Ne.symm other]
-  split <;> simp_all [withPeer, Std.TreeMap.getElem?_insert, Ne.symm other]
 
 end Leanux.Proofs.WG.Config

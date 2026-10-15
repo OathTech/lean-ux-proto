@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Index.StoreFieldFrames
 import Leanux.Proofs.WG.Index.ReleaseModel
 
 namespace Leanux.Proofs.WG.Index
@@ -14,11 +15,6 @@ theorem releasedPeer_peer (pid : PeerId) (d : Device) (p : Peer) :
       if p.refcount = 1 then none else some { p with refcount := p.refcount - 1 } := by
   unfold releasedPeerDevice
   split <;> simp
-
-theorem releasedPeer_other (pid other : PeerId) (d : Device) (p : Peer) (different : pid ≠ other) :
-    (releasedPeerDevice d pid p).peers[other]? = d.peers[other]? := by
-  unfold releasedPeerDevice
-  split <;> simp [Std.TreeMap.getElem?_erase, Std.TreeMap.getElem?_insert, different]
 
 theorem releasedPeer_indices (pid : PeerId) (d : Device) (p : Peer)
     (unique : UniqueIndices d.indexTable) : UniqueIndices (releasedPeerDevice d pid p).indexTable := by
@@ -39,16 +35,6 @@ theorem releasedPeer_dropped (pid : PeerId) (d : Device) (p : Peer) :
       d.txDropped + (if p.refcount = 1 then p.staged.length else 0) := by
   unfold releasedPeerDevice
   split <;> simp_all
-
-theorem releasedPeer_next (pid : PeerId) (d : Device) (p : Peer) :
-    (releasedPeerDevice d pid p).nextKeypairId = d.nextKeypairId := by
-  unfold releasedPeerDevice
-  split <;> rfl
-
-theorem releasedPeer_keypairs (pid : PeerId) (d : Device) (p : Peer) :
-    (releasedPeerDevice d pid p).keypairs = d.keypairs := by
-  unfold releasedPeerDevice
-  split <;> rfl
 
 theorem releasedPeer_owners_bounded (pid : PeerId) (d : Device) (p : Peer)
     (bounded : KeypairOwnersBounded d) : KeypairOwnersBounded (releasedPeerDevice d pid p) := by

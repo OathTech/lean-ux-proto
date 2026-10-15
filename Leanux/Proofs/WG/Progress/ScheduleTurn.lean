@@ -6,11 +6,6 @@ set_option pp.structureInstances false
 namespace Leanux.Proofs.WG.Progress
 open Leanux Leanux.WG Leanux.Env
 
-abbrev TurnResult := ForInStep (Option Unit × Unit)
-
-def turnContinue : TurnResult := .yield (none, ())
-def turnReturn : TurnResult := .done (some (), ())
-
 def resumeCandidates (stack : Option Worker) (candidates : List Activation) : M TurnResult := do
   match candidates with
   | [] => return turnReturn

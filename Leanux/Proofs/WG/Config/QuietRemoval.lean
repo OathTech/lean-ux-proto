@@ -8,13 +8,6 @@ set_option maxHeartbeats 800000
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise Std.Do
 
-def quietCleanupPeer (p : Peer) : Peer := deleteTimersPeer PeerTimer.all (emptyKeysPeer p)
-def quietCleanupDevice (d : Device) (pid : PeerId) (p : Peer) : Device :=
-  deleteTimersDevice PeerTimer.all (emptyKeysDevice d pid p) pid (emptyKeysPeer p)
-def quietRemovedDevice (d : Device) (pid : PeerId) (p : Peer) : Device :=
-  let cleaned := quietCleanupDevice d pid p
-  Index.releasedPeerDevice { cleaned with numPeers := cleaned.numPeers - 1 } pid (quietCleanupPeer p)
-
 def removalDeadGuard (pid : PeerId) : M Unit := do
   if ← branch .peerRemoveNotDead !(← getPeer pid).isDead then
     unsupported "peer_remove_after_dead: WARN_ON(!peer->is_dead)"
@@ -37,16 +30,9 @@ theorem peerRemoveAfterDead_source (pid : PeerId) :
   simp only [peerRemoveAfterDead, removalDeadGuard, decrementPeerCount,
     bind_assoc, distribute, pure_bind]
 
-theorem quietCleanup_frame (d : Device) (pid : PeerId) (p : Peer) :
-    withoutPeers (quietCleanupDevice d pid p) = withoutPeers d :=
-  deleteTimers_withoutPeers _ _ _ _
-
 theorem quietCleanup_resident (d : Device) (pid : PeerId) (p : Peer) :
     (quietCleanupDevice d pid p).peers[pid]? = some (quietCleanupPeer p) :=
   deleteTimers_resident _ _ _ _ (by simp [emptyKeysDevice, withPeer])
-
-theorem quietCleanup_refcount (p : Peer) : (quietCleanupPeer p).refcount = p.refcount := by
-  simp [quietCleanupPeer, deleteTimersPeer, PeerTimer.all, Peer.setTimer, emptyKeysPeer]
 
 theorem decrementPeerCount_returns (d : Device) (positive : 0 < d.numPeers) :
     Returns decrementPeerCount (fun w => w.k.wg = some d)
@@ -94,30 +80,6 @@ theorem peerRemoveAfterDead_quiet_returns (pid : PeerId) (d : Device) (p : Peer)
     { quietCleanupDevice d pid p with numPeers := (quietCleanupDevice d pid p).numPeers - 1 }
     (quietCleanupPeer p) (quietCleanup_resident d pid p)
     (by simpa only [quietCleanup_refcount] using live)
-
-def removalQueues (d : Device) := (d.sendWorkQueue, d.clearWorkQueue)
-
-theorem removalRun_queues {d final : Device} {ids : List NodeId}
-    (steps : RemovalRun d ids final) : removalQueues final = removalQueues d := by
-  induction steps with
-  | nil d => rfl
-  | cons d id rest n next final read step tail ih =>
-    rw [ih]
-    have hn := congrArg removalQueues (nodeRemoval_frame step)
-    have hl := congrArg removalQueues (deleteListedNodes_withoutPeers id d d.peers.toList)
-    simpa only [removalQueues, withoutTrie, withoutPeers] using hn.trans hl
-
-theorem removalEffect_queues {d final : Device} {ids : List NodeId}
-    (steps : RemovalEffect d ids final) : removalQueues final = removalQueues d := by
-  cases ids with
-  | nil => subst final; rfl
-  | cons id rest => have h := removalRun_queues steps; exact h
-
-theorem erasePeerList_exceptList (ids : List NodeId) (p : Peer) :
-    { erasePeerList ids p with allowedipsList := [] } = { p with allowedipsList := [] } := by
-  induction ids generalizing p with
-  | nil => rfl
-  | cons id rest ih => exact ih (eraseListedPeer id p)
 
 theorem peerRemove_quiet_returns (pid : PeerId) (d removed : Device) (p : Peer)
     (resident : d.peers[pid]? = some p) (live : 0 < p.refcount) (count : 0 < d.numPeers)

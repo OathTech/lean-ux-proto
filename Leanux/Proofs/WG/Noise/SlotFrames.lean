@@ -32,4 +32,19 @@ theorem keypairPut_peers_spec (P : (PeerId → Option Peer) → Prop)
   all_goals dsimp [peerAt] at *
   all_goals simp_all
 
+def tagAt (k : Kernel) (pid : PeerId) : Option Nat :=
+  (k.wg.bind fun d => d.peers[pid]?).map Peer.handshakeState
+
+theorem addNewKeypair_tag_spec (pid : PeerId) (kp : KeypairId) (tag : Nat) :
+    ⦃fun w => ⌜tagAt w.k pid = some tag⌝⦄ addNewKeypair pid kp
+    ⦃⇓? _ w => ⌜tagAt w.k pid = some tag⌝⦄ := by
+  have hp := keypairPut_peers_spec (fun ps => (ps pid).map Peer.handshakeState = some tag)
+  noise_vcgen [addNewKeypair, _private.Leanux.WG.Keypair.«0».Leanux.WG.modifyPeer,
+    getPeer, getKeypair, getDev, getK, setPeer, modifyDev, modifyK, branch, invariant, hp]
+  all_goals try dsimp +zetaDelta only at *
+  all_goals repeat intro
+  all_goals simp_all [tagAt, peerAt, Option.bind_map, Function.comp_def,
+    Std.TreeMap.getElem?_insert]
+  all_goals grind
+
 end Leanux.Proofs.WG.Noise

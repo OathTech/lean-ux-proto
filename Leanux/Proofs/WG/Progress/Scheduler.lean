@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Progress.ControlSource
 import Leanux.Env.Batch
 import Leanux.Proofs.WG.Noise.Basic
 
@@ -33,20 +34,5 @@ theorem consistent_hidden_iff (a : Activation) (w v : World) :
   | ok out => simp [probeResult, eq_comm]
   | error e => cases e <;> simp [probeResult, eq_comm]
 
-theorem workerIter_empty (worker : Worker) (pid : Option Nat)
-    (step afterItem : M Bool) (w v : World)
-    (empty : step.run w = .ok (false, v)) :
-    (workerIter worker pid step afterItem).run w = .ok (.ended, v) := by
-  simp only [workerIter, StateT.run_bind, empty, Except.bind]
-  rfl
-
-theorem workerIter_productive (worker : Worker) (pid : Option Nat)
-    (step afterItem : M Bool) (w v : World)
-    (item : step.run w = .ok (true, v)) :
-    (workerIter worker pid step afterItem).run w =
-      (afterItem.run v >>= fun out =>
-        pure (if out.1 then .yielded else .continued, out.2)) := by
-  simp only [workerIter, StateT.run_bind, item, Except.bind]
-  rfl
 
 end Leanux.Proofs.WG.Progress

@@ -6,27 +6,6 @@ set_option pp.structureInstances false
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise Std.Do
 
-/-- Device membership metadata unchanged by allowed-IP removal. -/
-def removalMetadata (d : Device) := (d.peerList, d.peerHashtable, d.indexTable, d.numPeers)
-
-theorem removalRun_metadata {d final : Device} {ids : List NodeId}
-    (steps : RemovalRun d ids final) : removalMetadata final = removalMetadata d := by
-  induction steps with
-  | nil d => rfl
-  | cons d id rest n next final read step tail ih =>
-    rw [ih]
-    have hn := congrArg removalMetadata (nodeRemoval_frame step)
-    have hl := congrArg removalMetadata (deleteListedNodes_withoutPeers id d d.peers.toList)
-    simpa only [removalMetadata, withoutTrie, withoutPeers] using hn.trans hl
-
-theorem removalEffect_metadata {d final : Device} {ids : List NodeId}
-    (steps : RemovalEffect d ids final) : removalMetadata final = removalMetadata d := by
-  cases ids with
-  | nil => subst final; rfl
-  | cons id rest =>
-    have h := removalRun_metadata steps
-    exact h
-
 def unlistPeer (d : Device) (pid : PeerId) : Device :=
   { d with peerList := d.peerList.filter (· != pid) }
 

@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Config.QuietFrames
 import Leanux.Proofs.WG.Config.EmptyKeypairs
 
 set_option autoImplicit false
@@ -7,27 +8,12 @@ set_option maxHeartbeats 800000
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise Std.Do
 
-def deleteTimersPeer : List PeerTimer → Peer → Peer
-  | [], p => p
-  | t :: ts, p => deleteTimersPeer ts (p.setTimer t none)
-
-def deleteTimersDevice : List PeerTimer → Device → PeerId → Peer → Device
-  | [], d, _, _ => d
-  | t :: ts, d, pid, p =>
-    deleteTimersDevice ts (withPeer d pid (p.setTimer t none)) pid (p.setTimer t none)
-
 theorem deleteTimers_resident (ts : List PeerTimer) (d : Device) (pid : PeerId) (p : Peer)
     (resident : d.peers[pid]? = some p) :
     (deleteTimersDevice ts d pid p).peers[pid]? = some (deleteTimersPeer ts p) := by
   induction ts generalizing d p with
   | nil => exact resident
   | cons t ts ih => exact ih _ _ (by simp [withPeer])
-
-theorem deleteTimers_withoutPeers (ts : List PeerTimer) (d : Device) (pid : PeerId) (p : Peer) :
-    withoutPeers (deleteTimersDevice ts d pid p) = withoutPeers d := by
-  induction ts generalizing d p with
-  | nil => rfl
-  | cons t ts ih => exact ih _ _
 
 theorem delTimer_returns (pid : PeerId) (t : PeerTimer) (d : Device) (p : Peer)
     (resident : d.peers[pid]? = some p) :

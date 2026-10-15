@@ -5,38 +5,6 @@ set_option autoImplicit false
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise
 
-/-- Missing nodes and resident nodes with no peer both have no owner. -/
-def nodeOwner (d : Device) (id : NodeId) : Option PeerId :=
-  d.nodes[id]?.bind AipNode.peer
-
-theorem writeNode_owner (d : Device) (id tracked : NodeId) (n : AipNode) :
-    nodeOwner (writeNode d id n) tracked = if tracked = id then n.peer else nodeOwner d tracked := by
-  by_cases same : tracked = id <;> simp [nodeOwner, writeNode, Std.TreeMap.getElem?_insert, same, Ne.symm]
-
-theorem writeNode_owner_frame (d : Device) (id tracked : NodeId) (old n : AipNode)
-    (resident : d.nodes[id]? = some old) (owner : n.peer = old.peer) :
-    nodeOwner (writeNode d id n) tracked = nodeOwner d tracked := by
-  rw [writeNode_owner]
-  by_cases same : tracked = id
-  · subst tracked; simp [nodeOwner, resident, owner]
-  · simp [same]
-
-theorem slotWrite_owner {d final : Device} {slot : Slot} {value : Option NodeId}
-    (write : SlotWrite d slot value final) (tracked : NodeId) :
-    nodeOwner final tracked = nodeOwner d tracked := by
-  cases write with
-  | root4 => rfl
-  | root6 => rfl
-  | child parent bit n value resident valid shape =>
-    exact writeNode_owner_frame d parent tracked n _ resident rfl
-
-theorem childReparent_owner {d final : Device} {child : Option NodeId} {slot : Slot}
-    (write : ChildReparent d child slot final) (tracked : NodeId) :
-    nodeOwner final tracked = nodeOwner d tracked := by
-  cases write with
-  | none => rfl
-  | some id n slot resident => exact writeNode_owner_frame d id tracked n _ resident rfl
-
 theorem clearNode_owner_none (d : Device) (id tracked : NodeId) (n : AipNode)
     (clear : tracked = id ∨ nodeOwner d tracked = none) :
     nodeOwner (writeNode d id { n with peer := none }) tracked = none := by
@@ -73,11 +41,6 @@ theorem nodeRemoval_owner_none {d final : Device} {id : NodeId} {n : AipNode}
     right
     rw [slotWrite_owner unlink]
     exact cleared
-
-theorem deleteListedNodes_owner (d : Device) (id tracked : NodeId) :
-    nodeOwner (deleteListedNodes id d d.peers.toList) tracked = nodeOwner d tracked := by
-  have nodes := congrArg Device.nodes (deleteListedNodes_withoutPeers id d d.peers.toList)
-  simpa only [withoutPeers, nodeOwner] using congrArg (fun nodes => nodes[tracked]?.bind AipNode.peer) nodes
 
 theorem removalRun_owner_none {d final : Device} {ids : List NodeId}
     (steps : RemovalRun d ids final) (tracked : NodeId)

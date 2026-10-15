@@ -7,13 +7,6 @@ set_option maxHeartbeats 800000
 namespace Leanux.Proofs.WG.Index
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise Leanux.Proofs.WG.Config Std.Do
 
-theorem setPeer_ownersBounded (pid : PeerId) (p : Peer) :
-    ⦃fun w => ⌜OwnersBoundedSafe w⌝⦄ setPeer pid p ⦃⇓? _ w => ⌜OwnersBoundedSafe w⌝⦄ := by
-  mvcgen [setPeer, modifyDev, modifyK]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [OwnersBoundedSafe, KeypairOwnersBounded]
-  all_goals grind
-
 theorem indexInsert_handshake_ownersBounded (pid : PeerId) :
     ⦃fun w => ⌜OwnersBoundedSafe w⌝⦄ indexInsert (.handshake pid) ⦃⇓? _ w => ⌜OwnersBoundedSafe w⌝⦄ := by
   apply (ensures_iff _ _ _).mp

@@ -48,4 +48,11 @@ theorem deriveKeys_ownersFresh (kp : KeypairId) (initiator : Bool) (ck : List UI
   have hs := setKeypair_ownersFresh kp
   mvcgen [deriveKeys, getKeypair, getDev, getK, invariant, hh, hk, ho, hs]
 
+theorem setPeer_ownersBounded (pid : PeerId) (p : Peer) :
+    ⦃fun w => ⌜OwnersBoundedSafe w⌝⦄ setPeer pid p ⦃⇓? _ w => ⌜OwnersBoundedSafe w⌝⦄ := by
+  mvcgen [setPeer, modifyDev, modifyK]
+  all_goals try dsimp +zetaDelta only at *
+  all_goals simp_all [OwnersBoundedSafe, KeypairOwnersBounded]
+  all_goals grind
+
 end Leanux.Proofs.WG.Index

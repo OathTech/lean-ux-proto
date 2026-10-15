@@ -6,11 +6,6 @@ set_option pp.structureInstances false
 namespace Leanux.Proofs.WG.Index
 open Leanux Leanux.WG
 
-theorem released_next (d : Device) (id : KeypairId) (k : Keypair) (now : Bool) :
-    (releasedDevice d id k now).nextKeypairId = d.nextKeypairId := by
-  cases now <;> by_cases last : k.refcount = 1 <;>
-    simp [releasedDevice, unhashKeypair, last]
-
 theorem released_owners_bounded (d : Device) (id : KeypairId) (k : Keypair) (now : Bool)
     (bounded : KeypairOwnersBounded d) :
     KeypairOwnersBounded (releasedDevice d id k now) := by

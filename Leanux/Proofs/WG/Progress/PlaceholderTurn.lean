@@ -6,15 +6,6 @@ set_option pp.structureInstances false
 namespace Leanux.Proofs.WG.Progress
 open Leanux Leanux.WG Leanux.Env
 
-/-- The original recordless dispatch priority. -/
-def placeholderSelection (d : Device) : Option Worker :=
-  [Worker.receiveWorker, .decryptWorker, .encryptWorker, .txWorker].find? fun worker =>
-    match worker with
-    | .receiveWorker => !d.handshakeQueue.isEmpty
-    | .decryptWorker => !d.decryptQueue.empty
-    | .encryptWorker => !d.encryptQueue.empty
-    | _ => !d.txWorkQueue.isEmpty
-
 def placeholderDispatch (worker : Worker) : M TurnResult := do
   if !(← dispatch worker) then invariant s!"{worker.symbol} has work but was not dispatched"
   return turnContinue

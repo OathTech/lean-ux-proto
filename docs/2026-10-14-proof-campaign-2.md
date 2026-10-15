@@ -28,11 +28,13 @@ No independent existential projected runs are spliced together.
 | H1 Noise | 11 local state/slot contracts | Public projection complete; whole-call edge coverage and lifetime confirmation remain open. |
 | H2 Index | 23 original-operation uniqueness, lookup, collision-draw and release contracts | Public projection complete, retaining 13 total contracts, 9 normal-return contracts and 1 exact stop; reachable coherence, broader records and the corpus runner composition remain open. |
 | H3 Roaming | 5 endpoint/authentication leaf contracts | Public projection complete; authentication provenance and complete caller coverage remain open. |
-| H4 Configuration | 60 contracts and the reachable internal dump-accounting finding | Public projection complete; residual within-WG helper separation remains. Queued/live-keypair removal, private-key collision, mixed attributes, global ownership and general dump composition remain open. |
-| H5 Progress | 25 contracts and the accepted batch-backlog counterexample | Public projection next; productive-record decrease, full loop coverage and probe/detach composition remain open. The backlog witness is historical over `de62c9d`: main's batch guard now addresses request 1. |
+| H4 Configuration | 60 contracts and the reachable internal dump-accounting finding | Public projection and frame separation complete. Queued/live-keypair removal, private-key collision, mixed attributes, global ownership and general dump composition remain open. |
+| H5 Progress | 25 contracts and the accepted batch-backlog counterexample | Public projection and frame separation complete; productive-record decrease, full loop coverage and probe/detach composition remain open. The backlog witness is historical over `de62c9d`: main's batch guard now addresses request 1. |
 | H6 Timers | 29 local timer/worker contracts | Public projection and generic frame separation complete; environment worker selection/dequeue, complete retry episodes and whole-run arming/session counts remain open. |
 
-No new mathematical result was started during this factoring checkpoint.
+Projection/frame factoring is complete for all six results. All 153 existing
+headline names remain, and no public statement directly names `World` or
+`Kernel`. No new mathematical result was started during this factoring checkpoint.
 The full proof gate remains failed in inherited campaign-1 counter-window and
 index carries; those files have not been edited. Scoped validation does not
 constitute a passing full gate. The report's earlier results concern their
@@ -47,11 +49,11 @@ connections to the current executable mirror, not replacement interpreters.
 | Area | Data / claims / source connections | Separate frame support |
 | --- | --- | --- |
 | Common C2 | `Campaign2/View` is data-only; `Campaign2/Bridge` defines projection and universal execution contracts. | No shared campaign-1 layer is changed. |
-| H1 | `Noise/Model`, `Statements`, `Slots`, `StateEdges`, `ConsumeEdges`; `Execution` holds the concrete monad connection. | `AccessFrames`, `KernelFrames`, `PeerFrames`, `SlotFrames`; `Basic` reexports access support. |
-| H2 | `Index/View`, `TableModel`, `OwnerWordModel`, `AllocationModel`, `ReleaseModel` and pure release effects/bounds; `Statements`, `HandshakeClaims`, `OwnerUpdateClaims` and the other operation/source modules. | `IndexFieldFrames`, `OwnerFieldFrames`; the old `HandshakeFrames` and `OwnerFrames` paths are import-only reexports, not duplicated lemmas. |
+| H1 | `Noise/Model`, `Statements`, `Slots`, `StateEdges`, `ConsumeEdges`; `Execution` holds the concrete monad connection; `AccessSource` holds accessor read/write contracts, reexported by `Basic`. | `KernelFrames`, `PeerFrames`, `SlotFrames`. |
+| H2 | `Index/View`, `TableModel`, `OwnerWordModel`, `AllocationModel`, `ReleaseModel` and pure release effects/bounds; `Statements`, `HandshakeClaims`, `OwnerUpdateClaims` and the other operation/source modules. | `IndexFieldFrames`, `OwnerFieldFrames`, `StoreFieldFrames`; the old `HandshakeFrames` and `OwnerFrames` paths are import-only reexports, not duplicated lemmas. |
 | H3 | `Roaming/Model`, `View`, `Statements`, `EndpointClaims`, `EndpointSource`, `Authentication`. | `Roaming/Frames`; `Basic` reexports the endpoint source connection. |
-| H4 | `Config/Model`, `ClaimView`, `Statements`, `SourceClaims`, `ObservationBridge`, and existing substantive effect/source modules. | `ConcreteFrames` isolates six whole-kernel endpoint contracts; `OperationFrames` isolates seven generic helpers; `ReadbackFrames` retains necessary socket/fixture preservation. Further within-WG footprint helpers still need their family file split. |
-| H5 | `Progress/Statements` and existing concrete scheduler/source modules; projection migration is queued. | Probe/filter/no-work preservation still needs separation during migration. |
+| H4 | `Config/Model`, `AllowedRemovalModel`, `QuietModel`, `ClaimView`, `Statements`, `SourceClaims`, `ObservationBridge`, and existing substantive effect/source modules. | `ConcreteFrames` isolates six whole-kernel endpoint contracts; `OperationFrames` isolates seven generic helpers; `ReadbackFrames` retains socket/fixture preservation; `AllowedListFrames`, `AllowedRootFrames`, `AllowedRemovalFrames`, `QuietFrames`, `KeyFieldFrames` isolate within-WG preservation. |
+| H5 | `Progress/Model`, `View`, `Statements`, `SourceClaims`, `ObservationBridge`; `ControlLaws` is generic state/error control and `ControlSource` connects it exactly to the original worker; the scheduler/source modules retain actual execution factors. | `StackFrames` isolates caller-guard preservation. Probe/filter/no-work contracts also establish outputs and remain substantive source claims. |
 | H6 | `TimerDiscipline/Model`, `View`, `Statements`, `ObservationBridge`, `ObservationClaims`, `SourceClaims`, and `*Source` operational proofs. | `SourceFrames`, `RecordedFrames`, `RecordedJitterFrames`, `SectionFrames`, `SelectionFrames`, `RetryFrames`, `JitterFrames`, `InitiationFrames`, `InitiationPreservationFrames`, `SendCutFrames`, `SendPeerFrames`, `SendSocketFrames`, `SendBufferFrame`, `SendWorkerFrame`. |
 
 A compound exact effect is not a disposable frame merely because its name
@@ -63,17 +65,34 @@ structural preservation made trivial or unstatable; retain and retype those
 outputs and meaningful within-WG preservation. H6's reference-decrement proof
 is therefore in `SendWorkerSource`, separate from send preservation.
 
-Validation at this checkpoint: the five migrated public modules build together
-(215 jobs). All 128 H1–H4/H6 terminal declarations import together and their
+H5 retains two runner findings, two generic worker laws, eighteen total
+inspection contracts, two total original no-work contracts and one scheduler
+agreement. Inspection totality is not underlying-operation success. The actual
+dispatch and NAPI decorations erase to the original actions, with exact stops;
+all branch observations retain their concrete intermediate executions. Generic
+worker laws have an exact original-operation instance and make no claim that
+arbitrary callbacks are WireGuard-local.
+
+The final family pass moved 38 preservation helpers, 11 supporting definitions
+and one exact model write/read equation without changing their text. Pure models
+were separated only to avoid import cycles. Compound effects, index-changing
+invariant proofs and release bounds remain claims. Independent read-only review
+of the projected interfaces found no semantic defect. A new pure frame file's
+namespace header initially failed compilation; correcting that header closed the
+same declarations. This was a source correction, not an infrastructure retry.
+
+Validation at the completed factoring checkpoint: all six public modules build
+together (238 jobs). All 153 terminal declarations import together and their
 printed axioms are a subset of `propext`, `Classical.choice`, `Quot.sound`.
-Fresh stock kernel replay passed separately for H2, H4 and H6. Commands:
-`LEAN_NUM_THREADS=32 capped -- scripts/in-bundle lake build` with those five
-`Leanux.Proofs.WG.<Result>.Statements` targets; the same capped bundle runs
+Commands: `LEAN_NUM_THREADS=32 capped -- scripts/in-bundle lake build` with all
+six `Leanux.Proofs.WG.<Result>.Statements` targets; the same capped bundle runs
 `lake env lean --stdin` for the complete headline axiom list and
-`lake env leanchecker --fresh <module>` for replay. The full
+`lake env leanchecker --fresh <module>` for replay. Fresh stock replay passed
+for H2, H4 and H5 after the final family moves; H6 passed at `5085fd9` and is
+unchanged since. The full
 `LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle scripts/proof-gate`
 failed in inherited `ReplayWindow.Counterexamples` and `CounterWindow.Refinement`;
-the forbidden-token and import/root/default-target checks passed. No cap hit,
+its forbidden-token and import/root/default-target checks passed. No cap hit,
 guest run or infrastructure rerun. Mirror and shared proof files are unchanged.
 
 [USER 2026-10-15] The index-lookup fix has landed at `de62c9d`; merge main
@@ -182,7 +201,7 @@ composing reachable-state coherence. The landed representation keeps owner
 identity in each table row and its optional peer word in the owner object.
 The two are not interchangeable on arbitrary states.
 
-Twenty terminal statements cover removal, the keypair-removal specialization,
+The first twenty terminal statements cover removal, the keypair-removal specialization,
 handshake replacement, normally completed insertion, lookup owner/table
 provenance, total matched-entry NULL/zero-reference/live lookup effects, and
 recorded collision-prefix completion, a corpus-draw two-call instance and
@@ -241,7 +260,7 @@ timeouts; factoring the generic two-call proof before applying concrete draws
 resolved that elaboration problem. These were failed proof iterations, not
 infrastructure outcomes or successful checks.
 
-`HandshakeFrames` composes numeric uniqueness through original
+`HandshakeClaims` composes numeric uniqueness through original
 `createInitiation`, `createResponse` and `beginSession`, including allocation,
 slot rotation, displaced-key removals and owner replacement. These contracts
 cover normal completion, including early returns; they do not characterize
@@ -264,7 +283,7 @@ Proof elaboration initially failed on intermediate device equalities; explicit
 substitution before the second dereference closed the same statement. These
 were failed proof iterations, not infrastructure reruns.
 
-`OwnerFrames`, `SessionOwners` and `OwnerCreation` establish embedded-owner
+`OwnerUpdateClaims`, `SessionOwners` and `OwnerCreation` establish embedded-owner
 uniqueness through the three original handshake operations. The allocation
 bound supplies the destination freshness needed by replacement; the designated
 owner remains unhashed through key derivation, clearing and slot rotation.

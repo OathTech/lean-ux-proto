@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Index.StoreFieldFrames
 import Leanux.Proofs.WG.Index.OwnerWordModel
 import Leanux.Proofs.WG.Index.Lookup
 

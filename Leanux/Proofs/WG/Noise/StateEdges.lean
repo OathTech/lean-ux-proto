@@ -6,9 +6,6 @@ set_option maxHeartbeats 800000
 namespace Leanux.Proofs.WG.Noise
 open Leanux Leanux.WG Std.Do
 
-def tagAt (k : Kernel) (pid : PeerId) : Option Nat :=
-  (k.wg.bind fun d => d.peers[pid]?).map Peer.handshakeState
-
 theorem createInitiation_tag (pid : PeerId) (old : Nat) :
     Ensures (createInitiation pid)
       (fun w => tagAt w.k pid = some old)
@@ -72,18 +69,6 @@ theorem expireCurrentPeerKeypairs_slots (pid : PeerId) (p : Peer) :
   all_goals try dsimp +zetaDelta only at *
   all_goals repeat intro
   all_goals simp_all [P, peerAt, slots, Option.bind_map, Function.comp_def,
-    Std.TreeMap.getElem?_insert]
-  all_goals grind
-
-theorem addNewKeypair_tag_spec (pid : PeerId) (kp : KeypairId) (tag : Nat) :
-    ⦃fun w => ⌜tagAt w.k pid = some tag⌝⦄ addNewKeypair pid kp
-    ⦃⇓? _ w => ⌜tagAt w.k pid = some tag⌝⦄ := by
-  have hp := keypairPut_peers_spec (fun ps => (ps pid).map Peer.handshakeState = some tag)
-  noise_vcgen [addNewKeypair, _private.Leanux.WG.Keypair.«0».Leanux.WG.modifyPeer,
-    getPeer, getKeypair, getDev, getK, setPeer, modifyDev, modifyK, branch, invariant, hp]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals repeat intro
-  all_goals simp_all [tagAt, peerAt, Option.bind_map, Function.comp_def,
     Std.TreeMap.getElem?_insert]
   all_goals grind
 

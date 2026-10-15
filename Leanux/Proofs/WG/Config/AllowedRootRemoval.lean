@@ -93,15 +93,5 @@ theorem rootLeafRemoved_node (v4 : Bool) (d : Device) (id : NodeId) (n : AipNode
   · simp [rootLeafRemoved, rootNodeRemoved, Std.TreeMap.getElem?_erase,
       Std.TreeMap.getElem?_insert, Ne.symm same, same, deleteListedNodes_nodes, bumpAllowedips]
 
-theorem rootLeafRemoved_table (v4 : Bool) (d : Device) (id : NodeId) (n : AipNode) :
-    (rootLeafRemoved v4 d id n).peerAllowedips =
-      if v4 then { d.peerAllowedips with root4 := none, seq := d.peerAllowedips.seq + 1 }
-      else { d.peerAllowedips with root6 := none, seq := d.peerAllowedips.seq + 1 } := by
-  cases v4 <;> simp [rootLeafRemoved, rootNodeRemoved, deleteListedNodes_allowedips, bumpAllowedips]
-
-theorem rootLeafRemoved_running (v4 : Bool) (d : Device) (id : NodeId) (n : AipNode) :
-    (rootLeafRemoved v4 d id n).running = d.running := by
-  simpa [rootLeafRemoved, rootNodeRemoved, withoutPeers, bumpAllowedips] using
-    congrArg Device.running (deleteListedNodes_withoutPeers id (bumpAllowedips d) (bumpAllowedips d).peers.toList)
 
 end Leanux.Proofs.WG.Config

@@ -41,4 +41,14 @@ theorem deriveKeys_indices_spec (kp : KeypairId) (initiator : Bool) (ck : List U
   have hs := setKeypair_indices_spec
   mvcgen [deriveKeys, getKeypair, getDev, getK, invariant, hh, hk, ho, hs]
 
+theorem keypairCreate_indices_spec (peer : Option PeerId) :
+    ⦃fun w => ⌜IndicesSafe w⌝⦄ keypairCreate peer ⦃⇓? _ w => ⌜IndicesSafe w⌝⦄ := by
+  apply (ensures_iff _ _ _).mp
+  intro w result final pre run
+  obtain ⟨d, device, unique⟩ := pre
+  have effect := keypairCreate_exact peer d w.k.keypairCounter w result final ⟨device, rfl⟩ run
+  cases result with
+  | none => exact ⟨d, effect.1, unique⟩
+  | some id => exact ⟨_, effect.2.1, unique⟩
+
 end Leanux.Proofs.WG.Index

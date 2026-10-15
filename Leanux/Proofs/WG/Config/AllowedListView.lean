@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Config.AllowedListFrames
 import Leanux.Proofs.WG.Config.AllowedLists
 import Leanux.Proofs.WG.Config.Fwmark
 
@@ -68,25 +69,6 @@ theorem deleteListedNodes_lookup (id : NodeId) (d : Device) (q : PeerId) :
         Std.TreeMap.mem_toList_iff_getElem?_eq_some.mpr found
       have seen : q ∈ d.peers.toList.map Prod.fst := List.mem_map.mpr ⟨(q, p), member, rfl⟩
       simpa only [if_pos seen, found, Option.map_some] using hq
-
-theorem deleteListedNodes_withoutPeers (id : NodeId) (d : Device) (entries : List (PeerId × Peer)) :
-    withoutPeers (deleteListedNodes id d entries) = withoutPeers d := by
-  induction entries generalizing d with
-  | nil => rfl
-  | cons entry rest ih =>
-      simp only [deleteListedNodes, List.foldl_cons]
-      change withoutPeers (deleteListedNodes id (deleteListedNode id d entry) rest) = _
-      rw [ih]
-      unfold deleteListedNode
-      split <;> rfl
-
-theorem deleteListedNodes_nodes (id : NodeId) (d : Device) (entries : List (PeerId × Peer)) :
-    (deleteListedNodes id d entries).nodes = d.nodes := by
-  simpa only [withoutPeers] using congrArg Device.nodes (deleteListedNodes_withoutPeers id d entries)
-
-theorem deleteListedNodes_allowedips (id : NodeId) (d : Device) (entries : List (PeerId × Peer)) :
-    (deleteListedNodes id d entries).peerAllowedips = d.peerAllowedips := by
-  simpa only [withoutPeers] using congrArg Device.peerAllowedips (deleteListedNodes_withoutPeers id d entries)
 
 theorem listDel_peer_lists (id : NodeId) (d : Device) :
     Returns (listDel id) (fun w => w.k.wg = some d)

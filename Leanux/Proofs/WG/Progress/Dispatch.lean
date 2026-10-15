@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Progress.Model
 import Leanux.Proofs.WG.Progress.Scheduler
 import Leanux.Proofs.WG.Config.Returns
 
@@ -93,14 +94,6 @@ theorem dispatch_success_iff (w : Worker) (initial final : World) :
             obtain ⟨rfl, rfl⟩ := Except.ok.inj read
             rw [ha] at ran
             exact (congrArg Prod.snd (Except.ok.inj ran))
-
-def NoDispatchWork (worker : Worker) (d : Device) : Prop :=
-  match worker with
-  | .encryptWorker => d.encryptQueue.empty = true
-  | .decryptWorker => d.decryptQueue.empty = true
-  | .receiveWorker => d.handshakeQueue.isEmpty = true
-  | .txWorker => d.txWorkQueue = []
-  | _ => True
 
 theorem dispatch_no_work (worker : Worker) (d : Device) (initial : World)
     (device : initial.k.wg = some d) (empty : NoDispatchWork worker d) :

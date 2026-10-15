@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Config.KeyFieldFrames
 import Leanux.Proofs.WG.Config.StagedInvalid
 
 set_option pp.structureInstances false
@@ -6,12 +7,6 @@ set_option maxHeartbeats 800000
 
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise Std.Do
-
-theorem invalidateDevice_peers (d : Device) (kp : Option KeypairId) :
-    (invalidateDevice d kp).peers = d.peers := by
-  cases kp with
-  | none => rfl
-  | some id => cases found : d.keypairs[id]? <;> simp [invalidateDevice, found]
 
 def updatedPeer (d : Device) (p : Peer) (now : Int64) : Peer :=
   { zeroedHandshake { p with precomputedStaticStatic := precomputedAfter d.staticIdentity p } with

@@ -29,17 +29,6 @@ theorem writeOwnerWord_read (d : Device) (owner : IndexOwner) (old word : Option
 def acquirePeer (d : Device) (pid : PeerId) (p : Peer) : Device :=
   { d with peers := d.peers.insert pid { p with refcount := p.refcount + 1 } }
 
-theorem acquirePeer_word (d : Device) (pid : PeerId) (p : Peer) (owner : IndexOwner)
-    (old : Option PeerId) (peer : d.peers[pid]? = some p)
-    (resident : ownerWord d owner = some old) :
-    ownerWord (acquirePeer d pid p) owner = some old := by
-  cases owner with
-  | handshake own =>
-    by_cases same : pid = own
-    · subst own; simpa [ownerWord, acquirePeer, peer] using resident
-    · simpa [ownerWord, acquirePeer, Std.TreeMap.getElem?_insert, same] using resident
-  | keypair kp => exact resident
-
 theorem bucket_find (index : Nat) (table : List IndexEntry) :
     (bucket index table).find? (·.index == index) = table.find? (·.index == index) := by
   simp only [bucket, List.find?_filter]
