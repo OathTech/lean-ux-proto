@@ -16,6 +16,7 @@ import Leanux.Proofs.WG.Queues.RxRingTrials
 import Leanux.Proofs.WG.Queues.RxBorrow
 import Leanux.Proofs.WG.Queues.TxDispositionStep
 import Leanux.Proofs.WG.Queues.TxDispositionEndpoints
+import Leanux.Proofs.WG.Queues.RxCompletionRunner
 
 import Leanux.Proofs.WG.Queues.RxPollStampPhase
 import Leanux.Proofs.WG.Queues.RxPollComposition
@@ -1394,8 +1395,8 @@ theorem original_poll_callback_completion (pid : PeerId) (budget : Nat) :
 
 /-- Actual persistent polls append only the fresh local suffix and preserve
 ordered callback pairing at the identical incoming audit seed. This includes
-finite poll sequences and Stops; it is not yet caller/Runner completion closure,
-socket inbox delivery, or receive-pipeline conservation. -/
+finite poll sequences and Stops. The caller/Runner composition follows below;
+socket inbox delivery and receive-pipeline conservation remain separate. -/
 theorem persistent_poll_callback_completion (pid : PeerId) (budget : Nat)
     (calls : List (PeerId × Nat)) :
     Queues.RxCompletion.Preserves Queues.RxCompletion.historyEvent
@@ -1404,5 +1405,50 @@ theorem persistent_poll_callback_completion (pid : PeerId) (budget : Nat)
       (Queues.RxHistory.polls calls) :=
   ⟨Queues.RxCompletion.observePoll_preserves pid budget,
     Queues.RxCompletion.polls_preserves calls⟩
+
+/-- Ordered callback entry/return pairing propagates through the existing
+concrete Env and syscall observers, including all worker, timer and scheduler
+continuations. The history premise is only prior completion pairing; allocation,
+residency, credit and progress are not premises. Stops retain a prefix with at
+most one unfinished trailing callback. Source erasure and full audit projection
+remain those of the preceding original-caller contracts. -/
+theorem original_caller_callback_completion (deferred : Lifetimes.EnvDeferredCall)
+    (remaining : Lifetimes.EnvRemainingCall) (syscall : Lifetimes.SyscallAuditCall) :
+    Queues.RxCompletion.Preserves Queues.RxCompletion.historyEvent
+      (Queues.RxHistory.deferred deferred) ∧
+    Queues.RxCompletion.Preserves Queues.RxCompletion.historyEvent
+      (Queues.RxHistory.remaining remaining) ∧
+    Queues.RxCompletion.Preserves Queues.RxCompletion.historyEvent
+      (Queues.RxHistory.syscallFamily syscall) :=
+  ⟨Queues.RxCompletion.deferred_preserves deferred,
+    Queues.RxCompletion.remaining_preserves remaining,
+    Queues.RxCompletion.syscallFamily_preserves syscall⟩
+
+/-- Every typed initialized Runner trace and both flags retain valid actual
+Stack-return receipts and distinct completed allocation stamps, even on Stop.
+Normal return pairs every committed callback entry in order; a failed prefix can
+leave one last entry unfinished. Copied consistency trials remain outside this
+committed journal. This is the same observer whose unconditional original Runner
+erasure and exact full audit projection are proved by initialized_runner_joint.
+It proves normal Stack return, not socket inbox arrival or receive-pipeline
+conservation, and adds no parser, allocation or success premise. -/
+theorem initialized_runner_callback_completion (trace : Leanux.Runner.Trace)
+    (placeholders floodExact : Bool) :
+    Logged.ErasesOuter (Queues.RxHistory.executeTraceHistory trace placeholders floodExact)
+      (Leanux.Runner.executeTrace trace placeholders floodExact) ∧
+    let out := Logged.runPrefixOuter
+      (Queues.RxHistory.executeTraceHistory trace placeholders floodExact) []
+    let t := out.2.filterMap Queues.RxCompletion.historyEvent
+    Queues.RxCompletion.CompletionPrefix Queues.RxCompletion.historyEvent out.2 ∧
+    (∀ e r, Queues.RxCompletion.Step.completed e r ∈ t →
+      r.Valid (Leanux.Env.Stack.receive e.tag.bytes)) ∧
+    ((t.filterMap Queues.RxCompletion.completed).map Queues.RxJoint.Entry.stamp).Nodup ∧
+    (∀ result, out.1 = .ok result →
+      Queues.RxCompletion.Closed Queues.RxCompletion.historyEvent out.2 ∧
+      Queues.RxHistory.entries out.2 = t.filterMap Queues.RxCompletion.completed) := by
+  refine ⟨Queues.RxHistory.executeTraceHistory_erases trace placeholders floodExact, ?_⟩
+  have hp := Queues.RxCompletion.executeTraceHistory_completion trace placeholders floodExact
+  have hr := Queues.RxCompletion.executeTraceHistory_receipts trace placeholders floodExact
+  exact ⟨hp.1, hr.1, hr.2.1, fun result hs => ⟨hp.2 result hs, hr.2.2 result hs⟩⟩
 
 end Leanux.Proofs.WG.DeliveryOrder

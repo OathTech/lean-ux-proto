@@ -4,7 +4,7 @@
 
 Work on `proofs/campaign` in `.worktrees/proofs-campaign` follows [the charter](2026-10-13-charter-proof-campaign.md),
 over unchanged mirror `de62c9d`. Local R3 lookup/address/source cuts compile; initialized R3 packet authorization
-and R4 completion/conservation remain open. The [register](proofs.md#results) holds pins/counts; the
+and R4 receive-pipeline conservation remain open. The [register](proofs.md#results) holds pins/counts; the
 [model map](proofs.md#layers) supplies refinement details. No main integration, push, differential check or guest run
 was made by this campaign.
 
@@ -13,17 +13,18 @@ was made by this campaign.
 | R1 | Replay uniqueness proved; inclusive-floor correction witnessed. |
 | R2 | Initialized allocation-identity access safety proved, including failures/trials; affiliation/credits separate. |
 | R3 | Parsed initialized routing histories, local nullable affiliation and actual lookup/handoff cuts; initialized packet binding open. |
-| R4 | Initialized entry uniqueness and local/persistent callback completion; chronology refuted; Runner completion/conservation open. |
+| R4 | Initialized entry uniqueness and callback completion; chronology refuted; receive-pipeline conservation open. |
 | R5 | Accepted age/post-zero/wire-nonce counterexamples; thirteen positive local contracts. |
 | R6 | Cookie exclusion proved; literal MAX=18 refuted, without a replacement universal bound. |
 
-**Validation.** Local R3 source cuts pass scoped/full builds (401/480 jobs), the 485-declaration permitted-axiom gate,
-fresh stock kernel replay, the 60-job default build and 124 tests (22.976s, one skip). Independent review is clear.
-Current source has 485 declarations (483 theorems/two definitions; 122 R3/112 R4), preserving all 483 preceding
-terminal bodies. Baseline `1a5542d` passed callback completion scoped/full builds (334/477 jobs), the
-483-declaration permitted-axiom gate, fresh stock kernel replay, the 60-job default build and 124 tests (24.775s,
-one skip). Baseline `bcbf733` passed the same checks for 480 declarations; its first coordinator exact script failed
-with SyntaxError before checks and the regenerated script passed.
+**Validation.** Initialized R4 callback-completion propagation passes scoped/full builds (337/483 jobs), the
+487-declaration permitted-axiom gate, fresh stock kernel replay, the 60-job default build and 124 tests
+(24.017s, one skip). Independent frozen review and exact source checks pass. Current source has 487 declarations
+(485 theorems/two definitions; 122 R3/114 R4), retaining all 485 preceding terminal bodies. The preceding `ce12402`
+R3 source-cut checkpoint passed scoped/full builds (401/480 jobs), the 485-declaration permitted-axiom gate,
+fresh stock kernel replay, the 60-job default build and 124 tests (22.976s, one skip). Baseline `1a5542d` passed the
+same checks for local callback completion (483 declarations). `bcbf733`'s first coordinator exact script failed
+with SyntaxError before checks; the regenerated script passed.
 
 Carry `a0cf252` passed eleven recipes: nine accepted agreements and two pending-dump rejections with accepted
 pre-delete boundaries. Those Runner recipes were not rerun: their observers are unchanged. No differential/guest run
@@ -273,7 +274,8 @@ correspondence remains informal.
 **Original versus proved.** The charter requires accepted-schedule order and no silent loss/duplication.
 [Terminals](../Leanux/Proofs/WG/DeliveryOrder/Statements.lean) prove initialized committed callback-entry stamp
 uniqueness for every typed Trace and both flags, including Stops. Chronological GRO order is false. Local/persistent
-polls now pair entries with actual normal Stack returns; caller/Runner completion and joint conservation remain open.
+polls and every initialized Runner normal return pair entries with actual normal Stack returns. Failed histories
+retain valid receipts and at most one trailing unfinished entry; joint conservation remains open.
 
 **Architecture.** Refinement chain:
 
@@ -283,7 +285,7 @@ polls now pair entries with actual normal Stack returns; caller/Runner completio
 | PrevQueue/RxQueueView, poll/GRO tags/provenance | Cached peek, deletion-permitting cell frames and exact bytes/origins; selected order, not chronology. |
 | [Joint projection](../Leanux/Proofs/WG/Queues/RxPollJointProjection.lean), stamp phase/support/history | Same execution's original/GRO/lifetime correspondence, actual read support, uniqueness and normal release. |
 | [Callback completion](../Leanux/Proofs/WG/Queues/RxPollCompletion.lean) | Ordered entry/normal-return pairs; failed prefixes retain at most one unfinished entry. |
-| Concrete caller spine, [Runner history](../Leanux/Proofs/WG/Queues/RxRunnerHistory.lean) | Same-history full R2 audit, isolated trials, actual returned Worlds and initialized entry uniqueness. |
+| Concrete caller spine, [Runner history](../Leanux/Proofs/WG/Queues/RxRunnerHistory.lean), [completion](../Leanux/Proofs/WG/Queues/RxCompletionRunner.lean) | Same-history full R2 audit, isolated trials, actual returned Worlds, initialized entry uniqueness and return pairing. |
 | Borrow/TX disposition, [endpoints](../Leanux/Proofs/WG/Queues/TxDispositionEndpoints.lean) | Adjacent repayment and original admission/publication/removal/disposal cuts. |
 
 [AGENT 2026-10-14] Prove receive-to-stack duplicate freedom before conservation, plus named W7 drops. Universal outgoing
@@ -345,9 +347,12 @@ parser, length, success, drain, credit, residency, progress or initial-allocatio
 
 **Callback completion.** `captureObserved` runs the existing observer once at its actual World/history, preserving
 failed journals. Entry precedes Stack; normal return appends actual value/World receipts, erased by old decoders.
-Closed/CompletionPrefix prove ordered valid Stack-return pairs and matching old entries for local/persistent finite
-polls, without allocation/progress premises. Only the new suffix is promoted at the same seed. This proves neither
-inbox/reply success nor caller/Runner completion.
+Closed/CompletionPrefix prove ordered valid Stack-return pairs through local/persistent polls and the existing
+concrete caller/Runner hierarchy. Every typed Trace and both flags derive the protocol from the empty history,
+without parser/allocation/progress premises. Normal return matches all entries; Stops retain valid receipts and at most
+one trailing unfinished callback. Completed stamps inherit existing entry uniqueness. Only new local suffixes are
+promoted at the same seed; isolated trials remain outside committed pairing. No new operational hierarchy or stronger
+BoundaryInv is introduced. Stack return does not prove inbox/reply success or whole-pipeline conservation.
 
 **Source-comment finding.** Independent review (2026-10-15 01:35:32–01:40:05) found `PeerRemove.lean:30,110–122` relying
 in prose on `requireNotPending`, actually `State.lean:102`'s `pure ()`. Later inspection found the same in
@@ -355,12 +360,23 @@ in prose on `requireNotPending`, actually `State.lean:102`'s `pure ()`. Later in
 quiescence. No accepted loss/ duplication witness was found: arbitrary last-peer erasure is not initialized, and the
 poll's last-put candidate Stops at a later getter. No kernel bug claim.
 
-**Remaining obligations.** Caller/initialized Runner completion propagation, affiliation/credits, worker-local ownership and RX
+**Remaining obligations.** Affiliation/credits, worker-local ownership and RX
 conservation, including relevant TX callbacks. Stores/rings/queues/locals/GRO overlap; counts cannot be added. Named
 rejection, validation, keepalive, purge/free and handoff dispositions need proof. Queue idleness does not empty
 stores/peer queues; finite prefixes retain pending obligations. W7 item/mark transport remains open.
 
-**Effort/process/review.** R4 ledgers are in `00fafa4`, `57cb46e`, `c4ef635`, `ec95fa8`, `3dec2c3`, `79dce53`, `1b76322`,
+**Effort/process/review.** Current propagation grant 06:11:24, acceptance 06:12:04. The first Env build failed on
+an unqualified batch type and broad tactic searches reaching the existing 200k heartbeat limit; rejected elaboration
+printed `declaration uses sorry`. Explicit constructor proofs repaired it without source admission or raised limits.
+The existing Runner observer is reused, and its history-only completion proof closes at the default limit.
+Full result collected 06:25:19 (13m15s after acceptance): seven capped builds, six PASS and one ordinary FAIL.
+A metadata edit script separately failed ValueError on a stale heading; it was repaired before the next build.
+The eighth capped call passed exact scope/count/body checks at 06:26:16; ownership returned at 06:27:23.
+Independent frozen review 06:23:53–06:27:59 found no defect. Root gate, fresh replay, default build, units and
+exact checks all passed on their first calls, preserving all 485 prior terminal bodies and seven current pins.
+No cap, interruption, infrastructure rerun or source change after successful builds occurred; final edits only
+reconcile validation metadata.
+Earlier R4 ledgers are in `00fafa4`, `57cb46e`, `c4ef635`, `ec95fa8`, `3dec2c3`, `79dce53`, `1b76322`,
 `983f84b`. Earlier joint-poll failures 16/23 printed recovery sorry terms; call 20 hit the existing two-million-heartbeat
 limit; corrected source passed gates. Receipt work: grant 04:47:00, acceptance 04:47:40, full-build result collected
 05:16:10 (28m30s), handback 05:18:34. Eleven worker builds had four passes/seven ordinary failures; its exact check
