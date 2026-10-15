@@ -3,7 +3,8 @@
 ## Progress
 
 Work on `proofs/campaign` in `.worktrees/proofs-campaign` follows [the charter](2026-10-13-charter-proof-campaign.md),
-with representation batch `cb2348e` carried and validated. All seven register rows are current over that mirror. Local R3
+with representation batch `cb2348e` carried and validated. All seven rows are current there, including the local R4
+packet-to-receipt link extension. Local R3
 session/material/RX-origin receipts and local material retention compile; initialized R3 packet authorization
 and R4 receive-pipeline conservation remain open. The [register](proofs.md#results) holds pins/counts; the
 [model map](proofs.md#layers) supplies refinement details. No main integration, push, differential check or guest run
@@ -18,7 +19,34 @@ was made by this campaign.
 | R5 | Accepted age/post-zero/wire-nonce counterexamples; thirteen positive local contracts. |
 | R6 | Cookie exclusion proved; literal MAX=18 refuted, without a replacement universal bound. |
 
-**Local R3 material-retention extension (validated).** Two terminal groups
+**Current packet-to-receipt link (validated).** Two terminal groups preserve all 494
+preceding bodies, giving 496 declarations (494 theorems/two definitions; 126 R3/119 R4). Scoped/full builds pass
+403/492 jobs; the full result was collected at 11:02:57 UTC, 31m49s after measured acceptance 10:31:08. Exact scope,
+all 494 old bodies, census, tokens/imports, whitespace and mirror checks pass. Independent frozen source/export/docs
+review is clear after the World-equality wording correction; final frozen reconciliation completed at 11:08:41 UTC
+(resumed review 10:52:59–11:08:41, 15m42s including waits). The 492-job build/496-declaration permitted-axiom gate,
+fresh stock kernel replay, 60-job default build and 103 tests (21.856s, one skip) pass. Replay started after the gate's
+build was collected. All four Lean files retain their frozen built hashes; subsequent edits are documentation
+metadata only. The unchanged executable, 23 model-replay tests and historical recipes were validated in the
+representation carry, not rerun for this proof-only extension. The prior validated checkpoint is `8f95d45`;
+its R3 supplied-history limitations remain.
+
+[AGENT 2026-10-15] Keep linkage separate from payload validity, completion and allocation invariants. Transport the
+live selected-cell fact only to consume entry, then retain the exact immutable receipt and ordered historical support.
+No getter, rerun or operational hierarchy is added. The new generic capture contract retains the actual precondition
+at the captured before World, result at the after World, and exact output history before receipt emission.
+
+**Packet-link effort.** The 90-minute/48-call lease reserves the final 20 minutes / 10 calls. Eighteen builds were
+collected (five PASS / 13 ordinary FAIL), plus two passing exact source checks, for 20 capped calls. Ownership returned
+at 11:08:38 UTC, 37m30s after acceptance. Call 02 displayed a rejected elaborator-recovery `sorry` goal term, not a
+source admission. Calls 11 and 13 exhausted the default 200k heartbeats; call 12 tested the split-tail proof at 2M
+before the factored default-limit retry. [AGENT 2026-10-15] Retain a theorem-local 2M bound only for `poll_link`,
+matching the existing poll layer; all other limits and the 32G memory cap stay unchanged. Other failures were local
+inference, normalization or tactic errors, including finite-poll continuation inference in calls 15/16. No kernel
+failure, cap hit, interruption or infrastructure retry occurred. Lake uses command-scoped LEAN_NUM_THREADS=32,
+QEMU slots 16 and unchanged per-compiler -j1. The full call ledger belongs in the checkpoint commit.
+
+**Preceding local R3 material-retention extension (`8f95d45`, validated).** Two terminal groups
 preserve all 492 preceding bodies, giving 494 declarations (492 theorems/two definitions; 126 R3/117 R4).
 A single support witness retains the full successful session Context/run, epoch/slot/stamp, receiving bytes/birthdate
 and nullable owner. The actual Some-front recovers its complete entry Peer/state/word without affiliation assumptions;
@@ -102,9 +130,9 @@ Its deterministic 200k-heartbeat build failure and first coordinator exact-norma
 limit or semantic changes; detailed carry timings and the 479+10 terminal API accounting are in `0ed74eb`/`15f0b97`.
 
 [AGENT 2026-10-15] Keep this tranche at fresh-poll occurrence disposition and run/payload receipts. The result-sensitive
-captured packet/stamp/peer link and same-journal receipt provenance remain explicit obligations; do not infer them
-from receipt validity or strengthen initialized premises. A bounded source-link attempt proves the actual capture
-lookup and full-RX-store drop/counter frames, but does not yet transport the relation to consume through the poll.
+captured packet/stamp/peer link and same-journal receipt provenance were left explicit at this checkpoint, rather
+than inferred from receipt validity or assumed in initialized premises. That bounded attempt proved the actual capture
+lookup and full-RX-store frames; the current packet-link tranche completes their local poll composition.
 
 **RX disposition effort.** Acceptance 08:12:10 UTC; 90-minute/48-call lease with the final 20 minutes / 10 calls reserved. Builds use
 command-scoped LEAN_NUM_THREADS=32 for Lake scheduling and QEMU slots 16, with unchanged per-compiler -j1 and 32G cap.
@@ -118,7 +146,7 @@ Ownership returned at 09:26:50 UTC, 74m40s after acceptance. No cap hit, interru
 diagnostic or limit increase occurred. Root validation used six capped calls (five PASS and the replay infrastructure
 failure above), followed by final metadata checks. Detailed call ledger belongs in the checkpoint commit.
 Review corrected optional selection wording and the
-decoder distinction above; captured-allocation and same-journal receipt provenance remain open, not silently assumed.
+decoder distinction above; captured-allocation and same-journal receipt provenance were left open at that checkpoint.
 
 Review also noted stale upstream comments
 at `Env.lean:906–907` and `Env/Batch.lean:294–295,337–338`: the executable afterBatch now checks the handshake ring/counter,
@@ -450,12 +478,26 @@ Nondelivery decisions on Stop do not assert completed cleanup. Normal None has t
 or repaid source-peer-mismatch route; cause predicates may overlap. Endpoint normal None is proved impossible;
 malformed families/unsupported IPv6 Stop instead. The state predicate is accurately “not crypted,” not assumed DEAD.
 
-Independent review exposed the missing captured packet/stamp/peer-to-consume link. It remains open, with actual
-capture and full-store preservation cuts proved for the next phase proof. `ConsumePayloadValid` asserts only a valid
-original consume run producing the carried bytes; it does not identify an earlier consumed event in that journal.
-Fresh suffix promotion preserves old probes/history and does not validate arbitrary old metadata. These are local
-post-removal results, not initialized admission conservation or authenticated routing. Review also corrected the
-generic partition helper's disjointness wording: only the fresh-poll Nodup theorem supplies uniqueness/disjointness.
+**Packet-to-receipt link.** The new literal-poll proof closes the previously missing selected packet/stamp/peer
+relation at consume entry, using the original second getter, full-store drop/counter/endpoint frames and actual peer
+guard. Strict capture-read/removal support precedes the exact consumed receipt; the identical whole receipt/Entry is
+carried through buffered, entered and completed events in that order, including Stop prefixes. The four history
+positions are: incoming h0, actual consume output hc, hc followed by consumed, then buffered on Some. This call
+appends its consumed receipt only after hc. A delayed callback needs no current packet residency; consume.after need not equal Stack.before.
+
+The original `ConsumePayloadValid`, `BoundaryInv` and completion protocol are unchanged. New HistoryLinked means
+ordered receipt linkage, not validity of every check or Stack witness. Fresh suffixes cannot borrow incoming metadata;
+persistent promotion retains the exact prior audit seed/probes, and finite polls preserve explicit incoming linkage.
+These local contracts need no allocation or World premise. Initialized caller propagation, key/session/public-key
+identity, admission credits and carrier conservation remain open.
+
+Independent review checked two potentially false joins. The standalone consume helper accepts arbitrary skb/stamp
+labels, so its SelectedAt/peer premises must be discharged by the literal poll; they are. Earlier removal plus final
+read support alone permits `[removed k, consumed k r, read k, removed k]`; strict-prefix ReadBeforeRemoval threading
+prevents borrowing the later duplicate. This is an arbitrary-journal countermodel, not an accepted Runner trace.
+Review also corrected “validity” to “linkage” for the old persistent history and “is not” to “need not equal”
+for the consume-after/Stack-before Worlds; no inequality is claimed. The earlier partition helper's
+disjointness wording remains qualified: fresh-poll Nodup, not generic Account alone, supplies uniqueness/disjointness.
 See [receipt source factors](../Leanux/Proofs/WG/Queues/RxDispositionReceipts.lean) and
 [local accounting](../Leanux/Proofs/WG/Queues/RxPollDisposition.lean).
 
@@ -466,6 +508,7 @@ See [receipt source factors](../Leanux/Proofs/WG/Queues/RxDispositionReceipts.le
 | RingGeometry/Steps, journals/occurrences, RX/TX source journals | Stale physical slots/live FIFO, finite occurrence conservation and original installed mutations; Stop prefixes separate from endpoints. |
 | PrevQueue/RxQueueView, poll/GRO tags/provenance | Cached peek, deletion-permitting cell frames and exact bytes/origins; selected order, not chronology. |
 | [Joint projection](../Leanux/Proofs/WG/Queues/RxPollJointProjection.lean), stamp phase/support/history | Same execution's original/GRO/lifetime correspondence, actual read support, uniqueness and normal release. |
+| [Consume link](../Leanux/Proofs/WG/Queues/RxConsumeLink.lean), [poll/receipt link](../Leanux/Proofs/WG/Queues/RxPollReceiptLink.lean) | Actual selected cell at consume entry; strict read/removal/receipt/Entry order in fresh suffixes, persistent and finite-poll linkage. |
 | [Callback completion](../Leanux/Proofs/WG/Queues/RxPollCompletion.lean) | Ordered entry/normal-return pairs; failed prefixes retain at most one unfinished entry. |
 | Concrete caller spine, [Runner history](../Leanux/Proofs/WG/Queues/RxRunnerHistory.lean), [completion](../Leanux/Proofs/WG/Queues/RxCompletionRunner.lean) | Same-history full R2 audit, isolated trials, actual returned Worlds, initialized entry uniqueness and return pairing. |
 | Borrow/TX disposition, [endpoints](../Leanux/Proofs/WG/Queues/TxDispositionEndpoints.lean) | Adjacent repayment and original admission/publication/removal/disposal cuts. |

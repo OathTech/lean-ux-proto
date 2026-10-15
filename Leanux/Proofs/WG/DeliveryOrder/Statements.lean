@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Queues.RxPollReceiptLink
 import Leanux.Proofs.WG.Queues.RxPollDisposition
 import Leanux.Proofs.WG.Queues.RxRunnerHistory
 import Leanux.Proofs.WG.Queues.FullRing
@@ -1454,9 +1455,9 @@ theorem initialized_runner_callback_completion (trace : Leanux.Runner.Trace)
 /-- Every freshly observed poll has valid check/consume receipts and carried
 consume-run payload witnesses, even on Stop. Normal None is classified
 by the original executed source factors; the endpoint helper never returns
-None normally. This run/payload result does not yet identify the consume
-packet with the earlier captured allocation or its earlier consumed journal
-event, nor prove initialized routing. -/
+None normally. This run/payload contract alone does not identify the consume
+packet with the captured allocation or its earlier consumed event. The stronger
+local source/history link is exported below; initialized routing remains open. -/
 theorem original_poll_disposition_receipts (pid : PeerId) (budget : Nat)
     (w : World) (prior : List Lifetimes.LifetimeEvent) :
     Queues.RxDisposition.Valid
@@ -1519,5 +1520,49 @@ theorem persistent_poll_disposition_receipts (pid : PeerId) (budget : Nat)
           h ++ suffix.map Queues.RxHistory.promote) ∧ Queues.RxDisposition.Valid suffix :=
   ⟨Queues.RxHistory.observePoll_erases pid budget,
     Queues.RxDisposition.observePoll_receipt_suffix pid budget w h⟩
+
+/-- In the unchanged original poll, every reached consume receipt names the
+actual selected skb/stamp/packet at consume entry and the checked peer. Its
+strict earlier prefix contains the capture read followed by that removal.
+Each buffered/entered/completed full Entry carries the same whole receipt in
+order in this fresh suffix, including on Stop. No allocation, current residency
+or initialized-origin premise is added. Consume's after World is not equated
+with the later Stack callback's before World. -/
+theorem original_poll_packet_receipt_links (pid : PeerId) (budget : Nat)
+    (w : World) (prior : List Lifetimes.LifetimeEvent) :
+    Logged.ErasesPrefix (Queues.RxJoint.poll pid budget)
+      (rxPoll pid budget (fun bytes => bytes.forM Leanux.Env.deliverInner)) ∧
+    ∃ suffix,
+      (runPrefix (Queues.RxJoint.poll pid budget) w (Queues.RxJoint.seed prior)).2 =
+        Queues.RxJoint.seed prior ++ suffix ∧ Queues.RxLink.Linked [] suffix ∧
+      ∀ event ∈ suffix, ∃ before after,
+        suffix = before ++ [event] ++ after ∧ Queues.RxLink.EventLink [] before event :=
+  ⟨Queues.RxJoint.poll_erases pid budget, Queues.RxLink.poll_ordered_links pid budget w prior⟩
+
+/-- Persistent and finite-poll composition keeps exact input audit history and
+old probe interleaving, promoting only the actual new linked suffix. The local
+link has no World premise; preserving an entire old receipt history requires
+that history's explicit linkage. The existing R2 projection retains its
+original AuditInv premise. This does not propagate origin through initialized
+callers, prove key/session identity, inbox delivery or admission conservation. -/
+theorem persistent_poll_packet_receipt_links (pid : PeerId) (budget : Nat)
+    (calls : List (PeerId × Nat)) (w : World) (h : List Queues.RxHistory.Event) :
+    Logged.ErasesPrefix (Queues.RxHistory.observePoll pid budget)
+      (rxPoll pid budget (fun bytes => bytes.forM Leanux.Env.deliverInner)) ∧
+    Logged.ProjectsUnder Lifetimes.AuditInv Queues.RxHistory.auditEvent
+      (Queues.RxHistory.observePoll pid budget) (Lifetimes.auditFocus (Lifetimes.rxPollStackPrefix pid budget)) ∧
+    Logged.PrefixPreserves (fun h _ => Queues.RxLink.HistoryLinked h) Queues.RxLink.HistoryLinked
+      (Queues.RxHistory.observePoll pid budget) ∧
+    Logged.PrefixPreserves (fun h _ => Queues.RxLink.HistoryLinked h) Queues.RxLink.HistoryLinked
+      (Queues.RxHistory.polls calls) ∧
+    ∃ suffix,
+      (runPrefix (Queues.RxJoint.poll pid budget) w (Queues.RxJoint.seed (Queues.RxHistory.prior h))).2 =
+        Queues.RxJoint.seed (Queues.RxHistory.prior h) ++ suffix ∧
+      runPrefix (Queues.RxHistory.observePoll pid budget) w h =
+        ((runPrefix (Queues.RxJoint.poll pid budget) w (Queues.RxJoint.seed (Queues.RxHistory.prior h))).1,
+          h ++ suffix.map Queues.RxHistory.promote) ∧ Queues.RxLink.Linked [] suffix :=
+  ⟨Queues.RxHistory.observePoll_erases pid budget, Queues.RxHistory.observePoll_projects pid budget,
+    Queues.RxLink.observePoll_link pid budget, Queues.RxLink.polls_link calls,
+    Queues.RxLink.observePoll_link_suffix pid budget w h⟩
 
 end Leanux.Proofs.WG.DeliveryOrder

@@ -51,6 +51,28 @@ theorem PrefixPreserves.captureObserved (ha : PrefixPreserves I S a) :
   | error e => simp [runPrefix_captureObserved, hr, Except.map]
   | ok out => simpa [runPrefix_captureObserved, hr, Except.map] using hn
 
+/-- Retain the actual incoming precondition and observer history in the
+successful witness. The outgoing history here precedes any receipt emission;
+on Stop it is exactly the underlying observer's outgoing history. -/
+theorem PrefixEnsures.captureObserved (ha : PrefixEnsures P S a Q) :
+    PrefixEnsures P S (captureObserved a)
+      (fun r h v => r.after = v ∧ Q r.value h r.after ∧
+        ∃ h0, P h0 r.before ∧
+          runPrefix a r.before h0 = (.ok (r.value, r.after), h)) := by
+  intro w h hi
+  obtain ⟨s, hs, safe, normal⟩ := ha w h hi
+  refine ⟨s, hs, safe, ?_⟩
+  cases hr : runPrefix a w h with
+  | mk result t =>
+    cases result with
+    | error e => simp [runPrefix_captureObserved, hr, Except.map]
+    | ok out =>
+      rcases out with ⟨x, v⟩
+      simp only [hr] at normal
+      simpa only [runPrefix_captureObserved, hr, Except.map] using
+        (show v = v ∧ Q x t v ∧ ∃ h0, P h0 w ∧
+          runPrefix a w h0 = (.ok (x, v), t) from ⟨rfl, normal, h, hi, hr⟩)
+
 /-- Append a successful receipt without rerunning the action. -/
 def receiptObserved (a : PrefixM Event α) (receipt : RunWitness α → Event) : PrefixM Event α := do
   let r ← captureObserved a
