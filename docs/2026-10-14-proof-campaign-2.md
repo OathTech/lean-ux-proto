@@ -401,6 +401,24 @@ insertion, or multipart readback. Independent read-only review found no
 correctness defect and confirmed that the extra root/owner premises specialize
 the stronger operational helper to the advertised case.
 
+`AllowedStructural`, `AllowedLeaf` and `AllowedCollapse` now cover branching
+nodes, unary promotion, leaf deletion and parent collapse. Exact source equations
+retain the original branch logs. `AllowedRemoval` composes those alternatives
+through the original snapshot loop, reading each node from the evolving state.
+Its pure `RemovalEffect` witness checks actual successive maps, including the
+parent reread after leaf deletion; it assumes no distinctness that would hide
+aliasing failures. `AllowedRemovalEffects` proves filtering of every peer list,
+target-list emptiness and exactly one sequence increment for a nonempty snapshot.
+`AllowedGeneralReplacement` carries this result through the original public
+setter, including generation update and balanced lookup acquisition/release.
+The two new terminal contracts accept arbitrary list lengths with a supplied
+removal witness. They do not establish witness existence for every valid trie,
+trie validity, lookup preservation, or ownership/list coherence. This extends
+the earlier singleton-root result without treating operational readiness as a
+global invariant. Independent review found no structural-case or read-order
+defect in the removal relation, sequence frame, final public composition or
+terminal scope.
+
 Remaining: private-key collision removal and mixed-attribute outer composition; full peer
 removal/replacement and allowed-IP ownership, other partial-error combinations,
 and general dump chunks/coalescing. Deferred removal work can change other
@@ -418,7 +436,7 @@ check: both the C and the mirror's own design require restoring pre-nest room.
 gives the witness and reproduction command. Ranked mirror suggestion 1:
 correct the saved cancellation snapshot (altitude-preserving).
 
-Validation: all fifty-six statements pass scoped build, standard-axiom inspection
+Validation: all fifty-eight statements pass scoped build, standard-axiom inspection
 (only `propext`, `Classical.choice`, `Quot.sound`), and `capped --
 scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Config.Statements`.
 The full proof gate fails in inherited `CounterWindow.Refinement` and

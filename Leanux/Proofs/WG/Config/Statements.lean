@@ -1,4 +1,4 @@
-import Leanux.Proofs.WG.Config.AllowedReplacement
+import Leanux.Proofs.WG.Config.AllowedGeneralReplacement
 import Leanux.Proofs.WG.Config.Identity
 import Leanux.Proofs.WG.Config.Port
 import Leanux.Proofs.WG.Config.RoundTrip
@@ -683,5 +683,46 @@ theorem original_allowedips_replace_single_root (v4 : Bool) (key : Key) (pid : P
   obtain ⟨ret, final, run, result, device⟩ :=
     setDevice_replace_root v4 key pid d p id n found peer listed resident leaf parent live bounded down w pre
   exact ⟨ret, final, run, result, device, rootReplacement_effects v4 _ pid p id n peer⟩
+
+/-- A supplied pure removal witness covers every structural branch and the evolving
+snapshot loop. The original operation returns, filters the removed identities from
+every peer list, empties the target list and increments the sequence once exactly
+when the snapshot was nonempty. This does not establish witness existence for all
+valid tries, trie validity, lookup preservation or ownership/list coherence. -/
+theorem original_allowedips_remove_general (pid : PeerId) (p : Peer) (d final : Device)
+    (resident : d.peers[pid]? = some p) (steps : RemovalEffect d p.allowedipsList final) :
+    Returns (removeByPeer pid) (fun w => w.k.wg = some d)
+      (fun _ w => w.k.wg = some final ∧
+        (∀ other : PeerId, final.peers[other]? = d.peers[other]?.map (erasePeerList p.allowedipsList)) ∧
+        final.peers[pid]? = some (erasePeerList p.allowedipsList p) ∧
+        (erasePeerList p.allowedipsList p).allowedipsList = [] ∧
+        final.peerAllowedips.seq = d.peerAllowedips.seq + (if p.allowedipsList.isEmpty then 0 else 1)) := by
+  intro w pre
+  obtain ⟨ret, result, run, device⟩ := removeByPeer_general pid p d final resident steps w pre
+  refine ⟨ret, result, run, device, removalEffect_peers steps, ?_,
+    erasePeerList_own_empty p, removalEffect_seq steps⟩
+  simpa [resident] using removalEffect_peers steps pid
+
+/-- The public setter replaces an existing stopped peer's allowed-IP list by the
+empty list for any supplied pure removal witness. The lookup reference is balanced
+and peer identity is preserved. Readiness is checked on successive maps, including
+the acquired reference and updated generation; no global trie invariant or general
+existence of a removal witness is claimed. -/
+theorem original_allowedips_replace_general (key : Key) (pid : PeerId) (d removed : Device) (p : Peer)
+    (found : d.peerHashtable.find? (·.1 == key) = some (key, pid))
+    (resident : d.peers[pid]? = some p) (live : 0 < p.refcount)
+    (bounded : p.refcount + 1 < 2 ^ 31) (down : d.running = false)
+    (steps : RemovalEffect
+      (withPeer { d with deviceUpdateGen := d.deviceUpdateGen + 1 } pid { p with refcount := p.refcount + 1 })
+      p.allowedipsList removed) :
+    Returns (wgSetDevice (replaceAllowedipsDeviceAttrs d key))
+      (fun w => w.k.wg = some d ∧ selectsDevice w d)
+      (fun ret w => ret = 0 ∧ w.k.wg = some (generalReplacementDevice removed pid p) ∧
+        ∃ q, (generalReplacementDevice removed pid p).peers[pid]? = some q ∧
+          q.allowedipsList = [] ∧ q.refcount = p.refcount ∧ q.internalId = p.internalId) := by
+  intro w pre
+  obtain ⟨ret, result, run, value, device⟩ :=
+    setDevice_replace_general key pid d removed p found resident live bounded down steps w pre
+  exact ⟨ret, result, run, value, device, generalReplacement_peer removed pid p⟩
 
 end Leanux.Proofs.WG.Config
