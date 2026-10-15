@@ -39,7 +39,7 @@ LIFECYCLE_EXPECTED = {
 # it, and the flood's drain check stops the operation (the batch machinery's
 # fail-closed outcome for a section between items' records).
 UNDERLOAD_EXPECTED = {
-    'e_underload_merged': ('unsupported_path', "work the flood queued outlived the guest's wait"),
+    'e_underload_merged': ('unsupported_path', "work the batch queued outlived the guest's wait"),
 }
 
 
