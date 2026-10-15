@@ -2,6 +2,7 @@ import Leanux.Proofs.WG.Config.SourceClaims
 import Leanux.Proofs.WG.Config.ClaimView
 import Leanux.Proofs.WG.Config.ObservationBridge
 import Leanux.Proofs.WG.Config.LiveRemovalSource
+import Leanux.Proofs.WG.Config.AllowedRemovalConverseClaims
 
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise
@@ -791,5 +792,43 @@ theorem original_peer_remove_live (pid : PeerId) (d removed : Device) (p : Peer)
         LiveRemovalEffect pid (deadPeerDevice removed pid p)
           { erasePeerList p.allowedipsList p with isDead := true } final) :=
   peerRemove_live_returns pid d removed p resident live count ready send clear steps
+
+/-- A normally returning original removal derives its structural witness from
+the actual successive reads. The only structural premise is that resident nodes
+have two child slots; aliases, cycles and repeated list identities are allowed.
+All peer lists filter the captured identities, their owners become absent or
+unowned, and the sequence increments exactly once for a nonempty captured list.
+NodePairs is preserved. No completion or valid-trie claim is made. -/
+theorem original_allowedips_remove_pairs (pid : PeerId) (p : Peer) (d : Device)
+    (resident : d.peers[pid]? = some p) (pairs : NodePairs d) :
+    Campaign2.Ensures (removeByPeer pid) (fun s => s.wg.device = some d)
+      (fun _ s => ∃ final, s.wg.device = some final ∧ NodePairs final ∧
+        RemovalEffect d p.allowedipsList final ∧
+        (∀ other : PeerId, final.peers[other]? = d.peers[other]?.map (erasePeerList p.allowedipsList)) ∧
+        final.peers[pid]? = some (erasePeerList p.allowedipsList p) ∧
+        (erasePeerList p.allowedipsList p).allowedipsList = [] ∧
+        final.peerAllowedips.seq = d.peerAllowedips.seq + (if p.allowedipsList.isEmpty then 0 else 1) ∧
+        ∀ id ∈ p.allowedipsList, nodeOwner final id = none) :=
+  source_allowedips_remove_pairs pid p d resident pairs
+
+/-- Normal original peer death derives its allowed-IP removal witness under the
+two-child-slot shape premise, then performs the exact membership/death updates.
+The peer stays resident with its original reference count; the numeric index
+table and device peer count are unchanged. This stops before later cleanup and
+release. No input execution witness, alias exclusion or completion promise is used. -/
+theorem original_peer_make_dead_pairs (pid : PeerId) (p : Peer) (d : Device)
+    (resident : d.peers[pid]? = some p) (pairs : NodePairs d) :
+    Campaign2.Ensures (peerMakeDead pid) (fun s => s.wg.device = some d)
+      (fun _ s => ∃ removed, RemovalEffect (unlistPeer d pid) p.allowedipsList removed ∧
+        let final := deadPeerDevice removed pid p
+        s.wg.device = some final ∧ NodePairs final ∧
+        final.peerList = d.peerList.filter (· != pid) ∧
+        final.peerHashtable = d.peerHashtable.filter (·.2 != pid) ∧
+        final.indexTable = d.indexTable ∧ final.numPeers = d.numPeers ∧
+        final.peers[pid]? = some { erasePeerList p.allowedipsList p with isDead := true } ∧
+        (erasePeerList p.allowedipsList p).allowedipsList = [] ∧
+        (erasePeerList p.allowedipsList p).refcount = p.refcount ∧
+        ∀ id ∈ p.allowedipsList, nodeOwner final id = none) :=
+  source_peer_make_dead_pairs pid p d resident pairs
 
 end Leanux.Proofs.WG.Config

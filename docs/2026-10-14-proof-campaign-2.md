@@ -28,13 +28,13 @@ No independent existential projected runs are spliced together.
 | H1 Noise | 18 state/slot, ordered-clear, rotation/confirmation and full session-effect contracts | Public projection complete; exact normal session composition and static rotation/release totality are checked. Whole-call edge coverage, session totality, exposed derivation-clock provenance and lifetime confirmation remain open. |
 | H2 Index | 44 contracts, including lifecycle boundaries, handshake reception/sending, staged/keepalive sending, queued clearing and original worker/timer dispatch | Public projection complete: 14 total contracts, 28 normal-return contracts, 1 exact stop and 1 projected initializer theorem; reachable coherence, broader records and the corpus runner composition remain open. |
 | H3 Roaming | 8 contracts, including decrypt publication and its same-execution first-poll endpoint connection | Public projection complete; first selected packet provenance is conditional on matching publication identity. General queue provenance and complete caller coverage remain open. |
-| H4 Configuration | 62 contracts, including live-key removal with empty work queues, and the internal dump-accounting finding | Public projection and frame separation complete. Queued-work removal, private-key collision, mixed attributes, global ownership and general dump composition remain open. |
+| H4 Configuration | 64 contracts, including normal removal/death converses under two-slot node shape, live-key removal with empty work queues, and the internal dump-accounting finding | Public projection and frame separation complete. Queued-work removal, private-key collision, mixed attributes, global ownership and general dump composition remain open. |
 | H5 Progress | 27 contracts, including original cut-loop budget adequacy, and the accepted batch-backlog counterexample | Public projection and frame separation complete; the recorded cut cannot exhaust its budget. Whole-worker record decrease, full loop coverage and probe/detach composition remain open. The backlog witness is historical over `de62c9d`: main's batch guard now addresses request 1. |
 | H6 Timers | 35 timer/worker contracts, including consecutive original retry pairs, conditional recorded rearming and same-peer attempt counting | Public projection and frame separation complete; a successful pair from an empty send queue derives the retry bound, reference acquisition/release, final empty queue and cleared pending flag. Conditional rearming preserves the exact expiry through release and section stop; consecutive successful pairs selecting the same initial peer increase attempts by their length and are bounded by 19 from zero. Scheduler retry episodes and whole-run arming/session counts remain open. |
 
 Projection/frame factoring completed at `69f988a` for all six results, preserving
 all 153 existing headline names before new mathematics. The following H2 lifecycle/sender
-and H6 dispatch/rearm increments, H3 publication/poll provenance, H5 cut-loop progress, H1 ordered clearing/rotation and H4 live-key removal bring the total to 194. No public statement directly names `World` or
+and H6 dispatch/rearm increments, H3 publication/poll provenance, H5 cut-loop progress, H1 ordered clearing/rotation and H4 live-key removal bring the total to 196. No public statement directly names `World` or
 `Kernel`.
 The full proof gate remains failed in inherited campaign-1 counter-window and
 index carries; those files have not been edited. Scoped validation does not
@@ -53,7 +53,7 @@ connections to the current executable mirror, not replacement interpreters.
 | H1 | `Noise/Model`, `Statements`, `Slots`, `StateEdges`, `ConsumeEdges`, `ClearModel`, `ClearEffects`, `ClearSource`, `RotationModel`, `RotationEffects`, `RotationSource`, `SessionModel`, `SessionSource`; `Execution` holds the concrete monad connection; `AccessSource` holds accessor read/write contracts, reexported by `Basic`. | `KernelFrames`, `PeerFrames`, `SlotFrames`, `ClearFrames`, `RotationFrames`, `SessionFrames`. |
 | H2 | `Index/View`, `TableModel`, `OwnerWordModel`, `AllocationModel`, `ReleaseModel`, `LifecycleModel` and pure release effects/bounds; `Statements`, `HandshakeClaims`, `OwnerUpdateClaims`, `LifecycleSource`, `LinkSource`, `SendSource`, `DispatchSource`, `ResponseSource`, `ConsumeSource`, `StagedSource`, `ReceiveOperations`, `ReceiveSource`, `ClearSource`, `TimerSource` and the other operation/source modules. | `IndexFieldFrames`, `OwnerFieldFrames`, `StoreFieldFrames`, `LifecycleFrames`, `NewlinkFrames`, `SendFrames`, `DispatchFrames`, `ResponseFrames`, `ConsumeFrames`, `StagedFrames`, `ReceiveFrames`, `ClearFrames`, `TimerFrames`; the old `HandshakeFrames` and `OwnerFrames` paths are import-only reexports, not duplicated lemmas. |
 | H3 | `Roaming/Model`, `View`, `Statements`, `EndpointClaims`, `EndpointSource`, `Authentication`, `PublicationModel`, `PublicationSource`, `PublicationClaims`, `PollEndpointModel`, `PollEndpointSource`, `PollEndpointClaims`. | `Roaming/Frames`, `PublicationFrames`, `PollEndpointFrames`; `Basic` reexports the endpoint source connection. |
-| H4 | `Config/Model`, `AllowedRemovalModel`, `QuietModel`, `LiveRemovalModel`, `LiveRemovalSource`, `ClaimView`, `Statements`, `SourceClaims`, `ObservationBridge`, and existing substantive effect/source modules. | `ConcreteFrames` isolates six whole-kernel endpoint contracts; `OperationFrames` isolates seven generic helpers; `ReadbackFrames` retains socket/fixture preservation; `AllowedListFrames`, `AllowedRootFrames`, `AllowedRemovalFrames`, `QuietFrames`, `LiveRemovalFrames`, `KeyFieldFrames` isolate within-WG preservation. |
+| H4 | `Config/Model`, `AllowedRemovalModel`, `AllowedPairsModel`, `AllowedPairsEffects`, `AllowedRemovalConverseSource`, `AllowedRemovalConverseClaims`, `QuietModel`, `LiveRemovalModel`, `LiveRemovalSource`, `ClaimView`, `Statements`, `SourceClaims`, `ObservationBridge`, and existing substantive effect/source modules. | `ConcreteFrames` isolates six whole-kernel endpoint contracts; `OperationFrames` isolates seven generic helpers; `ReadbackFrames` retains socket/fixture preservation; `AllowedListFrames`, `AllowedRootFrames`, `AllowedRemovalFrames`, `AllowedPairsFrames`, `QuietFrames`, `LiveRemovalFrames`, `KeyFieldFrames` isolate within-WG preservation. |
 | H5 | `Progress/Model`, `View`, `Statements`, `SourceClaims`, `ObservationBridge`; `ControlLaws` is generic state/error control and `ControlSource` connects it exactly to the original worker; the scheduler/source modules retain actual execution factors. `CutModel`, `CutSource` and `CutClaims` establish original cut-loop progress. | `StackFrames` isolates caller-guard preservation; `CutFrames` isolates record/error-location preservation. Probe/filter/no-work contracts also establish outputs and remain substantive source claims. |
 | H6 | `TimerDiscipline/Model`, `View`, `SendView`, `Statements`, `ObservationBridge`, `ObservationClaims`, `SourceClaims`, `SendDispatchModel`, `SendDispatchClaims`, `RetryDispatchModel`, `RetryDispatchClaims`, `RetryRearmModel`, `RetryRearmClaims`, `RetrySequenceModel`, `RetrySequenceClaims`, and `*Source` operational proofs. | `SourceFrames`, `RecordedFrames`, `RecordedJitterFrames`, `SectionFrames`, `SelectionFrames`, `RetryFrames`, `JitterFrames`, `InitiationFrames`, `InitiationPreservationFrames`, `SendCutFrames`, `SendPeerFrames`, `SendSocketFrames`, `SendBufferFrame`, `SendWorkerFrame`, `SendDispatchFrames`, `RetryDispatchFrames`, `RetryRearmFrames`, `WorkStateFrames`. |
 
@@ -1078,8 +1078,49 @@ examples have not been executed or kernel-proved and are not accepted-run
 counterexamples. A generalized operational relation was considered; the chosen
 two-slot invariant reuses the established relation and effects. Normal successful
 reads supply the remaining successive-state premises without ownership,
-acyclicity or distinct-node assumptions. This is a planned architecture, not a
-closed theorem or a mirror-team request.
+acyclicity or distinct-node assumptions. This architecture is now checked below;
+it is not a mirror-team request.
+
+The two new normal-return headlines derive the existing `RemovalEffect` rather
+than taking it as a premise. `NodePairs` requires exactly two child slots for
+each resident node; the other premise identifies the initial resident peer and
+its captured list. Branching, unary, leaf and collapsing cases use their actual
+successive reads, including the parent read after leaf erasure. Aliases, cycles
+and repeated list identities are not excluded. Normal completion derives exact
+list filtering, processed-node owner clearing, the single sequence increment for
+a nonempty list, and preserved node shape. `peerMakeDead` derives its removal
+witness from the actual prefix, then obtains exact membership/death effects from
+the existing execution theorem on the same concrete initial state. The peer
+remains resident with its original reference count; index table and peer count
+are unchanged at this stage. Later cleanup and release remain separate.
+
+The shape premise matches pristine C `drivers/net/wireguard/allowedips.h:15–17`
+(`bit[2]`) and the mirror's `newNode`, used at all three allocation sites with
+`#[none, none]`. This is source provenance, not a proved reachable-state shape
+invariant or total-success condition. Generic normal `add`/`insert` preservation,
+full trie validity, queued-work removal and outer setter composition remain open.
+The existing witness-based total-return claims are retained unchanged.
+
+`AllowedPairsModel` defines shape. `AllowedPairsEffects` contains invariant
+preservation through actual node/child/store mutation; those proofs must survive
+the state split. `AllowedPairsFrames` contains untouched-node-store support.
+`AllowedRemovalConverseSource` and `AllowedRemovalConverseClaims` connect the
+original executions to projected claims. Independent review's P3 classification
+finding was fixed by this Effects/Frames separation; final review closed with
+no remaining findings.
+
+H4 now has 64 headlines and the campaign 196. The capped full-parallel Config
+build passed (181 jobs), all 64 Config headline axioms are standard, and fresh
+stock kernel replay passed. All 196 campaign headlines import and pass axiom
+inspection together; token and import/root/default-target checks pass. Reproduce
+with `LEAN_NUM_THREADS=32 capped -- scripts/in-bundle lake build Leanux.Proofs.WG.Config.Statements`
+and the same wrapper around `lake env leanchecker --fresh Leanux.Proofs.WG.Config.Statements`.
+Ordinary proof elaboration errors were corrected. The first ephemeral axiom
+driver failed on the unknown formatting option `pp.width`; removing that option
+and rechecking the corrected driver passed. This was a driver correction, not
+an infrastructure retry. No cap failure, guest run or infrastructure rerun.
+Full gate failure remains inherited and unchanged, last run at `69f988a`.
+No new mirror finding or request arose.
 
 ## H5 — Termination and progress (finding; remainder open)
 
