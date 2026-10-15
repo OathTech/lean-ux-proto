@@ -10,8 +10,8 @@ remains failed in inherited campaign-1 files.
 
 | Result | Headlines | Established checkpoint | Still open |
 | --- | ---: | --- | --- |
-| H1 Noise | 20 | State/slot contracts, ordered clearing and rotation, static release budgets, full normal session effects and consecutive first-match confirmation | Whole-call edge coverage, session totality, exposed derivation-clock provenance, allocation-lifetime confirmation |
-| H2 Index | 51 | Exact index operations and successful-lookup provenance, original caller table safety, successful session publication coherence, session store bound and distinct allocation IDs across actual consecutive calls | Reachable hashed uniqueness and owner/peer-word residency through driver entries; outer-removal frames await decision |
+| H1 Noise | 20 | State/slot contracts, ordered clearing and rotation, static release budgets, full normal session effects and consecutive first-match confirmation | Whole-call edge coverage, session totality, exposed derivation-clock provenance, allocation-lifetime confirmation; reinstallation transport awaits shared-scope decision |
+| H2 Index | 51 | Exact index operations and successful-lookup provenance, original caller table safety, successful session publication coherence, session store bound and distinct allocation IDs across actual consecutive calls | Reachable hashed uniqueness and owner/peer-word residency through driver entries; outer-removal and ingress frame scopes await decision |
 | H3 Roaming | 12 | Data publication/first-poll join, both authenticated handshake cuts and inspection retaining them through continuation failure | General queue/caller coverage, final endpoint preservation |
 | H4 Configuration | 75 | Configuration leaves/flags, bounded public readback, port/fwmark/key effects, normal live-key removal and private-key collision composition, full REMOVE_ME, witness-free normal REPLACE_ALLOWEDIPS and remove-all and flag-only REPLACE_PEERS phase effects, empty-root insertion, exact root transfer and actual peer-dump readback | Collision completion, queued cleanup effects, mixed attributes, global ownership and general multipart readback |
 | H5 Progress | 33 | Historical backlog counterexample, source-connected scheduling inspections, cut/pow/drain/poll bounds | Whole-worker record decrease, full operation-end coverage and global termination/progress |
@@ -32,7 +32,12 @@ on this branch at `de62c9d`.
 must be named for the shared lemma and live in result directories. Report an
 overlap larger than “a few” before copying it. The
 [six-family outer-removal request](2026-10-15-campaign-2-shared-frame-request.md)
-is **pending**; those variants have not been implemented.
+is **pending**; those variants have not been implemented. The
+[follow-up inventory](2026-10-15-campaign-2-shared-frame-followup.md) reports H1's
+six-family reinstallation transport (three named variants checked, three not
+implemented), H2's additional nine-family ingress minimum, and H4's dependence
+on three already-pending outer-removal families. These larger carries are deferred
+pending the user's scope decision; no layer is split into batches to bypass it.
 
 [USER 2026-10-14] Write mirror-team requests in this tree and notify the user.
 The [three existing requests](2026-10-14-campaign-2-mirror-requests.md) have been
@@ -54,7 +59,7 @@ connections to the current executable mirror, not replacement interpreters.
 | Area | Data / claims / source connections | Separate frame support |
 | --- | --- | --- |
 | Common C2 | `Campaign2/View` is data-only; `Campaign2/Bridge` defines projection and universal execution contracts. | No shared campaign-1 layer is changed. |
-| H1 | `Noise/Model`, `Statements`, `Slots`, `StateEdges`, `ConsumeEdges`, `ClearModel`, `ClearEffects`, `ClearSource`, `RotationModel`, `RotationEffects`, `RotationSource`, `SessionModel`, `SessionSource`, `ConfirmationSequenceModel`, `ConfirmationSequenceEffects`, `ConfirmationSequenceSource`; `Execution` holds the concrete monad connection; `AccessSource` holds accessor read/write contracts, reexported by `Basic`. | `KernelFrames`, `PeerFrames`, `SlotFrames`, `ClearFrames`, `RotationFrames`, `SessionFrames`. |
+| H1 | `Noise/Model`, `Statements`, `Slots`, `StateEdges`, `ConsumeEdges`, `ClearModel`, `ClearEffects`, `ClearSource`, `RotationModel`, `RotationEffects`, `RotationSource`, `SessionModel`, `SessionSource`, `ConfirmationSequenceModel`, `ConfirmationSequenceEffects`, `ConfirmationSequenceSource`, `RestartModel`; `Execution` holds the concrete monad connection; `AccessSource` holds accessor read/write contracts, reexported by `Basic`. | `KernelFrames`, `PeerFrames`, `SlotFrames`, `ClearFrames`, `RotationFrames`, `SessionFrames`; standalone `RestartFrames` holds the three checked next-slot/cursor variants. |
 | H2 | `Index/View`, `LookupProvenanceSource`, `TableModel`, `OwnerWordModel`, `AllocationModel`, `ReleaseModel`, `LifecycleModel` and pure release effects/bounds; `Statements`, `HandshakeClaims`, `OwnerUpdateClaims`, `LifecycleSource`, `LinkSource`, `SendSource`, `DispatchSource`, `ResponseSource`, `ConsumeSource`, `StagedSource`, `ReceiveOperations`, `ReceiveSource`, `ClearSource`, `TimerSource`, `FlushSource`, `SessionCoherenceModel`, `SessionCoherenceEffects`, `SessionCoherenceSource`, `SessionAllocationEffects`, `SessionAllocationSource`, `SessionSequenceModel`, `SessionSequenceEffects`, `SessionSequenceSource` and the other operation/source modules. | `IndexFieldFrames`, `OwnerFieldFrames`, `StoreFieldFrames`, `LifecycleFrames`, `NewlinkFrames`, `SendFrames`, `DispatchFrames`, `ResponseFrames`, `ConsumeFrames`, `StagedFrames`, `ReceiveFrames`, `ClearFrames`, `TimerFrames`, `FlushFrames`, `SessionCoherenceFrames`, `SessionAllocationFrames`; the old `HandshakeFrames` and `OwnerFrames` paths are import-only reexports, not duplicated lemmas. |
 | H3 | `Roaming/Model`, `View`, `Statements`, `EndpointClaims`, `EndpointSource`, `Authentication`, `PublicationModel`, `PublicationSource`, `PublicationClaims`, `PollEndpointModel`, `PollEndpointSource`, `PollEndpointClaims`, `ResponseModel`, `ResponseCryptoSource`, `ResponseConsumeSource`, `ResponseLookupSource`, `ResponseCallSource`, `ResponseCallClaims`, `InitiationModel`, `InitiationCryptoSource`, `InitiationLookupSource`, `InitiationConsumeSource`, `InitiationCallSource`, `InitiationCallClaims`, `HandshakeAuditModel`, `HandshakeAuditSource`, `HandshakeAuditClaims`. | `Roaming/Frames`, `PublicationFrames`, `PollEndpointFrames`; `Basic` reexports the endpoint source connection. The response and initiation increments reuse existing accessor/read/clock support without new frames. |
 | H4 | `Config/Model`, `AllowedRemovalModel`, `AllowedPairsModel`, `AllowedPairsEffects`, `AllowedRemovalConverseSource`, `AllowedRemovalConverseClaims`, `QuietModel`, `LiveRemovalModel`, `LiveRemovalSource`, `CollisionModel`, `CollisionRemovalSource`, `CollisionRequestSource`, `AllowedInsertModel`, `AllowedInsertSource`, `AllowedReadbackSource`, `AllowedRoundTripSource`, `AllowedTransferModel`, `AllowedPlacementSource`, `AllowedTransferOperations`, `AllowedTransferSource`, `AllowedTransferRequestSource`, `AllowedTransferReadbackSource`, `RemoveFlagModel`, `RemoveFlagEffects`, `RemoveFlagSource`, `RemoveFlagRequestSource`, `ReplacementConverseSource`, `ReplacementConverseRequestSource`, `RemoveAllModel`, `RemoveAllEffects`, `RemoveAllSource`, `RemoveAllObservationSource`, `ReplacePeersRequestSource`, `ReplacePeersRequestClaims`, `ClaimView`, `Statements`, `SourceClaims`, `ObservationBridge`, and existing substantive effect/source modules. | `ConcreteFrames` isolates six whole-kernel endpoint contracts; `OperationFrames` isolates seven generic helpers; `ReadbackFrames` retains socket/fixture preservation; `AllowedListFrames`, `AllowedRootFrames`, `AllowedRemovalFrames`, `AllowedPairsFrames`, `QuietFrames`, `LiveRemovalFrames`, `KeyFieldFrames`, `CollisionFrames`, `AllowedInsertFrames`, `RemoveAllFrames` isolate within-WG preservation. |
@@ -127,6 +132,19 @@ installation needs the actual consume/create operations. Cursor, store-bound
 and surviving-next preservation through their rejected paths and failed-reference
 release remains the concrete missing support; slot confirmation alone does not
 establish key residency when aliases can erase the key.
+
+The next candidate uses actual initiation consumption and response creation
+between session/confirmation calls. Independent design critique found the initial
+next-ID-below-cursor premise sufficient for the proposed within-sequence numeric
+ID uniqueness, while leaving key residency and full driver reachability open.
+This is a design assessment, not a proved mixed-sequence result. Closed standalone
+support now records a deletion-aware cursor/next predicate (`RestartModel`) and
+pure insert/erase consequences plus three named variants (`RestartFrames`). The
+remaining release/consumer/creator transports make six overlapping shared
+families overall, so the implementation stopped at that boundary and is reported
+in the follow-up inventory. No executor or headline was added. The standalone
+support is not imported by `Noise.Statements`; reproduce its own scoped checks
+explicitly as below.
 
 ## H2 — Session index uniqueness
 
@@ -206,7 +224,12 @@ The remaining charter core is reachable hashed-table uniqueness and owner-object
 peer-word residency at actual lookup cuts through driver entry points. Outer
 `peerRemove`/`peerRemoveAll` table closure awaits the documented six-family
 decision; no workaround copies that layer. Data ingress/workers also have
-uncovered paths whose shared-frame overlap needs its own inventory before work.
+uncovered paths; the follow-up inventory identifies nine immediate ingress
+families (160–230 preservation lines plus 70–120 composition lines) and a larger
+decrypt/NAPI layer (preliminary 250–400 preservation lines plus composition).
+These are unimplemented, pending the scope decision. Most existing shared
+contracts omit the index-table observation rather than being individually false
+from the owner representation change.
 [AGENT 2026-10-15] Treat full reference/slot lifetimes, broader record layouts
 and a complete corpus-runner witness as supporting extensions, not separate H2
 deliverables; prioritize the actual driver invariant and lookup identity clauses.
@@ -362,6 +385,9 @@ pass. Normal full return supplies the certificate, while exact erasure preserves
 errors. Final cleanup effects and completion remain open. `RemoveAllFrames` isolates two within-WireGuard preservation helpers; the
 model, induction effects and source/observation files are separate. No shared
 variant was copied, and this result does not circumvent the pending H2 request.
+Moving these assumptions to the initial state needs the already-pending
+`subtree`/`rootRemovePeerLists`/`free` families; the follow-up inventory records
+that dependency without implementing renamed H4 copies.
 
 A flag-only `WGDEVICE_F_REPLACE_PEERS` request now composes this certificate with
 the original interface lookup, generation update and branch records. Exact
@@ -632,6 +658,15 @@ mirror-change request at this checkpoint.
 
 ## Validation, effort and trust limitations
 
+Standalone H1 restart support additionally passed a 116-job scoped build,
+standard-axiom inspection of all seven declarations and fresh stock kernel
+replay of `Noise.RestartFrames` (exit 0). Root reviewed the small insert/erase
+and named-variant proofs. One Lean draft failed on map normalization and retained
+read handling; its corrected build and later naming-correction build passed.
+One Python quoting error preceded any write or Lean launch. No infrastructure
+retry or resource-limit change occurred. These files add no headline and are
+outside the six Statements import closures.
+
 All headline declarations use only `propext`, `Classical.choice` and
 `Quot.sound`; structural/token checks pass. Source factoring, ordered effects,
 WP composition and finite induction were used without changing mirror
@@ -789,6 +824,9 @@ PY
 for area in Noise Index Roaming Config Progress TimerDiscipline; do
   LEAN_NUM_THREADS=32 capped -- scripts/in-bundle lake env leanchecker --fresh "Leanux.Proofs.WG.$area.Statements" || exit $?
 done
+# Standalone support, not imported by the headline modules:
+LEAN_NUM_THREADS=32 capped -- scripts/in-bundle lake build Leanux.Proofs.WG.Noise.RestartFrames
+LEAN_NUM_THREADS=32 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Noise.RestartFrames
 # Full gate: expected inherited failure, not reported as a scoped pass:
 LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle scripts/proof-gate
 ```
