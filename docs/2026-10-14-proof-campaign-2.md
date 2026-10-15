@@ -287,6 +287,21 @@ runner-trace witness or a general multipart theorem. Independent review found no
 correctness defect and confirmed the retained partial-update semantics; public
 key/table coherence is not assumed or claimed.
 
+`AllowedLists` and `AllowedListView` prove the original list deletion and its
+pointwise peer-list effect. `AllowedRemovalSource` factors the unchanged trie
+removal loop; `AllowedRootRemoval` closes its singleton root-leaf path.
+`AllowedReplacement` composes that path with lookup acquisition/release and the
+original public device setter. The new terminal contract replaces a stopped
+peer's owned singleton root leaf with an empty allowed-IP list: the node is
+erased, its family root is cleared, all peer lists lose the node, the trie
+sequence and device generation each advance once, and the lookup reference is
+balanced. Ordered map writes remain explicit; no structural map equality is
+inferred from pointwise lookup equality. This is a bounded successful-operation
+contract, not general trie validity, ownership preservation through arbitrary
+insertion, or multipart readback. Independent read-only review found no
+correctness defect and confirmed that the extra root/owner premises specialize
+the stronger operational helper to the advertised case.
+
 Remaining: private-key collision removal and mixed-attribute outer composition; full peer
 removal/replacement and allowed-IP ownership, other partial-error combinations,
 and general dump chunks/coalescing. Deferred removal work can change other
@@ -304,10 +319,11 @@ check: both the C and the mirror's own design require restoring pre-nest room.
 gives the witness and reproduction command. Ranked mirror suggestion 1:
 correct the saved cancellation snapshot (altitude-preserving).
 
-Validation: all fifty-five statements pass scoped build, standard-axiom inspection
+Validation: all fifty-six statements pass scoped build, standard-axiom inspection
 (only `propext`, `Classical.choice`, `Quot.sound`), and `capped --
 scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Config.Statements`.
-The full proof gate fails in inherited `CounterWindow.Refinement`; token/import
+The full proof gate fails in inherited `CounterWindow.Refinement` and
+`ReplayWindow.Counterexamples` after the index landing; token/import
 checks pass. Effort includes repaired proof-elaboration failures, including two
 local heartbeat limits resolved by simplifying put calculations before their
 continuations. The suggested `vcgen` replacement failed with a missing toolchain

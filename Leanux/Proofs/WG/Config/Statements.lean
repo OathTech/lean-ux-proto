@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Config.AllowedReplacement
 import Leanux.Proofs.WG.Config.Identity
 import Leanux.Proofs.WG.Config.Port
 import Leanux.Proofs.WG.Config.RoundTrip
@@ -659,5 +660,28 @@ theorem original_scalar_get_after_set (d : Device) (key psk : Key) (interval : N
           w.k.nlSock7 = { completedSock sock updated configured with queue := [] }) :=
   scalar_outer_get_after_set d key psk interval bad pid p sock peers found resident live bounded
     down noIps room idle empty
+
+/-- Replacing a stopped peer's singleton root-leaf allowed-IP list with an
+empty list removes the node, clears its family root, increments the trie
+sequence, and removes that node from every peer list. The public device
+setter increments its generation and balances the lookup reference. -/
+theorem original_allowedips_replace_single_root (v4 : Bool) (key : Key) (pid : PeerId)
+    (d : Device) (p : Peer) (id : NodeId) (n : AipNode)
+    (found : d.peerHashtable.find? (·.1 == key) = some (key, pid))
+    (peer : d.peers[pid]? = some p) (listed : p.allowedipsList = [id])
+    (resident : d.nodes[id]? = some n) (leaf : n.bit = #[none, none])
+    (parent : n.parent = rootSlot v4) (owned : n.peer = some pid)
+    (root : (if v4 then d.peerAllowedips.root4 else d.peerAllowedips.root6) = some id)
+    (live : 0 < p.refcount) (bounded : p.refcount + 1 < 2 ^ 31) (down : d.running = false) :
+    Returns (wgSetDevice (replaceAllowedipsDeviceAttrs d key))
+      (fun w => w.k.wg = some d ∧ selectsDevice w d)
+      (fun ret w =>
+        let updated := { d with deviceUpdateGen := d.deviceUpdateGen + 1 }
+        ret = 0 ∧ w.k.wg = some (rootReplacementDevice v4 updated pid p id n) ∧
+          RootReplacementEffects v4 updated id (rootReplacementDevice v4 updated pid p id n)) := by
+  intro w pre
+  obtain ⟨ret, final, run, result, device⟩ :=
+    setDevice_replace_root v4 key pid d p id n found peer listed resident leaf parent live bounded down w pre
+  exact ⟨ret, final, run, result, device, rootReplacement_effects v4 _ pid p id n peer⟩
 
 end Leanux.Proofs.WG.Config
