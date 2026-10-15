@@ -3,6 +3,7 @@ import Leanux.Proofs.WG.Config.ClaimView
 import Leanux.Proofs.WG.Config.ObservationBridge
 import Leanux.Proofs.WG.Config.LiveRemovalSource
 import Leanux.Proofs.WG.Config.AllowedRemovalConverseClaims
+import Leanux.Proofs.WG.Config.CollisionRequestSource
 
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise
@@ -830,5 +831,42 @@ theorem original_peer_make_dead_pairs (pid : PeerId) (p : Peer) (d : Device)
         (erasePeerList p.allowedipsList p).refcount = p.refcount ∧
         ∀ id ∈ p.allowedipsList, nodeOwner final id = none) :=
   source_peer_make_dead_pairs pid p d resident pairs
+
+/-- A normally returning original single-peer removal derives its actual
+allowed-IP removal relation and ordered live-key cleanup from the same run.
+The caller is resident with positive reference/device counts, two-child node
+shape and empty send/clear queues. No removal witness or static clear-reference
+budget is supplied. Aliases are retained; final release can erase the peer or
+leave it resident and dead. This does not guarantee completion or cover queued
+work or remove-all ordering. -/
+theorem original_peer_remove_live_effect (pid : PeerId) (d : Device) (p : Peer)
+    (resident : d.peers[pid]? = some p) (pairs : NodePairs d)
+    (live : 0 < p.refcount) (count : 0 < d.numPeers)
+    (send : d.sendWorkQueue = []) (clear : d.clearWorkQueue = []) :
+    Campaign2.Ensures (peerRemove (some pid)) (fun s => s.wg.device = some d)
+      (fun _ s => ∃ final, s.wg.device = some final ∧ CollisionRemovalEffect pid d p final) :=
+  peerRemove_live_effect_pairs pid d p resident pairs live count send clear
+
+/-- A changed private-key-only request with a live generated-public-key match
+returns zero on normal completion and performs the exact collision removal and
+installation relation. Lookup acquires one reference and its immediate caller
+put restores the original reference count before removal; both store writes
+are retained. Installation uses the actual post-removal device and peer list.
+NodePairs and quiet work queues are static scope premises; no supplied removal
+or execution witness, clear budget, completion guarantee or aggregate clock
+provenance is claimed. -/
+theorem original_private_key_request_collision (d : Device) (key pub : Key)
+    (pid : PeerId) (p : Peer) (changed : d.staticIdentity.staticPrivate ≠ key)
+    (generated : publicResult key = (some pub, true))
+    (found : d.peerHashtable.find? (·.1 == pub) = some (pub, pid))
+    (resident : d.peers[pid]? = some p) (pairs : NodePairs d)
+    (live : 0 < p.refcount) (bounded : p.refcount + 1 < 2 ^ 31) (count : 0 < d.numPeers)
+    (send : d.sendWorkQueue = []) (clear : d.clearWorkQueue = []) :
+    Campaign2.Ensures (wgSetDevice (privateKeyAttrs d key))
+      (fun s => s.wg.device = some d ∧ ClaimView.selectsDevice s d)
+      (fun ret s => ret = 0 ∧ ∃ final, s.wg.device = some final ∧
+        CollisionKeyEffect pid (requestGeneration d) p key final) :=
+  setDevice_private_collision d key pub pid p changed generated found resident pairs
+    live bounded count send clear
 
 end Leanux.Proofs.WG.Config

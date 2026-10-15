@@ -13,14 +13,13 @@ remains failed in inherited campaign-1 files.
 | H1 Noise | 20 | State/slot contracts, ordered clearing and rotation, static release budgets, full normal session effects and consecutive first-match confirmation | Whole-call edge coverage, session totality, exposed derivation-clock provenance, allocation-lifetime confirmation |
 | H2 Index | 48 | Exact index operations, original caller table safety, successful session publication coherence | Reachable store/slot/owner coherence, wider record layouts, corpus runner composition; outer-removal frames await decision |
 | H3 Roaming | 9 | Data publication/first-poll join and response-caller authentication at the actual pre-setter cut | Initiation, failed-call prefix retention, general queue/caller coverage, final endpoint preservation |
-| H4 Configuration | 64 | Configuration leaves/flags, bounded public readback, port/fwmark/key effects, allowed-IP removal and live-key peer removal | Collision and queued-work removal, mixed attributes, ownership and general multipart readback |
+| H4 Configuration | 66 | Configuration leaves/flags, bounded public readback, port/fwmark/key effects, normal live-key removal and private-key collision composition | Collision completion, queued-work/remove-all ordering, mixed attributes, ownership and general multipart readback |
 | H5 Progress | 32 | Historical backlog counterexample, source-connected scheduling inspections, cut/pow/drain bounds | Whole-worker record decrease, full operation-end coverage and global termination/progress |
 | H6 Timers | 36 | Local arm/delete rules, recorded delays, actual retry/send pairs, consecutive same-peer count bound and incoming-response session hook | Complete caller/site coverage, scheduler episodes and session-relative arm counting |
 
-Total: **209 headlines**. The factoring checkpoint `69f988a` preserved all 153
-then-existing headlines. Recent mathematical checkpoints include `3bf25a9`
-(H3 response), `bfd6f76` (H2 coherence) and `420c419` (H5 drain);
-`64d23eb` removes only an extra EOF blank line.
+Total: **211 headlines**. The factoring checkpoint `69f988a` preserved all 153
+then-existing headlines. Recent mathematical checkpoints include `a2923a1`
+(H1 consecutive confirmation) and `7b34fa4` (H6 response-session timer hook).
 
 [USER 2026-10-15] Resume before the split lands; factor claims over a
 WireGuard-only view and separate frames, then continue the charter. On the
@@ -58,7 +57,7 @@ connections to the current executable mirror, not replacement interpreters.
 | H1 | `Noise/Model`, `Statements`, `Slots`, `StateEdges`, `ConsumeEdges`, `ClearModel`, `ClearEffects`, `ClearSource`, `RotationModel`, `RotationEffects`, `RotationSource`, `SessionModel`, `SessionSource`, `ConfirmationSequenceModel`, `ConfirmationSequenceEffects`, `ConfirmationSequenceSource`; `Execution` holds the concrete monad connection; `AccessSource` holds accessor read/write contracts, reexported by `Basic`. | `KernelFrames`, `PeerFrames`, `SlotFrames`, `ClearFrames`, `RotationFrames`, `SessionFrames`. |
 | H2 | `Index/View`, `TableModel`, `OwnerWordModel`, `AllocationModel`, `ReleaseModel`, `LifecycleModel` and pure release effects/bounds; `Statements`, `HandshakeClaims`, `OwnerUpdateClaims`, `LifecycleSource`, `LinkSource`, `SendSource`, `DispatchSource`, `ResponseSource`, `ConsumeSource`, `StagedSource`, `ReceiveOperations`, `ReceiveSource`, `ClearSource`, `TimerSource`, `FlushSource`, `SessionCoherenceModel`, `SessionCoherenceEffects`, `SessionCoherenceSource` and the other operation/source modules. | `IndexFieldFrames`, `OwnerFieldFrames`, `StoreFieldFrames`, `LifecycleFrames`, `NewlinkFrames`, `SendFrames`, `DispatchFrames`, `ResponseFrames`, `ConsumeFrames`, `StagedFrames`, `ReceiveFrames`, `ClearFrames`, `TimerFrames`, `FlushFrames`, `SessionCoherenceFrames`; the old `HandshakeFrames` and `OwnerFrames` paths are import-only reexports, not duplicated lemmas. |
 | H3 | `Roaming/Model`, `View`, `Statements`, `EndpointClaims`, `EndpointSource`, `Authentication`, `PublicationModel`, `PublicationSource`, `PublicationClaims`, `PollEndpointModel`, `PollEndpointSource`, `PollEndpointClaims`, `ResponseModel`, `ResponseCryptoSource`, `ResponseConsumeSource`, `ResponseLookupSource`, `ResponseCallSource`, `ResponseCallClaims`. | `Roaming/Frames`, `PublicationFrames`, `PollEndpointFrames`; `Basic` reexports the endpoint source connection. The response increment needs no new frame support. |
-| H4 | `Config/Model`, `AllowedRemovalModel`, `AllowedPairsModel`, `AllowedPairsEffects`, `AllowedRemovalConverseSource`, `AllowedRemovalConverseClaims`, `QuietModel`, `LiveRemovalModel`, `LiveRemovalSource`, `ClaimView`, `Statements`, `SourceClaims`, `ObservationBridge`, and existing substantive effect/source modules. | `ConcreteFrames` isolates six whole-kernel endpoint contracts; `OperationFrames` isolates seven generic helpers; `ReadbackFrames` retains socket/fixture preservation; `AllowedListFrames`, `AllowedRootFrames`, `AllowedRemovalFrames`, `AllowedPairsFrames`, `QuietFrames`, `LiveRemovalFrames`, `KeyFieldFrames` isolate within-WG preservation. |
+| H4 | `Config/Model`, `AllowedRemovalModel`, `AllowedPairsModel`, `AllowedPairsEffects`, `AllowedRemovalConverseSource`, `AllowedRemovalConverseClaims`, `QuietModel`, `LiveRemovalModel`, `LiveRemovalSource`, `CollisionModel`, `CollisionRemovalSource`, `CollisionRequestSource`, `ClaimView`, `Statements`, `SourceClaims`, `ObservationBridge`, and existing substantive effect/source modules. | `ConcreteFrames` isolates six whole-kernel endpoint contracts; `OperationFrames` isolates seven generic helpers; `ReadbackFrames` retains socket/fixture preservation; `AllowedListFrames`, `AllowedRootFrames`, `AllowedRemovalFrames`, `AllowedPairsFrames`, `QuietFrames`, `LiveRemovalFrames`, `KeyFieldFrames`, `CollisionFrames` isolate within-WG preservation. |
 | H5 | `Progress/Model`, `View`, `Statements`, `SourceClaims`, `ObservationBridge`; `ControlLaws` is generic state/error control and `ControlSource` connects it exactly to the original worker; the scheduler/source modules retain actual execution factors. `CutModel`, `CutSource` and `CutClaims` establish original cut-loop progress; `FlushQueueModel`, `FlushQueueSource` and `FlushQueueClaims` establish original flush effects and count decrease; `PowModel` and `PowSource` connect a finite evaluator to the original arithmetic loop. `DrainModel`, `DrainOperations`, `DrainSelectionSource`, `DrainAuditSource`, `DrainEffects` and `DrainClaims` connect a phase audit and queue bound to the original workqueue drain. | `StackFrames` isolates caller-guard preservation; `CutFrames` isolates record/error-location preservation; `FlushQueueFrames` isolates queue preservation through worker bodies and release. Probe/filter/no-work contracts also establish outputs and remain substantive source claims. |
 | H6 | `TimerDiscipline/Model`, `View`, `SendView`, `Statements`, `ObservationBridge`, `ObservationClaims`, `SourceClaims`, `SendDispatchModel`, `SendDispatchClaims`, `RetryDispatchModel`, `RetryDispatchClaims`, `RetryRearmModel`, `RetryRearmClaims`, `RetrySequenceModel`, `RetrySequenceClaims`, `ResponseSessionModel`, `ResponseSessionEffects`, `ResponseSessionClaims`, and `*Source` operational proofs. | `SourceFrames`, `RecordedFrames`, `RecordedJitterFrames`, `SectionFrames`, `SelectionFrames`, `RetryFrames`, `JitterFrames`, `InitiationFrames`, `InitiationPreservationFrames`, `SendCutFrames`, `SendPeerFrames`, `SendSocketFrames`, `SendBufferFrame`, `SendWorkerFrame`, `SendDispatchFrames`, `RetryDispatchFrames`, `RetryRearmFrames`, `WorkStateFrames`, `ResponseSessionFrames`. |
 
@@ -256,11 +255,29 @@ send/clear work queues. The outer total removal still takes a supplied
 The final release may retain a dead peer when references remain. The normal
 converse does not import these totality premises.
 
+The normal full single-peer removal contract now derives both the structural
+removal and ordered clear effects from the same actual run. Its premises are
+initial residency, `NodePairs`, positive peer reference/device counts and empty
+send/clear queues. It takes neither a supplied `RemovalEffect` nor `ClearReady`;
+these normal effects do not promise completion.
+
+A changed private-key-only request also has an exact normal collision effect.
+The generated public key must select the named resident peer; its reference
+count is positive and its temporary increment below 2^31. The request retains
+the same node-shape, positive device-count and empty-queue conditions, with
+matching device selection. Lookup acquisition and the immediate caller put
+remain two ordered store writes, restoring the original reference count before
+removal without assuming structural map equality. The resulting removal witness
+and live-key cleanup are followed by identity/cookie/per-peer installation over
+the actual post-removal baseline, including that baseline's staged-send test
+and peer list. Normal outer return is zero. Final removal may erase the peer
+or retain it dead when references remain; no aggregate clock provenance is
+inferred from existential timestamps.
+
 The cancelled-nest finding below is internal accounting, not a demonstrated
-output mismatch. Private-key collision removal, queued-work removal, mixed
-attribute composition, global ownership and general getter round trips remain
-open. The actual predecessor-state removal relation was retained rather than
-postulating an independent operational witness for the converse.
+output mismatch. Total collision completion, queued-work removal, remove-all's
+two-pass ordering, mixed attributes, global ownership and general getter round
+trips remain open. No deferred shared-frame family was copied for these effects.
 
 ## H5 — Termination and progress
 
@@ -382,15 +399,19 @@ H2 coherence: 206; H5 drain: 196, with 32 headlines plus four exact-source
 equations checked. H5's public-scope finding was fixed by making exact
 correspondence unconditional and confining the queue bound to the progress
 conjunct; the changed interface was rebuilt and replayed. Its staged EOF
-whitespace finding was corrected in the next commit. H4's 64-headline and
-H6's prior 35-headline results retain their recorded scoped/replay checks;
+whitespace finding was corrected in the next commit. Earlier H4/H6 results
+retain their recorded scoped/replay checks;
 later shared C2 spine changes were checked in affected H2/H5/H6 runs.
 The incoming-response session hook adds a scoped H6 build (207 jobs), 36
 headlines plus four exact-source/erasure axiom checks, fresh stock replay
 (exit 0) and independent review. Five ordinary source drafts were corrected;
 a wrapped-output parser correction reused the same successful Lean output.
-The six-target scoped build passes together (341 jobs), with existing unused-simp
-and deprecated-tactic warnings. Combined inspection covers all 209 headlines. This does **not**
+H4 normal removal/collision adds a scoped build (185 jobs), all 66 headlines
+plus five source/frame axiom checks, fresh stock replay (exit 0) and independent
+review. Five ordinary elaboration drafts were corrected; a parser correction
+for the existing zero-axiom output format reused the same successful Lean output.
+The six-target scoped build passes together (345 jobs), with existing unused-simp
+and deprecated-tactic warnings. Combined inspection covers all 211 headlines. This does **not**
 constitute a passing full gate.
 
 The full gate was last actually run at `69f988a` and **failed** in inherited
