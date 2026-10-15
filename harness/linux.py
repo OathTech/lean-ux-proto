@@ -177,7 +177,7 @@ def dispatch_addresses(kernel=None, symbols=DISPATCH_SYMBOLS):
     return [found[name] for name in symbols]
 
 
-def binary_coverage_ranges(kernel=None, symbols=("wg_index_hashtable_lookup", "wg_peer_get_maybe_zero")):
+def binary_coverage_ranges(kernel=None, symbols=("wg_index_hashtable_lookup", "wg_peer_get_maybe_zero"), *, sources=None):
     """Resolve opted-in capture ranges from the already identity-checked ELF."""
     text = subprocess.check_output(["nm", "-S", "--defined-only", str(Path(kernel or KERNEL) / "vmlinux")],
                                    text=True, timeout=60)
@@ -187,6 +187,12 @@ def binary_coverage_ranges(kernel=None, symbols=("wg_index_hashtable_lookup", "w
         if len(parts) != 4 or parts[3] not in symbols:
             continue
         address, size, kind, name = parts
+        if sources and name in sources:
+            location = subprocess.check_output(
+                ["addr2line", "-e", str(Path(kernel or KERNEL) / "vmlinux"), "0x" + address],
+                text=True, timeout=60).strip().split(":", 1)[0]
+            if not location.endswith(sources[name]):
+                continue
         if kind not in ("t", "T") or name in found or int(size, 16) <= 0:
             raise ValueError(f"binary coverage symbol {name} is not one nonempty text symbol")
         lo, length = int(address, 16), int(size, 16)
@@ -196,6 +202,15 @@ def binary_coverage_ranges(kernel=None, symbols=("wg_index_hashtable_lookup", "w
     if set(found) != set(symbols):
         raise ValueError(f"binary coverage symbols missing: {sorted(set(symbols) - set(found))}")
     return [found[name] for name in symbols]
+
+
+def binary_profile_ranges(profile):
+    if profile == "index":
+        return binary_coverage_ranges()
+    if profile == "allowedips":
+        return binary_coverage_ranges(symbols=("lookup", "common_bits", "wg_peer_get_maybe_zero"),
+                                      sources={"lookup": "drivers/net/wireguard/allowedips.c"})
+    raise ValueError(f"unknown binary coverage profile: {profile}")
 
 
 class LinuxRunError(RuntimeError):
@@ -812,7 +827,7 @@ def _seccomp_policy_errno(trace, index, errno):
                for insn in op["filter"])
 
 
-def run_linux(traces, outdir, *, timeout=120, steer_wire=None, arm_records=ARM_RECORDS, guest_variant=None, alloc=None, binary_coverage=False):
+def run_linux(traces, outdir, *, timeout=120, steer_wire=None, arm_records=ARM_RECORDS, guest_variant=None, alloc=None, binary_coverage=False, binary_profile="index"):
     """Return ordered observations; preserve evidence and raise on execution failures.
 
     `outdir` must be a fresh/empty directory within the task's artifact root.
@@ -851,7 +866,7 @@ def run_linux(traces, outdir, *, timeout=120, steer_wire=None, arm_records=ARM_R
                 lock.close()
                 continue
             with lock:
-                return _run_locked(traces, outdir, timeout, arm_records, guest_variant, alloc, identity, binary_coverage)
+                return _run_locked(traces, outdir, timeout, arm_records, guest_variant, alloc, identity, binary_coverage, binary_profile)
         if time.monotonic() >= deadline:
             raise LinuxRunError("resource_busy", f"Other guests held all {QEMU_SLOTS} QEMU slots for {QEMU_LOCK_WAIT} s", outdir)
         if not waited:
@@ -865,13 +880,13 @@ QEMU_LOCK_WAIT = 3600
 QEMU_SLOTS = int(os.environ.get("LEANUX_QEMU_SLOTS", "16"))
 
 
-def _run_locked(traces, outdir, timeout, arm_records, guest_variant=None, alloc=None, kernel_identity=None, binary_coverage=False):
+def _run_locked(traces, outdir, timeout, arm_records, guest_variant=None, alloc=None, kernel_identity=None, binary_coverage=False, binary_profile="index"):
     build = ["gcc", "-static", "-O2", "-Wall", "-Wextra", "-Werror", "-std=c11", *GUEST_VARIANTS.get(guest_variant, ()), str(ROOT / "harness/guest.c"), "-o", str(outdir / "guest-runner")]
     started = time.monotonic()
     build_returncode = _bounded_process(build, outdir / "build.log", 60, OUTPUT_LIMIT)
     if build_returncode:
         raise LinuxRunError("build_failure", "Guest compilation failed; inspect build.log", outdir)
-    ranges = binary_coverage_ranges() if binary_coverage else []
+    ranges = binary_profile_ranges(binary_profile) if binary_coverage else []
     guest_args = " --binary-ranges /binary-ranges.txt" if ranges else ""
     if ranges:
         (outdir / "binary-ranges.txt").write_text("".join(f'{r["lo"]:x} {r["hi"]:x}\n' for r in ranges))

@@ -1,5 +1,6 @@
 import FiniteExecution
 import Image
+import AllowedipsImage
 import ServiceImage
 import Memory
 import LookupProjection
@@ -25,7 +26,7 @@ import LookupProjection
 -/
 namespace Binary.TrustBase
 
-def krakenCommit : String := "e91a885e02f5ac6e63bacf1de10733f9a0b7e788"
+def krakenCommit : String := "7ebba06a30eaf08c10b26b28ca14bfee1c791576"
 def kernelIdentity : String := "6b2018b9"
 def elfSha256 : String := "16c346209885db6c610d4aa126c6eb30f5d3c02f0498d95e606473945f648774"
 def decoderVersion : String := "GNU objdump (GNU Binutils for Ubuntu) 2.42"
@@ -132,7 +133,7 @@ def currentTaskAddress : BitVec 64 := .ofNat 64 0xffffffff81cc85c0
 def softirqPendingAddress : BitVec 64 := .ofNat 64 0xffffffff81cc85e0
 
 inductive KcovKind where
-  | pc | cmp4 | constCmp4 | constCmp1
+  | pc | cmp1 | cmp4 | cmp8 | constCmp4 | constCmp1
   deriving DecidableEq
 
 structure WordWrite where
@@ -205,6 +206,17 @@ def KcovStateBytes (layout : KcovLayout) (address : BitVec 64) : Prop :=
   KcovMetadataBytes layout address ∨ InRange preemptCountAddress 4 address ∨
     ((layout.mode = 2 ∨ layout.mode = 3) ∧ KcovStorageBytes layout address)
 
+/-- KCOV comparison record encoding: width in bits 1..2, constant bit 0. -/
+def KcovRecordTag : KcovKind → BitVec 64
+  | .pc => 0 | .cmp1 => 0 | .cmp4 => 4 | .cmp8 => 6
+  | .constCmp4 => 5 | .constCmp1 => 1
+
+/-- Callback argument width is fixed by the called entry point. -/
+def KcovArgument (kind : KcovKind) (s : MachineState) (reg : Reg64) : BitVec 64 :=
+  if kind = .constCmp1 ∨ kind = .cmp1 then (s.data.regs.get (.low reg .W8)).setWidth 64
+  else if kind = .cmp8 then s.data.regs.get64 reg
+  else (s.data.regs.get (.low reg .W32)).setWidth 64
+
 /-- Physical KCOV callback specification, with the actual early-return read
     dependencies and machine-width arithmetic. It is not a proof checker. -/
 def KcovPlan (kind : KcovKind) (s : MachineState) : Option (List WordWrite) := do
@@ -229,15 +241,9 @@ def KcovPlan (kind : KcovKind) (s : MachineState) : Option (List WordWrite) := d
     let slot := 4 * count
     let ending := 8 * slot + 40
     if 8 * (capacity.setWidth 64) < ending then return []
-    let tag : BitVec 64 := match kind with
-      | .pc => 0
-      | .cmp4 => 4
-      | .constCmp4 => 5
-      | .constCmp1 => 1
-    let arg1 := if kind = .constCmp1 then (s.data.regs.get (.low .rdi .W8)).setWidth 64
-      else (s.data.regs.get (.low .rdi .W32)).setWidth 64
-    let arg2 := if kind = .constCmp1 then (s.data.regs.get (.low .rsi .W8)).setWidth 64
-      else (s.data.regs.get (.low .rsi .W32)).setWidth 64
+    let tag := KcovRecordTag kind
+    let arg1 := KcovArgument kind s .rdi
+    let arg2 := KcovArgument kind s .rsi
     return [⟨area, count + 1⟩, ⟨area + ending - 32, tag⟩,
       ⟨area + ending - 24, arg1⟩, ⟨area + ending - 16, arg2⟩,
       ⟨area + ending - 8, returnPC⟩]
@@ -293,6 +299,58 @@ def BhEnableReady (s : MachineState) : Prop :=
     Readiness must justify that its softirq path runs no pending work. -/
 def BhEnableContract (fetch : Int64 → Option Decoded) : Prop :=
   ServiceReturns fetch (.ofNat 0xffffffff810732c0) BhEnableReady
+    (fun _ => InRange preemptCountAddress 4)
+    (fun before after => ∀ old : BitVec 32,
+      before.data.dmem.loadInt preemptCountAddress 4 = some (old.toNat : Int) →
+      after.data.dmem.loadInt preemptCountAddress 4 =
+        some ((old - before.data.regs.get (.low .rsi .W32)).toNat : Int))
+
+/-- Additional anchored decoder domain for M2; M1 agreement is separate
+    because peer-get is shared. The linked-label interpretation is unchanged. -/
+def AllowedipsDecoderAgreement (fetch : Int64 → Option Decoded) : Prop :=
+  ∀ pc instruction, AllowedipsImage.fetch pc = some instruction → fetch pc = some instruction
+
+/-- A callback's interior is not another anchored M2 invocation. -/
+def NoAllowedipsReentry (history : List MachineState) : Prop :=
+  ∀ s ∈ history.dropLast, AllowedipsImage.fetch s.pc = none
+
+/-- M2 uses the same physical callback specification, with its additional
+    anchored ranges excluded from callback interiors. The original M1
+    contracts and their hypotheses remain unchanged. -/
+def AllowedipsServiceReturns (fetch : Int64 → Option Decoded) (address : Int64)
+    (ready : MachineState → Prop) (writes : MachineState → BitVec 64 → Prop)
+    (effect : MachineState → MachineState → Prop) : Prop :=
+  ∀ s returnAddress, s.pc = address → ready s → EntryFrame s returnAddress →
+    Eventually (historyStep fetch)
+      (fun t => Returned s t.machine returnAddress ∧
+        EqualOutside (writes s) s.data.dmem t.machine.data.dmem ∧
+        effect s t.machine ∧ NoAnchoredReentry t.history ∧ NoAllowedipsReentry t.history)
+      ⟨s, [s]⟩
+
+def AllowedipsTracePcContract (fetch : Int64 → Option Decoded) : Prop :=
+  AllowedipsServiceReturns fetch (.ofNat 0xffffffff810f3100)
+    (KcovReady .pc) (KcovWrites .pc) (KcovEffect .pc)
+
+def AllowedipsTraceCmp1Contract (fetch : Int64 → Option Decoded) : Prop :=
+  AllowedipsServiceReturns fetch (.ofNat 0xffffffff810f3e40)
+    (KcovReady .cmp1) (KcovWrites .cmp1) (KcovEffect .cmp1)
+
+def AllowedipsTraceCmp8Contract (fetch : Int64 → Option Decoded) : Prop :=
+  AllowedipsServiceReturns fetch (.ofNat 0xffffffff810f3ea0)
+    (KcovReady .cmp8) (KcovWrites .cmp8) (KcovEffect .cmp8)
+
+def AllowedipsTraceConstCmp1Contract (fetch : Int64 → Option Decoded) : Prop :=
+  AllowedipsServiceReturns fetch (.ofNat 0xffffffff810f3ec0)
+    (KcovReady .constCmp1) (KcovWrites .constCmp1) (KcovEffect .constCmp1)
+
+def AllowedipsTraceConstCmp4Contract (fetch : Int64 → Option Decoded) : Prop :=
+  AllowedipsServiceReturns fetch (.ofNat 0xffffffff810f3f00)
+    (KcovReady .constCmp4) (KcovWrites .constCmp4) (KcovEffect .constCmp4)
+
+/-- As in M1, this contract covers the no-pending-work BH-enable path.
+    M2's Pre must justify the actual read conditions and stack separation. -/
+def AllowedipsBhEnableContract (fetch : Int64 → Option Decoded) : Prop :=
+  AllowedipsServiceReturns fetch (.ofNat 0xffffffff810732c0) BhEnableReady
     (fun _ => InRange preemptCountAddress 4)
     (fun before after => ∀ old : BitVec 32,
       before.data.dmem.loadInt preemptCountAddress 4 = some (old.toNat : Int) →

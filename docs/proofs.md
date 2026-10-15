@@ -130,6 +130,8 @@ realism and physical frame premises.
 | --- | --- | --- | --- | --- | --- |
 | `wg_index_hashtable_lookup`, including `wg_peer_get_maybe_zero` | `Binary.LookupRelation.lookup_simulation`, `lookup_transport`, `lookup_framed_transport` | 54 (23 lookup, 31 helper) | `TracePcContract`, `TraceCmp4Contract`, `TraceConstCmp4Contract`, `TraceConstCmp1Contract`, `BhEnableContract` | `cb2348e` | Function and bucket-loop composition proved; original ABI return, all accepted helper paths, result and cut frames. Independent review: go with named fixes; F1/F3/F4/F5/F8/F10/F11 implemented for recheck at M2. External export gate PASS at 430ea90 only; updated surface awaits M2 export gate. |
 
+| Allowed-IPs `lookup` and `common_bits`, both families | In progress; no function theorem claimed | 56 (35 lookup, 21 common_bits), plus existing peer-get | Under construction; additional variable cmp1/cmp8 callbacks reached | `cb2348e` | M2 probe, BSR extension and minimal trie heap relation in progress; M2 review will recheck M1 fixes. |
+
 The concrete frame instance `lookup_snapshot_transport` carries exact
 frontier and source-live lifetime/replay fields through lookup, conditional
 on their initial representation and untouched-byte separation. It does not

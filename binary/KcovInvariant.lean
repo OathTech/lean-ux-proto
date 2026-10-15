@@ -25,15 +25,14 @@ def bufferPlan (kind : KcovKind) (layout : KcovLayout) (count : Nat)
     if 4 * count + 5 ≤ layout.capacity.toNat then
       [⟨layout.area, .ofNat 64 (count + 1)⟩,
        ⟨layout.area + .ofNat 64 (8 * (4 * count + 1)),
-         if kind = .cmp4 then 4 else if kind = .constCmp4 then 5 else 1⟩,
+         KcovRecordTag kind⟩,
        ⟨layout.area + .ofNat 64 (8 * (4 * count + 2)), arg1⟩,
        ⟨layout.area + .ofNat 64 (8 * (4 * count + 3)), arg2⟩,
        ⟨layout.area + .ofNat 64 (8 * (4 * count + 4)), returnPC⟩]
     else []
 
 def argument (kind : KcovKind) (s : MachineState) (reg : Reg64) : BitVec 64 :=
-  if kind = .constCmp1 then (s.data.regs.get (.low reg .W8)).setWidth 64
-  else (s.data.regs.get (.low reg .W32)).setWidth 64
+  KcovArgument kind s reg
 
 set_option maxHeartbeats 1200000 in
 /-- Conditional metadata supports exactly the same buffer arithmetic as the
@@ -92,7 +91,8 @@ theorem plan_normal_form_of_reads (kind : KcovKind) (layout : KcovLayout)
   have o16 : 32*count+40-16 = 8*(4*count+3) := by omega
   have o8 : 32*count+40-8 = 8*(4*count+4) := by omega
   simp only [o32, o24, o16, o8] at a32 a24 a16 a8
-  by_cases h0 : preempt &&& 0xff0100#32 = 0#32
+  by_cases pcKind : kind = .pc
+  all_goals by_cases h0 : preempt &&& 0xff0100#32 = 0#32
   all_goals by_cases h1 : preempt &&& 0x100#32 = 0#32
   all_goals by_cases h2 : preempt &&& 0xff0000#32 = 0#32
   all_goals by_cases h3 : layout.softirqEnabled = 0#32
@@ -101,9 +101,9 @@ theorem plan_normal_form_of_reads (kind : KcovKind) (layout : KcovLayout)
     false_and, true_and, and_false, ite_true, ite_false, false_implies,
     true_implies] at softirq mode
   all_goals simp [KcovPlan, preemptRead, returnRead, task, mode, capacity, area, softirq,
-    h0, h1, h2, h3, countRead, nextNat, endGuard, a32, a24, a16, a8]
-  all_goals cases kind <;>
-    simp [enabled, bufferPlan, argument, nextBV, BitVec.ofNat_mul,
+    h0, h1, h2, h3, pcKind, countRead, nextNat, endGuard, a32, a24, a16, a8]
+  all_goals
+    simp [enabled, bufferPlan, argument, pcKind, nextBV, BitVec.ofNat_mul,
       Nat.not_lt, ite_not, ← BitVec.ofNat_add]
   all_goals by_cases h0 : preempt &&& 0xff0100#32 = 0#32 <;> simp_all
   all_goals by_cases h1 : preempt &&& 0x100#32 = 0#32 <;> simp_all

@@ -3601,3 +3601,100 @@ Validation: command syntax checked against the v4.35.0 toolchain's
 LeanExport main and Lake Check --from-export option; documentation-only
 change, no redundant proof rebuild. The next work is milestone 2, with the
 independent M2 review rechecking all these M1 dispositions.
+
+
+## Milestone 2: allowed-IPs lookup and common_bits (in progress)
+
+Implementation began at approximately 20:41 UTC on 2026-10-15, after the
+ordered M1 fixes. The image's local `lookup` at `0xffffffff813a0830` is the
+chartered allowed-IPs lookup (103 instructions, 35 regions); `common_bits`
+at `0xffffffff813a0750` contributes 73 instructions, 21 regions. The existing
+peer-get helper is also called. The duplicate unrelated local `lookup`
+symbol is rejected by source-qualified extraction. This is one milestone,
+with one register row and this report updated across its commit series.
+
+The automation target is repeated instruction-step and memory-frame plumbing,
+using kernel-checked Lean proofs. There is no certificate checker. Reported
+M2 instruction counts exclude previously certified peer-get and contracted
+service bodies; elapsed time, primary work and delegated work will be stated
+separately at the claim point. No M2 function-level theorem is claimed yet.
+
+### BSR ISA extension
+
+[AGENT 2026-10-15] Use the conservative common behavior of the current
+[Intel SDM revision 089, BSR volume 2A page 3-109](https://cdrdv2-public.intel.com/868137/325462-089-sdm-vol-1-2abcd-3abcd-4.pdf)
+and [AMD APM 24594 revision 3.37](https://docs.amd.com/api/khub/documents/j44LvPXzuuXgM0WyHKQfeQ/content).
+Nonzero BSR returns the highest set-bit index. Zero preserves the destination;
+32-bit zero additionally permits clearing its upper half, as Intel's
+older-processor footnote allows. All five non-ZF arithmetic flags remain
+universally undefined. This corrects the preliminary concern based on older
+Intel wording quoted by Linux: no equal-key exclusion or vendor-specific
+hypothesis is introduced. `common_bits` already seeds the zero input case
+with -1 and initializes the relevant upper word to zero.
+
+Private Kraken pin `7ebba06a30eaf08c10b26b28ca14bfee1c791576` adds semantics,
+parser and both printers, 26 executable guards, four AT&T round trips, two
+universal symbolic lemmas and a native assembly comparison. Tests cover all
+three legal widths, zero/nonzero, both zero-W32 alternatives, source/destination
+aliasing, memory-source/address-register aliasing, failed loads and illegal
+operands. Full capped v4.35.0 build PASS (68 jobs), native comparison PASS
+(1/1), and scoped fresh `leanchecker Kraken.X64.BsrTests` PASS; the symbolic
+lemmas use only the three standard axioms.
+
+A separate incidental `leanchecker --help` invocation **failed**, KILLED at
+the unchanged 32 GB cap (exit 137): that tool ignored the flag and attempted
+a whole-package replay. It is not counted as a pass. Dirty private and task
+states were preserved to snapshot refs before further checks. The successful
+scoped replay is a different, explicitly bounded check. An earlier command
+using the private checkout's nightly toolchain failed in the elan shim;
+Nono denial was unconfirmed. Subsequent commands selected the installed
+v4.35.0 per process, with no global/toolchain-file change.
+
+### Concrete test and proof foundations
+
+Before the M2 function proof, fresh opt-in `b1_trie_routing` recording passed:
+one trace, 12 operations, 102 compared operand pairs, 81 distinct rows.
+`LEANUX_QEMU_SLOTS=16 capped -- python3 -B binary/allowedips_probe.py`
+rebuilds that recording and the three-way comparison. IPv4 operation 5
+returned peer 3 after 1,592 decoded instructions, 50 ordered PC records,
+21 comparison triples and 34 mirror decisions; IPv6 operation 8 returned
+peer 4 after 1,510 instructions, 47 PC records, 22 comparisons and 32
+decisions. Both undefined-value seeds passed. The probe executes actual
+common_bits, peer-get and coverage/service bodies, checks the ABI return,
+and checks the materialised memory after its declared stack/KCOV framing.
+The state is the recorded prefix's mirror read projection, with synthetic
+addresses and explicit preempt baseline 512, not a captured kernel entry.
+It is a test, not the required Lean witness for a future Pre_allowedips.
+The existing M1 miss/hit tests still pass. Capture/harness unit checks passed
+(16 tests, one existing skip).
+
+The generated image has 176 instructions in 56 regions. The trie predicate
+relates only the query-reachable nodes and bytes actually read: the low IPv6
+key word is needed only after high-word equality. Its frame and subpath
+lemmas check. No acyclicity, strictly increasing prefix, positive peer count,
+or zero-valued placeholder bytes are imposed to make the proof terminate.
+The mirror's accepted bounded run will supply the loop induction.
+
+The named M2 service contracts add cmp1 and cmp8, and exclude reentry into
+the new anchored ranges. They remain physical callback hypotheses; no
+future R, expected source sequence, or termination of lookup is assumed.
+The KCOV comparison tag/argument definitions are shared with its memory-plan
+proof, including the full 64-bit cmp8 operands. M1's headline statements
+are unchanged. The trust-surface baseline is updated explicitly for the
+Kraken pin and these named declarations; they will be audited again with
+M2's final headline. No Pre_allowedips declaration has landed yet.
+
+Integrated capped build PASS (366 jobs), including all M1 headlines with
+only propext, Classical.choice and Quot.sound. Intermediate failures remain
+failures: broad arithmetic normalization was stopped twice (exit 143), and
+one subsequent attempt was KILLED at a deliberately reduced 4 GB cap
+(exit 137). A small explicit Nat normal form replaced it and checks in
+under a second. Concurrent Lake dependency plans caused missing-olean
+failures; dependency builds are now serialized while agents directly check
+distinct new modules. The initial six-way KCOV proof timed out; the shared
+tag/argument definitions and PC/non-PC split now check. These failures
+are not included in passing counts. No cap was raised to obtain a pass.
+
+The binary proof gate passes at this foundation checkpoint, including the
+clean private dependency pin, headline axiom check, and printed/diffed trust
+surface. This is the project gate, not a new external export replay.

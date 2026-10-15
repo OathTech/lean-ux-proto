@@ -45,12 +45,12 @@ structure ProbeInput where
 def liftE {α} (x : Except String α) : IO α :=
   match x with | .ok a => pure a | .error e => throw (IO.userError e)
 
-/-- Replay the recorded prefix with the same entry settings as executeTrace.
-    This probe deliberately accepts one corpus case, not arbitrary traces. -/
-def replayPrefix (j : Json) (count : Nat) : Except String Leanux.World := do
+/-- Replay complete recorded operations with executeTrace's entry settings.
+    Each concrete probe separately validates its selected corpus case. -/
+def replayRecordedPrefix (j : Json) (count : Nat) : Except String Leanux.World := do
   let t ← Leanux.Runner.parseTrace j
-  unless count == 3 && t.ops.size > count && t.hidden.isSome do
-    throw "probe requires the recorded three-operation prefix"
+  unless t.ops.size > count && t.hidden.isSome do
+    throw "probe requires a recorded prefix and a following operation"
   unless t.seccompPrefill == 0 do throw "probe does not support a seccomp prefill"
   let mut w : Leanux.World := {
     k := Leanux.Runner.initialKernel t.rlimit t.net t.bare t.foreign t.stepped t.seccompChild
@@ -73,6 +73,10 @@ def replayPrefix (j : Json) (count : Nat) : Except String Leanux.World := do
     results := results.push ret
     ends := ends.push (if ret == 0 then w.userFds else none)
   return {w with steps := #[], hidden := some []}
+
+def replayPrefix (j : Json) (count : Nat) : Except String Leanux.World := do
+  unless count == 3 do throw "index probe requires the recorded three-operation prefix"
+  replayRecordedPrefix j count
 
 def tableAddr : Nat := 0x100000
 def peerAddr (id : Leanux.WG.PeerId) : Nat := 0x600000 + id * 0x1000
@@ -239,38 +243,45 @@ def interpret [Labels] (seed : UInt64) (r : Run) (i : Instr) (pc size : Nat) : E
     (fun d => .done ⟨d, .ofNat (pc+size)⟩) (fun p d => .done ⟨d, p⟩)) >>= fun next =>
       pure {next with history := r.history.push next.state}
 
-def runMachine (input : ProbeInput) (initial : MachineState) (seed : UInt64)
-    (actualServices : Bool := false) : Except String Run := do
-  let _ : Labels := ⟨fun l => .ofNat ((input.labels.find? (·.1 == l)).map (·.2) |>.getD 0)⟩
+def runProgram (instructions : Array Instruction) (labels : Array (String × Nat))
+    (hooks : Array (Nat × String)) (preempt : Nat) (initial : MachineState) (seed : UInt64)
+    (actualServices : Bool) (budget entryPreempt : Nat) : Except String Run := do
+  let _ : Labels := ⟨fun l => .ofNat ((labels.find? (·.1 == l)).map (·.2) |>.getD 0)⟩
   let mut r : Run := {state := initial, history := #[initial]}
-  for _ in [:1000] do
+  for _ in [:budget] do
     let pc := r.state.pc.toBitVec.toNat
     if pc == stopAddr then return r
-    if let some (_, name) := input.hooks.find? (·.1 == pc) then
+    if let some (_, name) := hooks.find? (·.1 == pc) then
       let ra ← readNat r.state r.state.data.regs.rsp.toNat 8
       if name == "__sanitizer_cov_trace_pc" then
         r := {r with coverage := r.coverage.push ra}
       else if name == "__sanitizer_cov_trace_cmp4" || name == "__sanitizer_cov_trace_const_cmp4" ||
-          name == "__sanitizer_cov_trace_const_cmp1" then
-        let bits := if name == "__sanitizer_cov_trace_const_cmp1" then 8 else 32
+          name == "__sanitizer_cov_trace_const_cmp1" || name == "__sanitizer_cov_trace_cmp1" ||
+          name == "__sanitizer_cov_trace_cmp8" then
+        let bits := if name == "__sanitizer_cov_trace_cmp8" then 64
+          else if name == "__sanitizer_cov_trace_const_cmp1" || name == "__sanitizer_cov_trace_cmp1" then 8 else 32
         let comparison := (ra, r.state.data.regs.rdi.toNat % (2^bits), r.state.data.regs.rsi.toNat % (2^bits))
         r := {r with comparisons := r.comparisons.push comparison}
       else if name == "__local_bh_enable_ip" then
         if !actualServices then
-          unless r.state.data.regs.rsi == 512 && (← readNat r.state input.preempt 4) == 512 do
+          unless r.state.data.regs.rsi == 512 && (← readNat r.state preempt 4) == entryPreempt + 512 do
             throw "environment summary requires one balanced BH-disable and no pending work"
           r := {r with state := {r.state with data := {r.state.data with
-            dmem := put r.state.data.dmem input.preempt 4 0}}}
+            dmem := put r.state.data.dmem preempt 4 entryPreempt}}}
       else
         throw s!"unclassified or unreached-path call: {name}"
       if !actualServices then
         r ← interpret seed r (.regular .W64 .W64 .ret) pc 1
         continue
-    let some i := input.instructions.find? (·.pc == pc) | throw s!"PC outside decoded functions: {pc}"
+    let some i := instructions.find? (·.pc == pc) | throw s!"PC outside decoded functions: {pc}"
     let [.instr op] ← Kraken.X64.Parser.parse i.asm | throw s!"not one instruction at {pc}: {i.asm}"
     r := {r with pcs := r.pcs.push pc}
     r ← interpret seed r op pc i.size
   throw "instruction budget exhausted"
+
+def runMachine (input : ProbeInput) (initial : MachineState) (seed : UInt64)
+    (actualServices : Bool := false) : Except String Run :=
+  runProgram input.instructions input.labels input.hooks input.preempt initial seed actualServices 1000 0
 
 def probe (input : ProbeInput) (actualServices : Bool := false) : Except String Json := do
   let w ← replayPrefix input.trace input.operation
@@ -581,7 +592,175 @@ def peerNonnull : Except String Nat := do
   return total
 end ServiceTests
 
+namespace AllowedipsProbe
+open Leanux Leanux.WG
+
+structure Offsets where
+  nodeSize : Nat
+  peer : Nat
+  children : Nat
+  cidr : Nat
+  bitAtA : Nat
+  bitAtB : Nat
+  bitlen : Nat
+  bits : Nat
+  peerRefcount : Nat
+  deriving FromJson
+
+structure Input where
+  instructions : Array Instruction
+  labels : Array (String × Nat)
+  hooks : Array (Nat × String)
+  offsets : Offsets
+  entry : Nat
+  commonEntry : Nat
+  preempt : Nat
+  entryPreempt : Nat
+  budget : Nat
+  trace : Json
+  operation : Nat
+  deriving FromJson
+
+def nodeAddr (id : NodeId) : Nat := 0xa00000 + id * 0x1000
+def keyAddr : Nat := 0xb00000
+def nodePointer (node : Option NodeId) : Nat := node.map nodeAddr |>.getD 0
+
+/-- Test fixture from the recorded mirror's lookup read projection. Addresses,
+    scratch bytes and entry preempt count are supplied fixture data, not a
+    claimed capture of kernel memory. Other WG objects are not materialized. -/
+def materialize (d : Device) (o : Offsets) (key width preempt entryPreempt : Nat) : Except String DataMem := do
+  unless (width == 32 || width == 128) && key < 2^width do throw "invalid address width"
+  let mut m : DataMem := (List.replicate 0x810 (0 : UInt8)).At (.ofNat 64 (stackAddr-0x800))
+  m := put m stackAddr 8 stopAddr
+  m := put m preempt 4 entryPreempt
+  let network := (List.range (width/8)).map fun i => UInt8.ofNat (key / 256^(width/8-1-i) % 256)
+  m := m.storeBytes (.ofNat 64 keyAddr) network
+  for (id, n) in d.nodes.toList do
+    unless id < 256 && (n.bitlen == 32 || n.bitlen == 128) && n.cidr ≤ n.bitlen &&
+        n.bits < 2^n.bitlen && n.bit.size == 2 do throw "unrepresentable fixture trie node"
+    let a := nodeAddr id
+    m := m.storeBytes (.ofNat 64 a) (List.replicate o.nodeSize 0)
+    if let some pid := n.peer then
+      unless d.peers.contains pid do throw "node names absent peer"
+    m := put m (a+o.peer) 8 (nullablePeerAddr n.peer)
+    for i in [:2] do
+      let child := n.bit[i]!
+      if let some childId := child then
+        unless d.nodes.contains childId do throw "node names absent child"
+      m := put m (a+o.children+i*8) 8 (nodePointer child)
+    m := put m (a+o.cidr) 1 n.cidr
+    m := put m (a+o.bitAtA) 1 ((n.cidr/8) ^^^ ((n.bitlen/8-1)%8))
+    m := put m (a+o.bitAtB) 1 (7-n.cidr%8)
+    m := put m (a+o.bitlen) 1 n.bitlen
+    if n.bitlen == 32 then m := put m (a+o.bits) 4 n.bits
+    else
+      m := put m (a+o.bits) 8 (n.bits / 2^64)
+      m := put m (a+o.bits+8) 8 (n.bits % 2^64)
+  for (id, p) in d.peers.toList do
+    unless id < 256 && p.refcount < 2^32 do throw "unrepresentable fixture peer"
+    m := put m (peerAddr id+o.peerRefcount) 4 p.refcount
+  return materializeServices m
+
+/-- All outcomes come from executed edges/registers; no expected source
+    decisions are inputs. Peer-get's already-tested observer is reused. -/
+def edge (input : Input) (s t : MachineState) : Except String (List Step) := do
+  let l := Int64.ofNat input.entry
+  let c := Int64.ofNat input.commonEntry
+  let decision (d : Decision) (b : Bool) : Step := {decision := d, outcome := b}
+  let choose := Binary.LookupObservation.choice
+  if s.pc == l+0x41 then
+    return [decision .swapEndian32 (← choose t.pc (l+0x171) (l+0x47))]
+  if s.pc == l+0x5b then
+    return [decision .swapEndian128 (← choose t.pc (l+0x14f) (l+0x61))]
+  if s.pc == l+0x81 then
+    let more ← choose t.pc (l+0x87) (l+0x184)
+    return [decision .findNodeNode more] ++ if more then [] else [decision .lookupFound false]
+  if s.pc == l+0xd3 then
+    return [decision .findNodeNode (← choose t.pc (l+0xd5) (l+0x101))]
+  if s.pc == c+0x24 then
+    return [decision .commonBits32 (← choose t.pc (c+0x4c) (c+0x26))]
+  if s.pc == c+0x3c then
+    return [decision .commonBits128 (← choose t.pc (c+0x75) (c+0x3e))]
+  if s.pc == c+0x91 then
+    return [decision .fls128High (← choose t.pc (c+0x93) (c+0xc4))]
+  if s.pc == l+0xff then
+    return [decision .findNodePrefixMatches (← choose t.pc (l+0x90) (l+0x101))]
+  if s.pc == l+0x9b then
+    unless t.pc == l+0x9f do throw "unexpected CMOV successor"
+    return [decision .findNodeHasPeer (s.data.regs.rax != 0)]
+  if s.pc == l+0xb2 then
+    return [decision .findNodeFullLength (← choose t.pc (l+0x101) (l+0xb4))]
+  if s.pc == l+0x109 then
+    return [decision .lookupFound (← choose t.pc (l+0x10b) (l+0x184))]
+  if s.pc == l+0x11c then
+    return [decision .lookupPeerGone (← choose t.pc (l+0x74) (l+0x122))]
+  return (← Binary.LookupObservation.edge 0 s t).filterMap (·.step)
+
+def probe (input : Input) : Except String Json := do
+  unless input.budget > 0 && input.budget ≤ 100000 do throw "invalid explicit instruction budget"
+  unless input.entryPreempt == 512 do throw "allowedips transmit fixture expects nested BH disable"
+  let trace ← Leanux.Runner.parseTrace input.trace
+  unless trace.id == "b1_trie_routing" && (input.operation == 5 || input.operation == 8) do
+    throw "allowedips probe expects b1_trie_routing operation 5 or 8"
+  let some (.wgXmit family key _ _) := trace.ops[input.operation]? | throw "operation is not wg_xmit"
+  let priorWorld ← replayRecordedPrefix input.trace input.operation
+  -- The selected unicast operation's pre-lookup code changes no trie or
+  -- peer counts. syscall resets its decision/NET_RX context before that code.
+  let w := {priorWorld with steps := #[], hidden := some [], netRxSection := 0, netRxSections := 0}
+  let some dev := w.k.wg | throw "no device after recorded prefix"
+  let width := if family == 4 then 32 else 128
+  let root := if family == 4 then dev.peerAllowedips.root4 else dev.peerAllowedips.root6
+  let (answer, after) ← (Leanux.WG.lookup root width key).run w |>.mapError Stop.message
+  let some afterDev := after.k.wg | throw "lookup lost device"
+  let memory ← materialize dev input.offsets key width input.preempt input.entryPreempt
+  let regs : Reg64s := {
+    rdi := .ofNat (nodePointer root), rsi := .ofNat width,
+    rdx := .ofNat keyAddr, rsp := .ofNat stackAddr,
+    rbx := 0x11, rbp := 0x22, r12 := 0x33, r13 := 0x44, r14 := 0x55, r15 := 0x66}
+  let initial : MachineState := ⟨{regs, dmem := memory}, .ofNat input.entry⟩
+  let execute := runProgram input.instructions input.labels input.hooks input.preempt initial
+  let r ← execute 0 true input.budget input.entryPreempt
+  let alternate ← execute 0xffffffffffffffff true input.budget input.entryPreempt
+  unless r.coverage == alternate.coverage && r.comparisons == alternate.comparisons &&
+      r.pcs == alternate.pcs && r.state.data.regs == alternate.state.data.regs &&
+      r.state.data.dmem == alternate.state.data.dmem do throw "undefined seeds change observable execution"
+  unless r.state.data.regs.rax.toNat == nullablePeerAddr answer &&
+      r.state.data.regs.rsp.toNat == stackAddr+8 do throw "allowedips return/stack mismatch"
+  for reg in [Reg64.rbx, .rbp, .r12, .r13, .r14, .r15] do
+    unless r.state.data.regs.get64 reg == initial.data.regs.get64 reg do throw "allowedips callee-save mismatch"
+  let expected ← materialize afterDev input.offsets key width input.preempt input.entryPreempt
+  let stackBase := BitVec.ofNat 64 (stackAddr-0x800)
+  let some stackBytes := memory.loadBytes stackBase 0x810 | throw "initial stack missing"
+  unless (← readNat r.state coverageAddr 8) == r.coverage.size do throw "KCOV count mismatch"
+  for i in [:r.coverage.size] do
+    unless (← readNat r.state (coverageAddr+8*(i+1)) 8) == r.coverage[i]! do throw "KCOV record mismatch"
+  let finalMemory := (r.state.data.dmem.storeBytes stackBase stackBytes).storeBytes
+    (.ofNat 64 coverageAddr) (List.replicate coverageBytes 0)
+  unless finalMemory == expected do throw "allowedips non-stack memory differs from source result"
+  let steps ← Binary.observeHistory (edge input) r.history.toList
+  unless steps.toArray == after.steps do
+    throw s!"allowedips decision mismatch: machine={steps.map Step.label}, source={after.steps.map Step.label}"
+  let nodes := dev.nodes.toList.map fun (id, n) => Json.mkObj [
+    ("id", toJson id), ("peer", toJson n.peer), ("cidr", toJson n.cidr),
+    ("bitlen", toJson n.bitlen), ("bits", toJson n.bits), ("children", toJson n.bit)]
+  return Json.mkObj [("status", toJson "pass"), ("operation", toJson input.operation),
+    ("family", toJson family), ("key", toJson key), ("root", toJson root), ("nodes", toJson nodes),
+    ("peer_counts", toJson (dev.peers.toList.map fun (id, p) => (id, p.refcount))),
+    ("result", toJson answer), ("instructions_executed", toJson r.pcs.size),
+    ("instruction_budget", toJson input.budget), ("fixture_entry_preempt", toJson input.entryPreempt),
+    ("coverage", toJson r.coverage), ("comparisons", toJson r.comparisons),
+    ("decisions", toJson (steps.map Step.label)), ("mirror_decisions", toJson (after.steps.map Step.label)),
+    ("services", toJson "decoded bodies, KCOV_TRACE_PC"),
+    ("undefined_choices", toJson r.undefinedCount), ("write_accesses", toJson r.writes),
+    ("memory", toJson "all materialized non-stack bytes match the source lookup result")]
+end AllowedipsProbe
+
 def main (args : List String) : IO UInt32 := do
+  if let ["allowedips", path] := args then
+    let input ← liftE (Json.parse (← IO.FS.readFile path) >>= fromJson?)
+    let result ← liftE (AllowedipsProbe.probe input)
+    IO.println result.compress
+    return 0
   if args == ["peer-nonnull"] then
     match ServiceTests.peerNonnull with
     | .error message => IO.eprintln message; return 1
