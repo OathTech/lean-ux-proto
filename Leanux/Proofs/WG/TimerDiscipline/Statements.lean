@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.TimerDiscipline.RetransmitReadyClaims
 import Leanux.Proofs.WG.TimerDiscipline.AbsentGiveUpClaims
 import Leanux.Proofs.WG.TimerDiscipline.PendingGiveUpSource
 import Leanux.Proofs.WG.TimerDiscipline.RxDataTimersClaims
@@ -684,5 +685,21 @@ theorem original_giveup_absent_zero_key (pid : PeerId) (d : Device) (p : Peer)
         s.ambient.hidden = some (input.records rest))
       (fun _ final => final = absentGiveUpView entry d pid p input rest) :=
   absentGiveUp_returns pid d p input rest resident limit absent running alive valid entry
+
+/-- The original retransmit hook completes from valid supplied caller, jitter
+and arm records. Running/live peers receive the exact wrapped expiry and timer
+registration; otherwise the guard skips the arm after consuming the caller and
+jitter reads, preserving the arm record. This is a hook contract, not a complete
+send-worker or scheduler episode. -/
+theorem original_retransmit_hook_ready (pid : PeerId) (d : Device) (p : Peer)
+    (input : RetransmitArmInput) (rest : List HiddenRecord)
+    (resident : d.peers[pid]? = some p) (valid : input.Valid) (entry : Snapshot) :
+    Campaign2.Returns (timersHandshakeInitiated pid)
+      (fun s => s = entry ∧ s.wg.device = some d ∧ s.wg.armRecords = true ∧
+        s.ambient.hidden = some (input.records rest))
+      (fun _ final => final = if d.running && !p.isDead
+        then retransmitReadyView entry d pid p input rest
+        else retransmitSkippedView entry d input rest) :=
+  retransmitHook_returns pid d p input rest resident valid entry
 
 end Leanux.Proofs.WG.TimerDiscipline

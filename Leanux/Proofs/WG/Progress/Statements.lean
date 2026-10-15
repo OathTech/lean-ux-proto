@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Progress.CookieActivationClaims
 import Leanux.Proofs.WG.Progress.ObservationBridge
 import Leanux.Proofs.WG.Progress.CutClaims
 import Leanux.Proofs.WG.Progress.FlushQueueClaims
@@ -585,5 +586,32 @@ theorem original_jitter_record_progress (site : TimerDiscipline.JitterSite) (rec
             {entry with ambient := {entry.ambient with hidden := some rest}}) ∧
           jitter < HZ / 3 ∧ rest.IsSuffix records ∧ rest.length < records.length) :=
   jitter_record_progress site records
+
+/-- The original receive activation has enough occupancy fuel on an empty-index, cookie-only queue, for every supplied record list. Exact failures and projected effects are retained. The queue premise does not assert ingress provenance; its independent counter is decremented, not assumed consistent. -/
+theorem original_cookie_activation_outcome (a : Activation) (d : Device) (records : List HiddenRecord)
+    (receive : a.worker = .receiveWorker) (table : d.indexTable = []) (cookies : CookieOnly d) :
+    Campaign2.Observes (Activation.run a)
+      (fun s => s.wg.device = some d ∧ s.ambient.hidden = some records)
+      (fun entry outcome => outcome =
+        match resolveCookieActivation d.handshakeQueue.length records with
+        | .error error => .error error
+        | .ok summary => .ok ((), cookieActivationSnapshot a d entry summary)) :=
+  cookieActivation_outcome a d records receive table cookies
+
+/-- One complete original scheduler turn derives the singleton candidate by
+probing the original activation, removes it, and commits the successful run.
+Only pure record validation is assumed; no execution success is a premise. -/
+theorem original_cookie_scheduled_resumption_progress (a : Activation) (d : Device) (records : List HiddenRecord)
+    (summary : CookieActivationSummary) (receive : a.worker = .receiveWorker)
+    (table : d.indexTable = []) (cookies : CookieOnly d)
+    (resolve : resolveCookieActivation d.handshakeQueue.length records = .ok summary) :
+    Campaign2.Observes (scheduleTurn none)
+      (fun s => s.wg.device = some d ∧ s.ambient.hidden = some records ∧ s.ambient.suspended = [a])
+      (fun entry outcome =>
+        outcome = .ok (turnContinue, cookieActivationSnapshot a d
+          {entry with ambient := {entry.ambient with suspended := []}} summary) ∧
+        CookieActivationProgress d.handshakeQueue.length records summary ∧
+        (summary.yielded = true → summary.processed = 1)) :=
+  cookieScheduler_progress a d records summary receive table cookies resolve
 
 end Leanux.Proofs.WG.Progress

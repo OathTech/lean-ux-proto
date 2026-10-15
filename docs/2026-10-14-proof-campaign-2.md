@@ -14,10 +14,10 @@ the other H5 clauses and corrected-main carry remain open.
 | H2 Index | 52 | Exact index operations, all normal lookup outcomes, caller table safety, session coherence/allocation sequence | Reachable hashed uniqueness and owner/peer residency through all driver entries |
 | H3 Roaming | 13 | Authenticated handshake cuts, decrypt/first-poll join, complete poll setter-attempt audit | Queue/callback authentication invariant, broader caller coverage, final endpoint |
 | H4 Configuration | 79 | Leaves/flags, effective bounded readback, removal/replacement phase effects, root insertion/transfer, actual two-chunk getter and scalar set/get composition | Global ownership, queued cleanup/completion, mixed attributes, general getter pagination |
-| H5 Progress | 39 | Accepted operation boundaries, actual final-boundary backlog, scheduling inspections, cut/pow/drain/poll bounds, arbitrary supplied-record index/jitter-loop adequacy | Whole-worker record decrease, global progress, corrected-main carry |
-| H6 Timers | 46 | Seven local arm sites, recorded delays, caller hook compositions, retry bound, pending/absent-zero-key give-up | Complete caller coverage, scheduler episodes, session-relative counting |
+| H5 Progress | 41 | Accepted operation boundaries, actual final-boundary backlog, scheduling inspections, cut/pow/drain/poll bounds, arbitrary supplied-record index/jitter-loop adequacy, cookie activation and scheduled resumption | Whole-worker record decrease, global progress, corrected-main carry |
+| H6 Timers | 47 | Seven local arm sites, recorded delays, caller hook compositions, retry bound, pending/absent-zero-key give-up, total recorded retransmit hook | Complete caller coverage, scheduler episodes, session-relative counting |
 
-**250 headlines**; latest increment: H1 original session total success from static readiness.
+**253 headlines**; latest increments: H5 cookie activation/scheduled resumption and H6 total retransmit hook.
 Scoped builds, axioms and fresh replay pass; independent review found no issue.
 The full proof gate remains **failed in inherited campaign-1 files**.
 
@@ -61,8 +61,8 @@ universal execution contracts.
 | `Index` | View/table/owner/allocation/release models; lookup provenance and empty-result source; lifecycle/caller operation sources; session coherence/allocation/sequence effects and sources | `IndexFieldFrames`, `OwnerFieldFrames`, `StoreFieldFrames`, `LifecycleFrames`, `NewlinkFrames`, `SendFrames`, `DispatchFrames`, `ResponseFrames`, `ConsumeFrames`, `StagedFrames`, `ReceiveFrames`, `ClearFrames`, `TimerFrames`, `FlushFrames`, `SessionCoherenceFrames`, `SessionAllocationFrames` |
 | `Roaming` | Endpoint/authentication claims; publication, poll endpoint/attempt, response, initiation and handshake-audit model/source/claim families | `Frames`, `PublicationFrames`, `PollEndpointFrames` |
 | `Config` | `ClaimView`, models/effects/source claims, observation bridge; allowed-IP removal/insertion/transfer, collision, removal flags, remove-all/replacement, multipart/suffix readback families; `SocketReadbackModel/Claims` and five substantive `SocketReadback*Source` files; `ScalarSocketReadbackClaims/Source` compose original set/get | `ConcreteFrames`, `OperationFrames`, `ReadbackFrames`, `AllowedListFrames`, `AllowedRootFrames`, `AllowedRemovalFrames`, `AllowedPairsFrames`, `QuietFrames`, `LiveRemovalFrames`, `KeyFieldFrames`, `CollisionFrames`, `AllowedInsertFrames`, `RemoveAllFrames` |
-| `Progress` | Model/view/source/observation claims; control/scheduler sources; cut, flush-queue, pow, drain and poll-bound model/source/effect/claim families; `RunnerBoundaryModel/Claims`, `IndexProgressModel/Claims` and `JitterProgressModel/Claims` are projected; their `Source` files, `RunnerBoundaryAuditSource` and `BacklogSource` connect original operations | `StackFrames`, `CutFrames`, `FlushQueueFrames` |
-| `TimerDiscipline` | Model/view/send-view/observation claims; recorded, send/retry/rearm/sequence/boundary, pending-give-up, session, data and traversal model/source/effect/claim families; `AbsentGiveUpModel/Claims` and substantive `AbsentGiveUpSource` | `SourceFrames`, `RecordedFrames`, `RecordedJitterFrames`, `SectionFrames`, `SelectionFrames`, `RetryFrames`, `JitterFrames`, `InitiationFrames`, `InitiationPreservationFrames`, `SendCutFrames`, `SendPeerFrames`, `SendSocketFrames`, `SendBufferFrame`, `SendWorkerFrame`, `SendDispatchFrames`, `RetryDispatchFrames`, `RetryRearmFrames`, `WorkStateFrames`, `ResponseSessionFrames` |
+| `Progress` | Model/view/source/observation claims; control/scheduler sources; cut, flush-queue, pow, drain and poll-bound model/source/effect/claim families; `RunnerBoundaryModel/Claims`, `IndexProgressModel/Claims` and `JitterProgressModel/Claims` are projected; their `Source` files, `RunnerBoundaryAuditSource` and `BacklogSource` connect original operations; `CookieActivationModel/Source/Loop/Claims` and `CookieSchedulerSource` | `StackFrames`, `CutFrames`, `FlushQueueFrames`, `CookieActivationFrames` |
+| `TimerDiscipline` | Model/view/send-view/observation claims; recorded, send/retry/rearm/sequence/boundary, pending-give-up, session, data and traversal model/source/effect/claim families; `AbsentGiveUpModel/Claims` and substantive `AbsentGiveUpSource`; `RetransmitReadyModel/Source/Claims` | `SourceFrames`, `RecordedFrames`, `RecordedJitterFrames`, `SectionFrames`, `SelectionFrames`, `RetryFrames`, `JitterFrames`, `InitiationFrames`, `InitiationPreservationFrames`, `SendCutFrames`, `SendPeerFrames`, `SendSocketFrames`, `SendBufferFrame`, `SendWorkerFrame`, `SendDispatchFrames`, `RetryDispatchFrames`, `RetryRearmFrames`, `WorkStateFrames`, `ResponseSessionFrames` |
 
 `Index/HandshakeFrames` and `OwnerFrames` are import-only reexports.
 `Noise/Basic` reexports access contracts; `Roaming/Basic` reexports endpoint
@@ -321,7 +321,7 @@ with stock `Nat.powMod` would be a statement artefact. Poll audit under requeste
 budget at most MAX_QUEUED_PACKETS+1 excludes its finish-time exhaustion on normal
 prefix return: each continued iteration increments count despite arbitrary
 callbacks. Queue-test stop can mean an uncrypted head. Unsupported repoll remains.
-Neither local result proves callback/internal work termination. Whole-worker
+Neither local result proves callback/internal work termination. General whole-worker
 record decrease, detached-activation progress and global progress remain open.
 
 For arbitrary finite supplied records and a resident device, original index
@@ -344,6 +344,27 @@ Success preserves the entire projected state except the unused record suffix.
 No device-residency premise is needed. Recordless execution, distribution,
 arming and scheduler progress are separate claims.
 
+
+The complete original receive activation now has an exact outcome for arbitrary
+finite supplied records when its queued messages classify as cookies and its
+index table is empty. Every packet follows the actual lookup-miss path. The
+original list-occupancy-plus-one budget suffices; outcomes are the exact hidden
+error or exact queue/counter, five-per-packet decisions, final empty-poll decision
+when applicable, suspension and unused suffix. Success consumes a strict record
+suffix and either drains the list or yields after exactly one item. The independent
+queue counter is subtracted without a consistency premise; an empty list alone
+does not imply a zero counter. Cookie classification is an entry queue premise,
+not a claim about ingress validation.
+
+For one suspended receive activation and pure record-resolver success, a complete
+source-connected original scheduler turn derives the candidate by running the
+original probe, excludes dispatch/NAPI branches from the next record, removes the
+old activation and commits a successful run on that detached state. It retains
+the exact projected effect and strict suffix decrease; no execution-success
+witness is assumed. This is one scheduler turn with no caller-held worker, not
+whole-schedule termination or fairness. Only two projection equations are frames,
+in `CookieActivationFrames`; the remaining files express operational claims.
+
 ## H6 — Timer discipline
 
 Local contracts cover all seven concrete arm sites, actual clock-plus-delay
@@ -352,6 +373,16 @@ draws; H5 additionally proves arbitrary supplied-record jitter outcomes and
 budget adequacy. General arm-record mode can permit placeholders.
 There is no distribution claim. The applicable running/live/interval guards qualify each arm;
 a final timer value alone does not prove an arm event.
+
+The original retransmit arming hook is now total for a resident peer and valid
+supplied caller/jitter/arm records. Any finite rejected-draw prefix followed by an
+accepted draw is allowed. The running/live guard gives either the exact wrapped
+expiry, last clock, registration replacement and two guard decisions, or a skipped
+arm after consuming the caller and jitter reads. A skipped arm leaves its record,
+all timers, last clock and registrations unchanged, with only the guards actually
+evaluated logged. The explicit arm-validity premise also applies to that unused
+record, so this is narrower than all skipped calls. No new frame variant is needed.
+This hook contract does not supply the full send-worker or retry-history proof.
 
 From a resident device and initially empty send queue, original timer/send pairs derive same-peer selection, entry attempts ≤18,
 enqueue/reference acquisition, detach, increment and worker release. Consecutive
@@ -407,13 +438,22 @@ accepted-run findings. H1/H2/H3/H6 have no ranked mirror-change request.
 
 ## Validation and trust limitations
 
-Latest six-target build: **452 jobs**, all **250 headlines** standard axioms
+Latest six-target build: **461 jobs**, all **253 headlines** standard axioms
 only (`propext`, `Classical.choice`, `Quot.sound`); token/import/root/default/
-projected-name checks pass. Latest Noise build: 146 jobs, 21 headlines and
-21 new support declarations checked; fresh kernel replay passed (exit 0).
-Final independent read-only review found no issue in the session total-success increment.
-The author used 18 scoped build invocations: 16 corrected failures and two passes,
-plus two successful declaration inspections. No infrastructure rerun was needed.
+projected-name checks pass. Progress: 229 jobs, 41 headlines; TimerDiscipline:
+241 jobs, 47 headlines. All 41 new support declarations across nine files pass
+the axiom check. Independent read-only reviews found no issue in either increment.
+Fresh Progress and TimerDiscipline kernel replay both passed (exit 0).
+
+H5 prototype compilation: root 22 invocations (six passes, 16 corrected failures)
+and one successful declaration inspection; model author seven invocations (four
+passes, three corrected failures). Packaging/composition used 18 compiler
+invocations: eight passes, nine corrected failures and the separate diagnostic
+rerun failure below. H6 used six stdin prototypes (three passes, three corrected
+record-layout/map-unfolding failures), then its packaged build passed first time.
+A staged whitespace check caught two extra EOF blank lines in the new H5 files;
+these were removed before the final build, axiom check and Progress replay.
+No infrastructure retry or limit increase occurred in these increments.
 The earlier socket-getter review found a headline attribution error, corrected:
 the callback returns DATA; the enclosing socket dump appends DONE and finalizes.
 Earlier closed increments also passed
@@ -441,6 +481,14 @@ printing option; the third repeated the first input and passed. This was
 redundant checking, not an infrastructure retry. [AGENT 2026-10-15] Root now
 owns central axiom-output checks; parser repairs reuse captured output instead
 of repeating successful Lean invocations.
+
+**Separate cookie-loop diagnostic rerun violation:** after a failed scoped
+`CookieActivationLoop` build, the author reran unchanged source through
+`lake env lean -Dpp.structureInstances=false -Dpp.proofs=false` to read goals
+truncated from the first output. Both exited 1; this was not infrastructure and
+was not an allowed retry. Source corrections to monad/case reduction and loop
+composition then passed. Diagnostic output must be retained and read from the
+original invocation; changing printing options does not authorize a rerun.
 
 **Separate process violation at `314d13e`:** an unconditional dependent build
 repeated an unchanged failed REPLACE_PEERS source draft. This was not
