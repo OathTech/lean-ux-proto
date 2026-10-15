@@ -26,7 +26,7 @@ No independent existential projected runs are spliced together.
 | Result | Existing mathematical checkpoint | Factoring / remaining mathematics |
 | --- | --- | --- |
 | H1 Noise | 11 local state/slot contracts | Public projection complete; whole-call edge coverage and lifetime confirmation remain open. |
-| H2 Index | 26 contracts, now including initializer/setup/destruction boundaries | Public projection complete: 14 total contracts, 10 normal-return contracts, 1 exact stop and 1 projected initializer theorem; reachable coherence, broader records and the corpus runner composition remain open. |
+| H2 Index | 29 contracts, including initialization, newlink, creation and deletion boundaries | Public projection complete: 14 total contracts, 13 normal-return contracts, 1 exact stop and 1 projected initializer theorem; reachable coherence, broader records and the corpus runner composition remain open. |
 | H3 Roaming | 5 endpoint/authentication leaf contracts | Public projection complete; authentication provenance and complete caller coverage remain open. |
 | H4 Configuration | 60 contracts and the reachable internal dump-accounting finding | Public projection and frame separation complete. Queued/live-keypair removal, private-key collision, mixed attributes, global ownership and general dump composition remain open. |
 | H5 Progress | 25 contracts and the accepted batch-backlog counterexample | Public projection and frame separation complete; productive-record decrease, full loop coverage and probe/detach composition remain open. The backlog witness is historical over `de62c9d`: main's batch guard now addresses request 1. |
@@ -34,7 +34,7 @@ No independent existential projected runs are spliced together.
 
 Projection/frame factoring completed at `69f988a` for all six results, preserving
 all 153 existing headline names before new mathematics. The following H2 lifecycle
-increment brings the total to 156. No public statement directly names `World` or
+increments bring the total to 159. No public statement directly names `World` or
 `Kernel`.
 The full proof gate remains failed in inherited campaign-1 counter-window and
 index carries; those files have not been edited. Scoped validation does not
@@ -51,7 +51,7 @@ connections to the current executable mirror, not replacement interpreters.
 | --- | --- | --- |
 | Common C2 | `Campaign2/View` is data-only; `Campaign2/Bridge` defines projection and universal execution contracts. | No shared campaign-1 layer is changed. |
 | H1 | `Noise/Model`, `Statements`, `Slots`, `StateEdges`, `ConsumeEdges`; `Execution` holds the concrete monad connection; `AccessSource` holds accessor read/write contracts, reexported by `Basic`. | `KernelFrames`, `PeerFrames`, `SlotFrames`. |
-| H2 | `Index/View`, `TableModel`, `OwnerWordModel`, `AllocationModel`, `ReleaseModel`, `LifecycleModel` and pure release effects/bounds; `Statements`, `HandshakeClaims`, `OwnerUpdateClaims`, `LifecycleSource` and the other operation/source modules. | `IndexFieldFrames`, `OwnerFieldFrames`, `StoreFieldFrames`, `LifecycleFrames`; the old `HandshakeFrames` and `OwnerFrames` paths are import-only reexports, not duplicated lemmas. |
+| H2 | `Index/View`, `TableModel`, `OwnerWordModel`, `AllocationModel`, `ReleaseModel`, `LifecycleModel` and pure release effects/bounds; `Statements`, `HandshakeClaims`, `OwnerUpdateClaims`, `LifecycleSource`, `LinkSource` and the other operation/source modules. | `IndexFieldFrames`, `OwnerFieldFrames`, `StoreFieldFrames`, `LifecycleFrames`, `NewlinkFrames`; the old `HandshakeFrames` and `OwnerFrames` paths are import-only reexports, not duplicated lemmas. |
 | H3 | `Roaming/Model`, `View`, `Statements`, `EndpointClaims`, `EndpointSource`, `Authentication`. | `Roaming/Frames`; `Basic` reexports the endpoint source connection. |
 | H4 | `Config/Model`, `AllowedRemovalModel`, `QuietModel`, `ClaimView`, `Statements`, `SourceClaims`, `ObservationBridge`, and existing substantive effect/source modules. | `ConcreteFrames` isolates six whole-kernel endpoint contracts; `OperationFrames` isolates seven generic helpers; `ReadbackFrames` retains socket/fixture preservation; `AllowedListFrames`, `AllowedRootFrames`, `AllowedRemovalFrames`, `QuietFrames`, `KeyFieldFrames` isolate within-WG preservation. |
 | H5 | `Progress/Model`, `View`, `Statements`, `SourceClaims`, `ObservationBridge`; `ControlLaws` is generic state/error control and `ControlSource` connects it exactly to the original worker; the scheduler/source modules retain actual execution factors. | `StackFrames` isolates caller-guard preservation. Probe/filter/no-work contracts also establish outputs and remain substantive source claims. |
@@ -342,9 +342,27 @@ kernel replay passed. A combined import/axiom inspection of all 156 campaign
 headlines also passed with only the three standard axioms. Ordinary syntax and
 monadic-association proof errors were corrected without weakening statements;
 no infrastructure rerun or cap failure. The full gate's last run at `69f988a`
-failed in the unchanged inherited modules, as recorded above. `wgCreate` and
-`wgDelete` composition, internal destruction preservation, all caller coverage,
-owner/peer-word coherence and broader retry correspondence remain open.
+failed in the unchanged inherited modules, as recorded above.
+
+`LinkSource` now composes the original `wgNewlink`, `wgCreate` and `wgDelete`.
+Normal newlink and creation preserve the optional-device table invariant;
+normal deletion leaves no device, including its already-absent return. Creation
+uses original setup and newlink, and a normally returning negative newlink result
+clears the device. Deletion retains its exact original prefix and uses the
+original destruction endpoint. These contracts do not promise that missing
+records or an early stop complete successfully, or preserve the invariant at
+internal destruction cuts. `NewlinkFrames` holds three local initialization
+frames and one fixed-count record-cut variant reusing campaign 2's existing
+record-cut frame; no broad shared layer was copied.
+
+These three headlines bring H2 to 29 and the campaign to 159. The scoped build
+passed (152 jobs), all 29 H2 axiom checks and fresh stock kernel replay passed,
+and the combined import/axiom inspection of all 159 headlines passed with only
+the three standard axioms. The preceding 26 statements are unchanged; source
+review found no semantic issue. No cap failure or infrastructure rerun. The
+full gate remains the inherited failure recorded above, last run at `69f988a`.
+Internal destruction preservation, all caller coverage, owner/peer-word coherence
+and broader retry correspondence remain open.
 
 The table invariant is about hashed entries; this checkpoint does not establish
 all-driver reachable-session uniqueness or owner-store coherence through every

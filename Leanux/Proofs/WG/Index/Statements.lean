@@ -8,6 +8,7 @@ import Leanux.Proofs.WG.Index.CorpusDraws
 import Leanux.Proofs.WG.Index.OwnerCreation
 import Leanux.Proofs.WG.Index.LookupMiss
 import Leanux.Proofs.WG.Index.LifecycleSource
+import Leanux.Proofs.WG.Index.LinkSource
 
 /-! H2's original-operation table contracts. Reachable owner/peer-word
 coherence remains a separate obligation. -/
@@ -371,6 +372,30 @@ theorem original_destruct_tables : Campaign2.Ensures wgDestruct (fun _ => True)
     (fun _ s => s.wg.device = none ∧ View.TablesSafe s) := by
   intro w result final pre run
   have absent := wgDestruct_absent w result final pre run
+  exact ⟨absent, absent_tables_safe _ absent⟩
+
+/-- Original newlink preserves the optional-device table invariant on every
+normal return. Allocation refusals and missing records may still stop; this
+does not assert newlink initializes an arbitrary existing table. -/
+theorem original_newlink_tables : Campaign2.Ensures wgNewlink View.TablesSafe
+    (fun _ s => View.TablesSafe s) :=
+  wgNewlink_tables
+
+/-- Original creation preserves the optional-device table invariant: an
+existing device is retained, while an absent device is initialized by setup
+and either retained after newlink or removed on its negative return. Only
+normal completion is claimed, not success for arbitrary input records. -/
+theorem original_create_tables : Campaign2.Ensures wgCreate View.TablesSafe
+    (fun _ s => View.TablesSafe s) :=
+  wgCreate_tables
+
+/-- Every normal completion of original deletion leaves no device, including
+the already-absent ENODEV return, hence establishes the table invariant. The
+down/destruction prefix may stop; its intermediate states are not covered. -/
+theorem original_delete_tables : Campaign2.Ensures wgDelete (fun _ => True)
+    (fun _ s => s.wg.device = none ∧ View.TablesSafe s) := by
+  intro w result final pre run
+  have absent := wgDelete_absent w result final pre run
   exact ⟨absent, absent_tables_safe _ absent⟩
 
 end Leanux.Proofs.WG.Index
