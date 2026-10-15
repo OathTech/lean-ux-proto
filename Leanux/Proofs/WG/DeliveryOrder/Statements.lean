@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.Queues.RxConsumeProtection
+import Leanux.Proofs.WG.Queues.RxPollCarrier
 import Leanux.Proofs.WG.Queues.RxIngressProtection
 import Leanux.Proofs.WG.Queues.RxLinkRunner
 import Leanux.Proofs.WG.Queues.RxPollReceiptLink
@@ -1718,9 +1719,9 @@ actual lookup repayment, preserves the same supplied RX ledger on every normal
 endpoint (Some and None). Only the packet key's nullable, validity-independent
 owner compatibility is required; actual promotion supplies the staged call's
 current-key condition. The source-derived queue/reference delta retains funded
-handoffs. This does not cover arbitrary Stack/IRQ callbacks, the later poll
-caller's surviving reference, output key compatibility, or initialized carrier
-conservation; Stops have no claimed endpoint World. -/
+handoffs. This local theorem does not itself supply Stack/IRQ or output-key
+frames; the concrete Stack and normal-poll results appear below. Initialized
+carrier conservation remains open; Stops have no claimed endpoint World. -/
 theorem original_consume_data_done_rx_protection (pid : PeerId) (pkt : RxPacket)
     (endpoint : Endpoint) (w v : World) (result : Option (List UInt8))
     (cs : List Carrier) (loans : List Owner)
@@ -1731,5 +1732,60 @@ theorem original_consume_data_done_rx_protection (pid : PeerId) (pkt : RxPacket)
       Protected cs loans v ∧ Protected cs (loans ++ delta.owners) v := by
   obtain ⟨delta,hd⟩ := consumeDataDone_handoff pid pkt endpoint hc hr
   exact ⟨delta,hd,hd.protect hi hq hp⟩
+
+/-- Actual Stack transmission (including normal negative errno) and batched
+receive callbacks preserve the same supplied RX ledger and explicit funded
+reservations. Concrete destination acquisition and repayment retain the exact
+nonempty TX/send-work handoff delta. Nullable packet/current-key compatibility
+is supplied and preserved separately. Bytes may belong to a held GRO entry
+whose RX cell was already freed; no delivery-packet residency is required.
+These are normal endpoint contracts, not initialized ownership or inbox arrival. -/
+theorem original_stack_rx_protection (w v : World) (cs : List Carrier) (loans : List Owner)
+    (hi : Inventory cs w) (hq : QueueOwners cs w) (hp : Protected cs loans w)
+    (hk : KeysCompatible w) :
+    (∀ family addr (packets : List WG.Packet) mtu ret,
+      (wgXmit family addr packets mtu).run w=.ok (ret,v) →
+      ∃ delta,Handoff w v [] [] delta ∧ Inventory cs v ∧ QueueOwners cs v ∧
+        Protected cs loans v ∧ Protected cs (loans++delta.owners) v ∧ KeysCompatible v) ∧
+    (∀ packets : List (List UInt8),
+      (packets.forM Leanux.Env.deliverInner).run w=.ok ((),v) →
+      ∃ delta,Handoff w v [] [] delta ∧ Inventory cs v ∧ QueueOwners cs v ∧
+        Protected cs loans v ∧ Protected cs (loans++delta.owners) v ∧ KeysCompatible v) := by
+  constructor
+  · intro family addr packets mtu ret hr
+    obtain ⟨⟨delta,hd⟩,kv⟩ := wgXmit_protection family addr packets mtu hk hr
+    obtain ⟨iv,qv,pv,pd⟩ := hd.protect hi hq hp
+    exact ⟨delta,hd,iv,qv,pv,pd,kv⟩
+  · intro packets hr
+    exact stackForM_protection packets hi hq hp hk hr
+
+/-- A normal ORIGINAL poll removes exactly its observed allocation identities
+from the supplied RX inventory; all other carriers and their reservations stay
+funded, with exact queue ownership and nullable key/current compatibility.
+Actual removal occurrences partition into named nondelivery or completed Stack
+callbacks, with no selection/GRO/callback residual on normal return. The prior
+journal contains lifetime accesses only, so subtraction uses this poll's fresh
+removals. No caller/base reservation, peer-survival, totality, allocation-frontier
+or initialized premise is added. Uncrypted-head normal exits may retain queued
+carriers. Stops retain the existing prefix contracts but have no endpoint World;
+whole admission/ring/lifecycle conservation and initialized identity remain open. -/
+theorem original_poll_carrier_conservation (pid : PeerId) (budget : Nat) (w v : World) (n : Nat)
+    (cs : List Carrier) (loans : List Owner) (prior : List Lifetimes.LifetimeEvent)
+    (hi : Inventory cs w) (hq : QueueOwners cs w) (hp : Protected cs loans w)
+    (hk : KeysCompatible w) (hr : (WG.rxPoll pid budget (fun packets=>packets.forM Leanux.Env.deliverInner)).run w=.ok (n,v)) :
+    let h := (runPrefix (Queues.RxJoint.poll pid budget) w (Queues.RxJoint.seed prior)).2
+    let rest := remaining cs (PollCarrier.removedPackets h)
+    Inventory rest v ∧ QueueOwners rest v ∧ Protected rest loans v ∧ KeysCompatible v ∧
+      (∀p∈PollCarrier.removedPackets h,packetAt v p=none) ∧
+      Queues.RxDisposition.Account none h ∧ Queues.RxDisposition.callbackPending h=[] ∧ Queues.RxDisposition.unentered h=[] ∧
+      ((Queues.RxJoint.removalKeys h).map Prod.fst).Perm
+        ((h.filterMap Queues.RxDisposition.nondeliveryKey).map Prod.fst ++
+          (Queues.RxDisposition.completedEntries h).map (fun e=>e.tag.occurrence)) ∧
+      (((h.filterMap Queues.RxDisposition.nondeliveryKey).map Prod.fst ++
+          (Queues.RxDisposition.completedEntries h).map (fun e=>e.tag.occurrence))).Nodup := by
+  obtain ⟨state,gone⟩ := PollCarrier.poll_normal pid budget w v n cs loans prior ⟨hi,hq,hp,hk⟩ hr
+  have joint := (Queues.RxJoint.poll_erases pid budget w (Queues.RxJoint.seed prior)).trans hr
+  exact ⟨state.inventory,state.queues,state.funded,state.keys,gone,
+    Queues.RxDisposition.poll_normal_partition pid budget w v prior n joint⟩
 
 end Leanux.Proofs.WG.DeliveryOrder

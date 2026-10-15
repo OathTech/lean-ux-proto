@@ -3,7 +3,8 @@
 ## Progress
 
 Work on `proofs/campaign` in `.worktrees/proofs-campaign` follows [the charter](2026-10-13-charter-proof-campaign.md),
-with representation batch `cb2348e` carried and validated. All seven rows are current there, including the local R4
+with representation batch `cb2348e` carried and validated. All seven rows are current there, including the
+new local normal-poll carrier extension. Earlier results include the local R4
 packet-to-receipt link extension, local R3 owner-acquisition material frame and initialized R4 linkage.
 The session/decrypt source injection is validated with the original caller, audit and R4 contracts preserved.
 The local RX reference-transfer/discharge extension passes coordinated validation.
@@ -23,7 +24,7 @@ was made by this campaign.
 | R5 | Accepted age/post-zero/wire-nonce counterexamples; thirteen positive local contracts. |
 | R6 | Cookie exclusion proved; literal MAX=18 refuted, without a replacement universal bound. |
 
-**Current R3 stateful support (validated).** Three grouped exports
+**Preceding R3 stateful support (`a945ea8`, validated).** Three grouped exports
 preserve all 508 prior terminal bodies: 511 declarations (509 theorems/two definitions; 135 R3/125 R4).
 [HistorySupport](../Leanux/Proofs/WG/Origins/HistorySupport.lean),
 [SupportCallers](../Leanux/Proofs/WG/Origins/SupportCallers.lean) and
@@ -44,27 +45,37 @@ At that checkpoint, review found unfunded Handoff ghost loans; explicit funded t
 consequences resolved the finding. Its initial write/build shell lacked fail-closed chaining: the write succeeded,
 but the process-rule failure was reported and subsequent commands were corrected.
 
-**Current effort.** Acceptance 16:23:27 UTC; 110 minutes/60 capped calls, final 20 minutes/10 calls reserved.
-Scoped26 passes 458 jobs; full27 passes 511, collected by sampled 17:05:09 (41m42s after acceptance).
-Twenty-seven builds comprise seven PASS and twenty ordinary FAIL. Early failures were source/focus
-normalization, eliminated or unresolved binders, leaf-frame and namespace errors. Call01 displayed a rejected
-elaborator-recovery `sorry` placeholder; calls16/17 reported dependent kernel unknown-constant errors for the
-failed scheduler declaration. Calls10–13/16–17 exhausted default 200,000-heartbeat searches. Bundled append/support
-contracts and single-step source dispatch replaced repeated continuation traversal; all new proofs retain defaults.
-Call25 reached the reviewer's draft generic-worker export issue and failed; it now names the actual runWorkerPrefix
-with an explicit body preservation premise. No source admission, cap/limit increase, interruption or infrastructure
-retry occurred. Exact28 passes six-path scope, all508 prior bodies, census511/135R3/125R4,
-comment-aware tokens/imports, tracked/new whitespace and EOF, mirror/pins and empty index. The ledger is
-29 capped calls: 27 builds (7 PASS/20 FAIL) plus exact28/29 PASS. Exact28's doc hashes preceded ledger/status
-and review wording fixes; final exact29 records the final six hashes, with all four Lean hashes unchanged.
-Independent frozen review is clear at 17:08:27 UTC (17:01:33–17:08:27, 6m54 including waits). Its three findings
-are fixed: the generic worker export's actual body premise, the R2/R4-only initialization qualifier and the named
-historical R4 failure disclosures. Final metadata review is clear (17:10:24–17:10:31).
-Worker ownership ended at 17:10:42 UTC (47m15s); all jobs were collected before handback.
-Coordinated validation passes: 511-job/511-declaration permitted-axiom gate, fresh kernel replay
-collected at 17:13:57 after gate compilation, default build (60 jobs), and 103 unit tests
-(22.370s, one skip). Exact comparison retains every prior body and all four frozen Lean hashes.
-The full per-call ledger belongs in the checkpoint commit.
+**Current R4 normal-poll carrier extension (validated).** Two groups preserve all 511 prior
+terminal bodies: 513 declarations (511 theorems/two definitions; 135 R3/127 R4). Concrete key/current
+frames, Stack callbacks and unchanged normal poll execution retain the supplied funded RX inventory.
+The endpoint filters that exact original ledger by the poll's fresh removal identities, proves removed
+storage absent, and joins the named nondelivery/completed-callback partition. Uncrypted queued heads
+can remain. Initialized admission/ring/lifecycle conservation and configured identity remain open.
+
+**Current effort.** Acceptance 17:18:46 UTC; 130 minutes/72 capped calls, final 20 minutes/10 calls
+reserved at 19:08:46 or call62. Scoped41 passes 431 jobs; full42 passes 514, collected at
+18:24:47 UTC (66m01s after acceptance). Forty-two builds comprise ten PASS and thirty-two ordinary FAIL.
+Exact43 passes six-path scope, all 511 prior bodies, census, tokens/imports, whitespace/EOF,
+unchanged mirror/index and seven pins. Final metadata/hashes are covered by exact44: 44 calls total
+(42 builds: 10 PASS/32 ordinary FAIL; two exact checks). Independent frozen review is clear
+(18:24:52–18:31:01 UTC, 6m09s); final metadata review is clear at 18:32:04.
+Worker ownership ended at 18:31:46 UTC (73m00s), with every job collected.
+Coordinated validation passes: the 514-job/513-declaration permitted-axiom gate, fresh kernel replay
+collected at 18:35:30 after gate compilation, default build (60 jobs), and 103 unit tests
+(21.635s, one skip). Exact comparison retains all prior bodies and the four frozen Lean hashes.
+Every new proof retains default limits; no limit exhaustion occurred. Lake job parallelism is 32, QEMU slots16,
+with unchanged 32G cap and per-Lean `-j1`. Ordinary elaboration failures include rejected kernel
+metavariable diagnostics in calls01/26 and recovery goal placeholders in calls10/19/22/33/40;
+there is no source admission. No cap increase, interruption, infrastructure retry, differential or guest
+run occurred. The full per-call ledger belongs in the checkpoint commit.
+Independent review found two stale RX-carrier scope clauses in the map/claim table; both now explicitly
+leave initialized funding/work/admission correspondence open, while acknowledging the local callback result.
+[AGENT 2026-10-15] Use deletion-tolerant normal-poll composition: actual positive packet payment may
+retire its peer; a later original getter can Stop. No extra caller/base reservation or totality premise
+is introduced solely to simplify the loop. Failed-prefix protocols remain separate from endpoint Worlds.
+The preceding `a945ea8` checkpoint passed gate511/511, fresh kernel replay after compilation, default60
+and 103 tests (22.370s, one skip); its recovery/kernel/default-limit failures and three fixed review
+findings are recorded in that commit. It introduced no source admissions or proof-limit increase.
 
 **Current foundations.** The persistent RX journal records actual session/decrypt source cuts and preserves
 unconditional original erasure, the same full incoming R2 audit/probes and the established R4 boundary,
@@ -377,15 +388,24 @@ slack premise substitutes for it. The poll suffix uses its caller pid under the 
 Key payment must have returned; key-credit funding is not asserted. The new full staged-send and consumeDataDone
 contracts preserve that same RX ledger under nullable operational owner compatibility, with exact typed TX/send-work
 handoffs. They derive rather than assume strict acquisition/repayment balance and preserve separate key/slot facts
-through promotion and timers. Whole consumeData admission, arbitrary Stack/IRQ callbacks, surviving poll-caller and
-base/work/dump reservations, ring/carrier correspondence and initialized protection remain open. No output compatibility
-or TX ownership is inferred from the reference delta.
+through promotion and timers. New [key protection](../Leanux/Proofs/WG/Queues/RxKeyProtection.lean)
+separately preserves nullable packet/current-key compatibility using backwards non-NULL word retention and tagged
+current-cell provenance, allowing deletion and only actual received-key promotion. The [Stack proof](../Leanux/Proofs/WG/Queues/RxStackProtection.lean)
+carries the actual positive destination loan across nonempty typed handoffs and its repayment, including normal
+negative errno and delayed held-GRO callbacks after packet free. The [normal poll proof](../Leanux/Proofs/WG/Queues/RxPollCarrier.lean)
+selects the actual cached queue occurrence, retains its charge until peer payment and its cell until free, then
+filters the same original ledger by fresh removal identities. Completion getters and actual GRO/Stack calls remain
+in source order. No extra caller/base reservation, residency, totality or key-allocation frontier premise is used.
+Uncrypted-head normal return retains unremoved queued carriers. Whole consumeData admission, general IRQ,
+base/work/dump provenance, ring/carrier correspondence and initialized compatibility/protection remain open.
+Handoff alone supplies no key-word/slot frame or TX ownership; the new separate source frames supply the local
+compatibility needed here. Stopped calls have no claimed final World.
 
 Independent architecture review identified a source-level arbitrary-World countermodel to framing all consumeDataDone
 by RX credits alone: P owns a selected credit plus reservation at count two, but its next key belongs to Q; staging
 acquires Q and dead-create cleanup pays P, reducing P below demand. This is not an accepted Runner counterexample.
-The local consume theorem now uses exactly such operational packet-key compatibility; whole-poll closure still needs
-retention and reply-triggered TX compatibility, not cryptographic unforgeability. Paid-phase history and allocation freshness remain separate proof obligations, not inferred from the
+The local consume theorem uses operational packet-key compatibility; the new normal-poll theorem preserves it
+and handles reply-triggered TX through all-resident-current compatibility, not cryptographic unforgeability. Paid-phase history and allocation freshness remain separate proof obligations, not inferred from the
 three state predicates. No mirror repair is proposed from this arbitrary-state example.
 
 **Local disposition extension.** A fresh poll partitions actual removal occurrences by permutation, with no allocation
@@ -507,8 +527,8 @@ in prose on `requireNotPending`, actually `State.lean:102`'s `pure ()`. Later in
 quiescence. No accepted loss/ duplication witness was found: arbitrary last-peer erasure is not initialized, and the
 poll's last-put candidate Stops at a later getter. No kernel bug claim.
 
-**Remaining obligations.** Affiliation/credits, worker-local ownership and RX
-conservation, including relevant TX callbacks. Stores/rings/queues/locals/GRO overlap; counts cannot be added. Named
+**Remaining obligations.** Initialized nullable compatibility, source-acquired credits, worker-local ownership
+and admission-to-carrier conservation; concrete normal-poll/Stack preservation is now local groundwork. Stores/rings/queues/locals/GRO overlap; counts cannot be added. Named
 rejection, validation, keepalive, purge/free and handoff dispositions still need initialized admission-to-carrier composition
 beyond the proved local post-removal partition. Queue idleness does not empty
 stores/peer queues; finite prefixes retain pending obligations. W7 item/mark transport remains open.
