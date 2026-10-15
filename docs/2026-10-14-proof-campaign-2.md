@@ -122,7 +122,7 @@ review and capped scoped proof builds; ordinary elaboration failures repaired.
 
 ## H4 — Configuration semantics (in progress)
 
-Twenty-four terminal declarations cover configuration leaves, peer flags, bounded
+Twenty-eight terminal declarations cover configuration leaves, peer flags, bounded
 readback, normal-return guarantees, one sequential partial-error case, and
 fwmark/cache frames. `Validation`, `Identity` and `Port` prove invalid allowed-IP
 rejection, exact allowed-IP serialization, private-identity normalization,
@@ -159,6 +159,17 @@ completion. `SocketPorts` proves actual normal return
 and an exact device update for socket replacement and for initialization at a
 nonzero port in an existing namespace: conflicts return `-EADDRINUSE` without
 a device change, success replaces both sockets and the incoming port.
+`RunningPort` and `DevicePorts` compose this with the original port setter and
+outer configuration request: a different port clears listed peer sources/cache
+before binding, so a bind error retains those effects. An equal-port inner
+request leaves the device unchanged; an equal-port outer request still increments
+the generation. The outer theorem assumes an existing namespace; the inner
+contract also covers namespace failure. `RandomPort` proves port-zero success
+selects within 32768..60999 and, for a supplied padded four-byte draw with a free
+first candidate, proves an actual return installing exactly the computed port.
+The generic zero-port theorem remains partial: missing records or a collision
+can stop. The explicit hidden-input leaf proves consumption of the head record;
+final record-tail preservation through socket replacement is not yet claimed.
 
 [AGENT 2026-10-14] Get-after-set means the effective configuration established
 by the C: keys are clamped, prefixes masked, running port-zero may allocate a
@@ -175,15 +186,17 @@ resolves that finding. Review of the normal-return and partial-error increment
 found no defect. The fwmark/socket review found one wording error: a supplied
 IPv4 socket assigns its port, which need not change the previous value. The
 statement documentation now says assignment/preservation. No further defects
-were found. Actual outer dump composition remains open.
+were found. Independent review of the port composition and recorded-draw
+increment found no defect. Actual outer dump composition remains open.
 
-Remaining: running-port composition, port-zero draws, complete private-key effects, full peer
+Remaining: outer port-zero composition, collision-stop and final record-tail
+contracts, complete private-key effects, full peer
 removal/replacement and allowed-IP ownership, other partial-error combinations,
 and general dump chunks/coalescing. Deferred removal work can change other
 peers' dynamic state, so no unrestricted removal frame is claimed. No H4
 mirror mismatch or mirror-team request; ranked mirror suggestions: none.
 
-Validation: all twenty-four statements pass scoped build, standard-axiom inspection
+Validation: all twenty-eight statements pass scoped build, standard-axiom inspection
 (only `propext`, `Classical.choice`, `Quot.sound`), and `capped --
 scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Config.Statements`.
 The full proof gate fails in inherited `CounterWindow.Refinement`; token/import

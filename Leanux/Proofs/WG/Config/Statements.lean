@@ -7,6 +7,8 @@ import Leanux.Proofs.WG.Config.Fwmark
 import Leanux.Proofs.WG.Config.ClearedSources
 import Leanux.Proofs.WG.Config.SocketPorts
 import Leanux.Proofs.WG.Config.FwmarkEffects
+import Leanux.Proofs.WG.Config.DevicePorts
+import Leanux.Proofs.WG.Config.RandomPort
 
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise
@@ -297,5 +299,60 @@ theorem original_fwmark_peer_store_effects (d : Device) (mark : Nat) (net : d.cr
         (withoutPeers { d with fwmark := mark, deviceUpdateGen := d.deviceUpdateGen + 1 }) ∧
         clearedPeers d w.k d.peerList) :=
   setDevice_fwmark_effects d mark net
+
+/-- A nonzero port request equal to the current port preserves the device.
+Otherwise every listed peer has its local source/cache cleared, including when
+socket initialization returns an error; the non-peer device fields have the
+specified stopped/running, namespace and bind-conflict outcome. This contract
+concerns normal completion. -/
+theorem original_nonzero_port_effects (d : Device) (port : Nat) (nonzero : port ≠ 0)
+    (bound : Nat → Bool) :
+    Ensures (setPort port) (fun w => w.k.wg = some d ∧ w.portBound = bound)
+      (fun ret w => if d.incomingPort = port then ret = 0 ∧ w.k.wg = some d
+        else ret = (portOutcome d port bound).1 ∧
+          w.k.wg.map withoutPeers = some (withoutPeers (portOutcome d port bound).2) ∧
+          clearedPeers d w.k d.peerList) :=
+  setPort_nonzero_effects d port nonzero bound
+
+/-- A port-only outer configuration request increments the device generation.
+For a nonzero port, it then has exactly the set_port effects, including retained
+source/cache clearing on a bind error. The namespace exists; normal completion
+is assumed. -/
+theorem original_device_nonzero_port (d : Device) (port : Nat) (nonzero : port ≠ 0)
+    (net : d.creatingNet = true) (bound : Nat → Bool) :
+    Ensures (wgSetDevice (portAttrs d port))
+      (fun w => w.k.wg = some d ∧ selectsDevice w d ∧ w.portBound = bound)
+      (fun ret w =>
+        let updated := { d with deviceUpdateGen := d.deviceUpdateGen + 1 }
+        if d.incomingPort = port then ret = 0 ∧ w.k.wg = some updated
+        else ret = (portOutcome updated port bound).1 ∧
+          w.k.wg.map withoutPeers = some (withoutPeers (portOutcome updated port bound).2) ∧
+          clearedPeers d w.k d.peerList) :=
+  setDevice_port_nonzero d port nonzero net bound
+
+/-- On normal completion in an existing namespace, port-zero initialization
+installs both sockets at the same selected port in the configured local range,
+preserving every other device field. -/
+theorem original_zero_socket_range (d : Device) (net : d.creatingNet = true) :
+    Ensures (socketInit 0) (fun w => w.k.wg = some d)
+      (fun ret w => ret = 0 ∧ ∃ port,
+        LOCAL_PORT_LOW ≤ port ∧ port ≤ LOCAL_PORT_HIGH ∧ w.k.wg = some
+          { d with sock4 := some port, sock6 := some port, incomingPort := port }) :=
+  socketInit_zero d net
+
+/-- With an explicit correctly padded UDP draw at the head of the records,
+an existing namespace and a free first candidate, port-zero initialization
+returns normally and installs exactly the port computed from the four draw
+bytes. Other device fields are preserved. -/
+theorem original_zero_socket_record_return (d : Device) (net : d.creatingNet = true)
+    (a b c e : UInt8) (rest : List HiddenRecord)
+    (free4 : d.sock4 ≠ some (drawnPort a b c e))
+    (free6 : d.sock6 ≠ some (drawnPort a b c e)) :
+    Returns (socketInit 0)
+      (fun w => w.k.wg = some d ∧
+        w.hidden = some (udpDrawRecord a b c e :: rest) ∧ w.portBound (drawnPort a b c e) = false)
+      (fun ret w => ret = 0 ∧ w.k.wg = some
+        { d with sock4 := some (drawnPort a b c e), sock6 := some (drawnPort a b c e), incomingPort := drawnPort a b c e }) :=
+  socketInit_zero_record_returns d net a b c e rest free4 free6
 
 end Leanux.Proofs.WG.Config
