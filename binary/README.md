@@ -184,3 +184,11 @@ endpoint fields with exact byte order and leaves inactive union bytes alone.
 `WorldContext` derives decision logs from observed events under one fixed
 nonphysical context; its event cursor handles compiler-merged decisions.
 These remain components of the unfinished whole-World R.
+
+
+`FdHeap` supplies concrete task/files/fdtable pointers, descriptor entries
+and bitmap fields, with read-footprint frames and functionality under fixed
+allocation names. `binary/fd_layouts.py` regenerates its pinned offsets.
+Generation history, fixture-file abstractions and the remaining task fields
+remain open; this is not a whole-Kernel relation. Replay with
+`capped -- lake env leanchecker --fresh FdHeap` in `binary/`.
