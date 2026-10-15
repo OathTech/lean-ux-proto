@@ -14,6 +14,7 @@ import Leanux.Proofs.WG.Index.DispatchSource
 import Leanux.Proofs.WG.Index.ResponseSource
 import Leanux.Proofs.WG.Index.ConsumeSource
 import Leanux.Proofs.WG.Index.StagedSource
+import Leanux.Proofs.WG.Index.ReceiveSource
 
 /-! H2's original-operation table contracts. Reachable owner/peer-word
 coherence remains a separate obligation. -/
@@ -486,5 +487,24 @@ theorem original_send_keepalive_tables (pid : PeerId) :
     Campaign2.Ensures (sendKeepalive pid) View.TablesSafe
       (fun _ s => View.TablesSafe s) :=
   sendKeepalive_tables pid
+
+/-- Every normal return of original handshake-packet reception preserves
+optional-device numeric-index uniqueness, owner uniqueness and the hashed-keypair
+allocation bound. This includes cookie replies, rejected packets, session
+installation, keepalive enqueue paths and final peer release. No readiness,
+residency or reference-count premise is added. It does not assert authentication,
+transmission or completion on arbitrary records. -/
+theorem original_receive_handshake_packet_tables (msg : List UInt8) (src : SkbSource) :
+    Campaign2.Ensures (receiveHandshakePacket msg src) View.TablesSafe
+      (fun _ s => View.TablesSafe s) :=
+  receiveHandshakePacket_tables msg src
+
+/-- One original receive-queue iteration preserves the optional-device table
+invariant on normal return, including the empty queue and removal of the selected
+head before its packet body. This covers the actual packet caller and subsequent
+queue-count decrement; it does not assert whole-worker or scheduler closure. -/
+theorem original_receive_step_tables :
+    Campaign2.Ensures receiveStep View.TablesSafe (fun _ s => View.TablesSafe s) :=
+  receiveStep_tables
 
 end Leanux.Proofs.WG.Index
