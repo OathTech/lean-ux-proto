@@ -26,15 +26,15 @@ No independent existential projected runs are spliced together.
 | Result | Existing mathematical checkpoint | Factoring / remaining mathematics |
 | --- | --- | --- |
 | H1 Noise | 11 local state/slot contracts | Public projection complete; whole-call edge coverage and lifetime confirmation remain open. |
-| H2 Index | 29 contracts, including initialization, newlink, creation and deletion boundaries | Public projection complete: 14 total contracts, 13 normal-return contracts, 1 exact stop and 1 projected initializer theorem; reachable coherence, broader records and the corpus runner composition remain open. |
+| H2 Index | 31 contracts, including lifecycle boundaries and original initiation sender/worker | Public projection complete: 14 total contracts, 15 normal-return contracts, 1 exact stop and 1 projected initializer theorem; reachable coherence, broader records and the corpus runner composition remain open. |
 | H3 Roaming | 5 endpoint/authentication leaf contracts | Public projection complete; authentication provenance and complete caller coverage remain open. |
 | H4 Configuration | 60 contracts and the reachable internal dump-accounting finding | Public projection and frame separation complete. Queued/live-keypair removal, private-key collision, mixed attributes, global ownership and general dump composition remain open. |
 | H5 Progress | 25 contracts and the accepted batch-backlog counterexample | Public projection and frame separation complete; productive-record decrease, full loop coverage and probe/detach composition remain open. The backlog witness is historical over `de62c9d`: main's batch guard now addresses request 1. |
 | H6 Timers | 31 timer/worker contracts, including original environment send dispatch | Public projection and frame separation complete; selection/dequeue/section composition proved under the count premise. Complete retry episodes and whole-run arming/session counts remain open. |
 
 Projection/frame factoring completed at `69f988a` for all six results, preserving
-all 153 existing headline names before new mathematics. The following H2 lifecycle
-and H6 dispatch increments bring the total to 161. No public statement directly names `World` or
+all 153 existing headline names before new mathematics. The following H2 lifecycle/sender
+and H6 dispatch increments bring the total to 163. No public statement directly names `World` or
 `Kernel`.
 The full proof gate remains failed in inherited campaign-1 counter-window and
 index carries; those files have not been edited. Scoped validation does not
@@ -51,11 +51,11 @@ connections to the current executable mirror, not replacement interpreters.
 | --- | --- | --- |
 | Common C2 | `Campaign2/View` is data-only; `Campaign2/Bridge` defines projection and universal execution contracts. | No shared campaign-1 layer is changed. |
 | H1 | `Noise/Model`, `Statements`, `Slots`, `StateEdges`, `ConsumeEdges`; `Execution` holds the concrete monad connection; `AccessSource` holds accessor read/write contracts, reexported by `Basic`. | `KernelFrames`, `PeerFrames`, `SlotFrames`. |
-| H2 | `Index/View`, `TableModel`, `OwnerWordModel`, `AllocationModel`, `ReleaseModel`, `LifecycleModel` and pure release effects/bounds; `Statements`, `HandshakeClaims`, `OwnerUpdateClaims`, `LifecycleSource`, `LinkSource` and the other operation/source modules. | `IndexFieldFrames`, `OwnerFieldFrames`, `StoreFieldFrames`, `LifecycleFrames`, `NewlinkFrames`; the old `HandshakeFrames` and `OwnerFrames` paths are import-only reexports, not duplicated lemmas. |
+| H2 | `Index/View`, `TableModel`, `OwnerWordModel`, `AllocationModel`, `ReleaseModel`, `LifecycleModel` and pure release effects/bounds; `Statements`, `HandshakeClaims`, `OwnerUpdateClaims`, `LifecycleSource`, `LinkSource`, `SendSource` and the other operation/source modules. | `IndexFieldFrames`, `OwnerFieldFrames`, `StoreFieldFrames`, `LifecycleFrames`, `NewlinkFrames`, `SendFrames`; the old `HandshakeFrames` and `OwnerFrames` paths are import-only reexports, not duplicated lemmas. |
 | H3 | `Roaming/Model`, `View`, `Statements`, `EndpointClaims`, `EndpointSource`, `Authentication`. | `Roaming/Frames`; `Basic` reexports the endpoint source connection. |
 | H4 | `Config/Model`, `AllowedRemovalModel`, `QuietModel`, `ClaimView`, `Statements`, `SourceClaims`, `ObservationBridge`, and existing substantive effect/source modules. | `ConcreteFrames` isolates six whole-kernel endpoint contracts; `OperationFrames` isolates seven generic helpers; `ReadbackFrames` retains socket/fixture preservation; `AllowedListFrames`, `AllowedRootFrames`, `AllowedRemovalFrames`, `QuietFrames`, `KeyFieldFrames` isolate within-WG preservation. |
 | H5 | `Progress/Model`, `View`, `Statements`, `SourceClaims`, `ObservationBridge`; `ControlLaws` is generic state/error control and `ControlSource` connects it exactly to the original worker; the scheduler/source modules retain actual execution factors. | `StackFrames` isolates caller-guard preservation. Probe/filter/no-work contracts also establish outputs and remain substantive source claims. |
-| H6 | `TimerDiscipline/Model`, `View`, `Statements`, `ObservationBridge`, `ObservationClaims`, `SourceClaims`, `SendDispatchModel`, `SendDispatchClaims`, and `*Source` operational proofs. | `SourceFrames`, `RecordedFrames`, `RecordedJitterFrames`, `SectionFrames`, `SelectionFrames`, `RetryFrames`, `JitterFrames`, `InitiationFrames`, `InitiationPreservationFrames`, `SendCutFrames`, `SendPeerFrames`, `SendSocketFrames`, `SendBufferFrame`, `SendWorkerFrame`, `SendDispatchFrames`. |
+| H6 | `TimerDiscipline/Model`, `View`, `SendView`, `Statements`, `ObservationBridge`, `ObservationClaims`, `SourceClaims`, `SendDispatchModel`, `SendDispatchClaims`, and `*Source` operational proofs. | `SourceFrames`, `RecordedFrames`, `RecordedJitterFrames`, `SectionFrames`, `SelectionFrames`, `RetryFrames`, `JitterFrames`, `InitiationFrames`, `InitiationPreservationFrames`, `SendCutFrames`, `SendPeerFrames`, `SendSocketFrames`, `SendBufferFrame`, `SendWorkerFrame`, `SendDispatchFrames`. |
 
 A compound exact effect is not a disposable frame merely because its name
 contains “frame”: mark/generation updates, cleared-peer accumulation, reference
@@ -363,6 +363,36 @@ review found no semantic issue. No cap failure or infrastructure rerun. The
 full gate remains the inherited failure recorded above, last run at `69f988a`.
 Internal destruction preservation, all caller coverage, owner/peer-word coherence
 and broader retry correspondence remain open.
+
+[AGENT 2026-10-15] Strengthen the existing campaign-2 socket-send proof spine
+once with an optional table/cursor observation paired with the optional initiation
+peer observation. Handshake creation itself changes the table, so the broader
+observation is restricted to the send spine; the existing `InitiationView` is
+unchanged. `TimerDiscipline/SendView` is pure and imports no Index module. The
+old send helpers follow by projection, preserving all nine old signatures and
+the total getter's existing guarantee. This avoids copying a shared send layer.
+
+`Index/SendSource` now proves original `sendHandshakeInitiation` and
+`handshakeSendWorker` preserve `View.TablesSafe` on normal completion, including
+early returns and a final peer release. Numeric and owner/bound creation facts
+are combined on the same original execution. The worker needs no additional
+resident-peer or retained-reference premise; final-reference removal filters
+its handshake owner and preserves the invariant. `SendFrames` separately holds
+socket, timer, peer-field and one small refcount kernel variant. Review moved
+`indexRemove_tables` and `peerPut_tables` into `SendSource`: those operations
+change the table, so their invariant claims are substantive, not structural
+frames. The strengthened socket comment now names both observations.
+
+H2 now has 31 headlines, with the earlier 29 unchanged; H6's 31 headlines are
+also unchanged. The affected scoped build passed (175 jobs), all 62 affected
+axiom checks and both fresh kernel replays passed, and combined import/axiom
+inspection of all 163 campaign headlines passed with only the three standard
+axioms. Independent read-only review found no outstanding mathematical or scope
+defect. Ordinary elaboration failures were corrected; the direct expanded
+release proof was replaced by exact removal plus a refcount frame. No cap
+failure or infrastructure rerun. The full gate remains the inherited failure
+recorded above. Environment send dispatch, response sending, whole-caller
+coverage and reachable owner/store coherence remain open for H2.
 
 The table invariant is about hashed entries; this checkpoint does not establish
 all-driver reachable-session uniqueness or owner-store coherence through every

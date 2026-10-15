@@ -9,6 +9,7 @@ import Leanux.Proofs.WG.Index.OwnerCreation
 import Leanux.Proofs.WG.Index.LookupMiss
 import Leanux.Proofs.WG.Index.LifecycleSource
 import Leanux.Proofs.WG.Index.LinkSource
+import Leanux.Proofs.WG.Index.SendSource
 
 /-! H2's original-operation table contracts. Reachable owner/peer-word
 coherence remains a separate obligation. -/
@@ -397,5 +398,23 @@ theorem original_delete_tables : Campaign2.Ensures wgDelete (fun _ => True)
   intro w result final pre run
   have absent := wgDelete_absent w result final pre run
   exact ⟨absent, absent_tables_safe _ absent⟩
+
+/-- Every normal return of original handshake-initiation sending preserves
+numeric index uniqueness, embedded-owner uniqueness and the hashed-keypair
+allocation bound. This includes early returns and socket-send failure; it
+asserts neither successful transmission nor completion on arbitrary records. -/
+theorem original_send_handshake_initiation_tables (pid : PeerId) :
+    Campaign2.Ensures (sendHandshakeInitiation pid) View.TablesSafe
+      (fun _ s => View.TablesSafe s) :=
+  sendHandshakeInitiation_tables pid
+
+/-- Every normal return of the original handshake-send worker preserves the
+optional-device table invariant, including a final peer-reference release that
+removes its handshake row and peer. No resident-peer or retained-reference
+premise is added. Environment dispatch and stopped prefixes are not covered. -/
+theorem original_handshake_send_worker_tables (pid : PeerId) :
+    Campaign2.Ensures (handshakeSendWorker pid) View.TablesSafe
+      (fun _ s => View.TablesSafe s) :=
+  handshakeSendWorker_tables pid
 
 end Leanux.Proofs.WG.Index
