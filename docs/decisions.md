@@ -706,3 +706,11 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   `make_cookie.ipv4`'s witness corrected to the built kernel's layout (a
   declaration error the skipped flood had hidden); `e_underload_merged`
   kept with its new detail. The user accepts or drops this part as U1.
+- **2026-10-15 [USER]** The representation batch: B4's U1 accepted (the flood
+  runs exactly over `Env.batch`; the summary contract, the discard, the exact
+  flag and the checker's flood special case are deleted; the three checker
+  rules change as the B4 note names, with the `repeatable` list the run
+  found); B2 (the second device) is held until campaign 1 lands, its design
+  and review kept, for the proof carry the review costed at 10 to 15
+  agent-days. "2,3,4 agree with recommendation" [AGENT, coordinator: the
+  recommendations].
