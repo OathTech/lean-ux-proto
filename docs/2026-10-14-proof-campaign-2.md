@@ -12,12 +12,12 @@ remains failed in inherited campaign-1 files.
 | --- | ---: | --- | --- |
 | H1 Noise | 20 | State/slot contracts, ordered clearing and rotation, static release budgets, full normal session effects and consecutive first-match confirmation | Whole-call edge coverage, session totality, exposed derivation-clock provenance, allocation-lifetime confirmation; reinstallation transport awaits shared-scope decision |
 | H2 Index | 52 | Exact index operations and successful-lookup provenance and unique normal-empty classification, original caller table safety, successful session publication coherence, session store bound and distinct allocation IDs across actual consecutive calls | Reachable hashed uniqueness and owner/peer-word residency through driver entries; outer-removal and ingress frame scopes await decision |
-| H3 Roaming | 12 | Data publication/first-poll join, both authenticated handshake cuts and inspection retaining them through continuation failure | General queue/caller coverage, final endpoint preservation |
+| H3 Roaming | 13 | Data publication/first-poll join, both authenticated handshake cuts and inspection retaining them through continuation failure, plus every poll iteration’s designated endpoint-setter attempt | AEAD provenance across queue/callback changes, broader caller coverage and final endpoint preservation |
 | H4 Configuration | 76 | Configuration leaves/flags, bounded public readback, port/fwmark/key effects, normal live-key removal and private-key collision composition, full REMOVE_ME, witness-free normal REPLACE_ALLOWEDIPS and remove-all and flag-only REPLACE_PEERS phase effects, empty-root insertion, exact root transfer and actual peer-dump readback, including two-fragment split/resume/coalescing | Collision completion, queued cleanup effects, mixed attributes, global ownership and general multipart readback |
 | H5 Progress | 33 | Historical backlog counterexample, source-connected scheduling inspections, cut/pow/drain/poll bounds | Whole-worker record decrease, full operation-end coverage and global termination/progress |
 | H6 Timers | 45 | Local arm/delete rules, recorded delays, actual retry/send pairs, consecutive same-peer count bound and immediate give-up boundary, total pending-zero-key give-up, both response session hooks, data-completion sends, receive-data hooks and outgoing and accepted-handshake receive traversal compositions | Complete caller/site coverage, scheduler episodes and session-relative arm counting |
 
-Total: **238 headlines**. The factoring checkpoint `69f988a` preserved all 153
+Total: **239 headlines**. The factoring checkpoint `69f988a` preserved all 153
 then-existing headlines. Recent mathematical checkpoints include `a2923a1`
 (H1 consecutive confirmation) and `7b34fa4` (H6 response-session timer hook).
 
@@ -61,7 +61,7 @@ connections to the current executable mirror, not replacement interpreters.
 | Common C2 | `Campaign2/View` is data-only; `Campaign2/Bridge` defines projection and universal execution contracts. | No shared campaign-1 layer is changed. |
 | H1 | `Noise/Model`, `Statements`, `Slots`, `StateEdges`, `ConsumeEdges`, `ClearModel`, `ClearEffects`, `ClearSource`, `RotationModel`, `RotationEffects`, `RotationSource`, `SessionModel`, `SessionSource`, `ConfirmationSequenceModel`, `ConfirmationSequenceEffects`, `ConfirmationSequenceSource`, `RestartModel`; `Execution` holds the concrete monad connection; `AccessSource` holds accessor read/write contracts, reexported by `Basic`. | `KernelFrames`, `PeerFrames`, `SlotFrames`, `ClearFrames`, `RotationFrames`, `SessionFrames`; standalone `RestartFrames` holds the three checked next-slot/cursor variants. |
 | H2 | `Index/View`, `LookupProvenanceSource`, `LookupNoneModel`, `LookupNoneSource`, `TableModel`, `OwnerWordModel`, `AllocationModel`, `ReleaseModel`, `LifecycleModel` and pure release effects/bounds; `Statements`, `HandshakeClaims`, `OwnerUpdateClaims`, `LifecycleSource`, `LinkSource`, `SendSource`, `DispatchSource`, `ResponseSource`, `ConsumeSource`, `StagedSource`, `ReceiveOperations`, `ReceiveSource`, `ClearSource`, `TimerSource`, `FlushSource`, `SessionCoherenceModel`, `SessionCoherenceEffects`, `SessionCoherenceSource`, `SessionAllocationEffects`, `SessionAllocationSource`, `SessionSequenceModel`, `SessionSequenceEffects`, `SessionSequenceSource` and the other operation/source modules. | `IndexFieldFrames`, `OwnerFieldFrames`, `StoreFieldFrames`, `LifecycleFrames`, `NewlinkFrames`, `SendFrames`, `DispatchFrames`, `ResponseFrames`, `ConsumeFrames`, `StagedFrames`, `ReceiveFrames`, `ClearFrames`, `TimerFrames`, `FlushFrames`, `SessionCoherenceFrames`, `SessionAllocationFrames`; the old `HandshakeFrames` and `OwnerFrames` paths are import-only reexports, not duplicated lemmas. |
-| H3 | `Roaming/Model`, `View`, `Statements`, `EndpointClaims`, `EndpointSource`, `Authentication`, `PublicationModel`, `PublicationSource`, `PublicationClaims`, `PollEndpointModel`, `PollEndpointSource`, `PollEndpointClaims`, `ResponseModel`, `ResponseCryptoSource`, `ResponseConsumeSource`, `ResponseLookupSource`, `ResponseCallSource`, `ResponseCallClaims`, `InitiationModel`, `InitiationCryptoSource`, `InitiationLookupSource`, `InitiationConsumeSource`, `InitiationCallSource`, `InitiationCallClaims`, `HandshakeAuditModel`, `HandshakeAuditSource`, `HandshakeAuditClaims`. | `Roaming/Frames`, `PublicationFrames`, `PollEndpointFrames`; `Basic` reexports the endpoint source connection. The response and initiation increments reuse existing accessor/read/clock support without new frames. |
+| H3 | `Roaming/Model`, `View`, `Statements`, `EndpointClaims`, `EndpointSource`, `Authentication`, `PublicationModel`, `PublicationSource`, `PublicationClaims`, `PollEndpointModel`, `PollEndpointSource`, `PollEndpointClaims`, `PollAttemptModel`, `PollAttemptSource`, `PollAttemptAuditSource`, `PollAttemptClaims`, `ResponseModel`, `ResponseCryptoSource`, `ResponseConsumeSource`, `ResponseLookupSource`, `ResponseCallSource`, `ResponseCallClaims`, `InitiationModel`, `InitiationCryptoSource`, `InitiationLookupSource`, `InitiationConsumeSource`, `InitiationCallSource`, `InitiationCallClaims`, `HandshakeAuditModel`, `HandshakeAuditSource`, `HandshakeAuditClaims`. | `Roaming/Frames`, `PublicationFrames`, `PollEndpointFrames`; `Basic` reexports the endpoint source connection. The response and initiation increments reuse existing accessor/read/clock support without new frames. |
 | H4 | `Config/Model`, `AllowedRemovalModel`, `AllowedPairsModel`, `AllowedPairsEffects`, `AllowedRemovalConverseSource`, `AllowedRemovalConverseClaims`, `QuietModel`, `LiveRemovalModel`, `LiveRemovalSource`, `CollisionModel`, `CollisionRemovalSource`, `CollisionRequestSource`, `AllowedInsertModel`, `AllowedInsertSource`, `AllowedReadbackSource`, `AllowedRoundTripSource`, `AllowedTransferModel`, `AllowedPlacementSource`, `AllowedTransferOperations`, `AllowedTransferSource`, `AllowedTransferRequestSource`, `AllowedTransferReadbackSource`, `RemoveFlagModel`, `RemoveFlagEffects`, `RemoveFlagSource`, `RemoveFlagRequestSource`, `ReplacementConverseSource`, `ReplacementConverseRequestSource`, `RemoveAllModel`, `RemoveAllEffects`, `RemoveAllSource`, `RemoveAllObservationSource`, `ReplacePeersRequestSource`, `ReplacePeersRequestClaims`, `MultipartModel`, `MultipartSource`, `MultipartClaims`, `ClaimView`, `Statements`, `SourceClaims`, `ObservationBridge`, and existing substantive effect/source modules. | `ConcreteFrames` isolates six whole-kernel endpoint contracts; `OperationFrames` isolates seven generic helpers; `ReadbackFrames` retains socket/fixture preservation; `AllowedListFrames`, `AllowedRootFrames`, `AllowedRemovalFrames`, `AllowedPairsFrames`, `QuietFrames`, `LiveRemovalFrames`, `KeyFieldFrames`, `CollisionFrames`, `AllowedInsertFrames`, `RemoveAllFrames` isolate within-WG preservation. |
 | H5 | `Progress/Model`, `View`, `Statements`, `SourceClaims`, `ObservationBridge`; `ControlLaws` is generic state/error control and `ControlSource` connects it exactly to the original worker; the scheduler/source modules retain actual execution factors. `CutModel`, `CutSource` and `CutClaims` establish original cut-loop progress; `FlushQueueModel`, `FlushQueueSource` and `FlushQueueClaims` establish original flush effects and count decrease; `PowModel` and `PowSource` connect a finite evaluator to the original arithmetic loop. `DrainModel`, `DrainOperations`, `DrainSelectionSource`, `DrainAuditSource`, `DrainEffects` and `DrainClaims` connect a phase audit and queue bound to the original workqueue drain. `PollBoundModel`, `PollBoundEffects`, `PollStepSource`, `PollLoopSource`, `PollBoundSource` and `PollBoundClaims` connect the actual receive poll to its budget audit; no new structural frames. | `StackFrames` isolates caller-guard preservation; `CutFrames` isolates record/error-location preservation; `FlushQueueFrames` isolates queue preservation through worker bodies and release. Probe/filter/no-work contracts also establish outputs and remain substantive source claims. |
 | H6 | `TimerDiscipline/Model`, `View`, `SendView`, `Statements`, `ObservationBridge`, `ObservationClaims`, `SourceClaims`, `SendDispatchModel`, `SendDispatchClaims`, `RetryDispatchModel`, `RetryDispatchClaims`, `RetryRearmModel`, `RetryRearmClaims`, `RetrySequenceModel`, `RetrySequenceClaims`, `RetryBoundarySource`, `RetryBoundaryClaims`, `PendingGiveUpModel`, `PendingGiveUpSource`, `ResponseSessionModel`, `ResponseSessionEffects`, `ResponseSessionClaims`, `OutgoingResponseSessionModel`, `OutgoingResponseSessionClaims`, `DataDoneModel`, `DataDoneClaims`, `RxDataTimersModel`, `RxDataTimersClaims`, `ResponseTraversalModel`, `ResponseTraversalClaims`, `InitiationTraversalModel`, `InitiationTraversalClaims`, `ReceiveTraversalModel`, `ReceiveTraversalClaims`, and `*Source` operational proofs. | `SourceFrames`, `RecordedFrames`, `RecordedJitterFrames`, `SectionFrames`, `SelectionFrames`, `RetryFrames`, `JitterFrames`, `InitiationFrames`, `InitiationPreservationFrames`, `SendCutFrames`, `SendPeerFrames`, `SendSocketFrames`, `SendBufferFrame`, `SendWorkerFrame`, `SendDispatchFrames`, `RetryDispatchFrames`, `RetryRearmFrames`, `WorkStateFrames`, `ResponseSessionFrames`. |
@@ -303,6 +303,28 @@ General queue provenance, netlink/whole-run caller exclusion and final endpoint
 preservation remain open. Forged crypted packets in arbitrary states are not
 accepted-run findings. Exact consume transcripts were chosen over a larger
 crypto-dataflow frame layer; neither handshake caller needed new shared variants.
+
+The complete original receive poll now has a failure-retaining audit of every
+attempted iteration at its designated `consumeDataDone` endpoint-setter site.
+Each record contains the actual iteration entry, admission outcome and, when
+admission succeeds, the actual continuation outcome. The next iteration uses the
+real suffix successor, including arbitrary callback effects. A prefix error,
+setter/cache-reset error, later cleanup error or completion error retains all
+records already reached. Exact source equality and audit erasure preserve the
+whole original budget test, loop and completion. Checked head/endpoint equations
+and the recursive definition establish retention, not merely final-outcome equality.
+
+Every reached endpoint attempt derives residency at that iteration's entry and
+packet read, matching peer, CRYPTED status, actual true counter result and the
+endpoint converted from that packet's supported source. The cut is before the
+setter: it asserts an attempt, not a successful mutation or a failed operation's
+final state. This extends beyond the former first-iteration scope. It classifies
+only this designated site; arbitrary callback writes are outside the claim.
+CRYPTED/counter admission does not independently establish AEAD provenance. A
+persistent packet-provenance invariant across queues and callbacks remains open,
+as do final endpoint preservation, delivery and whole-driver coverage. The four
+new modules contain observation data, source/audit correspondence and claims;
+no new structural frame or shared variant is needed.
 
 ## H4 — Configuration semantics
 
@@ -747,6 +769,7 @@ remain recorded in their commits, and affected shared C2 changes were rechecked.
 | H2 session allocation | 209 | 49 + 7 | 1 |
 | H6 outgoing response | 210 | 37 + 4 | 3 |
 | H3 failure-retaining inspection | 76 | 12 + 7 | 2 |
+| H3 whole-poll setter attempts | 80 | 13 + 12 | 2 |
 | H2 allocation sequence | 212 | 50 + 6 | 4 |
 | H4 insertion/readback | 190 | 68 + 11 | 14 |
 | H5 receive-poll bound | 210 | 33 + 15 | 10 |
@@ -831,6 +854,13 @@ first invocation. Independent read-only review found no correctness/source/scope
 issue in the exact state and decision-log effect. No infrastructure rerun was
 needed for this increment.
 
+H3 whole-poll attempt inspection passed after two corrected draft failures
+(reserved field name and let/projection normalization), with six scoped build
+invocations in total. The headline build, standard-axiom checks and fresh
+Roaming replay passed (exit 0). Independent read-only review found no issue in
+source correspondence, per-iteration state threading, attempt retention or scope.
+No infrastructure retry, resource-limit increase or new frame was needed.
+
 Review dispositions: H5 drain and H2 sequence made source correspondence
 unconditional and kept bounds only on effects; H3 initiation distinguished
 `memcmp` replay ordering from signed wrapping clocks; H4 readback clarified the
@@ -838,8 +868,8 @@ peer’s allowed-IP list; H4 transfer clarified that only the allowed-IP cursor
 and sequence reset. All findings were fixed. H5 drain's staged EOF whitespace
 was corrected in the next commit. Both pre-adjustment and changed-interface H2
 sequence replays passed; this was source-driven revalidation, not a retry.
-The six-target scoped build passes together (418 jobs), with existing unused-simp
-and deprecated-tactic warnings. Combined inspection covers all 238 headlines. This does **not**
+The six-target scoped build passes together (422 jobs), with existing unused-simp
+and deprecated-tactic warnings. Combined inspection covers all 239 headlines. This does **not**
 constitute a passing full gate.
 
 The full gate was last actually run at `69f988a` and **failed** in inherited

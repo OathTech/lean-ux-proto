@@ -6,6 +6,7 @@ import Leanux.Proofs.WG.Roaming.PollEndpointClaims
 import Leanux.Proofs.WG.Roaming.ResponseCallClaims
 import Leanux.Proofs.WG.Roaming.InitiationCallClaims
 import Leanux.Proofs.WG.Roaming.HandshakeAuditClaims
+import Leanux.Proofs.WG.Roaming.PollAttemptClaims
 
 namespace Leanux.Proofs.WG.Roaming
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise
@@ -207,5 +208,32 @@ theorem original_response_retained_authentication (msg : List UInt8) (src : SkbS
     · intro w pre
       rw [responseHandshakeAudit_original msg src kind]
     · exact responseHandshakeAudit_facts msg src
+
+/-- Inspect every attempted iteration of the original poll, retaining the
+actual per-iteration entry, admission outcome and continuation outcome even
+when either phase fails. Erasure is the complete original poll inspection,
+including its budget test, callbacks and completion. Every reached designated
+consumeDataDone endpoint-setter site has a resident packet at that iteration's
+entry, matching peer, CRYPTED state, actual true counter-check result, and the
+endpoint converted from that packet's supported outer source. Its cut precedes
+the setter and survives a setter/cache-reset or later continuation failure.
+The audit loop's head equation records each attempted iteration, including
+failures; it never substitutes an empty event list for a reached setter.
+This covers that original setter site only: arbitrary callback endpoint writes
+are not classified. CRYPTED/counter admission is not independent AEAD provenance,
+and an attempt asserts neither successful mutation, final endpoint preservation,
+original-call completion nor delivery. -/
+theorem original_poll_all_endpoint_attempts (pid : PeerId) (budget : Nat)
+    (toStack : List (List UInt8) → M Unit) :
+    Campaign2.AgreesOn (fun _ => True)
+      (do let audit ← observedPollAttempts pid budget toStack; pure audit.outcome)
+      (Campaign2.inspect (rxPoll pid budget toStack)) ∧
+    Campaign2.Observes (observedPollAttempts pid budget toStack) (fun _ => True)
+      (fun entry observed => ∃ audit, observed = .ok (audit, entry) ∧
+        ∀ iteration ∈ audit.iterations, PollAttemptIterationFacts pid iteration) := by
+  constructor
+  · intro entry pre
+    rw [observedPollAttempts_erase]
+  · exact observedPollAttempts_facts pid budget toStack
 
 end Leanux.Proofs.WG.Roaming
