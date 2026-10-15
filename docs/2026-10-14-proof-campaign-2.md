@@ -13,11 +13,11 @@ the other H5 clauses and corrected-main carry remain open.
 | H1 Noise | 20 | State/slot edges, clearing/rotation, session effects, consecutive confirmation | Whole-call edges, totality, allocation-lifetime confirmation |
 | H2 Index | 52 | Exact index operations, all normal lookup outcomes, caller table safety, session coherence/allocation sequence | Reachable hashed uniqueness and owner/peer residency through all driver entries |
 | H3 Roaming | 13 | Authenticated handshake cuts, decrypt/first-poll join, complete poll setter-attempt audit | Queue/callback authentication invariant, broader caller coverage, final endpoint |
-| H4 Configuration | 78 | Leaves/flags, effective bounded readback, removal/replacement phase effects, root insertion/transfer, finite IPv4 suffix and actual two-chunk socket readback | Global ownership, queued cleanup/completion, mixed attributes, general getter pagination |
+| H4 Configuration | 79 | Leaves/flags, effective bounded readback, removal/replacement phase effects, root insertion/transfer, actual two-chunk getter and scalar set/get composition | Global ownership, queued cleanup/completion, mixed attributes, general getter pagination |
 | H5 Progress | 39 | Accepted operation boundaries, actual final-boundary backlog, scheduling inspections, cut/pow/drain/poll bounds, arbitrary supplied-record index/jitter-loop adequacy | Whole-worker record decrease, global progress, corrected-main carry |
 | H6 Timers | 46 | Seven local arm sites, recorded delays, caller hook compositions, retry bound, pending/absent-zero-key give-up | Complete caller coverage, scheduler episodes, session-relative counting |
 
-**248 headlines**; latest increment: H5 arbitrary supplied-record jitter progress.
+**249 headlines**; latest increment: H4 scalar set followed by multipart socket get.
 Scoped builds, axioms and fresh replay pass; independent review found no issue.
 The full proof gate remains **failed in inherited campaign-1 files**.
 
@@ -60,7 +60,7 @@ universal execution contracts.
 | `Noise` | `Model`, `Slots`, state/consume edges; clear, rotation, session and confirmation-sequence `Model/Effects/Source` families; `Execution`, `AccessSource`, `RestartModel` | `KernelFrames`, `PeerFrames`, `SlotFrames`, `ClearFrames`, `RotationFrames`, `SessionFrames`, standalone `RestartFrames` |
 | `Index` | View/table/owner/allocation/release models; lookup provenance and empty-result source; lifecycle/caller operation sources; session coherence/allocation/sequence effects and sources | `IndexFieldFrames`, `OwnerFieldFrames`, `StoreFieldFrames`, `LifecycleFrames`, `NewlinkFrames`, `SendFrames`, `DispatchFrames`, `ResponseFrames`, `ConsumeFrames`, `StagedFrames`, `ReceiveFrames`, `ClearFrames`, `TimerFrames`, `FlushFrames`, `SessionCoherenceFrames`, `SessionAllocationFrames` |
 | `Roaming` | Endpoint/authentication claims; publication, poll endpoint/attempt, response, initiation and handshake-audit model/source/claim families | `Frames`, `PublicationFrames`, `PollEndpointFrames` |
-| `Config` | `ClaimView`, models/effects/source claims, observation bridge; allowed-IP removal/insertion/transfer, collision, removal flags, remove-all/replacement, multipart/suffix readback families; `SocketReadbackModel/Claims` and five substantive `SocketReadback*Source` files | `ConcreteFrames`, `OperationFrames`, `ReadbackFrames`, `AllowedListFrames`, `AllowedRootFrames`, `AllowedRemovalFrames`, `AllowedPairsFrames`, `QuietFrames`, `LiveRemovalFrames`, `KeyFieldFrames`, `CollisionFrames`, `AllowedInsertFrames`, `RemoveAllFrames` |
+| `Config` | `ClaimView`, models/effects/source claims, observation bridge; allowed-IP removal/insertion/transfer, collision, removal flags, remove-all/replacement, multipart/suffix readback families; `SocketReadbackModel/Claims` and five substantive `SocketReadback*Source` files; `ScalarSocketReadbackClaims/Source` compose original set/get | `ConcreteFrames`, `OperationFrames`, `ReadbackFrames`, `AllowedListFrames`, `AllowedRootFrames`, `AllowedRemovalFrames`, `AllowedPairsFrames`, `QuietFrames`, `LiveRemovalFrames`, `KeyFieldFrames`, `CollisionFrames`, `AllowedInsertFrames`, `RemoveAllFrames` |
 | `Progress` | Model/view/source/observation claims; control/scheduler sources; cut, flush-queue, pow, drain and poll-bound model/source/effect/claim families; `RunnerBoundaryModel/Claims`, `IndexProgressModel/Claims` and `JitterProgressModel/Claims` are projected; their `Source` files, `RunnerBoundaryAuditSource` and `BacklogSource` connect original operations | `StackFrames`, `CutFrames`, `FlushQueueFrames` |
 | `TimerDiscipline` | Model/view/send-view/observation claims; recorded, send/retry/rearm/sequence/boundary, pending-give-up, session, data and traversal model/source/effect/claim families; `AbsentGiveUpModel/Claims` and substantive `AbsentGiveUpSource` | `SourceFrames`, `RecordedFrames`, `RecordedJitterFrames`, `SectionFrames`, `SelectionFrames`, `RetryFrames`, `JitterFrames`, `InitiationFrames`, `InitiationPreservationFrames`, `SendCutFrames`, `SendPeerFrames`, `SendSocketFrames`, `SendBufferFrame`, `SendWorkerFrame`, `SendDispatchFrames`, `RetryDispatchFrames`, `RetryRearmFrames`, `WorkStateFrames`, `ResponseSessionFrames` |
 
@@ -260,9 +260,16 @@ the first receive invokes the resumed callback and queues DATA plus DONE; the
 second receive and original drain/coalescer return the entire ordered list,
 checking repeated device metadata. The device is unchanged, and the socket ends
 idle/empty with cleared cursors, zero dump errno and current generation.
-Multi-peer/general pagination, concurrent updates, setter composition and
-reachability are not established. Global ownership, mixed attributes, final
-queued cleanup and total collision completion remain open.
+The original scalar setter now composes with that two-chunk getter on the same
+actual successor. For a stopped device and a positive bounded lookup reference,
+the result reads the new preshared key/keepalive interval and unchanged full
+IPv4 list. A malformed second peer returns `EINVAL` without undoing the first
+update, and the same readback succeeds. Device generation increases once;
+the final socket is empty/idle at that generation. Existing selector/socket
+frames suffice; no new structural frame was added. Multi-peer/general
+pagination, concurrent updates, other setter compositions and reachability are
+not established. Global ownership, mixed attributes, final queued cleanup and
+total collision completion remain open.
 
 ## H5 — Termination and progress
 
@@ -390,19 +397,12 @@ accepted-run findings. H1/H2/H3/H6 have no ranked mirror-change request.
 
 ## Validation and trust limitations
 
-Latest six-target build: **446 jobs**, all **248 headlines** standard axioms
+Latest six-target build: **448 jobs**, all **249 headlines** standard axioms
 only (`propext`, `Classical.choice`, `Quot.sound`); token/import/root/default/
-projected-name checks pass. Latest Progress build: 223 jobs, 39 headlines and
-nine new support declarations checked; fresh stock kernel replay passed
-(exit 0). Independent read-only review found no issue.
-The preceding TimerDiscipline build: 238 jobs, 46 headlines
-and 12 new support declarations checked; fresh stock kernel replay passed
-(exit 0). Independent read-only review found no issue.
-The preceding Progress build: 219 jobs, 37 headlines and 11
-new support declarations checked; fresh stock kernel replay passed (exit 0).
-Independent read-only review found no issue.
-The preceding Config increment passed 222 jobs, 78 headlines plus 24 supports
-and fresh replay exit 0. Its review found a headline attribution error, corrected:
+projected-name checks pass. Latest Config build: 224 jobs, 79 headlines and
+two new support declarations checked; fresh kernel replay passed (exit 0).
+Independent read-only review found no issue in the scalar multipart composition.
+The earlier socket-getter review found a headline attribution error, corrected:
 the callback returns DATA; the enclosing socket dump appends DONE and finalizes.
 Earlier closed increments also passed
 affected scoped builds, axiom checks and fresh replay; counts, corrected draft
