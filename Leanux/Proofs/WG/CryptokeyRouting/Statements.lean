@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.AllowedIps.RoutingDumpFrames
 import Leanux.Proofs.WG.AllowedIps.RoutingEnvTimersFrames
 import Leanux.Proofs.WG.AllowedIps.RoutingHandshakeReceiveFrames
 import Leanux.Proofs.WG.AllowedIps.RoutingMaintenanceFrames
@@ -69,8 +70,10 @@ through whole-call lifts, permitting peer deletion. Session creation, incoming
 Noise/cookie handling and the concrete handshake receive iteration now have
 original routing frames too. Complete activation runs, dispatch, scheduling and
 nested rescheduling, deferred workers and both environment timer modes now
-retain routing. Remaining Env/syscall and Runner execution, and packet
-authorization, remain separate.
+retain routing. Complete environment ingress/batch, control and stepped-dump
+callers now retain routing too; environment deletion observes its actual lifecycle
+completions. Enclosing syscall/Runner execution and packet authorization remain
+separate.
 Actual local parser output now discharges address shape for the setAllowedip
 guards and its selected bounded insertion. Complete original free normally
 clears both represented families and every resident list, preserving the other
@@ -2262,5 +2265,92 @@ theorem original_environment_timer_routing (initial : FlatTable × FlatTable)
     global_completion_lift initial _ (runTimersPlaceholder_routing jHi),
     global_completion_lift initial _ idleTimers_routing,
     global_completion_lift initial _ afterAdvance_routing⟩
+
+/-- Complete original receive-worker, ingress/flood and batch calls retain
+routing on normal return from arbitrary Worlds. Concrete nested rescheduling and
+inline NET_RX polling are included. Saved lists, queue capacity and finite bounds
+add no successful-drain, residency, credit or packet-validity premise. Silent
+lifts preserve optional state normally and prior safe journals on Stop. -/
+theorem original_environment_traffic_routing (initial : FlatTable × FlatTable)
+    (family port count tos dest addr : Nat) (msg : List UInt8) (ll : Bool)
+    (messages : List (List UInt8)) (items : List Env.BatchItem) :
+    RetainsRoutingCall (WG.handshakeReceiveWorker (Env.nestedResched .receiveWorker)) ∧
+    Framing.SameView routingView (Env.xmitMulticastLoop family addr) ∧
+    RetainsRoutingCall (Env.inject family port msg tos ll dest) ∧
+    RetainsRoutingCall (Env.flood count port family messages) ∧
+    RetainsRoutingCall Env.afterBatch ∧ RetainsRoutingCall (Env.batch items) ∧
+    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+      (Logged.liftPrefix (WG.handshakeReceiveWorker (Env.nestedResched .receiveWorker))) ∧
+    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+      (Logged.liftPrefix (Env.inject family port msg tos ll dest)) ∧
+    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+      (Logged.liftPrefix (Env.flood count port family messages)) ∧
+    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+      (Logged.liftPrefix (Env.batch items)) :=
+  ⟨handshakeReceiveWorker_routing, xmitMulticastLoop_routing family addr,
+    inject_routing family port msg tos ll dest, flood_routing count port family messages,
+    afterBatch_routing, batch_routing items,
+    global_completion_lift initial _ handshakeReceiveWorker_routing,
+    global_completion_lift initial _ (inject_routing family port msg tos ll dest),
+    global_completion_lift initial _ (flood_routing count port family messages),
+    global_completion_lift initial _ (batch_routing items)⟩
+
+/-- Original environment controls retain routing normally, including the actual
+MTU conversion and namespace worker. Environment deletion instead observes the
+real lifecycle completions after its idle/pending-dump guards; erasure is
+unconditional and semantic prefix preservation starts from optional routing/flat
+agreement. Stops retain safe completed history without a returned World. -/
+theorem original_environment_controls_completion (initial : FlatTable × FlatTable)
+    (mtu family : Nat) :
+    Framing.SameView routingView Env.requireIdleDevice ∧
+    RetainsRoutingCall Env.wgUp ∧ RetainsRoutingCall Env.wgDown ∧
+    Framing.SameView routingView (Env.setMtu mtu) ∧
+    Framing.SameView routingView Env.routeIntoWg0 ∧
+    Framing.SameView routingView (Env.wgDeladdr family) ∧
+    Framing.SameView routingView (Env.wgDelroute family) ∧
+    RetainsRoutingCall Env.observe ∧ RetainsRoutingCall Env.netnsCleanup ∧
+    Logged.ErasesPrefix envWgDeleteObserved Env.wgDelete ∧
+    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+      envWgDeleteObserved ∧
+    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+      (Logged.liftPrefix Env.observe) ∧
+    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+      (Logged.liftPrefix Env.netnsCleanup) :=
+  ⟨requireIdleDevice_routing, envWgUp_routing, envWgDown_routing,
+    envSetMtu_routing mtu, routeIntoWg0_routing, wgDeladdr_routing family,
+    wgDelroute_routing family, observe_routing, netnsCleanup_routing,
+    envWgDeleteObserved_erases, envWgDeleteObserved_global initial,
+    global_completion_lift initial _ observe_routing,
+    global_completion_lift initial _ netnsCleanup_routing⟩
+
+/-- Original stepped dump start/chunk/receive/completion and whole wgGetDevice
+retain routing on normal return. Cursor releases may retire resident peers;
+no cursor validity, owner affiliation, residency or successful-drain assumption
+is added. Silent lifts leave the journal unchanged on every outcome, preserve
+optional state only normally, and retain prior history safety on Stop. This is
+neither initialized syscall/Runner closure nor packet authorization. -/
+theorem original_dump_routing (initial : FlatTable × FlatTable) (fd seq : Nat)
+    (ref : WG.DeviceRef) (ctx : WG.DumpCtx) (skb : WG.NlSkb) :
+    RetainsRoutingCall (WG.wgGetDeviceDone ctx) ∧
+    RetainsRoutingCall (WG.wgGetDeviceDump ctx seq skb) ∧
+    RetainsRoutingCall (WG.netlinkDump fd) ∧
+    RetainsRoutingCall (WG.netlinkDumpStart fd ref) ∧
+    RetainsRoutingCall (WG.netlinkRecvmsg fd) ∧
+    RetainsRoutingCall (WG.wgGetDevice ref) ∧
+    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+      (Logged.liftPrefix (WG.netlinkDump fd)) ∧
+    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+      (Logged.liftPrefix (WG.netlinkDumpStart fd ref)) ∧
+    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+      (Logged.liftPrefix (WG.netlinkRecvmsg fd)) ∧
+    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+      (Logged.liftPrefix (WG.wgGetDevice ref)) :=
+  ⟨wgGetDeviceDone_routing ctx, wgGetDeviceDump_routing ctx seq skb,
+    netlinkDump_routing fd, netlinkDumpStart_routing fd ref,
+    netlinkRecvmsg_routing fd, wgGetDevice_routing ref,
+    global_completion_lift initial _ (netlinkDump_routing fd),
+    global_completion_lift initial _ (netlinkDumpStart_routing fd ref),
+    global_completion_lift initial _ (netlinkRecvmsg_routing fd),
+    global_completion_lift initial _ (wgGetDevice_routing ref)⟩
 
 end Leanux.Proofs.WG.CryptokeyRouting
