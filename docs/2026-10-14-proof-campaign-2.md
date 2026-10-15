@@ -230,13 +230,22 @@ review found no correctness defect; its placeholder-mode wording correction
 was applied. A failed axiom invocation named a nonexistent temporary file;
 generating the inspection file from the terminal declarations corrected it.
 
+`PeerRelease` adds exact original peer-put effects and allocation-bound
+preservation. The last release filters all handshake-owner rows, charges the
+staged packet count and erases the peer; other peers and the keypair store are
+unchanged. No non-NULL handshake word premise is needed for removal by owner
+identity. Both uniqueness predicates and both allocation bounds survive. The
+original retirement of worker/timer identities executes, but the terminals
+export device effects rather than a World frame. Independent read-only review
+found no defect; dangling references from other objects remain outside scope.
+
 The table invariant is about hashed entries; this checkpoint does not yet establish all-driver reachable-session
 uniqueness or initialize/preserve owner-store coherence through every caller.
 
 Independent read-only review found no semantic defect. Its wording finding was
 fixed: the terminal lookup docstring now describes its exported provenance
 postcondition, leaving stronger first-selection semantics to the internal
-scan contract. The twenty-one statements pass scoped build, standard-axiom inspection
+scan contract. The twenty-three statements pass scoped build, standard-axiom inspection
 and fresh stock kernel replay (`capped -- scripts/in-bundle lake env leanchecker
 --fresh Leanux.Proofs.WG.Index.Statements`). The full proof gate still fails in
 inherited `CounterWindow.Refinement` and `ReplayWindow.Counterexamples`;
