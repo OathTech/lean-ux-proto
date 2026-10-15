@@ -741,3 +741,14 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   wording ("relates the whole mirror world") was the coordinator's error,
   read literally by the grind [AGENT, coordinator]; the amendment is in the
   charter's section 1.
+- **2026-10-15 [AGENT, fork of the coordinator]** The W7 tier's receive
+  twin under load: the mirror's bound of 8 on the NAPI placement vector
+  (`napi_irq_before_put`) was a budget from when open placements were
+  rare, inconsistent with the protocol's ceiling (the injected-message
+  count, 2026-10-13); under load the twin opens 1,018 placements and the
+  kernel takes (c') at a few, so the check's before-put run was refused and
+  the trace failed at two claim points. The mirror's ceiling is the
+  records' NET_RX section-start count (exact, fail-closed); the selection
+  rule is unchanged (the kernel's comparison rows decide each poll's
+  placement, replayed once as the evidence); `section_agreement` costs the
+  section's records per poll. Not a retry, not a widened enumeration.
