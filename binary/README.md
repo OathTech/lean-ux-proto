@@ -64,19 +64,46 @@ capped -- python3 -B -m unittest binary.test_trust_gate
 The gate never updates the expected surface automatically. The baseline is
 the reviewable specification, not a retained execution log.
 
-Kernel replay and toolchain checking, from `binary/`:
+Kernel replay and export preparation, from `binary/` with its v4.35.0
+toolchain:
 
 ```sh
 capped -- lake env leanchecker --fresh LookupSnapshotTransport
 capped -- lake env leanchecker --fresh LookupWitness
-capped -- lake check
+capped -- lake env leanchecker --fresh LookupHitWitness
+capped -- lake env leanexport LookupAdequacy LookupSnapshotTransport LookupWitness LookupHitWitness TrustBase Execution > ../.tmp/binary-m1.ndjson
 ```
 
-`--fresh` takes one module per invocation. Under the box's Nono setup,
-`capped -- lake check --inadvisably-no-sandbox` is the available speedbump;
-the supplied AGENTS.md requires the user to run sandboxed `capped -- lake
-check` outside Nono at the claim point. Do not report the speedbump as that
-gate. The accepted proof axioms are only `propext`, `Classical.choice`, and
+`--fresh` takes one module per invocation. The export is ephemeral (about
+1.1 GB for the original M1 closure), not an evidence bundle to commit. Generate
+it from the exact commit being claimed, after a successful build, and record
+the commit and modules with the result. Export generation must finish with
+exit zero; a partial export from a failed job is not a gate input.
+
+The external gate is run by the user **outside Nono**, still from `binary/`:
+
+```sh
+capped -- lake check --from-export ../.tmp/binary-m1.ndjson
+```
+
+The toolchain’s sandboxed project build cannot see this package’s parent path
+dependencies. `--from-export` replays the complete exported declaration
+closure without that build. Plain `lake check` is not the recipe for this
+layout. If an inside-Nono speedbump is needed, use the same export with
+`capped -- lake check --inadvisably-no-sandbox --from-export ../.tmp/binary-m1.ndjson`;
+do not report that as the external gate.
+
+On 2026-10-15 the user reported external acceptance at **430ea90**, using
+`lake check --from-export ../.tmp/binary-m1.ndjson`, exported from
+`LookupAdequacy`, `LookupSnapshotTransport`, `LookupWitness`, `TrustBase`
+and `Execution` (before the hit-witness module existed). Its exact output was
+“Lean default kernel accepts the solution; uses axioms: propext, Quot.sound,
+Classical.choice”. That result does not cover subsequent surface changes;
+regenerate the export for the milestone-2 claim point, adding its headline
+modules to the command. Remove the export after the check when it is no longer
+needed.
+
+The accepted proof axioms are only `propext`, `Classical.choice`, and
 `Quot.sound`. Milestone 1 uses bespoke per-path composition. The unused
 `compose_regions` helper was retired in review fix F5.
 

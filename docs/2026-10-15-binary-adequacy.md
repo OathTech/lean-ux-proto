@@ -3583,3 +3583,21 @@ end Binary.TrustBase
 
 Validation: the quoted block is byte-for-byte TrustBase.lean; documentation
 and register update only. F10’s successful build and gate cover the code.
+
+
+### Milestone-1 README gate recipe (2026-10-15)
+
+The README now gives the actual external gate form, from binary/:
+`lake check --from-export ../.tmp/binary-m1.ndjson`, with `capped` around
+heavy commands. It lists the leanexport modules (including the new hit
+witness), requires a completed export from the claimed commit, distinguishes
+inside-Nono speedbumps, and records why the sandboxed build cannot resolve
+this package's parent path dependencies. The user-reported 430ea90 acceptance
+and its original five modules remain explicitly historical. No external gate
+for the changed surface is claimed; its fresh export belongs to the M2 claim
+point. Exports are ephemeral and are not committed.
+
+Validation: command syntax checked against the v4.35.0 toolchain's
+LeanExport main and Lake Check --from-export option; documentation-only
+change, no redundant proof rebuild. The next work is milestone 2, with the
+independent M2 review rechecking all these M1 dispositions.
