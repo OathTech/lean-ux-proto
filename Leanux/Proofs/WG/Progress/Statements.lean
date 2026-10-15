@@ -1,7 +1,7 @@
 import Leanux.Proofs.WG.Progress.BatchBacklog
 import Leanux.Proofs.WG.Progress.Scheduler
 import Leanux.Proofs.WG.Progress.Dispatch
-import Leanux.Proofs.WG.Progress.ScheduleTurn
+import Leanux.Proofs.WG.Progress.StackResume
 
 namespace Leanux.Proofs.WG.Progress
 open Leanux Leanux.Env
@@ -144,5 +144,51 @@ theorem original_turn_ambiguous (stack : Option Worker) (initial afterPeek : Wor
         | none => "syscall entry")
         "the records do not determine which suspended worker resumed") :=
   turn_ambiguous stack initial afterPeek next d a b rest records peek noStart device noPoll candidates
+
+/-- With a sole suspended candidate and a caller-stack worker that has work,
+the original resumption branch stops with its ambiguity diagnostic. The guard
+is read-only and no suspended activation is committed by this branch. -/
+theorem original_turn_stack_busy (worker : Worker) (initial afterPeek : World) (next : Option Nat)
+    (d : WG.Device) (a : Activation) (records : initial.hidden.isNone = false)
+    (peek : peekHiddenSite.run initial = .ok (next, afterPeek))
+    (noStart : ∀ worker, next.bind sectionOf ≠ some (worker, true))
+    (device : afterPeek.k.wg = some d)
+    (noPoll : (next == some (HiddenSite.sectionStart .netRx).info.id &&
+      d.peers.toList.any (·.2.napiScheduled)) = false)
+    (candidates : (afterPeek.suspended.filterM Activation.consistent).run afterPeek = .ok ([a], afterPeek))
+    (busy : (Activation.hasWork { worker }).run afterPeek = .ok (true, afterPeek)) :
+    (scheduleTurn (some worker)).run initial = .error (resumptionAmbiguity afterPeek) :=
+  turn_stack_busy worker initial afterPeek next d a records peek noStart device noPoll candidates busy
+
+/-- With a sole suspended candidate and an idle caller-stack worker, the
+original resumption branch detaches and executes that candidate. The equation
+retains failures from actual execution; probe success alone is insufficient. -/
+theorem original_turn_stack_idle (worker : Worker) (initial afterPeek : World) (next : Option Nat)
+    (d : WG.Device) (a : Activation) (records : initial.hidden.isNone = false)
+    (peek : peekHiddenSite.run initial = .ok (next, afterPeek))
+    (noStart : ∀ worker, next.bind sectionOf ≠ some (worker, true))
+    (device : afterPeek.k.wg = some d)
+    (noPoll : (next == some (HiddenSite.sectionStart .netRx).info.id &&
+      d.peers.toList.any (·.2.napiScheduled)) = false)
+    (candidates : (afterPeek.suspended.filterM Activation.consistent).run afterPeek = .ok ([a], afterPeek))
+    (idle : (Activation.hasWork { worker }).run afterPeek = .ok (false, afterPeek)) :
+    (scheduleTurn (some worker)).run initial =
+      ((Activation.run a).run (detached afterPeek a) >>= fun out => pure (turnContinue, out.2)) :=
+  turn_stack_idle worker initial afterPeek next d a records peek noStart device noPoll candidates idle
+
+/-- If the caller-stack work guard fails at the original single-candidate
+resumption branch, that exact stop propagates. It is not converted into an
+idle-worker result or permission to resume the suspended candidate. -/
+theorem original_turn_stack_error (worker : Worker) (initial afterPeek : World) (next : Option Nat)
+    (d : WG.Device) (a : Activation) (err : Stop) (records : initial.hidden.isNone = false)
+    (peek : peekHiddenSite.run initial = .ok (next, afterPeek))
+    (noStart : ∀ worker, next.bind sectionOf ≠ some (worker, true))
+    (device : afterPeek.k.wg = some d)
+    (noPoll : (next == some (HiddenSite.sectionStart .netRx).info.id &&
+      d.peers.toList.any (·.2.napiScheduled)) = false)
+    (candidates : (afterPeek.suspended.filterM Activation.consistent).run afterPeek = .ok ([a], afterPeek))
+    (failed : (Activation.hasWork { worker }).run afterPeek = .error err) :
+    (scheduleTurn (some worker)).run initial = .error err :=
+  turn_stack_error worker initial afterPeek next d a err records peek noStart device noPoll candidates failed
 
 end Leanux.Proofs.WG.Progress

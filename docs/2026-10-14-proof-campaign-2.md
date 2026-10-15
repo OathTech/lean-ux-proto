@@ -560,12 +560,17 @@ continuation. Successful candidate filtering preserves the entire World and
 selects exactly the successful probes, in order and with duplicates retained.
 The zero/singleton/multiple-candidate resumption cases preserve original return,
 committed execution after detachment, and ambiguity errors. These five terminals
-make fifteen. Independent read-only review found no defect. Productive-turn
-record decrease, iteration coverage, the stack-held-worker case and the frame
-from probing to execution after detachment remain open. No statement assumes
-that a successful probe guarantees successful detached execution.
+made fifteen. `Progress/StackResume` adds three original caller-stack guard
+contracts: a busy worker reports the original ambiguity stop, an idle worker
+permits committed execution, and a failed work check propagates its exact stop.
+The guard preserves the World. Its worker-only activation has no peer identifier,
+as in the mirror; transmit checks therefore take the error case. Independent
+read-only review found no defect. Productive-turn record decrease, iteration
+coverage and the frame from probing to execution after detachment remain open.
+No statement assumes that a successful probe guarantees successful detached
+execution.
 
-The fifteen H5 statements pass scoped build, standard-axiom inspection and
+The eighteen H5 statements pass scoped build, standard-axiom inspection and
 stock kernel replay (`leanchecker --fresh Leanux.Proofs.WG.Progress.Statements`,
 through the capped bundle). The
 full gate was rerun and fails at the same inherited counter refinement; token
