@@ -3,6 +3,7 @@ import Leanux.Proofs.WG.Noise.ConsumeEdges
 import Leanux.Proofs.WG.Noise.ClearSource
 import Leanux.Proofs.WG.Noise.RotationSource
 import Leanux.Proofs.WG.Noise.SessionSource
+import Leanux.Proofs.WG.Noise.ConfirmationSequenceSource
 
 /-! H1's checked local endpoints. Whole-run edge ownership and confirmation
 uniqueness by allocation lifetime remain separate obligations. -/
@@ -232,5 +233,44 @@ theorem original_begin_session_ordered (pid : PeerId) (d : Device) (p : Peer) (c
       (fun ok s => ∃ final, s.wg.device = some final ∧
         SessionEffect pid d p counter ok final s.wg.keypairCounter) :=
   beginSession_effect pid d p counter resident
+
+/-- Consecutive original confirmation calls, without an interleaved next-slot
+installation, return true only at the first input matching the initial next slot.
+On normal return the whole Device effect is that one ordered confirmation, or
+no change if there is no match; all remaining results are false. A successful
+match leaves next empty. Only initial caller residency is assumed. Aliased
+releases remain allowed, so this is neither key lifetime safety nor confirmation
+uniqueness across a larger execution that can install next again. -/
+theorem original_confirmation_sequence (pid : PeerId) (ids : List KeypairId)
+    (d : Device) (p : Peer) (resident : d.peers[pid]? = some p) :
+    Campaign2.Ensures (ids.mapM (receivedWithKeypair pid)) (fun s => s.wg.device = some d)
+      (fun results s => ∃ final, s.wg.device = some final ∧
+        ConfirmationSequenceEffect pid ids d p results final ∧
+        results.length = ids.length ∧ results.count true ≤ 1) := by
+  intro w results out pre run
+  obtain ⟨final, device, effect⟩ :=
+    confirmationSequence_effect pid ids d p resident w results out pre run
+  exact ⟨final, device, effect,
+    confirmationSequenceEffect_length pid ids d final p results effect,
+    confirmationSequenceEffect_count pid ids d final p results effect⟩
+
+/-- Static release readiness for the initial previous slot is required only if
+some input matches the initial next slot. It guarantees termination of these
+finite original calls and the same first-match effect. No supplied execution
+witness, received-key residency or distinctness premise is used; stopped calls
+without this readiness premise are not asserted to complete. -/
+theorem original_confirmation_sequence_ready_returns (pid : PeerId) (ids : List KeypairId)
+    (d : Device) (p : Peer) (resident : d.peers[pid]? = some p)
+    (ready : (∃ id ∈ ids, p.keypairNext = some id) → ClearReady d [p.keypairPrevious]) :
+    Campaign2.Returns (ids.mapM (receivedWithKeypair pid)) (fun s => s.wg.device = some d)
+      (fun results s => ∃ final, s.wg.device = some final ∧
+        ConfirmationSequenceEffect pid ids d p results final ∧
+        results.length = ids.length ∧ results.count true ≤ 1) := by
+  intro w pre
+  obtain ⟨results, out, run, final, device, effect⟩ :=
+    confirmationSequence_returns_ready pid ids d p resident ready w pre
+  exact ⟨results, out, run, final, device, effect,
+    confirmationSequenceEffect_length pid ids d final p results effect,
+    confirmationSequenceEffect_count pid ids d final p results effect⟩
 
 end Leanux.Proofs.WG.Noise
