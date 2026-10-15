@@ -28,13 +28,13 @@ No independent existential projected runs are spliced together.
 | H1 Noise | 13 state/slot and ordered-clear contracts | Public projection complete; whole-call edge coverage and lifetime confirmation remain open. |
 | H2 Index | 38 contracts, including lifecycle boundaries, both handshake senders, three message consumers, staged/keepalive sending and original worker/dispatch | Public projection complete: 14 total contracts, 22 normal-return contracts, 1 exact stop and 1 projected initializer theorem; reachable coherence, broader records and the corpus runner composition remain open. |
 | H3 Roaming | 8 contracts, including decrypt publication and its same-execution first-poll endpoint connection | Public projection complete; first selected packet provenance is conditional on matching publication identity. General queue provenance and complete caller coverage remain open. |
-| H4 Configuration | 60 contracts and the reachable internal dump-accounting finding | Public projection and frame separation complete. Queued/live-keypair removal, private-key collision, mixed attributes, global ownership and general dump composition remain open. |
+| H4 Configuration | 62 contracts, including live-key removal with empty work queues, and the internal dump-accounting finding | Public projection and frame separation complete. Queued-work removal, private-key collision, mixed attributes, global ownership and general dump composition remain open. |
 | H5 Progress | 27 contracts, including original cut-loop budget adequacy, and the accepted batch-backlog counterexample | Public projection and frame separation complete; the recorded cut cannot exhaust its budget. Whole-worker record decrease, full loop coverage and probe/detach composition remain open. The backlog witness is historical over `de62c9d`: main's batch guard now addresses request 1. |
 | H6 Timers | 32 timer/worker contracts, including original retransmit-timer/send-worker composition | Public projection and frame separation complete; a successful pair from an empty send queue derives the retry bound, reference acquisition/release, final empty queue and cleared pending flag. Complete retry episodes and whole-run arming/session counts remain open. |
 
 Projection/frame factoring completed at `69f988a` for all six results, preserving
 all 153 existing headline names before new mathematics. The following H2 lifecycle/sender
-and H6 dispatch increments, H3 publication/poll provenance, H5 cut-loop progress and H1 ordered clearing bring the total to 178. No public statement directly names `World` or
+and H6 dispatch increments, H3 publication/poll provenance, H5 cut-loop progress, H1 ordered clearing and H4 live-key removal bring the total to 180. No public statement directly names `World` or
 `Kernel`.
 The full proof gate remains failed in inherited campaign-1 counter-window and
 index carries; those files have not been edited. Scoped validation does not
@@ -53,7 +53,7 @@ connections to the current executable mirror, not replacement interpreters.
 | H1 | `Noise/Model`, `Statements`, `Slots`, `StateEdges`, `ConsumeEdges`, `ClearModel`, `ClearEffects`, `ClearSource`; `Execution` holds the concrete monad connection; `AccessSource` holds accessor read/write contracts, reexported by `Basic`. | `KernelFrames`, `PeerFrames`, `SlotFrames`, `ClearFrames`. |
 | H2 | `Index/View`, `TableModel`, `OwnerWordModel`, `AllocationModel`, `ReleaseModel`, `LifecycleModel` and pure release effects/bounds; `Statements`, `HandshakeClaims`, `OwnerUpdateClaims`, `LifecycleSource`, `LinkSource`, `SendSource`, `DispatchSource`, `ResponseSource`, `ConsumeSource`, `StagedSource` and the other operation/source modules. | `IndexFieldFrames`, `OwnerFieldFrames`, `StoreFieldFrames`, `LifecycleFrames`, `NewlinkFrames`, `SendFrames`, `DispatchFrames`, `ResponseFrames`, `ConsumeFrames`, `StagedFrames`; the old `HandshakeFrames` and `OwnerFrames` paths are import-only reexports, not duplicated lemmas. |
 | H3 | `Roaming/Model`, `View`, `Statements`, `EndpointClaims`, `EndpointSource`, `Authentication`, `PublicationModel`, `PublicationSource`, `PublicationClaims`, `PollEndpointModel`, `PollEndpointSource`, `PollEndpointClaims`. | `Roaming/Frames`, `PublicationFrames`, `PollEndpointFrames`; `Basic` reexports the endpoint source connection. |
-| H4 | `Config/Model`, `AllowedRemovalModel`, `QuietModel`, `ClaimView`, `Statements`, `SourceClaims`, `ObservationBridge`, and existing substantive effect/source modules. | `ConcreteFrames` isolates six whole-kernel endpoint contracts; `OperationFrames` isolates seven generic helpers; `ReadbackFrames` retains socket/fixture preservation; `AllowedListFrames`, `AllowedRootFrames`, `AllowedRemovalFrames`, `QuietFrames`, `KeyFieldFrames` isolate within-WG preservation. |
+| H4 | `Config/Model`, `AllowedRemovalModel`, `QuietModel`, `LiveRemovalModel`, `LiveRemovalSource`, `ClaimView`, `Statements`, `SourceClaims`, `ObservationBridge`, and existing substantive effect/source modules. | `ConcreteFrames` isolates six whole-kernel endpoint contracts; `OperationFrames` isolates seven generic helpers; `ReadbackFrames` retains socket/fixture preservation; `AllowedListFrames`, `AllowedRootFrames`, `AllowedRemovalFrames`, `QuietFrames`, `LiveRemovalFrames`, `KeyFieldFrames` isolate within-WG preservation. |
 | H5 | `Progress/Model`, `View`, `Statements`, `SourceClaims`, `ObservationBridge`; `ControlLaws` is generic state/error control and `ControlSource` connects it exactly to the original worker; the scheduler/source modules retain actual execution factors. `CutModel`, `CutSource` and `CutClaims` establish original cut-loop progress. | `StackFrames` isolates caller-guard preservation; `CutFrames` isolates record/error-location preservation. Probe/filter/no-work contracts also establish outputs and remain substantive source claims. |
 | H6 | `TimerDiscipline/Model`, `View`, `SendView`, `Statements`, `ObservationBridge`, `ObservationClaims`, `SourceClaims`, `SendDispatchModel`, `SendDispatchClaims`, `RetryDispatchModel`, `RetryDispatchClaims`, and `*Source` operational proofs. | `SourceFrames`, `RecordedFrames`, `RecordedJitterFrames`, `SectionFrames`, `SelectionFrames`, `RetryFrames`, `JitterFrames`, `InitiationFrames`, `InitiationPreservationFrames`, `SendCutFrames`, `SendPeerFrames`, `SendSocketFrames`, `SendBufferFrame`, `SendWorkerFrame`, `SendDispatchFrames`, `RetryDispatchFrames`, `WorkStateFrames`. |
 
@@ -866,7 +866,37 @@ The new composition hit local heartbeat limits during nested record projection;
 explicit frame projections and a generic count-decrement contract resolved them
 without raising any limit.
 
-Remaining: private-key collision removal and mixed-attribute outer composition; queued-work/live-keypair peer
+`LiveRemovalModel` and `LiveRemovalSource` now remove the empty-key-slot
+restriction for original `peerRemoveAfterDead` and `peerRemove`. Their two total
+contracts use static `ClearReady`: resident, non-NULL-word keys with enough
+references for their slot multiplicities, including aliases. The first theorem
+derives the ordered `ClearRun`; it does not assume an operational clear witness.
+The outer theorem retains the existing allowed-IP `RemovalEffect` witness.
+Both require a resident peer, positive peer reference/device count and empty
+send/clear queues; after-death removal additionally requires the dead flag.
+
+The suffix starts from the actual cleared device, performs the five timer
+writes, empty drain, count decrement and final release, and never repeats the
+slot writes over the pre-clear device. Last-reference release erases/purges;
+otherwise the dead peer remains. These are exact Device effects, not global
+ownership or dispatch-association contracts. `LiveRemovalFrames` separately
+proves the clear relation preserves queues/count and allowed-IP removal
+preserves the keypair store, which transports the static readiness premise.
+No new owner-equality, slot-distinctness or queue-coherence premise was added.
+
+H4 now has 62 headlines and the campaign 180. The capped full-parallel Config
+build passed (176 jobs), all 62 headline axiom checks and fresh stock replay
+passed, and all 180 campaign headlines import and pass standard-axiom
+inspection together. Structural gate checks pass; the full gate remains failed
+in the unchanged inherited files. Independent review closed with no findings.
+An initial 800k-heartbeat Lean elaboration timeout was corrected by projecting
+peer/count facts before monadic composition, without raising a limit. No cap
+hit, guest timeout or infrastructure rerun. Reproduce with `LEAN_NUM_THREADS=32
+capped -- scripts/in-bundle lake build Leanux.Proofs.WG.Config.Statements`,
+capped `lake env lean --stdin` for headline axioms, and capped `lake env
+leanchecker --fresh Leanux.Proofs.WG.Config.Statements`.
+
+Remaining: private-key collision removal and mixed-attribute outer composition; queued-work peer
 removal/replacement and allowed-IP ownership, other partial-error combinations,
 and general dump chunks/coalescing. Deferred removal work can change other
 peers' dynamic state, so no unrestricted removal frame is claimed.
@@ -883,7 +913,7 @@ check: both the C and the mirror's own design require restoring pre-nest room.
 gives the witness and reproduction command. Ranked mirror suggestion 1:
 correct the saved cancellation snapshot (altitude-preserving).
 
-Validation: all sixty statements pass scoped build, standard-axiom inspection
+Validation of the preceding sixty-statement checkpoint: scoped build and standard-axiom inspection passed
 (only `propext`, `Classical.choice`, `Quot.sound`), and `capped --
 scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Config.Statements`.
 The full proof gate fails in inherited `CounterWindow.Refinement` and

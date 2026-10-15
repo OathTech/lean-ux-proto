@@ -1,6 +1,7 @@
 import Leanux.Proofs.WG.Config.SourceClaims
 import Leanux.Proofs.WG.Config.ClaimView
 import Leanux.Proofs.WG.Config.ObservationBridge
+import Leanux.Proofs.WG.Config.LiveRemovalSource
 
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise
@@ -760,5 +761,35 @@ theorem original_peer_remove_quiet (pid : PeerId) (d removed : Device) (p : Peer
       (fun _ w => w.wg.device = some (quietRemovedDevice (deadPeerDevice removed pid p) pid
         { erasePeerList p.allowedipsList p with isDead := true })) :=
   SourceClaims.original_peer_remove_quiet pid d removed p resident live count empty send clear steps
+
+/-- A resident dead peer with a static reference budget for its possibly aliased
+key slots and empty send/clear queues completes original after-death removal.
+The exact effect starts with ordered key clearing, then deletes timers, decrements
+the peer count and releases the peer. It supplies no clear-run witness as a premise
+and does not cover queued work. -/
+theorem original_peer_remove_after_dead_live (pid : PeerId) (d : Device) (p : Peer)
+    (resident : d.peers[pid]? = some p) (dead : p.isDead = true)
+    (live : 0 < p.refcount) (count : 0 < d.numPeers)
+    (ready : ClearReady d (clearKeys p))
+    (send : d.sendWorkQueue = []) (clear : d.clearWorkQueue = []) :
+    Campaign2.Returns (peerRemoveAfterDead pid) (fun w => w.wg.device = some d)
+      (fun _ w => ∃ final, w.wg.device = some final ∧ LiveRemovalEffect pid d p final) :=
+  peerRemoveAfterDead_live_returns pid d p resident dead live count ready send clear
+
+/-- Original peer removal supports live and aliased key slots under their static
+reference budget. The supplied allowed-IP removal witness is followed by death,
+actual key releases, timer deletions, the empty work drain, count decrement and
+final peer release. The peer remains resident when its final put is not its last
+reference. Empty send/clear queues remain an explicit boundary. -/
+theorem original_peer_remove_live (pid : PeerId) (d removed : Device) (p : Peer)
+    (resident : d.peers[pid]? = some p) (live : 0 < p.refcount) (count : 0 < d.numPeers)
+    (ready : ClearReady d (clearKeys p))
+    (send : d.sendWorkQueue = []) (clear : d.clearWorkQueue = [])
+    (steps : RemovalEffect (unlistPeer d pid) p.allowedipsList removed) :
+    Campaign2.Returns (peerRemove (some pid)) (fun w => w.wg.device = some d)
+      (fun _ w => ∃ final, w.wg.device = some final ∧
+        LiveRemovalEffect pid (deadPeerDevice removed pid p)
+          { erasePeerList p.allowedipsList p with isDead := true } final) :=
+  peerRemove_live_returns pid d removed p resident live count ready send clear steps
 
 end Leanux.Proofs.WG.Config
