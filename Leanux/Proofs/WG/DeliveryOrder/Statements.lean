@@ -22,6 +22,7 @@ import Leanux.Proofs.WG.Queues.RxNapiHistory
 import Leanux.Proofs.WG.Queues.RxActivationHistory
 import Leanux.Proofs.WG.Queues.RxScheduleHistory
 import Leanux.Proofs.WG.Queues.RxEnvBatchHistory
+import Leanux.Proofs.WG.Queues.RxEnvControlsHistory
 
 /-! R4 queue components: physical-ring refusal, original prev_queue FIFO laws,
 and successful-endpoint receive-queue helper frames. Whole recorded-schedule delivery,
@@ -1278,5 +1279,40 @@ theorem original_batch_joint (d : Device) (cqes : List Int) (item : Leanux.Env.B
     fun w hi => (Queues.RxHistory.batchItem_preserves d cqes item w [] (Queues.RxHistory.boundary_initial w hi)).choose_spec.2.1⟩,
   ⟨Queues.RxHistory.batch_erases items, Queues.RxHistory.batch_projects items, Queues.RxHistory.batch_preserves items,
     fun w hi => (Queues.RxHistory.batch_preserves items w [] (Queues.RxHistory.boundary_initial w hi)).choose_spec.2.1⟩⟩
+
+/-- Every original deferred caller has exact source and full-audit correspondence.
+Recorded/placeholder timer passes observe actual crypt/send continuations; the
+placeholder reset and absent return precede its poll-free saved-peer timer block.
+Wait records, failed callbacks and prior consistency probes retain source order. -/
+theorem original_environment_deferred_joint (call : Lifetimes.EnvDeferredCall) :
+    ErasesPrefix (Queues.RxHistory.deferred call) call.original ∧
+    ProjectsUnder Lifetimes.AuditInv Queues.RxHistory.auditEvent
+      (Queues.RxHistory.deferred call) call.observed ∧
+    PrefixPreserves Queues.RxHistory.BoundaryInv Queues.RxHistory.BoundarySafe
+      (Queues.RxHistory.deferred call) ∧
+    ∀ w, Lifetimes.AllocationInv [] w →
+      Queues.RxHistory.BoundarySafe (runPrefix (Queues.RxHistory.deferred call) w []).2 :=
+  ⟨Queues.RxHistory.deferred_erases call, Queues.RxHistory.deferred_projects call,
+    Queues.RxHistory.deferred_preserves call,
+    fun w hi => (Queues.RxHistory.deferred_preserves call w []
+      (Queues.RxHistory.boundary_initial w hi)).choose_spec.2.1⟩
+
+/-- Every remaining original environment caller, including observation, uses its
+concrete stamped timer/traffic path or an inspected poll-free control observer.
+The same incoming audit history projects directly, with failed-prefix uniqueness
+and normal release boundaries. Initialized syscall/Runner composition, successful
+stack delivery and joint receive-pipeline conservation remain separate obligations. -/
+theorem original_environment_remaining_joint (call : Lifetimes.EnvRemainingCall) :
+    ErasesPrefix (Queues.RxHistory.remaining call) call.original ∧
+    ProjectsUnder Lifetimes.AuditInv Queues.RxHistory.auditEvent
+      (Queues.RxHistory.remaining call) call.observed ∧
+    PrefixPreserves Queues.RxHistory.BoundaryInv Queues.RxHistory.BoundarySafe
+      (Queues.RxHistory.remaining call) ∧
+    ∀ w, Lifetimes.AllocationInv [] w →
+      Queues.RxHistory.BoundarySafe (runPrefix (Queues.RxHistory.remaining call) w []).2 :=
+  ⟨Queues.RxHistory.remaining_erases call, Queues.RxHistory.remaining_projects call,
+    Queues.RxHistory.remaining_preserves call,
+    fun w hi => (Queues.RxHistory.remaining_preserves call w []
+      (Queues.RxHistory.boundary_initial w hi)).choose_spec.2.1⟩
 
 end Leanux.Proofs.WG.DeliveryOrder
