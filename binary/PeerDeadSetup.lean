@@ -17,7 +17,7 @@ theorem dead_negative_trace (fetch : Int64 → Option Decoded)
     historySteps fetch 2 (fun t => ∃ af₁ af₂,
       t.machine = ⟨zeroed (zeroed body (.low .rsi .W32) af₁) (.low .rdi .W32) af₂,
         Image.PeerGet.entry+0xb9⟩ ∧
-      ScanTrace base coverage preempt rxSection history
+      StableTrace base coverage preempt rxSection history
         (events ++ [LookupObservation.decision rxSection .refcountAddNzNegative false
           ⟨zeroed body (.low .rsi .W32) af₁, Image.PeerGet.entry+0xb7⟩]) t)
       ⟨⟨body, Image.PeerGet.entry+0xb5⟩, history⟩ := by
@@ -30,7 +30,7 @@ theorem dead_negative_trace (fetch : Int64 → Option Decoded)
     apply firstFrame.congr <;> rfl
   rw [machine] at recorded
   refine ⟨af₁, af₂, machine,
-    ScanTrace.of_observed_suffix observed last _ recorded ?_ ?_ _
+    StableTrace.of_observed_suffix observed last _ recorded ?_ ?_ _
       (dead_negative_observed rxSection body af₁ af₂) ?_⟩
   · simpa only [machine] using secondFrame
   · simp [machine]
@@ -54,7 +54,7 @@ theorem dead_result_trace (fetch : Int64 → Option Decoded)
     historySteps fetch 2 (fun t => ∃ af₁ af₂,
       t.machine = ⟨zeroed (zeroed body (.low .rsi .W32) af₁) (.low .rdi .W32) af₂,
         Image.PeerGet.entry+0xd8⟩ ∧
-      ScanTrace base coverage preempt rxSection history
+      StableTrace base coverage preempt rxSection history
         (events ++ [LookupObservation.decision rxSection .peerGetMaybeZeroDead true
           ⟨zeroed body (.low .rsi .W32) af₁, Image.PeerGet.entry+0xd6⟩]) t)
       ⟨⟨body, Image.PeerGet.entry+0xd4⟩, history⟩ := by
@@ -67,7 +67,7 @@ theorem dead_result_trace (fetch : Int64 → Option Decoded)
     apply firstFrame.congr <;> rfl
   rw [machine] at recorded
   refine ⟨af₁, af₂, machine,
-    ScanTrace.of_observed_suffix observed last _ recorded ?_ ?_ _
+    StableTrace.of_observed_suffix observed last _ recorded ?_ ?_ _
       (dead_result_observed rxSection body af₁ af₂) ?_⟩
   · simpa only [machine] using secondFrame
   · simp [machine]
@@ -88,7 +88,7 @@ theorem dead_wrap_trace (fetch : Int64 → Option Decoded)
     (last : history.getLast? = some ⟨body, Image.PeerGet.entry+0xc3⟩) :
     historySteps fetch 2 (fun t => ∃ af,
       t.machine = ⟨zeroed (oneArgument body) (.low .rdi .W32) af, Image.PeerGet.entry+0xca⟩ ∧
-      ScanTrace base coverage preempt rxSection history
+      StableTrace base coverage preempt rxSection history
         (events ++ [LookupObservation.decision rxSection .refcountAddNzWraps false
           ⟨oneArgument body, Image.PeerGet.entry+0xc8⟩]) t)
       ⟨⟨body, Image.PeerGet.entry+0xc3⟩, history⟩ := by
@@ -99,7 +99,7 @@ theorem dead_wrap_trace (fetch : Int64 → Option Decoded)
   have secondFrame : ScanFrame base coverage preempt (zeroed (oneArgument body) (.low .rdi .W32) af) := by
     apply firstFrame.congr <;> rfl
   rw [machine] at recorded
-  refine ⟨af, machine, ScanTrace.of_observed_suffix observed last _ recorded ?_ ?_ _
+  refine ⟨af, machine, StableTrace.of_observed_suffix observed last _ recorded ?_ ?_ _
     (dead_wrap_observed rxSection body af) ?_⟩
   · simpa only [machine] using secondFrame
   · simp [machine]

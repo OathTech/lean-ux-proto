@@ -72,6 +72,7 @@ theorem bucket_related (fetch : Int64 → Option Decoded)
         observeHistory (LookupObservation.edge c.rxSection) t.history = .ok (prior ++ delta) ∧
         R c t.history (seen ++ delta) t.machine
           (LookupSearch.result c.kinds c.query v.bucket sourceHistory world).2 ∧
+        PeerCountPhase.StableExtension history t.history ∧
         ∃ tail, t.history = history ++ tail ∧
           ∀ state ∈ tail, state.pc ∈ Image.cutPoints →
             EqualOutside (scanWrites base coverage) base.dmem state.data.dmem)
@@ -103,7 +104,7 @@ theorem bucket_related (fetch : Int64 → Option Decoded)
     (ScanFrame.initial base coverage preempt ready) bucket history prior rawObserved related.1
   apply eventually_weaken (historyStep fetch) _ _ _ _ run
   rintro t ⟨stop, frame, last, ⟨delta, records, tags, rawFull⟩,
-    before, after, recorded, firstCuts, secondCuts, _⟩
+    stable, before, after, recorded, firstCuts, secondCuts, _⟩
   have extended : t.history = history ++ (before ++ after) := by
     simpa only [List.append_assoc] using recorded
   have full := LookupObservation.observe_extend_raw c.rxSection history (before ++ after)
@@ -120,7 +121,7 @@ theorem bucket_related (fetch : Int64 → Option Decoded)
   have mapped : (cells c v).map Prod.snd = v.bucket := by simp [cells, List.map_map, Function.comp_def]
   have sourceFinal := (LookupSearch.result_worlds c.kinds c.query (cells c v) sourceHistory world).2
   rw [mapped, related.2.2.2] at sourceFinal
-  refine ⟨stop, frame, last, delta, records, tags, ?_, ?_, rawFull, ?_, before ++ after, extended, ?_⟩
+  refine ⟨stop, frame, last, delta, records, tags, ?_, ?_, rawFull, ?_, stable, before ++ after, extended, ?_⟩
   · exact bucket_delta_cuts c.rxSection c.query c.kinds (cells c v) t.history prior delta records tags rawFull
   · simpa only [← extended] using full
   · rw [sourceFinal]
@@ -334,13 +335,14 @@ theorem bucket_simulation (fetch : Int64 → Option Decoded)
         ExecutedCorrespondence.CutsAligned (R c) c.rxSection t.history
           (LookupSearch.result c.kinds c.query v.bucket sourceHistory world).1.2 ∧
         R c t.history (seen ++ delta) t.machine
-          (LookupSearch.result c.kinds c.query v.bucket sourceHistory world).2)
+          (LookupSearch.result c.kinds c.query v.bucket sourceHistory world).2 ∧
+        PeerCountPhase.StableExtension history t.history)
       ⟨⟨base, Image.Lookup.entry+0x2f⟩, history⟩ := by
   have run := bucket_related fetch agree tracePc traceCmp traceConstCmp c world v projected
     base coverage preempt ready entryBucket currentCount history seen prior related observed rawObserved inactive
     noReturn query mask cursor apart sourceHistory
   apply eventually_weaken (historyStep fetch) _ _ _ _ run
-  rintro t ⟨stop, frame, last, delta, records, tags, cuts, observedFull, rawFull, finalR, tail, recorded, frames⟩
+  rintro t ⟨stop, frame, last, delta, records, tags, cuts, observedFull, rawFull, finalR, stable, tail, recorded, frames⟩
   have separate : ∀ view, project c world = some view →
       ∀ address, Reads c view address → ¬scanWrites base coverage address := by
     intro view projection address read
@@ -361,7 +363,7 @@ theorem bucket_simulation (fetch : Int64 → Option Decoded)
   have mapped : (cells c v).map Prod.snd = v.bucket := by
     simp [cells, List.map_map, Function.comp_def]
   rw [mapped, related.2.2.2, ← records] at sourcePoints
-  refine ⟨stop, frame, delta, observedFull, rawFull, ?_, ?_, finalR⟩
+  refine ⟨stop, frame, delta, observedFull, rawFull, ?_, ?_, finalR, stable⟩
   · simpa only [recorded, sourcePoints] using allPoints
   · simpa only [recorded, sourcePoints] using allCuts
 

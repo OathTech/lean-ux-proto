@@ -70,7 +70,7 @@ theorem scan_search (fetch : Int64 → Option Decoded) (agree : AnchoredDecoderA
     Eventually (historyStep fetch) (fun t =>
       ScanStop query es t.machine ∧ ∃ delta,
       delta.filterMap (·.step) = scanSteps rxSection query es ∧ DecisionPoints delta ∧
-      ScanTrace base coverage preempt rxSection history (events ++ delta) t)
+      StableTrace base coverage preempt rxSection history (events ++ delta) t)
       ⟨⟨s, Image.Lookup.entry+(if first then 0x2f else 0x67)⟩, history⟩ := by
   induction es generalizing s first history events with
   | nil =>

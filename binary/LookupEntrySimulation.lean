@@ -126,6 +126,7 @@ theorem start_simulation (fetch : Int64 → Option Decoded)
         [entryPoint s] [sourceEntry world] ∧
       ExecutedCorrespondence.CutsAligned (R c) c.rxSection t.history [sourceEntry world] ∧
       R c t.history [entryPoint s] t.machine world ∧
+      PeerCountPhase.StableExtension [⟨s, Image.Lookup.entry⟩] t.history ∧
       ∃ tail, t.history = [⟨s, Image.Lookup.entry⟩] ++ tail ∧
         ∀ q ∈ tail, q.pc ∈ Image.cutPoints →
           EqualOutside (Lookup.entryWrites s coverage) s.dmem q.data.dmem)
@@ -138,7 +139,7 @@ theorem start_simulation (fetch : Int64 → Option Decoded)
     mapped pushSeparate returnSeparate metadataSeparate preemptSeparate c.rxSection
     [⟨s, Image.Lookup.entry⟩] [] initialRaw rfl
   apply eventually_weaken (historyStep fetch) _ _ _ _ run
-  rintro t ⟨pc, sp, bx, query, out, mask, r15, ready, memory, raw, last, tail, recorded, frames⟩
+  rintro t ⟨pc, sp, bx, query, out, mask, r15, ready, memory, raw, last, stable, tail, recorded, frames⟩
   have full := LookupObservation.observe_extend_raw c.rxSection
     [⟨s, Image.Lookup.entry⟩] tail [entryPoint s] [] [] initialObserved initialRaw
     (by simpa only [← recorded, List.append_nil] using raw)
@@ -153,7 +154,7 @@ theorem start_simulation (fetch : Int64 → Option Decoded)
   · exact ⟨by simpa only [← recorded] using extension.1,
       by simpa only [← recorded] using extension.2.1,
       by simpa only [← recorded] using extension.2.2,
-      tail, recorded, frames⟩
+      stable, tail, recorded, frames⟩
 
 theorem bucket_address (c : Config) (s : MachineData)
     (table : s.regs.rbx.toBitVec = c.table)
@@ -209,6 +210,7 @@ theorem header_simulation (fetch : Int64 → Option Decoded)
         (ExecutedCorrespondence.AtPoint (R c) c.rxSection t.history) seen sourceHistory ∧
       ExecutedCorrespondence.CutsAligned (R c) c.rxSection t.history sourceHistory ∧
       R c t.history seen t.machine world ∧
+      PeerCountPhase.StableExtension history t.history ∧
       ∃ tail, t.history = history ++ tail ∧
         ∀ q ∈ tail, q.pc ∈ Image.cutPoints →
           EqualOutside (InRange preemptCountAddress 4) s.dmem q.data.dmem)
@@ -264,6 +266,14 @@ theorem header_simulation (fetch : Int64 → Option Decoded)
   · exact ⟨by simpa only [← recorded] using extension.1,
       by simpa only [← recorded] using extension.2.1,
       by simpa only [← recorded] using extension.2.2,
+      (by
+        rw [recorded, ← history_restore related.1, List.append_assoc, List.singleton_append]
+        apply PeerCountPhase.StableExtension.of_ordinary
+        intro q member
+        simp only [bucketStates, List.dropLast_cons_cons, List.dropLast_singleton,
+          List.mem_cons, List.not_mem_nil, or_false] at member
+        rcases member with rfl | rfl | rfl | rfl <;>
+          constructor <;> simp [Image.Lookup.entry, Image.PeerGet.entry]),
       bucketStates s preempt head af, recorded,
       by intro q member _; simpa only [bucketStates_memory s preempt head af q member] using frame⟩
 

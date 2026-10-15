@@ -6,7 +6,7 @@ open TrustBase LookupHistory
 local instance : Labels := Image.linkedLabels
 
 /-- Complete actual zero-count path history from entry to the saved return.
-    This is physical/observational composition, not whole-World adequacy. -/
+    This is physical/observational composition, not all-cut helper adequacy. -/
 theorem dead_entry_history (fetch : Int64 → Option Decoded)
     (agree : AnchoredDecoderAgreement fetch) (contract : TracePcContract fetch)
     (traceCmp : TraceConstCmp4Contract fetch)
@@ -33,6 +33,7 @@ theorem dead_entry_history (fetch : Int64 → Option Decoded)
       final.machine.data.regs.rax = 0 ∧ LookupCoverage.Context.At coverage preempt final.machine.data.dmem ∧
       EqualOutside (entryWrites s coverage) s.dmem final.machine.data.dmem ∧
       final.history.getLast? = some final.machine ∧
+      PeerCountPhase.ReturningExtension history final.history ∧
       ∃ nullPoint zeroPoint negative wrap dead : MachineState,
         EqualOutside (entryWrites s coverage) s.dmem nullPoint.data.dmem ∧
         EqualOutside (entryWrites s coverage) s.dmem zeroPoint.data.dmem ∧
@@ -57,7 +58,7 @@ theorem dead_entry_history (fetch : Int64 → Option Decoded)
   have start := start_history fetch agree contract s coverage preempt state phase entry.1 mapped
     pushSeparate headerSeparate metadataSeparate preemptSeparate rxSection history events observed last
   apply eventually_trans (historyStep fetch) _ _ _ start
-  rintro body ⟨pc, sp, bx, ready, memory, seen, last, startTail, startRecorded, startCuts⟩
+  rintro body ⟨pc, sp, bx, ready, memory, seen, last, startStable, startTail, startRecorded, startCuts⟩
   have bodyBase : body.machine.data.regs.rsp.toBitVec = s.regs.rsp.toBitVec-48 := by simp [sp]
   have callbackSlot : body.machine.data.regs.rsp.toBitVec-8 = s.regs.rsp.toBitVec-56 := by
     rw [bodyBase, BitVec.sub_sub]
@@ -99,14 +100,14 @@ theorem dead_entry_history (fetch : Int64 → Option Decoded)
   have cursor : (⟨⟨body.machine.data, Image.PeerGet.entry+0x12⟩, body.history⟩ : Executed) = body := by rw [← pc]
   rw [cursor] at finish
   apply eventually_weaken (historyStep fetch) _ _ _ _ finish
-  rintro final ⟨returned, result, state, suffixFrame, last, nullPoint, zeroPoint, negative, wrap, dead,
+  rintro final ⟨returned, result, state, suffixFrame, last, returning, nullPoint, zeroPoint, negative, wrap, dead,
     nullFrame, zeroFrame, negativeFrame, wrapFrame, deadFrame, seen, tail, recorded, cuts⟩
   have transfer {after : Mem 64}
       (frame : EqualOutside (scanWrites body.machine.data coverage) body.machine.data.dmem after) :
       EqualOutside (entryWrites s coverage) s.dmem after := by
     intro address outside
     exact (initialFrame address outside).trans (frame address (fun written => outside (subset address written)))
-  refine ⟨returned, result, state, transfer suffixFrame, last,
+  refine ⟨returned, result, state, transfer suffixFrame, last, startStable.returning returning,
     nullPoint, zeroPoint, negative, wrap, dead, transfer nullFrame, transfer zeroFrame,
     transfer negativeFrame, transfer wrapFrame, transfer deadFrame, seen, startTail ++ tail, ?_, ?_⟩
   · rw [recorded, startRecorded, List.append_assoc]

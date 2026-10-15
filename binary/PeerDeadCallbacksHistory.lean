@@ -17,7 +17,7 @@ theorem dead_negative_stage (fetch : Int64 → Option Decoded)
     Eventually (historyStep fetch) (fun t => ∃ point : MachineState,
       t.machine.pc = Image.PeerGet.entry+0xbe ∧
       EqualOutside (scanWrites base coverage) base.dmem point.data.dmem ∧
-      ScanTrace base coverage preempt rxSection history
+      StableTrace base coverage preempt rxSection history
         (events ++ [LookupObservation.decision rxSection .refcountAddNzNegative false point]) t)
       ⟨⟨body, Image.PeerGet.entry+0xb0⟩, history⟩ := by
   have first := scan_call_cursor fetch "L_ffffffff810f3100"
@@ -64,7 +64,7 @@ theorem dead_wrap_stage (fetch : Int64 → Option Decoded)
     Eventually (historyStep fetch) (fun t => ∃ point : MachineState,
       t.machine.pc = Image.PeerGet.entry+0xcf ∧
       EqualOutside (scanWrites base coverage) base.dmem point.data.dmem ∧
-      ScanTrace base coverage preempt rxSection history
+      StableTrace base coverage preempt rxSection history
         (events ++ [LookupObservation.decision rxSection .refcountAddNzWraps false point]) t)
       ⟨⟨body, Image.PeerGet.entry+0xbe⟩, history⟩ := by
   have first := scan_call_cursor fetch "L_ffffffff810f3100"
@@ -111,7 +111,7 @@ theorem dead_result_stage (fetch : Int64 → Option Decoded)
     Eventually (historyStep fetch) (fun t => ∃ point : MachineState,
       t.machine.pc = Image.PeerGet.entry+0xdd ∧
       EqualOutside (scanWrites base coverage) base.dmem point.data.dmem ∧
-      ScanTrace base coverage preempt rxSection history
+      StableTrace base coverage preempt rxSection history
         (events ++ [LookupObservation.decision rxSection .peerGetMaybeZeroDead true point]) t)
       ⟨⟨body, Image.PeerGet.entry+0xcf⟩, history⟩ := by
   have first := scan_call_cursor fetch "L_ffffffff810f3100"
@@ -161,7 +161,7 @@ theorem dead_callbacks_history (fetch : Int64 → Option Decoded)
       EqualOutside (scanWrites body coverage) body.dmem negative.data.dmem ∧
       EqualOutside (scanWrites body coverage) body.dmem wrap.data.dmem ∧
       EqualOutside (scanWrites body coverage) body.dmem dead.data.dmem ∧
-      ScanTrace body coverage preempt rxSection history
+      StableTrace body coverage preempt rxSection history
         (events ++ [LookupObservation.decision rxSection .refcountAddNzNegative false negative,
           LookupObservation.decision rxSection .refcountAddNzWraps false wrap,
           LookupObservation.decision rxSection .peerGetMaybeZeroDead true dead]) t)

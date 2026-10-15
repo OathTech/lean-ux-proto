@@ -15,7 +15,7 @@ theorem live_negative_arguments_trace (fetch : Int64 → Option Decoded)
     historySteps fetch 2 (fun t => ∃ af,
       t.machine = ⟨xorMoved body (.low .rdi .W32) (.low .rsi .W32) (.low .rbp .W32) af,
         Image.PeerGet.entry+0x72⟩ ∧
-      ScanTrace base coverage preempt rxSection history events t)
+      StableTrace base coverage preempt rxSection history events t)
       ⟨⟨body, Image.PeerGet.entry+0x6e⟩, history⟩ := by
   apply historySteps_mono fetch 2 _ _ _ _ (negative_arguments_history fetch agree body history)
   rintro t ⟨af, machine, recorded⟩
@@ -25,7 +25,7 @@ theorem live_negative_arguments_trace (fetch : Int64 → Option Decoded)
       (xorMoved body (.low .rdi .W32) (.low .rsi .W32) (.low .rbp .W32) af) := by
     apply frame.congr <;> rfl
   rw [machine] at recorded
-  refine ⟨af, machine, ScanTrace.of_suffix observed last _ recorded ?_ ?_ ?_ ?_⟩
+  refine ⟨af, machine, StableTrace.of_suffix observed last _ recorded ?_ ?_ ?_ ?_⟩
   · simpa only [machine] using second
   · simp [machine]
   · simp [observeHistory, LookupObservation.edge, Image.Lookup.entry, Image.PeerGet.entry]
@@ -45,7 +45,7 @@ theorem live_wrap_arguments_trace (fetch : Int64 → Option Decoded)
     historySteps fetch 2 (fun t => ∃ af,
       t.machine = ⟨xorMoved body (.low .rdi .W32) (.low .rsi .W32) (.low .r12 .W32) af,
         Image.PeerGet.entry+0x85⟩ ∧
-      ScanTrace base coverage preempt rxSection history events t)
+      StableTrace base coverage preempt rxSection history events t)
       ⟨⟨body, Image.PeerGet.entry+0x80⟩, history⟩ := by
   apply historySteps_mono fetch 2 _ _ _ _ (wrap_arguments_history fetch agree body history)
   rintro t ⟨af, machine, recorded⟩
@@ -55,7 +55,7 @@ theorem live_wrap_arguments_trace (fetch : Int64 → Option Decoded)
       (xorMoved body (.low .rdi .W32) (.low .rsi .W32) (.low .r12 .W32) af) := by
     apply frame.congr <;> rfl
   rw [machine] at recorded
-  refine ⟨af, machine, ScanTrace.of_suffix observed last _ recorded ?_ ?_ ?_ ?_⟩
+  refine ⟨af, machine, StableTrace.of_suffix observed last _ recorded ?_ ?_ ?_ ?_⟩
   · simpa only [machine] using second
   · simp [machine]
   · simp [observeHistory, LookupObservation.edge, Image.Lookup.entry, Image.PeerGet.entry]
@@ -79,7 +79,7 @@ theorem live_result_arguments_trace (fetch : Int64 → Option Decoded)
     historySteps fetch 2 (fun t => ∃ af,
       t.machine = ⟨zeroed (body.setReg (.low .rsi .W32) (body.regs.get (.low .rbp .W32)))
         (.low .rdi .W32) af, Image.PeerGet.entry+0x98⟩ ∧
-      ScanTrace base coverage preempt rxSection history
+      StableTrace base coverage preempt rxSection history
         (events ++ [LookupObservation.decision rxSection .peerGetMaybeZeroDead false
           ⟨body.setReg (.low .rsi .W32) (body.regs.get (.low .rbp .W32)), Image.PeerGet.entry+0x96⟩]) t)
       ⟨⟨body, Image.PeerGet.entry+0x94⟩, history⟩ := by
@@ -91,7 +91,7 @@ theorem live_result_arguments_trace (fetch : Int64 → Option Decoded)
       (zeroed (body.setReg (.low .rsi .W32) (body.regs.get (.low .rbp .W32))) (.low .rdi .W32) af) := by
     apply frame.congr <;> rfl
   rw [machine] at recorded
-  refine ⟨af, machine, ScanTrace.of_observed_suffix observed last _ recorded ?_ ?_ _ ?_ ?_⟩
+  refine ⟨af, machine, StableTrace.of_observed_suffix observed last _ recorded ?_ ?_ _ ?_ ?_⟩
   · simpa only [machine] using second
   · simp [machine]
   · have h : (body.regs.get (.low .rbp .W32) == 0) = false := by

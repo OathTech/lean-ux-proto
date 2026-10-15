@@ -26,7 +26,7 @@ theorem live_callbacks_history (fetch : Int64 → Option Decoded)
       EqualOutside (scanWrites body coverage) body.dmem negative.data.dmem ∧
       EqualOutside (scanWrites body coverage) body.dmem wrap.data.dmem ∧
       EqualOutside (scanWrites body coverage) body.dmem dead.data.dmem ∧
-      ScanTrace body coverage preempt rxSection history
+      StableTrace body coverage preempt rxSection history
         (events ++ [LookupObservation.decision rxSection .refcountAddNzRetry false retry,
           LookupObservation.decision rxSection .refcountAddNzNegative false negative,
           LookupObservation.decision rxSection .refcountAddNzWraps false wrap,

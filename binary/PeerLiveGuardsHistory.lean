@@ -15,7 +15,7 @@ theorem nonzero_guard_trace (fetch : Int64 → Option Decoded)
     (last : history.getLast? = some ⟨body, Image.PeerGet.entry+0x3b⟩) :
     historySteps fetch 2 (fun t => ∃ af,
       t.machine = ⟨tested (.low .rbp .W32) body af, Image.PeerGet.entry+0x3f⟩ ∧
-      ScanTrace base coverage preempt rxSection history
+      StableTrace base coverage preempt rxSection history
         (events ++ [LookupObservation.decision rxSection .refcountAddNzZero false t.machine (some ((body.regs.get (.low .rbp .W32)).toNat, 0))]) t)
       ⟨⟨body, Image.PeerGet.entry+0x3b⟩, history⟩ := by
   apply historySteps_mono fetch 2 _ _ _ _ (peer_zero_guard fetch agree body history)
@@ -23,7 +23,7 @@ theorem nonzero_guard_trace (fetch : Int64 → Option Decoded)
   simp only [beq_iff_eq, accepted, ite_false] at machine recorded
   have nextFrame : ScanFrame base coverage preempt (tested (.low .rbp .W32) body af) :=
     frame.congr rfl rfl rfl rfl rfl rfl
-  refine ⟨af, machine, ScanTrace.of_observed_suffix observed last _ recorded ?_ ?_ _ ?_ ?_⟩
+  refine ⟨af, machine, StableTrace.of_observed_suffix observed last _ recorded ?_ ?_ _ ?_ ?_⟩
   · simpa only [machine] using nextFrame
   · simp [machine]
   · rw [machine]
@@ -46,7 +46,7 @@ theorem retry_guard_trace (fetch : Int64 → Option Decoded)
     (last : history.getLast? = some ⟨body, Image.PeerGet.entry+0x60⟩) :
     historySteps fetch 2 (fun t => ∃ af,
       t.machine = ⟨tested (.low .r15 .W8) body af, Image.PeerGet.entry+0x69⟩ ∧
-      ScanTrace base coverage preempt rxSection history
+      StableTrace base coverage preempt rxSection history
         (events ++ [LookupObservation.decision rxSection .refcountAddNzRetry false t.machine]) t)
       ⟨⟨body, Image.PeerGet.entry+0x60⟩, history⟩ := by
   apply historySteps_mono fetch 2 _ _ _ _ (peer_retry_guard fetch agree body history)
@@ -54,7 +54,7 @@ theorem retry_guard_trace (fetch : Int64 → Option Decoded)
   simp only [beq_iff_eq, accepted, ite_false] at machine recorded
   have nextFrame : ScanFrame base coverage preempt (tested (.low .r15 .W8) body af) :=
     frame.congr rfl rfl rfl rfl rfl rfl
-  refine ⟨af, machine, ScanTrace.of_observed_suffix observed last _ recorded ?_ ?_ _ ?_ ?_⟩
+  refine ⟨af, machine, StableTrace.of_observed_suffix observed last _ recorded ?_ ?_ _ ?_ ?_⟩
   · simpa only [machine] using nextFrame
   · simp [machine]
   · rw [machine]
@@ -77,7 +77,7 @@ theorem negative_guard_trace (fetch : Int64 → Option Decoded)
     (last : history.getLast? = some ⟨body, Image.PeerGet.entry+0x77⟩) :
     historySteps fetch 2 (fun t => ∃ af,
       t.machine = ⟨tested (.low .rbp .W32) body af, Image.PeerGet.entry+0x7b⟩ ∧
-      ScanTrace base coverage preempt rxSection history
+      StableTrace base coverage preempt rxSection history
         (events ++ [LookupObservation.decision rxSection .refcountAddNzNegative false t.machine]) t)
       ⟨⟨body, Image.PeerGet.entry+0x77⟩, history⟩ := by
   apply historySteps_mono fetch 2 _ _ _ _ (peer_negative_guard fetch agree body history)
@@ -85,7 +85,7 @@ theorem negative_guard_trace (fetch : Int64 → Option Decoded)
   simp only [accepted, Bool.false_eq_true, ite_false] at machine recorded
   have nextFrame : ScanFrame base coverage preempt (tested (.low .rbp .W32) body af) :=
     frame.congr rfl rfl rfl rfl rfl rfl
-  refine ⟨af, machine, ScanTrace.of_observed_suffix observed last _ recorded ?_ ?_ _ ?_ ?_⟩
+  refine ⟨af, machine, StableTrace.of_observed_suffix observed last _ recorded ?_ ?_ _ ?_ ?_⟩
   · simpa only [machine] using nextFrame
   · simp [machine]
   · rw [machine]
@@ -108,7 +108,7 @@ theorem wrap_guard_trace (fetch : Int64 → Option Decoded)
     (last : history.getLast? = some ⟨body, Image.PeerGet.entry+0x8a⟩) :
     historySteps fetch 2 (fun t => ∃ af,
       t.machine = ⟨tested (.low .r12 .W32) body af, Image.PeerGet.entry+0x8f⟩ ∧
-      ScanTrace base coverage preempt rxSection history
+      StableTrace base coverage preempt rxSection history
         (events ++ [LookupObservation.decision rxSection .refcountAddNzWraps false t.machine]) t)
       ⟨⟨body, Image.PeerGet.entry+0x8a⟩, history⟩ := by
   apply historySteps_mono fetch 2 _ _ _ _ (peer_wrap_guard fetch agree body history)
@@ -116,7 +116,7 @@ theorem wrap_guard_trace (fetch : Int64 → Option Decoded)
   simp only [accepted, Bool.false_eq_true, ite_false] at machine recorded
   have nextFrame : ScanFrame base coverage preempt (tested (.low .r12 .W32) body af) :=
     frame.congr rfl rfl rfl rfl rfl rfl
-  refine ⟨af, machine, ScanTrace.of_observed_suffix observed last _ recorded ?_ ?_ _ ?_ ?_⟩
+  refine ⟨af, machine, StableTrace.of_observed_suffix observed last _ recorded ?_ ?_ _ ?_ ?_⟩
   · simpa only [machine] using nextFrame
   · simp [machine]
   · rw [machine]

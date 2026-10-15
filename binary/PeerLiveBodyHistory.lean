@@ -37,6 +37,7 @@ theorem live_body_history (fetch : Int64 → Option Decoded)
       final.machine.data.dmem.loadInt (body.regs.rbx.toBitVec+0x420) 4 = some ((count.toBitVec+1).toNat : Int) ∧
       EqualOutside (peerWrites body coverage) body.dmem final.machine.data.dmem ∧
       final.history.getLast? = some final.machine ∧
+      PeerCountPhase.IncrementingReturn history final.history (body.regs.rbx.toBitVec+0x420) count.toBitVec ∧
       ∃ nullPoint zeroPoint retry negative wrap dead : MachineState,
         EqualOutside (scanWrites body coverage) body.dmem nullPoint.data.dmem ∧
         EqualOutside (scanWrites body coverage) body.dmem zeroPoint.data.dmem ∧
@@ -54,12 +55,14 @@ theorem live_body_history (fetch : Int64 → Option Decoded)
             LookupObservation.returned "wg_peer_get_maybe_zero" final.machine]) ∧
         ∃ before after, final.history = history ++ before ++ after ∧
           (∀ q ∈ before, q.pc ∈ Image.cutPoints → EqualOutside (scanWrites body coverage) body.dmem q.data.dmem) ∧
-          (∀ q ∈ after, q.pc ∈ Image.cutPoints → EqualOutside (scanWrites body coverage) (incrementPeerMemory body count) q.data.dmem))
+          (∀ q ∈ after, q.pc ∈ Image.cutPoints → EqualOutside (scanWrites body coverage) (incrementPeerMemory body count) q.data.dmem) ∧
+          PeerCountPhase.IncrementingReturnAt history (history ++ before) final.history
+            (body.regs.rbx.toBitVec+0x420) count.toBitVec)
       ⟨⟨body, Image.PeerGet.entry+0x12⟩, history⟩ := by
   have start := nonnull_prefix_history fetch agree tracePc traceCmp body nonnull count field
     coverage preempt ready fieldSeparate comparison rxSection history events observed last
   apply eventually_trans (historyStep fetch) _ _ _ start
-  rintro atZero ⟨pc, stack, bx, bp, address, ready₂, memory, last₂, af, observed₂, prefixTail, prefixRecorded, prefixCuts⟩
+  rintro atZero ⟨pc, stack, bx, bp, address, ready₂, memory, last₂, prefixStable, af, observed₂, prefixTail, prefixRecorded, prefixCuts⟩
   have old : atZero.machine.data.regs.get (.low .rbp .W32) = count.toBitVec := by
     simp [Reg64s.get, Reg64s.get64, Reg.base, Reg.offset, BitVec.drop, BitVec.take, bp]
     rw [BitVec.extractLsb'_setWidth_of_le (by decide)]
@@ -95,8 +98,8 @@ theorem live_body_history (fetch : Int64 → Option Decoded)
   have cursor : (⟨⟨atZero.machine.data, Image.PeerGet.entry+0x3b⟩, atZero.history⟩ : Executed) = atZero := by rw [← pc]
   rw [cursor] at finish
   apply eventually_weaken (historyStep fetch) _ _ _ _ finish
-  rintro final ⟨returned, result, state, finalCount, finalFrame, last, zeroPoint, retry, negative, wrap, dead,
-    zeroFrame, retryFrame, negativeFrame, wrapFrame, deadFrame, seen, before, after, recorded, beforeCuts, afterCuts⟩
+  rintro final ⟨returned, result, state, finalCount, finalFrame, last, phase, zeroPoint, retry, negative, wrap, dead,
+    zeroFrame, retryFrame, negativeFrame, wrapFrame, deadFrame, seen, before, after, recorded, beforeCuts, afterCuts, phaseAt⟩
   have increments : EqualOutside (scanWrites body coverage) (incrementPeerMemory body count) (incremented atZero.machine.data).dmem := by
     simp only [incrementPeerMemory, incremented, incrementMemory, address, old]
     exact memory.storeInt _ _ _
@@ -110,9 +113,11 @@ theorem live_body_history (fetch : Int64 → Option Decoded)
       EqualOutside (scanWrites body coverage) (incrementPeerMemory body count) m := by
     rw [scanEq] at framed
     intro a outside; exact (increments a outside).trans (framed a outside)
-  refine ⟨returned, result.trans bx, state, ?_, ?_, last, nullPoint, zeroPoint, retry, negative, wrap, dead,
+  have phase := prefixStable.incrementing phase
+  rw [address, old] at phase
+  refine ⟨returned, result.trans bx, state, ?_, ?_, last, phase, nullPoint, zeroPoint, retry, negative, wrap, dead,
     (fun _ _ => rfl), transferOld zeroFrame, transferNew retryFrame, transferNew negativeFrame,
-    transferNew wrapFrame, transferNew deadFrame, ?_, prefixTail ++ before, after, ?_, ?_, ?_⟩
+    transferNew wrapFrame, transferNew deadFrame, ?_, prefixTail ++ before, after, ?_, ?_, ?_, ?_⟩
   · simpa only [address, old] using finalCount
   · rw [writesEq] at finalFrame
     intro a outside; exact (memory a (fun h => outside (.inr h))).trans (finalFrame a outside)
@@ -123,6 +128,10 @@ theorem live_body_history (fetch : Int64 → Option Decoded)
     · exact prefixCuts q h cut
     · exact transferOld (beforeCuts q h cut)
   · intro q member cut; exact transferNew (afterCuts q member cut)
+
+  · rw [← List.append_assoc, ← prefixRecorded]
+    have h := prefixStable.incrementing_at phaseAt
+    simpa only [address, old] using h
 
 #print axioms live_body_history
 end Binary.PeerGet

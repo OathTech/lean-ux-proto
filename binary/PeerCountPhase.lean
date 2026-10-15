@@ -1,6 +1,5 @@
-import PeerCountState
+import PeerPhaseHistory
 import PeerIncrementHistory
-import ScanFrame
 
 namespace Binary.PeerCountPhase
 open PeerGet
@@ -34,25 +33,6 @@ theorem At.frame {pending before after address count writes}
       exact ⟨represented.1, equal.symm.trans represented.2⟩
     · simp only [At, selected, ite_false] at represented ⊢
       exact equal.symm.trans represented
-
-theorem scan_splice (pending : Option Pending) (front : List MachineState)
-    (shared : MachineState) (back : List MachineState) :
-    scan pending (front ++ shared :: back) = scan (scan pending (front ++ [shared])) (shared :: back) := by
-  induction front generalizing pending with
-  | nil => rfl
-  | cons before front ih =>
-    cases front with
-    | nil => rfl
-    | cons after front =>
-      simpa only [List.cons_append, scan] using ih (edge pending before after)
-
-theorem scan_snoc (pending : Option Pending) (history : List MachineState)
-    (before after : MachineState) (last : history.getLast? = some before) :
-    scan pending (history ++ [after]) = edge (scan pending history) before after := by
-  have restored := LookupHistory.history_restore last
-  rw [← restored]
-  rw [List.append_assoc, List.singleton_append]
-  exact scan_splice pending history.dropLast before [after]
 
 /-- Establish the phase from the actual successful CMPXCHG successor used
     by inc_cmpxchg_history. No old count is supplied independently. -/
@@ -118,35 +98,6 @@ theorem increment_history (fetch : Int64 → Option Decoded)
   refine ⟨machine, recorded, phase, ?_⟩
   rw [phase, machine]
   exact increment_at s
-
-theorem edge_silent (pending : Option Pending) (before after : MachineState)
-    (outside : Image.fetch before.pc = none) : edge pending before after = pending := by
-  have noReturn : before.pc ≠ Image.PeerGet.entry+0xaf := by
-    intro equal
-    rw [equal] at outside
-    cases outside
-  have noIncrement : before.pc ≠ Image.PeerGet.entry+0x4a := by
-    intro equal
-    rw [equal] at outside
-    cases outside
-  simp only [edge, noReturn, ite_false, noIncrement, false_and]
-
-/-- Named service contracts retain all their states. Their no-reentry
-    condition proves that those edges cannot reset or fabricate this phase. -/
-theorem scan_service (pending : Option Pending) (history : List MachineState)
-    (outside : TrustBase.NoAnchoredReentry history) : scan pending history = pending := by
-  induction history generalizing pending with
-  | nil => rfl
-  | cons before rest ih =>
-    cases rest with
-    | nil => rfl
-    | cons after rest =>
-      have first : Image.fetch before.pc = none := outside before (by simp)
-      have tail : TrustBase.NoAnchoredReentry (after :: rest) := by
-        intro s member
-        exact outside s (by simp only [List.dropLast_cons_cons, List.mem_cons]; exact Or.inr member)
-      simp only [scan, edge_silent pending before after first]
-      exact ih pending tail
 
 #print axioms At.functional
 #print axioms At.frame

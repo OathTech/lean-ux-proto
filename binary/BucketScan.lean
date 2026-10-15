@@ -89,6 +89,7 @@ theorem bucket_loop (fetch : Int64 → Option Decoded) (agree : AnchoredDecoderA
       t.history.getLast? = some t.machine ∧
       (∃ delta, delta.filterMap (·.step) = bucketSteps rxSection query kinds es ∧ DecisionPoints delta ∧
         observeHistory (LookupObservation.edge rxSection) t.history = .ok (events ++ delta)) ∧
+      PeerCountPhase.StableExtension history t.history ∧
       ∃ before after, t.history = history ++ before ++ after ∧
         ScanCuts base coverage preempt before ∧
         ScanCuts (bucketExitBase base query es) coverage preempt after ∧
@@ -105,7 +106,7 @@ theorem bucket_loop (fetch : Int64 → Option Decoded) (agree : AnchoredDecoderA
   | none =>
     apply Eventually.done
     obtain ⟨before, recorded, cuts⟩ := trace.extension
-    refine ⟨?_, ?_, trace.last, ⟨delta, ?_, tags, trace.observed⟩, before, [], ?_, cuts, ?_, by simp only [found]⟩
+    refine ⟨?_, ?_, trace.last, ⟨delta, ?_, tags, trace.observed⟩, trace.stable, before, [], ?_, cuts, ?_, by simp only [found]⟩
     · simpa only [BucketStop, ScanStop, found] using stop
     · simpa only [bucketExitBase, found] using trace.frame
     · simpa only [bucketSteps_split, found, List.append_nil] using records
@@ -124,11 +125,11 @@ theorem bucket_loop (fetch : Int64 → Option Decoded) (agree : AnchoredDecoderA
     have cursor : (⟨⟨t₁.machine.data, Image.Lookup.entry+0x95⟩, t₁.history⟩ : Executed) = t₁ := by rw [← hit.1]
     rw [cursor] at suffix
     apply eventually_weaken (historyStep fetch) _ _ _ _ suffix
-    rintro t₂ ⟨pc, bx, frame, observed, last, before, after, recorded, beforeCuts, afterCuts, boundary, boundaryLast, boundaryPC, boundaryFrame⟩
+    rintro t₂ ⟨pc, bx, frame, observed, last, stable, before, after, recorded, beforeCuts, afterCuts, boundary, boundaryLast, boundaryPC, boundaryFrame⟩
     let typePoints := [LookupObservation.decision rxSection .idxTypeMatch (kinds.contains e.kind) t₂.machine,
       LookupObservation.decision rxSection .idxFound (kinds.contains e.kind) t₂.machine]
     obtain ⟨scanTail, scanRecorded, scanCuts⟩ := trace.extension
-    refine ⟨?_, ?_, last, ⟨delta ++ typePoints, ?_, ?_, ?_⟩, scanTail ++ before, after, ?_,
+    refine ⟨?_, ?_, last, ⟨delta ++ typePoints, ?_, ?_, ?_⟩, trace.stable.trans stable, scanTail ++ before, after, ?_,
       scanCuts.append beforeCuts, ?_, ?_⟩
     · simpa only [BucketStop, found] using And.intro pc bx
     · simpa only [bucketExitBase, found] using frame

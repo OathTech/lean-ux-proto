@@ -27,7 +27,7 @@ theorem scan_type_arguments (fetch : Int64 → Option Decoded) (agree : Anchored
     (last : history.getLast? = some ⟨s, Image.Lookup.entry+0x9a⟩) :
     historySteps fetch 3 (fun t => ∃ af,
       t.machine = ⟨typeArguments s kind af, Image.Lookup.entry+0xa3⟩ ∧
-      ScanTrace (kindBase base kind) coverage preempt rxSection history events t)
+      StableTrace (kindBase base kind) coverage preempt rxSection history events t)
       ⟨⟨s, Image.Lookup.entry+0x9a⟩, history⟩ := by
   apply historySteps_mono fetch 3 _ _ _ _ (type_arguments fetch agree s kind history field)
   rintro t ⟨af₁, af₂, machine, recorded⟩
@@ -37,7 +37,7 @@ theorem scan_type_arguments (fetch : Int64 → Option Decoded) (agree : Anchored
     apply frame₁.congr <;> rfl
   have frame₃ : ScanFrame (kindBase base kind) coverage preempt (typeArguments s kind af₂) := by
     apply (frame.masked kind false).congr <;> rfl
-  refine ⟨af₂, machine, ScanTrace.of_suffix observed last _ recorded ?_ ?_ ?_ ?_⟩
+  refine ⟨af₂, machine, StableTrace.of_suffix observed last _ recorded ?_ ?_ ?_ ?_⟩
   · simpa only [machine] using frame₃
   · simp [machine]
   · simp [observeHistory, LookupObservation.edge, Image.Lookup.entry, Image.PeerGet.entry]
@@ -58,7 +58,7 @@ theorem scan_type_guard (fetch : Int64 → Option Decoded) (agree : AnchoredDeco
     (last : history.getLast? = some ⟨s, Image.Lookup.entry+0xa8⟩) :
     historySteps fetch 2 (fun t => ∃ af,
       t.machine = typeExit s af ∧
-      ScanTrace base coverage preempt rxSection history
+      StableTrace base coverage preempt rxSection history
         (events ++ [LookupObservation.decision rxSection .idxTypeMatch
           (decide (s.regs.get (.low .r14 .W32) ≠ 0)) t.machine,
           LookupObservation.decision rxSection .idxFound
@@ -69,7 +69,7 @@ theorem scan_type_guard (fetch : Int64 → Option Decoded) (agree : AnchoredDeco
   have endpoint : t.machine = typeExit s af := machine
   have nextFrame : ScanFrame base coverage preempt (tested (.low .r14 .W32) s af) :=
     frame.congr rfl rfl rfl rfl rfl rfl
-  refine ⟨af, endpoint, ScanTrace.of_observed_suffix observed last _ recorded ?_ ?_ _ ?_ ?_⟩
+  refine ⟨af, endpoint, StableTrace.of_observed_suffix observed last _ recorded ?_ ?_ _ ?_ ?_⟩
   · simpa only [endpoint, typeExit] using nextFrame
   · simp [endpoint, typeExit]
   · simpa only [endpoint, typeExit] using type_guard_observation rxSection s af
@@ -109,6 +109,7 @@ theorem matched_type_exit (fetch : Int64 → Option Decoded) (agree : AnchoredDe
         .ok (events ++ [LookupObservation.decision rxSection .idxTypeMatch (kinds.contains e.kind) t.machine,
           LookupObservation.decision rxSection .idxFound (kinds.contains e.kind) t.machine]) ∧
       t.history.getLast? = some t.machine ∧
+      PeerCountPhase.StableExtension history t.history ∧
       ∃ before after, t.history = history ++ before ++ after ∧
         ScanCuts base coverage preempt before ∧
         ScanCuts (kindBase base (.ofBitVec (kindWord e.kind))) coverage preempt after ∧
@@ -163,7 +164,7 @@ theorem matched_type_exit (fetch : Int64 → Option Decoded) (agree : AnchoredDe
   have suffix := trace₂.trans (trace₃.trans trace₄)
   obtain ⟨before, beforeEq, beforeCuts⟩ := trace₁.extension
   obtain ⟨after, afterEq, afterCuts⟩ := suffix.extension
-  refine ⟨?_, ?_, suffix.frame, ?_, suffix.last, before, after, ?_, beforeCuts, afterCuts,
+  refine ⟨?_, ?_, suffix.frame, ?_, suffix.last, trace₁.stable.trans suffix.stable, before, after, ?_, beforeCuts, afterCuts,
     t₁.machine, ?_, pc₁, trace₁.frame⟩
   · rw [machine₄]
     change (if t₃.machine.data.regs.get (.low .r14 .W32) == 0 then _ else _) = _

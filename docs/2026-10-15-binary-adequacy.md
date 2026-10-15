@@ -2128,3 +2128,62 @@ The complete peer-get all-cut relation, owner/BH/return composition, generic
 frame transport and function-level lookup theorem remain open. In particular,
 ScanFrame still discards callback no-reentry evidence; preserving the count
 scanner through the same executed prefixes is the next integration step.
+
+
+### Actual count phase through every helper path, 08:14:39 UTC
+
+The lookup prefix and bucket loop now retain scanner stability through their
+actual instruction histories. Service calls use the named contracts' retained
+NoAnchoredReentry evidence; absence of cuts alone is not substituted for it.
+The live helper retains the exact +0x44 history prefix shared by its count
+phase and old/new memory-frame partition. The NULL and zero-count helper
+paths retain scanner preservation through the final RET. No change was made
+to R, Pre_lookup, TrustBase, the mirror, or Kraken at this checkpoint.
+
+`PeerCountCuts` proves the count equation at every appended correspondence
+cut. Before CMPXCHG it is the ordinary old word; afterward it is the captured
+old operand with the physically incremented word; at RET it is the committed
+successor. The two raw successors before the store are proved not to be cuts.
+The count bound is a local arithmetic premise supplied by accepted source
+execution, not a new entry-domain restriction. `LookupHelperPhase` derives
+the activity guard from the actual observed prefixes. Its nonempty scanner
+seed is only a proof device for excluding earlier RET observations. It is
+propagated from the singleton lookup entry; these APIs are local to this
+anchored invocation, not histories containing an earlier completed helper.
+
+`LookupPeerSource` proves the exact returned source projection and preserves
+the embedded owner word even when the owner is the incremented peer.
+`LookupPeerRelation` supports committing that count using the executed write
+frame. `CorrespondencePrefix` restricts point matching to actual raw prefixes
+without changing the emitting occurrence, then composes it with proved
+cut-state relations. `PeerReturnObservation.helper_return_prefix` identifies
+the exact decision-only observation prefix before the final helper RET.
+These are supporting lemmas: the complete helper R theorem still needs their
+composition with its concrete source decision worlds and physical frames.
+
+Read-only review found the phase witness was initially separate from the
+physical old/new boundary. The remedy binds them to the same history prefix;
+the exact-boundary schedule and cut theorem were reviewed afterward. A second
+review found no incorrect phase/prefix guarantee or owner-word regression.
+It emphasized that prefix composition does not itself prove the cut-state R
+facts and that arbitrary return destinations still need the endpoint proof.
+
+The capped default build passed (303 jobs). Fresh kernel replays passed for
+LookupFromPre, PeerLiveEntryHistory, PeerDeadEntryHistory,
+PeerNullEntryHistory, LookupHelperPhase and LookupPeerSource, each including
+its imports. The final return-prefix amendment was rebuilt and LookupHelperPhase
+was replayed again. Printed axioms are standard only; the changed-path escape
+scan and diff check passed. Ordinary elaboration failures during development
+were fixed; no KILLED banner or timeout occurred. Reproduce with `capped --
+lake build` in binary/, then `capped -- lake env leanchecker --fresh MODULE`
+for each of the six modules above. The previously recorded three-way/witness
+runs remain the latest runtime checks; this checkpoint changes proofs only.
+
+Measured interval: 07:34:38 to 08:14:39 UTC, 2401 seconds. It adds phase
+composition and count equations, not a newly certified anchored region or
+function: zero new certified regions/functions, zero per agent-day. The
+proofs were hand-finished with mechanical scripted edits; no automated grind
+throughput is claimed. The complete helper simulation, owner/BH/return
+composition, generic untouched-WireGuard frame transport and function-level
+lookup theorem remain open. No landed property is yet transported. The
+verbatim TrustBase quoted above remains byte-for-byte current.

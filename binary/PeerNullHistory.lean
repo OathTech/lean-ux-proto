@@ -16,7 +16,7 @@ theorem null_guard_history (fetch : Int64 → Option Decoded)
     (last : history.getLast? = some ⟨body, Image.PeerGet.entry+0x12⟩) :
     historySteps fetch 2 (fun t => ∃ af,
       t.machine = ⟨tested (.low .rbx .W64) body af, Image.PeerGet.entry+0xdd⟩ ∧
-      ScanTrace base coverage preempt rxSection history
+      StableTrace base coverage preempt rxSection history
         (events ++ [LookupObservation.decision rxSection .peerGetMaybeZeroNull true t.machine]) t)
       ⟨⟨body, Image.PeerGet.entry+0x12⟩, history⟩ := by
   apply historySteps_mono fetch 2 _ _ _ _ (peer_null_guard fetch agree body history)
@@ -26,7 +26,7 @@ theorem null_guard_history (fetch : Int64 → Option Decoded)
   simp only [isZero, BEq.rfl, ite_true] at machine recorded
   have nextFrame : ScanFrame base coverage preempt (tested (.low .rbx .W64) body af) :=
     frame.congr rfl rfl rfl rfl rfl rfl
-  refine ⟨af, machine, ScanTrace.of_observed_suffix observed last _ recorded ?_ ?_ _ ?_ ?_⟩
+  refine ⟨af, machine, StableTrace.of_observed_suffix observed last _ recorded ?_ ?_ _ ?_ ?_⟩
   · simpa only [machine] using nextFrame
   · simp [machine]
   · rw [machine]
@@ -48,7 +48,7 @@ theorem clear_trace (fetch : Int64 → Option Decoded)
     (last : history.getLast? = some ⟨body, Image.PeerGet.entry+0xdd⟩) :
     historySteps fetch 2 (fun t =>
       t.machine.pc = Image.PeerGet.entry+0x9d ∧ t.machine.data.regs.rbx = 0 ∧
-      ScanTrace base coverage preempt rxSection history events t)
+      StableTrace base coverage preempt rxSection history events t)
       ⟨⟨body, Image.PeerGet.entry+0xdd⟩, history⟩ := by
   apply historySteps_mono fetch 2 _ _ _ _ (clear_history fetch agree body history)
   rintro t ⟨af, machine, recorded⟩
@@ -57,7 +57,7 @@ theorem clear_trace (fetch : Int64 → Option Decoded)
     apply frame.congr fields.2
     all_goals rw [fields.1]
   refine ⟨congrArg MachineState.pc machine, ?_,
-    ScanTrace.of_suffix observed last _ recorded ?_ ?_ (clear_observed rxSection body af) ?_⟩
+    StableTrace.of_suffix observed last _ recorded ?_ ?_ (clear_observed rxSection body af) ?_⟩
   · rw [machine, fields.1]
   · simpa only [machine] using nextFrame
   · simp [machine]
@@ -86,6 +86,7 @@ theorem null_suffix_history (fetch : Int64 → Option Decoded)
       LookupCoverage.Context.At coverage preempt final.machine.data.dmem ∧
       EqualOutside (scanWrites body coverage) body.dmem final.machine.data.dmem ∧
       final.history.getLast? = some final.machine ∧
+      PeerCountPhase.ReturningExtension history final.history ∧
       ∃ af, observeHistory (LookupObservation.edge rxSection) final.history =
         .ok (events ++ [LookupObservation.decision rxSection .peerGetMaybeZeroNull true
             ⟨tested (.low .rbx .W64) body af, Image.PeerGet.entry+0xdd⟩,
@@ -128,14 +129,14 @@ theorem null_suffix_history (fetch : Int64 → Option Decoded)
   have cursor₂ : (⟨⟨cleared.machine.data, Image.PeerGet.entry+0x9d⟩, cleared.history⟩ : Executed) = cleared := by rw [← pc₂]
   rw [cursor₂] at finish
   apply eventually_weaken (historyStep fetch) _ _ _ _ finish
-  rintro final ⟨returned, result, state, endFrame, seen, last, tail, recorded, cuts⟩
+  rintro final ⟨returned, result, state, endFrame, seen, last, returning, tail, recorded, cuts⟩
   have before := guardTrace.trans clearTrace
   have wholeFrame : EqualOutside (scanWrites body coverage) body.dmem final.machine.data.dmem := by
     rw [writeEq] at endFrame
     intro a outside
     exact (clearTrace.frame.memory a outside).trans (endFrame a outside)
   obtain ⟨earlier, earlierRecorded, earlierCuts⟩ := before.extension
-  refine ⟨returned, result.trans bx₂, state, wholeFrame, last, af, ?_, earlier ++ tail, ?_, ?_⟩
+  refine ⟨returned, result.trans bx₂, state, wholeFrame, last, before.stable.returning returning, af, ?_, earlier ++ tail, ?_, ?_⟩
   · simpa only [nullEvent, guardMachine, List.append_assoc, List.singleton_append] using seen
   · rw [recorded, earlierRecorded, List.append_assoc]
   · intro q member cut

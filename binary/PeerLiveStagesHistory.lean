@@ -18,7 +18,7 @@ theorem live_retry_stage (fetch : Int64 → Option Decoded)
       t.machine.pc = Image.PeerGet.entry+0x77 ∧
       t.machine.data.regs.rbx = body.regs.rbx ∧ t.machine.data.regs.rbp = body.regs.rbp ∧
       EqualOutside (scanWrites base coverage) base.dmem point.data.dmem ∧
-      ScanTrace base coverage preempt rxSection history
+      StableTrace base coverage preempt rxSection history
         (events ++ [LookupObservation.decision rxSection .refcountAddNzRetry false point]) t)
       ⟨⟨body, Image.PeerGet.entry+0x60⟩, history⟩ := by
   have guard := historySteps_eventually fetch 2 _ _
@@ -71,7 +71,7 @@ theorem live_negative_stage (fetch : Int64 → Option Decoded)
       t.machine.pc = Image.PeerGet.entry+0x8a ∧
       t.machine.data.regs.rbx = body.regs.rbx ∧ t.machine.data.regs.rbp = body.regs.rbp ∧
       EqualOutside (scanWrites base coverage) base.dmem point.data.dmem ∧
-      ScanTrace base coverage preempt rxSection history
+      StableTrace base coverage preempt rxSection history
         (events ++ [LookupObservation.decision rxSection .refcountAddNzNegative false point]) t)
       ⟨⟨body, Image.PeerGet.entry+0x77⟩, history⟩ := by
   have guard := historySteps_eventually fetch 2 _ _
@@ -127,7 +127,7 @@ theorem live_wrap_stage (fetch : Int64 → Option Decoded)
       t.machine.data.regs.rbx = body.regs.rbx ∧ t.machine.data.regs.rbp = body.regs.rbp ∧
       EqualOutside (scanWrites base coverage) base.dmem wrap.data.dmem ∧
       EqualOutside (scanWrites base coverage) base.dmem dead.data.dmem ∧
-      ScanTrace base coverage preempt rxSection history
+      StableTrace base coverage preempt rxSection history
         (events ++ [LookupObservation.decision rxSection .refcountAddNzWraps false wrap,
           LookupObservation.decision rxSection .peerGetMaybeZeroDead false dead]) t)
       ⟨⟨body, Image.PeerGet.entry+0x8a⟩, history⟩ := by

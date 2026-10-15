@@ -38,6 +38,7 @@ theorem start_history (fetch : Int64 → Option Decoded)
       EqualOutside (LookupCoverage.Context.writes coverage) (saveMemory s 6) t.machine.data.dmem ∧
       observeHistory (LookupObservation.edge rxSection) t.history = .ok events ∧
       t.history.getLast? = some t.machine ∧
+      PeerCountPhase.StableExtension history t.history ∧
       ∃ tail, t.history = history ++ tail ∧
         ∀ q ∈ tail, q.pc ∈ Image.cutPoints → EqualOutside (entryWrites s coverage) s.dmem q.data.dmem)
       ⟨⟨s, Image.Lookup.entry⟩, history⟩ := by
@@ -79,7 +80,7 @@ theorem start_history (fetch : Int64 → Option Decoded)
     (by simpa only [stack] using returnSeparate) metadataSeparate preemptSeparate rxSection
     (history ++ prologueStates s) events calleeObserved
   apply eventually_weaken (historyStep fetch) _ _ _ _ call
-  rintro t ⟨returned, state, frame, seen, last, serviceTail, serviceRecorded, serviceLast, noCuts, _noReentry⟩
+  rintro t ⟨returned, state, frame, seen, last, serviceTail, serviceRecorded, serviceLast, noCuts, noReentry⟩
   have sp : t.machine.data.regs.rsp = s.regs.rsp-40 := by
     rw [returned.2.1]
     change ((s.regs.rsp-40)-8)+8 = s.regs.rsp-40
@@ -112,9 +113,23 @@ theorem start_history (fetch : Int64 → Option Decoded)
     returnSeparate := by simpa only [bodySlot] using returnSeparate
     metadataSeparate := metadataSeparate
     preemptSeparate := preemptSeparate }
+  have prologueStable : PeerCountPhase.StableExtension history
+      ((history ++ prologueStates s) ++ [prologueCalled s]) := by
+    rw [← restored, List.append_assoc, List.append_assoc, List.singleton_append]
+    apply PeerCountPhase.StableExtension.of_ordinary
+    intro q member
+    simp only [prologueStates, List.cons_append, List.nil_append,
+      List.dropLast_cons_cons, List.dropLast_singleton, List.mem_cons, List.not_mem_nil, or_false] at member
+    rcases member with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;>
+      constructor <;> simp [Image.Lookup.entry, Image.PeerGet.entry]
+  have serviceStable := PeerCountPhase.StableExtension.service
+    (history ++ prologueStates s) (prologueCalled s) serviceTail noReentry
+  have stable : PeerCountPhase.StableExtension history t.history := by
+    rw [serviceRecorded]
+    exact prologueStable.trans serviceStable
   refine ⟨returned.1, sp, returned.2.2.1, returned.2.2.2.2.1,
     returned.2.2.2.2.2.1, returned.2.2.2.2.2.2.1, returned.2.2.2.2.2.2.2,
-    ready, memory, seen, last,
+    ready, memory, seen, last, stable,
     prologueStates s ++ prologueCalled s :: serviceTail, ?_, ?_⟩
   · simpa only [List.append_assoc] using serviceRecorded
   · intro q member cut

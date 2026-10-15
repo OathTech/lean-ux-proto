@@ -30,6 +30,7 @@ theorem live_finish_history (fetch : Int64 → Option Decoded)
       LookupCoverage.Context.At coverage preempt final.machine.data.dmem ∧
       EqualOutside (scanWrites body coverage) body.dmem final.machine.data.dmem ∧
       final.history.getLast? = some final.machine ∧
+      PeerCountPhase.ReturningExtension history final.history ∧
       ∃ retry negative wrap dead : MachineState,
         EqualOutside (scanWrites body coverage) body.dmem retry.data.dmem ∧
         EqualOutside (scanWrites body coverage) body.dmem negative.data.dmem ∧
@@ -72,13 +73,13 @@ theorem live_finish_history (fetch : Int64 → Option Decoded)
   have cursor₂ : (⟨⟨cleared.machine.data, Image.PeerGet.entry+0x9d⟩, cleared.history⟩ : Executed) = cleared := by rw [← pc₂]
   rw [cursor₂] at finish
   apply eventually_weaken (historyStep fetch) _ _ _ _ finish
-  rintro final ⟨returned, result, state, endFrame, seen, last, tail, recorded, cuts⟩
+  rintro final ⟨returned, result, state, endFrame, seen, last, returning, tail, recorded, cuts⟩
   have wholeFrame : EqualOutside (scanWrites body coverage) body.dmem final.machine.data.dmem := by
     rw [writeEq] at endFrame
     intro a outside
     exact (clearTrace.frame.memory a outside).trans (endFrame a outside)
   obtain ⟨earlier, earlierRecorded, earlierCuts⟩ := clearTrace.extension
-  refine ⟨returned, result.trans bx₂, state, wholeFrame, last, retry, negative, wrap, dead, retryFrame, negativeFrame, wrapFrame, deadFrame, ?_, earlier ++ tail, ?_, ?_⟩
+  refine ⟨returned, result.trans bx₂, state, wholeFrame, last, clearTrace.stable.returning returning, retry, negative, wrap, dead, retryFrame, negativeFrame, wrapFrame, deadFrame, ?_, earlier ++ tail, ?_, ?_⟩
   · simpa only [decisions, List.append_assoc, List.cons_append, List.nil_append] using seen
   · rw [recorded, earlierRecorded, List.append_assoc]
   · intro q member cut

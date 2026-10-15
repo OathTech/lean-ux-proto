@@ -23,6 +23,7 @@ def Started (c : Config) (world : World) (s : MachineData)
         [entryPoint s] [sourceEntry world] ∧
       ExecutedCorrespondence.CutsAligned (R c) c.rxSection t.history [sourceEntry world] ∧
       R c t.history [entryPoint s] t.machine world ∧
+      PeerCountPhase.StableExtension [⟨s, Image.Lookup.entry⟩] t.history ∧
       ∃ tail, t.history = [⟨s, Image.Lookup.entry⟩] ++ tail ∧
         ∀ q ∈ tail, q.pc ∈ Image.cutPoints →
           EqualOutside (Lookup.entryWrites s coverage) s.dmem q.data.dmem
@@ -117,6 +118,7 @@ structure BeforeBucket (c : Config) (world : World) (s : MachineData)
     [entryPoint s] [sourceEntry world]
   aligned : ExecutedCorrespondence.CutsAligned (R c) c.rxSection t.history [sourceEntry world]
   related : R c t.history [entryPoint s] t.machine world
+  stable : PeerCountPhase.StableExtension [⟨s, Image.Lookup.entry⟩] t.history
 
 private theorem low32_ofNat (v : BitVec 32) :
     (UInt64.ofNat v.toNat).toBitVec.extractLsb' 0 32 = v := by
@@ -134,7 +136,7 @@ theorem header_from_started (fetch : Int64 → Option Decoded)
     (u : Executed) (started : Started c world s ⟨coverage, preempt, v⟩ preempt u) :
     Eventually (historyStep fetch) (BeforeBucket c world s ⟨coverage, preempt, v⟩ preempt) u := by
   obtain ⟨pc, sp, bx, query, out, mask, saved, ready, memory, raw, observed,
-    matched, aligned, related, tail⟩ := started
+    matched, aligned, related, stable, tail⟩ := started
   have table : u.machine.data.regs.rbx.toBitVec = c.table := by rw [bx]; exact entry.table
   have queryReg : (u.machine.data.regs.get (.low .r12 .W32)).toNat = c.query := by
     simp only [Reg64s.get, Reg64s.get64, Reg.base, Reg.offset, BitVec.drop, BitVec.take, Width.bits, Nat.sub_zero, BitVec.extractLsb'_eq_self]
@@ -162,11 +164,11 @@ theorem header_from_started (fetch : Int64 → Option Decoded)
   rw [cursor] at run
   apply eventually_weaken (historyStep fetch) _ _ _ _ run
   rintro t ⟨pc', ⟨head, regs⟩, ready', loaded, memory', raw', observed',
-    matched', aligned', related', _⟩
+    matched', aligned', related', stable', _⟩
   exact ⟨pc', by simpa only [regs] using sp,
     by simpa only [regs, Reg64s.get, Reg64s.get64, Reg.base] using queryReg, by simpa only [regs] using out,
     by simpa only [regs, Reg64s.get, Reg64s.get64, Reg.base] using kindReg, by simpa only [regs] using saved,
-    ready', loaded, memory.trans memory', raw', observed', matched', aligned', related'⟩
+    ready', loaded, memory.trans memory', raw', observed', matched', aligned', related', stable.trans stable'⟩
 
 theorem header_from_pre (fetch : Int64 → Option Decoded)
     (agree : AnchoredDecoderAgreement fetch) (tracePc : TracePcContract fetch)
@@ -204,7 +206,8 @@ def AfterBucket (c : Config) (world : World) (s : MachineData)
       ExecutedCorrespondence.CutsAligned (R c) c.rxSection t.history
         (LookupSearch.result c.kinds c.query v.bucket [sourceEntry world] world).1.2 ∧
       R c t.history ([entryPoint s] ++ delta) t.machine
-        (LookupSearch.result c.kinds c.query v.bucket [sourceEntry world] world).2
+        (LookupSearch.result c.kinds c.query v.bucket [sourceEntry world] world).2 ∧
+      PeerCountPhase.StableExtension head.history t.history
 
 theorem bucket_from_head (fetch : Int64 → Option Decoded)
     (agree : AnchoredDecoderAgreement fetch) (tracePc : TracePcContract fetch)

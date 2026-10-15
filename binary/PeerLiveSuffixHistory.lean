@@ -33,6 +33,8 @@ theorem live_suffix_history (fetch : Int64 → Option Decoded)
       final.machine.data.dmem.loadInt body.regs.r13.toBitVec 4 = some ((body.regs.get (.low .rbp .W32)+1).toNat : Int) ∧
       EqualOutside (liveWrites body coverage) body.dmem final.machine.data.dmem ∧
       final.history.getLast? = some final.machine ∧
+      PeerCountPhase.IncrementingReturn history final.history body.regs.r13.toBitVec
+        (body.regs.get (.low .rbp .W32)) ∧
       ∃ zeroPoint retry negative wrap dead : MachineState,
         EqualOutside (scanWrites body coverage) body.dmem zeroPoint.data.dmem ∧
         EqualOutside (scanWrites body coverage) (incremented body).dmem retry.data.dmem ∧
@@ -51,7 +53,9 @@ theorem live_suffix_history (fetch : Int64 → Option Decoded)
           (∀ q ∈ before, q.pc ∈ Image.cutPoints →
             EqualOutside (scanWrites body coverage) body.dmem q.data.dmem) ∧
           (∀ q ∈ after, q.pc ∈ Image.cutPoints →
-            EqualOutside (scanWrites body coverage) (incremented body).dmem q.data.dmem))
+            EqualOutside (scanWrites body coverage) (incremented body).dmem q.data.dmem) ∧
+          PeerCountPhase.IncrementingReturnAt history (history ++ before) final.history
+            body.regs.r13.toBitVec (body.regs.get (.low .rbp .W32)))
       ⟨⟨body, Image.PeerGet.entry+0x3b⟩, history⟩ := by
   have start := live_zero_call_history fetch agree tracePc body coverage preempt ready nonzero
     rxSection history events observed last
@@ -90,7 +94,7 @@ theorem live_suffix_history (fetch : Int64 → Option Decoded)
   have cursor : (⟨⟨atIncrement.machine.data, Image.PeerGet.entry+0x44⟩, atIncrement.history⟩ : Executed) = atIncrement := by rw [← pc]
   rw [cursor] at finish
   apply eventually_weaken (historyStep fetch) _ _ _ _ finish
-  rintro final ⟨returned, result, state, finalCount, finalFrame, last, retry, negative, wrap, dead,
+  rintro final ⟨returned, result, state, finalCount, finalFrame, last, incrementPhase, retry, negative, wrap, dead,
     retryFrame, negativeFrame, wrapFrame, deadFrame, seen, tail, recorded, cuts⟩
   have increments : EqualOutside (scanWrites body coverage) (incremented body).dmem
       (incremented atIncrement.machine.data).dmem := by
@@ -103,9 +107,14 @@ theorem live_suffix_history (fetch : Int64 → Option Decoded)
     intro a outside
     exact (increments a outside).trans (framed a outside)
   obtain ⟨earlier, earlierRecorded, earlierCuts⟩ := trace.extension
-  refine ⟨returned, result.trans bx, state, ?_, ?_, last, zeroPoint, retry, negative, wrap, dead,
+  have phase : PeerCountPhase.IncrementingReturn history final.history body.regs.r13.toBitVec
+      (body.regs.get (.low .rbp .W32)) := by
+    obtain ⟨incAf, returnedPhase⟩ := incrementPhase
+    exact ⟨atIncrement.machine.data, atIncrement.history, incAf, trace.stable,
+      (by rw [← pc]; exact trace.last), congrArg UInt64.toBitVec address, old, returnedPhase⟩
+  refine ⟨returned, result.trans bx, state, ?_, ?_, last, phase, zeroPoint, retry, negative, wrap, dead,
     (fun _ _ => rfl), transfer retryFrame, transfer negativeFrame, transfer wrapFrame, transfer deadFrame,
-    ?_, earlier, tail, ?_, ?_, ?_⟩
+    ?_, earlier, tail, ?_, ?_, ?_, ?_⟩
   · simpa only [address, old] using finalCount
   · rw [writesEq] at finalFrame
     intro a outside
@@ -116,6 +125,11 @@ theorem live_suffix_history (fetch : Int64 → Option Decoded)
     exact (earlierCuts q member cut).memory
   · intro q member cut
     exact transfer (cuts q member cut)
+
+  · rw [← earlierRecorded]
+    obtain ⟨incAf, returnedPhase⟩ := incrementPhase
+    exact ⟨atIncrement.machine.data, incAf, trace.stable,
+      (by rw [← pc]; exact trace.last), congrArg UInt64.toBitVec address, old, returnedPhase⟩
 
 #print axioms live_suffix_history
 end Binary.PeerGet

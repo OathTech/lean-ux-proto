@@ -10,7 +10,7 @@ def incrementEntryMemory (s : MachineData) (count : UInt32) : Mem 64 :=
 
 /-- Complete accepted live helper history from entry through RET, with
     actual decisions and separate physical frames before/after the increment.
-    This is not yet the whole-World helper theorem. -/
+    This is not yet the helper all-cut R theorem. -/
 theorem live_entry_history (fetch : Int64 → Option Decoded)
     (agree : AnchoredDecoderAgreement fetch) (contract : TracePcContract fetch)
     (traceCmp : TraceConstCmp4Contract fetch) (traceByte : TraceConstCmp1Contract fetch)
@@ -41,6 +41,7 @@ theorem live_entry_history (fetch : Int64 → Option Decoded)
       final.machine.data.dmem.loadInt (s.regs.rdi.toBitVec+0x420) 4 = some ((count.toBitVec+1).toNat : Int) ∧
       EqualOutside (fun a => InRange (s.regs.rdi.toBitVec+0x420) 4 a ∨ entryWrites s coverage a) s.dmem final.machine.data.dmem ∧
       final.history.getLast? = some final.machine ∧
+      PeerCountPhase.IncrementingReturn history final.history (s.regs.rdi.toBitVec+0x420) count.toBitVec ∧
       ∃ nullPoint zeroPoint retry negative wrap dead : MachineState,
         EqualOutside (entryWrites s coverage) s.dmem nullPoint.data.dmem ∧
         EqualOutside (entryWrites s coverage) s.dmem zeroPoint.data.dmem ∧
@@ -58,7 +59,9 @@ theorem live_entry_history (fetch : Int64 → Option Decoded)
             LookupObservation.returned "wg_peer_get_maybe_zero" final.machine]) ∧
         ∃ before after, final.history = history ++ before ++ after ∧
           (∀ q ∈ before, q.pc ∈ Image.cutPoints → EqualOutside (entryWrites s coverage) s.dmem q.data.dmem) ∧
-          (∀ q ∈ after, q.pc ∈ Image.cutPoints → EqualOutside (entryWrites s coverage) (incrementEntryMemory s count) q.data.dmem))
+          (∀ q ∈ after, q.pc ∈ Image.cutPoints → EqualOutside (entryWrites s coverage) (incrementEntryMemory s count) q.data.dmem) ∧
+          PeerCountPhase.IncrementingReturnAt history (history ++ before) final.history
+            (s.regs.rdi.toBitVec+0x420) count.toBitVec)
       ⟨⟨s, Image.PeerGet.entry⟩, history⟩ := by
   have headerSeparate : LookupCoverage.Context.Separated coverage (InRange (s.regs.rsp.toBitVec-56) 8) := by
     intro address buffer inside
@@ -67,7 +70,7 @@ theorem live_entry_history (fetch : Int64 → Option Decoded)
   have start := start_history fetch agree contract s coverage preempt state phase entry.1 mapped
     pushSeparate headerSeparate metadataSeparate preemptSeparate rxSection history events observed last
   apply eventually_trans (historyStep fetch) _ _ _ start
-  rintro body ⟨pc, sp, bx, ready, memory, seen, last, startTail, startRecorded, startCuts⟩
+  rintro body ⟨pc, sp, bx, ready, memory, seen, last, startStable, startTail, startRecorded, startCuts⟩
   have bodyBase : body.machine.data.regs.rsp.toBitVec = s.regs.rsp.toBitVec-48 := by simp [sp]
   have callbackSlot : body.machine.data.regs.rsp.toBitVec-8 = s.regs.rsp.toBitVec-56 := by
     rw [bodyBase, BitVec.sub_sub]
@@ -119,8 +122,8 @@ theorem live_entry_history (fetch : Int64 → Option Decoded)
   have cursor : (⟨⟨body.machine.data, Image.PeerGet.entry+0x12⟩, body.history⟩ : Executed) = body := by rw [← pc]
   rw [cursor] at finish
   apply eventually_weaken (historyStep fetch) _ _ _ _ finish
-  rintro final ⟨returned, result, state, finalCount, finalFrame, last, nullPoint, zeroPoint, retry, negative, wrap, dead,
-    nullFrame, zeroFrame, retryFrame, negativeFrame, wrapFrame, deadFrame, seen, before, after, recorded, beforeCuts, afterCuts⟩
+  rintro final ⟨returned, result, state, finalCount, finalFrame, last, phase, nullPoint, zeroPoint, retry, negative, wrap, dead,
+    nullFrame, zeroFrame, retryFrame, negativeFrame, wrapFrame, deadFrame, seen, before, after, recorded, beforeCuts, afterCuts, phaseAt⟩
   have transferOld {m : Mem 64}
       (framed : EqualOutside (scanWrites body.machine.data coverage) body.machine.data.dmem m) :
       EqualOutside (entryWrites s coverage) s.dmem m := by
@@ -135,9 +138,11 @@ theorem live_entry_history (fetch : Int64 → Option Decoded)
       EqualOutside (entryWrites s coverage) (incrementEntryMemory s count) m := by
     intro a outside
     exact (increments a outside).trans (framed a (fun h => outside (subset a h)))
-  refine ⟨returned, result.trans bx, state, ?_, ?_, last, nullPoint, zeroPoint, retry, negative, wrap, dead,
+  have phase := startStable.incrementing phase
+  rw [bx] at phase
+  refine ⟨returned, result.trans bx, state, ?_, ?_, last, phase, nullPoint, zeroPoint, retry, negative, wrap, dead,
     transferOld nullFrame, transferOld zeroFrame, transferNew retryFrame, transferNew negativeFrame,
-    transferNew wrapFrame, transferNew deadFrame, seen, startTail ++ before, after, ?_, ?_, ?_⟩
+    transferNew wrapFrame, transferNew deadFrame, seen, startTail ++ before, after, ?_, ?_, ?_, ?_⟩
   · simpa only [bx] using finalCount
   · intro a outside
     exact (initialFrame a (fun h => outside (.inr h))).trans (finalFrame a (by
@@ -151,6 +156,10 @@ theorem live_entry_history (fetch : Int64 → Option Decoded)
     · exact startCuts q h cut
     · exact transferOld (beforeCuts q h cut)
   · intro q member cut; exact transferNew (afterCuts q member cut)
+
+  · rw [← List.append_assoc, ← startRecorded]
+    have h := startStable.incrementing_at phaseAt
+    simpa only [bx] using h
 
 #print axioms live_entry_history
 end Binary.PeerGet

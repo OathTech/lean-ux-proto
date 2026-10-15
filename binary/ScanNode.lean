@@ -12,7 +12,7 @@ theorem scan_container (fetch : Int64 → Option Decoded) (agree : AnchoredDecod
     (last : history.getLast? = some ⟨s, Image.Lookup.entry+0x39⟩) :
     historySteps fetch 1 (fun t =>
       t.machine = ⟨containerData s, Image.Lookup.entry+0x3d⟩ ∧
-      ScanTrace base coverage preempt rxSection history events t)
+      StableTrace base coverage preempt rxSection history events t)
       ⟨⟨s, Image.Lookup.entry+0x39⟩, history⟩ := by
   apply historySteps_mono fetch 1 _ _ _ _ (container_sub fetch agree s history)
   rintro t ⟨machine, recorded⟩
@@ -20,7 +20,7 @@ theorem scan_container (fetch : Int64 → Option Decoded) (agree : AnchoredDecod
   have nextFrame : ScanFrame base coverage preempt (containerData s) := by
     apply frame.congr fields.1
     all_goals rw [fields.2]
-  refine ⟨machine, ScanTrace.of_suffix observed last [t.machine] recorded ?_ (by simp) ?_ ?_⟩
+  refine ⟨machine, StableTrace.of_suffix observed last [t.machine] recorded ?_ (by simp) ?_ ?_⟩
   · simpa only [machine] using nextFrame
   · rw [machine]
     simp [observeHistory, LookupObservation.edge, Image.Lookup.entry, Image.PeerGet.entry]
@@ -37,7 +37,7 @@ theorem scan_entry_guard (fetch : Int64 → Option Decoded) (agree : AnchoredDec
     (last : history.getLast? = some ⟨s, Image.Lookup.entry+0x42⟩) :
     historySteps fetch 2 (fun t => ∃ af,
       t.machine = ⟨tested (.low .rbx .W64) s af, Image.Lookup.entry+0x47⟩ ∧
-      ScanTrace base coverage preempt rxSection history events t)
+      StableTrace base coverage preempt rxSection history events t)
       ⟨⟨s, Image.Lookup.entry+0x42⟩, history⟩ := by
   apply historySteps_mono fetch 2 _ _ _ _ (entry_guard fetch agree s history)
   rintro t ⟨af, machine, recorded⟩
@@ -46,7 +46,7 @@ theorem scan_entry_guard (fetch : Int64 → Option Decoded) (agree : AnchoredDec
   rw [jump] at machine recorded
   have nextFrame : ScanFrame base coverage preempt (tested (.low .rbx .W64) s af) :=
     frame.congr rfl rfl rfl rfl rfl rfl
-  refine ⟨af, machine, ScanTrace.of_suffix observed last _ recorded ?_ ?_ ?_ ?_⟩
+  refine ⟨af, machine, StableTrace.of_suffix observed last _ recorded ?_ ?_ ?_ ?_⟩
   · simpa only [machine] using nextFrame
   · simp [machine]
   · simp [observeHistory, LookupObservation.edge, Image.Lookup.entry, Image.PeerGet.entry]
@@ -63,7 +63,7 @@ theorem scan_index_arguments (fetch : Int64 → Option Decoded) (agree : Anchore
     (last : history.getLast? = some ⟨s, Image.Lookup.entry+0x4c⟩) :
     historySteps fetch 3 (fun t =>
       t.machine = ⟨indexArgs2 s index, Image.Lookup.entry+0x54⟩ ∧
-      ScanTrace base coverage preempt rxSection history events t)
+      StableTrace base coverage preempt rxSection history events t)
       ⟨⟨s, Image.Lookup.entry+0x4c⟩, history⟩ := by
   have frame₁ : ScanFrame base coverage preempt (indexLoaded s index) := by
     apply frame.congr <;> rfl
@@ -73,7 +73,7 @@ theorem scan_index_arguments (fetch : Int64 → Option Decoded) (agree : Anchore
     apply frame₂.congr <;> rfl
   apply historySteps_mono fetch 3 _ _ _ _ (index_arguments fetch agree s index history field)
   rintro t ⟨machine, recorded⟩
-  refine ⟨machine, ScanTrace.of_suffix observed last _ recorded ?_ ?_ ?_ ?_⟩
+  refine ⟨machine, StableTrace.of_suffix observed last _ recorded ?_ ?_ ?_ ?_⟩
   · simpa only [machine] using frame₃
   · simp [machine]
   · exact index_arguments_observation rxSection s index
@@ -104,7 +104,7 @@ theorem node_to_compare (fetch : Int64 → Option Decoded) (agree : AnchoredDeco
       t.machine.pc = Image.Lookup.entry+0x59 ∧ t.machine.data.regs.rbx.toBitVec = a ∧
       (t.machine.data.regs.get (.low .rbp .W32)).toNat = e.index ∧
       BucketShape t.machine.data.dmem (a+8) ((a,e)::rest) ∧
-      ScanTrace base coverage preempt rxSection history events t)
+      StableTrace base coverage preempt rxSection history events t)
       ⟨⟨s, Image.Lookup.entry+0x34⟩, history⟩ := by
   have first := scan_call_cursor fetch "L_ffffffff810f3100"
     ⟨⟨s, Image.Lookup.entry+0x34⟩, history⟩ (agree _ _ (by rfl)) .pc tracePc base coverage preempt

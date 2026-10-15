@@ -1,4 +1,5 @@
 import PeerSavedHistory
+import PeerPhaseExceptions
 import ScanFrame
 
 namespace Binary.PeerGet
@@ -30,6 +31,7 @@ theorem finish_9d_history (fetch : Int64 → Option Decoded)
       observeHistory (LookupObservation.edge rxSection) final.history =
         .ok (events ++ [LookupObservation.returned "wg_peer_get_maybe_zero" final.machine]) ∧
       final.history.getLast? = some final.machine ∧
+      PeerCountPhase.ReturningExtension history final.history ∧
       ∃ tail, final.history = history ++ tail ∧
         ∀ q ∈ tail, q.pc ∈ Image.cutPoints →
           EqualOutside (scanWrites body coverage) body.dmem q.data.dmem)
@@ -76,8 +78,15 @@ theorem finish_9d_history (fetch : Int64 → Option Decoded)
       initial.data.regs.r14 initial.data.regs.r15 returnAddress
   rw [restored, trace.observed, suffix] at seen
   obtain ⟨earlier, earlierRecorded, cuts⟩ := trace.extension
+  have returning : PeerCountPhase.ReturningExtension history final.history := by
+    apply trace.stable.returning
+    rw [recorded]
+    exact PeerCountPhase.returning_history afterCall.history afterCall.machine.data
+      initial.data.regs.rbx initial.data.regs.rbp initial.data.regs.r12 initial.data.regs.r13
+      initial.data.regs.r14 initial.data.regs.r15 returnAddress
+      (by rw [← pc]; exact trace.last)
   refine ⟨returned, result.trans bx, memory ▸ trace.frame.ready.state,
-    memory ▸ trace.frame.memory, ?_, ?_, earlier ++ epilogue, ?_, ?_⟩
+    memory ▸ trace.frame.memory, ?_, ?_, returning, earlier ++ epilogue, ?_, ?_⟩
   · rw [recorded, ← restored, List.append_assoc]
     exact seen
   · exact finalLast

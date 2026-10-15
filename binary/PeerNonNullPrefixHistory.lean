@@ -13,7 +13,7 @@ theorem nonnull_guard_history (fetch : Int64 → Option Decoded)
     (last : history.getLast? = some ⟨body, Image.PeerGet.entry+0x12⟩) :
     historySteps fetch 2 (fun t => ∃ af,
       t.machine = ⟨tested (.low .rbx .W64) body af, Image.PeerGet.entry+0x1b⟩ ∧
-      ScanTrace base coverage preempt rxSection history
+      StableTrace base coverage preempt rxSection history
         (events ++ [LookupObservation.decision rxSection .peerGetMaybeZeroNull false t.machine]) t)
       ⟨⟨body, Image.PeerGet.entry+0x12⟩, history⟩ := by
   apply historySteps_mono fetch 2 _ _ _ _ (peer_null_guard fetch agree body history)
@@ -26,7 +26,7 @@ theorem nonnull_guard_history (fetch : Int64 → Option Decoded)
   simp only [beq_iff_eq, nonzero, ite_false] at machine recorded
   have nextFrame : ScanFrame base coverage preempt (tested (.low .rbx .W64) body af) :=
     frame.congr rfl rfl rfl rfl rfl rfl
-  refine ⟨af, machine, ScanTrace.of_observed_suffix observed last _ recorded ?_ ?_ _ ?_ ?_⟩
+  refine ⟨af, machine, StableTrace.of_observed_suffix observed last _ recorded ?_ ?_ _ ?_ ?_⟩
   · simpa only [machine] using nextFrame
   · simp [machine]
   · rw [machine]
@@ -60,6 +60,7 @@ theorem nonnull_prefix_history (fetch : Int64 → Option Decoded)
       LookupCoverage.CallsReady coverage preempt t.machine.data ∧
       EqualOutside (scanWrites body coverage) body.dmem t.machine.data.dmem ∧
       t.history.getLast? = some t.machine ∧
+      PeerCountPhase.StableExtension history t.history ∧
       ∃ af, observeHistory (LookupObservation.edge rxSection) t.history =
         .ok (events ++ [LookupObservation.decision rxSection .peerGetMaybeZeroNull false
           ⟨tested (.low .rbx .W64) body af, Image.PeerGet.entry+0x1b⟩]) ∧
@@ -106,7 +107,7 @@ theorem nonnull_prefix_history (fetch : Int64 → Option Decoded)
   obtain ⟨later, recorded₂, cuts₂⟩ := trace₃.extension
   refine ⟨pc₃, trace₃.frame.stack.trans trace₂.frame.stack, bx₃.trans bx₂, bp₃,
     by simpa only [loaded, bx₂] using trace₃.frame.output,
-    trace₃.frame.ready, combine _ trace₃.frame.memory, trace₃.last, af, ?_, earlier ++ later, ?_, ?_⟩
+    trace₃.frame.ready, combine _ trace₃.frame.memory, trace₃.last, (trace₁.stable.trans trace₂.stable).trans trace₃.stable, af, ?_, earlier ++ later, ?_, ?_⟩
   · simpa only [event, machine₁] using trace₃.observed
   · rw [recorded₂, recorded₁, List.append_assoc]
   · intro q member cut

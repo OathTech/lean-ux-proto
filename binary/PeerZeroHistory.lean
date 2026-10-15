@@ -15,7 +15,7 @@ theorem zero_guard_history (fetch : Int64 → Option Decoded)
     (last : history.getLast? = some ⟨body, Image.PeerGet.entry+0x3b⟩) :
     historySteps fetch 2 (fun t => ∃ af,
       t.machine = ⟨tested (.low .rbp .W32) body af, Image.PeerGet.entry+0xb0⟩ ∧
-      ScanTrace base coverage preempt rxSection history
+      StableTrace base coverage preempt rxSection history
         (events ++ [LookupObservation.decision rxSection .refcountAddNzZero true t.machine (some (0, 0))]) t)
       ⟨⟨body, Image.PeerGet.entry+0x3b⟩, history⟩ := by
   apply historySteps_mono fetch 2 _ _ _ _ (peer_zero_guard fetch agree body history)
@@ -23,7 +23,7 @@ theorem zero_guard_history (fetch : Int64 → Option Decoded)
   simp only [zero, BEq.rfl, ite_true] at machine recorded
   have nextFrame : ScanFrame base coverage preempt (tested (.low .rbp .W32) body af) :=
     frame.congr rfl rfl rfl rfl rfl rfl
-  refine ⟨af, machine, ScanTrace.of_observed_suffix observed last _ recorded ?_ ?_ _ ?_ ?_⟩
+  refine ⟨af, machine, StableTrace.of_observed_suffix observed last _ recorded ?_ ?_ _ ?_ ?_⟩
   · simpa only [machine] using nextFrame
   · simp [machine]
   · rw [machine]
@@ -56,6 +56,7 @@ theorem zero_suffix_history (fetch : Int64 → Option Decoded)
       LookupCoverage.Context.At coverage preempt final.machine.data.dmem ∧
       EqualOutside (scanWrites body coverage) body.dmem final.machine.data.dmem ∧
       final.history.getLast? = some final.machine ∧
+      PeerCountPhase.ReturningExtension history final.history ∧
       ∃ af, ∃ negative wrap dead : MachineState,
         EqualOutside (scanWrites body coverage) body.dmem negative.data.dmem ∧
         EqualOutside (scanWrites body coverage) body.dmem wrap.data.dmem ∧
@@ -87,11 +88,11 @@ theorem zero_suffix_history (fetch : Int64 → Option Decoded)
   have cursor : (⟨⟨guarded.machine.data, Image.PeerGet.entry+0xb0⟩, guarded.history⟩ : Executed) = guarded := by rw [← pc]
   rw [cursor] at finish
   apply eventually_weaken (historyStep fetch) _ _ _ _ finish
-  rintro final ⟨returned, result, state, endFrame, last, negative, wrap, dead,
+  rintro final ⟨returned, result, state, endFrame, last, returning, negative, wrap, dead,
     negativeFrame, wrapFrame, deadFrame, seen, tail, recorded, cuts⟩
   simp only [data, tested, scanWrites] at endFrame negativeFrame wrapFrame deadFrame cuts
   obtain ⟨earlier, earlierRecorded, earlierCuts⟩ := trace.extension
-  refine ⟨returned, result, state, endFrame, last, af, negative, wrap, dead,
+  refine ⟨returned, result, state, endFrame, last, trace.stable.returning returning, af, negative, wrap, dead,
     negativeFrame, wrapFrame, deadFrame, ?_, earlier ++ tail, ?_, ?_⟩
   · simpa only [event, machine, List.append_assoc, List.cons_append, List.nil_append] using seen
   · rw [recorded, earlierRecorded, List.append_assoc]

@@ -30,6 +30,7 @@ theorem dead_body_history (fetch : Int64 → Option Decoded)
       LookupCoverage.Context.At coverage preempt final.machine.data.dmem ∧
       EqualOutside (scanWrites body coverage) body.dmem final.machine.data.dmem ∧
       final.history.getLast? = some final.machine ∧
+      PeerCountPhase.ReturningExtension history final.history ∧
       ∃ nullPoint zeroPoint negative wrap dead : MachineState,
         EqualOutside (scanWrites body coverage) body.dmem nullPoint.data.dmem ∧
         EqualOutside (scanWrites body coverage) body.dmem zeroPoint.data.dmem ∧
@@ -50,7 +51,7 @@ theorem dead_body_history (fetch : Int64 → Option Decoded)
   have start :=  nonnull_prefix_history fetch agree contract traceCmp body nonnull 0 field
     coverage preempt ready fieldSeparate comparison rxSection history events observed last
   apply eventually_trans (historyStep fetch) _ _ _ start
-  rintro atZero ⟨pc, stack, _, bp, _, ready₂, memory, last₂, af, observed₂, prefixTail, prefixRecorded, prefixCuts⟩
+  rintro atZero ⟨pc, stack, _, bp, _, ready₂, memory, last₂, prefixStable, af, observed₂, prefixTail, prefixRecorded, prefixCuts⟩
   let nullPoint : MachineState := ⟨tested (.low .rbx .W64) body af, Image.PeerGet.entry+0x1b⟩
   let nullEvent := LookupObservation.decision rxSection .peerGetMaybeZeroNull false nullPoint
   have zero : atZero.machine.data.regs.get (.low .rbp .W32) = 0 := by
@@ -70,7 +71,7 @@ theorem dead_body_history (fetch : Int64 → Option Decoded)
   have cursor : (⟨⟨atZero.machine.data, Image.PeerGet.entry+0x3b⟩, atZero.history⟩ : Executed) = atZero := by rw [← pc]
   rw [cursor] at finish
   apply eventually_weaken (historyStep fetch) _ _ _ _ finish
-  rintro final ⟨returned, result, state, finalFrame, last, af₂, negative, wrap, dead,
+  rintro final ⟨returned, result, state, finalFrame, last, returning, af₂, negative, wrap, dead,
     negativeFrame, wrapFrame, deadFrame, seen, tail, recorded, cuts⟩
   have transfer {m : Mem 64}
       (framed : EqualOutside (scanWrites atZero.machine.data coverage) atZero.machine.data.dmem m) :
@@ -78,7 +79,7 @@ theorem dead_body_history (fetch : Int64 → Option Decoded)
     rw [writesEq] at framed
     intro a outside
     exact (memory a outside).trans (framed a outside)
-  refine ⟨returned, result, state, transfer finalFrame, last, nullPoint,
+  refine ⟨returned, result, state, transfer finalFrame, last, prefixStable.returning returning, nullPoint,
     ⟨tested (.low .rbp .W32) atZero.machine.data af₂, Image.PeerGet.entry+0xb0⟩,
     negative, wrap, dead, (fun _ _ => rfl), memory, transfer negativeFrame,
     transfer wrapFrame, transfer deadFrame, ?_, prefixTail ++ tail, ?_, ?_⟩

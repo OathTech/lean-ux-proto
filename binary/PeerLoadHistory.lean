@@ -90,14 +90,14 @@ theorem refcount_load_trace (fetch : Int64 → Option Decoded)
     (last : history.getLast? = some ⟨body, Image.PeerGet.entry+0x20⟩) :
     historySteps fetch 2 (fun t =>
       t.machine = ⟨loaded body count, Image.PeerGet.entry+0x2d⟩ ∧
-      ScanTrace (loaded body count) coverage preempt rxSection history events t)
+      StableTrace (loaded body count) coverage preempt rxSection history events t)
       ⟨⟨body, Image.PeerGet.entry+0x20⟩, history⟩ := by
   apply historySteps_mono fetch 2 _ _ _ _ (refcount_load_history fetch agree body count history field)
   rintro t ⟨machine, recorded⟩
   have frame : ScanFrame (loaded body count) coverage preempt (loaded body count) :=
     ScanFrame.initial _ _ _ (ready.congr rfl rfl)
   rw [machine] at recorded
-  refine ⟨machine, ScanTrace.of_suffix observed last _ recorded ?_ ?_ ?_ ?_⟩
+  refine ⟨machine, StableTrace.of_suffix observed last _ recorded ?_ ?_ ?_ ?_⟩
   · simpa only [machine] using frame
   · simp [machine]
   · simp [observeHistory, LookupObservation.edge, Image.Lookup.entry, Image.PeerGet.entry]
@@ -119,7 +119,7 @@ theorem old_arguments_trace (fetch : Int64 → Option Decoded)
     historySteps fetch 2 (fun t => ∃ af,
       t.machine = ⟨xorMoved body (.low .rdi .W32) (.low .rsi .W32) (.low .rbp .W32) af,
         Image.PeerGet.entry+0x36⟩ ∧
-      ScanTrace base coverage preempt rxSection history events t)
+      StableTrace base coverage preempt rxSection history events t)
       ⟨⟨body, Image.PeerGet.entry+0x32⟩, history⟩ := by
   apply historySteps_mono fetch 2 _ _ _ _ (old_arguments_history fetch agree body history)
   rintro t ⟨af, machine, recorded⟩
@@ -129,7 +129,7 @@ theorem old_arguments_trace (fetch : Int64 → Option Decoded)
       (xorMoved body (.low .rdi .W32) (.low .rsi .W32) (.low .rbp .W32) af) := by
     apply frame.congr <;> rfl
   rw [machine] at recorded
-  refine ⟨af, machine, ScanTrace.of_suffix observed last _ recorded ?_ ?_ ?_ ?_⟩
+  refine ⟨af, machine, StableTrace.of_suffix observed last _ recorded ?_ ?_ ?_ ?_⟩
   · simpa only [machine] using second
   · simp [machine]
   · simp [observeHistory, LookupObservation.edge, Image.Lookup.entry, Image.PeerGet.entry]
@@ -155,7 +155,7 @@ theorem load_body_history (fetch : Int64 → Option Decoded)
       t.machine.pc = Image.PeerGet.entry+0x3b ∧
       t.machine.data.regs.rbx = body.regs.rbx ∧
       t.machine.data.regs.rbp = count.toUInt64 ∧
-      ScanTrace (loaded body count) coverage preempt rxSection history events t)
+      StableTrace (loaded body count) coverage preempt rxSection history events t)
       ⟨⟨body, Image.PeerGet.entry+0x20⟩, history⟩ := by
   have load := historySteps_eventually fetch 2 _ _
     (refcount_load_trace fetch agree body count field coverage preempt ready

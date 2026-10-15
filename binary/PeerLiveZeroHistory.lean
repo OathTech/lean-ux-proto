@@ -18,7 +18,7 @@ theorem live_zero_call_history (fetch : Int64 → Option Decoded)
     Eventually (historyStep fetch) (fun t => ∃ af,
       t.machine.pc = Image.PeerGet.entry+0x44 ∧
       t.machine.data.regs.rbx = body.regs.rbx ∧ t.machine.data.regs.rbp = body.regs.rbp ∧
-      ScanTrace body coverage preempt rxSection history
+      StableTrace body coverage preempt rxSection history
         (events ++ [LookupObservation.decision rxSection .refcountAddNzZero false
           ⟨tested (.low .rbp .W32) body af, Image.PeerGet.entry+0x3f⟩
           (some ((body.regs.get (.low .rbp .W32)).toNat, 0))]) t)

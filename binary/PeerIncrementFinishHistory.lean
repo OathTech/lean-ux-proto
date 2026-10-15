@@ -36,6 +36,7 @@ theorem increment_finish_history (fetch : Int64 → Option Decoded)
       final.machine.data.dmem.loadInt body.regs.r13.toBitVec 4 = some ((body.regs.get (.low .rbp .W32)+1).toNat : Int) ∧
       EqualOutside (liveWrites body coverage) body.dmem final.machine.data.dmem ∧
       final.history.getLast? = some final.machine ∧
+      (∃ af, PeerCountPhase.ReturningExtension (history ++ incrementStates body af) final.history) ∧
       ∃ retry negative wrap dead : MachineState,
         EqualOutside (scanWrites body coverage) (incremented body).dmem retry.data.dmem ∧
         EqualOutside (scanWrites body coverage) (incremented body).dmem negative.data.dmem ∧
@@ -54,7 +55,7 @@ theorem increment_finish_history (fetch : Int64 → Option Decoded)
   have call := increment_call_history fetch agree traceByte body coverage preempt ready count countSeparate
     comparison rxSection history events observed last
   apply eventually_trans (historyStep fetch) _ _ _ call
-  rintro testedState ⟨af, pc, bx, bp, trace⟩
+  rintro testedState ⟨af, pc, bx, bp, trace, stable⟩
   have regs := incremented_registers body
   have stack : testedState.machine.data.regs.rsp = body.regs.rsp := by
     simpa only [incFinal_shape, regs.1] using trace.frame.stack
@@ -90,7 +91,7 @@ theorem increment_finish_history (fetch : Int64 → Option Decoded)
   have cursor : (⟨⟨testedState.machine.data, Image.PeerGet.entry+0x60⟩, testedState.history⟩ : Executed) = testedState := by rw [← pc]
   rw [cursor] at finish
   apply eventually_weaken (historyStep fetch) _ _ _ _ finish
-  rintro final ⟨returned, result, state, finalFrame, last, retry, negative, wrap, dead,
+  rintro final ⟨returned, result, state, finalFrame, last, returning, retry, negative, wrap, dead,
     retryFrame, negativeFrame, wrapFrame, deadFrame, seen, tail, recorded, cuts⟩
   have afterIncrement {m : Mem 64}
       (framed : EqualOutside (scanWrites testedState.machine.data coverage) testedState.machine.data.dmem m) :
@@ -103,7 +104,7 @@ theorem increment_finish_history (fetch : Int64 → Option Decoded)
       EqualOutside (liveWrites body coverage) body.dmem m :=
     (incremented_frame body).trans (afterIncrement framed)
   obtain ⟨earlier, earlierRecorded, earlierCuts⟩ := trace.extension
-  refine ⟨returned, result.trans bx, state, ?_, transfer finalFrame, last,
+  refine ⟨returned, result.trans bx, state, ?_, transfer finalFrame, last, ⟨af, stable.returning returning⟩,
     retry, negative, wrap, dead, afterIncrement retryFrame, afterIncrement negativeFrame, afterIncrement wrapFrame, afterIncrement deadFrame,
     seen, earlier ++ tail, ?_, ?_⟩
   · rw [← (afterIncrement finalFrame).loadInt body.regs.r13.toBitVec 4 (by
