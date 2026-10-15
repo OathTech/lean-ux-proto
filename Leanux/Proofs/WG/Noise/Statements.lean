@@ -1,6 +1,7 @@
 import Leanux.Proofs.WG.Campaign2.Bridge
 import Leanux.Proofs.WG.Noise.ConsumeEdges
 import Leanux.Proofs.WG.Noise.ClearSource
+import Leanux.Proofs.WG.Noise.RotationSource
 
 /-! H1's checked local endpoints. Whole-run edge ownership and confirmation
 uniqueness by allocation lifetime remain separate obligations. -/
@@ -156,5 +157,63 @@ theorem original_clear_ready_returns (pid : PeerId) (d : Device) (p : Peer)
   intro w pre
   obtain ⟨result, final, run, effect⟩ := keypairsClear_returns_ready pid d p resident ready w pre
   exact ⟨result, final, run, original_clear_ordered pid d p resident w result final pre run⟩
+
+/-- Every normal original rotation derives the exact ordered peer writes and
+immediate releases, including table removals, decrements and final erasures.
+Aliased slots and aliases of the new key are allowed. This does not assert
+completion or residency of every key named by the resulting slots. -/
+theorem original_rotation_ordered (pid : PeerId) (newKey : KeypairId)
+    (d : Device) (p : Peer) (k : Keypair)
+    (resident : d.peers[pid]? = some p) (key : d.keypairs[newKey]? = some k) :
+    Campaign2.Ensures (addNewKeypair pid newKey) (fun s => s.wg.device = some d)
+      (fun _ s => ∃ final, s.wg.device = some final ∧
+        RotationRun pid d (rotationPlan p k.iAmTheInitiator newKey) final ∧
+        final.peers[pid]? = some (rotationPeer (rotationPlan p k.iAmTheInitiator newKey) p)) := by
+  intro w result final pre run
+  obtain ⟨out, device, effect⟩ := addNewKeypair_effect pid newKey d p k resident key w result final pre run
+  exact ⟨out, device, effect, rotationRun_peer effect p resident⟩
+
+/-- A resident new key supplies the role test. Static reference multiplicities
+for precisely the released old slots guarantee normal completion, without
+assuming an ordered run witness or distinct identities. The budget permits a
+last release to erase a key still named by a resulting slot; no slot/store
+coherence or allocation-lifetime uniqueness is claimed. -/
+theorem original_rotation_ready_returns (pid : PeerId) (newKey : KeypairId)
+    (d : Device) (p : Peer) (k : Keypair)
+    (resident : d.peers[pid]? = some p) (key : d.keypairs[newKey]? = some k)
+    (ready : ClearReady d (rotationReleases (rotationPlan p k.iAmTheInitiator newKey))) :
+    Campaign2.Returns (addNewKeypair pid newKey) (fun s => s.wg.device = some d)
+      (fun _ s => ∃ final, s.wg.device = some final ∧
+        RotationRun pid d (rotationPlan p k.iAmTheInitiator newKey) final ∧
+        final.peers[pid]? = some (rotationPeer (rotationPlan p k.iAmTheInitiator newKey) p)) := by
+  intro w pre
+  obtain ⟨result, final, run, post⟩ := addNewKeypair_returns_ready pid newKey d p k resident key ready w pre
+  exact ⟨result, final, run, original_rotation_ordered pid newKey d p k resident key w result final pre run⟩
+
+/-- Normal confirmation either returns false with the original Device, or
+performs the exact previous-slot write, old-previous release and current/next
+write. No received-key residency, ownership or distinctness premise is added. -/
+theorem original_confirmation_ordered (pid : PeerId) (received : KeypairId) (d : Device) (p : Peer)
+    (resident : d.peers[pid]? = some p) :
+    Campaign2.Ensures (receivedWithKeypair pid received) (fun s => s.wg.device = some d)
+      (fun ok s => ∃ final, s.wg.device = some final ∧ ConfirmationEffect pid received d p ok final ∧
+        final.peers[pid]? = some (if ok then rotationPeer (confirmationPlan p received) p else p)) := by
+  intro w ok final pre run
+  obtain ⟨out, device, effect⟩ := receivedWithKeypair_effect pid received d p resident w ok final pre run
+  exact ⟨out, device, effect, confirmationEffect_peer pid received d out p ok resident effect⟩
+
+/-- The next-slot mismatch needs no release budget. When it matches, static
+readiness for the old previous slot guarantees completion. The confirmed key
+need not be resident, and aliasing may let the release erase it; this is an
+exact local effect, not a lifetime or reachable-coherence invariant. -/
+theorem original_confirmation_ready_returns (pid : PeerId) (received : KeypairId) (d : Device) (p : Peer)
+    (resident : d.peers[pid]? = some p)
+    (ready : p.keypairNext = some received → ClearReady d [p.keypairPrevious]) :
+    Campaign2.Returns (receivedWithKeypair pid received) (fun s => s.wg.device = some d)
+      (fun ok s => ∃ final, s.wg.device = some final ∧ ConfirmationEffect pid received d p ok final ∧
+        final.peers[pid]? = some (if ok then rotationPeer (confirmationPlan p received) p else p)) := by
+  intro w pre
+  obtain ⟨ok, final, run, post⟩ := receivedWithKeypair_returns_ready pid received d p resident ready w pre
+  exact ⟨ok, final, run, original_confirmation_ordered pid received d p resident w ok final pre run⟩
 
 end Leanux.Proofs.WG.Noise

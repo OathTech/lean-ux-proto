@@ -25,7 +25,7 @@ No independent existential projected runs are spliced together.
 
 | Result | Existing mathematical checkpoint | Factoring / remaining mathematics |
 | --- | --- | --- |
-| H1 Noise | 13 state/slot and ordered-clear contracts | Public projection complete; whole-call edge coverage and lifetime confirmation remain open. |
+| H1 Noise | 17 state/slot, ordered-clear and exact rotation/confirmation contracts | Public projection complete; ordered release effects and static totality are checked. Whole-call edge coverage, full session composition and lifetime confirmation remain open. |
 | H2 Index | 40 contracts, including lifecycle boundaries, both handshake senders, three message consumers, staged/keepalive sending, handshake reception and original worker/dispatch | Public projection complete: 14 total contracts, 24 normal-return contracts, 1 exact stop and 1 projected initializer theorem; reachable coherence, broader records and the corpus runner composition remain open. |
 | H3 Roaming | 8 contracts, including decrypt publication and its same-execution first-poll endpoint connection | Public projection complete; first selected packet provenance is conditional on matching publication identity. General queue provenance and complete caller coverage remain open. |
 | H4 Configuration | 62 contracts, including live-key removal with empty work queues, and the internal dump-accounting finding | Public projection and frame separation complete. Queued-work removal, private-key collision, mixed attributes, global ownership and general dump composition remain open. |
@@ -34,7 +34,7 @@ No independent existential projected runs are spliced together.
 
 Projection/frame factoring completed at `69f988a` for all six results, preserving
 all 153 existing headline names before new mathematics. The following H2 lifecycle/sender
-and H6 dispatch/rearm increments, H3 publication/poll provenance, H5 cut-loop progress, H1 ordered clearing and H4 live-key removal bring the total to 183. No public statement directly names `World` or
+and H6 dispatch/rearm increments, H3 publication/poll provenance, H5 cut-loop progress, H1 ordered clearing/rotation and H4 live-key removal bring the total to 187. No public statement directly names `World` or
 `Kernel`.
 The full proof gate remains failed in inherited campaign-1 counter-window and
 index carries; those files have not been edited. Scoped validation does not
@@ -50,7 +50,7 @@ connections to the current executable mirror, not replacement interpreters.
 | Area | Data / claims / source connections | Separate frame support |
 | --- | --- | --- |
 | Common C2 | `Campaign2/View` is data-only; `Campaign2/Bridge` defines projection and universal execution contracts. | No shared campaign-1 layer is changed. |
-| H1 | `Noise/Model`, `Statements`, `Slots`, `StateEdges`, `ConsumeEdges`, `ClearModel`, `ClearEffects`, `ClearSource`; `Execution` holds the concrete monad connection; `AccessSource` holds accessor read/write contracts, reexported by `Basic`. | `KernelFrames`, `PeerFrames`, `SlotFrames`, `ClearFrames`. |
+| H1 | `Noise/Model`, `Statements`, `Slots`, `StateEdges`, `ConsumeEdges`, `ClearModel`, `ClearEffects`, `ClearSource`, `RotationModel`, `RotationEffects`, `RotationSource`; `Execution` holds the concrete monad connection; `AccessSource` holds accessor read/write contracts, reexported by `Basic`. | `KernelFrames`, `PeerFrames`, `SlotFrames`, `ClearFrames`, `RotationFrames`. |
 | H2 | `Index/View`, `TableModel`, `OwnerWordModel`, `AllocationModel`, `ReleaseModel`, `LifecycleModel` and pure release effects/bounds; `Statements`, `HandshakeClaims`, `OwnerUpdateClaims`, `LifecycleSource`, `LinkSource`, `SendSource`, `DispatchSource`, `ResponseSource`, `ConsumeSource`, `StagedSource`, `ReceiveOperations`, `ReceiveSource` and the other operation/source modules. | `IndexFieldFrames`, `OwnerFieldFrames`, `StoreFieldFrames`, `LifecycleFrames`, `NewlinkFrames`, `SendFrames`, `DispatchFrames`, `ResponseFrames`, `ConsumeFrames`, `StagedFrames`, `ReceiveFrames`; the old `HandshakeFrames` and `OwnerFrames` paths are import-only reexports, not duplicated lemmas. |
 | H3 | `Roaming/Model`, `View`, `Statements`, `EndpointClaims`, `EndpointSource`, `Authentication`, `PublicationModel`, `PublicationSource`, `PublicationClaims`, `PollEndpointModel`, `PollEndpointSource`, `PollEndpointClaims`. | `Roaming/Frames`, `PublicationFrames`, `PollEndpointFrames`; `Basic` reexports the endpoint source connection. |
 | H4 | `Config/Model`, `AllowedRemovalModel`, `QuietModel`, `LiveRemovalModel`, `LiveRemovalSource`, `ClaimView`, `Statements`, `SourceClaims`, `ObservationBridge`, and existing substantive effect/source modules. | `ConcreteFrames` isolates six whole-kernel endpoint contracts; `OperationFrames` isolates seven generic helpers; `ReadbackFrames` retains socket/fixture preservation; `AllowedListFrames`, `AllowedRootFrames`, `AllowedRemovalFrames`, `QuietFrames`, `LiveRemovalFrames`, `KeyFieldFrames` isolate within-WG preservation. |
@@ -192,9 +192,50 @@ gate remains failed in unchanged inherited shared files. Reproduce with
 and separate capped `lake env leanchecker --fresh <module>` runs. No mirror
 mismatch or additional mirror-team request arose from this increment.
 
+Four further projected contracts derive exact rotation and confirmation effects
+on normal return and prove total completion from static release budgets.
+`RotationModel` records each original peer write and immediate put, preserving
+paired writes and the source's order. Initiator rotation with next releases old
+current then old previous; without next it releases old previous. Responder
+rotation releases old next then old previous. Confirmation reads current from
+the then-current peer, writes previous, releases old previous, then writes
+current/next together. A mismatch returns false with the original Device.
+`RotationSource` proves exact equality with the original operations, including
+their branch records and errors, and derives the ordered relation from the
+actual normal execution. `RotationEffects` constructs that relation from
+`ClearReady` counts for precisely the released keys. `RotationFrames` contains
+only key-store/readiness preservation through a peer-slot write.
+
+These budgets allow aliases, including new/received identities. They do not
+prove retained-slot residency. For example, let old next=current name one
+resident key with one reference and a non-NULL peer word, old previous be empty,
+and the new key be distinct, resident and an initiator. Rotation demotes next to
+previous and then releases current, leaving previous naming the erased key.
+Confirmation can similarly release old previous when it aliases the received
+key. These are
+local statement-boundary examples, not accepted-run mirror findings. The total
+confirmation contract adds no received-key residency premise, because the
+original operation does not dereference it.
+
+H1 now has 17 headlines and the campaign 187. The capped full-parallel Noise
+and Config build passed (181 jobs), all 17 Noise headline axiom checks use only
+the three standard axioms, and fresh stock Noise kernel replay passed. Combined
+import/axiom inspection of all 187 headlines and the gate's structural checks
+passed. Independent review closed without findings. Ordinary source/elaboration
+errors were corrected; no heartbeat exhaustion, cap failure, guest timeout or
+infrastructure rerun in this increment. Reproduce with the preceding scoped
+Noise/Config build command and capped fresh replay of `Noise.Statements`.
+The full gate remains failed in the unchanged inherited files.
+
+Expiry's remaining sending-key effect was already proved in H4's
+`original_expiry_store_effects`, `original_expiry_keypair_fields` and
+`original_expiry_clock_relation`: next/current sending validity, aliases,
+handshake zero/unhash and the actual reset-clock provenance. H1 reuses those
+checked normal-return contracts; no duplicate proof is needed.
+
 Remaining H1 work: source-call coverage of owned edges through the runner;
-fresh-allocation provenance for session installation and confirmation once per
-allocation lifetime; exact rotation/confirmation release effects and expiry's sending-key effect.
+full session allocation/derivation/rotation composition; fresh-allocation
+provenance for session installation and confirmation once per allocation lifetime.
 The immediate second-call confirmation theorem is deliberately not presented
 as the lifetime theorem. Slots are individually optional values, not a bound
 of three on the entire store: outstanding packet references can retain keys.
@@ -970,6 +1011,20 @@ scalar-frame proof hit its heartbeat limit; the staged lookup/update/release
 contracts closed the same frame without raising the limit. No cap hit, infrastructure rerun, mirror edit, differential
 check or guest run. Builds use full Lake module parallelism with
 `LEAN_NUM_THREADS=32`; gate runs use `LEANUX_QEMU_SLOTS=16`, without a cap change.
+
+[AGENT 2026-10-15] For the next general allowed-IP removal increment, derive
+the existing `RemovalEffect` from normal execution under the static premise
+that every resident node has exactly two child slots. This replaces a supplied
+operational witness, not total-success readiness. The unrestricted converse is
+too strong for the existing relation: source inspection shows a three-element
+array with two non-NULL first children can take the original branching return,
+whereas every `NodeRemoval` constructor requires a two-element array. These
+examples have not been executed or kernel-proved and are not accepted-run
+counterexamples. A generalized operational relation was considered; the chosen
+two-slot invariant reuses the established relation and effects. Normal successful
+reads supply the remaining successive-state premises without ownership,
+acyclicity or distinct-node assumptions. This is a planned architecture, not a
+closed theorem or a mirror-team request.
 
 ## H5 — Termination and progress (finding; remainder open)
 
