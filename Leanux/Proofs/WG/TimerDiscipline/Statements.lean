@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.TimerDiscipline.AbsentGiveUpClaims
 import Leanux.Proofs.WG.TimerDiscipline.PendingGiveUpSource
 import Leanux.Proofs.WG.TimerDiscipline.RxDataTimersClaims
 import Leanux.Proofs.WG.TimerDiscipline.ResponseTraversalClaims
@@ -661,5 +662,27 @@ theorem original_giveup_pending_zero_key (pid : PeerId) (d : Device) (p : Peer)
       (fun s => s = entry ∧ s.wg.device = some d)
       (fun _ final => final = pendingGiveUpView entry d pid p) :=
   pendingGiveUp_returns pid d p expiry resident limit pending entry
+
+/-- Above the retry limit, a running live peer with zero-key absent returns
+from the original give-up callback when its two contiguous supplied records
+have the original sizes, caller-derived expiry and signed zero-or-one-tick gap.
+The complete projected effect deletes send-keepalive, purges staged packets and
+accounts their length, arms zero-key, consumes exactly these two records, stores
+the arm clock and applies the original zero/nonzero timer-address registration.
+Four original decisions are appended; all other projected fields are unchanged.
+The suffix is arbitrary, and successful execution is a conclusion, not a premise.
+This is one callback; no session provenance or scheduler episode is asserted. -/
+theorem original_giveup_absent_zero_key (pid : PeerId) (d : Device) (p : Peer)
+    (input : GiveUpArmInput) (rest : List HiddenRecord)
+    (resident : d.peers[pid]? = some p)
+    (limit : MAX_TIMER_HANDSHAKES < p.timerHandshakeAttempts)
+    (absent : p.timerZeroKeyMaterial = none)
+    (running : d.running = true) (alive : p.isDead = false)
+    (valid : input.Valid) (entry : Campaign2.Snapshot) :
+    Campaign2.Returns (expiredRetransmitHandshake pid)
+      (fun s => s = entry ∧ s.wg.device = some d ∧ s.wg.armRecords = true ∧
+        s.ambient.hidden = some (input.records rest))
+      (fun _ final => final = absentGiveUpView entry d pid p input rest) :=
+  absentGiveUp_returns pid d p input rest resident limit absent running alive valid entry
 
 end Leanux.Proofs.WG.TimerDiscipline

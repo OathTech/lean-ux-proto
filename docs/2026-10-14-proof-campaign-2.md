@@ -15,9 +15,9 @@ the other H5 clauses and corrected-main carry remain open.
 | H3 Roaming | 13 | Authenticated handshake cuts, decrypt/first-poll join, complete poll setter-attempt audit | Queue/callback authentication invariant, broader caller coverage, final endpoint |
 | H4 Configuration | 78 | Leaves/flags, effective bounded readback, removal/replacement phase effects, root insertion/transfer, finite IPv4 suffix and actual two-chunk socket readback | Global ownership, queued cleanup/completion, mixed attributes, general getter pagination |
 | H5 Progress | 37 | Accepted operation boundaries, actual final-boundary backlog, scheduling inspections, cut/pow/drain/poll bounds, arbitrary supplied-record index-loop adequacy | Whole-worker record decrease, global progress, corrected-main carry |
-| H6 Timers | 45 | Seven local arm sites, recorded delays, caller hook compositions, retry bound/give-up | Complete caller coverage, scheduler episodes, session-relative counting |
+| H6 Timers | 46 | Seven local arm sites, recorded delays, caller hook compositions, retry bound, pending/absent-zero-key give-up | Complete caller coverage, scheduler episodes, session-relative counting |
 
-**245 headlines**; latest increment: H5 arbitrary supplied-record index insertion.
+**246 headlines**; latest increment: H6 recorded absent-zero-key give-up.
 Scoped builds, axioms and fresh replay pass; independent review found no issue.
 The full proof gate remains **failed in inherited campaign-1 files**.
 
@@ -62,7 +62,7 @@ universal execution contracts.
 | `Roaming` | Endpoint/authentication claims; publication, poll endpoint/attempt, response, initiation and handshake-audit model/source/claim families | `Frames`, `PublicationFrames`, `PollEndpointFrames` |
 | `Config` | `ClaimView`, models/effects/source claims, observation bridge; allowed-IP removal/insertion/transfer, collision, removal flags, remove-all/replacement, multipart/suffix readback families; `SocketReadbackModel/Claims` and five substantive `SocketReadback*Source` files | `ConcreteFrames`, `OperationFrames`, `ReadbackFrames`, `AllowedListFrames`, `AllowedRootFrames`, `AllowedRemovalFrames`, `AllowedPairsFrames`, `QuietFrames`, `LiveRemovalFrames`, `KeyFieldFrames`, `CollisionFrames`, `AllowedInsertFrames`, `RemoveAllFrames` |
 | `Progress` | Model/view/source/observation claims; control/scheduler sources; cut, flush-queue, pow, drain and poll-bound model/source/effect/claim families; `RunnerBoundaryModel/Claims` and `IndexProgressModel/Claims` are projected; their `Source` files, `RunnerBoundaryAuditSource` and `BacklogSource` connect original operations | `StackFrames`, `CutFrames`, `FlushQueueFrames` |
-| `TimerDiscipline` | Model/view/send-view/observation claims; recorded, send/retry/rearm/sequence/boundary, pending-give-up, session, data and traversal model/source/effect/claim families | `SourceFrames`, `RecordedFrames`, `RecordedJitterFrames`, `SectionFrames`, `SelectionFrames`, `RetryFrames`, `JitterFrames`, `InitiationFrames`, `InitiationPreservationFrames`, `SendCutFrames`, `SendPeerFrames`, `SendSocketFrames`, `SendBufferFrame`, `SendWorkerFrame`, `SendDispatchFrames`, `RetryDispatchFrames`, `RetryRearmFrames`, `WorkStateFrames`, `ResponseSessionFrames` |
+| `TimerDiscipline` | Model/view/send-view/observation claims; recorded, send/retry/rearm/sequence/boundary, pending-give-up, session, data and traversal model/source/effect/claim families; `AbsentGiveUpModel/Claims` and substantive `AbsentGiveUpSource` | `SourceFrames`, `RecordedFrames`, `RecordedJitterFrames`, `SectionFrames`, `SelectionFrames`, `RetryFrames`, `JitterFrames`, `InitiationFrames`, `InitiationPreservationFrames`, `SendCutFrames`, `SendPeerFrames`, `SendSocketFrames`, `SendBufferFrame`, `SendWorkerFrame`, `SendDispatchFrames`, `RetryDispatchFrames`, `RetryRearmFrames`, `WorkStateFrames`, `ResponseSessionFrames` |
 
 `Index/HandshakeFrames` and `OwnerFrames` are import-only reexports.
 `Noise/Basic` reexports access contracts; `Roaming/Basic` reexports endpoint
@@ -339,6 +339,15 @@ and append exact true-give-up/false-zero-key-absent decisions. Hidden records,
 clocks, attempts and device queues stay unchanged. No running/live/record-mode
 premise is needed.
 
+With zero-key absent, a running device/live peer and two valid contiguous
+supplied caller/arm records give total original give-up behavior. It purges
+staged packets, accounts drops, deletes send-keepalive and arms zero-key at the
+wrapped caller-clock plus delay. The projected outcome fixes all four decisions,
+the unused record suffix, last jiffies and registration: unit zero leaves the
+registration list unchanged; a nonzero unit replaces all registrations at that
+address. Other projected fields are unchanged. These static input premises do
+not establish scheduler selection or a session history.
+
 Both response callers observe actual session results; the session-derived hook
 is reached exactly on true. Traversal compositions cover outgoing initiation,
 outgoing response, common initiation/response receive tails, data completion and
@@ -371,9 +380,12 @@ accepted-run findings. H1/H2/H3/H6 have no ranked mirror-change request.
 
 ## Validation and trust limitations
 
-Latest six-target build: **440 jobs**, all **245 headlines** standard axioms
+Latest six-target build: **443 jobs**, all **246 headlines** standard axioms
 only (`propext`, `Classical.choice`, `Quot.sound`); token/import/root/default/
-projected-name checks pass. Latest Progress build: 219 jobs, 37 headlines and 11
+projected-name checks pass. Latest TimerDiscipline build: 238 jobs, 46 headlines
+and 12 new support declarations checked; fresh stock kernel replay passed
+(exit 0). Independent read-only review found no issue.
+The preceding Progress build: 219 jobs, 37 headlines and 11
 new support declarations checked; fresh stock kernel replay passed (exit 0).
 Independent read-only review found no issue.
 The preceding Config increment passed 222 jobs, 78 headlines plus 24 supports
@@ -398,6 +410,13 @@ mistake while Config Statements rebuilt, missing its object. Each sole rerun
 after confirmed build completion passed. Build and dependent import/axiom
 checks are now sequential, including docstring changes.
 
+The absent-zero-key increment also repeated a successful Lean axiom invocation
+after its output parser failed. A second invocation failed on an unsupported
+printing option; the third repeated the first input and passed. This was
+redundant checking, not an infrastructure retry. [AGENT 2026-10-15] Root now
+owns central axiom-output checks; parser repairs reuse captured output instead
+of repeating successful Lean invocations.
+
 **Separate process violation at `314d13e`:** an unconditional dependent build
 repeated an unchanged failed REPLACE_PEERS source draft. This was not
 infrastructure or a permitted retry. Launch control was corrected; neither
@@ -410,6 +429,14 @@ bridge (about 0.334 s). A separate single full QueueRefill reduction trial faile
 at stock simplifier-step exhaustion with exit 1; its recovery printed sorryAx.
 No theorem was obtained/committed, no retry or limit increase occurred.
 The small bridge proves neither full-prefix throughput nor trace acceptance.
+
+A separate sessionless H6 episode prototype evaluated the initial send and one
+retry, but its full kernel-reduction proof failed with an application type
+mismatch; recovery reported `sorryAx`. No theorem or mirror finding was accepted,
+and the full attempt was not repeated or given larger limits. Seven stdin
+trials comprised two successful stage evaluations, three elaboration failures,
+one corrected missing-record failure and that failed full proof. This leaves
+the twenty-initiation scheduler episode and mixed-history arm count open.
 
 Stock `repeatM` has `implemented_by repeatM.erased`; stock `Nat.powMod`
 has an external implementation annotation. Proofs use logical definitions,
