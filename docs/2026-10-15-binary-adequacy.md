@@ -813,3 +813,38 @@ and widths against DWARF. Its remaining boundaries are explicit: ring
 functionality determines addresses, so semantic identities still require
 injective lifetime names and membership; the shared finish exports per-cut
 memory framing, not per-cut whole-R correspondence or KCOV state by itself.
+
+
+## Null helper: complete actual history, 2026-10-15
+
+`PeerNullEntryHistory.null_entry_history` composes the actual entry prologue,
+first callback, null guard, XOR/JMP clear branch, final callback and saved
+RET. The deterministic observer appends exactly null=true and returned,
+with the decision tied to its actual successor and the return to the final
+machine. Every appended cut has a memory frame against the original entry
+(stack saves plus KCOV buffer). `PeerStartHistory` derives body callback
+readiness from the actual pushed words. `PeerClearHistory` retains XOR's
+universally chosen AF and architectural zero-extension; the null guard
+retains TEST's independent AF. No peer read or peer-presence premise is
+introduced for the NULL pointer.
+
+This is complete physical/observational composition for one helper path,
+not whole-World adequacy or the complete helper theorem. The source-world
+relation and permissions still need composition, and dead/live histories
+remain open. No trust-base addition or Pre/R restriction.
+
+Validation: capped parallel build passed (230 jobs), all 293 printed axiom
+dependency lists were standard-only, the source audit passed for 75 Lean
+files, and kernel replay passed for `PeerClearHistory PeerStartHistory
+PeerNullHistory PeerNullEntryHistory`. The concrete `peer-null` probe passed
+four cases under two undefined-value seeds, 368 instructions total.
+Independent read-only review found no correctness/trust defect. Initial
+elaboration failures were corrected before the final build. Reproduce with
+the README build command, `capped -- lake env leanchecker` on those four
+modules, and `capped -- binary/.lake/build/bin/binary-probe peer-null` from
+the worktree root. No further mirror/runtime change; the last 124-test fast
+tier and recorded three-way checks remain applicable.
+
+Milestone 1 remains incomplete; no function or whole-R region is certified
+and no property transported. Its measured rate and verbatim trust base are
+still owed at the milestone. No main update or push.

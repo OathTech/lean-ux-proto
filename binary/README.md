@@ -139,3 +139,12 @@ Replay the current owner, list and helper-history components in `binary/`:
 ```sh
 capped -- lake env leanchecker Layouts SerialCpu DeviceScalars ListRing MirrorLoop MirrorHistory MirrorPeerPoints LoopSearch PeerSignHistory PeerReturnHistory PeerSavedHistory PeerPrologueHistory PeerFinishHistory OwnerWord OwnerStore BucketScan
 ```
+
+
+`PeerNullEntryHistory.null_entry_history` now composes the complete physical
+null-helper path, including both actual callbacks and RET, with exact
+observer events and memory framing at every appended cut. It does not yet
+supply whole-World R or the nonnull helper paths. Replay with `capped -- lake
+env leanchecker PeerClearHistory PeerStartHistory PeerNullHistory
+PeerNullEntryHistory`; `binary-probe peer-null` exercises the actual service
+bodies under two undefined-value seeds.
