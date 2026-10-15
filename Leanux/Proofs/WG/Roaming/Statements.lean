@@ -5,6 +5,7 @@ import Leanux.Proofs.WG.Roaming.PublicationClaims
 import Leanux.Proofs.WG.Roaming.PollEndpointClaims
 import Leanux.Proofs.WG.Roaming.ResponseCallClaims
 import Leanux.Proofs.WG.Roaming.InitiationCallClaims
+import Leanux.Proofs.WG.Roaming.HandshakeAuditClaims
 
 namespace Leanux.Proofs.WG.Roaming
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise
@@ -152,5 +153,59 @@ theorem original_initiation_endpoint_authentication (msg : List UInt8) (src : Sk
     · intro w pre
       rw [observedInitiationHandshake_source msg src kind]
     · exact observedInitiationHandshake_facts msg src kind
+
+/-- Inspect the original initiation caller, retaining its actual authenticated
+prefix even if the setter or later continuation errors. The two projections
+are exactly the actual prefix inspection and complete original-call inspection.
+The audit always returns at its unchanged entry. Prefix failure retains that
+same original error; a normal no-cut prefix completes without the setter;
+a present cut retains the existing authentication facts regardless of the full
+call's outcome. This is total inspection, not original-call success, successful
+endpoint mutation, or final endpoint preservation. The exact source factor
+already ties a present cut to immediate original setter invocation. -/
+theorem original_initiation_retained_authentication (msg : List UInt8) (src : SkbSource)
+    (kind : messageType msg = MESSAGE_HANDSHAKE_INITIATION) :
+    Campaign2.AgreesOn (fun _ => True)
+      (do let audited ← initiationHandshakeAudit msg src; pure audited.1)
+      (Campaign2.inspect (initiationCallPrefix msg src)) ∧
+    Campaign2.AgreesOn (fun _ => True)
+      (do let audited ← initiationHandshakeAudit msg src; pure audited.2)
+      (Campaign2.inspect (receiveHandshakePacket msg src)) ∧
+    Campaign2.Observes (initiationHandshakeAudit msg src) (fun _ => True)
+      (fun entry observed => ∃ audited, observed = .ok (audited, entry) ∧
+        HandshakeAuditFacts
+          (fun cut atCut => cut.beforeSetter = atCut ∧ InitiationCallFacts msg cut) audited) := by
+  constructor
+  · intro w pre
+    rw [initiationHandshakeAudit, handshakeAudit_prefix]
+  · constructor
+    · intro w pre
+      rw [initiationHandshakeAudit_original msg src kind]
+    · exact initiationHandshakeAudit_facts msg src
+
+/-- The response caller has the same failure-retaining inspection: exact
+prefix and original-call outcomes, unchanged inspection entry, and the actual
+authentication cut even if its original continuation fails. Error outcomes
+carry no final state. A cut certifies reaching the setter, not completing its
+write or preserving the endpoint afterwards; no receiver totality is claimed. -/
+theorem original_response_retained_authentication (msg : List UInt8) (src : SkbSource)
+    (kind : messageType msg = MESSAGE_HANDSHAKE_RESPONSE) :
+    Campaign2.AgreesOn (fun _ => True)
+      (do let audited ← responseHandshakeAudit msg src; pure audited.1)
+      (Campaign2.inspect (responseCallPrefix msg src)) ∧
+    Campaign2.AgreesOn (fun _ => True)
+      (do let audited ← responseHandshakeAudit msg src; pure audited.2)
+      (Campaign2.inspect (receiveHandshakePacket msg src)) ∧
+    Campaign2.Observes (responseHandshakeAudit msg src) (fun _ => True)
+      (fun entry observed => ∃ audited, observed = .ok (audited, entry) ∧
+        HandshakeAuditFacts
+          (fun cut atCut => cut.beforeSetter = atCut ∧ ResponseCallFacts msg cut) audited) := by
+  constructor
+  · intro w pre
+    rw [responseHandshakeAudit, handshakeAudit_prefix]
+  · constructor
+    · intro w pre
+      rw [responseHandshakeAudit_original msg src kind]
+    · exact responseHandshakeAudit_facts msg src
 
 end Leanux.Proofs.WG.Roaming
