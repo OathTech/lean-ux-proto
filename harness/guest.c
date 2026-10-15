@@ -62,7 +62,15 @@
  * the guest's 256 MiB free. */
 #define CAPACITY (4096UL * 1024)
 #define TASK_CMP_CAPACITY (8192UL * 1024)
-#define TASK_CAPACITY(comparisons) ((comparisons) ? TASK_CMP_CAPACITY : CAPACITY)
+/* Only a trace with a flood of more than this many sends (count, leading
+ * valids and control) gets the larger area (task_capacity below): the
+ * mapping is shared with every process the trace forks (the seccomp probes'
+ * children), and fork copies its page tables, work the comparison child
+ * records as one distinct comparison per page; at twice the pages the
+ * seccomp probes' rows grew past the captured-output limit (B1, the batch's
+ * claim point, 2026-10-15). The host's bound follows (harness/trace.py
+ * FLOOD_BIG_AREA_SENDS, task_cmp_capacity). */
+#define FLOOD_BIG_AREA_SENDS 2048
 /* W7 (design section 12): a wg_batch of 1025 keepalive-size items is about
  * 55 KB on the wire; the per-operation payload and the line buffer hold it. */
 #define MAX_PAYLOAD 65536
@@ -307,6 +315,11 @@ struct alloc_arg { uint32_t n, flags; struct { uint64_t lo, hi; } r[ALLOC_RANGES
 static struct alloc_arg alloc;
 #define KCOV_LEANUX_ALLOC_LOAD _IOW('c', 205, unsigned long)
 #define KCOV_LEANUX_ALLOC_STATUS _IOR('c', 206, unsigned long)
+/* The comparison child's task area for this trace (CAPACITY, or
+ * TASK_CMP_CAPACITY for a trace with a flood past FLOOD_BIG_AREA_SENDS). */
+struct trace;
+static unsigned long task_capacity(const struct trace *t, int comparisons);
+
 struct trace {
     /* net: 0 no network fixture, 1 the fixture with a down wg0, 2 the bare
      * network fixture without wg0 (L, "net_fixture": "bare"), 3 the
@@ -318,6 +331,19 @@ struct trace {
     unsigned nsteer; struct steer_entry steer[STEER_MAX];
     unsigned nroutes; struct fixture_route routes[MAX_FIXTURE_ROUTES];
 };
+
+static unsigned long task_capacity(const struct trace *t, int comparisons)
+{
+    if (!comparisons) return CAPACITY;
+    for (unsigned k = 0; k < t->count; ++k) {
+        const struct operation *op = &t->ops[k];
+        if (op->code != OP_WG_FLOOD) continue;
+        unsigned leading = op->payload_len >= 2 ? op->payload[0] : 0;
+        unsigned control = op->payload_len >= 2 ? op->payload[1] : 0;
+        if ((unsigned long)op->a + leading + control > FLOOD_BIG_AREA_SENDS) return TASK_CMP_CAPACITY;
+    }
+    return CAPACITY;
+}
 /* W4: the running trace's fixture routes, for route_into_wg0. */
 static const struct fixture_route *fixture_routes;
 static unsigned n_fixture_routes;
@@ -1949,11 +1975,12 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
             fail(t->id, -1, "environment_failure", "unexpected_inherited_descriptor");
     int coverage_fd = open("/sys/kernel/debug/kcov", O_RDWR);
     if (coverage_fd != 3) fail(t->id, -1, "coverage_failure", "open_kcov_at_3");
-    if (ioctl(coverage_fd, KCOV_INIT_TRACE, TASK_CAPACITY(comparisons))) fail(t->id, -1, "coverage_failure", "initialize_kcov");
+    const unsigned long task_cap = task_capacity(t, comparisons);
+    if (ioctl(coverage_fd, KCOV_INIT_TRACE, task_cap)) fail(t->id, -1, "coverage_failure", "initialize_kcov");
     if ((alloc.n || alloc.flags) && ioctl(coverage_fd, KCOV_LEANUX_ALLOC_LOAD, &alloc))
         fail(t->id, -1, "coverage_failure", "load_allocation_set");
     load_task_steering(t, coverage_fd);
-    unsigned long *coverage = mmap(NULL, TASK_CAPACITY(comparisons) * sizeof(*coverage), PROT_READ | PROT_WRITE, MAP_SHARED, coverage_fd, 0);
+    unsigned long *coverage = mmap(NULL, task_cap * sizeof(*coverage), PROT_READ | PROT_WRITE, MAP_SHARED, coverage_fd, 0);
     if (coverage == MAP_FAILED) fail(t->id, -1, "coverage_failure", "map_kcov");
     for (int fd = 4; fd < (t->net ? LISTEN4_FD : 8); ++fd)
         if (open("/dev/null", O_RDWR) != fd) fail(t->id, -1, "environment_failure", "fill_descriptor");
@@ -2662,9 +2689,9 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
                 fail(t->id, i, "environment_failure", "trace_exceeds_rekey_bound");
         }
         /* KCOV stops counting once the buffer is full, so "full" is the last
-         * value it can reach: CAPACITY - 1 PCs, or (TASK_CMP_CAPACITY - 1) / 4
-         * records (the comparison child's task area, B1). */
-        if (!count || count >= (comparisons ? (TASK_CMP_CAPACITY - 1) / 4 : CAPACITY - 1))
+         * value it can reach: CAPACITY - 1 PCs, or (task_cap - 1) / 4 records
+         * (the comparison child's task area for this trace, B1). */
+        if (!count || count >= (comparisons ? (task_cap - 1) / 4 : CAPACITY - 1))
             fail(t->id, i, "coverage_failure", "empty_or_full_kcov");
         result[i].error = ret == -1 ? captured_errno : 0;
         result[i].ret = ret == -1 ? -captured_errno : ret;
