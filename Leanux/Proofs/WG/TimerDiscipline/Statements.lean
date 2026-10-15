@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.TimerDiscipline.RxDataTimersClaims
+import Leanux.Proofs.WG.TimerDiscipline.ResponseTraversalClaims
 import Leanux.Proofs.WG.TimerDiscipline.DataDoneClaims
 import Leanux.Proofs.WG.TimerDiscipline.OutgoingResponseSessionClaims
 import Leanux.Proofs.WG.TimerDiscipline.ObservationClaims
@@ -542,5 +543,23 @@ theorem original_consume_data_done_timers (pid : PeerId) (pkt : RxPacket) (e : E
   · intro entry pre
     rw [observedRxDataTimers_erase pid pkt e]
   · exact observedRxDataTimers_facts pid pkt e
+
+/-- The original outgoing response sender reaches traversal exactly when its
+actual creation/session prefix returns a present successful session. The cut
+retains the original session effect and zero-key hook facts, and traversal starts
+at that prefix's end. Its enabled/live/running/recorded guards give the exact
+caller-plus-interval persistent expiry and clock gap at the hook's after-state.
+The authenticated-sent deletion, later clock/write and socket send remain in
+the original continuation. Erasure preserves every error; normal certificates
+do not promise transmission, final expiry preservation or failed-call retention. -/
+theorem original_outgoing_response_traversal (pid : PeerId) :
+    Campaign2.AgreesOn (fun _ => True)
+      (do let _ ← observedResponseTraversal pid; pure ()) (sendHandshakeResponse pid) ∧
+    Campaign2.Ensures (observedResponseTraversal pid) (fun _ => True)
+      (fun cut _ => ResponseTraversalFacts pid cut) := by
+  constructor
+  · intro entry pre
+    rw [observedResponseTraversal_erase pid]
+  · exact observedResponseTraversal_facts pid
 
 end Leanux.Proofs.WG.TimerDiscipline
