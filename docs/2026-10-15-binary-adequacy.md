@@ -2427,6 +2427,28 @@ The supplied AGENTS.md also requires the user to run `capped -- lake check`
 from this worktree's `binary/` outside Nono at the claim point. That external
 gate remains pending. No merge to main and no push were performed.
 
+### External gate for the reviewed milestone-1 checkpoint
+
+[USER 2026-10-15] The user ran the external gate outside Nono from
+`binary/` at commit `430ea90`:
+
+```sh
+lake check --from-export ../.tmp/binary-m1.ndjson
+```
+
+The leanexport contains `LookupAdequacy`, `LookupSnapshotTransport`,
+`LookupWitness`, `TrustBase` and `Execution`. The reported output was:
+
+```text
+Lean default kernel accepts the solution; uses axioms: propext, Quot.sound, Classical.choice
+```
+
+This satisfies the external toolchain gate for **430ea90** and supersedes
+that checkpoint's pending-gate status above. It does not validate subsequent
+review fixes. The export is disposable (about 1.1 GB), not a committed
+artifact. Export-based checking is needed because sandboxed `lake check`
+cannot see this package's path dependencies.
+
 ### TrustBase.lean, verbatim at the milestone-1 handoff
 
 ```lean
