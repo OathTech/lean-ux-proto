@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Packets.AffiliationCuts
 import Leanux.Proofs.WG.Configuration.RunnerRouting
 import Leanux.Proofs.WG.AllowedIps.RoutingDumpFrames
 import Leanux.Proofs.WG.AllowedIps.RoutingEnvTimersFrames
@@ -2407,5 +2408,66 @@ theorem parsed_initialized_routing_execution (json : Lean.Json) (trace : Runner.
   ⟨Configuration.executeTraceObserved_erases trace placeholders floodExact,
     Configuration.sourceRunner_json trace placeholders floodExact,
     Configuration.parsed_executeTraceObserved_routing json trace parsed placeholders floodExact⟩
+
+
+open Std.Do Leanux.WG
+
+/-- The original complete index lookup preserves the small nullable affiliation
+invariant and successful handshake lookup returns its actual owner. The source
+factor retains every original Stop and the fresh owner store-back, including
+owner/target aliasing. Snapshot facts are derived from a separate actual helper
+run; neither those facts nor Inv assert initialized reachability or stamp uniqueness. -/
+theorem original_nullable_index_affiliation (kinds : List IndexKind) (index : Nat) :
+    Affiliation.indexLookupSource kinds index = WG.indexLookup kinds index ∧
+    (⦃fun w => ⌜Affiliation.Inv w⌝⦄ WG.indexLookup kinds index
+      ⦃⇓? result w => ⌜Affiliation.Inv w ∧ ∀ owner borrowed,
+        result = some (.handshake owner, borrowed) → borrowed = owner⌝⦄) ∧
+    (∀ owner pid w v, (Affiliation.acquireOwner owner).run w = .ok (some pid, v) →
+      Affiliation.OwnerCertificate owner pid w) :=
+  ⟨Affiliation.indexLookupSource_eq kinds index, Affiliation.indexLookup_spec kinds index,
+    Affiliation.acquisition_certificate⟩
+
+/-- Local original allocation/refusal, rotation and session contracts. NULL
+allocation words are included; actual handshake reads derive compatibility in
+beginSession. Slot aliases and absent old keys are allowed. These are normal
+endpoint statements under the explicitly local invariant, not initialized
+Runner affiliation or totality. The stronger old SlotAffiliation is unchanged. -/
+theorem original_nullable_session_affiliation (word : Option PeerId) (pid : PeerId) (kid : KeypairId) :
+    (⦃fun w => ⌜Affiliation.CreationInput word w⌝⦄ WG.keypairCreate word
+      ⦃⇓? result w => ⌜Affiliation.Inv w ∧ ∀ id, result = some id →
+        ∃ s stamp, Affiliation.view w = some s ∧ s.keys id = some (stamp, word) ∧ id < s.nextKey⌝⦄) ∧
+    (⦃fun w => ⌜Affiliation.References pid [kid] (Affiliation.view w)⌝⦄ WG.addNewKeypair pid kid
+      ⦃⇓? _ w => ⌜Affiliation.Inv w⌝⦄) ∧
+    (⦃fun w => ⌜Affiliation.Inv w⌝⦄ WG.beginSession pid ⦃⇓? _ w => ⌜Affiliation.Inv w⌝⦄) :=
+  ⟨Affiliation.keypairCreate_affiliation word, Affiliation.addNewKeypair_affiliation pid kid,
+    Affiliation.beginSession_affiliation pid⟩
+
+/-- Literal source factors expose the TX and RX acquisition expressions.
+Successful strict TX acquisition derives positive credit and, from local slot
+compatibility, the sending peer. Successful original decryption preserves the
+packet's peer/key fields and uses the resident receiving key in its exact AEAD
+equation. Reached-input affiliation, historical allocation uniqueness, public-key
+intent, internal longest-prefix certificates and initialized path composition
+remain separate; no current-table-at-wire-send claim is made. -/
+theorem original_packet_affiliation_cuts (pid : PeerId) (kid : KeypairId)
+    (entry : Option (IndexOwner × PeerId)) (state : Option Affiliation.State)
+    (msg : List UInt8) (src : SkbSource) (ds : Nat) :
+    Affiliation.sendStagedSource pid = WG.sendStagedPackets pid ∧
+    Affiliation.consumeDataSource msg src ds = WG.consumeData msg src ds ∧
+    (⦃fun w => ⌜Affiliation.view w = state⌝⦄ Affiliation.receiveKeyAcquire entry
+      ⦃⇓? result w => ⌜Affiliation.view w = state ∧ ∀ key peer,
+        result = (some key, some peer) → entry = some (.keypair key, peer)⌝⦄) ∧
+    (∀ w v d p, Affiliation.Inv w → w.k.wg = some d → d.peers[pid]? = some p →
+      (p.keypairCurrent = some kid ∨ p.keypairPrevious = some kid ∨ p.keypairNext = some kid) →
+      (Affiliation.sendAcquire kid).run w = .ok ((), v) →
+      Framing.PeerBorrow.Borrowed w.k (some pid) v.k) ∧
+    (∀ pkt out w v, (WG.decryptPacket pkt).run w = .ok (some out, v) →
+      ∃ d k, w.k.wg = some d ∧ d.keypairs[pkt.keypair]? = some k ∧
+        out.peer = pkt.peer ∧ out.keypair = pkt.keypair ∧
+        WG.aeadDecrypt k.receiving.key (WG.counterNonce (WG.u64le pkt.bytes 8)) (pkt.bytes.drop 16) [] = some out.bytes) :=
+  ⟨Affiliation.sendStagedSource_eq pid, Affiliation.consumeDataSource_eq msg src ds,
+    Affiliation.receiveKeyAcquire_spec entry state,
+    fun w v d p hi hd hp hs hr => Affiliation.sendAcquire_owner kid pid p w v hi hd hp hs hr,
+    Affiliation.decryptPacket_fields⟩
 
 end Leanux.Proofs.WG.CryptokeyRouting
