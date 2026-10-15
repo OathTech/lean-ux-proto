@@ -962,6 +962,27 @@ The sentinel set gains at most two entries (the lookup channel, item 1;
 the shape oracle, item 7) if the integration keeps them; the rest are
 deleted.
 
+Run once at the C1 build (commits dc41773, 45b9f29, 820b3ae; the entries
+deleted after), every mutant rejected, each on the smallest subset that
+shows it:
+
+| Mutant | Subset | Verdict |
+| --- | --- | --- |
+| 1, the backtrace's bit strip | `r_walk` | rejected: a system-call result (`13.0.0.1` transmitted instead of `-EHOSTUNREACH`) |
+| 2, the `slen > pos` record dropped | `r_walk` | rejected: a system-call result (`-ENETUNREACH` instead of `-EHOSTUNREACH`) |
+| 3, `prefix_mismatch` without `-prefix` | `b1_basic` | rejected: operands differ at :1499 |
+| 4, the root inflate threshold 50 | `r_root_inflate` | rejected: the shape oracle (the root does not inflate at three of four slots) |
+| 5, aliases ordered by table id ascending | `r_tb_order` | rejected: the mirror's invariant (the injector's datagram routes by the MAIN alias, whose source is not the sender's) |
+| 6, the delete's accessed test dropped | `w9_session_delroute_untouched` | rejected: a hidden record (the data send after the untouched delete misses the cache and consumes a refresh jiffy Linux did not write) |
+| 7, the shape without `full_children` | `r_full_children` | rejected: the shape oracle |
+
+Three first subsets could not show their mutation and were replaced:
+`r_eight_hosts` for 4 (its root never inflates: the set semantics matched
+the root's mutated operands to a non-root record), `w9_delroute_untouched`
+for 6 (its retransmit misses the cache with or without the flush) and
+`b1_basic` and `r_eight_hosts` for 7 (no full child there: eight `/32`
+leaves make none). Item 8 belongs to C2 (the cut and the exclusions).
+
 ## 12. The proof tree
 
 Files naming the routing environment (`routeLookup`, `route4`, `route6`,
