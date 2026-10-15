@@ -217,13 +217,26 @@ safety, stopped prefixes and reachable owner-word coherence are explicitly
 outside these contracts. The frames are new campaign-2 index predicates;
 no campaign-1 lemma or shared layer was copied or edited.
 
+`DrawExhaustion` proves exact original insertion rejection for a finite contiguous
+stream consisting entirely of draws that collide after owner removal. The
+record-derived budget includes the extra turn that reads the empty stream and
+reports `no record left for index_draw`; `insertFinish` and budget exhaustion
+are never reached. Empty input is covered. The hiddenPlaceholders flag is
+unconstrained, but actual recordless placeholder execution is outside the
+statement. This is expected rejection of incomplete input, not an accepted
+runner trace or a nontermination finding. Since exceptions carry no World, the
+terminal does not claim an observable post-error table or log. Independent
+review found no correctness defect; its placeholder-mode wording correction
+was applied. A failed axiom invocation named a nonexistent temporary file;
+generating the inspection file from the terminal declarations corrected it.
+
 The table invariant is about hashed entries; this checkpoint does not yet establish all-driver reachable-session
 uniqueness or initialize/preserve owner-store coherence through every caller.
 
 Independent read-only review found no semantic defect. Its wording finding was
 fixed: the terminal lookup docstring now describes its exported provenance
 postcondition, leaving stronger first-selection semantics to the internal
-scan contract. The twenty statements pass scoped build, standard-axiom inspection
+scan contract. The twenty-one statements pass scoped build, standard-axiom inspection
 and fresh stock kernel replay (`capped -- scripts/in-bundle lake env leanchecker
 --fresh Leanux.Proofs.WG.Index.Statements`). The full proof gate still fails in
 inherited `CounterWindow.Refinement` and `ReplayWindow.Counterexamples`;

@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Index.DrawExhaustion
 import Leanux.Proofs.WG.Index.DrawRecords
 import Leanux.Proofs.WG.Index.ReleaseBounds
 import Leanux.Proofs.WG.Index.CorpusDraws
@@ -278,5 +279,20 @@ prefixes, store/slot safety or full reachable owner-word coherence. -/
 theorem original_begin_session_owners (pid : PeerId) :
     Ensures (beginSession pid) OwnersBoundedSafe (fun _ w => OwnersBoundedSafe w) :=
   (ensures_iff _ _ _).mpr (beginSession_owners_spec pid)
+
+/-- A finite contiguous stream consisting only of colliding draws is rejected
+by the original insertion with the exact missing-index-record error. Collision
+is tested after removing this owner's old row. The record-derived budget has
+one extra turn, so rejection occurs at the next hidden read, before budget
+exhaustion. This includes an empty stream and does not constrain the hiddenPlaceholders
+flag. Recordless placeholder execution is outside its scope. It does not claim
+an accepted runner trace or expose a final World on error. -/
+theorem original_index_insert_exhausted (owner : IndexOwner) (d : Device) (draws : List Draw)
+    (allCollide : ∀ draw ∈ draws,
+      (removeOwner owner d.indexTable).any (·.index == draw.value) = true)
+    (w : World) (device : w.k.wg = some d)
+    (records : w.hidden = some (draws.map Draw.record)) :
+    (indexInsert owner).run w = .error (.hidden "no record left for index_draw") :=
+  indexInsert_exhausted owner d draws allCollide w device records
 
 end Leanux.Proofs.WG.Index
