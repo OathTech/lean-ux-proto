@@ -848,3 +848,92 @@ tier and recorded three-way checks remain applicable.
 Milestone 1 remains incomplete; no function or whole-R region is certified
 and no property transported. Its measured rate and verbatim trust base are
 still owed at the milestone. No main update or push.
+
+
+## Dead helper: complete actual history, 2026-10-15
+
+`PeerDeadEntryHistory.dead_entry_history` composes the mapped, nonnull,
+zero-refcount helper path from entry through its real RET. The observer
+appends exactly null=false, zero=true with operands (0, 0), negative=false,
+wraps=false, dead=true, and returned. All five decision states are actual
+successors, with memory framing from the original entry at those states
+and every appended cut. Both TEST instructions and all XOR instructions
+retain their universally chosen undefined flags. The count comes from the
+physical memory load; it is not supplied as a desired postcondition.
+`PeerLoadHistory` proves the intermediate MOV successor is not a cut and
+retains it in the history before LEA establishes the refcount address.
+The common nonnull prefix admits every physical UInt32 count.
+
+These are physical/observational components. The live increment history,
+whole-World correspondence at every cut, the complete helper theorem, the
+lookup theorem and generic transport remain open. Finding 1 stays recorded;
+no liveness restriction or change to Pre/R was introduced. The trust base
+is unchanged. No whole-R region or function is certified, so these support
+lemmas are not counted as completed regions for the milestone's rate.
+
+Validation: capped full-parallel build passed (239 jobs), 327 printed axiom
+lists were standard-only, and source audit passed for 84 Lean files. Kernel
+replay passed for all nine new modules. The actual-service `peer-nonnull`
+probe passed 21 cases under two undefined-value seeds, 9982 instructions.
+Initial elaboration failures were corrected before this final build and
+are not passes. This proof-only batch changes neither mirror nor runtime;
+the previously recorded three-way checks and 124-test fast tier remain
+applicable. Reproduce with the README build command, `capped -- lake env
+leanchecker PeerCompareHistory PeerDeadSetup PeerDeadCallbacksHistory
+PeerDeadSuffixHistory PeerZeroHistory PeerLoadHistory
+PeerNonNullPrefixHistory PeerDeadBodyHistory PeerDeadEntryHistory` inside
+`binary/`, and `LEANUX_QEMU_SLOTS=16 capped --
+binary/.lake/build/bin/binary-probe peer-nonnull` at the worktree root.
+
+Independent read-only review found no correctness defect in the nine new
+modules. The end-to-end dead path now discharges the zero-guard arrival and
+field-separation obligations. The incoming observer prefix still belongs to
+the caller's composition; callback hypotheses, access/environment premises
+and whole-World R remain explicit boundaries. Existential decision points
+currently export memory frames but not every useful PC/register equation;
+strengthening those interfaces later may simplify the R proof.
+
+## Whole-World representation audit: remaining obligations, 2026-10-15
+
+The independent read-only audit identifies these concrete obligations; none
+is replaced by an assumed preservation theorem or an extra opaque field:
+
+- The physical index table determines per-bucket order, but not the mirror's
+  global insertion order across different buckets. Relate that order to the
+  actual prior insertion/unlink/replacement history. Replacement preserves
+  position; unlink preserves a stale forward pointer in inactive nodes.
+  Embedded owner addresses remain independent of nullable peer-word values.
+- Endpoint decoding must use its active union arm. IPv4/IPv6 inactive
+  mirror defaults do not require physical zero bytes; stale union tails
+  are ordinary. Scope is native-order, flowinfo and addresses network-order.
+  The zero-sized endpoint lock shares the handshake's address.
+- Cached source family comes from the cached route, not the current
+  endpoint. Null cache slots retain stale source/refresh bytes. Route
+  generation values are mirror epochs requiring actual routing provenance;
+  they are not literal rt_genid/sernum words. A cached route's current device
+  can become blackhole_netdev while the historical slot remains. Cache
+  storage must not be dereferenced after destruction.
+- Slot pointers can temporarily alias, or name a retired allocation absent
+  from the mirror's current keypair store. Names must follow lifetimes and
+  phases, not require globally distinct slots or positive refcounts.
+- Lookup changes only `steps` among non-WireGuard World fields. Its equation
+  uses the actual observed machine events appended to the fixed incoming
+  observation state. Other observer cursors and supplied environment remain
+  fixed during this call; later composition must connect adjacent cursors.
+  A copied incoming Kernel is not a physical frame relation.
+- The modeled trace task need not be the current KCOV task. File-count and
+  inode baselines, fixture external references, and the runner's modeled
+  maxFiles value need their explicit abstractions. They cannot silently
+  become raw equality to unrelated kernel globals. Task/fd/file, pipe,
+  eventfd, epoll, seccomp, socket and pending-work physical equations remain
+  necessary even though lookup does not read them.
+- Work/timer identities require embedded addresses and lifetime provenance;
+  jiffiesLast denotes the last consumed clock observation. The physical
+  last_under_load zero sentinel also differs from the placeholder flood
+  mode's `some 0`; that mode needs an explicit provenance interpretation.
+
+Field-level footprints should permit legitimate embedding and aliasing.
+The final preservation argument must account for the output word, selected
+peer count, owner word, stack, KCOV and preempt-count writes. A generic
+frame lemma is useful only once its concrete component relations and read
+footprints are proved. The audit does not establish whole-World R.

@@ -148,3 +148,12 @@ supply whole-World R or the nonnull helper paths. Replay with `capped -- lake
 env leanchecker PeerClearHistory PeerStartHistory PeerNullHistory
 PeerNullEntryHistory`; `binary-probe peer-null` exercises the actual service
 bodies under two undefined-value seeds.
+
+
+`PeerDeadEntryHistory.dead_entry_history` now composes the actual mapped
+zero-count helper path from entry through RET, all five decision states,
+and per-cut memory framing. `PeerNonNullPrefixHistory` obtains the count
+from the physical word and admits zero. These components do not yet supply
+the complete helper's whole-World relation. Replay the nine modules named
+in the dead-helper report; `binary-probe peer-nonnull` exercises 21 cases
+with actual service bodies and two undefined-value seeds.
