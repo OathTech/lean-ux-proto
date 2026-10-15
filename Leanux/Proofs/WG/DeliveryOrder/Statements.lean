@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Queues.RxIngressStable
 import Leanux.Proofs.WG.Queues.RxConsumeProtection
 import Leanux.Proofs.WG.Queues.RxPollCarrier
 import Leanux.Proofs.WG.Queues.RxIngressProtection
@@ -1787,5 +1788,54 @@ theorem original_poll_carrier_conservation (pid : PeerId) (budget : Nat) (w v : 
   have joint := (Queues.RxJoint.poll_erases pid budget w (Queues.RxJoint.seed prior)).trans hr
   exact ⟨state.inventory,state.queues,state.funded,state.keys,gone,
     Queues.RxDisposition.poll_normal_partition pid budget w v prior n joint⟩
+
+/-- Whole original admission conserves the supplied carrier inventory, exact
+queue ownership, funded reservations and nullable key compatibility. The same
+actual admission witness is appended by the existing receipt observer before
+its finish suffix. Enqueue success and EPIPE retain the queued carrier; ENOSPC
+pays its key/peer references and frees it. No initialized reachability, positive
+ring size, or peer-survival premise is asserted. This export is normal-only;
+the separate lower consume_receipt lemma also covers a later stopped finish,
+without assigning a World to that Stop. -/
+theorem original_consume_data_carrier_conservation
+    (cs : Ledger) (loans : Reservations) (w v : World)
+    (msg : List UInt8) (src : SkbSource) (ds : Nat)
+    (hi : CarrierState cs loans w) (hf : Packets.Inv w)
+    (hr : (consumeData msg src ds).run w=.ok ((),v)) :
+    ∃ r, Consumption cs loans msg src ds w v r ∧
+      ∀ h : List (MaterialOrigin.Event RxOrigin.Receipt),
+        runPrefix (RxOrigin.consume msg src ds) w h =
+          let next := (runPrefix (RxOrigin.admitRaw msg src ds) w h).2 ++
+            [.receipt (.admission msg src ds r)]
+          match r.value with
+          | none => (.ok ((),r.after),next)
+          | some ctx => runPrefix (finishObserved ctx) r.after next := by
+  obtain ⟨r,hc⟩ := consume_normal hi hf hr
+  exact ⟨r,hc,fun h=>consume_receipt r hc.1 hc.2.1 h⟩
+
+/-- Normal original admission preserves the supplied stable RX boundary with
+its exact outcome-selected carrier ledger. The separately existing ring
+observer gives the actual appended physical journal for the same execution.
+At a stable boundary, empty physical ring and cold resident NAPI flags force
+both the carrier ledger and RX store empty, including ring size zero. This does
+not establish initialized or all-prefix receive-pipeline conservation. -/
+theorem original_consume_data_stable_rx
+    (cs : Ledger) (loans : Reservations) (w : World)
+    (epoch n : Nat) (h : List (Queues.Ring.Journal.Event SkbId))
+    (hi : CarrierState cs loans w) (hs : StableRx cs w)
+    (physical : Queues.RxRing.Inv epoch (PtrRing.init n) h w) :
+    (∀ msg src ds v, Packets.Inv w → (consumeData msg src ds).run w=.ok ((),v) →
+      (∃r, StableConsumption cs loans msg src ds w v r) ∧
+      let out := runPrefix (Queues.RxRing.consume msg src ds) w h
+      out.1=.ok ((),v) ∧ (∃suffix,out.2=h++suffix) ∧
+        Queues.RxRing.Safe (PtrRing.init n) out.2 ∧
+        Queues.RxRing.Inv epoch (PtrRing.init n) out.2 v) ∧
+    ((∀d,w.k.wg=some d → d.decryptQueue.empty=true) →
+      (∀(d : Device)(pid : PeerId)(p : Peer),w.k.wg=some d → d.peers[pid]?=some p → p.napiScheduled=false) →
+      cs=[] ∧ ∀(d : Device)(id : SkbId)(pkt : RxPacket),w.k.wg=some d → d.rxSkbs[id]?≠some pkt) := by
+  constructor
+  · intro msg src ds v hf hr
+    exact ⟨consume_stable hi hf hs physical hr,consume_ring_normal physical hr⟩
+  · exact stable_drained hi hs physical
 
 end Leanux.Proofs.WG.DeliveryOrder
