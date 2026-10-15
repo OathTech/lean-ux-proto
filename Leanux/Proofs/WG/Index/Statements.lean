@@ -1,5 +1,5 @@
 import Leanux.Proofs.WG.Index.DrawRecords
-import Leanux.Proofs.WG.Index.Allocation
+import Leanux.Proofs.WG.Index.ReleaseBounds
 import Leanux.Proofs.WG.Index.CorpusDraws
 import Leanux.Proofs.WG.Index.HandshakeFrames
 import Leanux.Proofs.WG.Index.LookupMiss
@@ -214,5 +214,45 @@ theorem original_index_lookup_miss (kinds : List IndexKind) (index : Nat) (d : D
     Returns (indexLookup kinds index) (fun w => w.k.wg = some d)
       (fun result w => result = none ∧ w.k.wg = some d) :=
   indexLookup_miss kinds index d noMatch
+
+/-- Original keypair release removes every row for that owner when requested
+immediately or when the last reference is released; only the last release erases
+the keypair. Other stored keypairs are unchanged and both table uniqueness
+properties survive. The non-NULL peer word permits the mirror's dereference;
+this says nothing about peer residency or references held in slots and packets. -/
+theorem original_keypair_release (id : KeypairId) (now : Bool) (d : Device) (k : Keypair)
+    (resident : d.keypairs[id]? = some k) (live : 0 < k.refcount) (word : k.peer ≠ none)
+    (indices : UniqueIndices d.indexTable) (owners : UniqueOwners d.indexTable) :
+    Returns (keypairPut (some id) now) (fun w => w.k.wg = some d)
+      (fun _ w =>
+        let final := releasedDevice d id k now
+        w.k.wg = some final ∧
+        final.indexTable = (if now || k.refcount == 1 then
+          removeOwner (.keypair id) d.indexTable else d.indexTable) ∧
+        final.keypairs[id]? = (if k.refcount = 1 then none else some { k with refcount := k.refcount - 1 }) ∧
+        (∀ other : KeypairId, id ≠ other → final.keypairs[other]? = d.keypairs[other]?) ∧
+        UniqueIndices final.indexTable ∧ UniqueOwners final.indexTable) := by
+  intro w pre
+  obtain ⟨ret, final, run, device⟩ := keypairPut_exact id now d k resident live word w pre
+  exact ⟨ret, final, run, device, released_table d id k now, released_keypair d id k now,
+    fun other different => released_other_keypair d id other k now different,
+    released_indices d id k now indices, released_owners d id k now owners⟩
+
+/-- Original release preserves both bounds used to make future keypair
+allocations fresh. The allocation identity does not change. This local closure
+result does not initialize the bounds or prove them through every driver caller. -/
+theorem original_keypair_release_allocation_bounds (id : KeypairId) (now : Bool)
+    (d : Device) (k : Keypair) (resident : d.keypairs[id]? = some k)
+    (live : 0 < k.refcount) (word : k.peer ≠ none)
+    (owners : KeypairOwnersBounded d) (store : KeypairStoreBounded d) :
+    Returns (keypairPut (some id) now) (fun w => w.k.wg = some d)
+      (fun _ w => w.k.wg = some (releasedDevice d id k now) ∧
+        (releasedDevice d id k now).nextKeypairId = d.nextKeypairId ∧
+        KeypairOwnersBounded (releasedDevice d id k now) ∧
+        KeypairStoreBounded (releasedDevice d id k now)) := by
+  intro w pre
+  obtain ⟨ret, final, run, device⟩ := keypairPut_exact id now d k resident live word w pre
+  exact ⟨ret, final, run, device, released_next d id k now,
+    released_owners_bounded d id k now owners, released_store_bounded d id k now resident store⟩
 
 end Leanux.Proofs.WG.Index

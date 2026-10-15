@@ -120,12 +120,13 @@ composing reachable-state coherence. The landed representation keeps owner
 identity in each table row and its optional peer word in the owner object.
 The two are not interchangeable on arbitrary states.
 
-Fifteen terminal statements cover removal, the keypair-removal specialization,
+Seventeen terminal statements cover removal, the keypair-removal specialization,
 handshake replacement, normally completed insertion, lookup owner/table
 provenance, total matched-entry NULL/zero-reference/live lookup effects, and
 recorded collision-prefix completion, a corpus-draw two-call instance and
 bounded allocation freshness, three original handshake-operation numeric
-uniqueness contracts, and total absent/disallowed lookup. Removal and replacement return under device residency. Replacement
+uniqueness contracts, and total absent/disallowed lookup, plus exact keypair release and preservation
+of allocation bounds. Removal and replacement return under device residency. Replacement
 preserves numeric indices and every owner object's peer word; preserving owner
 uniqueness additionally requires the destination keypair not already hashed.
 Insertion first removes this owner's old row, then inserts a fresh numeric
@@ -187,13 +188,27 @@ that numeric uniqueness needs no destination-owner freshness premise for
 replacement: labels change while numbers remain fixed. These new result-local
 index contracts do not edit or copy campaign 1's shared receive-state layer.
 
+`Release` proves total original keypair release with a resident keypair,
+positive reference count and non-NULL peer word. Its ordered state transformer
+keeps both unhash operations on an immediate final release. `ReleaseEffects`
+proves their net filtering effect, final-reference erasure, unchanged other
+keypairs and preservation of both uniqueness predicates. `ReleaseBounds` keeps
+the allocation cursor and both freshness bounds. These are two additional
+terminal contracts. Non-NULL is sufficient for this mirror's dereference; no
+peer-residency premise is silently inferred from it. Peer slots and packet
+references are outside the contract. Independent read-only review found no
+correctness defect in the exact operation, effects, bounds or terminal scope.
+Proof elaboration initially failed on intermediate device equalities; explicit
+substitution before the second dereference closed the same statement. These
+were failed proof iterations, not infrastructure reruns.
+
 The table invariant is about hashed entries; this checkpoint does not yet establish all-driver reachable-session
 uniqueness or initialize/preserve owner-store coherence through every caller.
 
 Independent read-only review found no semantic defect. Its wording finding was
 fixed: the terminal lookup docstring now describes its exported provenance
 postcondition, leaving stronger first-selection semantics to the internal
-scan contract. The fifteen statements pass scoped build, standard-axiom inspection
+scan contract. The seventeen statements pass scoped build, standard-axiom inspection
 and fresh stock kernel replay (`capped -- scripts/in-bundle lake env leanchecker
 --fresh Leanux.Proofs.WG.Index.Statements`). The full proof gate still fails in
 inherited `CounterWindow.Refinement` and `ReplayWindow.Counterexamples`;
