@@ -185,6 +185,47 @@ def traces():
         SESSION + [fired("send_keepalive"), "wg_timers_data_received.not_pending=1",
                    "wg_timers_data_received.not_pending=0", NEED_ANOTHER + "=1"])
 
+    # B3 (docs/2026-10-15-design-b3-timer-wheel.md, section 9): the keepalive
+    # callback's re-arm inside a catch-up pass. As d3_keepalive_rearm_deleted,
+    # but one advance of 4200 ticks: the pass at the absorbing tick runs the
+    # keepalive's bucket (due about 1700 ticks before the tick), the callback
+    # re-arms at jiffies + 2500 with the base clock forwarded only to the
+    # next due bucket of any owner (timer.c:1008-1014), so the re-arm's
+    # delta is about 4200 and it lands on level 3 (slot 192+, width 512)
+    # instead of level 2. The tx worker's any_authenticated_packet_sent then
+    # deletes it, so only the kind-313 and kind-314 records show the level:
+    # the mutant B3-M7 (the base clock taken as mod_timer's read) computes
+    # level 2 and the kind-314 slot rejects it. The 25 s persistent keepalive
+    # (6250 ticks from the response's receive) is not due: 4200 plus the
+    # trace's real time (under 500 ticks) stays below it.
+    assert 4200 + 500 < 25 * HZ
+    out["d3_keepalive_rearm_catchup"] = (
+        ka_ops + [data(sess, 0, "one"), data(sess, 1, "two"), advance(4200), OBSERVE, GET],
+        steer,
+        SESSION + [fired("send_keepalive"), "wg_timers_data_received.not_pending=1",
+                   "wg_timers_data_received.not_pending=0", NEED_ANOTHER + "=1"])
+
+    # B3 (section 9): two passes in one wait, with work between them. A 1 s
+    # persistent keepalive (250 ticks, level 1, width 8) re-armed by the
+    # batch's transmission fires naturally about 250 ticks into the batch's
+    # wait; its keepalive's transmission re-arms it and it fires again about
+    # 250 ticks later, each firing a pass of its own with the encrypt and tx
+    # workers and the loopback NET_RX between (the T W N T W N stream of E1).
+    # The batch waits 2400 ms (600 ticks), past the second firing (at most
+    # 258 + 258 ticks after the transmission). The new-handshake timer the
+    # transmission arms (3750 ticks) and the zero-key timer are not due; no
+    # data is received, so no send-keepalive timer. The batch's wait is not
+    # in wait_after_up's table; the trace's real time since wg_up is about
+    # 3.3 s, under the guest's 4.5 s bound.
+    ops1, _, _ = session(1)
+    out["d3_two_passes"] = (
+        ops1 + [{"op": "wg_batch", "items": [{"kind": "xmit", "packet": {"family": 4, "dst": DST4.hex(),
+                                                                          "payload": d2.payload(17, 1).hex()}}],
+                 "wait_ms": 2400}, GET],
+        steer,
+        SESSION + [fired("send_persistent_keepalive"), INTERVAL + "=1",
+                   "wg_timers_any_authenticated_packet_traversal.keepalive=1"])
+
     # A session, then a data packet sent: data_sent arms the new-handshake
     # timer (3750 + [0, 83) ticks). The advance fires it:
     # wg_expired_new_handshake clears the endpoint source and queues an
