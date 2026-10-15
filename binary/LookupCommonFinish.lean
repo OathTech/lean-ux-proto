@@ -58,6 +58,7 @@ theorem common_finish (fetch : Int64 → Option Decoded)
         (seen ++ [returned "wg_index_hashtable_lookup" final.machine]) (source ++ [⟨.returned "wg_index_hashtable_lookup", finalWorld⟩]) ∧
       ExecutedCorrespondence.CutsAligned (R c) c.rxSection final.history (source ++ [⟨.returned "wg_index_hashtable_lookup", finalWorld⟩]) ∧
       R c final.history (seen ++ [returned "wg_index_hashtable_lookup" final.machine]) final.machine finalWorld ∧
+      EndsAtReturn (Image.Lookup.entry+0x94) final.history ∧
       ∃ suffix, final.history = current.history ++ suffix ∧
         CutFrames (fun a => scanWrites current.machine.data ⟨coverage, preempt, v⟩ a ∨
           InRange preemptCountAddress 4 a) current.machine.data.dmem suffix) current := by
@@ -143,7 +144,7 @@ theorem common_finish (fetch : Int64 → Option Decoded)
   have cursor : (⟨⟨afterBh.machine.data, Image.Lookup.entry+0x89⟩, afterBh.history⟩ : Executed) = afterBh := by rw [← afterPC]
   rw [cursor] at returnRun
   apply eventually_weaken (historyStep fetch) _ _ _ _ (historySteps_eventually fetch 7 _ _ returnRun)
-  rintro final ⟨returned, value, memory, full, matching, cuts, endpoint, retTail, retHistory, retMem⟩
+  rintro final ⟨returned, value, memory, full, matching, cuts, endpoint, ended, retTail, retHistory, retMem⟩
   have liftBh (q : MachineState)
       (localFrame : EqualOutside (fun a => InRange (callback.machine.data.regs.rsp.toBitVec-8) 8 a ∨
         InRange preemptCountAddress 4 a) callback.machine.data.dmem q.data.dmem) :
@@ -156,7 +157,7 @@ theorem common_finish (fetch : Int64 → Option Decoded)
         simpa only [traced.frame.stack] using stack
       · exact outside (.inr count)))
   have bhFrame := liftBh afterBh.machine frame
-  refine ⟨returned, ?_, ?_, full, matching, cuts, endpoint, (cbTail ++ bhTail) ++ retTail, ?_, ?_⟩
+  refine ⟨returned, ?_, ?_, full, matching, cuts, endpoint, ended, (cbTail ++ bhTail) ++ retTail, ?_, ?_⟩
   · rw [value, ret.2.2.1]
     exact cbBX
   · rw [memory]

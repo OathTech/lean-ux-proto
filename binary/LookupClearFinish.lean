@@ -31,7 +31,8 @@ theorem clear_finish (fetch : Int64 → Option Decoded)
         (seen ++ [returned "wg_index_hashtable_lookup" final.machine]) (source ++ [⟨.returned "wg_index_hashtable_lookup", finalWorld⟩]) ∧
       ExecutedCorrespondence.CutsAligned (R c) c.rxSection final.history (source ++ [⟨.returned "wg_index_hashtable_lookup", finalWorld⟩]) ∧
       R c final.history (seen ++ [returned "wg_index_hashtable_lookup" final.machine]) final.machine finalWorld ∧
-      CutFrames (LookupWrites c coverage preempt s v) s.dmem final.history) current := by
+      CutFrames (LookupWrites c coverage preempt s v) s.dmem final.history ∧
+      EndsAtReturn (Image.Lookup.entry+0x94) final.history) current := by
   have run := clear_simulation fetch agree c finalWorld current.machine.data current.history seen source
     (by simpa only [← pc] using related) observed matched aligned latest inactive noReturn
   have cursor : (⟨⟨current.machine.data, Image.Lookup.entry+0x71⟩, current.history⟩ : Executed) = current := by rw [← pc]
@@ -58,8 +59,8 @@ theorem clear_finish (fetch : Int64 → Option Decoded)
     (pending_from_frame c coverage preempt ra s cleared.machine.data world v entry clearFrame)
     seen source endpoint full matching cuts latest inactive noReturn
   apply eventually_weaken (historyStep fetch) _ _ _ _ finish
-  rintro final ⟨ret, value, memory, full, matching, cuts, endpoint, suffix, finalHistory, suffixFrames⟩
-  refine ⟨ret, ?_, ?_, full, matching, cuts, endpoint, ?_⟩
+  rintro final ⟨ret, value, memory, full, matching, cuts, endpoint, ended, suffix, finalHistory, suffixFrames⟩
+  refine ⟨ret, ?_, ?_, full, matching, cuts, endpoint, ?_, ended⟩
   · rw [value, machine, (PeerGet.zeroed_shape _ _).1]
   · intro a outside
     exact (clearFrame a outside).trans (memory a (by

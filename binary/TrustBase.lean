@@ -1,4 +1,4 @@
-import History
+import FiniteExecution
 import Image
 import ServiceImage
 import Memory
@@ -16,6 +16,12 @@ import LookupProjection
     Kraken's model with x86 hardware. The loader checks identity and branch
     encodings. Mutable runtime globals are NOT assumed equal to ELF initial
     bytes at a function entry; their current values belong in Pre_lookup.
+    A fixed fetch models stable text; the external ELF interpretation requires
+    no runtime text patch in these ranges. Independent review measured no
+    alternatives entry in the ranges, no jump table, empty smp_locks, no RET
+    thunk rewriting, and no GS use. These are interpretation facts, not unused
+    Lean premises. Permissions and serialization below are headline hypotheses.
+
 -/
 namespace Binary.TrustBase
 
@@ -32,24 +38,10 @@ local instance : Labels := Image.linkedLabels
 def pinnedFetch (pc : Int64) : Option Decoded :=
   (Image.fetch pc).orElse (fun _ => ServiceImage.fetch pc)
 
-/-- The ambient instruction image is this fixed ELF-derived listing,
-    including service bytes. This is the external bytes-to-AST assumption. -/
-def WholeImageDecoderAgreement (fetch : Int64 → Option Decoded) : Prop :=
-  fetch = pinnedFetch
-
 /-- The ambient decoder agrees with the pinned literal instructions/lengths.
     Interpreting those literals as this ELF is the external decoding assumption. -/
 def AnchoredDecoderAgreement (fetch : Int64 → Option Decoded) : Prop :=
   ∀ pc instruction, Image.fetch pc = some instruction → fetch pc = some instruction
-
-/-- No alternatives/static-key text change in a certified anchored range. -/
-def AnchoredTextStable (fetchAt : Nat → Int64 → Option Decoded) : Prop :=
-  ∀ time pc instruction, Image.fetch pc = some instruction → fetchAt time pc = some instruction
-
-/-- Read-only image bytes remain the linked bytes. `linked` is the loader's
-    fixed ELF projection; it is not chosen independently at each proof point. -/
-def ReadOnlyImage (linked : Mem 64) (readOnly : BitVec 64 → Prop) (memory : Mem 64) : Prop :=
-  ∀ address, readOnly address → memory.get? address = linked.get? address
 
 /-- External paging/access permissions, absent from Kraken MachineState. -/
 structure Permissions where
@@ -85,6 +77,19 @@ def RunAccessAllowed (fetch : Int64 → Option Decoded) (permissions : Permissio
 structure SerializedEnvironment (onlineCPUs : Nat) (externalActions : List Nat) : Prop where
   singleCPU : onlineCPUs = 1
   noInterleaving : externalActions = []
+
+/-- Permission safety of finite actual prefixes through the first outer RET.
+    This is safety only: no termination, source result or relation is assumed.
+    Service interiors are included; the unexecuted return destination is not. -/
+def InvocationPermissions (fetch : Int64 → Option Decoded) (permissions : Permissions)
+    (initial : MachineState) (returnPC : Int64) : Prop :=
+  ∀ history, ActualHistory fetch initial history → NoEarlyReturn returnPC history →
+    RunAccessAllowed fetch permissions history
+
+/-- The exported interpretation audit of this actual instruction history. -/
+def RunEnvironment (fetch : Int64 → Option Decoded) (permissions : Permissions)
+    (onlineCPUs : Nat) (externalActions : List Nat) (history : List MachineState) : Prop :=
+  SerializedEnvironment onlineCPUs externalActions ∧ RunAccessAllowed fetch permissions history
 
 /-- Kernel ABI: the stack word is the actual CALL return address. Eight-byte
     alignment follows this kernel's compiler flags, not a userspace ABI guess. -/

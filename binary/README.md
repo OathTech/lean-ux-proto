@@ -8,11 +8,14 @@ read-only. No dependency download or global configuration change is needed.
 `LookupAdequacy.lookup_simulation` proves entry-to-original-return execution
 of `wg_index_hashtable_lookup`, including the complete bucket loop and the
 NULL, zero-count and accepted live peer-get paths. Its premises are the
-named decoder/service contracts in `TrustBase.lean`, the witnessed
+named decoder/service contracts, `SerializedEnvironment` and
+`InvocationPermissions` in `TrustBase.lean`, the witnessed
 `Pre_lookup`, and acceptance of the executable mirror's run. It proves the
 ABI result, live output word, exact source decision/call history, minimal
 WireGuard R at actual correspondence points and anchored cuts, and the
-endpoint/cut memory footprint. There is no positive-peer restriction.
+endpoint/cut memory footprint. Its returned history exports the serialization
+and permission audit, including callback interiors and RET, stopping before
+the caller continuation. There is no positive-peer restriction.
 
 `LookupAdequacy.lookup_transport` transports predicates on the same accepted
 source run through R. `LookupFrameTransport.lookup_framed_transport` adds

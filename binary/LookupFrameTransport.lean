@@ -32,7 +32,7 @@ theorem LookupPost.frame_cuts (c : Config) (coverage : KcovLayout) (preempt : Bi
     (stable : ∀ v, LookupEntry c coverage preempt ra initial world v →
       ∀ before after, EqualOutside (LookupWrites c coverage preempt initial.data v) before after → F before → F after) :
     ∀ current ∈ final.history, current.pc ∈ Image.cutPoints → F current.data.dmem := by
-  obtain ⟨_, _, v, _, _, entry, _, _, _, _, _, _, frames⟩ := post
+  obtain ⟨_, _, v, _, _, entry, _, _, _, _, _, _, frames, _⟩ := post
   intro current member cut
   exact stable v entry _ _ (frames current member cut) initialFrame
 
@@ -47,6 +47,9 @@ theorem lookup_framed_transport {α : Type} (fetch : Int64 → Option Decoded)
     (bhEnable : BhEnableContract fetch)
     (c : Config) (coverage : KcovLayout) (preempt : BitVec 32) (returnAddress : UInt64)
     (initial : MachineState) (world : World)
+    (onlineCPUs : Nat) (externalActions : List Nat) (permissions : Permissions)
+    (environment : SerializedEnvironment onlineCPUs externalActions)
+    (access : InvocationPermissions fetch permissions initial (Image.Lookup.entry+0x94))
     (pre : Pre_lookup c coverage preempt returnAddress initial world)
     (answer : Option (IndexOwner × PeerId)) (finalWorld : World)
     (accepted : (indexLookup c.kinds c.query).run world = .ok (answer, finalWorld))
@@ -61,14 +64,15 @@ theorem lookup_framed_transport {α : Type} (fetch : Int64 → Option Decoded)
       observer run.finalWorld = observer world ∧ ∀ point ∈ run.points, observer point.world = observer world) :
     Eventually (historyStep fetch) (fun final =>
       LookupPost c coverage preempt returnAddress initial world answer finalWorld final ∧
+      RunEnvironment fetch permissions onlineCPUs externalActions final.history ∧
       ∃ run, run.result = answer ∧ run.finalWorld = finalWorld ∧
         MirrorHistory.Accepted (MirrorHistory.lookup c.kinds c.query) world run ∧
         FramedLookupRun c observer represents final run ∧ P run)
       ⟨initial, [initial]⟩ := by
   have run := lookup_transport fetch decoder tracePc traceCmp4 traceConstCmp4 traceConstCmp1 bhEnable
-    c coverage preempt returnAddress initial world pre answer finalWorld accepted P property
+    c coverage preempt returnAddress initial world onlineCPUs externalActions permissions environment access pre answer finalWorld accepted P property
   apply eventually_weaken (historyStep fetch) _ _ _ _ run
-  rintro final ⟨post, sourceRun, resultEq, worldEq, acceptedRun, realizes, propertyRun⟩
+  rintro final ⟨post, audited, sourceRun, resultEq, worldEq, acceptedRun, realizes, propertyRun⟩
   have finalFrame := post.frame c coverage preempt returnAddress initial world answer finalWorld final
     (fun memory => represents memory (observer world)) initialFrame
     frameRule
@@ -76,7 +80,7 @@ theorem lookup_framed_transport {α : Type} (fetch : Int64 → Option Decoded)
     (fun memory => represents memory (observer world)) initialFrame
     frameRule
   obtain ⟨finalSource, sourcePoints⟩ := sourceFrame sourceRun acceptedRun
-  refine ⟨post, sourceRun, resultEq, worldEq, acceptedRun, ⟨realizes, ?_, ?_⟩, propertyRun⟩
+  refine ⟨post, audited, sourceRun, resultEq, worldEq, acceptedRun, ⟨realizes, ?_, ?_⟩, propertyRun⟩
   · rw [finalSource]
     exact finalFrame
   · intro i current present cut

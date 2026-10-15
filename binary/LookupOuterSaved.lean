@@ -1,5 +1,6 @@
 import LookupReturnSimulation
 import LookupStackFrame
+import FiniteExecution
 
 namespace Binary.LookupRelation
 open Leanux TrustBase LookupHistory LookupObservation
@@ -81,6 +82,7 @@ theorem return_from_saved (fetch : Int64 → Option Decoded) (agree : AnchoredDe
         (seen ++ [returned "wg_index_hashtable_lookup" final.machine]) (source ++ [⟨.returned "wg_index_hashtable_lookup", world⟩]) ∧
       ExecutedCorrespondence.CutsAligned (R c) c.rxSection final.history (source ++ [⟨.returned "wg_index_hashtable_lookup", world⟩]) ∧
       R c final.history (seen ++ [returned "wg_index_hashtable_lookup" final.machine]) final.machine world ∧
+      EndsAtReturn (Image.Lookup.entry+0x94) final.history ∧
       ∃ suffix, final.history = history ++ suffix ∧
         ∀ q ∈ suffix, q.data.dmem = current.dmem)
       ⟨⟨current, Image.Lookup.entry+0x89⟩, history⟩ := by
@@ -96,7 +98,7 @@ theorem return_from_saved (fetch : Int64 → Option Decoded) (agree : AnchoredDe
   apply historySteps_mono fetch 7 _ _ _ _ run
   rintro final ⟨machine, recorded, full, matching, cuts, endpoint⟩
   refine ⟨?_, by rw [machine]; rfl, by rw [machine]; rfl, full, matching, cuts, endpoint,
-    _, recorded, ?_⟩
+    ?_, _, recorded, ?_⟩
   · rw [machine]
     refine ⟨rfl, ?_, rfl, rfl, rfl, rfl, rfl, saved.saved⟩
     change current.regs.rsp+48 = entry.regs.rsp+8
@@ -106,6 +108,15 @@ theorem return_from_saved (fetch : Int64 → Option Decoded) (agree : AnchoredDe
     change entry.regs.rsp.toBitVec-40+48 = entry.regs.rsp.toBitVec+8
     rw [show (48 : BitVec 64) = 40+8 from rfl, ← BitVec.add_assoc, BitVec.sub_add_cancel]
 
+  · rw [recorded]
+    refine ⟨history ++ (LookupReturn.restoreStates current entry.regs.rbx entry.regs.rbp
+      entry.regs.r12 entry.regs.r13 entry.regs.r14 returnAddress).take 5,
+      ⟨LookupReturn.restoreData current entry.regs.rbx entry.regs.rbp entry.regs.r12 entry.regs.r13 entry.regs.r14 5,
+        Image.Lookup.entry+0x94⟩,
+      ⟨LookupReturn.restoreData current entry.regs.rbx entry.regs.rbp entry.regs.r12 entry.regs.r13 entry.regs.r14 6,
+        .ofBitVec returnAddress.toBitVec⟩, ?_, rfl⟩
+    simp only [LookupReturn.restoreStates, List.take, List.append_assoc,
+      List.cons_append, List.nil_append]
   · intro q member
     simp only [LookupReturn.restoreStates, List.mem_cons, List.not_mem_nil, or_false] at member
     rcases member with rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> rfl

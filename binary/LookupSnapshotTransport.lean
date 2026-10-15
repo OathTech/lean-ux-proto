@@ -50,6 +50,9 @@ theorem lookup_snapshot_transport (fetch : Int64 → Option Decoded)
     (bhEnable : BhEnableContract fetch)
     (c : Config) (coverage : KcovLayout) (preempt : BitVec 32) (returnAddress : UInt64)
     (initial : MachineState) (world : World)
+    (onlineCPUs : Nat) (externalActions : List Nat) (permissions : Permissions)
+    (environment : SerializedEnvironment onlineCPUs externalActions)
+    (access : InvocationPermissions fetch permissions initial (Image.Lookup.entry+0x94))
     (pre : Pre_lookup c coverage preempt returnAddress initial world)
     (answer : Option (IndexOwner × PeerId)) (finalWorld : World)
     (accepted : (indexLookup c.kinds c.query).run world = .ok (answer, finalWorld))
@@ -61,12 +64,13 @@ theorem lookup_snapshot_transport (fetch : Int64 → Option Decoded)
         ¬LookupWrites c coverage preempt initial.data v a) :
     Eventually (historyStep fetch) (fun final =>
       LookupPost c coverage preempt returnAddress initial world answer finalWorld final ∧
+      RunEnvironment fetch permissions onlineCPUs externalActions final.history ∧
       ∃ run, run.result = answer ∧ run.finalWorld = finalWorld ∧
         MirrorHistory.Accepted (MirrorHistory.lookup c.kinds c.query) world run ∧
         FramedLookupRun c LookupSourceFrame.receivingSnapshot (ReceivingSnapshotFields c.keypairs) final run ∧ P run)
       ⟨initial, [initial]⟩ := by
   exact lookup_framed_transport fetch decoder tracePc traceCmp4 traceConstCmp4 traceConstCmp1 bhEnable
-    c coverage preempt returnAddress initial world pre answer finalWorld accepted P property
+    c coverage preempt returnAddress initial world onlineCPUs externalActions permissions environment access pre answer finalWorld accepted P property
     LookupSourceFrame.receivingSnapshot (ReceivingSnapshotFields c.keypairs) represented
     (fun v entry _ _ same fields => fields.frame same (separate v entry))
     (fun run acceptedRun => LookupSourceFrame.lookup_receivingSnapshot c.kinds c.query world

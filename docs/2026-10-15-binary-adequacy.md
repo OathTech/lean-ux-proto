@@ -2919,3 +2919,42 @@ one skip) all passed.
 
 Development elaboration failures were fixed before these passes; no killed
 or timed-out run was counted as success. F3 and later findings remain open.
+
+
+### Milestone-1 review fix F3: explicit environment surface (2026-10-15)
+
+[USER] Serialization and permissions are explicit headline hypotheses.
+`lookup_simulation` and all three transport headlines now take
+`SerializedEnvironment onlineCPUs externalActions` and
+`InvocationPermissions fetch permissions initial outerRetPC`. The latter is
+safety over finite actual instruction prefixes through the first outer RET;
+it assumes no termination, mirror result, source decisions, or R preservation.
+The conclusion exports `RunEnvironment` on the same raw history, including
+service interiors and RET's stack read, excluding the unexecuted caller
+continuation. The underlying Kraken execution theorem remains proved without
+these hypotheses; the permission audit is then derived from the access
+premise. Serialization is the explicitly supplied external interpretation,
+re-exported unchanged, not verification of a real scheduler or interrupt log.
+
+The implementation proves that the raw trace consists of actual successors,
+that the accepted source has exactly one outer-return tag, and that the final
+raw edge is the compiled outer RET. The last fact was present internally in
+the seven-instruction epilogue but absent from the old postcondition. These
+facts justify the audit's invocation boundary; none is a new assumption.
+`Pre_lookup`, its witnesses and R are unchanged.
+
+Unused `WholeImageDecoderAgreement`, `AnchoredTextStable` and `ReadOnlyImage`
+were removed. Stable text and absence of GS use are explicitly external
+interpretation facts, alongside the ELF/decoder link: the independent review
+measured no alternatives entry in the anchored ranges, no jump table, empty
+smp_locks and no RET-thunk rewrite. The five callback contracts remain
+hypotheses until F2, due before milestone 4's first transport.
+
+Validation: default build **357 jobs PASS**, binary axiom/escape gate PASS,
+and fresh `leanchecker LookupSnapshotTransport` closure replay PASS. The
+internal read-only check found no correctness defect; it noted that the access
+predicate rejects fault/unimplemented effects as well as denied permissions.
+The underlying Kraken theorem proves successful execution independently of
+that premise. No native-verification axiom or new project axiom was added.
+The external gate at 430ea90 does not cover this changed surface; the next
+external export must be regenerated. No KILLED banner or timeout occurred.

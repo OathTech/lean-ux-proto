@@ -28,7 +28,8 @@ theorem miss_execution (fetch : Int64 → Option Decoded)
         MatchesPoints (ExecutedCorrespondence.AtPoint (R c) c.rxSection final.history) points source ∧
         ExecutedCorrespondence.CutsAligned (R c) c.rxSection final.history source ∧
         R c final.history points final.machine finalWorld ∧
-        CutFrames (LookupWrites c coverage preempt s v) s.dmem final.history)
+        CutFrames (LookupWrites c coverage preempt s v) s.dmem final.history ∧
+        EndsAtReturn (Image.Lookup.entry+0x94) final.history)
       ⟨⟨s, Image.Lookup.entry⟩, [⟨s, Image.Lookup.entry⟩]⟩ := by
   obtain ⟨v, entry⟩ := pre
   obtain ⟨answerEq, finalEq⟩ := lookup_no_owner_accepted c coverage preempt ra _ world v entry focused answer finalWorld accepted
@@ -80,12 +81,13 @@ theorem miss_execution (fetch : Int64 → Option Decoded)
           MatchesPoints (ExecutedCorrespondence.AtPoint (R c) c.rxSection final.history) points source ∧
           ExecutedCorrespondence.CutsAligned (R c) c.rxSection final.history source ∧
           R c final.history points final.machine finalWorld ∧
-        CutFrames (LookupWrites c coverage preempt s v) s.dmem final.history) current := by
+        CutFrames (LookupWrites c coverage preempt s v) s.dmem final.history ∧
+        EndsAtReturn (Image.Lookup.entry+0x94) final.history) current := by
     have run := clear_finish fetch agree tracePc bh c coverage preempt ra s world v entry current pc finalWorld sourceView
       saved ready frame seen source related observed matched aligned latest inactive noReturn cutFrames
     apply eventually_weaken (historyStep fetch) _ _ _ _ run
-    rintro final ⟨ret, zero, frame, full, matching, cuts, endpoint, frames⟩
-    refine ⟨ret, zero, answerEq, v, _, _, entry, frame, ?_, full, matching, cuts, endpoint, frames⟩
+    rintro final ⟨ret, zero, frame, full, matching, cuts, endpoint, frames, ended⟩
+    refine ⟨ret, zero, answerEq, v, _, _, entry, frame, ?_, full, matching, cuts, endpoint, frames, ended⟩
     simpa only [answerEq, finalEq] using sourceRun
   rcases places with pc | pc
   · have scratch : ∀ view, project c finalWorld = some view → ∀ a, Reads c view a →
