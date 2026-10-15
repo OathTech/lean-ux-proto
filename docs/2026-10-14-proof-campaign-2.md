@@ -192,6 +192,14 @@ run and using the returned clock in the final state, with wrapping arithmetic.
 Independent review confirmed that relation. The read may use placeholders where
 enabled; captured-record provenance is not established by this theorem.
 
+The quiet private-key block now composes identity installation, cookie-key
+recomputation and the snapshotted peer-list loop. Its ordered relation records
+resident peers and intermediate stores, allowing repeated peers and aliased
+keypair slots. An unconditional source equality connects the factor to the
+original configuration continuation. The premise is that the code's staged-send
+condition is false; normal completion is assumed, and loop clocks remain
+existential. Independent review found no semantic defect in this increment.
+
 [AGENT 2026-10-15] Compose private-key updates from a baseline after optional
 self-peer removal: removal may flush other peers' work under the old identity,
 so an unrestricted surviving-peer frame against the initial request state would
@@ -218,14 +226,14 @@ defect. Review of the identity/precomputation/expiry leaves found no semantic
 defect and identified the weak existential-time and missing-target scope limits
 recorded above. Actual outer dump composition remains open.
 
-Remaining: private-key collision removal, the peer-list fold, optional
+Remaining: private-key collision removal, the peer-list fold with
 post-expiry staged sending and outer composition; full peer
 removal/replacement and allowed-IP ownership, other partial-error combinations,
 and general dump chunks/coalescing. Deferred removal work can change other
 peers' dynamic state, so no unrestricted removal frame is claimed. No H4
 mirror mismatch or mirror-team request; ranked mirror suggestions: none.
 
-Validation: all thirty-nine statements pass scoped build, standard-axiom inspection
+Validation: all forty-three statements pass scoped build, standard-axiom inspection
 (only `propext`, `Classical.choice`, `Quot.sound`), and `capped --
 scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Config.Statements`.
 The full proof gate fails in inherited `CounterWindow.Refinement`; token/import

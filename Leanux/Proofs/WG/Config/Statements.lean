@@ -13,6 +13,7 @@ import Leanux.Proofs.WG.Config.ZeroPort
 import Leanux.Proofs.WG.Config.RecordedPort
 import Leanux.Proofs.WG.Config.ExpiryEffects
 import Leanux.Proofs.WG.Config.ExpiryClock
+import Leanux.Proofs.WG.Config.KeyInstall
 
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise
@@ -476,5 +477,40 @@ theorem original_expiry_clock_relation (pid : PeerId) (d : Device) (p : Peer)
       (hiddenClock64 .resetLastSent).run before = .ok (now, after) ∧
       v.k.wg = some (expiredDevice d pid p now) :=
   expireCurrent_clock pid d p resident w v device run
+
+/-- Exact source equality exposing identity installation and the peer-list
+loop after optional self-peer removal, before later peer attributes. This is
+unconditional; the effects below separately require normal completion. -/
+theorem original_private_key_factor (a : DeviceAttrs) :
+    deviceKeyFactoredSource a = deviceKeySource a :=
+  deviceKey_loop_factor a
+
+/-- With staged sending disabled, a completed peer update precomputes its
+static-static value and performs the exact expiry store transformation. The
+clock here is existential; the stronger per-expiry read relation is separate. -/
+theorem original_quiet_key_peer (pid : PeerId) (d : Device) (p : Peer)
+    (resident : d.peers[pid]? = some p) :
+    Ensures (keyPeerSource pid false) (fun w => w.k.wg = some d)
+      (fun _ w => ∃ now, w.k.wg = some (peerUpdatedDevice d pid p now)) :=
+  keyPeer_quiet_exact pid d p resident
+
+/-- A completed quiet peer-list loop has the ordered relational effects of
+each resident peer update. Repeated peers and aliased keypair slots are allowed;
+missing peers or hidden inputs may stop, so this is not a return guarantee. -/
+theorem original_quiet_key_peer_loop (pids : List PeerId) (d : Device) :
+    Ensures (keyPeerLoopSource pids false) (fun w => w.k.wg = some d)
+      (fun _ w => ∃ final, w.k.wg = some final ∧ KeyPeerUpdates d pids final) :=
+  keyPeerLoop_quiet pids d
+
+/-- The quiet installation block sets identity and cookie keys, then applies
+ordered precomputation/expiry to its snapshotted peer list. The initial device
+is after optional collision removal; later peer attributes are outside this
+block. Normal completion is assumed, and clock values remain existential. -/
+theorem original_quiet_key_install (d : Device) (key : Key)
+    (quiet : requestsStagedSend d key = false) :
+    Ensures (keyInstallSource key) (fun w => w.k.wg = some d)
+      (fun _ w => ∃ final, w.k.wg = some final ∧
+        KeyPeerUpdates (installedDevice d key) d.peerList final) :=
+  keyInstall_quiet d key quiet
 
 end Leanux.Proofs.WG.Config
