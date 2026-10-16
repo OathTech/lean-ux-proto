@@ -40,9 +40,10 @@ it is not part of that baseline.
 | Native peer and packet primitives | 45 | 35 | 0 | 10 | 0 | 45 |
 | Native peer frames and allocation | 28 | 20 | 7 | 1 | 0 | 21 |
 | Product environment contracts and adapters | 28 | 23 | 3 | 2 | 10 | 35 |
+| Native AllowedIPs leaves and removal wrappers | 19 | 13 | 6 | 0 | 1 | 14 |
 
-The whole tree currently contains 450 Lean files and 6,224 theorems. The completed
-changes total 571 retyped theorems, 1,576 deletions, 126 retained contract shapes and 85 added.
+The whole tree currently contains 450 Lean files and 6,219 theorems. The completed
+changes total 584 retyped theorems, 1,582 deletions, 126 retained contract shapes and 86 added.
 Retyping changes or generalizes the actual state/monad carrier or observation.
 This includes shorthand contracts whose source functions or named views move
 to a native monad. Mere namespace qualification and equivalent relocation of a
@@ -712,9 +713,12 @@ and device modifiers retain their original quantified scope. All four baseline
 environment controls carry, including the original family-only delroute request.
 
 Deleted: the unused duplicate runWorker_sameKernel; fixtureSend_sameKernel and
-stackExcluded_sameKernel, whose actions now have only Ambient state. Their live
-consumers must use the generic actual Ambient adapter. stackExcluded_failure
-remains, with its exact failure claim. Stack's nineteen failing guards are
+stackExcluded_sameKernel, which are redundant concrete generic-rule instances.
+Both source actions remain product-typed. fixtureSend is exactly a lifted Ambient
+skipCut; stackExcluded always Stops, as retained by stackExcluded_failure. Their
+live consumers must use the generic actual adapter or exact-failure consequence.
+The 7aaacb6 report and commit message incorrectly classified these two deletions
+as Ambient-only structural frames; this corrects that justification, not the counts. Stack's nineteen failing guards are
 processed sequentially by a local head-only reduction tactic, without expanding
 continuation bodies or raising proof limits. ObservationSource.observe_eq is
 definitional equality against the current source, including routing access,
@@ -864,6 +868,67 @@ omit routing/neighbour calls, route-MTU propagation and the current timer-pass
 and advance-window rules. Its syscall copy omits the final `fib_trie` observation
 on route-changing operations. These source-inspected observer defects require
 current control-flow carry and exact erasure proofs; they are not mirror findings.
+
+## Native AllowedIPs and generic transport scope
+
+The two AllowedIPs framing modules move from 19 to 14 theorems: 13 native
+carries, six deletions and one shared actual liftAip adapter. Read-only leaves
+preserve the full AipStore; mutating leaves retain their substantive nextNode
+obligation. The removal wrappers preserve the baseline seven-field masked WG
+view through each actual guarded lift. Arbitrary Device modifiers retain their
+original mask premise. Ambient inputs and outputs, missing-device failures,
+child-index guards and finite exhaustion remain unrestricted.
+
+Four deleted helper frames now concern Ambient-only operations. The deleted
+allocator frame concerns fields outside its actual AipStore. The sixth deletion,
+SameNodeKernel.allocation, is redundant conditional projection support, not an
+unused or type-given theorem: its four live consumers in Lifetimes/AllowedIpsInsert
+must use the existing generic factor rule and actual adapters when carried.
+The allocator consumer there also remains to be migrated. The removal proof
+shares compiler-generated continuations through a tactic that constructs checked
+proof obligations; no execution world, unchecked proof step or raised limit is
+introduced.
+
+A separate scope audit found 26 helpers whose freely quantified product actions
+had been narrowed to WG.M, plus an update rule needing generic actual-state
+scope. A product action changing only fs.userOut is a concrete excluded original
+instance. This checkpoint repairs three transports in WGBase and Peers.Frames:
+they quantify actual StateT S m actions and an S-to-WGWorld projection, retaining
+the original seven-field premises. Four concrete callers instantiate the
+projection with id. The other 23 helpers and snapshot_modify remain to be
+repaired. These are repairs to already counted carries, not additional theorems.
+Concrete native operations with unchanged modifier predicates do not have that
+arbitrary-action restriction.
+
+Validation: AllowedIPs builds in 20 jobs; all 20 explicitly named declarations
+print only permitted axioms; fresh replay of WGAllowedIpsInsert passes.
+The transport pair builds in 94 jobs, all seven changed transports/callers print
+only permitted axioms, and fresh replays of both modules pass. Independent
+frozen-source reviews pass. Scope, source trust, unchanged limits, terminal
+preservation, mirror equality, census and whitespace checks pass. No full-tree
+pass is claimed.
+
+The AllowedIPs worker made ten failed development calls: four default-heartbeat
+failures, two unresolved composition-goal failures, two missing tactic/import
+failures, one invalid callback-control-flow failure and one doc-comment parser
+failure. The callback failure printed an elaboration-recovery admission; it is
+rejected, not validation. Root corrected the final comment and the closed build
+passed without changing limits. A transport axiom command first failed because
+it used the wrong namespace; the corrected command passes. The independently
+prepared transport candidate also passed one capped full-source stdin check.
+
+Three separate Clock carry probes remain unvalidated: the first lacked an
+explicit import; the next two leave Except error-branch reduction goals, with
+rejected recovery axiom prints. No Clock source change is included. All handles
+are collected. No crash, interruption, KILLED outcome, guest run, cap increase or
+infrastructure rerun occurred in this tranche.
+
+```sh
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake build Leanux.Proofs.Framing.WGAllowedIpsInsert Leanux.Proofs.WG.Keypairs.Frames.WGBase Leanux.Proofs.WG.Peers.Frames
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.Framing.WGAllowedIpsInsert
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Keypairs.Frames.WGBase
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Peers.Frames
+```
 
 ## Incoming merge and remaining work
 

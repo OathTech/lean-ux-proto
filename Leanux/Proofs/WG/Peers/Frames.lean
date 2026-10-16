@@ -17,8 +17,13 @@ def SamePeerSnapshot (a : WG.M α) : Prop :=
 def snapshotOfWGStoreView (v : WGStoreView) : Store PeerId :=
   ⟨v.peerCounter, fun i => (v.dev.bind fun d => d.peers[i]?).map (·.internalId)⟩
 
-theorem samePeerSnapshot_of_sameWGStore (h : SameWGStore a) : SamePeerSnapshot a :=
-  h.of_factor snapshotOfWGStoreView snapshot (fun _ => rfl)
+theorem samePeerSnapshot_of_sameWGStore
+    {S α : Type} {m : Type → Type} {ps : PostShape}
+    [Monad m] [WPMonad m ps] {project : S → WGWorld} {a : StateT S m α}
+    (h : SameView (fun s => wgStoreView (project s)) a) :
+    SameView (fun s => snapshot (project s)) a :=
+  h.of_factor snapshotOfWGStoreView
+    (fun s => snapshot (project s)) (fun _ => rfl)
 
 theorem SamePeerSnapshot.wp (h : SamePeerSnapshot a) (P : Store PeerId → Prop) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ a ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ :=

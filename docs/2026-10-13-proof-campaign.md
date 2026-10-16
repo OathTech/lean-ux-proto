@@ -5,8 +5,8 @@
 Work on `proofs/campaign` in `.worktrees/proofs-campaign` follows [the charter](2026-10-13-charter-proof-campaign.md).
 The state-split retrofit onto `6089dc4` precedes further R3/R4 results. All seven
 result rows remain lagging, last validated over `cb2348e`. The tree has moved from
-471 files / 7,715 named theorems to 450 files / 6,224 theorems. Completed changes
-comprise 571 retyped, 1,576 deleted, 126 retained contract shapes and 85 added theorems;
+471 files / 7,715 named theorems to 450 files / 6,219 theorems. Completed changes
+comprise 584 retyped, 1,582 deleted, 126 retained contract shapes and 86 added theorems;
 six redundant LifetimeSafety exports are removed, with every retained terminal
 body unchanged (515 declarations). The native foundational, ordinary lifetime,
 clock/Noise-helper, keypair-composition, product scheduler, small native helper and WGBase ports pass their
@@ -15,6 +15,12 @@ subsystem-frame layers and unused support have been deleted, with the distinctio
 recorded; the surviving consumers still need their native/product contracts.
 [The retrofit report](2026-10-16-proof-state-split.md) tracks exact counts,
 validation and remaining work. No full-tree pass is claimed.
+
+The native AllowedIPs tranche carries 13 of 19 old theorems, deletes six with
+explicit grounds and adds one actual adapter lemma. Its scoped build, axiom
+check, fresh replay and independent review pass. Three generic transports also
+regain their arbitrary product-action scope; the report tracks the remaining
+23 helpers and update rule. Every result remains lagging.
 
 The product environment tranche carries 25 of 28 old theorems and adds ten actual
 adapter facts, preserving the baseline 43-field scope. Two premise repairs and
