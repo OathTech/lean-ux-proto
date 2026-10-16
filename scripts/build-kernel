@@ -151,7 +151,7 @@ make -s -C "$SOURCE" O="$LEANUX_BUILD" ARCH=x86_64 allnoconfig
 LEANUX_CONFIG="$SOURCE/scripts/config"
 # SECCOMP (and with it SECCOMP_FILTER: arch/Kconfig's def_bool under
 # HAVE_ARCH_SECCOMP_FILTER && SECCOMP && NET) joins the oracle's configuration
-# [USER 2026-10-13: "Agree, sounds good - approved"; docs/2026-10-12-seccomp-design.md
+# [USER 2026-10-13: approved; docs/2026-10-12-seccomp-design.md
 # section 16]: nothing else changes, and the full differential check on the
 # rebuilt oracle is the re-validation.
 for option in 64BIT BINFMT_ELF BINFMT_SCRIPT PRINTK BUG MULTIUSER POSIX_TIMERS FUTEX \

@@ -868,8 +868,8 @@ answered with a reason the user can check, or raised for the user.
 ## 15. Build results (2026-10-15) [AGENT, fork of the coordinator]
 
 The build follows this note as revised, on `task/design-b3`, one commit per
-step. Decisions: U1 to U5 as recorded at `2784166` [USER 2026-10-15: "Agree
-re B3, go ahead as proposed"], U5 the per-timer layout with the enqueue stamp.
+step. Decisions: U1 to U5 as recorded at `2784166` [USER 2026-10-15: approved
+as proposed], U5 the per-timer layout with the enqueue stamp.
 
 ### 15.1 The oracle pair (step 1)
 

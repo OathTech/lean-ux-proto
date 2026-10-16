@@ -3,20 +3,19 @@
 Status: **decided, revision v3** (2026-10-07). Revision v2 (2026-10-06)
 answered a critical audit (section 15); revision v3 applies the user's
 decisions of 2026-10-07 (section 13, with provenance) and the **WireGuard
-boundary rule** — [USER 2026-10-07] "we should stop at the boundary of
-wireguard (unless this breaks important things)": the IP stack is modeled
-only where it drives WireGuard code paths or is needed to predict
-WireGuard's observable behaviour. Section 16 gives, per class, the
-WireGuard line, decision or outcome it alone reaches, the kept minimal set,
-and what is excluded as beyond the boundary (fail-noisy `unsupported`).
-The body below is corrected in place; sections marked *record only* keep
-verified kernel facts for classes no longer built. The census
-([2026-10-06-wireguard-census.md](2026-10-06-wireguard-census.md)) lists W4
-(transmit shapes, M) and W7 (bulk and multi-item queues, L) as in-reach
-workstreams toward the user's goal of 2026-10-06, 100% of reasonable
-single-CPU WireGuard. P5 (concurrency recheck arms) stays excluded. P9
-(NAPI budget exhaustion) is **reachable on one CPU** and is built in the
-stretch tier (section 10; decision 13.5(a)).
+boundary rule** — [USER 2026-10-07] stop at the boundary of WireGuard unless
+that breaks important things: the IP stack is modeled only where it drives
+WireGuard code paths or is needed to predict WireGuard's observable behaviour.
+Section 16 gives, per class, the WireGuard line, decision or outcome it alone
+reaches, the kept minimal set, and what is excluded as beyond the boundary
+(fail-noisy `unsupported`). The body below is corrected in place; sections
+marked *record only* keep verified kernel facts for classes no longer built.
+The census ([2026-10-06-wireguard-census.md](2026-10-06-wireguard-census.md))
+lists W4 (transmit shapes, M) and W7 (bulk and multi-item queues, L) as
+in-reach workstreams toward the user's goal of 2026-10-06, 100% of reasonable
+single-CPU WireGuard. P5 (concurrency recheck arms) stays excluded. P9 (NAPI
+budget exhaustion) is **reachable on one CPU** and is built in the stretch
+tier (section 10; decision 13.5(a)).
 
 Line numbers are in the unpatched `.deps/linux` (6.12.110) unless a file is
 named as patched. The kernel is `kernel/config-x86_64-net-choice`: one CPU,
@@ -600,11 +599,10 @@ them):**
   any placement the argument does not cover.
 - **K3** (v2, C2 option iii). Record the (c') placement itself: a choice
   record in `wg_queue_enqueue_per_peer_rx` after `wg_peer_put`
-  (queueing.h:201), so a nested NET_RX section's position relative to it
-  tells before-put from after-put. A new hook against the user's
-  "generic capture points, zero new hooks" preference. **Moot**: option
-  (ii) of 13.2 was approved [USER 2026-10-07] and keeps the check without
-  it.
+  (queueing.h:201), so a nested NET_RX section's position relative to it tells
+  before-put from after-put. A new hook against the user's preference for
+  generic capture points and no new hooks. **Moot**: option (ii) of 13.2 was
+  approved [USER 2026-10-07] and keeps the check without it.
 - The census's `handshake_queue_len` capture (P12) is not needed here.
 
 ## 4. W4 in the mirror and the environment
@@ -1316,10 +1314,10 @@ integration.
 
 **Decided, 2026-10-07** (v3). Provenance per item; the v2 texts below are
 kept as the record of the options and reasoning.
-- Scope — [USER 2026-10-07]: "we should stop at the boundary of wireguard
-  (unless this breaks important things)". The IP stack is modeled only
-  where it drives WireGuard code paths or is needed to predict WireGuard's
-  observable behaviour. Applied in section 16.
+- Scope — [USER 2026-10-07]: stop at the boundary of WireGuard unless that
+  breaks important things. The IP stack is modeled only where it drives
+  WireGuard code paths or is needed to predict WireGuard's observable
+  behaviour. Applied in section 16.
 - 13.1 — [AGENT 2026-10-07, under delegated authority]: the connected
   sender was the recommendation, but **no K1 and no connected sender**:
   fragmentation is beyond the boundary (16.1), so neither is built. K1
@@ -1690,18 +1688,17 @@ opcodes as placeholders until the coordinator allocates them.
 
 ## 16. Revision v3 — WireGuard boundary and decisions
 
-**The rule** [USER 2026-10-07]: "we should stop at the boundary of
-wireguard (unless this breaks important things)". Applied as: a class is
-kept iff it reaches a WireGuard line, decision or outcome (in
-`drivers/net/wireguard/`, as the mirror's A2 decisions name them) that no
-other kept class reaches, or it is needed so that the observations of kept
-traces stay predictable; the IP stack is modeled only as far as the kept
-classes' bytes and records need. Everything else is marked **excluded:
-beyond the WireGuard boundary**, as a fail-noisy `unsupported` in the
-mirror (section 9) and a `validate_trace` refusal in the harness, with
-three domain-control traces (section 8) showing the `unsupported` fires.
-The verified kernel facts of the dropped classes stay in sections 2.1,
-2.3-2.5 as record.
+**The rule** [USER 2026-10-07]: stop at the boundary of WireGuard unless that
+breaks important things. Applied as: a class is kept iff it reaches a
+WireGuard line, decision or outcome (in `drivers/net/wireguard/`, as the
+mirror's A2 decisions name them) that no other kept class reaches, or it is
+needed so that the observations of kept traces stay predictable; the IP stack
+is modeled only as far as the kept classes' bytes and records need. Everything
+else is marked **excluded: beyond the WireGuard boundary**, as a fail-noisy
+`unsupported` in the mirror (section 9) and a `validate_trace` refusal in the
+harness, with three domain-control traces (section 8) showing the
+`unsupported` fires. The verified kernel facts of the dropped classes stay in
+sections 2.1, 2.3-2.5 as record.
 
 ### 16.1 W4, class by class
 

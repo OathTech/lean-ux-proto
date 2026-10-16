@@ -265,7 +265,7 @@ def traces():
                                     e6["expect"] + ["wg_ratelimiter_gc_entries.v6_entry_iterate=1"])
     # l_recreate_ratelimited6 (B4: a delete and recreate with IPv6 rate-limited
     # entries, the recreate's eight-entry allocation schedule) was dropped at
-    # the landing of 2026-10-15 [USER: "(1) agreed"]: its comparison child
+    # the landing of 2026-10-15 [USER 2026-10-15]: its comparison child
     # sits at the guest's 4.5 s bound on both oracles (4.28 s alone on s4;
     # 55,538 comparison records, 56 % in the two creates), a fixture property
     # no reshape changes; l_delete_ratelimited6 stays as the two-table uninit

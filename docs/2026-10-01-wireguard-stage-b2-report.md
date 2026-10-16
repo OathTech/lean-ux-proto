@@ -96,7 +96,7 @@ Its findings, all fixed:
 - B2 decisions no longer repeatable;
 - the handshake queue as device state, run by the environment.
 
-## 3. Gaps (accepted, [USER] "so long as we'll fix it later")
+## 3. Gaps (accepted [USER], to be fixed later)
 
 - **Silent drops.** Nearly every outcome here is a drop, so assurance is
   control flow over the remote stream; the only observation is `sendto`'s

@@ -617,12 +617,12 @@ exits, `__ip_select_ident` and `ip_idents_reserve`, already the cut sites
   undeclared. The note recommends the per-caller cut, built in C2 before
   the file is anchored, since undeclared decisions are the thing the
   lane exists to remove.
-- `route.c` sits under the boundary decision of [USER 2026-10-07]
-  ("stop at the boundary of wireguard"; `docs/decisions.md:79-87`), which
-  the census records as "reached only where WireGuard's observables
-  depend on it"; anchoring it revises that decision, and the input
-  corpus's `-EHOSTUNREACH` path reverses the [AGENT 2026-10-08] deferral
-  of `ip_error` (`decisions.md:107-111`). U1 says so and is the user's.
+- `route.c` sits under the boundary decision of [USER 2026-10-07] (stop at the
+  boundary of WireGuard; `docs/decisions.md:79-87`), which the census records
+  as "reached only where WireGuard's observables depend on it"; anchoring it
+  revises that decision, and the input corpus's `-EHOSTUNREACH` path reverses
+  the [AGENT 2026-10-08] deferral of `ip_error` (`decisions.md:107-111`). U1
+  says so and is the user's.
 
 ## 7. IPv6
 

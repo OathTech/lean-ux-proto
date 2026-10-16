@@ -340,7 +340,7 @@ the D3 merge commit `84a56fd` (old machine).
 
 ### 6.1 What is approved on `main`
 
-The D3 oracle was approved by [USER 2026-10-07], "yes approved on both":
+The D3 oracle was approved by [USER 2026-10-07], both the merge and the boot parameter:
 - **profile `net-choice`**: `kernel/config-x86_64-net` unchanged, plus
   `kernel/patches/choice-stream.patch` applied **alone** to the locked source;
 - **patch sha256** `3b0f2026265c7ccfe3bd8951ab7afd3ccdf5b56d6ffea70f5c715a57f7f217ab`, hard-coded as

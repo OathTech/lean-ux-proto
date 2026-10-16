@@ -5,7 +5,7 @@ import Leanux.Seccomp.Local
 # The seccomp prefill fixture
 
 `"seccomp_prefill": N` (contracts/trace-v1.md; docs/2026-10-12-seccomp-design.md
-section 5) [USER 2026-10-12: "Yes, let's queue it"]: before the window, the
+section 5) [USER 2026-10-12: queued]: before the window, the
 guest sets no-new-privs and installs `N` copies of the fixed program below
 (harness/guest.c, `SECCOMP_PREFILL_*`). The mirror's initial task state carries
 that chain, reconstructed here by the mirror's own translation of the same
