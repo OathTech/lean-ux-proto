@@ -126,8 +126,10 @@ it is not part of that baseline.
 | Native ingress/configuration with retained product invariant contracts | 15 | 9 | 0 | 6 | 6 | 21 |
 | Native peer-removal routing completion | 8 | 8 | 0 | 0 | 0 | 8 |
 
-The whole tree currently contains 451 Lean files and 6,451 theorems. The completed
-changes total 2,177 retyped theorems, 1,662 deletions, 1,132 retained contract shapes and 398 added.
+| Peer updates, configuration, receive dispositions and worker cuts | 30 | 15 | 0 | 15 | 6 | 36 |
+
+The whole tree currently contains 451 Lean files and 6,457 theorems. The completed
+changes total 2,192 retyped theorems, 1,662 deletions, 1,147 retained contract shapes and 404 added.
 Retyping changes or generalizes the actual state/monad carrier or observation.
 This includes shorthand contracts whose source functions or named views move
 to a native monad. Mere namespace qualification and equivalent relocation of a
@@ -3160,3 +3162,47 @@ theorem actual_result : observe (peerMakeDead 0) = some (1, true) := by decide +
 #print axioms actual_result
 end RemovalDecisionWitness
 ~~~
+
+
+## Peer configuration, disposition receipts and worker cuts
+
+Four modules carry 30 theorems to 36: fifteen native retypes, fifteen retained
+product contract shapes, six additions and no deletions. Configuration keeps
+all five arbitrary full-World invariant contracts under product names alongside
+native counterparts. Saved keepalive identities, conditional negative returns
+and Stops retain the actual source order. Receive disposition receipts keep
+both WG and Ambient endpoints through the exact admission branches, including
+the peer put preceding a mismatch.
+
+The two encryption source factors had placed an arbitrary softirq callback
+before the entire iteration. The actual worker consumes the ring cell and
+installs the item before invoking the callback. Their corrected factors retain
+that cut and then use the saved item in the actual tail, including the
+reschedule guard. The earlier kernel-checked empty-ring callback witness in
+the receive-worker source-order report applies directly: actual polling yields
+(none, some (some []), [false]), while callback-first yields
+(some [], some none, [true]). It is a proof-observer defect, not an initialized
+execution or a mirror change. That report contains the exact Lean reproducer;
+the witness was not rerun for this checkpoint.
+
+All 54 explicitly named declarations use only standard axioms, four scoped
+fresh kernel replays pass, and independent complete source reviews pass.
+Final builds pass: peer completion257, configuration190, disposition276 and
+worker cuts164 jobs. One MVCGen deprecation in disposition remains unfinished
+framework migration; the other three modules have no warnings of their own.
+Changed-source ledgers: peer completion four failures then pass; configuration
+four failures then two passes, last removing an unused simp argument;
+disposition one failure then pass; worker cuts two failures, pass with warnings,
+a failed cleanup edit, then pass without warnings. No infrastructure retry,
+crash, cancellation, raised memory cap or raised proof limit occurred.
+All result rows remain lagging, the full proof gate and terminal replay remain
+pending, and the b700659 executable closure remains byte-identical. Its prior
+model and unit results therefore still apply.
+
+~~~sh
+cap() { if command -v capped >/dev/null 2>&1; then capped "$@"; else "$@"; fi; }
+cap scripts/in-bundle lake build Leanux.Proofs.WG.Configuration.PeerUpdateCompletion Leanux.Proofs.WG.Lifetimes.ConfigurationPeer Leanux.Proofs.WG.Queues.RxDispositionReceipts Leanux.Proofs.WG.Queues.RxWorkerCuts
+~~~
+
+For each named module, replay with
+'cap scripts/in-bundle lake env leanchecker --fresh MODULE'.
