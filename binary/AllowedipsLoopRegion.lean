@@ -111,12 +111,7 @@ theorem quiet_region [Labels] {Error Checkpoint : Type} {fetch pc code}
     intro before member after
     exact silent before.pc (inside before member).1 before after rfl
   · intro q member atCut
-    have nonempty : path ≠ [] := by intro empty; rw [empty] at last; cases last
-    have restore : path.dropLast ++ [t.machine] = path := by
-      have eq : path.getLast nonempty = t.machine := by
-        simpa only [List.getLast?_eq_some_getLast nonempty, Option.some.injEq] using last
-      rw [← eq]
-      exact List.dropLast_concat_getLast nonempty
+    have restore := Binary.history_restore last
     rw [← restore] at member
     rcases List.mem_append.mp member with prior | endpoint
     · rcases (inside q prior).2 with eq | interior

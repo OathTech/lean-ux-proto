@@ -78,11 +78,7 @@ theorem ScanTrace.trans {base coverage preempt rxSection history events nextEven
 
 theorem history_restore {history : List MachineState} {s : MachineState}
     (last : history.getLast? = some s) : history.dropLast ++ [s] = history := by
-  have nonempty : history ≠ [] := by intro empty; rw [empty] at last; cases last
-  have lastEq : history.getLast nonempty = s := by
-    simpa only [List.getLast?_eq_some_getLast nonempty, Option.some.injEq] using last
-  rw [← lastEq]
-  exact List.dropLast_concat_getLast nonempty
+  exact Binary.history_restore last
 
 /-- Append a concrete instruction suffix after its symbolic execution has
     supplied every successor and its cut facts. -/
@@ -228,13 +224,8 @@ theorem scan_call (fetch : Int64 → Option Decoded) (pc : Int64) (target : Labe
   refine ⟨finalPC, bx, bp, preserved, by simpa only [List.append_nil] using observations, last,
     Instrumentation.calledState s (pc+5) (label target) :: tail, recorded, ?_, stable⟩
   let localHistory := Instrumentation.calledState s (pc+5) (label target) :: tail
-  have nonempty : localHistory ≠ [] := by simp [localHistory]
   change localHistory.getLast? = some t.machine at localLast
-  have lastEq : localHistory.getLast nonempty = t.machine := by
-    simpa only [List.getLast?_eq_some_getLast nonempty, Option.some.injEq] using localLast
-  have restored : localHistory.dropLast ++ [t.machine] = localHistory := by
-    rw [← lastEq]
-    exact List.dropLast_concat_getLast nonempty
+  have restored := Binary.history_restore localLast
   intro q member cut
   change q ∈ localHistory at member
   rw [← restored] at member

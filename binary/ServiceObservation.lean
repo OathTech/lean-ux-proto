@@ -147,12 +147,7 @@ theorem CutsAligned.service_extension {R rxSection source}
         PrefixMatches R events source ∧
         (source.take events.length).getLast? = some latest ∧ R events final latest.world) :
     CutsAligned R rxSection (front ++ localHistory) source := by
-  have nonempty : localHistory ≠ [] := by intro empty; rw [empty] at last; cases last
-  have lastEq : localHistory.getLast nonempty = final := by
-    simpa only [List.getLast?_eq_getLast nonempty, Option.some.injEq] using last
-  have restored : localHistory.dropLast ++ [final] = localHistory := by
-    rw [← lastEq]
-    exact List.dropLast_concat_getLast nonempty
+  have restored := Binary.history_restore last
   have interior := aligned.prefix.append_no_cuts localHistory.dropLast noCuts
   have extended := interior.snoc final (by
     intro cut

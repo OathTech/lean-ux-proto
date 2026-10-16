@@ -154,9 +154,8 @@ from `binary/`, use `capped -- lake env leanchecker MODULE` for each module
 changed by this round and `WordAlignment`. No expected trust-surface file,
 TrustBase declaration, headline, Pre, R, mirror or dependency pin changed.
 
-The next trial targets the literal layout iteration copied at 110 sites,
-then the repeated history-tail property. Trial copies and timings remain
-ephemeral in `.tmp` until their results are retained or rejected.
+Rounds 2 and 3 below retain the literal layout iteration and the
+repeated history-tail property. Trial copies and logs are ephemeral.
 
 ### Round 2: literal instruction-layout iteration
 
@@ -199,3 +198,101 @@ measurements. The `.olean` sizes increase slightly: 155152→155608,
 127008→127312 and 87288→87480 bytes respectively, compared with the paused
 baseline's objects. The demonstrated gain is shared source/procedure
 maintenance, not smaller kernel proofs or a forecast for semantic composition.
+
+### Round 3: history endpoints used in cut composition
+
+[AGENT 2026-10-16] Retain the ordinary `Binary.history_restore` lemma in
+`History.lean`. Its proof uses the existing list-library characterization of
+`getLast?`; no list tactic or new history representation is needed. Ten
+sites across index lookup, allowed-IPs/peer-get and service correspondence
+now apply it. Existing public/local wrappers and high-level compositions
+remain. The net reduction is **40 handwritten Lean lines** across nine
+modules, including the shared lemma. No side conditions were added.
+
+Integrated build PASS (532 jobs, 111.10 seconds including dependents);
+final binary gate and exact trust-surface diff PASS (1.87 seconds warm).
+Direct elaboration samples: `ScanFrame` 0.772→0.787 seconds;
+`AllowedipsLoopFrame` 0.753→0.688 seconds. The small mixed changes reinforce
+that these timings do not establish a campaign-wide performance claim.
+
+### Stopping assessment
+
+[AGENT 2026-10-16] Stop this bounded experiment after the three retained
+rounds. The final inspection, informed by the note about the forthcoming
+mirror state split, concentrated on binary histories, cuts, separation and
+callbacks. Nothing here refactors the per-call mirror World interpretation
+or mirror-side frames. This work should survive that split.
+
+`storeInt_defined`, `EqualOutside.loadInt`, `InRange.offset_disjoint` and
+`CutFrames.append_after` already capture important binary frame properties.
+The witness store-preservation examples use short explicit iteration; giving
+those another tactic name offers little gain. Many remaining frame weakenings
+or equal-footprint compositions are one or two lines. The longer callback
+proofs differ in coverage-context fields, footprint inclusions and scanner
+invariants: factoring them deserves a new concrete example, not an expanding
+search procedure in this first experiment. No general callback-interface
+redesign or shared-region composition rewrite was attempted.
+
+The retained library is **three proved lemmas and one structural tactic**.
+Across 37 Lean modules, it removes **743 net lines**: **419 handwritten**
+and **324 generated**, counting new library code and imports. The emitter
+also loses six Python lines. This is measured maintenance leverage over
+existing M1 and completed M2 components. It neither completes M2 nor resolves
+the original campaign's function/trace composition cost. The largest source
+reduction is repetitive layout boilerplate, not semantic invariant work.
+
+Branch remains `task/binary-proof-refactor`, based on `6812d04`, with goal
+commit `b453a2c`, lemma round `3fc7aad`, tactic round `da2c600`, and the
+history/result commit carrying this final assessment. The original
+`task/binary-tv` still points at `6812d04`. No merge or push was performed.
+Headline declarations, TrustBase, Pre/R, mirror, oracle/image terms and
+Kraken pin remain unchanged. No fresh QEMU or differential claim is made.
+
+### Final kernel replay and reproduction
+
+Fresh combined replay **PASS**: `leanchecker --fresh RefactorReplay`,
+102.79 seconds, maximum RSS 2345332 KiB. The temporary aggregate imports all
+37 changed/new Lean modules plus `LookupSnapshotTransport`, `LookupWitness`,
+`LookupHitWitness`, `AllowedipsCallerExecution` and `CommonBitsExecution`.
+Its entire imported closure was replayed from an empty environment. The
+first aggregate compilation rejected a source outside the package root;
+adding the explicit `--root=../.tmp` fixed that invocation before replay.
+There was no cap kill or timeout.
+
+`#print axioms` reports `[propext, Quot.sound]` for `Binary.aligned_sub`
+and `Binary.history_restore`; `Binary.Instrumentation.called_entry` adds
+only `Classical.choice`. The final gate still accepts the original exact
+headline/trust declaration specification. This is local kernel replay, not
+a fresh external `lake check` acceptance; the user's external acceptance of
+commit `430ea90` remains historical.
+
+Recreate the aggregate from the worktree root:
+
+```sh
+python3 - <<'PYCODE'
+from pathlib import Path
+import subprocess
+modules = {Path(p).stem for p in subprocess.check_output(
+    ['git', 'diff', '6812d04', '--name-only', '--', 'binary/*.lean'],
+    text=True).splitlines()}
+modules.update(['LookupSnapshotTransport', 'LookupWitness', 'LookupHitWitness',
+                'AllowedipsCallerExecution', 'CommonBitsExecution'])
+Path('.tmp').mkdir(exist_ok=True)
+Path('.tmp/RefactorReplay.lean').write_text(
+    ''.join('import ' + m + '\n' for m in sorted(modules)))
+PYCODE
+capped -- scripts/proof-gate --binary
+```
+
+Then from `binary/`:
+
+```sh
+capped -- lake env lean --root=../.tmp \
+  -o .lake/build/lib/lean/RefactorReplay.olean ../.tmp/RefactorReplay.lean
+capped -- lake env leanchecker --fresh RefactorReplay
+```
+
+The experiment's `.worktrees/binary-proof-refactor/.tmp` and temporary
+`binary/.lake/build/lib/lean/RefactorReplay.olean` are removed after recording
+these conclusions. The branch/worktree and private build caches remain for
+review. No trial files, timing dumps, exports or logs are committed.

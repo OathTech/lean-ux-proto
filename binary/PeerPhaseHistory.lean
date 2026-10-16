@@ -6,11 +6,7 @@ namespace Binary.PeerCountPhase
 
 private theorem restore_history {history : List MachineState} {s : MachineState}
     (last : history.getLast? = some s) : history.dropLast ++ [s] = history := by
-  have nonempty : history ≠ [] := by intro empty; rw [empty] at last; cases last
-  have lastEq : history.getLast nonempty = s := by
-    simpa only [List.getLast?_eq_some_getLast nonempty, Option.some.injEq] using last
-  rw [← lastEq]
-  exact List.dropLast_concat_getLast nonempty
+  exact Binary.history_restore last
 
 theorem scan_splice (pending : Option Pending) (front : List MachineState)
     (shared : MachineState) (back : List MachineState) :

@@ -2,6 +2,12 @@ import Execution
 
 namespace Binary
 
+/-- A recorded endpoint recovers the complete history from its proper prefix. -/
+theorem history_restore {α : Type u} {history : List α} {last : α}
+    (ends : history.getLast? = some last) : history.dropLast ++ [last] = history := by
+  obtain ⟨front, rfl⟩ := List.getLast?_eq_some_iff.mp ends
+  simp
+
 /-- The history is extended only by an actual instruction successor. Starting
     from `[initial]` records every state, including repeated PCs. -/
 structure Executed where

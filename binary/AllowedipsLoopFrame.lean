@@ -87,11 +87,7 @@ theorem Trace.trans {base coverage rxSection history events nextEvents current n
 
 theorem history_restore {history : List MachineState} {s : MachineState}
     (last : history.getLast? = some s) : history.dropLast ++ [s] = history := by
-  have nonempty : history ≠ [] := by intro empty; rw [empty] at last; cases last
-  have lastEq : history.getLast nonempty = s := by
-    simpa only [List.getLast?_eq_some_getLast nonempty, Option.some.injEq] using last
-  rw [← lastEq]
-  exact List.dropLast_concat_getLast nonempty
+  exact Binary.history_restore last
 
 /-- Join a concrete local path to the incoming real history. All source
 observations are computed from edges, and scanner stability follows from
