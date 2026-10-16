@@ -1,29 +1,28 @@
-import Leanux.Proofs.WG.Peers.Access
 import Leanux.Proofs.WG.Peers.Allocation
+import Leanux.Proofs.WG.Peers.Access
+import Leanux.Proofs.WG.Lifetimes.Events
+import Leanux.Proofs.Logged.WGPrefix
 
 set_option maxHeartbeats 1000000
 set_option pp.structureInstances false
 
-/-! Peer creation observed at its first insertion and throughout initialization.
-The invariant bounds both resident and previously released identities; the latter
-is needed to distinguish a new allocation from arbitrary initial history. -/
+/-! Peer creation observed at insertion and throughout initialization. Generic
+contracts retain actual product actions; concrete observers run on WG/Ambient.
+The invariant bounds resident and previously released identities, distinguishing
+fresh allocations from arbitrary initial history. -/
 namespace Leanux.Proofs.WG.Peers
-open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing
-open Leanux.Proofs.WG.Lifetimes
+open Leanux Leanux.WG Leanux.Proofs.WG.Lifetimes
+open Leanux.Proofs.Framing Leanux.Proofs.Logged
+structure CreationStoreInv (h : List PeerEvent) (s : Store PeerId) : Prop where
+  access : AccessEvent.Safe h ∧ Unique s ∧ ∀ stamp, AccessEvent.Released h stamp → Absent s stamp
+  bounded : Bounded s
+  pastBounded : ∀ stamp, AccessEvent.Released h stamp → stamp ≤ s.frontier
 
-structure CreationInv (h : List PeerEvent) (w : World) : Prop where
-  access : AccessInv h w
-  bounded : Bounded (snapshot w)
-  pastBounded : ∀ stamp, AccessEvent.Released h stamp → stamp ≤ (snapshot w).frontier
-
-theorem CreationInv.congr (hi : CreationInv h w) (he : snapshot v = snapshot w) :
-    CreationInv h v := by
-  rcases hi with ⟨ha, hb, hp⟩
-  exact ⟨by simpa only [AccessInv, he] using ha, he ▸ hb, by simpa only [he] using hp⟩
-
-theorem CreationInv.read (hi : CreationInv h w)
-    (hl : (snapshot w).slots pid = some stamp) :
-    CreationInv (h ++ [.read pid stamp]) w := by
+theorem CreationStoreInv.congr (hi : CreationStoreInv h w) (he : v = w) :
+    CreationStoreInv h v := he ▸ hi
+theorem CreationStoreInv.read (hi : CreationStoreInv h w)
+    (hl : w.slots pid = some stamp) :
+    CreationStoreInv (h ++ [.read pid stamp]) w := by
   have hn : ¬ AccessEvent.Released h stamp := fun hr => hi.access.2.2 _ hr pid hl
   refine ⟨⟨AccessEvent.safe_append_read hi.access.1 hn, hi.access.2.1, ?_⟩,
     hi.bounded, ?_⟩
@@ -32,9 +31,9 @@ theorem CreationInv.read (hi : CreationInv h w)
   · intro s hs
     exact hi.pastBounded s (AccessEvent.released_append_read.mp hs)
 
-theorem CreationInv.write (hi : CreationInv h w)
-    (hl : (snapshot w).slots pid = some stamp) :
-    CreationInv (h ++ [.write pid stamp]) w := by
+theorem CreationStoreInv.write (hi : CreationStoreInv h w)
+    (hl : w.slots pid = some stamp) :
+    CreationStoreInv (h ++ [.write pid stamp]) w := by
   have hn : ¬ AccessEvent.Released h stamp := fun hr => hi.access.2.2 _ hr pid hl
   refine ⟨⟨AccessEvent.safe_append_write hi.access.1 hn, hi.access.2.1, ?_⟩,
     hi.bounded, ?_⟩
@@ -42,292 +41,11 @@ theorem CreationInv.write (hi : CreationInv h w)
     exact hi.access.2.2 s (AccessEvent.released_append_write.mp hs)
   · intro s hs
     exact hi.pastBounded s (AccessEvent.released_append_write.mp hs)
-
-abbrev CreationSpec (P : Store PeerId → Prop) (g : PrefixM PeerEvent α)
-    (Q : α → Store PeerId → Prop) :=
-  PrefixEnsures (fun h w => CreationInv h w ∧ P (snapshot w)) AccessEvent.Safe g
-    (fun x h w => CreationInv h w ∧ Q x (snapshot w))
-
-theorem creation_pure (P : Store PeerId → Prop) (x : α) :
-    CreationSpec P (pure x) (fun _ => P) :=
-  PrefixEnsures.pure (fun _ _ hi => hi.1.access.1) (fun _ _ hi => hi)
-
-theorem creation_lift (P : Store PeerId → Prop) (a : M α) (ha : SamePeerSnapshot a) :
-    CreationSpec P (liftPrefix a) (fun _ => P) := by
-  apply PrefixEnsures.lift a (fun _ _ hi => hi.1.access.1)
-  intro h w x v hi hr
-  have he := ha w x v hr
-  exact ⟨hi.1.congr he, he ▸ hi.2⟩
-
-theorem creation_kernel (P : Store PeerId → Prop) (a : M α) (ha : SameKernel a) :
-    CreationSpec P (liftPrefix a) (fun _ => P) :=
-  creation_lift P a (samePeerSnapshot_of_sameKernel ha)
-
-theorem creation_get (P : Store PeerId → Prop) (pid : PeerId) :
-    CreationSpec P (getPeerPrefix pid) (fun p s => P s ∧ s.slots pid = some p.internalId) := by
-  intro w h hi
-  rw [getPeerPrefix_run]
-  cases hr : (getPeer pid).run w with
-  | error _ => exact ⟨[], by simp, hi.1.access.1, True.intro⟩
-  | ok out =>
-    rcases out with ⟨p, v⟩
-    obtain ⟨rfl, live⟩ := getPeer_current pid w v p hr
-    have hn := hi.1.read live
-    exact ⟨[.read pid p.internalId], rfl, hn.access.1, hn, hi.2, live⟩
-
-theorem creation_set (P : Store PeerId → Prop) (pid : PeerId) (p : Peer) :
-    CreationSpec (fun s => P s ∧ s.slots pid = some p.internalId)
-      (setPeerPrefix pid p) (fun _ => P) := by
-  intro w h hi
-  rw [setPeerPrefix_run]
-  cases hd : w.k.wg with
-  | none => simp [snapshot, hd] at hi
-  | some d =>
-    have hr : (setPeer pid p).run w = .ok ((),
-        { w with k := { w.k with wg := some { d with peers := d.peers.insert pid p } } }) := by
-      simp [setPeer, modifyDev, modifyK, hd]
-    rw [hr]
-    simp only [Option.isSome_some, ↓reduceIte]
-    have he := setPeer_same pid p w _ hi.2.2 hr
-    have hn := (hi.1.write hi.2.2).congr he
-    exact ⟨[.write pid p.internalId], rfl, hn.access.1, hn, he ▸ hi.2.1⟩
-
-/-- A same-store observer can retain any cached identity predicate. -/
-theorem creation_forget (hg : CreationSpec P g Q)
-    (hq : ∀ x s, Q x s → R x s) : CreationSpec P g R :=
-  hg.consequence (fun _ _ h => h) (fun x _ _ h => ⟨h.1, hq x _ h.2⟩)
-
-theorem creation_branch (P : Store PeerId → Prop) (d : Decision) (b : Bool) :
-    CreationSpec P (liftPrefix (branch d b)) (fun _ => P) :=
-  creation_kernel P _ (sameKernel_branch d b)
-
-theorem creation_world (P : Store PeerId → Prop) :
-    CreationSpec P (liftPrefix (get : M World)) (fun _ => P) :=
-  creation_kernel P _ (fun _ _ _ hr => by cases hr; rfl)
-
-theorem creation_dev (P : Store PeerId → Prop) :
-    CreationSpec P (liftPrefix getDev) (fun _ => P) := by
-  apply creation_kernel
-  apply sameKernel_of_wp
-  intro k
-  mvcgen [getDev, getK, invariant]
-
-theorem creation_stop (P : Store PeerId → Prop) (what : String) :
-    CreationSpec P (liftPrefix (unsupported (α := α) what)) (fun _ => P) :=
-  creation_lift P _ (samePeerSnapshot_of_sameWGKernel (KernelFrames.unsupported_sameWGKernel what))
-
-theorem creation_require (P : Store PeerId → Prop) (pid : PeerId) (what : String) :
-    CreationSpec P (requireNotPendingPrefix pid what) (fun _ => P) := by
-  exact creation_pure P ()
-
-def dstCacheResetPrefix (pid : PeerId) : PrefixM PeerEvent Unit := do
-  let w ← liftPrefix (get : M World)
-  if !(w.armRecords && w.dstCacheRecords) then return
-  let ts ← liftPrefix (hiddenJiffies .dstCacheResetTs)
-  let p ← getPeerPrefix pid
-  setPeerPrefix pid { p with dstCache := { p.dstCache with resetTs := ts } }
-
-def resetLastSentHandshakePrefix (pid : PeerId) : PrefixM PeerEvent Unit := do
-  let now ← liftPrefix (hiddenClock64 .resetLastSent)
-  setPeerPrefix pid { (← getPeerPrefix pid) with
-    lastSentHandshake := now - (REKEY_TIMEOUT + 1 : Nat).toInt64 * NSEC_PER_SEC64 }
-
-def precomputeStaticStaticPrefix (pid : PeerId) : PrefixM PeerEvent Unit := do
-  requireNotPendingPrefix pid "recomputing the static-static key"
-  let identity := (← liftPrefix getDev).staticIdentity
-  let p ← getPeerPrefix pid
-  let zero ← do
-    if ← liftPrefix (branch .precomputeNoIdentity !identity.hasIdentity) then pure true
-    else
-      let (out, nonNull) := curve25519 identity.staticPrivate p.remoteStatic
-      setPeerPrefix pid { p with precomputedStaticStatic := out }
-      liftPrefix (branch .precomputeNullPoint !nonNull)
-  if zero then setPeerPrefix pid { (← getPeerPrefix pid) with precomputedStaticStatic := List.replicate 32 0 }
-
-def handshakeInitPrefix (pid : PeerId) (psk : Option Key) : PrefixM PeerEvent Unit := do
-  setPeerPrefix pid { (← getPeerPrefix pid) with handshakeEntryPeer := some pid }
-  if ← liftPrefix (branch .handshakeInitHasPsk psk.isSome) then
-    let p ← getPeerPrefix pid
-    setPeerPrefix pid { p with presharedKey := psk.getD p.presharedKey }
-  precomputeStaticStaticPrefix pid
-
-theorem dstCacheResetPrefix_erases (pid : PeerId) :
-    ErasesPrefix (dstCacheResetPrefix pid) (dstCacheReset pid) := by
-  unfold dstCacheResetPrefix dstCacheReset
-  repeat' first
-    | contradiction
-    | with_reducible exact erasesPrefix_lift _
-    | with_reducible exact erasesPrefix_pure _
-    | with_reducible exact getPeerPrefix_erases _
-    | with_reducible exact setPeerPrefix_erases _ _
-    | with_reducible apply erasesPrefix_ite
-    | with_reducible apply erasesPrefix_bind
-    | intro_forall
-    | dsimp only
-    | split
-
-theorem resetLastSentHandshakePrefix_erases (pid : PeerId) :
-    ErasesPrefix (resetLastSentHandshakePrefix pid) (resetLastSentHandshake pid) := by
-  unfold resetLastSentHandshakePrefix resetLastSentHandshake
-  exact erasesPrefix_bind (erasesPrefix_lift _) (fun _ =>
-    erasesPrefix_bind (getPeerPrefix_erases _) (fun _ => setPeerPrefix_erases _ _))
-
-theorem precomputeStaticStaticPrefix_erases (pid : PeerId) :
-    ErasesPrefix (precomputeStaticStaticPrefix pid) (precomputeStaticStatic pid) := by
-  unfold precomputeStaticStaticPrefix precomputeStaticStatic
-  repeat' first
-    | contradiction
-    | with_reducible exact requireNotPendingPrefix_erases _ _
-    | with_reducible exact erasesPrefix_lift _
-    | with_reducible exact erasesPrefix_pure _
-    | with_reducible exact getPeerPrefix_erases _
-    | with_reducible exact setPeerPrefix_erases _ _
-    | with_reducible apply erasesPrefix_ite
-    | with_reducible apply erasesPrefix_bind
-    | intro_forall
-    | dsimp only
-    | split
-
-theorem handshakeInitPrefix_erases (pid : PeerId) (psk : Option Key) :
-    ErasesPrefix (handshakeInitPrefix pid psk) (handshakeInit pid psk) := by
-  unfold handshakeInitPrefix handshakeInit IndexOwner.setPeerWord
-  simp only [bind_assoc]
-  repeat' first
-    | contradiction
-    | with_reducible exact precomputeStaticStaticPrefix_erases _
-    | with_reducible exact erasesPrefix_lift _
-    | with_reducible exact erasesPrefix_pure _
-    | with_reducible exact getPeerPrefix_erases _
-    | with_reducible exact setPeerPrefix_erases _ _
-    | with_reducible apply erasesPrefix_ite
-    | with_reducible apply erasesPrefix_bind
-    | intro_forall
-    | dsimp only
-    | split
-
-theorem dstCacheResetPrefix_spec (P : Store PeerId → Prop) (pid : PeerId) :
-    CreationSpec P (dstCacheResetPrefix pid) (fun _ => P) := by
-  unfold dstCacheResetPrefix
-  apply PrefixEnsures.bind (creation_world P)
-  intro w
-  split
-  · exact creation_pure _ ()
-  · apply PrefixEnsures.bind (creation_kernel P _ (hiddenJiffies_sameKernel _))
-    intro ts
-    apply PrefixEnsures.bind (creation_get P pid)
-    intro p
-    exact creation_set P pid { p with dstCache := { p.dstCache with resetTs := ts } }
-
-theorem resetLastSentHandshakePrefix_spec (P : Store PeerId → Prop) (pid : PeerId) :
-    CreationSpec P (resetLastSentHandshakePrefix pid) (fun _ => P) := by
-  unfold resetLastSentHandshakePrefix
-  apply PrefixEnsures.bind (creation_kernel P _ (Framing.hiddenClock64_sameKernel _))
-  intro now
-  apply PrefixEnsures.bind (creation_get P pid)
-  intro p
-  exact creation_set P pid { p with lastSentHandshake := now - (REKEY_TIMEOUT + 1 : Nat).toInt64 * NSEC_PER_SEC64 }
-
-theorem precomputeStaticStaticPrefix_spec (P : Store PeerId → Prop) (pid : PeerId) :
-    CreationSpec P (precomputeStaticStaticPrefix pid) (fun _ => P) := by
-  unfold precomputeStaticStaticPrefix
-  apply PrefixEnsures.bind (creation_require P pid _)
-  intro _
-  apply PrefixEnsures.bind (creation_dev P)
-  intro d
-  apply PrefixEnsures.bind (creation_get P pid)
-  intro p
-  apply PrefixEnsures.bind (creation_branch (fun s => P s ∧ s.slots pid = some p.internalId) _ _)
-  intro b
-  split
-  · dsimp only
-    simp only [pure_bind, ↓reduceIte]
-    apply PrefixEnsures.bind (creation_get (fun s => P s ∧ s.slots pid = some p.internalId) pid)
-    intro q
-    exact creation_forget (creation_set (fun s => P s ∧ s.slots pid = some p.internalId) pid { q with precomputedStaticStatic := List.replicate 32 0 })
-      (fun _ _ h => h.1)
-  · dsimp only
-    apply PrefixEnsures.bind (creation_set P pid
-      { p with precomputedStaticStatic := (curve25519 d.staticIdentity.staticPrivate p.remoteStatic).1 })
-    intro _
-    apply PrefixEnsures.bind (creation_branch P _ _)
-    intro zero
-    dsimp only
-    split
-    · apply PrefixEnsures.bind (creation_get P pid)
-      intro q
-      exact creation_set P pid { q with precomputedStaticStatic := List.replicate 32 0 }
-    · exact creation_pure P ()
-
-theorem handshakeInitPrefix_spec (P : Store PeerId → Prop) (pid : PeerId) (psk : Option Key) :
-    CreationSpec P (handshakeInitPrefix pid psk) (fun _ => P) := by
-  unfold handshakeInitPrefix
-  apply PrefixEnsures.bind (creation_get P pid)
-  intro p
-  apply PrefixEnsures.bind (creation_set P pid {p with handshakeEntryPeer := some pid})
-  intro _
-  apply PrefixEnsures.bind (creation_branch P _ _)
-  intro b
-  split
-  · apply PrefixEnsures.bind (creation_get P pid)
-    intro p
-    apply PrefixEnsures.bind (creation_set P pid { p with presharedKey := psk.getD p.presharedKey })
-    intro _
-    exact precomputeStaticStaticPrefix_spec P pid
-  · exact precomputeStaticStaticPrefix_spec P pid
-
-/-- The original non-failing allocation cut, before any initialization reads.
-The first setter can overwrite a malformed occupied nextPeer slot; the observer
-records the new allocation, without inventing an old release in that case. -/
-def createdPeer (publicKey : Key) (internalId : Nat) : Peer :=
-  { remoteStatic := publicKey, presharedKey := List.replicate 32 0,
-    precomputedStaticStatic := List.replicate 32 0, internalId,
-    cookieDecryptionKey := blake2s 32 [] ("cookie--".toUTF8.toList ++ publicKey),
-    cookieMac1Key := blake2s 32 [] ("mac1----".toUTF8.toList ++ publicKey) }
-
-def peerCreateCore (pid : PeerId) (publicKey : Key) : M Unit := do
-  let internalId := (← getK).peerCounter + 1
-  modifyK fun k => { k with peerCounter := internalId }
-  modifyDev fun d => { d with nextPeer := pid + 1 }
-  setPeer pid (createdPeer publicKey internalId)
-
-def peerCreateCorePrefix (pid : PeerId) (publicKey : Key) : PrefixM PeerEvent Unit :=
-  fun w => ExceptT.mk fun h => ((peerCreateCore pid publicKey).run w,
-    if w.k.wg.isSome then h ++ [.allocate pid (w.k.peerCounter + 1), .write pid (w.k.peerCounter + 1)]
-    else h)
-
-@[simp] theorem peerCreateCorePrefix_run (pid : PeerId) (key : Key) (w : World) (h : List PeerEvent) :
-    runPrefix (peerCreateCorePrefix pid key) w h = ((peerCreateCore pid key).run w,
-      if w.k.wg.isSome then h ++ [.allocate pid (w.k.peerCounter + 1), .write pid (w.k.peerCounter + 1)]
-      else h) := rfl
-
-theorem peerCreateCorePrefix_erases (pid : PeerId) (key : Key) :
-    ErasesPrefix (peerCreateCorePrefix pid key) (peerCreateCore pid key) := fun _ _ => rfl
-
-def creationCoreWorld (w : World) (pid : PeerId) (publicKey : Key) : World :=
-  { w with
-    k := { w.k with
-      peerCounter := w.k.peerCounter + 1
-      wg := w.k.wg.map fun d => { d with
-        nextPeer := pid + 1
-        peers := d.peers.insert pid (createdPeer publicKey (w.k.peerCounter + 1)) } } }
-
-theorem peerCreateCore_run (pid : PeerId) (key : Key) (w : World) :
-    (peerCreateCore pid key).run w = .ok ((), creationCoreWorld w pid key) := by
-  simp [peerCreateCore, creationCoreWorld, getK, modifyK, modifyDev, setPeer,
-    StateT.run_bind, StateT.run_get, StateT.run_modify]
-  cases w.k.wg <;> rfl
-
-theorem creationCore_snapshot (pid : PeerId) (key : Key) (w : World) (d : Device)
-    (hd : w.k.wg = some d) :
-    snapshot (creationCoreWorld w pid key) = (snapshot w).allocate pid := by
-  simpa [creationCoreWorld, snapshot, hd, mapStore] using
-    mapStore_allocate w.k.peerCounter d.peers pid (createdPeer key (w.k.peerCounter + 1)) rfl
-
-theorem CreationInv.allocate (hi : CreationInv h w)
-    (he : snapshot v = (snapshot w).allocate pid) :
-    CreationInv (h ++ [.allocate pid ((snapshot w).frontier + 1),
-      .write pid ((snapshot w).frontier + 1)]) v := by
-  have hn : ¬ AccessEvent.Released h ((snapshot w).frontier + 1) := by
+theorem CreationStoreInv.allocate (hi : CreationStoreInv h w)
+    (he : v = w.allocate pid) :
+    CreationStoreInv (h ++ [.allocate pid (w.frontier + 1),
+      .write pid (w.frontier + 1)]) v := by
+  have hn : ¬ AccessEvent.Released h (w.frontier + 1) := by
     intro hr
     have := hi.pastBounded _ hr
     omega
@@ -349,11 +67,138 @@ theorem CreationInv.allocate (hi : CreationInv h w)
     rw [he]
     exact Nat.le_trans (hi.pastBounded _ old) (Nat.le_succ _)
 
+variable {S α : Type}
+abbrev CreationSpec (view : S → Store PeerId) (P : Store PeerId → Prop)
+    (g : PrefixT PeerEvent S α) (Q : α → Store PeerId → Prop) :=
+  PrefixEnsures (fun h w => CreationStoreInv h (view w) ∧ P (view w))
+    AccessEvent.Safe g (fun x h w => CreationStoreInv h (view w) ∧ Q x (view w))
+
+theorem creation_pure (view : S → Store PeerId) (P : Store PeerId → Prop) (x : α) :
+    CreationSpec view P (pure x) (fun _ => P) :=
+  PrefixEnsures.pure (fun _ _ hi => hi.1.access.1) (fun _ _ hi => hi)
+
+theorem creation_lift (view : S → Store PeerId) (P : Store PeerId → Prop)
+    (a : StateT S (Except Stop) α) (ha : SameView view a) :
+    CreationSpec view P (liftPrefix a) (fun _ => P) := by
+  apply PrefixEnsures.lift a (fun _ _ hi => hi.1.access.1)
+  intro h w x v hi hr
+  have he := (ProjectedAction.iff_run _ _ _).mp ha w x v hr
+  exact ⟨hi.1.congr he, he ▸ hi.2⟩
+
+theorem creation_forget {view : S → Store PeerId} {P : Store PeerId → Prop}
+    {g : PrefixT PeerEvent S α} {Q R : α → Store PeerId → Prop}
+    (hg : CreationSpec view P g Q) (hq : ∀ x s, Q x s → R x s) :
+    CreationSpec view P g R :=
+  hg.consequence (fun _ _ h => h) (fun x _ _ h => ⟨h.1, hq x _ h.2⟩)
+
+theorem creation_world (view : S → Store PeerId) (P : Store PeerId → Prop) :
+    CreationSpec view P (liftPrefix (get : StateT S (Except Stop) S)) (fun _ => P) := by
+  apply creation_lift
+  apply (ProjectedAction.iff_run _ _ _).mpr
+  intro w x v hr
+  cases hr
+  rfl
+
+theorem creation_lift_preserves (view : S → Store PeerId)
+    (a : StateT S (Except Stop) α) (ha : SameView view a) :
+    PrefixPreserves (fun h w => CreationStoreInv h (view w)) AccessEvent.Safe (liftPrefix a) :=
+  ((creation_lift view (fun _ => True) a ha).consequence
+    (fun _ _ hi => ⟨hi, True.intro⟩) (fun _ _ _ hi => hi.1)).preserves
+
+abbrev CreationInv (h : List PeerEvent) (wg : WGWorld) :=
+  CreationStoreInv h (snapshot wg)
+
+abbrev WGCreationSpec (P : Store PeerId → Prop) (g : WGPrefix PeerEvent α)
+    (Q : α → Store PeerId → Prop) :=
+  StatePrefixEnsures (fun h w _ => CreationInv h w ∧ P (snapshot w)) AccessEvent.Safe g
+    (fun x h w _ => CreationInv h w ∧ Q x (snapshot w))
+
+theorem creation_state_pure (P : Store PeerId → Prop) (x : α) :
+    WGCreationSpec P (pure x) (fun _ => P) :=
+  StatePrefixEnsures.pure x (fun _ _ _ hi => hi.1.access.1) (fun _ _ _ hi => hi)
+
+theorem creation_state_lift (P : Store PeerId → Prop) (a : WG.M α)
+    (ha : SameView snapshot a) :
+    WGCreationSpec P (liftWGPrefix a) (fun _ => P) := by
+  apply StatePrefixEnsures.lift a (fun _ _ _ hi => hi.1.access.1)
+  intro h w ambient x v ambient' hi hr
+  have he := (ProjectedAction.iff_run_ambient _ _ _).mp ha w ambient x v ambient' hr
+  exact ⟨hi.1.congr he, he ▸ hi.2⟩
+
+theorem creation_state_forget {P : Store PeerId → Prop} {g : WGPrefix PeerEvent α}
+    {Q R : α → Store PeerId → Prop}
+    (hg : WGCreationSpec P g Q) (hq : ∀ x s, Q x s → R x s) :
+    WGCreationSpec P g R :=
+  hg.consequence (fun _ _ _ h => h) (fun x _ _ _ h => ⟨h.1, hq x _ h.2⟩)
+
+theorem creation_state_world (P : Store PeerId → Prop) :
+    WGCreationSpec P (liftWGPrefix (get : WG.M WGWorld)) (fun _ => P) := by
+  apply creation_state_lift
+  apply (ProjectedAction.iff_run_ambient _ _ _).mpr
+  intro w ambient x v ambient' hr
+  cases hr
+  rfl
+
+/-- Initial contents at the non-failing allocation cut. An occupied nextPeer
+slot may be overwritten; its observer records allocation/write and no invented
+release of the old resident. -/
+def createdPeer (publicKey : Key) (internalId : Nat) : Peer :=
+  { remoteStatic := publicKey, presharedKey := List.replicate 32 0,
+    precomputedStaticStatic := List.replicate 32 0, internalId,
+    cookieDecryptionKey := blake2s 32 [] ("cookie--".toUTF8.toList ++ publicKey),
+    cookieMac1Key := blake2s 32 [] ("mac1----".toUTF8.toList ++ publicKey) }
+
+def peerCreateCore (pid : PeerId) (publicKey : Key) : WG.M Unit := do
+  let internalId := (← get).peerCounter + 1
+  modify fun w => { w with peerCounter := internalId }
+  modifyDev fun d => { d with nextPeer := pid + 1 }
+  setPeer pid (createdPeer publicKey internalId)
+
+def peerCreateCorePrefix (pid : PeerId) (publicKey : Key) : WGPrefix PeerEvent Unit :=
+  fun w ambient => ExceptT.mk fun h => (((peerCreateCore pid publicKey).run w).run ambient,
+    if w.dev.isSome then h ++ [.allocate pid (w.peerCounter + 1), .write pid (w.peerCounter + 1)]
+    else h)
+
+@[simp] theorem peerCreateCorePrefix_run (pid : PeerId) (key : Key)
+    (w : WGWorld) (ambient : Ambient) (h : List PeerEvent) :
+    runStatePrefix (peerCreateCorePrefix pid key) w ambient h =
+      (((peerCreateCore pid key).run w).run ambient,
+        if w.dev.isSome then h ++ [.allocate pid (w.peerCounter + 1), .write pid (w.peerCounter + 1)]
+        else h) := rfl
+
+theorem peerCreateCorePrefix_erases (pid : PeerId) (key : Key) :
+    ErasesStatePrefix (peerCreateCorePrefix pid key) (peerCreateCore pid key) := fun _ _ _ => rfl
+
+def creationCoreWorld (w : WGWorld) (pid : PeerId) (publicKey : Key) : WGWorld :=
+  { w with
+    peerCounter := w.peerCounter + 1
+    dev := w.dev.map fun d => { d with
+      nextPeer := pid + 1
+      peers := d.peers.insert pid (createdPeer publicKey (w.peerCounter + 1)) } }
+
+theorem peerCreateCore_run (pid : PeerId) (key : Key) (w : WGWorld) (ambient : Ambient) :
+    ((peerCreateCore pid key).run w).run ambient = .ok (((), creationCoreWorld w pid key), ambient) := by
+  simp [peerCreateCore, creationCoreWorld, modifyDev, setPeer,
+    StateT.run_bind, StateT.run_get, StateT.run_modify]
+  cases w.dev <;> rfl
+
+theorem creationCore_snapshot (pid : PeerId) (key : Key) (w : WGWorld) (d : Device)
+    (hd : w.dev = some d) :
+    snapshot (creationCoreWorld w pid key) = (snapshot w).allocate pid := by
+  simpa [creationCoreWorld, snapshot, hd, mapStore] using
+    mapStore_allocate w.peerCounter d.peers pid (createdPeer key (w.peerCounter + 1)) rfl
+
 theorem peerCreateCorePrefix_preserves (pid : PeerId) (key : Key) :
-    PrefixPreserves CreationInv AccessEvent.Safe (peerCreateCorePrefix pid key) := by
-  intro w h hi
+    StatePrefixPreserves (fun h w _ => CreationInv h w) AccessEvent.Safe
+      (peerCreateCorePrefix pid key) := by
+  intro w ambient h hi
+  change ∃ suffix, (runStatePrefix (peerCreateCorePrefix pid key) w ambient h).2 = h ++ suffix ∧
+    AccessEvent.Safe (runStatePrefix (peerCreateCorePrefix pid key) w ambient h).2 ∧
+    match (runStatePrefix (peerCreateCorePrefix pid key) w ambient h).1 with
+    | .error _ => True
+    | .ok ((_, v), _) => CreationInv (runStatePrefix (peerCreateCorePrefix pid key) w ambient h).2 v
   rw [peerCreateCorePrefix_run, peerCreateCore_run]
-  cases hd : w.k.wg with
+  cases hd : w.dev with
   | none =>
     simp only [Option.isSome_none, Bool.false_eq_true, ↓reduceIte]
     refine ⟨[], by simp, hi.access.1, ?_⟩
@@ -366,11 +211,11 @@ theorem peerCreateCorePrefix_preserves (pid : PeerId) (key : Key) :
   | some d =>
     simp only [Option.isSome_some, ↓reduceIte]
     have hinv := hi.allocate (creationCore_snapshot pid key w d hd)
-    exact ⟨[.allocate pid (w.k.peerCounter + 1), .write pid (w.k.peerCounter + 1)],
+    exact ⟨[.allocate pid (w.peerCounter + 1), .write pid (w.peerCounter + 1)],
       rfl, hinv.access.1, hinv⟩
 
 /-- A proof-side regrouping of exactly the original creation body. -/
-def peerCreateFactored (key : Key) (psk : Option Key) : M (Except Int PeerId) := do
+def peerCreateFactored (key : Key) (psk : Option Key) : WG.M (Except Int PeerId) := do
   let d ← getDev
   if ← branchCmp .peerCreateMaxPeers (d.numPeers ≥ MAX_PEERS_PER_DEVICE) d.numPeers MAX_PEERS_PER_DEVICE then
     return .error (-ENOMEM)
@@ -388,44 +233,263 @@ theorem peerCreateFactored_eq (key : Key) (psk : Option Key) :
     peerCreateFactored key psk = peerCreate key psk := by
   simp only [peerCreateFactored, peerCreate, peerCreateCore, createdPeer, bind_assoc]
 
-def peerCreatePrefix (key : Key) (psk : Option Key) : PrefixM PeerEvent (Except Int PeerId) := do
-  let d ← liftPrefix getDev
-  if ← liftPrefix (branchCmp .peerCreateMaxPeers (d.numPeers ≥ MAX_PEERS_PER_DEVICE) d.numPeers MAX_PEERS_PER_DEVICE) then
+theorem core_creation_spec (pid : PeerId) (key : Key) :
+    WGCreationSpec (fun _ => True) (peerCreateCorePrefix pid key) (fun _ _ => True) :=
+  (show StatePrefixEnsures (fun h w _ => CreationInv h w) AccessEvent.Safe
+      (peerCreateCorePrefix pid key) (fun _ h w _ => CreationInv h w)
+      from peerCreateCorePrefix_preserves pid key).consequence
+    (fun _ _ _ h => h.1) (fun _ _ _ _ h => ⟨h, True.intro⟩)
+
+
+def dstCacheResetPrefix (pid : PeerId) : WGPrefix PeerEvent Unit := do
+  if !((← liftWGPrefix getAmbient).armRecords && (← liftWGPrefix (get : WG.M WGWorld)).dstCacheRecords) then return
+  let ts ← liftWGPrefix (hiddenJiffies .dstCacheResetTs)
+  let p ← getPeerPrefix pid
+  setPeerPrefix pid { p with dstCache := { p.dstCache with resetTs := ts } }
+
+def resetLastSentHandshakePrefix (pid : PeerId) : WGPrefix PeerEvent Unit := do
+  let now ← liftWGPrefix (hiddenClock64 .resetLastSent)
+  setPeerPrefix pid { (← getPeerPrefix pid) with
+    lastSentHandshake := now - (REKEY_TIMEOUT + 1 : Nat).toInt64 * NSEC_PER_SEC64 }
+
+def precomputeStaticStaticPrefix (pid : PeerId) : WGPrefix PeerEvent Unit := do
+  requireNotPendingPrefix pid "recomputing the static-static key"
+  let identity := (← liftWGPrefix getDev).staticIdentity
+  let p ← getPeerPrefix pid
+  let zero ← do
+    if ← liftWGPrefix (branch .precomputeNoIdentity !identity.hasIdentity) then pure true
+    else
+      let (out, nonNull) := curve25519 identity.staticPrivate p.remoteStatic
+      setPeerPrefix pid { p with precomputedStaticStatic := out }
+      liftWGPrefix (branch .precomputeNullPoint !nonNull)
+  if zero then setPeerPrefix pid { (← getPeerPrefix pid) with precomputedStaticStatic := List.replicate 32 0 }
+
+def handshakeInitPrefix (pid : PeerId) (psk : Option Key) : WGPrefix PeerEvent Unit := do
+  setPeerPrefix pid { (← getPeerPrefix pid) with handshakeEntryPeer := some pid }
+  if ← liftWGPrefix (branch .handshakeInitHasPsk psk.isSome) then
+    let p ← getPeerPrefix pid
+    setPeerPrefix pid { p with presharedKey := psk.getD p.presharedKey }
+  precomputeStaticStaticPrefix pid
+
+theorem dstCacheResetPrefix_erases (pid : PeerId) :
+    ErasesStatePrefix (dstCacheResetPrefix pid) (dstCacheReset pid) := by
+  unfold dstCacheResetPrefix dstCacheReset
+  repeat' first
+    | contradiction
+    | exact erasesStatePrefix_lift _
+    | exact erasesStatePrefix_pure _
+    | exact getPeerPrefix_erases _
+    | exact setPeerPrefix_erases _ _
+    | apply erasesStatePrefix_bind
+    | dsimp only
+    | split
+    | intro x
+
+theorem resetLastSentHandshakePrefix_erases (pid : PeerId) :
+    ErasesStatePrefix (resetLastSentHandshakePrefix pid) (resetLastSentHandshake pid) := by
+  unfold resetLastSentHandshakePrefix resetLastSentHandshake
+  exact erasesStatePrefix_bind (erasesStatePrefix_lift _) (fun _ =>
+    erasesStatePrefix_bind (getPeerPrefix_erases _) (fun _ => setPeerPrefix_erases _ _))
+
+theorem precomputeStaticStaticPrefix_erases (pid : PeerId) :
+    ErasesStatePrefix (precomputeStaticStaticPrefix pid) (precomputeStaticStatic pid) := by
+  unfold precomputeStaticStaticPrefix precomputeStaticStatic
+  repeat' first
+    | contradiction
+    | exact requireNotPendingPrefix_erases _ _
+    | exact erasesStatePrefix_lift _
+    | exact erasesStatePrefix_pure _
+    | exact getPeerPrefix_erases _
+    | exact setPeerPrefix_erases _ _
+    | apply erasesStatePrefix_bind
+    | dsimp only
+    | split
+    | intro x
+
+theorem handshakeInitPrefix_erases (pid : PeerId) (psk : Option Key) :
+    ErasesStatePrefix (handshakeInitPrefix pid psk) (handshakeInit pid psk) := by
+  unfold handshakeInitPrefix handshakeInit IndexOwner.setPeerWord
+  simp only [bind_assoc]
+  repeat' first
+    | contradiction
+    | exact precomputeStaticStaticPrefix_erases _
+    | exact erasesStatePrefix_lift _
+    | exact erasesStatePrefix_pure _
+    | exact getPeerPrefix_erases _
+    | exact setPeerPrefix_erases _ _
+    | apply erasesStatePrefix_bind
+    | dsimp only
+    | split
+    | intro x
+
+theorem dstCacheResetPrefix_hidden_failure (pid : PeerId) (w : WGWorld)
+    (ambient : Ambient) (h : List PeerEvent) (e : Stop)
+    (ha : ambient.armRecords = true) (hc : w.dstCacheRecords = true)
+    (hr : ((hiddenJiffies .dstCacheResetTs : WG.M UInt64).run w).run ambient = .error e) :
+    runStatePrefix (dstCacheResetPrefix pid) w ambient h = (.error e, h) := by
+  simp [dstCacheResetPrefix, runStatePrefix_bind, runStatePrefix_lift,
+    liftWGPrefix, getAmbient, StateT.run_get, ha, hc, hr]
+
+/-- A clock Stop after the allocation cut retains its observed events,
+with no final WG or Ambient endpoint. -/
+theorem creation_core_clock_failure (pid : PeerId) (key : Key) (w : WGWorld)
+    (ambient : Ambient) (h : List PeerEvent) (e : Stop) (hd : w.dev.isSome = true)
+    (ha : ambient.armRecords = true) (hc : w.dstCacheRecords = true)
+    (hr : ((hiddenJiffies .dstCacheResetTs : WG.M UInt64).run
+      (creationCoreWorld w pid key)).run ambient = .error e) :
+    runStatePrefix (do peerCreateCorePrefix pid key; dstCacheResetPrefix pid) w ambient h =
+      (.error e, h ++ [.allocate pid (w.peerCounter + 1), .write pid (w.peerCounter + 1)]) := by
+  rw [runStatePrefix_bind, peerCreateCorePrefix_run, peerCreateCore_run]
+  simp only [hd, ↓reduceIte]
+  exact dstCacheResetPrefix_hidden_failure pid _ _ _ e ha hc hr
+
+theorem creation_get (P : Store PeerId → Prop) (pid : PeerId) :
+    WGCreationSpec P (getPeerPrefix pid) (fun p s => P s ∧ s.slots pid = some p.internalId) := by
+  intro w ambient h hi
+  have he := getPeerPrefix_run pid w ambient h
+  change runPrefix ((getPeerPrefix pid).run w) ambient h = _ at he
+  rw [he]
+  cases hr : ((getPeer pid).run w).run ambient with
+  | error _ => exact ⟨[], by simp, hi.1.access.1, True.intro⟩
+  | ok out =>
+    rcases out with ⟨⟨p, v⟩, ambient'⟩
+    obtain ⟨rfl, rfl, live⟩ := getPeer_current pid w v p ambient ambient' hr
+    have hn := hi.1.read live
+    exact ⟨[.read pid p.internalId], rfl, hn.access.1, hn, hi.2, live⟩
+
+theorem creation_set (P : Store PeerId → Prop) (pid : PeerId) (p : Peer) :
+    WGCreationSpec (fun s => P s ∧ s.slots pid = some p.internalId)
+      (setPeerPrefix pid p) (fun _ => P) := by
+  intro w ambient h hi
+  have he := setPeerPrefix_run pid p w ambient h
+  change runPrefix ((setPeerPrefix pid p).run w) ambient h = _ at he
+  rw [he]
+  cases hd : w.dev with
+  | none => simp [snapshot, hd] at hi
+  | some d =>
+    have hr : ((setPeer pid p).run w).run ambient = .ok (((),
+        { w with dev := some { d with peers := d.peers.insert pid p } }), ambient) := by
+      simp [setPeer, modifyDev, hd]
+    rw [hr]
+    simp only [Option.isSome_some, ↓reduceIte]
+    have hs := setPeer_same pid p w _ ambient ambient hi.2.2 hr
+    have hn := (hi.1.write hi.2.2).congr hs
+    exact ⟨[.write pid p.internalId], rfl, hn.access.1, hn, hs ▸ hi.2.1⟩
+
+theorem creation_dev (P : Store PeerId → Prop) :
+    WGCreationSpec P (liftWGPrefix getDev) (fun _ => P) := by
+  apply creation_state_lift
+  apply SameView.of_wp
+  intro initial
+  mvcgen [getDev, invariant, AmbientM.invariant]
+  all_goals simp_all
+
+theorem creation_require (P : Store PeerId → Prop) (pid : PeerId) (what : String) :
+    WGCreationSpec P (requireNotPendingPrefix pid what) (fun _ => P) := by
+  exact creation_state_pure P ()
+theorem dstCacheResetPrefix_spec (P : Store PeerId → Prop) (pid : PeerId) :
+    WGCreationSpec P (dstCacheResetPrefix pid) (fun _ => P) := by
+  unfold dstCacheResetPrefix
+  apply StatePrefixEnsures.bind (creation_state_lift P _ (fun initial => hoare_liftAmbient (get : AmbientM Ambient) (fun w => snapshot w = initial)))
+  intro ambient
+  apply StatePrefixEnsures.bind (creation_state_world P)
+  intro w
+  split
+  · exact creation_state_pure _ ()
+  · apply StatePrefixEnsures.bind (creation_state_lift P _ (fun initial => hoare_liftAmbient (AmbientM.hiddenJiffies _) (fun w => snapshot w = initial)))
+    intro ts
+    apply StatePrefixEnsures.bind (creation_get P pid)
+    intro p
+    exact creation_set P pid { p with dstCache := { p.dstCache with resetTs := ts } }
+
+theorem resetLastSentHandshakePrefix_spec (P : Store PeerId → Prop) (pid : PeerId) :
+    WGCreationSpec P (resetLastSentHandshakePrefix pid) (fun _ => P) := by
+  unfold resetLastSentHandshakePrefix
+  apply StatePrefixEnsures.bind (creation_state_lift P _ (fun initial => hoare_liftAmbient (AmbientM.hiddenClock64 _) (fun w => snapshot w = initial)))
+  intro now
+  apply StatePrefixEnsures.bind (creation_get P pid)
+  intro p
+  exact creation_set P pid { p with lastSentHandshake := now - (REKEY_TIMEOUT + 1 : Nat).toInt64 * NSEC_PER_SEC64 }
+
+theorem precomputeStaticStaticPrefix_spec (P : Store PeerId → Prop) (pid : PeerId) :
+    WGCreationSpec P (precomputeStaticStaticPrefix pid) (fun _ => P) := by
+  unfold precomputeStaticStaticPrefix
+  apply StatePrefixEnsures.bind (creation_require P pid _)
+  intro _
+  apply StatePrefixEnsures.bind (creation_dev P)
+  intro d
+  apply StatePrefixEnsures.bind (creation_get P pid)
+  intro p
+  apply StatePrefixEnsures.bind (creation_state_lift (fun s => P s ∧ s.slots pid = some p.internalId) _ (fun initial => hoare_liftAmbient (AmbientM.branch _ _) (fun w => snapshot w = initial)))
+  intro b
+  split
+  · dsimp only
+    simp only [pure_bind, ↓reduceIte]
+    apply StatePrefixEnsures.bind (creation_get (fun s => P s ∧ s.slots pid = some p.internalId) pid)
+    intro q
+    exact creation_state_forget (creation_set (fun s => P s ∧ s.slots pid = some p.internalId) pid { q with precomputedStaticStatic := List.replicate 32 0 })
+      (fun _ _ h => h.1)
+  · dsimp only
+    apply StatePrefixEnsures.bind (creation_set P pid
+      { p with precomputedStaticStatic := (curve25519 d.staticIdentity.staticPrivate p.remoteStatic).1 })
+    intro _
+    apply StatePrefixEnsures.bind (creation_state_lift P _ (fun initial => hoare_liftAmbient (AmbientM.branch _ _) (fun w => snapshot w = initial)))
+    intro zero
+    dsimp only
+    split
+    · apply StatePrefixEnsures.bind (creation_get P pid)
+      intro q
+      exact creation_set P pid { q with precomputedStaticStatic := List.replicate 32 0 }
+    · exact creation_state_pure P ()
+
+theorem handshakeInitPrefix_spec (P : Store PeerId → Prop) (pid : PeerId) (psk : Option Key) :
+    WGCreationSpec P (handshakeInitPrefix pid psk) (fun _ => P) := by
+  unfold handshakeInitPrefix
+  apply StatePrefixEnsures.bind (creation_get P pid)
+  intro p
+  apply StatePrefixEnsures.bind (creation_set P pid {p with handshakeEntryPeer := some pid})
+  intro _
+  apply StatePrefixEnsures.bind (creation_state_lift P _ (fun initial => hoare_liftAmbient (AmbientM.branch _ _) (fun w => snapshot w = initial)))
+  intro b
+  split
+  · apply StatePrefixEnsures.bind (creation_get P pid)
+    intro p
+    apply StatePrefixEnsures.bind (creation_set P pid { p with presharedKey := psk.getD p.presharedKey })
+    intro _
+    exact precomputeStaticStaticPrefix_spec P pid
+  · exact precomputeStaticStaticPrefix_spec P pid
+
+def peerCreatePrefix (key : Key) (psk : Option Key) : WGPrefix PeerEvent (Except Int PeerId) := do
+  let d ← liftWGPrefix getDev
+  if ← liftWGPrefix (branchCmp .peerCreateMaxPeers (d.numPeers ≥ MAX_PEERS_PER_DEVICE) d.numPeers MAX_PEERS_PER_DEVICE) then
     return .error (-ENOMEM)
-  if ← liftPrefix (branch .peerCreateNoMem !(← liftPrefix (hiddenAlloc .kmemCacheZallocPeer))) then
+  if ← liftWGPrefix (branch .peerCreateNoMem !(← liftWGPrefix (hiddenAlloc .kmemCacheZallocPeer))) then
     return .error (-ENOMEM)
-  if ← liftPrefix (branch .peerCreateDstCacheFail false) then return .error (-ENOMEM)
+  if ← liftWGPrefix (branch .peerCreateDstCacheFail false) then return .error (-ENOMEM)
   let pid := d.nextPeer
   peerCreateCorePrefix pid key
   dstCacheResetPrefix pid
   handshakeInitPrefix pid psk
   resetLastSentHandshakePrefix pid
-  liftPrefix (modifyDev fun d => { d with peerList := d.peerList ++ [pid], peerHashtable := (key, pid) :: d.peerHashtable, numPeers := d.numPeers + 1 })
+  liftWGPrefix (modifyDev fun d => { d with peerList := d.peerList ++ [pid], peerHashtable := (key, pid) :: d.peerHashtable, numPeers := d.numPeers + 1 })
   return .ok pid
 
 theorem peerCreatePrefix_erases (key : Key) (psk : Option Key) :
-    ErasesPrefix (peerCreatePrefix key psk) (peerCreate key psk) := by
+    ErasesStatePrefix (peerCreatePrefix key psk) (peerCreate key psk) := by
   rw [← peerCreateFactored_eq]
   unfold peerCreatePrefix peerCreateFactored
   repeat' first
     | contradiction
-    | with_reducible exact peerCreateCorePrefix_erases _ _
-    | with_reducible exact dstCacheResetPrefix_erases _
-    | with_reducible exact handshakeInitPrefix_erases _ _
-    | with_reducible exact resetLastSentHandshakePrefix_erases _
-    | with_reducible exact erasesPrefix_lift _
-    | with_reducible exact erasesPrefix_pure _
-    | with_reducible apply erasesPrefix_ite
-    | with_reducible apply erasesPrefix_bind
-    | intro_forall
+    | exact peerCreateCorePrefix_erases _ _
+    | exact dstCacheResetPrefix_erases _
+    | exact handshakeInitPrefix_erases _ _
+    | exact resetLastSentHandshakePrefix_erases _
+    | exact erasesStatePrefix_lift _
+    | exact erasesStatePrefix_pure _
+    | apply erasesStatePrefix_bind
     | dsimp only
     | split
-
-theorem core_creation_spec (pid : PeerId) (key : Key) :
-    CreationSpec (fun _ => True) (peerCreateCorePrefix pid key) (fun _ _ => True) :=
-  (show PrefixEnsures CreationInv AccessEvent.Safe (peerCreateCorePrefix pid key)
-      (fun _ => CreationInv) from peerCreateCorePrefix_preserves pid key).consequence
-    (fun _ _ h => h.1) (fun _ _ _ h => ⟨h, True.intro⟩)
+    | intro x
 
 theorem modifyDev_samePeerSnapshot (f : Device → Device) (hf : ∀ d, (f d).peers = d.peers) :
     SamePeerSnapshot (modifyDev f) := by
@@ -434,55 +498,60 @@ theorem modifyDev_samePeerSnapshot (f : Device → Device) (hf : ∀ d, (f d).pe
   exact modifyDev_peer_spec (fun t => t = s) f hf
 
 theorem peerCreatePrefix_preserves (key : Key) (psk : Option Key) :
-    PrefixPreserves CreationInv AccessEvent.Safe (peerCreatePrefix key psk) := by
-  have full : CreationSpec (fun _ => True) (peerCreatePrefix key psk) (fun _ _ => True) := by
+    StatePrefixPreserves (fun h w _ => CreationInv h w) AccessEvent.Safe (peerCreatePrefix key psk) := by
+  have full : WGCreationSpec (fun _ => True) (peerCreatePrefix key psk) (fun _ _ => True) := by
     unfold peerCreatePrefix
-    apply PrefixEnsures.bind (creation_dev (fun _ => True))
+    apply StatePrefixEnsures.bind (creation_dev (fun _ => True))
     intro d
-    apply PrefixEnsures.bind (creation_lift (fun _ => True) _
-      (samePeerSnapshot_of_sameWGKernel (KernelFrames.branchCmp_sameWGKernel _ _ _ _)))
+    apply StatePrefixEnsures.bind (creation_state_lift (fun _ => True) _
+      (fun initial => hoare_liftAmbient (AmbientM.branchCmp _ _ _ _) (fun w => snapshot w = initial)))
     intro full
     split
-    · exact creation_pure (fun _ => True) _
-    · apply PrefixEnsures.bind (creation_kernel (fun _ => True) _ (Framing.hiddenAlloc_sameKernel _))
+    · exact creation_state_pure (fun _ => True) _
+    · apply StatePrefixEnsures.bind (creation_state_lift (fun _ => True) _ (fun initial => hoare_liftAmbient (AmbientM.hiddenAlloc _) (fun w => snapshot w = initial)))
       intro allocated
-      apply PrefixEnsures.bind (creation_branch (fun _ => True) _ _)
+      apply StatePrefixEnsures.bind (creation_state_lift (fun _ => True) _ (fun initial => hoare_liftAmbient (AmbientM.branch _ _) (fun w => snapshot w = initial)))
       intro failed
       split
-      · exact creation_pure (fun _ => True) _
-      · apply PrefixEnsures.bind (creation_branch (fun _ => True) _ _)
+      · exact creation_state_pure (fun _ => True) _
+      · apply StatePrefixEnsures.bind (creation_state_lift (fun _ => True) _ (fun initial => hoare_liftAmbient (AmbientM.branch _ _) (fun w => snapshot w = initial)))
         intro failed
         split
-        · exact creation_pure (fun _ => True) _
-        · apply PrefixEnsures.bind (core_creation_spec d.nextPeer key)
+        · exact creation_state_pure (fun _ => True) _
+        · apply StatePrefixEnsures.bind (core_creation_spec d.nextPeer key)
           intro _
-          apply PrefixEnsures.bind (dstCacheResetPrefix_spec (fun _ => True) d.nextPeer)
+          apply StatePrefixEnsures.bind (dstCacheResetPrefix_spec (fun _ => True) d.nextPeer)
           intro _
-          apply PrefixEnsures.bind (handshakeInitPrefix_spec (fun _ => True) d.nextPeer psk)
+          apply StatePrefixEnsures.bind (handshakeInitPrefix_spec (fun _ => True) d.nextPeer psk)
           intro _
-          apply PrefixEnsures.bind (resetLastSentHandshakePrefix_spec (fun _ => True) d.nextPeer)
+          apply StatePrefixEnsures.bind (resetLastSentHandshakePrefix_spec (fun _ => True) d.nextPeer)
           intro _
-          apply PrefixEnsures.bind (creation_lift (fun _ => True) _
+          apply StatePrefixEnsures.bind (creation_state_lift (fun _ => True) _
             (modifyDev_samePeerSnapshot
               (fun v => { v with peerList := v.peerList ++ [d.nextPeer], peerHashtable := (key, d.nextPeer) :: v.peerHashtable, numPeers := v.numPeers + 1 })
               (fun _ => rfl)))
           intro _
-          exact creation_pure (fun _ => True) _
-  exact (full.consequence (fun _ _ hi => ⟨hi, True.intro⟩) (fun _ _ _ hi => hi.1)).preserves
+          exact creation_state_pure (fun _ => True) _
+  exact full.consequence (fun _ _ _ hi => ⟨hi, True.intro⟩) (fun _ _ _ _ hi => hi.1)
+
 
 theorem peerPutPrefix_creation_preserves (peer : Option PeerId) :
-    PrefixPreserves CreationInv AccessEvent.Safe (peerPutPrefix peer) := by
-  intro w h hi
-  rw [peerPutPrefix_run]
+    StatePrefixPreserves (fun h w _ => CreationInv h w) AccessEvent.Safe (peerPutPrefix peer) := by
+  intro w ambient h hi
+  have he : runPrefix ((peerPutPrefix peer).run w) ambient h =
+      (((peerPut peer).run w).run ambient, h ++ peerPutEvents peer w) :=
+    peerPutPrefix_run peer w ambient h
+  rw [he]
   refine ⟨peerPutEvents peer w, rfl, peerPutEvents_safe peer w h hi.access, ?_⟩
-  cases hr : (peerPut peer).run w with
+  cases hr : ((peerPut peer).run w).run ambient with
   | error _ => trivial
   | ok out =>
-    rcases out with ⟨result, v⟩
+    rcases out with ⟨⟨result, v⟩, ambient'⟩
     cases result
-    have retained := peerPut_retained peer w () v hr
-    have ha := (peerPutPrefix_preserves peer w h hi.access).choose_spec.2.2
-    rw [peerPutPrefix_run, hr] at ha
+    have retained := (ProjectedAction.iff_run_ambient _ _ _).mp (peerPut_retained peer)
+      w ambient () v ambient' hr
+    have ha := (peerPutPrefix_preserves peer w ambient h hi.access).choose_spec.2.2
+    rw [he, hr] at ha
     refine ⟨ha, retained.bounded hi.bounded, ?_⟩
     intro stamp released
     rw [retained.1]
@@ -490,41 +559,20 @@ theorem peerPutPrefix_creation_preserves (peer : Option PeerId) :
     · exact hi.pastBounded _ old
     · obtain ⟨pid, p, _, hp, _, rfl⟩ := peerPutEvents_release peer w stamp fresh
       apply hi.bounded pid p.internalId
-      change (w.k.wg.bind (fun d => d.peers[pid]?)).map (·.internalId) = _
+      change (w.dev.bind (fun d => d.peers[pid]?)).map (·.internalId) = _
       rw [hp]; rfl
 
-theorem creation_lift_preserves (a : M α) (ha : SamePeerSnapshot a) :
-    PrefixPreserves CreationInv AccessEvent.Safe (liftPrefix a) :=
-  ((creation_lift (fun _ => True) a ha).consequence
-    (fun _ _ hi => ⟨hi, True.intro⟩) (fun _ _ _ hi => hi.1)).preserves
-
 theorem wgGetDeviceDonePrefix_creation_preserves (ctx : DumpCtx) :
-    PrefixPreserves CreationInv AccessEvent.Safe (wgGetDeviceDonePrefix ctx) := by
+    StatePrefixPreserves (fun h w _ => CreationInv h w) AccessEvent.Safe (wgGetDeviceDonePrefix ctx) := by
   unfold wgGetDeviceDonePrefix
-  exact PrefixPreserves.bind
-    (creation_lift_preserves _ (samePeerSnapshot_of_sameKernel (sameKernel_branch _ _)))
-    (fun _ => peerPutPrefix_creation_preserves ctx.nextPeer)
-
-theorem dstCacheResetPrefix_hidden_failure (pid : PeerId) (w : World) (h : List PeerEvent)
-    (e : Stop) (ha : w.armRecords = true) (hc : w.dstCacheRecords = true)
-    (hr : (hiddenJiffies .dstCacheResetTs).run w = .error e) :
-    runPrefix (dstCacheResetPrefix pid) w h = (.error e, h) := by
-  simp [dstCacheResetPrefix, runPrefix_bind, StateT.run_get, ha, hc, hr]
-
-/-- The first initializer's record failure happens after allocation and its
-initial write, which remain visible despite the absence of a final World. -/
-theorem creation_core_clock_failure (pid : PeerId) (key : Key) (w : World)
-    (h : List PeerEvent) (e : Stop) (hd : w.k.wg.isSome = true)
-    (ha : w.armRecords = true) (hc : w.dstCacheRecords = true)
-    (hr : (hiddenJiffies .dstCacheResetTs).run (creationCoreWorld w pid key) = .error e) :
-    runPrefix (do peerCreateCorePrefix pid key; dstCacheResetPrefix pid) w h =
-      (.error e, h ++ [.allocate pid (w.k.peerCounter + 1), .write pid (w.k.peerCounter + 1)]) := by
-  rw [runPrefix_bind, peerCreateCorePrefix_run, peerCreateCore_run]
-  simp only [hd, ↓reduceIte]
-  exact dstCacheResetPrefix_hidden_failure pid _ _ e ha hc hr
-
-/-- Finite sequences of the three complete original callers, discarding their
-ordinary return values but retaining the exact World and first Stop. -/
+  apply StatePrefixEnsures.bind (g := liftWGPrefix (branch .getDoneHasWg ctx.hasWg))
+  · exact (creation_state_lift (fun _ => True) _
+      (fun initial => hoare_liftAmbient (AmbientM.branch _ _) (fun w => snapshot w = initial))).consequence
+        (fun _ _ _ hi => ⟨hi, True.intro⟩) (fun _ _ _ _ hi => hi.1)
+  · intro _
+    exact peerPutPrefix_creation_preserves ctx.nextPeer
+/-- Complete original callers with ordinary return values discarded. An outer
+Stop terminates the sequence and retains exactly its observed prefix. -/
 inductive CreationCall where
   | create (key : Key) (psk : Option Key)
   | put (peer : Option PeerId)
@@ -532,49 +580,50 @@ inductive CreationCall where
 
 namespace CreationCall
 
-def original : CreationCall → M Unit
+def original : CreationCall → WG.M Unit
   | .create key psk => do let _ ← peerCreate key psk; pure ()
   | .put peer => peerPut peer
   | .dumpDone ctx => wgGetDeviceDone ctx
 
-def observed : CreationCall → PrefixM PeerEvent Unit
+def observed : CreationCall → WGPrefix PeerEvent Unit
   | .create key psk => do let _ ← peerCreatePrefix key psk; pure ()
   | .put peer => peerPutPrefix peer
   | .dumpDone ctx => wgGetDeviceDonePrefix ctx
 
-def execute : List CreationCall → M Unit
+def execute : List CreationCall → WG.M Unit
   | [] => pure ()
   | call :: calls => call.original >>= fun _ => execute calls
 
-def observe : List CreationCall → PrefixM PeerEvent Unit
+def observe : List CreationCall → WGPrefix PeerEvent Unit
   | [] => pure ()
   | call :: calls => call.observed >>= fun _ => observe calls
 
-theorem erases (call : CreationCall) : ErasesPrefix call.observed call.original := by
+theorem erases (call : CreationCall) : ErasesStatePrefix call.observed call.original := by
   cases call with
-  | create key psk => exact erasesPrefix_bind (peerCreatePrefix_erases key psk) (fun _ => erasesPrefix_pure ())
+  | create key psk => exact erasesStatePrefix_bind (peerCreatePrefix_erases key psk) (fun _ => erasesStatePrefix_pure ())
   | put peer => exact peerPutPrefix_erases peer
   | dumpDone ctx => exact wgGetDeviceDonePrefix_erases ctx
 
-theorem preserves (call : CreationCall) : PrefixPreserves CreationInv AccessEvent.Safe call.observed := by
+theorem preserves (call : CreationCall) : StatePrefixPreserves (fun h w _ => CreationInv h w) AccessEvent.Safe call.observed := by
   cases call with
   | create key psk =>
-    exact PrefixPreserves.bind (peerCreatePrefix_preserves key psk)
-      (fun _ => PrefixPreserves.pure (fun _ _ hi => hi.access.1) ())
+    exact StatePrefixEnsures.bind (peerCreatePrefix_preserves key psk)
+      (fun _ => StatePrefixEnsures.pure () (fun _ _ _ hi => hi.access.1) (fun _ _ _ hi => hi))
   | put peer => exact peerPutPrefix_creation_preserves peer
   | dumpDone ctx => exact wgGetDeviceDonePrefix_creation_preserves ctx
 
-theorem observe_erases (calls : List CreationCall) : ErasesPrefix (observe calls) (execute calls) := by
+theorem observe_erases (calls : List CreationCall) : ErasesStatePrefix (observe calls) (execute calls) := by
   induction calls with
-  | nil => exact erasesPrefix_pure ()
-  | cons call calls ih => exact erasesPrefix_bind call.erases (fun _ => ih)
+  | nil => exact erasesStatePrefix_pure ()
+  | cons call calls ih => exact erasesStatePrefix_bind call.erases (fun _ => ih)
 
 theorem observe_preserves (calls : List CreationCall) :
-    PrefixPreserves CreationInv AccessEvent.Safe (observe calls) := by
+    StatePrefixPreserves (fun h w _ => CreationInv h w) AccessEvent.Safe (observe calls) := by
   induction calls with
-  | nil => exact PrefixPreserves.pure (fun _ _ h => h.access.1) ()
-  | cons call calls ih => exact PrefixPreserves.bind call.preserves (fun _ => ih)
+  | nil => exact StatePrefixEnsures.pure () (fun _ _ _ hi => hi.access.1) (fun _ _ _ hi => hi)
+  | cons call calls ih => exact StatePrefixEnsures.bind call.preserves (fun _ => ih)
 
 end CreationCall
+
 
 end Leanux.Proofs.WG.Peers

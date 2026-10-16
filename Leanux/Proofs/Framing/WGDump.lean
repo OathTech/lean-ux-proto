@@ -1,28 +1,69 @@
 import Leanux.Proofs.Framing.WGAllowedIps
-import Leanux.Proofs.Framing.WGConfiguration
+import Leanux.Proofs.Framing.WGKernel
 import Leanux.Proofs.WG.NetlinkDump.Source
 
-/-! Canonical dump frames. Read-only serialization preserves the complete Kernel.
-The socket mask hides only the two netlink socket records, retaining device
-presence, every resident object and all allocator frontiers. Internal access
-coverage is established separately at the source getters. -/
+/-! Native dump frames and projection-parametric composition. The mutable
+socket observation masks only the original two socket records. -/
 namespace Leanux.Proofs.Framing
 open Leanux Leanux.WG Leanux.Proofs.WG.NetlinkDump Std.Do
 set_option maxHeartbeats 1000000
 set_option pp.structureInstances false
 
-namespace DumpKernelComposition
-open Lean Meta Elab Tactic
+namespace DumpComposition
+variable {S σ α β : Type} {m : Type → Type} {ps : PostShape}
+  [Monad m] [WPMonad m ps] {view : S → σ}
 
-theorem dumpKernel_ite (p : Prop) [Decidable p] {a b : M α}
-    (ha : p → SameKernel a) (hb : ¬p → SameKernel b) : SameKernel (if p then a else b) := by
+theorem ite_sameView (p : Prop) [Decidable p] {a b : StateT S m α}
+    (ha : p → SameView view a) (hb : ¬p → SameView view b) :
+    SameView view (if p then a else b) := by
   by_cases h : p <;> simp only [h, ↓reduceIte]
   · exact ha h
   · exact hb h
 
+theorem map_sameView (f : α → β) {a : StateT S m α} (ha : SameView view a) :
+    SameView view (f <$> a) := ha.map f
+
+theorem discard_sameView {a : StateT S m α} (ha : SameView view a) :
+    SameView view (discard a) := by
+  unfold Functor.discard
+  exact map_sameView _ ha
+
+theorem forIn_sameView (xs : List α) (b : β)
+    (f : α → β → StateT S m (ForInStep β))
+    (hf : ∀ a b, SameView view (f a b)) : SameView view (forIn xs b f) := by
+  induction xs generalizing b with
+  | nil => simpa only [List.forIn_nil] using SameView.pure view b
+  | cons a xs ih =>
+    rw [List.forIn_cons]
+    apply SameView.bind (hf a b)
+    intro step
+    cases step with
+    | done b => exact SameView.pure view b
+    | yield b => exact ih b
+
+theorem andM_sameView (a b : StateT S m Bool)
+    (ha : SameView view a) (hb : SameView view b) :
+    SameView view (do if ← a then b else pure false) := by
+  apply SameView.bind ha
+  intro result
+  cases result
+  · exact SameView.pure view false
+  · exact hb
+
+theorem orM_sameView (a b : StateT S m Bool)
+    (ha : SameView view a) (hb : SameView view b) :
+    SameView view (do if ← a then pure true else b) := by
+  apply SameView.bind ha
+  intro result
+  cases result
+  · exact hb
+  · exact SameView.pure view true
+
+open Lean Meta Elab Tactic
+
 elab "dump_kernel_head " n:ident : tactic => do
   let t := (← getMainTarget).consumeMData
-  unless t.isAppOf ``SameKernel do throwError "expected SameKernel"
+  unless t.isAppOf ``SameView do throwError "expected SameView"
   let a := t.getAppArgs.back! |>.consumeMData |>.headBeta
   let name ← Lean.Elab.realizeGlobalConstNoOverloadWithInfo n
   unless a.isAppOf name do throwError "different action head"
@@ -31,44 +72,6 @@ elab "dump_kernel_intro" : tactic => do
   unless (← getMainTarget).isForall do throwError "expected forall"
   evalTactic (← `(tactic| intro x))
 
-
-theorem map_sameSnapshot (f : α → β) {a : M α} (ha : SameKernel a) :
-    SameKernel (f <$> a) := by
-  simpa only [map_eq_pure_bind] using sameKernel_bind ha (fun x => sameKernel_pure (f x))
-
-theorem discard_sameSnapshot {a : M α} (ha : SameKernel a) : SameKernel (discard a) := by
-  unfold Functor.discard
-  exact map_sameSnapshot _ ha
-
-theorem forIn_sameSnapshot (xs : List α) (b : β) (f : α → β → M (ForInStep β))
-    (hf : ∀ a b, SameKernel (f a b)) : SameKernel (forIn xs b f) := by
-  induction xs generalizing b with
-  | nil => simpa only [List.forIn_nil] using sameKernel_pure b
-  | cons a xs ih =>
-    rw [List.forIn_cons]
-    apply sameKernel_bind (hf a b)
-    intro step
-    cases step with
-    | done b => exact sameKernel_pure b
-    | yield b => exact ih b
-
-theorem andM_sameSnapshot (a b : M Bool) (ha : SameKernel a) (hb : SameKernel b) :
-    SameKernel (Leanux.WG.andM a b) := by
-  unfold Leanux.WG.andM
-  apply sameKernel_bind ha
-  intro result
-  cases result
-  · exact sameKernel_pure false
-  · exact hb
-
-theorem orM_sameSnapshot (a b : M Bool) (ha : SameKernel a) (hb : SameKernel b) :
-    SameKernel (Leanux.WG.orM a b) := by
-  unfold Leanux.WG.orM
-  apply sameKernel_bind ha
-  intro result
-  cases result
-  · exact hb
-  · exact sameKernel_pure true
 
 private def kernelHeadBZ : Nat → Expr → Expr
   | 0, e => e
@@ -87,7 +90,7 @@ private def kernelHeadBZ : Nat → Expr → Expr
 elab "dump_dump_kernel_head_reduce" : tactic => withMainContext do
   let g ← getMainGoal
   let t := (← instantiateMVars (← g.getType)).consumeMData
-  unless t.isAppOf ``SameKernel do throwError "not SameKernel"
+  unless t.isAppOf ``SameView do throwError "not SameView"
   let .app f a := t | throwError "missing action"
   let a' := kernelHeadBZ 64 a
   if Expr.equal a a' then throwError "head unchanged"
@@ -96,7 +99,7 @@ elab "dump_dump_kernel_head_reduce" : tactic => withMainContext do
 elab "dump_dump_kernel_head_match" : tactic => withMainContext do
   let g ← getMainGoal
   let t := (← instantiateMVars (← g.getType)).consumeMData
-  unless t.isAppOf ``SameKernel do throwError "not SameKernel"
+  unless t.isAppOf ``SameView do throwError "not SameView"
   let a := t.getAppArgs.back! |>.consumeMData
   let some _ ← Lean.Meta.matchMatcherApp? a | throwError "not a top matcher"
   replaceMainGoal (← Lean.Meta.Split.splitMatch g a)
@@ -104,20 +107,20 @@ elab "dump_dump_kernel_head_match" : tactic => withMainContext do
 elab "dump_kernel_join_let" : tactic => withMainContext do
   let goal ← getMainGoal
   let target := (← instantiateMVars (← goal.getType)).consumeMData
-  unless target.isAppOf ``SameKernel do throwError "not SameKernel"
+  unless target.isAppOf ``SameView do throwError "not SameView"
   let action := target.getAppArgs.back! |>.consumeMData
   let .letE name ty value body _ := action | throwError "not a let"
   unless name.toString.startsWith "__do_jp" do throwError "not a join continuation"
   let property ← forallTelescope ty fun args _ => do
-    let result ← mkAppM ``SameKernel #[mkAppN value args]
+    let result ← mkAppM ``SameView #[target.getAppArgs[target.getAppArgs.size - 2]!, mkAppN value args]
     mkForallFVars args result
   let valueProof ← mkFreshExprSyntheticOpaqueMVar property
   let (continuation, next) ← withLocalDeclD name ty fun f => do
     let contract ← forallTelescope ty fun args _ => do
-      let result ← mkAppM ``SameKernel #[mkAppN f args]
+      let result ← mkAppM ``SameView #[target.getAppArgs[target.getAppArgs.size - 2]!, mkAppN f args]
       mkForallFVars args result
     withLocalDeclD `dump_kernel_join contract fun hf => do
-      let bodyProp ← mkAppM ``SameKernel #[body.instantiate1 f]
+      let bodyProp ← mkAppM ``SameView #[target.getAppArgs[target.getAppArgs.size - 2]!, body.instantiate1 f]
       let next ← mkFreshExprSyntheticOpaqueMVar bodyProp
       let proof ← mkLambdaFVars #[f, hf] next
       pure (proof, next.mvarId!)
@@ -127,7 +130,7 @@ elab "dump_kernel_join_let" : tactic => withMainContext do
 elab "dump_kernel_join_use" : tactic => withMainContext do
   let goal ← getMainGoal
   let target := (← instantiateMVars (← goal.getType)).consumeMData
-  unless target.isAppOf ``SameKernel do throwError "not SameKernel"
+  unless target.isAppOf ``SameView do throwError "not SameView"
   let action := target.getAppArgs.back! |>.consumeMData |>.headBeta
   unless action.getAppFn.isFVar do throwError "not a local continuation"
   for decl in ← getLCtx do
@@ -145,84 +148,115 @@ macro "dump_kernel_step" : tactic => `(tactic|
   first
     | contradiction
     | dump_kernel_intro
-    | with_reducible assumption
     | dump_kernel_join_let
     | dump_kernel_join_use
-    | (dump_kernel_head Pure.pure; exact sameKernel_pure _)
-    | (dump_kernel_head Bind.bind; refine sameKernel_bind ?_ ?_)
-    | (dump_kernel_head ite; refine dumpKernel_ite _ ?_ ?_)
-    | (dump_kernel_head Leanux.WG.andM; refine andM_sameSnapshot _ _ ?_ ?_)
-    | (dump_kernel_head Leanux.WG.orM; refine orM_sameSnapshot _ _ ?_ ?_)
-    | (dump_kernel_head Functor.discard; refine discard_sameSnapshot ?_)
-    | (dump_kernel_head Functor.map; refine map_sameSnapshot _ ?_)
-    | (dump_kernel_head ForIn.forIn; with_reducible refine forIn_sameSnapshot _ _ _ ?_)
+    | (dump_kernel_head Pure.pure; exact SameView.pure _ _)
+    | (dump_kernel_head Bind.bind; refine SameView.bind ?_ ?_)
+    | (dump_kernel_head ite; refine ite_sameView _ ?_ ?_)
+    | (dump_kernel_head Leanux.WG.andM; with_reducible refine andM_sameView _ _ ?_ ?_)
+    | (dump_kernel_head Leanux.WG.orM; with_reducible refine orM_sameView _ _ ?_ ?_)
+    | (dump_kernel_head Functor.discard; refine discard_sameView ?_)
+    | (dump_kernel_head Functor.map; refine map_sameView _ ?_)
+    | (dump_kernel_head ForIn.forIn; with_reducible refine forIn_sameView _ _ _ ?_)
     | dump_dump_kernel_head_reduce
     | dump_dump_kernel_head_match)
 
-end DumpKernelComposition
-open DumpKernelComposition
 
-def dumpKernel (k : Kernel) : Kernel := {k with nlSock7 := {}, nlSock8 := {}}
-def dumpView (w : World) : Kernel := dumpKernel w.k
-abbrev SameDumpKernel (a : M α) := SameView dumpView a
+end DumpComposition
+open DumpComposition
 
-theorem getNlSock_sameKernel (fd : Nat) : SameKernel (getNlSock fd) := by
-  apply sameKernel_of_wp
+def dumpStore (s : WGStoreView) : WGStoreView := {s with nlSock7 := {}, nlSock8 := {}}
+def dumpView (g : WGWorld) : WGStoreView := dumpStore (wgStoreView g)
+abbrev SameDump (a : WG.M α) := SameView dumpView a
+
+theorem getNlSock_sameWGWorld (fd : Nat) :
+    SameView (id : WGWorld → WGWorld) (getNlSock fd) := by
+  apply SameView.of_wp
   intro k
-  mvcgen [getNlSock, getK]
+  mvcgen [getNlSock]
 
-theorem setNlSock_sameDumpKernel (fd : Nat) (sock : NlSock) :
-    SameDumpKernel (setNlSock fd sock) := by
+theorem setNlSock_sameDump (fd : Nat) (sock : NlSock) :
+    SameDump (setNlSock fd sock) := by
+  apply SameView.of_wp
+  intro k
   by_cases hf : fd == 8
   all_goals simp only [setNlSock, hf, ↓reduceIte]
-  all_goals intro w x v hr; cases hr; rfl
+  all_goals mvcgen
+  all_goals simpa [dumpView, dumpStore, wgStoreView]
 
-theorem getAllowedips_sameKernel (skb : NlSkb) (family masked cidr : Nat) :
-    SameKernel (getAllowedips skb family masked cidr) := by
-  apply sameKernel_of_wp
+theorem getAllowedips_sameWGWorld (skb : NlSkb) (family masked cidr : Nat) :
+    SameView (id : WGWorld → WGWorld) (getAllowedips skb family masked cidr) := by
+  apply SameView.of_wp
   intro k
-  mvcgen [getAllowedips, branch]
+  mvcgen [getAllowedips, branch, AmbientM.branch]
 
-theorem readNode_sameKernel (n : AipNode) : SameKernel (readNode n) := by
-  apply sameKernel_of_wp
+theorem readNode_sameWGWorld (n : AipNode) :
+    SameView (id : WGWorld → WGWorld) (readNode n) := by
+  apply SameView.of_wp
   intro k
-  mvcgen [readNode, swapEndian, branch]
+  mvcgen [readNode, swapEndian, branch, AmbientM.branch]
 
-theorem getPeerDumpAllowed_sameKernel (p : Peer) (ctx : DumpCtx) (skb0 skb : NlSkb)
+theorem getPeerDumpAllowed_sameWGWorld (p : Peer) (ctx : DumpCtx) (skb0 skb : NlSkb)
     (pubkey : String) (attrs : List (String × Lean.Json)) (node : Option NodeId) :
-    SameKernel (getPeerDumpAllowedSource p ctx skb0 skb pubkey attrs node) := by
-  apply sameKernel_of_wp
-  intro k
-  have hn := fun id => sameKernel_wp _ (getNode_sameKernel id) (fun s => s = k)
-  have hr := fun n => sameKernel_wp _ (readNode_sameKernel n) (fun s => s = k)
-  have ha := fun skb fam addr cidr => sameKernel_wp _ (getAllowedips_sameKernel skb fam addr cidr) (fun s => s = k)
-  have hl (α β : Type) := list_view_spec (fun w => w.k) (α := α) (β := β) (fun s => s = k)
-  mvcgen [-Std.Do.Spec.forIn_list, -Std.Do.Spec.forIn'_list, hl,
-    getPeerDumpAllowedSource, hn, hr, ha, getDev, getK, branch, invariant]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all
-
-theorem getPeerDumpTail_sameKernel (p : Peer) (ctx : DumpCtx) (skb : NlSkb) :
-    SameKernel (getPeerDumpTailSource p ctx skb) := by
-  unfold getPeerDumpTailSource
+    SameView (id : WGWorld → WGWorld) (getPeerDumpAllowedSource p ctx skb0 skb pubkey attrs node) := by
+  have hn (n : NodeId) :
+      SameView (id : WGWorld → WGWorld) (MonadLift.monadLift (getNode n) : WG.M AipNode) := by
+    apply SameView.of_wp
+    intro k
+    apply hoare_liftAip_of (getNode n)
+    intro g d hg hd
+    dsimp only [id] at hg
+    subst g
+    apply hoare_consequence ((getNode_sameAipStore n).wp
+      (fun s => s = { nodes := d.nodes, nextNode := d.nextNode, trie := d.peerAllowedips }))
+    · intro s hs
+      exact hs
+    · intro _ s hs
+      subst s
+      cases k
+      simp_all
+  have hg : SameView (id : WGWorld → WGWorld) getDev := by
+    apply SameView.of_wp
+    intro k
+    mvcgen [getDev, invariant, AmbientM.invariant]
+  unfold getPeerDumpAllowedSource
   repeat' first
-    | (dump_kernel_head getPeerDumpAllowedSource; with_reducible exact getPeerDumpAllowed_sameKernel _ _ _ _ _ _ _)
-    | (dump_kernel_head Leanux.branch; with_reducible exact sameKernel_branch _ _)
+    | (dump_kernel_head liftM; unfold liftM)
+    | (dump_kernel_head MonadLift.monadLift; exact hn _)
+    | (dump_kernel_head MonadLiftT.monadLift; exact hn _)
+    | (dump_kernel_head getDev; exact hg)
+    | (dump_kernel_head readNode; with_reducible exact readNode_sameWGWorld _)
+    | (dump_kernel_head getAllowedips; with_reducible exact getAllowedips_sameWGWorld _ _ _ _)
+    | (dump_kernel_head Leanux.branch;
+        intro initial; exact hoare_liftAmbient (AmbientM.branch _ _) (fun s => s = initial))
+    | (dump_kernel_head Leanux.invariant;
+        intro initial; exact hoare_liftAmbient (AmbientM.invariant _) (fun s => s = initial))
     | dump_kernel_step
 
-theorem getPeerDump_sameKernel (pid : PeerId) (ctx : DumpCtx) (skb : NlSkb) :
-    SameKernel (getPeerDump pid ctx skb) := by
-  rw [getPeerDump_source]
-  apply sameKernel_of_wp
-  intro k
-  have ht := fun p => sameKernel_wp _ (getPeerDumpTail_sameKernel p ctx skb) (fun s => s = k)
-  mvcgen [getPeer, getDev, getK, invariant, ht]
+theorem getPeerDumpTail_sameWGWorld (p : Peer) (ctx : DumpCtx) (skb : NlSkb) :
+    SameView (id : WGWorld → WGWorld) (getPeerDumpTailSource p ctx skb) := by
+  unfold getPeerDumpTailSource
+  repeat' first
+    | (dump_kernel_head getPeerDumpAllowedSource; with_reducible exact getPeerDumpAllowed_sameWGWorld _ _ _ _ _ _ _)
+    | (dump_kernel_head Leanux.branch;
+        intro initial; exact hoare_liftAmbient (AmbientM.branch _ _) (fun s => s = initial))
+    | dump_kernel_step
 
-theorem coalesce_sameKernel (messages : List NlMessage) : SameKernel (coalesce messages) := by
-  apply sameKernel_of_wp
+theorem getPeerDump_sameWGWorld (pid : PeerId) (ctx : DumpCtx) (skb : NlSkb) :
+    SameView (id : WGWorld → WGWorld) (getPeerDump pid ctx skb) := by
+  rw [getPeerDump_source]
+  apply SameView.of_wp
   intro k
-  have hl (α β : Type) := list_view_spec (fun w => w.k) (α := α) (β := β) (fun s => s = k)
-  mvcgen [-Std.Do.Spec.forIn_list, -Std.Do.Spec.forIn'_list, hl, coalesce, invariant]
+  have ht := fun p => (getPeerDumpTail_sameWGWorld p ctx skb).wp (fun s => s = k)
+  mvcgen [getPeer, getDev, invariant, AmbientM.invariant, ht]
+
+theorem coalesce_sameWGWorld (messages : List NlMessage) :
+    SameView (id : WGWorld → WGWorld) (coalesce messages) := by
+  apply SameView.of_wp
+  intro k
+  have hl (α β : Type) := list_view_spec (m := AmbientM) (id : WGWorld → WGWorld)
+    (α := α) (β := β) (fun s => s = k)
+  mvcgen [-Std.Do.Spec.forIn_list, -Std.Do.Spec.forIn'_list, hl, coalesce, invariant, AmbientM.invariant]
   all_goals try dsimp +zetaDelta only at *
   all_goals simp_all
 

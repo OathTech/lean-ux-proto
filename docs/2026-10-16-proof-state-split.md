@@ -43,9 +43,12 @@ it is not part of that baseline.
 | Native AllowedIPs leaves and removal wrappers | 19 | 13 | 6 | 0 | 1 | 14 |
 | Native peer-access observer | 21 | 21 | 0 | 0 | 0 | 21 |
 | Exact recorded clock tests | 3 | 3 | 0 | 0 | 0 | 3 |
+| Native peer-creation observer and generic helpers | 42 | 39 | 3 | 0 | 4 | 43 |
+| Native dump sources and generic composition | 19 | 18 | 0 | 1 | 1 | 20 |
+| Native device lifecycle and generic factors | 14 | 12 | 2 | 0 | 0 | 12 |
 
 The whole tree currently contains 450 Lean files and 6,216 theorems. The completed
-changes total 605 retyped theorems, 1,585 deletions, 126 retained contract shapes and 86 added.
+changes total 674 retyped theorems, 1,590 deletions, 127 retained contract shapes and 91 added.
 Retyping changes or generalizes the actual state/monad carrier or observation.
 This includes shorthand contracts whose source functions or named views move
 to a native monad. Mere namespace qualification and equivalent relocation of a
@@ -1005,6 +1008,74 @@ KILLED result, timeout or infrastructure rerun occurred.
 LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake build Leanux.Proofs.WG.Keypairs.Frames.WGTransitions Leanux.Proofs.Framing.WGCookie Leanux.Proofs.WG.Peers.Allocation Leanux.Proofs.WG.Peers.Access Leanux.Proofs.Framing.EnvOperations Leanux.Proofs.Framing.Batch Leanux.Proofs.Framing.Stack Leanux.Proofs.WG.Environment.ObservationSource Leanux.Proofs.WG.Keypairs.Evolution.Rules
 LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Keypairs.Frames.WGBase
 LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Peers.Frames
+```
+
+## Peer creation, dump sources and device lifecycle
+
+These five modules move from 75 to 75 theorems: 69 retyped/generalized,
+five deleted, one retained product-interface contract and five added.
+CreationAccess is 42 to 43 (39 carried, three deleted, four native bridges);
+the dump trio is 19 to 20 (18 retyped, one retained, one added);
+device lifecycle is 14 to 12 (12 retyped, two deleted).
+All result surfaces remain lagging while downstream callers are carried.
+
+CreationStoreInv replaces the four old invariant laws over a pure store.
+Five generic PrefixT helpers retain arbitrary actual StateT S (Except Stop)
+actions and observations, including product get and callbacks. Four separate
+creation_state_* bridges serve the concrete WGPrefix observer. The missing-device
+core still increments peerCounter without events; whole creation instead stops
+at its initial getter. An occupied destination may still be overwritten, emitting
+allocation/write without an invented release. Cache gating reads Ambient before
+WG, and a subsequent clock Stop retains those events without a failed post-state.
+CreationCall retains all three complete callers and their ordinary-error/Stop
+distinction. No vacancy, queue, timer or clock-success premise was added.
+
+CreationAccess deletes creation_kernel (obsolete conditional monolithic support,
+with local callers migrated), creation_branch (a redundant concrete adapter
+instance, also with migrated callers), and unused creation_stop. None is justified
+by a failed compile. The lifecycle deletions are sameLinkView_of_link (the old
+projection transport, supplied by generic factoring) and modifyDev_link_spec
+(covered by the canonical modifier rule at fixed spectator state plus the actual
+lift adapter). Their local consumers are migrated.
+
+Dump source equalities retain every cursor, guard, failure and the get-before-put
+order. Generic composition uses actual StateT actions; its private product
+Stop-bind rule is retained, with a separate native counterpart. Lifecycle views
+retain seven WG observations. Generic ratelimiter_link carries arbitrary extra
+observations on both sides; its product instance can use exactly the old masked
+FS/task/seccomp remainder. It does not require equality of extra FS or seccomp
+fields. Newlink/create keep their original normal-endpoint alternatives and
+unrestricted records. mayHaveSlept and retireDeviceUnits change native bookkeeping,
+so their substantive seven-field contracts remain.
+
+Validation passes: CreationAccess build (57 jobs), dump/lifecycle build (40 jobs),
+all 62 plus 49 named declaration axiom checks, four fresh entry-module replays,
+independent source reviews, source/options, mirror, census, terminal and
+whitespace audits. No full-tree gate is claimed.
+
+Creation preparation used eleven stdin calls: calls 1, 4, 8, 10 and 11 passed
+13, 20, 26, 34 and 43 theorem checks; the six failures concerned record layout,
+folded postconditions, a removed tactic, reducible-only leaf matching, premature
+introduction before conditional splitting, and one extra tactic after closure.
+Recovery output from failed calls is rejected. The permanent module built on
+its first call. Dump preparation had four failures (socket/loop obligations,
+tail expansion at the existing limit and lift reductions), followed by a passing
+fifth with 20 theorem checks. Lifecycle preparation failed once on trailing
+tactics after closed goals, then passed all 12 theorem checks. The combined
+permanent build passed on its first call. Its first axiom-check program failed
+on a reserved local identifier before checking declarations; the corrected
+stdin program passed all 49 checks.
+One root replay command failed because --fresh accepts only one module;
+dirty worktrees were snapshotted before three separate successful invocations.
+No limits or caps were raised; no KILLED result, guest timeout or infrastructure
+rerun occurred.
+
+```sh
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake build Leanux.Proofs.WG.Peers.CreationAccess Leanux.Proofs.Framing.WGDump Leanux.Proofs.WG.NetlinkDump.Source Leanux.Proofs.WG.NetlinkDump.DeviceSource Leanux.Proofs.Framing.WGDeviceLifecycle
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Peers.CreationAccess
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.Framing.WGDump
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.NetlinkDump.DeviceSource
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.Framing.WGDeviceLifecycle
 ```
 
 ## Incoming merge and remaining work

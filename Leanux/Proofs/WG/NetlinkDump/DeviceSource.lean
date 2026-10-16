@@ -7,7 +7,7 @@ open Leanux Leanux.WG Lean
 set_option maxHeartbeats 1000000
 
 def deviceDumpHeaderSource (d : Device) (ctx : DumpCtx) (prevSeq0 : Nat) (skb0 : NlSkb) :
-    M (NlSkb × Nat × List (String × Json)) := do
+    WG.M (NlSkb × Nat × List (String × Json)) := do
   let seq := d.deviceUpdateGen
   let (fail, skb) := skb0.put (nlmsgTotal 4)   -- genlmsg_put: nlmsghdr + genlmsghdr
   if ← branch .dumpNoHdr fail then unsupported "a dump chunk without room for its header (unreachable: every chunk is fresh)"
@@ -41,7 +41,7 @@ def deviceDumpHeaderSource (d : Device) (ctx : DumpCtx) (prevSeq0 : Nat) (skb0 :
   return (skb, flags, device)
 
 def deviceDumpTailSource (d : Device) (ctx0 : DumpCtx) (skb0 : NlSkb)
-    (flags : Nat) (device : List (String × Json)) : M DumpCall := do
+    (flags : Nat) (device : List (String × Json)) : WG.M DumpCall := do
   let seq := d.deviceUpdateGen
   let mut ctx := ctx0
   let mut nextCursor := ctx.nextPeer
@@ -50,7 +50,7 @@ def deviceDumpTailSource (d : Device) (ctx0 : DumpCtx) (skb0 : NlSkb)
   let ret : Int := 0
   let mut done := true
   let mut peers : Option (Array PeerDumpAttrs) := some #[]
-  let cursorDead : M Bool := do
+  let cursorDead : WG.M Bool := do
     let some pid := ctx.nextPeer | invariant "unreachable"
     return (← getPeer pid).isDead
   if ← Leanux.WG.orM (branch .dumpPeerListEmpty d.peerList.isEmpty)
@@ -104,12 +104,14 @@ def deviceDumpTailSource (d : Device) (ctx0 : DumpCtx) (skb0 : NlSkb)
   return { ret := Int.ofNat (NLMSG_GOODSIZE - skb.room), skb, ctx := { ctx with nextPeer := nextCursor }, prevSeq := seq }
 
 
-private theorem source_if_bind (p : Prop) [Decidable p] (a b : M α) (f : α → M β) :
+private theorem source_if_bind {m : Type → Type} [Monad m] (p : Prop) [Decidable p] (a b : m α) (f : α → m β) :
     ((if p then a else b) >>= f) = (if p then a >>= f else b >>= f) := by
   split <;> rfl
-private theorem source_unsupported_bind (s : String) (f : α → M β) :
-    (unsupported s >>= f) = (unsupported s : M β) := rfl
-private theorem source_bind_congr (a : M α) (f g : α → M β) (h : ∀ x, f x = g x) :
+private theorem source_unsupported_bind (s : String) (f : α → Leanux.M β) :
+    (unsupported s >>= f) = (unsupported s : Leanux.M β) := rfl
+private theorem source_unsupported_bind_wg (s : String) (f : α → WG.M β) :
+    (unsupported s >>= f) = (unsupported s : WG.M β) := rfl
+private theorem source_bind_congr {m : Type → Type} [Monad m] (a : m α) (f g : α → m β) (h : ∀ x, f x = g x) :
     (a >>= f) = (a >>= g) := congrArg (fun k => a >>= k) (funext h)
 
 theorem wgGetDeviceDump_source (ctx : DumpCtx) (prevSeq : Nat) (skb : NlSkb) :
@@ -117,11 +119,11 @@ theorem wgGetDeviceDump_source (ctx : DumpCtx) (prevSeq : Nat) (skb : NlSkb) :
       let d ← getDev
       let (s, flags, attrs) ← deviceDumpHeaderSource d ctx prevSeq skb
       deviceDumpTailSource d ctx s flags attrs) := by
-  simp only [wgGetDeviceDump, deviceDumpHeaderSource, bind_assoc, pure_bind, source_if_bind, source_unsupported_bind]
+  simp only [wgGetDeviceDump, deviceDumpHeaderSource, bind_assoc, pure_bind, source_if_bind, source_unsupported_bind_wg]
   repeat' first
     | rfl
     | (apply source_bind_congr; intro x)
     | split
-    | simp only [bind_assoc, pure_bind, source_if_bind, source_unsupported_bind]
+    | simp only [bind_assoc, pure_bind, source_if_bind, source_unsupported_bind_wg]
 
 end Leanux.Proofs.WG.NetlinkDump
