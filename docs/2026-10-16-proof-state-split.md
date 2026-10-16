@@ -41,9 +41,11 @@ it is not part of that baseline.
 | Native peer frames and allocation | 28 | 20 | 7 | 1 | 0 | 21 |
 | Product environment contracts and adapters | 28 | 23 | 3 | 2 | 10 | 35 |
 | Native AllowedIPs leaves and removal wrappers | 19 | 13 | 6 | 0 | 1 | 14 |
+| Native peer-access observer | 21 | 21 | 0 | 0 | 0 | 21 |
+| Exact recorded clock tests | 3 | 3 | 0 | 0 | 0 | 3 |
 
 The whole tree currently contains 450 Lean files and 6,219 theorems. The completed
-changes total 584 retyped theorems, 1,582 deletions, 126 retained contract shapes and 86 added.
+changes total 608 retyped theorems, 1,582 deletions, 126 retained contract shapes and 86 added.
 Retyping changes or generalizes the actual state/monad carrier or observation.
 This includes shorthand contracts whose source functions or named views move
 to a native monad. Mere namespace qualification and equivalent relocation of a
@@ -928,6 +930,43 @@ LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake build 
 LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.Framing.WGAllowedIpsInsert
 LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Keypairs.Frames.WGBase
 LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Peers.Frames
+```
+
+## Native peer-access observer and exact clock tests
+
+Peers.Access carries all 21 theorems onto WGPrefix/StatePrefix with every native
+WG/Ambient endpoint and incoming history quantified. It corrects copied-source
+drift: unhash precedes the queue guard; erase/release precedes the timer guard;
+retirement follows both. A queue failure retains read/write only, while a timer
+failure also retains release. Missing-object and refcount-zero histories remain
+exact. No success, queue-empty, timer-clear or boundedness premise was added.
+The concrete finite caller family is unchanged.
+
+KeyTimes.Clock carries all three theorems, retaining signed 64-bit conversion,
+multiplication, addition, comparison and returned operands. Both iff statements
+name the complete native outputs; comparison recording uses exactly the outgoing
+clock Ambient, including its netRx ordinal. Arbitrary seconds, birthdays,
+decisions and Boolean transforms remain unrestricted. Downstream Receive and
+KeyLifetime terminal callers are still lagging.
+
+The scoped builds pass (Access 55 jobs; Clock 39). All 35 Access and four Clock
+named declarations use only permitted axioms. Fresh replays of both modules and
+independent full-source reviews pass; source, options, mirror, census, terminal
+preservation and whitespace checks pass. Counts are 24 retyped, zero deleted or
+added. This remains a partial retrofit, not a full-tree or R5 pass.
+
+Access development used four failed builds followed by the passing fifth:
+native reduction/syntax, simp-step exhaustion, queue-history and map comparison
+goals, then one reversed key inequality. Its earlier three failed stdin
+preparations remain rejected. Clock's fourth stdin preparation passes after the
+three failed probes recorded above. Recovery output from every failed call is
+not validation. No crash, interruption, cap/limit increase or infrastructure
+rerun occurred.
+
+```sh
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake build Leanux.Proofs.WG.Peers.Access Leanux.Proofs.WG.KeyTimes.Clock
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Peers.Access
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.KeyTimes.Clock
 ```
 
 ## Incoming merge and remaining work

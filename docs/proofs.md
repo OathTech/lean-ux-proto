@@ -18,7 +18,7 @@ conservation remain open; their next extensions follow the retrofit.
 
 The validated baseline `00641c6` has 471 Lean files and 7,715 named theorems.
 The current tree has 450 files and 6,219 theorems: completed changes comprise
-584 retyped, 1,582 deleted, 126 retained contract shapes and 86 added theorems.
+608 retyped, 1,582 deleted, 126 retained contract shapes and 86 added theorems.
 Three generic action transports also retain their original domain; 23 other
 helpers and one update rule identified by the scope audit still need repair.
 The count audit treats namespace-only product qualifications as retained
@@ -35,7 +35,7 @@ action/projection contracts, failure-prefix/native receipts, keypair identity
 core, ordinary lifetime actions, clock/Noise-helper contracts, keypair composition
 and product scheduler observers, index-table, removal and packet helpers,
 native socket/configuration, product evolution, WGBase, transition, cookie,
-peer and packet primitives, peer frames, allocation, product environment and AllowedIPs contracts pass their scoped
+peer and packet primitives, peer frames, allocation, product environment, AllowedIPs, native peer-access and exact-clock contracts pass their scoped
 builds, axiom checks, fresh kernel replay and independent reviews. The obsolete subsystem-frame layers and
 their unused support are
 removed; all previously ported targets still build after their generated
