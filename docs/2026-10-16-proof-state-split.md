@@ -31,9 +31,10 @@ it is not part of that baseline.
 | WG store view and Keypairs composition (four modules) | 31 | 27 | 4 | 0 | 0 | 27 |
 | Logged `RxPoll`, `Tools`, `Workers`, `Scheduler` | 26 | 17 | 0 | 9 | 0 | 26 |
 | Index table, trie-removal source, receive headers and data helpers | 12 | 8 | 4 | 0 | 0 | 8 |
+| Component adapter extension (new contracts only) | 0 | 0 | 0 | 0 | 7 | 7 |
 
-The whole tree currently contains 449 Lean files and 6,306 theorems. The completed
-changes total 276 retyped theorems, 1,476 deletions, 72 retained interfaces and 67 added.
+The whole tree currently contains 449 Lean files and 6,313 theorems. The completed
+changes total 276 retyped theorems, 1,476 deletions, 72 retained interfaces and 74 added.
 Retained interfaces means unchanged written signatures, not preservation of the
 old monolithic execution state. All carried contracts use the actual new stack.
 All terminal files remain unchanged. **Every result remains lagging** until the complete tree
@@ -412,6 +413,37 @@ timeout, KILLED outcome, limit increase or infrastructure rerun occurred.
 LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake build Leanux.Proofs.Framing.WGIndex Leanux.Proofs.WG.AllowedIps.RemovalSource Leanux.Proofs.Framing.WGReceiveHeaders Leanux.Proofs.Framing.WGData
 # Run separately for each of the four modules above:
 LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.Framing.WGData
+```
+
+## Component adapter extension
+
+`Framing.Lift` grows from nine to sixteen theorems; its original nine are
+byte-identical and are not counted again. Three exact equations expose the
+actual trie, packet-store and routing adapters. The first two keep the device
+guard before component execution, their original Stop and their precise field
+write-back. Routing receives the current device facts, including absence, and
+writes only the returned routing store; returned device facts are discarded.
+All three retain the actual Ambient result.
+
+Four Hoare rules transfer these exact executions. The trie transfer retains
+return-sensitive and frontier-sensitive component contracts; the three stability
+rules apply to arbitrary predicates stable under the relevant component
+replacement. They add no execution-success or Ambient restriction and avoid
+reintroducing per-leaf structural frames.
+
+Validation: final scoped build passes (11 jobs), all sixteen named declarations
+print only permitted axioms, fresh Lift kernel replay passes, and independent
+frozen-source review against the actual adapters found no substantive issue.
+Hashes, terminal preservation, mirror equality, trust scan and scoped whitespace
+pass. Five capped calls completed: the first build failed on record-literal
+indentation; two subsequent builds, the axiom check and replay passed. The second
+build was followed by removal of unused simp arguments in the new proofs. No
+source admission, recovery admission, interruption, limit increase, timeout,
+KILLED outcome or infrastructure rerun occurred. All handles are collected.
+
+```sh
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake build Leanux.Proofs.Framing.Lift
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.Framing.Lift
 ```
 
 ## Incoming source-observer findings

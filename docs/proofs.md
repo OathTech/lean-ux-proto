@@ -17,8 +17,8 @@ remain on this branch. Initialized R3 packet authorization and R4 receive-pipeli
 conservation remain open; their next extensions follow the retrofit.
 
 The validated baseline `00641c6` has 471 Lean files and 7,715 named theorems.
-The current tree has 449 files and 6,306 theorems: completed changes comprise
-276 retyped, 1,476 deleted, 72 retained interfaces and 67 added theorems.
+The current tree has 449 files and 6,313 theorems: completed changes comprise
+276 retyped, 1,476 deleted, 72 retained interfaces and 74 added theorems.
 The census includes private and attributed declarations and excludes nested
 comments and strings. Deferred uncommitted R3 work is outside the baseline.
 All seven terminal files remain unchanged.
@@ -49,7 +49,8 @@ original checkpoints. The current mirror/toolchain carry status is in
   exactly this closure, outside the mirror's default build.
 - `Leanux/Proofs/Framing/`: operational contracts over actual subsystem monads.
   `Hoare` supplies generic StateT contracts and exact native execution bridges;
-  `Lift` describes the real subsystem adapters, including their Stops.
+  `Lift` describes the real subsystem and WG component adapters, including
+  their Stops and precise field write-back.
   `Basic` and `WP` retain the lifetime distinction needed by reused keypair slots.
   `Allocation` and `Index` expose original source equations.
   `Projection` composes and factors equality views; `Tools` supplies generic

@@ -96,4 +96,126 @@ theorem hoare_liftIndex (a : WG.IndexM α) (P : WGWorld → Prop)
       rcases hr with ⟨⟨rfl, rfl⟩, rfl⟩
       exact stable g d table hp hd
 
+/-- The trie adapter runs on the actual node store, frontier and trie. Its
+device guard and every component Stop remain part of the execution. -/
+theorem liftAip_run (a : WG.AipM α) (g : WGWorld) (ambient : Ambient) :
+    ((WG.liftAip a).run g).run ambient =
+      match g.dev with
+      | none => .error (.invariant "no WireGuard device in this trace's fixture")
+      | some d =>
+          ((a.run {nodes := d.nodes, nextNode := d.nextNode, trie := d.peerAllowedips}).run ambient).map
+            (fun ((x, s), ambient') =>
+              ((x, {g with dev := some {d with nodes := s.nodes, nextNode := s.nextNode, peerAllowedips := s.trie}}), ambient')) := by
+  cases hd : g.dev with
+  | none =>
+    simp [WG.liftAip, WG.getDev, hd, invariant, AmbientM.invariant]
+    rfl
+  | some d =>
+    simp only [WG.liftAip, WG.getDev, StateT.run_bind, StateT.run_pure]
+    cases ha : (a.run {nodes := d.nodes, nextNode := d.nextNode, trie := d.peerAllowedips}).run ambient <;>
+      simp [WG.modifyDev, hd, ha] <;> rfl
+
+/-- The packet adapter retains the device guard and writes back exactly the
+two packet stores and their shared allocation frontier. -/
+theorem liftSkb_run (a : WG.SkbM α) (g : WGWorld) (ambient : Ambient) :
+    ((WG.liftSkb a).run g).run ambient =
+      match g.dev with
+      | none => .error (.invariant "no WireGuard device in this trace's fixture")
+      | some d =>
+          ((a.run {txSkbs := d.txSkbs, rxSkbs := d.rxSkbs, nextSkb := d.nextSkb}).run ambient).map
+            (fun ((x, s), ambient') =>
+              ((x, {g with dev := some {d with txSkbs := s.txSkbs, rxSkbs := s.rxSkbs, nextSkb := s.nextSkb}}), ambient')) := by
+  cases hd : g.dev with
+  | none =>
+    simp [WG.liftSkb, WG.getDev, hd, invariant, AmbientM.invariant]
+    rfl
+  | some d =>
+    simp only [WG.liftSkb, WG.getDev, StateT.run_bind, StateT.run_pure]
+    cases ha : (a.run {txSkbs := d.txSkbs, rxSkbs := d.rxSkbs, nextSkb := d.nextSkb}).run ambient <;>
+      simp [WG.modifyDev, hd, ha] <;> rfl
+
+/-- Routing receives the device facts of this entry, including absence. Only
+the returned routing store is written back; its returned device facts are not. -/
+theorem liftRouting_run (a : Net.M α) (g : WGWorld) (ambient : Ambient) :
+    ((liftRouting a).run g).run ambient =
+      ((a.run {toRouting := g.routing, wg0 := g.dev.map fun d => {running := d.running, inet4Dev := d.inet4Dev}}).run ambient).map
+        (fun ((x, s), ambient') => ((x, {g with routing := s.toRouting}), ambient')) := by
+  let entry : Net.State := {toRouting := g.routing, wg0 := g.dev.map fun d => {running := d.running, inet4Dev := d.inet4Dev}}
+  change ((a.run entry).run ambient >>= fun ((x, s), ambient') =>
+    Except.ok ((x, {g with routing := s.toRouting}), ambient')) = _
+  cases (a.run entry).run ambient <;> rfl
+
+/-- Transfer a native trie contract at the actual extracted store. The
+contract may constrain its return value or frontier; Ambient is unrestricted. -/
+theorem hoare_liftAip_of (a : WG.AipM α) (P : WGWorld → Prop)
+    (Q : α → WGWorld → Prop)
+    (h : ∀ g d, P g → g.dev = some d →
+      Hoare a
+        (fun s => s = {nodes := d.nodes, nextNode := d.nextNode, trie := d.peerAllowedips})
+        (fun x s => Q x {g with dev := some {d with nodes := s.nodes, nextNode := s.nextNode, peerAllowedips := s.trie}})) :
+    Hoare (WG.liftAip a) P Q := by
+  apply (hoare_iff_run_ambient _ _ _).mpr
+  intro g ambient x g' ambient' hp hr
+  rw [liftAip_run] at hr
+  cases hd : g.dev with
+  | none => simp [hd] at hr
+  | some d =>
+    simp only [hd] at hr
+    cases ha : (a.run {nodes := d.nodes, nextNode := d.nextNode, trie := d.peerAllowedips}).run ambient with
+    | error e => simp [ha, Except.map] at hr
+    | ok out =>
+      rcases out with ⟨⟨y, s⟩, b⟩
+      simp [ha, Except.map] at hr
+      rcases hr with ⟨⟨rfl, rfl⟩, rfl⟩
+      exact (hoare_iff_run_ambient _ _ _).mp (h g d hp hd) _ _ _ _ _ rfl ha
+
+/-- Arbitrary trie actions preserve predicates stable under replacing their
+three owned fields. No property of their Ambient execution is assumed. -/
+theorem hoare_liftAip (a : WG.AipM α) (P : WGWorld → Prop)
+    (stable : ∀ g d (s : WG.AipStore), P g → g.dev = some d →
+      P {g with dev := some {d with nodes := s.nodes, nextNode := s.nextNode, peerAllowedips := s.trie}}) :
+    Hoare (WG.liftAip a) P (fun _ => P) := by
+  apply hoare_liftAip_of a P (fun _ => P)
+  intro g d hp hd
+  apply (hoare_iff_run_ambient _ _ _).mpr
+  intro s ambient x s' ambient' _ _
+  exact stable g d s' hp hd
+
+/-- Arbitrary packet-store actions preserve predicates stable under replacing
+the two packet stores and their shared frontier. -/
+theorem hoare_liftSkb (a : WG.SkbM α) (P : WGWorld → Prop)
+    (stable : ∀ g d (s : WG.SkbStore), P g → g.dev = some d →
+      P {g with dev := some {d with txSkbs := s.txSkbs, rxSkbs := s.rxSkbs, nextSkb := s.nextSkb}}) :
+    Hoare (WG.liftSkb a) P (fun _ => P) := by
+  apply (hoare_iff_run_ambient _ _ _).mpr
+  intro g ambient x g' ambient' hp hr
+  rw [liftSkb_run] at hr
+  cases hd : g.dev with
+  | none => simp [hd] at hr
+  | some d =>
+    simp only [hd] at hr
+    cases ha : (a.run {txSkbs := d.txSkbs, rxSkbs := d.rxSkbs, nextSkb := d.nextSkb}).run ambient with
+    | error e => simp [ha, Except.map] at hr
+    | ok out =>
+      rcases out with ⟨⟨y, s⟩, b⟩
+      simp [ha, Except.map] at hr
+      rcases hr with ⟨⟨rfl, rfl⟩, rfl⟩
+      exact stable g d s hp hd
+
+/-- Routing can change its whole store. Outer predicates stable under that
+replacement survive, with the actual Ambient output passed through. -/
+theorem hoare_liftRouting (a : Net.M α) (P : WGWorld → Prop)
+    (stable : ∀ g routing, P g → P {g with routing}) :
+    Hoare (liftRouting a) P (fun _ => P) := by
+  apply (hoare_iff_run_ambient _ _ _).mpr
+  intro g ambient x g' ambient' hp hr
+  rw [liftRouting_run] at hr
+  cases ha : (a.run {toRouting := g.routing, wg0 := g.dev.map fun d => {running := d.running, inet4Dev := d.inet4Dev}}).run ambient with
+  | error e => simp [ha, Except.map] at hr
+  | ok out =>
+    rcases out with ⟨⟨y, s⟩, b⟩
+    simp [ha, Except.map] at hr
+    rcases hr with ⟨⟨rfl, rfl⟩, rfl⟩
+    exact stable g s.toRouting hp
+
 end Leanux.Proofs.Framing
