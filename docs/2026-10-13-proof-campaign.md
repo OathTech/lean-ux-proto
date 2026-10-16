@@ -3,25 +3,16 @@
 ## Progress
 
 Work on `proofs/campaign` in `.worktrees/proofs-campaign` follows [the charter](2026-10-13-charter-proof-campaign.md).
-The state-split retrofit onto `6089dc4` now precedes further R3/R4 results. All seven
-result rows are lagging pending complete retyping and validation; their last validated
-mirror remains `cb2348e`. The local CounterWindow layer is carried with 17 retyped
-and six deleted theorems, one added generic lemma, and passing scoped build, axiom
-checks and fresh kernel replay. Native generic contracts and subsystem adapters
-are also carried: 25 retyped, one relocated unchanged, 14 deleted and 14 added
-theorems, with scoped build, 47 declaration axiom checks, fresh replay and
-independent review passing. The acceptance-observer core now uses native
-WG/Ambient execution and the actual product lift (27 to 31 theorems); its scoped
-build, 89 declaration axiom checks, fresh replay and independent review pass.
-Native action/projection contracts also pass those scoped checks (21 to 23
-theorems: 19 generalized, two deleted, four added; 28 declaration axiom checks).
-The failure-prefix core and native receipts now pass scoped build, 221 declaration
-axiom checks, four fresh replays and independent review (128 to 172 theorems:
-113 retyped, 15 unchanged, 44 added). Native keypair snapshots and identities
-pass those scoped checks too (34 to 30 theorems: eight retyped, 22 unchanged,
-four deleted; 43 declaration axiom checks).
-[The retrofit report](2026-10-16-proof-state-split.md)
-tracks the counts and remaining work.
+The state-split retrofit onto `6089dc4` precedes further R3/R4 results. All seven
+result rows remain lagging, last validated over `cb2348e`. The tree has moved from
+471 files / 7,715 named theorems to 449 files / 6,320 theorems. Completed changes
+comprise 196 retyped, 1,462 deleted, 59 retained interfaces and 67 added theorems;
+all terminal files remain unchanged. The native foundational ports pass their
+scoped builds, axiom checks, fresh replay and independent reviews. Obsolete
+subsystem-frame layers and unused support have been deleted, with the distinction
+recorded; the surviving consumers still need their native/product contracts.
+[The retrofit report](2026-10-16-proof-state-split.md) tracks exact counts,
+validation and remaining work. No full-tree pass is claimed.
 
 The preceding `cb2348e` checkpoint validated all seven baseline result surfaces, including the
 local normal-poll carrier and initialized R3 committed-support extensions. The local R4

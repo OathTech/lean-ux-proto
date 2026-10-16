@@ -1,4 +1,3 @@
-import Leanux.Proofs.Framing.FS
 
 /-! Closing the namespace fixture holders only runs filesystem release and
 World-level work queue bookkeeping. The actual namespace cleanup is performed

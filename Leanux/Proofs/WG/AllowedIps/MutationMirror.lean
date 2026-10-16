@@ -1,6 +1,5 @@
 import Leanux.Proofs.WG.AllowedIps.StoreMutation
 import Leanux.Proofs.WG.Keypairs.Frames.WGBase
-import Leanux.Proofs.Framing.KernelEffects
 
 /-! Original allowed-IP mutation contracts. Normal-return statements retain
 record failures as errors; they do not assume every choice stream completes. -/

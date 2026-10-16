@@ -1,5 +1,4 @@
 import Leanux.Proofs.Framing.Tools
-import Leanux.Proofs.Framing.KernelEffects
 
 /-! Original scalar index operations. The canonical frame omits only the index
 entries; device presence, every resident value and all allocation counters stay

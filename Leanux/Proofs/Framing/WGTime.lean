@@ -1,4 +1,3 @@
-import Leanux.Proofs.Framing.KernelEffects
 import Leanux.WG.Handshake
 
 /-! Original recorded age tests and timer jitter preserve the complete kernel. -/

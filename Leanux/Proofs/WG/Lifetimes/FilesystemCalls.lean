@@ -1,4 +1,3 @@
-import Leanux.Proofs.Framing.EventpollCalls
 import Leanux.Proofs.WG.Lifetimes.FilesystemLocal
 
 /-! The eleven original filesystem dispatch arms and the actual deferred file

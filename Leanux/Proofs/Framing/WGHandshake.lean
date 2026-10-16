@@ -1,5 +1,4 @@
 import Leanux.Proofs.Framing.Tools
-import Leanux.Proofs.Framing.KernelEffects
 import Leanux.WG.Handshake
 
 /-! Canonical full-kernel frames for the original access-free Noise helpers.

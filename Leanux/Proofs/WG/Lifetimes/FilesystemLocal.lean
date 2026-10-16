@@ -1,4 +1,3 @@
-import Leanux.Proofs.Framing.PipeRead
 import Leanux.Proofs.WG.Lifetimes.AllocationInitial
 
 /-! Local filesystem calls whose original bodies perform no tracked WireGuard

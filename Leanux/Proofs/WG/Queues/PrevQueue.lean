@@ -1,4 +1,3 @@
-import Leanux.Proofs.Framing.KernelEffects
 import Leanux.WG.PrevQueue
 
 set_option maxHeartbeats 800000

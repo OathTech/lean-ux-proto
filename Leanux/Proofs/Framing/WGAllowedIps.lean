@@ -1,5 +1,4 @@
 import Leanux.Proofs.Framing.Tools
-import Leanux.Proofs.Framing.KernelEffects
 import Leanux.Proofs.WG.AllowedIps.RemovalSource
 
 /-! Canonical node-only frames. The mask omits nodes and trie roots/sequence,

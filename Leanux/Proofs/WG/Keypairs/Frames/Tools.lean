@@ -1,5 +1,4 @@
 import Leanux.Proofs.WG.Keypairs.OrdinaryHot
-import Leanux.Proofs.Framing.FSFileRefs
 import Leanux.Proofs.Framing.Tools
 
 /-! Reusable verification-condition setup for helpers that preserve the

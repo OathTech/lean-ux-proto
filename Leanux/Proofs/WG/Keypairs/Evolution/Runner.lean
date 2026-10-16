@@ -1,5 +1,4 @@
 import Leanux.Proofs.Logged.Runner
-import Leanux.Proofs.Framing.Prefill
 import Leanux.Proofs.WG.Keypairs.Evolution.Rules
 
 /-! The explicit-World outer runner carries the proved lifetime invariant

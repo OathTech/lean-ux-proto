@@ -1,5 +1,4 @@
 import Leanux.Proofs.WG.Peers.Primitives
-import Leanux.Proofs.Framing.FSFileRefs
 
 set_option pp.structureInstances false
 set_option maxHeartbeats 800000

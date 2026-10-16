@@ -1,4 +1,3 @@
-import Leanux.Proofs.Framing.KernelEffects
 import Leanux.Env.Batch
 import Leanux.Proofs.Framing.Projection
 

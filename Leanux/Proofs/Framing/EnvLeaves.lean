@@ -1,5 +1,3 @@
-import Leanux.Proofs.Framing.Control
-import Leanux.Proofs.Framing.KernelEffects
 import Leanux.Env
 
 /-! Complete Kernel frames for environment bookkeeping leaves. Source inspection

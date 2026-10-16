@@ -1,5 +1,4 @@
 import Leanux.Proofs.WG.Lifetimes.AllocationFrames
-import Leanux.Proofs.Framing.Prefill
 
 /-! The ordinary runner fixtures satisfy the allocation invariant with an
 empty history. Seccomp prefill preserves it through the shared WG projection. -/

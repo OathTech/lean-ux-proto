@@ -1,4 +1,3 @@
-import Leanux.Proofs.Framing.Kernel
 import Leanux.WG.Timers
 
 /-! The zero-key timer's immediate action is a queue operation, not a

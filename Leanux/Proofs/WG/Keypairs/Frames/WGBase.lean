@@ -1,5 +1,4 @@
 import Leanux.Proofs.Framing.WGDump
-import Leanux.Proofs.WG.Keypairs.Frames.Kernel
 import Leanux.Proofs.Framing.WGTime
 import Leanux.Proofs.Framing.WGIndex
 import Leanux.Proofs.Framing.WGAllowedIpsInsert

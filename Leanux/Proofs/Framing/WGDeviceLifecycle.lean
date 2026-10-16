@@ -1,5 +1,4 @@
 import Leanux.Proofs.Framing.WGTime
-import Leanux.Proofs.Framing.Kernel
 import Leanux.Proofs.Framing.Tools
 import Leanux.WG.Device
 

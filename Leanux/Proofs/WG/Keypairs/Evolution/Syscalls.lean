@@ -1,8 +1,6 @@
 import Leanux.Proofs.WG.Keypairs.Evolution.Operations
-import Leanux.Proofs.WG.Keypairs.Frames.Seccomp
 import Leanux.Proofs.WG.Keypairs.Frames.Env
 import Leanux.Proofs.WG.Keypairs.Frames.Syscalls
-import Leanux.Proofs.WG.Keypairs.Frames.EventpollCalls
 import Leanux.Proofs.WG.Keypairs.Evolution.Runner
 
 /-! Complete syscall composition. Nonreceive calls have a direct frame over

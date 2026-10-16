@@ -1,6 +1,5 @@
 import Leanux.Proofs.WG.AllowedIps.RoutingDumpFrames
 import Leanux.Proofs.Framing.Syscalls
-import Leanux.Proofs.Framing.Seccomp
 import Leanux.Proofs.WG.Lifetimes.SyscallsAudit
 
 /-! Literal original syscall wrappers and dispatch retain routing completions.

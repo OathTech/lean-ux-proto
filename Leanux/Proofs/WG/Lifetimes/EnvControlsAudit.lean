@@ -1,5 +1,4 @@
 import Leanux.Proofs.Framing.EnvOperations
-import Leanux.Proofs.Framing.Kernel
 import Leanux.Proofs.WG.Lifetimes.AllocationInitial
 import Leanux.Proofs.WG.Lifetimes.EnvDeferredCalls
 import Leanux.Proofs.WG.Lifetimes.DeviceLifecycle

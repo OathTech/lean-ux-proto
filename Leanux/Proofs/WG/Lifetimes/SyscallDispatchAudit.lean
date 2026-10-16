@@ -2,7 +2,6 @@ import Leanux.Proofs.WG.Lifetimes.SyscallWrappersAudit
 import Leanux.Proofs.WG.Lifetimes.ConfigurationDevice
 import Leanux.Proofs.WG.Lifetimes.DumpAccess
 import Leanux.Proofs.WG.Lifetimes.FilesystemCalls
-import Leanux.Proofs.Framing.Seccomp
 
 /-! Every original syscall dispatch arm. Access-free FS/seccomp leaves are
 lifted using independently proved full WG frames; configuration, dump, packet,

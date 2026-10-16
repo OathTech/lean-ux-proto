@@ -1,4 +1,3 @@
-import Leanux.Proofs.Framing.KernelEffects
 import Leanux.Proofs.Framing.Projection
 import Leanux.Proofs.WG.Keypairs.Frames.WGBase
 import Leanux.WG.Peer

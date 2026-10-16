@@ -1,7 +1,6 @@
 import Leanux.Proofs.WG.Queues.RingOccurrences
 import Leanux.Proofs.Logged.PrefixWorkers
 import Leanux.Proofs.Framing.Projection
-import Leanux.Proofs.Framing.KernelEffects
 import Leanux.WG.Send
 
 /-! Source journals refine finite executions of the original ring operations.

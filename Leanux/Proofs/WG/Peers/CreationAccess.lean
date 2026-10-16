@@ -1,6 +1,5 @@
 import Leanux.Proofs.WG.Peers.Access
 import Leanux.Proofs.WG.Peers.Allocation
-import Leanux.Proofs.Framing.Kernel
 
 set_option maxHeartbeats 1000000
 set_option pp.structureInstances false

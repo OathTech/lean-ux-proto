@@ -1,5 +1,4 @@
 import Leanux.Proofs.WG.Lifetimes.Actions
-import Leanux.Proofs.Framing.FSFileRefs
 
 set_option pp.structureInstances false
 

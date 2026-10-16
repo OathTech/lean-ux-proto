@@ -11,38 +11,26 @@ the register of its results.
 ## State-split retrofit in progress
 
 The campaign is carrying its complete proof tree onto split mirror `6089dc4`.
-All seven result rows remain validated only over `cb2348e` until their new
-world/monad contracts pass the proof gate and kernel replay. The proof target
-and gate are retained on this branch. R3 and R4 remain incomplete; their next
-extensions follow the retrofit. The baseline is `00641c6`, with 471 tracked Lean
-files and 7,715 named theorem declarations (including private and attributed
-declarations; nested comments and string literals are excluded). Uncommitted R3 work is
-preserved separately and is not part of that validated baseline.
-The first retrofit checkpoint carries the local counter-window execution layer:
-17 theorems retyped, six structural frames deleted, eight unchanged and one
-private generic transformer lemma added (31 to 26 in the three changed files;
-7,715 to 7,710 across the tree). Its scoped build, axiom checks and fresh kernel
-replay pass. The next checkpoint carries generic native partial/total contracts
-and exact subsystem adapters: 25 retyped, one relocated unchanged, 14 structural
-deletions and 14 additions (40 to 40). Its scoped build, all 47 declaration axiom
-checks and fresh replay pass; independent review found no substantive issue.
-The acceptance-observer core is also carried: 27 to 31 theorems, with ten generic
-proofs moved unchanged, 14 generalized/retyped, three retained interfaces and
-four added bridges. Its scoped build, 89 module-owned declaration axiom checks,
-fresh replay and independent review pass. Native action/projection contracts
-are carried too: 21 to 23 theorems, comprising 19 generalized, two obsolete Kernel
-transports deleted and four run bridges added. Scoped build, all 28 declaration
-axiom checks, fresh replay and independent review pass. The obsolete `frame_wg`
-macro is removed separately. The failure-prefix core and native receipts are
-also carried: 128 to 172 theorems, with 113 retyped, 15 unchanged and 44 added.
-The scoped build, all 221 declaration axiom checks, four fresh scoped replays and
-independent review pass. Native keypair snapshots and identities are carried:
-34 to 30 theorems, with eight retyped, 22 unchanged, three obsolete recording
-frames and one duplicate initialization wrapper deleted. Scoped build, all 43
-declaration axiom checks, fresh replay and independent review pass. The tree now
-has 477 Lean files and 7,756 theorems.
-This does not make a terminal result current; see the
-[retrofit report](2026-10-16-proof-state-split.md).
+All seven result rows remain lagging, last validated over `cb2348e`, until the
+complete tree passes its proof gate and kernel replay. The proof target and gate
+remain on this branch. Initialized R3 packet authorization and R4 receive-pipeline
+conservation remain open; their next extensions follow the retrofit.
+
+The validated baseline `00641c6` has 471 Lean files and 7,715 named theorems.
+The current tree has 449 files and 6,320 theorems: completed changes comprise
+196 retyped, 1,462 deleted, 59 retained interfaces and 67 added theorems.
+The census includes private and attributed declarations and excludes nested
+comments and strings. Deferred uncommitted R3 work is outside the baseline.
+All seven terminal files remain unchanged.
+
+The CounterWindow, generic native contracts/adapters, acceptance-observer core,
+action/projection contracts, failure-prefix/native receipts and keypair identity
+core pass their scoped builds, axiom checks, fresh kernel replay and independent
+reviews. The obsolete subsystem-frame layers and their unused support are
+removed; all previously ported targets still build after their generated
+artifacts were removed. This is not a full-tree pass. The
+[retrofit report](2026-10-16-proof-state-split.md) gives the per-tranche counts,
+deletion justifications and remaining source-observer carry.
 
 ## Layers
 
@@ -57,45 +45,18 @@ original checkpoints. The current mirror/toolchain carry status is in
 - `Leanux/Proofs.lean`: the root. It imports every result's `Statements`
   module and the checked counterexamples; `lake build LeanuxProofs` builds
   exactly this closure, outside the mirror's default build.
-- `Leanux/Proofs/Framing/`: generic operational framing over the mirror's
-  state and monad. `Basic` says which state an action leaves unchanged, with
-  the lifetime distinction a reused keypair slot needs; `WP` is the
-  weakest-precondition form; `Allocation` names the mirror's private
-  allocation helpers for proofs. `Projection` composes and factors arbitrary
-  equality views; `WGKernel` selects the seven dedicated WireGuard kernel
-  fields, and `FSFileRefs` proves six original file-reference helpers once
-  for the keypair, peer and packet projections. These are immediate-return
-  frames, not preservation of queued work or later scheduler effects.
-  `Index` exposes exact source equations for the recorded index-unhash helpers.
-  `PeerBorrow` derives positive-count acquisition and normal immediate repayment,
-  retaining the full outside-peer Kernel and every complete peer record pointwise.
-  It shares the existing WGBase proof environment without changing legacy signatures.
-  `KernelEffects` shares record-consumer and refcount contracts; `WGTime`
-  frames the original recorded age tests and jitter. `WGHandshake` frames
-  seven original explicit-input crypto helpers over the full Kernel; `WGIndex`
-  preserves every Kernel field except the device's scalar index table, including
-  allocation geometry and device presence. Legacy signatures project these
-  canonical contracts. `Batch` shares section-wrapper and record-only scheduler
-  frames over the full Kernel, with legacy interfaces derived by projection. `Kernel`
-  proves original kernel helpers over the full WG view, with the old keypair
-  interfaces derived by projection. `Tools` shares loop/map contracts and proof
-  setup without depending on the keypair frame hierarchy. `Signal`, `PipeAux`
-  and the seccomp frames preserve that full view. `Wait` shares the complete
-  fuel-bounded wait walk, epoll callback and wake wrappers. `Pipe` and `PipeRead`
-  share original source factors, release geometry, write-count and read-occupancy
-  progress over the full WG view. Legacy Wait/Pipe/PipeRead interfaces project
-  these contracts; source factors are aliases and weak wait-IH signatures are
-  unchanged. These frames require neither valid filesystem inputs nor sufficient
-  wake fuel and constrain normal endpoints only. `FSBase`, `Eventpoll`, `FS`
-  and `EventpollCalls` extend the canonical full-WG proofs through descriptor,
-  inode, eventfd, pipe and epoll callers, all eleven FS dispatch arms and actual
-  taskWorkRun. Their 347 legacy theorem signatures remain unchanged projections;
-  generic SameView list/search rules retain weak callback premises and fixed
-  epoll fuel results discharge the legacy weak-IH wrappers. Private source aliases
-  remain exact. These are normal-endpoint frames, not later namespace-cleanup
-  execution. `Control` shares compiler
-  continuations and frames finite repeat loops using an explicit decreasing
-  rank. `Prefill` preserves the view across arbitrary translated filters.
+- `Leanux/Proofs/Framing/`: operational contracts over actual subsystem monads.
+  `Hoare` supplies generic StateT contracts and exact native execution bridges;
+  `Lift` describes the real subsystem adapters, including their Stops.
+  `Basic` and `WP` retain the lifetime distinction needed by reused keypair slots.
+  `Allocation` and `Index` expose original source equations.
+  `Projection` composes and factors equality views; `Tools` supplies generic
+  loop/map rules and checked references to pinned mirror constants.
+  The remaining WG source frames, borrowing contracts and environment frames
+  still need native carry. Their narrower store observations must retain their
+  original fields when retyped. The obsolete filesystem, signal, seccomp and
+  ambient cross-subsystem layers have been deleted; the retrofit report records
+  their type justifications and the unused support removed with them.
 - `Leanux/Proofs/Logged/`: logged copies of mirror functions with erasure
   theorems (erasing the log gives back the original run, state, result and
   failure), from the validator (`Basic`, `RxPoll`) through the workers, the
@@ -138,8 +99,8 @@ original checkpoints. The current mirror/toolchain carry status is in
   lifetimes (`Lifetimes`, `LifetimeMirror`), the ordinary steps that may
   allocate or delete a slot but never alter a surviving window (`Ordinary`,
   `OrdinaryHot`, `OrdinaryRules`, `SnapshotRules`); `Frames/` holds the
-  per-function frame contracts over that projection for the kernel helpers,
-  WireGuard, pipes, the filesystem syscalls and the environment; `Evolution/`
+  per-function frame contracts over that projection for WireGuard and the
+  environment; `Evolution/`
   carries the acceptance-history invariant through the observers, the
   scheduler, the operations, the runner and the syscalls.
   `MaterialOrigin` supplies exact allocation/frontier and receiving-material field rules plus a shared receipt

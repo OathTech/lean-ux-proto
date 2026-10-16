@@ -1,4 +1,3 @@
-import Leanux.Proofs.Framing.Control
 import Leanux.Proofs.Framing.WGAllowedIps
 import Leanux.Proofs.Framing.WGConfiguration
 import Leanux.Proofs.WG.NetlinkDump.Source

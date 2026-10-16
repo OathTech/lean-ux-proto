@@ -1,5 +1,4 @@
 import Leanux.Proofs.Framing.Syscalls
-import Leanux.Proofs.WG.Keypairs.Frames.FS
 import Leanux.Proofs.WG.Keypairs.OrdinaryRules
 
 /-! Ordinary framing through syscall wrappers with an explicit contract for

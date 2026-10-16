@@ -1,7 +1,6 @@
 import Leanux.Proofs.WG.AllowedIps.RoutingGlobal
 import Leanux.Proofs.WG.AllowedIps.RoutingDeviceFrames
 import Leanux.Proofs.Framing.WGDeviceLifecycle
-import Leanux.Proofs.Framing.Prefill
 
 /-! Concrete guarded creation and shutdown frames. Creation uses the original
 whole-call endpoint, not an invariant for arbitrary setup. Shutdown permits

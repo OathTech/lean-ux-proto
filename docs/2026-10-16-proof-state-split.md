@@ -15,7 +15,7 @@ and strings and includes private and attributed declarations. The uncommitted
 configured-closure extension was preserved before resumption and is deferred;
 it is not part of that baseline.
 
-| Completed local port | Before | Retyped | Deleted | Retained interface | Added | After |
+| Completed proof change | Before | Retyped | Deleted | Retained interface | Added | After |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | CounterWindow `Refinement`, `MirrorCalls`, `Bounds` | 31 | 17 | 6 | 8 | 1 | 26 |
 | Framing `Basic`, `WP`, `Allocation`, `Index`, new `Hoare`/`Lift` | 40 | 25 | 14 | 1 | 14 | 40 |
@@ -23,9 +23,12 @@ it is not part of that baseline.
 | Lifetimes `Actions`, Framing `Projection`, `Tools` | 21 | 19 | 2 | 0 | 4 | 23 |
 | Logged prefix core (11 files), new `PrefixState`, `WGPrefix`, `NativeCapture` | 128 | 113 | 0 | 15 | 44 | 172 |
 | Keypairs `Lifetimes`, `LifetimeMirror`, `Identity` | 34 | 8 | 4 | 22 | 0 | 30 |
+| Obsolete subsystem-frame band (26 modules) | 1,427 | 0 | 1,427 | 0 | 0 | 0 |
+| Unused `Framing.Control` support | 6 | 0 | 6 | 0 | 0 | 0 |
+| Obsolete `Framing.Prefill` and unused support | 3 | 0 | 3 | 0 | 0 | 0 |
 
-The whole tree currently contains 477 Lean files and 7,756 theorems. The completed
-ports total 196 retyped theorems, 26 deletions, 59 retained interfaces and 67 added.
+The whole tree currently contains 449 Lean files and 6,320 theorems. The completed
+changes total 196 retyped theorems, 1,462 deletions, 59 retained interfaces and 67 added.
 All terminal files remain unchanged. **Every result remains lagging** until the complete tree
 passes its proof gate and kernel replay. R1/R2/R5/R6 retain their pre-split
 charter dispositions; initialized R3 packet authorization and R4 receive-pipeline
@@ -219,6 +222,39 @@ LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake build 
 LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Keypairs.Identity
 ```
 
+## Removed subsystem-frame layers
+
+The new subsystem monads cannot access the old global Kernel. The independently
+audited 26-module band contains 1,388 obsolete structural/transport facts and
+39 support theorems used only within that band. Those support facts include
+arithmetic, progress and arbitrary-callback composition: they are deleted as
+unused, not claimed to follow from subsystem separation. Six more unused
+theorems and their tactics are removed with `Framing.Control`. `Framing.Prefill`
+loses its obsolete cross-subsystem theorem and two unused private helpers.
+Thus this checkpoint removes 1,436 theorems: 1,389 obsolete facts and 47 unused
+support facts.
+
+Removed modules:
+
+- `Framing/{Eventpoll,EventpollCalls,FS,FSBase,FSFileRefs,Kernel,KernelEffects,Pipe,PipeAux,PipeRead,Seccomp,SeccompBridge,SeccompFilter,SeccompU,Signal,Wait}`.
+- `WG/Keypairs/Frames/{Eventpoll,EventpollCalls,FS,FSBase,Kernel,Pipe,PipeAux,PipeRead,Seccomp,Wait}`.
+- `Framing/{Control,Prefill}`.
+
+Only their 32 import edges are removed from 30 surviving files; those files'
+proof bodies and all terminal statements are unchanged. Their remaining native
+and product obligations still need carrying. In particular, initialized runner
+conclusions must use the actual `initialWG` construction: a seccomp/task prefill
+premise alone cannot imply an empty WG snapshot of an arbitrary product World.
+Conditional projection transport and within-WG preservation remain substantive.
+
+The 224 named generated artifacts of the deleted modules were removed from this
+worktree's private build tree. All previously ported targets still build together
+(97 jobs). Source/import scope, terminal preservation and whitespace checks pass.
+Independent frozen-source review confirmed the 28-file, 1,436-theorem deletion,
+its classification and all 32 import removals, with no substantive findings.
+No named generated artifact remains for these modules. No new theorem was
+introduced, and no full-tree pass is claimed.
+
 ## Incoming source-observer findings
 
 Source inspection found two observer carry defects beyond type changes. The old
@@ -258,12 +294,10 @@ build fails at 14 state-split/carry dependencies; no full proof-gate pass is
 claimed. The incoming whitespace speedbump reports existing patch whitespace
 and a unit-file trailing blank line; those incoming files remain unchanged.
 
-Next are native ordinary lifetime evolution, deletion of the broader
-structural-frame layers and the remaining native/product observers. A read-only
-deletion audit identifies 1,427 theorems in 26 modules: 1,388 structural/obsolete
-facts and 39 unused support facts. The latter include arithmetic and conditional
-callback composition, whose content is not supplied by the new types. These
-deletions have not yet been applied or included in the completed-port counts.
+Next are native ordinary lifetime evolution and the remaining native/product
+observers and within-subsystem contracts. The broader structural-frame layers
+have been deleted with their independently classified unused support; their
+surviving consumers still need the actual subsystem adapters.
 The incoming branch also includes pre-split send ordering, timer-wheel and
 peer-removal changes; their source observers must be carried in actual order.
 The runner and callback compositions keep the product world, and failing
