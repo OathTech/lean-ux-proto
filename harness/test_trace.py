@@ -10,7 +10,7 @@ import shutil
 import subprocess
 import unittest
 
-from .trace import (FIELDS, KCOV_CAPACITY, OPCODES, RESERVED_OPCODES, InvalidTrace, UnsupportedTrace, filter_may_kill, loads_trace,
+from .trace import (FIELDS, FLOOD_BIG_AREA_SENDS, KCOV_CAPACITY, KCOV_TASK_CMP_CAPACITY, OPCODES, task_cmp_capacity, RESERVED_OPCODES, InvalidTrace, UnsupportedTrace, filter_may_kill, loads_trace,
                     serialize_wire, validate_trace)
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -95,6 +95,46 @@ class TraceContractTests(unittest.TestCase):
         self.trace['ops'].append({'op': 'dup3', 'fd': {'literal': -2147483648}, 'newfd': {'ref': 0}, 'flags': 4294967295})
         self.assertEqual(serialize_wire([self.trace]),
                          'LEANUX_WIRE_V2\n1\nD 0\nA 0\nM 0 0\nT case 3 32 0 0 0 0 0 0\n1 0 -1 0 -1 0 2048 0 0\n6 1 0 0 -1 8 0 18446744073709551615 0\n3 0 -2147483648 1 0 0 4294967295 0 0\n')
+
+    def test_routing_operations(self):
+        # Lane C (docs/2026-10-15-design-c-fib-trie.md, 10): wg_addroute, wg_addaddr
+        # and the named wg_delroute, their validation and wire
+        peer = {"public_key": "22" * 32, "allowed_ips": [{"family": 4, "addr": "0a000000", "cidr": 8}]}
+        base = [{"op": "wg_set", "config": {"private_key": "11" * 32, "listen_port": 51820, "peers": [peer]}}, {"op": "wg_up"}]
+        ops = base + [
+            {"op": "wg_addroute", "family": 4, "dst": "0a090000", "plen": 16, "type": "unicast", "oif": "wg0",
+             "metric": 7, "mtu": 1000, "nlflags": ["excl", "append"]},
+            {"op": "wg_addroute", "family": 4, "dst": "08000000", "plen": 5, "type": "unreachable"},
+            {"op": "wg_addaddr", "addr": "0a010001", "plen": 24},
+            {"op": "wg_delroute", "family": 4, "dst": "0a090000", "plen": 16, "oif": "lo", "type": "blackhole", "metric": 3},
+            {"op": "wg_delroute", "family": 4}]
+        trace = {"version": 1, "id": "routing", "ops": ops}
+        lines = serialize_wire([validate_trace(trace)], dispatch=(1,)).splitlines()
+        self.assertEqual(lines[-5], f"35 0 -1 0 -1 {16 | 1 << 8 | 2 << 16 | 5 << 24} 7 {0x0a090000 | 1000 << 32} 0")
+        self.assertEqual(lines[-4], f"35 0 -1 0 -1 {5 | 7 << 8} 0 {0x08000000} 0")
+        self.assertEqual(lines[-3], f"36 0 -1 0 -1 24 0 {0x0a010001} 0")
+        self.assertEqual(lines[-2], f"24 0 -1 0 -1 4 {1 << 31 | 16 | 1 << 8 | 6 << 16} {0x0a090000 | 3 << 32} 0")
+        self.assertEqual(lines[-1], "24 0 -1 0 -1 4 0 0 0")
+        bad = [
+            {"op": "wg_addroute", "family": 6, "dst": "0a090000", "plen": 16, "type": "unicast", "oif": "wg0"},
+            {"op": "wg_addroute", "family": 4, "dst": "0a090001", "plen": 16, "type": "unicast", "oif": "wg0"},   # host bits
+            {"op": "wg_addroute", "family": 4, "dst": "0a090000", "plen": 16, "type": "unicast"},   # no device
+            {"op": "wg_addroute", "family": 4, "dst": "0a090000", "plen": 16, "type": "prohibit", "oif": "lo"},
+            {"op": "wg_addroute", "family": 4, "dst": "0a090000", "plen": 16, "type": "local", "oif": "wg0"},
+            {"op": "wg_addroute", "family": 4, "dst": "0a090000", "plen": 16, "type": "unicast", "oif": "eth0"},
+            {"op": "wg_addroute", "family": 4, "dst": "0a090000", "plen": 16, "type": "unicast", "oif": "wg0", "nlflags": ["excl", "excl"]},
+            {"op": "wg_addroute", "family": 4, "dst": "0a090000", "plen": 16, "type": "unicast", "oif": "wg0", "mtu": 67},
+            {"op": "wg_addroute", "family": 4, "dst": "0a090000", "plen": 33, "type": "unicast", "oif": "wg0"},
+            {"op": "wg_addaddr", "addr": "0a010001", "plen": 0},
+            {"op": "wg_addaddr", "addr": "0A010001", "plen": 24},
+            {"op": "wg_delroute", "family": 6, "dst": "0a090000", "plen": 16},
+            {"op": "wg_delroute", "family": 4, "dst": "0a090000"},
+            {"op": "wg_delroute", "family": 4, "plen": 16},
+        ]
+        for op in bad:
+            with self.subTest(op=op):
+                with self.assertRaises(InvalidTrace):
+                    validate_trace({"version": 1, "id": "routing", "ops": base + [op]})
 
     def test_sender_tos_and_link_local_source(self):
         # W5 (docs/2026-10-06-w5-w6-receive.md, section 6): `tos` on wg_inject
@@ -392,7 +432,7 @@ class OpcodeTableTests(unittest.TestCase):
         self.assertEqual(sorted(c for n, c in OPCODES.items()
                                 if n not in ("pipe2", "wg_advance", "wg_create", "wg_down", "wg_delete", "wg_flood",
                                              "wg_set_mtu", "wg_batch", "wg_deladdr", "wg_delroute", "wg_netns_close",
-                                             "wg_get_start", "wg_get_recv",
+                                             "wg_get_start", "wg_get_recv", "wg_addroute", "wg_addaddr",
                                              "epoll_create1", "epoll_ctl", "epoll_wait",
                                              "seccomp_install", "seccomp_probe", "seccomp_prctl", "seccomp_capdrop",
                                              "seccomp_query")),
@@ -522,6 +562,30 @@ class LifecycleWireTests(unittest.TestCase):
         match = re.search(r"#define CAPACITY \((\d+)UL \* 1024\)", guest)
         self.assertIsNotNone(match)
         self.assertEqual(int(match.group(1)) * 1024, KCOV_CAPACITY)
+        # B1: the comparison child's task area and its own limit
+        match = re.search(r"#define TASK_CMP_CAPACITY \((\d+)UL \* 1024\)", guest)
+        self.assertIsNotNone(match)
+        self.assertEqual(int(match.group(1)) * 1024, KCOV_TASK_CMP_CAPACITY)
+        self.assertGreater(KCOV_TASK_CMP_CAPACITY, KCOV_CAPACITY)
+        match = re.search(r"#define FLOOD_BIG_AREA_SENDS (\d+)\n", guest)
+        self.assertIsNotNone(match)
+        self.assertEqual(int(match.group(1)), FLOOD_BIG_AREA_SENDS)
+
+    def test_task_cmp_capacity_per_trace(self):
+        # B1: only a flood past FLOOD_BIG_AREA_SENDS sends (count, leading
+        # valids, control) gets the comparison child's larger task area
+        base = [{"op": "wg_create"}, {"op": "wg_up"}]
+        msg = "ab" * 148
+        def trace(*ops):
+            return {"version": 1, "id": "t", "net_fixture": "bare", "ops": base + list(ops)}
+        self.assertEqual(task_cmp_capacity(trace()), KCOV_CAPACITY)
+        self.assertEqual(task_cmp_capacity(trace({"op": "wg_flood", "count": FLOOD_BIG_AREA_SENDS, "port": 1})), KCOV_CAPACITY)
+        self.assertEqual(task_cmp_capacity(trace({"op": "wg_flood", "count": FLOOD_BIG_AREA_SENDS, "port": 1, "messages": [msg]})),
+                         KCOV_TASK_CMP_CAPACITY)
+        self.assertEqual(task_cmp_capacity(trace({"op": "wg_flood", "count": FLOOD_BIG_AREA_SENDS - 1, "port": 1, "messages": [msg],
+                                                  "control": msg})), KCOV_TASK_CMP_CAPACITY)
+        self.assertEqual(task_cmp_capacity(trace({"op": "wg_flood", "count": 520, "port": 1}, {"op": "wg_flood", "count": 4096, "port": 1})),
+                         KCOV_TASK_CMP_CAPACITY)
 
 
 if __name__ == '__main__':

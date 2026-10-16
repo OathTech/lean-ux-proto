@@ -24,6 +24,12 @@ def keypairGet (kp : Option KeypairId) : M (Option KeypairId) := do
   setKeypair id { k with refcount := k.refcount + 1 }
   return some id
 
+/-- wg_noise_keypair_get (noise.c:142-149) of a NULL keypair: the data
+    receive path's `wg_noise_keypair_get(NULL)` when the index lookup found
+    nothing (Receive.lean `consumeData`); `!keypair` decides. -/
+def keypairGetNull : M Unit := do
+  _ ← branch .keypairGetNull true
+
 /-- wg_noise_keypair_put (noise.c:131-140) through the store: the index
     entry is removed when `unreference_now`, and the last reference's release
     (`keypair_free_kref`) removes it again and frees the keypair (`call_rcu`,

@@ -217,6 +217,10 @@ ALLOC_SITES = {
     'allocNode205': dict(consumer='drivers/net/wireguard/allowedips.c:205', cls='task', helper=None, count=1),
     'allocNode234': dict(consumer='drivers/net/wireguard/allowedips.c:234', cls='task', helper=None, count=1),
     'kzallocKeypair': dict(consumer='drivers/net/wireguard/noise.c:100', cls='kworker', helper=None, count=1),
+    # B4 (docs/2026-10-15-design-b4-load-ratelimiter.md, 4.3): the ratelimiter
+    # entry, in the handshake receive worker; record-only (the class is not
+    # steerable), armed by the ratelimiter traces' draw entries
+    'kmemCacheAllocRlEntry': dict(consumer='drivers/net/wireguard/ratelimiter.c:138', cls='kworker', helper=None, count=1),
     # pipes (A section 19.6; D3+A integration): direct calls, task context
     # (pipe.c:882 and :1271 are deferred: Leanux/Kernel/Defs.lean AllocSite)
     'kzallocPipeInfo': dict(consumer='fs/pipe.c:798', cls='task', helper=None, count=1),

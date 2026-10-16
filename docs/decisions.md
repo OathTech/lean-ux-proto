@@ -714,3 +714,115 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   split starts when B3 is on `main` and lands before lane C's C1, whose new
   module retypes then [AGENT, coordinator: the sequencing argument; the
   measurements in the design note].
+- **2026-10-15 [AGENT, fork of the coordinator]** B4 part 1 (the settled
+  parts of docs/2026-10-15-design-b4-load-ratelimiter.md): the ratelimiter
+  entry allocation is a kind-305 site consumed by `rlAllocFail`, with the
+  E design's "not in the hook's list" sentence corrected (the hook is
+  generic); `wg_ratelimiter_init`'s three allocation arms are constant
+  false with the reason (creation allocations outside the model, census
+  row 132 unchanged); the uninit walk empties both ratelimiter tables, as
+  the C does, with `l_delete_ratelimited6` and `l_recreate_ratelimited6`
+  as witnesses; the producer's busy arm (receive.c:554) produces under the
+  trylock, constant on this configuration (spinlock_up.h:56), with
+  `e_underload_busy` (2,100 packets). The GC stays excluded; its reason is
+  sharpened in the note's section 3 and the claim that the guest's
+  per-operation remote reset is a silent instrument gap is retracted
+  (`section_problems` fails a lost section loudly).
+- **2026-10-15 [AGENT, fork of the coordinator]** B4 part 2, the prototype
+  that precedes the user's U1 decision (docs/2026-10-15-design-b4-load-
+  ratelimiter.md 2.3, 13): the flood runs exactly over `Env.batch`'s
+  machinery; the summary, the discard, the exact flag and the checker's
+  `wg_flood` arm are deleted; the three checker rules of U1 are changed,
+  with the `repeatable` list grown by three consume-path decisions the
+  prototype run found (`consumeFlood`, `consumeFailedPut`, `hsInitNoPeer`);
+  `make_cookie.ipv4`'s witness corrected to the built kernel's layout (a
+  declaration error the skipped flood had hidden); `e_underload_merged`
+  kept with its new detail. The user accepts or drops this part as U1.
+- **2026-10-15 [USER]** The representation batch: B4's U1 accepted (the flood
+  runs exactly over `Env.batch`; the summary contract, the discard, the exact
+  flag and the checker's flood special case are deleted; the three checker
+  rules change as the B4 note names, with the `repeatable` list the run
+  found); B2 (the second device) is held until campaign 1 lands, its design
+  and review kept, for the proof carry the review costed at 10 to 15
+  agent-days. "2,3,4 agree with recommendation" [AGENT, coordinator: the
+  recommendations].
+- **2026-10-15 [USER]** B3, the timer wheel as a mirror: "Agree re B3, go
+  ahead as proposed". The environment line moves (U1: the firing set and
+  order become semantics in both directions, E1 over stream-bounded passes;
+  the tick's placement, the wait's tick count and the base clock stay
+  recorded; the kind-310/311 reads are not made derived); two record-only
+  hooks (U2: kind 313 in `__mod_timer` after the forward on both paths, kind
+  314 in `enqueue_timer`, written without steering under `base->lock`,
+  carrying the timer's address; class-approved as record-only, the new
+  oracle pair's identity recorded at the landing); `kernel/time/timer.c`
+  mirrored but unanchored, its hooks may add lines (U3); the deferral case
+  `unsupported` only with the lookahead (U4); the per-timer layout with an
+  enqueue stamp (U5) [AGENT, fork of the coordinator: the design; the
+  Claude Opus 5.5 review at 6fe87f2].
+- **2026-10-15 [USER]** The simulation relation `R` of the binary adequacy
+  charter is minimal, a frame property: exactly what the simulation needs,
+  over the WireGuard projection of the World, each clause justified by an
+  anchored function's read or write or by a field a landed result observes;
+  everything a function does not touch is a frame theorem, never a relation
+  clause ("surely it's actively bad for the invariant to carry a load of
+  gunk that relates states that don't matter. Morally, we want to strip the
+  relation to exactly what the simulation needs (that's a kind of frame
+  property)"; "the right way to prove the theorem is minimally").
+  Definitions built for state outside `R` are parked under `binary/attic/`,
+  off the proof path, for a possible later milestone. The charter's first
+  wording ("relates the whole mirror world") was the coordinator's error,
+  read literally by the grind [AGENT, coordinator]; the amendment is in the
+  charter's section 1.
+- **2026-10-15 [USER]** Lane C, the anchoring question (design note U1):
+  `fib_frontend.c`, `fib_semantics.c` and `route.c` are anchored with cut
+  lists and the per-caller cut for the helpers IPv6 shares, in C2 and C3.
+  This revises the boundary decision of 2026-10-07 for routing (the line is
+  now drawn by function name in the cut lists, one layer down, under that
+  decision's own "unless this breaks important things": campaign 3's
+  end-to-end routing composition) and reverses the `ip_error` deferral of
+  2026-10-08 (the input corpus reaches it). "Agree on the anchoring
+  question."
+- **2026-10-15 [USER]** Lane C, IPv6 (design note U2): deferred, "might be a
+  task later"; IPv6 routing stays environment, and campaign 3's routing
+  composition is stated for IPv4 in its charter.
+- **2026-10-15 [AGENT, coordinator]** Lane C's tactical decisions as the
+  revised note recommends: three landings with C1 first (U3); the
+  `hash_mix` global-hash walk treated as a decision cut (U6).
+- **2026-10-15 [USER]** Lane C, the module's home and the standing rule
+  (design note U4 and U5): the FIB module lives at `Leanux/Net/` beside
+  `FS`, `WG` and `Seccomp`, and AGENTS.md's list of the mirror's directories
+  gains `Leanux/Net` ("agree with recommendation").
+- **2026-10-15 [USER, through the coordinator]** Lane C, a check-rule change
+  on the trust surface: a `wg_batch` operation is compared against the
+  WireGuard files, the headers they inline and `net/ipv4/fib_trie.c`
+  (`evaluator/check.py`, `BATCH_FILES`), since the batch's sends run the
+  trie's lookups and an anchored file's in-window coverage is witnessed in
+  a batch as in a single operation. Its one-off mutant
+  (C1-M8-batch-lookup-outcome) was rejected once and removed.
+- **2026-10-15 [AGENT, fork of the coordinator]** The W7 tier's receive
+  twin under load: the mirror's bound of 8 on the NAPI placement vector
+  (`napi_irq_before_put`) was a budget from when open placements were
+  rare, inconsistent with the protocol's ceiling (the injected-message
+  count, 2026-10-13); under load the twin opens 1,018 placements and the
+  kernel takes (c') at a few, so the check's before-put run was refused and
+  the trace failed at two claim points. The mirror's ceiling is the
+  records' NET_RX section-start count (exact, fail-closed); the selection
+  rule is unchanged (the kernel's comparison rows decide each poll's
+  placement, replayed once as the evidence); `section_agreement` costs the
+  section's records per poll. Not a retry, not a widened enumeration.
+- **2026-10-15 [USER]** The two heavy B4 traces are dropped: `l_recreate_ratelimited6`
+  (the recreate witness) and `e_underload_busy` (the busy arm). Their comparison
+  child sits at the guest's 4.5 s rekey bound on both oracles (4.28 s and 4.40 s
+  alone; over it beside any other suite), a fixture property under TCG that no
+  reshape changes, measured by the B3 fork on s4 and s5 (B3's hooks add four
+  records); `l_delete_ratelimited6` stays as the two-table uninit witness and the
+  busy arm keeps its constant-false declaration. "(1) agreed" to the
+  coordinator's recommendation. The structural remedy for the class (113 of 341
+  traces run past half the bound in the comparison child) is KVM acceleration of
+  the guest, a fixture case to put separately [AGENT, coordinator].
+- **2026-10-15 [USER]** B3 and C1 land as one integration ("(2) great, let's land
+  it"), after one claim point on the combined head on the s5 pair.
+- **2026-10-15 [AGENT, coordinator]** C1 lands before the state split, not after as
+  the split's decision entry said: C1 finished in one session instead of the
+  estimated ten days, and its new module retypes cheaply at the split since
+  nothing depends on it yet.

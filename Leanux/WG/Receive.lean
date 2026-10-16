@@ -33,7 +33,6 @@ def MESSAGE_HANDSHAKE_RESPONSE : Nat := 2
 def MESSAGE_HANDSHAKE_COOKIE : Nat := 3
 def MESSAGE_DATA : Nat := 4
 def MESSAGE_MINIMUM_LENGTH : Nat := 32
-def MAX_QUEUED_INCOMING_HANDSHAKES : Nat := 4096
 
 /-- `SKB_TYPE_LE32`: the first little-endian 32-bit word (type and reserved
     bytes). -/
@@ -180,13 +179,18 @@ def ratelimiterAllow (src : SkbSource) : M Bool := do
     let total := k.ratelimiter.table.length + k.ratelimiter.table6.length + 1
     if ← branchCmp .rlOverLimit (total > RL_MAX_ENTRIES) (Int.ofNat total) (Int.ofNat RL_MAX_ENTRIES) then
       unsupported "the ratelimiter table limit (16384 distinct source IPs — out of reach)"
-    -- `kmem_cache_alloc(entry_cache, GFP_KERNEL)` (:138): the site is not in the
-    -- kind-305 hook's list (kernel/patches/gen-choice-stream.py has no
-    -- ratelimiter.c site), so its outcome is the environment's (`envOk`, a
-    -- success on this fixture) and the failure arm stops; a record-only site is
-    -- the named follow-on (the receive audit's F13)
-    if ← branch .rlAllocFail !(← envOk .ratelimiterEntry) then
-      unsupported "a ratelimiter entry allocation failure (-ENOMEM)"
+    -- `kmem_cache_alloc(entry_cache, GFP_KERNEL)` (:138): an allocation
+    -- outcome, kind 305, at this consumer frame (the hook is generic; the site
+    -- is `AllocSite.kmemCacheAllocRlEntry`, armed by the ratelimiter traces'
+    -- `draw` entries; B4, the receive audit's F13). On NULL, `err_oom`
+    -- (:153-155): `atomic_dec(&total_entries)` (the mirror's count is the
+    -- tables' size, so nothing to undo) and `return false`, which
+    -- wg_cookie_validate_packet turns into VALID_MAC_WITH_COOKIE_BUT_RATELIMITED
+    -- (cookie.c:146-148): the packet is dropped. The arm is reached only by
+    -- steering, and the kworker class is not steerable (harness/steer.py
+    -- ENABLED_CLASSES): declared, never taken on this host.
+    if ← branch .rlAllocFail !(← hiddenAlloc .kmemCacheAllocRlEntry) then
+      return false
     let now ← hiddenClock .ratelimiterInsertNow
     modifyK fun k => setTable k ((ip, TOKEN_MAX - PACKET_COST, now) :: table k)
     return true
@@ -340,13 +344,15 @@ def receiveHandshakePacket (msg : List UInt8) (src : SkbSource) : M Unit := do
     the ring poll (`false` when empty) and the handshake packet consumed.
     The environment runs the worker when the queued work runs. -/
 def receiveStep : M Bool := do
-  match (← getDev).handshakeQueue with
-  | [] => do
+  -- `ptr_ring_consume_bh` (ptr_ring.h:361-370): the peek, and on an item the
+  -- discard that leaves its slot occupied until the batch rule clears it
+  match (← getDev).handshakeQueue.consume with
+  | (none, _) => do
     _ ← branch .workerConsumed false
     return false
-  | (msg, src) :: _ =>
+  | (some (msg, src), ring) =>
     _ ← branch .workerConsumed true   -- ptr_ring_consume_bh: the ring slot is taken first
-    modifyDev fun d => { d with handshakeQueue := d.handshakeQueue.drop 1 }
+    modifyDev fun d => { d with handshakeQueue := ring }
     receiveHandshakePacket msg src
     -- dev_kfree_skb; atomic_dec(&handshake_queue_len) (receive.c:215)
     modifyDev fun d => { d with handshakeQueueLen := d.handshakeQueueLen - 1 }
@@ -354,10 +360,12 @@ def receiveStep : M Bool := do
 
 /-- The whole loop: `receiveStep` per item, then `condResched`
     (receive.c:216: other kworkers may run here, the environment decides;
-    W7 phase 2 interleaves the iterations, `workerIter`). -/
+    W7 phase 2 interleaves the iterations, `workerIter`). The C's loop is
+    unbounded and ends at the first NULL poll; the fuel is the ring's
+    capacity plus that poll (a full ring takes 4097 iterations). -/
 def handshakeReceiveWorker (condResched : M Unit) : M Unit :=
   workerLoop .receiveWorker none receiveStep condResched
-    MAX_QUEUED_INCOMING_HANDSHAKES "the handshake queue did not drain"
+    (MAX_QUEUED_INCOMING_HANDSHAKES + 1) "the handshake queue did not drain"
 
 /-- wg_queue_enqueue_per_device_and_peer (queueing.h:157-178) for the
     decrypt queue and the peer's `rx_queue`: 0, `-ENOSPC` when the peer's
@@ -419,7 +427,7 @@ def consumeData (msg : List UInt8) (src : SkbSource) (ds : Nat) : M Unit := do
     | some (IndexOwner.handshake _, _) => invariant "a handshake entry under the keypair mask"
   -- `unlikely(!wg_noise_keypair_get(PACKET_CB(skb)->keypair))`
   let kp ← match keypair with
-    | none => do keypairGetCurrent; pure none   -- wg_noise_keypair_get(NULL)
+    | none => do keypairGetNull; pure none   -- wg_noise_keypair_get(NULL)
     | some kp => keypairGet (some kp)
   if ← branch .dataNoKeypair kp.isNone then
     -- err_keypair: wg_peer_put(peer), then dev_kfree_skb
@@ -472,14 +480,22 @@ def packetReceive (msg : List UInt8) (src : SkbSource) : M Unit := do
   if ← branch .rxHandshake (t == MESSAGE_HANDSHAKE_INITIATION || t == MESSAGE_HANDSHAKE_RESPONSE
                             || t == MESSAGE_HANDSHAKE_COOKIE) then
     if ← branch .rxRngNotReady false then unsupported "unreachable"   -- the guest waits for the RNG
-    -- `handshake_queue_len > MAX_QUEUED_INCOMING_HANDSHAKES / 2` (the counter):
-    -- the trylock path
-    if ← branch .rxQueueBusy ((← getDev).handshakeQueueLen > MAX_QUEUED_INCOMING_HANDSHAKES / 2) then
-      unsupported "spin_trylock_bh on a busy handshake queue"
-    -- ptr_ring_produce_bh fails when the ring (MAX_QUEUED_INCOMING_HANDSHAKES) is full
-    if ← branch .rxProduceFailed ((← getDev).handshakeQueue.length ≥ MAX_QUEUED_INCOMING_HANDSHAKES) then return   -- drop
-    -- atomic_inc(&wg->handshake_queue_len) (receive.c:567)
-    modifyDev fun d => { d with handshakeQueue := d.handshakeQueue ++ [(msg, src)],
+    -- `handshake_queue_len > MAX_QUEUED_INCOMING_HANDSHAKES / 2` (the counter,
+    -- against 2048): the trylock path (:555-558). `spin_trylock_bh` is on
+    -- `producer_lock`, which only producers take, and on this configuration
+    -- (no CONFIG_SMP, no CONFIG_DEBUG_SPINLOCK) `arch_spin_trylock` is
+    -- `({ barrier(); (void)(lock); 1; })` (include/linux/spinlock_up.h:56):
+    -- it always succeeds, and `__ptr_ring_produce` runs as the plain path's
+    -- `ptr_ring_produce_bh` does (B4, section 2.5; reached from the 2,050th
+    -- packet of a flood, which runs exactly since B4 part 2). An SMP oracle
+    -- would need a record here.
+    _ ← branch .rxQueueBusy ((← getDev).handshakeQueueLen > MAX_QUEUED_INCOMING_HANDSHAKES / 2)
+    -- `__ptr_ring_produce` (ptr_ring.h:104-116) fails when the producer's
+    -- slot is occupied (`PtrRing.full`): the packet is dropped (:561-565,
+    -- dev_kfree_skb at :585) and the counter is not touched (B1)
+    if ← branch .rxProduceFailed (← getDev).handshakeQueue.full then return   -- drop
+    -- the produce, then atomic_inc(&wg->handshake_queue_len) (receive.c:567)
+    modifyDev fun d => { d with handshakeQueue := d.handshakeQueue.produce (msg, src),
                                 handshakeQueueLen := d.handshakeQueueLen + 1 }
     cpumaskNextOnline
     -- queue_work_on(cpu, handshake_receive_wq, ...): queued iff not pending,

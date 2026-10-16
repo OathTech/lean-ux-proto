@@ -31,6 +31,9 @@ _spec.loader.exec_module(d1)
 _spec3 = importlib.util.spec_from_file_location("wg_d3_corpus", ROOT / "scripts" / "wg-d3-corpus.py")
 d3 = importlib.util.module_from_spec(_spec3)
 _spec3.loader.exec_module(d3)
+_spec_e = importlib.util.spec_from_file_location("wg_e_underload_corpus", ROOT / "scripts" / "wg-e-underload-corpus.py")
+eb = importlib.util.module_from_spec(_spec_e)
+_spec_e.loader.exec_module(eb)
 
 DEVICE, PEER, PORT, LISTENER = d1.DEVICE, d1.PEER, d1.PORT, d1.LISTENER
 SENDER = {"family": 4, "addr": "7f000001", "port": 51998}   # the fixture's sender
@@ -249,6 +252,24 @@ def traces():
     e = json.loads((ROOT / "corpus/wireguard/e_underload_ratelimit.json").read_text())
     out["l_delete_ratelimited"] = ({"net_fixture": e["net_fixture"]}, e["ops"][:5] + [DELETE, GET], e["steer"],
                                    e["expect"] + ["wg_ratelimiter_gc_entries.v4_entry_iterate=1"])
+    # The same over the IPv6 table (ratelimiter.c:70-74; B4's two-table fix,
+    # docs/2026-10-15-design-b4-load-ratelimiter.md 3.5): the uninit walk
+    # meets the /64 entry (v6_entry_iterate=1), which the mirror left in
+    # place before the fix (the opposite outcome covered); and, re-created,
+    # the device's lookup from the same /64 is an insert again (site 133),
+    # where a mirror still holding the entry would predict a hit (site 132).
+    # The second device's schedule repeats the first's (its own secret, the
+    # insert, the response) with a later initiation timestamp.
+    e6 = json.loads((ROOT / "corpus/wireguard/e_underload_ratelimit6.json").read_text())
+    out["l_delete_ratelimited6"] = ({"net_fixture": e6["net_fixture"]}, e6["ops"][:5] + [DELETE, GET], e6["steer"],
+                                    e6["expect"] + ["wg_ratelimiter_gc_entries.v6_entry_iterate=1"])
+    # l_recreate_ratelimited6 (B4: a delete and recreate with IPv6 rate-limited
+    # entries, the recreate's eight-entry allocation schedule) was dropped at
+    # the landing of 2026-10-15 [USER: "(1) agreed"]: its comparison child
+    # sits at the guest's 4.5 s bound on both oracles (4.28 s alone on s4;
+    # 55,538 comparison records, 56 % in the two creates), a fixture property
+    # no reshape changes; l_delete_ratelimited6 stays as the two-table uninit
+    # witness (2x margin). The B4 note records the measurement.
     # With D3 (section 7) [AGENT, int-dl follow-up 2].
     retransmit_steer = d2_initiator_steer()
     zk_ops, _, zk_steer = d3.session()

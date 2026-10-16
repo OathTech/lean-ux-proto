@@ -56,7 +56,10 @@ inductive Operation where
   | wgInject (family port : Nat) (message : List UInt8) (tos : Nat) (ll : Bool) (dest : Nat)
   /-- W9: the fixture-table operations, per family. -/
   | wgDeladdr (family : Nat)
-  | wgDelroute (family : Nat)
+  | wgDelroute (family : Nat) (named : Bool) (dst plen oif typeCode metric : Nat)
+  /-- Lane C: `wg_addroute` and `wg_addaddr` (the design note, 10). -/
+  | wgAddroute (dst plen oif typeCode metric mtu nlflags : Nat)
+  | wgAddaddr (addr plen : Nat)
   /-- E-B: an io_uring flood of `count` invalid-MAC1 initiations to wg0's port,
       with `messages` valid-MAC1 initiations submitted first (processed under
       load via the queue depth, their cookie replies checked byte-exact);
@@ -144,7 +147,8 @@ def Trace.net (t : Trace) : Bool :=
   t.ops.any fun
     | .wgSet _ | .wgGet _ | .wgUp | .wgXmit .. | .wgObserve | .wgInject .. | .wgAdvance _
     | .wgFlood _ _ _ _ | .wgCreate | .wgDown | .wgDelete | .wgSetMtu _ | .wgBatch _ _
-    | .wgDeladdr _ | .wgDelroute _ | .wgNetnsClose | .wgGetStart _ | .wgGetRecv => true
+    | .wgDeladdr _ | .wgDelroute .. | .wgNetnsClose | .wgGetStart _ | .wgGetRecv
+    | .wgAddroute .. | .wgAddaddr .. => true
     | _ => false
 
 /-- W2: a trace with a stepped dump operation gets the dump socket at fd 8. -/
@@ -230,6 +234,34 @@ private def hexBytes (j : Json) (digits : Nat) (what : String) : Except String (
   return pairs vs
 
 private def bigEndian (bs : List UInt8) : Nat := bs.foldl (fun acc b => acc * 256 + b.toNat) 0
+
+private def optNat (j : Json) (name : String) (bound : Nat) : Except String Nat :=
+  match j.getObjVal? name with
+  | .error _ => pure 0
+  | .ok _ => natField j name bound
+
+/-- Lane C: a route's device, `wg0` or `lo`, 0 when absent. -/
+private def routeOif (j : Json) : Except String Nat :=
+  match j.getObjVal? "oif" with
+  | .error _ => pure 0
+  | .ok o => do
+    match ← o.getStr? with
+    | "lo" => pure LO_IFINDEX
+    | "wg0" => pure WG0_IFINDEX
+    | _ => throw "oif: expected wg0 or lo"
+
+/-- Lane C: a route's type as its `RTN_` code; required for an add, 0 (any)
+    when absent from a delete. -/
+private def routeType (j : Json) (required : Bool) : Except String Nat :=
+  match j.getObjVal? "type" with
+  | .error _ => if required then throw "type: expected unicast, unreachable, blackhole or prohibit" else pure 0
+  | .ok t => do
+    match ← t.getStr? with
+    | "unicast" => pure 1
+    | "unreachable" => pure 7
+    | "blackhole" => pure 6
+    | "prohibit" => pure 8
+    | _ => throw "type: expected unicast, unreachable, blackhole or prohibit"
 
 private def subsetFields (j : Json) (allowed : List String) (what : String) : Except String Unit := do
   let obj ← j.getObj?
@@ -637,10 +669,50 @@ private def parseOperation (j : Json) (prior : Array Operation) : Except String 
     if family != 4 && family != 6 then throw "family: expected 4 or 6"
     return .wgDeladdr family
   | "wg_delroute" =>
-    fields j ["op", "family"]
+    let obj ← j.getObj?
+    if !(obj.all fun k _ => ["op", "family", "dst", "plen", "oif", "type", "metric"].contains k) then
+      throw "wg_delroute: unexpected field"
     let family ← (← field j "family").getNat?
     if family != 4 && family != 6 then throw "family: expected 4 or 6"
-    return .wgDelroute family
+    if obj.size == 2 then return .wgDelroute family false 0 0 0 0 0
+    -- lane C: a named route
+    if family != 4 then throw "wg_delroute: a named route is IPv4"
+    let dst := bigEndian (← hexBytes (← field j "dst") 8 "dst")
+    let plen ← natField j "plen" 32
+    let oif ← routeOif j
+    let typeCode ← routeType j false
+    let metric ← optNat j "metric" 4294967295
+    return .wgDelroute family true dst plen oif typeCode metric
+  | "wg_addroute" =>
+    let obj ← j.getObj?
+    if !(obj.all fun k _ => ["op", "family", "dst", "plen", "type", "oif", "metric", "mtu", "nlflags"].contains k) then
+      throw "wg_addroute: unexpected field"
+    let family ← (← field j "family").getNat?
+    if family != 4 then throw "family: expected 4 (IPv6 routes keep the environment's rule)"
+    let dst := bigEndian (← hexBytes (← field j "dst") 8 "dst")
+    let plen ← natField j "plen" 32
+    let typeCode ← routeType j true
+    let oif ← routeOif j
+    let metric ← optNat j "metric" 4294967295
+    let mtu ← optNat j "mtu" 65535
+    let nlflags ← match j.getObjVal? "nlflags" with
+      | .error _ => pure 0
+      | .ok f => do
+        let arr ← f.getArr?
+        let mut n := 0
+        for x in arr do
+          match ← x.getStr? with
+          | "excl" => n := n ||| Net.Fib.NLM_F_EXCL
+          | "replace" => n := n ||| Net.Fib.NLM_F_REPLACE
+          | "append" => n := n ||| Net.Fib.NLM_F_APPEND
+          | _ => throw "nlflags: expected excl, replace or append"
+        pure n
+    return .wgAddroute dst plen oif typeCode metric mtu nlflags
+  | "wg_addaddr" =>
+    fields j ["op", "addr", "plen"]
+    let addr := bigEndian (← hexBytes (← field j "addr") 8 "addr")
+    let plen ← natField j "plen" 32
+    return .wgAddaddr addr plen
   | "wg_flood" =>
     -- `messages`: the leading valid-MAC1 initiations the mirror processes and
     -- checks (byte-exact cookie replies). `control` (a mid-flood valid packet
@@ -658,8 +730,12 @@ private def parseOperation (j : Json) (prior : Array Operation) : Except String 
         if n != 4 && n != 6 then throw "family: expected 4 or 6"
         pure n
       | .error _ => pure 4
-    let count ← natField j "count" (2 ^ 20)
-    if count == 0 then throw "count: expected 1-2^20"
+    -- B4 (2.4): the flood runs exactly, so its size is bounded by the
+    -- handshake ring (MAX_QUEUED_INCOMING_HANDSHAKES, 4096: B1's twins fill
+    -- it and drop one send at a full slot) and the report's MAX_BRANCHES;
+    -- harness/trace.py has the same bound
+    let count ← natField j "count" 4096
+    if count == 0 then throw "count: expected 1-4096"
     let port ← natField j "port" 65535
     if port == 0 then throw "port: expected 1-65535"
     let messages ← match j.getObjVal? "messages" with
@@ -809,7 +885,19 @@ def parseTrace (j : Json) : Except String Trace := do
   let napiBeforePut ← if hasPlacement then
       (← (← field j "napi_irq_before_put").getArr?).toList.mapM fun b => b.getBool?
     else pure []
-  if napiBeforePut.length > 8 then throw "napi_irq_before_put: more than 8 entries"
+  -- The ceiling on the placement vector is the records': `Env.napiIrqExit`
+  -- opens a poll only where the next record is a NET_RX section start, so
+  -- the vector can name no more polls than the records hold section starts
+  -- (the W7 tier's receive twin opens about a thousand); without records
+  -- there is no open placement. The former bound of 8 was a budget from
+  -- when open placements were rare, and it refused the check's selection
+  -- run on a loaded host (2026-10-15).
+  let netRxStarts := match hidden with
+    | some perOp => perOp.foldl (fun n recs =>
+        n + (recs.filter (·.site == (HiddenSite.sectionStart .netRx).info.id)).length) 0
+    | none => 0
+  if napiBeforePut.length > netRxStarts then
+    throw "napi_irq_before_put: more entries than NET_RX section starts in the records"
   -- L: "bare"; W8: "foreign-creator"; W4: {"routes": [...]}
   let (bare, foreign, routes) ← if hasFixture then do
       let f ← field j "net_fixture"
@@ -1006,7 +1094,9 @@ def toSyscall (results : Array Int) (ends : Array (Option (Nat × Nat))) (index 
   | .wgObserve => .wgObserve
   | .wgInject family port message tos ll dest => .wgInject family port message tos ll dest
   | .wgDeladdr family => .wgDeladdr family
-  | .wgDelroute family => .wgDelroute family
+  | .wgDelroute family named dst plen oif typeCode metric => .wgDelroute family named dst plen oif typeCode metric
+  | .wgAddroute dst plen oif typeCode metric mtu nlflags => .wgAddroute dst plen oif typeCode metric mtu nlflags
+  | .wgAddaddr addr plen => .wgAddaddr addr plen
   | .wgFlood count port family messages => .wgFlood count port family messages
   | .wgBatch items waitMs => .wgBatch items waitMs
   | .wgAdvance ticks => .wgAdvance ticks
@@ -1020,9 +1110,16 @@ def toSyscall (results : Array Int) (ends : Array (Option (Nat × Nat))) (index 
   | .seccompCapdrop => .seccompCapdrop
   | .seccompQuery cmd action flags => .seccompQuery cmd action flags
 
+/-- Lane C: the boot trie of a network trace's fixture namespace (`lo` up),
+    for `leanux-model --fib-boot` and the harness's expected fixture facts. -/
+def fibBootJson : Except Stop Json := do
+  let world : World := { k := initialKernel 32 true, env := harnessEnv, timing := Env.timing }
+  let (_, w) ← Net.Fib.bootTables.run world
+  return Net.Fib.shape w.k
+
 /-- Run a trace. A `Stop` is returned with the operation index: the mirror
     never reports an observation for a path it does not model. -/
-def executeTrace (trace : Trace) (placeholders : Bool := false) (floodExact : Bool := false) : Except (Nat × Stop) Json := do
+def executeTrace (trace : Trace) (placeholders : Bool := false) : Except (Nat × Stop) Json := do
   let mut world : World := { k := initialKernel trace.rlimit trace.net trace.bare trace.foreign trace.stepped trace.seccompChild, env := harnessEnv,
                              timing := Env.timing, portBound := Env.portBound,
                              fixtureNetDevices := Env.fixtureNetDevices,
@@ -1030,7 +1127,6 @@ def executeTrace (trace : Trace) (placeholders : Bool := false) (floodExact : Bo
                              netnsCHolders := if trace.foreign then [9, 8, 5, 4] else [],
                              allocArmed := trace.allocArmed, routes := trace.routes,
                              hiddenPlaceholders := placeholders && trace.hidden.isNone,
-                             floodExact,
                              steerValues := if placeholders then trace.steer else [],
                              armRecords := trace.armRecords, dstCacheRecords := trace.dstCacheRecords,
                              napiBeforePut := trace.napiBeforePut,
@@ -1042,6 +1138,16 @@ def executeTrace (trace : Trace) (placeholders : Bool := false) (floodExact : Bo
     match Env.seccompPrefill trace.seccompPrefill world.k with
     | .ok k => world := { world with k }
     | .error e => throw (0, .invariant e)
+  -- lane C: the fixture namespaces' IPv4 tables at boot (`lo` up in each),
+  -- built by the C's own sequence outside every window (the design note,
+  -- 9.3); its steps are discarded with the first operation's reset
+  if trace.net then
+    let boot : M Unit := do
+      Net.Fib.bootTables
+      if trace.foreign then Net.Fib.inCreatorNs Net.Fib.bootTables
+    match boot.run world with
+    | .ok (_, w) => world := { w with steps := #[], envCalls := [] }
+    | .error e => throw (0, e)
   let mut results : Array Int := #[]
   let mut ends : Array (Option (Nat × Nat)) := #[]
   let mut observations : Array Json := #[]
@@ -1049,7 +1155,8 @@ def executeTrace (trace : Trace) (placeholders : Bool := false) (floodExact : Bo
   let mut fired : Array Json := #[]
   for op in trace.ops do
     let index := results.size
-    world := { world with hidden := trace.hidden.map (·[index]!), netRxRaised := false }
+    let ahead := trace.hidden.map fun h => (h.drop (index + 1)).toList   -- B3, E2's lookahead
+    world := { world with hidden := trace.hidden.map (·[index]!), hiddenAhead := ahead, netRxRaised := false }
     let (ret, w) ← (syscall (toSyscall results ends index op)).run world
       |>.mapError fun e => (index, e)
     let (_, w) ← skipAmbient.run w |>.mapError fun e => (index, e)
@@ -1132,5 +1239,38 @@ def decisionsJson : Json :=
             ("site", match c.site with | some l => toJson s!"{i.file}:{l}" | none => .null),
             ("assigned", toJson c.assigned)]
         | none => .null)]).toArray
+
+/-! The Send audit's F1 (2026-10-15), held at compile time. At the encrypt
+    worker's ring poll the pending NET_RX runs after `ptr_ring_consume_bh`'s
+    discard (send.c:293; ptr_ring.h:264-303), so a poll that produces into the
+    ring (a key confirmation's flush of staged packets) at a physically full
+    ring finds the slot the batch rule has just cleared, as Linux does. The
+    instance: fifteen items consumed without a clearing (tail 0, head 15,
+    slots 0 to 14 still occupied), then 1009 produced, the producer back at
+    the occupied slot 0; the poll's produce at the next ring poll succeeds in
+    the C's order and met the occupied slot (`-EPIPE`, the list dropped) in
+    the mirror's former order. The schedule needs the 17.17 placement with a
+    full ring, which no capture holds; the instance is the state itself. -/
+private def f1Ring : WG.PtrRing (List WG.SkbId) :=
+  let r0 := (List.range 15).foldl (fun r i => r.produce [i]) (WG.PtrRing.init WG.MAX_QUEUED_PACKETS)
+  let r1 := (List.range 15).foldl (fun r _ => r.consume.2) r0
+  (List.range 1009).foldl (fun r i => r.produce [100 + i]) r1
+
+private def f1World : World :=
+  { k := { initialKernel 8 with wg := some { ifindex := 3, ifname := "wg0", encryptQueue := f1Ring } }, env := harnessEnv,
+    timing := { advanceWait := 0, traceBound := 0 } }
+
+/-- The poll's produce (`wg_queue_enqueue_per_device_and_peer`, queueing.h:174):
+    `-EPIPE` at a full ring, else the item in the producer's slot. -/
+private def f1Poll : M Unit := do
+  let d ← WG.getDev
+  if d.encryptQueue.full then return
+  WG.modifyDev fun d => { d with encryptQueue := d.encryptQueue.produce [9999] }
+
+#guard f1Ring.full
+#guard f1Ring.consumerHead == 15 && f1Ring.consumerTail == 0 && f1Ring.producer == 0
+#guard match (WG.encryptRingPoll f1Poll).run f1World with
+  | .ok (some [100], w) => (w.k.wg.map fun d => (d.encryptQueue.slots[0]?).getD none) == some (some [9999])
+  | _ => false
 
 end Leanux.Runner

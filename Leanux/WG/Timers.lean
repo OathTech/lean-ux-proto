@@ -60,7 +60,12 @@ def expiredNewHandshake (pid : PeerId) : M Unit := do
 def expiredZeroKeyMaterial (pid : PeerId) : M Unit := do
   if ← branch .zeroKeyAlive !(← getPeer pid).isDead then
     peerGet pid
-    if ← branch .zeroKeyAlreadyQueued ((← getDev).clearWorkQueue.contains pid) then
+    -- `!queue_work(handshake_send_wq, &clear_peer_work)` (timers.c:112): false
+    -- iff PENDING, the clear queue's membership; a queue record for a unit the
+    -- mirror still holds queued is a second queueing after the pool's dequeue
+    -- (`peekQueuedUnit`; ce038d4's rule, the Send audit's F3)
+    if ← branch .zeroKeyAlreadyQueued ((← getDev).clearWorkQueue.contains pid
+                                        && !(← peekQueuedUnit .clearPeerWorker pid)) then
       peerPut (some pid)
     else
       recordQueued .clearPeerWorker pid   -- queue_work's record (dispatch order)

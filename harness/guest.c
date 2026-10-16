@@ -2,6 +2,7 @@
 #define _GNU_SOURCE
 #include <errno.h>
 #include <fcntl.h>
+#include <stdarg.h>
 #include <inttypes.h>
 #include <limits.h>
 #include <linux/genetlink.h>
@@ -47,8 +48,30 @@
  * section 10: a wg_create window's comparison child exceeds 64 K words; E-B: an
  * io_uring flood crossing 512 runs ~600 UDP sends inline in the trace task with
  * KCOV on, so both streams need headroom). The host's bounds follow it
- * (harness/trace.py KCOV_CAPACITY). */
+ * (harness/trace.py KCOV_CAPACITY). It sizes the PC child's task area, the
+ * remote area of both children (and the kernel's per-section area), the
+ * seccomp child's area, the remote-record tables below and every full check.
+ * B1 (docs/2026-10-15-design-b1-handshake-ring.md, section 6): a flood past
+ * the handshake ring's 4096 slots is about 4100 sends in one io_uring_enter,
+ * whose task-side comparison stream (the sends' own comparisons, about 345
+ * records a packet, 1.41 M in all) exceeds (CAPACITY - 1) / 4 records; the
+ * comparison child's task area alone is twice the size, with its own full
+ * check (harness/trace.py KCOV_TASK_CMP_CAPACITY; the host's merged bound is
+ * the sum of the two streams' limits). Both areas are vmalloc'ed and zeroed
+ * at KCOV_INIT_TRACE: 64 + 32 MiB in the comparison child, plus the 32 MiB
+ * the worker's remote section allocates, measured to leave about 75 MiB of
+ * the guest's 256 MiB free. */
 #define CAPACITY (4096UL * 1024)
+#define TASK_CMP_CAPACITY (8192UL * 1024)
+/* Only a trace with a flood of more than this many sends (count, leading
+ * valids and control) gets the larger area (task_capacity below): the
+ * mapping is shared with every process the trace forks (the seccomp probes'
+ * children), and fork copies its page tables, work the comparison child
+ * records as one distinct comparison per page; at twice the pages the
+ * seccomp probes' rows grew past the captured-output limit (B1, the batch's
+ * claim point, 2026-10-15). The host's bound follows (harness/trace.py
+ * FLOOD_BIG_AREA_SENDS, task_cmp_capacity). */
+#define FLOOD_BIG_AREA_SENDS 2048
 /* W7 (design section 12): a wg_batch of 1025 keepalive-size items is about
  * 55 KB on the wire; the per-operation payload and the line buffer hold it. */
 #define MAX_PAYLOAD 65536
@@ -175,6 +198,9 @@ struct fixture_route { unsigned family; unsigned char dst[16]; unsigned mtu; };
 /* W4 (docs/2026-10-06-w4-w7-transmit-bulk.md section 6): SIOCSIFMTU on wg0; W7: the batch. */
 #define OP_WG_SET_MTU 25
 #define OP_WG_BATCH 26
+/* Lane C (docs/2026-10-15-design-c-fib-trie.md, 10): the routing requests. */
+#define OP_WG_ADDROUTE 35
+#define OP_WG_ADDADDR 36
 /* epoll stream R (docs/2026-10-12-epoll-design.md section 6; the codes from
  * docs/2026-10-11-interface.md): fd is the set (epfd); epoll_ctl's newfd is
  * the target, a = cmd, b = events, value = data; epoll_wait's a = maxevents,
@@ -293,6 +319,11 @@ struct alloc_arg { uint32_t n, flags; struct { uint64_t lo, hi; } r[ALLOC_RANGES
 static struct alloc_arg alloc;
 #define KCOV_LEANUX_ALLOC_LOAD _IOW('c', 205, unsigned long)
 #define KCOV_LEANUX_ALLOC_STATUS _IOR('c', 206, unsigned long)
+/* The comparison child's task area for this trace (CAPACITY, or
+ * TASK_CMP_CAPACITY for a trace with a flood past FLOOD_BIG_AREA_SENDS). */
+struct trace;
+static unsigned long task_capacity(const struct trace *t, int comparisons);
+
 struct trace {
     /* net: 0 no network fixture, 1 the fixture with a down wg0, 2 the bare
      * network fixture without wg0 (L, "net_fixture": "bare"), 3 the
@@ -304,6 +335,19 @@ struct trace {
     unsigned nsteer; struct steer_entry steer[STEER_MAX];
     unsigned nroutes; struct fixture_route routes[MAX_FIXTURE_ROUTES];
 };
+
+static unsigned long task_capacity(const struct trace *t, int comparisons)
+{
+    if (!comparisons) return CAPACITY;
+    for (unsigned k = 0; k < t->count; ++k) {
+        const struct operation *op = &t->ops[k];
+        if (op->code != OP_WG_FLOOD) continue;
+        unsigned leading = op->payload_len >= 2 ? op->payload[0] : 0;
+        unsigned control = op->payload_len >= 2 ? op->payload[1] : 0;
+        if ((unsigned long)op->a + leading + control > FLOOD_BIG_AREA_SENDS) return TASK_CMP_CAPACITY;
+    }
+    return CAPACITY;
+}
 /* W4: the running trace's fixture routes, for route_into_wg0. */
 static const struct fixture_route *fixture_routes;
 static unsigned n_fixture_routes;
@@ -719,6 +763,80 @@ static size_t delroute_wg0(int family, unsigned char *payload, size_t size)
     return len;
 }
 
+/* Lane C's routing requests (docs/2026-10-15-design-c-fib-trie.md, 10).
+ * wg_addroute: a = plen | RTN_ type << 8 | device code << 16 (1 lo, 2 wg0)
+ * | NLM_F_ bits << 24 (1 EXCL, 2 REPLACE, 4 APPEND), b = the metric, value =
+ * dst | mtu << 32: table main, protocol static, scope link for a unicast
+ * route and universe for a reject type. */
+static void be32_bytes(uint32_t v, unsigned char *out)
+{
+    out[0] = v >> 24; out[1] = v >> 16; out[2] = v >> 8; out[3] = v;
+}
+static size_t addroute_request(const struct operation *op, unsigned char *payload, size_t size)
+{
+    size_t len = sizeof(struct rtmsg);
+    memset(payload, 0, size);
+    struct rtmsg *rt = (struct rtmsg *)payload;
+    unsigned plen = op->a & 0xff, type = (op->a >> 8) & 0xff, devsel = (op->a >> 16) & 0xff;
+    uint32_t oif = devsel == 1 ? 1 : wg_ifindex, metric = op->b, mtu = (uint32_t)(op->value >> 32);
+    unsigned char dst[4];
+    be32_bytes((uint32_t)op->value, dst);
+    rt->rtm_family = AF_INET;
+    rt->rtm_dst_len = plen;
+    rt->rtm_table = RT_TABLE_MAIN;
+    rt->rtm_protocol = RTPROT_STATIC;
+    rt->rtm_scope = type == RTN_UNICAST ? RT_SCOPE_LINK : RT_SCOPE_UNIVERSE;
+    rt->rtm_type = type;
+    if (plen) attr(payload, &len, RTA_DST, dst, 4);
+    if (devsel) attr(payload, &len, RTA_OIF, &oif, sizeof(oif));
+    if (metric) attr(payload, &len, RTA_PRIORITY, &metric, sizeof(metric));
+    if (mtu) {
+        unsigned char metrics[16];
+        size_t mlen = 0;
+        attr(metrics, &mlen, RTAX_MTU, &mtu, sizeof(mtu));
+        attr(payload, &len, RTA_METRICS, metrics, mlen);
+    }
+    return len;
+}
+/* wg_addaddr: a = plen, value = the address: RTM_NEWADDR on wg0 with
+ * IFA_LOCAL and IFA_ADDRESS, scope universe, no broadcast. */
+static size_t addaddr_request(const struct operation *op, unsigned char *payload, size_t size)
+{
+    size_t len = sizeof(struct ifaddrmsg);
+    memset(payload, 0, size);
+    struct ifaddrmsg *ifa = (struct ifaddrmsg *)payload;
+    unsigned char a4[4];
+    be32_bytes((uint32_t)op->value, a4);
+    ifa->ifa_family = AF_INET;
+    ifa->ifa_prefixlen = op->a & 0xff;
+    ifa->ifa_index = wg_ifindex;
+    attr(payload, &len, IFA_LOCAL, a4, 4);
+    attr(payload, &len, IFA_ADDRESS, a4, 4);
+    return len;
+}
+/* wg_delroute of a named route (b's top bit): b = plen | device code << 8 |
+ * RTN_ type << 16 (0: any), value = dst | metric << 32: table main, any
+ * protocol and scope (RT_SCOPE_NOWHERE), the type when given. */
+static size_t delroute_request(const struct operation *op, unsigned char *payload, size_t size)
+{
+    size_t len = sizeof(struct rtmsg);
+    memset(payload, 0, size);
+    struct rtmsg *rt = (struct rtmsg *)payload;
+    unsigned plen = op->b & 0xff, devsel = (op->b >> 8) & 0xff, type = (op->b >> 16) & 0xff;
+    uint32_t oif = devsel == 1 ? 1 : wg_ifindex, metric = (uint32_t)(op->value >> 32);
+    unsigned char dst[4];
+    be32_bytes((uint32_t)op->value, dst);
+    rt->rtm_family = AF_INET;
+    rt->rtm_dst_len = plen;
+    rt->rtm_table = RT_TABLE_MAIN;
+    rt->rtm_scope = RT_SCOPE_NOWHERE;
+    rt->rtm_type = type;
+    if (plen) attr(payload, &len, RTA_DST, dst, 4);
+    if (devsel) attr(payload, &len, RTA_OIF, &oif, sizeof(oif));
+    if (metric) attr(payload, &len, RTA_PRIORITY, &metric, sizeof(metric));
+    return len;
+}
+
 /* W5 (docs/2026-10-06-w5-w6-receive.md, section 6; D2 [USER 2026-10-07]):
  * the network namespace's sysctls, set to 0 and read back for the
  * LEANUX_FIXTURE row (harness/linux.py EXPECTED_NET_FIXTURE). */
@@ -1048,7 +1166,7 @@ static void print_choice(int *comma, unsigned long kind, unsigned long ip, unsig
 }
 
 static unsigned long split_hidden(const char *tag, const struct trace *t, unsigned i, unsigned long *area,
-                                  unsigned long count, int comparisons)
+                                  unsigned long count, int comparisons, unsigned short *blocks)
 {
     printf("%s {\"id\":\"%s\",\"index\":%u,\"mode\":\"%s\",\"records\":[", tag, t->id, i,
            comparisons ? "cmp" : "pc");
@@ -1064,24 +1182,27 @@ static unsigned long split_hidden(const char *tag, const struct trace *t, unsign
             j += 3 + n;
         }
     } else {
-        /* the dispatch-section block of each kept comparison record: a
+        /* the dispatch-section block of each kept comparison record of the
+         * remote area (`blocks`, the table print_records reads; the task
+         * area, whose records are in no block, passes NULL and is not
+         * tabled: B1, its comparison area is larger than the table): a
          * section's records reach the remote area as one block at its stop,
          * start record first and stop record last, nested blocks before
          * their enclosing one, so a running count of start records numbers
          * the block and the stop record ends it (0 outside any block) */
-        unsigned long block = 0, blocks = 0;
+        unsigned long block = 0, nblocks = 0;
         for (unsigned long k = 0; k < count;) {
             unsigned long *r = area + 1 + 4 * k;
             if ((r[0] >> 63) && ((r[0] >> 32) & 0xffff) == CHOICE_MAGIC + 1)
                 fail(t->id, i, "coverage_failure", "malformed_choice_record");   /* payload without header */
             if (!(r[0] >> 63) || ((r[0] >> 32) & 0xffff) != CHOICE_MAGIC) {
                 if (kept != k) memmove(area + 1 + 4 * kept, r, 4 * sizeof(*r));
-                cmp_block[kept] = (unsigned short)block;
+                if (blocks) blocks[kept] = (unsigned short)block;
                 ++kept; ++k; continue;
             }
             unsigned long n = r[0] & 0xffff, nrec = 1 + (n + 2) / 3;
             unsigned long kind = (r[0] >> 16) & 0xffff;
-            if (kind == 300) block = ++blocks;
+            if (kind == 300) block = ++nblocks;
             else if (kind == 301) block = 0;
             if (n > 5 || k + nrec > count) fail(t->id, i, "coverage_failure", "malformed_choice_record");
             unsigned long words[6] = {0};
@@ -1286,6 +1407,170 @@ static void route_into_wg0(const char *id, unsigned index, int first)
     }
     addr4_deleted = 0;   /* W9: the address is back */
     if (close(rtnl)) fail(id, index, "environment_failure", "route_close");
+}
+
+
+/* Lane C's shape oracle (docs/2026-10-15-design-c-fib-trie.md, 9.4): the IPv4
+ * FIB trie as /proc/net/fib_trie prints it (fib_trie.c:2733-2813), read
+ * outside the window and printed as JSON in the mirror's form: a tnode is
+ * ["prefix", plen, bits, full, empty, [children]], a leaf ["key", [aliases]]
+ * with each alias [plen, "scope", "TYPE", tos]. The aliased tables print the
+ * one trie twice ("Main:" then "Local:"); the two sections must be
+ * identical. An empty trie prints nothing: null. */
+#define FIBT_MAX_NODES 2048
+#define FIBT_MAX_ALIASES 4096
+struct fibt_alias { unsigned plen; char scope[12]; char type[14]; unsigned tos; };
+struct fibt_node { int tnode; char addr[20]; unsigned plen, bits, full, empty; int depth;
+                   int first_child, next_sibling; int first_alias, n_aliases; };
+static struct fibt_node fibt_nodes[FIBT_MAX_NODES];
+static struct fibt_alias fibt_aliases[FIBT_MAX_ALIASES];
+static char fibt_text[131072];
+static char fibt_json[262144];
+static size_t fibt_json_len;
+
+static void fibt_emit(const char *id, const char *fmt, ...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+    int n = vsnprintf(fibt_json + fibt_json_len, sizeof(fibt_json) - fibt_json_len, fmt, ap);
+    va_end(ap);
+    if (n < 0 || (size_t)n >= sizeof(fibt_json) - fibt_json_len) fail(id, -1, "environment_failure", "fib_trie_json_size");
+    fibt_json_len += (size_t)n;
+}
+
+static void fibt_emit_node(const char *id, int k)
+{
+    struct fibt_node *n = &fibt_nodes[k];
+    if (n->tnode) {
+        fibt_emit(id, "[\"%s\",%u,%u,%u,%u,[", n->addr, n->plen, n->bits, n->full, n->empty);
+        int first = 1;
+        for (int c = n->first_child; c >= 0; c = fibt_nodes[c].next_sibling) {
+            if (!first) fibt_emit(id, ",");
+            first = 0;
+            fibt_emit_node(id, c);
+        }
+        fibt_emit(id, "]]");
+    } else {
+        fibt_emit(id, "[\"%s\",[", n->addr);
+        for (int a = 0; a < n->n_aliases; ++a) {
+            struct fibt_alias *fa = &fibt_aliases[n->first_alias + a];
+            fibt_emit(id, "%s[%u,\"%s\",\"%s\",%u]", a ? "," : "", fa->plen, fa->scope, fa->type, fa->tos);
+        }
+        fibt_emit(id, "]]");
+    }
+}
+
+/* Parse the proc text into fibt_json; the top node's index or -1 (empty). */
+static const char *fibt_read(const char *id)
+{
+    int fd = open("/proc/net/fib_trie", O_RDONLY);
+    if (fd < 0) fail(id, -1, "environment_failure", "fib_trie_open");
+    size_t len = 0;
+    for (;;) {
+        ssize_t r = read(fd, fibt_text + len, sizeof(fibt_text) - 1 - len);
+        if (r < 0) fail(id, -1, "environment_failure", "fib_trie_read");
+        if (r == 0) break;
+        len += (size_t)r;
+        if (len >= sizeof(fibt_text) - 1) fail(id, -1, "environment_failure", "fib_trie_size");
+    }
+    close(fd);
+    fibt_text[len] = 0;
+    /* split the sections: each starts at a "Main:", "Local:" or "Id N:" line */
+    char *sections[4]; int n_sections = 0;
+    for (char *l = fibt_text; l && *l; ) {
+        char *nl = strchr(l, '\n');
+        if ((l[0] >= 'A' && l[0] <= 'Z') && strchr(l, ':') && (!nl || strchr(l, ':') < nl)) {
+            if (n_sections >= 4) fail(id, -1, "environment_failure", "fib_trie_sections");
+            sections[n_sections++] = l;
+        }
+        l = nl ? nl + 1 : NULL;
+    }
+    if (n_sections == 0) return "null";
+    if (n_sections != 2) fail(id, -1, "environment_failure", "fib_trie_two_tables");
+    /* the two sections must print the one aliased trie identically */
+    {
+        char *a = strchr(sections[0], '\n'), *b = strchr(sections[1], '\n');
+        size_t la = (size_t)(sections[1] - a), lb = strlen(b);
+        if (la != lb || memcmp(a, b, la)) fail(id, -1, "environment_failure", "fib_trie_tables_differ");
+    }
+    int n_nodes = 0, n_aliases = 0, top = -1;
+    int last_at_depth[40];
+    for (int d = 0; d < 40; ++d) last_at_depth[d] = -1;
+    char *end = sections[1];
+    for (char *l = strchr(sections[0], '\n') + 1; l < end && *l; ) {
+        char *nl = strchr(l, '\n');
+        size_t ll = nl ? (size_t)(nl - l) : strlen(l);
+        int spaces = 0;
+        while (spaces < (int)ll && l[spaces] == ' ') ++spaces;
+        const char *body = l + spaces;
+        if (!strncmp(body, "+-- ", 4)) {
+            if (n_nodes >= FIBT_MAX_NODES) fail(id, -1, "environment_failure", "fib_trie_nodes");
+            struct fibt_node *n = &fibt_nodes[n_nodes];
+            memset(n, 0, sizeof(*n));
+            n->tnode = 1; n->first_child = n->next_sibling = -1; n->first_alias = n_aliases;
+            if (sscanf(body + 4, "%19[0-9.]/%u %u %u %u", n->addr, &n->plen, &n->bits, &n->full, &n->empty) != 5)
+                fail(id, -1, "environment_failure", "fib_trie_tnode_line");
+            n->depth = (spaces - 2) / 3 + 1;
+            goto link;
+        } else if (!strncmp(body, "|-- ", 4)) {
+            if (n_nodes >= FIBT_MAX_NODES) fail(id, -1, "environment_failure", "fib_trie_nodes");
+            struct fibt_node *n = &fibt_nodes[n_nodes];
+            memset(n, 0, sizeof(*n));
+            n->tnode = 0; n->first_child = n->next_sibling = -1; n->first_alias = n_aliases;
+            if (sscanf(body + 4, "%19[0-9.]", n->addr) != 1) fail(id, -1, "environment_failure", "fib_trie_leaf_line");
+            /* a leaf prints at its parent's depth plus one (seq_indent(iter->depth)) */
+            n->depth = (spaces - 2) / 3 + 1;
+            goto link;
+        } else if (body[0] == '/') {
+            if (n_nodes == 0 || fibt_nodes[n_nodes - 1].tnode || n_aliases >= FIBT_MAX_ALIASES)
+                fail(id, -1, "environment_failure", "fib_trie_alias_line");
+            struct fibt_alias *fa = &fibt_aliases[n_aliases];
+            memset(fa, 0, sizeof(*fa));
+            int consumed = 0;
+            if (sscanf(body + 1, "%u %11s %13s%n", &fa->plen, fa->scope, fa->type, &consumed) != 3)
+                fail(id, -1, "environment_failure", "fib_trie_alias_fields");
+            if (!strncmp(body + 1 + consumed, " tos=", 5)) fa->tos = (unsigned)strtoul(body + 1 + consumed + 5, NULL, 10);
+            fibt_nodes[n_nodes - 1].n_aliases++;
+            n_aliases++;
+            l = nl ? nl + 1 : end;
+            continue;
+        } else {
+            fail(id, -1, "environment_failure", "fib_trie_line");
+        }
+link:
+        {
+            struct fibt_node *n = &fibt_nodes[n_nodes];
+            int d = n->depth;
+            if (d < 1 || d >= 40) fail(id, -1, "environment_failure", "fib_trie_depth");
+            if (d == 1) {
+                if (top >= 0) fail(id, -1, "environment_failure", "fib_trie_two_tops");
+                top = n_nodes;
+            } else {
+                int parent = last_at_depth[d - 1];
+                if (parent < 0 || !fibt_nodes[parent].tnode) fail(id, -1, "environment_failure", "fib_trie_parent");
+                if (fibt_nodes[parent].first_child < 0) fibt_nodes[parent].first_child = n_nodes;
+                else {
+                    int c = fibt_nodes[parent].first_child;
+                    while (fibt_nodes[c].next_sibling >= 0) c = fibt_nodes[c].next_sibling;
+                    fibt_nodes[c].next_sibling = n_nodes;
+                }
+            }
+            last_at_depth[d] = n_nodes;
+            for (int e = d + 1; e < 40; ++e) last_at_depth[e] = -1;
+            n_nodes++;
+        }
+        l = nl ? nl + 1 : end;
+    }
+    if (top < 0) return "null";
+    fibt_json_len = 0;
+    fibt_emit_node(id, top);
+    return fibt_json;
+}
+
+static void print_fib_trie(const char *id, unsigned index)
+{
+    const char *json = fibt_read(id);
+    printf("LEANUX_FIBTRIE {\"id\":\"%s\",\"index\":%u,\"fib_trie\":%s}\n", id, index, json);
 }
 
 /* wg0's transmit counters and receive error counters over a temporary rtnetlink socket, which is closed
@@ -1876,7 +2161,7 @@ static void seccomp_child_streams(const struct trace *t, unsigned i, const struc
     unsigned long count = __atomic_load_n(&child_area[0], __ATOMIC_RELAXED);
     if (!count || count >= (comparisons ? (CAPACITY - 1) / 4 : CAPACITY - 1))
         fail(t->id, (int)i, "coverage_failure", "empty_or_full_child_kcov");
-    count = split_hidden("LEANUX_CHIDDEN", t, i, child_area, count, comparisons);
+    count = split_hidden("LEANUX_CHIDDEN", t, i, child_area, count, comparisons, NULL);
     if (comparisons) print_records("LEANUX_CCMP", t->id, i, child_area, count, NULL);
     else print_pcs("LEANUX_CCOVERAGE", t->id, i, child_area, count);
 }
@@ -1932,11 +2217,12 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
             fail(t->id, -1, "environment_failure", "unexpected_inherited_descriptor");
     int coverage_fd = open("/sys/kernel/debug/kcov", O_RDWR);
     if (coverage_fd != 3) fail(t->id, -1, "coverage_failure", "open_kcov_at_3");
-    if (ioctl(coverage_fd, KCOV_INIT_TRACE, CAPACITY)) fail(t->id, -1, "coverage_failure", "initialize_kcov");
+    const unsigned long task_cap = task_capacity(t, comparisons);
+    if (ioctl(coverage_fd, KCOV_INIT_TRACE, task_cap)) fail(t->id, -1, "coverage_failure", "initialize_kcov");
     if ((alloc.n || alloc.flags) && ioctl(coverage_fd, KCOV_LEANUX_ALLOC_LOAD, &alloc))
         fail(t->id, -1, "coverage_failure", "load_allocation_set");
     load_task_steering(t, coverage_fd);
-    unsigned long *coverage = mmap(NULL, CAPACITY * sizeof(*coverage), PROT_READ | PROT_WRITE, MAP_SHARED, coverage_fd, 0);
+    unsigned long *coverage = mmap(NULL, task_cap * sizeof(*coverage), PROT_READ | PROT_WRITE, MAP_SHARED, coverage_fd, 0);
     if (coverage == MAP_FAILED) fail(t->id, -1, "coverage_failure", "map_kcov");
     for (int fd = 4; fd < (t->net ? LISTEN4_FD : 8); ++fd)
         if (open("/dev/null", O_RDWR) != fd) fail(t->id, -1, "environment_failure", "fill_descriptor");
@@ -2070,14 +2356,16 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
     if (setrlimit(RLIMIT_NOFILE, &limit) || getrlimit(RLIMIT_NOFILE, &actual) || actual.rlim_cur != t->rlimit || actual.rlim_max != t->rlimit)
         fail(t->id, -1, "environment_failure", "rlimit_nofile");
     if (!comparisons) {
+        /* read the trie before the record starts, so a parse failure is a clean error line */
+        const char *fib_trie = t->net ? fibt_read(t->id) : "null";
         printf("LEANUX_FIXTURE {\"id\":\"%s\",\"reserved\":[%s],\"free\":[%u,%u],\"rlimit\":[%u,%u]", t->id,
                t->net == 3 ? "0,1,2,3,4,5,6,7,8,9" : (t->stepped || t->child) ? "0,1,2,3,4,5,6,7,8" : "0,1,2,3,4,5,6,7",
                t->net == 3 ? 10 : (t->stepped || t->child) ? 9 : 8, t->rlimit - 1, t->rlimit, t->rlimit);
         /* W5: the network namespace's facts, as read back; W8: the foreign-creator
          * fixture adds the injector (8) and the pin (9) */
         if (t->net)
-            printf(",\"net\":{\"auto_flowlabels\":%ld,\"icmp_ratelimit\":%ld,\"icmp6_ratelimit\":%ld,\"lo_link_local\":\"fe80::ffff:1\"}",
-                   net_sysctl[0], net_sysctl[1], net_sysctl[2]);
+            printf(",\"net\":{\"auto_flowlabels\":%ld,\"icmp_ratelimit\":%ld,\"icmp6_ratelimit\":%ld,\"lo_link_local\":\"fe80::ffff:1\",\"fib_trie\":%s}",
+                   net_sysctl[0], net_sysctl[1], net_sysctl[2], fib_trie);
         printf("}\n");
     }
     /* Per-task coverage stays enabled from here to exit: KCOV_DISABLE resets
@@ -2190,10 +2478,22 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
         if (op->code == OP_WG_DELADDR || op->code == OP_WG_DELROUTE) {
             if (!t->net) fail(t->id, i, "invalid_input", "wireguard_without_network_fixture");
             if (op->a != 4 && op->a != 6) fail(t->id, i, "invalid_input", "fixture_family");
+            if ((op->b & 0x80000000u) && (op->code != OP_WG_DELROUTE || op->a != 4)) fail(t->id, i, "invalid_input", "wire_named_route");
             lifecycle_fd = rtnl_temporary(t, i);
             lifecycle_len = op->code == OP_WG_DELADDR
                 ? deladdr_wg0(op->a == 4 ? AF_INET : AF_INET6, lifecycle_body, sizeof(lifecycle_body))
+                : (op->b & 0x80000000u) ? delroute_request(op, lifecycle_body, sizeof(lifecycle_body))   /* lane C */
                 : delroute_wg0(op->a == 4 ? AF_INET : AF_INET6, lifecycle_body, sizeof(lifecycle_body));
+        }
+        /* Lane C: the routing corpus's requests, over the same temporary socket. */
+        if (op->code == OP_WG_ADDROUTE || op->code == OP_WG_ADDADDR) {
+            if (!t->net) fail(t->id, i, "invalid_input", "wireguard_without_network_fixture");
+            if (op->code == OP_WG_ADDROUTE && ((op->a & 0xff) > 32 || ((op->a >> 16) & 0xff) > 2 || (op->a >> 24) > 7))
+                fail(t->id, i, "invalid_input", "wire_addroute");
+            if (op->code == OP_WG_ADDADDR && (op->a < 1 || op->a > 32)) fail(t->id, i, "invalid_input", "wire_addaddr");
+            lifecycle_fd = rtnl_temporary(t, i);
+            lifecycle_len = op->code == OP_WG_ADDROUTE ? addroute_request(op, lifecycle_body, sizeof(lifecycle_body))
+                                                       : addaddr_request(op, lifecycle_body, sizeof(lifecycle_body));
         }
         /* E-B: the flood's socket, io_uring ring and SQEs are prepared before
          * the window (their inode/fd setup draws non-WireGuard clock records);
@@ -2399,6 +2699,10 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
             strcpy(request.ifr_name, "wg0");
             request.ifr_mtu = (int)op->a;
             ret = syscall(SYS_ioctl, SEND_FD, SIOCSIFMTU, &request);
+            /* lane C: below IPV4_MIN_MTU the kernel destroyed the in_device and
+             * its addresses (devinet.c:1637-1643); a later up at a valid MTU
+             * adds the address afresh (route_into_wg0 expects 0, not -EEXIST) */
+            if (ret == 0 && (int)op->a < 68) addr4_deleted = 1;
             break;
         }
         case OP_WG_INJECT: {
@@ -2506,12 +2810,20 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
             if (error < 0) { errno = -error; ret = -1; } else ret = 0;
             break;
         }
-        case OP_WG_DELADDR: case OP_WG_DELROUTE: {
+        case OP_WG_DELADDR: case OP_WG_DELROUTE: case OP_WG_ADDROUTE: case OP_WG_ADDADDR: {
             /* W9: RTM_DELADDR of wg0's fixture address or RTM_DELROUTE of
              * the default route via wg0; the acknowledgement's error code is
-             * the result (EADDRNOTAVAIL, ESRCH when absent). */
-            int error = nl_send(lifecycle_fd, op->code == OP_WG_DELADDR ? RTM_DELADDR : RTM_DELROUTE,
-                                NLM_F_REQUEST | NLM_F_ACK, 0, lifecycle_body, lifecycle_len, 0);
+             * the result (EADDRNOTAVAIL, ESRCH when absent). Lane C: the
+             * named route's deletion, RTM_NEWROUTE with NLM_F_CREATE and the
+             * trace's flags, RTM_NEWADDR with NLM_F_CREATE | NLM_F_EXCL. */
+            unsigned short type = op->code == OP_WG_DELADDR ? RTM_DELADDR : op->code == OP_WG_DELROUTE ? RTM_DELROUTE
+                                : op->code == OP_WG_ADDROUTE ? RTM_NEWROUTE : RTM_NEWADDR;
+            unsigned short flags = NLM_F_REQUEST | NLM_F_ACK;
+            if (op->code == OP_WG_ADDROUTE)
+                flags |= NLM_F_CREATE | ((op->a >> 24) & 1 ? NLM_F_EXCL : 0) | ((op->a >> 24) & 2 ? NLM_F_REPLACE : 0)
+                       | ((op->a >> 24) & 4 ? NLM_F_APPEND : 0);
+            if (op->code == OP_WG_ADDADDR) flags |= NLM_F_CREATE | NLM_F_EXCL;
+            int error = nl_send(lifecycle_fd, type, flags, 0, lifecycle_body, lifecycle_len, 0);
             if (!error) error = nl_receive(t->id, (int)i, lifecycle_fd, 0, NULL, 0);
             if (error < 0) { errno = -error; ret = -1; } else ret = 0;
             if (op->code == OP_WG_DELADDR && op->a == 4 && ret == 0) addr4_deleted = 1;
@@ -2637,6 +2949,12 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
             jiffies_end(t, i);   /* the end of the advance's wait (kind 310) */
             advanced_ns += jump;
         }
+        /* lane C: the trie after an operation that changes the IPv4 tables,
+         * outside the window (after the waits and route_into_wg0) */
+        if (!comparisons && (op->code == OP_WG_UP || op->code == OP_WG_DOWN || op->code == OP_WG_DELETE
+                             || op->code == OP_WG_DELADDR || op->code == OP_WG_DELROUTE || op->code == OP_WG_SET_MTU
+                             || op->code == OP_WG_NETNS_CLOSE || op->code == OP_WG_ADDROUTE || op->code == OP_WG_ADDADDR))
+            print_fib_trie(t->id, i);
         if (up_seen) {
             struct timespec now;
             clock_gettime(CLOCK_BOOTTIME, &now);
@@ -2645,8 +2963,9 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
                 fail(t->id, i, "environment_failure", "trace_exceeds_rekey_bound");
         }
         /* KCOV stops counting once the buffer is full, so "full" is the last
-         * value it can reach: CAPACITY - 1 PCs, or (CAPACITY - 1) / 4 records. */
-        if (!count || count >= (comparisons ? (CAPACITY - 1) / 4 : CAPACITY - 1))
+         * value it can reach: CAPACITY - 1 PCs, or (task_cap - 1) / 4 records
+         * (the comparison child's task area for this trace, B1). */
+        if (!count || count >= (comparisons ? (task_cap - 1) / 4 : CAPACITY - 1))
             fail(t->id, i, "coverage_failure", "empty_or_full_kcov");
         result[i].error = ret == -1 ? captured_errno : 0;
         result[i].ret = ret == -1 ? -captured_errno : ret;
@@ -2677,8 +2996,8 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
         }
         /* every trace: the generic clock hooks also fire on file paths */
         {
-            count = split_hidden("LEANUX_HIDDEN", t, i, coverage, count, comparisons);
-            if (remote) remote_count = split_hidden("LEANUX_RHIDDEN", t, i, remote, remote_count, comparisons);
+            count = split_hidden("LEANUX_HIDDEN", t, i, coverage, count, comparisons, NULL);
+            if (remote) remote_count = split_hidden("LEANUX_RHIDDEN", t, i, remote, remote_count, comparisons, cmp_block);
         }
         if (comparisons) {
             /* The remote stream's comparisons: the handshake worker's peer

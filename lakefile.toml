@@ -20,3 +20,10 @@ root = "Leanux.Main"
 name = "leanux-seccomp-tests"
 root = "SeccompTests"
 srcDir = "tests"
+
+# B3: the timer wheel's arithmetic and order (docs/2026-10-15-design-b3-timer-wheel.md,
+# section 9); `lake build leanux-timer-wheel-tests && .lake/build/bin/leanux-timer-wheel-tests`
+[[lean_exe]]
+name = "leanux-timer-wheel-tests"
+root = "TimerWheelTests"
+srcDir = "tests"

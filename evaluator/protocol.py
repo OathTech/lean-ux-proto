@@ -58,7 +58,13 @@ DIGEST = re.compile(r'[0-9a-f]{64}')
 # `child` (a child probe's record: an optional strict_ret, then exactly one
 # of ret, exited or signal; null for a self probe)
 EXTRA_FIELDS = {'pipe2': ('fds',), 'read': ('digest',), 'write': ('sigpipe',), 'wg_batch': ('cqes',),
-                'epoll_wait': ('digest',), 'seccomp_probe': ('sigsys', 'child')}
+                'epoll_wait': ('digest',), 'seccomp_probe': ('sigsys', 'child'),
+                # lane C's shape oracle (docs/2026-10-15-design-c-fib-trie.md, 9.4): after an
+                # operation that changes the IPv4 tables, the trie as /proc/net/fib_trie
+                # prints it, read by the guest outside the window and serialised by the mirror
+                'wg_up': ('fib_trie',), 'wg_down': ('fib_trie',), 'wg_delete': ('fib_trie',),
+                'wg_deladdr': ('fib_trie',), 'wg_delroute': ('fib_trie',), 'wg_set_mtu': ('fib_trie',),
+                'wg_netns_close': ('fib_trie',), 'wg_addroute': ('fib_trie',), 'wg_addaddr': ('fib_trie',)}
 EPOLL_EVENT_SIZE = 12   # sizeof(struct epoll_event) on x86-64 (packed)
 
 
@@ -199,7 +205,12 @@ def validate_observation(trace, result):
     return result
 
 
-def parse_batch(traces, output, max_bytes=16 * 1024 * 1024):
+# The model's output per batch: a harness budget on its size, not a check
+# rule. 32 MB since lane C (2026-10-15): a 4096-packet flood reports one trie
+# lookup per send (e_ring_full: 18 MB, 267,448 branches, 122,940 of them the
+# lookups), 16 MB no longer held it; the host's OUTPUT_LIMIT on the guest's
+# console (harness/linux.py) is a separate bound.
+def parse_batch(traces, output, max_bytes=32 * 1024 * 1024):
     if not traces:
         raise InvalidOutput('empty required test batch')
     if len(output) > max_bytes:
@@ -226,8 +237,12 @@ def parse_batch(traces, output, max_bytes=16 * 1024 * 1024):
 # The mirror's branches per trace (W4: raised from 4096 for multi-packet items;
 # the W7 full-ring tier: a 1024-item wg_batch reports 126,531 labels on the
 # wrap trace, docs/2026-10-13-w7-full-ring-tier.md, so 2^18 with headroom
-# for the 1025-item trace)
-MAX_BRANCHES = 262144
+# for the 1025-item trace; lane C, 2026-10-15: the flood reports one trie
+# lookup per send, about 30 more labels a packet, and e_ring_full's
+# 4096-packet flood reports 267,448, so 2^19 with the same headroom; a
+# harness budget on the report's size beside parse_batch's bytes, not a
+# check rule)
+MAX_BRANCHES = 524288
 
 SEMANTIC_ERRNOS = {'eventfd2': {12, 22, 24}, 'dup': {9, 12, 24}, 'dup3': {9, 12, 22},
                    'close': {9}, 'fcntl': {1, 9, 12, 22},
@@ -242,7 +257,8 @@ SEMANTIC_ERRNOS = {'eventfd2': {12, 22, 24}, 'dup': {9, 12, 24}, 'dup3': {9, 12,
                    # EBADF once the listeners are closed; wg_netns_close fails only
                    # outside the oracle's setup (the holders are the fixture's);
                    # W4: wg_xmit's EMSGSIZE and EINVAL from the sender's IP layer
-                   'wg_up': {19, 98, 64}, 'wg_xmit': {126, 89, 93, 101, 90, 22}, 'wg_observe': {11, 9}, 'read': {9, 11, 22}, 'write': {9, 11, 22},
+                   # lane C: wg_xmit's EHOSTUNREACH (113) and EACCES (13) from a reject route
+                   'wg_up': {19, 98, 64}, 'wg_xmit': {126, 89, 93, 101, 90, 22, 113, 13}, 'wg_observe': {11, 9}, 'read': {9, 11, 22}, 'write': {9, 11, 22},
                    'wg_netns_close': set(),
                    # D3: the advance ioctl fails only outside the oracle's setup (-EOPNOTSUPP, -EINVAL, -EPERM)
                    'wg_advance': set(),
@@ -259,6 +275,11 @@ SEMANTIC_ERRNOS = {'eventfd2': {12, 22, 24}, 'dup': {9, 12, 24}, 'dup3': {9, 12,
                    # wg0's fixture address (EADDRNOTAVAIL when absent) and
                    # RTM_DELROUTE of the default route via wg0 (ESRCH when absent)
                    'wg_deladdr': {99}, 'wg_delroute': {3},
+                   # Lane C (docs/2026-10-15-design-c-fib-trie.md, 10): RTM_NEWROUTE's
+                   # EEXIST, ENETDOWN (fib_check_nh_nongw), ENODEV (a stale ifindex),
+                   # EINVAL, ENOBUFS and ENOMEM (fib_create_info); RTM_NEWADDR's EEXIST,
+                   # ENODEV, ENOBUFS (no in_device), EINVAL
+                   'wg_addroute': {17, 100, 19, 22, 105, 12}, 'wg_addaddr': {17, 19, 105, 22},
                    # W2 (docs/2026-10-06-w1-w2-netlink.md 4.2): the stepped dump's
                    # request is acknowledged on a later receive, never failed; a
                    # receive with nothing queued is EAGAIN (the mirror's unsupported)

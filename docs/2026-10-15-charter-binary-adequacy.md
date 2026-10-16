@@ -65,9 +65,37 @@ the binary is a refinement over the observations our properties depend on."
 
 Fix the image (identity `6b2018b9`) and Kraken's semantics at the pinned
 commit. `R` is the state relation between a Kraken machine state and a
-mirror world; it relates the whole mirror world, so it is the strongest
-observation the mirror's properties can depend on. For an anchored function
-`f` with mirror `m_f`:
+mirror world, and it is minimal: a frame property [USER 2026-10-15]. It is
+defined over the WireGuard projection of the mirror's World only, and every
+clause of it is justified by a read or a write in an anchored function or
+by a field a landed WireGuard result observes (the index table and its
+owners, peers, keypairs and counters, the handshake and cookie state, the
+rings and queues, the timers and dispatch state the anchored functions
+touch, the service callbacks' metadata). What a function does not touch is
+handled by frame theorems, the binary's write footprint and the mirror's
+unchanged fields, never by a relation clause; the file layer, seccomp,
+epoll, the task-work chains, credentials and signal state are outside `R`
+by construction, not related trivially. A smaller `R` weakens the
+hypothesis, so the theorem applies in more contexts, and the frame
+theorems give equality outside the footprint, which is stronger than
+relatedness; nothing transportable is lost, since a property transports
+through the fields `R` relates, and `R` covers every field a landed result
+observes. Precisely: the per-function relation `R_f` is `f`'s footprint and
+no more; the global relation over the WireGuard projection is the
+conjunction of per-structure relations, and a landed property transports
+through it, not through any one `R_f`. What carries the global relation
+across a call is `f`'s theorem (`R_f` at exit, bytes outside the footprint
+unchanged) plus one global fact, a heap-layout invariant naming where the
+WireGuard structures live and that they are disjoint from each function's
+write footprint; that invariant is a milestone-6 obligation on the
+trust-surface review's list, not a clause of any `R_f` (the milestone-1
+review's F6, 2026-10-15). A later result that observes a field outside the
+global relation extends it additively. Definitions built for state outside `R` are parked under
+`binary/attic/`, imported by nothing on the proof path, with a line saying
+what each was for; they are not counted. (The charter's first wording,
+"it relates the whole mirror world", was read literally and cost the
+grind a day on task, seccomp and file state; the wording was the
+coordinator's error.) For an anchored function `f` with mirror `m_f`:
 
 > For every machine state `σ` and mirror world `s` with `R σ s`, every record
 > stream `ρ`, under the environment premises of section 2: if the mirror's
@@ -151,7 +179,8 @@ nothing else, reported by name.
 ## 2a. The entry precondition: non-vacuity and realism
 
 For each certified function `f`, `Pre_f` (the machine states `R` relates to
-some mirror world at `f`'s entry, with the ABI arguments) is listed in
+some mirror world at `f`'s entry, with the ABI arguments; it constrains only
+what `f` and its callbacks read, as `R` does) is listed in
 `binary/TrustBase.lean` by name next to the function's theorem, and two
 guards accompany it:
 

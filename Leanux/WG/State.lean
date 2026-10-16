@@ -1,4 +1,5 @@
 import Leanux.Kernel.Defs
+import Leanux.Kernel.TimerWheel
 
 /-! Access to the WireGuard device state. A missing device, node or peer is a
     mirror invariant failure: the C never dereferences one that is not there. -/
@@ -98,7 +99,9 @@ def freeRxSkb (id : SkbId) : M Unit := do
     excluded ordinary simultaneous initiation (a peer's initiation arriving
     while wg0's own is queued, `corpus/wireguard/p_sim_init_*`). A section
     record the scheduler cannot place is a hidden mismatch, as before. The
-    callers and `World.queuedThisCall` remain for a later cleanup. -/
+    callers remain for a later cleanup; `World.queuedThisCall` is no longer
+    written (the Send audit's F7, 2026-10-15), its resets stay until the
+    proof tree's frames over it are carried. -/
 def requireNotPending (_pid : PeerId) (_what : String) : M Unit := pure ()
 
 /-- Short-circuit `&&` and `||` over decisions: the right operand runs only
@@ -121,6 +124,38 @@ def recordWord64 (bs : List UInt8) (k : Nat) : UInt64 := (recordWord bs k).toUIn
 def callerJiffies (site : HiddenSite) : M (Option UInt64) := do
   if (← get).armRecords then some <$> hiddenJiffies site else pure none
 
+/-- `__mod_timer`'s placement once the base is forwarded to `clk` (B3,
+    section 3.2, steps 4 to 6), with the kind-314 record consumed and
+    checked when `unit?` is given (records on) and the peer's wheel invariant
+    checked after. -/
+def placeOnWheel (pid : PeerId) (t : PeerTimer) (expires clk : UInt64) (unit? : Option Nat) : M Unit := do
+  let p ← getPeer pid
+  match TimerWheel.place p t expires clk with
+  | .kept _ =>
+    -- :1123-1130: the slot, the list position and the stored bucket expiry
+    -- stay; only `expires` changes. The C writes no enqueue record here.
+    setPeer pid (p.setTimer t (some expires))
+    if unit?.isSome then
+      if (← peekHiddenSite) == some HiddenSite.timerEnqueue.info.id then
+        throw (.hidden s!"Linux re-enqueued peer {pid}'s {repr t} timer, which the mirror keeps in its slot (expires {expires}, base clock {clk})")
+  | .enqueued slot bexp =>
+    if let some u := unit? then
+      let eb ← hidden .timerEnqueue
+      let (ridx, rbexp, u3) := (recordWord eb 0, recordWord64 eb 1, recordWord eb 2)
+      if u != 0 && u3 != u then
+        throw (.hidden s!"the enqueue record names timer {u3}, the arm record {u}")
+      if ridx != slot || rbexp != bexp then
+        throw (.hidden s!"wheel arithmetic differs from Linux for peer {pid}'s {repr t} timer: expires {expires}, base clock {clk}: the mirror puts it in slot {slot} at bucket expiry {bexp}, Linux in slot {ridx} at {rbexp}")
+    -- the bucket expiry is in (expires, expires + 8^level] (calc_index rounds up)
+    let lvl := TimerWheel.levelOf slot
+    if !(timeAfter bexp expires && timeBeforeEq bexp (expires + (TimerWheel.LVL_GRAN lvl).toUInt64)) then
+      invariant s!"a bucket expiry {bexp} outside (expires, expires + 8^{lvl}] for expires {expires}"
+    let stamp := (← getK).timerEnqueues + 1
+    modifyK fun k => { k with timerEnqueues := stamp }
+    setPeer pid ((p.setTimer t (some expires)).setWheel t (some ⟨slot, bexp, stamp⟩))
+  if let some what := TimerWheel.peerWheelProblem (← getPeer pid) then
+    invariant s!"peer {pid}'s timers: {what}"
+
 /-- D3 (docs/2026-10-05-d3-timers.md, sections 3.3 and 5.1): `mod_timer(&peer->
     timer_x, jiffies + delay)`, once `mod_peer_timer`'s guard has passed.
     With arm records (`World.armRecords`) the kind-303 record carries
@@ -140,35 +175,79 @@ def callerJiffies (site : HiddenSite) : M (Option UInt64) := do
     `J_m` becomes the last known `jiffies`. All arithmetic is the C's, on
     `unsigned long`. Without records (the domain filter) the expiry is the
     nominal `jiffies + delay` from the last known `jiffies` (0 before any).
-    `mod_timer` of a pending timer moves it (`__mod_timer`), so the field
-    is overwritten. -/
+
+    B3 (docs/2026-10-15-design-b3-timer-wheel.md, section 3.2): then
+    `__mod_timer` (timer.c:1065-1190) on the wheel. A pending timer re-armed
+    with the same `expires` returns at once (:1085-1088): nothing else
+    changes and no further record is consumed. Otherwise the C locks and
+    forwards the base; its clock after the forward is the kind-313 record
+    `{clk, timer}` (`HiddenSite.timerClk`), a hidden input (it depends on
+    timers outside the modeled set, and inside a catch-up pass lags
+    `jiffies` by up to the advance), checked fail-closed: at most one past
+    `mod_timer`'s read (the lead of one after a pass, :2416), never behind
+    the previous recorded clock (`__forward_timer_base` never rewinds,
+    :994-1016), at or before the earliest overdue modeled bucket if one is
+    pending (:1008-1014), and past the step of a pass this arm runs inside
+    (`World.timerPassStep`). The slot and bucket expiry are
+    `calc_wheel_index(expires, clk)` (`TimerWheel.calcWheelIndex`); the
+    same-slot decision (:1123-1130) is computed from the peer's wheel entry,
+    and the kind-314 record `{idx, bucket_expiry, timer}`
+    (`HiddenSite.timerEnqueue`) checks it: it must be present, and equal to
+    the mirror's slot and bucket expiry, exactly when the mirror decided to
+    enqueue (:1144, :1173, :1180-1183), where the timer takes the next
+    enqueue stamp (`hlist_add_head`, :659). The pending-iff-slotted
+    invariant is checked after every arm (`TimerWheel.peerWheelProblem`). -/
 def armTimer (pid : PeerId) (t : PeerTimer) (delay : Nat) (jc? : Option UInt64 := none) : M Unit := do
   let w ← get
-  let e ← if w.armRecords then
-      let bs ← hidden .modTimerArm
-      let (jm, e) := (recordWord64 bs 0, recordWord64 bs 1)
-      -- the caller's read is recorded (kind 311), never recovered from `e`
-      let some jc := jc? | invariant "a timer armed with arm records and no caller read (kind 311)"
-      let expires := jc + delay.toUInt64       -- `expires = jiffies + delay`, the caller's arithmetic
-      if expires != e then
-        throw (.hidden s!"timer expiry differs from Linux: the caller read jiffies {jc} and mod_timer published {e}; the mirror's delay {delay} gives {expires}")
-      let gap := (jm - jc).toInt64             -- `(long)(J_m - J_c)`
-      if gap < 0 then
-        throw (.hidden s!"mod_timer's jiffies {jm} is behind the caller's read {jc} (delay {delay}, expires {e})")
-      if gap > 1 then
-        unsupported s!"a stall between a timer's two jiffies reads (the mirror's delay matches the published expiry): the caller's {jc}, mod_timer's {jm} (delay {delay}, expires {e})"
-      modify fun w => { w with jiffiesLast := some jm }
-      -- dispatch order (docs/2026-10-11-dispatch-order.md): the record's
-      -- third word is the timer's address, which its section names
-      let u := recordWord bs 2
-      if u != 0 then modify fun w => { w with timerUnits := (u, pid, t) :: w.timerUnits.filter (·.1 != u) }
-      pure e
-    else pure (w.jiffiesLast.getD 0 + delay.toUInt64)
-  setPeer pid ((← getPeer pid).setTimer t (some e))
+  if !w.armRecords then
+    -- the domain filter (no records): the nominal expiry and the wheel at
+    -- the last known `jiffies`, with no record to check
+    let j0 := w.jiffiesLast.getD 0
+    placeOnWheel pid t (j0 + delay.toUInt64) j0 none
+    return
+  let bs ← hidden .modTimerArm
+  let (jm, e) := (recordWord64 bs 0, recordWord64 bs 1)
+  -- the caller's read is recorded (kind 311), never recovered from `e`
+  let some jc := jc? | invariant "a timer armed with arm records and no caller read (kind 311)"
+  let expires := jc + delay.toUInt64       -- `expires = jiffies + delay`, the caller's arithmetic
+  if expires != e then
+    throw (.hidden s!"timer expiry differs from Linux: the caller read jiffies {jc} and mod_timer published {e}; the mirror's delay {delay} gives {expires}")
+  let gap := (jm - jc).toInt64             -- `(long)(J_m - J_c)`
+  if gap < 0 then
+    throw (.hidden s!"mod_timer's jiffies {jm} is behind the caller's read {jc} (delay {delay}, expires {e})")
+  if gap > 1 then
+    unsupported s!"a stall between a timer's two jiffies reads (the mirror's delay matches the published expiry): the caller's {jc}, mod_timer's {jm} (delay {delay}, expires {e})"
+  modify fun w => { w with jiffiesLast := some jm }
+  -- dispatch order (docs/2026-10-11-dispatch-order.md): the record's
+  -- third word is the timer's address, which its section names
+  let u := recordWord bs 2
+  if u != 0 then modify fun w => { w with timerUnits := (u, pid, t) :: w.timerUnits.filter (·.1 != u) }
+  -- __mod_timer :1085-1088: a pending timer re-armed with the same expires
+  if (← getPeer pid).timer t == some e then return
+  -- the base locked and forwarded: kind 313, the base clock
+  let cb ← hidden .timerClk
+  let (clk, u2) := (recordWord64 cb 0, recordWord cb 1)
+  if u != 0 && u2 != u then
+    throw (.hidden s!"the base-clock record names timer {u2}, the arm record {u}")
+  if timeAfter clk (jm + 1) then
+    throw (.hidden s!"the timer base's clock {clk} is more than one past mod_timer's read {jm}")
+  if let some prev := (← getK).timerClk then
+    if timeBefore clk prev then
+      throw (.hidden s!"the timer base's clock went back: {clk} after {prev}")
+  if let some b := TimerWheel.earliestDue (← getDev) jm then
+    if timeAfter clk b then
+      throw (.hidden s!"the timer base's clock {clk} is past the overdue modeled bucket {b} (forward_timer_base stops at next_expiry)")
+  if let some step := w.timerPassStep then
+    if !timeAfter clk step then
+      throw (.hidden s!"an arm inside a timer pass at step {step} with the base clock {clk} not past it")
+  modifyK fun k => { k with timerClk := some clk }
+  placeOnWheel pid t e clk (some u)
 
-/-- `del_timer(&peer->timer_x)` (timer.c:1407-1430): detach if pending. -/
+/-- `del_timer(&peer->timer_x)` (timer.c:1407-1430): detach if pending
+    (`detach_if_pending`, :940-955): the expiry and the wheel entry go. -/
 def delTimer (pid : PeerId) (t : PeerTimer) : M Unit := do
-  setPeer pid ((← getPeer pid).setTimer t none)
+  let p ← getPeer pid
+  setPeer pid ((p.setTimer t none).setWheel t none)
 
 /-- L: the bound port of the socket `send4`/`send6` (socket.c:27-47, a cut)
     sends from: `wg->sock4` or `wg->sock6`. A send with that socket NULL (a

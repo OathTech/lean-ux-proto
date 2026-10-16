@@ -1,5 +1,6 @@
 import Leanux.Kernel.Decision
 import Leanux.WG.Types
+import Leanux.Net.Fib.Types
 import Std.Data.TreeMap
 import Std.Data.TreeSet
 import Std.Data.HashSet
@@ -64,6 +65,7 @@ def FMODE_NOACCOUNT : UInt32 := (1 : UInt32) <<< 29
 def EBADF : Int := 9
 def EAGAIN : Int := 11
 def ENOMEM : Int := 12
+def ENOBUFS : Int := 105
 def EFAULT : Int := 14
 def EBUSY : Int := 16
 def EPIPE : Int := 32
@@ -620,6 +622,17 @@ structure Kernel where
       `xa_alloc_cyclic` cursor of `dev_by_index`, never reset): the next
       device registered gets this index. -/
   netIfindexNext : Nat := 4
+  /-- Lane C: the namespace's one IPv4 FIB table (the local table aliases
+      the main, docs/2026-10-15-design-c-fib-trie.md 1.1), its
+      `rt_genid` (`rt_cache_flush`, route.c:406-409) and `dev_addr_genid`
+      (the address events, fib_frontend.c:1458/1463/1505; a random start the
+      mirror counts from 0 with the comparison's operands excluded,
+      section 5(a)). -/
+  fib4 : Net.Fib.Table := {}
+  /-- W8's creating namespace C in the foreign-creator mode, where
+      WireGuard's UDP sockets bind and `send4` routes (the W8 design, 3.1):
+      its own table (`lo` only), torn down at `wg_netns_close`. -/
+  fib4C : Net.Fib.Table := {}
   /-- L: the ratelimiter's global singleton (ratelimiter.c:12-18). -/
   ratelimiter : Ratelimiter := {}
   /-- Pipes (P): the pipefs inodes, the `pipe_inode_info`s and their data
@@ -673,6 +686,16 @@ structure Kernel where
       (:1833, :1865): `ep_ptable_queue_proc` reads it and clears it when its
       `pwq` allocation fails (:1551-1553), which `ep_insert` tests (:1877). -/
   epqEpi : Option EpiId := none
+  /-- B3 (docs/2026-10-15-design-b3-timer-wheel.md, section 3.1): the timer
+      base's clock (`timer_bases[0].clk`, kernel/time/timer.c:251-266) as
+      last recorded at an arm (kind 313), kept for the check that the base
+      never rewinds (`__forward_timer_base`, :994-1016); `none` before the
+      first arm. -/
+  timerClk : Option UInt64 := none
+  /-- B3: the enqueue stamp counter (`enqueue_timer`, timer.c:655-680): each
+      enqueue takes the next stamp, which orders a slot's list (newest first,
+      `hlist_add_head`, :659). -/
+  timerEnqueues : Nat := 0
   deriving BEq
 
 /-! ## Allocation outcomes (docs/2026-10-05-a-alloc.md, section 6)
@@ -693,18 +716,23 @@ a site's records (section 6.2): -/
     `AllocSite.kzallocPipeInfo`'s note), the page usercopies and
     `__sigqueue_alloc`. -/
 inductive EnvSite where
-  -- L: wg_newlink's allocations (device.c:325-367) and wg_ratelimiter_init's
-  -- (ratelimiter.c:164-185); `register_netdevice` (A's domain: assumed
-  -- success in the harness)
+  -- L: wg_newlink's allocations (device.c:325-367); `register_netdevice`
+  -- (A's domain: assumed success in the harness). wg_ratelimiter_init's
+  -- (ratelimiter.c:164-185) are constant-outcome decisions since B4
+  -- (`ratelimiterInit`): creation allocations outside the model
   | pubkeyHashtableAlloc | indexHashtableAlloc | allocWorkqueue | packetQueueInit
-  | ratelimiterCache | ratelimiterTable | registerNetdevice
+  | registerNetdevice
   -- P (pipes, design section 5). `allocInode` is the inode-allocation cut:
   -- new_inode_pseudo -> alloc_inode -> alloc_inode_sb, inode_init_always_gfp
   -- and get_next_ino, no decisions (audit M3)
   | allocInode | kcallocResizeBufs
   | copyPageToIter | copyPageFromIter | sigqueueAlloc
-  -- E-B arm C: wg_ratelimiter_allow's per-entry kmem_cache_alloc (ratelimiter.c:138)
-  | ratelimiterEntry
+  -- lane C (docs/2026-10-15-design-c-fib-trie.md, section 5): the FIB trie's
+  -- GFP_KERNEL allocations in task context, constant successes on the fixture
+  -- until their record-only sites are armed: leaf_new (fib_trie.c:359),
+  -- tnode_alloc (:333), the aliases (:1281, :1344), fib_create_info
+  -- (fib_semantics.c:1489), ip_fib_metrics_init (metrics.c:76)
+  | fibLeafAlloc | fibTnodeAlloc | fibAliasAlloc | fibInfoAlloc | fibMetricsAlloc
   -- W4: skb_gso_segment's allocations inside skb_segment (device.c:179), an
   -- assumed-success site as the sites above (A's domain)
   | skbSegment
@@ -765,6 +793,10 @@ inductive AllocSite where
   -- epoll (docs/2026-10-12-epoll-design.md, 3.1; b-task): the four consumer
   -- frames of fs/eventpoll.c
   | kzallocEp | kmemCacheZallocEpi | kmemCacheAllocPwq | kmemCacheZallocEphead
+  -- B4 (docs/2026-10-15-design-b4-load-ratelimiter.md, 4.3): the
+  -- ratelimiter entry, wg_ratelimiter_allow's kmem_cache_alloc
+  -- (ratelimiter.c:138) in the handshake receive worker; index 69, id 139
+  | kmemCacheAllocRlEntry
   deriving Repr, BEq, DecidableEq
 
 structure AllocSiteInfo where
@@ -886,6 +918,10 @@ def AllocSite.info : AllocSite → AllocSiteInfo
   | .kmemCacheZallocEpi => ⟨123, "kmemCacheZallocEpi", "fs/eventpoll.c", 1764, .exact 1⟩
   | .kmemCacheAllocPwq => ⟨124, "kmemCacheAllocPwq", "fs/eventpoll.c", 1550, .exact 1⟩
   | .kmemCacheZallocEphead => ⟨125, "kmemCacheZallocEphead", "fs/eventpoll.c", 1722, .exact 1⟩
+  -- B4: a direct site in the receive worker (kworker context, record-only:
+  -- the class is not steerable); index 69 is the first after seccomp's
+  -- 58-68 whose id, 139, is free
+  | .kmemCacheAllocRlEntry => ⟨69, "kmemCacheAllocRlEntry", "drivers/net/wireguard/ratelimiter.c", 138, .exact 1⟩
 
 def AllocSite.all : List AllocSite :=
   [.kmallocEventfdCtx, .filpAlloc, .dAllocPseudo, .kmallocFdtable, .kvmallocFdArray, .kvmallocFdBitmaps,
@@ -897,7 +933,8 @@ def AllocSite.all : List AllocSite :=
    .kzallocSfilter, .vmallocBpfProg, .kzallocBpfAux, .percpuBpfActive, .percpuBpfStats,
    .kmallocOrigFprog, .kmemdupOrigFilter, .kmallocArrayMasks, .kmemdupOldProg, .vmallocBpfProgRealloc,
    .kcallocAddrs,
-   .kzallocEp, .kmemCacheZallocEpi, .kmemCacheAllocPwq, .kmemCacheZallocEphead]
+   .kzallocEp, .kmemCacheZallocEpi, .kmemCacheAllocPwq, .kmemCacheZallocEphead,
+   .kmemCacheAllocRlEntry]
 
 /-- An allocation site's hidden-site id: A's block 70-99 by index
     (docs/2026-10-05-a-alloc.md, section 6.1) and `70 + index` above it
@@ -905,7 +942,8 @@ def AllocSite.all : List AllocSite :=
     100-117; epoll's 122-125: ids 192-195 of its block); seccomp's sites,
     indices 58-68, take 400 + (index - 58), in seccomp's block 400-419
     (docs/2026-10-11-interface.md; 200-219 would meet `Worker.sectionId`'s
-    ids from index 15) [AGENT, seccomp X merges]. -/
+    ids from index 15) [AGENT, seccomp X merges]; B4's ratelimiter entry,
+    index 69, takes id 139 under the `70 + index` rule. -/
 def AllocSite.hiddenId (s : AllocSite) : Nat :=
   let i := s.info.index
   if 58 ≤ i ∧ i ≤ 68 then 400 + (i - 58) else 70 + i
@@ -1037,6 +1075,15 @@ inductive HiddenSite where
       `{jiffies before, jiffies after}` of the `wg_advance` operation, in
       the trace process's task stream. -/
   | modTimerArm | timeAdvance | jiffiesEnd
+  /-- B3 (docs/2026-10-15-design-b3-timer-wheel.md, sections 3.2, 4 and 7):
+      the timer wheel's two records at an arm, written by `__mod_timer` for a
+      timer of the armed set and resolved at the arming line like the arm
+      record: kind 313 `{base->clk, timer}` right after `forward_timer_base`
+      on both paths (the hidden input the slot depends on), and kind 314
+      `{idx, bucket_expiry, timer}` at the enqueue (the slot and bucket
+      expiry the C stored; absent on the same-slot path, so the mirror's own
+      same-slot decision is checked by the record's presence). -/
+  | timerClk | timerEnqueue
   /-- Pre-release review, finding 2 (docs/2026-10-14-pre-release-review.md,
       section 2): the caller's `jiffies` read that computes a peer timer's
       expiry, recorded as kind 311 `{jiffies}` on the caller's own line in
@@ -1267,6 +1314,11 @@ def HiddenSite.info : HiddenSite → HiddenSiteInfo
   -- `Env.afterAdvance` as the firing window's exact end. Id 128: the first
   -- free id after L's block (120-127).
   | .jiffiesEnd => ⟨128, "jiffies_end", "jiffies", "fs/ioctl.c", 51, 8, .mirror⟩
+  -- B3: the wheel's records at mod_peer_timer's line (the caller's return
+  -- address passed through __mod_timer), kind classes `clk` and `wheel`;
+  -- ids 428 and 429 continue the review's 420-427.
+  | .timerClk => ⟨428, "timer_clk", "clk", "drivers/net/wireguard/timers.c", 37, 16, .mirror⟩
+  | .timerEnqueue => ⟨429, "timer_enqueue", "wheel", "drivers/net/wireguard/timers.c", 37, 24, .mirror⟩
   -- Pre-release review finding 2: the caller's jiffies read before each
   -- mod_peer_timer, kind 311, 8 bytes, at the caller's line (the `_THIS_IP_`
   -- of the `kcov_timer_jiffies(jiffies, _THIS_IP_)` expression); ids 420-426.
@@ -1346,7 +1398,7 @@ def HiddenSite.all : List HiddenSite :=
   ++ Worker.all.flatMap (fun w => [.sectionStart w, .sectionStop w])
   ++ [.reschedReceive, .reschedEncrypt, .reschedTx, .reschedDecrypt, .newHandshakeJitter, .walltimeLastHandshakeData,
       .cookieBirthdate]
-  ++ [.modTimerArm, .timeAdvance, .jiffiesEnd]
+  ++ [.modTimerArm, .timeAdvance, .jiffiesEnd, .timerClk, .timerEnqueue]
   ++ [.timerJiffiesRetransmitZeroKey, .timerJiffiesExpiredKeepalive, .timerJiffiesDataSent, .timerJiffiesDataReceived,
       .timerJiffiesHandshakeInitiated, .timerJiffiesSessionDerived, .timerJiffiesTraversal]
   ++ (Worker.all.filter fun w => w.timer?.isNone && w != .netRx).map .queued
@@ -1488,11 +1540,6 @@ structure World where
       which runs before Linux). -/
   hiddenPlaceholders : Bool := false
   placeholderCount : Nat := 0
-  /-- `LEANUX_FLOOD_EXACT=1`: a flood's invalid tail runs through the real
-      worker packet by packet instead of `floodTailEffect`'s summary, to
-      check the summary against the unsummarised execution (the pre-release
-      review's section 8). -/
-  floodExact : Bool := false
   /-- W7 phase 2: the draining workers' activations suspended at a
       `cond_resched`, oldest first, each resumed when the records name it
       (`Activation`, `Env.schedule`). An operation ends with none suspended
@@ -1516,6 +1563,20 @@ structure World where
       ids restart (the simulation-target review, 2026-10-12, section 4.3). -/
   unitPeers : List (Nat × Nat × Nat) := []
   timerUnits : List (Nat × Nat × WG.PeerTimer) := []
+  /-- B3 (docs/2026-10-15-design-b3-timer-wheel.md, section 3.3): the bucket
+      expiry of the step a timer pass is at while one of its callbacks runs
+      (`Env.runTimers`), for the check that an arm inside the pass sees a
+      base clock past that step (`base->clk++`, timer.c:2416); `none`
+      outside a callback. -/
+  timerPassStep : Option UInt64 := none
+  /-- B3 (section 3.4): the last `wg_advance`'s `{before, after}`, for the
+      pass bound after the advance (`J_pass = before` when the end-of-wait
+      read equals `after`: no tick has followed the jump). -/
+  lastAdvance : Option (UInt64 × UInt64) := none
+  /-- B3 (section 3.4, E2): the later operations' records, for the lookahead
+      that tells a deferred timer softirq (its section appears later) from a
+      due timer that never fires; `none` without records. -/
+  hiddenAhead : Option (List (List HiddenRecord)) := none
   pendingWork : List Nat := []
   /-- W8 (docs/2026-10-06-w8-w9-netns-routing.md, 3.1): the foreign-creator
       fixture, where wg0's creating namespace C is held by the fixture's
@@ -1581,12 +1642,27 @@ structure World where
       check reads (`rt_genid`; the IPv6 fib sernum), bumped by every table
       change. The loopback prefixes are constants (`World.route4/6`). -/
   addrs4 : List Nat := []
+  /-- Lane C: the prefix length of a wg0 address added by `wg_addaddr`; an
+      address absent here is a `/32` (the fixture's). -/
+  addrPlens4 : List (Nat × Nat) := []
   addrs6 : List Nat := []
-  defaultRoute4 : Bool := false
   defaultRoute6 : Bool := false
-  defaultRoute4Accessed : Bool := false
-  ipv4Gen : Nat := 0
   ipv6Gen : Nat := 0
+  /-- Lane C: the IPv4 neighbour entries the stack created at a device's
+      first output (`ip_finish_output2` → `__neigh_create` → `arp_constructor`):
+      on a loopback or point-to-point device (every device of this fixture)
+      the key is `INADDR_ANY`, one entry per device, classified at address 0
+      (arp.c:233-242; the zeronet early return of `__inet_dev_addr_type`), as
+      (in the creating namespace, ifindex, type); never collected on this
+      fixture (`neigh_periodic_work` returns below `gc_thresh1`,
+      neighbour.c:980) and removed by `arp_ifdown` at the device's down and
+      unregister. -/
+  neighbours : List (Bool × Nat × Nat) := []
+  /-- Lane C: which namespace's table the trie functions address: the
+      device namespace D (`Kernel.fib4`), or the creating namespace C
+      (`Kernel.fib4C`) while `send4`/`send6` and C's teardown run in the
+      foreign-creator mode. -/
+  fibCreatorNs : Bool := false
   /-- W9 (design 14.3b): a successful flag-changing `wg_up` gets its
       addresses and routes after the operation's wait (the guest's
       `route_into_wg0` follows the wait), so the table changes apply after
@@ -1622,8 +1698,8 @@ structure World where
       receive.c:119). Kernel-global and never reset by teardown; per trace
       here because the checker runs each flooding trace in its own guest
       (docs/2026-10-05-e-dos.md §4.2), so a leak between traces is a
-      control-flow mismatch. A flood's invalid tail sets it to that tail's
-      last under-load read (`floodTailEffect`). -/
+      control-flow mismatch. Every flood packet the receive worker handles
+      sets or decays it as the C does (B4: the flood runs exactly). -/
   lastUnderLoad : Option Int64 := none
 
 /-- Why a mirror execution stopped without an observation. -/
@@ -1655,6 +1731,9 @@ abbrev M := StateT World (Except Stop)
 structure Route where
   dev : Nat
   src : Nat
+  /-- Lane C: the route's `RTAX_MTU` metric (`dst_mtu`, ip.h:490-492), 0 for
+      none (the device's MTU applies). -/
+  mtu : Nat := 0
   deriving Repr, BEq
 
 def LO_IFINDEX : Nat := 1
@@ -1667,23 +1746,6 @@ def LOOPBACK4 : Nat := 0x7f000001
     `from: "ll"` injection. -/
 def LO_LINK_LOCAL : Nat := 0xfe8000000000000000000000ffff0001
 
-/-- `ip_route_output_flow` on the fixture's tables (route.c): a set source
-    must be local (`127/8` or a wg0 address), else `-ENETUNREACH`
-    (route.c:2751-2754; the `-EINVAL` class of :2706-2712 needs a multicast
-    or zeronet source the fixture never configures); a `127/8` destination
-    or a wg0 address takes the local route over `lo` with `prefsrc`
-    (`127.0.0.1` for `127/8`, the address itself otherwise; :2833-2838);
-    anything else the default route via wg0 while it exists, with the
-    device's address as source, else `-ENETUNREACH` (:2714). -/
-def World.route4 (w : World) (saddr daddr : Nat) : Except Int Route :=
-  let isLocal (a : Nat) := a / 2 ^ 24 == 127 || w.addrs4.contains a
-  if saddr != 0 && !isLocal saddr then .error (-101)   -- -ENETUNREACH
-  else if isLocal daddr then
-    .ok { dev := LO_IFINDEX, src := if saddr != 0 then saddr else if daddr / 2 ^ 24 == 127 then LOOPBACK4 else daddr }
-  else match w.defaultRoute4, w.addrs4.head? with
-    | true, some a => .ok { dev := WG0_IFINDEX, src := if saddr != 0 then saddr else a }
-    | _, _ => .error (-101)
-
 /-- `ipv6_dst_lookup_flow` on the fixture's tables: `::1` and wg0's address
     are local over `lo`; else the default route via wg0 (source: the
     device's address) or `ip6_null_entry`'s `-ENETUNREACH`. -/
@@ -1694,18 +1756,6 @@ def World.route6 (w : World) (saddr daddr : Nat) : Except Int Route :=
   else match w.defaultRoute6, w.addrs6.head? with
     | true, some a => .ok { dev := WG0_IFINDEX, src := if saddr != 0 then saddr else a }
     | _, _ => .error (-101)
-
-/-- A lookup, noting a resolution through the IPv4 default route
-    (`fib_alias_accessed`, the `FA_S_ACCESSED` flag `wg_delroute`'s
-    generation bump depends on). -/
-def routeLookup (family saddr daddr : Nat) : M (Except Int Route) := do
-  let w ← get
-  if family == 4 then
-    let r := w.route4 saddr daddr
-    if let .ok { dev := d, .. } := r then
-      if d == WG0_IFINDEX then set { w with defaultRoute4Accessed := true }
-    return r
-  else return w.route6 saddr daddr
 
 /-- W9: whether a fixture socket receives at `addr:port` for `family`: the
     dual-stack sender is bound to the wildcard address at `SENDER_PORT`, so
@@ -2226,65 +2276,6 @@ def dropHiddenRecord : M (Option Nat) := do
     noteNetRxStart r.site
     return some r.site
   | _ => return none
-
-/-- E-B, the producer-side discard before a flood's receive-worker section
-    (docs/2026-10-05-e-dos.md §4.1): drop head records whose site is in
-    `allowed` (the fixture's sends' cut draws and NET_RX brackets) until the
-    next record is `stop`, or the stream is exhausted. A record outside
-    `allowed` is a hidden mismatch (something the mirror would have modeled
-    where it stands). Bounded by the operation's record count. -/
-def discardFloodRecords (stop : Nat) (allowed : List Nat) : M Nat := do
-  let mut dropped := 0
-  for _ in [0:4000000] do
-    match ← peekHiddenSite with
-    | some s =>
-      if s == stop then return dropped
-      if !allowed.contains s then
-        throw (.hidden s!"flood: a modeled record (site {s}) inside the discarded flood region (a mid-flood injection)")
-      _ ← dropHiddenRecord
-      dropped := dropped + 1
-    | none => return dropped
-  throw (.hidden "flood: the record stream did not drain")
-
-/-- The effect contract of a flood's invalid tail (the review's 3.4): the
-    packets the receive worker drops at the MAC1 check after the leading
-    valids, up to the section's `stop`. Each one runs
-    `wg_receive_handshake_packet` to the MAC check: with the counter at or
-    over the threshold it saves the clock (`under_load_now`, receive.c:115);
-    below it, with `last_under_load` set, it reads the clock for the decay
-    (`birthdate_has_expired`, receive.c:117) and resets `last_under_load` when
-    the decay has expired (:119); then `cond_resched` (`resched_receive`). The
-    contract folds exactly those records, in order, into the new
-    `last_under_load`, from `last` (the value the leading valids left): no
-    other state changes (a dropped packet is freed; `handshake_queue_len` is
-    decremented per packet, to 0 at the drain, which the caller sets). Any
-    other record is a hidden mismatch (a mid-flood injection, or a decay read
-    with no saved time). Returns the new value and whether an under-load read
-    occurred (the flood crossed the threshold). -/
-def floodTailEffect (stop : Nat) (cuts : List Nat) (last : Option Int64) : M (Option Int64 × Bool) := do
-  let underLoad := (HiddenSite.underLoadNow).info.id
-  let decay := (HiddenSite.birthdateExpired).info.id
-  let resched := (HiddenSite.reschedReceive).info.id
-  let mut last := last
-  let mut crossed := false
-  for _ in [0:4000000] do
-    match ← peekHiddenSite with
-    | some s =>
-      if s == stop then return (last, crossed)
-      if s == underLoad then
-        last := some (← hiddenClock64 .underLoadNow)
-        crossed := true
-      else if s == decay then
-        let some saved := last
-          | throw (.hidden "flood: a decay clock read with no saved under-load time (a mid-flood injection)")
-        let now ← hiddenClock64 .birthdateExpired
-        if saved + 1000000000 ≤ now then last := none   -- wg_birthdate_has_expired(last_under_load, 1), in s64
-      else if s == resched || cuts.contains s then
-        _ ← dropHiddenRecord
-      else
-        throw (.hidden s!"flood: a modeled record (site {s}) inside the discarded flood region (a mid-flood injection)")
-    | none => return (last, crossed)
-  throw (.hidden "flood: the record stream did not drain")
 
 def getFile (id : FileId) : M File := do
   match (← getK).files.get? id with
