@@ -320,7 +320,7 @@ the mirror cannot run a callback mid-body. -/
 /-- The site of the next record that is not ambient, without consuming
     anything (unlike `peekHiddenSite`). -/
 def peekNextSite : M (Option Nat) := do
-  let some rs := (← get).hidden | return none
+  let some rs := (← getAmbient).hidden | return none
   return (rs.find? fun r => !HiddenSite.passive r.site).map (·.site)
 
 /-- The D3 unit whose section a record starts: a timer callback or the
@@ -335,7 +335,7 @@ def timerSectionOf (site : Nat) : Option Worker :=
     its timer: the callback is entered with its own timer detached. -/
 def runTimerSection (w : Worker) (body : M Unit) : M Unit := do
   if w.timer?.isNone then invariant s!"{w.symbol} is not a timer callback"
-  modify fun s => { s with fired := s.fired.push w.symbol }
+  modifyAmbient fun s => { s with fired := s.fired.push w.symbol }
   runWorker w body
 
 /-- The clear work (`wg_queued_expired_zero_key_material`) of the peer at
@@ -366,7 +366,7 @@ def sectionAppearsLater (w : Worker) (unit : Nat) : M Bool := do
   let startId := (HiddenSite.sectionStart w).info.id
   let names (r : HiddenRecord) : Bool :=
     r.site == startId && (unit == 0 || r.bytes.length < 16 || WG.recordWord r.bytes 1 == unit)
-  return (s.hidden.getD []).any names || (s.hiddenAhead.getD []).any (·.any names)
+  return (s.ambient.hidden.getD []).any names || (s.hiddenAhead.getD []).any (·.any names)
 
 /-- E1, item 3, at an end-of-wait read with pass bound `jPass`: no pending
     modeled timer's bucket is due. One that is, is either the timer softirq
@@ -509,9 +509,10 @@ def runTimersPlaceholder (jHi : UInt64) : M Unit := do
     (the domain filter) the filter's prediction uses `Timing`'s constants. -/
 def idleTimers : M Unit := do
   let w ← get
-  if w.hidden.isNone then
-    let jHi := w.jiffiesLast.getD 0 + w.timing.traceBound.toUInt64 + w.timing.advanceWait.toUInt64
-    if w.hiddenPlaceholders then runTimersPlaceholder jHi else discard <| runTimers jHi
+  let a ← getAmbient
+  if a.hidden.isNone then
+    let jHi := w.jiffiesLast.getD 0 + a.timing.traceBound.toUInt64 + a.timing.advanceWait.toUInt64
+    if a.hiddenPlaceholders then runTimersPlaceholder jHi else discard <| runTimers jHi
     return
   let some jEnd ← peekSiteU64 .jiffiesEnd
     | throw (.hidden "no end-of-wait jiffies record (kind 310) in this operation")
@@ -530,11 +531,12 @@ def idleTimers : M Unit := do
     the advance starts from the last known `jiffies` (0 before any). -/
 def advance (ticks : Nat) : M Int := do
   let w ← get
-  let (j0, j1) ← if w.hidden.isNone && w.hiddenPlaceholders then
+  let a ← getAmbient
+  let (j0, j1) ← if a.hidden.isNone && a.hiddenPlaceholders then
       let j0 := w.jiffiesLast.getD 0
       pure (j0, j0 + ticks.toUInt64)
     else do
-      if !w.armRecords then unsupported "a time advance without arm records (the timers' expiries are unknown)"
+      if !a.armRecords then unsupported "a time advance without arm records (the timers' expiries are unknown)"
       let bs ← hidden .timeAdvance
       pure (WG.recordWord64 bs 0, WG.recordWord64 bs 1)
   -- `jiffies_64 += ticks` on `unsigned long` (review item 8): the difference
@@ -556,10 +558,11 @@ def advance (ticks : Nat) : M Int := do
     next operation (the timer control `tc_advance_wait0`). -/
 def afterAdvance : M Unit := do
   let w ← get
-  if w.hidden.isNone then
+  let a ← getAmbient
+  if a.hidden.isNone then
     -- the domain filter's prediction (no records): the fixture's wait
-    let jHi := w.jiffiesLast.getD 0 + w.timing.advanceWait.toUInt64
-    if w.hiddenPlaceholders then runTimersPlaceholder jHi else discard <| runTimers jHi
+    let jHi := w.jiffiesLast.getD 0 + a.timing.advanceWait.toUInt64
+    if a.hiddenPlaceholders then runTimersPlaceholder jHi else discard <| runTimers jHi
     return
   -- review item 7: the window ends at the recorded end of the advance's wait
   let some jEnd ← peekSiteU64 .jiffiesEnd
@@ -670,9 +673,9 @@ def setMtu (mtu : Nat) : M Int := do
     it records are discarded, as the boot's are (`Runner`). Its state
     changes, its environment calls and a stop stand. -/
 def outsideWindow (m : M α) : M α := do
-  let steps := (← get).steps
+  let steps := (← getAmbient).steps
   let r ← m
-  modify fun w => { w with steps }
+  modifyAmbient fun w => { w with steps }
   return r
 
 /-- W9 (design 14.3b): `route_into_wg0` after a successful flag-changing
@@ -967,7 +970,7 @@ def pollScheduledInline : M Unit := do
     missing). Without records (the domain filter) a fixed order. -/
 def afterBatch : M Unit := do
   modify fun w => { w with queuedThisCall := [] }   -- the call returned and slept
-  if (← get).hidden.isNone then
+  if (← getAmbient).hidden.isNone then
     runCryptWorkers
     runSendWorkers
     return
@@ -1043,7 +1046,7 @@ def batch (items : List BatchItem) : M Int := do
           if family == 4 then Net.neighbourClassify WG0_IFINDEX
           let ret ← WG.wgXmit family addr pkts mtu
           cqes := cqes ++ [if ret == 0 then (payload.length : Int) else ret]
-  modify fun w => { w with extraOut := [("cqes", Lean.toJson cqes)] }
+  modifyAmbient fun w => { w with extraOut := [("cqes", Lean.toJson cqes)] }
   afterBatch
   return items.length
 

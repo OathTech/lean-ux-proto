@@ -248,7 +248,7 @@ def dispatch : Syscall → M Int
     match ← WG.wgGetDevice device with
     | .error e => return e
     | .ok device =>
-      modify fun w => { w with extraOut := [("device", device)] }
+      modifyAmbient fun w => { w with extraOut := [("device", device)] }
       return 0
   -- W2 (4.2): one system call each on the stepped socket, the netlink
   -- core's chunk allocations below the cut as in `netlinkRequest`. The
@@ -281,7 +281,7 @@ def dispatch : Syscall → M Int
     -- (netlinkDumpStart stops at the start)
     if messages.all (· matches .done ..) then
       unsupported "wg_get_recv popping a lone NLMSG_DONE: no WireGuard code runs"
-    modify fun w => { w with extraOut := [("messages", Lean.Json.arr (messages.map (·.toJson)).toArray)] }
+    modifyAmbient fun w => { w with extraOut := [("messages", Lean.Json.arr (messages.map (·.toJson)).toArray)] }
     return 0
   | .wgUp => socketCallOn SENDER_FD Env.wgUp
   | .wgXmit family addr payload opts => socketCallOn SENDER_FD do
@@ -326,7 +326,7 @@ def dispatch : Syscall → M Int
     -- open (W8: after wg_netns_close the `recvfrom(4)` is -EBADF and the
     -- datagrams null, the sender's inbox and the stats are read as always)
     let (ret, observed) ← Env.observe
-    modify fun w => { w with extraOut := ["datagrams", "replies", "stats"].map fun k => (k, observed.getObjValD k) }
+    modifyAmbient fun w => { w with extraOut := ["datagrams", "replies", "stats"].map fun k => (k, observed.getObjValD k) }
     socketCallOn LISTEN4_FD (pure ret)
   | .wgAdvance ticks => do
     -- `ioctl(3, KCOV_LEANUX_TIME_ADVANCE, &ticks)`: `CLASS(fd, f)(fd)`
@@ -375,8 +375,8 @@ def Syscall.isNet : Syscall → Bool
 
 /-- One system call: entry, the handler, and the return-to-user work. -/
 def syscall (call : Syscall) : M Int := do
-  modify fun w => { w with steps := #[], userOut := none, userFds := none, extraOut := [], queuedThisCall := [], fired := #[],
-                           netRxSections := 0, netRxSection := 0, emitted := {}, translatedLen := none }
+  modify fun w => { w with userOut := none, userFds := none, queuedThisCall := [], emitted := {}, translatedLen := none }
+  modifyAmbient fun a => { a with steps := #[], extraOut := [], fired := #[], netRxSections := 0, netRxSection := 0 }
   -- seccomp: the entry path of the operation's own call once a mode is set
   -- (a harness call by design 6.2 rule 1: a cache hit); a probe enters itself
   match syscallNr call with
@@ -409,7 +409,7 @@ def syscall (call : Syscall) : M Int := do
   | .wgUp | .wgDown | .wgDelete | .wgDeladdr _ | .wgDelroute .. | .wgSetMtu _ | .wgNetnsClose
   | .wgAddroute .. | .wgAddaddr .. =>
     let shape := Net.Fib.shape (← getK)
-    modify fun w => { w with extraOut := w.extraOut ++ [("fib_trie", shape)] }
+    modifyAmbient fun w => { w with extraOut := w.extraOut ++ [("fib_trie", shape)] }
   | _ => pure ()
   return ret
 

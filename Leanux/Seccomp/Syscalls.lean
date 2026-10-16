@@ -118,7 +118,7 @@ def sigsysRecord (nr data : Int) : Json :=
 /-- The probe's two observation fields (contract: `sigsys` null unless a
     `TRAP` was caught, `child` null for a self probe). -/
 def probeOut (sigsys : Json) (child : Json) : M Unit :=
-  modify fun w => { w with extraOut := w.extraOut ++ [("sigsys", sigsys), ("child", child)] }
+  modifyAmbient fun w => { w with extraOut := w.extraOut ++ [("sigsys", sigsys), ("child", child)] }
 
 /-- Op 31 in the trace process. A killing chain is kept out of `self` by the
     validator; the mirror would have no task to continue with. -/

@@ -83,7 +83,7 @@ def drainHandshakeSendWq (upTo : Option PeerId) : M Unit := do
         runFlushedClearWork pid
         if upTo == some pid then return
       | none =>
-        if (← get).hidden.isSome then
+        if (← getAmbient).hidden.isSome then
           throw (.hidden s!"a flush of handshake_send_wq must run queued work ({d.sendWorkQueue.length} send, {d.clearWorkQueue.length} clear items), but no section names it")
         -- the domain filter's placeholder order
         match d.sendWorkQueue.head?, d.clearWorkQueue.head? with

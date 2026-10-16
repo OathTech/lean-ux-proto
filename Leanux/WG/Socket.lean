@@ -111,8 +111,7 @@ own choice points are mirrored line by line. -/
     value. Without the arm records the kernel wrote none: outside the domain. -/
 def dstCacheReset (pid : PeerId) : M Unit := do
   -- the pre-W9 rule for captures without the records (`World.dstCacheRecords`)
-  let w ← get
-  if !(w.armRecords && w.dstCacheRecords) then return
+  if !((← getAmbient).armRecords && (← get).dstCacheRecords) then return
   let ts ← hiddenJiffies .dstCacheResetTs
   let p ← getPeer pid
   setPeer pid { p with dstCache := { p.dstCache with resetTs := ts } }
@@ -166,8 +165,7 @@ def setPeerEndpoint (pid : PeerId) (e : Endpoint) : M Unit := do
     stored: the miss. -/
 def dstCacheGet (pid : PeerId) (gen : Nat) : M (Option DstSlot) := do
   -- the pre-W9 rule for captures without the records: every access misses
-  let w ← get
-  if !(w.armRecords && w.dstCacheRecords) then return none
+  if !((← getAmbient).armRecords && (← get).dstCacheRecords) then return none
   let p ← getPeer pid
   let c := p.dstCache
   if let some s := c.slot then

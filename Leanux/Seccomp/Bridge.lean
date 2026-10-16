@@ -64,7 +64,7 @@ def emit (d : Decision) (o : Bool) (ops : Option (Int × Int)) : M Unit := do
     let w ← get
     if w.emitted.contains key then return
     set { w with emitted := w.emitted.insert key }
-  modify fun w => { w with steps := w.steps.push { decision := d, outcome := o, operands := ops, netRx := w.netRxSection } }
+  modifyAmbient fun a => { a with steps := a.steps.push { decision := d, outcome := o, operands := ops, netRx := a.netRxSection } }
 
 /-- A C decision point of the seccomp paths (the kernel's `Decision`), with
     the once-per-operation rule for the repeatable ones. -/
@@ -88,16 +88,15 @@ instance : SeccompM M where
   branchCmp d o a b := kbranchCmp d.toDecision o a b
   alloc s := hiddenAlloc s.toAllocSite
   translatedInsn := do
-    let w ← get
-    if w.hidden.isNone then return none   -- no records: the domain filter
-    if w.translatedLen.isNone then
+    if (← getAmbient).hidden.isNone then return none   -- no records: the domain filter
+    if (← get).translatedLen.isNone then
       -- stream W's order: the length record precedes the instructions
       let n ← hiddenU64 .bpfProgInsn
       modify fun w => { w with translatedLen := some n }
     return some (← hiddenU64 .bpfProgInsn)
   translatedLen := do
+    if (← getAmbient).hidden.isNone then return none
     let w ← get
-    if w.hidden.isNone then return none
     match w.translatedLen with
     | some n =>
       set { w with translatedLen := none }

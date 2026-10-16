@@ -165,7 +165,7 @@ def epRbtreeInsert (ep : EpId) (epiId : EpiId) : M Unit := do
   let epi ← getEpi epiId
   let addr ← hiddenU64 .epollInsertAddress
   -- a placeholder (the domain filter, before Linux) carries no address
-  if (← get).hidden.isSome && (← getK).epis.any (fun _ e => e.file == epi.file && e.fileAddr != 0 && e.fileAddr != addr) then
+  if (← getAmbient).hidden.isSome && (← getK).epis.any (fun _ e => e.file == epi.file && e.fileAddr != 0 && e.fileAddr != addr) then
     throw (.hidden s!"ep_rbtree_insert: file {epi.file} recorded at address {addr}, before at another")
   setEpi epiId { epi with fileAddr := addr }
   let key := (addr, epi.fd)

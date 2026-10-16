@@ -122,7 +122,7 @@ def recordWord64 (bs : List UInt8) (k : Nat) : UInt64 := (recordWord bs k).toUIn
     review finding 2): kind 311 at `site`, consumed where the C evaluates the
     argument, before the guard; `none` without arm records. -/
 def callerJiffies (site : HiddenSite) : M (Option UInt64) := do
-  if (← get).armRecords then some <$> hiddenJiffies site else pure none
+  if (← getAmbient).armRecords then some <$> hiddenJiffies site else pure none
 
 /-- `__mod_timer`'s placement once the base is forwarded to `clk` (B3,
     section 3.2, steps 4 to 6), with the kind-314 record consumed and
@@ -199,7 +199,7 @@ def placeOnWheel (pid : PeerId) (t : PeerTimer) (expires clk : UInt64) (unit? : 
     invariant is checked after every arm (`TimerWheel.peerWheelProblem`). -/
 def armTimer (pid : PeerId) (t : PeerTimer) (delay : Nat) (jc? : Option UInt64 := none) : M Unit := do
   let w ← get
-  if !w.armRecords then
+  if !(← getAmbient).armRecords then
     -- the domain filter (no records): the nominal expiry and the wheel at
     -- the last known `jiffies`, with no record to check
     let j0 := w.jiffiesLast.getD 0
@@ -313,7 +313,7 @@ def loopbackSoftirq : M Unit := do
   if (← getDev).peers.toList.any (·.2.napiScheduled) then
     unsupported "a loopback NET_RX section while a NAPI poll is pending (one net_rx_action polls both)"
   modify fun w => { w with netRxRaised := false }
-  if (← get).hidden.isNone then return
+  if (← getAmbient).hidden.isNone then return
   let start := (HiddenSite.sectionStart .netRx).info
   if (← peekHiddenSite) != some start.id then
     let next := match ← peekHiddenSite with | some s => s!"site {s}" | none => "none"
