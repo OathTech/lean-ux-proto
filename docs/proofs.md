@@ -17,8 +17,11 @@ remain on this branch. Initialized R3 packet authorization and R4 receive-pipeli
 conservation remain open; their next extensions follow the retrofit.
 
 The validated baseline `00641c6` has 471 Lean files and 7,715 named theorems.
-The current tree has 449 files and 6,313 theorems: completed changes comprise
-276 retyped, 1,476 deleted, 72 retained interfaces and 74 added theorems.
+The current tree has 451 files and 6,314 theorems: completed changes comprise
+268 retyped, 1,476 deleted, 113 retained contract shapes and 75 added theorems.
+The count audit treats namespace-only product qualifications as retained
+contracts and corrects the earlier scheduler classification; total theorem,
+deletion and addition counts are unaffected.
 The census includes private and attributed declarations and excludes nested
 comments and strings. Deferred uncommitted R3 work is outside the baseline.
 All seven terminal files remain unchanged.
@@ -26,8 +29,9 @@ All seven terminal files remain unchanged.
 The CounterWindow, generic native contracts/adapters, acceptance-observer core,
 action/projection contracts, failure-prefix/native receipts, keypair identity
 core, ordinary lifetime actions, clock/Noise-helper contracts, keypair composition
-and product scheduler observers, index-table, removal and packet helpers pass their scoped builds, axiom checks, fresh
-kernel replay and independent reviews. The obsolete subsystem-frame layers and
+and product scheduler observers, index-table, removal and packet helpers,
+native socket/configuration and product evolution contracts pass their scoped
+builds, axiom checks, fresh kernel replay and independent reviews. The obsolete subsystem-frame layers and
 their unused support are
 removed; all previously ported targets still build after their generated
 artifacts were removed. This is not a full-tree pass. The
@@ -55,6 +59,8 @@ original checkpoints. The current mirror/toolchain carry status is in
   `Allocation` and `Index` expose original source equations.
   `Projection` composes and factors equality views; `Tools` supplies generic
   loop/map rules and checked references to pinned mirror constants.
+  Native socket/configuration frames retain the incoming eleven-field WG-owned
+  observation in `WGOwned`; their explicit seven-field store view stays separate.
   The remaining WG source frames, borrowing contracts and environment frames
   still need native carry. Their narrower store observations must retain their
   original fields when retyped. The obsolete filesystem, signal, seccomp and

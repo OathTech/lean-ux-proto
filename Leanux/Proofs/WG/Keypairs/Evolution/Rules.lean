@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.Keypairs.OrdinaryHot
+import Leanux.Proofs.WG.Keypairs.OrdinaryProduct
 import Leanux.Proofs.Logged.Outer
 import Leanux.Proofs.Logged.Tools
 
@@ -9,14 +10,14 @@ namespace Leanux.Proofs.WG.Keypairs
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing Std.Do
 
 def Evolves (g : GhostM α) : Prop :=
-  ∀ h w x h' w', Inv (snapshot w) h →
+  ∀ h w x h' w', Inv (snapshot w.wg) h →
     ((g.run h).run w) = .ok ((x, h'), w') →
-    Evolution (snapshot w) h (snapshot w') h'
+    Evolution (snapshot w.wg) h (snapshot w'.wg) h'
 
 theorem Evolves.preserves {g : GhostM α} (hg : Evolves g)
     (h : History) (w : World) (x : α) (h' : History) (w' : World)
-    (hi : Inv (snapshot w) h) (hr : ((g.run h).run w) = .ok ((x, h'), w')) :
-    Inv (snapshot w') h' := (hg h w x h' w' hi hr).preserves hi
+    (hi : Inv (snapshot w.wg) h) (hr : ((g.run h).run w) = .ok ((x, h'), w')) :
+    Inv (snapshot w'.wg) h' := (hg h w x h' w' hi hr).preserves hi
 
 theorem evolves_pure (x : α) : Evolves (pure x) := by
   intro h w y h' w' hi hr
@@ -27,7 +28,7 @@ theorem evolves_throw (e : Stop) : Evolves (throw e : GhostM α) := by
   intro h w y h' w' hi hr
   cases hr
 
-theorem evolves_lift {a : M α} (ha : OrdinaryAction a) : Evolves (StateT.lift a) := by
+theorem evolves_lift {a : Leanux.M α} (ha : ProductOrdinaryAction a) : Evolves (StateT.lift a) := by
   intro h w x h' w' hi hr
   simp only [StateT.run_lift, StateT.run_bind, StateT.run_pure] at hr
   cases he : a.run w with
@@ -36,14 +37,22 @@ theorem evolves_lift {a : M α} (ha : OrdinaryAction a) : Evolves (StateT.lift a
     rcases out with ⟨x1, w1⟩
     simp only [he, Leanux.Proofs.WG.CounterWindow.except_ok_bind] at hr
     cases hr
-    exact .ordinary (ha w _ _ he)
+    exact .ordinary ((Lifetimes.ProjectedAction.iff_run _ _ _).mp ha w _ _ he)
 
-theorem evolves_liftM {a : M α} (ha : OrdinaryAction a) : Evolves (liftM a) :=
+theorem evolves_liftM {a : Leanux.M α} (ha : ProductOrdinaryAction a) : Evolves (liftM a) :=
   evolves_lift ha
 
-theorem counterLogged_evolution (kp : KeypairId) (nonce : Nat) : Evolves (counterLogged kp nonce) := by
+theorem counterLogged_evolution (kp : KeypairId) (nonce : Nat) :
+    Evolves (liftWGGhost (counterLogged kp nonce)) := by
   intro h w x h' w' hi hr
-  exact counterLogged_evolves kp nonce w w' h h' x hi hr
+  rw [liftWGGhost_run] at hr
+  cases he : (((counterLogged kp nonce).run h).run w.wg).run w.ambient with
+  | error e => simp [he, Except.map] at hr
+  | ok out =>
+    rcases out with ⟨⟨⟨ok, history⟩, wg⟩, ambient⟩
+    simp [he, Except.map] at hr
+    rcases hr with ⟨⟨rfl, rfl⟩, rfl⟩
+    exact counterLogged_evolves kp nonce w.wg wg w.ambient ambient h history ok hi he
 
 theorem evolves_bind {g : GhostM α} {f : α → GhostM β}
     (hg : Evolves g) (hf : ∀ a, Evolves (f a)) : Evolves (g >>= f) := by
@@ -95,13 +104,15 @@ theorem evolves_array (xs : Array α) (b : β) (f : α → β → GhostM (ForInS
 
 theorem evolves_getWorld : Evolves getWorld := by
   apply evolves_lift
+  apply (Lifetimes.ProjectedAction.iff_run _ _ _).mpr
   intro w x w' hr
   cases hr
   exact .refl _
 
 theorem evolves_modifyWorld (f : World → World)
-    (hf : ∀ w, Ordinary (snapshot w) (snapshot (f w))) : Evolves (modifyWorld f) := by
+    (hf : ∀ w, Ordinary (snapshot w.wg) (snapshot (f w).wg)) : Evolves (modifyWorld f) := by
   apply evolves_lift
+  apply (Lifetimes.ProjectedAction.iff_run _ _ _).mpr
   intro w x w' hr
   cases hr
   exact hf w
@@ -109,7 +120,7 @@ theorem evolves_modifyWorld (f : World → World)
 /-- Retain the equality between a saved World and the state being replaced.
 The observer's NAPI placement bookkeeping uses this adjacent read/write form. -/
 theorem evolves_read_write (f : World → World) (next : World → GhostM α)
-    (hf : ∀ w, Ordinary (snapshot w) (snapshot (f w)))
+    (hf : ∀ w, Ordinary (snapshot w.wg) (snapshot (f w).wg))
     (hn : ∀ w, Evolves (next w)) :
     Evolves (do let w ← getWorld; setWorld (f w); next w) := by
   intro h w x h' w' hi hr
@@ -120,7 +131,7 @@ theorem evolves_read_write (f : World → World) (next : World → GhostM α)
 /-- A fixed starting point for verification conditions. Both the invariant
 and the complete evolution witness are retained across each call. -/
 def Track (s0 : Snapshot) (h0 h : History) (w : World) : Prop :=
-  Inv (snapshot w) h ∧ Evolution s0 h0 (snapshot w) h
+  Inv (snapshot w.wg) h ∧ Evolution s0 h0 (snapshot w.wg) h
 
 def GhostHoare (g : GhostM α) (P : History → World → Prop)
     (Q : α → History → World → Prop) : Prop :=
@@ -140,7 +151,9 @@ theorem Evolves.wp {g : GhostM α} (hg : Evolves g) (s0 : Snapshot) (h0 : Histor
     ⦃fun h w => ⌜Track s0 h0 h w⌝⦄ g
     ⦃⇓? _ h w => ⌜Track s0 h0 h w⌝⦄ := by
   apply (ghostHoare_iff_triple _ _ _).mp
-  intro h w out w' hp hr
+  intro h
+  apply (hoare_iff_run _ _ _).mpr
+  intro w out w' hp hr
   have ev := hg h w out.1 out.2 w' hp.1 hr
   exact ⟨ev.preserves hp.1, .trans hp.2 ev⟩
 
@@ -150,8 +163,8 @@ theorem evolves_iff_wp (g : GhostM α) : Evolves g ↔
   constructor
   · intro hg; exact hg.wp
   · intro hg h w x h' w' hi hr
-    have hh := (ghostHoare_iff_triple _ _ _).mpr (hg (snapshot w) h)
-    exact (hh h w (x, h') w' ⟨hi, .refl _ _⟩ hr).2
+    have hh := (ghostHoare_iff_triple _ _ _).mpr (hg (snapshot w.wg) h)
+    exact ((hoare_iff_run _ _ _).mp (hh h) w (x, h') w' ⟨hi, .refl _ _⟩ hr).2
 
 /-- The runner's explicit-world boundary merely rearranges the two states
 and indexes errors; successful results have this exact correspondence. -/
@@ -211,7 +224,7 @@ theorem runAtLogged_wp {g : GhostM α} (hg : Evolves g) (s0 : Snapshot) (h0 : Hi
 
 /-- Lift an ordinary mirror execution at an explicit World, as the runner
 does for post-operation ambient record processing. -/
-theorem ordinary_runAt_wp {a : M α} (ha : OrdinaryAction a) (s0 : Snapshot) (h0 : History)
+theorem ordinary_runAt_wp {a : Leanux.M α} (ha : ProductOrdinaryAction a) (s0 : Snapshot) (h0 : History)
     (index : Nat) (w : World) :
     ⦃fun h => ⌜Track s0 h0 h w⌝⦄
       (liftM ((a.run w).mapError (fun e => (index, e))) : StateT History (Except (Nat × Stop)) (α × World))
@@ -226,7 +239,7 @@ theorem ordinary_runAt_wp {a : M α} (ha : OrdinaryAction a) (s0 : Snapshot) (h0
   | ok value =>
     simp [he, Except.mapError] at hr
     rcases hr with ⟨rfl, rfl⟩
-    have ho := ha w _ _ he
+    have ho := (Lifetimes.ProjectedAction.iff_run _ _ _).mp ha w _ _ he
     exact ⟨ho.preserves hp.1, .trans hp.2 (.ordinary ho)⟩
 
 end Leanux.Proofs.WG.Keypairs

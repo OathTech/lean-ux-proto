@@ -15,7 +15,7 @@ and strings and includes private and attributed declarations. The uncommitted
 configured-closure extension was preserved before resumption and is deferred;
 it is not part of that baseline.
 
-| Completed proof change | Before | Retyped | Deleted | Retained interface | Added | After |
+| Completed proof change | Before | Retyped | Deleted | Retained contract shape | Added | After |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | CounterWindow `Refinement`, `MirrorCalls`, `Bounds` | 31 | 17 | 6 | 8 | 1 | 26 |
 | Framing `Basic`, `WP`, `Allocation`, `Index`, new `Hoare`/`Lift` | 40 | 25 | 14 | 1 | 14 | 40 |
@@ -29,14 +29,27 @@ it is not part of that baseline.
 | Keypairs `Ordinary` | 17 | 12 | 1 | 4 | 0 | 16 |
 | Framing `WGTime`, `WGHandshake`, Keypairs `OrdinaryHot` | 21 | 16 | 5 | 0 | 0 | 16 |
 | WG store view and Keypairs composition (four modules) | 31 | 27 | 4 | 0 | 0 | 27 |
-| Logged `RxPoll`, `Tools`, `Workers`, `Scheduler` | 26 | 17 | 0 | 9 | 0 | 26 |
+| Logged `RxPoll`, `Tools`, `Workers`, `Scheduler` | 26 | 0 | 0 | 26 | 0 | 26 |
 | Index table, trie-removal source, receive headers and data helpers | 12 | 8 | 4 | 0 | 0 | 8 |
 | Component adapter extension (new contracts only) | 0 | 0 | 0 | 0 | 7 | 7 |
+| Native socket/configuration frames and new WG-owned view | 9 | 9 | 0 | 0 | 0 | 9 |
+| Product evolution rules and new ordinary lift bridge | 24 | 0 | 0 | 24 | 1 | 25 |
 
-The whole tree currently contains 449 Lean files and 6,313 theorems. The completed
-changes total 276 retyped theorems, 1,476 deletions, 72 retained interfaces and 74 added.
-Retained interfaces means unchanged written signatures, not preservation of the
-old monolithic execution state. All carried contracts use the actual new stack.
+The whole tree currently contains 451 Lean files and 6,314 theorems. The completed
+changes total 268 retyped theorems, 1,476 deletions, 113 retained contract shapes and 75 added.
+Retyping changes or generalizes the actual state/monad carrier or observation.
+This includes shorthand contracts whose source functions or named views move
+to a native monad. Mere namespace qualification and equivalent relocation of a
+product-state projection count as retained contract shapes; their proofs and
+source observers may still require substantial repairs. All carried contracts
+use the actual new stack.
+
+The count audit corrects the scheduler row from 17 retyped / 9 retained to
+0 / 26: those seventeen signature edits qualify the same product monad as
+`Leanux.M`. The earlier description in terms of unchanged written signatures
+was inconsistent with the native source-equality and acceptance-observer rows.
+Before this checkpoint, the corrected totals are 259 retyped / 89 retained,
+rather than 276 / 72. The before/after, deletion and addition counts are unchanged.
 All terminal files remain unchanged. **Every result remains lagging** until the complete tree
 passes its proof gate and kernel replay. R1/R2/R5/R6 retain their pre-split
 charter dispositions; initialized R3 packet authorization and R4 receive-pipeline
@@ -352,9 +365,10 @@ LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env le
 
 ## Product scheduler observations
 
-All 26 existing erasure contracts now run over the actual product World: 17
-signatures explicitly name `Leanux.M`, and nine scheduler interfaces retain
-their written form. Their callback scope is unchanged. The native validator
+All 26 existing erasure contracts now run over the actual product World and
+retain their contract shapes: 17 signatures explicitly qualify `Leanux.M`,
+and nine scheduler interfaces retain their written form. Their callback scope
+is unchanged. The native validator
 observer enters through `liftWGGhost` once, carrying its actual WG and Ambient
 outputs and acceptance history. Scheduler records use Ambient; NAPI placement
 uses the fixture world. Original `Activation.consistent` trials still execute
@@ -446,7 +460,64 @@ LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake build 
 LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.Framing.Lift
 ```
 
+## Native socket/configuration and product evolution
+
+Nine socket/configuration contracts move to actual `WG.M`. Their pure
+`WGOwnedView` retains all eleven incoming WG-owned fields: the original seven
+store fields plus both IPv4 FIB tables, the timer clock and enqueue counter.
+The seven-field view is unchanged. The socket and configuration masks retain
+their original device fields and modifier premises. Three read-only helpers
+preserve the complete WG state; their proofs follow the actual helpers, not
+the monad type alone. Ambient inputs and outputs remain unrestricted, and
+ordinary error-valued returns remain distinct from Stops.
+
+All 24 evolution rules retain their product-world/history contract shapes.
+Seven statements adapt their source expressions or projection names. Arbitrary
+product callbacks, arbitrary World updates with their ordinary-transition
+premise, indexed runner boundaries and actual incoming histories remain.
+The validator enters through the real `liftWGGhost`; its evolution proof uses
+both actual WG/Ambient endpoints and the returned history. One new ordinary
+transport theorem uses the actual `liftWG` equation. No compatibility execution
+state or narrower callback domain is introduced.
+
+Validation: the closed build passes (93 jobs), all 47 explicit declarations
+print only permitted axioms, and three independent fresh kernel replays pass.
+Frozen-source independent review found no substantive issue. Source hashes, exact scope, terminal
+preservation, mirror equality, trust scan and scoped whitespace pass. Six capped
+calls completed: one development build failed on an unspecified base monad in
+the generic list rule; the repaired build, axiom check and three replays passed.
+One patch-format rejection occurred before mutation. No source admission,
+recovery admission, interruption, timeout, KILLED outcome, limit increase or
+infrastructure rerun occurred in this port. All handles are collected.
+
+```sh
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake build Leanux.Proofs.Framing.WGSocketLifecycle Leanux.Proofs.Framing.WGConfiguration Leanux.Proofs.WG.Keypairs.Evolution.Rules
+# Run separately for each of the three modules above:
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Keypairs.Evolution.Rules
+```
+
 ## Incoming source-observer findings
+
+Product-level former-Kernel observations must retain all 47 original fields:
+31 filesystem, three task, two seccomp and eleven WG fields. Native WG typing
+does not justify dropping those other observations from an arbitrary product
+action. Four old environment frames now encounter FIB writes: `setMtu`,
+`routeIntoWg0`, `wgDeladdr` and `wgDelroute`. They require explicit findings,
+not removal of the FIB fields from the observation. The latter three remain
+source-inspected candidates.
+
+A capped stdin evaluation confirms an unrestricted-state MTU witness: with
+`Runner.initialWG true`, `initialTasks 1024`, `initialFS true`, harness Ambient
+inputs, zero timing bounds and no hidden records, `Env.setMtu 1421` returns zero,
+changes the device MTU from 1420 to 1421, and changes `fib4.rtGenid4` from zero
+to two. The old scalar mask permits only device MTU/inet-flag changes. This is
+an executed witness, not yet a permanent kernel-checked counterexample or an
+initialized security failure. Five capped stdin probes comprised this successful
+evaluation, one display-expression type error and three failed kernel-proof
+attempts (`rfl`, `decide`, `cbv`); the last hit the default recursion-depth limit.
+The failed declarations' axiom prints reported elaboration-recovery `sorryAx`;
+none is validation and no source admission was introduced. No limit was raised,
+no interruption occurred and no temporary files were created.
 
 Source inspection found two observer carry defects beyond type changes. The old
 peer-release observer omits the incoming queue and timer guards. With a resident

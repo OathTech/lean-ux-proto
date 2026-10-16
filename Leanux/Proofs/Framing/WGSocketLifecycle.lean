@@ -1,56 +1,64 @@
 import Leanux.Proofs.Framing.WGTime
+import Leanux.Proofs.Framing.WGOwned
 import Leanux.Proofs.Framing.Tools
 import Leanux.WG.Socket
 
 /-! Canonical socket-control frames. Only the two socket labels and incoming
-port are masked; device presence, complete resident objects, allocation
-frontiers and every other Kernel field remain. These three original helpers
-inspect socket/device scalars and records, never resident peer/key/packet
-objects. That source fact is separate from the normal-return frame. -/
+port are masked. The other eleven-field observations and complete resident
+objects remain; actual Ambient inputs and outputs are unrestricted. -/
 namespace Leanux.Proofs.Framing
 open Leanux Leanux.WG Std.Do
 
 def socketDevice (d : Device) : Device :=
   {d with sock4 := none, sock6 := none, incomingPort := 0}
 
-def socketKernel (k : Kernel) : Kernel := {k with wg := k.wg.map socketDevice}
+def socketView (g : WGWorld) : WGOwnedView :=
+  {wgOwnedView g with dev := g.dev.map socketDevice}
 
-def socketKernelView (w : World) : Kernel := socketKernel w.k
+abbrev SameSocket (a : WG.M α) := SameView socketView a
 
-abbrev SameSocketKernel (a : M α) := SameView socketKernelView a
-
-theorem modifyDev_socket_spec (P : Kernel → Prop) (f : Device → Device)
+theorem modifyDev_socket_spec (P : WGOwnedView → Prop) (f : Device → Device)
     (hf : ∀ d, socketDevice (f d) = socketDevice d) :
-    ⦃fun w => ⌜P (socketKernelView w)⌝⦄ modifyDev f
-    ⦃⇓? _ w => ⌜P (socketKernelView w)⌝⦄ := by
-  apply (hoare_iff_triple _ _ _).mp
-  intro w x v hp hr
+    ⦃fun w => ⌜P (socketView w)⌝⦄ modifyDev f
+    ⦃⇓? _ w => ⌜P (socketView w)⌝⦄ := by
+  apply (hoare_iff_run_ambient _ _ _).mpr
+  intro w ambient x w' ambient' hp hr
   cases hr
-  simpa [socketKernelView, socketKernel, modifyDev, modifyK,
+  simpa [socketView, wgOwnedView, wgStoreView, modifyDev,
     Option.map_map, Function.comp_def, hf] using hp
 
-theorem sockFree_sameKernel (sock : Option Nat) : SameKernel (sockFree sock) := by
+theorem sockFree_sameWGWorld (sock : Option Nat) :
+    SameView (id : WGWorld → WGWorld) (sockFree sock) := by
   apply SameView.of_wp
   intro initial
-  have hi := sameKernel_wp _ (iputReport_sameKernel true) (fun k => k = initial)
-  mvcgen [sockFree, branch, hi]
+  have hi : Hoare (iputReport true : WG.M Unit)
+      (fun w => w = initial) (fun _ w => w = initial) :=
+    hoare_liftAmbient (AmbientM.iputReport true) (fun w => w = initial)
+  unfold Hoare at hi
+  mvcgen [sockFree, branch, AmbientM.branch, hi]
 
-theorem socketReinit_sameSocketKernel (new4 new6 : Option Nat) :
-    SameSocketKernel (socketReinit new4 new6) := by
+theorem socketReinit_sameSocket (new4 new6 : Option Nat) :
+    SameSocket (socketReinit new4 new6) := by
   apply SameView.of_wp
   intro initial
-  have hs := fun sock => (SameView.of_sameKernel socketKernel (sockFree_sameKernel sock)).wp (fun s => s = initial)
+  have hs := fun sock => ((sockFree_sameWGWorld sock).factor socketView).wp (fun s => s = initial)
   have hm := modifyDev_socket_spec (fun s => s = initial)
-  mvcgen [socketReinit, getDev, getK, branch, invariant, hs, hm]
+  mvcgen [socketReinit, getDev, branch, AmbientM.branch, invariant, AmbientM.invariant, hs, hm]
   all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [socketKernelView, socketKernel, socketDevice]
+  all_goals simp_all [socketView, socketDevice]
 
-theorem socketInit_sameSocketKernel (port : Nat) : SameSocketKernel (socketInit port) := by
+theorem socketInit_sameSocket (port : Nat) : SameSocket (socketInit port) := by
   apply SameView.of_wp
   intro initial
-  have hh := fun site => (SameView.of_sameKernel socketKernel (hidden_sameKernel site)).wp (fun s => s = initial)
-  have hs := fun a b => (socketReinit_sameSocketKernel a b).wp (fun s => s = initial)
-  have hi := (SameView.of_sameKernel socketKernel (iputReport_sameKernel true)).wp (fun s => s = initial)
-  mvcgen [socketInit, getDev, getK, invariant, unsupported, hh, hs, hi]
+  have hh (site : HiddenSite) : Hoare (hidden site : WG.M (List UInt8))
+      (fun w => socketView w = initial) (fun _ w => socketView w = initial) :=
+    hoare_liftAmbient (AmbientM.hidden site) (fun w => socketView w = initial)
+  have hs := fun a b => (socketReinit_sameSocket a b).wp (fun s => s = initial)
+  have hi : Hoare (iputReport true : WG.M Unit)
+      (fun w => socketView w = initial) (fun _ w => socketView w = initial) :=
+    hoare_liftAmbient (AmbientM.iputReport true) (fun w => socketView w = initial)
+  unfold Hoare at hh hi
+  mvcgen [socketInit, getDev, invariant, AmbientM.invariant,
+    unsupported, AmbientM.unsupported, hh, hs, hi]
 
 end Leanux.Proofs.Framing

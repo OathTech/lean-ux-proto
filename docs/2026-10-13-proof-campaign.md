@@ -5,8 +5,8 @@
 Work on `proofs/campaign` in `.worktrees/proofs-campaign` follows [the charter](2026-10-13-charter-proof-campaign.md).
 The state-split retrofit onto `6089dc4` precedes further R3/R4 results. All seven
 result rows remain lagging, last validated over `cb2348e`. The tree has moved from
-471 files / 7,715 named theorems to 449 files / 6,313 theorems. Completed changes
-comprise 276 retyped, 1,476 deleted, 72 retained interfaces and 74 added theorems;
+471 files / 7,715 named theorems to 451 files / 6,314 theorems. Completed changes
+comprise 268 retyped, 1,476 deleted, 113 retained contract shapes and 75 added theorems;
 all terminal files remain unchanged. The native foundational, ordinary lifetime,
 clock/Noise-helper, keypair-composition, product scheduler and small native helper ports pass their
 scoped builds, axiom checks, fresh replay and independent reviews. Obsolete
@@ -14,6 +14,12 @@ subsystem-frame layers and unused support have been deleted, with the distinctio
 recorded; the surviving consumers still need their native/product contracts.
 [The retrofit report](2026-10-16-proof-state-split.md) tracks exact counts,
 validation and remaining work. No full-tree pass is claimed.
+
+The count audit corrects seventeen scheduler namespace qualifications from
+retyped to retained contract shape. Native socket/configuration and product
+evolution now pass their closed build, axiom check, fresh replays and independent
+review. The whole-tree and deletion/addition counts are unchanged by
+the accounting correction.
 
 The preceding `cb2348e` checkpoint validated all seven baseline result surfaces, including the
 local normal-poll carrier and initialized R3 committed-support extensions. The local R4
