@@ -138,8 +138,10 @@ it is not part of that baseline.
 | Product stamped GRO, native NAPI cuts and joint poll | 43 | 4 | 0 | 39 | 0 | 43 |
 | Native session material and generic journal adapters | 34 | 32 | 0 | 2 | 1 | 35 |
 
-The whole tree currently contains 451 Lean files and 6,494 theorems. The completed
-changes total 2,291 retyped theorems, 1,671 deletions, 1,245 retained contract shapes and 450 added.
+| Product environment controls and remaining-call family | 23 | 0 | 1 | 22 | 0 | 22 |
+
+The whole tree currently contains 451 Lean files and 6,493 theorems. The completed
+changes total 2,291 retyped theorems, 1,672 deletions, 1,267 retained contract shapes and 450 added.
 Retyping changes or generalizes the actual state/monad carrier or observation.
 This includes shorthand contracts whose source functions or named views move
 to a native monad. Mere namespace qualification and equivalent relocation of a
@@ -3368,3 +3370,76 @@ cap scripts/in-bundle lake build Leanux.Proofs.WG.Lifetimes.ConfigurationDeviceF
 
 Fresh replay each named module with
 'cap scripts/in-bundle lake env leanchecker --fresh MODULE'.
+
+
+## Environment controls and warning-free session proofs
+
+The two environment modules carry 23 theorems to 22, retaining every product
+contract and deleting one exact duplicate of the canonical seven-field
+auditLift_store contract. The deleted helper is not replaced by a stronger
+43-field premise. All fifteen remaining-call cases retain actual product
+execution, reached scheduler probes and their original hypotheses.
+
+Controls now observe the actual route notifications and deletion callbacks:
+down/unregister precede device destruction, and creator-namespace cleanup
+includes loopback teardown. The obsolete delete copy ran its route cleanup
+even after an absent-device return. On the unrestricted fixture below, current
+deletion returns -ENODEV and preserves the whole World. The old control flow's
+IPv6 suffix instead clears the addresses/default route and increments its
+generation. This checked counterexample is proof-observer drift, not an
+initialized-run or Linux finding. The reconstruction projects away obsolete
+IPv4 scalar assignments that no longer exist in the split Routing record;
+they do not affect the demonstrated IPv6 observation.
+
+All 85 explicit declarations across controls, remaining calls and session
+material have standard-only axioms. Three scoped fresh kernel replays and
+independent complete source reviews pass. Final builds pass215/220/185 jobs,
+with zero own warnings. Session material's three deprecated tactic uses were
+replaced by direct checked Hoare composition; all 35 signatures are unchanged
+and their already-counted retrofit categories are not counted again.
+Controls had three ordinary failed development builds before pass; remaining
+calls, the three-body warning replacement and the counterexample passed on
+their first builds/probe. No infrastructure rerun, crash, cancellation, raised
+cap or raised proof limit occurred. Full proof-gate and terminal replay remain
+pending; all result rows remain lagging over b700659.
+
+~~~sh
+cap() { if command -v capped >/dev/null 2>&1; then capped "$@"; else "$@"; fi; }
+cap scripts/in-bundle lake build Leanux.Proofs.WG.Lifetimes.EnvControlsAudit Leanux.Proofs.WG.Lifetimes.EnvRemainingCalls Leanux.Proofs.WG.Origins.SessionMaterial
+~~~
+
+Replay each module with 'cap scripts/in-bundle lake env leanchecker --fresh MODULE'.
+Run this witness with 'cap scripts/in-bundle lake env lean --stdin':
+
+~~~lean
+import Leanux.Proofs.WG.Lifetimes.EnvControlsAudit
+import Leanux.Runner
+namespace Leanux.Proofs.DeleteDrift
+open Leanux Leanux.WG
+def obsoleteDeleteIPv6 : Leanux.M Int := do
+  if (← getWG).dev.isSome then Env.requireIdleDevice
+  let pending (sock : NlSock) : Bool :=
+    sock.cbRunning || sock.queue.any fun chunk =>
+      chunk.messages.any fun m => match m with | .done .. => true | _ => false
+  let k ← getWG
+  if pending k.nlSock7 || pending k.nlSock8 then
+    unsupported "a delete with a stepped dump pending (the dump's cursor holds the device reference; the guest refuses wg_delete_with_dump_pending)"
+  let ret ← (WG.wgDelete : Leanux.M Int)
+  modifyRouting fun r => {r with addrs6 := [], defaultRoute6 := false, ipv6Gen := r.ipv6Gen + 1}
+  return ret
+def entry : World :=
+  {fs := {}, tasks := Runner.initialTasks 32,
+   ambient := {env := fun _ _ => false, timing := {advanceWait := 0, traceBound := 0}},
+   wg := {routing := {addrs6 := [42], defaultRoute6 := true, ipv6Gen := 7}}}
+def ipv6Result (x : Except Stop (Int × World)) : Except Stop (Int × List Nat × Bool × Nat) :=
+  x.map fun (ret, w) => (ret, w.wg.routing.addrs6, w.wg.routing.defaultRoute6, w.wg.routing.ipv6Gen)
+theorem current_absent_delete : Env.wgDelete.run entry = .ok (-ENODEV, entry) := by rfl'
+theorem obsolete_absent_delete :
+    ipv6Result (obsoleteDeleteIPv6.run entry) = .ok (-ENODEV, [], false, 8) := by rfl'
+theorem current_absent_ipv6 :
+    ipv6Result (Env.wgDelete.run entry) = .ok (-ENODEV, [42], true, 7) := by rfl'
+#print axioms current_absent_delete
+#print axioms obsolete_absent_delete
+#print axioms current_absent_ipv6
+end Leanux.Proofs.DeleteDrift
+~~~

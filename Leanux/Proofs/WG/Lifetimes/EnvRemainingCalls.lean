@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.Lifetimes.EnvBatchAudit
+import Leanux.Proofs.WG.Lifetimes.EnvControlsAudit
 
 /-! Fifteen original environment controls, observation, ingress and batch calls.
 Local AuditInv preservation includes actual reached scheduler probes, while the
@@ -42,14 +43,14 @@ def Result : EnvRemainingCall → Type
   | .cleanup => Unit
   | .multicast _ _ => Unit
 
-def original : (call : EnvRemainingCall) → M call.Result
+def original : (call : EnvRemainingCall) → Leanux.M call.Result
   | .up => Env.wgUp
   | .mtu value => Env.setMtu value
   | .route => Env.routeIntoWg0
   | .down => Env.wgDown
   | .delete => Env.wgDelete
   | .deladdr family => Env.wgDeladdr family
-  | .delroute family => Env.wgDelroute family
+  | .delroute family => Env.wgDelroute family false 0 0 0 0 0
   | .observe => Env.observe
   | .inject family port msg tos ll dest => Env.inject family port msg tos ll dest
   | .flood count port family messages => Env.flood count port family messages
@@ -114,14 +115,14 @@ theorem preserves (call : EnvRemainingCall) : PrefixPreserves AuditInv AuditSafe
 
 /-- Local allocation validity and empty history supply initial probe validity.
 This does not supply the initialized outer Runner entry or its missing callers. -/
-theorem from_allocation (call : EnvRemainingCall) (w : World) (hi : AllocationInv [] w) :
+theorem from_allocation (call : EnvRemainingCall) (w : World) (hi : AllocationInv [] w.wg) :
     AuditSafe (runPrefix call.observed w []).2 ∧
     ∀ p ∈ probeEntries (runPrefix call.observed w []).2,
-      AllocationInv p.history p.world ∧
-      (p.world.suspended.filterM Env.Activation.consistent).run p.world =
-        (p.world.suspended.filterM (fun a => activationTrialDecision a p.world p.history)).map
+      AllocationInv p.history p.world.wg ∧
+      (p.world.ambient.suspended.filterM Env.Activation.consistent).run p.world =
+        (p.world.ambient.suspended.filterM (fun a => activationTrialDecision a p.world p.history)).map
           (fun ys => (ys, p.world)) ∧
-      ∀ a ∈ p.world.suspended, LifetimeEvent.Safe (runPrefix (activationRunPrefix a) p.world p.history).2 := by
+      ∀ a ∈ p.world.ambient.suspended, LifetimeEvent.Safe (runPrefix (activationRunPrefix a) p.world p.history).2 := by
   have hs := (call.preserves w [] (audit_initial hi)).choose_spec.2.1
   exact ⟨hs, fun p hp => savedProbe_trials hs.2 hp⟩
 

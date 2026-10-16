@@ -613,9 +613,22 @@ theorem receiveReject_sameWGWorld (k : Keypair) :
     SameView (id : WGWorld → WGWorld) (KeyTimes.receiveReject k) := by
   apply SameView.of_wp
   intro original
-  have ht := (branchExpired_sameWGWorld .decKeyExpired k.receiving.birthdate REJECT_AFTER_TIME).wp
-    (fun s => s = original)
-  mvcgen [KeyTimes.receiveReject, WG.orM, branch, branchCmp, ht, AmbientM.branch, AmbientM.branchCmp]
+  change Preserves (fun w => w = original) (KeyTimes.receiveReject k)
+  unfold KeyTimes.receiveReject WG.orM
+  apply preserves_bind (hoare_liftAmbient (AmbientM.branch .decKeyInvalid !k.receiving.isValid) _)
+  intro invalid
+  cases invalid with
+  | true => exact preserves_pure true
+  | false =>
+    apply preserves_bind ((branchExpired_sameWGWorld .decKeyExpired
+      k.receiving.birthdate REJECT_AFTER_TIME).wp (fun w => w = original))
+    intro expired
+    cases expired with
+    | true => exact preserves_pure true
+    | false =>
+      exact hoare_liftAmbient (AmbientM.branchCmp .decCounterLimit
+        (k.receivingCounter.counter ≥ REJECT_AFTER_MESSAGES)
+        k.receivingCounter.counter REJECT_AFTER_MESSAGES) _
 
 theorem receiveTail_sameWGWorld (pkt : RxPacket) (k : Keypair) :
     SameView (id : WGWorld → WGWorld) (KeyTimes.receiveTail pkt k) := by
@@ -638,14 +651,31 @@ theorem receiveTail_sameWGWorld (pkt : RxPacket) (k : Keypair) :
 
 theorem decrypt_spec (P : View → Prop) (stable : Stable P) (pkt : RxPacket) :
     ⦃fun w => ⌜P (view w)⌝⦄ decryptPacket pkt ⦃⇓? _ w => ⌜P (view w)⌝⦄ := by
+  have hg (id : KeypairId) : Preserves (fun w => P (view w)) (getKeypair id) :=
+    hoare_consequence (getKeypair_spec P id) (fun _ hp => hp) (fun _ _ hp => hp.1)
+  change Preserves (fun w => P (view w)) (decryptPacket pkt)
   rw [KeyTimes.decryptPacket_factor]
-  have hg := getKeypair_spec P
-  have hs := setKeypair_spec P stable
-  have hr := fun k => ((receiveReject_sameWGWorld k).factor view).wp P
-  have ht := fun k => ((receiveTail_sameWGWorld pkt k).factor view).wp P
-  mvcgen [hg, hs, hr, ht, branch, AmbientM.branch]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [view]
+  apply preserves_bind (hoare_liftAmbient (AmbientM.branch .decNoKeypair false) _)
+  intro missing
+  cases missing with
+  | true => exact preserves_pure none
+  | false =>
+    apply preserves_bind (hg pkt.keypair)
+    intro k
+    apply preserves_bind (((receiveReject_sameWGWorld k).factor view).wp P)
+    intro reject
+    cases reject with
+    | false => exact ((receiveTail_sameWGWorld pkt k).factor view).wp P
+    | true =>
+      apply preserves_bind (hg pkt.keypair)
+      intro fresh
+      apply preserves_bind
+        (hoare_consequence (setKeypair_spec P stable pkt.keypair
+          {fresh with receiving := {fresh.receiving with isValid := false}})
+          (fun _ hp => ⟨hp, by intro impossible; cases impossible⟩)
+          (fun _ _ hp => hp))
+      intro _
+      exact preserves_pure none
 
 theorem readDecrypt_retains (id : SkbId) (w v : WGWorld) (result : RxPacket × Option RxPacket)
     (ambient ambient' : Ambient)
@@ -659,7 +689,13 @@ theorem readDecrypt_retains (id : SkbId) (w v : WGWorld) (result : RxPacket × O
       ⦃⇓? _ u => ⌜RetainsView (view w) (view u)⌝⦄ := by
     have hp := hg.wp (RetainsView (view w))
     have hd := decrypt_spec (RetainsView (view w)) (fun _ _ a b => b.trans a)
-    mvcgen [RxOrigin.readDecrypt, hp, hd]
+    change Preserves (fun u => RetainsView (view w) (view u)) (RxOrigin.readDecrypt id)
+    unfold RxOrigin.readDecrypt
+    apply preserves_bind hp
+    intro packet
+    apply preserves_bind (hd packet)
+    intro result
+    exact preserves_pure (packet, result)
   exact (hoare_iff_run_ambient _ _ _).mp hs w ambient result v ambient' (RetainsView.refl _) hr
 
 theorem localDecrypt_support (id : SkbId) :
