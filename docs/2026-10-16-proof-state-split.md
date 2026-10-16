@@ -85,9 +85,10 @@ it is not part of that baseline.
 | Native session receipts, projection additions, routing histories and RX queue frames (corrected) | 44 | 38 | 1 | 5 | 11 | 54 |
 | Cookie/timer observers, affiliation, origin support, routing completions and enqueue admission | 118 | 82 | 5 | 31 | 19 | 132 |
 | Native ring cuts/frames, saved-peer maintenance, routing acquisition and keypair affiliation | 116 | 88 | 9 | 19 | 16 | 123 |
+| Product TX source/worker, native configuration tail and canonical WG composition | 25 | 3 | 0 | 22 | 8 | 33 |
 
-The whole tree currently contains 451 Lean files and 6,308 theorems. The completed
-changes total 1,575 retyped theorems, 1,627 deletions, 574 retained contract shapes and 220 added.
+The whole tree currently contains 451 Lean files and 6,316 theorems. The completed
+changes total 1,578 retyped theorems, 1,627 deletions, 596 retained contract shapes and 228 added.
 Retyping changes or generalizes the actual state/monad carrier or observation.
 This includes shorthand contracts whose source functions or named views move
 to a native monad. Mere namespace qualification and equivalent relocation of a
@@ -1987,3 +1988,39 @@ type inference; neither produced accepted endpoint evidence. The changed-source
 probe above adds the explicit tuple/result types and imports only mirror code;
 it passed. The queued-handshake witness passed on its first call. No KILLED or
 guest timeout occurred. Mirror sources remain exactly b700659.
+
+## TX worker and configuration-tail composition
+
+The corrected TX worker now has its complete source equality, erasure and
+initialized ring-history contracts over arbitrary product checksum, softirq and
+rescheduling callbacks. The consume event precedes the callback; the recorded
+consumed-item decision follows it. A failed callback retains the already
+installed consume event without asserting a failed-state endpoint. This closes
+the TX source-factor repair left pending in the preceding checkpoint.
+
+TX entry retains all eight original product contracts and adds two generic
+adapter/loop rules. The worker retains all eleven original contracts.
+PeerTailRouting carries three native claims and three product/generic contracts,
+adding three native counterparts. Its single observer control sequence supports
+both actual interpreters; arbitrary product continuations and address-shape
+premises remain unchanged. Three new canonical WG lift laws establish pure,
+bind and Ambient composition with exact Stops and product spectator fields.
+The seventeen existing Lift claims are unchanged and are not counted again.
+
+This tranche therefore has 25 old claims, three retypes, 22 retained contracts,
+zero deletions and eight additions. Four modules pass scoped builds, 65 explicit
+named axiom checks, four fresh entry-module replays and independent source
+reviews. No nonstandard axiom, mirror edit or limit change occurred. The prior
+unchanged default/unit passes still apply; the full gate remains pending and
+every result remains lagging.
+
+Development ledger: Lift's first build failed on rewrite targets that lacked
+explicit run notation; the second passed eleven jobs. TX entry needed three
+builds: the first failed on a substituted return variable and adapter heads;
+the second on distributing the lift through conditionals; the third passed.
+TX worker needed three local builds: adapter normalization, then one remaining
+rescheduling-branch head, then an explicit actual product action closed it.
+The final combined build passed 145 jobs. PeerTailRouting needed three builds:
+lift/predicate elaboration, an ordinary existing-heartbeat failure with
+no-progress simp diagnostics, then bounded composition passed 169 jobs.
+There was no infrastructure rerun, KILLED or guest timeout.

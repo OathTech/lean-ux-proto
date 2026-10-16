@@ -18,6 +18,23 @@ theorem liftWG_run (a : WG.M α) (w : World) :
   unfold liftWG StateT.run
   cases a w.wg w.ambient <;> rfl
 
+theorem liftWG_pure (x : α) : liftWG (pure x) = (pure x : Leanux.M α) := rfl
+
+theorem liftWG_bind (a : WG.M α) (f : α → WG.M β) :
+    liftWG (a >>= f) = (liftWG a >>= fun x => liftWG (f x)) := by
+  funext w
+  change (liftWG (a >>= f)).run w = (liftWG a >>= fun x => liftWG (f x)).run w
+  rw [liftWG_run]
+  simp only [StateT.run_bind]
+  rw [liftWG_run]
+  cases hr : (a.run w.wg).run w.ambient with
+  | error e => rfl
+  | ok out =>
+    rcases out with ⟨⟨x, g⟩, ambient⟩
+    simp only [Except.map, Except.bind]
+    exact (liftWG_run (f x) {w with wg := g, ambient}).symm
+
+
 theorem liftTask_run (a : TaskM α) (w : World) :
     (liftTask a).run w = ((a.run w.tasks).run w.ambient).map
       (fun ((x, tasks), ambient) => (x, {w with tasks, ambient})) := by
@@ -42,6 +59,13 @@ theorem stateLiftAmbient_run (a : AmbientM α) (s : σ) (ambient : Ambient) :
   unfold StateT.run StateT.lift
   change (a ambient >>= fun (x, b) => Except.ok ((x, s), b)) = _
   cases a ambient <;> rfl
+
+theorem liftWG_ambient (a : AmbientM α) :
+    liftWG (StateT.lift a) = liftAmbient a := by
+  funext w
+  change (liftWG (StateT.lift a)).run w = (liftAmbient a).run w
+  rw [liftWG_run, stateLiftAmbient_run, liftAmbient_run]
+  cases a.run w.ambient <;> rfl
 
 theorem hoare_liftAmbient (a : AmbientM α) (P : σ → Prop) :
     Hoare (StateT.lift a : StateT σ AmbientM α) P (fun _ => P) := by
