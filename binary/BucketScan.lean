@@ -130,7 +130,7 @@ theorem bucket_loop (fetch : Int64 → Option Decoded) (agree : AnchoredDecoderA
       LookupObservation.decision rxSection .idxFound (kinds.contains e.kind) t₂.machine]
     obtain ⟨scanTail, scanRecorded, scanCuts⟩ := trace.extension
     refine ⟨?_, ?_, last, ⟨delta ++ typePoints, ?_, ?_, ?_⟩, trace.stable.trans stable, scanTail ++ before, after, ?_,
-      scanCuts.append beforeCuts, ?_, ?_⟩
+      ScanCuts.append scanCuts beforeCuts, ?_, ?_⟩
     · simpa only [BucketStop, found] using And.intro pc bx
     · simpa only [bucketExitBase, found] using frame
     · rw [bucketSteps_split, found]

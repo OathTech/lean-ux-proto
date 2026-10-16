@@ -103,20 +103,24 @@ theorem scan_miss (fetch : Int64 → Option Decoded) (agree : AnchoredDecoderAgr
     (rxSection : Nat) (history : List MachineState) (events : List LookupObservation.Point)
     (observed : observeHistory (LookupObservation.edge rxSection) history = .ok events)
     (last : history.getLast? = some ⟨s, Image.Lookup.entry+0x5e⟩) :
-    Eventually (historyStep fetch) (fun t => ∃ next : UInt64,
-      t.machine.pc = Image.Lookup.entry+0x67 ∧ t.machine.data.regs.rbx = next ∧
-      BucketShape base.dmem next.toBitVec rest ∧
-      BucketShape t.machine.data.dmem next.toBitVec rest ∧
-      StableTrace base coverage preempt rxSection history events t)
-      ⟨⟨s, Image.Lookup.entry+0x5e⟩, history⟩ := by
+    Segment fetch (StableTrace base coverage preempt rxSection)
+      ⟨⟨s, Image.Lookup.entry+0x5e⟩, history⟩
+      (fun seen t => seen = events ∧ ∃ next : UInt64,
+        t.machine.pc = Image.Lookup.entry+0x67 ∧ t.machine.data.regs.rbx = next ∧
+        BucketShape base.dmem next.toBitVec rest ∧ BucketShape t.machine.data.dmem next.toBitVec rest) := by
   have call := scan_call_cursor fetch "L_ffffffff810f3100"
     ⟨⟨s, Image.Lookup.entry+0x5e⟩, history⟩ (agree _ _ (by rfl)) .pc tracePc base coverage preempt
-    frame (frame).ready.pc_allowed
-    rxSection events observed last (by
+    frame frame.ready.pc_allowed rxSection events observed last (by
       simp [LookupObservation.edge, Image.Lookup.entry, Image.PeerGet.entry]; rfl)
-  apply eventually_trans (historyStep fetch) _ _ _ call
-  rintro t₁ ⟨pc₁, bx₁, _, trace₁⟩
-  change t₁.machine.pc = Image.Lookup.entry+0x63 at pc₁
+  have first : Segment fetch (StableTrace base coverage preempt rxSection)
+      ⟨⟨s, Image.Lookup.entry+0x5e⟩, history⟩ (fun seen t => seen = events ∧
+        t.machine.pc = Image.Lookup.entry+0x63 ∧ t.machine.data.regs.rbx = s.regs.rbx) := by
+    apply eventually_weaken (historyStep fetch) _ _ _ _ call
+    rintro t ⟨pc, bx, _, trace⟩
+    exact ⟨events, ⟨rfl, pc, bx⟩, trace⟩
+  apply Segment.bind (fun first second => first.trans second) first
+  rintro t₁ seen ⟨same, pc₁, bx₁⟩ trace₁
+  subst seen
   have currentBucket := trace₁.frame.bucket (a+8) ((a,e)::rest) bucket separate
   obtain ⟨next, loaded, tail⟩ := bucket_tail _ _ _ _ _ currentBucket
   simp only [Layouts.node_next, BitVec.add_zero] at loaded
@@ -134,7 +138,7 @@ theorem scan_miss (fetch : Int64 → Option Decoded) (agree : AnchoredDecoderAgr
   rw [initial] at load
   apply eventually_weaken (historyStep fetch) _ _ _ _ load
   rintro t₂ ⟨machine₂, trace₂⟩
-  refine ⟨.ofBitVec next, congrArg MachineState.pc machine₂, ?_, baseTail, ?_, trace₁.trans trace₂⟩
+  refine ⟨events, ⟨rfl, .ofBitVec next, congrArg MachineState.pc machine₂, ?_, baseTail, ?_⟩, trace₂⟩
   · rw [machine₂]; rfl
   · rw [machine₂]
     exact tail

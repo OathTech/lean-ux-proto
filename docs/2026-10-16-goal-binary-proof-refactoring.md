@@ -319,7 +319,7 @@ history/result commit carrying this final assessment. The original
 Headline declarations, TrustBase, Pre/R, mirror, oracle/image terms and
 Kraken pin remain unchanged. No fresh QEMU or differential claim is made.
 
-### Final kernel replay and reproduction
+### Round-3 kernel replay and reproduction
 
 Fresh combined replay **PASS**: `leanchecker --fresh RefactorReplay`,
 102.79 seconds, maximum RSS 2345332 KiB. The temporary aggregate imports all
@@ -367,3 +367,132 @@ The experiment's `.worktrees/binary-proof-refactor/.tmp` and temporary
 `binary/.lake/build/lib/lean/RefactorReplay.olean` are removed after recording
 these conclusions. The branch/worktree and private build caches remain for
 review. No trial files, timing dumps, exports or logs are committed.
+
+
+### Follow-on results: callback and execution-segment experiments
+
+[AGENT 2026-10-16] Retain the shared callback proof and the small segment
+prototype on this experiment branch. Stop this round before a wider interface
+migration: the prototype checks, but has not demonstrated a reduction in
+composition effort. Keeping it here makes that result reviewable; it is not
+an instruction to convert the campaign to this API. No new search tactic is
+justified by these examples.
+
+The callback experiment uses `Instrumentation.call_return` in
+`CallComposition.lean` for M1 lookup, the allowed-IPs peer context and the
+held-out `CommonBitsCoverage.call`. It executes the actual CALL, composes the
+existing service theorem, restores the caller stack, preserves the mapped
+return slot and joins the write footprints. An arbitrary service
+postcondition retains each context's actual observations and history. The
+service theorem remains an argument supplied by the existing named contracts;
+this work does not prove those contracts from the image.
+
+`CallbackReadiness.lean` factors the same eight physical readiness fields and
+their restoration for the first two contexts. Coverage state and eligibility
+remain context-specific, with exactly the original byte separation premises.
+Common_bits retains its distinct readiness record and supplies an adapter for
+its local-history theorem. The held-out use therefore establishes reuse of
+the CALL/return argument, not interchangeability of all callback interfaces.
+
+`ExecutionSegment.lean` supplies two layers. `SegmentTrace` retains the
+endpoint frame, the observer's result on the actual history, its last state,
+and the invariant at every appended cut. Its composition and suffix lemmas
+replace the two physical scan trace implementations. `Segment` additionally
+requires actual Kraken `Eventually (historyStep fetch)` execution;
+`Segment.bind` composes that execution and the audit together from the exact
+returned machine/history. The audit composition law is proved by the caller,
+not added as a binary environment assumption.
+
+The bind is used twice: the callback followed by the next-node load in
+`scan_miss`, and that segment followed by the recursive bucket search. The
+original bucket induction and function headline are retained. At those joins
+the shared lemma composes history extensions, cut frames, observations and
+all-prefix scanner preservation. Heap-tail representation, read/write
+separation, register/PC equalities and decision-to-source correspondences
+remain explicit. These instances carry `StableTrace`, the physical component
+of the invariant. They are not new uniform full-R segment theorems:
+`LookupBucketSimulation` and the later unchanged proofs still perform the
+lift to R and correspondence at emitting occurrences.
+
+Line accounting against `7cebabd`, including all new Lean library code,
+imports, adapters and downstream repairs:
+
+| Experiment | Before | After | Net change |
+| --- | ---: | ---: | ---: |
+| Callback/readiness, ten modules including two new | 954 | 948 | -6 |
+| Segment/trace, eight modules including one new | 1224 | 1272 | +48 |
+| Follow-on total | 2178 | 2220 | +42 |
+
+The callback library costs 91 lines and replaces 97 lines elsewhere. The
+segment library costs 83 lines; the two trace implementations lose 48, while
+the loop use sites add 13. This is a mixed outcome: shared correctness
+arguments, little callback source saving, and a segment interface that still
+costs more than its current replacements. There is no measured authoring-rate
+or campaign-throughput improvement. Cumulatively with the first three rounds,
+the branch changes 47 Lean modules and removes 701 net lines from `6812d04`;
+that larger reduction still comes mainly from the earlier local refactorings.
+
+**Footprint trial rejected.** A checked trial of modular subrange inclusion
+and width weakening replaced six arguments across `LookupFromPre`,
+`LookupHelperSeparation` and a held-out allowed-IPs live-entry proof. Including
+the 21-line library it grew 528 lines to 547 (+19). It left the important
+allocation/read-set arguments intact. Removed the trial and its Lake root;
+no extra alias restriction, precondition or footprint tactic remains.
+Existing `EqualOutside.loadInt`, `BucketShape.frame_reads` and allocation
+facts already do the substantive work at the tested joins.
+
+**History-summary result is limited.** The segment uses the existing proved
+`StableExtension` summary, including every executed prefix, rather than
+replacing full histories with assumed endpoint facts. Common_bits already has
+`Local.trans` and `chain` for its local-history representation. This round
+reuses the callback proof there but does not replace that composition or add a
+new scanner-summary calculus. Runtime testing of relation candidates remains
+deferred as described above; no runtime checker was implemented or validated.
+
+The next meaningful success criterion would be a new region or caller that
+uses a common interface without reintroducing cursor/annotation adapters and
+per-point lifting. These trials do not establish that merely wrapping existing
+conjunctions in a segment record achieves it. They also do not settle whether
+a broader, consistently applied segment interface would pay off. Such a
+migration is beyond the retained two-join prototype, not an achieved saving.
+
+Validation: the full binary build passes (535 jobs). The binary proof gate
+passes, including the exact original headline/trust declaration diff and
+clean Kraken pin `7ebba06a30eaf08c10b26b28ca14bfee1c791576`.
+The final gate invocation, including incremental rebuilding, took 7.44 seconds
+(maximum RSS 1783996 KiB); it is not a before/after performance comparison.
+The six new helper theorems' axiom reports contain only `propext`,
+`Classical.choice` and `Quot.sound`.
+
+Failed attempts were failures: readiness aliases required explicit unfolding
+of `Context.Separated` at existing simplification sites; the shared trace
+record required an explicit `ScanCuts.append` application where projection
+inference lost its old name. Those integrated builds failed until repaired.
+The footprint trial initially failed from an uninferred width and a concrete
+address normalization, then checked before being rejected on cost. An
+aggregate command initially used the root worktree instead of `binary/` and
+failed before compilation; the corrected invocation succeeded. No failed run
+is counted as validation.
+
+
+Fresh kernel replay **PASS**: `leanchecker --fresh RefactorReplay`, 102.02
+seconds, maximum RSS 2346576 KiB, exit 0. The aggregate imports all 47
+changed/new Lean modules since `6812d04` plus `LookupSnapshotTransport`,
+`LookupWitness`, `LookupHitWitness`, `AllowedipsCallerExecution` and
+`CommonBitsExecution` (52 import roots). Its full imported closure was replayed
+from an empty environment. Reproduce with the round-3 commands above; their
+diff-based module enumeration now includes the follow-on modules. For the new
+helper axiom reports append `#print axioms` for
+`Binary.Instrumentation.call_return`, `Binary.CallbackReady.restore`,
+`Binary.CallbackReady.congr`, `Binary.SegmentTrace.trans`,
+`Binary.SegmentTrace.of_suffix` and `Binary.Segment.bind` to the temporary
+aggregate before compiling it. No cap kill or timeout occurred. This is local
+kernel replay, not a new external `lake check --from-export` acceptance.
+
+Plan commit: `0d36fe8`; this results section and the prototypes land together
+in the following experiment commit. The paused `task/binary-tv` stays at
+`6812d04`. The mirror, Pre/R declarations, oracle/image terms, TrustBase and
+Kraken are unchanged. There is no new milestone-2 completion, external gate,
+QEMU/differential result, merge or push. Remove this round's temporary logs,
+aggregate and rejected footprint build outputs after committing the result;
+keep the private branch and normal build caches for review.

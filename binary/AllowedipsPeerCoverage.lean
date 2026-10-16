@@ -1,3 +1,4 @@
+import CallbackReadiness
 import CommonBitsCoverage
 import AllowedipsPeerObservation
 namespace Binary.AllowedipsPeerCoverage
@@ -26,29 +27,14 @@ def Context.CompareAllowed (_c : Context) (_current : BitVec 32) : Prop :=
 
 /-- Physical callback invariant. The fixed coverage context already carries
     eligibility; the phase field is an inert compatibility index. -/
-structure CallsReady (c : Context) (current : BitVec 32) (s : MachineData) : Prop where
-  state : Context.At c current s.dmem
-  phase : True
-  aligned : s.regs.rsp.toNat % 8 = 0
-  mapped : (s.dmem.loadInt (s.regs.rsp.toBitVec-8) 8).isSome = true
-  pushSeparate : ∀ a, c.bytes a → ¬InRange (s.regs.rsp.toBitVec-8) 8 a
-  returnSeparate : c.Separated (InRange (s.regs.rsp.toBitVec-8) 8)
-  metadataSeparate : c.Separated c.metadataBytes
-  preemptSeparate : c.Separated (InRange preemptCountAddress 4)
+abbrev CallsReady (c : Context) (current : BitVec 32) (s : MachineData) : Prop :=
+  CallbackReady (Context.At c current) (True) c.bytes c.writes (Context.metadataBytes c) s
 
 theorem CallsReady.congr {c : Context} {current : BitVec 32}
     {before after : MachineData} (ready : CallsReady c current before)
     (memory : after.dmem = before.dmem) (stack : after.regs.rsp = before.regs.rsp) :
-    CallsReady c current after := by
-  exact {
-    state := by simpa only [memory] using ready.state
-    phase := ready.phase
-    aligned := by simpa only [stack] using ready.aligned
-    mapped := by simpa only [memory, stack] using ready.mapped
-    pushSeparate := by simpa only [stack] using ready.pushSeparate
-    returnSeparate := by simpa only [stack] using ready.returnSeparate
-    metadataSeparate := ready.metadataSeparate
-    preemptSeparate := ready.preemptSeparate }
+    CallsReady c current after :=
+  CallbackReady.congr ready memory stack
 
 theorem CallsReady.pc_allowed {c current s} (ready : CallsReady c current s) :
     Context.Allowed c current .pc := .inl ⟨rfl, ready.phase⟩

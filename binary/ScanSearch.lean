@@ -144,22 +144,31 @@ theorem scan_search (fetch : Int64 → Option Decoded) (agree : AnchoredDecoderA
         (by rw [← pc₃]; exact trace₃.last)
       have cursor₃ : (⟨⟨t₃.machine.data, Image.Lookup.entry+0x5e⟩, t₃.history⟩ : Executed) = t₃ := by rw [← pc₃]
       rw [cursor₃] at miss
-      apply eventually_trans (historyStep fetch) _ _ _ miss
-      rintro t₄ ⟨next, pc₄, bx₄, baseTail, _, trace₄⟩
-      have recur := ih (fun _ => canCompare) (fun cell member => separate cell (List.mem_cons_of_mem _ member)) false
-        t₄.machine.data trace₄.frame (by rw [bx₄]; exact baseTail) t₄.history
-        (((events ++ walkPoints rxSection s af) ++ [cmpEvent])) trace₄.observed
-        (by change t₄.history.getLast? = some ⟨t₄.machine.data, Image.Lookup.entry+0x67⟩; rw [← pc₄]; exact trace₄.last)
-      have cursor₄ : (⟨⟨t₄.machine.data, Image.Lookup.entry+0x67⟩, t₄.history⟩ : Executed) = t₄ := by rw [← pc₄]
-      simp only [Bool.false_eq_true, ite_false] at recur
-      rw [cursor₄] at recur
-      apply eventually_weaken (historyStep fetch) _ _ _ _ recur
-      rintro t₅ ⟨stop, delta, decisions, tags, trace₅⟩
+      have suffix : Segment fetch (StableTrace base coverage preempt rxSection) t₃
+          (fun seen t => ScanStop query es t.machine ∧ ∃ delta,
+            seen = ((events ++ walkPoints rxSection s af) ++ [cmpEvent]) ++ delta ∧
+            delta.filterMap (·.step) = scanSteps rxSection query es ∧ DecisionPoints delta) := by
+        apply Segment.bind (fun first second => first.trans second) miss
+        rintro t₄ seen ⟨same, next, pc₄, bx₄, baseTail, _⟩ trace₄
+        subst seen
+        have recur := ih (fun _ => canCompare) (fun cell member => separate cell (List.mem_cons_of_mem _ member)) false
+          t₄.machine.data trace₄.frame (by rw [bx₄]; exact baseTail) t₄.history
+          (((events ++ walkPoints rxSection s af) ++ [cmpEvent])) trace₄.observed
+          (by change t₄.history.getLast? = some ⟨t₄.machine.data, Image.Lookup.entry+0x67⟩; rw [← pc₄]; exact trace₄.last)
+        have cursor₄ : (⟨⟨t₄.machine.data, Image.Lookup.entry+0x67⟩, t₄.history⟩ : Executed) = t₄ := by rw [← pc₄]
+        simp only [Bool.false_eq_true, ite_false] at recur
+        rw [cursor₄] at recur
+        apply eventually_weaken (historyStep fetch) _ _ _ _ recur
+        rintro t₅ ⟨stop, delta, decisions, tags, trace₅⟩
+        exact ⟨_, ⟨stop, delta, rfl, decisions, tags⟩, trace₅⟩
+      apply eventually_weaken (historyStep fetch) _ _ _ _ suffix
+      rintro t₅ ⟨seen, ⟨stop, delta, same, decisions, tags⟩, trace⟩
+      subst seen
       refine ⟨?_, walkPoints rxSection s af ++ [cmpEvent] ++ delta, ?_,
         ((walk_decision_points rxSection s af).append (decision_point _ _ _ _)).append tags, ?_⟩
       · simpa only [ScanStop, firstIndex, hit, Bool.false_eq_true, ite_false] using stop
       · simp [scanSteps, hit, walkTrue, cmpEvent, matchIndex, LookupObservation.decision, decisions]
-      · simpa only [List.append_assoc] using frontTrace.trans (trace₄.trans trace₅)
+      · simpa only [List.append_assoc] using frontTrace.trans trace
 
 /-- Recover the actual represented suffix of the first matching entry.
     Its cells remain members of the original bucket for byte separation. -/

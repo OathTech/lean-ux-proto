@@ -75,7 +75,7 @@ theorem increment_call_history (fetch : Int64 → Option Decoded)
   apply eventually_weaken (historyStep fetch) _ _ _ _ call
   rintro final ⟨pc₂, bx₂, bp₂, trace₂⟩
   have regs := incremented_registers body
-  refine ⟨af, by rw [pc₂, pc]; rfl, ?_, ?_, trace.trans trace₂.toScanTrace, by simpa only [recorded] using trace₂.stable⟩
+  refine ⟨af, by rw [pc₂, pc]; rfl, ?_, ?_, trace.trans trace₂.toSegmentTrace, by simpa only [recorded] using trace₂.stable⟩
   · simpa only [machine, incFinal_shape, regs.2.1] using bx₂
   · simpa only [machine, incFinal_shape, regs.2.2.1] using bp₂
 

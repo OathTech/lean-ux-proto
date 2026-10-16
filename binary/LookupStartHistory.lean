@@ -107,7 +107,7 @@ theorem start_history (fetch : Int64 → Option Decoded)
       rw [bodySlot] at inside
       obtain ⟨byte, bound, eq⟩ := inside
       exact pushSeparate address kept ⟨byte, by omega, eq⟩
-    returnSeparate := by simpa only [bodySlot] using returnSeparate
+    returnSeparate := by simpa only [bodySlot, LookupCoverage.Context.Separated] using returnSeparate
     metadataSeparate := metadataSeparate
     preemptSeparate := preemptSeparate }
   have prologueStable : PeerCountPhase.StableExtension history

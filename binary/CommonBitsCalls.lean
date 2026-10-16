@@ -1,6 +1,6 @@
 import CommonBitsCoverage
 import CommonBitsStack
-import CallHistory
+import CallComposition
 
 namespace Binary.CommonBitsCoverage
 open TrustBase Instrumentation
@@ -52,45 +52,31 @@ theorem call (fetch : Int64 → Option Decoded) (pc : Int64) (target : Label)
       ∃ localHistory, t.history = history ++ localHistory ∧
         NoAnchoredReentry localHistory ∧ NoAllowedipsReentry localHistory)
       ⟨⟨s, pc⟩, history⟩ := by
-  have first := historySteps_eventually fetch 1 _ _
-    (call_instruction fetch pc target here s history ready.mapped)
-  apply eventually_trans (historyStep fetch) _ _ _ first
-  rintro t ⟨machine, recorded⟩
-  have state : t = ⟨calledState s (pc+5) (label target),
-      history ++ [calledState s (pc+5) (label target)]⟩ := by
-    cases t; simp_all
-  rw [state]
   have entry := called_ready c s (pc+5) (label target) ready
   have service := callback fetch (label target) kind contract c
     (calledState s (pc+5) (label target)) (pc+5).toUInt64 rfl entry.1 entry.2
     (by simpa [calledState] using ready.returnSeparate)
     ready.metadataSeparate ready.preemptSeparate
   have joined := history_prepend fetch _ _ service history
-  apply eventually_weaken (historyStep fetch) _ _ _ _ joined
-  rintro final ⟨localState, ⟨returned, state, frame, noReentry, noAllowedips⟩, machine, recorded⟩
-  have returned' : Returned (calledState s (pc+5) (label target)) final.machine (pc+5).toUInt64 :=
-    machine.symm ▸ returned
-  have sp : final.machine.data.regs.rsp = s.regs.rsp :=
-    (returned_caller s (pc+5) (label target) final.machine returned').2.1
-  have frame' : EqualOutside c.writes (calledState s (pc+5) (label target)).data.dmem
-      final.machine.data.dmem := machine.symm ▸ frame
-  have word : final.machine.data.dmem.loadInt (s.regs.rsp.toBitVec-8) 8 =
-      some ((pc+5).toBitVec.toNat : Int) := by
-    have unchanged := frame'.loadInt (s.regs.rsp.toBitVec-8) 8 (by
-      intro byte bound written
-      exact ready.returnSeparate _ written ⟨byte, bound, rfl⟩)
-    exact unchanged.symm.trans (load64_store s.dmem (s.regs.rsp.toBitVec-8) (pc+5).toBitVec)
-  have nextReady : CallsReady c final.machine.data := {
-    state := machine.symm ▸ state
+  let recordedHistory (t : Executed) : Prop := ∃ localHistory,
+    t.history = history ++ localHistory ∧ NoAnchoredReentry localHistory ∧ NoAllowedipsReentry localHistory
+  have run := call_return fetch pc target here s history c.writes c.At recordedHistory
+    ready.mapped ready.returnSeparate (by
+      apply eventually_weaken (historyStep fetch) _ _ _ _ joined
+      rintro final ⟨localState, ⟨returned, state, frame, noReentry, noAllowedips⟩, machine, recorded⟩
+      exact ⟨machine.symm ▸ returned, machine.symm ▸ state, machine.symm ▸ frame,
+        localState.history, recorded, noReentry, noAllowedips⟩)
+  apply eventually_weaken (historyStep fetch) _ _ _ _ run
+  rintro final ⟨returned, state, sp, mapped, frame, recorded⟩
+  refine ⟨returned, ?_, frame, recorded⟩
+  exact {
+    state := state
     aligned := by simpa only [sp] using ready.aligned
-    mapped := by rw [sp, word]; rfl
+    mapped := mapped
     pushSeparate := by simpa only [sp] using ready.pushSeparate
     returnSeparate := by simpa only [sp] using ready.returnSeparate
     metadataSeparate := ready.metadataSeparate
     preemptSeparate := ready.preemptSeparate }
-  exact ⟨returned', nextReady,
-    (storeInt_frame s.dmem (s.regs.rsp.toBitVec-8) 8 (pc+5).toBitVec.toInt).trans frame',
-    localState.history, recorded, noReentry, noAllowedips⟩
 
 /-- A proved region ending at a real callback entry can be composed with that
     callback. The execution premise is discharged by a named region theorem;

@@ -1,7 +1,6 @@
 import PeerLiveEntryHistory
 import AllowedipsPeerCoverageHistory
-import CallHistory
-import AllowedipsPeerCoverageHistory
+import CallComposition
 
 namespace Binary.AllowedipsPeerInstrumentation
 open TrustBase LookupObservation Instrumentation
@@ -43,46 +42,19 @@ theorem observed_call (fetch : Int64 → Option Decoded) (pc : Int64) (target : 
         (∀ q ∈ (calledState s (pc+5) (label target) :: tail).dropLast, ¬(q.pc ∈ AllowedipsImage.cutPoints ∨ q.pc ∈ Image.cutPoints)) ∧
         NoAnchoredReentry (calledState s (pc+5) (label target) :: tail))
       ⟨⟨s, pc⟩, front ++ [⟨s, pc⟩]⟩ := by
-  have call := historySteps_eventually fetch 1 _ _
-    (call_instruction fetch pc target here s (front ++ [⟨s, pc⟩]) ready.mapped)
-  apply eventually_trans (historyStep fetch) _ _ _ call
-  rintro t ⟨machine, recorded⟩
-  have state : t = ⟨calledState s (pc+5) (label target),
-      (front ++ [⟨s, pc⟩]) ++ [calledState s (pc+5) (label target)]⟩ := by
-    cases t; simp_all
-  rw [state]
   have afterCall := observeHistory_snoc (AllowedipsPeerObservation.edge rxSection) (front ++ [⟨s, pc⟩])
     ⟨s, pc⟩ (calledState s (pc+5) (label target)) events delta (by simp) observed observedCall
   have entry := called_ready s (pc+5) (label target) coverage preempt ready
   have service := AllowedipsPeerCoverage.observed_callback fetch (label target) kind contract coverage preempt
     (calledState s (pc+5) (label target)) (pc+5).toUInt64 rfl entry.1 entry.2 allowed
-    (by simpa [calledState] using ready.returnSeparate)
+    (by simpa [calledState, AllowedipsPeerCoverage.Context.Separated] using ready.returnSeparate)
     ready.metadataSeparate ready.preemptSeparate rxSection (front ++ [⟨s, pc⟩]) (events ++ delta) afterCall
-  apply eventually_weaken (historyStep fetch) _ _ _ _ service
-  rintro final ⟨returned, state, frame, observations, last, tail⟩
-  have sp : final.machine.data.regs.rsp = s.regs.rsp := by
-    rw [returned.2.1]
-    apply UInt64.toBitVec_inj.mp
-    change (s.regs.rsp.toBitVec-8)+8 = s.regs.rsp.toBitVec
-    exact BitVec.sub_add_cancel _ _
-  have word : final.machine.data.dmem.loadInt (s.regs.rsp.toBitVec-8) 8 =
-      some ((pc+5).toBitVec.toNat : Int) := by
-    have unchanged := frame.loadInt (s.regs.rsp.toBitVec-8) 8 (by
-      intro byte bound written
-      exact ready.returnSeparate _ written ⟨byte, bound, rfl⟩)
-    exact unchanged.symm.trans (load64_store s.dmem (s.regs.rsp.toBitVec-8) (pc+5).toBitVec)
-  have nextReady : AllowedipsPeerCoverage.CallsReady coverage preempt final.machine.data := {
-    state := state
-    phase := ready.phase
-    aligned := by simpa only [sp] using ready.aligned
-    mapped := by rw [sp, word]; rfl
-    pushSeparate := by simpa only [sp] using ready.pushSeparate
-    returnSeparate := by simpa only [sp] using ready.returnSeparate
-    metadataSeparate := ready.metadataSeparate
-    preemptSeparate := ready.preemptSeparate }
-  exact ⟨returned, nextReady,
-    (storeInt_frame s.dmem (s.regs.rsp.toBitVec-8) 8 (pc+5).toBitVec.toInt).trans frame,
-    observations, last, tail⟩
+  have run := call_return fetch pc target here s (front ++ [⟨s, pc⟩]) _ _ _
+    ready.mapped ready.returnSeparate service
+  apply eventually_weaken (historyStep fetch) _ _ _ _ run
+  rintro final ⟨returned, state, sp, mapped, frame, rest⟩
+  refine ⟨returned, ?_, frame, rest⟩
+  exact ready.restore state sp mapped
 
 #print axioms called_ready
 #print axioms observed_call
