@@ -7,8 +7,8 @@ free calls or a consequence of work queues being empty. -/
 namespace Leanux.Proofs.WG.Lifetimes
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing
 
-def deviceRetirementEvents (w : World) : List LifetimeEvent :=
-  match w.k.wg with
+def deviceRetirementEvents (w : WGWorld) : List LifetimeEvent :=
+  match w.dev with
   | none => []
   | some d =>
     d.peers.toList.map (fun (i,p) => .peer (.release i p.internalId)) ++
@@ -16,23 +16,24 @@ def deviceRetirementEvents (w : World) : List LifetimeEvent :=
     d.txSkbs.toList.map (fun (i,_) => .packet (.release (.inl i) (d.ifindex, i+1))) ++
     d.rxSkbs.toList.map (fun (i,_) => .packet (.release (.inr i) (d.ifindex, i+1)))
 
-def deviceDropped (w : World) : World := {w with k := {w.k with wg := none}}
+def deviceDropped (w : WGWorld) : WGWorld := {w with dev := none}
 
 def dropDevicePrefix : MixedM Unit :=
-  fun w => ExceptT.mk fun h =>
-    (.ok ((), deviceDropped w), h ++ deviceRetirementEvents w)
+  fun w ambient => ExceptT.mk fun h =>
+    (.ok (((), deviceDropped w), ambient), h ++ deviceRetirementEvents w)
 
-theorem dropDevicePrefix_run (w : World) (h : List LifetimeEvent) :
-    runPrefix dropDevicePrefix w h =
-      (.ok ((), deviceDropped w), h ++ deviceRetirementEvents w) := rfl
+theorem dropDevicePrefix_run (w : WGWorld) (ambient : Ambient) (h : List LifetimeEvent) :
+    runWGPrefix dropDevicePrefix w ambient h =
+      (.ok (((), deviceDropped w), ambient), h ++ deviceRetirementEvents w) := rfl
 
 theorem dropDevicePrefix_erases :
-    ErasesPrefix dropDevicePrefix (modifyK fun k => {k with wg := none}) := fun _ _ => rfl
+    ErasesStatePrefix dropDevicePrefix (modify fun w => {w with dev := none}) :=
+  fun _ _ _ => rfl
 
-theorem deviceRetirementEvents_peer (w : World) (i stamp : Nat) :
+theorem deviceRetirementEvents_peer (w : WGWorld) (i stamp : Nat) :
     .peer (.release i stamp) ∈ deviceRetirementEvents w ↔
       (Peers.snapshot w).slots i = some stamp := by
-  cases hd : w.k.wg with
+  cases hd : w.dev with
   | none => simp [deviceRetirementEvents, Peers.snapshot, hd]
   | some d =>
     simp only [deviceRetirementEvents, hd, List.mem_append, List.mem_map,
@@ -52,10 +53,10 @@ theorem deviceRetirementEvents_peer (w : World) (i stamp : Nat) :
         exact ⟨(i,p), Std.TreeMap.mem_toList_iff_getElem?_eq_some.mpr hl,
           rfl, by simpa [hl] using hp⟩
 
-theorem deviceRetirementEvents_key (w : World) (i stamp : Nat) :
+theorem deviceRetirementEvents_key (w : WGWorld) (i stamp : Nat) :
     .keypair (.release i stamp) ∈ deviceRetirementEvents w ↔
       keypairResidents w i = some stamp := by
-  cases hd : w.k.wg with
+  cases hd : w.dev with
   | none => simp [deviceRetirementEvents, keypairResidents, hd]
   | some d =>
     simp only [deviceRetirementEvents, hd, List.mem_append, List.mem_map,
@@ -75,10 +76,10 @@ theorem deviceRetirementEvents_key (w : World) (i stamp : Nat) :
         exact ⟨(i,k), Std.TreeMap.mem_toList_iff_getElem?_eq_some.mpr hl,
           rfl, by simpa [hl] using hp⟩
 
-theorem deviceRetirementEvents_packet (w : World) (i : Packets.Slot) (stamp : PacketStamp) :
+theorem deviceRetirementEvents_packet (w : WGWorld) (i : Packets.Slot) (stamp : PacketStamp) :
     .packet (.release i stamp) ∈ deviceRetirementEvents w ↔
       packetResidents w i = some stamp := by
-  cases hd : w.k.wg with
+  cases hd : w.dev with
   | none => simp [deviceRetirementEvents, packetResidents, hd]
   | some d =>
     cases i with
@@ -143,16 +144,16 @@ theorem LifetimeEvent.Safe.append_releases (hs : LifetimeEvent.Safe h)
                       by simpa [List.filterMap_append, List.filterMap_cons, List.filterMap_nil, LifetimeEvent.packet?] using AccessEvent.safe_append_release hs.2.2⟩
     simpa [List.append_assoc] using ih step (fun x hx => he x (by simp [hx]))
 
-theorem deviceRetirementEvents_releases (w : World) :
+theorem deviceRetirementEvents_releases (w : WGWorld) :
     ∀ e ∈ deviceRetirementEvents w, LifetimeEvent.IsRelease e := by
   intro e he
-  cases hd : w.k.wg with
+  cases hd : w.dev with
   | none => simp [deviceRetirementEvents, hd] at he
   | some d =>
     simp only [deviceRetirementEvents, hd, List.mem_append, List.mem_map] at he
     rcases he with ((⟨x, _, rfl⟩ | ⟨x, _, rfl⟩) | ⟨x, _, rfl⟩) | ⟨x, _, rfl⟩ <;> trivial
 
-theorem deviceRetirementEvents_origin (w : World) (h : List LifetimeEvent) :
+theorem deviceRetirementEvents_origin (w : WGWorld) (h : List LifetimeEvent) :
     ReleaseOrigin h (h ++ deviceRetirementEvents w) w := by
   constructor
   all_goals intro stamp hs
@@ -203,8 +204,8 @@ theorem AllocationInv.dropDevice (hi : AllocationInv h w) :
   · simp [deviceDropped]
 
 theorem dropDevicePrefix_allocation :
-    PrefixPreserves AllocationInv LifetimeEvent.Safe dropDevicePrefix := by
-  intro w h hi
+    StatePrefixPreserves (fun h w _ => AllocationInv h w) LifetimeEvent.Safe dropDevicePrefix := by
+  intro w ambient h hi
   exact ⟨deviceRetirementEvents w, rfl, hi.dropDevice.safe, hi.dropDevice⟩
 
 end Leanux.Proofs.WG.Lifetimes

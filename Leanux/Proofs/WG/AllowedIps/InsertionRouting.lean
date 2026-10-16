@@ -40,7 +40,7 @@ theorem graftRolledBack_frame (d : WG.Device) (width addr cidr pid : Nat) (p : W
 
 /-- Every normal refusal preserves represented node/list contents pointwise,
 while the wrapper increments sequence and a partial graft may consume one ID.
-This is deliberately not a transaction-rollback or a failed-Stop World claim. -/
+This is deliberately not a transaction-rollback or a failed-Stop state claim. -/
 structure InsertRefused (d out : WG.Device) (t4 t6 : Tree) : Prop where
   invariant : RoutingInvariant out t4 t6
   nodes : ∀ id : Nat, out.nodes[id]? = d.nodes[id]?
@@ -61,14 +61,14 @@ structure InsertRoutingOutcome (d out : WG.Device) (v4 : Bool) (t4 t6 : Tree)
       RoutingInvariant out (insertedTree4 d v4 t4 addr cidr pid) (insertedTree6 d v4 t6 addr cidr pid)) ∨
     (ret = -ENOMEM ∧ InsertRefused d out t4 t6)
 
-theorem insert_routing_outcome (w w' : World) (d : WG.Device) (hd : w.k.wg = some d)
+theorem insert_routing_outcome (w w' : WGWorld) (ambient ambient' : Ambient) (d : WG.Device) (hd : w.dev = some d)
     (family addr cidr pid : Nat) (p : WG.Peer) (hp : d.peers[pid]? = some p)
     (t4 t6 : Tree) (hi : RoutingInvariant d t4 t6)
     (ha : addr < 2 ^ rootWidth (family == 4)) (hc : cidr ≤ rootWidth (family == 4))
-    (ret : Int) (hrun : (WG.insert family addr cidr pid).run w = .ok (ret, w')) :
-    ∃ out, w'.k = {w.k with wg := some out} ∧
+    (ret : Int) (hrun : ((WG.insert family addr cidr pid).run w).run ambient = .ok ((ret, w'), ambient')) :
+    ∃ out, w' = {w with dev := some out} ∧
       InsertRoutingOutcome d out (family == 4) t4 t6 addr cidr pid ret := by
-  have ho := insert_outcome w w' d hd family (selectedTree (family == 4) t4 t6)
+  have ho := insert_outcome w w' ambient ambient' d hd family (selectedTree (family == 4) t4 t6)
     (selectedTree (!(family == 4)) t4 t6) addr cidr pid p hp (hi.selected_root _)
     hi.below (hi.selected_rep _) (hi.selected_valid _) (hi.selected_nodup _) ha hc
     (hi.selected_rep _) ret hrun
@@ -96,19 +96,19 @@ theorem RoutingInvariant.selected_lists (h : RoutingInvariant d t4 t6) (v4 : Boo
 
 /-- Successful original insertion has both its raw source peer-map equation
 and, under coherent input, the normalized all-peer move-to-tail equation. -/
-theorem insert_routing_success (w w' : World) (d : WG.Device) (hd : w.k.wg = some d)
+theorem insert_routing_success (w w' : WGWorld) (ambient ambient' : Ambient) (d : WG.Device) (hd : w.dev = some d)
     (family addr cidr pid : Nat) (p : WG.Peer) (hp : d.peers[pid]? = some p)
     (t4 t6 : Tree) (hi : RoutingInvariant d t4 t6)
     (ha : addr < 2 ^ rootWidth (family == 4)) (hc : cidr ≤ rootWidth (family == 4))
-    (hrun : (WG.insert family addr cidr pid).run w = .ok (0, w')) :
+    (hrun : ((WG.insert family addr cidr pid).run w).run ambient = .ok ((0, w'), ambient')) :
     let v4 := family == 4
     let inserted := (selectedTree v4 t4 t6).insertFresh (rootWidth v4) d.nextNode addr cidr pid
-    ∃ out, w'.k = {w.k with wg := some out} ∧
+    ∃ out, w' = {w with dev := some out} ∧
       InsertRoutingOutcome d out v4 t4 t6 addr cidr pid 0 ∧
       RoutingInvariant out (insertedTree4 d v4 t4 addr cidr pid) (insertedTree6 d v4 t6 addr cidr pid) ∧
       InsertionPeers d out inserted.allocations inserted.binding.id pid ∧
       (∀ q : Nat, out.peers[q]? = (d.peers[q]?).map (insertionPeer 0 inserted.binding.id pid q)) := by
-  obtain ⟨out, hk, ho⟩ := insert_routing_outcome w w' d hd family addr cidr pid p hp t4 t6 hi ha hc 0 hrun
+  obtain ⟨out, hk, ho⟩ := insert_routing_outcome w w' ambient ambient' d hd family addr cidr pid p hp t4 t6 hi ha hc 0 hrun
   rcases ho.result with ⟨_, hs, hinv⟩ | ⟨hf, _⟩
   · exact ⟨out, hk, ho, hinv, hs.peers,
       hs.normalized_peers (hi.bumpSeq.selected_rep _) (hi.bumpSeq.selected_rep _)
@@ -117,27 +117,27 @@ theorem insert_routing_success (w w' : World) (d : WG.Device) (hd : w.k.wg = som
 
 /-- Normal ENOMEM keeps the coherent pointwise stores and original trees,
 with the wrapper sequence bump and the exact zero-or-one consumed-ID bound. -/
-theorem insert_routing_refusal (w w' : World) (d : WG.Device) (hd : w.k.wg = some d)
+theorem insert_routing_refusal (w w' : WGWorld) (ambient ambient' : Ambient) (d : WG.Device) (hd : w.dev = some d)
     (family addr cidr pid : Nat) (p : WG.Peer) (hp : d.peers[pid]? = some p)
     (t4 t6 : Tree) (hi : RoutingInvariant d t4 t6)
     (ha : addr < 2 ^ rootWidth (family == 4)) (hc : cidr ≤ rootWidth (family == 4))
-    (hrun : (WG.insert family addr cidr pid).run w = .ok (-ENOMEM, w')) :
-    ∃ out, w'.k = {w.k with wg := some out} ∧ InsertionFrame d out ∧ InsertRefused d out t4 t6 := by
-  obtain ⟨out, hk, ho⟩ := insert_routing_outcome w w' d hd family addr cidr pid p hp t4 t6 hi ha hc (-ENOMEM) hrun
+    (hrun : ((WG.insert family addr cidr pid).run w).run ambient = .ok ((-ENOMEM, w'), ambient')) :
+    ∃ out, w' = {w with dev := some out} ∧ InsertionFrame d out ∧ InsertRefused d out t4 t6 := by
+  obtain ⟨out, hk, ho⟩ := insert_routing_outcome w w' ambient ambient' d hd family addr cidr pid p hp t4 t6 hi ha hc (-ENOMEM) hrun
   rcases ho.result with ⟨hf, _⟩ | ⟨_, hs⟩
   · simp [ENOMEM] at hf
   · exact ⟨out, hk, ho.frame, hs⟩
 
 /-- Complete original removal preserves the same invariant from a resident
 peer. Its saved list and precise filtering effects remain in RemovedPeer. -/
-theorem removeByPeer_routing_total (w : World) (d : WG.Device) (hd : w.k.wg = some d)
+theorem removeByPeer_routing_total (w : WGWorld) (ambient : Ambient) (d : WG.Device) (hd : w.dev = some d)
     (pid : Nat) (p : WG.Peer) (hp : d.peers[pid]? = some p)
     (t4 t6 : Tree) (hi : RoutingInvariant d t4 t6) :
-    ∃ out w', (WG.removeByPeer pid).run w = .ok ((), w') ∧
-      w'.k = {w.k with wg := some out} ∧ RemovedPeer d out t4 t6 pid p.allowedipsList ∧
+    ∃ out w' ambient', ((WG.removeByPeer pid).run w).run ambient = .ok (((), w'), ambient') ∧
+      w' = {w with dev := some out} ∧ RemovedPeer d out t4 t6 pid p.allowedipsList ∧
       RoutingInvariant out (t4.eraseIds p.allowedipsList) (t6.eraseIds p.allowedipsList) := by
-  obtain ⟨out, w', he, hk, hs⟩ := removeByPeer_total w d hd pid p hp t4 t6 hi.forest
+  obtain ⟨out, w', ambient', he, hk, hs⟩ := removeByPeer_total w ambient d hd pid p hp t4 t6 hi.forest
     hi.nodup4 hi.nodup6 hi.compressed4 hi.compressed6 hi.lists
-  exact ⟨out, w', he, hk, hs, hi.removed hs⟩
+  exact ⟨out, w', ambient', he, hk, hs, hi.removed hs⟩
 
 end Leanux.Proofs.WG.AllowedIps

@@ -45,7 +45,7 @@ theorem removedTree_context (d out : WG.Device) (v4 : Bool) (id : Nat)
     · exact False.elim (hgone ((c.mem_plug_nodeIds after q).mpr (.inl hctx)))
     · exact hret q hlocal (fun h => hgone ((c.mem_plug_nodeIds after q).mpr (.inr h)))
 
-theorem case_remove_binary (w : World) (d : WG.Device) (hd : w.k.wg = some d)
+theorem case_remove_binary (w : WGWorld) (ambient : Ambient) (d : WG.Device) (hd : w.dev = some d)
     (v4 : Bool) (c : Context) (n a b : NodeData) (al ar bl br : Tree)
     (hroot : rootValue d v4 = (c.plug (.node n (.node a al ar) (.node b bl br))).root)
     (hr : RepAt d.nodes (rootWidth v4) (rootSlot v4)
@@ -54,14 +54,14 @@ theorem case_remove_binary (w : World) (d : WG.Device) (hd : w.k.wg = some d)
     (hc : (c.plug (.node n (.node a al ar) (.node b bl br))).Compressed) :
     let old := encode (rootWidth v4) (c.slot (rootSlot v4)) n (.node a al ar) (.node b bl br)
     let out := removalCleared (unlisted d n.id) n.id old
-    ∃ w', (removeStep n.id).run w = .ok (.yield (), w') ∧
-      w'.k = { w.k with wg := some out } ∧
+    ∃ w' ambient', ((removeStep n.id).run w).run ambient = .ok ((.yield (), w'), ambient') ∧
+      w' = { w with dev := some out } ∧
       RemovedTree d out v4 (c.plug (.node n (.node a al ar) (.node b bl br))) n.id := by
   dsimp only
   have hfocus := c.focus_rep _ _ hr
-  obtain ⟨result, w', hrun, rfl, hk⟩ := (total_iff_run _ _ _).mp
-    (removeStep_binary_wp w.k d hd n.id a.id b.id _ hfocus.1 rfl) w rfl
-  refine ⟨w', hrun, hk, ?_⟩
+  obtain ⟨result, w', ambient', hrun, rfl, hk⟩ := (total_iff_run_ambient _ _ _).mp
+    (removeStep_binary_wp w d hd n.id a.id b.id _ hfocus.1 rfl) w ambient rfl
+  refine ⟨w', ambient', hrun, hk, ?_⟩
   apply removedTree_context d _ v4 n.id c _ (.node {n with peer := none} (.node a al ar) (.node b bl br)) hr hn
   · simpa [Tree.compact] using c.eraseId_nonleaf n (.node a al ar) (.node b bl br) hc hn (.inl rfl)
   · exact removalCleared_rep (unlisted d n.id) _ _ n _ _ hfocus (c.focus_nodup _ hn)
@@ -76,18 +76,18 @@ theorem case_remove_binary (w : World) (d : WG.Device) (hd : w.k.wg = some d)
   · intro q hq hgone; exact False.elim (hgone hq)
   · rfl
 
-theorem case_remove_root_leaf (w : World) (d : WG.Device) (hd : w.k.wg = some d)
+theorem case_remove_root_leaf (w : WGWorld) (ambient : Ambient) (d : WG.Device) (hd : w.dev = some d)
     (v4 : Bool) (n : NodeData)
     (hr : RepAt d.nodes (rootWidth v4) (rootSlot v4) (.node n .empty .empty)) :
     let old := encode (rootWidth v4) (rootSlot v4) n .empty .empty
     let out := removalRootLeaf (unlisted d n.id) v4 n.id old
-    ∃ w', (removeStep n.id).run w = .ok (.yield (), w') ∧
-      w'.k = { w.k with wg := some out } ∧ RemovedTree d out v4 (.node n .empty .empty) n.id := by
+    ∃ w' ambient', ((removeStep n.id).run w).run ambient = .ok ((.yield (), w'), ambient') ∧
+      w' = { w with dev := some out } ∧ RemovedTree d out v4 (.node n .empty .empty) n.id := by
   dsimp only
-  obtain ⟨result, w', hrun, rfl, hk⟩ := (total_iff_run _ _ _).mp
-    (removeStep_root_leaf_wp w.k d hd v4 n.id _ hr.1 rfl rfl) w rfl
+  obtain ⟨result, w', ambient', hrun, rfl, hk⟩ := (total_iff_run_ambient _ _ _).mp
+    (removeStep_root_leaf_wp w d hd v4 n.id _ hr.1 rfl rfl) w ambient rfl
   have hm := removalRootLeaf_metadata d v4 n.id (encode (rootWidth v4) (rootSlot v4) n .empty .empty)
-  refine ⟨w', hrun, hk, ⟨?_, ?_, ⟨hm.1, hm.2.2.2.1, hm.2.2.2.2⟩, hm.2.2.1, ?_, ?_, ?_⟩⟩
+  refine ⟨w', ambient', hrun, hk, ⟨?_, ?_, ⟨hm.1, hm.2.2.2.1, hm.2.2.2.2⟩, hm.2.2.1, ?_, ?_, ?_⟩⟩
   · simpa [Tree.root] using hm.2.1
   · rw [Tree.eraseId_leaf]; trivial
   · intro q hq
@@ -98,7 +98,7 @@ theorem case_remove_root_leaf (w : World) (d : WG.Device) (hd : w.k.wg = some d)
     subst q; simp [removalRootLeaf_node]
   · cases v4 <;> rfl
 
-theorem case_remove_root_unary (w : World) (d : WG.Device) (hd : w.k.wg = some d)
+theorem case_remove_root_unary (w : WGWorld) (ambient : Ambient) (d : WG.Device) (hd : w.dev = some d)
     (v4 left : Bool) (n a : NodeData) (l r : Tree)
     (hr : RepAt d.nodes (rootWidth v4) (rootSlot v4)
       (if left then .node n (.node a l r) .empty else .node n .empty (.node a l r)))
@@ -108,8 +108,8 @@ theorem case_remove_root_unary (w : World) (d : WG.Device) (hd : w.k.wg = some d
     let old := encode (rootWidth v4) (rootSlot v4) n (if left then t else .empty) (if left then .empty else t)
     let child := encode (rootWidth v4) (.child n.id (if left then 0 else 1)) a l r
     let out := removalRootUnary (unlisted d n.id) v4 n.id old a.id child
-    ∃ w', (removeStep n.id).run w = .ok (.yield (), w') ∧
-      w'.k = { w.k with wg := some out } ∧
+    ∃ w' ambient', ((removeStep n.id).run w).run ambient = .ok ((.yield (), w'), ambient') ∧
+      w' = { w with dev := some out } ∧
       RemovedTree d out v4 (if left then .node n t .empty else .node n .empty t) n.id := by
   dsimp only
   have hne : n.id ≠ a.id := by
@@ -126,13 +126,13 @@ theorem case_remove_root_unary (w : World) (d : WG.Device) (hd : w.k.wg = some d
     cases left
     · exact Tree.eraseId_unary_right hc hn
     · exact Tree.eraseId_unary_left hc hn
-  obtain ⟨result, w', hrun, rfl, hk⟩ := (total_iff_run _ _ _).mp
-    (removeStep_root_unary_wp w.k d hd v4 left n.id a.id _ _ ht ha hne (by cases left <;> rfl) rfl) w rfl
+  obtain ⟨result, w', ambient', hrun, rfl, hk⟩ := (total_iff_run_ambient _ _ _).mp
+    (removeStep_root_unary_wp w d hd v4 left n.id a.id _ _ ht ha hne (by cases left <;> rfl) rfl) w ambient rfl
   have hm := removalRootUnary_metadata d v4 n.id
     (encode (rootWidth v4) (rootSlot v4) n (if left then .node a l r else .empty)
       (if left then .empty else .node a l r)) a.id
     (encode (rootWidth v4) (.child n.id (if left then 0 else 1)) a l r)
-  refine ⟨w', hrun, hk, ⟨?_, ?_, ⟨hm.1, hm.2.2.2.1, hm.2.2.2.2⟩, hm.2.2.1, ?_, ?_, ?_⟩⟩
+  refine ⟨w', ambient', hrun, hk, ⟨?_, ?_, ⟨hm.1, hm.2.2.2.1, hm.2.2.2.2⟩, hm.2.2.1, ?_, ?_, ?_⟩⟩
   · rw [he]; exact hm.2.1
   · rw [he]; exact removalRootUnary_rep (unlisted d n.id) v4 n a l r left hr hn
   · intro q hq
@@ -149,7 +149,7 @@ theorem case_remove_root_unary (w : World) (d : WG.Device) (hd : w.k.wg = some d
     subst q; simp [removalRootUnary_node]
   · cases v4 <;> rfl
 
-theorem case_remove_child_unary (w : World) (d : WG.Device) (hd : w.k.wg = some d)
+theorem case_remove_child_unary (w : WGWorld) (ambient : Ambient) (d : WG.Device) (hd : w.dev = some d)
     (v4 : Bool) (outer : Context) (p n a : NodeData) (side childSide : Nat) (l r sibling : Tree)
     (hb : side < 2) (hab : childSide < 2)
     (hroot : rootValue d v4 = (outer.plug
@@ -163,8 +163,8 @@ theorem case_remove_child_unary (w : World) (d : WG.Device) (hd : w.k.wg = some 
     let parent := forkNode (rootWidth v4) (outer.slot (rootSlot v4)) p side target sibling
     let child := encode (rootWidth v4) (.child n.id childSide) a l r
     let out := removalChildUnary (unlisted d n.id) n.id old p.id side parent a.id child
-    ∃ w', (removeStep n.id).run w = .ok (.yield (), w') ∧
-      w'.k = { w.k with wg := some out } ∧
+    ∃ w' ambient', ((removeStep n.id).run w).run ambient = .ok ((.yield (), w'), ambient') ∧
+      w' = { w with dev := some out } ∧
       RemovedTree d out v4 (outer.plug (Tree.fork p side target sibling)) n.id := by
   dsimp only
   have hfocus := outer.focus_rep _ _ hr
@@ -179,10 +179,10 @@ theorem case_remove_child_unary (w : World) (d : WG.Device) (hd : w.k.wg = some 
   have bits : (forkNode (rootWidth v4) (.child p.id side) n childSide (.node a l r) .empty).bit =
       if decide (childSide = 0) then #[some a.id, none] else #[none, some a.id] := by
     by_cases he : childSide = 0 <;> simp [forkNode, he, encode, Tree.root]
-  obtain ⟨result, w', hrun, rfl, hk⟩ := (total_iff_run _ _ _).mp
-    (removeStep_child_unary_wp w.k d hd (decide (childSide = 0)) n.id p.id side a.id _ _ _
-      htn hp ha.1 hnp hna' hap (by omega) bits (forkNode_parent)) w rfl
-  refine ⟨w', hrun, hk, ?_⟩
+  obtain ⟨result, w', ambient', hrun, rfl, hk⟩ := (total_iff_run_ambient _ _ _).mp
+    (removeStep_child_unary_wp w d hd (decide (childSide = 0)) n.id p.id side a.id _ _ _
+      htn hp ha.1 hnp hna' hap (by omega) bits (forkNode_parent)) w ambient rfl
+  refine ⟨w', ambient', hrun, hk, ?_⟩
   let old := forkNode (rootWidth v4) (.child p.id side) n childSide (.node a l r) .empty
   let parent := forkNode (rootWidth v4) (outer.slot (rootSlot v4)) p side
     (Tree.fork n childSide (.node a l r) .empty) sibling
@@ -212,7 +212,7 @@ theorem case_remove_child_unary (w : World) (d : WG.Device) (hd : w.k.wg = some 
     subst q; simp [removalChildUnary_node]
   · rfl
 
-theorem case_remove_child_leaf_owned (w : World) (d : WG.Device) (hd : w.k.wg = some d)
+theorem case_remove_child_leaf_owned (w : WGWorld) (ambient : Ambient) (d : WG.Device) (hd : w.dev = some d)
     (v4 : Bool) (outer : Context) (p n : NodeData) (side : Nat) (sibling : Tree)
     (hb : side < 2) (hpowner : p.peer.isSome)
     (hroot : rootValue d v4 = (outer.plug (Tree.fork p side (.node n .empty .empty) sibling)).root)
@@ -223,8 +223,8 @@ theorem case_remove_child_leaf_owned (w : World) (d : WG.Device) (hd : w.k.wg = 
     let old := encode (rootWidth v4) (.child p.id side) n .empty .empty
     let parent := forkNode (rootWidth v4) (outer.slot (rootSlot v4)) p side (.node n .empty .empty) sibling
     let out := removalLeafDetached (unlisted d n.id) n.id old p.id side parent
-    ∃ w', (removeStep n.id).run w = .ok (.yield (), w') ∧
-      w'.k = { w.k with wg := some out } ∧
+    ∃ w' ambient', ((removeStep n.id).run w).run ambient = .ok ((.yield (), w'), ambient') ∧
+      w' = { w with dev := some out } ∧
       RemovedTree d out v4 (outer.plug (Tree.fork p side (.node n .empty .empty) sibling)) n.id := by
   dsimp only
   have hfocus := outer.focus_rep _ _ hr
@@ -232,10 +232,10 @@ theorem case_remove_child_leaf_owned (w : World) (d : WG.Device) (hd : w.k.wg = 
   obtain ⟨hp, ht, hs⟩ := fork_rep_parts hb hfocus
   have hpt := ((Tree.fork_nodup_iff ..).mp hnf).1
   have hnp : n.id ≠ p.id := fun he => hpt (by simp [Tree.nodeIds, he])
-  obtain ⟨result, w', hrun, rfl, hk⟩ := (total_iff_run _ _ _).mp
-    (removeStep_child_leaf_owned_wp w.k d hd n.id p.id side _ _ ht.1 hp hnp (by omega)
-      (by simpa using hpowner) rfl rfl) w rfl
-  refine ⟨w', hrun, hk, ?_⟩
+  obtain ⟨result, w', ambient', hrun, rfl, hk⟩ := (total_iff_run_ambient _ _ _).mp
+    (removeStep_child_leaf_owned_wp w d hd n.id p.id side _ _ ht.1 hp hnp (by omega)
+      (by simpa using hpowner) rfl rfl) w ambient rfl
+  refine ⟨w', ambient', hrun, hk, ?_⟩
   let old := encode (rootWidth v4) (.child p.id side) n .empty .empty
   let parent := forkNode (rootWidth v4) (outer.slot (rootSlot v4)) p side (.node n .empty .empty) sibling
   have hm := removalLeafDetached_metadata d n.id old p.id side parent
@@ -261,7 +261,7 @@ theorem case_remove_child_leaf_owned (w : World) (d : WG.Device) (hd : w.k.wg = 
     subst q; simp [removalLeafDetached_node]
   · rfl
 
-theorem case_remove_collapse_root (w : World) (d : WG.Device) (hd : w.k.wg = some d)
+theorem case_remove_collapse_root (w : WGWorld) (ambient : Ambient) (d : WG.Device) (hd : w.dev = some d)
     (v4 : Bool) (p n a : NodeData) (side : Nat) (l r : Tree)
     (hb : side < 2) (hpowner : p.peer = none)
     (hr : RepAt d.nodes (rootWidth v4) (rootSlot v4)
@@ -272,8 +272,8 @@ theorem case_remove_collapse_root (w : World) (d : WG.Device) (hd : w.k.wg = som
     let parent := forkNode (rootWidth v4) (rootSlot v4) p side (.node n .empty .empty) (.node a l r)
     let sibling := some (a.id, encode (rootWidth v4) (.child p.id (1-side)) a l r)
     let out := removalCollapseRoot (unlisted d n.id) n.id old p.id side parent v4 sibling
-    ∃ w', (removeStep n.id).run w = .ok (.yield (), w') ∧
-      w'.k = { w.k with wg := some out } ∧
+    ∃ w' ambient', ((removeStep n.id).run w).run ambient = .ok ((.yield (), w'), ambient') ∧
+      w' = { w with dev := some out } ∧
       RemovedTree d out v4 (Tree.fork p side (.node n .empty .empty) (.node a l r)) n.id := by
   dsimp only
   obtain ⟨hp, ht, hs⟩ := fork_rep_parts hb hr
@@ -281,21 +281,21 @@ theorem case_remove_collapse_root (w : World) (d : WG.Device) (hd : w.k.wg = som
   have hnp : n.id ≠ p.id := fun he => hpt (by simp [Tree.nodeIds, he])
   have hap : a.id ≠ p.id := fun he => hps (by simp [Tree.nodeIds, he])
   have han : a.id ≠ n.id := fun he => hts n.id (by simp [Tree.nodeIds]) (by simp [Tree.nodeIds, ← he])
-  obtain ⟨result, w', hrun, rfl, hk⟩ := (total_iff_run _ _ _).mp
-    (removeStep_leaf_collapse_root_wp w.k d hd n.id p.id side _ _ ht.1 hp hnp (by omega)
+  obtain ⟨result, w', ambient', hrun, rfl, hk⟩ := (total_iff_run_ambient _ _ _).mp
+    (removeStep_leaf_collapse_root_wp w d hd n.id p.id side _ _ ht.1 hp hnp (by omega)
       (by simpa using hpowner) rfl rfl v4 forkNode_parent
       (some (a.id, encode (rootWidth v4) (.child p.id (1-side)) a l r))
       (forkNode_other hb) (by
         intro q qn he
         cases he
-        exact ⟨hs.1, han, hap⟩)) w rfl
+        exact ⟨hs.1, han, hap⟩)) w ambient rfl
   let old := encode (rootWidth v4) (.child p.id side) n .empty .empty
   let parent := forkNode (rootWidth v4) (rootSlot v4) p side (.node n .empty .empty) (.node a l r)
   let sibling := some (a.id, encode (rootWidth v4) (.child p.id (1-side)) a l r)
   have hm := removalCollapseRoot_metadata d n.id old p.id side parent v4 sibling
   have he : (Tree.fork p side (.node n .empty .empty) (.node a l r)).eraseId n.id = .node a l r := by
     simpa [hpowner] using Tree.eraseId_leaf_parent hc hn
-  refine ⟨w', hrun, hk, ⟨?_, ?_, hm.1, hm.2.2, ?_, ?_, ?_⟩⟩
+  refine ⟨w', ambient', hrun, hk, ⟨?_, ?_, hm.1, hm.2.2, ?_, ?_, ?_⟩⟩
   · rw [he]; exact hm.2.1
   · rw [he]; exact removalCollapseRoot_rep (unlisted d n.id) v4 p n a side l r hb hr hn
   · intro q hq
@@ -314,7 +314,7 @@ theorem case_remove_collapse_root (w : World) (d : WG.Device) (hd : w.k.wg = som
     · simp [removalCollapseRoot_node, Ne.symm hnp, han]
   · exact removalCollapseRoot_frame d n.id old p.id side parent v4 sibling
 
-theorem case_remove_collapse_child (w : World) (d : WG.Device) (hd : w.k.wg = some d)
+theorem case_remove_collapse_child (w : WGWorld) (ambient : Ambient) (d : WG.Device) (hd : w.dev = some d)
     (v4 : Bool) (outer : Context) (g p n a : NodeData) (gside side : Nat)
     (l r outerSibling : Tree) (hgb : gside < 2) (hb : side < 2) (hpowner : p.peer = none)
     (hroot : rootValue d v4 = (outer.plug (Tree.fork g gside
@@ -331,8 +331,8 @@ theorem case_remove_collapse_child (w : World) (d : WG.Device) (hd : w.k.wg = so
     let grand := forkNode (rootWidth v4) (outer.slot (rootSlot v4)) g gside target outerSibling
     let sibling := some (a.id, encode (rootWidth v4) (.child p.id (1-side)) a l r)
     let out := removalCollapseChild (unlisted d n.id) n.id old p.id side parent g.id gside grand sibling
-    ∃ w', (removeStep n.id).run w = .ok (.yield (), w') ∧
-      w'.k = { w.k with wg := some out } ∧
+    ∃ w' ambient', ((removeStep n.id).run w).run ambient = .ok ((.yield (), w'), ambient') ∧
+      w' = { w with dev := some out } ∧
       RemovedTree d out v4 (outer.plug (Tree.fork g gside target outerSibling)) n.id := by
   dsimp only
   have hfocus := outer.focus_rep _ _ hr
@@ -347,21 +347,21 @@ theorem case_remove_collapse_child (w : World) (d : WG.Device) (hd : w.k.wg = so
   have hap : a.id ≠ p.id := fun he => hps (by simp [Tree.nodeIds, he])
   have han : a.id ≠ n.id := fun he => hts n.id (by simp [Tree.nodeIds]) (by simp [Tree.nodeIds, ← he])
   have hag : a.id ≠ g.id := fun he => hgp (by simp [Tree.mem_fork_nodeIds, Tree.nodeIds, he])
-  obtain ⟨result, w', hrun, rfl, hk⟩ := (total_iff_run _ _ _).mp
-    (removeStep_leaf_collapse_child_wp w.k d hd n.id p.id side g.id gside _ _ _ ht.1 hp hg
+  obtain ⟨result, w', ambient', hrun, rfl, hk⟩ := (total_iff_run_ambient _ _ _).mp
+    (removeStep_leaf_collapse_child_wp w d hd n.id p.id side g.id gside _ _ _ ht.1 hp hg
       hnp hng hpg (by omega) (by omega) (by simpa using hpowner) rfl rfl forkNode_parent
       (some (a.id, encode (rootWidth v4) (.child p.id (1-side)) a l r))
       (forkNode_other hb) (by
         intro q qn he
         cases he
-        exact ⟨hs.1, han, hap, hag⟩)) w rfl
+        exact ⟨hs.1, han, hap, hag⟩)) w ambient rfl
   let old := encode (rootWidth v4) (.child p.id side) n .empty .empty
   let parent := forkNode (rootWidth v4) (.child g.id gside) p side (.node n .empty .empty) (.node a l r)
   let grand := forkNode (rootWidth v4) (outer.slot (rootSlot v4)) g gside
     (Tree.fork p side (.node n .empty .empty) (.node a l r)) outerSibling
   let sibling := some (a.id, encode (rootWidth v4) (.child p.id (1-side)) a l r)
   have hm := removalCollapseChild_metadata d n.id old p.id side parent g.id gside grand sibling
-  refine ⟨w', hrun, hk, ?_⟩
+  refine ⟨w', ambient', hrun, hk, ?_⟩
   apply removedTree_context d _ v4 n.id outer _ (Tree.fork g gside (.node a l r) outerSibling) hr hn
   · have he := (outer.append (gapContext g gside outerSibling)).eraseId_leaf_parent p n side (.node a l r)
       (by simpa [gapContext_plug] using hc) (by simpa [gapContext_plug] using hn)

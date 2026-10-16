@@ -18,10 +18,10 @@ structure RxQueueCell where
 def rxMap (epoch : Nat) (peers : Std.TreeMap Nat Peer) : PeerId → Option RxQueueCell :=
   fun i => peers[i]?.map fun p => ⟨epoch, p.internalId, p.rxQueue⟩
 
-def rxQueues (w : World) : PeerId → Option RxQueueCell :=
-  fun i => w.k.wg.bind fun d => rxMap d.ifindex d.peers i
+def rxQueues (w : WGWorld) : PeerId → Option RxQueueCell :=
+  fun i => w.dev.bind fun d => rxMap d.ifindex d.peers i
 
-abbrev RetainsRx (a : M α) := ProjectedAction rxQueues ResidentsRetained a
+abbrev RetainsRx (a : WG.M α) := ProjectedAction rxQueues ResidentsRetained a
 
 theorem rx_retained_refl (s : PeerId → Option RxQueueCell) : ResidentsRetained s s :=
   fun _ _ h => h
@@ -30,10 +30,13 @@ theorem rx_retained_trans {a b c : PeerId → Option RxQueueCell}
     (hab : ResidentsRetained a b) (hbc : ResidentsRetained b c) : ResidentsRetained a c :=
   fun i x h => hab i x (hbc i x h)
 
-theorem rxQueues_kernel (ha : SameKernel a) : SameView rxQueues a := by
-  intro w x v hr
-  unfold rxQueues
-  rw [ha w x v hr]
+theorem rxQueues_kernel {S α : Type} {m : Type → Type} {ps : PostShape}
+    [Monad m] [WPMonad m ps] {project : S → WGWorld} {a : StateT S m α}
+    (ha : SameView (fun w => wgStoreView (project w)) a) :
+    SameView (fun w => rxQueues (project w)) a :=
+  ha.of_factor
+    (fun store : WGStoreView => fun i => store.dev.bind fun d => rxMap d.ifindex d.peers i)
+    (fun w => rxQueues (project w)) (fun _ => rfl)
 
 theorem rxMap_insert_same (epoch : Nat) (peers : Std.TreeMap Nat Peer)
     (i : PeerId) (old p : Peer) (hp : peers[i]? = some old)
@@ -70,14 +73,22 @@ theorem modifyPeer_rxQueues (pid : PeerId) (f : Peer → Peer)
     (hs : ∀ p, (f p).internalId = p.internalId)
     (hq : ∀ p, (f p).rxQueue = p.rxQueue) :
     SameView rxQueues (do let p ← getPeer pid; setPeer pid (f p)) := by
-  apply SameView.of_wp
-  intro s
-  mvcgen [Peers.getPeer_spec, setPeer, modifyDev, modifyK]
-  dsimp +zetaDelta only at *
-  obtain ⟨rfl, d, hd, hp⟩ := ‹_ ∧ ∃ _, _ ∧ _›
-  subst s
-  funext j
-  simp only [rxQueues, hd, Option.bind_some, Option.map_some]
-  exact congrFun (rxMap_insert_same _ _ _ _ _ hp (hs _) (hq _)) j
+  apply (ProjectedAction.iff_run_ambient _ _ _).mpr
+  intro w ambient x v ambient' hr
+  cases hd : w.dev with
+  | none =>
+    simp [getPeer, getDev, hd, invariant, AmbientM.invariant] at hr
+    cases hr
+  | some d =>
+    cases hp : d.peers[pid]? with
+    | none =>
+      simp [getPeer, getDev, hd, hp, invariant, AmbientM.invariant] at hr
+      cases hr
+    | some p =>
+      simp [getPeer, getDev, setPeer, modifyDev, hd, hp] at hr
+      rcases hr with ⟨rfl, rfl, rfl⟩
+      funext j
+      simp only [rxQueues, hd, Option.bind_some, Option.map_some]
+      exact congrFun (rxMap_insert_same _ _ _ _ _ hp (hs _) (hq _)) j
 
 end Leanux.Proofs.WG.Queues

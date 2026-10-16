@@ -8,10 +8,38 @@ namespace Leanux.Proofs.WG.Keypairs.OperationObservers
 open Leanux Leanux.WG Leanux.Env Leanux.Proofs.Logged
 open Leanux.Proofs.WG.Keypairs Leanux.Proofs.WG.Keypairs.Observers
 open Leanux.Proofs.WG.Keypairs.SchedulerObservers
-open KernelFrames WGFrames WGTransitions WGMore EnvFrames
+open Std.Do Leanux.Proofs.Framing
+open WGFrames WGTransitions WGMore EnvFrames
 
 set_option maxHeartbeats 400000
 set_option pp.structureInstances false
+
+
+private theorem requireStepComplete_ordinary (b : UInt64) :
+    ProductOrdinaryAction (Env.requireStepComplete b) := by
+  apply (ordinaryAction_iff_wp _).mpr
+  intro P hp
+  have hd := (sameView_liftWG (fun w => snapshot w.wg) snapshot getDev
+    getDev_sameSnapshot (fun _ _ _ h => h)).wp P
+  mvcgen [-Std.Do.Spec.monadLift_StateT, Env.requireStepComplete, hd]
+
+private theorem requireNothingDue_ordinary (b : UInt64) :
+    ProductOrdinaryAction (Env.requireNothingDue b) := by
+  apply (ordinaryAction_iff_wp _).mpr
+  intro P hp
+  have hg := productGetWG_spec (fun s => P (snapshotOfWGStoreView s.2.2.2))
+  have ht := timerWorker_spec P
+  have ha := fun α (a : AmbientM α) => productAmbient_spec a
+    (fun w => P (snapshot w.wg)) (fun _ _ h => h)
+  unfold Hoare at hg ha
+  mvcgen [-Std.Do.Spec.monadLift_StateT, Env.requireNothingDue, Env.sectionAppearsLater,
+    hg, ht, ha, unsupported]
+
+private theorem operationRouting (a : Net.M α) :
+    OrdinaryAction (MonadLift.monadLift a : WG.M α) := by
+  apply SameView.ordinary
+  intro initial
+  exact hoare_liftRouting a (fun w => snapshot w = initial) (fun _ _ h => h)
 
 macro "operation_leaf_step" : tactic => `(tactic|
   first
@@ -24,22 +52,46 @@ macro "operation_leaf_step" : tactic => `(tactic|
     | (evolves_head rxPollLogged; refine rxPollLogged_evolves _ _ _ ?_
        intro packets
        exact evolves_liftM (ordinary_forM packets Env.deliverInner deliverInner_ordinary))
-    | (ordinary_head Leanux.getK; exact getK_sameSnapshot.ordinary)
-    | (ordinary_head WG.requireNotPending; exact (requireNotPending_sameSnapshot _ _).ordinary)
-    | (ordinary_head Env.requireDrained; exact (requireDrained_sameSnapshot _ _).ordinary)
-    | (ordinary_head Env.requireNoCryptWork; exact requireNoCryptWork_sameSnapshot.ordinary)
-    | (ordinary_head Env.runOneSendWorker; exact runOneSendWorker_sameSnapshot.ordinary)
-    | (ordinary_head Env.peekNextSite; exact peekNextSite_sameSnapshot.ordinary)
-    | (ordinary_head Env.fireTimer; exact fireTimer_ordinary _ _)
+    | (evolves_head Leanux.getRouting; unfold Leanux.getRouting)
+    | (evolves_head Leanux.getWG; unfold Leanux.getWG)
+    | (evolves_head Leanux.modifyWG; unfold Leanux.modifyWG)
+    | (ordinary_head Leanux.getWG; unfold Leanux.getWG)
+    | (ordinary_head Leanux.modifyWG; unfold Leanux.modifyWG)
+    | (ordinary_head Env.requireStepComplete; exact requireStepComplete_ordinary _)
+    | (ordinary_head Env.requireNothingDue; exact requireNothingDue_ordinary _)
+    | (ordinary_head WG.requireNotPending; exact SameView.ordinary (requireNotPending_sameSnapshot _ _))
+    | (ordinary_head Env.requireDrained; exact SameView.ordinary (requireDrained_sameSnapshot _ _))
+    | (ordinary_head Env.requireNoCryptWork; exact SameView.ordinary requireNoCryptWork_sameSnapshot)
+    | (ordinary_head Env.runOneSendWorker; exact SameView.ordinary runOneSendWorker_sameSnapshot)
+    | (ordinary_head Env.peekNextSite; exact SameView.ordinary peekNextSite_sameSnapshot)
     | (ordinary_head Env.runOneClearWorker; exact runOneClearWorker_ordinary)
-    | (ordinary_head Env.timerWorker; exact (timerWorker_sameSnapshot _).ordinary)
+    | (ordinary_head Env.timerWorker; exact SameView.ordinary (timerWorker_sameSnapshot _))
     | (ordinary_head Env.runTimerSection; refine runTimerSection_ordinary _ _ ?_)
     | (ordinary_head WG.timerCallback; exact timerCallback_ordinary _ _)
-    | (ordinary_head WG.delTimer; exact (delTimer_sameSnapshot _ _).ordinary)
-    | (ordinary_head Env.fixtureSend; exact fixtureSend_sameSnapshot.ordinary)
-    | (ordinary_head Env.senderSource; exact (senderSource_sameSnapshot _ _ _ _).ordinary)
+    | (ordinary_head WG.delTimer; exact SameView.ordinary (delTimer_sameSnapshot _ _))
+    | (ordinary_head Env.fixtureSend; exact SameView.ordinary fixtureSend_sameSnapshot)
+    | (ordinary_head Env.senderSource; exact SameView.ordinary (senderSource_sameSnapshot _ _ _ _))
     | (ordinary_head WG.wgReceive; exact wgReceive_ordinary _ _)
-    | scheduler_worker_step)
+    | (ordinary_head MonadLift.monadLift; exact operationRouting _)
+    | (ordinary_head liftM; exact operationRouting _)
+    | scheduler_worker_step
+    | env_product_step)
+
+macro "operation_structure_step" : tactic => `(tactic|
+  first
+    | intro_forall
+    | evolves_join_let
+    | evolves_join_use
+    | (evolves_head Bind.bind; refine evolves_bind ?_ ?_)
+    | (evolves_head Pure.pure; exact evolves_pure _)
+    | (evolves_head MonadExceptOf.throw; exact evolves_throw _)
+    | (evolves_head ite; refine evolves_ite _ ?_ ?_)
+    | (evolves_head Functor.discard; refine evolves_discard ?_)
+    | (evolves_head Functor.map; refine evolves_map _ ?_)
+    | (evolves_head ForIn.forIn; with_reducible refine evolves_range _ _ _ ?_)
+    | (evolves_head ForIn.forIn; with_reducible refine evolves_forIn _ _ _ ?_)
+    | evolves_head_reduce
+    | evolves_head_match)
 
 theorem runSendWorkersLogged_evolves  : Evolves (runSendWorkersLogged) := by
   unfold runSendWorkersLogged
@@ -54,10 +106,9 @@ theorem afterXmitLogged_evolves  : Evolves (afterXmitLogged) := by
 
 theorem runTimersLogged_evolves (jHi : UInt64) : Evolves (runTimersLogged jHi) := by
   unfold runTimersLogged
-  repeat' first
-    | (evolves_head runSendWorkersLogged; exact runSendWorkersLogged_evolves)
-    | (evolves_head afterXmitLogged; exact afterXmitLogged_evolves)
-    | operation_leaf_step
+  repeat' first | operation_structure_step | operation_leaf_step
+  all_goals exact evolves_throw _
+
 
 theorem runTimersPlaceholderLogged_evolves (jHi : UInt64) : Evolves (runTimersPlaceholderLogged jHi) := by
   unfold runTimersPlaceholderLogged
@@ -114,7 +165,8 @@ theorem injectLogged_evolves (family port : Nat) (msg : List UInt8)
     (tos : Nat) (ll : Bool) (dest : Nat) :
     Evolves (injectLogged family port msg tos ll dest) := by
   unfold injectLogged
-  repeat' operation_step
+  repeat' first | operation_structure_step | operation_step
+
 
 theorem pollScheduledInlineLogged_evolves : Evolves pollScheduledInlineLogged := by
   unfold pollScheduledInlineLogged

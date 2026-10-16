@@ -78,9 +78,10 @@ it is not part of that baseline.
 | Native/product lifetime receive and release contracts | 43 | 25 | 0 | 18 | 18 | 61 |
 | Native allocation, ingress, trie and product runner/environment carry | 116 | 57 | 2 | 57 | 10 | 124 |
 | Native allocation/trie carries and product scheduler/worker/environment callers | 172 | 89 | 2 | 81 | 10 | 180 |
+| Native routing, allocation, retirement, R6 terminals and product operation evolution | 102 | 50 | 2 | 50 | 7 | 107 |
 
-The whole tree currently contains 451 Lean files and 6,257 theorems. The completed
-changes total 1,203 retyped theorems, 1,603 deletions, 396 retained contract shapes and 145 added.
+The whole tree currently contains 451 Lean files and 6,262 theorems. The completed
+changes total 1,253 retyped theorems, 1,605 deletions, 446 retained contract shapes and 152 added.
 Retyping changes or generalizes the actual state/monad carrier or observation.
 This includes shorthand contracts whose source functions or named views move
 to a native monad. Mere namespace qualification and equivalent relocation of a
@@ -94,8 +95,9 @@ The count audit corrects the scheduler row from 17 retyped / 9 retained to
 was inconsistent with the native source-equality and acceptance-observer rows.
 Before this checkpoint, the corrected totals are 259 retyped / 89 retained,
 rather than 276 / 72. The before/after, deletion and addition counts are unchanged.
-Six terminal files remain unchanged. LifetimeSafety loses six redundant filesystem
-exports; every retained terminal body is unchanged. The terminal surface is now
+Five terminal files remain unchanged. LifetimeSafety loses six redundant filesystem
+exports. FloodResistance retains all six names: five native WG/Ambient contracts
+and the existing product advance contract. Other retained terminal bodies are unchanged. The terminal surface is now
 515 declarations (513 theorems and two definitions). **Every result remains lagging** until the complete tree
 passes its proof gate and kernel replay. R1/R2/R5/R6 retain their pre-split
 charter dispositions; initialized R3 packet authorization and R4 receive-pipeline
@@ -1542,3 +1544,46 @@ was no KILLED result, guest timeout or infrastructure rerun.
 A checkpoint-driver path-list error stopped before staging. Dirty worktrees
 were snapshotted to recovery refs before correcting the driver; working files
 and branches were unchanged by that failed command.
+
+
+## Routing, lifetime leaves and operation evolution
+
+Twelve carried modules contain 102 old theorems: 50 native/generalized retypes,
+50 retained contracts, two deletions and seven helpers added, giving 107.
+Routing insertion/refusal and complete removal retain structural premises,
+exact WG/Ambient endpoints, allocation frontier bounds and recorded sequencing.
+Allocation initialization keeps the original seven-field WG store premise;
+queue helpers keep arbitrary projected-state scope. Retirement accounts for
+all resident objects, and rotation retains arbitrary product invariant contracts
+alongside native specializations. All six R6 terminal names remain.
+
+Deleted: AllocationInv.wgKernel duplicates the existing seven-field store
+transport; allocation_prefill frames a Seccomp/Task-only action that cannot
+access WG state. Its runner initializer obligation remains to be carried.
+No deletion follows from a compile failure. The eleven product evolution
+contracts retain their original scope; structural composition first avoids
+expanding large continuations. The existing 400,000-heartbeat limit is unchanged.
+
+Scoped builds pass. All 152 explicit named axiom checks use only standard
+axioms, including unchanged insertion-coherence and routing-invariant helpers.
+Fourteen fresh entry-module kernel replays pass. Independent source reviews
+pass; an adjacent stale handshake-queue comment was identified for correction.
+Default build passes (66 jobs), and unit tests pass (131 tests, one skip).
+Source census, trust scan, unchanged limits and mirror equality with b700659
+pass. The proof gate remains pending; every register row remains lagging.
+The register summary's previous-checkpoint census omission is corrected here.
+
+Development failures: removal-loop composition had four normalization failures
+and one rejected axiom-command syntax error; receive-queue unpacking had one
+failure; peer-frame/rotation composition had three failures, including existing-limit
+heartbeat exhaustion. Operation evolution had eight failed drafts, including
+six with existing-limit heartbeat exhaustion, one unsupported tactic backend,
+and the final missing throw branches. The ninth build passed; failed dependent
+constant diagnostics were never accepted as results. A draft initializer with
+an overly strong whole-WG equality premise was caught and replaced by the
+original seven-field premise, then rebuilt and replayed. No limits or memory
+caps were raised; no KILLED result, guest timeout or infrastructure rerun occurred.
+
+Reproduce with capped builds of the carried modules, explicit named axiom
+printing, and capped scripts/in-bundle lake env leanchecker --fresh on each
+entry module (plus unchanged InsertionCoherence and RoutingInvariant).

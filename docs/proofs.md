@@ -20,8 +20,8 @@ remain on this branch. Initialized R3 packet authorization and R4 receive-pipeli
 conservation remain open; their next extensions follow the retrofit.
 
 The validated baseline `00641c6` has 471 Lean files and 7,715 named theorems.
-The current tree has 451 files and 6,249 theorems: completed changes comprise
-1,114 retyped, 1,601 deleted, 315 retained contract shapes and 135 added theorems.
+The current tree has 451 files and 6,262 theorems: completed changes comprise
+1,253 retyped, 1,605 deleted, 446 retained contract shapes and 152 added theorems.
 All 26 generic helpers and the additional update rule identified by the scope
 audit now retain arbitrary actual product-action scope, with three duplicate
 WP wrappers removed. Their dependent build, axioms, fresh replays and review pass.
@@ -30,8 +30,9 @@ contracts and corrects the earlier scheduler classification; total theorem,
 deletion and addition counts are unaffected.
 The census includes private and attributed declarations and excludes nested
 comments and strings. Deferred uncommitted R3 work is outside the baseline.
-Six terminal files remain unchanged; LifetimeSafety loses six redundant filesystem
-exports, with all retained bodies unchanged. There are now 515 terminal
+Five terminal files remain unchanged; LifetimeSafety loses six redundant filesystem
+exports. All six FloodResistance names remain, with native WG/Ambient endpoints
+where the source requires them. Other retained bodies are unchanged. There are 515 terminal
 declarations (513 theorems and two definitions).
 
 The CounterWindow, generic native contracts/adapters, acceptance-observer core,

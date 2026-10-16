@@ -7,8 +7,9 @@ set_option pp.structureInstances false
 namespace Leanux.Proofs.WG.AllowedIps
 open Leanux
 
-private theorem run_bind_eq (f : M α) (g : α → M β) (w : World) :
-    (f >>= g).run w = Except.bind (f.run w) (fun (a, w') => (g a).run w') := rfl
+private theorem run_bind_eq {S : Type} {m : Type → Type} [Monad m]
+    (f : StateT S m α) (g : α → StateT S m β) (w : S) :
+    (f >>= g).run w = (f.run w >>= fun (a, w') => (g a).run w') := rfl
 
 theorem RepAt.entry_owner (hr : RepAt nodes width parent t) (he : e ∈ t.entries) :
     (nodes[e.id]?).bind WG.AipNode.peer = some e.peer := by
@@ -102,13 +103,13 @@ theorem RemovedPeer.no_target_entry (h : RemovedPeer d out t4 t6 pid saved) :
   rw [h.entries] at he
   exact by simpa using (List.mem_filter.mp he).2
 
-theorem removeByPeer_total (w : World) (d : WG.Device) (hd : w.k.wg = some d)
+theorem removeByPeer_total (w : WGWorld) (ambient : Ambient) (d : WG.Device) (hd : w.dev = some d)
     (pid : Nat) (p : WG.Peer) (hp : d.peers[pid]? = some p)
     (t4 t6 : Tree) (hf : ForestRep d t4 t6)
     (hn4 : t4.nodeIds.Nodup) (hn6 : t6.nodeIds.Nodup)
     (hc4 : t4.Compressed) (hc6 : t6.Compressed) (hl : ResidentLists d t4 t6) :
-    ∃ out w', (WG.removeByPeer pid).run w = .ok ((), w') ∧
-      w'.k = {w.k with wg := some out} ∧ RemovedPeer d out t4 t6 pid p.allowedipsList := by
+    ∃ out w' ambient', ((WG.removeByPeer pid).run w).run ambient = .ok (((), w'), ambient') ∧
+      w' = {w with dev := some out} ∧ RemovedPeer d out t4 t6 pid p.allowedipsList := by
   have hs : OwnedIds p.allowedipsList t4 t6 := by
     intro id hi
     obtain ⟨e, he, hi, _⟩ := ((hl pid p hp).2 id).mp hi
@@ -124,41 +125,45 @@ theorem removeByPeer_total (w : World) (d : WG.Device) (hd : w.k.wg = some d)
   rw [← removeByPeerWithStep_eq]
   by_cases hempty : p.allowedipsList.isEmpty = true
   · have hnil : p.allowedipsList = [] := List.isEmpty_iff.mp hempty
-    refine ⟨d, record w .removeListEmpty true, ?_, ?_, ?_⟩
-    · simp [removeByPeerWithStep, WG.getPeer, WG.getDev, getK, hd, hp, hnil, branch, record]
+    refine ⟨d, w, record ambient .removeListEmpty true, ?_, ?_, ?_⟩
+    · simp [removeByPeerWithStep, WG.getPeer, WG.getDev, hd, hp, hnil, branch, AmbientM.branch, record, StateT.run_bind] <;> rfl
     · simp [← hd]
     · refine ⟨?_, ?_, entries⟩
       · simpa [hnil, removalStart] using (RemovedIds.nil hf)
       · simpa only [hnil, Tree.eraseIds] using hl
   · have hempty' : p.allowedipsList.isEmpty = false := Bool.eq_false_iff.mpr hempty
-    let start : World := {record w .removeListEmpty false with k := {w.k with wg := some (removalStart d p.allowedipsList)}}
-    obtain ⟨out, finish, he, hk, hr⟩ := remove_saved_total p.allowedipsList start
+    let start : WGWorld := {w with dev := some (removalStart d p.allowedipsList)}
+    let startAmbient := record ambient .removeListEmpty false
+    obtain ⟨out, finish, finalAmbient, he, hk, hr⟩ := remove_saved_total p.allowedipsList start startAmbient
       (removalStart d p.allowedipsList) rfl t4 t6 (removalStart_forest hf _)
       hn4 hn6 hc4 hc6 (hl pid p hp).1 hs
-    refine ⟨out, record finish .removeListIter false, ?_, ?_,
+    refine ⟨out, finish, record finalAmbient .removeListIter false, ?_, ?_,
       ⟨hr, hr.coherent (removalStart_lists hl _), entries⟩⟩
-    · have hg : (WG.getPeer pid).run w = .ok (p, w) := by
-        simp [WG.getPeer, WG.getDev, getK, hd, hp]
-      have hb (w : World) (dec : Decision) (value : Bool) :
-          (branch dec value).run w = .ok (value, record w dec value) := rfl
-      have hm : (WG.modifyDev (fun d => {d with peerAllowedips :=
-          {d.peerAllowedips with seq := d.peerAllowedips.seq + 1}})).run
-          (record w .removeListEmpty false) = .ok ((), start) := by
-        simp [WG.modifyDev, modifyK, hd, start, removalStart, hempty', record]
-      simp only [removeByPeerWithStep, run_bind_eq, hg, Except.bind, hb, hempty',
+    · have hg : ((WG.getPeer pid).run w).run ambient = .ok ((p, w), ambient) := by
+        simp [WG.getPeer, WG.getDev, hd, hp, StateT.run_bind] <;> rfl
+      have hb (w : WGWorld) (ambient : Ambient) (dec : Decision) (value : Bool) :
+          ((show WG.M Bool from branch dec value).run w).run ambient =
+            .ok ((value, w), record ambient dec value) := rfl
+      have hm : ((WG.modifyDev (fun d => {d with peerAllowedips :=
+          {d.peerAllowedips with seq := d.peerAllowedips.seq + 1}})).run w).run
+          startAmbient = .ok (((), start), startAmbient) := by
+        simp [WG.modifyDev, hd, start, removalStart, hempty', StateT.run_modify]
+      have exceptBind {α β : Type} (x : Except Stop α) (f : α → Except Stop β) :
+          (x >>= f) = Except.bind x f := rfl
+      dsimp only [startAmbient] at hm he
+      simp only [removeByPeerWithStep, run_bind_eq, hg, exceptBind, Except.bind, hb, hempty',
         Bool.false_eq_true, ↓reduceIte, hm, he, StateT.run_pure]
       rfl
-    · change finish.k = _
-      rw [hk]
+    · rw [hk]
 
-theorem removeByPeer_endpoint (w w' : World) (d : WG.Device) (hd : w.k.wg = some d)
+theorem removeByPeer_endpoint (w w' : WGWorld) (ambient ambient' : Ambient) (d : WG.Device) (hd : w.dev = some d)
     (pid : Nat) (p : WG.Peer) (hp : d.peers[pid]? = some p)
     (t4 t6 : Tree) (hf : ForestRep d t4 t6)
     (hn4 : t4.nodeIds.Nodup) (hn6 : t6.nodeIds.Nodup)
     (hc4 : t4.Compressed) (hc6 : t6.Compressed) (hl : ResidentLists d t4 t6)
-    (hr : (WG.removeByPeer pid).run w = .ok ((), w')) :
-    ∃ out, w'.k = {w.k with wg := some out} ∧ RemovedPeer d out t4 t6 pid p.allowedipsList := by
-  obtain ⟨out, finish, he, hk, hs⟩ := removeByPeer_total w d hd pid p hp t4 t6 hf hn4 hn6 hc4 hc6 hl
+    (hr : ((WG.removeByPeer pid).run w).run ambient = .ok (((), w'), ambient')) :
+    ∃ out, w' = {w with dev := some out} ∧ RemovedPeer d out t4 t6 pid p.allowedipsList := by
+  obtain ⟨out, finish, finalAmbient, he, hk, hs⟩ := removeByPeer_total w ambient d hd pid p hp t4 t6 hf hn4 hn6 hc4 hc6 hl
   rw [hr] at he
   cases he
   exact ⟨out, hk, hs⟩
@@ -181,28 +186,35 @@ theorem resident_eraseIds_entries (hf : ForestRep d t4 t6) (hc : ResidentLists d
 
 theorem RemovedPeer.findNode (h : RemovedPeer d out t4 t6 pid p.allowedipsList)
     (hf : ForestRep d t4 t6) (hc : ResidentLists d t4 t6) (hp : d.peers[pid]? = some p)
-    (w : World) (hd : w.k.wg = some out) (hv4 : t4.Valid 32) (hv6 : t6.Valid 128)
+    (w : WGWorld) (ambient : Ambient) (hd : w.dev = some out) (hv4 : t4.Valid 32) (hv6 : t6.Valid 128)
     (v4 : Bool) (key : Nat) (hk : key < 2 ^ rootWidth v4) :
     let t := if v4 then t4 else t6
-    ∃ w', (WG.findNode (rootValue out v4) (rootWidth v4) key).run w =
-        .ok ((t.eraseIds p.allowedipsList).lookupId (rootWidth v4) key, w') ∧
-      w'.k = w.k ∧ Winner (rootWidth v4) key (t.entries.filter (fun e => e.peer != pid))
+    ∃ w' ambient', ((WG.liftAip (WG.findNode (rootValue out v4) (rootWidth v4) key)).run w).run ambient =
+        .ok (((t.eraseIds p.allowedipsList).lookupId (rootWidth v4) key, w'), ambient') ∧
+      w' = w ∧ Winner (rootWidth v4) key (t.entries.filter (fun e => e.peer != pid))
         ((t.eraseIds p.allowedipsList).lookup (rootWidth v4) key) := by
-  have entries := resident_eraseIds_entries hf hc hp v4
-  cases v4
-  · have hv := Tree.eraseIds_valid t6 p.allowedipsList hv6
-    obtain ⟨w', he, hk⟩ := findNode_run w out 128 key (.inr rfl) hk hd
-      (t6.eraseIds p.allowedipsList) .root6 h.loop.forest.2.2.2 hv
-    refine ⟨w', ?_, hk, ?_⟩
-    · simpa only [rootValue, Bool.false_eq_true, ↓reduceIte, rootWidth, h.loop.forest.2.1] using he
-    · rw [← entries]
-      exact Tree.lookup_spec hv key
-  · have hv := Tree.eraseIds_valid t4 p.allowedipsList hv4
-    obtain ⟨w', he, hk⟩ := findNode_run w out 32 key (.inl rfl) hk hd
-      (t4.eraseIds p.allowedipsList) .root4 h.loop.forest.2.2.1 hv
-    refine ⟨w', ?_, hk, ?_⟩
-    · simpa only [rootValue, ↓reduceIte, rootWidth, h.loop.forest.1] using he
-    · rw [← entries]
-      exact Tree.lookup_spec hv key
+  let t := if v4 then t4 else t6
+  let store : WG.AipStore := {nodes := out.nodes, nextNode := out.nextNode, trie := out.peerAllowedips}
+  have hw : rootWidth v4 = 32 ∨ rootWidth v4 = 128 := by cases v4 <;> simp [rootWidth]
+  have hv : t.Valid (rootWidth v4) := by cases v4 <;> assumption
+  have hroot : rootValue out v4 = (t.eraseIds p.allowedipsList).root := by
+    cases v4
+    · exact h.loop.forest.2.1
+    · exact h.loop.forest.1
+  have hr : RepAt store.nodes (rootWidth v4) (rootSlot v4) (t.eraseIds p.allowedipsList) := by
+    cases v4
+    · exact h.loop.forest.2.2.2
+    · exact h.loop.forest.2.2.1
+  obtain ⟨finalStore, finalAmbient, he, hf'⟩ := findNode_run store ambient (rootWidth v4) key hw hk
+    (t.eraseIds p.allowedipsList) (rootSlot v4) hr (Tree.eraseIds_valid t p.allowedipsList hv)
+  subst finalStore
+  refine ⟨w, finalAmbient, ?_, rfl, ?_⟩
+  · rw [Leanux.Proofs.Framing.liftAip_run, hd, hroot]
+    dsimp only [store] at he
+    simp only [he, Except.map]
+    change Except.ok ((_, {w with dev := some out}), finalAmbient) = _
+    rw [← hd]
+  · rw [← resident_eraseIds_entries hf hc hp v4]
+    exact Tree.lookup_spec (Tree.eraseIds_valid t p.allowedipsList hv) key
 
 end Leanux.Proofs.WG.AllowedIps
