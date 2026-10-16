@@ -2725,7 +2725,7 @@ changed-source builds gave six ordinary failures then PASS263; the first
 failures included two imported generated matcher collisions, resolved by the
 two import-only prerequisites. A later orchestration syntax exception occurred
 before any tool executed; every dirty worktree was preserved at
-\`refs/snapshots/proof-campaign-routing-check-driver-20261016T205312Z/\`
+`refs/snapshots/proof-campaign-routing-check-driver-20261016T205312Z/`
 before the corrected checks.
 
 HandshakeConsume/Calls carry exact native Noise execution with both Ambient
@@ -2745,7 +2745,7 @@ and four isolated passes; none of those passes validated a module. All
 fourteen cancellations targeted inspected owned PIDs. The last product
 diagnostic exited 143 with a KILLED signal banner and is a failure. Its
 post-cancellation preservation prefix is
-\`refs/snapshots/proof-campaign-handshake-product-20261016T205450Z/\`.
+`refs/snapshots/proof-campaign-handshake-product-20261016T205450Z/`.
 Earlier preservation windows are reported above. Final named-axiom and fresh
 replay checks pass; no source admission, raised limit or infrastructure rerun
 was used. Earlier bounded failed-driver outputs do not support a claim that
@@ -2785,3 +2785,6 @@ print(p.read_text());sys.exit(r.returncode)
 
 PY
 ```
+
+A documentation-format command had a syntax exception before executing any tool.
+Every dirty worktree was preserved at `refs/snapshots/proof-campaign-doc-format-driver-20261016T205954Z/` before resumption.
