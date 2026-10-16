@@ -76,10 +76,10 @@ theorem createInitiation_indices_spec (pid : PeerId) :
     ⦃fun w => ⌜IndicesSafe w⌝⦄ createInitiation pid ⦃⇓? _ w => ⌜IndicesSafe w⌝⦄ := by
   let P := fun k : Kernel => ∃ d, k.wg = some d ∧ UniqueIndices d.indexTable
   have hh := hidden_kernel_spec P
-  have hg := generatePublic_kernel_spec P
-  have he := messageEphemeral_kernel_spec P
-  have hd := mixDh_kernel_spec P
-  have hs := mixPrecomputedDh_kernel_spec P
+  have hg := generatePublic_wg_spec P
+  have he := messageEphemeral_wg_spec P
+  have hd := mixDh_wg_spec P
+  have hs := mixPrecomputedDh_wg_spec P
   have hi := indexInsert_indices_spec
   have hp := setPeer_indices_spec
   noise_vcgen [createInitiation, _private.Leanux.WG.Handshake.«0».Leanux.WG.setChain,
@@ -90,11 +90,11 @@ theorem createResponse_indices_spec (pid : PeerId) :
     ⦃fun w => ⌜IndicesSafe w⌝⦄ createResponse pid ⦃⇓? _ w => ⌜IndicesSafe w⌝⦄ := by
   let P := fun k : Kernel => ∃ d, k.wg = some d ∧ UniqueIndices d.indexTable
   have hh := hidden_kernel_spec P
-  have hg := generatePublic_kernel_spec P
-  have he := messageEphemeral_kernel_spec P
-  have hd := mixDh_kernel_spec P
-  have hk := kdf_kernel_spec P
-  have ho := kdfOut_kernel_spec P
+  have hg := generatePublic_wg_spec P
+  have he := messageEphemeral_wg_spec P
+  have hd := mixDh_wg_spec P
+  have hk := kdf_wg_spec P
+  have ho := kdfOut_wg_spec P
   have hi := indexInsert_indices_spec
   have hp := setPeer_indices_spec
   noise_vcgen [createResponse, _private.Leanux.WG.Handshake.«0».Leanux.WG.setChain,

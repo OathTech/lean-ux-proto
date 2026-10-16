@@ -43,8 +43,8 @@ theorem deriveKeys_ownersFresh (kp : KeypairId) (initiator : Bool) (ck : List UI
   let P := fun k : Kernel => ∃ d, k.wg = some d ∧ UniqueOwners d.indexTable ∧ KeypairOwnersBounded d ∧
     kp < d.nextKeypairId ∧ ∀ e ∈ d.indexTable, e.owner ≠ .keypair kp
   have hh := hiddenClock64_kernel_spec P
-  have hk := kdf_kernel_spec P
-  have ho := kdfOut_kernel_spec P
+  have hk := kdf_wg_spec P
+  have ho := kdfOut_wg_spec P
   have hs := setKeypair_ownersFresh kp
   mvcgen [deriveKeys, getKeypair, getDev, getK, invariant, hh, hk, ho, hs]
 

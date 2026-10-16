@@ -1,4 +1,4 @@
-import Leanux.Proofs.WG.Noise.KernelFrames
+import Leanux.Proofs.WG.Noise.CryptoFrames
 
 set_option pp.structureInstances false
 set_option maxHeartbeats 400000

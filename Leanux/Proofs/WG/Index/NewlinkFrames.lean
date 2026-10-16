@@ -1,5 +1,5 @@
 import Leanux.Proofs.WG.Index.LifecycleModel
-import Leanux.Proofs.WG.Noise.KernelFrames
+import Leanux.Proofs.WG.Noise.CryptoFrames
 import Leanux.Proofs.WG.TimerDiscipline.SendCutFrames
 
 set_option autoImplicit false

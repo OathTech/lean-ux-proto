@@ -40,10 +40,10 @@ theorem confirmationEffect_peer (pid : PeerId) (received : KeypairId) (d final :
     (effect : ConfirmationEffect pid received d p ok final) :
     final.peers[pid]? = some (if ok then rotationPeer (confirmationPlan p received) p else p) := by
   by_cases matched : p.keypairNext = some received
-  · simp only [ConfirmationEffect, matched, if_pos] at effect
+  · simp only [ConfirmationEffect, matched, ite_eq_left] at effect
     obtain ⟨rfl, steps⟩ := effect
     exact rotationRun_peer steps p resident
-  · simp only [ConfirmationEffect, matched, if_neg] at effect
+  · simp only [ConfirmationEffect, matched] at effect
     obtain ⟨rfl, rfl⟩ := effect
     exact resident
 

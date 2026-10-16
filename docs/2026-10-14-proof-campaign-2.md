@@ -7,11 +7,12 @@
 all six results are lagging until carried. Counts, type-justified frame
 deletions and scoped validation are tracked in the
 [retrofit report](2026-10-16-proof-campaign-2-state-split.md).
-The first two support tranches carry nine contracts, retain twenty-one and add
-four native companions: thirty-four checked theorems, with 258 terminal names
-still awaiting retrofit validation. No frame deletion has yet been made.
+The support tranches retype sixteen original theorems, retain sixty-three,
+delete six type-given frames and add seven native laws/adapters: eighty-six
+checked theorems, with 258 terminal names still awaiting retrofit validation.
+The frame/claim file map and pending consumers are in the retrofit report.
 
-Branch `proofs/campaign-2`, worktree `.worktrees/proofs-campaign-2`,
+Historical checkpoint: branch `proofs/campaign-2`, worktree `.worktrees/proofs-campaign-2`,
 Lean v4.35.0, mirror **`de62c9d`**. The proofs are **lagging main's
 representation batch `cb2348e`**. No merge or push during this resumption.
 **None of H1–H6 is complete.** The historical H5 backlog finding is complete;

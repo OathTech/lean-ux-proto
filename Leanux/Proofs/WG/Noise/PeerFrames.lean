@@ -1,22 +1,10 @@
 import Leanux.Proofs.WG.Noise.Slots
-import Leanux.Proofs.WG.Noise.KernelFrames
+import Leanux.Proofs.WG.Noise.CryptoFrames
 
 set_option pp.structureInstances false
 
 namespace Leanux.Proofs.WG.Noise
 open Leanux Leanux.WG Std.Do
-
-theorem indexRemove_peers_spec (P : (PeerId → Option Peer) → Prop)
-    (owner : IndexOwner) :
-    ⦃fun w => ⌜P (peerAt w)⌝⦄ indexRemove owner
-    ⦃⇓? _ w => ⌜P (peerAt w)⌝⦄ := by
-  have hm := modifyDev_peers_spec P
-  noise_vcgen [indexRemove, _private.Leanux.WG.Peer.«0».Leanux.WG.unhashEntry,
-    getDev, getK, branch, invariant, hm]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals try dsimp [peerAt] at *
-  all_goals try simp_all
-  all_goals try trivial
 
 theorem bucketHas_kernel_spec (P : Kernel → Prop) (walk collide : Decision) (index : Nat) :
     ⦃fun w => ⌜P w.k⌝⦄
@@ -26,21 +14,6 @@ theorem bucketHas_kernel_spec (P : Kernel → Prop) (walk collide : Decision) (i
     indexBucket, getDev, getK, branch, invariant]
   case inv1 => exact ((⇓? _ w => ⌜P w.k⌝) : PostCond _ (.arg World (.except Stop .pure)))
   all_goals try dsimp +zetaDelta only at *
-  all_goals try simp_all
-  all_goals try trivial
-
-theorem indexInsert_peers_spec (P : (PeerId → Option Peer) → Prop)
-    (owner : IndexOwner) :
-    ⦃fun w => ⌜P (peerAt w)⌝⦄ indexInsert owner
-    ⦃⇓? _ w => ⌜P (peerAt w)⌝⦄ := by
-  have hm := modifyDev_peers_spec P
-  have hh := hidden_kernel_spec (fun k => P (fun i => k.wg.bind fun d => d.peers[i]?))
-  have hb := bucketHas_kernel_spec (fun k => P (fun i => k.wg.bind fun d => d.peers[i]?))
-  noise_vcgen [indexInsert, _private.Leanux.WG.Peer.«0».Leanux.WG.unhashEntry,
-    getDev, getK, branch, invariant, unsupported, recordBudget, budgetExhausted, hh, hb, hm]
-  case inv1 => exact ((⇓? _ w => ⌜P (peerAt w)⌝) : PostCond _ (.arg World (.except Stop .pure)))
-  all_goals try dsimp +zetaDelta only at *
-  all_goals try dsimp [peerAt] at *
   all_goals try simp_all
   all_goals try trivial
 
@@ -61,8 +34,8 @@ theorem deriveKeys_peers_spec (P : (PeerId → Option Peer) → Prop)
     ⦃⇓? _ w => ⌜P (peerAt w)⌝⦄ := by
   let PK := fun k : Kernel => P (fun i => k.wg.bind fun d => d.peers[i]?)
   have hh := hiddenClock64_kernel_spec PK
-  have hk := kdf_kernel_spec PK
-  have ho := kdfOut_kernel_spec PK
+  have hk := kdf_wg_spec PK
+  have ho := kdfOut_wg_spec PK
   mvcgen [deriveKeys, getKeypair, getDev, getK, setKeypair, modifyDev, modifyK,
     invariant, hh, hk, ho]
   all_goals try dsimp +zetaDelta only at *
@@ -70,14 +43,5 @@ theorem deriveKeys_peers_spec (P : (PeerId → Option Peer) → Prop)
   all_goals try dsimp [peerAt] at *
   all_goals simp_all [PK, peerAt, Option.bind_map, Function.comp_def]
   all_goals assumption
-
-theorem indexReplaceHandshake_peers_spec (P : (PeerId → Option Peer) → Prop)
-    (pid : PeerId) (kp : KeypairId) :
-    ⦃fun w => ⌜P (peerAt w)⌝⦄ indexReplaceHandshake pid kp
-    ⦃⇓? _ w => ⌜P (peerAt w)⌝⦄ := by
-  have hm := modifyDev_peers_spec P
-  mvcgen [indexReplaceHandshake, indexHashed, getDev, getK, branch, invariant, hm]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [peerAt]
 
 end Leanux.Proofs.WG.Noise

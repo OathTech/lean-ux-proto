@@ -1,4 +1,4 @@
-import Leanux.Proofs.WG.Noise.KernelFrames
+import Leanux.Proofs.WG.Noise.CryptoFrames
 import Leanux.Proofs.WG.Noise.Slots
 import Leanux.WG.Timers
 

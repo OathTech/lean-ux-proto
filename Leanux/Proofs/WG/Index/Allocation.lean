@@ -1,6 +1,6 @@
 import Leanux.Proofs.WG.Index.AllocationModel
 import Leanux.Proofs.WG.Index.PeerWords
-import Leanux.Proofs.WG.Noise.KernelFrames
+import Leanux.Proofs.WG.Noise.CryptoFrames
 
 set_option autoImplicit false
 set_option pp.structureInstances false

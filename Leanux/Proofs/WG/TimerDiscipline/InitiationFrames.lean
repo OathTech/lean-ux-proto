@@ -17,10 +17,10 @@ theorem createInitiation_view (pid : PeerId) (v : InitiationView) :
       ⦃⇓? _ w => ⌜initiationAt w pid = some v⌝⦄ := by
   let P := fun k : Kernel => ((k.wg.bind fun d => d.peers[pid]?).map initiationView) = some v
   have hh := hidden_kernel_spec P
-  have hg := generatePublic_kernel_spec P
-  have he := messageEphemeral_kernel_spec P
-  have hd := mixDh_kernel_spec P
-  have hs := mixPrecomputedDh_kernel_spec P
+  have hg := generatePublic_wg_spec P
+  have he := messageEphemeral_wg_spec P
+  have hd := mixDh_wg_spec P
+  have hs := mixPrecomputedDh_wg_spec P
   have hi := indexInsert_peers_spec (fun ps => (ps pid).map initiationView = some v)
   noise_vcgen [createInitiation, _private.Leanux.WG.Handshake.«0».Leanux.WG.setChain,
     IndexOwner.peerDeref, IndexOwner.peerWord, unsupported, getPeer, getDev, getK,

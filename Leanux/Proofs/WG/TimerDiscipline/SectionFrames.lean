@@ -1,5 +1,5 @@
 import Leanux.Proofs.WG.TimerDiscipline.FireSource
-import Leanux.Proofs.WG.Noise.KernelFrames
+import Leanux.Proofs.WG.Noise.CryptoFrames
 
 set_option autoImplicit false
 set_option pp.structureInstances false

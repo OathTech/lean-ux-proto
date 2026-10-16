@@ -1,4 +1,4 @@
-import Leanux.Proofs.WG.Noise.KernelFrames
+import Leanux.Proofs.WG.Noise.CryptoFrames
 
 set_option autoImplicit false
 namespace Leanux.Proofs.WG.Config

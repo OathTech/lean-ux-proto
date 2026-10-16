@@ -17,10 +17,10 @@ theorem consumeInitiation_tables (msg : List UInt8) : Ensures (consumeInitiation
   have hl := pubkeyLookup_tables
   have hf := peerPut_tables
   have hh := hiddenClock64_kernel_spec TablesSafeKernel
-  have he := messageEphemeral_kernel_spec TablesSafeKernel
-  have hd := mixDh_kernel_spec TablesSafeKernel
-  have hs := mixPrecomputedDh_kernel_spec TablesSafeKernel
-  have hm := messageDecrypt_kernel_spec TablesSafeKernel
+  have he := messageEphemeral_wg_spec TablesSafeKernel
+  have hd := mixDh_wg_spec TablesSafeKernel
+  have hs := mixPrecomputedDh_wg_spec TablesSafeKernel
+  have hm := messageDecrypt_wg_spec TablesSafeKernel
   have hp := setPeer_tables
   rw [ensures_iff]
   mvcgen -trivial [consumeInitiation, WG.orM, getPeer, getDev, getK,
@@ -33,11 +33,11 @@ theorem consumeResponse_tables (msg : List UInt8) : Ensures (consumeResponse msg
     (fun w => TablesSafeKernel w.k) (fun _ w => TablesSafeKernel w.k) := by
   have hl := indexLookup_tables
   have hf := peerPut_tables
-  have he := messageEphemeral_kernel_spec TablesSafeKernel
-  have hd := mixDh_kernel_spec TablesSafeKernel
-  have hk := kdf_kernel_spec TablesSafeKernel
-  have ho := kdfOut_kernel_spec TablesSafeKernel
-  have hm := messageDecrypt_kernel_spec TablesSafeKernel
+  have he := messageEphemeral_wg_spec TablesSafeKernel
+  have hd := mixDh_wg_spec TablesSafeKernel
+  have hk := kdf_wg_spec TablesSafeKernel
+  have ho := kdfOut_wg_spec TablesSafeKernel
+  have hm := messageDecrypt_wg_spec TablesSafeKernel
   have hp := setPeer_tables
   rw [ensures_iff]
   mvcgen [consumeResponse, getPeer, getDev, getK,

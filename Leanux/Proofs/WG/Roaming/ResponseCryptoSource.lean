@@ -1,6 +1,6 @@
 import Leanux.Proofs.WG.Roaming.ResponseModel
 import Leanux.Proofs.WG.Noise.Basic
-import Leanux.Proofs.WG.Noise.KernelFrames
+import Leanux.Proofs.WG.Noise.CryptoFrames
 
 set_option autoImplicit false
 set_option pp.structureInstances false

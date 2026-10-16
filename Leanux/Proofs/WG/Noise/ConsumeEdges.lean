@@ -22,10 +22,10 @@ theorem consumeInitiation_tag (msg : List UInt8) :
   have hp := fun key => unconstrained_prefix (pubkeyLookup key)
   have hf := fun pid => unconstrained_prefix (peerPut pid)
   have hh := hiddenClock64_kernel_spec (fun _ => True)
-  have he := messageEphemeral_kernel_spec (fun _ => True)
-  have hd := mixDh_kernel_spec (fun _ => True)
-  have hs := mixPrecomputedDh_kernel_spec (fun _ => True)
-  have hm := messageDecrypt_kernel_spec (fun _ => True)
+  have he := messageEphemeral_wg_spec (fun _ => True)
+  have hd := mixDh_wg_spec (fun _ => True)
+  have hs := mixPrecomputedDh_wg_spec (fun _ => True)
+  have hm := messageDecrypt_wg_spec (fun _ => True)
   mvcgen -trivial [consumeInitiation, Leanux.WG.orM, getPeer, getDev, getK,
     setPeer, modifyDev, modifyK, branch, branchCmp, invariant, hp, hf, hh, he, hd, hs, hm]
   all_goals try dsimp +zetaDelta only at *
@@ -43,11 +43,11 @@ theorem consumeResponse_tag (msg : List UInt8) :
   rw [ensures_iff]
   have hi := fun kinds index => unconstrained_prefix (indexLookup kinds index)
   have hf := fun pid => unconstrained_prefix (peerPut pid)
-  have he := messageEphemeral_kernel_spec (fun _ => True)
-  have hd := mixDh_kernel_spec (fun _ => True)
-  have hk := kdf_kernel_spec (fun _ => True)
-  have ho := kdfOut_kernel_spec (fun _ => True)
-  have hm := messageDecrypt_kernel_spec (fun _ => True)
+  have he := messageEphemeral_wg_spec (fun _ => True)
+  have hd := mixDh_wg_spec (fun _ => True)
+  have hk := kdf_wg_spec (fun _ => True)
+  have ho := kdfOut_wg_spec (fun _ => True)
+  have hm := messageDecrypt_wg_spec (fun _ => True)
   mvcgen [consumeResponse, getPeer, getDev, getK,
     setPeer, modifyDev, modifyK, branch, invariant, hi, hf, he, hd, hk, ho, hm]
   all_goals try dsimp +zetaDelta only at *

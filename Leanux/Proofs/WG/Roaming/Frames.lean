@@ -1,6 +1,6 @@
 import Leanux.Proofs.WG.Roaming.EndpointSource
 import Leanux.Proofs.WG.Roaming.Model
-import Leanux.Proofs.WG.Noise.KernelFrames
+import Leanux.Proofs.WG.Noise.CryptoFrames
 
 set_option maxHeartbeats 800000
 

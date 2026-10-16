@@ -36,8 +36,8 @@ theorem deriveKeys_indices_spec (kp : KeypairId) (initiator : Bool) (ck : List U
     ⦃fun w => ⌜IndicesSafe w⌝⦄ deriveKeys kp initiator ck ⦃⇓? _ w => ⌜IndicesSafe w⌝⦄ := by
   let P := fun k : Kernel => ∃ d, k.wg = some d ∧ UniqueIndices d.indexTable
   have hh := hiddenClock64_kernel_spec P
-  have hk := kdf_kernel_spec P
-  have ho := kdfOut_kernel_spec P
+  have hk := kdf_wg_spec P
+  have ho := kdfOut_wg_spec P
   have hs := setKeypair_indices_spec
   mvcgen [deriveKeys, getKeypair, getDev, getK, invariant, hh, hk, ho, hs]
 

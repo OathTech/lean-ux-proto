@@ -44,7 +44,7 @@ theorem released_unhashed (d : Device) (id : KeypairId) (k : Keypair) (now : Boo
     ∀ e ∈ (releasedDevice d id k now).indexTable, e.owner ≠ .keypair id := by
   rw [released_table]
   have test : (now || k.refcount == 1) = true := by cases removing <;> simp_all
-  rw [if_pos test]
+  rw [ite_eq_left test]
   exact remove_absent _ _
 
 end Leanux.Proofs.WG.Index

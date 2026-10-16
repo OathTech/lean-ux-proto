@@ -64,8 +64,9 @@ remain historical and lagging during the retrofit. The
 [retrofit report](2026-10-16-proof-campaign-2-state-split.md) records baseline
 counts, carries, deletions and validation. This branch retains the proof
 target and gate removed from main pending campaign 1's landing.
-The initial support tranches check thirty-four theorems (nine retyped/generalized,
-twenty-one retained, four native companions). All six campaign 2 terminal
+The support tranches check eighty-six theorems (sixteen retyped/generalized,
+sixty-three retained, seven native laws/adapters), and delete six type-given
+frames. All six campaign 2 terminal
 closures remain lagging; no split terminal pass is claimed.
 
 | Result | Statements | Directory | Charter | Review | Mirror commit | Status |

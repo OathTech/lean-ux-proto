@@ -19,8 +19,8 @@ and attributed theorem declarations. Campaign 2 owns 427 Lean files,
 | Result | Files | Before theorems | Before headlines | Retrofit status |
 | --- | ---: | ---: | ---: | --- |
 | Common projection | 2 | 0 | 0 | Native and product observations carried |
-| H1 Noise | 35 | 171 | 22 | Native execution/getter/setter carried; terminal closure pending |
-| H2 Index | 68 | 318 | 52 | Three table contracts and seven pure table theorems carried; remaining closure pending |
+| H1 Noise | 35 | 171 | 22 | Native execution/access and seven crypto frames carried; six type-given frames deleted; pure release/rotation/confirmation relations checked; terminal closure pending |
+| H2 Index | 68 | 318 | 52 | Three table contracts and 36 pure theorems checked; lookup/caller closure pending |
 | H3 Roaming | 35 | 119 | 13 | Pure observation models build; native calls and product callbacks pending |
 | H4 Configuration | 130 | 554 | 79 | Total-return laws and one pure theorem checked; operational carry pending |
 | H5 Progress | 59 | 265 | 42 | Twelve pure/control theorems checked; operational carry pending |
@@ -146,7 +146,7 @@ Replay those roots with `scripts/in-bundle lake env leanchecker --fresh MODULE`
 | This tranche | 12 | 5 | 0 | 7 | 2 | 14 |
 | Cumulative checked support | 30 | 9 | 0 | 21 | 4 | 34 |
 
-The tree has 428 campaign-owned files and 1,835 theorems. The remaining
+At `b1d899d` the tree has 428 campaign-owned files and 1,835 theorems. The remaining
 baseline theorem count awaiting validation is 1,801. All 258 headline names
 remain present and all six terminal closures remain lagging.
 
@@ -178,3 +178,78 @@ Reproduce with `scripts/in-bundle lake build Leanux.Proofs.WG.Index.Table`
 and `scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Index.Table`,
 through `capped` on this host. This is scoped support validation, not a
 terminal or full-tree gate pass.
+
+## Component frames and pure lifecycle relations
+
+| Tranche | Before | Retyped | Deleted | Kept | Added | After |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `Noise.KernelFrames` and three index peer frames | 13 | 7 | 6 | 0 | 3 | 10 |
+| Pure index owner/allocation/lifecycle/lookup/sequence closure | 13 | 0 | 0 | 13 | 0 | 13 |
+| Pure release/rotation/confirmation/session-readiness closure | 29 | 0 | 0 | 29 | 0 | 29 |
+| This tranche | 55 | 7 | 6 | 42 | 3 | 52 |
+| Cumulative processed baseline and checked support | 85 | 16 | 6 | 63 | 7 | 86 |
+
+The tree now has 429 campaign-owned files and 1,832 theorems. Of the baseline,
+1,746 theorems still await validation. All 258 headline names remain, and no
+terminal closure has passed on the split mirror. Retained-pending declarations
+are excluded from the checked-kept count.
+
+`Noise.KernelFrames` is replaced by `Noise.CryptoFrames`: its seven crypto
+helpers still have type `WG.M`, which permits WireGuard mutation, so their
+preservation obligations remain substantive. Each now quantifies arbitrary
+`WGWorld` predicates and all actual Ambient executions. Its three other
+leaves (`hidden_kernel_spec`, `hiddenClock64_kernel_spec`, and
+`keypairAllocation_kernel_spec`) disappear because their underlying actions
+have type `AmbientM`. Their lifted execution cannot access the outer state.
+
+The three `Noise.PeerFrames` index-operation peer frames disappear because
+`indexRemove`, `indexInsert` and `indexReplaceHandshake` have type
+`IndexM = StateT (List IndexEntry) AmbientM`: peers are absent from their
+state. The real guarded `liftIndex` only writes the table back. These are
+type-based deletions, not reactions to compile errors. The bucket's own-table
+preservation, keypair creation and derivation peer frames remain substantive
+and pending in `PeerFrames`; none is counted as validated.
+
+`Noise.ComponentFrames` holds three local variants matching campaign 1's
+`hoare_liftAmbient`, `liftIndex_run` and `hoare_liftIndex`. The native run
+equation retains the missing-device error and actual table-only writeback;
+the Hoare rule requires stability under that writeback. These few generic
+adapters replace the deleted operation-specific leaves. They can be replaced
+by campaign 1's retyped layer when it reaches this branch. Twelve direct
+imports and 59 crypto-symbol references were renamed mechanically; this
+does not validate their still-unported consumers. Deleted-leaf uses remain
+in those pending consumers rather than gaining compatibility aliases.
+
+The two pure closures carry 42 further original theorems unchanged in
+meaning: owner words, allocation, lifecycle and lookup-none/sequence models;
+release effects, slot rotation, confirmation sequences and session readiness.
+Two deprecated `if_pos` uses were changed to `ite_eq_left` and an unused
+`if_neg` simplification argument was removed. No warning suppression or
+strengthened premise was introduced.
+
+Validation: component/crypto build 27 jobs, pure index build 26 jobs and
+final pure Noise build 45 jobs, all warning-free. Axiom checks cover 22 roots
+in four component/crypto modules, 49 roots in nine pure index modules and
+107 roots in 22 pure Noise modules; only the standard three axioms occur.
+All six fresh replay roots pass; independent complete review found no
+semantic defect and confirmed the consumer lag described above. Static
+token/import/root/default-target checks pass; mirror and shared files remain
+unchanged. These are scoped support checks, not a full proof-gate pass.
+
+Development: six capped changed-source component/crypto stdin probes (four
+failures, one warning-bearing pass and a clean pass), then one clean packaging
+build. One probe hit the default heartbeat limit while inferring an unspecified
+lifted action; explicitly supplying the actual branch resolved it without a
+limit increase. The pure index build passed first time. The pure Noise build
+passed with four warnings, then passed cleanly after the two source edits
+above. No unchanged failure rerun, infrastructure retry or cap increase.
+
+Reproduce the scoped builds with `scripts/in-bundle lake build` and these
+module suffixes under `Leanux.Proofs.WG`:
+
+- `Noise.ComponentFrames`, `Noise.CryptoFrames`;
+- `Index.LifecycleModel`, `Index.LookupNoneModel`, `Index.SessionSequenceEffects`;
+- `Noise.ConfirmationSequenceEffects`, `Noise.SessionReadyFrames`.
+
+Fresh-replay those roots with `scripts/in-bundle lake env leanchecker --fresh`
+(`CryptoFrames` includes `ComponentFrames`). Use `capped` on this host.

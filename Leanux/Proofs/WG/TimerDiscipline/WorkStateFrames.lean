@@ -39,10 +39,10 @@ theorem createInitiation_queueWorkView (pid : PeerId) (queue : WorkQueues) (pend
       ⦃⇓? _ w => ⌜queueWorkAt w pid = (some queue, some pending)⌝⦄ := by
   let P := fun k : Kernel => queueWorkKernel k pid = (some queue, some pending)
   have hh := hidden_kernel_spec P
-  have hg := generatePublic_kernel_spec P
-  have he := messageEphemeral_kernel_spec P
-  have hd := mixDh_kernel_spec P
-  have hs := mixPrecomputedDh_kernel_spec P
+  have hg := generatePublic_wg_spec P
+  have he := messageEphemeral_wg_spec P
+  have hd := mixDh_wg_spec P
+  have hs := mixPrecomputedDh_wg_spec P
   have hi := fun owner => indexInsert_queueWorkView owner pid queue pending
   have hc := fun ck hash => setChain_spec_queue_variant pid ck hash queue pending
   noise_vcgen [createInitiation,

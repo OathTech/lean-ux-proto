@@ -25,10 +25,10 @@ theorem createInitiation_owners_spec (pid : PeerId) :
     ⦃fun w => ⌜OwnersBoundedSafe w⌝⦄ createInitiation pid ⦃⇓? _ w => ⌜OwnersBoundedSafe w⌝⦄ := by
   let P := fun k : Kernel => ∃ d, k.wg = some d ∧ UniqueOwners d.indexTable ∧ KeypairOwnersBounded d
   have hh := hidden_kernel_spec P
-  have hg := generatePublic_kernel_spec P
-  have he := messageEphemeral_kernel_spec P
-  have hd := mixDh_kernel_spec P
-  have hs := mixPrecomputedDh_kernel_spec P
+  have hg := generatePublic_wg_spec P
+  have he := messageEphemeral_wg_spec P
+  have hd := mixDh_wg_spec P
+  have hs := mixPrecomputedDh_wg_spec P
   have hi := indexInsert_handshake_ownersBounded
   have hp := setPeer_ownersBounded
   noise_vcgen [createInitiation, _private.Leanux.WG.Handshake.«0».Leanux.WG.setChain,
@@ -39,11 +39,11 @@ theorem createResponse_owners_spec (pid : PeerId) :
     ⦃fun w => ⌜OwnersBoundedSafe w⌝⦄ createResponse pid ⦃⇓? _ w => ⌜OwnersBoundedSafe w⌝⦄ := by
   let P := fun k : Kernel => ∃ d, k.wg = some d ∧ UniqueOwners d.indexTable ∧ KeypairOwnersBounded d
   have hh := hidden_kernel_spec P
-  have hg := generatePublic_kernel_spec P
-  have he := messageEphemeral_kernel_spec P
-  have hd := mixDh_kernel_spec P
-  have hk := kdf_kernel_spec P
-  have ho := kdfOut_kernel_spec P
+  have hg := generatePublic_wg_spec P
+  have he := messageEphemeral_wg_spec P
+  have hd := mixDh_wg_spec P
+  have hk := kdf_wg_spec P
+  have ho := kdfOut_wg_spec P
   have hi := indexInsert_handshake_ownersBounded
   have hp := setPeer_ownersBounded
   noise_vcgen [createResponse, _private.Leanux.WG.Handshake.«0».Leanux.WG.setChain,
