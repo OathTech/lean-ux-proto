@@ -13,20 +13,20 @@ namespace Leanux.Proofs.WG.Queues
 open Leanux Leanux.WG Leanux.Proofs.Logged
 
 def dropGroPrefix (pid : PeerId) (occurrence : Nat) (id : SkbId) : PrefixM GroEvent Unit := do
-  liftPrefix (dropRxQueue pid)
+  liftPrefix (liftWG (dropRxQueue pid))
   emitPrefix (.removed occurrence id)
 
 theorem dropGroPrefix_erases (pid : PeerId) (occurrence : Nat) (id : SkbId) :
-    ErasesPrefix (dropGroPrefix pid occurrence id) (dropRxQueue pid) := by
+    ErasesPrefix (dropGroPrefix pid occurrence id) (liftWG (dropRxQueue pid)) := by
   intro w h
   simp only [dropGroPrefix, runPrefix_bind, runPrefix_lift]
-  cases (dropRxQueue pid).run w with
+  cases (liftWG (dropRxQueue pid)).run w with
   | error e => rfl
   | ok out => cases out; rfl
 
 def consumeGro (pid : PeerId) (occurrence : Nat) (id : SkbId)
     (pkt : RxPacket) (endpoint : Endpoint) : PrefixM GroEvent (Option GroEntry) := do
-  match ← liftPrefix (consumeDataDone pid pkt endpoint) with
+  match ← liftPrefix (liftWG (consumeDataDone pid pkt endpoint)) with
   | none => return none
   | some bytes =>
     let entry : GroEntry := ⟨occurrence, id, bytes⟩
@@ -36,10 +36,10 @@ def consumeGro (pid : PeerId) (occurrence : Nat) (id : SkbId)
 theorem consumeGro_erases (pid : PeerId) (occurrence : Nat) (id : SkbId)
     (pkt : RxPacket) (endpoint : Endpoint) :
     ErasesTo (Option.map GroEntry.bytes) (consumeGro pid occurrence id pkt endpoint)
-      (consumeDataDone pid pkt endpoint) := by
+      (liftWG (consumeDataDone pid pkt endpoint)) := by
   intro w h
   simp only [consumeGro, runPrefix_bind, runPrefix_lift]
-  cases (consumeDataDone pid pkt endpoint).run w with
+  cases (liftWG (consumeDataDone pid pkt endpoint)).run w with
   | error e => rfl
   | ok out =>
     rcases out with ⟨bytes, v⟩
@@ -62,35 +62,35 @@ def rxPollGro (pid : PeerId) (budget : Nat) : PrefixM GroEvent Nat := do
   let mut gro : TaggedGro := {}
   let mut drained := false
   for _ in [0:MAX_QUEUED_PACKETS + 1] do
-    let first ← liftPrefix (peekRxQueue pid)
-    let go ← liftPrefix (WG.andM (branch .rxPollPacket first.isSome) do
+    let first ← liftPrefix (liftWG (peekRxQueue pid))
+    let go ← liftPrefix (liftWG (WG.andM (branch .rxPollPacket first.isSome) do
       let some f := first | invariant "unreachable"
-      branch .rxPollNotUncrypted ((← getRxSkb f).state != .uncrypted))
+      branch .rxPollNotUncrypted ((← getRxSkb f).state != .uncrypted)))
     if !go then
       drained := true
       break
     let some id := first | liftPrefix (invariant "unreachable")
-    let pkt ← liftPrefix (getRxSkb id)
+    let pkt ← liftPrefix (liftWG (getRxSkb id))
     if pkt.peer != pid then liftPrefix (invariant "a packet on another peer's rx_queue")
     dropGroPrefix pid workDone id
     let mut free := true
     if !(← liftPrefix (branch .rxPollNotCrypted (pkt.state != .crypted))) then
-      if !(← liftPrefix (branch .rxPollCounterInvalid !(← liftPrefix (counterValidate pkt.keypair pkt.nonce)))) then
-        let endpoint ← liftPrefix (endpointFromSkb pkt.source)
+      if !(← liftPrefix (branch .rxPollCounterInvalid !(← liftPrefix (liftWG (counterValidate pkt.keypair pkt.nonce))))) then
+        let endpoint ← liftPrefix (liftWG (endpointFromSkb pkt.source))
         if !(← liftPrefix (branch .rxPollEndpointFailed endpoint.isNone)) then
           let some e := endpoint | liftPrefix (invariant "unreachable")
           for entry in (← consumeGro pid workDone id pkt e).toList do
             gro ← napiGroReceiveTagged gro entry
           free := false
-    liftPrefix (keypairPut (some pkt.keypair) false)
-    liftPrefix (peerPut (some pid))
+    liftPrefix (liftWG (keypairPut (some pkt.keypair) false))
+    liftPrefix (liftWG (peerPut (some pid)))
     _ ← liftPrefix (branch .rxPollFree free)
-    liftPrefix (freeRxSkb id)
+    liftPrefix (liftWG (freeRxSkb id))
     workDone := workDone + 1
     if ← liftPrefix (branch .rxPollBudgetDone (workDone ≥ budget)) then break
   if !drained && workDone < budget then liftPrefix (invariant "the rx_queue did not drain")
   if ← liftPrefix (branch .rxPollComplete (workDone < budget)) then
-    liftPrefix (completeRxQueue pid)
+    liftPrefix (liftWG (completeRxQueue pid))
     napiGroFlushAllTagged gro
   else liftPrefix (unsupported "a NAPI poll that used its whole budget (a repoll)")
   return workDone
@@ -101,6 +101,8 @@ theorem rxPollGro_erases (pid : PeerId) (budget : Nat) :
   rw [← rxPollGrouped_eq]
   apply ErasesTo.identity
   unfold rxPollGro rxPollGrouped
+  have hl {α : Type} (a : WG.M α) : (liftM a : Leanux.M α) = liftWG a := rfl
+  simp only [hl]
   apply erasesTo_bind id id (ErasesPrefix.to_projected (erasesPrefix_lift _))
   intro noBudget
   dsimp only [id]

@@ -91,9 +91,10 @@ it is not part of that baseline.
 | Key lifetime, affiliation, trie insertion and receive/socket completion | 56 | 44 | 1 | 11 | 14 | 69 |
 | Product encryption, IPv4 calls, timer callbacks and receive borrowing | 68 | 40 | 0 | 28 | 17 | 85 |
 | Native/product completion, poll and TX disposition projections | 70 | 38 | 0 | 32 | 12 | 82 |
+| TX worker, RX removal/GRO and disposition cuts | 48 | 7 | 2 | 39 | 4 | 50 |
 
-The whole tree currently contains 451 Lean files and 6,401 theorems. The completed
-changes total 1,811 retyped theorems, 1,636 deletions, 751 retained contract shapes and 322 added.
+The whole tree currently contains 451 Lean files and 6,403 theorems. The completed
+changes total 1,818 retyped theorems, 1,638 deletions, 790 retained contract shapes and 326 added.
 Retyping changes or generalizes the actual state/monad carrier or observation.
 This includes shorthand contracts whose source functions or named views move
 to a native monad. Mere namespace qualification and equivalent relocation of a
@@ -2435,3 +2436,51 @@ terminated at its inspected owned child PID and collected as a failure
 (Lean signal exit 143, enclosing build exit 1). No KILLED banner occurred.
 Dirty worktrees, including untracked files, were snapshotted before work
 resumed. Its corrected replacement remains separate from this checkpoint.
+
+## TX worker, RX removal/GRO and disposition cuts
+
+Five more modules pass scoped builds, 73 named standard-only axiom checks,
+five fresh module replays and independent source reviews. Their 48 old
+theorems become fifty: seven native/generalized carries, 39 retained product
+or pure contracts, two deletions and four additions. No terminal claim or
+mirror file changes. The full proof gate remains pending.
+
+TxWorker carries four concrete native/source claims, retains six product
+contracts, and adds three native preservation counterparts. The saved head,
+two-getter queue drop and completion-before-free/puts order are unchanged.
+The product iteration retains its arbitrary rescheduling callback, reached
+only after a successful step reporting an item. Three ordinary failures in
+adapter matching and composition preceded the passing build.
+
+RxPollOrder retains twelve product/pure contracts, carries two substantive
+native queue frames, and adds one generic native-to-product retention rule.
+Its callback condition still ranges over arbitrary actual product actions
+and permits resident deletion. The getRxSkb queue frame is deleted because
+getRxSkb is exactly the SkbStore adapter and the queue observation excludes
+that component; the invariant leaf is deleted because it is Ambient-only.
+Both uses now use canonical adapters. This reasoning is based on the actual
+types and write-back definitions. One ordinary normalization failure preceded
+the passing build.
+
+RxPollGro and RxPollGroOrder retain all four and nine original product
+contracts respectively. Actual native calls are lifted at their execution
+boundaries; occurrence tags, exact returned bytes and failure histories
+remain. GroSafe keeps its original chronological meaning and SelectedGroSafe
+continues to describe the different selection order. Both changed-source
+builds passed first time. The unchanged GroCallback/GroState dependencies
+also built, and their seventeen named declarations had standard-only axioms.
+
+TxDispositionCuts retains eight product factor/history/receipt contracts
+and carries its native no-send frame. The exact free receipt uses the
+starting packet stamp and retains both read and release events. Canonical
+Index/Skb adapters and the existing peer-word reader replace structural
+leaf expansions. Two ordinary proof failures preceded the passing build.
+
+A separate diagnostic built the independent closure of 49 maximal targets
+(305 proof modules, excluding the three active worker frontiers and their
+dependents). It failed at DeviceXmit, RoutingSendFrames, LifetimeSafety
+Replay/ReplayOrphan, DeliveryOrder ReplayGro, FloodResistance Replay and
+KeyLifetime ReplayDelayed/ReplayPostClear. This was a failure, not a
+full-tree pass; the replay programs still needed their product projections
+carried. No infrastructure rerun, proof-limit increase or memory-cap change
+occurred in this tranche.

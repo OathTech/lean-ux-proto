@@ -26,7 +26,7 @@ def GroInv (gro : List GroEntry) (h : List GroEvent) (_ : World) : Prop :=
 theorem GroInv.safe {gro h w} (hi : GroInv gro h w) : GroSafe h := by
   exact ⟨gro, by simp [hi.1, hi.2]⟩
 
-theorem gro_lift_bind (a : M α) (gro : List GroEntry) (f : α → PrefixM GroEvent β)
+theorem gro_lift_bind (a : Leanux.M α) (gro : List GroEntry) (f : α → PrefixM GroEvent β)
     (hf : ∀ x, PrefixEnsures (GroInv gro) GroSafe (f x) Q) :
     PrefixEnsures (GroInv gro) GroSafe (liftPrefix a >>= f) Q :=
   PrefixEnsures.bind (PrefixEnsures.lift a (fun _ _ hi => hi.safe)
@@ -37,7 +37,7 @@ theorem dropGroPrefix_spec (pid : PeerId) (occurrence : Nat) (id : SkbId)
     PrefixEnsures (GroInv gro) GroSafe (dropGroPrefix pid occurrence id) (fun _ => GroInv gro) := by
   intro w h hi
   simp only [dropGroPrefix, runPrefix_bind, runPrefix_lift]
-  cases (dropRxQueue pid).run w with
+  cases (liftWG (dropRxQueue pid)).run w with
   | error e => exact ⟨[], by simp, hi.safe, True.intro⟩
   | ok out =>
     rcases out with ⟨u, v⟩
@@ -57,13 +57,13 @@ occurrence. The original call's exact bytes and this call's ordinal/ID are kept.
 theorem consumeGro_run (pid : PeerId) (occurrence : Nat) (id : SkbId)
     (pkt : RxPacket) (endpoint : Endpoint) (w : World) (h : List GroEvent) :
     runPrefix (consumeGro pid occurrence id pkt endpoint) w h =
-      match (consumeDataDone pid pkt endpoint).run w with
+      match (liftWG (consumeDataDone pid pkt endpoint)).run w with
       | .error stop => (.error stop, h)
       | .ok (none, v) => (.ok (none, v), h)
       | .ok (some bytes, v) =>
         (.ok (some ⟨occurrence, id, bytes⟩, v), h ++ [.buffered ⟨occurrence, id, bytes⟩]) := by
   simp only [consumeGro, runPrefix_bind, runPrefix_lift]
-  cases (consumeDataDone pid pkt endpoint).run w with
+  cases (liftWG (consumeDataDone pid pkt endpoint)).run w with
   | error e => rfl
   | ok out => rcases out with ⟨bytes, v⟩; cases bytes <;> rfl
 
@@ -73,7 +73,7 @@ theorem consumeGro_spec (pid : PeerId) (occurrence : Nat) (id : SkbId)
       (fun out => GroInv (gro ++ out.toList)) := by
   intro w h hi
   rw [consumeGro_run]
-  cases hr : (consumeDataDone pid pkt endpoint).run w with
+  cases hr : (liftWG (consumeDataDone pid pkt endpoint)).run w with
   | error e => exact ⟨[], by simp, hi.safe, True.intro⟩
   | ok out =>
     rcases out with ⟨bytes, v⟩
