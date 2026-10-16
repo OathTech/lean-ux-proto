@@ -36,11 +36,12 @@ it is not part of that baseline.
 | Product evolution rules and new ordinary lift bridge | 24 | 0 | 0 | 24 | 1 | 25 |
 | Native WGBase contracts and generalized map rule | 185 | 117 | 68 | 0 | 0 | 117 |
 | Redundant filesystem-family wrappers and exports | 21 | 0 | 21 | 0 | 0 | 0 |
-| Native WGTransitions and cookie contracts | 109 | 109 | 0 | 0 | 0 | 109 |
+| Native WGTransitions and cookie contracts | 109 | 108 | 1 | 0 | 0 | 108 |
 | Native peer and packet primitives | 45 | 35 | 0 | 10 | 0 | 45 |
+| Native peer frames and allocation | 28 | 20 | 7 | 1 | 0 | 21 |
 
-The whole tree currently contains 449 Lean files and 6,225 theorems. The completed
-changes total 529 retyped theorems, 1,565 deletions, 123 retained contract shapes and 75 added.
+The whole tree currently contains 449 Lean files and 6,217 theorems. The completed
+changes total 548 retyped theorems, 1,573 deletions, 124 retained contract shapes and 75 added.
 Retyping changes or generalizes the actual state/monad carrier or observation.
 This includes shorthand contracts whose source functions or named views move
 to a native monad. Mere namespace qualification and equivalent relocation of a
@@ -565,16 +566,17 @@ LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env le
 
 ## Native transition and cookie contracts
 
-All 103 WGTransitions theorems and six cookie theorems carry to native WG.M.
+At the cbb4321 checkpoint, all 103 WGTransitions theorems and six cookie
+theorems were carried to native WG.M. The later premise correction below
+removes one duplicate conditional helper; 108 of the original 109 remain.
 The keypair snapshot and ordinary-transition relation retain their frontier,
 resident identities and receiving windows. Seven theorem names track the actual
-keypairGetNull source and the native cookie observation. No theorem is deleted
-or added. Scalar modifier conditions, all original inputs and normal-return
-scope remain; Ambient inputs and outputs are unrestricted.
+keypairGetNull source and the native cookie observation. No theorem was added. Concrete source inputs and normal-return scope remain;
+Ambient inputs and outputs are unrestricted.
 
 The cookie observation retains all eleven WG-owned fields, masking only the
-device secret/birthdate and both rate-limiter tables. Its arbitrary device and
-WG modifiers keep explicit mask-preservation premises. The source proofs retain
+device secret/birthdate and both rate-limiter tables. The device modifier keeps its original mask-preservation premise. The later
+review below corrects the generic WG modifier helper's narrowed premise. The source proofs retain
 rotation clock/random records, IPv4/IPv6 selection, allocation refusal and Stops.
 Transitions use the generic Ambient, Index and packet adapters; timer reads,
 wheel guards, queue conditions, owner reads and error-valued returns stay at the
@@ -628,7 +630,7 @@ LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env le
 
 Read-only preparation for the remaining product frames used six capped stdin
 calls: two passed and four failed. The five environment-bookkeeping candidates
-typecheck with standard axioms over a pure observation of the original 47
+typecheck with standard axioms over a pure observation of the incoming 47
 fields; no execution world or mirror wrapper was added. The first attempt had
 opaque lift/spec plumbing and five rejected recovery axiom prints. Three
 further batch/stack attempts failed on namespace qualification, two default
@@ -637,15 +639,83 @@ prints were rejected. The stack proof remains open. These calls created no
 files, changed no limits and are not permanent declarations or full-tree
 validation; the candidate carry still needs its own scoped build and replay.
 
+
+## Native peer frames and allocation; premise corrections
+
+The peer frame/allocation tranche carries 21 of 28 theorems: 20 native retypes
+and one byte-identical pure mapStore allocation contract. Six Ambient-only
+wrappers are deleted because their actions cannot access WG state:
+hiddenU64_sameKernel and the hiddenU64/hiddenClock/hiddenJiffies/hiddenClock64/
+hiddenAlloc peer specifications. Local initializer callers use the actual
+generic Ambient lift. samePeerSnapshot_of_sameKernel is a seventh deletion:
+obsolete conditional transport, not an unused or type-derived claim. Its live
+CreationAccess callers still need migration. The native WG-store factor and its
+projection are renamed; no original entry or modifier condition is discarded.
+
+Independent review found that peerCreate_spec had gained equality of four
+incoming fields through WGOwnedView. Its entry premise is corrected to
+WGStoreView, the original seven-field observation. Arbitrary Ambient endpoints,
+occupied-slot allocation, source Stops, and normal inner Except.error outcomes
+retain their original meanings; no vacancy, metadata or record-validity premise
+is added. The corrected build passes (26 jobs), all 25 declarations print only
+standard axioms, fresh replay passes, and the independent frozen-source review
+has no remaining finding. The earlier eleven-field version is superseded.
+
+A separate review found the same scope error in the arbitrary WG modifier
+helper modify_cookie_spec. Incrementing timerEnqueues preserves the original
+cookie store observation but violates its new eleven-field premise. The helper
+is deleted as redundant conditional support: generic hoare_modify already
+supports any actual state, observation and predicate. Its sole cookie caller
+now applies that generic rule locally. The four concrete cookie frames still
+prove their stronger eleven-field conclusions, and the device-only modifier
+rule retains its original device premise. This reclassifies one previously
+retyped transition/cookie theorem as deleted; it does not invalidate the
+historical build record. The corrected cookie build passes (34 jobs), all
+eight declarations print only standard axioms, and fresh replay and independent
+repair review pass.
+
+[AGENT 2026-10-16] Keep separate pure baseline and incoming product observations
+and use the generic modifier rule in place of duplicate conditional support.
+This preserves original callback scope while allowing separately identified
+stronger concrete conclusions; neither observation is an execution world.
+
+Peer development/validation used eight capped calls: six passes and two ordinary
+proof failures (allocation equality plumbing and device extraction). The premise
+repair was followed by new build, axiom and replay checks. The cookie correction
+adds three passing calls. Hashes, ordered names, unchanged proof limits, all-proof
+trust scan, all seven terminal files, mirror equality and whitespace pass.
+No crash, cap increase, infrastructure retry, source admission or recovery
+admission occurred in these source checks.
+
+Three additional read-only Stack stdin attempts all failed: two exhausted the
+default heartbeat limit and one exhausted simplification while eagerly
+unfolding the guarded source. Its single recovery axiom print is rejected.
+These were exploratory calls, not accepted declarations; no source or limit
+changed, and the Stack carry remains open.
+
+```sh
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake build Leanux.Proofs.WG.Peers.Allocation Leanux.Proofs.Framing.WGCookie
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Peers.Allocation
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.Framing.WGCookie
+```
+
 ## Incoming source-observer findings
 
-Product-level former-Kernel observations must retain all 47 original fields:
-31 filesystem, three task, two seccomp and eleven WG fields. Native WG typing
-does not justify dropping those other observations from an arbitrary product
-action. Four old environment frames now encounter FIB writes: `setMtu`,
-`routeIntoWg0`, `wgDeladdr` and `wgDelroute`. They require explicit findings,
-not removal of the FIB fields from the observation. All four now have kernel-checked stdin counterexamples; permanent declarations
-and their scoped replay remain part of the environment carry.
+The validated `00641c6` baseline has 43 Kernel fields: 31 filesystem, three
+task, two seccomp and seven WG fields. The incoming unsplit `e5afc0f` has 47:
+`573c9bd` adds the two FIB tables, and `049bd3d` adds the two timer fields.
+The preceding report incorrectly described all 47 as original. The two pure
+product observations must remain distinct; native WG typing cannot discard
+filesystem, task or seccomp observations from arbitrary product callbacks.
+
+The four checked FIB witnesses concern extensions to the incoming 47-field
+observation: `setMtu`, `routeIntoWg0`, `wgDeladdr` and `wgDelroute` write those
+new fields. Calling them counterexamples to the validated baseline contracts
+was incorrect. All four baseline 43-field contracts remain to carry, with
+the original device scalar mask for MTU. The enlarged frames fail and retain
+their explicit witnesses; their permanent declarations and scoped replay are
+pending. Generic callback and modifier hypotheses must preserve their baseline
+scope, independently of stronger conclusions proved for concrete helpers.
 
 Capped stdin proofs now establish two unrestricted-state counterexamples and
 the corresponding negations of FIB-generation preservation, with only standard

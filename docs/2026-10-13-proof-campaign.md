@@ -5,8 +5,8 @@
 Work on `proofs/campaign` in `.worktrees/proofs-campaign` follows [the charter](2026-10-13-charter-proof-campaign.md).
 The state-split retrofit onto `6089dc4` precedes further R3/R4 results. All seven
 result rows remain lagging, last validated over `cb2348e`. The tree has moved from
-471 files / 7,715 named theorems to 449 files / 6,225 theorems. Completed changes
-comprise 529 retyped, 1,565 deleted, 123 retained contract shapes and 75 added theorems;
+471 files / 7,715 named theorems to 449 files / 6,217 theorems. Completed changes
+comprise 548 retyped, 1,573 deleted, 124 retained contract shapes and 75 added theorems;
 six redundant LifetimeSafety exports are removed, with every retained terminal
 body unchanged (515 declarations). The native foundational, ordinary lifetime,
 clock/Noise-helper, keypair-composition, product scheduler, small native helper and WGBase ports pass their
@@ -30,10 +30,11 @@ snapshots before work resumed; the report records every failed call. The d6f7ed4
 checkpoint's default human author was an attribution error, corrected for future
 commits through an explicit per-invocation agent identity.
 
-The following transition/cookie tranche carries all 109 theorems, with no
-deletions or additions. Its 95-job build, 112-declaration axiom check, two fresh
+The transition/cookie checkpoint initially carried 109 theorems. The later
+premise correction removes one duplicate helper, leaving 108; no theorem was
+added. Its historical 95-job build, 112-declaration axiom check, two fresh
 kernel replays and independent review pass; one earlier development build failed
-on two local proof obligations. All four old environment-frame counterexamples
+on two local proof obligations. The four incoming full-store extension counterexamples
 and the timer selector difference now have kernel-checked stdin witnesses;
 permanent declarations and replay are pending their respective carry.
 
@@ -42,6 +43,15 @@ ten pure contracts unchanged. The 23-job build, 58-declaration axiom check, two
 fresh kernel replays and independent review pass. Native getters and execution
 sequences preserve both state endpoints. Four development builds and one root
 census invocation failed before the final checks; limits and mirror are unchanged.
+
+The peer frames/allocation tranche carries 21 of 28 theorems: 20 native
+retypes, one unchanged pure claim and seven deletions with source/type
+justifications. Review caught an extra four-field entry premise; the repaired
+seven-field contract passes build, axioms, fresh replay and independent review.
+A duplicate cookie modifier helper had the same scope defect and is replaced
+by the existing generic rule; its repair passes the same scoped checks.
+The original 43-field environment contracts still need carrying: the four
+FIB witnesses refute only the enlarged incoming 47-field extensions.
 
 The preceding `cb2348e` checkpoint validated all seven baseline result surfaces, including the
 local normal-poll carrier and initialized R3 committed-support extensions. The local R4

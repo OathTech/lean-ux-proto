@@ -32,14 +32,6 @@ theorem modifyDev_cookie_spec (P : WGOwnedView → Prop) (f : Device → Device)
   simpa [cookieView, wgOwnedView, wgStoreView, modifyDev,
     Option.map_map, Function.comp_def, hf] using hp
 
-theorem modify_cookie_spec (P : WGOwnedView → Prop) (f : WGWorld → WGWorld)
-    (hf : ∀ g, cookieView (f g) = cookieView g) :
-    ⦃fun w => ⌜P (cookieView w)⌝⦄ (modify f : WG.M Unit)
-    ⦃⇓? _ w => ⌜P (cookieView w)⌝⦄ := by
-  apply hoare_modify
-  intro w hp
-  simpa only [hf] using hp
-
 theorem makeCookie_sameCookie (src : SkbSource) : SameCookie (makeCookie src) := by
   apply SameView.of_wp
   intro initial
@@ -59,7 +51,13 @@ theorem ratelimiterAllow_sameCookie (src : SkbSource) : SameCookie (ratelimiterA
   have ha (α : Type) (a : AmbientM α) :
       ⦃fun g => ⌜cookieView g = initial⌝⦄ (MonadLift.monadLift a : WG.M α)
       ⦃⇓? _ g => ⌜cookieView g = initial⌝⦄ := hoare_liftAmbient a _
-  have hm := modify_cookie_spec (fun s => s = initial)
+  have hm (f : WGWorld → WGWorld)
+      (hf : ∀ g, cookieView (f g) = cookieView g) :
+      ⦃fun g => ⌜cookieView g = initial⌝⦄ (modify f : WG.M Unit)
+      ⦃⇓? _ g => ⌜cookieView g = initial⌝⦄ := by
+    apply hoare_modify
+    intro g h
+    simpa only [hf] using h
   mvcgen [-Std.Do.Spec.monadLift_StateT, ratelimiterAllow, branch, branchCmp,
     unsupported, invariant, hiddenClock, hiddenAlloc, ha, hm]
   all_goals try dsimp +zetaDelta only at *
