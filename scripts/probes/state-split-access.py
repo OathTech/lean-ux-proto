@@ -95,7 +95,8 @@ def with_fields(text):
                 depth -= 1
             j += 1
         block = text[i:j]
-        # fields at depth 0 of the block: `name :=`
+        # fields at depth 0 of the block: `name := e`, and the shorthand
+        # `name` alone (`{ d with mtu, ifindex }` updates both fields)
         depth = 0
         k = 0
         while k < len(block):
@@ -104,9 +105,9 @@ def with_fields(text):
                 depth += 1
             elif c in ')}]':
                 depth -= 1
-            elif depth == 0:
-                f = re.match(r'\s*([a-zA-Z_][A-Za-z0-9_]*)\s*:=', block[k:])
-                if f and (k == 0 or block[k - 1] in ' ,\n'):
+            elif depth == 0 and (k == 0 or block[k - 1] in ' ,\n'):
+                f = re.match(r'\s*([a-zA-Z_][A-Za-z0-9_]*)\s*(:=|,|$)', block[k:])
+                if f:
                     out.append(f.group(1))
                     k += f.end() - 1
             k += 1
@@ -147,6 +148,26 @@ AMBIENT = {'hidden', 'steps', 'emitted', 'netRxSection', 'netRxSections', 'netRx
            'addrs4', 'addrs6', 'defaultRoute4', 'defaultRoute6', 'defaultRoute4Accessed', 'ipv4Gen',
            'ipv6Gen', 'routesPending', 'routes', 'portBound', 'fixtureNetDevices', 'k'}
 
+METHOD_NAMES = {'insert', 'erase', 'find', 'filter', 'push', 'contains', 'foldl', 'foldr', 'length', 'toList',
+                'getD', 'isSome', 'isNone', 'modify', 'pure', 'return', 'take', 'drop', 'head', 'tail', 'append',
+                'reverse', 'zip', 'range', 'size', 'empty', 'isEmpty', 'count', 'sum', 'max', 'min', 'toNat',
+                'toUInt64', 'toArray', 'join', 'replicate', 'lookup', 'remove', 'update', 'keys', 'values'}
+
+
+def signature_of(body):
+    """The text of a definition up to its first `:=` outside brackets
+    (default arguments like `(jc? : Option UInt64 := none)` are inside)."""
+    depth = 0
+    for i, c in enumerate(body):
+        if c in '([{':
+            depth += 1
+        elif c in ')]}':
+            depth -= 1
+        elif depth == 0 and body.startswith(':=', i):
+            return body[:i]
+    return body
+
+
 DEF_RE = re.compile(r'^(?:@\[[^\]]*\]\s*)?(?:private |protected |noncomputable )*def\s+([A-Za-z_][A-Za-z0-9_.]*)', re.M)
 IDENT_RE = re.compile(r'[A-Za-z_][A-Za-z0-9_]*')
 
@@ -160,8 +181,8 @@ def functions_mode():
     for g, fs in WG_GROUPS.items():
         for f in fs:
             group_of[f] = g
-    defs = {}      # name -> (file, own groups, called names, ambient)
-    files = list(lean_files(['Leanux/WG']))
+    defs = {}      # name -> (file, own groups, called names, ambient, env, monadic)
+    files = list(lean_files(['Leanux/WG', 'Leanux/Net', 'Leanux/Kernel/Defs.lean', 'Leanux/Kernel/TimerWheel.lean']))
     for path in files:
         text = strip_comments(path.read_text())
         spans = [(m.start(), m.group(1)) for m in DEF_RE.finditer(text)]
@@ -178,12 +199,12 @@ def functions_mode():
             amb = {m.group(1) for m in re.finditer(r'\.([a-zA-Z_][A-Za-z0-9_]*)\b', body) if m.group(1) in AMBIENT}
             calls = set(IDENT_RE.findall(body))
             env = bool(re.search(r'\bEnv\.|\bRunner\.', body))
-            sig = body.split(':=', 1)[0]
-            monadic = bool(re.search(r'\bM\b', sig))
+            sig = signature_of(body)
+            monadic = bool(re.search(r'\b(M|StateT)\b', sig))
             defs[name.split('.')[-1]] = (str(path.relative_to(ROOT)), own if monadic else set(), calls, amb, env, monadic)
     # call edges only to monadic definitions whose names are not field names
     # or short common words (the match is syntactic)
-    names = {n for n, d in defs.items() if d[5] and n not in group_of and len(n) > 3}
+    names = {n for n, d in defs.items() if d[5] and n not in group_of and len(n) > 3 and n not in METHOD_NAMES}
     foot = {n: set(d[1]) for n, d in defs.items()}
     changed = True
     while changed:
@@ -196,16 +217,23 @@ def functions_mode():
     hist = defaultdict(int)
     multi = []
     for n, d in defs.items():
-        if not d[5]:
+        if not d[5] or not d[0].startswith('Leanux/WG'):
             continue
         k = len(foot[n])
         hist[k] += 1
         if k >= 3:
             multi.append((k, n, d[0], sorted(foot[n]), d[4]))
-    print(f'WireGuard definitions walked: {len(defs)} in {len(files)} files, monadic {sum(1 for d in defs.values() if d[5])}')
+    print('LEXICAL CANDIDATES: footprints from accessor text and name-matched calls, not a sound dependency analysis')
+    print(f'definitions walked: {len(defs)} in {len(files)} files (WG, Net, Kernel/Defs, TimerWheel), monadic {sum(1 for d in defs.values() if d[5])}')
     print('transitive footprint size (groups) -> definitions:',
           ', '.join(f'{k}: {hist[k]}' for k in sorted(hist)))
     print(f'definitions calling into Env/Runner: {sum(1 for d in defs.values() if d[4])}')
+    if '--leaves' in sys.argv:
+        print('definitions touching one or two groups (name, file, groups, own groups):')
+        for n, d in sorted(defs.items(), key=lambda x: (len(foot[x[0]]), x[0])):
+            if d[5] and d[0].startswith('Leanux/WG') and 1 <= len(foot[n]) <= 2:
+                print(f'  {len(foot[n])} {n:36s} {d[0]:30s} {" ".join(sorted(foot[n])):22s} own: {" ".join(sorted(d[1]))}')
+        return
     print('definitions touching three or more groups (name, file, groups):')
     for k, n, f, gs, env in sorted(multi, key=lambda x: (-x[0], x[1])):
         print(f'  {k} {n:36s} {f:30s} {" ".join(gs)}{" +env" if env else ""}')
@@ -254,6 +282,7 @@ def main():
         print(json.dumps(out, indent=1))
         return
 
+    print('LEXICAL CANDIDATES: writes are `with`-updated field names, reads are `.f` projections; names held by two structures are attributed to both')
     print(f'{"field":34s}' + ''.join(f'{g:>9s}' for g in groups))
     for s in fields:
         print(f'-- {s} ({len(fields[s])} fields)')
@@ -274,7 +303,7 @@ def main():
             touched = sorted(f for f in fields[s] if writes[(s, f)][g] or reads[(s, f)][g])
             written = sorted(f for f in fields[s] if writes[(s, f)][g])
             if touched:
-                print(f'{g:8s} {s:7s} reads {len(touched):3d} writes {len(written):3d} of {len(fields[s])}')
+                print(f'{g:8s} {s:7s} touched {len(touched):3d} written {len(written):3d} of {len(fields[s])}')
 
 
 if __name__ == '__main__':

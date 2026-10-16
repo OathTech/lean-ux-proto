@@ -1,4 +1,4 @@
-# Design: the state split, per-subsystem worlds and narrowed function types — 2026-10-15 [AGENT, fork of the coordinator]
+# Design: the state split, per-subsystem worlds and narrowed function types — 2026-10-15, revision 2 of 2026-10-16 [AGENT, fork of the coordinator]
 
 The stream that follows B3. The mirror's one global `World`, which every
 module reads and writes through a monad whose type says "may change
@@ -7,479 +7,668 @@ functions are typed over the sub-state they access. Nothing in the
 executable changes: the same code runs over tighter types, and the
 compiler is the retrofit tool for the proof tree.
 
-**Decisions [USER 2026-10-15]**, recorded in `docs/decisions.md` with
-their words: subsystems operate over localized world types; functions are
-narrowed at the type level to the data they access where that is cheap;
-no compatibility wrappers and no equivalence lemmas ("it's just throwing
-out fields. Just delete fields and see if anything breaks"); campaign 1
-(Codex#2) finishes R3 and R4 and lands, its retrofit one job afterwards;
-campaign 2 (Codex#1) stops at its checkpoint and resumes on the split
-mirror; the binary adequacy grind (Codex#3) continues with `R` over the
-WireGuard world literally; the split starts when B3 is on `main` and lands
-before lane C's C1, whose new module retypes then.
+**Revision 2** disposes of the independent review by Codex#4
+([the review](2026-10-15-review-state-split.md), verdict: redesign) and
+folds in its [companion proposal](2026-10-15-state-split-companion.md)
+where it holds. Section 10 lists the findings one by one; section 11
+lists what this revision changes against revision 1 and which of the
+changes are proposals awaiting the user. The measurements are rerun on
+`main` e5afc0f (merged into this branch), where B3, the audit fixes and
+lane C's first landing have added the timer wheel, the routing module and
+their state.
 
-**The reasoning [USER 2026-10-15]**, carried here because it decides the
-shape. There are two kinds of framing. Structural framing is enforced by
-the types and is free: in a program without side effects, a function that
-is not passed a piece of state cannot affect it, so the frame is the type.
-Non-localizable framing needs footprint invariants, and is to be kept only
-where an effect genuinely cannot be localized. The ideal is to strip the
-types at every point down to the accessible fields and get the footprints
-from referential transparency. The whole-of-Linux state is a hard question
-and is not decided here. The immediate fix removes the "one massive global
-state where everything gets modified without any type-level guarantee that
-things aren't being modified", which should remove most of the pointless
-frame lemmas: campaign 1's tree has 6,186 theorems, about 2,800 of them in
-`Frames`, `Framing` and `Logged` files, and 441 terminal results.
+**Decisions [USER 2026-10-15]**, recorded in `docs/decisions.md` with
+their words and unchanged by this revision: subsystems operate over
+localized world types; functions are narrowed at the type level to the
+data they access where that is cheap; no compatibility wrappers and no
+equivalence lemmas ("it's just throwing out fields. Just delete fields and
+see if anything breaks"); campaign 1 (Codex#2) finishes R3 and R4 and
+lands, its retrofit one job afterwards; campaign 2 (Codex#1) stops at its
+checkpoint and resumes on the split mirror; the binary adequacy grind
+(Codex#3) continues with `R` over the WireGuard world literally; the split
+starts when B3 is on `main` and lands before lane C's C1 (C1 has since
+landed; its module retypes in the split).
+
+**The reasoning [USER 2026-10-15]**, carried because it decides the shape.
+Two kinds of framing: structural, enforced by the types and free, because
+in a program without side effects a function that is not passed a piece
+of state cannot affect it; and non-localizable, needing footprint
+invariants, to be kept only where an effect genuinely cannot be localized.
+The ideal is to strip the types at every point down to the accessible
+fields and get the footprints from referential transparency. The
+whole-of-Linux state is a hard question not decided here. The immediate
+fix removes the "one massive global state where everything gets modified
+without any type-level guarantee that things aren't being modified".
 
 ## 1. The measured access matrix
 
-`scripts/probes/state-split-access.py` (read-only, syntactic: a write is a
-field named in a `{ x with f := ... }` update, the mirror's only way to
-change state; a read is a `.f` projection; a name held by two structures
-is attributed to both and flagged) over `main` de62c9d.
+`scripts/probes/state-split-access.py` prints, for each module group,
+which fields of `World`, `Kernel`, `Task`, `WG.Device` and `WG.Peer` it
+touches and which it writes, from the text: a write is a field named in a
+`{ x with f := e }` or shorthand `{ x with f }` update (the mirror's only
+way to change state), a read is a `.f` projection; a name held by two
+structures is attributed to both and flagged. **Its output is a list of
+lexical candidates, not a sound dependency analysis** (the review's
+finding 2): it does not resolve namespaces, it does not see a whole-record
+replacement (`setPeer` takes any `Peer`), and its call graph is by name.
+Revision 2 repaired the four parser errors the review found (shorthand
+updates, the summary's label, default arguments before the return type,
+container method names taken for calls) and extended the walk to
+`Leanux/Net` and the kernel helpers; the figures below are from the
+repaired probe on e5afc0f.
 
-The state, field by field:
-
-| Structure | Fields | Owner in the split |
-| --- | ---: | --- |
-| `World` | 49 | 14 ambient (the record stream, the decision log, the dispatch bookkeeping, the outputs), 20 WireGuard environment (routing, the fixture's network facts, NET_RX, timers), 1 `k`, the rest runner-only |
-| `Kernel` | 43 | 7 WireGuard (`wg`, the two netlink sockets, the two counters, `netIfindexNext`, `ratelimiter`), 28 file layer (files, inodes, pipes, pages, the user, the epoll tables), 4 seccomp (`seccompFilters`, `nextFilter`, `child`, `current`), `task` shared |
-| `Task` | 13 | 4 file layer (`files`, `rlimitNofile`, `taskWorks`, `inEventfd`), 5 seccomp (`seccomp`, `noNewPrivs`, `capSysAdmin`, `sigsys`, `sigpending`), 4 signal and lifecycle (`blocked`, `pending`, `exited`, `isKthread`) |
-| `WG.Device` | 52 | WireGuard |
-| `WG.Peer` | 47 | WireGuard |
-
-Which module touches which structure (reads/writes, of the fields):
+The state (51 `World` fields, 47 `Kernel`, 13 `Task`, 52 `Device`, 52
+`Peer` on e5afc0f), by module (touched / written):
 
 | Module | `World` | `Kernel` | `Task` | `Device` | `Peer` |
 | --- | --- | --- | --- | --- | --- |
-| `Leanux/WG` | 15 / 6 | 9 / 8 | 0 / 0 | 52 / 51 | 47 / 43 |
+| `Leanux/WG` | 16 / 7 | 11 / 10 | 0 / 0 | 52 / 51 | 52 / 48 |
 | `Leanux/FS` | 3 / 2 | 29 / 22 | 6 / 3 | 0 / 0 | 0 / 0 |
 | `Leanux/Seccomp` | 7 / 5 | 5 / 4 | 5 / 5 | 0 / 0 | 0 / 0 |
-| `Leanux/Kernel` (the accessors, signals) | 22 / 11 | 12 / 10 | 7 / 5 | 4 / 0 | 7 / 0 |
-| `Leanux/Env` | 31 / 22 | 7 / 2 | 6 / 5 | 23 / 6 | 5 / 1 |
-| `Runner`, `Syscalls`, `Main` | 28 / 12 | 4 / 2 | 4 / 1 | 5 / 0 | 1 / 0 |
+| `Leanux/Net` (lane C) | 6 / 3 | 2 / 2 | 0 / 0 | 0 / 0 | 0 / 0 |
+| `Leanux/Kernel` (the accessors, the signals, the wheel) | 24 / 12 | 12 / 10 | 7 / 5 | 4 / 0 | 7 / 0 |
+| `Leanux/Env` | 33 / 24 | 7 / 2 | 6 / 5 | 23 / 6 | 5 / 1 |
+| `Runner`, `Syscalls`, `Main` | 30 / 13 | 5 / 2 | 4 / 1 | 5 / 0 | 1 / 0 |
 
-The facts the split rests on:
+The facts the split rests on, each checked by reading the code and not
+only by the probe:
 
-- **No cross-subsystem access.** No file in `Leanux/WG` names a file-layer
-  or seccomp definition, and no file in `Leanux/FS` or `Leanux/Seccomp`
-  names a WireGuard one (`grep` over the three namespaces). The only
-  `Kernel` fields WireGuard touches are its own seven; the file layer and
-  seccomp touch none of them. The two apparent exceptions in the matrix
-  (`Kernel.child` read and `Kernel.current` written from `Leanux/WG`) are
-  the probe's name collisions: a local `let current` and the `.child`
-  constructor of an allowed-IPs parent reference.
+- **No access between the WireGuard, file-layer and seccomp object
+  stores.** No file in `Leanux/WG` names a file-layer or seccomp
+  definition, and no file in `Leanux/FS` or `Leanux/Seccomp` names a
+  WireGuard one. WireGuard's `Kernel` fields are its own eleven (`wg`, the
+  two netlink sockets, the two counters, `netIfindexNext`, `ratelimiter`,
+  the two FIB tables, `timerClk`, `timerEnqueues`); the file layer and
+  seccomp touch none of them. (The matrix's apparent WireGuard reads of
+  `child` and `current` are name collisions: a local `let current` and the
+  `.child` constructor of an allowed-IPs parent reference.)
+- **The file layer and seccomp both reach the task's signal state, inside
+  mirror functions** (the review's finding 1, confirmed on e5afc0f):
+  `FS/Pipe.lean:427,459` call `sendSig .task SIGPIPE 0` from `pipeWrite`;
+  `FS/FileTable.lean:152,155` read `Task.isKthread` and `Task.exited` in
+  `fput`; `Seccomp/Filter.lean:319,350` call `forceSigSeccomp` from the
+  filter; `Kernel/Signal.lean` reads `blocked`, writes `sigsys`, `blocked`,
+  `pending` and `sigpending`, and resolves `Kernel.current`. These are the
+  C's call sites (`kernel/signal.c:1328-1363` reads the action and the
+  blocked set and generates the signal). Revision 1's three id-keyed task
+  tables in sibling worlds would have made `pipeWrite : FS.M Int` a type
+  error at its own signal call; revision 2 keeps one task store that the
+  file layer, seccomp and the signal module share (section 2).
 - **The `World` fields WireGuard reads are environment, not kernel
-  state:** `sent`, `hidden`, `timerUnits`, `netRxRaised`,
+  state:** `sent`, `hidden`, `timerUnits`, `timerPassStep`, `netRxRaised`,
   `queuedThisCall`, `jiffiesLast`, `armRecords`, `dstCacheRecords`,
-  `addrs4/6`, `ipv4Gen/ipv6Gen`, `portBound`, `fixtureNetDevices`,
-  `lastUnderLoad`. They are the routing environment (lane C is making it a
-  module), the record stream, the dispatch bookkeeping and the fixture's
-  network facts. None is file-layer or seccomp state.
-- **The shared piece is `Task`,** read and written by the file layer
-  (`files`, `taskWorks`, `inEventfd`, `rlimitNofile`) and by seccomp
-  (`seccomp`, `noNewPrivs`, `capSysAdmin`, `sigsys`), with the signal and
-  lifecycle fields (`blocked`, `pending`, `sigpending`, `exited`) written
-  by `Kernel/Signal.lean` and the environment. The C's `task_struct` holds
-  all of these; the split keeps the id-keyed shape and splits the record.
+  `addrs4/6`, `ipv6Gen`, `portBound`, `fixtureNetDevices`,
+  `lastUnderLoad`.
+- **Lane C's routing module** (`Leanux/Net/Fib`, `Leanux/Net/Route.lean`,
+  landed) is its own component already: `getTable`/`modifyTable` select
+  `Kernel.fib4` or `fib4C` by `World.fibCreatorNs`; `routeLookup` and
+  `neighbourClassify` read `addrs4`, `addrPlens4` and `neighbours` and
+  write `neighbours`; nothing in it names `WG.Device`.
 - **The ambient effects every module has:** the record stream
-  (`World.hidden`, consumed in order by `hidden`), the decision log
-  (`World.steps`, appended by `branch`, `branchCmp`, `report`), the NET_RX
-  section counter the log stamps, and the stop (`Except Stop`). These are
-  written through `Leanux/Kernel/Defs.lean`'s primitives only.
+  (`World.hidden`, consumed by `hidden`), the decision log (`World.steps`,
+  appended by `branch`, `branchCmp`, `report`), the NET_RX stamp, the
+  stop. The kernel helper file is not their exclusive writer
+  (`Seccomp/Bridge.lean:67` appends to `steps`, `Env.lean:673-675` and
+  `Runner.lean:1149` reset them): those writes become explicit
+  `AmbientM` operations where they are.
 - **Seccomp already has the narrowed form.** Stream U's checker,
-  translation and engine (`Classic.lean`, `Translate.lean`, `Engine.lean`)
-  are written over a typeclass `SeccompM m` (`Decisions.lean:340`: the
-  decision log and the record kinds it needs, nothing else) with one
-  instance over `M` in `Bridge.lean`. It is the precedent for the shape in
-  section 3.
-- **Within WireGuard** (`--functions`, over 238 monadic definitions, the
-  footprint closed over the module's own call graph, syntactically): 46
-  touch no field group (ambient only: the queue records, the decision
-  log), 16 touch one of the eight groups of section 4, 43 two, 41 three,
-  24 four, 29 five or six, 39 seven or eight. The entry points (the
-  workers, the syscall handlers, the timer callbacks, the send and receive
-  paths, `wgSetDevice`, `peerRemove`) reach most of the device through
-  their callees, as the C does; the leaves (the allowed-IPs trie, the
-  rings and queues, the index table, the cookie and rate-limiter
-  functions, the timer arm and delete) are the ones that narrow cheaply.
+  translation and engine are written over a typeclass `SeccompM m`
+  (`Decisions.lean:340`) with one instance over `M` in `Bridge.lean`.
+- **The product-level orchestration inside today's seccomp directory**
+  (the review's finding 1): `Seccomp/Syscalls.lean:149-201`
+  (`sysSeccompProbeChild`) calls `Env.forkClocks`, `Env.childCreate`,
+  `Env.childExit`, `Env.childDrop` and switches `Kernel.current`;
+  `trapReturn` (`:109`) calls `Env.trapDelivered`. These stay over the
+  product (section 3).
 
-The proof trees, for the retrofit's size (`git archive` of each branch,
-counted the same way):
+The proof trees, for the retrofit's size, at the heads on 2026-10-16
+(tracked `.lean` files under `Leanux/Proofs`, named theorem declarations
+after stripping line comments):
 
-| Tree | Files | Theorems | In frame files | Statements naming `World` | Naming `Kernel` or `.k` | Mentioning file-layer definitions |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| `main` | 103 | 1,399 | 1,228 | — | — | 448 |
-| `proofs/campaign` (campaign 1) | 425 | 6,184 | 2,813 | 601 | 361 | about 920 |
-| `proofs/campaign-2` (campaign 2) | 167 | 2,114 | 1,271 | 163 | 401 | 456 |
+| Tree | Files | Theorems | In paths containing Frames, Framing or Logged |
+| --- | ---: | ---: | ---: |
+| `main` e5afc0f | 48 | 1,399 | 1,228 |
+| `proofs/campaign` 00641c6 (campaign 1) | 471 | 7,405 | 2,816 |
+| `proofs/campaign-2` 04b2f7c (campaign 2) | 475 | 3,225 | 1,510 |
 
-Campaign 2's tree is `main`'s tree plus about 700 of its own; `main`'s
-tree is itself mostly frame layer (the window proof's `Logged` and
-`Framing` layers), of which the file-layer part (the pipe, eventfd and
-epoll frames, 448 theorems) is cross-subsystem from WireGuard's point of
-view. The counts by mirror definition mentioned are syntactic and
-over-count seccomp (its definition names collide with ordinary words);
-the file-layer count is the robust one.
+Campaign 2's tree is `main`'s plus its own additions (317 new files and
+about 1,500 theorems at the review's snapshot, growing); it can no longer
+be sized as "about 700 theorems". By the user's decision campaign 1 lands
+before the split, so **the proof tree the split retrofits is campaign 1's
+landed tree, not `main`'s 1,399** (the review's finding 6; section 7).
 
 ## 2. The per-subsystem worlds
 
-Drawn from the matrix and from the C's ownership tree (`struct wg_device`
-owns its peers, index table and queues; `struct net` the routing tables
-and sockets; `struct task_struct` its files table, its seccomp state and
-its signal state; the file layer its inodes, pipes and epoll objects).
+Drawn from the matrix and from the C's ownership tree, with one change
+against revision 1 marked.
 
 ```lean
-/-- WireGuard: the device, the netlink sockets, the counters, the rate
-    limiter, and the routing environment until a second user appears. -/
+/-- The task store, shared by the file layer, seccomp and the signal
+    module: one mandatory parent, one optional child, the current task.
+    [Revision 2: replaces three id-keyed tables in sibling worlds; see 11.] -/
+structure TaskWorld where
+  task : Task                       -- Kernel.task, the record unchanged (files, rlimit, task works,
+  child : Option Task := none       --   the signal set, seccomp state, sigsys, flags)
+  current : TaskRef := .task        -- Kernel.current
+
+/-- WireGuard: the device, the netlink sockets, the counters that outlive
+    a device, the rate limiter, the timer wheel's state, the routing
+    component until a second user appears, the fixture facts it reads and
+    its transmit state. -/
 structure WGWorld where
   dev : Option WG.Device := none        -- Kernel.wg
   nlSock7 : WG.NlSock := {}             -- Kernel.nlSock7
   nlSock8 : WG.NlSock := {}             -- Kernel.nlSock8
-  peerCounter : Nat := 0                -- Kernel.peerCounter
-  keypairCounter : Nat := 0             -- Kernel.keypairCounter
-  netIfindexNext : Nat := 4             -- Kernel.netIfindexNext
-  ratelimiter : Ratelimiter := {}       -- Kernel.ratelimiter
+  peerCounter : Nat := 0                -- Kernel.peerCounter (outlives the device)
+  keypairCounter : Nat := 0             -- Kernel.keypairCounter (outlives the device)
+  netIfindexNext : Nat := 4             -- Kernel.netIfindexNext (outlives the device)
+  ratelimiter : Ratelimiter := {}       -- Kernel.ratelimiter (its own refcount lifetime)
   lastUnderLoad : Option Int64 := none  -- World.lastUnderLoad (receive.c's static)
-  routing : Net.Routing := {}           -- World.addrs4/6, defaultRoute4/6, ipv4Gen/6Gen, routes,
-                                        -- routesPending, defaultRoute4Accessed (lane C's module)
-  net : NetFixture := {}                -- World.portBound, fixtureNetDevices, listenerV4/6 (read-only facts)
-  timers : TimerState := {}             -- World.timerUnits, jiffiesLast, armRecords, dstCacheRecords (B3's wheel)
-  tx : TxState := {}                    -- World.sent, netRxRaised, queuedThisCall, napiBeforePut, napiAmbiguous
+  timerClk : Option UInt64 := none      -- Kernel.timerClk, timerEnqueues (B3's wheel base)
+  timerEnqueues : Nat := 0
+  timers : TimerState := {}             -- World.timerUnits, jiffiesLast, timerPassStep, dstCacheRecords
+  routing : Net.Routing := {}           -- Kernel.fib4, fib4C; World.addrs4, addrPlens4, addrs6, defaultRoute6,
+                                        --   ipv6Gen, neighbours, fibCreatorNs (lane C's component, section 4)
+  fixture : WGFixture := {}             -- World.portBound, fixtureNetDevices (function-valued inputs WG reads)
+  tx : TxState := {}                    -- World.sent, netRxRaised, queuedThisCall
 
-/-- The file layer: files, inodes, pipes, pages, eventfd, epoll, the user
-    accounting, and the per-task file state keyed by task. -/
+/-- The file layer's object stores and accounting (31 Kernel fields) and
+    its outputs. -/
 structure FSWorld where
-  files : TreeMap FileId File           -- Kernel.files .. Kernel.anonInodeInodeErr (9 fields)
-  ...                                   -- Kernel.inodes .. Kernel.pipeUserPagesHard (15 fields)
-  ...                                   -- Kernel.eps .. Kernel.epqEpi (13 fields)
-  tasks : TreeMap TaskRef FSTask        -- Task.files, rlimitNofile, taskWorks, inEventfd, per task
-  userOut : Option ByteArray := none    -- World.userOut, userFds (the read's output)
-  userFds : Option (Nat × Nat) := none
+  files : TreeMap FileId File ...       -- Kernel.files .. anonInodeInodeErr (9), inodes .. pipeUserPagesHard (15),
+                                        --   eps .. epqEpi (13)
+  userOut : Option ByteArray := none    -- World.userOut
+  userFds : Option (Nat × Nat) := none  -- World.userFds
 
-/-- seccomp: the filters, the per-task seccomp state keyed by task, the
-    sandboxed child's existence and the current task. -/
+/-- seccomp's filter store and its outputs. -/
 structure SeccompWorld where
   filters : TreeMap FilterId SeccompFilter   -- Kernel.seccompFilters
   nextFilter : FilterId := 0                  -- Kernel.nextFilter
-  tasks : TreeMap TaskRef SeccompTask         -- Task.seccomp, noNewPrivs, capSysAdmin, sigsys, per task
-  child : Bool := false                       -- Kernel.child's existence (its contents are the two task tables)
-  current : TaskRef := .task                  -- Kernel.current
-  translatedLen : Option Nat := none          -- World.translatedLen (the kind-309 length)
-  emitted : Std.HashSet String := {}          -- World.emitted (the decision log's seccomp keys)
+  translatedLen : Option Nat := none          -- World.translatedLen
+  emitted : Std.HashSet String := {}          -- World.emitted (the bridge's deduplication)
 
-/-- The signal and lifecycle part of the task, written by Kernel/Signal.lean
-    and the environment's child-exit path. -/
-structure TaskLifecycle where
-  blocked : SigSet := 0
-  pending : SigSet := 0
-  sigpending : Bool := false
-  exited : Bool := false
-  isKthread : Bool := false
+/-- The fixture's mutable transport and control state, product-level. -/
+structure EnvWorld where
+  listenerV4, listenerV6, senderInbox         -- delivery queues (mutable, not facts)
+  foreignCreator, netnsCHolders               -- W8
+  napiBeforePut, napiAmbiguous                -- W7's placement
+  routesPending, routes                       -- the fixture's extra MTU routes
+  lastAdvance, hiddenAhead                    -- B3's advance bound, the runner's look-ahead
+  mtu                                         -- the sender's MTU (W4)
 
-/-- What every module has: the record stream consumed in order, the
-    decision log, the NET_RX section stamp, the dispatch bookkeeping, the
-    steering state, the environment's answers and the outputs. -/
+/-- What every module has: the record stream, the decision log, the
+    section stamps, the dispatch bookkeeping, steering, the environment's
+    answers, the shared output accumulator. -/
 structure Ambient where
-  hidden : Option (List HiddenRecord) := none
-  hiddenPlaceholders : Bool := false
-  placeholderCount : Nat := 0
-  steps : Array Step := #[]
-  netRxSection : Nat := 0
-  netRxSections : Nat := 0
-  suspended : List Activation := []
-  unitPeers : List (Nat × Nat × Nat) := []
-  pendingWork : List Nat := []
-  fired : Array String := #[]
-  steerValues : List (String × Option (List UInt8)) := []
-  allocArmed : List String := []
-  allocSteered : List String := []
-  env : EnvSite → Nat → Bool
-  envCalls : List (EnvSite × Nat) := []
-  timing : Timing
-  extraOut : List (String × Lean.Json) := []
-  foreignCreator : Bool := false
-  netnsCHolders : List Nat := []
-  senderInbox : List InboxDatagram := []
+  hidden, hiddenPlaceholders, placeholderCount
+  steps, netRxSection, netRxSections
+  suspended, unitPeers, pendingWork, fired
+  armRecords                                  -- read by the queue records and the timer records alike
+  steerValues, allocArmed, allocSteered
+  env, envCalls, timing
+  extraOut                                    -- WG dumps and seccomp probes both append to it
 
-/-- The product the runner holds. -/
 structure World where
   ambient : Ambient
+  tasks : TaskWorld
   wg : WGWorld
   fs : FSWorld
   seccomp : SeccompWorld
-  task : TreeMap TaskRef TaskLifecycle
+  fixture : EnvWorld
 ```
 
-Where each existing field goes, and why, in the cases that need a word:
+Every one of the 50 non-`k` `World` fields and the 47 `Kernel` fields on
+e5afc0f is assigned exactly once above (the companion's inventory,
+reconciled against this head: B3 added `timerClk`, `timerEnqueues`,
+`timerPassStep`, `lastAdvance`, `hiddenAhead`; lane C added `fib4`,
+`fib4C`, `addrPlens4`, `neighbours`, `fibCreatorNs`; W4's `mtu`). The
+inventory is a cutover aid and is reconciled once more against the actual
+baseline before coding.
 
-- `Kernel.task` and `Kernel.child` (two `Task` records) become three
-  id-keyed tables, one per owner: the file layer's part of a task, the
-  seccomp part, the signal and lifecycle part. The C has one `task_struct`;
-  the split keeps the task's identity (`TaskRef`) and splits the record by
-  the subsystem that writes each field, which the matrix shows is clean
-  (no field is written by two subsystems). `Kernel.current` goes to
-  seccomp, its only writer; the file layer reads the current task's files
-  through its own table under the same `TaskRef`.
-- `World.hidden`, `steps`, `netRxSection(s)` are ambient: the primitives
-  `hidden`, `branch`, `report`, `noteNetRxStart` are the only writers and
-  every module calls them.
-- The dispatch bookkeeping (`suspended`, `unitPeers`, `pendingWork`,
-  `fired`, `timerUnits`) is the environment's scheduler state. `timerUnits`
-  and `jiffiesLast` are WireGuard's today (its timers are the only timers)
-  and go with B3's wheel into `WGWorld.timers`; the rest is ambient, read
-  by the scheduler in `Env/Batch.lean` and written by the dispatch
-  primitives.
-- The routing environment (`addrs4/6`, the default routes, the
-  generations, `routes`) is WireGuard's until a second subsystem routes;
-  lane C's module replaces these fields with the trie and `rt_cache_flush`'s
-  generation, inside `WGWorld.routing`, and moves out to its own world when
-  a second user appears.
-- `World.sent`, `senderInbox`, `listenerV4/6`: the fixture's datagram
-  transport, written by the WireGuard socket layer and the environment's
-  delivery; `sent` and the NET_RX raise are WireGuard's transmit state,
-  the inbox and listeners the environment's.
-- `World.userOut`, `userFds` are the file layer's read output and the
-  pipe's descriptors; `extraOut`, `translatedLen`, `emitted` are seccomp's
-  outputs and the kind-309 length; each goes to its writer.
-- `World.floodExact` is deleted by B4 (landed in the batch).
+Where a placement needs a word:
 
-Not decided here, deliberately: the whole-of-Linux state (the per-subsystem
-worlds are the leaves of the C's ownership tree, which composes them
-whatever the eventual shape is); the frame generator for the
-within-subsystem remainder (section 4 measures how much remains); lenses
-or effect classes for cross-component calls (there are none today; lane
-C's routing module is called by WireGuard and lives inside `WGWorld`).
+- **The task is one record in one store.** The matrix shows the file layer
+  and seccomp writing disjoint fields of it, but the signal module writes
+  the fields both of them reach through their own calls, so splitting the
+  record by writer would need three maps whose creation and removal must
+  agree and whose missing rows must fail noisily, where today one optional
+  child encodes existence. `getTask`/`modifyTask` keep their missing-child
+  failure; `getFiles` keeps selecting `.task` (`Kernel/Defs.lean:1758`),
+  not `current`; child creation copies the record and resets the same
+  fields in the same order (`Env.childCreate`). `sigsys` is the task's
+  signal disposition and stays with `blocked`, `pending` and
+  `sigpending`; it does not move to seccomp because this slice exercises
+  it through SIGSYS.
+- **Lifetimes are preserved.** Removing the device does not reset
+  `netIfindexNext`, the two counters, the rate limiter's refcount or
+  `lastUnderLoad`; each keeps its own update and teardown rule from the
+  C. `retirePeerUnits` and `retireDeviceUnits` (`Kernel/Defs.lean:2105,
+  2115`) write both ambient unit identities and `timerUnits`; they become
+  `WG.M` operations using ambient helpers, in the same order.
+- **`armRecords` stays ambient**: `recordQueued` and `peekQueuedUnit`
+  (`:2038-2063`) read it for the queue records; the timer records read it
+  too; it is the record protocol's flag, not a timer field.
+- **The dispatch bookkeeping** (`suspended`, `unitPeers`, `pendingWork`,
+  `fired`) is the scheduler's state, read in `Env/Batch.lean` and written
+  by the dispatch primitives: ambient.
+- **Routing is a component inside `WGWorld`** because WireGuard is its only
+  user today; its functions depend on `Net.Routing` and never on
+  `WG.Device`, and a peer's `dstCache` stays in the peer and consumes the
+  routing generations explicitly. `routeLookup` is stateful (it marks the
+  accessed default route). It moves to its own world when a second user
+  appears; the split does not touch lane C's algorithm.
+- **The fixture's listeners and inbox are mutable delivery queues**, not
+  read-only facts (revision 1 called them facts): `EnvWorld`, product
+  level. `WGWorld.fixture` holds only the two function-valued inputs
+  WireGuard reads (`portBound`, `fixtureNetDevices`).
+- `World.floodExact` is gone (B4 deleted it); `World.k` disappears with
+  `Kernel`.
 
-## 3. The monad structure, concretely
+Not decided here, deliberately: the whole-of-Linux state; the frame
+generator for the within-subsystem remainder; lenses or effect classes for
+cross-component calls beyond the shared task services of section 3.
 
-The cheapest shape in Lean, and the one the seccomp module already uses:
-each module's functions are written over its own state in a `StateT` on
-the ambient monad, and the runner lifts them into the product.
+## 3. The monad structure, and the one exception to "the runner composes"
 
 ```lean
-/-- The ambient monad: the record stream, the decision log, the dispatch
-    bookkeeping and the stop. Every module's monad is a StateT over it. -/
 abbrev AmbientM := StateT Ambient (Except Stop)
-
-abbrev WG.M := StateT WGWorld AmbientM
-abbrev FS.M := StateT FSWorld AmbientM
-abbrev Seccomp.M := StateT SeccompWorld AmbientM
-
-/-- The runner's monad over the product; the lifts are the only place a
-    subsystem's state meets another's. -/
-abbrev M := StateT World (Except Stop)
+abbrev TaskM    := StateT TaskWorld AmbientM        -- the shared task and signal services
+abbrev WG.M     := StateT WGWorld AmbientM
+abbrev FS.M     := StateT FSWorld TaskM             -- [revision 2: over TaskM, not AmbientM]
+abbrev Seccomp.M := StateT SeccompWorld TaskM       -- [revision 2: over TaskM, not AmbientM]
+abbrev M        := StateT World (Except Stop)       -- the runner, the environment, the orchestration
 
 def liftWG (x : WG.M α) : M α := fun w => do
   let ((a, wg), ambient) ← (x.run w.wg).run w.ambient
   return (a, { w with wg, ambient })
--- liftFS, liftSeccomp alike; liftTask for the lifecycle table.
+def liftFS (x : FS.M α) : M α := fun w => do
+  let (((a, fs), tasks), ambient) ← ((x.run w.fs).run w.tasks).run w.ambient
+  return (a, { w with fs, tasks, ambient })
+-- liftSeccomp alike (seccomp, tasks, ambient); liftTask (tasks, ambient).
+def liftFSLocal (x : StateT FSWorld AmbientM α) : FS.M α := fun fs => liftM (x.run fs)
 ```
 
-The ambient primitives (`hidden`, `branch`, `branchCmp`, `report`,
-`noteNetRxStart`, `skipAmbient`, `envOk`, `invariant`, `unsupported`) move
-from `M` to `AmbientM` and are reached from every module's monad through
-the `MonadLift` instance `StateT` gives; nothing in the module code
-changes at their call sites.
+Each lift starts from the latest product state and writes its layers back
+once; no task snapshot is retained across two lifted operations; `Except
+Stop` stays under every state layer, so a failure returns the error and no
+partial state. Lean's `StateT` lifting lets `FS.M` and `Seccomp.M` call
+`TaskM` operations (the signal chain, `getTask`, `modifyTask`,
+`getCurrent`) directly; a store-only helper may be `StateT FSWorld
+AmbientM` and is lifted by `liftFSLocal`. Checked on this head with the
+companion's fragment (`.tmp/SharedTaskSpike.lean`, Lean v4.35.0, 0.4 s):
+a file operation followed by a seccomp operation sees the first's task
+update, WireGuard and the task's other fields are untouched, the ambient
+log is in order, a missing-child failure propagates. The original two-layer
+spike (`.tmp/MonadSpike.lean`) passes too, including the proof that a
+lifted `WG.M` computation preserves the other fields; the sibling-lift
+fragment fails with `TaskM Unit` expected `FSM Unit`, which is the type
+error revision 1's design would have met at `pipeWrite`'s signal call.
 
-Signatures before and after:
+What each type structurally excludes (the companion's table, adopted):
+
+| Computation | State it can change | Excluded by the type |
+| --- | --- | --- |
+| `WG.M` | WireGuard, ambient | the task store, the file layer, seccomp, the fixture queues |
+| `TaskM` | the task store, ambient | WireGuard, the file-layer and filter stores, the fixture queues |
+| `FS.M` | the file layer, the task store, ambient | WireGuard, the filter store, the fixture queues |
+| `Seccomp.M` | seccomp, the task store, ambient | WireGuard, the file-layer stores, the fixture queues |
+| `M` | the product | nothing; orchestration needs the product |
+
+These are guarantees about state, not about success (an ambient record can
+still fail a file operation), and `FS.M` does not prove that the task's
+seccomp fields are unchanged: that remainder stays a stated fact where a
+result needs it, until a callee's type excludes it.
+
+**The exception, put to the user as a proposal** (section 11): the recorded
+formulation "the runner holds the product and is the only composer" gains
+one qualification. Subsystem operations may call the shared task and
+signal services at the C's existing call sites: a pipe's SIGPIPE stays
+inside `pipeWrite`, a seccomp trap's signal inside `seccompFilter`, the
+`fput` task-work test inside `fput`. The runner alone assembles the full
+product and orchestrates operations that touch independent stores: the
+syscall dispatch (`Syscalls.lean:231`, lifting per arm), the environment
+model (the workers, the scheduler, delivery, the child's exit), and the
+seccomp child probe and trap return (`Seccomp/Syscalls.lean`), which stay
+over `M` whatever file they live in; the filter execution beneath them is
+`Seccomp.M`.
+
+Signatures, before and after:
 
 ```lean
--- Leanux/WG/Peer.lean, before
-def indexLookup (kinds : List IndexKind) (index : Nat) : M (Option (IndexOwner × PeerId))
--- after
-def indexLookup (kinds : List IndexKind) (index : Nat) : WG.M (Option (IndexOwner × PeerId))
--- narrowed further (section 4): over the device's key tables only
-def indexLookup (kinds : List IndexKind) (index : Nat) : StateT KeyTables AmbientM (Option (IndexOwner × PeerId))
-
--- Leanux/FS/Pipe.lean, before and after
-def pipeWrite (iocb : Kiocb) (src : IovIter) : M Int
-def pipeWrite (iocb : Kiocb) (src : IovIter) : FS.M Int
-
--- Leanux/Seccomp/Filter.lean, before and after
-def secureComputing {E : Type} [BpfEngine E] (e : E) (nr : Int) (sd : SeccompData) : M FilterOutcome
-def secureComputing {E : Type} [BpfEngine E] (e : E) (nr : Int) (sd : SeccompData) : Seccomp.M FilterOutcome
+def indexLookup (kinds : List IndexKind) (index : Nat) : M (Option (IndexOwner × PeerId))     -- before
+def indexLookup (kinds : List IndexKind) (index : Nat) : WG.M (Option (IndexOwner × PeerId))  -- after; not narrower (section 4)
+def pipeWrite (iocb : Kiocb) (src : IovIter) : M Int                                            -- before
+def pipeWrite (iocb : Kiocb) (src : IovIter) : FS.M Int                                         -- after (its SIGPIPE through TaskM)
+def secureComputing {E} [BpfEngine E] (e : E) (nr : Int) (sd : SeccompData) : M FilterOutcome   -- before
+def secureComputing {E} [BpfEngine E] (e : E) (nr : Int) (sd : SeccompData) : Seccomp.M FilterOutcome
 ```
 
-The accessors follow the types: `getDev`, `modifyDev`, `getPeer`,
-`setKeypair` and the rest of `Leanux/WG/State.lean` are over `WG.M`
-(`modifyDev f := modify fun s => { s with dev := s.dev.map f }`); the
-file layer's `getFile`, `getPipe`, `modifyFiles`, `modifyFdt` over `FS.M`;
-seccomp's `getFilter`, `modifySeccomp` over `Seccomp.M`; `getTask` and
-`modifyTask` split into the three per-owner tables (each subsystem has its
-own `modifyTask` over its own task record). `getK` and `modifyK` disappear:
-their 15 uses in `Leanux/WG` are the seven WireGuard fields, and the file
-layer's 22 writes through them are its own fields.
+The accessors follow: `Leanux/WG/State.lean` over `WG.M`; the file
+layer's `getFile`, `getPipe`, `modifyFiles`, `modifyFdt` over `FS.M`;
+seccomp's `getFilter`, `modifySeccomp` over `Seccomp.M`; `getTask`,
+`modifyTask`, `getCurrent` and `Kernel/Signal.lean`'s 34 definitions over
+`TaskM`. `getK` and `modifyK` disappear. The environment keeps the product
+and lifts whole worker bodies (`runWorker w (liftWG body)`); a helper that
+takes a computation argument has that argument's type reviewed, not just
+its return type.
 
-The runner and the syscall dispatch (`Leanux/Syscalls.lean:231`,
-`dispatch : Syscall → M Int`) stay over the product and lift per arm:
-`| .pipe2 flags => liftFS (sysPipe2 flags)`, `| .wgSet attrs =>
-netlinkRequest (liftWG (WG.wgSetDevice attrs))`. The environment model
-(`Leanux/Env.lean`, `Env/Batch.lean`, `Env/Stack.lean`, `Env/IpStack.lean`)
-is genuinely cross-cutting: it runs the WireGuard workers and timers,
-delivers datagrams, drives the scheduler, and handles the child's exit; it
-stays over `M` and calls into WireGuard through `liftWG`. Its 53 uses of
-the WireGuard accessors become 53 lifts, or one lift around each worker
-body (`runWorker w (liftWG body)`), which is the same number of edits as
-B3 made there.
+## 4. Narrowing within WireGuard: projections defined up front
 
-`Kernel/Signal.lean` (34 definitions over the signal fields) becomes the
-lifecycle table's module; `Kernel/Decision.lean` and `Refcount.lean` are
-data and unchanged.
+Revision 1 promised eight sub-records of `WGWorld` and "59 leaves" found
+by compiler errors. The review showed that the groups cut through the
+same `Device` and the same stored `Peer`, that one lift per group cannot
+supply a two-group function, and that the motivating `indexLookup` is not
+a keys-only function: it takes a strong reference on the peer and stores
+the result back into the owner's embedded word (`peerlookup.c:217-222`).
+The repaired probe agrees: `indexLookup` touches `keys` and `peers`,
+`armTimer` touches `peers` and `timers`, `delTimer` `peers`.
 
-## 4. Narrowing within WireGuard
+Revision 2 narrows over the owners that already exist, with one
+extraction and write-back adapter per component, and keeps a function
+over `WG.M` wherever narrowing would need a second store of the same
+objects. The components, their fields, their adapters and the functions
+each narrows (the repaired probe's one- and two-group list, 17 and 64
+definitions, followed by hand through their callees; `config` in the
+probe's output is the device access `getDev`/`modifyDev` itself and is
+not counted as a second group):
 
-Eight field groups, from the matrix's `Device` and `Peer` fields and
-`WGWorld`'s own (the probe's `WG_GROUPS`): `config` (the device's
-identity, sockets, MTU, port, fwmark, the static identity), `peers` (the
-tables and a peer's identity, endpoint, reference count),
-`allowedips` (the trie), `keys` (keypairs, the index table, the handshake
-state), `queues` (the rings, the work queues, the skb stores, a peer's
-staged and per-peer queues), `timers`, `cookies` (the cookie checker, the
-MAC keys, the rate limiter, the under-load clock), `stats`.
+| Component | Its state (existing owner) | Functions narrowed (measured) | Stays `WG.M` |
+| --- | --- | --- | --- |
+| Routing | `Net.Routing` in `WGWorld.routing` (lane C's tables, the address lists, the neighbours, the creator flag) | lane C's module as landed: `routeLookup`, `neighbourClassify`, the table operations (`StateT Net.Routing AmbientM`, lifted by `liftRouting`, which replaces only `routing`) | a send: `send4`/`send6` need the route and the peer's `dstCache` |
+| Index table | `Device.indexTable` | `indexInsert`, `indexRemove`, `indexRemoveKeypair`, `indexReplaceHandshake`, `indexHashed`, `indexBucket`, `bucketHas`, `unhashEntry` (own group `keys`; the hidden index draw is ambient) | `indexLookup` (the peer get and the store-back span the owner), `peerGetMaybeZero` |
+| Allowed-IPs nodes | `Device.nodes`, `Device.nextNode` | `getNode`, `freeNode`, `allocNode`, `slotGet`, `slotSet`, `connectNode`, `chooseAndConnectNode`, `nodePlacement`, `subtree`, `lookupDst`, `lookupSrc` (node identity and dangling-node failures kept) | `insert` and the removals that maintain `Peer.allowedipsList`, unless the combined input proves cheap in the build |
+| Cookie checker and rate limiter | `Device.cookieSecret`, `cookieSecretBirthdate`, `cookieEncryptionKey`, `mac1Key`; `WGWorld.ratelimiter`, `lastUnderLoad` | `ratelimiterAllow`, `ratelimiterInit`, `ratelimiterUninit`, `gcEntries`, `makeCookie`, `cookieValidatePacket`, `cookieMessageCreate`, `cookieCheckerInit` (own group `cookies`) | `cookieMessageConsume` (peer-owned cookie fields plus the device's), `sendHandshakeCookie` |
+| The skb stores | `Device.txSkbs`, `rxSkbs`, `nextSkb` | `newTxSkb`, `newRxSkb`, `getTxSkb`, `getRxSkb`, `setTxSkb`, `setRxSkb`, `freeTxSkb`, `freeRxSkb` | the queue operations that move an skb between a ring and a peer's queue |
+| Rings | explicit `PtrRing` arguments and results as today | nothing changes: no monadic wrapper is added to obtain a group name | — |
+| Device configuration | `Device`'s identity, sockets, MTU, port, fwmark | `setMtu`, `socketInit`, `socketReinit`, `socketPort`, `lookupInterface`, `netDevices`, `getNlSock`, `setNlSock`, `wgSetup`, `pubkeyHashtableAlloc` (own group `config`) | `wgSetDevice`, `setPeerCmd`, `wgUp`, `wgDown` |
 
-What narrows cheaply, measured: the 16 single-group and 43 two-group
-definitions, which are the leaves: the allowed-IPs trie's operations
-(`allowedips`, with `peers` for the owner), the rings and the per-peer
-queue operations (`queues`), the index table and keypair slot operations
-(`keys`, with `peers` for the owner word), the cookie checker and the rate
-limiter (`cookies`), `armTimer`, `delTimer` and the timer state (`timers`),
-the counters (`stats`). Each gets a `StateT <group> AmbientM` type, with the
-group a sub-record of `WGWorld` and a lift from the group into `WG.M`
-(`liftKeys`), one per group. Those are the 59 definitions whose frames
-against the other seven groups then come from the type.
+Rules for each adapter: extraction happens at the original access point
+(the device or peer existence check stays where it is, so a malformed
+state or record returns the same error in the same order; `armTimer`
+consumes and validates its records before `getPeer` and keeps that order
+by staying `WG.M`); write-back replaces only the selected fields of the
+same owner; no owner word is copied into two stores; no peer-keyed map is
+introduced beside `Device.peers`; a narrowed leaf takes no callback that
+could mutate the rest of WireGuard. If a component needs several maps with
+equal domains, duplicated lifetime markers or a footprint invariant, the
+operation stays `WG.M` and the narrowing is reported as deferred. This is
+the user's "where this can be done cheaply" applied concretely, and it is
+not permission to restructure the mirror for a proof.
 
-What keeps the `WG.M` type: the entry points and the paths through them
-(the 39 definitions touching seven or eight groups, the 53 touching five or
-six): the receive and send paths, the handshake create and consume
-functions, the workers, the timer callbacks, `wgSetDevice`, `peerRemove`.
-These touch most of the device because the C does, and a narrower type
-would be a lie or a footprint invariant. No footprint invariants are
-written in this stream: within WireGuard, the frames between the groups
-that the campaigns' results need stay as they are, for the frame
-generator or a later narrowing to retire.
-
-The probe's `--functions` output is the list to work from; its groups are
-syntactic and will move a few fields during the build (the note's
-estimate allows for it).
+What keeps `WG.M` by measurement: the entry points and the paths through
+them (the probe's three-to-eight-group definitions: 112 of 241), the peer
+acquisition and release (`peerGet`, `peerGetMaybeZero`, `peerPut`,
+`keypairPut`), the timers (`armTimer`, `delTimer`, `placeOnWheel`, the
+callbacks), the endpoint cache (`dstCacheGet/Set/Reset`), the sends, and
+every function whose footprint reaches two owners.
 
 ## 5. The compile-driven retrofit of the proof tree
 
 No wrappers, no equivalence lemmas. The world types change, the mirror is
-rebuilt, the proof tree is rebuilt, and each failure is one of three
-kinds:
+rebuilt, the proof tree is rebuilt, and each failure is one of four kinds
+(the review's finding 5 adds the fourth):
 
-- **A statement over `World` whose function now takes a local world**
-  (campaign 1: 601 statements name `World`, 361 name `Kernel` or `.k`;
-  campaign 2: 163 and 401): retyped. A result's projection
-  (`Snapshot` of the keypairs, `WGKernelView`) is already WireGuard-only
-  and becomes a projection of `WGWorld`; the statement is the same
-  proposition over the smaller state and its proof is the same proof.
-- **A frame lemma that is now unstatable**, because the function's type
-  no longer includes the field (every file-layer frame against a
-  WireGuard function, every WireGuard frame against a file-layer function,
-  the seccomp band: on campaign 1 about 920 theorems mention file-layer
-  definitions, on `main` 448): deleted, with the uses that needed it
-  replaced by nothing (the type) or by the one lift lemma per subsystem
-  ("a lifted `WG.M` computation changes only `wg` and `ambient`"), proved
-  once in `Leanux/Proofs/Framing/Lift.lean`.
-- **A frame lemma that is still statable** (within WireGuard, between the
-  groups a result observes and the function's group; the `Logged`
-  shadow semantics that tracks a function's effects in order): kept, and
-  repaired where its proof unfolded through an accessor whose definition
-  moved (the `frame_same` tactic's `using` lists name the accessors).
+- **A statement over `World` whose function now has a local type.** It is
+  retyped over the function's actual execution tuple, which for `WG.M α`
+  is `WGWorld → Ambient → Except Stop ((α × WGWorld) × Ambient)` and for
+  `FS.M α` also carries `TaskWorld`. Substituting `WGWorld` for `World` in
+  `a.run w = .ok (x, w')` is not well typed; the local contract quantifies
+  over the ambient input even when its predicate observes only a WireGuard
+  snapshot. Campaign 2's `Ensures`, `Returns` and `Observes`
+  (`Campaign2/Bridge.lean:74-82`) already separate success, existence and
+  exact-error claims; those distinctions are preserved through the
+  retyping, not collapsed.
+- **A structural frame lemma** whose statement the types now make
+  unstatable (a file operation against a WireGuard snapshot:
+  `Framing/FS.lean`'s `allocFile_sameWGKernel` and its transport in
+  `Keypairs/Frames/FS.lean`; the seccomp band; the inverse): deleted, its
+  uses replaced by the one lift lemma per subsystem ("a lifted `FS.M`
+  computation changes only `fs`, `tasks` and `ambient`"), proved once in
+  `Leanux/Proofs/Framing/Lift.lean` (the shape is the `example` in the
+  spike). The lift lemma says exactly what can change; it does not say the
+  task's seccomp fields are unchanged.
+- **A frame that is still statable** (within WireGuard, between the
+  owners a result observes; a shared-task fact the file layer needs about
+  seccomp's fields; the `Logged` erasure theorems, which are content):
+  kept, retyped, repaired where its proof unfolded an accessor that moved.
+- **A product-level claim**: the logged runner (`Logged/Runner.lean`)
+  reconstructs whole traces with file outputs, SIGPIPE, record exhaustion
+  and indexed failures, and `executeTraceLogged_erases` preserves the
+  complete JSON and errors; it stays over the product, as do the syscall
+  and environment observers. A local observer stays local with its
+  ambient input; the small lift and observer bridge is proved once.
 
-Nothing is re-proved: a proof that typechecks after retyping is done; a
-proof whose statement is gone is deleted. The rule for the campaigns'
-retrofit tasks is "delete before repair": a frame that the types or the
-lift lemma now give is removed even if its old proof would still compile.
-
-The `Logged` layer is the one place needing judgement. It re-defines the
-mirror's functions with a log of their effects and proves erasure to the
-originals; the erasure theorems are real content (they are what lets a
-whole-run result talk about effects in order) and are kept, retyped over
-the local worlds; the parts of it that exist only to track that a function
-did not touch another subsystem's state go with the frames.
-
-The counts above are the upper bounds of each kind; the build reports the
-real ones.
+Deletion is justified by the guarantee the new type supplies, never by a
+theorem ceasing to compile. Terminal results are retyped with their
+premises and observable content intact; a terminal claim that cannot be
+retained is reported as lag or as a finding, not deleted to turn the gate
+green. The lexical counts of section 1 are candidate deletions, not
+demonstrated savings; the build reports the real ones.
 
 ## 6. Effects elsewhere
 
-- **The binary adequacy track** (`binary/`): `R` is a relation over
-  `WGWorld` by the type, which is the minimal `R` of the amended charter
-  (section 1, 2026-10-15) by construction rather than by discipline.
-  Codex#3's `Representation.lean` and `MirrorHistory.lean` name mirror
-  types and retype at its next merge; its parked components for task,
-  seccomp and file state are outside `WGWorld` and stay parked.
-- **Lane C** (`Leanux/Net/Fib/`, mid-build): its routing state is
-  `WGWorld.routing`; its functions are typed over the routing group and
-  lifted into `WG.M` at the send and receive paths' calls, which is the
-  within-WireGuard narrowing of section 4 applied to a new module. It
-  retypes when the split lands, before its own landing.
-- **The differential check:** nothing. The executable is the same program
-  over the same trace format with the same records consumed in the same
-  order; the runner's outputs are unchanged. The claim is that the fast
-  tier (the build and the unit tests, including the model-replay tests)
-  and the full check at the claim point show identical counts to the
-  landing before: the same number of traces, operations, agreements,
-  obligations and distinct rows. A difference in any count is a defect of
-  the split, never a finding about the kernel.
+- **The binary adequacy track:** `R` is a relation over `WGWorld` by the
+  type, the minimal `R` of the amended charter by construction; the
+  execution inputs (the ambient state) appear explicitly in its execution
+  interface. Codex#3's `Representation.lean` and `MirrorHistory.lean`
+  retype at its next merge; the adequacy theorem is not inferred from the
+  packaging change.
+- **Lane C:** its module is the routing component of section 4, over
+  `StateT Net.Routing AmbientM`, lifted at the send and receive paths; it
+  retypes in the split, which lands after C1 did.
+- **The differential check and behaviour preservation.** The executable
+  is the same program over the same trace format with the same records
+  consumed in the same order, so the claim is behaviour preservation,
+  shown two ways: the model-replay unit tests and the recorded traces
+  replayed on the pinned baseline and on the candidate give identical
+  outputs and errors (the replay is deterministic given the records; the
+  temporary captures are deleted afterwards); and the full check, the
+  controls and the sentinels run against the approved oracle at the claim
+  point as for any landing. Revision 1 asked for identical record totals
+  between two live kernel runs; that is not a sound test (two live runs
+  are two schedules) and is withdrawn: a difference in coverage, verdicts
+  or records at the claim point is investigated, not normalized.
 - **The campaigns' regime:** a named prerequisite, pause-and-wait, for
-  campaign 2 and the binary track; campaign 1 lands first and retrofits
-  after.
+  campaign 2 and the binary track; campaign 1 lands first and its landed
+  tree is the retrofit baseline.
 
-## 7. Order of work and estimate
+## 7. Order of work, staging and the proof-lag claim
 
-| Step | What | Days |
-| --- | ---: | ---: |
-| 1 | The world types, `Ambient`, the ambient primitives over `AmbientM`, the lifts; the model builds with every module still over `M` through a temporary `M := StateT World` that is the product (one commit, the types only) | 1 |
-| 2 | `Leanux/Seccomp` over `Seccomp.M` (the smallest, 43 monadic definitions, and the bridge already exists) | 0.5 |
-| 3 | `Leanux/FS` over `FS.M` (202 monadic definitions, 3,869 lines; `Kernel/Signal.lean` to the lifecycle table) | 1.5 |
-| 4 | `Leanux/WG` over `WG.M` (239 monadic definitions, 5,875 lines; the accessors in `State.lean`) | 1.5 |
-| 5 | The environment and the runner over the product with the lifts (`Env.lean` 1,036 lines, `Env/*` 774, `Runner.lean` 1,136, `Syscalls.lean` 397) | 1.5 |
-| 6 | The within-WireGuard groups and the 59 narrowed leaves (section 4) | 1.5 |
-| 7 | Build, the five-module unit tests, the `wireguard`, `pipes`, `epoll` and `seccomp` suites during the task; the full check, the controls and the sentinels at the claim point, with the identical-counts claim of section 6 | 1 |
-| 8 | `main`'s proof tree retrofitted by the deletion rule (1,399 theorems, 448 file-layer frames deleted, the rest retyped), so the register's rows and the proof gate hold at the landing | 1.5 |
-| | **The stream** | **10** |
-| 9 | Campaign 2's retrofit (its own 700 theorems over the retyped `main` tree), by Codex#1 on resumption | 1 to 2 |
-| 10 | Campaign 1's retrofit after it lands (6,184 theorems: about 920 file-layer frames deleted, 601 statements retyped, the `Logged` layer re-judged), by Codex#2 or a fork | 4 to 6 |
+Revision 1's step 1 ("the types only, every module still builds") was
+wrong: `w.k`, `w.hidden` and the accessors disappear with the fields, so
+no types-only commit compiles without a compatibility layer, which the
+user excluded. The coarse cutover is one connected migration, prepared and
+built in one worktree before its commit; the type-mechanics spike precedes
+it and the unused new types may be committed early.
 
-About 1.0 WU for the stream at the plan's rate, plus the two retrofits.
-Steps 2 to 4 are independent of each other once step 1 is in and can run
-as three forks; steps 5 and 6 follow them.
+1. **Pin the baseline** after B3 and campaign 1 have landed (B3 has);
+   reconcile the field inventory and the campaign revisions once. Campaign
+   2 stays at its checkpoint. (0.5 to 1 day, with the representative
+   conversions of step 2's first items.)
+2. **The coarse cutover, connected:** the worlds, `Ambient`, `TaskWorld`,
+   the ambient and task services, the accessors, every module's
+   signatures (seccomp 43 monadic definitions, the file layer 202,
+   WireGuard 241, the routing module 74, the kernel helpers), the
+   initialization, the syscall dispatch and the environment's lifts, the
+   output projections. Seccomp first (the bridge exists), then the file
+   layer and WireGuard, which are independent once the services exist and
+   can run as two forks, then the environment and runner. (4 to 7 days.)
+3. **Build, the fast tier, the affected suites** (`wireguard`, `pipes`,
+   `epoll`, `seccomp`); representation mistakes fixed in scope, an apparent
+   semantic defect reported. Build and elaboration time measured
+   separately from model-replay runtime, after the real lifts exist,
+   including the worker and scheduler boundary. (1 to 2 days.)
+4. **The mirror claim point:** the full check, the controls and the
+   sentinels on the approved oracle; the concrete mirror diff and the
+   actual proof lag presented for signoff. **The mirror lands with reported
+   proof lag**, as the standing rule allows; a green proof gate over the
+   old 1,399-theorem tree is not promised, because that tree will have been
+   replaced by campaign 1's landed tree. (Revision 1 promised the gate
+   green at the landing; withdrawn.)
+5. **The proof-tree retrofit** of the landed campaign-1 tree as one
+   follow-on job (the deletion rule of section 5), its own proof gate and
+   its own signoff, the register's pins and current-or-lagging status
+   updated honestly; campaign 2 resumes on that interface and shared
+   repairs are counted once.
+6. **The cheap WireGuard narrowing** (section 4) as separately reviewable
+   changes on the split tree, with scoped validation and explicit proof
+   lag; developed alongside step 2 where convenient, never holding the
+   coarse boundary hostage.
+
+The estimate, revised (the companion's, checked against the module sizes
+on e5afc0f: WireGuard 6,144 lines, the file layer 3,869, seccomp 2,786,
+the routing module 1,947, the environment 2,016, the runner and dispatch
+1,692):
+
+| Work | Days |
+| --- | ---: |
+| The coarse mirror split (steps 1 to 4) | 5.5 to 10 |
+| The cheap WireGuard narrowing (step 6) | 1 to 3 |
+| Campaign 1's landed tree retrofitted (step 5; 7,405 theorems today, growing until it lands) | 5 to 10 |
+| Campaign 2's own additions on resumption (about 1,500 theorems today) | 2 to 5 |
+
+These are planning allowances, not measured durations; re-estimated after
+the first complete build and replay measurements. Revision 1's ten days
+with a green gate is withdrawn.
 
 ## 8. Risks
 
-1. **Stopping risk: a module that genuinely needs two worlds.** The matrix
-   says there is none today: no WireGuard function names file-layer or
-   seccomp state, and the shared `Task` splits cleanly by writer. The one
-   place to watch is the environment's child-exit path, which writes the
-   lifecycle table and the file layer's task works in one operation; it
-   stays in the runner's monad over the product, which is allowed. If a
-   mirror function turns out to need two subsystems' state, the split
-   stops there and reports: that function is the first cross-component
-   call and needs the composition principle this note does not decide.
-2. **Elaboration cost.** Each lift is a `StateT` run and re-wrap; the
-   runner and the environment add one per worker body and per syscall arm,
-   a few hundred in all, and the hot loops (the workers, the rings) stay
-   inside one module's monad with no lift. Step 1's build measures it; a
-   slowdown of the model-replay unit tests beyond a few percent is a
-   finding to report before going on.
-3. **The seccomp child.** `Kernel.child` is a second `Task` record whose
-   file and seccomp parts the three tables hold under `TaskRef.child`; the
-   probe's child-exit and wait paths read both parts, in the runner. The
-   `test_model_replay` tests cover them and must stay green.
-4. **The `Logged` layer** may carry more cross-subsystem content than the
-   counts suggest, since its files import only proof-internal modules;
-   step 8 finds out on `main`'s tree first, which is the small instance.
-5. **The campaigns' carries land on the retyped tree in the middle of
-   their own merges**: the rule is that campaign 1 lands before the split
-   and campaign 2 pauses, so neither merges across it.
+1. **A local action that actually needs an excluded store.** The matrix
+   and the reading of section 1 show none between the WireGuard, file-layer
+   and seccomp stores; the task and signal coupling that revision 1 would
+   have hit with certainty is designed in through `TaskM`. If one appears,
+   the split stops at it and reports: it is a cross-component call this
+   note does not provide for.
+2. **Narrowing that changes failure or record order.** A narrowed leaf
+   whose extraction moved an existence check or a record read would return
+   a different error on a malformed state or stream; the adapter rules of
+   section 4 forbid it, and the model-replay tests and the recorded-trace
+   replay catch it. Such a leaf stays `WG.M`.
+3. **A real C path that needs new semantics** to express at the narrower
+   type: report, not build.
+4. **Elaboration and runtime cost of the lifts**, measured after the real
+   lifts exist (step 3), build time separately from replay time; a
+   material unexplained regression on a representative path is a stop.
+5. **The `Logged` layer and the product-level observers** may carry more
+   cross-subsystem content than the lexical counts suggest; the landed
+   campaign-1 tree is the instance that shows it, in step 5.
+6. **The seccomp child:** one optional record under `TaskRef.child` in the
+   shared store, created and dropped by the environment through the
+   product; the `test_model_replay` tests cover the probe and wait paths
+   and must stay green.
 
 ## 9. What this stream does not do
 
 No footprint invariants; no frame generator; no lenses or effect classes
-for cross-component calls; no change to the trace format, the records,
-the kernel, the harness or the check rules; no change to any theorem's
-proposition beyond its state type; no whole-of-Linux state design.
+beyond the shared task services; no change to the trace format, the
+records, the kernel, the harness or the check rules; no change to any
+theorem's proposition beyond its state type and execution tuple; no
+whole-of-Linux state design.
+
+## 10. Review dispositions (Codex#4's review of revision 1)
+
+1. **The task and signal boundary needs composition inside mirror
+   functions (high).** Fixed. The three id-keyed task tables in sibling
+   worlds are withdrawn; one shared `TaskWorld` under `TaskM`, with `FS.M`
+   and `Seccomp.M` stacked on it, so `pipeWrite`'s SIGPIPE, `fput`'s task
+   tests and the filter's `forceSigSeccomp` typecheck at the C's call
+   sites; `sigsys` stays with the signal state; `getFiles` keeps selecting
+   `.task`; child creation and drop keep one optional record. The
+   orchestration in `Seccomp/Syscalls.lean` (the child probe, `trapReturn`)
+   is named as product-level. Checked by the companion's fragment on this
+   head (section 3). The composer exception is put to the user (section
+   11), since it touches their formulation.
+2. **The probe reproduces its numbers but does not justify the dependency
+   and narrowing claims (high).** Fixed in part, answered in part. The four
+   parser errors are repaired (shorthand `with` fields; "touched" not
+   "reads"; the signature cut at the first `:=` outside brackets, so
+   `armTimer` is monadic; container method names excluded from call
+   edges, so `setPeer` no longer acquires `allowedips`), the walk extended
+   to the routing module and the kernel helpers, and every output labelled
+   as lexical candidates. The matrix remains a candidate finder, as the
+   review says; the absence of cross-store access is established by
+   reading (section 1's first bullet), and the 59-leaf figure is replaced
+   by section 4's finite list followed by hand. The "53 five or six" slip
+   is corrected (the figure was 29).
+3. **The eight WireGuard groups have no state representation or
+   sufficient signatures (high).** Fixed. The eight parallel sub-records
+   are withdrawn; section 4 defines the components over existing owners
+   with one adapter each, lists the functions each narrows, and keeps
+   `indexLookup`, `armTimer`, `delTimer`, the peer acquisition and the
+   sends over `WG.M`, with the reasons the review gave (the store-back and
+   the strong reference; the peer-embedded timers; `armTimer`'s record
+   order). Routing is a component with no dependence on `WG.Device`; the
+   device-removal lifetimes are listed as preserved.
+4. **Ambient services and the performance experiment need a more precise
+   boundary (medium).** Fixed. `armRecords` stays ambient; `recordQueued`
+   and `peekQueuedUnit` stay `AmbientM`; `retirePeerUnits` and
+   `retireDeviceUnits` become `WG.M`; the non-exclusive writers of `steps`
+   are named and stay explicit operations; the listeners and inbox are
+   mutable queues in `EnvWorld`; the cost measurement moves to after the
+   real lifts exist, build time separate from replay time.
+5. **Delete structural frames but retain ambient parameters and
+   product-level execution claims (medium).** Fixed. Section 5 defines the
+   local contract over the actual execution tuple, keeps campaign 2's
+   success, existence and exact-error distinctions, keeps the logged
+   runner and the observers over the product, proves the lift and observer
+   bridge once, and states that deletion is justified by the type's
+   guarantee and never by a theorem ceasing to compile; the lexical counts
+   are candidates, not savings.
+6. **The staging and the ten-day estimate are inconsistent with the
+   required campaign order (high).** Fixed. The types-only first commit is
+   withdrawn (it cannot compile without wrappers); the coarse cutover is
+   one connected migration; the mirror lands with reported proof lag under
+   the standing rule and the landed campaign-1 tree is the retrofit
+   baseline, as its own job with its own gate and signoff; the estimate is
+   the companion's, with the proof work budgeted against the trees as they
+   stand today (7,405 and 3,225 theorems), and the "103 files" slip is
+   corrected (48). The review did not choose a campaign order on the
+   user's behalf, and this revision keeps the recorded one.
+
+Provenance: the review and the companion proposal were produced by
+Codex#4 on 2026-10-15 (`task/review-state-split`, 7b70875 and 64352f9);
+revision 2 is by the coordinator's fork.
+
+## 11. What revision 2 changes against revision 1, and what is put to the user
+
+Unchanged: the user's four recorded decisions and their reasoning; the
+coarse WireGuard boundary; routing as its own component inside `WGWorld`;
+the nested ambient monad and the runner's lifts; the deletion of the
+structural frame layer; no wrappers and no equivalence lemmas; the
+campaigns' order.
+
+Changed, as the coordinator's details corrected:
+1. The task store is one shared `TaskWorld` (task, child, current) under
+   `TaskM`; the three id-keyed tables in sibling worlds, and the separate
+   lifecycle world, are withdrawn.
+2. `FS.M` and `Seccomp.M` are stacked on `TaskM`, not on `AmbientM`;
+   `sigsys` and `current` are task state, not seccomp's.
+3. The within-WireGuard narrowing is a finite list of components over
+   existing owners with one adapter each (section 4), not eight parallel
+   stores and 59 leaves found by compiler errors; `indexLookup`,
+   `armTimer`, `delTimer` stay `WG.M`.
+4. `armRecords` stays ambient; `retirePeerUnits`/`retireDeviceUnits` are
+   WireGuard operations; the fixture's queues are a mutable `EnvWorld`.
+5. No types-only first commit; the coarse cutover is one connected
+   migration.
+6. The mirror lands with reported proof lag; the retrofit baseline is the
+   landed campaign-1 tree; the proof-tree integration has its own gate and
+   signoff.
+7. Behaviour preservation is shown by replaying the same recorded inputs
+   on baseline and candidate, not by identical totals of two live runs.
+8. The estimate is 5.5 to 10 days for the coarse split, 1 to 3 for the
+   narrowing, 5 to 10 and 2 to 5 for the two proof retrofits.
+9. The probe is repaired, extended and labelled as lexical candidates.
+10. The stop risk is restated: a local action needing an excluded store,
+    narrowing that changes failure or record order, a C path needing new
+    semantics, a material lift cost; the task coupling is no longer one.
+
+**Put to the user** (recorded as [AGENT proposal, from Codex#4's review] in
+`docs/decisions.md`, pending):
+- The exception to "the runner is the only composer": subsystem operations
+  may call the shared task and signal services at the C's existing call
+  sites; the runner alone assembles the product and orchestrates across
+  independent stores.
+- The mirror landing with reported proof lag and the landed campaign-1
+  tree as the retrofit baseline, rather than a green proof gate at the
+  landing.

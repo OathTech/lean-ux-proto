@@ -826,3 +826,33 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   the split's decision entry said: C1 finished in one session instead of the
   estimated ten days, and its new module retypes cheaply at the split since
   nothing depends on it yet.
+- **2026-10-16 [AGENT, fork of the coordinator]** Superseded detail of the
+  state split: the task state split by task id into three per-subsystem
+  tables (a file-layer part, a seccomp part, a signal-and-lifecycle part)
+  and the separate "task lifecycle" world named in the 2026-10-15 entries
+  were the coordinator's detail, not the user's decision, and are withdrawn:
+  Codex#4's independent review (task/review-state-split, 7b70875) showed
+  that `pipeWrite`'s SIGPIPE, `fput`'s task tests and the seccomp filter's
+  `forceSigSeccomp` reach the task's signal state inside mirror functions at
+  the C's call sites, so sibling task worlds hit the design's own stop risk
+  with certainty. Revision 2 of docs/2026-10-15-design-state-split.md keeps
+  one shared task store under a `TaskM` layer that the file layer and
+  seccomp stack on. The user's decisions (localized worlds, narrowing where
+  cheap, delete fields and see what breaks, the campaign order) stand.
+- **2026-10-16 [AGENT proposal, from Codex#4's review; pending the user]**
+  The one exception to "the runner holds the product and is the only
+  composer": subsystem operations may call the shared task and signal
+  services at the C's existing call sites (a pipe's SIGPIPE inside
+  `pipeWrite`, a trap's signal inside `seccompFilter`, the task-work test
+  inside `fput`); the runner alone assembles the full product and
+  orchestrates operations across independent stores (the syscall dispatch,
+  the environment model, the seccomp child probe and trap return). Put to
+  the user because it qualifies their formulation.
+- **2026-10-16 [AGENT proposal, from Codex#4's review; pending the user]**
+  The state split's mirror landing carries reported proof lag under the
+  standing lag-and-repair rule, and the proof tree it retrofits is campaign
+  1's landed tree (7,405 theorems on 2026-10-16), as one follow-on job with
+  its own proof gate and signoff, not a green proof gate over `main`'s
+  1,399-theorem tree at the landing, which the campaign order the user chose
+  makes impossible. Revision 1's promise of a green gate at the landing is
+  withdrawn.
