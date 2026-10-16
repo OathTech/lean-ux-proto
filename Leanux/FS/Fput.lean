@@ -13,7 +13,7 @@ tears its set down. The rest of fs/file_table.c is in `Leanux.FS.FileTable`
 namespace Leanux
 
 /-- `f_op->release(inode, file)`. -/
-def fopRelease (fid : FileId) : Option FopsId → M Int
+def fopRelease (fid : FileId) : Option FopsId → FS.M Int
   | some .eventfd => eventfdRelease fid
   | some .pipefifo => do
     -- pipe_release(inode, file): `inode` is the file's pipefs inode
@@ -27,7 +27,7 @@ def fopRelease (fid : FileId) : Option FopsId → M Int
   | none => invariant "file->f_op is NULL"
 
 /-- __fput (file_table.c:442-482): the release of the last reference. -/
-def fputFinal (fid : FileId) : M Unit := do
+def fputFinal (fid : FileId) : FS.M Unit := do
   let f ← getFile fid
   if ← branchCmp .fputFinalNotOpened (!hasFlag f.fMode FMODE_OPENED) (f.fMode &&& FMODE_OPENED).toNat 0 then
     fileFree fid
@@ -72,7 +72,7 @@ def fputFinal (fid : FileId) : M Unit := do
   fileFree fid
 
 /-- __fput_sync (file_table.c:550-554). -/
-def fputSync (fid : FileId) : M Unit := do
+def fputSync (fid : FileId) : FS.M Unit := do
   let f ← getFile fid
   setFile fid { f with fCount := f.fCount - 1 }
   if ← branch .fputSyncLast (f.fCount == 1) then

@@ -90,17 +90,17 @@ inductive FilterOutcome where
 def actionOnly (ret : UInt32) : Int := s32 (ret &&& SECCOMP_RET_ACTION_FULL)
 
 def getFilter (id : FilterId) : M SeccompFilter := do
-  match (← getK).seccompFilters.get? id with
+  match (← get).filters.get? id with
   | some f => return f
   | none => _root_.Leanux.invariant s!"seccomp filter {id} is not allocated"
 
 def modifyFilter (id : FilterId) (f : SeccompFilter → SeccompFilter) : M Unit := do
   let flt ← getFilter id
-  modifyK fun k => { k with seccompFilters := k.seccompFilters.insert id (f flt) }
+  modify fun s => { s with filters := s.filters.insert id (f flt) }
 
 /-- The current task's `seccomp` state, updated. -/
 def modifySeccomp (f : SeccompState → SeccompState) : M Unit := do
-  let t := (← getK).current
+  let t := (← getTasks).current
   modifyTask t fun tk => { tk with seccomp := f tk.seccomp }
 
 /-! ## The cache: seccomp_uprobe_exception, seccomp_is_const_allow, seccomp_cache_prepare (:736-898) -/
@@ -477,7 +477,7 @@ def seccompFilterFree (prepared : Option FilterId) : M Unit := do
       _root_.Leanux.invariant "a seccomp program with BPF_PROG_TYPE_SOCKET_FILTER"
     if ← branch .releaseOrigHasFprog true then pure ()   -- kfree(fprog->filter); kfree(fprog)
     -- bpf_prog_free(prog): a cut; kfree(filter)
-    modifyK fun k => { k with seccompFilters := k.seccompFilters.erase prepared.get! }
+    modify fun s => { s with filters := s.filters.erase prepared.get! }
 
 /-- seccomp_prepare_filter (:661-705): the length, the privilege test, the
     allocation, and `bpf_prog_create_from_user` (stream U's) with
@@ -495,8 +495,8 @@ def seccompPrepareFilter (fprog : SockFprog) : M (Except Int FilterId) := do
   if ← kbranch .prepareNoNnp (!tk.noNewPrivs) then
     if ← kbranch .prepareNotCapable (!tk.capSysAdmin) then return .error errEACCES
   if ← kbranch .prepareSfilterNoMem (!(← hiddenAlloc .kzallocSfilter)) then return .error errENOMEM
-  let id := (← getK).nextFilter
-  modifyK fun k => { k with nextFilter := k.nextFilter + 1 }
+  let id := (← get).nextFilter
+  modify fun s => { s with nextFilter := s.nextFilter + 1 }
   -- mutex_init(&sfilter->notify_lock): the notifier is not mirrored
   match ← bpfProgCreateFromUser fprog with
   | .error e =>
@@ -507,7 +507,7 @@ def seccompPrepareFilter (fprog : SockFprog) : M (Except Int FilterId) := do
     -- refcount_set(&sfilter->refs, 1); refcount_set(&sfilter->users, 1); init_waitqueue_head
     let flt : SeccompFilter := { id, refs := 1, users := 1, prog := prog.toKernel,
                                  origProg := prog.origProg.map SockFilter.toKernel }
-    modifyK fun k => { k with seccompFilters := k.seccompFilters.insert id flt }
+    modify fun s => { s with filters := s.filters.insert id flt }
     return .ok id
 
 /-- seccomp_prepare_user_filter (:714-733): the `copy_from_user` of the

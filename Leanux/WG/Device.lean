@@ -1,4 +1,5 @@
 import Leanux.WG.Netlink
+import Leanux.Net.Route
 
 /-!
 # drivers/net/wireguard/device.c — bringing wg0 up and transmitting
@@ -123,18 +124,18 @@ def RATELIMITER_TABLE_SIZE : Nat := 2048
     unit of this harness, excluded with the reason in B4's section 3. -/
 def ratelimiterInit : M Int := do
   -- mutex_lock(&init_lock); `++init_refcnt != 1`
-  modifyK fun k => { k with ratelimiter := { k.ratelimiter with refcnt := k.ratelimiter.refcnt + 1 } }
+  modify fun k => { k with ratelimiter := { k.ratelimiter with refcnt := k.ratelimiter.refcnt + 1 } }
   let undo : M Int := do   -- err: --init_refcnt
-    modifyK fun k => { k with ratelimiter := { k.ratelimiter with refcnt := k.ratelimiter.refcnt - 1 } }
+    modify fun k => { k with ratelimiter := { k.ratelimiter with refcnt := k.ratelimiter.refcnt - 1 } }
     return -ENOMEM
-  if ← branch .ratelimiterInitNotFirst ((← getK).ratelimiter.refcnt != 1) then return 0
+  if ← branch .ratelimiterInitNotFirst ((← get).ratelimiter.refcnt != 1) then return 0
   if ← branch .ratelimiterInitCacheErr false then return ← undo
   if ← branch .ratelimiterInitTableV4Err false then return ← undo
   if ← branch .ratelimiterInitTableV6Err false then return ← undo
   -- queue_delayed_work(system_power_efficient_wq, &gc_work, HZ)
   let key ← hidden .ratelimiterKey
   -- both tables are kvcalloc'ed: empty (the last uninit's GC emptied them too)
-  modifyK fun k => { k with ratelimiter := { k.ratelimiter with key, table := [], table6 := [] } }
+  modify fun k => { k with ratelimiter := { k.ratelimiter with key, table := [], table6 := [] } }
   return 0
 
 /-- wg_ratelimiter_gc_entries (ratelimiter.c:55-82). With `work` NULL (the
@@ -161,15 +162,15 @@ def gcEntries (work : Bool) : M Unit := do
     -- hlist_for_each_entry_safe over table_v4[i]: on the uninit walk every
     -- entry, wherever its bucket, is met once and uninitialized (65-67)
     if i == 0 && !work then
-      for _ in (← getK).ratelimiter.table do
+      for _ in (← get).ratelimiter.table do
         _ ← branch .gcV4EntryIter true
-      modifyK fun k => { k with ratelimiter := { k.ratelimiter with table := [] } }
+      modify fun k => { k with ratelimiter := { k.ratelimiter with table := [] } }
     _ ← report .gcV4EntryIter false
     -- hlist_for_each_entry_safe over table_v6[i] (70-74): the same walk
     if i == 0 && !work then
-      for _ in (← getK).ratelimiter.table6 do
+      for _ in (← get).ratelimiter.table6 do
         _ ← branch .gcV6EntryIter true
-      modifyK fun k => { k with ratelimiter := { k.ratelimiter with table6 := [] } }
+      modify fun k => { k with ratelimiter := { k.ratelimiter with table6 := [] } }
     _ ← report .gcV6EntryIter false
     if ← report .gcHasWork work then unsupported "the ratelimiter GC's cond_resched (a work run)"
   _ ← branch .gcBucketIter false
@@ -178,9 +179,9 @@ def gcEntries (work : Bool) : M Unit := do
 /-- wg_ratelimiter_uninit (ratelimiter.c:205-221). -/
 def ratelimiterUninit : M Unit := do
   -- mutex_lock(&init_lock); `!init_refcnt || --init_refcnt`
-  let r := (← getK).ratelimiter.refcnt
+  let r := (← get).ratelimiter.refcnt
   if ← branch .ratelimiterUninitZero (r == 0) then return
-  modifyK fun k => { k with ratelimiter := { k.ratelimiter with refcnt := r - 1 } }
+  modify fun k => { k with ratelimiter := { k.ratelimiter with refcnt := r - 1 } }
   if ← branch .ratelimiterUninitNotLast (r - 1 != 0) then return
   -- cancel_delayed_work_sync(&gc_work): waits only for a GC run in
   -- progress (not a dispatched unit of this harness; outside the domain)
@@ -198,7 +199,7 @@ def ratelimiterUninit : M Unit := do
     rtnetlink core (`rtnl_create_link`, rtnetlink.c:3499-3515) allocated it
     with the name "wg0" and `ifi_index` 0. -/
 def wgSetup : M Unit :=
-  modifyK fun k => { k with wg := some { ifindex := 0, ifname := "wg0", creatingNet := false, deviceUpdateGen := 0 } }
+  modify fun k => { k with dev := some { ifindex := 0, ifname := "wg0", creatingNet := false, deviceUpdateGen := 0 } }
 
 /-- wg_cookie_checker_init (cookie.c:19-26). -/
 def cookieCheckerInit : M Unit := do
@@ -251,8 +252,8 @@ def wgNewlink : M Int := do
   -- IPv6 and link notifications (consumed by rtnetlinkRequest's cut)
   let ok ← envOk .registerNetdevice
   if ← branch .newlinkRegisterErr !ok then return ← unwind
-  let ifindex := (← getK).netIfindexNext
-  modifyK fun k => { k with netIfindexNext := ifindex + 1 }
+  let ifindex := (← get).netIfindexNext
+  modify fun k => { k with netIfindexNext := ifindex + 1 }
   modifyDev fun d => { d with ifindex }
   skipCutExactly .neighReachTime 2 allocCuts
   -- list_add(&wg->device_list, &device_list); priv_destructor = wg_destruct
@@ -262,10 +263,10 @@ def wgNewlink : M Int := do
     device with `NLM_F_EXCL` is `-EEXIST` before any WireGuard code; else
     `wg_setup` and `wg_newlink`. A failed `newlink` frees the device. -/
 def wgCreate : M Int := do
-  if (← getK).wg.isSome then return -EEXIST
+  if (← get).dev.isSome then return -EEXIST
   wgSetup
   let ret ← wgNewlink
-  if ret < 0 then modifyK fun k => { k with wg := none }
+  if ret < 0 then modify fun k => { k with dev := none }
   return ret
 
 /-- wg_destruct (device.c:242-270), from `netdev_run_todo`. -/
@@ -294,7 +295,7 @@ def wgDestruct : M Unit := do
   -- memzero_explicit(&wg->static_identity); kvfree ×2; free_netdev: the
   -- device's work structs die with it, as every peer's did at its release
   -- (docs/2026-10-11-dispatch-order.md, 4)
-  modifyK fun k => { k with wg := none }
+  modify fun k => { k with dev := none }
   retireDeviceUnits
 
 /-- `RTM_DELLINK` of "wg0" (rtnetlink.c:3383-3436): `-ENODEV` without one;
@@ -302,14 +303,21 @@ def wgDestruct : M Unit := do
     runs `wg_stop` for an up device; then `flush_all_backlogs` (a sleep
     point), the notifiers, and `netdev_run_todo` (its `rcu_barrier`, a sleep
     point), which calls `wg_destruct`. -/
-def wgDelete : M Int := do
-  if (← getK).wg.isNone then return -ENODEV
-  if (← getDev).running then wgDown
+def wgDelete [Monad m] [MonadLiftT WG.M m] [MonadLiftT AmbientM m] (onDown : m Unit := pure ()) (onUnregister : m Unit := pure ()) : m Int := do
+  if (← getWG).dev.isNone then return -ENODEV
+  if (← getDev).running then
+    wgDown
+    -- `dev_close_many`'s `NETDEV_DOWN` notifiers (the environment's: lane C's
+    -- routing, devinet's multicast leave)
+    onDown
   -- the notifications of dev_close_many and of NETDEV_UNREGISTER (ifinfo,
   -- netconf and address messages: nlmsg_new) and netdev_unregister_kobject's
   -- uevents (alloc_uevent_skb), below the cut when the run armed
   -- __alloc_skb; then flush_all_backlogs
   skipCut allocCuts
+  -- `NETDEV_UNREGISTER`'s notifiers (devinet's `inetdev_destroy`, the
+  -- routing's `fib_disable_ip`), before `wg_destruct` runs from the todo list
+  onUnregister
   mayHaveSlept
   wgDestruct
   return 0
@@ -356,7 +364,21 @@ def wgXmit (family addr : Nat) (pkts : List Packet) (mtu : Nat) : M Int := do
     -- `__dev_queue_xmit`'s `rcu_read_unlock_bh` (`loopbackSend`).
     if !(← branch .xmitErrorInet (family == 4)) then _ ← branch .xmitErrorInet6 (family == 6)
     let drawn ← skipCutSites ([.icmpCredit, .ipIdentKey, .ipIdentReserve, .flowHashSecret] ++ allocCuts)
-    loopbackSend [] (drawn.contains (HiddenSite.icmpCredit).info.id)
+    let mut sent := drawn.contains (HiddenSite.icmpCredit).info.id
+    -- lane C: once the global credit was drawn, `__icmp_send` routes the
+    -- error to the dropped packet's source (icmp.c:780, `icmp_route_lookup`:
+    -- :512 with a zero source; `xfrm_lookup` is the identity without XFRM,
+    -- so :525 classifies the destination on the packet's device); a route
+    -- error is `out_unlock`, nothing sent. The error's loopback delivery
+    -- creates lo's one neighbour (`Net.neighbourClassify`).
+    if family == 4 && sent then
+      let src := ((first.bytes.drop 12).take 4).foldl (fun acc b => acc * 256 + b.toNat) 0
+      match ← Net.routeOutput4 0 src with
+      | .error _ => sent := false
+      | .ok _ =>
+        _ ← Net.Fib.inetDevAddrType (some WG0_IFINDEX) src
+        Net.neighbourClassify LO_IFINDEX
+    loopbackSend [] sent
     modifyDev fun d => { d with txErrors := d.txErrors + 1 }   -- DEV_STATS_INC(dev, tx_errors)
     return ret
   let peer ← lookupDst family addr
@@ -433,7 +455,7 @@ def setMtu (newMtu : Int) : M Int := do
     peer's endpoint source. -/
 def netnsPreExit : M Unit := do
   -- rtnl_lock(); list_for_each_entry(wg, &device_list, device_list)
-  if (← getK).wg.isSome then
+  if (← get).dev.isSome then
     _ ← branch .preExitDevIter true
     if ← branch .preExitCreator (← getDev).creatingNet then
       -- netif_carrier_off(wg->dev); mutex_lock(&wg->device_update_lock);

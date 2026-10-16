@@ -18,13 +18,13 @@ inductive FcntlCmd where
     anonymous inode (fs/libfs.c, `alloc_anon_inode`) has `i_flags = S_PRIVATE`
     and `i_mode = S_IRUSR | S_IWUSR`, so no file-type bits. A pipefs inode's
     fields are in the inode store (`get_pipe_inode`). -/
-def inodeFlags : Option InodeId → M Nat
+def inodeFlags : Option InodeId → FS.M Nat
   | some .anon => return S_PRIVATE
   | some (.pipefs id) => return (← getInode id).iFlags
   | some (.fixture name) => unsupported s!"inode of fixture file {name}"
   | none => invariant "file->f_inode is NULL"
 
-def inodeFileType : Option InodeId → M Nat
+def inodeFileType : Option InodeId → FS.M Nat
   | some .anon => return 0
   | some (.pipefs id) => return (← getInode id).iMode &&& S_IFMT
   | some (.fixture name) => unsupported s!"inode of fixture file {name}"
@@ -35,7 +35,7 @@ def inodeFileType : Option InodeId → M Nat
     point: it passes at the owner test (fs/inode.c:2531), the pipe inode's
     `i_uid` being its creator's fsuid (fs/pipe.c:907), so `capable` is never
     consulted. `f_lock` is taken around the update. -/
-def setfl (fid : FileId) (arg : UInt32) : M Int := do
+def setfl (fid : FileId) (arg : UInt32) : FS.M Int := do
   let f ← getFile fid
   -- `((arg ^ filp->f_flags) & O_APPEND) && IS_APPEND(inode)`
   if ← branchCmp .setflAppendChanged (hasFlag (arg ^^^ f.fFlags) O_APPEND) ((arg ^^^ f.fFlags) &&& O_APPEND).toNat 0 then
@@ -70,7 +70,7 @@ def setfl (fid : FileId) (arg : UInt32) : M Int := do
 
 /-- do_fcntl (fcntl.c:443-...): the `switch (cmd)` arm taken is the choice
     point; only the three modeled commands can reach it. -/
-def doFcntl (fd : Nat) (cmd : FcntlCmd) (arg : UInt64) (fid : FileId) : M Int := do
+def doFcntl (fd : Nat) (cmd : FcntlCmd) (arg : UInt64) (fid : FileId) : FS.M Int := do
   let argi : Int := (arg.toUInt32).toNat  -- (int)arg; only bit 0 is tested
   match cmd with
   | .getFD =>
@@ -96,7 +96,7 @@ def doFcntl (fd : Nat) (cmd : FcntlCmd) (arg : UInt64) (fid : FileId) : M Int :=
 
 /-- SYSCALL_DEFINE3(fcntl) (fcntl.c:573-594). `security_file_fcntl` is the
     constant 0 (`CONFIG_SECURITY=n`), so `if (!err)` is not a branch here. -/
-def sysFcntl (fd : Nat) (cmd : FcntlCmd) (arg : UInt64) : M Int := do
+def sysFcntl (fd : Nat) (cmd : FcntlCmd) (arg : UInt64) : FS.M Int := do
   let f ← fdgetRaw fd
   let mut err := -EBADF
   if ← branch .fcntlNoFile f.file.isNone then return err  -- goto out

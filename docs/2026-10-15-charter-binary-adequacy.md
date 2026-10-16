@@ -80,8 +80,17 @@ hypothesis, so the theorem applies in more contexts, and the frame
 theorems give equality outside the footprint, which is stronger than
 relatedness; nothing transportable is lost, since a property transports
 through the fields `R` relates, and `R` covers every field a landed result
-observes. A later result that observes a field outside `R` extends `R`
-additively. Definitions built for state outside `R` are parked under
+observes. Precisely: the per-function relation `R_f` is `f`'s footprint and
+no more; the global relation over the WireGuard projection is the
+conjunction of per-structure relations, and a landed property transports
+through it, not through any one `R_f`. What carries the global relation
+across a call is `f`'s theorem (`R_f` at exit, bytes outside the footprint
+unchanged) plus one global fact, a heap-layout invariant naming where the
+WireGuard structures live and that they are disjoint from each function's
+write footprint; that invariant is a milestone-6 obligation on the
+trust-surface review's list, not a clause of any `R_f` (the milestone-1
+review's F6, 2026-10-15). A later result that observes a field outside the
+global relation extends it additively. Definitions built for state outside `R` are parked under
 `binary/attic/`, imported by nothing on the proof path, with a line saying
 what each was for; they are not counted. (The charter's first wording,
 "it relates the whole mirror world", was read literally and cost the

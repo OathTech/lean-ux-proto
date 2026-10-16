@@ -1,4 +1,5 @@
 import Leanux.WG.State
+import Leanux.Net.Route
 
 /-!
 # drivers/net/wireguard/socket.c — wg0's UDP sockets (L)
@@ -110,8 +111,7 @@ own choice points are mirrored line by line. -/
     value. Without the arm records the kernel wrote none: outside the domain. -/
 def dstCacheReset (pid : PeerId) : M Unit := do
   -- the pre-W9 rule for captures without the records (`World.dstCacheRecords`)
-  let w ← get
-  if !(w.armRecords && w.dstCacheRecords) then return
+  if !((← getAmbient).armRecords && (← get).dstCacheRecords) then return
   let ts ← hiddenJiffies .dstCacheResetTs
   let p ← getPeer pid
   setPeer pid { p with dstCache := { p.dstCache with resetTs := ts } }
@@ -165,8 +165,7 @@ def setPeerEndpoint (pid : PeerId) (e : Endpoint) : M Unit := do
     stored: the miss. -/
 def dstCacheGet (pid : PeerId) (gen : Nat) : M (Option DstSlot) := do
   -- the pre-W9 rule for captures without the records: every access misses
-  let w ← get
-  if !(w.armRecords && w.dstCacheRecords) then return none
+  if !((← getAmbient).armRecords && (← get).dstCacheRecords) then return none
   let p ← getPeer pid
   let c := p.dstCache
   if let some s := c.slot then
@@ -203,7 +202,7 @@ private def tunnelXmit (e : Endpoint) (bytes : List UInt8) (ds : Nat) (r : Route
 def send4 (e : Endpoint) (cache : Option PeerId) (bytes : List UInt8) (ds : Nat) (exactRx : Bool) : M Int := do
   let d ← getDev
   if ← branch .send4SockNull d.sock4.isNone then return -ENONET   -- err: kfree_skb
-  let gen := (← get).ipv4Gen
+  let gen := (← Net.Fib.inSocketNs Net.Fib.getTable).rtGenid4   -- lane C: `rt_genid` (rt_cache_valid, route.c:1602-1607)
   let mut saddr := e.src
   let mut srcIf := e.srcIf
   let mut route : Option Route := none
@@ -220,12 +219,12 @@ def send4 (e : Endpoint) (cache : Option PeerId) (bytes : List UInt8) (ds : Nat)
   if ← branch .send4CacheMiss route.isNone then
     -- inet_confirm_addr(net, NULL, 0, fl.saddr, RT_SCOPE_HOST): a zero source
     -- autoselects; a set one must be a configured address (devinet.c:1433)
-    let w ← get
+    let w ← getRouting
     let confirmed := saddr == 0 || saddr == LOOPBACK4 || w.addrs4.contains saddr
     if ← branch .send4SrcNotLocal !confirmed then
       clearSrc; saddr := 0; srcIf := 0
       if ← branch .send4ResetA cache.isSome then dstCacheReset cache.get!
-    let mut rt ← routeLookup 4 saddr e.addr
+    let mut rt ← Net.Fib.inSocketNs (Net.routeLookup 4 saddr e.addr)
     let mismatch := srcIf != 0 && (match rt with
       | .error err => err == -EINVAL
       | .ok r => r.dev != srcIf)
@@ -233,7 +232,7 @@ def send4 (e : Endpoint) (cache : Option PeerId) (bytes : List UInt8) (ds : Nat)
       clearSrc; saddr := 0; srcIf := 0
       if ← branch .send4ResetB cache.isSome then dstCacheReset cache.get!
       if ← branch .send4PutRt (match rt with | .ok _ => true | .error _ => false) then pure ()   -- ip_rt_put
-      rt ← routeLookup 4 0 e.addr
+      rt ← Net.Fib.inSocketNs (Net.routeLookup 4 0 e.addr)
     match rt with
     | .error err =>
       if ← branch .send4RouteErr true then return err   -- net_dbg_ratelimited; err: kfree_skb
@@ -242,6 +241,8 @@ def send4 (e : Endpoint) (cache : Option PeerId) (bytes : List UInt8) (ds : Nat)
       if ← branch .send4CacheSet cache.isSome then dstCacheSet cache.get! r.src gen r.dev
       route := some r
   let some r := route | invariant "send4 without a route"
+  -- lane C: `ip_finish_output2` on the route's device: its one neighbour
+  Net.Fib.inSocketNs (Net.neighbourClassify r.dev)
   tunnelXmit e bytes ds r exactRx
   return 0
 
@@ -251,7 +252,7 @@ def send4 (e : Endpoint) (cache : Option PeerId) (bytes : List UInt8) (ds : Nat)
 def send6 (e : Endpoint) (cache : Option PeerId) (bytes : List UInt8) (ds : Nat) (exactRx : Bool) : M Int := do
   let d ← getDev
   if ← branch .send6SockNull d.sock6.isNone then return -ENONET
-  let gen := (← get).ipv6Gen
+  let gen := (← getRouting).ipv6Gen
   let mut saddr := e.src
   let mut route : Option Route := none
   if ← branch .send6HasCache cache.isSome then
@@ -260,7 +261,7 @@ def send6 (e : Endpoint) (cache : Option PeerId) (bytes : List UInt8) (ds : Nat)
       route := some { dev := s.dev, src := s.src }; saddr := s.src
   if ← branch .send6CacheMiss route.isNone then
     -- !ipv6_addr_any(saddr) && !ipv6_chk_addr(net, saddr, NULL, 0)
-    let w ← get
+    let w ← getRouting
     let notLocal := saddr != 0 && !(saddr == 1 || saddr == LO_LINK_LOCAL || w.addrs6.contains saddr)   -- W5: the link-local address on lo
     if ← branch .send6SrcNotLocal notLocal then
       if let some pid := cache then
@@ -268,7 +269,7 @@ def send6 (e : Endpoint) (cache : Option PeerId) (bytes : List UInt8) (ds : Nat)
         setPeer pid { p with endpoint := p.endpoint.map fun e => { e with src := 0 } }
       saddr := 0
       if ← branch .send6Reset cache.isSome then dstCacheReset cache.get!
-    match ← routeLookup 6 saddr e.addr with
+    match ← Net.routeLookup 6 saddr e.addr with
     | .error err =>
       if ← branch .send6RouteErr true then return err
     | .ok r =>

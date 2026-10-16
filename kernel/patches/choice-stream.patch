@@ -106,7 +106,7 @@
  	case KCOV_REMOTE_ENABLE:
  		if (get_user(remote_num_handles, (unsigned __user *)(arg +
  				offsetof(struct kcov_remote_arg, num_handles))))
-@@ -1125,3 +1174,1002 @@
+@@ -1125,3 +1174,1059 @@
  }
  
  device_initcall(kcov_init);
@@ -662,6 +662,63 @@
 +EXPORT_SYMBOL(kcov_timer_jiffies);
 +
 +/*
++ * LEANUX B3 (docs/2026-10-15-design-b3-timer-wheel.md, sections 3.2, 4 and
++ * 7): the timer wheel's two records for a timer of the armed dispatch set,
++ * written where the C computes them in __mod_timer, which now receives its
++ * caller's return address so that both resolve to the arming line like the
++ * arm record (kind 303). Kind 313 {base->clk, timer} (16 bytes): the base
++ * clock right after forward_timer_base on both of __mod_timer's paths, the
++ * hidden input the slot depends on (it lags jiffies by the softirq's latency
++ * or, inside a catch-up pass, by up to the advance). Kind 314 {idx,
++ * bucket_expiry, timer} (24 bytes): the slot stored in the timer's flags and
++ * its bucket expiry at the enqueue; absent on the same-slot path, so the
++ * mirror's own same-slot decision is checked by the record's presence, not
++ * taken from it. Both gated like the arm record (the armed set,
++ * KCOV_DISPATCH_ARM_RECORDS) and written with the mode check and
++ * kcov_choice_write, with no steering lookup, as the kind-304 writer is:
++ * they run under base->lock with interrupts off. Record-only.
++ */
++static void notrace kcov_timer_wheel_write(u32 kind, unsigned long fn, unsigned long ip, const u64 *v, unsigned int len)
++{
++	struct task_struct *t = current;
++	u32 n, i;
++
++	if (!READ_ONCE(kcov_dispatch_kcov) || !(READ_ONCE(kcov_dispatch.flags) & KCOV_DISPATCH_ARM_RECORDS))
++		return;
++	n = min_t(u32, READ_ONCE(kcov_dispatch.n), KCOV_DISPATCH_MAX);
++	for (i = 0; i < n; i++)
++		if (READ_ONCE(kcov_dispatch.funcs[i]) == fn)
++			break;
++	if (i == n)
++		return;
++	if (!check_kcov_mode(KCOV_MODE_TRACE_PC, t) &&
++	    !(IS_ENABLED(CONFIG_KCOV_ENABLE_COMPARISONS) && check_kcov_mode(KCOV_MODE_TRACE_CMP, t)))
++		return;
++	kcov_choice_write(t, kind, ip, v, len);
++}
++
++void notrace kcov_timer_clk(void *func, unsigned long clk, void *timer, unsigned long ip)
++{
++	u64 v[2];
++
++	v[0] = clk;
++	v[1] = (unsigned long)timer;
++	kcov_timer_wheel_write(313, (unsigned long)func, ip, v, sizeof(v));
++}
++EXPORT_SYMBOL(kcov_timer_clk);
++
++void notrace kcov_timer_enqueued(void *func, unsigned int idx, unsigned long bucket_expiry, void *timer, unsigned long ip)
++{
++	u64 v[3];
++
++	v[0] = idx;
++	v[1] = bucket_expiry;
++	v[2] = (unsigned long)timer;
++	kcov_timer_wheel_write(314, (unsigned long)func, ip, v, sizeof(v));
++}
++EXPORT_SYMBOL(kcov_timer_enqueued);
++
++/*
 + * LEANUX epoll (docs/2026-10-12-epoll-design.md, section 3.2): the address
 + * of the struct file an epoll item is keyed by (ep_cmp_ffd: the file
 + * pointer, then the fd), recorded at ep_rbtree_insert (fs/eventpoll.c,
@@ -1111,7 +1168,7 @@
 +}
 --- a/include/linux/kcov.h
 +++ b/include/linux/kcov.h
-@@ -44,6 +44,51 @@
+@@ -44,6 +44,54 @@
  void kcov_remote_start(u64 handle);
  void kcov_remote_stop(void);
  u64 kcov_common_handle(void);
@@ -1160,10 +1217,13 @@
 +void kcov_seccomp_program(const void *insns, unsigned int len, unsigned long ip);
 +/* LEANUX seccomp: populate_seccomp_data's instruction-pointer record (kind 312). */
 +void kcov_seccomp_ip(unsigned long value, unsigned long ip);
++/* LEANUX B3: the timer wheel's base clock (kind 313) and enqueue (kind 314) records. */
++void kcov_timer_clk(void *func, unsigned long clk, void *timer, unsigned long ip);
++void kcov_timer_enqueued(void *func, unsigned int idx, unsigned long bucket_expiry, void *timer, unsigned long ip);
  
  static inline void kcov_remote_start_common(u64 id)
  {
-@@ -99,6 +144,22 @@
+@@ -99,6 +147,24 @@
  static inline void kcov_finish_switch(struct task_struct *t) {}
  static inline void kcov_remote_start(u64 handle) {}
  static inline void kcov_remote_stop(void) {}
@@ -1183,6 +1243,8 @@
 +static inline void kcov_epoll_insert(unsigned long file, unsigned long ip) {}
 +static inline void kcov_seccomp_program(const void *insns, unsigned int len, unsigned long ip) {}
 +static inline void kcov_seccomp_ip(unsigned long value, unsigned long ip) {}
++static inline void kcov_timer_clk(void *func, unsigned long clk, void *timer, unsigned long ip) {}
++static inline void kcov_timer_enqueued(void *func, unsigned int idx, unsigned long bucket_expiry, void *timer, unsigned long ip) {}
  static inline u64 kcov_common_handle(void)
  {
  	return 0;
@@ -1772,16 +1834,114 @@
  #include <linux/sysctl.h>
  
  #include <linux/uaccess.h>
-@@ -1239,6 +1240,8 @@
+@@ -679,13 +680,14 @@
+ 	}
+ }
+ 
+-static void internal_add_timer(struct timer_base *base, struct timer_list *timer)
++static unsigned long internal_add_timer(struct timer_base *base, struct timer_list *timer)
+ {
+ 	unsigned long bucket_expiry;
+ 	unsigned int idx;
+ 
+ 	idx = calc_wheel_index(timer->expires, base->clk, &bucket_expiry);
+ 	enqueue_timer(base, timer, idx, bucket_expiry);
++	return bucket_expiry;	/* LEANUX B3: for the kind-314 record */
+ }
+ 
+ #ifdef CONFIG_DEBUG_OBJECTS_TIMERS
+@@ -1062,7 +1064,7 @@
+ #define MOD_TIMER_NOTPENDING		0x04
+ 
+ static inline int
+-__mod_timer(struct timer_list *timer, unsigned long expires, unsigned int options)
++__mod_timer(struct timer_list *timer, unsigned long expires, unsigned int options, unsigned long ip)
+ {
+ 	unsigned long clk = 0, flags, bucket_expiry;
+ 	struct timer_base *base, *new_base;
+@@ -1105,6 +1107,7 @@
+ 			goto out_unlock;
+ 
+ 		forward_timer_base(base);
++		kcov_timer_clk(timer->function, base->clk, timer, ip);	/* LEANUX B3: kind 313 */
+ 
+ 		if (timer_pending(timer) && (options & MOD_TIMER_REDUCE) &&
+ 		    time_before_eq(timer->expires, expires)) {
+@@ -1139,6 +1142,7 @@
+ 			goto out_unlock;
+ 
+ 		forward_timer_base(base);
++		kcov_timer_clk(timer->function, base->clk, timer, ip);	/* LEANUX B3: kind 313 */
+ 	}
+ 
+ 	ret = detach_if_pending(timer, base, false);
+@@ -1180,7 +1184,8 @@
+ 	if (idx != UINT_MAX && clk == base->clk)
+ 		enqueue_timer(base, timer, idx, bucket_expiry);
+ 	else
+-		internal_add_timer(base, timer);
++		bucket_expiry = internal_add_timer(base, timer);
++	kcov_timer_enqueued(timer->function, timer_get_idx(timer), bucket_expiry, timer, ip);	/* LEANUX B3: kind 314 */
+ 
+ out_unlock:
+ 	raw_spin_unlock_irqrestore(&base->lock, flags);
+@@ -1206,7 +1211,7 @@
+  */
+ int mod_timer_pending(struct timer_list *timer, unsigned long expires)
+ {
+-	return __mod_timer(timer, expires, MOD_TIMER_PENDING_ONLY);
++	return __mod_timer(timer, expires, MOD_TIMER_PENDING_ONLY, _RET_IP_);
+ }
+ EXPORT_SYMBOL(mod_timer_pending);
+ 
+@@ -1239,7 +1244,9 @@
   */
  int mod_timer(struct timer_list *timer, unsigned long expires)
  {
+-	return __mod_timer(timer, expires, 0);
 +	/* LEANUX D3: the arm record (kind 303) for an armed function */
 +	kcov_timer_arm(timer->function, jiffies, expires, _RET_IP_, timer);
- 	return __mod_timer(timer, expires, 0);
++	return __mod_timer(timer, expires, 0, _RET_IP_);
  }
  EXPORT_SYMBOL(mod_timer);
-@@ -1771,6 +1774,7 @@
+ 
+@@ -1265,7 +1272,7 @@
+  */
+ int timer_reduce(struct timer_list *timer, unsigned long expires)
+ {
+-	return __mod_timer(timer, expires, MOD_TIMER_REDUCE);
++	return __mod_timer(timer, expires, MOD_TIMER_REDUCE, _RET_IP_);
+ }
+ EXPORT_SYMBOL(timer_reduce);
+ 
+@@ -1293,7 +1300,7 @@
+ {
+ 	if (WARN_ON_ONCE(timer_pending(timer)))
+ 		return;
+-	__mod_timer(timer, timer->expires, MOD_TIMER_NOTPENDING);
++	__mod_timer(timer, timer->expires, MOD_TIMER_NOTPENDING, _RET_IP_);
+ }
+ EXPORT_SYMBOL(add_timer);
+ 
+@@ -1310,7 +1317,7 @@
+ 	if (WARN_ON_ONCE(timer_pending(timer)))
+ 		return;
+ 	timer->flags |= TIMER_PINNED;
+-	__mod_timer(timer, timer->expires, MOD_TIMER_NOTPENDING);
++	__mod_timer(timer, timer->expires, MOD_TIMER_NOTPENDING, _RET_IP_);
+ }
+ EXPORT_SYMBOL(add_timer_local);
+ 
+@@ -1327,7 +1334,7 @@
+ 	if (WARN_ON_ONCE(timer_pending(timer)))
+ 		return;
+ 	timer->flags &= ~TIMER_PINNED;
+-	__mod_timer(timer, timer->expires, MOD_TIMER_NOTPENDING);
++	__mod_timer(timer, timer->expires, MOD_TIMER_NOTPENDING, _RET_IP_);
+ }
+ EXPORT_SYMBOL(add_timer_global);
+ 
+@@ -1771,6 +1778,7 @@
  			  unsigned long baseclk)
  {
  	int count = preempt_count();
@@ -1789,7 +1949,7 @@
  
  #ifdef CONFIG_LOCKDEP
  	/*
-@@ -1792,7 +1796,10 @@
+@@ -1792,7 +1800,10 @@
  	lock_map_acquire(&lockdep_map);
  
  	trace_timer_expire_entry(timer, baseclk);
@@ -1800,6 +1960,15 @@
  	trace_timer_expire_exit(timer);
  
  	lock_map_release(&lockdep_map);
+@@ -2613,7 +2624,7 @@
+ 
+ 	timer.task = current;
+ 	timer_setup_on_stack(&timer.timer, process_timeout, 0);
+-	__mod_timer(&timer.timer, expire, MOD_TIMER_NOTPENDING);
++	__mod_timer(&timer.timer, expire, MOD_TIMER_NOTPENDING, _RET_IP_);
+ 	schedule();
+ 	del_timer_sync(&timer.timer);
+ 
 --- a/mm/slub.c
 +++ b/mm/slub.c
 @@ -42,6 +42,7 @@

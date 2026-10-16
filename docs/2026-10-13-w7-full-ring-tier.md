@@ -174,7 +174,14 @@ placement arises per `wg_queue_enqueue_per_peer_rx`, that is per data
 message the fixture delivered, and a count above it is an invalid output;
 the bound of 64 it replaces was a guess. The check's placement selection
 (`section_agreement`) is two runs and a replay whatever the count, so the
-selection runs over all of them. `wg_packet_consume_data.enqueued` and
+selection runs over all of them. [AGENT 2026-10-15] Not quite: the mirror's
+parser kept its own bound of 8 on the `napi_irq_before_put` vector, which
+no run had reached because the twin's all-after run agreed outright on a
+quiet box; on a loaded box the kernel takes the (c') placement at a few
+polls and the before-put run was refused ("more than 8 entries"), failing
+the twin at two claim points. The mirror's ceiling is now the records'
+NET_RX section-start count, and the selection's cost is per section
+(the W4+W7 design's section 17.10, "The ceiling, as the load corrected it"). `wg_packet_consume_data.enqueued` and
 `enqueued_epipe` are `repeatable` (both outcomes in one operation: 1024
 successes and the refusal). On s2 the trace agrees (15,404 operand pairs;
 `invalid_output` before the ceiling, `opposite outcome covered` at

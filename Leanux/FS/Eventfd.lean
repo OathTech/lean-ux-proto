@@ -13,22 +13,22 @@ namespace Leanux
     beyond that the bitmap and node allocations are outside the domain
     (retired as a choice, docs/2026-10-05-a-alloc.md 6.4: unobservable, with
     a state-dependent count). -/
-def idaAlloc : M Int := do
-  let k ← getK
+def idaAlloc : FS.M Int := do
+  let k ← get
   let id := (List.range (k.idaUsed.size + 1)).find? (fun n => !k.idaUsed.contains n) |>.getD (k.idaUsed.size + 1)
   if id ≥ 63 then unsupported "ida bitmap allocation (id ≥ 63)"
-  modifyK fun k => { k with idaUsed := k.idaUsed.insert id }
+  modify fun k => { k with idaUsed := k.idaUsed.insert id }
   return id
 
 /-- do_eventfd (eventfd.c:379-423). -/
-def doEventfd (count : UInt32) (flags : UInt32) : M Int := do
+def doEventfd (count : UInt32) (flags : UInt32) : FS.M Int := do
   if ← branchCmp .doEventfdInvalidFlags (flags &&& ~~~EFD_FLAGS_SET != 0) (flags &&& ~~~EFD_FLAGS_SET).toNat 0 then return -EINVAL
   -- ctx = kmalloc(sizeof(*ctx), GFP_KERNEL)
   if ← branch .doEventfdNoMem (!(← hiddenAlloc .kmallocEventfdCtx)) then return -ENOMEM
-  let cid := (← getK).nextCtx
+  let cid := (← get).nextCtx
   -- kref_init; init_waitqueue_head; ctx->count = count; ctx->flags = flags
   setCtx cid { kref := 1, count := count.toUInt64, flags, id := none }
-  modifyK fun k => { k with nextCtx := cid + 1 }
+  modify fun k => { k with nextCtx := cid + 1 }
   let id ← idaAlloc  -- ctx->id = ida_alloc(...): stored unchecked, as in the C
   setCtx cid { (← getCtx cid) with id := some id }
   let flags := (flags &&& EFD_SHARED_FCNTL_FLAGS) ||| O_RDWR
@@ -48,6 +48,6 @@ def doEventfd (count : UInt32) (flags : UInt32) : M Int := do
   return fd
 
 /-- SYSCALL_DEFINE2(eventfd2, unsigned int, count, int, flags) (eventfd.c:425-428). -/
-def sysEventfd2 (count flags : UInt32) : M Int := doEventfd count flags
+def sysEventfd2 (count flags : UInt32) : FS.M Int := doEventfd count flags
 
 end Leanux

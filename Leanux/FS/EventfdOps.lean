@@ -19,7 +19,7 @@ registers on it through `poll_wait` (docs/2026-10-12-epoll-design.md, 2.5,
 namespace Leanux
 
 /-- `file->private_data` of an eventfd file. -/
-def eventfdCtxOf (file : File) : M CtxId :=
+def eventfdCtxOf (file : File) : FS.M CtxId :=
   match file.privateData with
   | some (.eventfdCtx id) => return id
   | some (.pipe _) => invariant "eventfd operation on a pipe file"
@@ -27,19 +27,19 @@ def eventfdCtxOf (file : File) : M CtxId :=
   | none => invariant "eventfd operation on a file with NULL private_data"
 
 /-- eventfd_free_ctx (eventfd.c:82-87). -/
-def eventfdFreeCtx (id : CtxId) : M Unit := do
+def eventfdFreeCtx (id : CtxId) : FS.M Unit := do
   let ctx ← getCtx id
   let some cid := ctx.id | invariant "eventfd_free_ctx reading an unset ctx->id"
   if ← branchCmp .eventfdFreeCtxHasId (cid >= 0) cid 0 then
     -- ida_free(&eventfd_ida, ctx->id)
-    modifyK fun k => { k with idaUsed := k.idaUsed.erase cid.toNat }
+    modify fun k => { k with idaUsed := k.idaUsed.erase cid.toNat }
   -- kfree(ctx)
   freeCtx id
 
 /-- eventfd_ctx_put (eventfd.c:103-106): `kref_put(&ctx->kref, eventfd_free)`
     (include/linux/kref.h:62-69); `eventfd_free` is `container_of` plus
     `eventfd_free_ctx`. -/
-def eventfdCtxPut (id : CtxId) : M Unit := do
+def eventfdCtxPut (id : CtxId) : FS.M Unit := do
   let ctx ← getCtx id
   setCtx id { ctx with kref := ctx.kref - 1 }
   if ← branch .krefPutLast (← refcountDecAndTest ctx.kref) then
@@ -48,7 +48,7 @@ def eventfdCtxPut (id : CtxId) : M Unit := do
 /-- eventfd_release (eventfd.c:109-116). By the time it runs, `__fput` has
     already called `eventpoll_release`, which removes every epoll item on the
     file, so `wake_up_poll` walks an empty queue (design 2.5, 2.8). -/
-def eventfdRelease (fid : FileId) : M Int := do
+def eventfdRelease (fid : FileId) : FS.M Int := do
   let file ← getFile fid
   let id ← eventfdCtxOf file  -- ctx = file->private_data
   wakeUpPoll (.eventfdWqh id) EPOLLHUP
@@ -58,7 +58,7 @@ def eventfdRelease (fid : FileId) : M Int := do
 /-- eventfd_ctx_do_read (eventfd.c:176-182), called with `ctx->wqh.lock` held:
     `*cnt = ((ctx->flags & EFD_SEMAPHORE) && ctx->count) ? 1 : ctx->count;`
     then `ctx->count -= *cnt;` — two statements, two mirror updates. -/
-def eventfdCtxDoRead (id : CtxId) : M UInt64 := do
+def eventfdCtxDoRead (id : CtxId) : FS.M UInt64 := do
   let ctx ← getCtx id
   let one ← do
     if ← branchCmp .ctxDoReadSemaphore (hasFlag ctx.flags EFD_SEMAPHORE) (ctx.flags &&& EFD_SEMAPHORE).toNat 0 then
@@ -70,7 +70,7 @@ def eventfdCtxDoRead (id : CtxId) : M UInt64 := do
 
 /-- eventfd_read (eventfd.c:214-245), the `read_iter` operation. `iterCount`
     is `iov_iter_count(to)`; the destination buffer is the caller's. -/
-def eventfdRead (iocb : Kiocb) (iterCount : Nat) : M Int := do
+def eventfdRead (iocb : Kiocb) (iterCount : Nat) : FS.M Int := do
   let file ← getFile iocb.filp
   let id ← eventfdCtxOf file  -- ctx = file->private_data
   if ← branchCmp .eventfdReadShort (iterCount < 8) iterCount 8 then return -EINVAL
@@ -82,10 +82,10 @@ def eventfdRead (iocb : Kiocb) (iterCount : Nat) : M Int := do
       return -EAGAIN  -- spin_unlock_irq
     unsupported "eventfd_read blocking wait"
   let ucnt ← eventfdCtxDoRead id
-  modifyK fun k => { k with task := { k.task with inEventfd := true } }
+  modifyTask .task fun t => { t with inEventfd := true }
   if ← branch .eventfdReadWaitqueueActive (← waitqueueActive (.eventfdWqh id)) then
     wakeUpLockedPoll (.eventfdWqh id) EPOLLOUT
-  modifyK fun k => { k with task := { k.task with inEventfd := false } }
+  modifyTask .task fun t => { t with inEventfd := false }
   -- spin_unlock_irq(&ctx->wqh.lock)
   -- `copy_to_iter`: the guest's buffer is mapped (a trace input under A-U, 6.5)
   if ← branch .eventfdReadCopyFault false then return -EFAULT
@@ -96,7 +96,7 @@ def eventfdRead (iocb : Kiocb) (iterCount : Nat) : M Int := do
 
 /-- eventfd_write (eventfd.c:247-280), the `write` operation. `buf` is the
     caller's buffer. -/
-def eventfdWrite (fid : FileId) (buf : ByteArray) (count : Nat) : M Int := do
+def eventfdWrite (fid : FileId) (buf : ByteArray) (count : Nat) : FS.M Int := do
   let file ← getFile fid
   let id ← eventfdCtxOf file  -- ctx = file->private_data
   if ← branchCmp .eventfdWriteWrongSize (count != 8) count 8 then return -EINVAL
@@ -115,17 +115,17 @@ def eventfdWrite (fid : FileId) (buf : ByteArray) (count : Nat) : M Int := do
   if ← branch .eventfdWriteResPositive (res > 0) then
     let ctx ← getCtx id
     setCtx id { ctx with count := ctx.count + ucnt }
-    modifyK fun k => { k with task := { k.task with inEventfd := true } }
+    modifyTask .task fun t => { t with inEventfd := true }
     if ← branch .eventfdWriteWaitqueueActive (← waitqueueActive (.eventfdWqh id)) then
       wakeUpLockedPoll (.eventfdWqh id) EPOLLIN
-    modifyK fun k => { k with task := { k.task with inEventfd := false } }
+    modifyTask .task fun t => { t with inEventfd := false }
   -- spin_unlock_irq(&ctx->wqh.lock)
   return res
 
 /-- eventfd_poll (eventfd.c:118-174), the `poll` operation: registers on
     `ctx->wqh`, then reads `count` outside the lock (the comment at 126-162
     argues the order is safe; one task here). -/
-def eventfdPoll (fid : FileId) (wait : PollTable) : M UInt32 := do
+def eventfdPoll (fid : FileId) (wait : PollTable) : FS.M UInt32 := do
   let file ← getFile fid
   let id ← eventfdCtxOf file  -- ctx = file->private_data
   pollWait fid (.eventfdWqh id) wait
@@ -185,7 +185,7 @@ def pipefifoFops : Fops :=
 def eventpollFops : Fops :=
   { llseek := true, release := true, poll := true, unlockedIoctl := true }
 
-def fopsOf : Option FopsId → M Fops
+def fopsOf : Option FopsId → FS.M Fops
   | some .eventfd => return eventfdFops
   | some .pipefifo => return pipefifoFops
   | some .eventpoll => return eventpollFops
@@ -198,14 +198,14 @@ def fopsOf : Option FopsId → M Fops
 -- `__fput`: the eventpoll arm needs the epoll mirror, which follows this
 -- module (stream S).
 
-def fopReadIter (iocb : Kiocb) (count : Nat) : Option FopsId → M Int
+def fopReadIter (iocb : Kiocb) (count : Nat) : Option FopsId → FS.M Int
   | some .eventfd => eventfdRead iocb count
   | some .pipefifo => pipeRead iocb count
   | some .eventpoll => invariant "eventpoll_fops has no read_iter (FMODE_CAN_READ is never set)"
   | some (.fixture name) => unsupported s!"read_iter of fixture file {name}"
   | none => invariant "file->f_op is NULL"
 
-def fopWrite (fid : FileId) (buf : ByteArray) (count : Nat) : Option FopsId → M Int
+def fopWrite (fid : FileId) (buf : ByteArray) (count : Nat) : Option FopsId → FS.M Int
   | some .eventfd => eventfdWrite fid buf count
   | some .pipefifo => invariant "pipefifo_fops has no write (fopsOf routes it to write_iter)"
   | some .eventpoll => invariant "eventpoll_fops has no write (FMODE_CAN_WRITE is never set)"
@@ -214,7 +214,7 @@ def fopWrite (fid : FileId) (buf : ByteArray) (count : Nat) : Option FopsId → 
 
 /-- `f_op->write_iter` (the `new_sync_write` path). `from` is the caller's
     buffer as an `iov_iter`. -/
-def fopWriteIter (iocb : Kiocb) («from» : IovIter) : Option FopsId → M Int
+def fopWriteIter (iocb : Kiocb) («from» : IovIter) : Option FopsId → FS.M Int
   | some .pipefifo => pipeWrite iocb «from»
   | some .eventfd => invariant "eventfd_fops has no write_iter (fopsOf routes it to write)"
   | some .eventpoll => invariant "eventpoll_fops has no write_iter (FMODE_CAN_WRITE is never set)"
@@ -225,7 +225,7 @@ def fopWriteIter (iocb : Kiocb) («from» : IovIter) : Option FopsId → M Int
     through `vfs_poll` only from `select`/`poll` (outside the domain):
     `ep_item_poll` dispatches an epoll target to `__ep_eventpoll_poll`
     itself (fs/eventpoll.c:1233-1236), in `Leanux.FS.Eventpoll`. -/
-def fopPoll (fid : FileId) (pt : PollTable) : Option FopsId → M UInt32
+def fopPoll (fid : FileId) (pt : PollTable) : Option FopsId → FS.M UInt32
   | some .eventfd => eventfdPoll fid pt
   | some .pipefifo => pipePoll fid pt
   | some .eventpoll => unsupported "ep_eventpoll_poll through vfs_poll (select/poll on an epoll file)"
@@ -238,7 +238,7 @@ def fopPoll (fid : FileId) (pt : PollTable) : Option FopsId → M UInt32
     `DEFAULT_POLLMASK` arm (:90-91) needs a pollable-by-default target, which
     `do_epoll_ctl`'s `file_can_poll` excludes for every target the contract
     has (design 9.3): modelled, unexercised. -/
-def vfsPoll (fid : FileId) (pt : PollTable) : M UInt32 := do
+def vfsPoll (fid : FileId) (pt : PollTable) : FS.M UInt32 := do
   let file ← getFile fid
   if let some (.fixture name) := file.fOp then
     unsupported s!"vfs_poll of fixture file {name} (f_op modelled for release only)"

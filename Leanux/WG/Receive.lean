@@ -159,23 +159,23 @@ def ratelimiterAllow (src : SkbSource) : M Bool := do
     if ← branch .rlProtoIp (src.family == 4) then pure (false, src.saddr)
     else if ← branch .rlProtoIp6 (src.family == 6) then pure (true, src.saddr / 2 ^ 64)
     else invariant "a handshake skb that is neither IPv4 nor IPv6 at the ratelimiter"
-  let table (k : Kernel) : List (Nat × Int × Int) := if v6 then k.ratelimiter.table6 else k.ratelimiter.table
-  let setTable (k : Kernel) (t : List (Nat × Int × Int)) : Kernel :=
+  let table (k : WGWorld) : List (Nat × Int × Int) := if v6 then k.ratelimiter.table6 else k.ratelimiter.table
+  let setTable (k : WGWorld) (t : List (Nat × Int × Int)) : WGWorld :=
     if v6 then { k with ratelimiter := { k.ratelimiter with table6 := t } }
     else { k with ratelimiter := { k.ratelimiter with table := t } }
-  match (table (← getK)).find? (·.1 == ip) with
+  match (table (← get)).find? (·.1 == ip) with
   | some (_, tokens, lastTime) =>
     _ ← branch .rlEntryMatch true
     let now ← hiddenClock .ratelimiterNow
     let newTokens := min TOKEN_MAX (tokens + now - lastTime)
     let ret ← branchCmp .rlAllow (newTokens ≥ PACKET_COST) newTokens PACKET_COST
     let tokens' := if ret then newTokens - PACKET_COST else newTokens
-    modifyK fun k => setTable k ((table k).map fun e => if e.1 == ip then (ip, tokens', now) else e)
+    modify fun k => setTable k ((table k).map fun e => if e.1 == ip then (ip, tokens', now) else e)
     return ret
   | none =>
     -- `atomic_inc_return(&total_entries) > max_entries` (:135): one counter
     -- over both tables
-    let k ← getK
+    let k ← get
     let total := k.ratelimiter.table.length + k.ratelimiter.table6.length + 1
     if ← branchCmp .rlOverLimit (total > RL_MAX_ENTRIES) (Int.ofNat total) (Int.ofNat RL_MAX_ENTRIES) then
       unsupported "the ratelimiter table limit (16384 distinct source IPs — out of reach)"
@@ -192,7 +192,7 @@ def ratelimiterAllow (src : SkbSource) : M Bool := do
     if ← branch .rlAllocFail !(← hiddenAlloc .kmemCacheAllocRlEntry) then
       return false
     let now ← hiddenClock .ratelimiterInsertNow
-    modifyK fun k => setTable k ((ip, TOKEN_MAX - PACKET_COST, now) :: table k)
+    modify fun k => setTable k ((ip, TOKEN_MAX - PACKET_COST, now) :: table k)
     return true
 
 /-- wg_cookie_validate_packet (cookie.c:119-154): the MAC1 check, and under
@@ -363,7 +363,7 @@ def receiveStep : M Bool := do
     W7 phase 2 interleaves the iterations, `workerIter`). The C's loop is
     unbounded and ends at the first NULL poll; the fuel is the ring's
     capacity plus that poll (a full ring takes 4097 iterations). -/
-def handshakeReceiveWorker (condResched : M Unit) : M Unit :=
+def handshakeReceiveWorker [Monad m] [MonadLiftT WG.M m] [MonadLiftT AmbientM m] (condResched : m Unit) : m Unit :=
   workerLoop .receiveWorker none receiveStep condResched
     (MAX_QUEUED_INCOMING_HANDSHAKES + 1) "the handshake queue did not drain"
 
@@ -399,7 +399,7 @@ def enqueuePerDeviceAndPeerRx (id : SkbId) : M Int := do
     peeked (an UNCRYPTED head the poll stopped at) or queued; the oldest
     still-UNCRYPTED packet of its keypair is the one the worker holds, since
     both the ring and the queue are FIFO. -/
-def enqueuePerPeerRx (irqExit : M Unit) (id : SkbId) (state : PacketState) : M Unit := do
+def enqueuePerPeerRx [Monad m] [MonadLiftT WG.M m] [MonadLiftT AmbientM m] (irqExit : m Unit) (id : SkbId) (state : PacketState) : m Unit := do
   let pid ← IndexOwner.peerDeref (.keypair (← getRxSkb id).keypair)   -- PACKET_PEER(skb)
   peerGet pid
   let p ← getPeer pid
@@ -427,7 +427,7 @@ def consumeData (msg : List UInt8) (src : SkbSource) (ds : Nat) : M Unit := do
     | some (IndexOwner.handshake _, _) => invariant "a handshake entry under the keypair mask"
   -- `unlikely(!wg_noise_keypair_get(PACKET_CB(skb)->keypair))`
   let kp ← match keypair with
-    | none => do keypairGetCurrent; pure none   -- wg_noise_keypair_get(NULL)
+    | none => do keypairGetNull; pure none   -- wg_noise_keypair_get(NULL)
     | some kp => keypairGet (some kp)
   if ← branch .dataNoKeypair kp.isNone then
     -- err_keypair: wg_peer_put(peer), then dev_kfree_skb

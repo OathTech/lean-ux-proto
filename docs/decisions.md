@@ -682,6 +682,38 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   builds and suite runs run concurrently across agents; `capped`, the
   memory cap, the KILLED-is-failure rule and the one-recorded-rerun rule are
   unchanged [AGENT, coordinator: the measurement and the number].
+- **2026-10-15 [USER]** The mirror's state is split into per-subsystem
+  worlds: "we want the subsystems to operate over localized world types"
+  (WireGuard, the file layer, seccomp, the task lifecycle, with the record
+  stream, the decision log and the dispatch bookkeeping as the ambient part
+  every module has; the runner holds the product and is the only composer).
+  Two kinds of framing: structural, enforced by the types and free, because
+  a function that is not passed a piece of state cannot affect it in a
+  program without side effects; and non-localizable, needing footprint
+  invariants, kept only where an effect cannot be localized. The design:
+  docs/2026-10-15-design-state-split.md.
+- **2026-10-15 [USER]** "we want functions to be narrowed at the type level
+  to just the data they access, where this can be done cheaply": within
+  WireGuard the leaves (the trie, the rings and queues, the index table and
+  slots, the cookie and rate-limiter functions, the timer operations) take
+  their field group's type; the entry points keep the WireGuard world. No
+  footprint invariants in this stream.
+- **2026-10-15 [USER]** The retrofit is compile-driven, with no compatibility
+  wrappers and no equivalence lemmas: "We don't need extensional
+  equivalence, it's just throwing out fields. Just delete fields and see if
+  anything breaks. There's no way for field deletion to modify behavior."
+  In the proof tree, a statement that mentions the global World is retyped
+  over the local world; a frame lemma the types or the one lift lemma now
+  give is deleted, even if its old proof would still compile; nothing is
+  re-proved.
+- **2026-10-15 [USER]** Timing against the campaigns: Codex#2's campaign 1
+  (`proofs/campaign`) finishes R3 and R4 and lands, its retrofit one job
+  afterwards; Codex#1's campaign 2 (`proofs/campaign-2`) stops at its
+  checkpoint now and resumes on the split mirror; Codex#3's binary adequacy
+  grind continues, its R a relation over the WireGuard world literally. The
+  split starts when B3 is on `main` and lands before lane C's C1, whose new
+  module retypes then [AGENT, coordinator: the sequencing argument; the
+  measurements in the design note].
 - **2026-10-15 [AGENT, fork of the coordinator]** B4 part 1 (the settled
   parts of docs/2026-10-15-design-b4-load-ratelimiter.md): the ratelimiter
   entry allocation is a kind-305 site consumed by `rlAllocFail`, with the
@@ -714,6 +746,19 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   and review kept, for the proof carry the review costed at 10 to 15
   agent-days. "2,3,4 agree with recommendation" [AGENT, coordinator: the
   recommendations].
+- **2026-10-15 [USER]** B3, the timer wheel as a mirror: "Agree re B3, go
+  ahead as proposed". The environment line moves (U1: the firing set and
+  order become semantics in both directions, E1 over stream-bounded passes;
+  the tick's placement, the wait's tick count and the base clock stay
+  recorded; the kind-310/311 reads are not made derived); two record-only
+  hooks (U2: kind 313 in `__mod_timer` after the forward on both paths, kind
+  314 in `enqueue_timer`, written without steering under `base->lock`,
+  carrying the timer's address; class-approved as record-only, the new
+  oracle pair's identity recorded at the landing); `kernel/time/timer.c`
+  mirrored but unanchored, its hooks may add lines (U3); the deferral case
+  `unsupported` only with the lookahead (U4); the per-timer layout with an
+  enqueue stamp (U5) [AGENT, fork of the coordinator: the design; the
+  Claude Opus 5.5 review at 6fe87f2].
 - **2026-10-15 [USER]** The simulation relation `R` of the binary adequacy
   charter is minimal, a frame property: exactly what the simulation needs,
   over the WireGuard projection of the World, each clause justified by an
@@ -728,3 +773,97 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   wording ("relates the whole mirror world") was the coordinator's error,
   read literally by the grind [AGENT, coordinator]; the amendment is in the
   charter's section 1.
+- **2026-10-15 [USER]** Lane C, the anchoring question (design note U1):
+  `fib_frontend.c`, `fib_semantics.c` and `route.c` are anchored with cut
+  lists and the per-caller cut for the helpers IPv6 shares, in C2 and C3.
+  This revises the boundary decision of 2026-10-07 for routing (the line is
+  now drawn by function name in the cut lists, one layer down, under that
+  decision's own "unless this breaks important things": campaign 3's
+  end-to-end routing composition) and reverses the `ip_error` deferral of
+  2026-10-08 (the input corpus reaches it). "Agree on the anchoring
+  question."
+- **2026-10-15 [USER]** Lane C, IPv6 (design note U2): deferred, "might be a
+  task later"; IPv6 routing stays environment, and campaign 3's routing
+  composition is stated for IPv4 in its charter.
+- **2026-10-15 [AGENT, coordinator]** Lane C's tactical decisions as the
+  revised note recommends: three landings with C1 first (U3); the
+  `hash_mix` global-hash walk treated as a decision cut (U6).
+- **2026-10-15 [USER]** Lane C, the module's home and the standing rule
+  (design note U4 and U5): the FIB module lives at `Leanux/Net/` beside
+  `FS`, `WG` and `Seccomp`, and AGENTS.md's list of the mirror's directories
+  gains `Leanux/Net` ("agree with recommendation").
+- **2026-10-15 [USER, through the coordinator]** Lane C, a check-rule change
+  on the trust surface: a `wg_batch` operation is compared against the
+  WireGuard files, the headers they inline and `net/ipv4/fib_trie.c`
+  (`evaluator/check.py`, `BATCH_FILES`), since the batch's sends run the
+  trie's lookups and an anchored file's in-window coverage is witnessed in
+  a batch as in a single operation. Its one-off mutant
+  (C1-M8-batch-lookup-outcome) was rejected once and removed.
+- **2026-10-15 [AGENT, fork of the coordinator]** The W7 tier's receive
+  twin under load: the mirror's bound of 8 on the NAPI placement vector
+  (`napi_irq_before_put`) was a budget from when open placements were
+  rare, inconsistent with the protocol's ceiling (the injected-message
+  count, 2026-10-13); under load the twin opens 1,018 placements and the
+  kernel takes (c') at a few, so the check's before-put run was refused and
+  the trace failed at two claim points. The mirror's ceiling is the
+  records' NET_RX section-start count (exact, fail-closed); the selection
+  rule is unchanged (the kernel's comparison rows decide each poll's
+  placement, replayed once as the evidence); `section_agreement` costs the
+  section's records per poll. Not a retry, not a widened enumeration.
+- **2026-10-15 [USER]** The two heavy B4 traces are dropped: `l_recreate_ratelimited6`
+  (the recreate witness) and `e_underload_busy` (the busy arm). Their comparison
+  child sits at the guest's 4.5 s rekey bound on both oracles (4.28 s and 4.40 s
+  alone; over it beside any other suite), a fixture property under TCG that no
+  reshape changes, measured by the B3 fork on s4 and s5 (B3's hooks add four
+  records); `l_delete_ratelimited6` stays as the two-table uninit witness and the
+  busy arm keeps its constant-false declaration. "(1) agreed" to the
+  coordinator's recommendation. The structural remedy for the class (113 of 341
+  traces run past half the bound in the comparison child) is KVM acceleration of
+  the guest, a fixture case to put separately [AGENT, coordinator].
+- **2026-10-15 [USER]** B3 and C1 land as one integration ("(2) great, let's land
+  it"), after one claim point on the combined head on the s5 pair.
+- **2026-10-15 [AGENT, coordinator]** C1 lands before the state split, not after as
+  the split's decision entry said: C1 finished in one session instead of the
+  estimated ten days, and its new module retypes cheaply at the split since
+  nothing depends on it yet.
+- **2026-10-16 [AGENT, fork of the coordinator]** Superseded detail of the
+  state split: the task state split by task id into three per-subsystem
+  tables (a file-layer part, a seccomp part, a signal-and-lifecycle part)
+  and the separate "task lifecycle" world named in the 2026-10-15 entries
+  were the coordinator's detail, not the user's decision, and are withdrawn:
+  Codex#4's independent review (task/review-state-split, 7b70875) showed
+  that `pipeWrite`'s SIGPIPE, `fput`'s task tests and the seccomp filter's
+  `forceSigSeccomp` reach the task's signal state inside mirror functions at
+  the C's call sites, so sibling task worlds hit the design's own stop risk
+  with certainty. Revision 2 of docs/2026-10-15-design-state-split.md keeps
+  one shared task store under a `TaskM` layer that the file layer and
+  seccomp stack on. The user's decisions (localized worlds, narrowing where
+  cheap, delete fields and see what breaks, the campaign order) stand.
+- **2026-10-16 [AGENT proposal, from Codex#4's review; pending the user]**
+  The one exception to "the runner holds the product and is the only
+  composer": subsystem operations may call the shared task and signal
+  services at the C's existing call sites (a pipe's SIGPIPE inside
+  `pipeWrite`, a trap's signal inside `seccompFilter`, the task-work test
+  inside `fput`); the runner alone assembles the full product and
+  orchestrates operations across independent stores (the syscall dispatch,
+  the environment model, the seccomp child probe and trap return). Put to
+  the user because it qualifies their formulation.
+- **2026-10-16 [AGENT proposal, from Codex#4's review; pending the user]**
+  The state split's mirror landing carries reported proof lag under the
+  standing lag-and-repair rule, and the proof tree it retrofits is campaign
+  1's landed tree (7,405 theorems on 2026-10-16), as one follow-on job with
+  its own proof gate and signoff, not a green proof gate over `main`'s
+  1,399-theorem tree at the landing, which the campaign order the user chose
+  makes impossible. Revision 1's promise of a green gate at the landing is
+  withdrawn.
+- **2026-10-16 [USER]** The state split's composer rule: the overriding aim is
+  to reflect the actual Linux decomposition of state; composition points are
+  added where they exist in Linux ("(1) yes, in general the overriding aim
+  here is to reflect the actual Linux decomposition of state. If we need to
+  add composition points because they exist in linux, we will do so"). So
+  the file layer, seccomp and the signal paths call the shared task services
+  at the C's own call sites, below the runner; the proposal of revision 2 is
+  adopted with that principle as its rule.
+- **2026-10-16 [USER]** The split's mirror lands with its proof lag reported,
+  and the landed campaign-1 tree is the retrofit's baseline with its own gate
+  and signoff ("(2) agree").

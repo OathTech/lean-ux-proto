@@ -59,14 +59,14 @@ structure EpollEvent where
 def isFileEpoll (f : File) : Bool := f.fOp == some .eventpoll
 
 /-- `file->private_data` of an epoll file. -/
-def epOf (f : File) : M EpId :=
+def epOf (f : File) : FS.M EpId :=
   match f.privateData with
   | some (.eventpoll e) => return e
   | _ => invariant "an epoll operation on a file whose private_data is not an eventpoll"
 
 /-- The `epitems` list a file's `f_ep` heads: a non-epoll file's head, or an
     epoll file's `ep->refs` (both `hlist`, head first). -/
-def fEpItems (f : File) : M (List EpiId) :=
+def fEpItems (f : File) : FS.M (List EpiId) :=
   match f.fEp with
   | .null => return []
   | .head items => return items
@@ -74,7 +74,7 @@ def fEpItems (f : File) : M (List EpiId) :=
 
 /-- `hlist_del_rcu(&epi->fllink)` from the list `file->f_ep` heads; after
     `ep_remove_file` nulled `f_ep` the node was the list's only one. -/
-def fEpUnlink (fid : FileId) (epi : EpiId) : M Unit := do
+def fEpUnlink (fid : FileId) (epi : EpiId) : FS.M Unit := do
   let f ← getFile fid
   match f.fEp with
   | .null => pure ()
@@ -85,7 +85,7 @@ def fEpUnlink (fid : FileId) (epi : EpiId) : M Unit := do
     with one task the cmpxchg succeeds at once, so the outcome is `f_count != 0`,
     and the count is incremented iff it was non-zero. The caller records the
     decision at its own line, as `__fget_files_rcu`'s does. -/
-def fileIncNotZero (fid : FileId) : M Bool := do
+def fileIncNotZero (fid : FileId) : FS.M Bool := do
   let f ← getFile fid
   if f.fCount == 0 then return false
   setFile fid { f with fCount := f.fCount + 1 }
@@ -95,23 +95,23 @@ def fileIncNotZero (fid : FileId) : M Bool := do
 
 /-- `free_ephead(head)` (:419-423): `kmem_cache_free` is a cut; the head's
     identity is its file's `f_ep`, so nothing is retained. -/
-def freeEphead (head : Bool) : M Unit := do
+def freeEphead (head : Bool) : FS.M Unit := do
   if ← branch .freeEpheadNonNull head then pure ()   -- kmem_cache_free(ephead_cache, head)
 
 /-- `list_file(file)` (:425-444): the head of a non-epoll file that an
     item links joins `tfile_check_list` with a reference to the file, unless
     it is listed already (`head->next` non-NULL). -/
-def listFile (fid : FileId) : M Unit := do
+def listFile (fid : FileId) : FS.M Unit := do
   -- head = container_of(file->f_ep, struct epitems_head, epitems)
-  if ← branch .listFileUnlisted (!(← getK).tfileCheckList.contains fid) then
+  if ← branch .listFileUnlisted (!(← get).tfileCheckList.contains fid) then
     if ← branch .listFileIncNotZeroFailed (!(← fileIncNotZero fid)) then return   -- a dying leaf
     -- head->file = file; head->next = tfile_check_list; tfile_check_list = head
-    modifyK fun k => { k with tfileCheckList := fid :: k.tfileCheckList }
+    modify fun k => { k with tfileCheckList := fid :: k.tfileCheckList }
 
 /-- `unlist_file(head)` (:446-462): the head is freed unless items still
     hang on it; the reference `list_file` took is dropped. A head whose
     file's `f_ep` was nulled by `ep_remove_file` has no items. -/
-def unlistFile (fid : FileId) : M Unit := do
+def unlistFile (fid : FileId) : FS.M Unit := do
   -- to_free = head; p = hlist_first_rcu(&head->epitems); file = head->file
   let items ← fEpItems (← getFile fid)
   let mut toFree := true
@@ -123,15 +123,15 @@ def unlistFile (fid : FileId) : M Unit := do
   fput fid
 
 /-- `clear_tfile_check_list()` (:2385-2393). -/
-def clearTfileCheckList : M Unit := do
+def clearTfileCheckList : FS.M Unit := do
   -- rcu_read_lock()
   for _ in [0:4096] do
-    match (← getK).tfileCheckList with
+    match (← get).tfileCheckList with
     | [] => break
     | fid :: rest =>
       _ ← branch .clearTfileCheckListIter true
       -- head = tfile_check_list; tfile_check_list = head->next
-      modifyK fun k => { k with tfileCheckList := rest }
+      modify fun k => { k with tfileCheckList := rest }
       unlistFile fid
   _ ← branch .clearTfileCheckListIter false
   -- rcu_read_unlock()
@@ -149,7 +149,7 @@ and `ep_register_epitem`, listed in `correspondence/kcov.json`. -/
 
 /-- `ep_find(ep, file, fd)` (:1357-1378): equality of `ep_cmp_ffd` is the
     same file and the same fd. -/
-def epFind (ep : EpId) (fid : FileId) (fd : Int) : M (Option EpiId) := do
+def epFind (ep : EpId) (fid : FileId) (fd : Int) : FS.M (Option EpiId) := do
   -- ep_set_ffd(&ffd, file, fd); the walk
   for (_, epiId) in (← getEp ep).rbr do
     let epi ← getEpi epiId
@@ -161,11 +161,11 @@ def epFind (ep : EpId) (fid : FileId) (fd : Int) : M (Option EpiId) := do
     at :1586 writes once per call. A file's address is stable for its
     lifetime: an item of the same file with another recorded address is a
     hidden mismatch. -/
-def epRbtreeInsert (ep : EpId) (epiId : EpiId) : M Unit := do
+def epRbtreeInsert (ep : EpId) (epiId : EpiId) : FS.M Unit := do
   let epi ← getEpi epiId
   let addr ← hiddenU64 .epollInsertAddress
   -- a placeholder (the domain filter, before Linux) carries no address
-  if (← get).hidden.isSome && (← getK).epis.any (fun _ e => e.file == epi.file && e.fileAddr != 0 && e.fileAddr != addr) then
+  if (← getAmbient).hidden.isSome && (← get).epis.any (fun _ e => e.file == epi.file && e.fileAddr != 0 && e.fileAddr != addr) then
     throw (.hidden s!"ep_rbtree_insert: file {epi.file} recorded at address {addr}, before at another")
   setEpi epiId { epi with fileAddr := addr }
   let key := (addr, epi.fd)
@@ -181,10 +181,10 @@ def epRbtreeInsert (ep : EpId) (epiId : EpiId) : M Unit := do
 /-! ## Reverse paths (:1590-1669) -/
 
 /-- `path_count_inc(nests)` (:1606-1614). -/
-def pathCountInc (nests : Nat) : M Int := do
+def pathCountInc (nests : Nat) : FS.M Int := do
   if ← branchCmp .pathCountIncDepthZero (nests == 0) nests 0 then return 0
-  let count := (← getK).pathCount[nests]! + 1
-  modifyK fun k => { k with pathCount := k.pathCount.set! nests count }
+  let count := (← get).pathCount[nests]! + 1
+  modify fun k => { k with pathCount := k.pathCount.set! nests count }
   if ← branchCmp .pathCountIncOverLimit (count > PATH_LIMITS[nests]!) count PATH_LIMITS[nests]! then return -1
   return 0
 
@@ -192,7 +192,7 @@ def pathCountInc (nests : Nat) : M Int := do
     at the set that no set watches, else the walk recurses into its
     watchers. The depth arm is bounded by the loop check (design 2.7). The
     recursion is through `refs`, at most `EP_MAX_NESTS + 1` deep. -/
-def reversePathCheckProc : Nat → List EpiId → Nat → M Int
+def reversePathCheckProc : Nat → List EpiId → Nat → FS.M Int
   | 0, _, _ => invariant "reverse_path_check_proc nested beyond EP_MAX_NESTS + 2"
   | fuel + 1, refs, depth => do
     if ← branchCmp .reversePathCheckProcTooDeep (depth > EP_MAX_NESTS) depth EP_MAX_NESTS then
@@ -208,10 +208,10 @@ def reversePathCheckProc : Nat → List EpiId → Nat → M Int
     return error
 
 /-- `reverse_path_check()` (:1656-1669): from each listed file. -/
-def reversePathCheck : M Int := do
-  for fid in (← getK).tfileCheckList do
+def reversePathCheck : FS.M Int := do
+  for fid in (← get).tfileCheckList do
     _ ← branch .reversePathCheckListIter true
-    modifyK fun k => { k with pathCount := #[0, 0, 0, 0, 0] }   -- path_count_init()
+    modify fun k => { k with pathCount := #[0, 0, 0, 0, 0] }   -- path_count_init()
     -- rcu_read_lock()
     let error ← reversePathCheckProc (EP_MAX_NESTS + 2) (← fEpItems (← getFile fid)) 0
     -- rcu_read_unlock()
@@ -224,7 +224,7 @@ def reversePathCheck : M Int := do
 /-- `ep_start_scan(ep, &scan_batch)` (:893-912): the ready list moves to
     the caller's batch (its items stay `linked`: `rdllink` is on the batch)
     and the set enters scanning. Returns the batch. -/
-def epStartScan (ep : EpId) : M (List EpiId) := do
+def epStartScan (ep : EpId) : FS.M (List EpiId) := do
   -- spin_lock_irq(&ep->lock); write_seqcount_begin(&ep->seq)
   let e ← getEp ep
   let batch := e.rdllist
@@ -236,7 +236,7 @@ def epStartScan (ep : EpId) : M (List EpiId) := do
 /-- `ep_done_scan(ep, &scan_batch)` (:916-962): the overflow chain
     (LIFO) is head-inserted, which makes it FIFO, then the batch's
     leftovers are spliced at the head. -/
-def epDoneScan (ep : EpId) (batch : List EpiId) : M Unit := do
+def epDoneScan (ep : EpId) (batch : List EpiId) : FS.M Unit := do
   -- spin_lock_irq(&ep->lock)
   let chain := (← getEp ep).ovflist.getD []
   for epiId in chain do
@@ -261,13 +261,13 @@ def epDoneScan (ep : EpId) (batch : List EpiId) : M Unit := do
 /-! ## Reference counts (:964-988) -/
 
 /-- `ep_get(ep)` (:964-967): `refcount_inc(&ep->refcount)`. -/
-def epGet (ep : EpId) : M Unit := do
+def epGet (ep : EpId) : FS.M Unit := do
   let e ← getEp ep
   refcountInc e.refcount
   setEp ep { e with refcount := e.refcount + 1 }
 
 /-- `ep_refcount_dec_and_test(ep)` (:972-979). -/
-def epRefcountDecAndTest (ep : EpId) : M Bool := do
+def epRefcountDecAndTest (ep : EpId) : FS.M Bool := do
   let e ← getEp ep
   let zero ← refcountDecAndTest e.refcount
   setEp ep { e with refcount := e.refcount - 1 }
@@ -280,12 +280,12 @@ def epRefcountDecAndTest (ep : EpId) : M Bool := do
 /-- `ep_free(ep)` (:981-988): `mutex_destroy`, `free_uid(ep->user)` (the
     root user's count, kernel/user.c, a cut), `wakeup_source_unregister(NULL)`
     and `kfree_rcu`. -/
-def epFree (ep : EpId) : M Unit := freeEp ep
+def epFree (ep : EpId) : FS.M Unit := freeEp ep
 
 /-! ## Removal (:822-854, :1007-1100) -/
 
 /-- `ep_remove_wait_queue(pwq)` (:822-838). -/
-def epRemoveWaitQueue (pwqId : PwqId) : M Unit := do
+def epRemoveWaitQueue (pwqId : PwqId) : FS.M Unit := do
   -- rcu_read_lock(); whead = smp_load_acquire(&pwq->whead)
   let pwq ← getPwq pwqId
   if ← branch .epRemoveWaitQueueWhead pwq.whead.isSome then
@@ -293,7 +293,7 @@ def epRemoveWaitQueue (pwqId : PwqId) : M Unit := do
   -- rcu_read_unlock()
 
 /-- `ep_unregister_pollwait(ep, epi)` (:843-854), with `mtx` held. -/
-def epUnregisterPollwait (_ep : EpId) (epiId : EpiId) : M Unit := do
+def epUnregisterPollwait (_ep : EpId) (epiId : EpiId) : FS.M Unit := do
   for _ in [0:4096] do
     match (← getEpi epiId).pwqlist with
     | [] => break
@@ -307,7 +307,7 @@ def epUnregisterPollwait (_ep : EpId) (epiId : EpiId) : M Unit := do
 
 /-- `ep_remove_file(ep, epi, file)` (:1021-1044), with `file->f_lock` held;
     returns with it released. -/
-def epRemoveFile (_ep : EpId) (epiId : EpiId) (fid : FileId) : M Unit := do
+def epRemoveFile (_ep : EpId) (epiId : EpiId) (fid : FileId) : FS.M Unit := do
   let file ← getFile fid
   let items ← fEpItems file
   let mut toFree := false
@@ -317,7 +317,7 @@ def epRemoveFile (_ep : EpId) (epiId : EpiId) (fid : FileId) : M Unit := do
     if let .epRefs e := file.fEp then setEp e { (← getEp e) with refs := [] }
     if ← branch .epRemoveFileNotEpoll (!isFileEpoll file) then
       -- v = container_of(head, ...); `!smp_load_acquire(&v->next)`: not on tfile_check_list
-      if ← branch .epRemoveFileHeadUnlisted (!(← getK).tfileCheckList.contains fid) then toFree := true
+      if ← branch .epRemoveFileHeadUnlisted (!(← get).tfileCheckList.contains fid) then toFree := true
   -- hlist_del_rcu(&epi->fllink)
   fEpUnlink fid epiId
   -- spin_unlock(&file->f_lock)
@@ -325,7 +325,7 @@ def epRemoveFile (_ep : EpId) (epiId : EpiId) (fid : FileId) : M Unit := do
 
 /-- `ep_remove_epi(ep, epi)` (:1046-1069): the tree, the ready list, the
     item's memory (`kfree_rcu`) and the user's watch count; always true. -/
-def epRemoveEpi (ep : EpId) (epiId : EpiId) : M Bool := do
+def epRemoveEpi (ep : EpId) (epiId : EpiId) : FS.M Bool := do
   -- rb_erase_cached(&epi->rbn, &ep->rbr): the ordered-map cut
   let e ← getEp ep
   setEp ep { e with rbr := e.rbr.filter (·.2 != epiId) }
@@ -338,13 +338,13 @@ def epRemoveEpi (ep : EpId) (epiId : EpiId) : M Bool := do
   -- spin_unlock_irq; wakeup_source_unregister(NULL); kfree_rcu(epi, rcu)
   freeEpi epiId
   -- percpu_counter_dec(&ep->user->epoll_watches)
-  modifyK fun k => { k with user := { k.user with epollWatches := k.user.epollWatches - 1 } }
+  modify fun k => { k with user := { k.user with epollWatches := k.user.epollWatches - 1 } }
   return true
 
 /-- `ep_remove(ep, epi)` (:1074-1100), for callers owning a reference to the
     set. The scoped `__free(fput)` drops `epi_fget`'s reference at the
     return; its `if (_T)` test is the cleanup's, on the live path non-NULL. -/
-def epRemove (ep : EpId) (epiId : EpiId) : M Unit := do
+def epRemove (ep : EpId) (epiId : EpiId) : FS.M Unit := do
   -- struct file *file __free(fput) = NULL
   epUnregisterPollwait ep epiId
   let epi ← getEpi epiId
@@ -368,7 +368,7 @@ def epRemove (ep : EpId) (epiId : EpiId) : M Unit := do
     all unregistrations first, then all removals; then the set's own
     reference. The `cond_resched` of each walk runs in a system call with
     no dispatch section open: nothing is recorded or run. -/
-def epClearAndPut (ep : EpId) : M Unit := do
+def epClearAndPut (ep : EpId) : FS.M Unit := do
   if ← branch .epClearAndPutPollWaitActive (← waitqueueActive (.epPollWait ep)) then
     invariant "an active poll_wait at ep_clear_and_put (eventpoll_release unhooks every watcher first)"
   -- mutex_lock(&ep->mtx)
@@ -386,7 +386,7 @@ def epClearAndPut (ep : EpId) : M Unit := do
   if ← branch .epClearAndPutLast (← epRefcountDecAndTest ep) then epFree ep
 
 /-- `ep_eventpoll_release(inode, file)` (:1165-1172), the `release` operation. -/
-def epEventpollRelease (fid : FileId) : M Int := do
+def epEventpollRelease (fid : FileId) : FS.M Int := do
   let ep ← epOf (← getFile fid)
   if ← branch .epEventpollReleaseHasEp true then epClearAndPut ep
   return 0
@@ -396,7 +396,7 @@ def epEventpollRelease (fid : FileId) : M Int := do
     the file, in list order, is marked dying, unregistered, unlinked and
     removed. The set's count cannot reach zero here (its file holds a
     reference). -/
-def eventpollReleaseFile (fid : FileId) : M Unit := do
+def eventpollReleaseFile (fid : FileId) : FS.M Unit := do
   for _ in [0:4096] do   -- again:
     -- spin_lock(&file->f_lock)
     let file ← getFile fid
@@ -425,7 +425,7 @@ def eventpollReleaseFile (fid : FileId) : M Unit := do
 
 /-- `ep_set_busy_poll_napi_id(epi)` (:656-685): returns at
     `ep_busy_loop_on` (:610-613), both terms zero in the fixture (design 3.3). -/
-def epSetBusyPollNapiId (epiId : EpiId) : M Unit := do
+def epSetBusyPollNapiId (epiId : EpiId) : FS.M Unit := do
   let e ← getEp (← getEpi epiId).ep
   _ ← branchCmp .epBusyLoopOnUsecs (e.busyPollUsecs != 0) e.busyPollUsecs 0
   _ ← branch .epBusyLoopOnNet false   -- net_busy_loop_on(): sysctl_net_busy_poll is 0
@@ -435,7 +435,7 @@ mutual
 
 /-- `ep_item_poll(epi, pt, depth)` (:1220-1239): the file's `poll` with
     `pt->_key = epi->event.events`, the result masked by the interest. -/
-def epItemPoll (fuel : Nat) (epiId : EpiId) (pt : PollTable) (depth : Nat) : M UInt32 := do
+def epItemPoll (fuel : Nat) (epiId : EpiId) (pt : PollTable) (depth : Nat) : FS.M UInt32 := do
   let epi ← getEpi epiId
   -- file = epi_fget(epi)
   let got ← fileIncNotZero epi.file
@@ -456,7 +456,7 @@ termination_by (fuel, 0)
     `poll`: registers on its `poll_wait`, then scans its ready list, polling
     each item at `depth + 1`; the first ready item ends the scan with
     `EPOLLIN | EPOLLRDNORM`, an item found not ready leaves the list. -/
-def epEventpollPollInner (fuel : Nat) (fid : FileId) (wait : PollTable) (depth : Nat) : M UInt32 := do
+def epEventpollPollInner (fuel : Nat) (fid : FileId) (wait : PollTable) (depth : Nat) : FS.M UInt32 := do
   let ep ← epOf (← getFile fid)
   let pt : PollTable := {}   -- init_poll_funcptr(&pt, NULL)
   pollWait fid (.epPollWait ep) wait
@@ -484,7 +484,7 @@ termination_by (fuel, 1)
 end
 
 /-- `ep_item_poll` from the slice's call sites, with the nesting budget. -/
-def epItemPollAt (epiId : EpiId) (pt : PollTable) (depth : Nat) : M UInt32 :=
+def epItemPollAt (epiId : EpiId) (pt : PollTable) (depth : Nat) : FS.M UInt32 :=
   epItemPoll (EP_MAX_NESTS + 2) epiId pt depth
 
 /-! ## Creation (:1327-1349, :2398-2439) -/
@@ -492,19 +492,19 @@ def epItemPollAt (epiId : EpiId) (pt : PollTable) (depth : Nat) : M UInt32 :=
 /-- `ep_alloc(&ep)` (:1327-1349). `get_current_user()` increments the root
     user's count, a guest-wide value (the operand exclusion of fs/pipe.c:794,
     here at :1343). -/
-def epAlloc : M (Except Int EpId) := do
+def epAlloc : FS.M (Except Int EpId) := do
   if ← branch .epAllocNoMem (!(← hiddenAlloc .kzallocEp)) then return .error (-ENOMEM)
   -- mutex_init, spin_lock_init, seqcount_spinlock_init, init_waitqueue_head x2,
   -- INIT_LIST_HEAD(&ep->rdllist), ep->rbr = RB_ROOT_CACHED, ep->ovflist = EP_UNACTIVE_PTR
   refcountIncGuestWide .rootUserCount   -- ep->user = get_current_user()
   -- refcount_set(&ep->refcount, 1)
-  let id := (← getK).nextEp
+  let id := (← get).nextEp
   setEp id {}
-  modifyK fun k => { k with nextEp := id + 1 }
+  modify fun k => { k with nextEp := id + 1 }
   return .ok id
 
 /-- `do_epoll_create(flags)` (:2398-2439). -/
-def doEpollCreate (flags : UInt32) : M Int := do
+def doEpollCreate (flags : UInt32) : FS.M Int := do
   if ← branchCmp .doEpollCreateInvalidFlags (flags &&& ~~~EPOLL_CLOEXEC != 0) (flags &&& ~~~EPOLL_CLOEXEC).toNat 0 then
     return -EINVAL
   let r ← epAlloc
@@ -530,7 +530,7 @@ def doEpollCreate (flags : UInt32) : M Int := do
 /-- `ep_attach_file(file, epi)` (:1709-1741): the item joins the head of
     the target's `f_ep` list, a fresh `epitems_head` for a non-epoll file
     without one, an epoll file's own `refs`. -/
-def epAttachFile (fid : FileId) (epiId : EpiId) : M Int := do
+def epAttachFile (fid : FileId) (epiId : EpiId) : FS.M Int := do
   let file ← getFile fid
   let ep ← if ← branch .epAttachFileIsEpoll (isFileEpoll file) then some <$> epOf file else pure none
   let mut head : Option FEp := none
@@ -566,8 +566,8 @@ def epAttachFile (fid : FileId) (epiId : EpiId) : M Int := do
 /-- `ep_alloc_epitem(ep, event, tfile, fd)` (:1755-1777): the user's watch
     quota (`percpu_counter_compare`, the inline of a kernel without
     `CONFIG_SMP`, percpu_counter.h:171-178), then the slab allocation. -/
-def epAllocEpitem (ep : EpId) (event : EpollEvent) (tfile : FileId) (fd : Int) : M (Except Int EpiId) := do
-  let k ← getK
+def epAllocEpitem (ep : EpId) (event : EpollEvent) (tfile : FileId) (fd : Int) : FS.M (Except Int EpiId) := do
+  let k ← get
   let count := k.user.epollWatches
   let max := k.maxUserWatches
   let cmp : Int ← do
@@ -575,25 +575,25 @@ def epAllocEpitem (ep : EpId) (event : EpollEvent) (tfile : FileId) (fd : Int) :
     else if ← branchCmp .percpuCounterCompareLt (count < max) count max then pure (-1)
     else pure 0
   if ← branch .epAllocEpitemOverWatches (cmp >= 0) then return .error (-ENOSPC)
-  modifyK fun k => { k with user := { k.user with epollWatches := k.user.epollWatches + 1 } }
+  modify fun k => { k with user := { k.user with epollWatches := k.user.epollWatches + 1 } }
   if ← branch .epAllocEpitemNoMem (!(← hiddenAlloc .kmemCacheZallocEpi)) then
-    modifyK fun k => { k with user := { k.user with epollWatches := k.user.epollWatches - 1 } }
+    modify fun k => { k with user := { k.user with epollWatches := k.user.epollWatches - 1 } }
     return .error (-ENOMEM)
   -- INIT_LIST_HEAD(&epi->rdllink); epi->ep = ep; ep_set_ffd; epi->event = *event; epi_clear_ovflist
-  let id := (← getK).nextEpi
+  let id := (← get).nextEpi
   setEpi id { ep, file := tfile, fd, fileAddr := 0, events := event.events, data := event.data }
-  modifyK fun k => { k with nextEpi := id + 1 }
+  modify fun k => { k with nextEpi := id + 1 }
   return .ok id
 
 /-- `ep_register_epitem(ep, epi, tep, full_check)` (:1795-1822). -/
-def epRegisterEpitem (ep : EpId) (epiId : EpiId) (tep : Option EpId) (fullCheck : Bool) : M Int := do
+def epRegisterEpitem (ep : EpId) (epiId : EpiId) (tep : Option EpId) (fullCheck : Bool) : FS.M Int := do
   let tfile := (← getEpi epiId).file
   if ← branch .epRegisterEpitemTep tep.isSome then pure ()   -- mutex_lock_nested(&tep->mtx, 1)
   let error ← epAttachFile tfile epiId
   if ← branch .epRegisterEpitemAttachError (error != 0) then
     if ← branch .epRegisterEpitemAttachErrorTep tep.isSome then pure ()   -- mutex_unlock(&tep->mtx)
     freeEpi epiId   -- kmem_cache_free(epi_cache, epi)
-    modifyK fun k => { k with user := { k.user with epollWatches := k.user.epollWatches - 1 } }
+    modify fun k => { k with user := { k.user with epollWatches := k.user.epollWatches - 1 } }
     return error
   if ← branchCmp .epRegisterEpitemFullCheck fullCheck (if fullCheck then 1 else 0) 0 then
     if ← branch .epRegisterEpitemNotTep tep.isNone then listFile tfile
@@ -604,7 +604,7 @@ def epRegisterEpitem (ep : EpId) (epiId : EpiId) (tep : Option EpId) (fullCheck 
 
 /-- `ep_insert(ep, event, tfile, fd, full_check)` (:1827-1904), with `mtx`
     held. -/
-def epInsert (ep : EpId) (event : EpollEvent) (tfile : FileId) (fd : Int) (fullCheck : Bool) : M Int := do
+def epInsert (ep : EpId) (event : EpollEvent) (tfile : FileId) (fd : Int) (fullCheck : Bool) : FS.M Int := do
   let tf ← getFile tfile
   let tep ← if ← branch .epInsertTargetEpoll (isFileEpoll tf) then some <$> epOf tf else pure none
   let r ← epAllocEpitem ep event tfile fd
@@ -625,13 +625,13 @@ def epInsert (ep : EpId) (event : EpollEvent) (tfile : FileId) (fd : Int) (fullC
   if ← branchCmp .epInsertWakeup (hasFlag epi.events EPOLLWAKEUP) (epi.events &&& EPOLLWAKEUP).toNat 0 then
     unsupported "ep_create_wakeup_source: EPOLLWAKEUP survived ep_take_care_of_epollwakeup"
   -- epq.epi = epi; init_poll_funcptr(&epq.pt, ep_ptable_queue_proc)
-  modifyK fun k => { k with epqEpi := some epiId }
+  modify fun k => { k with epqEpi := some epiId }
   let revents ← epItemPollAt epiId { qproc := some epiId } 1
   -- ep_ptable_queue_proc() signals allocation failure by clearing epq.epi
-  if ← branch .epInsertPwqAllocFailed (← getK).epqEpi.isNone then
+  if ← branch .epInsertPwqAllocFailed (← get).epqEpi.isNone then
     epRemove ep epiId
     return -ENOMEM
-  modifyK fun k => { k with epqEpi := none }   -- epq leaves scope
+  modify fun k => { k with epqEpi := none }   -- epq leaves scope
   -- spin_lock_irq(&ep->lock)
   epSetBusyPollNapiId epiId
   let epi ← getEpi epiId
@@ -653,7 +653,7 @@ def epInsert (ep : EpId) (event : EpollEvent) (tfile : FileId) (fd : Int) (fullC
 
 /-- `ep_modify(ep, epi, event)` (:1910-1980), with `mtx` held: the mask and
     data are replaced, then the item is polled without registering. -/
-def epModify (ep : EpId) (epiId : EpiId) (event : EpollEvent) : M Int := do
+def epModify (ep : EpId) (epiId : EpiId) (event : EpollEvent) : FS.M Int := do
   let pt : PollTable := {}   -- init_poll_funcptr(&pt, NULL)
   let epi ← getEpi epiId
   setEpi epiId { epi with events := event.events, data := event.data }
@@ -684,7 +684,7 @@ def epModify (ep : EpId) (epiId : EpiId) (event : EpollEvent) : M Int := do
 /-- `epoll_put_uevent(revents, data, uevent)` (include/linux/eventpoll.h:78-86)
     for x86-64: the packed 12 bytes, `events` then `data`, little-endian;
     the caller's buffer is valid (the guest's). -/
-def epollPutUevent (revents : UInt32) (data : UInt64) : M (Option ByteArray) := do
+def epollPutUevent (revents : UInt32) (data : UInt64) : FS.M (Option ByteArray) := do
   if ← branch .epollPutUeventEventsFault false then return none
   if ← branch .epollPutUeventDataFault false then return none
   let le (v : Nat) (width : Nat) : List UInt8 := (List.range width).map fun k => UInt8.ofNat (v / 256 ^ k % 256)
@@ -694,7 +694,7 @@ def epollPutUevent (revents : UInt32) (data : UInt64) : M (Option ByteArray) := 
     1 with the event's bytes, 0 when the re-poll found nothing, -EFAULT
     (unreached) with the item back at the batch's head. The `ws` block
     (:2009-2014) is dead without `CONFIG_PM`. -/
-def epDeliverEvent (ep : EpId) (epiId : EpiId) (pt : PollTable) : M (Int × ByteArray) := do
+def epDeliverEvent (ep : EpId) (epiId : EpiId) (pt : PollTable) : FS.M (Int × ByteArray) := do
   -- list_del_init(&epi->rdllink): the item leaves the scan batch
   setEpi epiId { (← getEpi epiId) with linked := false }
   let revents ← epItemPollAt epiId pt 1
@@ -716,7 +716,7 @@ def epDeliverEvent (ep : EpId) (epiId : EpiId) (pt : PollTable) : M (Int × Byte
 
 /-- `ep_send_events(ep, events, maxevents)` (:2057-2101): the count
     delivered and the bytes written to the caller's buffer. -/
-def epSendEvents (ep : EpId) (maxevents : Int) : M (Int × ByteArray) := do
+def epSendEvents (ep : EpId) (maxevents : Int) : FS.M (Int × ByteArray) := do
   if ← branch .epSendEventsFatalSignal false then return (-EINTR, ByteArray.empty)   -- no signal pending (design 5)
   let pt : PollTable := {}   -- init_poll_funcptr(&pt, NULL)
   -- mutex_lock(&ep->mtx)
@@ -748,7 +748,7 @@ def epSendEvents (ep : EpId) (maxevents : Int) : M (Int × ByteArray) := do
 /-- `ep_timeout_to_timespec(&to, ms)` (:2103-2123): NULL for a negative
     timeout, zero for 0; a positive one reads the clock (`ktime_get_ts64`,
     :2120), tier 2. -/
-def epTimeoutToTimespec (ms : Int) : M (Option Timespec64) := do
+def epTimeoutToTimespec (ms : Int) : FS.M (Option Timespec64) := do
   if ← branchCmp .epTimeoutNegative (ms < 0) ms 0 then return none
   if ← branchCmp .epTimeoutZero (ms == 0) ms 0 then return some ⟨0, 0⟩
   unsupported "a positive epoll_wait timeout: ktime_get_ts64 and the sleep (tier 2)"
@@ -758,7 +758,7 @@ def epTimeoutToTimespec (ms : Int) : M (Option Timespec64) := do
     of the ready list, `ep_is_scanning`, and `read_seqcount_retry`
     (`do___read_seqcount_retry`, seqlock.h:365-368). With one task the
     sequence is even and unchanged. -/
-def epEventsAvailable (ep : EpId) : M Bool := do
+def epEventsAvailable (ep : EpId) : FS.M Bool := do
   let e ← getEp ep
   if ← branchCmp .epEventsAvailableSeqOdd (e.seq % 2 == 1) (e.seq % 2) 0 then
     invariant "an odd seqcount outside a scan (a writer in progress)"
@@ -773,7 +773,7 @@ def epEventsAvailable (ep : EpId) : M Bool := do
 /-- `ep_poll(ep, events, maxevents, timeout)` (:2160-2282) for the paths
     tier 1 models: a zero timeout returns after one delivery attempt;
     anything that would sleep stops. -/
-def epPoll (ep : EpId) (maxevents : Int) (timeout : Option Timespec64) : M (Int × ByteArray) := do
+def epPoll (ep : EpId) (maxevents : Int) (timeout : Option Timespec64) : FS.M (Int × ByteArray) := do
   let mut timedOut := false
   -- `timeout && (timeout->tv_sec | timeout->tv_nsec)`
   let positive ← do
@@ -797,7 +797,7 @@ def epPoll (ep : EpId) (maxevents : Int) (timeout : Option Timespec64) : M (Int 
 
 /-- `do_epoll_wait(epfd, events, maxevents, to)` (:2641-2682). The events
     delivered go to the caller's buffer (`World.userOut`). -/
-def doEpollWait (epfd : Nat) (maxevents : Int) (to : Option Timespec64) : M Int := do
+def doEpollWait (epfd : Nat) (maxevents : Int) (to : Option Timespec64) : FS.M Int := do
   -- one unsigned range check in the built code, `(unsigned)(maxevents - 1) >
   -- EP_MAX_EVENTS - 1`, its operands on the second decision
   let bad ← do
@@ -824,7 +824,7 @@ def doEpollWait (epfd : Nat) (maxevents : Int) (to : Option Timespec64) : M Int 
 
 /-- `epoll_mutex_lock(mutex, depth, nonblock)` (:2467-2477): the syscall
     passes `nonblock = false`, so `mutex_lock_nested` (a cut) and 0. -/
-def epollMutexLock (nonblock : Bool) : M Int := do
+def epollMutexLock (nonblock : Bool) : FS.M Int := do
   if ← branch .epollMutexLockBlocking (!nonblock) then return 0   -- mutex_lock_nested(mutex, depth)
   unsupported "epoll_mutex_lock with nonblock (io_uring's epoll_ctl)"
 
@@ -833,11 +833,11 @@ def epollMutexLock (nonblock : Bool) : M Int := do
     `inserting_into` or too deep a chain; a set visited in this check
     answers its cached depth; non-epoll files met are listed for the
     reverse check. `loop_check_gen` is the relative counter (design 3.5). -/
-def epLoopCheckProc : Nat → EpId → Nat → M Nat
+def epLoopCheckProc : Nat → EpId → Nat → FS.M Nat
   | 0, _, _ => invariant "ep_loop_check_proc nested beyond EP_MAX_NESTS + 2"
   | fuel + 1, ep, depth => do
     let e ← getEp ep
-    let gen := (← getK).loopCheckGen
+    let gen := (← get).loopCheckGen
     if ← branchCmpExcluded .epLoopCheckProcVisited (e.gen == gen) .loopCheckGen then return e.loopCheckDepth
     -- mutex_lock_nested(&ep->mtx, depth + 1)
     setEp ep { e with gen }
@@ -851,7 +851,7 @@ def epLoopCheckProc : Nat → EpId → Nat → M Nat
         let tovisit ← epOf file
         -- `ep_tovisit == inserting_into || depth > EP_MAX_NESTS`
         let bad ← do
-          if ← branch .epLoopCheckProcSelf ((← getK).insertingInto == some tovisit) then pure true
+          if ← branch .epLoopCheckProcSelf ((← get).insertingInto == some tovisit) then pure true
           else branchCmp .epLoopCheckProcTooDeep (depth > EP_MAX_NESTS) depth EP_MAX_NESTS
         if bad then result := EP_MAX_NESTS + 1
         else
@@ -869,11 +869,11 @@ def epLoopCheckProc : Nat → EpId → Nat → M Nat
 
 /-- `ep_get_upwards_depth_proc(ep, depth)` (:2338-2351): the depth of the
     sets above `ep`, through `refs`. -/
-def epGetUpwardsDepthProc : Nat → EpId → Nat → M Nat
+def epGetUpwardsDepthProc : Nat → EpId → Nat → FS.M Nat
   | 0, _, _ => invariant "ep_get_upwards_depth_proc nested beyond EP_MAX_NESTS + 2"
   | fuel + 1, ep, depth => do
     let e ← getEp ep
-    let gen := (← getK).loopCheckGen
+    let gen := (← get).loopCheckGen
     if ← branchCmpExcluded .epGetUpwardsDepthProcVisited (e.gen == gen) .loopCheckGen then return e.loopCheckDepth
     let mut result := 0
     for epiId in e.refs do
@@ -885,8 +885,8 @@ def epGetUpwardsDepthProc : Nat → EpId → Nat → M Nat
     return result
 
 /-- `ep_loop_check(ep, to)` (:2363-2382). -/
-def epLoopCheck (ep to : EpId) : M Int := do
-  modifyK fun k => { k with insertingInto := some ep }
+def epLoopCheck (ep to : EpId) : FS.M Int := do
+  modify fun k => { k with insertingInto := some ep }
   let depth ← epLoopCheckProc (EP_MAX_NESTS + 2) to 0
   if ← branchCmp .epLoopCheckTooDeep (depth > EP_MAX_NESTS) depth EP_MAX_NESTS then return -1
   -- rcu_read_lock(); ... rcu_read_unlock()
@@ -898,7 +898,7 @@ def epLoopCheck (ep to : EpId) : M Int := do
 /-- The body of `do_epoll_ctl` between the two `fdget`s and the
     `error_tgt_fput` exit: the error and whether a full check was begun. -/
 private def doEpollCtlBody (fId tId : FileId) (op : Int) (fd : Int) (events : UInt32) (data : UInt64) :
-    M (Int × Bool) := do
+    FS.M (Int × Bool) := do
   let fFile ← getFile fId
   let tFile ← getFile tId
   -- `!file_can_poll(fd_file(tf))`: `f_op->poll` NULL (modelled, unexercised: design 9.3)
@@ -934,14 +934,14 @@ private def doEpollCtlBody (fId tId : FileId) (op : Int) (fd : Int) (events : UI
     -- `f->f_ep || ep->gen == loop_check_gen || is_file_epoll(tf)`
     let nested ← do
       if ← branch .doEpollCtlEpfdWatched (fFile.fEp != .null) then pure true
-      else if ← branchCmpExcluded .doEpollCtlGenMatches (e.gen == (← getK).loopCheckGen) .loopCheckGen then
+      else if ← branchCmpExcluded .doEpollCtlGenMatches (e.gen == (← get).loopCheckGen) .loopCheckGen then
         invariant "a set's gen equal to loop_check_gen outside a check: the fixture's warm-up rule (design 3.5)"
       else branch .doEpollCtlTargetEpoll (isFileEpoll tFile)
     if nested then
       -- mutex_unlock(&ep->mtx); epoll_mutex_lock(&epnested_mutex, 0, nonblock)
       let error ← epollMutexLock false
       if ← branch .doEpollCtlNestedLockError (error != 0) then return (error, false)
-      modifyK fun k => { k with loopCheckGen := k.loopCheckGen + 1 }
+      modify fun k => { k with loopCheckGen := k.loopCheckGen + 1 }
       fullCheck := true
       if ← branch .doEpollCtlTargetEpollLoop (isFileEpoll tFile) then
         tep := some (← epOf tFile)
@@ -977,7 +977,7 @@ private def doEpollCtlBody (fId tId : FileId) (op : Int) (fd : Int) (events : UI
 /-- `do_epoll_ctl(epfd, op, fd, epds, nonblock)` (:2479-2619). The two
     `CLASS(fd, ..)` descriptors are put at the exit in reverse order, on
     every path (an empty one records `fdput`'s decision as false). -/
-def doEpollCtl (epfd : Nat) (op : Int) (fd : Int) (events : UInt32) (data : UInt64) : M Int := do
+def doEpollCtl (epfd : Nat) (op : Int) (fd : Int) (events : UInt32) (data : UInt64) : FS.M Int := do
   let f ← fdget epfd
   if ← branch .doEpollCtlEpfdEmpty f.file.isNone then
     fdput f
@@ -991,7 +991,7 @@ def doEpollCtl (epfd : Nat) (op : Int) (fd : Int) (events : UInt32) (data : UInt
   -- error_tgt_fput:
   if ← branch .doEpollCtlFullCheckExit fullCheck then   -- threaded away on the early exits
     clearTfileCheckList
-    modifyK fun k => { k with loopCheckGen := k.loopCheckGen + 1 }
+    modify fun k => { k with loopCheckGen := k.loopCheckGen + 1 }
     -- mutex_unlock(&epnested_mutex)
   fdput tf
   fdput f
@@ -999,17 +999,17 @@ def doEpollCtl (epfd : Nat) (op : Int) (fd : Int) (events : UInt32) (data : UInt
 
 /-- `SYSCALL_DEFINE4(epoll_ctl, ...)` (:2626-2636): the event is copied
     from the caller for every op but DEL (the guest's buffer is valid). -/
-def sysEpollCtl (epfd : Nat) (op : Int) (fd : Int) (events : UInt32) (data : UInt64) : M Int := do
+def sysEpollCtl (epfd : Nat) (op : Int) (fd : Int) (events : UInt32) (data : UInt64) : FS.M Int := do
   if ← branchCmp .sysEpollCtlHasEvent (op != EPOLL_CTL_DEL) op EPOLL_CTL_DEL then
     if ← branch .sysEpollCtlCopyFault false then return -EFAULT
   doEpollCtl epfd op fd events data
 
 /-- `SYSCALL_DEFINE1(epoll_create1, int, flags)` (:2441-2444). -/
-def sysEpollCreate1 (flags : UInt32) : M Int := doEpollCreate flags
+def sysEpollCreate1 (flags : UInt32) : FS.M Int := doEpollCreate flags
 
 /-- `SYSCALL_DEFINE4(epoll_wait, ...)` (:2684-2691): the timespec argument
     is computed before the call. -/
-def sysEpollWait (epfd : Nat) (maxevents timeout : Int) : M Int := do
+def sysEpollWait (epfd : Nat) (maxevents timeout : Int) : FS.M Int := do
   let to ← epTimeoutToTimespec timeout
   doEpollWait epfd maxevents to
 

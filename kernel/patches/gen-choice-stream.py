@@ -901,6 +901,63 @@ unsigned long notrace kcov_timer_jiffies(unsigned long j, unsigned long ip)
 EXPORT_SYMBOL(kcov_timer_jiffies);
 
 /*
+ * LEANUX B3 (docs/2026-10-15-design-b3-timer-wheel.md, sections 3.2, 4 and
+ * 7): the timer wheel's two records for a timer of the armed dispatch set,
+ * written where the C computes them in __mod_timer, which now receives its
+ * caller's return address so that both resolve to the arming line like the
+ * arm record (kind 303). Kind 313 {base->clk, timer} (16 bytes): the base
+ * clock right after forward_timer_base on both of __mod_timer's paths, the
+ * hidden input the slot depends on (it lags jiffies by the softirq's latency
+ * or, inside a catch-up pass, by up to the advance). Kind 314 {idx,
+ * bucket_expiry, timer} (24 bytes): the slot stored in the timer's flags and
+ * its bucket expiry at the enqueue; absent on the same-slot path, so the
+ * mirror's own same-slot decision is checked by the record's presence, not
+ * taken from it. Both gated like the arm record (the armed set,
+ * KCOV_DISPATCH_ARM_RECORDS) and written with the mode check and
+ * kcov_choice_write, with no steering lookup, as the kind-304 writer is:
+ * they run under base->lock with interrupts off. Record-only.
+ */
+static void notrace kcov_timer_wheel_write(u32 kind, unsigned long fn, unsigned long ip, const u64 *v, unsigned int len)
+{
+	struct task_struct *t = current;
+	u32 n, i;
+
+	if (!READ_ONCE(kcov_dispatch_kcov) || !(READ_ONCE(kcov_dispatch.flags) & KCOV_DISPATCH_ARM_RECORDS))
+		return;
+	n = min_t(u32, READ_ONCE(kcov_dispatch.n), KCOV_DISPATCH_MAX);
+	for (i = 0; i < n; i++)
+		if (READ_ONCE(kcov_dispatch.funcs[i]) == fn)
+			break;
+	if (i == n)
+		return;
+	if (!check_kcov_mode(KCOV_MODE_TRACE_PC, t) &&
+	    !(IS_ENABLED(CONFIG_KCOV_ENABLE_COMPARISONS) && check_kcov_mode(KCOV_MODE_TRACE_CMP, t)))
+		return;
+	kcov_choice_write(t, kind, ip, v, len);
+}
+
+void notrace kcov_timer_clk(void *func, unsigned long clk, void *timer, unsigned long ip)
+{
+	u64 v[2];
+
+	v[0] = clk;
+	v[1] = (unsigned long)timer;
+	kcov_timer_wheel_write(313, (unsigned long)func, ip, v, sizeof(v));
+}
+EXPORT_SYMBOL(kcov_timer_clk);
+
+void notrace kcov_timer_enqueued(void *func, unsigned int idx, unsigned long bucket_expiry, void *timer, unsigned long ip)
+{
+	u64 v[3];
+
+	v[0] = idx;
+	v[1] = bucket_expiry;
+	v[2] = (unsigned long)timer;
+	kcov_timer_wheel_write(314, (unsigned long)func, ip, v, sizeof(v));
+}
+EXPORT_SYMBOL(kcov_timer_enqueued);
+
+/*
  * LEANUX epoll (docs/2026-10-12-epoll-design.md, section 3.2): the address
  * of the struct file an epoll item is keyed by (ep_cmp_ffd: the file
  * pointer, then the fd), recorded at ep_rbtree_insert (fs/eventpoll.c,
@@ -1119,6 +1176,9 @@ void kcov_epoll_insert(unsigned long file, unsigned long ip);
 void kcov_seccomp_program(const void *insns, unsigned int len, unsigned long ip);
 /* LEANUX seccomp: populate_seccomp_data's instruction-pointer record (kind 312). */
 void kcov_seccomp_ip(unsigned long value, unsigned long ip);
+/* LEANUX B3: the timer wheel's base clock (kind 313) and enqueue (kind 314) records. */
+void kcov_timer_clk(void *func, unsigned long clk, void *timer, unsigned long ip);
+void kcov_timer_enqueued(void *func, unsigned int idx, unsigned long bucket_expiry, void *timer, unsigned long ip);
 """)
 sub('include/linux/kcov.h', """static inline void kcov_dispatch_resched(unsigned long ip) {}
 """, """static inline void kcov_dispatch_resched(unsigned long ip) {}
@@ -1128,6 +1188,8 @@ static inline void kcov_work_queued(struct work_struct *work, unsigned long ip) 
 static inline void kcov_epoll_insert(unsigned long file, unsigned long ip) {}
 static inline void kcov_seccomp_program(const void *insns, unsigned int len, unsigned long ip) {}
 static inline void kcov_seccomp_ip(unsigned long value, unsigned long ip) {}
+static inline void kcov_timer_clk(void *func, unsigned long clk, void *timer, unsigned long ip) {}
+static inline void kcov_timer_enqueued(void *func, unsigned int idx, unsigned long bucket_expiry, void *timer, unsigned long ip) {}
 """)
 sub('include/linux/kcov.h', 'u64 kcov_common_handle(void);\n', 'u64 kcov_common_handle(void);\n'
     '/* LEANUX D3: the virtual time advance (kernel/time/timekeeping.c). */\n'
@@ -1199,6 +1261,68 @@ sub(TM, """int mod_timer(struct timer_list *timer, unsigned long expires)
 	kcov_timer_arm(timer->function, jiffies, expires, _RET_IP_, timer);
 	return __mod_timer(timer, expires, 0);
 }""")
+# ---- B3: the timer wheel's records (docs/2026-10-15-design-b3-timer-wheel.md,
+# section 7; U2 [USER 2026-10-15]). __mod_timer is out of line in this build
+# (System.map: `t __mod_timer`), so its _RET_IP_ is inside timer.c; it takes
+# its caller's return address as a parameter, which every caller passes, and
+# the two records resolve to the arming line (drivers/net/wireguard/timers.c:37)
+# like the arm record. Kind 313 after forward_timer_base on both paths
+# (pending: timer.c:1107; not pending: :1141; the cross-base forward at :1167 is
+# unreachable with one CPU). Kind 314 at __mod_timer's enqueue (:1180-1183),
+# after enqueue_timer or internal_add_timer, from the slot stored in the
+# timer's flags and the bucket expiry the enqueue computed (internal_add_timer
+# now returns it; its other callers ignore the value). timer.c is unanchored
+# and these edits add lines (U3). Record-only: no path's behaviour changes.
+sub(TM, """static inline int
+__mod_timer(struct timer_list *timer, unsigned long expires, unsigned int options)
+{""", """static inline int
+__mod_timer(struct timer_list *timer, unsigned long expires, unsigned int options, unsigned long ip)
+{""")
+sub(TM, "	return __mod_timer(timer, expires, MOD_TIMER_PENDING_ONLY);\n", "	return __mod_timer(timer, expires, MOD_TIMER_PENDING_ONLY, _RET_IP_);\n")
+sub(TM, "	return __mod_timer(timer, expires, 0);\n", "	return __mod_timer(timer, expires, 0, _RET_IP_);\n")
+sub(TM, "	return __mod_timer(timer, expires, MOD_TIMER_REDUCE);\n", "	return __mod_timer(timer, expires, MOD_TIMER_REDUCE, _RET_IP_);\n")
+sub(TM, "	__mod_timer(timer, timer->expires, MOD_TIMER_NOTPENDING);\n", "	__mod_timer(timer, timer->expires, MOD_TIMER_NOTPENDING, _RET_IP_);\n", 3)
+sub(TM, "	__mod_timer(&timer.timer, expire, MOD_TIMER_NOTPENDING);\n", "	__mod_timer(&timer.timer, expire, MOD_TIMER_NOTPENDING, _RET_IP_);\n")
+sub(TM, """		forward_timer_base(base);
+
+		if (timer_pending(timer) && (options & MOD_TIMER_REDUCE) &&""", """		forward_timer_base(base);
+		kcov_timer_clk(timer->function, base->clk, timer, ip);	/* LEANUX B3: kind 313 */
+
+		if (timer_pending(timer) && (options & MOD_TIMER_REDUCE) &&""")
+sub(TM, """		forward_timer_base(base);
+	}
+
+	ret = detach_if_pending(timer, base, false);""", """		forward_timer_base(base);
+		kcov_timer_clk(timer->function, base->clk, timer, ip);	/* LEANUX B3: kind 313 */
+	}
+
+	ret = detach_if_pending(timer, base, false);""")
+sub(TM, """static void internal_add_timer(struct timer_base *base, struct timer_list *timer)
+{
+	unsigned long bucket_expiry;
+	unsigned int idx;
+
+	idx = calc_wheel_index(timer->expires, base->clk, &bucket_expiry);
+	enqueue_timer(base, timer, idx, bucket_expiry);
+}""", """static unsigned long internal_add_timer(struct timer_base *base, struct timer_list *timer)
+{
+	unsigned long bucket_expiry;
+	unsigned int idx;
+
+	idx = calc_wheel_index(timer->expires, base->clk, &bucket_expiry);
+	enqueue_timer(base, timer, idx, bucket_expiry);
+	return bucket_expiry;	/* LEANUX B3: for the kind-314 record */
+}""")
+sub(TM, """	if (idx != UINT_MAX && clk == base->clk)
+		enqueue_timer(base, timer, idx, bucket_expiry);
+	else
+		internal_add_timer(base, timer);
+""", """	if (idx != UINT_MAX && clk == base->clk)
+		enqueue_timer(base, timer, idx, bucket_expiry);
+	else
+		bucket_expiry = internal_add_timer(base, timer);
+	kcov_timer_enqueued(timer->function, timer_get_idx(timer), bucket_expiry, timer, ip);	/* LEANUX B3: kind 314 */
+""")
 # ---- W9: the dst cache's jiffies (docs/2026-10-06-w8-w9-netns-routing.md, 4.1) ----
 # Record-only: the value stored is the value recorded; kind 306, two sites.
 DC='include/net/dst_cache.h'

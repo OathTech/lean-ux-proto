@@ -46,7 +46,7 @@ channel for the models beside the differential check, under Rule Zero:
 (1) the mirror might be wrong; (2) the kernel might contain bugs; (3) the
 former is much more likely than the latter [USER 2026-10-14]. A discrepancy
 is read in that order and a statement is never bent to accommodate one. The mirror
-(`Leanux/FS`, `Leanux/WG`, `Leanux/Kernel`, `Leanux/Env`,
+(`Leanux/FS`, `Leanux/WG`, `Leanux/Net`, `Leanux/Kernel`, `Leanux/Env`,
 `Leanux/Runner.lean`) carries no theorem, no proof-shaped restructuring, and
 no change made to let a proof close: a proof that cannot close is a report
 against the mirror, settled by the differential check, never by editing the
@@ -77,6 +77,7 @@ it is a box matter, not a project requirement.
 ```sh
 capped -- scripts/in-bundle python3 -B -m unittest evaluator.test_evaluation evaluator.test_model_replay harness.test_trace harness.test_wg harness.test_linux
 capped -- scripts/in-bundle python3 -m evaluator.check --suite wireguard   # about 3 minutes
+capped -- scripts/in-bundle python3 -m evaluator.check --suite routing     # the IPv4 FIB trie's corpus, about 3 minutes
 capped -- scripts/in-bundle python3 -m evaluator.check                     # everything: about an hour
 LEANUX_KERNEL_PROFILE=net-choice capped -m 64G -- scripts/in-bundle scripts/build-kernel
 ```
@@ -145,7 +146,7 @@ commit, then deleted unless it replaces a sentinel. No evidence bundles,
 integration records or run narratives: a merge commit's message carries the
 run's counts and the user's signoff.
 
-The mirror (`Leanux/FS`, `Leanux/WG`, `Leanux/Kernel`) contains only the C's
+The mirror (`Leanux/FS`, `Leanux/WG`, `Leanux/Net`, `Leanux/Kernel`) contains only the C's
 data and control flow. Fixture, scheduling and timing assumptions live in
 the environment model (`Leanux/Env.lean`) or the runner.
 
