@@ -169,6 +169,24 @@ theorem hoare_liftAip_of (a : WG.AipM α) (P : WGWorld → Prop)
       rcases hr with ⟨⟨rfl, rfl⟩, rfl⟩
       exact (hoare_iff_run_ambient _ _ _).mp (h g d hp hd) _ _ _ _ _ rfl ha
 
+/-- Total transfer through the actual trie adapter requires a device at entry
+and total native execution. The native Ambient endpoints stay unrestricted. -/
+theorem total_liftAip_of (a : WG.AipM α) (P : WGWorld → Prop)
+    (Q : α → WGWorld → Prop)
+    (device : ∀ g, P g → ∃ d, g.dev = some d)
+    (h : ∀ g d, P g → g.dev = some d →
+      ⦃fun s => ⌜s = {nodes := d.nodes, nextNode := d.nextNode, trie := d.peerAllowedips}⌝⦄ a
+      ⦃⇓ x s => ⌜Q x {g with dev := some {d with nodes := s.nodes, nextNode := s.nextNode, peerAllowedips := s.trie}}⌝⦄) :
+    ⦃fun g => ⌜P g⌝⦄ WG.liftAip a ⦃⇓ x g => ⌜Q x g⌝⦄ := by
+  apply (total_iff_run_ambient _ _ _).mpr
+  intro g ambient hp
+  obtain ⟨d, hd⟩ := device g hp
+  obtain ⟨x, s, ambient', hr, hq⟩ := (total_iff_run_ambient _ _ _).mp
+    (h g d hp hd) _ ambient rfl
+  refine ⟨x, {g with dev := some {d with nodes := s.nodes, nextNode := s.nextNode, peerAllowedips := s.trie}}, ambient', ?_, hq⟩
+  rw [liftAip_run, hd]
+  simp only [hr, Except.map]
+
 /-- Arbitrary trie actions preserve predicates stable under replacing their
 three owned fields. No property of their Ambient execution is assumed. -/
 theorem hoare_liftAip (a : WG.AipM α) (P : WGWorld → Prop)

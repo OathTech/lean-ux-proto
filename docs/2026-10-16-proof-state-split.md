@@ -67,9 +67,14 @@ it is not part of that baseline.
 | Product syscall observer | 3 | 0 | 0 | 3 | 0 | 3 |
 | Native cookie frames and generalized view transport | 24 | 19 | 5 | 0 | 0 | 19 |
 | Native device/peer configuration frames | 4 | 4 | 0 | 0 | 0 | 4 |
+| Native keypair release observer | 18 | 18 | 0 | 0 | 0 | 18 |
+| Native trie lists and child insertion | 12 | 5 | 0 | 7 | 0 | 12 |
+| Native device lifecycle and transmit frames | 39 | 39 | 0 | 0 | 0 | 39 |
+| Product syscall composition | 10 | 0 | 0 | 10 | 0 | 10 |
+| Canonical total Aip and product Task adapters | 0 | 0 | 0 | 0 | 2 | 2 |
 
-The whole tree currently contains 450 Lean files and 6,217 theorems. The completed
-changes total 959 retyped theorems, 1,599 deletions, 204 retained contract shapes and 101 added.
+The whole tree currently contains 450 Lean files and 6,219 theorems. The completed
+changes total 1,021 retyped theorems, 1,599 deletions, 221 retained contract shapes and 103 added.
 Retyping changes or generalizes the actual state/monad carrier or observation.
 This includes shorthand contracts whose source functions or named views move
 to a native monad. Mere namespace qualification and equivalent relocation of a
@@ -1316,4 +1321,53 @@ result, guest timeout or infrastructure rerun occurred.
 LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake build Leanux.Proofs.WG.Lifetimes.Ambient Leanux.Proofs.WG.Lifetimes.IndexOwnerAccess Leanux.Proofs.WG.Lifetimes.PacketRelease Leanux.Proofs.WG.AllowedIps.MutationMirror Leanux.Proofs.WG.Configuration.AllowedIpSource Leanux.Proofs.WG.Queues.RxRingJournal Leanux.Proofs.Logged.Syscalls Leanux.Proofs.WG.Cookies.Frames Leanux.Proofs.WG.Keypairs.Frames.WGConfig
 # Run separately for each entry module (Ambient includes Acquire):
 LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Cookies.Frames
+```
+
+## Device lifecycle, release calls and native trie composition
+
+This checkpoint carries 79 existing claims without deleting any: 62 are
+retyped/generalized and 17 retain their contract shapes. Two canonical adapter
+rules are added. The keypair release observer retains both owner resolutions,
+the early NULL and zero-count failures, exact histories, residency and
+release-uniqueness premises, and all WG/Ambient endpoints. The device lifecycle
+and transmit contracts retain their normal-only semantics, arbitrary snapshot
+predicates, stable-predicate premises, signed MTU and routing error paths.
+The generic link-view transport remains over arbitrary actual StateT actions.
+
+The trie list and child-insertion proofs retain the original bounds,
+distinctness, representation and validity premises. Native Aip contracts state
+exact successful results and state updates; the outer insertion retains
+allocation refusal versus the installed child. The new total Aip adapter
+requires an existing device and transfers the actual component execution and
+writeback. It does not discard failed or missing-device cases.
+
+All ten syscall contracts retain their product domain, including arbitrary
+product callbacks. One canonical Task adapter replaces per-operation task
+frames; actual filesystem and Ambient adapters carry the surrounding descriptor
+and record operations. Descriptor acquisition, callback, release, cuts and
+temporary rtnetlink socket cleanup retain their source order.
+
+Seven scoped modules compile; 114 explicit named-declaration axiom checks,
+six fresh entry-module kernel replays and independent source reviews pass.
+ListsMirror's private list-fold proof is covered transitively, not counted
+as an explicit axiom print. A broader build failed on ten targets, including
+older ChildMutation and WGDevice versions subsequently repaired. The complete
+tree gate and terminal replay are still pending; all result rows remain lagging.
+
+Development failures: KeypairRelease had three failed builds while aligning
+the actual refcount and index lifts. ChildMutation had five failed builds
+while composing native root, placement and allocation results, including
+one unsupported tactic syntax and an unintroduced continuation. One axiom
+inventory used an invalid private name and failed; its output was rejected,
+and the corrected inventory passed. WGDevice had four failed builds:
+ambiguous monad inference, routing-head matching and one existing-heartbeat
+timeout; the final proof matches the exact routing lifts after decomposition.
+Product/Syscalls had one failed adapter proof before using the already-proved
+exact lift equation. No limit or memory cap changed, and no KILLED outcome,
+guest timeout or infrastructure rerun occurred.
+
+```sh
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake build Leanux.Proofs.WG.AllowedIps.ListsMirror Leanux.Proofs.WG.AllowedIps.ChildMutation Leanux.Proofs.WG.Lifetimes.KeypairRelease Leanux.Proofs.WG.Keypairs.Frames.WGDevice Leanux.Proofs.WG.Keypairs.Frames.Syscalls
+# Run separately for each entry module, including Framing.Lift:
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Keypairs.Frames.WGDevice
 ```

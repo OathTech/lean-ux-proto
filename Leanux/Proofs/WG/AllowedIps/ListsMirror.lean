@@ -19,12 +19,12 @@ def delFold (id : Nat) (xs : List (Nat × WG.Peer)) (peers : Std.TreeMap Nat WG.
 def unlisted (d : WG.Device) (id : Nat) : WG.Device :=
   { d with peers := delFold id d.peers.toList d.peers }
 
-theorem listDel_wp (k : Kernel) (d : WG.Device) (hd : k.wg = some d) (id : Nat) :
-    ⦃fun w => ⌜w.k = k⌝⦄ WG.listDel id
-    ⦃⇓ result w => ⌜result = () ∧ w.k = { k with wg := some (unlisted d id) }⌝⦄ := by
-  mvcgen [WG.listDel, WG.getDev, getK, invariant, WG.setPeer, WG.modifyDev, modifyK]
+theorem listDel_wp (k : WGWorld) (d : WG.Device) (hd : k.dev = some d) (id : Nat) :
+    ⦃fun w => ⌜w = k⌝⦄ WG.listDel id
+    ⦃⇓ result w => ⌜result = () ∧ w = { k with dev := some (unlisted d id) }⌝⦄ := by
+  mvcgen [WG.listDel, WG.getDev, invariant, AmbientM.invariant, WG.setPeer, WG.modifyDev]
   invariants
-  | inv1 => (fun cursor w => ⌜w.k = { k with wg := some { d with
+  | inv1 => (fun cursor w => ⌜w = { k with dev := some { d with
       peers := delFold id cursor.1.prefix d.peers } }⌝, ExceptConds.false)
   all_goals try dsimp +zetaDelta only at *
   all_goals try simp_all [delFold, delStep, unlist, unlisted, List.foldl_append]

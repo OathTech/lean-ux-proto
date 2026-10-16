@@ -119,6 +119,23 @@ theorem productModifyWG_spec (P : ProductStore43 → Prop) (f : WGWorld → WGWo
   cases hr
   simpa only [productStoreView, hf] using hp
 
+/-- The task adapter changes the shared task store and Ambient only.
+Predicates about other product components transfer through this one rule. -/
+theorem productTask_spec (a : TaskM α) (P : World → Prop)
+    (stable : ∀ w tasks ambient, P w → P {w with tasks, ambient}) :
+    Hoare (MonadLift.monadLift a : Leanux.M α) P (fun _ => P) := by
+  apply (hoare_iff_run _ _ _).mpr
+  intro w x w' hp hr
+  change (liftTask a).run w = .ok (x, w') at hr
+  rw [liftTask_run] at hr
+  cases he : (a.run w.tasks).run w.ambient with
+  | error e => simp [he, Except.map] at hr
+  | ok out =>
+    rcases out with ⟨⟨y, tasks⟩, ambient⟩
+    simp [he, Except.map] at hr
+    rcases hr with ⟨rfl, rfl⟩
+    exact stable w tasks ambient hp
+
 /-- The file adapter changes only its own store, tasks and Ambient.
 A stable product predicate needs no per-operation filesystem frame. -/
 theorem productFS_spec (a : FS.M α) (P : World → Prop)
