@@ -1,5 +1,6 @@
 import Leanux.Proofs.WG.Cookies.Frames
 import Leanux.Proofs.WG.KeyTimes.Clock
+import Leanux.Proofs.Framing.Product
 
 /-! Source factors and exact rejection witnesses for the original handshake
 receiver. The MAC2 is checked against the cookie returned by the actual first
@@ -10,9 +11,10 @@ set_option pp.structureInstances false
 namespace Leanux.Proofs.WG.Cookies
 open Leanux Leanux.WG Std.Do Leanux.Proofs.Framing
 open Leanux.Proofs.WG.CounterWindow Leanux.Proofs.WG.KeyTimes
+open Leanux.Proofs.WG.Lifetimes
 
 /-- The original queue-depth and recorded-clock load calculation. -/
-def loadPhase : M Bool := do
+def loadPhase : WG.M Bool := do
   let mut underLoad := false
   let queueLen := (← getDev).handshakeQueueLen
   if ← branchCmp .hsUnderLoad (queueLen ≥ MAX_QUEUED_INCOMING_HANDSHAKES / 8)
@@ -35,8 +37,8 @@ def loadPhase : M Bool := do
       modify fun w => { w with lastUnderLoad := none }
   return underLoad
 
-/-- The same load calculation with its source continuation left abstract. -/
-def withLoad (next : Bool → M Unit) : M Unit := do
+/-- The source continuation form is native; its callback remains arbitrary. -/
+private def withLoadNative (next : Bool → WG.M α) : WG.M α := do
   let mut underLoad := false
   let queueLen := (← getDev).handshakeQueueLen
   if ← branchCmp .hsUnderLoad (queueLen ≥ MAX_QUEUED_INCOMING_HANDSHAKES / 8)
@@ -59,8 +61,15 @@ def withLoad (next : Bool → M Unit) : M Unit := do
       modify fun w => { w with lastUnderLoad := none }
   next underLoad
 
+/-- Execute the native prefix through the continuation monad's actual adapter.
+For arbitrary product continuations this is the real liftWG. -/
+def withLoad {m : Type → Type} [Monad m] [MonadLiftT WG.M m]
+    (next : Bool → m Unit) : m Unit := do
+  let loaded ← (withLoadNative pure : WG.M Bool)
+  next loaded
+
 /-- The unchanged original continuation after MAC validation. -/
-def afterMac (msg : List UInt8) (src : SkbSource) (underLoad : Bool) (macState : MacState) : M Unit := do
+def afterMac (msg : List UInt8) (src : SkbSource) (underLoad : Bool) (macState : MacState) : WG.M Unit := do
   -- packet_needs_cookie (receive.c:123-132):
   -- `(under_load && mac == WITH_COOKIE) || (!under_load && mac == NO_COOKIE)`
   let proceed ← WG.orM (WG.andM (branch .hsLoadedOperand underLoad) (branch .hsLoadedCookieOk (macState == .withCookie)))
@@ -111,20 +120,31 @@ def afterMac (msg : List UInt8) (src : SkbSource) (underLoad : Bool) (macState :
   timersTraversal pid
   peerPut peer
 
-private theorem if_bind (p : Prop) [Decidable p] (a b : M α) (f : α → M β) :
+private theorem if_bind {m : Type → Type} [Monad m]
+    (p : Prop) [Decidable p] (a b : m α) (f : α → m β) :
     ((if p then a else b) >>= f) = (if p then a >>= f else b >>= f) := by
   split <;> rfl
 
-private theorem invariant_bind (s : String) (f : α → M β) :
-    (invariant s >>= f) = (invariant s : M β) := rfl
+private theorem invariant_bind (s : String) (f : α → Leanux.M β) :
+    (invariant s >>= f) = (invariant s : Leanux.M β) := rfl
 
-private theorem bind_congr (a : M α) (f g : α → M β) (h : ∀ x, f x = g x) :
+private theorem invariant_bind_wg (s : String) (f : α → WG.M β) :
+    (invariant s >>= f) = (invariant s : WG.M β) := rfl
+
+private theorem bind_congr {m : Type → Type} [Monad m]
+    (a : m α) (f g : α → m β) (h : ∀ x, f x = g x) :
     (a >>= f) = (a >>= g) := congrArg (fun k => a >>= k) (funext h)
 
-theorem withLoad_eq (next : Bool → M Unit) : withLoad next = (loadPhase >>= next) := by
-  simp only [withLoad, loadPhase, bind_assoc, pure_bind, if_bind, invariant_bind]
+private theorem withLoadNative_eq (next : Bool → WG.M α) :
+    withLoadNative next = (loadPhase >>= next) := by
+  simp only [withLoadNative, loadPhase, bind_assoc, pure_bind, if_bind, invariant_bind_wg]
   repeat' first | rfl | (apply bind_congr; intro x) | split
-  all_goals simp only [bind_assoc, pure_bind, if_bind, invariant_bind]
+  all_goals simp only [bind_assoc, pure_bind, if_bind, invariant_bind_wg]
+
+theorem withLoad_eq {m : Type → Type} [Monad m] [MonadLiftT WG.M m]
+    (next : Bool → m Unit) :
+    withLoad next = ((liftM loadPhase : m Bool) >>= next) := by
+  simp only [withLoad, withLoadNative_eq, bind_pure]
 
 theorem receive_factor (msg : List UInt8) (src : SkbSource) :
     receiveHandshakePacket msg src = (do
@@ -138,147 +158,156 @@ theorem receive_factor (msg : List UInt8) (src : SkbSource) :
     if ← branch .hsCookie (messageType msg == MESSAGE_HANDSHAKE_COOKIE) then
       cookieMessageConsume msg
       return
-    withLoad fun loaded => do
+    withLoadNative fun loaded => do
       let mac ← cookieValidatePacket msg src loaded
       afterMac msg src loaded mac) = _
-  rw [withLoad_eq]
+  rw [withLoadNative_eq]
 
-def replyEntry (w : World) : World :=
-  record (record (record (record (record (record (record w
+def replyEntry (a : Ambient) : Ambient :=
+  record (record (record (record (record (record (record a
     .hsLoadedOperand true) .hsLoadedCookieOk false) .hsNotLoaded false)
     .hsNeedsCookieLoaded true) .hsNeedsCookieMac true)
     .hsSwitchInitiation true) .hsInitNeedsCookie true
 
 /-- The exact original rejection suffix contains only the cookie reply; the
 Noise consume/create continuation is not reached. This includes reply Stops. -/
-theorem afterMac_noCookie (msg : List UInt8) (src : SkbSource) (w : World)
+theorem afterMac_noCookie (msg : List UInt8) (src : SkbSource) (w : WGWorld) (a : Ambient)
     (ht : messageType msg = MESSAGE_HANDSHAKE_INITIATION) :
-    (afterMac msg src true .noCookie).run w =
-      (sendHandshakeCookie msg src).run (replyEntry w) := by
+    ((afterMac msg src true .noCookie).run w).run a =
+      ((sendHandshakeCookie msg src).run w).run (replyEntry a) := by
   have hc : (MacState.noCookie == MacState.withCookie) = false := rfl
   have hn : (MacState.noCookie == MacState.noCookie) = true := rfl
-  simp [afterMac, hc, hn, WG.orM, WG.andM, StateT.run_bind, branch_run, ht,
+  simp [afterMac, hc, hn, WG.orM, WG.andM, StateT.run_bind, branch, branch_run, ht,
     MESSAGE_HANDSHAKE_INITIATION, replyEntry]
 
-theorem loadPhase_sameKernel : SameKernel loadPhase := by
-  apply sameKernel_of_wp
-  intro k
-  have hc := sameKernel_wp _ (hiddenClock64_sameKernel .underLoadNow) (fun s => s = k)
-  have hb := fun t => sameKernel_wp _ (birthdateTest_sameKernel t 1) (fun s => s = k)
-  mvcgen [loadPhase, hc, hb, getDev, getK, branch, branchCmp, invariant]
+theorem loadPhase_sameStore : SameWGStore loadPhase := by
+  apply SameView.of_wp
+  intro initial
+  have hc : Hoare (hiddenClock64 .underLoadNow : WG.M Int64)
+      (fun w => wgStoreView w = initial) (fun _ w => wgStoreView w = initial) :=
+    hoare_liftAmbient (AmbientM.hiddenClock64 .underLoadNow) _
+  have hb := fun t => ((birthdateTest_sameWGWorld t 1).factor wgStoreView).wp
+    (fun s => s = initial)
+  unfold Hoare at hc
+  mvcgen [loadPhase, hc, hb, getDev, branch, branchCmp, invariant,
+    AmbientM.branch, AmbientM.branchCmp, AmbientM.invariant]
 
 def mac1Given (msg : List UInt8) := (msg.drop (msg.length - 32)).take 16
 def mac1Computed (d : Device) (msg : List UInt8) :=
   blake2s 16 d.mac1Key (msg.take (msg.length - 32))
 def mac2Given (msg : List UInt8) := (msg.drop (msg.length - 16)).take 16
 
-/-- A witness to the actual load and make_cookie runs. MAC2 failure is an
-explicit byte inequality against that returned cookie, not an assumed MAC state. -/
-structure FailedMac2 (msg : List UInt8) (src : SkbSource) (w : World) where
-  loaded : World
+/-- A witness to the actual load and make_cookie runs. Both state layers are
+carried continuously; MAC2 failure compares against the cookie actually returned. -/
+structure FailedMac2 (msg : List UInt8) (src : SkbSource) (w : WGWorld) (a : Ambient) where
+  loaded : WGWorld
+  loadedAmbient : Ambient
   device : Device
-  made : World
+  made : WGWorld
+  madeAmbient : Ambient
   cookie : List UInt8
-  loadRun : loadPhase.run (record w .hsCookie false) = .ok (true, loaded)
-  devicePresent : loaded.k.wg = some device
+  loadRun : (loadPhase.run w).run (record a .hsCookie false) =
+    .ok ((true, loaded), loadedAmbient)
+  devicePresent : loaded.dev = some device
   mac1Valid : mac1Computed device msg = mac1Given msg
-  cookieRun : (makeCookie src).run
-    (record (record loaded .macInvalid false) .macNoCookieCheck false) = .ok (cookie, made)
+  cookieRun : ((makeCookie src).run loaded).run
+    (record (record loadedAmbient .macInvalid false) .macNoCookieCheck false) =
+      .ok ((cookie, made), madeAmbient)
   mac2Invalid : blake2s 16 cookie (msg.take (msg.length - 16)) ≠ mac2Given msg
 
-def FailedMac2.checked (h : FailedMac2 msg src w) : World :=
-  record h.made .macCookieInvalid true
+def FailedMac2.checked (h : FailedMac2 msg src w a) : Ambient :=
+  record h.madeAmbient .macCookieInvalid true
 
-theorem FailedMac2.validate (h : FailedMac2 msg src w) :
-    (cookieValidatePacket msg src true).run h.loaded = .ok (.noCookie, h.checked) := by
-  have hg : getDev.run h.loaded = .ok (h.device, h.loaded) := by
-    simp [getDev, getK, h.devicePresent]
+theorem FailedMac2.validate (h : FailedMac2 msg src w a) :
+    ((cookieValidatePacket msg src true).run h.loaded).run h.loadedAmbient =
+      .ok ((.noCookie, h.made), h.checked) := by
+  have hg (ambient : Ambient) : (getDev.run h.loaded).run ambient =
+      .ok ((h.device, h.loaded), ambient) := by
+    simp [getDev, h.devicePresent]
   have hm1 := h.mac1Valid
   have hm2 := h.mac2Invalid
   simp only [mac1Computed, mac1Given] at hm1
   simp only [mac2Given] at hm2
   have hb : (blake2s 16 h.cookie (msg.take (msg.length - 16)) != (msg.drop (msg.length - 16)).take 16) = true := by
     simpa only [bne_iff_ne] using hm2
-  simp [cookieValidatePacket, StateT.run_bind, hg, hm1, h.cookieRun, hm2, hb,
-    FailedMac2.checked]
-
+  simp [cookieValidatePacket, StateT.run_bind, hg, branch, branch_run, hm1,
+    h.cookieRun, hm2, hb, FailedMac2.checked]
 
 /-- Whole original result equality, including a possible later reply failure. -/
-theorem receive_rejected_run (msg : List UInt8) (src : SkbSource) (w : World)
-    (ht : messageType msg = MESSAGE_HANDSHAKE_INITIATION) (h : FailedMac2 msg src w) :
-    (receiveHandshakePacket msg src).run w =
-      (sendHandshakeCookie msg src).run (replyEntry h.checked) := by
+theorem receive_rejected_run (msg : List UInt8) (src : SkbSource) (w : WGWorld) (a : Ambient)
+    (ht : messageType msg = MESSAGE_HANDSHAKE_INITIATION) (h : FailedMac2 msg src w a) :
+    ((receiveHandshakePacket msg src).run w).run a =
+      ((sendHandshakeCookie msg src).run h.made).run (replyEntry h.checked) := by
   rw [receive_factor]
   simp only [StateT.run_bind, ht, MESSAGE_HANDSHAKE_INITIATION, MESSAGE_HANDSHAKE_COOKIE,
-    Nat.reduceBEq, branch_run, except_ok_bind, Bool.false_eq_true, ↓reduceIte,
-    h.loadRun, h.validate]
-  exact afterMac_noCookie msg src h.checked ht
+    Nat.reduceBEq, branch, StateT.run_monadLift, StateT.run_pure, monadLift_self, branch_run,
+    except_ok_bind, pure_bind, Bool.false_eq_true, ↓reduceIte, h.loadRun, h.validate]
+  exact afterMac_noCookie msg src h.made h.checked ht
 
-@[simp] theorem noiseView_record (w : World) (d : Decision) (b : Bool) :
-    noiseView (record w d b) = noiseView w := rfl
-
-theorem receive_rejected_frame (msg : List UInt8) (src : SkbSource) (w v : World)
-    (ht : messageType msg = MESSAGE_HANDSHAKE_INITIATION) (h : FailedMac2 msg src w)
-    (hr : (receiveHandshakePacket msg src).run w = .ok ((), v)) :
+theorem receive_rejected_frame (msg : List UInt8) (src : SkbSource) (w v : WGWorld)
+    (a b : Ambient) (ht : messageType msg = MESSAGE_HANDSHAKE_INITIATION)
+    (h : FailedMac2 msg src w a)
+    (hr : ((receiveHandshakePacket msg src).run w).run a = .ok (((), v), b)) :
     noiseView v = noiseView w := by
-  rw [receive_rejected_run msg src w ht h] at hr
-  have hs : noiseView v = noiseView (replyEntry h.checked) :=
-    sendHandshakeCookie_frame msg src (replyEntry h.checked) () v hr
-  have hc : noiseView h.made = noiseView
-      (record (record h.loaded .macInvalid false) .macNoCookieCheck false) :=
-    makeCookie_frame src _ h.cookie h.made h.cookieRun
-  have hl : h.loaded.k = w.k := by
-    exact loadPhase_sameKernel (record w .hsCookie false) true h.loaded h.loadRun
-  calc
-    noiseView v = noiseView (replyEntry h.checked) := hs
-    _ = noiseView h.made := by simp only [replyEntry, FailedMac2.checked, noiseView_record]
-    _ = noiseView (record (record h.loaded .macInvalid false) .macNoCookieCheck false) := hc
-    _ = noiseView h.loaded := by simp only [noiseView_record]
-    _ = noiseView w := congrArg viewOfKernel hl
+  rw [receive_rejected_run msg src w a ht h] at hr
+  have hs : noiseView v = noiseView h.made :=
+    (ProjectedAction.iff_run_ambient _ _ _).mp (sendHandshakeCookie_frame msg src)
+      h.made (replyEntry h.checked) () v b hr
+  have hc : noiseView h.made = noiseView h.loaded :=
+    (ProjectedAction.iff_run_ambient _ _ _).mp (makeCookie_frame src)
+      h.loaded _ h.cookie h.made h.madeAmbient h.cookieRun
+  have hl : wgStoreView h.loaded = wgStoreView w :=
+    (ProjectedAction.iff_run_ambient _ _ _).mp loadPhase_sameStore
+      w _ true h.loaded h.loadedAmbient h.loadRun
+  exact hs.trans (hc.trans (congrArg viewOfStore hl))
 
 /-- The source's under-load invalid-MAC drop records, before any type dispatch. -/
-def dropEntry (w : World) : World :=
-  record (record (record (record (record w .hsLoadedOperand true)
+def dropEntry (a : Ambient) : Ambient :=
+  record (record (record (record (record a .hsLoadedOperand true)
     .hsLoadedCookieOk false) .hsNotLoaded false) .hsNeedsCookieLoaded true)
     .hsNeedsCookieMac false
 
-theorem afterMac_invalid (msg : List UInt8) (src : SkbSource) (w : World) :
-    (afterMac msg src true .invalid).run w = .ok ((), dropEntry w) := by
+theorem afterMac_invalid (msg : List UInt8) (src : SkbSource) (w : WGWorld) (a : Ambient) :
+    ((afterMac msg src true .invalid).run w).run a = .ok (((), w), dropEntry a) := by
   have hc : (MacState.invalid == MacState.withCookie) = false := rfl
   have hn : (MacState.invalid == MacState.noCookie) = false := rfl
-  simp [afterMac, hc, hn, WG.orM, WG.andM, StateT.run_bind, branch_run, dropEntry]
+  simp [afterMac, hc, hn, WG.orM, WG.andM, StateT.run_bind, branch, branch_run, dropEntry]
 
 /-- Invalid MAC1 is rejected before make_cookie, independently of MAC2. -/
-theorem receive_bad_mac1 (msg : List UInt8) (src : SkbSource) (w u : World) (d : Device)
+theorem receive_bad_mac1 (msg : List UInt8) (src : SkbSource) (w u : WGWorld)
+    (a b : Ambient) (d : Device)
     (ht : messageType msg = MESSAGE_HANDSHAKE_INITIATION)
-    (hl : loadPhase.run (record w .hsCookie false) = .ok (true, u))
-    (hd : u.k.wg = some d) (hm : mac1Computed d msg ≠ mac1Given msg) :
-    (receiveHandshakePacket msg src).run w =
-      .ok ((), dropEntry (record u .macInvalid true)) := by
-  have hg : getDev.run u = .ok (d, u) := by simp [getDev, getK, hd]
+    (hl : (loadPhase.run w).run (record a .hsCookie false) = .ok ((true, u), b))
+    (hd : u.dev = some d) (hm : mac1Computed d msg ≠ mac1Given msg) :
+    ((receiveHandshakePacket msg src).run w).run a =
+      .ok (((), u), dropEntry (record b .macInvalid true)) := by
+  have hg (ambient : Ambient) : (getDev.run u).run ambient = .ok ((d, u), ambient) := by
+    simp [getDev, hd]
   have hb : (blake2s 16 d.mac1Key (msg.take (msg.length - 32)) !=
       (msg.drop (msg.length - 32)).take 16) = true := by
     simpa only [bne_iff_ne, mac1Computed, mac1Given] using hm
-  have hv : (cookieValidatePacket msg src true).run u =
-      .ok (.invalid, record u .macInvalid true) := by
+  have hv : ((cookieValidatePacket msg src true).run u).run b =
+      .ok ((.invalid, u), record b .macInvalid true) := by
     have hm' := hm
     simp only [mac1Computed, mac1Given] at hm'
-    simp [cookieValidatePacket, StateT.run_bind, hg, hb, hm']
+    simp [cookieValidatePacket, StateT.run_bind, hg, branch, branch_run, hb, hm']
   rw [receive_factor]
   simp only [StateT.run_bind, ht, MESSAGE_HANDSHAKE_INITIATION, MESSAGE_HANDSHAKE_COOKIE,
-    Nat.reduceBEq, branch_run, except_ok_bind, Bool.false_eq_true, ↓reduceIte, hl, hv]
-  exact afterMac_invalid msg src _
+    Nat.reduceBEq, branch, StateT.run_monadLift, StateT.run_pure, monadLift_self, branch_run,
+    except_ok_bind, pure_bind, Bool.false_eq_true, ↓reduceIte, hl, hv]
+  exact afterMac_invalid msg src u (record b .macInvalid true)
 
-theorem receive_bad_mac1_frame (msg : List UInt8) (src : SkbSource) (w u v : World) (d : Device)
+theorem receive_bad_mac1_frame (msg : List UInt8) (src : SkbSource) (w u v : WGWorld)
+    (a b c : Ambient) (d : Device)
     (ht : messageType msg = MESSAGE_HANDSHAKE_INITIATION)
-    (hl : loadPhase.run (record w .hsCookie false) = .ok (true, u))
-    (hd : u.k.wg = some d) (hm : mac1Computed d msg ≠ mac1Given msg)
-    (hr : (receiveHandshakePacket msg src).run w = .ok ((), v)) :
+    (hl : (loadPhase.run w).run (record a .hsCookie false) = .ok ((true, u), b))
+    (hd : u.dev = some d) (hm : mac1Computed d msg ≠ mac1Given msg)
+    (hr : ((receiveHandshakePacket msg src).run w).run a = .ok (((), v), c)) :
     noiseView v = noiseView w := by
-  rw [receive_bad_mac1 msg src w u d ht hl hd hm] at hr
+  rw [receive_bad_mac1 msg src w u a b d ht hl hd hm] at hr
   cases hr
-  have hk : u.k = w.k := loadPhase_sameKernel (record w .hsCookie false) true u hl
-  have hn : noiseView u = noiseView w := congrArg viewOfKernel hk
-  simpa only [dropEntry, noiseView_record] using hn
+  have hs : wgStoreView u = wgStoreView w :=
+    (ProjectedAction.iff_run_ambient _ _ _).mp loadPhase_sameStore w _ true u b hl
+  exact congrArg viewOfStore hs
 
 end Leanux.Proofs.WG.Cookies

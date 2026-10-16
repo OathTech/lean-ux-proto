@@ -75,9 +75,10 @@ it is not part of that baseline.
 | Product runner/checkpoint observers and receive evolution | 18 | 0 | 0 | 18 | 4 | 22 |
 | Native exact trie replacement and graft composition | 12 | 11 | 0 | 1 | 0 | 12 |
 | Native/product lifetime receive and release contracts | 43 | 25 | 0 | 18 | 18 | 61 |
+| Native allocation, ingress, trie and product runner/environment carry | 116 | 57 | 2 | 57 | 10 | 124 |
 
-The whole tree currently contains 451 Lean files and 6,241 theorems. The completed
-changes total 1,057 retyped theorems, 1,599 deletions, 258 retained contract shapes and 125 added.
+The whole tree currently contains 451 Lean files and 6,249 theorems. The completed
+changes total 1,114 retyped theorems, 1,601 deletions, 315 retained contract shapes and 135 added.
 Retyping changes or generalizes the actual state/monad carrier or observation.
 This includes shorthand contracts whose source functions or named views move
 to a native monad. Mere namespace qualification and equivalent relocation of a
@@ -1430,3 +1431,42 @@ LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake build 
 # Replay each of the six entry modules separately:
 LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.Logged.Runner
 ```
+
+## Allocation, ingress and runner bounds
+
+This checkpoint carries 114 of 116 existing claims: 57 retyped/generalized and
+57 retained contract shapes. It adds ten helpers. Native allocation and receive
+contracts retain both WG/Ambient endpoints, exact refusal/failure histories,
+record operands and structural premises. Generic state helpers and product
+callbacks keep their original arbitrary-action domains. The cookie factor uses
+the actual load prefix and cookie result. Trie graft and removal preserve exact
+placement, allocation refusal, rollback and installed states.
+
+Deleted: noiseView_record, because recording is Ambient-only and cannot access
+the WG Noise view; prefill_initial_snapshot, because seccompPrefill takes only
+SeccompWorld and TaskWorld. The product runner proofs instead use the actual
+initialWG value and routing adapters. All other product environment and runner
+contracts retain their predicates, callbacks and success/failure scope.
+
+The eleven changed modules compile. Axiom inventory covers 184 explicit named
+declarations, including eighteen unchanged pure trie theorems; only standard
+axioms occur. Eleven fresh entry-module kernel replays pass. Source review
+passes; independent EnvLeaves review found a missing bounds guard in a local
+proof tactic, which was fixed and revalidated. The last whole-tree build failed
+on seven targets; Runner was subsequently repaired. The complete proof gate
+remains pending, and every register row remains lagging.
+
+Development failures: GraftStore had one stale rewrite; RemovalMirror had three
+adapter/normalization failures; ReceiveAttempts had two normalization/parser
+failures; Gate had four factor/normalization failures, including an existing-limit
+heartbeat timeout. Allocation had one stale rewrite. Runner/Bounds had one
+parser/invariant failure. EnvLeaves had six failed compositions, including an
+out-of-range tactic exception; the next build passed, and the reviewed guard
+change then passed its build, axiom check and fresh replay. Interrupted diagnostic
+orchestration and the tactic exception were followed by dirty-worktree snapshots
+before further changes. No limit or memory cap was raised, and no KILLED result,
+guest timeout or infrastructure rerun occurred.
+
+[AGENT 2026-10-16] Retain product runner/environment contracts and general
+state helper domains; specialize only concrete WG operations to their native
+stack. This preserves the old callers' full scope.

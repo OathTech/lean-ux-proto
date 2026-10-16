@@ -60,22 +60,39 @@ theorem graftRolledBack_rep (d : WG.Device) (width addr cidr pid : Nat) (p : WG.
     RepAt (graftRolledBack d width addr cidr pid p).nodes family base t :=
   hr.congr (fun id _ => graftRolledBack_nodes d width addr cidr pid p hb id)
 
-theorem add_root_graft_wp (k : Kernel) (d : WG.Device) (hd : k.wg = some d)
+theorem add_root_graft_wp (k : WGWorld) (d : WG.Device) (hd : k.dev = some d)
     (v4 : Bool) (n : NodeData) (l r : Tree) (addr cidr pid : Nat) (p : WG.Peer)
     (hp : d.peers[pid]? = some p) (hroot : rootValue d v4 = some n.id)
     (hb : NodesBelow d) (hr : RepAt d.nodes (rootWidth v4) (rootSlot v4) (.node n l r))
     (hv : (Tree.node n l r).Valid (rootWidth v4)) (ha : addr < 2 ^ rootWidth v4)
     (hc : cidr ≤ rootWidth v4)
     (hstop : ¬ (n.cidr ≤ cidr ∧ prefixBits (rootWidth v4) n.cidr n.addr = prefixBits (rootWidth v4) n.cidr addr)) :
-    ⦃fun w => ⌜w.k = k⌝⦄ WG.add (rootSlot v4) (rootWidth v4) addr cidr (some pid)
-    ⦃⇓? result w => ⌜(result = -ENOMEM ∧ w.k = k) ∨
+    ⦃fun w => ⌜w = k⌝⦄ WG.add (rootSlot v4) (rootWidth v4) addr cidr (some pid)
+    ⦃⇓? result w => ⌜(result = -ENOMEM ∧ w = k) ∨
       (result = -ENOMEM ∧ min cidr (common (rootWidth v4) n.addr addr) ≠ cidr ∧
-        w.k = { k with wg := some (graftRolledBack d (rootWidth v4) addr cidr pid p) }) ∨
-      (result = 0 ∧ w.k = { k with wg := some (graftInstalled d v4 n.id
+        w = { k with dev := some (graftRolledBack d (rootWidth v4) addr cidr pid p) }) ∨
+      (result = 0 ∧ w = { k with dev := some (graftInstalled d v4 n.id
         (encode (rootWidth v4) (rootSlot v4) n l r) addr cidr pid p) })⌝⦄ := by
   have hw : rootWidth v4 = 32 ∨ rootWidth v4 = 128 := by cases v4 <;> simp [rootWidth]
-  have placement := nodePlacement_root_stopped_wp k d hd (rootWidth v4) addr cidr hw ha hc
+  let store : WG.AipStore := {nodes := d.nodes, nextNode := d.nextNode, trie := d.peerAllowedips}
+  have nativePlacement := nodePlacement_root_stopped_wp store (rootWidth v4) addr cidr hw ha hc
     (rootSlot v4) n l r hr hv hstop
+  have placement : ⦃fun w => ⌜w = k⌝⦄
+      (MonadLift.monadLift (WG.nodePlacement (some n.id) addr cidr (rootWidth v4)) : WG.M (Option Nat × Bool))
+      ⦃⇓ result w => ⌜result = (none, false) ∧ w = k⌝⦄ := by
+    apply (total_iff_run_ambient _ _ _).mpr
+    intro w ambient hw
+    subst w
+    obtain ⟨x, s, ambient', hrun, hx, hs⟩ :=
+      (total_iff_run_ambient _ _ _).mp nativePlacement store ambient rfl
+    subst s
+    refine ⟨x, k, ambient', ?_, hx, rfl⟩
+    change ((WG.liftAip _).run k).run ambient = _
+    rw [liftAip_run, hd]
+    simp only [store] at hrun
+    simp only [hrun, Except.map]
+    change Except.ok ((x, {k with dev := some d}), ambient') = _
+    rw [← hd]
   have hg := graftable_of_stopped hv ha hstop
   have bound : min cidr (common (rootWidth v4) n.addr addr) < rootWidth v4 :=
     Nat.lt_of_lt_of_le hg hv.2.1

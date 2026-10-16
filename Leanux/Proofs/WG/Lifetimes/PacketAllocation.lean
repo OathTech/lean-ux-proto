@@ -24,19 +24,19 @@ def device : PacketAllocation → Device → Device
   | .tx p, d => {d with txSkbs := d.txSkbs.insert d.nextSkb p, nextSkb := d.nextSkb + 1}
   | .rx p, d => {d with rxSkbs := d.rxSkbs.insert d.nextSkb p, nextSkb := d.nextSkb + 1}
 
-def original : PacketAllocation → M SkbId
+def original : PacketAllocation → WG.M SkbId
   | .tx p => newTxSkb p
   | .rx p => newRxSkb p
 
-theorem run (a : PacketAllocation) (w : World) :
-    a.original.run w = match w.k.wg with
+theorem run (a : PacketAllocation) (w : WGWorld) (ambient : Ambient) :
+    (a.original.run w).run ambient = match w.dev with
       | none => .error (.invariant "no WireGuard device in this trace's fixture")
-      | some d => .ok (d.nextSkb, Packets.update w a.device) := by
-  cases hd : w.k.wg with
-  | none => cases a <;> simp [original, newTxSkb, newRxSkb, getDev, getK, hd, invariant]
+      | some d => .ok ((d.nextSkb, Packets.update w a.device), ambient) := by
+  cases hd : w.dev with
+  | none => cases a <;> simp [original, newTxSkb, newRxSkb, liftSkb_run, hd]
   | some d => cases a with
-    | tx p => simpa [Packets.update, hd, device, original] using Packets.newTxSkb_run w d p hd
-    | rx p => simpa [Packets.update, hd, device, original] using Packets.newRxSkb_run w d p hd
+    | tx p => simpa [Packets.update, hd, device, original] using Packets.newTxSkb_run w ambient d p hd
+    | rx p => simpa [Packets.update, hd, device, original] using Packets.newRxSkb_run w ambient d p hd
 
 theorem store (a : PacketAllocation) (d : Device) :
     Packets.deviceStore (a.device d) = (Packets.deviceStore d).allocate (a.slot d.nextSkb) := by
@@ -48,29 +48,32 @@ theorem epoch (a : PacketAllocation) (d : Device) : (a.device d).ifindex = d.ifi
 theorem frontier (a : PacketAllocation) (d : Device) : (a.device d).nextSkb = d.nextSkb + 1 := by cases a <;> rfl
 
 def observed (a : PacketAllocation) : MixedM SkbId :=
-  fun w => ExceptT.mk fun h => match a.original.run w with
+  fun w ambient => ExceptT.mk fun h => match (a.original.run w).run ambient with
     | .error e => (.error e, h)
-    | .ok (id, v) => (.ok (id, v), h ++
+    | .ok ((id, v), ambient') => (.ok ((id, v), ambient'), h ++
         [.packet (.allocate (a.slot id) (packetStamp w id)),
          .packet (.write (a.slot id) (packetStamp w id))])
 
-@[simp] theorem observation (a : PacketAllocation) (w : World) (h : List LifetimeEvent) :
-    runPrefix a.observed w h = match a.original.run w with
+@[simp] theorem observation (a : PacketAllocation) (w : WGWorld) (ambient : Ambient) (h : List LifetimeEvent) :
+    runStatePrefix a.observed w ambient h = match (a.original.run w).run ambient with
       | .error e => (.error e, h)
-      | .ok (id, v) => (.ok (id, v), h ++
+      | .ok ((id, v), ambient') => (.ok ((id, v), ambient'), h ++
           [.packet (.allocate (a.slot id) (packetStamp w id)),
            .packet (.write (a.slot id) (packetStamp w id))]) := rfl
 
-theorem erases (a : PacketAllocation) : ErasesPrefix a.observed a.original := by
-  intro w h; rw [observation]; cases a.original.run w <;> rfl
+theorem erases (a : PacketAllocation) : ErasesStatePrefix a.observed a.original := by
+  intro w ambient h
+  change (runStatePrefix a.observed w ambient h).1 = _
+  rw [observation]
+  cases (a.original.run w).run ambient <;> rfl
 
 end PacketAllocation
 
-theorem packetResidents_device {w : World} {d : Device} (hd : w.k.wg = some d) (s : Packets.Slot) :
+theorem packetResidents_device {w : WGWorld} {d : Device} (hd : w.dev = some d) (s : Packets.Slot) :
     packetResidents w s = ((Packets.deviceStore d).slots s).map (d.ifindex, ·) := by
   cases s <;> simp [packetResidents, Packets.deviceStore, hd, Option.map_map, Function.comp_def]
 
-theorem AllocationInv.packet_allocate (hi : AllocationInv h w) (hd : w.k.wg = some d)
+theorem AllocationInv.packet_allocate (hi : AllocationInv h w) (hd : w.dev = some d)
     (a : PacketAllocation) :
     AllocationInv (h ++ [.packet (.allocate (a.slot d.nextSkb) (d.ifindex, d.nextSkb + 1)),
       .packet (.write (a.slot d.nextSkb) (d.ifindex, d.nextSkb + 1))])
@@ -79,7 +82,7 @@ theorem AllocationInv.packet_allocate (hi : AllocationInv h w) (hd : w.k.wg = so
   let events : List LifetimeEvent :=
     [.packet (.allocate (a.slot d.nextSkb) (d.ifindex, d.nextSkb + 1)),
      .packet (.write (a.slot d.nextSkb) (d.ifindex, d.nextSkb + 1))]
-  have hv : v.k.wg = some (a.device d) := by simp [v, Packets.update, hd]
+  have hv : v.dev = some (a.device d) := by simp [v, Packets.update, hd]
   have hp : Peers.snapshot v = Peers.snapshot w := by
     cases a <;> simp [v, Packets.update, PacketAllocation.device, Peers.snapshot, hd]
   have hk : keyStore v = keyStore w := by
@@ -150,10 +153,12 @@ theorem AllocationInv.packet_allocate (hi : AllocationInv h w) (hd : w.k.wg = so
     exact Nat.le_trans (hi.packetPast d hd s old) (Nat.le_succ _)
 
 theorem PacketAllocation.preserves (a : PacketAllocation) :
-    PrefixPreserves AllocationInv LifetimeEvent.Safe a.observed := by
-  intro w h hi
-  rw [a.observation, a.run]
-  cases hd : w.k.wg with
+    StatePrefixPreserves (fun h w _ => AllocationInv h w) LifetimeEvent.Safe a.observed := by
+  intro w ambient h hi
+  have observed := a.observation w ambient h
+  simp only [runStatePrefix] at observed
+  rw [observed, a.run]
+  cases hd : w.dev with
   | none => exact ⟨[], by simp, hi.safe, True.intro⟩
   | some d =>
     have hn := hi.packet_allocate hd a

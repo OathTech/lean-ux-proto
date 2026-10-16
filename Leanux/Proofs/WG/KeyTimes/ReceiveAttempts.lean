@@ -1,4 +1,4 @@
-import Leanux.Proofs.Logged.Capture
+import Leanux.Proofs.Logged.NativeCapture
 import Leanux.Proofs.WG.KeyTimes.Receive
 
 set_option maxHeartbeats 600000
@@ -11,8 +11,8 @@ open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.WG.CounterWindow
 
 structure RxAttempt where
   packet : RxPacket
-  keyRead : RunWitness Keypair
-  guardRead : RunWitness Bool
+  keyRead : WGRunWitness Keypair
+  guardRead : WGRunWitness Bool
 
 def RxAttempt.Valid (a : RxAttempt) : Prop :=
   a.keyRead.Valid (getKeypair a.packet.keypair) ∧
@@ -20,12 +20,13 @@ def RxAttempt.Valid (a : RxAttempt) : Prop :=
   a.guardRead.value = false ∧
   a.keyRead.value.receiving.isValid = true ∧
   a.keyRead.value.receivingCounter.counter < REJECT_AFTER_MESSAGES ∧
-  ∃ now u, (hiddenClock64 .birthdateExpired).run
-      (record a.guardRead.before .decKeyInvalid false) = .ok (now, u) ∧
+  ∃ now u clockAmbient, ((hiddenClock64 .birthdateExpired : WG.M Int64).run
+      a.guardRead.before).run (record a.guardRead.ambientBefore .decKeyInvalid false) =
+      .ok ((now, u), clockAmbient) ∧
     ¬ deadline a.keyRead.value.receiving.birthdate REJECT_AFTER_TIME ≤ now
 
 /-- The unchanged original suffix starting with its pure AEAD call. -/
-def receiveAeadTail (pkt : RxPacket) (k : Keypair) : M (Option RxPacket) := do
+def receiveAeadTail (pkt : RxPacket) (k : Keypair) : WG.M (Option RxPacket) := do
   let nonce := u64le pkt.bytes 8
   let plain := aeadDecrypt k.receiving.key (counterNonce nonce) (pkt.bytes.drop 16) []
   if ← branch .decDecryptFailed plain.isNone then return none
@@ -33,77 +34,98 @@ def receiveAeadTail (pkt : RxPacket) (k : Keypair) : M (Option RxPacket) := do
   if ← branch .decTrimFailed false then return none
   return some {pkt with nonce, bytes}
 
-def receiveAttemptTail (a : RxAttempt) : PrefixM RxAttempt (Option RxPacket) := do
-  let cowOk ← liftPrefix (hiddenAlloc .skbCowDataRx)
-  if ← liftPrefix (WG.orM (branch .decCowDataFailed !cowOk) (branch .decTooManyFrags false)) then return none
-  if ← liftPrefix (branch .decSgvecFailed false) then return none
-  emitPrefix a
-  liftPrefix (receiveAeadTail a.packet a.keyRead.value)
+def receiveAttemptTail (a : RxAttempt) : WGPrefix RxAttempt (Option RxPacket) := do
+  let cowOk ← liftWGPrefix (hiddenAlloc .skbCowDataRx)
+  if ← liftWGPrefix (WG.orM (branch .decCowDataFailed !cowOk) (branch .decTooManyFrags false)) then return none
+  if ← liftWGPrefix (branch .decSgvecFailed false) then return none
+  emitStatePrefix a
+  liftWGPrefix (receiveAeadTail a.packet a.keyRead.value)
 
-def receiveAttemptsObserved (pkt : RxPacket) : PrefixM RxAttempt (Option RxPacket) := do
-  if ← liftPrefix (branch .decNoKeypair false) then return none
-  let keyRead ← captureRun (getKeypair pkt.keypair)
-  let guardRead ← captureRun (receiveReject keyRead.value)
+def receiveAttemptsObserved (pkt : RxPacket) : WGPrefix RxAttempt (Option RxPacket) := do
+  if ← liftWGPrefix (branch .decNoKeypair false) then return none
+  let keyRead ← captureWGRun (getKeypair pkt.keypair)
+  let guardRead ← captureWGRun (receiveReject keyRead.value)
   if guardRead.value then
-    let k ← liftPrefix (getKeypair pkt.keypair)
-    liftPrefix (setKeypair pkt.keypair {k with receiving := {k.receiving with isValid := false}})
+    let k ← liftWGPrefix (getKeypair pkt.keypair)
+    liftWGPrefix (setKeypair pkt.keypair {k with receiving := {k.receiving with isValid := false}})
     return none
   receiveAttemptTail {packet := pkt, keyRead, guardRead}
 
 theorem receiveAttemptTail_erases (a : RxAttempt) :
-    ErasesPrefix (receiveAttemptTail a) (receiveTail a.packet a.keyRead.value) := by
+    ErasesStatePrefix (receiveAttemptTail a) (receiveTail a.packet a.keyRead.value) := by
   unfold receiveAttemptTail receiveTail
-  apply erasesPrefix_bind (erasesPrefix_lift _)
+  apply erasesStatePrefix_bind (erasesStatePrefix_lift _)
   intro cowOk
-  apply erasesPrefix_bind (erasesPrefix_lift _)
+  apply erasesStatePrefix_bind (erasesStatePrefix_lift _)
   intro cowBad
   split
-  · exact erasesPrefix_pure _
-  · apply erasesPrefix_bind (erasesPrefix_lift _)
+  · exact erasesStatePrefix_pure _
+  · apply erasesStatePrefix_bind (erasesStatePrefix_lift _)
     intro sgBad
     split
-    · exact erasesPrefix_pure _
-    · exact emitThen_erases a (receiveAeadTail a.packet a.keyRead.value)
+    · exact erasesStatePrefix_pure _
+    · intro w ambient h
+      change (runStatePrefix (do emitStatePrefix a; liftWGPrefix (receiveAeadTail a.packet a.keyRead.value)) w ambient h).1 = _
+      simp only [runStatePrefix_bind, runStatePrefix_emit, liftWGPrefix, runStatePrefix_lift]
+      rfl
+
+theorem captureWGRun_bind_erases (a : WG.M α) (g : WGRunWitness α → WGPrefix E β)
+    (f : α → WG.M β) (he : ∀ r, ErasesStatePrefix (g r) (f r.value)) :
+    ErasesStatePrefix (captureWGRun a >>= g) (a >>= f) := by
+  intro w ambient h
+  change (runWGPrefix (captureWGRun a >>= g) w ambient h).1 = _
+  simp only [runWGPrefix, runStatePrefix_bind]
+  have hc := runWGPrefix_captureWGRun (E := E) a w ambient h
+  simp only [runWGPrefix] at hc
+  rw [hc]
+  cases hr : (a.run w).run ambient with
+  | error e => simp [hr, Except.map, StateT.run_bind]; rfl
+  | ok out =>
+    rcases out with ⟨⟨x, v⟩, ambient'⟩
+    simpa only [hr, Except.map, StateT.run_bind, except_ok_bind, runStatePrefix] using
+      he ⟨x, w, v, ambient, ambient'⟩ v ambient' h
 
 theorem receiveAttemptsObserved_erases (pkt : RxPacket) :
-    ErasesPrefix (receiveAttemptsObserved pkt) (decryptPacket pkt) := by
+    ErasesStatePrefix (receiveAttemptsObserved pkt) (decryptPacket pkt) := by
   rw [decryptPacket_factor]
   unfold receiveAttemptsObserved
-  apply erasesPrefix_bind (erasesPrefix_lift _)
+  apply erasesStatePrefix_bind (erasesStatePrefix_lift _)
   intro noKey
   split
-  · exact erasesPrefix_pure _
-  · apply captureRun_bind_erases
+  · exact erasesStatePrefix_pure _
+  · apply captureWGRun_bind_erases
     intro keyRead
-    apply captureRun_bind_erases
+    apply captureWGRun_bind_erases
     intro guardRead
     split
-    · apply erasesPrefix_bind (erasesPrefix_lift _)
+    · apply erasesStatePrefix_bind (erasesStatePrefix_lift _)
       intro k
-      apply erasesPrefix_bind (erasesPrefix_lift _)
+      apply erasesStatePrefix_bind (erasesStatePrefix_lift _)
       intro _
-      exact erasesPrefix_pure _
+      exact erasesStatePrefix_pure _
     · exact receiveAttemptTail_erases _
 
 namespace ReceiveAttempts
 
+variable {S T : Type}
+
 def Good (h : List RxAttempt) : Prop := ∀ a ∈ h, a.Valid
 
-def Keep (C : Prop) (h : List RxAttempt) (_ : World) : Prop := Good h ∧ C
+def Keep (C : Prop) (h : List RxAttempt) (_ : S) : Prop := Good h ∧ C
 
-theorem liftKeep (a : M α) (C : Prop) :
+theorem liftKeep (a : StateT S (Except Stop) α) (C : Prop) :
     PrefixEnsures (Keep C) Good (liftPrefix a) (fun _ => Keep C) :=
   PrefixEnsures.lift a (fun _ _ hi => hi.1) (fun _ _ _ _ hi _ => hi)
 
-theorem liftForget (a : M α) (C : Prop) :
+theorem liftForget (a : StateT S (Except Stop) α) (C : Prop) :
     PrefixEnsures (Keep C) Good (liftPrefix a) (fun _ => Keep True) :=
   (liftKeep a C).consequence (fun _ _ hi => hi) (fun _ _ _ hi => ⟨hi.1, trivial⟩)
 
 theorem pureForget (x : α) (C : Prop) :
-    PrefixEnsures (Keep C) Good (pure x) (fun _ => Keep True) :=
+    PrefixEnsures (Keep (S := S) C) Good (pure x) (fun _ => Keep True) :=
   PrefixEnsures.pure (fun _ _ hi => hi.1) (fun _ _ hi => ⟨hi.1, trivial⟩)
 
-theorem captureKeep (a : M α) (C : Prop) :
+theorem captureKeep (a : StateT S (Except Stop) α) (C : Prop) :
     PrefixEnsures (Keep C) Good (captureRun a)
       (fun r => Keep (C ∧ r.Valid a)) := by
   apply PrefixEnsures.captureRun _ (fun _ _ hi => hi.1)
@@ -111,7 +133,7 @@ theorem captureKeep (a : M α) (C : Prop) :
   exact ⟨hi.1, hi.2, hr⟩
 
 theorem emitGood (a : RxAttempt) :
-    PrefixEnsures (Keep a.Valid) Good (emitPrefix a) (fun _ => Keep True) := by
+    PrefixEnsures (Keep (S := S) a.Valid) Good (emitPrefix a) (fun _ => Keep True) := by
   intro w h hi
   have hg : Good (h ++ [a]) := by
     intro b hb
@@ -122,100 +144,157 @@ theorem emitGood (a : RxAttempt) :
       exact hi.2
   exact ⟨[a], by simp, by simpa using hg, by simpa [Keep] using hg⟩
 
+theorem liftStateKeep (a : StateT S (StateT T (Except Stop)) α) (C : Prop) :
+    StatePrefixEnsures (fun h s _ => Keep C h s) Good (liftStatePrefix a)
+      (fun _ h s _ => Keep C h s) :=
+  fun s => liftKeep (a.run s) C
+
+theorem liftStateForget (a : StateT S (StateT T (Except Stop)) α) (C : Prop) :
+    StatePrefixEnsures (fun h s _ => Keep C h s) Good (liftStatePrefix a)
+      (fun _ h s _ => Keep True h s) :=
+  fun s => liftForget (a.run s) C
+
+theorem pureStateForget (x : α) (C : Prop) :
+    StatePrefixEnsures (fun h (s : S) (_ : T) => Keep C h s) Good (pure x)
+      (fun _ h s _ => Keep True h s) :=
+  fun s => pureForget (x, s) C
+
+theorem captureKeepWG (a : WG.M α) (C : Prop) :
+    StatePrefixEnsures (fun h s _ => Keep C h s) Good (captureWGRun a)
+      (fun r h s _ => Keep (C ∧ r.Valid a) h s) := by
+  apply StatePrefixEnsures.captureWGRun _ (fun _ _ _ hi => hi.1)
+  intro h w ambient x v ambient' hi hr
+  exact ⟨hi.1, hi.2, hr⟩
+
+theorem emitGoodState (a : RxAttempt) :
+    StatePrefixEnsures (fun h (s : S) (_ : T) => Keep a.Valid h s) Good (emitStatePrefix a)
+      (fun _ h s _ => Keep True h s) := by
+  intro s t h hi
+  have hg := emitGood (S := T) a t h hi
+  exact hg
+
 theorem tail_safe (a : RxAttempt) :
-    PrefixEnsures (Keep a.Valid) Good (receiveAttemptTail a) (fun _ => Keep True) := by
+    StatePrefixEnsures (fun h s _ => Keep a.Valid h s) Good (receiveAttemptTail a) (fun _ h s _ => Keep True h s) := by
   unfold receiveAttemptTail
-  apply PrefixEnsures.bind (liftKeep _ _)
+  apply StatePrefixEnsures.bind (liftStateKeep _ _)
   intro cowOk
-  apply PrefixEnsures.bind (liftKeep _ _)
+  apply StatePrefixEnsures.bind (liftStateKeep _ _)
   intro cowBad
   split
-  · exact pureForget _ _
-  · apply PrefixEnsures.bind (liftKeep _ _)
+  · exact pureStateForget _ _
+  · apply StatePrefixEnsures.bind (liftStateKeep _ _)
     intro sgBad
     split
-    · exact pureForget _ _
-    · apply PrefixEnsures.bind (emitGood a)
+    · exact pureStateForget _ _
+    · apply StatePrefixEnsures.bind (emitGoodState a)
       intro _
-      exact liftForget _ _
+      exact liftStateForget _ _
 
 theorem safe (pkt : RxPacket) :
-    PrefixEnsures (Keep True) Good (receiveAttemptsObserved pkt) (fun _ => Keep True) := by
+    StatePrefixEnsures (fun h s _ => Keep True h s) Good (receiveAttemptsObserved pkt) (fun _ h s _ => Keep True h s) := by
   unfold receiveAttemptsObserved
-  apply PrefixEnsures.bind (liftKeep _ True)
+  apply StatePrefixEnsures.bind (liftStateKeep _ True)
   intro noKey
   split
-  · exact pureForget _ _
-  · apply PrefixEnsures.bind (captureKeep _ True)
+  · exact pureStateForget _ _
+  · apply StatePrefixEnsures.bind (captureKeepWG _ True)
     intro keyRead
-    apply PrefixEnsures.bind (captureKeep _ _)
+    apply StatePrefixEnsures.bind (captureKeepWG _ _)
     intro guardRead
     split
-    · apply PrefixEnsures.bind (liftKeep _ _)
+    · apply StatePrefixEnsures.bind (liftStateKeep _ _)
       intro k
-      apply PrefixEnsures.bind (liftKeep _ _)
+      apply StatePrefixEnsures.bind (liftStateKeep _ _)
       intro _
-      exact pureForget _ _
+      exact pureStateForget _ _
     · rename_i hf
       apply (tail_safe _).consequence
-      · intro h w hi
+      · intro h w ambient hi
         have hz : guardRead.value = false := by simpa using hf
-        have hr : (receiveReject keyRead.value).run guardRead.before = .ok (false, guardRead.after) := by
-          simpa [RunWitness.Valid, hz] using hi.2.2
-        obtain ⟨valid, bound, clock⟩ := receiveReject_false keyRead.value _ _ hr
+        have hr : ((receiveReject keyRead.value).run guardRead.before).run guardRead.ambientBefore =
+            .ok ((false, guardRead.after), guardRead.ambientAfter) := by
+          simpa [WGRunWitness.Valid, hz] using hi.2.2
+        obtain ⟨valid, bound, clock⟩ := receiveReject_false keyRead.value _ _ _ _ hr
         exact ⟨hi.1, hi.2.1.2, hi.2.2, hz, valid, bound, clock⟩
-      · intro _ _ _ hi
+      · intro _ _ _ _ hi
         exact hi
 
 end ReceiveAttempts
 
 /-- Allocation success reaches exactly one AEAD event. The equation is
 independent of whether the tag authenticates. -/
-theorem receiveAttemptTail_singleton (a : RxAttempt) (w u : World) (h : List RxAttempt)
-    (ha : (hiddenAlloc .skbCowDataRx).run w = .ok (true, u)) :
-    runPrefix (receiveAttemptTail a) w h =
-      ((receiveTail a.packet a.keyRead.value).run w, h ++ [a]) := by
+theorem receiveAttemptTail_singleton (a : RxAttempt) (w u : WGWorld)
+    (ambient allocatedAmbient : Ambient) (h : List RxAttempt)
+    (ha : ((hiddenAlloc .skbCowDataRx : WG.M Bool).run w).run ambient =
+      .ok ((true, u), allocatedAmbient)) :
+    runWGPrefix (receiveAttemptTail a) w ambient h =
+      (((receiveTail a.packet a.keyRead.value).run w).run ambient, h ++ [a]) := by
   unfold receiveAttemptTail receiveTail
-  simp only [runPrefix_bind, runPrefix_lift, ha, StateT.run_bind, except_ok_bind]
-  simp [WG.orM, branch_run, receiveAeadTail, runPrefix_bind, StateT.run_bind]
+  simp only [runWGPrefix, runStatePrefix_bind, liftWGPrefix, runStatePrefix_lift,
+    ha, StateT.run_bind, except_ok_bind]
+  simp [WG.orM, branch, StateT.run_monadLift, monadLift_self, branch_run,
+    receiveAeadTail, runStatePrefix_bind, StateT.run_bind]
   rfl
 
 /-- The concrete execution witnesses carried by the unique original attempt. -/
-def receiveAttemptWitness (pkt : RxPacket) (w entered checked : World) (k : Keypair) : RxAttempt :=
-  {packet := pkt, keyRead := ⟨k, record w .decNoKeypair false, entered⟩,
-    guardRead := ⟨false, entered, checked⟩}
+def receiveAttemptWitness (pkt : RxPacket) (w entered checked : WGWorld)
+    (ambient enteredAmbient checkedAmbient : Ambient) (k : Keypair) : RxAttempt :=
+  {packet := pkt,
+    keyRead := ⟨k, w, entered, record ambient .decNoKeypair false, enteredAmbient⟩,
+    guardRead := ⟨false, entered, checked, enteredAmbient, checkedAmbient⟩}
 
 /-- Getter, guard and allocation success suffice for exactly one original
 attempt. No premise mentions the authentication result. -/
 theorem receiveAttemptsObserved_singleton (pkt : RxPacket)
-    (w entered checked allocated : World) (k : Keypair) (h : List RxAttempt)
-    (hg : (getKeypair pkt.keypair).run (record w .decNoKeypair false) = .ok (k, entered))
-    (hr : (receiveReject k).run entered = .ok (false, checked))
-    (ha : (hiddenAlloc .skbCowDataRx).run checked = .ok (true, allocated)) :
-    runPrefix (receiveAttemptsObserved pkt) w h =
-      ((decryptPacket pkt).run w, h ++ [receiveAttemptWitness pkt w entered checked k]) := by
-  have ht := receiveAttemptTail_singleton (receiveAttemptWitness pkt w entered checked k)
-    checked allocated h ha
+    (w entered checked allocated : WGWorld)
+    (ambient enteredAmbient checkedAmbient allocatedAmbient : Ambient)
+    (k : Keypair) (h : List RxAttempt)
+    (hg : ((getKeypair pkt.keypair).run w).run (record ambient .decNoKeypair false) =
+      .ok ((k, entered), enteredAmbient))
+    (hr : ((receiveReject k).run entered).run enteredAmbient =
+      .ok ((false, checked), checkedAmbient))
+    (ha : ((hiddenAlloc .skbCowDataRx : WG.M Bool).run checked).run checkedAmbient =
+      .ok ((true, allocated), allocatedAmbient)) :
+    runWGPrefix (receiveAttemptsObserved pkt) w ambient h =
+      (((decryptPacket pkt).run w).run ambient,
+        h ++ [receiveAttemptWitness pkt w entered checked ambient enteredAmbient checkedAmbient k]) := by
+  have ht := receiveAttemptTail_singleton
+    (receiveAttemptWitness pkt w entered checked ambient enteredAmbient checkedAmbient k)
+    checked allocated checkedAmbient allocatedAmbient h ha
   rw [decryptPacket_factor]
+  have capture {α : Type} (a : WG.M α) (wg : WGWorld) (amb : Ambient) (hist : List RxAttempt) :
+      runStatePrefix (captureWGRun a) wg amb hist =
+        (((a.run wg).run amb).map
+          (fun ((x, wg'), amb') => ((⟨x, wg, wg', amb, amb'⟩, wg'), amb')), hist) :=
+    runWGPrefix_captureWGRun a wg amb hist
   unfold receiveAttemptsObserved
-  simpa only [runPrefix_bind, runPrefix_lift, branch_run, runPrefix_captureRun,
-    StateT.run_bind, except_ok_bind, hg, hr, Bool.false_eq_true, ↓reduceIte,
-    receiveAttemptWitness] using ht
+  simpa only [runWGPrefix, runStatePrefix_bind, liftWGPrefix, runStatePrefix_lift,
+    branch, StateT.run_monadLift, monadLift_self, branch_run, capture,
+    StateT.run_pure, except_pure, StateT.run_bind, except_ok_bind, hg, hr, Bool.false_eq_true, ↓reduceIte,
+    receiveAttemptWitness, Except.map] using ht
 
 /-- Failed authentication still emits the attempt and returns the original
 none endpoint, with all four preparation/authentication branch records. -/
 theorem receiveAttemptsObserved_failed_tag (pkt : RxPacket)
-    (w entered checked allocated : World) (k : Keypair) (h : List RxAttempt)
-    (hg : (getKeypair pkt.keypair).run (record w .decNoKeypair false) = .ok (k, entered))
-    (hr : (receiveReject k).run entered = .ok (false, checked))
-    (ha : (hiddenAlloc .skbCowDataRx).run checked = .ok (true, allocated))
+    (w entered checked allocated : WGWorld)
+    (ambient enteredAmbient checkedAmbient allocatedAmbient : Ambient)
+    (k : Keypair) (h : List RxAttempt)
+    (hg : ((getKeypair pkt.keypair).run w).run (record ambient .decNoKeypair false) =
+      .ok ((k, entered), enteredAmbient))
+    (hr : ((receiveReject k).run entered).run enteredAmbient =
+      .ok ((false, checked), checkedAmbient))
+    (ha : ((hiddenAlloc .skbCowDataRx : WG.M Bool).run checked).run checkedAmbient =
+      .ok ((true, allocated), allocatedAmbient))
     (hbad : aeadDecrypt k.receiving.key (counterNonce (u64le pkt.bytes 8)) (pkt.bytes.drop 16) [] = none) :
-    runPrefix (receiveAttemptsObserved pkt) w h =
-      (.ok (none, record (record (record (record allocated .decCowDataFailed false)
-        .decTooManyFrags false) .decSgvecFailed false) .decDecryptFailed true),
-        h ++ [receiveAttemptWitness pkt w entered checked k]) := by
-  rw [receiveAttemptsObserved_singleton pkt w entered checked allocated k h hg hr ha]
+    runWGPrefix (receiveAttemptsObserved pkt) w ambient h =
+      (.ok ((none, allocated),
+        record (record (record (record allocatedAmbient .decCowDataFailed false)
+          .decTooManyFrags false) .decSgvecFailed false) .decDecryptFailed true),
+        h ++ [receiveAttemptWitness pkt w entered checked ambient enteredAmbient checkedAmbient k]) := by
+  rw [receiveAttemptsObserved_singleton pkt w entered checked allocated
+    ambient enteredAmbient checkedAmbient allocatedAmbient k h hg hr ha]
   rw [decryptPacket_factor]
-  simp [StateT.run_bind, branch_run, hg, hr, receiveTail, ha, WG.orM, hbad]
+  simp [StateT.run_bind, branch, StateT.run_monadLift, monadLift_self,
+    branch_run, hg, hr, receiveTail, ha, WG.orM, hbad]
 
 end Leanux.Proofs.WG.KeyTimes

@@ -7,61 +7,77 @@ within a device epoch; earlier epochs are bounded by netIfindexNext. -/
 namespace Leanux.Proofs.WG.Lifetimes
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing
 
-def keyStore (w : World) : Store KeypairId := ⟨w.k.keypairCounter, keypairResidents w⟩
+def keyStore (w : WGWorld) : Store KeypairId := ⟨w.keypairCounter, keypairResidents w⟩
 
-structure AllocationInv (h : List LifetimeEvent) (w : World) : Prop where
+structure AllocationInv (h : List LifetimeEvent) (w : WGWorld) : Prop where
   release : ReleaseInv h w
   peer : Peers.CreationInv (h.filterMap LifetimeEvent.peer?) w
-  peerSlots : ∀ d, w.k.wg = some d → ∀ i p, d.peers[i]? = some p → i < d.nextPeer
+  peerSlots : ∀ d, w.dev = some d → ∀ i p, d.peers[i]? = some p → i < d.nextPeer
   keyBounded : Bounded (keyStore w)
   keyPast : ∀ stamp, AccessEvent.Released (h.filterMap LifetimeEvent.keypair?) stamp →
-    stamp ≤ w.k.keypairCounter
-  keySlots : ∀ d, w.k.wg = some d → ∀ i k, d.keypairs[i]? = some k → i < d.nextKeypairId
-  packetBounded : ∀ d, w.k.wg = some d → Bounded (Packets.deviceStore d)
-  epochBounded : ∀ d, w.k.wg = some d → d.ifindex < w.k.netIfindexNext
+    stamp ≤ w.keypairCounter
+  keySlots : ∀ d, w.dev = some d → ∀ i k, d.keypairs[i]? = some k → i < d.nextKeypairId
+  packetBounded : ∀ d, w.dev = some d → Bounded (Packets.deviceStore d)
+  epochBounded : ∀ d, w.dev = some d → d.ifindex < w.netIfindexNext
   packetPastEpoch : ∀ stamp, AccessEvent.Released (h.filterMap LifetimeEvent.packet?) stamp →
-    stamp.1 < w.k.netIfindexNext
-  packetPast : ∀ d, w.k.wg = some d → ∀ stamp,
+    stamp.1 < w.netIfindexNext
+  packetPast : ∀ d, w.dev = some d → ∀ stamp,
     AccessEvent.Released (h.filterMap LifetimeEvent.packet?) (d.ifindex, stamp) → stamp ≤ d.nextSkb
 
 theorem AllocationInv.safe (hi : AllocationInv h w) : LifetimeEvent.Safe h := hi.release.safe
 
-theorem AllocationInv.kernel (hi : AllocationInv h w) (he : v.k = w.k) : AllocationInv h v := by
-  rcases hi with ⟨hr, hp, hps, hkb, hkp, hks, hpb, heb, hpe, hpp⟩
+theorem AllocationInv.store (hi : AllocationInv h w)
+    (he : wgStoreView v = wgStoreView w) : AllocationInv h v := by
+  have hd := congrArg WGStoreView.dev he
+  have hp := congrArg WGStoreView.peerCounter he
+  have hk := congrArg WGStoreView.keypairCounter he
+  have hn := congrArg WGStoreView.netIfindexNext he
+  simp only [wgStoreView] at hd hp hk hn
+  rcases hi with ⟨hr, hc, hps, hkb, hkp, hks, hpb, heb, hpe, hpp⟩
   have hv : identityView v = identityView w := by
     unfold identityView Peers.snapshot keypairResidents packetResidents
-    rw [he]
+    rw [hd, hp]
   have hs : Peers.snapshot v = Peers.snapshot w := congrArg Prod.fst hv
-  refine ⟨⟨hr.1.congr hv, hv ▸ hr.2⟩, hp.congr hs, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
-  · simpa only [he] using hps
+  refine ⟨⟨hr.1.congr hv, hv ▸ hr.2⟩, hc.congr hs, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  · simpa only [hd] using hps
   · unfold Bounded keyStore keypairResidents
-    rw [he]
+    rw [hd, hk]
     exact hkb
-  · simpa only [he] using hkp
-  · simpa only [he] using hks
-  · simpa only [he] using hpb
-  · simpa only [he] using heb
-  · simpa only [he] using hpe
-  · simpa only [he] using hpp
+  · simpa only [hk] using hkp
+  · simpa only [hd] using hks
+  · simpa only [hd] using hpb
+  · simpa only [hd, hn] using heb
+  · simpa only [hn] using hpe
+  · simpa only [hd] using hpp
 
-theorem allocation_kernel (a : M α) (ha : SameKernel a) :
-    PrefixPreserves AllocationInv LifetimeEvent.Safe (liftPrefix a) :=
+/-- Arbitrary actual-state actions, including product runner actions, retain
+the allocation invariant when their projected WG store is unchanged. -/
+theorem allocation_store {S : Type} (project : S → WGWorld)
+    (a : StateT S (Except Stop) α)
+    (ha : SameView (fun w => wgStoreView (project w)) a) :
+    PrefixPreserves (fun h w => AllocationInv h (project w)) LifetimeEvent.Safe (liftPrefix a) :=
   (PrefixEnsures.lift a (fun _ _ hi => hi.safe)
-    (fun _ _ _ _ hi hr => hi.kernel (ha _ _ _ hr))).preserves
+    (fun _ w x v hi hr => hi.store ((ProjectedAction.iff_run _ _ _).mp ha w x v hr))).preserves
 
-theorem AllocationInv.key_vacant (hi : AllocationInv h w) (hd : w.k.wg = some d) :
+theorem allocation_state_store (a : WG.M α) (ha : SameWGStore a) :
+    StatePrefixPreserves (fun h w _ => AllocationInv h w) LifetimeEvent.Safe (liftWGPrefix a) :=
+  StatePrefixEnsures.lift a (fun _ _ _ hi => hi.safe)
+    (fun _ w ambient x v ambient' hi hr => hi.store
+      ((ProjectedAction.iff_run_ambient _ _ _).mp ha w ambient x v ambient' hr))
+
+theorem AllocationInv.key_vacant (hi : AllocationInv h w) (hd : w.dev = some d) :
     d.keypairs[d.nextKeypairId]? = none := by
   cases hk : d.keypairs[d.nextKeypairId]? with
   | none => rfl
   | some k => exact False.elim (Nat.lt_irrefl _ (hi.keySlots d hd _ _ hk))
 
-theorem AllocationInv.peer_vacant (hi : AllocationInv h w) (hd : w.k.wg = some d) :
+theorem AllocationInv.peer_vacant (hi : AllocationInv h w) (hd : w.dev = some d) :
     d.peers[d.nextPeer]? = none := by
   cases hp : d.peers[d.nextPeer]? with
   | none => rfl
   | some p => exact False.elim (Nat.lt_irrefl _ (hi.peerSlots d hd _ _ hp))
 
-theorem AllocationInv.packet_vacant (hi : AllocationInv h w) (hd : w.k.wg = some d) :
+theorem AllocationInv.packet_vacant (hi : AllocationInv h w) (hd : w.dev = some d) :
     d.txSkbs[d.nextSkb]? = none ∧ d.rxSkbs[d.nextSkb]? = none :=
   Packets.allocation_slots_empty w d hd (by simpa [Packets.Inv, Packets.snapshot, hd] using hi.packetBounded d hd)
 

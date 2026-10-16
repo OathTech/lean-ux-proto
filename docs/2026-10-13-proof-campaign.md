@@ -5,8 +5,8 @@
 Work on `proofs/campaign` in `.worktrees/proofs-campaign` follows [the charter](2026-10-13-charter-proof-campaign.md).
 The state-split retrofit onto `6089dc4` precedes further R3/R4 results. All seven
 result rows remain lagging, last validated over `cb2348e`. The tree has moved from
-471 files / 7,715 named theorems to 451 files / 6,241 theorems. Completed changes
-comprise 1,057 retyped, 1,599 deleted, 258 retained contract shapes and 125 added theorems;
+471 files / 7,715 named theorems to 451 files / 6,249 theorems. Completed changes
+comprise 1,114 retyped, 1,601 deleted, 315 retained contract shapes and 135 added theorems;
 six redundant LifetimeSafety exports are removed, with every retained terminal
 body unchanged (515 declarations). The native foundational, ordinary lifetime,
 clock/Noise-helper, keypair-composition, product scheduler, small native helper and WGBase ports pass their
