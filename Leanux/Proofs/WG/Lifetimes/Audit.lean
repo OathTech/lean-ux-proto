@@ -29,23 +29,24 @@ def probeEntries (h : List AuditEvent) : List ProbeEntry := h.filterMap AuditEve
 abbrev AuditM := PrefixM AuditEvent
 
 def AllProbeValid (h : List AuditEvent) : Prop :=
-  ∀ p ∈ probeEntries h, AllocationInv p.history p.world
+  ∀ p ∈ probeEntries h, AllocationInv p.history p.world.wg
 
 def AuditInv (h : List AuditEvent) (w : World) : Prop :=
-  AllocationInv (lifetimeHistory h) w ∧ AllProbeValid h
+  AllocationInv (lifetimeHistory h) w.wg ∧ AllProbeValid h
 
 def AuditSafe (h : List AuditEvent) : Prop :=
   LifetimeEvent.Safe (lifetimeHistory h) ∧ AllProbeValid h
 
 theorem AuditInv.safe (hi : AuditInv h w) : AuditSafe h := ⟨hi.1.safe, hi.2⟩
 
-theorem AuditInv.kernel (hi : AuditInv h w) (he : v.k = w.k) : AuditInv h v :=
-  ⟨hi.1.kernel he, hi.2⟩
+theorem AuditInv.store (hi : AuditInv h w)
+    (he : wgStoreView v.wg = wgStoreView w.wg) : AuditInv h v :=
+  ⟨hi.1.store he, hi.2⟩
 
-theorem audit_initial (hi : AllocationInv [] w) : AuditInv [] w :=
+theorem audit_initial (hi : AllocationInv [] w.wg) : AuditInv [] w :=
   ⟨hi, by simp [AllProbeValid, probeEntries]⟩
 
-def auditFocus (g : MixedM α) : AuditM α :=
+def auditFocus (g : PrefixM LifetimeEvent α) : AuditM α :=
   focusPrefix AuditEvent.lifetime AuditEvent.lifetime? g
 
 theorem auditFocus_erases (he : ErasesPrefix g a) : ErasesPrefix (auditFocus g) a :=
@@ -53,13 +54,16 @@ theorem auditFocus_erases (he : ErasesPrefix g a) : ErasesPrefix (auditFocus g) 
 
 /-- Focusing a lower observer cannot add, delete or reorder saved probe entries,
 even when it stops and even without a lower append premise. -/
-theorem auditFocus_probes (g : MixedM α) (w : World) (h : List AuditEvent) :
+theorem auditFocus_probes (g : PrefixM LifetimeEvent α) (w : World) (h : List AuditEvent) :
     probeEntries (runPrefix (auditFocus g) w h).2 = probeEntries h :=
   focusPrefix_other _ _ _ (fun _ => rfl) g w h
 
 /-- Arbitrary result-dependent lower contracts carry cached identities such as
 SavedPeers, together with every previously saved probe's validity. -/
-theorem auditFocus_ensures (hg : PrefixEnsures P S g Q) :
+theorem auditFocus_ensures {α : Type} {g : PrefixM LifetimeEvent α}
+    {P : List LifetimeEvent → World → Prop} {S : List LifetimeEvent → Prop}
+    {Q : α → List LifetimeEvent → World → Prop}
+    (hg : PrefixEnsures P S g Q) :
     PrefixEnsures (fun h w => P (lifetimeHistory h) w ∧ AllProbeValid h)
       (fun h => S (lifetimeHistory h) ∧ AllProbeValid h) (auditFocus g)
       (fun x h w => Q x (lifetimeHistory h) w ∧ AllProbeValid h) := by
@@ -71,24 +75,29 @@ theorem auditFocus_ensures (hg : PrefixEnsures P S g Q) :
     rw [auditFocus_probes]
     exact hi.2
   refine ⟨suffix, hs, ⟨hsafe, hp⟩, ?_⟩
-  change (match (runPrefix (auditFocus g) w h).1 with
-    | .error _ => True
-    | .ok (x, v) => Q x (lifetimeHistory (runPrefix (auditFocus g) w h).2) v) at hq
   cases hr : (runPrefix (auditFocus g) w h).1 with
   | error e => trivial
-  | ok out => exact ⟨by simpa only [hr] using hq, hp⟩
+  | ok out =>
+    rcases out with ⟨x, v⟩
+    have hr' : (runPrefix (focusPrefix AuditEvent.lifetime AuditEvent.lifetime? g) w h).1 =
+        .ok (x, v) := hr
+    simp only [hr'] at hq
+    exact ⟨hq, hp⟩
 
-theorem auditFocus_preserves (hg : PrefixPreserves AllocationInv LifetimeEvent.Safe g) :
-    PrefixPreserves AuditInv AuditSafe (auditFocus g) := auditFocus_ensures hg
+theorem auditFocus_preserves (hg : PrefixPreserves (fun h w => AllocationInv h w.wg) LifetimeEvent.Safe g) :
+    PrefixPreserves AuditInv AuditSafe (auditFocus g) :=
+  auditFocus_ensures (show PrefixEnsures (fun h w => AllocationInv h w.wg)
+    LifetimeEvent.Safe g (fun _ h w => AllocationInv h w.wg) from hg)
 
-theorem auditFocus_projects (hg : PrefixPreserves AllocationInv LifetimeEvent.Safe g) :
-    ProjectsUnder AllocationInv AuditEvent.lifetime? (auditFocus g) g :=
+theorem auditFocus_projects (hg : PrefixPreserves (fun h w => AllocationInv h w.wg) LifetimeEvent.Safe g) :
+    ProjectsUnder (fun h w => AllocationInv h w.wg) AuditEvent.lifetime? (auditFocus g) g :=
   hg.projects_focus _ _ (fun _ => rfl)
 
-theorem auditLift_kernel (a : M α) (ha : SameKernel a) :
+theorem auditLift_store (a : Leanux.M α)
+    (ha : SameView (fun w => wgStoreView w.wg) a) :
     PrefixPreserves AuditInv AuditSafe (liftPrefix a) :=
   (PrefixEnsures.lift a (fun _ _ hi => hi.safe)
-    (fun _ _ _ _ hi hr => hi.kernel (ha _ _ _ hr))).preserves
+    (fun _ w x v hi hr => hi.store ((ProjectedAction.iff_run _ _ _).mp ha w x v hr))).preserves
 
 /-- Capture exactly the current entry. This proof-side snapshot does not add a
 mirror getter or evaluate any resident-object predicate. -/

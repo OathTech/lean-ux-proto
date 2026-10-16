@@ -13,7 +13,8 @@ open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing Std.Do
 theorem metadata_modifyDev (f : Device → Device)
     (hf : ∀ d, deviceAllocationMetadata (f d) = deviceAllocationMetadata d) :
     SameView allocationMetadata (modifyDev f) := by
-  intro w x v hr
+  apply (ProjectedAction.iff_run_ambient _ _ _).mpr
+  intro w ambient x v ambient' hr
   cases hr
   simp [allocationMetadata, Option.map_map, Function.comp_def, hf]
 
@@ -25,47 +26,80 @@ theorem setKeypair_metadata (i : KeypairId) (k : Keypair) : SameView allocationM
 
 theorem setRxSkb_metadata (i : SkbId) (f : RxPacket → RxPacket) :
     SameView allocationMetadata (setRxSkb i f) := by
-  unfold setRxSkb
-  apply SameView.bind
-  · intro w p v hr
-    exact congrArg allocationMetadata (Packets.getRxSkb_current i w v p hr).1
-  · intro p; exact metadata_modifyDev _ (fun _ => rfl)
+  apply (ProjectedAction.iff_run_ambient _ _ _).mpr
+  intro w ambient x v ambient' hr
+  cases x
+  cases hd : w.dev with
+  | none => simp [setRxSkb, liftSkb_run, hd, invariant, AmbientM.invariant] at hr
+  | some d =>
+    cases hp : d.rxSkbs[i]? with
+    | none =>
+      simp [setRxSkb, liftSkb_run, SkbStore.setRx, SkbStore.getRx,
+        hd, hp, invariant, AmbientM.invariant] at hr
+      cases hr
+    | some p =>
+      rw [Packets.setRxSkb_run w ambient d i p f hd hp] at hr
+      cases hr
+      simp [allocationMetadata, deviceAllocationMetadata, Packets.update, hd]
 
 theorem peerGet_metadata (id : PeerId) : SameView allocationMetadata (peerGet id) := by
   apply SameView.of_wp
   intro s
-  mvcgen [peerGet, requireNotPending, getPeer, getDev, getK, setPeer,
-    modifyDev, modifyK, refcountInc, branch, branchCmp, invariant, unsupported]
+  mvcgen [peerGet, requireNotPending, getPeer, getDev, setPeer,
+    modifyDev, refcountInc, branch, branchCmp, invariant, unsupported,
+    AmbientM.branch, AmbientM.branchCmp, AmbientM.invariant, AmbientM.unsupported]
   all_goals dsimp +zetaDelta only at *
   all_goals simp_all [allocationMetadata, deviceAllocationMetadata]
 
 theorem peerPut_metadata (id : Option PeerId) : SameView allocationMetadata (peerPut id) := by
   apply SameView.of_wp
   intro s
-  simp only [peerPut, indexRemove_eq, indexUnhash]
-  mvcgen [peerPut, requireNotPending, getPeer, getDev, getK, setPeer,
-    modifyDev, modifyK, refcountDecAndTest, branch, branchCmp,
-    indexRemove, retirePeerUnits, invariant, unsupported]
+  have index_spec (a : IndexM Unit) :
+      Hoare (MonadLift.monadLift a : WG.M Unit)
+        (fun w => allocationMetadata w = s) (fun _ w => allocationMetadata w = s) := by
+    apply hoare_liftIndex a
+    intro w d table hi hd
+    have same : allocationMetadata {w with dev := some {d with indexTable := table}} =
+        allocationMetadata w := by
+      simp only [allocationMetadata, hd, Option.map_some, deviceAllocationMetadata]
+    exact same.trans hi
+  unfold Hoare at index_spec
+  mvcgen [peerPut, requireNotPending, getPeer, getDev, setPeer, modifyDev,
+    refcountDecAndTest, branch, branchCmp, AmbientM.branch, AmbientM.branchCmp,
+    index_spec, retirePeerUnits, modifyAmbient, invariant, unsupported,
+    AmbientM.invariant, AmbientM.unsupported]
   all_goals dsimp +zetaDelta only at *
   all_goals simp_all [allocationMetadata, deviceAllocationMetadata]
   all_goals subst_vars
   all_goals simp_all [allocationMetadata, deviceAllocationMetadata]
 
-def keypairReleaseRest (w : World) := (Peers.snapshot w, packetResidents w, allocationMetadata w)
+def keypairReleaseRest (w : WGWorld) := (Peers.snapshot w, packetResidents w, allocationMetadata w)
 
 theorem keypairPut_rest (kp : Option KeypairId) (now : Bool) :
     SameView keypairReleaseRest (keypairPut kp now) := by
   apply SameView.of_wp
   intro s
-  simp only [keypairPut, indexRemove_eq, indexUnhash]
-  have hd := fun o k => sameKernel_wp _ (indexOwner_peerDeref_sameKernel o) (fun v => v = k)
-  mvcgen [hd, keypairPut, getKeypair, getDev, getK, setKeypair, modifyDev, modifyK,
-    branch, branchCmp, refcountDecAndTest, unsupported, invariant]
+  have hd := fun o => indexOwner_peerDeref_preserves o (fun w => keypairReleaseRest w = s)
+  have index_spec (a : IndexM Unit) :
+      Hoare (MonadLift.monadLift a : WG.M Unit)
+        (fun w => keypairReleaseRest w = s) (fun _ w => keypairReleaseRest w = s) := by
+    apply hoare_liftIndex a
+    intro w d table hi hd
+    have same : keypairReleaseRest {w with dev := some {d with indexTable := table}} =
+        keypairReleaseRest w := by
+      unfold keypairReleaseRest Peers.snapshot packetResidents allocationMetadata
+      simp only [hd, Option.bind_some, Option.map_some, deviceAllocationMetadata]
+    exact same.trans hi
+  unfold Preserves Hoare at hd
+  unfold Hoare at index_spec
+  mvcgen [hd, index_spec, keypairPut, getKeypair, getDev, setKeypair, modifyDev,
+    branch, branchCmp, refcountDecAndTest, unsupported, invariant,
+    AmbientM.branch, AmbientM.branchCmp, AmbientM.unsupported, AmbientM.invariant]
   all_goals dsimp +zetaDelta only at *
   all_goals unfold keypairReleaseRest Peers.snapshot packetResidents allocationMetadata at *
-  all_goals simp_all [deviceAllocationMetadata]
+  all_goals simp_all [deviceAllocationMetadata, Option.bind_map, Function.comp_def]
   all_goals subst_vars
-  all_goals simp_all [deviceAllocationMetadata]
+  all_goals simp_all [deviceAllocationMetadata, Option.bind_map, Function.comp_def]
 
 theorem ordinary_same_frontier (ho : Keypairs.Ordinary s t) (hf : t.frontier = s.frontier) :
     ∀ i c, t.slots i = some c → s.slots i = some c := by
@@ -84,18 +118,21 @@ theorem ordinary_same_frontier (ho : Keypairs.Ordinary s t) (hf : t.frontier = s
     have hf₂ : u.frontier = t.frontier := hf.trans hf₁.symm
     exact fun i c hc => ih₁ hf₁ i c (ih₂ hf₂ i c hc)
 
-theorem keypairPut_retention (kp : Option KeypairId) (now : Bool) (w v : World)
-    (hr : (keypairPut kp now).run w = .ok (x, v)) : AllocationRetention w v := by
-  have hrest := keypairPut_rest kp now w x v hr
+theorem keypairPut_retention (kp : Option KeypairId) (now : Bool) (w v : WGWorld)
+    (ambient ambient' : Ambient)
+    (hr : ((keypairPut kp now).run w).run ambient = .ok ((x, v), ambient')) : AllocationRetention w v := by
+  have hrest := (ProjectedAction.iff_run_ambient _ _ _).mp
+    (keypairPut_rest kp now) w ambient x v ambient' hr
   have hp : Peers.snapshot v = Peers.snapshot w := congrArg Prod.fst hrest
   have ht : packetResidents v = packetResidents w := congrArg (fun s => s.2.1) hrest
   have hm : allocationMetadata v = allocationMetadata w := congrArg (fun s => s.2.2) hrest
   have hf : (Keypairs.snapshot v).frontier = (Keypairs.snapshot w).frontier :=
     congrArg AllocationMetadata.keyCounter hm
-  have retained := ordinary_same_frontier (Keypairs.keypairPut_ordinary kp now w x v hr) hf
+  have retained := ordinary_same_frontier ((ProjectedAction.iff_run_ambient _ _ _).mp
+    (Keypairs.keypairPut_ordinary kp now) w ambient x v ambient' hr) hf
   refine ⟨hm, hp ▸ Retained.refl _, ?_, fun i stamp hi => ht ▸ hi⟩
   intro i stamp hi
-  have projected (q : World) : keypairResidents q i =
+  have projected (q : WGWorld) : keypairResidents q i =
       ((Keypairs.snapshot q).slots i).map (·.stamp) := by
     simp [keypairResidents, Keypairs.snapshot, Keypairs.cell, Option.map_map, Function.comp_def]
   rw [projected] at hi
@@ -106,21 +143,27 @@ theorem keypairPut_retention (kp : Option KeypairId) (now : Bool) (w v : World)
     rw [projected, old]
     simpa only [hc] using hi
 
-theorem peerGet_retention (id : PeerId) (w v : World)
-    (hr : (peerGet id).run w = .ok (x, v)) : AllocationRetention w v := by
-  have rest := peerGet_otherResidents id w x v hr
+theorem peerGet_retention (id : PeerId) (w v : WGWorld)
+    (ambient ambient' : Ambient)
+    (hr : ((peerGet id).run w).run ambient = .ok ((x, v), ambient')) : AllocationRetention w v := by
+  have rest := (ProjectedAction.iff_run_ambient _ _ _).mp
+    (peerGet_otherResidents id) w ambient x v ambient' hr
   have hk : keypairResidents v = keypairResidents w := congrArg Prod.fst rest
   have ht : packetResidents v = packetResidents w := congrArg Prod.snd rest
-  exact ⟨peerGet_metadata id w x v hr, Peers.peerGet_retained id w x v hr,
+  exact ⟨(ProjectedAction.iff_run_ambient _ _ _).mp (peerGet_metadata id) w ambient x v ambient' hr,
+    (ProjectedAction.iff_run_ambient _ _ _).mp (Peers.peerGet_retained id) w ambient x v ambient' hr,
     fun i stamp hi => hk ▸ hi,
     fun i stamp hi => ht ▸ hi⟩
 
-theorem peerPut_retention (id : Option PeerId) (w v : World)
-    (hr : (peerPut id).run w = .ok (x, v)) : AllocationRetention w v := by
-  have rest := peerPut_otherResidents id w x v hr
+theorem peerPut_retention (id : Option PeerId) (w v : WGWorld)
+    (ambient ambient' : Ambient)
+    (hr : ((peerPut id).run w).run ambient = .ok ((x, v), ambient')) : AllocationRetention w v := by
+  have rest := (ProjectedAction.iff_run_ambient _ _ _).mp
+    (peerPut_otherResidents id) w ambient x v ambient' hr
   have hk : keypairResidents v = keypairResidents w := congrArg Prod.fst rest
   have ht : packetResidents v = packetResidents w := congrArg Prod.snd rest
-  exact ⟨peerPut_metadata id w x v hr, Peers.peerPut_retained id w x v hr,
+  exact ⟨(ProjectedAction.iff_run_ambient _ _ _).mp (peerPut_metadata id) w ambient x v ambient' hr,
+    (ProjectedAction.iff_run_ambient _ _ _).mp (Peers.peerPut_retained id) w ambient x v ambient' hr,
     fun i stamp hi => hk ▸ hi,
     fun i stamp hi => ht ▸ hi⟩
 

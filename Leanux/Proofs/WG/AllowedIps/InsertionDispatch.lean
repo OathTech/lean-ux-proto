@@ -23,12 +23,12 @@ structure Inserted (d out : WG.Device) (v4 : Bool) (t other : Tree)
 
 /-- Classification concerns normal returns only. A refused record remains a
 Stop, distinct from either normal allocator-refusal endpoint. -/
-def AddOutcome (k after : Kernel) (d : WG.Device) (v4 : Bool) (t other : Tree)
+def AddOutcome (k after : WGWorld) (d : WG.Device) (v4 : Bool) (t other : Tree)
     (addr cidr pid : Nat) (p : WG.Peer) (ret : Int) : Prop :=
   (ret = -ENOMEM ∧ after = k) ∨
   (ret = -ENOMEM ∧ (t.insertFresh (rootWidth v4) d.nextNode addr cidr pid).allocations = 2 ∧
-    after = { k with wg := some (graftRolledBack d (rootWidth v4) addr cidr pid p) }) ∨
-  (ret = 0 ∧ ∃ out, after = { k with wg := some out } ∧ Inserted d out v4 t other addr cidr pid)
+    after = { k with dev := some (graftRolledBack d (rootWidth v4) addr cidr pid p) }) ∨
+  (ret = 0 ∧ ∃ out, after = { k with dev := some out } ∧ Inserted d out v4 t other addr cidr pid)
 
 theorem Context.last_gap (c : Context) (hc : c ≠ .here) (hf : c.Follows width addr cidr) :
     ∃ (outer : Context) (parent : NodeData) (side : Nat) (sibling : Tree), side < 2 ∧ c = outer.append (gapContext parent side sibling) ∧
@@ -43,14 +43,14 @@ theorem Context.last_gap (c : Context) (hc : c ≠ .here) (hf : c.Follows width 
   · exact ⟨outer, parent, 0, r, by omega, rfl, ho, hi.1, hi.2.1, hi.2.2.1⟩
   · exact ⟨outer, parent, 1, l, by omega, rfl, ho, hi.1, hi.2.1, hi.2.2.1⟩
 
-theorem add_empty_outcome (w w' : World) (d : WG.Device) (hd : w.k.wg = some d)
+theorem add_empty_outcome (w w' : WGWorld) (ambient ambient' : Ambient) (d : WG.Device) (hd : w.dev = some d)
     (v4 : Bool) (addr cidr pid : Nat) (p : WG.Peer) (hp : d.peers[pid]? = some p)
     (he : rootValue d v4 = none) (ha : addr < 2 ^ rootWidth v4) (hc : cidr ≤ rootWidth v4)
     (hb : NodesBelow d) (other : Tree)
     (ho : RepAt d.nodes (rootWidth (!v4)) (rootSlot (!v4)) other) (ret : Int)
-    (hrun : (WG.add (rootSlot v4) (rootWidth v4) addr cidr (some pid)).run w = .ok (ret, w')) :
-    AddOutcome w.k w'.k d v4 .empty other addr cidr pid p ret := by
-  have h := case_add_empty_root_correct w w' d hd v4 addr cidr pid p hp he ha hc hb other ho ret hrun
+    (hrun : ((WG.add (rootSlot v4) (rootWidth v4) addr cidr (some pid)).run w).run ambient = .ok ((ret, w'), ambient')) :
+    AddOutcome w w' d v4 .empty other addr cidr pid p ret := by
+  have h := case_add_empty_root_correct w w' ambient ambient' d hd v4 addr cidr pid p hp he ha hc hb other ho ret hrun
   rcases h with hf | ⟨hz, hk, hbelow, hroot, hrep, _, hother, horep⟩
   · exact .inl hf
   · refine .inr (.inr ⟨hz, _, hk, hbelow, hroot, hrep, ?_, ?_, hother, horep, ?_, emptyInstalled_frame ..⟩)
@@ -58,7 +58,7 @@ theorem add_empty_outcome (w w' : World) (d : WG.Device) (hd : w.k.wg = some d)
     · exact emptyInstalled_seq d v4 addr cidr pid p
     · exact emptyInstalled_peers d v4 addr cidr pid p hp
 
-theorem add_gap_outcome (w w' : World) (d : WG.Device) (hd : w.k.wg = some d)
+theorem add_gap_outcome (w w' : WGWorld) (ambient ambient' : Ambient) (d : WG.Device) (hd : w.dev = some d)
     (v4 : Bool) (c : Context) (n : NodeData) (side : Nat) (sibling : Tree)
     (addr cidr pid : Nat) (p : WG.Peer) (hp : d.peers[pid]? = some p)
     (hroot : rootValue d v4 = (c.plug (Tree.fork n side .empty sibling)).root)
@@ -71,9 +71,9 @@ theorem add_gap_outcome (w w' : World) (d : WG.Device) (hd : w.k.wg = some d)
     (hm : prefixBits (rootWidth v4) n.cidr n.addr = prefixBits (rootWidth v4) n.cidr addr)
     (hbit : bit (rootWidth v4) n.cidr addr = side)
     (other : Tree) (ho : RepAt d.nodes (rootWidth (!v4)) (rootSlot (!v4)) other) (ret : Int)
-    (hrun : (WG.add (rootSlot v4) (rootWidth v4) addr cidr (some pid)).run w = .ok (ret, w')) :
-    AddOutcome w.k w'.k d v4 (c.plug (Tree.fork n side .empty sibling)) other addr cidr pid p ret := by
-  have h := case_add_context_empty_child_correct w w' d hd v4 c n side sibling addr cidr pid p hp
+    (hrun : ((WG.add (rootSlot v4) (rootWidth v4) addr cidr (some pid)).run w).run ambient = .ok ((ret, w'), ambient')) :
+    AddOutcome w w' d v4 (c.plug (Tree.fork n side .empty sibling)) other addr cidr pid p ret := by
+  have h := case_add_context_empty_child_correct w w' ambient ambient' d hd v4 c n side sibling addr cidr pid p hp
     hroot hb hbelow hn hr hv ha hc hf hlt hm hbit other ho ret hrun
   rcases h with hfail | ⟨hz, hk, hb', hroot', hr', _, _, hnext, hseq, hroots, ho'⟩
   · exact .inl hfail
@@ -83,7 +83,7 @@ theorem add_gap_outcome (w w' : World) (d : WG.Device) (hd : w.k.wg = some d)
     · rw [context_gap_insertFresh c n side sibling (rootWidth v4) d.nextNode addr cidr pid hf hb hlt hm hbit]
       exact gapInstalledAt_peers d v4 (c.slot (rootSlot v4)) n side sibling addr cidr pid p hp
 
-theorem add_exact_outcome (w w' : World) (d : WG.Device) (hd : w.k.wg = some d)
+theorem add_exact_outcome (w w' : WGWorld) (ambient ambient' : Ambient) (d : WG.Device) (hd : w.dev = some d)
     (v4 : Bool) (c : Context) (n : NodeData) (l r : Tree) (addr cidr pid : Nat) (p : WG.Peer)
     (hp : d.peers[pid]? = some p)
     (hroot : rootValue d v4 = (c.plug (.node n l r)).root) (hbelow : NodesBelow d)
@@ -94,10 +94,10 @@ theorem add_exact_outcome (w w' : World) (d : WG.Device) (hd : w.k.wg = some d)
     (hf : c.Follows (rootWidth v4) addr cidr) (hn : n.cidr = cidr)
     (hm : prefixBits (rootWidth v4) n.cidr n.addr = prefixBits (rootWidth v4) n.cidr addr)
     (other : Tree) (ho : RepAt d.nodes (rootWidth (!v4)) (rootSlot (!v4)) other) (ret : Int)
-    (hrun : (WG.add (rootSlot v4) (rootWidth v4) addr cidr (some pid)).run w = .ok (ret, w')) :
-    AddOutcome w.k w'.k d v4 (c.plug (.node n l r)) other addr cidr pid p ret := by
-  obtain ⟨v, he, hk, hroot', hr', _, _, _, halloc, hnext, hseq, hroots, ho', _, _, _, hb⟩ :=
-    case_add_context_exact_correct w d hd v4 c n l r addr cidr pid p hp hroot hr hv hnodup ha hc hf hn hm other ho
+    (hrun : ((WG.add (rootSlot v4) (rootWidth v4) addr cidr (some pid)).run w).run ambient = .ok ((ret, w'), ambient')) :
+    AddOutcome w w' d v4 (c.plug (.node n l r)) other addr cidr pid p ret := by
+  obtain ⟨v, finalAmbient, he, hk, hroot', hr', _, _, _, halloc, hnext, hseq, hroots, ho', _, _, _, hb⟩ :=
+    case_add_context_exact_correct w ambient d hd v4 c n l r addr cidr pid p hp hroot hr hv hnodup ha hc hf hn hm other ho
   rw [hrun] at he
   cases he
   refine .inr (.inr ⟨rfl, _, hk, hb hbelow, hroot', hr', ?_, hseq, hroots _, ho', ?_, exactInstalled_frame ..⟩)
@@ -106,7 +106,7 @@ theorem add_exact_outcome (w w' : World) (d : WG.Device) (hd : w.k.wg = some d)
   · rw [context_exact_insertFresh c n l r (rootWidth v4) d.nextNode addr cidr pid hf hn hm]
     exact exactInstalled_peers d n.id _ pid p hp
 
-theorem add_root_graft_outcome (w w' : World) (d : WG.Device) (hd : w.k.wg = some d)
+theorem add_root_graft_outcome (w w' : WGWorld) (ambient ambient' : Ambient) (d : WG.Device) (hd : w.dev = some d)
     (v4 : Bool) (n : NodeData) (l r : Tree) (addr cidr pid : Nat) (p : WG.Peer)
     (hp : d.peers[pid]? = some p) (hroot : rootValue d v4 = some n.id) (hb : NodesBelow d)
     (hr : RepAt d.nodes (rootWidth v4) (rootSlot v4) (.node n l r))
@@ -114,9 +114,9 @@ theorem add_root_graft_outcome (w w' : World) (d : WG.Device) (hd : w.k.wg = som
     (ha : addr < 2 ^ rootWidth v4) (hc : cidr ≤ rootWidth v4)
     (hstop : ¬ (n.cidr ≤ cidr ∧ prefixBits (rootWidth v4) n.cidr n.addr = prefixBits (rootWidth v4) n.cidr addr))
     (other : Tree) (ho : RepAt d.nodes (rootWidth (!v4)) (rootSlot (!v4)) other) (ret : Int)
-    (hrun : (WG.add (rootSlot v4) (rootWidth v4) addr cidr (some pid)).run w = .ok (ret, w')) :
-    AddOutcome w.k w'.k d v4 (.node n l r) other addr cidr pid p ret := by
-  have h := case_add_root_graft_endpoints w w' d hd v4 n l r addr cidr pid p hp hroot hb hr hv ha hc hstop ret hrun
+    (hrun : ((WG.add (rootSlot v4) (rootWidth v4) addr cidr (some pid)).run w).run ambient = .ok ((ret, w'), ambient')) :
+    AddOutcome w w' d v4 (.node n l r) other addr cidr pid p ret := by
+  have h := case_add_root_graft_endpoints w w' ambient ambient' d hd v4 n l r addr cidr pid p hp hroot hb hr hv ha hc hstop ret hrun
   rcases h with hf | ⟨hf, hs, hk⟩ | ⟨hz, _⟩
   · exact .inl hf
   · refine .inr (.inl ⟨hf, ?_, hk⟩)
@@ -124,14 +124,14 @@ theorem add_root_graft_outcome (w w' : World) (d : WG.Device) (hd : w.k.wg = som
     simp [graft, hs]
   · subst ret
     obtain ⟨hk, hb', hroot', hr', _, _, _, hnext, hother, hseq, ho'⟩ :=
-      case_add_root_graft_correct w w' d hd v4 n l r addr cidr pid p hp hroot hb hr hn hv ha hc hstop other ho hrun
+      case_add_root_graft_correct w w' ambient ambient' d hd v4 n l r addr cidr pid p hp hroot hb hr hn hv ha hc hstop other ho hrun
     refine .inr (.inr ⟨rfl, _, hk, hb', hroot', hr', hnext, hseq, hother, ho', ?_, graftInstalled_frame ..⟩)
     rw [root_graft_insertFresh _ _ _ _ _ _ _ _ hstop]
     rw [graft_binding]
     exact graftInstalled_peers d v4 n.id _ addr cidr pid _ p hp
       (by have := graft_allocations (rootWidth v4) d.nextNode addr cidr pid (.node n l r); omega)
 
-theorem add_deep_graft_outcome (w w' : World) (d : WG.Device) (hd : w.k.wg = some d)
+theorem add_deep_graft_outcome (w w' : WGWorld) (ambient ambient' : Ambient) (d : WG.Device) (hd : w.dev = some d)
     (v4 : Bool) (c : Context) (parent : NodeData) (side : Nat) (sibling : Tree)
     (n : NodeData) (l r : Tree) (addr cidr pid : Nat) (p : WG.Peer)
     (hp : d.peers[pid]? = some p)
@@ -146,9 +146,9 @@ theorem add_deep_graft_outcome (w w' : World) (d : WG.Device) (hd : w.k.wg = som
     (hbit : bit (rootWidth v4) parent.cidr addr = side)
     (hstop : ¬ (n.cidr ≤ cidr ∧ prefixBits (rootWidth v4) n.cidr n.addr = prefixBits (rootWidth v4) n.cidr addr))
     (other : Tree) (ho : RepAt d.nodes (rootWidth (!v4)) (rootSlot (!v4)) other) (ret : Int)
-    (hrun : (WG.add (rootSlot v4) (rootWidth v4) addr cidr (some pid)).run w = .ok (ret, w')) :
-    AddOutcome w.k w'.k d v4 (c.plug (Tree.fork parent side (.node n l r) sibling)) other addr cidr pid p ret := by
-  have h := case_add_context_graft_endpoints w w' d hd v4 c parent side sibling n l r addr cidr pid p hp
+    (hrun : ((WG.add (rootSlot v4) (rootWidth v4) addr cidr (some pid)).run w).run ambient = .ok ((ret, w'), ambient')) :
+    AddOutcome w w' d v4 (c.plug (Tree.fork parent side (.node n l r) sibling)) other addr cidr pid p ret := by
+  have h := case_add_context_graft_endpoints w w' ambient ambient' d hd v4 c parent side sibling n l r addr cidr pid p hp
     hroot hb hbelow hr hv hn ha hc hf hlt hm hbit hstop ret hrun
   rcases h with hfail | ⟨hfail, hs, hk⟩ | ⟨hz, _⟩
   · exact .inl hfail
@@ -159,7 +159,7 @@ theorem add_deep_graft_outcome (w w' : World) (d : WG.Device) (hd : w.k.wg = som
     simp [graft, hs]
   · subst ret
     obtain ⟨hk, hb', hroot', hr', _, _, _, hnext, hother, hseq, ho'⟩ :=
-      case_add_context_graft_correct w w' d hd v4 c parent side sibling n l r addr cidr pid p hp
+      case_add_context_graft_correct w w' ambient ambient' d hd v4 c parent side sibling n l r addr cidr pid p hp
         hroot hb hbelow hr hv hn ha hc hf hlt hm hbit hstop other ho hrun
     refine .inr (.inr ⟨rfl, _, hk, hb', hroot', hr', hnext, hseq, hother, ho', ?_, graftChildInstalled_frame ..⟩)
     rw [context_graft_insertFresh c parent side sibling n l r (rootWidth v4) d.nextNode addr cidr pid hf hb hlt hm hbit]
@@ -172,28 +172,29 @@ theorem add_deep_graft_outcome (w w' : World) (d : WG.Device) (hd : w.k.wg = som
 /-- Every normal original add return is classified by deriving its structural
 case from original nodePlacement. No path, exactness or stopping predicate is
 required of the caller. -/
-theorem add_outcome (w w' : World) (d : WG.Device) (hd : w.k.wg = some d)
+theorem add_outcome (w w' : WGWorld) (ambient ambient' : Ambient) (d : WG.Device) (hd : w.dev = some d)
     (v4 : Bool) (t other : Tree) (addr cidr pid : Nat) (p : WG.Peer)
     (hp : d.peers[pid]? = some p) (hroot : rootValue d v4 = t.root)
     (hbelow : NodesBelow d) (hr : RepAt d.nodes (rootWidth v4) (rootSlot v4) t)
     (hv : t.Valid (rootWidth v4)) (hn : t.nodeIds.Nodup)
     (ha : addr < 2 ^ rootWidth v4) (hc : cidr ≤ rootWidth v4)
     (ho : RepAt d.nodes (rootWidth (!v4)) (rootSlot (!v4)) other) (ret : Int)
-    (hrun : (WG.add (rootSlot v4) (rootWidth v4) addr cidr (some pid)).run w = .ok (ret, w')) :
-    AddOutcome w.k w'.k d v4 t other addr cidr pid p ret := by
+    (hrun : ((WG.add (rootSlot v4) (rootWidth v4) addr cidr (some pid)).run w).run ambient = .ok ((ret, w'), ambient')) :
+    AddOutcome w w' d v4 t other addr cidr pid p ret := by
   have hw : rootWidth v4 = 32 ∨ rootWidth v4 = 128 := by cases v4 <;> simp [rootWidth]
-  obtain ⟨result, _, _, _, c, u, ht, hf, hend⟩ :=
-    nodePlacement_run w d (rootWidth v4) addr cidr hw ha hc hd t (rootSlot v4) hr hv
+  let store : WG.AipStore := {nodes := d.nodes, nextNode := d.nextNode, trie := d.peerAllowedips}
+  obtain ⟨result, _, _, _, _, c, u, ht, hf, hend⟩ :=
+    nodePlacement_run store ambient (rootWidth v4) addr cidr hw ha hc t (rootSlot v4) hr hv
   subst t
   cases u with
   | empty =>
     by_cases he : c = .here
     · subst c
-      exact add_empty_outcome w w' d hd v4 addr cidr pid p hp hroot ha hc hbelow other ho ret hrun
+      exact add_empty_outcome w w' ambient ambient' d hd v4 addr cidr pid p hp hroot ha hc hbelow other ho ret hrun
     · obtain ⟨outer, parent, side, sibling, hb, heq, hf', hlt, hm, hbit⟩ := c.last_gap he hf
       subst c
       simp only [Context.plug_append, gapContext_plug] at hroot hr hv hn ⊢
-      exact add_gap_outcome w w' d hd v4 outer parent side sibling addr cidr pid p hp
+      exact add_gap_outcome w w' ambient ambient' d hd v4 outer parent side sibling addr cidr pid p hp
         hroot hb hbelow hn hr hv ha hc hf' hlt hm hbit other ho ret hrun
   | node n l r =>
     have he : (n.cidr = cidr ∧ prefixBits (rootWidth v4) n.cidr n.addr = prefixBits (rootWidth v4) n.cidr addr) ∨
@@ -203,33 +204,33 @@ theorem add_outcome (w w' : World) (d : WG.Device) (hd : w.k.wg = some d)
       · exact .inr (fun h => hmiss h.2)
       · exact .inl ⟨heq, hm⟩
     rcases he with ⟨heq, hm⟩ | hstop
-    · exact add_exact_outcome w w' d hd v4 c n l r addr cidr pid p hp hroot hbelow
+    · exact add_exact_outcome w w' ambient ambient' d hd v4 c n l r addr cidr pid p hp hroot hbelow
         hr hv hn ha hc hf heq hm other ho ret hrun
     · by_cases he : c = .here
       · subst c
-        exact add_root_graft_outcome w w' d hd v4 n l r addr cidr pid p hp hroot hbelow
+        exact add_root_graft_outcome w w' ambient ambient' d hd v4 n l r addr cidr pid p hp hroot hbelow
           hr hn hv ha hc hstop other ho ret hrun
       · obtain ⟨outer, parent, side, sibling, hb, heq, hf', hlt, hm, hbit⟩ := c.last_gap he hf
         subst c
         simp only [Context.plug_append, gapContext_plug] at hroot hr hv hn ⊢
-        exact add_deep_graft_outcome w w' d hd v4 outer parent side sibling n l r addr cidr pid p hp
+        exact add_deep_graft_outcome w w' ambient ambient' d hd v4 outer parent side sibling n l r addr cidr pid p hp
           hroot hb hbelow hr hv hn ha hc hf' hlt hm hbit hstop other ho ret hrun
 
-/-- Successful insertion carries the original Kernel endpoint and the actual
+/-- Successful insertion carries the complete native WG endpoint and the actual
 selected root, with independently proved pure validity, compression and IDs. -/
-theorem add_success (w w' : World) (d : WG.Device) (hd : w.k.wg = some d)
+theorem add_success (w w' : WGWorld) (ambient ambient' : Ambient) (d : WG.Device) (hd : w.dev = some d)
     (v4 : Bool) (t other : Tree) (addr cidr pid : Nat) (p : WG.Peer)
     (hp : d.peers[pid]? = some p) (hroot : rootValue d v4 = t.root)
     (hbelow : NodesBelow d) (hr : RepAt d.nodes (rootWidth v4) (rootSlot v4) t)
     (hv : t.Valid (rootWidth v4)) (hn : t.nodeIds.Nodup)
     (ha : addr < 2 ^ rootWidth v4) (hc : cidr ≤ rootWidth v4)
     (ho : RepAt d.nodes (rootWidth (!v4)) (rootSlot (!v4)) other)
-    (hrun : (WG.add (rootSlot v4) (rootWidth v4) addr cidr (some pid)).run w = .ok (0, w')) :
+    (hrun : ((WG.add (rootSlot v4) (rootWidth v4) addr cidr (some pid)).run w).run ambient = .ok ((0, w'), ambient')) :
     let inserted := t.insertFresh (rootWidth v4) d.nextNode addr cidr pid
-    ∃ out, w'.k = { w.k with wg := some out } ∧ Inserted d out v4 t other addr cidr pid ∧
+    ∃ out, w' = { w with dev := some out } ∧ Inserted d out v4 t other addr cidr pid ∧
       inserted.tree.Valid (rootWidth v4) ∧ inserted.tree.nodeIds.Nodup ∧
       (t.Compressed → inserted.tree.Compressed) := by
-  have outcome := add_outcome w w' d hd v4 t other addr cidr pid p hp hroot hbelow hr hv hn ha hc ho 0 hrun
+  have outcome := add_outcome w w' ambient ambient' d hd v4 t other addr cidr pid p hp hroot hbelow hr hv hn ha hc ho 0 hrun
   rcases outcome with hf | hf | ⟨_, out, hk, hs⟩
   · simp [ENOMEM] at hf
   · simp [ENOMEM] at hf
@@ -237,34 +238,43 @@ theorem add_success (w w' : World) (d : WG.Device) (hd : w.k.wg = some d)
     Tree.insertFresh_nodeIds_nodup hn (hr.ids_below hbelow) (rootWidth v4) addr cidr pid,
     fun h => Tree.insertFresh_compressed h (rootWidth v4) d.nextNode addr cidr pid⟩
 
-theorem add_lookup (w w' : World) (d : WG.Device) (hd : w.k.wg = some d)
+theorem add_lookup (w w' : WGWorld) (ambient ambient' : Ambient) (d : WG.Device) (hd : w.dev = some d)
     (v4 : Bool) (t : Tree) (addr cidr pid : Nat) (p : WG.Peer)
     (hp : d.peers[pid]? = some p) (hroot : rootValue d v4 = t.root)
     (hbelow : NodesBelow d) (hr : RepAt d.nodes (rootWidth v4) (rootSlot v4) t)
     (hv : t.Valid (rootWidth v4)) (hn : t.nodeIds.Nodup)
     (ha : addr < 2 ^ rootWidth v4) (hc : cidr ≤ rootWidth v4)
     (key : Nat) (hk : key < 2 ^ rootWidth v4)
-    (hrun : (WG.add (rootSlot v4) (rootWidth v4) addr cidr (some pid)).run w = .ok (0, w')) :
+    (hrun : ((WG.add (rootSlot v4) (rootWidth v4) addr cidr (some pid)).run w).run ambient = .ok ((0, w'), ambient')) :
     let inserted := t.insertFresh (rootWidth v4) d.nextNode addr cidr pid
-    ∃ out final, w'.k.wg = some out ∧
-      (WG.findNode (rootValue out v4) (rootWidth v4) key).run w' =
-        .ok ((inserted.tree.lookup (rootWidth v4) key).map Entry.id, final) ∧
+    ∃ out final finalAmbient, w'.dev = some out ∧
+      ((WG.liftAip (WG.findNode (rootValue out v4) (rootWidth v4) key)).run w').run ambient' =
+        .ok (((inserted.tree.lookup (rootWidth v4) key).map Entry.id, final), finalAmbient) ∧
       Winner (rootWidth v4) key
         (inserted.binding :: t.entries.filter
           (fun e => e.prefixKey (rootWidth v4) != (cidr, prefixBits (rootWidth v4) cidr addr)))
-        (inserted.tree.lookup (rootWidth v4) key) ∧ final.k = w'.k := by
+        (inserted.tree.lookup (rootWidth v4) key) ∧ final = w' := by
   obtain ⟨out, hkernel, hs, hvalid, _⟩ :=
-    add_success w w' d hd v4 t .empty addr cidr pid p hp hroot hbelow hr hv hn ha hc trivial hrun
-  have hdev : w'.k.wg = some out := by rw [hkernel]
+    add_success w w' ambient ambient' d hd v4 t .empty addr cidr pid p hp hroot hbelow hr hv hn ha hc trivial hrun
+  have hdev : w'.dev = some out := by rw [hkernel]
   have hw : rootWidth v4 = 32 ∨ rootWidth v4 = 128 := by cases v4 <;> simp [rootWidth]
-  obtain ⟨final, he, hframe⟩ := findNode_run w' out (rootWidth v4) key hw hk hdev
+  let store : WG.AipStore := {nodes := out.nodes, nextNode := out.nextNode, trie := out.peerAllowedips}
+  obtain ⟨finalStore, finalAmbient, he, hframe⟩ := findNode_run store ambient' (rootWidth v4) key hw hk
     (t.insertFresh (rootWidth v4) d.nextNode addr cidr pid).tree (rootSlot v4) hs.rep hvalid
-  refine ⟨out, final, hdev, ?_, Tree.insertFresh_lookup_spec hv ha hc d.nextNode pid key, hframe⟩
-  simpa only [hs.root, Tree.lookupId] using he
+  subst finalStore
+  refine ⟨out, w', finalAmbient, hdev, ?_, Tree.insertFresh_lookup_spec hv ha hc d.nextNode pid key, rfl⟩
+  rw [Leanux.Proofs.Framing.liftAip_run, hdev]
+  have he' : ((WG.findNode (rootValue out v4) (rootWidth v4) key).run store).run ambient' =
+      .ok ((((t.insertFresh (rootWidth v4) d.nextNode addr cidr pid).tree.lookup (rootWidth v4) key).map Entry.id, store), finalAmbient) := by
+    simpa only [hs.root, Tree.lookupId] using he
+  dsimp only [store] at he'
+  simp only [he', Except.map]
+  change Except.ok ((_, {w' with dev := some out}), finalAmbient) = _
+  rw [← hdev]
 
 /-- The wrapper's sequence advance precedes every add branch, including either
-normal allocation refusal. The outcome is based on that bumped input Kernel. -/
-theorem insert_outcome (w w' : World) (d : WG.Device) (hd : w.k.wg = some d)
+normal allocation refusal. The outcome is based on that bumped input WG state. -/
+theorem insert_outcome (w w' : WGWorld) (ambient ambient' : Ambient) (d : WG.Device) (hd : w.dev = some d)
     (family : Nat) (t other : Tree) (addr cidr pid : Nat) (p : WG.Peer)
     (hp : d.peers[pid]? = some p) (hroot : rootValue d (family == 4) = t.root)
     (hbelow : NodesBelow d)
@@ -272,14 +282,14 @@ theorem insert_outcome (w w' : World) (d : WG.Device) (hd : w.k.wg = some d)
     (hv : t.Valid (rootWidth (family == 4))) (hn : t.nodeIds.Nodup)
     (ha : addr < 2 ^ rootWidth (family == 4)) (hc : cidr ≤ rootWidth (family == 4))
     (ho : RepAt d.nodes (rootWidth (!(family == 4))) (rootSlot (!(family == 4))) other)
-    (ret : Int) (hrun : (WG.insert family addr cidr pid).run w = .ok (ret, w')) :
-    AddOutcome { w.k with wg := some (bumpSeq d) } w'.k (bumpSeq d) (family == 4)
+    (ret : Int) (hrun : ((WG.insert family addr cidr pid).run w).run ambient = .ok ((ret, w'), ambient')) :
+    AddOutcome { w with dev := some (bumpSeq d) } w' (bumpSeq d) (family == 4)
       t other addr cidr pid p ret := by
-  rw [insert_run_bump w d hd family addr cidr pid] at hrun
-  exact add_outcome { w with k := { w.k with wg := some (bumpSeq d) } } w' (bumpSeq d) rfl
+  rw [insert_run_bump w ambient d hd family addr cidr pid] at hrun
+  exact add_outcome { w with dev := some (bumpSeq d) } w' ambient ambient' (bumpSeq d) rfl
     (family == 4) t other addr cidr pid p hp hroot hbelow hr hv hn ha hc ho ret hrun
 
-theorem insert_success (w w' : World) (d : WG.Device) (hd : w.k.wg = some d)
+theorem insert_success (w w' : WGWorld) (ambient ambient' : Ambient) (d : WG.Device) (hd : w.dev = some d)
     (family : Nat) (t other : Tree) (addr cidr pid : Nat) (p : WG.Peer)
     (hp : d.peers[pid]? = some p) (hroot : rootValue d (family == 4) = t.root)
     (hbelow : NodesBelow d)
@@ -287,20 +297,20 @@ theorem insert_success (w w' : World) (d : WG.Device) (hd : w.k.wg = some d)
     (hv : t.Valid (rootWidth (family == 4))) (hn : t.nodeIds.Nodup)
     (ha : addr < 2 ^ rootWidth (family == 4)) (hc : cidr ≤ rootWidth (family == 4))
     (ho : RepAt d.nodes (rootWidth (!(family == 4))) (rootSlot (!(family == 4))) other)
-    (hrun : (WG.insert family addr cidr pid).run w = .ok (0, w')) :
+    (hrun : ((WG.insert family addr cidr pid).run w).run ambient = .ok ((0, w'), ambient')) :
     let inserted := t.insertFresh (rootWidth (family == 4)) d.nextNode addr cidr pid
-    ∃ out, w'.k = { w.k with wg := some out } ∧
+    ∃ out, w' = { w with dev := some out } ∧
       out.peerAllowedips.seq = d.peerAllowedips.seq + 1 ∧
       Inserted (bumpSeq d) out (family == 4) t other addr cidr pid ∧
       inserted.tree.Valid (rootWidth (family == 4)) ∧ inserted.tree.nodeIds.Nodup ∧
       (t.Compressed → inserted.tree.Compressed) := by
-  rw [insert_run_bump w d hd family addr cidr pid] at hrun
+  rw [insert_run_bump w ambient d hd family addr cidr pid] at hrun
   obtain ⟨out, hk, hs, hv', hn', hcomp⟩ :=
-    add_success { w with k := { w.k with wg := some (bumpSeq d) } } w' (bumpSeq d) rfl
+    add_success { w with dev := some (bumpSeq d) } w' ambient ambient' (bumpSeq d) rfl
       (family == 4) t other addr cidr pid p hp hroot hbelow hr hv hn ha hc ho hrun
   exact ⟨out, hk, hs.seq, hs, hv', hn', hcomp⟩
 
-theorem insert_lookup (w w' : World) (d : WG.Device) (hd : w.k.wg = some d)
+theorem insert_lookup (w w' : WGWorld) (ambient ambient' : Ambient) (d : WG.Device) (hd : w.dev = some d)
     (family : Nat) (t : Tree) (addr cidr pid : Nat) (p : WG.Peer)
     (hp : d.peers[pid]? = some p) (hroot : rootValue d (family == 4) = t.root)
     (hbelow : NodesBelow d)
@@ -308,31 +318,31 @@ theorem insert_lookup (w w' : World) (d : WG.Device) (hd : w.k.wg = some d)
     (hv : t.Valid (rootWidth (family == 4))) (hn : t.nodeIds.Nodup)
     (ha : addr < 2 ^ rootWidth (family == 4)) (hc : cidr ≤ rootWidth (family == 4))
     (key : Nat) (hk : key < 2 ^ rootWidth (family == 4))
-    (hrun : (WG.insert family addr cidr pid).run w = .ok (0, w')) :
+    (hrun : ((WG.insert family addr cidr pid).run w).run ambient = .ok ((0, w'), ambient')) :
     let v4 := family == 4
     let inserted := t.insertFresh (rootWidth v4) d.nextNode addr cidr pid
-    ∃ out final, w'.k.wg = some out ∧
-      (WG.findNode (rootValue out v4) (rootWidth v4) key).run w' =
-        .ok ((inserted.tree.lookup (rootWidth v4) key).map Entry.id, final) ∧
+    ∃ out final finalAmbient, w'.dev = some out ∧
+      ((WG.liftAip (WG.findNode (rootValue out v4) (rootWidth v4) key)).run w').run ambient' =
+        .ok (((inserted.tree.lookup (rootWidth v4) key).map Entry.id, final), finalAmbient) ∧
       Winner (rootWidth v4) key
         (inserted.binding :: t.entries.filter
           (fun e => e.prefixKey (rootWidth v4) != (cidr, prefixBits (rootWidth v4) cidr addr)))
-        (inserted.tree.lookup (rootWidth v4) key) ∧ final.k = w'.k := by
-  rw [insert_run_bump w d hd family addr cidr pid] at hrun
-  exact add_lookup { w with k := { w.k with wg := some (bumpSeq d) } } w' (bumpSeq d) rfl
+        (inserted.tree.lookup (rootWidth v4) key) ∧ final = w' := by
+  rw [insert_run_bump w ambient d hd family addr cidr pid] at hrun
+  exact add_lookup { w with dev := some (bumpSeq d) } w' ambient ambient' (bumpSeq d) rfl
     (family == 4) t addr cidr pid p hp hroot hbelow hr hv hn ha hc key hk hrun
 
 /-- A normal allocator refusal preserves both root values and all node lookups.
 The only frontier/list alternatives are no change, or one consumed identifier
 and removal of that scalar identifier from every resident peer list. -/
-theorem add_refusal (w w' : World) (d : WG.Device) (hd : w.k.wg = some d)
+theorem add_refusal (w w' : WGWorld) (ambient ambient' : Ambient) (d : WG.Device) (hd : w.dev = some d)
     (v4 : Bool) (t : Tree) (addr cidr pid : Nat) (p : WG.Peer)
     (hp : d.peers[pid]? = some p) (hroot : rootValue d v4 = t.root)
     (hbelow : NodesBelow d) (hr : RepAt d.nodes (rootWidth v4) (rootSlot v4) t)
     (hv : t.Valid (rootWidth v4)) (hn : t.nodeIds.Nodup)
     (ha : addr < 2 ^ rootWidth v4) (hc : cidr ≤ rootWidth v4)
-    (hrun : (WG.add (rootSlot v4) (rootWidth v4) addr cidr (some pid)).run w = .ok (-ENOMEM, w')) :
-    ∃ out, w'.k = { w.k with wg := some out } ∧ NodesBelow out ∧
+    (hrun : ((WG.add (rootSlot v4) (rootWidth v4) addr cidr (some pid)).run w).run ambient = .ok ((-ENOMEM, w'), ambient')) :
+    ∃ out, w' = { w with dev := some out } ∧ NodesBelow out ∧
       out.peerAllowedips.seq = d.peerAllowedips.seq ∧
       (∀ f, rootValue out f = rootValue d f) ∧
       (∀ id : Nat, out.nodes[id]? = d.nodes[id]?) ∧
@@ -340,7 +350,7 @@ theorem add_refusal (w w' : World) (d : WG.Device) (hd : w.k.wg = some d)
         (out.nextNode = d.nextNode + 1 ∧
           (t.insertFresh (rootWidth v4) d.nextNode addr cidr pid).allocations = 2 ∧
           ∀ q : Nat, out.peers[q]? = (d.peers[q]?).map (unlist d.nextNode))) := by
-  have outcome := add_outcome w w' d hd v4 t .empty addr cidr pid p hp hroot hbelow hr hv hn ha hc trivial (-ENOMEM) hrun
+  have outcome := add_outcome w w' ambient ambient' d hd v4 t .empty addr cidr pid p hp hroot hbelow hr hv hn ha hc trivial (-ENOMEM) hrun
   rcases outcome with ⟨_, hk⟩ | ⟨_, halloc, hk⟩ | ⟨hz, _⟩
   · refine ⟨d, ?_, hbelow, rfl, fun _ => rfl, fun _ => rfl, .inl ⟨rfl, fun _ => rfl⟩⟩
     rw [hk]

@@ -77,9 +77,10 @@ it is not part of that baseline.
 | Native exact trie replacement and graft composition | 12 | 11 | 0 | 1 | 0 | 12 |
 | Native/product lifetime receive and release contracts | 43 | 25 | 0 | 18 | 18 | 61 |
 | Native allocation, ingress, trie and product runner/environment carry | 116 | 57 | 2 | 57 | 10 | 124 |
+| Native allocation/trie carries and product scheduler/worker/environment callers | 172 | 89 | 2 | 81 | 10 | 180 |
 
-The whole tree currently contains 451 Lean files and 6,249 theorems. The completed
-changes total 1,114 retyped theorems, 1,601 deletions, 315 retained contract shapes and 135 added.
+The whole tree currently contains 451 Lean files and 6,257 theorems. The completed
+changes total 1,203 retyped theorems, 1,603 deletions, 396 retained contract shapes and 145 added.
 Retyping changes or generalizes the actual state/monad carrier or observation.
 This includes shorthand contracts whose source functions or named views move
 to a native monad. Mere namespace qualification and equivalent relocation of a
@@ -1488,5 +1489,56 @@ Post-merge default build passes (66 jobs); unit tests pass (131 tests, one
 skip). Exact source comparison confirms the proof tree, root, target and gate
 are unchanged by the merge, and mirror sources equal b700659. A whitespace
 check rejected an imported extra final blank line in the split design; it was
-removed after a recovery snapshot. The full proof build is running; the proof
-gate remains pending and all result rows remain lagging.
+removed after a recovery snapshot. The first full proof build after the merge failed at six downstream targets.
+The proof gate remains pending and all result rows remain lagging.
+
+
+## Scheduler, environment, allocation and trie checkpoint
+
+The 16 newly carried files contain 172 old theorems: 89 native or generic
+retypes, 81 retained product/pure contracts, two deletions and ten helpers added,
+giving 180. The separate ExactMutation correction reuses the canonical
+total Aip adapter; its two already-counted theorem statements are unchanged.
+The deleted fireTimer pair names a function absent from the current mirror.
+Its former raw selector has been replaced by the timer-wheel path, whose
+logged evolution callers remain under repair. No theorem is removed merely
+because compilation failed.
+
+Worker and scheduler contracts retain arbitrary product callbacks. Environment
+proofs keep the actual native lifts, routing effects, lifecycle hooks and
+pending-dump guard. Allocation transports keep arbitrary projected state helpers
+alongside concrete WG/Ambient contracts. Trie insertion/removal retains source
+Stops, exact endpoints, structural premises and the actual ambient continuation
+from insertion into lookup. The under-load constructors preserve both recorded
+clock endpoints and signed decay comparisons.
+
+Validation: all selected modules build; 215 explicit named declarations use
+only standard axioms, and 15 fresh kernel-replay entry checks cover the
+17 changed modules. Independent reviews checked the scheduler, worker and
+environment contracts and the actual source justifying deletion. The reviewed
+ExactMutation adapter duplication is fixed. Source audit confirms unchanged
+terminal files, proof limits, trust surface and mirror b700659. Default build
+passes (66 jobs); unit tests pass (131 tests, one skip). Reproduce with capped
+module builds, explicit named axiom printing and
+capped scripts/in-bundle lake env leanchecker --fresh on these module entries.
+
+The next whole-tree build failed at nine targets: AllocationInitial,
+KeypairRotation, PeerAllocationFrames, RxQueueView, DeviceRetirement,
+FloodResistance.Statements, RemovalCases, ExactMutation and
+Keypairs.Evolution.Operations. It observed ExactMutation during its repair;
+that module subsequently passed its scoped checks. This is a failed frontier
+build, not a whole-tree claim. The gate and all register rows remain lagging.
+
+Development failures remain recorded: scheduler work had an unavailable
+dependency and two proof/normalization failures; EnvWorkers had five failed
+changed-source compositions, including existing-limit heartbeat failures;
+Env had two failures before the explicit lifted WP contracts matched.
+AllocationFrames/Audit had two failures, retention one, and release/ambient
+one binder failure plus two axiom-driver errors before the complete inventory
+passed. InsertionDispatch and the ExactMutation adapter correction each had
+one failed proof normalization. No limit or memory cap was raised, and there
+was no KILLED result, guest timeout or infrastructure rerun.
+
+A checkpoint-driver path-list error stopped before staging. Dirty worktrees
+were snapshotted to recovery refs before correcting the driver; working files
+and branches were unchanged by that failed command.

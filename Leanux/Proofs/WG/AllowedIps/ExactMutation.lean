@@ -29,18 +29,18 @@ theorem add_placed_exact_wp (k : WGWorld) (d : WG.Device) (hd : k.dev = some d)
       (h : ⦃fun s => ⌜s = store d⌝⦄ a ⦃⇓ x s => ⌜x = value ∧ s = store d⌝⦄) :
       ⦃fun w => ⌜w = g⌝⦄ (MonadLift.monadLift a : WG.M α)
       ⦃⇓ x w => ⌜x = value ∧ w = g⌝⦄ := by
-    apply (total_iff_run_ambient _ _ _).mpr
-    intro w ambient hw
-    subst w
-    obtain ⟨x, s, ambient', hr, hv, hs⟩ := (total_iff_run_ambient _ _ _).mp h _ ambient rfl
-    subst s
-    refine ⟨x, g, ambient', ?_, hv, rfl⟩
-    change ((WG.liftAip a).run g).run ambient = _
-    rw [liftAip_run, hd]
-    simp only [store] at hr
-    simp only [hr, Except.map]
-    change Except.ok ((x, {g with dev := some d}), ambient') = _
-    rw [← hd]
+    apply total_liftAip_of
+    · intro w hw; subst w; exact ⟨d, hd⟩
+    · intro w d' hw hd'
+      subst w
+      have hdd : d' = d := Option.some.inj (hd'.symm.trans hd)
+      subst d'
+      mvcgen [h]
+      all_goals try dsimp +zetaDelta only at *
+      all_goals simp_all [store]
+      intro _ _ _
+      change {g with dev := some d} = g
+      rw [← hd']
   have rootNative := slotGet_root_wp (store d) v4
   have rootValueEq : (if v4 then (store d).trie.root4 else (store d).trie.root6) = some trie := hroot
   simp only [rootValueEq] at rootNative

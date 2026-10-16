@@ -10,7 +10,7 @@ open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing
 def ResidentsRetained (before after : ι → Option κ) : Prop :=
   ∀ i stamp, after i = some stamp → before i = some stamp
 
-structure AllocationRetention (w v : World) : Prop where
+structure AllocationRetention (w v : WGWorld) : Prop where
   metadata : allocationMetadata v = allocationMetadata w
   peer : Retained (Peers.snapshot w) (Peers.snapshot v)
   key : ResidentsRetained (keypairResidents w) (keypairResidents v)
@@ -20,15 +20,15 @@ def ReleasedFrom (before after : List (AccessEvent ι κ)) (resident : ι → Op
   ∀ stamp, AccessEvent.Released after stamp →
     AccessEvent.Released before stamp ∨ ∃ i, resident i = some stamp
 
-structure ReleaseOrigin (h g : List LifetimeEvent) (w : World) : Prop where
+structure ReleaseOrigin (h g : List LifetimeEvent) (w : WGWorld) : Prop where
   peer : ReleasedFrom (h.filterMap LifetimeEvent.peer?) (g.filterMap LifetimeEvent.peer?) (Peers.snapshot w).slots
   key : ReleasedFrom (h.filterMap LifetimeEvent.keypair?) (g.filterMap LifetimeEvent.keypair?) (keypairResidents w)
   packet : ReleasedFrom (h.filterMap LifetimeEvent.packet?) (g.filterMap LifetimeEvent.packet?) (packetResidents w)
 
-theorem packet_resident_store {w : World} {slot : Packets.Slot} {stamp : PacketStamp}
+theorem packet_resident_store {w : WGWorld} {slot : Packets.Slot} {stamp : PacketStamp}
     (hs : packetResidents w slot = some stamp) :
-    ∃ d n, w.k.wg = some d ∧ stamp = (d.ifindex, n) ∧ (Packets.deviceStore d).slots slot = some n := by
-  cases hd : w.k.wg with
+    ∃ d n, w.dev = some d ∧ stamp = (d.ifindex, n) ∧ (Packets.deviceStore d).slots slot = some n := by
+  cases hd : w.dev with
   | none => simp [packetResidents, hd] at hs
   | some d =>
     rw [packetResidents_device hd] at hs
@@ -40,8 +40,8 @@ theorem packet_resident_store {w : World} {slot : Packets.Slot} {stamp : PacketS
 
 theorem AllocationInv.retained (hi : AllocationInv h w) (hr : ReleaseInv g v)
     (hs : AllocationRetention w v) (ho : ReleaseOrigin h g w) : AllocationInv g v := by
-  have hkc : v.k.keypairCounter = w.k.keypairCounter := congrArg AllocationMetadata.keyCounter hs.metadata
-  have hne : v.k.netIfindexNext = w.k.netIfindexNext := congrArg AllocationMetadata.nextEpoch hs.metadata
+  have hkc : v.keypairCounter = w.keypairCounter := congrArg AllocationMetadata.keyCounter hs.metadata
+  have hne : v.netIfindexNext = w.netIfindexNext := congrArg AllocationMetadata.nextEpoch hs.metadata
   refine ⟨hr, ⟨hr.1.peer, hs.peer.bounded hi.peer.bounded, ?_⟩, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · intro stamp released
     rw [hs.peer.1]
@@ -57,7 +57,7 @@ theorem AllocationInv.retained (hi : AllocationInv h w) (hr : ReleaseInv g v)
     | none => simp [hx] at old
     | some p => rw [hn]; exact hi.peerSlots d hd i p hx
   · intro i stamp hl
-    change stamp ≤ v.k.keypairCounter
+    change stamp ≤ v.keypairCounter
     rw [hkc]
     exact hi.keyBounded i stamp (hs.key i stamp hl)
   · intro stamp released
@@ -109,11 +109,13 @@ theorem AllocationInv.retained (hi : AllocationInv h w) (hr : ReleaseInv g v)
         simp only [hx, Option.map_some, Option.some.injEq, Prod.mk.injEq] at live
         rw [← live.2]; exact hi.packetBounded d hd i n hx
 
-theorem allocation_retained (hg : PrefixPreserves ReleaseInv LifetimeEvent.Safe g)
+theorem allocation_retained {S α : Type} {project : S → WGWorld}
+    {g : PrefixT LifetimeEvent S α} {a : StateT S (Except Stop) α}
+    (hg : PrefixPreserves (fun h w => ReleaseInv h (project w)) LifetimeEvent.Safe g)
     (he : ErasesPrefix g a)
-    (hs : ∀ w x v, a.run w = .ok (x, v) → AllocationRetention w v)
-    (ho : ∀ w h, ReleaseOrigin h (runPrefix g w h).2 w) :
-    PrefixPreserves AllocationInv LifetimeEvent.Safe g := by
+    (hs : ∀ w x v, a.run w = .ok (x, v) → AllocationRetention (project w) (project v))
+    (ho : ∀ w h, ReleaseOrigin h (runPrefix g w h).2 (project w)) :
+    PrefixPreserves (fun h w => AllocationInv h (project w)) LifetimeEvent.Safe g := by
   intro w h hi
   obtain ⟨suffix, hsuf, hsafe, hout⟩ := hg w h hi.release
   refine ⟨suffix, hsuf, hsafe, ?_⟩
@@ -122,5 +124,24 @@ theorem allocation_retained (hg : PrefixPreserves ReleaseInv LifetimeEvent.Safe 
   | ok out =>
     exact hi.retained (by simpa only [hr] using hout)
       (hs w out.1 out.2 ((he w h).symm.trans hr)) (ho w h)
+
+/-- The native observer has the same retention contract, with both actual
+Ambient endpoints and the reached failure-prefix history explicit. -/
+theorem allocation_state_retained {g : MixedM α} {a : WG.M α}
+    (hg : StatePrefixPreserves (fun h w _ => ReleaseInv h w) LifetimeEvent.Safe g)
+    (he : ErasesStatePrefix g a)
+    (hs : ∀ w ambient x v ambient',
+      (a.run w).run ambient = .ok ((x, v), ambient') → AllocationRetention w v)
+    (ho : ∀ w ambient h, ReleaseOrigin h (runStatePrefix g w ambient h).2 w) :
+    StatePrefixPreserves (fun h w _ => AllocationInv h w) LifetimeEvent.Safe g := by
+  intro w ambient h hi
+  obtain ⟨suffix, hsuf, hsafe, hout⟩ := hg w ambient h hi.release
+  refine ⟨suffix, hsuf, hsafe, ?_⟩
+  cases hr : (runPrefix (g.run w) ambient h).1 with
+  | error e => trivial
+  | ok out =>
+    rcases out with ⟨⟨x, v⟩, ambient'⟩
+    exact hi.retained (by simpa only [hr] using hout)
+      (hs w ambient x v ambient' ((he w ambient h).symm.trans hr)) (ho w ambient h)
 
 end Leanux.Proofs.WG.Lifetimes
