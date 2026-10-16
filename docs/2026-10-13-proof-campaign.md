@@ -6,7 +6,7 @@ Work on `proofs/campaign` in `.worktrees/proofs-campaign` follows [the charter](
 The state-split retrofit onto `6089dc4` precedes further R3/R4 results. All seven
 result rows remain lagging, last validated over `cb2348e`. The tree has moved from
 471 files / 7,715 named theorems to 450 files / 6,216 theorems. Completed changes
-comprise 674 retyped, 1,590 deleted, 127 retained contract shapes and 91 added theorems;
+comprise 681 retyped, 1,590 deleted, 137 retained contract shapes and 91 added theorems;
 six redundant LifetimeSafety exports are removed, with every retained terminal
 body unchanged (515 declarations). The native foundational, ordinary lifetime,
 clock/Noise-helper, keypair-composition, product scheduler, small native helper and WGBase ports pass their
@@ -15,6 +15,12 @@ subsystem-frame layers and unused support have been deleted, with the distinctio
 recorded; the surviving consumers still need their native/product contracts.
 [The retrofit report](2026-10-16-proof-state-split.md) tracks exact counts,
 validation and remaining work. No full-tree pass is claimed.
+
+Receive admission, lifetime tagging and product GRO carry 17 claims (seven
+retyped, ten retained) without additions or deletions. Scoped builds, 36
+declaration axiom checks, five fresh replays and independent reviews pass. The
+replay-window counterexample retains both exact observations. The latest full
+proof build failed on 21 targets; downstream retrofit work continues.
 
 The peer-creation, dump-source and device-lifecycle carry preserves 70 of 75
 old theorems, removes five justified support wrappers and adds five native

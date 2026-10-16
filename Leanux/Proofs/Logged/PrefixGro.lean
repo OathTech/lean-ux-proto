@@ -125,7 +125,8 @@ theorem napiGroReceivePrefix_preserves
   apply PrefixEnsures.preserves
   apply PrefixEnsures.lift _ hs
   intro h w x v hi hr
-  simp [unsupported] at hr
+  change (Except.error _ : Except Stop _) = _ at hr
+  cases hr
 
 theorem napiGroFlushAllPrefix_preserves
     (callback : List (List UInt8) → PrefixM Event Unit)

@@ -45,15 +45,15 @@ theorem ResidentSafe.write (hi : ResidentSafe h resident) (hl : resident i = som
   exact ⟨AccessEvent.safe_append_write hi.1 (fun hr => hi.2 stamp hr i hl),
     fun s hs => hi.2 s (AccessEvent.released_append_write.mp hs)⟩
 
-def keypairResidents (w : World) : KeypairId → Option Nat :=
-  fun i => (w.k.wg.bind fun d => d.keypairs[i]?).map (·.internalId)
+def keypairResidents (w : WGWorld) : KeypairId → Option Nat :=
+  fun i => (w.dev.bind fun d => d.keypairs[i]?).map (·.internalId)
 
-def packetResidents (w : World) : Packets.Slot → Option PacketStamp :=
-  fun slot => w.k.wg.bind fun d => match slot with
+def packetResidents (w : WGWorld) : Packets.Slot → Option PacketStamp :=
+  fun slot => w.dev.bind fun d => match slot with
     | .inl i => d.txSkbs[i]?.map (fun _ => (d.ifindex, i + 1))
     | .inr i => d.rxSkbs[i]?.map (fun _ => (d.ifindex, i + 1))
 
-structure MixedInv (h : List LifetimeEvent) (w : World) : Prop where
+structure MixedInv (h : List LifetimeEvent) (w : WGWorld) : Prop where
   peer : Peers.AccessInv (h.filterMap LifetimeEvent.peer?) w
   keypair : ResidentSafe (h.filterMap LifetimeEvent.keypair?) (keypairResidents w)
   packet : ResidentSafe (h.filterMap LifetimeEvent.packet?) (packetResidents w)
@@ -61,11 +61,17 @@ structure MixedInv (h : List LifetimeEvent) (w : World) : Prop where
 theorem MixedInv.safe (hi : MixedInv h w) : LifetimeEvent.Safe h :=
   ⟨hi.peer.1, hi.keypair.1, hi.packet.1⟩
 
-abbrev MixedM := PrefixM LifetimeEvent
-def peerFocus (g : PrefixM Peers.PeerEvent α) : MixedM α :=
+abbrev MixedM := WGPrefix LifetimeEvent
+def peerFocus {S : Type} (g : PrefixT Peers.PeerEvent S α) : PrefixT LifetimeEvent S α :=
   focusPrefix LifetimeEvent.peer LifetimeEvent.peer? g
 
-theorem peerFocus_erases (hg : ErasesPrefix g a) : ErasesPrefix (peerFocus g) a :=
+theorem peerFocus_erases {S α : Type} {g : PrefixT Peers.PeerEvent S α}
+    {a : StateT S (Except Stop) α} (hg : ErasesPrefix g a) :
+    ErasesPrefix (peerFocus g) a :=
   focusPrefix_erases _ _ hg
+
+/-- Focusing a native observer retains both native states and the same first Stop. -/
+def peerStateFocus (g : WGPrefix Peers.PeerEvent α) : MixedM α :=
+  focusStatePrefix LifetimeEvent.peer LifetimeEvent.peer? g
 
 end Leanux.Proofs.WG.Lifetimes

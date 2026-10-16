@@ -1,3 +1,4 @@
+import Leanux.Proofs.Framing.WGAllowedIps
 import Leanux.Proofs.WG.Keypairs.Frames.Tools
 import Leanux.Proofs.WG.Peers.Primitives
 import Leanux.Proofs.WG.Keypairs.SnapshotRules

@@ -46,9 +46,11 @@ it is not part of that baseline.
 | Native peer-creation observer and generic helpers | 42 | 39 | 3 | 0 | 4 | 43 |
 | Native dump sources and generic composition | 19 | 18 | 0 | 1 | 1 | 20 |
 | Native device lifecycle and generic factors | 14 | 12 | 2 | 0 | 0 | 12 |
+| Native receive admission and lifetime tagging | 9 | 7 | 0 | 2 | 0 | 9 |
+| Product GRO callback contracts | 8 | 0 | 0 | 8 | 0 | 8 |
 
 The whole tree currently contains 450 Lean files and 6,216 theorems. The completed
-changes total 674 retyped theorems, 1,590 deletions, 127 retained contract shapes and 91 added.
+changes total 681 retyped theorems, 1,590 deletions, 137 retained contract shapes and 91 added.
 Retyping changes or generalizes the actual state/monad carrier or observation.
 This includes shorthand contracts whose source functions or named views move
 to a native monad. Mere namespace qualification and equivalent relocation of a
@@ -1076,6 +1078,42 @@ LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env le
 LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.Framing.WGDump
 LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.NetlinkDump.DeviceSource
 LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.Framing.WGDeviceLifecycle
+```
+
+## Receive admission, lifetime tags and product GRO
+
+Receive retains all five claims over actual WG/Ambient execution. It preserves
+the exact saved-record prefix, the clock witness and the wire-nonce bound without
+adding a bitmap-shape premise. Tagged retains four claims: two native/generalized
+and two pure. Its generic focus still accepts arbitrary actual StateT actions;
+the separate native focus definition serves WGPrefix observers.
+
+PrefixGro retains all eight product-callback contracts; only the lifted Stop
+elimination changes. The arbitrary-world replay counterexample now uses the
+actual split initializers and still checks both original guard outputs.
+No theorem is added or deleted in these carries. WGBase gains one acyclic import
+edge to share the generated add matcher with WGAllowedIps; no statement changes.
+
+Scoped builds pass (Receive 42 jobs, Tagged/WGTransitions 113, GRO/counterexample
+76). All 36 checked declarations use standard axioms. Fresh replays and
+independent source reviews pass. The whole-tree build at 5403c59 failed on
+21 targets; that failure remains the latest whole-tree outcome.
+
+Receive preparation had four failed elaboration calls before a passing fifth.
+Its first axiom-check driver then failed on a malformed regular expression;
+dirty worktrees were snapshotted before correction. The root combined import
+check failed once on an incorrect WGDump module path, then passed. The first
+GRO build failed on insufficient lift reduction, then passed with direct
+elimination of the impossible successful Stop. No cap or proof limit changed;
+no KILLED result, guest timeout or infrastructure rerun occurred.
+
+```sh
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake build Leanux.Proofs.WG.KeyTimes.Receive Leanux.Proofs.WG.Lifetimes.Tagged Leanux.Proofs.WG.Keypairs.Frames.WGTransitions Leanux.Proofs.Logged.PrefixGro Leanux.Proofs.WG.ReplayWindow.Counterexamples
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.KeyTimes.Receive
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Lifetimes.Tagged
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Keypairs.Frames.WGTransitions
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.Logged.PrefixGro
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.ReplayWindow.Counterexamples
 ```
 
 ## Incoming merge and remaining work
