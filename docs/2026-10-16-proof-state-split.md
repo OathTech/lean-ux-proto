@@ -112,8 +112,12 @@ it is not part of that baseline.
 | Native Noise/handshake receive and retained product transport/worker | 14 | 12 | 0 | 2 | 1 | 15 |
 | Packet construction and native ECN address preservation | 19 | 6 | 0 | 13 | 0 | 19 |
 
-The whole tree currently contains 451 Lean files and 6,418 theorems. The completed
-changes total 2,088 retyped theorems, 1,657 deletions, 1,030 retained contract shapes and 360 added.
+| Exact product scheduler/source routing | 21 | 0 | 1 | 20 | 0 | 20 |
+| Native peer removal and retained arbitrary product contracts | 18 | 10 | 0 | 8 | 10 | 28 |
+| Actual product worker routing and native pre/post transport | 8 | 0 | 0 | 8 | 1 | 9 |
+
+The whole tree currently contains 451 Lean files and 6,428 theorems. The completed
+changes total 2,098 retyped theorems, 1,658 deletions, 1,066 retained contract shapes and 371 added.
 Retyping changes or generalizes the actual state/monad carrier or observation.
 This includes shorthand contracts whose source functions or named views move
 to a native monad. Mere namespace qualification and equivalent relocation of a
@@ -2962,4 +2966,48 @@ cap scripts/in-bundle lake build Leanux.Proofs.WG.AllowedIps.RoutingMaintenanceF
 cap scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.AllowedIps.RoutingMaintenanceFrames
 cap scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.AllowedIps.RoutingHandshakeReceiveFrames
 cap scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Packets.AddressShape
+```
+
+
+## Product scheduling, peer removal and worker routing
+
+Four modules carry 47 old theorems to 57: ten native retypes, 36 retained
+product contract shapes, one type-derived Ambient frame removed and eleven
+helpers or native counterparts added. The arbitrary product actions and
+full-World invariant contracts remain available. Worker routing carries the
+saved peer-list evidence across actual recorded guards and fresh device reads;
+the native-to-product helper preserves returned values and both Ambient endpoints.
+
+Two obsolete proof observers were corrected against the unchanged mirror.
+Removing the first of two identical send-queue entries must leave the peer's
+pending flag true; the old observer cleared it. Peer removal must run the
+crypt-work/NAPI guard before final cleanup; the old observer accepted a dead
+peer with NAPI still scheduled. Four kernel-checked concrete witness outcomes
+distinguish the old copies from the original actions. These are proof-observer
+defects, not mirror or kernel findings. The corrected erasure theorems cover
+the actual source behavior, including Stops.
+
+All 75 named declarations use standard axioms only; four explicitly scoped
+fresh kernel replays and independent source reviews pass. Final builds pass
+for source scheduler191, routing scheduler299, peer removal163 and worker
+routing310 jobs. Ten MVCGen deprecations remain unfinished migration work.
+Development failures remain failures: schedulers had three ordinary failures
+and two passes; peer removal had six ordinary failures before passing; worker
+routing had three full-build failures before passing, plus four failed partial
+diagnostics. Peer-removal witness/setup diagnostics also failed before their
+complete named checks passed. There were no infrastructure retries, crashes,
+cancellations or raised limits in this carry.
+
+The full proof gate remains pending. Every register row remains lagging,
+and new R3/R4 results follow the completed retrofit. The mirror remains
+byte-identical to b700659; existing model66 and unit131/one-skip passes cover
+the unchanged executable closure. Reproduce the scoped build and fresh replay:
+
+```sh
+cap() { if command -v capped >/dev/null 2>&1; then capped "$@"; else "$@"; fi; }
+cap scripts/in-bundle lake build Leanux.Proofs.WG.Queues.SourceScheduler Leanux.Proofs.WG.AllowedIps.RoutingEnvWorkersFrames Leanux.Proofs.WG.Lifetimes.PeerRemoval
+cap scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Queues.SourceScheduler
+cap scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.AllowedIps.RoutingSchedulerFrames
+cap scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.AllowedIps.RoutingEnvWorkersFrames
+cap scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Lifetimes.PeerRemoval
 ```

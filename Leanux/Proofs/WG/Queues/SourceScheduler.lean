@@ -8,20 +8,18 @@ namespace Leanux.Proofs.WG.Queues.SourceScheduler
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing Std.Do
 variable {Event : Type}
 
-private theorem invariant_kernel (why : String) : SameKernel (invariant (α := α) why) := by
-  intro w x v hr
-  cases hr
-
-theorem occupancy_kernel (a : Activation) : SameKernel (Env.Activation.occupancy a) :=
+theorem occupancy_kernel (a : Activation) : SameProductStore (Env.Activation.occupancy a) :=
   activationOccupancy_sameKernel a
 
-theorem hasWork_kernel (a : Activation) : SameKernel (Env.Activation.hasWork a) :=
+theorem hasWork_kernel (a : Activation) : SameProductStore (Env.Activation.hasWork a) :=
   activationHasWork_sameKernel a
 
-theorem pendingNapi_kernel (next : Option Nat) : SameKernel (Lifetimes.pendingNapi next) := by
-  apply sameKernel_of_wp
-  intro k
-  mvcgen [Lifetimes.pendingNapi, getDev, getK, invariant]
+theorem pendingNapi_kernel (next : Option Nat) : SameProductStore (Lifetimes.pendingNapi next) := by
+  apply SameView.of_wp
+  intro initial
+  have hd := productGetDev_spec (fun s => s = initial)
+  unfold Hoare at hd
+  mvcgen [-Std.Do.Spec.monadLift_StateT, Lifetimes.pendingNapi, hd]
 
 def run (iteration : Activation → PrefixM Event IterResult) (a : Activation) : PrefixM Event Unit := do
   let occupancy ← liftPrefix (Env.Activation.occupancy a)
@@ -31,12 +29,12 @@ def run (iteration : Activation → PrefixM Event IterResult) (a : Activation) :
     | .ended => _ ← liftPrefix (hidden (.sectionStop act.worker)); return
     | .continued => act := {act with iterations := act.iterations + 1}
     | .yielded =>
-      liftPrefix (modify fun s => {s with suspended := s.suspended ++ [{act with iterations := act.iterations + 1}]})
+      liftPrefix (modifyAmbient fun s => {s with suspended := s.suspended ++ [{act with iterations := act.iterations + 1}]})
       return
   liftPrefix (invariant s!"{a.worker.symbol} consumed more items than its queue held ({occupancy}) in one run")
 
 def dispatch (iteration : Activation → PrefixM Event IterResult) (worker : Worker) : PrefixM Event Bool := do
-  let d ← liftPrefix getDev
+  let d ← liftPrefix (liftWG getDev)
   let mut pid : Option Nat := none
   match worker with
   | .encryptWorker => if d.encryptQueue.empty then return false
@@ -47,7 +45,7 @@ def dispatch (iteration : Activation → PrefixM Event IterResult) (worker : Wor
     let p ← match ← liftPrefix (peekUnit .txWorker) with
       | some u => liftPrefix (resolveUnit .txWorker u d.txWorkQueue)
       | none => pure headPid
-    liftPrefix (modifyDev fun d => {d with txWorkQueue := d.txWorkQueue.erase p})
+    liftPrefix (liftWG (modifyDev fun d => {d with txWorkQueue := d.txWorkQueue.erase p}))
     pid := some p
   | _ => return false
   _ ← liftPrefix (hidden (.sectionStart worker))
@@ -57,8 +55,8 @@ def dispatch (iteration : Activation → PrefixM Event IterResult) (worker : Wor
 def schedule (iteration : Activation → PrefixM Event IterResult) (napi : PrefixM Event Unit) (stack : Option Worker := none) : PrefixM Event Unit := do
   let netRx := (HiddenSite.sectionStart .netRx).info.id
   for _ in [0:(← liftPrefix recordBudget)] do
-    if (← liftPrefix get).hidden.isNone then
-      let d ← liftPrefix getDev
+    if (← liftPrefix getAmbient).hidden.isNone then
+      let d ← liftPrefix (liftWG getDev)
       let next := [Worker.receiveWorker, .decryptWorker, .encryptWorker, .txWorker].find? fun w =>
         match w with
         | .receiveWorker => !d.handshakeQueue.empty
@@ -75,13 +73,13 @@ def schedule (iteration : Activation → PrefixM Event IterResult) (napi : Prefi
       napi
       if (← liftPrefix peekHiddenSite) == some netRx then return
       continue
-    match ← liftPrefix ((← liftPrefix get).suspended.filterM Env.Activation.consistent) with
+    match ← liftPrefix ((← liftPrefix getAmbient).suspended.filterM Env.Activation.consistent) with
     | [] => return
     | [a] =>
       if let some w := stack then
         if ← liftPrefix (Env.Activation.hasWork {worker := w}) then
           liftPrefix (unsupported "the records do not determine which suspended worker resumed")
-      liftPrefix (modify fun s => {s with suspended := s.suspended.filter (· != a)})
+      liftPrefix (modifyAmbient fun s => {s with suspended := s.suspended.filter (· != a)})
       run iteration a
     | _ => liftPrefix (unsupported "the records do not determine which suspended worker resumed")
   liftPrefix (budgetExhausted "the scheduler loop")
@@ -96,7 +94,7 @@ theorem run_erases (iteration : Activation → PrefixM Event IterResult)
     | with_reducible exact erasesPrefix_pure _
     | with_reducible apply erasesPrefix_range
     | with_reducible apply erasesPrefix_bind
-    | (with_reducible split; all_goals try simp_all only [Option.some.injEq, Prod.mk.injEq, reduceCtorEq]; all_goals try subst_vars)
+    | (with_reducible split; all_goals try simp_all only []; all_goals try subst_vars)
     | (with_reducible intro x; try dsimp only)
 
 theorem dispatch_erases (iteration : Activation → PrefixM Event IterResult)
@@ -108,8 +106,10 @@ theorem dispatch_erases (iteration : Activation → PrefixM Event IterResult)
     | with_reducible exact erasesPrefix_lift _
     | with_reducible exact erasesPrefix_pure _
     | with_reducible apply erasesPrefix_bind
-    | (with_reducible split; all_goals try simp_all only [Option.some.injEq, Prod.mk.injEq, reduceCtorEq]; all_goals try subst_vars)
+    | (with_reducible split; all_goals try simp_all only []; all_goals try subst_vars)
     | (with_reducible intro x; try dsimp only)
+
+  all_goals exact erasesPrefix_lift _
 
 theorem schedule_erases (iteration : Activation → PrefixM Event IterResult) (napi : PrefixM Event Unit)
     (hi : ∀ a, ErasesPrefix (iteration a) (Env.Activation.iter a))
@@ -125,74 +125,113 @@ theorem schedule_erases (iteration : Activation → PrefixM Event IterResult) (n
     | with_reducible exact erasesPrefix_pure _
     | with_reducible apply erasesPrefix_range
     | with_reducible apply erasesPrefix_bind
-    | (with_reducible split; all_goals try simp_all only [Option.some.injEq, Prod.mk.injEq, reduceCtorEq]; all_goals try subst_vars)
+    | (with_reducible split; all_goals try simp_all only []; all_goals try subst_vars)
     | (with_reducible intro x; try dsimp only)
-  all_goals grind only [dispatch_erases, erasesPrefix_lift]
+  all_goals first
+    | exact erasesPrefix_lift _
+    | grind only [dispatch_erases, erasesPrefix_lift]
 
 variable {I : List Event → World → Prop} {S : List Event → Prop}
 
 theorem run_preserves (hs : ∀ h w, I h w → S h)
-    (hk : ∀ h w v, v.k = w.k → I h w → I h v)
+    (hk : ∀ h w v, productStoreView v = productStoreView w → I h w → I h v)
     (iteration : Activation → PrefixM Event IterResult)
     (hi : ∀ a, PrefixPreserves I S (iteration a)) (a : Activation) :
     PrefixPreserves I S (run iteration a) := by
+  have ambient {α : Type} (a : AmbientM α) :
+      PrefixPreserves I S (liftPrefix (MonadLift.monadLift a : Leanux.M α)) := by
+    apply viewLiftPrefix_preserves productStoreView hs hk
+    apply SameView.of_wp
+    intro initial
+    exact productAmbient_spec a _ (fun _ _ hi => hi)
+  apply PrefixEnsures.preserves
   unfold run
   repeat' first
-    | with_reducible exact hi _
-    | with_reducible exact kernelLiftPrefix_preserves hs hk (occupancy_kernel _)
-    | with_reducible exact kernelLiftPrefix_preserves hs hk (hidden_sameKernel _)
-    | with_reducible exact kernelLiftPrefix_preserves hs hk (invariant_kernel _)
-    | exact kernelLiftPrefix_preserves hs hk (by intro w x v hr; cases hr; rfl)
-    | with_reducible exact PrefixPreserves.pure hs _
-    | with_reducible apply PrefixPreserves.range _ _ _ hs
-    | with_reducible apply PrefixPreserves.bind
-    | (with_reducible split; all_goals try simp_all only [Option.some.injEq, Prod.mk.injEq, reduceCtorEq]; all_goals try subst_vars)
-    | (with_reducible intro x; try dsimp only)
+    | exact hi _
+    | (batch_lift_head Env.Activation.occupancy; exact viewLiftPrefix_preserves productStoreView hs hk (occupancy_kernel _))
+    | (first | batch_lift_head hidden | batch_lift_head invariant | batch_lift_head modifyAmbient
+       exact ambient _)
+    | (maintenance_head Pure.pure; exact PrefixEnsures.pure hs (fun _ _ hi => hi))
+    | (maintenance_head ForIn.forIn; apply PrefixEnsures.rangeInvariant (State := World)
+        (I := fun _ h w => I h w) (hs := fun _ h w hi => hs h w hi))
+    | (maintenance_head Bind.bind; apply PrefixEnsures.bind (Q := fun _ h w => I h w))
+    | maintenance_reduce
+    | (maintenance_head ite; split)
+    | (maintenance_head dite; split)
+    | (with_reducible split; all_goals try simp_all only []; all_goals try subst_vars)
+    | (maintenance_intro; try dsimp only)
 
 theorem dispatch_preserves (hs : ∀ h w, I h w → S h)
-    (hk : ∀ h w v, v.k = w.k → I h w → I h v)
-    (he : ∀ pid, PrefixPreserves I S (liftPrefix (modifyDev fun d => {d with txWorkQueue := d.txWorkQueue.erase pid})))
+    (hk : ∀ h w v, productStoreView v = productStoreView w → I h w → I h v)
+    (he : ∀ pid, PrefixPreserves I S (liftPrefix (liftWG (modifyDev fun d => {d with txWorkQueue := d.txWorkQueue.erase pid}))))
     (iteration : Activation → PrefixM Event IterResult)
     (hi : ∀ a, PrefixPreserves I S (iteration a)) (worker : Worker) :
     PrefixPreserves I S (dispatch iteration worker) := by
+  have ambient {α : Type} (a : AmbientM α) :
+      PrefixPreserves I S (liftPrefix (MonadLift.monadLift a : Leanux.M α)) := by
+    apply viewLiftPrefix_preserves productStoreView hs hk
+    apply SameView.of_wp
+    intro initial
+    exact productAmbient_spec a _ (fun _ _ hi => hi)
+  apply PrefixEnsures.preserves
   unfold dispatch
   repeat' first
-    | with_reducible exact run_preserves hs hk iteration hi _
-    | with_reducible exact he _
-    | with_reducible exact kernelLiftPrefix_preserves hs hk Lifetimes.getDev_sameKernel
-    | with_reducible exact kernelLiftPrefix_preserves hs hk (peekUnit_sameKernel _)
-    | with_reducible exact kernelLiftPrefix_preserves hs hk (resolveUnit_sameKernel _ _ _)
-    | with_reducible exact kernelLiftPrefix_preserves hs hk (hidden_sameKernel _)
-    | with_reducible exact PrefixPreserves.pure hs _
-    | with_reducible apply PrefixPreserves.bind
-    | (with_reducible split; all_goals try simp_all only [Option.some.injEq, Prod.mk.injEq, reduceCtorEq]; all_goals try subst_vars)
-    | (with_reducible intro x; try dsimp only)
+    | (maintenance_head run; exact run_preserves hs hk iteration hi _)
+    | (batch_lift_head liftWG
+       first
+       | exact he _
+       | exact viewLiftPrefix_preserves productStoreView hs hk
+           (liftWG_sameProductStore getDev Lifetimes.getDev_sameWGStore))
+    | (first | batch_lift_head peekUnit | batch_lift_head resolveUnit | batch_lift_head hidden
+       exact ambient _)
+    | (maintenance_head Pure.pure; exact PrefixEnsures.pure hs (fun _ _ hi => hi))
+    | (maintenance_head ForIn.forIn; apply PrefixEnsures.rangeInvariant (State := World)
+        (I := fun _ h w => I h w) (hs := fun _ h w hi => hs h w hi))
+    | (maintenance_head Bind.bind; apply PrefixEnsures.bind (Q := fun _ h w => I h w))
+    | maintenance_reduce
+    | (maintenance_head ite; split)
+    | (maintenance_head dite; split)
+    | (with_reducible split; all_goals try simp_all only []; all_goals try subst_vars)
+    | (maintenance_intro; try dsimp only)
 
 theorem schedule_preserves (hs : ∀ h w, I h w → S h)
-    (hk : ∀ h w v, v.k = w.k → I h w → I h v)
-    (he : ∀ pid, PrefixPreserves I S (liftPrefix (modifyDev fun d => {d with txWorkQueue := d.txWorkQueue.erase pid})))
+    (hk : ∀ h w v, productStoreView v = productStoreView w → I h w → I h v)
+    (he : ∀ pid, PrefixPreserves I S (liftPrefix (liftWG (modifyDev fun d => {d with txWorkQueue := d.txWorkQueue.erase pid}))))
     (iteration : Activation → PrefixM Event IterResult) (napi : PrefixM Event Unit)
     (hi : ∀ a, PrefixPreserves I S (iteration a)) (hn : PrefixPreserves I S napi) (stack : Option Worker) :
     PrefixPreserves I S (schedule iteration napi stack) := by
+  have ambient {α : Type} (a : AmbientM α) :
+      PrefixPreserves I S (liftPrefix (MonadLift.monadLift a : Leanux.M α)) := by
+    apply viewLiftPrefix_preserves productStoreView hs hk
+    apply SameView.of_wp
+    intro initial
+    exact productAmbient_spec a _ (fun _ _ hi => hi)
+  apply PrefixEnsures.preserves
   unfold schedule
   repeat' first
-    | with_reducible exact dispatch_preserves hs hk he iteration hi _
-    | with_reducible exact run_preserves hs hk iteration hi _
-    | with_reducible exact hn
-    | with_reducible exact kernelLiftPrefix_preserves hs hk Lifetimes.getDev_sameKernel
-    | with_reducible exact kernelLiftPrefix_preserves hs hk (pendingNapi_kernel _)
-    | with_reducible exact kernelLiftPrefix_preserves hs hk (hasWork_kernel _)
-    | with_reducible exact kernelLiftPrefix_preserves hs hk peekHiddenSite_sameKernel
-    | with_reducible exact kernelLiftPrefix_preserves hs hk recordBudget_sameKernel
-    | with_reducible exact kernelLiftPrefix_preserves hs hk (budgetExhausted_sameKernel _)
-    | with_reducible exact kernelLiftPrefix_preserves hs hk (filterM_sameKernel _ activationConsistent_sameKernel _)
-    | with_reducible exact kernelLiftPrefix_preserves hs hk (invariant_kernel _)
-    | exact kernelLiftPrefix_preserves hs hk (by intro w x v hr; cases hr; rfl)
-    | exact kernelLiftPrefix_preserves hs hk (by intro w x v hr; cases hr)
-    | with_reducible exact PrefixPreserves.pure hs _
-    | with_reducible apply PrefixPreserves.range _ _ _ hs
-    | with_reducible apply PrefixPreserves.bind
-    | (with_reducible split; all_goals try simp_all only [Option.some.injEq, Prod.mk.injEq, reduceCtorEq]; all_goals try subst_vars)
-    | (with_reducible intro x; try dsimp only)
+    | (maintenance_head dispatch; exact dispatch_preserves hs hk he iteration hi _)
+    | (maintenance_head run; exact run_preserves hs hk iteration hi _)
+    | exact hn
+    | (batch_lift_head liftWG
+       exact viewLiftPrefix_preserves productStoreView hs hk
+         (liftWG_sameProductStore getDev Lifetimes.getDev_sameWGStore))
+    | (batch_lift_head Lifetimes.pendingNapi; exact viewLiftPrefix_preserves productStoreView hs hk (pendingNapi_kernel _))
+    | (batch_lift_head Env.Activation.hasWork; exact viewLiftPrefix_preserves productStoreView hs hk (hasWork_kernel _))
+    | (batch_lift_head List.filterM; exact viewLiftPrefix_preserves productStoreView hs hk
+        (filterM_sameKernel productStoreView _ activationConsistent_sameKernel _))
+    | (first
+       | batch_lift_head peekHiddenSite | batch_lift_head recordBudget
+       | batch_lift_head budgetExhausted | batch_lift_head invariant | batch_lift_head unsupported
+       | batch_lift_head getAmbient | batch_lift_head modifyAmbient
+       exact ambient _)
+    | (maintenance_head Pure.pure; exact PrefixEnsures.pure hs (fun _ _ hi => hi))
+    | (maintenance_head ForIn.forIn; apply PrefixEnsures.rangeInvariant (State := World)
+        (I := fun _ h w => I h w) (hs := fun _ h w hi => hs h w hi))
+    | (maintenance_head Bind.bind; apply PrefixEnsures.bind (Q := fun _ h w => I h w))
+    | maintenance_reduce
+    | (maintenance_head ite; split)
+    | (maintenance_head dite; split)
+    | (with_reducible split; all_goals try simp_all only []; all_goals try subst_vars)
+    | (maintenance_intro; try dsimp only)
 
 end Leanux.Proofs.WG.Queues.SourceScheduler
