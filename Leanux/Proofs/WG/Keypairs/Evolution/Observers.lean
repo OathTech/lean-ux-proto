@@ -1,13 +1,14 @@
 import Leanux.Proofs.WG.Keypairs.Evolution.Rules
 import Leanux.Proofs.Logged.Workers
 import Leanux.Proofs.WG.Keypairs.Frames.WGConfig
+import Leanux.Proofs.Framing.Product
 
 /-! Evolution through the concrete receive observers. Callbacks retain their
 own evolution contracts, so later scheduler composition can supply any checked
 placement of receive work. No runner theorem is assumed here. -/
 namespace Leanux.Proofs.WG.Keypairs.Observers
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing
-open Leanux.Proofs.WG.Keypairs Leanux.Proofs.WG.Keypairs.KernelFrames
+open Leanux.Proofs.WG.Keypairs
 open Leanux.Proofs.WG.Keypairs.WGFrames Leanux.Proofs.WG.Keypairs.WGTransitions
 open Leanux.Proofs.WG.Keypairs.WGMore Leanux.Proofs.WG.Keypairs.WGConfig
 open Lean Meta Elab Tactic
@@ -97,36 +98,44 @@ elab "evolves_join_use" : tactic => withMainContext do
 
 macro "observer_ordinary_leaf" : tactic => `(tactic|
   first
-    | (ordinary_head Leanux.hidden; exact (sameSnapshot_of_sameKernel (hidden_sameKernel _)).ordinary)
-    | (ordinary_head Leanux.hiddenClock64; exact (hiddenClock64_sameSnapshot _).ordinary)
-    | (ordinary_head Leanux.hiddenJiffies; exact (hiddenJiffies_sameSnapshot _).ordinary)
-    | (ordinary_head Leanux.recordBudget; exact recordBudget_sameSnapshot.ordinary)
-    | (ordinary_head Leanux.budgetExhausted; exact (budgetExhausted_sameSnapshot _).ordinary)
-    | (ordinary_head Leanux.recordsLeft; exact recordsLeft_sameSnapshot.ordinary)
-    | (ordinary_head Leanux.peekSiteU64; exact (peekSiteU64_sameSnapshot _).ordinary)
-    | (ordinary_head Leanux.peekQueuedUnit; exact (peekQueuedUnit_sameSnapshot _ _).ordinary)
-    | (ordinary_head Leanux.branchCmp; exact (branchCmp_sameSnapshot _ _ _ _).ordinary)
-    | (ordinary_head Leanux.branch; exact (branch_sameSnapshot _ _).ordinary)
-    | (ordinary_head Leanux.peekHiddenSite; exact peekHiddenSite_sameSnapshot.ordinary)
-    | (ordinary_head Leanux.invariant; exact (invariant_sameSnapshot _).ordinary)
-    | (ordinary_head Leanux.unsupported; exact (unsupported_sameSnapshot _).ordinary)
-    | (ordinary_head Leanux.WG.getDev; exact getDev_sameSnapshot.ordinary)
-    | (ordinary_head Leanux.WG.getPeer; exact (getPeer_sameSnapshot _).ordinary)
-    | (ordinary_head Leanux.WG.getTxSkb; exact (getTxSkb_sameSnapshot _).ordinary)
-    | (ordinary_head Leanux.WG.setTxSkb; exact (setTxSkb_sameSnapshot _ _).ordinary)
-    | (ordinary_head Leanux.WG.freeTxSkb; exact (freeTxSkb_sameSnapshot _).ordinary)
-    | (ordinary_head Leanux.WG.getRxSkb; exact (getRxSkb_sameSnapshot _).ordinary)
-    | (ordinary_head Leanux.WG.setRxSkb; exact (setRxSkb_sameSnapshot _ _).ordinary)
-    | (ordinary_head Leanux.WG.freeRxSkb; exact (freeRxSkb_sameSnapshot _).ordinary)
-    | (ordinary_head Leanux.WG.getKeypair; exact (getKeypair_sameSnapshot _).ordinary)
-    | (ordinary_head Leanux.WG.setPeer; exact (setPeer_sameSnapshot _ _).ordinary)
-    | (ordinary_head Leanux.WG.peerGet; exact (peerGet_sameSnapshot _).ordinary)
-    | (ordinary_head Leanux.WG.peerPut; exact (peerPut_sameSnapshot _).ordinary)
+    | (ordinary_head Leanux.WG.liftSkb
+       apply SameView.ordinary
+       intro initial
+       apply hoare_liftSkb _ (fun w => snapshot w = initial)
+       intro g d store hg hd
+       simpa [snapshot, hd] using hg)
+    | (ordinary_head Leanux.branch; apply SameView.ordinary; intro initial; exact hoare_liftAmbient (AmbientM.branch _ _) (fun w => snapshot w = initial))
+    | (ordinary_head Leanux.branchCmp; apply SameView.ordinary; intro initial; exact hoare_liftAmbient (AmbientM.branchCmp _ _ _ _) (fun w => snapshot w = initial))
+    | (ordinary_head Leanux.invariant; apply SameView.ordinary; intro initial; exact hoare_liftAmbient (AmbientM.invariant _) (fun w => snapshot w = initial))
+    | (ordinary_head Leanux.unsupported; apply SameView.ordinary; intro initial; exact hoare_liftAmbient (AmbientM.unsupported _) (fun w => snapshot w = initial))
+    | (ordinary_head Leanux.WG.IndexOwner.peerDeref; exact SameView.ordinary (ownerPeerDeref_sameSnapshot _))
+    | (ordinary_head Leanux.WG.getDev; exact SameView.ordinary getDev_sameSnapshot)
+    | (ordinary_head Leanux.WG.getPeer; exact SameView.ordinary (getPeer_sameSnapshot _))
+    | (ordinary_head Leanux.WG.getTxSkb; unfold Leanux.WG.getTxSkb)
+    | (ordinary_head Leanux.WG.setTxSkb; unfold Leanux.WG.setTxSkb)
+    | (ordinary_head Leanux.WG.freeTxSkb; unfold Leanux.WG.freeTxSkb)
+    | (ordinary_head Leanux.WG.getRxSkb; unfold Leanux.WG.getRxSkb)
+    | (ordinary_head Leanux.WG.setRxSkb; unfold Leanux.WG.setRxSkb)
+    | (ordinary_head Leanux.WG.freeRxSkb; unfold Leanux.WG.freeRxSkb)
+    | (ordinary_head Leanux.WG.getKeypair; exact SameView.ordinary (getKeypair_sameSnapshot _))
+    | (ordinary_head Leanux.WG.setPeer; exact SameView.ordinary (setPeer_sameSnapshot _ _))
+    | (ordinary_head Leanux.WG.peerGet; exact SameView.ordinary (peerGet_sameSnapshot _))
+    | (ordinary_head Leanux.WG.peerPut; exact SameView.ordinary (peerPut_sameSnapshot _))
     | (ordinary_head Leanux.WG.keypairPut; exact keypairPut_ordinary _ _)
-    | (ordinary_head Leanux.WG.PrevQueue.peek; exact (PrevQueue_peek_sameSnapshot _).ordinary)
-    | (ordinary_head Leanux.WG.decryptPacket; exact (WGMore.decryptPacket_sameSnapshot _).ordinary)
-    | (ordinary_head Leanux.WG.endpointFromSkb; exact (endpointFromSkb_sameSnapshot _).ordinary)
+    | (ordinary_head Leanux.WG.PrevQueue.peek; exact SameView.ordinary (PrevQueue_peek_sameSnapshot _))
+    | (ordinary_head Leanux.WG.decryptPacket; exact SameView.ordinary (WGMore.decryptPacket_sameSnapshot _))
+    | (ordinary_head Leanux.WG.endpointFromSkb; exact SameView.ordinary (endpointFromSkb_sameSnapshot _))
     | (ordinary_head Leanux.WG.consumeDataDone; exact consumeDataDone_ordinary _ _ _))
+
+private theorem evolves_native {a : WG.M α} (ha : OrdinaryAction a) :
+    Evolves (monadLift a : GhostM α) := evolves_lift ha.liftWG
+
+private theorem evolves_ambient (a : AmbientM α) :
+    Evolves (monadLift a : GhostM α) := by
+  apply evolves_lift
+  apply SameView.ordinary
+  intro initial
+  exact productAmbient_spec a (fun w => snapshot w.wg = initial) (fun _ _ h => h)
 
 macro "evolves_step" : tactic => `(tactic|
   first
@@ -135,12 +144,37 @@ macro "evolves_step" : tactic => `(tactic|
     | with_reducible assumption
     | evolves_join_let
     | evolves_join_use
-    | (evolves_head counterLogged; exact counterLogged_evolution _ _)
+    | (evolves_head liftWGGhost; exact counterLogged_evolution _ _)
+    | (evolves_head Leanux.hidden; exact evolves_ambient (AmbientM.hidden _))
+    | (evolves_head Leanux.hiddenClock64; exact evolves_ambient (AmbientM.hiddenClock64 _))
+    | (evolves_head Leanux.hiddenJiffies; exact evolves_ambient (AmbientM.hiddenJiffies _))
+    | (evolves_head Leanux.recordBudget; exact evolves_ambient (AmbientM.recordBudget ))
+    | (evolves_head Leanux.budgetExhausted; exact evolves_ambient (AmbientM.budgetExhausted _))
+    | (evolves_head Leanux.recordsLeft; exact evolves_ambient (AmbientM.recordsLeft ))
+    | (evolves_head Leanux.peekSiteU64; exact evolves_ambient (AmbientM.peekSiteU64 _))
+    | (evolves_head Leanux.peekQueuedUnit; exact evolves_ambient (AmbientM.peekQueuedUnit _ _))
+    | (evolves_head Leanux.branchCmp; exact evolves_ambient (AmbientM.branchCmp _ _ _ _))
+    | (evolves_head Leanux.branch; exact evolves_ambient (AmbientM.branch _ _))
+    | (evolves_head Leanux.peekHiddenSite; exact evolves_ambient (AmbientM.peekHiddenSite ))
+    | (evolves_head Leanux.invariant; exact evolves_ambient (AmbientM.invariant _))
+    | (evolves_head Leanux.unsupported; exact evolves_ambient (AmbientM.unsupported _))
+    | (evolves_head Leanux.modifyAmbient; unfold Leanux.modifyAmbient)
     | (evolves_head getWorld; exact evolves_getWorld)
     | (evolves_head modifyWorld; refine evolves_modifyWorld _ ?_; intro w; exact Ordinary.refl _)
     | (evolves_head Pure.pure; exact evolves_pure _)
     | (evolves_head MonadExceptOf.throw; exact evolves_throw _)
-    | (evolves_head liftM; refine evolves_liftM ?_)
+    | (evolves_head liftM; first
+        | exact evolves_ambient _
+        | apply evolves_native
+        | refine evolves_liftM ?_)
+    | (evolves_head MonadLiftT.monadLift; first
+        | exact evolves_ambient _
+        | apply evolves_native
+        | refine evolves_liftM ?_)
+    | (evolves_head MonadLift.monadLift; first
+        | exact evolves_ambient _
+        | apply evolves_native
+        | refine evolves_liftM ?_)
     | (evolves_head StateT.lift; refine evolves_lift ?_)
     | (evolves_head Bind.bind; refine evolves_bind ?_ ?_)
     | (evolves_head ite; refine evolves_ite _ ?_ ?_)
@@ -178,7 +212,6 @@ theorem enqueuePerPeerRxLogged_evolves (irq : GhostM Unit) (hi : Evolves irq)
     (id : SkbId) (state : PacketState) : Evolves (enqueuePerPeerRxLogged irq id state) := by
   unfold enqueuePerPeerRxLogged
   repeat' evolves_step
-  exact (sameSnapshot_of_sameKernel (indexOwner_peerDeref_sameKernel _)).ordinary
 
 theorem decryptStepLogged_evolves (softirq irq : GhostM Unit)
     (hs : Evolves softirq) (hi : Evolves irq) : Evolves (decryptStepLogged softirq irq) := by

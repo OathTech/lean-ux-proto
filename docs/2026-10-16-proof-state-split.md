@@ -72,9 +72,12 @@ it is not part of that baseline.
 | Native device lifecycle and transmit frames | 39 | 39 | 0 | 0 | 0 | 39 |
 | Product syscall composition | 10 | 0 | 0 | 10 | 0 | 10 |
 | Canonical total Aip and product Task adapters | 0 | 0 | 0 | 0 | 2 | 2 |
+| Product runner/checkpoint observers and receive evolution | 18 | 0 | 0 | 18 | 4 | 22 |
+| Native exact trie replacement and graft composition | 12 | 11 | 0 | 1 | 0 | 12 |
+| Native/product lifetime receive and release contracts | 43 | 25 | 0 | 18 | 18 | 61 |
 
-The whole tree currently contains 450 Lean files and 6,219 theorems. The completed
-changes total 1,021 retyped theorems, 1,599 deletions, 221 retained contract shapes and 103 added.
+The whole tree currently contains 451 Lean files and 6,241 theorems. The completed
+changes total 1,057 retyped theorems, 1,599 deletions, 258 retained contract shapes and 125 added.
 Retyping changes or generalizes the actual state/monad carrier or observation.
 This includes shorthand contracts whose source functions or named views move
 to a native monad. Mere namespace qualification and equivalent relocation of a
@@ -1370,4 +1373,60 @@ guest timeout or infrastructure rerun occurred.
 LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake build Leanux.Proofs.WG.AllowedIps.ListsMirror Leanux.Proofs.WG.AllowedIps.ChildMutation Leanux.Proofs.WG.Lifetimes.KeypairRelease Leanux.Proofs.WG.Keypairs.Frames.WGDevice Leanux.Proofs.WG.Keypairs.Frames.Syscalls
 # Run separately for each entry module, including Framing.Lift:
 LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Keypairs.Frames.WGDevice
+```
+
+## Runner observations, receive composition and trie grafting
+
+This checkpoint carries 73 existing claims: 36 are retyped/generalized and
+37 retain their contract shapes. It adds 22 helpers and deletes no theorem.
+The checkpoint and acceptance observers retain the literal current runner
+body with exactly their original observation sites. They preserve arbitrary
+trace, flag and projection inputs, exact JSON, indexed failures and all guards.
+The eleven receive-evolution statements retain arbitrary product callbacks.
+
+Native lifetime leaves retain WG and Ambient endpoints and failure histories.
+Enqueue and decrypt-worker callbacks remain unrestricted product actions.
+Separate product contracts retain arbitrary full-World invariants and the
+original 43-field store-stability observation; the native specializations are
+additional claims. The short-circuit helper is generalized over actual StateT
+stacks, retaining its former arbitrary action domain.
+
+Exact replacement and graft insertion preserve the original structural
+premises, placement/finish contracts, allocation refusal, rollback and installed
+results. Aip calls use the actual component adapter. No mirror code changes.
+
+The eleven modules compile in scoped builds. All 129 explicit named
+declarations, including private helper theorems, have permitted axioms only.
+Six fresh entry-module kernel replays pass. Source review and exact observer
+body comparison pass; a separate reviewer also checked the eleven
+receive-evolution contracts and their arbitrary callback scope. The default
+build passes (66 jobs), and unit tests pass (131 tests, one skip). The broader
+proof-tree build fails on seven remaining modules; the proof gate and result
+status remain pending/lagging.
+
+Development failures: Checkpoints had 17 failed calls before the passing
+eighteenth, involving callback decomposition, equality aliases, existing
+heartbeat limits and two diagnostic/command invocations. Its callback proof
+was factored without changing the observer. Logged Runner had one failed
+head-recognizer match before passing. Evolution Observers had two failed
+native-lift compositions before passing. ExactMutation had two failed local
+adapter/composition builds before passing; rejected elaboration recovery
+output was not accepted. GraftMirror had two failed builds before passing.
+The lifetime closure had six failed compositions between its passing adapter
+and closure builds. Five axiom-inventory invocations failed on diagnostic
+syntax/elaboration context before the corrected inventories passed. One
+source-comparison script initially included a trailing documentation comment;
+correcting its boundary produced the exact comparison above. Orchestration
+parse exceptions and interruption were followed by dirty-worktree snapshots
+before resuming. No memory cap or proof limit was raised, and no KILLED result,
+guest timeout or infrastructure rerun occurred.
+
+[AGENT 2026-10-16] Keep full-product lifetime interfaces alongside native
+leaf specializations: the original contracts quantify invariants and
+callbacks that may observe the whole runner state.
+
+```sh
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake build Leanux.Proofs.Logged.Checkpoints Leanux.Proofs.Logged.Runner Leanux.Proofs.WG.Keypairs.Evolution.Observers Leanux.Proofs.WG.AllowedIps.ExactMutation Leanux.Proofs.WG.AllowedIps.GraftMirror Leanux.Proofs.WG.Lifetimes.ReleaseCalls
+# Replay each of the six entry modules separately:
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.Logged.Runner
 ```
