@@ -25,7 +25,7 @@ def openFmode (flags : UInt32) : UInt32 :=
 /-- Whether the file's inode is a character device (`S_ISCHR`). The anonymous
     inode has mode S_IRUSR|S_IWUSR (fs/libfs.c); a pipefs inode is `S_IFIFO`;
     fixture inodes are not modeled. -/
-def inodeIsChr : Option InodeId → M Bool
+def inodeIsChr : Option InodeId → FS.M Bool
   | some .anon => return false
   | some (.pipefs id) => return (← getInode id).iMode &&& S_IFMT == S_IFCHR
   -- W8: the fixture's sockets are S_IFSOCK, the pin's nsfs inode S_IFREG
@@ -33,10 +33,10 @@ def inodeIsChr : Option InodeId → M Bool
   | none => invariant "file->f_inode is NULL"
 
 /-- file_free (file_table.c:87-98). `put_cred` and the slab free are cut points. -/
-def fileFree (fid : FileId) : M Unit := do
+def fileFree (fid : FileId) : FS.M Unit := do
   let f ← getFile fid
   if ← branchCmp .fileFreeAccounted (!hasFlag f.fMode FMODE_NOACCOUNT) (f.fMode &&& FMODE_NOACCOUNT).toNat 0 then
-    modifyK fun k => { k with nrFiles := k.nrFiles - 1 }   -- percpu_counter_dec(&nr_files)
+    modify fun k => { k with nrFiles := k.nrFiles - 1 }   -- percpu_counter_dec(&nr_files)
   if ← branchCmp .fileFreeBacking (hasFlag f.fMode FMODE_BACKING) (f.fMode &&& FMODE_BACKING).toNat 0 then
     unsupported "backing_file_free"
   -- kmem_cache_free(filp_cachep, f)
@@ -44,8 +44,8 @@ def fileFree (fid : FileId) : M Unit := do
 
 /-- alloc_empty_file (file_table.c:214-253) with init_file (171-202) inlined:
     `f_flags = flags`, `f_mode = OPEN_FMODE(flags)`, `f_count = 1`. -/
-def allocEmptyFile (flags : UInt32) : M (Except Int FileId) := do
-  let k ← getK
+def allocEmptyFile (flags : UInt32) : FS.M (Except Int FileId) := do
+  let k ← get
   if ← branch .allocEmptyFileOverMax (k.nrFiles >= k.maxFiles) then
     _ ← branch .allocEmptyFileNotCapable false  -- the harness runs as root: capable(CAP_SYS_ADMIN)
     unsupported "files_stat.max_files reached (percpu recount)"
@@ -53,12 +53,12 @@ def allocEmptyFile (flags : UInt32) : M (Except Int FileId) := do
     return .error (-ENOMEM)
   let fid := k.nextFile
   setFile fid { fFlags := flags, fMode := openFmode flags, fCount := 1 }
-  modifyK fun k => { k with nextFile := fid + 1, nrFiles := k.nrFiles + 1 }
+  modify fun k => { k with nextFile := fid + 1, nrFiles := k.nrFiles + 1 }
   return .ok fid
 
 /-- `iocb_flags(file)` (include/linux/fs.h:3590-3602), with the IOCB values of
     include/linux/fs.h:351-359 (IOCB_APPEND = RWF_APPEND, ...). -/
-def iocbFlags (fFlags : UInt32) : M UInt32 := do
+def iocbFlags (fFlags : UInt32) : FS.M UInt32 := do
   let mut res : UInt32 := 0
   if ← branchCmp .iocbFlagsAppend (hasFlag fFlags O_APPEND) (fFlags &&& O_APPEND).toNat 0 then res := res ||| 0x10
   if ← branchCmp .iocbFlagsDirect (hasFlag fFlags O_DIRECT) (fFlags &&& O_DIRECT).toNat 0 then res := res ||| ((1 : UInt32) <<< 17)
@@ -69,7 +69,7 @@ def iocbFlags (fFlags : UInt32) : M UInt32 := do
 /-- file_init_path (file_table.c:330-351). The path/mapping fields are cut
     points; `i_readcount_inc` (include/linux/fs.h:3130-3133) counts on the
     inode record (`inodeReadcountInc`). -/
-def fileInitPath (fid : FileId) (fopId : FopsId) (inode : InodeId) : M Unit := do
+def fileInitPath (fid : FileId) (fopId : FopsId) (inode : InodeId) : FS.M Unit := do
   let fop ← fopsOf (some fopId)
   -- file->f_path = *path; file->f_inode = path->dentry->d_inode; f_mapping; f_wb_err; f_sb_err
   setFile fid { (← getFile fid) with fInode := some inode }
@@ -94,7 +94,7 @@ def fileInitPath (fid : FileId) (fopId : FopsId) (inode : InodeId) : M Unit := d
     inodeReadcountInc (some inode)
 
 /-- alloc_file (file_table.c:360-369). -/
-def allocFile (flags : UInt32) (fopId : FopsId) (inode : InodeId) : M (Except Int FileId) := do
+def allocFile (flags : UInt32) (fopId : FopsId) (inode : InodeId) : FS.M (Except Int FileId) := do
   let r ← allocEmptyFile flags
   if ← branch .allocFileOk (r matches .ok _) then
     if let .ok fid := r then fileInitPath fid fopId inode
@@ -105,7 +105,7 @@ def allocFile (flags : UInt32) (fopId : FopsId) (inode : InodeId) : M (Except In
     `d_instantiate` are cut points. A pipefs inode's pseudo dentry counts
     its references (`Inode.dCount`, dropped by `dputPipefs` in `__fput`);
     the anonymous inode's dentry is a cut point. -/
-def allocPathPseudo (inode : InodeId) : M Int := do
+def allocPathPseudo (inode : InodeId) : FS.M Int := do
   if ← branch .allocPathPseudoFail (!(← hiddenAlloc .dAllocPseudo)) then return -ENOMEM
   if let .pipefs id := inode then
     let ino ← getInode id
@@ -116,7 +116,7 @@ def allocPathPseudo (inode : InodeId) : M Int := do
 /-- alloc_file_pseudo (file_table.c:382-400). On failure, `ihold(inode)` and
     `path_put(&path)`: the dentry's last reference goes, and the `iput` of
     its killing balances the `ihold` (both cuts). -/
-def allocFilePseudo (flags : UInt32) (inode : InodeId) (fopId : FopsId) : M (Except Int FileId) := do
+def allocFilePseudo (flags : UInt32) (inode : InodeId) (fopId : FopsId) : FS.M (Except Int FileId) := do
   let ret ← allocPathPseudo inode
   if ← branch .allocFilePseudoPathErr (ret != 0) then return .error ret
   let r ← allocFile flags fopId inode
@@ -126,7 +126,7 @@ def allocFilePseudo (flags : UInt32) (inode : InodeId) (fopId : FopsId) : M (Exc
   return r
 
 /-- put_file_access (fs/internal.h:114-121). -/
-def putFileAccess (f : File) : M Unit := do
+def putFileAccess (f : File) : FS.M Unit := do
   if ← branchCmp .putFileAccessReadOnly (f.fMode &&& (FMODE_READ ||| FMODE_WRITE) == FMODE_READ) (f.fMode &&& (FMODE_READ ||| FMODE_WRITE)).toNat FMODE_READ.toNat then
     inodeReadcountDec f.fInode
   else if ← branchCmp .putFileAccessWriter (hasFlag f.fMode FMODE_WRITER) (f.fMode &&& FMODE_WRITER).toNat 0 then
@@ -138,7 +138,7 @@ def putFileAccess (f : File) : M Unit := do
 
 /-- fput (file_table.c:517-540). The last reference queues `____fput` as task
     work, run on return to user mode (see `Leanux.Syscalls`). -/
-def fput (fid : FileId) : M Unit := do
+def fput (fid : FileId) : FS.M Unit := do
   let f ← getFile fid
   setFile fid { f with fCount := f.fCount - 1 }
   if ← branch .fputLast (f.fCount == 1) then

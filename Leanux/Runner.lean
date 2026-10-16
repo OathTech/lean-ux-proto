@@ -1000,13 +1000,24 @@ def initialTasks (rlimit : Nat) (foreign : Bool := false) (stepped : Bool := fal
 
 def initialKernel (rlimit : Nat) (net : Bool := false) (bare : Bool := false) (foreign : Bool := false)
     (stepped : Bool := false) (seccompChild : Bool := false) : Kernel :=
-  let _ := rlimit
+  let _ := (rlimit, foreign, stepped, seccompChild)
+  {
+    wg := if net && !bare then some { ifindex := 3, ifname := "wg0" } else none,
+    -- L: the netns's ifindex cursor (lo 1, sit0 2, the fixture's wg0 3) and
+    -- the ratelimiter's reference count (the fixture's wg0 holds one; every
+    -- earlier trace process deleted its devices)
+    netIfindexNext := if net && !bare then 4 else 3,
+    ratelimiter := { refcnt := if net && !bare then 1 else 0 } }
+
+/-- The file layer's stores at the start (the state split, phase 2): the
+    fixture's files over the reserved descriptors, the environment facts and
+    the sysctl defaults, as `initialKernel` held them before the split. -/
+def initialFS (net : Bool := false) (foreign : Bool := false) (stepped : Bool := false)
+    (seccompChild : Bool := false) : FSWorld :=
   -- W8: the foreign-creator fixture adds the injector (8) and the pin (9);
   -- W2: a stepped trace adds the dump socket (8); seccomp (design 6.2 rule
   -- 2): the children's KCOV descriptor (8); the validator keeps the two apart
   let reserved := reservedFds foreign stepped seccompChild
-  let slot (fd : Nat) : Option FileId :=
-    if fd < 3 then some 0 else if fd < reserved then some (fd - 2) else none
   let files : Std.TreeMap FileId File := Std.TreeMap.ofList
     ([(0, fixtureFile "console" 4),   -- fds 0-2 plus init's references
       (1, fixtureFile "kcov" 2)] ++    -- fd 3 plus the coverage mapping
@@ -1016,7 +1027,6 @@ def initialKernel (rlimit : Nat) (net : Bool := false) (bare : Bool := false) (f
          | 0 => "udp-listener-127.0.0.1" | 1 => "udp-listener-::1" | 2 => "udp-sender"
          | 3 => "generic-netlink" | 4 => if stepped then "generic-netlink-dump" else "udp-injector"
          | _ => "netns-pin") 1))
-  let slots := (List.range NR_OPEN_DEFAULT).toArray
   {
     files, nextFile := if foreign then 8 else if stepped || seccompChild then 7 else 6, ctxs := {}, nextCtx := 0,
     idaUsed := {},
@@ -1026,12 +1036,6 @@ def initialKernel (rlimit : Nat) (net : Bool := false) (bare : Bool := false) (f
     -- Pipes (P design section 5): sysctl defaults, and `root_user`'s
     -- `pipe_bufs` at its baseline of 0 (no pipes outside the trace)
     pipeMaxSize := 1048576, pipeUserPagesSoft := 16384, pipeUserPagesHard := 0, user := { pipeBufs := 0 },
-    wg := if net && !bare then some { ifindex := 3, ifname := "wg0" } else none,
-    -- L: the netns's ifindex cursor (lo 1, sit0 2, the fixture's wg0 3) and
-    -- the ratelimiter's reference count (the fixture's wg0 holds one; every
-    -- earlier trace process deleted its devices)
-    netIfindexNext := if net && !bare then 4 else 3,
-    ratelimiter := { refcnt := if net && !bare then 1 else 0 },
     -- epoll: the fixture facts of Leanux/Env.lean (the warm-up's relative
     -- counter, the boot's max_user_watches)
     loopCheckGen := Env.LOOP_CHECK_GEN_BASE, maxUserWatches := Env.MAX_USER_WATCHES }
@@ -1126,7 +1130,8 @@ def toSyscall (results : Array Int) (ends : Array (Option (Nat × Nat))) (index 
 /-- Lane C: the boot trie of a network trace's fixture namespace (`lo` up),
     for `leanux-model --fib-boot` and the harness's expected fixture facts. -/
 def fibBootJson : Except Stop Json := do
-  let world : World := { k := initialKernel 32 true, tasks := initialTasks 32, ambient := { env := harnessEnv, timing := Env.timing } }
+  let world : World := { k := initialKernel 32 true, fs := initialFS true, tasks := initialTasks 32,
+                         ambient := { env := harnessEnv, timing := Env.timing } }
   let (_, w) ← Net.Fib.bootTables.run world
   return Net.Fib.shape w.k
 
@@ -1142,6 +1147,7 @@ def executeTrace (trace : Trace) (placeholders : Bool := false) : Except (Nat ×
                                (trace.steer.map (·.1)).filter fun l => AllocSite.all.any (·.info.label == l)
                              else [] }
   let mut world : World := { ambient, k := initialKernel trace.rlimit trace.net trace.bare trace.foreign trace.stepped trace.seccompChild,
+                             fs := initialFS trace.net trace.foreign trace.stepped trace.seccompChild,
                              tasks := initialTasks trace.rlimit trace.foreign trace.stepped trace.seccompChild,
                              portBound := Env.portBound,
                              fixtureNetDevices := Env.fixtureNetDevices,
@@ -1185,21 +1191,21 @@ def executeTrace (trace : Trace) (placeholders : Bool := false) : Except (Nat ×
       throw (index, .invariant "a NET_RX softirq raised by a loopback transmission was left pending")
     world := w
     results := results.push ret
-    ends := ends.push (if ret == 0 then w.userFds else none)
+    ends := ends.push (if ret == 0 then w.fs.userFds else none)
     -- a read's first READ_HEAD bytes in the clear (eventfd reads: all 8);
     -- an epoll_wait's `ret` events of 12 bytes (epoll, the read channel)
-    let bytes := match op, w.userOut with
+    let bytes := match op, w.fs.userOut with
       | .read .., some v => if ret > 0 then hexBytesOf (v.extract 0 (min ret.toNat READ_HEAD)) else ""
       | .epollWait .., some v => if ret > 0 then hexBytesOf (v.extract 0 (min (ret.toNat * 12) READ_HEAD)) else ""
       | _, _ => ""
     -- pipe2: the pair copied to the caller, or null on failure; a read's
     -- digest; a write's sigpipe (P design section 6)
     let fds : List (String × Json) := match op with
-      | .pipe2 _ => [("fds", match w.userFds with
+      | .pipe2 _ => [("fds", match w.fs.userFds with
           | some (r, wr) => if ret == 0 then toJson [r, wr] else .null
           | none => .null)]
-      | .read .. => [("digest", readDigest w.userOut ret)]
-      | .epollWait .. => [("digest", readDigest w.userOut (ret * 12))]
+      | .read .. => [("digest", readDigest w.fs.userOut ret)]
+      | .epollWait .. => [("digest", readDigest w.fs.userOut (ret * 12))]
       | .write .. => [("sigpipe", writeSigpipe w.tasks)]
       | _ => []
     let device := w.ambient.extraOut
@@ -1274,7 +1280,7 @@ private def f1Ring : WG.PtrRing (List WG.SkbId) :=
   (List.range 1009).foldl (fun r i => r.produce [100 + i]) r1
 
 private def f1World : World :=
-  { k := { initialKernel 8 with wg := some { ifindex := 3, ifname := "wg0", encryptQueue := f1Ring } }, tasks := initialTasks 8,
+  { k := { initialKernel 8 with wg := some { ifindex := 3, ifname := "wg0", encryptQueue := f1Ring } }, fs := initialFS, tasks := initialTasks 8,
     ambient := { env := harnessEnv, timing := { advanceWait := 0, traceBound := 0 } } }
 
 /-- The poll's produce (`wg_queue_enqueue_per_device_and_peer`, queueing.h:174):

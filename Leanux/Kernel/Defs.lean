@@ -618,48 +618,23 @@ structure Ratelimiter where
   table6 : List (Nat × Int × Int) := []
   deriving Repr, BEq
 
-/-- Whole-kernel mirror state. `nrFiles`/`maxFiles` mirror the system-wide
-    `nr_files` percpu counter and `files_stat.max_files`, and
-    `anonInodeInodeErr` whether the boot-time `anon_inode_inode` is an error
-    pointer; the runner supplies these environment facts. -/
-structure Kernel where
-  files : TreeMap FileId File
-  nextFile : FileId
-  ctxs : TreeMap CtxId EventfdCtx
-  nextCtx : CtxId
+/-- The file layer's object stores and accounting (the state split,
+    docs/2026-10-15-design-state-split.md, section 2): the 31 file-layer
+    fields of the former `Kernel` and the two user-memory outputs of
+    `World`. `nrFiles`/`maxFiles` mirror the system-wide `nr_files` percpu
+    counter and `files_stat.max_files`, and `anonInodeInodeErr` whether the
+    boot-time `anon_inode_inode` is an error pointer; the runner supplies
+    these environment facts (`Runner.initialFS`). -/
+structure FSWorld where
+  files : TreeMap FileId File := {}
+  nextFile : FileId := 0
+  ctxs : TreeMap CtxId EventfdCtx := {}
+  nextCtx : CtxId := 0
   /-- `eventfd_ida`: the allocated ids. -/
-  idaUsed : TreeSet Nat
-  nrFiles : Nat
-  maxFiles : Nat
-  anonInodeInodeErr : Bool
-  /-- The fixture's WireGuard device, in traces that use the network fixture. -/
-  wg : Option WG.Device := none
-  /-- W2 (docs/2026-10-06-w1-w2-netlink.md, 4.3): the dump state of the
-      fixture's generic-netlink socket (fd 7, `wg_get`) and of the stepped
-      dump socket (fd 8, `wg_get_start`/`wg_get_recv`). -/
-  nlSock7 : WG.NlSock := {}
-  nlSock8 : WG.NlSock := {}
-  /-- `peer_counter` (drivers/net/wireguard/peer.c), a global atomic. -/
-  peerCounter : Nat := 0
-  /-- `keypair_counter` (drivers/net/wireguard/noise.c), a global atomic. -/
-  keypairCounter : Nat := 0
-  /-- L: the network namespace's ifindex cursor (`net->ifindex`, the
-      `xa_alloc_cyclic` cursor of `dev_by_index`, never reset): the next
-      device registered gets this index. -/
-  netIfindexNext : Nat := 4
-  /-- Lane C: the namespace's one IPv4 FIB table (the local table aliases
-      the main, docs/2026-10-15-design-c-fib-trie.md 1.1), its
-      `rt_genid` (`rt_cache_flush`, route.c:406-409) and `dev_addr_genid`
-      (the address events, fib_frontend.c:1458/1463/1505; a random start the
-      mirror counts from 0 with the comparison's operands excluded,
-      section 5(a)). -/
-  fib4 : Net.Fib.Table := {}
-  /-- W8's creating namespace C in the foreign-creator mode, where
-      WireGuard's UDP sockets bind and `send4` routes (the W8 design, 3.1):
-      its own table (`lo` only), torn down at `wg_netns_close`. -/
-  fib4C : Net.Fib.Table := {}
-  /-- L: the ratelimiter's global singleton (ratelimiter.c:12-18). -/
-  ratelimiter : Ratelimiter := {}
+  idaUsed : TreeSet Nat := {}
+  nrFiles : Nat := 0
+  maxFiles : Nat := 0
+  anonInodeInodeErr : Bool := false
   /-- Pipes (P): the pipefs inodes, the `pipe_inode_info`s and their data
       pages, each an owned store with its next identity. -/
   inodes : TreeMap PipefsInodeId Inode := {}
@@ -701,6 +676,46 @@ structure Kernel where
       (:1833, :1865): `ep_ptable_queue_proc` reads it and clears it when its
       `pwq` allocation fails (:1551-1553), which `ep_insert` tests (:1877). -/
   epqEpi : Option EpiId := none
+  /-- The caller's buffer (user memory), as written by `copy_to_iter` (an
+      eventfd read's 8 bytes) or `copy_page_to_iter` (a pipe read). -/
+  userOut : Option ByteArray := none
+  /-- The descriptor pair `do_pipe2` copied to the caller (`fd[0]`, `fd[1]`,
+      fs/pipe.c:1026): the `fds` observation field. -/
+  userFds : Option (Nat × Nat) := none
+  deriving BEq
+
+/-- The WireGuard side of the kernel mirror state (the state split, phase 2:
+    the file layer's stores moved to `FSWorld`; this structure is dissolved
+    into `WGWorld` by the WireGuard fork). -/
+structure Kernel where
+  /-- The fixture's WireGuard device, in traces that use the network fixture. -/
+  wg : Option WG.Device := none
+  /-- W2 (docs/2026-10-06-w1-w2-netlink.md, 4.3): the dump state of the
+      fixture's generic-netlink socket (fd 7, `wg_get`) and of the stepped
+      dump socket (fd 8, `wg_get_start`/`wg_get_recv`). -/
+  nlSock7 : WG.NlSock := {}
+  nlSock8 : WG.NlSock := {}
+  /-- `peer_counter` (drivers/net/wireguard/peer.c), a global atomic. -/
+  peerCounter : Nat := 0
+  /-- `keypair_counter` (drivers/net/wireguard/noise.c), a global atomic. -/
+  keypairCounter : Nat := 0
+  /-- L: the network namespace's ifindex cursor (`net->ifindex`, the
+      `xa_alloc_cyclic` cursor of `dev_by_index`, never reset): the next
+      device registered gets this index. -/
+  netIfindexNext : Nat := 4
+  /-- Lane C: the namespace's one IPv4 FIB table (the local table aliases
+      the main, docs/2026-10-15-design-c-fib-trie.md 1.1), its
+      `rt_genid` (`rt_cache_flush`, route.c:406-409) and `dev_addr_genid`
+      (the address events, fib_frontend.c:1458/1463/1505; a random start the
+      mirror counts from 0 with the comparison's operands excluded,
+      section 5(a)). -/
+  fib4 : Net.Fib.Table := {}
+  /-- W8's creating namespace C in the foreign-creator mode, where
+      WireGuard's UDP sockets bind and `send4` routes (the W8 design, 3.1):
+      its own table (`lo` only), torn down at `wg_netns_close`. -/
+  fib4C : Net.Fib.Table := {}
+  /-- L: the ratelimiter's global singleton (ratelimiter.c:12-18). -/
+  ratelimiter : Ratelimiter := {}
   /-- B3 (docs/2026-10-15-design-b3-timer-wheel.md, section 3.1): the timer
       base's clock (`timer_bases[0].clk`, kernel/time/timer.c:251-266) as
       last recorded at an arm (kind 313), kept for the check that the base
@@ -1594,12 +1609,9 @@ structure World where
   tasks : TaskWorld
   seccomp : SeccompWorld := {}
   k : Kernel
-  /-- The caller's buffer (user memory), as written by `copy_to_iter` (an
-      eventfd read's 8 bytes) or `copy_page_to_iter` (a pipe read). -/
-  userOut : Option ByteArray := none
-  /-- The descriptor pair `do_pipe2` copied to the caller (`fd[0]`, `fd[1]`,
-      fs/pipe.c:1026): the `fds` observation field. -/
-  userFds : Option (Nat × Nat) := none
+  /-- The file layer's stores and its user-memory outputs (the state split,
+      phase 2). -/
+  fs : FSWorld
   /-- Fixture state, not kernel state: the datagrams waiting at the network
       fixture's UDP listeners (each with the outer TOS / traffic class the
       listener's cmsg reports, W5) and at its sender, which `wg_observe`
@@ -1783,6 +1795,21 @@ abbrev Seccomp.M := StateT SeccompWorld TaskM
   return (a, { w with seccomp, tasks, ambient })
 
 instance : MonadLift Seccomp.M M := ⟨liftSeccomp⟩
+
+/-- The file layer's monad: its stores over the task store (the state split,
+    section 3): a pipe's SIGPIPE, `fput`'s task-work test and the descriptor
+    table reach the task through `TaskM`, and nothing else. The file layer's
+    definitions name it explicitly (`FS.M`): the module lives in
+    `namespace Leanux`, so the bare `M` there is the product. -/
+abbrev FS.M := StateT FSWorld TaskM
+
+/-- The runner's lift of a file-layer computation: its stores, the task store
+    and the ambient part run and written back once. -/
+@[inline] def liftFS (x : FS.M α) : M α := fun w => do
+  let (((a, fs), tasks), ambient) ← ((x.run w.fs).run w.tasks).run w.ambient
+  return (a, { w with fs, tasks, ambient })
+
+instance : MonadLift FS.M M := ⟨liftFS⟩
 
 /-! ## W9: the fixture namespace's routing (docs/2026-10-06-w8-w9-netns-routing.md, 2.6, 4.2) -/
 
@@ -2405,116 +2432,5 @@ def retireDeviceUnits : M Unit :=
         !((Worker.all.find? (·.index == e.2.1)).any Worker.deviceOwned),
       pendingWork := st.ambient.pendingWork.filter fun i => !((Worker.all.find? (·.index == i)).any Worker.deviceOwned) },
     timerUnits := [] }
-
-def getFile (id : FileId) : M File := do
-  match (← getK).files.get? id with
-  | some f => return f
-  | none => invariant s!"dangling file identity {id}"
-
-def setFile (id : FileId) (f : File) : M Unit :=
-  modifyK fun k => { k with files := k.files.insert id f }
-
-def freeFile (id : FileId) : M Unit :=
-  modifyK fun k => { k with files := k.files.erase id }
-
-def getCtx (id : CtxId) : M EventfdCtx := do
-  match (← getK).ctxs.get? id with
-  | some c => return c
-  | none => invariant s!"dangling eventfd context {id}"
-
-def setCtx (id : CtxId) (c : EventfdCtx) : M Unit :=
-  modifyK fun k => { k with ctxs := k.ctxs.insert id c }
-
-def freeCtx (id : CtxId) : M Unit :=
-  modifyK fun k => { k with ctxs := k.ctxs.erase id }
-
-def getInode (id : PipefsInodeId) : M Inode := do
-  match (← getK).inodes.get? id with
-  | some i => return i
-  | none => invariant s!"dangling pipefs inode identity {id}"
-
-def setInode (id : PipefsInodeId) (i : Inode) : M Unit :=
-  modifyK fun k => { k with inodes := k.inodes.insert id i }
-
-def getPipe (id : PipeId) : M PipeInodeInfo := do
-  match (← getK).pipes.get? id with
-  | some p => return p
-  | none => invariant s!"dangling pipe identity {id}"
-
-def setPipe (id : PipeId) (p : PipeInodeInfo) : M Unit :=
-  modifyK fun k => { k with pipes := k.pipes.insert id p }
-
-def getPage (id : PageId) : M Page := do
-  match (← getK).pages.get? id with
-  | some p => return p
-  | none => invariant s!"dangling page identity {id}"
-
-def setPage (id : PageId) (p : Page) : M Unit :=
-  modifyK fun k => { k with pages := k.pages.insert id p }
-
-/-! ## epoll stores (lifetime identities) -/
-
-def getEp (id : EpId) : M Eventpoll := do
-  match (← getK).eps.get? id with
-  | some e => return e
-  | none => invariant s!"dangling eventpoll identity {id}"
-
-def setEp (id : EpId) (e : Eventpoll) : M Unit :=
-  modifyK fun k => { k with eps := k.eps.insert id e }
-
-def freeEp (id : EpId) : M Unit :=
-  modifyK fun k => { k with eps := k.eps.erase id }
-
-def getEpi (id : EpiId) : M Epitem := do
-  match (← getK).epis.get? id with
-  | some e => return e
-  | none => invariant s!"dangling epitem identity {id}"
-
-def setEpi (id : EpiId) (e : Epitem) : M Unit :=
-  modifyK fun k => { k with epis := k.epis.insert id e }
-
-def freeEpi (id : EpiId) : M Unit :=
-  modifyK fun k => { k with epis := k.epis.erase id }
-
-def getPwq (id : PwqId) : M EppollEntry := do
-  match (← getK).pwqs.get? id with
-  | some p => return p
-  | none => invariant s!"dangling eppoll_entry identity {id}"
-
-def setPwq (id : PwqId) (p : EppollEntry) : M Unit :=
-  modifyK fun k => { k with pwqs := k.pwqs.insert id p }
-
-def freePwq (id : PwqId) : M Unit :=
-  modifyK fun k => { k with pwqs := k.pwqs.erase id }
-
-/-! ## Bounds-checked descriptor-table access -/
-
-private def at? (a : Array α) (n : Nat) (what : String) : M α :=
-  match a[n]? with
-  | some x => return x
-  | none => invariant s!"{what}[{n}] beyond max_fds"
-
-/-- `fdt->fd[n]`. -/
-def fdtSlot (fdt : Fdtable) (n : Nat) : M (Option FileId) := at? fdt.fd n "fdt->fd"
-/-- `test_bit(n, fdt->open_fds)`. -/
-def fdtOpen (fdt : Fdtable) (n : Nat) : M Bool := at? fdt.openFds n "fdt->open_fds"
-/-- `test_bit(n, fdt->close_on_exec)`. -/
-def fdtCloexec (fdt : Fdtable) (n : Nat) : M Bool := at? fdt.closeOnExec n "fdt->close_on_exec"
-
-private def setAt (a : Array α) (n : Nat) (x : α) (what : String) : M (Array α) :=
-  if n < a.size then return a.set! n x else invariant s!"{what}[{n}] beyond max_fds"
-
-def setFdtSlot (n : Nat) (v : Option FileId) : M Unit := do
-  let t := (← getFiles).fdt
-  let fd ← setAt t.fd n v "fdt->fd"
-  modifyFdt fun t => { t with fd }
-def setFdtOpen (n : Nat) (b : Bool) : M Unit := do
-  let t := (← getFiles).fdt
-  let openFds ← setAt t.openFds n b "fdt->open_fds"
-  modifyFdt fun t => { t with openFds }
-def setFdtCloexec (n : Nat) (b : Bool) : M Unit := do
-  let t := (← getFiles).fdt
-  let closeOnExec ← setAt t.closeOnExec n b "fdt->close_on_exec"
-  modifyFdt fun t => { t with closeOnExec }
 
 end Leanux
