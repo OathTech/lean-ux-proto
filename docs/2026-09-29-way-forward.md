@@ -459,8 +459,8 @@ presented for user signoff before anything reaches `main`.
 - D3: agree.
 - D4: agree.
 - D5: agree.
-- D6: "don't remember, retire it".
-- D7: "sounds good".
+- D6: not remembered; retire it.
+- D7: agree.
 
 [AGENT] interpretation of D4: retired code and contracts are deleted from the
 tree, and git history keeps them. Superseded documents move to `docs/history/`.

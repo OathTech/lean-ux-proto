@@ -76,7 +76,10 @@ inductive Syscall where
   /-- W9: `RTM_DELADDR` of wg0's fixture address and `RTM_DELROUTE` of the
       default route via wg0, per family, on a temporary rtnetlink socket. -/
   | wgDeladdr (family : Nat)
-  | wgDelroute (family : Nat)
+  | wgDelroute (family : Nat) (named : Bool) (dst plen oif typeCode metric : Nat)
+  /-- Lane C: the routing corpus's requests over the same socket. -/
+  | wgAddroute (dst plen oif typeCode metric mtu nlflags : Nat)
+  | wgAddaddr (addr plen : Nat)
   /-- E-B: an io_uring flood to wg0's `port`: `count` invalid-MAC1 initiations
       with `messages` valid-MAC1 initiations submitted first. -/
   | wgFlood (count port family : Nat) (messages : List (List UInt8))
@@ -170,12 +173,12 @@ def rtnetlinkRequest (handler : M Int) : M Int := do
   let t := fs.fdt
   let some fd := (List.range t.maxFds).find? (fun n => n ≥ fs.nextFd && !(t.openFds.getD n true))
     | unsupported "no free descriptor in the table for the temporary rtnetlink socket (expansion)"
-  if fd ≥ (← getK).task.rlimitNofile then
+  if fd ≥ (← getTask .task).rlimitNofile then
     unsupported "no descriptor below RLIMIT_NOFILE for the temporary rtnetlink socket (the guest fails)"
-  let fid := (← getK).nextFile
+  let fid := (← get).fs.nextFile
   setFile fid { fFlags := O_RDWR, fMode := FMODE_READ ||| FMODE_WRITE ||| FMODE_OPENED, fCount := 1,
                 fOp := some (.fixture "rtnetlink"), fInode := some (.fixture "rtnetlink") }
-  modifyK fun k => { k with nextFile := fid + 1 }
+  modify fun w => { w with fs := { w.fs with nextFile := fid + 1 } }
   setFdtSlot fd (some fid)
   setFdtOpen fd true
   setFdtCloexec fd false
@@ -202,12 +205,12 @@ def TASK_WORK_FUEL : Nat := 1 <<< 16
     An `__fput` may queue more work (a release dropping another reference), so
     the loop is fuel-bounded rather than bounded by the queue at entry
     (future-proof-paths note, 3(d)). -/
-def taskWorkRun : M Unit := do
+def taskWorkRun : FS.M Unit := do
   for _ in [0:TASK_WORK_FUEL] do
-    match (← getK).task.taskWorks with
+    match (← getTask .task).taskWorks with
     | [] => return
     | fid :: rest =>
-      modifyK fun k => { k with task := { k.task with taskWorks := rest } }
+      modifyTask .task fun t => { t with taskWorks := rest }
       fputFinal fid
   invariant "task_work_run did not drain the task's work"
 
@@ -220,8 +223,8 @@ def taskWorkRun : M Unit := do
     the queue record), and its section runs in the guest's wait
     (`Env.netnsCleanup`, after this call). -/
 def netnsClose : M Int := do
-  if !(← get).foreignCreator then unsupported "wg_netns_close outside the foreign-creator fixture"
-  if (← get).netnsCHolders.isEmpty then unsupported "wg_netns_close twice"
+  if !(← getRouting).foreignCreator then unsupported "wg_netns_close outside the foreign-creator fixture"
+  if (← getEnv).netnsCHolders.isEmpty then unsupported "wg_netns_close twice"
   for fd in [INJECT_FD, LISTEN6_FD, LISTEN4_FD, PIN_FD] do
     let ret ← sysClose fd
     if ret != 0 then invariant s!"close({fd}) of a fixture holder returned {ret}"
@@ -229,23 +232,23 @@ def netnsClose : M Int := do
   return 0
 
 def dispatch : Syscall → M Int
-  | .eventfd2 count flags => sysEventfd2 count flags
-  | .dup fildes => sysDup fildes
-  | .dup3 oldfd newfd flags => ksysDup3 oldfd newfd flags
-  | .close fd => sysClose fd
-  | .read fd count => ksysRead fd count
-  | .write fd count buf => ksysWrite fd buf count
-  | .pipe2 flags => sysPipe2 flags
-  | .fcntl fd cmd arg => sysFcntl fd cmd arg
-  | .epollCreate1 flags => sysEpollCreate1 flags
-  | .epollCtl epfd op fd events data => sysEpollCtl epfd op fd events data
-  | .epollWait epfd maxevents timeout => sysEpollWait epfd maxevents timeout
+  | .eventfd2 count flags => liftFS (sysEventfd2 count flags)
+  | .dup fildes => liftFS (sysDup fildes)
+  | .dup3 oldfd newfd flags => liftFS (ksysDup3 oldfd newfd flags)
+  | .close fd => liftFS (sysClose fd)
+  | .read fd count => liftFS (ksysRead fd count)
+  | .write fd count buf => liftFS (ksysWrite fd buf count)
+  | .pipe2 flags => liftFS (sysPipe2 flags)
+  | .fcntl fd cmd arg => liftFS (sysFcntl fd cmd arg)
+  | .epollCreate1 flags => liftFS (sysEpollCreate1 flags)
+  | .epollCtl epfd op fd events data => liftFS (sysEpollCtl epfd op fd events data)
+  | .epollWait epfd maxevents timeout => liftFS (sysEpollWait epfd maxevents timeout)
   | .wgSet attrs => netlinkRequest (WG.wgSetDevice attrs)
   | .wgGet device => netlinkRequest do
     match ← WG.wgGetDevice device with
     | .error e => return e
     | .ok device =>
-      modify fun w => { w with extraOut := [("device", device)] }
+      modifyAmbient fun w => { w with extraOut := [("device", device)] }
       return 0
   -- W2 (4.2): one system call each on the stepped socket, the netlink
   -- core's chunk allocations below the cut as in `netlinkRequest`. The
@@ -278,7 +281,7 @@ def dispatch : Syscall → M Int
     -- (netlinkDumpStart stops at the start)
     if messages.all (· matches .done ..) then
       unsupported "wg_get_recv popping a lone NLMSG_DONE: no WireGuard code runs"
-    modify fun w => { w with extraOut := [("messages", Lean.Json.arr (messages.map (·.toJson)).toArray)] }
+    modifyAmbient fun w => { w with extraOut := [("messages", Lean.Json.arr (messages.map (·.toJson)).toArray)] }
     return 0
   | .wgUp => socketCallOn SENDER_FD Env.wgUp
   | .wgXmit family addr payload opts => socketCallOn SENDER_FD do
@@ -287,26 +290,33 @@ def dispatch : Syscall → M Int
     -- a successful wg_up (and removes with a down, a deletion or
     -- `wg_delroute`), else `-ENETUNREACH`; a local destination never
     -- reaches wg0
-    match ← routeLookup family 0 addr with
-    | .error err => return err
-    | .ok r => if r.dev != WG0_IFINDEX then unsupported "a transmit to a local address (not into wg0)"
+    let r ← match ← Net.routeLookup family 0 addr with
+      | .error err => return err
+      | .ok r => pure r
+    if r.dev != WG0_IFINDEX then unsupported "a transmit to a local address (not into wg0)"
     -- W4: an MTU change below the family's floor took its routes down with
     -- its IP device, and the fixture re-adds them only at the next wg_up
-    if let some d := (← getK).wg then
+    if let some d := (← getWG).dev then
       if (family == 4 && !d.inet4Dev) || (family == 6 && !d.inet6Dev) then
         unsupported "a transmit after an MTU change took the family's routes into wg0 down"
     -- udp_sendmsg returns the datagram's length once the device took it
     Env.fixtureSend
+    -- lane C: `dst_mtu` is the route's metric when it carries one
+    let opts := { opts with routeMtu := opts.routeMtu <|> (if r.mtu != 0 then some r.mtu else none) }
     match ← Env.xmitPackets family addr payload opts with
     | .error e => return e   -- refused by the sender's IP layer before any output
     | .ok (pkts, mtu) =>
       Env.xmitMulticastLoop family addr
+      -- lane C: `ip_finish_output2` on wg0: the device's one neighbour
+      if family == 4 then Net.neighbourClassify WG0_IFINDEX
       let ret ← WG.wgXmit family addr pkts mtu
       return if ret == 0 then payload.length else ret
   | .wgSetMtu mtu => socketCallOn SENDER_FD (Env.setMtu mtu)
   | .wgInject family port message tos ll dest => socketCallOn SENDER_FD (Env.inject family port message tos ll dest)
   | .wgDeladdr family => rtnetlinkRequest (Env.wgDeladdr family)
-  | .wgDelroute family => rtnetlinkRequest (Env.wgDelroute family)
+  | .wgDelroute family named dst plen oif typeCode metric => rtnetlinkRequest (Env.wgDelroute family named dst plen oif typeCode metric)
+  | .wgAddroute dst plen oif typeCode metric mtu nlflags => rtnetlinkRequest (Env.wgAddroute dst plen oif typeCode metric mtu nlflags)
+  | .wgAddaddr addr plen => rtnetlinkRequest (Env.wgAddaddr addr plen)
   | .wgFlood count port family messages => Env.flood count port family messages
   -- W7: the io_uring submission's descriptor plumbing (the ring's fdget, each
   -- send's fget of the sender) is the fixture's, as the flood's is: not modeled
@@ -316,7 +326,7 @@ def dispatch : Syscall → M Int
     -- open (W8: after wg_netns_close the `recvfrom(4)` is -EBADF and the
     -- datagrams null, the sender's inbox and the stats are read as always)
     let (ret, observed) ← Env.observe
-    modify fun w => { w with extraOut := ["datagrams", "replies", "stats"].map fun k => (k, observed.getObjValD k) }
+    modifyAmbient fun w => { w with extraOut := ["datagrams", "replies", "stats"].map fun k => (k, observed.getObjValD k) }
     socketCallOn LISTEN4_FD (pure ret)
   | .wgAdvance ticks => do
     -- `ioctl(3, KCOV_LEANUX_TIME_ADVANCE, &ticks)`: `CLASS(fd, f)(fd)`
@@ -331,12 +341,12 @@ def dispatch : Syscall → M Int
   | .wgDown => socketCallOn SENDER_FD Env.wgDown
   | .wgDelete => rtnetlinkRequest Env.wgDelete
   | .wgNetnsClose => netnsClose
-  | .seccompInstall via flags filter len bad mode => Seccomp.sysSeccompInstall via flags filter len bad mode
-  | .seccompProbe nr args .self _ => Seccomp.sysSeccompProbeSelf nr args
-  | .seccompProbe nr args .child strict => Seccomp.sysSeccompProbeChild nr args strict
-  | .seccompPrctl cmd args => Seccomp.sysSeccompPrctl cmd args
-  | .seccompCapdrop => Seccomp.sysSeccompCapdrop
-  | .seccompQuery cmd action flags => Seccomp.sysSeccompQuery cmd action flags
+  | .seccompInstall via flags filter len bad mode => liftSeccomp (Seccomp.sysSeccompInstall via flags filter len bad mode)
+  | .seccompProbe nr args .self _ => liftSeccomp (Seccomp.sysSeccompProbeSelf nr args)
+  | .seccompProbe nr args .child strict => liftSeccomp (Seccomp.sysSeccompProbeChild nr args strict)
+  | .seccompPrctl cmd args => liftSeccomp (Seccomp.sysSeccompPrctl cmd args)
+  | .seccompCapdrop => liftSeccomp Seccomp.sysSeccompCapdrop
+  | .seccompQuery cmd action flags => liftSeccomp (Seccomp.sysSeccompQuery cmd action flags)
 
 /-- The x86-64 number of the system call an operation makes, for the entry
     path once a seccomp mode is set (`__secure_computing`, design 4.5):
@@ -365,18 +375,20 @@ def Syscall.isNet : Syscall → Bool
 
 /-- One system call: entry, the handler, and the return-to-user work. -/
 def syscall (call : Syscall) : M Int := do
-  modify fun w => { w with steps := #[], userOut := none, userFds := none, extraOut := [], queuedThisCall := [], fired := #[],
-                           netRxSections := 0, netRxSection := 0, emitted := {}, translatedLen := none }
+  modify fun w => { w with fs := { w.fs with userOut := none, userFds := none },
+                           seccomp := { w.seccomp with emitted := {}, translatedLen := none } }
+  modifyWG fun g => { g with queuedThisCall := [] }
+  modifyAmbient fun a => { a with steps := #[], extraOut := [], fired := #[], netRxSections := 0, netRxSection := 0 }
   -- seccomp: the entry path of the operation's own call once a mode is set
   -- (a harness call by design 6.2 rule 1: a cache hit); a probe enters itself
   match syscallNr call with
-  | some nr => Seccomp.enterHarnessCall nr
+  | some nr => liftSeccomp (Seccomp.enterHarnessCall nr)
   | none =>
     if call.isNet && (← getCurrent).seccomp.mode != .disabled then
       unsupported "a network operation after a seccomp mode was set (the fixture's calls are not modelled under a filter)"
   let ret ← dispatch call
   -- harness calls whose entry falls inside the window after the operation's (fixture knowledge)
-  for c in Env.windowTailCalls do Seccomp.enterHarnessCall c
+  for c in Env.windowTailCalls do liftSeccomp (Seccomp.enterHarnessCall c)
   taskWorkRun
   -- the guest waits inside the operations that can queue the handshake send
   -- worker (and in wg_inject); the worker runs during that wait
@@ -391,6 +403,15 @@ def syscall (call : Syscall) : M Int := do
   | .wgAdvance _ => Env.afterAdvance
   -- W8: the namespace's teardown section runs in the guest's wait
   | .wgNetnsClose => Env.netnsCleanup
+  | _ => pure ()
+  -- lane C's shape oracle (the design note, 9.4): after an operation that
+  -- changes the IPv4 tables, the trie as `/proc/net/fib_trie` prints it,
+  -- compared with the guest's read outside the window
+  match call with
+  | .wgUp | .wgDown | .wgDelete | .wgDeladdr _ | .wgDelroute .. | .wgSetMtu _ | .wgNetnsClose
+  | .wgAddroute .. | .wgAddaddr .. =>
+    let shape := Net.Fib.shape (← getRouting)
+    modifyAmbient fun w => { w with extraOut := w.extraOut ++ [("fib_trie", shape)] }
   | _ => pure ()
   return ret
 

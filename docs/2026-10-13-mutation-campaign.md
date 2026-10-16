@@ -12,10 +12,9 @@ sentinels of `scripts/wg-mutants.py`, `pipes-mutants.py` and
 the whole mirror once and says which survivors should become sentinels or
 traces.
 
-Provenance: [USER 2026-10-13] "let's plan to work on fidelity improvements /
-audit / census gaps while the proof campaign is running"; the campaign's
-shape (the classes, the sampling, the subsets) is [AGENT, fork of the
-coordinator].
+Provenance: [USER 2026-10-13] fidelity improvements, audits and the census's
+gaps are the mirror work while the proof campaign runs; the campaign's shape
+(the classes, the sampling, the subsets) is [AGENT, fork of the coordinator].
 
 ## 1. The tool
 

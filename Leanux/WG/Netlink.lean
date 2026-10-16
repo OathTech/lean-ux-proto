@@ -94,11 +94,11 @@ structure DeviceAttrs where
 
 /-- The socket's namespace's device table as `lookup_interface` reads it:
     the fixture's devices (`World.fixtureNetDevices`, from `Env`) and wg0 at
-    its current ifindex with kind "wireguard" when it exists (`Kernel.wg`:
+    its current ifindex with kind "wireguard" when it exists (`WGWorld.dev`:
     L's bare fixture and `wg_delete` leave none). -/
 def netDevices : M (List (String × Nat × Option String)) := do
   let fixture := (← get).fixtureNetDevices
-  match (← getK).wg with
+  match (← get).dev with
   | some d => return fixture ++ [(d.ifname, d.ifindex, some "wireguard")]
   | none => return fixture
 

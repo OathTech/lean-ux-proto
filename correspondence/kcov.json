@@ -42,7 +42,8 @@
   "include/linux/poll.h",
   "fs/eventpoll.c",
   "include/linux/percpu_counter.h",
-  "arch/x86/include/asm/irqflags.h"
+  "arch/x86/include/asm/irqflags.h",
+  "net/ipv4/fib_trie.c"
  ],
  "functions": [
   "touch_atime",
@@ -274,7 +275,23 @@
   "eventpoll_release_file",
   "list_file",
   "reverse_path_check_proc",
-  "ep_destroy_wakeup_source"
+  "ep_destroy_wakeup_source",
+  "fib_table_lookup",
+  "fib_lookup_good_nhc",
+  "fib_find_alias",
+  "fib_table_insert",
+  "fib_table_delete",
+  "fib_notify_alias_delete",
+  "update_suffix",
+  "put_child",
+  "tnode_new",
+  "update_children",
+  "tnode_free",
+  "fib_table_flush",
+  "fib_insert_alias",
+  "fib_remove_alias",
+  "replace",
+  "resize"
  ],
  "known_gaps": [],
  "shared_exits": [
@@ -374,6 +391,44 @@
     "fs/eventpoll.c:2584"
    ],
    "note": "epoll stream S: ep_alloc_epitem's percpu_counter_dec on its -ENOMEM path (:1766) and ep_register_epitem's on its attach-error path (:1808) are one block in the built code, attributed to the latter; the steered epitem failure (e_alloc_epitem_nomem) reaches it without ep_register_epitem running. ep_register_epitem's own path runs its `if (tep)` block (:1800) first. arch/x86/include/asm/irqflags.h is anchored only so this chain can be named."
+  },
+  {
+   "function": "collapse",
+   "frames": [
+    "net/ipv4/fib_trie.c:699",
+    "net/ipv4/fib_trie.c:907"
+   ],
+   "points": 2,
+   "unless_covered": [
+    "net/ipv4/fib_trie.c:695",
+    "net/ipv4/fib_trie.c:907"
+   ],
+   "note": "resize's return without a collapse (:910, `return node_parent(tn)`) shares collapse's :699 (`tp = node_parent(oldtnode)`, the same value, one block): the two points attributed to collapse:699 inlined at resize:907 run on every resize (return PCs 0xffffffff8151ced2 and 0xffffffff8151d4c4 in the accepted build); collapse's `return tp` (:706) is the same merged return (the next entry); collapse itself ran only when its scan at :695 did. Found by the routing corpus (every insertion's resize), 2026-10-15."
+  },
+  {
+   "function": "fib_insert_node",
+   "frames": [
+    "net/ipv4/fib_trie.c:1153",
+    "net/ipv4/fib_trie.c:1165"
+   ],
+   "unless_covered": [
+    "net/ipv4/fib_trie.c:359",
+    "net/ipv4/fib_trie.c:1115",
+    "net/ipv4/fib_trie.c:1165"
+   ],
+   "note": "fib_insert_alias's returns (:1193 and :1165's `return fib_insert_node(...)`) are one block attributed to fib_insert_node:1153 (`return 0`) inlined at :1165 (return PC 0xffffffff8151d60c in the accepted build): it runs on an alias added to an existing leaf although fib_insert_node did not; fib_insert_node ran only when leaf_new's allocation at :359 did. Found by r_tb_order (the routing corpus), 2026-10-15."
+  },
+  {
+   "function": "collapse",
+   "frames": [
+    "net/ipv4/fib_trie.c:706",
+    "net/ipv4/fib_trie.c:907"
+   ],
+   "unless_covered": [
+    "net/ipv4/fib_trie.c:695",
+    "net/ipv4/fib_trie.c:907"
+   ],
+   "note": "resize's return without a collapse (:910) is one block with collapse's `return tp` (:706) inlined at resize:907 (return PC 0xffffffff8151cf8b in the accepted build): covered on every resize; collapse itself ran only when its scan at :695 did. Found by the routing corpus, 2026-10-15."
   }
  ],
  "operand_exclusions": [
@@ -432,7 +487,19 @@
   "IP6_ECN_set_ect1",
   "seccomp_may_assign_mode",
   "seccomp_log",
-  "percpu_counter_compare"
+  "percpu_counter_compare",
+  "child_length",
+  "get_index",
+  "get_cindex",
+  "node_set_parent",
+  "prefix_mismatch",
+  "tnode_free_init",
+  "tnode_free_append",
+  "node_free",
+  "alias_free_mem_rcu",
+  "tn_info",
+  "tnode_get_child_rcu",
+  "tnode_get_child"
  ],
  "helper_cuts": [
   {
@@ -679,6 +746,56 @@
    "function": "flush_sigqueue",
    "file": "kernel/signal.c",
    "note": "the pending queue flushed on the child's exit: the child's exit is an environment effect (seccomp design, audit C1); signal delivery is an environment effect by the P9 widening's scope [USER 2026-10-13; seccomp design section 16]: the mirror models generation to the pending set and the wake (send_signal_locked, prepare_signal, complete_signal, force_sig_info_to_task, listed), and takes delivery's effect (the handler ran, the frame, the restored mask, the child's exit) from the observation; kernel/signal.c is anchored for the generation chain, not for this path. Found by the boundary rule (pre-release review, finding 1)."
+  },
+  {
+   "function": "fib_free_table",
+   "file": "net/ipv4/fib_trie.c",
+   "note": "the namespace exit's table free (fib_frontend.c ip_fib_net_exit, W8's wg_netns_close): below the mirror's altitude, the trie is gone with its namespace; lane C"
+  },
+  {
+   "function": "fib_trie_free",
+   "file": "net/ipv4/fib_trie.c",
+   "note": "the free walk under fib_free_table at the namespace exit: as fib_free_table"
+  },
+  {
+   "function": "fib_proc_exit",
+   "file": "net/ipv4/fib_trie.c",
+   "note": "the namespace exit's proc entries (fib_trie.c:3040-3046): no routing state; lane C"
+  },
+  {
+   "function": "__node_free_rcu",
+   "file": "net/ipv4/fib_trie.c",
+   "note": "the call_rcu free of a node (fib_trie.c:309-317), run by the RCU softirq: a slab free below the altitude; lane C"
+  },
+  {
+   "function": "__alias_free_mem",
+   "file": "net/ipv4/fib_trie.c",
+   "note": "the call_rcu free of an alias (fib_trie.c:295-299): as __node_free_rcu"
+  },
+  {
+   "function": "leaf_walk_rcu",
+   "file": "net/ipv4/fib_trie.c",
+   "note": "the proc and dump walks (fib_trie.c:1762-1819) and fib_trie_free: outside every window on this fixture, the proc read happens outside it (the shape oracle); lane C"
+  },
+  {
+   "function": "fib_table_dump",
+   "file": "net/ipv4/fib_trie.c",
+   "note": "the RTM_GETROUTE dump (fib_trie.c:2335-2388): the fixture never requests one; lane C"
+  },
+  {
+   "function": "fn_trie_dump_leaf",
+   "file": "net/ipv4/fib_trie.c",
+   "note": "as fib_table_dump"
+  },
+  {
+   "function": "fib_table_flush_external",
+   "file": "net/ipv4/fib_trie.c",
+   "note": "the external-flush path (fib_trie.c:1937-2004) of a VRF or offload driver: none on this configuration; lane C"
+  },
+  {
+   "function": "fib_trie_table",
+   "file": "net/ipv4/fib_trie.c",
+   "note": "the table creation at the namespace init (fib_trie.c:2390-2420): before every window; lane C"
   }
  ],
  "data_only_operations": [

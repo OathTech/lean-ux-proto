@@ -2,6 +2,12 @@
 
 ## Current checkpoint
 
+**State-split retrofit in progress:** the branch now incorporates main
+`b700659`. The previous validation below is historical, over `de62c9d`;
+all six results are lagging until carried. Counts, type-justified frame
+deletions and scoped validation are tracked in the
+[retrofit report](2026-10-16-proof-campaign-2-state-split.md).
+
 Branch `proofs/campaign-2`, worktree `.worktrees/proofs-campaign-2`,
 Lean v4.35.0, mirror **`de62c9d`**. The proofs are **lagging main's
 representation batch `cb2348e`**. No merge or push during this resumption.

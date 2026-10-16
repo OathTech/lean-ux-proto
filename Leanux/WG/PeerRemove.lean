@@ -27,12 +27,14 @@ flush drains arms its timers as usual. The staged keepalive that queued the
 work is purged at the peer's release (`kref_release`, peer.c:217:
 `tx_dropped` counts it, `peerPut`).
 
-Out of the domain, fail-noisy (section I.8): work pending across system
-calls at a remove (`requireNotPending` at the paths that read it, as
-before), queued crypt work at a remove (the `packet_crypt_wq` flushes,
-peer.c:116 and 118: W3b), and `wg_peer_remove_all` with queued work, which
-no modeled call reaches in-syscall (the drain still runs it as the kernel
-would, at the first peer's flush).
+Out of the domain, fail-noisy (section I.8): queued crypt work at a remove
+(the `packet_crypt_wq` flushes, peer.c:116 and 118, and `napi_disable`,
+:120: W3b, the `unsupported` in `peerRemoveAfterDead`, reached by the
+control trace `l_w3b_remove_crypt_queued`), and `wg_peer_remove_all` with
+queued work, which no modeled call reaches in-syscall (the drain still runs
+it as the kernel would, at the first peer's flush). Work pending across
+system calls at a remove is placed by the dispatch records since the
+retirement of `requireNotPending` (State.lean).
 -/
 
 namespace Leanux.WG
@@ -46,7 +48,8 @@ def runFlushedSendWork (pid : PeerId) : M Unit := do
   modifyDev fun d => { d with sendWorkQueue := d.sendWorkQueue.erase pid }
   let p ← getPeer pid
   if !p.handshakePending then invariant "queued work without a pending flag"
-  setPeer pid { p with handshakePending := false }
+  -- PENDING cleared at the dequeue, set again by a second instance still queued
+  setPeer pid { p with handshakePending := (← getDev).sendWorkQueue.contains pid }
   _ ← hidden (.sectionStart .sendWorker)
   handshakeSendWorker pid
   _ ← hidden (.sectionStop .sendWorker)
@@ -80,7 +83,7 @@ def drainHandshakeSendWq (upTo : Option PeerId) : M Unit := do
         runFlushedClearWork pid
         if upTo == some pid then return
       | none =>
-        if (← get).hidden.isSome then
+        if (← getAmbient).hidden.isSome then
           throw (.hidden s!"a flush of handshake_send_wq must run queued work ({d.sendWorkQueue.length} send, {d.clearWorkQueue.length} clear items), but no section names it")
         -- the domain filter's placeholder order
         match d.sendWorkQueue.head?, d.clearWorkQueue.head? with
@@ -107,10 +110,19 @@ def peerRemoveAfterDead (pid : PeerId) : M Unit := do
     unsupported "peer_remove_after_dead: WARN_ON(!peer->is_dead)"
   keypairsClear pid
   timersStop pid
-  -- flush_workqueue(packet_crypt_wq) twice (peer.c:116, 118): crypt work
-  -- queued at a remove is W3b, outside the domain (the paths that queue it
-  -- in this call do not reach a remove; across calls, requireNotPending)
-  -- napi_disable, netif_napi_del
+  -- flush_workqueue(packet_crypt_wq) twice (peer.c:116, :118): the first runs
+  -- the queued encrypt and decrypt work, the second the tx work the first
+  -- queued; napi_disable (:120) waits out a scheduled poll. In reach on one
+  -- CPU and deterministic (a keepalive an earlier entry of the same wg_set
+  -- message staged under a session: the W3 design's W3b, the control trace
+  -- l_w3b_remove_crypt_queued), but the crypt workers run under the
+  -- environment's scheduler (Env/Batch.lean), which this module cannot call:
+  -- fail-closed until W3b plumbs the drain (the Peer audit's F1, 2026-10-15).
+  -- netif_napi_del: a cut
+  let d ← getDev
+  if !d.encryptQueue.empty || !d.decryptQueue.empty || !d.txWorkQueue.isEmpty
+      || d.peers.toList.any (·.2.napiScheduled) then
+    unsupported "crypt work queued at a peer removal (peer.c:116-120 would run it: W3b)"
   -- flush_workqueue(handshake_send_wq) (peer.c:129): every queued item
   drainHandshakeSendWq none
   if (← getDev).numPeers == 0 then invariant "--num_peers below zero"

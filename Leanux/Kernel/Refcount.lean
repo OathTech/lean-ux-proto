@@ -7,7 +7,7 @@ namespace Leanux
 /-- `refcount_dec_and_test` = `__refcount_sub_and_test(1, r, NULL)`
     (include/linux/refcount.h:262-278). `if (oldp)` is constant-folded away
     (NULL); saturation reports are `unsupported`. -/
-def refcountDecAndTest (old : Nat) : M Bool := do
+def refcountDecAndTest [Monad m] [MonadLiftT AmbientM m] (old : Nat) : m Bool := do
   let i := 1
   if ← branchCmp .refcountSubPositive (old > 0) old 0 then
     if ← branchCmp .refcountSubToZero (old == i) old i then return true
@@ -16,7 +16,7 @@ def refcountDecAndTest (old : Nat) : M Bool := do
   return false
 
 /-- `refcount_inc` = `__refcount_add(1, r, NULL)` (include/linux/refcount.h:182-193). -/
-def refcountInc (old : Nat) : M Unit := do
+def refcountInc [Monad m] [MonadLiftT AmbientM m] (old : Nat) : m Unit := do
   -- `if (oldp)` is constant-folded away (NULL)
   if ← branchCmp .refcountAddFromZero (old == 0) old 0 then
     unsupported "refcount_warn_saturate (add on zero)"
@@ -29,7 +29,7 @@ def refcountInc (old : Nat) : M Unit := do
     declared operand exclusion (`x`): the same decisions as `refcountInc`,
     with the outcomes the contract fixes (a live object: not zero, no
     overflow) and `__refcount_add.old_zero` reported without operands. -/
-def refcountIncGuestWide (x : OperandExclusion) : M Unit := do
+def refcountIncGuestWide [Monad m] [MonadLiftT AmbientM m] (x : OperandExclusion) : m Unit := do
   if ← branchCmpExcluded .refcountAddFromZero false x then
     unsupported "refcount_warn_saturate (add on zero)"
   if ← branch .refcountAddNegative false then unsupported "unreachable"
@@ -38,7 +38,7 @@ def refcountIncGuestWide (x : OperandExclusion) : M Unit := do
 /-- `kref_get_unless_zero` = `__refcount_add_not_zero(1, r, NULL)`
     (include/linux/refcount.h:139-156). Single-threaded, so the cmpxchg
     succeeds at once. Returns whether the count was nonzero. -/
-def refcountIncNotZero (old : Nat) : M Bool := do
+def refcountIncNotZero [Monad m] [MonadLiftT AmbientM m] (old : Nat) : m Bool := do
   if !(← branchCmp .refcountAddNzZero (old == 0) old 0) then
     _ ← branch .refcountAddNzRetry false
   if ← branch .refcountAddNzNegative false then unsupported "unreachable"

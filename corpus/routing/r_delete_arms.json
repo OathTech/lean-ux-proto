@@ -1,0 +1,90 @@
+{
+ "version": 1,
+ "id": "r_delete_arms",
+ "ops": [
+  {
+   "op": "wg_set",
+   "config": {
+    "private_key": "1111111111111111111111111111111111111111111111111111111111111111",
+    "listen_port": 51820,
+    "peers": [
+     {
+      "public_key": "2222222222222222222222222222222222222222222222222222222222222222",
+      "endpoint": {
+       "family": 4,
+       "addr": "7f000001",
+       "port": 51999
+      },
+      "allowed_ips": [
+       {
+        "family": 4,
+        "addr": "0a000000",
+        "cidr": 8
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "op": "wg_up"
+  },
+  {
+   "op": "wg_addroute",
+   "family": 4,
+   "dst": "0a1e0000",
+   "plen": 16,
+   "type": "unicast",
+   "oif": "wg0",
+   "metric": 5
+  },
+  {
+   "op": "wg_delroute",
+   "family": 4,
+   "dst": "0a1e0000",
+   "plen": 16,
+   "type": "unreachable"
+  },
+  {
+   "op": "wg_delroute",
+   "family": 4,
+   "dst": "0a1e0000",
+   "plen": 16,
+   "oif": "lo"
+  },
+  {
+   "op": "wg_delroute",
+   "family": 4,
+   "dst": "0a1e0000",
+   "plen": 16,
+   "metric": 6
+  },
+  {
+   "op": "wg_delroute",
+   "family": 4,
+   "dst": "0a1e0000",
+   "plen": 17
+  },
+  {
+   "op": "wg_delroute",
+   "family": 4,
+   "dst": "0a1f0000",
+   "plen": 16
+  },
+  {
+   "op": "wg_delroute",
+   "family": 4,
+   "dst": "0a1e0000",
+   "plen": 16
+  },
+  {
+   "op": "wg_delroute",
+   "family": 4,
+   "dst": "0a1e0000",
+   "plen": 16
+  },
+  {
+   "op": "wg_get"
+  }
+ ]
+}

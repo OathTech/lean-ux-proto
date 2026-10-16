@@ -11,7 +11,7 @@ namespace Leanux
 
 /-- filp_flush (open.c:1522-1540). `dnotify_flush` is compiled out
     (`CONFIG_DNOTIFY=n`); `locks_remove_posix` is a cut point (no POSIX locks). -/
-def filpFlush (fid : FileId) : M Int := do
+def filpFlush (fid : FileId) : FS.M Int := do
   let f ← getFile fid
   -- CHECK_DATA_CORRUPTION(file_count(filp) == 0, ...)
   if ← branchCmp .filpFlushCountZero (f.fCount == 0) f.fCount 0 then return 0
@@ -23,7 +23,7 @@ def filpFlush (fid : FileId) : M Int := do
   return 0
 
 /-- filp_close (open.c:1542-1550). -/
-def filpClose (fid : FileId) : M Int := do
+def filpClose (fid : FileId) : FS.M Int := do
   let retval ← filpFlush fid
   fput fid
   return retval

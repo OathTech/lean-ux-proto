@@ -90,7 +90,7 @@ def sigKernelStop (sig : Nat) : Bool := sig < SIGRTMIN && [19, 20, 21, 22].conta
     increment, nonzero (no overflow). Its value is not observable to the
     mirror: the condition at 425 is the cut's outcome. Returns whether a
     `sigqueue` was allocated (`q != NULL`). -/
-def sigqueueAlloc (overrideRlimit : Nat) : M Bool := do
+def sigqueueAlloc (overrideRlimit : Nat) : TaskM Bool := do
   -- rcu_read_lock(); ucounts = task_ucounts(t); sigpending = inc_rlimit_get_ucounts(...)
   let sigpendingNonzero := true  -- the cut's contract
   if ← branch .sigqueueAllocNoUcounts (!sigpendingNonzero) then return false
@@ -115,20 +115,20 @@ def sigKernelCoredump (sig : Nat) : Bool := [3, 4, 5, 6, 8, 11, 7, 31, 24, 25].c
 
 /-- The disposition the signal paths read for `sig` of the target `tk`: only
     `SIGSYS`'s is mirrored (`Task.sigsys`; design 4.1). -/
-def sigDisposition (tk : Task) (sig : Nat) : M SigDisposition := do
+def sigDisposition (tk : Task) (sig : Nat) : TaskM SigDisposition := do
   if sig == SIGSYS then return tk.sigsys
   unsupported s!"the disposition of signal {sig} is not mirrored (only SIGSYS's)"
 
 /-- sig_handler_ignored (kernel/signal.c:75-80): `handler == SIG_IGN ||
     (handler == SIG_DFL && sig_kernel_ignore(sig))`, one returned expression. -/
-def sigHandlerIgnored (disp : SigDisposition) (sig : Nat) : M Bool := do
+def sigHandlerIgnored (disp : SigDisposition) (sig : Nat) : TaskM Bool := do
   -- no mirrored disposition is SIG_IGN (the guest installs the handler at setup)
   if ← branch .sigHandlerIgn false then return true
   branch .sigHandlerDflIgnore (disp != .handler && sigKernelIgnore sig)
 
 /-- sig_task_ignored (kernel/signal.c:82-102), for the target `t`: not init,
     not `SIGNAL_UNKILLABLE`, not a kthread on these paths. -/
-def sigTaskIgnored (t : TaskRef) (sig : Nat) (_force : Bool) : M Bool := do
+def sigTaskIgnored (t : TaskRef) (sig : Nat) (_force : Bool) : TaskM Bool := do
   let tk ← getTask t
   let disp ← sigDisposition tk sig
   -- `is_global_init(t) && sig_kernel_only(sig)`: the trace process is not init
@@ -141,7 +141,7 @@ def sigTaskIgnored (t : TaskRef) (sig : Nat) (_force : Bool) : M Bool := do
 
 /-- sig_ignored (kernel/signal.c:104-123), for the target `t`.
     `t->real_blocked` is empty (it is set only inside `sigtimedwait`). -/
-def sigIgnored (t : TaskRef) (sig : Nat) (force : Bool := false) : M Bool := do
+def sigIgnored (t : TaskRef) (sig : Nat) (force : Bool := false) : TaskM Bool := do
   let tk ← getTask t
   -- `sigismember(&t->blocked, sig) || sigismember(&t->real_blocked, sig)`
   let blocked ← do
@@ -153,7 +153,7 @@ def sigIgnored (t : TaskRef) (sig : Nat) (force : Bool := false) : M Bool := do
   sigTaskIgnored t sig force
 
 /-- prepare_signal (kernel/signal.c:902-967), for the target `t`. -/
-def prepareSignal (t : TaskRef) (sig : Nat) (force : Bool := false) : M Bool := do
+def prepareSignal (t : TaskRef) (sig : Nat) (force : Bool := false) : TaskM Bool := do
   -- `signal->flags & SIGNAL_GROUP_EXIT`: the trace child is not exiting
   if ← branch .prepareSignalGroupExit false then
     unsupported "prepare_signal: a group exit in progress"
@@ -164,7 +164,7 @@ def prepareSignal (t : TaskRef) (sig : Nat) (force : Bool := false) : M Bool := 
   return !(← sigIgnored t sig force)
 
 /-- legacy_queue (kernel/signal.c:1068-1071) on `t->pending`. -/
-def legacyQueue (pending : SigSet) (sig : Nat) : M Bool := do
+def legacyQueue (pending : SigSet) (sig : Nat) : TaskM Bool := do
   if ← branchCmp .legacyQueueNotRt (sig < SIGRTMIN) sig SIGRTMIN then
     branch .legacyQueuePending (sigismember pending sig)
   else return false
@@ -173,7 +173,7 @@ def legacyQueue (pending : SigSet) (sig : Nat) : M Bool := do
     is clear at generation on these paths (`Task.exited` tracks the later
     `exit_task_work`, false while the task issues calls); the target is
     `current`, so `task_curr(p)` holds and `task_sigpending` is not read. -/
-def wantsSignal (t : TaskRef) (sig : Nat) : M Bool := do
+def wantsSignal (t : TaskRef) (sig : Nat) : TaskM Bool := do
   let tk ← getTask t
   if ← branch .wantsSignalBlocked (sigismember tk.blocked sig) then return false
   if ← branch .wantsSignalExiting tk.exited then return false
@@ -181,13 +181,13 @@ def wantsSignal (t : TaskRef) (sig : Nat) : M Bool := do
   -- `task_is_stopped_or_traced(p)`: the target is running
   if ← branch .wantsSignalStopped false then return false
   -- `task_curr(p) || !task_sigpending(p)`: one line, one body
-  if ← branch .wantsSignalCurr ((← getK).current == t) then return true
+  if ← branch .wantsSignalCurr ((← getTasks).current == t) then return true
   branch .wantsSignalNotPending (!tk.sigpending)
 
 /-- signal_wake_up_state (kernel/signal.c:759-774), for the target `t`:
     `TIF_SIGPENDING`; `wake_up_state` on a running task fails and
     `kick_process` is a cut (one CPU: nothing to kick). -/
-def signalWakeUpState (t : TaskRef) : M Unit := do
+def signalWakeUpState (t : TaskRef) : TaskM Unit := do
   modifyTask t fun tk => { tk with sigpending := true }
   if ← branch .wakeUpStateFailed true then pure ()
 
@@ -200,7 +200,7 @@ def sigFatal (disp : SigDisposition) (sig : Nat) : Bool :=
     thread is woken when it wants the signal; a fatal signal of the coredump
     class (`SIGSYS`) skips the group-exit block and is woken like any other
     (`do_coredump` and the exit run at delivery, an environment effect). -/
-def completeSignal (t : TaskRef) (sig : Nat) (type : Nat) : M Unit := do
+def completeSignal (t : TaskRef) (sig : Nat) (type : Nat) : TaskM Unit := do
   if ← branch .completeSignalWants (← wantsSignal t sig) then
     -- t = p
     let tk ← getTask t
@@ -228,7 +228,7 @@ def completeSignal (t : TaskRef) (sig : Nat) (type : Nat) : M Unit := do
 /-- __send_signal_locked (kernel/signal.c:1073-1188), with `t->sighand->siglock`
     held, for the target `t`. Returns `ret` (0, or -EAGAIN on a queue
     overflow). -/
-def sendSignalLocked' (t : TaskRef) (sig : Nat) (info : SigInfo) (type : Nat) (force : Bool) : M Int := do
+def sendSignalLocked' (t : TaskRef) (sig : Nat) (info : SigInfo) (type : Nat) (force : Bool) : TaskM Int := do
   -- result = TRACE_SIGNAL_IGNORED
   if ← branch .sendSignalNotPrepared !(← prepareSignal t sig force) then return 0
   -- `pending = (type != PIDTYPE_PID) ? &t->signal->shared_pending : &t->pending`
@@ -277,7 +277,7 @@ def sendSignalLocked' (t : TaskRef) (sig : Nat) (info : SigInfo) (type : Nat) (f
 /-- send_signal_locked (kernel/signal.c:1214-1252). `force` for
     `SEND_SIG_NOINFO` is `!task_pid_nr_ns(current, ...)`, an assignment (not
     a choice point): the trace child's pid is nonzero, so `false`. -/
-def sendSignalLocked (t : TaskRef) (sig : Nat) (info : SigInfo) (type : Nat) : M Int := do
+def sendSignalLocked (t : TaskRef) (sig : Nat) (info : SigInfo) (type : Nat) : TaskM Int := do
   let force ← do
     if ← branch .sendSignalLockedNoinfo (info == .noinfo) then
       pure false  -- force = !task_pid_nr_ns(current, task_active_pid_ns(t))
@@ -291,7 +291,7 @@ def sendSignalLocked (t : TaskRef) (sig : Nat) (info : SigInfo) (type : Nat) : M
 /-- do_send_sig_info (kernel/signal.c:1297-1309). `lock_task_sighand` is a cut
     point: the target is live (`current`, or the child inside its probe), so
     it succeeds. -/
-def doSendSigInfo (t : TaskRef) (sig : Nat) (info : SigInfo) (type : Nat) : M Int := do
+def doSendSigInfo (t : TaskRef) (sig : Nat) (info : SigInfo) (type : Nat) : TaskM Int := do
   let mut ret : Int := -3  -- -ESRCH
   if ← branch .doSendSigLock true then
     ret ← sendSignalLocked t sig info type
@@ -299,14 +299,14 @@ def doSendSigInfo (t : TaskRef) (sig : Nat) (info : SigInfo) (type : Nat) : M In
   return ret
 
 /-- send_sig_info (kernel/signal.c:1656-1666) to the target `t`. -/
-def sendSigInfo (t : TaskRef) (sig : Nat) (info : SigInfo) : M Int := do
+def sendSigInfo (t : TaskRef) (sig : Nat) (info : SigInfo) : TaskM Int := do
   -- `!valid_signal(sig)`: `sig <= _NSIG` (include/linux/signal.h:274)
   if ← branchCmp .sendSigInfoInvalid (!(sig <= NSIG)) sig NSIG then return -EINVAL
   doSendSigInfo t sig info PIDTYPE_PID
 
 /-- send_sig (kernel/signal.c:1672-1676) to the target `t` (`current` on
     the pipe paths: `.task`). -/
-def sendSig (t : TaskRef) (sig : Nat) (priv : Nat) : M Int := do
+def sendSig (t : TaskRef) (sig : Nat) (priv : Nat) : TaskM Int := do
   -- `__si_special(priv)`: `priv ? SEND_SIG_PRIV : SEND_SIG_NOINFO`
   let info : SigInfo := if ← branchCmp .sendSigPriv (priv != 0) priv 0 then .priv else .noinfo
   sendSigInfo t sig info
@@ -315,7 +315,7 @@ def sendSig (t : TaskRef) (sig : Nat) (priv : Nat) : M Int := do
     with `handler` `HANDLER_CURRENT` (0) or `HANDLER_EXIT` (2). `ignored` is
     false (no mirrored disposition is `SIG_IGN`); `SIGNAL_UNKILLABLE` is not
     mirrored (never set); `lock_task_sighand` is a cut (the target is live). -/
-def forceSigInfoToTask (info : SigInfo) (t : TaskRef) (handler : Nat) : M Int := do
+def forceSigInfoToTask (info : SigInfo) (t : TaskRef) (handler : Nat) : TaskM Int := do
   let sig ← match info with
     | .sys .. => pure SIGSYS
     | _ => unsupported "force_sig_info_to_task: a signal other than seccomp's SIGSYS"
@@ -350,8 +350,8 @@ def AUDIT_ARCH_X86_64 : UInt32 := 0xc000003e
 /-- force_sig_seccomp (kernel/signal.c:1855-1868) to `current`: the `SIGSYS`
     siginfo with `SYS_SECCOMP`, the filter's data as `si_errno`, the call
     number and the architecture; `HANDLER_EXIT` when a core dump is forced. -/
-def forceSigSeccomp (syscall data : Int) (forceCoredump : Bool) : M Int := do
-  let t := (← getK).current
+def forceSigSeccomp (syscall data : Int) (forceCoredump : Bool) : TaskM Int := do
+  let t := (← getTasks).current
   forceSigInfoToTask (.sys syscall data AUDIT_ARCH_X86_64) t (if forceCoredump then HANDLER_EXIT else HANDLER_CURRENT)
 
 end Leanux

@@ -107,7 +107,7 @@
 # user, built here only as a scratch kernel [AGENT 2026-10-12, stream W].
 # Path-independent identity from scripts/kernel-identity.py:
 # Built 2026-10-13 as .artifacts/kernel-net-choice-s1 with CONFIG_SECCOMP=y and CONFIG_SECCOMP_FILTER=y
-# [USER 2026-10-13: "Agree, sounds good - approved"; docs/2026-10-12-seccomp-design.md section 16],
+# [USER 2026-10-13: approved; docs/2026-10-12-seccomp-design.md section 16],
 # both record hooks line-preserving (patch sha256 e8e221374338778204609be01435b1e0478e627abcddb9fdd9518e5ce484cc29): the identity and
 # vmlinux lines below are that build's [AGENT 2026-10-13, stream X, phase 2b].
 # Built 2026-10-13 as .artifacts/kernel-net-choice-s2: the s1 configuration (CONFIG_SECCOMP=y, unchanged)
@@ -129,6 +129,16 @@
 # 8fbf65c7e214b4f5a5db78fe6d9f3a5f7a8403c38e6300d4667cd64abf295e0c. The identity and vmlinux lines below
 # are that build's [AGENT 2026-10-14, the review-fix integration]; the s3 lines it replaces were
 # 8376e99e... and 1987a8ed...
-6b2018b99f086345ce9fa316a89c76d27b40b536d5feb4402510e5fb62a5ae24
+# Built 2026-10-15 as .artifacts/kernel-net-choice-s5 (B3, docs/2026-10-15-design-b3-timer-wheel.md section 7;
+# U2 [USER 2026-10-15: approved as proposed]): the s4 configuration (unchanged) with the timer
+# wheel's two records for an armed timer, both record-only under the approved class, in one patch: kind 313
+# {base->clk, timer} right after forward_timer_base on both of __mod_timer's paths (kernel/time/timer.c, which
+# now takes its caller's return address so both records resolve to the arming line like kind 303) and kind
+# 314 {idx, bucket_expiry, timer} at __mod_timer's enqueue (internal_add_timer returns the bucket expiry),
+# written with the mode check and kcov_choice_write without the steering lookup (kcov_timer_clk,
+# kcov_timer_enqueued in kernel/kcov.c); timer.c is unanchored and the edits add lines (U3). Patch sha256
+# 630b602a200d66eea6cfee7ba33bc9924d50bf517984ee32be8a1a1dd96ae51b. The identity and vmlinux lines below are
+# that build's [AGENT 2026-10-15, B3 step 1]; the s4 lines it replaces were 6b2018b9... and 16c34620...
+b44d958f09743feddc5fdbc3410cb5de89cead4bffdd62b06582b0c560454767
 # vmlinux sha256 of the build the evidence used (path-dependent):
-16c346209885db6c610d4aa126c6eb30f5d3c02f0498d95e606473945f648774
+06513d05fc37506b6cea546e8f11b9fe328e482265341ca41c242157bfa5e88e

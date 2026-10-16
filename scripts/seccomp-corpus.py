@@ -669,7 +669,7 @@ trace("s_chain_big", [
 ])
 
 # The path budget (2.4, :921-926) through the prefill fixture [USER 2026-10-12:
-# "Yes, let's queue it"]: eight prefilled copies (31992 with the walk's
+# queued]: eight prefilled copies (31992 with the walk's
 # penalty) leave 776 instructions; a 772-instruction install (779 eBPF) is
 # -ENOMEM at seccomp_attach_filter, the chain and the mode (set by the
 # fixture, no-new-privs with it) untouched. The compare's operand, Linux's

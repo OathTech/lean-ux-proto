@@ -207,6 +207,10 @@ def SMP_CACHE_BYTES : Nat := 64
     (`wg_packet_queue_init`) and the bound of a peer's `prev_queue`. -/
 def MAX_QUEUED_PACKETS : Nat := 1024
 
+/-- `MAX_QUEUED_INCOMING_HANDSHAKES` (messages.h:51): the handshake ring's
+    size (`wg_packet_queue_init`, device.c:358-359). -/
+def MAX_QUEUED_INCOMING_HANDSHAKES : Nat := 4096
+
 /-- `struct ptr_ring` (include/linux/ptr_ring.h:30-40) as data (simulation-
     target review, section 4.1): the producer cursor, the consumer head (the
     next valid entry) and tail (the next entry to invalidate), the size, the
@@ -264,6 +268,16 @@ structure DstCache where
   refreshTs : UInt64 := 0
   slot : Option DstSlot := none
   deriving Repr, BEq
+
+/-- B3: a pending timer's place in the wheel (`kernel/time/timer.c`): its
+    slot (`flags`' index, 0-575), its bucket expiry (the step at which the
+    slot is next collected, `calc_index`) and its enqueue stamp (the order
+    within the slot's list, `hlist_add_head`: a larger stamp runs first). -/
+structure WheelEntry where
+  slot : Nat
+  bucketExpiry : UInt64
+  enqueued : Nat
+  deriving Repr, BEq, Inhabited
 
 /-- `struct wg_peer` with the parts of its `noise_handshake` on this path. -/
 structure Peer where
@@ -342,6 +356,19 @@ structure Peer where
   timerNewHandshake : Option UInt64 := none
   timerZeroKeyMaterial : Option UInt64 := none
   timerPersistentKeepalive : Option UInt64 := none
+  /-- B3 (docs/2026-10-15-design-b3-timer-wheel.md, section 3.1): the
+      wheel's per-timer data beside `expires`: the slot the C stores in
+      `timer->flags` (`timer_set_idx`, timer.c:557-560), the bucket expiry the
+      enqueue computed (`calc_index`, :567-582: the slot's next visit, kept on
+      a same-slot re-arm) and the enqueue stamp (the list position within the
+      slot: `hlist_add_head`, :659, newest first). `some` iff the timer is
+      pending, which `WG.armTimer` and `WG.delTimer` keep as a run-time
+      invariant. -/
+  wheelRetransmitHandshake : Option WheelEntry := none
+  wheelSendKeepalive : Option WheelEntry := none
+  wheelNewHandshake : Option WheelEntry := none
+  wheelZeroKeyMaterial : Option WheelEntry := none
+  wheelPersistentKeepalive : Option WheelEntry := none
   /-- `timer_handshake_attempts` (peer.h:56). -/
   timerHandshakeAttempts : Nat := 0
   /-- `timer_need_another_keepalive` and `sent_lastminute_handshake`
@@ -397,6 +424,22 @@ def Peer.setTimer (p : Peer) (t : PeerTimer) (v : Option UInt64) : Peer :=
   | .newHandshake => { p with timerNewHandshake := v }
   | .zeroKeyMaterial => { p with timerZeroKeyMaterial := v }
   | .persistentKeepalive => { p with timerPersistentKeepalive := v }
+
+/-- B3: the timer's wheel entry while pending (`none` otherwise). -/
+def Peer.wheel (p : Peer) : PeerTimer → Option WheelEntry
+  | .retransmitHandshake => p.wheelRetransmitHandshake
+  | .sendKeepalive => p.wheelSendKeepalive
+  | .newHandshake => p.wheelNewHandshake
+  | .zeroKeyMaterial => p.wheelZeroKeyMaterial
+  | .persistentKeepalive => p.wheelPersistentKeepalive
+
+def Peer.setWheel (p : Peer) (t : PeerTimer) (v : Option WheelEntry) : Peer :=
+  match t with
+  | .retransmitHandshake => { p with wheelRetransmitHandshake := v }
+  | .sendKeepalive => { p with wheelSendKeepalive := v }
+  | .newHandshake => { p with wheelNewHandshake := v }
+  | .zeroKeyMaterial => { p with wheelZeroKeyMaterial := v }
+  | .persistentKeepalive => { p with wheelPersistentKeepalive := v }
 
 /-- `struct noise_static_identity`. -/
 structure StaticIdentity where
@@ -465,8 +508,15 @@ structure Device where
   mac1Key : Key := List.replicate 32 0
   /-- `handshake_queue.last_cpu`, initialized to -1 (queueing.c:31). -/
   handshakeLastCpu : Int := -1
-  /-- `handshake_queue.ring`: queued handshake messages, oldest first. -/
-  handshakeQueue : List (List UInt8 × SkbSource) := []
+  /-- `handshake_queue.ring` (device.c:358-359): a `ptr_ring` of
+      `MAX_QUEUED_INCOMING_HANDSHAKES` slots, batch 16, holding the queued
+      handshake messages with their sources (B1,
+      docs/2026-10-15-design-b1-handshake-ring.md). Produced at
+      `wg_packet_receive` (receive.c:555-560), consumed by the receive worker
+      (:212); its occupancy, cursors and batch rule are the C's, so the full
+      test is physical occupancy, not the count. `wg_stop`'s drain leaves an
+      empty ring's cursors as they are (device.c:130). -/
+  handshakeQueue : PtrRing (List UInt8 × SkbSource) := PtrRing.init MAX_QUEUED_INCOMING_HANDSHAKES
   /-- `handshake_queue_len` (device.h), the atomic counter beside the ring:
       incremented by the producer after a successful produce (receive.c:567)
       and decremented by the worker after each packet (receive.c:215), so it

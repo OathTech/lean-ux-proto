@@ -32,6 +32,7 @@ from .protocol import InvalidOutput, compare, loads, parse_batch, validate_cover
 ROOT = Path(__file__).resolve().parents[1]
 ANCHORS = ROOT / 'correspondence/kcov.json'
 SUITES = ('handwritten', 'critic', 'wireguard', 'alloc', 'generated', 'wireguard-generated', 'pipes', 'pipes-generated',
+          'routing',   # lane C: corpus/routing, the IPv4 FIB trie's insertions, deletions and lookups (the design note, 10)
           'epoll', 'epoll-generated',   # epoll T: corpus/epoll and the `epoll` generator profile (design section 7)
           'seccomp', 'seccomp-generated')   # seccomp X: corpus/seccomp and the `seccomp` generator profile (design 7)
 # Corpus suites whose traces pass the domain filter first: the pipes corpus
@@ -109,13 +110,16 @@ def sha256(data):
 
 # W7: the anchored files compared for a `wg_batch` operation (above): the
 # WireGuard sources and the headers their paths inline; the file-table and
-# pipe files are the fixture's io_uring plumbing there.
+# pipe files are the fixture's io_uring plumbing there. Lane C (a check-rule
+# change on the trust surface, 2026-10-15): the IPv4 FIB trie, whose lookups
+# the batch's sends run, is compared in a batch as in a single operation.
 NET_HEADERS = {'include/net/ip_tunnels.h', 'include/net/inet_ecn.h', 'include/linux/if_vlan.h',
                'include/crypto/curve25519.h', 'include/linux/refcount.h'}
+BATCH_NET_FILES = {'net/ipv4/fib_trie.c'}
 
 
 def BATCH_FILES(files):
-    return [f for f in files if f.startswith('drivers/net/wireguard/') or f in NET_HEADERS]
+    return [f for f in files if f.startswith('drivers/net/wireguard/') or f in NET_HEADERS or f in BATCH_NET_FILES]
 
 
 def chunk_traces(traces):
@@ -456,6 +460,16 @@ JIFFIES_END = 310
 # the mirror computes the expiry from it and compares with the arm record's
 # published expiry, so the read is never recovered from the answer.
 TIMER_CALLER_JIFFIES = 311
+# B3 (docs/2026-10-15-design-b3-timer-wheel.md, sections 4, 6 and 7): the timer
+# wheel's two records at an arm of a dispatch-set timer, both resolved at the
+# arming line like the arm record (mod_timer's return address, passed through
+# __mod_timer): the base clock after forward_timer_base, {clk, timer} (class
+# 'clk', 16 bytes; the hidden input the slot depends on), and the enqueue's
+# slot and bucket expiry, {idx, bucket_expiry, timer} (class 'wheel', 24
+# bytes; absent on a same-slot re-arm). Each names the timer of the arm
+# record it follows; the mirror computes the slot and checks the record.
+TIMER_CLK, TIMER_ENQUEUE = 313, 314
+MASK64 = (1 << 64) - 1
 
 
 def load_hidden_sites():
@@ -468,7 +482,7 @@ def load_hidden_sites():
     for entry in loads(result.stdout.decode()):
         if set(entry) != {'id', 'label', 'kind', 'file', 'line', 'len', 'role'} \
                 or entry['kind'] not in ('random', 'clock', 'section', 'resched', 'timer', 'advance', 'alloc', 'queue', 'jiffies',
-                                         'address', 'program') \
+                                         'address', 'program', 'clk', 'wheel') \
                 or entry['role'] not in ('mirror', 'cut', 'ambient'):
             raise InvalidOutput(f'hidden site fields: {entry}')
         key = (entry['kind'], f"{entry['file']}:{entry['line']}")
@@ -565,7 +579,8 @@ def resolve_choices(per, sites, locations, dispatch=None):
                     else 'advance' if raw_kind == TIME_ADVANCE else 'alloc' if kind == ALLOC_KIND \
                     else 'queue' if raw_kind == QUEUE else 'jiffies' if raw_kind in (DST_CACHE_JIFFIES, JIFFIES_END, TIMER_CALLER_JIFFIES) \
                     else 'address' if raw_kind in (EPOLL_INSERT_ADDRESS, SECCOMP_IP) \
-                    else 'program' if raw_kind == SECCOMP_PROGRAM else None
+                    else 'program' if raw_kind == SECCOMP_PROGRAM \
+                    else 'clk' if raw_kind == TIMER_CLK else 'wheel' if raw_kind == TIMER_ENQUEUE else None
                 if kind_class == 'queue':
                     # {work, func}: the site is the queued function's symbol
                     queued_func = int.from_bytes(bytes.fromhex(data[16:32]), 'little') if length == 16 else 0
@@ -695,7 +710,7 @@ def jiffies_problems(traces, per):
     ops_of = {t['id']: t['ops'] for t in traces}
     problems = {}
     for (trace_id, mode), ops in per.items():
-        found, last, natural = [], None, 0
+        found, last, natural, last_arm, last_clk = [], None, 0, None, None
         for index, records in enumerate(ops):
             op = ops_of[trace_id][index]
             advances = [r for r in records if r[0] == TIME_ADVANCE]
@@ -710,6 +725,26 @@ def jiffies_problems(traces, per):
                                   kinds=[r[0] for r in records[:records.index(advances[0])]][:8]))
             floor = None
             for kind, _ip, _seq, length, data, _func in records:
+                if kind in (TIMER_CLK, TIMER_ENQUEUE):
+                    # B3: each names the timer of the arm record it follows; the base clock
+                    # is at most one past mod_timer's read and never goes back
+                    if length != (16 if kind == TIMER_CLK else 24):
+                        found.append(dict(index=index, problem=f'record kind {kind} length {length}'))
+                        continue
+                    if last_arm is None:
+                        found.append(dict(index=index, problem=f'record kind {kind} without an arm record before it'))
+                        continue
+                    named = int.from_bytes(bytes.fromhex(data[32:48] if kind == TIMER_ENQUEUE else data[16:32]), 'little')
+                    if named != last_arm[1]:
+                        found.append(dict(index=index, problem=f'record kind {kind} names timer {named:#x}, the arm record {last_arm[1]:#x}'))
+                    if kind == TIMER_CLK:
+                        clk = int.from_bytes(bytes.fromhex(data[:16]), 'little')
+                        if ((clk - last_arm[0] - 1) & MASK64) >> 63 == 0 and clk != last_arm[0] and clk != (last_arm[0] + 1) & MASK64:
+                            found.append(dict(index=index, problem='the timer base clock is more than one past mod_timer\'s read', clk=clk, jiffies=last_arm[0]))
+                        if last_clk is not None and ((clk - last_clk) & MASK64) >> 63:
+                            found.append(dict(index=index, problem='the timer base clock went back', clk=clk, last=last_clk))
+                        last_clk = clk
+                    continue
                 if kind not in (TIMER_ARM, TIME_ADVANCE, JIFFIES_END, TIMER_CALLER_JIFFIES):
                     continue
                 if length != (24 if kind == TIMER_ARM else 16 if kind == TIME_ADVANCE else 8):
@@ -740,6 +775,7 @@ def jiffies_problems(traces, per):
                     found.append(dict(index=index, problem='an arm after an advance before its absorbing tick',
                                       after=floor, jiffies=first))
                 last = first
+                last_arm = (first, int.from_bytes(bytes.fromhex(data[32:48]), 'little') if length == 24 else 0)
         if natural > JIFFIES_BOUND + JIFFIES_SLACK:
             found.append(dict(index=None, problem='jiffies progressed beyond the real-time bound',
                               natural=natural, bound=JIFFIES_BOUND))
@@ -1035,35 +1071,17 @@ def control_flow(trace, model_obs, coverage, locations, config, decisions, witne
     problems, gaps = [], Counter()
     order_stats = Counter()
     for index, op in enumerate(trace['ops']):
-        # E-B (docs/2026-10-05-e-dos.md §4.1): a `wg_flood` runs the receive
-        # worker as a discarded section whose per-packet coverage is
-        # scheduling-driven and not modeled (the mirror reports no decisions for
-        # it). The one checked control-flow effect is that the flood crossed the
-        # threshold: receive.c:115 (last_under_load = now) is covered.
-        if op['op'] == 'wg_flood':
-            covered = raw_lines(coverage[index], locations, config['files'])
-            # The batch is queued whole before the worker runs, so its first
-            # packet sees the batch's size: the threshold is crossed iff the
-            # batch (the leading valids, the control, the invalids) is at least
-            # MAX_QUEUED_INCOMING_HANDSHAKES / 8 = 512 (receive.c:112-113). Both
-            # directions are checked (the boundary traces e_underload_511/512/513,
-            # 2026-10-14; the pre-release review's section 8).
-            batch = op['count'] + len(op.get('messages', [])) + (1 if op.get('control') else 0)
-            reached = 'drivers/net/wireguard/receive.c:115' in covered
-            if batch >= 512 and not reached:
-                problems.append(dict(index=index,
-                                     problem='flood did not reach under_load (receive.c:115 not covered)'))
-            if batch < 512 and reached:
-                problems.append(dict(index=index,
-                                     problem=f'flood of {batch} reached under_load below the threshold (receive.c:115 covered)'))
-            continue
         # W7 (docs/2026-10-06-w4-w7-transmit-bulk.md, 5.5): a `wg_batch` is one
         # io_uring_enter whose descriptor plumbing (the ring's fdget, each
         # send's fget of the sender) is the fixture's, as the flood's is; the
         # mirror models none of it (no socketCallOn), so only the WireGuard
         # files and the headers its paths inline are compared for the
         # operation. Everything WireGuard runs per item is checked as usual.
-        op_files = BATCH_FILES(config['files']) if op['op'] == 'wg_batch' else config['files']
+        # B4 (docs/2026-10-15-design-b4-load-ratelimiter.md, 2.3): a `wg_flood`
+        # is the same submission (one io_uring_enter of sends from the fixture's
+        # sender), run exactly per packet since 2026-10-15; it was a summarised
+        # operation whose decisions this function skipped
+        op_files = BATCH_FILES(config['files']) if op['op'] in ('wg_batch', 'wg_flood') else config['files']
         # Raw coverage of a span line (any function, any attribution) must be
         # mapped, and no unlisted function may run span lines of an anchored
         # C file: either means a modeled path runs outside the listed
@@ -1098,9 +1116,11 @@ def control_flow(trace, model_obs, coverage, locations, config, decisions, witne
                 problems.append(dict(index=index, label=label, problem='unknown decision'))
             elif any(name == step[0] for name, _ in reported):
                 # W7: a batch runs the receive and transmit paths once per item;
-                # W8: wg_netns_close is four close system calls in one operation.
-                # Their decisions repeat; later outcomes add to the set
-                if not decisions[step[0]]['repeatable'] and op['op'] not in ('wg_batch', 'wg_netns_close'):
+                # W8: wg_netns_close is four close system calls in one operation;
+                # B4: a flood runs the handshake producer and the receive worker
+                # once per packet. Their decisions repeat; later outcomes add to
+                # the set
+                if not decisions[step[0]]['repeatable'] and op['op'] not in ('wg_batch', 'wg_netns_close', 'wg_flood'):
                     problems.append(dict(index=index, label=label, problem='decision reported more than once'))
                 reported.add(step)  # a repeatable decision: later evaluations add outcomes, not order
             else:
@@ -1216,6 +1236,12 @@ def operands_match(lhs, rhs, record, comparison):
             return False
         return y == a and any(x == (rhs + shift) & ((1 << bits) - 1) for shift in CONSTANT_SHIFTS[comparison['rel']])
     return sorted((x, y)) == sorted((a, b))
+
+
+def record_site(r, locations):
+    """The condition site of a comparison record: the innermost frame's
+    source, as `operand_agreement` matches it."""
+    return locations[r[3]][0]['source'].split('/.deps/linux/')[-1].split(' ')[0]
 
 
 def operand_agreement(trace, model_obs, comparisons, locations, decisions, functions=None, exclusions=(),
@@ -1496,22 +1522,50 @@ def section_agreement(trace, runs, comparisons, sections, locations, decisions, 
     first, second = runs
     count = first.get('napi_irq_ambiguous', 0)
     ids = range(len(trace['ops']))
-    def records(section):
-        # a section's records are those of its block; the records outside
-        # the NET_RX sections are the task's and those of any other block
-        out = []
-        for index in ids:
-            ordinal = sections.get((trace['id'], index), {})
-            def inside(r):
-                blocks = record_blocks(r)
-                if section:
-                    return any(ordinal.get(b) == section for b in blocks)
-                return not blocks or any(b not in ordinal for b in blocks)
-            out.append({'records': [r for r in comparisons[index]['records'] if inside(r)]})
+    # One pass over the operation's comparison records: a section's records
+    # are those of its block, and the records outside the NET_RX sections
+    # (the task's and any other block's) are indexed by their condition
+    # site. The per-poll agreement below then costs the section's own
+    # records and the put's site, not a scan of the operation's records per
+    # poll: the W7 tier's receive twin opens about a thousand placements
+    # (2026-10-15), and the selection is the same relation either way.
+    inside_section, outside_by_site = {}, {}
+    for index in ids:
+        ordinal = sections.get((trace['id'], index), {})
+        for r in comparisons[index]['records']:
+            blocks = record_blocks(r)
+            for s in {ordinal[b] for b in blocks if b in ordinal}:
+                inside_section.setdefault(s, {i: [] for i in ids})[index].append(r)
+            if not blocks or any(b not in ordinal for b in blocks):
+                outside_by_site.setdefault(record_site(r, locations), {i: [] for i in ids})[index].append(r)
+    def records(section, sites):
+        if section:
+            per_op = inside_section.get(section, {})
+        elif sites is None:
+            per_op = {i: [] for i in ids}
+            for by_op in outside_by_site.values():
+                for i, rs in by_op.items():
+                    per_op[i].extend(rs)
+        else:
+            per_op = {i: [] for i in ids}
+            for site in sites:
+                for i, rs in outside_by_site.get(site, {}).items():
+                    per_op[i].extend(rs)
+        return [{'records': per_op.get(i, [])} for i in ids]
+    def branch_sites(branches):
+        # the condition sites of the branches' declared comparisons; None
+        # when a branch is an operand exclusion (matched by call site)
+        out = set()
+        for b in branches:
+            if 'operands_excluded' in b:
+                return None
+            name = b['label'].rpartition('=')[0]
+            if name in decisions and decisions[name]['comparison'] is not None:
+                out.add(decisions[name]['comparison']['site'] or decisions[name]['site'])
         return out
     def agree(branches, section):
-        return operand_agreement(trace, {'branches': branches}, records(section), locations, decisions,
-                                 functions, exclusions, excluded)
+        return operand_agreement(trace, {'branches': branches}, records(section, branch_sites(branches)),
+                                 locations, decisions, functions, exclusions, excluded)
     a, b = split_sections(first), split_sections(second)
     if placement_shape(first) != placement_shape(second):
         return [dict(index=None, label='napi placement',

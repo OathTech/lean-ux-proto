@@ -1037,7 +1037,7 @@ class WgMutantScoringChecks(unittest.TestCase):
             text = (ROOT / path).read_text()
             self.assertEqual(text.count(old), 1, name)
             self.assertNotEqual(old, new, name)
-            self.assertIn(suite, ('wireguard', 'alloc', 'pipes'), name)
+            self.assertIn(suite, ('wireguard', 'alloc', 'pipes', 'routing'), name)   # lane C: corpus/routing
         self.assertEqual(self.m.tally({'a': dict(status='survived'), 'b': dict(status='no_verdict'),
                                        'c': dict(status='rejected')}),
                          {'no_verdict': 1, 'rejected': 1, 'survived': 1})

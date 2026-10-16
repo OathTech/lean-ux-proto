@@ -94,7 +94,7 @@ def decryptPacket (pkt : RxPacket) : M (Option RxPacket) := do
     worker's `napi_schedule` raised, where the records put it), and
     `irqExit` its placement inside `wg_queue_enqueue_per_peer_rx`;
     `needResched` its scheduler, as for the encrypt worker. -/
-def decryptStep (softirq irqExit : M Unit) : M Bool := do
+def decryptStep [Monad m] [MonadLiftT WG.M m] [MonadLiftT AmbientM m] (softirq irqExit : m Unit) : m Bool := do
   -- ptr_ring_consume_bh: its spin_unlock_bh runs a pending softirq
   softirq
   match (← getDev).decryptQueue.consume with
@@ -119,7 +119,7 @@ def decryptStep (softirq irqExit : M Unit) : M Bool := do
 /-- One iteration of the loop: `decryptStep`, then `cond_resched()` and its
     decision (W7 phase 2: the environment's scheduler drives the iterations,
     `workerIter`). -/
-def decryptIter (softirq irqExit : M Unit) (needResched : M Bool) : M IterResult :=
+def decryptIter [Monad m] [MonadLiftT WG.M m] [MonadLiftT AmbientM m] (softirq irqExit : m Unit) (needResched : m Bool) : m IterResult :=
   workerIter .decryptWorker none (decryptStep softirq irqExit)
     (do branch .decWorkerNeedResched (← needResched))
 
@@ -373,14 +373,14 @@ structure GroState where
 def GRO_NORMAL_BATCH : Nat := 8
 
 /-- gro_normal_list (gro.h): the list to the stack, if it holds anything. -/
-def groNormalList (toStack : List (List UInt8) → M Unit) (gro : GroState) : M GroState := do
+def groNormalList [Monad m] [MonadLiftT WG.M m] [MonadLiftT AmbientM m] (toStack : List (List UInt8) → m Unit) (gro : GroState) : m GroState := do
   if gro.rxCount == 0 then return gro   -- `if (!napi->rx_count) return;`
   toStack gro.rxList
   return { gro with rxList := [], rxCount := 0 }
 
 /-- gro_normal_one (gro.h): to the list, and the list to the stack at the batch. -/
-def groNormalOne (toStack : List (List UInt8) → M Unit) (gro : GroState) (pkt : List UInt8) (segs : Nat) :
-    M GroState := do
+def groNormalOne [Monad m] [MonadLiftT WG.M m] [MonadLiftT AmbientM m] (toStack : List (List UInt8) → m Unit) (gro : GroState) (pkt : List UInt8) (segs : Nat) :
+    m GroState := do
   let gro := { gro with rxList := gro.rxList ++ [pkt], rxCount := gro.rxCount + segs }
   if gro.rxCount ≥ GRO_NORMAL_BATCH then groNormalList toStack gro else return gro
 
@@ -401,7 +401,7 @@ def groTakenAtOnce (pkt : List UInt8) : Bool :=
   | some off => (byte (off + 13) &&& 0x2f) != 0   -- FIN 1, SYN 2, RST 4, PSH 8, URG 32
 
 /-- napi_gro_receive (gro.c): `GRO_NORMAL` at once, or `GRO_HELD`. -/
-def napiGroReceive (toStack : List (List UInt8) → M Unit) (gro : GroState) (pkt : List UInt8) : M GroState := do
+def napiGroReceive [Monad m] [MonadLiftT WG.M m] [MonadLiftT AmbientM m] (toStack : List (List UInt8) → m Unit) (gro : GroState) (pkt : List UInt8) : m GroState := do
   if groTakenAtOnce pkt then groNormalOne toStack gro pkt 1
   else
     if !gro.held.isEmpty then
@@ -411,7 +411,7 @@ def napiGroReceive (toStack : List (List UInt8) → M Unit) (gro : GroState) (pk
 /-- napi_complete_done's flushes (dev.c:6385-6388): the held chains through
     `napi_gro_complete` (`gro_normal_one` with the segment count, 1), then
     the list. -/
-def napiGroFlushAll (toStack : List (List UInt8) → M Unit) (gro : GroState) : M Unit := do
+def napiGroFlushAll [Monad m] [MonadLiftT WG.M m] [MonadLiftT AmbientM m] (toStack : List (List UInt8) → m Unit) (gro : GroState) : m Unit := do
   let mut g := gro
   for pkt in gro.held do g ← groNormalOne toStack g pkt 1
   g := { g with held := [] }
@@ -421,7 +421,7 @@ def napiGroFlushAll (toStack : List (List UInt8) → M Unit) (gro : GroState) : 
     budget `napi_poll` passes. `toStack` is the environment's cut where
     GRO's `gro_normal_list` hands a flushed list to the stack: at the batch
     of 8 inside the poll, and at `napi_complete_done`. -/
-def rxPoll (pid : PeerId) (budget : Nat) (toStack : List (List UInt8) → M Unit) : M Nat := do
+def rxPoll [Monad m] [MonadLiftT WG.M m] [MonadLiftT AmbientM m] (pid : PeerId) (budget : Nat) (toStack : List (List UInt8) → m Unit) : m Nat := do
   if ← branch .rxPollNoBudget (budget == 0) then return 0
   let mut workDone := 0
   let mut gro : GroState := {}

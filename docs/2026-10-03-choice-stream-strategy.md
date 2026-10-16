@@ -1,9 +1,8 @@
 # Choice-stream strategy — 2026-10-03
 
-Status: **direction agreed** [USER 2026-10-03: "Yes, this sounds like a good
-direction"]. The details are proposed [AGENT] and were revised after a
-critical audit (section 12). They go to the user's decisions in section 11,
-after the measurement in section 10.
+Status: **direction agreed** [USER 2026-10-03]. The details are proposed
+[AGENT] and were revised after a critical audit (section 12). They go to the
+user's decisions in section 11, after the measurement in section 10.
 
 It supersedes the kernel mechanism of the
 [steering design](2026-10-03-steering-design.md) (its sections 4.2 and 7.2).

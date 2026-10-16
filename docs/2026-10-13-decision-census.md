@@ -129,8 +129,8 @@ reaches is counted as unobservable, not unexercised.
 | `wg_peer_create.dst_cache_failed` | true | `drivers/net/wireguard/peer.c:36` | (a) | [A](2026-10-05-a-alloc.md) 10: `dst_cache_init`: lax and unsteerable, a constant-outcome decision |
 | `wg_index_hashtable_insert.locked_entry` | true | `drivers/net/wireguard/peerlookup.c:145` | (a) | [census 2026-10-06](2026-10-06-wireguard-census.md) P7: 64 index collisions |
 | `wg_index_hashtable_insert.locked_collision` | true | `drivers/net/wireguard/peerlookup.c:148` | (a) | [census 2026-10-06](2026-10-06-wireguard-census.md) P7: 64 index collisions |
-| `wg_ratelimiter_init.table_v6_failed` | true | `drivers/net/wireguard/ratelimiter.c:185` | (a) | [L](2026-10-05-l-lifecycle.md) 9, [A](2026-10-05-a-alloc.md) 10: a creation allocation outside the model |
-| `wg_ratelimiter_gc_entries.v6_entry_iterate` | true | `drivers/net/wireguard/ratelimiter.c:70` | (a) | [E](2026-10-05-e-dos.md) 11: the GC delayed work with entries: W10, not built |
+| `wg_ratelimiter_init.table_v6_failed` | true | `drivers/net/wireguard/ratelimiter.c:185` | (a) | [L](2026-10-05-l-lifecycle.md) 9, [A](2026-10-05-a-alloc.md) 10: a creation allocation outside the model |; since B4 (2026-10-15) a constant-false decision with that reason (`kmem_cache_create` and a 16 KiB `kvcalloc` are not direct kind-305 sites: docs/2026-10-15-design-b4-load-ratelimiter.md 4.4)
+| `wg_ratelimiter_gc_entries.v6_entry_iterate` | true | `drivers/net/wireguard/ratelimiter.c:70` | (a) | [E](2026-10-05-e-dos.md) 11: the periodic GC run with entries, excluded with the reason in [B4](2026-10-15-design-b4-load-ratelimiter.md) 3; **the uninit walk's arm is reached since B4** (`l_delete_ratelimited6`), the mirror having emptied the IPv4 table only before |
 | `wg_ratelimiter_gc_entries.has_work` | true | `drivers/net/wireguard/ratelimiter.c:77` | (a) | [E](2026-10-05-e-dos.md) 11: as above |
 | `wg_ratelimiter_gc_entries.requeue` | true | `drivers/net/wireguard/ratelimiter.c:80` | (a) | [E](2026-10-05-e-dos.md) 11: as above |
 | `wg_receive_handshake_packet.wrong_packet` | true | `drivers/net/wireguard/receive.c:192` | (a) | [census 2026-10-06](2026-10-06-wireguard-census.md) P14: structurally dead: the worker receives handshake types only |
@@ -427,6 +427,24 @@ twelve branch-free functions carry decisions whose C functions own no point,
 and the two data-only operations have no anchored coverage by construction. One
 exclusion is missing rather than stale: `dstCacheHit` is undeclared because
 `net/core/dst_cache.c` is not anchored (item 8 deferral); anchoring it is a small stream.
+
+### 5.7 List-primitive internals, at the altitude (added 2026-10-15)
+
+The inlined tests inside the kernel's list and queue primitives are not
+choice points of the mirror, whose state is list-shaped: `hlist_add_head_rcu`'s
+`if (first)` (rculist.h, at peerlookup.c:39, :157), `hlist_replace_rcu`'s
+`if (new->next)` (at :178), `skb_queue_splice_init`'s and
+`skb_queue_splice`'s `!skb_queue_empty` (send.c:351, :407; the first is the
+test at :353, the second is always true after it), `__skb_queue_purge`'s
+dequeue loop (:338, which only frees), and `skb_orphan`'s
+`if (skb->destructor)` (:400, which releases the sending socket's buffer
+charge below WireGuard's boundary, unobservable under the fixture's
+`SO_SNDBUFFORCE`). The `hlist_unhashed` test of `hlist_del_init_rcu` is the
+exception: it decides whether an entry leaves a table, and the mirror
+reports it at every remove and insert (`.idxRemoveHashed`,
+`.idxInsertHashed`, `.pubkeyRemoveHashed`). From the Send audit's F4 and the
+Peer audit's altitude note (`docs/2026-10-15-audit-send.md`,
+`docs/2026-10-15-audit-peer.md`).
 
 ## 6. The anchored-file boundary
 

@@ -31,19 +31,19 @@ structure PollTable where
     `whead`, exclusive at the tail for `EPOLLEXCLUSIVE`, else at the head,
     and the head of `epi->pwqlist`. It lives here, with `poll_wait`, because
     `poll_wait` calls it (stream S). -/
-def epPtableQueueProc (_file : FileId) (whead : WaitQueueRef) (_pt : PollTable) : M Unit := do
-  let epq := (← getK).epqEpi
+def epPtableQueueProc (_file : FileId) (whead : WaitQueueRef) (_pt : PollTable) : FS.M Unit := do
+  let epq := (← get).epqEpi
   if ← branch .epPtableQueueProcNoEpi epq.isNone then
     unsupported "ep_ptable_queue_proc after an earlier head's failed allocation (a second head)"
   let epiId := epq.get!
   -- pwq = kmem_cache_alloc(pwq_cache, GFP_KERNEL)
   if ← branch .epPtableQueueProcNoMem (!(← hiddenAlloc .kmemCacheAllocPwq)) then
-    modifyK fun k => { k with epqEpi := none }   -- epq->epi = NULL
+    modify fun k => { k with epqEpi := none }   -- epq->epi = NULL
     return
-  let id := (← getK).nextPwq
+  let id := (← get).nextPwq
   -- init_waitqueue_func_entry(&pwq->wait, ep_poll_callback); pwq->whead = whead; pwq->base = epi
   setPwq id { whead := some whead, base := epiId }
-  modifyK fun k => { k with nextPwq := id + 1 }
+  modify fun k => { k with nextPwq := id + 1 }
   let epi ← getEpi epiId
   let entry : WaitEntry := { func := .epPollCallback id }
   if ← branchCmp .epPtableQueueProcExclusive (hasFlag epi.events EPOLLEXCLUSIVE) (epi.events &&& EPOLLEXCLUSIVE).toNat 0 then
@@ -57,7 +57,7 @@ def epPtableQueueProc (_file : FileId) (whead : WaitQueueRef) (_pt : PollTable) 
     table, every caller names an embedded head), so the mirror holds them as
     values and the live test of `p && p->_qproc && wait_address` is
     `p->_qproc`. The registration it calls is `ep_ptable_queue_proc`. -/
-def pollWait (filp : FileId) (waitAddress : WaitQueueRef) (p : PollTable) : M Unit := do
+def pollWait (filp : FileId) (waitAddress : WaitQueueRef) (p : PollTable) : FS.M Unit := do
   if ← branch .pollWaitQproc p.qproc.isSome then
     epPtableQueueProc filp waitAddress p
     -- smp_mb()

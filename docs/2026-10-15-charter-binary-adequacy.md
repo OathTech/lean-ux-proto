@@ -7,41 +7,38 @@ under Kraken's x86-64 semantics, by a direct per-region grind with a trust
 base listed in one place and kept small. No reusable toolchain is the
 deliverable; whatever automation gets built along the way is a by-product.
 
-Provenance: [USER 2026-10-14] "we're not building some reusable toolchain,
-we are proving a single target theorem, namely adequacy of the called
-function at the binary level. We might build some stuff along the way but
-basically this is going to be a big grind and a minimized trust base." The
-same day: "The hard part is finding the ISA-state simulation invariant, but
-we basically already have a first approximation in the mirror
-datastructures. Then the meat of the proof is verifying that between any
-two correspondence points, we have invariant preservation." [AGENT,
-coordinator] wrote the charter from the probe's findings; the probe's
-estimate priced a certificate checker and its soundness theorem, which this
-charter does not build.
+Provenance: [USER 2026-10-14] this is not a reusable toolchain but the proof
+of a single target theorem, adequacy of the called function at the binary
+level: a big grind and a minimised trust base, with whatever gets built on the
+way incidental. The same day: the hard part is the ISA-state simulation
+invariant, of which the mirror's data structures are a first approximation;
+the meat of the proof is invariant preservation between any two correspondence
+points. [AGENT, coordinator] wrote the charter from the probe's findings; the
+probe's estimate priced a certificate checker and its soundness theorem, which
+this charter does not build.
 
 ## 0. What matters, and what does not
 
-[USER 2026-10-14] "The eventual adequacy result & transport of wireguard
-results to the binary, is the only thing that matters. We are going to get it
-done by any means necessary. The theorem / trust surface MUST MUST be correct.
-Everything else is ephemeral. It might get promoted to reusable
-infrastructure at some point. But basically if it's outside the trust
-surface, we don't care much, that's a judgement call."
+[USER 2026-10-14] The eventual adequacy result and the transport of the
+WireGuard results to the binary are the only thing that matters, to be reached
+by any means necessary; the theorem and the trust surface must be correct;
+everything else is ephemeral, possibly promoted to reusable infrastructure
+later, and outside the trust surface a judgement call.
 
 So, in this assignment:
 - The trust surface is two things: Kraken's semantics at the pinned commit,
-  and the statement of section 1 with the premises it assumes: the
-  environment premises, the call contracts, the decoder and the image, all
-  of them declarations in `binary/TrustBase.lean`. `R` as a whole is a proof
-  artefact, not surface: a wrong body fails the proofs or weakens the
-  transported properties, both visibly. Its machine-side domain at an entry,
-  the precondition `Pre_f`, *is* surface, because an unsatisfiable `Pre_f`
-  makes every theorem vacuous [USER 2026-10-14: "a sub-part of R defines the
-  states over which the binary may be called, and this *is* a trust surface
-  (eg it could be vacuous and we would prove the binary 'correct' even
-  though it couldn't be executed)"]. Section 2a says how it is guarded. They are reviewed
-  independently (section 7a) and every change to them is visible, named and
-  justified. Correctness here is the whole point.
+  and the statement of section 1 with the premises it assumes: the environment
+  premises, the call contracts, the decoder and the image, all of them
+  declarations in `binary/TrustBase.lean`. `R` as a whole is a proof artefact,
+  not surface: a wrong body fails the proofs or weakens the transported
+  properties, both visibly. Its machine-side domain at an entry, the
+  precondition `Pre_f`, *is* surface, because an unsatisfiable `Pre_f` makes
+  every theorem vacuous [USER 2026-10-14: the part of R that defines the
+  states over which the binary may be called is trust surface, since a vacuous
+  one would prove the binary correct over states it can never be executed in].
+  Section 2a says how it is guarded. They are reviewed independently (section
+  7a) and every change to them is visible, named and justified. Correctness
+  here is the whole point.
 - Everything outside that surface is a means: generators, scripts,
   automation, scratch definitions, the shape of intermediate lemmas, the
   private Kraken branch's internals. Any means that the Lean kernel accepts
@@ -52,22 +49,49 @@ So, in this assignment:
 
 ## 1. The theorem
 
-[USER 2026-10-14] "The ideal result here is essentially an adequacy result
-over the kraken semantics for this specific binary. That is, if the binary
-target function is called (inside the kernel) with the necessary precondition
-satisfied over its state, the binary executes and establishes a post
-condition that satisfies the theorems that have been proved about the lean
-mirror. That is, any property we prove about the mirror is necessarily also
-a property that we have proved over the binary. ... It should be phrased so
-that we can transport any of the properties we care about into the binary.
-Not over specific properties. That is, it's a generic simulation which shows
-the binary is a refinement over the observations our properties depend on."
+[USER 2026-10-14] The ideal result is an adequacy result over the Kraken
+semantics for this specific binary: if the binary's target function is called
+inside the kernel with the necessary precondition satisfied over its state,
+the binary's execution establishes a postcondition satisfying the theorems
+proved about the Lean mirror, so that any property proved about the mirror is
+thereby proved about the binary. It is phrased generically, so that any
+property of interest transports rather than specific ones: a generic
+simulation showing the binary is a refinement over the observations the
+properties depend on.
 
 Fix the image (identity `6b2018b9`) and Kraken's semantics at the pinned
 commit. `R` is the state relation between a Kraken machine state and a
-mirror world; it relates the whole mirror world, so it is the strongest
-observation the mirror's properties can depend on. For an anchored function
-`f` with mirror `m_f`:
+mirror world, and it is minimal: a frame property [USER 2026-10-15]. It is
+defined over the WireGuard projection of the mirror's World only, and every
+clause of it is justified by a read or a write in an anchored function or
+by a field a landed WireGuard result observes (the index table and its
+owners, peers, keypairs and counters, the handshake and cookie state, the
+rings and queues, the timers and dispatch state the anchored functions
+touch, the service callbacks' metadata). What a function does not touch is
+handled by frame theorems, the binary's write footprint and the mirror's
+unchanged fields, never by a relation clause; the file layer, seccomp,
+epoll, the task-work chains, credentials and signal state are outside `R`
+by construction, not related trivially. A smaller `R` weakens the
+hypothesis, so the theorem applies in more contexts, and the frame
+theorems give equality outside the footprint, which is stronger than
+relatedness; nothing transportable is lost, since a property transports
+through the fields `R` relates, and `R` covers every field a landed result
+observes. Precisely: the per-function relation `R_f` is `f`'s footprint and
+no more; the global relation over the WireGuard projection is the
+conjunction of per-structure relations, and a landed property transports
+through it, not through any one `R_f`. What carries the global relation
+across a call is `f`'s theorem (`R_f` at exit, bytes outside the footprint
+unchanged) plus one global fact, a heap-layout invariant naming where the
+WireGuard structures live and that they are disjoint from each function's
+write footprint; that invariant is a milestone-6 obligation on the
+trust-surface review's list, not a clause of any `R_f` (the milestone-1
+review's F6, 2026-10-15). A later result that observes a field outside the
+global relation extends it additively. Definitions built for state outside `R` are parked under
+`binary/attic/`, imported by nothing on the proof path, with a line saying
+what each was for; they are not counted. (The charter's first wording,
+"it relates the whole mirror world", was read literally and cost the
+grind a day on task, seccomp and file state; the wording was the
+coordinator's error.) For an anchored function `f` with mirror `m_f`:
 
 > For every machine state `σ` and mirror world `s` with `R σ s`, every record
 > stream `ρ`, under the environment premises of section 2: if the mirror's
@@ -151,7 +175,8 @@ nothing else, reported by name.
 ## 2a. The entry precondition: non-vacuity and realism
 
 For each certified function `f`, `Pre_f` (the machine states `R` relates to
-some mirror world at `f`'s entry, with the ABI arguments) is listed in
+some mirror world at `f`'s entry, with the ABI arguments; it constrains only
+what `f` and its callbacks read, as `R` does) is listed in
 `binary/TrustBase.lean` by name next to the function's theorem, and two
 guards accompany it:
 
@@ -278,19 +303,19 @@ mirror lane; a kernel finding only with positive evidence against the code's
 stated intent, written up in the tray; a statement or relation is never bent
 to accommodate either.
 
-[USER 2026-10-14] "In general, the purpose of the verification should be
-to validate the mirror, and detect discrepancies. Not to conform to mistakes
-in the mirror. The binary (ie the real kernel) is the source of truth here
-of course." So the direction of every discrepancy is fixed: the mirror
-conforms to the binary, never the reverse. A region that will not close
-because the mirror's data or control flow differs from the machine's is a
-mirror defect, fixed on the mirror lane by the project's normal process (a
-settling pass, the differential check, the register), and the region's
-lemma closes against the fixed mirror. Neither `Pre_f` nor `R` is narrowed
-or bent to make a mismatched region close, and the theorem's statement is
-not weakened for it. The first instance: the index lookup's dead-peer
-branch, where the kernel stores the null peer back into the entry and the
-mirror kept the stale id, found at milestone 1 and fixed on the mirror.
+[USER 2026-10-14] The purpose of the verification is to validate the mirror
+and detect discrepancies, never to conform to mistakes in the mirror; the
+binary, the real kernel, is the source of truth. So the direction of every
+discrepancy is fixed: the mirror conforms to the binary, never the reverse. A
+region that will not close because the mirror's data or control flow differs
+from the machine's is a mirror defect, fixed on the mirror lane by the
+project's normal process (a settling pass, the differential check, the
+register), and the region's lemma closes against the fixed mirror. Neither
+`Pre_f` nor `R` is narrowed or bent to make a mismatched region close, and the
+theorem's statement is not weakened for it. The first instance: the index
+lookup's dead-peer branch, where the kernel stores the null peer back into the
+entry and the mirror kept the stale id, found at milestone 1 and fixed on the
+mirror.
 
 A region lemma that will not close is one of three findings, and the report
 says which with the evidence: the mirror differs from the machine on that

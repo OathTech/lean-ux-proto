@@ -59,6 +59,12 @@ ReplayWindow. The conventions that keep proof work cheap are in
 
 ## Results
 
+Campaign 2 incorporates state-split mirror `b700659`; its earlier rows below
+remain historical and lagging during the retrofit. The
+[retrofit report](2026-10-16-proof-campaign-2-state-split.md) records baseline
+counts, carries, deletions and validation. This branch retains the proof
+target and gate removed from main pending campaign 1's landing.
+
 | Result | Statements | Directory | Charter | Review | Mirror commit | Status |
 | --- | --- | --- | --- | --- | --- | --- |
 | Receive counter window: replay freedom (S1, S2, S3) | S1: every accepted execution has its exact acceptance history, and no two events share an allocation lifetime and a wire counter. S2: `counterValidate` returns exactly what receive.c's rule returns and leaves exactly its replay state. S3: every non-receive syscall and every validator call leave every other keypair's window unchanged, per call and for whole syscalls including the runner's ambient step. | `Leanux/Proofs/WG/ReplayWindow/` (`Statements.lean`, 15 terminal declarations; `Counterexamples.lean`) | [charter](2026-10-12-charter-window-proof.md) | [independent review, two parts](2026-10-12-spike-window-review.md); the spike's [report](2026-10-13-spike-window.md) and [self-review](2026-10-13-spike-window-self-review.md) | 6f1f84c | lagging since 247beec (review item 8 landed 2026-10-13: the two counter-limit tests now carry operands and `CounterWindow/Refinement.lean`'s `counterValidate_execution` expects plain records; the proof campaign repairs it on merge; the index-table entry's `Option PeerId` and `indexLookup`'s store-back, landed 2026-10-14, touch `indexLookup_sameSnapshot` and the `consumeResponse`, `cookieMessageConsume` and `consumeData` frames, repaired on the same merge). Carried from ef7c535 over the epoll landing on 2026-10-13 (the wait-queue, epoll release and epoll system-call frames). |

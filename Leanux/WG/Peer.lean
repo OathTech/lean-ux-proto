@@ -49,13 +49,13 @@ def IndexOwner.peerDeref (o : IndexOwner) : M PeerId := do
 /-- `hlist_del_init_rcu(&entry->index_hash)` (rculist.h:182-188): the
     `hlist_unhashed` test is the decision `d`, true when the entry is in the
     table; the unhash leaves it absent either way. -/
-private def unhashEntry (d : Decision) (hashed : IndexEntry → Bool) : M Unit := do
-  _ ← branch d ((← getDev).indexTable.any hashed)
-  modifyDev fun dev => { dev with indexTable := dev.indexTable.filter fun e => !hashed e }
+private def unhashEntry (d : Decision) (hashed : IndexEntry → Bool) : IndexM Unit := do
+  _ ← branch d ((← get).any hashed)
+  modify fun t => t.filter fun e => !hashed e
 
 /-- wg_index_hashtable_remove (peerlookup.c:192-198) of an owner's entry:
     `hlist_del_init_rcu`, a no-op if unhashed. -/
-def indexRemove (owner : IndexOwner) : M Unit :=
+def indexRemove (owner : IndexOwner) : IndexM Unit :=
   unhashEntry .idxRemoveHashed (·.owner == owner)
 
 /-- wg_peer_put (peer.c:223-228) and kref_release (200-221): the release
@@ -70,8 +70,19 @@ def peerPut (peer : Option PeerId) : M Unit := do
   setPeer pid { p with refcount := p.refcount - 1 }
   if ← branch .peerKrefPutReleased (← refcountDecAndTest p.refcount) then
     indexRemove (.handshake pid)   -- `&peer->handshake.entry` (peer.c:211-212)
+    -- rcu_release's `WARN_ON(wg_prev_queue_peek(&tx_queue) || wg_prev_queue_peek(&rx_queue))`
+    -- (peer.c:191): a queued batch holds a reference (Send.lean, Receive.lean),
+    -- so a release with packets queued is a reference slip; the C warns and
+    -- frees, the mirror stops here rather than at a later dangling id (the
+    -- Peer audit's F3)
+    if p.txQueue.peeked.isSome || !p.txQueue.items.isEmpty || p.rxQueue.peeked.isSome || !p.rxQueue.items.isEmpty then
+      invariant "rcu_release: a released peer with packets on its tx_queue or rx_queue (peer.c:191)"
     -- wg_packet_purge_staged_packets: DEV_STATS_ADD(tx_dropped, qlen)
     modifyDev fun d => { d with txDropped := d.txDropped + p.staged.length, peers := d.peers.erase pid }
+    -- B3: a released peer has no pending timer (wg_timers_stop ran at its
+    -- removal, timers.c:235-243); a wheel entry left here is a mirror defect
+    if let some t := PeerTimer.all.find? (fun t => p.timerPending t || (p.wheel t).isSome) then
+      invariant s!"peer {pid} released with its {repr t} timer pending"
     -- the peer's work structs and timers are freed with it (rcu_free): their
     -- dispatch identities end here (docs/2026-10-11-dispatch-order.md, 4)
     retirePeerUnits pid
@@ -133,17 +144,17 @@ def INDEX_HASHTABLE_BITS : Nat := 13
 
 /-- `index_bucket` (peerlookup.c:73-81): the entries under the same masked
     index, in list order. -/
-def indexBucket (index : Nat) : M (List IndexEntry) := do
+def indexBucket (index : Nat) : IndexM (List IndexEntry) := do
   let mask := 2 ^ INDEX_HASHTABLE_BITS
-  return (← getDev).indexTable.filter (·.index % mask == index % mask)
+  return (← get).filter (·.index % mask == index % mask)
 
 /-- Whether an owner's entry is hashed (`!hlist_unhashed`). -/
-def indexHashed (owner : IndexOwner) : M Bool :=
-  return (← getDev).indexTable.any (·.owner == owner)
+def indexHashed (owner : IndexOwner) : IndexM Bool :=
+  return (← get).any (·.owner == owner)
 
 /-- A walk over a bucket for `index`, reporting the loop and the compare:
     whether some entry has this index. -/
-private def bucketHas (walk collide : Decision) (index : Nat) : M Bool := do
+private def bucketHas (walk collide : Decision) (index : Nat) : IndexM Bool := do
   for e in ← indexBucket index do
     _ ← branch walk true
     if ← branch collide (e.index == index) then return true
@@ -152,7 +163,7 @@ private def bucketHas (walk collide : Decision) (index : Nat) : M Bool := do
 
 /-- wg_index_hashtable_insert (peerlookup.c:109-153): a fresh random index
     (a recorded hidden input) not in use, inserted at the head. -/
-def indexInsert (owner : IndexOwner) : M Nat := do
+def indexInsert (owner : IndexOwner) : IndexM Nat := do
   -- `hlist_del_init_rcu(&entry->index_hash)` first (peerlookup.c:125)
   unhashEntry .idxInsertHashed (·.owner == owner)
   -- `goto search_unused_slot` draws again; nothing else inserts meanwhile
@@ -166,7 +177,7 @@ def indexInsert (owner : IndexOwner) : M Nat := do
     -- the locked walk's collision (stolen meanwhile, peerlookup.c:148) needs
     -- a concurrent insert
     if ← bucketHas .idxInsWalk2 .idxInsCollide2 index then unsupported "an index stolen during insertion"
-    modifyDev fun d => { d with indexTable := { index, owner } :: d.indexTable }
+    modify fun t => { index, owner } :: t
     return index
   budgetExhausted "index draws"
 
@@ -174,13 +185,13 @@ def indexInsert (owner : IndexOwner) : M Nat := do
     entry by its new keypair's, in place: the keypair's entry takes the
     handshake's index and list position, and the handshake's is unhashed.
     Whether the handshake entry was hashed. -/
-def indexReplaceHandshake (pid : PeerId) (kp : KeypairId) : M Bool := do
+def indexReplaceHandshake (pid : PeerId) (kp : KeypairId) : IndexM Bool := do
   let hashed ← indexHashed (.handshake pid)
   if ← branch .idxReplaceUnhashed !hashed then return false
   -- `new->index = old->index; hlist_replace_rcu(...)`: the keypair's own
   -- entry, with its own peer word, takes the index and the list position
-  modifyDev fun d => { d with indexTable := d.indexTable.map fun e =>
-    if e.owner == (.handshake pid) then { e with owner := .keypair kp } else e }
+  modify fun t => t.map fun e =>
+    if e.owner == (.handshake pid) then { e with owner := .keypair kp } else e
   return true
 
 def NSEC_PER_SEC : Int := 1000000000
@@ -302,8 +313,8 @@ def peerCreate (publicKey : Key) (presharedKey : Option Key) : M (Except Int Pee
   -- the site would be lax and unsteerable; the arm stays dead, named.
   if ← branch .peerCreateDstCacheFail false then return .error (-ENOMEM)
   let pid := d.nextPeer
-  let internalId := (← getK).peerCounter + 1   -- atomic64_inc_return(&peer_counter)
-  modifyK fun k => { k with peerCounter := internalId }
+  let internalId := (← get).peerCounter + 1   -- atomic64_inc_return(&peer_counter)
+  modify fun k => { k with peerCounter := internalId }
   modifyDev fun d => { d with nextPeer := pid + 1 }
   -- wg_cookie_init (zeroed: no cookie, is_valid and have_sent_mac1 false),
   -- then wg_cookie_checker_precompute_peer_keys (cookie.c:61-67):
@@ -329,6 +340,10 @@ def peerCreate (publicKey : Key) (presharedKey : Option Key) : M (Except Int Pee
 def peerMakeDead (pid : PeerId) : M Unit := do
   modifyDev fun d => { d with peerList := d.peerList.filter (· != pid) }   -- list_del_init
   removeByPeer pid
+  -- wg_pubkey_hashtable_remove (peerlookup.c:44-50): `hlist_del_init_rcu`'s
+  -- `if (!hlist_unhashed(n))` (rculist.h:183), the twin of the index remove's
+  -- decision (the Peer audit's F4); the entry is absent either way
+  _ ← branch .pubkeyRemoveHashed ((← getDev).peerHashtable.any (·.2 == pid))
   modifyDev fun d => { d with peerHashtable := d.peerHashtable.filter (·.2 != pid) }
   setPeer pid { (← getPeer pid) with isDead := true }
 
