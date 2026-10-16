@@ -10,17 +10,20 @@ No well-formedness, ownership, or reachability premise is used. -/
 namespace Leanux.Proofs.WG.Queues
 open Leanux Leanux.WG Leanux.Proofs.Framing Std.Do
 
-def encryptRing (w : World) : Option (PtrRing (List SkbId)) :=
-  w.k.wg.map (·.encryptQueue)
+def encryptRing (w : WGWorld) : Option (PtrRing (List SkbId)) :=
+  w.dev.map (·.encryptQueue)
 
-theorem encryptRing_kernel (ha : SameKernel a) : SameView encryptRing a := by
-  intro w x v hr
-  unfold encryptRing
-  rw [ha w x v hr]
+theorem encryptRing_kernel {S α : Type} {m : Type → Type} {ps : PostShape}
+    [Monad m] [WPMonad m ps] {project : S → WGWorld} {a : StateT S m α}
+    (ha : SameView (fun w => wgStoreView (project w)) a) :
+    SameView (fun w => encryptRing (project w)) a :=
+  ha.of_factor (fun store : WGStoreView => store.dev.map (·.encryptQueue))
+    (fun w => encryptRing (project w)) (fun _ => rfl)
 
 theorem setPeer_encryptRing (pid : PeerId) (p : Peer) :
     SameView encryptRing (setPeer pid p) := by
-  intro w x v hr
+  apply (Lifetimes.ProjectedAction.iff_run_ambient _ _ _).mpr
+  intro w ambient x v ambient' hr
   cases hr
   simp [encryptRing, Option.map_map, Function.comp_def]
 
@@ -28,14 +31,14 @@ theorem setTxSkb_encryptRing (id : SkbId) (f : DataPacket → DataPacket) :
     SameView encryptRing (setTxSkb id f) := by
   apply SameView.of_wp
   intro r
-  mvcgen [setTxSkb, getTxSkb, getDev, getK, modifyDev, modifyK, invariant]
-  all_goals dsimp +zetaDelta only at *
-  all_goals simp_all [encryptRing]
+  apply hoare_liftSkb (SkbStore.setTx id f) (fun w => encryptRing w = r)
+  intro g d packets hg hd
+  simpa [encryptRing, hd] using hg
 
 theorem getPeer_encryptRing (pid : PeerId) : SameView encryptRing (getPeer pid) := by
   apply SameView.of_wp
   intro r
-  mvcgen [getPeer, getDev, getK, invariant]
+  mvcgen [getPeer, getDev, invariant, AmbientM.invariant]
 
 /-- Exact alternatives for every ordinary return: successful production,
 peer-queue refusal, or physical ring fullness. Both refusals preserve the ring. -/
@@ -54,17 +57,18 @@ theorem enqueue_ring_wp (before : Option (PtrRing (List SkbId)))
   have peer_spec := (getPeer_encryptRing pid).wp (fun r => r = before)
   have set_spec := fun p => (setPeer_encryptRing pid p).wp (fun r => r = before)
   have cpu_spec := fun cpu => (encryptRing_kernel
-    (Lifetimes.cpumaskNextOnlineFrom_sameKernel cpu)).wp (fun r => r = before)
-  have queue_spec := (encryptRing_kernel
-    (Lifetimes.queueDeviceWork_sameKernel .encryptWorker)).wp
-      (fun r => r = before)
+    (Lifetimes.cpumaskNextOnlineFrom_sameStore cpu)).wp (fun r => r = before)
+  have queue_spec :
+      ⦃fun w => ⌜encryptRing w = before⌝⦄ (queueDeviceWork .encryptWorker : WG.M Unit)
+      ⦃⇓? _ w => ⌜encryptRing w = before⌝⦄ :=
+    hoare_liftAmbient (AmbientM.queueDeviceWork .encryptWorker) (fun w => encryptRing w = before)
   have produce_map (ds : Option Device) (hr : ds.map (·.encryptQueue) = before) :
       ds.map (fun d => d.encryptQueue.produce item) = before.map (fun r => r.produce item) := by
     rw [← hr]
     cases ds <;> rfl
   mvcgen [enqueuePerDeviceAndPeer, packet_spec, peer_spec, set_spec, cpu_spec,
-    queue_spec, getDev, getK, modifyDev, modifyK, branch, invariant]
-  all_goals dsimp +zetaDelta only at *
+    queue_spec, getDev, modifyDev, branch, AmbientM.branch, invariant, AmbientM.invariant]
+  all_goals try dsimp +zetaDelta only at *
   all_goals simp_all [EnqueueResult, encryptRing, EPIPE, ENOSPC, WG.EPIPE, WG.ENOSPC,
     Option.map_map, Function.comp_def]
   all_goals first
@@ -72,17 +76,17 @@ theorem enqueue_ring_wp (before : Option (PtrRing (List SkbId)))
     | (rename_i hfull; refine ⟨_, ?_, hfull⟩; symm; assumption)
 
 theorem enqueue_ring_result (pid : PeerId) (item : List SkbId)
-    (w v : World) (ret : Int)
-    (hr : (enqueuePerDeviceAndPeer pid item).run w = .ok (ret, v)) :
+    (w v : WGWorld) (ambient ambient' : Ambient) (ret : Int)
+    (hr : ((enqueuePerDeviceAndPeer pid item).run w).run ambient = .ok ((ret, v), ambient')) :
     EnqueueResult (encryptRing w) item ret (encryptRing v) :=
-  (hoare_iff_triple _ _ _).mpr (enqueue_ring_wp (encryptRing w) pid item)
-    w ret v rfl hr
+  (hoare_iff_run_ambient _ _ _).mp (enqueue_ring_wp (encryptRing w) pid item)
+    w ambient ret v ambient' rfl hr
 
-theorem enqueue_epipe (pid : PeerId) (item : List SkbId) (w v : World)
-    (hr : (enqueuePerDeviceAndPeer pid item).run w = .ok (-EPIPE, v)) :
+theorem enqueue_epipe (pid : PeerId) (item : List SkbId) (w v : WGWorld) (ambient ambient' : Ambient)
+    (hr : ((enqueuePerDeviceAndPeer pid item).run w).run ambient = .ok ((-EPIPE, v), ambient')) :
     encryptRing v = encryptRing w ∧
       ∃ r, encryptRing w = some r ∧ r.full = true := by
-  have h := enqueue_ring_result pid item w v (-EPIPE) hr
+  have h := enqueue_ring_result pid item w v ambient ambient' (-EPIPE) hr
   simpa [EnqueueResult, EPIPE, ENOSPC] using h
 
 end Leanux.Proofs.WG.Queues

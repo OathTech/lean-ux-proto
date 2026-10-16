@@ -81,9 +81,10 @@ it is not part of that baseline.
 | Native routing, allocation, retirement, R6 terminals and product operation evolution | 102 | 50 | 2 | 50 | 7 | 107 |
 | Native allocation, lookup, session and routing lifecycle with canonical Seccomp adapter (corrected) | 55 | 38 | 3 | 14 | 10 | 62 |
 | Replay terminals, receive admission, key maintenance, clear walks and native failures | 91 | 40 | 3 | 48 | 11 | 99 |
+| Native clear endpoints, material derivation and transmit enqueue | 48 | 37 | 0 | 11 | 1 | 49 |
 
-The whole tree currently contains 451 Lean files and 6,277 theorems. The completed
-changes total 1,331 retyped theorems, 1,611 deletions, 508 retained contract shapes and 173 added.
+The whole tree currently contains 451 Lean files and 6,278 theorems. The completed
+changes total 1,368 retyped theorems, 1,611 deletions, 519 retained contract shapes and 174 added.
 Retyping changes or generalizes the actual state/monad carrier or observation.
 This includes shorthand contracts whose source functions or named views move
 to a native monad. Mere namespace qualification and equivalent relocation of a
@@ -1684,3 +1685,27 @@ Reproduce the carried group with capped module builds, named axiom printing,
 and capped scripts/in-bundle lake env leanchecker --fresh on Syscalls,
 AntiReplay.Statements, RoutingInitial, ClearWalk, ReceiveEntry, KeyMaintenance,
 SessionFailure and ReceiveEntryFailure.
+
+
+## Clear endpoints, material and transmit enqueue
+
+ClearSnapshot and ClearEndpoint retain all 26 claims: eighteen native or
+observation carries and eight pure contracts. The saved-root execution factor,
+trie/frontier observations and complete seven-field store mask remain explicit.
+MaterialOrigin retains its fifteen original names: four native concrete claims,
+eight generic state-domain generalizations and three pure contracts; one generic
+nested-state bind inversion is added. Its derivation witness connects each actual
+WG and Ambient endpoint consecutively. Queues.Enqueue retains all seven claims,
+with six native carries and one generalized store-view transport. The original
+success, peer refusal and physical ring-full alternatives remain distinct.
+
+All four files passed scoped builds, 74 explicit named axiom checks, four fresh
+kernel replays and independent full-source reviews. Clear's first two builds
+failed on source-factor, mask and prestate substitutions; its third passed.
+Its first axiom driver failed in Python after Lean completed, and the recovered,
+corrected check passed; the recovery snapshot is recorded above. Material's
+three validation calls passed without failure. Enqueue's first two builds failed
+on proof normalization and the missing packet-store adapter; its third passed,
+followed by the axiom check and fresh replay. No limits or mirror code changed.
+The default build and unit results from the preceding checkpoint apply to the
+unchanged default target and evaluator. Full-tree validation remains pending.

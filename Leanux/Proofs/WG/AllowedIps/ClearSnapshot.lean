@@ -69,19 +69,19 @@ theorem Progress.unowned (h : Progress nodes P seen d) (id : NodeId) (n : AipNod
   simp [hp] at hhpeer
 
 def WalkInv (nodes : Std.TreeMap Nat AipNode) (P : PeerId → NodeId → Prop)
-    (root : NodeId) (state : Option Unit × List NodeId) (w : World) : Prop :=
-  ∃ d seen, w.k.wg = some d ∧ Progress nodes P seen d ∧
+    (root : NodeId) (state : Option Unit × List NodeId) (w : WGWorld) : Prop :=
+  ∃ d seen, w.dev = some d ∧ Progress nodes P seen d ∧
     Frontier nodes root seen state.2 ∧ (state.1.isSome = true → state.2 = [])
 
 theorem WalkInv.finish (h : WalkInv nodes P root state w) (hs : state.2 = [])
-    (hk : v.k.wg = w.k.wg) : WalkInv nodes P root (some (), []) v := by
+    (hk : v.dev = w.dev) : WalkInv nodes P root (some (), []) v := by
   obtain ⟨d, seen, hd, hp, hf, _⟩ := h
   exact ⟨d, seen, hk.trans hd, hp, by simpa [hs] using hf, fun _ => rfl⟩
 
 theorem WalkInv.after_unlist {id : NodeId} {rest : List NodeId} {n : AipNode}
     (h : WalkInv nodes P root state w) (hs : state.2 = id :: rest)
-    (hd : w.k.wg = some d) (hn : d.nodes[id]? = some n)
-    (hout : v.k.wg = some (unlisted d id)) :
+    (hd : w.dev = some d) (hn : d.nodes[id]? = some n)
+    (hout : v.dev = some (unlisted d id)) :
     WalkInv nodes P root (none, pushed n.bit.toList rest) v := by
   obtain ⟨old, seen, hold, hp, hf, _⟩ := h
   have he : old = d := Option.some.inj (hold.symm.trans hd)
@@ -91,8 +91,8 @@ theorem WalkInv.after_unlist {id : NodeId} {rest : List NodeId} {n : AipNode}
 
 theorem WalkInv.after_unowned {id : NodeId} {rest : List NodeId} {n : AipNode}
     (h : WalkInv nodes P root state w) (hs : state.2 = id :: rest)
-    (hd : w.k.wg = some d) (hn : d.nodes[id]? = some n) (hnone : n.peer = none)
-    (hout : v.k.wg = some d) : WalkInv nodes P root (none, pushed n.bit.toList rest) v := by
+    (hd : w.dev = some d) (hn : d.nodes[id]? = some n) (hnone : n.peer = none)
+    (hout : v.dev = some d) : WalkInv nodes P root (none, pushed n.bit.toList rest) v := by
   obtain ⟨old, seen, hold, hp, hf, _⟩ := h
   have he : old = d := Option.some.inj (hold.symm.trans hd)
   subst old
@@ -106,21 +106,40 @@ theorem step_spec (nodes : Std.TreeMap Nat AipNode) (P : PeerId → NodeId → P
     ⦃⇓? result w => ⌜WalkInv nodes P root result.value w⌝⦄ := by
   have hl := listDel_wp
   have hc := pushChildren_wp
-  mvcgen [rootRemoveStep, branch, getNode, getPeer, getDev, getK, invariant, hl, hc]
+  have hn (id : NodeId) (g : WGWorld) :
+      Hoare (MonadLift.monadLift (getNode id) : WG.M AipNode)
+        (fun w => w = g)
+        (fun n w => w = g ∧ ∃ d, g.dev = some d ∧ d.nodes[id]? = some n) := by
+    apply hoare_liftAip_of
+    intro entry d hentry hd
+    subst entry
+    unfold Hoare
+    mvcgen [getNode, invariant, AmbientM.invariant]
+    all_goals simp_all
+    change {g with dev := some d} = g
+    rw [← hd]
+  unfold Hoare at hn
+  mvcgen [rootRemoveStep, branch, AmbientM.branch, hn, getPeer, getDev, invariant, AmbientM.invariant, hl, hc]
   all_goals try dsimp +zetaDelta only at *
   all_goals simp_all only [ForInStep.value]
+  all_goals try solve | apply WalkInv.finish <;> first | assumption | rfl
+  all_goals obtain ⟨he, d, hdev, hnode⟩ := ‹_ = _ ∧ ∃ d, _ = some d ∧ _›
+  all_goals obtain ⟨hstack, hstore⟩ := ‹_ = pushed _ _ ∧ _›
+  all_goals have hstoredev := congrArg WGStoreView.dev hstore
+  all_goals dsimp only [wgStoreView] at hstoredev
+  all_goals subst_vars
+  all_goals try simp_all
   all_goals solve
-    | apply WalkInv.finish <;> first | assumption | rfl
     | apply WalkInv.after_unlist <;> first | assumption | simp_all
     | apply WalkInv.after_unowned <;> first | assumption | simp_all
 
 theorem root_spec (nodes : Std.TreeMap Nat AipNode) (P : PeerId → NodeId → Prop)
     (d : Device) (ho : Progress nodes P [] d) (root : NodeId) :
-    ⦃fun w => ⌜w.k.wg = some d⌝⦄ rootRemoveSource root
-    ⦃⇓? _ w => ⌜∃ out seen, w.k.wg = some out ∧ Progress nodes P seen out ∧
+    ⦃fun w => ⌜w.dev = some d⌝⦄ rootRemoveSource root
+    ⦃⇓? _ w => ⌜∃ out seen, w.dev = some out ∧ Progress nodes P seen out ∧
       Frontier nodes root seen []⌝⦄ := by
   have hs := step_spec nodes P root
-  mvcgen [rootRemoveSource, getDev, getK, invariant, hs]
+  mvcgen [rootRemoveSource, getDev, invariant, AmbientM.invariant, hs]
   invariants
   | inv1 => (fun cursor w => ⌜WalkInv nodes P root cursor.2 w⌝, ExceptConds.true)
   all_goals try dsimp +zetaDelta only at *
@@ -132,19 +151,19 @@ theorem root_spec (nodes : Std.TreeMap Nat AipNode) (P : PeerId → NodeId → P
   case vc5.h_1.post.success.h_1 =>
     rename_i before hbefore dd hdd state x hx finish hi
     obtain ⟨out, seen, hout, hp, hf, done⟩ := hi
-    have hempty := done (by simp [hx])
+    have hempty := done (by simp_all)
     exact ⟨out, seen, hout, hp, by simpa [hempty] using hf⟩
 
 /-- Only normal root completion adds the represented-family exclusion. The
 original map may include absent owners and the current map may omit old nodes. -/
-theorem root_normal (w v : World) (nodes : Std.TreeMap Nat AipNode)
-    (P : PeerId → NodeId → Prop) (d : Device) (hd : w.k.wg = some d)
+theorem root_normal (w v : WGWorld) (ambient ambient' : Ambient) (nodes : Std.TreeMap Nat AipNode)
+    (P : PeerId → NodeId → Prop) (d : Device) (hd : w.dev = some d)
     (ho : Progress nodes P [] d) (root : NodeId) (hroot : t.root = some root)
     (hrep : RepAt nodes width parent t)
-    (hr : (rootRemovePeerLists root).run w = .ok ((), v)) :
-    ∃ out, v.k.wg = some out ∧
+    (hr : ((rootRemovePeerLists root).run w).run ambient = .ok (((), v), ambient')) :
+    ∃ out, v.dev = some out ∧
       Progress nodes (fun pid id => P pid id ∧ id ∉ t.nodeIds) [] out := by
-  have hh := (hoare_iff_triple _ _ _).mpr (root_spec nodes P d ho root) w () v hd
+  have hh := (hoare_iff_run_ambient _ _ _).mp (root_spec nodes P d ho root) w ambient () v ambient' hd
     (by simpa only [rootRemoveSource_eq] using hr)
   obtain ⟨out, seen, hout, hp, hf⟩ := hh
   have coverage : ∀ id ∈ t.nodeIds, id ∈ seen := hrep.closed_coverage

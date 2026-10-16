@@ -9,6 +9,8 @@ erasure and receipt truth do not require it. -/
 namespace Leanux.Proofs.WG.MaterialOrigin
 open Leanux Leanux.WG Leanux.Proofs.Logged Lifetimes
 
+variable {State : Type}
+
 structure Material where
   stamp : Nat
   key : List UInt8
@@ -23,16 +25,16 @@ theorem material_fields (k : Keypair) (refs nonce : Nat) (counter : ReplayCounte
     material {k with refcount := refs, sendingCounter := nonce, receivingCounter := counter, peer := word, receiving := {k.receiving with isValid := valid}} = material k := rfl
 
 /-- The device update advances the slot frontier and installs the next global
-stamp with invalid zero material. The complete World/counter update is the
+stamp with invalid zero material. The complete WG/counter update is the
 existing keypairCreateCore_run equation.
 Old slots below the entry frontier cannot be reused by this allocation. -/
-theorem allocation_fields (w : World) (d : Device) (word : Option PeerId)
+theorem allocation_fields (w : WGWorld) (d : Device) (word : Option PeerId)
     (id : KeypairId) (below : id < d.nextKeypairId) :
-    (keyAllocationDevice d (w.k.keypairCounter + 1) word).nextKeypairId = d.nextKeypairId + 1 ∧
-    (keyAllocationDevice d (w.k.keypairCounter + 1) word).ifindex = d.ifindex ∧
-    (keyAllocationDevice d (w.k.keypairCounter + 1) word).keypairs[d.nextKeypairId]? =
-      some {internalId := w.k.keypairCounter + 1, peer := word} ∧
-    (keyAllocationDevice d (w.k.keypairCounter + 1) word).keypairs[id]? = d.keypairs[id]? := by
+    (keyAllocationDevice d (w.keypairCounter + 1) word).nextKeypairId = d.nextKeypairId + 1 ∧
+    (keyAllocationDevice d (w.keypairCounter + 1) word).ifindex = d.ifindex ∧
+    (keyAllocationDevice d (w.keypairCounter + 1) word).keypairs[d.nextKeypairId]? =
+      some {internalId := w.keypairCounter + 1, peer := word} ∧
+    (keyAllocationDevice d (w.keypairCounter + 1) word).keypairs[id]? = d.keypairs[id]? := by
   simp [keyAllocationDevice, Std.TreeMap.getElem?_insert, Nat.ne_of_lt below, Ne.symm (Nat.ne_of_lt below)]
 
 /-- The remaining concrete session/sending setters also retain receiving
@@ -41,8 +43,8 @@ theorem material_session_fields (k : Keypair) (initiator : Bool) (remoteIndex : 
     (sending : SymmetricKey) :
     material {k with iAmTheInitiator := initiator, remoteIndex, sending} = material k := rfl
 
-theorem allocation_fresh (w : World) (h : List LifetimeEvent) (d : Device)
-    (hi : AllocationInv h w) (hd : w.k.wg = some d) :
+theorem allocation_fresh (w : WGWorld) (h : List LifetimeEvent) (d : Device)
+    (hi : AllocationInv h w) (hd : w.dev = some d) :
     d.keypairs[d.nextKeypairId]? = none := hi.key_vacant hd
 
 theorem initial_material (stamp : Nat) (word : Option PeerId) :
@@ -60,16 +62,18 @@ def life? : Event R → Option LifetimeEvent
 def Valid (valid : R → Prop) (h : List (Event R)) : Prop :=
   ∀ e ∈ h, match e with | .life _ => True | .receipt r => valid r
 
-def access (a : MixedM α) : PrefixM (Event R) α := focusPrefix Event.life life? a
+def access (a : PrefixT LifetimeEvent State α) : PrefixT (Event R) State α := focusPrefix Event.life life? a
 
-theorem access_erases (ha : ErasesPrefix a original) :
+theorem access_erases {a : PrefixT LifetimeEvent State α}
+    {original : StateT State (Except Stop) α} (ha : ErasesPrefix a original) :
     ErasesPrefix (access (R := R) a) original := focusPrefix_erases _ _ ha
 
-theorem access_projects (ha : PrefixPreserves AllocationInv LifetimeEvent.Safe a) :
-    ProjectsUnder AllocationInv life? (access (R := R) a) a :=
+theorem access_projects {I : List LifetimeEvent → State → Prop}
+    {a : PrefixT LifetimeEvent State α} (ha : PrefixPreserves I LifetimeEvent.Safe a) :
+    ProjectsUnder I life? (access (R := R) a) a :=
   ha.projects_focus Event.life life? (fun _ => rfl)
 
-theorem access_valid (a : MixedM α) (valid : R → Prop) :
+theorem access_valid (a : PrefixT LifetimeEvent State α) (valid : R → Prop) :
     PrefixPreserves (fun h _ => Valid valid h) (Valid valid) (access a) := by
   intro w h hi
   refine ⟨_, rfl, ?_, ?_⟩
@@ -89,7 +93,8 @@ theorem access_valid (a : MixedM α) (valid : R → Prop) :
       · obtain ⟨v, _, rfl⟩ := List.mem_map.mp he
         trivial
 
-theorem receipt_erases {R α : Type} {a : PrefixM (Event R) α} {original : M α} (ha : ErasesPrefix a original) (f : RunWitness α → R) :
+theorem receipt_erases {R α : Type} {a : PrefixT (Event R) State α}
+    {original : StateT State (Except Stop) α} (ha : ErasesPrefix a original) (f : StateRunWitness State α → R) :
     ErasesPrefix (receiptObserved a (Event.receipt ∘ f)) original := by
   intro w h
   rw [runPrefix_receiptObserved]
@@ -97,9 +102,10 @@ theorem receipt_erases {R α : Type} {a : PrefixM (Event R) α} {original : M α
   cases hr : runPrefix a w h with
   | mk out t => cases out <;> simpa [hr] using he
 
-theorem receipt_valid {R α : Type} {a : PrefixM (Event R) α} {original : M α} {valid : R → Prop} (ha : ErasesPrefix a original)
+theorem receipt_valid {R α : Type} {a : PrefixT (Event R) State α}
+    {original : StateT State (Except Stop) α} {valid : R → Prop} (ha : ErasesPrefix a original)
     (hp : PrefixPreserves (fun h _ => Valid valid h) (Valid valid) a)
-    (f : RunWitness α → R) (hf : ∀ r, r.Valid original → valid (f r)) :
+    (f : StateRunWitness State α → R) (hf : ∀ r, r.Valid original → valid (f r)) :
     PrefixPreserves (fun h _ => Valid valid h) (Valid valid)
       (receiptObserved a (Event.receipt ∘ f)) := by
   intro w h hi
@@ -121,7 +127,7 @@ theorem receipt_valid {R α : Type} {a : PrefixM (Event R) α} {original : M α}
           exact hf _ ((ha w h).symm.trans (congrArg Prod.fst hr))
       exact ⟨s ++ [Event.receipt (f ⟨x, w, v⟩)], by simp [hs, List.append_assoc], hv', hv'⟩
 
-theorem valid_lift (valid : R → Prop) (a : M α) :
+theorem valid_lift (valid : R → Prop) (a : StateT State (Except Stop) α) :
     PrefixPreserves (fun h _ => Valid valid h) (Valid valid) (liftPrefix a) := by
   intro w h hi
   refine ⟨[], by simp, hi, ?_⟩
@@ -130,12 +136,13 @@ theorem valid_lift (valid : R → Prop) (a : M α) :
   | ok out => simpa [hr] using hi
 
 theorem valid_pure (valid : R → Prop) (x : α) :
-    PrefixPreserves (fun h _ => Valid valid h) (Valid valid) (pure x) := by
+    PrefixPreserves (fun h (_ : State) => Valid valid h) (Valid valid) (pure x) := by
   intro w h hi
   exact ⟨[], by simp, hi, hi⟩
 
-/-- Exact successful bind inversion; it does not provide a World for a Stop. -/
-theorem bind_ok (a : M α) (f : α → M β) (w v : World) (y : β) :
+/-- Exact successful bind inversion; it does not provide a state for a Stop. -/
+theorem bind_ok (a : StateT State (Except Stop) α)
+    (f : α → StateT State (Except Stop) β) (w v : State) (y : β) :
     (a >>= f).run w = .ok (y, v) ↔
       ∃ x u, a.run w = .ok (x, u) ∧ (f x).run u = .ok (y, v) := by
   simp only [StateT.run_bind]
@@ -148,27 +155,50 @@ theorem bind_ok (a : M α) (f : α → M β) (w v : World) (y : β) :
     · intro h; exact ⟨x, u, ⟨rfl, rfl⟩, h⟩
     · rintro ⟨z, t, ⟨rfl, rfl⟩, h⟩; exact h
 
+/-- Native bind inversion retains both consecutive state components. -/
+theorem bind_ok_ambient {Outer Inner : Type}
+    (a : StateT Outer (StateT Inner (Except Stop)) α)
+    (f : α → StateT Outer (StateT Inner (Except Stop)) β)
+    (w v : Outer) (ambient ambient' : Inner) (y : β) :
+    ((a >>= f).run w).run ambient = .ok ((y, v), ambient') ↔
+      ∃ x u middle, (a.run w).run ambient = .ok ((x, u), middle) ∧
+        ((f x).run u).run middle = .ok ((y, v), ambient') := by
+  simp only [StateT.run_bind]
+  cases hr : (a.run w).run ambient with
+  | error e => simp [hr]
+  | ok out =>
+    rcases out with ⟨⟨x, u⟩, middle⟩
+    simp only [hr, Except.bind, Except.ok.injEq, Prod.mk.injEq]
+    constructor
+    · intro h; exact ⟨x, u, middle, ⟨⟨rfl, rfl⟩, rfl⟩, h⟩
+    · rintro ⟨z, t, b, ⟨⟨rfl, rfl⟩, rfl⟩, h⟩; exact h
+
 /-- The exact birthdate and KDF calls, followed by the actual stored record.
 The original getter links the material's stamp and nullable word to its input;
 no assumption that the record survives later rotation is made. -/
-def Derivation (kp : KeypairId) (initiator : Bool) (ck : List UInt8) (w v : World) : Prop :=
-  ∃ born a outs b first c second d key e,
-    (hiddenClock64 .deriveKeysBirthdate).run w = .ok (born, a) ∧
-    (kdf true false ck []).run a = .ok (outs, b) ∧
-    (kdfOut outs 0).run b = .ok (first, c) ∧
-    (kdfOut outs 1).run c = .ok (second, d) ∧
-    (getKeypair kp).run d = .ok (key, e) ∧
+def Derivation (kp : KeypairId) (initiator : Bool) (ck : List UInt8)
+    (w v : WGWorld) (ambient ambient' : Ambient) : Prop :=
+  ∃ born a aAmbient outs b bAmbient first c cAmbient second d dAmbient key e eAmbient,
+    ((hiddenClock64 .deriveKeysBirthdate : WG.M Int64).run w).run ambient = .ok ((born, a), aAmbient) ∧
+    ((kdf true false ck []).run a).run aAmbient = .ok ((outs, b), bAmbient) ∧
+    ((kdfOut outs 0).run b).run bAmbient = .ok ((first, c), cAmbient) ∧
+    ((kdfOut outs 1).run c).run cAmbient = .ok ((second, d), dAmbient) ∧
+    ((getKeypair kp).run d).run dAmbient = .ok ((key, e), eAmbient) ∧
     v = CounterWindow.store e kp
       (if initiator then {key with sending := {key := first, birthdate := born, isValid := true}, receiving := {key := second, birthdate := born, isValid := true}}
-       else {key with receiving := {key := first, birthdate := born, isValid := true}, sending := {key := second, birthdate := born, isValid := true}})
+       else {key with receiving := {key := first, birthdate := born, isValid := true}, sending := {key := second, birthdate := born, isValid := true}}) ∧
+    ambient' = eAmbient
 
 theorem deriveKeys_execution (kp : KeypairId) (initiator : Bool) (ck : List UInt8)
-    (w v : World) (hr : (deriveKeys kp initiator ck).run w = .ok ((), v)) :
-    Derivation kp initiator ck w v := by
+    (w v : WGWorld) (ambient ambient' : Ambient)
+    (hr : ((deriveKeys kp initiator ck).run w).run ambient = .ok (((), v), ambient')) :
+    Derivation kp initiator ck w v ambient ambient' := by
   unfold deriveKeys at hr
-  simp only [bind_ok] at hr
-  obtain ⟨born, a, hc, outs, b, hk, first, c, hf, second, d, hs, key, e, hg, he⟩ := hr
-  refine ⟨born, a, outs, b, first, c, second, d, key, e, hc, hk, hf, hs, hg, ?_⟩
+  simp only [bind_ok_ambient] at hr
+  obtain ⟨born, a, aAmbient, hc, outs, b, bAmbient, hk, first, c, cAmbient, hf,
+    second, d, dAmbient, hs, key, e, eAmbient, hg, he⟩ := hr
+  refine ⟨born, a, aAmbient, outs, b, bAmbient, first, c, cAmbient, second, d, dAmbient,
+    key, e, eAmbient, hc, hk, hf, hs, hg, ?_⟩
   simpa only [CounterWindow.setKeypair_run, Except.ok.injEq, Prod.mk.injEq, true_and] using he.symm
 
 /-- Receiving material is resident at the derivation cut itself. Its identity
@@ -176,14 +206,16 @@ and nullable owner are those of the actual getter; later session cleanup may
 remove it. Both selected KDF outputs and the exact birthdate call are retained
 by Derivation, rather than inferred from an endpoint snapshot. -/
 theorem derivation_material (kp : KeypairId) (initiator : Bool) (ck : List UInt8)
-    (w v : World) (hd : Derivation kp initiator ck w v) :
+    (w v : WGWorld) (ambient ambient' : Ambient)
+    (hd : Derivation kp initiator ck w v ambient ambient') :
     ∃ (d : Device) (key : Keypair) (born : Int64) (first second : List UInt8),
-      v.k.wg = some d ∧
+      v.dev = some d ∧
       d.keypairs[kp]? = some
         (if initiator then {key with sending := {key := first, birthdate := born, isValid := true}, receiving := {key := second, birthdate := born, isValid := true}}
          else {key with receiving := {key := first, birthdate := born, isValid := true}, sending := {key := second, birthdate := born, isValid := true}}) := by
-  obtain ⟨born, a, outs, b, first, c, second, d, key, e, _, _, _, _, hg, rfl⟩ := hd
-  obtain ⟨rfl, dev, hdev, _⟩ := KeyTimes.getKeypair_return kp d e key hg
+  obtain ⟨born, a, aAmbient, outs, b, bAmbient, first, c, cAmbient, second, d, dAmbient,
+    key, e, eAmbient, _, _, _, _, hg, rfl, _⟩ := hd
+  obtain ⟨rfl, rfl, dev, hdev, _⟩ := KeyTimes.getKeypair_return kp d e key dAmbient eAmbient hg
   let updated : Keypair := if initiator then
     {key with sending := {key := first, birthdate := born, isValid := true}, receiving := {key := second, birthdate := born, isValid := true}}
     else {key with receiving := {key := first, birthdate := born, isValid := true}, sending := {key := second, birthdate := born, isValid := true}}
