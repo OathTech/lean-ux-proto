@@ -30,9 +30,10 @@ it is not part of that baseline.
 | Framing `WGTime`, `WGHandshake`, Keypairs `OrdinaryHot` | 21 | 16 | 5 | 0 | 0 | 16 |
 | WG store view and Keypairs composition (four modules) | 31 | 27 | 4 | 0 | 0 | 27 |
 | Logged `RxPoll`, `Tools`, `Workers`, `Scheduler` | 26 | 17 | 0 | 9 | 0 | 26 |
+| Index table, trie-removal source, receive headers and data helpers | 12 | 8 | 4 | 0 | 0 | 8 |
 
-The whole tree currently contains 449 Lean files and 6,310 theorems. The completed
-changes total 268 retyped theorems, 1,472 deletions, 72 retained interfaces and 67 added.
+The whole tree currently contains 449 Lean files and 6,306 theorems. The completed
+changes total 276 retyped theorems, 1,476 deletions, 72 retained interfaces and 67 added.
 Retained interfaces means unchanged written signatures, not preservation of the
 old monolithic execution state. All carried contracts use the actual new stack.
 All terminal files remain unchanged. **Every result remains lagging** until the complete tree
@@ -380,6 +381,37 @@ infrastructure rerun occurred. All handles are collected.
 ```sh
 LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake build Leanux.Proofs.Logged.Scheduler
 LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.Logged.Scheduler
+```
+
+## Native table, removal and packet helpers
+
+Eight claims are carried over their actual monads. The index bucket helpers
+retain equality of their own table. Trie removal retains its complete all-input
+WG/Ambient execution equation, including each source-positioned component lift
+and missing-device guard. Header and padding helpers preserve their complete
+native WG state. `checksumHelp` remains a product action, with complete World
+equality on normal returns; its rejecting paths remain unconstrained by that
+partial-correctness contract.
+
+Three outside-index frames are deleted because the actual index adapter already
+establishes structural separation. One unused conditional device-modification
+helper is also deleted; its conditional claim is not classified as type-given.
+No callback domain, return condition or failure equation was narrowed.
+
+Validation: scoped build passes (38 jobs), all 12 named declarations print only
+permitted axioms, and four independent fresh kernel replays pass. Independent
+frozen-source review found no substantive issue. Source hashes, trust scan,
+terminal preservation, mirror equality and scoped whitespace pass. Eight capped
+calls completed: two development builds failed on omitted comparison expansion
+and the product checksum failure WP; the frozen build, axiom check and four
+replays passed. The failure WP closes by definitional reduction under partial
+correctness. No source admission, elaboration-recovery admission, interruption,
+timeout, KILLED outcome, limit increase or infrastructure rerun occurred.
+
+```sh
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake build Leanux.Proofs.Framing.WGIndex Leanux.Proofs.WG.AllowedIps.RemovalSource Leanux.Proofs.Framing.WGReceiveHeaders Leanux.Proofs.Framing.WGData
+# Run separately for each of the four modules above:
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.Framing.WGData
 ```
 
 ## Incoming source-observer findings

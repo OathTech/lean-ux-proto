@@ -1,27 +1,28 @@
 import Leanux.Proofs.Framing.Tools
 import Leanux.WG.Receive
 
-/-! Original byte/header inspection leaves. Source inspection establishes
-that their only effects are branch records or Stops, with no resident-object
-access. These stronger frames are the canonical proofs for legacy projections. -/
+/-! Original byte/header inspection leaves preserve the native WG world.
+Their branch records and Stops retain unrestricted Ambient inputs and outputs. -/
 namespace Leanux.Proofs.Framing
 open Leanux Leanux.WG Std.Do
 
-theorem validateHeaderLen_sameKernel (msg : List UInt8) : SameKernel (validateHeaderLen msg) := by
-  apply sameKernel_of_wp
-  intro k
-  mvcgen [validateHeaderLen, WG.andM, branch]
+theorem validateHeaderLen_sameWGWorld (msg : List UInt8) :
+    SameView (id : WGWorld → WGWorld) (validateHeaderLen msg) := by
+  apply SameView.of_wp
+  intro initial
+  mvcgen [validateHeaderLen, WG.andM, branch, AmbientM.branch]
 
-theorem prepareSkbHeader_sameKernel (msg : List UInt8) : SameKernel (prepareSkbHeader msg) := by
-  apply sameKernel_of_wp
-  intro k
-  have hh := sameKernel_wp _ (validateHeaderLen_sameKernel msg) (fun s => s = k)
-  mvcgen [prepareSkbHeader, WG.andM, WG.orM, branch, hh]
+theorem prepareSkbHeader_sameWGWorld (msg : List UInt8) :
+    SameView (id : WGWorld → WGWorld) (prepareSkbHeader msg) := by
+  apply SameView.of_wp
+  intro initial
+  have hh := (validateHeaderLen_sameWGWorld msg).wp (fun s => s = initial)
+  mvcgen [prepareSkbHeader, WG.andM, WG.orM, branch, AmbientM.branch, hh]
 
-theorem ipTunnelGetDsfield_sameKernel (protocol : Nat) (hdr : List UInt8) :
-    SameKernel (ipTunnelGetDsfield protocol hdr) := by
-  apply sameKernel_of_wp
-  intro k
-  mvcgen [ipTunnelGetDsfield, branch, unsupported]
+theorem ipTunnelGetDsfield_sameWGWorld (protocol : Nat) (hdr : List UInt8) :
+    SameView (id : WGWorld → WGWorld) (ipTunnelGetDsfield protocol hdr) := by
+  apply SameView.of_wp
+  intro initial
+  mvcgen [ipTunnelGetDsfield, branch, AmbientM.branch, unsupported, AmbientM.unsupported]
 
 end Leanux.Proofs.Framing

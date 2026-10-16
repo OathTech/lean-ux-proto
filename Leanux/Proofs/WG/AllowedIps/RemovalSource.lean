@@ -7,7 +7,7 @@ open Leanux Leanux.WG
 
 /-- The collapse suffix starts with the original fresh parent read, after
 the target has been freed. The saved sibling is only a raw node identifier. -/
-def removeParentTail (parent : NodeId) (sibling : Option NodeId) : M (ForInStep Unit) := do
+def removeParentTail (parent : NodeId) (sibling : Option NodeId) : WG.M (ForInStep Unit) := do
   let pn ← getNode parent
   if ← branch .removeSiblingExists sibling.isSome then
     if let some c := sibling then setNode c { (← getNode c) with parent := pn.parent }
@@ -17,7 +17,7 @@ def removeParentTail (parent : NodeId) (sibling : Option NodeId) : M (ForInStep 
 
 /-- The node-only suffix, after list deletion. Both source continues yield
 to the next saved identifier; neither ends the outer peer-removal loop. -/
-def removeNodeBody (id : NodeId) : M (ForInStep Unit) := do
+def removeNodeBody (id : NodeId) : WG.M (ForInStep Unit) := do
   let n ← getNode id
   setNode id { n with peer := none }
   if ← branch .removeHasBit0 (← n.bitAt 0).isSome then
@@ -45,12 +45,12 @@ def removeNodeBody (id : NodeId) : M (ForInStep Unit) := do
   let .child parent _ := n.parent | invariant "free_parent without a parent node"
   removeParentTail parent sibling
 
-def removeStep (id : NodeId) : M (ForInStep Unit) := do
+def removeStep (id : NodeId) : WG.M (ForInStep Unit) := do
   _ ← branch .removeListIter true
   listDel id
   removeNodeBody id
 
-def removeByPeerWithStep (pid : PeerId) : M Unit := do
+def removeByPeerWithStep (pid : PeerId) : WG.M Unit := do
   let p ← getPeer pid
   if ← branch .removeListEmpty p.allowedipsList.isEmpty then return
   modifyDev fun d => { d with peerAllowedips := { d.peerAllowedips with seq := d.peerAllowedips.seq + 1 } }
@@ -58,7 +58,8 @@ def removeByPeerWithStep (pid : PeerId) : M Unit := do
   _ ← branch .removeListIter false
 
 /-- All-input source equality preserves every choice, complete successful
-World and exact Stop. It supplies no World or event journal on failure. -/
+WG/Ambient endpoints and exact Stop. It supplies no state or event journal
+on failure. -/
 theorem removeByPeerWithStep_eq (pid : PeerId) :
     removeByPeerWithStep pid = WG.removeByPeer pid := by
   rfl
