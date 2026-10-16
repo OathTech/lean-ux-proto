@@ -9,9 +9,9 @@ set_option pp.structureInstances false
 namespace Leanux.Proofs.WG.Queues.RxRing
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing
 
-def stepSource (softirq irq : M Unit) : M Bool := do
+def stepSource (softirq irq : Leanux.M Unit) : Leanux.M Bool := do
   softirq
-  match ← pollSource with
+  match ← liftWG pollSource with
   | none => return false
   | some id =>
     let decrypted ← decryptPacket (← getRxSkb id)
@@ -23,12 +23,12 @@ def stepSource (softirq irq : M Unit) : M Bool := do
     softirq
     return true
 
-private theorem bind_congr (a : M α) (f g : α → M β) (h : ∀ x, f x = g x) :
+private theorem bind_congr (a : Leanux.M α) (f g : α → Leanux.M β) (h : ∀ x, f x = g x) :
     (a >>= f) = (a >>= g) := congrArg (fun k => a >>= k) (funext h)
 
-theorem stepSource_eq (softirq irq : M Unit) : stepSource softirq irq = decryptStep softirq irq := by
+theorem stepSource_eq (softirq irq : Leanux.M Unit) : stepSource softirq irq = decryptStep softirq irq := by
   unfold stepSource pollSource decryptStep
-  simp only [bind_assoc]
+  simp only [liftWG_bind, liftWG_pure, bind_assoc, pure_bind]
   apply bind_congr
   intro _
   apply bind_congr
@@ -48,10 +48,10 @@ def step (softirq irq : Obs Unit) : Obs Bool := do
   match ← poll with
   | none => return false
   | some id =>
-    let decrypted ← liftPrefix (decryptPacket (← liftPrefix (getRxSkb id)))
+    let decrypted ← liftPrefix (liftWG (decryptPacket (← liftPrefix (liftWG (getRxSkb id)))))
     if ← liftPrefix (branch .decWorkerDecrypted decrypted.isSome) then
       let some d := decrypted | liftPrefix (invariant "unreachable")
-      liftPrefix (setRxSkb id fun _ => d)
+      liftPrefix (liftWG (setRxSkb id fun _ => d))
       enqueuePeer irq id .crypted
     else enqueuePeer irq id .dead
     softirq
@@ -75,6 +75,7 @@ theorem step_erases (hs : ErasesPrefix softirq originalSoftirq) (hi : ErasesPref
     | with_reducible apply erasesPrefix_ite
     | (with_reducible intro x; try dsimp only)
     | (with_reducible split)
+  all_goals exact erasesPrefix_lift _
 
 theorem iter_erases (hs : ErasesPrefix softirq originalSoftirq)
     (hi : ErasesPrefix irq originalIrq) (hr : ErasesPrefix needResched originalResched) :
@@ -86,16 +87,23 @@ theorem iter_erases (hs : ErasesPrefix softirq originalSoftirq)
 theorem step_preserves (hs : PrefixPreserves (Inv deviceIndex initial) (Safe initial) softirq)
     (hi : PrefixPreserves (Inv deviceIndex initial) (Safe initial) irq) :
     PrefixPreserves (Inv deviceIndex initial) (Safe initial) (step softirq irq) := by
+  have ambient {α : Type} (a : AmbientM α) : SameView cell (liftAmbient a) := by
+    intro initial
+    exact productAmbient_spec a _ (fun _ _ hi => hi)
+  have packets {α : Type} (a : SkbM α) : SameView nativeCell (liftSkb a) := by
+    intro initial
+    apply hoare_liftSkb
+    intro g d packets hg hd
+    simpa [nativeCell, hd] using hg
   unfold step
+  simp only [branch, invariant, getRxSkb, setRxSkb]
   repeat' first
     | with_reducible exact hs
     | with_reducible exact poll_preserves
     | with_reducible exact enqueuePeer_preserves hi _ _
-    | with_reducible exact lift_frame (getRx_frame _)
-    | with_reducible exact lift_frame (decryptPacket_frame _)
-    | with_reducible exact lift_frame (setRx_frame _ _)
-    | with_reducible exact lift_frame (kernel (sameKernel_branch _ _))
-    | with_reducible exact lift_frame (invariant_frame _)
+    | with_reducible exact lift_native_frame (packets _)
+    | with_reducible exact lift_native_frame (decryptPacket_frame _)
+    | with_reducible exact lift_frame (ambient _)
     | with_reducible exact PrefixPreserves.pure (fun _ _ hi => hi.safe) _
     | with_reducible apply PrefixPreserves.bind
     | with_reducible apply PrefixPreserves.ite
@@ -106,9 +114,15 @@ theorem iter_preserves (hs : PrefixPreserves (Inv deviceIndex initial) (Safe ini
     (hi : PrefixPreserves (Inv deviceIndex initial) (Safe initial) irq)
     (hr : PrefixPreserves (Inv deviceIndex initial) (Safe initial) needResched) :
     PrefixPreserves (Inv deviceIndex initial) (Safe initial) (iter softirq irq needResched) := by
+  have ambient {α : Type} (a : AmbientM α) : SameView cell (liftAmbient a) := by
+    intro initial
+    exact productAmbient_spec a _ (fun _ _ hi => hi)
   unfold iter
   apply workerIterPrefix_preserves _ _ (fun _ _ hi => hi.safe) (step_preserves hs hi)
-  exact PrefixPreserves.bind hr (fun _ => lift_frame (kernel (sameKernel_branch _ _)))
+  exact PrefixPreserves.bind hr (fun b => by
+    change PrefixPreserves (Inv deviceIndex initial) (Safe initial)
+      (liftPrefix (liftAmbient (AmbientM.branch .decWorkerNeedResched b)))
+    exact lift_frame (ambient (AmbientM.branch .decWorkerNeedResched b)))
 
 /-- For any composed observer with this contract, every reached event prefix
 has an original finite-ring execution witness. Normal completion additionally

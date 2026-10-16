@@ -86,9 +86,10 @@ it is not part of that baseline.
 | Cookie/timer observers, affiliation, origin support, routing completions and enqueue admission | 118 | 82 | 5 | 31 | 19 | 132 |
 | Native ring cuts/frames, saved-peer maintenance, routing acquisition and keypair affiliation | 116 | 88 | 9 | 19 | 16 | 123 |
 | Product TX source/worker, native configuration tail and canonical WG composition | 25 | 3 | 0 | 22 | 8 | 33 |
+| Configured identity, AllowedIPs, handshake construction, RX worker and strict TX borrowing | 93 | 50 | 3 | 40 | 22 | 112 |
 
-The whole tree currently contains 451 Lean files and 6,316 theorems. The completed
-changes total 1,578 retyped theorems, 1,627 deletions, 596 retained contract shapes and 228 added.
+The whole tree currently contains 451 Lean files and 6,335 theorems. The completed
+changes total 1,628 retyped theorems, 1,630 deletions, 636 retained contract shapes and 250 added.
 Retyping changes or generalizes the actual state/monad carrier or observation.
 This includes shorthand contracts whose source functions or named views move
 to a native monad. Mere namespace qualification and equivalent relocation of a
@@ -2024,3 +2025,82 @@ The final combined build passed 145 jobs. PeerTailRouting needed three builds:
 lift/predicate elaboration, an ordinary existing-heartbeat failure with
 no-progress simp diagnostics, then bounded composition passed 169 jobs.
 There was no infrastructure rerun, KILLED or guest timeout.
+
+## Configured identity, AllowedIPs and handshake/RX callers
+
+Six further modules pass their builds, 176 named declaration axiom checks, six
+fresh module replays and independent source reviews. Their 93 old theorems become
+112: 50 retyped, 40 retained contracts, three deletions and 22 additions.
+ConfiguredIdentity retains all 40 claims, including nullable owners, key
+frontiers and generic actual-state transports. AllowedIpsAccess retains its ten
+arbitrary product contracts and adds native counterparts; its seven other new
+helpers express conditional adapters, actual getter preservation and composition.
+The strict TX peer-borrow pair carries its positive pre-count and repayment to
+the native WG store. Its unused projection import is removed.
+
+RX entry/worker retain the complete original product callback scope and actual
+softirq, consumed-item decision and conditional ring-installation order.
+One generic native-to-product bridge replaces the obsolete Ambient failure
+wrapper. Handshake construction carries its four exact native erasures and
+preserves four arbitrary product invariant contracts alongside four new native
+counterparts. The two deleted index-insertion frames observed identities and
+allocation metadata outside IndexM's write scope; their deletion follows from
+that scope, independently of compilation. Lagging callers will use the canonical
+index adapter directly.
+
+The peerMakeDead observer in both configured identity and AllowedIPs had omitted
+the current getDev/pubkeyRemoveHashed step. Both now follow the literal mirror
+sequence. A present peer with no allowed-IP nodes distinguishes the decision
+histories below. This is a proof-observer correspondence finding, not a change
+to the mirror or an initialized kernel defect. Both endpoints passed kernel
+checking with standard axioms:
+
+~~~sh
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env lean -j1 --stdin <<'LEAN'
+import Leanux.Proofs.WG.Lifetimes.AllowedIpsAccess
+import Leanux.Runner
+open Leanux Leanux.WG Leanux.Proofs.WG.Lifetimes
+private def nodePeer : Peer :=
+  {remoteStatic := [], presharedKey := [], precomputedStaticStatic := [], internalId := 1}
+private def nodeWorld : WGWorld :=
+  {dev := some {ifindex := 4, ifname := "wg0", peers := Std.TreeMap.ofList [(0, nodePeer)],
+                peerHashtable := [([], 0)]}}
+private def nodeAmbient : Ambient := {env := Runner.harnessEnv, timing := Env.timing}
+private def obsoleteMakeDead : WG.M Unit := do
+  modifyDev (deadPeerList 0)
+  removeByPeer 0
+  modifyDev (deadPeerHashtable 0)
+  setPeer 0 {(← getPeer 0) with isDead := true}
+private def stepResult (a : WG.M Unit) : Option (List (Decision × Bool)) :=
+  (((a.run nodeWorld).run nodeAmbient).toOption).map
+    (fun out => out.2.steps.toList.map (fun step => (step.decision, step.outcome)))
+theorem actualMakeDeadSteps : stepResult (peerMakeDead 0) =
+    some [(.removeListEmpty, true), (.pubkeyRemoveHashed, true)] := by
+  decide +kernel
+theorem obsoleteMakeDeadSteps : stepResult obsoleteMakeDead =
+    some [(.removeListEmpty, true)] := by
+  decide +kernel
+#print axioms actualMakeDeadSteps
+#print axioms obsoleteMakeDeadSteps
+LEAN
+~~~
+
+Development ledger: ConfiguredIdentity needed eleven builds: accessor/source
+repairs, getter/WP normalization, one failed shared-Lift dependency, concrete
+creation WPs, pure-state/map congruence and explicit getter witnesses; the final
+build passed. AllowedIpsAccess had four failed development builds, then a pass
+and a changed-source pass after removing six avoidable helper aliases. A
+read-only API probe and its endpoint witness passed. RX needed two failed
+development builds and a passing third; its first private-name axiom invocation
+failed and was rejected, and the corrected invocation passed. A driver parse
+failure executed no tools; recovery snapshots preserved every dirty worktree
+before continuation. Handshake construction needed seven builds: erasure
+normalization and product composition failures, including two mistaken local
+proof edits, then explicit residual branch/KDF contracts closed the module.
+No recovery metavariable output was accepted. TX borrow passed its first build.
+There was no infrastructure rerun, KILLED, guest timeout, cap or proof-limit
+increase in this tranche.
+
+The mirror remains exactly b700659. The previous default build and unit results
+cover the unchanged executable closure. The full proof gate and downstream
+handshake/staging/NAPI chains remain pending; all result rows remain lagging.
