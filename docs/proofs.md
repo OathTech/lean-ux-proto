@@ -18,6 +18,12 @@ extensions follow the retrofit. The baseline is `00641c6`, with 471 tracked Lean
 files and 7,715 named theorem declarations (including private and attributed
 declarations; nested comments and string literals are excluded). Uncommitted R3 work is
 preserved separately and is not part of that validated baseline.
+The first retrofit checkpoint carries the local counter-window execution layer:
+17 theorems retyped, six structural frames deleted, eight unchanged and one
+private generic transformer lemma added (31 to 26 in the three changed files;
+7,715 to 7,710 across the tree). Its scoped build, axiom checks and fresh kernel
+replay pass. This does not make a terminal result current; see the
+[retrofit report](2026-10-16-proof-state-split.md).
 
 ## Layers
 

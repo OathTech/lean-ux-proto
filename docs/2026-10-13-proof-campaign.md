@@ -2,8 +2,15 @@
 
 ## Progress
 
-Work on `proofs/campaign` in `.worktrees/proofs-campaign` follows [the charter](2026-10-13-charter-proof-campaign.md),
-with representation batch `cb2348e` carried and validated. All seven baseline results are current there, including the
+Work on `proofs/campaign` in `.worktrees/proofs-campaign` follows [the charter](2026-10-13-charter-proof-campaign.md).
+The state-split retrofit onto `6089dc4` now precedes further R3/R4 results. All seven
+result rows are lagging pending complete retyping and validation; their last validated
+mirror remains `cb2348e`. The local CounterWindow layer is carried with 17 retyped
+and six deleted theorems, one added generic lemma, and passing scoped build, axiom
+checks and fresh kernel replay. [The retrofit report](2026-10-16-proof-state-split.md)
+tracks the counts and remaining work.
+
+The preceding `cb2348e` checkpoint validated all seven baseline result surfaces, including the
 local normal-poll carrier and initialized R3 committed-support extensions. The local R4
 whole-admission/stable-RX extension passes independent review and coordinated validation. The new R3
 configured-peer/session/publication source cuts pass independent review and coordinated validation. Earlier results include the local R4
@@ -26,7 +33,7 @@ was made by this campaign.
 | R5 | Accepted age/post-zero/wire-nonce counterexamples; thirteen positive local contracts. |
 | R6 | Cookie exclusion proved; literal MAX=18 refuted, without a replacement universal bound. |
 
-**Current R3 configured-identity extension (validated).** Three groups add
+**Pre-split R3 configured-identity extension (validated over `cb2348e`).** Three groups add
 actual peer creation/lookup/retirement/make-dead/fresh owner-acquisition contracts, one-witness configured
 session support, and successful RX publication identity. All518 prior terminal bodies remain unchanged;
 521 declarations (519 theorems/two definitions;141 R3/129 R4). Supplied table coherence bounds
@@ -39,7 +46,7 @@ supplied premises; initialized configured identity, current peer-allocation tran
 join remain open. The old original erasures, same-input AllocationInv R2 projections and initialized domains
 are unchanged. No cryptographic authentication or accepted counterexample is claimed.
 
-**Current effort and review.** The 42 worker calls comprise 40 builds (six clean PASS, 34 ordinary FAIL)
+**Pre-split effort and review.** The 42 worker calls comprise 40 builds (six clean PASS, 34 ordinary FAIL)
 and two passing exact checks. Scoped/full builds pass 474/523 jobs. Coordinated validation passes the
 523-job/521-declaration proof gate, fresh kernel replay after compilation, default 60-job build and
 103 tests (21.825s, one skip). Exact checks preserve all 518 prior bodies, four frozen Lean sources,

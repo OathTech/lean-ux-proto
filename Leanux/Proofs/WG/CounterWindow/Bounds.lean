@@ -38,14 +38,14 @@ theorem finish_counter_mono (c : ReplayCounter) (ns : List Nat) :
   | cons n ns ih => exact Nat.le_trans (step_counter_mono c n) (ih (step c n).2)
 
 /-- Every successful mirror validator call satisfies the arithmetic bounds. -/
-theorem mirror_accepted_bounds (w w' : World) (kp : KeypairId)
+theorem mirror_accepted_bounds (w w' : WGWorld) (ambient ambient' : Ambient) (kp : KeypairId)
     (c : ReplayCounter) (nonce : Nat) (hc : counterAt w kp = some c)
     (hs : c.backtrack.size = 128)
-    (hr : (counterValidate kp nonce).run w = .ok (true, w')) :
+    (hr : ((counterValidate kp nonce).run w).run ambient = .ok ((true, w'), ambient')) :
     c.counter ≤ nonce + 1 + COUNTER_WINDOW_SIZE ∧ nonce < REJECT_AFTER_MESSAGES := by
-  obtain ⟨out, he, _⟩ := mirror_step w kp c nonce hc hs
+  obtain ⟨out, outAmbient, he, _⟩ := mirror_step w ambient kp c nonce hc hs
   rw [hr] at he
-  have hb : (step c nonce).1 = true := (congrArg Prod.fst (Except.ok.inj he)).symm
+  have hb : (step c nonce).1 = true := (congrArg (fun out => out.1.1) (Except.ok.inj he)).symm
   exact step_accepted_bounds c nonce hb
 
 end Leanux.Proofs.WG.CounterWindow
