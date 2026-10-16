@@ -56,9 +56,13 @@ it is not part of that baseline.
 | Product batch source and generalized prefix contracts | 5 | 2 | 0 | 3 | 0 | 5 |
 | Native AllowedIPs store and arithmetic | 18 | 7 | 2 | 9 | 0 | 16 |
 | Native zero-timer keypair-store preservation | 1 | 1 | 0 | 0 | 0 | 1 |
+| Native borrowing, access and release invariants | 22 | 19 | 0 | 3 | 1 | 23 |
+| Product timer receipts, advance and operation observers | 20 | 0 | 0 | 20 | 1 | 21 |
+| Native AllowedIPs lookup and placement | 12 | 12 | 0 | 0 | 0 | 12 |
+| Recorded timer source factors | 3 | 0 | 2 | 1 | 1 | 2 |
 
-The whole tree currently contains 450 Lean files and 6,217 theorems. The completed
-changes total 859 retyped theorems, 1,592 deletions, 165 retained contract shapes and 94 added.
+The whole tree currently contains 450 Lean files and 6,218 theorems. The completed
+changes total 890 retyped theorems, 1,594 deletions, 189 retained contract shapes and 97 added.
 Retyping changes or generalizes the actual state/monad carrier or observation.
 This includes shorthand contracts whose source functions or named views move
 to a native monad. Mere namespace qualification and equivalent relocation of a
@@ -1195,4 +1199,52 @@ infrastructure rerun occurred.
 LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake build Leanux.Proofs.WG.Keypairs.Frames.WGMore Leanux.Proofs.WG.Lifetimes.MixedFrames Leanux.Proofs.WG.Queues.PrevQueue Leanux.Proofs.WG.Queues.RingSource Leanux.Proofs.Framing.Syscalls Leanux.Proofs.WG.Configuration.PeerSource Leanux.Proofs.WG.Configuration.DeviceSource Leanux.Proofs.WG.Environment.BatchSource Leanux.Proofs.Logged.PrefixBatch Leanux.Proofs.WG.AllowedIps.Store Leanux.Proofs.WG.AllowedIps.ArithmeticMirror Leanux.Proofs.WG.KeyTimes.ZeroTimer
 # Run separately for each entry module named above:
 LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Lifetimes.MixedFrames
+```
+
+## Timer receipts, native borrowing and lookup contracts
+
+This checkpoint carries 57 existing theorems to 58: 31 retyped/generalized,
+24 retained contract shapes, two obsolete source-support equalities deleted
+and three shared/native helpers added. Native borrowing retains all seven
+WG-store observations and the pointwise peer store, including refcount success
+conditions. Keypair access keeps arbitrary projected actions alongside native
+observers; release invariants now describe WGWorld. Lookup and placement retain
+all representation, width, address, budget and exact native-store conclusions.
+
+The product operation and advance observers follow the recorded timer wheel,
+step guards, end-of-wait guard, reset order and current routing/neighbour paths.
+Review found that moving peekUnit outside the timer receipt consumed passive
+records before its captured boundary. The final timerDispatchUnit keeps that
+lookup, all dispatch checks, detachment, callback and reset inside the captured
+action. The outer selection is pure. Independent re-review and fresh replay
+cover the repaired version; the earlier passing erasure proof did not establish
+receipt adequacy. The arbitrary product callback domain remains intact.
+
+TimerSource removes the vanished raw-scan fireTimerSource_eq and firstDue_eq
+support and adds the unconditional recorded-wheel source equality. This is a
+source-API replacement, not a type-trivial deletion. The separate documented
+raw-expiry versus recorded-wheel finding remains. CursorWitness retains its
+exact two observations after retyping the isolated callback to the native
+WG/Ambient stack. It makes no runner reachability claim: the current runner
+rejects the historical pending-dump replacement recipe.
+
+All ten modules compile in scoped builds. Their 93 named declarations and an
+ordinary-decide cursor observation theorem use only standard axioms; nine fresh
+entry-module replays and independent reviews pass. Advance's final replay also
+covers the repaired TimerPass. The complete proof gate remains pending.
+
+Development failures remain failures: PeerBorrow had two local proof failures;
+Lookup three; Placement one; Operations one caused by accidental changes to
+source-message literals (restored); CursorWitness one parser failure; Advance
+one reset-composition/name failure. TimerPass had fourteen failed builds and
+two passing builds, the first pass superseded by the receipt review repair.
+Its failures were ordinary normalization, tactic matching and existing heartbeat
+limits; the final helper factors the derivation without increasing those limits.
+Rejected recovery output is not accepted proof. No cap/limit increase, KILLED
+result, guest timeout or infrastructure rerun occurred.
+
+```sh
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake build Leanux.Proofs.Framing.PeerBorrow Leanux.Proofs.Logged.Advance Leanux.Proofs.Logged.Operations Leanux.Proofs.Logged.TimerPass Leanux.Proofs.WG.AllowedIps.LookupMirror Leanux.Proofs.WG.AllowedIps.PlacementMirror Leanux.Proofs.WG.Environment.TimerSource Leanux.Proofs.WG.LifetimeSafety.CursorWitness Leanux.Proofs.WG.Lifetimes.KeypairAccess Leanux.Proofs.WG.Lifetimes.ReleaseInvariant
+# Run separately for each entry module (Advance includes TimerPass):
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.Logged.Advance
 ```

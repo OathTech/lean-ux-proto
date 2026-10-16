@@ -46,7 +46,7 @@ theorem ResidentSafe.erase {resident : ι → Option κ} {i : ι} {stamp : κ}
 def ReleaseUnique (s : IdentityView) : Prop :=
   ResidentUnique s.2.1 ∧ ResidentUnique s.2.2
 
-def ReleaseInv (h : List LifetimeEvent) (w : World) : Prop :=
+def ReleaseInv (h : List LifetimeEvent) (w : WGWorld) : Prop :=
   MixedInv h w ∧ ReleaseUnique (identityView w)
 
 theorem ReleaseInv.safe (hi : ReleaseInv h w) : LifetimeEvent.Safe h := hi.1.safe

@@ -1,78 +1,89 @@
 import Leanux.Env
 
-/-! Literal original timer continuation after the complete saved-map scan.
-No proof imports or alternative execution are introduced into the mirror. -/
+/-! Literal factors of the current timer-wheel environment loops. Both factors
+retain the product runner state, actual native WireGuard lifts, record order,
+guards, and stops. The removed raw-expiry scan is not an executable alternative
+to the wheel's bucket and enqueue ordering. -/
 namespace Leanux.Proofs.WG.Environment
-open Leanux Leanux.WG
+open Leanux Leanux.WG Leanux.Env
 
-def fireTimerAfterScan (worker : Worker) (t : PeerTimer) (jHi : UInt64) (due : List PeerId) : M Unit := do
-  let named ← match ← peekUnit worker with
-    | some u =>
-      match (← get).timerUnits.find? (·.1 == u) with
-      | some (_, pid, t') =>
-        if t' != t then throw (.hidden s!"a section of {worker.symbol} for another timer of peer {pid}")
-        pure (some pid)
-      | none => throw (.hidden s!"a section of {worker.symbol} for a timer the mirror never armed ({u})")
-    | none => pure none
-  match named with
-  | some pid =>
-    if !due.contains pid then
-      throw (.hidden s!"a section of {worker.symbol} for peer {pid}, whose timer is not pending with expires before jiffies {jHi}")
-    delTimer pid t
-    Env.runTimerSection worker (WG.timerCallback pid t)
-  | none =>
-    match due with
-    | [pid] =>
-      delTimer pid t
-      Env.runTimerSection worker (WG.timerCallback pid t)
-    | [] => throw (.hidden s!"a section of {worker.symbol}, but no peer's timer is pending with expires before jiffies {jHi}")
-    | _ => unsupported s!"several peers' timers for {worker.symbol} due in one pass (their order)"
+def runTimersSource (jPass : UInt64) : Leanux.M Bool := do
+  modifyWG fun w => { w with queuedThisCall := [] }   -- the guest slept
+  -- L: without wg0 (bare fixture, or after wg_delete) no WireGuard timer
+  -- exists; a timer section in the records stays unconsumed and mismatches
+  if (← getWG).dev.isNone then return false
+  let startOf (w : Worker) := (HiddenSite.sectionStart w).info.id
+  let mut fired := false
+  let mut step : Option UInt64 := none
+  -- record-driven (review item 7): every turn consumes a section or breaks
+  for _ in [0:(← recordBudget)] do
+    let some site ← peekNextSite | break
+    let d ← getDev
+    if let some w := timerSectionOf site then
+      if w == .clearPeerWorker then
+        if let some b := step then
+          requireStepComplete b
+          step := none
+        if d.clearWorkQueue.isEmpty then break
+        runOneClearWorker
+      else
+        let some (pid, t, we) := TimerWheel.nextDue d jPass
+          | throw (.hidden s!"a section of {w.symbol}, but no modeled timer's bucket is due by jiffies {jPass}")
+        let expected ← timerWorker t
+        if w != expected then
+          throw (.hidden s!"the wheel runs peer {pid}'s {repr t} timer next ({expected.symbol}, bucket expiry {we.bucketExpiry}); the records show a section of {w.symbol}")
+        -- dispatch order (docs/2026-10-11-dispatch-order.md): the timer the
+        -- section names, by the address its arm record carried
+        if let some u ← peekUnit w then
+          match (← getWG).timerUnits.find? (·.1 == u) with
+          | some (_, pid', t') =>
+            if pid' != pid || t' != t then
+              throw (.hidden s!"the wheel runs peer {pid}'s {repr t} timer next; the section names peer {pid'}'s {repr t'}")
+          | none => throw (.hidden s!"a section of {w.symbol} for a timer the mirror never armed ({u})")
+        if let some b := step then
+          if b != we.bucketExpiry then requireStepComplete b
+        delTimer pid t
+        modifyWG fun s => { s with timerPassStep := some we.bucketExpiry }
+        runTimerSection w (WG.timerCallback pid t)
+        modifyWG fun s => { s with timerPassStep := none }
+        step := some we.bucketExpiry
+        fired := true
+    else
+      if let some b := step then
+        requireStepComplete b
+        step := none
+      if !fired then break
+      else if site == startOf .sendWorker && !d.sendWorkQueue.isEmpty then runOneSendWorker
+      else
+        -- the crypt work a timer queued, as the records order it, and a crypt
+        -- activation the records resume after a section (`schedule`)
+        runCryptWorkers
+        if (← peekNextSite) == some site then break
+  if let some b := step then requireStepComplete b
+  if fired then
+    deliverSent
+    let d ← getDev
+    if !d.sendWorkQueue.isEmpty || !d.clearWorkQueue.isEmpty || !d.encryptQueue.empty || !d.txWorkQueue.isEmpty then
+      unsupported "work a timer queued outlived the guest's wait"
+  return fired
 
-def fireTimerSource (worker : Worker) (jHi : UInt64) : M Unit := do
-  let some t := worker.timer? | invariant s!"{worker.symbol} is not a timer callback"
-  let d ← getDev
-  let due := d.peerList.filter fun pid =>
-    match d.peers.get? pid >>= (·.timer t) with
-    | some e => timeBefore e jHi | none => false
-  fireTimerAfterScan worker t jHi due
+theorem runTimersSource_eq (jPass : UInt64) :
+    runTimersSource jPass = Env.runTimers jPass := rfl
 
-theorem fireTimerSource_eq (worker : Worker) (jHi : UInt64) :
-    fireTimerSource worker jHi = Env.fireTimer worker jHi := rfl
-
-/-- The original pure earliest-entry fold, shared to avoid independently generated
-matcher constants in the two observations of the placeholder loop. -/
-def firstDue (due : List (UInt64 × PeerId × PeerTimer)) : Option (UInt64 × PeerId × PeerTimer) :=
-  due.foldl (fun acc c => match acc with
-    | some a => if timeBefore c.1 a.1 then some c else some a
-    | none => some c) none
-
-theorem firstDue_eq (due : List (UInt64 × PeerId × PeerTimer)) : firstDue due =
-    due.foldl (fun acc c => match acc with
-      | some a => if timeBefore c.1 a.1 then some c else some a
-      | none => some c) none := rfl
-
-def dueEntries (d : Device) (jHi : UInt64) : List (UInt64 × PeerId × PeerTimer) := d.peerList.flatMap fun pid =>
-      match d.peers.get? pid with
-      | some p => PeerTimer.all.filterMap fun t => (p.timer t).bind fun e => if timeBefore e jHi then some (e, pid, t) else none
-      | none => []
-
-def runTimersPlaceholderSource (jHi : UInt64) : M Unit := do
-  modify fun w => { w with queuedThisCall := [] }
-  if (← getK).wg.isNone then return   -- L: no wg0, no timers [AGENT, int-dl merge]
+def runTimersPlaceholderSource (jHi : UInt64) : Leanux.M Unit := do
+  modifyWG fun w => { w with queuedThisCall := [] }
+  if (← getWG).dev.isNone then return   -- no device, no timers
   -- the filter's own loop (review item 7): one turn per pending timer at most
   let pending := (← getDev).peers.size * PeerTimer.all.length
   for _ in [0:pending + 1] do
-    let d ← getDev
-    let due := dueEntries d jHi
-    let first := firstDue due
-    let some (_, pid, t) := first | break
+    let some (pid, t, _) := TimerWheel.nextDue (← getDev) jHi | break
     delTimer pid t
-    Env.runTimerSection (← Env.timerWorker t) (WG.timerCallback pid t)
-  Env.runCryptWorkers
-  Env.runSendWorkers
+    runTimerSection (← timerWorker t) (WG.timerCallback pid t)
+  runCryptWorkers
+  runSendWorkers
   for _ in [0:(← getDev).clearWorkQueue.length + 1] do
     if (← getDev).clearWorkQueue.isEmpty then break
-    Env.runOneClearWorker
+    runOneClearWorker
 
 theorem runTimersPlaceholderSource_eq (jHi : UInt64) :
     runTimersPlaceholderSource jHi = Env.runTimersPlaceholder jHi := rfl

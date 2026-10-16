@@ -1,8 +1,8 @@
 import Leanux.Runner
 
-/-! The stale raw slot's destructive callback in isolation. The executable
-record-stream witness separately establishes that device replacement with
-a retained dump cursor is reachable from the original runner. -/
+/-! The stale raw slot's destructive callback in isolation. This fixture
+is an isolated WG execution; the current runner rejects the historical
+device-replacement recipe while a stepped dump is pending. -/
 namespace Leanux.Proofs.WG.LifetimeSafety.CursorWitness
 open Leanux Leanux.WG
 
@@ -14,25 +14,26 @@ def replacementPeer : Peer :=
 
 def staleCursor : DumpCtx := { hasWg := true, nextPeer := some 26 }
 
-def replacementWorld : World :=
+def replacementWorld : WGWorld :=
   let d : Device :=
     { ifindex := 4, ifname := "wg0", numPeers := 1,
       peers := Std.TreeMap.ofList [(26, replacementPeer)], peerList := [26],
       peerHashtable := [(replacementKey, 26)], nextPeer := 27 }
-  let k := Runner.initialKernel 32 true false false true
-  { k := { k with wg := some d, peerCounter := 55,
-                  nlSock8 := { ctx := staleCursor, cbRunning := true } },
-    env := Runner.harnessEnv, timing := Env.timing }
+  { Runner.initialWG true with
+    dev := some d
+    peerCounter := 55
+    nlSock8 := { ctx := staleCursor, cbRunning := true } }
 
 def before : Option (Nat × Nat × Bool) :=
-  (replacementWorld.k.wg.bind (·.peers[26]?)).map fun p =>
+  (replacementWorld.dev.bind (·.peers[26]?)).map fun p =>
     (p.internalId, p.refcount, p.isDead)
 
 /-- Result of the actual callback, retaining the store lookup and both
 configuration indexes that should not point at a released live peer. -/
 def afterDone : Option (Option Nat × List Nat × List Nat) := do
-  let (_, w) ← ((wgGetDeviceDone staleCursor).run replacementWorld).toOption
-  let d ← w.k.wg
+  let ((_, w), _) ← (((wgGetDeviceDone staleCursor).run replacementWorld).run
+    { env := Runner.harnessEnv, timing := Env.timing }).toOption
+  let d ← w.dev
   pure ((d.peers[26]?).map (·.internalId), d.peerList, d.peerHashtable.map (·.2))
 
 end Leanux.Proofs.WG.LifetimeSafety.CursorWitness
