@@ -18,8 +18,10 @@ The existing proofs supply concrete examples and the regression suite. Keep
 headline statements, Pre, R, trust declarations and highest-level proof
 structure fixed. Keep the executable mirror, oracle, Kraken semantics and
 pinned dependency commit fixed. This is proof refactoring, not a campaign
-expansion, state-split migration or new composition architecture. No merge to
-main, no push, no global configuration or shared-cache changes.
+expansion or state-split migration. The follow-on experiment below permits
+new internal segment/composition interfaces while preserving the headline
+and highest-level M1/M2 structures. No merge to main, no push, no global
+configuration or shared-cache changes.
 
 The charter's direct-proof method remains: no certificate checker, no new
 axioms, no native reflection axiom, no sorry or unsafe proof escape. Generated
@@ -102,6 +104,75 @@ Keep temporary timing/export artifacts in `.tmp`; commit conclusions and
 reproduction commands here, not giant logs or dumps. Record the final branch,
 commits, retained mechanisms, measurements and stopping decision. Main remains
 unchanged until separately authorised.
+
+## Follow-on: execution segments as the unit of proof
+
+[USER 2026-10-16] Try the larger experiments discussed after round 3, with
+execution segments as the highest-priority unit: start from a state
+establishing the simulation relation, execute to a correspondence point,
+and reestablish it. Update this plan and implement the experiments. Runtime
+testing of candidate relations is an exploratory idea, not a required proof
+mechanism or a replacement for proof.
+
+[AGENT 2026-10-16] The previous stopping assessment applies to small local
+substitutions only. It did not test the cost of region composition. Resume
+on this branch from `7cebabd`, with one vertical example driving the API.
+A segment may have internal cuts and callback states: endpoint R alone is
+insufficient for the existing headline. Retain actual Kraken execution,
+all undefined outcomes, the same accepted source run, and correspondence at
+all required emitting points and cuts. Internal physical segments can carry
+a component invariant; lifting/composition must supply the full unchanged R.
+
+The experiments, in order:
+
+1. **Complete callback argument.** Generalize the actual CALL/service/RET
+   proof, including readiness restoration, return-word preservation,
+   footprint and observations. Instantiate for M1 index lookup and its
+   allowed-IPs peer context. Context laws must be proved from existing facts,
+   not added to Pre, R or TrustBase. Count instance and library costs.
+2. **Execution segment and loop composition.** Build a small proved segment
+   interface that composes execution, endpoints, observations, frames/cuts
+   and scanner facts. Use it for M1's callback-and-next-node step and carry
+   the step through the existing bucket induction. The composition theorem
+   must actually discharge obligations at joins, not merely package a long
+   conjunction. Preserve the existing function theorem and path structure.
+3. **Binary footprints.** Where that example still exposes repeated
+   obligations, derive local read preservation and separation from known
+   write footprints and interval inclusions. Normalize modular addresses
+   with proved lemmas. Add a bounded tactic only if ordinary applications
+   remain repetitive. Existing aliases remain permitted; unresolved alias
+   cases remain visible. Do not strengthen global allocation assumptions.
+4. **History summaries and reuse.** Carry reusable summaries of observations
+   and scanner state, with proved links to the existing full-history
+   computations and required prefixes. Test the mechanism on a completed M2
+   component not used to design it; `common_bits` is the initial held-out
+   candidate. This must not complete the unfinished M2 function theorem.
+
+Use each experiment's failures to revise the smallest interface needed by
+the next example. Success is lower cost for the next region/caller: fewer
+bespoke join obligations, no parallel physical-proof family for a new
+context, and preserved statements under kernel replay. Record library,
+instance and call-site code together, compile/replay cost, and residual
+manual obligations. Do not infer campaign throughput from line counts.
+Stop a mechanism when its instances merely reproduce the old proof or it
+requires function-specific hypotheses of essentially the desired result.
+
+### Optional: runtime testing of relation candidates
+
+There is value in using concrete machine/mirror states at cuts to falsify
+an invariant candidate before investing in a universal proof. Keep this a
+separate diagnostic experiment, deferred until the segment interface has a
+concrete use for it. Prefer executable physical clauses and supplied finite
+representation witnesses, preserving the distinction between physical
+state, recorded environment and history. Missing observations or abstract
+fields must yield an explicit unsupported/unknown result rather than pass.
+
+A diagnostic success establishes only the tested instance. It cannot justify
+universal separation, arbitrary heaps, absent readers, or closure under all
+Kraken outcomes. A candidate check is not a certificate checker on the proof
+path. If later used as a precise implementation of a relation clause, its
+relationship to that clause would itself need proof. No new gate, oracle
+instrumentation or executable-mirror change is part of this round.
 
 ## Progress
 
@@ -215,7 +286,7 @@ Direct elaboration samples: `ScanFrame` 0.772→0.787 seconds;
 `AllowedipsLoopFrame` 0.753→0.688 seconds. The small mixed changes reinforce
 that these timings do not establish a campaign-wide performance claim.
 
-### Stopping assessment
+### Round-3 stopping assessment (superseded for the follow-on)
 
 [AGENT 2026-10-16] Stop this bounded experiment after the three retained
 rounds. The final inspection, informed by the note about the forthcoming
