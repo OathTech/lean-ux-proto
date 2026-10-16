@@ -55,7 +55,7 @@ def rxPollLogged (pid : PeerId) (budget : Nat) (napiCompleteDone : List (List UI
     setPeer pid { (← getPeer pid) with rxQueue := (← getPeer pid).rxQueue.dropPeeked }
     let mut free := true
     if !(← branch .rxPollNotCrypted (pkt.state != .crypted)) then
-      if !(← branch .rxPollCounterInvalid !(← counterLogged pkt.keypair pkt.nonce)) then
+      if !(← branch .rxPollCounterInvalid !(← liftWGGhost (counterLogged pkt.keypair pkt.nonce))) then
         let endpoint ← endpointFromSkb pkt.source
         if !(← branch .rxPollEndpointFailed endpoint.isNone) then
           let some e := endpoint | invariant "unreachable"
@@ -86,7 +86,7 @@ elab "intro_forall" : tactic => do
   Lean.Elab.Tactic.evalTactic (← `(tactic| intro a))
 
 theorem groNormalListLogged_erases
-    (logged : List (List UInt8) → GhostM Unit) (original : List (List UInt8) → M Unit)
+    (logged : List (List UInt8) → GhostM Unit) (original : List (List UInt8) → Leanux.M Unit)
     (h : ∀ packets, Erases (logged packets) (original packets)) (gro : GroState) :
     Erases (groNormalListLogged logged gro) (groNormalList original gro) := by
   unfold groNormalListLogged groNormalList
@@ -95,7 +95,7 @@ theorem groNormalListLogged_erases
   · exact erases_bind (h _) (fun _ => erases_pure _)
 
 theorem groNormalOneLogged_erases
-    (logged : List (List UInt8) → GhostM Unit) (original : List (List UInt8) → M Unit)
+    (logged : List (List UInt8) → GhostM Unit) (original : List (List UInt8) → Leanux.M Unit)
     (h : ∀ packets, Erases (logged packets) (original packets))
     (gro : GroState) (pkt : List UInt8) (segs : Nat) :
     Erases (groNormalOneLogged logged gro pkt segs) (groNormalOne original gro pkt segs) := by
@@ -106,7 +106,7 @@ theorem groNormalOneLogged_erases
   · exact erases_pure _
 
 theorem napiGroReceiveLogged_erases
-    (logged : List (List UInt8) → GhostM Unit) (original : List (List UInt8) → M Unit)
+    (logged : List (List UInt8) → GhostM Unit) (original : List (List UInt8) → Leanux.M Unit)
     (h : ∀ packets, Erases (logged packets) (original packets))
     (gro : GroState) (pkt : List UInt8) :
     Erases (napiGroReceiveLogged logged gro pkt) (napiGroReceive original gro pkt) := by
@@ -118,7 +118,7 @@ theorem napiGroReceiveLogged_erases
     · exact erases_pure _
 
 theorem napiGroFlushAllLogged_erases
-    (logged : List (List UInt8) → GhostM Unit) (original : List (List UInt8) → M Unit)
+    (logged : List (List UInt8) → GhostM Unit) (original : List (List UInt8) → Leanux.M Unit)
     (h : ∀ packets, Erases (logged packets) (original packets)) (gro : GroState) :
     Erases (napiGroFlushAllLogged logged gro) (napiGroFlushAll original gro) := by
   unfold napiGroFlushAllLogged napiGroFlushAll
@@ -135,16 +135,16 @@ set_option maxHeartbeats 2000000 in
 /-- The complete receive-poll observer has the original result, state and error. -/
 theorem rxPollLogged_erases (pid : PeerId) (budget : Nat)
     (logged : List (List UInt8) → GhostM Unit)
-    (original : List (List UInt8) → M Unit)
+    (original : List (List UInt8) → Leanux.M Unit)
     (h : ∀ packets, Erases (logged packets) (original packets)) :
     Erases (rxPollLogged pid budget logged) (WG.rxPoll pid budget original) := by
   unfold rxPollLogged WG.rxPoll
   repeat' first
     | contradiction
     | with_reducible exact erases_pure _
-    | with_reducible exact erases_liftM _
-    | with_reducible exact erases_lift _
-    | with_reducible exact counterLogged_erases _ _
+    | exact erases_liftM _
+    | exact erases_lift _
+    | exact erases_liftWGGhost (counterLogged_erases _ _)
     | with_reducible apply erases_ite
     | with_reducible apply erases_bind
     | with_reducible apply erases_map
@@ -155,6 +155,8 @@ theorem rxPollLogged_erases (pid : PeerId) (budget : Nat)
     | with_reducible exact h _
     | intro_forall
     | (split <;> try simp_all only [Option.some.injEq, reduceCtorEq, forall_eq', not_true_eq_false])
-  all_goals grind only [erases_liftM]
+  all_goals
+    simp_all only [Option.some.injEq]
+    exact erases_liftM _
 
 end Leanux.Proofs.Logged

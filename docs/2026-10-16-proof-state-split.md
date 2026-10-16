@@ -29,9 +29,12 @@ it is not part of that baseline.
 | Keypairs `Ordinary` | 17 | 12 | 1 | 4 | 0 | 16 |
 | Framing `WGTime`, `WGHandshake`, Keypairs `OrdinaryHot` | 21 | 16 | 5 | 0 | 0 | 16 |
 | WG store view and Keypairs composition (four modules) | 31 | 27 | 4 | 0 | 0 | 27 |
+| Logged `RxPoll`, `Tools`, `Workers`, `Scheduler` | 26 | 17 | 0 | 9 | 0 | 26 |
 
 The whole tree currently contains 449 Lean files and 6,310 theorems. The completed
-changes total 251 retyped theorems, 1,472 deletions, 63 retained interfaces and 67 added.
+changes total 268 retyped theorems, 1,472 deletions, 72 retained interfaces and 67 added.
+Retained interfaces means unchanged written signatures, not preservation of the
+old monolithic execution state. All carried contracts use the actual new stack.
 All terminal files remain unchanged. **Every result remains lagging** until the complete tree
 passes its proof gate and kernel replay. R1/R2/R5/R6 retain their pre-split
 charter dispositions; initialized R3 packet authorization and R4 receive-pipeline
@@ -345,6 +348,40 @@ LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake build 
 LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Keypairs.SnapshotRules
 ```
 
+## Product scheduler observations
+
+All 26 existing erasure contracts now run over the actual product World: 17
+signatures explicitly name `Leanux.M`, and nine scheduler interfaces retain
+their written form. Their callback scope is unchanged. The native validator
+observer enters through `liftWGGhost` once, carrying its actual WG and Ambient
+outputs and acceptance history. Scheduler records use Ambient; NAPI placement
+uses the fixture world. Original `Activation.consistent` trials still execute
+on copied actual Worlds, discard their trial state and events, and convert only
+hidden-record mismatches to false. The selected committed observer runs once.
+
+The encrypt observer now calls the actual polymorphic `encryptRingPoll`, keeping
+ring consumption/write-back before the softirq and then the consumption record.
+The decrypt worker retains its distinct softirq-first order. This repairs the
+copied-source drift without a device, reachability or success premise. The
+checksum callback remains a product action. GRO batching, held packets, budget
+checks, reference puts, frees and all original Stops remain in the erasures.
+
+Validation: frozen scoped build passes (49 jobs), all 53 named declarations print
+only permitted axioms, and fresh Scheduler kernel replay passes. Independent
+frozen-source review found no substantive issue. Hashes, trust scan, terminal
+preservation, mirror equality and whitespace pass. Fourteen capped calls completed;
+nine development builds failed on lift inference and tactic normalization. Two
+failed builds emitted elaboration-recovery admission diagnostics after type errors;
+there was no source admission and none in final validation. A successful direct
+lift probe omitted explicit `-j1`; the Lake configuration and final axiom check
+retained it. No interruption, timeout, KILLED outcome, limit increase or
+infrastructure rerun occurred. All handles are collected.
+
+```sh
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake build Leanux.Proofs.Logged.Scheduler
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.Logged.Scheduler
+```
+
 ## Incoming source-observer findings
 
 Source inspection found two observer carry defects beyond type changes. The old
@@ -364,13 +401,14 @@ order selects the latter while raw-expiry order selects the former. The source
 observers and receipt boundaries must follow the actual inline execution. This
 selection witness is likewise source-inspected, pending formal checking.
 
-The success-observer lane has additional copied-source drift. Its encrypt worker
-still runs the softirq before consuming the ring; the mirror now consumes and
+The success-observer lane had additional copied-source drift. Its old encrypt
+worker ran the softirq before consuming the ring; the mirror consumes and
 writes back the ring first. With no device and a softirq that throws a hidden
 failure, the old copy reaches that failure while the mirror first reaches the
 missing-device invariant. This is a source-derived witness recipe, not an
 executed counterexample. The decrypt worker still runs its softirq first and
-must retain that ordering. The runner omits
+retains that ordering. The scheduler port above repairs this observer and proves
+its unrestricted erasure. The remaining runner copy omits
 the current routing-table boot, foreign-namespace boot, exact startup failure,
 startup-record clearing and per-operation `hiddenAhead`. Its environment copies
 omit routing/neighbour calls, route-MTU propagation and the current timer-pass
@@ -389,7 +427,7 @@ claimed. The incoming whitespace speedbump reports existing patch whitespace
 and a unit-file trailing blank line; those incoming files remain unchanged.
 
 Next are the remaining native/product observers and within-subsystem contracts,
-beginning with the scheduler observers.
+beginning with native component and source-helper contracts.
 The broader structural-frame layers
 have been deleted with their independently classified unused support; their
 surviving consumers still need the actual subsystem adapters.

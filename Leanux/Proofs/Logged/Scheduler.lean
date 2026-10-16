@@ -10,7 +10,7 @@ def napiSoftirqLogged : GhostM Unit := do
   let d ← getDev
   let pending := d.peers.toList.filterMap fun (pid, p) => if p.napiScheduled then some pid else none
   if pending.isEmpty then return
-  if (← getWorld).hidden.isSome && (← peekHiddenSite) != some (HiddenSite.sectionStart .netRx).info.id then return
+  if (← getAmbient).hidden.isSome && (← peekHiddenSite) != some (HiddenSite.sectionStart .netRx).info.id then return
   if pending.length > 1 then unsupported "NAPI polls of several peers in one softirq"
   -- net_rx_action → napi_poll(n, &repoll) → n->poll(n, n->weight)
   runWorkerLogged .netRx do
@@ -25,12 +25,11 @@ theorem napiSoftirqLogged_erases : Erases (napiSoftirqLogged) (Env.napiSoftirq) 
     | ghost_step
 
 def napiIrqExitLogged : GhostM Unit := do
-  if (← getWorld).hidden.isNone then return
+  if (← getAmbient).hidden.isNone then return
   if !(← getDev).peers.toList.any (·.2.napiScheduled) then return
   if (← peekHiddenSite) != some (HiddenSite.sectionStart .netRx).info.id then return
-  let w ← getWorld
-  let here := w.napiBeforePut.headD false
-  setWorld { w with napiBeforePut := w.napiBeforePut.drop 1, napiAmbiguous := w.napiAmbiguous + 1 }
+  let here := (← getEnv).napiBeforePut.headD false
+  modifyEnv fun e => { e with napiBeforePut := e.napiBeforePut.drop 1, napiAmbiguous := e.napiAmbiguous + 1 }
   if here then napiSoftirqLogged
 
 theorem napiIrqExitLogged_erases : Erases (napiIrqExitLogged) (Env.napiIrqExit) := by
@@ -44,21 +43,20 @@ through `napiSoftirqLogged`; successful execution retains its acceptance events.
 Copied-World consistency trials remain original
 actions and discard their trial state rather than appending this history. -/
 def cryptAheadLogged (pid : PeerId) : GhostM Unit := do
-  if (← getWorld).hidden.isNone then return
+  if (← getAmbient).hidden.isNone then return
   let some item := (← getPeer pid).txQueue.all.head? | return
   let some id := item.head? | invariant "an empty ring item"
   if (← getTxSkb id).state != .uncrypted then return
   let next ← peekHiddenSite
   unless next == some HiddenSite.modTimerArm.info.id || next == some HiddenSite.timerJiffiesTraversal.info.id do return
-  let w ← getWorld
-  let some enc := w.suspended.find? (·.worker == .encryptWorker)
+  let some enc := (← getAmbient).suspended.find? (·.worker == .encryptWorker)
     | throw (.hidden "the tx worker's head is uncrypted and no encrypt activation is suspended, but the next record is the traversal timer's caller read or arm (site 426 or 100)")
   modifyDev fun d => { d with txWorkQueue := d.txWorkQueue ++ [pid] }
   let r ← encryptIterLogged checksumHelp napiSoftirqLogged (liftM (condResched .encryptWorker))
   modifyDev fun d => { d with txWorkQueue := d.txWorkQueue.erase pid }
   match r with
   | .continued =>
-    modifyWorld fun s => { s with suspended := s.suspended.map fun x =>
+    modifyAmbient fun s => { s with suspended := s.suspended.map fun x =>
       if x == enc then { x with iterations := x.iterations + 1 } else x }
   | .ended => throw (.hidden "the encrypt activation's queue is empty, but the next record is the traversal timer's caller read or arm (site 426 or 100)")
   | .yielded => invariant "the encrypt activation yielded on a record that is not a resched"
@@ -102,7 +100,7 @@ def activationRunLogged (a : Activation) : GhostM Unit := do
     | .ended => _ ← hidden (.sectionStop act.worker); return
     | .continued => act := { act with iterations := act.iterations + 1 }
     | .yielded =>
-      modifyWorld fun s => { s with suspended := s.suspended ++ [{ act with iterations := act.iterations + 1 }] }
+      modifyAmbient fun s => { s with suspended := s.suspended ++ [{ act with iterations := act.iterations + 1 }] }
       return
   invariant s!"{a.worker.symbol} consumed more items than its queue held ({occupancy}) in one run"
 
@@ -139,8 +137,8 @@ theorem dispatchActivationLogged_erases (w : Worker) : Erases (dispatchActivatio
 
 def scheduleLogged (stack : Option Worker := none) : GhostM Unit := do
   let netRx := (HiddenSite.sectionStart .netRx).info.id
-  for _ in [0:(← liftM recordBudget)] do
-    if (← getWorld).hidden.isNone then
+  for _ in [0:(← recordBudget)] do
+    if (← getAmbient).hidden.isNone then
       let d ← getDev
       let next := [Worker.receiveWorker, .decryptWorker, .encryptWorker, .txWorker].find? fun w =>
         match w with
@@ -158,16 +156,16 @@ def scheduleLogged (stack : Option Worker := none) : GhostM Unit := do
       napiSoftirqLogged
       if (← peekHiddenSite) == some netRx then return   -- left to the caller
       continue
-    match ← liftM ((← getWorld).suspended.filterM Activation.consistent) with
+    match ← liftM ((← getAmbient).suspended.filterM Activation.consistent) with
     | [] => return
     | [a] =>
       if let some w := stack then
         if ← Activation.hasWork { worker := w } then
           unsupported "the records do not determine which suspended worker resumed"
-      modifyWorld fun s => { s with suspended := s.suspended.filter (· != a) }
+      modifyAmbient fun s => { s with suspended := s.suspended.filter (· != a) }
       activationRunLogged a
     | _ => unsupported "the records do not determine which suspended worker resumed"
-  liftM (budgetExhausted "the scheduler loop")
+  budgetExhausted "the scheduler loop"
 
 theorem scheduleLogged_erases (stack : Option Worker) : Erases (scheduleLogged stack) (Env.schedule stack) := by
   unfold scheduleLogged Env.schedule
@@ -176,7 +174,11 @@ theorem scheduleLogged_erases (stack : Option Worker) : Erases (scheduleLogged s
     | with_reducible apply napiSoftirqLogged_erases
     | with_reducible apply activationRunLogged_erases
     | ghost_step
-  all_goals grind only [dispatchActivationLogged_erases, erases_liftM]
+  all_goals
+    have invariant_erases (reason : String) :
+        Erases (invariant reason : GhostM Unit) (invariant reason : Leanux.M Unit) :=
+      erases_liftM _
+    grind only [dispatchActivationLogged_erases, erases_liftM]
 
 def nestedReschedLogged (self : Worker) : GhostM Unit := do
   if ← condResched self then scheduleLogged (stack := some self)
