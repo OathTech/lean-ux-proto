@@ -19,12 +19,6 @@ def snapshotOfWGKernelView (v : WGKernelView) : Store PeerId :=
 theorem samePeerSnapshot_of_sameWGKernel (h : SameWGKernel a) : SamePeerSnapshot a :=
   h.of_factor snapshotOfWGKernelView snapshot (fun _ => rfl)
 
-theorem fput_samePeerSnapshot (fid : FileId) : SamePeerSnapshot (fput fid) :=
-  samePeerSnapshot_of_sameWGKernel (FSFileRefs.fput_sameWGKernel fid)
-
-theorem fdput_samePeerSnapshot (f : Fd) : SamePeerSnapshot (fdput f) :=
-  samePeerSnapshot_of_sameWGKernel (FSFileRefs.fdput_sameWGKernel f)
-
 theorem SamePeerSnapshot.wp (h : SamePeerSnapshot a) (P : Store PeerId → Prop) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ a ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ :=
   ProjectedAction.wp h P (fun _ _ he hp => he ▸ hp)

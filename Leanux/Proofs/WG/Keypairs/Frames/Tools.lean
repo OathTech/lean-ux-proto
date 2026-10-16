@@ -1,5 +1,6 @@
 import Leanux.Proofs.WG.Keypairs.OrdinaryHot
 import Leanux.Proofs.Framing.Tools
+import Leanux.Proofs.Framing.Lift
 import Leanux.Proofs.Framing.WGKernel
 
 /-! Reusable verification-condition setup for helpers that preserve the
@@ -52,8 +53,18 @@ macro "frame_same" "[" fs:ident,* "]" "using" "[" specs:ident,* "]" : tactic => 
   let names := specs.getElems.mapIdx fun i _ => Lean.mkIdent (Lean.Name.mkSimple s!"frame_spec_{i}")
   let basics := #[``Leanux.branch, ``Leanux.branchCmp,
     ``Leanux.branchCmpExcluded, ``Leanux.unsupported, ``Leanux.invariant,
-    ``Leanux.AmbientM.branch, ``Leanux.AmbientM.branchCmp,
-    ``Leanux.AmbientM.branchCmpExcluded, ``Leanux.AmbientM.unsupported, ``Leanux.AmbientM.invariant,
+    ``Leanux.hidden, ``Leanux.hiddenU64, ``Leanux.hiddenClock,
+    ``Leanux.hiddenClock64, ``Leanux.hiddenJiffies, ``Leanux.hiddenAlloc,
+    ``Leanux.peekHiddenSite, ``Leanux.skipCut, ``Leanux.skipCutExactly,
+    ``Leanux.getAmbient, ``Leanux.modifyAmbient, ``Leanux.getRouting,
+    ``Leanux.refcountDecAndTest, ``Leanux.refcountInc,
+    ``Leanux.refcountIncGuestWide, ``Leanux.refcountIncNotZero,
+    ``Leanux.WG.AipNode.bitAt, ``Leanux.WG.choose,
+    ``Leanux.WG.commonBits, ``Leanux.WG.prefixMatches,
+    ``Leanux.WG.newTxSkb, ``Leanux.WG.getTxSkb,
+    ``Leanux.WG.setTxSkb, ``Leanux.WG.freeTxSkb,
+    ``Leanux.WG.newRxSkb, ``Leanux.WG.getRxSkb,
+    ``Leanux.WG.setRxSkb, ``Leanux.WG.freeRxSkb,
     ``Leanux.WG.andM, ``Leanux.WG.orM]
   let lemmas := (fs.getElems.map fun f => wrap (if f.getId.toString.startsWith "_private." then
       (Lean.mkCIdent (normalizePinnedName f.getId)).raw else f.raw)) ++
@@ -63,12 +74,43 @@ macro "frame_same" "[" fs:ident,* "]" "using" "[" specs:ident,* "]" : tactic => 
      have frame_list (α β : Type) := list_snapshot_spec (α := α) (β := β) (fun s => s = initial)
      have frame_map (α β : Type) := map_snapshot_spec (α := α) (β := β) (fun s => s = initial)
      have frame_discard (α : Type) := discard_snapshot_spec (α := α) (fun s => s = initial)
+     have frame_ambient (α : Type) (a : AmbientM α) :
+         ⦃fun w => ⌜snapshot w = initial⌝⦄ (MonadLift.monadLift a : WG.M α)
+         ⦃⇓? _ w => ⌜snapshot w = initial⌝⦄ :=
+       hoare_liftAmbient a (fun w => snapshot w = initial)
+     have frame_aip (α : Type) (a : AipM α) :
+         ⦃fun w => ⌜snapshot w = initial⌝⦄ (MonadLift.monadLift a : WG.M α)
+         ⦃⇓? _ w => ⌜snapshot w = initial⌝⦄ := by
+       apply hoare_liftAip a (fun w => snapshot w = initial)
+       intro g d store hg hd
+       simpa [snapshot, hd] using hg
+     have frame_skb (α : Type) (a : SkbM α) :
+         ⦃fun w => ⌜snapshot w = initial⌝⦄ (MonadLift.monadLift a : WG.M α)
+         ⦃⇓? _ w => ⌜snapshot w = initial⌝⦄ := by
+       apply hoare_liftSkb a (fun w => snapshot w = initial)
+       intro g d store hg hd
+       simpa [snapshot, hd] using hg
+     have frame_skb_explicit (α : Type) (a : SkbM α) :
+         ⦃fun w => ⌜snapshot w = initial⌝⦄ liftSkb a
+         ⦃⇓? _ w => ⌜snapshot w = initial⌝⦄ := frame_skb α a
+     have frame_index (α : Type) (a : IndexM α) :
+         ⦃fun w => ⌜snapshot w = initial⌝⦄ (MonadLift.monadLift a : WG.M α)
+         ⦃⇓? _ w => ⌜snapshot w = initial⌝⦄ := by
+       apply hoare_liftIndex a (fun w => snapshot w = initial)
+       intro g d table hg hd
+       simpa [snapshot, hd] using hg
+     have frame_routing (α : Type) (a : Net.M α) :
+         ⦃fun w => ⌜snapshot w = initial⌝⦄ (MonadLift.monadLift a : WG.M α)
+         ⦃⇓? _ w => ⌜snapshot w = initial⌝⦄ :=
+       hoare_liftRouting a (fun w => snapshot w = initial) (fun _ _ hg => hg)
      mvcgen [-Std.Do.Spec.forIn_list, -Std.Do.Spec.forIn'_list,
-       frame_modify, frame_list, frame_map, frame_discard, $lemmas,*]
+       -Std.Do.Spec.monadLift_StateT,
+       frame_modify, frame_list, frame_map, frame_discard,
+       frame_ambient, frame_aip, frame_skb, frame_skb_explicit, frame_index, frame_routing, $lemmas,*]
      all_goals try exact ((⇓? _ w => ⌜snapshot w = initial⌝) :
        PostCond _ (.arg WGWorld (.arg Ambient (.except Stop .pure))))
      all_goals try dsimp +zetaDelta only at *
-     all_goals try simp_all [snapshot, Option.bind_map, Function.comp_def]
+     all_goals try simp_all [snapshot, cell, Option.bind_map, Function.comp_def]
      all_goals try trivial))
   for (name, spec) in (names.zip specs.getElems).reverse do
     body ← `(tactic| (have $name := @$spec (fun s => s = initial); $body))
@@ -107,8 +149,18 @@ macro "frame_ordinary" "[" fs:ident,* "]" "using" "[" specs:ident,* "]"
   let ordnames := ords.getElems.mapIdx fun i _ => Lean.mkIdent (Lean.Name.mkSimple s!"frame_ord_{i}")
   let basics := #[``Leanux.branch, ``Leanux.branchCmp,
     ``Leanux.branchCmpExcluded, ``Leanux.unsupported, ``Leanux.invariant,
-    ``Leanux.AmbientM.branch, ``Leanux.AmbientM.branchCmp,
-    ``Leanux.AmbientM.branchCmpExcluded, ``Leanux.AmbientM.unsupported, ``Leanux.AmbientM.invariant,
+    ``Leanux.hidden, ``Leanux.hiddenU64, ``Leanux.hiddenClock,
+    ``Leanux.hiddenClock64, ``Leanux.hiddenJiffies, ``Leanux.hiddenAlloc,
+    ``Leanux.peekHiddenSite, ``Leanux.skipCut, ``Leanux.skipCutExactly,
+    ``Leanux.getAmbient, ``Leanux.modifyAmbient, ``Leanux.getRouting,
+    ``Leanux.refcountDecAndTest, ``Leanux.refcountInc,
+    ``Leanux.refcountIncGuestWide, ``Leanux.refcountIncNotZero,
+    ``Leanux.WG.AipNode.bitAt, ``Leanux.WG.choose,
+    ``Leanux.WG.commonBits, ``Leanux.WG.prefixMatches,
+    ``Leanux.WG.newTxSkb, ``Leanux.WG.getTxSkb,
+    ``Leanux.WG.setTxSkb, ``Leanux.WG.freeTxSkb,
+    ``Leanux.WG.newRxSkb, ``Leanux.WG.getRxSkb,
+    ``Leanux.WG.setRxSkb, ``Leanux.WG.freeRxSkb,
     ``Leanux.WG.andM, ``Leanux.WG.orM]
   let lemmas := (fs.getElems.map fun f => wrap (if f.getId.toString.startsWith "_private." then
       (Lean.mkCIdent (normalizePinnedName f.getId)).raw else f.raw)) ++
@@ -119,8 +171,39 @@ macro "frame_ordinary" "[" fs:ident,* "]" "using" "[" specs:ident,* "]"
      have frame_list (α β : Type) := list_snapshot_spec (α := α) (β := β) P
      have frame_map (α β : Type) := map_snapshot_spec (α := α) (β := β) P
      have frame_discard (α : Type) := discard_snapshot_spec (α := α) P
+     have frame_ambient (α : Type) (a : AmbientM α) :
+         ⦃fun w => ⌜P (snapshot w)⌝⦄ (MonadLift.monadLift a : WG.M α)
+         ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ :=
+       hoare_liftAmbient a (fun w => P (snapshot w))
+     have frame_aip (α : Type) (a : AipM α) :
+         ⦃fun w => ⌜P (snapshot w)⌝⦄ (MonadLift.monadLift a : WG.M α)
+         ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := by
+       apply hoare_liftAip a (fun w => P (snapshot w))
+       intro g d store hg hd
+       simpa [snapshot, hd] using hg
+     have frame_skb (α : Type) (a : SkbM α) :
+         ⦃fun w => ⌜P (snapshot w)⌝⦄ (MonadLift.monadLift a : WG.M α)
+         ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := by
+       apply hoare_liftSkb a (fun w => P (snapshot w))
+       intro g d store hg hd
+       simpa [snapshot, hd] using hg
+     have frame_skb_explicit (α : Type) (a : SkbM α) :
+         ⦃fun w => ⌜P (snapshot w)⌝⦄ liftSkb a
+         ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := frame_skb α a
+     have frame_index (α : Type) (a : IndexM α) :
+         ⦃fun w => ⌜P (snapshot w)⌝⦄ (MonadLift.monadLift a : WG.M α)
+         ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := by
+       apply hoare_liftIndex a (fun w => P (snapshot w))
+       intro g d table hg hd
+       simpa [snapshot, hd] using hg
+     have frame_routing (α : Type) (a : Net.M α) :
+         ⦃fun w => ⌜P (snapshot w)⌝⦄ (MonadLift.monadLift a : WG.M α)
+         ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ :=
+       hoare_liftRouting a (fun w => P (snapshot w)) (fun _ _ hg => hg)
      mvcgen [-Std.Do.Spec.forIn_list, -Std.Do.Spec.forIn'_list,
-       frame_modify, frame_list, frame_map, frame_discard, $lemmas,*]
+       -Std.Do.Spec.monadLift_StateT,
+       frame_modify, frame_list, frame_map, frame_discard,
+       frame_ambient, frame_aip, frame_skb, frame_skb_explicit, frame_index, frame_routing, $lemmas,*]
      all_goals try exact ((⇓? _ w => ⌜P (snapshot w)⌝) :
        PostCond _ (.arg WGWorld (.arg Ambient (.except Stop .pure))))
      all_goals try dsimp +zetaDelta only at *

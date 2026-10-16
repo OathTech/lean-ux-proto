@@ -34,9 +34,11 @@ it is not part of that baseline.
 | Component adapter extension (new contracts only) | 0 | 0 | 0 | 0 | 7 | 7 |
 | Native socket/configuration frames and new WG-owned view | 9 | 9 | 0 | 0 | 0 | 9 |
 | Product evolution rules and new ordinary lift bridge | 24 | 0 | 0 | 24 | 1 | 25 |
+| Native WGBase contracts and generalized map rule | 185 | 117 | 68 | 0 | 0 | 117 |
+| Redundant filesystem-family wrappers and exports | 21 | 0 | 21 | 0 | 0 | 0 |
 
-The whole tree currently contains 451 Lean files and 6,314 theorems. The completed
-changes total 268 retyped theorems, 1,476 deletions, 113 retained contract shapes and 75 added.
+The whole tree currently contains 449 Lean files and 6,225 theorems. The completed
+changes total 385 retyped theorems, 1,565 deletions, 113 retained contract shapes and 75 added.
 Retyping changes or generalizes the actual state/monad carrier or observation.
 This includes shorthand contracts whose source functions or named views move
 to a native monad. Mere namespace qualification and equivalent relocation of a
@@ -50,7 +52,9 @@ The count audit corrects the scheduler row from 17 retyped / 9 retained to
 was inconsistent with the native source-equality and acceptance-observer rows.
 Before this checkpoint, the corrected totals are 259 retyped / 89 retained,
 rather than 276 / 72. The before/after, deletion and addition counts are unchanged.
-All terminal files remain unchanged. **Every result remains lagging** until the complete tree
+Six terminal files remain unchanged. LifetimeSafety loses six redundant filesystem
+exports; every retained terminal body is unchanged. The terminal surface is now
+515 declarations (513 theorems and two definitions). **Every result remains lagging** until the complete tree
 passes its proof gate and kernel replay. R1/R2/R5/R6 retain their pre-split
 charter dispositions; initialized R3 packet authorization and R4 receive-pipeline
 conservation remain open.
@@ -496,6 +500,67 @@ LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake build 
 LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Keypairs.Evolution.Rules
 ```
 
+## Native WGBase and filesystem-wrapper removal
+
+The 185 WGBase contracts become 117 native/generalized contracts: 116 stay in
+WGBase and the arbitrary-StateT map rule moves to Framing.Tools. Thirteen
+previously ported helper theorems retain their contracts; across the three
+edited files the count is 198 to 130. The receive snapshot retains the counter
+frontier and every resident internal identity/window. Actual queue, timer,
+routing, owner-word and missing-device guards remain, without new validity or
+successful-execution premises.
+
+Sixty-six leaf frames disappear: sixteen Ambient, twenty-two trie, twelve index
+and sixteen packet-adapter claims. The native component types and generic
+adapter rules supply them. Two unused conditional node-view transports also
+disappear; these are redundant support, not type-given facts. Borrowed-peer
+return-value claims remain for their own carry. Generic map composition still
+admits arbitrary product callbacks. Large continuations are proved separately
+and applied with their checked contracts; the automation uses definitional
+goal replacement and guarded source-head matching.
+
+Twenty-one filesystem-related theorems are removed separately: nine structural
+frames, ten redundant generic-lift specializations, and two unused conditional
+transport helpers. This deletes FilesystemLocal and FilesystemCalls, four
+peer/packet fput/fdput frames, packet-view support and six LifetimeSafety exports.
+Actual FS operations, taskWorkRun and dispatch use their native monads and the
+exact product lift; they cannot execute WG mutations. The generic lift retains
+all returned values, FS/Task/Ambient outcomes, Stops and incoming observer history.
+The actual caller compositions still need carrying. In particular, fputFinal's
+queued namespace cleanup is distinct from its later product-level execution;
+task work retains its pop-before-release order and exhaustion Stop.
+
+Validation: the worker's scoped build passes (92 jobs), all twelve final macro
+probes pass, and the root's combined build of the ported closure passes (120
+jobs) after removing sixteen named generated artifacts of the deleted modules.
+All 130 theorems and both public helper definitions print only standard axioms.
+Fresh WGBase kernel replay and the frozen-source independent review pass.
+The review also confirms the twenty-one-deletion classification. Source hashes,
+retained terminal bodies, mirror equality, trust scan and whitespace pass.
+
+The worker made sixteen capped calls: thirteen builds (twelve failures and the
+final pass), two macro probes (one failure and one pass), and one intentional
+open-goal diagnostic (failure). One failed build panicked in whnfEasyCases on a
+loose bound variable while using continuation generation. Before further edits
+or builds, all worktrees were inspected and both dirty trees were preserved,
+including untracked files, under
+refs/snapshots/proof-campaign-vcgen-panic-20261016T084918Z; branches and normal
+indices were untouched. The proof was restructured; it was not retried as an
+infrastructure outcome. All sixteen handles are collected. Root build, axiom
+check and replay add three passing capped calls. No cap or proof limit was
+raised, and no KILLED outcome, guest timeout or infrastructure rerun occurred.
+Failed compilation output is not validation. No source admission was introduced.
+One root JavaScript syntax rejection occurred before any documentation edit.
+
+The preceding d6f7ed4 checkpoint accidentally used the repository's default
+human Git author. This is an attribution error; subsequent campaign commits
+use an explicit agent identity per invocation. Existing history is not rewritten.
+
+```sh
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake build Leanux.Proofs.WG.Keypairs.Frames.WGBase
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Keypairs.Frames.WGBase
+```
+
 ## Incoming source-observer findings
 
 Product-level former-Kernel observations must retain all 47 original fields:
@@ -503,30 +568,41 @@ Product-level former-Kernel observations must retain all 47 original fields:
 does not justify dropping those other observations from an arbitrary product
 action. Four old environment frames now encounter FIB writes: `setMtu`,
 `routeIntoWg0`, `wgDeladdr` and `wgDelroute`. They require explicit findings,
-not removal of the FIB fields from the observation. The latter three remain
+not removal of the FIB fields from the observation. The route-insertion and route-deletion frames remain
 source-inspected candidates.
 
-A capped stdin evaluation confirms an unrestricted-state MTU witness: with
-`Runner.initialWG true`, `initialTasks 1024`, `initialFS true`, harness Ambient
-inputs, zero timing bounds and no hidden records, `Env.setMtu 1421` returns zero,
-changes the device MTU from 1420 to 1421, and changes `fib4.rtGenid4` from zero
-to two. The old scalar mask permits only device MTU/inet-flag changes. This is
-an executed witness, not yet a permanent kernel-checked counterexample or an
-initialized security failure. Five capped stdin probes comprised this successful
-evaluation, one display-expression type error and three failed kernel-proof
-attempts (`rfl`, `decide`, `cbv`); the last hit the default recursion-depth limit.
-The failed declarations' axiom prints reported elaboration-recovery `sorryAx`;
-none is validation and no source admission was introduced. No limit was raised,
-no interruption occurred and no temporary files were created.
+Capped stdin proofs now establish two unrestricted-state counterexamples and
+the corresponding negations of FIB-generation preservation, with only standard
+axioms. Using Runner's initial component states, harness Ambient inputs, zero
+timing bounds and no hidden records, Env.setMtu 1421 returns zero, changes MTU
+1420 to 1421 and changes fib4.rtGenid4 from zero to two. With the WG IPv4 address
+present, Env.wgDeladdr4 returns zero, removes it and changes fib4.rtGenid4 and
+devAddrGenid from zero to one while fib4C.rtGenid4 stays zero. The old scalar
+mask permits only device MTU/inet-flag changes. These are kernel-checked stdin
+witnesses; permanent declarations and scoped replay belong to the environment
+carry. They are not initialized whole-run security failures.
 
-Source inspection found two observer carry defects beyond type changes. The old
-peer-release observer omits the incoming queue and timer guards. With a resident
-peer at refcount one and a queued transmit packet, the actual mirror Stops after
-the reference write and before erase; the old all-outcome event formula would
-append release. A pending timer instead Stops after erase and before retirement.
-The observer must retain both guards and each exact failed prefix, without adding
-queue/timer premises to erasure. This is an unrestricted-state witness recipe,
-not an executed Lean counterexample or a demonstrated initialized R2 failure.
+The preceding checkpoint recorded five MTU probes: one successful evaluation
+and four failures, including the default recursion limit; three failed proofs
+printed recovery sorryAx and count as failures. This checkpoint adds five
+environment probes: one failed direct-reflexivity proof, a passing reduction
+diagnostic, two passing fully unfolded witnesses and a passing joint check of
+four witness/negation declarations. Full source unfolding closes the proofs
+without raised limits. The failed call's recovery axiom print is not validation.
+
+The peer-release observer omits incoming queue and timer guards. Three capped
+stdin calls provide exact checked witnesses: a refcount-one queued peer Stops
+after the reference write and index removal but before erase; a pending timer
+Stops after erase and before retirement; a staged-only packet list permits
+release and contributes its length to txDropped. Two calls pass with standard
+axioms. The middle call failed because the staged fixture used bytes in place
+of Packet and printed a recovery axiom; the corrected fixture passes.
+The event formula must append release exactly when the refcount is one and
+both TX/RX queues are empty; pending timers must retain that release event.
+Erasure must keep both guards and exact failed prefixes without queue/timer
+preconditions. These are unrestricted-state witnesses, not initialized R2
+failures. All eight new read-only probe handles are collected, with no files,
+limit increase, interruption or infrastructure rerun.
 
 The timer observers still use the old raw-expiry scan and removed `fireTimer`.
 Actual `runTimers` uses `TimerWheel.nextDue`, dispatch validation, step completion,

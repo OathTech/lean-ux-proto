@@ -17,20 +17,22 @@ remain on this branch. Initialized R3 packet authorization and R4 receive-pipeli
 conservation remain open; their next extensions follow the retrofit.
 
 The validated baseline `00641c6` has 471 Lean files and 7,715 named theorems.
-The current tree has 451 files and 6,314 theorems: completed changes comprise
-268 retyped, 1,476 deleted, 113 retained contract shapes and 75 added theorems.
+The current tree has 449 files and 6,225 theorems: completed changes comprise
+385 retyped, 1,565 deleted, 113 retained contract shapes and 75 added theorems.
 The count audit treats namespace-only product qualifications as retained
 contracts and corrects the earlier scheduler classification; total theorem,
 deletion and addition counts are unaffected.
 The census includes private and attributed declarations and excludes nested
 comments and strings. Deferred uncommitted R3 work is outside the baseline.
-All seven terminal files remain unchanged.
+Six terminal files remain unchanged; LifetimeSafety loses six redundant filesystem
+exports, with all retained bodies unchanged. There are now 515 terminal
+declarations (513 theorems and two definitions).
 
 The CounterWindow, generic native contracts/adapters, acceptance-observer core,
 action/projection contracts, failure-prefix/native receipts, keypair identity
 core, ordinary lifetime actions, clock/Noise-helper contracts, keypair composition
 and product scheduler observers, index-table, removal and packet helpers,
-native socket/configuration and product evolution contracts pass their scoped
+native socket/configuration, product evolution and WGBase contracts pass their scoped
 builds, axiom checks, fresh kernel replay and independent reviews. The obsolete subsystem-frame layers and
 their unused support are
 removed; all previously ported targets still build after their generated
@@ -158,16 +160,14 @@ original checkpoints. The current mirror/toolchain carry status is in
   complete original allocator observations and safety with slot, lifetime and
   epoch bounds. `AllocationFrames` transports identities, metadata and released
   sets separately; `AllocationInitial` covers runner fixtures and prefill.
-  `FilesystemLocal` gives six source-audited lifts for the actual wait walk,
-  safewake, epoll callback and pipe read/write/release. Their full WG frames
-  transport AllocationInv; exact lifts retain the entire incoming history and
-  original result/World/Stop. Source access coverage is independent of framing.
-  `FilesystemCalls` adds the eleven typed original FS dispatch arms and actual
-  taskWorkRun with its pop-before-release order and exhaustion Stop. Source-audited
-  exact lifts retain arbitrary incoming history; full-WG frames transport
-  AllocationInv without valid-FS, fuel/drain or callback-ownership assumptions.
-  fputFinal may queue netnsCleanup; the later Env, syscall and Runner layers
-  supply its eventual execution and enclosing composition.
+  The former FilesystemLocal/FilesystemCalls wrappers and six terminal exports
+  are removed. Actual FS operations and taskWorkRun use native monads; their
+  product lifts preserve WG by type separation and retain exact FS/Task/Ambient
+  outcomes and Stops. Generic observer lifting retains incoming history.
+  The dispatcher, complete syscall and Runner compositions still need their
+  state-split carry. Task work keeps pop-before-release and its exhaustion Stop;
+  fputFinal may queue netnsCleanup, whose later product-level execution is
+  supplied by the Env, syscall and Runner layers.
   `AllocationRetention`, `AllocationReleaseFrames` and `AllocationReleases`
   retain allocation bounds across reference/free calls using entry-resident
   release origins. `AllocationAmbient` instantiates shared caller contracts

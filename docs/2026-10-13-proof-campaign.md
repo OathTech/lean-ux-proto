@@ -5,10 +5,11 @@
 Work on `proofs/campaign` in `.worktrees/proofs-campaign` follows [the charter](2026-10-13-charter-proof-campaign.md).
 The state-split retrofit onto `6089dc4` precedes further R3/R4 results. All seven
 result rows remain lagging, last validated over `cb2348e`. The tree has moved from
-471 files / 7,715 named theorems to 451 files / 6,314 theorems. Completed changes
-comprise 268 retyped, 1,476 deleted, 113 retained contract shapes and 75 added theorems;
-all terminal files remain unchanged. The native foundational, ordinary lifetime,
-clock/Noise-helper, keypair-composition, product scheduler and small native helper ports pass their
+471 files / 7,715 named theorems to 449 files / 6,225 theorems. Completed changes
+comprise 385 retyped, 1,565 deleted, 113 retained contract shapes and 75 added theorems;
+six redundant LifetimeSafety exports are removed, with every retained terminal
+body unchanged (515 declarations). The native foundational, ordinary lifetime,
+clock/Noise-helper, keypair-composition, product scheduler, small native helper and WGBase ports pass their
 scoped builds, axiom checks, fresh replay and independent reviews. Obsolete
 subsystem-frame layers and unused support have been deleted, with the distinction
 recorded; the surviving consumers still need their native/product contracts.
@@ -20,6 +21,14 @@ retyped to retained contract shape. Native socket/configuration and product
 evolution now pass their closed build, axiom check, fresh replays and independent
 review. The whole-tree and deletion/addition counts are unchanged by
 the accounting correction.
+
+WGBase carries 117 of 185 claims; 68 structural/unused helpers are deleted.
+The filesystem cleanup removes 21 redundant declarations, including six terminal
+exports. Closed compilation, standard-axiom checks, fresh kernel replay and
+independent review pass. One worker compiler panic was followed by all-dirty-tree
+snapshots before work resumed; the report records every failed call. The preceding
+checkpoint's default human author was an attribution error, corrected for future
+commits through an explicit per-invocation agent identity.
 
 The preceding `cb2348e` checkpoint validated all seven baseline result surfaces, including the
 local normal-poll carrier and initialized R3 committed-support extensions. The local R4

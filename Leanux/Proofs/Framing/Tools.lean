@@ -48,5 +48,20 @@ theorem discard_view_spec (view : S → σ) (P : σ → Prop) {α : Type} (a : S
     ⦃fun w => ⌜P (view w)⌝⦄ discard a
     ⦃⇓? _ w => ⌜P (view w)⌝⦄ := map_view_spec view P (fun _ => ()) a ha
 
+/-- Mapping preserves any view predicate maintained by each actual callback.
+The state and base monad stay generic, including the runner product stack. -/
+theorem mapM_view_spec (view : S → σ) (P : σ → Prop) {α β : Type}
+    (f : α → StateT S m β) (xs : List α)
+    (hf : ∀ x, ⦃fun w => ⌜P (view w)⌝⦄ f x
+      ⦃⇓? _ w => ⌜P (view w)⌝⦄) :
+    ⦃fun w => ⌜P (view w)⌝⦄ xs.mapM f
+    ⦃⇓? _ w => ⌜P (view w)⌝⦄ := by
+  have loop (ys : List α) (acc : List β) :
+      ⦃fun w => ⌜P (view w)⌝⦄ List.mapM.loop f ys acc
+      ⦃⇓? _ w => ⌜P (view w)⌝⦄ := by
+    induction ys generalizing acc with
+    | nil => mvcgen [List.mapM.loop]
+    | cons y ys ih => mvcgen [List.mapM.loop, hf, ih]
+  exact loop xs []
 
 end Leanux.Proofs.Framing

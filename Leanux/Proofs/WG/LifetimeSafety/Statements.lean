@@ -4,8 +4,6 @@ import Leanux.Proofs.WG.Lifetimes.EnvRemainingCalls
 import Leanux.Proofs.WG.Lifetimes.EnvDeferredCalls
 import Leanux.Proofs.WG.Lifetimes.BatchAudit
 import Leanux.Proofs.WG.Lifetimes.DumpAccess
-import Leanux.Proofs.WG.Lifetimes.FilesystemCalls
-import Leanux.Proofs.WG.Lifetimes.FilesystemLocal
 import Leanux.Proofs.WG.Lifetimes.PeerRemoval
 import Leanux.Proofs.WG.Lifetimes.DeviceControls
 import Leanux.Proofs.WG.Lifetimes.DeviceLifecycle
@@ -1709,51 +1707,6 @@ their failed access prefixes. Syscall tails and initialized whole-run compositio
 are supplied separately below. -/
 theorem configuration_family_allocation_access_preserves (call : Lifetimes.ConfigurationCall) :
     PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe call.observed := call.allocation
-
-/-- The actual wait walk/callback/safewake and pipe read/write/release preserve
-the complete WireGuard kernel view on normal return, with no valid-FS-state or
-fuel-sufficiency premise. This does not frame later task work or scheduling. -/
-theorem filesystem_local_family_wg_frame (call : Lifetimes.FilesystemLocalCall) :
-    Framing.SameWGKernel call.original := call.frame
-
-/-- Source-audited local filesystem lifts retain every original result, World
-and Stop, and append no lifetime event on either outcome. Their wait callbacks
-remain inside the actual epoll service; these are not arbitrary callback frames. -/
-theorem filesystem_local_family_exact_lift (call : Lifetimes.FilesystemLocalCall) :
-    ErasesPrefix call.observed call.original ∧
-      ∀ w h, runPrefix call.observed w h = (call.original.run w, h) :=
-  ⟨call.erases, call.run⟩
-
-/-- The full WG frame discharges concrete allocation preservation. Incoming
-safe history survives every original Stop; a normal return also preserves the
-resident/allocation invariant. The complete filesystem family is framed separately
-below, as is initialized outer-run closure; no failed World is asserted. -/
-theorem filesystem_local_family_allocation_preserves (call : Lifetimes.FilesystemLocalCall) :
-    PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe call.observed :=
-  call.allocation
-
-/-- All eleven original filesystem dispatch arms and actual taskWorkRun retain
-all seven dedicated WireGuard Kernel fields on normal return. This covers the
-actual nested epoll/wait/release calls without valid-FS, sufficient-fuel or
-work-drain premises; it does not frame later namespace-cleanup execution. -/
-theorem filesystem_family_wg_frame (call : Lifetimes.FilesystemCall) :
-    Framing.SameWGKernel call.original := call.frame
-
-/-- The source-audited filesystem family preserves exact original results,
-successful Worlds and Stops, with unchanged incoming lifetime history on either
-outcome. Task work retains pop-before-release and its original exhaustion Stop. -/
-theorem filesystem_family_exact_lift (call : Lifetimes.FilesystemCall) :
-    ErasesPrefix call.observed call.original ∧
-      ∀ w h, runPrefix call.observed w h = (call.original.run w, h) :=
-  ⟨call.erases, call.run⟩
-
-/-- Concrete allocation geometry transports through the full WG frame. On Stop
-only the unchanged safe history is claimed, not a failed World. The pin's final
-file release may queue netnsCleanup; its later Env execution and the enclosing
-syscall/Runner composition are supplied separately below. -/
-theorem filesystem_family_allocation_preserves (call : Lifetimes.FilesystemCall) :
-    PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe call.observed :=
-  call.allocation
 
 /-- All seven original dump calls retain their exact typed result, successful
 World and Stop for arbitrary inputs and histories. Cursor reads are demanded at
