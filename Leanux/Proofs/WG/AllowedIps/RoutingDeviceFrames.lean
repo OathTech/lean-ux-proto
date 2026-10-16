@@ -64,45 +64,97 @@ theorem dstCacheResetNow_routing (pid : PeerId) : SameView routingView (dstCache
   exact modifyPeer_routing pid (fun p => {p with dstCache := {p.dstCache with slot := none}}) (fun _ => rfl)
 
 theorem clearPeerEndpointSrc_routing (pid : PeerId) : SameView routingView (clearPeerEndpointSrc pid) := by
-  apply SameView.of_wp
-  intro s
-  have hg := routing_getPeer (fun t => t = s) pid
-  have hs := fun p => routing_setPeer (fun t => t = s) pid p
-  have hr := (dstCacheResetNow_routing pid).wp (fun t => t = s)
-  mvcgen [clearPeerEndpointSrc, hg, hs, hr]
-  all_goals simp_all
+  simpa only [clearPeerEndpointSrc, bind_assoc] using
+    (modifyPeer_routing pid
+      (fun p => {p with endpoint := p.endpoint.map fun e => {e with src := 0, srcIf := 0}})
+      (fun _ => rfl)).bind (fun _ => dstCacheResetNow_routing pid)
 
 theorem setPort_routing (port : Nat) : SameView routingView (setPort port) := by
   apply SameView.of_wp
-  intro s
-  have hc := fun pid => (clearPeerEndpointSrc_routing pid).wp (fun t => t = s)
-  have hs := (socketControl_routing_native _ (socketInit_sameSocket port)).wp (fun t => t = s)
-  have hm := (modifyDev_routing (fun d => {d with incomingPort := port}) (fun _ => rfl)).wp (fun t => t = s)
-  have hl (α β : Type) := list_view_spec routingView (m := AmbientM)
-    (α := α) (β := β) (fun t => t = s)
-  have ambient {α : Type} (a : AmbientM α) :
-      Hoare (MonadLift.monadLift a : WG.M α) (fun w => routingView w = s)
-        (fun _ w => routingView w = s) := hoare_liftAmbient a _
-  unfold Hoare at ambient
-  mvcgen [-Std.Do.Spec.monadLift_StateT, ambient, -Std.Do.Spec.forIn_list,
-    -Std.Do.Spec.forIn'_list, hl, setPort, hc, hs, hm, getDev, branch,
-    AmbientM.branch, invariant, AmbientM.invariant]
+  intro initial
+  let P := fun w : WGWorld => routingView w = initial
+  have read : Preserves P getDev := by
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient x v ambient' hp hr
+    cases hd : w.dev <;> simp [getDev, hd, invariant, AmbientM.invariant] at hr
+    · cases hr
+    · rcases hr with ⟨⟨rfl, rfl⟩, rfl⟩
+      exact hp
+  have hb (d : Decision) (b : Bool) : Preserves P (branch d b : WG.M Bool) :=
+    hoare_liftAmbient (AmbientM.branch d b) P
+  have hc := fun pid => (clearPeerEndpointSrc_routing pid).wp (fun t => t = initial)
+  have hs := (socketControl_routing_native _ (socketInit_sameSocket port)).wp (fun t => t = initial)
+  have hm := (modifyDev_routing (fun d => {d with incomingPort := port}) (fun _ => rfl)).wp (fun t => t = initial)
+  change Preserves P (setPort port)
+  unfold setPort
+  apply preserves_bind read
+  intro d
+  apply preserves_bind (hb _ _)
+  intro same
+  cases same
+  · dsimp only
+    apply preserves_bind
+    · exact list_view_spec routingView (fun t => t = initial) d.peerList () _
+        (fun pid _ => preserves_bind (hb _ _) (fun _ =>
+          preserves_bind (hc pid) (fun _ => preserves_pure _)))
+    intro _
+    apply preserves_bind (hb _ _)
+    intro _
+    apply preserves_bind (hb _ _)
+    intro stopped
+    cases stopped
+    · exact hs
+    · exact preserves_bind hm (fun _ => preserves_pure _)
+  · exact preserves_pure _
 
 theorem expireCurrentPeerKeypairs_routing (pid : PeerId) :
     SameView routingView (expireCurrentPeerKeypairs pid) := by
   apply SameView.of_wp
-  intro s
-  have hn := (requireNotPending_routing pid "clearing the handshake").wp (fun t => t = s)
-  have hr := (resetLastSentHandshake_routing pid).wp (fun t => t = s)
-  have hp := (getPeer_routing pid).wp (fun t => t = s)
-  have hg := fun kp => (getKeypair_routing kp).wp (fun t => t = s)
-  have hs := fun kp k => (setKeypair_routing kp k).wp (fun t => t = s)
-  have hclear := (handshakeClear_routing pid).wp (fun t => t = s)
-  have ambient {α : Type} (a : AmbientM α) :
-      Hoare (MonadLift.monadLift a : WG.M α) (fun w => routingView w = s)
-        (fun _ w => routingView w = s) := hoare_liftAmbient a _
-  unfold Hoare at ambient
-  mvcgen [-Std.Do.Spec.monadLift_StateT, ambient, expireCurrentPeerKeypairs,
-    hclear, hn, hr, hp, hg, hs, branch, AmbientM.branch, invariant, AmbientM.invariant]
+  intro initial
+  let P := fun w : WGWorld => routingView w = initial
+  have hn := (requireNotPending_routing pid "clearing the handshake").wp (fun t => t = initial)
+  have hr := (resetLastSentHandshake_routing pid).wp (fun t => t = initial)
+  have hp := (getPeer_routing pid).wp (fun t => t = initial)
+  have hg := fun kp => (getKeypair_routing kp).wp (fun t => t = initial)
+  have hs := fun kp k => (setKeypair_routing kp k).wp (fun t => t = initial)
+  have hclear := (handshakeClear_routing pid).wp (fun t => t = initial)
+  have hb (d : Decision) (b : Bool) : Preserves P (branch d b : WG.M Bool) :=
+    hoare_liftAmbient (AmbientM.branch d b) P
+  have hi {α : Type} (message : String) : Preserves P (invariant message : WG.M α) :=
+    hoare_liftAmbient (AmbientM.invariant message) P
+  have invalidated (kp : KeypairId) :
+      Preserves P (do
+        let k ← getKeypair kp
+        setKeypair kp {k with sending := {k.sending with isValid := false}}) :=
+    preserves_bind (hg kp) (fun k => hs kp _)
+  have currentTail (p : Peer) : Preserves P (do
+      if ← branch .expireCurrentKeypair p.keypairCurrent.isSome then
+        let some kp := p.keypairCurrent | invariant "unreachable"
+        let k ← getKeypair kp
+        setKeypair kp {k with sending := {k.sending with isValid := false}}) := by
+    apply preserves_bind (hb _ _)
+    intro current
+    cases current <;> dsimp only
+    · exact preserves_pure _
+    · cases p.keypairCurrent <;> dsimp only
+      · exact hi _
+      · exact invalidated _
+  change Preserves P (expireCurrentPeerKeypairs pid)
+  unfold expireCurrentPeerKeypairs
+  apply preserves_bind hn
+  intro _
+  apply preserves_bind hclear
+  intro _
+  apply preserves_bind hr
+  intro _
+  apply preserves_bind hp
+  intro p
+  apply preserves_bind (hb _ _)
+  intro next
+  cases next <;> dsimp only
+  · exact currentTail p
+  · cases p.keypairNext <;> dsimp only
+    · exact hi _
+    · exact preserves_bind (invalidated _) (fun _ => currentTail p)
 
 end Leanux.Proofs.WG.AllowedIps

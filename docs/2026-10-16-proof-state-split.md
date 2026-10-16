@@ -3483,8 +3483,11 @@ native companions. The retained product helper keeps its original 43-field
 premise. The obsolete global_initial_prefill statement required seccompPrefill
 to return a whole Kernel; its actual type now consumes and returns only
 SeccompWorld and TaskWorld. Its WireGuard frame is supplied by those types.
-Initialization instead uses the already available initialized WG projection,
-without an allocation or resident-coherence premise.
+Initialization instead uses equality of the initialized seven-field WG store,
+without an allocation or resident-coherence premise. Follow-up review found that
+the first carry fixed the entire WGWorld, inadvertently restricting fixture fields
+that the old premise left free. The corrected premise derives only the device
+equality it needs; the earlier no-finding review missed this restriction.
 
 The native observers retain both actual WG/Ambient endpoints, missing-device
 Stops and all completion histories. Default lifecycle callbacks are pure;
@@ -3558,3 +3561,25 @@ Reproduce with 'cap scripts/in-bundle lake build Leanux.Proofs.WG.Queues.RxPollS
 replay each root with 'cap scripts/in-bundle lake env leanchecker --fresh MODULE'.
 These scoped successes do not establish the full gate: every register row remains
 lagging, and the mirror remains byte-identical to b700659.
+
+
+## Initialization premise correction and device proof cleanup
+
+The corrected global_initial premise leaves routing environment, port bounds
+and other non-store WG fields arbitrary. The corrected LifecycleCompletion
+module builds in2.9seconds, all37 named roots have standard-only axioms, and
+fresh replay and independent re-review pass. One preceding correction build
+failed on normalization of the empty completion fold; it was repaired explicitly.
+
+RoutingDeviceFrames retains all eight theorem types and removes the deprecated
+proof tactics from endpoint clearing, port replacement and key expiration.
+Actual saved-list iteration, branch order and failure endpoints are unchanged.
+Its scoped build, all10 named roots, fresh replay and independent source review
+pass with zero own warnings. Three preceding development attempts failed on
+getter equality/destructuring and local proof layout. No theorem was added or
+deleted; no cap or proof limit changed.
+
+Reproduce with 'cap scripts/in-bundle lake build Leanux.Proofs.WG.Configuration.LifecycleCompletion Leanux.Proofs.WG.AllowedIps.RoutingDeviceFrames';
+replay each root with 'cap scripts/in-bundle lake env leanchecker --fresh MODULE'.
+The whole gate remains pending, all register rows remain lagging, and mirror
+sources remain identical to b700659.

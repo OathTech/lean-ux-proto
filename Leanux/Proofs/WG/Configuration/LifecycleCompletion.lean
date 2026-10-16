@@ -471,11 +471,13 @@ theorem wgDeleteObserved_global (initial : FlatTable × FlatTable) :
     | (with_reducible split)
 
 theorem global_initial (trace : Runner.Trace) (w : World)
-    (hk : w.wg = Runner.initialWG trace.net trace.bare) :
+    (hk : wgStoreView w.wg = wgStoreView (Runner.initialWG trace.net trace.bare)) :
     GlobalCompletionState ([], []) [] w.wg := by
   refine ⟨.nil, ?_⟩
-  rw [hk]
-  exact initialWG_global _ _
+  have hd : w.wg.dev = (Runner.initialWG trace.net trace.bare).dev :=
+    congrArg WGStoreView.dev hk
+  change GlobalRoutedView (routingView w.wg) ([], [])
+  simpa only [routingView, hd] using initialWG_global trace.net trace.bare
 
 private theorem absent_lift (h0 : List RoutingCompletion) (a : Leanux.M α) (ha : ProjectedRetainsRoutingCall World.wg a) :
     PrefixPreserves (fun h (w : World) => Absent h0 h w.wg) (fun h => h = h0) (liftPrefix a) := by
