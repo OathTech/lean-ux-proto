@@ -7,6 +7,9 @@
 all six results are lagging until carried. Counts, type-justified frame
 deletions and scoped validation are tracked in the
 [retrofit report](2026-10-16-proof-campaign-2-state-split.md).
+The first support tranche carries four contracts, retains fourteen and adds
+two native companions: twenty checked theorems, with 258 terminal names
+still awaiting retrofit validation. No frame deletion has yet been made.
 
 Branch `proofs/campaign-2`, worktree `.worktrees/proofs-campaign-2`,
 Lean v4.35.0, mirror **`de62c9d`**. The proofs are **lagging main's

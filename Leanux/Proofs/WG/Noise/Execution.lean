@@ -9,14 +9,59 @@ does not depend on the receive-window refinement. -/
 namespace Leanux.Proofs.WG.Noise
 open Leanux Leanux.WG Std.Do
 
-def peerAt (w : World) (pid : PeerId) : Option Peer :=
-  w.k.wg.bind fun d => d.peers[pid]?
+def peerAt (g : WGWorld) (pid : PeerId) : Option Peer :=
+  g.dev.bind fun d => d.peers[pid]?
 
-/-- Normal-completion contract; exceptions do not provide a final World. -/
-def Ensures (a : M α) (P : World → Prop) (Q : α → World → Prop) : Prop :=
+/-- Normal completion over an actual native state and Ambient. The predicate
+observes the native state; ambient inputs and outputs remain unrestricted.
+Product callbacks use their separate product contracts. -/
+def Ensures (a : StateT σ AmbientM α) (P : σ → Prop) (Q : α → σ → Prop) : Prop :=
+  ∀ s ambient x s' ambient', P s →
+    (a.run s).run ambient = .ok ((x, s'), ambient') → Q x s'
+
+theorem ensures_bind (a : StateT σ AmbientM α) (f : α → StateT σ AmbientM β)
+    (ha : Ensures a P Q) (hf : ∀ x, Ensures (f x) (Q x) R) :
+    Ensures (a >>= f) P R := by
+  intro s ambient y s' ambient' hp hr
+  change ((a.run s).run ambient >>= fun ((x, t), b) => ((f x).run t).run b) = _ at hr
+  cases he : (a.run s).run ambient with
+  | error e => rw [he] at hr; cases hr
+  | ok out =>
+    rcases out with ⟨⟨x, t⟩, b⟩
+    simp only [he] at hr
+    exact hf x t b y s' ambient' (ha s ambient x t b hp he) hr
+
+theorem ensures_iff (a : StateT σ AmbientM α) (P : σ → Prop) (Q : α → σ → Prop) :
+    Ensures a P Q ↔ ⦃fun s => ⌜P s⌝⦄ a ⦃⇓? x s => ⌜Q x s⌝⦄ := by
+  constructor
+  · intro h s ambient hp
+    cases hr : (a.run s).run ambient with
+    | error e =>
+      dsimp only [StateT.run] at hr
+      simp [WP.wp, PredTrans.pushArg, PredTrans.pushExcept, PredTrans.apply,
+        StateT.run, Except.instWP._aux_1, ExceptT.run, Id.run, PredTrans.pure,
+        Pure.pure, ExceptConds.true, ExceptConds.const, hr]
+    | ok out =>
+      rcases out with ⟨⟨x, s'⟩, ambient'⟩
+      dsimp only [StateT.run] at hr
+      simpa [WP.wp, PredTrans.pushArg, PredTrans.pushExcept, PredTrans.apply,
+        StateT.run, Except.instWP._aux_1, ExceptT.run, Id.run, PredTrans.pure,
+        Pure.pure, ExceptConds.true, ExceptConds.const, hr] using h s ambient x s' ambient' hp hr
+  · intro h s ambient x s' ambient' hp hr
+    have hh := h s ambient hp
+    dsimp only [StateT.run] at hr
+    simpa [WP.wp, PredTrans.pushArg, PredTrans.pushExcept, PredTrans.apply,
+      StateT.run, Except.instWP._aux_1, ExceptT.run, Id.run, PredTrans.pure,
+      Pure.pure, ExceptConds.true, ExceptConds.const, hr] using hh
+
+namespace Product
+
+/-- Partial correctness over an arbitrary actual state/error computation.
+This includes every original product action and full-state predicate. -/
+def Ensures (a : StateT σ (Except Stop) α) (P : σ → Prop) (Q : α → σ → Prop) : Prop :=
   ∀ w x w', P w → a.run w = .ok (x, w') → Q x w'
 
-theorem ensures_bind (a : M α) (f : α → M β)
+theorem ensures_bind (a : StateT σ (Except Stop) α) (f : α → StateT σ (Except Stop) β)
     (ha : Ensures a P Q) (hf : ∀ x, Ensures (f x) (Q x) R) :
     Ensures (a >>= f) P R := by
   intro w y w' hp hr
@@ -25,10 +70,10 @@ theorem ensures_bind (a : M α) (f : α → M β)
   | error e => rw [he] at hr; cases hr
   | ok out =>
     rcases out with ⟨x, v⟩
-    simp only [he, Except.bind] at hr
+    simp only [he] at hr
     exact hf x v y w' (ha w x v hp he) hr
 
-theorem ensures_iff (a : M α) (P : World → Prop) (Q : α → World → Prop) :
+theorem ensures_iff (a : StateT σ (Except Stop) α) (P : σ → Prop) (Q : α → σ → Prop) :
     Ensures a P Q ↔ ⦃fun w => ⌜P w⌝⦄ a ⦃⇓? x w => ⌜Q x w⌝⦄ := by
   constructor
   · intro h w hp
@@ -46,6 +91,8 @@ theorem ensures_iff (a : M α) (P : World → Prop) (Q : α → World → Prop) 
     simpa [WP.wp, PredTrans.pushArg, PredTrans.pushExcept, PredTrans.apply,
       StateT.run, Except.instWP._aux_1, ExceptT.run, Id.run, PredTrans.pure,
       Pure.pure, ExceptConds.true, ExceptConds.const, hr] using hh
+
+end Product
 
 @[spec high] theorem except_throw_wp {ε α : Type} (e : ε)
     (Q : PostCond α (.except ε .pure)) :

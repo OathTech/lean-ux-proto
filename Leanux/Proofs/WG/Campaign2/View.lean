@@ -7,7 +7,7 @@ replacement mirror: execution is connected in `Bridge`. -/
 namespace Leanux.Proofs.WG.Campaign2
 open Leanux
 
-/-- The WireGuard fields currently stored alongside other subsystem stores. -/
+/-- The WireGuard device, sockets and counters observed by the campaign. -/
 structure Core where
   device : Option WG.Device
   nlSock7 : WG.NlSock
@@ -17,31 +17,21 @@ structure Core where
   netIfindexNext : Nat
   ratelimiter : Ratelimiter
 
-/-- WireGuard state, network fixture, routing, transmit and timer data. -/
+/-- WireGuard-owned state, routing, transmit and timer data. -/
 structure State extends Core where
-  listenerV4 : List (Nat × List UInt8)
-  listenerV6 : List (Nat × List UInt8)
   sent : List SentDatagram
+  timerClk : Option UInt64
+  timerEnqueues : Nat
+  timerPassStep : Option UInt64
   timerUnits : List (Nat × Nat × WG.PeerTimer)
   netRxRaised : Bool
-  napiBeforePut : List Bool
-  napiAmbiguous : Nat
   queuedThisCall : List Nat
   jiffiesLast : Option UInt64
-  armRecords : Bool
   dstCacheRecords : Bool
-  addrs4 : List Nat
-  addrs6 : List Nat
-  defaultRoute4 : Bool
-  defaultRoute6 : Bool
-  defaultRoute4Accessed : Bool
-  ipv4Gen : Nat
-  ipv6Gen : Nat
-  routesPending : Bool
-  routes : List (Nat × Nat × Nat)
   portBound : Nat → Bool
   fixtureNetDevices : List (String × Nat × Option String)
   lastUnderLoad : Option Int64
+  routing : Net.Routing
 
 /-- Inputs and observations owned by execution, not the WireGuard device. -/
 structure Context where
@@ -50,19 +40,16 @@ structure Context where
   envCalls : List (EnvSite × Nat)
   steps : Array Step
   extraOut : List (String × Lean.Json)
-  senderInbox : List InboxDatagram
   hidden : Option (List HiddenRecord)
   hiddenPlaceholders : Bool
   placeholderCount : Nat
-  floodExact : Bool
   suspended : List Activation
   unitPeers : List (Nat × Nat × Nat)
   pendingWork : List Nat
-  foreignCreator : Bool
-  netnsCHolders : List Nat
   netRxSections : Nat
   netRxSection : Nat
   steerValues : List (String × Option (List UInt8))
+  armRecords : Bool
   fired : Array String
   allocArmed : List String
   allocSteered : List String

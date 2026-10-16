@@ -54,13 +54,13 @@ theorem resolveJitterInput_error (site : JitterSite) (records : List HiddenRecor
 
 def resolveJitterSearch (site : JitterSite) (records : List HiddenRecord) :
     Except Stop (Nat × List HiddenRecord) :=
-  match hr : resolveJitterInput site records with
+  match _ : resolveJitterInput site records with
   | .error error => .error error
   | .ok (bytes, rest) =>
     if jitterAccepted bytes[0]! then .ok (jitterValue bytes[0]!, rest)
     else resolveJitterSearch site rest
 termination_by records.length
-decreasing_by exact (resolveJitterInput_suffix site records bytes rest hr).2
+decreasing_by exact (resolveJitterInput_suffix site records bytes rest (by assumption)).2
 
 theorem resolveJitterSearch_outcome (site : JitterSite) (records : List HiddenRecord) :
     match resolveJitterSearch site records with

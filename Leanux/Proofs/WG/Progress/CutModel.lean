@@ -60,7 +60,7 @@ theorem cutAccepted_drop (sites : List HiddenSite) (records : List HiddenRecord)
   | cons record rest ih =>
     by_cases passive : HiddenSite.passive record.site = true
     · simpa [List.dropWhile_cons, passive, CutAccepted] using ih
-    · simp [List.dropWhile_cons, passive]
+    · simp [passive]
 
 theorem cutProgress_prepend (sites : List HiddenSite) (input middle rest : List HiddenRecord)
     (site : Nat) (taken : List Nat)
