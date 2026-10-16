@@ -26,9 +26,10 @@ it is not part of that baseline.
 | Obsolete subsystem-frame band (26 modules) | 1,427 | 0 | 1,427 | 0 | 0 | 0 |
 | Unused `Framing.Control` support | 6 | 0 | 6 | 0 | 0 | 0 |
 | Obsolete `Framing.Prefill` and unused support | 3 | 0 | 3 | 0 | 0 | 0 |
+| Keypairs `Ordinary` | 17 | 12 | 1 | 4 | 0 | 16 |
 
-The whole tree currently contains 449 Lean files and 6,320 theorems. The completed
-changes total 196 retyped theorems, 1,462 deletions, 59 retained interfaces and 67 added.
+The whole tree currently contains 449 Lean files and 6,319 theorems. The completed
+changes total 208 retyped theorems, 1,463 deletions, 63 retained interfaces and 67 added.
 All terminal files remain unchanged. **Every result remains lagging** until the complete tree
 passes its proof gate and kernel replay. R1/R2/R5/R6 retain their pre-split
 charter dispositions; initialized R3 packet authorization and R4 receive-pipeline
@@ -255,6 +256,34 @@ its classification and all 32 import removals, with no substantive findings.
 No named generated artifact remains for these modules. No new theorem was
 introduced, and no full-tree pass is claimed.
 
+## Native ordinary lifetime actions
+
+`OrdinaryAction` and `SameSnapshot` now use the generic projection contracts over
+actual `WG.M` executions. Their run bridges quantify every incoming and outgoing
+WG and Ambient state. Stable-predicate characterization, composition, getter
+preservation and allocation/deletion behavior retain their arbitrary-state scope.
+Both owner reads and unhashes remain in keypair release, including the actual
+missing-device and record failure paths. No boundedness, reachability or
+allocation-success premise was added. Four pure map theorems are unchanged;
+the only deletion transports through the removed Kernel projection.
+
+Validation: frozen build passes (80 jobs), all 20 named declarations print only
+permitted axioms, and fresh scoped kernel replay passes. Independent frozen-source
+review confirms all 17-to-16 theorem dispositions with no substantive findings.
+Hashes, source scan, terminal preservation, mirror equality and whitespace pass.
+Six development builds failed; one hit the existing 200,000-heartbeat limit and
+one attempted an incompatible tactic deprecation cleanup, which was reverted.
+The bounded proof now passes without a limit increase. No process was interrupted:
+the long-running build had exited before its PID was rechecked. A conservative
+snapshot nevertheless preserved all dirty worktrees, including untracked files,
+with branches and normal indices unchanged. All ten capped-call handles are
+collected; there was no KILLED outcome or infrastructure rerun.
+
+```sh
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake build Leanux.Proofs.WG.Keypairs.Ordinary
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Keypairs.Ordinary
+```
+
 ## Incoming source-observer findings
 
 Source inspection found two observer carry defects beyond type changes. The old
@@ -294,8 +323,8 @@ build fails at 14 state-split/carry dependencies; no full proof-gate pass is
 claimed. The incoming whitespace speedbump reports existing patch whitespace
 and a unit-file trailing blank line; those incoming files remain unchanged.
 
-Next are native ordinary lifetime evolution and the remaining native/product
-observers and within-subsystem contracts. The broader structural-frame layers
+Next are the remaining native/product observers and within-subsystem contracts,
+beginning with the clock and crypto-helper frames. The broader structural-frame layers
 have been deleted with their independently classified unused support; their
 surviving consumers still need the actual subsystem adapters.
 The incoming branch also includes pre-split send ordering, timer-wheel and

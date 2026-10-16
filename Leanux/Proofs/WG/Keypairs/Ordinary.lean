@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.Keypairs.LifetimeMirror
+import Leanux.Proofs.Framing.Projection
 
 set_option pp.structureInstances false
 
@@ -7,80 +8,71 @@ lifetime-store relation.  No condition is placed on failing executions. -/
 namespace Leanux.Proofs.WG.Keypairs
 open Leanux Leanux.WG Std.Do Leanux.Proofs.Framing
 
-def OrdinaryAction (a : M α) : Prop :=
-  ∀ w x w', a.run w = .ok (x, w') → Ordinary (snapshot w) (snapshot w')
+abbrev OrdinaryAction (a : WG.M α) : Prop :=
+  Lifetimes.ProjectedAction snapshot Ordinary a
 
 def Stable (P : Snapshot → Prop) : Prop :=
   ∀ s t, Ordinary s t → P s → P t
 
-def SameSnapshot (a : M α) : Prop :=
-  ∀ w x w', a.run w = .ok (x, w') → snapshot w' = snapshot w
+abbrev SameSnapshot (a : WG.M α) : Prop := SameView snapshot a
 
-theorem SameSnapshot.ordinary {a : M α} (h : SameSnapshot a) : OrdinaryAction a := by
-  intro w x w' hr
-  rw [h w x w' hr]
+theorem SameSnapshot.ordinary {a : WG.M α} (h : SameSnapshot a) : OrdinaryAction a := by
+  intro s
+  apply hoare_consequence (h s) (fun _ hs => hs)
+  intro _ w hw
+  rw [hw]
   exact .refl _
 
-theorem sameSnapshot_of_sameKernel {a : M α} (h : SameKernel a) : SameSnapshot a := by
-  intro w x w' hr
-  simp only [snapshot, h w x w' hr]
+theorem SameSnapshot.wp {a : WG.M α} (h : SameSnapshot a) (P : Snapshot → Prop) :
+    ⦃fun w => ⌜P (snapshot w)⌝⦄ a ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ :=
+  SameView.wp h P
 
-theorem SameSnapshot.wp {a : M α} (h : SameSnapshot a) (P : Snapshot → Prop) :
-    ⦃fun w => ⌜P (snapshot w)⌝⦄ a ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := by
-  apply (hoare_iff_triple _ _ _).mp
-  intro w x w' hw hr
-  simpa only [h w x w' hr] using hw
-
-theorem OrdinaryAction.wp {a : M α} (h : OrdinaryAction a) (P : Snapshot → Prop)
+theorem OrdinaryAction.wp {a : WG.M α} (h : OrdinaryAction a) (P : Snapshot → Prop)
     (hp : Stable P) :
-    ⦃fun w => ⌜P (snapshot w)⌝⦄ a ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := by
-  apply (hoare_iff_triple _ _ _).mp
-  intro w x w' hw hr
-  exact hp _ _ (h w x w' hr) hw
+    ⦃fun w => ⌜P (snapshot w)⌝⦄ a ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ :=
+  Lifetimes.ProjectedAction.wp h P hp
 
 /-- Preservation of every stable predicate characterizes ordinary executions. -/
-theorem ordinaryAction_iff_wp (a : M α) : OrdinaryAction a ↔
+theorem ordinaryAction_iff_wp (a : WG.M α) : OrdinaryAction a ↔
     ∀ P, Stable P → ⦃fun w => ⌜P (snapshot w)⌝⦄ a
       ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := by
   constructor
   · intro h; exact h.wp
-  · intro h w x w' hr
+  · intro h
+    apply (Lifetimes.ProjectedAction.iff_run_ambient _ _ _).mpr
+    intro w ambient x w' ambient' hr
     have hp : Stable (Ordinary (snapshot w)) := fun _ _ ht hs => .trans hs ht
-    exact (hoare_iff_triple _ _ _).mpr (h _ hp) w x w' (.refl _) hr
+    exact (hoare_iff_run_ambient _ _ _).mp (h _ hp) w ambient x w' ambient' (.refl _) hr
 
-theorem ordinaryAction_of_wp (a : M α)
+theorem ordinaryAction_of_wp (a : WG.M α)
     (h : ∀ s, ⦃fun w => ⌜snapshot w = s⌝⦄ a
-      ⦃⇓? _ w => ⌜Ordinary s (snapshot w)⌝⦄) : OrdinaryAction a := by
-  intro w x w' hr
-  exact (hoare_iff_triple _ _ _).mpr (h (snapshot w)) w x w' rfl hr
+      ⦃⇓? _ w => ⌜Ordinary s (snapshot w)⌝⦄) : OrdinaryAction a :=
+  Lifetimes.ProjectedAction.of_wp snapshot Ordinary a h
 
-theorem sameSnapshot_of_wp (a : M α)
+theorem sameSnapshot_of_wp (a : WG.M α)
     (h : ∀ s, ⦃fun w => ⌜snapshot w = s⌝⦄ a
-      ⦃⇓? _ w => ⌜snapshot w = s⌝⦄) : SameSnapshot a := by
-  intro w x w' hr
-  exact (hoare_iff_triple _ _ _).mpr (h (snapshot w)) w x w' rfl hr
+      ⦃⇓? _ w => ⌜snapshot w = s⌝⦄) : SameSnapshot a :=
+  SameView.of_wp snapshot a h
 
 theorem ordinary_pure (x : α) : OrdinaryAction (pure x) := by
-  intro w y w' hr
+  apply (Lifetimes.ProjectedAction.iff_run_ambient _ _ _).mpr
+  intro w ambient y w' ambient' hr
   cases hr
   exact .refl _
 
-theorem ordinary_bind {a : M α} {f : α → M β}
+theorem ordinary_bind {a : WG.M α} {f : α → WG.M β}
     (ha : OrdinaryAction a) (hf : ∀ x, OrdinaryAction (f x)) :
     OrdinaryAction (a >>= f) := by
-  intro w y w' hr
-  simp only [StateT.run_bind] at hr
-  cases hx : a.run w with
-  | error e => simp [hx] at hr
-  | ok v =>
-    simp only [hx, Leanux.Proofs.WG.CounterWindow.except_ok_bind] at hr
-    exact .trans (ha w v.1 v.2 hx) (hf v.1 v.2 y w' hr)
+  apply (ordinaryAction_iff_wp _).mpr
+  intro P hp
+  exact preserves_bind (ha.wp P hp) (fun x => (hf x).wp P hp)
 
 theorem keypairGet_sameSnapshot (kp : Option KeypairId) : SameSnapshot (keypairGet kp) := by
   apply sameSnapshot_of_wp
   intro s
-  mvcgen [keypairGet, getKeypair, getDev, getK, setKeypair, modifyDev, modifyK,
-    branch, branchCmp, refcountIncNotZero, unsupported, invariant]
+  mvcgen [keypairGet, getKeypair, getDev, setKeypair, modifyDev,
+    branch, branchCmp, AmbientM.branch, AmbientM.branchCmp,
+    refcountIncNotZero, unsupported, invariant, AmbientM.unsupported, AmbientM.invariant]
   all_goals try dsimp +zetaDelta only at *
   all_goals try simp_all [snapshot]
   subst s
@@ -147,11 +139,42 @@ theorem keypairPut_ordinary (kp : Option KeypairId) (now : Bool) :
   apply ordinaryAction_of_wp
   intro s
   simp only [keypairPut, indexRemove_eq]
-  have hd := fun o k => sameKernel_wp _ (indexOwner_peerDeref_sameKernel o) (fun v => v = k)
-  mvcgen [hd, indexUnhash, getKeypair, getDev, getK, setKeypair, modifyDev, modifyK,
-    branch, branchCmp, refcountDecAndTest, unsupported, invariant]
+  have hd := fun o g => indexOwner_peerDeref_preserves o (fun w => w = g)
+  -- The adapter's exact endpoint retains the saved keypair while permitting
+  -- each actual removal to replace the index table and consume its records.
+  have hu (a : IndexM Unit) (g : WGWorld) : Hoare (monadLift a : WG.M Unit)
+      (fun w => w = g)
+      (fun _ w => ∃ table, w = {g with dev := g.dev.map fun d => {d with indexTable := table}}) := by
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient x w' ambient' hw hr
+    subst w
+    change ((liftIndex a).run g).run ambient = .ok ((x, w'), ambient') at hr
+    rw [liftIndex_run] at hr
+    cases hg : g.dev with
+    | none => simp [hg] at hr
+    | some d =>
+      simp only [hg] at hr
+      cases ha : (a.run d.indexTable).run ambient with
+      | error e => simp [ha, Except.map] at hr
+      | ok out =>
+        rcases out with ⟨⟨y, table⟩, ambient''⟩
+        simp only [ha, Except.map, Except.ok.injEq, Prod.mk.injEq] at hr
+        rcases hr with ⟨⟨_, hw⟩, _⟩
+        exact ⟨table, by simpa [hg] using hw.symm⟩
+  unfold Preserves Hoare at hd hu
+  mvcgen [hd, hu, getKeypair, getDev, setKeypair, modifyDev,
+    branch, branchCmp, AmbientM.branch, AmbientM.branchCmp,
+    refcountDecAndTest, unsupported, invariant, AmbientM.unsupported, AmbientM.invariant]
   all_goals try dsimp +zetaDelta only at *
+  -- There are at most two index removals: the optional unreference and release.
+  all_goals try obtain ⟨table, rfl⟩ := ‹∃ table, _ = _›
   all_goals try simp_all [snapshot]
+  all_goals subst_vars
+  all_goals try dsimp +zetaDelta only at *
+  all_goals try simp_all [Option.bind_map, Function.comp_def]
+  all_goals try obtain ⟨table, rfl⟩ := ‹∃ table, _ = _›
+  all_goals try dsimp +zetaDelta only at *
+  all_goals try simp_all
   all_goals subst_vars
   all_goals first
   | exact .refl _
@@ -161,10 +184,12 @@ theorem keypairPut_ordinary (kp : Option KeypairId) (now : Bool) :
 theorem keypairCreate_ordinary (pid : Option PeerId) : OrdinaryAction (keypairCreate pid) := by
   apply ordinaryAction_of_wp
   intro s
-  have alloc_spec := sameKernel_wp _ keypairAllocation_sameKernel
-    (fun k => (⟨k.keypairCounter, fun i => (k.wg.bind fun d => d.keypairs[i]?).map cell⟩ : Snapshot) = s)
-  mvcgen [keypairCreate, alloc_spec, getDev, getK, setKeypair, modifyDev, modifyK,
-    branch, invariant]
+  have alloc_spec : Hoare (hiddenAlloc .kzallocKeypair : WG.M Bool)
+      (fun w => snapshot w = s) (fun _ w => snapshot w = s) :=
+    hoare_liftAmbient (AmbientM.hiddenAlloc .kzallocKeypair) (fun w => snapshot w = s)
+  unfold Hoare at alloc_spec
+  mvcgen [keypairCreate, alloc_spec, getDev, setKeypair, modifyDev,
+    branch, AmbientM.branch, invariant, AmbientM.invariant]
   all_goals try dsimp +zetaDelta only at *
   all_goals try simp_all [snapshot]
   all_goals try subst s
