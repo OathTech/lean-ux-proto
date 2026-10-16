@@ -128,8 +128,13 @@ it is not part of that baseline.
 
 | Peer updates, configuration, receive dispositions and worker cuts | 30 | 15 | 0 | 15 | 6 | 36 |
 
-The whole tree currently contains 451 Lean files and 6,457 theorems. The completed
-changes total 2,192 retyped theorems, 1,662 deletions, 1,147 retained contract shapes and 404 added.
+| Native dump access and retained product socket contracts | 25 | 12 | 1 | 12 | 13 | 37 |
+| Current timer-wheel and deferred-call observations | 25 | 0 | 8 | 17 | 12 | 29 |
+| Exact product traffic and batch observers | 16 | 0 | 0 | 16 | 0 | 16 |
+| Native receive-origin cuts and receipts | 32 | 32 | 0 | 0 | 7 | 39 |
+
+The whole tree currently contains 451 Lean files and 6,480 theorems. The completed
+changes total 2,236 retyped theorems, 1,671 deletions, 1,192 retained contract shapes and 436 added.
 Retyping changes or generalizes the actual state/monad carrier or observation.
 This includes shorthand contracts whose source functions or named views move
 to a native monad. Mere namespace qualification and equivalent relocation of a
@@ -3206,3 +3211,107 @@ cap scripts/in-bundle lake build Leanux.Proofs.WG.Configuration.PeerUpdateComple
 
 For each named module, replay with
 'cap scripts/in-bundle lake env leanchecker --fresh MODULE'.
+
+
+## Dump access, current timer wheel, traffic and receive origins
+
+Six modules carry 98 old theorems to 121: 44 native retypes, 45 retained
+product contracts, nine deletions and 32 additions. Dump access preserves
+the original arbitrary product action and full-World invariants, masking
+only the original two sockets; native counterparts use the seven-field WG
+projection. Its deleted unsupported frame follows directly from the Ambient
+type and canonical lift. Cursor reads, reference operations and Stops retain
+their source order.
+
+Timer observations now follow the current wheel's saved peer-list scan,
+including duplicate occurrences, bucket ordering, timer-unit checks, step
+completion and end-of-wait guards. Eight facts about removed raw-expiry/fire
+APIs are deleted because those source operations no longer exist. The
+fourteen remaining deferred-call cases keep their exact original result and
+failure histories. Receive-origin receipts retain both WG and Ambient
+endpoints through allocation, admission and decrypt cuts. All 32 old receive
+claims remain, with seven private composition bridges added; arbitrary
+product source-step instantiations remain supported.
+
+Traffic/batch observers were stale: injection and flood omitted the actual
+IPv4 route and neighbour checks; batch also omitted the route-MTU fallback
+and transmit neighbour classification. Their corrected erasure equations
+cover the unchanged complete source. A kernel-checked witness on an
+unrestricted empty-FIB fixture distinguishes current injection's missing-route
+invariant from the obsolete copy's later missing NET_RX-start record.
+This is a proof-observer defect, not a Linux or initialized-run claim.
+
+Validation: all 179 explicitly named declarations use standard axioms only;
+five scoped fresh kernel replays and independent complete source reviews
+pass. Final builds pass: dump188, timers/deferred206, traffic/batch205 and
+receive-origin183 jobs. All six modules have zero warnings of their own.
+Development ledgers: dump two ordinary failures then pass; timers eight
+ordinary failures then pass, plus four failed localization probes; traffic
+eight ordinary failures then two passes, with one failed witness probe before
+the three-theorem witness passed; receive-origin five ordinary failures then
+pass with warnings, followed by a failed cleanup build from a missing .olean
+during a concurrent whole-target writer. Its single infrastructure rerun
+passed after that writer finished. Recovery axioms from failed diagnostics
+were rejected. No crash, KILLED, guest timeout, raised cap or raised proof
+limit occurred. Rejected driver syntax made no source change.
+
+The latest whole-target diagnostic failed at ConfigurationDeviceFrames,
+EnvRemainingCalls, StampedGro, PeerCommandCompletion, EnvTimersAudit,
+SessionMaterial and RxNapiCuts. Scoped timer validation supersedes that
+module's diagnostic only. The whole proof gate and terminal replay remain
+pending, all register rows remain lagging, and R3/R4 resume after the
+retrofit. The mirror remains byte-identical to b700659; prior model66 and
+unit131/one-skip results cover the unchanged executable closure.
+
+~~~sh
+cap() { if command -v capped >/dev/null 2>&1; then capped "$@"; else "$@"; fi; }
+cap scripts/in-bundle lake build Leanux.Proofs.WG.Lifetimes.DumpAccess Leanux.Proofs.WG.Lifetimes.EnvDeferredCalls Leanux.Proofs.WG.Lifetimes.EnvBatchAudit Leanux.Proofs.WG.Packets.RxOriginCuts
+~~~
+
+Fresh replay each listed module plus EnvTrafficAudit with
+'cap scripts/in-bundle lake env leanchecker --fresh MODULE'.
+The traffic witness is reproduced with the following scoped command:
+
+~~~sh
+cap scripts/in-bundle python3 - <<'PY'
+from pathlib import Path
+import subprocess, sys
+mirror = Path('Leanux/Env.lean').read_text()
+old = mirror[mirror.index('def inject ('):mirror.index('/-! ## W7 stream B:')]
+old = old.replace('def inject (', 'def obsoleteInject (', 1).replace(': M Int', ': Leanux.M Int')
+a = old.index('  -- lane C:')
+b = old.index('  runWorker .netRx', a)
+old = old[:a] + old[b:]
+src = '''import Leanux.Runner
+namespace TrafficObserverDrift
+open Leanux Leanux.WG Leanux.Env
+''' + old + '''
+def fixture : World :=
+  { ambient := {env := Runner.harnessEnv, timing := Env.timing},
+    tasks := Runner.initialTasks 1024, fs := Runner.initialFS true,
+    wg := {dev := some {ifindex := 3, ifname := "wg0", running := true, incomingPort := 51820}} }
+def observe (a : Leanux.M Int) : String :=
+  match a.run fixture with
+  | .ok (ret, _) => s!"returned {ret}"
+  | .error e => e.message
+theorem currentRouteRejection :
+    observe (Env.inject 4 51820 []) =
+      "mirror invariant violated: wg_inject: the injector's datagram has no route" := by
+  decide +kernel
+theorem obsoleteReachesReceive :
+    observe (obsoleteInject 4 51820 []) =
+      s!"hidden-input records disagree: no record supplied for {(HiddenSite.sectionStart .netRx).info.label}" := by
+  decide +kernel
+theorem distinctOutcomes :
+    observe (Env.inject 4 51820 []) ≠ observe (obsoleteInject 4 51820 []) := by
+  rw [currentRouteRejection, obsoleteReachesReceive]
+  decide
+#print axioms currentRouteRejection
+#print axioms obsoleteReachesReceive
+#print axioms distinctOutcomes
+end TrafficObserverDrift
+'''
+r = subprocess.run(['lake', 'env', 'lean', '-j1', '--stdin'], input=src, text=True)
+sys.exit(r.returncode)
+PY
+~~~

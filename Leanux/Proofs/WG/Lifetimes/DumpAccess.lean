@@ -12,32 +12,66 @@ namespace Leanux.Proofs.WG.Lifetimes
 open Leanux Leanux.WG Lean Leanux.Proofs.Logged Leanux.Proofs.Framing Leanux.Proofs.WG.NetlinkDump
 set_option maxHeartbeats 1000000
 set_option pp.structureInstances false
-open DumpKernelComposition
+open DumpComposition
 
-def DumpStable (I : List LifetimeEvent → World → Prop) : Prop :=
+def DumpStable (I : List LifetimeEvent → WGWorld → Prop) : Prop :=
   ∀ h w v, dumpView v = dumpView w → I h w → I h v
+
+/-- The original product mask retains all 43 store fields except the two
+dump sockets. Native leaves use the corresponding seven-field WG mask. -/
+def productDumpView (w : World) : ProductStore43 :=
+  (fsStoreView w.fs, w.tasks, (w.seccomp.filters, w.seccomp.nextFilter), dumpView w.wg)
+
+def ProductDumpStable (I : List LifetimeEvent → World → Prop) : Prop :=
+  ∀ h w v, productDumpView v = productDumpView w → I h w → I h v
 
 theorem allocationDumpStable : DumpStable AllocationInv := by
   intro h w v he hi
-  have hid := congrArg (fun k => identityView {w with k}) he
-  have hmeta := congrArg (fun k => allocationMetadata {w with k}) he
+  have hd := congrArg WGStoreView.dev he
+  have hp := congrArg WGStoreView.peerCounter he
+  have hk := congrArg WGStoreView.keypairCounter he
+  have hn := congrArg WGStoreView.netIfindexNext he
+  simp only [dumpView, dumpStore, wgStoreView] at hd hp hk hn
   apply hi.congr
-  · unfold identityView Peers.snapshot keypairResidents packetResidents at hid ⊢
-    simpa [dumpView, dumpKernel] using hid
-  · unfold allocationMetadata deviceAllocationMetadata at hmeta ⊢
-    simpa [dumpView, dumpKernel] using hmeta
+  · unfold identityView
+    congr 1
+    · simp only [Peers.snapshot, hd, hp]
+    · congr 1
+      · funext id
+        simp only [keypairResidents, hd]
+      · funext slot
+        simp only [packetResidents, hd]
+  · simp only [allocationMetadata, hd, hk, hn]
 
-theorem dumpLift_preserves (c : AmbientContracts I) (stable : DumpStable I)
-    (a : M α) (ha : SameDumpKernel a) : PrefixPreserves I LifetimeEvent.Safe (liftPrefix a) := by
+theorem dumpLift_preserves (c : ProductAmbientContracts I) (stable : ProductDumpStable I)
+    (a : Leanux.M α) (ha : SameView productDumpView a) :
+    PrefixPreserves I LifetimeEvent.Safe (liftPrefix a) := by
   apply PrefixEnsures.preserves
   apply PrefixEnsures.lift a c.safe
   intro h w x v hi hr
-  exact stable h w v (ha w x v hr) hi
+  exact stable h w v ((ProjectedAction.iff_run _ _ _).mp ha w x v hr) hi
+
+theorem dumpLift_preserves_native (c : AmbientContracts I) (stable : DumpStable I)
+    (a : WG.M α) (ha : SameDump a) :
+    StatePrefixPreserves (fun h w _ => I h w) LifetimeEvent.Safe (liftWGPrefix a) := by
+  apply StatePrefixEnsures.lift a (fun h w _ hi => c.safe h w hi)
+  intro h w ambient x v ambient' hi hr
+  exact stable h w v ((ProjectedAction.iff_run_ambient _ _ _).mp ha w ambient x v ambient' hr) hi
+
+theorem dumpLift_native_product (c : ProductAmbientContracts I) (stable : ProductDumpStable I)
+    (a : WG.M α) (ha : SameDump a) :
+    PrefixPreserves I LifetimeEvent.Safe (liftWGObserver (liftWGPrefix a)) := by
+  rw [liftWGObserver_lift]
+  apply dumpLift_preserves c stable (liftWG a)
+  apply sameView_liftWG productDumpView dumpView a ha
+  intro w g ambient hg
+  change (_, _, _, dumpView g) = (_, _, _, dumpView w.wg)
+  rw [hg]
 
 def getPeerDumpPrefix (pid : PeerId) (ctx : DumpCtx) (skb : NlSkb) :
     MixedM (NlSkb × DumpCtx × PeerDump) := do
   let p ← getPeerMixed pid
-  liftPrefix (getPeerDumpTailSource p ctx skb)
+  liftWGPrefix (getPeerDumpTailSource p ctx skb)
 
 def wgGetDeviceDonePrefix (ctx : DumpCtx) : MixedM Unit := do
   _ ← rxBranch .getDoneHasWg ctx.hasWg
@@ -54,7 +88,7 @@ def deviceDumpTailPrefix (d : Device) (ctx0 : DumpCtx) (skb0 : NlSkb)
   let mut done := true
   let mut peers : Option (Array PeerDumpAttrs) := some #[]
   let cursorDead : MixedM Bool := do
-    let some pid := ctx.nextPeer | liftPrefix (invariant "unreachable")
+    let some pid := ctx.nextPeer | liftWGPrefix (invariant "unreachable")
     return (← getPeerMixed pid).isDead
   if ← orPrefix (rxBranch .dumpPeerListEmpty d.peerList.isEmpty)
       (andPrefix (rxBranch .dumpCursorSet ctx.nextPeer.isSome) (do rxBranch .dumpCursorDead (← cursorDead))) then
@@ -93,10 +127,10 @@ def deviceDumpTailPrefix (d : Device) (ctx0 : DumpCtx) (skb0 : NlSkb)
   -- the old cursor's is dropped
   if ← andPrefix (rxBranch .dumpOutRetZero (ret == 0))
       (andPrefix (rxBranch .dumpOutNotDone !done) (rxBranch .dumpOutHasCursor nextCursor.isSome)) then
-    let some pid := nextCursor | liftPrefix (invariant "unreachable")
+    let some pid := nextCursor | liftWGPrefix (invariant "unreachable")
     peerGetMixed pid
   peerPutMixed ctx.nextPeer
-  if ← rxBranch .dumpRetErr (ret != 0) then liftPrefix (unsupported "unreachable: the header and the nests fit")
+  if ← rxBranch .dumpRetErr (ret != 0) then liftWGPrefix (unsupported "unreachable: the header and the nests fit")
   -- genlmsg_end: the data message is complete
   let message := NlMessage.data flags device (peers.map (·.toList))
   skb := { skb with messages := skb.messages ++ [message] }
@@ -107,12 +141,12 @@ def deviceDumpTailPrefix (d : Device) (ctx0 : DumpCtx) (skb0 : NlSkb)
   return { ret := Int.ofNat (NLMSG_GOODSIZE - skb.room), skb, ctx := { ctx with nextPeer := nextCursor }, prevSeq := seq }
 
 def wgGetDeviceDumpPrefix (ctx : DumpCtx) (prevSeq : Nat) (skb : NlSkb) : MixedM DumpCall := do
-  let d ← liftPrefix getDev
-  let (s, flags, attrs) ← liftPrefix (deviceDumpHeaderSource d ctx prevSeq skb)
+  let d ← liftWGPrefix getDev
+  let (s, flags, attrs) ← liftWGPrefix (deviceDumpHeaderSource d ctx prevSeq skb)
   deviceDumpTailPrefix d ctx s flags attrs
 
 def netlinkDumpPrefix (fd : Nat) : MixedM Unit := do
-  let mut sock ← liftPrefix (getNlSock fd)
+  let mut sock ← liftWGPrefix (getNlSock fd)
   let mut skb : NlSkb := {}
   if sock.dumpDoneErrno > 0 then
     let r ← wgGetDeviceDumpPrefix sock.ctx sock.prevSeq skb
@@ -121,38 +155,38 @@ def netlinkDumpPrefix (fd : Nat) : MixedM Unit := do
     skb := r.skb
     sock := { sock with ctx := r.ctx, prevSeq := r.prevSeq, dumpDoneErrno := r.ret }
   if sock.dumpDoneErrno > 0 || skb.room < nlmsgTotal 4 then
-    liftPrefix (setNlSock fd { sock with queue := sock.queue ++ [skb] })
+    liftWGPrefix (setNlSock fd { sock with queue := sock.queue ++ [skb] })
     return
   -- netlink_dump_done (:2225-2250): NLMSG_DONE carrying dump_done_errno,
   -- NLM_F_MULTI (the consistency flag never set here, 2.4)
   skb := { skb with room := skb.room - nlmsgTotal 4, messages := skb.messages ++ [.done 2 sock.dumpDoneErrno] }
-  liftPrefix (setNlSock fd { sock with queue := sock.queue ++ [skb] })
+  liftWGPrefix (setNlSock fd { sock with queue := sock.queue ++ [skb] })
   wgGetDeviceDonePrefix sock.ctx   -- cb->done (:2370)
-  let after ← liftPrefix (getNlSock fd)
-  liftPrefix (setNlSock fd { after with cbRunning := false })
+  let after ← liftWGPrefix (getNlSock fd)
+  liftWGPrefix (setNlSock fd { after with cbRunning := false })
 
 def netlinkDumpStartPrefix (fd : Nat) (ref : DeviceRef) : MixedM Unit := do
-  let sock ← liftPrefix (getNlSock fd)
+  let sock ← liftWGPrefix (getNlSock fd)
   if sock.cbRunning then
-    liftPrefix (unsupported "a dump start while the socket's dump runs (-EBUSY, af_netlink.c:2406): no WireGuard code runs")
-  let wg ← liftPrefix (lookupInterface ref)
+    liftWGPrefix (unsupported "a dump start while the socket's dump runs (-EBUSY, af_netlink.c:2406): no WireGuard code runs")
+  let wg ← liftWGPrefix (lookupInterface ref)
   if ← rxBranch .getStartErr (wg matches .error _) then
-    let .error e := wg | liftPrefix (invariant "unreachable")
+    let .error e := wg | liftWGPrefix (invariant "unreachable")
     -- `cb` is zeroed (:2417) before `start` (:2431), so the context and
     -- `prev_seq` are gone on a start error too (audit, the transport note)
-    liftPrefix (setNlSock fd { sock with queue := sock.queue ++ [{ messages := [.error e] }], ctx := {}, prevSeq := 0 })
+    liftWGPrefix (setNlSock fd { sock with queue := sock.queue ++ [{ messages := [.error e] }], ctx := {}, prevSeq := 0 })
     return
   -- cb zeroed (:2422), then cb_running and dump_done_errno = INT_MAX (:2436-2437)
-  liftPrefix (setNlSock fd { sock with cbRunning := true, dumpDoneErrno := INT_MAX, prevSeq := 0, ctx := { hasWg := true } })
+  liftWGPrefix (setNlSock fd { sock with cbRunning := true, dumpDoneErrno := INT_MAX, prevSeq := 0, ctx := { hasWg := true } })
   netlinkDumpPrefix fd
 
 def netlinkRecvmsgPrefix (fd : Nat) : MixedM (Option (List NlMessage)) := do
-  let sock ← liftPrefix (getNlSock fd)
+  let sock ← liftWGPrefix (getNlSock fd)
   match sock.queue with
   | [] => return none
   | skb :: rest =>
-    liftPrefix (setNlSock fd { sock with queue := rest })
-    if (← liftPrefix (getNlSock fd)).cbRunning then netlinkDumpPrefix fd
+    liftWGPrefix (setNlSock fd { sock with queue := rest })
+    if (← liftWGPrefix (getNlSock fd)).cbRunning then netlinkDumpPrefix fd
     return some skb.messages
 
 def wgGetDevicePrefix (ref : DeviceRef) : MixedM (Except Int Json) := do
@@ -161,433 +195,856 @@ def wgGetDevicePrefix (ref : DeviceRef) : MixedM (Except Int Json) := do
   let mut finished := false
   for _ in [0:4096] do
     if finished then break
-    let some ms ← netlinkRecvmsgPrefix 7 | liftPrefix (invariant "op 9: nothing queued before the dump finished")
+    let some ms ← netlinkRecvmsgPrefix 7 | liftWGPrefix (invariant "op 9: nothing queued before the dump finished")
     for m in ms do
       messages := messages.push m
       match m with
       | .done .. | .error _ => finished := true
       | .data .. => pure ()
-  if !finished then liftPrefix (invariant "op 9: the dump did not finish")
-  liftPrefix (coalesce messages.toList)
+  if !finished then liftWGPrefix (invariant "op 9: the dump did not finish")
+  liftWGPrefix (coalesce messages.toList)
 
-theorem dumpUnsupported_sameKernel (s : String) : SameKernel (unsupported (α := α) s) := by
-  intro w x v hr
-  cases hr
-
-theorem deviceDumpHeader_sameKernel (d : Device) (ctx : DumpCtx) (prevSeq : Nat) (skb : NlSkb) :
-    SameKernel (deviceDumpHeaderSource d ctx prevSeq skb) := by
+theorem deviceDumpHeader_sameWGStore (d : Device) (ctx : DumpCtx) (prevSeq : Nat) (skb : NlSkb) :
+    SameWGStore (deviceDumpHeaderSource d ctx prevSeq skb) := by
+  change SameView wgStoreView _
   unfold deviceDumpHeaderSource
   repeat' first
-    | (dump_kernel_head Leanux.branch; with_reducible exact sameKernel_branch _ _)
-    | (dump_kernel_head Leanux.unsupported; with_reducible exact dumpUnsupported_sameKernel _)
+    | (dump_kernel_head Leanux.branch; exact fun initial =>
+        hoare_liftAmbient (AmbientM.branch _ _) (fun w => wgStoreView w = initial))
+    | (dump_kernel_head Leanux.unsupported; exact fun initial =>
+        hoare_liftAmbient (AmbientM.unsupported _) (fun w => wgStoreView w = initial))
     | dump_kernel_step
 
-theorem dumpMap_erases (f : α → β) {g : MixedM α} {a : M α}
+theorem dumpMap_erases (f : α → β) {g : PrefixM LifetimeEvent α} {a : Leanux.M α}
     (he : ErasesPrefix g a) : ErasesPrefix (f <$> g) (f <$> a) := by
   simp only [map_eq_pure_bind]
   exact erasesPrefix_bind he (fun _ => erasesPrefix_pure _)
 
-theorem dumpMap_preserves (c : AmbientContracts I) (f : α → β) {g : MixedM α}
-    (hg : PrefixPreserves I LifetimeEvent.Safe g) : PrefixPreserves I LifetimeEvent.Safe (f <$> g) := by
+theorem dumpMap_preserves (c : ProductAmbientContracts I) (f : α → β)
+    {g : PrefixM LifetimeEvent α} (hg : PrefixPreserves I LifetimeEvent.Safe g) :
+    PrefixPreserves I LifetimeEvent.Safe (f <$> g) := by
   simp only [map_eq_pure_bind]
   exact hg.bind (fun _ => PrefixPreserves.pure c.safe _)
 
-open Lean Meta Elab Tactic in
-elab "dump_prefix_intro" : tactic => do
-  unless (← getMainTarget).isForall do throwError "expected forall"
-  evalTactic (← `(tactic| intro x))
+theorem dumpMap_erases_native (f : α → β) {g : MixedM α} {a : WG.M α}
+    (he : ErasesStatePrefix g a) : ErasesStatePrefix (f <$> g) (f <$> a) := by
+  simp only [map_eq_pure_bind]
+  exact erasesStatePrefix_bind he (fun _ => erasesStatePrefix_pure _)
+
+theorem dumpMap_preserves_native (c : AmbientContracts I) (f : α → β) {g : MixedM α}
+    (hg : StatePrefixPreserves (fun h w _ => I h w) LifetimeEvent.Safe g) :
+    StatePrefixPreserves (fun h w _ => I h w) LifetimeEvent.Safe (f <$> g) := by
+  simp only [map_eq_pure_bind]
+  exact StatePrefixEnsures.bind hg (fun _ =>
+    StatePrefixEnsures.pure _ (fun h w _ hi => c.safe h w hi) (fun _ _ _ hi => hi))
+
 
 theorem getPeerDumpPrefix_erases (pid : PeerId) (ctx : DumpCtx) (skb : NlSkb) :
-    ErasesPrefix (getPeerDumpPrefix pid ctx skb) (getPeerDump pid ctx skb) := by
+    ErasesStatePrefix (getPeerDumpPrefix pid ctx skb) (getPeerDump pid ctx skb) := by
   rw [getPeerDump_source]
-  exact erasesPrefix_bind (getPeerMixed_erases pid) (fun _ => erasesPrefix_lift _)
-
-theorem getPeerDumpPrefix_preserves (c : AmbientContracts I) (pid : PeerId) (ctx : DumpCtx) (skb : NlSkb) :
-    PrefixPreserves I LifetimeEvent.Safe (getPeerDumpPrefix pid ctx skb) :=
-  PrefixPreserves.bind (AmbientContracts.drop (c.getPeer (fun _ => True) pid))
-    (fun p => AmbientContracts.drop (c.kernel (fun _ => True) _ (getPeerDumpTail_sameKernel p ctx skb)))
+  exact erasesStatePrefix_bind (getPeerMixed_erases _) (fun _ => erasesStatePrefix_lift _)
 
 theorem wgGetDeviceDonePrefix_erases (ctx : DumpCtx) :
-    ErasesPrefix (wgGetDeviceDonePrefix ctx) (wgGetDeviceDone ctx) := by
+    ErasesStatePrefix (wgGetDeviceDonePrefix ctx) (wgGetDeviceDone ctx) := by
   unfold wgGetDeviceDonePrefix wgGetDeviceDone
-  try simp only [bind_assoc, pure_bind]
   repeat' first
-    | with_reducible exact getPeerDumpPrefix_erases _ _ _
-    | with_reducible exact getPeerMixed_erases _
-    | with_reducible exact peerGetMixed_erases _
-    | with_reducible exact peerPutMixed_erases _
-    | with_reducible exact requireNotPendingMixed_erases _ _
-    | with_reducible exact erasesPrefix_lift _
-    | with_reducible exact erasesPrefix_pure _
-    | with_reducible apply andPrefix_erases
-    | with_reducible apply orPrefix_erases
-    | with_reducible apply erasesPrefix_range
-    | with_reducible apply erasesPrefix_forIn
-    | with_reducible apply dumpMap_erases
-    | with_reducible apply erasesPrefix_bind
-    | with_reducible apply erasesPrefix_ite
-    | (dump_prefix_intro; try dsimp only)
-    | (with_reducible split)
-    | simp_all
-  all_goals simp_all
-  all_goals first | exact erasesPrefix_lift _ | exact erasesPrefix_pure _ | skip
-
-theorem wgGetDeviceDonePrefix_preserves (c : AmbientContracts I) (ctx : DumpCtx) :
-    PrefixPreserves I LifetimeEvent.Safe (wgGetDeviceDonePrefix ctx) := by
-  unfold wgGetDeviceDonePrefix
-  repeat' first
-    | with_reducible exact getPeerDumpPrefix_preserves c _ _ _
-    | with_reducible exact AmbientContracts.drop (c.getPeer (fun _ => True) _)
-    | with_reducible exact c.peerGet _
-    | with_reducible exact c.peerPut _
-    | with_reducible exact AmbientContracts.drop (requireNotPendingMixed_spec c (fun _ => True) _ _)
-    | with_reducible exact AmbientContracts.drop (c.invariant (fun _ => True) _)
-    | with_reducible exact PrefixPreserves.pure c.safe _
-    | with_reducible apply AmbientContracts.drop (c.kernel (fun _ => True) _ ?_)
-    | with_reducible exact sameKernel_branch _ _
-    | with_reducible exact getDev_sameKernel
-    | with_reducible exact getNlSock_sameKernel _
-    | with_reducible exact lookupInterface_sameKernel _
-    | with_reducible exact coalesce_sameKernel _
-    | with_reducible exact dumpUnsupported_sameKernel _
-    | with_reducible apply andPrefix_preserves c.safe
-    | with_reducible apply orPrefix_preserves c.safe
-    | with_reducible apply PrefixPreserves.range _ _ _ c.safe
-    | with_reducible apply PrefixPreserves.forIn _ _ _ c.safe
-    | with_reducible apply dumpMap_preserves c
-    | with_reducible apply PrefixPreserves.bind
-    | with_reducible apply PrefixPreserves.ite
-    | (dump_prefix_intro; try dsimp only)
-    | (with_reducible split)
-    | simp_all
-  all_goals simp_all
-  all_goals first | exact erasesPrefix_lift _ | exact erasesPrefix_pure _ | skip
+    | contradiction
+    | maintenance_impossible_match
+    | maintenance_erases_join
+    | maintenance_erases_join_use
+    | maintenance_reduce
+    | maintenance_reduce_match
+    | maintenance_erases_bind
+    | (maintenance_head getPeerDumpPrefix; exact getPeerDumpPrefix_erases _ _ _ )
+    | (maintenance_head getPeerMixed; exact getPeerMixed_erases _)
+    | (maintenance_head peerGetMixed; exact peerGetMixed_erases _)
+    | (maintenance_head peerPutMixed; exact peerPutMixed_erases _)
+    | (maintenance_head requireNotPendingMixed; exact requireNotPendingMixed_erases _ _)
+    | (maintenance_head andPrefix; unfold andPrefix WG.andM)
+    | (maintenance_head orPrefix; unfold orPrefix WG.orM)
+    | (maintenance_head rxBranch; unfold rxBranch)
+    | (maintenance_head liftWGPrefix; exact erasesStatePrefix_lift _)
+    | (maintenance_head Pure.pure; exact erasesStatePrefix_pure _)
+    | (maintenance_head ForIn.forIn; apply erasesStatePrefix_forIn)
+    | (maintenance_head Functor.map; apply dumpMap_erases_native)
+    | (maintenance_head ite; split)
+    | (maintenance_head dite; split)
+    | maintenance_match
+    | maintenance_intro
+    | rfl
 
 theorem deviceDumpTailPrefix_erases (d : Device) (ctx : DumpCtx) (skb : NlSkb) (flags : Nat) (attrs : List (String × Json)) :
-    ErasesPrefix (deviceDumpTailPrefix d ctx skb flags attrs) (deviceDumpTailSource d ctx skb flags attrs) := by
+    ErasesStatePrefix (deviceDumpTailPrefix d ctx skb flags attrs) (deviceDumpTailSource d ctx skb flags attrs) := by
   unfold deviceDumpTailPrefix deviceDumpTailSource
-  try simp only [bind_assoc, pure_bind]
   repeat' first
-    | with_reducible exact getPeerDumpPrefix_erases _ _ _
-    | with_reducible exact wgGetDeviceDonePrefix_erases _
-    | with_reducible exact getPeerMixed_erases _
-    | with_reducible exact peerGetMixed_erases _
-    | with_reducible exact peerPutMixed_erases _
-    | with_reducible exact requireNotPendingMixed_erases _ _
-    | with_reducible exact erasesPrefix_lift _
-    | with_reducible exact erasesPrefix_pure _
-    | with_reducible apply andPrefix_erases
-    | with_reducible apply orPrefix_erases
-    | with_reducible apply erasesPrefix_range
-    | with_reducible apply erasesPrefix_forIn
-    | with_reducible apply dumpMap_erases
-    | with_reducible apply erasesPrefix_bind
-    | with_reducible apply erasesPrefix_ite
-    | (dump_prefix_intro; try dsimp only)
-    | (with_reducible split)
-    | simp_all
-  all_goals simp_all
-  all_goals first | exact erasesPrefix_lift _ | exact erasesPrefix_pure _ | skip
-
-theorem deviceDumpTailPrefix_preserves (c : AmbientContracts I) (d : Device) (ctx : DumpCtx) (skb : NlSkb) (flags : Nat) (attrs : List (String × Json)) :
-    PrefixPreserves I LifetimeEvent.Safe (deviceDumpTailPrefix d ctx skb flags attrs) := by
-  unfold deviceDumpTailPrefix
-  repeat' first
-    | with_reducible exact getPeerDumpPrefix_preserves c _ _ _
-    | with_reducible exact wgGetDeviceDonePrefix_preserves c _
-    | with_reducible exact AmbientContracts.drop (c.getPeer (fun _ => True) _)
-    | with_reducible exact c.peerGet _
-    | with_reducible exact c.peerPut _
-    | with_reducible exact AmbientContracts.drop (requireNotPendingMixed_spec c (fun _ => True) _ _)
-    | with_reducible exact AmbientContracts.drop (c.invariant (fun _ => True) _)
-    | with_reducible exact PrefixPreserves.pure c.safe _
-    | with_reducible apply AmbientContracts.drop (c.kernel (fun _ => True) _ ?_)
-    | with_reducible exact sameKernel_branch _ _
-    | with_reducible exact getDev_sameKernel
-    | with_reducible exact getNlSock_sameKernel _
-    | with_reducible exact lookupInterface_sameKernel _
-    | with_reducible exact coalesce_sameKernel _
-    | with_reducible exact dumpUnsupported_sameKernel _
-    | with_reducible apply andPrefix_preserves c.safe
-    | with_reducible apply orPrefix_preserves c.safe
-    | with_reducible apply PrefixPreserves.range _ _ _ c.safe
-    | with_reducible apply PrefixPreserves.forIn _ _ _ c.safe
-    | with_reducible apply dumpMap_preserves c
-    | with_reducible apply PrefixPreserves.bind
-    | with_reducible apply PrefixPreserves.ite
-    | (dump_prefix_intro; try dsimp only)
-    | (with_reducible split)
-    | simp_all
-  all_goals simp_all
-  all_goals first | exact erasesPrefix_lift _ | exact erasesPrefix_pure _ | skip
+    | contradiction
+    | maintenance_impossible_match
+    | maintenance_erases_join
+    | maintenance_erases_join_use
+    | maintenance_reduce
+    | maintenance_reduce_match
+    | maintenance_erases_bind
+    | (maintenance_head getPeerDumpPrefix; exact getPeerDumpPrefix_erases _ _ _ )
+    | (maintenance_head wgGetDeviceDonePrefix; exact wgGetDeviceDonePrefix_erases _ )
+    | (maintenance_head getPeerMixed; exact getPeerMixed_erases _)
+    | (maintenance_head peerGetMixed; exact peerGetMixed_erases _)
+    | (maintenance_head peerPutMixed; exact peerPutMixed_erases _)
+    | (maintenance_head requireNotPendingMixed; exact requireNotPendingMixed_erases _ _)
+    | (maintenance_head andPrefix; unfold andPrefix WG.andM)
+    | (maintenance_head orPrefix; unfold orPrefix WG.orM)
+    | (maintenance_head rxBranch; unfold rxBranch)
+    | (maintenance_head liftWGPrefix; exact erasesStatePrefix_lift _)
+    | (maintenance_head Pure.pure; exact erasesStatePrefix_pure _)
+    | (maintenance_head ForIn.forIn; apply erasesStatePrefix_forIn)
+    | (maintenance_head Functor.map; apply dumpMap_erases_native)
+    | (maintenance_head ite; split)
+    | (maintenance_head dite; split)
+    | maintenance_match
+    | maintenance_intro
+    | rfl
 
 theorem wgGetDeviceDumpPrefix_erases (ctx : DumpCtx) (prevSeq : Nat) (skb : NlSkb) :
-    ErasesPrefix (wgGetDeviceDumpPrefix ctx prevSeq skb) (wgGetDeviceDump ctx prevSeq skb) := by
+    ErasesStatePrefix (wgGetDeviceDumpPrefix ctx prevSeq skb) (wgGetDeviceDump ctx prevSeq skb) := by
   rw [wgGetDeviceDump_source]
-  exact erasesPrefix_bind (erasesPrefix_lift _) (fun d =>
-    erasesPrefix_bind (erasesPrefix_lift _) (fun s => deviceDumpTailPrefix_erases d ctx s.1 s.2.1 s.2.2))
-
-theorem wgGetDeviceDumpPrefix_preserves (c : AmbientContracts I) (ctx : DumpCtx) (prevSeq : Nat) (skb : NlSkb) :
-    PrefixPreserves I LifetimeEvent.Safe (wgGetDeviceDumpPrefix ctx prevSeq skb) :=
-  PrefixPreserves.bind (AmbientContracts.drop (c.kernel (fun _ => True) _ getDev_sameKernel)) (fun d =>
-    PrefixPreserves.bind (AmbientContracts.drop (c.kernel (fun _ => True) _ (deviceDumpHeader_sameKernel d ctx prevSeq skb)))
-      (fun s => deviceDumpTailPrefix_preserves c d ctx s.1 s.2.1 s.2.2))
+  exact erasesStatePrefix_bind (erasesStatePrefix_lift _) (fun d =>
+    erasesStatePrefix_bind (erasesStatePrefix_lift _) (fun s => deviceDumpTailPrefix_erases d ctx s.1 s.2.1 s.2.2))
 
 theorem netlinkDumpPrefix_erases (fd : Nat) :
-    ErasesPrefix (netlinkDumpPrefix fd) (netlinkDump fd) := by
+    ErasesStatePrefix (netlinkDumpPrefix fd) (netlinkDump fd) := by
   unfold netlinkDumpPrefix netlinkDump
-  try simp only [bind_assoc, pure_bind]
   repeat' first
-    | with_reducible exact getPeerDumpPrefix_erases _ _ _
-    | with_reducible exact wgGetDeviceDonePrefix_erases _
-    | with_reducible exact wgGetDeviceDumpPrefix_erases _ _ _
-    | with_reducible exact getPeerMixed_erases _
-    | with_reducible exact peerGetMixed_erases _
-    | with_reducible exact peerPutMixed_erases _
-    | with_reducible exact requireNotPendingMixed_erases _ _
-    | with_reducible exact erasesPrefix_lift _
-    | with_reducible exact erasesPrefix_pure _
-    | with_reducible apply andPrefix_erases
-    | with_reducible apply orPrefix_erases
-    | with_reducible apply erasesPrefix_range
-    | with_reducible apply erasesPrefix_forIn
-    | with_reducible apply dumpMap_erases
-    | with_reducible apply erasesPrefix_bind
-    | with_reducible apply erasesPrefix_ite
-    | (dump_prefix_intro; try dsimp only)
-    | (with_reducible split)
-    | simp_all
-  all_goals simp_all
-  all_goals first | exact erasesPrefix_lift _ | exact erasesPrefix_pure _ | skip
-
-theorem netlinkDumpPrefix_preserves (c : AmbientContracts I) (stable : DumpStable I) (fd : Nat) :
-    PrefixPreserves I LifetimeEvent.Safe (netlinkDumpPrefix fd) := by
-  unfold netlinkDumpPrefix
-  repeat' first
-    | with_reducible exact getPeerDumpPrefix_preserves c _ _ _
-    | with_reducible exact wgGetDeviceDonePrefix_preserves c _
-    | with_reducible exact wgGetDeviceDumpPrefix_preserves c _ _ _
-    | with_reducible exact dumpLift_preserves c stable _ (setNlSock_sameDumpKernel _ _)
-    | with_reducible exact AmbientContracts.drop (c.getPeer (fun _ => True) _)
-    | with_reducible exact c.peerGet _
-    | with_reducible exact c.peerPut _
-    | with_reducible exact AmbientContracts.drop (requireNotPendingMixed_spec c (fun _ => True) _ _)
-    | with_reducible exact AmbientContracts.drop (c.invariant (fun _ => True) _)
-    | with_reducible exact PrefixPreserves.pure c.safe _
-    | with_reducible apply AmbientContracts.drop (c.kernel (fun _ => True) _ ?_)
-    | with_reducible exact sameKernel_branch _ _
-    | with_reducible exact getDev_sameKernel
-    | with_reducible exact getNlSock_sameKernel _
-    | with_reducible exact lookupInterface_sameKernel _
-    | with_reducible exact coalesce_sameKernel _
-    | with_reducible exact dumpUnsupported_sameKernel _
-    | with_reducible apply andPrefix_preserves c.safe
-    | with_reducible apply orPrefix_preserves c.safe
-    | with_reducible apply PrefixPreserves.range _ _ _ c.safe
-    | with_reducible apply PrefixPreserves.forIn _ _ _ c.safe
-    | with_reducible apply dumpMap_preserves c
-    | with_reducible apply PrefixPreserves.bind
-    | with_reducible apply PrefixPreserves.ite
-    | (dump_prefix_intro; try dsimp only)
-    | (with_reducible split)
-    | simp_all
-  all_goals simp_all
-  all_goals first | exact erasesPrefix_lift _ | exact erasesPrefix_pure _ | skip
+    | contradiction
+    | maintenance_impossible_match
+    | maintenance_erases_join
+    | maintenance_erases_join_use
+    | maintenance_reduce
+    | maintenance_reduce_match
+    | maintenance_erases_bind
+    | (maintenance_head getPeerDumpPrefix; exact getPeerDumpPrefix_erases _ _ _ )
+    | (maintenance_head wgGetDeviceDonePrefix; exact wgGetDeviceDonePrefix_erases _ )
+    | (maintenance_head deviceDumpTailPrefix; exact deviceDumpTailPrefix_erases _ _ _ _ _ )
+    | (maintenance_head wgGetDeviceDumpPrefix; exact wgGetDeviceDumpPrefix_erases _ _ _ )
+    | (maintenance_head getPeerMixed; exact getPeerMixed_erases _)
+    | (maintenance_head peerGetMixed; exact peerGetMixed_erases _)
+    | (maintenance_head peerPutMixed; exact peerPutMixed_erases _)
+    | (maintenance_head requireNotPendingMixed; exact requireNotPendingMixed_erases _ _)
+    | (maintenance_head andPrefix; unfold andPrefix WG.andM)
+    | (maintenance_head orPrefix; unfold orPrefix WG.orM)
+    | (maintenance_head rxBranch; unfold rxBranch)
+    | (maintenance_head liftWGPrefix; exact erasesStatePrefix_lift _)
+    | (maintenance_head Pure.pure; exact erasesStatePrefix_pure _)
+    | (maintenance_head ForIn.forIn; apply erasesStatePrefix_forIn)
+    | (maintenance_head Functor.map; apply dumpMap_erases_native)
+    | (maintenance_head ite; split)
+    | (maintenance_head dite; split)
+    | maintenance_match
+    | maintenance_intro
+    | rfl
 
 theorem netlinkDumpStartPrefix_erases (fd : Nat) (ref : DeviceRef) :
-    ErasesPrefix (netlinkDumpStartPrefix fd ref) (netlinkDumpStart fd ref) := by
+    ErasesStatePrefix (netlinkDumpStartPrefix fd ref) (netlinkDumpStart fd ref) := by
   unfold netlinkDumpStartPrefix netlinkDumpStart
-  try simp only [bind_assoc, pure_bind]
   repeat' first
-    | with_reducible exact getPeerDumpPrefix_erases _ _ _
-    | with_reducible exact wgGetDeviceDonePrefix_erases _
-    | with_reducible exact wgGetDeviceDumpPrefix_erases _ _ _
-    | with_reducible exact netlinkDumpPrefix_erases _
-    | with_reducible exact getPeerMixed_erases _
-    | with_reducible exact peerGetMixed_erases _
-    | with_reducible exact peerPutMixed_erases _
-    | with_reducible exact requireNotPendingMixed_erases _ _
-    | with_reducible exact erasesPrefix_lift _
-    | with_reducible exact erasesPrefix_pure _
-    | with_reducible apply andPrefix_erases
-    | with_reducible apply orPrefix_erases
-    | with_reducible apply erasesPrefix_range
-    | with_reducible apply erasesPrefix_forIn
-    | with_reducible apply dumpMap_erases
-    | with_reducible apply erasesPrefix_bind
-    | with_reducible apply erasesPrefix_ite
-    | (dump_prefix_intro; try dsimp only)
-    | (with_reducible split)
-    | simp_all
-  all_goals simp_all
-  all_goals first | exact erasesPrefix_lift _ | exact erasesPrefix_pure _ | skip
-
-theorem netlinkDumpStartPrefix_preserves (c : AmbientContracts I) (stable : DumpStable I) (fd : Nat) (ref : DeviceRef) :
-    PrefixPreserves I LifetimeEvent.Safe (netlinkDumpStartPrefix fd ref) := by
-  unfold netlinkDumpStartPrefix
-  repeat' first
-    | with_reducible exact getPeerDumpPrefix_preserves c _ _ _
-    | with_reducible exact wgGetDeviceDonePrefix_preserves c _
-    | with_reducible exact wgGetDeviceDumpPrefix_preserves c _ _ _
-    | with_reducible exact netlinkDumpPrefix_preserves c stable _
-    | with_reducible exact dumpLift_preserves c stable _ (setNlSock_sameDumpKernel _ _)
-    | with_reducible exact AmbientContracts.drop (c.getPeer (fun _ => True) _)
-    | with_reducible exact c.peerGet _
-    | with_reducible exact c.peerPut _
-    | with_reducible exact AmbientContracts.drop (requireNotPendingMixed_spec c (fun _ => True) _ _)
-    | with_reducible exact AmbientContracts.drop (c.invariant (fun _ => True) _)
-    | with_reducible exact PrefixPreserves.pure c.safe _
-    | with_reducible apply AmbientContracts.drop (c.kernel (fun _ => True) _ ?_)
-    | with_reducible exact sameKernel_branch _ _
-    | with_reducible exact getDev_sameKernel
-    | with_reducible exact getNlSock_sameKernel _
-    | with_reducible exact lookupInterface_sameKernel _
-    | with_reducible exact coalesce_sameKernel _
-    | with_reducible exact dumpUnsupported_sameKernel _
-    | with_reducible apply andPrefix_preserves c.safe
-    | with_reducible apply orPrefix_preserves c.safe
-    | with_reducible apply PrefixPreserves.range _ _ _ c.safe
-    | with_reducible apply PrefixPreserves.forIn _ _ _ c.safe
-    | with_reducible apply dumpMap_preserves c
-    | with_reducible apply PrefixPreserves.bind
-    | with_reducible apply PrefixPreserves.ite
-    | (dump_prefix_intro; try dsimp only)
-    | (with_reducible split)
-    | simp_all
-  all_goals simp_all
-  all_goals first | exact erasesPrefix_lift _ | exact erasesPrefix_pure _ | skip
+    | contradiction
+    | maintenance_impossible_match
+    | maintenance_erases_join
+    | maintenance_erases_join_use
+    | maintenance_reduce
+    | maintenance_reduce_match
+    | maintenance_erases_bind
+    | (maintenance_head getPeerDumpPrefix; exact getPeerDumpPrefix_erases _ _ _ )
+    | (maintenance_head wgGetDeviceDonePrefix; exact wgGetDeviceDonePrefix_erases _ )
+    | (maintenance_head deviceDumpTailPrefix; exact deviceDumpTailPrefix_erases _ _ _ _ _ )
+    | (maintenance_head wgGetDeviceDumpPrefix; exact wgGetDeviceDumpPrefix_erases _ _ _ )
+    | (maintenance_head netlinkDumpPrefix; exact netlinkDumpPrefix_erases _ )
+    | (maintenance_head getPeerMixed; exact getPeerMixed_erases _)
+    | (maintenance_head peerGetMixed; exact peerGetMixed_erases _)
+    | (maintenance_head peerPutMixed; exact peerPutMixed_erases _)
+    | (maintenance_head requireNotPendingMixed; exact requireNotPendingMixed_erases _ _)
+    | (maintenance_head andPrefix; unfold andPrefix WG.andM)
+    | (maintenance_head orPrefix; unfold orPrefix WG.orM)
+    | (maintenance_head rxBranch; unfold rxBranch)
+    | (maintenance_head liftWGPrefix; exact erasesStatePrefix_lift _)
+    | (maintenance_head Pure.pure; exact erasesStatePrefix_pure _)
+    | (maintenance_head ForIn.forIn; apply erasesStatePrefix_forIn)
+    | (maintenance_head Functor.map; apply dumpMap_erases_native)
+    | (maintenance_head ite; split)
+    | (maintenance_head dite; split)
+    | maintenance_match
+    | maintenance_intro
+    | rfl
 
 theorem netlinkRecvmsgPrefix_erases (fd : Nat) :
-    ErasesPrefix (netlinkRecvmsgPrefix fd) (netlinkRecvmsg fd) := by
+    ErasesStatePrefix (netlinkRecvmsgPrefix fd) (netlinkRecvmsg fd) := by
   unfold netlinkRecvmsgPrefix netlinkRecvmsg
-  try simp only [bind_assoc, pure_bind]
   repeat' first
-    | with_reducible exact getPeerDumpPrefix_erases _ _ _
-    | with_reducible exact wgGetDeviceDonePrefix_erases _
-    | with_reducible exact wgGetDeviceDumpPrefix_erases _ _ _
-    | with_reducible exact netlinkDumpPrefix_erases _
-    | with_reducible exact netlinkDumpStartPrefix_erases _ _
-    | with_reducible exact getPeerMixed_erases _
-    | with_reducible exact peerGetMixed_erases _
-    | with_reducible exact peerPutMixed_erases _
-    | with_reducible exact requireNotPendingMixed_erases _ _
-    | with_reducible exact erasesPrefix_lift _
-    | with_reducible exact erasesPrefix_pure _
-    | with_reducible apply andPrefix_erases
-    | with_reducible apply orPrefix_erases
-    | with_reducible apply erasesPrefix_range
-    | with_reducible apply erasesPrefix_forIn
-    | with_reducible apply dumpMap_erases
-    | with_reducible apply erasesPrefix_bind
-    | with_reducible apply erasesPrefix_ite
-    | (dump_prefix_intro; try dsimp only)
-    | (with_reducible split)
-    | simp_all
-  all_goals simp_all
-  all_goals first | exact erasesPrefix_lift _ | exact erasesPrefix_pure _ | skip
-
-theorem netlinkRecvmsgPrefix_preserves (c : AmbientContracts I) (stable : DumpStable I) (fd : Nat) :
-    PrefixPreserves I LifetimeEvent.Safe (netlinkRecvmsgPrefix fd) := by
-  unfold netlinkRecvmsgPrefix
-  repeat' first
-    | with_reducible exact getPeerDumpPrefix_preserves c _ _ _
-    | with_reducible exact wgGetDeviceDonePrefix_preserves c _
-    | with_reducible exact wgGetDeviceDumpPrefix_preserves c _ _ _
-    | with_reducible exact netlinkDumpPrefix_preserves c stable _
-    | with_reducible exact netlinkDumpStartPrefix_preserves c stable _ _
-    | with_reducible exact dumpLift_preserves c stable _ (setNlSock_sameDumpKernel _ _)
-    | with_reducible exact AmbientContracts.drop (c.getPeer (fun _ => True) _)
-    | with_reducible exact c.peerGet _
-    | with_reducible exact c.peerPut _
-    | with_reducible exact AmbientContracts.drop (requireNotPendingMixed_spec c (fun _ => True) _ _)
-    | with_reducible exact AmbientContracts.drop (c.invariant (fun _ => True) _)
-    | with_reducible exact PrefixPreserves.pure c.safe _
-    | with_reducible apply AmbientContracts.drop (c.kernel (fun _ => True) _ ?_)
-    | with_reducible exact sameKernel_branch _ _
-    | with_reducible exact getDev_sameKernel
-    | with_reducible exact getNlSock_sameKernel _
-    | with_reducible exact lookupInterface_sameKernel _
-    | with_reducible exact coalesce_sameKernel _
-    | with_reducible exact dumpUnsupported_sameKernel _
-    | with_reducible apply andPrefix_preserves c.safe
-    | with_reducible apply orPrefix_preserves c.safe
-    | with_reducible apply PrefixPreserves.range _ _ _ c.safe
-    | with_reducible apply PrefixPreserves.forIn _ _ _ c.safe
-    | with_reducible apply dumpMap_preserves c
-    | with_reducible apply PrefixPreserves.bind
-    | with_reducible apply PrefixPreserves.ite
-    | (dump_prefix_intro; try dsimp only)
-    | (with_reducible split)
-    | simp_all
-  all_goals simp_all
-  all_goals first | exact erasesPrefix_lift _ | exact erasesPrefix_pure _ | skip
+    | contradiction
+    | maintenance_impossible_match
+    | maintenance_erases_join
+    | maintenance_erases_join_use
+    | maintenance_reduce
+    | maintenance_reduce_match
+    | maintenance_erases_bind
+    | (maintenance_head getPeerDumpPrefix; exact getPeerDumpPrefix_erases _ _ _ )
+    | (maintenance_head wgGetDeviceDonePrefix; exact wgGetDeviceDonePrefix_erases _ )
+    | (maintenance_head deviceDumpTailPrefix; exact deviceDumpTailPrefix_erases _ _ _ _ _ )
+    | (maintenance_head wgGetDeviceDumpPrefix; exact wgGetDeviceDumpPrefix_erases _ _ _ )
+    | (maintenance_head netlinkDumpPrefix; exact netlinkDumpPrefix_erases _ )
+    | (maintenance_head netlinkDumpStartPrefix; exact netlinkDumpStartPrefix_erases _ _ )
+    | (maintenance_head getPeerMixed; exact getPeerMixed_erases _)
+    | (maintenance_head peerGetMixed; exact peerGetMixed_erases _)
+    | (maintenance_head peerPutMixed; exact peerPutMixed_erases _)
+    | (maintenance_head requireNotPendingMixed; exact requireNotPendingMixed_erases _ _)
+    | (maintenance_head andPrefix; unfold andPrefix WG.andM)
+    | (maintenance_head orPrefix; unfold orPrefix WG.orM)
+    | (maintenance_head rxBranch; unfold rxBranch)
+    | (maintenance_head liftWGPrefix; exact erasesStatePrefix_lift _)
+    | (maintenance_head Pure.pure; exact erasesStatePrefix_pure _)
+    | (maintenance_head ForIn.forIn; apply erasesStatePrefix_forIn)
+    | (maintenance_head Functor.map; apply dumpMap_erases_native)
+    | (maintenance_head ite; split)
+    | (maintenance_head dite; split)
+    | maintenance_match
+    | maintenance_intro
+    | rfl
 
 theorem wgGetDevicePrefix_erases (ref : DeviceRef) :
-    ErasesPrefix (wgGetDevicePrefix ref) (wgGetDevice ref) := by
+    ErasesStatePrefix (wgGetDevicePrefix ref) (wgGetDevice ref) := by
   unfold wgGetDevicePrefix wgGetDevice
-  try simp only [bind_assoc, pure_bind]
+  simp only [Std.Legacy.Range.forIn_eq_forIn_range']
   repeat' first
-    | with_reducible exact getPeerDumpPrefix_erases _ _ _
-    | with_reducible exact wgGetDeviceDonePrefix_erases _
-    | with_reducible exact wgGetDeviceDumpPrefix_erases _ _ _
-    | with_reducible exact netlinkDumpPrefix_erases _
-    | with_reducible exact netlinkDumpStartPrefix_erases _ _
-    | with_reducible exact netlinkRecvmsgPrefix_erases _
-    | with_reducible exact getPeerMixed_erases _
-    | with_reducible exact peerGetMixed_erases _
-    | with_reducible exact peerPutMixed_erases _
-    | with_reducible exact requireNotPendingMixed_erases _ _
-    | with_reducible exact erasesPrefix_lift _
-    | with_reducible exact erasesPrefix_pure _
-    | with_reducible apply andPrefix_erases
-    | with_reducible apply orPrefix_erases
-    | with_reducible apply erasesPrefix_range
-    | with_reducible apply erasesPrefix_forIn
-    | with_reducible apply dumpMap_erases
-    | with_reducible apply erasesPrefix_bind
-    | with_reducible apply erasesPrefix_ite
-    | (dump_prefix_intro; try dsimp only)
+    | contradiction
+    | maintenance_impossible_match
+    | maintenance_erases_join
+    | maintenance_erases_join_use
+    | maintenance_reduce
+    | maintenance_reduce_match
+    | maintenance_erases_bind
+    | (maintenance_head getPeerDumpPrefix; exact getPeerDumpPrefix_erases _ _ _ )
+    | (maintenance_head wgGetDeviceDonePrefix; exact wgGetDeviceDonePrefix_erases _ )
+    | (maintenance_head deviceDumpTailPrefix; exact deviceDumpTailPrefix_erases _ _ _ _ _ )
+    | (maintenance_head wgGetDeviceDumpPrefix; exact wgGetDeviceDumpPrefix_erases _ _ _ )
+    | (maintenance_head netlinkDumpPrefix; exact netlinkDumpPrefix_erases _ )
+    | (maintenance_head netlinkDumpStartPrefix; exact netlinkDumpStartPrefix_erases _ _ )
+    | (maintenance_head netlinkRecvmsgPrefix; exact netlinkRecvmsgPrefix_erases _ )
+    | (maintenance_head getPeerMixed; exact getPeerMixed_erases _)
+    | (maintenance_head peerGetMixed; exact peerGetMixed_erases _)
+    | (maintenance_head peerPutMixed; exact peerPutMixed_erases _)
+    | (maintenance_head requireNotPendingMixed; exact requireNotPendingMixed_erases _ _)
+    | (maintenance_head andPrefix; unfold andPrefix WG.andM)
+    | (maintenance_head orPrefix; unfold orPrefix WG.orM)
+    | (maintenance_head rxBranch; unfold rxBranch)
+    | (maintenance_head liftWGPrefix; exact erasesStatePrefix_lift _)
+    | (maintenance_head Pure.pure; exact erasesStatePrefix_pure _)
+    | (maintenance_head ForIn.forIn; apply erasesStatePrefix_forIn)
+    | (maintenance_head Functor.map; apply dumpMap_erases_native)
+    | (maintenance_head ite; split)
+    | (maintenance_head dite; split)
+    | maintenance_match
+    | maintenance_intro
+    | rfl
+
+theorem getPeerDumpPrefix_preserves (c : AmbientContracts I) (pid : PeerId) (ctx : DumpCtx) (skb : NlSkb) :
+    StatePrefixPreserves (fun h w _ => I h w) LifetimeEvent.Safe (getPeerDumpPrefix pid ctx skb) := by
+  change StatePrefixEnsures _ _ _ _
+  unfold getPeerDumpPrefix
+  repeat' first
+    | (maintenance_head getPeerMixed; exact AmbientContracts.drop (c.getPeer (fun _ => True) _))
+    | (maintenance_head peerGetMixed; exact c.peerGet _)
+    | (maintenance_head peerPutMixed; exact c.peerPut _)
+    | (maintenance_head requireNotPendingMixed; exact AmbientContracts.drop (requireNotPendingMixed_spec c (fun _ => True) _ _))
+    | (maintenance_head rxBranch; unfold rxBranch)
+    | (maintenance_lift_action_head getDev; exact AmbientContracts.drop (c.store (fun _ => True) _ getDev_sameWGStore))
+    | (maintenance_lift_action_head deviceDumpHeaderSource; exact AmbientContracts.drop (c.store (fun _ => True) _ (deviceDumpHeader_sameWGStore _ _ _ _)))
+    | (maintenance_lift_action_head getPeerDumpTailSource; exact AmbientContracts.drop (c.store (fun _ => True) _ ((getPeerDumpTail_sameWGWorld _ _ _).factor wgStoreView)))
+    | (maintenance_lift_action_head getNlSock; exact AmbientContracts.drop (c.store (fun _ => True) _ ((getNlSock_sameWGWorld _).factor wgStoreView)))
+    | (maintenance_lift_action_head lookupInterface; exact AmbientContracts.drop (c.store (fun _ => True) _ ((lookupInterface_sameWGWorld _).factor wgStoreView)))
+    | (maintenance_lift_action_head coalesce; exact AmbientContracts.drop (c.store (fun _ => True) _ ((coalesce_sameWGWorld _).factor wgStoreView)))
+    | (maintenance_lift_action_head branch; exact AmbientContracts.drop (c.store (fun _ => True) _ (fun initial => hoare_liftAmbient (AmbientM.branch _ _) (fun w => wgStoreView w = initial))))
+    | (maintenance_lift_action_head invariant; exact AmbientContracts.drop (c.store (fun _ => True) _ (fun initial => hoare_liftAmbient (AmbientM.invariant _) (fun w => wgStoreView w = initial))))
+    | (maintenance_lift_action_head unsupported; exact AmbientContracts.drop (c.store (fun _ => True) _ (fun initial => hoare_liftAmbient (AmbientM.unsupported _) (fun w => wgStoreView w = initial))))
+    | (maintenance_head andPrefix; unfold andPrefix)
+    | (maintenance_head orPrefix; unfold orPrefix)
+    | (maintenance_head Pure.pure; exact StatePrefixEnsures.pure _ (fun h w _ hi => c.safe h w hi) (fun _ _ _ hi => hi))
+    | (maintenance_head ForIn.forIn; apply StatePrefixEnsures.forInInvariant _ _ _ (fun _ h w _ => I h w) LifetimeEvent.Safe (fun _ h w _ hi => c.safe h w hi); intro x b; change StatePrefixEnsures _ _ _ _)
+    | (maintenance_head Bind.bind; apply StatePrefixEnsures.bind (Q := fun _ h w _ => I h w))
+    | (maintenance_head Functor.map; apply dumpMap_preserves_native c)
+    | maintenance_join_let
+    | maintenance_join_use
+    | consume_conditional
+    | maintenance_reduce
     | (with_reducible split)
-    | simp_all
-  all_goals simp_all
-  all_goals first | exact erasesPrefix_lift _ | exact erasesPrefix_pure _ | skip
+    | (maintenance_intro; try dsimp only)
+    | contradiction
+
+theorem wgGetDeviceDonePrefix_preserves (c : AmbientContracts I) (ctx : DumpCtx) :
+    StatePrefixPreserves (fun h w _ => I h w) LifetimeEvent.Safe (wgGetDeviceDonePrefix ctx) := by
+  change StatePrefixEnsures _ _ _ _
+  unfold wgGetDeviceDonePrefix
+  repeat' first
+    | (maintenance_head getPeerDumpPrefix; exact getPeerDumpPrefix_preserves c _ _ _ )
+    | (maintenance_head getPeerMixed; exact AmbientContracts.drop (c.getPeer (fun _ => True) _))
+    | (maintenance_head peerGetMixed; exact c.peerGet _)
+    | (maintenance_head peerPutMixed; exact c.peerPut _)
+    | (maintenance_head requireNotPendingMixed; exact AmbientContracts.drop (requireNotPendingMixed_spec c (fun _ => True) _ _))
+    | (maintenance_head rxBranch; unfold rxBranch)
+    | (maintenance_lift_action_head getDev; exact AmbientContracts.drop (c.store (fun _ => True) _ getDev_sameWGStore))
+    | (maintenance_lift_action_head deviceDumpHeaderSource; exact AmbientContracts.drop (c.store (fun _ => True) _ (deviceDumpHeader_sameWGStore _ _ _ _)))
+    | (maintenance_lift_action_head getPeerDumpTailSource; exact AmbientContracts.drop (c.store (fun _ => True) _ ((getPeerDumpTail_sameWGWorld _ _ _).factor wgStoreView)))
+    | (maintenance_lift_action_head getNlSock; exact AmbientContracts.drop (c.store (fun _ => True) _ ((getNlSock_sameWGWorld _).factor wgStoreView)))
+    | (maintenance_lift_action_head lookupInterface; exact AmbientContracts.drop (c.store (fun _ => True) _ ((lookupInterface_sameWGWorld _).factor wgStoreView)))
+    | (maintenance_lift_action_head coalesce; exact AmbientContracts.drop (c.store (fun _ => True) _ ((coalesce_sameWGWorld _).factor wgStoreView)))
+    | (maintenance_lift_action_head branch; exact AmbientContracts.drop (c.store (fun _ => True) _ (fun initial => hoare_liftAmbient (AmbientM.branch _ _) (fun w => wgStoreView w = initial))))
+    | (maintenance_lift_action_head invariant; exact AmbientContracts.drop (c.store (fun _ => True) _ (fun initial => hoare_liftAmbient (AmbientM.invariant _) (fun w => wgStoreView w = initial))))
+    | (maintenance_lift_action_head unsupported; exact AmbientContracts.drop (c.store (fun _ => True) _ (fun initial => hoare_liftAmbient (AmbientM.unsupported _) (fun w => wgStoreView w = initial))))
+    | (maintenance_head andPrefix; unfold andPrefix)
+    | (maintenance_head orPrefix; unfold orPrefix)
+    | (maintenance_head Pure.pure; exact StatePrefixEnsures.pure _ (fun h w _ hi => c.safe h w hi) (fun _ _ _ hi => hi))
+    | (maintenance_head ForIn.forIn; apply StatePrefixEnsures.forInInvariant _ _ _ (fun _ h w _ => I h w) LifetimeEvent.Safe (fun _ h w _ hi => c.safe h w hi); intro x b; change StatePrefixEnsures _ _ _ _)
+    | (maintenance_head Bind.bind; apply StatePrefixEnsures.bind (Q := fun _ h w _ => I h w))
+    | (maintenance_head Functor.map; apply dumpMap_preserves_native c)
+    | maintenance_join_let
+    | maintenance_join_use
+    | consume_conditional
+    | maintenance_reduce
+    | (with_reducible split)
+    | (maintenance_intro; try dsimp only)
+    | contradiction
+
+theorem deviceDumpTailPrefix_preserves (c : AmbientContracts I) (d : Device) (ctx : DumpCtx) (skb : NlSkb) (flags : Nat) (attrs : List (String × Json)) :
+    StatePrefixPreserves (fun h w _ => I h w) LifetimeEvent.Safe (deviceDumpTailPrefix d ctx skb flags attrs) := by
+  change StatePrefixEnsures _ _ _ _
+  unfold deviceDumpTailPrefix
+  repeat' first
+    | (maintenance_head getPeerDumpPrefix; exact getPeerDumpPrefix_preserves c _ _ _ )
+    | (maintenance_head wgGetDeviceDonePrefix; exact wgGetDeviceDonePrefix_preserves c _ )
+    | (maintenance_head getPeerMixed; exact AmbientContracts.drop (c.getPeer (fun _ => True) _))
+    | (maintenance_head peerGetMixed; exact c.peerGet _)
+    | (maintenance_head peerPutMixed; exact c.peerPut _)
+    | (maintenance_head requireNotPendingMixed; exact AmbientContracts.drop (requireNotPendingMixed_spec c (fun _ => True) _ _))
+    | (maintenance_head rxBranch; unfold rxBranch)
+    | (maintenance_lift_action_head getDev; exact AmbientContracts.drop (c.store (fun _ => True) _ getDev_sameWGStore))
+    | (maintenance_lift_action_head deviceDumpHeaderSource; exact AmbientContracts.drop (c.store (fun _ => True) _ (deviceDumpHeader_sameWGStore _ _ _ _)))
+    | (maintenance_lift_action_head getPeerDumpTailSource; exact AmbientContracts.drop (c.store (fun _ => True) _ ((getPeerDumpTail_sameWGWorld _ _ _).factor wgStoreView)))
+    | (maintenance_lift_action_head getNlSock; exact AmbientContracts.drop (c.store (fun _ => True) _ ((getNlSock_sameWGWorld _).factor wgStoreView)))
+    | (maintenance_lift_action_head lookupInterface; exact AmbientContracts.drop (c.store (fun _ => True) _ ((lookupInterface_sameWGWorld _).factor wgStoreView)))
+    | (maintenance_lift_action_head coalesce; exact AmbientContracts.drop (c.store (fun _ => True) _ ((coalesce_sameWGWorld _).factor wgStoreView)))
+    | (maintenance_lift_action_head branch; exact AmbientContracts.drop (c.store (fun _ => True) _ (fun initial => hoare_liftAmbient (AmbientM.branch _ _) (fun w => wgStoreView w = initial))))
+    | (maintenance_lift_action_head invariant; exact AmbientContracts.drop (c.store (fun _ => True) _ (fun initial => hoare_liftAmbient (AmbientM.invariant _) (fun w => wgStoreView w = initial))))
+    | (maintenance_lift_action_head unsupported; exact AmbientContracts.drop (c.store (fun _ => True) _ (fun initial => hoare_liftAmbient (AmbientM.unsupported _) (fun w => wgStoreView w = initial))))
+    | (maintenance_head andPrefix; unfold andPrefix)
+    | (maintenance_head orPrefix; unfold orPrefix)
+    | (maintenance_head Pure.pure; exact StatePrefixEnsures.pure _ (fun h w _ hi => c.safe h w hi) (fun _ _ _ hi => hi))
+    | (maintenance_head ForIn.forIn; apply StatePrefixEnsures.forInInvariant _ _ _ (fun _ h w _ => I h w) LifetimeEvent.Safe (fun _ h w _ hi => c.safe h w hi); intro x b; change StatePrefixEnsures _ _ _ _)
+    | (maintenance_head Bind.bind; apply StatePrefixEnsures.bind (Q := fun _ h w _ => I h w))
+    | (maintenance_head Functor.map; apply dumpMap_preserves_native c)
+    | maintenance_join_let
+    | maintenance_join_use
+    | consume_conditional
+    | maintenance_reduce
+    | (with_reducible split)
+    | (maintenance_intro; try dsimp only)
+    | contradiction
+
+theorem wgGetDeviceDumpPrefix_preserves (c : AmbientContracts I) (ctx : DumpCtx) (prevSeq : Nat) (skb : NlSkb) :
+    StatePrefixPreserves (fun h w _ => I h w) LifetimeEvent.Safe (wgGetDeviceDumpPrefix ctx prevSeq skb) := by
+  change StatePrefixEnsures _ _ _ _
+  unfold wgGetDeviceDumpPrefix
+  repeat' first
+    | (maintenance_head getPeerDumpPrefix; exact getPeerDumpPrefix_preserves c _ _ _ )
+    | (maintenance_head wgGetDeviceDonePrefix; exact wgGetDeviceDonePrefix_preserves c _ )
+    | (maintenance_head deviceDumpTailPrefix; exact deviceDumpTailPrefix_preserves c _ _ _ _ _ )
+    | (maintenance_head getPeerMixed; exact AmbientContracts.drop (c.getPeer (fun _ => True) _))
+    | (maintenance_head peerGetMixed; exact c.peerGet _)
+    | (maintenance_head peerPutMixed; exact c.peerPut _)
+    | (maintenance_head requireNotPendingMixed; exact AmbientContracts.drop (requireNotPendingMixed_spec c (fun _ => True) _ _))
+    | (maintenance_head rxBranch; unfold rxBranch)
+    | (maintenance_lift_action_head getDev; exact AmbientContracts.drop (c.store (fun _ => True) _ getDev_sameWGStore))
+    | (maintenance_lift_action_head deviceDumpHeaderSource; exact AmbientContracts.drop (c.store (fun _ => True) _ (deviceDumpHeader_sameWGStore _ _ _ _)))
+    | (maintenance_lift_action_head getPeerDumpTailSource; exact AmbientContracts.drop (c.store (fun _ => True) _ ((getPeerDumpTail_sameWGWorld _ _ _).factor wgStoreView)))
+    | (maintenance_lift_action_head getNlSock; exact AmbientContracts.drop (c.store (fun _ => True) _ ((getNlSock_sameWGWorld _).factor wgStoreView)))
+    | (maintenance_lift_action_head lookupInterface; exact AmbientContracts.drop (c.store (fun _ => True) _ ((lookupInterface_sameWGWorld _).factor wgStoreView)))
+    | (maintenance_lift_action_head coalesce; exact AmbientContracts.drop (c.store (fun _ => True) _ ((coalesce_sameWGWorld _).factor wgStoreView)))
+    | (maintenance_lift_action_head branch; exact AmbientContracts.drop (c.store (fun _ => True) _ (fun initial => hoare_liftAmbient (AmbientM.branch _ _) (fun w => wgStoreView w = initial))))
+    | (maintenance_lift_action_head invariant; exact AmbientContracts.drop (c.store (fun _ => True) _ (fun initial => hoare_liftAmbient (AmbientM.invariant _) (fun w => wgStoreView w = initial))))
+    | (maintenance_lift_action_head unsupported; exact AmbientContracts.drop (c.store (fun _ => True) _ (fun initial => hoare_liftAmbient (AmbientM.unsupported _) (fun w => wgStoreView w = initial))))
+    | (maintenance_head andPrefix; unfold andPrefix)
+    | (maintenance_head orPrefix; unfold orPrefix)
+    | (maintenance_head Pure.pure; exact StatePrefixEnsures.pure _ (fun h w _ hi => c.safe h w hi) (fun _ _ _ hi => hi))
+    | (maintenance_head ForIn.forIn; apply StatePrefixEnsures.forInInvariant _ _ _ (fun _ h w _ => I h w) LifetimeEvent.Safe (fun _ h w _ hi => c.safe h w hi); intro x b; change StatePrefixEnsures _ _ _ _)
+    | (maintenance_head Bind.bind; apply StatePrefixEnsures.bind (Q := fun _ h w _ => I h w))
+    | (maintenance_head Functor.map; apply dumpMap_preserves_native c)
+    | maintenance_join_let
+    | maintenance_join_use
+    | consume_conditional
+    | maintenance_reduce
+    | (with_reducible split)
+    | (maintenance_intro; try dsimp only)
+    | contradiction
+
+theorem netlinkDumpPrefix_preserves (c : AmbientContracts I) (stable : DumpStable I) (fd : Nat) :
+    StatePrefixPreserves (fun h w _ => I h w) LifetimeEvent.Safe (netlinkDumpPrefix fd) := by
+  change StatePrefixEnsures _ _ _ _
+  unfold netlinkDumpPrefix
+  repeat' first
+    | (maintenance_head getPeerDumpPrefix; exact getPeerDumpPrefix_preserves c _ _ _ )
+    | (maintenance_head wgGetDeviceDonePrefix; exact wgGetDeviceDonePrefix_preserves c _ )
+    | (maintenance_head deviceDumpTailPrefix; exact deviceDumpTailPrefix_preserves c _ _ _ _ _ )
+    | (maintenance_head wgGetDeviceDumpPrefix; exact wgGetDeviceDumpPrefix_preserves c _ _ _ )
+    | (maintenance_head getPeerMixed; exact AmbientContracts.drop (c.getPeer (fun _ => True) _))
+    | (maintenance_head peerGetMixed; exact c.peerGet _)
+    | (maintenance_head peerPutMixed; exact c.peerPut _)
+    | (maintenance_head requireNotPendingMixed; exact AmbientContracts.drop (requireNotPendingMixed_spec c (fun _ => True) _ _))
+    | (maintenance_head rxBranch; unfold rxBranch)
+    | (maintenance_lift_action_head getDev; exact AmbientContracts.drop (c.store (fun _ => True) _ getDev_sameWGStore))
+    | (maintenance_lift_action_head deviceDumpHeaderSource; exact AmbientContracts.drop (c.store (fun _ => True) _ (deviceDumpHeader_sameWGStore _ _ _ _)))
+    | (maintenance_lift_action_head getPeerDumpTailSource; exact AmbientContracts.drop (c.store (fun _ => True) _ ((getPeerDumpTail_sameWGWorld _ _ _).factor wgStoreView)))
+    | (maintenance_lift_action_head getNlSock; exact AmbientContracts.drop (c.store (fun _ => True) _ ((getNlSock_sameWGWorld _).factor wgStoreView)))
+    | (maintenance_lift_action_head lookupInterface; exact AmbientContracts.drop (c.store (fun _ => True) _ ((lookupInterface_sameWGWorld _).factor wgStoreView)))
+    | (maintenance_lift_action_head coalesce; exact AmbientContracts.drop (c.store (fun _ => True) _ ((coalesce_sameWGWorld _).factor wgStoreView)))
+    | (maintenance_lift_action_head branch; exact AmbientContracts.drop (c.store (fun _ => True) _ (fun initial => hoare_liftAmbient (AmbientM.branch _ _) (fun w => wgStoreView w = initial))))
+    | (maintenance_lift_action_head invariant; exact AmbientContracts.drop (c.store (fun _ => True) _ (fun initial => hoare_liftAmbient (AmbientM.invariant _) (fun w => wgStoreView w = initial))))
+    | (maintenance_lift_action_head unsupported; exact AmbientContracts.drop (c.store (fun _ => True) _ (fun initial => hoare_liftAmbient (AmbientM.unsupported _) (fun w => wgStoreView w = initial))))
+    | (maintenance_lift_action_head setNlSock; exact dumpLift_preserves_native c stable _ (setNlSock_sameDump _ _))
+    | (maintenance_head andPrefix; unfold andPrefix)
+    | (maintenance_head orPrefix; unfold orPrefix)
+    | (maintenance_head Pure.pure; exact StatePrefixEnsures.pure _ (fun h w _ hi => c.safe h w hi) (fun _ _ _ hi => hi))
+    | (maintenance_head ForIn.forIn; apply StatePrefixEnsures.forInInvariant _ _ _ (fun _ h w _ => I h w) LifetimeEvent.Safe (fun _ h w _ hi => c.safe h w hi); intro x b; change StatePrefixEnsures _ _ _ _)
+    | (maintenance_head Bind.bind; apply StatePrefixEnsures.bind (Q := fun _ h w _ => I h w))
+    | (maintenance_head Functor.map; apply dumpMap_preserves_native c)
+    | maintenance_join_let
+    | maintenance_join_use
+    | consume_conditional
+    | maintenance_reduce
+    | (with_reducible split)
+    | (maintenance_intro; try dsimp only)
+    | contradiction
+
+theorem netlinkDumpStartPrefix_preserves (c : AmbientContracts I) (stable : DumpStable I) (fd : Nat) (ref : DeviceRef) :
+    StatePrefixPreserves (fun h w _ => I h w) LifetimeEvent.Safe (netlinkDumpStartPrefix fd ref) := by
+  change StatePrefixEnsures _ _ _ _
+  unfold netlinkDumpStartPrefix
+  repeat' first
+    | (maintenance_head getPeerDumpPrefix; exact getPeerDumpPrefix_preserves c _ _ _ )
+    | (maintenance_head wgGetDeviceDonePrefix; exact wgGetDeviceDonePrefix_preserves c _ )
+    | (maintenance_head deviceDumpTailPrefix; exact deviceDumpTailPrefix_preserves c _ _ _ _ _ )
+    | (maintenance_head wgGetDeviceDumpPrefix; exact wgGetDeviceDumpPrefix_preserves c _ _ _ )
+    | (maintenance_head netlinkDumpPrefix; exact netlinkDumpPrefix_preserves c stable _ )
+    | (maintenance_head getPeerMixed; exact AmbientContracts.drop (c.getPeer (fun _ => True) _))
+    | (maintenance_head peerGetMixed; exact c.peerGet _)
+    | (maintenance_head peerPutMixed; exact c.peerPut _)
+    | (maintenance_head requireNotPendingMixed; exact AmbientContracts.drop (requireNotPendingMixed_spec c (fun _ => True) _ _))
+    | (maintenance_head rxBranch; unfold rxBranch)
+    | (maintenance_lift_action_head getDev; exact AmbientContracts.drop (c.store (fun _ => True) _ getDev_sameWGStore))
+    | (maintenance_lift_action_head deviceDumpHeaderSource; exact AmbientContracts.drop (c.store (fun _ => True) _ (deviceDumpHeader_sameWGStore _ _ _ _)))
+    | (maintenance_lift_action_head getPeerDumpTailSource; exact AmbientContracts.drop (c.store (fun _ => True) _ ((getPeerDumpTail_sameWGWorld _ _ _).factor wgStoreView)))
+    | (maintenance_lift_action_head getNlSock; exact AmbientContracts.drop (c.store (fun _ => True) _ ((getNlSock_sameWGWorld _).factor wgStoreView)))
+    | (maintenance_lift_action_head lookupInterface; exact AmbientContracts.drop (c.store (fun _ => True) _ ((lookupInterface_sameWGWorld _).factor wgStoreView)))
+    | (maintenance_lift_action_head coalesce; exact AmbientContracts.drop (c.store (fun _ => True) _ ((coalesce_sameWGWorld _).factor wgStoreView)))
+    | (maintenance_lift_action_head branch; exact AmbientContracts.drop (c.store (fun _ => True) _ (fun initial => hoare_liftAmbient (AmbientM.branch _ _) (fun w => wgStoreView w = initial))))
+    | (maintenance_lift_action_head invariant; exact AmbientContracts.drop (c.store (fun _ => True) _ (fun initial => hoare_liftAmbient (AmbientM.invariant _) (fun w => wgStoreView w = initial))))
+    | (maintenance_lift_action_head unsupported; exact AmbientContracts.drop (c.store (fun _ => True) _ (fun initial => hoare_liftAmbient (AmbientM.unsupported _) (fun w => wgStoreView w = initial))))
+    | (maintenance_lift_action_head setNlSock; exact dumpLift_preserves_native c stable _ (setNlSock_sameDump _ _))
+    | (maintenance_head andPrefix; unfold andPrefix)
+    | (maintenance_head orPrefix; unfold orPrefix)
+    | (maintenance_head Pure.pure; exact StatePrefixEnsures.pure _ (fun h w _ hi => c.safe h w hi) (fun _ _ _ hi => hi))
+    | (maintenance_head ForIn.forIn; apply StatePrefixEnsures.forInInvariant _ _ _ (fun _ h w _ => I h w) LifetimeEvent.Safe (fun _ h w _ hi => c.safe h w hi); intro x b; change StatePrefixEnsures _ _ _ _)
+    | (maintenance_head Bind.bind; apply StatePrefixEnsures.bind (Q := fun _ h w _ => I h w))
+    | (maintenance_head Functor.map; apply dumpMap_preserves_native c)
+    | maintenance_join_let
+    | maintenance_join_use
+    | consume_conditional
+    | maintenance_reduce
+    | (with_reducible split)
+    | (maintenance_intro; try dsimp only)
+    | contradiction
+
+theorem netlinkRecvmsgPrefix_preserves (c : AmbientContracts I) (stable : DumpStable I) (fd : Nat) :
+    StatePrefixPreserves (fun h w _ => I h w) LifetimeEvent.Safe (netlinkRecvmsgPrefix fd) := by
+  change StatePrefixEnsures _ _ _ _
+  unfold netlinkRecvmsgPrefix
+  repeat' first
+    | (maintenance_head getPeerDumpPrefix; exact getPeerDumpPrefix_preserves c _ _ _ )
+    | (maintenance_head wgGetDeviceDonePrefix; exact wgGetDeviceDonePrefix_preserves c _ )
+    | (maintenance_head deviceDumpTailPrefix; exact deviceDumpTailPrefix_preserves c _ _ _ _ _ )
+    | (maintenance_head wgGetDeviceDumpPrefix; exact wgGetDeviceDumpPrefix_preserves c _ _ _ )
+    | (maintenance_head netlinkDumpPrefix; exact netlinkDumpPrefix_preserves c stable _ )
+    | (maintenance_head netlinkDumpStartPrefix; exact netlinkDumpStartPrefix_preserves c stable _ _ )
+    | (maintenance_head getPeerMixed; exact AmbientContracts.drop (c.getPeer (fun _ => True) _))
+    | (maintenance_head peerGetMixed; exact c.peerGet _)
+    | (maintenance_head peerPutMixed; exact c.peerPut _)
+    | (maintenance_head requireNotPendingMixed; exact AmbientContracts.drop (requireNotPendingMixed_spec c (fun _ => True) _ _))
+    | (maintenance_head rxBranch; unfold rxBranch)
+    | (maintenance_lift_action_head getDev; exact AmbientContracts.drop (c.store (fun _ => True) _ getDev_sameWGStore))
+    | (maintenance_lift_action_head deviceDumpHeaderSource; exact AmbientContracts.drop (c.store (fun _ => True) _ (deviceDumpHeader_sameWGStore _ _ _ _)))
+    | (maintenance_lift_action_head getPeerDumpTailSource; exact AmbientContracts.drop (c.store (fun _ => True) _ ((getPeerDumpTail_sameWGWorld _ _ _).factor wgStoreView)))
+    | (maintenance_lift_action_head getNlSock; exact AmbientContracts.drop (c.store (fun _ => True) _ ((getNlSock_sameWGWorld _).factor wgStoreView)))
+    | (maintenance_lift_action_head lookupInterface; exact AmbientContracts.drop (c.store (fun _ => True) _ ((lookupInterface_sameWGWorld _).factor wgStoreView)))
+    | (maintenance_lift_action_head coalesce; exact AmbientContracts.drop (c.store (fun _ => True) _ ((coalesce_sameWGWorld _).factor wgStoreView)))
+    | (maintenance_lift_action_head branch; exact AmbientContracts.drop (c.store (fun _ => True) _ (fun initial => hoare_liftAmbient (AmbientM.branch _ _) (fun w => wgStoreView w = initial))))
+    | (maintenance_lift_action_head invariant; exact AmbientContracts.drop (c.store (fun _ => True) _ (fun initial => hoare_liftAmbient (AmbientM.invariant _) (fun w => wgStoreView w = initial))))
+    | (maintenance_lift_action_head unsupported; exact AmbientContracts.drop (c.store (fun _ => True) _ (fun initial => hoare_liftAmbient (AmbientM.unsupported _) (fun w => wgStoreView w = initial))))
+    | (maintenance_lift_action_head setNlSock; exact dumpLift_preserves_native c stable _ (setNlSock_sameDump _ _))
+    | (maintenance_head andPrefix; unfold andPrefix)
+    | (maintenance_head orPrefix; unfold orPrefix)
+    | (maintenance_head Pure.pure; exact StatePrefixEnsures.pure _ (fun h w _ hi => c.safe h w hi) (fun _ _ _ hi => hi))
+    | (maintenance_head ForIn.forIn; apply StatePrefixEnsures.forInInvariant _ _ _ (fun _ h w _ => I h w) LifetimeEvent.Safe (fun _ h w _ hi => c.safe h w hi); intro x b; change StatePrefixEnsures _ _ _ _)
+    | (maintenance_head Bind.bind; apply StatePrefixEnsures.bind (Q := fun _ h w _ => I h w))
+    | (maintenance_head Functor.map; apply dumpMap_preserves_native c)
+    | maintenance_join_let
+    | maintenance_join_use
+    | consume_conditional
+    | maintenance_reduce
+    | (with_reducible split)
+    | (maintenance_intro; try dsimp only)
+    | contradiction
 
 theorem wgGetDevicePrefix_preserves (c : AmbientContracts I) (stable : DumpStable I) (ref : DeviceRef) :
-    PrefixPreserves I LifetimeEvent.Safe (wgGetDevicePrefix ref) := by
+    StatePrefixPreserves (fun h w _ => I h w) LifetimeEvent.Safe (wgGetDevicePrefix ref) := by
+  change StatePrefixEnsures _ _ _ _
   unfold wgGetDevicePrefix
+  simp only [Std.Legacy.Range.forIn_eq_forIn_range']
   repeat' first
-    | with_reducible exact getPeerDumpPrefix_preserves c _ _ _
-    | with_reducible exact wgGetDeviceDonePrefix_preserves c _
-    | with_reducible exact wgGetDeviceDumpPrefix_preserves c _ _ _
-    | with_reducible exact netlinkDumpPrefix_preserves c stable _
-    | with_reducible exact netlinkDumpStartPrefix_preserves c stable _ _
-    | with_reducible exact netlinkRecvmsgPrefix_preserves c stable _
-    | with_reducible exact dumpLift_preserves c stable _ (setNlSock_sameDumpKernel _ _)
-    | with_reducible exact AmbientContracts.drop (c.getPeer (fun _ => True) _)
-    | with_reducible exact c.peerGet _
-    | with_reducible exact c.peerPut _
-    | with_reducible exact AmbientContracts.drop (requireNotPendingMixed_spec c (fun _ => True) _ _)
-    | with_reducible exact AmbientContracts.drop (c.invariant (fun _ => True) _)
-    | with_reducible exact PrefixPreserves.pure c.safe _
-    | with_reducible apply AmbientContracts.drop (c.kernel (fun _ => True) _ ?_)
-    | with_reducible exact sameKernel_branch _ _
-    | with_reducible exact getDev_sameKernel
-    | with_reducible exact getNlSock_sameKernel _
-    | with_reducible exact lookupInterface_sameKernel _
-    | with_reducible exact coalesce_sameKernel _
-    | with_reducible exact dumpUnsupported_sameKernel _
-    | with_reducible apply andPrefix_preserves c.safe
-    | with_reducible apply orPrefix_preserves c.safe
-    | with_reducible apply PrefixPreserves.range _ _ _ c.safe
-    | with_reducible apply PrefixPreserves.forIn _ _ _ c.safe
-    | with_reducible apply dumpMap_preserves c
-    | with_reducible apply PrefixPreserves.bind
-    | with_reducible apply PrefixPreserves.ite
-    | (dump_prefix_intro; try dsimp only)
+    | (maintenance_head getPeerDumpPrefix; exact getPeerDumpPrefix_preserves c _ _ _ )
+    | (maintenance_head wgGetDeviceDonePrefix; exact wgGetDeviceDonePrefix_preserves c _ )
+    | (maintenance_head deviceDumpTailPrefix; exact deviceDumpTailPrefix_preserves c _ _ _ _ _ )
+    | (maintenance_head wgGetDeviceDumpPrefix; exact wgGetDeviceDumpPrefix_preserves c _ _ _ )
+    | (maintenance_head netlinkDumpPrefix; exact netlinkDumpPrefix_preserves c stable _ )
+    | (maintenance_head netlinkDumpStartPrefix; exact netlinkDumpStartPrefix_preserves c stable _ _ )
+    | (maintenance_head netlinkRecvmsgPrefix; exact netlinkRecvmsgPrefix_preserves c stable _ )
+    | (maintenance_head getPeerMixed; exact AmbientContracts.drop (c.getPeer (fun _ => True) _))
+    | (maintenance_head peerGetMixed; exact c.peerGet _)
+    | (maintenance_head peerPutMixed; exact c.peerPut _)
+    | (maintenance_head requireNotPendingMixed; exact AmbientContracts.drop (requireNotPendingMixed_spec c (fun _ => True) _ _))
+    | (maintenance_head rxBranch; unfold rxBranch)
+    | (maintenance_lift_action_head getDev; exact AmbientContracts.drop (c.store (fun _ => True) _ getDev_sameWGStore))
+    | (maintenance_lift_action_head deviceDumpHeaderSource; exact AmbientContracts.drop (c.store (fun _ => True) _ (deviceDumpHeader_sameWGStore _ _ _ _)))
+    | (maintenance_lift_action_head getPeerDumpTailSource; exact AmbientContracts.drop (c.store (fun _ => True) _ ((getPeerDumpTail_sameWGWorld _ _ _).factor wgStoreView)))
+    | (maintenance_lift_action_head getNlSock; exact AmbientContracts.drop (c.store (fun _ => True) _ ((getNlSock_sameWGWorld _).factor wgStoreView)))
+    | (maintenance_lift_action_head lookupInterface; exact AmbientContracts.drop (c.store (fun _ => True) _ ((lookupInterface_sameWGWorld _).factor wgStoreView)))
+    | (maintenance_lift_action_head coalesce; exact AmbientContracts.drop (c.store (fun _ => True) _ ((coalesce_sameWGWorld _).factor wgStoreView)))
+    | (maintenance_lift_action_head branch; exact AmbientContracts.drop (c.store (fun _ => True) _ (fun initial => hoare_liftAmbient (AmbientM.branch _ _) (fun w => wgStoreView w = initial))))
+    | (maintenance_lift_action_head invariant; exact AmbientContracts.drop (c.store (fun _ => True) _ (fun initial => hoare_liftAmbient (AmbientM.invariant _) (fun w => wgStoreView w = initial))))
+    | (maintenance_lift_action_head unsupported; exact AmbientContracts.drop (c.store (fun _ => True) _ (fun initial => hoare_liftAmbient (AmbientM.unsupported _) (fun w => wgStoreView w = initial))))
+    | (maintenance_lift_action_head setNlSock; exact dumpLift_preserves_native c stable _ (setNlSock_sameDump _ _))
+    | (maintenance_head andPrefix; unfold andPrefix)
+    | (maintenance_head orPrefix; unfold orPrefix)
+    | (maintenance_head Pure.pure; exact StatePrefixEnsures.pure _ (fun h w _ hi => c.safe h w hi) (fun _ _ _ hi => hi))
+    | (maintenance_head ForIn.forIn; apply StatePrefixEnsures.forInInvariant _ _ _ (fun _ h w _ => I h w) LifetimeEvent.Safe (fun _ h w _ hi => c.safe h w hi); intro x b; change StatePrefixEnsures _ _ _ _)
+    | (maintenance_head Bind.bind; apply StatePrefixEnsures.bind (Q := fun _ h w _ => I h w))
+    | (maintenance_head Functor.map; apply dumpMap_preserves_native c)
+    | maintenance_join_let
+    | maintenance_join_use
+    | consume_conditional
+    | maintenance_reduce
     | (with_reducible split)
-    | simp_all
-  all_goals simp_all
-  all_goals first | exact erasesPrefix_lift _ | exact erasesPrefix_pure _ | skip
+    | (maintenance_intro; try dsimp only)
+    | contradiction
+
+theorem getPeerDumpPrefix_preserves_product (c : ProductAmbientContracts I) (pid : PeerId) (ctx : DumpCtx) (skb : NlSkb) :
+    PrefixPreserves I LifetimeEvent.Safe (liftWGObserver (getPeerDumpPrefix pid ctx skb)) := by
+  change PrefixEnsures _ _ _ _
+  unfold getPeerDumpPrefix
+  repeat' first
+    | (first | rw [liftWGObserver_bind] | rw [liftWGObserver_pure] | rw [liftWGObserver_forIn] | rw [apply_ite])
+    | (maintenance_head getPeerMixed; exact ProductAmbientContracts.drop (c.getPeer (fun _ => True) _))
+    | (maintenance_head peerGetMixed; exact c.peerGet _)
+    | (maintenance_head peerPutMixed; exact c.peerPut _)
+    | (maintenance_head requireNotPendingMixed; exact ProductAmbientContracts.drop (requireNotPendingMixed_spec_product c (fun _ => True) _ _))
+    | (maintenance_head rxBranch; unfold rxBranch)
+    | (maintenance_lift_action_head getDev; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ getDev_sameWGStore))
+    | (maintenance_lift_action_head deviceDumpHeaderSource; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ (deviceDumpHeader_sameWGStore _ _ _ _)))
+    | (maintenance_lift_action_head getPeerDumpTailSource; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ ((getPeerDumpTail_sameWGWorld _ _ _).factor wgStoreView)))
+    | (maintenance_lift_action_head getNlSock; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ ((getNlSock_sameWGWorld _).factor wgStoreView)))
+    | (maintenance_lift_action_head lookupInterface; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ ((lookupInterface_sameWGWorld _).factor wgStoreView)))
+    | (maintenance_lift_action_head coalesce; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ ((coalesce_sameWGWorld _).factor wgStoreView)))
+    | (maintenance_lift_action_head branch; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ (fun initial => hoare_liftAmbient (AmbientM.branch _ _) (fun w => wgStoreView w = initial))))
+    | (maintenance_lift_action_head invariant; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ (fun initial => hoare_liftAmbient (AmbientM.invariant _) (fun w => wgStoreView w = initial))))
+    | (maintenance_lift_action_head unsupported; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ (fun initial => hoare_liftAmbient (AmbientM.unsupported _) (fun w => wgStoreView w = initial))))
+    | (maintenance_head andPrefix; unfold andPrefix)
+    | (maintenance_head orPrefix; unfold orPrefix)
+    | (maintenance_head Pure.pure; exact PrefixPreserves.pure c.safe _)
+    | (maintenance_head ForIn.forIn; apply PrefixPreserves.forIn _ _ _ c.safe; intro x b; change PrefixEnsures _ _ _ _)
+    | (maintenance_head Bind.bind; apply PrefixEnsures.bind (Q := fun _ h w => I h w))
+    | (maintenance_head Functor.map; simp only [map_eq_pure_bind])
+    | maintenance_join_let
+    | maintenance_join_use
+    | consume_conditional
+    | maintenance_reduce
+    | (with_reducible split)
+    | (maintenance_intro; try dsimp only)
+    | contradiction
+
+theorem wgGetDeviceDonePrefix_preserves_product (c : ProductAmbientContracts I) (ctx : DumpCtx) :
+    PrefixPreserves I LifetimeEvent.Safe (liftWGObserver (wgGetDeviceDonePrefix ctx)) := by
+  change PrefixEnsures _ _ _ _
+  unfold wgGetDeviceDonePrefix
+  repeat' first
+    | (first | rw [liftWGObserver_bind] | rw [liftWGObserver_pure] | rw [liftWGObserver_forIn] | rw [apply_ite])
+    | (maintenance_head getPeerDumpPrefix; exact getPeerDumpPrefix_preserves_product c _ _ _ )
+    | (maintenance_head getPeerMixed; exact ProductAmbientContracts.drop (c.getPeer (fun _ => True) _))
+    | (maintenance_head peerGetMixed; exact c.peerGet _)
+    | (maintenance_head peerPutMixed; exact c.peerPut _)
+    | (maintenance_head requireNotPendingMixed; exact ProductAmbientContracts.drop (requireNotPendingMixed_spec_product c (fun _ => True) _ _))
+    | (maintenance_head rxBranch; unfold rxBranch)
+    | (maintenance_lift_action_head getDev; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ getDev_sameWGStore))
+    | (maintenance_lift_action_head deviceDumpHeaderSource; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ (deviceDumpHeader_sameWGStore _ _ _ _)))
+    | (maintenance_lift_action_head getPeerDumpTailSource; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ ((getPeerDumpTail_sameWGWorld _ _ _).factor wgStoreView)))
+    | (maintenance_lift_action_head getNlSock; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ ((getNlSock_sameWGWorld _).factor wgStoreView)))
+    | (maintenance_lift_action_head lookupInterface; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ ((lookupInterface_sameWGWorld _).factor wgStoreView)))
+    | (maintenance_lift_action_head coalesce; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ ((coalesce_sameWGWorld _).factor wgStoreView)))
+    | (maintenance_lift_action_head branch; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ (fun initial => hoare_liftAmbient (AmbientM.branch _ _) (fun w => wgStoreView w = initial))))
+    | (maintenance_lift_action_head invariant; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ (fun initial => hoare_liftAmbient (AmbientM.invariant _) (fun w => wgStoreView w = initial))))
+    | (maintenance_lift_action_head unsupported; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ (fun initial => hoare_liftAmbient (AmbientM.unsupported _) (fun w => wgStoreView w = initial))))
+    | (maintenance_head andPrefix; unfold andPrefix)
+    | (maintenance_head orPrefix; unfold orPrefix)
+    | (maintenance_head Pure.pure; exact PrefixPreserves.pure c.safe _)
+    | (maintenance_head ForIn.forIn; apply PrefixPreserves.forIn _ _ _ c.safe; intro x b; change PrefixEnsures _ _ _ _)
+    | (maintenance_head Bind.bind; apply PrefixEnsures.bind (Q := fun _ h w => I h w))
+    | (maintenance_head Functor.map; simp only [map_eq_pure_bind])
+    | maintenance_join_let
+    | maintenance_join_use
+    | consume_conditional
+    | maintenance_reduce
+    | (with_reducible split)
+    | (maintenance_intro; try dsimp only)
+    | contradiction
+
+theorem deviceDumpTailPrefix_preserves_product (c : ProductAmbientContracts I) (d : Device) (ctx : DumpCtx) (skb : NlSkb) (flags : Nat) (attrs : List (String × Json)) :
+    PrefixPreserves I LifetimeEvent.Safe (liftWGObserver (deviceDumpTailPrefix d ctx skb flags attrs)) := by
+  change PrefixEnsures _ _ _ _
+  unfold deviceDumpTailPrefix
+  repeat' first
+    | (first | rw [liftWGObserver_bind] | rw [liftWGObserver_pure] | rw [liftWGObserver_forIn] | rw [apply_ite])
+    | (maintenance_head getPeerDumpPrefix; exact getPeerDumpPrefix_preserves_product c _ _ _ )
+    | (maintenance_head wgGetDeviceDonePrefix; exact wgGetDeviceDonePrefix_preserves_product c _ )
+    | (maintenance_head getPeerMixed; exact ProductAmbientContracts.drop (c.getPeer (fun _ => True) _))
+    | (maintenance_head peerGetMixed; exact c.peerGet _)
+    | (maintenance_head peerPutMixed; exact c.peerPut _)
+    | (maintenance_head requireNotPendingMixed; exact ProductAmbientContracts.drop (requireNotPendingMixed_spec_product c (fun _ => True) _ _))
+    | (maintenance_head rxBranch; unfold rxBranch)
+    | (maintenance_lift_action_head getDev; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ getDev_sameWGStore))
+    | (maintenance_lift_action_head deviceDumpHeaderSource; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ (deviceDumpHeader_sameWGStore _ _ _ _)))
+    | (maintenance_lift_action_head getPeerDumpTailSource; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ ((getPeerDumpTail_sameWGWorld _ _ _).factor wgStoreView)))
+    | (maintenance_lift_action_head getNlSock; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ ((getNlSock_sameWGWorld _).factor wgStoreView)))
+    | (maintenance_lift_action_head lookupInterface; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ ((lookupInterface_sameWGWorld _).factor wgStoreView)))
+    | (maintenance_lift_action_head coalesce; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ ((coalesce_sameWGWorld _).factor wgStoreView)))
+    | (maintenance_lift_action_head branch; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ (fun initial => hoare_liftAmbient (AmbientM.branch _ _) (fun w => wgStoreView w = initial))))
+    | (maintenance_lift_action_head invariant; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ (fun initial => hoare_liftAmbient (AmbientM.invariant _) (fun w => wgStoreView w = initial))))
+    | (maintenance_lift_action_head unsupported; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ (fun initial => hoare_liftAmbient (AmbientM.unsupported _) (fun w => wgStoreView w = initial))))
+    | (maintenance_head andPrefix; unfold andPrefix)
+    | (maintenance_head orPrefix; unfold orPrefix)
+    | (maintenance_head Pure.pure; exact PrefixPreserves.pure c.safe _)
+    | (maintenance_head ForIn.forIn; apply PrefixPreserves.forIn _ _ _ c.safe; intro x b; change PrefixEnsures _ _ _ _)
+    | (maintenance_head Bind.bind; apply PrefixEnsures.bind (Q := fun _ h w => I h w))
+    | (maintenance_head Functor.map; simp only [map_eq_pure_bind])
+    | maintenance_join_let
+    | maintenance_join_use
+    | consume_conditional
+    | maintenance_reduce
+    | (with_reducible split)
+    | (maintenance_intro; try dsimp only)
+    | contradiction
+
+theorem wgGetDeviceDumpPrefix_preserves_product (c : ProductAmbientContracts I) (ctx : DumpCtx) (prevSeq : Nat) (skb : NlSkb) :
+    PrefixPreserves I LifetimeEvent.Safe (liftWGObserver (wgGetDeviceDumpPrefix ctx prevSeq skb)) := by
+  change PrefixEnsures _ _ _ _
+  unfold wgGetDeviceDumpPrefix
+  repeat' first
+    | (first | rw [liftWGObserver_bind] | rw [liftWGObserver_pure] | rw [liftWGObserver_forIn] | rw [apply_ite])
+    | (maintenance_head getPeerDumpPrefix; exact getPeerDumpPrefix_preserves_product c _ _ _ )
+    | (maintenance_head wgGetDeviceDonePrefix; exact wgGetDeviceDonePrefix_preserves_product c _ )
+    | (maintenance_head deviceDumpTailPrefix; exact deviceDumpTailPrefix_preserves_product c _ _ _ _ _ )
+    | (maintenance_head getPeerMixed; exact ProductAmbientContracts.drop (c.getPeer (fun _ => True) _))
+    | (maintenance_head peerGetMixed; exact c.peerGet _)
+    | (maintenance_head peerPutMixed; exact c.peerPut _)
+    | (maintenance_head requireNotPendingMixed; exact ProductAmbientContracts.drop (requireNotPendingMixed_spec_product c (fun _ => True) _ _))
+    | (maintenance_head rxBranch; unfold rxBranch)
+    | (maintenance_lift_action_head getDev; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ getDev_sameWGStore))
+    | (maintenance_lift_action_head deviceDumpHeaderSource; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ (deviceDumpHeader_sameWGStore _ _ _ _)))
+    | (maintenance_lift_action_head getPeerDumpTailSource; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ ((getPeerDumpTail_sameWGWorld _ _ _).factor wgStoreView)))
+    | (maintenance_lift_action_head getNlSock; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ ((getNlSock_sameWGWorld _).factor wgStoreView)))
+    | (maintenance_lift_action_head lookupInterface; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ ((lookupInterface_sameWGWorld _).factor wgStoreView)))
+    | (maintenance_lift_action_head coalesce; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ ((coalesce_sameWGWorld _).factor wgStoreView)))
+    | (maintenance_lift_action_head branch; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ (fun initial => hoare_liftAmbient (AmbientM.branch _ _) (fun w => wgStoreView w = initial))))
+    | (maintenance_lift_action_head invariant; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ (fun initial => hoare_liftAmbient (AmbientM.invariant _) (fun w => wgStoreView w = initial))))
+    | (maintenance_lift_action_head unsupported; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ (fun initial => hoare_liftAmbient (AmbientM.unsupported _) (fun w => wgStoreView w = initial))))
+    | (maintenance_head andPrefix; unfold andPrefix)
+    | (maintenance_head orPrefix; unfold orPrefix)
+    | (maintenance_head Pure.pure; exact PrefixPreserves.pure c.safe _)
+    | (maintenance_head ForIn.forIn; apply PrefixPreserves.forIn _ _ _ c.safe; intro x b; change PrefixEnsures _ _ _ _)
+    | (maintenance_head Bind.bind; apply PrefixEnsures.bind (Q := fun _ h w => I h w))
+    | (maintenance_head Functor.map; simp only [map_eq_pure_bind])
+    | maintenance_join_let
+    | maintenance_join_use
+    | consume_conditional
+    | maintenance_reduce
+    | (with_reducible split)
+    | (maintenance_intro; try dsimp only)
+    | contradiction
+
+theorem netlinkDumpPrefix_preserves_product (c : ProductAmbientContracts I) (stable : ProductDumpStable I) (fd : Nat) :
+    PrefixPreserves I LifetimeEvent.Safe (liftWGObserver (netlinkDumpPrefix fd)) := by
+  change PrefixEnsures _ _ _ _
+  unfold netlinkDumpPrefix
+  repeat' first
+    | (first | rw [liftWGObserver_bind] | rw [liftWGObserver_pure] | rw [liftWGObserver_forIn] | rw [apply_ite])
+    | (maintenance_head getPeerDumpPrefix; exact getPeerDumpPrefix_preserves_product c _ _ _ )
+    | (maintenance_head wgGetDeviceDonePrefix; exact wgGetDeviceDonePrefix_preserves_product c _ )
+    | (maintenance_head deviceDumpTailPrefix; exact deviceDumpTailPrefix_preserves_product c _ _ _ _ _ )
+    | (maintenance_head wgGetDeviceDumpPrefix; exact wgGetDeviceDumpPrefix_preserves_product c _ _ _ )
+    | (maintenance_head getPeerMixed; exact ProductAmbientContracts.drop (c.getPeer (fun _ => True) _))
+    | (maintenance_head peerGetMixed; exact c.peerGet _)
+    | (maintenance_head peerPutMixed; exact c.peerPut _)
+    | (maintenance_head requireNotPendingMixed; exact ProductAmbientContracts.drop (requireNotPendingMixed_spec_product c (fun _ => True) _ _))
+    | (maintenance_head rxBranch; unfold rxBranch)
+    | (maintenance_lift_action_head getDev; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ getDev_sameWGStore))
+    | (maintenance_lift_action_head deviceDumpHeaderSource; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ (deviceDumpHeader_sameWGStore _ _ _ _)))
+    | (maintenance_lift_action_head getPeerDumpTailSource; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ ((getPeerDumpTail_sameWGWorld _ _ _).factor wgStoreView)))
+    | (maintenance_lift_action_head getNlSock; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ ((getNlSock_sameWGWorld _).factor wgStoreView)))
+    | (maintenance_lift_action_head lookupInterface; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ ((lookupInterface_sameWGWorld _).factor wgStoreView)))
+    | (maintenance_lift_action_head coalesce; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ ((coalesce_sameWGWorld _).factor wgStoreView)))
+    | (maintenance_lift_action_head branch; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ (fun initial => hoare_liftAmbient (AmbientM.branch _ _) (fun w => wgStoreView w = initial))))
+    | (maintenance_lift_action_head invariant; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ (fun initial => hoare_liftAmbient (AmbientM.invariant _) (fun w => wgStoreView w = initial))))
+    | (maintenance_lift_action_head unsupported; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ (fun initial => hoare_liftAmbient (AmbientM.unsupported _) (fun w => wgStoreView w = initial))))
+    | (maintenance_lift_action_head setNlSock; exact dumpLift_native_product c stable _ (setNlSock_sameDump _ _))
+    | (maintenance_head andPrefix; unfold andPrefix)
+    | (maintenance_head orPrefix; unfold orPrefix)
+    | (maintenance_head Pure.pure; exact PrefixPreserves.pure c.safe _)
+    | (maintenance_head ForIn.forIn; apply PrefixPreserves.forIn _ _ _ c.safe; intro x b; change PrefixEnsures _ _ _ _)
+    | (maintenance_head Bind.bind; apply PrefixEnsures.bind (Q := fun _ h w => I h w))
+    | (maintenance_head Functor.map; simp only [map_eq_pure_bind])
+    | maintenance_join_let
+    | maintenance_join_use
+    | consume_conditional
+    | maintenance_reduce
+    | (with_reducible split)
+    | (maintenance_intro; try dsimp only)
+    | contradiction
+
+theorem netlinkDumpStartPrefix_preserves_product (c : ProductAmbientContracts I) (stable : ProductDumpStable I) (fd : Nat) (ref : DeviceRef) :
+    PrefixPreserves I LifetimeEvent.Safe (liftWGObserver (netlinkDumpStartPrefix fd ref)) := by
+  change PrefixEnsures _ _ _ _
+  unfold netlinkDumpStartPrefix
+  repeat' first
+    | (first | rw [liftWGObserver_bind] | rw [liftWGObserver_pure] | rw [liftWGObserver_forIn] | rw [apply_ite])
+    | (maintenance_head getPeerDumpPrefix; exact getPeerDumpPrefix_preserves_product c _ _ _ )
+    | (maintenance_head wgGetDeviceDonePrefix; exact wgGetDeviceDonePrefix_preserves_product c _ )
+    | (maintenance_head deviceDumpTailPrefix; exact deviceDumpTailPrefix_preserves_product c _ _ _ _ _ )
+    | (maintenance_head wgGetDeviceDumpPrefix; exact wgGetDeviceDumpPrefix_preserves_product c _ _ _ )
+    | (maintenance_head netlinkDumpPrefix; exact netlinkDumpPrefix_preserves_product c stable _ )
+    | (maintenance_head getPeerMixed; exact ProductAmbientContracts.drop (c.getPeer (fun _ => True) _))
+    | (maintenance_head peerGetMixed; exact c.peerGet _)
+    | (maintenance_head peerPutMixed; exact c.peerPut _)
+    | (maintenance_head requireNotPendingMixed; exact ProductAmbientContracts.drop (requireNotPendingMixed_spec_product c (fun _ => True) _ _))
+    | (maintenance_head rxBranch; unfold rxBranch)
+    | (maintenance_lift_action_head getDev; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ getDev_sameWGStore))
+    | (maintenance_lift_action_head deviceDumpHeaderSource; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ (deviceDumpHeader_sameWGStore _ _ _ _)))
+    | (maintenance_lift_action_head getPeerDumpTailSource; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ ((getPeerDumpTail_sameWGWorld _ _ _).factor wgStoreView)))
+    | (maintenance_lift_action_head getNlSock; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ ((getNlSock_sameWGWorld _).factor wgStoreView)))
+    | (maintenance_lift_action_head lookupInterface; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ ((lookupInterface_sameWGWorld _).factor wgStoreView)))
+    | (maintenance_lift_action_head coalesce; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ ((coalesce_sameWGWorld _).factor wgStoreView)))
+    | (maintenance_lift_action_head branch; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ (fun initial => hoare_liftAmbient (AmbientM.branch _ _) (fun w => wgStoreView w = initial))))
+    | (maintenance_lift_action_head invariant; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ (fun initial => hoare_liftAmbient (AmbientM.invariant _) (fun w => wgStoreView w = initial))))
+    | (maintenance_lift_action_head unsupported; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ (fun initial => hoare_liftAmbient (AmbientM.unsupported _) (fun w => wgStoreView w = initial))))
+    | (maintenance_lift_action_head setNlSock; exact dumpLift_native_product c stable _ (setNlSock_sameDump _ _))
+    | (maintenance_head andPrefix; unfold andPrefix)
+    | (maintenance_head orPrefix; unfold orPrefix)
+    | (maintenance_head Pure.pure; exact PrefixPreserves.pure c.safe _)
+    | (maintenance_head ForIn.forIn; apply PrefixPreserves.forIn _ _ _ c.safe; intro x b; change PrefixEnsures _ _ _ _)
+    | (maintenance_head Bind.bind; apply PrefixEnsures.bind (Q := fun _ h w => I h w))
+    | (maintenance_head Functor.map; simp only [map_eq_pure_bind])
+    | maintenance_join_let
+    | maintenance_join_use
+    | consume_conditional
+    | maintenance_reduce
+    | (with_reducible split)
+    | (maintenance_intro; try dsimp only)
+    | contradiction
+
+theorem netlinkRecvmsgPrefix_preserves_product (c : ProductAmbientContracts I) (stable : ProductDumpStable I) (fd : Nat) :
+    PrefixPreserves I LifetimeEvent.Safe (liftWGObserver (netlinkRecvmsgPrefix fd)) := by
+  change PrefixEnsures _ _ _ _
+  unfold netlinkRecvmsgPrefix
+  repeat' first
+    | (first | rw [liftWGObserver_bind] | rw [liftWGObserver_pure] | rw [liftWGObserver_forIn] | rw [apply_ite])
+    | (maintenance_head getPeerDumpPrefix; exact getPeerDumpPrefix_preserves_product c _ _ _ )
+    | (maintenance_head wgGetDeviceDonePrefix; exact wgGetDeviceDonePrefix_preserves_product c _ )
+    | (maintenance_head deviceDumpTailPrefix; exact deviceDumpTailPrefix_preserves_product c _ _ _ _ _ )
+    | (maintenance_head wgGetDeviceDumpPrefix; exact wgGetDeviceDumpPrefix_preserves_product c _ _ _ )
+    | (maintenance_head netlinkDumpPrefix; exact netlinkDumpPrefix_preserves_product c stable _ )
+    | (maintenance_head netlinkDumpStartPrefix; exact netlinkDumpStartPrefix_preserves_product c stable _ _ )
+    | (maintenance_head getPeerMixed; exact ProductAmbientContracts.drop (c.getPeer (fun _ => True) _))
+    | (maintenance_head peerGetMixed; exact c.peerGet _)
+    | (maintenance_head peerPutMixed; exact c.peerPut _)
+    | (maintenance_head requireNotPendingMixed; exact ProductAmbientContracts.drop (requireNotPendingMixed_spec_product c (fun _ => True) _ _))
+    | (maintenance_head rxBranch; unfold rxBranch)
+    | (maintenance_lift_action_head getDev; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ getDev_sameWGStore))
+    | (maintenance_lift_action_head deviceDumpHeaderSource; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ (deviceDumpHeader_sameWGStore _ _ _ _)))
+    | (maintenance_lift_action_head getPeerDumpTailSource; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ ((getPeerDumpTail_sameWGWorld _ _ _).factor wgStoreView)))
+    | (maintenance_lift_action_head getNlSock; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ ((getNlSock_sameWGWorld _).factor wgStoreView)))
+    | (maintenance_lift_action_head lookupInterface; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ ((lookupInterface_sameWGWorld _).factor wgStoreView)))
+    | (maintenance_lift_action_head coalesce; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ ((coalesce_sameWGWorld _).factor wgStoreView)))
+    | (maintenance_lift_action_head branch; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ (fun initial => hoare_liftAmbient (AmbientM.branch _ _) (fun w => wgStoreView w = initial))))
+    | (maintenance_lift_action_head invariant; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ (fun initial => hoare_liftAmbient (AmbientM.invariant _) (fun w => wgStoreView w = initial))))
+    | (maintenance_lift_action_head unsupported; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ (fun initial => hoare_liftAmbient (AmbientM.unsupported _) (fun w => wgStoreView w = initial))))
+    | (maintenance_lift_action_head setNlSock; exact dumpLift_native_product c stable _ (setNlSock_sameDump _ _))
+    | (maintenance_head andPrefix; unfold andPrefix)
+    | (maintenance_head orPrefix; unfold orPrefix)
+    | (maintenance_head Pure.pure; exact PrefixPreserves.pure c.safe _)
+    | (maintenance_head ForIn.forIn; apply PrefixPreserves.forIn _ _ _ c.safe; intro x b; change PrefixEnsures _ _ _ _)
+    | (maintenance_head Bind.bind; apply PrefixEnsures.bind (Q := fun _ h w => I h w))
+    | (maintenance_head Functor.map; simp only [map_eq_pure_bind])
+    | maintenance_join_let
+    | maintenance_join_use
+    | consume_conditional
+    | maintenance_reduce
+    | (with_reducible split)
+    | (maintenance_intro; try dsimp only)
+    | contradiction
+
+theorem wgGetDevicePrefix_preserves_product (c : ProductAmbientContracts I) (stable : ProductDumpStable I) (ref : DeviceRef) :
+    PrefixPreserves I LifetimeEvent.Safe (liftWGObserver (wgGetDevicePrefix ref)) := by
+  change PrefixEnsures _ _ _ _
+  unfold wgGetDevicePrefix
+  simp only [Std.Legacy.Range.forIn_eq_forIn_range']
+  repeat' first
+    | (first | rw [liftWGObserver_bind] | rw [liftWGObserver_pure] | rw [liftWGObserver_forIn] | rw [apply_ite])
+    | (maintenance_head getPeerDumpPrefix; exact getPeerDumpPrefix_preserves_product c _ _ _ )
+    | (maintenance_head wgGetDeviceDonePrefix; exact wgGetDeviceDonePrefix_preserves_product c _ )
+    | (maintenance_head deviceDumpTailPrefix; exact deviceDumpTailPrefix_preserves_product c _ _ _ _ _ )
+    | (maintenance_head wgGetDeviceDumpPrefix; exact wgGetDeviceDumpPrefix_preserves_product c _ _ _ )
+    | (maintenance_head netlinkDumpPrefix; exact netlinkDumpPrefix_preserves_product c stable _ )
+    | (maintenance_head netlinkDumpStartPrefix; exact netlinkDumpStartPrefix_preserves_product c stable _ _ )
+    | (maintenance_head netlinkRecvmsgPrefix; exact netlinkRecvmsgPrefix_preserves_product c stable _ )
+    | (maintenance_head getPeerMixed; exact ProductAmbientContracts.drop (c.getPeer (fun _ => True) _))
+    | (maintenance_head peerGetMixed; exact c.peerGet _)
+    | (maintenance_head peerPutMixed; exact c.peerPut _)
+    | (maintenance_head requireNotPendingMixed; exact ProductAmbientContracts.drop (requireNotPendingMixed_spec_product c (fun _ => True) _ _))
+    | (maintenance_head rxBranch; unfold rxBranch)
+    | (maintenance_lift_action_head getDev; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ getDev_sameWGStore))
+    | (maintenance_lift_action_head deviceDumpHeaderSource; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ (deviceDumpHeader_sameWGStore _ _ _ _)))
+    | (maintenance_lift_action_head getPeerDumpTailSource; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ ((getPeerDumpTail_sameWGWorld _ _ _).factor wgStoreView)))
+    | (maintenance_lift_action_head getNlSock; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ ((getNlSock_sameWGWorld _).factor wgStoreView)))
+    | (maintenance_lift_action_head lookupInterface; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ ((lookupInterface_sameWGWorld _).factor wgStoreView)))
+    | (maintenance_lift_action_head coalesce; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ ((coalesce_sameWGWorld _).factor wgStoreView)))
+    | (maintenance_lift_action_head branch; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ (fun initial => hoare_liftAmbient (AmbientM.branch _ _) (fun w => wgStoreView w = initial))))
+    | (maintenance_lift_action_head invariant; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ (fun initial => hoare_liftAmbient (AmbientM.invariant _) (fun w => wgStoreView w = initial))))
+    | (maintenance_lift_action_head unsupported; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ (fun initial => hoare_liftAmbient (AmbientM.unsupported _) (fun w => wgStoreView w = initial))))
+    | (maintenance_lift_action_head setNlSock; exact dumpLift_native_product c stable _ (setNlSock_sameDump _ _))
+    | (maintenance_head andPrefix; unfold andPrefix)
+    | (maintenance_head orPrefix; unfold orPrefix)
+    | (maintenance_head Pure.pure; exact PrefixPreserves.pure c.safe _)
+    | (maintenance_head ForIn.forIn; apply PrefixPreserves.forIn _ _ _ c.safe; intro x b; change PrefixEnsures _ _ _ _)
+    | (maintenance_head Bind.bind; apply PrefixEnsures.bind (Q := fun _ h w => I h w))
+    | (maintenance_head Functor.map; simp only [map_eq_pure_bind])
+    | maintenance_join_let
+    | maintenance_join_use
+    | consume_conditional
+    | maintenance_reduce
+    | (with_reducible split)
+    | (maintenance_intro; try dsimp only)
+    | contradiction
 
 /-- The seven original dump result types remain distinct. -/
 inductive NetlinkDumpCall where
@@ -608,7 +1065,7 @@ def Result : NetlinkDumpCall → Type
   | .receive .. => Option (List NlMessage)
   | .device .. => Except Int Json
 
-def original : (call : NetlinkDumpCall) → M call.Result
+def original : (call : NetlinkDumpCall) → WG.M call.Result
   | .peer p c s => getPeerDump p c s
   | .chunk c q s => wgGetDeviceDump c q s
   | .done c => wgGetDeviceDone c
@@ -626,7 +1083,7 @@ def observed : (call : NetlinkDumpCall) → MixedM call.Result
   | .receive fd => netlinkRecvmsgPrefix fd
   | .device ref => wgGetDevicePrefix ref
 
-theorem erases (call : NetlinkDumpCall) : ErasesPrefix call.observed call.original := by
+theorem erases (call : NetlinkDumpCall) : ErasesStatePrefix call.observed call.original := by
   cases call with
   | peer p c s => exact getPeerDumpPrefix_erases p c s
   | chunk c q s => exact wgGetDeviceDumpPrefix_erases c q s
@@ -637,7 +1094,7 @@ theorem erases (call : NetlinkDumpCall) : ErasesPrefix call.observed call.origin
   | device ref => exact wgGetDevicePrefix_erases ref
 
 theorem preserves_ambient (c : AmbientContracts I) (stable : DumpStable I) (call : NetlinkDumpCall) :
-    PrefixPreserves I LifetimeEvent.Safe call.observed := by
+    StatePrefixPreserves (fun h w _ => I h w) LifetimeEvent.Safe call.observed := by
   cases call with
   | peer p ctx s => exact getPeerDumpPrefix_preserves c p ctx s
   | chunk ctx q s => exact wgGetDeviceDumpPrefix_preserves c ctx q s
@@ -647,8 +1104,19 @@ theorem preserves_ambient (c : AmbientContracts I) (stable : DumpStable I) (call
   | receive fd => exact netlinkRecvmsgPrefix_preserves c stable fd
   | device ref => exact wgGetDevicePrefix_preserves c stable ref
 
+theorem preserves_ambient_product (c : ProductAmbientContracts I) (stable : ProductDumpStable I) (call : NetlinkDumpCall) :
+    PrefixPreserves I LifetimeEvent.Safe (liftWGObserver call.observed) := by
+  cases call with
+  | peer p ctx s => exact getPeerDumpPrefix_preserves_product c p ctx s
+  | chunk ctx q s => exact wgGetDeviceDumpPrefix_preserves_product c ctx q s
+  | done ctx => exact wgGetDeviceDonePrefix_preserves_product c ctx
+  | dump fd => exact netlinkDumpPrefix_preserves_product c stable fd
+  | start fd ref => exact netlinkDumpStartPrefix_preserves_product c stable fd ref
+  | receive fd => exact netlinkRecvmsgPrefix_preserves_product c stable fd
+  | device ref => exact wgGetDevicePrefix_preserves_product c stable ref
+
 theorem allocation (call : NetlinkDumpCall) :
-    PrefixPreserves AllocationInv LifetimeEvent.Safe call.observed :=
+    StatePrefixPreserves (fun h w _ => AllocationInv h w) LifetimeEvent.Safe call.observed :=
   call.preserves_ambient allocationAmbient allocationDumpStable
 
 end NetlinkDumpCall
