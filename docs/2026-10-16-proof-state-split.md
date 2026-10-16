@@ -27,9 +27,10 @@ it is not part of that baseline.
 | Unused `Framing.Control` support | 6 | 0 | 6 | 0 | 0 | 0 |
 | Obsolete `Framing.Prefill` and unused support | 3 | 0 | 3 | 0 | 0 | 0 |
 | Keypairs `Ordinary` | 17 | 12 | 1 | 4 | 0 | 16 |
+| Framing `WGTime`, `WGHandshake`, Keypairs `OrdinaryHot` | 21 | 16 | 5 | 0 | 0 | 16 |
 
-The whole tree currently contains 449 Lean files and 6,319 theorems. The completed
-changes total 208 retyped theorems, 1,463 deletions, 63 retained interfaces and 67 added.
+The whole tree currently contains 449 Lean files and 6,314 theorems. The completed
+changes total 224 retyped theorems, 1,468 deletions, 63 retained interfaces and 67 added.
 All terminal files remain unchanged. **Every result remains lagging** until the complete tree
 passes its proof gate and kernel replay. R1/R2/R5/R6 retain their pre-split
 charter dispositions; initialized R3 packet authorization and R4 receive-pipeline
@@ -284,6 +285,35 @@ LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake build 
 LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Keypairs.Ordinary
 ```
 
+## Native clock and crypto-helper contracts
+
+The five clock/jitter contracts and seven Noise-helper contracts now preserve
+the actual `WGWorld`, with unrestricted Ambient inputs and outputs. These helpers
+are genuinely `WG.M`; their preservation follows from their bodies, not subsystem
+separation alone. The four snapshot contracts retain key derivation, the getter's
+current-slot fact, the setter's existing-cell premise and decryption's snapshot
+preservation even when decryption rejects or invalidates a receiving key.
+
+Two Ambient-only compatibility frames are deleted. Three additional deleted
+wrappers duplicate retained canonical native contracts; their remaining Session
+callers still need redirects and remain lagging. No success, validity or liveness
+premise was added, and no failed-state preservation or totality claim is made.
+
+Validation: frozen scoped build passes (84 jobs); all 100 module-owned
+declarations, including the 16 explicit theorems, use only permitted axioms;
+fresh OrdinaryHot kernel replay passes. Independent frozen-source review confirms
+the complete claim and deletion ledger with no substantive findings. Source and
+artifact hashes, trust scan, terminal preservation, mirror equality and whitespace
+pass. Of five capped calls, one temporary axiom-enumeration checker failed for a
+missing import; correcting that checker alone passed. There was no source proof
+failure, admission, recovery admission, crash, interruption, timeout, KILLED
+outcome, limit increase or infrastructure rerun. All handles are collected.
+
+```sh
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake build Leanux.Proofs.WG.Keypairs.OrdinaryHot
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Keypairs.OrdinaryHot
+```
+
 ## Incoming source-observer findings
 
 Source inspection found two observer carry defects beyond type changes. The old
@@ -305,7 +335,11 @@ selection witness is likewise source-inspected, pending formal checking.
 
 The success-observer lane has additional copied-source drift. Its encrypt worker
 still runs the softirq before consuming the ring; the mirror now consumes and
-writes back the ring first. Its runner omits
+writes back the ring first. With no device and a softirq that throws a hidden
+failure, the old copy reaches that failure while the mirror first reaches the
+missing-device invariant. This is a source-derived witness recipe, not an
+executed counterexample. The decrypt worker still runs its softirq first and
+must retain that ordering. The runner omits
 the current routing-table boot, foreign-namespace boot, exact startup failure,
 startup-record clearing and per-operation `hiddenAhead`. Its environment copies
 omit routing/neighbour calls, route-MTU propagation and the current timer-pass
@@ -324,7 +358,8 @@ claimed. The incoming whitespace speedbump reports existing patch whitespace
 and a unit-file trailing blank line; those incoming files remain unchanged.
 
 Next are the remaining native/product observers and within-subsystem contracts,
-beginning with the clock and crypto-helper frames. The broader structural-frame layers
+beginning with the projection/composition layer and scheduler observers.
+The broader structural-frame layers
 have been deleted with their independently classified unused support; their
 surviving consumers still need the actual subsystem adapters.
 The incoming branch also includes pre-split send ordering, timer-wheel and

@@ -17,15 +17,16 @@ remain on this branch. Initialized R3 packet authorization and R4 receive-pipeli
 conservation remain open; their next extensions follow the retrofit.
 
 The validated baseline `00641c6` has 471 Lean files and 7,715 named theorems.
-The current tree has 449 files and 6,319 theorems: completed changes comprise
-208 retyped, 1,463 deleted, 63 retained interfaces and 67 added theorems.
+The current tree has 449 files and 6,314 theorems: completed changes comprise
+224 retyped, 1,468 deleted, 63 retained interfaces and 67 added theorems.
 The census includes private and attributed declarations and excludes nested
 comments and strings. Deferred uncommitted R3 work is outside the baseline.
 All seven terminal files remain unchanged.
 
 The CounterWindow, generic native contracts/adapters, acceptance-observer core,
 action/projection contracts, failure-prefix/native receipts, keypair identity
-core and ordinary lifetime actions pass their scoped builds, axiom checks, fresh kernel replay and independent
+core, ordinary lifetime actions and clock/Noise-helper contracts pass their
+scoped builds, axiom checks, fresh kernel replay and independent
 reviews. The obsolete subsystem-frame layers and their unused support are
 removed; all previously ported targets still build after their generated
 artifacts were removed. This is not a full-tree pass. The

@@ -1,56 +1,58 @@
 import Leanux.Proofs.Framing.Tools
 import Leanux.WG.Handshake
 
-/-! Canonical full-kernel frames for the original access-free Noise helpers.
+/-! Canonical native-WG frames for the original access-free Noise helpers.
 Their branches and record failures are unchanged. These frames alone do not
 establish call coverage; callers inspect and observe every store access. -/
 namespace Leanux.Proofs.Framing
 open Leanux Leanux.WG Std.Do
 
-theorem generatePublic_sameKernel (secret : Key) : SameKernel (generatePublic secret) := by
-  apply sameKernel_of_wp
+theorem generatePublic_sameWGWorld (secret : Key) :
+    SameView (id : WGWorld → WGWorld) (generatePublic secret) := by
+  apply SameView.of_wp
   intro k
-  mvcgen [generatePublic, branch]
+  mvcgen [generatePublic, branch, AmbientM.branch]
 
-theorem kdf_sameKernel (second third : Bool) (chainingKey data : List UInt8) :
-    SameKernel (kdf second third chainingKey data) := by
-  apply sameKernel_of_wp
+theorem kdf_sameWGWorld (second third : Bool) (chainingKey data : List UInt8) :
+    SameView (id : WGWorld → WGWorld) (kdf second third chainingKey data) := by
+  apply SameView.of_wp
   intro k
-  mvcgen [kdf, WG.orM, branch]
+  mvcgen [kdf, WG.orM, branch, AmbientM.branch]
 
-theorem kdfOut_sameKernel (outs : List (List UInt8)) (i : Nat) : SameKernel (kdfOut outs i) := by
-  apply sameKernel_of_wp
+theorem kdfOut_sameWGWorld (outs : List (List UInt8)) (i : Nat) :
+    SameView (id : WGWorld → WGWorld) (kdfOut outs i) := by
+  apply SameView.of_wp
   intro k
-  mvcgen [kdfOut, invariant]
+  mvcgen [kdfOut, invariant, AmbientM.invariant]
 
-theorem messageEphemeral_sameKernel (copy : Bool) (e ck hash : List UInt8) :
-    SameKernel (messageEphemeral copy e ck hash) := by
-  apply sameKernel_of_wp
+theorem messageEphemeral_sameWGWorld (copy : Bool) (e ck hash : List UInt8) :
+    SameView (id : WGWorld → WGWorld) (messageEphemeral copy e ck hash) := by
+  apply SameView.of_wp
   intro k
-  have hk := fun second third ck data => sameKernel_wp _ (kdf_sameKernel second third ck data) (fun s => s = k)
-  have ho := fun outs i => sameKernel_wp _ (kdfOut_sameKernel outs i) (fun s => s = k)
-  mvcgen [messageEphemeral, hk, ho, branch]
+  have hk := fun second third ck data => (kdf_sameWGWorld second third ck data).wp (fun s => s = k)
+  have ho := fun outs i => (kdfOut_sameWGWorld outs i).wp (fun s => s = k)
+  mvcgen [messageEphemeral, hk, ho, branch, AmbientM.branch]
 
-theorem mixDh_sameKernel (key : Bool) (ck priv pub : List UInt8) :
-    SameKernel (mixDh key ck priv pub) := by
-  apply sameKernel_of_wp
+theorem mixDh_sameWGWorld (key : Bool) (ck priv pub : List UInt8) :
+    SameView (id : WGWorld → WGWorld) (mixDh key ck priv pub) := by
+  apply SameView.of_wp
   intro k
-  have hk := fun second third ck data => sameKernel_wp _ (kdf_sameKernel second third ck data) (fun s => s = k)
-  have ho := fun outs i => sameKernel_wp _ (kdfOut_sameKernel outs i) (fun s => s = k)
-  mvcgen [mixDh, hk, ho, branch]
+  have hk := fun second third ck data => (kdf_sameWGWorld second third ck data).wp (fun s => s = k)
+  have ho := fun outs i => (kdfOut_sameWGWorld outs i).wp (fun s => s = k)
+  mvcgen [mixDh, hk, ho, branch, AmbientM.branch]
 
-theorem mixPrecomputedDh_sameKernel (ck precomputed : List UInt8) :
-    SameKernel (mixPrecomputedDh ck precomputed) := by
-  apply sameKernel_of_wp
+theorem mixPrecomputedDh_sameWGWorld (ck precomputed : List UInt8) :
+    SameView (id : WGWorld → WGWorld) (mixPrecomputedDh ck precomputed) := by
+  apply SameView.of_wp
   intro k
-  have hk := fun second third ck data => sameKernel_wp _ (kdf_sameKernel second third ck data) (fun s => s = k)
-  have ho := fun outs i => sameKernel_wp _ (kdfOut_sameKernel outs i) (fun s => s = k)
-  mvcgen [mixPrecomputedDh, hk, ho, branch]
+  have hk := fun second third ck data => (kdf_sameWGWorld second third ck data).wp (fun s => s = k)
+  have ho := fun outs i => (kdfOut_sameWGWorld outs i).wp (fun s => s = k)
+  mvcgen [mixPrecomputedDh, hk, ho, branch, AmbientM.branch]
 
-theorem messageDecrypt_sameKernel (sealed key hash : List UInt8) :
-    SameKernel (messageDecrypt sealed key hash) := by
-  apply sameKernel_of_wp
+theorem messageDecrypt_sameWGWorld (sealed key hash : List UInt8) :
+    SameView (id : WGWorld → WGWorld) (messageDecrypt sealed key hash) := by
+  apply SameView.of_wp
   intro k
-  mvcgen [messageDecrypt, branch, invariant]
+  mvcgen [messageDecrypt, branch, AmbientM.branch, invariant, AmbientM.invariant]
 
 end Leanux.Proofs.Framing
