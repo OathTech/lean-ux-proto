@@ -29,8 +29,12 @@ checks and fresh replay pass; independent review found no substantive issue.
 The acceptance-observer core is also carried: 27 to 31 theorems, with ten generic
 proofs moved unchanged, 14 generalized/retyped, three retained interfaces and
 four added bridges. Its scoped build, 89 module-owned declaration axiom checks,
-fresh replay and independent review pass. The tree now has 474 Lean files and
-7,714 theorems. This does not make a terminal result current; see the
+fresh replay and independent review pass. Native action/projection contracts
+are carried too: 21 to 23 theorems, comprising 19 generalized, two obsolete Kernel
+transports deleted and four run bridges added. Scoped build, all 28 declaration
+axiom checks, fresh replay and independent review pass. The obsolete `frame_wg`
+macro is removed separately. The tree now has 474 Lean files and 7,716 theorems.
+This does not make a terminal result current; see the
 [retrofit report](2026-10-16-proof-state-split.md).
 
 ## Layers

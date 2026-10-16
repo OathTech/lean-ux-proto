@@ -20,9 +20,10 @@ it is not part of that baseline.
 | CounterWindow `Refinement`, `MirrorCalls`, `Bounds` | 31 | 17 | 6 | 8 | 1 | 26 |
 | Framing `Basic`, `WP`, `Allocation`, `Index`, new `Hoare`/`Lift` | 40 | 25 | 14 | 1 | 14 | 40 |
 | Logged `Basic`, `Outer`, new `Ghost` | 27 | 14 | 0 | 13 | 4 | 31 |
+| Lifetimes `Actions`, Framing `Projection`, `Tools` | 21 | 19 | 2 | 0 | 4 | 23 |
 
-The whole tree currently contains 474 Lean files and 7,714 theorems. The completed
-ports total 56 retyped theorems, 20 deletions, 22 retained interfaces and 19 added. All terminal files
+The whole tree currently contains 474 Lean files and 7,716 theorems. The completed
+ports total 75 retyped theorems, 22 deletions, 22 retained interfaces and 23 added. All terminal files
 remain unchanged. **Every result remains lagging** until the complete tree
 passes its proof gate and kernel replay. R1/R2/R5/R6 retain their pre-split
 charter dispositions; initialized R3 packet authorization and R4 receive-pipeline
@@ -126,6 +127,54 @@ LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake build 
 LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.Logged.Outer
 ```
 
+## Native actions and projections
+
+`Action`, `ProjectedAction`, `SameView` and the finite-loop/map/discard rules now
+use the actual generic `StateT` stack. Four exact run bridges retain every native
+input and successful output. `Executions` passes each call's returned subsystem
+state and Ambient directly into the next call. These partial contracts observe
+the outer state; predicates depending on Ambient still require a multistate
+contract. No successful-run, failure or progress premise was discarded.
+
+The two deleted theorems, `Action.of_sameKernel` and `SameView.of_sameKernel`,
+transported through the removed Kernel projection. Separately, the `frame_wg`
+tactic macro hard-coded that old interface and is deleted; its remaining callers
+are still lagging. `pinned_const` is retained. These macro changes are outside
+the theorem counts.
+
+Validation: scoped build passes (14 jobs), all 28 explicitly named declarations
+print only permitted axioms, and fresh scoped kernel replay passes. Independent
+review compared the complete claim diff and the three execution-chain consumers
+and found no substantive issue. Hashes, source-token scan, terminal preservation,
+mirror equality and scoped whitespace pass. Two earlier builds failed on implicit
+state variables and function extensionality. No admission, recovery admission,
+interruption, timeout, KILLED outcome, limit increase or infrastructure rerun
+occurred.
+
+```sh
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake build Leanux.Proofs.Framing.Tools
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.Framing.Tools
+```
+
+## Incoming source-observer findings
+
+Source inspection found two observer carry defects beyond type changes. The old
+peer-release observer omits the incoming queue and timer guards. With a resident
+peer at refcount one and a queued transmit packet, the actual mirror Stops after
+the reference write and before erase; the old all-outcome event formula would
+append release. A pending timer instead Stops after erase and before retirement.
+The observer must retain both guards and each exact failed prefix, without adding
+queue/timer premises to erasure. This is an unrestricted-state witness recipe,
+not an executed Lean counterexample or a demonstrated initialized R2 failure.
+
+The timer observers still use the old raw-expiry scan and removed `fireTimer`.
+Actual `runTimers` uses `TimerWheel.nextDue`, dispatch validation, step completion,
+detach, `timerPassStep`, callback execution and clearing in order. Expiries 64 and
+65 share bucket expiry 72 at level one: with enqueue stamps one and two, wheel
+order selects the latter while raw-expiry order selects the former. The source
+observers and receipt boundaries must follow the actual inline execution. This
+selection witness is likewise source-inspected, pending formal checking.
+
 ## Incoming merge and remaining work
 
 The incoming model build passes (66 jobs), executable build passes (130 jobs),
@@ -136,8 +185,8 @@ build fails at 14 state-split/carry dependencies; no full proof-gate pass is
 claimed. The incoming whitespace speedbump reports existing patch whitespace
 and a unit-file trailing blank line; those incoming files remain unchanged.
 
-Next are generic projection/action contracts, deletion of the broader
-structural-frame layers and the remaining native/product observers.
+Next are the generic failure-prefix core, deletion of the broader structural-frame
+layers and the remaining native/product observers.
 The incoming branch also includes pre-split send ordering, timer-wheel and
 peer-removal changes; their source observers must be carried in actual order.
 The runner and callback compositions keep the product world, and failing

@@ -1,98 +1,166 @@
 import Leanux.Proofs.WG.Lifetimes.Store
-import Leanux.Proofs.Framing.WP
+import Leanux.Proofs.Framing.Hoare
 
-/-! Reusable execution contracts for projections. The relation and invariant
-are parameters, so store identities and epoch preservation use the same
-composition lemmas. Executions are successful calls of the original monad. -/
+/-! Reusable partial execution contracts over the actual StateT stack.
+Relations observe the outer state. Native execution bridges quantify every
+Ambient endpoint, and finite execution chains carry that endpoint onward. -/
 namespace Leanux.Proofs.WG.Lifetimes
 open Leanux Std.Do Leanux.Proofs.Framing
 
-def Action (P : World → Prop) (R : World → World → Prop) (a : M α) : Prop :=
-  ∀ w x w', P w → a.run w = .ok (x, w') → P w' ∧ R w w'
+section Generic
+variable {S σ α β : Type} {m : Type → Type} {ps : PostShape}
+  [Monad m] [WPMonad m ps]
 
-/-- Projection contracts freeze only the relevant state in a WP proof, rather
-than the full World. This supplies a reusable framing layer for each store. -/
-def ProjectedAction (project : World → σ) (R : σ → σ → Prop) (a : M α) : Prop :=
-  ∀ w x w', a.run w = .ok (x, w') → R (project w) (project w')
+def Action (P : S → Prop) (R : S → S → Prop) (a : StateT S m α) : Prop :=
+  ∀ start, Hoare a (fun s => s = start ∧ P s) (fun _ s => P s ∧ R start s)
 
-theorem ProjectedAction.of_wp (project : World → σ) (R : σ → σ → Prop) (a : M α)
-    (h : ∀ s, ⦃fun w => ⌜project w = s⌝⦄ a
-      ⦃⇓? _ w => ⌜R s (project w)⌝⦄) : ProjectedAction project R a := by
-  intro w x w' hr
-  exact (hoare_iff_triple _ _ _).mpr (h (project w)) w x w' rfl hr
+/-- Freeze the relevant projection in a partial WP contract. The inner state
+is unrestricted; predicates that observe it require a multistate Triple. -/
+def ProjectedAction (project : S → σ) (R : σ → σ → Prop)
+    (a : StateT S m α) : Prop :=
+  ∀ initial, Hoare a (fun s => project s = initial) (fun _ s => R initial (project s))
 
-theorem ProjectedAction.wp {project : World → σ} {R : σ → σ → Prop}
+variable {P : S → Prop} {R : S → S → Prop}
+  {a : StateT S m α} {f : α → StateT S m β}
+
+theorem ProjectedAction.of_wp (project : S → σ) (R : σ → σ → Prop) (a : StateT S m α)
+    (h : ∀ initial, ⦃fun s => ⌜project s = initial⌝⦄ a
+      ⦃⇓? _ s => ⌜R initial (project s)⌝⦄) : ProjectedAction project R a := h
+
+theorem ProjectedAction.wp {project : S → σ} {R : σ → σ → Prop}
     (h : ProjectedAction project R a)
     (P : σ → Prop) (hp : ∀ s t, R s t → P s → P t) :
-    ⦃fun w => ⌜P (project w)⌝⦄ a ⦃⇓? _ w => ⌜P (project w)⌝⦄ := by
-  apply (hoare_iff_triple _ _ _).mp
-  intro w x w' hw hr
-  exact hp _ _ (h w x w' hr) hw
+    ⦃fun s => ⌜P (project s)⌝⦄ a ⦃⇓? _ s => ⌜P (project s)⌝⦄ := by
+  intro s
+  apply SPred.pure_elim'
+  intro hs
+  have hc : Hoare a (fun t => project t = project s) (fun _ t => P (project t)) :=
+    hoare_consequence (h (project s)) (fun _ he => he)
+      (fun _ t hr => hp _ _ hr hs)
+  exact (SPred.pure_intro rfl).trans (hc s)
 
-theorem ProjectedAction.action {project : World → σ} {R : σ → σ → Prop}
+theorem ProjectedAction.action {project : S → σ} {R : σ → σ → Prop}
     (h : ProjectedAction project R a)
     (P : σ → Prop) (hp : ∀ s t, R s t → P s → P t) :
-    Action (fun w => P (project w)) (fun w v => R (project w) (project v)) a := by
-  intro w x w' hw hr
-  have ht := h w x w' hr
-  exact ⟨hp _ _ ht hw, ht⟩
+    Action (fun s => P (project s)) (fun s t => R (project s) (project t)) a := by
+  intro start s
+  apply SPred.pure_elim'
+  rintro ⟨he, hs⟩
+  subst s
+  have hc : Hoare a (fun t => project t = project start)
+      (fun _ t => P (project t) ∧ R (project start) (project t)) :=
+    hoare_consequence (h (project start)) (fun _ he => he)
+      (fun _ t hr => ⟨hp _ _ hr hs, hr⟩)
+  exact (SPred.pure_intro rfl).trans (hc start)
 
-theorem Action.pure (hrefl : ∀ w, R w w) (x : α) : Action P R (pure x) := by
-  intro w y w' hp hr
-  cases hr
-  exact ⟨hp, hrefl w⟩
+theorem Action.pure (hrefl : ∀ s, R s s) (x : α) :
+    Action P R (pure x : StateT S m α) := by
+  intro start
+  apply hoare_consequence (hoare_pure x (fun s => s = start ∧ P s))
+  · exact fun _ h => h
+  · intro _ s h
+    refine ⟨h.2.2, ?_⟩
+    rw [← h.2.1]
+    exact hrefl s
 
 theorem Action.bind (htrans : ∀ u v w, R u v → R v w → R u w)
     (ha : Action P R a) (hf : ∀ x, Action P R (f x)) :
     Action P R (a >>= f) := by
-  intro w y w' hp hr
-  simp only [StateT.run_bind] at hr
-  cases hx : a.run w with
-  | error e => simp [hx] at hr
-  | ok v =>
-    simp only [hx, Leanux.Proofs.WG.CounterWindow.except_ok_bind] at hr
-    have hfirst := ha w v.1 v.2 hp hx
-    have hlast := hf v.1 v.2 y w' hfirst.1 hr
-    exact ⟨hlast.1, htrans _ _ _ hfirst.2 hlast.2⟩
+  intro start
+  apply hoare_bind a f (ha start)
+  intro x middle
+  apply SPred.pure_elim'
+  rintro ⟨hp, hr⟩
+  have hc : Hoare (f x) (fun s => s = middle ∧ P s)
+      (fun _ s => P s ∧ R start s) :=
+    hoare_consequence (hf x middle) (fun _ h => h)
+      (fun _ s h => ⟨h.1, htrans _ _ _ hr h.2⟩)
+  exact (SPred.pure_intro ⟨rfl, hp⟩).trans (hc middle)
 
-theorem Action.of_sameKernel (project : Kernel → σ)
-    (P : σ → Prop) (R : σ → σ → Prop) (hrefl : ∀ s, R s s)
-    (ha : SameKernel a) :
-    Action (fun w => P (project w.k)) (fun w v => R (project w.k) (project v.k)) a := by
-  intro w x w' hp hr
-  dsimp only
-  rw [ha w x w' hr]
-  exact ⟨hp, hrefl _⟩
+theorem Action.wp (h : Action P R a) (start : S) :
+    ⦃fun s => ⌜s = start ∧ P s⌝⦄ a
+    ⦃⇓? _ s => ⌜P s ∧ R start s⌝⦄ := h start
 
-theorem Action.wp (h : Action P R a) (start : World) :
-    ⦃fun w => ⌜w = start ∧ P w⌝⦄ a
-    ⦃⇓? _ w => ⌜P w ∧ R start w⌝⦄ := by
-  apply (hoare_iff_triple _ _ _).mp
-  intro w x w' hp hr
-  simpa only [hp.1] using h w x w' hp.2 hr
+theorem Action.of_wp (a : StateT S m α)
+    (h : ∀ start, ⦃fun s => ⌜s = start ∧ P s⌝⦄ a
+      ⦃⇓? _ s => ⌜P s ∧ R start s⌝⦄) : Action P R a := h
 
-theorem Action.of_wp (a : M α)
-    (h : ∀ start, ⦃fun w => ⌜w = start ∧ P w⌝⦄ a
-      ⦃⇓? _ w => ⌜P w ∧ R start w⌝⦄) : Action P R a := by
-  intro w x w' hp hr
-  exact (hoare_iff_triple _ _ _).mpr (h w) w x w' ⟨rfl, hp⟩ hr
+end Generic
 
-/-- A finite sequence names each actual helper and its complete successful
-execution. The family controls which helpers the theorem covers. -/
-inductive Executions (family : (α : Type) → M α → Prop) : World → World → Prop where
-  | nil (w) : Executions family w w
-  | cons {α : Type} {a : M α} {x : α} {w v u : World}
-      (ha : family α a) (hr : a.run w = .ok (x, v))
-      (tail : Executions family v u) : Executions family w u
+/-- The base-stack contract is exactly its successful native endpoints. -/
+theorem Action.iff_run (P : S → Prop) (R : S → S → Prop)
+    (a : StateT S (Except Stop) α) :
+    Action P R a ↔ ∀ s x s', P s → a.run s = .ok (x, s') → P s' ∧ R s s' := by
+  constructor
+  · intro h s x s' hp hr
+    exact (hoare_iff_run _ _ _).mp (h s) s x s' ⟨rfl, hp⟩ hr
+  · intro h start
+    apply (hoare_iff_run _ _ _).mpr
+    rintro s x s' ⟨rfl, hp⟩ hr
+    exact h s x s' hp hr
 
-theorem Executions.contract (h : Executions family w w')
-    (hrefl : ∀ w, R w w) (htrans : ∀ u v w, R u v → R v w → R u w)
-    (hc : ∀ {α} (a : M α), family α a → Action P R a) (hp : P w) :
-    P w' ∧ R w w' := by
+/-- No Ambient input or successful output is omitted from the native contract. -/
+theorem Action.iff_run_ambient (P : S → Prop) (R : S → S → Prop)
+    (a : StateT S AmbientM α) :
+    Action P R a ↔ ∀ s ambient x s' ambient', P s →
+      (a.run s).run ambient = .ok ((x, s'), ambient') → P s' ∧ R s s' := by
+  constructor
+  · intro h s ambient x s' ambient' hp hr
+    exact (hoare_iff_run_ambient _ _ _).mp (h s) s ambient x s' ambient' ⟨rfl, hp⟩ hr
+  · intro h start
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    rintro s ambient x s' ambient' ⟨rfl, hp⟩ hr
+    exact h s ambient x s' ambient' hp hr
+
+theorem ProjectedAction.iff_run (project : S → σ) (R : σ → σ → Prop)
+    (a : StateT S (Except Stop) α) :
+    ProjectedAction project R a ↔
+      ∀ s x s', a.run s = .ok (x, s') → R (project s) (project s') := by
+  constructor
+  · intro h s x s' hr
+    exact (hoare_iff_run _ _ _).mp (h (project s)) s x s' rfl hr
+  · intro h initial
+    apply (hoare_iff_run _ _ _).mpr
+    intro s x s' he hr
+    rw [← he]
+    exact h s x s' hr
+
+theorem ProjectedAction.iff_run_ambient (project : S → σ) (R : σ → σ → Prop)
+    (a : StateT S AmbientM α) :
+    ProjectedAction project R a ↔ ∀ s ambient x s' ambient',
+      (a.run s).run ambient = .ok ((x, s'), ambient') → R (project s) (project s') := by
+  constructor
+  · intro h s ambient x s' ambient' hr
+    exact (hoare_iff_run_ambient _ _ _).mp (h (project s)) s ambient x s' ambient' rfl hr
+  · intro h initial
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro s ambient x s' ambient' he hr
+    rw [← he]
+    exact h s ambient x s' ambient' hr
+
+/-- A finite sequence names each actual helper and complete successful call.
+The next call receives both native outputs of the preceding call. -/
+inductive Executions (family : (α : Type) → StateT S AmbientM α → Prop) :
+    S → Ambient → S → Ambient → Prop where
+  | nil (s ambient) : Executions family s ambient s ambient
+  | cons {α : Type} {a : StateT S AmbientM α} {x : α} {s middle finish : S}
+      {ambient nextAmbient finalAmbient : Ambient}
+      (ha : family α a)
+      (hr : (a.run s).run ambient = .ok ((x, middle), nextAmbient))
+      (tail : Executions family middle nextAmbient finish finalAmbient) :
+      Executions family s ambient finish finalAmbient
+
+variable {S : Type} {family : (α : Type) → StateT S AmbientM α → Prop}
+  {P : S → Prop} {R : S → S → Prop} {s s' : S} {ambient ambient' : Ambient}
+
+theorem Executions.contract (h : Executions family s ambient s' ambient')
+    (hrefl : ∀ s, R s s) (htrans : ∀ u v w, R u v → R v w → R u w)
+    (hc : ∀ {α} (a : StateT S AmbientM α), family α a → Action P R a) (hp : P s) :
+    P s' ∧ R s s' := by
   induction h with
-  | nil w => exact ⟨hp, hrefl w⟩
+  | nil s ambient => exact ⟨hp, hrefl s⟩
   | cons ha hr tail ih =>
-    have hs := hc _ ha _ _ _ hp hr
+    have hs := (Action.iff_run_ambient _ _ _).mp (hc _ ha) _ _ _ _ _ hp hr
     have ht := ih hs.1
     exact ⟨ht.1, htrans _ _ _ hs.2 ht.2⟩
 

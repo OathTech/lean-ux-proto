@@ -13,6 +13,8 @@ theorems, with scoped build, 47 declaration axiom checks, fresh replay and
 independent review passing. The acceptance-observer core now uses native
 WG/Ambient execution and the actual product lift (27 to 31 theorems); its scoped
 build, 89 declaration axiom checks, fresh replay and independent review pass.
+Native action/projection contracts also pass those scoped checks (21 to 23
+theorems: 19 generalized, two deleted, four added; 28 declaration axiom checks).
 [The retrofit report](2026-10-16-proof-state-split.md)
 tracks the counts and remaining work.
 
