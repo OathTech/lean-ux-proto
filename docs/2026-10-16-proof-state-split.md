@@ -15,13 +15,14 @@ and strings and includes private and attributed declarations. The uncommitted
 configured-closure extension was preserved before resumption and is deferred;
 it is not part of that baseline.
 
-| Completed local port | Before | Retyped | Structural deletions | Unchanged | Added | After |
+| Completed local port | Before | Retyped | Structural deletions | Retained interface | Added | After |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | CounterWindow `Refinement`, `MirrorCalls`, `Bounds` | 31 | 17 | 6 | 8 | 1 | 26 |
 | Framing `Basic`, `WP`, `Allocation`, `Index`, new `Hoare`/`Lift` | 40 | 25 | 14 | 1 | 14 | 40 |
+| Logged `Basic`, `Outer`, new `Ghost` | 27 | 14 | 0 | 13 | 4 | 31 |
 
-The whole tree currently contains 473 Lean files and 7,710 theorems. The completed
-ports total 42 retyped theorems, 20 deletions, nine unchanged and 15 added. All terminal files
+The whole tree currently contains 474 Lean files and 7,714 theorems. The completed
+ports total 56 retyped theorems, 20 deletions, 22 retained interfaces and 19 added. All terminal files
 remain unchanged. **Every result remains lagging** until the complete tree
 passes its proof gate and kernel replay. R1/R2/R5/R6 retain their pre-split
 charter dispositions; initialized R3 packet authorization and R4 receive-pipeline
@@ -99,6 +100,32 @@ LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake build 
 LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.Framing.WP
 ```
 
+## Native acceptance observations
+
+`Ghost` holds the ten existing generic erasure proofs, moved byte-for-byte from
+`Outer`. `Basic` reuses them, generalizes 11 theorems and retypes the three counter
+contracts over `WGWorld` and `Ambient`. Three helper/product interfaces remain.
+The counter observer still runs the actual validator once and appends exactly
+one lifetime/nonce event only on acceptance, retaining both outgoing states.
+Missing-device and missing-key failures remain exact. Four new extraction/lift
+lemmas connect generic erasure to native and product execution through actual
+`liftWG`. The outer runner still attaches exactly its operation index to Stop.
+This success-only observer retains no history on failure; the separate Prefix
+layer must continue to retain failure history.
+
+Validation: final scoped build passes (34 jobs), all 89 module-owned declarations
+(43 explicit source declarations) print only permitted axioms, and fresh scoped
+kernel replay passes after compilation. Independent frozen-source review found
+no substantive issue. Hash, source-token, mirror, terminal-preservation and
+whitespace checks pass. Two earlier builds failed on normalization and one
+parser typo; there was no admission, recovery admission, interruption, timeout,
+KILLED outcome, limit increase or infrastructure rerun.
+
+```sh
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake build Leanux.Proofs.Logged.Outer
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.Logged.Outer
+```
+
 ## Incoming merge and remaining work
 
 The incoming model build passes (66 jobs), executable build passes (130 jobs),
@@ -109,8 +136,8 @@ build fails at 14 state-split/carry dependencies; no full proof-gate pass is
 claimed. The incoming whitespace speedbump reports existing patch whitespace
 and a unit-file trailing blank line; those incoming files remain unchanged.
 
-Next are local/product observer retyping, generic projection/action contracts
-and deletion of the broader structural-frame layers.
+Next are generic projection/action contracts, deletion of the broader
+structural-frame layers and the remaining native/product observers.
 The incoming branch also includes pre-split send ordering, timer-wheel and
 peer-removal changes; their source observers must be carried in actual order.
 The runner and callback compositions keep the product world, and failing

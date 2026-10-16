@@ -10,7 +10,10 @@ and six deleted theorems, one added generic lemma, and passing scoped build, axi
 checks and fresh kernel replay. Native generic contracts and subsystem adapters
 are also carried: 25 retyped, one relocated unchanged, 14 deleted and 14 added
 theorems, with scoped build, 47 declaration axiom checks, fresh replay and
-independent review passing. [The retrofit report](2026-10-16-proof-state-split.md)
+independent review passing. The acceptance-observer core now uses native
+WG/Ambient execution and the actual product lift (27 to 31 theorems); its scoped
+build, 89 declaration axiom checks, fresh replay and independent review pass.
+[The retrofit report](2026-10-16-proof-state-split.md)
 tracks the counts and remaining work.
 
 The preceding `cb2348e` checkpoint validated all seven baseline result surfaces, including the

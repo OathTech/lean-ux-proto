@@ -26,7 +26,11 @@ replay pass. The next checkpoint carries generic native partial/total contracts
 and exact subsystem adapters: 25 retyped, one relocated unchanged, 14 structural
 deletions and 14 additions (40 to 40). Its scoped build, all 47 declaration axiom
 checks and fresh replay pass; independent review found no substantive issue.
-The tree now has 473 Lean files and 7,710 theorems. This does not make a terminal result current; see the
+The acceptance-observer core is also carried: 27 to 31 theorems, with ten generic
+proofs moved unchanged, 14 generalized/retyped, three retained interfaces and
+four added bridges. Its scoped build, 89 module-owned declaration axiom checks,
+fresh replay and independent review pass. The tree now has 474 Lean files and
+7,714 theorems. This does not make a terminal result current; see the
 [retrofit report](2026-10-16-proof-state-split.md).
 
 ## Layers
