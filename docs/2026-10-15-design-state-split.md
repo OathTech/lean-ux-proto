@@ -756,3 +756,70 @@ fields; FS lands first on this branch and WG rebases onto it, so the
 `main`'s tree retyped by deletion and retyping (what phase 1 breaks is in
 its report), then the landed campaign-1 tree as its own job.
 
+## 13. Phase 2, WireGuard, as built (2026-10-16)
+
+On `task/split-wg`, from the phase-1 head, two commits plus this section.
+
+**The coarse split** (`WGWorld`, `Net.Routing`, `EnvWorld`, `WG.M`,
+`Net.M`): as section 2 assigns, with two deviations. `WGWorld` is flat:
+revision 2 narrows over the owners that exist (`Device`, `Peer`), so the
+sub-records `TimerState`, `TxState` and `WGFixture` of section 2's sketch
+would have been groups of `WGWorld` with no adapter of their own; the fields
+keep their names, which is also what let every `{ w with jiffiesLast := .. }`
+in the WireGuard module compile unchanged. And `foreignCreator` is in
+`Net.Routing`, not `EnvWorld`: the routing module's table selection reads it
+(`inSocketNs`), so it is a fixture fact the component depends on, set by
+the runner at trace start and never written after; `netnsCHolders`, the
+mutable part of W8's fixture, is `EnvWorld`'s.
+
+**The routing component's adapter.** The routing module reads the device at
+three sites (`deviceUp`, `deviceHasInet`, a route insertion's `oif` check:
+the C's `dev_get_by_index` and `__in_dev_get_rcu`), which section 2's
+"never on `WG.Device`" missed. Rather than store the device's `running` and
+`inet4Dev` in the routing state (an owner word in two stores), the
+component's running state is `Net.State extends Net.Routing` with `wg0 :
+Option Net.DevFacts`, and `liftRouting` extracts the facts from the device
+at every entry and writes back the routing state only. The facts cannot go
+stale inside a routing computation, since none can touch the device.
+
+**The composition points.** WireGuard's workers call back into the rest of
+the kernel: the stack's `napi_gro_receive` and `skb_checksum_help`, the
+scheduler's `cond_resched`, the softirq placement at the interrupt exit.
+The environment supplies those as computations over the product
+(`deliverInner`, `checksumHelp`, `napiSoftirq`, `napiIrqExit`,
+`condResched`), and a `WG.M` function cannot take them. The functions that
+take them are polymorphic in the caller's monad, `[Monad m] [MonadLiftT
+WG.M m] [MonadLiftT AmbientM m]`: `workerIter`, `workerLoop`,
+`encryptPacket`, `encryptRingPoll`, `encryptStep`, `encryptIter`, `txIter`,
+`decryptStep`, `decryptIter`, the GRO helpers and `rxPoll`,
+`handshakeReceiveWorker`, `enqueuePerPeerRx`, `wgDelete` (its two hooks).
+A caller over the product instantiates them at `M`, a WireGuard caller at
+`WG.M`; their own WireGuard calls lift through the first constraint and
+the ambient primitives through the second. This is the user's rule
+applied: composition points where Linux has them.
+
+**The within-WireGuard components built**, over the owners that exist, one
+adapter each (`Leanux/WG/State.lean`), measured against section 4's list:
+
+| Component | State | Adapter | Functions over it | Deviation from section 4 |
+| --- | --- | --- | --- | --- |
+| The skb stores | `SkbStore` (`txSkbs`, `rxSkbs`, `nextSkb`) | `liftSkb` | `SkbStore.newTx/getTx/setTx/freeTx/newRx/getRx/setRx/freeRx`; the names the paths use (`newTxSkb` ..) are `WG.M` applications of the adapter, because the polymorphic worker functions call them and a `[MonadLiftT WG.M m]` caller lifts `WG.M`, not `SkbM` | none |
+| The index table | `List IndexEntry` | `liftIndex` | `unhashEntry`, `indexRemove`, `indexBucket`, `indexHashed`, `bucketHas`, `indexInsert`, `indexReplaceHandshake` (the hidden index draw is ambient) | none; `indexLookup`, `peerGetMaybeZero` stay `WG.M` as planned |
+| The allowed-IPs trie | `AipStore` (`nodes`, `nextNode`, `trie` = `peerAllowedips`) | `liftAip` | `getNode`, `setNode`, `freeNode`, `slotGet`, `slotSet`, `allocNode`, `connectNode`, `chooseAndConnectNode`, `nodePlacement`, `subtree`, `findNode`; `choose`, `commonBits`, `prefixMatches` and `AipNode.bitAt` over any monad that lifts `AmbientM` | the roots join the component (`slotGet`/`slotSet` read and write `Device.peerAllowedips`); `lookupDst`, `lookupSrc` and `lookup` stay `WG.M`, not narrowed: `lookup` takes the peer reference (`wg_peer_get_maybe_zero(node->peer)`, allowedips.c:127-147), which spans the peer owner |
+
+Not built in this phase, deferred with the reason: the cookie checker and
+rate limiter (its state spans `Device`'s cookie fields and `WGWorld`'s
+`ratelimiter` and `lastUnderLoad`: two owners, so the adapter would extract
+from both; cheap but not done in the session's budget) and device
+configuration (ten heterogeneous functions over the device's identity,
+sockets, MTU and port plus `WGWorld`'s netlink sockets and fixture facts;
+the component has no single field group). Both are follow-ons under
+section 4's rules; the index lookup, the timers, the sends and the peer
+acquisition stay `WG.M` by measurement, as section 4 says.
+
+**Checks** are in the two commits' messages and the phase-2 report: the
+build, the fast tier, the `wireguard`, `wireguard-generated`, `w7-tier` and
+`routing` suites and the timer and lifecycle controls on s5 on the coarse
+commit; the preservation check over those runs' recorded inputs against the
+e5afc0f baseline and both commits' binaries; the model's time on the
+heaviest chunk (`e_ring_full`) unchanged.

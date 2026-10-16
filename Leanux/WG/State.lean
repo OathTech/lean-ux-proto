@@ -15,17 +15,83 @@ def getDev : M Device := do
 def modifyDev (f : Device → Device) : M Unit :=
   modify fun k => { k with dev := k.dev.map f }
 
-def getNode (id : NodeId) : M AipNode := do
-  match (← getDev).nodes.get? id with
+/-! ## Components inside WireGuard (the state split,
+    docs/2026-10-15-design-state-split.md, section 4)
+
+A component is a group of the device's own fields with one extraction and
+write-back adapter: the adapter reads the device at the original access
+point (so a missing device fails as before, in the same order), runs the
+component's computation over just those fields, and writes those fields
+back into the same owner. No owner word is held in two stores: the
+component's state exists only while its computation runs. A function whose
+footprint reaches two owners (the index lookup's peer get, the trie
+insertion's peer list, the sends) stays `WG.M`. -/
+
+/-- The skb stores: a packet on its way out or in, owned once
+    (`Device.txSkbs`, `rxSkbs`, `nextSkb`). -/
+structure SkbStore where
+  txSkbs : Std.TreeMap SkbId DataPacket
+  rxSkbs : Std.TreeMap SkbId RxPacket
+  nextSkb : SkbId
+
+abbrev SkbM := StateT SkbStore AmbientM
+
+/-- The skb stores' adapter. The instances below are low priority: a
+    component's lift must not be the route by which an ambient primitive
+    reaches `WG.M` (the transitive `MonadLiftT` search prefers the most
+    recent instance, and an adapter reads the device first, which a path
+    without a device must not do). -/
+@[inline] def liftSkb (x : SkbM α) : M α := do
+  let d ← getDev
+  let (a, s) ← x.run { txSkbs := d.txSkbs, rxSkbs := d.rxSkbs, nextSkb := d.nextSkb }
+  modifyDev fun d => { d with txSkbs := s.txSkbs, rxSkbs := s.rxSkbs, nextSkb := s.nextSkb }
+  return a
+
+instance (priority := low) : MonadLift SkbM M := ⟨liftSkb⟩
+
+/-- The index hashtable (`Device.indexTable`): the entries by index and
+    owner; the lookup's peer get stays with the device. -/
+abbrev IndexM := StateT (List IndexEntry) AmbientM
+
+/-- The index table's adapter. -/
+@[inline] def liftIndex (x : IndexM α) : M α := do
+  let d ← getDev
+  let (a, t) ← x.run d.indexTable
+  modifyDev fun d => { d with indexTable := t }
+  return a
+
+instance (priority := low) : MonadLift IndexM M := ⟨liftIndex⟩
+
+/-- The allowed-IPs trie: the node store with its next identity and the two
+    roots (`Device.nodes`, `nextNode`, `peerAllowedips`); a peer's
+    `allowedipsList` stays with the peer. -/
+structure AipStore where
+  nodes : Std.TreeMap NodeId AipNode
+  nextNode : NodeId
+  trie : AllowedIps
+
+abbrev AipM := StateT AipStore AmbientM
+
+/-- The trie's adapter. -/
+@[inline] def liftAip (x : AipM α) : M α := do
+  let d ← getDev
+  let (a, s) ← x.run { nodes := d.nodes, nextNode := d.nextNode, trie := d.peerAllowedips }
+  modifyDev fun d => { d with nodes := s.nodes, nextNode := s.nextNode, peerAllowedips := s.trie }
+  return a
+
+instance (priority := low) : MonadLift AipM M := ⟨liftAip⟩
+
+def getNode (id : NodeId) : AipM AipNode := do
+  match (← get).nodes.get? id with
   | some n => return n
   | none => invariant s!"dangling allowedips node {id}"
 
-def setNode (id : NodeId) (n : AipNode) : M Unit :=
-  modifyDev fun d => { d with nodes := d.nodes.insert id n }
+def setNode (id : NodeId) (n : AipNode) : AipM Unit :=
+  modify fun s => { s with nodes := s.nodes.insert id n }
 
-def freeNode (id : NodeId) : M Unit := do
+def freeNode (id : NodeId) : AipM Unit := do
   _ ← getNode id
-  modifyDev fun d => { d with nodes := d.nodes.erase id }
+  modify fun s => { s with nodes := s.nodes.erase id }
 
 def getPeer (id : PeerId) : M Peer := do
   match (← getDev).peers.get? id with
@@ -53,41 +119,56 @@ the mirror's allocation point (the `PACKET_CB` assignments of
 consumption by the stack; `newRxSkb` is `wg_packet_consume_data`'s, `freeRxSkb`
 the poll's `dev_kfree_skb` or `napi_gro_receive`. -/
 
-def newTxSkb (p : DataPacket) : M SkbId := do
-  let id := (← getDev).nextSkb
-  modifyDev fun d => { d with txSkbs := d.txSkbs.insert id p, nextSkb := id + 1 }
+namespace SkbStore
+
+def newTx (p : DataPacket) : SkbM SkbId := do
+  let id := (← get).nextSkb
+  modify fun s => { s with txSkbs := s.txSkbs.insert id p, nextSkb := id + 1 }
   return id
 
-def getTxSkb (id : SkbId) : M DataPacket := do
-  match (← getDev).txSkbs.get? id with
+def getTx (id : SkbId) : SkbM DataPacket := do
+  match (← get).txSkbs.get? id with
   | some p => return p
   | none => invariant s!"dangling tx skb {id}"
 
-def setTxSkb (id : SkbId) (f : DataPacket → DataPacket) : M Unit := do
-  let p ← getTxSkb id
-  modifyDev fun d => { d with txSkbs := d.txSkbs.insert id (f p) }
+def setTx (id : SkbId) (f : DataPacket → DataPacket) : SkbM Unit := do
+  let p ← getTx id
+  modify fun s => { s with txSkbs := s.txSkbs.insert id (f p) }
 
-def freeTxSkb (id : SkbId) : M Unit := do
-  let _ ← getTxSkb id   -- freeing twice is an invariant failure
-  modifyDev fun d => { d with txSkbs := d.txSkbs.erase id }
+def freeTx (id : SkbId) : SkbM Unit := do
+  let _ ← getTx id   -- freeing twice is an invariant failure
+  modify fun s => { s with txSkbs := s.txSkbs.erase id }
 
-def newRxSkb (p : RxPacket) : M SkbId := do
-  let id := (← getDev).nextSkb
-  modifyDev fun d => { d with rxSkbs := d.rxSkbs.insert id p, nextSkb := id + 1 }
+def newRx (p : RxPacket) : SkbM SkbId := do
+  let id := (← get).nextSkb
+  modify fun s => { s with rxSkbs := s.rxSkbs.insert id p, nextSkb := id + 1 }
   return id
 
-def getRxSkb (id : SkbId) : M RxPacket := do
-  match (← getDev).rxSkbs.get? id with
+def getRx (id : SkbId) : SkbM RxPacket := do
+  match (← get).rxSkbs.get? id with
   | some p => return p
   | none => invariant s!"dangling rx skb {id}"
 
-def setRxSkb (id : SkbId) (f : RxPacket → RxPacket) : M Unit := do
-  let p ← getRxSkb id
-  modifyDev fun d => { d with rxSkbs := d.rxSkbs.insert id (f p) }
+def setRx (id : SkbId) (f : RxPacket → RxPacket) : SkbM Unit := do
+  let p ← getRx id
+  modify fun s => { s with rxSkbs := s.rxSkbs.insert id (f p) }
 
-def freeRxSkb (id : SkbId) : M Unit := do
-  let _ ← getRxSkb id
-  modifyDev fun d => { d with rxSkbs := d.rxSkbs.erase id }
+def freeRx (id : SkbId) : SkbM Unit := do
+  let _ ← getRx id
+  modify fun s => { s with rxSkbs := s.rxSkbs.erase id }
+
+end SkbStore
+
+/-- The skb stores at the device (the component's functions through its
+    adapter): the names the paths use. -/
+def newTxSkb (p : DataPacket) : M SkbId := liftSkb (SkbStore.newTx p)
+def getTxSkb (id : SkbId) : M DataPacket := liftSkb (SkbStore.getTx id)
+def setTxSkb (id : SkbId) (f : DataPacket → DataPacket) : M Unit := liftSkb (SkbStore.setTx id f)
+def freeTxSkb (id : SkbId) : M Unit := liftSkb (SkbStore.freeTx id)
+def newRxSkb (p : RxPacket) : M SkbId := liftSkb (SkbStore.newRx p)
+def getRxSkb (id : SkbId) : M RxPacket := liftSkb (SkbStore.getRx id)
+def setRxSkb (id : SkbId) (f : RxPacket → RxPacket) : M Unit := liftSkb (SkbStore.setRx id f)
+def freeRxSkb (id : SkbId) : M Unit := liftSkb (SkbStore.freeRx id)
 
 /-- Retired (2026-10-14, the pre-release review's finding 3). It stopped a
     path that reads or changes state the pending handshake send worker also
@@ -334,23 +415,23 @@ def loopbackSend (sites : List HiddenSite) (raised : Bool) : M Unit := do
 /-- `node->bit[i]`, `i` 0 or 1: the bounds-checked read that replaces
     `bit[..]!` in the trie code (future-proof-paths note, 3(d)); an index
     outside the pair is a mirror invariant failure, not a panic. -/
-def AipNode.bitAt (n : AipNode) (i : Nat) : M (Option NodeId) :=
+def AipNode.bitAt [Monad m] [MonadLiftT AmbientM m] (n : AipNode) (i : Nat) : m (Option NodeId) :=
   match n.bit[i]? with
   | some c => pure c
   | none => invariant s!"allowedips node bit[{i}] is out of range"
 
 /-- Read the pointer a slot holds (`*parent_bit`). -/
-def slotGet (s : Slot) : M (Option NodeId) := do
+def slotGet (s : Slot) : AipM (Option NodeId) := do
   match s with
-  | .root4 => return (← getDev).peerAllowedips.root4
-  | .root6 => return (← getDev).peerAllowedips.root6
+  | .root4 => return (← get).trie.root4
+  | .root6 => return (← get).trie.root6
   | .child parent bit => (← getNode parent).bitAt bit
 
 /-- Store a pointer into a slot (`rcu_assign_pointer(*parent_bit, node)`). -/
-def slotSet (s : Slot) (v : Option NodeId) : M Unit := do
+def slotSet (s : Slot) (v : Option NodeId) : AipM Unit := do
   match s with
-  | .root4 => modifyDev fun d => { d with peerAllowedips := { d.peerAllowedips with root4 := v } }
-  | .root6 => modifyDev fun d => { d with peerAllowedips := { d.peerAllowedips with root6 := v } }
+  | .root4 => modify fun st => { st with trie := { st.trie with root4 := v } }
+  | .root6 => modify fun st => { st with trie := { st.trie with root6 := v } }
   | .child parent bit =>
     let n ← getNode parent
     if bit > 1 then invariant "child slot bit beyond bit[2]"

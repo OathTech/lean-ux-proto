@@ -1869,7 +1869,11 @@ abbrev Net.M := StateT Net.State AmbientM
   let (a, s) ← x.run { toRouting := g.routing, wg0 }
   return (a, { g with routing := s.toRouting })
 
-instance : MonadLift Net.M WG.M := ⟨liftRouting⟩
+/-- Low priority: the component's lift must not be the route by which an
+    ambient primitive reaches `WG.M` (the transitive `MonadLiftT` search
+    would otherwise prefer the most recent instance and run every `branch`
+    through the adapter). -/
+instance (priority := low) : MonadLift Net.M WG.M := ⟨liftRouting⟩
 
 /-- The routing state, read and written at any monad that lifts `Net.M`
     (WireGuard's sockets and the environment's address and route

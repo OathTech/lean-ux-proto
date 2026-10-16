@@ -49,13 +49,13 @@ def IndexOwner.peerDeref (o : IndexOwner) : M PeerId := do
 /-- `hlist_del_init_rcu(&entry->index_hash)` (rculist.h:182-188): the
     `hlist_unhashed` test is the decision `d`, true when the entry is in the
     table; the unhash leaves it absent either way. -/
-private def unhashEntry (d : Decision) (hashed : IndexEntry → Bool) : M Unit := do
-  _ ← branch d ((← getDev).indexTable.any hashed)
-  modifyDev fun dev => { dev with indexTable := dev.indexTable.filter fun e => !hashed e }
+private def unhashEntry (d : Decision) (hashed : IndexEntry → Bool) : IndexM Unit := do
+  _ ← branch d ((← get).any hashed)
+  modify fun t => t.filter fun e => !hashed e
 
 /-- wg_index_hashtable_remove (peerlookup.c:192-198) of an owner's entry:
     `hlist_del_init_rcu`, a no-op if unhashed. -/
-def indexRemove (owner : IndexOwner) : M Unit :=
+def indexRemove (owner : IndexOwner) : IndexM Unit :=
   unhashEntry .idxRemoveHashed (·.owner == owner)
 
 /-- wg_peer_put (peer.c:223-228) and kref_release (200-221): the release
@@ -144,17 +144,17 @@ def INDEX_HASHTABLE_BITS : Nat := 13
 
 /-- `index_bucket` (peerlookup.c:73-81): the entries under the same masked
     index, in list order. -/
-def indexBucket (index : Nat) : M (List IndexEntry) := do
+def indexBucket (index : Nat) : IndexM (List IndexEntry) := do
   let mask := 2 ^ INDEX_HASHTABLE_BITS
-  return (← getDev).indexTable.filter (·.index % mask == index % mask)
+  return (← get).filter (·.index % mask == index % mask)
 
 /-- Whether an owner's entry is hashed (`!hlist_unhashed`). -/
-def indexHashed (owner : IndexOwner) : M Bool :=
-  return (← getDev).indexTable.any (·.owner == owner)
+def indexHashed (owner : IndexOwner) : IndexM Bool :=
+  return (← get).any (·.owner == owner)
 
 /-- A walk over a bucket for `index`, reporting the loop and the compare:
     whether some entry has this index. -/
-private def bucketHas (walk collide : Decision) (index : Nat) : M Bool := do
+private def bucketHas (walk collide : Decision) (index : Nat) : IndexM Bool := do
   for e in ← indexBucket index do
     _ ← branch walk true
     if ← branch collide (e.index == index) then return true
@@ -163,7 +163,7 @@ private def bucketHas (walk collide : Decision) (index : Nat) : M Bool := do
 
 /-- wg_index_hashtable_insert (peerlookup.c:109-153): a fresh random index
     (a recorded hidden input) not in use, inserted at the head. -/
-def indexInsert (owner : IndexOwner) : M Nat := do
+def indexInsert (owner : IndexOwner) : IndexM Nat := do
   -- `hlist_del_init_rcu(&entry->index_hash)` first (peerlookup.c:125)
   unhashEntry .idxInsertHashed (·.owner == owner)
   -- `goto search_unused_slot` draws again; nothing else inserts meanwhile
@@ -177,7 +177,7 @@ def indexInsert (owner : IndexOwner) : M Nat := do
     -- the locked walk's collision (stolen meanwhile, peerlookup.c:148) needs
     -- a concurrent insert
     if ← bucketHas .idxInsWalk2 .idxInsCollide2 index then unsupported "an index stolen during insertion"
-    modifyDev fun d => { d with indexTable := { index, owner } :: d.indexTable }
+    modify fun t => { index, owner } :: t
     return index
   budgetExhausted "index draws"
 
@@ -185,13 +185,13 @@ def indexInsert (owner : IndexOwner) : M Nat := do
     entry by its new keypair's, in place: the keypair's entry takes the
     handshake's index and list position, and the handshake's is unhashed.
     Whether the handshake entry was hashed. -/
-def indexReplaceHandshake (pid : PeerId) (kp : KeypairId) : M Bool := do
+def indexReplaceHandshake (pid : PeerId) (kp : KeypairId) : IndexM Bool := do
   let hashed ← indexHashed (.handshake pid)
   if ← branch .idxReplaceUnhashed !hashed then return false
   -- `new->index = old->index; hlist_replace_rcu(...)`: the keypair's own
   -- entry, with its own peer word, takes the index and the list position
-  modifyDev fun d => { d with indexTable := d.indexTable.map fun e =>
-    if e.owner == (.handshake pid) then { e with owner := .keypair kp } else e }
+  modify fun t => t.map fun e =>
+    if e.owner == (.handshake pid) then { e with owner := .keypair kp } else e
   return true
 
 def NSEC_PER_SEC : Int := 1000000000
