@@ -68,7 +68,7 @@ theorem GroReady.buffered {g h} (hi : GroReady g h) (e : GroEntry) :
   · simpa [bufferedEntries, heldEntries, List.filterMap_append, List.filter_append] using
       congrArg (· ++ heldEntries [e]) hi.held
 
-theorem selected_lift (a : M α) (I : List GroEvent → Prop)
+theorem selected_lift (a : Leanux.M α) (I : List GroEvent → Prop)
     (hs : ∀ h, I h → SelectedGroSafe h) :
     PrefixEnsures (fun h _ => I h) SelectedGroSafe (liftPrefix a) (fun _ h _ => I h) :=
   PrefixEnsures.lift a (fun h _ => hs h) (fun _ _ _ _ hi _ => hi)
@@ -78,7 +78,7 @@ theorem dropGro_ready (pid occurrence id : Nat) (g : TaggedGro) :
       (fun _ h _ => GroReady g h) := by
   intro w h hi
   simp only [dropGroPrefix, runPrefix_bind, runPrefix_lift]
-  cases (dropRxQueue pid).run w with
+  cases (liftWG (dropRxQueue pid)).run w with
   | error e => exact ⟨[], by simp, hi.safe, True.intro⟩
   | ok out =>
     rcases out with ⟨u, v⟩
@@ -95,7 +95,7 @@ theorem consumeGro_pending (pid occurrence id : Nat) (pkt : RxPacket)
       (fun out h _ => GroPending g out h) := by
   intro w h hi
   rw [consumeGro_run]
-  cases (consumeDataDone pid pkt endpoint).run w with
+  cases (liftWG (consumeDataDone pid pkt endpoint)).run w with
   | error e => exact ⟨[], by simp, hi.safe, True.intro⟩
   | ok out =>
     rcases out with ⟨bytes, v⟩
@@ -276,7 +276,7 @@ theorem groOption_ready (g : TaggedGro) (out : Option GroEntry) :
   | some e =>
     simpa [List.forIn_cons, List.forIn_nil, bind_assoc] using napiGroReceive_ready g e
 
-theorem ready_lift_bind (a : M α) (g : TaggedGro) (f : α → PrefixM GroEvent β)
+theorem ready_lift_bind (a : Leanux.M α) (g : TaggedGro) (f : α → PrefixM GroEvent β)
     (hf : ∀ x, PrefixEnsures (fun h _ => GroReady g h) SelectedGroSafe (f x) Q) :
     PrefixEnsures (fun h _ => GroReady g h) SelectedGroSafe (liftPrefix a >>= f) Q :=
   PrefixEnsures.bind (selected_lift a (GroReady g) (fun _ hi => hi.safe)) hf

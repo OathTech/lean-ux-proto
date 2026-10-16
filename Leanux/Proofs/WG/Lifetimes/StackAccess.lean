@@ -11,39 +11,62 @@ set_option pp.structureInstances false
 namespace Leanux.Proofs.WG.Lifetimes
 open Leanux Leanux.WG Leanux.Env Leanux.Proofs.Logged Leanux.Proofs.Framing Std.Do
 
-def reply4Prefix (dst : Nat) (bytes : List UInt8) : MixedM Unit := do
+def reply4Prefix (dst : Nat) (bytes : List UInt8) : PrefixM LifetimeEvent Unit := do
   liftPrefix (skipCut ([.inetEhashSecret] ++ allocCuts))
-  let w ← liftPrefix (get : M World)
-  let d ← liftPrefix getDev
-  let mtu := ((w.routes.find? fun (f,a,_) => f == 4 && a == dst).map (·.2.2)).getD d.mtu
-  discard <| wgXmitPrefix 4 dst [{bytes, csum := none, mtu}] mtu
+  let saddr := WG.beAt bytes 12 4
+  match ← liftPrefix (liftWG (liftRouting (Net.routeOutput4 saddr dst))) with
+  | .error _ => return
+  | .ok r =>
+    if r.dev != WG0_IFINDEX then
+      liftPrefix (unsupported "a stack reply routed away from wg0")
+    let devMtu := (← liftPrefix (liftWG getDev)).mtu
+    let mtu := if r.mtu != 0 then r.mtu else devMtu
+    liftPrefix (liftWG (liftRouting (Net.neighbourClassify WG0_IFINDEX)))
+    discard <| liftWGObserver (wgXmitPrefix 4 dst [{bytes, csum := none, mtu}] mtu)
 
 theorem reply4Prefix_erases (dst : Nat) (bytes : List UInt8) :
     ErasesPrefix (reply4Prefix dst bytes) (Stack.reply4 dst bytes) := by
   unfold reply4Prefix Stack.reply4
   simp only [Functor.discard, map_const, Function.comp_apply, Function.const, map_eq_pure_bind]
   repeat' first
-    | exact wgXmitPrefix_erases _ _ _ _
+    | exact liftWGObserver_erases (wgXmitPrefix_erases _ _ _ _)
     | exact erasesPrefix_lift _
     | exact erasesPrefix_pure _
     | apply erasesPrefix_bind
-    | intro_forall
+    | apply erasesPrefix_ite
+    | maintenance_intro
+    | dsimp only
+    | split
 
-theorem reply4Prefix_preserves (c : AmbientContracts I) (t : TxContracts I)
-    (x : WgXmitContracts I) (dst : Nat) (bytes : List UInt8) :
+theorem reply4Prefix_preserves (c : ProductAmbientContracts I) (t : ProductTxContracts I)
+    (x : ProductWgXmitContracts I) (dst : Nat) (bytes : List UInt8) :
     PrefixPreserves I LifetimeEvent.Safe (reply4Prefix dst bytes) := by
+  have routing {α : Type} (a : Net.M α) :
+      PrefixPreserves I LifetimeEvent.Safe (liftPrefix (liftWG (liftRouting a))) :=
+    ProductAmbientContracts.drop (c.store (fun _ => True) _
+      (liftWG_sameProductStore _ (liftRouting_sameWGStore a)))
+  have dev : PrefixPreserves I LifetimeEvent.Safe (liftPrefix (liftWG getDev)) :=
+    ProductAmbientContracts.drop (c.store (fun _ => True) _ (fun initial =>
+      productGetDev_spec (fun s => s = initial)))
   unfold reply4Prefix
   simp only [Functor.discard, map_const, Function.comp_apply, Function.const, map_eq_pure_bind]
   repeat' first
-    | exact wgXmitPrefix_preserves c t x _ _ _ _
-    | exact AmbientContracts.drop (c.kernel (fun _ => True) _ (skipCut_sameKernel _))
-    | exact AmbientContracts.drop (c.kernel (fun _ => True) _ getDev_sameKernel)
-    | exact AmbientContracts.drop (c.kernel (fun _ => True) _ (by intro w a v hr; cases hr; rfl))
-    | exact PrefixPreserves.pure c.safe _
-    | apply PrefixPreserves.bind
-    | intro_forall
+    | with_reducible exact wgXmitPrefix_preserves_product c t x _ _ _ _
+    | with_reducible exact ProductAmbientContracts.drop (c.ambient (fun _ => True) (AmbientM.skipCut _))
+    | with_reducible exact ProductAmbientContracts.drop (c.ambient (fun _ => True) (AmbientM.unsupported _))
+    | with_reducible exact dev
+    | with_reducible exact routing _
+    | with_reducible exact PrefixPreserves.pure c.safe _
+    | with_reducible apply PrefixPreserves.bind
+    | with_reducible apply PrefixPreserves.ite
+    | maintenance_intro
+    | dsimp only
+    | split
+  all_goals first
+    | exact ProductAmbientContracts.drop (c.ambient (fun _ => True) (AmbientM.skipCut _))
+    | exact ProductAmbientContracts.drop (c.ambient (fun _ => True) (AmbientM.unsupported _))
 
-def receive4Prefix (pkt : List UInt8) : MixedM Unit := do
+def receive4Prefix (pkt : List UInt8) : PrefixM LifetimeEvent Unit := do
   let byte (i : Nat) : Nat := (pkt.getD i 0).toNat
   let ihl := byte 0 % 16
   -- row 1 (ip_rcv_core, ip_input.c:496): ihl < 5; row 2: tot_len < ihl*4
@@ -66,10 +89,14 @@ def receive4Prefix (pkt : List UInt8) : MixedM Unit := do
   if dst / 2 ^ 24 == 127 then liftPrefix (Leanux.Env.Stack.excluded "2.2 row 8 (a loopback destination, route_localnet 0)")
   if top == 127 then liftPrefix (Leanux.Env.Stack.excluded "2.2 row 9 (a loopback source)")
   if dst / 2 ^ 28 == 0xe then liftPrefix (Leanux.Env.Stack.excluded "2.2 rows 11a-11c (a multicast destination)")
-  -- row 12: wg0's own address as the source (fib_validate_source)
-  if src == WG0_ADDR4 then liftPrefix (Leanux.Env.Stack.excluded "2.2 row 12 (wg0's own address as the source)")
-  -- row 13: a destination that is not local (forwarding off: ip_error, no ICMP)
-  if dst != WG0_ADDR4 then liftPrefix (Leanux.Env.Stack.excluded "2.2 row 13 (a destination other than wg0's address)")
+  -- The route verdict is obtained by the actual trie lookup and source test.
+  match ← liftPrefix (liftWG (liftRouting (Net.routeInput4 src dst))) with
+  | .local true =>
+    liftPrefix (Stack.excluded "2.2 row 12 (a local source: fib_validate_source's -EINVAL)")
+  | .local false => pure ()
+  | .noRoute | .notLocal => return
+  | .broadcast =>
+    liftPrefix (unsupported "a decrypted packet to a broadcast route (udp.c's broadcast delivery)")
   -- row 15: fragments
   if WG.beAt pkt 6 2 % 0x4000 != 0 then liftPrefix (Leanux.Env.Stack.excluded "2.2 row 15 (a fragment)")
   let protocol := byte 9
@@ -93,12 +120,12 @@ def receive4Prefix (pkt : List UInt8) : MixedM Unit := do
   -- rows 22-24: the port map of the fixture
   let dport := WG.beAt pkt 22 2
   if dport != SENDER_PORT then
-    if (← liftPrefix getK).wg.any (fun d => d.running && dport == d.incomingPort) then
+    if (← liftPrefix getWG).dev.any (fun d => d.running && dport == d.incomingPort) then
       liftPrefix (Leanux.Env.Stack.excluded "2.2 row 24 (wg0's own listen port: a nested receive)")
     liftPrefix (Leanux.Env.Stack.excluded "2.2 row 22 (no socket at the port: ICMP port unreachable)")
   -- row 23: delivered to the sender, with the inner TOS (after the ECN
   -- rewrite) and the destination its `IPV6_PKTINFO` reports (v4-mapped)
-  liftPrefix (modify fun w => { w with senderInbox := w.senderInbox ++
+  liftPrefix (modifyEnv fun w => { w with senderInbox := w.senderInbox ++
     [{ family := AF_INET, addr := src, port := WG.beAt pkt 20 2, bytes := pkt.drop 28, tos := byte 1,
        dst := 0xffff00000000 + dst }] })
 
@@ -111,33 +138,50 @@ theorem receive4Prefix_erases (pkt : List UInt8) :
     | with_reducible exact erasesPrefix_pure _
     | with_reducible exact erasesPrefix_lift_failure_bind (Stack.excluded _) (stackExcluded_failure _) _ _
     | with_reducible exact erasesPrefix_lift_failure_bind (invariant _) (fun _ => ⟨_, rfl⟩) _ _
+    | with_reducible exact erasesPrefix_lift_failure_bind (unsupported _) (fun _ => ⟨_, rfl⟩) _ _
     | with_reducible apply erasesPrefix_ite
     | with_reducible apply erasesPrefix_bind
-    | intro_forall
+    | maintenance_intro
     | dsimp only
     | split
+  all_goals exact erasesPrefix_lift _
 
-theorem receive4Prefix_preserves (c : AmbientContracts I) (t : TxContracts I)
-    (x : WgXmitContracts I) (pkt : List UInt8) :
+theorem receive4Prefix_preserves (c : ProductAmbientContracts I) (t : ProductTxContracts I)
+    (x : ProductWgXmitContracts I) (pkt : List UInt8) :
     PrefixPreserves I LifetimeEvent.Safe (receive4Prefix pkt) := by
+  have routing {α : Type} (a : Net.M α) :
+      PrefixPreserves I LifetimeEvent.Safe (liftPrefix (liftWG (liftRouting a))) :=
+    ProductAmbientContracts.drop (c.store (fun _ => True) _
+      (liftWG_sameProductStore _ (liftRouting_sameWGStore a)))
+  have read : PrefixPreserves I LifetimeEvent.Safe (liftPrefix (getWG : Leanux.M WGWorld)) :=
+    ProductAmbientContracts.drop (c.store (fun _ => True) _
+      (fun initial => productGetWG_spec (fun s => s = initial)))
+  have write (f : EnvWorld → EnvWorld) :
+      PrefixPreserves I LifetimeEvent.Safe (liftPrefix (modifyEnv f)) := by
+    apply ProductAmbientContracts.drop (c.store (fun _ => True) _ ?_)
+    apply (ProjectedAction.iff_run _ _ _).mpr
+    intro w v w' hr
+    cases hr
+    rfl
   unfold receive4Prefix
   repeat' first
     | with_reducible exact reply4Prefix_preserves c t x _ _
     | with_reducible exact PrefixPreserves.lift_failure_bind c.safe (Stack.excluded _) (stackExcluded_failure _) _
     | with_reducible exact PrefixPreserves.lift_failure_bind c.safe (invariant _) (fun _ => ⟨_, rfl⟩) _
-    | with_reducible exact AmbientContracts.drop (c.kernel (fun _ => True) _ (by intro w a v hr; cases hr; rfl))
-    | with_reducible exact AmbientContracts.drop (c.kernel (fun _ => True) _ (stackExcluded_sameKernel _))
-    | with_reducible exact AmbientContracts.drop (c.invariant (fun _ => True) _)
+    | with_reducible exact PrefixPreserves.lift_failure_bind c.safe (unsupported _) (fun _ => ⟨_, rfl⟩) _
+    | with_reducible exact ProductAmbientContracts.drop (c.ambient (fun _ => True) (AmbientM.unsupported _))
+    | with_reducible exact ProductAmbientContracts.drop (c.invariant (fun _ => True) _)
+    | with_reducible exact read
+    | with_reducible exact write _
+    | with_reducible exact routing _
     | with_reducible exact PrefixPreserves.pure c.safe _
     | with_reducible apply PrefixPreserves.ite
     | with_reducible apply PrefixPreserves.bind
-    | intro_forall
+    | maintenance_intro
     | dsimp only
     | split
-  all_goals exact AmbientContracts.drop (c.kernel (fun _ => True) _
-    (by intro w a v hr; cases hr; rfl))
 
-def stackReceivePrefix (pkt : List UInt8) : MixedM Unit := do
+def stackReceivePrefix (pkt : List UInt8) : PrefixM LifetimeEvent Unit := do
   let version := (pkt.headD 0).toNat / 16
   if version == 4 then receive4Prefix pkt
   else if version == 6 then liftPrefix (Stack.receive6 pkt)
@@ -151,29 +195,29 @@ theorem stackReceivePrefix_erases (pkt : List UInt8) :
   · exact receive4Prefix_erases _
   · split <;> exact erasesPrefix_lift _
 
-theorem stackReceivePrefix_preserves (c : AmbientContracts I) (t : TxContracts I)
-    (x : WgXmitContracts I) (pkt : List UInt8) :
+theorem stackReceivePrefix_preserves (c : ProductAmbientContracts I) (t : ProductTxContracts I)
+    (x : ProductWgXmitContracts I) (pkt : List UInt8) :
     PrefixPreserves I LifetimeEvent.Safe (stackReceivePrefix pkt) := by
   unfold stackReceivePrefix
   dsimp only
   split
   · exact receive4Prefix_preserves c t x _
   · split
-    · exact AmbientContracts.drop (c.kernel (fun _ => True) _ (stackReceive6_sameKernel _))
-    · exact AmbientContracts.drop (c.invariant (fun _ => True) _)
+    · exact ProductAmbientContracts.drop (c.store (fun _ => True) _ (stackReceive6_sameKernel _))
+    · exact ProductAmbientContracts.drop (c.invariant (fun _ => True) _)
 
-def stackFlushPrefix (pkts : List (List UInt8)) : MixedM Unit := pkts.forM stackReceivePrefix
+def stackFlushPrefix (pkts : List (List UInt8)) : PrefixM LifetimeEvent Unit := pkts.forM stackReceivePrefix
 
 theorem stackFlushPrefix_erases (pkts : List (List UInt8)) :
     ErasesPrefix (stackFlushPrefix pkts) (pkts.forM Leanux.Env.deliverInner) := by
   exact erasesPrefix_forM pkts stackReceivePrefix Leanux.Env.deliverInner stackReceivePrefix_erases
 
-theorem stackFlushPrefix_preserves (c : AmbientContracts I) (t : TxContracts I)
-    (x : WgXmitContracts I) (pkts : List (List UInt8)) :
+theorem stackFlushPrefix_preserves (c : ProductAmbientContracts I) (t : ProductTxContracts I)
+    (x : ProductWgXmitContracts I) (pkts : List (List UInt8)) :
     PrefixPreserves I LifetimeEvent.Safe (stackFlushPrefix pkts) :=
   PrefixPreserves.forM pkts stackReceivePrefix c.safe (stackReceivePrefix_preserves c t x)
 
-def rxPollStackPrefix (pid : PeerId) (budget : Nat) : MixedM Nat :=
+def rxPollStackPrefix (pid : PeerId) (budget : Nat) : PrefixM LifetimeEvent Nat :=
   rxPollPrefix pid budget stackFlushPrefix
 
 theorem rxPollStackPrefix_erases (pid : PeerId) (budget : Nat) :
@@ -181,8 +225,8 @@ theorem rxPollStackPrefix_erases (pid : PeerId) (budget : Nat) :
       (rxPoll pid budget (fun pkts => pkts.forM Leanux.Env.deliverInner)) :=
   rxPollPrefix_erases pid budget _ _ stackFlushPrefix_erases
 
-theorem rxPollStackPrefix_preserves (c : AmbientContracts I) (t : TxContracts I)
-    (r : RxContracts I) (x : WgXmitContracts I) (pid : PeerId) (budget : Nat) :
+theorem rxPollStackPrefix_preserves (c : ProductAmbientContracts I) (t : ProductTxContracts I)
+    (r : ProductRxContracts I) (x : ProductWgXmitContracts I) (pid : PeerId) (budget : Nat) :
     PrefixPreserves I LifetimeEvent.Safe (rxPollStackPrefix pid budget) :=
   rxPollPrefix_preserves_ambient c t r pid budget _ (stackFlushPrefix_preserves c t x)
 

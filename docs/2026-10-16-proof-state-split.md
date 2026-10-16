@@ -95,9 +95,12 @@ it is not part of that baseline.
 | Native transmit source and routing sends | 32 | 24 | 5 | 3 | 3 | 30 |
 | Native TX publication, disposal and error endpoints | 30 | 30 | 0 | 0 | 0 | 30 |
 | Product TX disposition step and native/product RX stack | 16 | 6 | 0 | 10 | 0 | 16 |
+| Product GRO history, stack callbacks and NAPI | 91 | 0 | 1 | 90 | 0 | 90 |
+| Native socket/handshake/TX routing and product callbacks | 53 | 42 | 1 | 10 | 1 | 53 |
+| Native Noise consumption and retained product contracts | 9 | 5 | 1 | 3 | 10 | 18 |
 
-The whole tree currently contains 451 Lean files and 6,401 theorems. The completed
-changes total 1,878 retyped theorems, 1,643 deletions, 803 retained contract shapes and 329 added.
+The whole tree currently contains 451 Lean files and 6,409 theorems. The completed
+changes total 1,925 retyped theorems, 1,646 deletions, 906 retained contract shapes and 340 added.
 Retyping changes or generalizes the actual state/monad carrier or observation.
 This includes shorthand contracts whose source functions or named views move
 to a native monad. Mere namespace qualification and equivalent relocation of a
@@ -2673,3 +2676,112 @@ banner. All dirty worktrees were preserved before resumption at
 `refs/snapshots/proof-campaign-handshake-native-20261016T204911Z/`.
 Neither call changes the completed tranche's results. The full proof gate
 remains pending.
+
+## GRO history, stack/NAPI, routing and Noise consumption
+
+The twelve changed modules pass their scoped builds, 229 explicitly named
+standard-only axiom checks, nine fresh module replays and independent source
+reviews. Two files only prepend canonical imports: RxBorrow and Enqueue retain
+all 22 theorem bodies byte-for-byte, already counted in earlier tranches.
+There is no mirror, proof-limit, cap or gate change. The full proof gate remains
+pending, and every result remains lagging.
+
+SelectedGro, RxPollTags and RxPollProjection retain all 73 pure/history and
+product contracts. Their four generic action binders still accept arbitrary
+actual product actions; the concrete packet operations use the actual WG
+adapter. One ordinary projection eta goal failed the first changed-source
+build; the second passed (173 jobs). A separate axiom-inventory invocation
+misparsed the name ending in a question mark and failed explicitly; its
+corrected exact inventory passed. No failed invocation counted as validation.
+
+StackAccess retains ten product contracts. Its obsolete observer omitted the
+actual output-route and neighbour calls and used fixed-address input tests.
+The repaired observer follows routeOutput4, the device check and metric,
+neighbour classification, and the actual routeInput4 verdicts in source order.
+Exact erasure preserves Stops and complete successful World endpoints; access
+preservation keeps arbitrary product invariants under the original 43-field
+stability premise. Three changed-source builds gave two ordinary adapter-leaf
+normalization failures followed by PASS158. The counterexample below proves
+the obsolete reply observer stops while the mirror returns normally on an
+invalid source route before device access. It is an unrestricted observer
+counterexample, not a reachability or Linux-defect claim.
+
+BatchNapi retains seven product contracts, including captured-map event order,
+short-circuit reads, exact section records, placement choice and failure history.
+The deleted chooseNapiHere_sameKernel wrapper framed only the fixture's
+EnvWorld read/update; that component is outside the former store observation.
+Its actual product source factor remains, and its caller uses the structural
+write-back fact locally. Two changed-source builds gave one ordinary leaf
+normalization failure followed by PASS161.
+
+RoutingSocketFrames, RoutingHandshakeFrames and RoutingTxFrames retain every
+substantive frame: 42 native carries and ten original product contracts.
+The removed indexInsert_routing wrapper is an IndexM-only operation, handled
+by the canonical Index adapter. One new actual liftWG bridge carries the
+routing retention relation to the product. Checksum, softirq, after-item and
+reschedule callbacks remain arbitrary product actions. Timer wheel effects,
+route lookups, error paths and resident deletion stay in the source. Seven
+changed-source builds gave six ordinary failures then PASS263; the first
+failures included two imported generated matcher collisions, resolved by the
+two import-only prerequisites. A later orchestration syntax exception occurred
+before any tool executed; every dirty worktree was preserved at
+\`refs/snapshots/proof-campaign-routing-check-driver-20261016T205312Z/\`
+before the corrected checks.
+
+HandshakeConsume/Calls carry exact native Noise execution with both Ambient
+endpoints and retain three original arbitrary product-invariant contracts.
+The response continuation is a literal source factor, equated by reflexivity;
+all owner checks, fresh getters and failed-consumption puts remain. The old
+consumeReject_sameKernel frame is deleted because its two decisions act only
+in AmbientM; canonical lifting supplies the component separation. Three native
+counterparts and seven private checked composition/factor lemmas are added.
+No cryptographic validity, scalar-owner authenticity, successful-record or
+reachability premise is introduced.
+
+Handshake development used eleven scoped builds: four ordinary failures,
+six explicitly cancelled failures and the final PASS137. Fifteen isolated
+stdin diagnostics produced three ordinary failures, eight cancelled failures
+and four isolated passes; none of those passes validated a module. All
+fourteen cancellations targeted inspected owned PIDs. The last product
+diagnostic exited 143 with a KILLED signal banner and is a failure. Its
+post-cancellation preservation prefix is
+\`refs/snapshots/proof-campaign-handshake-product-20261016T205450Z/\`.
+Earlier preservation windows are reported above. Final named-axiom and fresh
+replay checks pass; no source admission, raised limit or infrastructure rerun
+was used. Earlier bounded failed-driver outputs do not support a claim that
+every historical recovery warning was retained.
+
+Reproduce the stack-observer counterexample from this checkout with the
+following command; it extracts the exact obsolete observer from 3b0a27a and
+changes only its execution carrier/observation wrappers:
+
+```sh
+python3 - <<'PY'
+from pathlib import Path
+import subprocess,sys
+old=subprocess.check_output(['git','show','3b0a27a:Leanux/Proofs/WG/Lifetimes/StackAccess.lean'],text=True)
+factor=old[old.index('def reply4Prefix '):old.index('theorem reply4Prefix_erases')]
+factor=factor.replace('reply4Prefix','obsoleteReply').replace(': MixedM Unit',': Leanux.M Unit').replace('liftPrefix (skipCut ([.inetEhashSecret] ++ allocCuts))','skipCut ([.inetEhashSecret] ++ allocCuts)').replace('liftPrefix (get : M World)','(get : Leanux.M World)').replace('liftPrefix getDev','liftWG getDev').replace('w.routes','w.fixture.routes').replace('wgXmitPrefix','WG.wgXmit')
+source='import Leanux.Runner\nimport Leanux.Env.Stack\nopen Leanux Leanux.WG Leanux.Env\nnamespace StackObserverWitness\n'+factor+'''
+def initial : World := {
+  ambient := {env := fun _ _ => false, timing := ⟨0,0⟩}
+  tasks := Runner.initialTasks 32
+  fs := {}}
+def observe (a : Leanux.M Unit) : Bool :=
+  match a.run initial with
+  | .error _ => false
+  | .ok _ => true
+-- A nonzero zeronet source makes the actual route fail before device access.
+def bytes : List UInt8 := List.replicate 15 0 ++ [1]
+theorem obsolete_stops : observe (obsoleteReply 0 bytes) = false := by decide +kernel
+theorem current_returns : observe (Stack.reply4 0 bytes) = true := by decide +kernel
+#print axioms obsolete_stops
+#print axioms current_returns
+end StackObserverWitness
+'''
+p=Path('.tmp/state-split-stack-observer-witness.log')
+with p.open('w') as f:r=subprocess.run(['capped','--','scripts/in-bundle','lake','env','lean','-j1','--stdin'],input=source,text=True,stdout=f,stderr=subprocess.STDOUT)
+print(p.read_text());sys.exit(r.returncode)
+
+PY
+```

@@ -7,11 +7,11 @@ observed before any poll callback can change the resident store. -/
 namespace Leanux.Proofs.WG.Lifetimes
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing
 
-def napiSoftirqPrefix : MixedM Unit := do
-  let d ← liftPrefix getDev
-  let pending ← savedPeerFilterMap (fun pid p => if p.napiScheduled then some pid else none) d.peers.toList
+def napiSoftirqPrefix : PrefixM LifetimeEvent Unit := do
+  let d ← liftWGObserver (liftWGPrefix getDev)
+  let pending ← liftWGObserver (savedPeerFilterMap (fun pid p => if p.napiScheduled then some pid else none) d.peers.toList)
   if pending.isEmpty then return
-  if (← liftPrefix get).hidden.isSome && (← liftPrefix peekHiddenSite) != some (HiddenSite.sectionStart .netRx).info.id then return
+  if (← liftPrefix getAmbient).hidden.isSome && (← liftPrefix peekHiddenSite) != some (HiddenSite.sectionStart .netRx).info.id then return
   if pending.length > 1 then liftPrefix (unsupported "NAPI polls of several peers in one softirq")
   runWorkerPrefix .netRx do
     for pid in pending do
@@ -19,15 +19,16 @@ def napiSoftirqPrefix : MixedM Unit := do
 
 theorem napiSoftirqPrefix_erases : ErasesPrefix napiSoftirqPrefix Env.napiSoftirq := by
   unfold napiSoftirqPrefix Env.napiSoftirq
-  apply erasesPrefix_bind (erasesPrefix_lift _)
+  apply erasesPrefix_bind (liftWGObserver_erases (erasesStatePrefix_lift _))
   intro d
-  have h := savedPeerFilterMap_erases (fun pid p => if p.napiScheduled then some pid else none) d.peers.toList
+  have h := liftWGObserver_erases (savedPeerFilterMap_erases (fun pid p => if p.napiScheduled then some pid else none) d.peers.toList)
   apply erasesPrefix_bind_pure h
   dsimp only
   simp only [discard, map_const, Function.comp_def, map_eq_pure_bind]
   repeat' first
     | with_reducible apply runWorkerPrefix_erases
     | with_reducible exact rxPollStackPrefix_erases _ _
+    | with_reducible exact liftWGObserver_erases (erasesStatePrefix_lift _)
     | with_reducible exact erasesPrefix_lift _
     | with_reducible exact erasesPrefix_pure _
     | with_reducible apply erasesPrefix_forIn
@@ -35,53 +36,50 @@ theorem napiSoftirqPrefix_erases : ErasesPrefix napiSoftirqPrefix Env.napiSoftir
     | (with_reducible split)
     | (with_reducible intro x; try dsimp only)
 
-theorem napiSoftirqPrefix_preserves (c : AmbientContracts I) (t : TxContracts I)
-    (r : RxContracts I) (x : WgXmitContracts I) :
+theorem napiSoftirqPrefix_preserves (c : ProductAmbientContracts I) (t : ProductTxContracts I)
+    (r : ProductRxContracts I) (x : ProductWgXmitContracts I) :
     PrefixPreserves I LifetimeEvent.Safe napiSoftirqPrefix := by
-  apply AmbientContracts.drop (Q := fun _ _ => True)
+  apply ProductAmbientContracts.drop (Q := fun _ _ => True)
   unfold napiSoftirqPrefix
-  apply PrefixEnsures.bind (getDev_saved_spec c (fun _ => True))
+  apply PrefixEnsures.bind (getDev_saved_spec_product c (fun _ => True))
   intro d
-  apply PrefixEnsures.bind (savedPeerFilterMap_spec c (fun _ => True) _ _)
+  apply PrefixEnsures.bind (savedPeerFilterMap_spec_product c (fun _ => True) _ _)
   intro pending
   apply PrefixEnsures.consequence (show PrefixEnsures I LifetimeEvent.Safe _ (fun _ => I) from ?_)
     (fun _ _ hi => hi.1) (fun _ _ _ hi => ⟨hi, True.intro⟩)
   change PrefixPreserves I LifetimeEvent.Safe _
   simp only [discard, map_const, Function.comp_def, map_eq_pure_bind]
   repeat' first
-    | with_reducible apply runWorkerPrefix_preserves c.safe c.kernelStable
+    | with_reducible apply runWorkerPrefix_preserves c.safe c.storeStable
     | with_reducible exact rxPollStackPrefix_preserves c t r x _ _
-    | with_reducible exact AmbientContracts.drop (c.kernel (fun _ => True) _ peekHiddenSite_sameKernel)
-    | exact AmbientContracts.drop (c.kernel (fun _ => True) _ (by intro w x v hr; cases hr; rfl))
-    | exact AmbientContracts.drop (c.kernel (fun _ => True) _ (by intro w x v hr; cases hr))
+    | with_reducible exact ProductAmbientContracts.drop (c.ambient (fun _ => True) AmbientM.peekHiddenSite)
+    | exact ProductAmbientContracts.drop (c.ambient (fun _ => True) (get : AmbientM Ambient))
+    | exact ProductAmbientContracts.drop (c.ambient (fun _ => True) (AmbientM.unsupported _))
     | with_reducible exact PrefixPreserves.pure c.safe _
     | with_reducible apply PrefixPreserves.forIn _ _ _ c.safe
     | with_reducible apply PrefixPreserves.bind
     | (with_reducible split)
     | (with_reducible intro z; try dsimp only)
 
-/-- Scalar placement choice only: the original get/set are retained together. -/
-def chooseNapiHere : M Bool := do
-  let w ← get
+  all_goals exact ProductAmbientContracts.drop (c.ambient (fun _ => True) AmbientM.peekHiddenSite)
+
+/-- Scalar placement choice in the actual product environment component. -/
+def chooseNapiHere : Leanux.M Bool := do
+  let w ← getEnv
   let here := w.napiBeforePut.headD false
-  set {w with napiBeforePut := w.napiBeforePut.drop 1, napiAmbiguous := w.napiAmbiguous + 1}
+  modifyEnv fun e => {e with napiBeforePut := e.napiBeforePut.drop 1, napiAmbiguous := e.napiAmbiguous + 1}
   return here
 
-theorem chooseNapiHere_sameKernel : SameKernel chooseNapiHere := by
-  intro w x v hr
-  cases hr
-  rfl
-
-def napiIrqExitPrefix : MixedM Unit := do
-  if (← liftPrefix get).hidden.isNone then return
-  let d ← liftPrefix getDev
-  if !(← savedPeerAny (·.napiScheduled) d.peers.toList) then return
+def napiIrqExitPrefix : PrefixM LifetimeEvent Unit := do
+  if (← liftPrefix getAmbient).hidden.isNone then return
+  let d ← liftWGObserver (liftWGPrefix getDev)
+  if !(← liftWGObserver (savedPeerAny (·.napiScheduled) d.peers.toList)) then return
   if (← liftPrefix peekHiddenSite) != some (HiddenSite.sectionStart .netRx).info.id then return
   let here ← liftPrefix chooseNapiHere
   if here then napiSoftirqPrefix
 
-def napiIrqExitSource : M Unit := do
-  if (← get).hidden.isNone then return
+def napiIrqExitSource : Leanux.M Unit := do
+  if (← getAmbient).hidden.isNone then return
   if !(← getDev).peers.toList.any (·.2.napiScheduled) then return
   if (← peekHiddenSite) != some (HiddenSite.sectionStart .netRx).info.id then return
   let here ← chooseNapiHere
@@ -95,41 +93,58 @@ theorem napiIrqExitPrefix_erases : ErasesPrefix napiIrqExitPrefix Env.napiIrqExi
   unfold napiIrqExitPrefix napiIrqExitSource
   repeat' first
     | with_reducible exact napiSoftirqPrefix_erases
-    | with_reducible apply erasesPrefix_bind_pure (savedPeerAny_erases _ _)
+    | with_reducible apply erasesPrefix_bind_pure (liftWGObserver_erases (savedPeerAny_erases _ _))
+    | with_reducible exact liftWGObserver_erases (erasesStatePrefix_lift _)
     | with_reducible exact erasesPrefix_lift _
     | with_reducible exact erasesPrefix_pure _
     | with_reducible apply erasesPrefix_bind
     | (with_reducible split)
     | (with_reducible intro x; try dsimp only)
 
-theorem napiIrqExitPrefix_preserves (c : AmbientContracts I) (t : TxContracts I)
-    (r : RxContracts I) (x : WgXmitContracts I) :
+  all_goals exact liftWGObserver_erases (erasesStatePrefix_lift _)
+
+theorem napiIrqExitPrefix_preserves (c : ProductAmbientContracts I) (t : ProductTxContracts I)
+    (r : ProductRxContracts I) (x : ProductWgXmitContracts I) :
     PrefixPreserves I LifetimeEvent.Safe napiIrqExitPrefix := by
   unfold napiIrqExitPrefix
-  apply PrefixPreserves.bind (AmbientContracts.drop (c.kernel (fun _ => True) _ (by intro w x v hr; cases hr; rfl)))
+  apply PrefixPreserves.bind (ProductAmbientContracts.drop (c.ambient (fun _ => True) (get : AmbientM Ambient)))
   intro world
   split
   · exact PrefixPreserves.pure c.safe _
-  · apply AmbientContracts.drop (Q := fun _ _ => True)
-    apply PrefixEnsures.bind (getDev_saved_spec c (fun _ => True))
+  · apply ProductAmbientContracts.drop (Q := fun _ _ => True)
+    apply PrefixEnsures.bind (getDev_saved_spec_product c (fun _ => True))
     intro d
-    apply PrefixEnsures.bind (savedPeerAny_spec c (fun _ => True) _ _)
+    apply PrefixEnsures.bind (savedPeerAny_spec_product c (fun _ => True) _ _)
     intro pending
     apply PrefixEnsures.consequence (show PrefixEnsures I LifetimeEvent.Safe _ (fun _ => I) from ?_)
       (fun _ _ hi => hi.1) (fun _ _ _ hi => ⟨hi, True.intro⟩)
     repeat' first
       | exact napiSoftirqPrefix_preserves c t r x
-      | exact AmbientContracts.drop (c.kernel (fun _ => True) _ peekHiddenSite_sameKernel)
-      | exact AmbientContracts.drop (c.kernel (fun _ => True) _ chooseNapiHere_sameKernel)
+      | exact ProductAmbientContracts.drop (c.ambient (fun _ => True) AmbientM.peekHiddenSite)
+      | exact ProductAmbientContracts.drop (c.store (fun _ => True) chooseNapiHere (by
+          apply (ProjectedAction.iff_run _ _ _).mpr
+          intro w x v hr
+          cases hr
+          rfl))
       | exact PrefixPreserves.pure c.safe _
       | apply PrefixPreserves.bind
       | split
       | (intro z; try dsimp only)
 
-theorem napiSoftirqPrefix_allocation : PrefixPreserves AllocationInv LifetimeEvent.Safe napiSoftirqPrefix :=
-  napiSoftirqPrefix_preserves allocationAmbient allocationTx allocationRx allocationWgXmit
+theorem napiSoftirqPrefix_allocation : PrefixPreserves (fun h w => AllocationInv h w.wg) LifetimeEvent.Safe napiSoftirqPrefix :=
+  napiSoftirqPrefix_preserves (ProductAmbientContracts.ofNative allocationAmbient)
+    (ProductTxContracts.ofNative allocationTx)
+    ⟨fun len => (allocationRx.stats len).liftWGObserver,
+      fun why => (allocationRx.dishonest why).liftWGObserver,
+      fun id => (allocationRx.free id).liftWGObserver⟩
+    ⟨fun P => (allocationWgXmit.errors P).liftWGObserver⟩
 
-theorem napiIrqExitPrefix_allocation : PrefixPreserves AllocationInv LifetimeEvent.Safe napiIrqExitPrefix :=
-  napiIrqExitPrefix_preserves allocationAmbient allocationTx allocationRx allocationWgXmit
+theorem napiIrqExitPrefix_allocation : PrefixPreserves (fun h w => AllocationInv h w.wg) LifetimeEvent.Safe napiIrqExitPrefix :=
+  napiIrqExitPrefix_preserves (ProductAmbientContracts.ofNative allocationAmbient)
+    (ProductTxContracts.ofNative allocationTx)
+    ⟨fun len => (allocationRx.stats len).liftWGObserver,
+      fun why => (allocationRx.dishonest why).liftWGObserver,
+      fun id => (allocationRx.free id).liftWGObserver⟩
+    ⟨fun P => (allocationWgXmit.errors P).liftWGObserver⟩
 
 end Leanux.Proofs.WG.Lifetimes

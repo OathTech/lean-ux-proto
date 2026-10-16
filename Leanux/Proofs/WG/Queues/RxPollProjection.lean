@@ -22,7 +22,7 @@ theorem dropGro_projects (pid n id : Nat) :
     ProjectsPrefix removedId? (fun x => x) (dropGroPrefix pid n id) (dropRxPrefix pid id) := by
   intro w h
   simp only [dropGroPrefix, dropRxPrefix, runPrefix_bind, runPrefix_lift]
-  cases (dropRxQueue pid).run w with
+  cases (liftWG (dropRxQueue pid)).run w with
   | error e => rfl
   | ok out =>
     rcases out with ⟨u, v⟩
@@ -31,11 +31,11 @@ theorem dropGro_projects (pid n id : Nat) :
 
 theorem consumeGro_projects (pid n id : Nat) (pkt : RxPacket) (endpoint : Endpoint) :
     ProjectsPrefix removedId? (Option.map GroEntry.bytes) (consumeGro pid n id pkt endpoint)
-      (liftPrefix (consumeDataDone pid pkt endpoint)) := by
+      (liftPrefix (liftWG (consumeDataDone pid pkt endpoint))) := by
   intro w h
   rw [consumeGro_run]
   simp only [runPrefix_lift]
-  cases (consumeDataDone pid pkt endpoint).run w with
+  cases (liftWG (consumeDataDone pid pkt endpoint)).run w with
   | error e => rfl
   | ok out =>
     rcases out with ⟨bytes, v⟩
@@ -154,7 +154,9 @@ theorem rxPollGro_projects (pid : PeerId) (budget : Nat) :
             projectsPrefix_pure removedId? (projectStep pollProject) _)
         | with_reducible exact projectsPrefix_pure removedId? (projectStep TaggedGro.erase) _
       all_goals simp_all [ProjectsPrefix, Option.toList_map, Except.map]
-      all_goals exact groOption_projects _ _
+      all_goals first
+        | exact groOption_projects _ _
+        | (intro w; split <;> simp_all only)
     · intro acc
       dsimp only [pollProject]
       repeat' first

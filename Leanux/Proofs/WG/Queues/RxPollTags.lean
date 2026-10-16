@@ -51,11 +51,11 @@ theorem TagReady.entered {n h} (hi : TagReady n h) (xs : List GroEntry) :
     TagReady n (h ++ xs.map GroEvent.entered) := by
   exact ⟨by simpa using hi.ordinals, by simpa using hi.buffered⟩
 
-theorem tag_lift (a : M α) (I : List GroEvent → Prop) (hs : ∀ h, I h → TagSafe h) :
+theorem tag_lift (a : Leanux.M α) (I : List GroEvent → Prop) (hs : ∀ h, I h → TagSafe h) :
     PrefixEnsures (fun h _ => I h) TagSafe (liftPrefix a) (fun _ h _ => I h) :=
   PrefixEnsures.lift a (fun h _ => hs h) (fun _ _ _ _ hi _ => hi)
 
-theorem tag_lift_bind (a : M α) (I : List GroEvent → Prop) (hs : ∀ h, I h → TagSafe h)
+theorem tag_lift_bind (a : Leanux.M α) (I : List GroEvent → Prop) (hs : ∀ h, I h → TagSafe h)
     (f : α → PrefixM GroEvent β)
     (hf : ∀ x, PrefixEnsures (fun h _ => I h) TagSafe (f x) Q) :
     PrefixEnsures (fun h _ => I h) TagSafe (liftPrefix a >>= f) Q :=
@@ -66,7 +66,7 @@ theorem dropGro_tags (pid n id : Nat) :
       (fun _ h _ => TagDropped n id h) := by
   intro w h hi
   simp only [dropGroPrefix, runPrefix_bind, runPrefix_lift]
-  cases (dropRxQueue pid).run w with
+  cases (liftWG (dropRxQueue pid)).run w with
   | error e => exact ⟨[], by simp, hi.safe, True.intro⟩
   | ok out =>
     rcases out with ⟨u, v⟩
@@ -94,7 +94,7 @@ theorem consumeGro_tags (pid n id : Nat) (pkt : RxPacket) (endpoint : Endpoint) 
       (fun _ h _ => TagReady (n + 1) h) := by
   intro w h hi
   rw [consumeGro_run]
-  cases (consumeDataDone pid pkt endpoint).run w with
+  cases (liftWG (consumeDataDone pid pkt endpoint)).run w with
   | error e => exact ⟨[], by simp, hi.safe, True.intro⟩
   | ok out =>
     rcases out with ⟨bytes, v⟩

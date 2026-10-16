@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Keypairs.Frames.WGTransitions
 import Leanux.Proofs.WG.Lifetimes.ReceiveEntry
 import Leanux.Proofs.WG.Queues.PtrRing
 

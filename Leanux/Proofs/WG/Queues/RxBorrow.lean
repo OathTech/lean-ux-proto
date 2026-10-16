@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Keypairs.Frames.WGMore
 import Leanux.Proofs.Framing.PeerBorrow
 import Leanux.Proofs.Framing.Product
 import Leanux.Proofs.WG.Lifetimes.AllowedLookupAccess
