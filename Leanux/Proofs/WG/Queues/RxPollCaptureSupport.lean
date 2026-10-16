@@ -36,7 +36,7 @@ theorem ReadBeforeRemoval.append (hi : ReadBeforeRemoval base h k) (tail : List 
   obtain ⟨a, b, c, rfl⟩ := hi
   exact ⟨a, b, c ++ tail, by simp only [List.append_assoc]⟩
 
-theorem removalKeys_frame (ha : Appends a) (hm : HistoryFrame removedStamp a) :
+theorem removalKeys_frame {State α : Type} {a : PrefixT Event State α} (ha : Appends a) (hm : HistoryFrame removedStamp a) :
     HistoryFrame removedKey a := by
   intro w h
   obtain ⟨tail, ht⟩ := ha w h
@@ -76,12 +76,12 @@ theorem read_quiet (base : List Event) (pending : Option (SkbId × PacketStamp))
   · exact ht ▸ hc
 
 theorem read_access (base : List Event) (pending : Option (SkbId × PacketStamp))
-    (a : MixedM α) :
+    (a : PrefixM LifetimeEvent α) :
     PrefixPreserves (fun h _ => ReadContext base pending h) (ReadSupport base) (access a) :=
   read_quiet base pending _ (access_appends a)
     (fun w h => focusPrefix_other Event.access accessEvent removedStamp (fun _ => rfl) a w h)
 
-theorem read_lift (base : List Event) (pending : Option (SkbId × PacketStamp)) (a : M α) :
+theorem read_lift (base : List Event) (pending : Option (SkbId × PacketStamp)) (a : Leanux.M α) :
     PrefixPreserves (fun h _ => ReadContext base pending h) (ReadSupport base) (liftPrefix a) :=
   read_quiet base pending _ (Appends.lift a) (HistoryFrame.lift _ a)
 
@@ -90,15 +90,15 @@ theorem read_capture (base : List Event) (skb : SkbId) :
       (fun out h _ => ReadContext base (some (skb, out.2)) h) := by
   intro w h hi
   rw [capture_run]
-  cases hg : (getRxSkb skb).run w with
+  cases hg : (liftWG (getRxSkb skb)).run w with
   | error e => exact ⟨[], by simp, hi.1, True.intro⟩
   | ok out =>
     have hm : HistoryFrame removedStamp (capture skb) := by
       intro w h; rw [capture_run]
-      cases (getRxSkb skb).run w <;> simp [removedStamp, List.filterMap_append]
+      cases (liftWG (getRxSkb skb)).run w <;> simp [removedStamp, List.filterMap_append]
     have hs := (read_quiet base none _ (capture_appends skb) hm w h hi).choose_spec.2.1
     rw [capture_run, hg] at hs
-    refine ⟨[readEvent skb (packetStamp w skb)], rfl, hs, hs, ?_⟩
+    refine ⟨[readEvent skb (packetStamp w.wg skb)], rfl, hs, hs, ?_⟩
     intro p hp
     simp only [Option.mem_some_iff] at hp
     subst p
@@ -107,7 +107,7 @@ theorem read_capture (base : List Event) (skb : SkbId) :
 
 theorem read_mark (base : List Event) (n skb : Nat) (stamp : PacketStamp) :
     PrefixEnsures (fun h _ => ReadContext base (some (skb, stamp)) h) (ReadSupport base)
-      (emitPrefix (.removed n skb stamp)) (fun _ h _ => ReadContext base none h) := by
+      (emitPrefix (.removed n skb stamp) : Obs Unit) (fun _ h _ => ReadContext base none h) := by
   intro w h hi
   have hs : ReadSupport base (h ++ [.removed n skb stamp]) := by
     refine ⟨?_, ?_⟩
@@ -146,7 +146,7 @@ theorem read_option (base : List Event) (pending : Option (SkbId × PacketStamp)
       (fun _ => PrefixPreserves.pure (fun _ _ hi => hi.1) _))
 
 theorem read_stop (base : List Event) (pending : Option (SkbId × PacketStamp))
-    (a : M Unit) (ha : ∀ w, ∃ e, a.run w = .error e) (f : Unit → Obs α) :
+    (a : Leanux.M Unit) (ha : ∀ w, ∃ e, a.run w = .error e) (f : Unit → Obs α) :
     PrefixEnsures (fun h _ => ReadContext base pending h) (ReadSupport base)
       (liftPrefix a >>= f) Q := by
   intro w h hi
@@ -155,7 +155,7 @@ theorem read_stop (base : List Event) (pending : Option (SkbId × PacketStamp))
   exact ⟨[], by simp, hi.1, True.intro⟩
 
 theorem read_receipt_access (base : List Event) (pending : Option (SkbId × PacketStamp))
-    (a : MixedM α) (f : RunWitness α → Event) (hf : ∀ r, removedStamp (f r) = none) :
+    (a : PrefixM LifetimeEvent α) (f : RunWitness α → Event) (hf : ∀ r, removedStamp (f r) = none) :
     PrefixPreserves (fun h _ => ReadContext base pending h) (ReadSupport base)
       (receiptObserved (access a) f) :=
   read_quiet base pending _ (access_appends a).receiptObserved
@@ -163,7 +163,7 @@ theorem read_receipt_access (base : List Event) (pending : Option (SkbId × Pack
       fun w h => focusPrefix_other Event.access accessEvent removedStamp (fun _ => rfl) a w h).receiptObserved hf)
 
 theorem read_receipt_lift (base : List Event) (pending : Option (SkbId × PacketStamp))
-    (a : M α) (f : RunWitness α → Event) (hf : ∀ r, removedStamp (f r) = none) :
+    (a : Leanux.M α) (f : RunWitness α → Event) (hf : ∀ r, removedStamp (f r) = none) :
     PrefixPreserves (fun h _ => ReadContext base pending h) (ReadSupport base)
       (receiptObserved (liftPrefix a) f) :=
   read_quiet base pending _ (Appends.lift a).receiptObserved
@@ -293,7 +293,7 @@ theorem safe_suffix_read_fresh (prior : List LifetimeEvent) (suffix : List Event
 /-- Prior releases exclude every newly removed and callback-entered stamp,
 including prefixes stopped inside the callback. No normal-return premise is used. -/
 theorem poll_suffix_fresh (pid : PeerId) (budget : Nat) (w : World)
-    (prior : List LifetimeEvent) (hi : AllocationInv prior w) (suffix : List Event)
+    (prior : List LifetimeEvent) (hi : AllocationInv prior w.wg) (suffix : List Event)
     (he : (runPrefix (poll pid budget) w (seed prior)).2 = seed prior ++ suffix) :
     (∀ k ∈ removalKeys suffix, ¬ PriorReleased prior k.2.2) ∧
       (∀ e ∈ entries suffix, ¬ PriorReleased prior e.stamp) := by
@@ -320,7 +320,7 @@ theorem poll_suffix_fresh (pid : PeerId) (budget : Nat) (w : World)
 /-- Local suffix entries are distinct. On normal return their actual releases
 also lie in this suffix; they cannot be borrowed from the incoming history. -/
 theorem poll_suffix_entries (pid : PeerId) (budget : Nat) (w : World)
-    (prior : List LifetimeEvent) (hi : AllocationInv prior w) (suffix : List Event)
+    (prior : List LifetimeEvent) (hi : AllocationInv prior w.wg) (suffix : List Event)
     (he : (runPrefix (poll pid budget) w (seed prior)).2 = seed prior ++ suffix) :
     ((entries suffix).map Entry.stamp).Nodup ∧
       (match (runPrefix (poll pid budget) w (seed prior)).1 with
@@ -350,7 +350,7 @@ theorem poll_suffix_entries (pid : PeerId) (budget : Nat) (w : World)
 /-- Normal return releases every removal in the new suffix, including explicit
 drops which never produce a GRO payload. -/
 theorem poll_suffix_removal_release (pid : PeerId) (budget : Nat) (w : World)
-    (prior : List LifetimeEvent) (hi : AllocationInv prior w) (suffix : List Event)
+    (prior : List LifetimeEvent) (hi : AllocationInv prior w.wg) (suffix : List Event)
     (he : (runPrefix (poll pid budget) w (seed prior)).2 = seed prior ++ suffix) :
     match (runPrefix (poll pid budget) w (seed prior)).1 with
     | .error _ => True

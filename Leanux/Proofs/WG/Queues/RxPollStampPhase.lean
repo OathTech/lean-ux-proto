@@ -1,3 +1,4 @@
+import Lean
 import Leanux.Proofs.WG.Queues.RxPollStampSafety
 import Leanux.Proofs.WG.Queues.RxRingNapi
 
@@ -20,13 +21,13 @@ inductive PhaseKind where
 
 def PhaseExtra : PhaseKind → List Event → World → Prop
   | .ready, h, _ => ∀ s ∈ removedStamps h, Released h s
-  | .captured skb stamp, h, w => packetStamp w skb = stamp ∧
+  | .captured skb stamp, h, w => packetStamp w.wg skb = stamp ∧
       stamp ∉ removedStamps h ∧ ∀ s ∈ removedStamps h, Released h s
-  | .pending skb stamp, h, w => packetStamp w skb = stamp ∧
+  | .pending skb stamp, h, w => packetStamp w.wg skb = stamp ∧
       ∀ s ∈ removedStamps h, s ≠ stamp → Released h s
 
 structure Phase (kind : PhaseKind) (h : List Event) (w : World) : Prop where
-  allocation : AllocationInv (h.filterMap accessEvent) w
+  allocation : AllocationInv (h.filterMap accessEvent) w.wg
   distinct : (removedStamps h).Nodup
   extra : PhaseExtra kind h w
 
@@ -41,13 +42,13 @@ theorem released_mono (h tail : List Event) (s : PacketStamp) (hs : Released h s
   exact Or.inl hs
 
 theorem stamp_cell (w v : World) (skb : SkbId) (he : RxRing.cell v = RxRing.cell w) :
-    packetStamp v skb = packetStamp w skb := by
+    packetStamp v.wg skb = packetStamp w.wg skb := by
   have hh := congrArg (fun c : Option (Nat × PtrRing SkbId) => (c.map Prod.fst).getD 0) he
   simpa only [RxRing.cell, packetStamp, Option.map_map, Function.comp_def] using
     congrArg (fun n => (n, skb + 1)) hh
 
 theorem Phase.transport (hi : Phase kind h w) (tail : List Event)
-    (ha : AllocationInv ((h ++ tail).filterMap accessEvent) v)
+    (ha : AllocationInv ((h ++ tail).filterMap accessEvent) v.wg)
     (hm : removedStamps (h ++ tail) = removedStamps h)
     (hc : RxRing.cell v = RxRing.cell w) : Phase kind (h ++ tail) v := by
   refine ⟨ha, hm ▸ hi.distinct, ?_⟩
@@ -61,9 +62,9 @@ theorem Phase.transport (hi : Phase kind h w) (tail : List Event)
     exact ⟨(stamp_cell w v skb hc).trans hi.extra.1,
       fun s hs hn => released_mono h tail s (hi.extra.2 s (hm ▸ hs) hn)⟩
 
-theorem phase_project (kind : PhaseKind) (g : Obs α) (a : MixedM β)
-    (p : α → β) (hp : ProjectsUnderTo AllocationInv accessEvent p g a)
-    (ha : PrefixPreserves AllocationInv LifetimeEvent.Safe a)
+theorem phase_project (kind : PhaseKind) (g : Obs α) (a : PrefixM LifetimeEvent β)
+    (p : α → β) (hp : ProjectsUnderTo (fun h (w : World) => AllocationInv h w.wg) accessEvent p g a)
+    (ha : PrefixPreserves (fun h (w : World) => AllocationInv h w.wg) LifetimeEvent.Safe a)
     (he : ErasesPrefix a original) (hc : SameView RxRing.cell original)
     (hm : HistoryFrame removedStamp g) (hg : Appends g) :
     PrefixPreserves (Phase kind) StampSafe g := by
@@ -78,24 +79,34 @@ theorem phase_project (kind : PhaseKind) (g : Obs α) (a : MixedM β)
     | ok out =>
       have ho : original.run w = .ok (p out.1, out.2) := by
         rw [← he w (h.filterMap accessEvent), hj, hr]; rfl
-      have hav : AllocationInv ((h ++ tail).filterMap accessEvent) out.2 := by
+      have hav : AllocationInv ((h ++ tail).filterMap accessEvent) out.2.wg := by
         simpa only [hr, ht] using hs.2
       simpa only [hr, ht] using hi.transport tail hav
-        (by simpa only [← ht, removedStamps] using hm w h) (hc w _ _ ho)
+        (by simpa only [← ht, removedStamps] using hm w h) ((ProjectedAction.iff_run _ _ _).mp hc w _ _ ho)
 
-theorem phase_access (kind : PhaseKind) (a : MixedM α)
-    (ha : PrefixPreserves AllocationInv LifetimeEvent.Safe a)
+theorem phase_access (kind : PhaseKind) (a : PrefixM LifetimeEvent α)
+    (ha : PrefixPreserves (fun h (w : World) => AllocationInv h w.wg) LifetimeEvent.Safe a)
     (he : ErasesPrefix a original) (hc : SameView RxRing.cell original) :
     PrefixPreserves (Phase kind) StampSafe (access a) :=
   phase_project kind _ a id (access_projects ha).to_mapped ha he hc
     (fun w h => focusPrefix_other Event.access accessEvent removedStamp (fun _ => rfl) a w h)
     (access_appends a)
 
-theorem phase_lift (kind : PhaseKind) (a : M α) (ha : SameKernel a) :
-    PrefixPreserves (Phase kind) StampSafe (liftPrefix a) :=
-  phase_project kind _ _ id (projectsUnderTo_lift _ a)
-    (allocation_kernel a ha) (erasesPrefix_lift a) (RxRing.kernel ha)
+theorem phase_lift (kind : PhaseKind) (a : Leanux.M α) (ha : SameProductStore a) :
+    PrefixPreserves (Phase kind) StampSafe (liftPrefix a) := by
+  have hw : SameView (fun w : World => wgStoreView w.wg) a :=
+    ha.of_factor (fun v : ProductStore43 => v.2.2.2) _ (fun _ => rfl)
+  exact phase_project kind _ _ id (projectsUnderTo_lift _ a)
+    (allocation_store World.wg a hw) (erasesPrefix_lift a) (RxRing.kernel hw)
     (HistoryFrame.lift _ a) (Appends.lift a)
+
+private theorem phase_native_access (kind : PhaseKind) (a : MixedM α)
+    (ha : StatePrefixPreserves (fun h w _ => AllocationInv h w) LifetimeEvent.Safe a)
+    {original : WG.M α} (he : ErasesStatePrefix a original)
+    (hc : SameView RxRing.nativeCell original) :
+    PrefixPreserves (Phase kind) StampSafe (access (liftWGObserver a)) :=
+  phase_access kind _ ha.liftWGObserver (liftWGObserver_erases he)
+    (sameView_liftWG RxRing.cell RxRing.nativeCell original hc (fun _ _ _ h => h))
 
 theorem phase_emit (kind : PhaseKind) (e : Event)
     (ha : accessEvent e = none) (hm : removedStamp e = none) :
@@ -118,11 +129,11 @@ theorem phase_capture (skb : SkbId) :
       (fun out => Phase (.captured skb out.2)) := by
   intro w h hi
   obtain ⟨tail, ht⟩ := capture_appends skb w h
-  have hs := (capture_access skb).underTo.preserves (AmbientContracts.drop (allocationAmbient.getRx (fun _ => True) skb)) w h hi.allocation
+  have hs := (capture_access skb).underTo.preserves (AmbientContracts.drop (allocationAmbient.getRx (fun _ => True) skb)).liftWGObserver w h hi.allocation
   have hm : HistoryFrame removedStamp (capture skb) := by
     intro w h
     rw [capture_run]
-    cases (getRxSkb skb).run w <;> simp [removedStamp, List.filterMap_append]
+    cases (liftWG (getRxSkb skb)).run w <;> simp [removedStamp, List.filterMap_append]
   refine ⟨tail, ht, ⟨hs.1, by simpa only [removedStamps, hm w h] using hi.distinct⟩, ?_⟩
   cases hr : (runPrefix (capture skb) w h).1 with
   | error e => trivial
@@ -140,7 +151,7 @@ theorem phase_capture (skb : SkbId) :
         exact hfresh (hi.extra _ old)
       · simpa only [ht, PhaseExtra] using hrdy.extra
 
-theorem phase_mark (pid n skb : Nat) (stamp : PacketStamp) :
+theorem phase_mark (n skb : Nat) (stamp : PacketStamp) :
     PrefixEnsures (Phase (.captured skb stamp)) StampSafe
       (emitPrefix (.removed n skb stamp)) (fun _ => Phase (.pending skb stamp)) := by
   intro w h hi
@@ -166,21 +177,25 @@ theorem phase_drop (pid n skb : Nat) (stamp : PacketStamp) :
       (fun _ => Phase (.pending skb stamp)) := by
   unfold drop
   apply PrefixEnsures.bind
-    (phase_access _ _ (rxDropPeekedPrefix_preserves allocationAmbient pid)
+    (phase_native_access _ _ (rxDropPeekedPrefix_preserves allocationAmbient pid)
       (rxDropPeekedPrefix_erases pid)
       ((RxRing.getPeer_cell pid).bind (fun _ => (RxRing.getPeer_cell pid).bind
         (fun _ => RxRing.setPeer_frame _ _))))
   intro _
-  exact phase_mark pid n skb stamp
+  exact phase_mark n skb stamp
 
 theorem phase_free (skb : SkbId) (stamp : PacketStamp) :
-    PrefixEnsures (Phase (.pending skb stamp)) StampSafe (access (freeRxSkbPrefix skb))
+    PrefixEnsures (Phase (.pending skb stamp)) StampSafe (access (liftWGObserver (freeRxSkbPrefix skb)))
       (fun _ => Phase .ready) := by
   intro w h hi
-  obtain ⟨tail, ht, hs, hp⟩ := phase_access (.pending skb stamp) _
-    (allocationRx.free skb) (freeRxSkbPrefix_erases skb) (RxRing.freeRx_frame skb) w h hi
+  obtain ⟨tail, ht, hs, hp⟩ := phase_native_access (.pending skb stamp) _
+    (allocationRx.free skb) (freeRxSkbPrefix_erases skb) (by
+      intro initial
+      apply hoare_liftSkb
+      intro g d store hg hd
+      simpa [RxRing.nativeCell, hd] using hg) w h hi
   refine ⟨tail, ht, hs, ?_⟩
-  cases hr : (runPrefix (access (freeRxSkbPrefix skb)) w h).1 with
+  cases hr : (runPrefix (access (liftWGObserver (freeRxSkbPrefix skb))) w h).1 with
   | error e => trivial
   | ok out =>
     simp only [hr] at hp
@@ -188,7 +203,7 @@ theorem phase_free (skb : SkbId) (stamp : PacketStamp) :
     intro s hm
     by_cases he : s = stamp
     · subst s
-      cases hg : (getRxSkb skb).run w with
+      cases hg : (liftWG (getRxSkb skb)).run w with
       | error e => simp only [free_run, hg] at hr; contradiction
       | ok p =>
         simp [free_run, hg, Released, List.filterMap_append, accessEvent,
@@ -212,8 +227,9 @@ theorem phase_consume (kind : PhaseKind) (pid n skb : Nat) (stamp : PacketStamp)
     (pkt : RxPacket) (ep : Endpoint) :
     PrefixPreserves (Phase kind) StampSafe (consume pid n skb stamp pkt ep) :=
   phase_project kind _ _ _ (consume_access pid n skb stamp pkt ep)
-    (consumeDataDonePrefix_preserves_ambient allocationAmbient allocationTx allocationRx pid pkt ep)
-    (consumeDataDonePrefix_erases pid pkt ep) (RxRing.consumeDataDone_cell pid pkt ep)
+    (consumeDataDonePrefix_preserves_ambient allocationAmbient allocationTx allocationRx pid pkt ep).liftWGObserver
+    (liftWGObserver_erases (consumeDataDonePrefix_erases pid pkt ep))
+    (sameView_liftWG RxRing.cell RxRing.nativeCell _ (RxRing.consumeDataDone_cell pid pkt ep) (fun _ _ _ h => h))
     (consume_removed pid n skb stamp pkt ep) (consume_appends pid n skb stamp pkt ep)
 
 theorem flush_removed (entries : List Entry) : HistoryFrame removedStamp (flush entries) := by
@@ -275,31 +291,41 @@ theorem phase_flushAll (kind : PhaseKind) (g : Gro) :
     (flushAll_removed g) (flushAll_appends g)
 
 theorem phase_peek (kind : PhaseKind) (pid : PeerId) :
-    PrefixPreserves (Phase kind) StampSafe (access (peekAccess pid)) := by
-  apply phase_access kind _ (peekAccess_allocation pid) (peekAccess_erases pid)
+    PrefixPreserves (Phase kind) StampSafe (access (liftWGObserver (peekAccess pid))) := by
+  apply phase_native_access kind _ (peekAccess_allocation pid) (peekAccess_erases pid)
   unfold peekRxQueue
   apply (RxRing.getPeer_cell pid).bind
   intro p
-  apply (RxRing.kernel (prevQueuePeek_sameKernel p.rxQueue)).bind
+  apply (RxRing.kernel (prevQueuePeek_sameWGStore p.rxQueue)).bind
   intro out
   exact (RxRing.getPeer_cell pid).bind (fun _ =>
     (RxRing.setPeer_frame pid _).bind (fun _ => SameView.pure _ _))
 
 theorem phase_ready (kind : PhaseKind) (first : Option SkbId) :
-    PrefixPreserves (Phase kind) StampSafe (access (readyAccess first)) := by
-  apply phase_access kind _ (readyAccess_allocation first) (readyAccess_erases first)
+    PrefixPreserves (Phase kind) StampSafe (access (liftWGObserver (readyAccess first))) := by
+  apply phase_native_access kind _ (readyAccess_allocation first) (readyAccess_erases first)
+  have ambient {α : Type} (a : AmbientM α) :
+      SameView RxRing.nativeCell (monadLift a : WG.M α) :=
+    fun initial => hoare_liftAmbient a (fun w => RxRing.nativeCell w = initial)
   unfold WG.andM
-  apply (RxRing.kernel (sameKernel_branch _ _)).bind
+  apply (ambient (AmbientM.branch .rxPollPacket first.isSome)).bind
   intro go
   split
   · cases first with
-    | none => exact RxRing.kernel (by intro w x v hr; cases hr)
-    | some skb => exact (RxRing.getRx_frame skb).bind (fun _ => RxRing.kernel (sameKernel_branch _ _))
+    | none => exact ambient (AmbientM.invariant "unreachable")
+    | some skb =>
+      apply (show SameView RxRing.nativeCell (getRxSkb skb) from by
+        intro initial
+        apply hoare_liftSkb
+        intro g d store hg hd
+        simpa [RxRing.nativeCell, hd] using hg).bind
+      intro p
+      exact ambient (AmbientM.branch .rxPollNotUncrypted (p.state != .uncrypted))
   · exact SameView.pure _ _
 
 theorem phase_complete (kind : PhaseKind) (pid : PeerId) :
-    PrefixPreserves (Phase kind) StampSafe (access (completeAccess pid)) := by
-  apply phase_access kind _ (completeAccess_allocation pid) (completeAccess_erases pid)
+    PrefixPreserves (Phase kind) StampSafe (access (liftWGObserver (completeAccess pid))) := by
+  apply phase_native_access kind _ (completeAccess_allocation pid) (completeAccess_erases pid)
   unfold completeRxQueue
   exact (RxRing.getPeer_cell pid).bind (fun _ => RxRing.setPeer_frame pid _)
 
@@ -325,37 +351,112 @@ theorem phase_bind (kind : PhaseKind) (g : Obs α) (f : α → Obs β)
     (hf : ∀ x, PrefixEnsures (Phase kind) StampSafe (f x) Q) :
     PrefixEnsures (Phase kind) StampSafe (g >>= f) Q := PrefixEnsures.bind hg hf
 
+elab "rx_phase_head " mode:ident name:ident : tactic => Lean.Elab.Tactic.withMainContext do
+  let ty := (← Lean.instantiateMVars (← (← Lean.Elab.Tactic.getMainGoal).getType)).consumeMData
+  unless ty.isAppOf ``PrefixEnsures || ty.isAppOf ``PrefixPreserves do
+    Lean.throwError "not a prefix contract"
+  let args := ty.getAppArgs
+  unless args.size ≥ 2 do Lean.throwError "missing observer"
+  let mut action := (if ty.isAppOf ``PrefixPreserves then args.back! else args[args.size - 2]!).consumeMData
+  if action.isAppOf ``Bind.bind then
+    let bindArgs := action.getAppArgs
+    unless bindArgs.size ≥ 2 do Lean.throwError "missing bind action"
+    action := bindArgs[bindArgs.size - 2]!.consumeMData
+  if mode.getId.eraseMacroScopes.toString == "receipt" then
+    unless action.isAppOf ``receiptObserved do Lean.throwError "not a receipt"
+    let receiptArgs := action.getAppArgs
+    unless receiptArgs.size ≥ 2 do Lean.throwError "missing receipt action"
+    action := receiptArgs[receiptArgs.size - 2]!.consumeMData
+  else
+    unless mode.getId.eraseMacroScopes.toString == "plain" do Lean.throwError "unknown observer mode"
+    if action.isAppOf ``receiptObserved then Lean.throwError "receipt needs its own rule"
+  let expected := name.getId.eraseMacroScopes.toString
+  for wrapper in [``access, ``liftWGObserver, ``liftPrefix, ``liftWGPrefix,
+      ``liftM, ``MonadLiftT.monadLift, ``MonadLift.monadLift, ``liftWG] do
+    if action.isAppOf wrapper && expected != wrapper.toString &&
+        !wrapper.toString.endsWith ("." ++ expected) then
+      unless action.getAppArgs.size > 0 do Lean.throwError "missing lifted observer"
+      action := action.getAppArgs.back!.consumeMData
+  let .const actual _ := action.getAppFn | Lean.throwError "not a constant-headed observer"
+  unless actual.toString == expected || actual.toString.endsWith ("." ++ expected) do
+    Lean.throwError "different observer head"
+
+elab "rx_phase_reduce" : tactic => Lean.Elab.Tactic.withMainContext do
+  let goal ← Lean.Elab.Tactic.getMainGoal
+  let ty := (← Lean.instantiateMVars (← goal.getType)).consumeMData
+  unless ty.isAppOf ``PrefixEnsures || ty.isAppOf ``PrefixPreserves do
+    Lean.throwError "not a prefix contract"
+  let args := ty.getAppArgs
+  unless args.size ≥ 2 do Lean.throwError "missing observer"
+  let index := if ty.isAppOf ``PrefixPreserves then args.size - 1 else args.size - 2
+  let rec reduce : Nat → Lean.Expr → Lean.Expr
+    | 0, e => e
+    | n + 1, e =>
+      let e := e.consumeMData
+      match e with
+      | .letE _ _ value body _ => reduce n (body.instantiate1 value)
+      | _ =>
+        match e.getAppFn.consumeMData with
+        | .letE _ _ value body _ =>
+          reduce n (Lean.mkAppN (body.instantiate1 value) e.getAppArgs)
+        | .lam .. =>
+          let next := e.headBeta
+          if Lean.Expr.equal e next then e else reduce n next
+        | _ => e
+  let action := args[index]!
+  let reduced := reduce 64 action
+  if Lean.Expr.equal action reduced then Lean.throwError "observer head unchanged"
+  Lean.Elab.Tactic.replaceMainGoal
+    [← goal.replaceTargetDefEq (Lean.mkAppN ty.getAppFn (args.set! index reduced))]
+
+elab "rx_phase_intro" : tactic => Lean.Elab.Tactic.withMainContext do
+  let ty := (← Lean.instantiateMVars (← (← Lean.Elab.Tactic.getMainGoal).getType)).consumeMData
+  unless ty.isForall do Lean.throwError "not a binder"
+  Lean.Elab.Tactic.evalTactic (← `(tactic| intro x))
+
+elab "rx_phase_match" : tactic => Lean.Elab.Tactic.withMainContext do
+  let goal ← Lean.Elab.Tactic.getMainGoal
+  let ty := (← Lean.instantiateMVars (← goal.getType)).consumeMData
+  unless ty.isAppOf ``PrefixEnsures || ty.isAppOf ``PrefixPreserves do
+    Lean.throwError "not a prefix contract"
+  let args := ty.getAppArgs
+  unless args.size ≥ 2 do Lean.throwError "missing observer"
+  let action := (if ty.isAppOf ``PrefixPreserves then args.back! else args[args.size - 2]!).consumeMData
+  let some _ ← Lean.Meta.matchMatcherApp? action | Lean.throwError "not a top matcher"
+  Lean.Elab.Tactic.replaceMainGoal (← Lean.Meta.Split.splitMatch goal action)
+
 macro "rx_stamp_step" : tactic => `(tactic|
   repeat' first
-    | exact PrefixEnsures.pure (fun _ _ hi => hi.safe) (fun _ _ hi => hi)
-    | with_reducible apply phase_invariant
-    | with_reducible apply phase_unsupported
-    | with_reducible apply PrefixEnsures.bind (phase_capture _)
-    | with_reducible apply PrefixEnsures.bind (phase_drop _ _ _ _)
-    | with_reducible apply PrefixEnsures.bind (phase_free _ _)
-    | with_reducible apply phase_bind _ _ _ (phase_consume _ _ _ _ _ _ _)
-    | with_reducible apply phase_bind _ _ _ (phase_option _ _ _)
-    | with_reducible apply phase_bind _ _ _ (phase_flushAll _ _)
-    | with_reducible apply phase_bind _ _ _ (phase_peek _ _)
-    | with_reducible apply phase_bind _ _ _ (phase_ready _ _)
-    | with_reducible apply phase_bind _ _ _ (phase_complete _ _)
-    | with_reducible apply phase_bind _ _ _ (phase_receipt _ _ _ (phase_access _ _
+    | rx_phase_reduce
+    | (rx_phase_head plain Pure.pure; exact PrefixEnsures.pure (fun _ _ hi => hi.safe) (fun _ _ hi => hi))
+    | (rx_phase_head plain invariant; apply phase_invariant)
+    | (rx_phase_head plain unsupported; apply phase_unsupported)
+    | (rx_phase_head plain capture; apply PrefixEnsures.bind (phase_capture _))
+    | (rx_phase_head plain drop; apply PrefixEnsures.bind (phase_drop _ _ _ _))
+    | (rx_phase_head plain freeRxSkbPrefix; apply PrefixEnsures.bind (phase_free _ _))
+    | (rx_phase_head plain consume; apply phase_bind _ _ _ (phase_consume _ _ _ _ _ _ _))
+    | (rx_phase_head plain ForIn.forIn; apply phase_bind _ _ _ (phase_option _ _ _))
+    | (rx_phase_head plain flushAll; apply phase_bind _ _ _ (phase_flushAll _ _))
+    | (rx_phase_head plain peekAccess; apply phase_bind _ _ _ (phase_peek _ _))
+    | (rx_phase_head plain readyAccess; apply phase_bind _ _ _ (phase_ready _ _))
+    | (rx_phase_head plain completeAccess; apply phase_bind _ _ _ (phase_complete _ _))
+    | (rx_phase_head receipt counterValidatePrefix; apply phase_bind _ _ _ (phase_receipt _ _ _ (phase_native_access _ _
         (AmbientContracts.drop (counterValidatePrefix_spec allocationAmbient (fun _ => True) _ _))
-        (counterValidatePrefix_erases _ _) (RxRing.counterValidate_cell _ _)) (fun _ => rfl) (fun _ => rfl))
-    | with_reducible apply phase_bind _ _ _ (phase_receipt _ _ _ (phase_lift _ _ (sameKernel_branch _ _)) (fun _ => rfl) (fun _ => rfl))
-    | with_reducible apply phase_bind _ _ _ (phase_receipt _ _ _ (phase_lift _ _ (endpointFromSkb_sameKernel _)) (fun _ => rfl) (fun _ => rfl))
-    | with_reducible apply phase_bind _ _ _ (phase_access _ _
+        (counterValidatePrefix_erases _ _) (RxRing.counterValidate_cell _ _)) (fun _ => rfl) (fun _ => rfl)))
+    | (rx_phase_head receipt branch; apply phase_bind _ _ _ (phase_receipt _ _ _ (phase_lift _ _ (by intro initial; exact productAmbient_spec (AmbientM.branch _ _) _ (fun _ _ hi => hi))) (fun _ => rfl) (fun _ => rfl)))
+    | (rx_phase_head receipt endpointFromSkb; apply phase_bind _ _ _ (phase_receipt _ _ _ (phase_lift _ _ (liftWG_sameProductStore _ (endpointFromSkb_sameWGStore _))) (fun _ => rfl) (fun _ => rfl)))
+    | (rx_phase_head plain counterValidatePrefix; apply phase_bind _ _ _ (phase_native_access _ _
         (AmbientContracts.drop (counterValidatePrefix_spec allocationAmbient (fun _ => True) _ _))
-        (counterValidatePrefix_erases _ _) (RxRing.counterValidate_cell _ _))
-    | with_reducible apply phase_bind _ _ _ (phase_access _ _ (allocationTx.put _ _)
-        (keypairPutPrefix_erases _ _) (RxRing.keypairPut_cell _ _))
-    | with_reducible apply phase_bind _ _ _ (phase_access _ _ (allocationAmbient.peerPut _)
-        (peerPutMixed_erases _) (RxRing.peerPut_cell _))
-    | with_reducible apply phase_bind _ _ _ (phase_lift _ _ (sameKernel_branch _ _))
-    | with_reducible apply phase_bind _ _ _ (phase_lift _ _ (endpointFromSkb_sameKernel _))
-    | with_reducible apply PrefixEnsures.ite
-    | (with_reducible intro x; try dsimp only)
-    | (with_reducible split))
+        (counterValidatePrefix_erases _ _) (RxRing.counterValidate_cell _ _)))
+    | (rx_phase_head plain keypairPutPrefix; apply phase_bind _ _ _ (phase_native_access _ _ (allocationTx.put _ _)
+        (keypairPutPrefix_erases _ _) (RxRing.keypairPut_cell _ _)))
+    | (rx_phase_head plain peerPutMixed; apply phase_bind _ _ _ (phase_native_access _ _ (allocationAmbient.peerPut _)
+        (peerPutMixed_erases _) (RxRing.peerPut_cell _)))
+    | (rx_phase_head plain branch; apply phase_bind _ _ _ (phase_lift _ _ (by intro initial; exact productAmbient_spec (AmbientM.branch _ _) _ (fun _ _ hi => hi))))
+    | (rx_phase_head plain endpointFromSkb; apply phase_bind _ _ _ (phase_lift _ _ (liftWG_sameProductStore _ (endpointFromSkb_sameWGStore _))))
+    | (rx_phase_head plain ite; apply PrefixEnsures.ite)
+    | rx_phase_intro
+    | rx_phase_match)
 
 /-- Every reached removal has a distinct allocation stamp. A normal return
 has observed an actual packet release for every removed stamp. Stops retain
@@ -363,7 +464,7 @@ only the prefix safety conclusion, so a failed callback may leave a pending stam
 theorem poll_phase (pid : PeerId) (budget : Nat) :
     PrefixPreserves (Phase .ready) StampSafe (poll pid budget) := by
   unfold poll
-  apply PrefixEnsures.bind (phase_lift .ready _ (sameKernel_branch _ _))
+  apply PrefixEnsures.bind (phase_lift .ready _ (by intro initial; exact productAmbient_spec (AmbientM.branch _ _) _ (fun _ _ hi => hi)))
   intro noBudget
   split
   · exact PrefixEnsures.pure (fun _ _ hi => hi.safe) (fun _ _ hi => hi)
@@ -378,7 +479,7 @@ theorem poll_phase (pid : PeerId) (budget : Nat) :
 
 /-- A fresh local metadata journal accepts any valid accumulated lifetime history. -/
 theorem seed_ready (prior : List LifetimeEvent) (w : World)
-    (hi : AllocationInv prior w) : Phase .ready (seed prior) w := by
+    (hi : AllocationInv prior w.wg) : Phase .ready (seed prior) w := by
   have hm : removedStamps (seed prior) = [] :=
     filterMap_disjoint Event.access removedStamp (fun _ => rfl) prior
   exact ⟨by simpa using hi, by rw [hm]; simp,
@@ -387,7 +488,7 @@ theorem seed_ready (prior : List LifetimeEvent) (w : World)
 /-- Per-poll removal identities are distinct on every reached prefix; all are
 released on normal return. The initial lifetime history may be nonempty. -/
 theorem poll_removed_stamps (pid : PeerId) (budget : Nat) (w : World)
-    (prior : List LifetimeEvent) (hi : AllocationInv prior w) :
+    (prior : List LifetimeEvent) (hi : AllocationInv prior w.wg) :
     (removedStamps (runPrefix (poll pid budget) w (seed prior)).2).Nodup ∧
       (match (runPrefix (poll pid budget) w (seed prior)).1 with
        | .error _ => True
@@ -436,7 +537,7 @@ theorem context_bind (g : Gro) (extra : List EntryKey) (a : Obs α) (f : α → 
     PrefixEnsures (fun h _ => Context g extra h) Supported (a >>= f) Q :=
   PrefixEnsures.bind (Q := fun _ h _ => Context g extra h) ha hf
 
-theorem context_access (g : Gro) (extra : List EntryKey) (a : MixedM α) :
+theorem context_access (g : Gro) (extra : List EntryKey) (a : PrefixM LifetimeEvent α) :
     PrefixPreserves (fun h _ => Context g extra h) Supported (access a) :=
   context_quiet g extra _
     (fun w h => focusPrefix_other Event.access accessEvent removedKey (fun _ => rfl) a w h)
@@ -452,7 +553,7 @@ theorem context_receipt (g : Gro) (extra : List EntryKey) (a : Obs α) (f : RunW
     (context_quiet g extra _ (HistoryFrame.emit _ (hr r)) (HistoryFrame.emit _ (he r)) (emit_appends _)).bind
       (fun _ => PrefixPreserves.pure (fun _ _ hi => hi.entered) r.value))
 
-theorem context_lift (g : Gro) (extra : List EntryKey) (a : M α) :
+theorem context_lift (g : Gro) (extra : List EntryKey) (a : Leanux.M α) :
     PrefixPreserves (fun h _ => Context g extra h) Supported (liftPrefix a) :=
   context_quiet g extra _ (HistoryFrame.lift _ _) (HistoryFrame.lift _ _) (Appends.lift _)
 
@@ -462,14 +563,14 @@ theorem context_capture (g : Gro) (extra : List EntryKey) (skb : SkbId) :
   all_goals
     intro w h
     rw [capture_run]
-    cases (getRxSkb skb).run w <;> simp [List.filterMap_append, removedKey, enteredEntry]
+    cases (liftWG (getRxSkb skb)).run w <;> simp [List.filterMap_append, removedKey, enteredEntry]
 
 theorem context_buffered (g : Gro) (extra : List EntryKey) (e : Entry) :
-    PrefixPreserves (fun h _ => Context g extra h) Supported (emitPrefix (.buffered e)) :=
+    PrefixPreserves (fun h _ => Context g extra h) Supported (emitPrefix (.buffered e) : Obs Unit) :=
   context_quiet g extra _ (HistoryFrame.emit _ rfl) (HistoryFrame.emit _ rfl) (emit_appends _)
 
 theorem context_mark (g : Gro) (n skb : Nat) (stamp : PacketStamp) :
-    PrefixEnsures (fun h _ => Context g [] h) Supported (emitPrefix (.removed n skb stamp))
+    PrefixEnsures (fun h _ => Context g [] h) Supported (emitPrefix (.removed n skb stamp) : Obs Unit)
       (fun _ h _ => Context g [(n, skb, stamp)] h) := by
   intro w h hi
   have hr : removalKeys (h ++ [Event.removed n skb stamp]) = removalKeys h ++ [(n, skb, stamp)] := by
@@ -780,7 +881,7 @@ theorem supported_stamp_mem (h : List Event) (hs : Supported h) (e : Entry)
 one poll. Normal poll return has released every entered stamp, including GRO
 payloads whose packet storage was freed before their later callback. -/
 theorem poll_entry_stamps (pid : PeerId) (budget : Nat) (w : World)
-    (prior : List LifetimeEvent) (hi : AllocationInv prior w) :
+    (prior : List LifetimeEvent) (hi : AllocationInv prior w.wg) :
     let h := (runPrefix (poll pid budget) w (seed prior)).2
     ((entries h).map Entry.stamp).Nodup ∧
       (match (runPrefix (poll pid budget) w (seed prior)).1 with

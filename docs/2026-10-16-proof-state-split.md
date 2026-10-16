@@ -148,8 +148,12 @@ it is not part of that baseline.
 
 | Joint poll projection and stamped safety | 36 | 7 | 0 | 29 | 0 | 36 |
 
-The whole tree currently contains 451 Lean files and 6,501 theorems. The completed
-changes total 2,331 retyped theorems, 1,673 deletions, 1,318 retained contract shapes and 459 added.
+| Stamped poll phase and capture support | 89 | 1 | 0 | 88 | 1 | 90 |
+| Persistent poll history, composition and NAPI | 40 | 0 | 0 | 40 | 0 | 40 |
+| Complete product syscall audit | 5 | 0 | 0 | 5 | 0 | 5 |
+
+The whole tree currently contains 451 Lean files and 6,502 theorems. The completed
+changes total 2,332 retyped theorems, 1,673 deletions, 1,451 retained contract shapes and 460 added.
 Retyping changes or generalizes the actual state/monad carrier or observation.
 This includes shorthand contracts whose source functions or named views move
 to a native monad. Mere namespace qualification and equivalent relocation of a
@@ -3583,3 +3587,44 @@ Reproduce with 'cap scripts/in-bundle lake build Leanux.Proofs.WG.Configuration.
 replay each root with 'cap scripts/in-bundle lake env leanchecker --fresh MODULE'.
 The whole gate remains pending, all register rows remain lagging, and mirror
 sources remain identical to b700659.
+
+
+## Stamped phase, persistent poll history and syscall audit
+
+Phase/CaptureSupport carry89 theorems to90:88 retained product/pure contracts,
+one history-frame theorem generalized to arbitrary actual State, and one private
+native-to-product access bridge. Arbitrary product callbacks and the original
+43-field frame premise remain intact. Failed prefixes may retain a pending stamp;
+the release conclusion still requires a normal return. The unused phase_mark
+peer argument was removed and its sole caller adjusted. Both modules build with
+zero own warnings; all107 named roots, fresh closure replay and independent
+complete review pass.
+
+After the preceding projection/safety checkpoint, three Phase proof attempts
+failed, one attempt stopped at a changing dependency, and one encountered a
+missing shared build artifact. The sole infrastructure retry reached the proof
+and failed at the existing heartbeat limit. Guarded head selection and reduction
+then passed the output-free Phase check and the built Phase/Capture modules.
+Their aggregate graph failed on unrelated environment-control work; that graph
+is not reported as a pass. No limits were raised.
+
+History/Composition/NapiHistory retain all40 product/pure contracts, including
+the fifteen unchanged History statements. Native scans enter through the actual
+observer adapter; arbitrary mixed callbacks remain product actions. The renamed
+BoundaryInv.productStore transport keeps the original43-field premise. The first
+scoped graph passes327 jobs; all57 named roots, fresh NAPI closure replay and
+independent complete review pass with zero own warnings.
+
+SyscallsAudit retains five product contracts and the actual syscall reset,
+seccomp entry, task work, worker/timer waits and final FIB observation. Its local
+allocation premise observes the WG projection; saved trial equality still returns
+the full World and preserves stops. Build13seconds, all nine named roots, fresh
+replay and independent source review pass with zero own warnings. Six local
+adapter-proof failures, one changing-dependency failure and one missing-artifact
+failure preceded the pass. The missing-artifact run had one infrastructure retry,
+which then exposed a proof failure; it was not accepted as successful.
+
+Reproduce with 'cap scripts/in-bundle lake build Leanux.Proofs.WG.Queues.RxNapiHistory Leanux.Proofs.WG.Lifetimes.SyscallsAudit';
+replay each root with 'cap scripts/in-bundle lake env leanchecker --fresh MODULE'.
+Full gate and terminal replay remain pending; every register row remains lagging.
+The mirror is unchanged at b700659.

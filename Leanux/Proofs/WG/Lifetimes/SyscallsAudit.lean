@@ -10,18 +10,20 @@ set_option maxHeartbeats 2000000
 set_option pp.structureInstances false
 
 def syscallAudit (call : Syscall) : AuditM Int := do
-  liftPrefix (modify fun w => { w with steps := #[], userOut := none, userFds := none, extraOut := [], queuedThisCall := [], fired := #[], netRxSections := 0, netRxSection := 0, emitted := {}, translatedLen := none })
+  liftPrefix (modify fun w => { w with fs := {w.fs with userOut := none, userFds := none}, seccomp := {w.seccomp with emitted := {}, translatedLen := none} })
+  liftPrefix (modifyWG fun g => {g with queuedThisCall := []})
+  liftPrefix (modifyAmbient fun a => {a with steps := #[], extraOut := [], fired := #[], netRxSections := 0, netRxSection := 0})
   -- seccomp: the entry path of the operation's own call once a mode is set
   -- (a harness call by design 6.2 rule 1: a cache hit); a probe enters itself
   match syscallNr call with
-  | some nr => liftPrefix (Seccomp.enterHarnessCall nr)
+  | some nr => liftPrefix (liftSeccomp (Seccomp.enterHarnessCall nr))
   | none =>
     if call.isNet && (← liftPrefix getCurrent).seccomp.mode != .disabled then
       liftPrefix (unsupported "a network operation after a seccomp mode was set (the fixture's calls are not modelled under a filter)")
   let ret ← dispatchAudit call
   -- harness calls whose entry falls inside the window after the operation's (fixture knowledge)
-  for c in Env.windowTailCalls do liftPrefix (Seccomp.enterHarnessCall c)
-  liftPrefix taskWorkRun
+  for c in Env.windowTailCalls do liftPrefix (liftSeccomp (Seccomp.enterHarnessCall c))
+  liftPrefix (liftFS taskWorkRun)
   -- the guest waits inside the operations that can queue the handshake send
   -- worker (and in wg_inject); the worker runs during that wait
   -- worker; D3: a timer may fire in these waits (`idleTimersAudit`)
@@ -36,55 +38,55 @@ def syscallAudit (call : Syscall) : AuditM Int := do
   -- W8: the namespace's teardown section runs in the guest's wait
   | .wgNetnsClose => envNetnsCleanupAudit
   | _ => pure ()
+  match call with
+  | .wgUp | .wgDown | .wgDelete | .wgDeladdr _ | .wgDelroute .. | .wgSetMtu _ | .wgNetnsClose
+  | .wgAddroute .. | .wgAddaddr .. =>
+    let shape := Net.Fib.shape (← liftPrefix getRouting)
+    liftPrefix (modifyAmbient fun w => {w with extraOut := w.extraOut ++ [("fib_trie", shape)]})
+  | _ => pure ()
   return ret
 
 macro "syscall_audit_erasure" : tactic => `(tactic|
   repeat' first
-    | contradiction
-    | with_reducible exact dispatchAudit_erases _
-    | with_reducible exact runSendWorkersAudit_erases
-    | with_reducible exact idleTimersAudit_erases
-    | with_reducible exact routeIntoWg0Audit_erases
-    | with_reducible exact afterXmitAudit_erases
-    | with_reducible exact afterAdvanceAudit_erases
-    | with_reducible exact envNetnsCleanupAudit_erases
-    | with_reducible exact erasesPrefix_lift _
-    | with_reducible exact erasesPrefix_pure _
-    | with_reducible apply erasesPrefix_forIn
-    | with_reducible apply erasesPrefix_bind
-    | (with_reducible split; all_goals try simp_all only [Option.some.injEq, reduceCtorEq]; all_goals try subst_vars)
-    | (with_reducible intro x; try dsimp only))
+    | (maintenance_head dispatchAudit; exact dispatchAudit_erases _)
+    | (maintenance_head runSendWorkersAudit; exact runSendWorkersAudit_erases )
+    | (maintenance_head idleTimersAudit; exact idleTimersAudit_erases )
+    | (maintenance_head routeIntoWg0Audit; exact routeIntoWg0Audit_erases )
+    | (maintenance_head afterXmitAudit; exact afterXmitAudit_erases )
+    | (maintenance_head afterAdvanceAudit; exact afterAdvanceAudit_erases )
+    | (maintenance_head envNetnsCleanupAudit; exact envNetnsCleanupAudit_erases )
+    | (maintenance_head ForIn.forIn; apply erasesPrefix_forIn)
+    | control_audit_erases)
 
 macro "syscall_audit_preservation" : tactic => `(tactic|
   repeat' first
-    | contradiction
-    | with_reducible exact dispatchAudit_preserves _
-    | with_reducible exact runSendWorkersAudit_preserves
-    | with_reducible exact idleTimersAudit_preserves
-    | with_reducible exact routeIntoWg0Audit_preserves
-    | with_reducible exact afterXmitAudit_preserves
-    | with_reducible exact afterAdvanceAudit_preserves
-    | with_reducible exact envNetnsCleanupAudit_preserves
-    | with_reducible exact auditLift_wgKernel _ (SeccompFrames.enterHarnessCall_sameWGKernel _)
-    | with_reducible exact auditLift_wgKernel _ SignalFrames.getCurrent_sameWGKernel
-    | with_reducible exact auditLift_wgKernel _ FSFrames.taskWorkRun_sameWGKernel
-    | exact auditLift_kernel _ (by intro w x v hr; cases hr; rfl)
-    | exact auditLift_kernel _ (by intro w x v hr; cases hr)
-    | with_reducible exact PrefixPreserves.pure (fun _ _ hi => hi.safe) _
-    | with_reducible apply PrefixPreserves.forIn _ _ _ (fun _ _ hi => hi.safe)
-    | with_reducible apply PrefixPreserves.bind
-    | (with_reducible split; all_goals try simp_all only [Option.some.injEq, reduceCtorEq]; all_goals try subst_vars)
-    | (with_reducible intro x; try dsimp only))
+    | (audit_contract_head dispatchAudit; exact dispatchAudit_preserves _)
+    | (audit_contract_head runSendWorkersAudit; exact runSendWorkersAudit_preserves )
+    | (audit_contract_head idleTimersAudit; exact idleTimersAudit_preserves )
+    | (audit_contract_head routeIntoWg0Audit; exact routeIntoWg0Audit_preserves )
+    | (audit_contract_head afterXmitAudit; exact afterXmitAudit_preserves )
+    | (audit_contract_head afterAdvanceAudit; exact afterAdvanceAudit_preserves )
+    | (audit_contract_head envNetnsCleanupAudit; exact envNetnsCleanupAudit_preserves )
+    | (audit_contract_head ForIn.forIn; apply PrefixPreserves.forIn _ _ _ (fun _ _ hi => hi.safe))
+    | (control_audit_routing; exact auditLift_store _ (by intro initial; exact productRouting_spec _ (fun s => s.2.2.2 = initial)))
+    | syscall_audit_component
+    | control_audit_preserves)
 
 theorem syscallAudit_erases (call : Syscall) : ErasesPrefix (syscallAudit call) (syscall call) := by
   unfold syscallAudit syscall
-  try simp only [discard, map_const, Function.comp_def, map_eq_pure_bind, bind_assoc]
   syscall_audit_erasure
 
 theorem syscallAudit_preserves (call : Syscall) : PrefixPreserves AuditInv AuditSafe (syscallAudit call) := by
+  apply PrefixEnsures.preserves
   unfold syscallAudit
-  try simp only [discard, map_const, Function.comp_def, map_eq_pure_bind, bind_assoc]
   syscall_audit_preservation
+  all_goals
+    apply auditLift_store
+    intro initial
+    unfold Leanux.getCurrent
+    change Hoare (liftFS (StateT.lift TaskM.getCurrent)) _ _
+    exact productFS_spec (StateT.lift TaskM.getCurrent)
+      (fun w => wgStoreView w.wg = initial) (fun _ _ _ _ hi => hi)
 
 /-- The public dispatcher, complete syscall and fixture holder-close boundary.
 All original Syscall constructors remain arguments, including arbitrary typed
@@ -96,7 +98,7 @@ inductive SyscallAuditCall where
 
 namespace SyscallAuditCall
 
-def original : SyscallAuditCall → M Int
+def original : SyscallAuditCall → Leanux.M Int
   | .dispatch call => Leanux.dispatch call
   | .syscall call => Leanux.syscall call
   | .netnsClose => Leanux.netnsClose
@@ -121,14 +123,14 @@ theorem preserves (call : SyscallAuditCall) : PrefixPreserves AuditInv AuditSafe
 /-- Every actual saved filter entry derives its validity from the original
 operation's local allocation-valid entry. The ordered filter equality includes
 its Stops; safety of other candidate trials does not assert they executed. -/
-theorem from_allocation (call : SyscallAuditCall) (w : World) (hi : AllocationInv [] w) :
+theorem from_allocation (call : SyscallAuditCall) (w : World) (hi : AllocationInv [] w.wg) :
     AuditSafe (runPrefix call.observed w []).2 ∧
     ∀ p ∈ probeEntries (runPrefix call.observed w []).2,
-      AllocationInv p.history p.world ∧
-      (p.world.suspended.filterM Env.Activation.consistent).run p.world =
-        (p.world.suspended.filterM (fun a => activationTrialDecision a p.world p.history)).map
+      AllocationInv p.history p.world.wg ∧
+      (p.world.ambient.suspended.filterM Env.Activation.consistent).run p.world =
+        (p.world.ambient.suspended.filterM (fun a => activationTrialDecision a p.world p.history)).map
           (fun ys => (ys, p.world)) ∧
-      ∀ a ∈ p.world.suspended, LifetimeEvent.Safe (runPrefix (activationRunPrefix a) p.world p.history).2 := by
+      ∀ a ∈ p.world.ambient.suspended, LifetimeEvent.Safe (runPrefix (activationRunPrefix a) p.world p.history).2 := by
   have hs := (call.preserves w [] (audit_initial hi)).choose_spec.2.1
   exact ⟨hs, fun p hp => savedProbe_trials hs.2 hp⟩
 

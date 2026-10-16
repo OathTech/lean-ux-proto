@@ -20,7 +20,7 @@ def BoundarySafe (h : List Event) := AuditSafe (auditHistory h) ∧ (stamps h).N
 theorem BoundaryInv.safe (hi : BoundaryInv h w) : BoundarySafe h :=
   ⟨hi.audit.safe, hi.distinct⟩
 
-theorem boundary_initial (w : World) (hi : AllocationInv [] w) : BoundaryInv [] w :=
+theorem boundary_initial (w : World) (hi : AllocationInv [] w.wg) : BoundaryInv [] w :=
   ⟨audit_initial hi, by simp [stamps, entries], by simp [stamps, entries]⟩
 
 theorem released_promote (suffix : List RxJoint.Event) (s : PacketStamp) :
@@ -32,12 +32,12 @@ entries. Success restores the release boundary; Stops keep uniqueness only. -/
 theorem observePoll_preserves (pid : PeerId) (budget : Nat) :
     PrefixPreserves BoundaryInv BoundarySafe (observePoll pid budget) := by
   intro w h hi
-  have allocation : AllocationInv (prior h) w := hi.audit.1
+  have allocation : AllocationInv (prior h) w.wg := hi.audit.1
   obtain ⟨suffix, hs⟩ := RxJoint.poll_appends pid budget w (RxJoint.seed (prior h))
   have hg := observePoll_suffix pid budget w h _ suffix (Prod.ext rfl hs)
   have ha := (observePoll_projects pid budget).preserves
     (auditFocus_preserves
-      (rxPollStackPrefix_preserves allocationAmbient allocationTx allocationRx allocationWgXmit pid budget))
+      (rxPollStackPrefix_preserves (ProductAmbientContracts.ofNative allocationAmbient) (ProductTxContracts.ofNative allocationTx) ⟨fun len => (allocationRx.stats len).liftWGObserver, fun why => (allocationRx.dishonest why).liftWGObserver, fun id => (allocationRx.free id).liftWGObserver⟩ ⟨fun P => (allocationWgXmit.errors P).liftWGObserver⟩ pid budget))
     w h hi.audit
   have perPoll := RxJoint.poll_suffix_entries pid budget w (prior h) allocation suffix hs
   have fresh := (RxJoint.poll_suffix_fresh pid budget w (prior h) allocation suffix hs).2
@@ -95,16 +95,16 @@ theorem audit_preserves (a : AuditM α) (ha : PrefixPreserves AuditInv AuditSafe
     rw [hs]
     exact (released_append h suffix s).mpr (Or.inl old)
 
-def mixed (a : MixedM α) : Obs α := audit (auditFocus a)
+def mixed (a : PrefixM LifetimeEvent α) : Obs α := audit (auditFocus a)
 
 theorem mixed_erases (he : ErasesPrefix a original) : ErasesPrefix (mixed a) original :=
   audit_erases (auditFocus_erases he)
 
-theorem mixed_preserves (ha : PrefixPreserves AllocationInv LifetimeEvent.Safe a) :
+theorem mixed_preserves (ha : PrefixPreserves (fun h (w : World) => AllocationInv h w.wg) LifetimeEvent.Safe a) :
     PrefixPreserves BoundaryInv BoundarySafe (mixed a) :=
   audit_preserves _ (auditFocus_preserves ha)
 
-theorem mixed_projects (ha : PrefixPreserves AllocationInv LifetimeEvent.Safe a) :
+theorem mixed_projects (ha : PrefixPreserves (fun h (w : World) => AllocationInv h w.wg) LifetimeEvent.Safe a) :
     ProjectsUnder AuditInv auditEvent (mixed a) (auditFocus a) :=
   audit_projects (auditFocus_preserves ha)
 
@@ -112,9 +112,9 @@ theorem mixed_projects (ha : PrefixPreserves AllocationInv LifetimeEvent.Safe a)
 history, retaining probe interleaving and the continuation's actual prefix. -/
 theorem projectsFocus_bind
     (hg : ProjectsUnder AuditInv auditEvent g (auditFocus a))
-    (ha : PrefixPreserves AllocationInv LifetimeEvent.Safe a)
+    (ha : PrefixPreserves (fun h (w : World) => AllocationInv h w.wg) LifetimeEvent.Safe a)
     (hf : ∀ x, ProjectsUnder AuditInv auditEvent (f x) (auditFocus (b x)))
-    (hb : ∀ x, PrefixPreserves AllocationInv LifetimeEvent.Safe (b x)) :
+    (hb : ∀ x, PrefixPreserves (fun h (w : World) => AllocationInv h w.wg) LifetimeEvent.Safe (b x)) :
     ProjectsUnder AuditInv auditEvent (g >>= f) (auditFocus (a >>= b)) := by
   have projected := projectsUnder_bind hg (auditFocus_preserves ha) hf
   have focused := FocusesUnder.bind (encode := AuditEvent.lifetime) (decode := AuditEvent.lifetime?)
@@ -122,17 +122,17 @@ theorem projectsFocus_bind
   intro w h hi
   exact (focused w (h.filterMap auditEvent) hi.1).symm.trans (projected w h hi)
 
-theorem projectsFocus_lift (a : M α) :
+theorem projectsFocus_lift (a : Leanux.M α) :
     ProjectsUnder AuditInv auditEvent (liftPrefix a) (auditFocus (liftPrefix a)) := by
   intro w h hi
-  have focused := FocusesUnder.lift (I := AllocationInv)
+  have focused := FocusesUnder.lift (I := fun h (w : World) => AllocationInv h w.wg)
     (encode := AuditEvent.lifetime) (decode := AuditEvent.lifetime?) a w (h.filterMap auditEvent) hi.1
   exact focused.symm.trans (projectsUnder_lift (I := AuditInv) auditEvent a w h hi)
 
 theorem projectsFocus_pure (x : α) :
     ProjectsUnder AuditInv auditEvent (pure x) (auditFocus (pure x)) := by
   intro w h hi
-  have focused := FocusesUnder.pure (I := AllocationInv)
+  have focused := FocusesUnder.pure (I := fun h (w : World) => AllocationInv h w.wg)
     (encode := AuditEvent.lifetime) (decode := AuditEvent.lifetime?) x w (h.filterMap auditEvent) hi.1
   exact focused.symm.trans (projectsUnder_pure (I := AuditInv) auditEvent x w h hi)
 
@@ -162,7 +162,7 @@ theorem polls_erases (calls : List (PeerId × Nat)) :
 /-- Empty metadata accepts any allocation-valid World. The conclusion includes
 every failed prefix; no assertion of completed stack delivery is made. -/
 theorem polls_safe (calls : List (PeerId × Nat)) (w : World)
-    (hi : AllocationInv [] w) : BoundarySafe (runPrefix (polls calls) w []).2 :=
+    (hi : AllocationInv [] w.wg) : BoundarySafe (runPrefix (polls calls) w []).2 :=
   (polls_preserves calls w [] (boundary_initial w hi)).choose_spec.2.1
 
 end Leanux.Proofs.WG.Queues.RxHistory
