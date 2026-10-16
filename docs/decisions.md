@@ -867,3 +867,20 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
 - **2026-10-16 [USER]** The split's mirror lands with its proof lag reported,
   and the landed campaign-1 tree is the retrofit's baseline with its own gate
   and signoff ("(2) agree").
+- **2026-10-16 [USER]** `main`'s proof tree (the replay-window result and the
+  layers it rests on, 1,399 theorems) is part of campaign 1, which carries
+  it, so it is removed from `main` until the campaign lands: "those are part
+  of Campaign 1, they should just get kicked out of main until the campaign
+  lands". The state split's phase 3 is therefore not a retype of `main`'s
+  tree but its removal in the final cutover: `Leanux/Proofs/` and
+  `Leanux/Proofs.lean` deleted on the branch, the `LeanuxProofs` lake target
+  removed, `scripts/proof-gate` reporting plainly that `main` carries no
+  proof tree and that the results live on `proofs/campaign` until it lands
+  (an explicit notice, exit 0, never a silent pass; the binary gate
+  `--binary` unaffected), the register's result rows turned into "carried on
+  proofs/campaign at <its head>, off main until the campaign lands, to be
+  retyped over the split worlds by its retrofit", and AGENTS.md's proof-tree
+  paragraph amended minimally (between campaign landings the tree lives on
+  the campaign's branch and `main` carries none; the gate runs at a
+  campaign's landing). Campaign 1's retrofit covers the replay-window layers
+  as well as its own results [AGENT, coordinator: the phase-3 plan].

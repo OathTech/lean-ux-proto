@@ -752,7 +752,37 @@ Validation: the fast tier, the `wireguard`, `wireguard-generated` and
 
 The two forks edit `Kernel/Defs.lean`'s `Kernel` and `World` on disjoint
 fields; FS lands first on this branch and WG rebases onto it, so the
-`Kernel` structure is deleted by the WG fork. Phase 3 is the proof tree:
-`main`'s tree retyped by deletion and retyping (what phase 1 breaks is in
-its report), then the landed campaign-1 tree as its own job.
+`Kernel` structure is deleted by the WG fork.
+
+**Phase 3, as the user decided on 2026-10-16** ("those are part of Campaign
+1, they should just get kicked out of main until the campaign lands"):
+`main`'s proof tree is not retyped but removed in the final cutover commit
+series, after phase 2 merges: `Leanux/Proofs/` and `Leanux/Proofs.lean`
+deleted, the `LeanuxProofs` lake target removed, `scripts/proof-gate`
+reporting plainly that `main` carries no proof tree and that the results
+live on `proofs/campaign` until it lands (an explicit notice, exit 0,
+never a silent pass; the binary gate `--binary` unaffected; `binary/`
+imports nothing under `Leanux.Proofs`), the register's result rows turned
+into "carried on proofs/campaign at <its head>, off main until the
+campaign lands, to be retyped over the split worlds by its retrofit", and
+AGENTS.md amended minimally. The campaigns' retrofits then include:
+campaign 1's, the replay-window result and the `Logged`, `Framing` and
+`CounterWindow` layers it rests on as well as its own results; campaign
+2's, its additions over campaign 1's retyped layers. The AGENTS.md
+wording, a standing-rule edit the user decided:
+
+> Theorems live only in the proof tree, `Leanux/Proofs/`, its own lake
+> target `LeanuxProofs` outside the default build; its map and its register
+> of results are [docs/proofs.md](docs/proofs.md). Between campaign
+> landings the tree lives on the campaign's branch and `main` carries
+> none: a campaign carries the results it rests on and lands them together,
+> retyped over the mirror as it stands [USER 2026-10-16].
+
+and, in the gate paragraph, "run at its claim points (a merge of the tree)
+and not on mirror commits" becomes "run at a campaign's landing and not on
+mirror commits; while `main` carries no tree the gate says so explicitly
+(an exit-0 notice naming the branch that carries the results, never a
+silent pass)"; and the register paragraph's "the mirror commit it holds
+over" becomes "the branch that carries it and the mirror commit it holds
+over".
 
