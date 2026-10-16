@@ -7,6 +7,19 @@ proofs; retain their highest-level proof structures. Exercise judgment about
 lemmas versus tactics and stop when further work has diminishing returns.
 This experiment should be substantially shorter than the initial proof build.
 
+## Current direction
+
+[USER 2026-10-16] Plan a sequential relational proof as a sibling to M1,
+not a replacement. Correspondence points are freely chosen proof devices,
+not the observations used to validate the mirror. Prefer stripping useful
+M1 proof components to rebuilding everything; some invariants remain useful.
+The deliberately unrealistic sequential model is an experiment in proof
+cost, not a claim of composition into concurrent kernel contexts.
+
+The next experiment is specified below under "Sibling sequential relational
+proof". The earlier rounds and their measurements remain historical results.
+This update plans the experiment; implementation has not started.
+
 ## Fixed target and scope
 
 Worktree: `.worktrees/binary-proof-refactor`. Branch:
@@ -15,13 +28,13 @@ Worktree: `.worktrees/binary-proof-refactor`. Branch:
 is not an objective of this experiment.
 
 The existing proofs supply concrete examples and the regression suite. Keep
-headline statements, Pre, R, trust declarations and highest-level proof
-structure fixed. Keep the executable mirror, oracle, Kraken semantics and
-pinned dependency commit fixed. This is proof refactoring, not a campaign
-expansion or state-split migration. The follow-on experiment below permits
-new internal segment/composition interfaces while preserving the headline
-and highest-level M1/M2 structures. No merge to main, no push, no global
-configuration or shared-cache changes.
+the existing M1/M2 headline statements, Pre, R and trust declarations fixed.
+Keep the executable mirror, oracle, Kraken semantics and pinned dependency
+commit fixed. The earlier refactoring rounds preserved their highest-level
+proof structures. The sibling experiment adds its own explicitly weaker
+statement and relations; it does not replace or weaken those existing claims.
+This is not a campaign expansion or state-split migration. No merge to main,
+no push, no global configuration or shared-cache changes.
 
 The charter's direct-proof method remains: no certificate checker, no new
 axioms, no native reflection axiom, no sorry or unsafe proof escape. Generated
@@ -29,7 +42,7 @@ proofs or tactic applications must be accepted by the ordinary Lean kernel.
 The three preserved `.lean.draft` files remain outside the build and outside
 all acceptance claims.
 
-## The working loop
+## The working loop for the earlier refactoring rounds
 
 1. Find a repeatedly written proof pattern in the current tree, with concrete
    examples and reason to expect further occurrences.
@@ -48,7 +61,7 @@ Lemmas express useful properties repeatedly proved. Tactics implement search
 or iteration; they can exploit regular shapes but can also become a burden
 when unpredictable. The choice is made per pattern, not by a tactic quota.
 
-## Initial candidates
+## Initial candidates for the earlier rounds
 
 | Existing repetition | Possible mechanism |
 | --- | --- |
@@ -73,8 +86,9 @@ A large opaque tactic that barely reduces the tree is not success.
 
 The strongest result is a formerly tedious proof reduced to a short ordinary
 application, reused on another existing example with little adjustment.
-Headline/type and trust-surface equality must hold; do not update their
-expected specification to accommodate a refactoring drift.
+Existing headline/type and trust-surface equality must hold; do not update
+their expected specification to accommodate a refactoring drift. The sibling
+experiment has a separate, visibly weaker statement, as specified below.
 
 [AGENT 2026-10-16] Use short measured rounds, initially targeting a few focused
 hours rather than another milestone-length build. Reassess after each family.
@@ -105,7 +119,114 @@ reproduction commands here, not giant logs or dumps. Record the final branch,
 commits, retained mechanisms, measurements and stopping decision. Main remains
 unchanged until separately authorised.
 
-## Follow-on: execution segments as the unit of proof
+## Sibling sequential relational proof
+
+### Question and explicit limitation
+
+How much cheaper is a function-level binary/mirror proof when execution is
+sequential and correspondence points are chosen solely to simplify the
+relational argument? This is an **unrealistic sequential-kernel experiment**.
+It does not establish contextual refinement for concurrent Linux, justify
+atomicity in Linux, or settle the eventual kernel observation interface.
+M1 already uses a largely serialized environment; the main experimental
+change is removing its internal observation/cut correspondence obligations.
+
+Call the measurement an optimistic cost baseline, not a rigorous lower bound
+on proof effort. Existing instruction facts, invariants and knowledge of the
+completed M1 make this cheaper than an independent first construction.
+
+### Target and sibling contract
+
+[AGENT 2026-10-16] Start with `wg_index_hashtable_lookup`, including its bucket
+loop and peer-get paths, because completed M1 supplies the closest control.
+Prefer a stripped derivation using M1's useful physical region proofs, heap
+predicates and loop facts. Introduce new proof modules/names for the sibling;
+keep M1 and the incomplete M2 available unchanged. A helper-only pilot may
+test the approach but is not completion of the lookup experiment.
+
+Keep the existing lookup entry domain and accepted-mirror-run restriction.
+Do not exclude dead peers, NULL words, collisions or legitimate aliases to
+simplify the sibling. Preserve the existing concrete entry witnesses. Any
+additional environmental premise must be stated explicitly in the sibling
+statement, not hidden in a relation or a service lemma. Reuse existing named
+service contracts and list the ones used; no assumed region correctness,
+future readiness or termination premise may replace a proof obligation.
+
+The sibling contract should relate ABI inputs and abstract state at entry,
+execute the actual binary without interference, and establish the matching
+return value, output word, relevant final abstract state, restored ABI and
+endpoint memory footprint. Final service-state facts needed for another
+sequential call remain explicit. Preserve Kraken's permitted instruction
+outcomes and actual service executions/contracts; this is not a single
+recorded-path test or deletion of synchronization instructions from the image.
+
+Define a separate endpoint relation/observation projection for this contract.
+Exclude exact internal decision logs and raw execution histories from its
+observations. Persistent mutations still matter where they affect future
+calls: clearing an owner's peer word cannot be abstracted away merely because
+the store is internal. State precisely which final fields and effects the
+sibling preserves, and derive its entry relation from the existing Pre.
+Generic transport, if stated, is over that projection, not every predicate on
+the mirror's instrumented trace. No concurrent-composition claim is made.
+
+### Proof method
+
+Use relational Hoare judgments of the form `{R_i} B_i ~ M_i {R_j}`. The
+relations may differ by correspondence point. Binary and mirror fragments
+need not take equal numbers of steps; silent fragments may stutter. Entry
+and return implement the sibling contract, while intermediate points are
+chosen for convenient alignment, not inherited from the recorded decisions
+or the image's instrumentation cuts.
+
+1. Write the sibling statement and identify the M1 obligations it omits.
+   Choose candidate points around naturally aligned effects and a relational
+   invariant at the bucket-loop header. Audit which M1 facts remain useful.
+2. Strip a region with a pending update into a relational segment whose exit
+   follows the corresponding updates on both sides. Check whether the
+   pending-count/owner relation disappears. Retain it only if the new argument
+   actually needs it; do not assume that every historical invariant vanishes.
+3. Compose the loop and the null/dead/live paths using those segment facts,
+   ending in the sibling function theorem. Reuse physical execution, memory,
+   separation and ABI lemmas wherever they fit. Avoid rebuilding instruction
+   proofs solely to obtain a cosmetically independent source tree.
+4. Report the actual proof dependencies and remaining difficulties. A weaker
+   corollary of M1 may serve as a specification reference, but simply projecting
+   the completed M1 headline is not the construction-cost experiment. Reusing
+   a helper theorem is allowed; disclose any fine-grained machinery it brings
+   along instead of counting that machinery as eliminated.
+
+No new general framework or tactic is a prerequisite. The earlier segment
+prototype is optional: its preservation of every old cut must not determine
+the new proof's granularity. Binary-only invariants inside a segment remain
+available, as do useful intermediate relational assertions.
+
+### Measurement, validation and stopping
+
+Record construction elapsed time, build/check waiting time and significant
+contract/invariant revisions prospectively. Distinguish reused work from new
+work. Compare against M1 by obligations and dependency groups: physical
+execution, heaps/separation, ABI/services, relational alignment, histories and
+phase handling. Count new/adapted code and retained dependencies, not deleted
+lines: the original proof remains present. Separate logical proof dependencies
+from incidental module imports. Do not infer a campaign-wide speedup from a
+warm build or a weaker statement's shorter source.
+
+Use the existing binary gate to guard M1/M2 against drift. Print the sibling
+statement, its explicit hypotheses and its axioms, and replay its actual proof
+closure with the toolchain checker. Use the existing export-based external
+gate at the appropriate claim point; local replay is not external acceptance.
+No new gate infrastructure or change to the original expected surface is
+needed for this experiment. All heavy work remains capped.
+
+Stop after one complete sibling function and its comparison report. If the
+small segment pilot does not simplify the alignment obligations, reassess
+before expanding it into another lengthy proof family. An unfinished sibling
+or a projection of M1 is reported as such. The result should tell us whether
+relaxing the observation discipline removes the expensive obligations, and
+which remaining costs merit tooling. Runtime testing of candidate relations
+and a realistic concurrent observation model remain separate later questions.
+
+## Earlier follow-on: execution segments as the unit of proof
 
 [USER 2026-10-16] Try the larger experiments discussed after round 3, with
 execution segments as the highest-priority unit: start from a state
