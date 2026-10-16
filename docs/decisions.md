@@ -873,3 +873,13 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   paraphrase with its provenance tag. The quotations present at HEAD were
   replaced by paraphrase on this date; history is not rewritten. AGENTS.md's
   signoff and recording rules say so.
+- **2026-10-16 [AGENT, fork of the coordinator]** The state split's cutover is
+  assembled on `task/state-split` (phases 1 to 3: the ambient layer, the
+  shared task store, seccomp, the file layer, WireGuard with routing, the
+  prototype proof tree and its gate removed), validated at a claim point on
+  the s5 pair (2,314 traces, 53,717 operations, every one in agreement; the
+  eight controls as expected; sentinels 15, 2 and 1 of 15, 2 and 1) with the
+  recorded inputs of every chunk replayed identically through the e5afc0f
+  and cutover binaries. The landing needs the user's signoff; the campaigns'
+  retrofits then cover campaign 1's own results and the replay-window layers
+  it rests on, and campaign 2's additions over them.

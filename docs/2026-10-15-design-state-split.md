@@ -912,3 +912,50 @@ build, the fast tier, the `wireguard`, `wireguard-generated`, `w7-tier` and
 commit; the preservation check over those runs' recorded inputs against the
 e5afc0f baseline and both commits' binaries; the model's time on the
 heaviest chunk (`e_ring_full`) unchanged.
+
+## 15. The cutover as built (2026-10-16)
+
+On `task/state-split`, after the file layer's and WireGuard's phase-2
+branches merged (sections 13 and 14; `task/split-wg` at 6089dc4 carrying
+`task/split-fs`): `World = { ambient, tasks, seccomp, fs, wg, fixture }`,
+`Kernel` gone, every field's home as the two sections list; then phase 3
+as decided: `Leanux/Proofs/`, `Leanux/Proofs.lean`, the `LeanuxProofs`
+lake target and `scripts/proof-gate` deleted with no stub, AGENTS.md's
+gate paragraph and the README's and REPRODUCING's proof-tree commands
+removed as a consequence while the proof-tree paragraph's standing rule
+stays, the register's prototype rows removed and its map and campaign rows
+kept with the line that `main` carries no proof tree until campaign 1
+lands. The executable is the same program over the split worlds; the
+trace format and the outputs are unchanged.
+
+The claim point on the s5 pair (oracle b44d958f, control aa192fdc), the six
+suite groups concurrently at 16 slots and the eight control suites then the
+sentinel sets in a clean detached worktree:
+
+| Group | Traces | Operations | Agreement | Obligations | Distinct rows |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| seccomp, seccomp-generated | 267 | 1,459 | 267 | 586,446 | 585,743 |
+| wireguard, wireguard-generated | 466 | 3,268 | 466 | 413,585 | 51,460 |
+| handwritten, critic | 73 | 891 | 73 | 9,002 | 9,000 |
+| generated, alloc | 1,031 | 36,382 | 1,031 | 301,686 | 301,515 |
+| pipes, pipes-generated, epoll, epoll-generated | 471 | 11,671 | 471 | 194,366 | 165,997 |
+| w7-tier | 6 | 46 | 6 | 254,408 | 33,799 |
+| all | 2,314 | 53,717 | 2,314 | 1,759,493 | 1,147,514 |
+
+No reruns; ten console splits in the wireguard group. Controls: all eight
+as expected on s5 and actl-s5. Sentinels: WireGuard 15 of 15 (Q-M1
+rejected in the set), pipes 2 of 2, seccomp 1 of 1. Behaviour
+preservation: every chunk input of the six groups (288, 135, 3, 33, 15
+and 18: 492 in all, the model, comparison and Linux-side inputs) replayed
+through the e5afc0f binary and the cutover binary gives identical stdout,
+stderr and exit code, equal to the run's recorded output. The fast tier:
+131 tests OK, 1 skipped. Build cost after phase 1 was 1:14 against 1:08
+(the primitives' instance resolution), the model-replay tests unchanged.
+
+What the campaigns' retrofits now include: campaign 1's, the replay-window
+result and the `Logged`, `Framing` and `CounterWindow` layers it rests on
+(the prototype deleted from `main` at this cutover) as well as its own
+results, retyped over the split worlds; campaign 2's, its additions over
+those layers once campaign 1's are retyped; the binary track's `R` over
+`WGWorld` and its `proof-gate --binary` into its own script at its merge.
+
