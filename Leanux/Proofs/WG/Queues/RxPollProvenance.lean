@@ -41,7 +41,7 @@ theorem rxPollGro_callback_provenance (pid : PeerId) (budget : Nat) (w : World) 
 the removal-prefix theorem. The initial resident identifies the entry queue;
 arbitrary packet IDs and all later Stops remain covered. -/
 theorem rxPollGro_entry_prefix (pid : PeerId) (budget : Nat) (w : World) (cell : RxQueueCell)
-    (hc : rxQueues w pid = some cell) :
+    (hc : rxQueues w.wg pid = some cell) :
     RemovalPrefix cell.queue.all
       ((removedTags (runPrefix (rxPollGro pid budget) w []).2).map Prod.snd) := by
   have hp := rxPollRemovals_prefix pid budget (fun bytes => bytes.forM Leanux.Env.deliverInner)
@@ -49,7 +49,7 @@ theorem rxPollGro_entry_prefix (pid : PeerId) (budget : Nat) (w : World) (cell :
   simpa only [rxPollGro_removals_agree] using hp
 
 theorem rxPollGro_buffered_sublist (pid : PeerId) (budget : Nat) (w : World) (cell : RxQueueCell)
-    (hc : rxQueues w pid = some cell) :
+    (hc : rxQueues w.wg pid = some cell) :
     ((bufferedEntries (runPrefix (rxPollGro pid budget) w []).2).map GroEntry.skb).Sublist
       cell.queue.all := by
   have hb := (rxPollGro_tags_properties pid budget w).1.map Prod.snd

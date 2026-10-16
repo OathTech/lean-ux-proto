@@ -22,6 +22,7 @@ when all four pass:
 """
 import os
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -36,7 +37,6 @@ DECL = re.compile(r'^(?:theorem|lemma|def|abbrev|instance)\s+([A-Za-z_][\w\'.]*)
 NAMESPACE = re.compile(r'^namespace\s+(\S+)\s*$')
 DEPENDS = re.compile(r"^'([^']+)' depends on axioms: \[([^\]]*)\]$")
 NO_AXIOMS = re.compile(r"^'([^']+)' does not depend on any axioms$")
-CAPPED_DEFAULT = Path('/usr/local/bin/capped')
 
 failures = []
 
@@ -52,9 +52,10 @@ def capped(command):
         if not os.access(named, os.X_OK):
             raise SystemExit(f'LEANUX_CAPPED names no executable: {named}')
         return [named, '--'] + command
-    if os.access(CAPPED_DEFAULT, os.X_OK):
-        return [str(CAPPED_DEFAULT), '--'] + command
-    print(f'note: {CAPPED_DEFAULT} is not installed; building uncapped', file=sys.stderr, flush=True)
+    available = shutil.which('capped')
+    if available:
+        return [available, '--'] + command
+    print('note: capped is not installed; building uncapped', file=sys.stderr, flush=True)
     return command
 
 

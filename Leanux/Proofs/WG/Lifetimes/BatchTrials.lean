@@ -29,7 +29,7 @@ private theorem trialFilterAux (xs acc : List Activation) (w : World) (h : List 
   | nil => rfl
   | cons a xs ih =>
     simp only [List.filterAuxM, StateT.run_bind, activationTrialDecision_eq a w h]
-    cases hr : activationTrialDecision a w h <;> simp [hr, Except.map, ih]
+    cases hr : activationTrialDecision a w h <;> simp [Except.map, ih]
 
 /-- Original filterM order and early failure are reproduced by the separately
 observed trials. Hidden mismatch is an ordinary false decision; any other Stop
@@ -38,13 +38,13 @@ theorem activationTrials_filter (xs : List Activation) (w : World) (h : List Lif
     (xs.filterM Env.Activation.consistent).run w =
       (xs.filterM (fun a => activationTrialDecision a w h)).map (fun ys => (ys, w)) := by
   simp only [List.filterM, StateT.run_bind, trialFilterAux xs [] w h]
-  cases hr : List.filterAuxM (fun a => activationTrialDecision a w h) xs [] <;> simp [hr, Except.map]
+  cases hr : List.filterAuxM (fun a => activationTrialDecision a w h) xs [] <;> simp [Except.map]
 
 /-- Every candidate has a safe trial prefix from an allocation-valid entry,
 including false and non-hidden-error candidates. Together with filter equality,
 this covers all evaluated candidates, without asserting unevaluated ones ran. -/
 theorem activationTrials_safe (xs : List Activation) (w : World) (h : List LifetimeEvent)
-    (hi : AllocationInv h w) :
+    (hi : AllocationInv h w.wg) :
     ∀ a ∈ xs, LifetimeEvent.Safe (runPrefix (activationRunPrefix a) w h).2 := by
   intro a _
   exact (activationRunPrefix_allocation a w h hi).choose_spec.2.1

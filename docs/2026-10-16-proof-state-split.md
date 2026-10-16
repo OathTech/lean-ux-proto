@@ -102,9 +102,14 @@ it is not part of that baseline.
 | Native routing session frames | 8 | 7 | 1 | 0 | 0 | 7 |
 | Native acquiring lookup and peer-configuration tail | 10 | 8 | 0 | 2 | 0 | 10 |
 | Native handshake send/receive and retained product worker contracts | 38 | 20 | 0 | 18 | 16 | 54 |
+| Routing RX/NAPI and canonical packet-store adapters | 36 | 14 | 3 | 19 | 0 | 33 |
+| Product scheduler, copied-state trials and audit | 47 | 2 | 0 | 45 | 0 | 47 |
+| Receive-ring callbacks, workers and provenance | 35 | 17 | 0 | 18 | 0 | 35 |
+| Native queued-work flushing and peer shutdown | 5 | 5 | 0 | 0 | 0 | 5 |
+| Device routing and retained product mask transports | 6 | 4 | 0 | 2 | 2 | 8 |
 
-The whole tree currently contains 451 Lean files and 6,419 theorems. The completed
-changes total 2,004 retyped theorems, 1,652 deletions, 930 retained contract shapes and 356 added.
+The whole tree currently contains 451 Lean files and 6,418 theorems. The completed
+changes total 2,046 retyped theorems, 1,655 deletions, 1,014 retained contract shapes and 358 added.
 Retyping changes or generalizes the actual state/monad carrier or observation.
 This includes shorthand contracts whose source functions or named views move
 to a native monad. Mere namespace qualification and equivalent relocation of a
@@ -2854,3 +2859,66 @@ produced two kernel metavariable rejections; that invocation is a failure,
 not evidence for any claim. The first two frontiers are repaired above; the
 remaining two belong to the next scoped carry. The scheduler and receive-ring
 consumer work continues independently and is not included in this checkpoint.
+
+
+## Scheduler and receive-worker carry
+
+The scheduler family and audit retain exact product-state execution, copied-state
+trials, arbitrary callbacks and failure histories. The native queue modifiers
+run in WG.M; the observer lifts preserve their actual ambient transitions.
+The range invariant explicitly names World, and proof-selection guards avoid
+speculative unfolding without increasing proof limits. The original eager
+device read and record-driven budgets remain.
+
+Routing RX/NAPI retains the original callback contracts and the permitted
+deletion of peer slots. Three packet-store frame wrappers are removed because
+SkbM cannot inspect the routing view; their callers use the canonical adapter.
+Enqueue still acquires its owner, checks and updates the actual peer, invokes
+the arbitrary interrupt callback and releases the acquired reference. Flush
+frames retain actual pending-work, record-selection, drain and timer behavior.
+The RX-ring proofs preserve the complete ring cell through actual NAPI,
+encryption, socket sends and transmit scheduling.
+
+Validation of this checkpoint: 161 named declarations use only standard axioms;
+twelve explicitly scoped fresh kernel replays and independent source reviews
+pass. Final scoped builds pass: BatchCalls192, BatchAudit193, routing275,
+flush248, device249 and ring222 jobs. All five Batch modules are warning-free. The routing
+and ring files still have 72 deprecated MVCGen syntax warnings. These are
+unfinished migration work, not an accepted warning exception or a claim that
+the proof tree is current. Lean4.35's new vcgen uses Std.WP.Triple, whereas the
+existing contracts use Std.Do.Triple; a blind rename failed. Two exploratory
+kernel-checked equivalences preserve the original native and product Hoare
+domains, but do not yet migrate the specification rules or generic contracts.
+
+Development failures remain failures: the BatchCalls sequence had eleven
+ordinary failures before two passes; a separate range diagnostic failed once
+on an invalidated dependency, then its one permitted infrastructure rerun
+reported the actual type-inference failure. The audit's eight calls included
+one missing-dependency failure and ordinary parser/proof-limit failures before
+the final pass. Routing's twelve calls had three passes and nine ordinary
+failures; flush had two failures then a pass; rings had two passes and eight
+ordinary failures, including the incompatible tactic rename. No proof or
+memory limit was raised. Device routing had one base-monad annotation failure
+then passed; its product transports retain the exact original43-field masks,
+and two native companions use actual WG-owned view frames. A separately
+requested dependency build passed.
+
+An accidental capped leanchecker --help invocation launched unscoped replay
+and was KILLED with exit137 at32G. It is a failed invocation, not replay
+evidence, and was not rerun. Before further work, all dirty worktrees including
+untracked files were snapshotted under
+refs/snapshots/proof-campaign-capped-checker-20261016T212506Z; branches and
+ordinary indices were untouched. Subsequent validation used explicit module
+names. The complete proof gate and whole-tree replay remain pending.
+
+The proof gate now finds optional capped through PATH instead of a fixed
+machine installation path. Its present/absent-wrapper cases were checked;
+the gate's proof and axiom checks are unchanged. Portable reproduction:
+
+```sh
+cap() { if command -v capped >/dev/null 2>&1; then capped "$@"; else "$@"; fi; }
+cap scripts/in-bundle lake build Leanux.Proofs.WG.Lifetimes.BatchAudit Leanux.Proofs.WG.AllowedIps.RoutingFlushFrames Leanux.Proofs.WG.Queues.RxRingTx Leanux.Proofs.WG.Queues.RxPollProvenance
+cap scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Lifetimes.BatchAudit
+cap scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.AllowedIps.RoutingFlushFrames
+cap scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Queues.RxRingTx
+```

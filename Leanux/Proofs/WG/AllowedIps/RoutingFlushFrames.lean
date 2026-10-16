@@ -11,13 +11,16 @@ set_option pp.structureInstances false
 theorem runFlushedSendWork_routing (pid : PeerId) : RetainsRoutingCall (runFlushedSendWork pid) := by
   apply ProjectedAction.of_wp
   intro s
+  have ambient {α : Type} (a : AmbientM α) (Q : WGWorld → Prop) :
+      Hoare (MonadLift.monadLift a : WG.M α) Q (fun _ w => Q w) :=
+    hoare_liftAmbient a Q
+  unfold Hoare at ambient
   let P := RetainsRouting s
   have hg := routing_getPeer P pid
   have hs := fun p => routing_setPeer P pid p
   have hm := (modifyDev_routing (fun d => {d with sendWorkQueue := d.sendWorkQueue.erase pid}) (fun _ => rfl)).wp P
-  have hh := fun site => (routing_kernel _ (hidden_sameKernel site)).wp P
-  have hw := (handshakeSendWorker_routing pid).wp s
-  mvcgen [runFlushedSendWork, hg, hs, hm, hh, hw, invariant]
+  have hw := RetainsRoutingCall.wp (handshakeSendWorker_routing pid) s
+  mvcgen [-Std.Do.Spec.monadLift_StateT, ambient, getDev, getAmbient, hidden, peekUnit, resolveUnit, invariant, unsupported, branch, AmbientM.invariant, AmbientM.unsupported, AmbientM.branch, runFlushedSendWork, hg, hs, hm, hw, invariant]
   all_goals try dsimp +zetaDelta only [P] at *
   all_goals try simp_all
   all_goals try exact id
@@ -28,10 +31,14 @@ theorem runFlushedSendWork_routing (pid : PeerId) : RetainsRoutingCall (runFlush
 theorem runFlushedClearWork_routing (pid : PeerId) : RetainsRoutingCall (runFlushedClearWork pid) := by
   apply ProjectedAction.of_wp
   intro s
+  have ambient {α : Type} (a : AmbientM α) :
+      Hoare (MonadLift.monadLift a : WG.M α)
+        (fun w => RetainsRouting s (routingView w))
+        (fun _ w => RetainsRouting s (routingView w)) := hoare_liftAmbient a _
+  unfold Hoare at ambient
   have hm := (modifyDev_routing (fun d => {d with clearWorkQueue := d.clearWorkQueue.erase pid}) (fun _ => rfl)).wp (RetainsRouting s)
-  have hh := fun site => (routing_kernel _ (hidden_sameKernel site)).wp (RetainsRouting s)
-  have hw := (queuedExpiredZeroKeyMaterial_routing pid).wp s
-  mvcgen [runFlushedClearWork, hm, hh, hw]
+  have hw := RetainsRoutingCall.wp (queuedExpiredZeroKeyMaterial_routing pid) s
+  mvcgen [-Std.Do.Spec.monadLift_StateT, ambient, getDev, getAmbient, hidden, peekUnit, resolveUnit, invariant, unsupported, branch, AmbientM.invariant, AmbientM.unsupported, AmbientM.branch, runFlushedClearWork, hm, hw]
   all_goals try exact id
   all_goals try trivial
   all_goals subst s
@@ -40,12 +47,15 @@ theorem runFlushedClearWork_routing (pid : PeerId) : RetainsRoutingCall (runFlus
 theorem drainHandshakeSendWq_routing (upTo : Option PeerId) : RetainsRoutingCall (drainHandshakeSendWq upTo) := by
   apply ProjectedAction.of_wp
   intro s
-  have hs := fun pid => (runFlushedSendWork_routing pid).wp s
-  have hc := fun pid => (runFlushedClearWork_routing pid).wp s
-  have hp := fun worker => (routing_kernel _ (Framing.peekUnit_sameKernel worker)).wp (RetainsRouting s)
-  have hr := fun worker unit queue => (routing_kernel _ (Framing.resolveUnit_sameKernel worker unit queue)).wp (RetainsRouting s)
-  mvcgen [drainHandshakeSendWq, hs, hc, hp, hr, getDev, getK, invariant]
-  all_goals try exact ((⇓? _ w => ⌜RetainsRouting s (routingView w)⌝) : PostCond _ (.arg World (.except Stop .pure)))
+  have ambient {α : Type} (a : AmbientM α) :
+      Hoare (MonadLift.monadLift a : WG.M α)
+        (fun w => RetainsRouting s (routingView w))
+        (fun _ w => RetainsRouting s (routingView w)) := hoare_liftAmbient a _
+  unfold Hoare at ambient
+  have hs := fun pid => RetainsRoutingCall.wp (runFlushedSendWork_routing pid) s
+  have hc := fun pid => RetainsRoutingCall.wp (runFlushedClearWork_routing pid) s
+  mvcgen [-Std.Do.Spec.monadLift_StateT, ambient, getDev, getAmbient, hidden, peekUnit, resolveUnit, invariant, unsupported, branch, AmbientM.invariant, AmbientM.unsupported, AmbientM.branch, drainHandshakeSendWq, hs, hc, getDev, invariant]
+  all_goals try exact ((⇓? _ w => ⌜RetainsRouting s (routingView w)⌝) : PostCond _ (.arg WGWorld (.arg Ambient (.except Stop .pure))))
   all_goals try dsimp +zetaDelta only at *
   all_goals try simp_all
   all_goals try assumption
@@ -57,10 +67,15 @@ theorem drainHandshakeSendWq_routing (upTo : Option PeerId) : RetainsRoutingCall
 theorem timersStop_routing (pid : PeerId) : RetainsRoutingCall (timersStop pid) := by
   apply ProjectedAction.of_wp
   intro s
+  have ambient {α : Type} (a : AmbientM α) :
+      Hoare (MonadLift.monadLift a : WG.M α)
+        (fun w => RetainsRouting s (routingView w))
+        (fun _ w => RetainsRouting s (routingView w)) := hoare_liftAmbient a _
+  unfold Hoare at ambient
   have hd := fun t => (delTimer_routing pid t).wp (RetainsRouting s)
-  have hw := (drainHandshakeSendWq_routing (some pid)).wp s
-  mvcgen [timersStop, hd, hw, getDev, getK, invariant]
-  all_goals try exact ((⇓? _ w => ⌜RetainsRouting s (routingView w)⌝) : PostCond _ (.arg World (.except Stop .pure)))
+  have hw := RetainsRoutingCall.wp (drainHandshakeSendWq_routing (some pid)) s
+  mvcgen [-Std.Do.Spec.monadLift_StateT, ambient, getDev, getAmbient, hidden, peekUnit, resolveUnit, invariant, unsupported, branch, AmbientM.invariant, AmbientM.unsupported, AmbientM.branch, timersStop, hd, hw, getDev, invariant]
+  all_goals try exact ((⇓? _ w => ⌜RetainsRouting s (routingView w)⌝) : PostCond _ (.arg WGWorld (.arg Ambient (.except Stop .pure))))
   all_goals try dsimp +zetaDelta only at *
   all_goals try assumption
   all_goals try exact id
@@ -71,13 +86,18 @@ theorem timersStop_routing (pid : PeerId) : RetainsRoutingCall (timersStop pid) 
 theorem peerRemoveAfterDead_routing (pid : PeerId) : RetainsRoutingCall (peerRemoveAfterDead pid) := by
   apply ProjectedAction.of_wp
   intro s
+  have ambient {α : Type} (a : AmbientM α) :
+      Hoare (MonadLift.monadLift a : WG.M α)
+        (fun w => RetainsRouting s (routingView w))
+        (fun _ w => RetainsRouting s (routingView w)) := hoare_liftAmbient a _
+  unfold Hoare at ambient
   have hg := (getPeer_routing pid).wp (RetainsRouting s)
   have hk := (keypairsClear_routing pid).wp (RetainsRouting s)
-  have ht := (timersStop_routing pid).wp s
-  have hw := (drainHandshakeSendWq_routing none).wp s
+  have ht := RetainsRoutingCall.wp (timersStop_routing pid) s
+  have hw := RetainsRoutingCall.wp (drainHandshakeSendWq_routing none) s
   have hm := (modifyDev_routing (fun d => {d with numPeers := d.numPeers - 1}) (fun _ => rfl)).wp (RetainsRouting s)
-  have hp := (peerPut_retainsRouting (some pid)).wp s
-  mvcgen [peerRemoveAfterDead, hg, hk, ht, hw, hm, hp, getDev, getK, branch, unsupported, invariant]
+  have hp := RetainsRoutingCall.wp (peerPut_retainsRouting (some pid)) s
+  mvcgen [-Std.Do.Spec.monadLift_StateT, ambient, getDev, getAmbient, hidden, peekUnit, resolveUnit, invariant, unsupported, branch, AmbientM.invariant, AmbientM.unsupported, AmbientM.branch, peerRemoveAfterDead, hg, hk, ht, hw, hm, hp, getDev, branch, unsupported, invariant]
   all_goals try dsimp +zetaDelta only at *
   all_goals try assumption
   all_goals try exact id

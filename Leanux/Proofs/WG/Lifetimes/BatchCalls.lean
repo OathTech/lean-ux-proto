@@ -38,7 +38,7 @@ def original : (call : BatchCall) → M call.Result
   | .schedule stack => Env.schedule stack
   | .nestedResched worker => Env.nestedResched worker
 
-def observed : (call : BatchCall) → MixedM call.Result
+def observed : (call : BatchCall) → PrefixM LifetimeEvent call.Result
   | .napi => napiSoftirqPrefix
   | .irqExit => napiIrqExitPrefix
   | .hasWork a => activationHasWorkPrefix a
@@ -63,12 +63,12 @@ theorem erases (call : BatchCall) : ErasesPrefix call.observed call.original := 
   | schedule stack => exact schedulePrefix_erases stack
   | nestedResched worker => exact nestedReschedPrefix_erases worker
 
-theorem allocation (call : BatchCall) : PrefixPreserves AllocationInv LifetimeEvent.Safe call.observed := by
+theorem allocation (call : BatchCall) : PrefixPreserves (fun h w => AllocationInv h w.wg) LifetimeEvent.Safe call.observed := by
   cases call with
   | napi => exact napiSoftirqPrefix_allocation
   | irqExit => exact napiIrqExitPrefix_allocation
-  | hasWork a => exact activationHasWorkPrefix_preserves allocationAmbient allocationTx a
-  | occupancy a => exact activationOccupancyPrefix_preserves allocationAmbient a
+  | hasWork a => exact activationHasWorkPrefix_preserves (ProductAmbientContracts.ofNative allocationAmbient) (ProductTxContracts.ofNative allocationTx) a
+  | occupancy a => exact activationOccupancyPrefix_preserves (ProductAmbientContracts.ofNative allocationAmbient) a
   | cryptAhead pid => exact cryptAheadPrefix_allocation pid
   | iteration a => exact activationIterPrefix_allocation a
   | activation a => exact activationRunPrefix_allocation a

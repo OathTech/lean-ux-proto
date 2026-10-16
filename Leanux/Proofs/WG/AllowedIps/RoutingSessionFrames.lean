@@ -102,7 +102,7 @@ theorem createResponse_routing (pid : PeerId) : SameView routingView (createResp
   have hw := (ownerDeref_routing (.handshake pid)).wp (fun t => t = s)
   mvcgen [-Std.Do.Spec.monadLift_StateT, ambient, index_spec, liftM, hidden, hw, hg, hs, hp, he, hd, hk, ho, branch, AmbientM.branch, invariant, AmbientM.invariant]
   all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [routingView, routingState]
+  all_goals simp_all [routingView]
 
 theorem timersSessionDerived_routing (pid : PeerId) : SameView routingView (timersSessionDerived pid) := by
   apply SameView.of_wp
