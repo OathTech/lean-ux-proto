@@ -127,19 +127,13 @@ def main():
              '    (fun _ => fetchIn PeerGet.entry PeerGet.code pc)',
              'end Binary.Image', '']
     (ROOT / 'binary/Image.lean').write_text('\n'.join(text))
-    proof = ['import Image', 'import RegionExecution',
+    proof = ['import Image', 'import LayoutTactic',
              'set_option maxRecDepth 4096', 'set_option maxHeartbeats 2000000',
              'namespace Binary.Image', 'local instance : Labels := linkedLabels']
     for ns, offset in region_names:
         proof += [f'theorem {ns}_r{offset:02x}_layout :',
                   f'    LaidOut fetch ({ns}.entry + .ofNat {offset}) {ns}.r{offset:02x} := by',
-                  '  repeat first',
-                  '    | apply LaidOut.cons',
-                  '    | exact LaidOut.nil _',
-                  '    | apply regular_mono',
-                  '    | exact True.intro',
-                  '    | decide',
-                  '    | rfl']
+                  '  binary_layout']
     proof += ['end Binary.Image', '']
     (ROOT / 'binary/ImageLayout.lean').write_text('\n'.join(proof))
     o = layouts(ORACLE)

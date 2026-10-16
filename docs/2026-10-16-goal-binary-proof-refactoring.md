@@ -157,3 +157,45 @@ TrustBase declaration, headline, Pre, R, mirror or dependency pin changed.
 The next trial targets the literal layout iteration copied at 110 sites,
 then the repeated history-tail property. Trial copies and timings remain
 ephemeral in `.tmp` until their results are retained or rejected.
+
+### Round 2: literal instruction-layout iteration
+
+[AGENT 2026-10-16] Retain `binary_layout` in `binary/LayoutTactic.lean`.
+This is a procedure over an existing concrete instruction list, not a new
+checker, certificate or semantics. It applies `LaidOut.cons`, proves positive
+length by ordinary `decide`, fetch equality by `rfl`, and monotonicity by the
+existing `regular_mono`; only the smaller tail recurses. The empty-list case
+uses `LaidOut.nil`. There is no broad simplifier or search through hypotheses.
+
+Replaced **110** identical procedures: 54 in `ImageLayout`, 35 in
+`AllowedipsLayoutProofs`, 21 in `CommonBitsLayout`. All original theorem
+statements remain. There are no per-site side conditions or exceptions.
+The first 54 are generated, so source savings must be separated: **320 net
+handwritten Lean lines** (including the entire 16-line tactic module), plus
+**324 generated lines**. `generate.py` also loses six lines and emits the new
+invocation/import. Its layout-emission block reproduces all 54 declarations
+exactly; the full ELF/DWARF generator was not rerun or modified otherwise.
+
+One-off negative checks prove that the tactic fails for a missing fetch, a
+zero-length instruction and a `.nop` outside `RegionOperation`, even with a
+hypothesis of the desired layout supplied. They use `fail_if_success` and
+are ephemeral, not a new gate. The first invocation used the wrong relative
+`.tmp` path and failed before checking; the corrected invocation passes.
+
+Integrated build PASS (532 jobs, 125.53 seconds including invalidated
+imports); binary gate and exact trust-surface diff PASS. Scoped replay of
+`LayoutTactic`, `ImageLayout`, `AllowedipsLayoutProofs`, `CommonBitsLayout`
+passes, 8.09 seconds combined. Reproduce with the same gate and one
+`capped -- lake env leanchecker MODULE` per named module in `binary/`.
+
+| Direct elaboration, seconds | Before | After |
+| --- | ---: | ---: |
+| ImageLayout | 3.848 | 2.882 |
+| AllowedipsLayoutProofs | 2.745 | 2.008 |
+| CommonBitsLayout | 3.895 | 2.758 |
+
+These are single warm shared-host observations, not controlled throughput
+measurements. The `.olean` sizes increase slightly: 155152→155608,
+127008→127312 and 87288→87480 bytes respectively, compared with the paused
+baseline's objects. The demonstrated gain is shared source/procedure
+maintenance, not smaller kernel proofs or a forecast for semantic composition.
