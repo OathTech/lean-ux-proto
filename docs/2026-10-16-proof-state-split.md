@@ -84,9 +84,10 @@ it is not part of that baseline.
 | Native clear endpoints, material derivation and transmit enqueue (corrected) | 48 | 36 | 1 | 11 | 1 | 48 |
 | Native session receipts, projection additions, routing histories and RX queue frames (corrected) | 44 | 38 | 1 | 5 | 11 | 54 |
 | Cookie/timer observers, affiliation, origin support, routing completions and enqueue admission | 118 | 82 | 5 | 31 | 19 | 132 |
+| Native ring cuts/frames, saved-peer maintenance, routing acquisition and keypair affiliation | 116 | 88 | 9 | 19 | 16 | 123 |
 
-The whole tree currently contains 451 Lean files and 6,301 theorems. The completed
-changes total 1,487 retyped theorems, 1,618 deletions, 555 retained contract shapes and 204 added.
+The whole tree currently contains 451 Lean files and 6,308 theorems. The completed
+changes total 1,575 retyped theorems, 1,627 deletions, 574 retained contract shapes and 220 added.
 Retyping changes or generalizes the actual state/monad carrier or observation.
 This includes shorthand contracts whose source functions or named views move
 to a native monad. Mere namespace qualification and equivalent relocation of a
@@ -1843,3 +1844,146 @@ failure, then passed; deletion review required the final combined 136-job build
 and fresh trust checks on all three corrected queue files. Superseded passes
 were not used to claim the final source. No KILLED, guest timeout or new
 infrastructure rerun occurred.
+
+## Ring cuts, saved-peer observers and routing acquisition
+
+This tranche carries 116 old claims: 88 native/generalized retypes, nineteen
+retained product/pure contracts and nine deletions, with sixteen additions
+(123 after). The thirteen modules pass scoped builds, 166 explicit named axiom
+checks, thirteen fresh entry-module kernel replays and independent source
+reviews. The unchanged default build and unit closure retain their preceding
+66-job and 131-test/one-skip passes. Every result remains lagging.
+
+Seven packet leaf wrappers, the ambient invariant wrapper and
+Keypairs.indexReplaceHandshake_view are removed because their component types
+cannot alter the observed fields; consumers use the canonical guarded adapters.
+The TX/RX journal interfaces keep arbitrary product callbacks and invariants.
+Conditional native ring frames retain peer/keypair retirement and nullable
+index-owner reads, with no new residency or coherence premise. Loopback and
+socket contracts retain their original seven store fields; the latter permit
+WG metadata changes outside that observation. Routing's generic transports keep
+arbitrary actual StateT actions and projections.
+
+Saved-peer reads retain exact lookup order and source identities.
+MaintenanceCalls retains its old expiry-only setup hypothesis for the clock
+failure history, but computes the actual wheel-clearing deletion separately;
+the obsolete setup endpoint is never asserted to be that actual endpoint.
+Three product contracts remain beside their native counterparts.
+
+Independent review rejected the first TX poll observer as a correspondence
+failure: current encryptRingPoll consumes and installs the ring, runs the
+callback, then reports the consumed-item decision. The old observer ran the
+callback first and only then polled. The corrected cut now contains just the
+actual consume/installation before the callback. The worker observer and its
+old stepSource_eq still need carrying; this cut's successful checks do not
+certify them.
+
+A distinguishing example uses an empty one-slot ring and a callback that
+enqueues an empty batch. The actual call returns no item and leaves the batch
+queued; the old factor returns the batch and leaves the ring empty. This is a
+proof-observer mismatch over unrestricted callbacks, not an initialized-kernel
+defect. Both endpoints were kernel checked with only standard axioms:
+
+~~~sh
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env lean -j1 --stdin <<'LEAN'
+import Leanux.WG.Data
+open Leanux Leanux.WG
+private def start : WGWorld :=
+  {dev := some {ifindex := 3, ifname := "wg0", encryptQueue := PtrRing.init 1}}
+private def input : Ambient := {env := fun _ _ => true, timing := ⟨0,0⟩}
+private def callback : WG.M Unit := modifyDev fun d => {d with encryptQueue := d.encryptQueue.produce []}
+private def oldPoll : WG.M (Option (List SkbId)) := do
+  let d ← getDev
+  match d.encryptQueue.consume with
+  | (none, _) => _ ← branch .encWorkerConsumed false; return none
+  | (some item, ring) =>
+    _ ← branch .encWorkerConsumed true
+    modifyDev fun d => {d with encryptQueue := ring}
+    return some item
+private def oldFactor : WG.M (Option (List SkbId)) := do callback; oldPoll
+private def observe (a : WG.M (Option (List SkbId))) :
+    Except Stop (Option (List SkbId) × Option (Option (List SkbId)) × List Bool) :=
+  ((a.run start).run input).map fun (out : (Option (List SkbId) × WGWorld) × Ambient) =>
+    (out.1.1, out.1.2.dev.map (fun (d : Device) => d.encryptQueue.peek),
+      out.2.steps.toList.map (fun (s : Step) => s.outcome))
+theorem currentOrder :
+    observe (encryptRingPoll callback) = .ok (none, some (some []), [false]) := by
+  rfl
+theorem obsoleteOrder :
+    observe oldFactor = .ok (some [], some none, [true]) := by
+  rfl
+#print axioms currentOrder
+#print axioms obsoleteOrder
+LEAN
+~~~
+
+ReceiveMaintenance also removes the obsolete queuedThisCall write from its
+observer and follows the current pending-work test. The current call appends to
+sendWorkQueue but does not append to queuedThisCall. Its erasure and both
+invariant domains pass. The checked distinguishing example is reproducible as:
+
+~~~sh
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env lean -j1 --stdin <<'LEAN'
+import Leanux.Runner
+open Leanux Leanux.WG
+private def queuePeer : Peer :=
+  {remoteStatic := [], presharedKey := [], precomputedStaticStatic := [],
+   internalId := 1, lastSentHandshake := -6000000000}
+private def queueWorld : WGWorld :=
+  {dev := some {ifindex := 4, ifname := "wg0",
+    peers := Std.TreeMap.ofList [(0, queuePeer)]}}
+private def queueAmbient : Ambient :=
+  {env := Runner.harnessEnv, timing := Env.timing,
+   hidden := some [{site := HiddenSite.birthdateExpired.info.id,
+    bytes := List.replicate 8 0}]}
+private def obsoleteQueue : WG.M Unit := do
+  if ← branch .queuedNotRetry true then
+    setPeer 0 {(← getPeer 0) with timerHandshakeAttempts := 0}
+  let p ← getPeer 0
+  if ← branchExpired .queuedNotExpired p.lastSentHandshake REKEY_TIMEOUT not then return
+  if ← branch .queuedDead p.isDead then return
+  peerGet 0
+  if ← branch .queuedAlreadyQueued p.handshakePending then
+    peerPut (some 0)
+    return
+  setPeer 0 {(← getPeer 0) with handshakePending := true}
+  recordQueued .sendWorker 0
+  modifyDev fun d => {d with sendWorkQueue := d.sendWorkQueue ++ [0]}
+  modify fun w => {w with queuedThisCall := 0 :: w.queuedThisCall}
+private def queueResult (a : WG.M Unit) : Option (List PeerId × List PeerId) := do
+  let ((_, w), _) ← ((a.run queueWorld).run queueAmbient).toOption
+  let d ← w.dev
+  pure (d.sendWorkQueue, w.queuedThisCall)
+theorem actualQueueResult :
+    queueResult (sendQueuedHandshakeInitiation 0 false) = some ([0], []) := by
+  decide +kernel
+theorem obsoleteQueueResult :
+    queueResult obsoleteQueue = some ([0], [0]) := by
+  decide +kernel
+#print axioms actualQueueResult
+#print axioms obsoleteQueueResult
+LEAN
+~~~
+
+The latest complete 509-target build failed at ten frontier modules:
+TxRingCuts, RxRingCuts, SocketFrames, SavedPeerLookup, PeerTailRouting,
+MaintenanceCalls, HandshakeConstruct, AllowedIpsAccess, ConfiguredIdentity and
+Keypairs.Affiliation. Several now pass scoped checks; downstream blocked modules
+remain unvalidated and the full gate is pending.
+
+Development ledger: ReceiveMaintenance/SavedPeers needed three builds (getter
+normalization, then an existing-heartbeat failure, then explicit composition).
+RoutingAcquire/Global needed two (device projection); Keypairs.Affiliation
+needed three (lifted/refcount WP, then index-head normalization). Each ring-frame
+file needed two (WP adapter heads); the cuts needed two for the same reason.
+Review rejected that first passing TX cut's source order; the corrected cut
+passed its new build, axiom check and replay. Socket and Loopback each passed
+their first scoped build. SavedPeerLookup/MaintenanceCalls needed two builds,
+with a residual exact clock-run goal on the first. No proof limit or cap changed.
+
+The first TX witness probe failed because a concurrent rebuild had removed its
+imported cut artifact. Its one infrastructure rerun failed ordinarily on tuple
+type inference; neither produced accepted endpoint evidence. The changed-source
+probe above adds the explicit tuple/result types and imports only mirror code;
+it passed. The queued-handshake witness passed on its first call. No KILLED or
+guest timeout occurred. Mirror sources remain exactly b700659.

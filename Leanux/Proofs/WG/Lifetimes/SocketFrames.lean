@@ -1,17 +1,19 @@
-import Leanux.Proofs.WG.Lifetimes.SavedPeers
+import Leanux.Proofs.Framing.WGKernel
+import Leanux.Proofs.Framing.Lift
 
-/-! Full-Kernel frames for concrete access-free socket/record helpers. -/
+/-! Seven-field WG-store frames for socket selection and pending NET_RX.
+The original device and duplicate-raise guards remain part of the actions. -/
 namespace Leanux.Proofs.WG.Lifetimes
-open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing Std.Do
+open Leanux Leanux.WG Leanux.Proofs.Framing Std.Do
 
-theorem socketPort_sameKernel (family : Nat) : SameKernel (socketPort family) := by
-  apply sameKernel_of_wp
+theorem socketPort_sameStore (family : Nat) : SameWGStore (socketPort family) := by
+  apply SameView.of_wp
   intro k
-  mvcgen [socketPort, getDev, getK, unsupported, invariant]
+  mvcgen [socketPort, getDev, unsupported, invariant, AmbientM.unsupported, AmbientM.invariant]
 
-theorem raiseLoopbackRx_sameKernel : SameKernel raiseLoopbackRx := by
-  apply sameKernel_of_wp
+theorem raiseLoopbackRx_sameStore : SameWGStore raiseLoopbackRx := by
+  apply SameView.of_wp
   intro k
-  mvcgen [raiseLoopbackRx, invariant]
+  mvcgen [raiseLoopbackRx, invariant, AmbientM.invariant]
 
 end Leanux.Proofs.WG.Lifetimes

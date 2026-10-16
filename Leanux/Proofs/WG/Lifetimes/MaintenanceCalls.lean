@@ -25,7 +25,7 @@ def Result : MaintenanceCall → Type
   | .guard _ | .modifyTimer _ _ _ _ => Bool
   | _ => Unit
 
-def original (call : MaintenanceCall) : M call.Result := match call with
+def original (call : MaintenanceCall) : WG.M call.Result := match call with
   | .cache pid => dstCacheReset pid
   | .endpoint pid e => setPeerEndpoint pid e
   | .arm pid t d jc => armTimer pid t d jc
@@ -53,7 +53,7 @@ def observed (call : MaintenanceCall) : MixedM call.Result := match call with
   | .queuedHandshake pid retry => sendQueuedHandshakeInitiationPrefix pid retry
   | .keyFresh pid => keepKeyFreshRxPrefix pid
 
-theorem erases (call : MaintenanceCall) : ErasesPrefix call.observed call.original := by
+theorem erases (call : MaintenanceCall) : ErasesStatePrefix call.observed call.original := by
   cases call with
   | cache pid => exact dstCacheResetMixed_erases pid
   | endpoint pid e => exact setPeerEndpointPrefix_erases pid e
@@ -69,9 +69,9 @@ theorem erases (call : MaintenanceCall) : ErasesPrefix call.observed call.origin
   | keyFresh pid => exact keepKeyFreshRxPrefix_erases pid
 
 theorem preserves_ambient (c : AmbientContracts I)
-    (hq : ∀ pid, PrefixPreserves I LifetimeEvent.Safe
-      (liftPrefix (modifyDev fun d => {d with sendWorkQueue := d.sendWorkQueue ++ [pid]})))
-    (call : MaintenanceCall) : PrefixPreserves I LifetimeEvent.Safe call.observed := by
+    (hq : ∀ pid, StatePrefixPreserves (fun h w _ => I h w) LifetimeEvent.Safe
+      (liftWGPrefix (modifyDev fun d => {d with sendWorkQueue := d.sendWorkQueue ++ [pid]})))
+    (call : MaintenanceCall) : StatePrefixPreserves (fun h w _ => I h w) LifetimeEvent.Safe call.observed := by
   cases call with
   | cache pid => exact AmbientContracts.drop (dstCacheResetMixed_spec c (fun _ => True) pid)
   | endpoint pid e => exact AmbientContracts.drop (setPeerEndpointPrefix_spec c (fun _ => True) pid e)
@@ -86,35 +86,69 @@ theorem preserves_ambient (c : AmbientContracts I)
   | queuedHandshake pid retry => exact sendQueuedHandshakeInitiationPrefix_preserves_ambient c hq pid retry
   | keyFresh pid => exact keepKeyFreshRxPrefix_preserves_ambient c hq pid
 
+theorem preserves_product (c : ProductAmbientContracts I)
+    (hq : ∀ pid, PrefixPreserves I LifetimeEvent.Safe
+      (liftWGObserver (liftWGPrefix (modifyDev fun d => {d with sendWorkQueue := d.sendWorkQueue ++ [pid]}))))
+    (call : MaintenanceCall) : PrefixPreserves I LifetimeEvent.Safe (liftWGObserver call.observed) := by
+  cases call with
+  | cache pid => exact ProductAmbientContracts.drop (dstCacheResetMixed_spec_product c (fun _ => True) pid)
+  | endpoint pid e => exact ProductAmbientContracts.drop (setPeerEndpointPrefix_spec_product c (fun _ => True) pid e)
+  | arm pid t d jc => exact ProductAmbientContracts.drop (armTimerPrefix_spec_product c (fun _ => True) pid t d jc)
+  | deleteTimer pid t => exact ProductAmbientContracts.drop (delTimerPrefix_spec_product c (fun _ => True) pid t)
+  | guard pid => exact ProductAmbientContracts.drop (modPeerTimerGuardPrefix_spec_product c (fun _ => True) pid)
+  | modifyTimer site pid t d => exact ProductAmbientContracts.drop (modPeerTimerPrefix_spec_product c (fun _ => True) site pid t d)
+  | handshakeComplete pid site => exact ProductAmbientContracts.drop (timersHandshakeCompletePrefix_spec_product c (fun _ => True) pid site)
+  | authenticatedReceived pid => exact ProductAmbientContracts.drop (timersAnyAuthenticatedPacketReceivedPrefix_spec_product c (fun _ => True) pid)
+  | dataReceived pid => exact ProductAmbientContracts.drop (timersDataReceivedPrefix_spec_product c (fun _ => True) pid)
+  | traversal pid => exact ProductAmbientContracts.drop (timersTraversalPrefix_spec_product c (fun _ => True) pid)
+  | queuedHandshake pid retry => exact sendQueuedHandshakeInitiationPrefix_preserves_product c hq pid retry
+  | keyFresh pid => exact keepKeyFreshRxPrefix_preserves_product c hq pid
+
 theorem allocation (call : MaintenanceCall) :
-    PrefixPreserves AllocationInv LifetimeEvent.Safe call.observed :=
+    StatePrefixPreserves (fun h w _ => AllocationInv h w) LifetimeEvent.Safe call.observed :=
   call.preserves_ambient allocationAmbient sendWorkQueue_allocation
 
 end MaintenanceCall
 
-/-- The handshake-completion clock failure follows two actual peer updates.
-Its four-event prefix is specified using consecutive original executions. -/
+/-- Clock failure retains the four actual accesses. The expiry-only setup
+premises remain valid inputs; the observed deletion additionally clears the
+wheel slot, which does not change either access stamp or the Ambient clock. -/
 theorem timersHandshakeCompletePrefix_clock_failure (pid : PeerId) (site : HiddenSite)
-    (w afterDelete clockEntry : World) (p q : Peer) (h : List LifetimeEvent) (e : Stop)
-    (hp : (getPeer pid).run w = .ok (p, w))
-    (hdel : (setPeer pid (p.setTimer .retransmitHandshake none)).run w = .ok ((), afterDelete))
-    (hq : (getPeer pid).run afterDelete = .ok (q, afterDelete))
-    (hreset : (setPeer pid {q with timerHandshakeAttempts := 0, sentLastminuteHandshake := false}).run afterDelete = .ok ((), clockEntry))
-    (hclock : (hidden site).run clockEntry = .error e) :
-    runPrefix (timersHandshakeCompletePrefix pid site) w h =
+    (w afterDelete clockEntry : WGWorld) (ambient : Ambient)
+    (p q : Peer) (h : List LifetimeEvent) (e : Stop)
+    (hp : ((getPeer pid).run w).run ambient = .ok ((p, w), ambient))
+    (hdel : ((setPeer pid (p.setTimer .retransmitHandshake none)).run w).run ambient = .ok (((), afterDelete), ambient))
+    (hq : ((getPeer pid).run afterDelete).run ambient = .ok ((q, afterDelete), ambient))
+    (hreset : ((setPeer pid {q with timerHandshakeAttempts := 0, sentLastminuteHandshake := false}).run afterDelete).run ambient = .ok (((), clockEntry), ambient))
+    (hclock : (((hidden site : WG.M (List UInt8))).run clockEntry).run ambient = .error e) :
+    runStatePrefix (timersHandshakeCompletePrefix pid site) w ambient h =
       (.error e, h ++ [.peer (.read pid p.internalId), .peer (.write pid p.internalId),
         .peer (.read pid q.internalId), .peer (.write pid q.internalId)]) := by
-  have hw : w.k.wg.isSome = true := by
-    cases hd : w.k.wg with
-    | none => simp [getPeer, getDev, getK, hd, invariant] at hp
-    | some d => rfl
-  have hd : afterDelete.k.wg.isSome = true := by
-    cases he : afterDelete.k.wg with
-    | none => simp [getPeer, getDev, getK, he, invariant] at hq
-    | some d => rfl
-  simp only [timersHandshakeCompletePrefix, delTimerPrefix, modifyPeerKeysPrefix,
-    runPrefix_bind, getPeerMixed_run, hp, hq, setPeerMixed_run, hw, hd,
-    ↓reduceIte, hdel, hreset, runPrefix_lift, hclock]
-  simp [Peer.setTimer, List.append_assoc]
+  cases hd : w.dev with
+  | none =>
+    simp [getPeer, getDev, hd, invariant, AmbientM.invariant] at hp
+    cases hp
+  | some d =>
+    cases he : d.peers[pid]? with
+    | none =>
+      simp [getPeer, getDev, hd, he, invariant, AmbientM.invariant] at hp
+      cases hp
+    | some actual =>
+      have hp' : ((getPeer pid).run w).run ambient = .ok ((actual, w), ambient) := by
+        simp [getPeer, getDev, hd, he]
+      rw [hp'] at hp
+      cases hp
+      simp [setPeer, modifyDev, hd] at hdel
+      subst afterDelete
+      simp [getPeer, getDev] at hq
+      subst q
+      have hc : (AmbientM.hidden site).run ambient = .error e := by
+        cases hx : (AmbientM.hidden site).run ambient with
+        | error stop => simpa [hidden, hx] using hclock
+        | ok value => simp [hidden, hx] at hclock
+      simp [timersHandshakeCompletePrefix, delTimerPrefix, modifyPeerKeysPrefix,
+        runStatePrefix_bind, getPeerMixed_run, setPeerMixed_run, liftWGPrefix, runStatePrefix_lift,
+        getPeer, getDev, setPeer, modifyDev, hd, he, hidden, hc,
+        Peer.setTimer, Peer.setWheel, List.append_assoc]
 
 end Leanux.Proofs.WG.Lifetimes
