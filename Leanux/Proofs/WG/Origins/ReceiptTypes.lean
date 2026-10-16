@@ -1,4 +1,4 @@
-import Leanux.Proofs.Logged.Capture
+import Leanux.Proofs.Logged.NativeCapture
 
 /-! Receipt data only. Operational validity and source contracts remain in the
 session and RX origin modules; keeping these types low avoids a caller cycle. -/
@@ -14,8 +14,8 @@ structure Context where
   initiator : Bool
 
 inductive Receipt where
-  | allocation (word : Option PeerId) (run : RunWitness (Option KeypairId))
-  | material (pid : PeerId) (run : RunWitness (Option Context))
+  | allocation (word : Option PeerId) (run : WGRunWitness (Option KeypairId))
+  | material (pid : PeerId) (run : WGRunWitness (Option Context))
 
 end SessionOrigin
 
@@ -25,9 +25,9 @@ structure Admission where
   slot : SkbId
 
 inductive Receipt where
-  | allocation (packet : RxPacket) (run : RunWitness SkbId)
-  | admission (msg : List UInt8) (src : SkbSource) (ds : Nat) (run : RunWitness (Option Admission))
-  | decrypt (id : SkbId) (run : RunWitness (RxPacket × Option RxPacket))
+  | allocation (packet : RxPacket) (run : WGRunWitness SkbId)
+  | admission (msg : List UInt8) (src : SkbSource) (ds : Nat) (run : WGRunWitness (Option Admission))
+  | decrypt (id : SkbId) (run : WGRunWitness (RxPacket × Option RxPacket))
 
 end RxOrigin
 

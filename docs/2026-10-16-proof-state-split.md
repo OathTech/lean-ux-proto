@@ -82,9 +82,10 @@ it is not part of that baseline.
 | Native allocation, lookup, session and routing lifecycle with canonical Seccomp adapter (corrected) | 55 | 38 | 3 | 14 | 10 | 62 |
 | Replay terminals, receive admission, key maintenance, clear walks and native failures | 91 | 40 | 3 | 48 | 11 | 99 |
 | Native clear endpoints, material derivation and transmit enqueue | 48 | 37 | 0 | 11 | 1 | 49 |
+| Native session receipts, projection additions, routing histories and RX queue frames | 44 | 39 | 0 | 5 | 11 | 55 |
 
-The whole tree currently contains 451 Lean files and 6,278 theorems. The completed
-changes total 1,368 retyped theorems, 1,611 deletions, 519 retained contract shapes and 174 added.
+The whole tree currently contains 451 Lean files and 6,289 theorems. The completed
+changes total 1,407 retyped theorems, 1,611 deletions, 524 retained contract shapes and 185 added.
 Retyping changes or generalizes the actual state/monad carrier or observation.
 This includes shorthand contracts whose source functions or named views move
 to a native monad. Mere namespace qualification and equivalent relocation of a
@@ -1709,3 +1710,45 @@ on proof normalization and the missing packet-store adapter; its third passed,
 followed by the axiom check and fresh replay. No limits or mirror code changed.
 The default build and unit results from the preceding checkpoint apply to the
 unchanged default target and evaluator. Full-tree validation remains pending.
+
+
+## Session receipts, routing histories and receive queues
+
+This checkpoint carries 44 previously unported claims: 39 native or generic
+retypes and five pure contracts, plus eleven additions. The existing 24
+PrefixState claims are unchanged and are not counted again. Four generic
+projection rules use the lower observer's returned outer state in bind.
+SessionOrigin adds seven local composition helpers and carries all seventeen
+original names; receipt data stores actual WG and Ambient entry/exit witnesses.
+The generic front/tail constructors keep arbitrary target monads and callbacks.
+
+RoutingHistory threads the same outgoing Ambient into the next call.
+RoutingRetains preserves its arbitrary StateT action interface through the
+explicit ProjectedRetainsRoutingCall projection, beside the native alias.
+ConfigurationInputs records the actual guarded insertion cut and final Ambient;
+its initialization and rejection observations retain the original seven fields.
+All nine RxHelperFrames claims retain complete original helpers, queue identity,
+retention and successful-endpoint scope.
+
+Scoped builds, 157 explicit named axiom checks and five fresh entry-module
+replays passed, with full-source independent reviews. The axiom count includes
+21 unchanged pure declarations in FlatHistory and AddressBounds. Default-target
+and unit results carry from the preceding checkpoint because their source
+closure is unchanged. The complete proof gate remains pending.
+
+Session's first five development builds failed on dependent-match normalization,
+contract introduction, a missing Lean import, and the unchanged heartbeat limit;
+explicit source-order composition passed on the sixth. RoutingHistory,
+RoutingRetains and ConfigurationInputs each had one ordinary proof failure
+before their second build passed. RX helper builds failed on stale identifier
+rewrites, adapter/view normalization, the concurrent PrefixState failure, and
+loop-invariant typing before the fourth build passed.
+
+RoutingHistory's first axiom check and replay failed because a concurrent failed
+PrefixState build left its artifact absent. Each was rerun once after that
+dependency was repaired, and both passed; these are the recorded infrastructure
+reruns. An RX replay command incorrectly supplied a file path instead of a module
+name and failed before resolving the module. The corrected module invocation
+passed. Dirty-worktree recovery snapshots are under
+refs/snapshots/proof-campaign-checkpoint-driver-20261016T184251Z; branches and
+working files were preserved. No memory cap or proof limit changed.

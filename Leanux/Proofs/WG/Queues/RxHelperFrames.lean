@@ -14,13 +14,13 @@ open Leanux Leanux.WG Leanux.Proofs.Framing Leanux.Proofs.WG.Lifetimes Std.Do
 theorem getPeer_rxQueues (pid : PeerId) : SameView rxQueues (getPeer pid) := by
   apply SameView.of_wp
   intro s
-  mvcgen [getPeer, getDev, getK, invariant]
+  mvcgen [getPeer, getDev, invariant, AmbientM.invariant]
 
 theorem keypairGet_rxQueues (kp : Option KeypairId) : SameView rxQueues (keypairGet kp) := by
   apply SameView.of_wp
   intro s
-  mvcgen [keypairGet, getKeypair, getDev, getK, setKeypair, modifyDev, modifyK,
-    refcountIncNotZero, branch, branchCmp, invariant, unsupported]
+  mvcgen [keypairGet, getKeypair, getDev, setKeypair, modifyDev,
+    refcountIncNotZero, branch, branchCmp, AmbientM.branch, AmbientM.branchCmp, invariant, unsupported, AmbientM.invariant, AmbientM.unsupported]
   all_goals dsimp +zetaDelta only at *
   all_goals unfold rxQueues at *; simp_all only [Option.bind_some, Option.bind_map, Function.comp_def]
 
@@ -28,10 +28,19 @@ theorem keypairPut_rxQueues (kp : Option KeypairId) (now : Bool) :
     SameView rxQueues (keypairPut kp now) := by
   apply SameView.of_wp
   intro s
-  simp only [keypairPut, indexRemove_eq]
-  have hd := fun o k => sameKernel_wp _ (indexOwner_peerDeref_sameKernel o) (fun v => v = k)
-  mvcgen [hd, indexUnhash, getKeypair, getDev, getK, setKeypair, modifyDev, modifyK,
-    refcountDecAndTest, branch, branchCmp, invariant, unsupported]
+  have hd := fun o => indexOwner_peerDeref_preserves o (fun w => rxQueues w = s)
+  unfold Preserves Hoare at hd
+  have index_spec (a : IndexM Unit) :
+      Hoare (MonadLift.monadLift a : WG.M Unit)
+        (fun w => rxQueues w = s) (fun _ w => rxQueues w = s) := by
+    apply hoare_liftIndex a (fun w => rxQueues w = s)
+    intro w d table hi hw
+    unfold rxQueues at hi ⊢
+    simpa only [hw, Option.bind_some] using hi
+  unfold Hoare at index_spec
+  mvcgen [keypairPut, hd, index_spec, getKeypair, getDev, setKeypair, modifyDev,
+    refcountDecAndTest, branch, branchCmp, AmbientM.branch, AmbientM.branchCmp,
+    invariant, unsupported, AmbientM.invariant, AmbientM.unsupported]
   all_goals dsimp +zetaDelta only at *
   all_goals unfold rxQueues at *; simp_all [Option.bind_some, Option.bind_map, Function.comp_def]
   all_goals subst_vars
@@ -40,50 +49,59 @@ theorem keypairPut_rxQueues (kp : Option KeypairId) (now : Bool) :
 theorem freeRxSkb_rxQueues (id : SkbId) : SameView rxQueues (freeRxSkb id) := by
   apply SameView.of_wp
   intro s
-  mvcgen [freeRxSkb, getRxSkb, getDev, getK, modifyDev, modifyK, invariant]
-  all_goals dsimp +zetaDelta only at *
-  all_goals unfold rxQueues at *; simp_all only [Option.bind_some, Option.bind_map, Function.comp_def]
+  apply hoare_liftSkb (SkbStore.freeRx id) (fun w => rxQueues w = s)
+  intro w d packets hi hd
+  unfold rxQueues at hi ⊢
+  simpa only [hd, Option.bind_some] using hi
 
 theorem peerGet_rxQueues (pid : PeerId) : SameView rxQueues (peerGet pid) := by
   apply SameView.of_wp
   intro s
-  mvcgen [peerGet, requireNotPending, Peers.getPeer_spec, getDev, getK, setPeer,
-    modifyDev, modifyK, refcountInc, branch, branchCmp, invariant, unsupported]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals try obtain ⟨_, _, _, _⟩ := ‹_ ∧ ∃ _, _ ∧ _›
-  all_goals try simp_all only
-  all_goals try obtain ⟨_, _, _, _⟩ := ‹_ ∧ ∃ _, _ ∧ _›
-  all_goals try unfold rxQueues at *; simp_all only [Option.bind_some, Option.bind_map, Function.comp_def]
-  subst s
-  apply rxMap_insert_same <;> first | assumption | rfl
+  mvcgen [peerGet, requireNotPending, getPeer, getDev, setPeer,
+    modifyDev, refcountInc, branch, branchCmp, AmbientM.branch, AmbientM.branchCmp, invariant, unsupported, AmbientM.invariant, AmbientM.unsupported]
+  all_goals dsimp +zetaDelta only at *
+  all_goals unfold rxQueues at *
+  all_goals simp_all only [Option.bind_some, Option.bind_map, Function.comp_def]
+  all_goals subst s
+  all_goals apply rxMap_insert_same <;> first | assumption | rfl
 
 theorem peerGetMaybeZero_rxQueues (pid : Option PeerId) :
     SameView rxQueues (peerGetMaybeZero pid) := by
   apply SameView.of_wp
   intro s
-  mvcgen [peerGetMaybeZero, requireNotPending, Peers.getPeer_spec, getDev, getK,
-    setPeer, modifyDev, modifyK, refcountIncNotZero, branch, branchCmp, invariant, unsupported]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals try solve | unfold rxQueues at *; simp_all only [Option.bind_map, Function.comp_def]
-  all_goals try obtain ⟨_, _, _, _⟩ := ‹_ ∧ ∃ _, _ ∧ _›
-  all_goals try simp_all only
-  all_goals try obtain ⟨_, _, _, _⟩ := ‹_ ∧ ∃ _, _ ∧ _›
-  all_goals try unfold rxQueues at *; simp_all only [Option.bind_some, Option.bind_map, Function.comp_def]
+  mvcgen [peerGetMaybeZero, requireNotPending, getPeer, getDev,
+    setPeer, modifyDev, refcountIncNotZero, branch, branchCmp, AmbientM.branch, AmbientM.branchCmp,
+    invariant, unsupported, AmbientM.invariant, AmbientM.unsupported]
+  all_goals dsimp +zetaDelta only at *
+  all_goals unfold rxQueues at *
+  all_goals simp_all only [Option.bind_some, Option.bind_map, Function.comp_def]
   all_goals subst s
   all_goals apply rxMap_insert_same <;> first | assumption | rfl
 
 theorem peerPut_rxQueues (pid : Option PeerId) : RetainsRx (peerPut pid) := by
   apply ProjectedAction.of_wp
   intro s
-  simp only [peerPut, indexRemove_eq]
-  mvcgen [indexUnhash, requireNotPending, Peers.getPeer_spec, getDev, getK, setPeer,
-    modifyDev, modifyK, refcountDecAndTest, retirePeerUnits,
-    branch, branchCmp, invariant, unsupported]
+  have index_spec (a : IndexM Unit) :
+      Hoare (MonadLift.monadLift a : WG.M Unit)
+        (fun w => ResidentsRetained s (rxQueues w))
+        (fun _ w => ResidentsRetained s (rxQueues w)) := by
+    apply hoare_liftIndex a
+    intro w d table hi hd
+    unfold rxQueues at hi ⊢
+    simpa only [hd, Option.bind_some] using hi
+  unfold Hoare at index_spec
+  have erase_retains (ds : Option Device) (pid : PeerId) :
+      ResidentsRetained (fun i => ds.bind fun d => rxMap d.ifindex d.peers i)
+        (fun i => ds.bind fun d => rxMap d.ifindex (d.peers.erase pid) i) := by
+    cases ds with
+    | none => exact rx_retained_refl _
+    | some d => exact rxMap_erase d.ifindex d.peers pid
+  mvcgen [peerPut, index_spec, requireNotPending, getPeer, getDev, setPeer,
+    modifyDev, refcountDecAndTest, retirePeerUnits, modifyAmbient,
+    branch, branchCmp, AmbientM.branch, AmbientM.branchCmp,
+    invariant, unsupported, AmbientM.invariant, AmbientM.unsupported]
   all_goals try dsimp +zetaDelta only at *
   all_goals try solve | unfold rxQueues at *; simp_all only [Option.bind_map, Function.comp_def]; exact rx_retained_refl _
-  all_goals try obtain ⟨_, _, _, _⟩ := ‹_ ∧ ∃ _, _ ∧ _›
-  all_goals try simp_all only
-  all_goals try obtain ⟨_, _, _, _⟩ := ‹_ ∧ ∃ _, _ ∧ _›
   all_goals try unfold rxQueues at *; simp_all only [Option.bind_some, Option.bind_map, Function.comp_def]
   all_goals try subst s
   all_goals try simp_all [Option.bind_map, Function.comp_def]
@@ -91,15 +109,16 @@ theorem peerPut_rxQueues (pid : Option PeerId) : RetainsRx (peerPut pid) := by
   all_goals first
     | exact rx_retained_refl _
     | exact rxMap_insert_erase _ _ _ _
+    | exact rx_retained_trans (by assumption) (erase_retains _ _)
     | (apply rxMap_insert_retained <;> first | assumption | rfl)
 
 theorem counterValidate_rxQueues (kp : KeypairId) (nonce : Nat) :
     SameView rxQueues (counterValidate kp nonce) := by
   apply SameView.of_wp
   intro s
-  mvcgen [counterValidate, getKeypair, getDev, getK, setKeypair, modifyDev, modifyK,
-    branch, branchCmp, WG.orM, invariant]
-  all_goals try exact ((⇓? _ w => ⌜rxQueues w = s⌝) : PostCond _ (.arg World (.except Stop .pure)))
+  mvcgen [counterValidate, getKeypair, getDev, setKeypair, modifyDev,
+    branch, branchCmp, AmbientM.branch, AmbientM.branchCmp, WG.orM, invariant, AmbientM.invariant]
+  all_goals try exact ((⇓? _ w => ⌜rxQueues w = s⌝) : PostCond _ (.arg WGWorld (.arg Ambient (.except Stop .pure))))
   all_goals try dsimp +zetaDelta only at *
   all_goals try unfold rxQueues at *; simp_all only [Option.bind_some, Option.bind_map, Function.comp_def]
 
@@ -124,6 +143,6 @@ theorem receivedWithKeypair_rxQueues (pid : PeerId) (kp : KeypairId) :
       (pinned_const _private.Leanux.WG.Keypair.«0».Leanux.WG.modifyPeer) pid
         (fun p => {p with keypairCurrent := some kp, keypairNext := none})
       ⦃⇓? _ w => ⌜rxQueues w = s⌝⦄ := hm2
-  mvcgen [receivedWithKeypair, hg, hk, hp1, hp2, branch, invariant]
+  mvcgen [receivedWithKeypair, hg, hk, hp1, hp2, branch, AmbientM.branch, invariant, AmbientM.invariant]
 
 end Leanux.Proofs.WG.Queues

@@ -1,4 +1,5 @@
 import Leanux.Proofs.Logged.FocusComposition
+import Leanux.Proofs.Logged.ProjectsUnder
 
 /-! Observation contracts for an actual outer StateT over a prefix observer.
 Both native states and the reached journal pass continuously through bind. -/
@@ -206,5 +207,51 @@ theorem StatePrefixEnsures.focus (encode : E → F) (decode : F → Option E)
 theorem StateAppends.focus (encode : E → F) (decode : F → Option E)
     (g : StatePrefixT E Outer Inner α) : StateAppends (focusStatePrefix encode decode g) :=
   fun s => Appends.focus encode decode (g.run s)
+
+/-- Projection under an invariant over the two actual state components. -/
+def StateProjectsUnder (I : List F → Outer → Inner → Prop) (ρ : E → Option F)
+    (g : StatePrefixT E Outer Inner α) (a : StatePrefixT F Outer Inner α) : Prop :=
+  ∀ s t h, I (h.filterMap ρ) s t →
+    runStatePrefix a s t (h.filterMap ρ) =
+      ((runStatePrefix g s t h).1, (runStatePrefix g s t h).2.filterMap ρ)
+
+theorem stateProjectsUnder_pure {I : List F → Outer → Inner → Prop}
+    (ρ : E → Option F) (x : α) :
+    StateProjectsUnder I ρ (pure x) (pure x) := by intro s t h _; rfl
+
+theorem stateProjectsUnder_lift {I : List F → Outer → Inner → Prop}
+    (ρ : E → Option F) (a : StateT Outer (StateT Inner (Except Stop)) α) :
+    StateProjectsUnder I ρ (liftStatePrefix a) (liftStatePrefix a) := by
+  intro s t h _; rfl
+
+theorem stateProjectsUnder_bind {I : List F → Outer → Inner → Prop} {S : List F → Prop}
+    {ρ : E → Option F} {g : StatePrefixT E Outer Inner α}
+    {a : StatePrefixT F Outer Inner α} {f : α → StatePrefixT E Outer Inner β}
+    {b : α → StatePrefixT F Outer Inner β}
+    (hg : StateProjectsUnder I ρ g a) (ha : StatePrefixPreserves I S a)
+    (hf : ∀ x, StateProjectsUnder I ρ (f x) (b x)) :
+    StateProjectsUnder I ρ (g >>= f) (a >>= b) := by
+  intro s t h hi
+  have he := hg s t h hi
+  obtain ⟨suffix, _, _, hp⟩ := ha s t (h.filterMap ρ) hi
+  have he' : runPrefix (a.run s) t (h.filterMap ρ) =
+      ((runStatePrefix g s t h).1, (runStatePrefix g s t h).2.filterMap ρ) := he
+  rw [he'] at hp
+  rw [runStatePrefix_bind, runStatePrefix_bind, he]
+  cases hr : runStatePrefix g s t h with
+  | mk result hist =>
+    cases result with
+    | error e => rfl
+    | ok out =>
+      rcases out with ⟨⟨x, s'⟩, t'⟩
+      exact hf x s' t' hist (by simpa only [hr] using hp)
+
+theorem stateProjectsUnder_focus {I : List E → Outer → Inner → Prop} {S : List E → Prop}
+    (encode : E → F) (decode : F → Option E) (hd : ∀ e, decode (encode e) = some e)
+    {a : StatePrefixT E Outer Inner α} (ha : StatePrefixPreserves I S a) :
+    StateProjectsUnder I decode (focusStatePrefix encode decode a) a := by
+  intro s
+  exact projectsUnder_focus encode decode hd
+    (fun t h hi => let ⟨suffix, hs, _, _⟩ := ha s t h hi; ⟨suffix, hs⟩)
 
 end Leanux.Proofs.Logged

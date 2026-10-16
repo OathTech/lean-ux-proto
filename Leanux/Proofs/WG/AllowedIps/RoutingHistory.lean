@@ -6,7 +6,7 @@ import Leanux.Proofs.WG.AllowedIps.ClearEndpoint
 actual return values and reached-input bounds/residency, never output invariants
 or agreement. This is not a Netlink, parser or enclosing Runner theorem. -/
 namespace Leanux.Proofs.WG.AllowedIps
-open Leanux
+open Leanux Leanux.Proofs.Framing
 set_option maxHeartbeats 1200000
 set_option pp.structureInstances false
 
@@ -31,53 +31,62 @@ def RoutingCall.flat (c : RoutingCall) (xs : FlatTable × FlatTable) : FlatTable
 def flatHistory (calls : List RoutingCall) (xs : FlatTable × FlatTable) : FlatTable × FlatTable :=
   calls.foldl (fun tables c => c.flat tables) xs
 
-inductive RoutingStep : World → RoutingCall → World → Prop where
-  | create (hr : (WG.peerCreate key psk).run w = .ok (result, v)) :
-      RoutingStep w (.create key psk result) v
+/-- Each edge retains both native execution endpoints. The ambient state is
+threaded across edges, rather than chosen independently at each call. -/
+inductive RoutingStep : WGWorld → Ambient → RoutingCall → WGWorld → Ambient → Prop where
+  | create (hr : ((WG.peerCreate key psk).run w).run ambient = .ok ((result, v), ambient')) :
+      RoutingStep w ambient (.create key psk result) v ambient'
   | insert (ha : addr < 2 ^ rootWidth v4) (hc : cidr ≤ rootWidth v4)
-      (resident : ∃ d p, w.k.wg = some d ∧ d.peers[pid]? = some p)
-      (hr : (WG.insert (if v4 then 4 else 6) addr cidr pid).run w = .ok (result, v)) :
-      RoutingStep w (.insert v4 addr cidr pid result) v
-  | remove (hr : (WG.removeByPeer pid).run w = .ok ((), v)) :
-      RoutingStep w (.remove pid) v
-  | put (hr : (WG.peerPut peer).run w = .ok ((), v)) :
-      RoutingStep w (.put peer) v
-  | clear (hr : WG.free.run w = .ok ((), v)) : RoutingStep w .clear v
+      (resident : ∃ d p, w.dev = some d ∧ d.peers[pid]? = some p)
+      (hr : ((WG.insert (if v4 then 4 else 6) addr cidr pid).run w).run ambient = .ok ((result, v), ambient')) :
+      RoutingStep w ambient (.insert v4 addr cidr pid result) v ambient'
+  | remove (hr : ((WG.removeByPeer pid).run w).run ambient = .ok (((), v), ambient')) :
+      RoutingStep w ambient (.remove pid) v ambient'
+  | put (hr : ((WG.peerPut peer).run w).run ambient = .ok (((), v), ambient')) :
+      RoutingStep w ambient (.put peer) v ambient'
+  | clear (hr : (WG.free.run w).run ambient = .ok (((), v), ambient')) :
+      RoutingStep w ambient .clear v ambient'
 
-inductive RoutingHistory : World → List RoutingCall → World → Prop where
-  | nil : RoutingHistory w [] w
-  | cons (step : RoutingStep w c u) (tail : RoutingHistory u cs v) : RoutingHistory w (c :: cs) v
+inductive RoutingHistory : WGWorld → Ambient → List RoutingCall → WGWorld → Ambient → Prop where
+  | nil : RoutingHistory w ambient [] w ambient
+  | cons (step : RoutingStep w ambient c u middleAmbient)
+      (tail : RoutingHistory u middleAmbient cs v finalAmbient) :
+      RoutingHistory w ambient (c :: cs) v finalAmbient
 
-theorem removeByPeer_input_resident (w v : World) (d : WG.Device) (pid : Nat)
-    (hd : w.k.wg = some d) (hr : (WG.removeByPeer pid).run w = .ok ((), v)) :
+theorem removeByPeer_input_resident (w v : WGWorld) (ambient ambient' : Ambient) (d : WG.Device) (pid : Nat)
+    (hd : w.dev = some d) (hr : ((WG.removeByPeer pid).run w).run ambient = .ok (((), v), ambient')) :
     ∃ p, d.peers[pid]? = some p := by
   cases hp : d.peers[pid]? with
-  | none => simp [WG.removeByPeer, WG.getPeer, WG.getDev, getK, hd, hp, invariant] at hr
+  | none =>
+    simp [WG.removeByPeer, WG.getPeer, WG.getDev, hd, hp, invariant, AmbientM.invariant] at hr
+    change (Except.error (.invariant s!"dangling peer {pid}") :
+      Except Stop ((Unit × WGWorld) × Ambient)) = .ok (((), v), ambient') at hr
+    cases hr
   | some p => exact ⟨p, rfl⟩
 
-theorem RoutingStep.refines (hs : RoutingStep w c v) (hd : w.k.wg = some d)
+theorem RoutingStep.refines (hs : RoutingStep w ambient c v ambient') (hd : w.dev = some d)
     (hi : RoutingInvariant d t4 t6) (he4 : FlatAgree 32 t4 xs.1) (he6 : FlatAgree 128 t6 xs.2) :
-    ∃ out u4 u6, v.k.wg = some out ∧ RoutingInvariant out u4 u6 ∧
+    ∃ out u4 u6, v.dev = some out ∧ RoutingInvariant out u4 u6 ∧
       FlatAgree 32 u4 (c.flat xs).1 ∧ FlatAgree 128 u6 (c.flat xs).2 := by
   cases hs with
   | create hr =>
-    obtain ⟨out, hout, hinv⟩ := peerCreate_routing_preserved _ _ d hd hi _ _ _ hr
+    obtain ⟨out, hout, hinv⟩ := peerCreate_routing_preserved _ _ _ _ d hd hi _ _ _ hr
     exact ⟨out, t4, t6, hout, hinv, he4, he6⟩
   | put hr =>
-    obtain ⟨out, hout, hinv⟩ := peerPut_routing_preserved _ _ d hd hi _ hr
+    obtain ⟨out, hout, hinv⟩ := peerPut_routing_preserved _ _ _ _ d hd hi _ hr
     exact ⟨out, t4, t6, hout, hinv, he4, he6⟩
   | clear hr =>
-    obtain ⟨out, hout, hc⟩ := free_endpoint _ _ d hd t4 t6 hi hr
-    exact ⟨out, .empty, .empty, by rw [hout], Cleared.routing hi hc,
+    obtain ⟨out, hout, hc⟩ := free_endpoint _ _ _ _ d hd t4 t6 hi hr
+    exact ⟨out, .empty, .empty, congrArg WGStoreView.dev hout, Cleared.routing hi hc,
       flatAgree_empty 32, flatAgree_empty 128⟩
-  | @insert addr v4 cidr pid w result v ha hc resident hr =>
+  | @insert addr v4 cidr pid w ambient result v ambient' ha hc resident hr =>
     obtain ⟨old, p, hold, hp⟩ := resident
     rw [hd] at hold
     cases hold
     have hb : ((if v4 then 4 else 6 : Nat) == 4) = v4 := by cases v4 <;> rfl
-    obtain ⟨out, hout, ho⟩ := insert_routing_outcome w v d hd (if v4 then 4 else 6)
+    obtain ⟨out, hout, ho⟩ := insert_routing_outcome w v ambient ambient' d hd (if v4 then 4 else 6)
       addr cidr pid p hp t4 t6 hi (by simpa only [hb] using ha) (by simpa only [hb] using hc) result hr
-    have hdev : v.k.wg = some out := by rw [hout]
+    have hdev : v.dev = some out := by rw [hout]
     rcases ho.result with ⟨hresult, _, hinv⟩ | ⟨hresult, hf⟩
     · subst result
       rw [hb] at hinv
@@ -90,9 +99,9 @@ theorem RoutingStep.refines (hs : RoutingStep w c v) (hd : w.k.wg = some d)
       refine ⟨out, t4, t6, hdev, hf.invariant, ?_, ?_⟩
       · simpa [RoutingCall.flat, ENOMEM] using he4
       · simpa [RoutingCall.flat, ENOMEM] using he6
-  | @remove pid w v hr =>
-    obtain ⟨p, hp⟩ := removeByPeer_input_resident w v d pid hd hr
-    obtain ⟨out, hout, hm⟩ := removeByPeer_endpoint w v d hd pid p hp t4 t6 hi.forest
+  | @remove pid w ambient v ambient' hr =>
+    obtain ⟨p, hp⟩ := removeByPeer_input_resident w v ambient ambient' d pid hd hr
+    obtain ⟨out, hout, hm⟩ := removeByPeer_endpoint w v ambient ambient' d hd pid p hp t4 t6 hi.forest
       hi.nodup4 hi.nodup6 hi.compressed4 hi.compressed6 hi.lists hr
     refine ⟨out, t4.eraseIds p.allowedipsList, t6.eraseIds p.allowedipsList,
       ?_, hi.removed hm, ?_, ?_⟩
@@ -100,9 +109,9 @@ theorem RoutingStep.refines (hs : RoutingStep w c v) (hd : w.k.wg = some d)
     · exact he4.remove (resident_eraseIds_entries hi.forest hi.lists hp true)
     · exact he6.remove (resident_eraseIds_entries hi.forest hi.lists hp false)
 
-theorem RoutingHistory.refines (history : RoutingHistory w calls v) (hd : w.k.wg = some d)
+theorem RoutingHistory.refines (history : RoutingHistory w ambient calls v finalAmbient) (hd : w.dev = some d)
     (hi : RoutingInvariant d t4 t6) (he4 : FlatAgree 32 t4 xs.1) (he6 : FlatAgree 128 t6 xs.2) :
-    ∃ out u4 u6, v.k.wg = some out ∧ RoutingInvariant out u4 u6 ∧
+    ∃ out u4 u6, v.dev = some out ∧ RoutingInvariant out u4 u6 ∧
       FlatAgree 32 u4 (flatHistory calls xs).1 ∧ FlatAgree 128 u6 (flatHistory calls xs).2 := by
   induction history generalizing d t4 t6 xs with
   | nil => exact ⟨d, t4, t6, hd, hi, he4, he6⟩
@@ -110,16 +119,17 @@ theorem RoutingHistory.refines (history : RoutingHistory w calls v) (hd : w.k.wg
     obtain ⟨out, u4, u6, hout, hinv, he4', he6'⟩ := step.refines hd hi he4 he6
     exact ih hout hinv he4' he6'
 
-/-- Histories begin in the actual configured fixture. No representation or
-coherence hypothesis is supplied at the end or at an intermediate step. -/
-theorem RoutingHistory.initialized (history : RoutingHistory w calls v)
-    (hstart : w.k = Runner.initialKernel rlimit true false foreign stepped seccompChild) :
-    ∃ out t4 t6, v.k.wg = some out ∧ RoutingInvariant out t4 t6 ∧
+/-- Histories begin with the actual configured fixture's original seven-field
+WG store observation. Scheduling metadata and Ambient remain unrestricted; no
+representation or coherence hypothesis is supplied at an intermediate step. -/
+theorem RoutingHistory.initialized (history : RoutingHistory w ambient calls v finalAmbient)
+    (hstart : wgStoreView w = wgStoreView (Runner.initialWG true false)) :
+    ∃ out t4 t6, v.dev = some out ∧ RoutingInvariant out t4 t6 ∧
       FlatAgree 32 t4 (flatHistory calls ([], [])).1 ∧
       FlatAgree 128 t6 (flatHistory calls ([], [])).2 := by
-  obtain ⟨d, hd, hi⟩ := initialKernel_routing rlimit foreign stepped seccompChild
-  rw [← hstart] at hd
-  exact history.refines hd hi (flatAgree_empty 32) (flatAgree_empty 128)
+  obtain ⟨d, hd, hi⟩ := initialWG_routing
+  have hdev : w.dev = some d := (congrArg WGStoreView.dev hstart).trans hd
+  exact history.refines hdev hi (flatAgree_empty 32) (flatAgree_empty 128)
 
 def selectedFlat (v4 : Bool) (xs : FlatTable × FlatTable) : FlatTable :=
   if v4 then xs.1 else xs.2
@@ -127,12 +137,13 @@ def selectedFlat (v4 : Bool) (xs : FlatTable × FlatTable) : FlatTable :=
 /-- Original node lookup at the reached family root returns a flat-history
 longest-prefix winner. A returned node's raw owner is identified in the actual
 store; this does not assert that this raw peer label is still resident. -/
-theorem RoutingHistory.findNode (history : RoutingHistory w calls v)
-    (hstart : w.k = Runner.initialKernel rlimit true false foreign stepped seccompChild)
+theorem RoutingHistory.findNode (history : RoutingHistory w ambient calls v finalAmbient)
+    (hstart : wgStoreView w = wgStoreView (Runner.initialWG true false))
     (v4 : Bool) (key : Nat) (hk : key < 2 ^ rootWidth v4) :
-    ∃ (d : WG.Device) (answer : Option Entry) (finish : World), v.k.wg = some d ∧
-      (WG.findNode (rootValue d v4) (rootWidth v4) key).run v =
-        .ok (answer.map Entry.id, finish) ∧ finish.k = v.k ∧
+    ∃ (d : WG.Device) (answer : Option Entry) (finish : WGWorld) (finishAmbient : Ambient),
+      v.dev = some d ∧
+      ((WG.liftAip (WG.findNode (rootValue d v4) (rootWidth v4) key)).run v).run finalAmbient =
+        .ok ((answer.map Entry.id, finish), finishAmbient) ∧ wgStoreView finish = wgStoreView v ∧
       FlatWinner (rootWidth v4) key (selectedFlat v4 (flatHistory calls ([], [])))
         (answer.map (canonical (rootWidth v4))) ∧
       ∀ e ∈ answer, ∃ n, d.nodes[e.id]? = some n ∧ n.peer = some e.peer := by
@@ -143,11 +154,18 @@ theorem RoutingHistory.findNode (history : RoutingHistory w calls v)
     cases v4
     · exact he6
     · exact he4
-  obtain ⟨finish, hrun, hframe⟩ := findNode_run v d (rootWidth v4) key hw hk hd t (rootSlot v4)
-    (hi.selected_rep v4) (hi.selected_valid v4)
-  refine ⟨d, t.lookup (rootWidth v4) key, finish, hd, ?_, hframe,
+  let entry : WG.AipStore := {nodes := d.nodes, nextNode := d.nextNode, trie := d.peerAllowedips}
+  obtain ⟨finish, finishAmbient, hrun, hframe⟩ := findNode_run entry finalAmbient
+    (rootWidth v4) key hw hk t (rootSlot v4) (hi.selected_rep v4) (hi.selected_valid v4)
+  subst finish
+  dsimp only [entry, t] at hrun
+  refine ⟨d, t.lookup (rootWidth v4) key, v, finishAmbient, hd, ?_, rfl,
     he.winner (Tree.lookup_spec (hi.selected_valid v4) key), ?_⟩
-  · simpa only [hi.selected_root v4, Tree.lookupId] using hrun
+  · rw [liftAip_run, hd]
+    simp only [hi.selected_root v4, hrun, Except.map, Tree.lookupId]
+    change Except.ok ((_, {v with dev := some d}), finishAmbient) =
+      Except.ok ((_, v), finishAmbient)
+    rw [← hd]
   · intro e hem
     have hwinner := Tree.lookup_spec (hi.selected_valid v4) key
     change t.lookup (rootWidth v4) key = some e at hem
