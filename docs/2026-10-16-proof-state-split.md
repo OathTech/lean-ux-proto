@@ -122,8 +122,12 @@ it is not part of that baseline.
 | Native packet routing cuts and generic helper contracts | 22 | 19 | 0 | 3 | 2 | 24 |
 | Native handshake RX-cell frames and retained product cookie transport | 23 | 20 | 2 | 1 | 2 | 23 |
 
-The whole tree currently contains 451 Lean files and 6,442 theorems. The completed
-changes total 2,160 retyped theorems, 1,662 deletions, 1,086 retained contract shapes and 389 added.
+| Product traffic/ring scheduling and deferred-worker audit | 40 | 0 | 0 | 40 | 3 | 43 |
+| Native ingress/configuration with retained product invariant contracts | 15 | 9 | 0 | 6 | 6 | 21 |
+| Native peer-removal routing completion | 8 | 8 | 0 | 0 | 0 | 8 |
+
+The whole tree currently contains 451 Lean files and 6,451 theorems. The completed
+changes total 2,177 retyped theorems, 1,662 deletions, 1,132 retained contract shapes and 398 added.
 Retyping changes or generalizes the actual state/monad carrier or observation.
 This includes shorthand contracts whose source functions or named views move
 to a native monad. Mere namespace qualification and equivalent relocation of a
@@ -3082,3 +3086,77 @@ cap scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Origins.Hand
 cap scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Packets.RoutingCuts
 cap scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Queues.RxRingHandshake
 ```
+
+
+## Traffic scheduling, deferred workers and configuration leaves
+
+Six modules carry 63 theorems to 72: seventeen native retypes, 46 retained
+product contracts, nine additions and no deletions. This census includes all
+seventeen RxRingScheduler theorems; an intermediate handback counted sixteen.
+Ingress and configuration retain the original arbitrary product invariants
+alongside native counterparts. Traffic routing retains the original seven-field
+premise for arbitrary product actions, and the arbitrary worker callbacks.
+Deferred-worker observers preserve exact section records, saved-peer accesses,
+returned WG/Ambient endpoints and queue updates.
+
+PeerRemovalCompletion's observer omitted the actual pubkeyRemoveHashed
+decision between AllowedIPs removal and the peer-hash update. The corrected
+observer includes the getter and decision. A kernel-checked counterexample
+starts with resident peer 0, internal ID 7, and empty AllowedIPs/hash lists:
+both old and actual actions normally mark the peer dead, but the old copy
+emits zero pubkeyRemoveHashed decisions and peerMakeDead emits one. This is
+proof-observer drift. The following capped Lean probe reproduces the two
+different normal outcomes; it is not an initialized-runtime claim.
+
+All 101 named declarations have standard-only axioms, six scoped fresh kernel
+replays pass, and independent complete source reviews pass. Final builds pass:
+routing traffic322, ring scheduler231, receive ingress179, configuration186,
+peer-removal completion256 and deferred workers199 jobs. Twelve MVCGen
+deprecations remain unfinished; the other four modules are warning-free.
+Changed-source build ledgers: traffic two failures then pass; scheduler two
+failures then pass; ingress/configuration pass first time; peer removal two
+failures then two passes (last removes warnings); deferred workers four
+failures then two passes (last removes warnings). No infrastructure rerun,
+crash, cancellation or limit increase occurred. Rejected patch/driver syntax
+did not mutate source. A new full-target diagnostic failed at five frontiers:
+RxDispositionReceipts, ConfigurationPeer, DumpAccess, EnvTimersAudit and
+PeerUpdateCompletion. Recovery metavariable errors are rejected failures.
+The full proof gate and terminal replay remain pending; all rows stay lagging.
+The executable closure is unchanged, so its prior model/unit passes stand.
+
+~~~sh
+cap() { if command -v capped >/dev/null 2>&1; then capped "$@"; else "$@"; fi; }
+cap scripts/in-bundle lake build Leanux.Proofs.WG.AllowedIps.RoutingEnvTrafficFrames Leanux.Proofs.WG.Queues.RxRingScheduler Leanux.Proofs.WG.Lifetimes.ReceiveIngress Leanux.Proofs.WG.Lifetimes.ConfigurationLeaves Leanux.Proofs.WG.Configuration.PeerRemovalCompletion Leanux.Proofs.WG.Lifetimes.EnvWorkersAudit
+~~~
+
+For each named module, the scoped replay command is
+'cap scripts/in-bundle lake env leanchecker --fresh MODULE'.
+Run the following text with 'cap scripts/in-bundle lake env lean --stdin':
+
+~~~lean
+import Leanux.WG.Peer
+open Leanux Leanux.WG
+namespace RemovalDecisionWitness
+def obsolete (pid : PeerId) : WG.M Unit := do
+  modifyDev fun d => {d with peerList := d.peerList.filter (· != pid)}
+  removeByPeer pid
+  modifyDev fun d => {d with peerHashtable := d.peerHashtable.filter (·.2 != pid)}
+  let p ← getPeer pid
+  setPeer pid {p with isDead := true}
+def peer : Peer := {
+  remoteStatic := [], presharedKey := [], precomputedStaticStatic := [], internalId := 7 }
+def initial : WGWorld := {
+  dev := some {ifindex := 3, ifname := "wg0",
+    peers := ({} : Std.TreeMap PeerId Peer).insert 0 peer} }
+def ambient : Ambient := {env := fun _ _ => false, timing := ⟨0, 0⟩}
+def observe (a : WG.M Unit) : Option (Nat × Bool) :=
+  match (a.run initial).run ambient with
+  | .error _ => none
+  | .ok ((_, w), rest) => (w.dev.bind fun d => d.peers[0]?).map fun p =>
+      ((rest.steps.toList.filter fun s => s.decision == .pubkeyRemoveHashed).length, p.isDead)
+theorem obsolete_result : observe (obsolete 0) = some (0, true) := by decide +kernel
+theorem actual_result : observe (peerMakeDead 0) = some (1, true) := by decide +kernel
+#print axioms obsolete_result
+#print axioms actual_result
+end RemovalDecisionWitness
+~~~

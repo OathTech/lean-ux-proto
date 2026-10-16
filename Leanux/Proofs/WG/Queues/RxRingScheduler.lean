@@ -11,26 +11,35 @@ namespace Leanux.Proofs.WG.Queues.RxRing
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing Std.Do
 
 theorem receiveIter_cell : SameView cell
-    (workerIter .receiveWorker none receiveStep (Env.condResched .receiveWorker)) := by
+    (workerIter .receiveWorker none (MonadLift.monadLift receiveStep) (Env.condResched .receiveWorker)) := by
   apply SameView.of_wp
   intro s
-  have hr := receiveStep_cell.wp (fun t => t = s)
-  have hc := (kernel (condResched_sameKernel .receiveWorker)).wp (fun t => t = s)
+  have hr := (sameView_liftWG cell nativeCell receiveStep receiveStep_cell
+    (fun _ _ _ h => h)).wp (fun t => t = s)
+  have hc := ((condResched_sameKernel .receiveWorker).of_factor
+    (fun store : ProductStore43 => store.2.2.2.dev.map fun d => (d.ifindex, d.decryptQueue)) cell (fun _ => rfl)).wp (fun t => t = s)
   mvcgen [workerIter, hr, hc]
 
 /-- The original non-decrypt activation includes cryptAhead's actual encrypt
 iteration before TX. A malformed activation still executes its original Stop. -/
 theorem otherIter_cell (a : Activation) (h : a.worker ≠ .decryptWorker) :
     SameView cell (Env.Activation.iter a) := by
-  unfold Env.Activation.iter
-  cases hw : a.worker <;> simp only [hw]
-  all_goals try exact actualEncryptIter_cell
-  all_goals try exact receiveIter_cell
-  all_goals try exact invariant_frame _
-  · split
-    · exact (cryptAhead_cell _).bind (fun _ => txIter_cell _ _ (kernel (condResched_sameKernel _)))
-    · exact invariant_frame _
-  · exact False.elim (h hw)
+  apply SameView.of_wp
+  intro initial
+  have he := actualEncryptIter_cell.wp (fun t => t = initial)
+  have hr := receiveIter_cell.wp (fun t => t = initial)
+  have ht := fun pid => (txIter_cell pid (Env.condResched .txWorker)
+    ((condResched_sameKernel .txWorker).of_factor
+      (fun store : ProductStore43 => store.2.2.2.dev.map fun d => (d.ifindex, d.decryptQueue))
+      cell (fun _ => rfl))).wp (fun t => t = initial)
+  have hc := fun pid => (cryptAhead_cell pid).wp (fun t => t = initial)
+  have ambient {α : Type} (b : AmbientM α) :
+      Hoare (MonadLift.monadLift b : Leanux.M α)
+        (fun w => cell w = initial) (fun _ w => cell w = initial) :=
+    productAmbient_spec b _ (fun _ _ hi => hi)
+  unfold Hoare at ambient
+  mvcgen [-Std.Do.Spec.monadLift_StateT, Env.Activation.iter, he, hr, ht, hc, invariant, ambient]
+  all_goals simp_all
 
 def activationIter (a : Activation) : Obs IterResult :=
   if a.worker = .decryptWorker then
@@ -76,17 +85,20 @@ theorem nestedResched_erases (self : Worker) : ErasesPrefix (nestedResched self)
   · exact schedule_erases _
   · exact erasesPrefix_pure _
 
-theorem inv_kernel (h : v.k = w.k) (hi : Inv deviceIndex initial hist w) :
+theorem inv_kernel (h : productStoreView v = productStoreView w) (hi : Inv deviceIndex initial hist w) :
     Inv deviceIndex initial hist v := by
   obtain ⟨r, hj, hc⟩ := hi
-  exact ⟨r, hj, by simpa [cell, h] using hc⟩
+  have hd := congrArg (fun store : ProductStore43 => store.2.2.2.dev) h
+  change v.wg.dev = w.wg.dev at hd
+  exact ⟨r, hj, by simpa only [cell, hd] using hc⟩
 
 theorem activationIter_preserves (a : Activation) :
     PrefixPreserves (Inv deviceIndex initial) (Safe initial) (activationIter a) := by
   unfold activationIter
   split
   · exact iter_preserves (lift_frame napiSoftirq_cell) (lift_frame napiIrqExit_cell)
-      (lift_frame (kernel (condResched_sameKernel _)))
+      (lift_frame ((condResched_sameKernel _).of_factor
+        (fun store : ProductStore43 => store.2.2.2.dev.map fun d => (d.ifindex, d.decryptQueue)) cell (fun _ => rfl)))
   · exact lift_frame (otherIter_cell a (by assumption))
 
 theorem activationRun_preserves (a : Activation) :
@@ -96,8 +108,8 @@ theorem activationRun_preserves (a : Activation) :
 
 theorem txWorkErase_preserves (pid : PeerId) :
     PrefixPreserves (Inv deviceIndex initial) (Safe initial)
-      (liftPrefix (modifyDev fun d => {d with txWorkQueue := d.txWorkQueue.erase pid})) :=
-  lift_frame (modifyDev_cell _ (fun _ => rfl) (fun _ => rfl))
+      (liftPrefix (liftWG (modifyDev fun d => {d with txWorkQueue := d.txWorkQueue.erase pid}))) :=
+  lift_native_frame (modifyDev_cell _ (fun _ => rfl) (fun _ => rfl))
 
 theorem dispatch_preserves (worker : Worker) :
     PrefixPreserves (Inv deviceIndex initial) (Safe initial) (dispatch worker) :=
@@ -112,7 +124,8 @@ theorem schedule_preserves (stack : Option Worker) :
 theorem nestedResched_preserves (self : Worker) :
     PrefixPreserves (Inv deviceIndex initial) (Safe initial) (nestedResched self) := by
   unfold nestedResched
-  apply PrefixPreserves.bind (lift_frame (kernel (condResched_sameKernel self)))
+  apply PrefixPreserves.bind (lift_frame ((condResched_sameKernel self).of_factor
+    (fun store : ProductStore43 => store.2.2.2.dev.map fun d => (d.ifindex, d.decryptQueue)) cell (fun _ => rfl)))
   intro b
   split
   · exact schedule_preserves _
@@ -136,8 +149,8 @@ def SchedulerCall.observe : SchedulerCall α → Obs α
   | .schedule stack => RxRing.schedule stack
   | .nested self => nestedResched self
 
-def SchedulerCall.original : SchedulerCall α → M α
-  | .consume msg src ds => consumeData msg src ds
+def SchedulerCall.original : SchedulerCall α → Leanux.M α
+  | .consume msg src ds => liftWG (consumeData msg src ds)
   | .iteration a => Env.Activation.iter a
   | .run a => Env.Activation.run a
   | .dispatch w => Env.dispatch w

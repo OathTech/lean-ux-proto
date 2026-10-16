@@ -11,156 +11,266 @@ open Leanux Leanux.WG Leanux.Proofs.Framing Leanux.Proofs.WG.Lifetimes Std.Do
 set_option maxHeartbeats 1000000
 set_option pp.structureInstances false
 
-theorem wgKernel_routing (a : M α) (ha : SameWGKernel a) : SameView routingView a :=
-  ha.of_factor (fun k => k.wg.map routingState) routingView (fun _ => rfl)
+theorem wgKernel_routing (a : Leanux.M α) (ha : SameView (fun w : World => wgStoreView w.wg) a) :
+    SameView (fun w : World => routingView w.wg) a :=
+  ha.of_factor (fun k : WGStoreView => k.dev.map routingState) (fun w : World => routingView w.wg) (fun _ => rfl)
+
+private theorem product_store_routing (a : Leanux.M α) (ha : SameProductStore a) :
+    SameView (fun w : World => routingView w.wg) a :=
+  ha.of_factor (fun store : ProductStore43 => store.2.2.2.dev.map routingState)
+    (fun w : World => routingView w.wg) (fun _ => rfl)
 
 private theorem workerLoop_routing (worker : Worker) (pid : Option Nat)
-    (step : M Bool) (afterItem : M Unit) (bound : Nat) (drained : String)
-    (hs : RetainsRoutingCall step) (ha : RetainsRoutingCall afterItem) :
-    RetainsRoutingCall (workerLoop worker pid step afterItem bound drained) := by
-  have hafter : RetainsRoutingCall (do afterItem; pure false) := by
+    (step : Leanux.M Bool) (afterItem : Leanux.M Unit) (bound : Nat) (drained : String)
+    (hs : ProductRetainsRoutingCall step) (ha : ProductRetainsRoutingCall afterItem) :
+    ProductRetainsRoutingCall (workerLoop worker pid step afterItem bound drained) := by
+  have hafter : ProductRetainsRoutingCall (do afterItem; pure false) := by
     apply ProjectedAction.of_wp
     intro s
-    have h := ha.wp s
+    have h := RetainsRoutingCall.wp ha s
     mvcgen [h]
     subst s
     exact RetainsRouting.refl _
   apply ProjectedAction.of_wp
   intro s
-  have hi := (workerIter_routing worker pid step _ hs hafter).wp s
-  mvcgen [workerLoop, hi, invariant]
-  all_goals try exact ((⇓? _ w => ⌜RetainsRouting s (routingView w)⌝) : PostCond _ (.arg World (.except Stop .pure)))
+  have hi := RetainsRoutingCall.wp (workerIter_routing worker pid step _ hs hafter) s
+  have ambient {α : Type} (a : AmbientM α) :
+      Hoare (MonadLift.monadLift a : Leanux.M α)
+        (fun w => RetainsRouting s (routingView w.wg)) (fun _ w => RetainsRouting s (routingView w.wg)) :=
+    productAmbient_spec a _ (fun _ _ h => h)
+  unfold Hoare at ambient
+  mvcgen [-Std.Do.Spec.monadLift_StateT, ambient, workerLoop, hi, invariant]
+  all_goals try exact ((⇓? _ w => ⌜RetainsRouting s (routingView w.wg)⌝) : PostCond _ (.arg World (.except Stop .pure)))
   all_goals try dsimp +zetaDelta only at *
   all_goals try trivial
   all_goals try exact id
   all_goals try subst s
+  all_goals intros
   all_goals first | exact RetainsRouting.refl _ | assumption
 
 theorem handshakeReceiveWorker_routing :
-    RetainsRoutingCall (handshakeReceiveWorker (Env.nestedResched .receiveWorker)) :=
-  workerLoop_routing _ _ _ _ _ _ receiveStep_routing (nestedResched_routing .receiveWorker)
+    ProductRetainsRoutingCall (handshakeReceiveWorker (Env.nestedResched .receiveWorker)) :=
+  workerLoop_routing _ _ _ _ _ _ receiveStep_routing.liftWG (nestedResched_routing .receiveWorker)
 
 theorem xmitMulticastLoop_routing (family addr : Nat) :
-    SameView routingView (Env.xmitMulticastLoop family addr) := by
+    SameView (fun w : World => routingView w.wg) (Env.xmitMulticastLoop family addr) := by
   apply SameView.of_wp
   intro s
-  have hl := (routing_kernel _ (Queues.loopbackSend_kernel [] true)).wp (fun t => t = s)
-  mvcgen [Env.xmitMulticastLoop, hl, unsupported]
+  have hl : Hoare (MonadLift.monadLift (loopbackSend [] true) : Leanux.M Unit)
+      (fun w => routingView w.wg = s) (fun _ w => routingView w.wg = s) :=
+    (sameView_liftWG (fun w : World => routingView w.wg) routingView _
+      (routing_kernel _ (Queues.loopbackSend_kernel [] true)) (fun _ _ _ h => h)).wp (fun t => t = s)
+  have ambient {α : Type} (a : AmbientM α) :
+      Hoare (MonadLift.monadLift a : Leanux.M α)
+        (fun w => routingView w.wg = s) (fun _ w => routingView w.wg = s) :=
+    productAmbient_spec a _ (fun _ _ h => h)
+  unfold Hoare at hl ambient
+  mvcgen [-Std.Do.Spec.monadLift_StateT, ambient, Env.xmitMulticastLoop, hl, unsupported]
 
 theorem inject_routing (family port : Nat) (msg : List UInt8) (tos : Nat)
-    (ll : Bool) (dest : Nat) : RetainsRoutingCall (Env.inject family port msg tos ll dest) := by
+    (ll : Bool) (dest : Nat) : ProductRetainsRoutingCall (Env.inject family port msg tos ll dest) := by
   apply ProjectedAction.of_wp
   intro s
   let P := RetainsRouting s
-  have hn := fun pid => (requireNotPending_routing pid "receiving while a handshake is queued").wp P
-  have hf := (routing_kernel _ fixtureSend_sameKernel).wp P
-  have hs := (routing_kernel _ (senderSource_sameKernel family dest tos ll)).wp P
-  have hw := fun src => (runWorker_routing .netRx _ (wgReceive_routing msg src)).wp s
-  have hc := runCryptWorkers_routing.wp s
+  have ambient {α : Type} (a : AmbientM α) :
+      Hoare (MonadLift.monadLift a : Leanux.M α)
+        (fun w => P (routingView w.wg)) (fun _ w => P (routingView w.wg)) :=
+    productAmbient_spec a _ (fun _ _ h => h)
+  have dev := productGetDev_spec (fun store => P (store.2.2.2.dev.map routingState))
+  have readWG := productGetWG_spec (fun store => P (store.2.2.2.dev.map routingState))
+  have editWG := productModifyWG_spec (fun store => P (store.2.2.2.dev.map routingState))
+  have routing {α : Type} (a : Net.M α) :=
+    productRouting_spec a (fun store => P (store.2.2.2.dev.map routingState))
+  have native {α : Type} (a : WG.M α) (ha : SameView routingView a) :
+      Hoare (MonadLift.monadLift a : Leanux.M α)
+        (fun w => P (routingView w.wg)) (fun _ w => P (routingView w.wg)) :=
+    (sameView_liftWG (fun w : World => routingView w.wg) routingView a ha
+      (fun _ _ _ h => h)).wp P
+  unfold Hoare at ambient dev readWG editWG routing native
+  have hn := fun pid => native _ (requireNotPending_routing pid "receiving while a handshake is queued")
+  have hs := (product_store_routing _ (senderSource_sameKernel family dest tos ll)).wp P
+  have hw (src : SkbSource) : Hoare
+      (Env.runWorker .netRx (MonadLift.monadLift (wgReceive msg src)))
+      (fun w => P (routingView w.wg)) (fun _ w => P (routingView w.wg)) :=
+    RetainsRoutingCall.wp (runWorker_routing .netRx _ (wgReceive_routing msg src).liftWG) s
+  unfold Hoare at hw
+  have hc := RetainsRoutingCall.wp runCryptWorkers_routing s
   have hd := fun queues => (requireDrained_routing "the datagram queued" queues).wp P
-  have hl (α β : Type) := list_view_spec routingView (α := α) (β := β) P
-  mvcgen [-Std.Do.Spec.forIn_list, -Std.Do.Spec.forIn'_list, hl,
-    Env.inject, hn, hf, hs, hw, hc, hd, getDev, getK, invariant, unsupported]
+  have hl (α β : Type) := list_view_spec (m := Except Stop) (fun w : World => routingView w.wg) (α := α) (β := β) P
+  mvcgen [-Std.Do.Spec.monadLift_StateT, ambient, dev, readWG, editWG, routing, hidden, Env.fixtureSend, skipCut, getAmbient, modifyAmbient, Env.peekNextSite, peekUnit, resolveUnit, recordBudget, budgetExhausted, -Std.Do.Spec.forIn_list, -Std.Do.Spec.forIn'_list, hl,
+    Env.inject, getRouting, getEnv, hn, hs, hw, hc, hd,  invariant, unsupported]
   all_goals try dsimp +zetaDelta only [P] at *
-  all_goals try simp_all [routingView]
+  all_goals try simp_all [routingView, productStoreView, wgStoreView]
   all_goals try trivial
   all_goals try exact id
   all_goals try subst s
+  all_goals intros
   all_goals first | exact RetainsRouting.refl _ | assumption
 
-theorem afterBatch_routing : RetainsRoutingCall Env.afterBatch := by
+theorem afterBatch_routing : ProductRetainsRoutingCall Env.afterBatch := by
   apply ProjectedAction.of_wp
   intro s
   let P := RetainsRouting s
-  have hc := runCryptWorkers_routing.wp s
-  have hs := runSendWorkers_routing.wp s
-  have hw := runOneSendWorker_routing.wp s
-  have hsc := (schedule_routing none).wp s
-  have hb := (routing_kernel _ recordBudget_sameKernel).wp P
-  have hp := (routing_kernel _ peekNextSite_sameKernel).wp P
+  have ambient {α : Type} (a : AmbientM α) :
+      Hoare (MonadLift.monadLift a : Leanux.M α)
+        (fun w => P (routingView w.wg)) (fun _ w => P (routingView w.wg)) :=
+    productAmbient_spec a _ (fun _ _ h => h)
+  have dev := productGetDev_spec (fun store => P (store.2.2.2.dev.map routingState))
+  have readWG := productGetWG_spec (fun store => P (store.2.2.2.dev.map routingState))
+  have editWG := productModifyWG_spec (fun store => P (store.2.2.2.dev.map routingState))
+  have routing {α : Type} (a : Net.M α) :=
+    productRouting_spec a (fun store => P (store.2.2.2.dev.map routingState))
+  have native {α : Type} (a : WG.M α) (ha : SameView routingView a) :
+      Hoare (MonadLift.monadLift a : Leanux.M α)
+        (fun w => P (routingView w.wg)) (fun _ w => P (routingView w.wg)) :=
+    (sameView_liftWG (fun w : World => routingView w.wg) routingView a ha
+      (fun _ _ _ h => h)).wp P
+  unfold Hoare at ambient dev readWG editWG routing native
+  have hc := RetainsRoutingCall.wp runCryptWorkers_routing s
+  have hs := RetainsRoutingCall.wp runSendWorkers_routing s
+  have hw := RetainsRoutingCall.wp runOneSendWorker_routing s
+  have hsc := RetainsRoutingCall.wp (schedule_routing none) s
   have hd := fun qs => (requireDrained_routing "the batch queued" qs).wp P
   have he := deliverSent_routing.wp P
-  mvcgen [Env.afterBatch, hc, hs, hw, hsc, hb, hp, hd, he, getDev, getK, invariant]
-  all_goals try exact ((⇓? _ w => ⌜RetainsRouting s (routingView w)⌝) : PostCond _ (.arg World (.except Stop .pure)))
+  mvcgen [-Std.Do.Spec.monadLift_StateT, ambient, dev, readWG, editWG, routing, hidden, Env.fixtureSend, skipCut, getAmbient, modifyAmbient, Env.peekNextSite, peekUnit, resolveUnit, recordBudget, budgetExhausted, Env.afterBatch, hc, hs, hw, hsc, hd, he,  invariant]
+  all_goals try exact ((⇓? _ w => ⌜RetainsRouting s (routingView w.wg)⌝) : PostCond _ (.arg World (.except Stop .pure)))
   all_goals try dsimp +zetaDelta only [P] at *
-  all_goals try simp_all [routingView]
+  all_goals try simp_all [routingView, productStoreView, wgStoreView]
   all_goals try trivial
   all_goals try exact id
   all_goals try subst s
+  all_goals intros
   all_goals first | exact RetainsRouting.refl _ | assumption
 
 theorem flood_routing (count port family : Nat) (messages : List (List UInt8)) :
-    RetainsRoutingCall (Env.flood count port family messages) := by
+    ProductRetainsRoutingCall (Env.flood count port family messages) := by
   apply ProjectedAction.of_wp
   intro s
   let P := RetainsRouting s
-  have hn := fun pid => (requireNotPending_routing pid "a flood while a handshake is queued").wp P
-  have hf := (routing_kernel _ fixtureSend_sameKernel).wp P
-  have hs := (routing_kernel _ (senderSource_sameKernel family 0 0 false)).wp P
-  have hw (msg src) : RetainsRoutingCall (Env.runWorker .netRx (do wgReceive msg src; Env.pollScheduledInline)) := by
+  have ambient {α : Type} (a : AmbientM α) :
+      Hoare (MonadLift.monadLift a : Leanux.M α)
+        (fun w => P (routingView w.wg)) (fun _ w => P (routingView w.wg)) :=
+    productAmbient_spec a _ (fun _ _ h => h)
+  have dev := productGetDev_spec (fun store => P (store.2.2.2.dev.map routingState))
+  have readWG := productGetWG_spec (fun store => P (store.2.2.2.dev.map routingState))
+  have editWG := productModifyWG_spec (fun store => P (store.2.2.2.dev.map routingState))
+  have routing {α : Type} (a : Net.M α) :=
+    productRouting_spec a (fun store => P (store.2.2.2.dev.map routingState))
+  have native {α : Type} (a : WG.M α) (ha : SameView routingView a) :
+      Hoare (MonadLift.monadLift a : Leanux.M α)
+        (fun w => P (routingView w.wg)) (fun _ w => P (routingView w.wg)) :=
+    (sameView_liftWG (fun w : World => routingView w.wg) routingView a ha
+      (fun _ _ _ h => h)).wp P
+  unfold Hoare at ambient dev readWG editWG routing native
+  have hn := fun pid => native _ (requireNotPending_routing pid "a flood while a handshake is queued")
+  have hs := (product_store_routing _ (senderSource_sameKernel family 0 0 false)).wp P
+  have hw (msg src) : ProductRetainsRoutingCall (Env.runWorker .netRx (do MonadLift.monadLift (wgReceive msg src); Env.pollScheduledInline)) := by
     apply runWorker_routing
     apply ProjectedAction.of_wp
     intro t
-    have hr := (wgReceive_routing msg src).wp t
-    have hp := pollScheduledInline_routing.wp t
-    mvcgen [hr, hp]
+    have hr : Hoare (MonadLift.monadLift (wgReceive msg src) : Leanux.M Unit)
+        (fun w => RetainsRouting t (routingView w.wg))
+        (fun _ w => RetainsRouting t (routingView w.wg)) :=
+      RetainsRoutingCall.wp (wgReceive_routing msg src).liftWG t
+    unfold Hoare at hr
+    have hp := RetainsRoutingCall.wp pollScheduledInline_routing t
+    mvcgen [-Std.Do.Spec.monadLift_StateT, ambient, dev, readWG, editWG, routing, hidden, Env.fixtureSend, skipCut, getAmbient, modifyAmbient, Env.peekNextSite, peekUnit, resolveUnit, recordBudget, budgetExhausted, hr, hp]
     subst t
     exact RetainsRouting.refl _
-  have hwp := fun msg src => (hw msg src).wp s
-  have ha := afterBatch_routing.wp s
+  have hwp := fun msg src => RetainsRoutingCall.wp (hw msg src) s
+  have ha := RetainsRoutingCall.wp afterBatch_routing s
   have hd := fun queues => (requireDrained_routing "the flood queued" queues).wp P
-  have hl (α β : Type) := list_view_spec routingView (α := α) (β := β) P
-  mvcgen [-Std.Do.Spec.forIn_list, -Std.Do.Spec.forIn'_list, hl,
-    Env.flood, hn, hf, hs, hwp, ha, hd, getDev, getK, invariant, unsupported]
+  have hl (α β : Type) := list_view_spec (m := Except Stop) (fun w : World => routingView w.wg) (α := α) (β := β) P
+  mvcgen [-Std.Do.Spec.monadLift_StateT, ambient, dev, readWG, editWG, routing, hidden, Env.fixtureSend, skipCut, getAmbient, modifyAmbient, Env.peekNextSite, peekUnit, resolveUnit, recordBudget, budgetExhausted, -Std.Do.Spec.forIn_list, -Std.Do.Spec.forIn'_list, hl,
+    Env.flood, hn, hs, hwp, ha, hd,  invariant, unsupported]
   all_goals try dsimp +zetaDelta only [P] at *
-  all_goals try simp_all [routingView]
+  all_goals try simp_all [routingView, productStoreView, wgStoreView]
   all_goals try trivial
   all_goals try exact id
   all_goals try subst s
+  all_goals intros
   all_goals first | exact RetainsRouting.refl _ | assumption
 
 theorem batchItem_routing (d : Device) (cqes : List Int) (item : Env.BatchItem) :
-    RetainsRoutingCall (Environment.batchItemSource d cqes item) := by
+    ProductRetainsRoutingCall (Environment.batchItemSource d cqes item) := by
   apply ProjectedAction.of_wp
   intro s
   let P := RetainsRouting s
-  have hf := (routing_kernel _ fixtureSend_sameKernel).wp P
-  have hs := fun family => (routing_kernel _ (senderSource_sameKernel family 0 0 false)).wp P
-  have hw (msg src) : RetainsRoutingCall (Env.runWorker .netRx (do wgReceive msg src; Env.pollScheduledInline)) := by
+  have ambient {α : Type} (a : AmbientM α) :
+      Hoare (MonadLift.monadLift a : Leanux.M α)
+        (fun w => P (routingView w.wg)) (fun _ w => P (routingView w.wg)) :=
+    productAmbient_spec a _ (fun _ _ h => h)
+  have dev := productGetDev_spec (fun store => P (store.2.2.2.dev.map routingState))
+  have readWG := productGetWG_spec (fun store => P (store.2.2.2.dev.map routingState))
+  have editWG := productModifyWG_spec (fun store => P (store.2.2.2.dev.map routingState))
+  have routing {α : Type} (a : Net.M α) :=
+    productRouting_spec a (fun store => P (store.2.2.2.dev.map routingState))
+  have native {α : Type} (a : WG.M α) (ha : SameView routingView a) :
+      Hoare (MonadLift.monadLift a : Leanux.M α)
+        (fun w => P (routingView w.wg)) (fun _ w => P (routingView w.wg)) :=
+    (sameView_liftWG (fun w : World => routingView w.wg) routingView a ha
+      (fun _ _ _ h => h)).wp P
+  unfold Hoare at ambient dev readWG editWG routing native
+  have hs := fun family => (product_store_routing _ (senderSource_sameKernel family 0 0 false)).wp P
+  have hw (msg src) : ProductRetainsRoutingCall (Env.runWorker .netRx (do MonadLift.monadLift (wgReceive msg src); Env.pollScheduledInline)) := by
     apply runWorker_routing
     apply ProjectedAction.of_wp
     intro t
-    have hr := (wgReceive_routing msg src).wp t
-    have hp := pollScheduledInline_routing.wp t
-    mvcgen [hr, hp]
+    have hr : Hoare (MonadLift.monadLift (wgReceive msg src) : Leanux.M Unit)
+        (fun w => RetainsRouting t (routingView w.wg))
+        (fun _ w => RetainsRouting t (routingView w.wg)) :=
+      RetainsRoutingCall.wp (wgReceive_routing msg src).liftWG t
+    unfold Hoare at hr
+    have hp := RetainsRoutingCall.wp pollScheduledInline_routing t
+    mvcgen [-Std.Do.Spec.monadLift_StateT, ambient, dev, readWG, editWG, routing, hidden, Env.fixtureSend, skipCut, getAmbient, modifyAmbient, Env.peekNextSite, peekUnit, resolveUnit, recordBudget, budgetExhausted, hr, hp]
     subst t
     exact RetainsRouting.refl _
-  have hwp := fun msg src => (hw msg src).wp s
-  have hl := fun family addr => (routing_kernel _ (routeLookup_sameKernel family 0 addr)).wp P
-  have hx := fun family addr payload opts => (routing_kernel _ (xmitPackets_sameKernel family addr payload opts)).wp P
+  have hwp := fun msg src => RetainsRoutingCall.wp (hw msg src) s
+  have hx := fun family addr payload opts => (product_store_routing _ (xmitPackets_sameKernel family addr payload opts)).wp P
   have hm := fun family addr => (xmitMulticastLoop_routing family addr).wp P
-  have ht := fun family addr pkts mtu => (wgXmit_routing family addr pkts mtu).wp s
-  mvcgen [Environment.batchItemSource, hf, hs, hwp, hl, hx, hm, ht, unsupported]
+  have ht (family addr : Nat) (pkts : List Packet) (mtu : Nat) :
+      Hoare (MonadLift.monadLift (wgXmit family addr pkts mtu) : Leanux.M Int)
+        (fun w => P (routingView w.wg)) (fun _ w => P (routingView w.wg)) :=
+    RetainsRoutingCall.wp (wgXmit_routing family addr pkts mtu).liftWG s
+  unfold Hoare at ht
+  mvcgen [-Std.Do.Spec.monadLift_StateT, ambient, dev, readWG, editWG, routing, hidden, Env.fixtureSend, skipCut, getAmbient, modifyAmbient, Env.peekNextSite, peekUnit, resolveUnit, recordBudget, budgetExhausted, Environment.batchItemSource, hs, hwp, hx, hm, ht, unsupported]
   all_goals try dsimp +zetaDelta only [P] at *
   all_goals try subst s
+  all_goals intros
   all_goals first | exact RetainsRouting.refl _ | assumption
 
-theorem batch_routing (items : List Env.BatchItem) : RetainsRoutingCall (Env.batch items) := by
+theorem batch_routing (items : List Env.BatchItem) : ProductRetainsRoutingCall (Env.batch items) := by
   rw [← Environment.batchSource_eq]
   apply ProjectedAction.of_wp
   intro s
   let P := RetainsRouting s
-  have hn := fun pid => (requireNotPending_routing pid "a batch while a handshake is queued").wp P
-  have hi := fun d cqes item => (batchItem_routing d cqes item).wp s
-  have ha := afterBatch_routing.wp s
-  have hl (α β : Type) := list_view_spec routingView (α := α) (β := β) P
-  mvcgen [-Std.Do.Spec.forIn_list, -Std.Do.Spec.forIn'_list, hl,
-    Environment.batchSource, hn, hi, ha, getK, unsupported]
+  have ambient {α : Type} (a : AmbientM α) :
+      Hoare (MonadLift.monadLift a : Leanux.M α)
+        (fun w => P (routingView w.wg)) (fun _ w => P (routingView w.wg)) :=
+    productAmbient_spec a _ (fun _ _ h => h)
+  have dev := productGetDev_spec (fun store => P (store.2.2.2.dev.map routingState))
+  have readWG := productGetWG_spec (fun store => P (store.2.2.2.dev.map routingState))
+  have editWG := productModifyWG_spec (fun store => P (store.2.2.2.dev.map routingState))
+  have routing {α : Type} (a : Net.M α) :=
+    productRouting_spec a (fun store => P (store.2.2.2.dev.map routingState))
+  have native {α : Type} (a : WG.M α) (ha : SameView routingView a) :
+      Hoare (MonadLift.monadLift a : Leanux.M α)
+        (fun w => P (routingView w.wg)) (fun _ w => P (routingView w.wg)) :=
+    (sameView_liftWG (fun w : World => routingView w.wg) routingView a ha
+      (fun _ _ _ h => h)).wp P
+  unfold Hoare at ambient dev readWG editWG routing native
+  have hn := fun pid => native _ (requireNotPending_routing pid "a batch while a handshake is queued")
+  have hi := fun d cqes item => RetainsRoutingCall.wp (batchItem_routing d cqes item) s
+  have ha := RetainsRoutingCall.wp afterBatch_routing s
+  have hl (α β : Type) := list_view_spec (m := Except Stop) (fun w : World => routingView w.wg) (α := α) (β := β) P
+  mvcgen [-Std.Do.Spec.monadLift_StateT, ambient, dev, readWG, editWG, routing, hidden, Env.fixtureSend, skipCut, getAmbient, modifyAmbient, Env.peekNextSite, peekUnit, resolveUnit, recordBudget, budgetExhausted, -Std.Do.Spec.forIn_list, -Std.Do.Spec.forIn'_list, hl,
+    Environment.batchSource, hn, hi, ha,  unsupported]
   all_goals try dsimp +zetaDelta only [P] at *
-  all_goals try simp_all [routingView]
+  all_goals try simp_all [routingView, productStoreView, wgStoreView]
   all_goals try trivial
   all_goals try exact id
   all_goals try subst s
+  all_goals intros
   all_goals first | exact RetainsRouting.refl _ | assumption
 
 end Leanux.Proofs.WG.AllowedIps
