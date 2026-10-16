@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.Keypairs.Frames.Tools
+import Leanux.Proofs.WG.Peers.Primitives
 import Leanux.Proofs.WG.Keypairs.SnapshotRules
 import Leanux.Proofs.Framing.WGTime
 import Leanux.Proofs.Framing.WGSocketLifecycle
@@ -96,14 +97,18 @@ elab "snapshot_join_use" : tactic => withMainContext do
 
 
 /-- The socket-control mask retains the legacy receive-state view. -/
-theorem sameSnapshot_of_sameSocket (h : Framing.SameSocket a) : SameSnapshot a := by
-  apply h.of_factor (fun v => snapshotOfWGStoreView v.toWGStoreView) snapshot
+theorem sameSnapshot_of_sameSocket
+    (h : Framing.SameView (fun g : WGWorld => (Framing.socketView g).toWGStoreView) a) :
+    SameSnapshot a := by
+  apply h.of_factor snapshotOfWGStoreView snapshot
   intro w
   simp [snapshot, snapshotOfWGStoreView, Framing.socketView, Framing.socketDevice,
     Framing.wgOwnedView, Framing.wgStoreView, Option.bind_map, Function.comp_def]
 
-theorem sameSnapshot_of_sameConfiguration (h : Framing.SameConfiguration a) : SameSnapshot a := by
-  apply h.of_factor (fun v => snapshotOfWGStoreView v.toWGStoreView) snapshot
+theorem sameSnapshot_of_sameConfiguration
+    (h : Framing.SameView (fun g : WGWorld => (Framing.configurationView g).toWGStoreView) a) :
+    SameSnapshot a := by
+  apply h.of_factor snapshotOfWGStoreView snapshot
   intro w
   simp [snapshot, snapshotOfWGStoreView, Framing.configurationView, Framing.configurationDevice,
     Framing.wgOwnedView, Framing.wgStoreView, Option.bind_map, Function.comp_def]
@@ -208,7 +213,8 @@ theorem PrevQueue_peek_spec (P : Snapshot → Prop) {α : Type} (q : PrevQueue �
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (PrevQueue_peek_sameSnapshot (α := α) q).wp P
 
 theorem cookiePrecomputeDeviceKeys_sameSnapshot  : SameSnapshot (Leanux.WG.cookiePrecomputeDeviceKeys ) :=
-  sameSnapshot_of_sameConfiguration Framing.cookiePrecomputeDeviceKeys_sameConfiguration
+  sameSnapshot_of_sameConfiguration
+    (Framing.cookiePrecomputeDeviceKeys_sameConfiguration.factor Framing.WGOwnedView.toWGStoreView)
 
 theorem cookiePrecomputeDeviceKeys_spec (P : Snapshot → Prop)  :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.cookiePrecomputeDeviceKeys
@@ -287,7 +293,8 @@ theorem socketPort_spec (P : Snapshot → Prop) (family : Nat) :
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (socketPort_sameSnapshot family).wp P
 
 theorem socketReinit_sameSnapshot (new4 new6 : Option Nat) : SameSnapshot (Leanux.WG.socketReinit new4 new6) := by
-  exact sameSnapshot_of_sameSocket (Framing.socketReinit_sameSocket new4 new6)
+  exact sameSnapshot_of_sameSocket
+    ((Framing.socketReinit_sameSocket new4 new6).factor Framing.WGOwnedView.toWGStoreView)
 
 theorem socketReinit_spec (P : Snapshot → Prop) (new4 new6 : Option Nat) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.socketReinit new4 new6
@@ -400,7 +407,8 @@ theorem rootRemovePeerLists_spec (P : Snapshot → Prop) (root : NodeId) :
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (rootRemovePeerLists_sameSnapshot root).wp P
 
 theorem socketInit_sameSnapshot (port : Nat) : SameSnapshot (Leanux.WG.socketInit port) := by
-  exact sameSnapshot_of_sameSocket (Framing.socketInit_sameSocket port)
+  exact sameSnapshot_of_sameSocket
+    ((Framing.socketInit_sameSocket port).factor Framing.WGOwnedView.toWGStoreView)
 
 theorem socketInit_spec (P : Snapshot → Prop) (port : Nat) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.socketInit port
@@ -498,7 +506,8 @@ theorem setPeerEndpoint_spec (P : Snapshot → Prop) (pid : PeerId) (e : Endpoin
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (setPeerEndpoint_sameSnapshot pid e).wp P
 
 theorem setStaticIdentityPrivateKey_sameSnapshot (privateKey : Key) : SameSnapshot (Leanux.WG.setStaticIdentityPrivateKey privateKey) :=
-  sameSnapshot_of_sameConfiguration (Framing.setStaticIdentityPrivateKey_sameConfiguration privateKey)
+  sameSnapshot_of_sameConfiguration
+    ((Framing.setStaticIdentityPrivateKey_sameConfiguration privateKey).factor Framing.WGOwnedView.toWGStoreView)
 
 theorem setStaticIdentityPrivateKey_spec (P : Snapshot → Prop) (privateKey : Key) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.setStaticIdentityPrivateKey privateKey

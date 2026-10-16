@@ -5,12 +5,13 @@ factor retains the complete JSON and consumes no tracked resident object. -/
 namespace Leanux.Proofs.WG.Environment
 open Leanux Leanux.WG Leanux.Env
 
-def observeTail : M (Int × Lean.Json) := do
-  if let some d := (← getK).wg then
+def observeTail : Leanux.M (Int × Lean.Json) := do
+  if let some d := (← getWG).dev then
     if !d.sendWorkQueue.isEmpty then unsupported "send work queued by an operation that does not wait"
   requireNoCryptWork
   deliverSent
-  let w ← get
+  let w ← getEnv
+  let foreignCreator := (← getRouting).foreignCreator
   let hex (bs : List UInt8) : String := String.join (bs.map fun b =>
     let d := "0123456789abcdef".toList
     String.mk [d[b.toNat / 16]!, d[b.toNat % 16]!])
@@ -18,7 +19,7 @@ def observeTail : M (Int × Lean.Json) := do
   let type (bs : List UInt8) : Nat := if bs.length ≥ 4 then WG.u32le bs 0 else 0
   -- W8: after wg_netns_close the listeners are closed: `recvfrom(4)` is
   -- -EBADF and the datagrams are null (the guest prints null)
-  let closed := w.foreignCreator && w.netnsCHolders.isEmpty
+  let closed := foreignCreator && w.netnsCHolders.isEmpty
   let ret : Int := if closed then -EBADF else match w.listenerV4 with
     | (_, bs) :: _ => bs.length
     | [] => -EAGAIN
@@ -50,9 +51,9 @@ def observeTail : M (Int × Lean.Json) := do
                  Lean.toJson dg.tos, Lean.toJson (hex (beBytes dg.dst 16)),
                  Lean.toJson bs.length, Lean.toJson (type bs), Lean.toJson (if bs.length ≥ 12 then WG.u32le bs 8 else 0),
                  Lean.toJson (hex bs)]
-  modify fun w => { w with listenerV4 := [], listenerV6 := [], senderInbox := [] }
+  modifyEnv fun w => { w with listenerV4 := [], listenerV6 := [], senderInbox := [] }
   -- L: without wg0 the guest's RTM_GETLINK fails with ENODEV: `stats` null
-  let stats := match (← getK).wg with
+  let stats := match (← getWG).dev with
     | some d => Lean.Json.mkObj [("tx_errors", Lean.toJson d.txErrors), ("tx_dropped", Lean.toJson d.txDropped),
                                  ("rx_frame_errors", Lean.toJson d.rxFrameErrors),
                                  ("rx_length_errors", Lean.toJson d.rxLengthErrors),

@@ -1,3 +1,4 @@
+import Leanux.Proofs.Framing.WP
 import Leanux.Proofs.WG.Lifetimes.Actions
 import Leanux.Proofs.Framing.Lift
 import Leanux.WG.Peer
@@ -32,8 +33,7 @@ theorem getPeer_current (i : PeerId) (w w' : WGWorld) (p : Peer)
       cases hr
     | some old =>
       have he : ((getPeer i).run w).run ambient = .ok ((old, w), ambient) := by
-        simp [getPeer, getDev, hd, hp]
-        rfl
+        simp [getPeer, getDev, hd, hp] <;> rfl
       rw [he] at hr
       cases hr
       exact ⟨rfl, rfl, by simp [snapshot, hd, hp]⟩
@@ -60,8 +60,7 @@ theorem getPeer_spec (i : PeerId) (start : WGWorld) (initialAmbient : Ambient) :
       cases hr
     | some old =>
       have he : ((getPeer i).run w).run ambient = .ok ((old, w), ambient) := by
-        simp [getPeer, getDev, hd, hp]
-        rfl
+        simp [getPeer, getDev, hd, hp] <;> rfl
       rw [he] at hr
       cases hr
       exact ⟨hq.1, hq.2, d, hd, hp⟩

@@ -1,39 +1,39 @@
 import Leanux.Env.Batch
-import Leanux.Proofs.Framing.Projection
+import Leanux.Proofs.Framing.Product
+import Leanux.Proofs.WG.Packets.Primitives
 
-/-! Full-kernel frames for read-only and record-only scheduler leaves. These frames alone
-make no internal-access claim; the lifetime observers inspect their source. -/
+/-! Product frames over the original 43 store observations. Arbitrary worker
+and filter callbacks retain their scope. These frames make no access claim. -/
 namespace Leanux.Proofs.Framing
-open Leanux Leanux.WG Std.Do
+open Leanux Leanux.WG Std.Do Leanux.Proofs.WG.Lifetimes
 
-/-- A callback frame lifts through section records and NET_RX scalar metadata. -/
+/-- A callback frame lifts through actual section records and NET_RX metadata. -/
 theorem runWorker_sameView {σ : Type} (view : World → σ)
-    (hv : ∀ w v, v.k = w.k → view v = view w) (worker : Worker) (body : M Unit)
+    (hv : ∀ w v, productStoreView v = productStoreView w → view v = view w)
+    (worker : Worker) (body : Leanux.M Unit)
     (hb : SameView view body) : SameView view (Env.runWorker worker body) := by
-  unfold Env.runWorker
-  repeat' first
-    | exact hb
-    | exact (fun w x v hr => hv w v (hidden_sameKernel _ w x v hr))
-    | exact (fun w x v hr => hv w v (by cases hr; rfl))
-    | exact SameView.pure view _
-    | apply SameView.bind
-    | split
-    | (intro x; try dsimp only)
+  apply SameView.of_wp
+  intro initial
+  have hb' := hb.wp (fun v => v = initial)
+  have ha := fun α (a : AmbientM α) => productAmbient_spec a
+    (fun w => view w = initial)
+    (fun w ambient hp => (hv w {w with ambient} rfl).trans hp)
+  unfold Hoare at ha
+  mvcgen [-Std.Do.Spec.monadLift_StateT, Env.runWorker, hidden, modifyAmbient, ha, hb']
 
-theorem runWorker_sameKernel (worker : Worker) (body : M Unit) (hb : SameKernel body) :
-    SameKernel (Env.runWorker worker body) :=
-  runWorker_sameView (·.k) (fun _ _ he => he) worker body hb
+theorem condResched_sameKernel (self : Worker) : SameProductStore (Env.condResched self) := by
+  apply SameView.of_wp
+  intro initial
+  have ha := fun α (a : AmbientM α) => productAmbient_spec a
+    (fun w => productStoreView w = initial) (fun _ _ h => h)
+  unfold Hoare at ha
+  mvcgen [-Std.Do.Spec.monadLift_StateT, Env.condResched, peekHiddenSite, hidden, invariant, ha]
 
-theorem condResched_sameKernel (self : Worker) : SameKernel (Env.condResched self) := by
-  apply sameKernel_of_wp
-  intro k
-  have hp := sameKernel_wp _ peekHiddenSite_sameKernel (fun s => s = k)
-  have hh := fun site => sameKernel_wp _ (hidden_sameKernel site) (fun s => s = k)
-  mvcgen [Env.condResched, hp, hh, invariant]
-
-/-- The trial's returned World is discarded on every outcome. This endpoint
-frame is separate from a proof of accesses made inside the trial. -/
-theorem activationConsistent_sameKernel (a : Activation) : SameKernel (Env.Activation.consistent a) := by
+/-- The actual trial runs on a copied product World. Its state is discarded;
+hidden mismatches return false and every other Stop propagates. -/
+theorem activationConsistent_sameKernel (a : Activation) :
+    SameProductStore (Env.Activation.consistent a) := by
+  apply (ProjectedAction.iff_run _ _ _).mpr
   intro w b v hr
   unfold Env.Activation.consistent at hr
   simp only [StateT.run_bind, StateT.run_get, pure_bind] at hr
@@ -46,24 +46,61 @@ theorem activationConsistent_sameKernel (a : Activation) : SameKernel (Env.Activ
     simp only [he, StateT.run_pure] at hr
     cases e <;> cases hr <;> rfl
 
-theorem filterAuxM_sameKernel (f : α → M Bool) (hf : ∀ a, SameKernel (f a))
-    (xs acc : List α) : SameKernel (List.filterAuxM f xs acc) := by
+theorem filterAuxM_sameKernel {S σ α : Type} {m : Type → Type} {ps : PostShape}
+    [Monad m] [WPMonad m ps] (view : S → σ)
+    (f : α → StateT S m Bool) (hf : ∀ a, SameView view (f a))
+    (xs acc : List α) : SameView view (List.filterAuxM f xs acc) := by
   induction xs generalizing acc with
-  | nil => exact sameKernel_pure _
-  | cons a xs ih => exact sameKernel_bind (hf a) (fun b => ih (cond b (a :: acc) acc))
+  | nil => exact SameView.pure view _
+  | cons a xs ih => exact SameView.bind (hf a) (fun b => ih (cond b (a :: acc) acc))
 
-theorem filterM_sameKernel (f : α → M Bool) (hf : ∀ a, SameKernel (f a))
-    (xs : List α) : SameKernel (xs.filterM f) :=
-  sameKernel_bind (filterAuxM_sameKernel f hf xs []) (fun ys => sameKernel_pure ys.reverse)
+theorem filterM_sameKernel {S σ α : Type} {m : Type → Type} {ps : PostShape}
+    [Monad m] [WPMonad m ps] (view : S → σ)
+    (f : α → StateT S m Bool) (hf : ∀ a, SameView view (f a))
+    (xs : List α) : SameView view (xs.filterM f) :=
+  SameView.bind (filterAuxM_sameKernel view f hf xs []) (fun ys => SameView.pure view ys.reverse)
 
-theorem activationOccupancy_sameKernel (a : Activation) : SameKernel (Env.Activation.occupancy a) := by
-  apply sameKernel_of_wp
-  intro k
-  mvcgen [Env.Activation.occupancy, getDev, getK, getPeer, invariant]
+theorem activationOccupancy_sameKernel (a : Activation) :
+    SameProductStore (Env.Activation.occupancy a) := by
+  have dev : SameWGStore WG.getDev := by
+    intro initial
+    unfold Hoare
+    mvcgen [WG.getDev, invariant, AmbientM.invariant]
+  have peer (pid : PeerId) : SameWGStore (getPeer pid) := by
+    intro initial
+    unfold Hoare
+    mvcgen [getPeer, WG.getDev, invariant, AmbientM.invariant]
+  apply SameView.of_wp
+  intro initial
+  have hd := (liftWG_sameProductStore WG.getDev dev).wp (fun s => s = initial)
+  have hp := fun pid => (liftWG_sameProductStore (getPeer pid) (peer pid)).wp (fun s => s = initial)
+  have ha := fun α (x : AmbientM α) => productAmbient_spec x
+    (fun w => productStoreView w = initial) (fun _ _ h => h)
+  unfold Hoare at ha
+  mvcgen [-Std.Do.Spec.monadLift_StateT, Env.Activation.occupancy, hd, hp, invariant, ha]
 
-theorem activationHasWork_sameKernel (a : Activation) : SameKernel (Env.Activation.hasWork a) := by
-  apply sameKernel_of_wp
-  intro k
-  mvcgen [Env.Activation.hasWork, getDev, getK, getPeer, getTxSkb, invariant]
+theorem activationHasWork_sameKernel (a : Activation) :
+    SameProductStore (Env.Activation.hasWork a) := by
+  have dev : SameWGStore WG.getDev := by
+    intro initial
+    unfold Hoare
+    mvcgen [WG.getDev, invariant, AmbientM.invariant]
+  have peer (pid : PeerId) : SameWGStore (getPeer pid) := by
+    intro initial
+    unfold Hoare
+    mvcgen [getPeer, WG.getDev, invariant, AmbientM.invariant]
+  have packet (id : SkbId) : SameWGStore (getTxSkb id) := by
+    apply (ProjectedAction.iff_run_ambient _ _ _).mpr
+    intro g ambient p g' ambient' hr
+    rw [(Leanux.Proofs.WG.Packets.getTxSkb_current id g g' p ambient ambient' hr).1]
+  apply SameView.of_wp
+  intro initial
+  have hd := (liftWG_sameProductStore WG.getDev dev).wp (fun s => s = initial)
+  have hp := fun pid => (liftWG_sameProductStore (getPeer pid) (peer pid)).wp (fun s => s = initial)
+  have ht := fun id => (liftWG_sameProductStore (getTxSkb id) (packet id)).wp (fun s => s = initial)
+  have ha := fun α (x : AmbientM α) => productAmbient_spec x
+    (fun w => productStoreView w = initial) (fun _ _ h => h)
+  unfold Hoare at ha
+  mvcgen [-Std.Do.Spec.monadLift_StateT, Env.Activation.hasWork, hd, hp, ht, invariant, ha]
 
 end Leanux.Proofs.Framing
