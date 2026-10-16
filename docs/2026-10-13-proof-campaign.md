@@ -6,7 +6,7 @@ Work on `proofs/campaign` in `.worktrees/proofs-campaign` follows [the charter](
 The state-split retrofit onto `6089dc4` precedes further R3/R4 results. All seven
 result rows remain lagging, last validated over `cb2348e`. The tree has moved from
 471 files / 7,715 named theorems to 449 files / 6,225 theorems. Completed changes
-comprise 494 retyped, 1,565 deleted, 113 retained contract shapes and 75 added theorems;
+comprise 529 retyped, 1,565 deleted, 123 retained contract shapes and 75 added theorems;
 six redundant LifetimeSafety exports are removed, with every retained terminal
 body unchanged (515 declarations). The native foundational, ordinary lifetime,
 clock/Noise-helper, keypair-composition, product scheduler, small native helper and WGBase ports pass their
@@ -36,6 +36,12 @@ kernel replays and independent review pass; one earlier development build failed
 on two local proof obligations. All four old environment-frame counterexamples
 and the timer selector difference now have kernel-checked stdin witnesses;
 permanent declarations and replay are pending their respective carry.
+
+The peer/packet primitive tranche retains all 45 theorems, with 35 retyped and
+ten pure contracts unchanged. The 23-job build, 58-declaration axiom check, two
+fresh kernel replays and independent review pass. Native getters and execution
+sequences preserve both state endpoints. Four development builds and one root
+census invocation failed before the final checks; limits and mirror are unchanged.
 
 The preceding `cb2348e` checkpoint validated all seven baseline result surfaces, including the
 local normal-poll carrier and initialized R3 committed-support extensions. The local R4

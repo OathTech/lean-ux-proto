@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.Lifetimes.Actions
+import Leanux.Proofs.Framing.Lift
 
 set_option pp.structureInstances false
 
@@ -15,73 +16,83 @@ def deviceStore (d : Device) : Store Slot :=
     | .inl i => d.txSkbs[i]?.map (fun _ => i + 1)
     | .inr i => d.rxSkbs[i]?.map (fun _ => i + 1)⟩
 
-def snapshot (w : World) : Store Slot :=
-  match w.k.wg with
+def snapshot (w : WGWorld) : Store Slot :=
+  match w.dev with
   | none => ⟨0, fun _ => none⟩
   | some d => deviceStore d
 
-def epoch (w : World) : Option Nat := w.k.wg.map (·.ifindex)
+def epoch (w : WGWorld) : Option Nat := w.dev.map (·.ifindex)
 
-def update (w : World) (f : Device → Device) : World :=
-  { w with k := { w.k with wg := w.k.wg.map f } }
+def update (w : WGWorld) (f : Device → Device) : WGWorld :=
+  { w with dev := w.dev.map f }
 
-def Inv (w : World) : Prop := Bounded (snapshot w)
+def Inv (w : WGWorld) : Prop := Bounded (snapshot w)
 
-def Step (w w' : World) : Prop :=
+def Step (w w' : WGWorld) : Prop :=
   epoch w' = epoch w ∧ Transition (snapshot w) (snapshot w')
 
-theorem Step.refl (w : World) : Step w w := ⟨rfl, .refl _⟩
+theorem Step.refl (w : WGWorld) : Step w w := ⟨rfl, .refl _⟩
 
 theorem Step.trans (h : Step w v) (g : Step v u) : Step w u :=
   ⟨g.1.trans h.1, h.2.trans g.2⟩
 
-theorem newTxSkb_run (w : World) (d : Device) (p : DataPacket)
-    (hd : w.k.wg = some d) :
-    (newTxSkb p).run w = .ok (d.nextSkb, update w fun v =>
-      { v with txSkbs := v.txSkbs.insert d.nextSkb p, nextSkb := d.nextSkb + 1 }) := by
-  simp [newTxSkb, getDev, getK, modifyDev, modifyK, hd, update]
-  rfl
+theorem newTxSkb_run (w : WGWorld) (ambient : Ambient) (d : Device) (p : DataPacket)
+    (hd : w.dev = some d) :
+    ((newTxSkb p).run w).run ambient = .ok ((d.nextSkb, update w fun v =>
+      { v with txSkbs := v.txSkbs.insert d.nextSkb p, nextSkb := d.nextSkb + 1 }), ambient) := by
+  simp [newTxSkb, liftSkb_run, SkbStore.newTx, hd, update]
+  all_goals rfl
 
-theorem getTxSkb_run (w : World) (d : Device) (i : SkbId) (p : DataPacket)
-    (hd : w.k.wg = some d) (hp : d.txSkbs[i]? = some p) :
-    (getTxSkb i).run w = .ok (p, w) := by
-  simp [getTxSkb, getDev, getK, hd, hp]
+theorem getTxSkb_run (w : WGWorld) (ambient : Ambient) (d : Device) (i : SkbId) (p : DataPacket)
+    (hd : w.dev = some d) (hp : d.txSkbs[i]? = some p) :
+    ((getTxSkb i).run w).run ambient = .ok ((p, w), ambient) := by
+  simp [getTxSkb, liftSkb_run, SkbStore.getTx, hd, hp]
+  change (Except.ok ((p, {w with dev := some d}), ambient) : Except Stop _) =
+    .ok ((p, w), ambient)
+  rw [← hd]
 
-theorem setTxSkb_run (w : World) (d : Device) (i : SkbId) (p : DataPacket)
-    (f : DataPacket → DataPacket) (hd : w.k.wg = some d) (hp : d.txSkbs[i]? = some p) :
-    (setTxSkb i f).run w = .ok ((), update w fun v =>
-      { v with txSkbs := v.txSkbs.insert i (f p) }) := by
-  simp [setTxSkb, getTxSkb, getDev, getK, modifyDev, modifyK, hd, hp, update]
+theorem setTxSkb_run (w : WGWorld) (ambient : Ambient) (d : Device) (i : SkbId) (p : DataPacket)
+    (f : DataPacket → DataPacket) (hd : w.dev = some d) (hp : d.txSkbs[i]? = some p) :
+    ((setTxSkb i f).run w).run ambient = .ok (((), update w fun v =>
+      { v with txSkbs := v.txSkbs.insert i (f p) }), ambient) := by
+  simp [setTxSkb, liftSkb_run, SkbStore.setTx, SkbStore.getTx, hd, hp, update]
+  all_goals rfl
 
-theorem freeTxSkb_run (w : World) (d : Device) (i : SkbId) (p : DataPacket)
-    (hd : w.k.wg = some d) (hp : d.txSkbs[i]? = some p) :
-    (freeTxSkb i).run w = .ok ((), update w fun v =>
-      { v with txSkbs := v.txSkbs.erase i }) := by
-  simp [freeTxSkb, getTxSkb, getDev, getK, modifyDev, modifyK, hd, hp, update]
+theorem freeTxSkb_run (w : WGWorld) (ambient : Ambient) (d : Device) (i : SkbId) (p : DataPacket)
+    (hd : w.dev = some d) (hp : d.txSkbs[i]? = some p) :
+    ((freeTxSkb i).run w).run ambient = .ok (((), update w fun v =>
+      { v with txSkbs := v.txSkbs.erase i }), ambient) := by
+  simp [freeTxSkb, liftSkb_run, SkbStore.freeTx, SkbStore.getTx, hd, hp, update]
+  all_goals rfl
 
-theorem newRxSkb_run (w : World) (d : Device) (p : RxPacket)
-    (hd : w.k.wg = some d) :
-    (newRxSkb p).run w = .ok (d.nextSkb, update w fun v =>
-      { v with rxSkbs := v.rxSkbs.insert d.nextSkb p, nextSkb := d.nextSkb + 1 }) := by
-  simp [newRxSkb, getDev, getK, modifyDev, modifyK, hd, update]
-  rfl
+theorem newRxSkb_run (w : WGWorld) (ambient : Ambient) (d : Device) (p : RxPacket)
+    (hd : w.dev = some d) :
+    ((newRxSkb p).run w).run ambient = .ok ((d.nextSkb, update w fun v =>
+      { v with rxSkbs := v.rxSkbs.insert d.nextSkb p, nextSkb := d.nextSkb + 1 }), ambient) := by
+  simp [newRxSkb, liftSkb_run, SkbStore.newRx, hd, update]
+  all_goals rfl
 
-theorem getRxSkb_run (w : World) (d : Device) (i : SkbId) (p : RxPacket)
-    (hd : w.k.wg = some d) (hp : d.rxSkbs[i]? = some p) :
-    (getRxSkb i).run w = .ok (p, w) := by
-  simp [getRxSkb, getDev, getK, hd, hp]
+theorem getRxSkb_run (w : WGWorld) (ambient : Ambient) (d : Device) (i : SkbId) (p : RxPacket)
+    (hd : w.dev = some d) (hp : d.rxSkbs[i]? = some p) :
+    ((getRxSkb i).run w).run ambient = .ok ((p, w), ambient) := by
+  simp [getRxSkb, liftSkb_run, SkbStore.getRx, hd, hp]
+  change (Except.ok ((p, {w with dev := some d}), ambient) : Except Stop _) =
+    .ok ((p, w), ambient)
+  rw [← hd]
 
-theorem setRxSkb_run (w : World) (d : Device) (i : SkbId) (p : RxPacket)
-    (f : RxPacket → RxPacket) (hd : w.k.wg = some d) (hp : d.rxSkbs[i]? = some p) :
-    (setRxSkb i f).run w = .ok ((), update w fun v =>
-      { v with rxSkbs := v.rxSkbs.insert i (f p) }) := by
-  simp [setRxSkb, getRxSkb, getDev, getK, modifyDev, modifyK, hd, hp, update]
+theorem setRxSkb_run (w : WGWorld) (ambient : Ambient) (d : Device) (i : SkbId) (p : RxPacket)
+    (f : RxPacket → RxPacket) (hd : w.dev = some d) (hp : d.rxSkbs[i]? = some p) :
+    ((setRxSkb i f).run w).run ambient = .ok (((), update w fun v =>
+      { v with rxSkbs := v.rxSkbs.insert i (f p) }), ambient) := by
+  simp [setRxSkb, liftSkb_run, SkbStore.setRx, SkbStore.getRx, hd, hp, update]
+  all_goals rfl
 
-theorem freeRxSkb_run (w : World) (d : Device) (i : SkbId) (p : RxPacket)
-    (hd : w.k.wg = some d) (hp : d.rxSkbs[i]? = some p) :
-    (freeRxSkb i).run w = .ok ((), update w fun v =>
-      { v with rxSkbs := v.rxSkbs.erase i }) := by
-  simp [freeRxSkb, getRxSkb, getDev, getK, modifyDev, modifyK, hd, hp, update]
+theorem freeRxSkb_run (w : WGWorld) (ambient : Ambient) (d : Device) (i : SkbId) (p : RxPacket)
+    (hd : w.dev = some d) (hp : d.rxSkbs[i]? = some p) :
+    ((freeRxSkb i).run w).run ambient = .ok (((), update w fun v =>
+      { v with rxSkbs := v.rxSkbs.erase i }), ambient) := by
+  simp [freeRxSkb, liftSkb_run, SkbStore.freeRx, SkbStore.getRx, hd, hp, update]
+  all_goals rfl
 
 theorem deviceStore_newTx (d : Device) (p : DataPacket) :
     deviceStore { d with txSkbs := d.txSkbs.insert d.nextSkb p, nextSkb := d.nextSkb + 1 } =
@@ -163,8 +174,8 @@ theorem deviceStore_freeRx (d : Device) (i : SkbId) :
       by_cases h : i = k <;>
         simp [h, eq_comm]
 
-theorem update_contract (w : World) (d : Device) (f : Device → Device)
-    (hd : w.k.wg = some d) (he : (f d).ifindex = d.ifindex)
+theorem update_contract (w : WGWorld) (d : Device) (f : Device → Device)
+    (hd : w.dev = some d) (he : (f d).ifindex = d.ifindex)
     (hb : Bounded (deviceStore d) → Bounded (deviceStore (f d)))
     (ht : Transition (deviceStore d) (deviceStore (f d))) (hi : Inv w) :
     Inv (update w f) ∧ Step w (update w f) := by
@@ -172,11 +183,12 @@ theorem update_contract (w : World) (d : Device) (f : Device → Device)
   simpa [Inv, Step, snapshot, update, epoch, hd, he] using And.intro (hb hi') (And.intro he ht)
 
 theorem newTxSkb_contract (p : DataPacket) : Action Inv Step (newTxSkb p) := by
-  intro w x w' hi hr
-  cases hd : w.k.wg with
-  | none => simp [newTxSkb, getDev, getK, hd, invariant] at hr
+  apply (Action.iff_run_ambient _ _ _).mpr
+  intro w ambient x w' ambient' hi hr
+  cases hd : w.dev with
+  | none => simp [newTxSkb, liftSkb_run, SkbStore.newTx, hd, invariant, AmbientM.invariant] at hr
   | some d =>
-    rw [newTxSkb_run w d p hd] at hr
+    rw [newTxSkb_run w ambient d p hd] at hr
     cases hr
     apply update_contract w d _ hd rfl _ _ hi
     · rw [deviceStore_newTx]
@@ -184,34 +196,41 @@ theorem newTxSkb_contract (p : DataPacket) : Action Inv Step (newTxSkb p) := by
     · rw [deviceStore_newTx]
       exact allocate_transition _ _
 
-theorem getTxSkb_current (i : SkbId) (w w' : World) (p : DataPacket)
-    (hr : (getTxSkb i).run w = .ok (p, w')) :
-    w' = w ∧ ∃ d, w.k.wg = some d ∧ d.txSkbs[i]? = some p := by
-  cases hd : w.k.wg with
-  | none => simp [getTxSkb, getDev, getK, hd, invariant] at hr
+theorem getTxSkb_current (i : SkbId) (w w' : WGWorld) (p : DataPacket)
+    (ambient ambient' : Ambient)
+    (hr : ((getTxSkb i).run w).run ambient = .ok ((p, w'), ambient')) :
+    w' = w ∧ ambient' = ambient ∧ ∃ d, w.dev = some d ∧ d.txSkbs[i]? = some p := by
+  cases hd : w.dev with
+  | none => simp [getTxSkb, liftSkb_run, SkbStore.getTx, hd, invariant, AmbientM.invariant] at hr
   | some d =>
     cases hp : d.txSkbs[i]? with
-    | none => simp [getTxSkb, getDev, getK, hd, hp, invariant] at hr
-    | some old =>
-      rw [getTxSkb_run w d i old hd hp] at hr
+    | none =>
+      simp [getTxSkb, liftSkb_run, SkbStore.getTx, hd, hp, invariant, AmbientM.invariant] at hr
       cases hr
-      exact ⟨rfl, d, rfl, hp⟩
+    | some old =>
+      rw [getTxSkb_run w ambient d i old hd hp] at hr
+      cases hr
+      exact ⟨rfl, rfl, d, rfl, hp⟩
 
 theorem getTxSkb_contract (i : SkbId) : Action Inv Step (getTxSkb i) := by
-  intro w x w' hi hr
-  rcases getTxSkb_current i w w' x hr with ⟨rfl, _⟩
+  apply (Action.iff_run_ambient _ _ _).mpr
+  intro w ambient x w' ambient' hi hr
+  rcases getTxSkb_current i w w' x ambient ambient' hr with ⟨rfl, _, _⟩
   exact ⟨hi, .refl _⟩
 
 theorem setTxSkb_contract (i : SkbId) (f : DataPacket → DataPacket) :
     Action Inv Step (setTxSkb i f) := by
-  intro w x w' hi hr
-  cases hd : w.k.wg with
-  | none => simp [setTxSkb, getTxSkb, getDev, getK, hd, invariant] at hr
+  apply (Action.iff_run_ambient _ _ _).mpr
+  intro w ambient x w' ambient' hi hr
+  cases hd : w.dev with
+  | none => simp [setTxSkb, SkbStore.setTx, getTxSkb, liftSkb_run, SkbStore.getTx, hd, invariant, AmbientM.invariant] at hr
   | some d =>
     cases hp : d.txSkbs[i]? with
-    | none => simp [setTxSkb, getTxSkb, getDev, getK, hd, hp, invariant] at hr
+    | none =>
+      simp [setTxSkb, SkbStore.setTx, getTxSkb, liftSkb_run, SkbStore.getTx, hd, hp, invariant, AmbientM.invariant] at hr
+      cases hr
     | some old =>
-      rw [setTxSkb_run w d i old f hd hp] at hr
+      rw [setTxSkb_run w ambient d i old f hd hp] at hr
       cases hr
       apply update_contract w d _ hd rfl _ _ hi
       · rw [deviceStore_setTx d i old (f old) hp]
@@ -220,14 +239,17 @@ theorem setTxSkb_contract (i : SkbId) (f : DataPacket → DataPacket) :
         exact .refl _
 
 theorem freeTxSkb_contract (i : SkbId) : Action Inv Step (freeTxSkb i) := by
-  intro w x w' hi hr
-  cases hd : w.k.wg with
-  | none => simp [freeTxSkb, getTxSkb, getDev, getK, hd, invariant] at hr
+  apply (Action.iff_run_ambient _ _ _).mpr
+  intro w ambient x w' ambient' hi hr
+  cases hd : w.dev with
+  | none => simp [freeTxSkb, SkbStore.freeTx, getTxSkb, liftSkb_run, SkbStore.getTx, hd, invariant, AmbientM.invariant] at hr
   | some d =>
     cases hp : d.txSkbs[i]? with
-    | none => simp [freeTxSkb, getTxSkb, getDev, getK, hd, hp, invariant] at hr
+    | none =>
+      simp [freeTxSkb, SkbStore.freeTx, getTxSkb, liftSkb_run, SkbStore.getTx, hd, hp, invariant, AmbientM.invariant] at hr
+      cases hr
     | some old =>
-      rw [freeTxSkb_run w d i old hd hp] at hr
+      rw [freeTxSkb_run w ambient d i old hd hp] at hr
       cases hr
       apply update_contract w d _ hd rfl _ _ hi
       · rw [deviceStore_freeTx]
@@ -236,11 +258,12 @@ theorem freeTxSkb_contract (i : SkbId) : Action Inv Step (freeTxSkb i) := by
         exact erase_transition _ _
 
 theorem newRxSkb_contract (p : RxPacket) : Action Inv Step (newRxSkb p) := by
-  intro w x w' hi hr
-  cases hd : w.k.wg with
-  | none => simp [newRxSkb, getDev, getK, hd, invariant] at hr
+  apply (Action.iff_run_ambient _ _ _).mpr
+  intro w ambient x w' ambient' hi hr
+  cases hd : w.dev with
+  | none => simp [newRxSkb, liftSkb_run, SkbStore.newRx, hd, invariant, AmbientM.invariant] at hr
   | some d =>
-    rw [newRxSkb_run w d p hd] at hr
+    rw [newRxSkb_run w ambient d p hd] at hr
     cases hr
     apply update_contract w d _ hd rfl _ _ hi
     · rw [deviceStore_newRx]
@@ -248,34 +271,41 @@ theorem newRxSkb_contract (p : RxPacket) : Action Inv Step (newRxSkb p) := by
     · rw [deviceStore_newRx]
       exact allocate_transition _ _
 
-theorem getRxSkb_current (i : SkbId) (w w' : World) (p : RxPacket)
-    (hr : (getRxSkb i).run w = .ok (p, w')) :
-    w' = w ∧ ∃ d, w.k.wg = some d ∧ d.rxSkbs[i]? = some p := by
-  cases hd : w.k.wg with
-  | none => simp [getRxSkb, getDev, getK, hd, invariant] at hr
+theorem getRxSkb_current (i : SkbId) (w w' : WGWorld) (p : RxPacket)
+    (ambient ambient' : Ambient)
+    (hr : ((getRxSkb i).run w).run ambient = .ok ((p, w'), ambient')) :
+    w' = w ∧ ambient' = ambient ∧ ∃ d, w.dev = some d ∧ d.rxSkbs[i]? = some p := by
+  cases hd : w.dev with
+  | none => simp [getRxSkb, liftSkb_run, SkbStore.getRx, hd, invariant, AmbientM.invariant] at hr
   | some d =>
     cases hp : d.rxSkbs[i]? with
-    | none => simp [getRxSkb, getDev, getK, hd, hp, invariant] at hr
-    | some old =>
-      rw [getRxSkb_run w d i old hd hp] at hr
+    | none =>
+      simp [getRxSkb, liftSkb_run, SkbStore.getRx, hd, hp, invariant, AmbientM.invariant] at hr
       cases hr
-      exact ⟨rfl, d, rfl, hp⟩
+    | some old =>
+      rw [getRxSkb_run w ambient d i old hd hp] at hr
+      cases hr
+      exact ⟨rfl, rfl, d, rfl, hp⟩
 
 theorem getRxSkb_contract (i : SkbId) : Action Inv Step (getRxSkb i) := by
-  intro w x w' hi hr
-  rcases getRxSkb_current i w w' x hr with ⟨rfl, _⟩
+  apply (Action.iff_run_ambient _ _ _).mpr
+  intro w ambient x w' ambient' hi hr
+  rcases getRxSkb_current i w w' x ambient ambient' hr with ⟨rfl, _, _⟩
   exact ⟨hi, .refl _⟩
 
 theorem setRxSkb_contract (i : SkbId) (f : RxPacket → RxPacket) :
     Action Inv Step (setRxSkb i f) := by
-  intro w x w' hi hr
-  cases hd : w.k.wg with
-  | none => simp [setRxSkb, getRxSkb, getDev, getK, hd, invariant] at hr
+  apply (Action.iff_run_ambient _ _ _).mpr
+  intro w ambient x w' ambient' hi hr
+  cases hd : w.dev with
+  | none => simp [setRxSkb, SkbStore.setRx, getRxSkb, liftSkb_run, SkbStore.getRx, hd, invariant, AmbientM.invariant] at hr
   | some d =>
     cases hp : d.rxSkbs[i]? with
-    | none => simp [setRxSkb, getRxSkb, getDev, getK, hd, hp, invariant] at hr
+    | none =>
+      simp [setRxSkb, SkbStore.setRx, getRxSkb, liftSkb_run, SkbStore.getRx, hd, hp, invariant, AmbientM.invariant] at hr
+      cases hr
     | some old =>
-      rw [setRxSkb_run w d i old f hd hp] at hr
+      rw [setRxSkb_run w ambient d i old f hd hp] at hr
       cases hr
       apply update_contract w d _ hd rfl _ _ hi
       · rw [deviceStore_setRx d i old (f old) hp]
@@ -284,14 +314,17 @@ theorem setRxSkb_contract (i : SkbId) (f : RxPacket → RxPacket) :
         exact .refl _
 
 theorem freeRxSkb_contract (i : SkbId) : Action Inv Step (freeRxSkb i) := by
-  intro w x w' hi hr
-  cases hd : w.k.wg with
-  | none => simp [freeRxSkb, getRxSkb, getDev, getK, hd, invariant] at hr
+  apply (Action.iff_run_ambient _ _ _).mpr
+  intro w ambient x w' ambient' hi hr
+  cases hd : w.dev with
+  | none => simp [freeRxSkb, SkbStore.freeRx, getRxSkb, liftSkb_run, SkbStore.getRx, hd, invariant, AmbientM.invariant] at hr
   | some d =>
     cases hp : d.rxSkbs[i]? with
-    | none => simp [freeRxSkb, getRxSkb, getDev, getK, hd, hp, invariant] at hr
+    | none =>
+      simp [freeRxSkb, SkbStore.freeRx, getRxSkb, liftSkb_run, SkbStore.getRx, hd, hp, invariant, AmbientM.invariant] at hr
+      cases hr
     | some old =>
-      rw [freeRxSkb_run w d i old hd hp] at hr
+      rw [freeRxSkb_run w ambient d i old hd hp] at hr
       cases hr
       apply update_contract w d _ hd rfl _ _ hi
       · rw [deviceStore_freeRx]
@@ -301,7 +334,7 @@ theorem freeRxSkb_contract (i : SkbId) : Action Inv Step (freeRxSkb i) := by
 
 /-- Exactly the eight original packet-store primitives. This family does not
 assert coverage of callers, scheduled workers or device lifecycle operations. -/
-inductive Primitive : (α : Type) → M α → Prop where
+inductive Primitive : (α : Type) → WG.M α → Prop where
   | newTx (p) : Primitive SkbId (newTxSkb p)
   | getTx (i) : Primitive DataPacket (getTxSkb i)
   | setTx (i f) : Primitive Unit (setTxSkb i f)
@@ -324,10 +357,10 @@ theorem primitive_contract (h : Primitive α a) : Action Inv Step a := by
 
 def Sequence := Executions Primitive
 
-theorem sequence_contract (h : Sequence w w') (hi : Inv w) : Inv w' ∧ Step w w' :=
+theorem sequence_contract (h : Sequence w ambient w' ambient') (hi : Inv w) : Inv w' ∧ Step w w' :=
   h.contract Step.refl (fun _ _ _ => Step.trans) (fun _ h => primitive_contract h) hi
 
-theorem allocation_slots_empty (w : World) (d : Device) (hd : w.k.wg = some d)
+theorem allocation_slots_empty (w : WGWorld) (d : Device) (hd : w.dev = some d)
     (hi : Inv w) : d.txSkbs[d.nextSkb]? = none ∧ d.rxSkbs[d.nextSkb]? = none := by
   have hb : Bounded (deviceStore d) := by simpa [Inv, snapshot, hd] using hi
   constructor
@@ -344,55 +377,67 @@ theorem allocation_slots_empty (w : World) (d : Device) (hd : w.k.wg = some d)
       simp only [deviceStore] at h
       omega
 
-theorem freeTxSkb_facts (i : SkbId) (w v : World) (hi : Inv w)
-    (hr : (freeTxSkb i).run w = .ok ((), v)) :
+theorem freeTxSkb_facts (i : SkbId) (w v : WGWorld)
+    (ambient ambient' : Ambient) (hi : Inv w)
+    (hr : ((freeTxSkb i).run w).run ambient = .ok (((), v), ambient')) :
     Inv v ∧ i + 1 ≤ (snapshot v).frontier ∧ (snapshot v).slots (.inl i) = none := by
-  have hv := (freeTxSkb_contract i w () v hi hr).1
-  cases hd : w.k.wg with
-  | none => simp [freeTxSkb, getTxSkb, getDev, getK, hd, invariant] at hr
+  have hv := ((Action.iff_run_ambient _ _ _).mp (freeTxSkb_contract i)
+    w ambient () v ambient' hi hr).1
+  cases hd : w.dev with
+  | none => simp [freeTxSkb, SkbStore.freeTx, getTxSkb, liftSkb_run, SkbStore.getTx, hd, invariant, AmbientM.invariant] at hr
   | some d =>
     cases hp : d.txSkbs[i]? with
-    | none => simp [freeTxSkb, getTxSkb, getDev, getK, hd, hp, invariant] at hr
+    | none =>
+      simp [freeTxSkb, SkbStore.freeTx, getTxSkb, liftSkb_run, SkbStore.getTx, hd, hp, invariant, AmbientM.invariant] at hr
+      cases hr
     | some p =>
       have hb := hi (.inl i) (i + 1) (by simp [snapshot, deviceStore, hd, hp])
-      rw [freeTxSkb_run w d i p hd hp] at hr
+      rw [freeTxSkb_run w ambient d i p hd hp] at hr
       cases hr
       exact ⟨hv, by simpa [snapshot, update, deviceStore, hd] using hb,
         by simp [snapshot, update, deviceStore, hd]⟩
 
-theorem freeRxSkb_facts (i : SkbId) (w v : World) (hi : Inv w)
-    (hr : (freeRxSkb i).run w = .ok ((), v)) :
+theorem freeRxSkb_facts (i : SkbId) (w v : WGWorld)
+    (ambient ambient' : Ambient) (hi : Inv w)
+    (hr : ((freeRxSkb i).run w).run ambient = .ok (((), v), ambient')) :
     Inv v ∧ i + 1 ≤ (snapshot v).frontier ∧ (snapshot v).slots (.inr i) = none := by
-  have hv := (freeRxSkb_contract i w () v hi hr).1
-  cases hd : w.k.wg with
-  | none => simp [freeRxSkb, getRxSkb, getDev, getK, hd, invariant] at hr
+  have hv := ((Action.iff_run_ambient _ _ _).mp (freeRxSkb_contract i)
+    w ambient () v ambient' hi hr).1
+  cases hd : w.dev with
+  | none => simp [freeRxSkb, SkbStore.freeRx, getRxSkb, liftSkb_run, SkbStore.getRx, hd, invariant, AmbientM.invariant] at hr
   | some d =>
     cases hp : d.rxSkbs[i]? with
-    | none => simp [freeRxSkb, getRxSkb, getDev, getK, hd, hp, invariant] at hr
+    | none =>
+      simp [freeRxSkb, SkbStore.freeRx, getRxSkb, liftSkb_run, SkbStore.getRx, hd, hp, invariant, AmbientM.invariant] at hr
+      cases hr
     | some p =>
       have hb := hi (.inr i) (i + 1) (by simp [snapshot, deviceStore, hd, hp])
-      rw [freeRxSkb_run w d i p hd hp] at hr
+      rw [freeRxSkb_run w ambient d i p hd hp] at hr
       cases hr
       exact ⟨hv, by simpa [snapshot, update, deviceStore, hd] using hb,
         by simp [snapshot, update, deviceStore, hd]⟩
 
-theorem freedTx_unreadable (i : SkbId) (w v u out : World) (p : DataPacket)
-    (hi : Inv w) (hf : (freeTxSkb i).run w = .ok ((), v))
-    (hs : Sequence v u) : (getTxSkb i).run u ≠ .ok (p, out) := by
+theorem freedTx_unreadable (i : SkbId) (w v u out : WGWorld) (p : DataPacket)
+    (ambient afterFree afterSequence afterGet : Ambient)
+    (hi : Inv w) (hf : ((freeTxSkb i).run w).run ambient = .ok (((), v), afterFree))
+    (hs : Sequence v afterFree u afterSequence) :
+    ((getTxSkb i).run u).run afterSequence ≠ .ok ((p, out), afterGet) := by
   intro hq
-  obtain ⟨hv, hb, he⟩ := freeTxSkb_facts i w v hi hf
-  obtain ⟨_, d, hd, hp⟩ := getTxSkb_current i u out p hq
+  obtain ⟨hv, hb, he⟩ := freeTxSkb_facts i w v ambient afterFree hi hf
+  obtain ⟨_, _, d, hd, hp⟩ := getTxSkb_current i u out p afterSequence afterGet hq
   have hl : (snapshot u).slots (.inl i) = some (i + 1) := by
     simp [snapshot, deviceStore, hd, hp]
   have hfresh := (sequence_contract hs hv).2.2.empty_fresh he hl
   exact Nat.not_lt_of_ge hb hfresh
 
-theorem freedRx_unreadable (i : SkbId) (w v u out : World) (p : RxPacket)
-    (hi : Inv w) (hf : (freeRxSkb i).run w = .ok ((), v))
-    (hs : Sequence v u) : (getRxSkb i).run u ≠ .ok (p, out) := by
+theorem freedRx_unreadable (i : SkbId) (w v u out : WGWorld) (p : RxPacket)
+    (ambient afterFree afterSequence afterGet : Ambient)
+    (hi : Inv w) (hf : ((freeRxSkb i).run w).run ambient = .ok (((), v), afterFree))
+    (hs : Sequence v afterFree u afterSequence) :
+    ((getRxSkb i).run u).run afterSequence ≠ .ok ((p, out), afterGet) := by
   intro hq
-  obtain ⟨hv, hb, he⟩ := freeRxSkb_facts i w v hi hf
-  obtain ⟨_, d, hd, hp⟩ := getRxSkb_current i u out p hq
+  obtain ⟨hv, hb, he⟩ := freeRxSkb_facts i w v ambient afterFree hi hf
+  obtain ⟨_, _, d, hd, hp⟩ := getRxSkb_current i u out p afterSequence afterGet hq
   have hl : (snapshot u).slots (.inr i) = some (i + 1) := by
     simp [snapshot, deviceStore, hd, hp]
   have hfresh := (sequence_contract hs hv).2.2.empty_fresh he hl

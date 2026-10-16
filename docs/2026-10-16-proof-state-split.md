@@ -37,9 +37,10 @@ it is not part of that baseline.
 | Native WGBase contracts and generalized map rule | 185 | 117 | 68 | 0 | 0 | 117 |
 | Redundant filesystem-family wrappers and exports | 21 | 0 | 21 | 0 | 0 | 0 |
 | Native WGTransitions and cookie contracts | 109 | 109 | 0 | 0 | 0 | 109 |
+| Native peer and packet primitives | 45 | 35 | 0 | 10 | 0 | 45 |
 
 The whole tree currently contains 449 Lean files and 6,225 theorems. The completed
-changes total 494 retyped theorems, 1,565 deletions, 113 retained contract shapes and 75 added.
+changes total 529 retyped theorems, 1,565 deletions, 123 retained contract shapes and 75 added.
 Retyping changes or generalizes the actual state/monad carrier or observation.
 This includes shorthand contracts whose source functions or named views move
 to a native monad. Mere namespace qualification and equivalent relocation of a
@@ -595,6 +596,46 @@ LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake build 
 # Run separately for each of the two modules above:
 LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Keypairs.Frames.WGTransitions
 ```
+
+## Native peer and packet primitives
+
+The two primitive modules retain all 45 theorems: 35 native retypes and ten
+byte-identical pure contracts. Exact getters retain both WG and Ambient state,
+and the execution chains pass each returned Ambient to the following call.
+Packet allocation, conditional setters, free and subsequent unreadability keep
+the original device-epoch and boundedness premises; arbitrary packet modifiers
+remain arbitrary. The eight packet wrappers use the actual guarded skb adapter.
+Peer reference release retains the actual index unhash, queue guards, erase,
+timer guards and retirement; its normal-return retention claim gains no premise.
+
+Validation: the frozen scoped build passes (23 jobs), all 58 named declarations
+print only standard axioms, both fresh kernel replays pass, and independent
+statement/source review passes. Hashes, the ordered theorem names, unchanged
+proof limits, all-proof trust scan, seven unchanged terminal files, mirror
+equality and whitespace checks pass. Four earlier worker builds failed on
+conversion/spec selection, including the existing 800000-heartbeat limit; no
+limit was raised. The first root axiom invocation omitted two inductive
+declarations from its census and failed its count assertion; the corrected
+invocation checks all 58. All nine validation/development calls are accounted
+for: four pass, five fail. There was no panic, interruption, infrastructure
+rerun, source admission or observed worker recovery-admission diagnostic.
+
+```sh
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake build Leanux.Proofs.WG.Peers.Primitives Leanux.Proofs.WG.Packets.Primitives
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Peers.Primitives
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Packets.Primitives
+```
+
+Read-only preparation for the remaining product frames used six capped stdin
+calls: two passed and four failed. The five environment-bookkeeping candidates
+typecheck with standard axioms over a pure observation of the original 47
+fields; no execution world or mirror wrapper was added. The first attempt had
+opaque lift/spec plumbing and five rejected recovery axiom prints. Three
+further batch/stack attempts failed on namespace qualification, two default
+heartbeat exhaustions and an unavailable tactic; three further recovery axiom
+prints were rejected. The stack proof remains open. These calls created no
+files, changed no limits and are not permanent declarations or full-tree
+validation; the candidate carry still needs its own scoped build and replay.
 
 ## Incoming source-observer findings
 
