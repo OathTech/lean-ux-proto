@@ -140,8 +140,10 @@ it is not part of that baseline.
 
 | Product environment controls and remaining-call family | 23 | 0 | 1 | 22 | 0 | 22 |
 
-The whole tree currently contains 451 Lean files and 6,493 theorems. The completed
-changes total 2,291 retyped theorems, 1,672 deletions, 1,267 retained contract shapes and 450 added.
+| Native public device completion and original product helpers | 14 | 10 | 0 | 4 | 4 | 18 |
+
+The whole tree currently contains 451 Lean files and 6,497 theorems. The completed
+changes total 2,301 retyped theorems, 1,672 deletions, 1,271 retained contract shapes and 454 added.
 Retyping changes or generalizes the actual state/monad carrier or observation.
 This includes shorthand contracts whose source functions or named views move
 to a native monad. Mere namespace qualification and equivalent relocation of a
@@ -3443,3 +3445,25 @@ theorem current_absent_ipv6 :
 #print axioms current_absent_ipv6
 end Leanux.Proofs.DeleteDrift
 ~~~
+
+
+## Public device routing completion
+
+DeviceCompletion carries fourteen theorems to eighteen: ten concrete native
+retypes, four retained arbitrary-product helpers and four native companions.
+The retained product kernel helper keeps its original 43-field premise;
+native callers use seven WG fields. Saved-list membership, malformed input,
+ordinary negative returns, zero-key decisions and Stops retain source order.
+No residency or coherence hypothesis was added.
+
+The final scoped build passes263 jobs with zero own warnings. All22 named
+declarations have standard-only axioms; fresh kernel replay and independent
+complete review pass. Three prior development builds failed on proof
+composition/normalization; no failed result was accepted. No crash,
+infrastructure rerun, cancellation or cap/proof-limit change occurred.
+Full gate and terminal replay are pending, every row stays lagging, and
+the mirror remains identical to b700659.
+
+Reproduce with 'cap scripts/in-bundle lake build Leanux.Proofs.WG.Configuration.DeviceCompletion'
+and 'cap scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Configuration.DeviceCompletion',
+using the portable cap function above.
