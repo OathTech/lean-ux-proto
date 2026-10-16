@@ -16,8 +16,8 @@ open Leanux Leanux.WG Leanux.Proofs.WG.CounterWindow Leanux.Proofs.Logged
 
 def cell (k : Keypair) : Cell := ⟨k.internalId, k.receivingCounter⟩
 
-def snapshot (w : World) : Snapshot :=
-  ⟨w.k.keypairCounter, fun i => (w.k.wg.bind fun d => d.keypairs[i]?).map cell⟩
+def snapshot (w : WGWorld) : Snapshot :=
+  ⟨w.keypairCounter, fun i => (w.dev.bind fun d => d.keypairs[i]?).map cell⟩
 
 def Snapshot.put (s : Snapshot) (i : Nat) (v : Option Cell) : Snapshot :=
   { s with slots := fun j => if j = i then v else s.slots j }

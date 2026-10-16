@@ -17,7 +17,9 @@ Native action/projection contracts also pass those scoped checks (21 to 23
 theorems: 19 generalized, two deleted, four added; 28 declaration axiom checks).
 The failure-prefix core and native receipts now pass scoped build, 221 declaration
 axiom checks, four fresh replays and independent review (128 to 172 theorems:
-113 retyped, 15 unchanged, 44 added).
+113 retyped, 15 unchanged, 44 added). Native keypair snapshots and identities
+pass those scoped checks too (34 to 30 theorems: eight retyped, 22 unchanged,
+four deleted; 43 declaration axiom checks).
 [The retrofit report](2026-10-16-proof-state-split.md)
 tracks the counts and remaining work.
 

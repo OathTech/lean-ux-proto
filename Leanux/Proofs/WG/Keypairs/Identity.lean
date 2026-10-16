@@ -71,25 +71,31 @@ theorem Evolution.released_absent (first : Evolution s h t g)
     (Nat.le_trans (hi.bounded i c hc) first.frontier_mono) ha
 
 /-- A successful original getter returns exactly the current store object
-and leaves the World unchanged, including its lifetime identity. -/
-theorem getKeypair_current (i : KeypairId) (w w' : World) (k : Keypair)
-    (hr : (getKeypair i).run w = .ok (k, w')) :
-    w' = w ∧ (snapshot w).slots i = some (cell k) := by
-  cases hd : w.k.wg with
-  | none => simp [getKeypair, getDev, getK, hd, invariant] at hr
+and leaves both WG and Ambient unchanged, including its lifetime identity. -/
+theorem getKeypair_current (i : KeypairId) (w w' : WGWorld)
+    (ambient ambient' : Ambient) (k : Keypair)
+    (hr : ((getKeypair i).run w).run ambient = .ok ((k, w'), ambient')) :
+    w' = w ∧ ambient' = ambient ∧ (snapshot w).slots i = some (cell k) := by
+  cases hd : w.dev with
+  | none =>
+    simp [getKeypair, getDev, hd, invariant, AmbientM.invariant] at hr
+    cases hr
   | some d =>
     cases hk : d.keypairs[i]? with
-    | none => simp [getKeypair, getDev, getK, hd, hk, invariant] at hr
-    | some actual =>
-      rw [getKeypair_run w d i actual hd hk] at hr
+    | none =>
+      simp [getKeypair, getDev, hd, hk, invariant, AmbientM.invariant] at hr
       cases hr
-      exact ⟨rfl, snapshot_lookup w d i k hd hk⟩
+    | some actual =>
+      rw [getKeypair_run w ambient d i actual hd hk] at hr
+      cases hr
+      exact ⟨rfl, rfl, snapshot_lookup w d i k hd hk⟩
 
 /-- Looking up a slot cannot resolve an allocation identity absent from the
 current store, even when that slot has since been reused. -/
-theorem getKeypair_absent_identity (i : KeypairId) (w w' : World)
+theorem getKeypair_absent_identity (i : KeypairId) (w w' : WGWorld)
+    (ambient ambient' : Ambient)
     (k : Keypair) (stamp : Nat) (ha : LifetimeAbsent (snapshot w) stamp)
-    (hr : (getKeypair i).run w = .ok (k, w')) : k.internalId ≠ stamp :=
-  ha i (cell k) (getKeypair_current i w w' k hr).2
+    (hr : ((getKeypair i).run w).run ambient = .ok ((k, w'), ambient')) : k.internalId ≠ stamp :=
+  ha i (cell k) (getKeypair_current i w w' ambient ambient' k hr).2.2
 
 end Leanux.Proofs.WG.Keypairs

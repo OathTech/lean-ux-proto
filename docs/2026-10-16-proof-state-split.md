@@ -15,17 +15,18 @@ and strings and includes private and attributed declarations. The uncommitted
 configured-closure extension was preserved before resumption and is deferred;
 it is not part of that baseline.
 
-| Completed local port | Before | Retyped | Structural deletions | Retained interface | Added | After |
+| Completed local port | Before | Retyped | Deleted | Retained interface | Added | After |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | CounterWindow `Refinement`, `MirrorCalls`, `Bounds` | 31 | 17 | 6 | 8 | 1 | 26 |
 | Framing `Basic`, `WP`, `Allocation`, `Index`, new `Hoare`/`Lift` | 40 | 25 | 14 | 1 | 14 | 40 |
 | Logged `Basic`, `Outer`, new `Ghost` | 27 | 14 | 0 | 13 | 4 | 31 |
 | Lifetimes `Actions`, Framing `Projection`, `Tools` | 21 | 19 | 2 | 0 | 4 | 23 |
 | Logged prefix core (11 files), new `PrefixState`, `WGPrefix`, `NativeCapture` | 128 | 113 | 0 | 15 | 44 | 172 |
+| Keypairs `Lifetimes`, `LifetimeMirror`, `Identity` | 34 | 8 | 4 | 22 | 0 | 30 |
 
-The whole tree currently contains 477 Lean files and 7,760 theorems. The completed
-ports total 188 retyped theorems, 22 deletions, 37 retained interfaces and 67 added. All terminal files
-remain unchanged. **Every result remains lagging** until the complete tree
+The whole tree currently contains 477 Lean files and 7,756 theorems. The completed
+ports total 196 retyped theorems, 26 deletions, 59 retained interfaces and 67 added.
+All terminal files remain unchanged. **Every result remains lagging** until the complete tree
 passes its proof gate and kernel replay. R1/R2/R5/R6 retain their pre-split
 charter dispositions; initialized R3 packet authorization and R4 receive-pipeline
 conservation remain open.
@@ -191,6 +192,33 @@ LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env le
 LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.Logged.ProjectsUnderTo
 ```
 
+## Native keypair snapshots and identities
+
+The lifetime snapshot now takes `WGWorld`. Validator evolution and preservation
+use actual WG and Ambient inputs and successful outputs, preserving exact
+acceptance history and false-return bitmap updates. The getter retains equality
+of both returned states and the current-slot lifetime fact. The pure lifetime
+algebra is unchanged. The canonical initial snapshot describes the actual
+`Runner.initialWG net bare`; the old task/file/seccomp initialization wrapper
+collapses to this same conclusion.
+
+Three recording frames are deleted because their operations now take only
+Ambient, outside the WG snapshot. The fourth deletion is the redundant
+initialization wrapper. No boundedness or reachability premise was added.
+
+Validation: final scoped build passes (77 jobs), all 43 named declarations print
+only permitted axioms, and fresh Identity kernel replay passes. Independent
+frozen-source review found no substantive issue. Hashes, prohibited-token scan,
+terminal preservation, mirror equality and whitespace pass. One earlier build
+failed on elimination of two impossible native failure equations. There were five
+capped calls, no admission, interruption, timeout, KILLED outcome, limit increase
+or infrastructure rerun; all handles are collected.
+
+```sh
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake build Leanux.Proofs.WG.Keypairs.Identity
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Keypairs.Identity
+```
+
 ## Incoming source-observer findings
 
 Source inspection found two observer carry defects beyond type changes. The old
@@ -210,7 +238,9 @@ order selects the latter while raw-expiry order selects the former. The source
 observers and receipt boundaries must follow the actual inline execution. This
 selection witness is likewise source-inspected, pending formal checking.
 
-The success-observer lane has additional copied-source drift. Its runner omits
+The success-observer lane has additional copied-source drift. Its encrypt worker
+still runs the softirq before consuming the ring; the mirror now consumes and
+writes back the ring first. Its runner omits
 the current routing-table boot, foreign-namespace boot, exact startup failure,
 startup-record clearing and per-operation `hiddenAhead`. Its environment copies
 omit routing/neighbour calls, route-MTU propagation and the current timer-pass
@@ -228,7 +258,7 @@ build fails at 14 state-split/carry dependencies; no full proof-gate pass is
 claimed. The incoming whitespace speedbump reports existing patch whitespace
 and a unit-file trailing blank line; those incoming files remain unchanged.
 
-Next are the native keypair snapshot/evolution core, deletion of the broader
+Next are native ordinary lifetime evolution, deletion of the broader
 structural-frame layers and the remaining native/product observers. A read-only
 deletion audit identifies 1,427 theorems in 26 modules: 1,388 structural/obsolete
 facts and 39 unused support facts. The latter include arithmetic and conditional
