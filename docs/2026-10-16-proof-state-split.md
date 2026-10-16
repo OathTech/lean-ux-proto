@@ -90,9 +90,10 @@ it is not part of that baseline.
 | Native counter, lookup/cache, TX staging/admission and RX maintenance | 110 | 61 | 5 | 44 | 29 | 134 |
 | Key lifetime, affiliation, trie insertion and receive/socket completion | 56 | 44 | 1 | 11 | 14 | 69 |
 | Product encryption, IPv4 calls, timer callbacks and receive borrowing | 68 | 40 | 0 | 28 | 17 | 85 |
+| Native/product completion, poll and TX disposition projections | 70 | 38 | 0 | 32 | 12 | 82 |
 
-The whole tree currently contains 451 Lean files and 6,389 theorems. The completed
-changes total 1,773 retyped theorems, 1,636 deletions, 719 retained contract shapes and 310 added.
+The whole tree currently contains 451 Lean files and 6,401 theorems. The completed
+changes total 1,811 retyped theorems, 1,636 deletions, 751 retained contract shapes and 322 added.
 Retyping changes or generalizes the actual state/monad carrier or observation.
 This includes shorthand contracts whose source functions or named views move
 to a native monad. Mere namespace qualification and equivalent relocation of a
@@ -2380,3 +2381,57 @@ not memory-cap outcomes, passes or infrastructure retries. Dirty worktrees,
 including untracked sources, were snapshotted before work resumed.
 No proof limit or memory cap changed. Handshake response erasure is being
 factored along its literal source continuation; every result remains lagging.
+
+## Native/product completion, poll and TX disposition projections
+
+Six modules pass scoped builds, 115 explicit named axiom checks, six fresh
+module replays and independent source reviews. Their seventy old theorems
+become 82: 38 retyped/generalized, 32 retained contract shapes and twelve
+additions, with no deletion. The executable closure is unchanged, so its
+previous default build and unit results still apply. The full proof gate is
+pending and all result rows remain lagging.
+
+TxCompletion carries six native/source contracts and retains five arbitrary
+product-invariant contracts, beside five native counterparts and a generic
+actual-adapter traversal law. Jitter-failure endpoints still follow the
+pending-timer read and recorded clock, including both Ambient endpoints.
+The source's socket, timer, acquisition and cleanup order remains exact.
+
+ReceivePoll carries three native contracts, retains three arbitrary product
+contracts and adds the native two-getter-drop contract. The poll's callbacks
+and complete World invariant remain arbitrary. Queue peeking has a concrete
+WG.M type; its own-store preservation is therefore a substantive retained
+proof, not a foreign-subsystem frame supplied by the split. Erasure covers
+the original short-circuit reads, GRO callbacks, release order, failures and
+full-budget refusal. Four ordinary elaboration/proof failures preceded the
+passing build; guarded composition replaces expensive unrestricted matching.
+
+RxPollPrimitives generalizes the arbitrary-state resident-retention rule,
+carries the six other native queue statements, and adds the nested-state
+retention rule. Both getters at the original drop remain. RxPollPrefix
+retains all four original product theorems, including complete World/Stop
+erasure for arbitrary stack callbacks and the failure-retaining removal log.
+The pair used four changed-source builds: two passed and two failed in
+source-factor or erasure automation. No premise was added.
+
+TxDisposition generalizes six history/algebra rules, retypes its native
+source equality, and retains nine concrete product erasures and the pure
+bind/conditional rule. Its two additions carry arbitrary native observers
+through the actual adapter and its traversal. TxDispositionProjection
+carries eleven native appended-history facts, generalizes four actual-state
+rules, and retains ten product projection/history contracts. Its additions
+are the native observer projection bridge and a generic nested-state
+appended-history traversal rule. Saved-head reads, publication, cleanup and
+queue-removal order remain the source's.
+
+The eight changed-source build calls for TxCompletion and these two TX
+modules produced six failures and two passes. The seventh call built
+TxDisposition but failed in Projection; that call is a failure. All final
+target builds and separate trust checks passed. These were ordinary proof
+repairs, with no infrastructure rerun or cap/limit change.
+
+A separate obsolete handshake build with malformed declaration layout was
+terminated at its inspected owned child PID and collected as a failure
+(Lean signal exit 143, enclosing build exit 1). No KILLED banner occurred.
+Dirty worktrees, including untracked files, were snapshotted before work
+resumed. Its corrected replacement remains separate from this checkpoint.
