@@ -2,6 +2,9 @@ import Lean
 import Leanux.Proofs.WG.Queues.RxQueuePrimitives
 import Leanux.Proofs.Framing.WGTime
 import Leanux.Proofs.WG.Keypairs.Frames.WGBase
+-- Realize the shared keepKeyFreshRx matcher congruence in its source-frame
+-- dependency before this module elaborates another proof over that matcher.
+import Leanux.Proofs.WG.Keypairs.Frames.WGMore
 
 set_option maxHeartbeats 800000
 set_option pp.structureInstances false

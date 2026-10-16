@@ -94,9 +94,10 @@ it is not part of that baseline.
 | TX worker, RX removal/GRO and disposition cuts | 48 | 7 | 2 | 39 | 4 | 50 |
 | Native transmit source and routing sends | 32 | 24 | 5 | 3 | 3 | 30 |
 | Native TX publication, disposal and error endpoints | 30 | 30 | 0 | 0 | 0 | 30 |
+| Product TX disposition step and native/product RX stack | 16 | 6 | 0 | 10 | 0 | 16 |
 
 The whole tree currently contains 451 Lean files and 6,401 theorems. The completed
-changes total 1,872 retyped theorems, 1,643 deletions, 793 retained contract shapes and 329 added.
+changes total 1,878 retyped theorems, 1,643 deletions, 803 retained contract shapes and 329 added.
 Retyping changes or generalizes the actual state/monad carrier or observation.
 This includes shorthand contracts whose source functions or named views move
 to a native monad. Mere namespace qualification and equivalent relocation of a
@@ -2642,3 +2643,33 @@ resumption at the respective prefixes
 The diagnostic's markers were ephemeral; no trusted source or limit changed.
 The targeted handshake repair and the RxStack heartbeat failure are outside
 this completed tranche.
+
+
+## Product disposition step and receive-stack boundary
+
+TxDispositionStep retains all six original product contracts, including
+complete successful World endpoints, Stops and filtered access histories.
+Its native helpers cross the actual WG adapter. RxStackFrames retains all
+ten claims: six native carries and four product contracts. Their route,
+classification and reply paths follow the actual mirror. RxMaintenanceFrames
+has an import-only prerequisite repair; its twelve theorem bodies are unchanged
+and already counted in their earlier tranche.
+
+These three frozen modules pass 30 named standard-only axiom checks, three
+fresh replays and independent source reviews. TxDispositionStep's two
+changed-source calls produced one adapter-normalization failure, then a pass
+(182 jobs). RxStack's five calls produced four failures, then a pass (190
+jobs): an imported generated matcher collision, adapter/monad inference,
+the existing heartbeat bound in a broad receive proof, and one beta-normalization
+goal. Targeted source composition closed the latter proofs without changing
+limits. The first call's orchestration error was preserved in the earlier
+203251Z snapshot; it was not an uncollected build.
+
+The independent 47-target build over the eligible 300-module dependency
+closure failed at StackAccess. It is a diagnostic, not a full-tree pass.
+A separate handshake build was stopped at its inspected owned child after
+five minutes without a result; build exit 1 / Lean exit 143, with no KILLED
+banner. All dirty worktrees were preserved before resumption at
+`refs/snapshots/proof-campaign-handshake-native-20261016T204911Z/`.
+Neither call changes the completed tranche's results. The full proof gate
+remains pending.
