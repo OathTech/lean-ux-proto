@@ -8,7 +8,7 @@ namespace Leanux.Proofs.WG.Origins.HandshakeSources
 open Leanux Leanux.WG Leanux.Proofs.Logged Lifetimes
 
 structure Ops (m : Type → Type) where
-  step : {α : Type} → M α → m α
+  step : {α : Type} → WG.M α → m α
   session : PeerId → m Bool
   modifyPeer : PeerId → (Peer → Peer) → m Unit
   create : PeerId → m (Option (List UInt8))
@@ -106,7 +106,7 @@ def stepWith {m : Type → Type} [Monad m] (o : Ops m) : m Bool := do
     o.step (modifyDev fun d => {d with handshakeQueueLen := d.handshakeQueueLen - 1})
     return true
 
-def original : Ops M where
+def original : Ops WG.M where
   step := fun a => a
   session := beginSession
   modifyPeer := fun pid f => do setPeer pid (f (← getPeer pid))
@@ -127,7 +127,7 @@ def original : Ops M where
   cookieConsume := cookieMessageConsume
 
 def prefixOps : Ops MixedM where
-  step := liftPrefix
+  step := liftWGPrefix
   session := beginSessionPrefix
   modifyPeer := modifyPeerKeysPrefix
   create := createResponsePrefix

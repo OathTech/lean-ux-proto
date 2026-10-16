@@ -116,8 +116,14 @@ it is not part of that baseline.
 | Native peer removal and retained arbitrary product contracts | 18 | 10 | 0 | 8 | 10 | 28 |
 | Actual product worker routing and native pre/post transport | 8 | 0 | 0 | 8 | 1 | 9 |
 
-The whole tree currently contains 451 Lean files and 6,428 theorems. The completed
-changes total 2,098 retyped theorems, 1,658 deletions, 1,066 retained contract shapes and 371 added.
+| Current product timer-wheel routing | 8 | 0 | 2 | 6 | 2 | 8 |
+| Native device controls/lifecycle and original product invariant contracts | 25 | 15 | 0 | 10 | 12 | 37 |
+| Native handshake source equations | 8 | 8 | 0 | 0 | 0 | 8 |
+| Native packet routing cuts and generic helper contracts | 22 | 19 | 0 | 3 | 2 | 24 |
+| Native handshake RX-cell frames and retained product cookie transport | 23 | 20 | 2 | 1 | 2 | 23 |
+
+The whole tree currently contains 451 Lean files and 6,442 theorems. The completed
+changes total 2,160 retyped theorems, 1,662 deletions, 1,086 retained contract shapes and 389 added.
 Retyping changes or generalizes the actual state/monad carrier or observation.
 This includes shorthand contracts whose source functions or named views move
 to a native monad. Mere namespace qualification and equivalent relocation of a
@@ -3010,4 +3016,69 @@ cap scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Queues.Sourc
 cap scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.AllowedIps.RoutingSchedulerFrames
 cap scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.AllowedIps.RoutingEnvWorkersFrames
 cap scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Lifetimes.PeerRemoval
+```
+
+
+## Timer routing, device lifecycle and handshake RX cells
+
+Six modules carry 86 old theorems to 100: 62 native/generalized retypes,
+20 retained contract shapes, four deletions and eighteen additions.
+The two timer-selector deletions are obsolete source APIs, separately
+from the two IndexM-only RX-cell wrappers that the canonical adapter makes
+redundant. Timer routing follows the actual wheel, unit dispatch, pass-step
+guards and recorded end-of-wait rule. Its arbitrary product callback remains.
+Device controls/lifecycle retain arbitrary full-World invariant contracts and
+the original 43-field product socket premise alongside native counterparts.
+The native socket premise uses the original seven fields, factored from the
+concrete eleven-field frame. Default wgDelete callbacks are exactly pure;
+this is the original specialized WG call, not Env.wgDelete's richer callbacks.
+
+The handshake source equations retain arbitrary output monads and callbacks
+with WG.M leaf inputs. Receive-ring frames preserve the entire decrypt-ring
+cell through actual Noise, cookie, session and handshake receive calls.
+The receive proof uses the existing exact load/MAC source factor to avoid
+expanding the same continuation across every branch; limits are unchanged.
+
+RoutingCuts had the same stale ICMP error copy already identified in
+DeviceXmit: a credit draw alone did not justify loopback delivery. The exact
+source includes the first packet's IPv4 source route and address/neighbor
+classification. Its corrected whole-action factor covers Stops as well as
+normal results. A separate kernel-checked witness compares the old factor
+with WG.wgXmit: the old copy stops, while the original returns -ENOKEY,
+increments txErrors and consumes the credit record. This is proof-observer
+drift, not an initialized execution or kernel finding. To reproduce that
+witness with the earlier DeviceXmit fixture, extract destinationField/txHeaders,
+txWalk and txCheck/txError/txSelect/txFinish from
+05713a7:Leanux/Proofs/WG/Packets/RoutingCuts.lean, retype M to WG.M, and use
+the old wgXmit_factor right-hand side. Its named outcome is none instead
+of the original some (-ENOKEY, 1, 0). The source/ambient fixture and capped
+kernel-check command are in the preceding TX error-endpoint report.
+
+All 143 explicitly named declarations use standard axioms only. Five scoped
+fresh kernel replays and independent complete source reviews pass.
+Final builds pass: timer320, lifecycle169, handshake source179, routing
+cuts273 and RX handshake218 jobs. Thirty-nine MVCGen warnings remain
+unfinished framework migration; the source/lifecycle pair is warning-free.
+Development calls: timer FAIL then PASS; lifecycle three ordinary failures
+then PASS; source PASS first time; routing cuts seven ordinary failures
+then two passes; RX handshake two ordinary failures then PASS. Rejected
+trust-driver syntax executed no tool and was corrected. No crash, cancellation,
+infrastructure rerun, memory-cap increase or proof-limit change occurred.
+
+A concurrent complete-target diagnostic failed at eight frontiers:
+ReceiveIngress, PeerRemovalCompletion, EnvWorkersAudit, RoutingEnvTimersFrames,
+RoutingCuts, HandshakeSources, DeviceControls and RxRingHandshake. Its
+in-progress-source errors and recovery unknown-constant rejections are failures;
+the scoped checks above supersede only their named modules. The proof gate
+and terminal replay remain pending. All register rows remain lagging.
+The b700659 mirror and executable closure remain unchanged.
+
+```sh
+cap() { if command -v capped >/dev/null 2>&1; then capped "$@"; else "$@"; fi; }
+cap scripts/in-bundle lake build Leanux.Proofs.WG.AllowedIps.RoutingEnvTimersFrames Leanux.Proofs.WG.Lifetimes.DeviceLifecycle Leanux.Proofs.WG.Origins.HandshakeSources Leanux.Proofs.WG.Packets.RoutingCuts Leanux.Proofs.WG.Queues.RxRingHandshake
+cap scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.AllowedIps.RoutingEnvTimersFrames
+cap scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Lifetimes.DeviceLifecycle
+cap scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Origins.HandshakeSources
+cap scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Packets.RoutingCuts
+cap scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Queues.RxRingHandshake
 ```

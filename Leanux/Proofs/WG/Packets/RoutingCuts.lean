@@ -3,7 +3,7 @@ import Leanux.Proofs.WG.AllowedIps.RoutingRxFrames
 import Leanux.Proofs.WG.Lifetimes.DeviceXmit
 
 /-! Literal original source factors at the routing query and staged append.
-The input/output World equations below keep the query attached to its actual
+The input/output WGWorld and Ambient equations below keep the query attached to its actual
 caller prefix. They do not assert initialized reachability or key ownership. -/
 namespace Leanux.Proofs.WG.Packets
 open Leanux Leanux.WG Leanux.Proofs.Framing Std.Do
@@ -15,7 +15,7 @@ structure RxReady where
   ipLen : Nat
   originalLen : Nat
 
-def rxPrepare (pid : PeerId) (pkt : RxPacket) (endpoint : Endpoint) : M (Option RxReady) := do
+def rxPrepare (pid : PeerId) (pkt : RxPacket) (endpoint : Endpoint) : WG.M (Option RxReady) := do
   setPeerEndpoint pid endpoint
   if ← branch .doneReceivedNew (← receivedWithKeypair pid pkt.keypair) then
     timersHandshakeComplete pid .walltimeLastHandshakeData
@@ -25,7 +25,7 @@ def rxPrepare (pid : PeerId) (pkt : RxPacket) (endpoint : Endpoint) : M (Option 
   timersTraversal pid
   let bytes := pkt.bytes
   let len := bytes.length   -- skb->len
-  let reject (why : Dishonest) : M (Option RxReady) := do
+  let reject (why : Dishonest) : WG.M (Option RxReady) := do
     dishonest why   -- then packet_processed: dev_kfree_skb
     return none
   -- a packet with length 0 is a keepalive
@@ -61,7 +61,7 @@ def rxPrepare (pid : PeerId) (pkt : RxPacket) (endpoint : Endpoint) : M (Option 
   if ← branch .doneTrimFailed false then return none
   return some ⟨protocol, bytes, ipLen, lenBeforeTrim⟩
 
-def rxAfterLookup (pid : PeerId) (ready : RxReady) (routed : Option PeerId) : M (Option (List UInt8)) := do
+def rxAfterLookup (pid : PeerId) (ready : RxReady) (routed : Option PeerId) : WG.M (Option (List UInt8)) := do
   peerPut routed
   if ← branch .doneDishonestPeer (routed != some pid) then
     dishonest .peer
@@ -69,11 +69,11 @@ def rxAfterLookup (pid : PeerId) (ready : RxReady) (routed : Option PeerId) : M 
   updateRxStats pid (ready.originalLen + MESSAGE_DATA_LEN_0)
   return some (ready.bytes.take ready.ipLen)
 
-def rxFinish (pid : PeerId) (ready : RxReady) : M (Option (List UInt8)) := do
+def rxFinish (pid : PeerId) (ready : RxReady) : WG.M (Option (List UInt8)) := do
   let routed ← lookupSrc ready.protocol ready.bytes
   rxAfterLookup pid ready routed
 
-private theorem bind_if (c : Prop) [Decidable c] (a b : M α) (f : α → M β) :
+private theorem bind_if {m : Type → Type} [Monad m] (c : Prop) [Decidable c] (a b : m α) (f : α → m β) :
     (if c then a else b) >>= f = (if c then a >>= f else b >>= f) := by
   split <;> rfl
 
@@ -85,10 +85,16 @@ theorem consumeDataDone_factor (pid : PeerId) (pkt : RxPacket) (endpoint : Endpo
       | some r => rxFinish pid r) := by
   simp only [consumeDataDone, rxPrepare, rxFinish, rxAfterLookup, bind_assoc, bind_if, pure_bind]
 
-private theorem any_spec (a : M α) :
+/-- The original arbitrary product action interface, generalized over its state. -/
+private theorem any_spec (a : StateT S (Except Stop) α) :
     ⦃fun _ => ⌜True⌝⦄ a ⦃⇓? _ _ => ⌜True⌝⦄ := by
-  apply (hoare_iff_triple _ _ _).mp
+  apply (hoare_iff_run _ _ _).mpr
   exact fun _ _ _ _ _ => True.intro
+
+private theorem any_spec_ambient (a : StateT S AmbientM α) :
+    ⦃fun _ => ⌜True⌝⦄ a ⦃⇓? _ _ => ⌜True⌝⦄ := by
+  apply (hoare_iff_run_ambient _ _ _).mpr
+  exact fun _ _ _ _ _ _ _ => True.intro
 
 def RxPrepared (pkt : RxPacket) (r : RxReady) : Prop :=
   r.originalLen = pkt.bytes.length ∧ r.protocol = ipTunnelParseProtocol pkt.bytes ∧ ∃ v4 : Bool,
@@ -108,30 +114,30 @@ theorem rxPrepare_shape (pid : PeerId) (pkt : RxPacket) (endpoint : Endpoint) :
   have he4 : ⦃fun _ => ⌜ipTunnelParseProtocol pkt.bytes = 4⌝⦄
       inetEcnDecapsulate 4 pkt.ds pkt.bytes
       ⦃⇓? out _ => ⌜AddressPreserved true pkt.bytes out⌝⦄ := by
-    apply (hoare_iff_triple _ _ _).mp
-    intro w out v hp hr
-    exact (hoare_iff_triple _ _ _).mpr
-      (inetEcnDecapsulate_address true pkt.ds pkt.bytes (protocol_length pkt.bytes true hp)) w out v True.intro hr
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient out v ambient' hp hr
+    exact (hoare_iff_run_ambient _ _ _).mp
+      (inetEcnDecapsulate_address true pkt.ds pkt.bytes (protocol_length pkt.bytes true hp)) w ambient out v ambient' True.intro hr
   have he6 : ⦃fun _ => ⌜ipTunnelParseProtocol pkt.bytes = 6⌝⦄
       inetEcnDecapsulate 6 pkt.ds pkt.bytes
       ⦃⇓? out _ => ⌜AddressPreserved false pkt.bytes out⌝⦄ := by
-    apply (hoare_iff_triple _ _ _).mp
-    intro w out v hp hr
-    exact (hoare_iff_triple _ _ _).mpr
-      (inetEcnDecapsulate_address false pkt.ds pkt.bytes (protocol_length pkt.bytes false hp)) w out v True.intro hr
-  have hep := any_spec (setPeerEndpoint pid endpoint)
-  have hk := any_spec (receivedWithKeypair pid pkt.keypair)
-  have hh := any_spec (timersHandshakeComplete pid .walltimeLastHandshakeData)
-  have hst := any_spec (sendStagedPackets pid)
-  have hf := any_spec (keepKeyFreshRx pid)
-  have ha := any_spec (timersAnyAuthenticatedPacketReceived pid)
-  have ht := any_spec (timersTraversal pid)
-  have hd := any_spec (timersDataReceived pid)
-  have hstats := fun len => any_spec (updateRxStats pid len)
-  have herr := fun why => any_spec (dishonest why)
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient out v ambient' hp hr
+    exact (hoare_iff_run_ambient _ _ _).mp
+      (inetEcnDecapsulate_address false pkt.ds pkt.bytes (protocol_length pkt.bytes false hp)) w ambient out v ambient' True.intro hr
+  have hep := any_spec_ambient (setPeerEndpoint pid endpoint)
+  have hk := any_spec_ambient (receivedWithKeypair pid pkt.keypair)
+  have hh := any_spec_ambient (timersHandshakeComplete pid .walltimeLastHandshakeData)
+  have hst := any_spec_ambient (sendStagedPackets pid)
+  have hf := any_spec_ambient (keepKeyFreshRx pid)
+  have ha := any_spec_ambient (timersAnyAuthenticatedPacketReceived pid)
+  have ht := any_spec_ambient (timersTraversal pid)
+  have hd := any_spec_ambient (timersDataReceived pid)
+  have hstats := fun len => any_spec_ambient (updateRxStats pid len)
+  have herr := fun why => any_spec_ambient (dishonest why)
   mvcgen [rxPrepare, hep, hk, hh, hst, hf, ha, ht, hd, hstats, herr, he4, he6,
-    WG.andM, WG.orM, branch]
-  all_goals dsimp +zetaDelta only at *
+    WG.andM, WG.orM, branch, AmbientM.branch]
+  all_goals try dsimp +zetaDelta only at *
   all_goals simp_all [RxPrepared]
   all_goals first
     | (refine ⟨true, ?_, ?_, ?_⟩ <;> simp_all)
@@ -145,17 +151,17 @@ theorem rxPrepare_routing (pid : PeerId) (pkt : RxPacket) (endpoint : Endpoint) 
   have hep := (setPeerEndpoint_routing pid endpoint).wp P
   have hk := (receivedWithKeypair_routing pid pkt.keypair).wp P
   have hh := (timersHandshakeComplete_routing pid .walltimeLastHandshakeData).wp P
-  have hst := (sendStagedPackets_routing pid).wp s
-  have hf := (keepKeyFreshRx_routing pid).wp s
+  have hst := RetainsRoutingCall.wp (sendStagedPackets_routing pid) s
+  have hf := RetainsRoutingCall.wp (keepKeyFreshRx_routing pid) s
   have ha := (timersAnyAuthenticatedPacketReceived_routing pid).wp P
   have ht := (timersTraversal_routing pid).wp P
   have hd := (timersDataReceived_routing pid).wp P
   have hstats := fun len => (updateRxStats_routing pid len).wp P
   have herr := fun why => (dishonest_routing why).wp P
   have hecn := fun protocol outer bytes =>
-    (routing_kernel _ (Lifetimes.inetEcnDecapsulate_sameKernel protocol outer bytes)).wp P
+    (routing_kernel _ (Lifetimes.inetEcnDecapsulate_sameWGStore protocol outer bytes)).wp P
   mvcgen [rxPrepare, hep, hk, hh, hst, hf, ha, ht, hd, hstats, herr, hecn,
-    WG.andM, WG.orM, branch]
+    WG.andM, WG.orM, branch, AmbientM.branch]
   all_goals try dsimp +zetaDelta only [P] at *
   all_goals try (unfold routingView at *; simp_all)
   all_goals subst s
@@ -165,57 +171,59 @@ theorem rxAfterLookup_guard (pid : PeerId) (r : RxReady) (routed : Option PeerId
     ⦃fun _ => ⌜True⌝⦄ rxAfterLookup pid r routed
     ⦃⇓? result _ => ⌜∀ bytes, result = some bytes →
       routed = some pid ∧ bytes = r.bytes.take r.ipLen⌝⦄ := by
-  have hp := any_spec (peerPut routed)
-  have hd := any_spec (dishonest .peer)
-  have hs := any_spec (updateRxStats pid (r.originalLen + MESSAGE_DATA_LEN_0))
-  mvcgen [rxAfterLookup, hp, hd, hs, branch]
+  have hp := any_spec_ambient (peerPut routed)
+  have hd := any_spec_ambient (dishonest .peer)
+  have hs := any_spec_ambient (updateRxStats pid (r.originalLen + MESSAGE_DATA_LEN_0))
+  mvcgen [rxAfterLookup, hp, hd, hs, branch, AmbientM.branch]
   all_goals simp_all
 
-/-- The actual original caller prefix leads to the query's input World, and
-the query's output World leads to the original guard/statistics tail. -/
+/-- The actual caller prefix and guard/statistics tail share both the native
+WireGuard state and the reached Ambient endpoint at every cut. -/
 theorem consumeDataDone_query (pid : PeerId) (pkt : RxPacket) (endpoint : Endpoint)
-    (w v : World) (bytes : List UInt8)
-    (hr : (consumeDataDone pid pkt endpoint).run w = .ok (some bytes, v)) :
-    ∃ r u q,
-      (rxPrepare pid pkt endpoint).run w = .ok (some r, u) ∧
-      (lookupSrc r.protocol r.bytes).run u = .ok (some pid, q) ∧
-      (rxAfterLookup pid r (some pid)).run q = .ok (some bytes, v) ∧
+    (w v : WGWorld) (ambient ambient' : Ambient) (bytes : List UInt8)
+    (hr : ((consumeDataDone pid pkt endpoint).run w).run ambient = .ok ((some bytes, v), ambient')) :
+    ∃ r u q middle afterLookup,
+      ((rxPrepare pid pkt endpoint).run w).run ambient = .ok ((some r, u), middle) ∧
+      ((lookupSrc r.protocol r.bytes).run u).run middle = .ok ((some pid, q), afterLookup) ∧
+      ((rxAfterLookup pid r (some pid)).run q).run afterLookup = .ok ((some bytes, v), ambient') ∧
       RxPrepared pkt r ∧ bytes = r.bytes.take r.ipLen := by
   rw [consumeDataDone_factor] at hr
   simp only [StateT.run_bind] at hr
-  cases hp : (rxPrepare pid pkt endpoint).run w with
+  cases hp : ((rxPrepare pid pkt endpoint).run w).run ambient with
   | error e => simp [hp] at hr
   | ok out =>
-    rcases out with ⟨ready, u⟩
+    rcases out with ⟨⟨ready, u⟩, middle⟩
     cases ready with
     | none => simp [hp] at hr
     | some r =>
       simp only [hp, except_ok_bind, rxFinish, StateT.run_bind] at hr
-      cases hq : (lookupSrc r.protocol r.bytes).run u with
+      cases hq : ((lookupSrc r.protocol r.bytes).run u).run middle with
       | error e => simp [hq] at hr
       | ok out =>
-        rcases out with ⟨routed, q⟩
+        rcases out with ⟨⟨routed, q⟩, afterLookup⟩
         simp only [hq, except_ok_bind] at hr
-        have hg := (hoare_iff_triple _ _ _).mpr (rxAfterLookup_guard pid r routed)
-          q (some bytes) v True.intro hr bytes rfl
+        have hg := (hoare_iff_run_ambient _ _ _).mp (rxAfterLookup_guard pid r routed)
+          q afterLookup (some bytes) v ambient' True.intro hr bytes rfl
         obtain ⟨rfl, hb⟩ := hg
-        exact ⟨r, u, q, rfl, hq, hr,
-          (hoare_iff_triple _ _ _).mpr (rxPrepare_shape pid pkt endpoint)
-            w (some r) u True.intro hp r rfl, hb⟩
+        exact ⟨r, u, q, middle, afterLookup, rfl, hq, hr,
+          (hoare_iff_run_ambient _ _ _).mp (rxPrepare_shape pid pkt endpoint)
+            w ambient (some r) u middle True.intro hp r rfl, hb⟩
 
 theorem consumeDataDone_authorized (pid : PeerId) (pkt : RxPacket) (endpoint : Endpoint)
-    (w v : World) (bytes : List UInt8) (xs : FlatTable × FlatTable)
+    (w v : WGWorld) (ambient ambient' : Ambient) (bytes : List UInt8) (xs : FlatTable × FlatTable)
     (hi : RoutedView (routingView w) xs)
-    (hr : (consumeDataDone pid pkt endpoint).run w = .ok (some bytes, v)) :
+    (hr : ((consumeDataDone pid pkt endpoint).run w).run ambient = .ok ((some bytes, v), ambient')) :
     ∃ v4 : Bool, ipTunnelParseProtocol bytes = (if v4 then 4 else 6) ∧
       ipTunnelParseProtocol pkt.bytes = (if v4 then 4 else 6) ∧
       PeerWinner (rootWidth v4) (sourceAddress v4 bytes) (selectedFlat v4 xs) (some pid) ∧
       sourceAddress v4 bytes = sourceAddress v4 pkt.bytes := by
-  obtain ⟨r, u, q, hp, hq, _, hs, hb⟩ := consumeDataDone_query pid pkt endpoint w v bytes hr
+  obtain ⟨r, u, q, middle, afterLookup, hp, hq, _, hs, hb⟩ :=
+    consumeDataDone_query pid pkt endpoint w v ambient ambient' bytes hr
   obtain ⟨_, hinput, v4, hproto, hlen, haddr⟩ := hs
-  have hu := hi.retains (rxPrepare_routing pid pkt endpoint w (some r) u hp)
+  have hu := hi.retains ((Lifetimes.ProjectedAction.iff_run_ambient _ _ _).mp
+    (rxPrepare_routing pid pkt endpoint) w ambient (some r) u middle hp)
   rw [hproto] at hq
-  have hw := lookupSrc_normal u q xs v4 r.bytes (some pid) hu hq
+  have hw := lookupSrc_normal u q middle afterLookup xs v4 r.bytes (some pid) hu hq
   have he : sourceAddress v4 bytes = sourceAddress v4 r.bytes := by
     rw [hb]
     exact sourceAddress_take v4 r.bytes r.ipLen hlen
@@ -226,7 +234,7 @@ theorem consumeDataDone_authorized (pid : PeerId) (pkt : RxPacket) (endpoint : E
 def destinationField (family : Nat) (bytes : List UInt8) : Nat :=
   if family == 4 then beAt bytes 16 4 else beAt bytes 24 16
 
-def txHeaders (family addr : Nat) (pkts : List Packet) : M Unit :=
+def txHeaders (family addr : Nat) (pkts : List Packet) : WG.M Unit :=
   forIn pkts () fun p _ => do
     if destinationField family p.bytes != addr then
       invariant "the environment's destination disagrees with the packet header"
@@ -242,7 +250,7 @@ theorem txHeaders_spec (family addr : Nat) (pkts : List Packet) :
     mvcgen [-Std.Do.Spec.forIn_list, -Std.Do.Spec.forIn'_list, ih, invariant]
     all_goals simp_all
 
-def txWalk (pkts : List Packet) (mtu : Nat) (acc : List Packet) : M (List Packet) :=
+def txWalk (pkts : List Packet) (mtu : Nat) (acc : List Packet) : WG.M (List Packet) :=
   forIn pkts acc fun pkt packets => do
     _ ← branch .xmitWalk true
     _ ← branch .xmitShareFailed false
@@ -255,10 +263,10 @@ theorem txWalk_spec (pkts : List Packet) (mtu : Nat) (acc : List Packet) :
   | nil => simp only [txWalk, List.forIn_nil]; mvcgen; simp
   | cons p ps ih =>
     simp only [txWalk, List.forIn_cons] at *
-    mvcgen [-Std.Do.Spec.forIn_list, -Std.Do.Spec.forIn'_list, ih, branch]
+    mvcgen [-Std.Do.Spec.forIn_list, -Std.Do.Spec.forIn'_list, ih, branch, AmbientM.branch]
     all_goals simp_all [List.append_assoc]
 
-def txCheck (family addr : Nat) (pkts : List Packet) (mtu : Nat) : M Bool := do
+def txCheck (family addr : Nat) (pkts : List Packet) (_mtu : Nat) : WG.M Bool := do
   let some first := pkts.head? | invariant "wg_xmit without a packet"
   let realProtocol := match first.bytes with
     | b :: _ => if b.toNat / 16 == 4 then ETH_P_IP else if b.toNat / 16 == 6 then ETH_P_IPV6 else 0
@@ -273,29 +281,32 @@ def txCheck (family addr : Nat) (pkts : List Packet) (mtu : Nat) : M Bool := do
   txHeaders family addr pkts
   return true
 
-def txError (family : Nat) (ret : Int) : M Int := do
-  -- err_icmp: icmp_ndo_send / icmpv6_ndo_send (cut points, whose rate limit
-  -- and IP output draw cut-site choices), then err. The error is sent iff
-  -- the rate limits allowed it, and then `icmp_global_consume` drew
-  -- (icmp.c:310-339, ipv6/icmp.c:195-238: type 3 / type 1 is in the
-  -- default ratemask, wg0 is not loopback, the reply's route is local);
-  -- the ICMP's loopback delivery raises NET_RX, whose section runs at
-  -- `__dev_queue_xmit`'s `rcu_read_unlock_bh` (`loopbackSend`).
+def txError (family : Nat) (first : Packet) (ret : Int) : WG.M Int := do
+  -- The credit draw is followed by the IPv4 source route and address
+  -- classification. A route error suppresses the loopback delivery.
   if !(← branch .xmitErrorInet (family == 4)) then _ ← branch .xmitErrorInet6 (family == 6)
   let drawn ← skipCutSites ([.icmpCredit, .ipIdentKey, .ipIdentReserve, .flowHashSecret] ++ allocCuts)
-  loopbackSend [] (drawn.contains (HiddenSite.icmpCredit).info.id)
+  let mut sent := drawn.contains (HiddenSite.icmpCredit).info.id
+  if family == 4 && sent then
+    let src := ((first.bytes.drop 12).take 4).foldl (fun acc b => acc * 256 + b.toNat) 0
+    match ← Net.routeOutput4 0 src with
+    | .error _ => sent := false
+    | .ok _ =>
+      _ ← Net.Fib.inetDevAddrType (some WG0_IFINDEX) src
+      Net.neighbourClassify LO_IFINDEX
+  loopbackSend [] sent
   modifyDev fun d => { d with txErrors := d.txErrors + 1 }   -- DEV_STATS_INC(dev, tx_errors)
   return ret
 
-def txSelect (family : Nat) (pkts : List Packet) (mtu : Nat) (peer : Option PeerId) : M (Except Int (PeerId × List Packet)) := do
+def txSelect (family : Nat) (pkts : List Packet) (mtu : Nat) (peer : Option PeerId) : WG.M (Except Int (PeerId × List Packet)) := do
   if ← branch .xmitNoPeer peer.isNone then
     if !(← branch .xmitNoPeerInet (family == 4)) then _ ← branch .xmitNoPeerInet6 (family == 6)
-    return .error (← txError family (-ENOKEY))
+    return .error (← txError family (pkts.head?.getD {bytes := []}) (-ENOKEY))
   let some pid := peer | invariant "unreachable"
   let epFamily := (← getPeer pid).endpoint.map (·.family) |>.getD 0
   if ← WG.andM (branch .xmitEndpointNotInet (epFamily != AF_INET)) (branch .xmitEndpointNotInet6 (epFamily != AF_INET6)) then
     peerPut peer   -- err_peer
-    return .error (← txError family (-EDESTADDRREQ))
+    return .error (← txError family (pkts.head?.getD {bytes := []}) (-EDESTADDRREQ))
   _ ← branch .xmitValidDst true   -- mtu = dst_mtu(skb_dst(skb))
   -- `if (!skb_is_gso(skb))` (device.c:176): a GSO skb arrives as its segments
   if !(← branch .xmitNotGso (pkts.length < 2)) then
@@ -303,7 +314,7 @@ def txSelect (family : Nat) (pkts : List Packet) (mtu : Nat) (peer : Option Peer
     -- an allocation inside skb_segment fails (A's domain, `envOk`)
     if ← branch .xmitGsoError !(← envOk .skbSegment) then
       peerPut peer   -- err_peer
-      return .error (← txError family (-ENOMEM))
+      return .error (← txError family (pkts.head?.getD {bytes := []}) (-ENOMEM))
   -- skb_list_walk_safe (device.c:189-204): every packet of the list gets
   -- the one `mtu` of this call
   let packets ← txWalk pkts mtu []
@@ -314,7 +325,7 @@ def txSelect (family : Nat) (pkts : List Packet) (mtu : Nat) (peer : Option Peer
   Lifetimes.xmitTrim pid
   return .ok (pid, packets)
 
-def txFinish (pid : PeerId) (packets : List Packet) : M Int := do
+def txFinish (pid : PeerId) (packets : List Packet) : WG.M Int := do
   Lifetimes.xmitSplice pid packets
   sendStagedPackets pid
   peerPut (some pid)
@@ -324,10 +335,10 @@ theorem txCheck_valid (family addr : Nat) (pkts : List Packet) (mtu : Nat) :
     ⦃fun _ => ⌜True⌝⦄ txCheck family addr pkts mtu
     ⦃⇓? ok _ => ⌜ok = true → pkts ≠ [] ∧ ∀ p ∈ pkts, destinationField family p.bytes = addr⌝⦄ := by
   have hh := txHeaders_spec family addr pkts
-  have he := any_spec (modifyDev fun d => {d with txErrors := d.txErrors + 1})
-  mvcgen [txCheck, hh, he, branch, WG.andM, invariant]
+  have he := any_spec_ambient (modifyDev fun d => {d with txErrors := d.txErrors + 1})
+  mvcgen [txCheck, hh, he, branch, AmbientM.branch, WG.andM, invariant, AmbientM.invariant]
   all_goals simp_all
-  all_goals intro hempty; subst pkts; simp_all
+  all_goals try (intro hempty; subst pkts; simp_all)
 
 theorem txCheck_routing (family addr : Nat) (pkts : List Packet) (mtu : Nat) :
     SameView routingView (txCheck family addr pkts mtu) := by
@@ -336,18 +347,27 @@ theorem txCheck_routing (family addr : Nat) (pkts : List Packet) (mtu : Nat) :
   let P := fun t => t = s
   have he := (modifyDev_routing (fun d => {d with txErrors := d.txErrors + 1})
     (fun _ => rfl)).wp P
-  have hl (α β : Type) := list_view_spec routingView (α := α) (β := β) P
+  have hl (α β : Type) := list_view_spec (m := AmbientM) routingView (α := α) (β := β) P
   mvcgen [-Std.Do.Spec.forIn_list, -Std.Do.Spec.forIn'_list, hl,
-    txCheck, txHeaders, he, branch, WG.andM, invariant]
-  all_goals try exact ((⇓? _ w => ⌜P (routingView w)⌝) : PostCond _ (.arg World (.except Stop .pure)))
+    txCheck, txHeaders, he, branch, AmbientM.branch, WG.andM, invariant, AmbientM.invariant]
+  all_goals try exact ((⇓? _ w => ⌜P (routingView w)⌝) : PostCond _ (.arg WGWorld (.arg Ambient (.except Stop .pure))))
   all_goals simp_all [P]
 
-theorem txError_spec (family : Nat) (ret : Int) :
-    ⦃fun _ => ⌜True⌝⦄ txError family ret ⦃⇓? result _ => ⌜result = ret⌝⦄ := by
-  have hc := fun sites => any_spec (skipCutSites sites)
-  have hl := fun raised => any_spec (loopbackSend [] raised)
-  have he := any_spec (modifyDev fun d => {d with txErrors := d.txErrors + 1})
-  mvcgen [txError, hc, hl, he, branch]
+theorem txError_spec (family : Nat) (first : Packet) (ret : Int) :
+    ⦃fun _ => ⌜True⌝⦄ txError family first ret ⦃⇓? result _ => ⌜result = ret⌝⦄ := by
+  have hc := fun sites => any_spec_ambient (skipCutSites sites : WG.M (List Nat))
+  have hl := fun raised => any_spec_ambient (loopbackSend [] raised)
+  have he := any_spec_ambient (modifyDev fun d => {d with txErrors := d.txErrors + 1})
+  have hr := fun src => any_spec_ambient
+    (MonadLift.monadLift (Net.routeOutput4 0 src) : WG.M (Except Int Route))
+  have ht := fun src => any_spec_ambient
+    (MonadLift.monadLift (Net.Fib.inetDevAddrType (some WG0_IFINDEX) src) : WG.M Net.Fib.RouteType)
+  have hn := any_spec_ambient (MonadLift.monadLift (Net.neighbourClassify LO_IFINDEX) : WG.M Unit)
+  have ha {α : Type} (a : AmbientM α) :
+      Hoare (MonadLift.monadLift a : WG.M α) (fun _ => True) (fun _ _ => True) :=
+    hoare_liftAmbient a _
+  unfold Hoare at ha
+  mvcgen [-Std.Do.Spec.monadLift_StateT, ha, txError, hc, hl, he, hr, ht, hn, branch]
 
 def TxSelected (peer : Option PeerId) (pkts : List Packet) (mtu : Nat)
     (result : Except Int (PeerId × List Packet)) : Prop :=
@@ -358,25 +378,30 @@ def TxSelected (peer : Option PeerId) (pkts : List Packet) (mtu : Nat)
 theorem txSelect_spec (family : Nat) (pkts : List Packet) (mtu : Nat) (peer : Option PeerId) :
     ⦃fun _ => ⌜True⌝⦄ txSelect family pkts mtu peer
     ⦃⇓? result _ => ⌜TxSelected peer pkts mtu result⌝⦄ := by
-  have he := txError_spec family
-  have hp := fun peer => any_spec (peerPut peer)
-  have hg := fun pid => any_spec (getPeer pid)
-  have ht := fun pid => any_spec (Lifetimes.xmitTrim pid)
-  have ha := any_spec (envOk .skbSegment)
+  have he := txError_spec family (pkts.head?.getD {bytes := []})
+  have hp := fun peer => any_spec_ambient (peerPut peer)
+  have hg := fun pid => any_spec_ambient (getPeer pid)
+  have ht := fun pid => any_spec_ambient (Lifetimes.xmitTrim pid)
+  have ha := any_spec_ambient (envOk .skbSegment : WG.M Bool)
   have hw := txWalk_spec pkts mtu []
-  mvcgen [txSelect, he, hp, hg, ht, ha, hw, branch, WG.andM, invariant]
+  mvcgen [txSelect, he, hp, hg, ht, ha, hw, branch, AmbientM.branch, WG.andM, invariant, AmbientM.invariant]
   all_goals try dsimp +zetaDelta only at *
   all_goals simp_all [TxSelected, ENOKEY, EDESTADDRREQ, ENOMEM]
 
-private theorem bind_option (o : Option α) (a : α → M β) (b : M β) (f : β → M γ) :
+private theorem bind_option {m : Type → Type} [Monad m]
+    (o : Option α) (a : α → m β) (b : m β) (f : β → m γ) :
     (match o with | some v => a v | none => b) >>= f =
       match o with | some v => a v >>= f | none => b >>= f := by
   cases o <;> rfl
 
-private theorem invariant_bind (msg : String) (f : α → M β) :
+private theorem invariant_bind (msg : String) (f : α → Leanux.M β) :
     invariant msg >>= f = invariant msg := rfl
 
-private theorem bind_congr (a : M α) (f g : α → M β) (h : ∀ x, f x = g x) :
+private theorem invariant_bind_ambient (msg : String) (f : α → WG.M β) :
+    invariant msg >>= f = invariant msg := rfl
+
+private theorem bind_congr {m : Type → Type} [Monad m]
+    (a : m α) (f g : α → m β) (h : ∀ x, f x = g x) :
     a >>= f = a >>= g := congrArg (fun f => a >>= f) (funext h)
 
 theorem wgXmit_factor (family addr : Nat) (pkts : List Packet) (mtu : Nat) :
@@ -387,69 +412,120 @@ theorem wgXmit_factor (family addr : Nat) (pkts : List Packet) (mtu : Nat) :
       | .error err => return err
       | .ok (pid, packets) => txFinish pid packets) := by
   rw [Lifetimes.wgXmitSource_eq]
-  cases hh : pkts.head? <;> simp only [Lifetimes.wgXmitSource, txCheck, txError, txSelect, txFinish, txHeaders, txWalk, destinationField, beAt,
-    bind_assoc, bind_if, bind_option, invariant_bind, pure_bind, hh]
-  all_goals repeat' first
-    | rfl
-    | apply bind_congr
-    | intro_forall
-    | (split <;> try simp_all only [bind_assoc, bind_if, bind_option, invariant_bind,
-        pure_bind, Bool.not_true, Bool.not_false, Bool.false_eq_true, ite_false, ite_true])
-    | simp only [bind_assoc, bind_if, bind_option, invariant_bind, pure_bind,
-        Bool.not_true, Bool.not_false, Bool.false_eq_true, ite_false, ite_true]
+  cases hh : pkts.head? with
+  | none =>
+    simp only [Lifetimes.wgXmitSource, txCheck, hh, invariant_bind_ambient]
+  | some first =>
+    conv => lhs; unfold Lifetimes.wgXmitSource; rw [hh]
+    change (do
+      let realProtocol := match first.bytes with
+        | b :: _ => if b.toNat / 16 == 4 then ETH_P_IP else if b.toNat / 16 == 6 then ETH_P_IPV6 else 0
+        | [] => 0
+      let skbProtocol := if family == 4 then ETH_P_IP else ETH_P_IPV6
+      -- `real_protocol && skb->protocol == real_protocol`
+      let ok ← WG.andM (branch .checkProtoParsed (realProtocol != 0))
+        (branch .checkProtoMatches (skbProtocol == realProtocol))
+      if ← branch .xmitBadProtocol !ok then
+        modifyDev fun d => {d with txErrors := d.txErrors + 1}
+        return -EPROTONOSUPPORT
+      txHeaders family addr pkts
+      let peer ← lookupDst family addr
+      if ← branch .xmitNoPeer peer.isNone then
+        if !(← branch .xmitNoPeerInet (family == 4)) then _ ← branch .xmitNoPeerInet6 (family == 6)
+        return ← txError family first (-ENOKEY)
+      let some pid := peer | invariant "unreachable"
+      let epFamily := (← getPeer pid).endpoint.map (·.family) |>.getD 0
+      if ← WG.andM (branch .xmitEndpointNotInet (epFamily != AF_INET)) (branch .xmitEndpointNotInet6 (epFamily != AF_INET6)) then
+        peerPut peer   -- err_peer
+        return ← txError family first (-EDESTADDRREQ)
+      _ ← branch .xmitValidDst true   -- mtu = dst_mtu(skb_dst(skb))
+      -- `if (!skb_is_gso(skb))` (device.c:176): a GSO skb arrives as its segments
+      if !(← branch .xmitNotGso (pkts.length < 2)) then
+        -- skb_gso_segment(skb, 0) (device.c:179-186): `IS_ERR(segs)` only when
+        -- an allocation inside skb_segment fails (A's domain, `envOk`)
+        if ← branch .xmitGsoError !(← envOk .skbSegment) then
+          peerPut peer   -- err_peer
+          return ← txError family first (-ENOMEM)
+      -- skb_list_walk_safe (device.c:189-204): every packet of the list gets
+      -- the one `mtu` of this call
+      let packets ← txWalk pkts mtu []
+      _ ← branch .xmitWalk false
+      -- `while (skb_queue_len(&peer->staged_packet_queue) > MAX_STAGED_PACKETS)`
+      -- (device.c:211-214): the oldest packets go, one `tx_dropped` each, before
+      -- the new ones are spliced (W4: the trim)
+      Lifetimes.xmitTrim pid
+      Lifetimes.xmitSplice pid packets
+      sendStagedPackets pid
+      peerPut peer
+      return 0   -- NETDEV_TX_OK
+      : WG.M Int) = _
+    simp only [txCheck, txSelect, txFinish, hh, Option.getD_some,
+      bind_assoc, bind_if, pure_bind]
+    all_goals repeat' first
+      | rfl
+      | apply bind_congr
+      | keypairs_intro_forall
+      | (split <;> try simp_all only [bind_assoc, bind_if,
+          invariant_bind_ambient, pure_bind, bind_pure, Bool.not_true, Bool.not_false,
+          Bool.false_eq_true, ite_false, ite_true])
+      | simp only [bind_assoc, bind_if, bind_option,
+          invariant_bind_ambient, pure_bind, bind_pure, Bool.not_true, Bool.not_false,
+          Bool.false_eq_true, ite_false, ite_true]
 
 /-- Exact original-call chain ending at the completed staged append. The following
 send/put tail is retained; this is not a later encryption or wire-send claim. -/
 def TxHandoff (family addr : Nat) (pkts : List Packet) (mtu : Nat)
-    (w v : World) (pid : PeerId) : Prop :=
-  ∃ u q r s,
-    (txCheck family addr pkts mtu).run w = .ok (true, u) ∧
-    (lookupDst family addr).run u = .ok (some pid, q) ∧
-    (txSelect family pkts mtu (some pid)).run q =
-      .ok (.ok (pid, pkts.map (fun pkt => {pkt with mtu})), r) ∧
-    (Lifetimes.xmitSplice pid (pkts.map (fun pkt => {pkt with mtu}))).run r = .ok ((), s) ∧
-    (do sendStagedPackets pid; peerPut (some pid); pure (0 : Int)).run s = .ok (0, v)
+    (w v : WGWorld) (ambient ambient' : Ambient) (pid : PeerId) : Prop :=
+  ∃ u q r s a b c d,
+    ((txCheck family addr pkts mtu).run w).run ambient = .ok ((true, u), a) ∧
+    ((lookupDst family addr).run u).run a = .ok ((some pid, q), b) ∧
+    ((txSelect family pkts mtu (some pid)).run q).run b =
+      .ok ((.ok (pid, pkts.map (fun pkt => {pkt with mtu})), r), c) ∧
+    ((Lifetimes.xmitSplice pid (pkts.map (fun pkt => {pkt with mtu}))).run r).run c = .ok (((), s), d) ∧
+    ((do sendStagedPackets pid; peerPut (some pid); pure (0 : Int) : WG.M Int).run s).run d =
+      .ok ((0, v), ambient')
 
 theorem wgXmit_handoff (family addr : Nat) (pkts : List Packet) (mtu : Nat)
-    (w v : World) (hr : (wgXmit family addr pkts mtu).run w = .ok (0, v)) :
-    ∃ pid, TxHandoff family addr pkts mtu w v pid := by
+    (w v : WGWorld) (ambient ambient' : Ambient)
+    (hr : ((wgXmit family addr pkts mtu).run w).run ambient = .ok ((0, v), ambient')) :
+    ∃ pid, TxHandoff family addr pkts mtu w v ambient ambient' pid := by
   rw [wgXmit_factor] at hr
   simp only [StateT.run_bind] at hr
-  cases hc : (txCheck family addr pkts mtu).run w with
+  cases hc : ((txCheck family addr pkts mtu).run w).run ambient with
   | error e => simp [hc] at hr
   | ok out =>
-    rcases out with ⟨ok, u⟩
+    rcases out with ⟨⟨ok, u⟩, a⟩
     cases ok with
     | false => simp [hc, EPROTONOSUPPORT] at hr
     | true =>
-      simp only [hc, except_ok_bind, Bool.not_true, Bool.false_eq_true, if_false] at hr
+      simp only [hc, except_ok_bind, Bool.not_true, Bool.false_eq_true, ite_false] at hr
       simp only [StateT.run_bind] at hr
-      cases hq : (lookupDst family addr).run u with
+      cases hq : ((lookupDst family addr).run u).run a with
       | error e => simp [hq] at hr
       | ok out =>
-        rcases out with ⟨peer, q⟩
-        simp only [hq, except_ok_bind, StateT.run_bind] at hr
-        cases hs : (txSelect family pkts mtu peer).run q with
+        rcases out with ⟨⟨peer, q⟩, b⟩
+        simp only [hq, except_ok_bind] at hr
+        cases hs : ((txSelect family pkts mtu peer).run q).run b with
         | error e => simp [hs] at hr
         | ok out =>
-          rcases out with ⟨selected, r⟩
-          have hv := (hoare_iff_triple _ _ _).mpr (txSelect_spec family pkts mtu peer)
-            q selected r True.intro hs
+          rcases out with ⟨⟨selected, r⟩, c⟩
+          have hv := (hoare_iff_run_ambient _ _ _).mp (txSelect_spec family pkts mtu peer)
+            q b selected r c True.intro hs
           cases selected with
           | error err =>
-            simp only [hs, except_ok_bind, StateT.run_pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at hr
-            change (Except.ok (err, r) : Except Stop (Int × World)) = .ok (0, v) at hr
-            exact False.elim (hv (congrArg Prod.fst (Except.ok.inj hr)))
+            simp only [hs, except_ok_bind, StateT.run_pure] at hr
+            change (Except.ok ((err, r), c) : Except Stop ((Int × WGWorld) × Ambient)) = .ok ((0, v), ambient') at hr
+            exact False.elim (hv (congrArg (Prod.fst ∘ Prod.fst) (Except.ok.inj hr)))
           | ok pair =>
             rcases pair with ⟨pid, packets⟩
             obtain ⟨rfl, rfl⟩ := hv
             simp only [hs, except_ok_bind, txFinish, StateT.run_bind] at hr
-            cases hh : (Lifetimes.xmitSplice pid (pkts.map (fun pkt => {pkt with mtu}))).run r with
+            cases hh : ((Lifetimes.xmitSplice pid (pkts.map (fun pkt => {pkt with mtu}))).run r).run c with
             | error e => simp [hh] at hr
             | ok out =>
-              rcases out with ⟨⟨⟩, s⟩
+              rcases out with ⟨⟨⟨⟩, s⟩, d⟩
               simp only [hh, except_ok_bind] at hr
-              exact ⟨pid, u, q, r, s, hc, hq, hs, hh, hr⟩
+              exact ⟨pid, u, q, r, s, a, b, c, d, hc, hq, hs, hh, hr⟩
 
 theorem destinationField_bound (v4 : Bool) (bytes : List UInt8) :
     destinationField (if v4 then 4 else 6) bytes < 2 ^ rootWidth v4 := by
@@ -458,18 +534,20 @@ theorem destinationField_bound (v4 : Bool) (bytes : List UInt8) :
   · exact beAt_bound bytes 16 4
 
 theorem wgXmit_authorized (v4 : Bool) (addr : Nat) (pkts : List Packet) (mtu : Nat)
-    (w v : World) (xs : FlatTable × FlatTable) (hi : RoutedView (routingView w) xs)
-    (hr : (wgXmit (if v4 then 4 else 6) addr pkts mtu).run w = .ok (0, v)) :
-    ∃ pid, TxHandoff (if v4 then 4 else 6) addr pkts mtu w v pid ∧
+    (w v : WGWorld) (ambient ambient' : Ambient) (xs : FlatTable × FlatTable)
+    (hi : RoutedView (routingView w) xs)
+    (hr : ((wgXmit (if v4 then 4 else 6) addr pkts mtu).run w).run ambient = .ok ((0, v), ambient')) :
+    ∃ pid, TxHandoff (if v4 then 4 else 6) addr pkts mtu w v ambient ambient' pid ∧
       PeerWinner (rootWidth v4) addr (selectedFlat v4 xs) (some pid) ∧
       ∀ pkt ∈ pkts, destinationField (if v4 then 4 else 6) pkt.bytes = addr := by
-  obtain ⟨pid, hh⟩ := wgXmit_handoff _ addr pkts mtu w v hr
+  obtain ⟨pid, hh⟩ := wgXmit_handoff _ addr pkts mtu w v ambient ambient' hr
   have hkeep := hh
-  obtain ⟨u, q, r, s, hc, hq, _, _, _⟩ := hh
-  have hv := (hoare_iff_triple _ _ _).mpr (txCheck_valid _ addr pkts mtu)
-    w true u True.intro hc rfl
+  obtain ⟨u, q, r, s, a, b, c, d, hc, hq, _, _, _⟩ := hh
+  have hv := (hoare_iff_run_ambient _ _ _).mp (txCheck_valid _ addr pkts mtu)
+    w ambient true u a True.intro hc rfl
   have hu : RoutedView (routingView u) xs := by
-    rw [txCheck_routing _ addr pkts mtu w true u hc]
+    rw [(Lifetimes.ProjectedAction.iff_run_ambient _ _ _).mp
+      (txCheck_routing _ addr pkts mtu) w ambient true u a hc]
     exact hi
   have ha : addr < 2 ^ rootWidth v4 := by
     cases pkts with
@@ -477,6 +555,6 @@ theorem wgXmit_authorized (v4 : Bool) (addr : Nat) (pkts : List Packet) (mtu : N
     | cons p ps =>
       rw [← hv.2 p (by simp)]
       exact destinationField_bound v4 p.bytes
-  exact ⟨pid, hkeep, lookupDst_normal u q xs v4 addr ha (some pid) hu hq, hv.2⟩
+  exact ⟨pid, hkeep, lookupDst_normal u q a b xs v4 addr ha (some pid) hu hq, hv.2⟩
 
 end Leanux.Proofs.WG.Packets
