@@ -1,6 +1,5 @@
 import Leanux.Proofs.WG.Queues.RxRingWorker
 import Leanux.Proofs.WG.Queues.RxStackFrames
-import Leanux.Proofs.WG.Lifetimes.BatchCalls
 
 /-! Full decrypt-ring cell frames for concrete receive callbacks. Peer/keypair
 release and TX enqueue are allowed: this view retains the device index and
@@ -11,85 +10,59 @@ set_option pp.structureInstances false
 namespace Leanux.Proofs.WG.Queues.RxRing
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing Leanux.Proofs.WG.Lifetimes Std.Do
 
-theorem getPeer_cell (pid : PeerId) : SameView cell (getPeer pid) := getPeer_frame pid
-theorem getKeypair_cell (id : KeypairId) : SameView cell (getKeypair id) := getKeypair_frame id
-theorem keypairGet_cell (id : Option KeypairId) : SameView cell (keypairGet id) := keypairGet_frame id
-theorem keypairPut_cell (id : Option KeypairId) (now : Bool) : SameView cell (keypairPut id now) := keypairPut_frame id now
-theorem peerGet_cell (id : PeerId) : SameView cell (peerGet id) := peerGet_frame id
-theorem peerGetMaybeZero_cell (id : Option PeerId) : SameView cell (peerGetMaybeZero id) := peerGetMaybeZero_frame id
-theorem peerPut_cell (id : Option PeerId) : SameView cell (peerPut id) := peerPut_frame id
+theorem getPeer_cell (pid : PeerId) : SameView nativeCell (getPeer pid) := getPeer_frame pid
+theorem getKeypair_cell (id : KeypairId) : SameView nativeCell (getKeypair id) := getKeypair_frame id
+theorem keypairGet_cell (id : Option KeypairId) : SameView nativeCell (keypairGet id) := keypairGet_frame id
+theorem keypairPut_cell (id : Option KeypairId) (now : Bool) : SameView nativeCell (keypairPut id now) := keypairPut_frame id now
+theorem peerGet_cell (id : PeerId) : SameView nativeCell (peerGet id) := peerGet_frame id
+theorem peerGetMaybeZero_cell (id : Option PeerId) : SameView nativeCell (peerGetMaybeZero id) := peerGetMaybeZero_frame id
+theorem peerPut_cell (id : Option PeerId) : SameView nativeCell (peerPut id) := peerPut_frame id
 
 theorem getPeer_cell_spec (P : (Option (Nat × PtrRing SkbId)) → Prop) (pid : PeerId) :
-    ⦃fun w => ⌜P (cell w)⌝⦄ getPeer pid ⦃⇓? _ w => ⌜P (cell w)⌝⦄ :=
+    ⦃fun w => ⌜P (nativeCell w)⌝⦄ getPeer pid ⦃⇓? _ w => ⌜P (nativeCell w)⌝⦄ :=
   (getPeer_frame pid).wp P
 
 theorem setPeer_cell_spec (P : (Option (Nat × PtrRing SkbId)) → Prop) (pid : PeerId) (p : Peer) :
-    ⦃fun w => ⌜P (cell w)⌝⦄ setPeer pid p ⦃⇓? _ w => ⌜P (cell w)⌝⦄ :=
+    ⦃fun w => ⌜P (nativeCell w)⌝⦄ setPeer pid p ⦃⇓? _ w => ⌜P (nativeCell w)⌝⦄ :=
   (setPeer_frame pid p).wp P
 
 theorem modifyPeer_cell (pid : PeerId) (f : Peer → Peer)
     (_hs : ∀ p, (f p).internalId = p.internalId) (_hq : ∀ p, (f p).rxQueue = p.rxQueue) :
-    SameView cell (do let p ← getPeer pid; setPeer pid (f p)) :=
+    SameView nativeCell (do let p ← getPeer pid; setPeer pid (f p)) :=
   (getPeer_frame pid).bind (fun p => setPeer_frame pid (f p))
 
 theorem modifyDev_cell (f : Device → Device) (he : ∀ d, (f d).ifindex = d.ifindex)
-    (hq : ∀ d, (f d).decryptQueue = d.decryptQueue) : SameView cell (modifyDev f) := modify f he hq
+    (hq : ∀ d, (f d).decryptQueue = d.decryptQueue) : SameView nativeCell (modifyDev f) := modify f he hq
 
-theorem cell_kernel (ha : SameKernel a) : SameView cell a := kernel ha
+theorem cell_kernel {S α : Type} {m : Type → Type} {ps : PostShape}
+    [Monad m] [WPMonad m ps] {project : S → WGWorld} {a : StateT S m α}
+    (ha : SameView (fun w => wgStoreView (project w)) a) :
+    SameView (fun w => nativeCell (project w)) a := kernel ha
+
 theorem requireNotPending_cell (pid : PeerId) (why : String) :
-    SameView cell (requireNotPending pid why) := by
+    SameView nativeCell (requireNotPending pid why) := by
   apply SameView.of_wp
   intro s
   have hg := (getPeer_cell pid).wp (fun t => t = s)
   mvcgen [requireNotPending, hg, unsupported]
 
-theorem setKeypair_cell (kp : KeypairId) (k : Keypair) : SameView cell (setKeypair kp k) :=
+theorem setKeypair_cell (kp : KeypairId) (k : Keypair) : SameView nativeCell (setKeypair kp k) :=
   modifyDev_cell _ (fun _ => rfl) (fun _ => rfl)
 
-theorem getTxSkb_cell (id : SkbId) : SameView cell (getTxSkb id) := by
-  apply SameView.of_wp
-  intro s
-  mvcgen [getTxSkb, getDev, getK, invariant]
-
-theorem setTxSkb_cell (id : SkbId) (f : DataPacket → DataPacket) :
-    SameView cell (setTxSkb id f) := by
-  apply SameView.of_wp
-  intro s
-  have hg := (getTxSkb_cell id).wp (fun t => t = s)
-  have hm := fun p => (modifyDev_cell (fun d => {d with txSkbs := d.txSkbs.insert id (f p)})
-    (fun _ => rfl) (fun _ => rfl)).wp (fun t => t = s)
-  mvcgen [setTxSkb, hg, hm]
-
-theorem newTxSkb_cell (p : DataPacket) : SameView cell (newTxSkb p) := by
-  apply SameView.of_wp
-  intro s
-  mvcgen [newTxSkb, getDev, getK, modifyDev, modifyK, invariant]
-  all_goals dsimp +zetaDelta only at *
-  all_goals unfold cell at *; simp_all
-
-theorem freeTxSkb_cell (id : SkbId) : SameView cell (freeTxSkb id) := by
-  apply SameView.of_wp
-  intro s
-  have hg := (getTxSkb_cell id).wp (fun t => t = s)
-  have hm := (modifyDev_cell (fun d => {d with txSkbs := d.txSkbs.erase id})
-    (fun _ => rfl) (fun _ => rfl)).wp (fun t => t = s)
-  mvcgen [freeTxSkb, hg, hm]
-
-
 theorem counterValidate_cell (kp : KeypairId) (nonce : Nat) :
-    SameView cell (counterValidate kp nonce) := by
+    SameView nativeCell (counterValidate kp nonce) := by
   apply SameView.of_wp
   intro s
-  mvcgen [counterValidate, getKeypair, getDev, getK, setKeypair, modifyDev, modifyK,
-    branch, branchCmp, WG.orM, invariant]
-  all_goals try exact ((⇓? _ w => ⌜cell w = s⌝) : PostCond _ (.arg World (.except Stop .pure)))
+  mvcgen [counterValidate, getKeypair, getDev, setKeypair, modifyDev,
+    branch, branchCmp, AmbientM.branch, AmbientM.branchCmp, WG.orM, invariant, AmbientM.invariant]
+  all_goals try exact ((⇓? _ w => ⌜nativeCell w = s⌝) : PostCond _ (.arg WGWorld (.arg Ambient (.except Stop .pure))))
   all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [cell, Option.map_map, Function.comp_def]
+  all_goals simp_all [nativeCell, Option.map_map, Function.comp_def]
 
   all_goals trivial
 
 theorem receivedWithKeypair_cell (pid : PeerId) (kp : KeypairId) :
-    SameView cell (receivedWithKeypair pid kp) := by
+    SameView nativeCell (receivedWithKeypair pid kp) := by
   apply SameView.of_wp
   intro s
   have hg := (getPeer_cell pid).wp (fun t => t = s)
@@ -99,212 +72,311 @@ theorem receivedWithKeypair_cell (pid : PeerId) (kp : KeypairId) :
     (modifyPeer_cell pid f hs hq).wp (fun t => t = s)
   have hm1 := hm (fun p => {p with keypairPrevious := p.keypairCurrent}) (fun _ => rfl) (fun _ => rfl)
   have hm2 := hm (fun p => {p with keypairCurrent := some kp, keypairNext := none}) (fun _ => rfl) (fun _ => rfl)
-  have hp1 : ⦃fun w => ⌜cell w = s⌝⦄
+  have hp1 : ⦃fun w => ⌜nativeCell w = s⌝⦄
       (pinned_const _private.Leanux.WG.Keypair.«0».Leanux.WG.modifyPeer) pid
         (fun p => {p with keypairPrevious := p.keypairCurrent})
-      ⦃⇓? _ w => ⌜cell w = s⌝⦄ := hm1
-  have hp2 : ⦃fun w => ⌜cell w = s⌝⦄
+      ⦃⇓? _ w => ⌜nativeCell w = s⌝⦄ := hm1
+  have hp2 : ⦃fun w => ⌜nativeCell w = s⌝⦄
       (pinned_const _private.Leanux.WG.Keypair.«0».Leanux.WG.modifyPeer) pid
         (fun p => {p with keypairCurrent := some kp, keypairNext := none})
-      ⦃⇓? _ w => ⌜cell w = s⌝⦄ := hm2
-  mvcgen [receivedWithKeypair, hg, hk, hp1, hp2, branch, invariant]
+      ⦃⇓? _ w => ⌜nativeCell w = s⌝⦄ := hm2
+  mvcgen [receivedWithKeypair, hg, hk, hp1, hp2, branch, AmbientM.branch, invariant, AmbientM.invariant]
 
 
-theorem dstCacheReset_cell (pid : PeerId) : SameView cell (dstCacheReset pid) := by
+theorem dstCacheReset_cell (pid : PeerId) : SameView nativeCell (dstCacheReset pid) := by
   apply SameView.of_wp
   intro s
   have hg := getPeer_cell_spec (fun t => t = s) pid
   have hs := fun p => setPeer_cell_spec (fun t => t = s) pid p
-  have ht := (cell_kernel (hiddenJiffies_sameKernel .dstCacheResetTs)).wp (fun t => t = s)
-  mvcgen [dstCacheReset, hg, hs, ht]
+  have ambient {α : Type} (a : AmbientM α) :
+      Hoare (MonadLift.monadLift a : WG.M α) (fun w => nativeCell w = s) (fun _ w => nativeCell w = s) :=
+    hoare_liftAmbient a (fun w => nativeCell w = s)
+  unfold Hoare at ambient
+  mvcgen [-Std.Do.Spec.monadLift_StateT, dstCacheReset, getAmbient, hiddenJiffies, hg, hs, ambient]
   all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [cell, Option.map_map, Function.comp_def]
+  all_goals unfold nativeCell at *; simp_all [CurrentRx]
 
-theorem setPeerEndpoint_cell (pid : PeerId) (e : Endpoint) : SameView cell (setPeerEndpoint pid e) := by
+theorem setPeerEndpoint_cell (pid : PeerId) (e : Endpoint) : SameView nativeCell (setPeerEndpoint pid e) := by
   apply SameView.of_wp
   intro s
   have hg := getPeer_cell_spec (fun t => t = s) pid
   have hs := fun p => setPeer_cell_spec (fun t => t = s) pid p
   have hn := (requireNotPending_cell pid "changing the endpoint").wp (fun t => t = s)
-  have he := fun old => (cell_kernel (endpointEq_sameKernel e old)).wp (fun t => t = s)
   have hc := (dstCacheReset_cell pid).wp (fun t => t = s)
-  mvcgen [setPeerEndpoint, hg, hs, hn, he, hc, branch]
+  have ambient {α : Type} (a : AmbientM α) :
+      Hoare (MonadLift.monadLift a : WG.M α) (fun w => nativeCell w = s) (fun _ w => nativeCell w = s) :=
+    hoare_liftAmbient a (fun w => nativeCell w = s)
+  unfold Hoare at ambient
+  have he (old : Option Endpoint) :
+      ⦃fun w => ⌜nativeCell w = s⌝⦄ endpointEq e old ⦃⇓? _ w => ⌜nativeCell w = s⌝⦄ := by
+    mvcgen [-Std.Do.Spec.monadLift_StateT, endpointEq, WG.andM, branch, ambient]
+  mvcgen [-Std.Do.Spec.monadLift_StateT, setPeerEndpoint, he, hg, hs, hn, hc, branch, ambient]
   all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [cell, Option.map_map, Function.comp_def]
+  all_goals unfold nativeCell at *; simp_all [CurrentRx]
 
 theorem armTimer_cell (pid : PeerId) (timer : PeerTimer) (delay : Nat) (jc : Option UInt64 := none) :
-    SameView cell (armTimer pid timer delay jc) := by
-  rw [armTimer_source pid timer delay jc]
-  apply SameView.bind (cell_kernel (timerArmExpiry_sameKernel pid timer delay jc))
-  intro expiry
-  exact modifyPeer_cell pid (fun p => p.setTimer timer (some expiry))
+    SameView nativeCell (armTimer pid timer delay jc) := by
+  have wheel (t : PeerTimer) (expires clk : UInt64) (unit : Option Nat) :
+      SameView nativeCell (placeOnWheel pid t expires clk unit) := by
+    apply SameView.of_wp
+    intro s
+    have hg := getPeer_cell_spec (fun q => q = s) pid
+    have hs := fun p => setPeer_cell_spec (fun q => q = s) pid p
+    have ambient {α : Type} (a : AmbientM α) :
+        Hoare (MonadLift.monadLift a : WG.M α) (fun w => nativeCell w = s) (fun _ w => nativeCell w = s) :=
+      hoare_liftAmbient a _
+    unfold Hoare at ambient
+    mvcgen [-Std.Do.Spec.monadLift_StateT, placeOnWheel, hg, hs, ambient,
+      hidden, peekHiddenSite, invariant]
+  have ambient {α : Type} (a : AmbientM α) : SameView nativeCell (monadLift a : WG.M α) :=
+    fun initial => hoare_liftAmbient a (fun w => nativeCell w = initial)
+  have read : SameView nativeCell (get : WG.M WGWorld) := by
+    apply SameView.of_wp; intro initial; mvcgen
+  have dev : SameView nativeCell getDev := by
+    apply SameView.of_wp; intro initial; mvcgen [getDev, invariant, AmbientM.invariant]
+  have stopped {α : Type} (e : Stop) : SameView nativeCell (throw e : WG.M α) := by
+    apply SameView.of_wp; intro initial; mvcgen
+  have edit (f : WGWorld → WGWorld) (hf : ∀ w, nativeCell (f w) = nativeCell w) :
+      SameView nativeCell (_root_.modify f : WG.M Unit) := by
+    intro initial
+    apply hoare_modify
+    intro w hw
+    exact (hf w).trans hw
+  unfold armTimer
+  simp (config := { zeta := false }) only [getAmbient, hidden, invariant, unsupported, liftM]
+  repeat' first
+    | rxqueue_join_let
+    | rxqueue_join_use
+    | (snapshot_head placeOnWheel; exact wheel _ _ _ _)
+    | (snapshot_head getDev; exact dev)
+    | (snapshot_head getPeer; exact getPeer_cell _)
+    | (snapshot_head MonadLiftT.monadLift; exact ambient _)
+    | (snapshot_head MonadLift.monadLift; exact ambient _)
+    | (snapshot_head get; exact read)
+    | (snapshot_head MonadStateOf.get; exact read)
+    | (snapshot_head throw; exact stopped _)
+    | (snapshot_head MonadExceptOf.throw; exact stopped _)
+    | contradiction
+    | keypairs_intro_forall
+    | (snapshot_head Pure.pure; exact SameView.pure _ _)
+    | (snapshot_head Bind.bind; apply SameView.bind)
+    | (snapshot_head ite; split)
+    | (snapshot_head _root_.modify; exact edit _ (fun _ => rfl))
+    | snapshot_head_reduce
+    | snapshot_head_match
+
+theorem delTimer_cell (pid : PeerId) (timer : PeerTimer) : SameView nativeCell (delTimer pid timer) :=
+  modifyPeer_cell pid (fun p => (p.setTimer timer none).setWheel timer none)
     (fun p => by cases timer <;> rfl) (fun p => by cases timer <;> rfl)
 
-theorem delTimer_cell (pid : PeerId) (timer : PeerTimer) : SameView cell (delTimer pid timer) :=
-  modifyPeer_cell pid (fun p => p.setTimer timer none)
-    (fun p => by cases timer <;> rfl) (fun p => by cases timer <;> rfl)
-
-theorem modPeerTimerGuard_cell (pid : PeerId) : SameView cell (modPeerTimerGuard pid) := by
+theorem modPeerTimerGuard_cell (pid : PeerId) : SameView nativeCell (modPeerTimerGuard pid) := by
   apply SameView.of_wp
   intro s
   have hg := (getPeer_cell pid).wp (fun t => t = s)
-  mvcgen [modPeerTimerGuard, getDev, getK, hg, WG.andM, branch, invariant]
+  have ambient {α : Type} (a : AmbientM α) :
+      Hoare (MonadLift.monadLift a : WG.M α) (fun w => nativeCell w = s) (fun _ w => nativeCell w = s) :=
+    hoare_liftAmbient a (fun w => nativeCell w = s)
+  unfold Hoare at ambient
+  mvcgen [-Std.Do.Spec.monadLift_StateT, ambient, modPeerTimerGuard, getDev, hg, WG.andM, branch, invariant, AmbientM.invariant]
 
 theorem modPeerTimer_cell (site : HiddenSite) (pid : PeerId) (timer : PeerTimer) (delay : Nat) :
-    SameView cell (modPeerTimer site pid timer delay) := by
+    SameView nativeCell (modPeerTimer site pid timer delay) := by
   apply SameView.of_wp
   intro s
   have hg := (modPeerTimerGuard_cell pid).wp (fun t => t = s)
   have ha := fun jc => (armTimer_cell pid timer delay jc).wp (fun t => t = s)
-  have hc := (cell_kernel (callerJiffies_sameKernel site)).wp (fun t => t = s)
+  have hc := (callerJiffies_sameWGWorld site).wp (fun w => nativeCell w = s)
   mvcgen [modPeerTimer, hg, ha, hc]
 
 theorem timersHandshakeComplete_cell (pid : PeerId) (site : HiddenSite) :
-    SameView cell (timersHandshakeComplete pid site) := by
+    SameView nativeCell (timersHandshakeComplete pid site) := by
   apply SameView.of_wp
   intro s
   have hg := getPeer_cell_spec (fun t => t = s) pid
   have hs := fun p => setPeer_cell_spec (fun t => t = s) pid p
   have hd := (delTimer_cell pid .retransmitHandshake).wp (fun t => t = s)
-  have hh := (cell_kernel (hidden_sameKernel site)).wp (fun t => t = s)
-  mvcgen [timersHandshakeComplete, hg, hs, hd, hh]
+  have ambient {α : Type} (a : AmbientM α) :
+      Hoare (MonadLift.monadLift a : WG.M α) (fun w => nativeCell w = s) (fun _ w => nativeCell w = s) :=
+    hoare_liftAmbient a (fun w => nativeCell w = s)
+  unfold Hoare at ambient
+  mvcgen [-Std.Do.Spec.monadLift_StateT, timersHandshakeComplete, hg, hs, hd, hidden, ambient]
   all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [cell, Option.map_map, Function.comp_def]
+  all_goals unfold nativeCell at *; simp_all [CurrentRx]
 
 theorem timersAnyAuthenticatedPacketReceived_cell (pid : PeerId) :
-    SameView cell (timersAnyAuthenticatedPacketReceived pid) := delTimer_cell pid .newHandshake
+    SameView nativeCell (timersAnyAuthenticatedPacketReceived pid) := delTimer_cell pid .newHandshake
 
-theorem timersDataReceived_cell (pid : PeerId) : SameView cell (timersDataReceived pid) := by
+theorem timersDataReceived_cell (pid : PeerId) : SameView nativeCell (timersDataReceived pid) := by
   apply SameView.of_wp
   intro s
   have hg := getPeer_cell_spec (fun t => t = s) pid
   have hs := fun p => setPeer_cell_spec (fun t => t = s) pid p
   have ht := (modPeerTimer_cell .timerJiffiesDataReceived pid .sendKeepalive KEEPALIVE_TIMEOUT_TICKS).wp (fun t => t = s)
-  have hd := discard_view_spec cell (fun t => t = s) _ ht
-  mvcgen [timersDataReceived, hg, hs, ht, hd, getDev, getK, branch, invariant]
+  have hd := discard_view_spec nativeCell (fun t => t = s) _ ht
+  have ambient {α : Type} (a : AmbientM α) :
+      Hoare (MonadLift.monadLift a : WG.M α) (fun w => nativeCell w = s) (fun _ w => nativeCell w = s) :=
+    hoare_liftAmbient a (fun w => nativeCell w = s)
+  unfold Hoare at ambient
+  mvcgen [-Std.Do.Spec.monadLift_StateT, ambient, timersDataReceived, hg, hs, ht, hd, getDev, branch, invariant, AmbientM.invariant]
   all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [cell, Option.map_map, Function.comp_def]
+  all_goals unfold nativeCell at *; simp_all [CurrentRx]
 
-theorem timersTraversal_cell (pid : PeerId) : SameView cell (timersTraversal pid) := by
+theorem timersTraversal_cell (pid : PeerId) : SameView nativeCell (timersTraversal pid) := by
   apply SameView.of_wp
   intro s
   have hg := (getPeer_cell pid).wp (fun t => t = s)
   have ht := fun delay => (modPeerTimer_cell .timerJiffiesTraversal pid .persistentKeepalive delay).wp (fun t => t = s)
-  have hd := fun delay => discard_view_spec cell (fun t => t = s) _ (ht delay)
-  mvcgen [timersTraversal, hg, ht, hd, branchCmp]
+  have hd := fun delay => discard_view_spec nativeCell (fun t => t = s) _ (ht delay)
+  have ambient {α : Type} (a : AmbientM α) :
+      Hoare (MonadLift.monadLift a : WG.M α) (fun w => nativeCell w = s) (fun _ w => nativeCell w = s) :=
+    hoare_liftAmbient a (fun w => nativeCell w = s)
+  unfold Hoare at ambient
+  mvcgen [-Std.Do.Spec.monadLift_StateT, ambient, timersTraversal, hg, ht, hd, branchCmp]
 
 /-- Queueing a handshake can release the extra peer reference while preserving
-the complete decrypt-ring cell; no ownership premise is imposed. -/
+the device index and complete decrypt ring. -/
+
 theorem sendQueuedHandshakeInitiation_cell (pid : PeerId) (retry : Bool) :
-    SameView cell (sendQueuedHandshakeInitiation pid retry) := by
+    SameView nativeCell (sendQueuedHandshakeInitiation pid retry) := by
   apply SameView.of_wp
   intro s
   let P := fun t => t = s
   have hg := getPeer_cell_spec P pid
   have hs := fun p => setPeer_cell_spec P pid p
   have hn := (requireNotPending_cell pid "queueing a handshake").wp P
-  have hc := fun date => (cell_kernel (branchExpired_sameKernel .queuedNotExpired date REKEY_TIMEOUT (!·))).wp P
+  have hc := fun date => (branchExpired_sameWGWorld .queuedNotExpired date REKEY_TIMEOUT (!·)).wp (fun w => P (nativeCell w))
   have hget := (peerGet_cell pid).wp P
   have hput := (peerPut_cell (some pid)).wp P
-  have hrec := (cell_kernel (recordQueued_sameKernel .sendWorker pid)).wp P
   have hqueue := (modifyDev_cell (fun d => {d with sendWorkQueue := d.sendWorkQueue ++ [pid]})
     (fun _ => rfl) (fun _ => rfl)).wp P
-  mvcgen [sendQueuedHandshakeInitiation, hg, hs, hn, hc, hget, hput, hrec, hqueue, branch]
+  have ambient {α : Type} (a : AmbientM α) :
+      Hoare (MonadLift.monadLift a : WG.M α) (fun w => P (nativeCell w)) (fun _ w => P (nativeCell w)) :=
+    hoare_liftAmbient a (fun w => P (nativeCell w))
+  unfold Hoare at ambient
+  mvcgen [-Std.Do.Spec.monadLift_StateT, sendQueuedHandshakeInitiation, hg, hs, hn, hc, hget, hput, hqueue, branch, peekQueuedUnit, recordQueued, ambient]
   all_goals try dsimp +zetaDelta only [P] at *
-  all_goals try (simp_all [cell, Option.map_map, Function.comp_def])
-  all_goals try subst s
+  all_goals try (unfold nativeCell at *; simp_all [CurrentRx])
+  all_goals subst s
   all_goals rfl
 
-theorem keepKeyFreshRx_cell (pid : PeerId) : SameView cell (keepKeyFreshRx pid) := by
+theorem keepKeyFreshRx_cell (pid : PeerId) : SameView nativeCell (keepKeyFreshRx pid) := by
   apply SameView.of_wp
   intro s
   let P := fun t => t = s
   have hg := getPeer_cell_spec P pid
   have hs := fun p => setPeer_cell_spec P pid p
   have hk := fun id => (getKeypair_cell id).wp P
-  have ht := fun date delay => (cell_kernel (branchExpired_sameKernel .rxFreshExpired date delay)).wp P
+  have ht := fun date delay => (branchExpired_sameWGWorld .rxFreshExpired date delay).wp (fun w => P (nativeCell w))
   have hq := (sendQueuedHandshakeInitiation_cell pid false).wp P
-  mvcgen [keepKeyFreshRx, hg, hs, hk, ht, hq, WG.andM, branch, invariant]
+  have ambient {α : Type} (a : AmbientM α) :
+      Hoare (MonadLift.monadLift a : WG.M α) (fun w => P (nativeCell w)) (fun _ w => P (nativeCell w)) :=
+    hoare_liftAmbient a (fun w => P (nativeCell w))
+  unfold Hoare at ambient
+  mvcgen [-Std.Do.Spec.monadLift_StateT, ambient, keepKeyFreshRx, hg, hs, hk, ht, hq, WG.andM, branch, invariant, AmbientM.invariant]
   all_goals try dsimp +zetaDelta only [P] at *
-  all_goals try (simp_all [cell, Option.map_map, Function.comp_def])
-  all_goals try subst s
+  all_goals try (unfold nativeCell at *; simp_all [CurrentRx])
+  all_goals subst s
   all_goals rfl
 
-
-theorem txDevice_cell (u : TxDeviceUpdate) : SameView cell (modifyDev u.apply) :=
+theorem txDevice_cell (u : TxDeviceUpdate) : SameView nativeCell (modifyDev u.apply) :=
   modifyDev_cell _ (fun d => by cases u <;> rfl) (fun d => by cases u <;> rfl)
 
-theorem cpumaskChooseOnline_cell (pid : PeerId) : SameView cell (cpumaskChooseOnline pid) := by
+theorem cpumaskChooseOnline_cell (pid : PeerId) : SameView nativeCell (cpumaskChooseOnline pid) := by
   apply SameView.of_wp
   intro s
   have hg := getPeer_cell_spec (fun t => t = s) pid
   have hs := fun p => setPeer_cell_spec (fun t => t = s) pid p
-  mvcgen [cpumaskChooseOnline, hg, hs, branch]
-  all_goals try exact ((⇓? _ w => ⌜cell w = s⌝) : PostCond _ (.arg World (.except Stop .pure)))
+  mvcgen [cpumaskChooseOnline, hg, hs, branch, AmbientM.branch]
+  all_goals try exact ((⇓? _ w => ⌜nativeCell w = s⌝) : PostCond _ (.arg WGWorld (.arg Ambient (.except Stop .pure))))
   all_goals try dsimp +zetaDelta only at *
-  all_goals try (unfold cell at *; simp_all [CurrentRx, Option.bind_map, Function.comp_def])
+  all_goals try (unfold nativeCell at *; simp_all [CurrentRx, Option.bind_map, Function.comp_def])
   all_goals trivial
 
 theorem enqueuePerDeviceAndPeer_cell (pid : PeerId) (item : List SkbId) :
-    SameView cell (enqueuePerDeviceAndPeer pid item) := by
+    SameView nativeCell (enqueuePerDeviceAndPeer pid item) := by
   apply SameView.of_wp
   intro s
+  have skb {α : Type} (a : SkbM α) :
+      Hoare (liftSkb a) (fun w => nativeCell w = s) (fun _ w => nativeCell w = s) := by
+    apply hoare_liftSkb a
+    intro w d store hi hd
+    simpa [nativeCell, hd] using hi
+  unfold Hoare at skb
   have hg := getPeer_cell_spec (fun t => t = s) pid
   have hs := fun p => setPeer_cell_spec (fun t => t = s) pid p
-  have hp := fun id f => (setTxSkb_cell id f).wp (fun t => t = s)
-  have hc := fun last => (cell_kernel (cpumaskNextOnlineFrom_sameKernel last)).wp (fun t => t = s)
-  have hw := (cell_kernel (queueDeviceWork_sameKernel .encryptWorker)).wp (fun t => t = s)
+  have hc := fun last => (cell_kernel (cpumaskNextOnlineFrom_sameStore last)).wp (fun t => t = s)
   have hd := fun u => (txDevice_cell u).wp (fun t => t = s)
   have hcpu := fun cpu => hd (.cpu cpu)
   have hring := hd (.ring item)
-  mvcgen [enqueuePerDeviceAndPeer, hg, hs, hp, hc, hw, hcpu, hring, getDev, getK, modifyDev, modifyK, branch, invariant]
+  have queued : Hoare (queueDeviceWork .encryptWorker : WG.M Unit)
+      (fun w => nativeCell w = s) (fun _ w => nativeCell w = s) :=
+    hoare_liftAmbient (AmbientM.queueDeviceWork .encryptWorker) _
+  unfold Hoare at queued
+  mvcgen [enqueuePerDeviceAndPeer, hg, hs, hc, hcpu, hring,
+    setTxSkb, skb, queued, getDev, modifyDev, branch, AmbientM.branch, invariant, AmbientM.invariant]
   all_goals try dsimp +zetaDelta only at *
-  all_goals unfold cell at *; simp_all [CurrentRx, Option.bind_map, Function.comp_def]
+  all_goals unfold nativeCell at *; simp_all [CurrentRx, Option.bind_map, Function.comp_def]
 
 theorem enqueuePerPeerTx_cell (item : List SkbId) (state : PacketState) :
-    SameView cell (enqueuePerPeerTx item state) := by
+    SameView nativeCell (enqueuePerPeerTx item state) := by
   apply SameView.of_wp
   intro s
   let P := fun t => t = s
-  have htx := fun id => (getTxSkb_cell id).wp P
+  have skb {α : Type} (a : SkbM α) :
+      Hoare (liftSkb a) (fun w => P (nativeCell w)) (fun _ w => P (nativeCell w)) := by
+    apply hoare_liftSkb a
+    intro w d store hi hd
+    simpa [nativeCell, hd] using hi
+  unfold Hoare at skb
   have hk := fun id => (getKeypair_cell id).wp P
   have hg := fun pid => (getPeer_cell pid).wp P
   have hget := fun pid => (peerGet_cell pid).wp P
   have hput := fun pid => (peerPut_cell pid).wp P
-  have hset := fun id f => (setTxSkb_cell id f).wp P
   have hcpu := fun pid => (cpumaskChooseOnline_cell pid).wp P
-  have hpeek := fun pid => (cell_kernel (peekQueuedUnit_sameKernel .txWorker pid)).wp P
-  have hrec := fun pid => (cell_kernel (recordQueued_sameKernel .txWorker pid)).wp P
   have hdev := fun pid => (txDevice_cell (.work pid)).wp P
-  have hw := fun o => (cell_kernel (indexOwner_peerDeref_sameKernel o)).wp P
-  mvcgen [hw, enqueuePerPeerTx, htx, hk, hg, hget, hput, hset, hcpu, hpeek, hrec, hdev,
-    getDev, getK, modifyDev, modifyK, branch, invariant]
+  have peek (pid : PeerId) : Hoare (peekQueuedUnit .txWorker pid : WG.M Bool)
+      (fun w => P (nativeCell w)) (fun _ w => P (nativeCell w)) :=
+    hoare_liftAmbient (AmbientM.peekQueuedUnit .txWorker pid) _
+  have recorded (pid : PeerId) : Hoare (recordQueued .txWorker pid : WG.M Unit)
+      (fun w => P (nativeCell w)) (fun _ w => P (nativeCell w)) :=
+    hoare_liftAmbient (AmbientM.recordQueued .txWorker pid) _
+  unfold Hoare at peek recorded
+  have howner := fun o => indexOwner_peerDeref_preserves o (fun w => P (nativeCell w))
+  unfold Preserves Hoare at howner
+  mvcgen [enqueuePerPeerTx, howner, hk, hg, hget, hput, hcpu, hdev,
+    getTxSkb, setTxSkb, skb, peek, recorded, getDev, modifyDev,
+    branch, AmbientM.branch, invariant, AmbientM.invariant]
   all_goals try dsimp +zetaDelta only [P] at *
-  all_goals try (unfold cell at *; simp_all [Option.bind_map, Function.comp_def])
-  all_goals try subst s
+  all_goals try (unfold nativeCell at *; simp_all [Option.bind_map, Function.comp_def])
+  all_goals subst s
   all_goals rfl
 
-theorem createData_cell (pid : PeerId) (item : List SkbId) : SameView cell (createData pid item) := by
+theorem createData_cell (pid : PeerId) (item : List SkbId) : SameView nativeCell (createData pid item) := by
   apply SameView.of_wp
   intro s
   let P := fun t => t = s
+  have skb {α : Type} (a : SkbM α) :
+      Hoare (liftSkb a) (fun w => P (nativeCell w)) (fun _ w => P (nativeCell w)) := by
+    apply hoare_liftSkb a
+    intro w d store hi hd
+    simpa [nativeCell, hd] using hi
+  unfold Hoare at skb
   have hg := (getPeer_cell pid).wp P
-  have ht := fun id => (getTxSkb_cell id).wp P
   have hd := (enqueuePerDeviceAndPeer_cell pid item).wp P
   have hp := (enqueuePerPeerTx_cell item .dead).wp P
   have hk := fun id => (keypairPut_cell id false).wp P
   have hr := (peerPut_cell (some pid)).wp P
-  have hf := fun id => (freeTxSkb_cell id).wp P
-  mvcgen [createData, hg, ht, hd, hp, hk, hr, hf, branch, invariant]
-  all_goals try exact ((⇓? _ w => ⌜P (cell w)⌝) : PostCond _ (.arg World (.except Stop .pure)))
+  mvcgen [createData, hg, hd, hp, hk, hr,
+    getTxSkb, freeTxSkb, skb, branch, AmbientM.branch, invariant, AmbientM.invariant]
+  all_goals try exact ((⇓? _ w => ⌜P (nativeCell w)⌝) : PostCond _ (.arg WGWorld (.arg Ambient (.except Stop .pure))))
   all_goals try dsimp +zetaDelta only [P] at *
-  all_goals try (unfold cell at *; simp_all [Option.bind_map, Function.comp_def])
+  all_goals try (unfold nativeCell at *; simp_all [Option.bind_map, Function.comp_def])
   all_goals try subst s
   all_goals first | rfl | trivial
 
 theorem stagedOutNokey_cell (pid : PeerId) (packets : List Packet)
     (keypair : Option KeypairId) (invalid : Bool) :
-    SameView cell (stagedOutNokey pid packets keypair invalid) := by
+    SameView nativeCell (stagedOutNokey pid packets keypair invalid) := by
   cases invalid <;> cases keypair <;> apply SameView.of_wp <;> intro s
   all_goals
     let P := fun t => t = s
@@ -314,27 +386,26 @@ theorem stagedOutNokey_cell (pid : PeerId) (packets : List Packet)
     have hset := fun id k => (setKeypair_cell id k).wp P
     have hp := fun kp => (keypairPut_cell kp false).wp P
     have hq := (sendQueuedHandshakeInitiation_cell pid false).wp P
-    have hl (α β : Type) := list_view_spec cell (α := α) (β := β) P
+    have hl (α β : Type) := list_view_spec (m := AmbientM) nativeCell (α := α) (β := β) P
     simp only [stagedOutNokey, getPeer_twice, Bool.false_eq_true, ↓reduceIte]
     mvcgen [-Std.Do.Spec.forIn_list, -Std.Do.Spec.forIn'_list, hl,
-      hg, hs, hk, hset, hp, hq, branch, invariant]
-  all_goals try exact ((⇓? _ w => ⌜cell w = s⌝) : PostCond _ (.arg World (.except Stop .pure)))
+      hg, hs, hk, hset, hp, hq, branch, invariant, AmbientM.branch, AmbientM.invariant]
+  all_goals try exact ((⇓? _ w => ⌜nativeCell w = s⌝) : PostCond _ (.arg WGWorld (.arg Ambient (.except Stop .pure))))
   all_goals try dsimp +zetaDelta only at *
-  all_goals try (unfold cell at *; simp_all [CurrentRx, Option.bind_map, Function.comp_def])
+  all_goals try (unfold nativeCell at *; simp_all [CurrentRx, Option.bind_map, Function.comp_def])
   all_goals try subst s
   all_goals first | rfl | trivial
 
-theorem newTxSkbs_cell (packets : List DataPacket) : SameView cell (packets.mapM newTxSkb) := by
-  induction packets with
-  | nil => exact SameView.pure _ _
-  | cons p ps ih =>
-    simp only [List.mapM_cons]
-    exact SameView.bind (newTxSkb_cell p) (fun _ => SameView.bind ih (fun _ => SameView.pure _ _))
-
-theorem sendStagedPackets_cell (pid : PeerId) : SameView cell (sendStagedPackets pid) := by
+theorem sendStagedPackets_cell (pid : PeerId) : SameView nativeCell (sendStagedPackets pid) := by
   apply SameView.of_wp
   intro s
   let P := fun t => t = s
+  have skb {α : Type} (a : SkbM α) :
+      Hoare (liftSkb a) (fun w => P (nativeCell w)) (fun _ w => P (nativeCell w)) := by
+    apply hoare_liftSkb a
+    intro w d store hi hd
+    simpa [nativeCell, hd] using hi
+  unfold Hoare at skb
   have hg := getPeer_cell_spec P pid
   have hs := fun p => setPeer_cell_spec P pid p
   have hk := fun id => (getKeypair_cell id).wp P
@@ -344,43 +415,52 @@ theorem sendStagedPackets_cell (pid : PeerId) : SameView cell (sendStagedPackets
   have hout := fun packets kp invalid => (stagedOutNokey_cell pid packets kp invalid).wp P
   have hput := fun kp => (keypairPut_cell kp false).wp P
   have hqueue := (sendQueuedHandshakeInitiation_cell pid false).wp P
-  have ht := fun date => (cell_kernel (branchExpired_sameKernel .stagedBirthdateExpired date REJECT_AFTER_TIME)).wp P
-  have he := fun pkt => (cell_kernel (ipTunnelEcnEncap_sameKernel pkt)).wp P
-  have hn := fun packets => (newTxSkbs_cell packets).wp P
+  have ht := fun date => (branchExpired_sameWGWorld .stagedBirthdateExpired date REJECT_AFTER_TIME).wp (fun w => P (nativeCell w))
+  have he := fun pkt => (ipTunnelEcnEncap_sameWGWorld pkt).wp (fun w => P (nativeCell w))
+  have hn (packets : List DataPacket) := mapM_view_spec nativeCell P newTxSkb packets
+    (fun p => skb (SkbStore.newTx p))
   have hc := fun item => (createData_cell pid item).wp P
-  have hl (α β : Type) := list_view_spec cell (α := α) (β := β) P
+  have hl (α β : Type) := list_view_spec (m := AmbientM) nativeCell (α := α) (β := β) P
   simp only [sendStagedPackets, getPeer_twice]
-  have hw := fun o => (cell_kernel (indexOwner_peerDeref_sameKernel o)).wp P
-  mvcgen [hw,-Std.Do.Spec.forIn_list, -Std.Do.Spec.forIn'_list, hl, hg, hs, hk, hset, hget, hp, hout, hput, hqueue, ht, he, hn, hc, branch, branchCmp, invariant]
-  all_goals try exact ((⇓? _ w => ⌜P (cell w)⌝) : PostCond _ (.arg World (.except Stop .pure)))
+  have hw := fun o => indexOwner_peerDeref_preserves o (fun w => P (nativeCell w))
+  unfold Preserves Hoare at hw
+  mvcgen [hw, -Std.Do.Spec.forIn_list, -Std.Do.Spec.forIn'_list,
+    hl, hg, hs, hk, hset, hget, hp, hout, hput, hqueue, ht, he, hn, hc, branch, branchCmp, AmbientM.branch, AmbientM.branchCmp, invariant, AmbientM.invariant]
+  all_goals try exact ((⇓? _ w => ⌜P (nativeCell w)⌝) : PostCond _ (.arg WGWorld (.arg Ambient (.except Stop .pure))))
   all_goals try dsimp +zetaDelta only [P] at *
-  all_goals try (unfold cell at *; simp_all [CurrentRx, Option.bind_map, Function.comp_def])
+  all_goals try (unfold nativeCell at *; simp_all [CurrentRx, Option.bind_map, Function.comp_def])
   all_goals try subst s
   all_goals first | rfl | trivial
 
-
 theorem lookup_cell (root : Option NodeId) (bits key : Nat) :
-    SameView cell (lookup root bits key) := by
+    SameView nativeCell (lookup root bits key) := by
   apply SameView.of_wp
   intro s
-  have hs := (cell_kernel (swapEndian_sameKernel bits)).wp (fun t => t = s)
-  have hf := (cell_kernel (findNode_sameKernel root bits key)).wp (fun t => t = s)
-  have hn := fun id => (cell_kernel (Framing.getNode_sameKernel id)).wp (fun t => t = s)
+  have aip {α : Type} (a : AipM α) :
+      Hoare (MonadLift.monadLift a : WG.M α) (fun w => nativeCell w = s) (fun _ w => nativeCell w = s) := by
+    apply hoare_liftAip a
+    intro w d trie hi hd
+    simpa [nativeCell, hd] using hi
+  have ambient {α : Type} (a : AmbientM α) :
+      Hoare (MonadLift.monadLift a : WG.M α) (fun w => nativeCell w = s) (fun _ w => nativeCell w = s) :=
+    hoare_liftAmbient a _
+  unfold Hoare at aip ambient
   have hp := fun pid => (peerGetMaybeZero_cell pid).wp (fun t => t = s)
-  mvcgen [lookup, hs, hf, hn, hp, branch, invariant, unsupported]
+  mvcgen [-Std.Do.Spec.monadLift_StateT, lookup, swapEndian, aip, hp, ambient,
+    branch, invariant, unsupported]
 
 theorem lookupSrc_cell (protocol : Nat) (bytes : List UInt8) :
-    SameView cell (lookupSrc protocol bytes) := by
+    SameView nativeCell (lookupSrc protocol bytes) := by
   apply SameView.of_wp
   intro s
   have hl := fun root bits key => (lookup_cell root bits key).wp (fun t => t = s)
-  mvcgen [lookupSrc, hl, getDev, getK, branch, invariant]
+  mvcgen [lookupSrc, hl, getDev, branch, AmbientM.branch, invariant, AmbientM.invariant]
 
-theorem dishonest_cell (why : Dishonest) : SameView cell (dishonest why) :=
+theorem dishonest_cell (why : Dishonest) : SameView nativeCell (dishonest why) :=
   modifyDev_cell _ (fun d => by cases why <;> rfl) (fun d => by cases why <;> rfl)
 
 theorem updateRxStats_cell (pid : PeerId) (len : Nat) :
-    SameView cell (updateRxStats pid len) := by
+    SameView nativeCell (updateRxStats pid len) := by
   apply SameView.of_wp
   intro s
   have hg := getPeer_cell_spec (fun t => t = s) pid
@@ -389,10 +469,10 @@ theorem updateRxStats_cell (pid : PeerId) (len : Nat) :
     (fun _ => rfl) (fun _ => rfl)).wp (fun t => t = s)
   mvcgen [updateRxStats, hg, hs, hd]
   all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [cell, Option.map_map, Function.comp_def]
+  all_goals simp_all [nativeCell, Option.map_map, Function.comp_def]
 
 theorem consumeDataDone_cell (pid : PeerId) (pkt : RxPacket) (endpoint : Endpoint) :
-    SameView cell (consumeDataDone pid pkt endpoint) := by
+    SameView nativeCell (consumeDataDone pid pkt endpoint) := by
   apply SameView.of_wp
   intro s
   let P := fun t => t = s
@@ -406,40 +486,40 @@ theorem consumeDataDone_cell (pid : PeerId) (pkt : RxPacket) (endpoint : Endpoin
   have hdata := (timersDataReceived_cell pid).wp P
   have hstats := fun len => (updateRxStats_cell pid len).wp P
   have herr := fun why => (dishonest_cell why).wp P
-  have hecn := fun protocol outer bytes => (cell_kernel (inetEcnDecapsulate_sameKernel protocol outer bytes)).wp P
+  have hecn := fun protocol outer bytes => (cell_kernel (inetEcnDecapsulate_sameWGStore protocol outer bytes)).wp P
   have hl := fun protocol bytes => (lookupSrc_cell protocol bytes).wp P
   have hp := fun peer => (peerPut_cell peer).wp P
   mvcgen [consumeDataDone, hep, hk, hh, hst, hf, ha, htr, hdata, hstats, herr, hecn, hl, hp,
-    WG.andM, WG.orM, branch]
+    WG.andM, WG.orM, branch, AmbientM.branch]
   all_goals try dsimp +zetaDelta only [P] at *
-  all_goals try (unfold cell at *; simp_all)
+  all_goals try (unfold nativeCell at *; simp_all)
   all_goals try subst s
   all_goals rfl
 
 
 theorem lookupDst_cell (family addr : Nat) :
-    SameView cell (lookupDst family addr) := by
+    SameView nativeCell (lookupDst family addr) := by
   apply SameView.of_wp
   intro s
   have hl := fun root bits key => (lookup_cell root bits key).wp (fun t => t = s)
-  mvcgen [lookupDst, hl, getDev, getK, branch, invariant]
+  mvcgen [lookupDst, hl, getDev, branch, AmbientM.branch, invariant, AmbientM.invariant]
 
-theorem xmitTrim_cell (pid : PeerId) : SameView cell (xmitTrim pid) := by
+theorem xmitTrim_cell (pid : PeerId) : SameView nativeCell (xmitTrim pid) := by
   apply SameView.of_wp
   intro s
   have hg := getPeer_cell_spec (fun t => t = s) pid
   have hs := fun p => setPeer_cell_spec (fun t => t = s) pid p
   have hd := (modifyDev_cell (fun d => {d with txDropped := d.txDropped + 1})
     (fun _ => rfl) (fun _ => rfl)).wp (fun t => t = s)
-  have hl (α β : Type) := list_view_spec cell (α := α) (β := β) (fun t => t = s)
+  have hl (α β : Type) := list_view_spec (m := AmbientM) nativeCell (α := α) (β := β) (fun t => t = s)
   simp only [xmitTrim, Std.Legacy.Range.forIn_eq_forIn_range']
-  mvcgen [-Std.Do.Spec.forIn_list, -Std.Do.Spec.forIn'_list, hl, hg, hs, hd, branch]
-  all_goals try exact ((⇓? _ w => ⌜cell w = s⌝) : PostCond _ (.arg World (.except Stop .pure)))
+  mvcgen [-Std.Do.Spec.forIn_list, -Std.Do.Spec.forIn'_list, hl, hg, hs, hd, branch, AmbientM.branch]
+  all_goals try exact ((⇓? _ w => ⌜nativeCell w = s⌝) : PostCond _ (.arg WGWorld (.arg Ambient (.except Stop .pure))))
   all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [cell, Option.map_map, Function.comp_def]
+  all_goals simp_all [nativeCell, Option.map_map, Function.comp_def]
 
 theorem xmitSplice_cell (pid : PeerId) (packets : List Packet) :
-    SameView cell (xmitSplice pid packets) := by
+    SameView nativeCell (xmitSplice pid packets) := by
   simp only [xmitSplice, getPeer_twice]
   exact modifyPeer_cell pid (fun p => {p with staged := p.staged ++ packets})
     (fun _ => rfl) (fun _ => rfl)
@@ -448,7 +528,7 @@ theorem xmitSplice_cell (pid : PeerId) (packets : List Packet) :
 normal return, including negative status codes. Its full source factor keeps both
 getters in the splice and all protocol, allocation and loopback error paths. -/
 theorem wgXmit_cell (family addr : Nat) (packets : List Packet) (mtu : Nat) :
-    SameView cell (wgXmit family addr packets mtu) := by
+    SameView nativeCell (wgXmit family addr packets mtu) := by
   rw [wgXmitSource_eq]
   apply SameView.of_wp
   intro s
@@ -460,14 +540,23 @@ theorem wgXmit_cell (family addr : Nat) (packets : List Packet) (mtu : Nat) :
   have hstage := fun pid => (sendStagedPackets_cell pid).wp P
   have hput := fun pid => (peerPut_cell pid).wp P
   have hloop := fun sites raised => (cell_kernel (loopbackSend_kernel sites raised)).wp P
-  have hcut := fun sites => (cell_kernel (skipCutSites_sameKernel sites)).wp P
-  have henv := fun site => (cell_kernel (envOk_sameKernel site)).wp P
+  have ambient {α : Type} (a : AmbientM α) :
+      Hoare (MonadLift.monadLift a : WG.M α)
+        (fun w => P (nativeCell w)) (fun _ w => P (nativeCell w)) :=
+    hoare_liftAmbient a _
+  have routing {α : Type} (a : Net.M α) :
+      Hoare (MonadLift.monadLift a : WG.M α)
+        (fun w => P (nativeCell w)) (fun _ w => P (nativeCell w)) := by
+    apply hoare_liftRouting a
+    intro w route hi
+    exact hi
+  unfold Hoare at ambient routing
   have herr := (modifyDev_cell (fun d => {d with txErrors := d.txErrors + 1})
     (fun _ => rfl) (fun _ => rfl)).wp P
-  have hl (α β : Type) := list_view_spec cell (α := α) (β := β) P
-  mvcgen [-Std.Do.Spec.forIn_list, -Std.Do.Spec.forIn'_list, hl, wgXmitSource,
-    hg, hlookup, htrim, hsplice, hstage, hput, hloop, hcut, henv, herr,
-    WG.andM, branch, invariant, unsupported]
+  have hl (α β : Type) := list_view_spec (m := AmbientM) nativeCell (α := α) (β := β) P
+  mvcgen [-Std.Do.Spec.forIn_list, -Std.Do.Spec.forIn'_list, -Std.Do.Spec.monadLift_StateT,
+    hl, wgXmitSource, hg, hlookup, htrim, hsplice, hstage, hput, hloop, ambient, routing, herr,
+    WG.andM, branch, invariant, unsupported, skipCutSites, envOk]
   all_goals try dsimp +zetaDelta only [P] at *
   all_goals try subst s
   all_goals first | rfl | trivial
@@ -477,34 +566,113 @@ theorem reply4_cell (dst : Nat) (bytes : List UInt8) :
   apply SameView.of_wp
   intro s
   let P := fun t => t = s
-  have hc := fun sites => (cell_kernel (skipCut_sameKernel sites)).wp P
-  have hx := fun family addr packets mtu => (wgXmit_cell family addr packets mtu).wp P
-  have hd (α : Type) := discard_view_spec cell (α := α) P
-  mvcgen [Leanux.Env.Stack.reply4, hc, hx, hd, getDev, getK, invariant]
+  have ambient {α : Type} (a : AmbientM α) :
+      Hoare (MonadLift.monadLift a : Leanux.M α)
+        (fun w => P (cell w)) (fun _ w => P (cell w)) :=
+    productAmbient_spec a _ (fun _ _ h => h)
+  have routing {α : Type} (a : Net.M α) :
+      Hoare (MonadLift.monadLift (MonadLift.monadLift a : WG.M α) : Leanux.M α)
+        (fun w => P (cell w)) (fun _ w => P (cell w)) :=
+    ((liftWG_sameProductStore _ (liftRouting_sameWGStore a)).of_factor
+      (fun store : ProductStore43 => store.2.2.2.dev.map fun d => (d.ifindex, d.decryptQueue))
+      cell (fun _ => rfl)).wp P
+  have hg : SameView nativeCell getDev := by
+    apply SameView.of_wp
+    intro initial
+    mvcgen [getDev, invariant, AmbientM.invariant]
+  have hd := (sameView_liftWG (fun w => cell w) nativeCell getDev hg
+    (fun _ _ _ h => h)).wp P
+  have hx (family addr : Nat) (packets : List Packet) (mtu : Nat) :
+      ⦃fun w : World => ⌜P (cell w)⌝⦄
+        (MonadLift.monadLift (wgXmit family addr packets mtu) : Leanux.M Int)
+      ⦃⇓? _ w => ⌜P (cell w)⌝⦄ :=
+    (sameView_liftWG cell nativeCell (wgXmit family addr packets mtu)
+      (wgXmit_cell family addr packets mtu) (fun _ _ _ h => h)).wp P
+  have discardSpec (α : Type) :=
+    discard_view_spec (m := Except Stop) (fun w : World => cell w) (α := α) P
+  unfold Hoare at ambient routing
+  mvcgen [-Std.Do.Spec.monadLift_StateT, Leanux.Env.Stack.reply4,
+    skipCut, ambient, routing, hd, hx, discardSpec, unsupported]
   all_goals try dsimp +zetaDelta only [P] at *
-  all_goals try subst s
+  all_goals subst s
   all_goals rfl
 
 theorem receive4_cell (bytes : List UInt8) :
     SameView cell (Leanux.Env.Stack.receive4 bytes) := by
-  apply SameView.of_wp
-  intro s
-  let P := fun t => t = s
-  have hr := fun dst bytes => (reply4_cell dst bytes).wp P
-  mvcgen [Leanux.Env.Stack.receive4, Leanux.Env.Stack.excluded, hr, getK, invariant, unsupported]
-  all_goals try dsimp +zetaDelta only [P] at *
-  all_goals try subst s
-  all_goals rfl
+  have stopped (a : Leanux.M Unit) (failure : ∀ w, ∃ e, a.run w = .error e)
+      (tail : Unit → Leanux.M Unit) : SameView cell (a >>= tail) := by
+    apply (ProjectedAction.iff_run _ _ _).mpr
+    intro w x v hr
+    obtain ⟨e, he⟩ := failure w
+    simp only [StateT.run_bind, he, Except.bind] at hr
+    contradiction
+  have excluded := fun row tail => stopped (Leanux.Env.Stack.excluded row)
+    (stackExcluded_failure row) tail
+  have invalid := fun why tail => stopped (Leanux.invariant why) (fun _ => ⟨_, rfl⟩) tail
+  have unsupported := fun why tail => stopped (Leanux.unsupported why) (fun _ => ⟨_, rfl⟩) tail
+  have excludedAlone (row : String) : SameView cell (Leanux.Env.Stack.excluded row) := by
+    apply (ProjectedAction.iff_run _ _ _).mpr
+    intro w x v hr
+    obtain ⟨e, he⟩ := stackExcluded_failure row w
+    rw [he] at hr
+    contradiction
+  have route (src dst : Nat) : SameView cell
+      (MonadLift.monadLift (MonadLift.monadLift (Net.routeInput4 src dst) : WG.M _) : Leanux.M _) :=
+    ((liftWG_sameProductStore _ (liftRouting_sameWGStore _)).of_factor
+      (fun store : ProductStore43 => store.2.2.2.dev.map fun d => (d.ifindex, d.decryptQueue))
+      (fun w => cell w) (fun _ => rfl))
+  have read : SameView cell (getWG : Leanux.M WGWorld) := by
+    apply (ProjectedAction.iff_run _ _ _).mpr
+    intro w x v hr
+    cases hr
+    rfl
+  have write (f : EnvWorld → EnvWorld) : SameView cell (modifyEnv f) := by
+    apply (ProjectedAction.iff_run _ _ _).mpr
+    intro w x v hr
+    cases hr
+    rfl
+  have iteRule {α : Type} (p : Prop) [Decidable p] {a b : Leanux.M α}
+      (ha : p → SameView cell a) (hb : ¬p → SameView cell b) :
+      SameView cell (if p then a else b) := by
+    by_cases hp : p
+    · simpa only [if_pos hp] using ha hp
+    · simpa only [if_neg hp] using hb hp
+  unfold Leanux.Env.Stack.receive4
+  repeat' first
+    | (env_bind_head Leanux.Env.Stack.excluded; exact excluded _ _)
+    | (env_bind_head Leanux.invariant; exact invalid _ _)
+    | (env_bind_head Leanux.unsupported; exact unsupported _ _)
+    | (snapshot_head Leanux.Env.Stack.excluded; exact excludedAlone _)
+    | (snapshot_head Leanux.Env.Stack.reply4; exact reply4_cell _ _)
+    | (snapshot_head MonadLift.monadLift; exact route _ _)
+    | (snapshot_head liftM; exact route _ _)
+    | (snapshot_head getWG; exact read)
+    | (snapshot_head modifyEnv; exact write _)
+    | (snapshot_head Pure.pure; exact SameView.pure _ _)
+    | (snapshot_head Bind.bind; apply SameView.bind)
+    | (snapshot_head ite; refine iteRule _ ?_ ?_)
+    | keypairs_intro_forall
+    | env_ordinary_head_reduce
+    | env_ordinary_head_match
 
-theorem deliverInner_cell (bytes : List UInt8) : SameView cell (Leanux.Env.deliverInner bytes) := by
+theorem deliverInner_cell (bytes : List UInt8) :
+    SameView cell (Leanux.Env.deliverInner bytes) := by
   apply SameView.of_wp
   intro s
   let P := fun t => t = s
   have h4 := (receive4_cell bytes).wp P
-  have h6 := (cell_kernel (stackReceive6_sameKernel bytes)).wp P
-  mvcgen [Leanux.Env.deliverInner, Leanux.Env.Stack.receive, h4, h6, invariant]
+  have h6 := ((stackReceive6_sameKernel bytes).of_factor
+    (fun store : ProductStore43 => store.2.2.2.dev.map fun d => (d.ifindex, d.decryptQueue))
+    (fun w => cell w) (fun _ => rfl)).wp P
+  have ambient {α : Type} (a : AmbientM α) :
+      Hoare (MonadLift.monadLift a : Leanux.M α)
+        (fun w => P (cell w)) (fun _ w => P (cell w)) :=
+    productAmbient_spec a _ (fun _ _ h => h)
+  unfold Hoare at ambient
+  mvcgen [-Std.Do.Spec.monadLift_StateT, Leanux.Env.deliverInner,
+    Leanux.Env.Stack.receive, h4, h6, invariant, ambient]
   all_goals try dsimp +zetaDelta only [P] at *
-  all_goals try subst s
+  all_goals subst s
   all_goals rfl
 
 theorem stackForM_cell (packets : List (List UInt8)) :

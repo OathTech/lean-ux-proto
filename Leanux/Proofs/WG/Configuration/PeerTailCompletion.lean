@@ -16,10 +16,10 @@ theorem peerTailFinishSource_routing (a : PeerAttrs) (peer : Option PeerId)
   let P := RetainsRouting s
   have hg := routing_getPeer P pid
   have hs := fun p => routing_setPeer P pid p
-  have hk := (sendKeepalive_routing pid).wp s
-  have ht := (sendStagedPackets_routing pid).wp s
-  have hp := (peerPut_retainsRouting peer).wp s
-  mvcgen [peerTailFinishSource, hg, hs, hk, ht, hp, WG.andM, getDev, getK, branch, invariant]
+  have hk := RetainsRoutingCall.wp (sendKeepalive_routing pid) s
+  have ht := RetainsRoutingCall.wp (sendStagedPackets_routing pid) s
+  have hp := RetainsRoutingCall.wp (peerPut_retainsRouting peer) s
+  mvcgen [peerTailFinishSource, hg, hs, hk, ht, hp, WG.andM, getDev, branch, AmbientM.branch, invariant, AmbientM.invariant]
   all_goals try dsimp +zetaDelta only [P] at *
   all_goals try (unfold routingView at *; simp_all [routingState])
   all_goals try assumption
@@ -27,21 +27,21 @@ theorem peerTailFinishSource_routing (a : PeerAttrs) (peer : Option PeerId)
   all_goals try exact RetainsRouting.refl _
 
 def peerConfigTailObserved (a : PeerAttrs) (peer : Option PeerId) (pid : PeerId) :
-    PrefixM RoutingCompletion Int :=
-  peerAllowedIpsObserved a peer pid (fun ret => liftPrefix (peerTailFinishSource a peer pid ret))
+    WGPrefix RoutingCompletion Int :=
+  peerAllowedIpsObservedWG a peer pid (fun ret => liftWGPrefix (peerTailFinishSource a peer pid ret))
 
 theorem peerConfigTailObserved_erases (a : PeerAttrs) (peer : Option PeerId) (pid : PeerId) :
-    ErasesPrefix (peerConfigTailObserved a peer pid) (peerConfigTailSource a peer pid) := by
+    ErasesStatePrefix (peerConfigTailObserved a peer pid) (peerConfigTailSource a peer pid) := by
   rw [peerConfigTailSource_factor]
-  exact peerAllowedIpsObserved_erases a peer pid _ _ (fun _ => erasesPrefix_lift _)
+  exact peerAllowedIpsObservedWG_erases a peer pid _ _ (fun _ => erasesStatePrefix_lift _)
 
 theorem peerConfigTailObserved_spec (initial : FlatTable × FlatTable)
     (a : PeerAttrs) (shape : PeerAddressShape a) (peer : Option PeerId) (pid : PeerId) :
-    PrefixEnsures (CompletionTarget initial pid) (CompletionSafe initial)
-      (peerConfigTailObserved a peer pid) (fun _ => CompletionState initial) := by
-  apply peerAllowedIpsObserved_spec initial a shape peer pid
+    StatePrefixEnsures (fun h w _ => CompletionTarget initial pid h w) (CompletionSafe initial)
+      (peerConfigTailObserved a peer pid) (fun _ h w _ => CompletionState initial h w) := by
+  apply peerAllowedIpsObservedWG_spec initial a shape peer pid
   intro ret
-  intro w h hi
-  exact completion_lift_retains initial _ (peerTailFinishSource_routing a peer pid ret) w h hi.1
+  exact (completion_lift_retains_wg initial _ (peerTailFinishSource_routing a peer pid ret)).consequence
+    (fun _ _ _ hi => hi.1) (fun _ _ _ _ hi => hi)
 
 end Leanux.Proofs.WG.Configuration

@@ -98,9 +98,13 @@ it is not part of that baseline.
 | Product GRO history, stack callbacks and NAPI | 91 | 0 | 1 | 90 | 0 | 90 |
 | Native socket/handshake/TX routing and product callbacks | 53 | 42 | 1 | 10 | 1 | 53 |
 | Native Noise consumption and retained product contracts | 9 | 5 | 1 | 3 | 10 | 18 |
+| Native receive-ring callbacks and retained product callbacks | 53 | 44 | 5 | 4 | 0 | 48 |
+| Native routing session frames | 8 | 7 | 1 | 0 | 0 | 7 |
+| Native acquiring lookup and peer-configuration tail | 10 | 8 | 0 | 2 | 0 | 10 |
+| Native handshake send/receive and retained product worker contracts | 38 | 20 | 0 | 18 | 16 | 54 |
 
-The whole tree currently contains 451 Lean files and 6,409 theorems. The completed
-changes total 1,925 retyped theorems, 1,646 deletions, 906 retained contract shapes and 340 added.
+The whole tree currently contains 451 Lean files and 6,419 theorems. The completed
+changes total 2,004 retyped theorems, 1,652 deletions, 930 retained contract shapes and 356 added.
 Retyping changes or generalizes the actual state/monad carrier or observation.
 This includes shorthand contracts whose source functions or named views move
 to a native monad. Mere namespace qualification and equivalent relocation of a
@@ -2788,3 +2792,65 @@ PY
 
 A documentation-format command had a syntax exception before executing any tool.
 Every dirty worktree was preserved at `refs/snapshots/proof-campaign-doc-format-driver-20261016T205954Z/` before resumption.
+
+
+## Acquiring lookup, receive callbacks and handshake workers
+
+Seven more modules pass scoped builds, 149 explicitly named standard-only
+axiom checks, five fresh module replay scopes and independent source reviews.
+Their 109 old theorems become 119: 79 are retyped or generalized, 24 retain
+their product or pure contract shape, six are deleted and sixteen are added.
+No terminal declaration changes. The full proof gate remains pending, with
+all seven result rows lagging. The unchanged executable closure retains its
+previous default-build PASS66 and unit PASS131 with one skip; no differential
+claim is made for this proof-only tranche.
+
+RxRingCallbackFrames carries 43 native contracts, generalizes one arbitrary
+StateT/store transport and retains four product callback contracts. Four
+foreign-Skb wrapper frames and their redundant newTxSkbs map instance are
+deleted: the canonical component adapter and generic map rule now supply
+their separation. The actual WG timer wheel updates, peer release and queued
+owner reads remain proved. Four changed-source builds gave three ordinary
+proof-form failures followed by PASS205; all 48 named theorems and fresh
+replay pass. Independent review confirmed the deletion grounds and identified
+the remaining RxRingTx/Encrypt callers for their next carry.
+
+RoutingSessionFrames carries seven native contracts and removes the
+indexReplaceHandshake routing wrapper. That action is IndexM-only; the
+canonical Index adapter supplies the routing separation. Its build passed
+on the first call (248 jobs), followed by seven named axiom checks and fresh
+replay. Session creation, owner dereference, timer effects and response
+sending retain their actual source paths.
+
+LookupExecution retains all seven theorem names: five now state native WG
+execution with both Ambient endpoints, and two arithmetic claims remain
+pure. Its actual trie read uses the canonical total Aip adapter while keeping
+the original seven WG store observations at entry. Acquiring lookup remains
+a partial-correctness claim: an unresident or dying raw winner may Stop, and
+no successful-acquisition or liveness premise is introduced. Three changed
+builds gave an ordinary namespace/projection failure, a pass, then a pass
+after review removed a duplicated adapter derivation. The final nine named
+declarations and fresh replay pass. PeerTailCompletion carries all three
+concrete claims natively, retaining the exact completion journal and cleanup
+deletion; its first build passed (221 jobs), with four named declarations,
+fresh replay and independent review passing.
+
+HandshakeSend, HandshakeReceive and ReceiveWorker carry every old claim,
+including eighteen arbitrary product-invariant or callback contracts.
+Twenty native/generalized carries and sixteen additions provide the native
+counterparts and two canonical contract bridges. The observer retains the
+actual cookie/load decisions, refusal and Stop paths, PtrRing consumption,
+receive-before-decrement ordering and worker final put. Five changed-source
+builds gave two ordinary form failures and three passes, ending at PASS178.
+All 81 named declarations and the fresh ReceiveWorker dependency replay pass.
+Review found trailing whitespace, corrected before the final checks; no
+semantic finding remains. There were no crashes, cancellations, raised
+limits or infrastructure reruns in these seven-module carries.
+
+A separate diagnostic build of 331 eligible modules reached 395 Lake jobs
+and failed at four pending frontiers: LookupExecution, PeerTailCompletion,
+RoutingFlushFrames and RxPollProvenance. Its failed lookup declarations also
+produced two kernel metavariable rejections; that invocation is a failure,
+not evidence for any claim. The first two frontiers are repaired above; the
+remaining two belong to the next scoped carry. The scheduler and receive-ring
+consumer work continues independently and is not included in this checkpoint.
