@@ -144,8 +144,10 @@ it is not part of that baseline.
 
 | Native lifecycle routing and arbitrary product helpers | 29 | 23 | 1 | 5 | 5 | 33 |
 
+| Product syscall wrappers and complete dispatch | 13 | 0 | 0 | 13 | 0 | 13 |
+
 The whole tree currently contains 451 Lean files and 6,501 theorems. The completed
-changes total 2,324 retyped theorems, 1,672 deletions, 1,276 retained contract shapes and 459 added.
+changes total 2,324 retyped theorems, 1,672 deletions, 1,289 retained contract shapes and 459 added.
 Retyping changes or generalizes the actual state/monad carrier or observation.
 This includes shorthand contracts whose source functions or named views move
 to a native monad. Mere namespace qualification and equivalent relocation of a
@@ -3497,3 +3499,33 @@ rows stay lagging. The mirror is byte-identical to b700659.
 Reproduce with 'cap scripts/in-bundle lake build Leanux.Proofs.WG.Configuration.LifecycleCompletion'
 and 'cap scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Configuration.LifecycleCompletion',
 using the portable cap function above.
+
+
+## Product syscall entry and receive classification
+
+The ten wrapper and three dispatch theorems retain their arbitrary product
+callbacks and complete store-mask premises. Current dispatch includes returned
+route MTU, IPv4 neighbour classification and all route/address operations.
+Concrete FS/task/seccomp leaves use the existing component adapters. The
+nineteen named declarations have standard-only axioms; fresh Dispatch closure
+replay and independent complete review pass. Both modules have zero own warnings.
+Six development calls reached the frozen pair: three wrapper failures, two
+dispatch failures, then a dispatch pass whose downstream Syscalls module failed.
+A separate branch diagnostic hit the existing two-million-heartbeat limit.
+None of those failures is counted as a pass.
+
+RxDispositionReceipts retains all six theorem signatures and its source rejection
+predicate. The replacement prepare_none proof splits on the existing rejection
+predicate; its complement fixes the real IPv4/IPv6 length decisions. Actual
+WG/Ambient prefix effects and stops remain unrestricted. One checked tactic
+elaborator constructs ordinary local composition proofs; no logical claim was
+added. Build276, all nine named logical roots, fresh replay and independent review
+pass with zero own warnings. The warning cleanup used twenty-five changed-source
+builds: twenty-three failures and two passes, the final pass removing warnings.
+One pre-tool script setup error executed no command. There was no infrastructure
+rerun, crash, cancellation or cap/proof-limit change.
+
+Reproduce with 'cap scripts/in-bundle lake build Leanux.Proofs.WG.Lifetimes.SyscallDispatchAudit Leanux.Proofs.WG.Queues.RxDispositionReceipts';
+replay each module with 'cap scripts/in-bundle lake env leanchecker --fresh MODULE'.
+The full gate and terminal replay remain pending, all rows stay lagging, and
+the mirror is byte-identical to b700659.
