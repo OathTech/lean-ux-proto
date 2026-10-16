@@ -93,9 +93,10 @@ it is not part of that baseline.
 | Native/product completion, poll and TX disposition projections | 70 | 38 | 0 | 32 | 12 | 82 |
 | TX worker, RX removal/GRO and disposition cuts | 48 | 7 | 2 | 39 | 4 | 50 |
 | Native transmit source and routing sends | 32 | 24 | 5 | 3 | 3 | 30 |
+| Native TX publication, disposal and error endpoints | 30 | 30 | 0 | 0 | 0 | 30 |
 
 The whole tree currently contains 451 Lean files and 6,401 theorems. The completed
-changes total 1,842 retyped theorems, 1,643 deletions, 793 retained contract shapes and 329 added.
+changes total 1,872 retyped theorems, 1,643 deletions, 793 retained contract shapes and 329 added.
 Retyping changes or generalizes the actual state/monad carrier or observation.
 This includes shorthand contracts whose source functions or named views move
 to a native monad. Mere namespace qualification and equivalent relocation of a
@@ -2592,3 +2593,52 @@ then raised a serialization exception; no child remained. Dirty worktrees
 were preserved at
 `refs/snapshots/proof-campaign-rxstack-driver-20261016T203251Z/`
 before resuming. These unfinished repairs are outside this checkpoint.
+
+## Native TX publication, disposal and error endpoints
+
+Three modules pass scoped builds, 38 named standard-only axiom checks,
+three fresh module replays and independent source reviews. All thirty old
+theorems remain: 28 native carries and two arbitrary-state generalizations,
+with no addition or deletion. Their eight changed-source build calls
+produced five ordinary failures followed by the three final passes.
+The full proof gate is pending; all results remain lagging.
+
+TxPublication preserves every peer's complete TX queue, including when
+publication and enqueue use different peers. The actual acquisition derives
+a reference count greater than one; the final repayment therefore cannot
+release the resident. Owner resolution, both queue-work records and the
+source's get/put order are unchanged. The generic borrow transport still
+admits arbitrary actual StateT actions and projections. Concrete claims
+use WG.M with both unrestricted Ambient endpoints.
+
+TxDisposal retains normal-return packet absence without a distinct-ID or
+allocation premise. Repeated identifiers can still stop at a second checked
+getter. The native packet operation is justified by its actual run equation;
+canonical Skb and Index adapters handle separate component updates.
+Direct cleanup keeps keypair-put, peer-put and free-list order. Its full-queue
+endpoint proves packet absence without claiming preservation of an unrelated
+peer queue.
+
+TxDispositionEndpoints retains all ten claims. Entry-ring refusal enqueues
+the peer item while leaving the encrypt ring unchanged; normal publication
+marks the head DEAD. DEAD body/step completion removes the item packets and
+emits no socket packet. These local endpoints do not transport a DEAD mark
+through an arbitrary future schedule. The peek observation carries the old
+WG store fields; the checked native peek law preserves the complete WG
+world, and the actual product adapter supplies separation for the former
+FS, Task and Seccomp fields. Its packet-view transport remains generic over
+arbitrary actual StateT actions.
+
+A stalled handshake build was terminated at its inspected owned Lean child
+after ten minutes without a result. It exited 143, with enclosing build exit
+1 and no KILLED banner. A single stage-marked diagnostic then located the
+unfinished native outer response-preservation proof. After localization,
+its inspected owned child was terminated and collected with exit 143 and a
+KILLED signal banner. Both calls are failures, not passes or cap outcomes.
+All dirty worktrees, including untracked sources, were preserved before
+resumption at the respective prefixes
+`refs/snapshots/proof-campaign-handshake-stage-20261016T204130Z/` and
+`refs/snapshots/proof-campaign-handshake-located-20261016T204245Z/`.
+The diagnostic's markers were ephemeral; no trusted source or limit changed.
+The targeted handshake repair and the RxStack heartbeat failure are outside
+this completed tranche.
