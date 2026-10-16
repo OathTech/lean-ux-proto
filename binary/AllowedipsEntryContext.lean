@@ -1,3 +1,4 @@
+import WordAlignment
 import AllowedipsCoverage
 import AllowedipsEntryStack
 
@@ -63,10 +64,7 @@ theorem first_ready {c coverage old ra s world v}
     rfl
   refine ⟨by simpa only [memory] using nextContext,?_,?_,?_,?_,?_,?_⟩
   · rw [stack]
-    simp only [UInt64.toNat_sub,show (80 : UInt64).toNat = 80 from rfl]
-    have aligned := pre.entry.1
-    have bound := s.data.regs.rsp.toNat_lt_size
-    omega
+    exact aligned_sub _ 80 pre.entry.1 (by decide)
   · rw [memory,push]
     exact Allowedips.entryMemory_mapped s.data 7 _ (pre.stack 10 (by decide))
   · intro a member inside

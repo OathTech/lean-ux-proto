@@ -105,7 +105,55 @@ unchanged until separately authorised.
 
 ## Progress
 
-The worktree is created at the fixed checkpoint. Pattern discovery has found
-repeated modular stack-alignment arguments and repeated call-push frame
-proofs across M1, the allowed-IPs port and common_bits. No replacement or
-speedup is claimed yet.
+### Round 1: stack alignment and CALL entry
+
+[AGENT 2026-10-16] Retain two ordinary lemmas: `Binary.aligned_sub` in
+`binary/WordAlignment.lean` and `Binary.Instrumentation.called_entry` in
+`binary/CallHistory.lean`. No tactic is needed for either property.
+
+The first closes the modular alignment arithmetic, including wraparound;
+the second establishes the pushed return word and aligned ABI frame without
+a coverage-context hypothesis. Replaced 26 alignment arguments across 23
+modules, with six of those sites subsequently using the CALL-entry lemma.
+The six CALL sites cover M1 instrumentation, index lookup and peer calls,
+the allowed-IPs versions, and common_bits. Nested prologue offsets use two
+lemma applications. Register-argument setup still has its explicit local
+simplification; no semantic exception or added premise.
+
+Net Lean source reduction is **59 lines**, counting the new 14-line module,
+CALL lemma and added imports. Original theorem signatures are unchanged.
+The integrated build passes (530 jobs); the binary proof gate and exact
+trust-surface diff pass. Scoped `lake env leanchecker MODULE` replay passes
+for all 24 changed/new proof modules (24.51 seconds combined). This is
+replay from imported environments, not a new external export acceptance.
+
+Warm, single-run direct elaboration observations, in seconds:
+
+| Module | Before | After |
+| --- | ---: | ---: |
+| CallHistory | 0.910 | 0.799 |
+| CommonBitsEntryState | 0.973 | 0.838 |
+| AllowedipsEntryContext | 0.870 | 0.753 |
+
+These short shared-host measurements establish no regression at this scale;
+they are not a reliable campaign-throughput speedup. The original warm gate
+was 1.88 seconds, the new warm gate 1.89 seconds. The alignment rebuild's
+86.29 seconds includes invalidated dependents and is not comparable to a
+warm gate. Timings use `time.monotonic()` around `lake env lean MODULE.lean`
+with no output object requested, under `capped`.
+
+Setup failures: the first baseline gate lacked the new worktree's generated
+Lake manifest; `lake -d binary update` resolved its local path dependencies,
+and the rerun passed. An exploratory `leanchecker --help` invocation failed
+because this executable has no help mode and tried the absent default
+`BinaryTV` module; explicit module invocations passed. Neither failure is
+counted as proof validation.
+
+Reproduce from this worktree with `capped -- scripts/proof-gate --binary`;
+from `binary/`, use `capped -- lake env leanchecker MODULE` for each module
+changed by this round and `WordAlignment`. No expected trust-surface file,
+TrustBase declaration, headline, Pre, R, mirror or dependency pin changed.
+
+The next trial targets the literal layout iteration copied at 110 sites,
+then the repeated history-tail property. Trial copies and timings remain
+ephemeral in `.tmp` until their results are retained or rejected.

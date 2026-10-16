@@ -75,17 +75,8 @@ theorem peer_call_entry (s : MachineData) (peer : BitVec 64)
     TrustBase.EntryFrame (peerCalled s peer) (AllowedipsImage.Lookup.entry+0x119).toUInt64 ∧
       (peerCalled s peer).data.regs.rdi.toBitVec = peer := by
   constructor
-  · constructor
-    · change ((peerArgument s peer).regs.rsp-8).toNat % 8 = 0
-      have sp : (peerArgument s peer).regs.rsp = s.regs.rsp := by
-        simp [peerArgument, MachineData.setReg, Reg64s.set, Reg64s.set64]
-      rw [sp]
-      simp only [UInt64.toNat_sub, show (8 : UInt64).toNat = 8 from rfl]
-      have bound := s.regs.rsp.toNat_lt_size
-      omega
-    · unfold peerCalled Instrumentation.calledState
-      simp only [UInt64.toBitVec_sub, show (8 : UInt64).toBitVec = 8#64 from rfl]
-      exact load64_store _ _ _
+  · exact Instrumentation.called_entry (peerArgument s peer) (AllowedipsImage.Lookup.entry+0x119) _
+      (by simpa only [peerArgument, MachineData.setReg, Reg64s.set, Reg64s.set64] using aligned)
   · simp [peerCalled, Instrumentation.calledState, peerArgument, MachineData.setReg,
       Reg64s.set, Reg64s.set64]
 

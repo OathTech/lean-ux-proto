@@ -1,3 +1,4 @@
+import WordAlignment
 import KcovHistory
 import PeerComparisons
 
@@ -38,6 +39,18 @@ theorem call_instruction (fetch : Int64 → Option Decoded) (pc : Int64) (target
   rw [loaded]
   simp [Effects.All]
 
+/-- The actual CALL push establishes the ABI entry frame independently of
+coverage layout or callback readiness. -/
+theorem called_entry (s : MachineData) (returnPC target : Int64)
+    (aligned : s.regs.rsp.toNat % 8 = 0) :
+    EntryFrame (calledState s returnPC target) returnPC.toUInt64 := by
+  constructor
+  · exact aligned_sub _ 8 aligned (by decide)
+  · change (s.dmem.storeInt (s.regs.rsp.toBitVec-8) 8 returnPC.toBitVec.toInt).loadInt
+      (s.regs.rsp-8).toBitVec 8 = _
+    simp only [UInt64.toBitVec_sub, show (8 : UInt64).toBitVec = 8#64 from rfl]
+    exact load64_store s.dmem (s.regs.rsp.toBitVec-8) returnPC.toBitVec
+
 /-- Physical readiness follows the actual push, not a per-call hypothesis
     that the service is able to run. -/
 theorem called_ready (s : MachineData) (returnPC target : Int64)
@@ -46,16 +59,7 @@ theorem called_ready (s : MachineData) (returnPC target : Int64)
     EntryFrame (calledState s returnPC target) returnPC.toUInt64 ∧
     KcovState coverage preempt (calledState s returnPC target).data.dmem := by
   constructor
-  · constructor
-    · change (s.regs.rsp-8).toNat % 8 = 0
-      simp only [UInt64.toNat_sub, show (8 : UInt64).toNat = 8 from rfl]
-      have bound := s.regs.rsp.toNat_lt_size
-      have aligned := ready.aligned
-      omega
-    · change (s.dmem.storeInt (s.regs.rsp.toBitVec-8) 8 returnPC.toBitVec.toInt).loadInt
-        (s.regs.rsp-8).toBitVec 8 = _
-      simp only [UInt64.toBitVec_sub, show (8 : UInt64).toBitVec = 8#64 from rfl]
-      exact load64_store s.dmem (s.regs.rsp.toBitVec-8) returnPC.toBitVec
+  · exact Instrumentation.called_entry s returnPC target ready.aligned
   · exact Kcov.state_frame coverage preempt _ _ ready.state _
       (storeInt_frame s.dmem (s.regs.rsp.toBitVec-8) 8 returnPC.toBitVec.toInt) ready.pushSeparate
 

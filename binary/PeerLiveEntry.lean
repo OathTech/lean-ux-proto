@@ -1,3 +1,4 @@
+import WordAlignment
 import PeerStart
 import PeerLoad
 import PeerIncrementFinish
@@ -50,10 +51,7 @@ theorem live_entry_to_return (fetch : Int64 → Option Decoded)
     rw [show (56 : BitVec 64) = 48+8 from rfl, ← BitVec.sub_sub, BitVec.sub_add_cancel]
   have bodyAligned : body.data.regs.rsp.toNat % 8 = 0 := by
     rw [rsp]
-    simp only [UInt64.toNat_sub, show (48 : UInt64).toNat = 48 from rfl]
-    have aligned := entry.1
-    change s.regs.rsp.toNat % 8 = 0 at aligned
-    omega
+    exact aligned_sub _ 48 entry.1 (by decide)
   have bodyMapped : (body.data.dmem.loadInt (body.data.regs.rsp.toBitVec-8) 8).isSome = true := by
     rw [callbackSlot]
     have framed := prefixFrame.loadInt (s.regs.rsp.toBitVec-56) 8 (by

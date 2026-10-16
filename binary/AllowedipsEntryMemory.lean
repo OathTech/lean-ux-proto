@@ -1,3 +1,4 @@
+import WordAlignment
 import AllowedipsEntrySlots
 namespace Binary.AllowedipsEntry
 open TrustBase CommonBitsCoverage
@@ -163,10 +164,7 @@ theorem memory_ready {c coverage old ra initial world v}
     rfl
   refine ⟨⟨mem.before,mem.preempt⟩,?_,?_,?_,?_,?_,?_⟩
   · rw [stack]
-    simp only [UInt64.toNat_sub,show (80 : UInt64).toNat = 80 from rfl]
-    have aligned := pre.entry.1
-    have bound := initial.data.regs.rsp.toNat_lt_size
-    omega
+    exact aligned_sub _ 80 pre.entry.1 (by decide)
   · rw [push]
     exact mem.mapped 10 (by decide)
   · intro a member inside

@@ -1,3 +1,4 @@
+import WordAlignment
 import LookupWriteFrame
 
 namespace Binary.LookupRelation
@@ -14,12 +15,8 @@ theorem ready_at_outer (c : Config) (coverage : KcovLayout) (preempt : BitVec 32
     (mapped : (t.dmem.loadInt (t.regs.rsp.toBitVec-8) 8).isSome = true) :
     LookupCoverage.CallsReady ⟨coverage, preempt, v⟩ (512+preempt) t := by
   refine ⟨state, .inr rfl, ?_, mapped, ?_, ?_, entry.coverageMetadata, entry.coveragePreempt⟩
-  · rw [stack, UInt64.toNat_sub]
-    simp only [show (40 : UInt64).toNat = 40 from rfl]
-    have align := entry.frame.1
-    change s.regs.rsp.toNat % 8 = 0 at align
-    have bound := s.regs.rsp.toNat_lt_size
-    omega
+  · rw [stack]
+    exact aligned_sub _ 40 entry.frame.1 (by decide)
   · intro a service written
     exact entry.serviceStack a service (callback_stack_in c s t stack a written)
   · intro a covered inside

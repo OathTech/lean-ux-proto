@@ -1,3 +1,4 @@
+import WordAlignment
 import LookupCallHistory
 import ScanFrame
 
@@ -97,9 +98,7 @@ theorem called_entry (s : MachineData) (aligned : s.regs.rsp.toNat % 8 = 0) :
   constructor
   · rw [(called_shape s).1]
     change (s.regs.rsp-8).toNat % 8 = 0
-    simp only [UInt64.toNat_sub, show (8 : UInt64).toNat = 8 from rfl]
-    have bound := s.regs.rsp.toNat_lt_size
-    omega
+    exact aligned_sub _ 8 aligned (by decide)
   · rw [(called_shape s).1, (called_shape s).2]
     simp only [UInt64.toBitVec_sub, show (8 : UInt64).toBitVec = 8#64 from rfl]
     exact load64_store _ _ _

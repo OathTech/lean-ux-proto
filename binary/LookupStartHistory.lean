@@ -1,3 +1,4 @@
+import WordAlignment
 import LookupPrologueHistory
 import ScanFrame
 
@@ -55,10 +56,7 @@ theorem start_history (fetch : Int64 → Option Decoded)
   have entry : EntryFrame (prologueCalled s) (Image.Lookup.entry+0x19).toUInt64 := by
     constructor
     · change ((s.regs.rsp-40)-8).toNat % 8 = 0
-      simp only [UInt64.toNat_sub, show (40 : UInt64).toNat = 40 from rfl,
-        show (8 : UInt64).toNat = 8 from rfl]
-      have bound := s.regs.rsp.toNat_lt_size
-      omega
+      exact aligned_sub _ 8 (aligned_sub _ 40 aligned (by decide)) (by decide)
     · rw [stack, prologue_called_memory]
       simpa [slot, savedWords] using saveMemory_read s 6 5 (by decide) (by decide)
   have calleeState : LookupCoverage.Context.At coverage preempt (prologueCalled s).data.dmem := by
@@ -96,8 +94,7 @@ theorem start_history (fetch : Int64 → Option Decoded)
     phase := phase
     aligned := by
       rw [sp]
-      simp only [UInt64.toNat_sub, show (40 : UInt64).toNat = 40 from rfl]
-      omega
+      exact aligned_sub _ 40 aligned (by decide)
     mapped := by
       rw [bodySlot]
       have read := memory.loadInt (s.regs.rsp.toBitVec-48) 8 (by

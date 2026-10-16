@@ -1,3 +1,4 @@
+import WordAlignment
 import CommonBitsEntryHistory
 
 namespace Binary.CommonBits
@@ -131,10 +132,7 @@ theorem CallerAt.entry {i c s} (caller : CallerAt i c s) : EntryAt i c (helperEn
   · exact CommonBitsCoverage.state_frame c _ _ caller.coverage _ frame
       (fun a byte inside => caller.coverageSeparate a byte (push_inside s a inside))
   · change (s.regs.rsp-8).toNat % 8 = 0
-    simp only [UInt64.toNat_sub,show (8 : UInt64).toNat = 8 from rfl]
-    have bound := s.regs.rsp.toNat_lt_size
-    have aligned := caller.aligned
-    omega
+    exact aligned_sub _ 8 caller.aligned (by decide)
   · intro n hn
     have mapped := storeInt_defined s.dmem (s.regs.rsp.toBitVec-.ofNat 64 ((n+2)*8))
       (s.regs.rsp.toBitVec-8) 8 8 (AllowedipsImage.Lookup.entry+0xea).toBitVec.toInt

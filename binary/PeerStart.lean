@@ -1,3 +1,4 @@
+import WordAlignment
 import KcovExecution
 import ImageLayout
 
@@ -41,8 +42,7 @@ theorem prologue_and_return (fetch : Int64 → Option Decoded)
     constructor
     · simp only [regs]
       change (s.regs.rsp - 56).toNat % 8 = 0
-      simp only [UInt64.toNat_sub, show (56 : UInt64).toNat = 56 from rfl]
-      omega
+      exact aligned_sub _ 56 aligned (by decide)
     · rw [calleeSP, memory]
       have saved := saveMemory_read s 7 6 (by decide) (by decide)
       simpa [slot, savedWords] using saved

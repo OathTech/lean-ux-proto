@@ -1,3 +1,4 @@
+import WordAlignment
 import AllowedipsTailExecution
 
 namespace Binary.AllowedipsTail
@@ -71,10 +72,7 @@ theorem Ready.of_middle_frame {c coverage old ra initial world v entry current}
   have calls : CallsReady ⟨coverage,old+512⟩ current := by
     refine ⟨state,?_,mappedCall,?_,?_,?_,?_⟩
     · rw [stack]
-      simp only [UInt64.toNat_sub,show (80 : UInt64).toNat=80 from rfl]
-      have aligned := pre.entry.1
-      have bound := initial.data.regs.rsp.toNat_lt_size
-      omega
+      exact aligned_sub _ 80 pre.entry.1 (by decide)
     · intro a read written
       rw [callSlot] at written
       exact pre.stackServices a (AllowedipsCoverage.bytes_during coverage old a read)

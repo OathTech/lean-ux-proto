@@ -1,3 +1,4 @@
+import WordAlignment
 import PeerCall
 
 set_option maxHeartbeats 1000000
@@ -99,9 +100,7 @@ theorem after_call (fetch : Int64 → Option Decoded) (address : Int64) (kind : 
     constructor
     · simp only [regs]
       change (s.regs.rsp - 8).toNat % 8 = 0
-      simp only [UInt64.toNat_sub, show (8 : UInt64).toNat = 8 from rfl]
-      have bound := s.regs.rsp.toNat_lt_size
-      omega
+      exact aligned_sub _ 8 aligned (by decide)
     · rw [calleeSP, memory]
       change (callMemory s returnOffset).loadInt (s.regs.rsp.toBitVec-8) 8 = _
       have stored := load64_store s.dmem (s.regs.rsp.toBitVec-8)

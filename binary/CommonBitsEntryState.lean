@@ -1,3 +1,4 @@
+import WordAlignment
 import CommonBitsPrologue
 import CommonBitsBodyState
 
@@ -67,10 +68,7 @@ theorem EntryAt.body {i c s} (entry : EntryAt i c s) : BodyAt i c (prologueData 
   refine ⟨?_,stack,?_,?_,?_⟩
   · refine ⟨coverage,?_,?_,?_,?_,entry.metadataSeparate,entry.preemptSeparate⟩
     · change (s.regs.rsp-32).toNat % 8 = 0
-      simp only [UInt64.toNat_sub,show (32 : UInt64).toNat = 32 from rfl]
-      have bound := s.regs.rsp.toNat_lt_size
-      have aligned := entry.aligned
-      omega
+      exact aligned_sub _ 32 entry.aligned (by decide)
     · have mapped := saves_preserve_mapped s 4 _ (entry.mapped 4 (by decide))
       change ((saveMemory s 4).loadInt ((s.regs.rsp-32).toBitVec-8) 8).isSome = true
       simpa [UInt64.toBitVec_sub,BitVec.sub_sub] using mapped

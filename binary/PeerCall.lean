@@ -1,3 +1,4 @@
+import WordAlignment
 import KcovExecution
 import ImageLayout
 
@@ -45,9 +46,7 @@ theorem trace_and_return (fetch : Int64 → Option Decoded)
     constructor
     · simp only [regs]
       change (s.regs.rsp - 8).toNat % 8 = 0
-      simp only [UInt64.toNat_sub, show (8 : UInt64).toNat = 8 from rfl]
-      have bound := s.regs.rsp.toNat_lt_size
-      omega
+      exact aligned_sub _ 8 aligned (by decide)
     · rw [calleeSP, memory]
       change (callMemory s (offset+5)).loadInt (s.regs.rsp.toBitVec-8) 8 = _
       have stored := load64_store s.dmem (s.regs.rsp.toBitVec-8)

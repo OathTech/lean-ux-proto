@@ -15,16 +15,7 @@ theorem called_ready (s : MachineData) (returnPC target : Int64)
     EntryFrame (calledState s returnPC target) returnPC.toUInt64 ∧
     AllowedipsPeerCoverage.Context.At coverage preempt (calledState s returnPC target).data.dmem := by
   constructor
-  · constructor
-    · change (s.regs.rsp-8).toNat % 8 = 0
-      simp only [UInt64.toNat_sub, show (8 : UInt64).toNat = 8 from rfl]
-      have bound := s.regs.rsp.toNat_lt_size
-      have aligned := ready.aligned
-      omega
-    · change (s.dmem.storeInt (s.regs.rsp.toBitVec-8) 8 returnPC.toBitVec.toInt).loadInt
-        (s.regs.rsp-8).toBitVec 8 = _
-      simp only [UInt64.toBitVec_sub, show (8 : UInt64).toBitVec = 8#64 from rfl]
-      exact load64_store s.dmem (s.regs.rsp.toBitVec-8) returnPC.toBitVec
+  · exact Instrumentation.called_entry s returnPC target ready.aligned
   · exact AllowedipsPeerCoverage.state_frame coverage preempt _ _ ready.state _
       (storeInt_frame s.dmem (s.regs.rsp.toBitVec-8) 8 returnPC.toBitVec.toInt) ready.pushSeparate
 
