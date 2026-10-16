@@ -7,8 +7,8 @@ No lifetime or routing invariant enters this operational factor. -/
 namespace Leanux.Proofs.WG.Configuration
 open Leanux Leanux.WG
 
-def peerConfigTailSource (a : PeerAttrs) (peer : Option PeerId) (pid : PeerId) : M Int := do
-  let out (peer : Option PeerId) (ret : Int) : M Int := do
+def peerConfigTailSource (a : PeerAttrs) (peer : Option PeerId) (pid : PeerId) : WG.M Int := do
+  let out (peer : Option PeerId) (ret : Int) : WG.M Int := do
     peerPut peer
     _ ← (branch .peerZeroPsk a.presharedKey.isSome)
     return ret
@@ -36,8 +36,8 @@ def peerConfigTailSource (a : PeerAttrs) (peer : Option PeerId) (pid : PeerId) :
   if ← (branch .peerRunning running) then sendStagedPackets pid
   out peer ret
 
-def peerConfigUpdateSource (a : PeerAttrs) (peer : Option PeerId) (flags : UInt32) (psk : Option Key) (pid : PeerId) : M Int := do
-  let out (peer : Option PeerId) (ret : Int) : M Int := do
+def peerConfigUpdateSource (a : PeerAttrs) (peer : Option PeerId) (flags : UInt32) (psk : Option Key) (pid : PeerId) : WG.M Int := do
+  let out (peer : Option PeerId) (ret : Int) : WG.M Int := do
     peerPut peer
     _ ← (branch .peerZeroPsk a.presharedKey.isSome)
     return ret
@@ -55,8 +55,8 @@ def peerConfigUpdateSource (a : PeerAttrs) (peer : Option PeerId) (flags : UInt3
   if ← (branch .peerReplaceAips (flags &&& WGPEER_F_REPLACE_ALLOWEDIPS != 0)) then removeByPeer pid
   peerConfigTailSource a peer pid
 
-def setPeerCmdSource (a : PeerAttrs) : M Int := do
-  let out (peer : Option PeerId) (ret : Int) : M Int := do
+def setPeerCmdSource (a : PeerAttrs) : WG.M Int := do
+  let out (peer : Option PeerId) (ret : Int) : WG.M Int := do
     peerPut peer
     _ ← (branch .peerZeroPsk a.presharedKey.isSome)
     return ret

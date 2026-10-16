@@ -79,15 +79,15 @@ theorem lift_frame (ha : SameView cell a) :
   apply PrefixEnsures.lift _ (fun _ _ hi => hi.safe)
   intro h w x v hi hr
   obtain ⟨r, hj, hc⟩ := hi
-  exact ⟨r, hj, (ha w x v hr).trans hc⟩
+  exact ⟨r, hj, ((Leanux.Proofs.WG.Lifetimes.ProjectedAction.iff_run _ _ _).mp ha w x v hr).trans hc⟩
 
-def enqueue (source : M Int) (id : ι) : PrefixM (Ring.Journal.Event ι) Int := do
+def enqueue (source : Leanux.M Int) (id : ι) : PrefixM (Ring.Journal.Event ι) Int := do
   let ret ← liftPrefix source
   if ret = 0 then emitPrefix (.offered id true)
   else if ret = -EPIPE then emitPrefix (.offered id false)
   return ret
 
-theorem enqueue_erases (source : M Int) (id : ι) : ErasesPrefix (enqueue source id) source := by
+theorem enqueue_erases (source : Leanux.M Int) (id : ι) : ErasesPrefix (enqueue source id) source := by
   intro w h
   simp only [enqueue, runPrefix_bind, runPrefix_lift]
   cases hr : source.run w with
@@ -106,7 +106,7 @@ def EnqueueResult (before : Option (Nat × PtrRing ι)) (id : ι)
   (ret = -ENOSPC ∧ after = before) ∨
   (ret = -EPIPE ∧ after = before ∧ ∃ e r, before = some (e, r) ∧ r.full = true)
 
-theorem enqueue_preserves (source : M Int) (id : ι)
+theorem enqueue_preserves (source : Leanux.M Int) (id : ι)
     (hresult : ∀ w ret v, source.run w = .ok (ret, v) → EnqueueResult (cell w) id ret (cell v))
     (free : ∀ w v r, cell w = some (deviceIndex, r) → source.run w = .ok (0, v) → r.full = false) :
     PrefixPreserves (Inv cell deviceIndex initial) (Safe initial) (enqueue source id) := by
@@ -134,12 +134,12 @@ theorem enqueue_preserves (source : M Int) (id : ι)
         runPrefix_emit, runPrefix_pure]
       exact ⟨[.offered id false], rfl, ⟨r, hn⟩, ⟨r, hn, ha.trans hc⟩⟩
 
-def poll (source : M (Option ι)) : PrefixM (Ring.Journal.Event ι) (Option ι) := do
+def poll (source : Leanux.M (Option ι)) : PrefixM (Ring.Journal.Event ι) (Option ι) := do
   let out ← liftPrefix source
   emitPrefix (.polled out)
   return out
 
-theorem poll_erases (source : M (Option ι)) : ErasesPrefix (poll source) source := by
+theorem poll_erases (source : Leanux.M (Option ι)) : ErasesPrefix (poll source) source := by
   intro w h
   simp only [poll, runPrefix_bind, runPrefix_lift]
   cases hr : source.run w with
@@ -148,7 +148,7 @@ theorem poll_erases (source : M (Option ι)) : ErasesPrefix (poll source) source
     rcases result with ⟨out, v⟩
     simp [runPrefix_emit, runPrefix_pure]
 
-theorem poll_preserves (source : M (Option ι))
+theorem poll_preserves (source : Leanux.M (Option ι))
     (hresult : ∀ w out v r, cell w = some (deviceIndex, r) → source.run w = .ok (out, v) →
       out = r.consume.1 ∧ cell v = some (deviceIndex, r.consume.2)) : PrefixPreserves (Inv cell deviceIndex initial) (Safe initial) (poll source) := by
   intro w h hi
@@ -172,7 +172,8 @@ theorem from_initial {g : PrefixM (Ring.Journal.Event ι) α}
       | .error _ => True
       | .ok (_, v) => Inv cell deviceIndex (PtrRing.init n) (runPrefix g w []).2 v := by
   obtain ⟨_, _, hs, ho⟩ := hg w [] (initial_inv hc)
-  exact ⟨hs, ho⟩
+  refine ⟨hs, ?_⟩
+  cases hr : (runPrefix g w []).1 <;> simpa only [hr] using ho
 
 theorem initialized {g : PrefixM (Ring.Journal.Event ι) α}
     (hg : PrefixPreserves (Inv cell deviceIndex (PtrRing.init n)) (Safe (PtrRing.init n)) g)

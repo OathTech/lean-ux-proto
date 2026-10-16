@@ -5,10 +5,14 @@ import Leanux.Proofs.Framing.Batch
 namespace Leanux.Proofs.Logged
 open Leanux Leanux.Proofs.Framing
 
-theorem kernelLiftPrefix_preserves (hs : ∀ h w, I h w → S h)
-    (hk : ∀ h w v, v.k = w.k → I h w → I h v) (ha : SameKernel a) :
+theorem viewLiftPrefix_preserves {T σ α : Type} (view : T → σ)
+    {I : List Event → T → Prop} {S : List Event → Prop}
+    {a : StateT T (Except Stop) α}
+    (hs : ∀ h w, I h w → S h)
+    (hk : ∀ h w v, view v = view w → I h w → I h v) (ha : SameView view a) :
     PrefixPreserves I S (liftPrefix a) :=
-  PrefixEnsures.preserves (PrefixEnsures.lift a hs (fun h w x v hi hr => hk h w v (ha w x v hr) hi))
+  PrefixEnsures.preserves (PrefixEnsures.lift a hs (fun h w x v hi hr =>
+    hk h w v ((Leanux.Proofs.WG.Lifetimes.ProjectedAction.iff_run _ _ _).mp ha w x v hr) hi))
 
 /-- Insert an observed pure computation without adding an original action. -/
 theorem erasesPrefix_bind_pure (hg : ErasesPrefix g (pure x))
@@ -28,9 +32,9 @@ theorem erasesPrefix_bind_pure (hg : ErasesPrefix g (pure x))
 def runWorkerPrefix (worker : Worker) (body : PrefixM Event Unit) : PrefixM Event Unit := do
   _ ← liftPrefix (hidden (.sectionStart worker))
   if worker == .netRx then
-    liftPrefix (modify fun s => {s with netRxSection := s.netRxSections})
+    liftPrefix (modifyAmbient fun s => {s with netRxSection := s.netRxSections})
   body
-  if worker == .netRx then liftPrefix (modify fun s => {s with netRxSection := 0})
+  if worker == .netRx then liftPrefix (modifyAmbient fun s => {s with netRxSection := 0})
   _ ← liftPrefix (hidden (.sectionStop worker))
 
 theorem runWorkerPrefix_erases (worker : Worker) (hb : ErasesPrefix body originalBody) :
@@ -45,14 +49,19 @@ theorem runWorkerPrefix_erases (worker : Worker) (hb : ErasesPrefix body origina
     | (intro x; try dsimp only)
 
 theorem runWorkerPrefix_preserves (hs : ∀ h w, I h w → S h)
-    (hk : ∀ h w v, v.k = w.k → I h w → I h v) (worker : Worker)
+    (hk : ∀ h w v, productStoreView v = productStoreView w → I h w → I h v) (worker : Worker)
     (hb : PrefixPreserves I S body) :
     PrefixPreserves I S (runWorkerPrefix worker body) := by
+  have ambient {α : Type} (a : AmbientM α) :
+      PrefixPreserves I S (liftPrefix (MonadLift.monadLift a : Leanux.M α)) := by
+    apply viewLiftPrefix_preserves productStoreView hs hk
+    apply SameView.of_wp
+    intro initial
+    exact productAmbient_spec a _ (fun _ _ hi => hi)
   unfold runWorkerPrefix
   repeat' first
     | exact hb
-    | exact kernelLiftPrefix_preserves hs hk (hidden_sameKernel _)
-    | exact kernelLiftPrefix_preserves hs hk (by intro w x v hr; cases hr; rfl)
+    | exact ambient _
     | exact PrefixPreserves.pure hs _
     | apply PrefixPreserves.bind
     | split

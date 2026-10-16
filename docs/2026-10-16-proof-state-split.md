@@ -48,9 +48,17 @@ it is not part of that baseline.
 | Native device lifecycle and generic factors | 14 | 12 | 2 | 0 | 0 | 12 |
 | Native receive admission and lifetime tagging | 9 | 7 | 0 | 2 | 0 | 9 |
 | Product GRO callback contracts | 8 | 0 | 0 | 8 | 0 | 8 |
+| Native operation frames (`WGMore`) | 126 | 125 | 0 | 1 | 0 | 126 |
+| Native mixed-access observers and shared transports | 35 | 35 | 0 | 0 | 2 | 37 |
+| Native previous queues and product ring contracts | 19 | 6 | 0 | 13 | 0 | 19 |
+| Filesystem product bridge and syscall contracts | 2 | 0 | 0 | 2 | 1 | 3 |
+| Native peer/device configuration source factors | 2 | 2 | 0 | 0 | 0 | 2 |
+| Product batch source and generalized prefix contracts | 5 | 2 | 0 | 3 | 0 | 5 |
+| Native AllowedIPs store and arithmetic | 18 | 7 | 2 | 9 | 0 | 16 |
+| Native zero-timer keypair-store preservation | 1 | 1 | 0 | 0 | 0 | 1 |
 
-The whole tree currently contains 450 Lean files and 6,216 theorems. The completed
-changes total 681 retyped theorems, 1,590 deletions, 137 retained contract shapes and 91 added.
+The whole tree currently contains 450 Lean files and 6,217 theorems. The completed
+changes total 859 retyped theorems, 1,592 deletions, 165 retained contract shapes and 94 added.
 Retyping changes or generalizes the actual state/monad carrier or observation.
 This includes shorthand contracts whose source functions or named views move
 to a native monad. Mere namespace qualification and equivalent relocation of a
@@ -1137,3 +1145,54 @@ The runner and callback compositions keep the product world, and failing
 prefixes retain history without inventing a failed post-state. No guest or
 differential run is part of this proof retrofit. No main integration or push
 has occurred.
+
+## Native operation frames and remaining shared observers
+
+This checkpoint carries 208 existing theorems to 209: 178 retyped/generalized,
+28 retained contract shapes, two deleted structural record frames and three
+added shared bridges. WGMore carries all 126 claims, including arbitrary product
+IRQ callbacks. MixedAccess/MixedFrames carry all 35 claims and add two native
+bridges while retaining generic StateT/PrefixT transports. Review removed a
+duplicated index-adapter derivation in favor of the existing canonical rule.
+
+PrevQueue retains exact malformed Stops and its original coherence premise.
+RingSource retains arbitrary product actions and all failure-prefix and
+conservation claims. The new general filesystem adapter supports the original
+seven-field product netnsClose frame without recreating per-operation FS frames.
+Peer/device configuration factors retain unconditional source equalities in WG.M.
+The zero timer still preserves the complete transport-keypair map.
+
+AllowedIPs recording now transforms Ambient only, so record_k and commonRecords_k
+are deleted on type grounds. Four arithmetic execution laws preserve exact
+records and every numeric premise. Node access retains both native endpoints;
+the bounded bit and branch selectors generalize to every actual admitted monad.
+Their live lookup/graft consumers remain follow-on work.
+
+The batch source factor restores the mirror's route checks, route-MTU propagation
+and neighbour calls, retaining its unconditional equality. PrefixBatch keeps
+arbitrary product worker callbacks and the original 43-field stability condition;
+its renamed view transport generalizes to arbitrary actual states and observations.
+
+Validation: ten scoped builds pass, 243 declaration axiom checks use only standard
+axioms, twelve fresh entry-module replays pass, and independent source reviews
+pass. No whole-tree gate pass is claimed; the latest whole-tree build still
+failed on 21 targets.
+
+Development failures are recorded as failures: WGMore had two preparation
+failures (generated-name import collision, then elaboration/existing heartbeat
+limit); PrevQueue and RingSource each had one ordinary proof failure; Mixed had
+six native run/factor/focus normalization failures before its first passing
+build, then a reviewed canonical-adapter repair with another passing build and
+axiom check; Syscalls had three failed probes (folded local contracts and missing
+loop invariants) before the passing fourth; PrefixBatch failed once on a missing
+local type binder; ZeroTimer failed twice (existing heartbeat limit, then local
+spec matching). Failed elaboration recovery output is rejected. The AllowedIPs
+axiom inventory failed once by reading a comment as a declaration, then passed
+with the actual names. No limit/cap increase, KILLED result, guest timeout or
+infrastructure rerun occurred.
+
+```sh
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake build Leanux.Proofs.WG.Keypairs.Frames.WGMore Leanux.Proofs.WG.Lifetimes.MixedFrames Leanux.Proofs.WG.Queues.PrevQueue Leanux.Proofs.WG.Queues.RingSource Leanux.Proofs.Framing.Syscalls Leanux.Proofs.WG.Configuration.PeerSource Leanux.Proofs.WG.Configuration.DeviceSource Leanux.Proofs.WG.Environment.BatchSource Leanux.Proofs.Logged.PrefixBatch Leanux.Proofs.WG.AllowedIps.Store Leanux.Proofs.WG.AllowedIps.ArithmeticMirror Leanux.Proofs.WG.KeyTimes.ZeroTimer
+# Run separately for each entry module named above:
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Lifetimes.MixedFrames
+```

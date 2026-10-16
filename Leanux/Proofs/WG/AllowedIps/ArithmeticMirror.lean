@@ -4,7 +4,7 @@ import Leanux.Proofs.WG.AllowedIps.Prefix
 # The mirror's prefix arithmetic
 
 These execution equations retain the branch records, as well as the result
-and the complete World. The width and address premises in the matching
+and the complete Ambient state. The width and address premises in the matching
 theorem are the address-family invariants used by the trie representation.
 -/
 
@@ -13,12 +13,12 @@ namespace Leanux.Proofs.WG.AllowedIps
 open Leanux
 
 /-- One branch record, with the same section marker as the mirror. -/
-def record (w : World) (d : Decision) (outcome : Bool) : World :=
+def record (w : Ambient) (d : Decision) (outcome : Bool) : Ambient :=
   { w with steps := w.steps.push { decision := d, outcome, netRx := w.netRxSection } }
 
 /-- The complete bookkeeping of `commonBits`, including its unsupported-width
 return of zero. The two supported families are selected by its callers. -/
-def commonRecords (w : World) (width x : Nat) : World :=
+def commonRecords (w : Ambient) (width x : Nat) : Ambient :=
   let w := record w .commonBits32 (width == 32)
   if width == 32 then w else
   let w := record w .commonBits128 (width == 128)
@@ -33,19 +33,9 @@ def commonValue (width a b : Nat) : Nat :=
       else WG.fls (x % 2 ^ 64))
   else 0
 
-@[simp] theorem record_k (w : World) (d : Decision) (outcome : Bool) :
-    (record w d outcome).k = w.k := rfl
-
-@[simp] theorem commonRecords_k (w : World) (width x : Nat) :
-    (commonRecords w width x).k = w.k := by
-  unfold commonRecords
-  split
-  · rfl
-  · split <;> rfl
-
 /-- Exact execution of the original highest-set-bit helper, for every width. -/
-theorem commonBits_run_raw (n : WG.AipNode) (key width : Nat) (w : World) :
-    (WG.commonBits n key width).run w =
+theorem commonBits_run_raw (n : WG.AipNode) (key width : Nat) (w : Ambient) :
+    (WG.commonBits (m := AmbientM) n key width).run w =
       .ok (commonValue width n.bits key, commonRecords w width (n.bits ^^^ key)) := by
   by_cases h32 : width = 32
   · subst width
@@ -53,9 +43,9 @@ theorem commonBits_run_raw (n : WG.AipNode) (key width : Nat) (w : World) :
   · by_cases h128 : width = 128
     · subst width
       by_cases hh : (n.bits ^^^ key) / 2 ^ 64 = 0
-      · simp [WG.commonBits, branch, commonValue, commonRecords, record, hh] <;> rfl
-      · simp [WG.commonBits, branch, commonValue, commonRecords, record, hh] <;> rfl
-    · simp [WG.commonBits, branch, commonValue, commonRecords, record, h32, h128] <;> rfl
+      · simp [WG.commonBits, branch, AmbientM.branch, commonValue, commonRecords, record, hh] <;> rfl
+      · simp [WG.commonBits, branch, AmbientM.branch, commonValue, commonRecords, record, hh] <;> rfl
+    · simp [WG.commonBits, branch, AmbientM.branch, commonValue, commonRecords, record, h32, h128] <;> rfl
 
 theorem commonValue_supported (width a b : Nat) (hw : width = 32 ∨ width = 128) :
     commonValue width a b = common width a b := by
@@ -67,39 +57,41 @@ theorem commonValue_supported (width a b : Nat) (hw : width = 32 ∨ width = 128
 
 /-- Both supported address families compute the same width-parametric
 common-prefix function, with exactly the mirror's branch records. -/
-theorem commonBits_run (n : WG.AipNode) (key width : Nat) (w : World)
+theorem commonBits_run (n : WG.AipNode) (key width : Nat) (w : Ambient)
     (hw : width = 32 ∨ width = 128) :
-    (WG.commonBits n key width).run w =
+    (WG.commonBits (m := AmbientM) n key width).run w =
       .ok (common width n.bits key, commonRecords w width (n.bits ^^^ key)) := by
   rw [commonBits_run_raw, commonValue_supported width n.bits key hw]
 
 /-- Exact execution of the original prefix test before its arithmetic
 result is expressed as equality of leading address bits. -/
-theorem prefixMatches_run_value (n : WG.AipNode) (key width : Nat) (w : World)
+theorem prefixMatches_run_value (n : WG.AipNode) (key width : Nat) (w : Ambient)
     (hw : width = 32 ∨ width = 128) :
-    (WG.prefixMatches n key width).run w =
+    (WG.prefixMatches (m := AmbientM) n key width).run w =
       .ok (decide (n.cidr ≤ common width n.bits key),
         commonRecords w width (n.bits ^^^ key)) := by
-  change ((WG.commonBits n key width).run w >>= fun out =>
+  change ((WG.commonBits (m := AmbientM) n key width).run w >>= fun out =>
     .ok (decide (n.cidr ≤ out.1), out.2)) = _
   rw [commonBits_run n key width w hw]
   rfl
 
 /-- On bounded addresses of either family, the original prefix test returns
 true exactly when the addresses share the node's leading prefix bits. -/
-theorem prefixMatches_run (n : WG.AipNode) (key width : Nat) (w : World)
+theorem prefixMatches_run (n : WG.AipNode) (key width : Nat) (w : Ambient)
     (hw : width = 32 ∨ width = 128) (hn : n.bits < 2 ^ width)
     (hk : key < 2 ^ width) (hc : n.cidr ≤ width) :
-    (WG.prefixMatches n key width).run w =
+    (WG.prefixMatches (m := AmbientM) n key width).run w =
       .ok (decide (prefixBits width n.cidr n.bits = prefixBits width n.cidr key),
         commonRecords w width (n.bits ^^^ key)) := by
   rw [prefixMatches_run_value n key width w hw]
   simp only [common_ge_iff hn hk hc]
 
-/-- The original branch selector reads the next address bit and leaves the
-World unchanged when the node's prefix is shorter than its address width. -/
-theorem choose_run (n : WG.AipNode) (key : Nat) (w : World) (hc : n.cidr < n.bitlen) :
-    (WG.choose n key).run w = .ok (bit n.bitlen n.cidr key, w) := by
+/-- The original branch selector returns the next address bit without an
+effect when the node's prefix is shorter than its address width, in every
+monad admitted by the actual function. -/
+theorem choose_run {m : Type → Type} [Monad m] [MonadLiftT AmbientM m]
+    (n : WG.AipNode) (key : Nat) (hc : n.cidr < n.bitlen) :
+    (WG.choose n key : m Nat) = pure (bit n.bitlen n.cidr key) := by
   have h : ¬ n.cidr ≥ n.bitlen := by omega
   simp [WG.choose, h, bit] <;> rfl
 

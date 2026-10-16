@@ -51,16 +51,16 @@ theorem Tree.child_height_lt (n : NodeData) (l r : Tree) (b : Nat) :
   unfold Tree.child
   split <;> omega
 
-theorem getNode_run (w : World) (d : WG.Device) (id : Nat) (n : WG.AipNode)
-    (hd : w.k.wg = some d) (hn : d.nodes[id]? = some n) :
-    (WG.getNode id).run w = .ok (n, w) := by
-  simp [WG.getNode, WG.getDev, getK, hd, hn]
-  rfl
+theorem getNode_run (w : WG.AipStore) (ambient : Ambient) (id : Nat) (n : WG.AipNode)
+    (hn : w.nodes[id]? = some n) :
+    ((WG.getNode id).run w).run ambient = .ok ((n, w), ambient) := by
+  simp [WG.getNode, hn, StateT.run_bind] <;> rfl
 
-theorem encode_bitAt_run (width : Nat) (parent : WG.Slot) (n : NodeData)
-    (l r : Tree) (b : Nat) (w : World) (hb : b < 2) :
-    ((encode width parent n l r).bitAt b).run w =
-      .ok ((Tree.child l r b).root, w) := by
+theorem encode_bitAt_run {m : Type → Type} [Monad m] [MonadLiftT AmbientM m]
+    (width : Nat) (parent : WG.Slot) (n : NodeData)
+    (l r : Tree) (b : Nat) (hb : b < 2) :
+    ((encode width parent n l r).bitAt b : m (Option WG.NodeId)) =
+      pure (Tree.child l r b).root := by
   have cases : b = 0 ∨ b = 1 := by omega
   rcases cases with rfl | rfl <;> rfl
 
