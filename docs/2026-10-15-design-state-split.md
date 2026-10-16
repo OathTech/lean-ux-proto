@@ -672,3 +672,87 @@ Changed, as the coordinator's details corrected:
 - The mirror landing with reported proof lag and the landed campaign-1
   tree as the retrofit baseline, rather than a green proof gate at the
   landing.
+
+## 12. Phase 1 as built, and the brief for phase 2 (2026-10-16)
+
+Phase 1 is on `task/state-split` (three commits after revision 2 and the
+user's decisions): the ambient layer, the shared task store, and seccomp
+converted end to end. It builds, the fast tier passes, and the executable
+is the same program (section 6's preservation check, the recorded inputs of
+the seccomp suites replayed through the e5afc0f binary and the phase-1
+binary, identical). What the two phase-2 forks inherit:
+
+- **The shape.** `AmbientM := StateT Ambient (Except Stop)`;
+  `TaskM := StateT TaskWorld AmbientM`; `Seccomp.M := StateT SeccompWorld
+  TaskM`; the runner's `M := StateT World (Except Stop)` with
+  `liftAmbient`, `liftTask`, `liftSeccomp` and a `MonadLift` instance for
+  each (the `AmbientM` one at high priority, so the unconverted modules'
+  primitive calls lift directly). `World` is `{ ambient, tasks, seccomp,
+  k, ...the fields not yet moved }`; `Kernel` holds the file-layer and
+  WireGuard fields only.
+- **The primitives are polymorphic.** `branch`, `branchCmp`, `hidden`, the
+  cut and allocation consumers, the dispatch-order reads, `envOk`,
+  `unsupported`, `invariant`, `budgetExhausted`, the refcount helpers:
+  `[Monad m] [MonadLiftT AmbientM m]`, `@[inline]` wrappers over
+  `AmbientM.<name>`. The task services `getTask`, `modifyTask`,
+  `getCurrent`, `getFiles`, `modifyFiles`, `modifyFdt` are
+  `[MonadLiftT TaskM m]`. Reads and writes of the moved state go through
+  `getAmbient`/`modifyAmbient` and `getTasks`/`modifyTasks`; a direct
+  `(← get).hidden` no longer typechecks, which is how the compiler finds
+  every site.
+- **The namespace trick.** `abbrev Seccomp.M` lives in `Leanux.Kernel.Defs`;
+  inside `namespace Leanux.Seccomp` the bare name `M` resolves to it, so a
+  module's signatures move as one. The same works for `FS.M` and `WG.M`.
+  A function that must stay over the product writes `_root_.Leanux.M`.
+- **The runner lifts explicitly** at the syscall dispatch's match arms
+  (`liftSeccomp (Seccomp.sysSeccompProbeChild ..)`), because a match arm is
+  not a `do` element and gets no automatic lift; inside `do` blocks a
+  `TaskM` or `AmbientM` call auto-lifts through `MonadLiftT`.
+- **The checks.** `lake build Leanux leanux-model`; the five-module unit
+  line; the subsystem's suites on s5; and the preservation script
+  (`.tmp/preserve.py` in the phase-1 worktree, ephemeral: for each chunk of
+  a check run it replays `inputs.jsonl` through the baseline binary from a
+  detached worktree at e5afc0f and the candidate binary and compares
+  stdout, stderr and exit code, and the run's own `model.stdout`).
+- **Measured cost.** Clean build and the model-replay tests before and
+  after phase 1 are in the phase-1 report; the lifts are inlined and the
+  replay tests did not move.
+
+**Fork FS** (`FSWorld`, section 2): the 31 file-layer `Kernel` fields plus
+`userOut`, `userFds`; `abbrev FS.M := StateT FSWorld TaskM`; the stores'
+accessors in `Kernel/Defs.lean` (`getFile` .. `setFdtCloexec`) move to the
+file layer over `FS.M` (the task's file table stays in `TaskM`); the
+syscalls `pipe2`, `read`, `write`, `close`, `dup`, `dup3`, `fcntl`,
+`eventfd2`, `epoll_create1`, `epoll_ctl`, `epoll_wait` and the task-work
+run are lifted with `liftFS` at the dispatch; `pipeWrite`'s `sendSig` and
+`fput`'s task test auto-lift through `TaskM`. Validation: the fast tier,
+the `pipes`, `pipes-generated`, `epoll` and `epoll-generated` suites on s5,
+the preservation script over those runs.
+
+**Fork WG** (`WGWorld`, section 2, with the routing component of section 4):
+the WireGuard `Kernel` fields (`wg`, the two netlink sockets, the two
+counters, `netIfindexNext`, `ratelimiter`, `fib4`, `fib4C`, `timerClk`,
+`timerEnqueues`) and the WireGuard environment fields of `World` (`sent`,
+`netRxRaised`, `queuedThisCall`, `timerUnits`, `jiffiesLast`,
+`timerPassStep`, `dstCacheRecords`, `lastUnderLoad`, the routing fields
+`addrs4`, `addrPlens4`, `addrs6`, `defaultRoute6`, `ipv6Gen`,
+`neighbours`, `fibCreatorNs`, the fixture inputs `portBound`,
+`fixtureNetDevices`); `abbrev WG.M := StateT WGWorld AmbientM`; lane C's
+module over `StateT Net.Routing AmbientM` inside `WGWorld.routing` with
+`liftRouting`; `retirePeerUnits`, `retireDeviceUnits`, `workerIter` and
+`workerLoop` over `WG.M`; the environment stays over the product and lifts
+whole worker bodies (`runWorker w (liftWG body)`) and the WireGuard
+syscalls at the dispatch; what remains of `World` after it is `EnvWorld`
+(the listeners and inbox, the foreign-creator fields, the NAPI placement,
+`routesPending`, `routes`, `lastAdvance`, `hiddenAhead`, `mtu`), and `k`
+disappears. The adapter rules of section 4 bind every narrowing a fork
+attempts inside WireGuard; the component list there is the finite list.
+Validation: the fast tier, the `wireguard`, `wireguard-generated` and
+`w7-tier` suites on s5 (the D3 traces included), the preservation script.
+
+The two forks edit `Kernel/Defs.lean`'s `Kernel` and `World` on disjoint
+fields; FS lands first on this branch and WG rebases onto it, so the
+`Kernel` structure is deleted by the WG fork. Phase 3 is the proof tree:
+`main`'s tree retyped by deletion and retyping (what phase 1 breaks is in
+its report), then the landed campaign-1 tree as its own job.
+
