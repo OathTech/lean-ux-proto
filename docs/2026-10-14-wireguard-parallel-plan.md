@@ -6,13 +6,12 @@ as a running cost. Lowest time to delivery is the objective; the gates are
 the claim point (one integration at a time), the carry per landing for each
 running proof campaign, and a design-and-audit round before each extension.
 
-Provenance: [USER 2026-10-14] "I think we should try to parallelize more
-than this, even if it costs some proof integration overhead. Can we run the
-representation fixes in parallel with Phase 0? Then fix up?" The plan
-assumes proof fix-up is a cost we bear. Code-to-mirror proofs beyond the
-binary-level scoping probe are out of this plan by the same decision. The
-apex table the plan works toward is the one put to the user on 2026-10-14
-(the model layer's reachable rows).
+Provenance: [USER 2026-10-14] parallelise more than the first plan did, even
+at some proof-integration overhead, running the representation fixes in
+parallel with phase 0 and fixing up after. The plan assumes proof fix-up is a
+cost we bear. Code-to-mirror proofs beyond the binary-level scoping probe are
+out of this plan by the same decision. The apex table the plan works toward is
+the one put to the user on 2026-10-14 (the model layer's reachable rows).
 
 ## 1. The rules the plan runs under
 
@@ -125,9 +124,9 @@ configuration. Each is named in the apex table as a boundary.
 
 ## 7. With a dedicated box
 
-[USER 2026-10-14] "We should also assume potentially more resources, eg. if
-we move the repo to our 3rd box where it can run uncontended." What that
-changes, and what it does not:
+[USER 2026-10-14] More resources may be assumed, for example the repository
+moving to a third box where it runs uncontended. What that changes, and what
+it does not:
 
 - The claim point is the one gate that is box-bound. On an uncontended
   32-core host the slot count goes to about 24 (each TCG guest is one

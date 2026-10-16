@@ -107,7 +107,7 @@
 # user, built here only as a scratch kernel [AGENT 2026-10-12, stream W].
 # Path-independent identity from scripts/kernel-identity.py:
 # Built 2026-10-13 as .artifacts/kernel-net-choice-s1 with CONFIG_SECCOMP=y and CONFIG_SECCOMP_FILTER=y
-# [USER 2026-10-13: "Agree, sounds good - approved"; docs/2026-10-12-seccomp-design.md section 16],
+# [USER 2026-10-13: approved; docs/2026-10-12-seccomp-design.md section 16],
 # both record hooks line-preserving (patch sha256 e8e221374338778204609be01435b1e0478e627abcddb9fdd9518e5ce484cc29): the identity and
 # vmlinux lines below are that build's [AGENT 2026-10-13, stream X, phase 2b].
 # Built 2026-10-13 as .artifacts/kernel-net-choice-s2: the s1 configuration (CONFIG_SECCOMP=y, unchanged)
@@ -130,7 +130,7 @@
 # are that build's [AGENT 2026-10-14, the review-fix integration]; the s3 lines it replaces were
 # 8376e99e... and 1987a8ed...
 # Built 2026-10-15 as .artifacts/kernel-net-choice-s5 (B3, docs/2026-10-15-design-b3-timer-wheel.md section 7;
-# U2 [USER 2026-10-15 "Agree re B3, go ahead as proposed"]): the s4 configuration (unchanged) with the timer
+# U2 [USER 2026-10-15: approved as proposed]): the s4 configuration (unchanged) with the timer
 # wheel's two records for an armed timer, both record-only under the approved class, in one patch: kind 313
 # {base->clk, timer} right after forward_timer_base on both of __mod_timer's paths (kernel/time/timer.c, which
 # now takes its caller's return address so both records resolve to the arming line like kind 303) and kind

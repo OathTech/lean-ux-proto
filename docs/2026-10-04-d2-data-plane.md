@@ -1,8 +1,7 @@
 # D2: the WireGuard data plane — design, 2026-10-04
 
 Status: **revised after the audit (section 11)** [USER 2026-10-04: the sequence D2 data plane, then
-D3 timers, then pipes as the scale test]. The target is "complete on one CPU"
-for WireGuard: every path reachable on a single-CPU `CONFIG_PREEMPT_NONE`
+D3 timers, then pipes as the scale test]. The target is completeness on one CPU for WireGuard: every path reachable on a single-CPU `CONFIG_PREEMPT_NONE`
 kernel, checked against Linux.
 
 D2 adds payload packets in both directions to the mirror. It needs **no

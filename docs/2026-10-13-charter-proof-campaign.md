@@ -8,10 +8,9 @@ is landed and current in [the register](proofs.md); this charter sets six
 further results in dependency order and leaves the proof architecture to the
 agent.
 
-Provenance: [USER 2026-10-13] "I think we should try giving Codex#2 *all*
-of the properties of interest, not just one", as one very long grind
-campaign. [AGENT, coordinator] wrote the charter from the property table put
-to the user on 2026-10-12.
+Provenance: [USER 2026-10-13] Codex#2 is given all the properties of interest,
+not just one, as one very long grind campaign. [AGENT, coordinator] wrote the
+charter from the property table put to the user on 2026-10-12.
 
 ## 1. What this is, and what it is not
 

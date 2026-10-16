@@ -40,7 +40,7 @@
 # user, built here only as a scratch kernel [AGENT 2026-10-12, stream W].
 # Path-independent identity from scripts/kernel-identity.py:
 # Built 2026-10-13 as .artifacts/kernel-net-choice-actl-s1 with CONFIG_SECCOMP=y and CONFIG_SECCOMP_FILTER=y
-# [USER 2026-10-13: "Agree, sounds good - approved"; docs/2026-10-12-seccomp-design.md section 16],
+# [USER 2026-10-13: approved; docs/2026-10-12-seccomp-design.md section 16],
 # both record hooks line-preserving (patch sha256 182d265c517a1953eba8476210708334a50c3b8f371209c2e687502f54bc6e1d): the identity and
 # vmlinux lines below are that build's [AGENT 2026-10-13, stream X, phase 2b].
 # Built 2026-10-13 as .artifacts/kernel-net-choice-actl-s2 with the kind-310 end-of-wait jiffies record
