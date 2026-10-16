@@ -313,8 +313,8 @@ def peerCreate (publicKey : Key) (presharedKey : Option Key) : M (Except Int Pee
   -- the site would be lax and unsteerable; the arm stays dead, named.
   if ← branch .peerCreateDstCacheFail false then return .error (-ENOMEM)
   let pid := d.nextPeer
-  let internalId := (← getK).peerCounter + 1   -- atomic64_inc_return(&peer_counter)
-  modifyK fun k => { k with peerCounter := internalId }
+  let internalId := (← get).peerCounter + 1   -- atomic64_inc_return(&peer_counter)
+  modify fun k => { k with peerCounter := internalId }
   modifyDev fun d => { d with nextPeer := pid + 1 }
   -- wg_cookie_init (zeroed: no cookie, is_valid and have_sent_mac1 false),
   -- then wg_cookie_checker_precompute_peer_keys (cookie.c:61-67):

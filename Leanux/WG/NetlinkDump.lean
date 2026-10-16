@@ -11,7 +11,7 @@ when the room is short (lib/nlattr.c:1094), a nest start is a 4-byte put
 whose cancel restores the room, and the netlink core runs one dump call per
 chunk (`netlink_dump`: inside the `sendmsg` that starts the dump, then inside
 every `recvmsg` while `cb_running`). The per-socket state is
-`Leanux.WG.NlSock` (`Kernel.nlSock7`, `Kernel.nlSock8`).
+`Leanux.WG.NlSock` (`WGWorld.nlSock7`, `WGWorld.nlSock8`).
 -/
 
 namespace Leanux.WG
@@ -283,11 +283,11 @@ def wgGetDeviceDump (ctx0 : DumpCtx) (prevSeq0 : Nat) (skb0 : NlSkb) : M DumpCal
 def INT_MAX : Int := 2147483647
 
 def getNlSock (fd : Nat) : M NlSock := do
-  let k ← getK
+  let k ← get
   return if fd == 8 then k.nlSock8 else k.nlSock7
 
 def setNlSock (fd : Nat) (s : NlSock) : M Unit :=
-  modifyK fun k => if fd == 8 then { k with nlSock8 := s } else { k with nlSock7 := s }
+  modify fun k => if fd == 8 then { k with nlSock8 := s } else { k with nlSock7 := s }
 
 /-- `netlink_dump` (af_netlink.c:2255-2383): a fresh chunk, the dump
     callback while `dump_done_errno > 0`, then either the chunk queued

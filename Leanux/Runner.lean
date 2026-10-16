@@ -1026,15 +1026,19 @@ def initialKernel (rlimit : Nat) (net : Bool := false) (bare : Bool := false) (f
     -- Pipes (P design section 5): sysctl defaults, and `root_user`'s
     -- `pipe_bufs` at its baseline of 0 (no pipes outside the trace)
     pipeMaxSize := 1048576, pipeUserPagesSoft := 16384, pipeUserPagesHard := 0, user := { pipeBufs := 0 },
-    wg := if net && !bare then some { ifindex := 3, ifname := "wg0" } else none,
-    -- L: the netns's ifindex cursor (lo 1, sit0 2, the fixture's wg0 3) and
-    -- the ratelimiter's reference count (the fixture's wg0 holds one; every
-    -- earlier trace process deleted its devices)
-    netIfindexNext := if net && !bare then 4 else 3,
-    ratelimiter := { refcnt := if net && !bare then 1 else 0 },
     -- epoll: the fixture facts of Leanux/Env.lean (the warm-up's relative
     -- counter, the boot's max_user_watches)
     loopCheckGen := Env.LOOP_CHECK_GEN_BASE, maxUserWatches := Env.MAX_USER_WATCHES }
+
+/-- WireGuard's initial world (the state split, section 2): the fixture's
+    wg0 in a network trace that is not bare; L: the netns's ifindex cursor
+    (lo 1, sit0 2, the fixture's wg0 3) and the ratelimiter's reference
+    count (the fixture's wg0 holds one; every earlier trace process deleted
+    its devices). -/
+def initialWG (net : Bool := false) (bare : Bool := false) : WGWorld :=
+  { dev := if net && !bare then some { ifindex := 3, ifname := "wg0" } else none,
+    netIfindexNext := if net && !bare then 4 else 3,
+    ratelimiter := { refcnt := if net && !bare then 1 else 0 } }
 
 /-- The harness environment for the pipe sites (`EnvSite`): every allocation
     and user-memory access succeeds. -/
@@ -1126,9 +1130,10 @@ def toSyscall (results : Array Int) (ends : Array (Option (Nat × Nat))) (index 
 /-- Lane C: the boot trie of a network trace's fixture namespace (`lo` up),
     for `leanux-model --fib-boot` and the harness's expected fixture facts. -/
 def fibBootJson : Except Stop Json := do
-  let world : World := { k := initialKernel 32 true, tasks := initialTasks 32, ambient := { env := harnessEnv, timing := Env.timing } }
-  let (_, w) ← Net.Fib.bootTables.run world
-  return Net.Fib.shape w.k
+  let world : World := { k := initialKernel 32 true, wg := initialWG true, tasks := initialTasks 32,
+                         ambient := { env := harnessEnv, timing := Env.timing } }
+  let (_, w) ← (liftWG (liftRouting Net.Fib.bootTables)).run world
+  return Net.Fib.shape w.wg.routing
 
 /-- Run a trace. A `Stop` is returned with the operation index: the mirror
     never reports an observation for a path it does not model. -/
@@ -1143,13 +1148,14 @@ def executeTrace (trace : Trace) (placeholders : Bool := false) : Except (Nat ×
                              else [] }
   let mut world : World := { ambient, k := initialKernel trace.rlimit trace.net trace.bare trace.foreign trace.stepped trace.seccompChild,
                              tasks := initialTasks trace.rlimit trace.foreign trace.stepped trace.seccompChild,
-                             portBound := Env.portBound,
-                             fixtureNetDevices := Env.fixtureNetDevices,
-                             foreignCreator := trace.foreign,
-                             netnsCHolders := if trace.foreign then [9, 8, 5, 4] else [],
-                             routes := trace.routes,
-                             dstCacheRecords := trace.dstCacheRecords,
-                             napiBeforePut := trace.napiBeforePut }
+                             wg := { initialWG trace.net trace.bare with
+                                     portBound := Env.portBound,
+                                     fixtureNetDevices := Env.fixtureNetDevices,
+                                     dstCacheRecords := trace.dstCacheRecords,
+                                     routing := { foreignCreator := trace.foreign } },
+                             fixture := { netnsCHolders := if trace.foreign then [9, 8, 5, 4] else [],
+                                          routes := trace.routes,
+                                          napiBeforePut := trace.napiBeforePut } }
   -- the seccomp prefill fixture (design 5): the chain the guest installed before the window
   if trace.seccompPrefill > 0 then
     match Env.seccompPrefill trace.seccompPrefill world.seccomp world.tasks with
@@ -1173,7 +1179,8 @@ def executeTrace (trace : Trace) (placeholders : Bool := false) : Except (Nat ×
   for op in trace.ops do
     let index := results.size
     let ahead := trace.hidden.map fun h => (h.drop (index + 1)).toList   -- B3, E2's lookahead
-    world := { world with ambient := { world.ambient with hidden := trace.hidden.map (·[index]!) }, hiddenAhead := ahead, netRxRaised := false }
+    world := { world with ambient := { world.ambient with hidden := trace.hidden.map (·[index]!) },
+                          fixture := { world.fixture with hiddenAhead := ahead }, wg := { world.wg with netRxRaised := false } }
     let (ret, w) ← (syscall (toSyscall results ends index op)).run world
       |>.mapError fun e => (index, e)
     let (_, w) ← (skipAmbient : M Unit).run w |>.mapError fun e => (index, e)
@@ -1181,7 +1188,7 @@ def executeTrace (trace : Trace) (placeholders : Bool := false) : Except (Nat ×
       throw (index, .hidden s!"a record of site {r.site} was not consumed")
     if let a :: _ := w.ambient.suspended then
       throw (index, .hidden s!"{a.worker.symbol} is still suspended at the end of the operation (its stop has no record)")
-    if w.netRxRaised then
+    if w.wg.netRxRaised then
       throw (index, .invariant "a NET_RX softirq raised by a loopback transmission was left pending")
     world := w
     results := results.push ret
@@ -1218,7 +1225,7 @@ def executeTrace (trace : Trace) (placeholders : Bool := false) : Except (Nat ×
     for symbol in w.ambient.fired do
       fired := fired.push (Json.mkObj [("index", toJson index), ("symbol", toJson symbol)])
   -- a placement the check chose must have been met
-  if world.napiBeforePut.any id then
+  if world.fixture.napiBeforePut.any id then
     throw (results.size - 1, .invariant "napi_irq_before_put names more NAPI polls than the trace has")
   -- the domain filter: a schedule entry for an allocation site that the
   -- mirror never met would be left over in the kernel
@@ -1229,7 +1236,7 @@ def executeTrace (trace : Trace) (placeholders : Bool := false) : Except (Nat ×
   return Json.mkObj ([("version", toJson (1 : Nat)), ("id", toJson trace.id),
     ("observations", .arr observations), ("branches", .arr branches)]
     ++ (if fired.isEmpty then [] else [("fired", .arr fired)])
-    ++ (if world.napiAmbiguous > 0 then [("napi_irq_ambiguous", toJson world.napiAmbiguous)] else []))
+    ++ (if world.fixture.napiAmbiguous > 0 then [("napi_irq_ambiguous", toJson world.fixture.napiAmbiguous)] else []))
 
 /-- The hidden-input site table, for the check's call-site cross-check. -/
 def hiddenSitesJson : Json :=
@@ -1274,7 +1281,7 @@ private def f1Ring : WG.PtrRing (List WG.SkbId) :=
   (List.range 1009).foldl (fun r i => r.produce [100 + i]) r1
 
 private def f1World : World :=
-  { k := { initialKernel 8 with wg := some { ifindex := 3, ifname := "wg0", encryptQueue := f1Ring } }, tasks := initialTasks 8,
+  { k := initialKernel 8, wg := { dev := some { ifindex := 3, ifname := "wg0", encryptQueue := f1Ring } }, tasks := initialTasks 8,
     ambient := { env := harnessEnv, timing := { advanceWait := 0, traceBound := 0 } } }
 
 /-- The poll's produce (`wg_queue_enqueue_per_device_and_peer`, queueing.h:174):
@@ -1287,7 +1294,7 @@ private def f1Poll : M Unit := do
 #guard f1Ring.full
 #guard f1Ring.consumerHead == 15 && f1Ring.consumerTail == 0 && f1Ring.producer == 0
 #guard match (WG.encryptRingPoll f1Poll).run f1World with
-  | .ok (some [100], w) => (w.k.wg.map fun d => (d.encryptQueue.slots[0]?).getD none) == some (some [9999])
+  | .ok (some [100], w) => (w.wg.dev.map fun d => (d.encryptQueue.slots[0]?).getD none) == some (some [9999])
   | _ => false
 
 end Leanux.Runner

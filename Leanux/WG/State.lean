@@ -8,12 +8,12 @@ namespace Leanux.WG
 open Leanux
 
 def getDev : M Device := do
-  match (← getK).wg with
+  match (← get).dev with
   | some d => return d
   | none => invariant "no WireGuard device in this trace's fixture"
 
 def modifyDev (f : Device → Device) : M Unit :=
-  modifyK fun k => { k with wg := k.wg.map f }
+  modify fun k => { k with dev := k.dev.map f }
 
 def getNode (id : NodeId) : M AipNode := do
   match (← getDev).nodes.get? id with
@@ -150,8 +150,8 @@ def placeOnWheel (pid : PeerId) (t : PeerTimer) (expires clk : UInt64) (unit? : 
     let lvl := TimerWheel.levelOf slot
     if !(timeAfter bexp expires && timeBeforeEq bexp (expires + (TimerWheel.LVL_GRAN lvl).toUInt64)) then
       invariant s!"a bucket expiry {bexp} outside (expires, expires + 8^{lvl}] for expires {expires}"
-    let stamp := (← getK).timerEnqueues + 1
-    modifyK fun k => { k with timerEnqueues := stamp }
+    let stamp := (← get).timerEnqueues + 1
+    modify fun k => { k with timerEnqueues := stamp }
     setPeer pid ((p.setTimer t (some expires)).setWheel t (some ⟨slot, bexp, stamp⟩))
   if let some what := TimerWheel.peerWheelProblem (← getPeer pid) then
     invariant s!"peer {pid}'s timers: {what}"
@@ -231,7 +231,7 @@ def armTimer (pid : PeerId) (t : PeerTimer) (delay : Nat) (jc? : Option UInt64 :
     throw (.hidden s!"the base-clock record names timer {u2}, the arm record {u}")
   if timeAfter clk (jm + 1) then
     throw (.hidden s!"the timer base's clock {clk} is more than one past mod_timer's read {jm}")
-  if let some prev := (← getK).timerClk then
+  if let some prev := (← get).timerClk then
     if timeBefore clk prev then
       throw (.hidden s!"the timer base's clock went back: {clk} after {prev}")
   if let some b := TimerWheel.earliestDue (← getDev) jm then
@@ -240,7 +240,7 @@ def armTimer (pid : PeerId) (t : PeerTimer) (delay : Nat) (jc? : Option UInt64 :
   if let some step := w.timerPassStep then
     if !timeAfter clk step then
       throw (.hidden s!"an arm inside a timer pass at step {step} with the base clock {clk} not past it")
-  modifyK fun k => { k with timerClk := some clk }
+  modify fun k => { k with timerClk := some clk }
   placeOnWheel pid t e clk (some u)
 
 /-- `del_timer(&peer->timer_x)` (timer.c:1407-1430): detach if pending

@@ -219,7 +219,7 @@ def send4 (e : Endpoint) (cache : Option PeerId) (bytes : List UInt8) (ds : Nat)
   if ← branch .send4CacheMiss route.isNone then
     -- inet_confirm_addr(net, NULL, 0, fl.saddr, RT_SCOPE_HOST): a zero source
     -- autoselects; a set one must be a configured address (devinet.c:1433)
-    let w ← get
+    let w ← getRouting
     let confirmed := saddr == 0 || saddr == LOOPBACK4 || w.addrs4.contains saddr
     if ← branch .send4SrcNotLocal !confirmed then
       clearSrc; saddr := 0; srcIf := 0
@@ -252,7 +252,7 @@ def send4 (e : Endpoint) (cache : Option PeerId) (bytes : List UInt8) (ds : Nat)
 def send6 (e : Endpoint) (cache : Option PeerId) (bytes : List UInt8) (ds : Nat) (exactRx : Bool) : M Int := do
   let d ← getDev
   if ← branch .send6SockNull d.sock6.isNone then return -ENONET
-  let gen := (← get).ipv6Gen
+  let gen := (← getRouting).ipv6Gen
   let mut saddr := e.src
   let mut route : Option Route := none
   if ← branch .send6HasCache cache.isSome then
@@ -261,7 +261,7 @@ def send6 (e : Endpoint) (cache : Option PeerId) (bytes : List UInt8) (ds : Nat)
       route := some { dev := s.dev, src := s.src }; saddr := s.src
   if ← branch .send6CacheMiss route.isNone then
     -- !ipv6_addr_any(saddr) && !ipv6_chk_addr(net, saddr, NULL, 0)
-    let w ← get
+    let w ← getRouting
     let notLocal := saddr != 0 && !(saddr == 1 || saddr == LO_LINK_LOCAL || w.addrs6.contains saddr)   -- W5: the link-local address on lo
     if ← branch .send6SrcNotLocal notLocal then
       if let some pid := cache then

@@ -223,8 +223,8 @@ def taskWorkRun : M Unit := do
     the queue record), and its section runs in the guest's wait
     (`Env.netnsCleanup`, after this call). -/
 def netnsClose : M Int := do
-  if !(← get).foreignCreator then unsupported "wg_netns_close outside the foreign-creator fixture"
-  if (← get).netnsCHolders.isEmpty then unsupported "wg_netns_close twice"
+  if !(← getRouting).foreignCreator then unsupported "wg_netns_close outside the foreign-creator fixture"
+  if (← getEnv).netnsCHolders.isEmpty then unsupported "wg_netns_close twice"
   for fd in [INJECT_FD, LISTEN6_FD, LISTEN4_FD, PIN_FD] do
     let ret ← sysClose fd
     if ret != 0 then invariant s!"close({fd}) of a fixture holder returned {ret}"
@@ -296,7 +296,7 @@ def dispatch : Syscall → M Int
     if r.dev != WG0_IFINDEX then unsupported "a transmit to a local address (not into wg0)"
     -- W4: an MTU change below the family's floor took its routes down with
     -- its IP device, and the fixture re-adds them only at the next wg_up
-    if let some d := (← getK).wg then
+    if let some d := (← getWG).dev then
       if (family == 4 && !d.inet4Dev) || (family == 6 && !d.inet6Dev) then
         unsupported "a transmit after an MTU change took the family's routes into wg0 down"
     -- udp_sendmsg returns the datagram's length once the device took it
@@ -375,8 +375,9 @@ def Syscall.isNet : Syscall → Bool
 
 /-- One system call: entry, the handler, and the return-to-user work. -/
 def syscall (call : Syscall) : M Int := do
-  modify fun w => { w with userOut := none, userFds := none, queuedThisCall := [],
+  modify fun w => { w with userOut := none, userFds := none,
                            seccomp := { w.seccomp with emitted := {}, translatedLen := none } }
+  modifyWG fun g => { g with queuedThisCall := [] }
   modifyAmbient fun a => { a with steps := #[], extraOut := [], fired := #[], netRxSections := 0, netRxSection := 0 }
   -- seccomp: the entry path of the operation's own call once a mode is set
   -- (a harness call by design 6.2 rule 1: a cache hit); a probe enters itself
@@ -409,7 +410,7 @@ def syscall (call : Syscall) : M Int := do
   match call with
   | .wgUp | .wgDown | .wgDelete | .wgDeladdr _ | .wgDelroute .. | .wgSetMtu _ | .wgNetnsClose
   | .wgAddroute .. | .wgAddaddr .. =>
-    let shape := Net.Fib.shape (← getK)
+    let shape := Net.Fib.shape (← getRouting)
     modifyAmbient fun w => { w with extraOut := w.extraOut ++ [("fib_trie", shape)] }
   | _ => pure ()
   return ret
