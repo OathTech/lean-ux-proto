@@ -754,24 +754,26 @@ The two forks edit `Kernel/Defs.lean`'s `Kernel` and `World` on disjoint
 fields; FS lands first on this branch and WG rebases onto it, so the
 `Kernel` structure is deleted by the WG fork.
 
-**Phase 3, as the user decided on 2026-10-16.** The proof tree on `main`
+**Phase 3, as the user decided on 2026-10-16** ("NO PROOFS NO GATES
+REMOVE IT AT THE END OF THE SPLIT"). The proof tree on `main`
 (`Leanux/Proofs/`, the replay-window result and the `Logged`, `Framing`
 and `CounterWindow` layers it rests on, 1,399 theorems) was a prototype
-for campaign 1 that landed on `main` by sequencing ("It shouldn't have
-been on main in the first place, it was a prototype for Campaign 1"). It
-is not retyped: it is deleted in the final cutover commit series, after
-phase 2 merges, and campaign 1 carries it and lands it with its own
-results, retyped over the split worlds by its retrofit. Not a standing
-rule, a refactor; AGENTS.md's proof-tree paragraph stays as it is. The
-cutover steps: delete `Leanux/Proofs/` and `Leanux/Proofs.lean`; remove
-the `LeanuxProofs` lake target; remove the register's replay-window rows
-and the lagging notes that refer to `main`'s copy, keeping the map and the
-campaign rows as they are on the campaign branches, with one line saying
-`main` carries no proof tree until campaign 1 lands and that the
-prototype was deleted at this commit as campaign 1's; make
-`scripts/proof-gate` fail noisily on a `main` with no tree ("no proof
-tree on main; campaign 1 carries it", an error, since there is nothing to
-gate), with `--binary` untouched (`binary/` imports nothing under
-`Leanux.Proofs`). The campaigns' retrofits then include: campaign 1's,
-the replay-window result and its layers as well as its own results;
-campaign 2's, its additions over campaign 1's retyped layers.
+for campaign 1 that landed on `main` by sequencing. It is not retyped and
+it gets no stub: in the final cutover commit series, after phase 2
+merges, `Leanux/Proofs/`, `Leanux/Proofs.lean`, the `LeanuxProofs` lake
+target and `scripts/proof-gate` are deleted; AGENTS.md's proof-gate
+paragraph and the proof-tree commands in its build-and-check and gates
+sections go with them as a consequence of the deletion, while the
+proof-tree paragraph's standing rule stays (theorems live only in the
+proof tree, Rule Zero, no theorem is an acceptance gate), and the gate
+text returns with campaign 1's landing as that landing's own change; the
+register's rows and lag notes for the prototype are removed, its map and
+the campaign rows kept. The binary track's gate is `proof-gate --binary`
+on `task/binary-tv` (not on `main`; `binary/` imports nothing under
+`Leanux.Proofs`): it is not a proof-tree gate and moves into its own
+script, `scripts/binary-gate` with nothing else in it, at that branch's
+merge, since the binary claim point still needs it. `main` then has no
+proofs and no proof gate until campaign 1 lands; campaign 1 carries the
+prototype and lands it with its own results, retyped over the split
+worlds by its retrofit; campaign 2's retrofit is its additions over those
+layers.

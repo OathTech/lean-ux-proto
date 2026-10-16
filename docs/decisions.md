@@ -867,23 +867,23 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
 - **2026-10-16 [USER]** The split's mirror lands with its proof lag reported,
   and the landed campaign-1 tree is the retrofit's baseline with its own gate
   and signoff ("(2) agree").
-- **2026-10-16 [USER]** The replay-window spike on `main` (`Leanux/Proofs/`,
-  1,399 theorems: the result and the `Logged`, `Framing` and `CounterWindow`
-  layers it rests on) was a prototype for campaign 1 that landed on `main`
-  by sequencing ("It shouldn't have been on main in the first place, it was
-  a prototype for Campaign 1"; "those are part of Campaign 1, they should
-  just get kicked out of main until the campaign lands"). It is deleted
-  from `main` at the state split's cutover; campaign 1 carries it and lands
-  it with its own results, retyped over the split worlds by its retrofit.
-  Not a standing rule: a refactor correcting an accident of sequencing.
-  AGENTS.md's proof-tree paragraph stays as it is (theorems live only in
-  the proof tree with its target and its gate, true again when campaign 1
-  lands). In the cutover: `Leanux/Proofs/` and `Leanux/Proofs.lean`
-  deleted, the `LeanuxProofs` target removed, the register's replay-window
-  rows and the lagging notes that refer to `main`'s copy removed (the map
-  and the campaign rows stay as they are on the campaign branches, with
-  one line saying `main` carries no proof tree until campaign 1 lands and
-  that the prototype was deleted at this commit as campaign 1's), and
-  `scripts/proof-gate` failing noisily on a `main` with no tree ("no proof
-  tree on main; campaign 1 carries it", an error, since there is nothing to
-  gate; `--binary` untouched) [AGENT, coordinator: the cutover steps].
+- **2026-10-16 [USER]** "NO PROOFS NO GATES REMOVE IT AT THE END OF THE SPLIT":
+  the prototype proof tree on `main` (`Leanux/Proofs/`, the replay-window
+  result and the layers it rests on, 1,399 theorems: a prototype for
+  campaign 1 that landed on `main` by sequencing, "It shouldn't have been
+  on main in the first place, it was a prototype for Campaign 1") and its
+  gate are removed from `main` at the state split's cutover until campaign
+  1 lands: `Leanux/Proofs/`, `Leanux/Proofs.lean`, the `LeanuxProofs` lake
+  target and `scripts/proof-gate` itself deleted (no erroring stub, no
+  notice); AGENTS.md's proof-gate paragraph and the proof-tree commands in
+  its build-and-check and gates sections removed as a consequence of the
+  deletion, while its standing rule stays (theorems live only in the proof
+  tree, Rule Zero, no theorem is an acceptance gate; the gate text returns
+  with campaign 1's landing, as that landing's own change); the register's
+  rows and lag notes for the prototype removed, its map and the campaign
+  rows kept. The binary track's gate (`proof-gate --binary`, which lives
+  on `task/binary-tv`, not on `main`) is not a proof-tree gate and moves
+  into its own script (`scripts/binary-gate`, nothing else in it) at that
+  branch's merge, since the binary claim point still needs it. Not a
+  standing rule: a refactor correcting an accident of sequencing [AGENT,
+  coordinator: the cutover steps].
