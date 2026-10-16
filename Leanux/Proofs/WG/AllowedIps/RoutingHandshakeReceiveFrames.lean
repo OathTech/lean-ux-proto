@@ -13,30 +13,44 @@ theorem setPeerEndpointFromSkb_routing (pid : PeerId) (src : SkbSource) :
     SameView routingView (setPeerEndpointFromSkb pid src) := by
   apply SameView.of_wp
   intro s
-  have he := (routing_kernel _ (endpointFromSkb_sameKernel src)).wp (fun t => t = s)
+  have ambient {α : Type} (a : AmbientM α) :
+      Hoare (MonadLift.monadLift a : WG.M α)
+        (fun w => routingView w = s) (fun _ w => routingView w = s) :=
+    hoare_liftAmbient a _
+  unfold Hoare at ambient
+  have he := (routing_kernel _ (endpointFromSkb_sameWGStore src)).wp (fun t => t = s)
   have hs := fun e => (setPeerEndpoint_routing pid e).wp (fun t => t = s)
-  mvcgen [setPeerEndpointFromSkb, he, hs, branch, invariant]
+  mvcgen [-Std.Do.Spec.monadLift_StateT, ambient, hiddenAlloc, hiddenClock64, branch, branchCmp, invariant, AmbientM.branch, AmbientM.branchCmp, AmbientM.invariant, setPeerEndpointFromSkb, he, hs, branch, invariant]
 
 theorem sendBufferAsReplyToSkb_routing (src : SkbSource) (bytes : List UInt8) :
     SameView routingView (sendBufferAsReplyToSkb src bytes) := by
   apply SameView.of_wp
   intro s
-  have ha := (routing_kernel _ (hiddenAlloc_sameKernel .replySkb)).wp (fun t => t = s)
-  have he := (routing_kernel _ (endpointFromSkb_sameKernel src)).wp (fun t => t = s)
+  have ambient {α : Type} (a : AmbientM α) :
+      Hoare (MonadLift.monadLift a : WG.M α)
+        (fun w => routingView w = s) (fun _ w => routingView w = s) :=
+    hoare_liftAmbient a _
+  unfold Hoare at ambient
+  have he := (routing_kernel _ (endpointFromSkb_sameWGStore src)).wp (fun t => t = s)
   have h4 := fun e => (send4_routing e none bytes 0 false).wp (fun t => t = s)
   have h6 := fun e => (send6_routing e none bytes 0 false).wp (fun t => t = s)
-  have hd (α : Type) := discard_view_spec routingView (α := α) (fun t => t = s)
-  mvcgen [sendBufferAsReplyToSkb, ha, he, h4, h6, hd, branch, invariant]
+  have hd (α : Type) := discard_view_spec (m := AmbientM) routingView (α := α) (fun t => t = s)
+  mvcgen [-Std.Do.Spec.monadLift_StateT, ambient, hiddenAlloc, hiddenClock64, branch, branchCmp, invariant, AmbientM.branch, AmbientM.branchCmp, AmbientM.invariant, sendBufferAsReplyToSkb, he, h4, h6, hd, branch, invariant]
 
 theorem sendHandshakeCookie_routing (msg : List UInt8) (src : SkbSource) :
     SameView routingView (sendHandshakeCookie msg src) := by
   apply SameView.of_wp
   intro s
-  have hc := fun i mac => (cookie_routing _ (cookieMessageCreate_sameCookieKernel i src mac)).wp (fun t => t = s)
+  have ambient {α : Type} (a : AmbientM α) :
+      Hoare (MonadLift.monadLift a : WG.M α)
+        (fun w => routingView w = s) (fun _ w => routingView w = s) :=
+    hoare_liftAmbient a _
+  unfold Hoare at ambient
+  have hc := fun i mac => (cookie_routing_native _ (cookieMessageCreate_sameCookie i src mac)).wp (fun t => t = s)
   have hs := fun bytes => (sendBufferAsReplyToSkb_routing src bytes).wp (fun t => t = s)
-  mvcgen [sendHandshakeCookie, hc, hs]
+  mvcgen [-Std.Do.Spec.monadLift_StateT, ambient, hiddenAlloc, hiddenClock64, branch, branchCmp, invariant, AmbientM.branch, AmbientM.branchCmp, AmbientM.invariant, sendHandshakeCookie, hc, hs]
 
-private def handshakeSwitch (msg : List UInt8) (src : SkbSource) (needsCookie : Bool) : M Unit := do
+private def handshakeSwitch (msg : List UInt8) (src : SkbSource) (needsCookie : Bool) : WG.M Unit := do
   let t := messageType msg
   let peer ← do
     if ← branch .hsSwitchInitiation (t == MESSAGE_HANDSHAKE_INITIATION) then
@@ -77,7 +91,7 @@ private def handshakeSwitch (msg : List UInt8) (src : SkbSource) (needsCookie : 
   timersTraversal pid
   peerPut peer
 
-private def handshakeAfterMac (msg : List UInt8) (src : SkbSource) (underLoad : Bool) (macState : MacState) : M Unit := do
+private def handshakeAfterMac (msg : List UInt8) (src : SkbSource) (underLoad : Bool) (macState : MacState) : WG.M Unit := do
   -- packet_needs_cookie (receive.c:123-132):
   -- `(under_load && mac == WITH_COOKIE) || (!under_load && mac == NO_COOKIE)`
   let proceed ← WG.orM (WG.andM (branch .hsLoadedOperand underLoad) (branch .hsLoadedCookieOk (macState == .withCookie)))
@@ -97,33 +111,34 @@ private theorem handshakeSwitch_routing (msg : List UInt8) (src : SkbSource) (ne
     RetainsRoutingCall (handshakeSwitch msg src needsCookie) := by
   apply ProjectedAction.of_wp
   intro s
+  have ambient {α : Type} (a : AmbientM α) :
+      Hoare (MonadLift.monadLift a : WG.M α)
+        (fun w => RetainsRouting s (routingView w))
+        (fun _ w => RetainsRouting s (routingView w)) :=
+    hoare_liftAmbient a _
+  unfold Hoare at ambient
   let P := RetainsRouting s
   have hg := fun pid => routing_getPeer P pid
   have hs := fun pid p => routing_setPeer P pid p
-  have hu := fun peer => (peerPut_retainsRouting peer).wp s
-  have hc := fun site => (routing_kernel _ (hiddenClock64_sameKernel site)).wp P
-  have hcookie := (cookieMessageConsume_routing msg).wp s
-  have ha := fun b n => (routing_kernel _ (birthdateTest_sameKernel b n)).wp P
-  have hv := fun b => (cookie_routing _ (cookieValidatePacket_sameCookieKernel msg src b)).wp P
+  have hu := fun peer => RetainsRoutingCall.wp (peerPut_retainsRouting peer) s
   have hsc := (sendHandshakeCookie_routing msg src).wp P
-  have hi := (consumeInitiation_routing msg).wp s
-  have hr := (consumeResponse_routing msg).wp s
+  have hi := RetainsRoutingCall.wp (consumeInitiation_routing msg) s
+  have hr := RetainsRoutingCall.wp (consumeResponse_routing msg) s
   have he := fun pid => (setPeerEndpointFromSkb_routing pid src).wp P
   have hsend := fun pid => (sendHandshakeResponse_routing pid).wp P
   have hbegin := fun pid => (beginSession_routing pid).wp P
   have hd := fun pid => (timersSessionDerived_routing pid).wp P
   have hcomplete := fun pid => (timersHandshakeComplete_routing pid .walltimeLastHandshake).wp P
-  have hk := fun pid => (sendKeepalive_routing pid).wp s
+  have hk := fun pid => RetainsRoutingCall.wp (sendKeepalive_routing pid) s
   have hrecv := fun pid => (timersAnyAuthenticatedPacketReceived_routing pid).wp P
   have ht := fun pid => (timersTraversal_routing pid).wp P
   have hm := (modifyDev_routing (fun d => {d with rxPackets := d.rxPackets + 1, rxBytes := d.rxBytes + msg.length})
     (fun _ => rfl)).wp P
-  have hb := fun d b => (routing_kernel _ (sameKernel_branch d b)).wp P
-  have hbc := fun d b x y => (routing_kernel _ (branchCmp_sameKernel d b x y)).wp P
-  mvcgen [hb, hbc, handshakeSwitch, hg, hs, hu, hc, hsc, hi, hr,
+  mvcgen [-Std.Do.Spec.monadLift_StateT, ambient, hiddenAlloc, hiddenClock64, branch, branchCmp, invariant, AmbientM.branch, AmbientM.branchCmp, AmbientM.invariant, handshakeSwitch, hg, hs, hu, hsc, hi, hr,
     he, hsend, hbegin, hd, hcomplete, hk, hrecv, ht, hm, invariant]
   all_goals try dsimp +zetaDelta only [P] at *
-  all_goals try simp_all [routingView, routingState]
+  all_goals try simp_all [routingView]
+  all_goals try simp_all
   all_goals try subst s
   all_goals first | exact RetainsRouting.refl _ | assumption
 
@@ -132,12 +147,18 @@ private theorem handshakeAfterMac_routing (msg : List UInt8) (src : SkbSource) (
   rw [← handshakeAfterMac_eq]
   apply ProjectedAction.of_wp
   intro s
+  have ambient {α : Type} (a : AmbientM α) :
+      Hoare (MonadLift.monadLift a : WG.M α)
+        (fun w => RetainsRouting s (routingView w))
+        (fun _ w => RetainsRouting s (routingView w)) :=
+    hoare_liftAmbient a _
+  unfold Hoare at ambient
   let P := RetainsRouting s
-  have hs := fun b => (handshakeSwitch_routing msg src b).wp s
-  have hb := fun d b => (routing_kernel _ (sameKernel_branch d b)).wp P
-  mvcgen [hb, handshakeAfterMac, hs, WG.andM, WG.orM]
+  have hs := fun b => RetainsRoutingCall.wp (handshakeSwitch_routing msg src b) s
+  mvcgen [-Std.Do.Spec.monadLift_StateT, ambient, hiddenAlloc, hiddenClock64, branch, branchCmp, invariant, AmbientM.branch, AmbientM.branchCmp, AmbientM.invariant, handshakeAfterMac, hs, WG.andM, WG.orM]
   all_goals try dsimp +zetaDelta only [P] at *
-  all_goals try simp_all [routingView, routingState]
+  all_goals try simp_all [routingView]
+  all_goals try simp_all
   all_goals try subst s
   all_goals first | exact RetainsRouting.refl _ | assumption
 
@@ -146,35 +167,52 @@ theorem receiveHandshakePacket_routing (msg : List UInt8) (src : SkbSource) :
   rw [Cookies.receive_factor]
   apply ProjectedAction.of_wp
   intro s
+  have ambient {α : Type} (a : AmbientM α) :
+      Hoare (MonadLift.monadLift a : WG.M α)
+        (fun w => RetainsRouting s (routingView w))
+        (fun _ w => RetainsRouting s (routingView w)) :=
+    hoare_liftAmbient a _
+  unfold Hoare at ambient
   let P := RetainsRouting s
-  have hc := (cookieMessageConsume_routing msg).wp s
-  have hl := (routing_kernel _ Cookies.loadPhase_sameKernel).wp P
-  have hv := fun loaded => (cookie_routing _ (cookieValidatePacket_sameCookieKernel msg src loaded)).wp P
-  have ha := fun loaded mac => (handshakeAfterMac_routing msg src loaded mac).wp s
-  have hb := fun d b => (routing_kernel _ (sameKernel_branch d b)).wp P
-  mvcgen [hb, hc, hl, hv, ha]
+  have hc := RetainsRoutingCall.wp (cookieMessageConsume_routing msg) s
+  have hl := (routing_kernel _ Cookies.loadPhase_sameStore).wp P
+  have hv := fun loaded => (cookie_routing_native _ (cookieValidatePacket_sameCookie msg src loaded)).wp P
+  have ha := fun loaded mac => RetainsRoutingCall.wp (handshakeAfterMac_routing msg src loaded mac) s
+  mvcgen [-Std.Do.Spec.monadLift_StateT, ambient, hiddenAlloc, hiddenClock64, branch, branchCmp, invariant, AmbientM.branch, AmbientM.branchCmp, AmbientM.invariant, hc, hl, hv, ha]
   all_goals try dsimp +zetaDelta only [P] at *
+  all_goals try simp_all
   all_goals try subst s
   all_goals first | exact RetainsRouting.refl _ | assumption
 
 theorem receiveStep_routing : RetainsRoutingCall receiveStep := by
   apply ProjectedAction.of_wp
   intro s
+  have ambient {α : Type} (a : AmbientM α) :
+      Hoare (MonadLift.monadLift a : WG.M α)
+        (fun w => RetainsRouting s (routingView w))
+        (fun _ w => RetainsRouting s (routingView w)) :=
+    hoare_liftAmbient a _
+  unfold Hoare at ambient
   let P := RetainsRouting s
-  have hr := fun msg src => (receiveHandshakePacket_routing msg src).wp s
+  have hr := fun msg src => RetainsRoutingCall.wp (receiveHandshakePacket_routing msg src) s
   have hq := fun ring => (modifyDev_routing (fun d => {d with handshakeQueue := ring})
     (fun _ => rfl)).wp P
   have hc := (modifyDev_routing (fun d => {d with handshakeQueueLen := d.handshakeQueueLen - 1})
     (fun _ => rfl)).wp P
-  mvcgen [receiveStep, hr, hq, hc, getDev, getK, branch, invariant]
+  mvcgen [-Std.Do.Spec.monadLift_StateT, ambient, hiddenAlloc, hiddenClock64, branch, branchCmp, invariant, AmbientM.branch, AmbientM.branchCmp, AmbientM.invariant, receiveStep, hr, hq, hc, getDev, branch, invariant]
   all_goals try dsimp +zetaDelta only [P] at *
   all_goals try simp_all [routingView]
+  all_goals try simp_all
   all_goals try subst s
   all_goals first | exact RetainsRouting.refl _ | assumption
 
 theorem actualReceiveIter_routing :
-    RetainsRoutingCall (workerIter .receiveWorker none receiveStep (Env.condResched .receiveWorker)) :=
-  workerIter_routing _ _ _ _ receiveStep_routing
-    (.of_same (routing_kernel _ (Framing.condResched_sameKernel .receiveWorker)))
+    ProductRetainsRoutingCall
+      (workerIter .receiveWorker none (liftWG receiveStep) (Env.condResched .receiveWorker)) :=
+  workerIter_routing _ _ _ _ receiveStep_routing.liftWG
+    (ProjectedRetainsRoutingCall.of_same
+      ((Framing.condResched_sameKernel .receiveWorker).of_factor
+        (fun store : ProductStore43 => store.2.2.2.dev.map routingState)
+        (fun w : World => routingView w.wg) (fun _ => rfl)))
 
 end Leanux.Proofs.WG.AllowedIps

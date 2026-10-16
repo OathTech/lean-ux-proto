@@ -107,9 +107,13 @@ it is not part of that baseline.
 | Receive-ring callbacks, workers and provenance | 35 | 17 | 0 | 18 | 0 | 35 |
 | Native queued-work flushing and peer shutdown | 5 | 5 | 0 | 0 | 0 | 5 |
 | Device routing and retained product mask transports | 6 | 4 | 0 | 2 | 2 | 8 |
+| Native admission and canonical packet allocation adapter | 9 | 8 | 1 | 0 | 0 | 8 |
+| Native routing lifecycle/maintenance and retained product transport | 18 | 16 | 1 | 1 | 1 | 18 |
+| Native Noise/handshake receive and retained product transport/worker | 14 | 12 | 0 | 2 | 1 | 15 |
+| Packet construction and native ECN address preservation | 19 | 6 | 0 | 13 | 0 | 19 |
 
 The whole tree currently contains 451 Lean files and 6,418 theorems. The completed
-changes total 2,046 retyped theorems, 1,655 deletions, 1,014 retained contract shapes and 358 added.
+changes total 2,088 retyped theorems, 1,657 deletions, 1,030 retained contract shapes and 360 added.
 Retyping changes or generalizes the actual state/monad carrier or observation.
 This includes shorthand contracts whose source functions or named views move
 to a native monad. Mere namespace qualification and equivalent relocation of a
@@ -2921,4 +2925,41 @@ cap scripts/in-bundle lake build Leanux.Proofs.WG.Lifetimes.BatchAudit Leanux.Pr
 cap scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Lifetimes.BatchAudit
 cap scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.AllowedIps.RoutingFlushFrames
 cap scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Queues.RxRingTx
+```
+
+
+## Admission, incoming handshakes and lifecycle routing
+
+This carry preserves actual owner acquisition and writeback, resident-list
+receipts, release paths, cookie gating, receive-queue updates and worker
+callbacks. Arbitrary product cookie and rate-limiter transports keep their
+original 43-field premises; separate native companions serve concrete WG calls.
+The removed packet-allocation frame follows from the canonical Skb adapter;
+seccomp prefill now accepts only SeccompWorld and TaskWorld, so its WireGuard
+frame is unstatable. Packet address claims retain every byte/length premise and
+their product constructor or native ECN domains.
+
+Six modules retain 60 theorems: 42 retyped, 16 retained, two redundant frames
+deleted and two native companions added. All 65 named declaration checks use
+standard axioms only, five scoped fresh kernel replays pass, and independent
+full source reviews pass. Final builds pass for admission 270,
+lifecycle 254, maintenance 286, handshake 281 and packet-address 266 jobs.
+The 40 MVCGen deprecation warnings in these modules remain unfinished migration
+work; no warning suppression or exception is adopted. Shared-framework warning
+migration and complete-tree validation are still pending.
+
+Development build failures were ordinary proof elaboration failures: admission
+two before two passes; maintenance one before two passes; Noise one missing
+routing import before its successful downstream build; handshake one before a
+pass; packet addresses five before a pass. The getter specification now matches
+the actual product lift, avoiding irrelevant expansion without a proof-limit
+increase. No infrastructure retry, interruption or memory-limit change occurred.
+The unchanged executable closure reuses the preceding model/unit validation.
+
+```sh
+cap() { if command -v capped >/dev/null 2>&1; then capped "$@"; else "$@"; fi; }
+cap scripts/in-bundle lake build Leanux.Proofs.WG.AllowedIps.RoutingMaintenanceFrames Leanux.Proofs.WG.AllowedIps.RoutingHandshakeReceiveFrames Leanux.Proofs.WG.Packets.AddressShape
+cap scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.AllowedIps.RoutingMaintenanceFrames
+cap scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.AllowedIps.RoutingHandshakeReceiveFrames
+cap scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Packets.AddressShape
 ```

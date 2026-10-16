@@ -20,7 +20,7 @@ def DestinationShape (family addr : Nat) (bytes : List UInt8) : Prop :=
 theorem destination_slice (pre post : List UInt8) (addr off width : Nat)
     (hp : pre.length = off) :
     (((pre ++ Env.beBytes addr width) ++ post).drop off).take width = Env.beBytes addr width := by
-  simp [List.append_assoc, List.drop_append, hp, List.take_append, beBytes_length]
+  simp [List.append_assoc, hp, beBytes_length]
 
 theorem gsoSegment_shape (addr index : Nat) (slice : List UInt8) (mtu : Nat) :
     DestinationShape 4 addr (Env.gsoSegment addr index slice mtu).bytes := by
@@ -38,8 +38,8 @@ theorem gsoSegment_shape (addr index : Nat) (slice : List UInt8) (mtu : Nat) :
 theorem xmitPacket_shape (family addr : Nat) (payload : List UInt8) (mtu tos : Nat) :
     ⦃fun _ => ⌜True⌝⦄ Env.xmitPacket family addr payload mtu tos
     ⦃⇓? packet _ => ⌜DestinationShape family addr packet.bytes⌝⦄ := by
-  mvcgen [Env.xmitPacket, invariant, unsupported]
-  all_goals dsimp +zetaDelta only at *
+  mvcgen [AmbientM.branch, AmbientM.invariant, AmbientM.unsupported, Env.xmitPacket, invariant, unsupported]
+  all_goals try dsimp +zetaDelta only at *
   all_goals simp_all only [beq_iff_eq]
   all_goals unfold DestinationShape
   · apply Or.inl
@@ -64,8 +64,12 @@ theorem xmitPackets_shape (family addr : Nat) (payload : List UInt8) (opts : Xmi
     ⦃⇓? result _ => ⌜∀ packets mtu, result = .ok (packets, mtu) →
       ∀ packet ∈ packets, DestinationShape family addr packet.bytes⌝⦄ := by
   have hs := fun mtu => xmitPacket_shape family addr payload mtu opts.tos
-  mvcgen [Env.xmitPackets, getDev, getK, invariant, unsupported, hs]
-  all_goals dsimp +zetaDelta only at *
+  have hd : Hoare (MonadLift.monadLift getDev : Leanux.M Device) (fun _ => True) (fun _ _ => True) :=
+    (hoare_iff_run _ _ _).mpr (fun _ _ _ _ _ => trivial)
+  unfold Hoare at hd
+  mvcgen [-Std.Do.Spec.monadLift_StateT, AmbientM.branch, AmbientM.invariant, AmbientM.unsupported,
+    Env.xmitPackets, hd, getEnv, invariant, unsupported, hs]
+  all_goals try dsimp +zetaDelta only at *
   all_goals simp_all [List.mem_map, gsoSegment_shape]
 
 theorem rst4_shape (bytes : List UInt8) :
@@ -109,7 +113,7 @@ private theorem rewrite4_address (bytes : List UInt8) (tos c1 c2 : UInt8)
     omega
   · cases bytes with
     | nil => simp at hl
-    | cons b bs => simp [List.take, List.append_assoc]
+    | cons b bs => simp [List.take]
   · change beAt _ 12 4 = beAt bytes 12 4
     rw [beAt_prefix _ _ 12 4 (by omega), hp]
     simp [beAt]
@@ -125,7 +129,7 @@ private theorem rewrite6_address (bytes : List UInt8) (tos : UInt8)
     omega
   · cases bytes with
     | nil => simp at hl
-    | cons b bs => simp [List.take, List.append_assoc]
+    | cons b bs => simp [List.take]
   · change beAt _ 8 16 = beAt bytes 8 16
     rw [beAt_prefix _ _ 8 16 (by omega), hp]
     simp [beAt, List.drop_drop]
@@ -136,25 +140,25 @@ private theorem addressPreserved_refl (v4 : Bool) (bytes : List UInt8) :
 private theorem ipEcnSetCe_address (bytes : List UInt8) (hl : 20 ≤ bytes.length) :
     ⦃fun _ => ⌜True⌝⦄ ipEcnSetCe bytes
     ⦃⇓? out _ => ⌜AddressPreserved true bytes out⌝⦄ := by
-  mvcgen [ipEcnSetCe, branch]
+  mvcgen [AmbientM.branch, AmbientM.invariant, AmbientM.unsupported, ipEcnSetCe, branch]
   all_goals first | exact addressPreserved_refl _ _ | exact rewrite4_address bytes _ _ _ hl
 
 private theorem ipEcnSetEct1_address (bytes : List UInt8) (hl : 20 ≤ bytes.length) :
     ⦃fun _ => ⌜True⌝⦄ ipEcnSetEct1 bytes
     ⦃⇓? out _ => ⌜AddressPreserved true bytes out⌝⦄ := by
-  mvcgen [ipEcnSetEct1, branch]
+  mvcgen [AmbientM.branch, AmbientM.invariant, AmbientM.unsupported, ipEcnSetEct1, branch]
   all_goals first | exact addressPreserved_refl _ _ | exact rewrite4_address bytes _ _ _ hl
 
 private theorem ip6EcnSetCe_address (bytes : List UInt8) (hl : 40 ≤ bytes.length) :
     ⦃fun _ => ⌜True⌝⦄ ip6EcnSetCe bytes
     ⦃⇓? out _ => ⌜AddressPreserved false bytes out⌝⦄ := by
-  mvcgen [ip6EcnSetCe, branch]
+  mvcgen [AmbientM.branch, AmbientM.invariant, AmbientM.unsupported, ip6EcnSetCe, branch]
   all_goals first | exact addressPreserved_refl _ _ | exact rewrite6_address bytes _ hl
 
 private theorem ip6EcnSetEct1_address (bytes : List UInt8) (hl : 40 ≤ bytes.length) :
     ⦃fun _ => ⌜True⌝⦄ ip6EcnSetEct1 bytes
     ⦃⇓? out _ => ⌜AddressPreserved false bytes out⌝⦄ := by
-  mvcgen [ip6EcnSetEct1, branch]
+  mvcgen [AmbientM.branch, AmbientM.invariant, AmbientM.unsupported, ip6EcnSetEct1, branch]
   all_goals first | exact addressPreserved_refl _ _ | exact rewrite6_address bytes _ hl
 
 theorem inetEcnSet_address (ce v4 : Bool) (bytes : List UInt8)
@@ -165,12 +169,12 @@ theorem inetEcnSet_address (ce v4 : Bool) (bytes : List UInt8)
   | false =>
     have ha := ip6EcnSetCe_address bytes hl
     have hb := ip6EcnSetEct1_address bytes hl
-    cases ce <;> mvcgen [inetEcnSet, branch, invariant, ha, hb]
+    cases ce <;> mvcgen [AmbientM.branch, AmbientM.invariant, AmbientM.unsupported, inetEcnSet, branch, invariant, ha, hb]
     all_goals simp_all
   | true =>
     have ha := ipEcnSetCe_address bytes hl
     have hb := ipEcnSetEct1_address bytes hl
-    cases ce <;> mvcgen [inetEcnSet, branch, invariant, ha, hb]
+    cases ce <;> mvcgen [AmbientM.branch, AmbientM.invariant, AmbientM.unsupported, inetEcnSet, branch, invariant, ha, hb]
     all_goals simp_all
 
 theorem inetEcnDecapsulate_address (v4 : Bool) (outer : Nat) (bytes : List UInt8)
@@ -178,13 +182,13 @@ theorem inetEcnDecapsulate_address (v4 : Bool) (outer : Nat) (bytes : List UInt8
     ⦃fun _ => ⌜True⌝⦄ inetEcnDecapsulate (if v4 then 4 else 6) outer bytes
     ⦃⇓? out _ => ⌜AddressPreserved v4 bytes out⌝⦄ := by
   have hs := fun ce => inetEcnSet_address ce v4 bytes hl
-  mvcgen [inetEcnDecapsulate, hs, branch]
+  mvcgen [AmbientM.branch, AmbientM.invariant, AmbientM.unsupported, inetEcnDecapsulate, hs, branch]
   all_goals exact addressPreserved_refl _ _
 
 theorem sourceAddress_take (v4 : Bool) (bytes : List UInt8) (len : Nat)
     (hl : (if v4 then 20 else 40) ≤ len) :
     sourceAddress v4 (bytes.take len) = sourceAddress v4 bytes := by
-  cases v4 <;> simp only [sourceAddress, Bool.false_eq_true, Bool.true_eq, ↓reduceIte] at *
+  cases v4 <;> simp only [sourceAddress, Bool.false_eq_true, ↓reduceIte] at *
   · exact beAt_take bytes 8 16 len (by omega)
   · exact beAt_take bytes 12 4 len (by omega)
 
@@ -199,7 +203,7 @@ theorem protocol_after_trim (v4 : Bool) (before after : List UInt8) (len : Nat)
     | succ n => cases after <;> rfl
   rcases ha with ⟨hlen, hhead, _⟩
   cases v4 <;> unfold ipTunnelParseProtocol at *
-  all_goals simp only [List.length_take, hh, hhead, Bool.false_eq_true, Bool.true_eq, if_false, if_true] at *
+  all_goals simp only [List.length_take, hh, hhead, Bool.false_eq_true, ite_false, ite_true] at *
   all_goals try (split at hp <;> simp_all)
   all_goals try (split at hp <;> simp_all)
   all_goals omega
