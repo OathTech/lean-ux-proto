@@ -188,6 +188,8 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--check', type=Path, help='reuse a completed check; default makes a fresh recorded run')
     p.add_argument('--trace', choices=[TRACE, 'd1_second_response'], default=TRACE)
+    p.add_argument('--out', type=Path, default=ROOT / '.tmp/binary-tv',
+                   help='Private directory for decoded input and result')
     args = p.parse_args()
     bootstrap()
     checked_command([str(TOOLCHAIN / 'lake'), 'build', 'binary-probe'], ROOT / 'binary')
@@ -201,7 +203,7 @@ def main():
         env = dict(os.environ, LEANUX_KERNEL_DIR=str(ORACLE.parent))
         shell = f'export PATH="{TOOLCHAIN}:$PATH"; exec python3 -m evaluator.check --suite wireguard --binary-coverage --trace {args.trace} --out "$1"'
         checked_command([str(ROOT / 'scripts/in-bundle'), '/bin/sh', '-c', shell, 'binary-tv', str(check)], ROOT, env)
-    out = ROOT / '.tmp/binary-tv'
+    out = args.out.resolve()
     out.mkdir(parents=True, exist_ok=True)
     path, f, chunk = prepare(check, out, args.trace)
     compare(path, f, chunk)

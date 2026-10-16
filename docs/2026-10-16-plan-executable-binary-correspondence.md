@@ -1,14 +1,17 @@
 # Plan: executable reconstruction and paired binary/mirror execution
 
-Status: planning note, 2026-10-16. No implementation of the paired runner is
-claimed. Worktree `.worktrees/binary-proof-refactor`, branch
-`task/binary-proof-refactor`; implementation baseline `cb845fe`.
+Status: implementation started, 2026-10-16. Worktree
+`.worktrees/binary-pair-runner`, branch `task/binary-pair-runner`, created from
+planning commit `caa6668`. The earlier experiments remain on their original
+branch; the implementation baseline is `cb845fe`.
 
 [USER 2026-10-16] Develop binary/mirror correspondence through executable
 reconstruction and assertions, exercising them on workloads before attempting
 universal proof. The mirror fixes the target abstraction; loop invariants
-belong in the executable paired program too. This note records the proposed
-build sequence; the current task is documentation.
+belong in the executable paired program too. This note records the build sequence.
+
+[USER 2026-10-16] Begin this experiment in a separate worktree, preserving the
+existing M1/M2 and sequential sibling as comparison baselines.
 
 [AGENT 2026-10-16] Establish the mechanism on index lookup, then test its value
 on the unfinished allowed-IPs loop. Build small examples before generalizing
@@ -313,3 +316,117 @@ need axiom reports and kernel replay; the external gate remains
 [binary/README.md](../binary/README.md). This plan adds no new gate or
 acceptance claim. No merge to main, push, shared-cache edit or other-worktree
 mutation is authorized by it.
+
+## First runnable slice
+
+Implemented on `task/binary-pair-runner`, 2026-10-16. Stages 0–2 have an
+index pilot, and stage 3 has the two specified recorded-prefix workloads
+plus a focused mutation set. Stages 4–6 remain open; this is not a report
+that the overall hypothesis has been established.
+
+[AGENT 2026-10-16] Use the existing `LookupMirror.body`/`finish` presentation
+and its `indexLookup_eq` theorem to pause the source. Stop the binary at the
+bucket header, the helper-entry or miss-tail exit, and the original return.
+This avoids a second source interpreter and preserves independent branch
+selection. Source steps and binary instruction counts do not align.
+
+The executable component is `PairMemory.reconstruct`. Its target is fixed
+by `PairMemory.target`: all table membership and order within each of 8192
+buckets, every interpreted embedded owner word, and every peer reference
+count. Cross-bucket list order is not physically represented. The decoder
+never receives the mirror state; identities and addresses are established
+once before running. It checks backlinks, cycles, bucket hashes, owner kinds,
+mapped reads, containing-object bounds and separation. Different entries
+may legitimately point to the same peer. Unrelated World state, supplied
+environment and diagnostic logs are outside this component. A complete
+World reconstruction and its frame composition are not claimed.
+
+`PairIndex.lookup` retains both heaps and the pointer interpretation across
+iterations and calls. It resets call ABI registers as an explicit caller
+action; it never materializes a successor heap from the source. Header
+assertions check reconstructed data, remaining chain, cursor, query, kind
+mask, output pointer, stack depth and BH-disabled count. Loop measure checks
+observe a decreasing remaining list. Return assertions check result/output,
+saved registers, stack, restored preempt count, pending-softirq word, KCOV
+count/content and the binary's actual read/write requests against permitted
+ranges. Permission requests are recorded by the factored `ProbeSupport`
+executor; callbacks execute their decoded bodies. The access checks are
+runtime assertions, not universal memory-safety or lifetime proofs.
+
+The runner's declared fixture is sequential, starts with preempt count zero,
+has no pending softirq and uses a bounded KCOV_TRACE_PC buffer. It does not
+execute environment interference at BH-enable. World and records come from
+the real prefix replayer; the additional states are explicitly synthetic.
+The mirror itself, the oracle and Kraken semantics were not changed. All
+existing M1/partial-M2 statements and `TrustBase.lean` remain unchanged.
+
+The first suite covers an empty bucket, a nonempty miss, live/NULL/dead hits,
+two successive live or dead lookups, collisions of lengths 1, 3 and 8 before
+the sought entry, wrong-kind stops, and keypair-owner dead hits. Collision
+entries deliberately share a peer. Each positive case runs two undefined
+seeds. Fifteen controls reject changed counts/owner words, unresolved
+pointers, cycles, bad backlinks/kinds, missing memory/interpretation,
+overlapping allocations, a missing instruction label, mapped accesses
+outside the footprint, and wrong loop cursor/query/remaining work. The
+mapped cross-entry read control first confirms that its bytes are mapped.
+
+The dead-peer two-call regression passes for both owner kinds. For the
+handshake case, the first call executes 441 instructions and the second 271:
+the second actually reads the retained NULL owner word. No dead-peer state
+was excluded to obtain this result.
+
+### Proof interface and limits
+
+`PairNextProof.word_loadInt` connects the executable word reader to Kraken's
+load. `PairNextProof.next_segment` composes M1's existing three-instruction
+back-edge proof with reconstruction equality and the updated cursor/exit.
+It uses the same `reconstruct` definition as the runner. Its premises are
+explicit arguments, not added axioms or an oracle fact: the initial
+`Corresponds` equality and the executable next-pointer read.
+
+Both declarations use only `propext`, `Classical.choice` and `Quot.sound`.
+Fresh local kernel replay of `PairNextProof` passes. The existing binary gate
+passes with a clean private Kraken at
+`7ebba06a30eaf08c10b26b28ca14bfee1c791576` and an unchanged trust-surface diff.
+No new external-export acceptance is claimed. Baseline imports still emit
+their existing module/deprecation/unused-simp warnings; the new modules emit
+no warnings and add no suppression. Those inherited warnings are not fixed
+by this experiment.
+
+This proof uses `Effects.All`, which erases access requests. It does not
+prove the runtime footprint checks, the full loop, the full call, callback
+contracts, kernel-entry reachability or concurrent contextual refinement.
+It reuses an already-proved physical region, so its brevity is not evidence
+of reduced new-function proof cost. No invariant changed while proving this
+small lemma; the word-reader implementation was rewritten using Kraken's
+existing byte conversion to simplify the connection. The decisive test of
+new invariant invention remains the unfinished M2 join.
+
+### Measurements and next boundary
+
+The worktree was created at 23:46 UTC. Authoring, local elaboration debugging,
+builds and scoped validation overlapped; no reliable per-activity timing was
+collected for this slice. Fresh workload generation took about two minutes
+per workload, largely outside paired execution. Reused builds and M1 lemmas
+make this unsuitable for a campaign throughput estimate.
+
+At the measured runtime checkpoint, each workload supplied 15 cases, 48
+completed calls over two seeds and 94 checked loop headers. The live-query
+workload executed 22,404 instructions in its positive calls; the wrong-index
+workload executed 21,774. Paired suite execution took about 4.3 seconds per
+workload; capture/build/three-way checks are excluded. Failure controls are
+reported separately, not counted as successful calls. Both fresh kernel
+checks and both independent coverage/result/decision comparisons passed.
+
+The next boundary is actual entry capture, then application to the allowed-IPs
+loop. Current `harness/guest.c` and `harness/linux.py` provide filtered KCOV
+PC/comparison streams, not register/heap snapshots. A capture must select one
+invocation in the recorded operation, stop the single CPU coherently at
+function entry, read all ABI state and the real stack/return, traverse table
+roots into embedded owners and referenced peers, and include per-CPU/task
+and coverage-buffer storage read by the service bodies. It must record the
+same invocation's return and identify the image and source records. Actual
+addresses must enter a persistent interpretation; missing bytes must fail.
+A separate loader and generalized call/service addresses are needed before
+the synthetic fixture can be replaced. No capture implementation or new
+oracle instrumentation has been added at this checkpoint.

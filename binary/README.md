@@ -60,6 +60,50 @@ redirected to an ephemeral file under `../.tmp`, followed by the existing
 `lake check --from-export` form outside Nono. No external acceptance of this
 sibling is claimed.
 
+## Executable reconstruction experiment
+
+The sibling worktree `.worktrees/binary-pair-runner`, branch
+`task/binary-pair-runner`, implements the first part of the
+[paired-execution plan](../docs/2026-10-16-plan-executable-binary-correspondence.md#first-runnable-slice).
+It preserves the existing M1 theorem and trust declarations. From that
+worktree's root, regenerate and run either recorded workload:
+
+```sh
+LEANUX_QEMU_SLOTS=16 capped -- /usr/bin/python3 -B binary/pair_run.py --trace d1_second_response
+LEANUX_QEMU_SLOTS=16 capped -- /usr/bin/python3 -B binary/pair_run.py --trace d1_wrong_receiver_index_same_bucket
+```
+
+Use a Python interpreter with pyelftools installed (`python3` on ordinary
+machines). `--check PATH` reuses a successful differential check containing
+raw binary coverage. The existing three-way comparison runs first. The
+paired executable then checks reconstruction at entry, successive loop
+headers, the loop exit and return, with actual decoded service bodies.
+Its JSON inputs, outputs and logs remain ephemeral under `.tmp/binary-pair/`.
+
+These are **constructed entry heaps**, generated from a recorded mirror
+prefix, plus labelled synthetic cases. They are not captured kernel memory.
+The sequential fixture has no pending softirq and no concurrent interference;
+the two undefined-value seeds are tests, not quantification over choices.
+Reconstruction covers table membership/order within buckets, embedded owner
+words and peer reference counts. It does not reconstruct a whole World.
+Environment records and diagnostic histories remain separate.
+
+`PairNextProof.next_segment` proves one symbolic back edge using the same
+executable reconstruction, reusing M1's physical region lemma. Its explicit
+premises are initial reconstruction equality and a successful executable
+next-pointer read. It uses `Effects.All`, so it exports no permission audit
+and is not a new function-level simulation theorem. Build and replay from
+`binary/` with:
+
+```sh
+capped -- lake build binary-pair-runner PairNextProof
+capped -- lake env leanchecker --fresh PairNextProof
+```
+
+The module prints both new theorems' axioms. Local replay does not constitute
+the external gate below. An export for that gate can name `PairNextProof`;
+the original M1 export does not cover the new executable definitions.
+
 ## Build and trust checks
 
 All heavy commands run through `capped`; a KILLED banner or timeout fails.
