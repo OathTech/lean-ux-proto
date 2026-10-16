@@ -856,3 +856,14 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   1,399-theorem tree at the landing, which the campaign order the user chose
   makes impossible. Revision 1's promise of a green gate at the landing is
   withdrawn.
+- **2026-10-16 [USER]** The state split's composer rule: the overriding aim is
+  to reflect the actual Linux decomposition of state; composition points are
+  added where they exist in Linux ("(1) yes, in general the overriding aim
+  here is to reflect the actual Linux decomposition of state. If we need to
+  add composition points because they exist in linux, we will do so"). So
+  the file layer, seccomp and the signal paths call the shared task services
+  at the C's own call sites, below the runner; the proposal of revision 2 is
+  adopted with that principle as its rule.
+- **2026-10-16 [USER]** The split's mirror lands with its proof lag reported,
+  and the landed campaign-1 tree is the retrofit's baseline with its own gate
+  and signoff ("(2) agree").
