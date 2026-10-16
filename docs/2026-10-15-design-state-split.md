@@ -17,12 +17,13 @@ changes are proposals awaiting the user. The measurements are rerun on
 lane C's first landing have added the timer wheel, the routing module and
 their state.
 
-**Decisions [USER 2026-10-15]**, recorded in `docs/decisions.md` with
-their words and unchanged by this revision: subsystems operate over
-localized world types; functions are narrowed at the type level to the
-data they access where that is cheap; no compatibility wrappers and no
-equivalence lemmas ("it's just throwing out fields. Just delete fields and
-see if anything breaks"); campaign 1 (Codex#2) finishes R3 and R4 and
+**Decisions [USER 2026-10-15]**, recorded in `docs/decisions.md`,
+unchanged by this revision: subsystems operate over localized world
+types; functions are narrowed at the type level to the data they access
+where that is cheap; no compatibility wrappers and no equivalence lemmas
+(narrowing deletes fields from a function's view, which cannot change
+behaviour, so the types change and what fails to typecheck is repaired);
+campaign 1 (Codex#2) finishes R3 and R4 and
 lands, its retrofit one job afterwards; campaign 2 (Codex#1) stops at its
 checkpoint and resumes on the split mirror; the binary adequacy grind
 (Codex#3) continues with `R` over the WireGuard world literally; the split
@@ -37,8 +38,8 @@ invariants, to be kept only where an effect genuinely cannot be localized.
 The ideal is to strip the types at every point down to the accessible
 fields and get the footprints from referential transparency. The
 whole-of-Linux state is a hard question not decided here. The immediate
-fix removes the "one massive global state where everything gets modified
-without any type-level guarantee that things aren't being modified".
+fix removes the one global state that everything modifies without any
+type-level guarantee of what is left alone.
 
 ## 1. The measured access matrix
 
@@ -268,7 +269,7 @@ Not decided here, deliberately: the whole-of-Linux state; the frame
 generator for the within-subsystem remainder; lenses or effect classes for
 cross-component calls beyond the shared task services of section 3.
 
-## 3. The monad structure, and the one exception to "the runner composes"
+## 3. The monad structure, and the one exception to the runner composing
 
 ```lean
 abbrev AmbientM := StateT Ambient (Except Stop)
@@ -320,8 +321,8 @@ seccomp fields are unchanged: that remainder stays a stated fact where a
 result needs it, until a callee's type excludes it.
 
 **The exception, put to the user as a proposal** (section 11): the recorded
-formulation "the runner holds the product and is the only composer" gains
-one qualification. Subsystem operations may call the shared task and
+formulation, that the runner holds the product and is the only composer,
+gains one qualification. Subsystem operations may call the shared task and
 signal services at the C's existing call sites: a pipe's SIGPIPE stays
 inside `pipeWrite`, a seccomp trap's signal inside `seccompFilter`, the
 `fput` task-work test inside `fput`. The runner alone assembles the full
@@ -392,7 +393,7 @@ introduced beside `Device.peers`; a narrowed leaf takes no callback that
 could mutate the rest of WireGuard. If a component needs several maps with
 equal domains, duplicated lifetime markers or a footprint invariant, the
 operation stays `WG.M` and the narrowing is reported as deferred. This is
-the user's "where this can be done cheaply" applied concretely, and it is
+the user's cheap-narrowing qualification applied concretely, and it is
 not permission to restructure the mirror for a proof.
 
 What keeps `WG.M` by measurement: the entry points and the paths through
@@ -665,7 +666,7 @@ Changed, as the coordinator's details corrected:
 
 **Put to the user** (recorded as [AGENT proposal, from Codex#4's review] in
 `docs/decisions.md`, pending):
-- The exception to "the runner is the only composer": subsystem operations
+- The exception to the runner being the only composer: subsystem operations
   may call the shared task and signal services at the C's existing call
   sites; the runner alone assembles the product and orchestrates across
   independent stores.
@@ -754,8 +755,9 @@ The two forks edit `Kernel/Defs.lean`'s `Kernel` and `World` on disjoint
 fields; FS lands first on this branch and WG rebases onto it, so the
 `Kernel` structure is deleted by the WG fork.
 
-**Phase 3, as the user decided on 2026-10-16** ("NO PROOFS NO GATES
-REMOVE IT AT THE END OF THE SPLIT"). The proof tree on `main`
+**Phase 3, as the user decided on 2026-10-16:** no proofs and no proof
+gate on `main` until campaign 1 lands, removed at the end of the split.
+The proof tree on `main`
 (`Leanux/Proofs/`, the replay-window result and the `Logged`, `Framing`
 and `CounterWindow` layers it rests on, 1,399 theorems) was a prototype
 for campaign 1 that landed on `main` by sequencing. It is not retyped and

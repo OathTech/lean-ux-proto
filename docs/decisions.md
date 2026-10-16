@@ -683,7 +683,7 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   memory cap, the KILLED-is-failure rule and the one-recorded-rerun rule are
   unchanged [AGENT, coordinator: the measurement and the number].
 - **2026-10-15 [USER]** The mirror's state is split into per-subsystem
-  worlds: "we want the subsystems to operate over localized world types"
+  worlds, each subsystem operating over its own localized world type
   (WireGuard, the file layer, seccomp, the task lifecycle, with the record
   stream, the decision log and the dispatch bookkeeping as the ambient part
   every module has; the runner holds the product and is the only composer).
@@ -692,17 +692,17 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   program without side effects; and non-localizable, needing footprint
   invariants, kept only where an effect cannot be localized. The design:
   docs/2026-10-15-design-state-split.md.
-- **2026-10-15 [USER]** "we want functions to be narrowed at the type level
-  to just the data they access, where this can be done cheaply": within
+- **2026-10-15 [USER]** Functions are narrowed at the type level to the data
+  they access, wherever that is cheap: within
   WireGuard the leaves (the trie, the rings and queues, the index table and
   slots, the cookie and rate-limiter functions, the timer operations) take
   their field group's type; the entry points keep the WireGuard world. No
   footprint invariants in this stream.
 - **2026-10-15 [USER]** The retrofit is compile-driven, with no compatibility
-  wrappers and no equivalence lemmas: "We don't need extensional
-  equivalence, it's just throwing out fields. Just delete fields and see if
-  anything breaks. There's no way for field deletion to modify behavior."
-  In the proof tree, a statement that mentions the global World is retyped
+  wrappers and no equivalence lemmas: narrowing a type deletes fields from
+  a function's view, which cannot change behaviour in a program without side
+  effects, so the types are changed and whatever fails to typecheck is
+  repaired. In the proof tree, a statement that mentions the global World is retyped
   over the local world; a frame lemma the types or the one lift lemma now
   give is deleted, even if its old proof would still compile; nothing is
   re-proved.
@@ -840,8 +840,8 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   seccomp stack on. The user's decisions (localized worlds, narrowing where
   cheap, delete fields and see what breaks, the campaign order) stand.
 - **2026-10-16 [AGENT proposal, from Codex#4's review; pending the user]**
-  The one exception to "the runner holds the product and is the only
-  composer": subsystem operations may call the shared task and signal
+  The one exception to the rule that the runner holds the product and is
+  the only composer: subsystem operations may call the shared task and signal
   services at the C's existing call sites (a pipe's SIGPIPE inside
   `pipeWrite`, a trap's signal inside `seccompFilter`, the task-work test
   inside `fput`); the runner alone assembles the full product and
@@ -857,21 +857,19 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   makes impossible. Revision 1's promise of a green gate at the landing is
   withdrawn.
 - **2026-10-16 [USER]** The state split's composer rule: the overriding aim is
-  to reflect the actual Linux decomposition of state; composition points are
-  added where they exist in Linux ("(1) yes, in general the overriding aim
-  here is to reflect the actual Linux decomposition of state. If we need to
-  add composition points because they exist in linux, we will do so"). So
+  to reflect the actual Linux decomposition of state, and composition points
+  are added where they exist in Linux. So
   the file layer, seccomp and the signal paths call the shared task services
   at the C's own call sites, below the runner; the proposal of revision 2 is
   adopted with that principle as its rule.
 - **2026-10-16 [USER]** The split's mirror lands with its proof lag reported,
   and the landed campaign-1 tree is the retrofit's baseline with its own gate
-  and signoff ("(2) agree").
-- **2026-10-16 [USER]** "NO PROOFS NO GATES REMOVE IT AT THE END OF THE SPLIT":
-  the prototype proof tree on `main` (`Leanux/Proofs/`, the replay-window
+  and signoff.
+- **2026-10-16 [USER]** No proofs and no proof gate on `main` until campaign 1
+  lands, removed at the end of the split: the prototype proof tree on `main` (`Leanux/Proofs/`, the replay-window
   result and the layers it rests on, 1,399 theorems: a prototype for
-  campaign 1 that landed on `main` by sequencing, "It shouldn't have been
-  on main in the first place, it was a prototype for Campaign 1") and its
+  campaign 1 that landed on `main` by sequencing and should not have been
+  there) and its
   gate are removed from `main` at the state split's cutover until campaign
   1 lands: `Leanux/Proofs/`, `Leanux/Proofs.lean`, the `LeanuxProofs` lake
   target and `scripts/proof-gate` itself deleted (no erroring stub, no
