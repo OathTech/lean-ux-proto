@@ -154,8 +154,10 @@ it is not part of that baseline.
 
 | Routing environment controls and dump frames | 20 | 7 | 0 | 13 | 1 | 21 |
 
-The whole tree currently contains 451 Lean files and 6,503 theorems. The completed
-changes total 2,339 retyped theorems, 1,673 deletions, 1,464 retained contract shapes and 461 added.
+| Initialized runner erasure, routing syscalls and persistent worker history | 91 | 0 | 0 | 91 | 3 | 94 |
+
+The whole tree currently contains 451 Lean files and 6,506 theorems. The completed
+changes total 2,339 retyped theorems, 1,673 deletions, 1,555 retained contract shapes and 464 added.
 Retyping changes or generalizes the actual state/monad carrier or observation.
 This includes shorthand contracts whose source functions or named views move
 to a native monad. Mere namespace qualification and equivalent relocation of a
@@ -3656,3 +3658,49 @@ cap change or proof-limit change occurred. Reproduce with
 replay with 'cap scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.AllowedIps.RoutingDumpFrames'.
 The full gate remains pending, every register row remains lagging, and the
 mirror remains byte-identical to b700659.
+
+
+## Initialized runner erasure and persistent worker history
+
+RunnerAudit retains its unconditional original JSON/indexed-Stop erasure for all
+typed traces, both placeholder settings and arbitrary incoming history. One
+private tail theorem factors the literal current runner, including prefill,
+routing boot, lookahead, resets, guards and observations. RunnerCompletion keeps
+all five original contracts, including its two private projection lemmas;
+sourceRunner's JSON projection matches the actual current runner.
+
+SyscallCompletion retains all thirteen product contracts and arbitrary callback
+premises. Component actions use the canonical adapters, including the actual
+Task-to-FS-to-product current-task read. Window calls, task work, waits and FIB
+observations retain their original order and failed-prefix behavior.
+
+HistoryAdapters retains sixty-two product/pure contracts and adds one private
+native projection bridge. RxWorkerHistory retains ten product contracts and adds
+one private allocation bridge. The encryption observer now follows the already
+reported source correction: consume/install the saved item before NAPI, then
+continue with that item. Arbitrary product callbacks and exact store masks remain.
+
+The five modules build with zero own warnings. All131 named logical roots have
+only standard axioms; fresh scoped replay and independent complete source review
+pass. The theorem census is91 before and94 after:91 retained, three added, none
+deleted or retyped in this tranche.
+
+Development failures remain failures. SyscallCompletion needed three central
+module attempts (two failed, one passed) and thirteen output-free diagnostics
+(six failed, seven passed); four of the failed attempts were explicitly stopped
+stalled elaborations, with exit143/KILLED and preservation snapshots. These were
+not infrastructure retries or successful cap outcomes. HistoryAdapters needed
+eight failed local proof attempts before its output-free pass; Worker needed
+one no-progress tactic repair. RunnerCompletion's isolated projection and
+parameterized composition diagnostics included failed layout/normalization
+attempts before passing; only the later complete built module establishes its
+unconditional result. The aggregate build still failed on ActivationHistory,
+and the ongoing lifetime safety WP diagnostics are not validated by this
+checkpoint. No cap or proof limit was raised.
+
+Reproduce with
+'cap scripts/in-bundle lake build Leanux.Proofs.WG.Lifetimes.RunnerAudit Leanux.Proofs.WG.Configuration.RunnerCompletion Leanux.Proofs.WG.Queues.RxWorkerHistory';
+replay each root with
+'cap scripts/in-bundle lake env leanchecker --fresh MODULE'.
+Full gate and remaining initialized safety/history chains are pending. Every
+register row remains lagging; mirror sources are byte-identical to b700659.

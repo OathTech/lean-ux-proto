@@ -1,6 +1,8 @@
+import Lean
 import Leanux.Proofs.WG.Origins.SessionMaterial
 import Leanux.Proofs.WG.Origins.HandshakeSources
 import Leanux.Proofs.WG.Queues.RxPollComposition
+import Leanux.Proofs.Framing.WGDump
 
 /-! Inject the actual session and stored-decrypt receipts into the existing
 persistent RX journal. Focus executes each lower observer once and preserves
@@ -40,10 +42,22 @@ theorem encoded_audit (s : List Origins.Event) :
       (s.filterMap Origins.lifetime).map AuditEvent.lifetime := by
   induction s with
   | nil => rfl
-  | cons e s ih => cases e <;> simp only [List.map_cons,List.filterMap_cons,encode,RxHistory.auditEvent,Origins.lifetime,Option.map_some,Option.map_none,ih]
+  | cons e s ih => cases e <;> simp only [List.map_cons,List.filterMap_cons,encode,RxHistory.auditEvent,Origins.lifetime,ih]
 
-theorem focus_projects (g : PrefixM Origins.Event α) (a : MixedM α)
-    (ha : Appends g) (hp : ProjectsUnder AllocationInv Origins.lifetime g a) :
+private theorem native_projects {I : List F → WGWorld → Ambient → Prop}
+    {g : WGPrefix E α} {a : WGPrefix F α} {ρ : E → Option F}
+    (hp : StateProjectsUnder I ρ g a) :
+    ProjectsUnder (fun h (w : World) => I h w.wg w.ambient) ρ
+      (liftWGObserver g) (liftWGObserver a) := by
+  intro w h hi
+  have he := hp w.wg w.ambient h hi
+  change runWGPrefix a w.wg w.ambient (h.filterMap ρ) =
+    ((runWGPrefix g w.wg w.ambient h).1,
+      (runWGPrefix g w.wg w.ambient h).2.filterMap ρ) at he
+  rw [liftWGObserver_run, liftWGObserver_run, he]
+
+theorem focus_projects (g : PrefixM Origins.Event α) (a : PrefixM LifetimeEvent α)
+    (ha : Appends g) (hp : ProjectsUnder (fun h (w : World) => AllocationInv h w.wg) Origins.lifetime g a) :
     ProjectsUnder AuditInv RxHistory.auditEvent (focus g) (auditFocus a) := by
   intro w h hi
   have projected := hp w (h.filterMap decode) (by simpa only [input_lifetime,RxHistory.prior,RxHistory.auditHistory] using hi.1)
@@ -61,22 +75,22 @@ theorem focus_projects (g : PrefixM Origins.Event α) (a : MixedM α)
   rw [← input,projected]
   simp only [hs,List.filterMap_append,input_lifetime,List.drop_left,encoded_audit]
 
-def session (pid : PeerId) : Obs Bool := focus (Origins.localSession pid)
-def decrypt (id : SkbId) : Obs (RxPacket × Option RxPacket) := focus (Origins.localDecrypt id)
+def session (pid : PeerId) : Obs Bool := focus (liftWGObserver (Origins.localSession pid))
+def decrypt (id : SkbId) : Obs (RxPacket × Option RxPacket) := focus (liftWGObserver (Origins.localDecrypt id))
 
-theorem session_erases (pid : PeerId) : ErasesPrefix (session pid) (beginSession pid) :=
-  focusPrefix_erases _ _ (Origins.localSession_erases pid)
+theorem session_erases (pid : PeerId) : ErasesPrefix (session pid) (liftWG (beginSession pid)) :=
+  focusPrefix_erases _ _ (liftWGObserver_erases (Origins.localSession_erases pid))
 
-theorem decrypt_erases (id : SkbId) : ErasesPrefix (decrypt id) (RxOrigin.readDecrypt id) :=
-  focusPrefix_erases _ _ (Origins.localDecrypt_erases id)
+theorem decrypt_erases (id : SkbId) : ErasesPrefix (decrypt id) (liftWG (RxOrigin.readDecrypt id)) :=
+  focusPrefix_erases _ _ (liftWGObserver_erases (Origins.localDecrypt_erases id))
 
 theorem session_projects (pid : PeerId) :
-    ProjectsUnder AuditInv RxHistory.auditEvent (session pid) (auditFocus (beginSessionPrefix pid)) :=
-  focus_projects _ _ (Appends.focus _ _ _) (Origins.localSession_projects pid)
+    ProjectsUnder AuditInv RxHistory.auditEvent (session pid) (auditFocus (liftWGObserver (beginSessionPrefix pid))) :=
+  focus_projects _ _ (StateAppends.focus _ _ _).liftWGObserver (native_projects (Origins.localSession_projects pid))
 
 theorem decrypt_projects (id : SkbId) :
-    ProjectsUnder AuditInv RxHistory.auditEvent (decrypt id) (auditFocus (RxOrigin.readDecryptPrefix id)) :=
-  focus_projects _ _ (Appends.focus _ _ _) (Origins.localDecrypt_projects id)
+    ProjectsUnder AuditInv RxHistory.auditEvent (decrypt id) (auditFocus (liftWGObserver (RxOrigin.readDecryptPrefix id))) :=
+  focus_projects _ _ (StateAppends.focus _ _ _).liftWGObserver (native_projects (Origins.localDecrypt_projects id))
 
 def Valid (h : List HEvent) : Prop := Origins.Valid (h.filterMap decode)
 
@@ -98,19 +112,19 @@ theorem focus_valid (g : PrefixM Origins.Event α)
   cases (runPrefix g w (h.filterMap decode)).1 <;> first | trivial | exact out
 
 theorem session_valid (pid : PeerId) : PrefixPreserves (fun h _ => Valid h) Valid (session pid) :=
-  focus_valid _ (Origins.localSession_valid pid)
+  focus_valid _ (Origins.localSession_valid pid).liftWGObserver
 
 theorem decrypt_valid (id : SkbId) : PrefixPreserves (fun h _ => Valid h) Valid (decrypt id) :=
-  focus_valid _ (Origins.localDecrypt_valid id)
+  focus_valid _ (Origins.localDecrypt_valid id).liftWGObserver
 
 theorem focus_other (ρ : HEvent → Option F) (hd : ∀ e, ρ (encode e) = none)
     (g : PrefixM Origins.Event α) :
     ∀ w h, (runPrefix (focus g) w h).2.filterMap ρ = h.filterMap ρ :=
   focusPrefix_other encode decode ρ hd g
 
-theorem focus_preserves (g : PrefixM Origins.Event α) (a : MixedM α)
+theorem focus_preserves (g : PrefixM Origins.Event α) (a : PrefixM LifetimeEvent α)
     (hp : ProjectsUnder AuditInv RxHistory.auditEvent (focus g) (auditFocus a))
-    (ha : PrefixPreserves AllocationInv LifetimeEvent.Safe a) :
+    (ha : PrefixPreserves (fun h (w : World) => AllocationInv h w.wg) LifetimeEvent.Safe a) :
     PrefixPreserves RxHistory.BoundaryInv RxHistory.BoundarySafe (focus g) := by
   intro w h hi
   obtain ⟨suffix,hs⟩ := Appends.focus encode decode g w h
@@ -133,23 +147,23 @@ theorem session_preserves (pid : PeerId) :
     PrefixPreserves RxHistory.BoundaryInv RxHistory.BoundarySafe (session pid) :=
   focus_preserves _ _ (session_projects pid)
     (beginSessionPrefix_preserves_ambient allocationAmbient allocationHandshakeReceive.create
-      allocationHandshakeReceive.put allocationHandshakeReceive.replace pid)
+      allocationHandshakeReceive.put allocationHandshakeReceive.replace pid).liftWGObserver
 
 theorem decrypt_preserves (id : SkbId) :
     PrefixPreserves RxHistory.BoundaryInv RxHistory.BoundarySafe (decrypt id) :=
-  focus_preserves _ _ (decrypt_projects id) (RxOrigin.readDecrypt_allocation id)
+  focus_preserves _ _ (decrypt_projects id) (RxOrigin.readDecrypt_allocation id).liftWGObserver
 
-def life (a : MixedM α) : PrefixM Origins.Event α :=
+def life (a : PrefixM LifetimeEvent α) : PrefixM Origins.Event α :=
   focusPrefix Origins.Event.life Origins.lifetime a
 
 theorem life_erases (he : ErasesPrefix a original) : ErasesPrefix (life a) original :=
   focusPrefix_erases _ _ he
 
-theorem life_projects (ha : PrefixPreserves AllocationInv LifetimeEvent.Safe a) :
-    ProjectsUnder AllocationInv Origins.lifetime (life a) a :=
+theorem life_projects (ha : PrefixPreserves (fun h (w : World) => AllocationInv h w.wg) LifetimeEvent.Safe a) :
+    ProjectsUnder (fun h (w : World) => AllocationInv h w.wg) Origins.lifetime (life a) a :=
   ha.projects_focus _ _ (fun _ => rfl)
 
-theorem life_valid (a : MixedM α) :
+theorem life_valid (a : PrefixM LifetimeEvent α) :
     PrefixPreserves (fun h _ => Origins.Valid h) Origins.Valid (life a) := by
   intro w h hi
   obtain ⟨s,hs⟩ := Appends.focus Origins.Event.life Origins.lifetime a w h
@@ -164,24 +178,24 @@ theorem life_valid (a : MixedM α) :
   cases (runPrefix (life a) w h).1 <;> first | trivial | exact hv
 
 def ops : HandshakeSources.Ops (PrefixM Origins.Event) where
-  step := liftPrefix
-  session := Origins.localSession
-  modifyPeer := fun pid f => life (modifyPeerKeysPrefix pid f)
-  create := fun pid => life (createResponsePrefix pid)
-  mac := fun pid msg => life (addMacToPacketPrefix pid msg)
-  send := fun pid msg => life (sendBufferToPeerPrefix pid msg)
-  derived := fun pid => life (timersSessionDerivedPrefix pid)
-  traversal := fun pid => life (timersTraversalPrefix pid)
-  sent := fun pid => life (timersAnyAuthenticatedPacketSentPrefix pid)
-  cookie := fun msg src => life (sendHandshakeCookiePrefix msg src)
-  initiation := fun msg => life (consumeInitiationPrefix msg)
-  response := fun msg => life (consumeResponsePrefix msg)
-  endpoint := fun pid src => life (setPeerEndpointFromSkbPrefix pid src)
-  complete := fun pid => life (timersHandshakeCompletePrefix pid)
-  keepalive := fun pid => life (sendKeepalivePrefix pid)
-  received := fun pid => life (timersAnyAuthenticatedPacketReceivedPrefix pid)
-  put := fun pid => life (peerPutMixed pid)
-  cookieConsume := fun msg => life (cookieMessageConsumePrefix msg)
+  step := fun a => liftPrefix (liftWG a)
+  session := fun pid => liftWGObserver (Origins.localSession pid)
+  modifyPeer := fun pid f => life (liftWGObserver (modifyPeerKeysPrefix pid f))
+  create := fun pid => life (liftWGObserver (createResponsePrefix pid))
+  mac := fun pid msg => life (liftWGObserver (addMacToPacketPrefix pid msg))
+  send := fun pid msg => life (liftWGObserver (sendBufferToPeerPrefix pid msg))
+  derived := fun pid => life (liftWGObserver (timersSessionDerivedPrefix pid))
+  traversal := fun pid => life (liftWGObserver (timersTraversalPrefix pid))
+  sent := fun pid => life (liftWGObserver (timersAnyAuthenticatedPacketSentPrefix pid))
+  cookie := fun msg src => life (liftWGObserver (sendHandshakeCookiePrefix msg src))
+  initiation := fun msg => life (liftWGObserver (consumeInitiationPrefix msg))
+  response := fun msg => life (liftWGObserver (consumeResponsePrefix msg))
+  endpoint := fun pid src => life (liftWGObserver (setPeerEndpointFromSkbPrefix pid src))
+  complete := fun pid => life (liftWGObserver (timersHandshakeCompletePrefix pid))
+  keepalive := fun pid => life (liftWGObserver (sendKeepalivePrefix pid))
+  received := fun pid => life (liftWGObserver (timersAnyAuthenticatedPacketReceivedPrefix pid))
+  put := fun pid => life (liftWGObserver (peerPutMixed pid))
+  cookieConsume := fun msg => life (liftWGObserver (cookieMessageConsumePrefix msg))
 
 def localResponse (pid : PeerId) := HandshakeSources.responseWith ops pid
 def localAfterMac (msg : List UInt8) (src : SkbSource) (loaded : Bool) (mac : MacState) :=
@@ -195,31 +209,37 @@ theorem localReception_eq (msg src) : localReception msg src = HandshakeSources.
 
 
 def localPrepare : PrefixM Origins.Event (Option PeerId) :=
-  focusPrefix Origins.rxEncode Origins.rxDecode RxOrigin.prepare
+  focusPrefix Origins.rxEncode Origins.rxDecode (liftWGObserver RxOrigin.prepare)
 
 theorem localPrepare_appends : Appends localPrepare := Appends.focus _ _ _
-theorem localPrepare_erases : ErasesPrefix localPrepare RxWorkers.prepareSource :=
-  focusPrefix_erases _ _ RxOrigin.prepare_erases
+theorem localPrepare_erases : ErasesPrefix localPrepare (liftWG RxWorkers.prepareSource) :=
+  focusPrefix_erases _ _ (liftWGObserver_erases RxOrigin.prepare_erases)
 
 theorem localPrepare_projects :
-    ProjectsUnder AllocationInv Origins.lifetime localPrepare RxWorkers.preparePrefix := by
+    ProjectsUnder (fun h (w : World) => AllocationInv h w.wg) Origins.lifetime
+      localPrepare (liftWGObserver RxWorkers.preparePrefix) := by
   apply Origins.adapter_projects _ _ (by intro e; cases e <;> rfl) (by intro e; cases e <;> rfl)
-    _ _ _ RxOrigin.prepare_projects
-  unfold RxOrigin.prepare RxOrigin.prepareWith RxOrigin.decrypt MaterialOrigin.access
+    _ _ _ (native_projects RxOrigin.prepare_projects)
+  apply StateAppends.liftWGObserver
+  unfold RxOrigin.prepare RxOrigin.prepareWith RxOrigin.decrypt
   repeat' first
-    | with_reducible exact Appends.focus _ _ _
-    | with_reducible exact Appends.lift _
-    | with_reducible exact Appends.pure _
-    | with_reducible exact (Appends.focus _ _ _).receiptObserved
-    | with_reducible apply Appends.bind
-    | (intro_forall; try dsimp only)
+    | with_reducible exact StateAppends.focus _ _ _
+    | with_reducible exact StateAppends.lift _
+    | with_reducible exact StateAppends.pure _
+    | with_reducible exact (StateAppends.focus _ _ _).receiptWGObserved _
+    | with_reducible apply StateAppends.bind
+    | (session_origin_intro_forall; try dsimp only; try simp only [liftWG_bind, liftWG_pure, liftWGObserver_bind, liftWGObserver_pure, apply_ite])
     | split
+  all_goals repeat' first
+    | exact StateAppends.lift _
+    | exact StateAppends.focus _ _ _
+    | apply StateAppends.receiptWGObserved
 
 theorem localPrepare_valid :
     PrefixPreserves (fun h _ => Origins.Valid h) Origins.Valid localPrepare := by
   apply Origins.focus_valid Origins.rxEncode Origins.rxDecode
     (fun e => match e with | .life _ => True | .receipt r => RxOrigin.Receipt.Valid r)
-    RxOrigin.prepare
+    (liftWGObserver RxOrigin.prepare)
   · intro e x hv hx
     cases e <;> simp only [Origins.rxDecode,Option.some.injEq,reduceCtorEq] at hx
     all_goals subst x; exact hv
@@ -227,114 +247,144 @@ theorem localPrepare_valid :
   · intro w h hi
     have input : MaterialOrigin.Valid RxOrigin.Receipt.Valid h := by
       intro e he; cases e <;> exact hi _ he
-    obtain ⟨s,hs,hv,hq⟩ := RxOrigin.prepare_valid w h input
-    have truth : ∀ e ∈ (runPrefix RxOrigin.prepare w h).2,
+    obtain ⟨s,hs,hv,hq⟩ := RxOrigin.prepare_valid.liftWGObserver w h input
+    have truth : ∀ e ∈ (runPrefix (liftWGObserver RxOrigin.prepare) w h).2,
         (match e with | .life _ => True | .receipt r => RxOrigin.Receipt.Valid r) := by
       intro e he; cases e <;> exact hv _ he
     refine ⟨s,hs,truth,?_⟩
-    cases (runPrefix RxOrigin.prepare w h).1 <;> first | trivial | exact truth
+    cases (runPrefix (liftWGObserver RxOrigin.prepare) w h).1 <;> first | trivial | exact truth
 
 
 
 macro "origin_erases_steps" : tactic => `(tactic|
   first
-    | with_reducible exact Origins.localSession_erases _
-    | with_reducible exact life_erases (modifyPeerKeysPrefix_erases _ _)
-    | with_reducible exact life_erases (createResponsePrefix_erases _)
-    | with_reducible exact life_erases (addMacToPacketPrefix_erases _ _)
-    | with_reducible exact life_erases (sendBufferToPeerPrefix_erases _ _)
-    | with_reducible exact life_erases (timersSessionDerivedPrefix_erases _)
-    | with_reducible exact life_erases (timersTraversalPrefix_erases _)
-    | with_reducible exact life_erases (timersAnyAuthenticatedPacketSentPrefix_erases _)
-    | with_reducible exact life_erases (sendHandshakeCookiePrefix_erases _ _)
-    | with_reducible exact life_erases (consumeInitiationPrefix_erases _)
-    | with_reducible exact life_erases (consumeResponsePrefix_erases _)
-    | with_reducible exact life_erases (setPeerEndpointFromSkbPrefix_erases _ _)
-    | with_reducible exact life_erases (timersHandshakeCompletePrefix_erases _ _)
-    | with_reducible exact life_erases (sendKeepalivePrefix_erases _)
-    | with_reducible exact life_erases (timersAnyAuthenticatedPacketReceivedPrefix_erases _)
-    | with_reducible exact life_erases (peerPutMixed_erases _)
-    | with_reducible exact life_erases (cookieMessageConsumePrefix_erases _)
+    | with_reducible exact liftWGObserver_erases (Origins.localSession_erases _)
+    | with_reducible (rw [← liftWG_bind]; exact life_erases (liftWGObserver_erases (modifyPeerKeysPrefix_erases _ _)))
+    | with_reducible exact life_erases (liftWGObserver_erases (createResponsePrefix_erases _))
+    | with_reducible exact life_erases (liftWGObserver_erases (addMacToPacketPrefix_erases _ _))
+    | with_reducible exact life_erases (liftWGObserver_erases (sendBufferToPeerPrefix_erases _ _))
+    | with_reducible exact life_erases (liftWGObserver_erases (timersSessionDerivedPrefix_erases _))
+    | with_reducible exact life_erases (liftWGObserver_erases (timersTraversalPrefix_erases _))
+    | with_reducible exact life_erases (liftWGObserver_erases (timersAnyAuthenticatedPacketSentPrefix_erases _))
+    | with_reducible exact life_erases (liftWGObserver_erases (sendHandshakeCookiePrefix_erases _ _))
+    | with_reducible exact life_erases (liftWGObserver_erases (consumeInitiationPrefix_erases _))
+    | with_reducible exact life_erases (liftWGObserver_erases (consumeResponsePrefix_erases _))
+    | with_reducible exact life_erases (liftWGObserver_erases (setPeerEndpointFromSkbPrefix_erases _ _))
+    | with_reducible exact life_erases (liftWGObserver_erases (timersHandshakeCompletePrefix_erases _ _))
+    | with_reducible exact life_erases (liftWGObserver_erases (sendKeepalivePrefix_erases _))
+    | with_reducible exact life_erases (liftWGObserver_erases (timersAnyAuthenticatedPacketReceivedPrefix_erases _))
+    | with_reducible exact life_erases (liftWGObserver_erases (peerPutMixed_erases _))
+    | with_reducible exact life_erases (liftWGObserver_erases (cookieMessageConsumePrefix_erases _))
     | with_reducible exact erasesPrefix_lift _
     | with_reducible exact erasesPrefix_pure _
     | with_reducible apply erasesPrefix_bind
     | with_reducible apply erasesPrefix_ite
-    | (intro_forall; try dsimp only)
-    | (with_reducible split))
+    | (session_origin_intro_forall; try dsimp only; try simp only [liftWG_bind, liftWG_pure, liftWGObserver_bind, liftWGObserver_pure, apply_ite])
+    | (with_reducible split <;> try simp only [liftWG_bind, liftWG_pure, liftWGObserver_bind, liftWGObserver_pure, liftWGObserver_lift]))
 
-theorem localResponse_erases (pid : PeerId) : ErasesPrefix (localResponse pid) (sendHandshakeResponse pid) := by
+theorem localResponse_erases (pid : PeerId) : ErasesPrefix (localResponse pid) (liftWG (sendHandshakeResponse pid)) := by
   rw [← HandshakeSources.response_original]
   unfold localResponse HandshakeSources.responseWith
   dsimp only [ops, HandshakeSources.original]
+  simp only [liftWG_bind, liftWG_pure, apply_ite]
   repeat' first
     | origin_erases_steps
 
-theorem localAfterMac_erases (msg : List UInt8) (src : SkbSource) (loaded : Bool) (mac : MacState) : ErasesPrefix (localAfterMac msg src loaded mac) (Cookies.afterMac msg src loaded mac) := by
+theorem localAfterMac_erases (msg : List UInt8) (src : SkbSource) (loaded : Bool) (mac : MacState) : ErasesPrefix (localAfterMac msg src loaded mac) (liftWG (Cookies.afterMac msg src loaded mac)) := by
   rw [← HandshakeSources.afterMac_original]
   unfold localAfterMac HandshakeSources.afterMacWith
   simp only [← localResponse_eq, HandshakeSources.response_original]
   dsimp only [ops, HandshakeSources.original]
+  simp only [liftWG_bind, liftWG_pure, apply_ite]
   change ErasesPrefix _ _
   repeat' first
     | with_reducible exact localResponse_erases _
     | origin_erases_steps
 
-theorem localReception_erases (msg : List UInt8) (src : SkbSource) : ErasesPrefix (localReception msg src) (receiveHandshakePacket msg src) := by
+theorem localReception_erases (msg : List UInt8) (src : SkbSource) : ErasesPrefix (localReception msg src) (liftWG (receiveHandshakePacket msg src)) := by
   rw [← HandshakeSources.reception_original]
   unfold localReception HandshakeSources.receptionWith
   simp only [← localAfterMac_eq, HandshakeSources.afterMac_original]
   dsimp only [ops, HandshakeSources.original]
+  simp only [liftWG_bind, liftWG_pure, apply_ite]
   repeat' first
     | with_reducible exact localAfterMac_erases _ _ _ _
     | origin_erases_steps
 
-theorem localStep_erases  : ErasesPrefix (localStep ) (receiveStep) := by
+theorem localStep_erases  : ErasesPrefix (localStep ) (liftWG receiveStep) := by
   rw [← HandshakeSources.step_original]
   unfold localStep HandshakeSources.stepWith
   simp only [← localReception_eq, HandshakeSources.reception_original]
   dsimp only [ops, HandshakeSources.original]
+  simp only [liftWG_bind]
   repeat' first
     | with_reducible exact localReception_erases _ _
     | origin_erases_steps
 
 private theorem pop_allocation (ring : PtrRing (List UInt8 × SkbSource)) :
-    PrefixPreserves AllocationInv LifetimeEvent.Safe
-      (liftPrefix (modifyDev fun d => {d with handshakeQueue := ring})) := allocationReceiveQueue.pop ring
+    PrefixPreserves (fun h (w : World) => AllocationInv h w.wg) LifetimeEvent.Safe
+      (liftWGObserver (liftWGPrefix (modifyDev fun d => {d with handshakeQueue := ring}))) := (allocationReceiveQueue.pop ring).liftWGObserver
 private theorem decrement_allocation :
-    PrefixPreserves AllocationInv LifetimeEvent.Safe
-      (liftPrefix (modifyDev fun d => {d with handshakeQueueLen := d.handshakeQueueLen - 1})) := allocationReceiveQueue.decrement
+    PrefixPreserves (fun h (w : World) => AllocationInv h w.wg) LifetimeEvent.Safe
+      (liftWGObserver (liftWGPrefix (modifyDev fun d => {d with handshakeQueueLen := d.handshakeQueueLen - 1}))) := allocationReceiveQueue.decrement.liftWGObserver
 
-macro "origin_allocation" : tactic => `(tactic| first
-    | with_reducible exact AmbientContracts.drop (allocationAmbient.kernel (fun _ => True) _ (hiddenClock64_sameKernel _))
-    | with_reducible exact AmbientContracts.drop (modifyPeerKeysPrefix_spec_ambient allocationAmbient (fun _ => True) _ _ (fun _ => rfl))
-    | with_reducible exact createResponsePrefix_preserves allocationAmbient allocationHandshakeReceive.index _
-    | with_reducible exact addMacToPacketPrefix_preserves allocationAmbient _ _
-    | with_reducible exact beginSessionPrefix_preserves_ambient allocationAmbient allocationHandshakeReceive.create allocationHandshakeReceive.put allocationHandshakeReceive.replace _
-    | with_reducible exact AmbientContracts.drop (timersSessionDerivedPrefix_spec allocationAmbient (fun _ => True) _)
-    | with_reducible exact AmbientContracts.drop (timersTraversalPrefix_spec allocationAmbient (fun _ => True) _)
-    | with_reducible exact AmbientContracts.drop (timersAnyAuthenticatedPacketSentPrefix_spec allocationAmbient (fun _ => True) _)
-    | with_reducible exact AmbientContracts.drop (sendBufferToPeerPrefix_spec allocationAmbient allocationHandshakeReceive.socket (fun _ => True) _ _)
-    | with_reducible exact sendHandshakeCookiePrefix_preserves allocationAmbient allocationHandshakeReceive _ _
-    | with_reducible exact consumeInitiationPrefix_preserves allocationAmbient _
-    | with_reducible exact consumeResponsePrefix_preserves allocationAmbient _
-    | with_reducible exact setPeerEndpointFromSkbPrefix_preserves allocationAmbient _ _
-    | with_reducible exact AmbientContracts.drop (timersHandshakeCompletePrefix_spec allocationAmbient (fun _ => True) _ _)
-    | with_reducible exact sendKeepalivePrefix_preserves_ambient allocationAmbient allocationHandshakeReceive.tx _
-    | with_reducible exact allocationHandshakeReceive.stats _
-    | with_reducible exact AmbientContracts.drop (timersAnyAuthenticatedPacketReceivedPrefix_spec allocationAmbient (fun _ => True) _)
-    | with_reducible exact allocationAmbient.peerPut _
-    | with_reducible exact cookieMessageConsumePrefix_preserves allocationAmbient _
-    | with_reducible exact allocation_kernel _ Cookies.loadPhase_sameKernel
-    | with_reducible exact AmbientContracts.drop (cookieLift_spec allocationAmbient allocationHandshakeReceive.cookie (fun _ => True) _ (cookieValidatePacket_sameCookieKernel _ _ _))
-    | with_reducible exact allocation_kernel _ getDev_sameKernel
+/-- Reject non-leaf contracts before attempting the native lift bridge. -/
+elab "origin_allocation_goal" : tactic => do
+  let target := (← Lean.instantiateMVars (← (← Lean.Elab.Tactic.getMainGoal).getType)).consumeMData
+  unless target.isAppOf ``PrefixPreserves do Lean.throwError "not an allocation preservation goal"
+  let args := target.getAppArgs
+  unless args.size > 0 do Lean.throwError "missing observed action"
+  let action := args.back!.consumeMData
+  unless action.isAppOf ``liftPrefix || action.isAppOf ``liftWGObserver ||
+      action.isAppOf ``Pure.pure do
+    Lean.throwError "not a leaf preservation goal"
+
+macro "origin_allocation" : tactic => `(tactic|
+  (origin_allocation_goal
+   first
+    | with_reducible exact PrefixPreserves.pure (fun _ _ hi => hi.safe) _
     | with_reducible exact pop_allocation _
     | with_reducible exact decrement_allocation
-    | with_reducible exact allocation_kernel _ (orM_sameKernel (andM_sameKernel (sameKernel_branch _ _) (sameKernel_branch _ _)) (andM_sameKernel (sameKernel_branch _ _) (sameKernel_branch _ _)))
-    | with_reducible exact allocation_kernel _ (andM_sameKernel (sameKernel_branch _ _) (sameKernel_branch _ _))
-    | with_reducible exact allocation_kernel _ (sameKernel_branch _ _)
-    | with_reducible exact AmbientContracts.drop (allocationAmbient.invariant (fun _ => True) _)
-    | with_reducible exact PrefixPreserves.pure allocationAmbient.safe _
-)
+    | (try simp only [← liftWGObserver_lift]
+       apply PrefixEnsures.preserves
+       apply StatePrefixEnsures.liftWGObserver (P := fun h w _ => AllocationInv h w) (Q := fun _ h w _ => AllocationInv h w)
+       first
+       | (maintenance_lift_action_head hiddenClock64; exact (allocation_state_store _ (by intro initial; exact hoare_liftAmbient (AmbientM.hiddenClock64 _) _)))
+       | (maintenance_head modifyPeerKeysPrefix; apply AmbientContracts.drop; apply modifyPeerKeysPrefix_spec_ambient allocationAmbient (fun _ => True); intro p; rfl)
+       | (maintenance_head createResponsePrefix; exact (createResponsePrefix_preserves allocationAmbient allocationHandshakeReceive.index _))
+       | (maintenance_head addMacToPacketPrefix; exact (addMacToPacketPrefix_preserves allocationAmbient _ _))
+       | (maintenance_head beginSessionPrefix; exact (beginSessionPrefix_preserves_ambient allocationAmbient allocationHandshakeReceive.create allocationHandshakeReceive.put allocationHandshakeReceive.replace _))
+       | (maintenance_head timersSessionDerivedPrefix; exact (AmbientContracts.drop (timersSessionDerivedPrefix_spec allocationAmbient (fun _ => True) _)))
+       | (maintenance_head timersTraversalPrefix; exact (AmbientContracts.drop (timersTraversalPrefix_spec allocationAmbient (fun _ => True) _)))
+       | (maintenance_head timersAnyAuthenticatedPacketSentPrefix; exact (AmbientContracts.drop (timersAnyAuthenticatedPacketSentPrefix_spec allocationAmbient (fun _ => True) _)))
+       | (maintenance_head sendBufferToPeerPrefix; exact (AmbientContracts.drop (sendBufferToPeerPrefix_spec allocationAmbient allocationHandshakeReceive.socket (fun _ => True) _ _)))
+       | (maintenance_head sendHandshakeCookiePrefix; exact (sendHandshakeCookiePrefix_preserves allocationAmbient allocationHandshakeReceive _ _))
+       | (maintenance_head consumeInitiationPrefix; exact (consumeInitiationPrefix_preserves allocationAmbient _))
+       | (maintenance_head consumeResponsePrefix; exact (consumeResponsePrefix_preserves allocationAmbient _))
+       | (maintenance_head setPeerEndpointFromSkbPrefix; exact (setPeerEndpointFromSkbPrefix_preserves allocationAmbient _ _))
+       | (maintenance_head timersHandshakeCompletePrefix; exact (AmbientContracts.drop (timersHandshakeCompletePrefix_spec allocationAmbient (fun _ => True) _ _)))
+       | (maintenance_head sendKeepalivePrefix; exact (sendKeepalivePrefix_preserves_ambient allocationAmbient allocationHandshakeReceive.tx _))
+       | (maintenance_lift_action_head modifyDev; exact (allocationHandshakeReceive.stats _))
+       | (maintenance_head timersAnyAuthenticatedPacketReceivedPrefix; exact (AmbientContracts.drop (timersAnyAuthenticatedPacketReceivedPrefix_spec allocationAmbient (fun _ => True) _)))
+       | (maintenance_head peerPutMixed; exact (allocationAmbient.peerPut _))
+       | (maintenance_head cookieMessageConsumePrefix; exact (cookieMessageConsumePrefix_preserves allocationAmbient _))
+       | (maintenance_lift_action_head Cookies.loadPhase; exact (allocation_state_store _ Cookies.loadPhase_sameStore))
+       | (maintenance_lift_action_head cookieValidatePacket; exact (AmbientContracts.drop (cookieLift_spec allocationAmbient allocationHandshakeReceive.cookie (fun _ => True) _ ((cookieValidatePacket_sameCookie _ _ _).factor WGOwnedView.toWGStoreView))))
+       | (maintenance_lift_action_head getDev; exact (allocation_state_store _ getDev_sameWGStore))
+       | (maintenance_lift_action_head WG.orM
+          apply allocation_state_store
+          apply orM_sameView
+          all_goals apply andM_sameView
+          all_goals intro initial
+          all_goals exact hoare_liftAmbient (AmbientM.branch _ _) (fun w => wgStoreView w = initial))
+       | (maintenance_lift_action_head WG.andM
+          apply allocation_state_store
+          apply andM_sameView
+          all_goals intro initial
+          all_goals exact hoare_liftAmbient (AmbientM.branch _ _) (fun w => wgStoreView w = initial))
+       | (maintenance_lift_action_head branch; exact (allocation_state_store _ (fun initial => hoare_liftAmbient (AmbientM.branch _ _) (fun w => wgStoreView w = initial))))
+       | (maintenance_lift_action_head invariant; exact (AmbientContracts.drop (allocationAmbient.invariant (fun _ => True) _))))))
+
 
 private theorem project_ite {E F α : Type} {I : List F → World → Prop}
     {ρ : E → Option F} {gt ge : PrefixM E α} {bt be : PrefixM F α}
@@ -347,7 +397,7 @@ private theorem project_ite {E F α : Type} {I : List F → World → Prop}
 
 macro "origin_project_steps" : tactic => `(tactic|
   first
-    | with_reducible exact Origins.localSession_projects _
+    | with_reducible exact native_projects (Origins.localSession_projects _)
     | with_reducible apply life_projects
     | with_reducible exact projectsUnder_lift _ _
     | with_reducible exact projectsUnder_pure _ _
@@ -356,59 +406,93 @@ macro "origin_project_steps" : tactic => `(tactic|
     | with_reducible apply projectsUnder_bind (S := LifetimeEvent.Safe)
     | with_reducible apply PrefixPreserves.bind
     | with_reducible apply PrefixPreserves.ite
-    | (intro_forall; try dsimp only)
-    | (with_reducible split))
+    | (session_origin_intro_forall; try dsimp only; try simp only [liftWG_bind, liftWG_pure, liftWGObserver_bind, liftWGObserver_pure, apply_ite])
+    | (with_reducible split <;> try simp only [liftWG_bind, liftWG_pure, liftWGObserver_bind, liftWGObserver_pure, liftWGObserver_lift]))
 
 theorem localResponse_projects (pid : PeerId) :
-    ProjectsUnder AllocationInv Origins.lifetime (localResponse pid) (sendHandshakeResponsePrefix pid) := by
+    ProjectsUnder (fun h (w : World) => AllocationInv h w.wg) Origins.lifetime (localResponse pid) (liftWGObserver (sendHandshakeResponsePrefix pid)) := by
   rw [← HandshakeSources.response_prefix]
   unfold localResponse HandshakeSources.responseWith
   dsimp only [ops, HandshakeSources.prefixOps]
+  simp only [liftWGObserver_bind, liftWGObserver_pure, liftWGObserver_lift, apply_ite]
   repeat' first
     | origin_project_steps
 
 -- This source continuation has the same bounded fanout as Lifetimes.HandshakeReceive.
 set_option maxHeartbeats 800000 in
 theorem localAfterMac_projects (msg : List UInt8) (src : SkbSource) (loaded : Bool) (mac : MacState) :
-    ProjectsUnder AllocationInv Origins.lifetime (localAfterMac msg src loaded mac) (afterMacPrefix msg src loaded mac) := by
+    ProjectsUnder (fun h (w : World) => AllocationInv h w.wg) Origins.lifetime (localAfterMac msg src loaded mac) (liftWGObserver (afterMacPrefix msg src loaded mac)) := by
   rw [← HandshakeSources.afterMac_prefix]
   unfold localAfterMac HandshakeSources.afterMacWith
   simp only [← localResponse_eq, HandshakeSources.response_prefix]
   dsimp only [ops, HandshakeSources.prefixOps]
+  simp only [liftWGObserver_bind, liftWGObserver_pure, liftWGObserver_lift, apply_ite]
   repeat' first
     | with_reducible exact localResponse_projects _
-    | with_reducible exact sendHandshakeResponsePrefix_preserves allocationAmbient allocationHandshakeReceive.socket allocationHandshakeReceive.index allocationHandshakeReceive.create allocationHandshakeReceive.put allocationHandshakeReceive.replace _
+    | with_reducible exact (sendHandshakeResponsePrefix_preserves allocationAmbient allocationHandshakeReceive.socket allocationHandshakeReceive.index allocationHandshakeReceive.create allocationHandshakeReceive.put allocationHandshakeReceive.replace _).liftWGObserver.preserves
     | origin_project_steps
 
 theorem localReception_projects (msg : List UInt8) (src : SkbSource) :
-    ProjectsUnder AllocationInv Origins.lifetime (localReception msg src) (receiveHandshakePacketPrefix msg src) := by
+    ProjectsUnder (fun h (w : World) => AllocationInv h w.wg) Origins.lifetime (localReception msg src) (liftWGObserver (receiveHandshakePacketPrefix msg src)) := by
   rw [← HandshakeSources.reception_prefix]
   unfold localReception HandshakeSources.receptionWith
   simp only [← localAfterMac_eq, HandshakeSources.afterMac_prefix]
   dsimp only [ops, HandshakeSources.prefixOps]
+  simp only [liftWGObserver_bind, liftWGObserver_pure, liftWGObserver_lift, apply_ite]
   repeat' first
     | with_reducible exact localAfterMac_projects _ _ _ _
-    | with_reducible exact afterMacPrefix_preserves allocationAmbient allocationHandshakeReceive _ _ _ _
+    | with_reducible exact (afterMacPrefix_preserves allocationAmbient allocationHandshakeReceive _ _ _ _).liftWGObserver.preserves
     | origin_project_steps
 
 theorem localStep_projects  :
-    ProjectsUnder AllocationInv Origins.lifetime (localStep ) (receiveStepPrefix) := by
+    ProjectsUnder (fun h (w : World) => AllocationInv h w.wg) Origins.lifetime (localStep ) (liftWGObserver receiveStepPrefix) := by
   rw [← HandshakeSources.step_prefix]
   unfold localStep HandshakeSources.stepWith
   simp only [← localReception_eq, HandshakeSources.reception_prefix]
   dsimp only [ops, HandshakeSources.prefixOps]
-  repeat' first
-    | with_reducible exact localReception_projects _ _
-    | with_reducible exact receiveHandshakePacketPrefix_preserves allocationAmbient allocationHandshakeReceive _ _
-    | origin_project_steps
-
-
+  simp only [liftWGObserver_bind, liftWGObserver_lift]
+  have getAllocation : PrefixPreserves (fun h (w : World) => AllocationInv h w.wg)
+      LifetimeEvent.Safe (liftPrefix (liftWG getDev)) := by
+    simpa only [liftWGObserver_lift] using
+      (allocation_state_store getDev getDev_sameWGStore).liftWGObserver.preserves
+  have branchAllocation (b : Bool) : PrefixPreserves (fun h (w : World) => AllocationInv h w.wg)
+      LifetimeEvent.Safe (liftPrefix (liftWG (branch .workerConsumed b))) := by
+    simpa only [liftWGObserver_lift] using
+      (allocation_state_store (branch .workerConsumed b) (fun initial =>
+        hoare_liftAmbient (AmbientM.branch .workerConsumed b)
+          (fun w => wgStoreView w = initial))).liftWGObserver.preserves
+  apply projectsUnder_bind (projectsUnder_lift _ _) getAllocation
+  intro d
+  cases hc : d.handshakeQueue.consume with
+  | mk item ring =>
+    cases item with
+    | none =>
+      simp only [liftWGObserver_bind, liftWGObserver_lift, liftWGObserver_pure]
+      apply projectsUnder_bind (projectsUnder_lift _ _) (branchAllocation false)
+      intro _
+      exact projectsUnder_pure _ _
+    | some pair =>
+      rcases pair with ⟨msg, src⟩
+      simp only [liftWGObserver_bind, liftWGObserver_lift, liftWGObserver_pure]
+      apply projectsUnder_bind (projectsUnder_lift _ _) (branchAllocation true)
+      intro _
+      apply projectsUnder_bind (projectsUnder_lift _ _)
+        (by simpa only [liftWGObserver_lift] using pop_allocation ring)
+      intro _
+      apply projectsUnder_bind (localReception_projects msg src)
+        (receiveHandshakePacketPrefix_preserves allocationAmbient
+          allocationHandshakeReceive msg src).liftWGObserver.preserves
+      intro _
+      apply projectsUnder_bind (projectsUnder_lift _ _)
+        (by simpa only [liftWGObserver_lift] using decrement_allocation)
+      intro _
+      exact projectsUnder_pure _ _
 
 private theorem valid_pure (x : α) :
-    PrefixPreserves (fun h _ => Origins.Valid h) Origins.Valid (pure x) :=
+    PrefixPreserves (fun h _ => Origins.Valid h) Origins.Valid (pure x : PrefixM Origins.Event α) :=
   PrefixPreserves.pure (I := fun h _ => Origins.Valid h) (S := Origins.Valid) (fun _ _ hi => hi) x
 
-private theorem valid_lift (a : M α) :
+private theorem valid_lift (a : Leanux.M α) :
     PrefixPreserves (fun h _ => Origins.Valid h) Origins.Valid (liftPrefix a) := by
   intro w h hi
   refine ⟨[],by simp,hi,?_⟩
@@ -428,7 +512,7 @@ theorem localResponse_valid (pid : PeerId) :
   dsimp only [ops]
   repeat' first
     | with_reducible exact life_valid _
-    | with_reducible exact Origins.localSession_valid _
+    | with_reducible exact (Origins.localSession_valid _).liftWGObserver.preserves
     | with_reducible exact valid_lift _
     | with_reducible exact valid_pure _
     | with_reducible apply PrefixPreserves.bind
@@ -444,7 +528,7 @@ theorem localAfterMac_valid (msg : List UInt8) (src : SkbSource) (loaded : Bool)
   repeat' first
     | with_reducible exact localResponse_valid _
     | with_reducible exact life_valid _
-    | with_reducible exact Origins.localSession_valid _
+    | with_reducible exact (Origins.localSession_valid _).liftWGObserver.preserves
     | with_reducible exact valid_lift _
     | with_reducible exact valid_pure _
     | with_reducible apply PrefixPreserves.bind
@@ -460,7 +544,7 @@ theorem localReception_valid (msg : List UInt8) (src : SkbSource) :
   repeat' first
     | with_reducible exact localAfterMac_valid _ _ _ _
     | with_reducible exact life_valid _
-    | with_reducible exact Origins.localSession_valid _
+    | with_reducible exact (Origins.localSession_valid _).liftWGObserver.preserves
     | with_reducible exact valid_lift _
     | with_reducible exact valid_pure _
     | with_reducible apply PrefixPreserves.bind
@@ -476,7 +560,7 @@ theorem localStep_valid  :
   repeat' first
     | with_reducible exact localReception_valid _ _
     | with_reducible exact life_valid _
-    | with_reducible exact Origins.localSession_valid _
+    | with_reducible exact (Origins.localSession_valid _).liftWGObserver.preserves
     | with_reducible exact valid_lift _
     | with_reducible exact valid_pure _
     | with_reducible apply PrefixPreserves.bind
@@ -490,6 +574,7 @@ theorem localResponse_appends (pid : PeerId) :
   dsimp only [ops]
   repeat' first
     | exact Appends.focus _ _ _
+    | exact (StateAppends.focus _ _ _).liftWGObserver
     | with_reducible exact Appends.lift _
     | with_reducible exact Appends.pure _
     | with_reducible apply Appends.bind
@@ -506,6 +591,7 @@ theorem localAfterMac_appends (msg : List UInt8) (src : SkbSource) (loaded : Boo
   repeat' first
     | with_reducible exact localResponse_appends _
     | exact Appends.focus _ _ _
+    | exact (StateAppends.focus _ _ _).liftWGObserver
     | with_reducible exact Appends.lift _
     | with_reducible exact Appends.pure _
     | with_reducible apply Appends.bind
@@ -521,6 +607,7 @@ theorem localReception_appends (msg : List UInt8) (src : SkbSource) :
   repeat' first
     | with_reducible exact localAfterMac_appends _ _ _ _
     | exact Appends.focus _ _ _
+    | exact (StateAppends.focus _ _ _).liftWGObserver
     | with_reducible exact Appends.lift _
     | with_reducible exact Appends.pure _
     | with_reducible apply Appends.bind
@@ -536,6 +623,7 @@ theorem localStep_appends  :
   repeat' first
     | with_reducible exact localReception_appends _ _
     | exact Appends.focus _ _ _
+    | exact (StateAppends.focus _ _ _).liftWGObserver
     | with_reducible exact Appends.lift _
     | with_reducible exact Appends.pure _
     | with_reducible apply Appends.bind
@@ -546,20 +634,20 @@ theorem localStep_appends  :
 def prepare : Obs (Option PeerId) := focus localPrepare
 def receiveStep : Obs Bool := focus localStep
 
-theorem prepare_erases : ErasesPrefix prepare RxWorkers.prepareSource :=
+theorem prepare_erases : ErasesPrefix prepare (liftWG RxWorkers.prepareSource) :=
   focusPrefix_erases _ _ localPrepare_erases
-theorem receiveStep_erases : ErasesPrefix receiveStep WG.receiveStep :=
+theorem receiveStep_erases : ErasesPrefix receiveStep (liftWG WG.receiveStep) :=
   focusPrefix_erases _ _ localStep_erases
 
-theorem prepare_projects : ProjectsUnder AuditInv RxHistory.auditEvent prepare (auditFocus RxWorkers.preparePrefix) :=
+theorem prepare_projects : ProjectsUnder AuditInv RxHistory.auditEvent prepare (auditFocus (liftWGObserver RxWorkers.preparePrefix)) :=
   focus_projects _ _ localPrepare_appends localPrepare_projects
-theorem receiveStep_projects : ProjectsUnder AuditInv RxHistory.auditEvent receiveStep (auditFocus receiveStepPrefix) :=
+theorem receiveStep_projects : ProjectsUnder AuditInv RxHistory.auditEvent receiveStep (auditFocus (liftWGObserver receiveStepPrefix)) :=
   focus_projects _ _ localStep_appends localStep_projects
 
 theorem prepare_preserves : PrefixPreserves RxHistory.BoundaryInv RxHistory.BoundarySafe prepare :=
-  focus_preserves _ _ prepare_projects RxWorkers.prepare_preserves
+  focus_preserves _ _ prepare_projects RxWorkers.prepare_preserves.liftWGObserver
 theorem receiveStep_preserves : PrefixPreserves RxHistory.BoundaryInv RxHistory.BoundarySafe receiveStep :=
-  focus_preserves _ _ receiveStep_projects (HandshakeReceiveCall.allocation .step)
+  focus_preserves _ _ receiveStep_projects (HandshakeReceiveCall.allocation .step).liftWGObserver
 
 theorem prepare_valid : PrefixPreserves (fun h _ => Valid h) Valid prepare := focus_valid _ localPrepare_valid
 theorem receiveStep_valid : PrefixPreserves (fun h _ => Valid h) Valid receiveStep := focus_valid _ localStep_valid
@@ -568,24 +656,24 @@ def receiveIteration : Obs IterResult :=
   workerIterPrefix .receiveWorker none receiveStep (liftPrefix (Env.condResched .receiveWorker))
 
 theorem receiveIteration_erases : ErasesPrefix receiveIteration
-    (workerIter .receiveWorker none WG.receiveStep (Env.condResched .receiveWorker)) :=
+    (workerIter .receiveWorker none (liftWG WG.receiveStep) (Env.condResched .receiveWorker)) :=
   workerIterPrefix_erases _ _ receiveStep_erases (erasesPrefix_lift _)
 
 theorem receiveIteration_preserves : PrefixPreserves RxHistory.BoundaryInv RxHistory.BoundarySafe receiveIteration :=
   workerIterPrefix_preserves _ _ (fun _ _ hi => hi.safe) receiveStep_preserves
-    (kernelLiftPrefix_preserves (fun _ _ hi => hi.safe) (fun _ _ _ he hi => hi.kernel he) (condResched_sameKernel _))
+    (viewLiftPrefix_preserves productStoreView (fun _ _ hi => hi.safe) (fun _ _ _ he hi => ⟨hi.audit.store (congrArg (fun p : ProductStore43 => p.2.2.2) he), hi.distinct, hi.released⟩) (condResched_sameKernel _))
 
 theorem receiveIteration_projects : ProjectsUnder AuditInv RxHistory.auditEvent receiveIteration
     (auditFocus (receiveIterPrefix (liftPrefix (Env.condResched .receiveWorker)))) := by
   unfold receiveIteration receiveIterPrefix workerIterPrefix
   repeat' first
     | with_reducible exact receiveStep_projects
-    | exact (show PrefixPreserves AllocationInv LifetimeEvent.Safe receiveStepPrefix from HandshakeReceiveCall.allocation .step)
+    | exact (show PrefixPreserves (fun h (w : World) => AllocationInv h w.wg) LifetimeEvent.Safe (liftWGObserver receiveStepPrefix) from (HandshakeReceiveCall.allocation .step).liftWGObserver)
     | with_reducible exact RxHistory.projectsFocus_lift _
     | with_reducible exact RxHistory.projectsFocus_pure _
-    | with_reducible exact allocation_kernel _ (condResched_sameKernel _)
-    | with_reducible exact allocation_kernel _ (sameKernel_branch _ _)
-    | with_reducible exact PrefixPreserves.pure allocationAmbient.safe _
+    | with_reducible exact allocation_store World.wg _ ((condResched_sameKernel _).of_factor (fun v : ProductStore43 => v.2.2.2) (fun w => wgStoreView w.wg) (fun _ => rfl))
+    | with_reducible exact (allocation_state_store _ (fun initial => hoare_liftAmbient (AmbientM.branch _ _) (fun w => wgStoreView w = initial))).liftWGObserver
+    | with_reducible exact PrefixPreserves.pure (fun _ _ hi => hi.safe) _
     | with_reducible apply RxHistory.projectsFocus_bind
     | with_reducible apply PrefixPreserves.bind
     | (with_reducible intro x; try dsimp only)
@@ -600,7 +688,7 @@ theorem focus_history (P : List HEvent → Prop) (g : PrefixM Origins.Event α)
   refine ⟨suffix.map encode,rfl,hv,?_⟩
   cases (runPrefix (focus g) w h).1 <;> trivial
 
-theorem history_lift (P : List HEvent → Prop) (a : M α) :
+theorem history_lift (P : List HEvent → Prop) (a : Leanux.M α) :
     PrefixPreserves (fun h _ => P h) P (liftPrefix a) := by
   intro w h hi
   refine ⟨[],by simp,hi,?_⟩
