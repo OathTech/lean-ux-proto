@@ -1,7 +1,8 @@
 # Proofs about the mirrors
 
 `Leanux/Proofs/` is the repository's proof tree: every theorem about the
-executable mirrors lives there and nowhere else. Proofs are a validation
+executable mirrors lives there and nowhere else (between campaign 1's
+prototype and its landing, on the campaign's branch; see Results). Proofs are a validation
 channel for the models beside the differential check, under Rule Zero: the
 mirror is never edited to let a proof close; a proof that cannot close is a
 report against the mirror, settled by the check. The standing rule and the
@@ -49,13 +50,14 @@ ReplayWindow. The conventions that keep proof work cheap are in
 
 ## Results
 
-| Result | Statements | Directory | Charter | Review | Mirror commit | Status |
-| --- | --- | --- | --- | --- | --- | --- |
-| Receive counter window: replay freedom (S1, S2, S3) | S1: every accepted execution has its exact acceptance history, and no two events share an allocation lifetime and a wire counter. S2: `counterValidate` returns exactly what receive.c's rule returns and leaves exactly its replay state. S3: every non-receive syscall and every validator call leave every other keypair's window unchanged, per call and for whole syscalls including the runner's ambient step. | `Leanux/Proofs/WG/ReplayWindow/` (`Statements.lean`, 15 terminal declarations; `Counterexamples.lean`) | [charter](2026-10-12-charter-window-proof.md) | [independent review, two parts](2026-10-12-spike-window-review.md); the spike's [report](2026-10-13-spike-window.md) and [self-review](2026-10-13-spike-window-self-review.md) | 6f1f84c | lagging since 247beec (review item 8 landed 2026-10-13: the two counter-limit tests now carry operands and `CounterWindow/Refinement.lean`'s `counterValidate_execution` expects plain records; the proof campaign repairs it on merge; the index-table entry's `Option PeerId` and `indexLookup`'s store-back, landed 2026-10-14, touch `indexLookup_sameSnapshot` and the `consumeResponse`, `cookieMessageConsume` and `consumeData` frames, repaired on the same merge; the representation batch of 2026-10-15 (the handshake queue as a `PtrRing`, the flood run exactly over `Env.batch` with `floodExact` deleted, the ratelimiter's entry site and two-table uninit, the batch completion guard) touches the flood frames in `Logged/Operations.lean`, `Keypairs/Frames/Env.lean`, `Frames/Kernel.lean`, `Evolution/Operations.lean`, `WGMore.lean:460`, the fuel copies in `Logged/Workers.lean:107-109` and the ring frames in `Logged/{Scheduler,Workers}.lean`, repaired by the campaigns on merge with the `floodExact` parameter removed from their statements; the B3, audit-fix and C1 landing of 2026-10-15 (the timer wheel with `fireTimer` removed and `WGKernelView` moved, the Send and Peer audit fixes, the IPv4 FIB trie with the environment's `defaultRoute4`, `defaultRoute4Accessed` and `ipv4Gen` gone and `neighbours`, `fibCreatorNs`, `addrPlens4`, `fib4`, `fib4C` added) touches 99 files on campaign 1 and 36 on campaign 2 by the merge messages' union, repaired under the same rule). Carried from ef7c535 over the epoll landing on 2026-10-13 (the wait-queue, epoll release and epoll system-call frames). |
-
-The gate for every row: `capped -- scripts/in-bundle scripts/proof-gate`
-(the build, the axioms of every terminal statement, the forbidden tokens,
-the imports and the default targets).
+`main` carries no proof tree until campaign 1 lands: the replay-window
+prototype (the result and the `Logged`, `Framing` and `CounterWindow`
+layers it rested on) was a prototype for campaign 1 that had landed on
+`main` by sequencing, and was deleted from `main` at the state split's
+cutover as campaign 1's; campaign 1 carries it on `proofs/campaign` and
+lands it with its own results, retyped over the split worlds by its
+retrofit. The rows below are the campaigns' results on their branches,
+as their own reports keep them; the gate returns with campaign 1's landing.
 
 ## Result table: claim, theorem, boundary, premises, counterexample, pin
 
@@ -70,9 +72,6 @@ instances. The split is by declaration name and is indicative.
 
 | Result | Original claim (charter) | Exact theorems (names) | Event boundary | Substantive premises | Counterexample or blocker | Mirror pin |
 | --- | --- | --- | --- | --- | --- | --- |
-| ReplayWindow S1 (landed) | Every accepted execution has its exact acceptance history and no two events share a lifetime and a wire counter | `S1` | Validator acceptance events of a successful `executeTrace`, keyed by allocation lifetime and wire nonce; includes validator successes whose packets are later dropped | A successful runner execution (the placeholder parameter included); the exactly erased logged execution | None; the theorem is over the executable, not over all Linux executions | 6f1f84c (register row) |
-| ReplayWindow S2 (landed) | `counterValidate` returns what receive.c's rule returns and leaves its replay state | `S2`, `S2_acceptance`, `S2_update` | Refinement from `counterValidate` to the Lean `CounterWindow.step` rule | An allocated keypair; a 128-word bitmap (established by reachable allocation) | None; "the C's rule" is a source identification of `step`, the refinement is within Lean | 6f1f84c |
-| ReplayWindow S3 (landed) | Every non-receive syscall and every validator call leave every other keypair's window unchanged | `S3`, `S3_nonreceive`, `S3_validator`, `S3_surviving`, `S3_syscall`, `S3_syscall_ambient` | Surviving old cells under nonreceive calls; other keypairs under a validator call; whole-operation evolution including the ambient step | Lifetime-aware framing (a reused slot is a new identity) | None; the literal equality of every keypair store through allocation and deletion was never claimed | 6f1f84c |
 | R1 anti-replay | No counter accepted twice under one lifetime; nothing at or below the floor accepted | `pure_uniqueness`, `mirror_uniqueness`, `runner_uniqueness`, `pure_run_floor`, `mirror_floor`, `mirror_run_floor`, `runner_floor`, `pure_run_below_floor` | The window model's runs and the mirror through S2 | As S1 and S2 | `inclusive_boundary_witness`: an unseen counter at exactly highest minus 8128 is accepted; the charter's "at or below" was false of the kernel's rule and corrected to "strictly below" | `ffea367` |
 | R2 lifetime safety | The mirror never resolves a dead identity after its release | `keypair_no_resurrection`, `peer_create_fresh_identity`, `packet_*_free_prevents_later_lookup` and the access-safety family (list in `LifetimeSafety/Statements.lean`) | Operation endpoints and failure-retaining access prefixes per call family | Resident and allocation premises; callback premises; the environment's own domain | `stale_cursor_retargets_replacement`: an accepted replay releases a replacement peer through a stale dump cursor after device recreation, a mirror-domain finding (the guest forbids the composition; the matching refusal is the finding-6 fix on task/review-timer). Whole-run closure and saved-reference ownership open | `ffea367` |
 | R3 cryptokey routing | Lookup agrees with the insert and remove history; delivery and transmit bound to the owning peer | `pureTree_lookup_correct`, `original_findNode_lookup_correct`, `original_insert_longest_prefix`, `original_add_all_cases`, `original_insert_all_cases` and the insertion family | Represented tries against an independently defined flat-prefix winner | Shape, address-bound, fresh-id and resident-target premises; bounded inputs | None yet; removal, configuration history and the packet-path halves open. A trie winner labelled with a raw peer slot is not yet identity authorization | `ffea367` |
@@ -82,7 +81,6 @@ instances. The split is by declaration name and is indicative.
 
 | Result | Terminal declarations | Theorem results | Infrastructure | Witnesses |
 | --- | --- | --- | --- | --- |
-| ReplayWindow | 13 | 10 | 3 | 0 |
 | AntiReplay | 9 | 8 | 0 | 1 |
 | LifetimeSafety | 143 | 84 | 58 | 1 |
 | CryptokeyRouting | 45 | 45 | 0 | 0 |

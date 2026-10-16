@@ -6,10 +6,6 @@ moreLeanArgs = ["-j1"]
 [[lean_lib]]
 name = "Leanux"
 
-[[lean_lib]]
-name = "LeanuxProofs"
-roots = ["Leanux.Proofs"]
-
 [[lean_exe]]
 name = "leanux-model"
 root = "Leanux.Main"

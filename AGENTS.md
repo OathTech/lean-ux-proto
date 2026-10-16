@@ -52,8 +52,8 @@ no change made to let a proof close: a proof that cannot close is a report
 against the mirror, settled by the differential check, never by editing the
 mirror to fit the statement. Proofs about the mirror and about models
 layered on it are in scope; a simulation proof against the C is not, until
-the user opens it. No proof-audit infrastructure beyond the axiom check
-below, and no theorem is an acceptance gate for mirror work.
+the user opens it. No proof-audit infrastructure beyond the axiom check,
+and no theorem is an acceptance gate for mirror work.
 
 The register names, per result, the mirror commit it holds over and whether
 it is current or lagging. A mirror change may land while a result lags; its
@@ -120,17 +120,6 @@ Linux. It rests on three gates, and only these block:
   (records dropped, unconsumed or at the wrong site, an unlisted function
   covered, a schedule not consumed exactly);
 - the kernel identity check, which refuses to boot any other build.
-
-The proof tree makes a separate claim and has its own gate, run at its
-claim points (a merge of the tree) and not on mirror commits:
-`capped -- scripts/in-bundle scripts/proof-gate`, which builds `LeanuxProofs`
-(about three minutes), prints the axioms of every declaration of every
-`Statements.lean` under `Leanux/Proofs/` and fails on any beyond `propext`,
-`Classical.choice` and `Quot.sound`, fails on `sorry`, `admit`, `axiom`,
-`native_decide`, `unsafe`, `implemented_by` or `extern` anywhere in the
-tree, and fails if anything outside the tree imports it, if the root
-`Leanux/Proofs.lean` misses a result's `Statements`, or if `LeanuxProofs` is
-a default lake target.
 
 Everything else is a speedbump: cheap, run at claim points, never blocking
 intermediate work, built to catch honest drift and not adversarial attack:

@@ -105,16 +105,11 @@ scripts/in-bundle python3 -m evaluator.check --suite wireguard
 
 # All default suites, including generated cases; allow roughly an hour
 scripts/in-bundle python3 -m evaluator.check
-
-# The proof tree: build and axiom check
-scripts/in-bundle scripts/proof-gate
 ```
 
 The checker builds the model, boots the guest, and writes
 `.artifacts/check/<timestamp>/report.json`. Success means exit status 0 and
 `"status": "pass"`; mismatches and infrastructure failures both fail the run.
-The proof gate prints the axioms of every proved statement and fails on any
-beyond Lean's three standard ones.
 
 ## Trusted boundary and target configuration
 
