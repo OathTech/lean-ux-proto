@@ -152,8 +152,10 @@ it is not part of that baseline.
 | Persistent poll history, composition and NAPI | 40 | 0 | 0 | 40 | 0 | 40 |
 | Complete product syscall audit | 5 | 0 | 0 | 5 | 0 | 5 |
 
-The whole tree currently contains 451 Lean files and 6,502 theorems. The completed
-changes total 2,332 retyped theorems, 1,673 deletions, 1,451 retained contract shapes and 460 added.
+| Routing environment controls and dump frames | 20 | 7 | 0 | 13 | 1 | 21 |
+
+The whole tree currently contains 451 Lean files and 6,503 theorems. The completed
+changes total 2,339 retyped theorems, 1,673 deletions, 1,464 retained contract shapes and 461 added.
 Retyping changes or generalizes the actual state/monad carrier or observation.
 This includes shorthand contracts whose source functions or named views move
 to a native monad. Mere namespace qualification and equivalent relocation of a
@@ -3628,3 +3630,29 @@ Reproduce with 'cap scripts/in-bundle lake build Leanux.Proofs.WG.Queues.RxNapiH
 replay each root with 'cap scripts/in-bundle lake env leanchecker --fresh MODULE'.
 Full gate and terminal replay remain pending; every register row remains lagging.
 The mirror is unchanged at b700659.
+
+
+## Routing controls and dump completion
+
+Environment controls retain twelve product contracts, including arbitrary
+onDown/onUnregister callbacks and the original43-field store premise. Their
+source-shaped delete observer includes the pending-dump guard and the actual
+callback/destructor order. Native WG, routing and ambient actions enter through
+the canonical adapters. Nine local proof attempts failed before the output-free
+check and scoped build passed; changing dependency failures were separate.
+The final repair supplies explicit intermediate assertions and uses the
+canonical action's definitional equality, without unfolding unrelated state.
+
+Dump frames carry eight theorems to nine: seven native contracts, one retained
+product contract and one new native companion. The product dump theorem retains
+the exact43-field premise; its native companion observes only the WG store.
+Saved peer puts, cursor cleanup, deletion-permitting routing preservation and
+failure endpoints follow the actual dump code. Its first reached build passed.
+
+Both modules build without own warnings; all22 named logical roots, fresh dump
+closure replay and independent complete review pass. No infrastructure rerun,
+cap change or proof-limit change occurred. Reproduce with
+'cap scripts/in-bundle lake build Leanux.Proofs.WG.AllowedIps.RoutingDumpFrames';
+replay with 'cap scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.AllowedIps.RoutingDumpFrames'.
+The full gate remains pending, every register row remains lagging, and the
+mirror remains byte-identical to b700659.
