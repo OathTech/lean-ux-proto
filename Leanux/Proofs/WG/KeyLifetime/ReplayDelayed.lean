@@ -8,11 +8,18 @@ The optional second variant also runs the original zero timer and clear worker
 before encryption, retaining only the queued packet's key reference. -/
 open Lean Leanux Leanux.WG Leanux.Runner Leanux.Proofs.Logged
 
+/-- The original 43 store fields, excluding the former outer output fields.
+This is a pure observation of the product, not an execution state. -/
+private def store43 (w : World) :=
+  ({ w.fs with userOut := none, userFds := none }, w.tasks,
+    w.seccomp.filters, w.seccomp.nextFilter, w.wg.dev, w.wg.nlSock7, w.wg.nlSock8,
+    w.wg.peerCounter, w.wg.keypairCounter, w.wg.netIfindexNext, w.wg.ratelimiter)
+
 private def require (p : Bool) (message : String) : IO Unit :=
   unless p do throw (IO.userError message)
 
 private def device (w : World) : IO Device :=
-  match w.k.wg with
+  match w.wg.dev with
   | some d => pure d
   | none => throw (IO.userError "missing witness device")
 
@@ -47,8 +54,9 @@ def main : IO UInt32 := do
     key.sending.birthdate == 132000000000 && key.sendingCounter == 1 && key.refcount == 1)
     "two nonempty receives did not establish the expected key/timer state"
   let entry := { before with
-    hidden := trace.hidden.map (·[6]!)
-    netRxRaised := false }
+    ambient := { before.ambient with hidden := trace.hidden.map (·[6]!) }
+    fixture := { before.fixture with hiddenAhead := trace.hidden.map (fun h => (h.drop (7)).toList) }
+    wg := { before.wg with netRxRaised := false } }
   let jEnd : UInt64 := if clears then 4295060796 else 4294973046
   let (result, units) := runPrefix (advanceSyscallObserved 44250) entry []
   let (ret, final) ← match result with
@@ -94,11 +102,11 @@ def main : IO UInt32 := do
     else pure expired.execution.after
   let some crypt := units[if clears then 4 else 2]?
     | throw (IO.userError "missing encryption scheduler call")
-  require (crypt.execution.before.k == materialBoundary.k)
+  require (store43 crypt.execution.before == store43 materialBoundary)
     "kernel changed between the observed material boundary and encryption scheduler entry"
   let expected := dataMessage retained.remoteIndex packet.nonce retained.sending.key []
-  require (!(crypt.execution.before.senderInbox.any (·.bytes == expected)) &&
-    crypt.execution.after.senderInbox.any (·.bytes == expected))
+  require (!(crypt.execution.before.fixture.senderInbox.any (·.bytes == expected)) &&
+    crypt.execution.after.fixture.senderInbox.any (·.bytes == expected))
     "old material did not produce the expected ciphertext after recorded expiry"
   let dc ← device crypt.execution.after
   let pc ← peer0 dc
@@ -107,10 +115,10 @@ def main : IO UInt32 := do
     dc.txSkbs[packetId]?.isNone && pc.handshakePending &&
     pc.handshakeState == (if clears then 0 else pe.handshakeState))
     "transmission did not release its packet/reference before the queued handshake"
-  require (final.hidden == some []) "observed advance left unconsumed records"
+  require (final.ambient.hidden == some []) "observed advance left unconsumed records"
   let some last := checkpoints[6]? | throw (IO.userError "missing final checkpoint")
-  require (last.k == final.k && last.steps == final.steps && last.senderInbox == final.senderInbox &&
-    last.jiffiesLast == final.jiffiesLast && last.jiffiesLast == some jEnd && last.hidden == some [])
+  require (store43 last == store43 final && last.ambient.steps == final.ambient.steps && last.fixture.senderInbox == final.fixture.senderInbox &&
+    last.wg.jiffiesLast == final.wg.jiffiesLast && last.wg.jiffiesLast == some jEnd && last.ambient.hidden == some [])
     "observed timer endpoint disagrees with original runner"
   let branches ← match original.getObjValAs? (Array Json) "branches" with
     | .error e => throw (IO.userError e)

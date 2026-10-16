@@ -7,11 +7,18 @@ arm records are disabled: this is a runner-domain witness, not a Linux capture.
 The exact timer-pass observer also inspects the internal retained reference. -/
 open Lean Leanux Leanux.WG Leanux.Runner Leanux.Proofs.Logged
 
+/-- The original 43 store fields, excluding the former outer output fields.
+This is a pure observation of the product, not an execution state. -/
+private def store43 (w : World) :=
+  ({ w.fs with userOut := none, userFds := none }, w.tasks,
+    w.seccomp.filters, w.seccomp.nextFilter, w.wg.dev, w.wg.nlSock7, w.wg.nlSock8,
+    w.wg.peerCounter, w.wg.keypairCounter, w.wg.netIfindexNext, w.wg.ratelimiter)
+
 private def require (p : Bool) (message : String) : IO Unit :=
   unless p do throw (IO.userError message)
 
 private def getDevice (w : World) : IO Device :=
-  match w.k.wg with
+  match w.wg.dev with
   | some d => pure d
   | none => throw (IO.userError "missing witness device")
 
@@ -47,18 +54,17 @@ def main : IO UInt32 := do
   -- Runner's operation setup followed by syscall's literal reset. The
   -- intervening disabled-seccomp getter and idleTimers' peek do not modify it.
   let entry := { before with
-    hidden := trace.hidden.map (·[4]!)
-    netRxRaised := false
-    steps := #[]
-    userOut := none
-    userFds := none
-    extraOut := []
-    queuedThisCall := []
-    fired := #[]
-    netRxSections := 0
-    netRxSection := 0
-    emitted := {}
-    translatedLen := none }
+    ambient := { before.ambient with
+      hidden := trace.hidden.map (·[4]!)
+      steps := #[]
+      extraOut := []
+      fired := #[]
+      netRxSections := 0
+      netRxSection := 0 }
+    fixture := { before.fixture with hiddenAhead := trace.hidden.map (fun h => (h.drop (5)).toList) }
+    wg := { before.wg with netRxRaised := false, queuedThisCall := [] }
+    fs := { before.fs with userOut := none, userFds := none }
+    seccomp := { before.seccomp with emitted := {}, translatedLen := none } }
   let (result, units) := runPrefix (timerPassObserved 135005) entry []
   let (fired, final) ← match result with
     | .error e => throw (IO.userError s!"observed timer pass: {e.message}")
@@ -81,19 +87,19 @@ def main : IO UInt32 := do
     packet.plaintext.bytes.isEmpty && dc.encryptQueue.count == 1)
     "unexpected packet awaiting encryption after clear"
   let some crypt := units[3]? | throw (IO.userError "missing crypt scheduler call")
-  require (crypt.execution.before.k == cleared.execution.after.k)
+  require (store43 crypt.execution.before == store43 cleared.execution.after)
     "kernel state changed between clear completion and crypt scheduler entry"
   let expected := dataMessage retained.remoteIndex packet.nonce retained.sending.key []
-  require (!(crypt.execution.before.senderInbox.any (·.bytes == expected)) &&
-    crypt.execution.after.senderInbox.any (·.bytes == expected))
+  require (!(crypt.execution.before.fixture.senderInbox.any (·.bytes == expected)) &&
+    crypt.execution.after.fixture.senderInbox.any (·.bytes == expected))
     "crypt scheduler did not transmit the ciphertext under the retained key"
   let afterCrypt ← getDevice crypt.execution.after
   require (afterCrypt.keypairs[slot]?.isNone && afterCrypt.txSkbs[packetId]?.isNone)
     "transmission did not release the retained keypair and packet"
-  require (final.hidden.map (List.map (·.site)) == some [128])
+  require (final.ambient.hidden.map (List.map (·.site)) == some [128])
     "timer pass left records other than its caller's end-of-wait word"
   let some last := checkpoints[4]? | throw (IO.userError "missing final runner checkpoint")
-  require (last.k == final.k && last.jiffiesLast == some 135005 && last.hidden == some [])
+  require (store43 last == store43 final && last.wg.jiffiesLast == some 135005 && last.ambient.hidden == some [])
     "timer-pass endpoint disagrees with the accepted runner checkpoint"
   let branches ← match original.getObjValAs? (Array Json) "branches" with
     | .error e => throw (IO.userError e)

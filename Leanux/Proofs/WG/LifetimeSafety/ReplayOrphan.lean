@@ -21,13 +21,13 @@ private structure CursorCheckpoint where
   deriving BEq, Repr
 
 private def projectCursor (index : Nat) (w : World) : CursorCheckpoint :=
-  { index, cursor := w.k.nlSock8.ctx.nextPeer, running := w.k.nlSock8.cbRunning,
-    frontier := w.k.peerCounter, ifindex := w.k.wg.map (·.ifindex),
-    peer := (w.k.wg.bind (·.peers[26]?)).map fun p => (p.internalId, p.refcount, p.isDead),
-    listed := w.k.wg.any (·.peerList.contains 26),
-    hashed := w.k.wg.any fun d => d.peerHashtable.any (·.2 == 26),
-    trieOwner := w.k.wg.bind fun d => d.peerAllowedips.root4.bind fun id => (d.nodes[id]?).bind (·.peer),
-    triePrefix := w.k.wg.bind fun d => d.peerAllowedips.root4.bind fun id => (d.nodes[id]?).map fun n => (n.bits, n.cidr) }
+  { index, cursor := w.wg.nlSock8.ctx.nextPeer, running := w.wg.nlSock8.cbRunning,
+    frontier := w.wg.peerCounter, ifindex := w.wg.dev.map (·.ifindex),
+    peer := (w.wg.dev.bind (·.peers[26]?)).map fun p => (p.internalId, p.refcount, p.isDead),
+    listed := w.wg.dev.any (·.peerList.contains 26),
+    hashed := w.wg.dev.any fun d => d.peerHashtable.any (·.2 == 26),
+    trieOwner := w.wg.dev.bind fun d => d.peerAllowedips.root4.bind fun id => (d.nodes[id]?).bind (·.peer),
+    triePrefix := w.wg.dev.bind fun d => d.peerAllowedips.root4.bind fun id => (d.nodes[id]?).map fun n => (n.bits, n.cidr) }
 
 private def expected : List CursorCheckpoint :=
   [⟨2, some 26, true, 28, some 3, some (27, 2, false), true, true, none, none⟩,

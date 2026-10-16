@@ -33,7 +33,7 @@ def main : IO UInt32 := do
     "original/checkpoint JSON or checkpoint count differs"
   let some before := checkpoints[3]? | throw (IO.userError "missing session checkpoint")
   let some after := checkpoints[4]? | throw (IO.userError "missing batch checkpoint")
-  let some d := before.k.wg | throw (IO.userError "missing initial device")
+  let some d := before.wg.dev | throw (IO.userError "missing initial device")
   let some p := d.peers[0]? | throw (IO.userError "missing initial peer")
   let some slot := p.keypairCurrent | throw (IO.userError "missing current keypair")
   let some key := d.keypairs[slot]? | throw (IO.userError "missing session material")
@@ -57,9 +57,9 @@ def main : IO UInt32 := do
   require (packetHex replyN == "04000000040302010100000000000000970a5c285c46d27c2a1da800d008a21ed85a87ed00a2e327a015c23d84703a9c90b90ed582a2d4eb8ad7bc6a7ba7bce30401e5603229bcee0dbde30baa1a2fbd" &&
     packetHex replyH == "04000000040302010200000000000000cd72867e65810e61d33daa6cc1a961503c85660d2076aaad546036179974b7674d7ca31bb974acb859d59677921b156bb90c029ea8debd0bf30a69efa55207be")
     "computed reply ciphertexts differ from the reproducible witness"
-  require (after.senderInbox.map (·.bytes) == before.senderInbox.map (·.bytes) ++ [replyN, replyH])
+  require (after.fixture.senderInbox.map (·.bytes) == before.fixture.senderInbox.map (·.bytes) ++ [replyN, replyH])
     "actual output did not append normal SYN RST before held ACK RST"
-  let some d' := after.k.wg | throw (IO.userError "missing final device")
+  let some d' := after.wg.dev | throw (IO.userError "missing final device")
   let some p' := d'.peers[0]? | throw (IO.userError "missing final peer")
   let some key' := d'.keypairs[slot]? | throw (IO.userError "missing final keypair")
   require (p'.internalId == p.internalId && p'.keypairCurrent == some slot &&

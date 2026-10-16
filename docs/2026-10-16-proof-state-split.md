@@ -92,9 +92,10 @@ it is not part of that baseline.
 | Product encryption, IPv4 calls, timer callbacks and receive borrowing | 68 | 40 | 0 | 28 | 17 | 85 |
 | Native/product completion, poll and TX disposition projections | 70 | 38 | 0 | 32 | 12 | 82 |
 | TX worker, RX removal/GRO and disposition cuts | 48 | 7 | 2 | 39 | 4 | 50 |
+| Native transmit source and routing sends | 32 | 24 | 5 | 3 | 3 | 30 |
 
-The whole tree currently contains 451 Lean files and 6,403 theorems. The completed
-changes total 1,818 retyped theorems, 1,638 deletions, 790 retained contract shapes and 326 added.
+The whole tree currently contains 451 Lean files and 6,401 theorems. The completed
+changes total 1,842 retyped theorems, 1,643 deletions, 793 retained contract shapes and 329 added.
 Retyping changes or generalizes the actual state/monad carrier or observation.
 This includes shorthand contracts whose source functions or named views move
 to a native monad. Mere namespace qualification and equivalent relocation of a
@@ -2484,3 +2485,110 @@ KeyLifetime ReplayDelayed/ReplayPostClear. This was a failure, not a
 full-tree pass; the replay programs still needed their product projections
 carried. No infrastructure rerun, proof-limit increase or memory-cap change
 occurred in this tranche.
+
+## Native transmit source, routing sends and executable witness carry
+
+DeviceXmit and RoutingSendFrames pass scoped builds, 36 named standard-only
+axiom checks, two fresh module replays and independent source reviews. Their
+32 old theorems become thirty: 24 retyped/generalized, three retained product
+contracts, five deleted and three added. Six executable witness modules also
+compile and pass independent source review; their runtime results below are
+separate, and include four failures. All results remain lagging.
+
+DeviceXmit retains all three arbitrary product-invariant contracts, carries
+five native/source claims and adds three native preservation counterparts.
+Its literal source factor now includes the ICMP error route lookup,
+address classification and conditional loopback delivery. The previous
+observer omitted the route/classification and treated a credit draw as
+unconditional permission to send. Two ordinary development failures preceded
+the passing build; exact Ambient leaves and fixed intermediate invariants
+avoid unrestricted continuation matching. No proof limit changed.
+
+The unrestricted-state counterexample below kernel-checks the difference:
+the obsolete observer stops, while the actual mirror returns -ENOKEY,
+increments txErrors and consumes the credit record. This is proof-observer
+drift, not a demonstrated initialized execution or Linux defect. The first
+probe failed on record layout syntax; its recovery axiom output was rejected.
+The corrected probe passed with standard-only axioms for both statements.
+
+~~~sh
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 python3 - <<'PY'
+import subprocess,sys
+old=subprocess.check_output(['git','show','3fdf997:Leanux/Proofs/WG/Lifetimes/DeviceXmit.lean'],text=True)
+parts=[]
+for first,last in [('def xmitTrim (','def xmitTrimPrefix'),('def xmitSplice (','def xmitSplicePrefix'),('def wgXmitSource (','theorem wgXmitSource_eq')]:
+ parts.append(old[old.index(first):old.index(last)].replace(': M ',': WG.M '))
+source='import Leanux.WG.Device\nopen Leanux Leanux.WG\nnamespace XmitObserverWitness\n'+'\n'.join(parts)+"""
+def initial : WGWorld := {dev := some {ifindex := 3, ifname := "wg0"}}
+def ambient : Ambient := {\n  env := fun _ _ => false\n  timing := ⟨0,0⟩\n  hidden := some [{site := HiddenSite.icmpCredit.info.id, bytes := [1]}]}
+def packet : Packet := {bytes := [0x45] ++ List.replicate 19 0}
+def observe (a : WG.M Int) : Option (Int × Nat × Nat) :=
+  match (a.run initial).run ambient with
+  | .error _ => none
+  | .ok ((n, w), rest) => w.dev.map fun d => (n, d.txErrors, (rest.hidden.getD []).length)
+theorem obsolete_stops : observe (wgXmitSource 4 0 [packet] 0) = none := by decide +kernel
+theorem current_returns : observe (WG.wgXmit 4 0 [packet] 0) = some (-ENOKEY, 1, 0) := by decide +kernel
+#print axioms obsolete_stops
+#print axioms current_returns
+end XmitObserverWitness
+"""
+r=subprocess.run(['capped','--','scripts/in-bundle','lake','env','lean','-j1','--stdin'],input=source,text=True)
+sys.exit(r.returncode)
+PY
+~~~
+
+RoutingSendFrames carries eighteen native concrete contracts and generalizes
+the arbitrary-action WP rule over its actual state and observation. Five
+packet-store-only routing frames are deleted: getTxSkb, setTxSkb, newTxSkb,
+freeTxSkb and newTxSkbs are actual SkbStore adapter actions, while routingView
+excludes that component. Their uses employ the canonical adapter, with the
+generic traversal law where needed. Native peer/queue actions still require
+substantive frames; peer release can delete residents. Five ordinary
+development failures preceded the passing build.
+
+The six executable modules retain all expected outcomes. Their old whole
+Kernel comparisons are represented by the same 43-field observation across
+the product worlds, excluding the same outer outputs. Four later routing
+and timer fields are not silently added to that baseline observation.
+Three pure private observation helpers are added; no theorem is added or
+deleted. Timer entry fixtures also copy the current runner's hiddenAhead
+reset. Two changed-source build calls passed.
+
+Each command below was run once, with no infrastructure rerun:
+
+~~~sh
+# Replace CASE and MODULE with one row from the table.
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle bash -o pipefail -c \
+  'python3 -B docs/proof-campaign-replay.py CASE | lake env lean --run Leanux/Proofs/WG/MODULE.lean'
+~~~
+
+| CASE | MODULE | Result |
+| --- | --- | --- |
+| r2-stale-dump-cursor | LifetimeSafety/Replay | PASS |
+| r2-stale-dump-cursor-orphan | LifetimeSafety/ReplayOrphan | PASS |
+| r4-gro-reorder | DeliveryOrder/ReplayGro | PASS, exact ciphertext order |
+| r6-retransmit-limit | FloodResistance/Replay | FAIL at original operation 2: expected timer_clk site 428, saw 41 |
+| r5-delayed-encryption | KeyLifetime/ReplayDelayed | FAIL at original operation 1: expected site 428, saw 8 |
+| r5-coherent-post-clear | KeyLifetime/ReplayDelayed | FAIL at original operation 1: expected site 428, saw 8 |
+| r5-post-clear-transport | KeyLifetime/ReplayPostClear | FAIL at original operation 4: no modeled timer bucket due at jiffies 135005 |
+
+All four failures precede the proof observers. The historical generator
+replaces roaming records with an older seed and synthesizes timer inputs
+without the current wheel clock records. The normal differential runner
+captures current records from the approved oracle; its present S5 unit
+fixture contains sites 428 and 429. Replaying those different fixtures would
+not establish these witnesses. The old generator and mirror are unchanged
+here; the failures remain findings pending exact witness reconstruction.
+
+Two stalled handshake development jobs were terminated only at inspected
+owned child PIDs before replacement: one Lean child exited 143 with enclosing
+build exit 1 and no KILLED banner; the focused diagnostic exited 143 with a
+KILLED signal banner. Both are failures, neither a cap outcome or pass.
+Dirty worktrees were snapshotted at
+`refs/snapshots/proof-campaign-handshake-composition-20261016T203023Z/`
+before work resumed. A later RxStack build failed on a generated-declaration
+import collision before checking its statements. Its completed-job driver
+then raised a serialization exception; no child remained. Dirty worktrees
+were preserved at
+`refs/snapshots/proof-campaign-rxstack-driver-20261016T203251Z/`
+before resuming. These unfinished repairs are outside this checkpoint.
