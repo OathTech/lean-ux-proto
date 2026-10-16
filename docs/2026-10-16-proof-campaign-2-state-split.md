@@ -20,9 +20,9 @@ and attributed theorem declarations. Campaign 2 owns 427 Lean files,
 | --- | ---: | ---: | ---: | --- |
 | Common projection | 2 | 0 | 0 | Native and product observations carried |
 | H1 Noise | 35 | 171 | 22 | Native execution/getter/setter carried; terminal closure pending |
-| H2 Index | 68 | 318 | 52 | Pending native index-table and WG contracts |
+| H2 Index | 68 | 318 | 52 | Three table contracts and seven pure table theorems carried; remaining closure pending |
 | H3 Roaming | 35 | 119 | 13 | Pure observation models build; native calls and product callbacks pending |
-| H4 Configuration | 130 | 554 | 79 | One pure theorem checked; operational carry pending |
+| H4 Configuration | 130 | 554 | 79 | Total-return laws and one pure theorem checked; operational carry pending |
 | H5 Progress | 59 | 265 | 42 | Twelve pure/control theorems checked; operational carry pending |
 | H6 Timer discipline | 98 | 404 | 50 | Pure views build; timer wheel and worker semantics pending |
 
@@ -77,7 +77,7 @@ shared host, all heavy commands run through `capped`, with the existing cap,
 | Initial pure/configuration/control closure | 13 | 0 | 0 | 13 | 0 | 13 |
 | Total validated theorem surface | 18 | 4 | 0 | 14 | 2 | 20 |
 
-The tree now has 428 campaign-owned files and 1,833 theorems. The 258
+At `adba365` the tree has 428 campaign-owned files and 1,833 theorems. The 258
 headline names are unchanged and none has yet been validated against the
 split mirror. Of the baseline, 1,813 theorems still await retrofit validation.
 These are support carries, not new charter results.
@@ -136,3 +136,45 @@ module suffixes under `Leanux.Proofs.WG`:
 
 Replay those roots with `scripts/in-bundle lake env leanchecker --fresh MODULE`
 (`PollBoundEffects` includes `PollBoundModel`). Use `capped` on this host.
+
+## Total native contracts and the index table
+
+| Tranche | Before | Retyped/generalized | Deleted | Kept | Added | After |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `Config.Returns`, `Index.Table` | 5 | 5 | 0 | 0 | 2 | 7 |
+| `Index.TableModel` | 7 | 0 | 0 | 7 | 0 | 7 |
+| This tranche | 12 | 5 | 0 | 7 | 2 | 14 |
+| Cumulative checked support | 30 | 9 | 0 | 21 | 4 | 34 |
+
+The tree has 428 campaign-owned files and 1,835 theorems. The remaining
+baseline theorem count awaiting validation is 1,801. All 258 headline names
+remain present and all six terminal closures remain lagging.
+
+`Config.Returns` distinguishes native total execution over arbitrary Ambient
+inputs from arbitrary product execution. Its original product laws are
+generalized over the actual state type in `Config.Product`; the native
+versions are companions. The outer-state predicate cannot constrain hidden
+records: a record-sensitive total claim still needs both states observed.
+
+`Index.Table`'s removal, hashed-membership and handshake-replacement contracts
+now call the real `liftIndex` adapter around each narrowed operation. Their
+resident-device premise, exact Device effects and Boolean results remain;
+no uniqueness, validity, owner-residency or successful-execution premise was
+added. Duplicate and malformed tables remain in scope. The pure table
+uniqueness/owner algebra contributes seven unchanged theorems.
+
+The scoped build passes 30 jobs without warnings. All 35 named logical roots
+in the seven-module closure have only standard axioms; independent complete
+review found no substantive issue. Fresh replay of `Index.Table` passes.
+Static token/import/root/default-target and whitespace checks pass; mirror
+and shared-layer boundaries are unchanged.
+
+Development: two capped stdin calls for the total-contract prototype (one
+failed, then a warning-free pass after correction), and two packaging builds
+(one failed normalization proof, then a warning-free pass). No unchanged
+failed source rerun, infrastructure retry, cap or proof-limit change.
+
+Reproduce with `scripts/in-bundle lake build Leanux.Proofs.WG.Index.Table`
+and `scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Index.Table`,
+through `capped` on this host. This is scoped support validation, not a
+terminal or full-tree gate pass.
