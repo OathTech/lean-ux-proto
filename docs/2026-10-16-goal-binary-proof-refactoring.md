@@ -16,9 +16,8 @@ M1 proof components to rebuilding everything; some invariants remain useful.
 The deliberately unrealistic sequential model is an experiment in proof
 cost, not a claim of composition into concurrent kernel contexts.
 
-The next experiment is specified below under "Sibling sequential relational
-proof". The earlier rounds and their measurements remain historical results.
-This update plans the experiment; implementation has not started.
+The sibling sequential lookup experiment is implemented; its result and
+limitations are recorded below. The earlier rounds remain historical results.
 
 ## Fixed target and scope
 
@@ -225,6 +224,175 @@ or a projection of M1 is reported as such. The result should tell us whether
 relaxing the observation discipline removes the expensive obligations, and
 which remaining costs merit tooling. Runtime testing of candidate relations
 and a realistic concurrent observation model remain separate later questions.
+
+## Sibling sequential experiment: result
+
+[USER 2026-10-16] Run the sibling sequential experiment described above.
+
+[AGENT 2026-10-16] Retain one complete sibling lookup proof and stop this
+round. It demonstrates simpler relational composition without changing M1;
+expanding the experiment into another bucket-loop implementation or a general
+framework would measure a different intervention. The remaining physical
+bookkeeping is substantial, so this result does not justify projecting a
+campaign-wide speedup.
+
+### What checked
+
+`Binary.Sequential.lookup_simulation` in `binary/SequentialLookup.lean`
+executes the actual image under `instructionStep` from the original
+`Pre_lookup` to its original ABI return. It includes arbitrary collision
+chains, the wrong-kind stop, NULL owner words, dead peers and accepted live
+counts. The entry domain and accepted-source-run restriction are unchanged.
+The live output may still alias disposable helper scratch; mapping is proved
+using the existing bytewise lemma rather than a new separation premise.
+
+The new `Post` exports the return value, live output word, restored ABI,
+`Related` at return, memory footprint, coverage invariant, restored preempt
+count and conditional softirq-pending word. `related_entry` derives the new
+relation from the original Pre. `Post.frame` frames arbitrary memory
+interpretations insensitive to the proved writes. This is not new transport
+of the campaign's whole-operation results.
+
+`Related` uses the existing bucket/owner/count projection of World, with a
+new `At` predicate over ordinary current bytes. It has no execution history,
+source decision log, pending count or pending owner clause. Both sides commit
+the peer update before the helper-return correspondence point; both commit
+the owner update before the result-region exit. Thus the dead path retains
+its zero-count peer and clears the owner's peer word, including the original
+alias cases. We did not alter the mirror to make the proof close.
+
+Composition uses existing `Eventually` transitivity and physical execution
+lemmas. No new search tactic, certificate checker or trusted automation was
+needed. The nine sibling modules add **1,318 lines**; no existing proof was
+deleted or replaced in this round. Some physical preparation proofs are
+copied/adapted into the sibling. That duplication is appropriate to this
+comparison, not a proposed long-term library design.
+
+### Contract difference and realism
+
+[AGENT 2026-10-16] The sibling's headline is an endpoint theorem of sequential
+Kraken `instructionStep`; it does **not** export M1's `RunEnvironment`
+permission audit. Its hypotheses do not include unused `SerializedEnvironment`
+or `InvocationPermissions` arguments. This is a further explicit weakening,
+not a proof that permissions or concurrency are unimportant. The original
+headline and its audit are unchanged. Compare the sibling with M1's core
+`lookup_kraken` as well as its audited headline so that deleting this audit is
+not credited as an observation-alignment saving.
+
+Sequentiality is inherent in this execution relation: no other CPU, interrupt
+or external action is interleaved. Kraken's permitted undefined instruction
+outcomes remain universally quantified. Real callback instructions and BH
+instructions still execute under the existing named service contracts.
+`instructionStep` does not independently discharge memory access permissions;
+the sibling makes no claim about that audit or real Linux atomicity.
+
+The named hypotheses are the unchanged `AnchoredDecoderAgreement`,
+`TracePcContract`, `TraceCmp4Contract`, `TraceConstCmp4Contract`,
+`TraceConstCmp1Contract`, `BhEnableContract`, `Pre_lookup`, and acceptance of
+the executable `indexLookup` run. No region correctness, future readiness or
+termination hypothesis was added. `TrustBase.lean`, the original expected
+surface, image, oracle, mirror and Kraken pin are unchanged. No permission
+premise is hidden as a fact of the Kraken model.
+
+This does not settle Linux's contextual observation interface, prove
+concurrent refinement, discharge the five service contracts from the image,
+establish realistic entry reachability, transport whole-operation properties,
+or complete M2. The existing witnesses were preserved, not rerun under QEMU;
+there is no new differential-test or external-export acceptance claim.
+
+### What became cheaper, and what remained
+
+The new function proof does not depend on the completed M1 lookup theorem,
+its selected/miss execution theorems, its helper simulation, its result
+simulation or its common-finish theorem. It composes new endpoint proofs.
+The selected suffix no longer proves matched source lists, cut alignment,
+per-cut frames, pending-owner transitions or per-decision peer-count
+correspondence. Those are concrete removed obligations, not just a shorter
+spelling of M1's theorem.
+
+However, this is a stripped proof, not an independent construction. The
+entry/header/bucket loop and helper CALL still reuse M1's stronger proofs.
+The bucket loop's invariant is composed through `bucket_from_head`, not
+reproved under the weaker relation. The physical peer entry/return lemmas
+still retain histories, scanner summaries and cuts internally. In particular
+`PeerCountPhase.scan`, `countPhase` and `ownerPending` remain in the logical
+closure. `owner_pending_result` and the all-cut peer execution theorems do
+not. Empty-history bridges reuse ordinary physical frame lemmas; they do not
+introduce a pending update into the new relation.
+
+Stack save/restore, byte separation, coverage readiness and output mapping
+remain most of the adapted suffix code. The experiment removes a layer of
+alignment work; it does not make memory/ABI/service composition disappear.
+
+A transitive traversal of declaration **types and proof/definition values**
+(including opaque values and inductive constructors), not just imports, gives:
+
+| Measure | M1 audited headline | M1 core before audit | Sequential sibling |
+| --- | ---: | ---: | ---: |
+| Referenced binary declarations | 1,694 | 1,636 | 1,462 |
+| Binary modules containing those declarations | 154 | 152 | 130 |
+| Lines in those whole module files | 22,789 | 22,491 | 19,928 |
+
+The sibling shares 121 modules with either M1 closure, adds nine, and avoids
+31 of the core's modules. The core-to-sibling declaration reduction is about
+10.6%. Whole-module line counts include declarations unused by the theorem;
+they are a coarse footprint, not proof-term size or lines saved. Imports
+still bring in more modules than these logical closures. No speedup follows
+from these counts alone.
+
+The dependency traversal was an ephemeral measurement, not a new gate.
+Reproduce by importing `SequentialLookup`, `LookupAdequacy` and `Lean`,
+walking `Environment.find?` from each headline through
+`ConstantInfo.type.getUsedConstants`, `ConstantInfo.value? true`, and
+inductive constructors, deduplicating names, and mapping each name through
+`Environment.getModuleIdxFor?`. The core is the private declaration
+`_private.LookupAdequacy.0.Binary.LookupRelation.lookup_kraken`. Count only
+modules with a corresponding `binary/<module>.lean`; include complete files
+only for the explicitly labelled whole-module line measure.
+
+### Time, failures and validation
+
+Timing marker: **2026-10-16 02:07:49 UTC** at baseline `cc29454`, before the
+first sibling implementation. There was a little source inspection before
+that marker. The first successful complete sibling build ended at
+**02:22:33.694 UTC**, **14 minutes 44.7 seconds** after it. This includes
+adaptation and compile repairs, but excludes later dependency analysis,
+reporting and fresh replay. It is a single-agent, warm-cache, heavily reused
+construction; it is not comparable to M1's 16.98-hour first construction.
+There is no independent new-function authoring-rate measurement.
+
+The final scoped build took 0.93 seconds, maximum RSS 1,724,940 KiB. The full
+binary gate passed all 544 jobs, the original exact headline/trust diff and
+clean Kraken pin `7ebba06a30eaf08c10b26b28ca14bfee1c791576`; its warm run took
+1.91 seconds, maximum RSS 1,770,060 KiB. Aggregate build waiting was not
+continuously instrumented, so no total waiting-time estimate is claimed.
+
+Failed intermediate builds were failures: option/integer coercions in the
+peer result, dependent-match normalization in the endpoint relation, an
+uninferred conjunction and missing local name in the helper adapter, and
+the generic XOR lemma name/PC normalization in the clear tail. A temporary
+source-extraction command failed before writing files; a dependency query
+initially used invalid syntax for a private declaration name. All were
+corrected before the successful runs. No failed run counts as validation.
+
+The sibling headline, its miss/selected compositions, entry relation and
+frame theorem report only `propext`, `Classical.choice`, `Quot.sound`.
+Fresh aggregate replay **PASS**: `leanchecker --fresh RefactorReplay`,
+108.13 seconds, maximum RSS 2,348,400 KiB, exit 0. Its complete imported
+closure was replayed from an empty environment. No cap kill or timeout
+occurred. This is local kernel replay, not external export acceptance.
+
+Reproduce from the worktree root with `capped -- lake -d binary build
+SequentialLookup` and `capped -- scripts/proof-gate --binary`. The aggregate
+recipe below now includes all 56 changed/new modules since `6812d04` plus
+five existing headline/witness roots, for 61 roots. From `binary/`, compile
+that aggregate with `lean --root=../.tmp` and run
+`capped -- lake env leanchecker --fresh RefactorReplay`. This is local kernel
+replay; the user's external acceptance at `430ea90` remains historical.
+For an external check of the sibling, export `SequentialLookup` (and the
+original headline/witness roots if checking the combined branch) with
+`leanexport`, then run `lake check --from-export` outside Nono as documented
+in `binary/README.md`.
 
 ## Earlier follow-on: execution segments as the unit of proof
 

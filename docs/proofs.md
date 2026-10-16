@@ -132,6 +132,14 @@ realism and physical frame premises.
 
 | Allowed-IPs `lookup` and `common_bits`, both families | In progress; no function theorem claimed | 56 (35 lookup, 21 common_bits), plus existing peer-get | Under construction; additional variable cmp1/cmp8 callbacks reached | `cb2348e` | Paused for replanning (2026-10-16). Both-family Pre witnesses execute to RET; complete entry/common_bits/peer-get/return-tail components checked with union cut frames. Bounded loop and function correspondence/transport remain open; recovery record is in the single adequacy report. M2 review will recheck M1 fixes. |
 
+On the separate `task/binary-proof-refactor` branch, the
+[sequential sibling experiment](2026-10-16-goal-binary-proof-refactoring.md#sibling-sequential-experiment-result)
+adds `Binary.Sequential.lookup_simulation` for the same full index lookup.
+It keeps Pre and the image fixed, but exports endpoint effects under
+sequential Kraken execution, without internal correspondence or M1's
+permission audit. This is an experiment in proof cost, not additional
+campaign function coverage or M2 completion; M1 remains available unchanged.
+
 The concrete frame instance `lookup_snapshot_transport` carries exact
 frontier and source-live lifetime/replay fields through lookup, conditional
 on their initial representation and untouched-byte separation. It does not

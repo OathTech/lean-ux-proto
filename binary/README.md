@@ -39,6 +39,27 @@ The independent milestone-1 review approved proceeding with named fixes.
 Per the user’s resume instruction, milestone 2’s review rechecks those fixes;
 there is no separate review before starting it.
 
+## Sequential sibling experiment
+
+On `task/binary-proof-refactor`, `SequentialLookup.lean` adds
+`Binary.Sequential.lookup_simulation`. It retains the original `Pre_lookup`
+and proves endpoint effects for the full index lookup, including its bucket
+loop and NULL/dead/live peer paths. Its separate relation contains current
+bucket/owner/count bytes; decisions and cut alignment are not observations.
+It reuses substantial physical and bucket proofs from M1.
+
+This is an intentionally unrealistic sequential experiment, with no
+concurrent-context claim and no exported execution-wide permission audit.
+The original M1 theorem and trust surface are unchanged. The
+[experiment report](../docs/2026-10-16-goal-binary-proof-refactoring.md#sibling-sequential-experiment-result)
+records the precise differences, retained dependencies and measurements.
+Build with `capped -- lake build SequentialLookup`; replay its closure with
+`capped -- lake env leanchecker --fresh SequentialLookup`. An external
+sibling export can use `capped -- lake env leanexport SequentialLookup`,
+redirected to an ephemeral file under `../.tmp`, followed by the existing
+`lake check --from-export` form outside Nono. No external acceptance of this
+sibling is claimed.
+
 ## Build and trust checks
 
 All heavy commands run through `capped`; a KILLED banner or timeout fails.
