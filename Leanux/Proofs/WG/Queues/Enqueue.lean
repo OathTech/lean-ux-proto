@@ -27,14 +27,6 @@ theorem setPeer_encryptRing (pid : PeerId) (p : Peer) :
   cases hr
   simp [encryptRing, Option.map_map, Function.comp_def]
 
-theorem setTxSkb_encryptRing (id : SkbId) (f : DataPacket → DataPacket) :
-    SameView encryptRing (setTxSkb id f) := by
-  apply SameView.of_wp
-  intro r
-  apply hoare_liftSkb (SkbStore.setTx id f) (fun w => encryptRing w = r)
-  intro g d packets hg hd
-  simpa [encryptRing, hd] using hg
-
 theorem getPeer_encryptRing (pid : PeerId) : SameView encryptRing (getPeer pid) := by
   apply SameView.of_wp
   intro r
@@ -52,8 +44,13 @@ theorem enqueue_ring_wp (before : Option (PtrRing (List SkbId)))
     (pid : PeerId) (item : List SkbId) :
     ⦃fun w => ⌜encryptRing w = before⌝⦄ enqueuePerDeviceAndPeer pid item
     ⦃⇓? ret w => ⌜EnqueueResult before item ret (encryptRing w)⌝⦄ := by
-  have packet_spec := fun id => (setTxSkb_encryptRing id
-    (fun p => {p with state := .uncrypted})).wp (fun r => r = before)
+  have packet_spec (id : SkbId) :
+      ⦃fun w => ⌜encryptRing w = before⌝⦄
+        setTxSkb id (fun p => {p with state := .uncrypted})
+      ⦃⇓? _ w => ⌜encryptRing w = before⌝⦄ := by
+    apply hoare_liftSkb
+    intro g d packets hg hd
+    simpa [encryptRing, hd] using hg
   have peer_spec := (getPeer_encryptRing pid).wp (fun r => r = before)
   have set_spec := fun p => (setPeer_encryptRing pid p).wp (fun r => r = before)
   have cpu_spec := fun cpu => (encryptRing_kernel

@@ -81,11 +81,12 @@ it is not part of that baseline.
 | Native routing, allocation, retirement, R6 terminals and product operation evolution | 102 | 50 | 2 | 50 | 7 | 107 |
 | Native allocation, lookup, session and routing lifecycle with canonical Seccomp adapter (corrected) | 55 | 38 | 3 | 14 | 10 | 62 |
 | Replay terminals, receive admission, key maintenance, clear walks and native failures | 91 | 40 | 3 | 48 | 11 | 99 |
-| Native clear endpoints, material derivation and transmit enqueue | 48 | 37 | 0 | 11 | 1 | 49 |
-| Native session receipts, projection additions, routing histories and RX queue frames | 44 | 39 | 0 | 5 | 11 | 55 |
+| Native clear endpoints, material derivation and transmit enqueue (corrected) | 48 | 36 | 1 | 11 | 1 | 48 |
+| Native session receipts, projection additions, routing histories and RX queue frames (corrected) | 44 | 38 | 1 | 5 | 11 | 54 |
+| Cookie/timer observers, affiliation, origin support, routing completions and enqueue admission | 118 | 82 | 5 | 31 | 19 | 132 |
 
-The whole tree currently contains 451 Lean files and 6,289 theorems. The completed
-changes total 1,407 retyped theorems, 1,611 deletions, 524 retained contract shapes and 185 added.
+The whole tree currently contains 451 Lean files and 6,301 theorems. The completed
+changes total 1,487 retyped theorems, 1,618 deletions, 555 retained contract shapes and 204 added.
 Retyping changes or generalizes the actual state/monad carrier or observation.
 This includes shorthand contracts whose source functions or named views move
 to a native monad. Mere namespace qualification and equivalent relocation of a
@@ -1752,3 +1753,93 @@ name and failed before resolving the module. The corrected module invocation
 passed. Dirty-worktree recovery snapshots are under
 refs/snapshots/proof-campaign-checkpoint-driver-20261016T184251Z; branches and
 working files were preserved. No memory cap or proof limit changed.
+
+
+## Cookie, timer, affiliation and completion carry
+
+The new tranche has 118 old claims: 82 native/generalized retypes, 31 retained
+product/pure contracts and five deletions, with nineteen additions (132 after).
+Two previously carried packet frames are also deleted; the preceding table rows
+correct their earlier classification. The eight changed files have 134 old and
+146 current theorems. Every result row remains lagging over b700659.
+
+CookieAccess retains all three arbitrary product-invariant contracts and the
+original seven-field cookie mask (43 fields at product scope). Self-review
+rejected an intermediate eleven/47-field mask because it strengthened the
+arbitrary-action premise; the accepted version restores the original domain.
+MaintenanceTimers retains ten product-invariant contracts and adds their native
+counterparts, with all original branch/clock/Stop behavior.
+
+The obsolete timerArmExpiry factor, its frame and armTimer_source are retired:
+the current arm places a timer on the wheel, whereas that old proof-side factor
+only wrote expiry. This is a source mismatch, not a type-trivial deletion or a
+mirror defect. The native observer now includes the same-expiry return, clock and
+enqueue records, all wheel checks and insertion; deletion clears both fields.
+Its universal erasure proof and both invariant domains pass.
+
+The distinguishing kernel-checked example starts with one peer, no arm records,
+and no previous jiffies. Current armTimer at delay one installs wheel slot two,
+bucket expiry two, enqueue stamp one; the obsolete expiry-only operation leaves
+no wheel entry. Reproduce from this worktree:
+
+~~~sh
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env lean -j1 --stdin <<'LEAN'
+import Leanux.Runner
+open Leanux Leanux.WG
+private def witnessPeer : Peer :=
+  { remoteStatic := [], presharedKey := [], precomputedStaticStatic := [], internalId := 1 }
+private def witnessWorld : WGWorld :=
+  { dev := some { ifindex := 4, ifname := "wg0", peers := Std.TreeMap.ofList [(0, witnessPeer)] } }
+private def witnessAmbient : Ambient := { env := Runner.harnessEnv, timing := Env.timing }
+private def wheelAfter (a : WG.M Unit) : Option (Option (Nat × UInt64 × Nat)) := do
+  let ((_, w), _) ← ((a.run witnessWorld).run witnessAmbient).toOption
+  let d ← w.dev
+  let p ← d.peers[0]?
+  pure ((p.wheel .newHandshake).map fun e => (e.slot, e.bucketExpiry, e.enqueued))
+theorem currentArmWheel : wheelAfter (armTimer 0 .newHandshake 1) = some (some (2, 2, 1)) := by
+  decide +kernel
+theorem obsoleteExpiryOnlyWheel : wheelAfter (do
+    let p ← getPeer 0
+    setPeer 0 (p.setTimer .newHandshake (some 1))) = some none := by
+  decide +kernel
+#print axioms currentArmWheel
+#print axioms obsoleteExpiryOnlyWheel
+LEAN
+~~~
+
+Affiliation exposes the actual consecutive owner-read, get and owner-write
+executions. Material support uses one WGRunWitness with both Ambient endpoints,
+without a new liveness, coherence or success premise. All generic observation
+transports retain arbitrary product actions. Routing completions retain signed
+ordinary results and append nothing for failed whole calls; three existing
+product helpers remain generic beside three new native bridges for callers.
+
+The other three new-tranche deletions are Origins.indexReplace_view and
+EnqueueAdmission's getRxSkb_decryptRing/setRxSkb_decryptRing. The prior corrections
+delete Enqueue.setTxSkb_encryptRing and RxHelperFrames.freeRxSkb_rxQueues.
+The actual index and packet component types cannot change their observed fields;
+canonical guarded adapters discharge consumers directly. Retaining those four
+packet wrappers was our retrofit form error, including the earlier independent
+RX review. The unported poll/combined terminal consumers still need direct
+adapters; this checkpoint does not claim full-tree validity.
+
+All eight changed modules passed scoped builds, 225 explicit named axiom checks,
+eight fresh entry-module kernel replays and independent source reviews. Standard
+axioms only; mirror, caps and proof limits unchanged. The unchanged default build
+and unit closure retain their preceding 66-job and 131-test/one-skip passes.
+The full 509-target build failed at ReceiveMaintenance, SavedPeers,
+RoutingCompletions, EnqueueAdmission, Origins.State and Peers.Affiliation.
+Several now pass scoped checks; the whole-tree run remains a failure.
+
+Development ledger: CookieAccess had two proof failures before an intermediate
+pass; mask review then required the corrected fourth build and new trust checks.
+MaintenanceTimers had eight ordinary proof/dependency failures before its ninth
+build passed, including existing-limit failures; no limit was raised. Its first
+witness probe omitted a required identity field and failed; recovery axiom output
+was rejected, and the corrected example passed. Affiliation and routing
+completions each had one failed draft; Origins.State had two (factor inference
+and private-name unfolding) before passing. Admission had one factor-elaboration
+failure, then passed; deletion review required the final combined 136-job build
+and fresh trust checks on all three corrected queue files. Superseded passes
+were not used to claim the final source. No KILLED, guest timeout or new
+infrastructure rerun occurred.

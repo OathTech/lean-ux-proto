@@ -46,14 +46,6 @@ theorem keypairPut_rxQueues (kp : Option KeypairId) (now : Bool) :
   all_goals subst_vars
   all_goals simp_all
 
-theorem freeRxSkb_rxQueues (id : SkbId) : SameView rxQueues (freeRxSkb id) := by
-  apply SameView.of_wp
-  intro s
-  apply hoare_liftSkb (SkbStore.freeRx id) (fun w => rxQueues w = s)
-  intro w d packets hi hd
-  unfold rxQueues at hi ⊢
-  simpa only [hd, Option.bind_some] using hi
-
 theorem peerGet_rxQueues (pid : PeerId) : SameView rxQueues (peerGet pid) := by
   apply SameView.of_wp
   intro s

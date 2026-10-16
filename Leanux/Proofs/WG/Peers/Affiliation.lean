@@ -5,7 +5,7 @@ import Leanux.Proofs.WG.Lifetimes.LookupAccess
 which name their owners. Missing objects and NULL words are permitted. This is
 an input invariant for local source contracts, not initialized Runner closure. -/
 namespace Leanux.Proofs.WG.Affiliation
-open Leanux Leanux.WG Leanux.Proofs.Framing Std.Do
+open Leanux Leanux.WG Leanux.Proofs.Framing Leanux.Proofs.WG.Lifetimes Std.Do
 set_option maxHeartbeats 1000000
 set_option pp.structureInstances false
 
@@ -30,7 +30,7 @@ def state (d : Device) : State :=
   ⟨d.ifindex, d.nextPeer, d.nextKeypairId, fun i => d.peers[i]?.map peerCell,
     fun i => d.keypairs[i]?.map keyCell, fun i => d.txSkbs[i]?.map (fun p => (p.peer, p.keypair)),
     fun i => d.rxSkbs[i]?.map (fun p => (p.peer, p.keypair))⟩
-def view (w : World) : Option State := w.k.wg.map state
+def view (w : WGWorld) : Option State := w.dev.map state
 
 def State.keyRef (s : State) (pid : PeerId) (kid : KeypairId) : Prop :=
   kid < s.nextKey ∧ ∀ stamp word, s.keys kid = some (stamp, word) → Compatible word pid
@@ -45,13 +45,18 @@ structure State.Inv (s : State) : Prop where
   tx : ∀ id pid kid, s.tx id = some (pid, kid) → pid < s.nextPeer ∧ s.keyRef pid kid
   rx : ∀ id pid kid, s.rx id = some (pid, kid) → pid < s.nextPeer ∧ s.keyRef pid kid
 
-def Inv (w : World) : Prop := ∀ s, view w = some s → s.Inv
+def Inv (w : WGWorld) : Prop := ∀ s, view w = some s → s.Inv
 
-def peerAt (w : World) (pid : PeerId) := w.k.wg.bind fun d => d.peers[pid]?.map peerCell
-def keyAt (w : World) (kid : KeypairId) := w.k.wg.bind fun d => d.keypairs[kid]?.map keyCell
+def peerAt (w : WGWorld) (pid : PeerId) := w.dev.bind fun d => d.peers[pid]?.map peerCell
+def keyAt (w : WGWorld) (kid : KeypairId) := w.dev.bind fun d => d.keypairs[kid]?.map keyCell
 
-theorem kernel (ha : SameKernel a) : SameView view a :=
-  fun w x v hr => congrArg (fun k : Kernel => k.wg.map state) (ha w x v hr)
+/-- Pure observation transport over any actual outer state and inner monad.
+The seven-field premise includes the original whole-store product instances. -/
+theorem kernel {S α : Type} {m : Type → Type} {ps : PostShape}
+    [Monad m] [WPMonad m ps] {project : S → WGWorld} {a : StateT S m α}
+    (ha : SameView (fun s => wgStoreView (project s)) a) :
+    SameView (fun s => view (project s)) a :=
+  ha.factor (fun k : WGStoreView => k.dev.map state)
 
 theorem state_peer_same (d : Device) (pid : PeerId) (old p : Peer)
     (hp : d.peers[pid]? = some old) (he : peerCell p = peerCell old) :
@@ -76,49 +81,52 @@ theorem state_key_same (d : Device) (kid : KeypairId) (old k : Keypair)
 theorem getPeer_spec (P : Option State → Prop) (pid : PeerId) :
     ⦃fun w => ⌜P (view w)⌝⦄ getPeer pid
     ⦃⇓? p w => ⌜P (view w) ∧ peerAt w pid = some (peerCell p)⌝⦄ := by
-  mvcgen [getPeer, getDev, getK, invariant]
+  mvcgen [getPeer, getDev, invariant, AmbientM.invariant]
   all_goals simp_all [peerAt]
 
 theorem setPeer_spec (P : Option State → Prop) (pid : PeerId) (p : Peer) :
     ⦃fun w => ⌜P (view w) ∧ peerAt w pid = some (peerCell p)⌝⦄ setPeer pid p
     ⦃⇓? _ w => ⌜P (view w)⌝⦄ := by
-  apply (hoare_iff_triple _ _ _).mp
-  intro w x v hi hr
-  cases hd : w.k.wg with
+  apply (hoare_iff_run_ambient _ _ _).mpr
+  intro w ambient x v ambient' hi hr
+  cases hd : w.dev with
   | none => simp [peerAt, hd] at hi
   | some d =>
     obtain ⟨old, hold, he⟩ := Option.map_eq_some_iff.mp (by simpa [peerAt, hd] using hi.2)
     have hh := state_peer_same d pid old p hold he.symm
     cases hr
-    simpa [view, setPeer, modifyDev, modifyK, hd, hh] using hi.1
+    simpa [view, setPeer, modifyDev, hd, hh] using hi.1
 
 theorem getKeypair_spec (P : Option State → Prop) (kid : KeypairId) :
     ⦃fun w => ⌜P (view w)⌝⦄ getKeypair kid
     ⦃⇓? k w => ⌜P (view w) ∧ keyAt w kid = some (keyCell k)⌝⦄ := by
-  mvcgen [getKeypair, getDev, getK, invariant]
+  mvcgen [getKeypair, getDev, invariant, AmbientM.invariant]
   all_goals simp_all [keyAt]
 
 theorem setKeypair_spec (P : Option State → Prop) (kid : KeypairId) (k : Keypair) :
     ⦃fun w => ⌜P (view w) ∧ keyAt w kid = some (keyCell k)⌝⦄ setKeypair kid k
     ⦃⇓? _ w => ⌜P (view w)⌝⦄ := by
-  apply (hoare_iff_triple _ _ _).mp
-  intro w x v hi hr
-  cases hd : w.k.wg with
+  apply (hoare_iff_run_ambient _ _ _).mpr
+  intro w ambient x v ambient' hi hr
+  cases hd : w.dev with
   | none => simp [keyAt, hd] at hi
   | some d =>
     obtain ⟨old, hold, he⟩ := Option.map_eq_some_iff.mp (by simpa [keyAt, hd] using hi.2)
     have hh := state_key_same d kid old k hold he.symm
     cases hr
-    simpa [view, setKeypair, modifyDev, modifyK, hd, hh] using hi.1
+    simpa [view, setKeypair, modifyDev, hd, hh] using hi.1
 
 theorem peerGetMaybeZero_view (peer : Option PeerId) : SameView view (peerGetMaybeZero peer) := by
-  intro w result v hr
-  have hb := ((hoare_iff_triple _ _ _).mpr (PeerBorrow.acquire_spec peer w.k) w result v rfl hr).2
+  apply (ProjectedAction.iff_run_ambient _ _ _).mpr
+  intro w ambient result v ambient' hr
+  have hb := ((hoare_iff_run_ambient _ _ _).mp
+    (PeerBorrow.acquire_spec peer (wgStoreView w)) w ambient result v ambient' rfl hr).2
+  change (wgStoreView v).dev.map state = (wgStoreView w).dev.map state
   cases result with
-  | none => exact congrArg (fun k : Kernel => k.wg.map state) hb
+  | none => exact congrArg (fun k : WGStoreView => k.dev.map state) hb
   | some pid =>
     obtain ⟨d, p, hd, hp, hpos, hv⟩ := hb
-    simp only [view, hv, hd, Option.map_some]
+    simp only [hv, hd, Option.map_some]
     exact congrArg some (state_peer_same d pid p {p with refcount := p.refcount + 1} hp rfl)
 
 def State.word (s : State) : IndexOwner → Option (Option PeerId)
@@ -214,27 +222,28 @@ theorem State.Inv.setWord {s : State} (hi : s.Inv) (owner : IndexOwner) (word : 
         rw [eqfun]
       simpa [same] using hi
 
-def wordAt (w : World) (o : IndexOwner) := (view w).bind (fun s => s.word o)
+def wordAt (w : WGWorld) (o : IndexOwner) := (view w).bind (fun s => s.word o)
 
 theorem peerWord_spec (o : IndexOwner) (P : Option State → Prop) :
     ⦃fun w => ⌜P (view w)⌝⦄ o.peerWord
     ⦃⇓? word w => ⌜P (view w) ∧ wordAt w o = some word⌝⦄ := by
-  cases o <;> mvcgen [IndexOwner.peerWord, getPeer, getKeypair, getDev, getK, invariant]
+  cases o <;> mvcgen [IndexOwner.peerWord, getPeer, getKeypair, getDev, invariant, AmbientM.invariant]
   all_goals simp_all [wordAt, view, state, State.word, peerCell, keyCell]
 
-theorem setPeerWord_view (o : IndexOwner) (word : Option PeerId) (w v : World)
-    (hr : (o.setPeerWord word).run w = .ok ((), v)) :
+theorem setPeerWord_view (o : IndexOwner) (word : Option PeerId) (w v : WGWorld)
+    (ambient ambient' : Ambient)
+    (hr : ((o.setPeerWord word).run w).run ambient = .ok (((), v), ambient')) :
     view v = (view w).map (fun s => s.setWord o word) := by
-  cases hd : w.k.wg with
-  | none => cases o <;> simp [IndexOwner.setPeerWord, getPeer, getKeypair, getDev, getK, hd, invariant] at hr
+  cases hd : w.dev with
+  | none => cases o <;> simp [IndexOwner.setPeerWord, getPeer, getKeypair, getDev, hd, invariant, AmbientM.invariant] at hr <;> cases hr
   | some d =>
     cases o with
     | handshake pid =>
       cases hp : d.peers[pid]? with
-      | none => simp [IndexOwner.setPeerWord, getPeer, getDev, getK, hd, hp, invariant] at hr
+      | none => simp [IndexOwner.setPeerWord, getPeer, getDev, hd, hp, invariant, AmbientM.invariant] at hr; cases hr
       | some p =>
-        simp [IndexOwner.setPeerWord, getPeer, getDev, getK, hd, hp, setPeer, modifyDev, modifyK] at hr
-        subst v
+        simp [IndexOwner.setPeerWord, getPeer, getDev, hd, hp, setPeer, modifyDev] at hr
+        rcases hr with ⟨rfl, rfl⟩
         simp only [view, hd, Option.map_some]
         congr 1
         unfold state State.setWord
@@ -245,10 +254,10 @@ theorem setPeerWord_view (o : IndexOwner) (word : Option PeerId) (w v : World)
         · simp [Std.TreeMap.getElem?_insert, he, Ne.symm he]
     | keypair kid =>
       cases hk : d.keypairs[kid]? with
-      | none => simp [IndexOwner.setPeerWord, getKeypair, getDev, getK, hd, hk, invariant] at hr
+      | none => simp [IndexOwner.setPeerWord, getKeypair, getDev, hd, hk, invariant, AmbientM.invariant] at hr; cases hr
       | some k =>
-        simp [IndexOwner.setPeerWord, getKeypair, getDev, getK, hd, hk, setKeypair, modifyDev, modifyK] at hr
-        subst v
+        simp [IndexOwner.setPeerWord, getKeypair, getDev, hd, hk, setKeypair, modifyDev] at hr
+        rcases hr with ⟨rfl, rfl⟩
         simp only [view, hd, Option.map_some]
         congr 1
         unfold state State.setWord
@@ -260,56 +269,65 @@ theorem setPeerWord_view (o : IndexOwner) (word : Option PeerId) (w v : World)
 
 /-- The original found-entry acquisition, before the caller's alive branch.
 The owner is reread by the setter, including when it is the acquired peer. -/
-def acquireOwner (owner : IndexOwner) : M (Option PeerId) := do
+def acquireOwner (owner : IndexOwner) : WG.M (Option PeerId) := do
   let peer ← peerGetMaybeZero (← owner.peerWord)
   owner.setPeerWord peer
   return peer
 
-def Acquisition (owner : IndexOwner) (w : World) (result : Option PeerId) (v : World) : Prop :=
-  ∃ (oldWord : Option PeerId) (readWorld borrowedWorld : World),
-    owner.peerWord.run w = .ok (oldWord, readWorld) ∧
-    (peerGetMaybeZero oldWord).run readWorld = .ok (result, borrowedWorld) ∧
-    (owner.setPeerWord result).run borrowedWorld = .ok ((), v)
+def Acquisition (owner : IndexOwner) (w : WGWorld) (result : Option PeerId)
+    (v : WGWorld) (ambient ambient' : Ambient) : Prop :=
+  ∃ (oldWord : Option PeerId) (readWorld borrowedWorld : WGWorld)
+    (readAmbient borrowedAmbient : Ambient),
+    (owner.peerWord.run w).run ambient = .ok ((oldWord, readWorld), readAmbient) ∧
+    ((peerGetMaybeZero oldWord).run readWorld).run readAmbient =
+      .ok ((result, borrowedWorld), borrowedAmbient) ∧
+    ((owner.setPeerWord result).run borrowedWorld).run borrowedAmbient =
+      .ok (((), v), ambient')
 
-theorem acquireOwner_acquisition (owner : IndexOwner) (w v : World) (result : Option PeerId)
-    (hr : (acquireOwner owner).run w = .ok (result, v)) : Acquisition owner w result v := by
+theorem acquireOwner_acquisition (owner : IndexOwner) (w v : WGWorld) (result : Option PeerId)
+    (ambient ambient' : Ambient)
+    (hr : ((acquireOwner owner).run w).run ambient = .ok ((result, v), ambient')) :
+    Acquisition owner w result v ambient ambient' := by
   simp only [acquireOwner, StateT.run_bind] at hr
-  cases hread : owner.peerWord.run w with
+  cases hread : (owner.peerWord.run w).run ambient with
   | error e => simp [hread] at hr
   | ok read =>
-    rcases read with ⟨word, u⟩
+    rcases read with ⟨⟨word, u⟩, readAmbient⟩
     simp only [hread, Leanux.Proofs.WG.CounterWindow.except_ok_bind] at hr
-    cases hget : (peerGetMaybeZero word).run u with
+    cases hget : ((peerGetMaybeZero word).run u).run readAmbient with
     | error e => simp [hget] at hr
     | ok got =>
-      rcases got with ⟨peer, b⟩
+      rcases got with ⟨⟨peer, b⟩, borrowedAmbient⟩
       simp only [hget, Leanux.Proofs.WG.CounterWindow.except_ok_bind] at hr
-      cases hstore : (owner.setPeerWord peer).run b with
+      cases hstore : ((owner.setPeerWord peer).run b).run borrowedAmbient with
       | error e => simp [hstore] at hr
       | ok out =>
-        rcases out with ⟨u, final⟩
+        rcases out with ⟨⟨u, final⟩, finalAmbient⟩
         cases u
         simp [hstore] at hr
-        rcases hr with ⟨rfl, rfl⟩
-        exact ⟨word, _, _, hread, hget, hstore⟩
+        rcases hr with ⟨⟨rfl, rfl⟩, rfl⟩
+        exact ⟨word, _, _, _, _, hread, hget, hstore⟩
 
-theorem Acquisition.facts (h : Acquisition owner w result v) :
+theorem Acquisition.facts (h : Acquisition owner w result v ambient ambient') :
     (result = none ∨ wordAt w owner = some result) ∧
     view v = (view w).map (fun s => s.setWord owner result) := by
-  obtain ⟨oldWord, readWorld, borrowedWorld, read, get, store⟩ := h
-  have rd := (hoare_iff_triple _ _ _).mpr (peerWord_spec owner (fun s => s = view w))
-    w oldWord readWorld rfl read
-  have gp := (hoare_iff_triple _ _ _).mpr (PeerBorrow.acquire_spec oldWord readWorld.k)
-    readWorld result borrowedWorld rfl get
-  have gv := peerGetMaybeZero_view oldWord readWorld result borrowedWorld get
+  obtain ⟨oldWord, readWorld, borrowedWorld, readAmbient, borrowedAmbient, read, get, store⟩ := h
+  have rd := (hoare_iff_run_ambient _ _ _).mp (peerWord_spec owner (fun s => s = view w))
+    w ambient oldWord readWorld readAmbient rfl read
+  have gp := (hoare_iff_run_ambient _ _ _).mp
+    (PeerBorrow.acquire_spec oldWord (wgStoreView readWorld))
+    readWorld readAmbient result borrowedWorld borrowedAmbient rfl get
+  have gv := (ProjectedAction.iff_run_ambient _ _ _).mp (peerGetMaybeZero_view oldWord)
+    readWorld readAmbient result borrowedWorld borrowedAmbient get
   have ww : wordAt w owner = some oldWord := by
     simpa only [wordAt, rd.1] using rd.2
   refine ⟨gp.1.imp id (fun he => by simpa [he] using ww), ?_⟩
-  rw [setPeerWord_view owner result borrowedWorld v store, gv, rd.1]
+  rw [setPeerWord_view owner result borrowedWorld v borrowedAmbient ambient' store, gv, rd.1]
 
-theorem acquireOwner_preserves (owner : IndexOwner) (w v : World) (result : Option PeerId)
-    (hi : Inv w) (hr : (acquireOwner owner).run w = .ok (result, v)) : Inv v := by
-  have facts := (acquireOwner_acquisition owner w v result hr).facts
+theorem acquireOwner_preserves (owner : IndexOwner) (w v : WGWorld) (result : Option PeerId)
+    (ambient ambient' : Ambient)
+    (hi : Inv w) (hr : ((acquireOwner owner).run w).run ambient = .ok ((result, v), ambient')) : Inv v := by
+  have facts := (acquireOwner_acquisition owner w v result ambient ambient' hr).facts
   intro out hout
   rw [facts.2] at hout
   obtain ⟨s, hs, rfl⟩ := Option.map_eq_some_iff.mp hout
@@ -318,9 +336,10 @@ theorem acquireOwner_preserves (owner : IndexOwner) (w v : World) (result : Opti
   · exact Or.inl h
   · exact Or.inr (by simpa [wordAt, hs] using h)
 
-theorem acquireOwner_handshake (pid borrowed : PeerId) (w v : World)
-    (hi : Inv w) (hr : (acquireOwner (.handshake pid)).run w = .ok (some borrowed, v)) : borrowed = pid := by
-  have facts := (acquireOwner_acquisition (.handshake pid) w v (some borrowed) hr).facts
+theorem acquireOwner_handshake (pid borrowed : PeerId) (w v : WGWorld)
+    (ambient ambient' : Ambient)
+    (hi : Inv w) (hr : ((acquireOwner (.handshake pid)).run w).run ambient = .ok ((some borrowed, v), ambient')) : borrowed = pid := by
+  have facts := (acquireOwner_acquisition (.handshake pid) w v (some borrowed) ambient ambient' hr).facts
   have hw : wordAt w (.handshake pid) = some (some borrowed) := facts.1.resolve_left (by simp)
   obtain ⟨s, hs, hh⟩ := Option.bind_eq_some_iff.mp hw
   obtain ⟨p, hp, he⟩ := Option.map_eq_some_iff.mp hh
@@ -330,25 +349,28 @@ theorem acquireOwner_handshake (pid borrowed : PeerId) (w v : World)
   · rw [hc] at he
     exact (Option.some.inj he).symm
 
-theorem frame (ha : SameView view a) : ⦃fun w => ⌜Inv w⌝⦄ a ⦃⇓? _ w => ⌜Inv w⌝⦄ :=
+theorem frame {S α : Type} {m : Type → Type} {ps : PostShape}
+    [Monad m] [WPMonad m ps] {project : S → WGWorld} {a : StateT S m α}
+    (ha : SameView (fun s => view (project s)) a) :
+    ⦃fun s => ⌜Inv (project s)⌝⦄ a ⦃⇓? _ s => ⌜Inv (project s)⌝⦄ :=
   ha.wp (fun v => ∀ s, v = some s → s.Inv)
 
 theorem acquireOwner_spec (owner : IndexOwner) :
     ⦃fun w => ⌜Inv w⌝⦄ acquireOwner owner
     ⦃⇓? result w => ⌜Inv w ∧ ∀ pid borrowed,
       owner = .handshake pid → result = some borrowed → borrowed = pid⌝⦄ := by
-  apply (hoare_iff_triple _ _ _).mp
-  intro w result v hi hr
-  refine ⟨acquireOwner_preserves owner w v result hi hr, ?_⟩
+  apply (hoare_iff_run_ambient _ _ _).mpr
+  intro w ambient result v ambient' hi hr
+  refine ⟨acquireOwner_preserves owner w v result ambient ambient' hi hr, ?_⟩
   intro pid borrowed he hn
   subst owner; subst result
-  exact acquireOwner_handshake pid borrowed w v hi hr
+  exact acquireOwner_handshake pid borrowed w v ambient ambient' hi hr
 
 /-- Literal original scan, with only its already-present acquisition named. -/
-def indexLookupSource (kinds : List IndexKind) (index : Nat) : M (Option (IndexOwner × PeerId)) := do
+def indexLookupSource (kinds : List IndexKind) (index : Nat) : WG.M (Option (IndexOwner × PeerId)) := do
   let mut entry : Option IndexEntry := none
   let mut stopped := false
-  for e in ← indexBucket index do
+  for e in ← liftIndex (indexBucket index) do
     _ ← branch .idxWalk true
     if ← branch .idxMatch (e.index == index) then
       if ← branch .idxTypeMatch (kinds.contains e.kind) then entry := some e
@@ -373,11 +395,19 @@ theorem indexLookup_spec (kinds : List IndexKind) (index : Nat) :
     ⦃⇓? result w => ⌜Inv w ∧ ∀ owner borrowed,
       result = some (.handshake owner, borrowed) → borrowed = owner⌝⦄ := by
   rw [← indexLookupSource_eq]
-  have hb := fun decision value => frame (kernel (sameKernel_branch decision value))
-  have hi := frame (kernel (indexBucket_sameKernel index))
+  have ambient {α : Type} (a : AmbientM α) :
+      Hoare (MonadLift.monadLift a : WG.M α) Inv (fun _ => Inv) :=
+    hoare_liftAmbient a Inv
+  have hi : Hoare (liftIndex (indexBucket index)) Inv (fun _ => Inv) := by
+    apply hoare_liftIndex
+    intro g d table hg hd
+    simpa only [Inv, view, hd, Option.map_some, state] using hg
   have ha := acquireOwner_spec
-  mvcgen [indexLookupSource, hb, hi, ha, invariant]
-  all_goals try exact ((⇓? _ w => ⌜Inv w⌝) : PostCond _ (.arg World (.except Stop .pure)))
+  unfold Hoare at ambient hi
+  mvcgen [-Std.Do.Spec.monadLift_StateT, indexLookupSource, branch, ambient, hi, ha,
+    invariant, AmbientM.invariant]
+  all_goals try exact ((⇓? _ w => ⌜Inv w⌝) :
+    PostCond _ (.arg WGWorld (.arg Ambient (.except Stop .pure))))
   all_goals dsimp +zetaDelta only at *
   all_goals simp_all
   all_goals grind
