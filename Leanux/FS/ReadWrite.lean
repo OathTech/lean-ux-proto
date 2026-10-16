@@ -14,7 +14,7 @@ namespace Leanux
     constant 0 (`CONFIG_SECURITY=n`); `fsnotify_file_area_perm` returns 0
     without fsnotify. `unsigned_offsets` is only reached for negative
     positions, which never arise from `f_pos = 0`. -/
-def rwVerifyArea (ppos : Option Int) (count : Nat) : M Int := do
+def rwVerifyArea (ppos : Option Int) (count : Nat) : FS.M Int := do
   if ← branchCmp .rwVerifyNegativeCount (count >= 2 ^ 63) count 0 then return -EINVAL
   if ← branch .rwVerifyHasPos ppos.isSome then
     let pos := ppos.getD 0
@@ -26,7 +26,7 @@ def rwVerifyArea (ppos : Option Int) (count : Nat) : M Int := do
 
 /-- new_sync_read (read_write.c:478-493). `init_sync_kiocb` copies
     `f_iocb_flags`; `iov_iter_ubuf` describes the caller's buffer. -/
-def newSyncRead (fid : FileId) (len : Nat) (ppos : Option Int) : M (Int × Option Int) := do
+def newSyncRead (fid : FileId) (len : Nat) (ppos : Option Int) : FS.M (Int × Option Int) := do
   let f ← getFile fid
   let iocb : Kiocb := { filp := fid, kiFlags := f.fIocbFlags, kiPos := ppos.getD 0 }
   let ret ← fopReadIter iocb len f.fOp
@@ -36,7 +36,7 @@ def newSyncRead (fid : FileId) (len : Nat) (ppos : Option Int) : M (Int × Optio
   return (ret, ppos.map fun _ => iocb.kiPos)
 
 /-- vfs_read (read_write.c:549-578). -/
-def vfsRead (fid : FileId) (count : Nat) (pos : Option Int) : M (Int × Option Int) := do
+def vfsRead (fid : FileId) (count : Nat) (pos : Option Int) : FS.M (Int × Option Int) := do
   let f ← getFile fid
   if ← branchCmp .vfsReadNotReadable (!hasFlag f.fMode FMODE_READ) (f.fMode &&& FMODE_READ).toNat 0 then return (-EBADF, pos)
   if ← branchCmp .vfsReadCannotRead (!hasFlag f.fMode FMODE_CAN_READ) (f.fMode &&& FMODE_CAN_READ).toNat 0 then return (-EINVAL, pos)
@@ -56,12 +56,12 @@ def vfsRead (fid : FileId) (count : Nat) (pos : Option Int) : M (Int × Option I
   return (ret, pos)
 
 /-- `file_ppos` (read_write.c:695-699). -/
-def filePpos (f : File) : M (Option Int) := do
+def filePpos (f : File) : FS.M (Option Int) := do
   if ← branchCmp .filePposStream (hasFlag f.fMode FMODE_STREAM) (f.fMode &&& FMODE_STREAM).toNat 0 then return none
   return some f.fPos
 
 /-- ksys_read (read_write.c:701-718) and SYSCALL_DEFINE3(read). -/
-def ksysRead (fd : Nat) (count : Nat) : M Int := do
+def ksysRead (fd : Nat) (count : Nat) : FS.M Int := do
   let f ← fdgetPos fd
   let mut ret := -EBADF
   if ← branch .ksysReadHasFile f.file.isSome then
@@ -79,19 +79,19 @@ def ksysRead (fd : Nat) (count : Nat) : M Int := do
 /-- Whether the file's inode is a regular file (`S_ISREG`). The anonymous
     inode has mode S_IRUSR|S_IWUSR, with no file-type bits; a pipefs inode's
     `i_mode` is `S_IFIFO | S_IRUSR | S_IWUSR` (fs/pipe.c:906). -/
-def inodeIsReg : Option InodeId → M Bool
+def inodeIsReg : Option InodeId → FS.M Bool
   | some .anon => return false
   | some (.pipefs id) => return (← getInode id).iMode &&& S_IFMT == S_IFREG
   | some (.fixture name) => unsupported s!"inode of fixture file {name}"
   | none => invariant "file->f_inode is NULL"
 
 /-- `file_start_write` (include/linux/fs.h:2996-3001). -/
-def fileStartWrite (f : File) : M Unit := do
+def fileStartWrite (f : File) : FS.M Unit := do
   if ← branch .fileStartWriteNotRegular !(← inodeIsReg f.fInode) then return
   unsupported "sb_start_write"
 
 /-- `file_end_write` (include/linux/fs.h:3016-3021). -/
-def fileEndWrite (f : File) : M Unit := do
+def fileEndWrite (f : File) : FS.M Unit := do
   if ← branch .fileEndWriteNotRegular !(← inodeIsReg f.fInode) then return
   unsupported "sb_end_write"
 
@@ -99,7 +99,7 @@ def fileEndWrite (f : File) : M Unit := do
     `vfs_write` (P design section 4). `init_sync_kiocb` copies
     `f_iocb_flags`; `iov_iter_ubuf` describes the first `len` bytes of the
     caller's buffer. `ppos` is NULL for `FMODE_STREAM` files (pipes). -/
-def newSyncWrite (fid : FileId) (buf : ByteArray) (len : Nat) (ppos : Option Int) : M Int := do
+def newSyncWrite (fid : FileId) (buf : ByteArray) (len : Nat) (ppos : Option Int) : FS.M Int := do
   let f ← getFile fid
   let iocb : Kiocb := { filp := fid, kiFlags := f.fIocbFlags, kiPos := ppos.getD 0 }
   if len > buf.size then invariant "new_sync_write: the caller's buffer is shorter than len"
@@ -112,7 +112,7 @@ def newSyncWrite (fid : FileId) (buf : ByteArray) (len : Nat) (ppos : Option Int
   return ret
 
 /-- vfs_write (read_write.c:663-693). `buf` is the caller's buffer. -/
-def vfsWrite (fid : FileId) (buf : ByteArray) (count : Nat) (pos : Option Int) : M Int := do
+def vfsWrite (fid : FileId) (buf : ByteArray) (count : Nat) (pos : Option Int) : FS.M Int := do
   let f ← getFile fid
   if ← branchCmp .vfsWriteNotWritable (!hasFlag f.fMode FMODE_WRITE) (f.fMode &&& FMODE_WRITE).toNat 0 then return -EBADF
   if ← branchCmp .vfsWriteCannotWrite (!hasFlag f.fMode FMODE_CAN_WRITE) (f.fMode &&& FMODE_CAN_WRITE).toNat 0 then return -EINVAL
@@ -133,7 +133,7 @@ def vfsWrite (fid : FileId) (buf : ByteArray) (count : Nat) (pos : Option Int) :
   return ret
 
 /-- ksys_write (read_write.c:725-743) and SYSCALL_DEFINE3(write). -/
-def ksysWrite (fd : Nat) (buf : ByteArray) (count : Nat) : M Int := do
+def ksysWrite (fd : Nat) (buf : ByteArray) (count : Nat) : FS.M Int := do
   let f ← fdgetPos fd
   let mut ret := -EBADF
   if ← branch .ksysWriteHasFile f.file.isSome then

@@ -175,10 +175,10 @@ def rtnetlinkRequest (handler : M Int) : M Int := do
     | unsupported "no free descriptor in the table for the temporary rtnetlink socket (expansion)"
   if fd ≥ (← getTask .task).rlimitNofile then
     unsupported "no descriptor below RLIMIT_NOFILE for the temporary rtnetlink socket (the guest fails)"
-  let fid := (← getK).nextFile
+  let fid := (← get).fs.nextFile
   setFile fid { fFlags := O_RDWR, fMode := FMODE_READ ||| FMODE_WRITE ||| FMODE_OPENED, fCount := 1,
                 fOp := some (.fixture "rtnetlink"), fInode := some (.fixture "rtnetlink") }
-  modifyK fun k => { k with nextFile := fid + 1 }
+  modify fun w => { w with fs := { w.fs with nextFile := fid + 1 } }
   setFdtSlot fd (some fid)
   setFdtOpen fd true
   setFdtCloexec fd false
@@ -205,7 +205,7 @@ def TASK_WORK_FUEL : Nat := 1 <<< 16
     An `__fput` may queue more work (a release dropping another reference), so
     the loop is fuel-bounded rather than bounded by the queue at entry
     (future-proof-paths note, 3(d)). -/
-def taskWorkRun : M Unit := do
+def taskWorkRun : FS.M Unit := do
   for _ in [0:TASK_WORK_FUEL] do
     match (← getTask .task).taskWorks with
     | [] => return
@@ -232,17 +232,17 @@ def netnsClose : M Int := do
   return 0
 
 def dispatch : Syscall → M Int
-  | .eventfd2 count flags => sysEventfd2 count flags
-  | .dup fildes => sysDup fildes
-  | .dup3 oldfd newfd flags => ksysDup3 oldfd newfd flags
-  | .close fd => sysClose fd
-  | .read fd count => ksysRead fd count
-  | .write fd count buf => ksysWrite fd buf count
-  | .pipe2 flags => sysPipe2 flags
-  | .fcntl fd cmd arg => sysFcntl fd cmd arg
-  | .epollCreate1 flags => sysEpollCreate1 flags
-  | .epollCtl epfd op fd events data => sysEpollCtl epfd op fd events data
-  | .epollWait epfd maxevents timeout => sysEpollWait epfd maxevents timeout
+  | .eventfd2 count flags => liftFS (sysEventfd2 count flags)
+  | .dup fildes => liftFS (sysDup fildes)
+  | .dup3 oldfd newfd flags => liftFS (ksysDup3 oldfd newfd flags)
+  | .close fd => liftFS (sysClose fd)
+  | .read fd count => liftFS (ksysRead fd count)
+  | .write fd count buf => liftFS (ksysWrite fd buf count)
+  | .pipe2 flags => liftFS (sysPipe2 flags)
+  | .fcntl fd cmd arg => liftFS (sysFcntl fd cmd arg)
+  | .epollCreate1 flags => liftFS (sysEpollCreate1 flags)
+  | .epollCtl epfd op fd events data => liftFS (sysEpollCtl epfd op fd events data)
+  | .epollWait epfd maxevents timeout => liftFS (sysEpollWait epfd maxevents timeout)
   | .wgSet attrs => netlinkRequest (WG.wgSetDevice attrs)
   | .wgGet device => netlinkRequest do
     match ← WG.wgGetDevice device with
@@ -375,7 +375,7 @@ def Syscall.isNet : Syscall → Bool
 
 /-- One system call: entry, the handler, and the return-to-user work. -/
 def syscall (call : Syscall) : M Int := do
-  modify fun w => { w with userOut := none, userFds := none,
+  modify fun w => { w with fs := { w.fs with userOut := none, userFds := none },
                            seccomp := { w.seccomp with emitted := {}, translatedLen := none } }
   modifyWG fun g => { g with queuedThisCall := [] }
   modifyAmbient fun a => { a with steps := #[], extraOut := [], fired := #[], netRxSections := 0, netRxSection := 0 }

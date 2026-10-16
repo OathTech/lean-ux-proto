@@ -8,7 +8,7 @@ import Leanux.FS.Fput
 namespace Leanux
 
 /-- SYSCALL_DEFINE1(close) (open.c:1558-1583). -/
-def sysClose (fd : Nat) : M Int := do
+def sysClose (fd : Nat) : FS.M Int := do
   let file ← fileCloseFd fd
   if ← branch .closeNoFile file.isNone then return -EBADF
   let some fid := file | invariant "unreachable"

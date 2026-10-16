@@ -756,7 +756,72 @@ fields; FS lands first on this branch and WG rebases onto it, so the
 `main`'s tree retyped by deletion and retyping (what phase 1 breaks is in
 its report), then the landed campaign-1 tree as its own job.
 
-## 13. Phase 2, WireGuard, as built (2026-10-16)
+## 13. Phase 2, the file layer, as built (2026-10-16)
+
+On `task/split-fs` from 909c174, one mirror commit (a5d4c6d). `FSWorld`
+holds the 31 file-layer `Kernel` fields with their docstrings and defaults
+and the two user-memory outputs (`userOut`, `userFds`) that were `World`'s;
+`FS.M := StateT FSWorld TaskM`; `liftFS` runs a file-layer computation on
+`World.fs`, `World.tasks` and `World.ambient` and writes the three back
+once, with a `MonadLift FS.M M` instance. The stores' accessors (`getFile`
+.. `setFdtCloexec`, the bounds-checked descriptor-table reads) moved from
+`Kernel/Defs.lean` to `Leanux/FS/Stores.lean` over `FS.M`, unchanged but
+for the monad; the three file-layer modules that imported `Kernel.Defs`
+import it instead.
+
+One departure from section 12's brief: the file layer's modules live in
+`namespace Leanux`, not `Leanux.FS`, so the namespace trick does not apply
+and the signatures name `FS.M` explicitly (174 of them, a mechanical
+retyping of every `M` in `Leanux/FS`; the file has no other use of the
+name). Renaming the modules into `Leanux.FS` would have moved every
+definition's name, which the proof tree and the dispatch use; the type is
+what the split needs, not the namespace. `getK`/`modifyK` in the file layer
+became `get`/`modify` over `FSWorld`, whose field names are the former
+`Kernel`'s, so the lambdas did not change.
+
+The runner: the dispatch lifts the eleven file-layer system calls with
+`liftFS`; `taskWorkRun` is `FS.M` (its task reads through `TaskM`, its
+`fputFinal` the file layer's); `netnsClose`'s four closes and task-work
+runs, the `wg_advance` arm's `fdget`/`fdput` and `rtnetlinkRequest`'s
+temporary descriptor auto-lift inside their `do` blocks, `rtnetlinkRequest`
+reading and writing `World.fs.nextFile` directly as it did `Kernel`'s; the
+per-call reset clears `World.fs.userOut`/`userFds`. `Runner.initialFS`
+builds the stores `initialKernel` held (the fixture's files over the
+reserved descriptors, `nrFiles`, `maxFiles`, the pipe sysctls, `root_user`,
+the epoll fixture facts); `initialKernel` keeps `wg`, `netIfindexNext` and
+`ratelimiter`. The environment model touches no file-layer state (its
+child creation copies the task record, `TaskM`, as phase 1 left it).
+
+`Kernel` after this phase, for the WireGuard fork to dissolve: `wg`,
+`nlSock7`, `nlSock8`, `peerCounter`, `keypairCounter`, `netIfindexNext`,
+`fib4`, `fib4C`, `ratelimiter`, `timerClk`, `timerEnqueues`. `World` after
+it: `ambient`, `tasks`, `seccomp`, `k`, `fs`, and the environment and
+WireGuard fields the WireGuard fork moves.
+
+Checks: `lake build Leanux leanux-model` green; the five-module unit line
+131 OK (1 skipped); on the s5 pair at 16 slots, `pipes` and
+`pipes-generated` 224 traces, 5509 operations, 224 agreements, and `epoll`
+and `epoll-generated` 247 traces, 6162 operations, 247 agreements, no
+splits, no retries; the preservation script over both runs' chunk inputs
+(the e5afc0f binary against this one): 9 of 9 and 9 of 9 chunks identical
+in stdout, stderr and exit code, and equal to the runs' recorded output.
+Clean build 73.6 s wall / 181 s user against phase 1's 74 s / 185 s; the 27
+model-replay tests 1.14 s against 1.11 s: no cost. Beyond the brief, the
+other subsystems' suites on the same tree, since the shared paths changed
+(`rtnetlinkRequest`, the per-call reset, the dispatch): `seccomp` and
+`seccomp-generated` 267 traces, 267 agreements; `wireguard`,
+`wireguard-generated`, `w7-tier` and `routing` 488 traces, 488 agreements,
+no retries; the preservation script over both: 288 of 288 and 154 of 154
+chunks identical.
+
+What this phase breaks in `main`'s proof tree (not edited; by grep): 7
+sites in 3 files project `World.userOut`/`userFds`; 5 sites in 2 files
+read a file-layer `Kernel` field; 9 files name a file-layer function whose
+type is now `FS.M` (`Keypairs/Frames/{Pipe,FS,Kernel,EventpollCalls,
+FSBase,Wait,PipeRead}.lean`, `Logged/Syscalls.lean`,
+`Keypairs/Evolution/Syscalls.lean`), retyped or deleted in phase 3.
+
+## 14. Phase 2, WireGuard, as built (2026-10-16)
 
 On `task/split-wg`, from the phase-1 head, two commits plus this section.
 

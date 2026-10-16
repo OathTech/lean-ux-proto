@@ -618,20 +618,23 @@ structure Ratelimiter where
   table6 : List (Nat × Int × Int) := []
   deriving Repr, BEq
 
-/-- Whole-kernel mirror state. `nrFiles`/`maxFiles` mirror the system-wide
-    `nr_files` percpu counter and `files_stat.max_files`, and
-    `anonInodeInodeErr` whether the boot-time `anon_inode_inode` is an error
-    pointer; the runner supplies these environment facts. -/
-structure Kernel where
-  files : TreeMap FileId File
-  nextFile : FileId
-  ctxs : TreeMap CtxId EventfdCtx
-  nextCtx : CtxId
+/-- The file layer's object stores and accounting (the state split,
+    docs/2026-10-15-design-state-split.md, section 2): the 31 file-layer
+    fields of the former `Kernel` and the two user-memory outputs of
+    `World`. `nrFiles`/`maxFiles` mirror the system-wide `nr_files` percpu
+    counter and `files_stat.max_files`, and `anonInodeInodeErr` whether the
+    boot-time `anon_inode_inode` is an error pointer; the runner supplies
+    these environment facts (`Runner.initialFS`). -/
+structure FSWorld where
+  files : TreeMap FileId File := {}
+  nextFile : FileId := 0
+  ctxs : TreeMap CtxId EventfdCtx := {}
+  nextCtx : CtxId := 0
   /-- `eventfd_ida`: the allocated ids. -/
-  idaUsed : TreeSet Nat
-  nrFiles : Nat
-  maxFiles : Nat
-  anonInodeInodeErr : Bool
+  idaUsed : TreeSet Nat := {}
+  nrFiles : Nat := 0
+  maxFiles : Nat := 0
+  anonInodeInodeErr : Bool := false
   /-- Pipes (P): the pipefs inodes, the `pipe_inode_info`s and their data
       pages, each an owned store with its next identity. -/
   inodes : TreeMap PipefsInodeId Inode := {}
@@ -673,7 +676,14 @@ structure Kernel where
       (:1833, :1865): `ep_ptable_queue_proc` reads it and clears it when its
       `pwq` allocation fails (:1551-1553), which `ep_insert` tests (:1877). -/
   epqEpi : Option EpiId := none
+  /-- The caller's buffer (user memory), as written by `copy_to_iter` (an
+      eventfd read's 8 bytes) or `copy_page_to_iter` (a pipe read). -/
+  userOut : Option ByteArray := none
+  /-- The descriptor pair `do_pipe2` copied to the caller (`fd[0]`, `fd[1]`,
+      fs/pipe.c:1026): the `fds` observation field. -/
+  userFds : Option (Nat × Nat) := none
   deriving BEq
+
 
 /-! ## Allocation outcomes (docs/2026-10-05-a-alloc.md, section 6)
 
@@ -1761,13 +1771,9 @@ structure World where
   ambient : Ambient
   tasks : TaskWorld
   seccomp : SeccompWorld := {}
-  k : Kernel
-  /-- The caller's buffer (user memory), as written by `copy_to_iter` (an
-      eventfd read's 8 bytes) or `copy_page_to_iter` (a pipe read). -/
-  userOut : Option ByteArray := none
-  /-- The descriptor pair `do_pipe2` copied to the caller (`fd[0]`, `fd[1]`,
-      fs/pipe.c:1026): the `fds` observation field. -/
-  userFds : Option (Nat × Nat) := none
+  /-- The file layer's stores and its user-memory outputs (the state split,
+      phase 2). -/
+  fs : FSWorld
   wg : WGWorld := {}
   fixture : EnvWorld := {}
 
@@ -1833,6 +1839,21 @@ abbrev Seccomp.M := StateT SeccompWorld TaskM
   return (a, { w with seccomp, tasks, ambient })
 
 instance : MonadLift Seccomp.M M := ⟨liftSeccomp⟩
+
+/-- The file layer's monad: its stores over the task store (the state split,
+    section 3): a pipe's SIGPIPE, `fput`'s task-work test and the descriptor
+    table reach the task through `TaskM`, and nothing else. The file layer's
+    definitions name it explicitly (`FS.M`): the module lives in
+    `namespace Leanux`, so the bare `M` there is the product. -/
+abbrev FS.M := StateT FSWorld TaskM
+
+/-- The runner's lift of a file-layer computation: its stores, the task store
+    and the ambient part run and written back once. -/
+@[inline] def liftFS (x : FS.M α) : M α := fun w => do
+  let (((a, fs), tasks), ambient) ← ((x.run w.fs).run w.tasks).run w.ambient
+  return (a, { w with fs, tasks, ambient })
+
+instance : MonadLift FS.M M := ⟨liftFS⟩
 
 /-- WireGuard's monad (the state split, section 3): its own world over the
     ambient monad, and nothing else: the type excludes the task store, the
@@ -2414,13 +2435,10 @@ subsystem monads), inlined so each call site resolves its lift statically. -/
 @[inline] def getAmbient [Monad m] [MonadLiftT AmbientM m] : m Ambient := monadLift (get : AmbientM Ambient)
 @[inline] def modifyAmbient [Monad m] [MonadLiftT AmbientM m] (f : Ambient → Ambient) : m Unit := monadLift (modify f : AmbientM Unit)
 
-def getK : M Kernel := return (← get).k
-
 /-- The fixture's mutable state at the product level (`World.fixture`),
     for the environment model and the runner. -/
 def getEnv : M EnvWorld := return (← get).fixture
 def modifyEnv (f : EnvWorld → EnvWorld) : M Unit := modify fun w => { w with fixture := f w.fixture }
-def modifyK (f : Kernel → Kernel) : M Unit := modify fun w => { w with k := f w.k }
 
 /-! ## The shared task store (the state split, section 3) -/
 
@@ -2507,116 +2525,5 @@ def retireDeviceUnits : WG.M Unit := do
       !((Worker.all.find? (·.index == e.2.1)).any Worker.deviceOwned),
     pendingWork := a.pendingWork.filter fun i => !((Worker.all.find? (·.index == i)).any Worker.deviceOwned) }
   modify fun g => { g with timerUnits := [] }
-
-def getFile (id : FileId) : M File := do
-  match (← getK).files.get? id with
-  | some f => return f
-  | none => invariant s!"dangling file identity {id}"
-
-def setFile (id : FileId) (f : File) : M Unit :=
-  modifyK fun k => { k with files := k.files.insert id f }
-
-def freeFile (id : FileId) : M Unit :=
-  modifyK fun k => { k with files := k.files.erase id }
-
-def getCtx (id : CtxId) : M EventfdCtx := do
-  match (← getK).ctxs.get? id with
-  | some c => return c
-  | none => invariant s!"dangling eventfd context {id}"
-
-def setCtx (id : CtxId) (c : EventfdCtx) : M Unit :=
-  modifyK fun k => { k with ctxs := k.ctxs.insert id c }
-
-def freeCtx (id : CtxId) : M Unit :=
-  modifyK fun k => { k with ctxs := k.ctxs.erase id }
-
-def getInode (id : PipefsInodeId) : M Inode := do
-  match (← getK).inodes.get? id with
-  | some i => return i
-  | none => invariant s!"dangling pipefs inode identity {id}"
-
-def setInode (id : PipefsInodeId) (i : Inode) : M Unit :=
-  modifyK fun k => { k with inodes := k.inodes.insert id i }
-
-def getPipe (id : PipeId) : M PipeInodeInfo := do
-  match (← getK).pipes.get? id with
-  | some p => return p
-  | none => invariant s!"dangling pipe identity {id}"
-
-def setPipe (id : PipeId) (p : PipeInodeInfo) : M Unit :=
-  modifyK fun k => { k with pipes := k.pipes.insert id p }
-
-def getPage (id : PageId) : M Page := do
-  match (← getK).pages.get? id with
-  | some p => return p
-  | none => invariant s!"dangling page identity {id}"
-
-def setPage (id : PageId) (p : Page) : M Unit :=
-  modifyK fun k => { k with pages := k.pages.insert id p }
-
-/-! ## epoll stores (lifetime identities) -/
-
-def getEp (id : EpId) : M Eventpoll := do
-  match (← getK).eps.get? id with
-  | some e => return e
-  | none => invariant s!"dangling eventpoll identity {id}"
-
-def setEp (id : EpId) (e : Eventpoll) : M Unit :=
-  modifyK fun k => { k with eps := k.eps.insert id e }
-
-def freeEp (id : EpId) : M Unit :=
-  modifyK fun k => { k with eps := k.eps.erase id }
-
-def getEpi (id : EpiId) : M Epitem := do
-  match (← getK).epis.get? id with
-  | some e => return e
-  | none => invariant s!"dangling epitem identity {id}"
-
-def setEpi (id : EpiId) (e : Epitem) : M Unit :=
-  modifyK fun k => { k with epis := k.epis.insert id e }
-
-def freeEpi (id : EpiId) : M Unit :=
-  modifyK fun k => { k with epis := k.epis.erase id }
-
-def getPwq (id : PwqId) : M EppollEntry := do
-  match (← getK).pwqs.get? id with
-  | some p => return p
-  | none => invariant s!"dangling eppoll_entry identity {id}"
-
-def setPwq (id : PwqId) (p : EppollEntry) : M Unit :=
-  modifyK fun k => { k with pwqs := k.pwqs.insert id p }
-
-def freePwq (id : PwqId) : M Unit :=
-  modifyK fun k => { k with pwqs := k.pwqs.erase id }
-
-/-! ## Bounds-checked descriptor-table access -/
-
-private def at? (a : Array α) (n : Nat) (what : String) : M α :=
-  match a[n]? with
-  | some x => return x
-  | none => invariant s!"{what}[{n}] beyond max_fds"
-
-/-- `fdt->fd[n]`. -/
-def fdtSlot (fdt : Fdtable) (n : Nat) : M (Option FileId) := at? fdt.fd n "fdt->fd"
-/-- `test_bit(n, fdt->open_fds)`. -/
-def fdtOpen (fdt : Fdtable) (n : Nat) : M Bool := at? fdt.openFds n "fdt->open_fds"
-/-- `test_bit(n, fdt->close_on_exec)`. -/
-def fdtCloexec (fdt : Fdtable) (n : Nat) : M Bool := at? fdt.closeOnExec n "fdt->close_on_exec"
-
-private def setAt (a : Array α) (n : Nat) (x : α) (what : String) : M (Array α) :=
-  if n < a.size then return a.set! n x else invariant s!"{what}[{n}] beyond max_fds"
-
-def setFdtSlot (n : Nat) (v : Option FileId) : M Unit := do
-  let t := (← getFiles).fdt
-  let fd ← setAt t.fd n v "fdt->fd"
-  modifyFdt fun t => { t with fd }
-def setFdtOpen (n : Nat) (b : Bool) : M Unit := do
-  let t := (← getFiles).fdt
-  let openFds ← setAt t.openFds n b "fdt->open_fds"
-  modifyFdt fun t => { t with openFds }
-def setFdtCloexec (n : Nat) (b : Bool) : M Unit := do
-  let t := (← getFiles).fdt
-  let closeOnExec ← setAt t.closeOnExec n b "fdt->close_on_exec"
-  modifyFdt fun t => { t with closeOnExec }
 
 end Leanux
