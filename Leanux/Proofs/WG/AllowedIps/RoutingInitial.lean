@@ -28,8 +28,8 @@ theorem empty_routing (ifindex : Nat) (ifname : String) :
 /-- This is the actual Runner fixture with its configured WG device. The
 non-network and bare fixtures have no device and are not silently identified
 with an empty resident device. -/
-theorem initialKernel_routing (rlimit : Nat) (foreign stepped seccompChild : Bool) :
-    ∃ d, (Runner.initialKernel rlimit true false foreign stepped seccompChild).wg = some d ∧
+theorem initialWG_routing :
+    ∃ d, (Runner.initialWG true false).dev = some d ∧
       RoutingInvariant d .empty .empty :=
   ⟨{ifindex := 3, ifname := "wg0"}, rfl, empty_routing 3 "wg0"⟩
 

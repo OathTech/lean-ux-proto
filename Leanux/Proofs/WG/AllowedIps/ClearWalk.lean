@@ -12,12 +12,12 @@ set_option pp.structureInstances false
 def pushed (children : List (Option NodeId)) (stack : List NodeId) : List NodeId :=
   children.foldl (fun s c => match c with | none => s | some id => id :: s) stack
 
-def pushChild (c : Option NodeId) (stack : List NodeId) : M (ForInStep (List NodeId)) := do
+def pushChild (c : Option NodeId) (stack : List NodeId) : WG.M (ForInStep (List NodeId)) := do
   if ← branch .pushRcuNonNull c.isSome then
     if let some c := c then return .yield (c :: stack)
   return .yield stack
 
-def pushChildren (children : List (Option NodeId)) (initial : List NodeId) : M (List NodeId) :=
+def pushChildren (children : List (Option NodeId)) (initial : List NodeId) : WG.M (List NodeId) :=
   forIn children initial pushChild
 
 theorem pushed_mem (children : List (Option NodeId)) (stack : List NodeId) (id : Nat) :
@@ -30,22 +30,22 @@ theorem pushed_mem (children : List (Option NodeId)) (stack : List NodeId) (id :
     rw [ih]
     cases c <;> simp <;> grind
 
-theorem pushChild_wp (c : Option NodeId) (stack : List NodeId) (k : Kernel) :
-    ⦃fun w => ⌜w.k = k⌝⦄ pushChild c stack
-    ⦃⇓ result w => ⌜result = .yield (match c with | none => stack | some id => id :: stack) ∧ w.k = k⌝⦄ := by
-  cases c <;> mvcgen [pushChild, branch]
+theorem pushChild_wp (c : Option NodeId) (stack : List NodeId) (k : WGStoreView) :
+    ⦃fun w => ⌜wgStoreView w = k⌝⦄ pushChild c stack
+    ⦃⇓ result w => ⌜result = .yield (match c with | none => stack | some id => id :: stack) ∧ wgStoreView w = k⌝⦄ := by
+  cases c <;> mvcgen [pushChild, branch, AmbientM.branch]
 
-theorem pushChildren_wp (children : List (Option NodeId)) (initial : List NodeId) (k : Kernel) :
-    ⦃fun w => ⌜w.k = k⌝⦄ pushChildren children initial
-    ⦃⇓ result w => ⌜result = pushed children initial ∧ w.k = k⌝⦄ := by
+theorem pushChildren_wp (children : List (Option NodeId)) (initial : List NodeId) (k : WGStoreView) :
+    ⦃fun w => ⌜wgStoreView w = k⌝⦄ pushChildren children initial
+    ⦃⇓ result w => ⌜result = pushed children initial ∧ wgStoreView w = k⌝⦄ := by
   mvcgen [pushChildren, pushChild_wp]
   invariants
-  | inv1 => (fun cursor w => ⌜cursor.2 = pushed cursor.1.prefix initial ∧ w.k = k⌝, ExceptConds.false)
+  | inv1 => (fun cursor w => ⌜cursor.2 = pushed cursor.1.prefix initial ∧ wgStoreView w = k⌝, ExceptConds.false)
   all_goals try dsimp +zetaDelta only at *
   all_goals simp_all [pushed, List.foldl_append]
 
 def rootRemoveStep (_ : Nat) (state : Option Unit × List NodeId) :
-    M (ForInStep (Option Unit × List NodeId)) := do
+    WG.M (ForInStep (Option Unit × List NodeId)) := do
   match state.2 with
   | [] => do
     _ ← branch .rootRemoveLenPositive false
@@ -61,7 +61,7 @@ def rootRemoveStep (_ : Nat) (state : Option Unit × List NodeId) :
       listDel id
     return .yield (none, stack)
 
-def rootRemoveSource (root : NodeId) : M Unit := do
+def rootRemoveSource (root : NodeId) : WG.M Unit := do
   let out ← forIn [0:(← getDev).nodes.size + 1] (none, [root]) rootRemoveStep
   match out.1 with
   | some x => pure x
@@ -188,20 +188,20 @@ theorem ClearProgress.unowned {nodes : Std.TreeMap Nat AipNode} {visited : List 
 
 /-- A proof-only state for the actual loop, with no totality requirement. -/
 def ClearWalkInv (nodes : Std.TreeMap Nat AipNode) (root : NodeId)
-    (state : Option Unit × List NodeId) (w : World) : Prop :=
-  ∃ d visited, w.k.wg = some d ∧ ClearProgress nodes visited d ∧
+    (state : Option Unit × List NodeId) (w : WGWorld) : Prop :=
+  ∃ d visited, w.dev = some d ∧ ClearProgress nodes visited d ∧
     Frontier nodes root visited state.2 ∧ (state.1.isSome = true → state.2 = [])
 
 theorem ClearWalkInv.finish (h : ClearWalkInv nodes root state w) (hs : state.2 = [])
-    (hk : v.k.wg = w.k.wg) : ClearWalkInv nodes root (some (), []) v := by
+    (hk : v.dev = w.dev) : ClearWalkInv nodes root (some (), []) v := by
   obtain ⟨d, seen, hd, hp, hf, _⟩ := h
   exact ⟨d, seen, hk.trans hd, hp, by simpa [hs] using hf, fun _ => rfl⟩
 
 theorem ClearWalkInv.after_unlist {nodes : Std.TreeMap Nat AipNode} {root id : NodeId}
-    {state : Option Unit × List NodeId} {w v : World} {rest : List NodeId} {d : Device} {n : AipNode}
+    {state : Option Unit × List NodeId} {w v : WGWorld} {rest : List NodeId} {d : Device} {n : AipNode}
     (h : ClearWalkInv nodes root state w) (hs : state.2 = id :: rest)
-    (hd : w.k.wg = some d) (hn : d.nodes[id]? = some n)
-    (hout : v.k.wg = some (unlisted d id)) :
+    (hd : w.dev = some d) (hn : d.nodes[id]? = some n)
+    (hout : v.dev = some (unlisted d id)) :
     ClearWalkInv nodes root (none, pushed n.bit.toList rest) v := by
   obtain ⟨old, seen, hold, hp, hf, _⟩ := h
   have he : old = d := Option.some.inj (hold.symm.trans hd)
@@ -211,10 +211,10 @@ theorem ClearWalkInv.after_unlist {nodes : Std.TreeMap Nat AipNode} {root id : N
   exact Frontier.step (by simpa [hs] using hf) hnode
 
 theorem ClearWalkInv.after_unowned {nodes : Std.TreeMap Nat AipNode} {root id : NodeId}
-    {state : Option Unit × List NodeId} {w v : World} {rest : List NodeId} {d : Device} {n : AipNode}
+    {state : Option Unit × List NodeId} {w v : WGWorld} {rest : List NodeId} {d : Device} {n : AipNode}
     (h : ClearWalkInv nodes root state w) (hs : state.2 = id :: rest)
-    (hd : w.k.wg = some d) (hn : d.nodes[id]? = some n) (hnone : n.peer = none)
-    (hout : v.k.wg = some d) :
+    (hd : w.dev = some d) (hn : d.nodes[id]? = some n) (hnone : n.peer = none)
+    (hout : v.dev = some d) :
     ClearWalkInv nodes root (none, pushed n.bit.toList rest) v := by
   obtain ⟨old, seen, hold, hp, hf, _⟩ := h
   have he : old = d := Option.some.inj (hold.symm.trans hd)
@@ -229,22 +229,41 @@ theorem rootRemoveStep_spec (nodes : Std.TreeMap Nat AipNode) (root : NodeId)
     ⦃⇓? result w => ⌜ClearWalkInv nodes root result.value w⌝⦄ := by
   have hl := listDel_wp
   have hc := pushChildren_wp
-  mvcgen [rootRemoveStep, branch, getNode, getPeer, getDev, getK, invariant, hl, hc]
+  have hn (id : NodeId) (g : WGWorld) :
+      Hoare (MonadLift.monadLift (getNode id) : WG.M AipNode)
+        (fun w => w = g)
+        (fun n w => w = g ∧ ∃ d, g.dev = some d ∧ d.nodes[id]? = some n) := by
+    apply hoare_liftAip_of
+    intro entry d hentry hd
+    subst entry
+    unfold Hoare
+    mvcgen [getNode, invariant, AmbientM.invariant]
+    all_goals simp_all
+    change {g with dev := some d} = g
+    rw [← hd]
+  unfold Hoare at hn
+  mvcgen [rootRemoveStep, branch, AmbientM.branch, hn, getPeer, getDev, invariant, AmbientM.invariant, hl, hc]
   all_goals try dsimp +zetaDelta only at *
   all_goals simp_all only [ForInStep.value]
+  all_goals try solve | apply ClearWalkInv.finish <;> first | assumption | rfl
+  all_goals obtain ⟨he, d, hdev, hnode⟩ := ‹_ = _ ∧ ∃ d, _ = some d ∧ _›
+  all_goals obtain ⟨hstack, hstore⟩ := ‹_ = pushed _ _ ∧ _›
+  all_goals have hstoredev := congrArg WGStoreView.dev hstore
+  all_goals dsimp only [wgStoreView] at hstoredev
+  all_goals subst_vars
+  all_goals try simp_all
   all_goals solve
-    | apply ClearWalkInv.finish <;> first | assumption | rfl
     | apply ClearWalkInv.after_unlist <;> first | assumption | simp_all
     | apply ClearWalkInv.after_unowned <;> first | assumption | simp_all
 
 /-- Normal completion supplies an empty pending stack. Exhaustion and missing
-references remain Stops, with no returned failed World. -/
+references remain Stops, with no returned failed WGWorld. -/
 theorem rootRemove_spec (d : Device) (ho : ListsOwned d) (root : NodeId) :
-    ⦃fun w => ⌜w.k.wg = some d⌝⦄ rootRemoveSource root
-    ⦃⇓? _ w => ⌜∃ out seen, w.k.wg = some out ∧ ClearProgress d.nodes seen out ∧
+    ⦃fun w => ⌜w.dev = some d⌝⦄ rootRemoveSource root
+    ⦃⇓? _ w => ⌜∃ out seen, w.dev = some out ∧ ClearProgress d.nodes seen out ∧
       Frontier d.nodes root seen []⌝⦄ := by
   have hs := rootRemoveStep_spec d.nodes root
-  mvcgen [rootRemoveSource, getDev, getK, invariant, hs]
+  mvcgen [rootRemoveSource, getDev, invariant, AmbientM.invariant, hs]
   invariants
   | inv1 => (fun cursor w => ⌜ClearWalkInv d.nodes root cursor.2 w⌝, ExceptConds.true)
   all_goals try dsimp +zetaDelta only at *
@@ -256,20 +275,20 @@ theorem rootRemove_spec (d : Device) (ho : ListsOwned d) (root : NodeId) :
   case vc5.h_1.post.success.h_1 =>
     rename_i before hbefore dd hdd state x hx finish hi
     obtain ⟨out, seen, hout, hp, hf, done⟩ := hi
-    have hempty := done (by simp [hx])
+    have hempty := done (by simp_all)
     exact ⟨out, seen, hout, hp, by simpa [hempty] using hf⟩
 
 /-- On a normal return, every node represented below this root has disappeared
 from every resident peer list. Raw absent owners are permitted at entry; their
 actual getter failure is not turned into a successful clear. -/
-theorem rootRemove_lists (w v : World) (d : Device) (hd : w.k.wg = some d)
+theorem rootRemove_lists (w v : WGWorld) (ambient ambient' : Ambient) (d : Device) (hd : w.dev = some d)
     (ho : ListsOwned d) (root : NodeId) (hr : t.root = some root)
     (hrep : RepAt d.nodes width parent t)
-    (he : (rootRemovePeerLists root).run w = .ok ((), v)) :
-    ∃ out, v.k.wg = some out ∧ out.nodes = d.nodes ∧
+    (he : ((rootRemovePeerLists root).run w).run ambient = .ok (((), v), ambient')) :
+    ∃ out, v.dev = some out ∧ out.nodes = d.nodes ∧
       ∀ (pid : PeerId) (p : Peer), out.peers[pid]? = some p →
         ∀ id ∈ t.nodeIds, id ∉ p.allowedipsList := by
-  have hh := (hoare_iff_triple _ _ _).mpr (rootRemove_spec d ho root) w () v hd
+  have hh := (hoare_iff_run_ambient _ _ _).mp (rootRemove_spec d ho root) w ambient () v ambient' hd
     (by simpa only [rootRemoveSource_eq] using he)
   obtain ⟨out, seen, hout, hp, hf⟩ := hh
   have coverage : ∀ id ∈ t.nodeIds, id ∈ seen := hrep.closed_coverage
@@ -280,24 +299,30 @@ theorem rootRemove_lists (w v : World) (d : Device) (hd : w.k.wg = some d)
   exact (hp.2 pid p hpeer id hlist).1 (coverage id hid)
 
 
-/-- Full Kernel/device context and complete peer records, with only resident
-allowed-IP lists hidden. Device and peer absence are retained. -/
-def clearListView (w : World) : Kernel × (PeerId → Option Peer) :=
-  ({w.k with wg := w.k.wg.map (fun d => {d with peers := {}})},
-    fun pid => w.k.wg.bind (fun d => d.peers[pid]?.map (fun p => {p with allowedipsList := []})))
+/-- The original seven-field WG store observation and complete peer records,
+with resident allowed-IP lists hidden. Device and peer absence are retained. -/
+def clearListView (w : WGWorld) : WGStoreView × (PeerId → Option Peer) :=
+  ({wgStoreView w with dev := w.dev.map (fun d => {d with peers := {}})},
+    fun pid => w.dev.bind (fun d => d.peers[pid]?.map (fun p => {p with allowedipsList := []})))
 
 theorem listDel_clearListView (id : NodeId) : SameView clearListView (listDel id) := by
-  intro w result v hr
-  cases hd : w.k.wg with
-  | none => simp [listDel, getDev, getK, invariant, hd] at hr
+  apply (Lifetimes.ProjectedAction.iff_run_ambient _ _ _).mpr
+  intro w ambient result v ambient' hr
+  cases hd : w.dev with
+  | none =>
+    simp [listDel, getDev, invariant, AmbientM.invariant, hd] at hr
+    change (Except.error (.invariant "no WireGuard device in this trace's fixture") :
+      Except Stop ((Unit × WGWorld) × Ambient)) = .ok ((result, v), ambient') at hr
+    cases hr
   | some d =>
-    obtain ⟨r, finish, he, hh⟩ := (total_iff_run _ _ _).mp (listDel_wp w.k d hd id) w rfl
+    obtain ⟨r, finish, finalAmbient, he, hh⟩ :=
+      (total_iff_run_ambient _ _ _).mp (listDel_wp w d hd id) w ambient rfl
     rw [hr] at he
     cases he
     unfold clearListView
     rw [hh.2]
     apply Prod.ext
-    · simp [unlisted, hd]
+    · simp [wgStoreView, unlisted, hd]
     · funext pid
       simp only [Option.bind_some, unlisted_get, Option.map_map, hd]
       cases d.peers[pid]? <;> rfl
@@ -305,17 +330,28 @@ theorem listDel_clearListView (id : NodeId) : SameView clearListView (listDel id
 theorem rootRemove_clearListView (root : NodeId) : SameView clearListView (rootRemovePeerLists root) := by
   apply SameView.of_wp
   intro initial
-  have hn := fun id => (SameView.of_sameKernel (fun k =>
-    ({k with wg := k.wg.map (fun d => {d with peers := {}})},
-      fun pid : PeerId => k.wg.bind (fun d => d.peers[pid]?.map (fun p => {p with allowedipsList := []}))))
-      (getNode_sameKernel id)).wp (fun s => s = initial)
+  have hn (id : NodeId) :
+      ⦃fun w => ⌜clearListView w = initial⌝⦄
+        (MonadLift.monadLift (getNode id) : WG.M AipNode)
+      ⦃⇓? _ w => ⌜clearListView w = initial⌝⦄ := by
+    apply hoare_liftAip_of
+    intro g d hg hd
+    apply hoare_consequence ((getNode_sameAipStore id).wp
+      (fun s => s = {nodes := d.nodes, nextNode := d.nextNode, trie := d.peerAllowedips}))
+    · intro s hs; exact hs
+    · intro _ s hs
+      subst s
+      change clearListView {g with dev := some d} = initial
+      rw [← hd]
+      exact hg
   have hd := fun id => (listDel_clearListView id).wp (fun s => s = initial)
-  have hl (α β : Type) := list_view_spec clearListView (α := α) (β := β) (fun s => s = initial)
+  have hl (α β : Type) := list_view_spec (m := AmbientM) clearListView (α := α) (β := β) (fun s => s = initial)
   mvcgen [-Std.Do.Spec.forIn_list, -Std.Do.Spec.forIn'_list, hl, rootRemovePeerLists,
-    hn, hd, getPeer, getDev, getK, invariant, branch]
-  all_goals try exact ((⇓? _ w => ⌜clearListView w = initial⌝) : PostCond _ (.arg World (.except Stop .pure)))
+    hn, hd, getPeer, getDev, invariant, AmbientM.invariant, branch, AmbientM.branch]
+  all_goals try exact ((⇓? _ w => ⌜clearListView w = initial⌝) :
+    PostCond _ (.arg WGWorld (.arg Ambient (.except Stop .pure))))
   all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [clearListView, ExceptConds.true, ExceptConds.const]
+  all_goals simp_all [clearListView, wgStoreView, ExceptConds.true, ExceptConds.const]
 
 
 end Leanux.Proofs.WG.AllowedIps

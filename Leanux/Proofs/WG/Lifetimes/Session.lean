@@ -80,26 +80,22 @@ def sessionStateRejected (st : Nat) : AmbientM Bool := do
     AmbientM.branch .sessionNotConsumedResponse (st != HANDSHAKE_CONSUMED_RESPONSE)
   else pure false
 
-/-- The only store reads are of the scalar index table, not its referenced
-peer or keypair objects. The update changes no lifetime or allocator cursor. -/
-theorem indexReplaceHandshake_identity_metadata (pid : PeerId) (kp : KeypairId) :
-    SameView (fun w => (identityView w, allocationMetadata w))
-      (liftIndex (indexReplaceHandshake pid kp)) := by
-  apply SameView.of_wp
-  intro initial
-  apply hoare_liftIndex
-  intro g d table hi hd
-  unfold identityView Peers.snapshot keypairResidents packetResidents allocationMetadata at hi ⊢
-  simpa [deviceAllocationMetadata, hd] using hi
-
+/-- Index removal/replacement is observed without inventing object access;
+the canonical index adapter supplies the allocation invariant's stability. -/
 theorem indexReplaceHandshake_allocation (pid : PeerId) (kp : KeypairId) :
     StatePrefixPreserves (fun h w _ => AllocationInv h w) LifetimeEvent.Safe
       (liftWGPrefix (liftIndex (indexReplaceHandshake pid kp))) := by
   apply StatePrefixEnsures.lift _ (fun h w _ hi => hi.safe)
   intro h w ambient x v ambient' hi hr
-  have hf := (ProjectedAction.iff_run_ambient _ _ _).mp
-    (indexReplaceHandshake_identity_metadata pid kp) w ambient x v ambient' hr
-  exact hi.congr (congrArg Prod.fst hf) (congrArg Prod.snd hf)
+  have hp : Hoare (liftIndex (indexReplaceHandshake pid kp)) (AllocationInv h)
+      (fun _ => AllocationInv h) := by
+    apply hoare_liftIndex
+    intro g d table hg hd
+    apply hg.congr
+    · unfold identityView Peers.snapshot keypairResidents packetResidents
+      simp [hd]
+    · simp [allocationMetadata, deviceAllocationMetadata, hd]
+  exact (hoare_iff_run_ambient _ _ _).mp hp w ambient x v ambient' hi hr
 
 def sessionKeypairPrefix (kp : KeypairId) (initiator : Bool) (remoteIndex : Nat) : MixedM Unit := do
   let k ← getKeypairPrefix kp

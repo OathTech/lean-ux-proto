@@ -131,4 +131,103 @@ theorem enqueuePerPeerRxPrefix_keypair_failure (irq : PrefixM LifetimeEvent Unit
       getKeypairPrefix_run, hk, Except.map]
   simp only [enqueuePerPeerRxPrefix, runPrefix_bind, packet, key]
 
+/-- The concrete native, pure-interrupt call used by consumeData. The product
+observer above retains its unrestricted callback. -/
+def enqueuePerPeerRxNativePrefix (id : SkbId) (state : PacketState) : MixedM Unit := do
+  let pid ← peerDerefPrefix (.keypair (← getRxSkbPrefix id).keypair)
+  peerGetMixed pid
+  let p ← getPeerMixed pid
+  if !(p.rxQueue.all.contains id) then
+    liftWGPrefix (invariant "a decrypted packet that is not on its peer's rx_queue")
+  setRxSkbPrefix id fun q => {q with state}
+  setPeerMixed pid {p with napiScheduled := true}
+  pure ()
+  peerPutMixed (some pid)
+
+theorem enqueuePerPeerRxNativePrefix_erases (id : SkbId) (state : PacketState) :
+    ErasesStatePrefix (enqueuePerPeerRxNativePrefix id state)
+      (enqueuePerPeerRx (pure () : WG.M Unit) id state) := by
+  unfold enqueuePerPeerRxNativePrefix enqueuePerPeerRx
+  apply erasesStatePrefix_bind (getRxSkbPrefix_erases id)
+  intro pkt
+  apply erasesStatePrefix_bind (peerDerefPrefix_erases (.keypair pkt.keypair))
+  intro pid
+  apply erasesStatePrefix_bind (peerGetMixed_erases pid)
+  intro _
+  apply erasesStatePrefix_bind (getPeerMixed_erases pid)
+  intro p
+  dsimp only
+  split
+  · apply erasesStatePrefix_bind (erasesStatePrefix_lift _)
+    intro _
+    apply erasesStatePrefix_bind (setRxSkbPrefix_erases id _)
+    intro _
+    apply erasesStatePrefix_bind (setPeerMixed_erases pid _)
+    intro _
+    simpa only [pure_bind, liftM, monadLift, monadLift_self] using peerPutMixed_erases (some pid)
+  · apply erasesStatePrefix_bind (setRxSkbPrefix_erases id _)
+    intro _
+    apply erasesStatePrefix_bind (setPeerMixed_erases pid _)
+    intro _
+    simpa only [pure_bind, liftM, monadLift, monadLift_self] using peerPutMixed_erases (some pid)
+
+theorem enqueuePerPeerRxNativePrefix_preserves_ambient (c : AmbientContracts I)
+    (id : SkbId) (state : PacketState) :
+    StatePrefixPreserves (fun h w _ => I h w) LifetimeEvent.Safe
+      (enqueuePerPeerRxNativePrefix id state) := by
+  unfold enqueuePerPeerRxNativePrefix
+  apply StatePrefixEnsures.bind (AmbientContracts.drop (c.getRx (fun _ => True) id))
+  intro pkt
+  apply StatePrefixEnsures.bind (AmbientContracts.drop (peerDerefPrefix_spec c (fun _ => True) (.keypair pkt.keypair)))
+  intro pid
+  apply StatePrefixEnsures.bind (c.peerGet pid)
+  intro _
+  have hget : StatePrefixEnsures (fun h w _ => I h w) LifetimeEvent.Safe (getPeerMixed pid)
+      (fun p h w _ => I h w ∧ (identityView w).1.slots pid = some p.internalId) :=
+    (c.getPeer (fun _ => True) pid).consequence
+      (fun _ _ _ hn => ⟨hn, True.intro⟩) (fun _ _ _ _ hn => ⟨hn.1, hn.2.2⟩)
+  apply StatePrefixEnsures.bind hget
+  intro p
+  dsimp only
+  have tail : StatePrefixEnsures
+      (fun h w _ => I h w ∧ (identityView w).1.slots pid = some p.internalId)
+      LifetimeEvent.Safe
+      (do setRxSkbPrefix id fun q => {q with state}
+          setPeerMixed pid {p with napiScheduled := true}
+          pure ()
+          peerPutMixed (some pid)) (fun _ h w _ => I h w) := by
+    apply StatePrefixEnsures.bind (c.setRx (fun s => s.1.slots pid = some p.internalId) id _)
+    intro _
+    apply StatePrefixEnsures.bind ((c.setPeer (fun _ => True) pid
+      {p with napiScheduled := true}).consequence
+        (fun _ _ _ hn => ⟨hn.1, True.intro, hn.2⟩) (fun _ _ _ _ hn => hn.1))
+    intro _
+    simpa only [pure_bind] using c.peerPut (some pid)
+  split
+  · apply StatePrefixEnsures.bind (Q := fun (_ : Unit) h w _ =>
+        I h w ∧ (identityView w).1.slots pid = some p.internalId)
+    · apply StatePrefixEnsures.lift _ (fun h w _ hn => c.safe h w hn.1)
+      intro h w ambient x v ambient' hn hr
+      simp [invariant, AmbientM.invariant] at hr
+      cases hr
+    intro _
+    exact tail
+  · exact tail
+
+theorem enqueuePerPeerRxNativePrefix_lift (id : SkbId) (state : PacketState) :
+    liftWGObserver (enqueuePerPeerRxNativePrefix id state) =
+      enqueuePerPeerRxPrefix (pure ()) id state := by
+  unfold enqueuePerPeerRxNativePrefix enqueuePerPeerRxPrefix
+  simp only [liftWGObserver_bind, liftWGObserver_pure, pure_bind]
+  congr 1
+  funext pkt
+  congr 1
+  funext pid
+  congr 1
+  funext u
+  congr 1
+  funext p
+  split <;> simp only [liftWGObserver_bind, liftWGObserver_lift, liftWGObserver_pure, pure_bind]
+  all_goals rfl
+
 end Leanux.Proofs.WG.Lifetimes

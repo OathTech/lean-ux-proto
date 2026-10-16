@@ -79,10 +79,11 @@ it is not part of that baseline.
 | Native allocation, ingress, trie and product runner/environment carry | 116 | 57 | 2 | 57 | 10 | 124 |
 | Native allocation/trie carries and product scheduler/worker/environment callers | 172 | 89 | 2 | 81 | 10 | 180 |
 | Native routing, allocation, retirement, R6 terminals and product operation evolution | 102 | 50 | 2 | 50 | 7 | 107 |
-| Native allocation, lookup, session and routing lifecycle with canonical Seccomp adapter | 55 | 39 | 2 | 14 | 10 | 63 |
+| Native allocation, lookup, session and routing lifecycle with canonical Seccomp adapter (corrected) | 55 | 38 | 3 | 14 | 10 | 62 |
+| Replay terminals, receive admission, key maintenance, clear walks and native failures | 91 | 40 | 3 | 48 | 11 | 99 |
 
-The whole tree currently contains 451 Lean files and 6,270 theorems. The completed
-changes total 1,292 retyped theorems, 1,607 deletions, 460 retained contract shapes and 162 added.
+The whole tree currently contains 451 Lean files and 6,277 theorems. The completed
+changes total 1,331 retyped theorems, 1,611 deletions, 508 retained contract shapes and 173 added.
 Retyping changes or generalizes the actual state/monad carrier or observation.
 This includes shorthand contracts whose source functions or named views move
 to a native monad. Mere namespace qualification and equivalent relocation of a
@@ -96,9 +97,11 @@ The count audit corrects the scheduler row from 17 retyped / 9 retained to
 was inconsistent with the native source-equality and acceptance-observer rows.
 Before this checkpoint, the corrected totals are 259 retyped / 89 retained,
 rather than 276 / 72. The before/after, deletion and addition counts are unchanged.
-Five terminal files remain unchanged. LifetimeSafety loses six redundant filesystem
+Three terminal files remain unchanged. LifetimeSafety loses six redundant filesystem
 exports. FloodResistance retains all six names: five native WG/Ambient contracts
-and the existing product advance contract. Other retained terminal bodies are unchanged. The terminal surface is now
+and the existing product advance contract. ReplayWindow and AntiReplay retain all
+22 theorem names and two definitions, with eight native/mixed retypes and fourteen
+retained product/pure contracts. The terminal surface is now
 515 declarations (513 theorems and two definitions). **Every result remains lagging** until the complete tree
 passes its proof gate and kernel replay. R1/R2/R5/R6 retain their pre-split
 charter dispositions; initialized R3 packet authorization and R4 receive-pipeline
@@ -1627,3 +1630,57 @@ infrastructure rerun occurred.
 Reproduce with capped module builds, explicit named axiom printing and
 capped scripts/in-bundle lake env leanchecker --fresh on Product, RoutingView,
 RoutingLifecycle, DeviceCreation, LookupAccess, PeerAllocationFailure and Session.
+
+
+## Replay terminals, receive admission and native failure prefixes
+
+The new carried group contains 91 original theorems: 40 native/generalized
+retypes, 48 retained contracts, three deletions and eleven native helpers or
+counterparts, giving 99. A separate correction deletes Session's previously
+retained indexReplaceHandshake_identity_metadata; the earlier table row is
+amended from 39 retyped/two deleted to 38 retyped/three deleted. Its allocation
+consumer now applies the canonical index adapter directly. That redundant
+frame was a retrofit mistake, not a substantive lost property.
+
+All replay-window and R1 terminal names remain. Native validator sequences
+thread each actual WG and Ambient endpoint; arbitrary product observer actions,
+runner traces, recorded schedules and placeholder settings retain their original
+scope. The inclusive boundary witness is unchanged. Syscall composition retains
+all ten product contracts and the original NoReceiveCall classification.
+Receive admission preserves both arbitrary product-invariant contracts and the
+unrestricted product IRQ callback; its concrete native pure-IRQ call has an exact
+bridge. Conditional session-clock and device-work failures retain their complete
+source-order journals with consecutive actual operation premises.
+
+The other deletions are indexRemove_identity_metadata and the Ambient-only
+recordQueued_sameKernel/queueDeviceWork_sameKernel. They follow from the actual
+component types; allocation consumers keep the guarded canonical adapters.
+AllowedIPs clear walks retain total child-push results, source-positioned Aip
+lifts, original store masks and normal/failed outcome domains.
+
+All scoped builds, 149 explicit named axiom checks, eight fresh entry-module
+kernel replays and source reviews pass. Default build passes (66 jobs); unit
+tests pass (131 tests, one skip). The proof target/gate, proof limits and mirror
+b700659 remain unchanged. The complete proof gate is still pending and every
+register row remains lagging.
+
+Development failures: syscall composition had five existing-limit heartbeat
+failures and two WP adapter failures before passing at the unchanged limit;
+replay terminals had two boundary-normalization failures; receive admission had
+six failed drafts including one existing-limit timeout; key maintenance had one
+erasure-normalization failure; clear walks had two; each newly carried failure
+prefix had one. Failed dependent-constant recovery outputs were rejected.
+No KILLED result, guest timeout, cap increase or infrastructure rerun occurred.
+
+A new whole-tree build failed at nine later targets: CookieAccess,
+SessionFailure, ReceiveEntryFailure, MaterialOrigin, Queues.Enqueue,
+MaintenanceTimers, RxHelperFrames, ClearSnapshot and Peers.Affiliation.
+Several were being carried concurrently and subsequently passed scoped checks;
+this remains a failed whole-tree run. An output-parser exception in the next
+AllowedIPs axiom inventory triggered recovery snapshots of every dirty worktree,
+including untracked files, before work resumed; branches were untouched.
+
+Reproduce the carried group with capped module builds, named axiom printing,
+and capped scripts/in-bundle lake env leanchecker --fresh on Syscalls,
+AntiReplay.Statements, RoutingInitial, ClearWalk, ReceiveEntry, KeyMaintenance,
+SessionFailure and ReceiveEntryFailure.

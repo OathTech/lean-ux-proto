@@ -17,11 +17,11 @@ theorem pure_uniqueness (c : ReplayCounter) (ns : List Nat)
 
 /-- The same uniqueness property holds for finite runs of the actual mirror
 validator, with the keypair continuously allocated throughout the run. -/
-theorem mirror_uniqueness (w w' : World) (kp : KeypairId) (c : ReplayCounter)
+theorem mirror_uniqueness (w w' : WGWorld) (ambient ambient' : Ambient) (kp : KeypairId) (c : ReplayCounter)
     (ns results : List Nat) (hc : counterAt w kp = some c)
     (hs : c.backtrack.size = 128)
-    (hr : (mirrorCalls kp ns).run w = .ok (results, w')) : results.Nodup :=
-  mirrorCalls_nodup w w' kp c ns results hc hs hr
+    (hr : ((mirrorCalls kp ns).run w).run ambient = .ok ((results, w'), ambient')) : results.Nodup :=
+  mirrorCalls_nodup w w' ambient ambient' kp c ns results hc hs hr
 
 /-- Every accepted full runner execution has its exact committed acceptance
 history, with no repeated (allocation lifetime, wire counter) pair. This
@@ -64,25 +64,25 @@ theorem pure_run_below_floor (c : ReplayCounter) (priorCalls : List Nat) (nonce 
 
 /-- Every successful original validator call obeys the same inclusive floor,
 by exact S2 refinement, from any shape-correct allocated replay window. -/
-theorem mirror_floor (w w' : World) (kp : KeypairId) (c : ReplayCounter)
+theorem mirror_floor (w w' : WGWorld) (ambient ambient' : Ambient) (kp : KeypairId) (c : ReplayCounter)
     (nonce : Nat) (hc : counterAt w kp = some c) (hs : c.backtrack.size = 128)
-    (hr : (counterValidate kp nonce).run w = .ok (true, w')) :
+    (hr : ((counterValidate kp nonce).run w).run ambient = .ok ((true, w'), ambient')) :
     c.counter ≤ nonce + 1 + COUNTER_WINDOW_SIZE :=
-  (mirror_accepted_bounds w w' kp c nonce hc hs hr).1
+  (mirror_accepted_bounds w w' ambient ambient' kp c nonce hc hs hr).1
 
 /-- The floor applies after every finite sequence of original mirror calls;
-the prefix's pure state is the exact projection of the resulting World. -/
-theorem mirror_run_floor (w mid out : World) (kp : KeypairId) (c : ReplayCounter)
+the prefix's pure state is the exact projection of the resulting WG state. -/
+theorem mirror_run_floor (w mid out : WGWorld) (ambient midAmbient outAmbient : Ambient) (kp : KeypairId) (c : ReplayCounter)
     (priorCalls results : List Nat) (nonce : Nat)
     (hc : counterAt w kp = some c) (hs : c.backtrack.size = 128)
-    (hp : (mirrorCalls kp priorCalls).run w = .ok (results, mid))
-    (hr : (counterValidate kp nonce).run mid = .ok (true, out)) :
+    (hp : ((mirrorCalls kp priorCalls).run w).run ambient = .ok ((results, mid), midAmbient))
+    (hr : ((counterValidate kp nonce).run mid).run midAmbient = .ok ((true, out), outAmbient)) :
     (finish c priorCalls).counter ≤ nonce + 1 + COUNTER_WINDOW_SIZE := by
-  obtain ⟨actual, he, hcounter⟩ := mirrorCalls_refines w kp c priorCalls hc hs
+  obtain ⟨actual, actualAmbient, he, hcounter⟩ := mirrorCalls_refines w ambient kp c priorCalls hc hs
   rw [hp] at he
-  have hm : mid = actual := congrArg Prod.snd (Except.ok.inj he)
+  have hm : mid = actual := congrArg (fun out => out.1.2) (Except.ok.inj he)
   subst actual
-  exact mirror_floor mid out kp (finish c priorCalls) nonce hcounter
+  exact mirror_floor mid out midAmbient outAmbient kp (finish c priorCalls) nonce hcounter
     (by simpa [finish_size] using hs) hr
 
 /-- The C boundary is inclusive: after accepting wire counter 8129, unseen
