@@ -82,10 +82,10 @@ def eventfdRead (iocb : Kiocb) (iterCount : Nat) : M Int := do
       return -EAGAIN  -- spin_unlock_irq
     unsupported "eventfd_read blocking wait"
   let ucnt ← eventfdCtxDoRead id
-  modifyK fun k => { k with task := { k.task with inEventfd := true } }
+  modifyTask .task fun t => { t with inEventfd := true }
   if ← branch .eventfdReadWaitqueueActive (← waitqueueActive (.eventfdWqh id)) then
     wakeUpLockedPoll (.eventfdWqh id) EPOLLOUT
-  modifyK fun k => { k with task := { k.task with inEventfd := false } }
+  modifyTask .task fun t => { t with inEventfd := false }
   -- spin_unlock_irq(&ctx->wqh.lock)
   -- `copy_to_iter`: the guest's buffer is mapped (a trace input under A-U, 6.5)
   if ← branch .eventfdReadCopyFault false then return -EFAULT
@@ -115,10 +115,10 @@ def eventfdWrite (fid : FileId) (buf : ByteArray) (count : Nat) : M Int := do
   if ← branch .eventfdWriteResPositive (res > 0) then
     let ctx ← getCtx id
     setCtx id { ctx with count := ctx.count + ucnt }
-    modifyK fun k => { k with task := { k.task with inEventfd := true } }
+    modifyTask .task fun t => { t with inEventfd := true }
     if ← branch .eventfdWriteWaitqueueActive (← waitqueueActive (.eventfdWqh id)) then
       wakeUpLockedPoll (.eventfdWqh id) EPOLLIN
-    modifyK fun k => { k with task := { k.task with inEventfd := false } }
+    modifyTask .task fun t => { t with inEventfd := false }
   -- spin_unlock_irq(&ctx->wqh.lock)
   return res
 

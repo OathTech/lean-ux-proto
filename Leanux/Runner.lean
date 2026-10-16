@@ -979,12 +979,32 @@ def fixtureFile (name : String) (refs : Nat) : File :=
     { fFlags := O_RDWR, fMode := FMODE_READ ||| FMODE_WRITE ||| FMODE_OPENED,
       fCount := refs, fOp := some (.fixture name), fInode := some (.fixture name) }
 
+/-- The fixture's reserved descriptors (0-2, the KCOV fd, the fixture's sockets). -/
+def reservedFds (foreign stepped seccompChild : Bool) : Nat :=
+  if foreign then 10 else if stepped || seccompChild then 9 else 8
+
+/-- The trace process at the start (the task store): its file table over the
+    reserved descriptors, the rlimit, SIGPIPE blocked (P design section 6)
+    and no pending signal; no child; `current` is the task. -/
+def initialTasks (rlimit : Nat) (foreign : Bool := false) (stepped : Bool := false) (seccompChild : Bool := false) : TaskWorld :=
+  let reserved := reservedFds foreign stepped seccompChild
+  let slot (fd : Nat) : Option FileId :=
+    if fd < 3 then some 0 else if fd < reserved then some (fd - 2) else none
+  let slots := (List.range NR_OPEN_DEFAULT).toArray
+  { task := {
+      files := { count := 1, resizeInProgress := false, nextFd := reserved,
+                 fdt := { maxFds := NR_OPEN_DEFAULT, fd := slots.map slot,
+                          openFds := slots.map (· < reserved), closeOnExec := slots.map fun _ => false } }
+      rlimitNofile := rlimit
+      blocked := sigmask SIGPIPE, pending := 0 } }
+
 def initialKernel (rlimit : Nat) (net : Bool := false) (bare : Bool := false) (foreign : Bool := false)
     (stepped : Bool := false) (seccompChild : Bool := false) : Kernel :=
+  let _ := rlimit
   -- W8: the foreign-creator fixture adds the injector (8) and the pin (9);
   -- W2: a stepped trace adds the dump socket (8); seccomp (design 6.2 rule
   -- 2): the children's KCOV descriptor (8); the validator keeps the two apart
-  let reserved := if foreign then 10 else if stepped || seccompChild then 9 else 8
+  let reserved := reservedFds foreign stepped seccompChild
   let slot (fd : Nat) : Option FileId :=
     if fd < 3 then some 0 else if fd < reserved then some (fd - 2) else none
   let files : Std.TreeMap FileId File := Std.TreeMap.ofList
@@ -997,14 +1017,7 @@ def initialKernel (rlimit : Nat) (net : Bool := false) (bare : Bool := false) (f
          | 3 => "generic-netlink" | 4 => if stepped then "generic-netlink-dump" else "udp-injector"
          | _ => "netns-pin") 1))
   let slots := (List.range NR_OPEN_DEFAULT).toArray
-  { task := {
-      files := { count := 1, resizeInProgress := false, nextFd := reserved,
-                 fdt := { maxFds := NR_OPEN_DEFAULT, fd := slots.map slot,
-                          openFds := slots.map (· < reserved), closeOnExec := slots.map fun _ => false } }
-      rlimitNofile := rlimit
-      -- the trace child blocks SIGPIPE before the first operation and starts
-      -- with no pending signal (P design section 6; the guest side is P1's)
-      blocked := sigmask SIGPIPE, pending := 0 }
+  {
     files, nextFile := if foreign then 8 else if stepped || seccompChild then 7 else 6, ctxs := {}, nextCtx := 0,
     idaUsed := {},
     -- Environment facts: the system-wide open-file count and limit are not
@@ -1066,8 +1079,8 @@ def readDigest (out : Option ByteArray) (ret : Int) : Json :=
 
 /-- The `sigpipe` observation field of a write: whether `SIGPIPE` is pending
     in the task after the call (the guest's `sigpending()` after each write). -/
-def writeSigpipe (k : Kernel) : Json :=
-  toJson (if sigismember k.task.pending SIGPIPE then (1 : Nat) else 0)
+def writeSigpipe (t : TaskWorld) : Json :=
+  toJson (if sigismember t.task.pending SIGPIPE then (1 : Nat) else 0)
 
 def toSyscall (results : Array Int) (ends : Array (Option (Nat × Nat))) (index : Nat) : Operation → Syscall
   | .eventfd2 init flags => .eventfd2 init flags
@@ -1113,7 +1126,7 @@ def toSyscall (results : Array Int) (ends : Array (Option (Nat × Nat))) (index 
 /-- Lane C: the boot trie of a network trace's fixture namespace (`lo` up),
     for `leanux-model --fib-boot` and the harness's expected fixture facts. -/
 def fibBootJson : Except Stop Json := do
-  let world : World := { k := initialKernel 32 true, ambient := { env := harnessEnv, timing := Env.timing } }
+  let world : World := { k := initialKernel 32 true, tasks := initialTasks 32, ambient := { env := harnessEnv, timing := Env.timing } }
   let (_, w) ← Net.Fib.bootTables.run world
   return Net.Fib.shape w.k
 
@@ -1129,6 +1142,7 @@ def executeTrace (trace : Trace) (placeholders : Bool := false) : Except (Nat ×
                                (trace.steer.map (·.1)).filter fun l => AllocSite.all.any (·.info.label == l)
                              else [] }
   let mut world : World := { ambient, k := initialKernel trace.rlimit trace.net trace.bare trace.foreign trace.stepped trace.seccompChild,
+                             tasks := initialTasks trace.rlimit trace.foreign trace.stepped trace.seccompChild,
                              portBound := Env.portBound,
                              fixtureNetDevices := Env.fixtureNetDevices,
                              foreignCreator := trace.foreign,
@@ -1138,8 +1152,8 @@ def executeTrace (trace : Trace) (placeholders : Bool := false) : Except (Nat ×
                              napiBeforePut := trace.napiBeforePut }
   -- the seccomp prefill fixture (design 5): the chain the guest installed before the window
   if trace.seccompPrefill > 0 then
-    match Env.seccompPrefill trace.seccompPrefill world.k with
-    | .ok k => world := { world with k }
+    match Env.seccompPrefill trace.seccompPrefill world.k world.tasks with
+    | .ok (k, tasks) => world := { world with k, tasks }
     | .error e => throw (0, .invariant e)
   -- lane C: the fixture namespaces' IPv4 tables at boot (`lo` up in each),
   -- built by the C's own sequence outside every window (the design note,
@@ -1186,7 +1200,7 @@ def executeTrace (trace : Trace) (placeholders : Bool := false) : Except (Nat ×
           | none => .null)]
       | .read .. => [("digest", readDigest w.userOut ret)]
       | .epollWait .. => [("digest", readDigest w.userOut (ret * 12))]
-      | .write .. => [("sigpipe", writeSigpipe w.k)]
+      | .write .. => [("sigpipe", writeSigpipe w.tasks)]
       | _ => []
     let device := w.ambient.extraOut
     observations := observations.push (Json.mkObj ([
@@ -1260,7 +1274,7 @@ private def f1Ring : WG.PtrRing (List WG.SkbId) :=
   (List.range 1009).foldl (fun r i => r.produce [100 + i]) r1
 
 private def f1World : World :=
-  { k := { initialKernel 8 with wg := some { ifindex := 3, ifname := "wg0", encryptQueue := f1Ring } },
+  { k := { initialKernel 8 with wg := some { ifindex := 3, ifname := "wg0", encryptQueue := f1Ring } }, tasks := initialTasks 8,
     ambient := { env := harnessEnv, timing := { advanceWait := 0, traceBound := 0 } } }
 
 /-- The poll's produce (`wg_queue_enqueue_per_device_and_peer`, queueing.h:174):

@@ -1176,9 +1176,9 @@ def forkClocks : M Unit := do
     copied; the pending set empty; the signal mask inherited. The child has
     no file table of its own: no modelled path in it touches a file. -/
 def childCreate : M Unit := do
-  let p := (← getK).task
+  let p := (← getTasks).task
   let c : Task := { p with pending := 0, sigpending := false, taskWorks := [], inEventfd := false, exited := false }
-  modifyK fun k => { k with child := some c }
+  modifyTasks fun t => { t with child := some c }
 
 /-- The child's exit: `seccomp_filter_release` (kernel/seccomp.c:572-585)
     runs after `kcov_task_exit`, in no window (design 2.8, audit C1): one
@@ -1187,7 +1187,7 @@ def childCreate : M Unit := do
     walks nothing. No decisions. -/
 def childExit : M Unit := do
   let k ← getK
-  match k.child with
+  match (← getTasks).child with
   | none => invariant "the child's exit effect without a child"
   | some c =>
     if let some id := c.seccomp.filter then
@@ -1200,15 +1200,15 @@ def childExit : M Unit := do
 
 /-- The parent's `wait4` reaped the child: its task object is dropped. -/
 def childDrop : M Unit := do
-  if (← getK).child.isNone then invariant "wait4 without a child"
-  modifyK fun k => { k with child := none }
+  if (← getTasks).child.isNone then invariant "wait4 without a child"
+  modifyTasks fun t => { t with child := none }
 
 /-- A `TRAP`'s delivery to the current task (design 2.2, 5): `get_signal`
     dequeues the `SIGSYS` (the pending set and `TIF_SIGPENDING` clear), the
     handler runs on its frame and `rt_sigreturn` restores the mask, which is
     as before. No decisions: the delivery side is not anchored. -/
 def trapDelivered : M Unit := do
-  let t := (← getK).current
+  let t := (← getTasks).current
   modifyTask t fun tk => { tk with pending := sigdelset tk.pending SIGSYS, sigpending := false }
 
 /-- The seccomp prefill fixture (`"seccomp_prefill": N`; design section 5)
@@ -1220,6 +1220,6 @@ def trapDelivered : M Unit := do
     window, like the fixture descriptors; the kernel's `total_insns` at the
     next recorded install is the evidence that the reconstruction's lengths
     are the kernel's. -/
-def seccompPrefill (n : Nat) (k : Kernel) : Except String Kernel := Leanux.Seccomp.Prefill.apply n k
+def seccompPrefill (n : Nat) (k : Kernel) (t : TaskWorld) : Except String (Kernel × TaskWorld) := Leanux.Seccomp.Prefill.apply n k t
 
 end Leanux.Env

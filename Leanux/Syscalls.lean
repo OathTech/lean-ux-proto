@@ -173,7 +173,7 @@ def rtnetlinkRequest (handler : M Int) : M Int := do
   let t := fs.fdt
   let some fd := (List.range t.maxFds).find? (fun n => n ≥ fs.nextFd && !(t.openFds.getD n true))
     | unsupported "no free descriptor in the table for the temporary rtnetlink socket (expansion)"
-  if fd ≥ (← getK).task.rlimitNofile then
+  if fd ≥ (← getTask .task).rlimitNofile then
     unsupported "no descriptor below RLIMIT_NOFILE for the temporary rtnetlink socket (the guest fails)"
   let fid := (← getK).nextFile
   setFile fid { fFlags := O_RDWR, fMode := FMODE_READ ||| FMODE_WRITE ||| FMODE_OPENED, fCount := 1,
@@ -207,10 +207,10 @@ def TASK_WORK_FUEL : Nat := 1 <<< 16
     (future-proof-paths note, 3(d)). -/
 def taskWorkRun : M Unit := do
   for _ in [0:TASK_WORK_FUEL] do
-    match (← getK).task.taskWorks with
+    match (← getTask .task).taskWorks with
     | [] => return
     | fid :: rest =>
-      modifyK fun k => { k with task := { k.task with taskWorks := rest } }
+      modifyTask .task fun t => { t with taskWorks := rest }
       fputFinal fid
   invariant "task_work_run did not drain the task's work"
 

@@ -151,7 +151,7 @@ def sysSeccompProbeChild (nr : Int) (args : Array UInt64) (strict : Option Stric
   Env.forkClocks
   getSeccompFilter .task
   Env.childCreate
-  modifyK fun k => { k with current := .child }
+  modifyTasks fun t => { t with current := .child }
   let mut record : List (String × Json) := []
   let mut alive := true
   if let some via := strict then
@@ -194,7 +194,7 @@ def sysSeccompProbeChild (nr : Int) (args : Array UInt64) (strict : Option Stric
     | .skip _ | .trapped .. =>
       _root_.Leanux.invariant s!"the child's exit call {exitNr} is not const-allowed (design 6.2 rule 1)"
   Env.childExit
-  modifyK fun k => { k with current := .task }
+  modifyTasks fun t => { t with current := .task }
   enterHarnessCall NR_wait4
   Env.childDrop
   probeOut sigsys (Json.mkObj record)
@@ -218,7 +218,7 @@ def sysSeccompInstall (via : InstallVia) (flags : UInt32) (filter : Option _root
     `arg2..arg5`. -/
 def sysSeccompPrctl (cmd : PrctlCmd) (args : Array UInt64) : M Int := do
   let a (i : Nat) : UInt64 := args.getD i 0
-  let t := (← getK).current
+  let t := (← getTasks).current
   match cmd with
   | .setNoNewPrivs =>
     if a 0 != 1 || a 1 != 0 || a 2 != 0 || a 3 != 0 then return errEINVAL
@@ -232,7 +232,7 @@ def sysSeccompPrctl (cmd : PrctlCmd) (args : Array UInt64) : M Int := do
 /-- Op 33, data-only: `capset` without `CAP_SYS_ADMIN` in the effective,
     permitted and inheritable sets. -/
 def sysSeccompCapdrop : M Int := do
-  let t := (← getK).current
+  let t := (← getTasks).current
   modifyTask t fun tk => { tk with capSysAdmin := false }
   return 0
 

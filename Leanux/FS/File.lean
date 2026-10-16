@@ -165,7 +165,7 @@ def allocFd (start «end» : Nat) (flags : UInt32) : M Int := do
 
 /-- get_unused_fd_flags (file.c:555-558): `alloc_fd(0, rlimit(RLIMIT_NOFILE), flags)`. -/
 def getUnusedFdFlags (flags : UInt32) : M Int := do
-  allocFd 0 (← getK).task.rlimitNofile flags
+  allocFd 0 (← getTask .task).rlimitNofile flags
 
 /-- __put_unused_fd (file.c:561-567). -/
 def putUnusedFdLocked (fd : Nat) : M Unit := do
@@ -248,7 +248,7 @@ def doDup2 (fid : FileId) (fd : Nat) (flags : UInt32) : M Int := do
 def ksysDup3 (oldfd newfd : Nat) (flags : UInt32) : M Int := do
   if ← branchCmp .dup3InvalidFlags (flags &&& ~~~O_CLOEXEC != 0) (flags &&& ~~~O_CLOEXEC).toNat 0 then return -EINVAL
   if ← branchCmp .dup3Equal (oldfd == newfd) oldfd newfd then return -EINVAL
-  if ← branchCmp .dup3TargetLimit (newfd >= (← getK).task.rlimitNofile) newfd (← getK).task.rlimitNofile then return -EBADF
+  if ← branchCmp .dup3TargetLimit (newfd >= (← getTask .task).rlimitNofile) newfd (← getTask .task).rlimitNofile then return -EBADF
   -- spin_lock(&files->file_lock)
   let err ← expandFiles newfd
   let file ← filesLookupFdRaw oldfd   -- files_lookup_fd_locked

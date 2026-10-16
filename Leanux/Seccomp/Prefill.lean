@@ -59,7 +59,7 @@ def translated : Except String BpfProg :=
 
 /-- `n` copies on the trace process's chain, newest at the head, no-new-privs
     set, mode `filter`, `filter_count` `n`. -/
-def apply (n : Nat) (k : Kernel) : Except String Kernel := do
+def apply (n : Nat) (k : Kernel) (t : TaskWorld) : Except String (Kernel × TaskWorld) := do
   if n == 0 || n > PREFILL_MAX then throw s!"seccomp_prefill: {n} copies (1..{PREFILL_MAX})"
   let prog ← translated
   let mut k := k
@@ -70,7 +70,7 @@ def apply (n : Nat) (k : Kernel) : Except String Kernel := do
                                  origProg := program.map SockFilter.toKernel }
     k := { k with nextFilter := id + 1, seccompFilters := k.seccompFilters.insert id flt }
     prev := some id
-  return { k with task := { k.task with noNewPrivs := true,
-                                        seccomp := { mode := .filter, filterCount := n, filter := prev } } }
+  let task : Task := { t.task with noNewPrivs := true, seccomp := { mode := .filter, filterCount := n, filter := prev } }
+  return (k, { t with task })
 
 end Leanux.Seccomp.Prefill

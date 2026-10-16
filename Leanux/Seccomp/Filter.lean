@@ -100,7 +100,7 @@ def modifyFilter (id : FilterId) (f : SeccompFilter → SeccompFilter) : M Unit 
 
 /-- The current task's `seccomp` state, updated. -/
 def modifySeccomp (f : SeccompState → SeccompState) : M Unit := do
-  let t := (← getK).current
+  let t := (← getTasks).current
   modifyTask t fun tk => { tk with seccomp := f tk.seccomp }
 
 /-! ## The cache: seccomp_uprobe_exception, seccomp_is_const_allow, seccomp_cache_prepare (:736-898) -/

@@ -573,6 +573,17 @@ structure Task where
   sigpending : Bool := false
   deriving BEq
 
+/-- The task store, shared by the file layer, seccomp and the signal module
+    (the state split, docs/2026-10-15-design-state-split.md, section 2): one
+    mandatory parent, one optional child (the seccomp probe's), and the task
+    the runner is executing. The subsystems reach it through `TaskM`; the
+    runner holds it in `World.tasks`. -/
+structure TaskWorld where
+  task : Task
+  child : Option Task := none
+  current : TaskRef := .task
+  deriving BEq
+
 /-- `wg_ratelimiter`'s statics (drivers/net/wireguard/ratelimiter.c:12-18):
     `init_refcnt` and the hsiphash `key` (zeros while unknown: drawn before
     the trace for the fixture's wg0). The tables hold no entries on the
@@ -597,7 +608,6 @@ structure Ratelimiter where
     `anonInodeInodeErr` whether the boot-time `anon_inode_inode` is an error
     pointer; the runner supplies these environment facts. -/
 structure Kernel where
-  task : Task
   files : TreeMap FileId File
   nextFile : FileId
   ctxs : TreeMap CtxId EventfdCtx
@@ -658,8 +668,6 @@ structure Kernel where
       dropped at the parent's `wait4`; and `current`, the task the runner
       is executing (the child only while a child probe's steps run). -/
   seccompFilters : TreeMap FilterId SeccompFilter := {}
-  child : Option Task := none
-  current : TaskRef := .task
   /-- The next filter's allocation identity (stream V): monotone, never reused. -/
   nextFilter : FilterId := 0
   /-- epoll (design 4.1): the `struct eventpoll`, `epitem` and `eppoll_entry`
@@ -1576,6 +1584,7 @@ structure Ambient where
 
 structure World where
   ambient : Ambient
+  tasks : TaskWorld
   k : Kernel
   /-- seccomp (design 4.2, 4.5): the repeatable decisions of the checker,
       the translation, the cache's emulation and the entry path are emitted
@@ -1744,7 +1753,22 @@ abbrev M := StateT World (Except Stop)
   let (a, ambient) ← x.run w.ambient
   return (a, { w with ambient })
 
-instance : MonadLift AmbientM M := ⟨liftAmbient⟩
+instance (priority := high) : MonadLift AmbientM M := ⟨liftAmbient⟩
+
+/-- The task monad: the shared task store over the ambient monad. The file
+    layer's and seccomp's monads stack on it, so a pipe's SIGPIPE, a trap's
+    signal and the task-work test run at the C's own call sites (the state
+    split, section 3; [USER 2026-10-16]: composition points where Linux has
+    them). -/
+abbrev TaskM := StateT TaskWorld AmbientM
+
+/-- The runner's lift of a task computation: run it on `World.tasks` and
+    `World.ambient` and write both back. -/
+@[inline] def liftTask (x : TaskM α) : M α := fun w => do
+  let ((a, tasks), ambient) ← (x.run w.tasks).run w.ambient
+  return (a, { w with tasks, ambient })
+
+instance : MonadLift TaskM M := ⟨liftTask⟩
 
 /-! ## W9: the fixture namespace's routing (docs/2026-10-06-w8-w9-netns-routing.md, 2.6, 4.2) -/
 
@@ -2280,33 +2304,47 @@ subsystem monads), inlined so each call site resolves its lift statically. -/
 def getK : M Kernel := return (← get).k
 def modifyK (f : Kernel → Kernel) : M Unit := modify fun w => { w with k := f w.k }
 
+/-! ## The shared task store (the state split, section 3) -/
+
+namespace TaskM
+
 /-- The task `t` names (design 4.1). Reading the child while none exists
     is a runner invariant: no path reaches a child outside its probe. -/
-def getTask (t : TaskRef) : M Task := do
-  let k ← getK
+def getTask (t : TaskRef) : TaskM Task := do
+  let s ← get
   match t with
-  | .task => return k.task
+  | .task => return s.task
   | .child =>
-    match k.child with
+    match s.child with
     | some c => return c
     | none => invariant "a kernel path targets the child, and there is no child"
 
 /-- Update the task `t` names; the missing child is the same invariant. -/
-def modifyTask (t : TaskRef) (f : Task → Task) : M Unit := do
-  let k ← getK
+def modifyTask (t : TaskRef) (f : Task → Task) : TaskM Unit := do
+  let s ← get
   match t with
-  | .task => modifyK fun k => { k with task := f k.task }
+  | .task => set { s with task := f s.task }
   | .child =>
-    match k.child with
-    | some c => modifyK fun k => { k with child := some (f c) }
+    match s.child with
+    | some c => set { s with child := some (f c) }
     | none => invariant "a kernel path targets the child, and there is no child"
 
-/-- The task the runner is executing: `Kernel.current` resolved. -/
-def getCurrent : M Task := do getTask (← getK).current
-def getFiles : M FilesStruct := return (← getK).task.files
-def modifyFiles (f : FilesStruct → FilesStruct) : M Unit :=
-  modifyK fun k => { k with task := { k.task with files := f k.task.files } }
-def modifyFdt (f : Fdtable → Fdtable) : M Unit :=
+/-- The task the runner is executing: `TaskWorld.current` resolved. -/
+def getCurrent : TaskM Task := do getTask (← get).current
+
+end TaskM
+
+@[inline] def getTasks [Monad m] [MonadLiftT TaskM m] : m TaskWorld := monadLift (get : TaskM TaskWorld)
+@[inline] def modifyTasks [Monad m] [MonadLiftT TaskM m] (f : TaskWorld → TaskWorld) : m Unit := monadLift (modify f : TaskM Unit)
+@[inline] def getTask [Monad m] [MonadLiftT TaskM m] (t : TaskRef) : m Task := monadLift (TaskM.getTask t)
+@[inline] def modifyTask [Monad m] [MonadLiftT TaskM m] (t : TaskRef) (f : Task → Task) : m Unit := monadLift (TaskM.modifyTask t f)
+@[inline] def getCurrent [Monad m] [MonadLiftT TaskM m] : m Task := monadLift TaskM.getCurrent
+/-- The trace process's file table (`Kernel/Defs.lean`'s addressing rule:
+    `.task`, not `current`; no modelled child path touches a file). -/
+@[inline] def getFiles [Monad m] [MonadLiftT TaskM m] : m FilesStruct := do return (← getTask .task).files
+@[inline] def modifyFiles [Monad m] [MonadLiftT TaskM m] (f : FilesStruct → FilesStruct) : m Unit :=
+  modifyTask .task fun t => { t with files := f t.files }
+@[inline] def modifyFdt [Monad m] [MonadLiftT TaskM m] (f : Fdtable → Fdtable) : m Unit :=
   modifyFiles fun fs => { fs with fdt := f fs.fdt }
 
 /-- One iteration of a draining worker's loop (`wg_packet_encrypt_worker`,

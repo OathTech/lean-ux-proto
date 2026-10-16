@@ -145,7 +145,7 @@ def fput (fid : FileId) : M Unit := do
     if ← branch .fputNotOpened (!hasFlag f.fMode (FMODE_BACKING ||| FMODE_OPENED)) then
       fileFree fid
       return
-    let task := (← getK).task
+    let task ← getTask .task
     -- `likely(!in_interrupt() && !(task->flags & PF_KTHREAD))`
     let taskContext ← do
       if ← branch .fputInInterrupt false then pure false  -- system-call context
@@ -155,7 +155,7 @@ def fput (fid : FileId) : M Unit := do
       if ← branch .fputTaskWorkAddFailed task.exited then
         unsupported "task_work_add after exit_task_work (falls through to delayed fput)"
       -- task_work_add pushes at the head of task->task_works (kernel/task_work.c)
-      modifyK fun k => { k with task := { k.task with taskWorks := fid :: k.task.taskWorks } }
+      modifyTask .task fun t => { t with taskWorks := fid :: t.taskWorks }
       return
     unsupported "delayed fput"
 
