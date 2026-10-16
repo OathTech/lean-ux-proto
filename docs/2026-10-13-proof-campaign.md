@@ -5,8 +5,8 @@
 Work on `proofs/campaign` in `.worktrees/proofs-campaign` follows [the charter](2026-10-13-charter-proof-campaign.md).
 The state-split retrofit onto `6089dc4` precedes further R3/R4 results. All seven
 result rows remain lagging, last validated over `cb2348e`. The tree has moved from
-471 files / 7,715 named theorems to 450 files / 6,219 theorems. Completed changes
-comprise 608 retyped, 1,582 deleted, 126 retained contract shapes and 86 added theorems;
+471 files / 7,715 named theorems to 450 files / 6,216 theorems. Completed changes
+comprise 605 retyped, 1,585 deleted, 126 retained contract shapes and 86 added theorems;
 six redundant LifetimeSafety exports are removed, with every retained terminal
 body unchanged (515 declarations). The native foundational, ordinary lifetime,
 clock/Noise-helper, keypair-composition, product scheduler, small native helper and WGBase ports pass their
@@ -23,9 +23,10 @@ the corresponding failure histories; downstream result callers still lag.
 
 The native AllowedIPs tranche carries 13 of 19 old theorems, deletes six with
 explicit grounds and adds one actual adapter lemma. Its scoped build, axiom
-check, fresh replay and independent review pass. Three generic transports also
-regain their arbitrary product-action scope; the report tracks the remaining
-23 helpers and update rule. Every result remains lagging.
+check, fresh replay and independent review pass. The generic scope audit is now
+repaired: 26 helpers and one update rule retain arbitrary actual product actions,
+with three duplicate WP wrappers removed. Its 121-job dependent build, 169 theorem
+axiom checks, fresh replays and independent review pass. Every result remains lagging.
 
 The product environment tranche carries 25 of 28 old theorems and adds ten actual
 adapter facts, preserving the baseline 43-field scope. Two premise repairs and
@@ -67,7 +68,7 @@ justifications. Review caught an extra four-field entry premise; the repaired
 seven-field contract passes build, axioms, fresh replay and independent review.
 A duplicate cookie modifier helper had the same scope defect and is replaced
 by the existing generic rule; its repair passes the same scoped checks.
-The original 43-field environment contracts still need carrying: the four
+The product environment carry retains the original 43-field contracts; the four
 FIB witnesses refute only the enlarged incoming 47-field extensions.
 
 The preceding `cb2348e` checkpoint validated all seven baseline result surfaces, including the

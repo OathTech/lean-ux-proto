@@ -22,17 +22,15 @@ theorem samePeerSnapshot_of_sameWGStore
     [Monad m] [WPMonad m ps] {project : S → WGWorld} {a : StateT S m α}
     (h : SameView (fun s => wgStoreView (project s)) a) :
     SameView (fun s => snapshot (project s)) a :=
-  h.of_factor snapshotOfWGStoreView
-    (fun s => snapshot (project s)) (fun _ => rfl)
+  h.of_factor snapshotOfWGStoreView (fun s => snapshot (project s)) (fun _ => rfl)
 
-theorem SamePeerSnapshot.wp (h : SamePeerSnapshot a) (P : Store PeerId → Prop) :
-    ⦃fun w => ⌜P (snapshot w)⌝⦄ a ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ :=
-  ProjectedAction.wp h P (fun _ _ he hp => he ▸ hp)
-
-theorem samePeerSnapshot_of_wp (a : WG.M α)
-    (h : ∀ s, ⦃fun w => ⌜snapshot w = s⌝⦄ a
-      ⦃⇓? _ w => ⌜snapshot w = s⌝⦄) : SamePeerSnapshot a :=
-  ProjectedAction.of_wp snapshot (fun s t => t = s) a h
+theorem samePeerSnapshot_of_wp
+    {S α : Type} {m : Type → Type} {ps : PostShape}
+    [Monad m] [WPMonad m ps] {project : S → Store PeerId}
+    (a : StateT S m α)
+    (h : ∀ initial, ⦃fun w => ⌜project w = initial⌝⦄ a
+      ⦃⇓? _ w => ⌜project w = initial⌝⦄) : SameView project a :=
+  SameView.of_wp project a h
 
 theorem getPeer_live_spec (P : Store PeerId → Prop) (i : PeerId) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ getPeer i
@@ -70,7 +68,7 @@ theorem requireNotPending_samePeerSnapshot (pid : PeerId) (what : String) :
 theorem requireNotPending_peer_spec (P : Store PeerId → Prop) (pid : PeerId) (what : String) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ requireNotPending pid what
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ :=
-  (requireNotPending_samePeerSnapshot pid what).wp P
+  SameView.wp (requireNotPending_samePeerSnapshot pid what) P
 
 theorem peerGetMaybeZero_samePeerSnapshot (peer : Option PeerId) :
     SamePeerSnapshot (peerGetMaybeZero peer) := by
@@ -130,7 +128,7 @@ theorem handshakeInit_samePeerSnapshot (pid : PeerId) (psk : Option Key) :
   intro s
   have get_spec := getPeer_live_spec (fun t => t = s)
   have set_spec := setPeer_live_spec (fun t => t = s)
-  have precompute_spec := (precomputeStaticStatic_samePeerSnapshot pid).wp (fun t => t = s)
+  have precompute_spec := SameView.wp (precomputeStaticStatic_samePeerSnapshot pid) (fun t => t = s)
   mvcgen [handshakeInit, IndexOwner.setPeerWord, get_spec, set_spec, precompute_spec,
     branch, AmbientM.branch]
   all_goals simp_all [snapshot]

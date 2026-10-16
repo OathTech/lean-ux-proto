@@ -12,8 +12,12 @@ open Leanux Leanux.WG Std.Do Leanux.Proofs.Framing
 def snapshotOfWGStoreView (v : WGStoreView) : Snapshot :=
   ⟨v.keypairCounter, fun i => (v.dev.bind fun d => d.keypairs[i]?).map cell⟩
 
-theorem sameSnapshot_of_sameWGStore (h : SameWGStore a) : SameSnapshot a :=
-  h.of_factor snapshotOfWGStoreView snapshot (fun _ => rfl)
+theorem sameSnapshot_of_sameWGStore
+    {S α : Type} {m : Type → Type} {ps : PostShape}
+    [Monad m] [WPMonad m ps] {project : S → WGWorld} {a : StateT S m α}
+    (h : SameView (fun s => wgStoreView (project s)) a) :
+    SameView (fun s => snapshot (project s)) a :=
+  h.of_factor snapshotOfWGStoreView (fun s => snapshot (project s)) (fun _ => rfl)
 
 theorem modifyDev_snapshot_spec (P : Snapshot → Prop) (f : Device → Device)
     (hf : ∀ d, (f d).keypairs = d.keypairs) :
@@ -24,25 +28,34 @@ theorem modifyDev_snapshot_spec (P : Snapshot → Prop) (f : Device → Device)
   cases hr
   simpa [snapshot, modifyDev, Option.bind_map, Function.comp_def, hf] using hp
 
-theorem list_snapshot_spec (P : Snapshot → Prop) {α β : Type}
-    (xs : List α) (init : β) (f : α → β → WG.M (ForInStep β))
-    (hf : ∀ x b, ⦃fun w => ⌜P (snapshot w)⌝⦄ f x b
-      ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄) :
-    ⦃fun w => ⌜P (snapshot w)⌝⦄ forIn xs init f
-    ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ :=
-  list_view_spec snapshot P xs init f hf
+theorem list_snapshot_spec (P : Snapshot → Prop)
+    {S : Type} {m : Type → Type} {ps : PostShape}
+    [Monad m] [WPMonad m ps] {project : S → Snapshot}
+    {α β : Type}
+    (xs : List α) (init : β) (f : α → β → StateT S m (ForInStep β))
+    (hf : ∀ x b, ⦃fun w => ⌜P (project w)⌝⦄ f x b
+      ⦃⇓? _ w => ⌜P (project w)⌝⦄) :
+    ⦃fun w => ⌜P (project w)⌝⦄ forIn xs init f
+    ⦃⇓? _ w => ⌜P (project w)⌝⦄ :=
+  list_view_spec project P xs init f hf
 
-theorem map_snapshot_spec (P : Snapshot → Prop) {α β : Type}
-    (f : α → β) (a : WG.M α)
-    (ha : ⦃fun w => ⌜P (snapshot w)⌝⦄ a ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄) :
-    ⦃fun w => ⌜P (snapshot w)⌝⦄ StateT.map f a
-    ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ :=
-  map_view_spec snapshot P f a ha
+theorem map_snapshot_spec (P : Snapshot → Prop)
+    {S : Type} {m : Type → Type} {ps : PostShape}
+    [Monad m] [WPMonad m ps] {project : S → Snapshot}
+    {α β : Type}
+    (f : α → β) (a : StateT S m α)
+    (ha : ⦃fun w => ⌜P (project w)⌝⦄ a ⦃⇓? _ w => ⌜P (project w)⌝⦄) :
+    ⦃fun w => ⌜P (project w)⌝⦄ StateT.map f a
+    ⦃⇓? _ w => ⌜P (project w)⌝⦄ :=
+  map_view_spec project P f a ha
 
-theorem discard_snapshot_spec (P : Snapshot → Prop) {α : Type} (a : WG.M α)
-    (ha : ⦃fun w => ⌜P (snapshot w)⌝⦄ a ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄) :
-    ⦃fun w => ⌜P (snapshot w)⌝⦄ discard a
-    ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := discard_view_spec snapshot P a ha
+theorem discard_snapshot_spec (P : Snapshot → Prop)
+    {S : Type} {m : Type → Type} {ps : PostShape}
+    [Monad m] [WPMonad m ps] {project : S → Snapshot}
+    {α : Type} (a : StateT S m α)
+    (ha : ⦃fun w => ⌜P (project w)⌝⦄ a ⦃⇓? _ w => ⌜P (project w)⌝⦄) :
+    ⦃fun w => ⌜P (project w)⌝⦄ discard a
+    ⦃⇓? _ w => ⌜P (project w)⌝⦄ := discard_view_spec project P a ha
 
 
 macro "frame_same" "[" fs:ident,* "]" "using" "[" specs:ident,* "]" : tactic => do
@@ -71,9 +84,9 @@ macro "frame_same" "[" fs:ident,* "]" "using" "[" specs:ident,* "]" : tactic => 
     (basics.map fun n => wrap (Lean.mkIdent n).raw) ++ (names.map fun f => wrap f.raw)
   let mut body ← `(tactic|
     (have frame_modify := modifyDev_snapshot_spec (fun s => s = initial)
-     have frame_list (α β : Type) := list_snapshot_spec (α := α) (β := β) (fun s => s = initial)
-     have frame_map (α β : Type) := map_snapshot_spec (α := α) (β := β) (fun s => s = initial)
-     have frame_discard (α : Type) := discard_snapshot_spec (α := α) (fun s => s = initial)
+     have frame_list (α β : Type) := list_snapshot_spec (S := WGWorld) (m := AmbientM) (project := snapshot) (α := α) (β := β) (fun s => s = initial)
+     have frame_map (α β : Type) := map_snapshot_spec (S := WGWorld) (m := AmbientM) (project := snapshot) (α := α) (β := β) (fun s => s = initial)
+     have frame_discard (α : Type) := discard_snapshot_spec (S := WGWorld) (m := AmbientM) (project := snapshot) (α := α) (fun s => s = initial)
      have frame_ambient (α : Type) (a : AmbientM α) :
          ⦃fun w => ⌜snapshot w = initial⌝⦄ (MonadLift.monadLift a : WG.M α)
          ⦃⇓? _ w => ⌜snapshot w = initial⌝⦄ :=
@@ -168,9 +181,9 @@ macro "frame_ordinary" "[" fs:ident,* "]" "using" "[" specs:ident,* "]"
     ((names ++ ordnames).map fun f => wrap f.raw)
   let mut body ← `(tactic|
     (have frame_modify := modifyDev_snapshot_spec P
-     have frame_list (α β : Type) := list_snapshot_spec (α := α) (β := β) P
-     have frame_map (α β : Type) := map_snapshot_spec (α := α) (β := β) P
-     have frame_discard (α : Type) := discard_snapshot_spec (α := α) P
+     have frame_list (α β : Type) := list_snapshot_spec (S := WGWorld) (m := AmbientM) (project := snapshot) (α := α) (β := β) P
+     have frame_map (α β : Type) := map_snapshot_spec (S := WGWorld) (m := AmbientM) (project := snapshot) (α := α) (β := β) P
+     have frame_discard (α : Type) := discard_snapshot_spec (S := WGWorld) (m := AmbientM) (project := snapshot) (α := α) P
      have frame_ambient (α : Type) (a : AmbientM α) :
          ⦃fun w => ⌜P (snapshot w)⌝⦄ (MonadLift.monadLift a : WG.M α)
          ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ :=

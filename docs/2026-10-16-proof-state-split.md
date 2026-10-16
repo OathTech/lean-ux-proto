@@ -26,7 +26,7 @@ it is not part of that baseline.
 | Obsolete subsystem-frame band (26 modules) | 1,427 | 0 | 1,427 | 0 | 0 | 0 |
 | Unused `Framing.Control` support | 6 | 0 | 6 | 0 | 0 | 0 |
 | Obsolete `Framing.Prefill` and unused support | 3 | 0 | 3 | 0 | 0 | 0 |
-| Keypairs `Ordinary` | 17 | 12 | 1 | 4 | 0 | 16 |
+| Keypairs `Ordinary` | 17 | 10 | 3 | 4 | 0 | 14 |
 | Framing `WGTime`, `WGHandshake`, Keypairs `OrdinaryHot` | 21 | 16 | 5 | 0 | 0 | 16 |
 | WG store view and Keypairs composition (four modules) | 31 | 27 | 4 | 0 | 0 | 27 |
 | Logged `RxPoll`, `Tools`, `Workers`, `Scheduler` | 26 | 0 | 0 | 26 | 0 | 26 |
@@ -38,14 +38,14 @@ it is not part of that baseline.
 | Redundant filesystem-family wrappers and exports | 21 | 0 | 21 | 0 | 0 | 0 |
 | Native WGTransitions and cookie contracts | 109 | 108 | 1 | 0 | 0 | 108 |
 | Native peer and packet primitives | 45 | 35 | 0 | 10 | 0 | 45 |
-| Native peer frames and allocation | 28 | 20 | 7 | 1 | 0 | 21 |
+| Native peer frames and allocation | 28 | 19 | 8 | 1 | 0 | 20 |
 | Product environment contracts and adapters | 28 | 23 | 3 | 2 | 10 | 35 |
 | Native AllowedIPs leaves and removal wrappers | 19 | 13 | 6 | 0 | 1 | 14 |
 | Native peer-access observer | 21 | 21 | 0 | 0 | 0 | 21 |
 | Exact recorded clock tests | 3 | 3 | 0 | 0 | 0 | 3 |
 
-The whole tree currently contains 450 Lean files and 6,219 theorems. The completed
-changes total 608 retyped theorems, 1,582 deletions, 126 retained contract shapes and 86 added.
+The whole tree currently contains 450 Lean files and 6,216 theorems. The completed
+changes total 605 retyped theorems, 1,585 deletions, 126 retained contract shapes and 86 added.
 Retyping changes or generalizes the actual state/monad carrier or observation.
 This includes shorthand contracts whose source functions or named views move
 to a native monad. Mere namespace qualification and equivalent relocation of a
@@ -897,8 +897,8 @@ scope. A product action changing only fs.userOut is a concrete excluded original
 instance. This checkpoint repairs three transports in WGBase and Peers.Frames:
 they quantify actual StateT S m actions and an S-to-WGWorld projection, retaining
 the original seven-field premises. Four concrete callers instantiate the
-projection with id. The other 23 helpers and snapshot_modify remain to be
-repaired. These are repairs to already counted carries, not additional theorems.
+projection with id. The other 23 helpers and snapshot_modify are repaired in the
+generic composition checkpoint below. These are repairs to already counted carries, not additional theorems.
 Concrete native operations with unchanged modifier predicates do not have that
 arbitrary-action restriction.
 
@@ -967,6 +967,44 @@ rerun occurred.
 LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake build Leanux.Proofs.WG.Peers.Access Leanux.Proofs.WG.KeyTimes.Clock
 LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Peers.Access
 LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.KeyTimes.Clock
+```
+
+## Generic composition scope repair
+
+The six already-carried helper files change from 172 to 169 theorems:
+21 contracts regain arbitrary actual StateT actions and their pure observation
+functions, 148 retain their contract shape, and three exact duplicate WP wrappers
+are deleted. This completes the audit of 26 narrowed helpers plus snapshot_modify,
+including the three transports repaired in the preceding checkpoint. These are
+repairs of already-counted carries, not new baseline retypes.
+
+SameSnapshot.wp and SamePeerSnapshot.wp are instances of SameView.wp;
+OrdinaryAction.wp is the corresponding ProjectedAction.wp instance.
+Their native callers now use those generic rules. The substantive
+SameSnapshot.ordinary rule becomes SameView.ordinary. Bind, loops, map, discard,
+WP characterizations and arbitrary outer modifiers retain product-action scope;
+snapshot_modify retains its original two observed-field premises. Concrete
+WG.andM/orM and native join automation still describe their actual native actions.
+A real product action changing fs.userOut remains a valid generic instance.
+
+The dependent build passes (121 jobs), all 169 theorem axiom reports contain
+only permitted axioms, fresh replays of WGBase and Peers.Frames pass, and
+independent source review passes. The source/options, mirror, terminal, census
+and whitespace audits pass. Whole-tree status remains lagging.
+
+Preparation had three failed stdin calls followed by a passing fourth with
+24 affected theorem checks and four product/native instantiation checks.
+Failures concerned a missing namespace, generic receiver names and native
+instantiations; truncated diagnostics from the second call are not claimed clean.
+The final build passed on its first call. The first axiom driver then failed
+in its Python parser; both dirty worktrees were snapshotted before correcting
+the driver. The corrected check passed without source changes. No limit increase,
+KILLED result, timeout or infrastructure rerun occurred.
+
+```sh
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake build Leanux.Proofs.WG.Keypairs.Frames.WGTransitions Leanux.Proofs.Framing.WGCookie Leanux.Proofs.WG.Peers.Allocation Leanux.Proofs.WG.Peers.Access Leanux.Proofs.Framing.EnvOperations Leanux.Proofs.Framing.Batch Leanux.Proofs.Framing.Stack Leanux.Proofs.WG.Environment.ObservationSource Leanux.Proofs.WG.Keypairs.Evolution.Rules
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Keypairs.Frames.WGBase
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Peers.Frames
 ```
 
 ## Incoming merge and remaining work

@@ -16,43 +16,45 @@ def Stable (P : Snapshot → Prop) : Prop :=
 
 abbrev SameSnapshot (a : WG.M α) : Prop := SameView snapshot a
 
-theorem SameSnapshot.ordinary {a : WG.M α} (h : SameSnapshot a) : OrdinaryAction a := by
-  intro s
-  apply hoare_consequence (h s) (fun _ hs => hs)
+theorem SameView.ordinary {S : Type} {m : Type → Type} {ps : PostShape}
+    [Monad m] [WPMonad m ps] {project : S → Snapshot}
+    {a : StateT S m α} (h : SameView project a) : Lifetimes.ProjectedAction project Ordinary a := by
+  intro initial
+  apply hoare_consequence (h initial) (fun _ hs => hs)
   intro _ w hw
   rw [hw]
   exact .refl _
 
-theorem SameSnapshot.wp {a : WG.M α} (h : SameSnapshot a) (P : Snapshot → Prop) :
-    ⦃fun w => ⌜P (snapshot w)⌝⦄ a ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ :=
-  SameView.wp h P
-
-theorem OrdinaryAction.wp {a : WG.M α} (h : OrdinaryAction a) (P : Snapshot → Prop)
-    (hp : Stable P) :
-    ⦃fun w => ⌜P (snapshot w)⌝⦄ a ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ :=
-  Lifetimes.ProjectedAction.wp h P hp
-
 /-- Preservation of every stable predicate characterizes ordinary executions. -/
-theorem ordinaryAction_iff_wp (a : WG.M α) : OrdinaryAction a ↔
-    ∀ P, Stable P → ⦃fun w => ⌜P (snapshot w)⌝⦄ a
-      ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := by
+theorem ordinaryAction_iff_wp {S : Type} {m : Type → Type} {ps : PostShape}
+    [Monad m] [WPMonad m ps] {project : S → Snapshot}
+    (a : StateT S m α) : Lifetimes.ProjectedAction project Ordinary a ↔
+    ∀ P, Stable P → ⦃fun w => ⌜P (project w)⌝⦄ a
+      ⦃⇓? _ w => ⌜P (project w)⌝⦄ := by
   constructor
-  · intro h; exact h.wp
-  · intro h
-    apply (Lifetimes.ProjectedAction.iff_run_ambient _ _ _).mpr
-    intro w ambient x w' ambient' hr
-    have hp : Stable (Ordinary (snapshot w)) := fun _ _ ht hs => .trans hs ht
-    exact (hoare_iff_run_ambient _ _ _).mp (h _ hp) w ambient x w' ambient' (.refl _) hr
+  · intro h; exact Lifetimes.ProjectedAction.wp h
+  · intro h initial
+    have hp : Stable (Ordinary initial) := fun _ _ ht hs => .trans hs ht
+    apply hoare_consequence (h _ hp)
+    · intro w hw
+      rw [hw]
+      exact .refl _
+    · intro _ _ hr
+      exact hr
 
-theorem ordinaryAction_of_wp (a : WG.M α)
-    (h : ∀ s, ⦃fun w => ⌜snapshot w = s⌝⦄ a
-      ⦃⇓? _ w => ⌜Ordinary s (snapshot w)⌝⦄) : OrdinaryAction a :=
-  Lifetimes.ProjectedAction.of_wp snapshot Ordinary a h
+theorem ordinaryAction_of_wp {S : Type} {m : Type → Type} {ps : PostShape}
+    [Monad m] [WPMonad m ps] {project : S → Snapshot}
+    (a : StateT S m α)
+    (h : ∀ initial, ⦃fun w => ⌜project w = initial⌝⦄ a
+      ⦃⇓? _ w => ⌜Ordinary initial (project w)⌝⦄) : Lifetimes.ProjectedAction project Ordinary a :=
+  Lifetimes.ProjectedAction.of_wp project Ordinary a h
 
-theorem sameSnapshot_of_wp (a : WG.M α)
-    (h : ∀ s, ⦃fun w => ⌜snapshot w = s⌝⦄ a
-      ⦃⇓? _ w => ⌜snapshot w = s⌝⦄) : SameSnapshot a :=
-  SameView.of_wp snapshot a h
+theorem sameSnapshot_of_wp {S : Type} {m : Type → Type} {ps : PostShape}
+    [Monad m] [WPMonad m ps] {project : S → Snapshot}
+    (a : StateT S m α)
+    (h : ∀ initial, ⦃fun w => ⌜project w = initial⌝⦄ a
+      ⦃⇓? _ w => ⌜project w = initial⌝⦄) : SameView project a :=
+  SameView.of_wp project a h
 
 theorem ordinary_pure (x : α) : OrdinaryAction (pure x) := by
   apply (Lifetimes.ProjectedAction.iff_run_ambient _ _ _).mpr
@@ -60,12 +62,15 @@ theorem ordinary_pure (x : α) : OrdinaryAction (pure x) := by
   cases hr
   exact .refl _
 
-theorem ordinary_bind {a : WG.M α} {f : α → WG.M β}
-    (ha : OrdinaryAction a) (hf : ∀ x, OrdinaryAction (f x)) :
-    OrdinaryAction (a >>= f) := by
+theorem ordinary_bind {S : Type} {m : Type → Type} {ps : PostShape}
+    [Monad m] [WPMonad m ps] {project : S → Snapshot}
+    {a : StateT S m α} {f : α → StateT S m β}
+    (ha : Lifetimes.ProjectedAction project Ordinary a) (hf : ∀ x, Lifetimes.ProjectedAction project Ordinary (f x)) :
+    Lifetimes.ProjectedAction project Ordinary (a >>= f) := by
   apply (ordinaryAction_iff_wp _).mpr
   intro P hp
-  exact preserves_bind (ha.wp P hp) (fun x => (hf x).wp P hp)
+  exact preserves_bind (Lifetimes.ProjectedAction.wp ha P hp)
+    (fun x => Lifetimes.ProjectedAction.wp (hf x) P hp)
 
 theorem keypairGet_sameSnapshot (kp : Option KeypairId) : SameSnapshot (keypairGet kp) := by
   apply sameSnapshot_of_wp
@@ -83,7 +88,7 @@ theorem keypairGet_sameSnapshot (kp : Option KeypairId) : SameSnapshot (keypairG
     split <;> simp_all [cell]
 
 theorem keypairGet_ordinary (kp : Option KeypairId) : OrdinaryAction (keypairGet kp) :=
-  (keypairGet_sameSnapshot kp).ordinary
+  SameView.ordinary (keypairGet_sameSnapshot kp)
 
 /-- Pure map lemmas discharge the final state update without requiring the
 mirror to expose any new helper. -/

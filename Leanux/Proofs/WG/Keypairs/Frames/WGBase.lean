@@ -39,7 +39,7 @@ private def snapshotHeadBZ : Nat → Expr → Expr
 elab "snapshot_head_reduce" : tactic => withMainContext do
   let g ← getMainGoal
   let t := (← instantiateMVars (← g.getType)).consumeMData
-  unless t.isAppOf ``SameSnapshot do throwError "not SameSnapshot"
+  unless t.isAppOf ``SameSnapshot || t.isAppOf ``Framing.SameView do throwError "not SameSnapshot"
   let .app f a := t | throwError "missing action"
   let a' := snapshotHeadBZ 64 a
   if Expr.equal a a' then throwError "head unchanged"
@@ -48,7 +48,7 @@ elab "snapshot_head_reduce" : tactic => withMainContext do
 elab "snapshot_head_match" : tactic => withMainContext do
   let g ← getMainGoal
   let t := (← instantiateMVars (← g.getType)).consumeMData
-  unless t.isAppOf ``SameSnapshot do throwError "not SameSnapshot"
+  unless t.isAppOf ``SameSnapshot || t.isAppOf ``Framing.SameView do throwError "not SameSnapshot"
   let a := t.getAppArgs.back! |>.consumeMData
   let some _ ← Lean.Meta.matchMatcherApp? a | throwError "not a top matcher"
   replaceMainGoal (← Lean.Meta.Split.splitMatch g a)
@@ -58,7 +58,7 @@ elab "snapshot_head_match" : tactic => withMainContext do
 elab "snapshot_join_let" : tactic => withMainContext do
   let goal ← getMainGoal
   let target := (← instantiateMVars (← goal.getType)).consumeMData
-  unless target.isAppOf ``SameSnapshot do throwError "not SameSnapshot"
+  unless target.isAppOf ``SameSnapshot || target.isAppOf ``Framing.SameView do throwError "not SameSnapshot"
   let action := target.getAppArgs.back! |>.consumeMData
   let .letE name ty value body _ := action | throwError "not a let"
   unless name.toString.startsWith "__do_jp" do throwError "not a join continuation"
@@ -81,7 +81,7 @@ elab "snapshot_join_let" : tactic => withMainContext do
 elab "snapshot_join_use" : tactic => withMainContext do
   let goal ← getMainGoal
   let target := (← instantiateMVars (← goal.getType)).consumeMData
-  unless target.isAppOf ``SameSnapshot do throwError "not SameSnapshot"
+  unless target.isAppOf ``SameSnapshot || target.isAppOf ``Framing.SameView do throwError "not SameSnapshot"
   let action := target.getAppArgs.back! |>.consumeMData |>.headBeta
   unless action.getAppFn.isFVar do throwError "not a local continuation"
   for decl in ← getLCtx do
@@ -116,8 +116,9 @@ theorem sameSnapshot_of_sameConfiguration
     Framing.SameView (fun s => snapshot (project s)) a := by
   apply h.of_factor snapshotOfWGStoreView (fun s => snapshot (project s))
   intro s
-  simp [snapshot, snapshotOfWGStoreView, Framing.configurationView, Framing.configurationDevice,
-    Framing.wgOwnedView, Framing.wgStoreView, Option.bind_map, Function.comp_def]
+  simp [snapshot, snapshotOfWGStoreView, Framing.configurationView,
+    Framing.configurationDevice, Framing.wgOwnedView, Framing.wgStoreView,
+    Option.bind_map, Function.comp_def]
 
 theorem PrevQueue_dequeue_sameSnapshot {α : Type} (q : PrevQueue α) : SameSnapshot (Leanux.WG.PrevQueue.dequeue (α := α) q) := by
   frame_same [Leanux.WG.PrevQueue.dequeue] using []

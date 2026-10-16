@@ -12,49 +12,63 @@ theorem ordinary_throw (e : Stop) : OrdinaryAction (throw e : WG.M α) := by
   intro w ambient x w' ambient' hr
   cases hr
 
-theorem ordinary_map (f : α → β) {a : WG.M α} (ha : OrdinaryAction a) :
-    OrdinaryAction (f <$> a) := by
-  simpa only [map_eq_pure_bind] using ordinary_bind ha (fun x => ordinary_pure (f x))
+theorem ordinary_map {S : Type} {m : Type → Type} {ps : PostShape}
+    [Monad m] [WPMonad m ps] {project : S → Snapshot}
+    (f : α → β) {a : StateT S m α} (ha : Lifetimes.ProjectedAction project Ordinary a) :
+    Lifetimes.ProjectedAction project Ordinary (f <$> a) := by
+  simpa only [map_eq_pure_bind] using ordinary_bind ha (fun x => SameView.ordinary (SameView.pure project (f x)))
 
-theorem ordinary_discard {a : WG.M α} (ha : OrdinaryAction a) : OrdinaryAction (discard a) := by
+theorem ordinary_discard {S : Type} {m : Type → Type} {ps : PostShape}
+    [Monad m] [WPMonad m ps] {project : S → Snapshot}
+    {a : StateT S m α} (ha : Lifetimes.ProjectedAction project Ordinary a) : Lifetimes.ProjectedAction project Ordinary (discard a) := by
   unfold Functor.discard
   exact ordinary_map _ ha
 
-theorem ordinary_ite (p : Prop) [Decidable p] {a b : WG.M α}
-    (ha : p → OrdinaryAction a) (hb : ¬p → OrdinaryAction b) :
-    OrdinaryAction (if p then a else b) := by
+theorem ordinary_ite {S : Type} {m : Type → Type} {ps : PostShape}
+    [Monad m] [WPMonad m ps] {project : S → Snapshot}
+    (p : Prop) [Decidable p] {a b : StateT S m α}
+    (ha : p → Lifetimes.ProjectedAction project Ordinary a) (hb : ¬p → Lifetimes.ProjectedAction project Ordinary b) :
+    Lifetimes.ProjectedAction project Ordinary (if p then a else b) := by
   by_cases hp : p
   · simpa only [if_pos hp] using ha hp
   · simpa only [if_neg hp] using hb hp
 
-theorem ordinary_forIn (xs : List α) (b : β) (f : α → β → WG.M (ForInStep β))
-    (hf : ∀ a b, OrdinaryAction (f a b)) : OrdinaryAction (forIn xs b f) := by
+theorem ordinary_forIn {S : Type} {m : Type → Type} {ps : PostShape}
+    [Monad m] [WPMonad m ps] {project : S → Snapshot}
+    (xs : List α) (b : β) (f : α → β → StateT S m (ForInStep β))
+    (hf : ∀ a b, Lifetimes.ProjectedAction project Ordinary (f a b)) : Lifetimes.ProjectedAction project Ordinary (forIn xs b f) := by
   induction xs generalizing b with
-  | nil => simpa only [List.forIn_nil] using ordinary_pure b
+  | nil => simpa only [List.forIn_nil] using SameView.ordinary (SameView.pure project b)
   | cons a xs ih =>
     rw [List.forIn_cons]
     apply ordinary_bind (hf a b)
     intro step
     cases step with
-    | done b => exact ordinary_pure b
+    | done b => exact SameView.ordinary (SameView.pure project b)
     | yield b => exact ih b
 
-theorem ordinary_range (r : Std.Legacy.Range) (b : β)
-    (f : Nat → β → WG.M (ForInStep β)) (hf : ∀ a b, OrdinaryAction (f a b)) :
-    OrdinaryAction (forIn r b f) := by
+theorem ordinary_range {S : Type} {m : Type → Type} {ps : PostShape}
+    [Monad m] [WPMonad m ps] {project : S → Snapshot}
+    (r : Std.Legacy.Range) (b : β)
+    (f : Nat → β → StateT S m (ForInStep β)) (hf : ∀ a b, Lifetimes.ProjectedAction project Ordinary (f a b)) :
+    Lifetimes.ProjectedAction project Ordinary (forIn r b f) := by
   rw [Std.Legacy.Range.forIn_eq_forIn_range']
   exact ordinary_forIn _ b f hf
 
-theorem ordinary_forM (xs : List α) (f : α → WG.M PUnit)
-    (hf : ∀ a, OrdinaryAction (f a)) : OrdinaryAction (xs.forM f) := by
+theorem ordinary_forM {S : Type} {m : Type → Type} {ps : PostShape}
+    [Monad m] [WPMonad m ps] {project : S → Snapshot}
+    (xs : List α) (f : α → StateT S m PUnit)
+    (hf : ∀ a, Lifetimes.ProjectedAction project Ordinary (f a)) : Lifetimes.ProjectedAction project Ordinary (xs.forM f) := by
   induction xs with
-  | nil => simpa only [List.forM_eq_forM, List.forM_nil] using ordinary_pure PUnit.unit
+  | nil => simpa only [List.forM_eq_forM, List.forM_nil] using SameView.ordinary (SameView.pure project PUnit.unit)
   | cons a xs ih =>
     simpa only [List.forM_eq_forM, List.forM_cons] using ordinary_bind (hf a) (fun _ => ih)
 
-theorem ordinary_array (xs : Array α) (b : β)
-    (f : α → β → WG.M (ForInStep β)) (hf : ∀ a b, OrdinaryAction (f a b)) :
-    OrdinaryAction (forIn xs b f) := by
+theorem ordinary_array {S : Type} {m : Type → Type} {ps : PostShape}
+    [Monad m] [WPMonad m ps] {project : S → Snapshot}
+    (xs : Array α) (b : β)
+    (f : α → β → StateT S m (ForInStep β)) (hf : ∀ a b, Lifetimes.ProjectedAction project Ordinary (f a b)) :
+    Lifetimes.ProjectedAction project Ordinary (forIn xs b f) := by
   rw [← Array.forIn_toList]
   exact ordinary_forIn _ b f hf
 
@@ -64,16 +78,19 @@ theorem ordinary_get : OrdinaryAction (get : WG.M WGWorld) := by
   cases hr
   exact .refl _
 
-theorem ordinary_modify (f : WGWorld → WGWorld)
-    (hf : ∀ w, Ordinary (snapshot w) (snapshot (f w))) : OrdinaryAction (modify f) := by
-  apply (Lifetimes.ProjectedAction.iff_run_ambient _ _ _).mpr
-  intro w ambient x w' ambient' hr
-  cases hr
+theorem ordinary_modify {S : Type} {m : Type → Type} {ps : PostShape}
+    [Monad m] [WPMonad m ps] {project : S → Snapshot}
+    (f : S → S) (hf : ∀ w, Ordinary (project w) (project (f w))) :
+    Lifetimes.ProjectedAction project Ordinary (modify f : StateT S m Unit) := by
+  intro initial
+  apply hoare_modify
+  intro w hw
+  rw [← hw]
   exact hf w
 
 theorem ordinary_modifyDev (f : Device → Device)
     (hf : ∀ d, (f d).keypairs = d.keypairs) : OrdinaryAction (modifyDev f) := by
-  apply SameSnapshot.ordinary
+  apply SameView.ordinary
   apply sameSnapshot_of_wp
   intro s
   exact modifyDev_snapshot_spec (fun t => t = s) f hf
@@ -105,7 +122,9 @@ elab "keypairs_intro_forall" : tactic => do
 /-- Inspect the action head without evaluating the action or its framing predicate. -/
 elab "ordinary_head " n:ident : tactic => do
   let t := (← Lean.Elab.Tactic.getMainTarget).consumeMData
-  unless t.isAppOf ``OrdinaryAction do
+  unless t.isAppOf ``OrdinaryAction ||
+      (t.isAppOf ``Lifetimes.ProjectedAction &&
+        t.getAppArgs[t.getAppArgs.size - 2]!.isConstOf ``Ordinary) do
     Lean.throwError "expected an OrdinaryAction goal"
   let a := t.getAppArgs.back! |>.consumeMData |>.headBeta
   let name ← Lean.Elab.realizeGlobalConstNoOverloadWithInfo n
