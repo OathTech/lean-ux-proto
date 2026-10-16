@@ -175,10 +175,10 @@ def rtnetlinkRequest (handler : M Int) : M Int := do
     | unsupported "no free descriptor in the table for the temporary rtnetlink socket (expansion)"
   if fd ≥ (← getTask .task).rlimitNofile then
     unsupported "no descriptor below RLIMIT_NOFILE for the temporary rtnetlink socket (the guest fails)"
-  let fid := (← getK).nextFile
+  let fid := (← get).fs.nextFile
   setFile fid { fFlags := O_RDWR, fMode := FMODE_READ ||| FMODE_WRITE ||| FMODE_OPENED, fCount := 1,
                 fOp := some (.fixture "rtnetlink"), fInode := some (.fixture "rtnetlink") }
-  modifyK fun k => { k with nextFile := fid + 1 }
+  modify fun w => { w with fs := { w.fs with nextFile := fid + 1 } }
   setFdtSlot fd (some fid)
   setFdtOpen fd true
   setFdtCloexec fd false
@@ -205,7 +205,7 @@ def TASK_WORK_FUEL : Nat := 1 <<< 16
     An `__fput` may queue more work (a release dropping another reference), so
     the loop is fuel-bounded rather than bounded by the queue at entry
     (future-proof-paths note, 3(d)). -/
-def taskWorkRun : M Unit := do
+def taskWorkRun : FS.M Unit := do
   for _ in [0:TASK_WORK_FUEL] do
     match (← getTask .task).taskWorks with
     | [] => return
@@ -223,8 +223,8 @@ def taskWorkRun : M Unit := do
     the queue record), and its section runs in the guest's wait
     (`Env.netnsCleanup`, after this call). -/
 def netnsClose : M Int := do
-  if !(← get).foreignCreator then unsupported "wg_netns_close outside the foreign-creator fixture"
-  if (← get).netnsCHolders.isEmpty then unsupported "wg_netns_close twice"
+  if !(← getRouting).foreignCreator then unsupported "wg_netns_close outside the foreign-creator fixture"
+  if (← getEnv).netnsCHolders.isEmpty then unsupported "wg_netns_close twice"
   for fd in [INJECT_FD, LISTEN6_FD, LISTEN4_FD, PIN_FD] do
     let ret ← sysClose fd
     if ret != 0 then invariant s!"close({fd}) of a fixture holder returned {ret}"
@@ -232,17 +232,17 @@ def netnsClose : M Int := do
   return 0
 
 def dispatch : Syscall → M Int
-  | .eventfd2 count flags => sysEventfd2 count flags
-  | .dup fildes => sysDup fildes
-  | .dup3 oldfd newfd flags => ksysDup3 oldfd newfd flags
-  | .close fd => sysClose fd
-  | .read fd count => ksysRead fd count
-  | .write fd count buf => ksysWrite fd buf count
-  | .pipe2 flags => sysPipe2 flags
-  | .fcntl fd cmd arg => sysFcntl fd cmd arg
-  | .epollCreate1 flags => sysEpollCreate1 flags
-  | .epollCtl epfd op fd events data => sysEpollCtl epfd op fd events data
-  | .epollWait epfd maxevents timeout => sysEpollWait epfd maxevents timeout
+  | .eventfd2 count flags => liftFS (sysEventfd2 count flags)
+  | .dup fildes => liftFS (sysDup fildes)
+  | .dup3 oldfd newfd flags => liftFS (ksysDup3 oldfd newfd flags)
+  | .close fd => liftFS (sysClose fd)
+  | .read fd count => liftFS (ksysRead fd count)
+  | .write fd count buf => liftFS (ksysWrite fd buf count)
+  | .pipe2 flags => liftFS (sysPipe2 flags)
+  | .fcntl fd cmd arg => liftFS (sysFcntl fd cmd arg)
+  | .epollCreate1 flags => liftFS (sysEpollCreate1 flags)
+  | .epollCtl epfd op fd events data => liftFS (sysEpollCtl epfd op fd events data)
+  | .epollWait epfd maxevents timeout => liftFS (sysEpollWait epfd maxevents timeout)
   | .wgSet attrs => netlinkRequest (WG.wgSetDevice attrs)
   | .wgGet device => netlinkRequest do
     match ← WG.wgGetDevice device with
@@ -296,7 +296,7 @@ def dispatch : Syscall → M Int
     if r.dev != WG0_IFINDEX then unsupported "a transmit to a local address (not into wg0)"
     -- W4: an MTU change below the family's floor took its routes down with
     -- its IP device, and the fixture re-adds them only at the next wg_up
-    if let some d := (← getK).wg then
+    if let some d := (← getWG).dev then
       if (family == 4 && !d.inet4Dev) || (family == 6 && !d.inet6Dev) then
         unsupported "a transmit after an MTU change took the family's routes into wg0 down"
     -- udp_sendmsg returns the datagram's length once the device took it
@@ -375,8 +375,9 @@ def Syscall.isNet : Syscall → Bool
 
 /-- One system call: entry, the handler, and the return-to-user work. -/
 def syscall (call : Syscall) : M Int := do
-  modify fun w => { w with userOut := none, userFds := none, queuedThisCall := [],
+  modify fun w => { w with fs := { w.fs with userOut := none, userFds := none },
                            seccomp := { w.seccomp with emitted := {}, translatedLen := none } }
+  modifyWG fun g => { g with queuedThisCall := [] }
   modifyAmbient fun a => { a with steps := #[], extraOut := [], fired := #[], netRxSections := 0, netRxSection := 0 }
   -- seccomp: the entry path of the operation's own call once a mode is set
   -- (a harness call by design 6.2 rule 1: a cache hit); a probe enters itself
@@ -409,7 +410,7 @@ def syscall (call : Syscall) : M Int := do
   match call with
   | .wgUp | .wgDown | .wgDelete | .wgDeladdr _ | .wgDelroute .. | .wgSetMtu _ | .wgNetnsClose
   | .wgAddroute .. | .wgAddaddr .. =>
-    let shape := Net.Fib.shape (← getK)
+    let shape := Net.Fib.shape (← getRouting)
     modifyAmbient fun w => { w with extraOut := w.extraOut ++ [("fib_trie", shape)] }
   | _ => pure ()
   return ret

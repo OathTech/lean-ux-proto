@@ -170,12 +170,12 @@ def receive4 (pkt : List UInt8) : M Unit := do
   -- rows 22-24: the port map of the fixture
   let dport := WG.beAt pkt 22 2
   if dport != SENDER_PORT then
-    if (← getK).wg.any (fun d => d.running && dport == d.incomingPort) then
+    if (← getWG).dev.any (fun d => d.running && dport == d.incomingPort) then
       excluded "2.2 row 24 (wg0's own listen port: a nested receive)"
     excluded "2.2 row 22 (no socket at the port: ICMP port unreachable)"
   -- row 23: delivered to the sender, with the inner TOS (after the ECN
   -- rewrite) and the destination its `IPV6_PKTINFO` reports (v4-mapped)
-  modify fun w => { w with senderInbox := w.senderInbox ++
+  modifyEnv fun w => { w with senderInbox := w.senderInbox ++
     [{ family := AF_INET, addr := src, port := WG.beAt pkt 20 2, bytes := pkt.drop 28, tos := byte 1,
        dst := 0xffff00000000 + dst }] }
 
@@ -213,11 +213,11 @@ def receive6 (pkt : List UInt8) : M Unit := do
   if WG.beAt pkt 46 2 == 0 then excluded "2.3 rows 13-14 (a zero UDP checksum)"
   let dport := WG.beAt pkt 42 2
   if dport != SENDER_PORT then
-    if (← getK).wg.any (fun d => d.running && dport == d.incomingPort) then
+    if (← getWG).dev.any (fun d => d.running && dport == d.incomingPort) then
       excluded "2.3 (wg0's own listen port: a nested receive)"
     excluded "2.3 row 16 (no socket at the port: ICMPv6 port unreachable)"
   -- delivered to the sender, with the inner traffic class (after the ECN rewrite)
-  modify fun w => { w with senderInbox := w.senderInbox ++
+  modifyEnv fun w => { w with senderInbox := w.senderInbox ++
     [{ family := AF_INET6, addr := src, port := WG.beAt pkt 40 2, bytes := pkt.drop 48,
        tos := WG.beAt pkt 0 2 / 16 % 256, dst := dst }] }
 

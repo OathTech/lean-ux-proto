@@ -19,12 +19,12 @@ open Leanux
 def fls (x : Nat) : Nat := if x == 0 then 0 else Nat.log2 x + 1
 
 /-- choose (allowedips.c:36-39). -/
-def choose (node : AipNode) (key : Nat) : M Nat := do
+def choose [Monad m] [MonadLiftT AmbientM m] (node : AipNode) (key : Nat) : m Nat := do
   if node.cidr ≥ node.bitlen then invariant "choose on a full-length node"
   return key / 2 ^ (node.bitlen - 1 - node.cidr) % 2
 
 /-- common_bits (allowedips.c:87-97), with `fls128` (82-85) for 128 bits. -/
-def commonBits (node : AipNode) (key : Nat) (bits : Nat) : M Nat := do
+def commonBits [Monad m] [MonadLiftT AmbientM m] (node : AipNode) (key : Nat) (bits : Nat) : m Nat := do
   if ← branch .commonBits32 (bits == 32) then
     return 32 - fls (node.bits ^^^ key)
   if ← branch .commonBits128 (bits == 128) then
@@ -36,13 +36,13 @@ def commonBits (node : AipNode) (key : Nat) (bits : Nat) : M Nat := do
   return 0
 
 /-- prefix_matches (allowedips.c:99-109). -/
-def prefixMatches (node : AipNode) (key bits : Nat) : M Bool := do
+def prefixMatches [Monad m] [MonadLiftT AmbientM m] (node : AipNode) (key bits : Nat) : m Bool := do
   let common ← commonBits node key bits
   return common ≥ node.cidr
 
 /-- find_node (allowedips.c:111-124): the deepest node on the key's path
     that has a peer. -/
-def findNode (trie : Option NodeId) (bits key : Nat) : M (Option NodeId) := do
+def findNode (trie : Option NodeId) (bits key : Nat) : AipM (Option NodeId) := do
   let mut node := trie
   let mut found : Option NodeId := none
   for _ in [0:130] do   -- MAX_ALLOWEDIPS_DEPTH bounds the path
@@ -62,22 +62,22 @@ def newNode (key cidr bits : Nat) (peer : Option PeerId) : AipNode :=
   { peer, bit := #[none, none], cidr, bitlen := bits, bits := key, parent := .root4 }
 
 /-- connect_node (allowedips.c:169-173). -/
-def connectNode (slot : Slot) (id : NodeId) : M Unit := do
+def connectNode (slot : Slot) (id : NodeId) : AipM Unit := do
   setNode id { (← getNode id) with parent := slot }
   slotSet slot (some id)
 
 /-- choose_and_connect_node (allowedips.c:175-179). -/
-def chooseAndConnectNode (parent node : NodeId) : M Unit := do
+def chooseAndConnectNode (parent node : NodeId) : AipM Unit := do
   let bit ← choose (← getNode parent) (← getNode node).bits
   connectNode (.child parent bit) node
 
 /-- A zeroed allocation from `node_cache` at one of `add`'s three
     `kmem_cache_zalloc` calls (`site`: allowedips.c:190, :205 or :234), an
     allocation outcome. -/
-def allocNode (site : AllocSite) (n : AipNode) : M (Option NodeId) := do
+def allocNode (site : AllocSite) (n : AipNode) : AipM (Option NodeId) := do
   if !(← hiddenAlloc site) then return none   -- kmem_cache_zalloc(node_cache)
-  let id := (← getDev).nextNode
-  modifyDev fun d => { d with nextNode := id + 1, nodes := d.nodes.insert id n }
+  let id := (← get).nextNode
+  modify fun s => { s with nextNode := id + 1, nodes := s.nodes.insert id n }
   return some id
 
 def listRemove (l : List NodeId) (id : NodeId) : List NodeId := l.filter (· != id)
@@ -95,7 +95,7 @@ def listDel (id : NodeId) : M Unit := do
 
 /-- node_placement (allowedips.c:149-167): the deepest node on the key's path
     whose prefix covers `cidr`, and whether it is exact. -/
-def nodePlacement (trie : Option NodeId) (key cidr bits : Nat) : M (Option NodeId × Bool) := do
+def nodePlacement (trie : Option NodeId) (key cidr bits : Nat) : AipM (Option NodeId × Bool) := do
   let mut node := trie
   let mut parent : Option NodeId := none
   for _ in [0:130] do   -- MAX_ALLOWEDIPS_DEPTH bounds the path
@@ -229,10 +229,10 @@ def removeByPeer (pid : PeerId) : M Unit := do
     the recursion's order: the node, then bit[0]'s subtree, then bit[1]'s. An
     explicit stack, fuel-bounded (future-proof-paths note, 3(d)) by the
     trie's node count: each node is pushed once (review item 7). -/
-def subtree (id : NodeId) : M (List NodeId) := do
+def subtree (id : NodeId) : AipM (List NodeId) := do
   let mut out := #[]
   let mut stack := [id]
-  for _ in [0:(← getDev).nodes.size + 1] do
+  for _ in [0:(← get).nodes.size + 1] do
     match stack with
     | [] => return out.toList
     | n :: rest =>

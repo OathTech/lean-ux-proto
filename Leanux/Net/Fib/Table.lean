@@ -56,7 +56,7 @@ def devAddrGenidBump : M Unit := modifyTable fun tb => { tb with devAddrGenid :=
 def deviceUp (dev : Nat) : M Bool := do
   if dev == LO_IFINDEX then return true
   if dev == WG0_IFINDEX then
-    match (← getK).wg with
+    match (← get).wg0 with
     | some d => return d.running
     | none => return false
   return false
@@ -64,7 +64,7 @@ def deviceUp (dev : Nat) : M Bool := do
 def deviceHasInet (dev : Nat) : M Bool := do
   if dev == LO_IFINDEX then return true
   if dev == WG0_IFINDEX then
-    match (← getK).wg with
+    match (← get).wg0 with
     | some d => return d.inet4Dev
     | none => return false
   return false
@@ -169,7 +169,7 @@ def createInfo (cfg : Config) : M (Except Int FibInfoId) := do
       -- `nh->fib_nh_scope = RT_SCOPE_NOWHERE; nh->fib_nh_dev = dev_get_by_index(net, oif)`
       fi := { fi with nhScope := RT_SCOPE_NOWHERE }
       if cfg.oif != LO_IFINDEX && cfg.oif != WG0_IFINDEX then return .error (-19)   -- -ENODEV
-      if cfg.oif == WG0_IFINDEX && (← getK).wg.isNone then return .error (-19)
+      if cfg.oif == WG0_IFINDEX && (← get).wg0.isNone then return .error (-19)
       fi := { fi with dev := cfg.oif }
     else
       -- `fib_check_nh` → `fib_check_nh_nongw` (:1244-1275)
@@ -679,7 +679,7 @@ def typeName : RouteType → String
     children]`, a leaf `[key, aliases]` with each alias `[plen, scope,
     type, tos]`; the children in index order, empty slots omitted, as the
     proc walk prints them. -/
-def shapeOf (k : Kernel) : Nat → KeyVector → Lean.Json
+def shapeOf (k : Net.Routing) : Nat → KeyVector → Lean.Json
   | _, .leaf key _ aliases =>
     Lean.Json.arr #[Lean.toJson (dotted key),
       Lean.Json.arr (aliases.map fun fa =>
@@ -696,7 +696,7 @@ def shapeOf (k : Kernel) : Nat → KeyVector → Lean.Json
 
 /-- The namespace's trie as the proc file shows it (`Main:`), `null` for an
     empty trie. -/
-def shape (k : Kernel) : Lean.Json :=
+def shape (k : Net.Routing) : Lean.Json :=
   match k.fib4.trie.root with
   | some n => shapeOf k (KEYLENGTH + 2) n
   | none => Lean.Json.null

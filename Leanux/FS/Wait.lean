@@ -1,4 +1,4 @@
-import Leanux.Kernel.Defs
+import Leanux.FS.Stores
 
 /-!
 # kernel/sched/wait.c and include/linux/wait.h — the wait-queue service
@@ -66,14 +66,14 @@ def WF_SYNC : UInt32 := 0x10
 /-! ## The heads -/
 
 /-- The queue a `wait_queue_head_t *` names. -/
-def getWaitQueue : WaitQueueRef → M WaitQueue
+def getWaitQueue : WaitQueueRef → FS.M WaitQueue
   | .pipeRd p => return (← getPipe p).rdWait
   | .pipeWr p => return (← getPipe p).wrWait
   | .eventfdWqh c => return (← getCtx c).wqh
   | .epWq e => return (← getEp e).wq
   | .epPollWait e => return (← getEp e).pollWait
 
-def setWaitQueue (r : WaitQueueRef) (q : WaitQueue) : M Unit := do
+def setWaitQueue (r : WaitQueueRef) (q : WaitQueue) : FS.M Unit := do
   match r with
   | .pipeRd p => setPipe p { (← getPipe p) with rdWait := q }
   | .pipeWr p => setPipe p { (← getPipe p) with wrWait := q }
@@ -83,7 +83,7 @@ def setWaitQueue (r : WaitQueueRef) (q : WaitQueue) : M Unit := do
 
 /-- `waitqueue_active` (wait.h:125-127): `!list_empty(&wq_head->head)`. A
     value; the caller's test is the decision. -/
-def waitqueueActive (r : WaitQueueRef) : M Bool :=
+def waitqueueActive (r : WaitQueueRef) : FS.M Bool :=
   return !(← getWaitQueue r).entries.isEmpty
 
 /-! ## Queueing (wait.c:17-57) -/
@@ -93,7 +93,7 @@ def waitqueueActive (r : WaitQueueRef) : M Bool :=
     entries, at the head: no entry in the domain carries that flag
     (`add_wait_queue_priority` has no caller here), so its loop stops at the
     first entry or does not run, and the insertion point is the head. -/
-def addWaitQueue (r : WaitQueueRef) (e : WaitEntry) : M Unit := do
+def addWaitQueue (r : WaitQueueRef) (e : WaitEntry) : FS.M Unit := do
   let q ← getWaitQueue r
   -- spin_lock_irqsave(&wq_head->lock, flags): a cut
   setWaitQueue r { q with entries := { e with exclusive := false } :: q.entries }
@@ -101,7 +101,7 @@ def addWaitQueue (r : WaitQueueRef) (e : WaitEntry) : M Unit := do
 
 /-- `add_wait_queue_exclusive` (wait.c:28-36): sets `WQ_FLAG_EXCLUSIVE`, then
     `__add_wait_queue_entry_tail` (wait.h:193-195) appends at the tail. -/
-def addWaitQueueExclusive (r : WaitQueueRef) (e : WaitEntry) : M Unit := do
+def addWaitQueueExclusive (r : WaitQueueRef) (e : WaitEntry) : FS.M Unit := do
   let q ← getWaitQueue r
   setWaitQueue r { q with entries := q.entries ++ [{ e with exclusive := true }] }
 
@@ -110,7 +110,7 @@ def addWaitQueueExclusive (r : WaitQueueRef) (e : WaitEntry) : M Unit := do
     (each `eppoll_entry` sits on exactly one head); an entry that is not on
     the queue would be a `list_del` of an unlinked node, a mirror invariant
     failure. -/
-def removeWaitQueue (r : WaitQueueRef) (e : WaitEntry) : M Unit := do
+def removeWaitQueue (r : WaitQueueRef) (e : WaitEntry) : FS.M Unit := do
   let q ← getWaitQueue r
   let some i := q.entries.findIdx? (·.func == e.func)
     | invariant s!"remove_wait_queue: {repr e.func} is not on {repr r}"
@@ -156,7 +156,7 @@ mutual
     The return is the C's `int`: negative stops the walk, non-zero counts
     against `nr_exclusive` for an exclusive entry. `sync` is
     `wake_flags & WF_SYNC` (wait.c:94 passes `wake_flags` as `sync`). -/
-def WaitEntry.callAt (fuel : Nat) (e : WaitEntry) (mode wakeFlags : UInt32) (key : Option UInt32) : M Int :=
+def WaitEntry.callAt (fuel : Nat) (e : WaitEntry) (mode wakeFlags : UInt32) (key : Option UInt32) : FS.M Int :=
   match e.func with
   | .epPollCallback pwq => epPollCallbackAt fuel pwq mode wakeFlags key
 termination_by (fuel, 3)
@@ -167,7 +167,7 @@ termination_by (fuel, 3)
     zero (so `nr_exclusive = 0` never stops: `wake_up_all`). Returns the
     remaining `nr_exclusive`. -/
 def wakeUpCommonAt (fuel : Nat) (r : WaitQueueRef) (mode : UInt32) (nrExclusive : Int) (wakeFlags : UInt32)
-    (key : Option UInt32) : M Int := do
+    (key : Option UInt32) : FS.M Int := do
   -- lockdep_assert_held(&wq_head->lock): a cut
   let q ← getWaitQueue r
   -- curr = list_first_entry(&wq_head->head, ...); `&curr->entry == &wq_head->head` (:80-83)
@@ -196,7 +196,7 @@ termination_by (fuel, 0)
     pollflags)`, which is `__wake_up(.., TASK_NORMAL, 1, poll_to_key(m))`
     (wait.h:236-236, wait.c:124-127) and `__wake_up_common_lock` (:99-110)
     around the walk; `epi` is unused in this variant. -/
-def epPollSafewakeAt (fuel : Nat) (ep : EpId) (_epi : Option EpiId) (pollflags : UInt32) : M Unit := do
+def epPollSafewakeAt (fuel : Nat) (ep : EpId) (_epi : Option EpiId) (pollflags : UInt32) : FS.M Unit := do
   -- spin_lock_irqsave(&wq_head->lock, flags); the walk; spin_unlock_irqrestore
   discard <| wakeUpCommonAt fuel (.epPollWait ep) TASK_NORMAL 1 0 (some (EPOLLIN ||| pollflags))
 termination_by (fuel, 1)
@@ -208,7 +208,7 @@ termination_by (fuel, 1)
     `ep_pm_stay_awake_rcu` is empty without `CONFIG_PM`. In tier 1 no task
     sleeps on `ep->wq` (design 5), so the exclusive-wake rule (:1483-1502)
     is not reached: its arm stops. -/
-def epPollCallbackAt (fuel : Nat) (pwqId : PwqId) (_mode wakeFlags : UInt32) (key : Option UInt32) : M Int := do
+def epPollCallbackAt (fuel : Nat) (pwqId : PwqId) (_mode wakeFlags : UInt32) (key : Option UInt32) : FS.M Int := do
   let pwq ← getPwq pwqId
   let epiId := pwq.base
   let epi ← getEpi epiId
@@ -260,60 +260,60 @@ end
 /-- `__wake_up_common` at the top of a wake: the walk with the full nesting
     budget. -/
 def wakeUpCommon (r : WaitQueueRef) (mode : UInt32) (nrExclusive : Int) (wakeFlags : UInt32)
-    (key : Option UInt32) : M Int :=
+    (key : Option UInt32) : FS.M Int :=
   wakeUpCommonAt WAKE_NEST_FUEL r mode nrExclusive wakeFlags key
 
 /-- `ep_poll_safewake(ep, epi, pollflags)` from the epoll mirror's own
     call sites (`ep_insert`, `ep_modify`, `ep_clear_and_put`), with the full
     nesting budget. -/
-def epPollSafewake (ep : EpId) (epi : Option EpiId) (pollflags : UInt32) : M Unit :=
+def epPollSafewake (ep : EpId) (epi : Option EpiId) (pollflags : UInt32) : FS.M Unit :=
   epPollSafewakeAt WAKE_NEST_FUEL ep epi pollflags
 
 /-- `__wake_up_common_lock` (wait.c:99-110): the walk under the head's lock;
     returns how many exclusive entries were woken, `nr_exclusive - remaining`. -/
 def wakeUpCommonLock (r : WaitQueueRef) (mode : UInt32) (nrExclusive : Int) (wakeFlags : UInt32)
-    (key : Option UInt32) : M Int := do
+    (key : Option UInt32) : FS.M Int := do
   -- spin_lock_irqsave(&wq_head->lock, flags)
   let remaining ← wakeUpCommon r mode nrExclusive wakeFlags key
   -- spin_unlock_irqrestore(&wq_head->lock, flags)
   return nrExclusive - remaining
 
 /-- `__wake_up` (wait.c:124-127). -/
-def wakeUpBase (r : WaitQueueRef) (mode : UInt32) (nr : Int) (key : Option UInt32) : M Int :=
+def wakeUpBase (r : WaitQueueRef) (mode : UInt32) (nr : Int) (key : Option UInt32) : FS.M Int :=
   wakeUpCommonLock r mode nr 0 key
 
 /-- `__wake_up_locked_key` (wait.c:145-147): with the head's lock held. -/
-def wakeUpLockedKey (r : WaitQueueRef) (mode : UInt32) (key : Option UInt32) : M Unit :=
+def wakeUpLockedKey (r : WaitQueueRef) (mode : UInt32) (key : Option UInt32) : FS.M Unit :=
   discard <| wakeUpCommon r mode 1 0 key
 
 /-- `__wake_up_sync_key` (wait.c:167-172). The `!wq_head` test (:169) is a
     NULL check on a pointer the mirror holds as a `WaitQueueRef`, never NULL
     on these paths. -/
-def wakeUpSyncKey (r : WaitQueueRef) (mode : UInt32) (key : Option UInt32) : M Unit :=
+def wakeUpSyncKey (r : WaitQueueRef) (mode : UInt32) (key : Option UInt32) : FS.M Unit :=
   discard <| wakeUpCommonLock r mode 1 WF_SYNC key
 
 /-! ## The macros (wait.h:219-246); each drops `__wake_up`'s return -/
 
 /-- `wake_up(x)` (wait.h:219). -/
-def wakeUp (r : WaitQueueRef) : M Unit := discard <| wakeUpBase r TASK_NORMAL 1 none
+def wakeUp (r : WaitQueueRef) : FS.M Unit := discard <| wakeUpBase r TASK_NORMAL 1 none
 /-- `wake_up_all(x)` (wait.h:221). -/
-def wakeUpAll (r : WaitQueueRef) : M Unit := discard <| wakeUpBase r TASK_NORMAL 0 none
+def wakeUpAll (r : WaitQueueRef) : FS.M Unit := discard <| wakeUpBase r TASK_NORMAL 0 none
 /-- `wake_up_sync(x)` (wait.h:224), `__wake_up_sync` (wait.c:203-205). -/
-def wakeUpSync (r : WaitQueueRef) : M Unit := wakeUpSyncKey r TASK_NORMAL none
+def wakeUpSync (r : WaitQueueRef) : FS.M Unit := wakeUpSyncKey r TASK_NORMAL none
 /-- `wake_up_interruptible(x)` (wait.h:226). -/
-def wakeUpInterruptible (r : WaitQueueRef) : M Unit :=
+def wakeUpInterruptible (r : WaitQueueRef) : FS.M Unit :=
   discard <| wakeUpBase r TASK_INTERRUPTIBLE 1 none
 /-- `wake_up_interruptible_all(x)` (wait.h:228): `nr_exclusive = 0`. -/
-def wakeUpInterruptibleAll (r : WaitQueueRef) : M Unit :=
+def wakeUpInterruptibleAll (r : WaitQueueRef) : FS.M Unit :=
   discard <| wakeUpBase r TASK_INTERRUPTIBLE 0 none
 /-- `wake_up_poll(x, m)` (wait.h:236-236). -/
-def wakeUpPoll (r : WaitQueueRef) (m : UInt32) : M Unit :=
+def wakeUpPoll (r : WaitQueueRef) (m : UInt32) : FS.M Unit :=
   discard <| wakeUpBase r TASK_NORMAL 1 (some m)
 /-- `wake_up_locked_poll(x, m)` (wait.h:240-240). -/
-def wakeUpLockedPoll (r : WaitQueueRef) (m : UInt32) : M Unit :=
+def wakeUpLockedPoll (r : WaitQueueRef) (m : UInt32) : FS.M Unit :=
   wakeUpLockedKey r TASK_NORMAL (some m)
 /-- `wake_up_interruptible_sync_poll(x, m)` (wait.h:244-244). -/
-def wakeUpInterruptibleSyncPoll (r : WaitQueueRef) (m : UInt32) : M Unit :=
+def wakeUpInterruptibleSyncPoll (r : WaitQueueRef) (m : UInt32) : FS.M Unit :=
   wakeUpSyncKey r TASK_INTERRUPTIBLE (some m)
 
 end Leanux

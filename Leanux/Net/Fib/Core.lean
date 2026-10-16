@@ -68,11 +68,11 @@ end Trie
     (the foreign-creator mode's socket paths and C's teardown). -/
 def getTable : M Table := do
   let w ← get
-  return if w.fibCreatorNs then w.k.fib4C else w.k.fib4
+  return if w.fibCreatorNs then w.fib4C else w.fib4
 def modifyTable (f : Table → Table) : M Unit := do
   let w ← get
-  if w.fibCreatorNs then modifyK fun k => { k with fib4C := f k.fib4C }
-  else modifyK fun k => { k with fib4 := f k.fib4 }
+  if w.fibCreatorNs then set { w with fib4C := f w.fib4C }
+  else set { w with fib4 := f w.fib4 }
 /-- Run `act` with the creating namespace's table addressed (restored after). -/
 def inCreatorNs (act : M α) : M α := do
   let was := (← get).fibCreatorNs

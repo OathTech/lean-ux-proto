@@ -19,7 +19,7 @@ def FMODE_PWRITE : UInt32 := (1 : UInt32) <<< 4
 /-- get_pipe_inode (fs/pipe.c:880-918). `inode->i_ino = get_next_ino()` lies
     inside the inode-allocation cut (`newInodePseudo`); `i_fop`, `i_uid` and
     `i_gid` (root) are not read on these paths. -/
-def getPipeInode : M (Option PipefsInodeId) := do
+def getPipeInode : FS.M (Option PipefsInodeId) := do
   let ino? ← newInodePseudo  -- new_inode_pseudo(pipe_mnt->mnt_sb)
   if ← branch .getPipeInodeNoInode ino?.isNone then return none  -- fail_inode
   let some ino := ino? | invariant "unreachable"
@@ -40,7 +40,7 @@ def getPipeInode : M (Option PipefsInodeId) := do
     ...)` and, on success, `path_get(&f->f_path)`: `mntget` is a cut, `dget`
     takes a reference to the pipefs dentry (`Inode.dCount`).
     `f->f_mapping = base->f_mapping` is not mirrored. -/
-def allocFileClone (base : FileId) (flags : UInt32) (fopId : FopsId) : M (Except Int FileId) := do
+def allocFileClone (base : FileId) (flags : UInt32) (fopId : FopsId) : FS.M (Except Int FileId) := do
   let some inode := (← getFile base).fInode | invariant "alloc_file_clone of a file with a NULL f_inode"
   let f ← allocFile flags fopId inode
   if ← branch .allocFileCloneOk (f matches .ok _) then
@@ -50,18 +50,18 @@ def allocFileClone (base : FileId) (flags : UInt32) (fopId : FopsId) : M (Except
   return f
 
 /-- stream_open (fs/open.c:1654-1659). -/
-def streamOpen (fid : FileId) : M Unit := do
+def streamOpen (fid : FileId) : FS.M Unit := do
   let f ← getFile fid
   setFile fid { f with fMode := (f.fMode &&& ~~~(FMODE_LSEEK ||| FMODE_PREAD ||| FMODE_PWRITE ||| FMODE_ATOMIC_POS))
                                   ||| FMODE_STREAM }
 
 /-- create_pipe_files (fs/pipe.c:920-963): `res[0]`, the read end, and
     `res[1]`, the write end. -/
-def createPipeFiles (flags : UInt32) : M (Except Int (FileId × FileId)) := do
+def createPipeFiles (flags : UInt32) : FS.M (Except Int (FileId × FileId)) := do
   let ino? ← getPipeInode
   if ← branch .createPipeFilesNoInode ino?.isNone then return .error (-ENFILE)
   let some ino := ino? | invariant "unreachable"
-  let iPipe : M PipeId := do
+  let iPipe : FS.M PipeId := do
     match (← getInode ino).iPipe with
     | some pid => pure pid
     | none => invariant "create_pipe_files: inode->i_pipe is NULL"
@@ -97,7 +97,7 @@ def PIPE2_FLAGS : UInt32 := O_CLOEXEC ||| O_NONBLOCK ||| O_DIRECT ||| O_NOTIFICA
 /-- __do_pipe_flags (fs/pipe.c:965-1001): the descriptors `fd[0]`, `fd[1]` and
     the files `files[0]`, `files[1]`. `audit_fd_pair` is compiled out
     (`CONFIG_AUDIT` unset). -/
-def doPipeFlags (flags : UInt32) : M (Except Int (Nat × Nat × FileId × FileId)) := do
+def doPipeFlags (flags : UInt32) : FS.M (Except Int (Nat × Nat × FileId × FileId)) := do
   if ← branchCmp .doPipeFlagsInvalid (flags &&& ~~~PIPE2_FLAGS != 0) (flags &&& ~~~PIPE2_FLAGS).toNat 0 then
     return .error (-EINVAL)
   let files ← createPipeFiles flags
@@ -125,7 +125,7 @@ def doPipeFlags (flags : UInt32) : M (Except Int (Nat × Nat × FileId × FileId
 /-- do_pipe2 (fs/pipe.c:1018-1038) with a valid `fildes`; `copy_to_user`
     does not fault (the guest's buffer is mapped, A section 6.5), and the
     pair it copies is `World.userFds`. -/
-def doPipe2 (flags : UInt32) : M Int := do
+def doPipe2 (flags : UInt32) : FS.M Int := do
   let r ← doPipeFlags flags
   let error : Int := match r with | .error e => e | .ok _ => 0
   if ← branch .doPipe2Ok (error == 0) then
@@ -143,6 +143,6 @@ def doPipe2 (flags : UInt32) : M Int := do
   return error
 
 /-- SYSCALL_DEFINE2(pipe2, int __user *, fildes, int, flags) (fs/pipe.c:1040-1043). -/
-def sysPipe2 (flags : UInt32) : M Int := doPipe2 flags
+def sysPipe2 (flags : UInt32) : FS.M Int := doPipe2 flags
 
 end Leanux

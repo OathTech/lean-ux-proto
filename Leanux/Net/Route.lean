@@ -83,7 +83,7 @@ def routeOutput4 (saddr daddr : Nat) : M (Except Int Route) := do
     trie, IPv6 on the environment's rule. -/
 def routeLookup (family saddr daddr : Nat) : M (Except Int Route) := do
   if family == 4 then routeOutput4 saddr daddr
-  else return (← get).route6 saddr daddr
+  else return (← get).toRouting.route6 saddr daddr
 
 /-- `ip_route_input_slow`'s verdict for the decrypted packet's addresses, as
     the receive predicate reads it (the design note, 1.9): the martian tests

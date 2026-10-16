@@ -71,8 +71,8 @@ def dataMessage (remoteIndex nonce : Nat) (key plaintext : List UInt8) : List UI
 /-- encrypt_packet (send.c:162-219) of a packet under its item's keypair:
     the message bytes, or `none` when it fails. `checksumHelp` is
     `skb_checksum_help`'s output (a cut). -/
-def encryptPacket (checksumHelp : Packet → M Packet) (keypair : KeypairId) (pkt : DataPacket) :
-    M (Option (List UInt8)) := do
+def encryptPacket [Monad m] [MonadLiftT WG.M m] [MonadLiftT AmbientM m] (checksumHelp : Packet → m Packet) (keypair : KeypairId) (pkt : DataPacket) :
+    m (Option (List UInt8)) := do
   -- skb_get_hash (a cut point)
   skipCut [.flowHashSecret]
   let len := pkt.plaintext.bytes.length
@@ -117,7 +117,7 @@ def encryptPacket (checksumHelp : Packet → M Packet) (keypair : KeypairId) (pk
     the consume) met the occupied slot and dropped the list with `-EPIPE`
     (the Send audit's F1, 2026-10-15; the compile-time instance in
     `Leanux/Runner.lean`). -/
-def encryptRingPoll (softirq : M Unit) : M (Option (List SkbId)) := do
+def encryptRingPoll [Monad m] [MonadLiftT WG.M m] [MonadLiftT AmbientM m] (softirq : m Unit) : m (Option (List SkbId)) := do
   let (item, ring) := (← getDev).encryptQueue.consume
   modifyDev fun d => { d with encryptQueue := ring }
   softirq
@@ -131,7 +131,7 @@ def encryptRingPoll (softirq : M Unit) : M (Option (List SkbId)) := do
     `softirq` is the environment's NET_RX placement at the ring poll
     (`encryptRingPoll`). W7 phase 2: the iteration is the unit the
     environment interleaves (`workerIter`). -/
-def encryptStep (checksumHelp : Packet → M Packet) (softirq : M Unit) : M Bool := do
+def encryptStep [Monad m] [MonadLiftT WG.M m] [MonadLiftT AmbientM m] (checksumHelp : Packet → m Packet) (softirq : m Unit) : m Bool := do
   match ← encryptRingPoll softirq with
   | none => return false
   | some first =>
@@ -159,7 +159,7 @@ def encryptStep (checksumHelp : Packet → M Packet) (softirq : M Unit) : M Bool
     the environment's scheduler: whether `need_resched()` holds, which
     suspends the worker's activation (W7 phase 2, `workerIter`; the loop and
     its bound are the activation's, `Env.Activation.run`). -/
-def encryptIter (checksumHelp : Packet → M Packet) (softirq : M Unit) (needResched : M Bool) : M IterResult :=
+def encryptIter [Monad m] [MonadLiftT WG.M m] [MonadLiftT AmbientM m] (checksumHelp : Packet → m Packet) (softirq : m Unit) (needResched : m Bool) : m IterResult :=
   workerIter .encryptWorker none (encryptStep checksumHelp softirq)
     (do branch .encWorkerNeedResched (← needResched))
 
@@ -246,7 +246,7 @@ def txStep (pid : PeerId) : M Bool := do
 /-- One iteration of wg_packet_tx_worker's loop (send.c:262-285) for a
     peer: `txStep`, then `cond_resched()` and its decision. `needResched` as
     for `encryptIter`. -/
-def txIter (pid : PeerId) (needResched : M Bool) : M IterResult :=
+def txIter [Monad m] [MonadLiftT WG.M m] [MonadLiftT AmbientM m] (pid : PeerId) (needResched : m Bool) : m IterResult :=
   workerIter .txWorker (some pid) (txStep pid)
     (do branch .txNeedResched (← needResched))
 

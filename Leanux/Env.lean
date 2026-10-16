@@ -96,7 +96,7 @@ def fixtureNetDevices : List (String × Nat × Option String) := [("lo", 1, none
     the wildcard bind (`[::]:51998`, dual-stack) receives at (W9,
     `World.wildcardLocal`: `127/8`, `::1`, wg0's addresses), or (W5) at the
     link-local address on `lo`. -/
-def isSender (w : World) (family addr port : Nat) : Bool :=
+def isSender (w : Net.Routing) (family addr port : Nat) : Bool :=
   port == SENDER_PORT && (w.wildcardLocal family addr || (family == AF_INET6 && addr == LO_LINK_LOCAL))
 
 /-- What the sender's datagrams carry in their skb, by destination (W9,
@@ -109,7 +109,7 @@ def isSender (w : World) (family addr port : Nat) : Bool :=
     `::1`. A datagram to wg0's address while it is not configured would
     route into wg0 instead: outside the domain. -/
 def senderSource (family dest : Nat) (tos : Nat := 0) (ll : Bool := false) : M SkbSource := do
-  let w ← get
+  let w ← getRouting
   if ll && dest != 0 then unsupported "a link-local source with a destination other than loopback"
   if family == 4 then
     if ll then unsupported "a link-local source for an IPv4 injection"
@@ -193,14 +193,14 @@ def listenerFamily (e : Endpoint) : Option Nat :=
     the cached or routed `fl.saddr`), no longer "the destination's own
     address" (design section 2.5). -/
 def deliverSent : M Unit := do
-  for dg in (← get).sent do
+  for dg in (← getWG).sent do
     let loopback := (dg.family == AF_INET && dg.addr / 2 ^ 24 == 127)
       || (dg.family == AF_INET6 && (dg.addr == 1 || dg.addr == LO_LINK_LOCAL))
     -- W1's hand-off of scoped IPv6 endpoints to W9 is superseded here: W5
     -- (2.5, `w5_scoped_*`) models the datagram to a link-local endpoint
     -- with its `sin6_scope_id` (the scoped outer source); W9's send6 owns
     -- the route lookup itself when it lands [AGENT, W integration].
-    if isSender (← get) dg.family dg.addr dg.port then
+    if isSender (← getRouting) dg.family dg.addr dg.port then
       -- from wg0's socket, bound to the wildcard address at its port, with
       -- the source `send4`/`send6` ask for: the endpoint's `src4`/`src6`
       -- (the destination of the datagram it was learned from, a local
@@ -212,12 +212,12 @@ def deliverSent : M Unit := do
       let src := { family := dg.family, addr := if dg.src != 0 then dg.src else dg.addr, port := dg.sport,
                    bytes := dg.bytes, tos := dg.ds,
                    dst := if dg.family == AF_INET6 then dg.addr else 0xffff00000000 + dg.addr : InboxDatagram }
-      modify fun w => { w with senderInbox := w.senderInbox ++ [src] }
+      modifyEnv fun w => { w with senderInbox := w.senderInbox ++ [src] }
     else match listenerFamily { family := dg.family, addr := dg.addr, port := dg.port } with
-      | some 4 => modify fun w => { w with listenerV4 := w.listenerV4 ++ [(dg.ds, dg.bytes)] }
-      | some _ => modify fun w => { w with listenerV6 := w.listenerV6 ++ [(dg.ds, dg.bytes)] }
+      | some 4 => modifyEnv fun w => { w with listenerV4 := w.listenerV4 ++ [(dg.ds, dg.bytes)] }
+      | some _ => modifyEnv fun w => { w with listenerV6 := w.listenerV6 ++ [(dg.ds, dg.bytes)] }
       | none => if !loopback then unsupported "a datagram routed back into wg0"
-  modify fun w => { w with sent := [] }
+  modifyWG fun w => { w with sent := [] }
 
 /-- The crypt work a deferred unit queued, on the kernel's one CPU after
     that unit: the encrypt worker (`packet_crypt_wq`, queued by
@@ -246,7 +246,7 @@ def requireDrained (what : String) (queues : List Bool) : M Unit := do
     is not determined, since these operations' waits are not measured for
     it. `wg_xmit` has its own (`afterXmit`). -/
 def requireNoCryptWork : M Unit := do
-  let some d := (← getK).wg | return
+  let some d := (← getWG).dev | return
   if !d.encryptQueue.empty || !d.txWorkQueue.isEmpty then
     unsupported "crypt work queued in a system call (its worker's timing)"
 
@@ -273,9 +273,9 @@ def runOneSendWorker : M Unit := do
     that can queue it (`wg_set`, `wg_up`, `wg_xmit`), and the worker's remote
     KCOV section lands in that operation. -/
 def runSendWorkers : M Unit := do
-  if (← getK).wg.isNone then return   -- L: no device, no worker
+  if (← getWG).dev.isNone then return   -- L: no device, no worker
   requireNoCryptWork
-  modify fun w => { w with queuedThisCall := [] }   -- the call returned and slept
+  modifyWG fun w => { w with queuedThisCall := [] }   -- the call returned and slept
   -- record-driven (review item 7): every turn runs a worker whose section
   -- consumes records; the queue may grow meanwhile (a response's initiation)
   for _ in [0:(← recordBudget)] do
@@ -294,11 +294,11 @@ def runSendWorkers : M Unit := do
     the guest's opened-section count, show a worker that outlived the wait:
     its records would be missing from this operation. -/
 def afterXmit : M Unit := do
-  let some d := (← getK).wg | return   -- L: no device (the send failed)
+  let some d := (← getWG).dev | return   -- L: no device (the send failed)
   let crypt := !d.encryptQueue.empty || !d.txWorkQueue.isEmpty
   if crypt && !d.sendWorkQueue.isEmpty then
     unsupported "wg_xmit queued crypt work and a handshake (their order)"
-  modify fun w => { w with queuedThisCall := [] }   -- the call returned and slept
+  modifyWG fun w => { w with queuedThisCall := [] }   -- the call returned and slept
   if crypt then
     runCryptWorkers
     let d ← getDev
@@ -366,7 +366,7 @@ def sectionAppearsLater (w : Worker) (unit : Nat) : M Bool := do
   let startId := (HiddenSite.sectionStart w).info.id
   let names (r : HiddenRecord) : Bool :=
     r.site == startId && (unit == 0 || r.bytes.length < 16 || WG.recordWord r.bytes 1 == unit)
-  return (s.ambient.hidden.getD []).any names || (s.hiddenAhead.getD []).any (·.any names)
+  return (s.ambient.hidden.getD []).any names || (s.fixture.hiddenAhead.getD []).any (·.any names)
 
 /-- E1, item 3, at an end-of-wait read with pass bound `jPass`: no pending
     modeled timer's bucket is due. One that is, is either the timer softirq
@@ -377,10 +377,10 @@ def sectionAppearsLater (w : Worker) (unit : Nat) : M Bool := do
     it). E2. -/
 def requireNothingDue (jPass : UInt64) : M Unit := do
   -- L: without wg0 (bare fixture, or after wg_delete) no WireGuard timer exists
-  let some d := (← getK).wg | return
+  let some d := (← getWG).dev | return
   let some (pid, t, we) := TimerWheel.nextDue d jPass | return
   let w ← timerWorker t
-  let unit := (((← get).timerUnits.find? fun e => e.2.1 == pid && e.2.2 == t).map (·.1)).getD 0
+  let unit := (((← getWG).timerUnits.find? fun e => e.2.1 == pid && e.2.2 == t).map (·.1)).getD 0
   if ← sectionAppearsLater w unit then
     unsupported s!"a due timer's softirq deferred past the end-of-wait read: peer {pid}'s {repr t} timer (bucket expiry {we.bucketExpiry}, the read {jPass}) fires later in the stream"
   throw (.hidden s!"a due timer did not fire: peer {pid}'s {repr t} timer, bucket expiry {we.bucketExpiry}, pending at the end-of-wait read {jPass}")
@@ -415,11 +415,11 @@ def requireStepComplete (b : UInt64) : M Unit := do
     run when the records end outlived the guest's wait: outside the domain.
     Without records (the domain filter) nothing fires here. -/
 def runTimers (jPass : UInt64) : M Bool := do
-  modify fun w => { w with queuedThisCall := [] }   -- the guest slept
+  modifyWG fun w => { w with queuedThisCall := [] }   -- the guest slept
   -- L: without wg0 (bare fixture, or after wg_delete) no WireGuard timer
   -- exists; a timer section in the records stays unconsumed and mismatches
   -- [AGENT, int-dl merge]
-  if (← getK).wg.isNone then return false
+  if (← getWG).dev.isNone then return false
   let startOf (w : Worker) := (HiddenSite.sectionStart w).info.id
   let mut fired := false
   let mut step : Option UInt64 := none
@@ -443,7 +443,7 @@ def runTimers (jPass : UInt64) : M Bool := do
         -- dispatch order (docs/2026-10-11-dispatch-order.md): the timer the
         -- section names, by the address its arm record carried
         if let some u ← peekUnit w then
-          match (← get).timerUnits.find? (·.1 == u) with
+          match (← getWG).timerUnits.find? (·.1 == u) with
           | some (_, pid', t') =>
             if pid' != pid || t' != t then
               throw (.hidden s!"the wheel runs peer {pid}'s {repr t} timer next; the section names peer {pid'}'s {repr t'}")
@@ -451,9 +451,9 @@ def runTimers (jPass : UInt64) : M Bool := do
         if let some b := step then
           if b != we.bucketExpiry then requireStepComplete b
         delTimer pid t
-        modify fun s => { s with timerPassStep := some we.bucketExpiry }
+        modifyWG fun s => { s with timerPassStep := some we.bucketExpiry }
         runTimerSection w (WG.timerCallback pid t)
-        modify fun s => { s with timerPassStep := none }
+        modifyWG fun s => { s with timerPassStep := none }
         step := some we.bucketExpiry
         fired := true
     else
@@ -481,8 +481,8 @@ def runTimers (jPass : UInt64) : M Bool := do
     prediction for the filter's verdict only; the check follows the
     records. -/
 def runTimersPlaceholder (jHi : UInt64) : M Unit := do
-  modify fun w => { w with queuedThisCall := [] }
-  if (← getK).wg.isNone then return   -- L: no wg0, no timers [AGENT, int-dl merge]
+  modifyWG fun w => { w with queuedThisCall := [] }
+  if (← getWG).dev.isNone then return   -- L: no wg0, no timers [AGENT, int-dl merge]
   -- the filter's own loop (review item 7): one turn per pending timer at most
   let pending := (← getDev).peers.size * PeerTimer.all.length
   for _ in [0:pending + 1] do
@@ -508,7 +508,7 @@ def runTimersPlaceholder (jHi : UInt64) : M Unit := do
     is a hidden mismatch (a capture without the instrument). Without records
     (the domain filter) the filter's prediction uses `Timing`'s constants. -/
 def idleTimers : M Unit := do
-  let w ← get
+  let w ← getWG
   let a ← getAmbient
   if a.hidden.isNone then
     let jHi := w.jiffiesLast.getD 0 + a.timing.traceBound.toUInt64 + a.timing.advanceWait.toUInt64
@@ -520,7 +520,7 @@ def idleTimers : M Unit := do
   requireNothingDue jEnd
   let j ← hiddenJiffies .jiffiesEnd
   if j != jEnd then invariant "the end-of-wait jiffies record changed between the peek and the read"
-  modify fun w => { w with jiffiesLast := some j }
+  modifyWG fun w => { w with jiffiesLast := some j }
 
 /-- `wg_advance`'s ioctl: `leanux_time_advance` moves `jiffies_64` by
     `ticks` (`do_timer`), and the ioctl records kind 304 `{before, after}`
@@ -530,7 +530,7 @@ def idleTimers : M Unit := do
     an advance is outside the domain. Without records (the domain filter)
     the advance starts from the last known `jiffies` (0 before any). -/
 def advance (ticks : Nat) : M Int := do
-  let w ← get
+  let w ← getWG
   let a ← getAmbient
   let (j0, j1) ← if a.hidden.isNone && a.hiddenPlaceholders then
       let j0 := w.jiffiesLast.getD 0
@@ -543,7 +543,8 @@ def advance (ticks : Nat) : M Int := do
   -- is exact modulo 2^64, as the kernel's
   if j1 - j0 != ticks.toUInt64 then
     throw (.hidden s!"the advance moved jiffies from {j0} to {j1}, not by {ticks}")
-  modify fun w => { w with jiffiesLast := some j1, lastAdvance := some (j0, j1) }
+  modifyWG fun w => { w with jiffiesLast := some j1 }
+  modifyEnv fun e => { e with lastAdvance := some (j0, j1) }
   return 0
 
 /-- The guest's wait after `wg_advance`'s ioctl (stream K, section 13.3: until
@@ -557,7 +558,7 @@ def advance (ticks : Nat) : M Int := do
     `J_end = after` the pass bound is `before` and the sections land in the
     next operation (the timer control `tc_advance_wait0`). -/
 def afterAdvance : M Unit := do
-  let w ← get
+  let w ← getWG
   let a ← getAmbient
   if a.hidden.isNone then
     -- the domain filter's prediction (no records): the fixture's wait
@@ -567,13 +568,13 @@ def afterAdvance : M Unit := do
   -- review item 7: the window ends at the recorded end of the advance's wait
   let some jEnd ← peekSiteU64 .jiffiesEnd
     | throw (.hidden "no end-of-wait jiffies record (kind 310) in this wg_advance")
-  let some (j0, j1) := w.lastAdvance | invariant "afterAdvance without an advance"
+  let some (j0, j1) := (← getEnv).lastAdvance | invariant "afterAdvance without an advance"
   let jPass := if timeAfter jEnd j1 then jEnd else j0
   discard <| runTimers jPass
   requireNothingDue jPass
   let j ← hiddenJiffies .jiffiesEnd
   if j != jEnd then invariant "the end-of-wait jiffies record changed between the peek and the read"
-  modify fun w => { w with jiffiesLast := some j }
+  modifyWG fun w => { w with jiffiesLast := some j }
 
 /-- Work a down or a deletion would leave behind: crypt work (its worker's
     timing) and a decrypt queue or NAPI poll still pending
@@ -590,7 +591,7 @@ def requireIdleDevice : M Unit := do
     sees no `IFF_UP` change, dev.c:8962). Otherwise the mirror's `wgUp`;
     after a success the guest adds wg0's addresses and routes. -/
 def wgUp : M Int := do
-  let some d := (← getK).wg | return -ENODEV
+  let some d := (← getWG).dev | return -ENODEV
   if d.running then return 0
   let ret ← WG.wgUp
   -- `dev_change_flags`' rtnetlink notifications and the fixture's routes
@@ -607,7 +608,7 @@ def wgUp : M Int := do
   -- W9: the guest's `route_into_wg0` adds wg0's addresses and default routes
   -- after this operation's wait (design 14.3b): `routeIntoWg0` applies them
   -- once the send workers and the idle timers have run
-  if ret == 0 then modify fun w => { w with routesPending := true }
+  if ret == 0 then modifyEnv fun w => { w with routesPending := true }
   return ret
 
 /-- `inetdev_destroy(in_dev)` (devinet.c:313-336) for wg0: `in_dev->dead`,
@@ -615,9 +616,9 @@ def wgUp : M Int := do
     `fib_del_ifaddr` with the scan skipped), the last one disabling IP on
     the device (`fib_inetaddr_event`, fib_frontend.c:1459-1471). -/
 def inetdevDestroy : M Unit := do
-  let w ← get
+  let w ← getRouting
   let addrs := w.addrs4
-  modify fun w => { w with addrs4 := [], addrPlens4 := [] }
+  modifyRouting fun w => { w with addrs4 := [], addrPlens4 := [] }
   let mut rest := addrs
   for a in addrs do
     rest := rest.drop 1
@@ -631,7 +632,7 @@ def inetdevDestroy : M Unit := do
     re-adds them; a transmit in between is outside the domain
     (`Syscalls.lean`). -/
 def setMtu (mtu : Nat) : M Int := do
-  if (← getK).wg.isNone then return -ENODEV
+  if (← getWG).dev.isNone then return -ENODEV
   let old := (← getDev).mtu
   -- the guest fills `ifr_mtu` with `(int)op->a` (guest.c): the trace's u32
   -- word reaches `dev_set_mtu` negative at or above 2^31
@@ -662,9 +663,9 @@ def setMtu (mtu : Nat) : M Int := do
     -- fib_frontend.c:1519-1522) and nexthop.c's flush (:3884-3887)
     if mtu < 68 then inetdevDestroy
     Net.Fib.netdevChangeMtu
-    modify fun w => { w with addrs6 := if mtu < 1280 then [] else w.addrs6,
-                             defaultRoute6 := mtu ≥ 1280 && w.defaultRoute6,
-                             ipv6Gen := if mtu < 1280 then w.ipv6Gen + 1 else w.ipv6Gen }
+    modifyRouting fun w => { w with addrs6 := if mtu < 1280 then [] else w.addrs6,
+                                    defaultRoute6 := mtu ≥ 1280 && w.defaultRoute6,
+                                    ipv6Gen := if mtu < 1280 then w.ipv6Gen + 1 else w.ipv6Gen }
   return ret
 
 /-- A fixture request the guest issues after the operation's coverage
@@ -685,8 +686,8 @@ def outsideWindow (m : M α) : M α := do
     dst the handshake worker cached during the wait. The fixture puts the
     wait before the adds so this order is the only one. -/
 def routeIntoWg0 : M Unit := do
-  if !(← get).routesPending then return
-  let addrAlready := (← get).addrs4.contains WG0_ADDR4
+  if !(← getEnv).routesPending then return
+  let addrAlready := (← getRouting).addrs4.contains WG0_ADDR4
   -- lane C: the IPv4 requests on the trie (`Net.Fib.routeIntoWg0`): the
   -- address through the inetaddr chain, the default route and the W4
   -- routes through `fib_table_insert`, each a `rt_cache_flush`. The guest
@@ -696,18 +697,18 @@ def routeIntoWg0 : M Unit := do
   -- address add is refused (-ENOBUFS, devinet.c:888), its route adds with it
   -- (-ENODEV): nothing enters the tables until a later MTU change and up
   let down4 := (← getDev).mtu < 68
-  modify fun w => { w with routesPending := false }
+  modifyEnv fun w => { w with routesPending := false }
   if !down4 then
-    modify fun w => { w with addrs4 := if addrAlready then w.addrs4 else w.addrs4 ++ [WG0_ADDR4] }
-    let routes4 := (← get).routes.filterMap fun (f, a, m) => if f == 4 then some (a, m) else none
+    modifyRouting fun w => { w with addrs4 := if addrAlready then w.addrs4 else w.addrs4 ++ [WG0_ADDR4] }
+    let routes4 := (← getEnv).routes.filterMap fun (f, a, m) => if f == 4 then some (a, m) else none
     outsideWindow (Net.Fib.routeIntoWg0 addrAlready WG0_ADDR4 routes4)
-  modify fun w => { w with addrs6 := [WG0_ADDR6], defaultRoute6 := true, ipv6Gen := w.ipv6Gen + 1 }
+  modifyRouting fun w => { w with addrs6 := [WG0_ADDR6], defaultRoute6 := true, ipv6Gen := w.ipv6Gen + 1 }
 
 /-- `wg_down`: `SIOCSIFFLAGS` without `IFF_UP`. `-ENODEV` without wg0; a
     down device does not change; an up one goes through `__dev_close_many`
     (`wg_stop`), and `NETDEV_DOWN` removes the routes. -/
 def wgDown : M Int := do
-  let some d := (← getK).wg | return -ENODEV
+  let some d := (← getWG).dev | return -ENODEV
   if !d.running then return 0
   requireIdleDevice
   WG.wgDown
@@ -722,13 +723,13 @@ def wgDown : M Int := do
   -- go (`keep_addr_on_down` 0)
   Net.Fib.rtCacheFlush
   Net.Fib.netdevDown WG0_IFINDEX
-  modify fun w => { w with defaultRoute6 := false, addrs6 := [], ipv6Gen := w.ipv6Gen + 1 }
+  modifyRouting fun w => { w with defaultRoute6 := false, addrs6 := [], ipv6Gen := w.ipv6Gen + 1 }
   return 0
 
 /-- `wg_delete`: `RTM_DELLINK` (the mirror's `wgDelete`); `NETDEV_DOWN` and
     `NETDEV_UNREGISTER` remove every route via wg0. -/
 def wgDelete : M Int := do
-  if (← getK).wg.isSome then requireIdleDevice
+  if (← getWG).dev.isSome then requireIdleDevice
   -- Pre-release review finding 6 (docs/2026-10-14-pre-release-review.md,
   -- section 6; W2 design 5): the guest refuses `wg_delete` while a stepped
   -- dump is pending (`guest.c` `wg_delete_with_dump_pending`: the dump's
@@ -740,7 +741,7 @@ def wgDelete : M Int := do
   -- queued chunks
   let pending (sock : WG.NlSock) : Bool :=
     sock.cbRunning || sock.queue.any fun chunk => chunk.messages.any fun m => match m with | .done .. => true | _ => false
-  let k ← getK
+  let k ← getWG
   if pending k.nlSock7 || pending k.nlSock8 then
     unsupported "a delete with a stepped dump pending (the dump's cursor holds the device reference; the guest refuses wg_delete_with_dump_pending)"
   -- lane C: `dev_close_many`'s `NETDEV_DOWN` (as `wgDown`'s) and
@@ -751,11 +752,11 @@ def wgDelete : M Int := do
   let onDown : M Unit := do
     Net.Fib.rtCacheFlush
     Net.Fib.netdevDown WG0_IFINDEX
-    modify fun w => { w with defaultRoute6 := false, addrs6 := [], ipv6Gen := w.ipv6Gen + 1 }
+    modifyRouting fun w => { w with defaultRoute6 := false, addrs6 := [], ipv6Gen := w.ipv6Gen + 1 }
   let onUnregister : M Unit := do
     inetdevDestroy
     Net.Fib.netdevUnregister WG0_IFINDEX
-    modify fun w => { w with addrs6 := [], defaultRoute6 := false, ipv6Gen := w.ipv6Gen + 1 }
+    modifyRouting fun w => { w with addrs6 := [], defaultRoute6 := false, ipv6Gen := w.ipv6Gen + 1 }
   let ret ← WG.wgDelete onDown onUnregister
   return ret
 
@@ -766,8 +767,8 @@ def wgDelete : M Int := do
     default route via wg0 is gone and `rt_genid` moves. IPv6: the address
     and its local route go, the default route stays, the sernum moves. -/
 def wgDeladdr (family : Nat) : M Int := do
-  if (← getK).wg.isNone then unsupported "wg_deladdr without wg0 (the request names a stale ifindex)"
-  let w ← get
+  if (← getWG).dev.isNone then unsupported "wg_deladdr without wg0 (the request names a stale ifindex)"
+  let w ← getRouting
   if family == 4 then
     -- the request names the fixture's address (`deladdr_wg0`)
     if !w.addrs4.contains WG0_ADDR4 then return -EADDRNOTAVAIL
@@ -775,11 +776,11 @@ def wgDeladdr (family : Nat) : M Int := do
     -- chain's `NETDEV_DOWN`: `fib_del_ifaddr`, the generation, and the
     -- last address disabling IP on the device (fib_frontend.c:1459-1471)
     let rest := w.addrs4.filter (· != WG0_ADDR4)
-    set { w with addrs4 := rest }
+    modifyRouting fun _ => { w with addrs4 := rest }
     Net.Fib.inetaddrDown WG0_IFINDEX WG0_ADDR4 32 rest.isEmpty false
   else
     if w.addrs6.isEmpty then return -EADDRNOTAVAIL
-    set { w with addrs6 := [], ipv6Gen := w.ipv6Gen + 1 }
+    modifyRouting fun _ => { w with addrs6 := [], ipv6Gen := w.ipv6Gen + 1 }
   return 0
 
 /-- W9 `wg_delroute`: `RTM_DELROUTE` of the default route via wg0; `-ESRCH`
@@ -787,8 +788,8 @@ def wgDeladdr (family : Nat) : M Int := do
     up (`fib_table_delete`, `fib_trie.c:1754-1755`, `FA_S_ACCESSED`); the
     IPv6 sernum moves unconditionally (`fib6_del`). -/
 def wgDelroute (family : Nat) (named : Bool) (dst plen oif typeCode metric : Nat) : M Int := do
-  if (← getK).wg.isNone then unsupported "wg_delroute without wg0 (the request names a stale ifindex)"
-  let w ← get
+  if (← getWG).dev.isNone then unsupported "wg_delroute without wg0 (the request names a stale ifindex)"
+  let w ← getRouting
   if family == 4 then
     -- lane C: `inet_rtm_delroute` → `fib_table_delete` on the trie with the
     -- guest's request (`delroute_wg0`): `-ESRCH` when absent, the flush only
@@ -802,7 +803,7 @@ def wgDelroute (family : Nat) (named : Bool) (dst plen oif typeCode metric : Nat
     return ← Net.Fib.delrouteWg0
   else
     if !w.defaultRoute6 then return -ESRCH
-    set { w with defaultRoute6 := false, ipv6Gen := w.ipv6Gen + 1 }
+    modifyRouting fun _ => { w with defaultRoute6 := false, ipv6Gen := w.ipv6Gen + 1 }
   return 0
 
 /-- Lane C `wg_addroute`: `RTM_NEWROUTE` over L's temporary rtnetlink socket
@@ -830,16 +831,16 @@ def wgAddroute (dst plen oif typeCode metric mtu nlflags : Nat) : M Int := do
     `NETDEV_UP` through the inetaddr chain (`fib_add_ifaddr`: the local
     route, the prefix route and its broadcast). -/
 def wgAddaddr (addr plen : Nat) : M Int := do
-  let some d := (← getK).wg | return -ENODEV
+  let some d := (← getWG).dev | return -ENODEV
   if !d.inet4Dev then return -ENOBUFS
-  let w ← get
+  let w ← getRouting
   let mask := if plen == 0 then 0 else Net.Fib.KEY_MAX - (2 ^ (32 - plen) - 1)
   for a in w.addrs4 do
     let p := (w.addrPlens4.lookup a).getD 32
     if a == addr && p == plen then return -EEXIST
     if a == addr then unsupported "wg_addaddr of an address already there with another prefix (a second primary)"
     if p == plen && a &&& mask == addr &&& mask then unsupported "wg_addaddr of a secondary address (in the prefix of one already there)"
-  modify fun w => { w with addrs4 := w.addrs4 ++ [addr], addrPlens4 := w.addrPlens4 ++ [(addr, plen)] }
+  modifyRouting fun w => { w with addrs4 := w.addrs4 ++ [addr], addrPlens4 := w.addrPlens4 ++ [(addr, plen)] }
   Net.Fib.inetaddrUp WG0_IFINDEX addr plen
   return 0
 
@@ -853,11 +854,12 @@ def wgAddaddr (addr plen : Nat) : M Int := do
     discarded: outside the domain. -/
 def observe : M (Int × Lean.Json) := do
   idleTimers   -- the guest's wait before this operation
-  if let some d := (← getK).wg then
+  if let some d := (← getWG).dev then
     if !d.sendWorkQueue.isEmpty then unsupported "send work queued by an operation that does not wait"
   requireNoCryptWork
   deliverSent
-  let w ← get
+  let w ← getEnv
+  let foreignCreator := (← getRouting).foreignCreator
   let hex (bs : List UInt8) : String := String.join (bs.map fun b =>
     let d := "0123456789abcdef".toList
     String.mk [d[b.toNat / 16]!, d[b.toNat % 16]!])
@@ -865,7 +867,7 @@ def observe : M (Int × Lean.Json) := do
   let type (bs : List UInt8) : Nat := if bs.length ≥ 4 then WG.u32le bs 0 else 0
   -- W8: after wg_netns_close the listeners are closed: `recvfrom(4)` is
   -- -EBADF and the datagrams are null (the guest prints null)
-  let closed := w.foreignCreator && w.netnsCHolders.isEmpty
+  let closed := foreignCreator && w.netnsCHolders.isEmpty
   let ret : Int := if closed then -EBADF else match w.listenerV4 with
     | (_, bs) :: _ => bs.length
     | [] => -EAGAIN
@@ -897,9 +899,9 @@ def observe : M (Int × Lean.Json) := do
                  Lean.toJson dg.tos, Lean.toJson (hex (beBytes dg.dst 16)),
                  Lean.toJson bs.length, Lean.toJson (type bs), Lean.toJson (if bs.length ≥ 12 then WG.u32le bs 8 else 0),
                  Lean.toJson (hex bs)]
-  modify fun w => { w with listenerV4 := [], listenerV6 := [], senderInbox := [] }
+  modifyEnv fun w => { w with listenerV4 := [], listenerV6 := [], senderInbox := [] }
   -- L: without wg0 the guest's RTM_GETLINK fails with ENODEV: `stats` null
-  let stats := match (← getK).wg with
+  let stats := match (← getWG).dev with
     | some d => Lean.Json.mkObj [("tx_errors", Lean.toJson d.txErrors), ("tx_dropped", Lean.toJson d.txDropped),
                                  ("rx_frame_errors", Lean.toJson d.rxFrameErrors),
                                  ("rx_length_errors", Lean.toJson d.rxLengthErrors),
@@ -920,10 +922,10 @@ def inject (family port : Nat) (msg : List UInt8) (tos : Nat := 0) (ll : Bool :=
   -- W8 (design 3.1, 3.4): in the foreign-creator fixture the injector lives
   -- in the creating namespace: gone after wg_netns_close, and wg0's own
   -- address (in the device namespace) is unroutable from it
-  if (← get).foreignCreator then
-    if (← get).netnsCHolders.isEmpty then unsupported "wg_inject after wg_netns_close (no socket in the creating namespace)"
+  if (← getRouting).foreignCreator then
+    if (← getEnv).netnsCHolders.isEmpty then unsupported "wg_inject after wg_netns_close (no socket in the creating namespace)"
     if dest == 1 then unsupported "wg_inject to wg0's address from the creating namespace (unroutable)"
-  let some d := (← getK).wg | unsupported "a datagram to a port other than wg0's (no wg0)"
+  let some d := (← getWG).dev | unsupported "a datagram to a port other than wg0's (no wg0)"
   if !d.running || port != d.incomingPort then unsupported "a datagram to a port other than wg0's"
   -- a pending send worker inserts an index entry under a random index
   for pid in d.peerList do requireNotPending pid "receiving while a handshake is queued"
@@ -969,7 +971,7 @@ def pollScheduledInline : M Unit := do
     end outlived the guest's wait: outside the domain (its records would be
     missing). Without records (the domain filter) a fixed order. -/
 def afterBatch : M Unit := do
-  modify fun w => { w with queuedThisCall := [] }   -- the call returned and slept
+  modifyWG fun w => { w with queuedThisCall := [] }   -- the call returned and slept
   if (← getAmbient).hidden.isNone then
     runCryptWorkers
     runSendWorkers
@@ -1005,7 +1007,7 @@ def afterBatch : M Unit := do
     Then the deferred units, by the records (`afterBatch`). The call returns
     the number of entries submitted. -/
 def batch (items : List BatchItem) : M Int := do
-  let some d := (← getK).wg | unsupported "a batch without wg0"
+  let some d := (← getWG).dev | unsupported "a batch without wg0"
   if !d.running then unsupported "a batch with wg0 down"
   for pid in d.peerList do requireNotPending pid "a batch while a handshake is queued"
   let mut cqes : List Int := []
@@ -1077,7 +1079,7 @@ def batch (items : List BatchItem) : M Int := do
     summarised, discarded or preset. The operation returns 0 (the submission
     succeeded). -/
 def flood (count port family : Nat) (messages : List (List UInt8)) : M Int := do
-  let some d := (← getK).wg | unsupported "a flood to a port other than wg0's (no wg0)"
+  let some d := (← getWG).dev | unsupported "a flood to a port other than wg0's (no wg0)"
   if !d.running || port != d.incomingPort then unsupported "a flood to a port other than wg0's"
   for pid in d.peerList do requireNotPending pid "a flood while a handshake is queued"
   -- the guest's invalid template (harness/guest.c flood_prep)
@@ -1116,8 +1118,8 @@ def flood (count port family : Nat) (messages : List (List UInt8)) : M Int := do
     queue record did not name is a hidden mismatch. The linkwatch event the
     carrier change queues is armed by no trace yet (W8b). -/
 def netnsCleanup : M Unit := do
-  if !(← get).foreignCreator then unsupported "wg_netns_close outside the foreign-creator fixture"
-  modify fun w => { w with netnsCHolders := [] }
+  if !(← getRouting).foreignCreator then unsupported "wg_netns_close outside the foreign-creator fixture"
+  modifyEnv fun w => { w with netnsCHolders := [] }
   if let some u ← peekUnit .netnsCleanup then _ ← resolveUnit .netnsCleanup u [0]
   runWorker .netnsCleanup do
     WG.netnsPreExit

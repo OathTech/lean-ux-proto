@@ -130,9 +130,8 @@ def napiIrqExit : M Unit := do
   if (← getAmbient).hidden.isNone then return
   if !(← getDev).peers.toList.any (·.2.napiScheduled) then return
   if (← peekHiddenSite) != some (HiddenSite.sectionStart .netRx).info.id then return
-  let w ← get
-  let here := w.napiBeforePut.headD false
-  set { w with napiBeforePut := w.napiBeforePut.drop 1, napiAmbiguous := w.napiAmbiguous + 1 }
+  let here := (← getEnv).napiBeforePut.headD false
+  modifyEnv fun e => { e with napiBeforePut := e.napiBeforePut.drop 1, napiAmbiguous := e.napiAmbiguous + 1 }
   if here then napiSoftirq
 
 /-- Whether the activation's loop condition holds: its ring or queue has an

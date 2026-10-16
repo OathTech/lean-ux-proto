@@ -779,3 +779,136 @@ proofs and no proof gate until campaign 1 lands; campaign 1 carries the
 prototype and lands it with its own results, retyped over the split
 worlds by its retrofit; campaign 2's retrofit is its additions over those
 layers.
+
+## 13. Phase 2, the file layer, as built (2026-10-16)
+
+On `task/split-fs` from 909c174, one mirror commit (a5d4c6d). `FSWorld`
+holds the 31 file-layer `Kernel` fields with their docstrings and defaults
+and the two user-memory outputs (`userOut`, `userFds`) that were `World`'s;
+`FS.M := StateT FSWorld TaskM`; `liftFS` runs a file-layer computation on
+`World.fs`, `World.tasks` and `World.ambient` and writes the three back
+once, with a `MonadLift FS.M M` instance. The stores' accessors (`getFile`
+.. `setFdtCloexec`, the bounds-checked descriptor-table reads) moved from
+`Kernel/Defs.lean` to `Leanux/FS/Stores.lean` over `FS.M`, unchanged but
+for the monad; the three file-layer modules that imported `Kernel.Defs`
+import it instead.
+
+One departure from section 12's brief: the file layer's modules live in
+`namespace Leanux`, not `Leanux.FS`, so the namespace trick does not apply
+and the signatures name `FS.M` explicitly (174 of them, a mechanical
+retyping of every `M` in `Leanux/FS`; the file has no other use of the
+name). Renaming the modules into `Leanux.FS` would have moved every
+definition's name, which the proof tree and the dispatch use; the type is
+what the split needs, not the namespace. `getK`/`modifyK` in the file layer
+became `get`/`modify` over `FSWorld`, whose field names are the former
+`Kernel`'s, so the lambdas did not change.
+
+The runner: the dispatch lifts the eleven file-layer system calls with
+`liftFS`; `taskWorkRun` is `FS.M` (its task reads through `TaskM`, its
+`fputFinal` the file layer's); `netnsClose`'s four closes and task-work
+runs, the `wg_advance` arm's `fdget`/`fdput` and `rtnetlinkRequest`'s
+temporary descriptor auto-lift inside their `do` blocks, `rtnetlinkRequest`
+reading and writing `World.fs.nextFile` directly as it did `Kernel`'s; the
+per-call reset clears `World.fs.userOut`/`userFds`. `Runner.initialFS`
+builds the stores `initialKernel` held (the fixture's files over the
+reserved descriptors, `nrFiles`, `maxFiles`, the pipe sysctls, `root_user`,
+the epoll fixture facts); `initialKernel` keeps `wg`, `netIfindexNext` and
+`ratelimiter`. The environment model touches no file-layer state (its
+child creation copies the task record, `TaskM`, as phase 1 left it).
+
+`Kernel` after this phase, for the WireGuard fork to dissolve: `wg`,
+`nlSock7`, `nlSock8`, `peerCounter`, `keypairCounter`, `netIfindexNext`,
+`fib4`, `fib4C`, `ratelimiter`, `timerClk`, `timerEnqueues`. `World` after
+it: `ambient`, `tasks`, `seccomp`, `k`, `fs`, and the environment and
+WireGuard fields the WireGuard fork moves.
+
+Checks: `lake build Leanux leanux-model` green; the five-module unit line
+131 OK (1 skipped); on the s5 pair at 16 slots, `pipes` and
+`pipes-generated` 224 traces, 5509 operations, 224 agreements, and `epoll`
+and `epoll-generated` 247 traces, 6162 operations, 247 agreements, no
+splits, no retries; the preservation script over both runs' chunk inputs
+(the e5afc0f binary against this one): 9 of 9 and 9 of 9 chunks identical
+in stdout, stderr and exit code, and equal to the runs' recorded output.
+Clean build 73.6 s wall / 181 s user against phase 1's 74 s / 185 s; the 27
+model-replay tests 1.14 s against 1.11 s: no cost. Beyond the brief, the
+other subsystems' suites on the same tree, since the shared paths changed
+(`rtnetlinkRequest`, the per-call reset, the dispatch): `seccomp` and
+`seccomp-generated` 267 traces, 267 agreements; `wireguard`,
+`wireguard-generated`, `w7-tier` and `routing` 488 traces, 488 agreements,
+no retries; the preservation script over both: 288 of 288 and 154 of 154
+chunks identical.
+
+What this phase breaks in `main`'s proof tree (not edited; by grep): 7
+sites in 3 files project `World.userOut`/`userFds`; 5 sites in 2 files
+read a file-layer `Kernel` field; 9 files name a file-layer function whose
+type is now `FS.M` (`Keypairs/Frames/{Pipe,FS,Kernel,EventpollCalls,
+FSBase,Wait,PipeRead}.lean`, `Logged/Syscalls.lean`,
+`Keypairs/Evolution/Syscalls.lean`), retyped or deleted in phase 3.
+
+## 14. Phase 2, WireGuard, as built (2026-10-16)
+
+On `task/split-wg`, from the phase-1 head, two commits plus this section.
+
+**The coarse split** (`WGWorld`, `Net.Routing`, `EnvWorld`, `WG.M`,
+`Net.M`): as section 2 assigns, with two deviations. `WGWorld` is flat:
+revision 2 narrows over the owners that exist (`Device`, `Peer`), so the
+sub-records `TimerState`, `TxState` and `WGFixture` of section 2's sketch
+would have been groups of `WGWorld` with no adapter of their own; the fields
+keep their names, which is also what let every `{ w with jiffiesLast := .. }`
+in the WireGuard module compile unchanged. And `foreignCreator` is in
+`Net.Routing`, not `EnvWorld`: the routing module's table selection reads it
+(`inSocketNs`), so it is a fixture fact the component depends on, set by
+the runner at trace start and never written after; `netnsCHolders`, the
+mutable part of W8's fixture, is `EnvWorld`'s.
+
+**The routing component's adapter.** The routing module reads the device at
+three sites (`deviceUp`, `deviceHasInet`, a route insertion's `oif` check:
+the C's `dev_get_by_index` and `__in_dev_get_rcu`), which section 2's
+"never on `WG.Device`" missed. Rather than store the device's `running` and
+`inet4Dev` in the routing state (an owner word in two stores), the
+component's running state is `Net.State extends Net.Routing` with `wg0 :
+Option Net.DevFacts`, and `liftRouting` extracts the facts from the device
+at every entry and writes back the routing state only. The facts cannot go
+stale inside a routing computation, since none can touch the device.
+
+**The composition points.** WireGuard's workers call back into the rest of
+the kernel: the stack's `napi_gro_receive` and `skb_checksum_help`, the
+scheduler's `cond_resched`, the softirq placement at the interrupt exit.
+The environment supplies those as computations over the product
+(`deliverInner`, `checksumHelp`, `napiSoftirq`, `napiIrqExit`,
+`condResched`), and a `WG.M` function cannot take them. The functions that
+take them are polymorphic in the caller's monad, `[Monad m] [MonadLiftT
+WG.M m] [MonadLiftT AmbientM m]`: `workerIter`, `workerLoop`,
+`encryptPacket`, `encryptRingPoll`, `encryptStep`, `encryptIter`, `txIter`,
+`decryptStep`, `decryptIter`, the GRO helpers and `rxPoll`,
+`handshakeReceiveWorker`, `enqueuePerPeerRx`, `wgDelete` (its two hooks).
+A caller over the product instantiates them at `M`, a WireGuard caller at
+`WG.M`; their own WireGuard calls lift through the first constraint and
+the ambient primitives through the second. This is the user's rule
+applied: composition points where Linux has them.
+
+**The within-WireGuard components built**, over the owners that exist, one
+adapter each (`Leanux/WG/State.lean`), measured against section 4's list:
+
+| Component | State | Adapter | Functions over it | Deviation from section 4 |
+| --- | --- | --- | --- | --- |
+| The skb stores | `SkbStore` (`txSkbs`, `rxSkbs`, `nextSkb`) | `liftSkb` | `SkbStore.newTx/getTx/setTx/freeTx/newRx/getRx/setRx/freeRx`; the names the paths use (`newTxSkb` ..) are `WG.M` applications of the adapter, because the polymorphic worker functions call them and a `[MonadLiftT WG.M m]` caller lifts `WG.M`, not `SkbM` | none |
+| The index table | `List IndexEntry` | `liftIndex` | `unhashEntry`, `indexRemove`, `indexBucket`, `indexHashed`, `bucketHas`, `indexInsert`, `indexReplaceHandshake` (the hidden index draw is ambient) | none; `indexLookup`, `peerGetMaybeZero` stay `WG.M` as planned |
+| The allowed-IPs trie | `AipStore` (`nodes`, `nextNode`, `trie` = `peerAllowedips`) | `liftAip` | `getNode`, `setNode`, `freeNode`, `slotGet`, `slotSet`, `allocNode`, `connectNode`, `chooseAndConnectNode`, `nodePlacement`, `subtree`, `findNode`; `choose`, `commonBits`, `prefixMatches` and `AipNode.bitAt` over any monad that lifts `AmbientM` | the roots join the component (`slotGet`/`slotSet` read and write `Device.peerAllowedips`); `lookupDst`, `lookupSrc` and `lookup` stay `WG.M`, not narrowed: `lookup` takes the peer reference (`wg_peer_get_maybe_zero(node->peer)`, allowedips.c:127-147), which spans the peer owner |
+
+Not built in this phase, deferred with the reason: the cookie checker and
+rate limiter (its state spans `Device`'s cookie fields and `WGWorld`'s
+`ratelimiter` and `lastUnderLoad`: two owners, so the adapter would extract
+from both; cheap but not done in the session's budget) and device
+configuration (ten heterogeneous functions over the device's identity,
+sockets, MTU and port plus `WGWorld`'s netlink sockets and fixture facts;
+the component has no single field group). Both are follow-ons under
+section 4's rules; the index lookup, the timers, the sends and the peer
+acquisition stay `WG.M` by measurement, as section 4 says.
+
+**Checks** are in the two commits' messages and the phase-2 report: the
+build, the fast tier, the `wireguard`, `wireguard-generated`, `w7-tier` and
+`routing` suites and the timer and lifecycle controls on s5 on the coarse
+commit; the preservation check over those runs' recorded inputs against the
+e5afc0f baseline and both commits' binaries; the model's time on the
+heaviest chunk (`e_ring_full`) unchanged.
