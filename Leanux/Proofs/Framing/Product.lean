@@ -153,5 +153,21 @@ theorem productFS_spec (a : FS.M α) (P : World → Prop)
     rcases hr with ⟨rfl, rfl⟩
     exact stable w fs tasks ambient hp
 
+/-- The seccomp adapter changes only its store, tasks and Ambient. -/
+theorem productSeccomp_spec (a : Seccomp.M α) (P : World → Prop)
+    (stable : ∀ w seccomp tasks ambient, P w → P {w with seccomp, tasks, ambient}) :
+    Hoare (MonadLift.monadLift a : Leanux.M α) P (fun _ => P) := by
+  apply (hoare_iff_run _ _ _).mpr
+  intro w x w' hp hr
+  change (liftSeccomp a).run w = .ok (x, w') at hr
+  rw [liftSeccomp_run] at hr
+  cases he : ((a.run w.seccomp).run w.tasks).run w.ambient with
+  | error e => simp [he, Except.map] at hr
+  | ok out =>
+    rcases out with ⟨⟨⟨y, seccomp⟩, tasks⟩, ambient⟩
+    simp [he, Except.map] at hr
+    rcases hr with ⟨rfl, rfl⟩
+    exact stable w seccomp tasks ambient hp
+
 
 end Leanux.Proofs.Framing

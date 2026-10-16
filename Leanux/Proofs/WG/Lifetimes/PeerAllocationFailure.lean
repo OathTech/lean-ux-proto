@@ -10,45 +10,62 @@ open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing
 particular, it reproduces the original occupied-slot overwrite behavior on
 malformed Worlds; the preservation theorem separately excludes that input. -/
 theorem peerCreateMixed_cache_clock_failure (key : Key) (psk : Option Key)
-    (w guarded allocated reserved entry : World) (d : Device)
+    (w guarded allocated reserved entry : WGWorld) (d : Device)
+    (ambient guardedAmbient allocatedAmbient reservedAmbient entryAmbient : Ambient)
     (h : List LifetimeEvent) (e : Stop)
-    (hdev : (getDev).run w = .ok (d, w))
-    (hfull : (branchCmp .peerCreateMaxPeers (d.numPeers ≥ MAX_PEERS_PER_DEVICE)
-      d.numPeers MAX_PEERS_PER_DEVICE).run w = .ok (false, guarded))
-    (halloc : (hiddenAlloc .kmemCacheZallocPeer).run guarded = .ok (true, allocated))
-    (hmem : (branch .peerCreateNoMem false).run allocated = .ok (false, reserved))
-    (hcache : (branch .peerCreateDstCacheFail false).run reserved = .ok (false, entry))
-    (ha : entry.armRecords = true) (hc : entry.dstCacheRecords = true)
-    (hclock : (hiddenJiffies .dstCacheResetTs).run
-      (Peers.creationCoreWorld entry d.nextPeer key) = .error e) :
-    runPrefix (peerCreateMixed key psk) w h =
-      (.error e, h ++ [.peer (.allocate d.nextPeer (entry.k.peerCounter + 1)),
-        .peer (.write d.nextPeer (entry.k.peerCounter + 1))]) := by
-  have hd : w.k.wg = some d := by
-    cases hd : w.k.wg with
-    | none => simp [getDev, getK, hd, invariant] at hdev
+    (hdev : ((getDev).run w).run ambient = .ok ((d, w), ambient))
+    (hfull : ((branchCmp .peerCreateMaxPeers (d.numPeers ≥ MAX_PEERS_PER_DEVICE)
+      d.numPeers MAX_PEERS_PER_DEVICE : WG.M Bool).run w).run ambient =
+        .ok ((false, guarded), guardedAmbient))
+    (halloc : ((hiddenAlloc .kmemCacheZallocPeer : WG.M Bool).run guarded).run guardedAmbient =
+      .ok ((true, allocated), allocatedAmbient))
+    (hmem : ((branch .peerCreateNoMem false : WG.M Bool).run allocated).run allocatedAmbient =
+      .ok ((false, reserved), reservedAmbient))
+    (hcache : ((branch .peerCreateDstCacheFail false : WG.M Bool).run reserved).run reservedAmbient =
+      .ok ((false, entry), entryAmbient))
+    (ha : entryAmbient.armRecords = true) (hc : entry.dstCacheRecords = true)
+    (hclock : ((hiddenJiffies .dstCacheResetTs : WG.M UInt64).run
+      (Peers.creationCoreWorld entry d.nextPeer key)).run entryAmbient = .error e) :
+    runStatePrefix (peerCreateMixed key psk) w ambient h =
+      (.error e, h ++ [.peer (.allocate d.nextPeer (entry.peerCounter + 1)),
+        .peer (.write d.nextPeer (entry.peerCounter + 1))]) := by
+  have hd : w.dev = some d := by
+    cases hd : w.dev with
+    | none =>
+      have hstop : ((Leanux.invariant "no WireGuard device in this trace's fixture" :
+          WG.M Device).run w).run ambient =
+          .error (.invariant "no WireGuard device in this trace's fixture") := by rfl'
+      simp only [getDev, StateT.run_bind, StateT.run_get, pure_bind, hd, hstop] at hdev
+      contradiction
     | some old =>
-      have same : old = d := by simpa [getDev, getK, hd] using hdev
+      have same : old = d := by simpa [getDev, hd] using hdev
       exact congrArg some same
-  have hg := KernelFrames.branchCmp_sameWGKernel .peerCreateMaxPeers
-    (d.numPeers ≥ MAX_PEERS_PER_DEVICE) d.numPeers MAX_PEERS_PER_DEVICE w false guarded hfull
-  have hgwg : guarded.k.wg = w.k.wg := congrArg (fun v => v.wg) hg
-  have hga := hiddenAlloc_sameKernel .kmemCacheZallocPeer guarded true allocated halloc
-  have ham := sameKernel_branch .peerCreateNoMem false allocated false reserved hmem
-  have hmc := sameKernel_branch .peerCreateDstCacheFail false reserved false entry hcache
-  have present : entry.k.wg.isSome = true := by rw [hmc, ham, hga, hgwg, hd]; rfl
+  have preserved {α : Type} (a : AmbientM α) {s t : WGWorld}
+      {b b' : Ambient} {x : α}
+      (hr : ((StateT.lift a : WG.M α).run s).run b = .ok ((x, t), b')) : t = s :=
+    (hoare_iff_run_ambient _ _ _).mp (hoare_liftAmbient a (fun v => v = s))
+      s b x t b' rfl hr
+  have hg : guarded = w := preserved (AmbientM.branchCmp .peerCreateMaxPeers
+    (d.numPeers ≥ MAX_PEERS_PER_DEVICE) d.numPeers MAX_PEERS_PER_DEVICE) hfull
+  have hga : allocated = guarded := preserved (AmbientM.hiddenAlloc .kmemCacheZallocPeer) halloc
+  have ham : reserved = allocated := preserved (AmbientM.branch .peerCreateNoMem false) hmem
+  have hmc : entry = reserved := preserved (AmbientM.branch .peerCreateDstCacheFail false) hcache
+  have present : entry.dev.isSome = true := by rw [hmc, ham, hga, hg, hd]; rfl
   have fail := Peers.dstCacheResetPrefix_hidden_failure d.nextPeer
-    (Peers.creationCoreWorld entry d.nextPeer key)
-    ((h.filterMap LifetimeEvent.peer?) ++ [.allocate d.nextPeer (entry.k.peerCounter + 1),
-      .write d.nextPeer (entry.k.peerCounter + 1)]) e ha hc hclock
-  have localRun : runPrefix (Peers.peerCreatePrefix key psk) w (h.filterMap LifetimeEvent.peer?) =
+    (Peers.creationCoreWorld entry d.nextPeer key) entryAmbient
+    ((h.filterMap LifetimeEvent.peer?) ++ [.allocate d.nextPeer (entry.peerCounter + 1),
+      .write d.nextPeer (entry.peerCounter + 1)]) e ha hc hclock
+  have localRun : runStatePrefix (Peers.peerCreatePrefix key psk) w ambient (h.filterMap LifetimeEvent.peer?) =
       (.error e, h.filterMap LifetimeEvent.peer? ++
-        [.allocate d.nextPeer (entry.k.peerCounter + 1), .write d.nextPeer (entry.k.peerCounter + 1)]) := by
-    simp only [Peers.peerCreatePrefix, runPrefix_bind, runPrefix_lift, hdev, hfull,
+        [.allocate d.nextPeer (entry.peerCounter + 1), .write d.nextPeer (entry.peerCounter + 1)]) := by
+    simp only [Peers.peerCreatePrefix, liftWGPrefix, runStatePrefix_bind, runStatePrefix_lift, hdev, hfull,
       Bool.false_eq_true, ↓reduceIte, halloc, Bool.not_true, hmem, hcache,
       Peers.peerCreateCorePrefix_run, Peers.peerCreateCore_run, present, fail]
-  simpa only [peerCreateMixed, peerFocus, List.map_cons, List.map_nil] using
-    focusPrefix_suffix LifetimeEvent.peer LifetimeEvent.peer? (Peers.peerCreatePrefix key psk)
-      w h (.error e) _ localRun
+  change runPrefix (focusPrefix LifetimeEvent.peer LifetimeEvent.peer?
+    (Peers.peerCreatePrefix key psk w)) ambient h = _
+  change runPrefix (Peers.peerCreatePrefix key psk w) ambient _ = _ at localRun
+  simpa only [List.map_cons, List.map_nil] using
+    focusPrefix_suffix LifetimeEvent.peer LifetimeEvent.peer? (Peers.peerCreatePrefix key psk w)
+      ambient h (.error e) _ localRun
 
 end Leanux.Proofs.WG.Lifetimes

@@ -10,22 +10,22 @@ closure. -/
 namespace Leanux.Proofs.WG.Lifetimes
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing
 
-def PeerSlotsBounded (w : World) : Prop :=
-  ∀ d, w.k.wg = some d → ∀ i p, d.peers[i]? = some p → i < d.nextPeer
+def PeerSlotsBounded (w : WGWorld) : Prop :=
+  ∀ d, w.dev = some d → ∀ i p, d.peers[i]? = some p → i < d.nextPeer
 
 theorem PeerCreationGeometry.counters (hg : PeerCreationGeometry w result v) :
-    v.k.keypairCounter = w.k.keypairCounter ∧ v.k.netIfindexNext = w.k.netIfindexNext := by
+    v.keypairCounter = w.keypairCounter ∧ v.netIfindexNext = w.netIfindexNext := by
   have hk := congrArg AllocationMetadata.keyCounter hg.2.1
   have hn := congrArg AllocationMetadata.nextEpoch hg.2.1
   cases result <;> exact ⟨hk, hn⟩
 
 theorem PeerCreationGeometry.device (hg : PeerCreationGeometry w result v)
-    (hv : v.k.wg = some e) :
-    ∃ d, w.k.wg = some d ∧ e.ifindex = d.ifindex ∧
+    (hv : v.dev = some e) :
+    ∃ d, w.dev = some d ∧ e.ifindex = d.ifindex ∧
       e.nextKeypairId = d.nextKeypairId ∧ e.nextSkb = d.nextSkb ∧
       e.nextPeer = (match result with | .error _ => d.nextPeer | .ok pid => pid + 1) := by
   have hm := congrArg AllocationMetadata.device hg.2.1
-  cases hd : w.k.wg with
+  cases hd : w.dev with
   | none => cases result <;> simp [allocationMetadata, peerCreateMetadata, hd, hv] at hm
   | some d =>
     refine ⟨d, rfl, ?_⟩
@@ -37,11 +37,11 @@ theorem PeerCreationGeometry.device (hg : PeerCreationGeometry w result v)
       congrArg DeviceAllocationMetadata.nextPacket hm,
       congrArg DeviceAllocationMetadata.nextPeer hm⟩
 
-theorem peerCreate_peerSlots (key : Key) (psk : Option Key) (w v : World)
-    (result : Except Int PeerId) (hb : PeerSlotsBounded w)
-    (hr : (peerCreate key psk).run w = .ok (result, v)) : PeerSlotsBounded v := by
-  have hg := peerCreate_geometry key psk w v result hr
-  have hp := Peers.peerCreate_exact key psk w v result hr
+theorem peerCreate_peerSlots (key : Key) (psk : Option Key) (w v : WGWorld)
+    (result : Except Int PeerId) (ambient ambient' : Ambient) (hb : PeerSlotsBounded w)
+    (hr : ((peerCreate key psk).run w).run ambient = .ok ((result, v), ambient')) : PeerSlotsBounded v := by
+  have hg := peerCreate_geometry key psk w v result ambient ambient' hr
+  have hp := Peers.peerCreate_exact key psk w v result ambient ambient' hr
   intro e hv i p hl
   obtain ⟨d, hd, _, _, _, hn⟩ := hg.device hv
   have live : (Peers.snapshot v).slots i = some p.internalId := by simp [Peers.snapshot, hv, hl]
@@ -85,7 +85,7 @@ theorem AllocationInv.peerTransport (hi : AllocationInv h w)
   · exact ⟨by simpa only [identityView, hk] using hi.release.2.1,
       by simpa only [identityView, ht] using hi.release.2.2⟩
   · intro i stamp hl
-    change stamp ≤ v.k.keypairCounter
+    change stamp ≤ v.keypairCounter
     rw [hkc]
     exact hi.keyBounded i stamp (by simpa only [keyStore, hk] using hl)
   · intro stamp hs
@@ -121,22 +121,23 @@ theorem AllocationInv.peerTransport (hi : AllocationInv h w)
     exact hi.packetPast d hd stamp (he ▸ (hpacket ▸ hs))
 
 def peerCreateMixed (key : Key) (psk : Option Key) : MixedM (Except Int PeerId) :=
-  peerFocus (Peers.peerCreatePrefix key psk)
+  peerStateFocus (Peers.peerCreatePrefix key psk)
 
 theorem peerCreateMixed_erases (key : Key) (psk : Option Key) :
-    ErasesPrefix (peerCreateMixed key psk) (peerCreate key psk) :=
-  peerFocus_erases (Peers.peerCreatePrefix_erases key psk)
+    ErasesStatePrefix (peerCreateMixed key psk) (peerCreate key psk) :=
+  focusStatePrefix_erases _ _ (Peers.peerCreatePrefix_erases key psk)
 
 theorem peerCreateMixed_preserves (key : Key) (psk : Option Key) :
-    PrefixPreserves AllocationInv LifetimeEvent.Safe (peerCreateMixed key psk) := by
-  intro w h hi
-  obtain ⟨suffix, hsuf, hsafe, hout⟩ := Peers.peerCreatePrefix_preserves key psk w
+    StatePrefixPreserves (fun h w _ => AllocationInv h w) LifetimeEvent.Safe (peerCreateMixed key psk) := by
+  intro w ambient h hi
+  obtain ⟨suffix, hsuf, hsafe, hout⟩ := Peers.peerCreatePrefix_preserves key psk w ambient
     (h.filterMap LifetimeEvent.peer?) hi.peer
-  have hr : runPrefix (Peers.peerCreatePrefix key psk) w (h.filterMap LifetimeEvent.peer?) =
-      ((runPrefix (Peers.peerCreatePrefix key psk) w (h.filterMap LifetimeEvent.peer?)).1,
+  have hr : runPrefix ((Peers.peerCreatePrefix key psk).run w) ambient (h.filterMap LifetimeEvent.peer?) =
+      ((runPrefix ((Peers.peerCreatePrefix key psk).run w) ambient (h.filterMap LifetimeEvent.peer?)).1,
         h.filterMap LifetimeEvent.peer? ++ suffix) := Prod.ext rfl hsuf
-  unfold peerCreateMixed peerFocus
-  rw [focusPrefix_suffix _ _ _ _ _ _ _ hr]
+  unfold peerCreateMixed peerStateFocus focusStatePrefix
+  dsimp only [StateT.run] at hsuf hsafe hout hr ⊢
+  rw [focusPrefix_suffix LifetimeEvent.peer LifetimeEvent.peer? _ _ _ _ _ hr]
   have hp : (h ++ suffix.map LifetimeEvent.peer).filterMap LifetimeEvent.peer? =
       h.filterMap LifetimeEvent.peer? ++ suffix := by
     rw [List.filterMap_append, filterMap_encoded LifetimeEvent.peer LifetimeEvent.peer? (fun _ => rfl)]
@@ -149,12 +150,13 @@ theorem peerCreateMixed_preserves (key : Key) (psk : Option Key) :
   refine ⟨suffix.map LifetimeEvent.peer, rfl, ?_, ?_⟩
   · exact ⟨by simpa only [hp, hsuf] using hsafe,
       hk ▸ hi.release.1.keypair.1, ht ▸ hi.release.1.packet.1⟩
-  · cases ho : (runPrefix (Peers.peerCreatePrefix key psk) w (h.filterMap LifetimeEvent.peer?)).1 with
+  · cases ho : (runPrefix (Peers.peerCreatePrefix key psk w) ambient (h.filterMap LifetimeEvent.peer?)).1 with
     | error e => trivial
     | ok out =>
-      have original := (Peers.peerCreatePrefix_erases key psk w _).symm.trans ho
-      exact hi.peerTransport (peerCreate_geometry key psk w out.2 out.1 original)
+      rcases out with ⟨⟨result, v⟩, ambient'⟩
+      have original := (Peers.peerCreatePrefix_erases key psk w ambient _).symm.trans ho
+      exact hi.peerTransport (peerCreate_geometry key psk w v result ambient ambient' original)
         (by simpa only [hp, hsuf, ho] using hout)
-        (peerCreate_peerSlots key psk w out.2 out.1 hi.peerSlots original) hk ht
+        (peerCreate_peerSlots key psk w v result ambient ambient' hi.peerSlots original) hk ht
 
 end Leanux.Proofs.WG.Lifetimes

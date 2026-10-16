@@ -79,9 +79,10 @@ it is not part of that baseline.
 | Native allocation, ingress, trie and product runner/environment carry | 116 | 57 | 2 | 57 | 10 | 124 |
 | Native allocation/trie carries and product scheduler/worker/environment callers | 172 | 89 | 2 | 81 | 10 | 180 |
 | Native routing, allocation, retirement, R6 terminals and product operation evolution | 102 | 50 | 2 | 50 | 7 | 107 |
+| Native allocation, lookup, session and routing lifecycle with canonical Seccomp adapter | 55 | 39 | 2 | 14 | 10 | 63 |
 
-The whole tree currently contains 451 Lean files and 6,262 theorems. The completed
-changes total 1,253 retyped theorems, 1,605 deletions, 446 retained contract shapes and 152 added.
+The whole tree currently contains 451 Lean files and 6,270 theorems. The completed
+changes total 1,292 retyped theorems, 1,607 deletions, 460 retained contract shapes and 162 added.
 Retyping changes or generalizes the actual state/monad carrier or observation.
 This includes shorthand contracts whose source functions or named views move
 to a native monad. Mere namespace qualification and equivalent relocation of a
@@ -1587,3 +1588,42 @@ caps were raised; no KILLED result, guest timeout or infrastructure rerun occurr
 Reproduce with capped builds of the carried modules, explicit named axiom
 printing, and capped scripts/in-bundle lake env leanchecker --fresh on each
 entry module (plus unchanged InsertionCoherence and RoutingInvariant).
+
+
+## Native allocation, lookup, session and routing lifecycle
+
+The next carried group has 55 existing theorems: 39 native/generalized retypes,
+14 retained product/pure contracts and two deletions. Ten additions include the
+canonical product Seccomp adapter and native counterparts for contracts that
+continue to support arbitrary product invariants. The group therefore has 63
+theorems, excluding unchanged adapter contracts and the comment-only correction
+to the logged batch-completion explanation.
+
+Allocation preserves exact successful and failed prefixes and both Ambient
+endpoints. Lookup still resolves and updates the actual nullable index owner.
+Its bucket proof reuses the canonical index-table frame. Session retains the
+recorded rejection choices and guard order; routing initialization and release
+keep the original seven-field store premise and exact refusal outcomes.
+
+Deleted: sessionStateRejected_sameKernel observes only Ambient-owned state;
+indexRemove_routing observes fields unavailable to the native IndexM action.
+Their consumers use the actual component adapters, with source guards intact.
+Both deletions follow from source types and projection definitions.
+
+Scoped builds, all 101 explicit named axiom checks and seven fresh entry-module
+kernel replays pass. Source reviews pass; all proof limits and mirror b700659
+are unchanged. Default build passes (66 jobs); unit tests pass (131 tests,
+one skip). The proof gate remains pending, with every register row lagging.
+
+Development failures: allocation/failure normalization had five failed builds;
+device creation had three; session had four; lookup had two and one rejected
+axiom-inventory command before repair; routing lifecycle had three. Successful
+lookup checks were repeated after replacing a duplicate bucket proof with the
+canonical frame. Routing lifecycle also repeated checks after whitespace-only
+cleanup; future such cleanup uses token identity and whitespace checking.
+No cap or proof limit was raised; no KILLED result, guest timeout or
+infrastructure rerun occurred.
+
+Reproduce with capped module builds, explicit named axiom printing and
+capped scripts/in-bundle lake env leanchecker --fresh on Product, RoutingView,
+RoutingLifecycle, DeviceCreation, LookupAccess, PeerAllocationFailure and Session.

@@ -81,57 +81,57 @@ theorem RoutingInvariant.erase (hi : RoutingInvariant d t4 t6) (pid : Nat) :
 
 theorem modifyDev_routing (f : Device → Device)
     (hf : ∀ d, routingState (f d) = routingState d) : SameView routingView (modifyDev f) := by
-  intro w x v hr
+  apply (Lifetimes.ProjectedAction.iff_run_ambient _ _ _).mpr
+  intro w ambient x v ambient' hr
   cases hr
-  simp [routingView, modifyDev, modifyK, Option.map_map, Function.comp_def, hf]
-
-theorem indexRemove_routing (owner : IndexOwner) :
-    SameView routingView (indexRemove owner) := by
-  apply (indexRemove_sameIndexKernel owner).of_factor
-    (fun k : Kernel => k.wg.map routingState) routingView
-  intro w
-  simp [routingView, indexKernelView, indexKernel, routingState, Option.map_map, Function.comp_def]
-  rfl
+  simp [routingView, modifyDev, Option.map_map, Function.comp_def, hf]
 
 /-- Exact normal creation effects on the routing projection, including both
-original refusal arms. Initializer record failures have no returned World. -/
-theorem peerCreate_routing_spec (start : World) (key : Key) (psk : Option Key) :
-    ⦃fun w => ⌜w.k = start.k⌝⦄ peerCreate key psk
+original refusal arms. Initializer record failures have no returned WG/Ambient endpoint. -/
+theorem peerCreate_routing_spec (start : WGWorld) (key : Key) (psk : Option Key) :
+    ⦃fun w => ⌜wgStoreView w = wgStoreView start⌝⦄ peerCreate key psk
     ⦃⇓? result w => ⌜match result with
       | .error err => err = -ENOMEM ∧ routingView w = routingView start
       | .ok pid => ∃ s, routingView start = some s ∧ pid = s.peerFrontier ∧
           routingView w = some s.allocate⌝⦄ := by
-  have ha := sameKernel_wp _ (hiddenAlloc_sameKernel .kmemCacheZallocPeer) (fun k => k = start.k)
+  have ha :
+      ⦃fun w => ⌜wgStoreView w = wgStoreView start⌝⦄
+        (hiddenAlloc .kmemCacheZallocPeer : WG.M Bool)
+      ⦃⇓? _ w => ⌜wgStoreView w = wgStoreView start⌝⦄ :=
+    hoare_liftAmbient (AmbientM.hiddenAlloc .kmemCacheZallocPeer)
+      (fun w => wgStoreView w = wgStoreView start)
   have hd := fun pid => (dstCacheReset_routing pid).wp
     (fun s => s = (routingView start).map RoutingState.allocate)
   have hh := fun pid => (handshakeInit_routing pid psk).wp
     (fun s => s = (routingView start).map RoutingState.allocate)
   have ht := fun pid => (resetLastSentHandshake_routing pid).wp
     (fun s => s = (routingView start).map RoutingState.allocate)
-  mvcgen [peerCreate, ha, hd, hh, ht, getDev, getK, setPeer, modifyDev, modifyK,
-    branch, branchCmp, invariant]
+  mvcgen [peerCreate, ha, hd, hh, ht, getDev, setPeer, modifyDev,
+    branch, branchCmp, AmbientM.branch, AmbientM.branchCmp, invariant, AmbientM.invariant]
   all_goals try dsimp +zetaDelta only at *
-  all_goals try simp_all only [routingView, Option.map_some]
-  all_goals try exact routingState_allocate _ _ rfl
+  all_goals try simp_all only [routingView, wgStoreView, WGStoreView.mk.injEq, Option.map_some]
+  all_goals obtain ⟨hdev, _⟩ := ‹some _ = start.dev ∧ _›
+  all_goals simp only [← hdev, Option.map_some] at *
+  all_goals clear hdev
   all_goals try simp_all [routingView, routingState, RoutingState.allocate,
     Std.TreeMap.getElem?_insert, Std.LawfulEqOrd.compare_eq_iff_eq]
   all_goals first | assumption | (funext q; split <;> simp_all [eq_comm])
 
-theorem peerCreate_routing (w v : World) (key : Key) (psk : Option Key)
-    (result : Except Int PeerId) (hr : (peerCreate key psk).run w = .ok (result, v)) :
+theorem peerCreate_routing (w v : WGWorld) (ambient ambient' : Ambient) (key : Key) (psk : Option Key)
+    (result : Except Int PeerId) (hr : ((peerCreate key psk).run w).run ambient = .ok ((result, v), ambient')) :
     match result with
     | .error err => err = -ENOMEM ∧ routingView v = routingView w
     | .ok pid => ∃ s, routingView w = some s ∧ pid = s.peerFrontier ∧
         routingView v = some s.allocate := by
-  have he := (hoare_iff_triple _ _ _).mpr (peerCreate_routing_spec w key psk) w result v rfl hr
+  have he := (hoare_iff_run_ambient _ _ _).mp (peerCreate_routing_spec w key psk) w ambient result v ambient' rfl hr
   cases result <;> exact he
 
-theorem peerCreate_routing_preserved (w v : World) (d : Device)
-    (hd : w.k.wg = some d) (hi : RoutingInvariant d t4 t6)
+theorem peerCreate_routing_preserved (w v : WGWorld) (ambient ambient' : Ambient) (d : Device)
+    (hd : w.dev = some d) (hi : RoutingInvariant d t4 t6)
     (key : Key) (psk : Option Key) (result : Except Int PeerId)
-    (hr : (peerCreate key psk).run w = .ok (result, v)) :
-    ∃ out, v.k.wg = some out ∧ RoutingInvariant out t4 t6 := by
-  have he := peerCreate_routing w v key psk result hr
+    (hr : ((peerCreate key psk).run w).run ambient = .ok ((result, v), ambient')) :
+    ∃ out, v.dev = some out ∧ RoutingInvariant out t4 t6 := by
+  have he := peerCreate_routing w v ambient ambient' key psk result hr
   cases result with
   | error err =>
     have hview : routingView v = some (routingState d) := he.2.trans (by simp [routingView, hd])
@@ -149,36 +149,50 @@ theorem peerCreate_routing_preserved (w v : World) (d : Device)
 
 /-- Normal release either retains the routing projection or deletes one peer
 list. It leaves the represented prefixes intact, even if their owner vanishes. -/
-theorem peerPut_routing_spec (start : World) (peer : Option PeerId) :
-    ⦃fun w => ⌜w.k = start.k⌝⦄ peerPut peer
+theorem peerPut_routing_spec (start : WGWorld) (peer : Option PeerId) :
+    ⦃fun w => ⌜wgStoreView w = wgStoreView start⌝⦄ peerPut peer
     ⦃⇓? _ w => ⌜routingView w = routingView start ∨
       ∃ pid, routingView w = (routingView start).map (fun s => s.erase pid)⌝⦄ := by
-  have hi := fun pid => (indexRemove_routing (.handshake pid)).wp
-    (fun s => s = routingView start)
-  simp only [peerPut]
-  mvcgen [hi, getPeer, getDev, getK, setPeer, modifyDev, modifyK,
-    requireNotPending, refcountDecAndTest, branch, branchCmp, branchCmpExcluded,
-    retirePeerUnits, invariant, unsupported]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals try simp_all only [routingView, Option.map_some]
-  all_goals try simp_all [routingView, routingState, RoutingState.erase,
-    Std.TreeMap.getElem?_insert, Std.TreeMap.getElem?_erase,
-    Std.LawfulEqOrd.compare_eq_iff_eq]
-  all_goals try (funext q; split <;> simp_all)
-  all_goals try (apply Or.inl; funext q; split <;> simp_all)
-  apply Or.inr
-  refine ⟨peer.getD 0, ?_⟩
-  obtain ⟨out, hout, hn, ht, hnf, hpf, hl⟩ := ‹∃ a, _›
-  refine ⟨out, hout, hn, ht, hnf, hpf, ?_⟩
-  funext q
-  have hq := congrFun hl q
-  split <;> simp_all [eq_comm]
+  have hi (pid : PeerId) :
+      ⦃fun w => ⌜routingView w = routingView start⌝⦄
+        (MonadLift.monadLift (indexRemove (.handshake pid)) : WG.M Unit)
+      ⦃⇓? _ w => ⌜routingView w = routingView start⌝⦄ := by
+    apply hoare_liftIndex _ (fun w => routingView w = routingView start)
+    intro g d table hg hd
+    simpa [routingView, hd, routingState] using hg
+  cases peer with
+  | none =>
+    mvcgen [peerPut, branch, AmbientM.branch]
+    simp_all [routingView, wgStoreView]
+  | some pid =>
+    simp only [peerPut, Option.isNone_some, Option.getD_some, Bool.false_eq_true, ↓reduceIte]
+    mvcgen [hi, getPeer, getDev, setPeer, modifyDev,
+      requireNotPending, refcountDecAndTest, branch, branchCmp, branchCmpExcluded,
+      AmbientM.branch, AmbientM.branchCmp, AmbientM.branchCmpExcluded,
+      retirePeerUnits, modifyAmbient, invariant, unsupported, AmbientM.invariant, AmbientM.unsupported]
+    all_goals try dsimp +zetaDelta only at *
+    all_goals try simp_all only [routingView, wgStoreView, WGStoreView.mk.injEq, Option.map_some]
+    all_goals obtain ⟨hdev, _⟩ := ‹some _ = start.dev ∧ _›
+    all_goals simp only [← hdev, Option.map_some] at *
+    all_goals clear hdev
+    all_goals try simp_all [routingView, wgStoreView, routingState, RoutingState.erase,
+      Std.TreeMap.getElem?_insert, Std.TreeMap.getElem?_erase,
+      Std.LawfulEqOrd.compare_eq_iff_eq]
+    all_goals try (funext q; split <;> simp_all)
+    all_goals try (apply Or.inl; funext q; split <;> simp_all)
+    apply Or.inr
+    refine ⟨pid, ?_⟩
+    obtain ⟨out, hout, hn, ht, hnf, hpf, hl⟩ := ‹∃ a, _›
+    refine ⟨out, hout, hn, ht, hnf, hpf, ?_⟩
+    funext q
+    have hq := congrFun hl q
+    split <;> simp_all [eq_comm]
 
-theorem peerPut_routing_preserved (w v : World) (d : Device)
-    (hd : w.k.wg = some d) (hi : RoutingInvariant d t4 t6)
-    (peer : Option PeerId) (hr : (peerPut peer).run w = .ok ((), v)) :
-    ∃ out, v.k.wg = some out ∧ RoutingInvariant out t4 t6 := by
-  have he := (hoare_iff_triple _ _ _).mpr (peerPut_routing_spec w peer) w () v rfl hr
+theorem peerPut_routing_preserved (w v : WGWorld) (ambient ambient' : Ambient) (d : Device)
+    (hd : w.dev = some d) (hi : RoutingInvariant d t4 t6)
+    (peer : Option PeerId) (hr : ((peerPut peer).run w).run ambient = .ok (((), v), ambient')) :
+    ∃ out, v.dev = some out ∧ RoutingInvariant out t4 t6 := by
+  have he := (hoare_iff_run_ambient _ _ _).mp (peerPut_routing_spec w peer) w ambient () v ambient' rfl hr
   rcases he with he | ⟨pid, he⟩
   · have hview : routingView v = some (routingState d) := he.trans (by simp [routingView, hd])
     obtain ⟨out, hout, hv⟩ := Option.map_eq_some_iff.mp hview

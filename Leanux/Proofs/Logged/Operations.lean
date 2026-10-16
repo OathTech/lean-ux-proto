@@ -411,8 +411,8 @@ def floodLogged (count port family : Nat) (messages : List (List UInt8)) : Ghost
       WG.wgReceive msg src
       pollScheduledInlineLogged
   afterBatchLogged
-  -- the receive worker drained the floodLogged within the guest's wait (B4, 2.3:
-  -- `afterBatchLogged`'s drain check does not list the handshake queue)
+  -- Confirm the flood's handshake queue and counter after the batch guard,
+  -- which also checks them along with the other worker queues.
   let d ← getDev
   requireDrained "the flood queued" [!d.handshakeQueue.empty, d.handshakeQueueLen != 0]
   return 0

@@ -10,8 +10,8 @@ Stops preserve the incoming access history. -/
 namespace Leanux.Proofs.WG.Lifetimes
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing
 
-def freshDeviceWorld (w : World) : World :=
-  {w with k := {w.k with netIfindexNext := w.k.netIfindexNext + 1, wg := some {ifindex := w.k.netIfindexNext, ifname := "wg0"}}}
+def freshDeviceWorld (w : WGWorld) : WGWorld :=
+  {w with netIfindexNext := w.netIfindexNext + 1, dev := some {ifindex := w.netIfindexNext, ifname := "wg0"}}
 
 theorem AllocationInv.freshDevice (hi : AllocationInv h w) :
     AllocationInv h (freshDeviceWorld w) := by
@@ -44,27 +44,44 @@ theorem AllocationInv.freshDevice (hi : AllocationInv h w) :
     subst d
     exact False.elim (Nat.lt_irrefl _ (hi.packetPastEpoch _ hs))
 
-def linkWorld (w : World) (v : WGKernelView) : World :=
-  {w with k := {w.k with wg := v.wg, peerCounter := v.peerCounter, keypairCounter := v.keypairCounter, netIfindexNext := v.netIfindexNext}}
-
-theorem linkView_identity_metadata (w v : World) (he : linkView v = linkView w) :
+theorem linkView_identity_metadata (w v : WGWorld) (he : linkView v = linkView w) :
     (identityView v, allocationMetadata v) = (identityView w, allocationMetadata w) := by
-  have hi := congrArg (fun s => identityView (linkWorld w s)) he
-  have hm := congrArg (fun s => allocationMetadata (linkWorld w s)) he
+  let observe : WGStoreView → IdentityView := fun s =>
+    (⟨s.peerCounter, fun i => (s.dev.bind fun d => d.peers[i]?).map (·.internalId)⟩,
+      (fun i => (s.dev.bind fun d => d.keypairs[i]?).map (·.internalId)),
+      fun slot => s.dev.bind fun d => match slot with
+        | .inl i => d.txSkbs[i]?.map (fun _ => (d.ifindex, i + 1))
+        | .inr i => d.rxSkbs[i]?.map (fun _ => (d.ifindex, i + 1)))
+  have hi := congrArg observe he
+  have hm := congrArg (fun s : WGStoreView =>
+    (⟨s.keypairCounter, s.netIfindexNext,
+      s.dev.map deviceAllocationMetadata⟩ : AllocationMetadata)) he
   apply Prod.ext
-  · unfold identityView Peers.snapshot keypairResidents packetResidents at hi ⊢
-    simpa [linkWorld, linkView, linkKernel, linkDevice, WGKernelView.ofKernel,
-      Option.bind_map, Function.comp_def] using hi
-  · unfold allocationMetadata deviceAllocationMetadata at hm ⊢
-    simpa [linkWorld, linkView, linkKernel, linkDevice, WGKernelView.ofKernel,
+  · apply Prod.ext
+    · simpa [observe, identityView, Peers.snapshot, linkView, linkStore, linkDevice,
+        wgStoreView, Option.bind_map, Function.comp_def] using congrArg Prod.fst hi
+    · apply Prod.ext
+      · change keypairResidents v = keypairResidents w
+        unfold keypairResidents
+        simpa [observe, linkView, linkStore, linkDevice,
+          wgStoreView, Option.bind_map, Function.comp_def] using
+          congrArg (fun s : IdentityView => s.2.1) hi
+      · funext slot
+        have ht := congrArg (fun s : IdentityView => s.2.2 slot) hi
+        cases slot <;>
+          simpa [observe, identityView, packetResidents, linkView, linkStore, linkDevice,
+            wgStoreView, Option.bind_map, Function.comp_def] using ht
+  · unfold allocationMetadata deviceAllocationMetadata
+    simpa [deviceAllocationMetadata, linkView, linkStore, linkDevice, wgStoreView,
       Option.map_map, Function.comp_def] using hm
 
-theorem freshDevice_linkView (w : World) :
+theorem freshDevice_linkView (w : WGWorld) :
     linkView (freshDeviceWorld w) = registeredLink (setupLink (linkView w)) := rfl
 
 theorem wgCreate_allocation_endpoint (hi : AllocationInv h w)
-    (hr : wgCreate.run w = .ok (ret,v)) : AllocationInv h v := by
-  have he := (hoare_iff_triple _ _ _).mpr (wgCreate_endpoint (linkView w)) w ret v rfl hr
+    (hr : (wgCreate.run w).run ambient = .ok ((ret, v), ambient')) : AllocationInv h v := by
+  have he := (hoare_iff_run_ambient _ _ _).mp (wgCreate_endpoint (linkView w))
+    w ambient ret v ambient' rfl hr
   rcases he with same | ⟨_,fresh⟩
   · have hf := linkView_identity_metadata w v same
     exact hi.congr (congrArg Prod.fst hf) (congrArg Prod.snd hf)
@@ -72,15 +89,15 @@ theorem wgCreate_allocation_endpoint (hi : AllocationInv h w)
       (fresh.trans (freshDevice_linkView w).symm)
     exact hi.freshDevice.congr (congrArg Prod.fst hf) (congrArg Prod.snd hf)
 
-def wgCreatePrefix : MixedM Int := liftPrefix wgCreate
+def wgCreatePrefix : MixedM Int := liftWGPrefix wgCreate
 
-theorem wgCreatePrefix_erases : ErasesPrefix wgCreatePrefix wgCreate := erasesPrefix_lift _
+theorem wgCreatePrefix_erases : ErasesStatePrefix wgCreatePrefix wgCreate :=
+  erasesStatePrefix_lift _
 
 theorem wgCreatePrefix_allocation :
-    PrefixPreserves AllocationInv LifetimeEvent.Safe wgCreatePrefix := by
-  apply PrefixEnsures.preserves
-  apply PrefixEnsures.lift wgCreate (fun _ _ hi => hi.safe)
-  intro h w x v hi hr
+    StatePrefixPreserves (fun h w _ => AllocationInv h w) LifetimeEvent.Safe wgCreatePrefix := by
+  apply StatePrefixEnsures.lift wgCreate (fun _ _ _ hi => hi.safe)
+  intro h w ambient x v ambient' hi hr
   exact wgCreate_allocation_endpoint hi hr
 
 end Leanux.Proofs.WG.Lifetimes
