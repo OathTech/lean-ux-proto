@@ -12,7 +12,7 @@ original packet storage may already have been freed. -/
 set_option maxHeartbeats 2000000
 set_option pp.structureInstances false
 namespace Leanux.Proofs.WG.Queues.RxJoint
-open Leanux Leanux.WG Leanux.Proofs.Logged Lifetimes
+open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing Lifetimes
 
 structure Entry where
   tag : GroEntry
@@ -45,7 +45,7 @@ def groEvent : Event → Option GroEvent
   | .checkedState .. | .checkedCounter .. | .checkedEndpoint .. => none
 
 abbrev Obs := PrefixM Event
-def access (a : MixedM α) : Obs α := focusPrefix Event.access accessEvent a
+def access (a : PrefixM LifetimeEvent α) : Obs α := focusPrefix Event.access accessEvent a
 
 theorem access_erases (he : ErasesPrefix a original) : ErasesPrefix (access a) original :=
   focusPrefix_erases _ _ he
@@ -54,8 +54,8 @@ theorem access_gro (he : ErasesPrefix a original) :
     ProjectsPrefix groEvent id (access a) (liftPrefix original) :=
   projectsPrefix_focus_other _ _ _ (fun _ => rfl) he
 
-theorem access_projects (ha : PrefixPreserves AllocationInv LifetimeEvent.Safe a) :
-    ProjectsUnder AllocationInv accessEvent (access a) a :=
+theorem access_projects (ha : PrefixPreserves (fun h w => AllocationInv h w.wg) LifetimeEvent.Safe a) :
+    ProjectsUnder (fun h w => AllocationInv h w.wg) accessEvent (access a) a :=
   ha.projects_focus _ _ (fun _ => rfl)
 
 structure Gro where
@@ -159,20 +159,20 @@ theorem flushAll_gro (g : Gro) :
     exact projectsPrefix_pure _ id ()
 
 theorem stack_allocation (bytes : List UInt8) :
-    PrefixPreserves AllocationInv LifetimeEvent.Safe (stackReceivePrefix bytes) :=
-  stackReceivePrefix_preserves allocationAmbient allocationTx allocationWgXmit bytes
+    PrefixPreserves (fun h w => AllocationInv h w.wg) LifetimeEvent.Safe (stackReceivePrefix bytes) :=
+  stackReceivePrefix_preserves (ProductAmbientContracts.ofNative allocationAmbient) (ProductTxContracts.ofNative allocationTx) ⟨fun P => (allocationWgXmit.errors P).liftWGObserver⟩ bytes
 
 theorem stackFlush_allocation (bytes : List (List UInt8)) :
-    PrefixPreserves AllocationInv LifetimeEvent.Safe (stackFlushPrefix bytes) :=
-  stackFlushPrefix_preserves allocationAmbient allocationTx allocationWgXmit bytes
+    PrefixPreserves (fun h w => AllocationInv h w.wg) LifetimeEvent.Safe (stackFlushPrefix bytes) :=
+  stackFlushPrefix_preserves (ProductAmbientContracts.ofNative allocationAmbient) (ProductTxContracts.ofNative allocationTx) ⟨fun P => (allocationWgXmit.errors P).liftWGObserver⟩ bytes
 
 theorem enter_access (e : Entry) :
-    ProjectsUnder AllocationInv accessEvent (enter e) (stackReceivePrefix e.tag.bytes) := by
+    ProjectsUnder (fun h w => AllocationInv h w.wg) accessEvent (enter e) (stackReceivePrefix e.tag.bytes) := by
   exact projectsUnder_emit_bind _ rfl
     (receiptObserved_projectsUnder (fun _ => rfl) (access_projects (stack_allocation _)))
 
 theorem flush_access (entries : List Entry) :
-    ProjectsUnder AllocationInv accessEvent (flush entries)
+    ProjectsUnder (fun h w => AllocationInv h w.wg) accessEvent (flush entries)
       (stackFlushPrefix (entries.map fun e => e.tag.bytes)) := by
   induction entries with
   | nil => exact projectsUnder_pure _ _
@@ -181,7 +181,7 @@ theorem flush_access (entries : List Entry) :
     exact projectsUnder_bind (enter_access e) (stack_allocation _) (fun _ => ih)
 
 theorem normalList_access (g : Gro) :
-    ProjectsUnderTo AllocationInv accessEvent Gro.erase (normalList g)
+    ProjectsUnderTo (fun h w => AllocationInv h w.wg) accessEvent Gro.erase (normalList g)
       (groNormalListPrefix stackFlushPrefix g.erase) := by
   unfold normalList groNormalListPrefix
   dsimp only [Gro.erase, Gro.forget, TaggedGro.erase]
@@ -194,7 +194,7 @@ theorem normalList_access (g : Gro) :
     · intro _; exact projectsUnderTo_pure _ _ _
 
 theorem normalOne_access (g : Gro) (e : Entry) (segs : Nat) :
-    ProjectsUnderTo AllocationInv accessEvent Gro.erase (normalOne g e segs)
+    ProjectsUnderTo (fun h w => AllocationInv h w.wg) accessEvent Gro.erase (normalOne g e segs)
       (groNormalOnePrefix stackFlushPrefix g.erase e.tag.bytes segs) := by
   unfold normalOne groNormalOnePrefix
   dsimp only [Gro.erase, Gro.forget, TaggedGro.erase]
@@ -205,7 +205,7 @@ theorem normalOne_access (g : Gro) (e : Entry) (segs : Nat) :
       projectsUnderTo_pure accessEvent Gro.erase {g with rxList := g.rxList ++ [e], rxCount := g.rxCount + segs}
 
 theorem receive_access (g : Gro) (e : Entry) :
-    ProjectsUnderTo AllocationInv accessEvent Gro.erase (receive g e)
+    ProjectsUnderTo (fun h w => AllocationInv h w.wg) accessEvent Gro.erase (receive g e)
       (napiGroReceivePrefix stackFlushPrefix g.erase e.tag.bytes) := by
   unfold receive napiGroReceivePrefix
   simp only [Gro.erase, Gro.forget, TaggedGro.erase, List.isEmpty_map]
@@ -213,7 +213,7 @@ theorem receive_access (g : Gro) (e : Entry) :
   · exact normalOne_access g e 1
   · split
     · apply projectsUnderTo_bind accessEvent id Gro.erase (projectsPrefix_lift _ _).underTo
-      · exact Lifetimes.allocation_kernel _ (by intro w x v hr; cases hr)
+      · exact Lifetimes.allocation_store World.wg _ (by intro initial; exact productAmbient_spec _ _ (fun _ _ hi => hi))
       · intro _
         simpa [Gro.erase, Gro.forget, TaggedGro.erase, List.map_append] using
           projectsUnderTo_pure accessEvent Gro.erase {g with held := g.held ++ [e]}
@@ -221,7 +221,7 @@ theorem receive_access (g : Gro) (e : Entry) :
         projectsUnderTo_pure accessEvent Gro.erase {g with held := g.held ++ [e]}
 
 theorem flushAll_access (gro : Gro) :
-    ProjectsUnder AllocationInv accessEvent (flushAll gro)
+    ProjectsUnder (fun h w => AllocationInv h w.wg) accessEvent (flushAll gro)
       (napiGroFlushAllPrefix stackFlushPrefix gro.erase) := by
   apply ProjectsUnderTo.identity
   unfold flushAll napiGroFlushAllPrefix

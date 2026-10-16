@@ -133,8 +133,13 @@ it is not part of that baseline.
 | Exact product traffic and batch observers | 16 | 0 | 0 | 16 | 0 | 16 |
 | Native receive-origin cuts and receipts | 32 | 32 | 0 | 0 | 7 | 39 |
 
-The whole tree currently contains 451 Lean files and 6,480 theorems. The completed
-changes total 2,236 retyped theorems, 1,671 deletions, 1,192 retained contract shapes and 436 added.
+| Device configuration frames and full lifetime observer | 19 | 13 | 0 | 6 | 7 | 26 |
+| Public peer command completion | 12 | 6 | 0 | 6 | 6 | 18 |
+| Product stamped GRO, native NAPI cuts and joint poll | 43 | 4 | 0 | 39 | 0 | 43 |
+| Native session material and generic journal adapters | 34 | 32 | 0 | 2 | 1 | 35 |
+
+The whole tree currently contains 451 Lean files and 6,494 theorems. The completed
+changes total 2,291 retyped theorems, 1,671 deletions, 1,245 retained contract shapes and 450 added.
 Retyping changes or generalizes the actual state/monad carrier or observation.
 This includes shorthand contracts whose source functions or named views move
 to a native monad. Mere namespace qualification and equivalent relocation of a
@@ -3315,3 +3320,51 @@ r = subprocess.run(['lake', 'env', 'lean', '-j1', '--stdin'], input=src, text=Tr
 sys.exit(r.returncode)
 PY
 ~~~
+
+
+## Device configuration, joint poll and session material
+
+Seven modules carry 108 theorems to 122: 55 native/generalized retypes,
+53 retained product or pure contracts, fourteen additions and no deletions.
+Device frames keep the original seven-field native configuration mask and
+the original arbitrary product action contract. The complete device observer
+keeps all five full-World invariant contracts beside native counterparts.
+Public peer command completion likewise retains all six arbitrary-product
+helpers. No address-shape, residency or source-erasure premise is added.
+
+Stamped GRO, NAPI and joint polling preserve actual product callbacks and
+their source order. Consumption receipts project the actual WG/Ambient
+endpoints captured by that execution; no reconstructed state or repeated
+execution is used. Stops retain accesses without creating successful
+receipts. Session support keeps its explicit incoming-history premise and
+exact successful material/decryption witnesses. Its generic carrier,
+projection and invariant helpers still admit arbitrary product actions.
+The two fixed-source whole-WG frames remain substantive; their names now
+state their actual observation.
+
+All 180 explicitly named declarations have standard-only axioms; seven
+scoped fresh kernel replays and independent complete source reviews pass.
+Final builds pass: configuration frames191, complete device193, public peer259,
+stamped GRO285, NAPI cuts204, joint poll286 and session material185 jobs.
+Session material still has three MVCGen deprecations pending direct proof
+replacement; the other six modules have zero warnings of their own.
+Development failures remain failures: frames had one unmodified baseline
+failure after a rejected edit driver and one candidate failure; public peer
+had one failure; NAPI had one failure; session material had two failures.
+Device and session cleanup builds removed unused-argument warnings.
+Session's first axiom inventory rejected its incomplete receipt? name before
+validation; the corrected inventory passed all fifty declarations.
+There was no infrastructure rerun, crash, cancellation or limit change.
+
+The full proof gate and terminal replay remain pending. Every result row
+stays lagging over b700659; initialized R3 authorization and R4 pipeline
+conservation remain open. The executable closure is unchanged and retains
+the prior model66 and unit131/one-skip validation.
+
+~~~sh
+cap() { if command -v capped >/dev/null 2>&1; then capped "$@"; else "$@"; fi; }
+cap scripts/in-bundle lake build Leanux.Proofs.WG.Lifetimes.ConfigurationDeviceFrames Leanux.Proofs.WG.Lifetimes.ConfigurationDevice Leanux.Proofs.WG.Configuration.PeerCommandCompletion Leanux.Proofs.WG.Queues.StampedGro Leanux.Proofs.WG.Queues.RxNapiCuts Leanux.Proofs.WG.Queues.RxPollJoint Leanux.Proofs.WG.Origins.SessionMaterial
+~~~
+
+Fresh replay each named module with
+'cap scripts/in-bundle lake env leanchecker --fresh MODULE'.
