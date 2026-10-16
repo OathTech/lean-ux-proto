@@ -142,8 +142,10 @@ it is not part of that baseline.
 
 | Native public device completion and original product helpers | 14 | 10 | 0 | 4 | 4 | 18 |
 
-The whole tree currently contains 451 Lean files and 6,497 theorems. The completed
-changes total 2,301 retyped theorems, 1,672 deletions, 1,271 retained contract shapes and 454 added.
+| Native lifecycle routing and arbitrary product helpers | 29 | 23 | 1 | 5 | 5 | 33 |
+
+The whole tree currently contains 451 Lean files and 6,501 theorems. The completed
+changes total 2,324 retyped theorems, 1,672 deletions, 1,276 retained contract shapes and 459 added.
 Retyping changes or generalizes the actual state/monad carrier or observation.
 This includes shorthand contracts whose source functions or named views move
 to a native monad. Mere namespace qualification and equivalent relocation of a
@@ -3466,4 +3468,32 @@ the mirror remains identical to b700659.
 
 Reproduce with 'cap scripts/in-bundle lake build Leanux.Proofs.WG.Configuration.DeviceCompletion'
 and 'cap scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Configuration.DeviceCompletion',
+using the portable cap function above.
+
+
+## Lifecycle routing completion
+
+LifecycleCompletion carries twenty-nine theorems to thirty-three: twenty-three
+native retypes, five retained arbitrary-product helpers, one deletion and five
+native companions. The retained product helper keeps its original 43-field
+premise. The obsolete global_initial_prefill statement required seccompPrefill
+to return a whole Kernel; its actual type now consumes and returns only
+SeccompWorld and TaskWorld. Its WireGuard frame is supplied by those types.
+Initialization instead uses the already available initialized WG projection,
+without an allocation or resident-coherence premise.
+
+The native observers retain both actual WG/Ambient endpoints, missing-device
+Stops and all completion histories. Default lifecycle callbacks are pure;
+the destructor suffix and its queue guards retain source order.
+
+The final scoped build passes266 jobs with zero own warnings. All37 named
+declarations have standard-only axioms; fresh kernel replay and independent
+complete review pass. Two preceding development builds failed on bounded
+proof search and normalization. No failed result was accepted; no crash,
+infrastructure rerun, cancellation or cap/proof-limit change occurred.
+The whole proof gate and terminal replay remain pending and all register
+rows stay lagging. The mirror is byte-identical to b700659.
+
+Reproduce with 'cap scripts/in-bundle lake build Leanux.Proofs.WG.Configuration.LifecycleCompletion'
+and 'cap scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Configuration.LifecycleCompletion',
 using the portable cap function above.
