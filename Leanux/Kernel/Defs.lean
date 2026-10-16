@@ -584,6 +584,21 @@ structure TaskWorld where
   current : TaskRef := .task
   deriving BEq
 
+/-- seccomp's own store (the state split, section 2): the filter objects and
+    their counter, the kind-309 length the bridge reads ahead, and the keys of
+    the repeatable decisions already emitted in this operation. -/
+structure SeccompWorld where
+  filters : TreeMap FilterId SeccompFilter := {}
+  nextFilter : FilterId := 0
+  /-- seccomp: the kind-309 length record, read before the instructions
+      (stream W's order) and answered to the translation after them. -/
+  translatedLen : Option Nat := none
+  /-- seccomp (design 4.2, 4.5): the repeatable decisions of the checker,
+      the translation, the cache's emulation and the entry path are emitted
+      once per operation as a set of (decision, outcome, operands); the keys
+      emitted so far in this operation (`Seccomp.Bridge`). -/
+  emitted : Std.HashSet String := {}
+
 /-- `wg_ratelimiter`'s statics (drivers/net/wireguard/ratelimiter.c:12-18):
     `init_refcnt` and the hsiphash `key` (zeros while unknown: drawn before
     the trace for the fixture's wg0). The tables hold no entries on the
@@ -662,14 +677,6 @@ structure Kernel where
   pipeMaxSize : Nat := 1048576
   pipeUserPagesSoft : Nat := 16384
   pipeUserPagesHard : Nat := 0
-  /-- seccomp (design 4.1): every filter any task holds, by allocation
-      identity (the chain runs through `prev`); the sandboxed child of a
-      child probe, created from `task` by `copy_seccomp`'s effects and
-      dropped at the parent's `wait4`; and `current`, the task the runner
-      is executing (the child only while a child probe's steps run). -/
-  seccompFilters : TreeMap FilterId SeccompFilter := {}
-  /-- The next filter's allocation identity (stream V): monotone, never reused. -/
-  nextFilter : FilterId := 0
   /-- epoll (design 4.1): the `struct eventpoll`, `epitem` and `eppoll_entry`
       stores, each with its next identity (lifetime identities: never
       reused). -/
@@ -1585,15 +1592,8 @@ structure Ambient where
 structure World where
   ambient : Ambient
   tasks : TaskWorld
+  seccomp : SeccompWorld := {}
   k : Kernel
-  /-- seccomp (design 4.2, 4.5): the repeatable decisions of the checker,
-      the translation, the cache's emulation and the entry path are emitted
-      once per operation as a set of (decision, outcome, operands); the keys
-      emitted so far in this operation (`Seccomp.Bridge`). -/
-  emitted : Std.HashSet String := {}
-  /-- seccomp: the kind-309 length record, read before the instructions
-      (stream W's order) and answered to the translation after them. -/
-  translatedLen : Option Nat := none
   /-- The caller's buffer (user memory), as written by `copy_to_iter` (an
       eventfd read's 8 bytes) or `copy_page_to_iter` (a pipe read). -/
   userOut : Option ByteArray := none
@@ -1769,6 +1769,20 @@ abbrev TaskM := StateT TaskWorld AmbientM
   return (a, { w with tasks, ambient })
 
 instance : MonadLift TaskM M := ⟨liftTask⟩
+
+/-- seccomp's monad: its own store over the task store (the state split,
+    section 3): the filter paths reach the task's seccomp and signal state
+    through `TaskM`, and nothing else. Inside `namespace Leanux.Seccomp` the
+    name `M` resolves to this. -/
+abbrev Seccomp.M := StateT SeccompWorld TaskM
+
+/-- The runner's lift of a seccomp computation: its store, the task store
+    and the ambient part run and written back once. -/
+@[inline] def liftSeccomp (x : Seccomp.M α) : M α := fun w => do
+  let (((a, seccomp), tasks), ambient) ← ((x.run w.seccomp).run w.tasks).run w.ambient
+  return (a, { w with seccomp, tasks, ambient })
+
+instance : MonadLift Seccomp.M M := ⟨liftSeccomp⟩
 
 /-! ## W9: the fixture namespace's routing (docs/2026-10-06-w8-w9-netns-routing.md, 2.6, 4.2) -/
 

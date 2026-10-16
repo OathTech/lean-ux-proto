@@ -341,12 +341,12 @@ def dispatch : Syscall → M Int
   | .wgDown => socketCallOn SENDER_FD Env.wgDown
   | .wgDelete => rtnetlinkRequest Env.wgDelete
   | .wgNetnsClose => netnsClose
-  | .seccompInstall via flags filter len bad mode => Seccomp.sysSeccompInstall via flags filter len bad mode
-  | .seccompProbe nr args .self _ => Seccomp.sysSeccompProbeSelf nr args
-  | .seccompProbe nr args .child strict => Seccomp.sysSeccompProbeChild nr args strict
-  | .seccompPrctl cmd args => Seccomp.sysSeccompPrctl cmd args
-  | .seccompCapdrop => Seccomp.sysSeccompCapdrop
-  | .seccompQuery cmd action flags => Seccomp.sysSeccompQuery cmd action flags
+  | .seccompInstall via flags filter len bad mode => liftSeccomp (Seccomp.sysSeccompInstall via flags filter len bad mode)
+  | .seccompProbe nr args .self _ => liftSeccomp (Seccomp.sysSeccompProbeSelf nr args)
+  | .seccompProbe nr args .child strict => liftSeccomp (Seccomp.sysSeccompProbeChild nr args strict)
+  | .seccompPrctl cmd args => liftSeccomp (Seccomp.sysSeccompPrctl cmd args)
+  | .seccompCapdrop => liftSeccomp Seccomp.sysSeccompCapdrop
+  | .seccompQuery cmd action flags => liftSeccomp (Seccomp.sysSeccompQuery cmd action flags)
 
 /-- The x86-64 number of the system call an operation makes, for the entry
     path once a seccomp mode is set (`__secure_computing`, design 4.5):
@@ -375,18 +375,19 @@ def Syscall.isNet : Syscall → Bool
 
 /-- One system call: entry, the handler, and the return-to-user work. -/
 def syscall (call : Syscall) : M Int := do
-  modify fun w => { w with userOut := none, userFds := none, queuedThisCall := [], emitted := {}, translatedLen := none }
+  modify fun w => { w with userOut := none, userFds := none, queuedThisCall := [],
+                           seccomp := { w.seccomp with emitted := {}, translatedLen := none } }
   modifyAmbient fun a => { a with steps := #[], extraOut := [], fired := #[], netRxSections := 0, netRxSection := 0 }
   -- seccomp: the entry path of the operation's own call once a mode is set
   -- (a harness call by design 6.2 rule 1: a cache hit); a probe enters itself
   match syscallNr call with
-  | some nr => Seccomp.enterHarnessCall nr
+  | some nr => liftSeccomp (Seccomp.enterHarnessCall nr)
   | none =>
     if call.isNet && (← getCurrent).seccomp.mode != .disabled then
       unsupported "a network operation after a seccomp mode was set (the fixture's calls are not modelled under a filter)"
   let ret ← dispatch call
   -- harness calls whose entry falls inside the window after the operation's (fixture knowledge)
-  for c in Env.windowTailCalls do Seccomp.enterHarnessCall c
+  for c in Env.windowTailCalls do liftSeccomp (Seccomp.enterHarnessCall c)
   taskWorkRun
   -- the guest waits inside the operations that can queue the handshake send
   -- worker (and in wg_inject); the worker runs during that wait

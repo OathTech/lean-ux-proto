@@ -9,7 +9,8 @@ The checker, the translation and the engine (`Leanux/Seccomp/Classic.lean`,
 `Translate.lean`, `Engine.lean`) are written over the `SeccompM` typeclass
 with their own decision table (`SDecision`) and allocation sites
 (`SAllocSite`), because the shared `Decision` enumeration cannot be extended
-from a leaf module. This file is the one instance over `M`:
+from a leaf module. This file is the one instance over `Seccomp.M` (the state split: the
+filter store over the task store over the ambient monad):
 
 - each `SDecision` maps to its `Decision` constructor
   (`SDecision.toDecision`, `Leanux/Kernel/Decision.lean`), whose info,
@@ -19,9 +20,9 @@ from a leaf module. This file is the one instance over `M`:
   order, the eBPF length first and then one word per instruction
   (`HiddenSite.bpfProgInsn`); the translation asks for the instructions
   first and the length last, so the bridge reads the length at the first
-  request and holds it in `World.translatedLen`;
+  request and holds it in `SeccompWorld.translatedLen`;
 - a repeatable decision's (decision, outcome, operands) pair is emitted
-  once per operation (design 4.2, 4.5): `World.emitted` keeps the keys.
+  once per operation (design 4.2, 4.5): `SeccompWorld.emitted` keeps the keys.
 
 Nothing here absorbs a failure: every stop the walkers raise is the mirror's
 own `Stop`.

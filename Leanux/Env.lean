@@ -1165,7 +1165,7 @@ def windowTailCalls : List Int := []
 
 /-- `copy_process`'s two clock reads (`start_time` at kernel/fork.c:2532,
     `start_boottime` at :2533) in the parent's window: consumed, not observed. -/
-def forkClocks : M Unit := do
+def forkClocks : AmbientM Unit := do
   _ ← hidden .forkStartTime
   _ ← hidden .forkStartBoottime
 
@@ -1175,7 +1175,7 @@ def forkClocks : M Unit := do
     seccomp state, no-new-privs, the capability set and the action table
     copied; the pending set empty; the signal mask inherited. The child has
     no file table of its own: no modelled path in it touches a file. -/
-def childCreate : M Unit := do
+def childCreate : TaskM Unit := do
   let p := (← getTasks).task
   let c : Task := { p with pending := 0, sigpending := false, taskWorks := [], inEventfd := false, exited := false }
   modifyTasks fun t => { t with child := some c }
@@ -1185,21 +1185,20 @@ def childCreate : M Unit := do
     `users` and one `refs` decrement on the head filter the child holds,
     nothing freed, since the parent holds it too; a task without a filter
     walks nothing. No decisions. -/
-def childExit : M Unit := do
-  let k ← getK
+def childExit : Seccomp.M Unit := do
   match (← getTasks).child with
   | none => invariant "the child's exit effect without a child"
   | some c =>
     if let some id := c.seccomp.filter then
-      match k.seccompFilters.get? id with
+      match (← get).filters.get? id with
       | none => invariant s!"the child's head filter {id} is not allocated"
       | some f =>
         if f.users < 2 || f.refs < 2 then
           invariant s!"the child's exit would drop the parent's reference on filter {id}"
-        modifyK fun k => { k with seccompFilters := k.seccompFilters.insert id { f with users := f.users - 1, refs := f.refs - 1 } }
+        modify fun s => { s with filters := s.filters.insert id { f with users := f.users - 1, refs := f.refs - 1 } }
 
 /-- The parent's `wait4` reaped the child: its task object is dropped. -/
-def childDrop : M Unit := do
+def childDrop : TaskM Unit := do
   if (← getTasks).child.isNone then invariant "wait4 without a child"
   modifyTasks fun t => { t with child := none }
 
@@ -1207,7 +1206,7 @@ def childDrop : M Unit := do
     dequeues the `SIGSYS` (the pending set and `TIF_SIGPENDING` clear), the
     handler runs on its frame and `rt_sigreturn` restores the mask, which is
     as before. No decisions: the delivery side is not anchored. -/
-def trapDelivered : M Unit := do
+def trapDelivered : TaskM Unit := do
   let t := (← getTasks).current
   modifyTask t fun tk => { tk with pending := sigdelset tk.pending SIGSYS, sigpending := false }
 
@@ -1220,6 +1219,6 @@ def trapDelivered : M Unit := do
     window, like the fixture descriptors; the kernel's `total_insns` at the
     next recorded install is the evidence that the reconstruction's lengths
     are the kernel's. -/
-def seccompPrefill (n : Nat) (k : Kernel) (t : TaskWorld) : Except String (Kernel × TaskWorld) := Leanux.Seccomp.Prefill.apply n k t
+def seccompPrefill (n : Nat) (sc : SeccompWorld) (t : TaskWorld) : Except String (SeccompWorld × TaskWorld) := Leanux.Seccomp.Prefill.apply n sc t
 
 end Leanux.Env

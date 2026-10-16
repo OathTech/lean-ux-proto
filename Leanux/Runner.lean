@@ -1152,8 +1152,8 @@ def executeTrace (trace : Trace) (placeholders : Bool := false) : Except (Nat ×
                              napiBeforePut := trace.napiBeforePut }
   -- the seccomp prefill fixture (design 5): the chain the guest installed before the window
   if trace.seccompPrefill > 0 then
-    match Env.seccompPrefill trace.seccompPrefill world.k world.tasks with
-    | .ok (k, tasks) => world := { world with k, tasks }
+    match Env.seccompPrefill trace.seccompPrefill world.seccomp world.tasks with
+    | .ok (seccomp, tasks) => world := { world with seccomp, tasks }
     | .error e => throw (0, .invariant e)
   -- lane C: the fixture namespaces' IPv4 tables at boot (`lo` up in each),
   -- built by the C's own sequence outside every window (the design note,

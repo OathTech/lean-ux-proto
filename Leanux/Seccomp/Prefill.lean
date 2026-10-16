@@ -59,16 +59,16 @@ def translated : Except String BpfProg :=
 
 /-- `n` copies on the trace process's chain, newest at the head, no-new-privs
     set, mode `filter`, `filter_count` `n`. -/
-def apply (n : Nat) (k : Kernel) (t : TaskWorld) : Except String (Kernel × TaskWorld) := do
+def apply (n : Nat) (sc : SeccompWorld) (t : TaskWorld) : Except String (SeccompWorld × TaskWorld) := do
   if n == 0 || n > PREFILL_MAX then throw s!"seccomp_prefill: {n} copies (1..{PREFILL_MAX})"
   let prog ← translated
-  let mut k := k
+  let mut k := sc
   let mut prev : Option FilterId := none
   for _ in [0:n] do
     let id := k.nextFilter
     let flt : SeccompFilter := { id, allowNative, prev, prog := prog.toKernel,
                                  origProg := program.map SockFilter.toKernel }
-    k := { k with nextFilter := id + 1, seccompFilters := k.seccompFilters.insert id flt }
+    k := { k with nextFilter := id + 1, filters := k.filters.insert id flt }
     prev := some id
   let task : Task := { t.task with noNewPrivs := true, seccomp := { mode := .filter, filterCount := n, filter := prev } }
   return (k, { t with task })
