@@ -19,6 +19,12 @@ cost, not a claim of composition into concurrent kernel contexts.
 The sibling sequential lookup experiment is implemented; its result and
 limitations are recorded below. The earlier rounds remain historical results.
 
+The proposed next experiment has a separate
+[build plan](2026-10-16-plan-executable-binary-correspondence.md): develop
+executable reconstruction and loop assertions through paired Kraken/mirror
+runs, then prove the tested definitions. That implementation has not started;
+the results below remain the completed baseline.
+
 ## Fixed target and scope
 
 Worktree: `.worktrees/binary-proof-refactor`. Branch:
