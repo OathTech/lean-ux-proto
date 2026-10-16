@@ -1,11 +1,13 @@
 import Leanux.Proofs.Framing.WGTime
 import Leanux.Proofs.Framing.Tools
+import Leanux.Proofs.Framing.WGOwned
+import Leanux.Proofs.Framing.Lift
 import Leanux.WG.Receive
 
 /-! Canonical original cookie frames. The projection omits only the device
 cookie secret/birthdate and both ratelimiter tables. It retains device presence,
-complete resident stores, every allocation frontier, and all other Kernel
-fields. Source inspection separately establishes that these four helpers do
+complete resident stores, every allocation frontier, and all eleven WG-owned
+observations outside that mask. Source inspection establishes that these four helpers do
 not dereference resident peers, keypairs or packets. -/
 namespace Leanux.Proofs.Framing
 open Leanux Leanux.WG Std.Do
@@ -13,69 +15,76 @@ open Leanux Leanux.WG Std.Do
 def cookieDevice (d : Device) : Device :=
   {d with cookieSecret := [], cookieSecretBirthdate := 0}
 
-def cookieKernel (k : Kernel) : Kernel :=
-  {k with
-    wg := k.wg.map cookieDevice
-    ratelimiter := {k.ratelimiter with table := [], table6 := []}}
+def cookieView (g : WGWorld) : WGOwnedView :=
+  {wgOwnedView g with
+    dev := g.dev.map cookieDevice
+    ratelimiter := {g.ratelimiter with table := [], table6 := []}}
 
-def cookieKernelView (w : World) : Kernel := cookieKernel w.k
+abbrev SameCookie (a : WG.M α) := SameView cookieView a
 
-abbrev SameCookieKernel (a : M α) := SameView cookieKernelView a
-
-theorem modifyDev_cookie_spec (P : Kernel → Prop) (f : Device → Device)
+theorem modifyDev_cookie_spec (P : WGOwnedView → Prop) (f : Device → Device)
     (hf : ∀ d, cookieDevice (f d) = cookieDevice d) :
-    ⦃fun w => ⌜P (cookieKernelView w)⌝⦄ modifyDev f
-    ⦃⇓? _ w => ⌜P (cookieKernelView w)⌝⦄ := by
-  apply (hoare_iff_triple _ _ _).mp
-  intro w x v hp hr
+    ⦃fun w => ⌜P (cookieView w)⌝⦄ modifyDev f
+    ⦃⇓? _ w => ⌜P (cookieView w)⌝⦄ := by
+  apply (hoare_iff_run_ambient _ _ _).mpr
+  intro w ambient x w' ambient' hp hr
   cases hr
-  simpa [cookieKernelView, cookieKernel, modifyDev, modifyK,
+  simpa [cookieView, wgOwnedView, wgStoreView, modifyDev,
     Option.map_map, Function.comp_def, hf] using hp
 
-theorem modifyK_cookie_spec (P : Kernel → Prop) (f : Kernel → Kernel)
-    (hf : ∀ k, cookieKernel (f k) = cookieKernel k) :
-    ⦃fun w => ⌜P (cookieKernelView w)⌝⦄ modifyK f
-    ⦃⇓? _ w => ⌜P (cookieKernelView w)⌝⦄ := by
-  apply (hoare_iff_triple _ _ _).mp
-  intro w x v hp hr
-  cases hr
-  simpa [cookieKernelView, modifyK, hf] using hp
+theorem modify_cookie_spec (P : WGOwnedView → Prop) (f : WGWorld → WGWorld)
+    (hf : ∀ g, cookieView (f g) = cookieView g) :
+    ⦃fun w => ⌜P (cookieView w)⌝⦄ (modify f : WG.M Unit)
+    ⦃⇓? _ w => ⌜P (cookieView w)⌝⦄ := by
+  apply hoare_modify
+  intro w hp
+  simpa only [hf] using hp
 
-theorem makeCookie_sameCookieKernel (src : SkbSource) : SameCookieKernel (makeCookie src) := by
+theorem makeCookie_sameCookie (src : SkbSource) : SameCookie (makeCookie src) := by
   apply SameView.of_wp
   intro initial
-  have he := fun d b n => (SameView.of_sameKernel cookieKernel (branchExpired_sameKernel d b n)).wp (fun s => s = initial)
-  have hc := fun site => (SameView.of_sameKernel cookieKernel (hiddenClock64_sameKernel site)).wp (fun s => s = initial)
-  have hh := fun site => (SameView.of_sameKernel cookieKernel (hidden_sameKernel site)).wp (fun s => s = initial)
+  have he := fun d b n => ((branchExpired_sameWGWorld d b n).factor cookieView).wp (fun s => s = initial)
+  have ha (α : Type) (a : AmbientM α) :
+      ⦃fun g => ⌜cookieView g = initial⌝⦄ (MonadLift.monadLift a : WG.M α)
+      ⦃⇓? _ g => ⌜cookieView g = initial⌝⦄ := hoare_liftAmbient a _
   have hm := modifyDev_cookie_spec (fun s => s = initial)
-  mvcgen [makeCookie, getDev, getK, branch, invariant, he, hc, hh, hm]
+  mvcgen [-Std.Do.Spec.monadLift_StateT, makeCookie, getDev, branch, invariant,
+    hiddenClock64, hidden, he, ha, hm]
   all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [cookieKernelView, cookieKernel, cookieDevice]
+  all_goals simp_all [cookieView, wgOwnedView, wgStoreView, cookieDevice]
 
-theorem ratelimiterAllow_sameCookieKernel (src : SkbSource) : SameCookieKernel (ratelimiterAllow src) := by
+theorem ratelimiterAllow_sameCookie (src : SkbSource) : SameCookie (ratelimiterAllow src) := by
   apply SameView.of_wp
   intro initial
-  have hc := fun site => (SameView.of_sameKernel cookieKernel (hiddenClock_sameKernel site)).wp (fun s => s = initial)
-  have he := fun site => (SameView.of_sameKernel cookieKernel (hiddenAlloc_sameKernel site)).wp (fun s => s = initial)
-  have hm := modifyK_cookie_spec (fun s => s = initial)
-  mvcgen [ratelimiterAllow, getK, branch, branchCmp, unsupported, invariant, hc, he, hm]
+  have ha (α : Type) (a : AmbientM α) :
+      ⦃fun g => ⌜cookieView g = initial⌝⦄ (MonadLift.monadLift a : WG.M α)
+      ⦃⇓? _ g => ⌜cookieView g = initial⌝⦄ := hoare_liftAmbient a _
+  have hm := modify_cookie_spec (fun s => s = initial)
+  mvcgen [-Std.Do.Spec.monadLift_StateT, ratelimiterAllow, branch, branchCmp,
+    unsupported, invariant, hiddenClock, hiddenAlloc, ha, hm]
   all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [cookieKernelView, cookieKernel, cookieDevice]
+  all_goals try split
+  all_goals simp_all [cookieView, wgOwnedView, wgStoreView, cookieDevice]
 
-theorem cookieMessageCreate_sameCookieKernel (index : Nat) (src : SkbSource) (mac1 : List UInt8) :
-    SameCookieKernel (cookieMessageCreate index src mac1) := by
+theorem cookieMessageCreate_sameCookie (index : Nat) (src : SkbSource) (mac1 : List UInt8) :
+    SameCookie (cookieMessageCreate index src mac1) := by
   apply SameView.of_wp
   intro initial
-  have hh := fun site => (SameView.of_sameKernel cookieKernel (hidden_sameKernel site)).wp (fun s => s = initial)
-  have hm := (makeCookie_sameCookieKernel src).wp (fun s => s = initial)
-  mvcgen [cookieMessageCreate, getDev, getK, invariant, hh, hm]
+  have ha (α : Type) (a : AmbientM α) :
+      ⦃fun g => ⌜cookieView g = initial⌝⦄ (MonadLift.monadLift a : WG.M α)
+      ⦃⇓? _ g => ⌜cookieView g = initial⌝⦄ := hoare_liftAmbient a _
+  have hm := (makeCookie_sameCookie src).wp (fun s => s = initial)
+  mvcgen [-Std.Do.Spec.monadLift_StateT, cookieMessageCreate, getDev, invariant, hidden, ha, hm]
 
-theorem cookieValidatePacket_sameCookieKernel (msg : List UInt8) (src : SkbSource) (checkCookie : Bool) :
-    SameCookieKernel (cookieValidatePacket msg src checkCookie) := by
+theorem cookieValidatePacket_sameCookie (msg : List UInt8) (src : SkbSource) (checkCookie : Bool) :
+    SameCookie (cookieValidatePacket msg src checkCookie) := by
   apply SameView.of_wp
   intro initial
-  have hm := (makeCookie_sameCookieKernel src).wp (fun s => s = initial)
-  have hr := (ratelimiterAllow_sameCookieKernel src).wp (fun s => s = initial)
-  mvcgen [cookieValidatePacket, getDev, getK, invariant, branch, hm, hr]
+  have ha (α : Type) (a : AmbientM α) :
+      ⦃fun g => ⌜cookieView g = initial⌝⦄ (MonadLift.monadLift a : WG.M α)
+      ⦃⇓? _ g => ⌜cookieView g = initial⌝⦄ := hoare_liftAmbient a _
+  have hm := (makeCookie_sameCookie src).wp (fun s => s = initial)
+  have hr := (ratelimiterAllow_sameCookie src).wp (fun s => s = initial)
+  mvcgen [-Std.Do.Spec.monadLift_StateT, cookieValidatePacket, getDev, invariant, branch, ha, hm, hr]
 
 end Leanux.Proofs.Framing

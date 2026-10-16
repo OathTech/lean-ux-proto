@@ -36,9 +36,10 @@ it is not part of that baseline.
 | Product evolution rules and new ordinary lift bridge | 24 | 0 | 0 | 24 | 1 | 25 |
 | Native WGBase contracts and generalized map rule | 185 | 117 | 68 | 0 | 0 | 117 |
 | Redundant filesystem-family wrappers and exports | 21 | 0 | 21 | 0 | 0 | 0 |
+| Native WGTransitions and cookie contracts | 109 | 109 | 0 | 0 | 0 | 109 |
 
 The whole tree currently contains 449 Lean files and 6,225 theorems. The completed
-changes total 385 retyped theorems, 1,565 deletions, 113 retained contract shapes and 75 added.
+changes total 494 retyped theorems, 1,565 deletions, 113 retained contract shapes and 75 added.
 Retyping changes or generalizes the actual state/monad carrier or observation.
 This includes shorthand contracts whose source functions or named views move
 to a native monad. Mere namespace qualification and equivalent relocation of a
@@ -561,6 +562,40 @@ LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake build 
 LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Keypairs.Frames.WGBase
 ```
 
+## Native transition and cookie contracts
+
+All 103 WGTransitions theorems and six cookie theorems carry to native WG.M.
+The keypair snapshot and ordinary-transition relation retain their frontier,
+resident identities and receiving windows. Seven theorem names track the actual
+keypairGetNull source and the native cookie observation. No theorem is deleted
+or added. Scalar modifier conditions, all original inputs and normal-return
+scope remain; Ambient inputs and outputs are unrestricted.
+
+The cookie observation retains all eleven WG-owned fields, masking only the
+device secret/birthdate and both rate-limiter tables. Its arbitrary device and
+WG modifiers keep explicit mask-preservation premises. The source proofs retain
+rotation clock/random records, IPv4/IPv6 selection, allocation refusal and Stops.
+Transitions use the generic Ambient, Index and packet adapters; timer reads,
+wheel guards, queue conditions, owner reads and error-valued returns stay at the
+actual source. sendStagedPackets specializes the generic map rule locally.
+
+Validation: closed two-module build passes (95 jobs), all 112 named declarations
+(109 theorems, two definitions and one abbreviation) print only standard axioms,
+and both fresh scoped kernel replays pass. Independent frozen-source review
+passes. Source hashes, two-file proof scope, unchanged terminal files, mirror
+equality, trust scan and whitespace pass. Two worker builds completed: the first
+failed on the existing pure rate-limiter table choice and the opaque queued-unit
+wrapper; local proof fixes produced the passing build. Root axiom checking and
+two replays add three passing capped calls. No source admission, scope expansion,
+crash, cap or proof-limit increase, timeout, KILLED outcome or infrastructure
+rerun occurred. All handles are collected; no ephemeral files were created.
+
+```sh
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake build Leanux.Proofs.WG.Keypairs.Frames.WGTransitions Leanux.Proofs.Framing.WGCookie
+# Run separately for each of the two modules above:
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Keypairs.Frames.WGTransitions
+```
+
 ## Incoming source-observer findings
 
 Product-level former-Kernel observations must retain all 47 original fields:
@@ -568,8 +603,8 @@ Product-level former-Kernel observations must retain all 47 original fields:
 does not justify dropping those other observations from an arbitrary product
 action. Four old environment frames now encounter FIB writes: `setMtu`,
 `routeIntoWg0`, `wgDeladdr` and `wgDelroute`. They require explicit findings,
-not removal of the FIB fields from the observation. The route-insertion and route-deletion frames remain
-source-inspected candidates.
+not removal of the FIB fields from the observation. All four now have kernel-checked stdin counterexamples; permanent declarations
+and their scoped replay remain part of the environment carry.
 
 Capped stdin proofs now establish two unrestricted-state counterexamples and
 the corresponding negations of FIB-generation preservation, with only standard
@@ -604,13 +639,32 @@ preconditions. These are unrestricted-state witnesses, not initialized R2
 failures. All eight new read-only probe handles are collected, with no files,
 limit increase, interruption or infrastructure rerun.
 
+Two additional route witnesses are checked. With the initial component states,
+the device running and fixture routes pending, routeIntoWg0 returns normally
+and changes fib4.rtGenid4 from zero to three. Deleting its IPv4 default route
+returns zero and reduces fib4.infos.size from two to one, while generation
+stays three because the alias was not accessed. Actual SameView negations use
+those changed projections. Three capped calls comprised one passing evaluation,
+one failed full-unfold proof attempt at the default recursion limit, and one
+passing four-declaration check using the built-in decide +kernel. The latter
+constructs a kernel-checked decision proof, with only standard axioms; it uses
+no native proof shortcut or raised limit. All four recovery axiom prints from
+the failed call are rejected, not validation.
+
 The timer observers still use the old raw-expiry scan and removed `fireTimer`.
 Actual `runTimers` uses `TimerWheel.nextDue`, dispatch validation, step completion,
 detach, `timerPassStep`, callback execution and clearing in order. Expiries 64 and
 65 share bucket expiry 72 at level one: with enqueue stamps one and two, wheel
 order selects the latter while raw-expiry order selects the former. The source
-observers and receipt boundaries must follow the actual inline execution. This
-selection witness is likewise source-inspected, pending formal checking.
+observers and receipt boundaries must follow the actual inline execution.
+A capped stdin proof checks both placements, coherent timer/wheel pairs and the
+two selector results: five declarations, standard axioms only. The old selector
+was copied literally into the probe from the lagging source. This proves a local
+selection difference, not an initialized schedule or full-pass failure. The first
+probe failed on record-literal indentation and emitted two rejected recovery
+axiom prints; the corrected call passed. These five new route/timer probe
+handles are collected, with no files, raised limits, crash or infrastructure
+rerun. Permanent declarations and replay remain for the corresponding carry.
 
 The success-observer lane had additional copied-source drift. Its old encrypt
 worker ran the softirq before consuming the ring; the mirror consumes and

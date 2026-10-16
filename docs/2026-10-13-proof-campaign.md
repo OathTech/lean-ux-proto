@@ -6,7 +6,7 @@ Work on `proofs/campaign` in `.worktrees/proofs-campaign` follows [the charter](
 The state-split retrofit onto `6089dc4` precedes further R3/R4 results. All seven
 result rows remain lagging, last validated over `cb2348e`. The tree has moved from
 471 files / 7,715 named theorems to 449 files / 6,225 theorems. Completed changes
-comprise 385 retyped, 1,565 deleted, 113 retained contract shapes and 75 added theorems;
+comprise 494 retyped, 1,565 deleted, 113 retained contract shapes and 75 added theorems;
 six redundant LifetimeSafety exports are removed, with every retained terminal
 body unchanged (515 declarations). The native foundational, ordinary lifetime,
 clock/Noise-helper, keypair-composition, product scheduler, small native helper and WGBase ports pass their
@@ -26,9 +26,16 @@ WGBase carries 117 of 185 claims; 68 structural/unused helpers are deleted.
 The filesystem cleanup removes 21 redundant declarations, including six terminal
 exports. Closed compilation, standard-axiom checks, fresh kernel replay and
 independent review pass. One worker compiler panic was followed by all-dirty-tree
-snapshots before work resumed; the report records every failed call. The preceding
+snapshots before work resumed; the report records every failed call. The d6f7ed4
 checkpoint's default human author was an attribution error, corrected for future
 commits through an explicit per-invocation agent identity.
+
+The following transition/cookie tranche carries all 109 theorems, with no
+deletions or additions. Its 95-job build, 112-declaration axiom check, two fresh
+kernel replays and independent review pass; one earlier development build failed
+on two local proof obligations. All four old environment-frame counterexamples
+and the timer selector difference now have kernel-checked stdin witnesses;
+permanent declarations and replay are pending their respective carry.
 
 The preceding `cb2348e` checkpoint validated all seven baseline result surfaces, including the
 local normal-poll carrier and initialized R3 committed-support extensions. The local R4

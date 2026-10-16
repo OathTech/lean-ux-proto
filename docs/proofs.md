@@ -18,7 +18,7 @@ conservation remain open; their next extensions follow the retrofit.
 
 The validated baseline `00641c6` has 471 Lean files and 7,715 named theorems.
 The current tree has 449 files and 6,225 theorems: completed changes comprise
-385 retyped, 1,565 deleted, 113 retained contract shapes and 75 added theorems.
+494 retyped, 1,565 deleted, 113 retained contract shapes and 75 added theorems.
 The count audit treats namespace-only product qualifications as retained
 contracts and corrects the earlier scheduler classification; total theorem,
 deletion and addition counts are unaffected.
@@ -32,7 +32,8 @@ The CounterWindow, generic native contracts/adapters, acceptance-observer core,
 action/projection contracts, failure-prefix/native receipts, keypair identity
 core, ordinary lifetime actions, clock/Noise-helper contracts, keypair composition
 and product scheduler observers, index-table, removal and packet helpers,
-native socket/configuration, product evolution and WGBase contracts pass their scoped
+native socket/configuration, product evolution, WGBase, transition and cookie
+contracts pass their scoped
 builds, axiom checks, fresh kernel replay and independent reviews. The obsolete subsystem-frame layers and
 their unused support are
 removed; all previously ported targets still build after their generated

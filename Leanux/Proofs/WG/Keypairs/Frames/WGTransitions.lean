@@ -2,7 +2,7 @@ import Leanux.Proofs.Framing.WGReceiveHeaders
 import Leanux.Proofs.WG.Keypairs.Frames.WGBase
 
 namespace Leanux.Proofs.WG.Keypairs.WGTransitions
-open Leanux Leanux.WG Std.Do Leanux.Proofs.WG.Keypairs Leanux.Proofs.WG.Keypairs.KernelFrames Leanux.Proofs.WG.Keypairs.WGFrames
+open Leanux Leanux.WG Std.Do Leanux.Proofs.WG.Keypairs Leanux.Proofs.WG.Keypairs.WGFrames
 
 set_option pp.structureInstances false
 set_option maxHeartbeats 800000
@@ -43,56 +43,56 @@ theorem endpointFromSkb_spec (P : Snapshot → Prop) (src : SkbSource) :
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (endpointFromSkb_sameSnapshot src).wp P
 
 theorem expireCurrentPeerKeypairs_sameSnapshot (pid : PeerId) : SameSnapshot (Leanux.WG.expireCurrentPeerKeypairs pid) := by
-  frame_same [Leanux.WG.expireCurrentPeerKeypairs, Leanux.WG.handshakeClear] using [ownerPeerDeref_spec, ownerPeerWord_spec, getKeypair_live_spec, getPeer_spec, handshakeZero_spec, indexRemove_spec, requireNotPending_spec, resetLastSentHandshake_spec, setKeypair_live_spec]
+  frame_same [Leanux.WG.expireCurrentPeerKeypairs, Leanux.WG.handshakeClear] using [ownerPeerDeref_spec, ownerPeerWord_spec, getKeypair_live_spec, getPeer_spec, handshakeZero_spec, requireNotPending_spec, resetLastSentHandshake_spec, setKeypair_live_spec]
 
 theorem expireCurrentPeerKeypairs_spec (P : Snapshot → Prop) (pid : PeerId) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.expireCurrentPeerKeypairs pid
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (expireCurrentPeerKeypairs_sameSnapshot pid).wp P
 
 theorem handshakeClear_sameSnapshot (pid : PeerId) : SameSnapshot (Leanux.WG.handshakeClear pid) := by
-  frame_same [Leanux.WG.handshakeClear] using [ownerPeerDeref_spec, ownerPeerWord_spec, handshakeZero_spec, indexRemove_spec]
+  frame_same [Leanux.WG.handshakeClear] using [ownerPeerDeref_spec, ownerPeerWord_spec, handshakeZero_spec]
 
 theorem handshakeClear_spec (P : Snapshot → Prop) (pid : PeerId) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.handshakeClear pid
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (handshakeClear_sameSnapshot pid).wp P
 
 theorem ipTunnelGetDsfield_sameSnapshot (protocol : Nat) (hdr : List UInt8) : SameSnapshot (Leanux.WG.ipTunnelGetDsfield protocol hdr) := by
-  exact sameSnapshot_of_sameKernel (Framing.ipTunnelGetDsfield_sameKernel protocol hdr)
+  exact (Framing.ipTunnelGetDsfield_sameWGWorld protocol hdr).factor snapshot
 
 theorem ipTunnelGetDsfield_spec (P : Snapshot → Prop) (protocol : Nat) (hdr : List UInt8) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.ipTunnelGetDsfield protocol hdr
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (ipTunnelGetDsfield_sameSnapshot protocol hdr).wp P
 
 theorem jitterBelowRekeyTimeout_sameSnapshot (site : HiddenSite) : SameSnapshot (Leanux.WG.jitterBelowRekeyTimeout site) :=
-  sameSnapshot_of_sameWGKernel (Framing.sameWGKernel_of_sameKernel (Framing.jitterBelowRekeyTimeout_sameKernel site))
+  (Framing.jitterBelowRekeyTimeout_sameWGWorld site).factor snapshot
 
 theorem jitterBelowRekeyTimeout_spec (P : Snapshot → Prop) (site : HiddenSite) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.jitterBelowRekeyTimeout site
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (jitterBelowRekeyTimeout_sameSnapshot site).wp P
 
 theorem kdf_sameSnapshot (second third : Bool) (chainingKey data : List UInt8) : SameSnapshot (Leanux.WG.kdf second third chainingKey data) :=
-  sameSnapshot_of_sameKernel (Framing.kdf_sameKernel second third chainingKey data)
+  (Framing.kdf_sameWGWorld second third chainingKey data).factor snapshot
 
 theorem kdf_spec (P : Snapshot → Prop) (second third : Bool) (chainingKey data : List UInt8) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.kdf second third chainingKey data
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (kdf_sameSnapshot second third chainingKey data).wp P
 
 theorem kdfOut_sameSnapshot (outs : List (List UInt8)) (i : Nat) : SameSnapshot (Leanux.WG.kdfOut outs i) :=
-  sameSnapshot_of_sameKernel (Framing.kdfOut_sameKernel outs i)
+  (Framing.kdfOut_sameWGWorld outs i).factor snapshot
 
 theorem kdfOut_spec (P : Snapshot → Prop) (outs : List (List UInt8)) (i : Nat) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.kdfOut outs i
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (kdfOut_sameSnapshot outs i).wp P
 
-theorem keypairGetCurrent_sameSnapshot  : SameSnapshot (Leanux.WG.keypairGetCurrent ) := by
-  frame_same [Leanux.WG.keypairGetCurrent] using []
+theorem keypairGetNull_sameSnapshot  : SameSnapshot (Leanux.WG.keypairGetNull ) := by
+  frame_same [Leanux.WG.keypairGetNull] using []
 
-theorem keypairGetCurrent_spec (P : Snapshot → Prop)  :
-    ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.keypairGetCurrent
-    ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (keypairGetCurrent_sameSnapshot ).wp P
+theorem keypairGetNull_spec (P : Snapshot → Prop)  :
+    ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.keypairGetNull
+    ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (keypairGetNull_sameSnapshot ).wp P
 
 theorem messageDecrypt_sameSnapshot (sealed key hash : List UInt8) : SameSnapshot (Leanux.WG.messageDecrypt sealed key hash) :=
-  sameSnapshot_of_sameKernel (Framing.messageDecrypt_sameKernel sealed key hash)
+  (Framing.messageDecrypt_sameWGWorld sealed key hash).factor snapshot
 
 theorem messageDecrypt_spec (P : Snapshot → Prop) (sealed key hash : List UInt8) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.messageDecrypt sealed key hash
@@ -113,14 +113,14 @@ theorem purgeStagedPackets_spec (P : Snapshot → Prop) (pid : PeerId) :
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (purgeStagedPackets_sameSnapshot pid).wp P
 
 theorem sendBufferToPeer_sameSnapshot (pid : PeerId) (bytes : List UInt8) : SameSnapshot (Leanux.WG.sendBufferToPeer pid bytes) := by
-  frame_same [Leanux.WG.sendBufferToPeer] using [getPeer_spec, hiddenAlloc_snapshot_spec, send4_spec, send6_spec, setPeer_spec]
+  frame_same [Leanux.WG.sendBufferToPeer] using [getPeer_spec, send4_spec, send6_spec, setPeer_spec]
 
 theorem sendBufferToPeer_spec (P : Snapshot → Prop) (pid : PeerId) (bytes : List UInt8) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.sendBufferToPeer pid bytes
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (sendBufferToPeer_sameSnapshot pid bytes).wp P
 
 theorem sendQueuedHandshakeInitiation_sameSnapshot (pid : PeerId) (isRetry : Bool) : SameSnapshot (Leanux.WG.sendQueuedHandshakeInitiation pid isRetry) := by
-  frame_same [Leanux.WG.sendQueuedHandshakeInitiation] using [branchExpired_spec, getPeer_spec, peerGet_spec, peerPut_spec, recordQueued_spec, requireNotPending_spec, setPeer_spec]
+  frame_same [Leanux.WG.sendQueuedHandshakeInitiation, Leanux.peekQueuedUnit, Leanux.recordQueued] using [branchExpired_spec, getPeer_spec, peerGet_spec, peerPut_spec, requireNotPending_spec, setPeer_spec]
 
 theorem sendQueuedHandshakeInitiation_spec (P : Snapshot → Prop) (pid : PeerId) (isRetry : Bool) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.sendQueuedHandshakeInitiation pid isRetry
@@ -141,7 +141,7 @@ theorem timersAnyAuthenticatedPacketSent_spec (P : Snapshot → Prop) (pid : Pee
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (timersAnyAuthenticatedPacketSent_sameSnapshot pid).wp P
 
 theorem timersHandshakeComplete_sameSnapshot (pid : PeerId) (site : HiddenSite := .walltimeLastHandshake) : SameSnapshot (Leanux.WG.timersHandshakeComplete pid site) := by
-  frame_same [Leanux.WG.timersHandshakeComplete] using [delTimer_spec, getPeer_spec, hidden_snapshot_spec, setPeer_spec]
+  frame_same [Leanux.WG.timersHandshakeComplete] using [delTimer_spec, getPeer_spec, setPeer_spec]
 
 theorem timersHandshakeComplete_spec (P : Snapshot → Prop) (pid : PeerId) (site : HiddenSite := .walltimeLastHandshake) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.timersHandshakeComplete pid site
@@ -176,14 +176,14 @@ theorem deriveKeys_spec (P : Snapshot → Prop) (kp : KeypairId) (initiator : Bo
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (deriveKeys_sameSnapshot kp initiator chainingKey).wp P
 
 theorem enqueuePerDeviceAndPeer_sameSnapshot (pid : PeerId) (item : List SkbId) : SameSnapshot (Leanux.WG.enqueuePerDeviceAndPeer pid item) := by
-  frame_same [Leanux.WG.enqueuePerDeviceAndPeer] using [cpumaskNextOnlineFrom_spec, getDev_spec, getPeer_spec, queueDeviceWork_spec, setPeer_spec, setTxSkb_spec]
+  frame_same [Leanux.WG.enqueuePerDeviceAndPeer, Leanux.queueDeviceWork] using [cpumaskNextOnlineFrom_spec, getDev_spec, getPeer_spec, setPeer_spec]
 
 theorem enqueuePerDeviceAndPeer_spec (P : Snapshot → Prop) (pid : PeerId) (item : List SkbId) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.enqueuePerDeviceAndPeer pid item
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (enqueuePerDeviceAndPeer_sameSnapshot pid item).wp P
 
 theorem enqueuePerPeerTx_sameSnapshot (item : List SkbId) (state : PacketState) : SameSnapshot (Leanux.WG.enqueuePerPeerTx item state) := by
-  frame_same [Leanux.WG.enqueuePerPeerTx] using [ownerPeerDeref_spec, ownerPeerWord_spec, peekQueuedUnit_spec, cpumaskChooseOnline_spec, getDev_spec, getKeypair_live_spec, getPeer_spec, peerGet_spec, peerPut_spec, recordQueued_spec, setPeer_spec, getTxSkb_spec, setTxSkb_spec]
+  frame_same [Leanux.WG.enqueuePerPeerTx, Leanux.peekQueuedUnit, Leanux.recordQueued] using [ownerPeerDeref_spec, ownerPeerWord_spec, cpumaskChooseOnline_spec, getDev_spec, getKeypair_live_spec, getPeer_spec, peerGet_spec, peerPut_spec, setPeer_spec]
 
 theorem enqueuePerPeerTx_spec (P : Snapshot → Prop) (item : List SkbId) (state : PacketState) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.enqueuePerPeerTx item state
@@ -204,21 +204,21 @@ theorem keypairsClear_spec (P : Snapshot → Prop) (hp : Stable P) (pid : PeerId
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (keypairsClear_ordinary pid).wp P hp
 
 theorem messageEphemeral_sameSnapshot (copy : Bool) (e chainingKey hash : List UInt8) : SameSnapshot (Leanux.WG.messageEphemeral copy e chainingKey hash) :=
-  sameSnapshot_of_sameKernel (Framing.messageEphemeral_sameKernel copy e chainingKey hash)
+  (Framing.messageEphemeral_sameWGWorld copy e chainingKey hash).factor snapshot
 
 theorem messageEphemeral_spec (P : Snapshot → Prop) (copy : Bool) (e chainingKey hash : List UInt8) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.messageEphemeral copy e chainingKey hash
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (messageEphemeral_sameSnapshot copy e chainingKey hash).wp P
 
 theorem mixDh_sameSnapshot (key : Bool) (chainingKey priv pub : List UInt8) : SameSnapshot (Leanux.WG.mixDh key chainingKey priv pub) :=
-  sameSnapshot_of_sameKernel (Framing.mixDh_sameKernel key chainingKey priv pub)
+  (Framing.mixDh_sameWGWorld key chainingKey priv pub).factor snapshot
 
 theorem mixDh_spec (P : Snapshot → Prop) (key : Bool) (chainingKey priv pub : List UInt8) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.mixDh key chainingKey priv pub
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (mixDh_sameSnapshot key chainingKey priv pub).wp P
 
 theorem mixPrecomputedDh_sameSnapshot (chainingKey precomputed : List UInt8) : SameSnapshot (Leanux.WG.mixPrecomputedDh chainingKey precomputed) :=
-  sameSnapshot_of_sameKernel (Framing.mixPrecomputedDh_sameKernel chainingKey precomputed)
+  (Framing.mixPrecomputedDh_sameWGWorld chainingKey precomputed).factor snapshot
 
 theorem mixPrecomputedDh_spec (P : Snapshot → Prop) (chainingKey precomputed : List UInt8) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.mixPrecomputedDh chainingKey precomputed
@@ -227,7 +227,7 @@ theorem mixPrecomputedDh_spec (P : Snapshot → Prop) (chainingKey precomputed :
 theorem callerJiffies_spec (P : Snapshot → Prop) (site : HiddenSite) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ callerJiffies site
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ :=
-  (sameSnapshot_of_sameKernel (Framing.callerJiffies_sameKernel site)).wp P
+  ((Framing.callerJiffies_sameWGWorld site).factor snapshot).wp P
 
 theorem modPeerTimer_sameSnapshot (site : HiddenSite) (pid : PeerId) (t : PeerTimer) (delay : Nat) : SameSnapshot (Leanux.WG.modPeerTimer site pid t delay) := by
   frame_same [Leanux.WG.modPeerTimer] using [callerJiffies_spec, armTimer_spec, modPeerTimerGuard_spec]
@@ -258,33 +258,16 @@ theorem timersDataSent_spec (P : Snapshot → Prop) (pid : PeerId) :
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (timersDataSent_sameSnapshot pid).wp P
 
 theorem beginSession_ordinary (pid : PeerId) : OrdinaryAction (Leanux.WG.beginSession pid) := by
-  frame_ordinary [Leanux.WG.beginSession] using [ownerPeerDeref_spec, ownerPeerWord_spec, deriveKeys_spec, getKeypair_live_spec, getPeer_spec, handshakeZero_spec, indexReplaceHandshake_spec, setKeypair_live_spec] ordinary [addNewKeypair_spec, keypairCreate_ordinary_spec]
+  frame_ordinary [Leanux.WG.beginSession] using [ownerPeerDeref_spec, ownerPeerWord_spec, deriveKeys_spec, getKeypair_live_spec, getPeer_spec, handshakeZero_spec, setKeypair_live_spec] ordinary [addNewKeypair_spec, keypairCreate_ordinary_spec]
 
 theorem beginSession_spec (P : Snapshot → Prop) (hp : Stable P) (pid : PeerId) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.beginSession pid
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (beginSession_ordinary pid).wp P hp
 
 theorem consumeInitiation_sameSnapshot (msg : List UInt8) : SameSnapshot (Leanux.WG.consumeInitiation msg) := by
-  apply sameSnapshot_of_wp
-  intro initial
-  have h0 := @branch_spec (fun s => s = initial)
-  have h1 := @branchCmp_spec (fun s => s = initial)
-  have h2 := @getDev_spec (fun s => s = initial)
-  have h3 := @getPeer_spec (fun s => s = initial)
-  have h4 := @hiddenClock_spec (fun s => s = initial)
-  have h5 := @hiddenClock64_spec (fun s => s = initial)
-  have h6 := @messageDecrypt_spec (fun s => s = initial)
-  have h7 := @messageEphemeral_spec (fun s => s = initial)
-  have h8 := @mixDh_spec (fun s => s = initial)
-  have h9 := @mixPrecomputedDh_spec (fun s => s = initial)
-  have h10 := @peerPut_spec (fun s => s = initial)
-  have h11 := @pubkeyLookup_spec (fun s => s = initial)
-  have h12 := @setPeer_spec (fun s => s = initial)
-  mvcgen -trivial [consumeInitiation, WG.andM, WG.orM, invariant, unsupported, h0, h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12]
-  all_goals mleave
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [snapshot]
-  all_goals trivial
+  frame_same [Leanux.WG.consumeInitiation] using [getDev_spec, getPeer_spec,
+    messageDecrypt_spec, messageEphemeral_spec, mixDh_spec, mixPrecomputedDh_spec,
+    peerPut_spec, pubkeyLookup_spec, setPeer_spec]
 
 theorem consumeInitiation_spec (P : Snapshot → Prop) (msg : List UInt8) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.consumeInitiation msg
@@ -298,21 +281,21 @@ theorem consumeResponse_spec (P : Snapshot → Prop) (msg : List UInt8) :
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (consumeResponse_sameSnapshot msg).wp P
 
 theorem createData_ordinary (pid : PeerId) (item : List SkbId) : OrdinaryAction (Leanux.WG.createData pid item) := by
-  frame_ordinary [Leanux.WG.createData] using [enqueuePerDeviceAndPeer_spec, enqueuePerPeerTx_spec, getPeer_spec, peerPut_spec, getTxSkb_spec, freeTxSkb_spec] ordinary [keypairPut_ordinary_spec]
+  frame_ordinary [Leanux.WG.createData] using [enqueuePerDeviceAndPeer_spec, enqueuePerPeerTx_spec, getPeer_spec, peerPut_spec] ordinary [keypairPut_ordinary_spec]
 
 theorem createData_spec (P : Snapshot → Prop) (hp : Stable P) (pid : PeerId) (item : List SkbId) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.createData pid item
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (createData_ordinary pid item).wp P hp
 
 theorem createInitiation_sameSnapshot (pid : PeerId) : SameSnapshot (Leanux.WG.createInitiation pid) := by
-  frame_same [Leanux.WG.createInitiation] using [ownerPeerDeref_spec, ownerPeerWord_spec, generatePublic_spec, getDev_spec, getPeer_spec, hidden_snapshot_spec, indexInsert_spec, messageEphemeral_spec, mixDh_spec, mixPrecomputedDh_spec, setChain_spec, setPeer_spec]
+  frame_same [Leanux.WG.createInitiation] using [ownerPeerDeref_spec, ownerPeerWord_spec, generatePublic_spec, getDev_spec, getPeer_spec, messageEphemeral_spec, mixDh_spec, mixPrecomputedDh_spec, setChain_spec, setPeer_spec]
 
 theorem createInitiation_spec (P : Snapshot → Prop) (pid : PeerId) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.createInitiation pid
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (createInitiation_sameSnapshot pid).wp P
 
 theorem createResponse_sameSnapshot (pid : PeerId) : SameSnapshot (Leanux.WG.createResponse pid) := by
-  frame_same [Leanux.WG.createResponse] using [ownerPeerDeref_spec, ownerPeerWord_spec, generatePublic_spec, getPeer_spec, hidden_snapshot_spec, indexInsert_spec, kdfOut_spec, kdf_spec, messageEphemeral_spec, mixDh_spec, setChain_spec, setPeer_spec]
+  frame_same [Leanux.WG.createResponse] using [ownerPeerDeref_spec, ownerPeerWord_spec, generatePublic_spec, getPeer_spec, kdfOut_spec, kdf_spec, messageEphemeral_spec, mixDh_spec, setChain_spec, setPeer_spec]
 
 theorem createResponse_spec (P : Snapshot → Prop) (pid : PeerId) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.createResponse pid
@@ -354,21 +337,25 @@ theorem timersTraversal_spec (P : Snapshot → Prop) (pid : PeerId) :
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (timersTraversal_sameSnapshot pid).wp P
 
 theorem sendHandshakeInitiation_sameSnapshot (pid : PeerId) : SameSnapshot (Leanux.WG.sendHandshakeInitiation pid) := by
-  frame_same [Leanux.WG.sendHandshakeInitiation] using [addMacToPacket_spec, branchExpired_spec, createInitiation_spec, getPeer_spec, hiddenClock_spec, hiddenClock64_spec, sendBufferToPeer_spec, setPeer_spec, timersAnyAuthenticatedPacketSent_spec, timersHandshakeInitiated_spec, timersTraversal_spec]
+  frame_same [Leanux.WG.sendHandshakeInitiation] using [addMacToPacket_spec, branchExpired_spec, createInitiation_spec, getPeer_spec, sendBufferToPeer_spec, setPeer_spec, timersAnyAuthenticatedPacketSent_spec, timersHandshakeInitiated_spec, timersTraversal_spec]
 
 theorem sendHandshakeInitiation_spec (P : Snapshot → Prop) (pid : PeerId) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.sendHandshakeInitiation pid
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (sendHandshakeInitiation_sameSnapshot pid).wp P
 
 theorem sendHandshakeResponse_ordinary (pid : PeerId) : OrdinaryAction (Leanux.WG.sendHandshakeResponse pid) := by
-  frame_ordinary [Leanux.WG.sendHandshakeResponse] using [addMacToPacket_spec, createResponse_spec, getPeer_spec, hiddenClock_spec, hiddenClock64_spec, sendBufferToPeer_spec, setPeer_spec, timersAnyAuthenticatedPacketSent_spec, timersSessionDerived_spec, timersTraversal_spec] ordinary [beginSession_spec]
+  frame_ordinary [Leanux.WG.sendHandshakeResponse] using [addMacToPacket_spec, createResponse_spec, getPeer_spec, sendBufferToPeer_spec, setPeer_spec, timersAnyAuthenticatedPacketSent_spec, timersSessionDerived_spec, timersTraversal_spec] ordinary [beginSession_spec]
 
 theorem sendHandshakeResponse_spec (P : Snapshot → Prop) (hp : Stable P) (pid : PeerId) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.sendHandshakeResponse pid
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (sendHandshakeResponse_ordinary pid).wp P hp
 
 theorem sendStagedPackets_ordinary (pid : PeerId) : OrdinaryAction (Leanux.WG.sendStagedPackets pid) := by
-  frame_ordinary [Leanux.WG.sendStagedPackets] using [ownerPeerDeref_spec, ownerPeerWord_spec, mapM_snapshot_spec, branchExpired_spec, getKeypair_live_spec, getPeer_spec, ipTunnelEcnEncap_spec, keypairGet_snapshot_spec, peerGet_spec, sendQueuedHandshakeInitiation_spec, setKeypair_live_spec, setPeer_spec, newTxSkb_spec] ordinary [createData_spec, keypairPut_ordinary_spec]
+  have mapM_spec (P : Snapshot → Prop) {α β : Type} (f : α → WG.M β) (xs : List α)
+      (hf : ∀ x, ⦃fun w => ⌜P (snapshot w)⌝⦄ f x ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄) :
+      ⦃fun w => ⌜P (snapshot w)⌝⦄ xs.mapM f ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ :=
+    Framing.mapM_view_spec snapshot P f xs hf
+  frame_ordinary [Leanux.WG.sendStagedPackets] using [ownerPeerDeref_spec, ownerPeerWord_spec, mapM_spec, branchExpired_spec, getKeypair_live_spec, getPeer_spec, ipTunnelEcnEncap_spec, keypairGet_snapshot_spec, peerGet_spec, sendQueuedHandshakeInitiation_spec, setKeypair_live_spec, setPeer_spec] ordinary [createData_spec, keypairPut_ordinary_spec]
 
 theorem sendStagedPackets_spec (P : Snapshot → Prop) (hp : Stable P) (pid : PeerId) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.sendStagedPackets pid
@@ -382,7 +369,7 @@ theorem handshakeSendWorker_spec (P : Snapshot → Prop) (pid : PeerId) :
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (handshakeSendWorker_sameSnapshot pid).wp P
 
 theorem sendKeepalive_ordinary (pid : PeerId) : OrdinaryAction (Leanux.WG.sendKeepalive pid) := by
-  frame_ordinary [Leanux.WG.sendKeepalive] using [getDev_spec, getPeer_spec, hiddenAlloc_snapshot_spec, setPeer_spec] ordinary [sendStagedPackets_spec]
+  frame_ordinary [Leanux.WG.sendKeepalive] using [getDev_spec, getPeer_spec, setPeer_spec] ordinary [sendStagedPackets_spec]
 
 theorem sendKeepalive_spec (P : Snapshot → Prop) (hp : Stable P) (pid : PeerId) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.sendKeepalive pid
