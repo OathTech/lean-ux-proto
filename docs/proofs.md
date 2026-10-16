@@ -20,8 +20,8 @@ remain on this branch. Initialized R3 packet authorization and R4 receive-pipeli
 conservation remain open; their next extensions follow the retrofit.
 
 The validated baseline `00641c6` has 471 Lean files and 7,715 named theorems.
-The current tree has 451 files and 6,335 theorems: completed changes comprise
-1,628 retyped, 1,630 deleted, 636 retained contract shapes and 250 added theorems.
+The current tree has 451 files and 6,359 theorems: completed changes comprise
+1,689 retyped, 1,635 deleted, 680 retained contract shapes and 279 added theorems.
 All 26 generic helpers and the additional update rule identified by the scope
 audit now retain arbitrary actual product-action scope, with three duplicate
 WP wrappers removed. Their dependent build, axioms, fresh replays and review pass.

@@ -306,7 +306,12 @@ private def traceFinish (j : Json) (id : String) (ops : Array Operation) (pauses
   let napiBeforePut ← if hasPlacement then
       (← (← source_field j "napi_irq_before_put").getArr?).toList.mapM fun b => b.getBool?
     else pure []
-  if napiBeforePut.length > 8 then throw "napi_irq_before_put: more than 8 entries"
+  let netRxStarts := match hidden with
+    | some perOp => perOp.foldl (fun n recs =>
+        n + (recs.filter (·.site == (HiddenSite.sectionStart .netRx).info.id)).length) 0
+    | none => 0
+  if napiBeforePut.length > netRxStarts then
+    throw "napi_irq_before_put: more entries than NET_RX section starts in the records"
   -- L: "bare"; W8: "foreign-creator"; W4: {"routes": [...]}
   let (bare, foreign, routes) ← if hasFixture then do
       let f ← source_field j "net_fixture"

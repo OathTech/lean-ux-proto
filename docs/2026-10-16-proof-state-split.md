@@ -87,9 +87,10 @@ it is not part of that baseline.
 | Native ring cuts/frames, saved-peer maintenance, routing acquisition and keypair affiliation | 116 | 88 | 9 | 19 | 16 | 123 |
 | Product TX source/worker, native configuration tail and canonical WG composition | 25 | 3 | 0 | 22 | 8 | 33 |
 | Configured identity, AllowedIPs, handshake construction, RX worker and strict TX borrowing | 93 | 50 | 3 | 40 | 22 | 112 |
+| Native counter, lookup/cache, TX staging/admission and RX maintenance | 110 | 61 | 5 | 44 | 29 | 134 |
 
-The whole tree currently contains 451 Lean files and 6,335 theorems. The completed
-changes total 1,628 retyped theorems, 1,630 deletions, 636 retained contract shapes and 250 added.
+The whole tree currently contains 451 Lean files and 6,359 theorems. The completed
+changes total 1,689 retyped theorems, 1,635 deletions, 680 retained contract shapes and 279 added.
 Retyping changes or generalizes the actual state/monad carrier or observation.
 This includes shorthand contracts whose source functions or named views move
 to a native monad. Mere namespace qualification and equivalent relocation of a
@@ -2104,3 +2105,91 @@ increase in this tranche.
 The mirror remains exactly b700659. The previous default build and unit results
 cover the unchanged executable closure. The full proof gate and downstream
 handshake/staging/NAPI chains remain pending; all result rows remain lagging.
+
+## Native counter, lookup/cache, TX staging and RX maintenance
+
+Twelve modules pass their scoped builds, 189 explicit declaration axiom checks,
+twelve fresh module replays and independent source review. Their 110 old
+theorems become 134: 61 retyped/generalized, 44 retained contracts, five
+deletions and 29 additions. The concrete counter-window observer keeps the exact
+comparison operands, short circuit, increment and bitmap failure paths. Lookup
+and cache observers retain arbitrary product-history invariant contracts beside
+their native counterparts; cache acquisition reads the actual Ambient and WG
+flags separately and retains the peer read before a failed refresh clock.
+
+The TX family retains arbitrary product invariants and the original arbitrary
+keypair continuation. Native metadata/access, staging and admission contracts
+thread the actual WG and Ambient endpoints; rejection and malformed allocation
+still retain their reached history. KeyTimes' five generic transports now apply
+to arbitrary actual StateT state; its two product branch contracts remain, and
+seven native helper contracts are added. The conditional native-to-product TX
+contract constructor is an addition, not a substitute for the arbitrary product
+contract.
+
+Four RX Skb leaf frames are deleted because their cross-store observations are
+preserved by the component's write scope. The lookup getNode wrapper is deleted
+as a duplicate of the already-proved native getter contract, not because the
+getter's own-store behavior follows from types. RX queue primitives retain
+arbitrary product continuations. Maintenance carries twelve substantive
+successful-return or retention claims, using actual wheel placement and removal.
+Two local tactics factor generated continuations into ordinary kernel-checked
+composition proofs; no verification limit changes.
+
+ParserShape's 22 contracts remain. Its old proof-side source factor bounded NAPI
+placements by eight; the current parser bounds them by recorded NET_RX section
+starts. A one-operation trace with one placement and no hidden records was
+accepted by the old factor and rejected by the parser. The repaired factor uses
+the literal current count, so its source equality closes again. This is a
+proof-observer correspondence finding; it changes no mirror behavior. Both
+counterexample endpoints were checked by the kernel using standard axioms.
+Reproduce the distinction from the old committed factor with:
+
+~~~sh
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 python3 - <<'PY'
+import subprocess,sys
+old=subprocess.check_output(['git','show','91a07ea:Leanux/Proofs/WG/Configuration/ParserShape.lean'],text=True)
+fragment=old[old.index('private abbrev source_field'):old.index('private theorem traceSource_eq')]
+lean='''import Leanux.Proofs.WG.Configuration.PeerTailRouting
+open Lean Leanux Leanux.WG Leanux.Runner
+namespace ParserPlacementProbe
+private def parseOperation := pinned_const _private.Leanux.Runner.«0».Leanux.Runner.parseOperation
+'''+fragment+'''
+private def specimen : Json := Json.mkObj [
+  ("version", toJson (1 : Nat)), ("id", toJson "placement_probe"),
+  ("ops", Json.arr #[Json.mkObj [("op", toJson "pipe2"), ("flags", toJson (0 : Nat))]]),
+  ("napi_irq_before_put", Json.arr #[Json.bool false])]
+theorem actual_rejects : (Runner.parseTrace specimen).isOk = false := by
+  decide +kernel
+theorem obsolete_accepts : (traceSource specimen).isOk = true := by
+  decide +kernel
+#print axioms actual_rejects
+#print axioms obsolete_accepts
+end ParserPlacementProbe
+'''
+r=subprocess.run(['capped','--','scripts/in-bundle','lake','env','lean','-j1','--stdin'],input=lean,text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
+print(r.stdout);sys.exit(r.returncode)
+PY
+~~~
+
+Development outcomes: the four-module TX chain needed fourteen changed-source
+builds (six passes, eight ordinary failures in binder, range, conditional and
+product composition); its final whitespace correction preserves proof tokens
+and passed the dependent build. TxStagingCalls passed its first build. KeyTimes
+staging had one binder/trailing-tactic failure followed by a pass. CounterAccess
+passed its native build and its product-extension build. AllowedLookup had one
+heartbeat failure from broad rule matching, then passed both narrowed matching
+and its product extension. SocketCache passed both builds. ParserShape passed
+after the old factor's failed source equality was repaired. The two RX modules
+needed fourteen builds (two passes, twelve ordinary failures in normalization,
+WP composition and conjunction transport). The first maintenance axiom wrapper
+incorrectly rejected wrapped output; its corrected multiline parser passed all
+twelve declarations. No failed output was accepted as validation. There was no
+crash, infrastructure rerun, KILLED, guest timeout or cap/proof-limit increase.
+
+The intervening whole-tree diagnostic build failed at seven frontiers:
+TxContracts, TxDispositionCuts, RxMaintenanceFrames, SocketCache,
+AllowedIpsInsert, Configuration.ParserShape and HandshakeConsume. This was
+not a count of all remaining downstream failures. Several are repaired above;
+the full proof gate remains pending. The mirror remains exactly b700659,
+and the prior default-build and unit-test results cover its unchanged executable
+closure. Every result remains lagging; R3/R4 work follows the retrofit.

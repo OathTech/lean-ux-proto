@@ -23,7 +23,7 @@ def Result : TxStagingCall → Type
   | .deviceEnqueue _ _ => Int
   | _ => Unit
 
-def original (call : TxStagingCall) : M call.Result := match call with
+def original (call : TxStagingCall) : WG.M call.Result := match call with
   | .cpu pid => cpumaskChooseOnline pid
   | .peerEnqueue item state => enqueuePerPeerTx item state
   | .deviceEnqueue pid item => enqueuePerDeviceAndPeer pid item
@@ -41,7 +41,7 @@ def observed (call : TxStagingCall) : MixedM call.Result := match call with
   | .send pid => sendStagedPacketsPrefix pid
   | .keepalive pid => sendKeepalivePrefix pid
 
-theorem erases (call : TxStagingCall) : ErasesPrefix call.observed call.original := by
+theorem erases (call : TxStagingCall) : ErasesStatePrefix call.observed call.original := by
   cases call with
   | cpu pid => exact cpumaskChooseOnlinePrefix_erases pid
   | peerEnqueue item state => exact enqueuePerPeerTxPrefix_erases item state
@@ -52,7 +52,7 @@ theorem erases (call : TxStagingCall) : ErasesPrefix call.observed call.original
   | keepalive pid => exact sendKeepalivePrefix_erases pid
 
 theorem preserves_ambient (c : AmbientContracts I) (t : TxContracts I)
-    (call : TxStagingCall) : PrefixPreserves I LifetimeEvent.Safe call.observed := by
+    (call : TxStagingCall) : StatePrefixPreserves (fun h w _ => I h w) LifetimeEvent.Safe call.observed := by
   cases call with
   | cpu pid => exact cpumaskChooseOnlinePrefix_preserves_ambient c pid
   | peerEnqueue item state => exact enqueuePerPeerTxPrefix_preserves_ambient c t item state
@@ -62,20 +62,33 @@ theorem preserves_ambient (c : AmbientContracts I) (t : TxContracts I)
   | send pid => exact sendStagedPacketsPrefix_preserves_ambient c t pid
   | keepalive pid => exact sendKeepalivePrefix_preserves_ambient c t pid
 
-theorem allocation (call : TxStagingCall) : PrefixPreserves AllocationInv LifetimeEvent.Safe call.observed :=
+theorem preserves_product (c : ProductAmbientContracts I) (t : ProductTxContracts I)
+    (call : TxStagingCall) : PrefixPreserves I LifetimeEvent.Safe (liftWGObserver call.observed) := by
+  cases call with
+  | cpu pid => exact cpumaskChooseOnlinePrefix_preserves_product c pid
+  | peerEnqueue item state => exact enqueuePerPeerTxPrefix_preserves_product c t item state
+  | deviceEnqueue pid item => exact enqueuePerDeviceAndPeerPrefix_preserves_product c t pid item
+  | create pid item => exact createDataPrefix_preserves_product c t pid item
+  | purge pid => exact purgeStagedPacketsPrefix_preserves_product c t pid
+  | send pid => exact sendStagedPacketsPrefix_preserves_product c t pid
+  | keepalive pid => exact sendKeepalivePrefix_preserves_product c t pid
+
+theorem allocation (call : TxStagingCall) : StatePrefixPreserves (fun h w _ => AllocationInv h w) LifetimeEvent.Safe call.observed :=
   call.preserves_ambient allocationAmbient allocationTx
 
 end TxStagingCall
 
 /-- An absent/malformed allocation record can fail after the initial peer read.
 The premises are original operations, not observer log assumptions. -/
-theorem sendKeepalivePrefix_alloc_failure (pid : PeerId) (w checked : World) (p : Peer)
+theorem sendKeepalivePrefix_alloc_failure (pid : PeerId) (w checked : WGWorld) (ambient checkedAmbient : Ambient) (p : Peer)
     (h : List LifetimeEvent) (e : Stop)
-    (hp : (getPeer pid).run w = .ok (p, w))
-    (hb : (branch .keepaliveStagedEmpty p.staged.isEmpty).run w = .ok (true, checked))
-    (ha : (hiddenAlloc .keepaliveSkb).run checked = .error e) :
-    runPrefix (sendKeepalivePrefix pid) w h =
+    (hp : ((getPeer pid).run w).run ambient = .ok ((p, w), ambient))
+    (hb : ((branch .keepaliveStagedEmpty p.staged.isEmpty : WG.M Bool).run w).run ambient =
+      .ok ((true, checked), checkedAmbient))
+    (ha : ((hiddenAlloc .keepaliveSkb : WG.M Bool).run checked).run checkedAmbient = .error e) :
+    runStatePrefix (sendKeepalivePrefix pid) w ambient h =
       (.error e, h ++ [.peer (.read pid p.internalId)]) := by
-  simp [sendKeepalivePrefix, runPrefix_bind, getPeerMixed_run, hp, runPrefix_lift, hb, ha]
+  simp [sendKeepalivePrefix, runStatePrefix_bind, getPeerMixed_run, hp,
+    liftWGPrefix, liftStatePrefix, runPrefix_lift, hb, ha]
 
 end Leanux.Proofs.WG.Lifetimes
