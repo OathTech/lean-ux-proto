@@ -12,10 +12,10 @@ open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing
 
 def expiredRetransmitHandshakePrefix (pid : PeerId) : MixedM Unit := do
   let attempts := (← getPeerMixed pid).timerHandshakeAttempts
-  if ← liftPrefix (branchCmp .retransmitGiveUp (attempts > MAX_TIMER_HANDSHAKES) attempts MAX_TIMER_HANDSHAKES) then
+  if ← liftWGPrefix (branchCmp .retransmitGiveUp (attempts > MAX_TIMER_HANDSHAKES) attempts MAX_TIMER_HANDSHAKES) then
     delTimerPrefix pid .sendKeepalive
     purgeStagedPacketsPrefix pid
-    if ← liftPrefix (branch .retransmitZeroKeyNotPending !((← getPeerMixed pid).timerPending .zeroKeyMaterial)) then
+    if ← liftWGPrefix (branch .retransmitZeroKeyNotPending !((← getPeerMixed pid).timerPending .zeroKeyMaterial)) then
       discard <| modPeerTimerPrefix .timerJiffiesRetransmitZeroKey pid .zeroKeyMaterial ZERO_KEY_MATERIAL_TICKS
   else
     modifyPeerKeysPrefix pid fun p => {p with timerHandshakeAttempts := p.timerHandshakeAttempts + 1}
@@ -24,7 +24,7 @@ def expiredRetransmitHandshakePrefix (pid : PeerId) : MixedM Unit := do
 
 def expiredSendKeepalivePrefix (pid : PeerId) : MixedM Unit := do
   sendKeepalivePrefix pid
-  if ← liftPrefix (branch .keepaliveNeedAnother (← getPeerMixed pid).timerNeedAnotherKeepalive) then
+  if ← liftWGPrefix (branch .keepaliveNeedAnother (← getPeerMixed pid).timerNeedAnotherKeepalive) then
     modifyPeerKeysPrefix pid fun p => {p with timerNeedAnotherKeepalive := false}
     discard <| modPeerTimerPrefix .timerJiffiesExpiredKeepalive pid .sendKeepalive KEEPALIVE_TIMEOUT_TICKS
 
@@ -33,16 +33,16 @@ def expiredNewHandshakePrefix (pid : PeerId) : MixedM Unit := do
   sendQueuedHandshakeInitiationPrefix pid false
 
 def expiredZeroKeyMaterialPrefix (pid : PeerId) : MixedM Unit := do
-  if ← liftPrefix (branch .zeroKeyAlive !(← getPeerMixed pid).isDead) then
+  if ← liftWGPrefix (branch .zeroKeyAlive !(← getPeerMixed pid).isDead) then
     peerGetMixed pid
-    if ← liftPrefix (branch .zeroKeyAlreadyQueued ((← liftPrefix getDev).clearWorkQueue.contains pid)) then
+    if ← liftWGPrefix (branch .zeroKeyAlreadyQueued ((← liftWGPrefix getDev).clearWorkQueue.contains pid && !(← liftWGPrefix (peekQueuedUnit .clearPeerWorker pid)))) then
       peerPutMixed (some pid)
     else
-      liftPrefix (recordQueued .clearPeerWorker pid)
-      liftPrefix (modifyDev fun d => {d with clearWorkQueue := d.clearWorkQueue ++ [pid]})
+      liftWGPrefix (recordQueued .clearPeerWorker pid)
+      liftWGPrefix (modifyDev fun d => {d with clearWorkQueue := d.clearWorkQueue ++ [pid]})
 
 def expiredSendPersistentKeepalivePrefix (pid : PeerId) : MixedM Unit := do
-  if ← liftPrefix (branch .persistentKeepaliveInterval ((← getPeerMixed pid).persistentKeepaliveInterval != 0)) then
+  if ← liftWGPrefix (branch .persistentKeepaliveInterval ((← getPeerMixed pid).persistentKeepaliveInterval != 0)) then
     sendKeepalivePrefix pid
 
 def timerCallbackPrefix (pid : PeerId) : PeerTimer → MixedM Unit
@@ -53,7 +53,7 @@ def timerCallbackPrefix (pid : PeerId) : PeerTimer → MixedM Unit
   | .persistentKeepalive => expiredSendPersistentKeepalivePrefix pid
 
 theorem expiredRetransmitHandshakePrefix_erases (pid : PeerId) :
-    ErasesPrefix (expiredRetransmitHandshakePrefix pid) (expiredRetransmitHandshake pid) := by
+    ErasesStatePrefix (expiredRetransmitHandshakePrefix pid) (expiredRetransmitHandshake pid) := by
   unfold expiredRetransmitHandshakePrefix expiredRetransmitHandshake modifyPeerKeysPrefix
   simp only [Functor.discard, map_const, Function.comp_apply, Function.const, map_eq_pure_bind, bind_assoc]
   repeat' first
@@ -64,14 +64,14 @@ theorem expiredRetransmitHandshakePrefix_erases (pid : PeerId) :
     | with_reducible exact modPeerTimerPrefix_erases _ _ _ _
     | with_reducible exact clearPeerEndpointSrcPrefix_erases _
     | with_reducible exact sendQueuedHandshakeInitiationPrefix_erases _ _
-    | with_reducible exact erasesPrefix_lift _
-    | with_reducible exact erasesPrefix_pure _
-    | with_reducible apply erasesPrefix_bind
+    | (maintenance_lift_head; exact erasesStatePrefix_lift _)
+    | with_reducible exact erasesStatePrefix_pure _
+    | with_reducible apply erasesStatePrefix_bind
     | (with_reducible split)
     | (with_reducible intro x; try dsimp only)
 
 theorem expiredSendKeepalivePrefix_erases (pid : PeerId) :
-    ErasesPrefix (expiredSendKeepalivePrefix pid) (expiredSendKeepalive pid) := by
+    ErasesStatePrefix (expiredSendKeepalivePrefix pid) (expiredSendKeepalive pid) := by
   unfold expiredSendKeepalivePrefix expiredSendKeepalive modifyPeerKeysPrefix
   simp only [Functor.discard, map_const, Function.comp_apply, Function.const, map_eq_pure_bind, bind_assoc]
   repeat' first
@@ -79,43 +79,43 @@ theorem expiredSendKeepalivePrefix_erases (pid : PeerId) :
     | with_reducible exact setPeerMixed_erases _ _
     | with_reducible exact sendKeepalivePrefix_erases _
     | with_reducible exact modPeerTimerPrefix_erases _ _ _ _
-    | with_reducible exact erasesPrefix_lift _
-    | with_reducible exact erasesPrefix_pure _
-    | with_reducible apply erasesPrefix_bind
+    | (maintenance_lift_head; exact erasesStatePrefix_lift _)
+    | with_reducible exact erasesStatePrefix_pure _
+    | with_reducible apply erasesStatePrefix_bind
     | (with_reducible split)
     | (with_reducible intro x; try dsimp only)
 
 theorem expiredNewHandshakePrefix_erases (pid : PeerId) :
-    ErasesPrefix (expiredNewHandshakePrefix pid) (expiredNewHandshake pid) :=
-  erasesPrefix_bind (clearPeerEndpointSrcPrefix_erases pid) (fun _ => sendQueuedHandshakeInitiationPrefix_erases pid false)
+    ErasesStatePrefix (expiredNewHandshakePrefix pid) (expiredNewHandshake pid) :=
+  erasesStatePrefix_bind (clearPeerEndpointSrcPrefix_erases pid) (fun _ => sendQueuedHandshakeInitiationPrefix_erases pid false)
 
 theorem expiredZeroKeyMaterialPrefix_erases (pid : PeerId) :
-    ErasesPrefix (expiredZeroKeyMaterialPrefix pid) (expiredZeroKeyMaterial pid) := by
+    ErasesStatePrefix (expiredZeroKeyMaterialPrefix pid) (expiredZeroKeyMaterial pid) := by
   unfold expiredZeroKeyMaterialPrefix expiredZeroKeyMaterial
   repeat' first
     | with_reducible exact getPeerMixed_erases _
     | with_reducible exact peerGetMixed_erases _
     | with_reducible exact peerPutMixed_erases _
-    | with_reducible exact erasesPrefix_lift _
-    | with_reducible exact erasesPrefix_pure _
-    | with_reducible apply erasesPrefix_bind
+    | (maintenance_lift_head; exact erasesStatePrefix_lift _)
+    | with_reducible exact erasesStatePrefix_pure _
+    | with_reducible apply erasesStatePrefix_bind
     | (with_reducible split)
     | (with_reducible intro x; try dsimp only)
 
 theorem expiredSendPersistentKeepalivePrefix_erases (pid : PeerId) :
-    ErasesPrefix (expiredSendPersistentKeepalivePrefix pid) (expiredSendPersistentKeepalive pid) := by
+    ErasesStatePrefix (expiredSendPersistentKeepalivePrefix pid) (expiredSendPersistentKeepalive pid) := by
   unfold expiredSendPersistentKeepalivePrefix expiredSendPersistentKeepalive
   repeat' first
     | with_reducible exact getPeerMixed_erases _
     | with_reducible exact sendKeepalivePrefix_erases _
-    | with_reducible exact erasesPrefix_lift _
-    | with_reducible exact erasesPrefix_pure _
-    | with_reducible apply erasesPrefix_bind
+    | (maintenance_lift_head; exact erasesStatePrefix_lift _)
+    | with_reducible exact erasesStatePrefix_pure _
+    | with_reducible apply erasesStatePrefix_bind
     | (with_reducible split)
     | (with_reducible intro x; try dsimp only)
 
 theorem timerCallbackPrefix_erases (pid : PeerId) (timer : PeerTimer) :
-    ErasesPrefix (timerCallbackPrefix pid timer) (timerCallback pid timer) := by
+    ErasesStatePrefix (timerCallbackPrefix pid timer) (timerCallback pid timer) := by
   cases timer with
   | retransmitHandshake => exact expiredRetransmitHandshakePrefix_erases pid
   | sendKeepalive => exact expiredSendKeepalivePrefix_erases pid
@@ -125,15 +125,15 @@ theorem timerCallbackPrefix_erases (pid : PeerId) (timer : PeerTimer) :
 
 /-- Scalar queue mutations have independent ambient obligations. Concrete
 allocation geometry discharges both, without a reference-credit invariant. -/
-structure TimerQueueContracts (I : List LifetimeEvent → World → Prop) : Prop where
-  send : ∀ pid, PrefixPreserves I LifetimeEvent.Safe
-    (liftPrefix (modifyDev fun d => {d with sendWorkQueue := d.sendWorkQueue ++ [pid]}))
-  clear : ∀ pid, PrefixPreserves I LifetimeEvent.Safe
-    (liftPrefix (modifyDev fun d => {d with clearWorkQueue := d.clearWorkQueue ++ [pid]}))
+structure TimerQueueContracts (I : List LifetimeEvent → WGWorld → Prop) : Prop where
+  send : ∀ pid, StatePrefixPreserves (fun h w _ => I h w) LifetimeEvent.Safe
+    (liftWGPrefix (modifyDev fun d => {d with sendWorkQueue := d.sendWorkQueue ++ [pid]}))
+  clear : ∀ pid, StatePrefixPreserves (fun h w _ => I h w) LifetimeEvent.Safe
+    (liftWGPrefix (modifyDev fun d => {d with clearWorkQueue := d.clearWorkQueue ++ [pid]}))
 
 theorem expiredRetransmitHandshakePrefix_preserves (c : AmbientContracts I) (t : TxContracts I)
     (q : TimerQueueContracts I) (pid : PeerId) :
-    PrefixPreserves I LifetimeEvent.Safe (expiredRetransmitHandshakePrefix pid) := by
+    StatePrefixPreserves (fun h w _ => I h w) LifetimeEvent.Safe (expiredRetransmitHandshakePrefix pid) := by
   unfold expiredRetransmitHandshakePrefix
   simp only [Functor.discard, map_const, Function.comp_apply, Function.const, map_eq_pure_bind]
   repeat' first
@@ -146,13 +146,13 @@ theorem expiredRetransmitHandshakePrefix_preserves (c : AmbientContracts I) (t :
     | with_reducible exact AmbientContracts.drop (modifyPeerKeysPrefix_spec_ambient c (fun _ => True) _ _ (fun _ => rfl))
     | with_reducible exact purgeStagedPacketsPrefix_preserves_ambient c t _
     | with_reducible exact sendQueuedHandshakeInitiationPrefix_preserves_ambient c q.send _ _
-    | with_reducible exact PrefixPreserves.pure c.safe _
-    | with_reducible apply PrefixPreserves.bind
+    | with_reducible exact StatePrefixEnsures.pure _ (fun h w _ hi => c.safe h w hi) (fun _ _ _ hi => hi)
+    | with_reducible apply StatePrefixEnsures.bind
     | (with_reducible split)
     | (with_reducible intro x; try dsimp only)
 
 theorem expiredSendKeepalivePrefix_preserves (c : AmbientContracts I) (t : TxContracts I)
-    (pid : PeerId) : PrefixPreserves I LifetimeEvent.Safe (expiredSendKeepalivePrefix pid) := by
+    (pid : PeerId) : StatePrefixPreserves (fun h w _ => I h w) LifetimeEvent.Safe (expiredSendKeepalivePrefix pid) := by
   unfold expiredSendKeepalivePrefix
   simp only [Functor.discard, map_const, Function.comp_apply, Function.const, map_eq_pure_bind]
   repeat' first
@@ -161,47 +161,48 @@ theorem expiredSendKeepalivePrefix_preserves (c : AmbientContracts I) (t : TxCon
     | with_reducible exact AmbientContracts.drop (c.branch (fun _ => True) _ _)
     | with_reducible exact AmbientContracts.drop (modPeerTimerPrefix_spec c (fun _ => True) _ _ _ _)
     | with_reducible exact AmbientContracts.drop (modifyPeerKeysPrefix_spec_ambient c (fun _ => True) _ _ (fun _ => rfl))
-    | with_reducible exact PrefixPreserves.pure c.safe _
-    | with_reducible apply PrefixPreserves.bind
+    | with_reducible exact StatePrefixEnsures.pure _ (fun h w _ hi => c.safe h w hi) (fun _ _ _ hi => hi)
+    | with_reducible apply StatePrefixEnsures.bind
     | (with_reducible split)
     | (with_reducible intro x; try dsimp only)
 
 theorem expiredNewHandshakePrefix_preserves (c : AmbientContracts I) (q : TimerQueueContracts I)
-    (pid : PeerId) : PrefixPreserves I LifetimeEvent.Safe (expiredNewHandshakePrefix pid) :=
-  PrefixPreserves.bind (AmbientContracts.drop (clearPeerEndpointSrcPrefix_spec c (fun _ => True) pid))
+    (pid : PeerId) : StatePrefixPreserves (fun h w _ => I h w) LifetimeEvent.Safe (expiredNewHandshakePrefix pid) :=
+  StatePrefixEnsures.bind (AmbientContracts.drop (clearPeerEndpointSrcPrefix_spec c (fun _ => True) pid))
     (fun _ => sendQueuedHandshakeInitiationPrefix_preserves_ambient c q.send pid false)
 
 theorem expiredZeroKeyMaterialPrefix_preserves (c : AmbientContracts I) (q : TimerQueueContracts I)
-    (pid : PeerId) : PrefixPreserves I LifetimeEvent.Safe (expiredZeroKeyMaterialPrefix pid) := by
+    (pid : PeerId) : StatePrefixPreserves (fun h w _ => I h w) LifetimeEvent.Safe (expiredZeroKeyMaterialPrefix pid) := by
   unfold expiredZeroKeyMaterialPrefix
   repeat' first
     | with_reducible exact AmbientContracts.drop (c.getPeer_frame (fun _ => True) _)
     | with_reducible exact AmbientContracts.drop (c.branch (fun _ => True) _ _)
     | with_reducible exact c.peerGet _
     | with_reducible exact c.peerPut _
-    | with_reducible exact AmbientContracts.drop (c.kernel (fun _ => True) _ getDev_sameKernel)
-    | with_reducible exact AmbientContracts.drop (c.kernel (fun _ => True) _ (recordQueued_sameKernel _ _))
+    | with_reducible exact AmbientContracts.drop (c.store (fun _ => True) _ getDev_sameWGStore)
+    | (maintenance_lift_action_head recordQueued; exact AmbientContracts.drop (c.store (fun _ => True) _ (fun initial => hoare_liftAmbient (AmbientM.recordQueued .clearPeerWorker pid) (fun w => wgStoreView w = initial))))
+    | (maintenance_lift_action_head peekQueuedUnit; exact AmbientContracts.drop (c.store (fun _ => True) _ (fun initial => hoare_liftAmbient (AmbientM.peekQueuedUnit .clearPeerWorker pid) (fun w => wgStoreView w = initial))))
     | with_reducible exact q.clear _
-    | with_reducible exact PrefixPreserves.pure c.safe _
-    | with_reducible apply PrefixPreserves.bind
+    | with_reducible exact StatePrefixEnsures.pure _ (fun h w _ hi => c.safe h w hi) (fun _ _ _ hi => hi)
+    | with_reducible apply StatePrefixEnsures.bind
     | (with_reducible split)
     | (with_reducible intro x; try dsimp only)
 
 theorem expiredSendPersistentKeepalivePrefix_preserves (c : AmbientContracts I) (t : TxContracts I)
-    (pid : PeerId) : PrefixPreserves I LifetimeEvent.Safe (expiredSendPersistentKeepalivePrefix pid) := by
+    (pid : PeerId) : StatePrefixPreserves (fun h w _ => I h w) LifetimeEvent.Safe (expiredSendPersistentKeepalivePrefix pid) := by
   unfold expiredSendPersistentKeepalivePrefix
   repeat' first
     | with_reducible exact AmbientContracts.drop (c.getPeer_frame (fun _ => True) _)
     | with_reducible exact AmbientContracts.drop (c.branch (fun _ => True) _ _)
     | with_reducible exact sendKeepalivePrefix_preserves_ambient c t _
-    | with_reducible exact PrefixPreserves.pure c.safe _
-    | with_reducible apply PrefixPreserves.bind
+    | with_reducible exact StatePrefixEnsures.pure _ (fun h w _ hi => c.safe h w hi) (fun _ _ _ hi => hi)
+    | with_reducible apply StatePrefixEnsures.bind
     | (with_reducible split)
     | (with_reducible intro x; try dsimp only)
 
 theorem timerCallbackPrefix_preserves (c : AmbientContracts I) (t : TxContracts I)
     (q : TimerQueueContracts I) (pid : PeerId) (timer : PeerTimer) :
-    PrefixPreserves I LifetimeEvent.Safe (timerCallbackPrefix pid timer) := by
+    StatePrefixPreserves (fun h w _ => I h w) LifetimeEvent.Safe (timerCallbackPrefix pid timer) := by
   cases timer with
   | retransmitHandshake => exact expiredRetransmitHandshakePrefix_preserves c t q pid
   | sendKeepalive => exact expiredSendKeepalivePrefix_preserves c t pid
@@ -212,19 +213,19 @@ theorem timerCallbackPrefix_preserves (c : AmbientContracts I) (t : TxContracts 
 theorem clearWorkQueue_identity_metadata (pid : PeerId) :
     SameView (fun w => (identityView w, allocationMetadata w))
       (modifyDev fun d => {d with clearWorkQueue := d.clearWorkQueue ++ [pid]}) := by
-  intro w x v hr
+  apply (ProjectedAction.iff_run_ambient _ _ _).mpr
+  intro w ambient x v ambient' hr
   cases hr
   unfold identityView Peers.snapshot keypairResidents packetResidents allocationMetadata
   simp [Option.bind_map, Function.comp_def, deviceAllocationMetadata]
   rfl
 
 theorem clearWorkQueue_allocation (pid : PeerId) :
-    PrefixPreserves AllocationInv LifetimeEvent.Safe
-      (liftPrefix (modifyDev fun d => {d with clearWorkQueue := d.clearWorkQueue ++ [pid]})) := by
-  apply PrefixEnsures.preserves
-  apply PrefixEnsures.lift _ (fun _ _ hi => hi.safe)
-  intro h w x v hi hr
-  have hf := clearWorkQueue_identity_metadata pid w x v hr
+    StatePrefixPreserves (fun h w _ => AllocationInv h w) LifetimeEvent.Safe
+      (liftWGPrefix (modifyDev fun d => {d with clearWorkQueue := d.clearWorkQueue ++ [pid]})) := by
+  apply StatePrefixEnsures.lift _ (fun _ _ _ hi => hi.safe)
+  intro h w ambient x v ambient' hi hr
+  have hf := (ProjectedAction.iff_run_ambient _ _ _).mp (clearWorkQueue_identity_metadata pid) w ambient x v ambient' hr
   exact hi.congr (congrArg Prod.fst hf) (congrArg Prod.snd hf)
 
 theorem allocationTimerQueue : TimerQueueContracts AllocationInv :=
@@ -240,7 +241,7 @@ inductive TimerCallbackCall where
 
 namespace TimerCallbackCall
 
-def original : TimerCallbackCall → M Unit
+def original : TimerCallbackCall → WG.M Unit
   | .retransmit pid => expiredRetransmitHandshake pid
   | .keepalive pid => expiredSendKeepalive pid
   | .handshake pid => expiredNewHandshake pid
@@ -256,7 +257,7 @@ def observed : TimerCallbackCall → MixedM Unit
   | .persistent pid => expiredSendPersistentKeepalivePrefix pid
   | .dispatch pid timer => timerCallbackPrefix pid timer
 
-theorem erases (call : TimerCallbackCall) : ErasesPrefix call.observed call.original := by
+theorem erases (call : TimerCallbackCall) : ErasesStatePrefix call.observed call.original := by
   cases call with
   | retransmit pid => exact expiredRetransmitHandshakePrefix_erases pid
   | keepalive pid => exact expiredSendKeepalivePrefix_erases pid
@@ -266,7 +267,7 @@ theorem erases (call : TimerCallbackCall) : ErasesPrefix call.observed call.orig
   | dispatch pid timer => exact timerCallbackPrefix_erases pid timer
 
 theorem preserves_ambient (c : AmbientContracts I) (t : TxContracts I) (q : TimerQueueContracts I)
-    (call : TimerCallbackCall) : PrefixPreserves I LifetimeEvent.Safe call.observed := by
+    (call : TimerCallbackCall) : StatePrefixPreserves (fun h w _ => I h w) LifetimeEvent.Safe call.observed := by
   cases call with
   | retransmit pid => exact expiredRetransmitHandshakePrefix_preserves c t q pid
   | keepalive pid => exact expiredSendKeepalivePrefix_preserves c t pid
@@ -276,8 +277,237 @@ theorem preserves_ambient (c : AmbientContracts I) (t : TxContracts I) (q : Time
   | dispatch pid timer => exact timerCallbackPrefix_preserves c t q pid timer
 
 theorem allocation (call : TimerCallbackCall) :
-    PrefixPreserves AllocationInv LifetimeEvent.Safe call.observed :=
+    StatePrefixPreserves (fun h w _ => AllocationInv h w) LifetimeEvent.Safe call.observed :=
   call.preserves_ambient allocationAmbient allocationTx allocationTimerQueue
 
 end TimerCallbackCall
+
+/-- Preserve the original arbitrary product-history invariant domain. -/
+structure ProductTimerQueueContracts (I : List LifetimeEvent → World → Prop) : Prop where
+  send : ∀ pid, PrefixPreserves I LifetimeEvent.Safe
+    (liftWGObserver (liftWGPrefix (modifyDev fun d => {d with sendWorkQueue := d.sendWorkQueue ++ [pid]})))
+  clear : ∀ pid, PrefixPreserves I LifetimeEvent.Safe
+    (liftWGObserver (liftWGPrefix (modifyDev fun d => {d with clearWorkQueue := d.clearWorkQueue ++ [pid]})))
+
+theorem expiredRetransmitHandshakePrefix_preserves_product (c : ProductAmbientContracts I) (t : ProductTxContracts I)
+    (q : ProductTimerQueueContracts I) (pid : PeerId) :
+    PrefixPreserves I LifetimeEvent.Safe (liftWGObserver (expiredRetransmitHandshakePrefix pid)) := by
+  have ambient {α : Type} (a : AmbientM α) : PrefixEnsures I LifetimeEvent.Safe
+      (liftWGObserver (liftWGPrefix (MonadLift.monadLift a : WG.M α))) (fun _ => I) :=
+    ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _
+      (fun initial => hoare_liftAmbient a (fun w => wgStoreView w = initial)))
+  change PrefixEnsures I LifetimeEvent.Safe _ (fun _ => I)
+  unfold expiredRetransmitHandshakePrefix
+  try simp only [Functor.discard, map_const, Function.comp_apply, Function.const, map_eq_pure_bind]
+  repeat' first
+    | maintenance_join_let
+    | maintenance_join_use
+    | maintenance_product_lift
+    | (maintenance_head getPeerMixed; exact ProductAmbientContracts.drop (c.getPeer_frame (fun _ => True) _))
+    | (maintenance_head peerGetMixed; exact c.peerGet _)
+    | (maintenance_head peerPutMixed; exact c.peerPut _)
+    | (maintenance_head delTimerPrefix; exact ProductAmbientContracts.drop (delTimerPrefix_spec_product c (fun _ => True) _ _))
+    | (maintenance_head modPeerTimerPrefix; exact ProductAmbientContracts.drop (modPeerTimerPrefix_spec_product c (fun _ => True) _ _ _ _))
+    | (maintenance_head clearPeerEndpointSrcPrefix; exact ProductAmbientContracts.drop (clearPeerEndpointSrcPrefix_spec_product c (fun _ => True) _))
+    | (maintenance_head modifyPeerKeysPrefix; exact ProductAmbientContracts.drop (modifyPeerKeysPrefix_spec_product c (fun _ => True) _ _ (fun _ => rfl)))
+    | (maintenance_head purgeStagedPacketsPrefix; exact purgeStagedPacketsPrefix_preserves_product c t _)
+    | (maintenance_head sendKeepalivePrefix; exact sendKeepalivePrefix_preserves_product c t _)
+    | (maintenance_head sendQueuedHandshakeInitiationPrefix; exact sendQueuedHandshakeInitiationPrefix_preserves_product c q.send _ _)
+    | (maintenance_lift_action_head modifyDev; exact q.clear _)
+    | (maintenance_lift_action_head getDev; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ getDev_sameWGStore))
+    | (maintenance_lift_action_head branch; exact ambient (AmbientM.branch _ _))
+    | (maintenance_lift_action_head branchCmp; exact ambient (AmbientM.branchCmp _ _ _ _))
+    | (maintenance_lift_action_head recordQueued; exact ambient (AmbientM.recordQueued _ _))
+    | (maintenance_lift_action_head peekQueuedUnit; exact ambient (AmbientM.peekQueuedUnit _ _))
+    | (maintenance_head Pure.pure; exact PrefixEnsures.pure c.safe (fun _ _ hi => hi))
+    | maintenance_product_bind
+    | maintenance_intro
+    | maintenance_reduce
+    | (maintenance_head ite; split)
+    | maintenance_reduce_match
+    | maintenance_match
+    | maintenance_impossible_match
+    | contradiction
+
+theorem expiredSendKeepalivePrefix_preserves_product (c : ProductAmbientContracts I) (t : ProductTxContracts I) (pid : PeerId) :
+    PrefixPreserves I LifetimeEvent.Safe (liftWGObserver (expiredSendKeepalivePrefix pid)) := by
+  have ambient {α : Type} (a : AmbientM α) : PrefixEnsures I LifetimeEvent.Safe
+      (liftWGObserver (liftWGPrefix (MonadLift.monadLift a : WG.M α))) (fun _ => I) :=
+    ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _
+      (fun initial => hoare_liftAmbient a (fun w => wgStoreView w = initial)))
+  change PrefixEnsures I LifetimeEvent.Safe _ (fun _ => I)
+  unfold expiredSendKeepalivePrefix
+  try simp only [Functor.discard, map_const, Function.comp_apply, Function.const, map_eq_pure_bind]
+  repeat' first
+    | maintenance_join_let
+    | maintenance_join_use
+    | maintenance_product_lift
+    | (maintenance_head getPeerMixed; exact ProductAmbientContracts.drop (c.getPeer_frame (fun _ => True) _))
+    | (maintenance_head peerGetMixed; exact c.peerGet _)
+    | (maintenance_head peerPutMixed; exact c.peerPut _)
+    | (maintenance_head delTimerPrefix; exact ProductAmbientContracts.drop (delTimerPrefix_spec_product c (fun _ => True) _ _))
+    | (maintenance_head modPeerTimerPrefix; exact ProductAmbientContracts.drop (modPeerTimerPrefix_spec_product c (fun _ => True) _ _ _ _))
+    | (maintenance_head clearPeerEndpointSrcPrefix; exact ProductAmbientContracts.drop (clearPeerEndpointSrcPrefix_spec_product c (fun _ => True) _))
+    | (maintenance_head modifyPeerKeysPrefix; exact ProductAmbientContracts.drop (modifyPeerKeysPrefix_spec_product c (fun _ => True) _ _ (fun _ => rfl)))
+    | (maintenance_head purgeStagedPacketsPrefix; exact purgeStagedPacketsPrefix_preserves_product c t _)
+    | (maintenance_head sendKeepalivePrefix; exact sendKeepalivePrefix_preserves_product c t _)
+    | (maintenance_head sendQueuedHandshakeInitiationPrefix; exact sendQueuedHandshakeInitiationPrefix_preserves_product c q.send _ _)
+    | (maintenance_lift_action_head modifyDev; exact q.clear _)
+    | (maintenance_lift_action_head getDev; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ getDev_sameWGStore))
+    | (maintenance_lift_action_head branch; exact ambient (AmbientM.branch _ _))
+    | (maintenance_lift_action_head branchCmp; exact ambient (AmbientM.branchCmp _ _ _ _))
+    | (maintenance_lift_action_head recordQueued; exact ambient (AmbientM.recordQueued _ _))
+    | (maintenance_lift_action_head peekQueuedUnit; exact ambient (AmbientM.peekQueuedUnit _ _))
+    | (maintenance_head Pure.pure; exact PrefixEnsures.pure c.safe (fun _ _ hi => hi))
+    | maintenance_product_bind
+    | maintenance_intro
+    | maintenance_reduce
+    | (maintenance_head ite; split)
+    | maintenance_reduce_match
+    | maintenance_match
+    | maintenance_impossible_match
+    | contradiction
+
+theorem expiredNewHandshakePrefix_preserves_product (c : ProductAmbientContracts I) (q : ProductTimerQueueContracts I) (pid : PeerId) :
+    PrefixPreserves I LifetimeEvent.Safe (liftWGObserver (expiredNewHandshakePrefix pid)) := by
+  have ambient {α : Type} (a : AmbientM α) : PrefixEnsures I LifetimeEvent.Safe
+      (liftWGObserver (liftWGPrefix (MonadLift.monadLift a : WG.M α))) (fun _ => I) :=
+    ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _
+      (fun initial => hoare_liftAmbient a (fun w => wgStoreView w = initial)))
+  change PrefixEnsures I LifetimeEvent.Safe _ (fun _ => I)
+  unfold expiredNewHandshakePrefix
+  try simp only [Functor.discard, map_const, Function.comp_apply, Function.const, map_eq_pure_bind]
+  repeat' first
+    | maintenance_join_let
+    | maintenance_join_use
+    | maintenance_product_lift
+    | (maintenance_head getPeerMixed; exact ProductAmbientContracts.drop (c.getPeer_frame (fun _ => True) _))
+    | (maintenance_head peerGetMixed; exact c.peerGet _)
+    | (maintenance_head peerPutMixed; exact c.peerPut _)
+    | (maintenance_head delTimerPrefix; exact ProductAmbientContracts.drop (delTimerPrefix_spec_product c (fun _ => True) _ _))
+    | (maintenance_head modPeerTimerPrefix; exact ProductAmbientContracts.drop (modPeerTimerPrefix_spec_product c (fun _ => True) _ _ _ _))
+    | (maintenance_head clearPeerEndpointSrcPrefix; exact ProductAmbientContracts.drop (clearPeerEndpointSrcPrefix_spec_product c (fun _ => True) _))
+    | (maintenance_head modifyPeerKeysPrefix; exact ProductAmbientContracts.drop (modifyPeerKeysPrefix_spec_product c (fun _ => True) _ _ (fun _ => rfl)))
+    | (maintenance_head purgeStagedPacketsPrefix; exact purgeStagedPacketsPrefix_preserves_product c t _)
+    | (maintenance_head sendKeepalivePrefix; exact sendKeepalivePrefix_preserves_product c t _)
+    | (maintenance_head sendQueuedHandshakeInitiationPrefix; exact sendQueuedHandshakeInitiationPrefix_preserves_product c q.send _ _)
+    | (maintenance_lift_action_head modifyDev; exact q.clear _)
+    | (maintenance_lift_action_head getDev; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ getDev_sameWGStore))
+    | (maintenance_lift_action_head branch; exact ambient (AmbientM.branch _ _))
+    | (maintenance_lift_action_head branchCmp; exact ambient (AmbientM.branchCmp _ _ _ _))
+    | (maintenance_lift_action_head recordQueued; exact ambient (AmbientM.recordQueued _ _))
+    | (maintenance_lift_action_head peekQueuedUnit; exact ambient (AmbientM.peekQueuedUnit _ _))
+    | (maintenance_head Pure.pure; exact PrefixEnsures.pure c.safe (fun _ _ hi => hi))
+    | maintenance_product_bind
+    | maintenance_intro
+    | maintenance_reduce
+    | (maintenance_head ite; split)
+    | maintenance_reduce_match
+    | maintenance_match
+    | maintenance_impossible_match
+    | contradiction
+
+theorem expiredZeroKeyMaterialPrefix_preserves_product (c : ProductAmbientContracts I) (q : ProductTimerQueueContracts I) (pid : PeerId) :
+    PrefixPreserves I LifetimeEvent.Safe (liftWGObserver (expiredZeroKeyMaterialPrefix pid)) := by
+  have ambient {α : Type} (a : AmbientM α) : PrefixEnsures I LifetimeEvent.Safe
+      (liftWGObserver (liftWGPrefix (MonadLift.monadLift a : WG.M α))) (fun _ => I) :=
+    ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _
+      (fun initial => hoare_liftAmbient a (fun w => wgStoreView w = initial)))
+  change PrefixEnsures I LifetimeEvent.Safe _ (fun _ => I)
+  unfold expiredZeroKeyMaterialPrefix
+  try simp only [Functor.discard, map_const, Function.comp_apply, Function.const, map_eq_pure_bind]
+  repeat' first
+    | maintenance_join_let
+    | maintenance_join_use
+    | maintenance_product_lift
+    | (maintenance_head getPeerMixed; exact ProductAmbientContracts.drop (c.getPeer_frame (fun _ => True) _))
+    | (maintenance_head peerGetMixed; exact c.peerGet _)
+    | (maintenance_head peerPutMixed; exact c.peerPut _)
+    | (maintenance_head delTimerPrefix; exact ProductAmbientContracts.drop (delTimerPrefix_spec_product c (fun _ => True) _ _))
+    | (maintenance_head modPeerTimerPrefix; exact ProductAmbientContracts.drop (modPeerTimerPrefix_spec_product c (fun _ => True) _ _ _ _))
+    | (maintenance_head clearPeerEndpointSrcPrefix; exact ProductAmbientContracts.drop (clearPeerEndpointSrcPrefix_spec_product c (fun _ => True) _))
+    | (maintenance_head modifyPeerKeysPrefix; exact ProductAmbientContracts.drop (modifyPeerKeysPrefix_spec_product c (fun _ => True) _ _ (fun _ => rfl)))
+    | (maintenance_head purgeStagedPacketsPrefix; exact purgeStagedPacketsPrefix_preserves_product c t _)
+    | (maintenance_head sendKeepalivePrefix; exact sendKeepalivePrefix_preserves_product c t _)
+    | (maintenance_head sendQueuedHandshakeInitiationPrefix; exact sendQueuedHandshakeInitiationPrefix_preserves_product c q.send _ _)
+    | (maintenance_lift_action_head modifyDev; exact q.clear _)
+    | (maintenance_lift_action_head getDev; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ getDev_sameWGStore))
+    | (maintenance_lift_action_head branch; exact ambient (AmbientM.branch _ _))
+    | (maintenance_lift_action_head branchCmp; exact ambient (AmbientM.branchCmp _ _ _ _))
+    | (maintenance_lift_action_head recordQueued; exact ambient (AmbientM.recordQueued _ _))
+    | (maintenance_lift_action_head peekQueuedUnit; exact ambient (AmbientM.peekQueuedUnit _ _))
+    | (maintenance_head Pure.pure; exact PrefixEnsures.pure c.safe (fun _ _ hi => hi))
+    | maintenance_product_bind
+    | maintenance_intro
+    | maintenance_reduce
+    | (maintenance_head ite; split)
+    | maintenance_reduce_match
+    | maintenance_match
+    | maintenance_impossible_match
+    | contradiction
+
+theorem expiredSendPersistentKeepalivePrefix_preserves_product (c : ProductAmbientContracts I) (t : ProductTxContracts I) (pid : PeerId) :
+    PrefixPreserves I LifetimeEvent.Safe (liftWGObserver (expiredSendPersistentKeepalivePrefix pid)) := by
+  have ambient {α : Type} (a : AmbientM α) : PrefixEnsures I LifetimeEvent.Safe
+      (liftWGObserver (liftWGPrefix (MonadLift.monadLift a : WG.M α))) (fun _ => I) :=
+    ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _
+      (fun initial => hoare_liftAmbient a (fun w => wgStoreView w = initial)))
+  change PrefixEnsures I LifetimeEvent.Safe _ (fun _ => I)
+  unfold expiredSendPersistentKeepalivePrefix
+  try simp only [Functor.discard, map_const, Function.comp_apply, Function.const, map_eq_pure_bind]
+  repeat' first
+    | maintenance_join_let
+    | maintenance_join_use
+    | maintenance_product_lift
+    | (maintenance_head getPeerMixed; exact ProductAmbientContracts.drop (c.getPeer_frame (fun _ => True) _))
+    | (maintenance_head peerGetMixed; exact c.peerGet _)
+    | (maintenance_head peerPutMixed; exact c.peerPut _)
+    | (maintenance_head delTimerPrefix; exact ProductAmbientContracts.drop (delTimerPrefix_spec_product c (fun _ => True) _ _))
+    | (maintenance_head modPeerTimerPrefix; exact ProductAmbientContracts.drop (modPeerTimerPrefix_spec_product c (fun _ => True) _ _ _ _))
+    | (maintenance_head clearPeerEndpointSrcPrefix; exact ProductAmbientContracts.drop (clearPeerEndpointSrcPrefix_spec_product c (fun _ => True) _))
+    | (maintenance_head modifyPeerKeysPrefix; exact ProductAmbientContracts.drop (modifyPeerKeysPrefix_spec_product c (fun _ => True) _ _ (fun _ => rfl)))
+    | (maintenance_head purgeStagedPacketsPrefix; exact purgeStagedPacketsPrefix_preserves_product c t _)
+    | (maintenance_head sendKeepalivePrefix; exact sendKeepalivePrefix_preserves_product c t _)
+    | (maintenance_head sendQueuedHandshakeInitiationPrefix; exact sendQueuedHandshakeInitiationPrefix_preserves_product c q.send _ _)
+    | (maintenance_lift_action_head modifyDev; exact q.clear _)
+    | (maintenance_lift_action_head getDev; exact ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ getDev_sameWGStore))
+    | (maintenance_lift_action_head branch; exact ambient (AmbientM.branch _ _))
+    | (maintenance_lift_action_head branchCmp; exact ambient (AmbientM.branchCmp _ _ _ _))
+    | (maintenance_lift_action_head recordQueued; exact ambient (AmbientM.recordQueued _ _))
+    | (maintenance_lift_action_head peekQueuedUnit; exact ambient (AmbientM.peekQueuedUnit _ _))
+    | (maintenance_head Pure.pure; exact PrefixEnsures.pure c.safe (fun _ _ hi => hi))
+    | maintenance_product_bind
+    | maintenance_intro
+    | maintenance_reduce
+    | (maintenance_head ite; split)
+    | maintenance_reduce_match
+    | maintenance_match
+    | maintenance_impossible_match
+    | contradiction
+
+theorem timerCallbackPrefix_preserves_product (c : ProductAmbientContracts I) (t : ProductTxContracts I)
+    (q : ProductTimerQueueContracts I) (pid : PeerId) (timer : PeerTimer) :
+    PrefixPreserves I LifetimeEvent.Safe (liftWGObserver (timerCallbackPrefix pid timer)) := by
+  cases timer with
+  | retransmitHandshake => exact expiredRetransmitHandshakePrefix_preserves_product c t q pid
+  | sendKeepalive => exact expiredSendKeepalivePrefix_preserves_product c t pid
+  | newHandshake => exact expiredNewHandshakePrefix_preserves_product c q pid
+  | zeroKeyMaterial => exact expiredZeroKeyMaterialPrefix_preserves_product c q pid
+  | persistentKeepalive => exact expiredSendPersistentKeepalivePrefix_preserves_product c t pid
+
+namespace TimerCallbackCall
+
+theorem preserves_product (c : ProductAmbientContracts I) (t : ProductTxContracts I)
+    (q : ProductTimerQueueContracts I) (call : TimerCallbackCall) :
+    PrefixPreserves I LifetimeEvent.Safe (liftWGObserver call.observed) := by
+  cases call with
+  | retransmit pid => exact expiredRetransmitHandshakePrefix_preserves_product c t q pid
+  | keepalive pid => exact expiredSendKeepalivePrefix_preserves_product c t pid
+  | handshake pid => exact expiredNewHandshakePrefix_preserves_product c q pid
+  | zero pid => exact expiredZeroKeyMaterialPrefix_preserves_product c q pid
+  | persistent pid => exact expiredSendPersistentKeepalivePrefix_preserves_product c t pid
+  | dispatch pid timer => exact timerCallbackPrefix_preserves_product c t q pid timer
+
+end TimerCallbackCall
+
 end Leanux.Proofs.WG.Lifetimes

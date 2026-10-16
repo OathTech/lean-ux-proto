@@ -26,7 +26,7 @@ def Result : SocketCall → Type
   | .send4 .. | .send6 .. => Int
   | _ => Unit
 
-def original (call : SocketCall) : M call.Result := match call with
+def original (call : SocketCall) : WG.M call.Result := match call with
   | .reset pid => dstCacheReset pid
   | .resetNow pid => dstCacheResetNow pid
   | .clear pid => clearPeerEndpointSrc pid
@@ -52,7 +52,7 @@ def observed (call : SocketCall) : MixedM call.Result := match call with
   | .send4 e cache bytes ds exactRx => send4Prefix e cache bytes ds exactRx
   | .send6 e cache bytes ds exactRx => send6Prefix e cache bytes ds exactRx
 
-theorem erases (call : SocketCall) : ErasesPrefix call.observed call.original := by
+theorem erases (call : SocketCall) : ErasesStatePrefix call.observed call.original := by
   cases call with
   | reset pid => exact dstCacheResetMixed_erases pid
   | resetNow pid => exact dstCacheResetNowPrefix_erases pid
@@ -80,21 +80,37 @@ theorem spec (c : AmbientContracts I) (sc : SocketContracts I) (P : IdentityView
   | tunnel e bytes ds r exactRx => exact tunnelXmitPrefix_spec c sc P e bytes ds r exactRx
   | send4 e cache bytes ds exactRx => exact send4Prefix_spec c sc P e cache bytes ds exactRx
   | send6 e cache bytes ds exactRx => exact send6Prefix_spec c sc P e cache bytes ds exactRx
+theorem spec_product (c : ProductAmbientContracts I) (sc : ProductSocketContracts I) (P : IdentityView → Prop)
+    (call : SocketCall) : ProductAmbientSpec I P (liftWGObserver call.observed) (fun _ => P) := by
+  cases call with
+  | reset pid => exact dstCacheResetMixed_spec_product c P pid
+  | resetNow pid => exact dstCacheResetNowPrefix_spec_product c P pid
+  | clear pid => exact clearPeerEndpointSrcPrefix_spec_product c P pid
+  | endpoint pid e => exact setPeerEndpointPrefix_spec_product c P pid e
+  | cacheGet pid gen => exact dstCacheGetPrefix_spec_product c P pid gen
+  | cacheSet pid src gen dev => exact dstCacheSetPrefix_spec_product c P pid src gen dev
+  | softirq => exact loopbackSoftirqPrefix_spec_product c P
+  | loopback sites raised => exact loopbackSendPrefix_spec_product c P sites raised
+  | tunnel e bytes ds r exactRx => exact tunnelXmitPrefix_spec_product c sc P e bytes ds r exactRx
+  | send4 e cache bytes ds exactRx => exact send4Prefix_spec_product c sc P e cache bytes ds exactRx
+  | send6 e cache bytes ds exactRx => exact send6Prefix_spec_product c sc P e cache bytes ds exactRx
 
-theorem allocation (call : SocketCall) : PrefixPreserves AllocationInv LifetimeEvent.Safe call.observed :=
+
+theorem allocation (call : SocketCall) : StatePrefixPreserves (fun h w _ => AllocationInv h w) LifetimeEvent.Safe call.observed :=
   AmbientContracts.drop (call.spec allocationAmbient allocationSocket (fun _ => True))
 
 end SocketCall
 
 /-- A cache miss reads its peer before requesting the refresh clock. This
 conditional equation uses original getter/clock executions, not log premises. -/
-theorem dstCacheGetPrefix_clock_failure (pid gen : Nat) (w : World) (p : Peer)
+theorem dstCacheGetPrefix_clock_failure (pid gen : Nat) (w : WGWorld) (ambient : Ambient) (p : Peer)
     (h : List LifetimeEvent) (e : Stop)
-    (ha : w.armRecords = true) (hc : w.dstCacheRecords = true)
-    (hp : (getPeer pid).run w = .ok (p, w)) (hs : p.dstCache.slot = none)
-    (hf : (hiddenJiffies .dstCacheRefreshTs).run w = .error e) :
-    runPrefix (dstCacheGetPrefix pid gen) w h =
+    (ha : ambient.armRecords = true) (hc : w.dstCacheRecords = true)
+    (hp : ((getPeer pid).run w).run ambient = .ok ((p, w), ambient)) (hs : p.dstCache.slot = none)
+    (hf : ((hiddenJiffies .dstCacheRefreshTs : WG.M UInt64).run w).run ambient = .error e) :
+    runStatePrefix (dstCacheGetPrefix pid gen) w ambient h =
       (.error e, h ++ [.peer (.read pid p.internalId)]) := by
-  simp [dstCacheGetPrefix, runPrefix_bind, getPeerMixed_run, hp, hs, ha, hc, hf]
+  simp [dstCacheGetPrefix, runStatePrefix_bind, runStatePrefix_lift, liftWGPrefix, getPeerMixed_run, hp, hs, ha, hc, hf,
+    getAmbient, StateT.run_bind, StateT.run_pure, StateT.run_lift]
 
 end Leanux.Proofs.WG.Lifetimes

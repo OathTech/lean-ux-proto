@@ -89,9 +89,10 @@ it is not part of that baseline.
 | Configured identity, AllowedIPs, handshake construction, RX worker and strict TX borrowing | 93 | 50 | 3 | 40 | 22 | 112 |
 | Native counter, lookup/cache, TX staging/admission and RX maintenance | 110 | 61 | 5 | 44 | 29 | 134 |
 | Key lifetime, affiliation, trie insertion and receive/socket completion | 56 | 44 | 1 | 11 | 14 | 69 |
+| Product encryption, IPv4 calls, timer callbacks and receive borrowing | 68 | 40 | 0 | 28 | 17 | 85 |
 
-The whole tree currently contains 451 Lean files and 6,372 theorems. The completed
-changes total 1,733 retyped theorems, 1,636 deletions, 691 retained contract shapes and 293 added.
+The whole tree currently contains 451 Lean files and 6,389 theorems. The completed
+changes total 1,773 retyped theorems, 1,636 deletions, 719 retained contract shapes and 310 added.
 Retyping changes or generalizes the actual state/monad carrier or observation.
 This includes shorthand contracts whose source functions or named views move
 to a native monad. Mere namespace qualification and equivalent relocation of a
@@ -2254,3 +2255,128 @@ a handshake claim in this checkpoint.
 The mirror remains exactly b700659. The full-tree diagnostic and complete gate
 remain unfinished, so every result is still lagging; new R3/R4 work follows
 completion of the retrofit.
+
+## Product encryption, IPv4 calls, timer callbacks and receive borrowing
+
+Six modules pass scoped builds, 123 explicit named axiom checks, six fresh
+module replays and independent source reviews. Their 68 old theorems become
+85: forty native/source carries, 28 retained product contracts and seventeen
+additions, with no deletion. The prior default build and unit results still
+cover the unchanged executable closure. The full proof gate remains pending.
+
+EncryptWorker retains all eleven original product contracts and arbitrary
+checksum, softirq and rescheduling callbacks. Its observer now performs the
+actual consume and unconditional ring installation before the callback, then
+the consumed-item decision and saved-item processing. The earlier ring-order
+counterexample in this report applies to this obsolete observer too. No
+ownership or ring-geometry premise was added. Four changed-source builds were
+needed: three ordinary failures in head normalization, product adapter
+transparency and invariant inference, then a pass.
+
+SocketSend4 carries nine native/source contracts, retains seven arbitrary
+product contracts and adds seven native counterparts. SocketCalls carries
+three native claims, retains its product specification and adds the native
+specification. The IPv4 factor now reads the actual FIB generation and socket
+namespace, performs both route lookups there, and classifies the neighbor
+before tunnel transmission. An empty packet on the one-route specimen below
+leaves no neighbor in the old committed tail but adds the current neighbor
+entry in the source. This is proof-observer drift, not a Linux finding.
+SocketSend4 had one no-progress-simp failure then passed; SocketCalls passed
+first time. The first witness probe's ordinary reduction failed and its
+recovery axioms were rejected; the second used kernel reduction and passed.
+
+~~~sh
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env lean -j1 --stdin <<'LEAN'
+import Leanux.Proofs.WG.Lifetimes.SocketSend4
+open Leanux Leanux.WG Leanux.Proofs.WG.Lifetimes
+namespace SocketFactorWitness
+def w : WGWorld := {dev := some {ifindex := 3, ifname := "wg0", sock4 := some 51820}}
+def a : Ambient := {env := fun _ _ => false, timing := {advanceWait := 0, traceBound := 0}}
+def ep : Endpoint := {family := AF_INET, addr := LOOPBACK4, port := 51821}
+def rt : Route := {dev := 1, src := LOOPBACK4}
+def oldFinish (e : Endpoint) (bytes : List UInt8) (ds : Nat)
+    (exactRx : Bool) (route : Option Route) : WG.M Int := do
+  let some r := route | invariant "send4 without a route"
+  (pinned_const _private.Leanux.WG.Socket.«0».Leanux.WG.tunnelXmit) e bytes ds r exactRx
+  return 0
+def outcome (x : WG.M Int) : Option (Int × List (Bool × Nat × Nat)) :=
+  match (x.run w).run a with
+  | .error _ => none
+  | .ok ((n, w'), _) => some (n, w'.routing.neighbours)
+theorem old_result : outcome (oldFinish ep [] 0 false (some rt)) = some (0, []) := by decide +kernel
+theorem current_result : outcome (send4FinishSource ep [] 0 false (some rt)) =
+    some (0, [(false,1,3)]) := by decide +kernel
+theorem differs : outcome (oldFinish ep [] 0 false (some rt)) ≠
+    outcome (send4FinishSource ep [] 0 false (some rt)) := by
+  rw [old_result, current_result]
+  decide
+#print axioms old_result
+#print axioms current_result
+#print axioms differs
+end SocketFactorWitness
+LEAN
+~~~
+
+RxCompletionFrame retains all five native queue contracts, including the
+actual lookup acquisition and surviving-resident behavior of completion.
+Two normalization/Hoare failures preceded its passing build. RxBorrow carries
+twelve native observations and retains both arbitrary product-action helpers,
+beside two native counterparts. ProductBorrowed and productView preserve the
+former 43-field observation and every complete peer record pointwise; they
+are pure observations, not execution states. Repayment still requires only
+the original borrowed-result contract, with no added initial liveness or
+ownership premise. One no-progress normalization failure preceded its pass.
+
+TimerCallbacks carries eleven concrete native/source claims and retains all
+seven arbitrary product-invariant contracts beside seven native counterparts.
+Both independent queue-mutation obligations remain. Its zero-key observer was
+missing the source's peekQueuedUnit test: a new queue record can describe
+requeueing after dequeue even while the mirror still holds the earlier entry.
+The corrected observer keeps the acquisition for that requeue and consumes the
+record before appending; the old observer instead repaid it. One changed-source
+build exposed the stale guard and adapter normalization failures, then the
+native and product builds passed. The first witness probe failed on record
+layout syntax and its recovery prints were rejected; the corrected probe
+kernel-checks both unrestricted-state outcomes below. No initialized
+reachability or kernel-defect claim is made.
+
+~~~sh
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env lean -j1 --stdin <<'LEAN'
+import Leanux.WG.Timers
+open Leanux Leanux.WG
+namespace ZeroQueueObserverWitness
+def peer : Peer := {remoteStatic := [], presharedKey := [], precomputedStaticStatic := [], internalId := 1}
+def initial : WGWorld := {dev := some {ifindex := 3, ifname := "wg0", peers := ({} : Std.TreeMap Nat Peer).insert 0 peer, clearWorkQueue := [0]}}
+def ambient : Ambient := {env := fun _ _ => true, timing := ⟨0,0⟩, armRecords := true, unitPeers := [(1, Worker.clearPeerWorker.index, 0)], hidden := some [{site := (HiddenSite.queued .clearPeerWorker).info.id, bytes := [1] ++ List.replicate 15 0}]}
+def obsolete : WG.M Unit := do
+  if ← branch .zeroKeyAlive !(← getPeer 0).isDead then
+    peerGet 0
+    if ← branch .zeroKeyAlreadyQueued ((← getDev).clearWorkQueue.contains 0) then
+      peerPut (some 0)
+    else
+      recordQueued .clearPeerWorker 0
+      modifyDev fun d => {d with clearWorkQueue := d.clearWorkQueue ++ [0]}
+def observe (a : WG.M Unit) : Option (List PeerId × Option Nat × Nat) :=
+  match (a.run initial).run ambient with
+  | .error _ => none
+  | .ok ((_, w), rest) => w.dev.map fun d =>
+      (d.clearWorkQueue, (d.peers[0]?).map Peer.refcount, (rest.hidden.getD []).length)
+theorem old_result : observe obsolete = some ([0], some 1, 1) := by decide +kernel
+theorem current_result : observe (expiredZeroKeyMaterial 0) = some ([0,0], some 2, 0) := by decide +kernel
+#print axioms old_result
+#print axioms current_result
+end ZeroQueueObserverWitness
+LEAN
+~~~
+
+The intervening whole-tree diagnostic failed at ten frontiers: ReceiveFailure,
+TxDispositionCuts, ReceiveCompletion, RxBorrow, EncryptWorker, TimerCallbacks,
+RxTxFrames, AllowedIpsInsert, SocketSend and HandshakeConsume. Several have
+since passed scoped checks; this list is not all remaining downstream work.
+The obsolete handshake child in that build and five worker diagnostics were
+terminated only at inspected owned PIDs. All six were collected as failures;
+four direct wrappers emitted KILLED for the termination signal. They were
+not memory-cap outcomes, passes or infrastructure retries. Dirty worktrees,
+including untracked sources, were snapshotted before work resumed.
+No proof limit or memory cap changed. Handshake response erasure is being
+factored along its literal source continuation; every result remains lagging.

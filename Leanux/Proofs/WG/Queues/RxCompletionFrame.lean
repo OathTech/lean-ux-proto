@@ -13,18 +13,23 @@ theorem lookup_rxQueues (root : Option NodeId) (bits key : Nat) :
     SameView rxQueues (lookup root bits key) := by
   apply SameView.of_wp
   intro s
-  have hs := (rxQueues_kernel (swapEndian_sameKernel bits)).wp (fun t => t = s)
-  have hf := (rxQueues_kernel (findNode_sameKernel root bits key)).wp (fun t => t = s)
-  have hn := fun id => (rxQueues_kernel (Framing.getNode_sameKernel id)).wp (fun t => t = s)
+  have aip {α : Type} (a : AipM α) :
+      Hoare (MonadLift.monadLift a : WG.M α) (fun w => rxQueues w = s) (fun _ w => rxQueues w = s) := by
+    apply hoare_liftAip a
+    intro w d store hi hd
+    unfold rxQueues at hi ⊢
+    simpa only [hd, Option.bind_some] using hi
+  unfold Hoare at aip
   have hp := fun pid => (peerGetMaybeZero_rxQueues pid).wp (fun t => t = s)
-  mvcgen [lookup, hs, hf, hn, hp, branch, invariant, unsupported]
+  mvcgen [lookup, swapEndian, aip, hp, branch, AmbientM.branch,
+    invariant, AmbientM.invariant, unsupported, AmbientM.unsupported]
 
 theorem lookupSrc_rxQueues (protocol : Nat) (bytes : List UInt8) :
     SameView rxQueues (lookupSrc protocol bytes) := by
   apply SameView.of_wp
   intro s
   have hl := fun root bits key => (lookup_rxQueues root bits key).wp (fun t => t = s)
-  mvcgen [lookupSrc, hl, getDev, getK, branch, invariant]
+  mvcgen [lookupSrc, hl, getDev, branch, AmbientM.branch, invariant, AmbientM.invariant]
 
 theorem dishonest_rxQueues (why : Dishonest) : SameView rxQueues (dishonest why) :=
   modifyDev_rxQueues _ (fun d => by cases why <;> rfl) (fun d => by cases why <;> rfl)
@@ -49,18 +54,24 @@ theorem consumeDataDone_rxQueues (pid : PeerId) (pkt : RxPacket) (endpoint : End
   have hep := (setPeerEndpoint_rxQueues pid endpoint).wp P
   have hk := (receivedWithKeypair_rxQueues pid pkt.keypair).wp P
   have hh := (timersHandshakeComplete_rxQueues pid .walltimeLastHandshakeData).wp P
-  have hst := (sendStagedPackets_rxQueues pid).wp s
-  have hf := (keepKeyFreshRx_rxQueues pid).wp s
+  have hst := RetainsRx.wp (sendStagedPackets_rxQueues pid) s
+  have hf := RetainsRx.wp (keepKeyFreshRx_rxQueues pid) s
   have ha := (timersAnyAuthenticatedPacketReceived_rxQueues pid).wp P
   have htr := (timersTraversal_rxQueues pid).wp P
   have hdata := (timersDataReceived_rxQueues pid).wp P
   have hstats := fun len => (updateRxStats_rxQueues pid len).wp P
   have herr := fun why => (dishonest_rxQueues why).wp P
-  have hecn := fun protocol outer bytes => (rxQueues_kernel (inetEcnDecapsulate_sameKernel protocol outer bytes)).wp P
+  have hecn (protocol outer : Nat) (bytes : List UInt8) :
+      Hoare (inetEcnDecapsulate protocol outer bytes)
+        (fun w => P (rxQueues w)) (fun _ w => P (rxQueues w)) := by
+    unfold Hoare
+    mvcgen [inetEcnDecapsulate, inetEcnSet, ipEcnSetCe, ipEcnSetEct1,
+      ip6EcnSetCe, ip6EcnSetEct1, branch, AmbientM.branch]
+  unfold Hoare at hecn
   have hl := fun protocol bytes => (lookupSrc_rxQueues protocol bytes).wp P
-  have hp := fun peer => (peerPut_rxQueues peer).wp s
+  have hp := fun peer => RetainsRx.wp (peerPut_rxQueues peer) s
   mvcgen [consumeDataDone, hep, hk, hh, hst, hf, ha, htr, hdata, hstats, herr, hecn, hl, hp,
-    WG.andM, WG.orM, branch]
+    WG.andM, WG.orM, branch, AmbientM.branch]
   all_goals try dsimp +zetaDelta only [P] at *
   all_goals try (unfold rxQueues at *; simp_all)
   all_goals subst s
