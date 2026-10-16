@@ -22,7 +22,11 @@ The first retrofit checkpoint carries the local counter-window execution layer:
 17 theorems retyped, six structural frames deleted, eight unchanged and one
 private generic transformer lemma added (31 to 26 in the three changed files;
 7,715 to 7,710 across the tree). Its scoped build, axiom checks and fresh kernel
-replay pass. This does not make a terminal result current; see the
+replay pass. The next checkpoint carries generic native partial/total contracts
+and exact subsystem adapters: 25 retyped, one relocated unchanged, 14 structural
+deletions and 14 additions (40 to 40). Its scoped build, all 47 declaration axiom
+checks and fresh replay pass; independent review found no substantive issue.
+The tree now has 473 Lean files and 7,710 theorems. This does not make a terminal result current; see the
 [retrofit report](2026-10-16-proof-state-split.md).
 
 ## Layers

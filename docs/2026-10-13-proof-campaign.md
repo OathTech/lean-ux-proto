@@ -7,7 +7,10 @@ The state-split retrofit onto `6089dc4` now precedes further R3/R4 results. All 
 result rows are lagging pending complete retyping and validation; their last validated
 mirror remains `cb2348e`. The local CounterWindow layer is carried with 17 retyped
 and six deleted theorems, one added generic lemma, and passing scoped build, axiom
-checks and fresh kernel replay. [The retrofit report](2026-10-16-proof-state-split.md)
+checks and fresh kernel replay. Native generic contracts and subsystem adapters
+are also carried: 25 retyped, one relocated unchanged, 14 deleted and 14 added
+theorems, with scoped build, 47 declaration axiom checks, fresh replay and
+independent review passing. [The retrofit report](2026-10-16-proof-state-split.md)
 tracks the counts and remaining work.
 
 The preceding `cb2348e` checkpoint validated all seven baseline result surfaces, including the

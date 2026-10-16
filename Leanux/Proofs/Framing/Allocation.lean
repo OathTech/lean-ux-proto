@@ -1,11 +1,11 @@
-import Leanux.Proofs.Logged.Basic
+import Leanux.Kernel.Defs
 
 /-! Public proof-side names for the pinned private allocation helpers.
 The equation below checks the entire copy by definitional equality. -/
 namespace Leanux.Proofs.Framing.Allocation
 open Leanux
 
-def recordOutcome (s : AllocSite) : M Bool := do
+def recordOutcome (s : AllocSite) : AmbientM Bool := do
   let bs ← hidden (.alloc s)
   match bs.headD 2 with
   | 1 => return true
@@ -15,7 +15,7 @@ def recordOutcome (s : AllocSite) : M Bool := do
 /-- One allocation encounter's outcome in the domain filter (placeholders):
     ok, unless the steering schedule names the site, in which case its next
     entry decides (a draw is ok; the only value is the fail word). -/
-def placeholderOutcome (s : AllocSite) : M Bool := do
+def placeholderOutcome (s : AllocSite) : AmbientM Bool := do
   let w ← get
   match w.steerValues.findIdx? (·.1 == s.info.label) with
   | none =>
@@ -42,9 +42,9 @@ def placeholderOutcome (s : AllocSite) : M Bool := do
       allocation there on this fixture, section 16.2.3): a record of it
       would be left over, failing the run.
     - A site the run did not arm answers ok: the transitional unarmed
-      answer (section 6.6), declared in `World.allocArmed`.
+      answer (section 6.6), declared in `Ambient.allocArmed`.
     In the domain filter the steering schedule decides (`allocPlaceholder`). -/
-def allocationOutcome (s : AllocSite) : M Bool := do
+def allocationOutcome (s : AllocSite) : AmbientM Bool := do
   let i := s.info
   match i.count with
   | .laxZero => return true
@@ -54,7 +54,7 @@ def allocationOutcome (s : AllocSite) : M Bool := do
     let w ← get
     let placeholders := w.hidden.isNone && w.hiddenPlaceholders
     if !placeholders && !w.allocArmed.contains i.label then return true   -- unarmed (section 6.6)
-    let encounter : M Bool := if placeholders then placeholderOutcome s else recordOutcome s
+    let encounter : AmbientM Bool := if placeholders then placeholderOutcome s else recordOutcome s
     let mut k := 0
     while k < n do
       if !(← encounter) then return false
@@ -62,6 +62,6 @@ def allocationOutcome (s : AllocSite) : M Bool := do
     return true
 
 theorem allocationOutcome_eq (s : AllocSite) :
-    allocationOutcome s = hiddenAlloc s := rfl
+    allocationOutcome s = AmbientM.hiddenAlloc s := rfl
 
 end Leanux.Proofs.Framing.Allocation
