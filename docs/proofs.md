@@ -33,7 +33,10 @@ fresh replay and independent review pass. Native action/projection contracts
 are carried too: 21 to 23 theorems, comprising 19 generalized, two obsolete Kernel
 transports deleted and four run bridges added. Scoped build, all 28 declaration
 axiom checks, fresh replay and independent review pass. The obsolete `frame_wg`
-macro is removed separately. The tree now has 474 Lean files and 7,716 theorems.
+macro is removed separately. The failure-prefix core and native receipts are
+also carried: 128 to 172 theorems, with 113 retyped, 15 unchanged and 44 added.
+The scoped build, all 221 declaration axiom checks, four fresh scoped replays and
+independent review pass. The tree now has 477 Lean files and 7,760 theorems.
 This does not make a terminal result current; see the
 [retrofit report](2026-10-16-proof-state-split.md).
 

@@ -3,18 +3,20 @@ import Leanux.Proofs.Logged.Focus
 
 /-! Exact projection under an explicit entry invariant. Focusing an existing
 observer needs only its appended-suffix contract, not a second source copy.
-The equality includes the entire result, successful World, Stop and history. -/
+The equality includes the entire result, successful state, Stop and history. -/
 namespace Leanux.Proofs.Logged
 open Leanux
 
-def ProjectsUnder (I : List F → World → Prop) (ρ : E → Option F)
-    (g : PrefixM E α) (a : PrefixM F α) : Prop :=
+variable {State : Type}
+
+def ProjectsUnder (I : List F → State → Prop) (ρ : E → Option F)
+    (g : PrefixT E State α) (a : PrefixT F State α) : Prop :=
   ∀ w h, I (h.filterMap ρ) w →
     runPrefix a w (h.filterMap ρ) =
       ((runPrefix g w h).1, (runPrefix g w h).2.filterMap ρ)
 
-variable {E F G α β : Type} {I : List F → World → Prop} {S : List F → Prop}
-  {ρ : E → Option F} {g : PrefixM E α} {a : PrefixM F α}
+variable {E F G α β : Type} {I : List F → State → Prop} {S : List F → Prop}
+  {ρ : E → Option F} {g : PrefixT E State α} {a : PrefixT F State α}
 
 theorem ProjectsPrefix.under (hg : ProjectsPrefix ρ id g a) : ProjectsUnder I ρ g a := by
   intro w h _
@@ -23,7 +25,7 @@ theorem ProjectsPrefix.under (hg : ProjectsPrefix ρ id g a) : ProjectsUnder I �
 theorem projectsUnder_pure (ρ : E → Option F) (x : α) :
     ProjectsUnder I ρ (pure x) (pure x) := by intro w h _; rfl
 
-theorem projectsUnder_lift (ρ : E → Option F) (a : M α) :
+theorem projectsUnder_lift (ρ : E → Option F) (a : StateT State (Except Stop) α) :
     ProjectsUnder I ρ (liftPrefix a) (liftPrefix a) := by intro w h _; rfl
 
 theorem projectsUnder_emit (ρ : E → Option F) (e : E) (he : ρ e = none) :
@@ -49,7 +51,7 @@ theorem projectsUnder_bind (hg : ProjectsUnder I ρ g a)
 
 /-- A finite loop projects exactly while its lower body transports the entry invariant. -/
 theorem projectsUnder_forIn (xs : List γ) (b : β)
-    (g : γ → β → PrefixM E (ForInStep β)) (a : γ → β → PrefixM F (ForInStep β))
+    (g : γ → β → PrefixT E State (ForInStep β)) (a : γ → β → PrefixT F State (ForInStep β))
     (ha : ∀ x b, PrefixPreserves I S (a x b))
     (hg : ∀ x b, ProjectsUnder I ρ (g x b) (a x b)) :
     ProjectsUnder I ρ (forIn xs b g) (forIn xs b a) := by
@@ -65,7 +67,7 @@ theorem projectsUnder_forIn (xs : List γ) (b : β)
 
 /-- Range-loop projection retains both normal loop exits and failed prefixes. -/
 theorem projectsUnder_range (r : Std.Legacy.Range) (b : β)
-    (g : Nat → β → PrefixM E (ForInStep β)) (a : Nat → β → PrefixM F (ForInStep β))
+    (g : Nat → β → PrefixT E State (ForInStep β)) (a : Nat → β → PrefixT F State (ForInStep β))
     (ha : ∀ x b, PrefixPreserves I S (a x b))
     (hg : ∀ x b, ProjectsUnder I ρ (g x b) (a x b)) :
     ProjectsUnder I ρ (forIn r b g) (forIn r b a) := by
@@ -117,12 +119,12 @@ theorem projectsUnder_emit_bind (e : E) (he : ρ e = none)
   simpa [runPrefix_bind, List.filterMap_append, he] using hg w (h ++ [e]) (by simpa [List.filterMap_append, he] using hi)
 
 /-- A projection whose history is untouched on every outcome. -/
-def HistoryFrame (ρ : E → Option F) (g : PrefixM E α) : Prop :=
+def HistoryFrame (ρ : E → Option F) (g : PrefixT E State α) : Prop :=
   ∀ w h, (runPrefix g w h).2.filterMap ρ = h.filterMap ρ
 
-theorem HistoryFrame.lift (ρ : E → Option F) (a : M α) : HistoryFrame ρ (liftPrefix a) := fun _ _ => rfl
-theorem HistoryFrame.pure (ρ : E → Option F) (x : α) : HistoryFrame ρ (pure x) := fun _ _ => rfl
-theorem HistoryFrame.emit (e : E) (he : ρ e = none) : HistoryFrame ρ (emitPrefix e) := by
+theorem HistoryFrame.lift (ρ : E → Option F) (a : StateT State (Except Stop) α) : HistoryFrame ρ (liftPrefix a) := fun _ _ => rfl
+theorem HistoryFrame.pure (ρ : E → Option F) (x : α) : HistoryFrame (State := State) ρ (pure x) := fun _ _ => rfl
+theorem HistoryFrame.emit (e : E) (he : ρ e = none) : HistoryFrame (State := State) ρ (emitPrefix e) := by
   intro w h; simp [List.filterMap_append, he]
 theorem HistoryFrame.bind (hg : HistoryFrame ρ g) (hf : ∀ x, HistoryFrame ρ (f x)) :
     HistoryFrame ρ (g >>= f) := by
@@ -142,7 +144,7 @@ theorem HistoryFrame.project (hg : HistoryFrame ρ g) (he : ErasesPrefix g origi
   cases original.run w <;> rfl
 
 theorem HistoryFrame.forIn (xs : List γ) (b : β)
-    (f : γ → β → PrefixM E (ForInStep β)) (hf : ∀ x b, HistoryFrame ρ (f x b)) :
+    (f : γ → β → PrefixT E State (ForInStep β)) (hf : ∀ x b, HistoryFrame ρ (f x b)) :
     HistoryFrame ρ (ForIn.forIn xs b f) := by
   induction xs generalizing b with
   | nil => exact HistoryFrame.pure ρ b
@@ -155,14 +157,14 @@ theorem HistoryFrame.forIn (xs : List γ) (b : β)
     | yield b => exact ih b
 
 /-- Unconditional history extension, without an endpoint or safety premise. -/
-def Appends (a : PrefixM E α) : Prop :=
+def Appends (a : PrefixT E State α) : Prop :=
   ∀ w h, ∃ s, (runPrefix a w h).2 = h ++ s
 
-theorem Appends.pure (x : α) : Appends (pure x : PrefixM E α) :=
+theorem Appends.pure (x : α) : Appends (pure x : PrefixT E State α) :=
   fun _ _ => ⟨[], (List.append_nil _).symm⟩
-theorem Appends.lift (a : M α) : Appends (liftPrefix a : PrefixM E α) :=
+theorem Appends.lift (a : StateT State (Except Stop) α) : Appends (liftPrefix a : PrefixT E State α) :=
   fun _ _ => ⟨[], (List.append_nil _).symm⟩
-theorem Appends.focus (encode : F → E) (decode : E → Option F) (a : PrefixM F α) :
+theorem Appends.focus (encode : F → E) (decode : E → Option F) (a : PrefixT F State α) :
     Appends (focusPrefix encode decode a) := fun _ _ => ⟨_, rfl⟩
 theorem Appends.bind (ha : Appends a) (hf : ∀ x, Appends (f x)) : Appends (a >>= f) := by
   intro w h
@@ -176,7 +178,7 @@ theorem Appends.bind (ha : Appends a) (hf : ∀ x, Appends (f x)) : Appends (a >
     | ok out =>
       obtain ⟨t, ht⟩ := hf out.1 out.2 hist
       exact ⟨s ++ t, by simpa only [hs, List.append_assoc] using ht⟩
-theorem Appends.forIn (xs : List γ) (b : β) (f : γ → β → PrefixM E (ForInStep β))
+theorem Appends.forIn (xs : List γ) (b : β) (f : γ → β → PrefixT E State (ForInStep β))
     (hf : ∀ x b, Appends (f x b)) : Appends (forIn xs b f) := by
   induction xs generalizing b with
   | nil => exact Appends.pure b
@@ -188,7 +190,7 @@ theorem Appends.forIn (xs : List γ) (b : β) (f : γ → β → PrefixM E (ForI
     | done b => exact Appends.pure b
     | yield b => exact ih b
 theorem Appends.range (r : Std.Legacy.Range) (b : β)
-    (f : Nat → β → PrefixM E (ForInStep β)) (hf : ∀ x b, Appends (f x b)) :
+    (f : Nat → β → PrefixT E State (ForInStep β)) (hf : ∀ x b, Appends (f x b)) :
     Appends (ForIn.forIn r b f) := by
   rw [Std.Legacy.Range.forIn_eq_forIn_range']
   exact Appends.forIn _ b f hf

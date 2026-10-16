@@ -1,12 +1,14 @@
 import Leanux.Proofs.Logged.ProjectsUnder
 
 /-! Invariant-conditioned exact observer projection with a result map.
-The complete World, Stop and reached history are retained. -/
+The complete state, Stop and reached history are retained. -/
 namespace Leanux.Proofs.Logged
 open Leanux
 
-def ProjectsUnderTo (I : List F → World → Prop) (ρ : E → Option F)
-    (p : α → β) (g : PrefixM E α) (a : PrefixM F β) : Prop :=
+variable {State : Type}
+
+def ProjectsUnderTo (I : List F → State → Prop) (ρ : E → Option F)
+    (p : α → β) (g : PrefixT E State α) (a : PrefixT F State β) : Prop :=
   ∀ w h, I (h.filterMap ρ) w →
     runPrefix a w (h.filterMap ρ) =
       ((runPrefix g w h).1.map (fun (x, v) => (p x, v)),
@@ -28,8 +30,8 @@ theorem ProjectsUnderTo.identity (hg : ProjectsUnderTo I ρ id g a) :
   cases hr : (runPrefix g w h).1 <;> simpa only [hr, Except.map, id] using he
 
 theorem ProjectsUnderTo.preserves {E F α β : Type}
-    {I : List F → World → Prop} {S : List F → Prop} {ρ : E → Option F}
-    {p : α → β} {g : PrefixM E α} {a : PrefixM F β} (hg : ProjectsUnderTo I ρ p g a)
+    {I : List F → State → Prop} {S : List F → Prop} {ρ : E → Option F}
+    {p : α → β} {g : PrefixT E State α} {a : PrefixT F State β} (hg : ProjectsUnderTo I ρ p g a)
     (ha : PrefixPreserves I S a) :
     ∀ w h, I (h.filterMap ρ) w → S ((runPrefix g w h).2.filterMap ρ) ∧
       match (runPrefix g w h).1 with
@@ -39,12 +41,12 @@ theorem ProjectsUnderTo.preserves {E F α β : Type}
   obtain ⟨_, _, hs, hp⟩ := ha w (h.filterMap ρ) hi
   rw [hg w h hi] at hs hp
   refine ⟨hs, ?_⟩
-  cases hr : (runPrefix g w h).1 <;> simpa only [hr, Except.map] using hp
+  cases hr : (runPrefix g w h).1 <;> simp only [hr, Except.map] at hp ⊢ <;> exact hp
 
 theorem projectsUnderTo_pure (ρ : E → Option F) (p : α → β) (x : α) :
     ProjectsUnderTo I ρ p (pure x) (pure (p x)) := (projectsPrefix_pure ρ p x).underTo
 
-theorem projectsUnderTo_lift (ρ : E → Option F) (a : M α) :
+theorem projectsUnderTo_lift (ρ : E → Option F) (a : StateT State (Except Stop) α) :
     ProjectsUnderTo I ρ id (liftPrefix a) (liftPrefix a) :=
   (projectsPrefix_lift ρ a).underTo
 
@@ -74,8 +76,8 @@ theorem projectsUnderTo_ite (ρ : E → Option F) (c : Prop) [Decidable c] (p : 
   · exact he hc
 
 theorem projectsUnderTo_forIn_map (ρ : E → Option F) (p : β → γ) (f : α → δ)
-    (xs : List α) (b : β) (g : α → β → PrefixM E (ForInStep β))
-    (a : δ → γ → PrefixM F (ForInStep γ))
+    (xs : List α) (b : β) (g : α → β → PrefixT E State (ForInStep β))
+    (a : δ → γ → PrefixT F State (ForInStep γ))
     (ha : ∀ x b, PrefixPreserves I S (a x b))
     (hg : ∀ x b, ProjectsUnderTo I ρ (projectStep p) (g x b) (a (f x) (p b))) :
     ProjectsUnderTo I ρ p (forIn xs b g) (forIn (xs.map f) (p b) a) := by
@@ -90,16 +92,16 @@ theorem projectsUnderTo_forIn_map (ρ : E → Option F) (p : β → γ) (f : α 
     | yield b => exact ih b
 
 theorem projectsUnderTo_forIn (ρ : E → Option F) (p : β → γ)
-    (xs : List α) (b : β) (g : α → β → PrefixM E (ForInStep β))
-    (a : α → γ → PrefixM F (ForInStep γ))
+    (xs : List α) (b : β) (g : α → β → PrefixT E State (ForInStep β))
+    (a : α → γ → PrefixT F State (ForInStep γ))
     (ha : ∀ x b, PrefixPreserves I S (a x b))
     (hg : ∀ x b, ProjectsUnderTo I ρ (projectStep p) (g x b) (a x (p b))) :
     ProjectsUnderTo I ρ p (forIn xs b g) (forIn xs (p b) a) := by
   simpa only [List.map_id] using projectsUnderTo_forIn_map ρ p id xs b g a ha hg
 
 theorem projectsUnderTo_range (ρ : E → Option F) (p : β → γ)
-    (r : Std.Legacy.Range) (b : β) (g : Nat → β → PrefixM E (ForInStep β))
-    (a : Nat → γ → PrefixM F (ForInStep γ))
+    (r : Std.Legacy.Range) (b : β) (g : Nat → β → PrefixT E State (ForInStep β))
+    (a : Nat → γ → PrefixT F State (ForInStep γ))
     (ha : ∀ x b, PrefixPreserves I S (a x b))
     (hg : ∀ x b, ProjectsUnderTo I ρ (projectStep p) (g x b) (a x (p b))) :
     ProjectsUnderTo I ρ p (forIn r b g) (forIn r (p b) a) := by

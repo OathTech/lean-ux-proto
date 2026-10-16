@@ -5,18 +5,20 @@ No operation is assumed independent of its incoming journal. -/
 namespace Leanux.Proofs.Logged
 open Leanux
 
+variable {State : Type}
+
 variable {E G α β γ : Type}
 
 /-- Exact focus agreement at an invariant-valid entry, including Stops. -/
-def FocusesUnder (I : List E → World → Prop) (encode : E → G)
-    (decode : G → Option E) (g : PrefixM G α) (a : PrefixM E α) : Prop :=
+def FocusesUnder (I : List E → State → Prop) (encode : E → G)
+    (decode : G → Option E) (g : PrefixT G State α) (a : PrefixT E State α) : Prop :=
   ∀ w h, I (h.filterMap decode) w →
     runPrefix g w h = runPrefix (focusPrefix encode decode a) w h
 
-variable {I : List E → World → Prop} {S : List E → Prop}
+variable {I : List E → State → Prop} {S : List E → Prop}
   {encode : E → G} {decode : G → Option E}
 
-theorem FocusesUnder.focus (a : PrefixM E α) :
+theorem FocusesUnder.focus (a : PrefixT E State α) :
     FocusesUnder I encode decode (focusPrefix encode decode a) a := fun _ _ _ => rfl
 
 theorem FocusesUnder.pure (x : α) :
@@ -25,7 +27,7 @@ theorem FocusesUnder.pure (x : α) :
   change (Except.ok (ε := Stop) (x, w), h) = (Except.ok (x, w), h ++ ((h.filterMap decode).drop (h.filterMap decode).length).map encode)
   simp
 
-theorem FocusesUnder.lift (a : M α) :
+theorem FocusesUnder.lift (a : StateT State (Except Stop) α) :
     FocusesUnder I encode decode (liftPrefix a) (liftPrefix a) := by
   intro w h _
   change (a.run w, h) = (a.run w, h ++ ((h.filterMap decode).drop (h.filterMap decode).length).map encode)
@@ -75,7 +77,7 @@ theorem FocusesUnder.bind
 
 theorem FocusesUnder.forIn (hd : ∀ e, decode (encode e) = some e)
     (xs : List γ) (init : β)
-    (g : γ → β → PrefixM G (ForInStep β)) (a : γ → β → PrefixM E (ForInStep β))
+    (g : γ → β → PrefixT G State (ForInStep β)) (a : γ → β → PrefixT E State (ForInStep β))
     (hs : ∀ h w, I h w → S h)
     (ha : ∀ x z, PrefixPreserves I S (a x z))
     (hg : ∀ x z, FocusesUnder I encode decode (g x z) (a x z)) :
@@ -98,10 +100,10 @@ theorem FocusesUnder.forIn (hd : ∀ e, decode (encode e) = some e)
 the conditional interface above also transports an existing state invariant. -/
 theorem focusPrefix_bind_appends (encode : E → G) (decode : G → Option E)
     (hd : ∀ e, decode (encode e) = some e)
-    (ha : Appends a) (hb : ∀ x, Appends (b x)) (w : World) (h : List G) :
+    (ha : Appends a) (hb : ∀ x, Appends (b x)) (w : State) (h : List G) :
     runPrefix (focusPrefix encode decode a >>= fun x => focusPrefix encode decode (b x)) w h =
       runPrefix (focusPrefix encode decode (a >>= b)) w h := by
-  have preserve {δ : Type} (q : PrefixM E δ) (hq : Appends q) :
+  have preserve {δ : Type} (q : PrefixT E State δ) (hq : Appends q) :
       PrefixPreserves (fun _ _ => True) (fun _ => True) q := by
     intro v hist _
     obtain ⟨s, hs⟩ := hq v hist

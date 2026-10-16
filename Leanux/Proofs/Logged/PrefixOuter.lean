@@ -2,9 +2,11 @@ import Leanux.Proofs.Logged.Prefix
 import Init.Data.Array.Lemmas
 
 /-! Indexed runner errors with observation state outside the exception layer.
-The World stays an explicit runner variable; a Stop retains the reached history. -/
+The state stays an explicit runner variable; a Stop retains the reached history. -/
 namespace Leanux.Proofs.Logged
 open Leanux Std.Do
+
+variable {State : Type}
 
 abbrev PrefixOuter (Event : Type) := ExceptT (Nat × Stop) (StateM (List Event))
 
@@ -85,17 +87,17 @@ theorem erasesOuter_array (xs : Array α) (b : β)
   exact erasesOuter_forIn _ b g a ha
 
 /-- Attach the exact operation index without dropping a failed inner history. -/
-def runAtPrefix (index : Nat) (w : World) (g : PrefixM Event α) :
-    PrefixOuter Event (α × World) := ExceptT.mk fun h =>
+def runAtPrefix (index : Nat) (w : State) (g : PrefixT Event State α) :
+    PrefixOuter Event (α × State) := ExceptT.mk fun h =>
   let (r, h') := runPrefix g w h
   (r.mapError (fun e => (index, e)), h')
 
-@[simp] theorem runAtPrefix_run (index : Nat) (w : World) (g : PrefixM Event α)
+@[simp] theorem runAtPrefix_run (index : Nat) (w : State) (g : PrefixT Event State α)
     (h : List Event) :
     runPrefixOuter (runAtPrefix index w g) h =
       ((runPrefix g w h).1.mapError (fun e => (index, e)), (runPrefix g w h).2) := rfl
 
-theorem runAtPrefix_erases (index : Nat) (w : World) (hg : ErasesPrefix g a) :
+theorem runAtPrefix_erases (index : Nat) (w : State) (hg : ErasesPrefix g a) :
     ErasesOuter (runAtPrefix index w g) ((a.run w).mapError (fun e => (index, e))) := by
   intro h
   simp only [runAtPrefix_run, hg w h]
@@ -119,10 +121,10 @@ theorem prefixOuter_wp_iff (g : PrefixOuter Event α) (P : List Event → Prop)
           Pure.pure, hr] using hh
 
 /-- An inner prefix contract becomes a runner contract with the same failed
-history and its result-dependent successful World predicate. -/
-theorem runAtPrefix_wp {g : PrefixM Event α} {P : List Event → World → Prop}
-    {S : List Event → Prop} {Q : α → List Event → World → Prop}
-    (hg : PrefixEnsures P S g Q) (index : Nat) (w : World) :
+history and its result-dependent successful state predicate. -/
+theorem runAtPrefix_wp {g : PrefixT Event State α} {P : List Event → State → Prop}
+    {S : List Event → Prop} {Q : α → List Event → State → Prop}
+    (hg : PrefixEnsures P S g Q) (index : Nat) (w : State) :
     ⦃fun h => ⌜P h w⌝⦄ runAtPrefix index w g
     ⦃post⟨fun out h => ⌜Q out.1 h out.2⌝, fun _ h => ⌜S h⌝⟩⦄ := by
   apply (prefixOuter_wp_iff _ _ _ _).mpr

@@ -6,8 +6,10 @@ Only its new suffix is injected, preserving the prior global interleaving. -/
 namespace Leanux.Proofs.Logged
 open Leanux Leanux.Proofs.Framing
 
+variable {State : Type}
+
 def focusPrefix (encode : E → G) (decode : G → Option E)
-    (g : PrefixM E α) : PrefixM G α :=
+    (g : PrefixT E State α) : PrefixT G State α :=
   fun w => ExceptT.mk fun h =>
     let initial := h.filterMap decode
     let out := runPrefix g w initial
@@ -18,7 +20,7 @@ theorem focusPrefix_erases (encode : E → G) (decode : G → Option E)
   fun w h => hg w (h.filterMap decode)
 
 theorem focusPrefix_suffix (encode : E → G) (decode : G → Option E)
-    (g : PrefixM E α) (w : World) (h : List G) (out : Except Stop (α × World))
+    (g : PrefixT E State α) (w : State) (h : List G) (out : Except Stop (α × State))
     (suffix : List E)
     (hr : runPrefix g w (h.filterMap decode) = (out, h.filterMap decode ++ suffix)) :
     runPrefix (focusPrefix encode decode g) w h = (out, h ++ suffix.map encode) := by
@@ -42,7 +44,7 @@ theorem filterMap_disjoint (encode : E → G) (decode : G → Option F)
 
 theorem focusPrefix_other (encode : E → G) (decode : G → Option E)
     (other : G → Option F) (hd : ∀ e, other (encode e) = none)
-    (g : PrefixM E α) (w : World) (h : List G) :
+    (g : PrefixT E State α) (w : State) (h : List G) :
     (runPrefix (focusPrefix encode decode g) w h).2.filterMap other = h.filterMap other := by
   change (h ++ _).filterMap other = _
   rw [List.filterMap_append, filterMap_disjoint encode other hd]
@@ -69,7 +71,7 @@ theorem PrefixEnsures.focus (encode : E → G) (decode : G → Option E)
 original execution preserves its view. The existing error-prefix condition
 is retained; the extra predicate is required only on successful outcomes. -/
 theorem PrefixEnsures.frameView (hg : PrefixEnsures P S g Q)
-    (he : ErasesPrefix g a) (view : World → σ) (hv : SameView view a) (R : σ → Prop) :
+    (he : ErasesPrefix g a) (view : State → σ) (hv : SameView view a) (R : σ → Prop) :
     PrefixEnsures (fun h w => P h w ∧ R (view w)) S g
       (fun x h w => Q x h w ∧ R (view w)) := by
   intro w h hi
@@ -79,6 +81,7 @@ theorem PrefixEnsures.frameView (hg : PrefixEnsures P S g Q)
   | error e => trivial
   | ok out =>
     have ho : a.run w = .ok out := (he w h).symm.trans hr
-    exact ⟨by simpa only [hr] using hq, (hv w out.1 out.2 ho) ▸ hi.2⟩
+    have hf := (Leanux.Proofs.WG.Lifetimes.ProjectedAction.iff_run _ _ _).mp hv w out.1 out.2 ho
+    exact ⟨by simpa only [hr] using hq, hf ▸ hi.2⟩
 
 end Leanux.Proofs.Logged

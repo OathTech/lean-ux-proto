@@ -21,9 +21,10 @@ it is not part of that baseline.
 | Framing `Basic`, `WP`, `Allocation`, `Index`, new `Hoare`/`Lift` | 40 | 25 | 14 | 1 | 14 | 40 |
 | Logged `Basic`, `Outer`, new `Ghost` | 27 | 14 | 0 | 13 | 4 | 31 |
 | Lifetimes `Actions`, Framing `Projection`, `Tools` | 21 | 19 | 2 | 0 | 4 | 23 |
+| Logged prefix core (11 files), new `PrefixState`, `WGPrefix`, `NativeCapture` | 128 | 113 | 0 | 15 | 44 | 172 |
 
-The whole tree currently contains 474 Lean files and 7,716 theorems. The completed
-ports total 75 retyped theorems, 22 deletions, 22 retained interfaces and 23 added. All terminal files
+The whole tree currently contains 477 Lean files and 7,760 theorems. The completed
+ports total 188 retyped theorems, 22 deletions, 37 retained interfaces and 67 added. All terminal files
 remain unchanged. **Every result remains lagging** until the complete tree
 passes its proof gate and kernel replay. R1/R2/R5/R6 retain their pre-split
 charter dispositions; initialized R3 packet authorization and R4 receive-pipeline
@@ -156,6 +157,40 @@ LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake build 
 LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.Framing.Tools
 ```
 
+## Failure-prefix contracts and native receipts
+
+The eleven existing prefix modules now work over an arbitrary actual state.
+All 128 theorem names and their content remain: 113 signatures are generalized;
+15 pure or outer-runner signatures are unchanged. The new nested-StateT rules
+pass both returned native states and the journal into each continuation. A Stop
+retains the reached journal and exact exception, without inventing failed state
+endpoints. The 44 added theorems cover this composition, the real WG-to-product
+adapter, and native capture.
+
+Native receipts retain before/after WG and Ambient states. Successful observed
+capture retains the actual incoming-history witness and exact nested execution;
+it executes the observer once. Failed capture keeps its outgoing journal, and
+only success appends a receipt. The product `PrefixM` and `RunWitness` aliases
+continue to describe actual runner executions. No reconstructed monolithic
+execution state or historical-event translation was introduced.
+
+Validation: the final scoped build passes (54 jobs), all 221 named declarations
+print only permitted axioms, and four fresh scoped replays cover all fourteen
+files. Independent frozen-source review found no substantive issue and confirmed
+the counts. Source hashes, prohibited-token scan, terminal preservation, mirror
+equality and whitespace pass. Thirteen earlier builds failed on polymorphic
+binders, tuple/alias normalization and namespace resolution. No source or recovery
+admission, interruption, timeout, KILLED outcome, limit increase or infrastructure
+rerun occurred. All four replay handles completed successfully.
+
+```sh
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake build Leanux.Proofs.Logged.NativeCapture Leanux.Proofs.Logged.PrefixOuter Leanux.Proofs.Logged.PrefixControl Leanux.Proofs.Logged.ProjectsUnderTo
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.Logged.NativeCapture
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.Logged.PrefixOuter
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.Logged.PrefixControl
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.Logged.ProjectsUnderTo
+```
+
 ## Incoming source-observer findings
 
 Source inspection found two observer carry defects beyond type changes. The old
@@ -175,6 +210,14 @@ order selects the latter while raw-expiry order selects the former. The source
 observers and receipt boundaries must follow the actual inline execution. This
 selection witness is likewise source-inspected, pending formal checking.
 
+The success-observer lane has additional copied-source drift. Its runner omits
+the current routing-table boot, foreign-namespace boot, exact startup failure,
+startup-record clearing and per-operation `hiddenAhead`. Its environment copies
+omit routing/neighbour calls, route-MTU propagation and the current timer-pass
+and advance-window rules. Its syscall copy omits the final `fib_trie` observation
+on route-changing operations. These source-inspected observer defects require
+current control-flow carry and exact erasure proofs; they are not mirror findings.
+
 ## Incoming merge and remaining work
 
 The incoming model build passes (66 jobs), executable build passes (130 jobs),
@@ -185,8 +228,12 @@ build fails at 14 state-split/carry dependencies; no full proof-gate pass is
 claimed. The incoming whitespace speedbump reports existing patch whitespace
 and a unit-file trailing blank line; those incoming files remain unchanged.
 
-Next are the generic failure-prefix core, deletion of the broader structural-frame
-layers and the remaining native/product observers.
+Next are the native keypair snapshot/evolution core, deletion of the broader
+structural-frame layers and the remaining native/product observers. A read-only
+deletion audit identifies 1,427 theorems in 26 modules: 1,388 structural/obsolete
+facts and 39 unused support facts. The latter include arithmetic and conditional
+callback composition, whose content is not supplied by the new types. These
+deletions have not yet been applied or included in the completed-port counts.
 The incoming branch also includes pre-split send ordering, timer-wheel and
 peer-removal changes; their source observers must be carried in actual order.
 The runner and callback compositions keep the product world, and failing

@@ -1,12 +1,14 @@
 import Leanux.Proofs.Logged.PrefixLoops
 
 /-! Failure-retaining observers may carry extra information in a loop's local
-accumulator. Erasure projects that accumulator while retaining the full World
+accumulator. Erasure projects that accumulator while retaining the full state
 and exact original Stop. -/
 namespace Leanux.Proofs.Logged
 open Leanux
 
-def ErasesTo (p : α → β) (g : PrefixM Event α) (a : M β) : Prop :=
+variable {State : Type}
+
+def ErasesTo (p : α → β) (g : PrefixT Event State α) (a : StateT State (Except Stop) β) : Prop :=
   ∀ w h, ((runPrefix g w h).1.map fun (x, v) => (p x, v)) = a.run w
 
 theorem ErasesPrefix.to_projected (hg : ErasesPrefix g a) : ErasesTo id g a := by
@@ -20,7 +22,7 @@ theorem ErasesTo.identity (hg : ErasesTo id g a) : ErasesPrefix g a := by
   cases hr : (runPrefix g w h).1 <;> simpa [hr, Except.map] using he
 
 theorem erasesTo_pure (p : α → β) (x : α) :
-    ErasesTo p (pure x : PrefixM Event α) (pure (p x)) := fun _ _ => rfl
+    ErasesTo p (pure x : PrefixT Event State α) (pure (p x)) := fun _ _ => rfl
 
 theorem erasesTo_bind (p : α → β) (q : γ → δ)
     (hg : ErasesTo p g a) (hf : ∀ x, ErasesTo q (f x) (b (p x))) :
@@ -34,6 +36,7 @@ theorem erasesTo_bind (p : α → β) (q : γ → δ)
     | error e =>
       simp only [hr] at he
       simp [← he, StateT.run_bind, Except.map]
+      rfl
     | ok out =>
       rcases out with ⟨x, v⟩
       simp only [hr] at he
@@ -51,7 +54,7 @@ def projectStep (p : α → β) : ForInStep α → ForInStep β
   | .yield x => .yield (p x)
 
 theorem erasesTo_forIn (p : β → γ) (xs : List α) (b : β)
-    (g : α → β → PrefixM Event (ForInStep β)) (a : α → γ → M (ForInStep γ))
+    (g : α → β → PrefixT Event State (ForInStep β)) (a : α → γ → StateT State (Except Stop) (ForInStep γ))
     (ha : ∀ x b, ErasesTo (projectStep p) (g x b) (a x (p b))) :
     ErasesTo p (forIn xs b g) (forIn xs (p b) a) := by
   induction xs generalizing b with
@@ -65,7 +68,7 @@ theorem erasesTo_forIn (p : β → γ) (xs : List α) (b : β)
     | yield b => exact ih b
 
 theorem erasesTo_range (p : β → γ) (r : Std.Legacy.Range) (b : β)
-    (g : Nat → β → PrefixM Event (ForInStep β)) (a : Nat → γ → M (ForInStep γ))
+    (g : Nat → β → PrefixT Event State (ForInStep β)) (a : Nat → γ → StateT State (Except Stop) (ForInStep γ))
     (ha : ∀ x b, ErasesTo (projectStep p) (g x b) (a x (p b))) :
     ErasesTo p (forIn r b g) (forIn r (p b) a) := by
   rw [Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.forIn_eq_forIn_range']
@@ -73,7 +76,7 @@ theorem erasesTo_range (p : β → γ) (r : Std.Legacy.Range) (b : β)
 
 /-- Project both the loop entries and its proof-side accumulator. -/
 theorem erasesTo_forIn_map (p : β → γ) (f : α → δ) (xs : List α) (b : β)
-    (g : α → β → PrefixM Event (ForInStep β)) (a : δ → γ → M (ForInStep γ))
+    (g : α → β → PrefixT Event State (ForInStep β)) (a : δ → γ → StateT State (Except Stop) (ForInStep γ))
     (ha : ∀ x b, ErasesTo (projectStep p) (g x b) (a (f x) (p b))) :
     ErasesTo p (forIn xs b g) (forIn (xs.map f) (p b) a) := by
   induction xs generalizing b with
