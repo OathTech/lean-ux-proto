@@ -1,6 +1,7 @@
 # Proof campaign: state-split retrofit
 
-The branch `proofs/campaign` carries split mirror `6089dc4`, merged at `6e0a5c8`.
+The branch `proofs/campaign` carries main `b700659`, including split mirror
+`6089dc4` previously merged at `6e0a5c8`.
 The executable mirror is unchanged by the proof work. The nondefault
 `LeanuxProofs` target and `scripts/proof-gate` remain on this branch. The
 [split design](2026-10-15-design-state-split.md) describes the new worlds and
@@ -1470,3 +1471,22 @@ guest timeout or infrastructure rerun occurred.
 [AGENT 2026-10-16] Retain product runner/environment contracts and general
 state helper domains; specialize only concrete WG operations to their native
 stack. This preserves the old callers' full scope.
+
+## State-split main landing
+
+[USER 2026-10-16] Integrate main b700659 on the campaign branch while
+retaining its proof tree, nondefault Lake target and proof gate. These return
+to main only with a separately authorized campaign landing.
+
+The merge preserves the complete campaign proof tree and its existing gate
+practice and reproduction commands. Main's mirror delta from 6089dc4 is
+comment-only; executable code is unchanged. The register now names b700659 as
+the retrofit target and keeps cb2348e as the last fully validated mirror.
+Counts are unchanged: 451 Lean files, 6,249 theorems and 515 terminal declarations.
+
+Post-merge default build passes (66 jobs); unit tests pass (131 tests, one
+skip). Exact source comparison confirms the proof tree, root, target and gate
+are unchanged by the merge, and mirror sources equal b700659. A whitespace
+check rejected an imported extra final blank line in the split design; it was
+removed after a recovery snapshot. The full proof build is running; the proof
+gate remains pending and all result rows remain lagging.

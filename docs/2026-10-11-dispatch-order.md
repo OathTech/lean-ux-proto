@@ -1,8 +1,8 @@
 # Dispatch order: the unit a section runs is recorded (2026-10-11)
 
-Decision [USER 2026-10-11]: option A, "Okay, let's do (A)": the order in which
-Linux dispatches queued deferred units is recorded at the source, not assumed
-from queue order and not taken as a placement the check reruns.
+Decision [USER 2026-10-11]: option A: the order in which Linux dispatches
+queued deferred units is recorded at the source, not assumed from queue order
+and not taken as a placement the check reruns.
 
 Stream: `task/dispatch-order` on the interface commit. Kernel change:
 record-only (the approved class); the merge's signoff covers the new identity.

@@ -306,7 +306,7 @@ def ratelimit6_traces():
 
 
 # e_underload_busy (the producer's busy test at receive.c:554, a 2,100-send
-# flood) was dropped at the landing of 2026-10-15 [USER: "(1) agreed"]: its
+# flood) was dropped at the landing of 2026-10-15 [USER 2026-10-15]: its
 # comparison child sits at 4.40 s of the guest's 4.5 s bound under load, and
 # on this configuration the trylock it reaches is a compile-time constant
 # (include/linux/spinlock_up.h:56), declared constant in the mirror; the

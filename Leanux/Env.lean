@@ -1213,7 +1213,7 @@ def trapDelivered : TaskM Unit := do
   modifyTask t fun tk => { tk with pending := sigdelset tk.pending SIGSYS, sigpending := false }
 
 /-- The seccomp prefill fixture (`"seccomp_prefill": N`; design section 5)
-    [USER 2026-10-12: "Yes, let's queue it"]: the guest set no-new-privs and
+    [USER 2026-10-12: queued]: the guest set no-new-privs and
     installed `N` copies of `Seccomp.Prefill.program` before the window. The
     initial task state carries that chain, reconstructed by the mirror's own
     translation of the same program and the decision-free cache emulation

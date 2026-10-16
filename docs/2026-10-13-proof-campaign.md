@@ -3,7 +3,7 @@
 ## Progress
 
 Work on `proofs/campaign` in `.worktrees/proofs-campaign` follows [the charter](2026-10-13-charter-proof-campaign.md).
-The state-split retrofit onto `6089dc4` precedes further R3/R4 results. All seven
+The state-split retrofit onto main `b700659` precedes further R3/R4 results. All seven
 result rows remain lagging, last validated over `cb2348e`. The tree has moved from
 471 files / 7,715 named theorems to 451 files / 6,249 theorems. Completed changes
 comprise 1,114 retyped, 1,601 deleted, 315 retained contract shapes and 135 added theorems;

@@ -52,8 +52,8 @@ no change made to let a proof close: a proof that cannot close is a report
 against the mirror, settled by the differential check, never by editing the
 mirror to fit the statement. Proofs about the mirror and about models
 layered on it are in scope; a simulation proof against the C is not, until
-the user opens it. No proof-audit infrastructure beyond the axiom check
-below, and no theorem is an acceptance gate for mirror work.
+the user opens it. No proof-audit infrastructure beyond the axiom check,
+and no theorem is an acceptance gate for mirror work.
 
 The register names, per result, the mirror commit it holds over and whether
 it is current or lagging. A mirror change may land while a result lags; its
@@ -186,8 +186,8 @@ including the coordinator.
 - Prepare the complete change and relevant validation in worktrees first.
   Present its branch/commit and reviewable diff, then obtain user signoff as the
   final step before updating `main`. The merge commit's message carries the
-  run's counts and the user's words. Additional unapproved changes require
-  new signoff.
+  run's counts and the fact of the user's signoff. Additional unapproved
+  changes require new signoff.
 - While awaiting signoff, preserve the branch, keep `main` unchanged, and
   follow the registered worktree cleanup policy.
 
@@ -200,7 +200,9 @@ remains mandatory.
 
 A decision is logged where it is made, with its provenance (user or agent):
 in the commit message, in the design doc it belongs to, and in
-[docs/decisions.md](docs/decisions.md) when it is a standing one. This file
+[docs/decisions.md](docs/decisions.md) when it is a standing one. Decisions
+are recorded as paraphrase with their provenance, never as quotations of the
+user, in the log, the documents and commit messages alike. This file
 carries no decision history and no session state.
 
 ## Kernel findings

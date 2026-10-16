@@ -17,12 +17,13 @@ changes are proposals awaiting the user. The measurements are rerun on
 lane C's first landing have added the timer wheel, the routing module and
 their state.
 
-**Decisions [USER 2026-10-15]**, recorded in `docs/decisions.md` with
-their words and unchanged by this revision: subsystems operate over
-localized world types; functions are narrowed at the type level to the
-data they access where that is cheap; no compatibility wrappers and no
-equivalence lemmas ("it's just throwing out fields. Just delete fields and
-see if anything breaks"); campaign 1 (Codex#2) finishes R3 and R4 and
+**Decisions [USER 2026-10-15]**, recorded in `docs/decisions.md`,
+unchanged by this revision: subsystems operate over localized world
+types; functions are narrowed at the type level to the data they access
+where that is cheap; no compatibility wrappers and no equivalence lemmas
+(narrowing deletes fields from a function's view, which cannot change
+behaviour, so the types change and what fails to typecheck is repaired);
+campaign 1 (Codex#2) finishes R3 and R4 and
 lands, its retrofit one job afterwards; campaign 2 (Codex#1) stops at its
 checkpoint and resumes on the split mirror; the binary adequacy grind
 (Codex#3) continues with `R` over the WireGuard world literally; the split
@@ -37,8 +38,8 @@ invariants, to be kept only where an effect genuinely cannot be localized.
 The ideal is to strip the types at every point down to the accessible
 fields and get the footprints from referential transparency. The
 whole-of-Linux state is a hard question not decided here. The immediate
-fix removes the "one massive global state where everything gets modified
-without any type-level guarantee that things aren't being modified".
+fix removes the one global state that everything modifies without any
+type-level guarantee of what is left alone.
 
 ## 1. The measured access matrix
 
@@ -268,7 +269,7 @@ Not decided here, deliberately: the whole-of-Linux state; the frame
 generator for the within-subsystem remainder; lenses or effect classes for
 cross-component calls beyond the shared task services of section 3.
 
-## 3. The monad structure, and the one exception to "the runner composes"
+## 3. The monad structure, and the one exception to the runner composing
 
 ```lean
 abbrev AmbientM := StateT Ambient (Except Stop)
@@ -320,8 +321,8 @@ seccomp fields are unchanged: that remainder stays a stated fact where a
 result needs it, until a callee's type excludes it.
 
 **The exception, put to the user as a proposal** (section 11): the recorded
-formulation "the runner holds the product and is the only composer" gains
-one qualification. Subsystem operations may call the shared task and
+formulation, that the runner holds the product and is the only composer,
+gains one qualification. Subsystem operations may call the shared task and
 signal services at the C's existing call sites: a pipe's SIGPIPE stays
 inside `pipeWrite`, a seccomp trap's signal inside `seccompFilter`, the
 `fput` task-work test inside `fput`. The runner alone assembles the full
@@ -392,7 +393,7 @@ introduced beside `Device.peers`; a narrowed leaf takes no callback that
 could mutate the rest of WireGuard. If a component needs several maps with
 equal domains, duplicated lifetime markers or a footprint invariant, the
 operation stays `WG.M` and the narrowing is reported as deferred. This is
-the user's "where this can be done cheaply" applied concretely, and it is
+the user's cheap-narrowing qualification applied concretely, and it is
 not permission to restructure the mirror for a proof.
 
 What keeps `WG.M` by measurement: the entry points and the paths through
@@ -665,7 +666,7 @@ Changed, as the coordinator's details corrected:
 
 **Put to the user** (recorded as [AGENT proposal, from Codex#4's review] in
 `docs/decisions.md`, pending):
-- The exception to "the runner is the only composer": subsystem operations
+- The exception to the runner being the only composer: subsystem operations
   may call the shared task and signal services at the C's existing call
   sites; the runner alone assembles the product and orchestrates across
   independent stores.
@@ -752,9 +753,32 @@ Validation: the fast tier, the `wireguard`, `wireguard-generated` and
 
 The two forks edit `Kernel/Defs.lean`'s `Kernel` and `World` on disjoint
 fields; FS lands first on this branch and WG rebases onto it, so the
-`Kernel` structure is deleted by the WG fork. Phase 3 is the proof tree:
-`main`'s tree retyped by deletion and retyping (what phase 1 breaks is in
-its report), then the landed campaign-1 tree as its own job.
+`Kernel` structure is deleted by the WG fork.
+
+**Phase 3, as the user decided on 2026-10-16:** no proofs and no proof
+gate on `main` until campaign 1 lands, removed at the end of the split.
+The proof tree on `main`
+(`Leanux/Proofs/`, the replay-window result and the `Logged`, `Framing`
+and `CounterWindow` layers it rests on, 1,399 theorems) was a prototype
+for campaign 1 that landed on `main` by sequencing. It is not retyped and
+it gets no stub: in the final cutover commit series, after phase 2
+merges, `Leanux/Proofs/`, `Leanux/Proofs.lean`, the `LeanuxProofs` lake
+target and `scripts/proof-gate` are deleted; AGENTS.md's proof-gate
+paragraph and the proof-tree commands in its build-and-check and gates
+sections go with them as a consequence of the deletion, while the
+proof-tree paragraph's standing rule stays (theorems live only in the
+proof tree, Rule Zero, no theorem is an acceptance gate), and the gate
+text returns with campaign 1's landing as that landing's own change; the
+register's rows and lag notes for the prototype are removed, its map and
+the campaign rows kept. The binary track's gate is `proof-gate --binary`
+on `task/binary-tv` (not on `main`; `binary/` imports nothing under
+`Leanux.Proofs`): it is not a proof-tree gate and moves into its own
+script, `scripts/binary-gate` with nothing else in it, at that branch's
+merge, since the binary claim point still needs it. `main` then has no
+proofs and no proof gate until campaign 1 lands; campaign 1 carries the
+prototype and lands it with its own results, retyped over the split
+worlds by its retrofit; campaign 2's retrofit is its additions over those
+layers.
 
 ## 13. Phase 2, the file layer, as built (2026-10-16)
 
@@ -888,3 +912,49 @@ build, the fast tier, the `wireguard`, `wireguard-generated`, `w7-tier` and
 commit; the preservation check over those runs' recorded inputs against the
 e5afc0f baseline and both commits' binaries; the model's time on the
 heaviest chunk (`e_ring_full`) unchanged.
+
+## 15. The cutover as built (2026-10-16)
+
+On `task/state-split`, after the file layer's and WireGuard's phase-2
+branches merged (sections 13 and 14; `task/split-wg` at 6089dc4 carrying
+`task/split-fs`): `World = { ambient, tasks, seccomp, fs, wg, fixture }`,
+`Kernel` gone, every field's home as the two sections list; then phase 3
+as decided: `Leanux/Proofs/`, `Leanux/Proofs.lean`, the `LeanuxProofs`
+lake target and `scripts/proof-gate` deleted with no stub, AGENTS.md's
+gate paragraph and the README's and REPRODUCING's proof-tree commands
+removed as a consequence while the proof-tree paragraph's standing rule
+stays, the register's prototype rows removed and its map and campaign rows
+kept with the line that `main` carries no proof tree until campaign 1
+lands. The executable is the same program over the split worlds; the
+trace format and the outputs are unchanged.
+
+The claim point on the s5 pair (oracle b44d958f, control aa192fdc), the six
+suite groups concurrently at 16 slots and the eight control suites then the
+sentinel sets in a clean detached worktree:
+
+| Group | Traces | Operations | Agreement | Obligations | Distinct rows |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| seccomp, seccomp-generated | 267 | 1,459 | 267 | 586,446 | 585,743 |
+| wireguard, wireguard-generated | 466 | 3,268 | 466 | 413,585 | 51,460 |
+| handwritten, critic | 73 | 891 | 73 | 9,002 | 9,000 |
+| generated, alloc | 1,031 | 36,382 | 1,031 | 301,686 | 301,515 |
+| pipes, pipes-generated, epoll, epoll-generated | 471 | 11,671 | 471 | 194,366 | 165,997 |
+| w7-tier | 6 | 46 | 6 | 254,408 | 33,799 |
+| all | 2,314 | 53,717 | 2,314 | 1,759,493 | 1,147,514 |
+
+No reruns; ten console splits in the wireguard group. Controls: all eight
+as expected on s5 and actl-s5. Sentinels: WireGuard 15 of 15 (Q-M1
+rejected in the set), pipes 2 of 2, seccomp 1 of 1. Behaviour
+preservation: every chunk input of the six groups (288, 135, 3, 33, 15
+and 18: 492 in all, the model, comparison and Linux-side inputs) replayed
+through the e5afc0f binary and the cutover binary gives identical stdout,
+stderr and exit code, equal to the run's recorded output. The fast tier:
+131 tests OK, 1 skipped. Build cost after phase 1 was 1:14 against 1:08
+(the primitives' instance resolution), the model-replay tests unchanged.
+
+What the campaigns' retrofits now include: campaign 1's, the replay-window
+result and the `Logged`, `Framing` and `CounterWindow` layers it rests on
+(the prototype deleted from `main` at this cutover) as well as its own
+results, retyped over the split worlds; campaign 2's, its additions over
+those layers once campaign 1's are retyped; the binary track's `R` over
+`WGWorld` and its `proof-gate --binary` into its own script at its merge.
