@@ -20,8 +20,8 @@ remain on this branch. Initialized R3 packet authorization and R4 receive-pipeli
 conservation remain open; their next extensions follow the retrofit.
 
 The validated baseline `00641c6` has 471 Lean files and 7,715 named theorems.
-The current tree has 451 files and 6,359 theorems: completed changes comprise
-1,689 retyped, 1,635 deleted, 680 retained contract shapes and 279 added theorems.
+The current tree has 451 files and 6,372 theorems: completed changes comprise
+1,733 retyped, 1,636 deleted, 691 retained contract shapes and 293 added theorems.
 All 26 generic helpers and the additional update rule identified by the scope
 audit now retain arbitrary actual product-action scope, with three duplicate
 WP wrappers removed. Their dependent build, axioms, fresh replays and review pass.
@@ -30,11 +30,12 @@ contracts and corrects the earlier scheduler classification; total theorem,
 deletion and addition counts are unaffected.
 The census includes private and attributed declarations and excludes nested
 comments and strings. Deferred uncommitted R3 work is outside the baseline.
-Three terminal files remain unchanged; LifetimeSafety loses six redundant filesystem
+Two terminal files remain unchanged; LifetimeSafety loses six redundant filesystem
 exports. All six FloodResistance names remain, with native WG/Ambient endpoints
 where the source requires them. ReplayWindow and AntiReplay retain all 22 theorem
 names and two definitions; their scoped builds, axioms, fresh replay and review pass. There are 515 terminal
-declarations (513 theorems and two definitions).
+declarations (513 theorems and two definitions). KeyLifetime retains all thirteen
+names, with twelve native WG/Ambient contracts and the existing product timer contract.
 
 The CounterWindow, generic native contracts/adapters, acceptance-observer core,
 action/projection contracts, failure-prefix/native receipts, keypair identity

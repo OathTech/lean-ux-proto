@@ -88,9 +88,10 @@ it is not part of that baseline.
 | Product TX source/worker, native configuration tail and canonical WG composition | 25 | 3 | 0 | 22 | 8 | 33 |
 | Configured identity, AllowedIPs, handshake construction, RX worker and strict TX borrowing | 93 | 50 | 3 | 40 | 22 | 112 |
 | Native counter, lookup/cache, TX staging/admission and RX maintenance | 110 | 61 | 5 | 44 | 29 | 134 |
+| Key lifetime, affiliation, trie insertion and receive/socket completion | 56 | 44 | 1 | 11 | 14 | 69 |
 
-The whole tree currently contains 451 Lean files and 6,359 theorems. The completed
-changes total 1,689 retyped theorems, 1,635 deletions, 680 retained contract shapes and 279 added.
+The whole tree currently contains 451 Lean files and 6,372 theorems. The completed
+changes total 1,733 retyped theorems, 1,636 deletions, 691 retained contract shapes and 293 added.
 Retyping changes or generalizes the actual state/monad carrier or observation.
 This includes shorthand contracts whose source functions or named views move
 to a native monad. Mere namespace qualification and equivalent relocation of a
@@ -104,11 +105,12 @@ The count audit corrects the scheduler row from 17 retyped / 9 retained to
 was inconsistent with the native source-equality and acceptance-observer rows.
 Before this checkpoint, the corrected totals are 259 retyped / 89 retained,
 rather than 276 / 72. The before/after, deletion and addition counts are unchanged.
-Three terminal files remain unchanged. LifetimeSafety loses six redundant filesystem
+Two terminal files remain unchanged. LifetimeSafety loses six redundant filesystem
 exports. FloodResistance retains all six names: five native WG/Ambient contracts
 and the existing product advance contract. ReplayWindow and AntiReplay retain all
 22 theorem names and two definitions, with eight native/mixed retypes and fourteen
-retained product/pure contracts. The terminal surface is now
+retained product/pure contracts. KeyLifetime retains all thirteen names, with twelve
+native contracts and the existing product timer contract. The terminal surface is now
 515 declarations (513 theorems and two definitions). **Every result remains lagging** until the complete tree
 passes its proof gate and kernel replay. R1/R2/R5/R6 retain their pre-split
 charter dispositions; initialized R3 packet authorization and R4 receive-pipeline
@@ -2193,3 +2195,62 @@ not a count of all remaining downstream failures. Several are repaired above;
 the full proof gate remains pending. The mirror remains exactly b700659,
 and the prior default-build and unit-test results cover its unchanged executable
 closure. Every result remains lagging; R3/R4 work follows the retrofit.
+
+## Key lifetime, affiliation, trie insertion and receive/socket completion
+
+Seven modules pass scoped builds, 91 explicit declaration axiom checks, seven
+fresh module replays and independent source review. Their 56 old theorems
+become 69: 44 retyped/generalized, eleven retained contract shapes, one deletion
+and fourteen additions. The selected-source census excludes concurrently
+developed modules.
+
+KeyLifetime retains all thirteen terminal names: twelve native WG/Ambient
+contracts and the original product timer contract. The clock operands,
+stored-counter bounds, allocation failure history and complete keypair-store
+preservation on zeroing retain their original scope; these are the prior R5
+disposition, not a new universal lifetime claim. AffiliationCuts carries eight
+native source claims and one pure claim. Its null-keypair case uses the current
+body-identical null getter and adds no ownership premise.
+
+AllowedIPs insertion keeps four arbitrary product-invariant contracts, including
+the arbitrary product action in the allocation lift. Native counterparts use
+the real WG-to-Aip adapter only where the source does: polymorphic ambient
+arithmetic operations do not acquire an extra missing-device guard. Its masked
+allocation view still preserves WG metadata. Four native counterparts and three
+private conditional/composition helpers account for its seven additions.
+
+ReceiveFailure preserves the exact bitmap failure and reached keypair read.
+ReceiveCompletion retains both original arbitrary product-invariant contracts,
+all three receive callback premises, and exact source order and failure history.
+Its generic disjunction transport applies to arbitrary actual StateT state;
+two native counterparts and two generic native disjunction laws are added.
+The ECN frame is an actual own-WG-store claim. SocketSend similarly retains
+three arbitrary product-invariant contracts and the arbitrary continuation,
+beside three native counterparts; routing reads use the actual routing adapter
+and retain IPv6 generation and address observations in order.
+
+RxTxFrames carries seven substantive native claims. The removed newTxSkbs leaf
+frame duplicated Skb-component write-scope preservation; its sole caller now
+uses the canonical adapter and the generic map rule. The justification is the
+component scope, not merely the WG.M surface type or a compiler failure.
+
+Development outcomes: KeyLifetime had one namespace failure then passed;
+AllowedIPs insertion had ten changed-source builds, two passes and eight ordinary
+failures in adapter selection, binder normalization and conditional composition;
+ReceiveFailure had one open-variable reduction failure then passed;
+ReceiveCompletion had one broad-rule heartbeat failure then passed its native
+and product builds. AffiliationCuts had one adapter/getter normalization failure
+then passed. RxTxFrames had three predicate/composition failures then passed.
+SocketSend had three elaboration/composition failures then passed. No cap or
+proof limit changed, and none of these outcomes was an infrastructure retry.
+
+Two obsolete handshake diagnostics were explicitly cancelled at inspected,
+worker-owned PIDs while that separate module remained under development.
+One wrapper emitted KILLED for its received termination signal; both outcomes
+are failures, neither is a memory-cap pass or an infrastructure rerun. Dirty
+worktrees were snapshotted before work resumed. Those diagnostics do not validate
+a handshake claim in this checkpoint.
+
+The mirror remains exactly b700659. The full-tree diagnostic and complete gate
+remain unfinished, so every result is still lagging; new R3/R4 work follows
+completion of the retrofit.
