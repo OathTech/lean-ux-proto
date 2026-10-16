@@ -54,9 +54,9 @@ theorem live_suffix_history (fetch : Int64 → Option Decoded)
             LookupObservation.decision rxSection .peerGetMaybeZeroDead false dead,
             LookupObservation.returned "wg_peer_get_maybe_zero" final.machine]) ∧
         ∃ before after, final.history = history ++ before ++ after ∧
-          (∀ q ∈ before, q.pc ∈ Image.cutPoints →
+          (∀ q ∈ before, (q.pc ∈ AllowedipsImage.cutPoints ∨ q.pc ∈ Image.cutPoints) →
             EqualOutside (AllowedipsPeerHistory.scanWrites body coverage) body.dmem q.data.dmem) ∧
-          (∀ q ∈ after, q.pc ∈ Image.cutPoints →
+          (∀ q ∈ after, (q.pc ∈ AllowedipsImage.cutPoints ∨ q.pc ∈ Image.cutPoints) →
             EqualOutside (AllowedipsPeerHistory.scanWrites body coverage) (incremented body).dmem q.data.dmem) ∧
           PeerCountPhase.IncrementingReturnAt history (history ++ before) final.history
             body.regs.r13.toBitVec (body.regs.get (.low .rbp .W32)))

@@ -1,0 +1,163 @@
+import AllowedipsSourceEvents
+import AllowedipsAdequacyOuterCount
+
+namespace Binary.AllowedipsSourceLog
+open Leanux Leanux.WG MirrorHistory LookupSourceFrame
+
+def step (point : Point) : Option Step :=
+  match point.tag with | .decision _ => point.world.steps.back? | _ => none
+
+def State (incoming : List Step) (rx : Nat) (points : List Point) (world : World) : Prop :=
+  world.steps.toList = incoming ++ points.filterMap step ∧ world.netRxSection = rx
+
+/-- Source logging fidelity, proved from the logging operations. Each
+    recorded World contains exactly the accumulated decisions at that mark. -/
+inductive Log (incoming : List Step) (rx : Nat) : List Point → Prop where
+  | nil : Log incoming rx []
+  | snoc {points} (prior : Log incoming rx points) (point : Point)
+      (state : State incoming rx (points ++ [point]) point.world) :
+      Log incoming rx (points ++ [point])
+
+def Flow (action : Logged α) : Prop :=
+  ∀ incoming rx history world answer points final,
+    Log incoming rx history → State incoming rx history world →
+    (action.run history).run world = .ok ((answer,points),final) →
+    Log incoming rx points ∧ State incoming rx points final
+
+theorem flow_pure (answer : α) : Flow (pure answer) := by
+  intro incoming rx history world result points final log state accepted
+  cases accepted
+  exact ⟨log,state⟩
+
+theorem flow_bind {action : Logged α} {next : α → Logged β}
+    (first : Flow action) (rest : ∀ answer, Flow (next answer)) : Flow (action >>= next) := by
+  intro incoming rx history world answer points final log state accepted
+  obtain ⟨value,middle,intermediate,run,tail⟩ :=
+    AllowedipsSource.accepted_bind history points world final answer accepted
+  obtain ⟨middleLog,middleState⟩ := first incoming rx history world value middle intermediate log state run
+  exact rest value incoming rx middle intermediate answer points final middleLog middleState tail
+
+theorem flow_lift {action : M α}
+    (preserves : Preserves (fun w => (w.steps,w.netRxSection)) action) : Flow (StateT.lift action) := by
+  intro incoming rx history world answer points final log state accepted
+  cases actual : action.run world with
+  | error error =>
+    simp only [StateT.run_lift,StateT.run_bind,StateT.run_pure,actual] at accepted
+    cases accepted
+  | ok value =>
+    obtain ⟨value,after⟩ := value
+    simp only [StateT.run_lift,StateT.run_bind,StateT.run_pure,actual] at accepted
+    change Except.ok ((value,history),after) = Except.ok ((answer,points),final) at accepted
+    obtain ⟨⟨rfl,rfl⟩,rfl⟩ := Prod.mk.inj (Except.ok.inj accepted)
+    obtain ⟨steps,rxEq⟩ := Prod.mk.inj (preserves world value after actual)
+    exact ⟨log,by simpa only [State,steps,rxEq] using state⟩
+
+theorem flow_mark (tag : Tag) (silent : ∀ d, tag ≠ .decision d) : Flow (mark tag) := by
+  intro incoming rx history world answer points final log state accepted
+  rw [mark_run] at accepted
+  cases accepted
+  have unchanged : step ⟨tag,world⟩ = none := by
+    cases tag with
+    | decision d => exact False.elim (silent d rfl)
+    | call symbol => rfl
+    | returned symbol => rfl
+  have next : State incoming rx (history ++ [⟨tag,world⟩]) world := by
+    simpa only [State,List.filterMap_append,List.filterMap_cons,List.filterMap_nil,unchanged,
+      Option.toList_none,List.nil_append,List.append_nil] using state
+  exact ⟨.snoc log _ next,next⟩
+
+theorem flow_called {action : Logged α} (symbol : String) (flow : Flow action) :
+    Flow (called symbol action) := by
+  unfold called
+  apply flow_bind (flow_mark _ (by intro d; cases d <;> simp))
+  intro _
+  apply flow_bind flow
+  intro answer
+  apply flow_bind (flow_mark _ (by intro d; cases d <;> simp))
+  intro _
+  exact flow_pure answer
+
+theorem flow_branch (d : Decision) (outcome : Bool) : Flow (branchLogged d outcome) := by
+  intro incoming rx history world answer points final log state accepted
+  rw [branch_run] at accepted
+  cases accepted
+  have next : State incoming rx (history ++ [⟨.decision d,LookupMirror.record world d outcome⟩])
+      (LookupMirror.record world d outcome) := by
+    simp only [State] at state ⊢
+    simp [LookupMirror.record,step,state.1,state.2,List.append_assoc]
+  exact ⟨.snoc log _ next,next⟩
+
+theorem flow_cmp (d : Decision) (outcome : Bool) (left right : Int) :
+    Flow (branchCmpLogged d outcome left right) := by
+  intro incoming rx history world answer points final log state accepted
+  rw [branchCmp_run] at accepted
+  cases accepted
+  have next : State incoming rx (history ++ [⟨.decision d,PeerMirror.recordCmp world d outcome left right⟩])
+      (PeerMirror.recordCmp world d outcome left right) := by
+    simp only [State] at state ⊢
+    simp [PeerMirror.recordCmp,step,state.1,state.2,List.append_assoc]
+  exact ⟨.snoc log _ next,next⟩
+
+theorem flow_count (old : Nat) : Flow (count old) := by
+  unfold count
+  apply flow_bind (flow_cmp _ _ _ _)
+  intro zero
+  cases zero with
+  | true =>
+    apply flow_bind (flow_branch _ _)
+    intro _
+    apply flow_bind (flow_branch _ _)
+    intro _
+    exact flow_pure _
+  | false =>
+    apply flow_bind (flow_branch _ _)
+    intro _
+    apply flow_bind (flow_branch _ _)
+    intro _
+    apply flow_bind (flow_branch _ _)
+    intro wraps
+    cases wraps with
+    | false => exact flow_pure _
+    | true =>
+      apply flow_bind (flow_lift (preserves_throw _ _))
+      intro _
+      exact flow_pure _
+
+theorem setPeer_state (pid : PeerId) (peer : Peer) :
+    Preserves (fun w => (w.steps,w.netRxSection)) (setPeer pid peer) := by
+  intro world answer final accepted
+  cases hd : world.k.wg with
+  | none =>
+    simp [setPeer,modifyDev,modifyK,getDev,getK,hd,invariant] at accepted
+    cases accepted
+  | some device =>
+    simp [setPeer,modifyDev,modifyK,getDev,getK,hd] at accepted
+    cases accepted
+    rfl
+
+theorem flow_peer (word : Option PeerId) : Flow (peerGet word) := by
+  unfold peerGet
+  apply flow_bind (flow_branch _ _)
+  intro null
+  cases null with
+  | true => exact flow_pure _
+  | false =>
+    cases word with
+    | none => exact flow_lift (preserves_throw _ _)
+    | some pid =>
+      apply flow_bind (flow_lift (preserves_pure _ _))
+      intro _
+      apply flow_bind (flow_lift (preserves_getPeer _ _))
+      intro peer
+      apply flow_bind (flow_count peer.refcount)
+      intro live
+      apply flow_bind (flow_branch _ _)
+      intro dead
+      cases dead with
+      | true => exact flow_pure _
+      | false =>
+        apply flow_bind (flow_lift (setPeer_state _ _))
+        intro _
+        exact flow_pure _
+
+end Binary.AllowedipsSourceLog

@@ -58,8 +58,8 @@ theorem live_body_history (fetch : Int64 → Option Decoded)
             LookupObservation.decision rxSection .peerGetMaybeZeroDead false dead,
             LookupObservation.returned "wg_peer_get_maybe_zero" final.machine]) ∧
         ∃ before after, final.history = history ++ before ++ after ∧
-          (∀ q ∈ before, q.pc ∈ Image.cutPoints → EqualOutside (AllowedipsPeerHistory.scanWrites body coverage) body.dmem q.data.dmem) ∧
-          (∀ q ∈ after, q.pc ∈ Image.cutPoints → EqualOutside (AllowedipsPeerHistory.scanWrites body coverage) (incrementPeerMemory body count) q.data.dmem) ∧
+          (∀ q ∈ before, (q.pc ∈ AllowedipsImage.cutPoints ∨ q.pc ∈ Image.cutPoints) → EqualOutside (AllowedipsPeerHistory.scanWrites body coverage) body.dmem q.data.dmem) ∧
+          (∀ q ∈ after, (q.pc ∈ AllowedipsImage.cutPoints ∨ q.pc ∈ Image.cutPoints) → EqualOutside (AllowedipsPeerHistory.scanWrites body coverage) (incrementPeerMemory body count) q.data.dmem) ∧
           PeerCountPhase.IncrementingReturnAt history (history ++ before) final.history
             (body.regs.rbx.toBitVec+0x420) count.toBitVec)
       ⟨⟨body, Image.PeerGet.entry+0x12⟩, history⟩ := by

@@ -1,4 +1,5 @@
 import AllowedipsPeerCoverage
+import CommonBitsTrace
 
 namespace Binary.AllowedipsPeerCoverage
 open TrustBase LookupObservation
@@ -26,7 +27,7 @@ theorem observed_callback (fetch : Int64 → Option Decoded) (address : Int64) (
         t.history.getLast? = some t.machine ∧
         ∃ tail, t.history = front ++ s :: tail ∧
           (s :: tail).getLast? = some t.machine ∧
-          (∀ q ∈ (s :: tail).dropLast, q.pc ∉ Image.cutPoints) ∧
+          (∀ q ∈ (s :: tail).dropLast, ¬(q.pc ∈ AllowedipsImage.cutPoints ∨ q.pc ∈ Image.cutPoints)) ∧
           NoAnchoredReentry (s :: tail))
       ⟨s, front ++ [s]⟩ := by
   have run := callback fetch address kind contract layout preempt s returnAddress atEntry entry
@@ -50,8 +51,14 @@ theorem observed_callback (fetch : Int64 → Option Decoded) (address : Int64) (
     tail, history, last, ?_, ?_⟩
   · rw [history, List.getLast?_append, last]
     rfl
-  · intro q present
-    exact no_reentry_cuts localState.history noReentry.1 q (by simpa only [localHistory] using present)
+  · intro q present cut
+    have present' : q ∈ localState.history.dropLast := by simpa only [localHistory] using present
+    rcases cut with newCut | oldCut
+    · have unmapped := noReentry.2 q present'
+      have mapped := CommonBits.cut_decoded q.pc newCut
+      rw [unmapped] at mapped
+      cases mapped
+    · exact no_reentry_cuts localState.history noReentry.1 q present' oldCut
 
   · simpa only [localHistory] using noReentry.1
 

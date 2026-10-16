@@ -53,7 +53,7 @@ theorem increment_finish_history (fetch : Int64 → Option Decoded)
             LookupObservation.decision rxSection .peerGetMaybeZeroDead false dead,
             LookupObservation.returned "wg_peer_get_maybe_zero" final.machine]) ∧
         ∃ tail, final.history = history ++ tail ∧
-          ∀ q ∈ tail, q.pc ∈ Image.cutPoints →
+          ∀ q ∈ tail, (q.pc ∈ AllowedipsImage.cutPoints ∨ q.pc ∈ Image.cutPoints) →
             EqualOutside (AllowedipsPeerHistory.scanWrites body coverage) (incremented body).dmem q.data.dmem)
       ⟨⟨body, Image.PeerGet.entry+0x44⟩, history⟩ := by
   have call := increment_call_history fetch agree traceByte body coverage preempt ready count countSeparate

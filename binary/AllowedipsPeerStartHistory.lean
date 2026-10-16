@@ -55,7 +55,7 @@ theorem start_history (fetch : Int64 → Option Decoded)
       t.history.getLast? = some t.machine ∧
       PeerCountPhase.StableExtension history t.history ∧
       ∃ tail, t.history = history ++ tail ∧
-        ∀ q ∈ tail, q.pc ∈ Image.cutPoints → EqualOutside (entryWrites s coverage) s.dmem q.data.dmem)
+        ∀ q ∈ tail, (q.pc ∈ AllowedipsImage.cutPoints ∨ q.pc ∈ Image.cutPoints) → EqualOutside (entryWrites s coverage) s.dmem q.data.dmem)
       ⟨⟨s, Image.PeerGet.entry⟩, history⟩ := by
   have start := historySteps_eventually fetch 8 _ _ (prologue_history fetch agree s history mapped)
   apply eventually_trans (historyStep fetch) _ _ _ start

@@ -62,8 +62,8 @@ theorem live_entry_history (fetch : Int64 → Option Decoded)
             LookupObservation.decision rxSection .peerGetMaybeZeroDead false dead,
             LookupObservation.returned "wg_peer_get_maybe_zero" final.machine]) ∧
         ∃ before after, final.history = history ++ before ++ after ∧
-          (∀ q ∈ before, q.pc ∈ Image.cutPoints → EqualOutside (entryWrites s coverage) s.dmem q.data.dmem) ∧
-          (∀ q ∈ after, q.pc ∈ Image.cutPoints → EqualOutside (entryWrites s coverage) (incrementEntryMemory s count) q.data.dmem) ∧
+          (∀ q ∈ before, (q.pc ∈ AllowedipsImage.cutPoints ∨ q.pc ∈ Image.cutPoints) → EqualOutside (entryWrites s coverage) s.dmem q.data.dmem) ∧
+          (∀ q ∈ after, (q.pc ∈ AllowedipsImage.cutPoints ∨ q.pc ∈ Image.cutPoints) → EqualOutside (entryWrites s coverage) (incrementEntryMemory s count) q.data.dmem) ∧
           PeerCountPhase.IncrementingReturnAt history (history ++ before) final.history
             (s.regs.rdi.toBitVec+0x420) count.toBitVec)
       ⟨⟨s, Image.PeerGet.entry⟩, history⟩ := by

@@ -95,7 +95,7 @@ theorem null_suffix_history (fetch : Int64 → Option Decoded)
             ⟨tested (.low .rbx .W64) body af, Image.PeerGet.entry+0xdd⟩,
           LookupObservation.returned "wg_peer_get_maybe_zero" final.machine]) ∧
         ∃ tail, final.history = history ++ tail ∧
-          ∀ q ∈ tail, q.pc ∈ Image.cutPoints →
+          ∀ q ∈ tail, (q.pc ∈ AllowedipsImage.cutPoints ∨ q.pc ∈ Image.cutPoints) →
             EqualOutside (AllowedipsPeerHistory.scanWrites body coverage) body.dmem q.data.dmem)
       ⟨⟨body, Image.PeerGet.entry+0x12⟩, history⟩ := by
   have guard := historySteps_eventually fetch 2 _ _

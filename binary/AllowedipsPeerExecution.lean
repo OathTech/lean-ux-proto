@@ -41,7 +41,7 @@ theorem null (fetch : Int64 → Option Decoded)
           .ok ([] ++ [LookupObservation.decision rxSection .peerGetMaybeZeroNull true guard,
             LookupObservation.returned "wg_peer_get_maybe_zero" final.machine]) ∧
         ∃ tail, final.history = [⟨s, Image.PeerGet.entry⟩] ++ tail ∧
-          ∀ q ∈ tail, q.pc ∈ Image.cutPoints →
+          ∀ q ∈ tail, (q.pc ∈ AllowedipsImage.cutPoints ∨ q.pc ∈ Image.cutPoints) →
             EqualOutside (entryWrites s coverage) s.dmem q.data.dmem)
       ⟨⟨s, Image.PeerGet.entry⟩, [⟨s, Image.PeerGet.entry⟩]⟩ := by
   have run := AllowedipsPeerGet.null_entry_history fetch agree contract s returnAddress entry null coverage coverage.preempt state trivial mapped pushSeparate coverageSeparate metadataSeparate preemptSeparate rxSection [⟨s, Image.PeerGet.entry⟩] [] rfl rfl
@@ -94,7 +94,7 @@ theorem dead (fetch : Int64 → Option Decoded)
             LookupObservation.decision rxSection .peerGetMaybeZeroDead true dead,
             LookupObservation.returned "wg_peer_get_maybe_zero" final.machine]) ∧
         ∃ tail, final.history = [⟨s, Image.PeerGet.entry⟩] ++ tail ∧
-          ∀ q ∈ tail, q.pc ∈ Image.cutPoints →
+          ∀ q ∈ tail, (q.pc ∈ AllowedipsImage.cutPoints ∨ q.pc ∈ Image.cutPoints) →
             EqualOutside (entryWrites s coverage) s.dmem q.data.dmem)
       ⟨⟨s, Image.PeerGet.entry⟩, [⟨s, Image.PeerGet.entry⟩]⟩ := by
   have run := AllowedipsPeerGet.dead_entry_history fetch agree contract traceCmp s returnAddress entry nonnull field coverage coverage.preempt state trivial mapped pushSeparate coverageSeparate metadataSeparate preemptSeparate fieldSeparate trivial rxSection [⟨s, Image.PeerGet.entry⟩] [] rfl rfl
@@ -156,8 +156,8 @@ theorem live (fetch : Int64 → Option Decoded)
             LookupObservation.decision rxSection .peerGetMaybeZeroDead false dead,
             LookupObservation.returned "wg_peer_get_maybe_zero" final.machine]) ∧
         ∃ before after, final.history = [⟨s, Image.PeerGet.entry⟩] ++ before ++ after ∧
-          (∀ q ∈ before, q.pc ∈ Image.cutPoints → EqualOutside (entryWrites s coverage) s.dmem q.data.dmem) ∧
-          (∀ q ∈ after, q.pc ∈ Image.cutPoints → EqualOutside (entryWrites s coverage) (AllowedipsPeerGet.incrementEntryMemory s count) q.data.dmem) ∧
+          (∀ q ∈ before, (q.pc ∈ AllowedipsImage.cutPoints ∨ q.pc ∈ Image.cutPoints) → EqualOutside (entryWrites s coverage) s.dmem q.data.dmem) ∧
+          (∀ q ∈ after, (q.pc ∈ AllowedipsImage.cutPoints ∨ q.pc ∈ Image.cutPoints) → EqualOutside (entryWrites s coverage) (AllowedipsPeerGet.incrementEntryMemory s count) q.data.dmem) ∧
           PeerCountPhase.IncrementingReturnAt [⟨s, Image.PeerGet.entry⟩] ([⟨s, Image.PeerGet.entry⟩] ++ before) final.history
             (s.regs.rdi.toBitVec+0x420) count.toBitVec)
       ⟨⟨s, Image.PeerGet.entry⟩, [⟨s, Image.PeerGet.entry⟩]⟩ := by

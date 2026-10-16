@@ -218,7 +218,7 @@ theorem increment_observed (rxSection : Nat) (s : MachineData) (af : Bool) :
 /-- All actual intermediate states remain recorded; the only new anchored
     cut before the CALL is its argument state at +0x5b. -/
 theorem increment_cuts (s : MachineData) (af : Bool) (q : MachineState)
-    (member : q ∈ incrementStates s af) (cut : q.pc ∈ Image.cutPoints) :
+    (member : q ∈ incrementStates s af) (cut : (q.pc ∈ AllowedipsImage.cutPoints ∨ q.pc ∈ Image.cutPoints)) :
     q = ⟨incFinal s af, Image.PeerGet.entry+0x5b⟩ := by
   simp only [incrementStates, List.mem_cons, List.not_mem_nil, or_false] at member
   rcases member with rfl | rfl | rfl | rfl | rfl | rfl | rfl

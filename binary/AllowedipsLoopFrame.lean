@@ -54,7 +54,7 @@ theorem stack_slot_inside (stack : UInt64) (n : Nat) (bound : n < 6) (a : BitVec
 
 def Cuts (base : MachineData) (coverage : CommonBitsCoverage.Context)
     (history : List MachineState) : Prop :=
-  ∀ q ∈ history, q.pc ∈ AllowedipsImage.cutPoints →
+  ∀ q ∈ history, (q.pc ∈ AllowedipsImage.cutPoints ∨ q.pc ∈ Image.cutPoints) →
     EqualOutside (writes base.regs.rsp coverage) base.dmem q.data.dmem
 
 theorem Cuts.append {base coverage first second}
@@ -141,7 +141,7 @@ theorem quiet_trace {fetch pc code}
     (last : history.getLast? = some ⟨s,pc⟩)
     (silent : ∀ address ∈ regionPCs pc code, ∀ before after,
       before.pc = address → AllowedipsObservation.edge rxSection before after = .ok [])
-    (noInterior : ∀ address ∈ (regionPCs pc code).tail, address ∉ AllowedipsImage.cutPoints)
+    (noInterior : ∀ address ∈ (regionPCs pc code).tail, ¬(address ∈ AllowedipsImage.cutPoints ∨ address ∈ Image.cutPoints))
     (ordinary : ∀ address ∈ regionPCs pc code,
       address ≠ Image.PeerGet.entry+0xaf ∧ address ≠ Image.PeerGet.entry+0x4a) :
     Eventually (historyStep fetch) (fun t => P t.machine ∧

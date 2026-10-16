@@ -38,7 +38,7 @@ theorem finish_9d_history (fetch : Int64 → Option Decoded)
       final.history.getLast? = some final.machine ∧
       PeerCountPhase.ReturningExtension history final.history ∧
       ∃ tail, final.history = history ++ tail ∧
-        ∀ q ∈ tail, q.pc ∈ Image.cutPoints →
+        ∀ q ∈ tail, (q.pc ∈ AllowedipsImage.cutPoints ∨ q.pc ∈ Image.cutPoints) →
           EqualOutside (AllowedipsPeerHistory.scanWrites body coverage) body.dmem q.data.dmem)
       ⟨⟨body, Image.PeerGet.entry+0x9d⟩, history⟩ := by
   have call := scan_call_cursor fetch "L_ffffffff810f3100"

@@ -41,7 +41,7 @@ theorem dead_suffix_history (fetch : Int64 → Option Decoded)
           LookupObservation.decision rxSection .peerGetMaybeZeroDead true dead,
           LookupObservation.returned "wg_peer_get_maybe_zero" final.machine]) ∧
         ∃ tail, final.history = history ++ tail ∧
-          ∀ q ∈ tail, q.pc ∈ Image.cutPoints →
+          ∀ q ∈ tail, (q.pc ∈ AllowedipsImage.cutPoints ∨ q.pc ∈ Image.cutPoints) →
             EqualOutside (AllowedipsPeerHistory.scanWrites body coverage) body.dmem q.data.dmem)
       ⟨⟨body, Image.PeerGet.entry+0xb0⟩, history⟩ := by
   have callbacks := dead_callbacks_history fetch agree contract traceCmp body coverage preempt ready

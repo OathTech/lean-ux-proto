@@ -20,7 +20,7 @@ private theorem scalar_trace {fetch pc code}
     (last : history.getLast? = some ⟨s,pc⟩)
     (static : ∀ address ∈ regionPCs pc code, Quiet address ∧
       address ≠ Image.PeerGet.entry+0xaf ∧ address ≠ Image.PeerGet.entry+0x4a)
-    (noInterior : ∀ address ∈ (regionPCs pc code).tail, address ∉ AllowedipsImage.cutPoints) :
+    (noInterior : ∀ address ∈ (regionPCs pc code).tail, ¬(address ∈ AllowedipsImage.cutPoints ∨ address ∈ Image.cutPoints)) :
     Eventually (historyStep fetch) (fun t => P t.machine ∧ Trace base coverage rxSection history events t)
       ⟨⟨s,pc⟩,history⟩ := by
   apply quiet_trace layout base s coverage P ?_ frame rxSection history events observed last

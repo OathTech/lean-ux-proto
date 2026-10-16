@@ -15,7 +15,7 @@ private theorem args32_silent (rxSection : Nat) :
 
 private theorem args32_noInterior :
     ∀ address ∈ (AllowedipsLoop.regionPCs (AllowedipsImage.CommonBits.entry+0x15) (AllowedipsImage.CommonBits.r15.take 2)).tail,
-      address ∉ AllowedipsImage.cutPoints := by decide
+      ¬(address ∈ AllowedipsImage.cutPoints ∨ address ∈ Image.cutPoints) := by decide
 private theorem args32_ordinary :
     ∀ address ∈ AllowedipsLoop.regionPCs (AllowedipsImage.CommonBits.entry+0x15) (AllowedipsImage.CommonBits.r15.take 2),
       address ≠ Image.PeerGet.entry+0xaf ∧ address ≠ Image.PeerGet.entry+0x4a := by decide
@@ -51,7 +51,7 @@ private theorem args128_silent (rxSection : Nat) :
 
 private theorem args128_noInterior :
     ∀ address ∈ (AllowedipsLoop.regionPCs (AllowedipsImage.CommonBits.entry+0x2b) (AllowedipsImage.CommonBits.r2b.take 3)).tail,
-      address ∉ AllowedipsImage.cutPoints := by decide
+      ¬(address ∈ AllowedipsImage.cutPoints ∨ address ∈ Image.cutPoints) := by decide
 private theorem args128_ordinary :
     ∀ address ∈ AllowedipsLoop.regionPCs (AllowedipsImage.CommonBits.entry+0x2b) (AllowedipsImage.CommonBits.r2b.take 3),
       address ≠ Image.PeerGet.entry+0xaf ∧ address ≠ Image.PeerGet.entry+0x4a := by decide
@@ -86,7 +86,7 @@ private theorem seed128_silent (rxSection : Nat) :
 
 private theorem seed128_noInterior :
     ∀ address ∈ (AllowedipsLoop.regionPCs (AllowedipsImage.CommonBits.entry+0xaf) (AllowedipsImage.CommonBits.raf.take 1)).tail,
-      address ∉ AllowedipsImage.cutPoints := by decide
+      ¬(address ∈ AllowedipsImage.cutPoints ∨ address ∈ Image.cutPoints) := by decide
 private theorem seed128_ordinary :
     ∀ address ∈ AllowedipsLoop.regionPCs (AllowedipsImage.CommonBits.entry+0xaf) (AllowedipsImage.CommonBits.raf.take 1),
       address ≠ Image.PeerGet.entry+0xaf ∧ address ≠ Image.PeerGet.entry+0x4a := by decide
@@ -118,7 +118,7 @@ private theorem high_args_silent (rxSection : Nat) :
 
 private theorem high_args_noInterior :
     ∀ address ∈ (AllowedipsLoop.regionPCs (AllowedipsImage.CommonBits.entry+0x7a) (AllowedipsImage.CommonBits.r7a.take 4)).tail,
-      address ∉ AllowedipsImage.cutPoints := by decide
+      ¬(address ∈ AllowedipsImage.cutPoints ∨ address ∈ Image.cutPoints) := by decide
 private theorem high_args_ordinary :
     ∀ address ∈ AllowedipsLoop.regionPCs (AllowedipsImage.CommonBits.entry+0x7a) (AllowedipsImage.CommonBits.r7a.take 4),
       address ≠ Image.PeerGet.entry+0xaf ∧ address ≠ Image.PeerGet.entry+0x4a := by decide
@@ -154,7 +154,7 @@ private theorem ipv4_silent (rxSection : Nat) :
 
 private theorem ipv4_noInterior :
     ∀ address ∈ (AllowedipsLoop.regionPCs (AllowedipsImage.CommonBits.entry+0x51) (AllowedipsImage.CommonBits.r51.take 6)).tail,
-      address ∉ AllowedipsImage.cutPoints := by decide
+      ¬(address ∈ AllowedipsImage.cutPoints ∨ address ∈ Image.cutPoints) := by decide
 private theorem ipv4_ordinary :
     ∀ address ∈ AllowedipsLoop.regionPCs (AllowedipsImage.CommonBits.entry+0x51) (AllowedipsImage.CommonBits.r51.take 6),
       address ≠ Image.PeerGet.entry+0xaf ∧ address ≠ Image.PeerGet.entry+0x4a := by decide
@@ -196,7 +196,7 @@ private theorem high_scan_silent (rxSection : Nat) :
 
 private theorem high_scan_noInterior :
     ∀ address ∈ (AllowedipsLoop.regionPCs (AllowedipsImage.CommonBits.entry+0x98) AllowedipsImage.CommonBits.r98).tail,
-      address ∉ AllowedipsImage.cutPoints := by decide
+      ¬(address ∈ AllowedipsImage.cutPoints ∨ address ∈ Image.cutPoints) := by decide
 private theorem high_scan_ordinary :
     ∀ address ∈ AllowedipsLoop.regionPCs (AllowedipsImage.CommonBits.entry+0x98) AllowedipsImage.CommonBits.r98,
       address ≠ Image.PeerGet.entry+0xaf ∧ address ≠ Image.PeerGet.entry+0x4a := by decide
@@ -232,7 +232,7 @@ private theorem low_scan_silent (rxSection : Nat) :
 
 private theorem low_scan_noInterior :
     ∀ address ∈ (AllowedipsLoop.regionPCs (AllowedipsImage.CommonBits.entry+0xc9) AllowedipsImage.CommonBits.rc9).tail,
-      address ∉ AllowedipsImage.cutPoints := by decide
+      ¬(address ∈ AllowedipsImage.cutPoints ∨ address ∈ Image.cutPoints) := by decide
 private theorem low_scan_ordinary :
     ∀ address ∈ AllowedipsLoop.regionPCs (AllowedipsImage.CommonBits.entry+0xc9) AllowedipsImage.CommonBits.rc9,
       address ≠ Image.PeerGet.entry+0xaf ∧ address ≠ Image.PeerGet.entry+0x4a := by decide

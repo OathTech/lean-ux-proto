@@ -16,7 +16,7 @@ theorem quiet_write (fetch : Int64 → Option Decoded) (pc : Int64)
     (silent : ∀ address ∈ AllowedipsLoop.regionPCs pc code, ∀ before after,
       before.pc = address → AllowedipsObservation.edge rxSection before after = .ok [])
     (noInterior : ∀ address ∈ (AllowedipsLoop.regionPCs pc code).tail,
-      address ∉ AllowedipsImage.cutPoints)
+      ¬(address ∈ AllowedipsImage.cutPoints ∨ address ∈ Image.cutPoints))
     (ordinary : ∀ address ∈ AllowedipsLoop.regionPCs pc code,
       address ≠ Image.PeerGet.entry+0xaf ∧ address ≠ Image.PeerGet.entry+0x4a) :
     Eventually (historyStep fetch) (fun t => P t.machine ∧ Local writes ⟨s,pc⟩ rxSection [] t)

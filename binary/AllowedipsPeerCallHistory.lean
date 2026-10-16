@@ -49,7 +49,7 @@ theorem observed_call (fetch : Int64 → Option Decoded) (pc : Int64) (target : 
       t.history.getLast? = some t.machine ∧
       ∃ tail, t.history = (front ++ [⟨s, pc⟩]) ++ calledState s (pc+5) (label target) :: tail ∧
         (calledState s (pc+5) (label target) :: tail).getLast? = some t.machine ∧
-        (∀ q ∈ (calledState s (pc+5) (label target) :: tail).dropLast, q.pc ∉ Image.cutPoints) ∧
+        (∀ q ∈ (calledState s (pc+5) (label target) :: tail).dropLast, ¬(q.pc ∈ AllowedipsImage.cutPoints ∨ q.pc ∈ Image.cutPoints)) ∧
         NoAnchoredReentry (calledState s (pc+5) (label target) :: tail))
       ⟨⟨s, pc⟩, front ++ [⟨s, pc⟩]⟩ := by
   have call := historySteps_eventually fetch 1 _ _

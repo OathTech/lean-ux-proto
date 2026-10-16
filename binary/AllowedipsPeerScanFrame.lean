@@ -41,7 +41,7 @@ theorem ScanFrame.congr {base current next : MachineData} {coverage preempt}
 
 def ScanCuts (base : MachineData) (coverage : AllowedipsPeerCoverage.Context) (preempt : BitVec 32)
     (history : List MachineState) : Prop :=
-  ∀ s ∈ history, s.pc ∈ Image.cutPoints → ScanFrame base coverage preempt s.data
+  ∀ s ∈ history, (s.pc ∈ AllowedipsImage.cutPoints ∨ s.pc ∈ Image.cutPoints) → ScanFrame base coverage preempt s.data
 
 theorem ScanCuts.append {base coverage preempt first second}
     (a : ScanCuts base coverage preempt first) (b : ScanCuts base coverage preempt second) :

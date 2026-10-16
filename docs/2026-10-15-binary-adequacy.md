@@ -3786,3 +3786,128 @@ AllowedipsRoot AllowedipsPeerExecution` exited successfully; both exact
 witness executions passed again. The binary trust gate passed with the
 explicitly updated trust-surface specification, and its six unit tests
 passed. This is local kernel replay, not a new external `lake check` result.
+
+### Recovery record: paused for replanning, 2026-10-16
+
+[USER 2026-10-16] Pause at a natural checkpoint and commit a recovery record
+on `task/binary-tv` for replanning. No next proof phase is authorised by this
+pause record. No merge or push was performed.
+
+The previous checkpoint is `25e60fb`; this commit preserves the subsequent
+component proofs and the strengthened cut frames. Before resuming after the
+interruption, all dirty task-tree files, including untracked sources, were
+preserved at `refs/snapshots/binary-tv/m2-resume-20261016T002541Z`
+(`01f2731270d4edfff6cdaa9e63928d4aa5388dca`). Only this worktree was modified.
+The private Kraken dependency is clean at
+`7ebba06a30eaf08c10b26b28ca14bfee1c791576`; the mirror remains at the
+integrated `cb2348e` representation. The oracle remains read-only.
+
+Milestone 1's ordered review fixes are committed individually:
+`5c56e32` (F1), `3d17637` (F3), `9d0641f` (F4), `637b032` (F5),
+`686bba4` (F8), `0649685` (F10), `520a5f7` (F11), and `2d8b717`
+(export-based gate documentation). They await the planned milestone-2
+review. The user's external `lake check --from-export` acceptance remains
+specific to the five exported modules at `430ea90`; it does not certify
+this later tree. F2's callback bodies and F7's realism gate remain due at
+milestone 4, as directed.
+
+Milestone 2 is **not complete**. No allowed-IPs function-level simulation or
+transport theorem has been proved. The current completed component map is:
+
+- `Binary.AllowedipsEntry.execution` (`AllowedipsEntryExecution`): actual entry through lookup+0x74,
+  both address families, endian conversion, callbacks and BH-disable;
+  `AllowedipsEntryExports` supplies current query/root/pending/read frames.
+- `Binary.CommonBits.entry_history` (`CommonBitsEntryHistory`): complete helper through RET,
+  all branches, exact event signature and ABI; caller integration is in
+  `AllowedipsLoopCommonCall` and `AllowedipsLoopNodeCommon`.
+- `Binary.AllowedipsLoop.node_body` (`AllowedipsLoopBody`): one nonempty trie iteration, including
+  mismatch, full-length and child cases. Its bounded iteration composition
+  remains open. `AllowedipsRoot` and `AllowedipsSelected` cover the outer
+  node/found guard regions and their callbacks.
+- `Binary.AllowedipsCaller.live_result` (`AllowedipsCallerExecution`): selected-node peer-word load,
+  real CALL, complete live peer-get execution and caller result TEST through
+  lookup+0x122. `AllowedipsCallerPre` derives readiness, focused count reads
+  and separation from the existing entry precondition and executed loop
+  frames. Live positivity comes from accepted source execution, not Pre.
+- `Binary.AllowedipsTail.execution` (`AllowedipsTailExecution`): lookup+0x122 through the actual RET,
+  restoring the original ABI/result and preempt count and retaining both
+  coverage phases and the conditional softirq-pending word.
+  `AllowedipsTailReady` supplies `Binary.AllowedipsTail.Ready.of_middle_frame`
+  as the planned integration point.
+- `AllowedipsCorrespondence*`: strict emitting-prefix matching, stuttering
+  cuts and physical R framing. `Binary.AllowedipsSource.suffix_live` (`AllowedipsAdequacySource`)
+  extracts the exact accepted live suffix; `AllowedipsAdequacyPost` defines
+  the intended postcondition, and the `OuterCount`/`Invocation` modules
+  prove the outer-return bookkeeping needed for permission auditing.
+
+A composition gap was found and corrected in the local proof summaries:
+frames previously covered only one image's cuts. `CommonBits.Local`, the
+loop traces and the allowed-IPs peer-get ports now retain the union of the
+allowed-IPs and original image cut sets. Static instruction paths and the
+existing callbacks' two no-reentry clauses discharge the stronger facts.
+No R clause, physical Pre condition or service assumption was added for it.
+
+The unimported draft `binary/drafts/AllowedipsAdequacyLog.lean.draft` is
+preserved for recovery, outside the package. Its direct Lean check failed;
+it is not a proved module. It needs fixes to substituted variable names,
+explicit negative/wrap cases, `setPeer` step framing and a qualified
+identifier. The unused `CommonBitsPaths.lean` intermediate was removed;
+`CommonBitsPathsHistory` supersedes it and the snapshot retains its source.
+
+Remaining work, before any milestone-2 claim:
+
+1. Compose the accepted bounded selector loop with the physical iteration,
+   retaining the found-node invariant (reached, matching prefix, non-null
+   peer) and exact source event signature.
+2. Finish source-log fidelity and turn actual event signatures into
+   cumulative-step `MatchesPoints`.
+3. Join entry, root/search/found guards, miss exit (lookup+0x184), selected
+   peer call and the return tail. Derive tail readiness from the actual
+   middle frame and mapped call word; do not introduce future-run premises.
+4. Splice the helper's increment phase into the full raw history and prove
+   R at every emitting point and stuttering cut, then instantiate
+   `AllowedipsPost` and the explicit invocation environment hypotheses.
+5. Prove generic transport and the concrete landed-result frame corollaries;
+   update the one register row and this report, including measured rate,
+   the final trust base verbatim, and a fresh external export gate.
+
+The decoded M2 surface remains 176 instructions in 56 regions, plus the
+existing peer-get helper and named callback contracts. No completed-function
+rate is asserted for this interrupted milestone; component counts and a
+green build are not function adequacy. The earlier rate and trust-base quote
+for milestone 1 remain in its section above.
+
+Reproduction after an agreed replan uses the worktree's pinned toolchain:
+`capped lake -d binary build` and `capped scripts/proof-gate --binary`.
+The witnessed states can be regenerated with
+`LEANUX_QEMU_SLOTS=16 capped python3 -B binary/allowedips_probe.py`, then
+`cd binary` and `capped lake env lean AllowedipsWitnessRun.lean`.
+The external acceptance form is documented in `binary/README.md`:
+`lake check --from-export <fresh-headline-export.ndjson>` outside nono.
+Do not reuse the old export as acceptance of changed statements or proofs.
+
+Two loop-support drafts are also preserved outside the package:
+`binary/drafts/AllowedipsLoopFound.lean.draft` has a failed simplification
+in the mismatch branch; `binary/drafts/AllowedipsSourceContinuation.lean.draft`
+contains repairs to earlier errors but has not been rechecked against the
+updated `SourceEvents` module. Neither is counted as proved. The next loop
+step is an induction over accepted `afterGuard` fuel, using checked
+`node_body` and `SourceEvents.nodeBody_run`; done cases return, zero fuel
+contradicts acceptance, and yielded nonempty children recurse. Preserve the
+found-node invariant and compose `Trace.trans` with exact event signatures.
+No `AllowedipsLoopWalk` module or whole-function assembly exists yet.
+
+The checkpoint gate's first rebuild failed in `AllowedipsOuterScalar`:
+its private scalar wrapper still stated the old single-image cut exclusion.
+The wrapper was strengthened to the same union as the underlying proved
+trace lemma; the existing concrete instruction checks discharge it. This
+failed build is not counted as a pass.
+
+Final paused-checkpoint validation: capped integrated build PASS (529 jobs),
+binary proof gate PASS (pinned clean Kraken, axiom scan, source escape scan
+and unchanged trust-surface specification). Capped scoped kernel replay
+PASS for `AllowedipsEntryExecution`, `CommonBitsEntryHistory`,
+`AllowedipsLoopBody`, `AllowedipsCallerExecution`, `AllowedipsTailExecution`,
+`AllowedipsTailReady` and `AllowedipsAdequacyInvocation`. All agents and
+tracked jobs are stopped. The three `.lean.draft` sources are deliberately
+excluded from the build and from these acceptance claims.

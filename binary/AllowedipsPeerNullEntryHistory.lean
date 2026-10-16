@@ -39,7 +39,7 @@ theorem null_entry_history (fetch : Int64 → Option Decoded)
           .ok (events ++ [LookupObservation.decision rxSection .peerGetMaybeZeroNull true guard,
             LookupObservation.returned "wg_peer_get_maybe_zero" final.machine]) ∧
         ∃ tail, final.history = history ++ tail ∧
-          ∀ q ∈ tail, q.pc ∈ Image.cutPoints →
+          ∀ q ∈ tail, (q.pc ∈ AllowedipsImage.cutPoints ∨ q.pc ∈ Image.cutPoints) →
             EqualOutside (entryWrites s coverage) s.dmem q.data.dmem)
       ⟨⟨s, Image.PeerGet.entry⟩, history⟩ := by
   have headerSeparate : AllowedipsPeerCoverage.Context.Separated coverage (InRange (s.regs.rsp.toBitVec-56) 8) := by

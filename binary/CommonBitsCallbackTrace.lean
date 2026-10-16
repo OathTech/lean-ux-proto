@@ -48,10 +48,12 @@ theorem callback_trace (fetch : Int64 → Option Decoded) (pc : Int64) (target :
         simpa only [recorded,List.singleton_append,List.getLast?_cons_of_ne_nil nonempty] using last
       rw [← AllowedipsLoop.history_restore tailLast] at inside
       rcases List.mem_append.mp inside with interior | endpoint
-      · have outside := noNew q interior
-        have mapped := cut_decoded q.pc atCut
-        rw [outside] at mapped
-        cases mapped
+      · rcases atCut with newCut | oldCut
+        · have outside := noNew q interior
+          have mapped := cut_decoded q.pc newCut
+          rw [outside] at mapped
+          cases mapped
+        · exact False.elim (LookupObservation.no_reentry_cuts tail noOld q interior oldCut)
       · have same := List.mem_singleton.mp endpoint
         simpa only [same] using frame
   · intro q member

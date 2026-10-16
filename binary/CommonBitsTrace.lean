@@ -20,7 +20,7 @@ structure Local (writes : BitVec 64 → Prop) (initial : MachineState)
   observed : ∃ points, observeHistory (AllowedipsObservation.edge rxSection) final.history = .ok points ∧
     points.map pointView = signature
   frame : EqualOutside writes initial.data.dmem final.machine.data.dmem
-  cuts : ∀ q ∈ final.history, q.pc ∈ AllowedipsImage.cutPoints →
+  cuts : ∀ q ∈ final.history, (q.pc ∈ AllowedipsImage.cutPoints ∨ q.pc ∈ Image.cutPoints) →
     EqualOutside writes initial.data.dmem q.data.dmem
   ordinary : ∀ q ∈ final.history.dropLast, PeerCountPhase.Ordinary q
 
@@ -80,7 +80,7 @@ theorem quiet (fetch : Int64 → Option Decoded) (pc : Int64)
     (silent : ∀ address ∈ AllowedipsLoop.regionPCs pc code, ∀ before after,
       before.pc = address → AllowedipsObservation.edge rxSection before after = .ok [])
     (noInterior : ∀ address ∈ (AllowedipsLoop.regionPCs pc code).tail,
-      address ∉ AllowedipsImage.cutPoints)
+      ¬(address ∈ AllowedipsImage.cutPoints ∨ address ∈ Image.cutPoints))
     (ordinary : ∀ address ∈ AllowedipsLoop.regionPCs pc code,
       address ≠ Image.PeerGet.entry+0xaf ∧ address ≠ Image.PeerGet.entry+0x4a) :
     Eventually (historyStep fetch) (fun t => P t.machine ∧ Local writes ⟨s,pc⟩ rxSection [] t)

@@ -1,0 +1,54 @@
+import AllowedipsSourceSteps
+
+namespace Binary.AllowedipsLoop
+open AllowedipsRelation Leanux.WG
+
+/-- Every retained candidate was actually reached, matched its prefix and
+had a non-null owning peer. Its conditional peer read is therefore represented. -/
+def Found (view : AllowedipsSource.NodeView) (root : Option NodeId) (bits key : Nat)
+    (found : Option NodeId) : Prop :=
+  ∀ id, found = some id → ∃ node, view id = some node ∧
+    Reached view root bits key id ∧ node.cidr ≤ common bits node.bits key ∧ node.peer.isSome = true
+
+theorem Found.none (view root bits key) : Found view root bits key none := by
+  intro id impossible
+  cases impossible
+
+theorem Found.selected {view root bits key id previous node}
+    (prior : Found view root bits key previous)
+    (present : view id = some node) (reached : Reached view root bits key id)
+    (matching : node.cidr ≤ common bits node.bits key) :
+    Found view root bits key (selectedNode id node previous) := by
+  cases has : node.peer.isSome with
+  | false => simpa only [selectedNode,has,Bool.false_eq_true,ite_false] using prior
+  | true =>
+    simp only [selectedNode,has,ite_true]
+    intro candidate equal
+    cases equal
+    exact ⟨node,present,reached,matching,has⟩
+
+def stepAcc (step : ForInStep AllowedipsSource.Acc) : AllowedipsSource.Acc :=
+  match step with | .done acc => acc | .yield acc => acc
+
+theorem selectedStep_found (view : AllowedipsSource.NodeView) (root : Option NodeId)
+    (bits key id : Nat) (previous : Option NodeId) (node : AipNode)
+    (step : ForInStep AllowedipsSource.Acc)
+    (prior : Found view root bits key previous)
+    (present : view id = some node) (reached : Reached view root bits key id)
+    (selected : AllowedipsSource.selectStep view bits key (none,some id,previous) = some step) :
+    Found view root bits key (stepAcc step).2.2 := by
+  by_cases mismatch : AllowedipsSource.commonValue node key bits < node.cidr
+  · simp only [AllowedipsSource.selectStep,present,Option.bind_some,if_pos mismatch] at selected
+    cases selected
+    exact prior
+  · have matching : node.cidr ≤ common bits node.bits key := by rw [←common_value]; omega
+    have found := prior.selected present reached matching
+    by_cases full : node.cidr = bits <;>
+      by_cases invalid : node.cidr ≥ node.bitlen <;>
+      cases child : node.bit[key/2^(node.bitlen-1-node.cidr)%2]?
+    all_goals try simp only [full] at mismatch
+    all_goals simp [AllowedipsSource.selectStep,present,mismatch,full,invalid,child] at selected
+    all_goals cases selected; exact found
+
+#print axioms selectedStep_found
+end Binary.AllowedipsLoop

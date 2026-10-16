@@ -107,7 +107,7 @@ theorem refcount_load_trace (fetch : Int64 → Option Decoded)
   · intro q member cut
     simp only [List.mem_cons, List.not_mem_nil, or_false] at member
     rcases member with rfl | rfl
-    · exact False.elim ((by decide : Image.PeerGet.entry+0x26 ∉ Image.cutPoints) cut)
+    · exact False.elim ((by decide : ¬(Image.PeerGet.entry+0x26 ∈ AllowedipsImage.cutPoints ∨ Image.PeerGet.entry+0x26 ∈ Image.cutPoints)) cut)
     · exact frame
 
 /-- Old-count comparison arguments emit no decision; the TEST/JE that
