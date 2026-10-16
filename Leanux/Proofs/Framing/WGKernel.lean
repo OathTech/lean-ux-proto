@@ -1,13 +1,12 @@
 import Leanux.Proofs.Framing.Projection
 
-/-! The complete WireGuard-related part of Kernel. Filesystem helpers may
-change files, task work and World records while preserving this view. In
-particular, this frame does not assert preservation of pending scheduling. -/
+/-! The seven-field WireGuard store projection. Other native WG fields,
+including timer and scheduling state, are outside this view. -/
 namespace Leanux.Proofs.Framing
 open Leanux
 
-@[ext] structure WGKernelView where
-  wg : Option WG.Device
+@[ext] structure WGStoreView where
+  dev : Option WG.Device
   peerCounter : Nat
   keypairCounter : Nat
   nlSock7 : WG.NlSock
@@ -15,15 +14,10 @@ open Leanux
   netIfindexNext : Nat
   ratelimiter : Ratelimiter
 
-def WGKernelView.ofKernel (k : Kernel) : WGKernelView :=
-  ⟨k.wg, k.peerCounter, k.keypairCounter, k.nlSock7, k.nlSock8,
-    k.netIfindexNext, k.ratelimiter⟩
+def wgStoreView (w : WGWorld) : WGStoreView :=
+  ⟨w.dev, w.peerCounter, w.keypairCounter, w.nlSock7, w.nlSock8,
+    w.netIfindexNext, w.ratelimiter⟩
 
-def wgKernelView (w : World) : WGKernelView := WGKernelView.ofKernel w.k
-
-abbrev SameWGKernel (a : M α) : Prop := SameView wgKernelView a
-
-theorem sameWGKernel_of_sameKernel (h : SameKernel a) : SameWGKernel a :=
-  SameView.of_sameKernel WGKernelView.ofKernel h
+abbrev SameWGStore (a : WG.M α) : Prop := SameView wgStoreView a
 
 end Leanux.Proofs.Framing
