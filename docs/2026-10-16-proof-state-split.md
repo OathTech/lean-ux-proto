@@ -146,8 +146,10 @@ it is not part of that baseline.
 
 | Product syscall wrappers and complete dispatch | 13 | 0 | 0 | 13 | 0 | 13 |
 
+| Joint poll projection and stamped safety | 36 | 7 | 0 | 29 | 0 | 36 |
+
 The whole tree currently contains 451 Lean files and 6,501 theorems. The completed
-changes total 2,324 retyped theorems, 1,672 deletions, 1,289 retained contract shapes and 459 added.
+changes total 2,331 retyped theorems, 1,673 deletions, 1,318 retained contract shapes and 459 added.
 Retyping changes or generalizes the actual state/monad carrier or observation.
 This includes shorthand contracts whose source functions or named views move
 to a native monad. Mere namespace qualification and equivalent relocation of a
@@ -3529,3 +3531,30 @@ Reproduce with 'cap scripts/in-bundle lake build Leanux.Proofs.WG.Lifetimes.Sysc
 replay each module with 'cap scripts/in-bundle lake env leanchecker --fresh MODULE'.
 The full gate and terminal replay remain pending, all rows stay lagging, and
 the mirror is byte-identical to b700659.
+
+
+## Joint projection, stamped safety and warning cleanup
+
+RxPollJointProjection and RxPollStampSafety retain eighteen theorems each:
+seven native/generalized carriers and twenty-nine retained product/pure
+contracts. Arbitrary product PrefixM actions keep their original domain,
+capture_fresh retains the complete successful World equality, and failures
+retain their actual history and Stop. There is no new allocation-coherence
+premise. All39 named declarations, fresh replay of both modules and independent
+complete review pass with zero own warnings. The eight development calls
+through the frozen pair included five local proof/normalization failures and
+one changing-dependency failure; the final Projection and Safety builds pass.
+No failed call is counted as a pass.
+
+WGConfiguration retains its five existing contracts and replaces four deprecated
+tactic bodies with direct checked composition. Build35, all eight named
+declarations, fresh replay and independent source review pass with zero own
+warnings. Five preceding development calls failed, including two at the existing
+heartbeat limit; limits were unchanged. Tree and Insertion only replace deprecated
+conditional rewrite lemmas: build13, all87 named declarations (including seven
+attributed theorems), and fresh Insertion closure replay pass without warnings.
+
+Reproduce with 'cap scripts/in-bundle lake build Leanux.Proofs.WG.Queues.RxPollStampSafety Leanux.Proofs.Framing.WGConfiguration Leanux.Proofs.WG.AllowedIps.Insertion';
+replay each root with 'cap scripts/in-bundle lake env leanchecker --fresh MODULE'.
+These scoped successes do not establish the full gate: every register row remains
+lagging, and the mirror remains byte-identical to b700659.

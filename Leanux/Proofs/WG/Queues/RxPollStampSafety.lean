@@ -20,14 +20,14 @@ def seed (prior : List LifetimeEvent) : List Event := prior.map Event.access
     (seed prior).filterMap groEvent = [] :=
   filterMap_disjoint Event.access groEvent (fun _ => rfl) prior
 
-theorem access_appends (a : MixedM α) : Appends (access a) := Appends.focus _ _ _
+theorem access_appends (a : PrefixM LifetimeEvent α) : Appends (access a) := Appends.focus _ _ _
 
-theorem emit_appends (e : Event) : Appends (emitPrefix e) := fun _ _ => ⟨[e], rfl⟩
+theorem emit_appends {State : Type} (e : Event) : Appends (emitPrefix e : PrefixT Event State Unit) := fun _ _ => ⟨[e], rfl⟩
 
 theorem capture_appends (skb : SkbId) : Appends (capture skb) := by
   intro w h
   rw [capture_run]
-  cases (getRxSkb skb).run w with
+  cases (liftWG (getRxSkb skb)).run w with
   | error e => exact ⟨[], by simp⟩
   | ok out => exact ⟨_, rfl⟩
 
@@ -112,37 +112,40 @@ theorem poll_fresh_gro (pid : PeerId) (budget : Nat) (w : World) (prior : List L
 /-- Arbitrary valid previous lifetime history is retained in the same joint
 execution; its reached access prefix is safe even if the poll Stops. -/
 theorem poll_safe_suffix (pid : PeerId) (budget : Nat) (w : World)
-    (prior : List LifetimeEvent) (hi : AllocationInv prior w) :
+    (prior : List LifetimeEvent) (hi : AllocationInv prior w.wg) :
     ∃ suffix, (runPrefix (poll pid budget) w (seed prior)).2 = seed prior ++ suffix ∧
       LifetimeEvent.Safe (prior ++ suffix.filterMap accessEvent) ∧
       (match (runPrefix (poll pid budget) w (seed prior)).1 with
        | .error _ => True
-       | .ok (_, v) => AllocationInv (prior ++ suffix.filterMap accessEvent) v) := by
+       | .ok (_, v) => AllocationInv (prior ++ suffix.filterMap accessEvent) v.wg) := by
   obtain ⟨suffix, hs⟩ := poll_appends pid budget w (seed prior)
   have hp := (poll_access pid budget).preserves
-    (rxPollStackPrefix_preserves allocationAmbient allocationTx allocationRx allocationWgXmit pid budget)
+    (rxPollStackPrefix_preserves (ProductAmbientContracts.ofNative allocationAmbient) (ProductTxContracts.ofNative allocationTx) ⟨fun len => (allocationRx.stats len).liftWGObserver, fun why => (allocationRx.dishonest why).liftWGObserver, fun id => (allocationRx.free id).liftWGObserver⟩ ⟨fun P => (allocationWgXmit.errors P).liftWGObserver⟩ pid budget)
     w (seed prior) (by simpa using hi)
   rw [hs, List.filterMap_append, seed_access] at hp
   refine ⟨suffix, hs, hp.1, ?_⟩
-  cases hr : (runPrefix (poll pid budget) w (seed prior)).1 <;> simpa only [hr] using hp.2
+  cases hr : (runPrefix (poll pid budget) w (seed prior)).1 with
+  | error _ => trivial
+  | ok out => simpa only [hr] using hp.2
 
 /-- A normal original getter captures its resident allocation identity, which
 cannot have been released in the incoming history. This is a reached getter
 cut, not whole-poll distinctness. -/
 theorem capture_fresh (skb : SkbId) (w v : World) (h : List Event)
     (pkt : RxPacket) (stamp : PacketStamp)
-    (hi : AllocationInv (h.filterMap accessEvent) w)
+    (hi : AllocationInv (h.filterMap accessEvent) w.wg)
     (hr : (runPrefix (capture skb) w h).1 = .ok ((pkt, stamp), v)) :
-    v = w ∧ stamp = packetStamp w skb ∧
+    v = w ∧ stamp = packetStamp w.wg skb ∧
       ¬ AccessEvent.Released ((h.filterMap accessEvent).filterMap LifetimeEvent.packet?) stamp := by
-  rw [capture_run] at hr
-  cases hg : (getRxSkb skb).run w with
-  | error e => simp [hg] at hr
+  rw [capture_run, liftWG_run] at hr
+  cases hg : ((getRxSkb skb).run w.wg).run w.ambient with
+  | error e => simp [hg, Except.map] at hr
   | ok out =>
-    rcases out with ⟨p, u⟩
-    simp only [hg, Except.ok.injEq, Prod.mk.injEq] at hr
+    rcases out with ⟨⟨p, u⟩, ambient⟩
+    obtain ⟨rfl, rfl, d, hd, hp⟩ :=
+      Packets.getRxSkb_current skb w.wg u p w.ambient ambient hg
+    simp only [hg, Except.map, Except.ok.injEq, Prod.mk.injEq] at hr
     rcases hr with ⟨⟨rfl, rfl⟩, rfl⟩
-    obtain ⟨rfl, d, hd, hp⟩ := Packets.getRxSkb_current skb w u p hg
     refine ⟨rfl, rfl, ?_⟩
     intro released
     exact hi.release.1.packet.2 _ released (.inr skb)
@@ -151,19 +154,31 @@ theorem capture_fresh (skb : SkbId) (w v : World) (h : List Event)
 /-- The actual free performs its original getter and emits the read/release
 pair. Failure at that getter emits neither event. -/
 theorem free_run (skb : SkbId) (w : World) (h : List Event) :
-    runPrefix (access (freeRxSkbPrefix skb)) w h =
-      match (getRxSkb skb).run w with
+    runPrefix (access (liftWGObserver (freeRxSkbPrefix skb))) w h =
+      match (liftWG (getRxSkb skb)).run w with
       | .error e => (.error e, h)
-      | .ok (_, _) => ((freeRxSkb skb).run w,
-          h ++ [.access (.packet (.read (.inr skb) (packetStamp w skb))),
-                .access (.packet (.release (.inr skb) (packetStamp w skb)))]) := by
+      | .ok (_, _) => ((liftWG (freeRxSkb skb)).run w,
+          h ++ [.access (.packet (.read (.inr skb) (packetStamp w.wg skb))),
+                .access (.packet (.release (.inr skb) (packetStamp w.wg skb)))]) := by
+  have hg (hist : List LifetimeEvent) :
+      runPrefix (liftWGObserver (freeRxSkbPrefix skb)) w hist =
+        match (liftWG (getRxSkb skb)).run w with
+        | .error e => (.error e, hist)
+        | .ok (_, _) => ((liftWG (freeRxSkb skb)).run w,
+            hist ++ [.packet (.read (.inr skb) (packetStamp w.wg skb)),
+              .packet (.release (.inr skb) (packetStamp w.wg skb))]) := by
+    rw [liftWGObserver_run, liftWG_run]
+    change ((runStatePrefix (freeRxSkbPrefix skb) w.wg w.ambient hist).1.map _,
+      (runStatePrefix (freeRxSkbPrefix skb) w.wg w.ambient hist).2) = _
+    rw [freeRxSkbPrefix_run]
+    cases ((getRxSkb skb).run w.wg).run w.ambient <;> simp only [Except.map, liftWG_run]
   unfold access
-  cases hr : (getRxSkb skb).run w with
+  cases hr : (liftWG (getRxSkb skb)).run w with
   | error e =>
     simpa only [List.map_nil, List.append_nil] using
-      focusPrefix_suffix Event.access accessEvent (freeRxSkbPrefix skb) w h (.error e) []
-        (by simp only [freeRxSkbPrefix_run, hr, List.append_nil])
-  | ok out => exact focusPrefix_suffix _ _ _ _ _ _ _ (by rw [freeRxSkbPrefix_run, hr])
+      focusPrefix_suffix Event.access accessEvent (liftWGObserver (freeRxSkbPrefix skb))
+        w h (.error e) [] (by rw [hg, hr]; simp only [List.append_nil])
+  | ok out => exact focusPrefix_suffix _ _ _ _ _ _ _ (by rw [hg, hr])
 
 /-- Entry is recorded before the actual callback, and survives callback
 failure. It is not a successful-delivery marker. -/

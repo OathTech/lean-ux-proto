@@ -163,7 +163,7 @@ theorem graft_valid {down : Tree} (hv : down.Valid width)
       change min cidr (common width n.addr addr) < n.cidr at hg
       by_cases hm : min cidr (common width n.addr addr) = cidr
       · simp only [graft]
-        rw [if_pos hm]
+        rw [ite_eq_left hm]
         refine Tree.fork_valid (n := requestedNode fresh addr cidr peer)
           (other := .empty) ha hc (bit_lt_two _ _ _) hv trivial ?_ ?_
         · change cidr < n.cidr ∧ _ ∧ _
@@ -171,7 +171,7 @@ theorem graft_valid {down : Tree} (hv : down.Valid width)
         · trivial
       · obtain ⟨he, hnew, hold, hbit⟩ := graft_split_properties hv ha hg hm
         simp only [graft]
-        rw [if_neg hm]
+        rw [ite_eq_right hm]
         simp only [he]
         refine Tree.fork_valid (n := ⟨fresh + 1, addr, common width n.addr addr, none⟩)
           ha (common_le _ _ _) (bit_lt_two _ _ _) hv

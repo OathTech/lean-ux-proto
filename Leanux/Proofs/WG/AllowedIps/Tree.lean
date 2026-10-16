@@ -244,7 +244,7 @@ theorem Tree.lookup_spec {t : Tree} (hv : t.Valid width) (key : Nat) :
           have re := er.empty_of_full hr hf
           subst l
           subst r
-          simpa only [Tree.lookup, if_pos hm, if_pos hf, Tree.entries, List.append_nil] using own
+          simpa only [Tree.lookup, ite_eq_left hm, ite_eq_left hf, Tree.entries, List.append_nil] using own
         · by_cases hb : bit width n.cidr key = 0
           · have other := er.no_match_of_wrong_branch (key := key) hr (by omega)
             have chosen := (ihl hl).or_of_dominates own (el.dominates_own hl)
