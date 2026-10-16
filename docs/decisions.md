@@ -867,20 +867,23 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
 - **2026-10-16 [USER]** The split's mirror lands with its proof lag reported,
   and the landed campaign-1 tree is the retrofit's baseline with its own gate
   and signoff ("(2) agree").
-- **2026-10-16 [USER]** `main`'s proof tree (the replay-window result and the
-  layers it rests on, 1,399 theorems) is part of campaign 1, which carries
-  it, so it is removed from `main` until the campaign lands: "those are part
-  of Campaign 1, they should just get kicked out of main until the campaign
-  lands". The state split's phase 3 is therefore not a retype of `main`'s
-  tree but its removal in the final cutover: `Leanux/Proofs/` and
-  `Leanux/Proofs.lean` deleted on the branch, the `LeanuxProofs` lake target
-  removed, `scripts/proof-gate` reporting plainly that `main` carries no
-  proof tree and that the results live on `proofs/campaign` until it lands
-  (an explicit notice, exit 0, never a silent pass; the binary gate
-  `--binary` unaffected), the register's result rows turned into "carried on
-  proofs/campaign at <its head>, off main until the campaign lands, to be
-  retyped over the split worlds by its retrofit", and AGENTS.md's proof-tree
-  paragraph amended minimally (between campaign landings the tree lives on
-  the campaign's branch and `main` carries none; the gate runs at a
-  campaign's landing). Campaign 1's retrofit covers the replay-window layers
-  as well as its own results [AGENT, coordinator: the phase-3 plan].
+- **2026-10-16 [USER]** The replay-window spike on `main` (`Leanux/Proofs/`,
+  1,399 theorems: the result and the `Logged`, `Framing` and `CounterWindow`
+  layers it rests on) was a prototype for campaign 1 that landed on `main`
+  by sequencing ("It shouldn't have been on main in the first place, it was
+  a prototype for Campaign 1"; "those are part of Campaign 1, they should
+  just get kicked out of main until the campaign lands"). It is deleted
+  from `main` at the state split's cutover; campaign 1 carries it and lands
+  it with its own results, retyped over the split worlds by its retrofit.
+  Not a standing rule: a refactor correcting an accident of sequencing.
+  AGENTS.md's proof-tree paragraph stays as it is (theorems live only in
+  the proof tree with its target and its gate, true again when campaign 1
+  lands). In the cutover: `Leanux/Proofs/` and `Leanux/Proofs.lean`
+  deleted, the `LeanuxProofs` target removed, the register's replay-window
+  rows and the lagging notes that refer to `main`'s copy removed (the map
+  and the campaign rows stay as they are on the campaign branches, with
+  one line saying `main` carries no proof tree until campaign 1 lands and
+  that the prototype was deleted at this commit as campaign 1's), and
+  `scripts/proof-gate` failing noisily on a `main` with no tree ("no proof
+  tree on main; campaign 1 carries it", an error, since there is nothing to
+  gate; `--binary` untouched) [AGENT, coordinator: the cutover steps].
