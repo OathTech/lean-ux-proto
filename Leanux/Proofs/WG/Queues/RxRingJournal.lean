@@ -10,7 +10,7 @@ abbrev Event := Ring.Journal.Event SkbId
 abbrev Obs := PrefixM Event
 
 def cell (w : World) : Option (Nat × PtrRing SkbId) :=
-  w.k.wg.map fun d => (d.ifindex, d.decryptQueue)
+  w.wg.dev.map fun d => (d.ifindex, d.decryptQueue)
 
 abbrev Refines := Ring.Source.Refines (ι := SkbId)
 abbrev Safe := Ring.Source.Safe (ι := SkbId)

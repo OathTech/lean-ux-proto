@@ -5,8 +5,9 @@ stays inside the loop; the continuation is reached only after normal exhaustion.
 namespace Leanux.Proofs.WG.Configuration
 open Leanux Leanux.WG
 
-def peerAllowedIpsSource (a : PeerAttrs) (peer : Option PeerId) (pid : PeerId) (next : Int → M Int) : M Int := do
-  let out (peer : Option PeerId) (ret : Int) : M Int := do
+def peerAllowedIpsSource [Monad m] [MonadLiftT WG.M m] [MonadLiftT AmbientM m]
+    (a : PeerAttrs) (peer : Option PeerId) (pid : PeerId) (next : Int → m Int) : m Int := do
+  let out (peer : Option PeerId) (ret : Int) : m Int := do
     peerPut peer
     _ ← (branch .peerZeroPsk a.presharedKey.isSome)
     return ret
@@ -25,8 +26,8 @@ def peerAllowedIpsSource (a : PeerAttrs) (peer : Option PeerId) (pid : PeerId) (
     _ ← (branch .peerAipsIter false)
   next ret
 
-def peerTailFinishSource (a : PeerAttrs) (peer : Option PeerId) (pid : PeerId) (ret : Int) : M Int := do
-  let out (peer : Option PeerId) (ret : Int) : M Int := do
+def peerTailFinishSource (a : PeerAttrs) (peer : Option PeerId) (pid : PeerId) (ret : Int) : WG.M Int := do
+  let out (peer : Option PeerId) (ret : Int) : WG.M Int := do
     peerPut peer
     _ ← branch .peerZeroPsk a.presharedKey.isSome
     return ret

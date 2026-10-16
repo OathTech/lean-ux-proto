@@ -60,9 +60,16 @@ it is not part of that baseline.
 | Product timer receipts, advance and operation observers | 20 | 0 | 0 | 20 | 1 | 21 |
 | Native AllowedIPs lookup and placement | 12 | 12 | 0 | 0 | 0 | 12 |
 | Recorded timer source factors | 3 | 0 | 2 | 1 | 1 | 2 |
+| Native acquisition and generalized ambient contracts | 15 | 15 | 0 | 0 | 4 | 19 |
+| Native index-owner and packet-release observers | 19 | 19 | 0 | 0 | 0 | 19 |
+| Native AllowedIPs mutation | 18 | 11 | 0 | 7 | 0 | 18 |
+| AllowedIPs source and product RX ring journal | 6 | 1 | 0 | 5 | 0 | 6 |
+| Product syscall observer | 3 | 0 | 0 | 3 | 0 | 3 |
+| Native cookie frames and generalized view transport | 24 | 19 | 5 | 0 | 0 | 19 |
+| Native device/peer configuration frames | 4 | 4 | 0 | 0 | 0 | 4 |
 
-The whole tree currently contains 450 Lean files and 6,218 theorems. The completed
-changes total 890 retyped theorems, 1,594 deletions, 189 retained contract shapes and 97 added.
+The whole tree currently contains 450 Lean files and 6,217 theorems. The completed
+changes total 959 retyped theorems, 1,599 deletions, 204 retained contract shapes and 101 added.
 Retyping changes or generalizes the actual state/monad carrier or observation.
 This includes shorthand contracts whose source functions or named views move
 to a native monad. Mere namespace qualification and equivalent relocation of a
@@ -1247,4 +1254,66 @@ result, guest timeout or infrastructure rerun occurred.
 LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake build Leanux.Proofs.Framing.PeerBorrow Leanux.Proofs.Logged.Advance Leanux.Proofs.Logged.Operations Leanux.Proofs.Logged.TimerPass Leanux.Proofs.WG.AllowedIps.LookupMirror Leanux.Proofs.WG.AllowedIps.PlacementMirror Leanux.Proofs.WG.Environment.TimerSource Leanux.Proofs.WG.LifetimeSafety.CursorWitness Leanux.Proofs.WG.Lifetimes.KeypairAccess Leanux.Proofs.WG.Lifetimes.ReleaseInvariant
 # Run separately for each entry module (Advance includes TimerPass):
 LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.Logged.Advance
+```
+
+## Native release, cookie replies and syscall composition
+
+This checkpoint carries 89 existing theorems to 88: 69 retyped/generalized,
+15 retained contract shapes, five structural leaf frames deleted and four native
+adapters added. Acquire and the owner/packet observers retain exact failure
+histories, current-residency and release-uniqueness premises, and both native
+state endpoints. Ambient's four projected helpers retain arbitrary actual
+product actions and invariants over caller-selected observations; their native
+counterparts are additional instances, not restrictions of that domain.
+
+AllowedIPs mutation preserves total component contracts and exact outer
+allocation refusal or installed-device results. The source loop retains its
+early cleanup. Review caught an initially narrowed continuation; the corrected
+helper quantifies over every actual monad admitting the WG and Ambient lifts,
+including the product runner. RxRingJournal retains its product-world domain.
+
+Cookie replies preserve the complete device except the original secret,
+birthdate and transmit-statistic mask, plus both allocation frontiers. The five
+hidden/clock/allocation/routing/cut leaf frames are removed because those native
+operations cannot inspect WGWorld; their actual callers use the canonical
+adapters. The recorded expiry test remains a WG claim. Generic view factors
+retain arbitrary actual action stacks. Review rejected an initially stronger
+11-field generic cookie premise; the final transport retains the original
+seven-field WG-store observation and its exact mask. The final proof retains branch return
+values, so impossible cache paths are eliminated by the recorded decision law.
+
+The logged syscall restores the exact subsystem reset order, seccomp lifts,
+return-to-user work and final FIB observation. All three product erasure
+interfaces remain unrestricted, including the arbitrary socket callback.
+
+The four device/peer configuration contracts now use the native WG stack;
+their normal-only behavior and stable-predicate premises are unchanged.
+
+All ten modules compile in scoped builds; 126 named declaration axiom checks,
+nine fresh entry-module replays and independent source reviews pass. A broader
+concurrent build failed on 11 targets, including earlier versions of three
+subsequently repaired modules. This is a failed integration check, not a pass;
+the complete proof gate and terminal replay remain pending.
+
+Development failures: Ambient had one local error-case proof failure; Mutation
+had eight failed builds before the passing ninth, involving parser/layout,
+local adapter matching and simplification; the logged syscall had one parser
+failure before passing. Cookie Frames had six failed builds and two passing builds; the first pass
+preceded the scope-review correction and was superseded. Failures involved
+ordinary factor/conversion failures, branch-result matching and existing
+heartbeat limits; an attempted join-point tactic also produced terms rejected
+by the kernel for application type mismatch, plus a parser/layout failure
+following the review correction. That attempt was removed, and the
+accepted proof uses ordinary exact branch contracts. Rejected elaboration
+recovery output is never accepted. The initially narrower AllowedIPs helper
+passed compilation but failed scope review; its generalized replacement passed
+fresh checks and re-review. WGConfig had one failed build because its tactic
+recognizer did not accept the actual generic action head, then passed after
+the recognizer repair. No cap or proof limit was increased, and no KILLED
+result, guest timeout or infrastructure rerun occurred.
+
+```sh
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake build Leanux.Proofs.WG.Lifetimes.Ambient Leanux.Proofs.WG.Lifetimes.IndexOwnerAccess Leanux.Proofs.WG.Lifetimes.PacketRelease Leanux.Proofs.WG.AllowedIps.MutationMirror Leanux.Proofs.WG.Configuration.AllowedIpSource Leanux.Proofs.WG.Queues.RxRingJournal Leanux.Proofs.Logged.Syscalls Leanux.Proofs.WG.Cookies.Frames Leanux.Proofs.WG.Keypairs.Frames.WGConfig
+# Run separately for each entry module (Ambient includes Acquire):
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Cookies.Frames
 ```
