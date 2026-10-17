@@ -20,9 +20,9 @@ and attributed theorem declarations. Campaign 2 owns 427 Lean files,
 | --- | ---: | ---: | ---: | --- |
 | Common projection | 2 | 0 | 0 | Native and product observations carried |
 | H1 Noise | 35 | 171 | 22 | Native access, crypto/slot/peer frames, slot/clear/zero operations and all four state-edge contracts and eleven ordered clear/release contracts, ten rotation/confirmation source contracts, projected clear/rotation/confirmation support and four session counter/word frames, both normal consume-tag contracts and four consecutive-confirmation contracts carried; all fourteen normal session source contracts and nineteen recorded totality/projected-ready/read-frame contracts carried; six type-given frames deleted; full caller/reachability closure pending |
-| H2 Index | 68 | 318 | 52 | Table/scans/insertion, full lookup/miss and success/empty-result inversion, exact allocation/release, eight native numeric-index frames, seven native owner frames plus their pure bound and both release/rotation owner invariants, ten projected table claims, all ten record contracts, exact draw exhaustion/corpus pair, five lifecycle contracts and 55 pure theorems checked; native receive factor, retirement frame and exact session-allocation factor, four session owner invariants, five handshake index invariants, three owner-creation invariants, the projected allocation effect and four sequential-allocation contracts carried; seven Ambient frames deleted; two stale peer-release totality counterexamples checked; whole terminal closure/callers pending |
-| H3 Roaming | 35 | 119 | 13 | Six native endpoint/destination contracts plus three product publication source factors and a generic observation-read frame carried; two Ambient frames deleted; native decryption provenance and five product publication leaves carried; all six enqueue/publication caller contracts, ten poll endpoint source contracts and seven attempt-audit source contracts carried; poll endpoint facts and broader caller closure pending |
-| H4 Configuration | 130 | 554 | 79 | Total-return/branch laws, seven exact source factors, three endpoint-clearing frames, three empty-root insertion contracts, total first placement, validation/identity, partial and total empty-list peer dumps, ordered allowed-list deletion, concrete dump cancellation and four total root-transfer contracts, all five inserted-node readback contracts and singleton root removal with its two pure effects, native port/flag/socket contracts, allowed-IP set/get composition, fourteen structural/leaf removal contracts and seven scalar/set-get contracts checked; three Ambient frames deleted; remaining effects/readback carry pending |
+| H2 Index | 68 | 318 | 52 | Table/scans/insertion, full lookup/miss and success/empty-result inversion, exact allocation/release, eight native numeric-index frames, seven native owner frames plus their pure bound and both release/rotation owner invariants, ten projected table claims, all ten record contracts, exact draw exhaustion/corpus pair, five lifecycle contracts and 55 pure theorems checked; native receive factor, retirement frame and exact session-allocation factor, four session owner invariants, five handshake index invariants, three owner-creation invariants, the projected allocation effect, four sequential-allocation contracts and three new-device frames carried; seven Ambient frames deleted; two stale peer-release totality counterexamples checked; whole terminal closure/callers pending |
+| H3 Roaming | 35 | 119 | 13 | Six native endpoint/destination contracts plus three product publication source factors and a generic observation-read frame carried; two Ambient frames deleted; native decryption provenance and five product publication leaves carried; all six enqueue/publication caller contracts, ten poll endpoint source contracts and seven attempt-audit source contracts and three poll support frames carried; poll endpoint facts and broader caller closure pending |
+| H4 Configuration | 130 | 554 | 79 | Total-return/branch laws, seven exact source factors, three endpoint-clearing frames, three empty-root insertion contracts, total first placement, validation/identity, partial and total empty-list peer dumps, ordered allowed-list deletion, concrete dump cancellation and four total root-transfer contracts, all five inserted-node readback contracts and singleton root removal with its two pure effects, native port/flag/socket contracts, allowed-IP set/get composition, fourteen structural/leaf removal contracts and seven scalar/set-get contracts, six total scalar/readback contracts, paired transfer/readback and three pure removal facts checked; three Ambient frames deleted; remaining effects/readback carry pending |
 | H5 Progress | 59 | 265 | 42 | Twenty-nine pure/control or pure-source theorems, three generalized worker control contracts and one Ambient record frame and seven exact cut-source/projected contracts and six arbitrary-record jitter source/projected contracts and six arbitrary-record index insertion source contracts and both projected outcome claims checked; two pointer-ring snapshot contracts and remaining operational carry pending |
 | H6 Timer discipline | 98 | 404 | 50 | Two pure session-liveness relations, map/guard base, two current wheel effects, separated jitter bound/frame and two projected bound claims, six exact jitter-record contracts and four exact exhaustion contracts and four source/product outcome claims, plus a checked stale-statement counterexample; three Ambient frames deleted; seven exact-peer arming claims and wider timer/worker semantics pending |
 
@@ -1551,3 +1551,72 @@ Reproduce using the capped scoped build and fresh-replay commands above on
 `Noise.SessionReadyClaims`, `Index.SessionSequenceSource`,
 `Roaming.PollEndpointSource` and `Roaming.PollAttemptAuditSource`, each under
 `Leanux.Proofs.WG`.
+
+## Total scalar readback, paired transfer and remaining native frames
+
+| Tranche | Before | Retyped | Deleted | Kept | Added | After |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `Config.ScalarReturns`, `RoundTripReturns` | 6 | 6 | 0 | 0 | 0 | 6 |
+| `Config.AllowedTransferReadbackSource` | 1 | 1 | 0 | 0 | 0 | 1 |
+| `Config.AllowedRootFrames`, `AllowedRemovalModel` | 3 | 0 | 0 | 3 | 0 | 3 |
+| `Roaming.PollEndpointFrames` | 3 | 3 | 0 | 0 | 0 | 3 |
+| `Index.NewlinkFrames` | 3 | 3 | 0 | 0 | 0 | 3 |
+| This tranche | 16 | 13 | 0 | 3 | 0 | 16 |
+| Cumulative validated surface | 509 | 366 | 21 | 122 | 32 | 520 |
+
+The tree still has 456 campaign-owned files and 1,842 theorem declarations;
+1,322 baseline declarations await validation. The checked closure has 184 proof
+modules: H1 122 theorems, H2 174, H3 42, H4 102, H5 54 and H6 26.
+All six complete results and all 258 terminal declarations remain lagging.
+
+H4's total scalar contracts keep the original reference-count upper bound and
+retained-reference domain. Each constructs normal completion for the actual
+entry state and arbitrary Ambient, then obtains the exact postcondition from
+that same run. The total set/get composition retains its exact dump, cursor and
+peer postconditions. Paired allowed-IP transfer/readback threads the setter and
+both getters through their actual successors, including the first getter's
+returned buffer and cursor. Original peer inequality, node/list/root/width,
+sequence and space premises are unchanged. Three pure Device-transform facts
+remain byte-identical and are now checked; they alone claim no native execution.
+
+H3 retains queue-peek preservation as a substantive within-WireGuard fact:
+`PrevQueue.peek` still has type `WG.M`, which can write packet storage.
+The local variant is renamed from its obsolete Kernel spelling to
+`PrevQueue_peek_spec_wg_variant`. Full Product observation equality is retained
+by the read helper. The existing packet-read provenance/preservation contract
+moves from `PollEndpointClaims` to `PollEndpointFrames`, using the actual WG
+lift and exact product getter. Those claims and `PollAttemptClaims` receive
+only the corresponding move/reference updates and remain unvalidated.
+
+H2's three new-device frames retain all absent-device and partial/error paths.
+`TablesSafeKernel` becomes `TablesSafeWG`, with the same Device table safety
+predicate under native optional-device quantification. Cookie and hash-key
+initialization preserve that predicate through unrelated field writes;
+ratelimiter initialization preserves it on every normal branch. Pending
+consumers still using the old predicate name are explicitly deferred; no alias
+or shared-layer edit is introduced.
+
+Claims: `Config/ScalarReturns`, `RoundTripReturns`,
+`AllowedTransferReadbackSource` and pure `AllowedRemovalModel`.
+Frames: `Config/AllowedRootFrames`, `Roaming/PollEndpointFrames` and
+`Index/NewlinkFrames`. No theorem is deleted or added in this tranche.
+
+Scoped capped builds pass without warnings: scalar totals 49 jobs, transfer and
+pure support 64, total round trip 53, poll frames 40 and new-device frames 36.
+Axiom inspection covers 161, 130 and 150 logical roots across those groups,
+with only the permitted axioms. Fresh kernel replay passes for all seven roots.
+Static token/import, public-name and whitespace checks pass; independent reviews
+found no correctness issue. Mirror and shared layers are unchanged. No full
+terminal or gate pass is claimed.
+
+Development: scalar totals had one failed existential-witness draft, then a
+clean second. Transfer/readback first had one redundant tactic after the goal
+was already solved, then a clean second draft. Poll frames first left a predicate
+transport goal, then closed on the second draft. New-device frames first omitted
+the mirror import after removing an unnecessary pending proof import, then
+closed with that import restored. Total round trip passed its first prototype.
+All packaged builds passed first time. Full compiler output was saved before
+preview; no infrastructure rerun, limit increase or guest run occurred.
+
+Reproduce scoped build and fresh replay on the seven modules in the table
+under `Leanux.Proofs.WG`, using the capped bundle commands above.

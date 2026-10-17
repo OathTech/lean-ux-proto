@@ -24,8 +24,8 @@ theorem transfer_paired_readback (v4 : Bool) (d : Device) (id : NodeId) (addr ci
       let first ← getPeerDump donor ctx skb
       let second ← getPeerDump target first.2.1 first.1
       pure (ret, first.2.2, second))
-      (fun w => w.k.wg = some d)
-      (fun result w => w.k.wg = some
+      (fun w => w.dev = some d)
+      (fun result w => w.dev = some
           (transferRequestDevice d id { newNode addr cidr (allowedBits v4) (some donor) with parent } target newPeer) ∧
         result = (0,
           PeerDump.complete { publicKey := hexKey oldPeer.remoteStatic, attrs := peerFixedAttrs oldPeer },
@@ -48,29 +48,28 @@ theorem transfer_paired_readback (v4 : Bool) (d : Device) (id : NodeId) (addr ci
     unfold peerFixedSpace
     split <;> (try split) <;> omega
   have hs := setAllowedip_root_transfer v4 d id addr cidr (some donor) parent target newPeer width root node newResident
-  intro initial hd
-  obtain ⟨ret, afterSet, setRun, hret, hdev⟩ := hs initial hd
+  intro initial ambient hd
+  obtain ⟨ret, afterSet, setAmbient, setRun, hret, hdev⟩ := hs initial ambient hd
   subst ret
-  obtain ⟨first, afterFirst, firstRun, firstDev, firstResult⟩ :=
-    getPeerDump_empty_device updated donor old ctx skb ho oldOnly fresh (by omega) afterSet hdev
+  obtain ⟨first, afterFirst, firstAmbient, firstRun, firstDev, firstResult⟩ :=
+    getPeerDump_empty_device updated donor old ctx skb ho oldOnly fresh (by omega) afterSet setAmbient hdev
   subst first
-  obtain ⟨second, final, secondRun, finalDev, secondResult⟩ :=
+  obtain ⟨second, final, finalAmbient, secondRun, finalDev, secondResult⟩ :=
     getPeerDump_single v4 updated next id target addr cidr parent
       { ctx with nextAllowedip := none, allowedipsSeq := 0 }
       { skb with room := skb.room - peerFixedSpace old }
       ht (by simp [next, transferredPeer, newEmpty, listRemove]) hn rfl (Or.inl rfl)
-      (by dsimp; omega) afterFirst firstDev
-  refine ⟨(0, PeerDump.complete { publicKey := hexKey old.remoteStatic, attrs := peerFixedAttrs old }, second), final, ?_, ?_⟩
-  · simp only [StateT.run_bind, setRun]
-    change ((getPeerDump donor ctx skb).run afterSet >>= fun a =>
-      ((fun b => ((0, a.1.2.2, b.1), b.2)) <$>
-        (getPeerDump target a.1.2.1 a.1.1).run a.2)) = _
+      (by dsimp; omega) afterFirst firstAmbient firstDev
+  refine ⟨(0, PeerDump.complete { publicKey := hexKey old.remoteStatic, attrs := peerFixedAttrs old }, second), final, finalAmbient, ?_, ?_⟩
+  · change (((setAllowedip target (allowedAttrs v4 addr cidr)).run initial).run ambient >>=
+        fun ((ret, g), a) => ((getPeerDump donor ctx skb).run g).run a >>=
+          fun ((first, g'), a') => ((getPeerDump target first.2.1 first.1).run g').run a' >>=
+            fun ((second, g''), a'') => Except.ok (((ret, first.2.2, second), g''), a'')) = _
+    rw [setRun]
+    dsimp only [bind, Except.bind]
     rw [firstRun]
-    change ((fun b => ((0, PeerDump.complete { publicKey := hexKey old.remoteStatic, attrs := peerFixedAttrs old }, b.1), b.2)) <$>
-      (getPeerDump target { ctx with nextAllowedip := none, allowedipsSeq := 0 }
-        { skb with room := skb.room - peerFixedSpace old }).run afterFirst) = _
+    dsimp only [bind, Except.bind]
     rw [secondRun]
-    rfl
   · refine ⟨finalDev, ?_⟩
     simp [secondResult, old, next, eraseListedPeer, transferredPeer, peerFixedSpace,
       peerFixedAttrs, Nat.sub_sub, Nat.add_assoc]

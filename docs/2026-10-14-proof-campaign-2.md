@@ -7,8 +7,8 @@
 all six results are lagging until carried. Counts, type-justified frame
 deletions and scoped validation are tracked in the
 [retrofit report](2026-10-16-proof-campaign-2-state-split.md).
-The support tranches retype 353 original theorems, retain 119,
-delete twenty-one type-given frames and add thirty-two support/finding declarations: 504
+The support tranches retype 366 original theorems, retain 122,
+delete twenty-one type-given frames and add thirty-two support/finding declarations: 520
 checked theorems, with 258 terminal names still awaiting whole-result validation.
 Ten H2 table claims now have checked projected support and unchanged public
 audit names; this is not a build of the full H2 Statements module.

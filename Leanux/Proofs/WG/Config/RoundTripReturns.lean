@@ -17,7 +17,7 @@ theorem scalars_get_after_set_returns (key psk : Key) (interval : Nat) (pid : Pe
       let ret ← setPeerCmd (scalarAttrs key psk interval)
       let dump ← getPeerDump pid ctx skb
       pure (ret, dump))
-      (fun w => w.k.wg = some d)
+      (fun w => w.dev = some d)
       (fun result w =>
         let updated := { p with presharedKey := psk, persistentKeepaliveInterval := interval }
         peerAt w pid = some updated ∧ result =
@@ -25,13 +25,22 @@ theorem scalars_get_after_set_returns (key psk : Key) (interval : Nat) (pid : Pe
            { ctx with nextAllowedip := none, allowedipsSeq := 0 },
            .complete { publicKey := hexKey p.remoteStatic, attrs := peerFixedAttrs updated })) := by
   let updated := { p with presharedKey := psk, persistentKeepaliveInterval := interval }
-  have hs := (returns_iff _ _ _).mp (setPeer_scalars_down_returns key psk interval pid d p found resident live bounded down)
-  have hd := (returns_iff _ _ _).mp (getPeerDump_no_allowedips_returns pid updated ctx skb fresh
-    (by simpa [updated] using empty) room)
-  rw [returns_iff]
-  mvcgen [hs, hd]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals repeat intro
-  all_goals simp_all [peerAt, updated, scalarDevice, withPeer]
+  refine returns_bind _ _
+    (setPeer_scalars_down_returns key psk interval pid d p found resident live bounded down) ?_
+  intro ret
+  refine returns_bind (Q := fun dump w => ret = 0 ∧ peerAt w pid = some updated ∧
+    dump = ({ skb with room := skb.room - peerFixedSpace updated },
+      { ctx with nextAllowedip := none, allowedipsSeq := 0 },
+      .complete { publicKey := hexKey p.remoteStatic, attrs := peerFixedAttrs updated })) _ _ ?_ ?_
+  · intro g ambient pre
+    obtain ⟨rfl, device⟩ := pre
+    have peer : peerAt g pid = some updated := by
+      simp [peerAt, device, scalarDevice_peer, updated]
+    obtain ⟨dump, final, after, run, result⟩ := getPeerDump_no_allowedips_returns pid updated ctx skb fresh
+      (by simpa [updated] using empty) room g ambient peer
+    exact ⟨dump, final, after, run, rfl, result⟩
+  · intro dump g ambient pre
+    rcases pre with ⟨rfl, peer, rfl⟩
+    exact ⟨_, g, ambient, rfl, peer, rfl⟩
 
 end Leanux.Proofs.WG.Config

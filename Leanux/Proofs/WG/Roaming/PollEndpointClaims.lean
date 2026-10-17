@@ -15,21 +15,12 @@ theorem packetState_notCrypted (state : PacketState)
   | uncrypted => change true = false at h; cases h
   | dead => change true = false at h; cases h
 
-theorem getRxSkb_packet (id : SkbId) (entry : Campaign2.Snapshot) :
-    ⦃fun w => ⌜∀ id, packetAt (Campaign2.snapshot w) id = packetAt entry id⌝⦄
-      getRxSkb id
-    ⦃⇓? packet w => ⌜(∀ id, packetAt (Campaign2.snapshot w) id = packetAt entry id) ∧
-      packetAt entry id = some packet⌝⦄ := by
-  mvcgen [getRxSkb, getDev, getK, invariant]
-  all_goals simp_all [packetAt, Campaign2.snapshot, Campaign2.core]
-  all_goals grind
-
 theorem pollEndpointPrefix_facts (pid : PeerId) (entry : Campaign2.Snapshot) :
     Ensures (pollEndpointPrefix pid)
       (fun w => ∀ id, packetAt (Campaign2.snapshot w) id = packetAt entry id)
       (fun result _ => ∀ cut, result = .endpoint cut → PollEndpointFacts pid entry cut) := by
   rw [ensures_iff]
-  have hp := fun (q : PrevQueue SkbId) => PrevQueue_peek_spec_kernel_variant q
+  have hp := fun (q : PrevQueue SkbId) => PrevQueue_peek_spec_wg_variant q
     (fun k => ∀ id, (k.wg.bind fun d => d.rxSkbs[id]?) = packetAt entry id)
   have hg := fun id => getRxSkb_packet id entry
   have hc := fun key nonce => unconstrained_prefix (counterValidate key nonce)

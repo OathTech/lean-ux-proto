@@ -12,7 +12,7 @@ theorem pollAttemptPrefix_facts (pid : PeerId) (entry : Campaign2.Snapshot) :
       (fun result w => ∀ cut, result = .endpoint cut →
         cut.beforeSetter = snapshot w ∧ PollAttemptFacts pid entry cut) := by
   rw [ensures_iff]
-  have hp := fun (q : PrevQueue SkbId) => PrevQueue_peek_spec_kernel_variant q
+  have hp := fun (q : PrevQueue SkbId) => PrevQueue_peek_spec_wg_variant q
     (fun k => ∀ id, (k.wg.bind fun d => d.rxSkbs[id]?) = packetAt entry id)
   have hg := fun id => getRxSkb_packet id entry
   have hc := fun key nonce => unconstrained_prefix (counterValidate key nonce)
