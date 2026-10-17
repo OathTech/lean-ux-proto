@@ -104,3 +104,9 @@ caller/jitter witnesses remain intact, and initiation's complete wheel effect
 is anchored at the real successful prefix state. No successful transmission
 or new readiness condition is assumed. The retrofit report records validation
 and the added private Product source factor.
+
+The 1,001-theorem checkpoint additionally corrects data-sent, discarded-arm
+and traversal recorded-clock contracts in ArmingPrefixesSource. Their original
+prefix/record domains and actual Product intermediate-state witnesses remain.
+Complete wheel effects are anchored at the real pre-arm state; see the retrofit
+report for the four retypes, three corrections and private composition support.

@@ -1,4 +1,4 @@
-import Leanux.Proofs.WG.Config.QuietRemovalSource
+import Leanux.Proofs.WG.Config.QuietRemovalLeaves
 import Leanux.Proofs.WG.Index.PeerRelease
 
 set_option autoImplicit false
@@ -7,20 +7,6 @@ set_option maxHeartbeats 800000
 
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise Std.Do
-
-theorem quietCleanup_resident (d : Device) (pid : PeerId) (p : Peer) :
-    (quietCleanupDevice d pid p).peers[pid]? = some (quietCleanupPeer p) :=
-  deleteTimers_resident _ _ _ _ (by simp [emptyKeysDevice, withPeer])
-
-theorem decrementPeerCount_returns (d : Device) (positive : 0 < d.numPeers) :
-    Returns decrementPeerCount (fun w => w.k.wg = some d)
-      (fun _ w => w.k.wg = some { d with numPeers := d.numPeers - 1 }) := by
-  rw [returns_iff]
-  mvcgen [decrementPeerCount, getDev, getK, modifyDev, modifyK, invariant]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals repeat intro
-  all_goals simp_all
-  all_goals omega
 
 theorem peerRemoveAfterDead_quiet_returns (pid : PeerId) (d : Device) (p : Peer)
     (resident : d.peers[pid]? = some p) (dead : p.isDead = true) (live : 0 < p.refcount)

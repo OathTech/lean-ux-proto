@@ -20,11 +20,11 @@ and attributed theorem declarations. Campaign 2 owns 427 Lean files,
 | --- | ---: | ---: | ---: | ---: | --- |
 | Common projection | 2 | 0 | 0 | 0 | Actual native WG/Ambient and full Product observations carried; no reconstructed execution states. |
 | H1 Noise | 35 | 171 | 22 | 180 | All original Noise obligations carried, including the full terminal closure; six type-given frames deleted. Wider caller/lifetime/reachability and clock-provenance charter claims remain open. |
-| H2 Index | 68 | 318 | 52 | 188 | Table, lookup, collision records, allocation, owner invariants and lifecycle support carried; seven type-given frames deleted. Exact peer-release outcomes replace stale totality, with checked counterexamples. Terminal closure and whole-driver coherence remain pending. |
+| H2 Index | 68 | 318 | 52 | 190 | Table, lookup, collision records, allocation, owner invariants and lifecycle support carried; seven type-given frames deleted. Exact peer-release outcomes replace stale totality, with checked counterexamples. Terminal closure and whole-driver coherence remain pending. |
 | H3 Roaming | 35 | 119 | 13 | 109 | Endpoint/publication, polling, attempt facts, crypto, lookup and response-caller factors carried with full Product certificates; two type-given frames deleted. Initiation transcript facts and broader authentication/caller closure remain pending. |
-| H4 Configuration | 130 | 554 | 79 | 315 | Scalar, identity, port, dump, allowed-IP and structural support carried; three type-given frames deleted. Quiet timer cleanup is corrected; queued-send and removal totality have checked stale-statement counterexamples. Remaining readback/effects and terminal closure remain pending. |
+| H4 Configuration | 130 | 554 | 79 | 317 | Scalar, identity, port, dump, allowed-IP and structural support carried; three type-given frames deleted. Quiet timer cleanup is corrected; queued-send and removal totality have checked stale-statement counterexamples. Remaining readback/effects and terminal closure remain pending. |
 | H5 Progress | 59 | 265 | 42 | 136 | Pure/control, cut, jitter, index, poll bounds, dispatch, scheduler turns, stack/probe frames and Product observation bridge carried. Receive-ring activation models, historical backlog/runner claims, remaining drain/flush claims and terminal closure remain pending. |
-| H6 Timer discipline | 98 | 404 | 50 | 59 | Base/guard/jitter, arming/wheel, recorded clock and initiation-send arming contracts carried; three type-given frames deleted. Exact wheel corrections are explicit; broader timer episodes, worker composition and terminal closure remain pending. |
+| H6 Timer discipline | 98 | 404 | 50 | 69 | Base/guard/jitter, arming/wheel, recorded clock and initiation-send arming contracts carried; three type-given frames deleted. Exact wheel corrections are explicit; broader timer episodes, worker composition and terminal closure remain pending. |
 
 Retyped, deleted and retained counts will be reported per validated tranche.
 H1 now has a checked split terminal closure; H2–H6 remain lagging.
@@ -2871,3 +2871,74 @@ Roaming.ResponseCallProductSource under Leanux.Proofs.WG. Inspect logical
 declarations with #print axioms and replay each root using scripts/in-bundle
 lake env leanchecker --fresh MODULE. On this host use capped, 32 Lean
 threads and 16 QEMU slots.
+
+## Initiation frames, timer prefixes and projected peer-release claims
+
+| Tranche | Before | Retyped | Corrected | Deleted | Kept | Added | After |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| TimerDiscipline.ArmingPrefixesSource | 7 | 4 | 3 | 0 | 0 | 1 | 8 |
+| TimerDiscipline.InitiationFrames | 2 | 2 | 0 | 0 | 0 | 0 | 2 |
+| QuietRemovalFrames and QuietRemovalLeaves | 2 | 1 | 0 | 0 | 1 | 0 | 2 |
+| Index.PeerReleaseClaims companions | 0 | 0 | 0 | 0 | 0 | 2 | 2 |
+| This tranche | 11 | 7 | 3 | 0 | 1 | 3 | 14 |
+| Cumulative processed baseline and checked support | 949 | 717 | 21 | 21 | 190 | 73 | 1,001 |
+
+The census is 512 campaign-owned files, 1,883 theorems and 320 checked proof
+modules; 882 baseline declarations await validation. Checked counts are H1
+180, H2 190, H3 109, H4 317, H5 136 and H6 69. H1's terminal module remains
+current; H2–H6 and the full gate remain lagging. All 258 terminal names/order
+remain, and no new charter result is claimed.
+
+ArmingPrefixesSource carries two native source factors and two total Product
+prefix contracts on their original premises. Three recorded-arm predictions
+are explicitly corrected to the complete wheel effect, anchored at the actual
+prefix successor where applicable; actual caller/jitter Product states remain.
+One private lift-bind variant follows campaign 1's composition shape and is
+counted as added support. No frame is deleted.
+
+InitiationFrames retains two substantive within-WG preservation claims.
+Their native runs quantify arbitrary Ambient inputs and preserve the original
+initiation view through actual branch/crypto/index behavior, including missing
+identity, crypto failure and NULL peer-word failure paths. No residency or
+successful-index premise is added. Existing generic component/crypto contracts
+are reused; no shared-layer copy or edit is made. The arbitrary-world callback
+scope of other generic send-frame contracts is not settled by these two
+native-operation carries.
+
+The unchanged pure cleanup-residency lemma moves to QuietRemovalFrames.
+QuietRemovalLeaves carries the native total counter decrement under the same
+positive-count premise. The two broader removal contracts remain pending at
+this checkpoint; neither receives an additional crypt/NAPI readiness premise.
+
+PeerReleaseClaims supplies two new checked projected companions for the
+original table/peer/drop-accounting/uniqueness and allocation-bound headlines.
+Both keep the old resident/live and invariant premises, classify the exact
+queue-first/timer-second refusal, and retain every original success conjunct.
+PeerReleaseOutcomeModel contains only that pure refusal selector. No
+post-error state or whole-driver reference safety is asserted. The two
+Statements wrappers now have the corrected outcome signatures and delegate
+to these companions; their enclosing module remains lagging. The companions
+are counted as added support here, not as two additional validated baseline
+headlines. Independent review requested that their old unconditional docstrings
+be qualified; both companion and wrapper descriptions now state refusal or
+normal-return effects explicitly.
+
+Scoped build passes 138 jobs without warnings. Axiom inspection covers 531
+logical roots in 110 proof modules, including 319 public theorem roots, with
+only the three standard axioms. Fresh kernel replay passes for all four scoped
+roots. Static token/import/root/default-target checks
+pass and all terminal names/order are intact. Root reviews of timer/cleanup
+carries and independent peer-release/prefix classification review are clear.
+
+Development ledger: ArmingPrefixesSource failed its first changed probe on
+a native Bool normalization with one unused simplification warning; the second
+passed cleanly. InitiationFrames, the two cleanup leaves and PeerReleaseClaims
+each passed their first probe. Broader removal-outcome and initiation transcript
+packages remain outside this checked surface and its census. No unchanged-source rerun, infrastructure retry, cap/proof-limit increase or
+guest run occurred.
+
+Reproduce with scripts/in-bundle lake build on TimerDiscipline.ArmingPrefixesSource,
+TimerDiscipline.InitiationFrames, Config.QuietRemovalLeaves and
+Index.PeerReleaseClaims under Leanux.Proofs.WG, followed by #print axioms and
+scripts/in-bundle lake env leanchecker --fresh MODULE for each root.
+Use capped, 32 Lean threads and 16 QEMU slots on this host.

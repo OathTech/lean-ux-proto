@@ -48,7 +48,8 @@ contract under the same resident/live hypotheses. On final release, queue
 refusal takes precedence over the first pending timer or wheel entry; each
 produces its exact invariant Stop. All other cases return the original
 releasedPeerDevice. It asserts no post-error state. This preserves the checked
-counterexamples and does not add readiness. The two original terminal wrappers
-and downstream configuration/timer users still need their own domain carry.
+counterexamples and does not add readiness. Both original terminal wrappers now use projected exact-outcome companions in
+PeerReleaseClaims, preserving every former success guarantee. The full terminal
+module and downstream configuration/timer users still need their remaining carry.
 The corrected source passes scoped build, standard-axiom inspection and fresh
 replay, recorded in the retrofit report.

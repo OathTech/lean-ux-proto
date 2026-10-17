@@ -1,7 +1,7 @@
 import Leanux.Proofs.WG.Campaign2.Bridge
 import Leanux.Proofs.WG.Index.TableClaims
 import Leanux.Proofs.WG.Index.View
-import Leanux.Proofs.WG.Index.PeerRelease
+import Leanux.Proofs.WG.Index.PeerReleaseClaims
 import Leanux.Proofs.WG.Index.DrawExhaustion
 import Leanux.Proofs.WG.Index.DrawRecords
 import Leanux.Proofs.WG.Index.ReleaseBounds
@@ -292,45 +292,40 @@ theorem original_index_insert_exhausted (owner : IndexOwner) (d : Device) (draws
   rw [indexInsert_exhausted owner d draws allCollide w pre.1 pre.2]
   rfl
 
-/-- Original peer release decrements the count. The last release removes all
-handshake-owner rows, erases the peer and charges its staged packets to txDropped;
-other peers are unchanged. Numeric-index and embedded-owner uniqueness survive.
-This executes the original identity-retirement operation but exports only device
-effects; it does not establish safety of references in other objects. -/
+/-- The original resident/live domain has an exact refusal or normal return.
+On return, all original table, peer, drop-accounting and uniqueness effects
+hold. Refusal exposes no post-state; reference safety elsewhere is not claimed. -/
 theorem original_peer_release (pid : PeerId) (d : Device) (p : Peer)
     (resident : d.peers[pid]? = some p) (live : 0 < p.refcount)
     (indices : UniqueIndices d.indexTable) (owners : UniqueOwners d.indexTable) :
-    Campaign2.Returns (peerPut (some pid)) (fun w => w.wg.device = some d)
-      (fun _ w =>
+    Campaign2.Observes (peerPut (some pid)) (fun w => w.wg.device = some d)
+      (fun _ out =>
+        match peerReleaseRefusal pid p with
+        | some stop => out = .error stop
+        | none => ∃ w, out = .ok ((), w) ∧
         let final := releasedPeerDevice d pid p
         w.wg.device = some final ∧
         final.indexTable = (if p.refcount = 1 then removeOwner (.handshake pid) d.indexTable else d.indexTable) ∧
         final.peers[pid]? = (if p.refcount = 1 then none else some { p with refcount := p.refcount - 1 }) ∧
         (∀ other : PeerId, pid ≠ other → final.peers[other]? = d.peers[other]?) ∧
         final.txDropped = d.txDropped + (if p.refcount = 1 then p.staged.length else 0) ∧
-        UniqueIndices final.indexTable ∧ UniqueOwners final.indexTable) := by
-  intro w pre
-  obtain ⟨ret, final, run, device⟩ := peerPut_exact pid d p resident live w pre
-  exact ⟨ret, final, run, device, releasedPeer_table pid d p, releasedPeer_peer pid d p,
-    fun other different => releasedPeer_other pid other d p different, releasedPeer_dropped pid d p,
-    releasedPeer_indices pid d p indices, releasedPeer_owners pid d p owners⟩
+        UniqueIndices final.indexTable ∧ UniqueOwners final.indexTable) :=
+  ReleaseClaims.original_peer_release pid d p resident live indices owners
 
-/-- Original peer release preserves the keypair store and allocation cursor,
-and both freshness bounds for later allocation. Removing handshake rows cannot
-introduce a keypair owner beyond the cursor; whole-driver initialization and
-preservation of these bounds are not claimed. -/
+/-- Exact refusal or normal preservation of the original keypair store, cursor
+and allocation bounds. No whole-driver initialization or preservation is claimed. -/
 theorem original_peer_release_allocation_bounds (pid : PeerId) (d : Device) (p : Peer)
     (resident : d.peers[pid]? = some p) (live : 0 < p.refcount)
     (owners : KeypairOwnersBounded d) (store : KeypairStoreBounded d) :
-    Campaign2.Returns (peerPut (some pid)) (fun w => w.wg.device = some d)
-      (fun _ w =>
+    Campaign2.Observes (peerPut (some pid)) (fun w => w.wg.device = some d)
+      (fun _ out =>
+        match peerReleaseRefusal pid p with
+        | some stop => out = .error stop
+        | none => ∃ w, out = .ok ((), w) ∧
         let final := releasedPeerDevice d pid p
         w.wg.device = some final ∧ final.keypairs = d.keypairs ∧ final.nextKeypairId = d.nextKeypairId ∧
-        KeypairOwnersBounded final ∧ KeypairStoreBounded final) := by
-  intro w pre
-  obtain ⟨ret, final, run, device⟩ := peerPut_exact pid d p resident live w pre
-  exact ⟨ret, final, run, device, releasedPeer_keypairs pid d p, releasedPeer_next pid d p,
-    releasedPeer_owners_bounded pid d p owners, releasedPeer_store_bounded pid d p store⟩
+        KeypairOwnersBounded final ∧ KeypairStoreBounded final) :=
+  ReleaseClaims.original_peer_release_allocation_bounds pid d p resident live owners store
 
 /-- The original runner initializer establishes the optional-device table
 invariant for every fixture-flag combination. Only its core projection is
