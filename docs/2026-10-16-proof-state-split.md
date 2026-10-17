@@ -13,8 +13,8 @@ new worlds; new R3/R4 results follow the retrofit.
 | Validated baseline `00641c6` | 471 | 7,715 |
 | Completed retrofit checkpoints | 452 | 6,556 |
 
-Completed changes comprise **2,995 retyped/generalized, 1,708 deleted,
-2,249 retained contract shapes and 549 added theorems**. Retyping changes the
+Completed changes comprise **3,105 retyped/generalized, 1,708 deleted,
+2,280 retained contract shapes and 549 added theorems**. Retyping changes the
 actual carrier or observation, including shorthand contracts whose functions
 move to a native monad. Namespace-only product qualification and equivalent
 projection relocation count as retained. The census includes private and
@@ -427,7 +427,18 @@ own warnings. Development recorded one proof failure and two successful
 elaborations exposing unused-premise warnings, all repaired before handback.
 No infrastructure rerun or limit change occurred.
 
-Remaining work is the routing/origin terminal carry,
+CryptokeyRouting retains all 141 terminal names: 110 retyped/generalized and
+31 retained contracts (twenty pure, eleven product). Three compound clauses
+are removed: the index-only operation's routing frame, the Seccomp/Task-only
+prefill initialization clause and the removed fireTimer source API's clause.
+The surviving initialization mask is the original seven WG fields; actual
+wheel dispatch, arbitrary product callbacks, positional histories and copied
+probe worlds remain. Its 470-job build, all 141 named axiom checks, explicit
+fresh replay and complete independent review pass. The terminal module has
+zero warnings; its closure has 1,549 inherited warnings. This is the carry of
+existing statements, not the open initialized packet-authorization result.
+
+Remaining work is the delivery terminal carry,
 RX ingress layers, warning
 cleanup, the full proof gate and terminal replay. Deterministic source/proof
 failures are failures; source edits are checked anew, never described as

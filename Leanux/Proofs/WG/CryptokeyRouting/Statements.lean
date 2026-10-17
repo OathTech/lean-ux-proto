@@ -107,38 +107,38 @@ open Leanux.Proofs.WG.AllowedIps
 their maximal common-prefix length: every bounded CIDR is at most that
 length exactly when the corresponding leading address bits agree. The
 execution equation includes all of the mirror's branch records. -/
-theorem commonBits_correct (n : WG.AipNode) (key width : Nat) (w : World)
+theorem commonBits_correct (n : WG.AipNode) (key width : Nat) (ambient : Ambient)
     (hw : width = 32 ∨ width = 128) (hn : n.bits < 2 ^ width)
     (hk : key < 2 ^ width) :
-    (WG.commonBits n key width).run w =
-        .ok (common width n.bits key, commonRecords w width (n.bits ^^^ key)) ∧
+    (WG.commonBits (m := AmbientM) n key width).run ambient =
+        .ok (common width n.bits key, commonRecords ambient width (n.bits ^^^ key)) ∧
       common width n.bits key ≤ width ∧
       ∀ cidr, cidr ≤ width →
         (cidr ≤ common width n.bits key ↔
           prefixBits width cidr n.bits = prefixBits width cidr key) := by
-  exact ⟨commonBits_run n key width w hw, common_le _ _ _,
+  exact ⟨commonBits_run n key width ambient hw, common_le _ _ _,
     fun _ hc => common_ge_iff hn hk hc⟩
 
 /-- For bounded IPv4 or IPv6 addresses and a CIDR within the family width,
 the original `prefixMatches` returns true exactly when the node and query
-have equal leading prefix bits, with exactly its recorded World effects. -/
-theorem prefixMatches_correct (n : WG.AipNode) (key width : Nat) (w : World)
+have equal leading prefix bits, with exactly its recorded Ambient effects. -/
+theorem prefixMatches_correct (n : WG.AipNode) (key width : Nat) (ambient : Ambient)
     (hw : width = 32 ∨ width = 128) (hn : n.bits < 2 ^ width)
     (hk : key < 2 ^ width) (hc : n.cidr ≤ width) :
-    (WG.prefixMatches n key width).run w =
+    (WG.prefixMatches (m := AmbientM) n key width).run ambient =
       .ok (decide (prefixBits width n.cidr n.bits = prefixBits width n.cidr key),
-        commonRecords w width (n.bits ^^^ key)) :=
-  prefixMatches_run n key width w hw hn hk hc
+        commonRecords ambient width (n.bits ^^^ key)) :=
+  prefixMatches_run n key width ambient hw hn hk hc
 
 /-- Whenever the node has another address bit to inspect, the original
-`choose` returns that next bit, either zero or one, and preserves the World.
-This arithmetic statement is uniform in the node's address width. -/
-theorem choose_correct (n : WG.AipNode) (key : Nat) (w : World) (hc : n.cidr < n.bitlen) :
-    (WG.choose n key).run w =
-        .ok (prefixBits n.bitlen (n.cidr + 1) key % 2, w) ∧
+`choose` returns that next bit, either zero or one, as a pure action in
+any monad admitted by the actual helper. The address width is arbitrary. -/
+theorem choose_correct {m : Type → Type} [Monad m] [MonadLiftT AmbientM m]
+    (n : WG.AipNode) (key : Nat) (hc : n.cidr < n.bitlen) :
+    (WG.choose n key : m Nat) = pure (prefixBits n.bitlen (n.cidr + 1) key % 2) ∧
       prefixBits n.bitlen (n.cidr + 1) key % 2 < 2 := by
   constructor
-  · simpa only [bit_eq_prefix_succ] using choose_run n key w hc
+  · simpa only [bit_eq_prefix_succ] using choose_run (m := m) n key hc
   · exact Nat.mod_lt _ (by decide)
 
 /-- In the pure intermediate tree, lookup returns an owned prefix that
@@ -168,32 +168,34 @@ theorem pureTree_search_depth_bound (t : Tree) (width : Nat)
 
 /-- The original traversal always returns normally on an exactly represented
 valid IPv4 or IPv6 tree. It returns the longest matching owned prefix's node
-ID, or none when no owned prefix matches, and preserves the whole Kernel.
+ID, or none when no owned prefix matches, and preserves the native AipStore.
 The representation premise describes the actual node map and backlinks;
 establishing it from configuration mutations remains a separate obligation. -/
-theorem original_findNode_lookup_correct (w : World) (d : WG.Device)
+theorem original_findNode_lookup_correct (w : WG.AipStore) (ambient : Ambient)
     (width key : Nat) (hw : width = 32 ∨ width = 128) (hk : key < 2 ^ width)
-    (hd : w.k.wg = some d) (t : Tree) (parent : WG.Slot)
-    (hr : RepAt d.nodes width parent t) (hv : t.Valid width) :
-    ∃ w', (WG.findNode t.root width key).run w =
-        .ok ((t.lookup width key).map Entry.id, w') ∧
-      Winner width key t.entries (t.lookup width key) ∧ w'.k = w.k := by
-  obtain ⟨w', he, hframe⟩ := findNode_run w d width key hw hk hd t parent hr hv
-  exact ⟨w', he, Tree.lookup_spec hv key, hframe⟩
+    (t : Tree) (parent : WG.Slot)
+    (hr : RepAt w.nodes width parent t) (hv : t.Valid width) :
+    ∃ w' ambient', ((WG.findNode t.root width key).run w).run ambient =
+        .ok (((t.lookup width key).map Entry.id, w'), ambient') ∧
+      Winner width key t.entries (t.lookup width key) ∧ w' = w := by
+  obtain ⟨w', ambient', he, hframe⟩ := findNode_run w ambient width key hw hk t parent hr hv
+  exact ⟨w', ambient', he, Tree.lookup_spec hv key, hframe⟩
 
 /-- Any successful execution of the original traversal on an exactly
 represented valid IPv4 or IPv6 tree returns its longest matching owned
 prefix's node ID, or none when no owned prefix matches. This theorem assumes
 the structural representation at entry; it does not establish that mutations
 produce it. It is the successful-run corollary of the total result above. -/
-theorem original_findNode_successful_lookup_correct (w w' : World) (d : WG.Device)
+theorem original_findNode_successful_lookup_correct (w w' : WG.AipStore)
+    (ambient ambient' : Ambient)
     (width key : Nat) (hw : width = 32 ∨ width = 128) (hk : key < 2 ^ width)
-    (hd : w.k.wg = some d) (t : Tree) (parent : WG.Slot)
-    (hr : RepAt d.nodes width parent t) (hv : t.Valid width) (result : Option Nat)
-    (hreturn : (WG.findNode t.root width key).run w = .ok (result, w')) :
+    (t : Tree) (parent : WG.Slot)
+    (hr : RepAt w.nodes width parent t) (hv : t.Valid width) (result : Option Nat)
+    (hreturn : ((WG.findNode t.root width key).run w).run ambient =
+      .ok ((result, w'), ambient')) :
     result = (t.lookup width key).map Entry.id ∧
-      Winner width key t.entries (t.lookup width key) ∧ w'.k = w.k := by
-  have h := findNode_refines w w' d width key hw hk hd t parent hr hv result hreturn
+      Winner width key t.entries (t.lookup width key) ∧ w' = w := by
+  have h := findNode_refines w w' ambient ambient' width key hw hk t parent hr hv result hreturn
   exact ⟨h.1, Tree.lookup_spec hv key, h.2⟩
 
 /-- Pure Patricia insertion replaces the owner of exactly the requested
@@ -236,21 +238,21 @@ theorem pureTree_insert_preserves_structure (t : Tree) (width fresh addr cidr pe
     Tree.insertFresh_nodeIds_bounded hf width addr cidr peer⟩
 
 /-- On an empty selected root, the original `add` either refuses allocation
-without changing the Kernel or installs precisely the pure insertion's tree.
+without changing WGWorld or installs precisely the pure insertion's tree.
 Whole-store freshness protects every represented node of the opposite family;
 the target peer must exist. This classifies normal executions, without
 asserting that missing or malformed allocation records complete normally. -/
-theorem original_add_empty_root_correct (w w' : World) (d : WG.Device)
-    (hd : w.k.wg = some d) (v4 : Bool) (addr cidr pid : Nat) (p : WG.Peer)
+theorem original_add_empty_root_correct (w w' : WGWorld) (ambient ambient' : Ambient) (d : WG.Device)
+    (hd : w.dev = some d) (v4 : Bool) (addr cidr pid : Nat) (p : WG.Peer)
     (hp : d.peers[pid]? = some p) (he : rootValue d v4 = none)
     (ha : addr < 2 ^ rootWidth v4) (hc : cidr ≤ rootWidth v4)
     (hb : NodesBelow d) (other : Tree)
     (ho : RepAt d.nodes (rootWidth (!v4)) (rootSlot (!v4)) other) (result : Int)
-    (hr : (WG.add (rootSlot v4) (rootWidth v4) addr cidr (some pid)).run w = .ok (result, w')) :
+    (hr : ((WG.add (rootSlot v4) (rootWidth v4) addr cidr (some pid)).run w).run ambient = .ok ((result, w'), ambient')) :
     let installed := emptyInstalled d v4 addr cidr pid p
     let tree := (Tree.empty.insertFresh (rootWidth v4) d.nextNode addr cidr pid).tree
-    (result = -ENOMEM ∧ w'.k = w.k) ∨
-      (result = 0 ∧ w'.k = { w.k with wg := some installed } ∧
+    (result = -ENOMEM ∧ w' = w) ∨
+      (result = 0 ∧ w' = { w with dev := some installed } ∧
         NodesBelow installed ∧ rootValue installed v4 = tree.root ∧
         RepAt installed.nodes (rootWidth v4) (rootSlot v4) tree ∧ tree.Valid (rootWidth v4) ∧
         rootValue installed (!v4) = rootValue d (!v4) ∧
@@ -260,22 +262,22 @@ theorem original_add_empty_root_correct (w w' : World) (d : WG.Device)
 /-- The original `insert` increments the table sequence on both normal
 outcomes. Success into an empty selected root agrees with pure insertion;
 allocation refusal preserves the device apart from that sequence increment.
-The whole Kernel equation frames unrelated state. The opposite root's value
+The whole WGWorld equation frames unrelated WG state. The opposite root's value
 and any supplied opposite-family representation survive either outcome.
 An existing caller linkage between them is preserved, not established here.
 As in the original wrapper,
 family 4 selects IPv4 and every other value selects IPv6. General insertion
 history, owner liveness, and packet admission are not asserted here. -/
-theorem original_insert_empty_root_correct (w w' : World) (d : WG.Device)
-    (hd : w.k.wg = some d) (family addr cidr pid : Nat) (p : WG.Peer)
+theorem original_insert_empty_root_correct (w w' : WGWorld) (ambient ambient' : Ambient) (d : WG.Device)
+    (hd : w.dev = some d) (family addr cidr pid : Nat) (p : WG.Peer)
     (hp : d.peers[pid]? = some p) (he : rootValue d (family == 4) = none)
     (ha : addr < 2 ^ rootWidth (family == 4)) (hc : cidr ≤ rootWidth (family == 4))
     (hb : NodesBelow d) (other : Tree)
     (ho : RepAt d.nodes (rootWidth (!(family == 4))) (rootSlot (!(family == 4))) other)
-    (result : Int) (hr : (WG.insert family addr cidr pid).run w = .ok (result, w')) :
+    (result : Int) (hr : ((WG.insert family addr cidr pid).run w).run ambient = .ok ((result, w'), ambient')) :
     let v4 := family == 4
     let tree := (Tree.empty.insertFresh (rootWidth v4) d.nextNode addr cidr pid).tree
-    ∃ d', w'.k = { w.k with wg := some d' } ∧
+    ∃ d', w' = { w with dev := some d' } ∧
       d'.peerAllowedips.seq = d.peerAllowedips.seq + 1 ∧ NodesBelow d' ∧
       rootValue d' (!v4) = rootValue d (!v4) ∧
       RepAt d'.nodes (rootWidth (!v4)) (rootSlot (!v4)) other ∧
@@ -283,7 +285,7 @@ theorem original_insert_empty_root_correct (w w' : World) (d : WG.Device)
         (result = 0 ∧ d' = emptyInstalled (bumpSeq d) v4 addr cidr pid p ∧
           rootValue d' v4 = tree.root ∧ RepAt d'.nodes (rootWidth v4) (rootSlot v4) tree ∧
           tree.Valid (rootWidth v4))) := by
-  rcases insert_empty_exact w w' d hd family addr cidr pid p hp he hc result hr with hf | hs
+  rcases insert_empty_exact w w' ambient ambient' d hd family addr cidr pid p hp he hc result hr with hf | hs
   · exact ⟨bumpSeq d, hf.2, rfl, hb, rfl, ho, .inl ⟨hf.1, rfl⟩⟩
   · refine ⟨emptyInstalled (bumpSeq d) (family == 4) addr cidr pid p, hs.2,
       emptyInstalled_seq (bumpSeq d) (family == 4) addr cidr pid p,
@@ -300,33 +302,38 @@ the requested prefix and choose the requested branch, ending at an exact
 node or the first stopped subtree. Exact nodes include ownerless nodes.
 The exact flag agrees with zero allocations in the existing pure insertion;
 the theorem does not yet refine nonempty original mutation or history. -/
-theorem original_nodePlacement_correct (w : World) (d : WG.Device) (width key cidr : Nat)
+theorem original_nodePlacement_correct (w : WG.AipStore) (ambient : Ambient)
+    (width key cidr : Nat)
     (hw : width = 32 ∨ width = 128) (hk : key < 2 ^ width) (hc : cidr ≤ width)
-    (hd : w.k.wg = some d) (t : Tree) (base : WG.Slot)
-    (hr : RepAt d.nodes width base t) (hv : t.Valid width) :
-    ∃ result w', (WG.nodePlacement t.root key cidr width).run w = .ok (result, w') ∧
-      w'.k = w.k ∧ PlacementWitness t width key cidr result ∧
+    (t : Tree) (base : WG.Slot)
+    (hr : RepAt w.nodes width base t) (hv : t.Valid width) :
+    ∃ result w' ambient', ((WG.nodePlacement t.root key cidr width).run w).run ambient =
+      .ok ((result, w'), ambient') ∧
+      w' = w ∧ PlacementWitness t width key cidr result ∧
       ∀ fresh peer, result.2 = true ↔
         (t.insertFresh width fresh key cidr peer).allocations = 0 := by
-  obtain ⟨result, w', he, hf, hp⟩ := nodePlacement_run w d width key cidr hw hk hc hd t base hr hv
-  exact ⟨result, w', he, hf, hp, hp.allocations⟩
+  obtain ⟨result, w', ambient', he, hf, hp⟩ :=
+    nodePlacement_run w ambient width key cidr hw hk hc t base hr hv
+  exact ⟨result, w', ambient', he, hf, hp, hp.allocations⟩
 
 /-- A nonexact original placement identifies a structurally graftable focus.
 Pure insertion of any fresh node identifiers at that focus, rebuilt through
 the context, is exactly the existing recursive `insertFresh` result. This
 links the original traversal to the pure mutation's stopped case without
 assuming an insertion-history or peer-list invariant. -/
-theorem original_nodePlacement_stopped (w w' : World) (d : WG.Device) (width key cidr : Nat)
+theorem original_nodePlacement_stopped (w w' : WG.AipStore) (ambient ambient' : Ambient)
+    (width key cidr : Nat)
     (hw : width = 32 ∨ width = 128) (hk : key < 2 ^ width) (hc : cidr ≤ width)
-    (hd : w.k.wg = some d) (t : Tree) (base : WG.Slot)
-    (hr : RepAt d.nodes width base t) (hv : t.Valid width) (parent : Option Nat)
-    (hreturn : (WG.nodePlacement t.root key cidr width).run w = .ok ((parent, false), w')) :
-    w'.k = w.k ∧ ∃ (c : Context) (u : Tree), t = c.plug u ∧ c.Follows width key cidr ∧
+    (t : Tree) (base : WG.Slot)
+    (hr : RepAt w.nodes width base t) (hv : t.Valid width) (parent : Option Nat)
+    (hreturn : ((WG.nodePlacement t.root key cidr width).run w).run ambient =
+      .ok (((parent, false), w'), ambient')) :
+    w' = w ∧ ∃ (c : Context) (u : Tree), t = c.plug u ∧ c.Follows width key cidr ∧
       parent = c.lastParent none ∧ Graftable width key cidr u ∧
       ∀ fresh peer, t.insertFresh width fresh key cidr peer =
         let localResult := graft width fresh key cidr peer u
         { localResult with tree := c.plug localResult.tree } := by
-  obtain ⟨hf, hp⟩ := nodePlacement_refines w w' d width key cidr hw hk hc hd t base hr hv
+  obtain ⟨hf, hp⟩ := nodePlacement_refines w w' ambient ambient' width key cidr hw hk hc t base hr hv
     (parent, false) hreturn
   exact ⟨hf, hp.stopped rfl hv hk⟩
 
@@ -334,29 +341,30 @@ theorem original_nodePlacement_stopped (w w' : World) (d : WG.Device) (width key
 loop completes with precisely its enclosing parent and a false exact flag.
 This traversal fact supplies the missing-child case for future mutation
 refinement; it does not assert that the subsequent allocation completes. -/
-theorem original_nodePlacement_empty_focus (w : World) (d : WG.Device) (width key cidr : Nat)
+theorem original_nodePlacement_empty_focus (w : WG.AipStore) (ambient : Ambient)
+    (width key cidr : Nat)
     (hw : width = 32 ∨ width = 128) (hk : key < 2 ^ width) (hc : cidr ≤ width)
-    (hd : w.k.wg = some d) (c : Context) (base : WG.Slot)
-    (hr : RepAt d.nodes width base (c.plug .empty))
+    (c : Context) (base : WG.Slot)
+    (hr : RepAt w.nodes width base (c.plug .empty))
     (hv : (c.plug .empty).Valid width) (hf : c.Follows width key cidr) :
-    ∃ w', (WG.nodePlacement (c.plug .empty).root key cidr width).run w =
-      .ok ((c.lastParent none, false), w') ∧ w'.k = w.k := by
-  obtain ⟨result, w', he, hp⟩ :=
-    (Leanux.Proofs.Framing.total_iff_run _ _ _).mp
-      (nodePlacement_empty_focus_wp w.k d width key cidr hw hk hc hd c base hr hv hf) w rfl
+    ∃ w' ambient', ((WG.nodePlacement (c.plug .empty).root key cidr width).run w).run ambient =
+      .ok (((c.lastParent none, false), w'), ambient') ∧ w' = w := by
+  obtain ⟨result, w', ambient', he, hp⟩ :=
+    (Leanux.Proofs.Framing.total_iff_run_ambient _ _ _).mp
+      (nodePlacement_empty_focus_wp w width key cidr hw hk hc c base hr hv hf) w ambient rfl
   rcases hp with ⟨rfl, hframe⟩
-  exact ⟨w', he, hframe⟩
+  exact ⟨w', ambient', he, hframe⟩
 
 /-- On a represented root whose requested immediate child is empty, original
-`add` either refuses allocation without a Kernel change or installs exactly
+`add` either refuses allocation without a WGWorld change or installs exactly
 the existing pure insertion result. The exact installed state includes
 the new backlink, parent slot update, and peer-list append. Whole-store freshness and explicit
 parent/sibling separation support the representation; no peer-list coherence
 or general insertion-history premise is assumed or concluded. Both root
 values and the sequence counter are preserved, as is any supplied
 opposite-family representation. Record errors remain errors. -/
-theorem original_add_empty_child_correct (w w' : World) (d : WG.Device)
-    (hd : w.k.wg = some d) (v4 : Bool) (n : NodeData) (side : Nat) (sibling : Tree)
+theorem original_add_empty_child_correct (w w' : WGWorld) (ambient ambient' : Ambient) (d : WG.Device)
+    (hd : w.dev = some d) (v4 : Bool) (n : NodeData) (side : Nat) (sibling : Tree)
     (addr cidr pid : Nat) (p : WG.Peer) (hp : d.peers[pid]? = some p)
     (hroot : rootValue d v4 = some n.id) (hb : side < 2) (hbelow : NodesBelow d)
     (hparent : n.id ∉ sibling.nodeIds)
@@ -366,20 +374,20 @@ theorem original_add_empty_child_correct (w w' : World) (d : WG.Device)
     (hm : prefixBits (rootWidth v4) n.cidr n.addr = prefixBits (rootWidth v4) n.cidr addr)
     (hbit : bit (rootWidth v4) n.cidr addr = side)
     (other : Tree) (ho : RepAt d.nodes (rootWidth (!v4)) (rootSlot (!v4)) other) (result : Int)
-    (hreturn : (WG.add (rootSlot v4) (rootWidth v4) addr cidr (some pid)).run w = .ok (result, w')) :
+    (hreturn : ((WG.add (rootSlot v4) (rootWidth v4) addr cidr (some pid)).run w).run ambient = .ok ((result, w'), ambient')) :
     let installed := gapInstalled d v4 n side sibling addr cidr pid p
     let inserted := (Tree.fork n side .empty sibling).insertFresh (rootWidth v4) d.nextNode addr cidr pid
-    (result = -ENOMEM ∧ w'.k = w.k) ∨
-      (result = 0 ∧ w'.k = { w.k with wg := some installed } ∧ NodesBelow installed ∧
+    (result = -ENOMEM ∧ w' = w) ∨
+      (result = 0 ∧ w' = { w with dev := some installed } ∧ NodesBelow installed ∧
         rootValue installed v4 = inserted.tree.root ∧
         RepAt installed.nodes (rootWidth v4) (rootSlot v4) inserted.tree ∧
         inserted.tree.Valid (rootWidth v4) ∧ installed.nextNode = d.nextNode + 1 ∧
         installed.peerAllowedips.seq = d.peerAllowedips.seq ∧
         (∀ family, rootValue installed family = rootValue d family) ∧
         RepAt installed.nodes (rootWidth (!v4)) (rootSlot (!v4)) other) := by
-  have outcome := (Leanux.Proofs.Framing.hoare_iff_triple _ _ _).mpr
-    (add_root_gap_wp w.k d hd v4 n side sibling addr cidr pid p hp hroot hb hbelow hr hv ha hc hlt hm hbit)
-    w result w' rfl hreturn
+  have outcome := (Leanux.Proofs.Framing.hoare_iff_run_ambient _ _ _).mp
+    (add_root_gap_wp w d hd v4 n side sibling addr cidr pid p hp hroot hb hbelow hr hv ha hc hlt hm hbit)
+    w ambient result w' ambient' rfl hreturn
   rcases outcome with hf | hs
   · exact .inl hf
   have shape := gap_insertFresh n side sibling (rootWidth v4) d.nextNode addr cidr pid hb hlt hm hbit
@@ -396,8 +404,8 @@ theorem original_add_empty_child_correct (w w' : World) (d : WG.Device)
 lookup from the resulting selected root terminates and returns a longest
 matching binding in the independently updated flat list. This composes the
 mutation representation with the previously proved original traversal. -/
-theorem original_add_empty_child_lookup (w w' : World) (d : WG.Device)
-    (hd : w.k.wg = some d) (v4 : Bool) (n : NodeData) (side : Nat) (sibling : Tree)
+theorem original_add_empty_child_lookup (w w' : WGWorld) (ambient ambient' : Ambient) (d : WG.Device)
+    (hd : w.dev = some d) (v4 : Bool) (n : NodeData) (side : Nat) (sibling : Tree)
     (addr cidr pid : Nat) (p : WG.Peer) (hp : d.peers[pid]? = some p)
     (hroot : rootValue d v4 = some n.id) (hb : side < 2) (hbelow : NodesBelow d)
     (hparent : n.id ∉ sibling.nodeIds)
@@ -406,33 +414,34 @@ theorem original_add_empty_child_lookup (w w' : World) (d : WG.Device)
     (ha : addr < 2 ^ rootWidth v4) (hc : cidr ≤ rootWidth v4) (hlt : n.cidr < cidr)
     (hm : prefixBits (rootWidth v4) n.cidr n.addr = prefixBits (rootWidth v4) n.cidr addr)
     (hbit : bit (rootWidth v4) n.cidr addr = side) (key : Nat) (hk : key < 2 ^ rootWidth v4)
-    (hreturn : (WG.add (rootSlot v4) (rootWidth v4) addr cidr (some pid)).run w = .ok (0, w')) :
+    (hreturn : ((WG.add (rootSlot v4) (rootWidth v4) addr cidr (some pid)).run w).run ambient = .ok ((0, w'), ambient')) :
     let old := Tree.fork n side .empty sibling
     let inserted := old.insertFresh (rootWidth v4) d.nextNode addr cidr pid
-    ∃ d' final, w'.k.wg = some d' ∧
-      (WG.findNode (rootValue d' v4) (rootWidth v4) key).run w' =
-        .ok ((inserted.tree.lookup (rootWidth v4) key).map Entry.id, final) ∧
+    ∃ d' final finalAmbient, w'.dev = some d' ∧
+      ((WG.liftAip (WG.findNode (rootValue d' v4) (rootWidth v4) key)).run w').run ambient' =
+        .ok (((inserted.tree.lookup (rootWidth v4) key).map Entry.id, final), finalAmbient) ∧
       Winner (rootWidth v4) key
         (inserted.binding :: old.entries.filter
           (fun e => e.prefixKey (rootWidth v4) != (cidr, prefixBits (rootWidth v4) cidr addr)))
-        (inserted.tree.lookup (rootWidth v4) key) ∧ final.k = w'.k := by
-  have outcome := original_add_empty_child_correct w w' d hd v4 n side sibling addr cidr pid p
+        (inserted.tree.lookup (rootWidth v4) key) ∧ final = w' := by
+  have outcome := original_add_empty_child_correct w w' ambient ambient' d hd v4 n side sibling addr cidr pid p
     hp hroot hb hbelow hparent hr hv ha hc hlt hm hbit .empty trivial 0 hreturn
   rcases outcome with hf | hs
   · simp [ENOMEM] at hf
   obtain ⟨_, hkernel, _, hroot', hrep, hvalid, _⟩ := hs
-  have hdev : w'.k.wg = some (gapInstalled d v4 n side sibling addr cidr pid p) := by
+  have hdev : w'.dev = some (gapInstalled d v4 n side sibling addr cidr pid p) := by
     rw [hkernel]
   have hw : rootWidth v4 = 32 ∨ rootWidth v4 = 128 := by cases v4 <;> simp [rootWidth]
-  obtain ⟨final, he, hframe⟩ := findNode_run w'
-    (gapInstalled d v4 n side sibling addr cidr pid p) (rootWidth v4) key hw hk hdev
+  obtain ⟨finalAmbient, he⟩ := findNode_lift_run w' ambient'
+    (gapInstalled d v4 n side sibling addr cidr pid p) hdev (rootWidth v4) key hw hk
     ((Tree.fork n side .empty sibling).insertFresh (rootWidth v4) d.nextNode addr cidr pid).tree
     (rootSlot v4) hrep hvalid
-  refine ⟨_, final, hdev, ?_, Tree.insertFresh_lookup_spec hv ha hc d.nextNode pid key, hframe⟩
+  refine ⟨_, w', finalAmbient, hdev, ?_,
+    Tree.insertFresh_lookup_spec hv ha hc d.nextNode pid key, rfl⟩
   simpa only [hroot', Tree.lookupId] using he
 
 /-- Original `add` into an empty child at any represented depth either
-refuses allocation without a Kernel change or installs the existing pure
+refuses allocation without a WGWorld change or installs the existing pure
 insertion result. The actual selected root, structural representation, local
 validity and duplicate-free node identifiers are retained. Premises explicitly
 supply the requested path, initial root linkage and whole-store freshness.
@@ -441,8 +450,8 @@ are framed. Separate dispatch, coherence and finite-call history contracts below
 cover those additional boundaries; whole device-command composition is supplied
 separately below, together with lifecycle and initialized Runner composition.
 Packet paths remain open. -/
-theorem original_add_context_empty_child_correct (w w' : World) (d : WG.Device)
-    (hd : w.k.wg = some d) (v4 : Bool) (c : Context) (n : NodeData) (side : Nat) (sibling : Tree)
+theorem original_add_context_empty_child_correct (w w' : WGWorld) (ambient ambient' : Ambient) (d : WG.Device)
+    (hd : w.dev = some d) (v4 : Bool) (c : Context) (n : NodeData) (side : Nat) (sibling : Tree)
     (addr cidr pid : Nat) (p : WG.Peer) (hp : d.peers[pid]? = some p)
     (hroot : rootValue d v4 = (c.plug (Tree.fork n side .empty sibling)).root)
     (hb : side < 2) (hbelow : NodesBelow d)
@@ -454,12 +463,12 @@ theorem original_add_context_empty_child_correct (w w' : World) (d : WG.Device)
     (hm : prefixBits (rootWidth v4) n.cidr n.addr = prefixBits (rootWidth v4) n.cidr addr)
     (hbit : bit (rootWidth v4) n.cidr addr = side)
     (other : Tree) (ho : RepAt d.nodes (rootWidth (!v4)) (rootSlot (!v4)) other) (result : Int)
-    (hreturn : (WG.add (rootSlot v4) (rootWidth v4) addr cidr (some pid)).run w = .ok (result, w')) :
+    (hreturn : ((WG.add (rootSlot v4) (rootWidth v4) addr cidr (some pid)).run w).run ambient = .ok ((result, w'), ambient')) :
     let installed := gapInstalledAt d v4 (c.slot (rootSlot v4)) n side sibling addr cidr pid p
     let inserted := (c.plug (Tree.fork n side .empty sibling)).insertFresh
       (rootWidth v4) d.nextNode addr cidr pid
-    (result = -ENOMEM ∧ w'.k = w.k) ∨
-      (result = 0 ∧ w'.k = { w.k with wg := some installed } ∧ NodesBelow installed ∧
+    (result = -ENOMEM ∧ w' = w) ∨
+      (result = 0 ∧ w' = { w with dev := some installed } ∧ NodesBelow installed ∧
         rootValue installed v4 = inserted.tree.root ∧
         RepAt installed.nodes (rootWidth v4) (rootSlot v4) inserted.tree ∧
         inserted.tree.Valid (rootWidth v4) ∧ inserted.tree.nodeIds.Nodup ∧
@@ -473,8 +482,8 @@ original lookup starts at the actual resulting selected root, terminates, and
 returns a longest matching binding in the independently updated flat list.
 This is one mutation case with explicit structural premises, not a general
 configuration-history or packet-admission theorem. -/
-theorem original_add_context_empty_child_lookup (w w' : World) (d : WG.Device)
-    (hd : w.k.wg = some d) (v4 : Bool) (c : Context) (n : NodeData) (side : Nat) (sibling : Tree)
+theorem original_add_context_empty_child_lookup (w w' : WGWorld) (ambient ambient' : Ambient) (d : WG.Device)
+    (hd : w.dev = some d) (v4 : Bool) (c : Context) (n : NodeData) (side : Nat) (sibling : Tree)
     (addr cidr pid : Nat) (p : WG.Peer) (hp : d.peers[pid]? = some p)
     (hroot : rootValue d v4 = (c.plug (Tree.fork n side .empty sibling)).root)
     (hb : side < 2) (hbelow : NodesBelow d)
@@ -485,29 +494,30 @@ theorem original_add_context_empty_child_lookup (w w' : World) (d : WG.Device)
     (hf : c.Follows (rootWidth v4) addr cidr) (hlt : n.cidr < cidr)
     (hm : prefixBits (rootWidth v4) n.cidr n.addr = prefixBits (rootWidth v4) n.cidr addr)
     (hbit : bit (rootWidth v4) n.cidr addr = side) (key : Nat) (hk : key < 2 ^ rootWidth v4)
-    (hreturn : (WG.add (rootSlot v4) (rootWidth v4) addr cidr (some pid)).run w = .ok (0, w')) :
+    (hreturn : ((WG.add (rootSlot v4) (rootWidth v4) addr cidr (some pid)).run w).run ambient = .ok ((0, w'), ambient')) :
     let old := c.plug (Tree.fork n side .empty sibling)
     let inserted := old.insertFresh (rootWidth v4) d.nextNode addr cidr pid
-    ∃ d' final, w'.k.wg = some d' ∧
-      (WG.findNode (rootValue d' v4) (rootWidth v4) key).run w' =
-        .ok ((inserted.tree.lookup (rootWidth v4) key).map Entry.id, final) ∧
+    ∃ d' final finalAmbient, w'.dev = some d' ∧
+      ((WG.liftAip (WG.findNode (rootValue d' v4) (rootWidth v4) key)).run w').run ambient' =
+        .ok (((inserted.tree.lookup (rootWidth v4) key).map Entry.id, final), finalAmbient) ∧
       Winner (rootWidth v4) key
         (inserted.binding :: old.entries.filter
           (fun e => e.prefixKey (rootWidth v4) != (cidr, prefixBits (rootWidth v4) cidr addr)))
-        (inserted.tree.lookup (rootWidth v4) key) ∧ final.k = w'.k := by
-  have outcome := original_add_context_empty_child_correct w w' d hd v4 c n side sibling addr cidr pid p
+        (inserted.tree.lookup (rootWidth v4) key) ∧ final = w' := by
+  have outcome := original_add_context_empty_child_correct w w' ambient ambient' d hd v4 c n side sibling addr cidr pid p
     hp hroot hb hbelow hnodup hr hv ha hc hf hlt hm hbit .empty trivial 0 hreturn
   rcases outcome with hfail | hs
   · simp [ENOMEM] at hfail
   obtain ⟨_, hkernel, _, hroot', hrep, hvalid, _⟩ := hs
-  have hdev : w'.k.wg = some (gapInstalledAt d v4 (c.slot (rootSlot v4)) n side sibling addr cidr pid p) := by
+  have hdev : w'.dev = some (gapInstalledAt d v4 (c.slot (rootSlot v4)) n side sibling addr cidr pid p) := by
     rw [hkernel]
   have hw : rootWidth v4 = 32 ∨ rootWidth v4 = 128 := by cases v4 <;> simp [rootWidth]
-  obtain ⟨final, he, hframe⟩ := findNode_run w'
-    (gapInstalledAt d v4 (c.slot (rootSlot v4)) n side sibling addr cidr pid p) (rootWidth v4) key hw hk hdev
+  obtain ⟨finalAmbient, he⟩ := findNode_lift_run w' ambient'
+    (gapInstalledAt d v4 (c.slot (rootSlot v4)) n side sibling addr cidr pid p) hdev (rootWidth v4) key hw hk
     ((c.plug (Tree.fork n side .empty sibling)).insertFresh (rootWidth v4) d.nextNode addr cidr pid).tree
     (rootSlot v4) hrep hvalid
-  refine ⟨_, final, hdev, ?_, Tree.insertFresh_lookup_spec hv ha hc d.nextNode pid key, hframe⟩
+  refine ⟨_, w', finalAmbient, hdev, ?_,
+    Tree.insertFresh_lookup_spec hv ha hc d.nextNode pid key, rfl⟩
   simpa only [hroot', Tree.lookupId] using he
 
 /-- The original configuration insertion wrapper for an empty child at any
@@ -516,8 +526,8 @@ Success retains the actual root linkage, pure insertion representation, local
 validity and duplicate-free node identifiers; refusal leaves only the sequence
 increment. Both root values and a supplied opposite-family representation are
 preserved. This does not claim coverage of other insertion cases or histories. -/
-theorem original_insert_context_empty_child_correct (w w' : World) (d : WG.Device)
-    (hd : w.k.wg = some d) (family : Nat) (c : Context) (n : NodeData) (side : Nat) (sibling : Tree)
+theorem original_insert_context_empty_child_correct (w w' : WGWorld) (ambient ambient' : Ambient) (d : WG.Device)
+    (hd : w.dev = some d) (family : Nat) (c : Context) (n : NodeData) (side : Nat) (sibling : Tree)
     (addr cidr pid : Nat) (p : WG.Peer) (hp : d.peers[pid]? = some p)
     (hroot : rootValue d (family == 4) = (c.plug (Tree.fork n side .empty sibling)).root)
     (hb : side < 2) (hbelow : NodesBelow d)
@@ -531,11 +541,11 @@ theorem original_insert_context_empty_child_correct (w w' : World) (d : WG.Devic
       prefixBits (rootWidth (family == 4)) n.cidr addr)
     (hbit : bit (rootWidth (family == 4)) n.cidr addr = side)
     (other : Tree) (ho : RepAt d.nodes (rootWidth (!(family == 4))) (rootSlot (!(family == 4))) other)
-    (result : Int) (hreturn : (WG.insert family addr cidr pid).run w = .ok (result, w')) :
+    (result : Int) (hreturn : ((WG.insert family addr cidr pid).run w).run ambient = .ok ((result, w'), ambient')) :
     let v4 := family == 4
     let inserted := (c.plug (Tree.fork n side .empty sibling)).insertFresh
       (rootWidth v4) d.nextNode addr cidr pid
-    ∃ d', w'.k = { w.k with wg := some d' } ∧ d'.peerAllowedips.seq = d.peerAllowedips.seq + 1 ∧
+    ∃ d', w' = { w with dev := some d' } ∧ d'.peerAllowedips.seq = d.peerAllowedips.seq + 1 ∧
       NodesBelow d' ∧ (∀ f, rootValue d' f = rootValue d f) ∧
       RepAt d'.nodes (rootWidth (!v4)) (rootSlot (!v4)) other ∧
       ((result = -ENOMEM ∧ d' = bumpSeq d) ∨
@@ -543,9 +553,9 @@ theorem original_insert_context_empty_child_correct (w w' : World) (d : WG.Devic
           rootValue d' v4 = inserted.tree.root ∧
           RepAt d'.nodes (rootWidth v4) (rootSlot v4) inserted.tree ∧
           inserted.tree.Valid (rootWidth v4) ∧ inserted.tree.nodeIds.Nodup ∧ d'.nextNode = d.nextNode + 1)) := by
-  rw [insert_run_bump w d hd family addr cidr pid] at hreturn
+  rw [insert_run_bump w ambient d hd family addr cidr pid] at hreturn
   have outcome := original_add_context_empty_child_correct
-    { w with k := { w.k with wg := some (bumpSeq d) } } w' (bumpSeq d) rfl (family == 4)
+    { w with dev := some (bumpSeq d) } w' ambient ambient' (bumpSeq d) rfl (family == 4)
     c n side sibling addr cidr pid p hp hroot hb hbelow hnodup hr hv ha hc hf hlt hm hbit other ho result hreturn
   rcases outcome with hfail | hs
   · refine ⟨bumpSeq d, hfail.2, rfl, hbelow, ?_, ho, .inl ⟨hfail.1, rfl⟩⟩
@@ -561,17 +571,17 @@ theorem original_insert_context_empty_child_correct (w w' : World) (d : WG.Devic
 is the source's fold over saved peer values, and every resident peer list is
 filtered pointwise. Resident identities and all allocation counters remain
 unchanged. This endpoint theorem does not claim internal-access coverage. -/
-theorem original_listDel_correct (w : World) (d : WG.Device) (hd : w.k.wg = some d) (id : Nat) :
-    ∃ w', (WG.listDel id).run w = .ok ((), w') ∧
-      w'.k = { w.k with wg := some (unlisted d id) } ∧
+theorem original_listDel_correct (w : WGWorld) (ambient : Ambient) (d : WG.Device) (hd : w.dev = some d) (id : Nat) :
+    ∃ w' ambient', ((WG.listDel id).run w).run ambient = .ok (((), w'), ambient') ∧
+      w' = { w with dev := some (unlisted d id) } ∧
       (∀ pid : Nat, (unlisted d id).peers[pid]? = (d.peers[pid]?).map (unlist id)) ∧
       (∀ pid : Nat, ((unlisted d id).peers[pid]?).map WG.Peer.internalId =
         (d.peers[pid]?).map WG.Peer.internalId) ∧
       (unlisted d id).nextPeer = d.nextPeer ∧ (unlisted d id).nextNode = d.nextNode ∧
       (unlisted d id).nextKeypairId = d.nextKeypairId ∧ (unlisted d id).nextSkb = d.nextSkb := by
-  obtain ⟨result, w', hr, _, hk⟩ := (Leanux.Proofs.Framing.total_iff_run _ _ _).mp
-    (listDel_wp w.k d hd id) w rfl
-  exact ⟨w', hr, hk, unlisted_get d id, unlisted_identity d id, rfl, rfl, rfl, rfl⟩
+  obtain ⟨result, w', ambient', hr, _, hk⟩ := (Leanux.Proofs.Framing.total_iff_run_ambient _ _ _).mp
+    (listDel_wp w d hd id) w ambient rfl
+  exact ⟨w', ambient', hr, hk, unlisted_get d id, unlisted_identity d id, rfl, rfl, rfl, rfl⟩
 
 /-- Original exact-prefix insertion terminates at any represented depth and
 refines the same pure insertion used for lookup correctness. It preserves the
@@ -580,8 +590,8 @@ peer list, and appends the ID once to the filtered target list. Previous
 ownership and coherent peer lists are not prerequisites. Root linkage,
 duplicate-free represented IDs and local validity are explicit premises;
 configuration histories and packet admission are separate obligations. -/
-theorem original_add_context_exact_correct (w : World) (d : WG.Device)
-    (hd : w.k.wg = some d) (v4 : Bool) (c : Context) (n : NodeData) (l r : Tree)
+theorem original_add_context_exact_correct (w : WGWorld) (ambient : Ambient) (d : WG.Device)
+    (hd : w.dev = some d) (v4 : Bool) (c : Context) (n : NodeData) (l r : Tree)
     (addr cidr pid : Nat) (p : WG.Peer) (hp : d.peers[pid]? = some p)
     (hroot : rootValue d v4 = (c.plug (.node n l r)).root)
     (hr : RepAt d.nodes (rootWidth v4) (rootSlot v4) (c.plug (.node n l r)))
@@ -593,8 +603,8 @@ theorem original_add_context_exact_correct (w : World) (d : WG.Device)
     (other : Tree) (ho : RepAt d.nodes (rootWidth (!v4)) (rootSlot (!v4)) other) :
     let installed := exactInstalled d n.id (encode (rootWidth v4) (c.slot (rootSlot v4)) n l r) pid p
     let inserted := (c.plug (.node n l r)).insertFresh (rootWidth v4) d.nextNode addr cidr pid
-    ∃ w', (WG.add (rootSlot v4) (rootWidth v4) addr cidr (some pid)).run w = .ok (0, w') ∧
-      w'.k = { w.k with wg := some installed } ∧
+    ∃ w' ambient', ((WG.add (rootSlot v4) (rootWidth v4) addr cidr (some pid)).run w).run ambient = .ok ((0, w'), ambient') ∧
+      w' = { w with dev := some installed } ∧
       rootValue installed v4 = inserted.tree.root ∧
       RepAt installed.nodes (rootWidth v4) (rootSlot v4) inserted.tree ∧
       inserted.tree.Valid (rootWidth v4) ∧ inserted.tree.nodeIds = (c.plug (.node n l r)).nodeIds ∧
@@ -611,8 +621,8 @@ theorem original_add_context_exact_correct (w : World) (d : WG.Device)
 /-- After original exact-prefix insertion, lookup from the actual resulting
 root terminates and satisfies the independent canonical-prefix replacement
 specification. The inserted binding retains the old stored address and ID. -/
-theorem original_add_context_exact_lookup (w : World) (d : WG.Device)
-    (hd : w.k.wg = some d) (v4 : Bool) (c : Context) (n : NodeData) (l r : Tree)
+theorem original_add_context_exact_lookup (w : WGWorld) (ambient : Ambient) (d : WG.Device)
+    (hd : w.dev = some d) (v4 : Bool) (c : Context) (n : NodeData) (l r : Tree)
     (addr cidr pid : Nat) (p : WG.Peer) (hp : d.peers[pid]? = some p)
     (hroot : rootValue d v4 = (c.plug (.node n l r)).root)
     (hr : RepAt d.nodes (rootWidth v4) (rootSlot v4) (c.plug (.node n l r)))
@@ -624,25 +634,25 @@ theorem original_add_context_exact_lookup (w : World) (d : WG.Device)
     (key : Nat) (hk : key < 2 ^ rootWidth v4) :
     let old := c.plug (.node n l r)
     let inserted := old.insertFresh (rootWidth v4) d.nextNode addr cidr pid
-    ∃ w' d' final,
-      (WG.add (rootSlot v4) (rootWidth v4) addr cidr (some pid)).run w = .ok (0, w') ∧
-      w'.k.wg = some d' ∧
-      (WG.findNode (rootValue d' v4) (rootWidth v4) key).run w' =
-        .ok ((inserted.tree.lookup (rootWidth v4) key).map Entry.id, final) ∧
+    ∃ w' ambient' d' final finalAmbient,
+      ((WG.add (rootSlot v4) (rootWidth v4) addr cidr (some pid)).run w).run ambient = .ok ((0, w'), ambient') ∧
+      w'.dev = some d' ∧
+      ((WG.liftAip (WG.findNode (rootValue d' v4) (rootWidth v4) key)).run w').run ambient' =
+        .ok (((inserted.tree.lookup (rootWidth v4) key).map Entry.id, final), finalAmbient) ∧
       Winner (rootWidth v4) key
         (inserted.binding :: old.entries.filter
           (fun e => e.prefixKey (rootWidth v4) != (cidr, prefixBits (rootWidth v4) cidr addr)))
-        (inserted.tree.lookup (rootWidth v4) key) ∧ final.k = w'.k := by
-  obtain ⟨w', hrun, hkernel, hroot', hrep, hvalid, _⟩ :=
-    original_add_context_exact_correct w d hd v4 c n l r addr cidr pid p hp hroot hr hv hnodup
+        (inserted.tree.lookup (rootWidth v4) key) ∧ final = w' := by
+  obtain ⟨w', ambient', hrun, hkernel, hroot', hrep, hvalid, _⟩ :=
+    original_add_context_exact_correct w ambient d hd v4 c n l r addr cidr pid p hp hroot hr hv hnodup
       ha hc hf hn hm .empty trivial
   let installed := exactInstalled d n.id (encode (rootWidth v4) (c.slot (rootSlot v4)) n l r) pid p
-  have hdev : w'.k.wg = some installed := by rw [hkernel]
+  have hdev : w'.dev = some installed := by rw [hkernel]
   have hw : rootWidth v4 = 32 ∨ rootWidth v4 = 128 := by cases v4 <;> simp [rootWidth]
-  obtain ⟨final, he, hframe⟩ := findNode_run w' installed (rootWidth v4) key hw hk hdev
+  obtain ⟨finalAmbient, he⟩ := findNode_lift_run w' ambient' installed hdev (rootWidth v4) key hw hk
     ((c.plug (.node n l r)).insertFresh (rootWidth v4) d.nextNode addr cidr pid).tree
     (rootSlot v4) hrep hvalid
-  refine ⟨w', installed, final, hrun, hdev, ?_, Tree.insertFresh_lookup_spec hv ha hc d.nextNode pid key, hframe⟩
+  refine ⟨w', ambient', installed, w', finalAmbient, hrun, hdev, ?_, Tree.insertFresh_lookup_spec hv ha hc d.nextNode pid key, rfl⟩
   change rootValue installed v4 = _ at hroot'
   rw [hroot']
   simpa only [Tree.lookupId] using he
@@ -650,8 +660,8 @@ theorem original_add_context_exact_lookup (w : World) (d : WG.Device)
 /-- The original family wrapper increments the sequence exactly once, then
 completes the exact-prefix update without allocating a node. The endpoint is
 the same owner replacement and peer-list movement used by the add theorem. -/
-theorem original_insert_context_exact_correct (w : World) (d : WG.Device)
-    (hd : w.k.wg = some d) (family : Nat) (c : Context) (n : NodeData) (l r : Tree)
+theorem original_insert_context_exact_correct (w : WGWorld) (ambient : Ambient) (d : WG.Device)
+    (hd : w.dev = some d) (family : Nat) (c : Context) (n : NodeData) (l r : Tree)
     (addr cidr pid : Nat) (p : WG.Peer) (hp : d.peers[pid]? = some p)
     (hroot : rootValue d (family == 4) = (c.plug (.node n l r)).root)
     (hr : RepAt d.nodes (rootWidth (family == 4)) (rootSlot (family == 4)) (c.plug (.node n l r)))
@@ -663,17 +673,17 @@ theorem original_insert_context_exact_correct (w : World) (d : WG.Device)
     let v4 := family == 4
     let installed := exactInstalled (bumpSeq d) n.id (encode (rootWidth v4) (c.slot (rootSlot v4)) n l r) pid p
     let inserted := (c.plug (.node n l r)).insertFresh (rootWidth v4) d.nextNode addr cidr pid
-    ∃ w', (WG.insert family addr cidr pid).run w = .ok (0, w') ∧
-      w'.k = { w.k with wg := some installed } ∧
+    ∃ w' ambient', ((WG.insert family addr cidr pid).run w).run ambient = .ok ((0, w'), ambient') ∧
+      w' = { w with dev := some installed } ∧
       installed.peerAllowedips.seq = d.peerAllowedips.seq + 1 ∧ installed.nextNode = d.nextNode ∧
       rootValue installed v4 = inserted.tree.root ∧
       RepAt installed.nodes (rootWidth v4) (rootSlot v4) inserted.tree ∧
       inserted.tree.Valid (rootWidth v4) ∧ inserted.tree.nodeIds.Nodup := by
-  obtain ⟨w', hrun, hkernel, hroot', hrep, hvalid, _, hnodup', _⟩ :=
-    original_add_context_exact_correct { w with k := { w.k with wg := some (bumpSeq d) } }
+  obtain ⟨w', ambient', hrun, hkernel, hroot', hrep, hvalid, _, hnodup', _⟩ :=
+    original_add_context_exact_correct { w with dev := some (bumpSeq d) } ambient
       (bumpSeq d) rfl (family == 4) c n l r addr cidr pid p hp hroot hr hv hnodup ha hc hf hn hm .empty trivial
-  refine ⟨w', ?_, hkernel, rfl, rfl, hroot', hrep, hvalid, hnodup'⟩
-  rw [insert_run_bump w d hd family addr cidr pid]
+  refine ⟨w', ambient', ?_, hkernel, rfl, rfl, hroot', hrep, hvalid, hnodup'⟩
+  rw [insert_run_bump w ambient d hd family addr cidr pid]
   exact hrun
 
 /-- Every normal return of original add at a nonempty selected root is one of:
@@ -682,8 +692,8 @@ installation of the source-shaped one-node or two-node graft. The represented
 input and actual root link justify traversal; the separate success theorem proves
 that either successful endpoint represents the pure inserted tree. A missing or
 rejected choice record may Stop and is not a normal allocation refusal. -/
-theorem original_add_root_graft_endpoints (w w' : World) (d : WG.Device)
-    (hd : w.k.wg = some d) (v4 : Bool) (n : NodeData) (l r : Tree)
+theorem original_add_root_graft_endpoints (w w' : WGWorld) (ambient ambient' : Ambient) (d : WG.Device)
+    (hd : w.dev = some d) (v4 : Bool) (n : NodeData) (l r : Tree)
     (addr cidr pid : Nat) (p : WG.Peer) (hp : d.peers[pid]? = some p)
     (hroot : rootValue d v4 = some n.id) (hb : NodesBelow d)
     (hr : RepAt d.nodes (rootWidth v4) (rootSlot v4) (.node n l r))
@@ -691,11 +701,11 @@ theorem original_add_root_graft_endpoints (w w' : World) (d : WG.Device)
     (ha : addr < 2 ^ rootWidth v4) (hc : cidr ≤ rootWidth v4)
     (hstop : ¬ (n.cidr ≤ cidr ∧ prefixBits (rootWidth v4) n.cidr n.addr =
       prefixBits (rootWidth v4) n.cidr addr)) (result : Int)
-    (hreturn : (WG.add (rootSlot v4) (rootWidth v4) addr cidr (some pid)).run w = .ok (result, w')) :
-    (result = -ENOMEM ∧ w'.k = w.k) ∨
+    (hreturn : ((WG.add (rootSlot v4) (rootWidth v4) addr cidr (some pid)).run w).run ambient = .ok ((result, w'), ambient')) :
+    (result = -ENOMEM ∧ w' = w) ∨
       (result = -ENOMEM ∧ min cidr (common (rootWidth v4) n.addr addr) ≠ cidr ∧
-        w'.k = { w.k with wg := some (graftRolledBack d (rootWidth v4) addr cidr pid p) }) ∨
-      (result = 0 ∧ w'.k = { w.k with wg := some (graftInstalled d v4 n.id
+        w' = { w with dev := some (graftRolledBack d (rootWidth v4) addr cidr pid p) }) ∨
+      (result = 0 ∧ w' = { w with dev := some (graftInstalled d v4 n.id
         (encode (rootWidth v4) (rootSlot v4) n l r) addr cidr pid p) }) := by
   apply case_add_root_graft_endpoints <;> assumption
 
@@ -726,8 +736,8 @@ theorem original_root_graft_rollback_effects (d : WG.Device) (width addr cidr pi
 normal endpoint retains that increment, including either allocation refusal.
 Success endpoints are exact source updates. The separate success theorem gives
 pure-tree refinement; general configuration-history composition remains open. -/
-theorem original_insert_root_graft_endpoints (w w' : World) (d : WG.Device)
-    (hd : w.k.wg = some d) (family : Nat) (n : NodeData) (l r : Tree)
+theorem original_insert_root_graft_endpoints (w w' : WGWorld) (ambient ambient' : Ambient) (d : WG.Device)
+    (hd : w.dev = some d) (family : Nat) (n : NodeData) (l r : Tree)
     (addr cidr pid : Nat) (p : WG.Peer) (hp : d.peers[pid]? = some p)
     (hroot : rootValue d (family == 4) = some n.id) (hb : NodesBelow d)
     (hr : RepAt d.nodes (rootWidth (family == 4)) (rootSlot (family == 4)) (.node n l r))
@@ -735,17 +745,17 @@ theorem original_insert_root_graft_endpoints (w w' : World) (d : WG.Device)
     (ha : addr < 2 ^ rootWidth (family == 4)) (hc : cidr ≤ rootWidth (family == 4))
     (hstop : ¬ (n.cidr ≤ cidr ∧ prefixBits (rootWidth (family == 4)) n.cidr n.addr =
       prefixBits (rootWidth (family == 4)) n.cidr addr)) (result : Int)
-    (hreturn : (WG.insert family addr cidr pid).run w = .ok (result, w')) :
+    (hreturn : ((WG.insert family addr cidr pid).run w).run ambient = .ok ((result, w'), ambient')) :
     let v4 := family == 4
-    ∃ d', w'.k = { w.k with wg := some d' } ∧ d'.peerAllowedips.seq = d.peerAllowedips.seq + 1 ∧
+    ∃ d', w' = { w with dev := some d' } ∧ d'.peerAllowedips.seq = d.peerAllowedips.seq + 1 ∧
       ((result = -ENOMEM ∧ d' = bumpSeq d) ∨
         (result = -ENOMEM ∧ min cidr (common (rootWidth v4) n.addr addr) ≠ cidr ∧
           d' = graftRolledBack (bumpSeq d) (rootWidth v4) addr cidr pid p) ∨
         (result = 0 ∧ d' = graftInstalled (bumpSeq d) v4 n.id
           (encode (rootWidth v4) (rootSlot v4) n l r) addr cidr pid p)) := by
-  rw [insert_run_bump w d hd family addr cidr pid] at hreturn
+  rw [insert_run_bump w ambient d hd family addr cidr pid] at hreturn
   have outcome := original_add_root_graft_endpoints
-    { w with k := { w.k with wg := some (bumpSeq d) } } w' (bumpSeq d) rfl
+    { w with dev := some (bumpSeq d) } w' ambient ambient' (bumpSeq d) rfl
     (family == 4) n l r addr cidr pid p hp hroot hb hr hv ha hc hstop result hreturn
   rcases outcome with hf | hf | hs
   · exact ⟨bumpSeq d, hf.2, rfl, .inl ⟨hf.1, rfl⟩⟩
@@ -761,8 +771,8 @@ bound and a supplied opposite-family representation are preserved. Compression
 is preserved when present initially. Owners may be absent from the peer store;
 only the target peer must be resident. This is one insertion case, not a general
 configuration-history or packet-admission theorem. -/
-theorem original_add_root_graft_correct (w w' : World) (d : WG.Device)
-    (hd : w.k.wg = some d) (v4 : Bool) (n : NodeData) (l r : Tree)
+theorem original_add_root_graft_correct (w w' : WGWorld) (ambient ambient' : Ambient) (d : WG.Device)
+    (hd : w.dev = some d) (v4 : Bool) (n : NodeData) (l r : Tree)
     (addr cidr pid : Nat) (p : WG.Peer) (hp : d.peers[pid]? = some p)
     (hroot : rootValue d v4 = some n.id) (hb : NodesBelow d)
     (hr : RepAt d.nodes (rootWidth v4) (rootSlot v4) (.node n l r))
@@ -772,10 +782,10 @@ theorem original_add_root_graft_correct (w w' : World) (d : WG.Device)
     (hstop : ¬ (n.cidr ≤ cidr ∧ prefixBits (rootWidth v4) n.cidr n.addr =
       prefixBits (rootWidth v4) n.cidr addr))
     (other : Tree) (ho : RepAt d.nodes (rootWidth (!v4)) (rootSlot (!v4)) other)
-    (hreturn : (WG.add (rootSlot v4) (rootWidth v4) addr cidr (some pid)).run w = .ok (0, w')) :
+    (hreturn : ((WG.add (rootSlot v4) (rootWidth v4) addr cidr (some pid)).run w).run ambient = .ok ((0, w'), ambient')) :
     let inserted := (Tree.node n l r).insertFresh (rootWidth v4) d.nextNode addr cidr pid
     let installed := graftInstalled d v4 n.id (encode (rootWidth v4) (rootSlot v4) n l r) addr cidr pid p
-    w'.k = { w.k with wg := some installed } ∧ NodesBelow installed ∧
+    w' = { w with dev := some installed } ∧ NodesBelow installed ∧
       rootValue installed v4 = inserted.tree.root ∧
       RepAt installed.nodes (rootWidth v4) (rootSlot v4) inserted.tree ∧
       inserted.tree.Valid (rootWidth v4) ∧ inserted.tree.nodeIds.Nodup ∧
@@ -790,8 +800,8 @@ theorem original_add_root_graft_correct (w w' : World) (d : WG.Device)
 at the actual resulting device root, terminates, and returns a longest-prefix
 winner in the independently updated flat binding list. The result retains raw
 owner labels and does not assert their lifetime or packet-admission properties. -/
-theorem original_add_root_graft_lookup (w w' : World) (d : WG.Device)
-    (hd : w.k.wg = some d) (v4 : Bool) (n : NodeData) (l r : Tree)
+theorem original_add_root_graft_lookup (w w' : WGWorld) (ambient ambient' : Ambient) (d : WG.Device)
+    (hd : w.dev = some d) (v4 : Bool) (n : NodeData) (l r : Tree)
     (addr cidr pid : Nat) (p : WG.Peer) (hp : d.peers[pid]? = some p)
     (hroot : rootValue d v4 = some n.id) (hb : NodesBelow d)
     (hr : RepAt d.nodes (rootWidth v4) (rootSlot v4) (.node n l r))
@@ -800,25 +810,25 @@ theorem original_add_root_graft_lookup (w w' : World) (d : WG.Device)
     (ha : addr < 2 ^ rootWidth v4) (hc : cidr ≤ rootWidth v4)
     (hstop : ¬ (n.cidr ≤ cidr ∧ prefixBits (rootWidth v4) n.cidr n.addr =
       prefixBits (rootWidth v4) n.cidr addr)) (key : Nat) (hk : key < 2 ^ rootWidth v4)
-    (hreturn : (WG.add (rootSlot v4) (rootWidth v4) addr cidr (some pid)).run w = .ok (0, w')) :
+    (hreturn : ((WG.add (rootSlot v4) (rootWidth v4) addr cidr (some pid)).run w).run ambient = .ok ((0, w'), ambient')) :
     let old := Tree.node n l r
     let inserted := old.insertFresh (rootWidth v4) d.nextNode addr cidr pid
-    ∃ d' final, w'.k.wg = some d' ∧
-      (WG.findNode (rootValue d' v4) (rootWidth v4) key).run w' =
-        .ok ((inserted.tree.lookup (rootWidth v4) key).map Entry.id, final) ∧
+    ∃ d' final finalAmbient, w'.dev = some d' ∧
+      ((WG.liftAip (WG.findNode (rootValue d' v4) (rootWidth v4) key)).run w').run ambient' =
+        .ok (((inserted.tree.lookup (rootWidth v4) key).map Entry.id, final), finalAmbient) ∧
       Winner (rootWidth v4) key
         (inserted.binding :: old.entries.filter
           (fun e => e.prefixKey (rootWidth v4) != (cidr, prefixBits (rootWidth v4) cidr addr)))
-        (inserted.tree.lookup (rootWidth v4) key) ∧ final.k = w'.k := by
+        (inserted.tree.lookup (rootWidth v4) key) ∧ final = w' := by
   obtain ⟨hkernel, _, hroot', hrep, hvalid, _⟩ := original_add_root_graft_correct
-    w w' d hd v4 n l r addr cidr pid p hp hroot hb hr hn hv ha hc hstop .empty trivial hreturn
-  have hdev : w'.k.wg = some (graftInstalled d v4 n.id
+    w w' ambient ambient' d hd v4 n l r addr cidr pid p hp hroot hb hr hn hv ha hc hstop .empty trivial hreturn
+  have hdev : w'.dev = some (graftInstalled d v4 n.id
       (encode (rootWidth v4) (rootSlot v4) n l r) addr cidr pid p) := by rw [hkernel]
   have hw : rootWidth v4 = 32 ∨ rootWidth v4 = 128 := by cases v4 <;> simp [rootWidth]
-  obtain ⟨final, he, hframe⟩ := findNode_run w' _ (rootWidth v4) key hw hk hdev
+  obtain ⟨finalAmbient, he⟩ := findNode_lift_run w' ambient' _ hdev (rootWidth v4) key hw hk
     ((Tree.node n l r).insertFresh (rootWidth v4) d.nextNode addr cidr pid).tree
     (rootSlot v4) hrep hvalid
-  refine ⟨_, final, hdev, ?_, Tree.insertFresh_lookup_spec hv ha hc d.nextNode pid key, hframe⟩
+  refine ⟨_, w', finalAmbient, hdev, ?_, Tree.insertFresh_lookup_spec hv ha hc d.nextNode pid key, rfl⟩
   simpa only [hroot', Tree.lookupId] using he
 
 /-- A successful original configuration insert that grafts before the nonempty
@@ -827,8 +837,8 @@ exact allocation count, and preserves a supplied opposite-family representation.
 The premise is an actual successful original run. Both normal allocation refusals
 are classified separately by the endpoint theorem. Rejected or missing records
 may Stop and are outside these normal-return contracts. -/
-theorem original_insert_root_graft_correct (w w' : World) (d : WG.Device)
-    (hd : w.k.wg = some d) (family : Nat) (n : NodeData) (l r : Tree)
+theorem original_insert_root_graft_correct (w w' : WGWorld) (ambient ambient' : Ambient) (d : WG.Device)
+    (hd : w.dev = some d) (family : Nat) (n : NodeData) (l r : Tree)
     (addr cidr pid : Nat) (p : WG.Peer) (hp : d.peers[pid]? = some p)
     (hroot : rootValue d (family == 4) = some n.id) (hb : NodesBelow d)
     (hr : RepAt d.nodes (rootWidth (family == 4)) (rootSlot (family == 4)) (.node n l r))
@@ -838,10 +848,10 @@ theorem original_insert_root_graft_correct (w w' : World) (d : WG.Device)
     (hstop : ¬ (n.cidr ≤ cidr ∧ prefixBits (rootWidth (family == 4)) n.cidr n.addr =
       prefixBits (rootWidth (family == 4)) n.cidr addr))
     (other : Tree) (ho : RepAt d.nodes (rootWidth (!(family == 4))) (rootSlot (!(family == 4))) other)
-    (hreturn : (WG.insert family addr cidr pid).run w = .ok (0, w')) :
+    (hreturn : ((WG.insert family addr cidr pid).run w).run ambient = .ok ((0, w'), ambient')) :
     let v4 := family == 4
     let inserted := (Tree.node n l r).insertFresh (rootWidth v4) d.nextNode addr cidr pid
-    ∃ d', w'.k = { w.k with wg := some d' } ∧
+    ∃ d', w' = { w with dev := some d' } ∧
       d'.peerAllowedips.seq = d.peerAllowedips.seq + 1 ∧ NodesBelow d' ∧
       rootValue d' v4 = inserted.tree.root ∧
       RepAt d'.nodes (rootWidth v4) (rootSlot v4) inserted.tree ∧
@@ -850,10 +860,10 @@ theorem original_insert_root_graft_correct (w w' : World) (d : WG.Device)
       d'.nextNode = d.nextNode + inserted.allocations ∧
       rootValue d' (!v4) = rootValue d (!v4) ∧
       RepAt d'.nodes (rootWidth (!v4)) (rootSlot (!v4)) other := by
-  rw [insert_run_bump w d hd family addr cidr pid] at hreturn
+  rw [insert_run_bump w ambient d hd family addr cidr pid] at hreturn
   obtain ⟨hk, hb', hroot', hr', hv', hn', hcomp, hnext, hotherRoot, hseq, hother⟩ :=
     original_add_root_graft_correct
-      { w with k := { w.k with wg := some (bumpSeq d) } } w' (bumpSeq d) rfl
+      { w with dev := some (bumpSeq d) } w' ambient ambient' (bumpSeq d) rfl
       (family == 4) n l r addr cidr pid p hp hroot hb hr hn hv ha hc hstop other ho hreturn
   exact ⟨_, hk, hseq, hb', hroot', hr', hv', hn', hcomp, hnext, hotherRoot, hother⟩
 
@@ -863,7 +873,7 @@ allocation refusal, second refusal with frontier advance and all-peer filtering,
 or the installed child graft. Missing/rejected records can Stop and are outside
 this normal-return classification. Existing node owners need not be resident;
 the requested target peer is resident, and no peer-list coherence is assumed. -/
-theorem original_add_context_graft_endpoints (w w' : World) (d : WG.Device) (hd : w.k.wg = some d)
+theorem original_add_context_graft_endpoints (w w' : WGWorld) (ambient ambient' : Ambient) (d : WG.Device) (hd : w.dev = some d)
     (v4 : Bool) (c : Context) (parent : NodeData) (side : Nat) (sibling : Tree)
     (n : NodeData) (l r : Tree) (addr cidr pid : Nat) (p : WG.Peer)
     (hp : d.peers[pid]? = some p)
@@ -877,11 +887,11 @@ theorem original_add_context_graft_endpoints (w w' : World) (d : WG.Device) (hd 
     (hm : prefixBits (rootWidth v4) parent.cidr parent.addr = prefixBits (rootWidth v4) parent.cidr addr)
     (hbit : bit (rootWidth v4) parent.cidr addr = side)
     (hstop : ¬ (n.cidr ≤ cidr ∧ prefixBits (rootWidth v4) n.cidr n.addr = prefixBits (rootWidth v4) n.cidr addr))
-    (ret : Int) (hreturn : (WG.add (rootSlot v4) (rootWidth v4) addr cidr (some pid)).run w = .ok (ret, w')) :
-    (ret = -ENOMEM ∧ w'.k = w.k) ∨
+    (ret : Int) (hreturn : ((WG.add (rootSlot v4) (rootWidth v4) addr cidr (some pid)).run w).run ambient = .ok ((ret, w'), ambient')) :
+    (ret = -ENOMEM ∧ w' = w) ∨
       (ret = -ENOMEM ∧ min cidr (common (rootWidth v4) n.addr addr) ≠ cidr ∧
-        w'.k = { w.k with wg := some (graftRolledBack d (rootWidth v4) addr cidr pid p) }) ∨
-      (ret = 0 ∧ w'.k = { w.k with wg := some (contextGraftInstalled d v4
+        w' = { w with dev := some (graftRolledBack d (rootWidth v4) addr cidr pid p) }) ∨
+      (ret = 0 ∧ w' = { w with dev := some (contextGraftInstalled d v4
         (c.slot (rootSlot v4)) parent side sibling n l r addr cidr pid p) }) := by
   apply case_add_context_graft_endpoints <;> assumption
 
@@ -890,7 +900,7 @@ the existing pure insertion, with exact allocation count, both root values,
 whole-store freshness and a supplied opposite-family representation preserved.
 Validity and distinct node identifiers are structural input premises; orphan
 owner labels are permitted. This does not yet close complete configuration histories. -/
-theorem original_add_context_graft_correct (w w' : World) (d : WG.Device) (hd : w.k.wg = some d)
+theorem original_add_context_graft_correct (w w' : WGWorld) (ambient ambient' : Ambient) (d : WG.Device) (hd : w.dev = some d)
     (v4 : Bool) (c : Context) (parent : NodeData) (side : Nat) (sibling : Tree)
     (n : NodeData) (l r : Tree) (addr cidr pid : Nat) (p : WG.Peer)
     (hp : d.peers[pid]? = some p)
@@ -905,11 +915,11 @@ theorem original_add_context_graft_correct (w w' : World) (d : WG.Device) (hd : 
     (hbit : bit (rootWidth v4) parent.cidr addr = side)
     (hstop : ¬ (n.cidr ≤ cidr ∧ prefixBits (rootWidth v4) n.cidr n.addr = prefixBits (rootWidth v4) n.cidr addr))
     (other : Tree) (ho : RepAt d.nodes (rootWidth (!v4)) (rootSlot (!v4)) other)
-    (hreturn : (WG.add (rootSlot v4) (rootWidth v4) addr cidr (some pid)).run w = .ok (0, w')) :
+    (hreturn : ((WG.add (rootSlot v4) (rootWidth v4) addr cidr (some pid)).run w).run ambient = .ok ((0, w'), ambient')) :
     let old := c.plug (Tree.fork parent side (.node n l r) sibling)
     let inserted := old.insertFresh (rootWidth v4) d.nextNode addr cidr pid
     let installed := contextGraftInstalled d v4 (c.slot (rootSlot v4)) parent side sibling n l r addr cidr pid p
-    w'.k = { w.k with wg := some installed } ∧ NodesBelow installed ∧
+    w' = { w with dev := some installed } ∧ NodesBelow installed ∧
       rootValue installed v4 = inserted.tree.root ∧
       RepAt installed.nodes (rootWidth v4) (rootSlot v4) inserted.tree ∧
       inserted.tree.Valid (rootWidth v4) ∧ inserted.tree.nodeIds.Nodup ∧
@@ -924,7 +934,7 @@ theorem original_add_context_graft_correct (w w' : World) (d : WG.Device) (hd : 
 resulting device root terminates with a longest-prefix winner for the independently
 updated flat bindings. This is raw owner-label routing, not owner lifetime or
 packet-delivery authorization. -/
-theorem original_add_context_graft_lookup (w w' : World) (d : WG.Device) (hd : w.k.wg = some d)
+theorem original_add_context_graft_lookup (w w' : WGWorld) (ambient ambient' : Ambient) (d : WG.Device) (hd : w.dev = some d)
     (v4 : Bool) (c : Context) (parent : NodeData) (side : Nat) (sibling : Tree)
     (n : NodeData) (l r : Tree) (addr cidr pid : Nat) (p : WG.Peer)
     (hp : d.peers[pid]? = some p)
@@ -939,31 +949,31 @@ theorem original_add_context_graft_lookup (w w' : World) (d : WG.Device) (hd : w
     (hbit : bit (rootWidth v4) parent.cidr addr = side)
     (hstop : ¬ (n.cidr ≤ cidr ∧ prefixBits (rootWidth v4) n.cidr n.addr = prefixBits (rootWidth v4) n.cidr addr))
     (key : Nat) (hk : key < 2 ^ rootWidth v4)
-    (hreturn : (WG.add (rootSlot v4) (rootWidth v4) addr cidr (some pid)).run w = .ok (0, w')) :
+    (hreturn : ((WG.add (rootSlot v4) (rootWidth v4) addr cidr (some pid)).run w).run ambient = .ok ((0, w'), ambient')) :
     let old := c.plug (Tree.fork parent side (.node n l r) sibling)
     let inserted := old.insertFresh (rootWidth v4) d.nextNode addr cidr pid
-    ∃ d' final, w'.k.wg = some d' ∧
-      (WG.findNode (rootValue d' v4) (rootWidth v4) key).run w' =
-        .ok ((inserted.tree.lookup (rootWidth v4) key).map Entry.id, final) ∧
+    ∃ d' final finalAmbient, w'.dev = some d' ∧
+      ((WG.liftAip (WG.findNode (rootValue d' v4) (rootWidth v4) key)).run w').run ambient' =
+        .ok (((inserted.tree.lookup (rootWidth v4) key).map Entry.id, final), finalAmbient) ∧
       Winner (rootWidth v4) key
         (inserted.binding :: old.entries.filter
           (fun e => e.prefixKey (rootWidth v4) != (cidr, prefixBits (rootWidth v4) cidr addr)))
-        (inserted.tree.lookup (rootWidth v4) key) ∧ final.k = w'.k := by
+        (inserted.tree.lookup (rootWidth v4) key) ∧ final = w' := by
   obtain ⟨hkernel, _, hroot', hrep, hvalid, _⟩ := original_add_context_graft_correct
-    w w' d hd v4 c parent side sibling n l r addr cidr pid p hp hroot hb hbelow hr hv hn ha hc hf hlt hm hbit hstop .empty trivial hreturn
-  have hdev : w'.k.wg = some (contextGraftInstalled d v4
+    w w' ambient ambient' d hd v4 c parent side sibling n l r addr cidr pid p hp hroot hb hbelow hr hv hn ha hc hf hlt hm hbit hstop .empty trivial hreturn
+  have hdev : w'.dev = some (contextGraftInstalled d v4
       (c.slot (rootSlot v4)) parent side sibling n l r addr cidr pid p) := by rw [hkernel]
   have hw : rootWidth v4 = 32 ∨ rootWidth v4 = 128 := by cases v4 <;> simp [rootWidth]
-  obtain ⟨final, he, hframe⟩ := findNode_run w' _ (rootWidth v4) key hw hk hdev
+  obtain ⟨finalAmbient, he⟩ := findNode_lift_run w' ambient' _ hdev (rootWidth v4) key hw hk
     ((c.plug (Tree.fork parent side (.node n l r) sibling)).insertFresh (rootWidth v4) d.nextNode addr cidr pid).tree
     (rootSlot v4) hrep hvalid
-  refine ⟨_, final, hdev, ?_, Tree.insertFresh_lookup_spec hv ha hc d.nextNode pid key, hframe⟩
+  refine ⟨_, w', finalAmbient, hdev, ?_, Tree.insertFresh_lookup_spec hv ha hc d.nextNode pid key, rfl⟩
   simpa only [hroot', Tree.lookupId] using he
 
 /-- Original insert below an arbitrary represented path has the same successful
 graft refinement and advances the allowed-IP sequence once. The run premise is
 original normal success; records that Stop are not classified as allocation refusals. -/
-theorem original_insert_context_graft_correct (w w' : World) (d : WG.Device) (hd : w.k.wg = some d)
+theorem original_insert_context_graft_correct (w w' : WGWorld) (ambient ambient' : Ambient) (d : WG.Device) (hd : w.dev = some d)
     (family : Nat) (c : Context) (parent : NodeData) (side : Nat) (sibling : Tree)
     (n : NodeData) (l r : Tree) (addr cidr pid : Nat) (p : WG.Peer)
     (hp : d.peers[pid]? = some p)
@@ -978,11 +988,11 @@ theorem original_insert_context_graft_correct (w w' : World) (d : WG.Device) (hd
     (hbit : bit (rootWidth (family == 4)) parent.cidr addr = side)
     (hstop : ¬ (n.cidr ≤ cidr ∧ prefixBits (rootWidth (family == 4)) n.cidr n.addr = prefixBits (rootWidth (family == 4)) n.cidr addr))
     (other : Tree) (ho : RepAt d.nodes (rootWidth (!(family == 4))) (rootSlot (!(family == 4))) other)
-    (hreturn : (WG.insert family addr cidr pid).run w = .ok (0, w')) :
+    (hreturn : ((WG.insert family addr cidr pid).run w).run ambient = .ok ((0, w'), ambient')) :
     let v4 := family == 4
     let old := c.plug (Tree.fork parent side (.node n l r) sibling)
     let inserted := old.insertFresh (rootWidth v4) d.nextNode addr cidr pid
-    ∃ d', w'.k = { w.k with wg := some d' } ∧
+    ∃ d', w' = { w with dev := some d' } ∧
       d'.peerAllowedips.seq = d.peerAllowedips.seq + 1 ∧ NodesBelow d' ∧
       rootValue d' v4 = inserted.tree.root ∧
       RepAt d'.nodes (rootWidth v4) (rootSlot v4) inserted.tree ∧
@@ -991,43 +1001,43 @@ theorem original_insert_context_graft_correct (w w' : World) (d : WG.Device) (hd
       d'.nextNode = d.nextNode + inserted.allocations ∧
       rootValue d' (!v4) = rootValue d (!v4) ∧
       RepAt d'.nodes (rootWidth (!v4)) (rootSlot (!v4)) other := by
-  rw [insert_run_bump w d hd family addr cidr pid] at hreturn
+  rw [insert_run_bump w ambient d hd family addr cidr pid] at hreturn
   obtain ⟨hk, hb', hroot', hr', hv', hn', hcomp, hnext, hotherRoot, hseq, hother⟩ :=
     original_add_context_graft_correct
-      { w with k := { w.k with wg := some (bumpSeq d) } } w' (bumpSeq d) rfl
+      { w with dev := some (bumpSeq d) } w' ambient ambient' (bumpSeq d) rfl
       (family == 4) c parent side sibling n l r addr cidr pid p hp hroot hb hbelow hr hv hn ha hc hf hlt hm hbit hstop other ho hreturn
   exact ⟨_, hk, hseq, hb', hroot', hr', hv', hn', hcomp, hnext, hotherRoot, hother⟩
 
 /-- Every normal original add return on a represented IPv4/IPv6 tree is
 classified without caller-supplied placement/path premises. First refusal leaves
-the Kernel unchanged; second refusal retains the exact rollback device, one
+WGWorld unchanged; second refusal retains the exact rollback device, one
 consumed node identifier and peer-list filtering. Success supplies the common
 structural pure-insertion consequences in Inserted, not a unified exact Device
 update. Old owner labels may be orphaned; the requested target peer is resident.
 Missing/rejected records may Stop and are outside this normal-return claim. -/
-theorem original_add_all_cases (w w' : World) (d : WG.Device) (hd : w.k.wg = some d)
+theorem original_add_all_cases (w w' : WGWorld) (ambient ambient' : Ambient) (d : WG.Device) (hd : w.dev = some d)
     (v4 : Bool) (t other : Tree) (addr cidr pid : Nat) (p : WG.Peer)
     (hp : d.peers[pid]? = some p) (hroot : rootValue d v4 = t.root)
     (hbelow : NodesBelow d) (hr : RepAt d.nodes (rootWidth v4) (rootSlot v4) t)
     (hv : t.Valid (rootWidth v4)) (hn : t.nodeIds.Nodup)
     (ha : addr < 2 ^ rootWidth v4) (hc : cidr ≤ rootWidth v4)
     (ho : RepAt d.nodes (rootWidth (!v4)) (rootSlot (!v4)) other) (ret : Int)
-    (hrun : (WG.add (rootSlot v4) (rootWidth v4) addr cidr (some pid)).run w = .ok (ret, w')) :
-    AddOutcome w.k w'.k d v4 t other addr cidr pid p ret := by
+    (hrun : ((WG.add (rootSlot v4) (rootWidth v4) addr cidr (some pid)).run w).run ambient = .ok ((ret, w'), ambient')) :
+    AddOutcome w w' d v4 t other addr cidr pid p ret := by
   apply add_outcome <;> assumption
 
 /-- Either normal allocator refusal preserves every node lookup and both
 root values. Its frontier/peer-map effects are exactly unchanged values or one
 consumed identifier with all-peer filtering of that identifier. No peer-list
 freshness, structural TreeMap equality, or full-World rollback is asserted. -/
-theorem original_add_allocation_refusal (w w' : World) (d : WG.Device) (hd : w.k.wg = some d)
+theorem original_add_allocation_refusal (w w' : WGWorld) (ambient ambient' : Ambient) (d : WG.Device) (hd : w.dev = some d)
     (v4 : Bool) (t : Tree) (addr cidr pid : Nat) (p : WG.Peer)
     (hp : d.peers[pid]? = some p) (hroot : rootValue d v4 = t.root)
     (hbelow : NodesBelow d) (hr : RepAt d.nodes (rootWidth v4) (rootSlot v4) t)
     (hv : t.Valid (rootWidth v4)) (hn : t.nodeIds.Nodup)
     (ha : addr < 2 ^ rootWidth v4) (hc : cidr ≤ rootWidth v4)
-    (hrun : (WG.add (rootSlot v4) (rootWidth v4) addr cidr (some pid)).run w = .ok (-ENOMEM, w')) :
-    ∃ out, w'.k = { w.k with wg := some out } ∧ NodesBelow out ∧
+    (hrun : ((WG.add (rootSlot v4) (rootWidth v4) addr cidr (some pid)).run w).run ambient = .ok ((-ENOMEM, w'), ambient')) :
+    ∃ out, w' = { w with dev := some out } ∧ NodesBelow out ∧
       out.peerAllowedips.seq = d.peerAllowedips.seq ∧
       (∀ f, rootValue out f = rootValue d f) ∧
       (∀ id : Nat, out.nodes[id]? = d.nodes[id]?) ∧
@@ -1042,7 +1052,7 @@ advance in every normal branch. The outcome classifier derives all placement
 cases from the represented input and preserves the distinction between first
 refusal and second-allocation rollback. Family 4 selects IPv4; other family
 values follow the original IPv6 arm. Record Stops remain possible. -/
-theorem original_insert_all_cases (w w' : World) (d : WG.Device) (hd : w.k.wg = some d)
+theorem original_insert_all_cases (w w' : WGWorld) (ambient ambient' : Ambient) (d : WG.Device) (hd : w.dev = some d)
     (family : Nat) (t other : Tree) (addr cidr pid : Nat) (p : WG.Peer)
     (hp : d.peers[pid]? = some p) (hroot : rootValue d (family == 4) = t.root)
     (hbelow : NodesBelow d)
@@ -1050,8 +1060,8 @@ theorem original_insert_all_cases (w w' : World) (d : WG.Device) (hd : w.k.wg = 
     (hv : t.Valid (rootWidth (family == 4))) (hn : t.nodeIds.Nodup)
     (ha : addr < 2 ^ rootWidth (family == 4)) (hc : cidr ≤ rootWidth (family == 4))
     (ho : RepAt d.nodes (rootWidth (!(family == 4))) (rootSlot (!(family == 4))) other)
-    (ret : Int) (hrun : (WG.insert family addr cidr pid).run w = .ok (ret, w')) :
-    AddOutcome { w.k with wg := some (bumpSeq d) } w'.k (bumpSeq d) (family == 4)
+    (ret : Int) (hrun : ((WG.insert family addr cidr pid).run w).run ambient = .ok ((ret, w'), ambient')) :
+    AddOutcome { w with dev := some (bumpSeq d) } w' (bumpSeq d) (family == 4)
       t other addr cidr pid p ret := by
   apply insert_outcome <;> assumption
 
@@ -1062,7 +1072,7 @@ selected root is linked to that tree; the opposite root value and any supplied
 opposite-family RepAt are preserved. The latter relation does not itself assert
 that the supplied tree was linked to the opposite root. No configuration-history,
 peer-list coherence, old-owner residency or packet-path premise is inferred. -/
-theorem original_insert_success (w w' : World) (d : WG.Device) (hd : w.k.wg = some d)
+theorem original_insert_success (w w' : WGWorld) (ambient ambient' : Ambient) (d : WG.Device) (hd : w.dev = some d)
     (family : Nat) (t other : Tree) (addr cidr pid : Nat) (p : WG.Peer)
     (hp : d.peers[pid]? = some p) (hroot : rootValue d (family == 4) = t.root)
     (hbelow : NodesBelow d)
@@ -1070,9 +1080,9 @@ theorem original_insert_success (w w' : World) (d : WG.Device) (hd : w.k.wg = so
     (hv : t.Valid (rootWidth (family == 4))) (hn : t.nodeIds.Nodup)
     (ha : addr < 2 ^ rootWidth (family == 4)) (hc : cidr ≤ rootWidth (family == 4))
     (ho : RepAt d.nodes (rootWidth (!(family == 4))) (rootSlot (!(family == 4))) other)
-    (hrun : (WG.insert family addr cidr pid).run w = .ok (0, w')) :
+    (hrun : ((WG.insert family addr cidr pid).run w).run ambient = .ok ((0, w'), ambient')) :
     let inserted := t.insertFresh (rootWidth (family == 4)) d.nextNode addr cidr pid
-    ∃ out, w'.k = { w.k with wg := some out } ∧
+    ∃ out, w' = { w with dev := some out } ∧
       out.peerAllowedips.seq = d.peerAllowedips.seq + 1 ∧
       Inserted (bumpSeq d) out (family == 4) t other addr cidr pid ∧
       inserted.tree.Valid (rootWidth (family == 4)) ∧ inserted.tree.nodeIds.Nodup ∧
@@ -1084,7 +1094,7 @@ findNode from the resulting device's actual selected root terminates and returns
 a longest-prefix winner for independently updated canonical flat bindings.
 All insertion cases are derived internally. Owners remain raw peer labels;
 this is neither owner-lifetime safety nor packet-path authorization. -/
-theorem original_insert_longest_prefix (w w' : World) (d : WG.Device) (hd : w.k.wg = some d)
+theorem original_insert_longest_prefix (w w' : WGWorld) (ambient ambient' : Ambient) (d : WG.Device) (hd : w.dev = some d)
     (family : Nat) (t : Tree) (addr cidr pid : Nat) (p : WG.Peer)
     (hp : d.peers[pid]? = some p) (hroot : rootValue d (family == 4) = t.root)
     (hbelow : NodesBelow d)
@@ -1092,16 +1102,16 @@ theorem original_insert_longest_prefix (w w' : World) (d : WG.Device) (hd : w.k.
     (hv : t.Valid (rootWidth (family == 4))) (hn : t.nodeIds.Nodup)
     (ha : addr < 2 ^ rootWidth (family == 4)) (hc : cidr ≤ rootWidth (family == 4))
     (key : Nat) (hk : key < 2 ^ rootWidth (family == 4))
-    (hrun : (WG.insert family addr cidr pid).run w = .ok (0, w')) :
+    (hrun : ((WG.insert family addr cidr pid).run w).run ambient = .ok ((0, w'), ambient')) :
     let v4 := family == 4
     let inserted := t.insertFresh (rootWidth v4) d.nextNode addr cidr pid
-    ∃ out final, w'.k.wg = some out ∧
-      (WG.findNode (rootValue out v4) (rootWidth v4) key).run w' =
-        .ok ((inserted.tree.lookup (rootWidth v4) key).map Entry.id, final) ∧
+    ∃ out final finalAmbient, w'.dev = some out ∧
+      ((WG.liftAip (WG.findNode (rootValue out v4) (rootWidth v4) key)).run w').run ambient' =
+        .ok (((inserted.tree.lookup (rootWidth v4) key).map Entry.id, final), finalAmbient) ∧
       Winner (rootWidth v4) key
         (inserted.binding :: t.entries.filter
           (fun e => e.prefixKey (rootWidth v4) != (cidr, prefixBits (rootWidth v4) cidr addr)))
-        (inserted.tree.lookup (rootWidth v4) key) ∧ final.k = w'.k := by
+        (inserted.tree.lookup (rootWidth v4) key) ∧ final = w' := by
   apply insert_lookup <;> assumption
 
 /-- Pure removal filters exactly the owned entries with the requested node ID,
@@ -1178,44 +1188,44 @@ theorem original_removal_source_equation (pid : Nat) :
 /-- One original loop iteration with two nonempty child slots terminates,
 filters every peer list and clears only the target owner. Child residency is
 unnecessary in this arm; no saved-list coherence is inferred. -/
-theorem original_removal_binary_step (w : World) (d : WG.Device)
-    (hd : w.k.wg = some d) (id left right : Nat) (n : WG.AipNode)
+theorem original_removal_binary_step (w : WGWorld) (ambient : Ambient) (d : WG.Device)
+    (hd : w.dev = some d) (id left right : Nat) (n : WG.AipNode)
     (hn : d.nodes[id]? = some n) (hbits : n.bit = #[some left, some right]) :
-    ∃ w', (removeStep id).run w = .ok (.yield (), w') ∧
-      w'.k = { w.k with wg := some (removalCleared (unlisted d id) id n) } := by
-  obtain ⟨result, w', he, hx, hk⟩ := (Leanux.Proofs.Framing.total_iff_run _ _ _).mp
-    (removeStep_binary_wp w.k d hd id left right n hn hbits) w rfl
+    ∃ w' ambient', ((removeStep id).run w).run ambient = .ok ((.yield (), w'), ambient') ∧
+      w' = { w with dev := some (removalCleared (unlisted d id) id n) } := by
+  obtain ⟨result, w', ambient', he, hx, hk⟩ := (Leanux.Proofs.Framing.total_iff_run_ambient _ _ _).mp
+    (removeStep_binary_wp w d hd id left right n hn hbits) w ambient rfl
   subst result
-  exact ⟨w', he, hk⟩
+  exact ⟨w', ambient', he, hk⟩
 
 /-- A leaf whose saved parent tag selects a device root terminates with that
 root cleared and the target freed. The input root need not point at the target;
 this raw endpoint is not a whole-tree selection or configuration-history claim. -/
-theorem original_removal_root_leaf_step (w : World) (d : WG.Device)
-    (hd : w.k.wg = some d) (v4 : Bool) (id : Nat) (n : WG.AipNode)
+theorem original_removal_root_leaf_step (w : WGWorld) (ambient : Ambient) (d : WG.Device)
+    (hd : w.dev = some d) (v4 : Bool) (id : Nat) (n : WG.AipNode)
     (hn : d.nodes[id]? = some n) (hbits : n.bit = #[none, none])
     (hparent : n.parent = rootSlot v4) :
-    ∃ w', (removeStep id).run w = .ok (.yield (), w') ∧
-      w'.k = { w.k with wg := some (removalRootLeaf (unlisted d id) v4 id n) } := by
-  obtain ⟨result, w', he, hx, hk⟩ := (Leanux.Proofs.Framing.total_iff_run _ _ _).mp
-    (removeStep_root_leaf_wp w.k d hd v4 id n hn hbits hparent) w rfl
+    ∃ w' ambient', ((removeStep id).run w).run ambient = .ok ((.yield (), w'), ambient') ∧
+      w' = { w with dev := some (removalRootLeaf (unlisted d id) v4 id n) } := by
+  obtain ⟨result, w', ambient', he, hx, hk⟩ := (Leanux.Proofs.Framing.total_iff_run_ambient _ _ _).mp
+    (removeStep_root_leaf_wp w d hd v4 id n hn hbits hparent) w ambient rfl
   subst result
-  exact ⟨w', he, hk⟩
+  exact ⟨w', ambient', he, hk⟩
 
 /-- A root-tagged unary target terminates when its distinct child is resident.
 The exact endpoint promotes that child and changes only its backlink. Owners
 remain raw labels, including any orphan labels. -/
-theorem original_removal_root_unary_step (w : World) (d : WG.Device)
-    (hd : w.k.wg = some d) (v4 left : Bool) (id child : Nat) (n cn : WG.AipNode)
+theorem original_removal_root_unary_step (w : WGWorld) (ambient : Ambient) (d : WG.Device)
+    (hd : w.dev = some d) (v4 left : Bool) (id child : Nat) (n cn : WG.AipNode)
     (hn : d.nodes[id]? = some n) (hc : d.nodes[child]? = some cn) (hne : id ≠ child)
     (hbits : n.bit = if left then #[some child, none] else #[none, some child])
     (hparent : n.parent = rootSlot v4) :
-    ∃ w', (removeStep id).run w = .ok (.yield (), w') ∧
-      w'.k = { w.k with wg := some (removalRootUnary (unlisted d id) v4 id n child cn) } := by
-  obtain ⟨result, w', he, hx, hk⟩ := (Leanux.Proofs.Framing.total_iff_run _ _ _).mp
-    (removeStep_root_unary_wp w.k d hd v4 left id child n cn hn hc hne hbits hparent) w rfl
+    ∃ w' ambient', ((removeStep id).run w).run ambient = .ok ((.yield (), w'), ambient') ∧
+      w' = { w with dev := some (removalRootUnary (unlisted d id) v4 id n child cn) } := by
+  obtain ⟨result, w', ambient', he, hx, hk⟩ := (Leanux.Proofs.Framing.total_iff_run_ambient _ _ _).mp
+    (removeStep_root_unary_wp w d hd v4 left id child n cn hn hc hne hbits hparent) w ambient rfl
   subst result
-  exact ⟨w', he, hk⟩
+  exact ⟨w', ambient', he, hk⟩
 
 /-- Pointwise equations describe the entire resulting node map, including
 unrelated resident nodes, the retired target and the promoted child's backlink. -/
@@ -1278,73 +1288,74 @@ theorem local_removal_unary_representation (d : WG.Device) (v4 : Bool) (n c : No
 /-- The leaf/ownerless-parent prefix reaches the exact post-target-free
 continuation. This equation keeps later missing-sibling/grandparent Stops;
 no successful-tail premise or failed-prefix World is assumed. -/
-theorem original_removal_collapse_continuation (w : World) (d : WG.Device)
-    (hd : w.k.wg = some d) (id parent side : Nat) (n pn : WG.AipNode)
+theorem original_removal_collapse_continuation (w : WGWorld) (ambient : Ambient) (d : WG.Device)
+    (hd : w.dev = some d) (id parent side : Nat) (n pn : WG.AipNode)
     (hn : d.nodes[id]? = some n) (hp : d.nodes[parent]? = some pn)
     (hip : id ≠ parent) (hb : side ≤ 1) (howner : pn.peer = none)
     (hbits : n.bit = #[none, none]) (hparent : n.parent = .child parent side)
     (sibling : Option Nat) (hs : pn.bit[1-side]? = some sibling) :
-    (removeNodeBody id).run w = (removeParentTail parent sibling).run
-      { removalRecords w removalCollapseRecords with
-        k := { w.k with wg := some (removalLeafDetached d id n parent side pn) } } :=
-  removeNodeBody_leaf_collapse_run w d hd id parent side n pn hn hp hip hb howner hbits hparent sibling hs
+    ((removeNodeBody id).run w).run ambient =
+      ((removeParentTail parent sibling).run
+        { w with dev := some (removalLeafDetached d id n parent side pn) }).run
+          (removalRecords ambient removalCollapseRecords) :=
+  removeNodeBody_leaf_collapse_run w ambient d hd id parent side n pn hn hp hip hb howner hbits hparent sibling hs
 
 /-- Original nonroot unary removal is total under resident, distinct input
 snapshots and a valid parent-slot index. The raw endpoint does not require
 parent linkage, parent array length, owner residency or list coherence. -/
-theorem original_removal_child_unary_step (w : World) (d : WG.Device)
-    (hd : w.k.wg = some d) (left : Bool) (id parent side child : Nat) (n pn cn : WG.AipNode)
+theorem original_removal_child_unary_step (w : WGWorld) (ambient : Ambient) (d : WG.Device)
+    (hd : w.dev = some d) (left : Bool) (id parent side child : Nat) (n pn cn : WG.AipNode)
     (hn : d.nodes[id]? = some n) (hp : d.nodes[parent]? = some pn)
     (hc : d.nodes[child]? = some cn) (hip : id ≠ parent) (hic : id ≠ child)
     (hcp : child ≠ parent) (hb : side ≤ 1)
     (hbits : n.bit = if left then #[some child, none] else #[none, some child])
     (hparent : n.parent = .child parent side) :
-    ∃ w', (removeStep id).run w = .ok (.yield (), w') ∧
-      w'.k = { w.k with wg := some (removalChildUnary (unlisted d id) id n parent side pn child cn) } := by
-  obtain ⟨result, w', he, hx, hk⟩ := (Leanux.Proofs.Framing.total_iff_run _ _ _).mp
-    (removeStep_child_unary_wp w.k d hd left id parent side child n pn cn hn hp hc hip hic hcp hb hbits hparent) w rfl
+    ∃ w' ambient', ((removeStep id).run w).run ambient = .ok ((.yield (), w'), ambient') ∧
+      w' = { w with dev := some (removalChildUnary (unlisted d id) id n parent side pn child cn) } := by
+  obtain ⟨result, w', ambient', he, hx, hk⟩ := (Leanux.Proofs.Framing.total_iff_run_ambient _ _ _).mp
+    (removeStep_child_unary_wp w d hd left id parent side child n pn cn hn hp hc hip hic hcp hb hbits hparent) w ambient rfl
   subst result
-  exact ⟨w', he, hk⟩
+  exact ⟨w', ambient', he, hk⟩
 
 /-- The leaf's owned parent is reread after detachment and retained. Its
 raw owner label need not resolve to a resident peer. Every list is filtered
 before the target getter; both device roots remain unchanged. -/
-theorem original_removal_child_leaf_step (w : World) (d : WG.Device)
-    (hd : w.k.wg = some d) (id parent side : Nat) (n pn : WG.AipNode)
+theorem original_removal_child_leaf_step (w : WGWorld) (ambient : Ambient) (d : WG.Device)
+    (hd : w.dev = some d) (id parent side : Nat) (n pn : WG.AipNode)
     (hn : d.nodes[id]? = some n) (hp : d.nodes[parent]? = some pn)
     (hip : id ≠ parent) (hb : side ≤ 1) (howner : pn.peer.isSome)
     (hbits : n.bit = #[none, none]) (hparent : n.parent = .child parent side) :
-    ∃ w', (removeStep id).run w = .ok (.yield (), w') ∧
-      w'.k = { w.k with wg := some (removalLeafDetached (unlisted d id) id n parent side pn) } := by
-  obtain ⟨result, w', he, hx, hk⟩ := (Leanux.Proofs.Framing.total_iff_run _ _ _).mp
-    (removeStep_child_leaf_owned_wp w.k d hd id parent side n pn hn hp hip hb howner hbits hparent) w rfl
+    ∃ w' ambient', ((removeStep id).run w).run ambient = .ok ((.yield (), w'), ambient') ∧
+      w' = { w with dev := some (removalLeafDetached (unlisted d id) id n parent side pn) } := by
+  obtain ⟨result, w', ambient', he, hx, hk⟩ := (Leanux.Proofs.Framing.total_iff_run_ambient _ _ _).mp
+    (removeStep_child_leaf_owned_wp w d hd id parent side n pn hn hp hip hb howner hbits hparent) w ambient rfl
   subst result
-  exact ⟨w', he, hk⟩
+  exact ⟨w', ambient', he, hk⟩
 
 /-- An ownerless parent with a root tag is collapsed after target retirement.
 Both sibling-present and sibling-absent paths are included. The tag does not
 assert that the input root points to the parent. -/
-theorem original_removal_collapse_root_step (w : World) (d : WG.Device)
-    (hd : w.k.wg = some d) (id parent side : Nat) (n pn : WG.AipNode)
+theorem original_removal_collapse_root_step (w : WGWorld) (ambient : Ambient) (d : WG.Device)
+    (hd : w.dev = some d) (id parent side : Nat) (n pn : WG.AipNode)
     (hn : d.nodes[id]? = some n) (hp : d.nodes[parent]? = some pn)
     (hip : id ≠ parent) (hb : side ≤ 1) (howner : pn.peer = none)
     (hbits : n.bit = #[none, none]) (hparent : n.parent = .child parent side)
     (v4 : Bool) (hbase : pn.parent = rootSlot v4) (sibling : Option (Nat × WG.AipNode))
     (hbit : pn.bit[1-side]? = some (sibling.map Prod.fst))
     (hs : ∀ c cn, sibling = some (c, cn) → d.nodes[c]? = some cn ∧ c ≠ id ∧ c ≠ parent) :
-    ∃ w', (removeStep id).run w = .ok (.yield (), w') ∧
-      w'.k = { w.k with wg := some (removalCollapseRoot (unlisted d id) id n parent side pn v4 sibling) } := by
-  obtain ⟨result, w', he, hx, hk⟩ := (Leanux.Proofs.Framing.total_iff_run _ _ _).mp
-    (removeStep_leaf_collapse_root_wp w.k d hd id parent side n pn hn hp hip hb howner hbits hparent
-      v4 hbase sibling hbit hs) w rfl
+    ∃ w' ambient', ((removeStep id).run w).run ambient = .ok ((.yield (), w'), ambient') ∧
+      w' = { w with dev := some (removalCollapseRoot (unlisted d id) id n parent side pn v4 sibling) } := by
+  obtain ⟨result, w', ambient', he, hx, hk⟩ := (Leanux.Proofs.Framing.total_iff_run_ambient _ _ _).mp
+    (removeStep_leaf_collapse_root_wp w d hd id parent side n pn hn hp hip hb howner hbits hparent
+      v4 hbase sibling hbit hs) w ambient rfl
   subst result
-  exact ⟨w', he, hk⟩
+  exact ⟨w', ambient', he, hk⟩
 
 /-- Collapse below a resident grandparent retains the actual reread/update
 order and the original array write. Input separation prevents intervening
 writes/frees from invalidating supplied snapshots; no final effect is a premise. -/
-theorem original_removal_collapse_child_step (w : World) (d : WG.Device)
-    (hd : w.k.wg = some d) (id parent side grand gside : Nat) (n pn gn : WG.AipNode)
+theorem original_removal_collapse_child_step (w : WGWorld) (ambient : Ambient) (d : WG.Device)
+    (hd : w.dev = some d) (id parent side grand gside : Nat) (n pn gn : WG.AipNode)
     (hn : d.nodes[id]? = some n) (hp : d.nodes[parent]? = some pn)
     (hg : d.nodes[grand]? = some gn) (hip : id ≠ parent) (hig : id ≠ grand)
     (hpg : parent ≠ grand) (hb : side ≤ 1) (hgb : gside ≤ 1) (howner : pn.peer = none)
@@ -1353,13 +1364,13 @@ theorem original_removal_collapse_child_step (w : World) (d : WG.Device)
     (hbit : pn.bit[1-side]? = some (sibling.map Prod.fst))
     (hs : ∀ c cn, sibling = some (c, cn) →
       d.nodes[c]? = some cn ∧ c ≠ id ∧ c ≠ parent ∧ c ≠ grand) :
-    ∃ w', (removeStep id).run w = .ok (.yield (), w') ∧
-      w'.k = { w.k with wg := some (removalCollapseChild (unlisted d id) id n parent side pn grand gside gn sibling) } := by
-  obtain ⟨result, w', he, hx, hk⟩ := (Leanux.Proofs.Framing.total_iff_run _ _ _).mp
-    (removeStep_leaf_collapse_child_wp w.k d hd id parent side grand gside n pn gn hn hp hg hip hig hpg
-      hb hgb howner hbits hparent hbase sibling hbit hs) w rfl
+    ∃ w' ambient', ((removeStep id).run w).run ambient = .ok ((.yield (), w'), ambient') ∧
+      w' = { w with dev := some (removalCollapseChild (unlisted d id) id n parent side pn grand gside gn sibling) } := by
+  obtain ⟨result, w', ambient', he, hx, hk⟩ := (Leanux.Proofs.Framing.total_iff_run_ambient _ _ _).mp
+    (removeStep_leaf_collapse_child_wp w d hd id parent side grand gside n pn gn hn hp hg hip hig hpg
+      hb hgb howner hbits hparent hbase sibling hbit hs) w ambient rfl
   subst result
-  exact ⟨w', he, hk⟩
+  exact ⟨w', ambient', he, hk⟩
 
 /-- Exact pointwise node effects for retained-parent arms. Conditional order
 matches source writes even for aliased arguments to these endpoint functions. -/
@@ -1421,39 +1432,39 @@ theorem collapse_removal_metadata (d : WG.Device) (id : Nat) (n : WG.AipNode)
 /-- One iteration factored from original removeByPeer completes for every
 represented target ID. Forest representation, compression and distinct IDs
 derive all seven source cases, including actual roots and parent links.
-The full Kernel endpoint represents eraseId in both families, filters every
+The full WGWorld endpoint represents eraseId in both families, filters every
 resident peer list, preserves sequence/frontier and other fields, erases all
 retired represented IDs, and frames nodes outside the original forest. No
 owner residency, saved-list coherence or absent-target no-op is assumed. -/
-theorem original_removeStep_forest_total (w : World) (d : WG.Device)
-    (hd : w.k.wg = some d) (t4 t6 : Tree) (id : Nat) (hf : ForestRep d t4 t6)
+theorem original_removeStep_forest_total (w : WGWorld) (ambient : Ambient) (d : WG.Device)
+    (hd : w.dev = some d) (t4 t6 : Tree) (id : Nat) (hf : ForestRep d t4 t6)
     (hn4 : t4.nodeIds.Nodup) (hn6 : t6.nodeIds.Nodup)
     (hc4 : t4.Compressed) (hc6 : t6.Compressed)
     (hi : id ∈ t4.nodeIds ++ t6.nodeIds) :
-    ∃ out w', (removeStep id).run w = .ok (.yield (), w') ∧
-      w'.k = {w.k with wg := some out} ∧ RemovedForest d out t4 t6 id :=
-  remove_forest_total w d hd t4 t6 id hf hn4 hn6 hc4 hc6 hi
+    ∃ out w' ambient', ((removeStep id).run w).run ambient = .ok ((.yield (), w'), ambient') ∧
+      w' = {w with dev := some out} ∧ RemovedForest d out t4 t6 id :=
+  remove_forest_total w ambient d hd t4 t6 id hf hn4 hn6 hc4 hc6 hi
 
 /-- Every returned original step has the same represented endpoint. With
 valid input prefixes, both resulting trees remain valid, compressed and
 duplicate-free; their IDs are sublists and their ordered entries are exactly
 filtered by the target ID. This concerns one iteration, not the enclosing
 loop's sequence increment or a history of peer removals. -/
-theorem original_removeStep_forest_properties (w w' : World) (d : WG.Device)
-    (hd : w.k.wg = some d) (t4 t6 : Tree) (id : Nat) (hf : ForestRep d t4 t6)
+theorem original_removeStep_forest_properties (w w' : WGWorld) (ambient ambient' : Ambient) (d : WG.Device)
+    (hd : w.dev = some d) (t4 t6 : Tree) (id : Nat) (hf : ForestRep d t4 t6)
     (hn4 : t4.nodeIds.Nodup) (hn6 : t6.nodeIds.Nodup)
     (hc4 : t4.Compressed) (hc6 : t6.Compressed)
     (hv4 : t4.Valid 32) (hv6 : t6.Valid 128)
     (hi : id ∈ t4.nodeIds ++ t6.nodeIds) (result : ForInStep PUnit)
-    (hrun : (removeStep id).run w = .ok (result, w')) :
-    result = .yield () ∧ (∃ out, w'.k = {w.k with wg := some out} ∧ RemovedForest d out t4 t6 id) ∧
+    (hrun : ((removeStep id).run w).run ambient = .ok ((result, w'), ambient')) :
+    result = .yield () ∧ (∃ out, w' = {w with dev := some out} ∧ RemovedForest d out t4 t6 id) ∧
       (t4.eraseId id).Valid 32 ∧ (t6.eraseId id).Valid 128 ∧
       (t4.eraseId id).Compressed ∧ (t6.eraseId id).Compressed ∧
       (t4.eraseId id).nodeIds.Nodup ∧ (t6.eraseId id).nodeIds.Nodup ∧
       (t4.eraseId id).nodeIds.Sublist t4.nodeIds ∧ (t6.eraseId id).nodeIds.Sublist t6.nodeIds ∧
       (t4.eraseId id).entries = t4.entries.filter (fun e => e.id != id) ∧
       (t6.eraseId id).entries = t6.entries.filter (fun e => e.id != id) := by
-  have he := remove_forest_endpoint w w' d hd t4 t6 id hf hn4 hn6 hc4 hc6 hi result hrun
+  have he := remove_forest_endpoint w w' ambient ambient' d hd t4 t6 id hf hn4 hn6 hc4 hc6 hi result hrun
   exact ⟨he.1, he.2, Tree.eraseId_valid hv4 id, Tree.eraseId_valid hv6 id,
     Tree.eraseId_compressed t4 id, Tree.eraseId_compressed t6 id,
     Tree.eraseId_nodup hn4 id, Tree.eraseId_nodup hn6 id,
@@ -1464,25 +1475,25 @@ theorem original_removeStep_forest_properties (w w' : World) (d : WG.Device)
 selected family root completes with the longest-prefix winner among exactly
 the surviving entries. The query is bounded to its family width. Returned
 owners remain raw labels; this theorem makes no packet authorization claim. -/
-theorem original_removeStep_then_findNode (w : World) (d : WG.Device)
-    (hd : w.k.wg = some d) (t4 t6 : Tree) (id : Nat) (hf : ForestRep d t4 t6)
+theorem original_removeStep_then_findNode (w : WGWorld) (ambient : Ambient) (d : WG.Device)
+    (hd : w.dev = some d) (t4 t6 : Tree) (id : Nat) (hf : ForestRep d t4 t6)
     (hn4 : t4.nodeIds.Nodup) (hn6 : t6.nodeIds.Nodup)
     (hc4 : t4.Compressed) (hc6 : t6.Compressed)
     (hv4 : t4.Valid 32) (hv6 : t6.Valid 128)
     (hi : id ∈ t4.nodeIds ++ t6.nodeIds) (v4 : Bool) (key : Nat)
     (hk : key < 2 ^ rootWidth v4) :
     let t := if v4 then t4 else t6
-    ∃ out after queryAfter, (removeStep id).run w = .ok (.yield (), after) ∧
-      after.k = {w.k with wg := some out} ∧ RemovedForest d out t4 t6 id ∧
-      (WG.findNode (rootValue out v4) (rootWidth v4) key).run after =
-        .ok ((t.eraseId id).lookupId (rootWidth v4) key, queryAfter) ∧
-      queryAfter.k = after.k ∧
+    ∃ out after afterAmbient queryAfter queryAmbient, ((removeStep id).run w).run ambient = .ok ((.yield (), after), afterAmbient) ∧
+      after = {w with dev := some out} ∧ RemovedForest d out t4 t6 id ∧
+      ((WG.liftAip (WG.findNode (rootValue out v4) (rootWidth v4) key)).run after).run afterAmbient =
+        .ok (((t.eraseId id).lookupId (rootWidth v4) key, queryAfter), queryAmbient) ∧
+      queryAfter = after ∧
       Winner (rootWidth v4) key (t.entries.filter (fun e => e.id != id))
         ((t.eraseId id).lookup (rootWidth v4) key) := by
-  obtain ⟨out, after, hrun, ha, hs⟩ := remove_forest_total w d hd t4 t6 id hf hn4 hn6 hc4 hc6 hi
-  have hd' : after.k.wg = some out := by rw [ha]
-  obtain ⟨queryAfter, hquery, hframe, hwinner⟩ := hs.findNode after hd' hv4 hv6 v4 key hk
-  exact ⟨out, after, queryAfter, hrun, ha, hs, hquery, hframe, hwinner⟩
+  obtain ⟨out, after, afterAmbient, hrun, ha, hs⟩ := remove_forest_total w ambient d hd t4 t6 id hf hn4 hn6 hc4 hc6 hi
+  have hd' : after.dev = some out := by rw [ha]
+  obtain ⟨queryAfter, queryAmbient, hquery, hframe, hwinner⟩ := hs.findNode after afterAmbient hd' hv4 hv6 v4 key hk
+  exact ⟨out, after, afterAmbient, queryAfter, queryAmbient, hrun, ha, hs, hquery, hframe, hwinner⟩
 
 /-- Complete original peer removal is total from represented compressed
 forests and explicitly coherent resident lists. The saved target list supplies
@@ -1490,29 +1501,29 @@ owned membership for every original iteration; no owner-residency condition is
 imposed on other entries. The result includes exact sequence/list effects,
 both-family erasure, retired-ID absence, complete framing and preserved
 coherence. This does not establish coherence from initialized histories. -/
-theorem original_removeByPeer_forest_total (w : World) (d : WG.Device)
-    (hd : w.k.wg = some d) (pid : Nat) (p : WG.Peer) (hp : d.peers[pid]? = some p)
+theorem original_removeByPeer_forest_total (w : WGWorld) (ambient : Ambient) (d : WG.Device)
+    (hd : w.dev = some d) (pid : Nat) (p : WG.Peer) (hp : d.peers[pid]? = some p)
     (t4 t6 : Tree) (hf : ForestRep d t4 t6)
     (hn4 : t4.nodeIds.Nodup) (hn6 : t6.nodeIds.Nodup)
     (hc4 : t4.Compressed) (hc6 : t6.Compressed) (hl : ResidentLists d t4 t6) :
-    ∃ out w', (WG.removeByPeer pid).run w = .ok ((), w') ∧
-      w'.k = {w.k with wg := some out} ∧ RemovedPeer d out t4 t6 pid p.allowedipsList :=
-  removeByPeer_total w d hd pid p hp t4 t6 hf hn4 hn6 hc4 hc6 hl
+    ∃ out w' ambient', ((WG.removeByPeer pid).run w).run ambient = .ok (((), w'), ambient') ∧
+      w' = {w with dev := some out} ∧ RemovedPeer d out t4 t6 pid p.allowedipsList :=
+  removeByPeer_total w ambient d hd pid p hp t4 t6 hf hn4 hn6 hc4 hc6 hl
 
 /-- The normal endpoint has an empty target list, no target-owned entries,
 and exactly one sequence increment iff the saved list was nonempty. All peer
 lists are filtered at the saved IDs while other peer fields are preserved.
 Valid inputs retain validity, compression, distinct IDs and frontier bounds;
 the outcome contract also includes outside-node and retired-node equations. -/
-theorem original_removeByPeer_forest_properties (w w' : World) (d : WG.Device)
-    (hd : w.k.wg = some d) (pid : Nat) (p : WG.Peer) (hp : d.peers[pid]? = some p)
+theorem original_removeByPeer_forest_properties (w w' : WGWorld) (ambient ambient' : Ambient) (d : WG.Device)
+    (hd : w.dev = some d) (pid : Nat) (p : WG.Peer) (hp : d.peers[pid]? = some p)
     (t4 t6 : Tree) (hf : ForestRep d t4 t6)
     (hn4 : t4.nodeIds.Nodup) (hn6 : t6.nodeIds.Nodup)
     (hc4 : t4.Compressed) (hc6 : t6.Compressed)
     (hv4 : t4.Valid 32) (hv6 : t6.Valid 128) (hl : ResidentLists d t4 t6)
-    (hr : (WG.removeByPeer pid).run w = .ok ((), w')) :
+    (hr : ((WG.removeByPeer pid).run w).run ambient = .ok (((), w'), ambient')) :
     let ids := p.allowedipsList
-    ∃ out, w'.k = {w.k with wg := some out} ∧ RemovedPeer d out t4 t6 pid ids ∧
+    ∃ out, w' = {w with dev := some out} ∧ RemovedPeer d out t4 t6 pid ids ∧
       out.peerAllowedips.seq = d.peerAllowedips.seq + (if ids.isEmpty then 0 else 1) ∧
       out.nextNode = d.nextNode ∧ (NodesBelow d → NodesBelow out) ∧
       out.peers[pid]? = some {p with allowedipsList := []} ∧
@@ -1522,7 +1533,7 @@ theorem original_removeByPeer_forest_properties (w w' : World) (d : WG.Device)
       (t4.eraseIds ids).Compressed ∧ (t6.eraseIds ids).Compressed ∧
       (t4.eraseIds ids).nodeIds.Nodup ∧ (t6.eraseIds ids).nodeIds.Nodup ∧
       (t4.eraseIds ids).nodeIds.Sublist t4.nodeIds ∧ (t6.eraseIds ids).nodeIds.Sublist t6.nodeIds := by
-  obtain ⟨out, hk, hs⟩ := removeByPeer_endpoint w w' d hd pid p hp t4 t6 hf hn4 hn6 hc4 hc6 hl hr
+  obtain ⟨out, hk, hs⟩ := removeByPeer_endpoint w w' ambient ambient' d hd pid p hp t4 t6 hf hn4 hn6 hc4 hc6 hl hr
   exact ⟨out, hk, hs, hs.seq, hs.nextNode, hs.below, hs.target_empty hp, hs.peers,
     hs.no_target_entry, Tree.eraseIds_valid _ _ hv4, Tree.eraseIds_valid _ _ hv6,
     Tree.eraseIds_compressed _ _ hc4, Tree.eraseIds_compressed _ _ hc6,
@@ -1533,126 +1544,126 @@ theorem original_removeByPeer_forest_properties (w w' : World) (d : WG.Device)
 family root returns the longest-prefix winner after filtering exactly the
 target peer's entries. Input list coherence and bounded query/valid prefixes
 are explicit; returned raw owner labels do not imply packet authorization. -/
-theorem original_removeByPeer_then_findNode (w : World) (d : WG.Device)
-    (hd : w.k.wg = some d) (pid : Nat) (p : WG.Peer) (hp : d.peers[pid]? = some p)
+theorem original_removeByPeer_then_findNode (w : WGWorld) (ambient : Ambient) (d : WG.Device)
+    (hd : w.dev = some d) (pid : Nat) (p : WG.Peer) (hp : d.peers[pid]? = some p)
     (t4 t6 : Tree) (hf : ForestRep d t4 t6)
     (hn4 : t4.nodeIds.Nodup) (hn6 : t6.nodeIds.Nodup)
     (hc4 : t4.Compressed) (hc6 : t6.Compressed)
     (hv4 : t4.Valid 32) (hv6 : t6.Valid 128) (hl : ResidentLists d t4 t6)
     (v4 : Bool) (key : Nat) (hk : key < 2 ^ rootWidth v4) :
     let t := if v4 then t4 else t6
-    ∃ out after queryAfter, (WG.removeByPeer pid).run w = .ok ((), after) ∧
-      after.k = {w.k with wg := some out} ∧ RemovedPeer d out t4 t6 pid p.allowedipsList ∧
-      (WG.findNode (rootValue out v4) (rootWidth v4) key).run after =
-        .ok ((t.eraseIds p.allowedipsList).lookupId (rootWidth v4) key, queryAfter) ∧
-      queryAfter.k = after.k ∧
+    ∃ out after afterAmbient queryAfter queryAmbient, ((WG.removeByPeer pid).run w).run ambient = .ok (((), after), afterAmbient) ∧
+      after = {w with dev := some out} ∧ RemovedPeer d out t4 t6 pid p.allowedipsList ∧
+      ((WG.liftAip (WG.findNode (rootValue out v4) (rootWidth v4) key)).run after).run afterAmbient =
+        .ok (((t.eraseIds p.allowedipsList).lookupId (rootWidth v4) key, queryAfter), queryAmbient) ∧
+      queryAfter = after ∧
       Winner (rootWidth v4) key (t.entries.filter (fun e => e.peer != pid))
         ((t.eraseIds p.allowedipsList).lookup (rootWidth v4) key) := by
-  obtain ⟨out, after, hrun, ha, hs⟩ := removeByPeer_total w d hd pid p hp t4 t6 hf hn4 hn6 hc4 hc6 hl
-  have hd' : after.k.wg = some out := by rw [ha]
-  obtain ⟨queryAfter, hquery, hframe, hwinner⟩ := hs.findNode hf hl hp after hd' hv4 hv6 v4 key hk
-  exact ⟨out, after, queryAfter, hrun, ha, hs, hquery, hframe, hwinner⟩
+  obtain ⟨out, after, afterAmbient, hrun, ha, hs⟩ := removeByPeer_total w ambient d hd pid p hp t4 t6 hf hn4 hn6 hc4 hc6 hl
+  have hd' : after.dev = some out := by rw [ha]
+  obtain ⟨queryAfter, queryAmbient, hquery, hframe, hwinner⟩ := hs.findNode hf hl hp after afterAmbient hd' hv4 hv6 v4 key hk
+  exact ⟨out, after, afterAmbient, queryAfter, queryAmbient, hrun, ha, hs, hquery, hframe, hwinner⟩
 
 /-- Every bounded-input normal return of original insert preserves the combined
 routing invariant through its actual success or allocation-refusal endpoint.
 Input lists are explicitly coherent; raw owner labels are bounded by nextPeer,
-not assumed resident. The complete Kernel endpoint and sequence increment are
+not assumed resident. The complete WGWorld endpoint and sequence increment are
 retained. Record Stops and initialized configuration histories are not covered
 by a normal-return premise. Family selection is the original family == 4 test. -/
-theorem original_insert_routing_preserved (w w' : World) (d : WG.Device)
-    (hd : w.k.wg = some d) (family addr cidr pid : Nat) (p : WG.Peer)
+theorem original_insert_routing_preserved (w w' : WGWorld) (ambient ambient' : Ambient) (d : WG.Device)
+    (hd : w.dev = some d) (family addr cidr pid : Nat) (p : WG.Peer)
     (hp : d.peers[pid]? = some p) (t4 t6 : Tree) (hi : RoutingInvariant d t4 t6)
     (ha : addr < 2 ^ rootWidth (family == 4)) (hc : cidr ≤ rootWidth (family == 4))
-    (ret : Int) (hr : (WG.insert family addr cidr pid).run w = .ok (ret, w')) :
-    ∃ out, w'.k = {w.k with wg := some out} ∧
+    (ret : Int) (hr : ((WG.insert family addr cidr pid).run w).run ambient = .ok ((ret, w'), ambient')) :
+    ∃ out, w' = {w with dev := some out} ∧
       InsertRoutingOutcome d out (family == 4) t4 t6 addr cidr pid ret :=
-  insert_routing_outcome w w' d hd family addr cidr pid p hp t4 t6 hi ha hc ret hr
+  insert_routing_outcome w w' ambient ambient' d hd family addr cidr pid p hp t4 t6 hi ha hc ret hr
 
 /-- Successful insertion exposes the exact raw peer-map effect: replacement
 filters every list before target append, while fresh allocation only appends to
 the target. Coherent input and frontier bounds derive fresh-ID absence and hence
 the normalized move-to-tail equation. Both represented families retain validity,
 compression, distinct IDs, list coherence and node/peer/owner frontier bounds. -/
-theorem original_insert_coherent_peer_maps (w w' : World) (d : WG.Device)
-    (hd : w.k.wg = some d) (family addr cidr pid : Nat) (p : WG.Peer)
+theorem original_insert_coherent_peer_maps (w w' : WGWorld) (ambient ambient' : Ambient) (d : WG.Device)
+    (hd : w.dev = some d) (family addr cidr pid : Nat) (p : WG.Peer)
     (hp : d.peers[pid]? = some p) (t4 t6 : Tree) (hi : RoutingInvariant d t4 t6)
     (ha : addr < 2 ^ rootWidth (family == 4)) (hc : cidr ≤ rootWidth (family == 4))
-    (hr : (WG.insert family addr cidr pid).run w = .ok (0, w')) :
+    (hr : ((WG.insert family addr cidr pid).run w).run ambient = .ok ((0, w'), ambient')) :
     let v4 := family == 4
     let inserted := (selectedTree v4 t4 t6).insertFresh (rootWidth v4) d.nextNode addr cidr pid
-    ∃ out, w'.k = {w.k with wg := some out} ∧
+    ∃ out, w' = {w with dev := some out} ∧
       InsertRoutingOutcome d out v4 t4 t6 addr cidr pid 0 ∧
       RoutingInvariant out (insertedTree4 d v4 t4 addr cidr pid) (insertedTree6 d v4 t6 addr cidr pid) ∧
       InsertionPeers d out inserted.allocations inserted.binding.id pid ∧
       (∀ q : Nat, out.peers[q]? = (d.peers[q]?).map (insertionPeer 0 inserted.binding.id pid q)) :=
-  insert_routing_success w w' d hd family addr cidr pid p hp t4 t6 hi ha hc hr
+  insert_routing_success w w' ambient ambient' d hd family addr cidr pid p hp t4 t6 hi ha hc hr
 
 /-- Either original normal allocation refusal preserves coherent node and peer
 contents pointwise and both old trees. The wrapper still increments sequence;
 partial graft rollback consumes one node ID. The frame preserves every other
 Device field. This is not transactional rollback or a statement about a World
 returned by a Stop, which the original monad does not provide. -/
-theorem original_insert_refusal_coherent (w w' : World) (d : WG.Device)
-    (hd : w.k.wg = some d) (family addr cidr pid : Nat) (p : WG.Peer)
+theorem original_insert_refusal_coherent (w w' : WGWorld) (ambient ambient' : Ambient) (d : WG.Device)
+    (hd : w.dev = some d) (family addr cidr pid : Nat) (p : WG.Peer)
     (hp : d.peers[pid]? = some p) (t4 t6 : Tree) (hi : RoutingInvariant d t4 t6)
     (ha : addr < 2 ^ rootWidth (family == 4)) (hc : cidr ≤ rootWidth (family == 4))
-    (hr : (WG.insert family addr cidr pid).run w = .ok (-ENOMEM, w')) :
-    ∃ out, w'.k = {w.k with wg := some out} ∧ InsertionFrame d out ∧ InsertRefused d out t4 t6 :=
-  insert_routing_refusal w w' d hd family addr cidr pid p hp t4 t6 hi ha hc hr
+    (hr : ((WG.insert family addr cidr pid).run w).run ambient = .ok ((-ENOMEM, w'), ambient')) :
+    ∃ out, w' = {w with dev := some out} ∧ InsertionFrame d out ∧ InsertRefused d out t4 t6 :=
+  insert_routing_refusal w w' ambient ambient' d hd family addr cidr pid p hp t4 t6 hi ha hc hr
 
 /-- Complete original peer removal is total from the combined routing invariant
 and a resident target. Its precise saved-list erasure contract additionally
 preserves all routing/frontier conditions, including bounds on orphan raw owners.
 The input invariant is explicit; the finite initialized history contracts below
 derive it for their listed calls, without enclosing configuration closure. -/
-theorem original_removeByPeer_routing_preserved (w : World) (d : WG.Device)
-    (hd : w.k.wg = some d) (pid : Nat) (p : WG.Peer) (hp : d.peers[pid]? = some p)
+theorem original_removeByPeer_routing_preserved (w : WGWorld) (ambient : Ambient) (d : WG.Device)
+    (hd : w.dev = some d) (pid : Nat) (p : WG.Peer) (hp : d.peers[pid]? = some p)
     (t4 t6 : Tree) (hi : RoutingInvariant d t4 t6) :
-    ∃ out w', (WG.removeByPeer pid).run w = .ok ((), w') ∧
-      w'.k = {w.k with wg := some out} ∧ RemovedPeer d out t4 t6 pid p.allowedipsList ∧
+    ∃ out w' ambient', ((WG.removeByPeer pid).run w).run ambient = .ok (((), w'), ambient') ∧
+      w' = {w with dev := some out} ∧ RemovedPeer d out t4 t6 pid p.allowedipsList ∧
       RoutingInvariant out (t4.eraseIds p.allowedipsList) (t6.eraseIds p.allowedipsList) :=
-  removeByPeer_routing_total w d hd pid p hp t4 t6 hi
+  removeByPeer_routing_total w ambient d hd pid p hp t4 t6 hi
 
 /-- Actual peer creation either normally refuses with ENOMEM and preserves the
 routing projection, or returns the old peer frontier and installs an empty list
 at that slot while advancing the frontier. Device/list absence remains explicit.
 Initializer Stops have no returned World and are not converted to refusals. -/
-theorem original_peerCreate_routing_effects (w v : World) (key : WG.Key) (psk : Option WG.Key)
-    (result : Except Int WG.PeerId) (hr : (WG.peerCreate key psk).run w = .ok (result, v)) :
+theorem original_peerCreate_routing_effects (w v : WGWorld) (ambient ambient' : Ambient) (key : WG.Key) (psk : Option WG.Key)
+    (result : Except Int WG.PeerId) (hr : ((WG.peerCreate key psk).run w).run ambient = .ok ((result, v), ambient')) :
     match result with
     | .error err => err = -ENOMEM ∧ routingView v = routingView w
     | .ok pid => ∃ s, routingView w = some s ∧ pid = s.peerFrontier ∧
         routingView v = some s.allocate :=
-  peerCreate_routing w v key psk result hr
+  peerCreate_routing w v ambient ambient' key psk result hr
 
 /-- Original normal peer creation preserves both represented families, resident
 list coherence and node/peer/raw-owner frontier bounds. The owner bound makes a
 fresh empty peer list coherent even when older raw owners are no longer resident. -/
-theorem original_peerCreate_routing_preserved (w v : World) (d : WG.Device)
-    (hd : w.k.wg = some d) (t4 t6 : Tree) (hi : RoutingInvariant d t4 t6)
+theorem original_peerCreate_routing_preserved (w v : WGWorld) (ambient ambient' : Ambient) (d : WG.Device)
+    (hd : w.dev = some d) (t4 t6 : Tree) (hi : RoutingInvariant d t4 t6)
     (key : WG.Key) (psk : Option WG.Key) (result : Except Int WG.PeerId)
-    (hr : (WG.peerCreate key psk).run w = .ok (result, v)) :
-    ∃ out, v.k.wg = some out ∧ RoutingInvariant out t4 t6 :=
-  peerCreate_routing_preserved w v d hd hi key psk result hr
+    (hr : ((WG.peerCreate key psk).run w).run ambient = .ok ((result, v), ambient')) :
+    ∃ out, v.dev = some out ∧ RoutingInvariant out t4 t6 :=
+  peerCreate_routing_preserved w v ambient ambient' d hd hi key psk result hr
 
 /-- A normal raw peerPut preserves the routing invariant and both trees, even
 when it deletes a peer and leaves its raw owner labels in the trie. This is not
 a reference-credit or authorization theorem, and assumes no positive refcount. -/
-theorem original_peerPut_routing_preserved (w v : World) (d : WG.Device)
-    (hd : w.k.wg = some d) (t4 t6 : Tree) (hi : RoutingInvariant d t4 t6)
-    (peer : Option WG.PeerId) (hr : (WG.peerPut peer).run w = .ok ((), v)) :
-    ∃ out, v.k.wg = some out ∧ RoutingInvariant out t4 t6 :=
-  peerPut_routing_preserved w v d hd hi peer hr
+theorem original_peerPut_routing_preserved (w v : WGWorld) (ambient ambient' : Ambient) (d : WG.Device)
+    (hd : w.dev = some d) (t4 t6 : Tree) (hi : RoutingInvariant d t4 t6)
+    (peer : Option WG.PeerId) (hr : ((WG.peerPut peer).run w).run ambient = .ok (((), v), ambient')) :
+    ∃ out, v.dev = some out ∧ RoutingInvariant out t4 t6 :=
+  peerPut_routing_preserved w v ambient ambient' d hd hi peer hr
 
 /-- Finite actual normal create/insert/removeByPeer/peerPut/free calls from the
 original configured fixture refine an independent pair of canonical flat-prefix
 tables. Actual returns determine success/refusal effects. Only insertion's
 reached input bounds and target residency are supplied; coherence and agreement
 are derived at every step. This does not cover enclosing Netlink or Runner calls. -/
-theorem original_initialized_routing_history (w v : World) (calls : List RoutingCall)
-    (history : RoutingHistory w calls v) (rlimit : Nat) (foreign stepped seccompChild : Bool)
-    (hstart : w.k = Runner.initialKernel rlimit true false foreign stepped seccompChild) :
-    ∃ out t4 t6, v.k.wg = some out ∧ RoutingInvariant out t4 t6 ∧
+theorem original_initialized_routing_history (w v : WGWorld) (ambient finalAmbient : Ambient) (calls : List RoutingCall)
+    (history : RoutingHistory w ambient calls v finalAmbient)
+    (hstart : Leanux.Proofs.Framing.wgStoreView w = Leanux.Proofs.Framing.wgStoreView (Runner.initialWG true false)) :
+    ∃ out t4 t6, v.dev = some out ∧ RoutingInvariant out t4 t6 ∧
       FlatAgree 32 t4 (flatHistory calls ([], [])).1 ∧
       FlatAgree 128 t6 (flatHistory calls ([], [])).2 := history.initialized hstart
 
@@ -1660,93 +1671,97 @@ theorem original_initialized_routing_history (w v : World) (calls : List Routing
 matching canonical prefix justified by the finite call history. Any returned
 node has that raw owner in the actual store. No owner-residency, packet identity
 authorization, enclosing configuration history or failed-World claim follows. -/
-theorem original_initialized_history_findNode (w v : World) (calls : List RoutingCall)
-    (history : RoutingHistory w calls v) (rlimit : Nat) (foreign stepped seccompChild : Bool)
-    (hstart : w.k = Runner.initialKernel rlimit true false foreign stepped seccompChild)
+theorem original_initialized_history_findNode (w v : WGWorld) (ambient finalAmbient : Ambient) (calls : List RoutingCall)
+    (history : RoutingHistory w ambient calls v finalAmbient)
+    (hstart : Leanux.Proofs.Framing.wgStoreView w = Leanux.Proofs.Framing.wgStoreView (Runner.initialWG true false))
     (v4 : Bool) (key : Nat) (hk : key < 2 ^ rootWidth v4) :
-    ∃ (d : WG.Device) (answer : Option Entry) (finish : World), v.k.wg = some d ∧
-      (WG.findNode (rootValue d v4) (rootWidth v4) key).run v =
-        .ok (answer.map Entry.id, finish) ∧ finish.k = v.k ∧
+    ∃ (d : WG.Device) (answer : Option Entry) (finish : WGWorld) (finishAmbient : Ambient), v.dev = some d ∧
+      ((WG.liftAip (WG.findNode (rootValue d v4) (rootWidth v4) key)).run v).run finalAmbient =
+        .ok ((answer.map Entry.id, finish), finishAmbient) ∧
+      Leanux.Proofs.Framing.wgStoreView finish = Leanux.Proofs.Framing.wgStoreView v ∧
       FlatWinner (rootWidth v4) key (selectedFlat v4 (flatHistory calls ([], [])))
         (answer.map (canonical (rootWidth v4))) ∧
       ∀ e ∈ answer, ∃ n, d.nodes[e.id]? = some n ∧ n.peer = some e.peer :=
   history.findNode hstart v4 key hk
 
 /-- The actual pinned private parser supplies the address/length relation. A
-normal setAllowedip call either rejects without Kernel mutation or reaches an
+normal setAllowedip call either rejects without store-view mutation or reaches an
 actual bounded IPv4/IPv6 insertion after its original guards. Malformed/missing
 fields and AF overrides retain the source behavior; no parser-fidelity premise
 or enclosing parser/Runner closure is assumed. -/
 theorem parsed_setAllowedip_bounded_call (j : Lean.Json) (what : String) (ip : WG.AllowedIpAttrs)
     (hp : parseAllowedIp j what = .ok (.attrs ip)) (pid : WG.PeerId)
-    (w v : World) (ret : Int) (hr : (WG.setAllowedip pid ip).run w = .ok (ret, v)) :
-    AddressShape ip ∧ AllowedipOutcome w.k pid ip ret v :=
-  ⟨parseAllowedIp_shape j what (.attrs ip) hp, parsed_setAllowedip_outcome j what ip hp pid w v ret hr⟩
+    (w v : WGWorld) (ambient ambient' : Ambient) (ret : Int) (hr : ((WG.setAllowedip pid ip).run w).run ambient = .ok ((ret, v), ambient')) :
+    AddressShape ip ∧ AllowedipOutcome (Leanux.Proofs.Framing.wgStoreView w) pid ip ret v ambient' :=
+  ⟨parseAllowedIp_shape j what (.attrs ip) hp, parsed_setAllowedip_outcome j what ip hp pid w v ambient ambient' ret hr⟩
 
 /-- Parsed local allowed-IP attributes compose with the actual normal insertion
 contract. Resident target and entry routing/flat agreement remain explicit;
-rejection preserves Kernel, while negative insertion returns keep their actual
+rejection preserves the seven-field WG store view, while negative insertion returns keep their actual
 sequence/frontier effects. This is not whole Netlink/configuration closure. -/
 theorem parsed_setAllowedip_routing_preserved (j : Lean.Json) (what : String)
     (ip : WG.AllowedIpAttrs) (hparse : parseAllowedIp j what = .ok (.attrs ip))
-    (pid : WG.PeerId) (w v : World) (d : WG.Device) (hd : w.k.wg = some d)
+    (pid : WG.PeerId) (w v : WGWorld) (ambient ambient' : Ambient) (d : WG.Device) (hd : w.dev = some d)
     (t4 t6 : Tree) (hi : RoutingInvariant d t4 t6) (p : WG.Peer) (hp : d.peers[pid]? = some p)
     (xs : FlatTable × FlatTable) (he4 : FlatAgree 32 t4 xs.1) (he6 : FlatAgree 128 t6 xs.2)
-    (ret : Int) (hr : (WG.setAllowedip pid ip).run w = .ok (ret, v)) :
-    (ret = -EINVAL ∧ v.k = w.k) ∨
+    (ret : Int) (hr : ((WG.setAllowedip pid ip).run w).run ambient = .ok ((ret, v), ambient')) :
+    (ret = -EINVAL ∧ Leanux.Proofs.Framing.wgStoreView v = Leanux.Proofs.Framing.wgStoreView w) ∨
       ∃ v4 out u4 u6, ip.family.getD 0 = (if v4 then WG.AF_INET else WG.AF_INET6) ∧
-        v.k.wg = some out ∧ RoutingInvariant out u4 u6 ∧
+        v.dev = some out ∧ RoutingInvariant out u4 u6 ∧
         FlatAgree 32 u4 ((RoutingCall.insert v4 (ip.addr.getD 0) (ip.cidr.getD 0) pid ret).flat xs).1 ∧
         FlatAgree 128 u6 ((RoutingCall.insert v4 (ip.addr.getD 0) (ip.cidr.getD 0) pid ret).flat xs).2 :=
   setAllowedip_routing pid ip (parseAllowedIp_shape j what (.attrs ip) hparse)
-    w v d hd hi hp he4 he6 ret hr
+    w v ambient ambient' d hd hi hp he4 he6 ret hr
 
 /-- Original rootRemovePeerLists has an all-input source equation. From the
 represented subtree and resident-list ownership, a normal return removes every
-represented ID from every resident list and preserves all other Kernel/device
+represented ID from every resident list and preserves all other store-view/device
 and complete peer fields. No owner residency, fuel sufficiency or totality is
 asserted; complete normal WG.free and its history rule are stated separately. -/
-theorem original_rootRemove_lists_normal (w v : World) (d : WG.Device) (hd : w.k.wg = some d)
+theorem original_rootRemove_lists_normal (w v : WGWorld) (ambient ambient' : Ambient) (d : WG.Device) (hd : w.dev = some d)
     (ho : ListsOwned d) (root : WG.NodeId) (t : Tree) (width : Nat) (parent : WG.Slot)
     (hroot : t.root = some root) (hrep : RepAt d.nodes width parent t)
-    (hr : (WG.rootRemovePeerLists root).run w = .ok ((), v)) :
+    (hr : ((WG.rootRemovePeerLists root).run w).run ambient = .ok (((), v), ambient')) :
     rootRemoveSource root = WG.rootRemovePeerLists root ∧ clearListView v = clearListView w ∧
-      ∃ out, v.k.wg = some out ∧ out.nodes = d.nodes ∧
+      ∃ out, v.dev = some out ∧ out.nodes = d.nodes ∧
         ∀ (pid : WG.PeerId) (p : WG.Peer), out.peers[pid]? = some p →
           ∀ id ∈ t.nodeIds, id ∉ p.allowedipsList :=
-  ⟨rootRemoveSource_eq root, rootRemove_clearListView root w () v hr,
-    rootRemove_lists w v d hd ho root hroot hrep hr⟩
+  ⟨rootRemoveSource_eq root, (Leanux.Proofs.WG.Lifetimes.ProjectedAction.iff_run_ambient _ _ _).mp
+      (rootRemove_clearListView root) w ambient () v ambient' hr,
+    rootRemove_lists w v ambient ambient' d hd ho root hroot hrep hr⟩
+
 /-- A normal return of the complete original free empties both represented
-families and every resident allowed-IP list. The full Kernel endpoint retains
+families and every resident allowed-IP list. The WG store-view endpoint retains
 complete peer records except those lists, increments sequence once, preserves
 all allocation frontiers and other Device fields, and only deletes node entries.
 Raw orphan owners remain permitted inputs: totality, physical-node emptiness
 and a returned failed World are not claimed. -/
-theorem original_free_routing_endpoint (w v : World) (d : WG.Device)
-    (hd : w.k.wg = some d) (t4 t6 : Tree) (hi : RoutingInvariant d t4 t6)
-    (hr : WG.free.run w = .ok ((), v)) :
-    ∃ out, v.k = {w.k with wg := some out} ∧ Cleared d out ∧
+theorem original_free_routing_endpoint (w v : WGWorld) (ambient ambient' : Ambient) (d : WG.Device)
+    (hd : w.dev = some d) (t4 t6 : Tree) (hi : RoutingInvariant d t4 t6)
+    (hr : (WG.free.run w).run ambient = .ok (((), v), ambient')) :
+    ∃ out, Leanux.Proofs.Framing.wgStoreView v = {Leanux.Proofs.Framing.wgStoreView w with dev := some out} ∧ Cleared d out ∧
       RoutingInvariant out .empty .empty := by
-  obtain ⟨out, hout, hc⟩ := free_endpoint w v d hd t4 t6 hi hr
+  obtain ⟨out, hout, hc⟩ := free_endpoint w v ambient ambient' d hd t4 t6 hi hr
   exact ⟨out, hout, hc, Cleared.routing hi hc⟩
 
 /-- After a normal original clear, original findNode at either actual family
 root returns no binding. This follows from the derived empty represented forest;
 it does not require every unreachable physical node to have been retired. -/
-theorem original_free_then_findNode (w v : World) (d : WG.Device)
-    (hd : w.k.wg = some d) (t4 t6 : Tree) (hi : RoutingInvariant d t4 t6)
-    (hr : WG.free.run w = .ok ((), v))
+theorem original_free_then_findNode (w v : WGWorld) (ambient ambient' : Ambient) (d : WG.Device)
+    (hd : w.dev = some d) (t4 t6 : Tree) (hi : RoutingInvariant d t4 t6)
+    (hr : (WG.free.run w).run ambient = .ok (((), v), ambient'))
     (v4 : Bool) (key : Nat) (hk : key < 2 ^ rootWidth v4) :
-    ∃ out finish, v.k = {w.k with wg := some out} ∧ Cleared d out ∧
-      (WG.findNode (rootValue out v4) (rootWidth v4) key).run v = .ok (none, finish) ∧
-      finish.k = v.k := by
-  obtain ⟨out, hout, hc⟩ := free_endpoint w v d hd t4 t6 hi hr
+    ∃ out finish finishAmbient, Leanux.Proofs.Framing.wgStoreView v = {Leanux.Proofs.Framing.wgStoreView w with dev := some out} ∧ Cleared d out ∧
+      ((WG.liftAip (WG.findNode (rootValue out v4) (rootWidth v4) key)).run v).run ambient' =
+        .ok ((none, finish), finishAmbient) ∧
+      Leanux.Proofs.Framing.wgStoreView finish = Leanux.Proofs.Framing.wgStoreView v := by
+  obtain ⟨out, hout, hc⟩ := free_endpoint w v ambient ambient' d hd t4 t6 hi hr
   have hi' := Cleared.routing hi hc
-  have hd' : v.k.wg = some out := by rw [hout]
+  have hd' : v.dev = some out := congrArg Leanux.Proofs.Framing.WGStoreView.dev hout
   have hw : rootWidth v4 = 32 ∨ rootWidth v4 = 128 := by cases v4 <;> simp [rootWidth]
-  obtain ⟨finish, hrun, hframe⟩ := findNode_run v out (rootWidth v4) key hw hk hd'
+  obtain ⟨finishAmbient, hrun⟩ := findNode_lift_run v ambient' out hd' (rootWidth v4) key hw hk
     (selectedTree v4 .empty .empty) (rootSlot v4) (hi'.selected_rep v4) (hi'.selected_valid v4)
-  refine ⟨out, finish, hout, hc, ?_, hframe⟩
+  refine ⟨out, v, finishAmbient, hout, hc, ?_, rfl⟩
   simpa [hi'.selected_root v4, selectedTree, Tree.lookupId, Tree.lookup] using hrun
 
 /-- Original raw release and staged-send helpers retain nodes, table/frontiers
@@ -1765,8 +1780,8 @@ returns and before/after views are retained. This statement has no routing,
 address-shape, target-residency or normal-return premise. -/
 theorem routing_completion_source_erasure (pid : WG.PeerId) (ip : WG.AllowedIpAttrs)
     (a : WG.PeerAttrs) (peer : Option WG.PeerId) :
-    Logged.ErasesPrefix (completedAllowedip pid ip) (WG.setAllowedip pid ip) ∧
-    Logged.ErasesPrefix (Configuration.peerConfigTailObserved a peer pid)
+    Logged.ErasesStatePrefix (completedAllowedip pid ip) (WG.setAllowedip pid ip) ∧
+    Logged.ErasesStatePrefix (Configuration.peerConfigTailObserved a peer pid)
       (Configuration.peerConfigTailSource a peer pid) :=
   ⟨completedAllowedip_erases pid ip, Configuration.peerConfigTailObserved_erases a peer pid⟩
 
@@ -1777,7 +1792,7 @@ all actual source effects. A Stop preserves the prior safe journal without a
 failed World or a completion event. Entry shape/routing/residency are explicit. -/
 theorem setAllowedip_completion_routing (initial : FlatTable × FlatTable)
     (pid : WG.PeerId) (ip : WG.AllowedIpAttrs) (shape : AddressShape ip) :
-    Logged.PrefixPreserves (CompletionTarget initial pid) (CompletionSafe initial)
+    Logged.StatePrefixPreserves (fun h w _ => CompletionTarget initial pid h w) (CompletionSafe initial)
       (completedAllowedip pid ip) :=
   completedAllowedip_preserves initial pid ip shape
 
@@ -1790,8 +1805,8 @@ this is not enclosing setPeerCmd, parser, Netlink or Runner closure. -/
 theorem original_peerConfigTail_routing_prefix (initial : FlatTable × FlatTable)
     (a : WG.PeerAttrs) (shape : Configuration.PeerAddressShape a)
     (peer : Option WG.PeerId) (pid : WG.PeerId) :
-    Logged.PrefixEnsures (CompletionTarget initial pid) (CompletionSafe initial)
-      (Configuration.peerConfigTailObserved a peer pid) (fun _ => CompletionState initial) :=
+    Logged.StatePrefixEnsures (fun h w _ => CompletionTarget initial pid h w) (CompletionSafe initial)
+      (Configuration.peerConfigTailObserved a peer pid) (fun _ h w _ => CompletionState initial h w) :=
   Configuration.peerConfigTailObserved_spec initial a shape peer pid
 
 /-- Removal, peer death/removal and the complete acquired-peer update stage
@@ -1800,10 +1815,10 @@ removeByPeer normal cut before later peer cleanup or flushing can Stop; it does
 not label that cut as completion of whole peer-object removal. -/
 theorem original_peer_update_completion_erasure (pid : WG.PeerId) (peer : Option WG.PeerId)
     (a : WG.PeerAttrs) (flags : UInt32) (psk : Option WG.Key) :
-    Logged.ErasesPrefix (completedRemovePeer pid) (WG.removeByPeer pid) ∧
-    Logged.ErasesPrefix (Configuration.peerMakeDeadObserved pid) (WG.peerMakeDead pid) ∧
-    Logged.ErasesPrefix (Configuration.peerRemoveObserved peer) (WG.peerRemove peer) ∧
-    Logged.ErasesPrefix (Configuration.peerConfigUpdateObserved a peer flags psk pid)
+    Logged.ErasesStatePrefix (completedRemovePeer pid) (WG.removeByPeer pid) ∧
+    Logged.ErasesStatePrefix (Configuration.peerMakeDeadObserved pid) (WG.peerMakeDead pid) ∧
+    Logged.ErasesStatePrefix (Configuration.peerRemoveObserved peer) (WG.peerRemove peer) ∧
+    Logged.ErasesStatePrefix (Configuration.peerConfigUpdateObserved a peer flags psk pid)
       (Configuration.peerConfigUpdateSource a peer flags psk pid) :=
   ⟨completedRemovePeer_erases pid, Configuration.peerMakeDeadObserved_erases pid,
     Configuration.peerRemoveObserved_erases peer,
@@ -1815,10 +1830,10 @@ delete peers or Stop during flushing; its earlier completed routing prefix
 remains safe, and only normal returns carry reached routing/flat agreement. -/
 theorem original_peer_removal_routing_prefix (initial : FlatTable × FlatTable)
     (pid : WG.PeerId) (peer : Option WG.PeerId) :
-    Logged.PrefixEnsures (CompletionState initial) (CompletionSafe initial)
-      (completedRemovePeer pid) (fun _ => CompletionTarget initial pid) ∧
-    Logged.PrefixEnsures (CompletionState initial) (CompletionSafe initial)
-      (Configuration.peerRemoveObserved peer) (fun _ => CompletionState initial) :=
+    Logged.StatePrefixEnsures (fun h w _ => CompletionState initial h w) (CompletionSafe initial)
+      (completedRemovePeer pid) (fun _ h w _ => CompletionTarget initial pid h w) ∧
+    Logged.StatePrefixEnsures (fun h w _ => CompletionState initial h w) (CompletionSafe initial)
+      (Configuration.peerRemoveObserved peer) (fun _ h w _ => CompletionState initial h w) :=
   ⟨completedRemovePeer_spec initial pid, Configuration.peerRemoveObserved_spec initial peer⟩
 
 /-- The actual acquired-peer update stage covers REMOVE_ME, preshared-key and
@@ -1830,8 +1845,8 @@ composition of setPeerCmd remains outside this stage theorem. -/
 theorem original_peer_update_routing_prefix (initial : FlatTable × FlatTable)
     (a : WG.PeerAttrs) (shape : Configuration.PeerAddressShape a)
     (peer : Option WG.PeerId) (flags : UInt32) (psk : Option WG.Key) (pid : WG.PeerId) :
-    Logged.PrefixEnsures (CompletionTarget initial pid) (CompletionSafe initial)
-      (Configuration.peerConfigUpdateObserved a peer flags psk pid) (fun _ => CompletionState initial) :=
+    Logged.StatePrefixEnsures (fun h w _ => CompletionTarget initial pid h w) (CompletionSafe initial)
+      (Configuration.peerConfigUpdateObserved a peer flags psk pid) (fun _ h w _ => CompletionState initial h w) :=
   Configuration.peerConfigUpdateObserved_spec initial a shape peer flags psk pid
 
 /-- Actual public-key-table lookup and peer creation establish the returned
@@ -1840,17 +1855,17 @@ flat agreement while retaining its actual allocator effects. No public-key/peer
 identity affiliation or full setPeerCmd composition is asserted. -/
 theorem original_configuration_acquisition_routing (initial : FlatTable × FlatTable)
     (key : WG.Key) (psk : Option WG.Key) :
-    Logged.PrefixEnsures (CompletionState initial) (CompletionSafe initial)
-      (Logged.liftPrefix (WG.pubkeyLookup key)) (CompletionAcquired initial) ∧
-    Logged.PrefixEnsures (CompletionState initial) (CompletionSafe initial)
-      (Logged.liftPrefix (WG.peerCreate key psk)) (CompletionCreated initial) :=
+    Logged.StatePrefixEnsures (fun h w _ => CompletionState initial h w) (CompletionSafe initial)
+      (Logged.liftWGPrefix (WG.pubkeyLookup key)) (fun x h w _ => CompletionAcquired initial x h w) ∧
+    Logged.StatePrefixEnsures (fun h w _ => CompletionState initial h w) (CompletionSafe initial)
+      (Logged.liftWGPrefix (WG.peerCreate key psk)) (fun x h w _ => CompletionCreated initial x h w) :=
   ⟨pubkeyLookup_completion initial key, peerCreate_completion initial key psk⟩
 
 /-- The complete public peer-command observer erases to the original call for
 all attributes and Worlds, preserving every ordinary return and Stop. Nested
 routing completion events remain at their actual primitive boundaries. -/
 theorem original_setPeerCmd_completion_erasure (a : WG.PeerAttrs) :
-    Logged.ErasesPrefix (Configuration.setPeerCmdObserved a) (WG.setPeerCmd a) :=
+    Logged.ErasesStatePrefix (Configuration.setPeerCmdObserved a) (WG.setPeerCmd a) :=
   Configuration.setPeerCmdObserved_erases a
 
 /-- From routed entry and local address shape, the complete original command
@@ -1860,8 +1875,8 @@ supply residency; no target-residency, credit, affiliation or progress premise
 is imposed on this whole-command contract. -/
 theorem original_setPeerCmd_routing_prefix (initial : FlatTable × FlatTable)
     (a : WG.PeerAttrs) (shape : Configuration.PeerAddressShape a) :
-    Logged.PrefixEnsures (CompletionState initial) (CompletionSafe initial)
-      (Configuration.setPeerCmdObserved a) (fun _ => CompletionState initial) :=
+    Logged.StatePrefixEnsures (fun h w _ => CompletionState initial h w) (CompletionSafe initial)
+      (Configuration.setPeerCmdObserved a) (fun _ h w _ => CompletionState initial h w) :=
   Configuration.setPeerCmdObserved_spec initial a shape
 
 /-- Successful public parsing derives address shape for every actual wgSet
@@ -1873,8 +1888,8 @@ theorem parsed_trace_peer_commands_routing (j : Lean.Json) (trace : Runner.Trace
     Configuration.TraceAddressShape trace ∧
       ∀ attrs, Runner.Operation.wgSet attrs ∈ trace.ops →
         ∀ peer, WG.PeerEntry.attrs peer ∈ attrs.peers.getD [] →
-          Logged.PrefixEnsures (CompletionState initial) (CompletionSafe initial)
-            (Configuration.setPeerCmdObserved peer) (fun _ => CompletionState initial) := by
+          Logged.StatePrefixEnsures (fun h w _ => CompletionState initial h w) (CompletionSafe initial)
+            (Configuration.setPeerCmdObserved peer) (fun _ h w _ => CompletionState initial h w) := by
   have hs := Configuration.parseTrace_shape j trace hparse
   refine ⟨hs, ?_⟩
   intro attrs hop peer hp
@@ -1884,9 +1899,9 @@ theorem parsed_trace_peer_commands_routing (j : Lean.Json) (trace : Runner.Trace
 clear marker occurs after WG.free normally completes, before either remove-all
 loop; no event represents a failed primitive's unavailable World. -/
 theorem original_device_configuration_completion_erasure (a : WG.DeviceAttrs) :
-    Logged.ErasesPrefix completedFree WG.free ∧
-    Logged.ErasesPrefix Configuration.peerRemoveAllObserved WG.peerRemoveAll ∧
-    Logged.ErasesPrefix (Configuration.wgSetDeviceObserved a) (WG.wgSetDevice a) :=
+    Logged.ErasesStatePrefix completedFree WG.free ∧
+    Logged.ErasesStatePrefix Configuration.peerRemoveAllObserved WG.peerRemoveAll ∧
+    Logged.ErasesStatePrefix (Configuration.wgSetDeviceObserved a) (WG.wgSetDevice a) :=
   ⟨completedFree_erases, Configuration.peerRemoveAllObserved_erases,
     Configuration.wgSetDeviceObserved_erases a⟩
 
@@ -1898,12 +1913,12 @@ ordinary negative results. Only local address shape is added: no target-residenc
 saved-list validity, drain, credit or identity-affiliation premise is needed. -/
 theorem original_device_configuration_routing_prefix (initial : FlatTable × FlatTable)
     (a : WG.DeviceAttrs) (shape : Configuration.DeviceAddressShape a) :
-    Logged.PrefixEnsures (CompletionState initial) (CompletionSafe initial)
-      completedFree (fun _ => CompletionEmpty initial) ∧
-    Logged.PrefixEnsures (CompletionState initial) (CompletionSafe initial)
-      Configuration.peerRemoveAllObserved (fun _ => CompletionEmpty initial) ∧
-    Logged.PrefixEnsures (CompletionState initial) (CompletionSafe initial)
-      (Configuration.wgSetDeviceObserved a) (fun _ => CompletionState initial) :=
+    Logged.StatePrefixEnsures (fun h w _ => CompletionState initial h w) (CompletionSafe initial)
+      completedFree (fun _ h w _ => CompletionEmpty initial h w) ∧
+    Logged.StatePrefixEnsures (fun h w _ => CompletionState initial h w) (CompletionSafe initial)
+      Configuration.peerRemoveAllObserved (fun _ h w _ => CompletionEmpty initial h w) ∧
+    Logged.StatePrefixEnsures (fun h w _ => CompletionState initial h w) (CompletionSafe initial)
+      (Configuration.wgSetDeviceObserved a) (fun _ h w _ => CompletionState initial h w) :=
   ⟨completedFree_empty_spec initial, Configuration.peerRemoveAllObserved_empty_spec initial,
     Configuration.wgSetDeviceObserved_spec initial a shape⟩
 
@@ -1915,8 +1930,8 @@ theorem parsed_trace_device_configuration_routing (j : Lean.Json) (trace : Runne
     (hparse : Runner.parseTrace j = .ok trace) (initial : FlatTable × FlatTable) :
     Configuration.TraceAddressShape trace ∧
       ∀ attrs, Runner.Operation.wgSet attrs ∈ trace.ops →
-        Logged.PrefixEnsures (CompletionState initial) (CompletionSafe initial)
-          (Configuration.wgSetDeviceObserved attrs) (fun _ => CompletionState initial) := by
+        Logged.StatePrefixEnsures (fun h w _ => CompletionState initial h w) (CompletionSafe initial)
+          (Configuration.wgSetDeviceObserved attrs) (fun _ h w _ => CompletionState initial h w) := by
   have hs := Configuration.parseTrace_shape j trace hparse
   refine ⟨hs, ?_⟩
   intro attrs hop
@@ -1926,13 +1941,13 @@ theorem parsed_trace_device_configuration_routing (j : Lean.Json) (trace : Runne
 including absent-device errors, arbitrary fixture rows and failed teardown.
 Creation and down run as exact original lifts; no synthetic reset event is used. -/
 theorem original_optional_lifecycle_erasure (a : WG.DeviceAttrs) (p : WG.PeerAttrs) :
-    Logged.ErasesPrefix (Logged.liftPrefix (Event := RoutingCompletion) WG.wgCreate) WG.wgCreate ∧
-    Logged.ErasesPrefix (Logged.liftPrefix (Event := RoutingCompletion) WG.wgDown) WG.wgDown ∧
-    Logged.ErasesPrefix Configuration.wgDestructObserved WG.wgDestruct ∧
-    Logged.ErasesPrefix Configuration.wgDeleteObserved WG.wgDelete ∧
-    Logged.ErasesPrefix (Configuration.setPeerCmdObserved p) (WG.setPeerCmd p) ∧
-    Logged.ErasesPrefix (Configuration.wgSetDeviceObserved a) (WG.wgSetDevice a) :=
-  ⟨Logged.erasesPrefix_lift _, Logged.erasesPrefix_lift _,
+    Logged.ErasesStatePrefix (Logged.liftWGPrefix (E := RoutingCompletion) WG.wgCreate) WG.wgCreate ∧
+    Logged.ErasesStatePrefix (Logged.liftWGPrefix (E := RoutingCompletion) WG.wgDown) WG.wgDown ∧
+    Logged.ErasesStatePrefix Configuration.wgDestructObserved WG.wgDestruct ∧
+    Logged.ErasesStatePrefix Configuration.wgDeleteObserved WG.wgDelete ∧
+    Logged.ErasesStatePrefix (Configuration.setPeerCmdObserved p) (WG.setPeerCmd p) ∧
+    Logged.ErasesStatePrefix (Configuration.wgSetDeviceObserved a) (WG.wgSetDevice a) :=
+  ⟨Logged.erasesStatePrefix_lift _, Logged.erasesStatePrefix_lift _,
     Configuration.wgDestructObserved_erases, Configuration.wgDeleteObserved_erases,
     Configuration.setPeerCmdObserved_erases p, Configuration.wgSetDeviceObserved_erases a⟩
 
@@ -1947,39 +1962,36 @@ credit, drain or successful-execution premise. Runner and packet closure remain 
 theorem original_optional_lifecycle_routing_prefix (initial : FlatTable × FlatTable)
     (a : WG.DeviceAttrs) (p : WG.PeerAttrs)
     (ha : Configuration.DeviceAddressShape a) (hp : Configuration.PeerAddressShape p) :
-    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
-      (Logged.liftPrefix WG.wgCreate) ∧
-    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
-      (Logged.liftPrefix WG.wgDown) ∧
-    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+    Logged.StatePrefixPreserves (fun h w _ => GlobalCompletionState initial h w) (CompletionSafe initial)
+      (Logged.liftWGPrefix WG.wgCreate) ∧
+    Logged.StatePrefixPreserves (fun h w _ => GlobalCompletionState initial h w) (CompletionSafe initial)
+      (Logged.liftWGPrefix WG.wgDown) ∧
+    Logged.StatePrefixPreserves (fun h w _ => GlobalCompletionState initial h w) (CompletionSafe initial)
       Configuration.wgDestructObserved ∧
-    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+    Logged.StatePrefixPreserves (fun h w _ => GlobalCompletionState initial h w) (CompletionSafe initial)
       Configuration.wgDeleteObserved ∧
-    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+    Logged.StatePrefixPreserves (fun h w _ => GlobalCompletionState initial h w) (CompletionSafe initial)
       (Configuration.setPeerCmdObserved p) ∧
-    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+    Logged.StatePrefixPreserves (fun h w _ => GlobalCompletionState initial h w) (CompletionSafe initial)
       (Configuration.wgSetDeviceObserved a) ∧
-    (∀ h0, Logged.PrefixPreserves (fun h w => h = h0 ∧ routingView w = none) (fun h => h = h0)
+    (∀ h0, Logged.StatePrefixPreserves (fun h w _ => h = h0 ∧ routingView w = none) (fun h => h = h0)
       (Configuration.setPeerCmdObserved p)) ∧
-    (∀ h0, Logged.PrefixPreserves (fun h w => h = h0 ∧ routingView w = none) (fun h => h = h0)
+    (∀ h0, Logged.StatePrefixPreserves (fun h w _ => h = h0 ∧ routingView w = none) (fun h => h = h0)
       (Configuration.wgSetDeviceObserved a)) :=
-  ⟨wgCreate_global_completion initial, global_completion_lift initial _ wgDown_routing,
+  ⟨wgCreate_global_completion initial, global_completion_lift_wg initial _ wgDown_routing,
     Configuration.wgDestructObserved_global initial, Configuration.wgDeleteObserved_global initial,
     Configuration.setPeerCmdObserved_global initial p hp, Configuration.wgSetDeviceObserved_global initial a ha,
     fun h => Configuration.setPeerCmdObserved_absent h p,
     fun h => Configuration.wgSetDeviceObserved_absent h a⟩
 
 /-- The actual Runner fixture initializes optional routing for every typed
-trace, including bare and nonnetwork modes. Successful original seccomp prefill
-preserves that initialization. This is an initial-state theorem, not execution
-of the enclosing Runner, and makes no returned-World claim for failed prefill. -/
-theorem original_optional_routing_initialization (trace : Runner.Trace) (w : World) :
-    (w.k = Runner.initialKernel trace.rlimit trace.net trace.bare trace.foreign trace.stepped trace.seccompChild →
-      GlobalCompletionState ([], []) [] w) ∧
-    (Env.seccompPrefill trace.seccompPrefill
-      (Runner.initialKernel trace.rlimit trace.net trace.bare trace.foreign trace.stepped trace.seccompChild) = .ok w.k →
-      GlobalCompletionState ([], []) [] w) :=
-  ⟨Configuration.global_initial trace w, Configuration.global_initial_prefill trace w⟩
+trace, including bare and nonnetwork modes. The original store-view premise
+retains its scope; seccomp prefill is subsystem-local and needs no WG frame. -/
+theorem original_optional_routing_initialization (trace : Runner.Trace) (w : World)
+    (hw : Framing.wgStoreView w.wg =
+      Framing.wgStoreView (Runner.initialWG trace.net trace.bare)) :
+    GlobalCompletionState ([], []) [] w.wg :=
+  Configuration.global_initial trace w hw
 
 /-- Complete original TX calls preserve the routing table, node/peer frontiers
 and each surviving resident list on every normal return, including ordinary
@@ -1988,16 +2000,16 @@ callbacks require their own routing frames; the checksum and Stack callbacks
 are also discharged concretely. This is not destination authorization. -/
 theorem original_tx_routing_frames (family addr : Nat) (packets : List WG.Packet) (mtu : Nat)
     (pid : WG.PeerId) (item : List WG.SkbId) (bytes : List UInt8)
-    (checksum : WG.Packet → M WG.Packet) (softirq : M Unit) (need : M Bool)
-    (hc : ∀ pkt, RetainsRoutingCall (checksum pkt))
-    (hs : RetainsRoutingCall softirq) (hn : RetainsRoutingCall need) :
+    (checksum : WG.Packet → Leanux.M WG.Packet) (softirq : Leanux.M Unit) (need : Leanux.M Bool)
+    (hc : ∀ pkt, ProductRetainsRoutingCall (checksum pkt))
+    (hs : ProductRetainsRoutingCall softirq) (hn : ProductRetainsRoutingCall need) :
     RetainsRoutingCall (WG.wgXmit family addr packets mtu) ∧
     RetainsRoutingCall (WG.createDataDone pid item) ∧
-    RetainsRoutingCall (WG.txStep pid) ∧ RetainsRoutingCall (WG.txIter pid need) ∧
-    RetainsRoutingCall (WG.encryptStep checksum softirq) ∧
-    RetainsRoutingCall (WG.encryptIter checksum softirq need) ∧
-    RetainsRoutingCall (Env.deliverInner bytes) ∧
-    (∀ pkt, RetainsRoutingCall (Env.checksumHelp pkt)) :=
+    RetainsRoutingCall (WG.txStep pid) ∧ ProductRetainsRoutingCall (WG.txIter pid need) ∧
+    ProductRetainsRoutingCall (WG.encryptStep checksum softirq) ∧
+    ProductRetainsRoutingCall (WG.encryptIter checksum softirq need) ∧
+    ProductRetainsRoutingCall (Env.deliverInner bytes) ∧
+    (∀ pkt, ProductRetainsRoutingCall (Env.checksumHelp pkt)) :=
   ⟨wgXmit_routing family addr packets mtu, createDataDone_routing pid item,
     txStep_routing pid, txIter_routing pid need hn,
     encryptStep_routing checksum softirq hc hs, encryptIter_routing checksum softirq need hc hs hn,
@@ -2011,14 +2023,14 @@ execution or drain premise is imposed. No authorization or delivery conclusion
 follows from this routing frame. -/
 theorem original_rx_routing_frames (pid : WG.PeerId) (budget : Nat)
     (pkt : WG.RxPacket) (endpoint : WG.Endpoint)
-    (callback : List (List UInt8) → M Unit) (softirq irq : M Unit) (need : M Bool)
-    (hc : ∀ xs, RetainsRoutingCall (callback xs))
-    (hs : RetainsRoutingCall softirq) (hi : RetainsRoutingCall irq) (hn : RetainsRoutingCall need) :
+    (callback : List (List UInt8) → Leanux.M Unit) (softirq irq : Leanux.M Unit) (need : Leanux.M Bool)
+    (hc : ∀ xs, ProductRetainsRoutingCall (callback xs))
+    (hs : ProductRetainsRoutingCall softirq) (hi : ProductRetainsRoutingCall irq) (hn : ProductRetainsRoutingCall need) :
     RetainsRoutingCall (WG.consumeDataDone pid pkt endpoint) ∧
-    RetainsRoutingCall (WG.rxPoll pid budget callback) ∧
-    RetainsRoutingCall (WG.rxPoll pid budget (fun xs => xs.forM Env.deliverInner)) ∧
-    RetainsRoutingCall (WG.decryptStep softirq irq) ∧
-    RetainsRoutingCall (WG.decryptIter softirq irq need) :=
+    ProductRetainsRoutingCall (WG.rxPoll pid budget callback) ∧
+    ProductRetainsRoutingCall (WG.rxPoll pid budget (fun xs => xs.forM Env.deliverInner)) ∧
+    ProductRetainsRoutingCall (WG.decryptStep softirq irq) ∧
+    ProductRetainsRoutingCall (WG.decryptIter softirq irq need) :=
   ⟨consumeDataDone_routing pid pkt endpoint, rxPoll_routing pid budget callback hc,
     actualRxPoll_routing pid budget, decryptStep_routing softirq irq hs hi,
     decryptIter_routing softirq irq need hs hi hn⟩
@@ -2031,29 +2043,34 @@ scheduler/Runner claim. -/
 theorem original_traffic_routing_completion (initial : FlatTable × FlatTable)
     (family addr : Nat) (packets : List WG.Packet) (mtu : Nat)
     (pid : WG.PeerId) (budget : Nat) (pkt : WG.RxPacket) (endpoint : WG.Endpoint) :
-    (Logged.ErasesPrefix (Logged.liftPrefix (Event := RoutingCompletion) (WG.wgXmit family addr packets mtu))
+    (Logged.ErasesStatePrefix (Logged.liftWGPrefix (E := RoutingCompletion) (WG.wgXmit family addr packets mtu))
         (WG.wgXmit family addr packets mtu) ∧
-      Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
-        (Logged.liftPrefix (WG.wgXmit family addr packets mtu))) ∧
-    (Logged.ErasesPrefix (Logged.liftPrefix (Event := RoutingCompletion) (WG.txStep pid)) (WG.txStep pid) ∧
-      Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
-        (Logged.liftPrefix (WG.txStep pid))) ∧
-    (Logged.ErasesPrefix (Logged.liftPrefix (Event := RoutingCompletion) (WG.consumeDataDone pid pkt endpoint))
+      Logged.StatePrefixPreserves (fun h w _ => GlobalCompletionState initial h w) (CompletionSafe initial)
+        (Logged.liftWGPrefix (WG.wgXmit family addr packets mtu))) ∧
+    (Logged.ErasesStatePrefix (Logged.liftWGPrefix (E := RoutingCompletion) (WG.txStep pid)) (WG.txStep pid) ∧
+      Logged.StatePrefixPreserves (fun h w _ => GlobalCompletionState initial h w) (CompletionSafe initial)
+        (Logged.liftWGPrefix (WG.txStep pid))) ∧
+    (Logged.ErasesStatePrefix (Logged.liftWGPrefix (E := RoutingCompletion) (WG.consumeDataDone pid pkt endpoint))
         (WG.consumeDataDone pid pkt endpoint) ∧
-      Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
-        (Logged.liftPrefix (WG.consumeDataDone pid pkt endpoint))) ∧
+      Logged.StatePrefixPreserves (fun h w _ => GlobalCompletionState initial h w) (CompletionSafe initial)
+        (Logged.liftWGPrefix (WG.consumeDataDone pid pkt endpoint))) ∧
     (Logged.ErasesPrefix (Logged.liftPrefix (Event := RoutingCompletion)
         (WG.rxPoll pid budget (fun xs => xs.forM Env.deliverInner)))
         (WG.rxPoll pid budget (fun xs => xs.forM Env.deliverInner)) ∧
-      Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+      Logged.PrefixPreserves (fun h w => GlobalCompletionState initial h w.wg) (CompletionSafe initial)
         (Logged.liftPrefix (WG.rxPoll pid budget (fun xs => xs.forM Env.deliverInner)))) := by
-  have lift {α : Type} (a : M α) (ha : RetainsRoutingCall a) :
+  have liftNative {α : Type} (a : WG.M α) (ha : RetainsRoutingCall a) :
+      Logged.ErasesStatePrefix (Logged.liftWGPrefix (E := RoutingCompletion) a) a ∧
+        Logged.StatePrefixPreserves (fun h w _ => GlobalCompletionState initial h w)
+          (CompletionSafe initial) (Logged.liftWGPrefix a) :=
+    ⟨Logged.erasesStatePrefix_lift a, global_completion_lift_wg initial a ha⟩
+  have liftProduct {α : Type} (a : Leanux.M α) (ha : ProductRetainsRoutingCall a) :
       Logged.ErasesPrefix (Logged.liftPrefix (Event := RoutingCompletion) a) a ∧
-        Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
-          (Logged.liftPrefix a) :=
-    ⟨Logged.erasesPrefix_lift a, global_completion_lift initial a ha⟩
-  exact ⟨lift _ (wgXmit_routing family addr packets mtu), lift _ (txStep_routing pid),
-    lift _ (consumeDataDone_routing pid pkt endpoint), lift _ (actualRxPoll_routing pid budget)⟩
+        Logged.PrefixPreserves (fun h w => GlobalCompletionState initial h w.wg)
+          (CompletionSafe initial) (Logged.liftPrefix a) :=
+    ⟨Logged.erasesPrefix_lift a, global_completion_lift World.wg initial a ha⟩
+  exact ⟨liftNative _ (wgXmit_routing family addr packets mtu), liftNative _ (txStep_routing pid),
+    liftNative _ (consumeDataDone_routing pid pkt endpoint), liftProduct _ (actualRxPoll_routing pid budget)⟩
 
 /-- Original receive admission, including keypair refusal and EPIPE/ENOSPC
 cleanup, preserves the routing table/frontiers and every surviving resident
@@ -2066,13 +2083,13 @@ theorem original_receive_admission_routing (initial : FlatTable × FlatTable)
     RetainsRoutingCall (WG.consumeData msg src ds) ∧
     RetainsRoutingCall (WG.packetReceive msg src) ∧
     RetainsRoutingCall (WG.wgReceive msg src) ∧
-    Logged.ErasesPrefix (Logged.liftPrefix (Event := RoutingCompletion) (WG.wgReceive msg src))
+    Logged.ErasesStatePrefix (Logged.liftWGPrefix (E := RoutingCompletion) (WG.wgReceive msg src))
       (WG.wgReceive msg src) ∧
-    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
-      (Logged.liftPrefix (WG.wgReceive msg src)) :=
+    Logged.StatePrefixPreserves (fun h w _ => GlobalCompletionState initial h w) (CompletionSafe initial)
+      (Logged.liftWGPrefix (WG.wgReceive msg src)) :=
   ⟨enqueuePerDeviceAndPeerRx_routing id, consumeData_routing msg src ds,
     packetReceive_routing msg src, wgReceive_routing msg src,
-    Logged.erasesPrefix_lift _, global_completion_lift initial _ (wgReceive_routing msg src)⟩
+    Logged.erasesStatePrefix_lift _, global_completion_lift_wg initial _ (wgReceive_routing msg src)⟩
 
 /-- Both actual direct poll callers, IRQ-exit placement and crypt iterations
 now have concrete routing frames: checksum, Stack, softirq, IRQ and rescheduling
@@ -2080,25 +2097,25 @@ callbacks are discharged. Original pending-map scans, ambiguity choices and
 Stops remain. No saved-list or progress premise is imposed. This local caller
 closure is not a complete activation/scheduler or packet-authorization theorem. -/
 theorem original_concrete_napi_routing (initial : FlatTable × FlatTable) (pid : WG.PeerId) :
-    RetainsRoutingCall Env.napiSoftirq ∧ RetainsRoutingCall Env.pollScheduledInline ∧
-    RetainsRoutingCall Env.napiIrqExit ∧
-    RetainsRoutingCall (WG.encryptStep Env.checksumHelp Env.napiSoftirq) ∧
-    RetainsRoutingCall (WG.encryptIter Env.checksumHelp Env.napiSoftirq (Env.condResched .encryptWorker)) ∧
-    RetainsRoutingCall (WG.decryptStep Env.napiSoftirq Env.napiIrqExit) ∧
-    RetainsRoutingCall (WG.decryptIter Env.napiSoftirq Env.napiIrqExit (Env.condResched .decryptWorker)) ∧
-    RetainsRoutingCall (WG.txIter pid (Env.condResched .txWorker)) ∧
-    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+    ProductRetainsRoutingCall Env.napiSoftirq ∧ ProductRetainsRoutingCall Env.pollScheduledInline ∧
+    ProductRetainsRoutingCall Env.napiIrqExit ∧
+    ProductRetainsRoutingCall (WG.encryptStep Env.checksumHelp Env.napiSoftirq) ∧
+    ProductRetainsRoutingCall (WG.encryptIter Env.checksumHelp Env.napiSoftirq (Env.condResched .encryptWorker)) ∧
+    ProductRetainsRoutingCall (WG.decryptStep Env.napiSoftirq Env.napiIrqExit) ∧
+    ProductRetainsRoutingCall (WG.decryptIter Env.napiSoftirq Env.napiIrqExit (Env.condResched .decryptWorker)) ∧
+    ProductRetainsRoutingCall (WG.txIter pid (Env.condResched .txWorker)) ∧
+    Logged.PrefixPreserves (fun h w => GlobalCompletionState initial h w.wg) (CompletionSafe initial)
       (Logged.liftPrefix Env.napiSoftirq) ∧
-    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+    Logged.PrefixPreserves (fun h w => GlobalCompletionState initial h w.wg) (CompletionSafe initial)
       (Logged.liftPrefix Env.pollScheduledInline) ∧
-    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+    Logged.PrefixPreserves (fun h w => GlobalCompletionState initial h w.wg) (CompletionSafe initial)
       (Logged.liftPrefix Env.napiIrqExit) :=
   ⟨napiSoftirq_routing, pollScheduledInline_routing, napiIrqExit_routing,
     actualEncryptStep_routing, actualEncryptIter_routing, actualDecryptStep_routing,
     actualDecryptIter_routing, actualTxIter_routing pid,
-    global_completion_lift initial _ napiSoftirq_routing,
-    global_completion_lift initial _ pollScheduledInline_routing,
-    global_completion_lift initial _ napiIrqExit_routing⟩
+    global_completion_lift World.wg initial _ napiSoftirq_routing,
+    global_completion_lift World.wg initial _ pollScheduledInline_routing,
+    global_completion_lift World.wg initial _ napiIrqExit_routing⟩
 
 /-- Every original timer callback and device open/up/namespace-exit preserves
 routing on normal return, including ordinary negative errors. Peer deletion is
@@ -2112,18 +2129,18 @@ theorem original_timer_device_routing (initial : FlatTable × FlatTable)
     RetainsRoutingCall (WG.timerCallback pid timer) ∧
     RetainsRoutingCall WG.wgOpen ∧ RetainsRoutingCall WG.wgUp ∧
     Framing.SameView routingView WG.netnsPreExit ∧
-    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
-      (Logged.liftPrefix (WG.timerCallback pid timer)) ∧
-    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
-      (Logged.liftPrefix WG.wgOpen) ∧
-    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
-      (Logged.liftPrefix WG.wgUp) ∧
-    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
-      (Logged.liftPrefix WG.netnsPreExit) :=
+    Logged.StatePrefixPreserves (fun h w _ => GlobalCompletionState initial h w) (CompletionSafe initial)
+      (Logged.liftWGPrefix (WG.timerCallback pid timer)) ∧
+    Logged.StatePrefixPreserves (fun h w _ => GlobalCompletionState initial h w) (CompletionSafe initial)
+      (Logged.liftWGPrefix WG.wgOpen) ∧
+    Logged.StatePrefixPreserves (fun h w _ => GlobalCompletionState initial h w) (CompletionSafe initial)
+      (Logged.liftWGPrefix WG.wgUp) ∧
+    Logged.StatePrefixPreserves (fun h w _ => GlobalCompletionState initial h w) (CompletionSafe initial)
+      (Logged.liftWGPrefix WG.netnsPreExit) :=
   ⟨timerCallback_routing pid timer, wgOpen_routing, wgUp_routing, netnsPreExit_routing,
-    global_completion_lift initial _ (timerCallback_routing pid timer),
-    global_completion_lift initial _ wgOpen_routing, global_completion_lift initial _ wgUp_routing,
-    global_completion_same initial _ netnsPreExit_routing⟩
+    global_completion_lift_wg initial _ (timerCallback_routing pid timer),
+    global_completion_lift_wg initial _ wgOpen_routing, global_completion_lift_wg initial _ wgUp_routing,
+    global_completion_same_wg initial _ netnsPreExit_routing⟩
 
 /-- Original session creation and response sending preserve the complete routing
 view on normal return. Actual getter facts justify peer setters; keypair/index
@@ -2134,13 +2151,12 @@ theorem original_session_routing_frames (pid : WG.PeerId) (peerWord : Option WG.
     Framing.SameView routingView (WG.keypairCreate peerWord) ∧
     Framing.SameView routingView (WG.addNewKeypair pid kp) ∧
     Framing.SameView routingView (WG.deriveKeys kp initiator ck) ∧
-    Framing.SameView routingView (WG.indexReplaceHandshake pid kp) ∧
     Framing.SameView routingView (WG.beginSession pid) ∧
     Framing.SameView routingView (WG.createResponse pid) ∧
     Framing.SameView routingView (WG.timersSessionDerived pid) ∧
     Framing.SameView routingView (WG.sendHandshakeResponse pid) :=
   ⟨keypairCreate_routing peerWord, addNewKeypair_routing pid kp, deriveKeys_routing kp initiator ck,
-    indexReplaceHandshake_routing pid kp, beginSession_routing pid, createResponse_routing pid,
+    beginSession_routing pid, createResponse_routing pid,
     timersSessionDerived_routing pid, sendHandshakeResponse_routing pid⟩
 
 /-- Complete original incoming Noise/cookie and handshake receive calls retain
@@ -2154,7 +2170,7 @@ theorem original_handshake_receive_routing_frames (msg : List UInt8) (src : WG.S
     RetainsRoutingCall (WG.cookieMessageConsume msg) ∧
     RetainsRoutingCall (WG.receiveHandshakePacket msg src) ∧
     RetainsRoutingCall WG.receiveStep ∧
-    RetainsRoutingCall (workerIter .receiveWorker none WG.receiveStep (Env.condResched .receiveWorker)) :=
+    ProductRetainsRoutingCall (workerIter .receiveWorker none (Leanux.liftWG WG.receiveStep) (Env.condResched .receiveWorker)) :=
   ⟨consumeInitiation_routing msg, consumeResponse_routing msg, cookieMessageConsume_routing msg,
     receiveHandshakePacket_routing msg src, receiveStep_routing, actualReceiveIter_routing⟩
 
@@ -2165,38 +2181,43 @@ without a failed World. Scheduler composition is supplied below; no packet
 authorization or Runner closure follows from these local caller contracts. -/
 theorem original_handshake_routing_completion (initial : FlatTable × FlatTable)
     (msg : List UInt8) (src : WG.SkbSource) :
-    (Logged.ErasesPrefix (Logged.liftPrefix (Event := RoutingCompletion) (WG.consumeInitiation msg))
+    (Logged.ErasesStatePrefix (Logged.liftWGPrefix (E := RoutingCompletion) (WG.consumeInitiation msg))
         (WG.consumeInitiation msg) ∧
-      Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
-        (Logged.liftPrefix (WG.consumeInitiation msg))) ∧
-    (Logged.ErasesPrefix (Logged.liftPrefix (Event := RoutingCompletion) (WG.consumeResponse msg))
+      Logged.StatePrefixPreserves (fun h w _ => GlobalCompletionState initial h w) (CompletionSafe initial)
+        (Logged.liftWGPrefix (WG.consumeInitiation msg))) ∧
+    (Logged.ErasesStatePrefix (Logged.liftWGPrefix (E := RoutingCompletion) (WG.consumeResponse msg))
         (WG.consumeResponse msg) ∧
-      Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
-        (Logged.liftPrefix (WG.consumeResponse msg))) ∧
-    (Logged.ErasesPrefix (Logged.liftPrefix (Event := RoutingCompletion) (WG.cookieMessageConsume msg))
+      Logged.StatePrefixPreserves (fun h w _ => GlobalCompletionState initial h w) (CompletionSafe initial)
+        (Logged.liftWGPrefix (WG.consumeResponse msg))) ∧
+    (Logged.ErasesStatePrefix (Logged.liftWGPrefix (E := RoutingCompletion) (WG.cookieMessageConsume msg))
         (WG.cookieMessageConsume msg) ∧
-      Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
-        (Logged.liftPrefix (WG.cookieMessageConsume msg))) ∧
-    (Logged.ErasesPrefix (Logged.liftPrefix (Event := RoutingCompletion) (WG.receiveHandshakePacket msg src))
+      Logged.StatePrefixPreserves (fun h w _ => GlobalCompletionState initial h w) (CompletionSafe initial)
+        (Logged.liftWGPrefix (WG.cookieMessageConsume msg))) ∧
+    (Logged.ErasesStatePrefix (Logged.liftWGPrefix (E := RoutingCompletion) (WG.receiveHandshakePacket msg src))
         (WG.receiveHandshakePacket msg src) ∧
-      Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
-        (Logged.liftPrefix (WG.receiveHandshakePacket msg src))) ∧
-    (Logged.ErasesPrefix (Logged.liftPrefix (Event := RoutingCompletion) WG.receiveStep) WG.receiveStep ∧
-      Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
-        (Logged.liftPrefix WG.receiveStep)) ∧
+      Logged.StatePrefixPreserves (fun h w _ => GlobalCompletionState initial h w) (CompletionSafe initial)
+        (Logged.liftWGPrefix (WG.receiveHandshakePacket msg src))) ∧
+    (Logged.ErasesStatePrefix (Logged.liftWGPrefix (E := RoutingCompletion) WG.receiveStep) WG.receiveStep ∧
+      Logged.StatePrefixPreserves (fun h w _ => GlobalCompletionState initial h w) (CompletionSafe initial)
+        (Logged.liftWGPrefix WG.receiveStep)) ∧
     (Logged.ErasesPrefix (Logged.liftPrefix (Event := RoutingCompletion)
-        (workerIter .receiveWorker none WG.receiveStep (Env.condResched .receiveWorker)))
-        (workerIter .receiveWorker none WG.receiveStep (Env.condResched .receiveWorker)) ∧
-      Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
-        (Logged.liftPrefix (workerIter .receiveWorker none WG.receiveStep (Env.condResched .receiveWorker)))) := by
-  have lift {α : Type} (a : M α) (ha : RetainsRoutingCall a) :
+        (workerIter .receiveWorker none (Leanux.liftWG WG.receiveStep) (Env.condResched .receiveWorker)))
+        (workerIter .receiveWorker none (Leanux.liftWG WG.receiveStep) (Env.condResched .receiveWorker)) ∧
+      Logged.PrefixPreserves (fun h w => GlobalCompletionState initial h w.wg) (CompletionSafe initial)
+        (Logged.liftPrefix (workerIter .receiveWorker none (Leanux.liftWG WG.receiveStep) (Env.condResched .receiveWorker)))) := by
+  have liftNative {α : Type} (a : WG.M α) (ha : RetainsRoutingCall a) :
+      Logged.ErasesStatePrefix (Logged.liftWGPrefix (E := RoutingCompletion) a) a ∧
+        Logged.StatePrefixPreserves (fun h w _ => GlobalCompletionState initial h w)
+          (CompletionSafe initial) (Logged.liftWGPrefix a) :=
+    ⟨Logged.erasesStatePrefix_lift a, global_completion_lift_wg initial a ha⟩
+  have liftProduct {α : Type} (a : Leanux.M α) (ha : ProductRetainsRoutingCall a) :
       Logged.ErasesPrefix (Logged.liftPrefix (Event := RoutingCompletion) a) a ∧
-        Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
-          (Logged.liftPrefix a) :=
-    ⟨Logged.erasesPrefix_lift a, global_completion_lift initial a ha⟩
-  exact ⟨lift _ (consumeInitiation_routing msg), lift _ (consumeResponse_routing msg),
-    lift _ (cookieMessageConsume_routing msg), lift _ (receiveHandshakePacket_routing msg src),
-    lift _ receiveStep_routing, lift _ actualReceiveIter_routing⟩
+        Logged.PrefixPreserves (fun h w => GlobalCompletionState initial h w.wg)
+          (CompletionSafe initial) (Logged.liftPrefix a) :=
+    ⟨Logged.erasesPrefix_lift a, global_completion_lift World.wg initial a ha⟩
+  exact ⟨liftNative _ (consumeInitiation_routing msg), liftNative _ (consumeResponse_routing msg),
+    liftNative _ (cookieMessageConsume_routing msg), liftNative _ (receiveHandshakePacket_routing msg src),
+    liftNative _ receiveStep_routing, liftProduct _ actualReceiveIter_routing⟩
 
 /-- The actual pre-encryption helper, all activation iterations and complete
 scheduler retain routing on normal return from arbitrary Worlds. Exact source
@@ -2206,26 +2227,26 @@ Silent whole-call lifts preserve optional routing on normal return and retain
 prior safe completion histories on Stop, without a failed World. -/
 theorem original_scheduler_routing (initial : FlatTable × FlatTable)
     (pid : WG.PeerId) (a : Activation) (worker : Worker) (stack : Option Worker) :
-    RetainsRoutingCall (Env.cryptAhead pid) ∧
-    RetainsRoutingCall (Env.Activation.iter a) ∧
-    RetainsRoutingCall (Env.Activation.run a) ∧
-    RetainsRoutingCall (Env.dispatch worker) ∧
-    RetainsRoutingCall (Env.schedule stack) ∧
-    RetainsRoutingCall (Env.nestedResched worker) ∧
-    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+    ProductRetainsRoutingCall (Env.cryptAhead pid) ∧
+    ProductRetainsRoutingCall (Env.Activation.iter a) ∧
+    ProductRetainsRoutingCall (Env.Activation.run a) ∧
+    ProductRetainsRoutingCall (Env.dispatch worker) ∧
+    ProductRetainsRoutingCall (Env.schedule stack) ∧
+    ProductRetainsRoutingCall (Env.nestedResched worker) ∧
+    Logged.PrefixPreserves (fun h w => GlobalCompletionState initial h w.wg) (CompletionSafe initial)
       (Logged.liftPrefix (Env.Activation.run a)) ∧
-    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+    Logged.PrefixPreserves (fun h w => GlobalCompletionState initial h w.wg) (CompletionSafe initial)
       (Logged.liftPrefix (Env.dispatch worker)) ∧
-    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+    Logged.PrefixPreserves (fun h w => GlobalCompletionState initial h w.wg) (CompletionSafe initial)
       (Logged.liftPrefix (Env.schedule stack)) ∧
-    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+    Logged.PrefixPreserves (fun h w => GlobalCompletionState initial h w.wg) (CompletionSafe initial)
       (Logged.liftPrefix (Env.nestedResched worker)) :=
   ⟨cryptAhead_routing pid, activationIter_routing a, activationRun_routing a,
     dispatch_routing worker, schedule_routing stack, nestedResched_routing worker,
-    global_completion_lift initial _ (activationRun_routing a),
-    global_completion_lift initial _ (dispatch_routing worker),
-    global_completion_lift initial _ (schedule_routing stack),
-    global_completion_lift initial _ (nestedResched_routing worker)⟩
+    global_completion_lift World.wg initial _ (activationRun_routing a),
+    global_completion_lift World.wg initial _ (dispatch_routing worker),
+    global_completion_lift World.wg initial _ (schedule_routing stack),
+    global_completion_lift World.wg initial _ (nestedResched_routing worker)⟩
 
 /-- Actual deferred crypt/send/clear workers and transmit completion retain
 routing and surviving peer lists. Queue membership supplies no residency premise;
@@ -2234,25 +2255,25 @@ contract is included without a drain-success assumption. Whole-call lifts keep
 the journal unchanged on every outcome and optional state only on normal return. -/
 theorem original_environment_worker_routing (initial : FlatTable × FlatTable)
     (what : String) (queues : List Bool) (upTo : Option WG.PeerId) :
-    Framing.SameView routingView (Env.requireDrained what queues) ∧
-    RetainsRoutingCall Env.runCryptWorkers ∧
-    RetainsRoutingCall Env.runOneSendWorker ∧
-    RetainsRoutingCall Env.runOneClearWorker ∧
-    RetainsRoutingCall Env.runSendWorkers ∧
-    RetainsRoutingCall Env.afterXmit ∧
+    Framing.SameView (fun w : World => routingView w.wg) (Env.requireDrained what queues) ∧
+    ProductRetainsRoutingCall Env.runCryptWorkers ∧
+    ProductRetainsRoutingCall Env.runOneSendWorker ∧
+    ProductRetainsRoutingCall Env.runOneClearWorker ∧
+    ProductRetainsRoutingCall Env.runSendWorkers ∧
+    ProductRetainsRoutingCall Env.afterXmit ∧
     RetainsRoutingCall (WG.drainHandshakeSendWq upTo) ∧
-    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+    Logged.PrefixPreserves (fun h w => GlobalCompletionState initial h w.wg) (CompletionSafe initial)
       (Logged.liftPrefix Env.runCryptWorkers) ∧
-    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+    Logged.PrefixPreserves (fun h w => GlobalCompletionState initial h w.wg) (CompletionSafe initial)
       (Logged.liftPrefix Env.runSendWorkers) ∧
-    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+    Logged.PrefixPreserves (fun h w => GlobalCompletionState initial h w.wg) (CompletionSafe initial)
       (Logged.liftPrefix Env.afterXmit) :=
   ⟨requireDrained_routing what queues, runCryptWorkers_routing, runOneSendWorker_routing,
     runOneClearWorker_routing, runSendWorkers_routing, afterXmit_routing,
     drainHandshakeSendWq_routing upTo,
-    global_completion_lift initial _ runCryptWorkers_routing,
-    global_completion_lift initial _ runSendWorkers_routing,
-    global_completion_lift initial _ afterXmit_routing⟩
+    global_completion_lift World.wg initial _ runCryptWorkers_routing,
+    global_completion_lift World.wg initial _ runSendWorkers_routing,
+    global_completion_lift World.wg initial _ afterXmit_routing⟩
 
 /-- Recorded timer dispatch, the original placeholder pass and enclosing idle/
 advance calls retain routing on normal return. All concrete timer callbacks are
@@ -2261,28 +2282,27 @@ added. Whole-call lifts retain prior safe history on Stop, with no failed World,
 packet authorization or initialized enclosing Runner claim. -/
 theorem original_environment_timer_routing (initial : FlatTable × FlatTable)
     (worker : Worker) (pid : WG.PeerId) (timer : WG.PeerTimer) (jHi : UInt64) (ticks : Nat) :
-    RetainsRoutingCall (Env.runTimerSection worker (WG.timerCallback pid timer)) ∧
-    RetainsRoutingCall (Env.fireTimer worker jHi) ∧
-    RetainsRoutingCall (Env.runTimers jHi) ∧
-    RetainsRoutingCall (Env.runTimersPlaceholder jHi) ∧
-    RetainsRoutingCall Env.idleTimers ∧
-    Framing.SameView routingView (Env.advance ticks) ∧
-    RetainsRoutingCall Env.afterAdvance ∧
-    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+    ProductRetainsRoutingCall (Env.runTimerSection worker (Leanux.liftWG (WG.timerCallback pid timer))) ∧
+    ProductRetainsRoutingCall (Env.runTimers jHi) ∧
+    ProductRetainsRoutingCall (Env.runTimersPlaceholder jHi) ∧
+    ProductRetainsRoutingCall Env.idleTimers ∧
+    Framing.SameView (fun w : World => routingView w.wg) (Env.advance ticks) ∧
+    ProductRetainsRoutingCall Env.afterAdvance ∧
+    Logged.PrefixPreserves (fun h w => GlobalCompletionState initial h w.wg) (CompletionSafe initial)
       (Logged.liftPrefix (Env.runTimers jHi)) ∧
-    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+    Logged.PrefixPreserves (fun h w => GlobalCompletionState initial h w.wg) (CompletionSafe initial)
       (Logged.liftPrefix (Env.runTimersPlaceholder jHi)) ∧
-    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+    Logged.PrefixPreserves (fun h w => GlobalCompletionState initial h w.wg) (CompletionSafe initial)
       (Logged.liftPrefix Env.idleTimers) ∧
-    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+    Logged.PrefixPreserves (fun h w => GlobalCompletionState initial h w.wg) (CompletionSafe initial)
       (Logged.liftPrefix Env.afterAdvance) :=
-  ⟨runTimerSection_routing worker _ (timerCallback_routing pid timer),
-    fireTimer_routing worker jHi, runTimers_routing jHi, runTimersPlaceholder_routing jHi,
+  ⟨runTimerSection_routing worker _ (timerCallback_routing pid timer).liftWG,
+    runTimers_routing jHi, runTimersPlaceholder_routing jHi,
     idleTimers_routing, advance_routing ticks, afterAdvance_routing,
-    global_completion_lift initial _ (runTimers_routing jHi),
-    global_completion_lift initial _ (runTimersPlaceholder_routing jHi),
-    global_completion_lift initial _ idleTimers_routing,
-    global_completion_lift initial _ afterAdvance_routing⟩
+    global_completion_lift World.wg initial _ (runTimers_routing jHi),
+    global_completion_lift World.wg initial _ (runTimersPlaceholder_routing jHi),
+    global_completion_lift World.wg initial _ idleTimers_routing,
+    global_completion_lift World.wg initial _ afterAdvance_routing⟩
 
 /-- Complete original receive-worker, ingress/flood and batch calls retain
 routing on normal return from arbitrary Worlds. Concrete nested rescheduling and
@@ -2292,26 +2312,26 @@ lifts preserve optional state normally and prior safe journals on Stop. -/
 theorem original_environment_traffic_routing (initial : FlatTable × FlatTable)
     (family port count tos dest addr : Nat) (msg : List UInt8) (ll : Bool)
     (messages : List (List UInt8)) (items : List Env.BatchItem) :
-    RetainsRoutingCall (WG.handshakeReceiveWorker (Env.nestedResched .receiveWorker)) ∧
-    Framing.SameView routingView (Env.xmitMulticastLoop family addr) ∧
-    RetainsRoutingCall (Env.inject family port msg tos ll dest) ∧
-    RetainsRoutingCall (Env.flood count port family messages) ∧
-    RetainsRoutingCall Env.afterBatch ∧ RetainsRoutingCall (Env.batch items) ∧
-    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+    ProductRetainsRoutingCall (WG.handshakeReceiveWorker (Env.nestedResched .receiveWorker)) ∧
+    Framing.SameView (fun w : World => routingView w.wg) (Env.xmitMulticastLoop family addr) ∧
+    ProductRetainsRoutingCall (Env.inject family port msg tos ll dest) ∧
+    ProductRetainsRoutingCall (Env.flood count port family messages) ∧
+    ProductRetainsRoutingCall Env.afterBatch ∧ ProductRetainsRoutingCall (Env.batch items) ∧
+    Logged.PrefixPreserves (fun h w => GlobalCompletionState initial h w.wg) (CompletionSafe initial)
       (Logged.liftPrefix (WG.handshakeReceiveWorker (Env.nestedResched .receiveWorker))) ∧
-    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+    Logged.PrefixPreserves (fun h w => GlobalCompletionState initial h w.wg) (CompletionSafe initial)
       (Logged.liftPrefix (Env.inject family port msg tos ll dest)) ∧
-    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+    Logged.PrefixPreserves (fun h w => GlobalCompletionState initial h w.wg) (CompletionSafe initial)
       (Logged.liftPrefix (Env.flood count port family messages)) ∧
-    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+    Logged.PrefixPreserves (fun h w => GlobalCompletionState initial h w.wg) (CompletionSafe initial)
       (Logged.liftPrefix (Env.batch items)) :=
   ⟨handshakeReceiveWorker_routing, xmitMulticastLoop_routing family addr,
     inject_routing family port msg tos ll dest, flood_routing count port family messages,
     afterBatch_routing, batch_routing items,
-    global_completion_lift initial _ handshakeReceiveWorker_routing,
-    global_completion_lift initial _ (inject_routing family port msg tos ll dest),
-    global_completion_lift initial _ (flood_routing count port family messages),
-    global_completion_lift initial _ (batch_routing items)⟩
+    global_completion_lift World.wg initial _ handshakeReceiveWorker_routing,
+    global_completion_lift World.wg initial _ (inject_routing family port msg tos ll dest),
+    global_completion_lift World.wg initial _ (flood_routing count port family messages),
+    global_completion_lift World.wg initial _ (batch_routing items)⟩
 
 /-- Original environment controls retain routing normally, including the actual
 MTU conversion and namespace worker. Environment deletion instead observes the
@@ -2320,26 +2340,26 @@ unconditional and semantic prefix preservation starts from optional routing/flat
 agreement. Stops retain safe completed history without a returned World. -/
 theorem original_environment_controls_completion (initial : FlatTable × FlatTable)
     (mtu family : Nat) :
-    Framing.SameView routingView Env.requireIdleDevice ∧
-    RetainsRoutingCall Env.wgUp ∧ RetainsRoutingCall Env.wgDown ∧
-    Framing.SameView routingView (Env.setMtu mtu) ∧
-    Framing.SameView routingView Env.routeIntoWg0 ∧
-    Framing.SameView routingView (Env.wgDeladdr family) ∧
-    Framing.SameView routingView (Env.wgDelroute family) ∧
-    RetainsRoutingCall Env.observe ∧ RetainsRoutingCall Env.netnsCleanup ∧
+    Framing.SameView (fun w : World => routingView w.wg) Env.requireIdleDevice ∧
+    ProductRetainsRoutingCall Env.wgUp ∧ ProductRetainsRoutingCall Env.wgDown ∧
+    Framing.SameView (fun w : World => routingView w.wg) (Env.setMtu mtu) ∧
+    Framing.SameView (fun w : World => routingView w.wg) Env.routeIntoWg0 ∧
+    Framing.SameView (fun w : World => routingView w.wg) (Env.wgDeladdr family) ∧
+    Framing.SameView (fun w : World => routingView w.wg) (Env.wgDelroute family false 0 0 0 0 0) ∧
+    ProductRetainsRoutingCall Env.observe ∧ ProductRetainsRoutingCall Env.netnsCleanup ∧
     Logged.ErasesPrefix envWgDeleteObserved Env.wgDelete ∧
-    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+    Logged.PrefixPreserves (fun h w => GlobalCompletionState initial h w.wg) (CompletionSafe initial)
       envWgDeleteObserved ∧
-    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+    Logged.PrefixPreserves (fun h w => GlobalCompletionState initial h w.wg) (CompletionSafe initial)
       (Logged.liftPrefix Env.observe) ∧
-    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+    Logged.PrefixPreserves (fun h w => GlobalCompletionState initial h w.wg) (CompletionSafe initial)
       (Logged.liftPrefix Env.netnsCleanup) :=
   ⟨requireIdleDevice_routing, envWgUp_routing, envWgDown_routing,
     envSetMtu_routing mtu, routeIntoWg0_routing, wgDeladdr_routing family,
     wgDelroute_routing family, observe_routing, netnsCleanup_routing,
     envWgDeleteObserved_erases, envWgDeleteObserved_global initial,
-    global_completion_lift initial _ observe_routing,
-    global_completion_lift initial _ netnsCleanup_routing⟩
+    global_completion_lift World.wg initial _ observe_routing,
+    global_completion_lift World.wg initial _ netnsCleanup_routing⟩
 
 /-- Original stepped dump start/chunk/receive/completion and whole wgGetDevice
 retain routing on normal return. Cursor releases may retire resident peers;
@@ -2356,21 +2376,21 @@ theorem original_dump_routing (initial : FlatTable × FlatTable) (fd seq : Nat)
     RetainsRoutingCall (WG.netlinkDumpStart fd ref) ∧
     RetainsRoutingCall (WG.netlinkRecvmsg fd) ∧
     RetainsRoutingCall (WG.wgGetDevice ref) ∧
-    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
-      (Logged.liftPrefix (WG.netlinkDump fd)) ∧
-    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
-      (Logged.liftPrefix (WG.netlinkDumpStart fd ref)) ∧
-    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
-      (Logged.liftPrefix (WG.netlinkRecvmsg fd)) ∧
-    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
-      (Logged.liftPrefix (WG.wgGetDevice ref)) :=
+    Logged.StatePrefixPreserves (fun h w _ => GlobalCompletionState initial h w) (CompletionSafe initial)
+      (Logged.liftWGPrefix (WG.netlinkDump fd)) ∧
+    Logged.StatePrefixPreserves (fun h w _ => GlobalCompletionState initial h w) (CompletionSafe initial)
+      (Logged.liftWGPrefix (WG.netlinkDumpStart fd ref)) ∧
+    Logged.StatePrefixPreserves (fun h w _ => GlobalCompletionState initial h w) (CompletionSafe initial)
+      (Logged.liftWGPrefix (WG.netlinkRecvmsg fd)) ∧
+    Logged.StatePrefixPreserves (fun h w _ => GlobalCompletionState initial h w) (CompletionSafe initial)
+      (Logged.liftWGPrefix (WG.wgGetDevice ref)) :=
   ⟨wgGetDeviceDone_routing ctx, wgGetDeviceDump_routing ctx seq skb,
     netlinkDump_routing fd, netlinkDumpStart_routing fd ref,
     netlinkRecvmsg_routing fd, wgGetDevice_routing ref,
-    global_completion_lift initial _ (netlinkDump_routing fd),
-    global_completion_lift initial _ (netlinkDumpStart_routing fd ref),
-    global_completion_lift initial _ (netlinkRecvmsg_routing fd),
-    global_completion_lift initial _ (wgGetDevice_routing ref)⟩
+    global_completion_lift_wg initial _ (netlinkDump_routing fd),
+    global_completion_lift_wg initial _ (netlinkDumpStart_routing fd ref),
+    global_completion_lift_wg initial _ (netlinkRecvmsg_routing fd),
+    global_completion_lift_wg initial _ (wgGetDevice_routing ref)⟩
 
 /-- Every typed syscall/trace and both Runner flags retain exact execution,
 without address-shape assumptions. The full observed Json × World erases to a
@@ -2392,9 +2412,9 @@ and safe completed prefixes from explicit entry agreement and address shape.
 Ordinary negative returns keep their actual cleanup; Stops retain history only. -/
 theorem original_syscall_routing_prefix (initial : FlatTable × FlatTable) (call : Syscall)
     (shape : Configuration.SyscallAddressShape call) :
-    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+    Logged.PrefixPreserves (fun h w => GlobalCompletionState initial h w.wg) (CompletionSafe initial)
       (Configuration.dispatchObserved call) ∧
-    Logged.PrefixPreserves (GlobalCompletionState initial) (CompletionSafe initial)
+    Logged.PrefixPreserves (fun h w => GlobalCompletionState initial h w.wg) (CompletionSafe initial)
       (Configuration.syscallObserved call) :=
   ⟨Configuration.dispatchObserved_global initial call shape,
     Configuration.syscallObserved_global initial call shape⟩
@@ -2414,7 +2434,7 @@ theorem parsed_initialized_routing_execution (json : Lean.Json) (trace : Runner.
       (Logged.runPrefixOuter (Configuration.executeTraceObserved trace placeholders) []).2 ∧
     ∀ out, (Logged.runPrefixOuter (Configuration.executeTraceObserved trace placeholders) []).1 = .ok out →
       GlobalCompletionState ([], [])
-        (Logged.runPrefixOuter (Configuration.executeTraceObserved trace placeholders) []).2 out.2 :=
+        (Logged.runPrefixOuter (Configuration.executeTraceObserved trace placeholders) []).2 out.2.wg :=
   ⟨Configuration.executeTraceObserved_erases trace placeholders,
     Configuration.sourceRunner_json trace placeholders,
     Configuration.parsed_executeTraceObserved_routing json trace parsed placeholders⟩
@@ -2432,7 +2452,7 @@ theorem original_nullable_index_affiliation (kinds : List IndexKind) (index : Na
     (⦃fun w => ⌜Affiliation.Inv w⌝⦄ WG.indexLookup kinds index
       ⦃⇓? result w => ⌜Affiliation.Inv w ∧ ∀ owner borrowed,
         result = some (.handshake owner, borrowed) → borrowed = owner⌝⦄) ∧
-    (∀ owner pid w v, (Affiliation.acquireOwner owner).run w = .ok (some pid, v) →
+    (∀ owner pid w v ambient ambient', ((Affiliation.acquireOwner owner).run w).run ambient = .ok ((some pid, v), ambient') →
       Affiliation.OwnerCertificate owner pid w) :=
   ⟨Affiliation.indexLookupSource_eq kinds index, Affiliation.indexLookup_spec kinds index,
     Affiliation.acquisition_certificate⟩
@@ -2467,17 +2487,17 @@ theorem original_packet_affiliation_cuts (pid : PeerId) (kid : KeypairId)
     (⦃fun w => ⌜Affiliation.view w = state⌝⦄ Affiliation.receiveKeyAcquire entry
       ⦃⇓? result w => ⌜Affiliation.view w = state ∧ ∀ key peer,
         result = (some key, some peer) → entry = some (.keypair key, peer)⌝⦄) ∧
-    (∀ w v d p, Affiliation.Inv w → w.k.wg = some d → d.peers[pid]? = some p →
+    (∀ w v ambient ambient' d p, Affiliation.Inv w → w.dev = some d → d.peers[pid]? = some p →
       (p.keypairCurrent = some kid ∨ p.keypairPrevious = some kid ∨ p.keypairNext = some kid) →
-      (Affiliation.sendAcquire kid).run w = .ok ((), v) →
-      Framing.PeerBorrow.Borrowed w.k (some pid) v.k) ∧
-    (∀ pkt out w v, (WG.decryptPacket pkt).run w = .ok (some out, v) →
-      ∃ d k, w.k.wg = some d ∧ d.keypairs[pkt.keypair]? = some k ∧
+      ((Affiliation.sendAcquire kid).run w).run ambient = .ok (((), v), ambient') →
+      Framing.PeerBorrow.Borrowed (Framing.wgStoreView w) (some pid) (Framing.wgStoreView v)) ∧
+    (∀ pkt out w v ambient ambient', ((WG.decryptPacket pkt).run w).run ambient = .ok ((some out, v), ambient') →
+      ∃ d k, w.dev = some d ∧ d.keypairs[pkt.keypair]? = some k ∧
         out.peer = pkt.peer ∧ out.keypair = pkt.keypair ∧
         WG.aeadDecrypt k.receiving.key (WG.counterNonce (WG.u64le pkt.bytes 8)) (pkt.bytes.drop 16) [] = some out.bytes) :=
   ⟨Affiliation.sendStagedSource_eq pid, Affiliation.consumeDataSource_eq msg src ds,
     Affiliation.receiveKeyAcquire_spec entry state,
-    fun w v d p hi hd hp hs hr => Affiliation.sendAcquire_owner kid pid p w v hi hd hp hs hr,
+    fun w v ambient ambient' _ p hi hd hp hs hr => Affiliation.sendAcquire_owner kid pid p w v ambient ambient' hi hd hp hs hr,
     Affiliation.decryptPacket_fields⟩
 
 /-- Original normal source/destination lookup answers refine the independent flat
@@ -2486,11 +2506,11 @@ Actual packet constructors supply all-packet family/destination-byte shape; no
 arbitrary mixed-family list or unbounded-Nat encoding equality is assumed. -/
 theorem original_routing_lookup_and_packet_shapes (v4 : Bool) (addr : Nat)
     (bytes : List UInt8) (opts : Env.XmitOpts) :
-    (∀ w v xs peer, RoutedView (routingView w) xs →
-      (WG.lookupSrc (if v4 then 4 else 6) bytes).run w = .ok (peer, v) →
+    (∀ w v ambient ambient' xs peer, RoutedView (routingView w) xs →
+      ((WG.lookupSrc (if v4 then 4 else 6) bytes).run w).run ambient = .ok ((peer, v), ambient') →
       PeerWinner (rootWidth v4) (sourceAddress v4 bytes) (selectedFlat v4 xs) peer) ∧
-    (∀ w v xs peer, RoutedView (routingView w) xs → addr < 2 ^ rootWidth v4 →
-      (WG.lookupDst (if v4 then 4 else 6) addr).run w = .ok (peer, v) →
+    (∀ w v ambient ambient' xs peer, RoutedView (routingView w) xs → addr < 2 ^ rootWidth v4 →
+      ((WG.lookupDst (if v4 then 4 else 6) addr).run w).run ambient = .ok ((peer, v), ambient') →
       PeerWinner (rootWidth v4) addr (selectedFlat v4 xs) peer) ∧
     (⦃fun _ => ⌜True⌝⦄ Env.xmitPackets (if v4 then 4 else 6) addr bytes opts
       ⦃⇓? result _ => ⌜∀ packets mtu, result = .ok (packets, mtu) →
@@ -2499,8 +2519,8 @@ theorem original_routing_lookup_and_packet_shapes (v4 : Bool) (addr : Nat)
     (∀ outer, (if v4 then 20 else 40) ≤ bytes.length →
       (⦃fun _ => ⌜True⌝⦄ WG.inetEcnDecapsulate (if v4 then 4 else 6) outer bytes
         ⦃⇓? out _ => ⌜Packets.AddressPreserved v4 bytes out⌝⦄)) :=
-  ⟨fun w v xs peer hi hr => lookupSrc_normal w v xs v4 bytes peer hi hr,
-    fun w v xs peer hi ha hr => lookupDst_normal w v xs v4 addr ha peer hi hr,
+  ⟨fun w v ambient ambient' xs peer hi hr => lookupSrc_normal w v ambient ambient' xs v4 bytes peer hi hr,
+    fun w v ambient ambient' xs peer hi ha hr => lookupDst_normal w v ambient ambient' xs v4 addr ha peer hi hr,
     Packets.xmitPackets_shape _ addr bytes opts, Packets.rst4_shape bytes,
     fun outer hl => Packets.inetEcnDecapsulate_address v4 outer bytes hl⟩
 
@@ -2522,20 +2542,20 @@ theorem original_packet_routing_source_cuts (pid : PeerId) (pkt : RxPacket)
       match ← Packets.txSelect family packets mtu peer with
       | .error err => return err
       | .ok (pid, ready) => Packets.txFinish pid ready)) ∧
-    (∀ w v bytes xs, RoutedView (routingView w) xs →
-      (WG.consumeDataDone pid pkt endpoint).run w = .ok (some bytes, v) →
+    (∀ w v ambient ambient' bytes xs, RoutedView (routingView w) xs →
+      ((WG.consumeDataDone pid pkt endpoint).run w).run ambient = .ok ((some bytes, v), ambient') →
       ∃ v4 : Bool, WG.ipTunnelParseProtocol bytes = (if v4 then 4 else 6) ∧
         WG.ipTunnelParseProtocol pkt.bytes = (if v4 then 4 else 6) ∧
         PeerWinner (rootWidth v4) (sourceAddress v4 bytes) (selectedFlat v4 xs) (some pid) ∧
         sourceAddress v4 bytes = sourceAddress v4 pkt.bytes) ∧
-    (∀ (v4 : Bool) w v xs, RoutedView (routingView w) xs →
-      (WG.wgXmit (if v4 then 4 else 6) addr packets mtu).run w = .ok (0, v) →
-      ∃ owner, Packets.TxHandoff (if v4 then 4 else 6) addr packets mtu w v owner ∧
+    (∀ (v4 : Bool) w v ambient ambient' xs, RoutedView (routingView w) xs →
+      ((WG.wgXmit (if v4 then 4 else 6) addr packets mtu).run w).run ambient = .ok ((0, v), ambient') →
+      ∃ owner, Packets.TxHandoff (if v4 then 4 else 6) addr packets mtu w v ambient ambient' owner ∧
         PeerWinner (rootWidth v4) addr (selectedFlat v4 xs) (some owner) ∧
         ∀ packet ∈ packets, Packets.destinationField (if v4 then 4 else 6) packet.bytes = addr) :=
   ⟨Packets.consumeDataDone_factor pid pkt endpoint, Packets.wgXmit_factor family addr packets mtu,
-    fun w v bytes xs hi hr => Packets.consumeDataDone_authorized pid pkt endpoint w v bytes xs hi hr,
-    fun v4 w v xs hi hr => Packets.wgXmit_authorized v4 addr packets mtu w v xs hi hr⟩
+    fun w v ambient ambient' bytes xs hi hr => Packets.consumeDataDone_authorized pid pkt endpoint w v ambient ambient' bytes xs hi hr,
+    fun v4 w v ambient ambient' xs hi hr => Packets.wgXmit_authorized v4 addr packets mtu w v ambient ambient' xs hi hr⟩
 
 /-- Local source-shaped session receipts: exact original erasure on all
 inputs, exact R2 projection under its existing AllocationInv, and truthful
@@ -2543,25 +2563,25 @@ partial receipt histories on Stops from valid incoming receipt history. A Some f
 nullable handshake word, allocation and peer read to the completed derivation.
 This does not establish initialized session provenance or later residency. -/
 theorem original_session_material_receipts (pid : PeerId) :
-    Logged.ErasesPrefix (SessionOrigin.observed pid) (WG.beginSession pid) ∧
-    Logged.ProjectsUnder Lifetimes.AllocationInv MaterialOrigin.life?
+    Logged.ErasesStatePrefix (SessionOrigin.observed pid) (WG.beginSession pid) ∧
+    Logged.StateProjectsUnder (fun h w _ => Lifetimes.AllocationInv h w) MaterialOrigin.life?
       (SessionOrigin.observed pid) (Lifetimes.beginSessionPrefix pid) ∧
-    Logged.PrefixPreserves (fun h _ => MaterialOrigin.Valid SessionOrigin.Receipt.Valid h)
+    Logged.StatePrefixPreserves (fun h _ _ => MaterialOrigin.Valid SessionOrigin.Receipt.Valid h)
       (MaterialOrigin.Valid SessionOrigin.Receipt.Valid) (SessionOrigin.observed pid) ∧
-    (∀ ctx w v, (SessionOrigin.front pid).run w = .ok (some ctx, v) →
-      ∃ readWorld initWorld deriveWorld,
-        SessionOrigin.Entered pid ctx w readWorld ∧
-        (WG.getPeer pid).run readWorld = .ok (ctx.peer, readWorld) ∧
-        (SessionOrigin.initKey ctx.slot (ctx.state == WG.HANDSHAKE_CONSUMED_RESPONSE) ctx.peer.remoteIndex).run readWorld = .ok ((), initWorld) ∧
-        (branch .sessionInitiator (ctx.state == WG.HANDSHAKE_CONSUMED_RESPONSE)).run initWorld = .ok (ctx.initiator, deriveWorld) ∧
-        (WG.deriveKeys ctx.slot ctx.initiator ctx.peer.chainingKey).run deriveWorld = .ok ((), v) ∧
-        MaterialOrigin.Derivation ctx.slot ctx.initiator ctx.peer.chainingKey deriveWorld v) ∧
-    (∀ (w : World) (d : Device) (word : Option PeerId) (id : KeypairId), id < d.nextKeypairId →
-      (Lifetimes.keyAllocationDevice d (w.k.keypairCounter + 1) word).nextKeypairId = d.nextKeypairId + 1 ∧
-      (Lifetimes.keyAllocationDevice d (w.k.keypairCounter + 1) word).ifindex = d.ifindex ∧
-      (Lifetimes.keyAllocationDevice d (w.k.keypairCounter + 1) word).keypairs[d.nextKeypairId]? =
-        some {internalId := w.k.keypairCounter + 1, peer := word} ∧
-      (Lifetimes.keyAllocationDevice d (w.k.keypairCounter + 1) word).keypairs[id]? = d.keypairs[id]?) :=
+    (∀ ctx w v ambient ambient', ((SessionOrigin.front pid).run w).run ambient = .ok ((some ctx, v), ambient') →
+      ∃ readWorld initWorld deriveWorld readAmbient initAmbient deriveAmbient,
+        SessionOrigin.Entered pid ctx w readWorld ambient readAmbient ∧
+        ((WG.getPeer pid).run readWorld).run readAmbient = .ok ((ctx.peer, readWorld), readAmbient) ∧
+        ((SessionOrigin.initKey ctx.slot (ctx.state == WG.HANDSHAKE_CONSUMED_RESPONSE) ctx.peer.remoteIndex).run readWorld).run readAmbient = .ok (((), initWorld), initAmbient) ∧
+        ((branch .sessionInitiator (ctx.state == WG.HANDSHAKE_CONSUMED_RESPONSE) : WG.M Bool).run initWorld).run initAmbient = .ok ((ctx.initiator, deriveWorld), deriveAmbient) ∧
+        ((WG.deriveKeys ctx.slot ctx.initiator ctx.peer.chainingKey).run deriveWorld).run deriveAmbient = .ok (((), v), ambient') ∧
+        MaterialOrigin.Derivation ctx.slot ctx.initiator ctx.peer.chainingKey deriveWorld v deriveAmbient ambient') ∧
+    (∀ (w : WGWorld) (d : Device) (word : Option PeerId) (id : KeypairId), id < d.nextKeypairId →
+      (Lifetimes.keyAllocationDevice d (w.keypairCounter + 1) word).nextKeypairId = d.nextKeypairId + 1 ∧
+      (Lifetimes.keyAllocationDevice d (w.keypairCounter + 1) word).ifindex = d.ifindex ∧
+      (Lifetimes.keyAllocationDevice d (w.keypairCounter + 1) word).keypairs[d.nextKeypairId]? =
+        some {internalId := w.keypairCounter + 1, peer := word} ∧
+      (Lifetimes.keyAllocationDevice d (w.keypairCounter + 1) word).keypairs[id]? = d.keypairs[id]?) :=
   ⟨SessionOrigin.observed_erases pid, SessionOrigin.observed_projects pid,
     SessionOrigin.observed_valid pid, SessionOrigin.front_material pid, MaterialOrigin.allocation_fields⟩
 
@@ -2573,23 +2593,23 @@ is unconditional; receipt validity is preserved from valid incoming
 history (including empty), independently of the AllocationInv required by R2 projection. Initialized session matching, unique original ciphertext and
 receipt-to-poll/Stack transport are separate obligations. -/
 theorem original_rx_origin_receipts (msg : List UInt8) (src : SkbSource) (ds : Nat) :
-    Logged.ErasesPrefix (RxOrigin.consume msg src ds) (WG.consumeData msg src ds) ∧
-    Logged.ProjectsUnder Lifetimes.AllocationInv MaterialOrigin.life?
+    Logged.ErasesStatePrefix (RxOrigin.consume msg src ds) (WG.consumeData msg src ds) ∧
+    Logged.StateProjectsUnder (fun h w _ => Lifetimes.AllocationInv h w) MaterialOrigin.life?
       (RxOrigin.consume msg src ds) (Lifetimes.consumeDataPrefix msg src ds) ∧
-    Logged.PrefixPreserves (fun h _ => MaterialOrigin.Valid RxOrigin.Receipt.Valid h)
+    Logged.StatePrefixPreserves (fun h _ _ => MaterialOrigin.Valid RxOrigin.Receipt.Valid h)
       (MaterialOrigin.Valid RxOrigin.Receipt.Valid) (RxOrigin.consume msg src ds) ∧
-    Logged.ErasesPrefix RxOrigin.prepare Queues.RxWorkers.prepareSource ∧
-    Logged.ProjectsUnder Lifetimes.AllocationInv MaterialOrigin.life?
+    Logged.ErasesStatePrefix RxOrigin.prepare Queues.RxWorkers.prepareSource ∧
+    Logged.StateProjectsUnder (fun h w _ => Lifetimes.AllocationInv h w) MaterialOrigin.life?
       RxOrigin.prepare Queues.RxWorkers.preparePrefix ∧
-    Logged.PrefixPreserves (fun h _ => MaterialOrigin.Valid RxOrigin.Receipt.Valid h)
+    Logged.StatePrefixPreserves (fun h _ _ => MaterialOrigin.Valid RxOrigin.Receipt.Valid h)
       (MaterialOrigin.Valid RxOrigin.Receipt.Valid) RxOrigin.prepare ∧
-    (∀ ctx w v, (RxOrigin.admitSource msg src ds).run w = .ok (some ctx, v) →
-      RxOrigin.Admitted msg src ds ctx w v) ∧
-    (∀ id (r : Logged.RunWitness (RxPacket × Option RxPacket)) out,
+    (∀ ctx w v ambient ambient', ((RxOrigin.admitSource msg src ds).run w).run ambient = .ok ((some ctx, v), ambient') →
+      RxOrigin.Admitted msg src ds ctx w v ambient ambient') ∧
+    (∀ id (r : Logged.WGRunWitness (RxPacket × Option RxPacket)) out,
       r.Valid (RxOrigin.readDecrypt id) → r.value.2 = some out →
-      ∃ d k, r.before.k.wg = some d ∧ d.rxSkbs[id]? = some r.value.1 ∧
+      ∃ d k, r.before.dev = some d ∧ d.rxSkbs[id]? = some r.value.1 ∧
         d.keypairs[r.value.1.keypair]? = some k ∧ k.receiving.isValid = true ∧
-        (WG.decryptPacket r.value.1).run r.before = .ok (some out, r.after) ∧
+        ((WG.decryptPacket r.value.1).run r.before).run r.ambientBefore = .ok ((some out, r.after), r.ambientAfter) ∧
         out = {r.value.1 with nonce := WG.u64le r.value.1.bytes 8, bytes := out.bytes} ∧
         WG.aeadDecrypt k.receiving.key (WG.counterNonce (WG.u64le r.value.1.bytes 8))
           (r.value.1.bytes.drop 16) [] = some out.bytes) :=
@@ -2605,26 +2625,26 @@ erasure is unconditional; R2 projection uses exactly its prior AllocationInv.
 Valid incoming receipts remain valid on every outcome. This is a local adapter,
 not initialized Runner origin or cryptographic peer-identity authentication. -/
 theorem original_session_material_retention (pid : PeerId) :
-    Logged.ErasesPrefix (Origins.localSession pid) (WG.beginSession pid) ∧
-    Logged.ProjectsUnder Lifetimes.AllocationInv Origins.lifetime
+    Logged.ErasesStatePrefix (Origins.localSession pid) (WG.beginSession pid) ∧
+    Logged.StateProjectsUnder (fun h w _ => Lifetimes.AllocationInv h w) Origins.lifetime
       (Origins.localSession pid) (Lifetimes.beginSessionPrefix pid) ∧
-    Logged.PrefixPreserves (fun h _ => Origins.Valid h) Origins.Valid (Origins.localSession pid) ∧
-    Logged.PrefixPreserves
-      (fun h w => MaterialOrigin.Valid SessionOrigin.Receipt.Valid (h.filterMap Origins.sessionDecode) ∧
+    Logged.StatePrefixPreserves (fun h _ _ => Origins.Valid h) Origins.Valid (Origins.localSession pid) ∧
+    Logged.StatePrefixPreserves
+      (fun h w _ => MaterialOrigin.Valid SessionOrigin.Receipt.Valid (h.filterMap Origins.sessionDecode) ∧
         Origins.Inv (Origins.sessions h) w)
       (fun h => MaterialOrigin.Valid SessionOrigin.Receipt.Valid (h.filterMap Origins.sessionDecode))
       (Origins.localSession pid) ∧
-    (∀ ctx w v, (SessionOrigin.front pid).run w = .ok (some ctx,v) →
-      ∃ d key, w.k.wg = some d ∧ d.peers[pid]? = some ctx.peer ∧
+    (∀ ctx w v ambient ambient', ((SessionOrigin.front pid).run w).run ambient = .ok ((some ctx,v),ambient') →
+      ∃ d key, w.dev = some d ∧ d.peers[pid]? = some ctx.peer ∧
         ctx.state = ctx.peer.handshakeState ∧ ctx.word = ctx.peer.handshakeEntryPeer ∧
         ctx.slot = d.nextKeypairId ∧
         Origins.view v = some (d.ifindex, fun q => if ctx.slot = q then some key else d.keypairs[q]?) ∧
-        key.internalId = w.k.keypairCounter + 1 ∧ key.peer = ctx.word ∧ key.receiving.isValid = true) ∧
-    (∀ kp w v result, (SessionOrigin.tail pid kp).run w = .ok (result,v) → Origins.Retains w v) ∧
-    (∀ word w v result, (WG.keypairCreate word).run w = .ok (result,v) → Origins.Retains w v) :=
+        key.internalId = w.keypairCounter + 1 ∧ key.peer = ctx.word ∧ key.receiving.isValid = true) ∧
+    (∀ kp w v result ambient ambient', ((SessionOrigin.tail pid kp).run w).run ambient = .ok ((result,v),ambient') → Origins.Retains w v) ∧
+    (∀ word w v result ambient ambient', ((WG.keypairCreate word).run w).run ambient = .ok ((result,v),ambient') → Origins.Retains w v) :=
   ⟨Origins.localSession_erases pid, Origins.localSession_projects pid,
     Origins.localSession_valid pid, Origins.localSession_support pid,
-    Origins.front_effect pid, fun kp _ _ _ hr => Origins.tail_retains pid kp hr,
+    Origins.front_effect pid, fun kp _ _ _ ambient ambient' hr => Origins.tail_retains pid kp ambient ambient' hr,
     Origins.create_retains⟩
 
 /-- An actual successful local decrypt appends its full run receipt after a
@@ -2635,32 +2655,32 @@ AEAD and record-transform equations are retained. Nullable owner support does
 not identify packet.peer with the session peer. All-input erasure and the old
 same-input R2 projection are independent of this support premise. -/
 theorem original_decrypt_material_history (id : SkbId) :
-    Logged.ErasesPrefix (Origins.localDecrypt id) (RxOrigin.readDecrypt id) ∧
-    Logged.ProjectsUnder Lifetimes.AllocationInv Origins.lifetime
+    Logged.ErasesStatePrefix (Origins.localDecrypt id) (RxOrigin.readDecrypt id) ∧
+    Logged.StateProjectsUnder (fun h w _ => Lifetimes.AllocationInv h w) Origins.lifetime
       (Origins.localDecrypt id) (RxOrigin.readDecryptPrefix id) ∧
-    Logged.PrefixPreserves (fun h _ => Origins.Valid h) Origins.Valid (Origins.localDecrypt id) ∧
-    Logged.PrefixPreserves (fun h w => Origins.Inv (Origins.sessions h) w) (fun _ => True)
+    Logged.StatePrefixPreserves (fun h _ _ => Origins.Valid h) Origins.Valid (Origins.localDecrypt id) ∧
+    Logged.StatePrefixPreserves (fun h w _ => Origins.Inv (Origins.sessions h) w) (fun _ => True)
       (Origins.localDecrypt id) ∧
-    (∀ w h,
-      let observed := Logged.runPrefix (RxOrigin.readDecryptPrefix id) w (h.filterMap Origins.lifetime)
+    (∀ w ambient h,
+      let observed := Logged.runWGPrefix (RxOrigin.readDecryptPrefix id) w ambient (h.filterMap Origins.lifetime)
       let suffix := (observed.2.drop (h.filterMap Origins.lifetime).length).map Origins.Event.life
-      Logged.runPrefix (Origins.localDecrypt id) w h = match observed.1 with
+      Logged.runWGPrefix (Origins.localDecrypt id) w ambient h = match observed.1 with
         | .error e => (.error e,h ++ suffix)
-        | .ok (result,v) => (.ok (result,v),h ++ suffix ++ [.rx (.decrypt id ⟨result,w,v⟩)])) ∧
-    (∀ w h packet out v, Origins.Inv (Origins.sessions h) w →
-      (Logged.runPrefix (Origins.localDecrypt id) w h).1 = .ok ((packet,some out),v) →
+        | .ok ((result,v),ambient') => (.ok ((result,v),ambient'),h ++ suffix ++ [.rx (.decrypt id ⟨result,w,v,ambient,ambient'⟩)])) ∧
+    (∀ w ambient h packet out v ambient', Origins.Inv (Origins.sessions h) w →
+      (Logged.runWGPrefix (Origins.localDecrypt id) w ambient h).1 = .ok (((packet,some out),v),ambient') →
       ∃ (suffix : List Lifetimes.LifetimeEvent) (d : Device) (k : Keypair) (pid : PeerId)
-        (r : Logged.RunWitness (Option SessionOrigin.Context)) (ctx : SessionOrigin.Context)
+        (r : Logged.WGRunWitness (Option SessionOrigin.Context)) (ctx : SessionOrigin.Context)
         (originDev : Device) (original : Keypair) (before middle : List Origins.Event),
-        (Logged.runPrefix (Origins.localDecrypt id) w h).2 =
-          h ++ suffix.map Origins.Event.life ++ [.rx (.decrypt id ⟨(packet,some out),w,v⟩)] ∧
+        (Logged.runWGPrefix (Origins.localDecrypt id) w ambient h).2 =
+          h ++ suffix.map Origins.Event.life ++ [.rx (.decrypt id ⟨(packet,some out),w,v,ambient,ambient'⟩)] ∧
         h = before ++ [.session (.material pid r)] ++ middle ∧
         r.Valid (SessionOrigin.front pid) ∧ r.value = some ctx ∧ ctx.slot = packet.keypair ∧
-        r.after.k.wg = some originDev ∧ originDev.ifindex = d.ifindex ∧
+        r.after.dev = some originDev ∧ originDev.ifindex = d.ifindex ∧
         originDev.keypairs[packet.keypair]? = some original ∧ original.receiving.isValid = true ∧
         original.peer = ctx.word ∧ MaterialOrigin.material k = MaterialOrigin.material original ∧
-        Origins.WordLe k.peer ctx.word ∧ w.k.wg = some d ∧ d.rxSkbs[id]? = some packet ∧
-        d.keypairs[packet.keypair]? = some k ∧ (WG.decryptPacket packet).run w = .ok (some out,v) ∧
+        Origins.WordLe k.peer ctx.word ∧ w.dev = some d ∧ d.rxSkbs[id]? = some packet ∧
+        d.keypairs[packet.keypair]? = some k ∧ ((WG.decryptPacket packet).run w).run ambient = .ok ((some out,v),ambient') ∧
         out = {packet with nonce := WG.u64le packet.bytes 8, bytes := out.bytes} ∧
         WG.aeadDecrypt k.receiving.key (WG.counterNonce (WG.u64le packet.bytes 8))
           (packet.bytes.drop 16) [] = some out.bytes) :=
@@ -2677,23 +2697,29 @@ supplied session support normally and receipt validity on Stop; it does not
 establish initialized occurrence chronology or packet/peer authorization. -/
 theorem original_index_material_retention (kinds : List IndexKind) (index : Nat) :
     Affiliation.indexLookupSource kinds index = WG.indexLookup kinds index ∧
-    (∀ owner w result v, (Affiliation.acquireOwner owner).run w = .ok (result,v) →
+    (∀ owner w result v ambient ambient', ((Affiliation.acquireOwner owner).run w).run ambient = .ok ((result,v),ambient') →
       Origins.Retains w v) ∧
-    (∀ id w v result, (Affiliation.acquireOwner (.keypair id)).run w = .ok (result,v) →
-      ∃ (d : Device) (old : Keypair), w.k.wg = some d ∧ d.keypairs[id]? = some old ∧
+    (∀ id w v result ambient ambient', ((Affiliation.acquireOwner (.keypair id)).run w).run ambient = .ok ((result,v),ambient') →
+      ∃ (d : Device) (old : Keypair), w.dev = some d ∧ d.keypairs[id]? = some old ∧
         Origins.WordLe result old.peer ∧
         Origins.view v = some (d.ifindex, fun q =>
           if id = q then some {old with peer := result} else d.keypairs[q]?)) ∧
-    (∀ w result v, (WG.indexLookup kinds index).run w = .ok (result,v) →
+    (∀ w result v ambient ambient', ((WG.indexLookup kinds index).run w).run ambient = .ok ((result,v),ambient') →
       Origins.Retains w v) ∧
-    Logged.ErasesPrefix
-      (MaterialOrigin.access (R := SessionOrigin.Receipt) (Lifetimes.indexLookupPrefix kinds index))
+    Logged.ErasesStatePrefix
+      (Origins.accessNative (R := SessionOrigin.Receipt) (Lifetimes.indexLookupPrefix kinds index))
       (WG.indexLookup kinds index) ∧
-    Logged.PrefixPreserves Origins.SessionInv (MaterialOrigin.Valid SessionOrigin.Receipt.Valid)
-      (MaterialOrigin.access (Lifetimes.indexLookupPrefix kinds index)) :=
-  ⟨Affiliation.indexLookupSource_eq kinds index, Origins.acquireOwner_retains,
-    Origins.acquireOwner_keypair_effect, Origins.indexLookup_retains kinds index,
-    MaterialOrigin.access_erases (Lifetimes.indexLookupPrefix_erases kinds index),
+    Logged.StatePrefixPreserves (fun h w _ => Origins.SessionInv h w) (MaterialOrigin.Valid SessionOrigin.Receipt.Valid)
+      (Origins.accessNative (Lifetimes.indexLookupPrefix kinds index)) :=
+  ⟨Affiliation.indexLookupSource_eq kinds index,
+    fun owner w result v ambient ambient' hr =>
+      (Lifetimes.ProjectedAction.iff_run_ambient _ _ _).mp
+        (Origins.acquireOwner_retains owner) w ambient result v ambient' hr,
+    Origins.acquireOwner_keypair_effect,
+    fun w result v ambient ambient' hr =>
+      (Lifetimes.ProjectedAction.iff_run_ambient _ _ _).mp
+        (Origins.indexLookup_retains kinds index) w ambient result v ambient' hr,
+    Logged.focusStatePrefix_erases _ _ (Lifetimes.indexLookupPrefix_erases kinds index),
     Origins.indexLookup_support kinds index⟩
 
 /-- Actual persistent caller source cuts use the enriched adapters once. Both
@@ -2702,7 +2728,7 @@ cut captures the stored getter/decrypt before publication. Erasure covers arbitr
 incoming histories and all original results/Stops. Copied trials and admission
 receipt injection are not asserted by these committed caller equations. -/
 theorem original_origin_history_injection :
-    Origins.HistoryAdapters.ops.session = Origins.localSession ∧
+    Origins.HistoryAdapters.ops.session = (fun pid => Logged.liftWGObserver (Origins.localSession pid)) ∧
     (∀ pid, Origins.HandshakeSources.responseWith Origins.HandshakeSources.original pid =
       WG.sendHandshakeResponse pid) ∧
     (∀ msg src loaded mac,
@@ -2710,7 +2736,7 @@ theorem original_origin_history_injection :
         Cookies.afterMac msg src loaded mac) ∧
     Queues.RxHistory.decryptStep =
       Queues.RxWorkers.decryptWith Origins.HistoryAdapters.prepare
-        (fun pid => Queues.RxHistory.mixed (Lifetimes.peerPutMixed (some pid)))
+        (fun pid => Queues.RxHistory.mixed (Logged.liftWGObserver (Lifetimes.peerPutMixed (some pid))))
         Queues.RxHistory.napiSoftirq Queues.RxHistory.napiIrqExit ∧
     (∀ a : Activation, a.worker = .receiveWorker →
       Queues.RxHistory.activationIteration a = Origins.HistoryAdapters.receiveIteration) ∧
@@ -2762,8 +2788,8 @@ arbitrary Worlds. Erasure, invalidation and a cleared nullable owner are allowed
 The generic support consequence transports an already supplied session history;
 this is neither initialized origin nor packet/public-key authorization. -/
 theorem original_material_retaining_leaves :
-    (∀ (α : Type) (a : M α), Framing.SameKernel a → Origins.Retaining.RetainsCall a) ∧
-    (∀ (α : Type) (a : M α), Framing.SameWGKernel a → Origins.Retaining.RetainsCall a) ∧
+    (∀ (α : Type) (a : Leanux.M α), Framing.SameProductStore a → Origins.Retaining.ProjectedRetainsCall World.wg a) ∧
+    (∀ (α : Type) (a : Leanux.M α), Framing.SameView (fun w : World => Framing.wgStoreView w.wg) a → Origins.Retaining.ProjectedRetainsCall World.wg a) ∧
     (∀ pid, Origins.Retaining.RetainsCall (WG.peerGet pid)) ∧
     (∀ peer, Origins.Retaining.RetainsCall (WG.peerPut peer)) ∧
     (∀ kp, Origins.Retaining.RetainsCall (WG.keypairGet kp)) ∧
@@ -2776,11 +2802,11 @@ theorem original_material_retaining_leaves :
     (∀ msg, Origins.Retaining.RetainsCall (WG.consumeInitiation msg) ∧
       Origins.Retaining.RetainsCall (WG.consumeResponse msg) ∧
       Origins.Retaining.RetainsCall (WG.cookieMessageConsume msg)) ∧
-    (∀ (α : Type) (a : M α) history w result v,
-      Origins.Retaining.RetainsCall a → Origins.Inv history w →
-      a.run w = .ok (result,v) → Origins.Inv history v) :=
-  ⟨fun _ _ h => Origins.Retaining.of_view (Origins.kernel h),
-    fun _ _ h => Origins.Retaining.of_view (Origins.sameView_of_sameWG h),
+    (∀ (α : Type) (a : Leanux.M α) history w result v,
+      Origins.Retaining.ProjectedRetainsCall World.wg a → Origins.Inv history w.wg →
+      a.run w = .ok (result,v) → Origins.Inv history v.wg) :=
+  ⟨fun _ _ h => Origins.Retaining.of_view (Origins.kernel (project := id) h),
+    fun _ _ h => Origins.Retaining.of_view (Origins.sameView_of_sameWG (project := World.wg) h),
     fun pid => Origins.Retaining.of_view (Origins.Retaining.peerGet_material pid),
     fun peer => Origins.Retaining.of_view (Origins.Retaining.peerPut_material peer),
     Origins.Retaining.keypairGet_material, Origins.Retaining.keypairPut_material,
@@ -2801,21 +2827,21 @@ theorem original_material_retaining_traffic :
     (∀ pid, Origins.Retaining.RetainsCall (WG.sendStagedPackets pid) ∧
       Origins.Retaining.RetainsCall (WG.sendKeepalive pid) ∧
       Origins.Retaining.RetainsCall (WG.txStep pid) ∧
-      Origins.Retaining.RetainsCall (WG.txIter pid (Env.condResched .txWorker))) ∧
+      Origins.Retaining.ProductRetainsCall (WG.txIter pid (Env.condResched .txWorker))) ∧
     (∀ family addr packets mtu, Origins.Retaining.RetainsCall (WG.wgXmit family addr packets mtu)) ∧
     (∀ msg src, Origins.Retaining.RetainsCall (WG.wgReceive msg src)) ∧
     (∀ msg src ds, Origins.Retaining.RetainsCall (WG.consumeData msg src ds)) ∧
     (∀ pid pkt endpoint, Origins.Retaining.RetainsCall (WG.consumeDataDone pid pkt endpoint)) ∧
-    (∀ pid budget, Origins.Retaining.RetainsCall
+    (∀ pid budget, Origins.Retaining.ProductRetainsCall
       (WG.rxPoll pid budget (fun xs => xs.forM Env.deliverInner))) ∧
-    Origins.Retaining.RetainsCall Env.napiSoftirq ∧
-    Origins.Retaining.RetainsCall Env.napiIrqExit ∧
-    Origins.Retaining.RetainsCall Env.pollScheduledInline ∧
-    Origins.Retaining.RetainsCall (WG.encryptIter Env.checksumHelp Env.napiSoftirq
+    Origins.Retaining.ProductRetainsCall Env.napiSoftirq ∧
+    Origins.Retaining.ProductRetainsCall Env.napiIrqExit ∧
+    Origins.Retaining.ProductRetainsCall Env.pollScheduledInline ∧
+    Origins.Retaining.ProductRetainsCall (WG.encryptIter Env.checksumHelp Env.napiSoftirq
       (Env.condResched .encryptWorker)) ∧
-    Origins.Retaining.RetainsCall (WG.decryptIter Env.napiSoftirq Env.napiIrqExit
+    Origins.Retaining.ProductRetainsCall (WG.decryptIter Env.napiSoftirq Env.napiIrqExit
       (Env.condResched .decryptWorker)) ∧
-    (∀ bytes, Origins.Retaining.RetainsCall (Env.deliverInner bytes)) :=
+    (∀ bytes, Origins.Retaining.ProductRetainsCall (Env.deliverInner bytes)) :=
   ⟨fun pid => ⟨Origins.Retaining.sendStagedPackets_material pid,
       Origins.Retaining.sendKeepalive_material pid, Origins.Retaining.txStep_material pid,
       Origins.Retaining.actualTxIter_material pid⟩,
@@ -2872,13 +2898,13 @@ theorem original_origin_support_cuts :
     Origins.HistorySupport.Preserves Origins.HistoryAdapters.prepare ∧
     (∀ pid budget, Origins.HistorySupport.Preserves (Queues.RxHistory.observePoll pid budget)) ∧
     Origins.HistorySupport.Preserves (Queues.RxHistory.audit Lifetimes.consistentFilterAudit) ∧
-    (∀ h pre post id (r : Logged.RunWitness (RxPacket × Option RxPacket)) out,
+    (∀ h pre post id (r : Logged.WGRunWitness (RxPacket × Option RxPacket)) out,
       Origins.HistorySupport.HistorySafe h → h = pre ++ .rx (.decrypt id r) :: post →
       r.value.2 = some out →
-      ∃ d k, r.before.k.wg = some d ∧ d.rxSkbs[id]? = some r.value.1 ∧
+      ∃ d k, r.before.dev = some d ∧ d.rxSkbs[id]? = some r.value.1 ∧
         d.keypairs[r.value.1.keypair]? = some k ∧
         Origins.Supported (Origins.HistorySupport.sessions pre) d.ifindex r.value.1.keypair k ∧
-        (WG.decryptPacket r.value.1).run r.before = .ok (some out,r.after) ∧
+        ((WG.decryptPacket r.value.1).run r.before).run r.ambientBefore = .ok ((some out,r.after),r.ambientAfter) ∧
         out = {r.value.1 with nonce := u64le r.value.1.bytes 8, bytes := out.bytes} ∧
         aeadDecrypt k.receiving.key (counterNonce (u64le r.value.1.bytes 8))
           (r.value.1.bytes.drop 16) [] = some out.bytes) ∧
@@ -2979,13 +3005,13 @@ theorem initialized_committed_material_support :
             (Logged.runPrefixOuter (Queues.RxHistory.executeTraceHistory trace placeholders) []).2) ∧
       Origins.HistorySupport.HistorySafe
         (Logged.runPrefixOuter (Queues.RxHistory.executeTraceHistory trace placeholders) []).2) ∧
-    (∀ trace placeholders pre post id (r : Logged.RunWitness (RxPacket × Option RxPacket)) out,
+    (∀ trace placeholders pre post id (r : Logged.WGRunWitness (RxPacket × Option RxPacket)) out,
       (Logged.runPrefixOuter (Queues.RxHistory.executeTraceHistory trace placeholders) []).2 =
         pre ++ .rx (.decrypt id r) :: post → r.value.2 = some out →
-      ∃ d k, r.before.k.wg = some d ∧ d.rxSkbs[id]? = some r.value.1 ∧
+      ∃ d k, r.before.dev = some d ∧ d.rxSkbs[id]? = some r.value.1 ∧
         d.keypairs[r.value.1.keypair]? = some k ∧
         Origins.Supported (Origins.HistorySupport.sessions pre) d.ifindex r.value.1.keypair k ∧
-        (WG.decryptPacket r.value.1).run r.before = .ok (some out,r.after) ∧
+        ((WG.decryptPacket r.value.1).run r.before).run r.ambientBefore = .ok ((some out,r.after),r.ambientAfter) ∧
         out = {r.value.1 with nonce := u64le r.value.1.bytes 8, bytes := out.bytes} ∧
         aeadDecrypt k.receiving.key (counterNonce (u64le r.value.1.bytes 8))
           (r.value.1.bytes.drop 16) [] = some out.bytes) ∧
@@ -3011,17 +3037,17 @@ theorem original_configured_peer_identity :
     (∀ key psk, ⦃fun w=>⌜ConfiguredIdentity.Inv w⌝⦄ WG.peerCreate key psk
       ⦃⇓? result w=>⌜ConfiguredIdentity.Inv w ∧ ∀pid,result=.ok pid →
         ∃s p,ConfiguredIdentity.view w=some s ∧ s.peers pid=some p ∧ p.static=key⌝⦄) ∧
-    (∀ key w v pid, ConfiguredIdentity.Inv w →
-      (WG.pubkeyLookup key).run w=.ok (some pid,v) →
+    (∀ key w v pid ambient ambient', ConfiguredIdentity.Inv w →
+      ((WG.pubkeyLookup key).run w).run ambient=.ok ((some pid,v),ambient') →
       ConfiguredIdentity.view v=ConfiguredIdentity.view w ∧
-      ∃d p,w.k.wg=some d ∧ d.peers[pid]?=some p ∧ (key,pid)∈d.peerHashtable ∧
+      ∃d p,w.dev=some d ∧ d.peers[pid]?=some p ∧ (key,pid)∈d.peerHashtable ∧
         p.remoteStatic=key ∧ 0<p.refcount) ∧
     (∀ peer, ⦃fun w=>⌜ConfiguredIdentity.Inv w⌝⦄ WG.peerPut peer
       ⦃⇓? _ w=>⌜ConfiguredIdentity.Inv w⌝⦄) ∧
-    (∀ pid w v, ConfiguredIdentity.Inv w →
-      (WG.peerMakeDead pid).run w=.ok ((),v) → ConfiguredIdentity.Inv v) ∧
-    (∀ owner w v result, ConfiguredIdentity.Inv w →
-      (Affiliation.acquireOwner owner).run w=.ok (result,v) → ConfiguredIdentity.Inv v) :=
+    (∀ pid w v ambient ambient', ConfiguredIdentity.Inv w →
+      ((WG.peerMakeDead pid).run w).run ambient=.ok (((),v),ambient') → ConfiguredIdentity.Inv v) ∧
+    (∀ owner w v result ambient ambient', ConfiguredIdentity.Inv w →
+      ((Affiliation.acquireOwner owner).run w).run ambient=.ok ((result,v),ambient') → ConfiguredIdentity.Inv v) :=
   ⟨ConfiguredIdentity.peerCreate_spec,ConfiguredIdentity.pubkeyLookup_identity,
     ConfiguredIdentity.peerPut_preserves,ConfiguredIdentity.peerMakeDead_preserves,
     ConfiguredIdentity.acquireOwner_preserves⟩
@@ -3032,16 +3058,16 @@ supplies live/self facts; a Some front alone may precede a Stop. The unchanged
 observer has unconditional erasure and its original same-input AllocationInv
 projection. Incoming configured support is supplied, not initialized here. -/
 theorem original_configured_session_support :
-    (∀ pid, Logged.ErasesPrefix (SessionOrigin.observed pid) (WG.beginSession pid) ∧
-      Logged.ProjectsUnder Lifetimes.AllocationInv MaterialOrigin.life?
+    (∀ pid, Logged.ErasesStatePrefix (SessionOrigin.observed pid) (WG.beginSession pid) ∧
+      Logged.StateProjectsUnder (fun h w _ => Lifetimes.AllocationInv h w) MaterialOrigin.life?
         (SessionOrigin.observed pid) (Lifetimes.beginSessionPrefix pid)) ∧
-    (∀ pid w v result history, ConfiguredIdentity.Inv w → ConfiguredSession.Inv history w →
-      (WG.beginSession pid).run w=.ok (result,v) →
-      ∃front u,(SessionOrigin.front pid).run w=.ok (front,u) ∧
-        ConfiguredSession.Inv (history++[SessionOrigin.Receipt.material pid ⟨front,w,u⟩]) v) ∧
-    (∀ pid w v result h t, MaterialOrigin.Valid SessionOrigin.Receipt.Valid h →
+    (∀ pid w v result ambient ambient' history, ConfiguredIdentity.Inv w → ConfiguredSession.Inv history w →
+      ((WG.beginSession pid).run w).run ambient=.ok ((result,v),ambient') →
+      ∃front u middle,((SessionOrigin.front pid).run w).run ambient=.ok ((front,u),middle) ∧
+        ConfiguredSession.Inv (history++[SessionOrigin.Receipt.material pid ⟨front,w,u,ambient,middle⟩]) v) ∧
+    (∀ pid w v result ambient ambient' h t, MaterialOrigin.Valid SessionOrigin.Receipt.Valid h →
       ConfiguredIdentity.Inv w → ConfiguredSession.Inv (h.filterMap Origins.receipt?) w →
-      Logged.runPrefix (SessionOrigin.observed pid) w h=(.ok (result,v),t) →
+      Logged.runWGPrefix (SessionOrigin.observed pid) w ambient h=(.ok ((result,v),ambient'),t) →
       ConfiguredSession.Inv (t.filterMap Origins.receipt?) v) ∧
     (∀ history epoch slot key pid, ConfiguredSession.Supported history epoch slot key →
       key.peer=some pid → ConfiguredSession.ByPeer history epoch slot key pid) :=
@@ -3057,18 +3083,19 @@ claim is normal-only; lower receiptObserved separately retains later Stop
 prefixes. Supplied support/compatibility are explicit, and current peer-slot
 identity, initialized publication and later Stack/routing joins remain open. -/
 theorem original_rx_publication_identity :
-    Logged.ErasesPrefix RxOrigin.prepare Queues.RxWorkers.prepareSource ∧
-    Logged.ProjectsUnder Lifetimes.AllocationInv MaterialOrigin.life?
+    Logged.ErasesStatePrefix RxOrigin.prepare Queues.RxWorkers.prepareSource ∧
+    Logged.StateProjectsUnder (fun h w _ => Lifetimes.AllocationInv h w) MaterialOrigin.life?
       RxOrigin.prepare Queues.RxWorkers.preparePrefix ∧
-    (∀ history w v h t pid, ConfiguredSession.Inv history w → Queues.RxCredits.RxCompatible w →
-      Logged.runPrefix RxOrigin.prepare w h=(.ok (some pid,v),t) →
-      ∃d id ring, ∃(r : Logged.RunWitness (RxPacket × Option RxPacket)), ∃pre suffix,
-        w.k.wg=some d ∧ d.decryptQueue.consume=(some id,ring) ∧
-        r.before=Packets.update (CounterWindow.record w .decWorkerConsumed true)
-          (fun d=>{d with decryptQueue:=ring}) ∧
+    (∀ history w v ambient ambient' h t pid, ConfiguredSession.Inv history w → Queues.RxCredits.RxCompatible w →
+      Logged.runWGPrefix RxOrigin.prepare w ambient h=(.ok ((some pid,v),ambient'),t) →
+      ∃d id ring, ∃(r : Logged.WGRunWitness (RxPacket × Option RxPacket)), ∃pre suffix,
+        w.dev=some d ∧ d.decryptQueue.consume=(some id,ring) ∧
+        r.before=Packets.update w (fun d=>{d with decryptQueue:=ring}) ∧
+        r.ambientBefore=CounterWindow.record ambient .decWorkerConsumed true ∧
         r.Valid (RxOrigin.readDecrypt id) ∧
-        Logged.runPrefix (MaterialOrigin.access (RxOrigin.readDecryptPrefix id)) r.before h=
-          (.ok (r.value,r.after),h++pre) ∧
+        Logged.runWGPrefix (Logged.focusStatePrefix MaterialOrigin.Event.life MaterialOrigin.life?
+          (RxOrigin.readDecryptPrefix id)) r.before r.ambientBefore h=
+          (.ok ((r.value,r.after),r.ambientAfter),h++pre) ∧
         t=h++pre++[MaterialOrigin.Event.receipt (RxOrigin.Receipt.decrypt id r)]++suffix ∧
         ∀out,r.value.2=some out → PublicationIdentity.Identity history id r out pid v) :=
   ⟨RxOrigin.prepare_erases,RxOrigin.prepare_projects,PublicationIdentity.prepare_identity⟩
