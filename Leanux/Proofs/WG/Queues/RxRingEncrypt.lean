@@ -62,12 +62,47 @@ theorem encryptStep_cell (checksum : Packet → Leanux.M Packet) (softirq : Lean
   have hd := fun r => native (modifyDev (fun d => {d with encryptQueue := r}))
     (modifyDev_cell _ (fun _ => rfl) (fun _ => rfl))
   have hl (α β : Type) := list_view_spec (m := Except Stop) cell (α := α) (β := β) P
-  unfold Hoare at skb ambient hg hq hd
-  mvcgen [-Std.Do.Spec.forIn_list, -Std.Do.Spec.forIn'_list, -Std.Do.Spec.monadLift_StateT,
-    hl, encryptStep, encryptRingPoll, hi, hg, skb, ambient, he, hq, hd, getTxSkb, setTxSkb, branch, invariant]
-  all_goals try exact ((⇓? _ w => ⌜P (cell w)⌝) : PostCond _ (.arg World (.except Stop .pure)))
-  all_goals try dsimp +zetaDelta only [P] at *
-  all_goals simp_all [cell]
+  have poll : Preserves (fun w => P (cell w)) (encryptRingPoll softirq) := by
+    unfold encryptRingPoll
+    apply preserves_bind hg
+    intro d
+    rcases d.encryptQueue.consume with ⟨item, ring⟩
+    exact preserves_bind (hd ring) (fun _ => preserves_bind hi (fun _ =>
+      preserves_bind (ambient (AmbientM.branch .encWorkerConsumed item.isSome))
+        (fun _ => preserves_pure item)))
+  change Preserves (fun w => P (cell w)) (encryptStep checksum softirq)
+  unfold encryptStep
+  apply preserves_bind poll
+  intro item
+  ·
+    cases item with
+    | none => exact preserves_pure _
+    | some first =>
+      dsimp only
+      cases hh : first.head? with
+      | none => exact ambient (AmbientM.invariant _)
+      | some headId =>
+        dsimp only
+        apply preserves_bind (skb (SkbStore.getTx headId))
+        intro head
+        refine preserves_bind (hl _ _ _ _ _ ?_) ?_
+        · intro id state
+          apply preserves_bind (ambient (AmbientM.branch .encWorkerSkbIterate true))
+          intro _
+          apply preserves_bind (skb (SkbStore.getTx id))
+          intro packet
+          apply preserves_bind (he head.keypair packet)
+          intro encrypted
+          apply preserves_bind (ambient (AmbientM.branch .encWorkerEncrypted encrypted.isSome))
+          intro success
+          split
+          · exact preserves_bind (skb (SkbStore.setTx id _)) (fun _ => preserves_pure _)
+          · exact preserves_pure _
+        · intro state
+          split
+          · exact preserves_bind (ambient (AmbientM.branch .encWorkerSkbIterate false))
+              (fun _ => preserves_bind (hq first state) (fun _ => preserves_pure _))
+          · exact preserves_bind (hq first state) (fun _ => preserves_pure _)
 
 
 theorem encryptIter_cell (checksum : Packet → Leanux.M Packet) (softirq : Leanux.M Unit) (resched : Leanux.M Bool)

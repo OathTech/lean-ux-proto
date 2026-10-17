@@ -172,13 +172,39 @@ theorem encryptStep_ordinary (checksum : Packet → Leanux.M Packet) (softirq : 
       (OrdinaryAction.liftWG (SameView.ordinary (enqueuePerPeerTx_sameSnapshot item state))) P hp
   have ambient := fun α (a : AmbientM α) => productAmbient_spec a
     (fun w => P (snapshot w.wg)) (fun _ _ h => h)
-  unfold Hoare at ambient
-  mvcgen [-Std.Do.Spec.monadLift_StateT, WG.encryptStep, poll_spec, enc,
-    readPacket, writePacket, enqueue, branch, invariant, ambient]
-  case inv1 => exact (⇓? _ w => ⌜P (snapshot w.wg)⌝)
-  all_goals try assumption
-  all_goals try trivial
-  all_goals exact id
+  change Preserves (fun w => P (snapshot w.wg)) (WG.encryptStep checksum softirq)
+  unfold WG.encryptStep
+  apply preserves_bind poll_spec
+  intro item
+  cases item with
+  | none => exact preserves_pure _
+  | some first =>
+    dsimp only
+    cases hh : first.head? with
+    | none => exact ambient _ (AmbientM.invariant _)
+    | some headId =>
+      dsimp only
+      apply preserves_bind (readPacket headId)
+      intro head
+      refine preserves_bind (list_view_spec (m := Except Stop)
+        (fun w : World => snapshot w.wg) P _ _ _ ?_) ?_
+      · intro id state
+        apply preserves_bind (ambient _ (AmbientM.branch .encWorkerSkbIterate true))
+        intro _
+        apply preserves_bind (readPacket id)
+        intro packet
+        apply preserves_bind (enc head.keypair packet)
+        intro encrypted
+        apply preserves_bind (ambient _ (AmbientM.branch .encWorkerEncrypted encrypted.isSome))
+        intro success
+        split
+        · exact preserves_bind (writePacket id _) (fun _ => preserves_pure _)
+        · exact preserves_pure _
+      · intro state
+        split
+        · exact preserves_bind (ambient _ (AmbientM.branch .encWorkerSkbIterate false))
+            (fun _ => preserves_bind (enqueue first state) (fun _ => preserves_pure _))
+        · exact preserves_bind (enqueue first state) (fun _ => preserves_pure _)
 
 theorem encryptIter_ordinary (checksum : Packet → Leanux.M Packet) (softirq : Leanux.M Unit) (need : Leanux.M Bool)
     (hc : ∀ pkt, ProductOrdinaryAction (checksum pkt)) (hs : ProductOrdinaryAction softirq)

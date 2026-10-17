@@ -11,10 +11,10 @@ new worlds; new R3/R4 results follow the retrofit.
 | Census | Lean files | Named theorems |
 | --- | ---: | ---: |
 | Validated baseline `00641c6` | 471 | 7,715 |
-| Completed retrofit checkpoints | 452 | 6,551 |
+| Completed retrofit checkpoints | 452 | 6,550 |
 
-Completed changes comprise **2,968 retyped/generalized, 1,707 deleted,
-2,196 retained contract shapes and 543 added theorems**. Retyping changes the
+Completed changes comprise **2,990 retyped/generalized, 1,708 deleted,
+2,197 retained contract shapes and 543 added theorems**. Retyping changes the
 actual carrier or observation, including shorthand contracts whose functions
 move to a native monad. Namespace-only product qualification and equivalent
 projection relocation count as retained. The census includes private and
@@ -397,8 +397,28 @@ check accidentally repeated the second source after a rejected edit driver.
 Completion environment had two ordinary failures and a final pass. Neither
 required an infrastructure rerun or limit change.
 
+Admission carries 24→23 theorems: 21 native retypes, one generalized StateT
+contract and one retained pure contract. The allocation key-view frame is
+deleted because allocation writes only SkbStore; its two callers use the
+canonical adapter. Vacancy, nullable ownership, borrowing and repayment,
+normal failure and the original seven-field store mask remain. The scoped
+346-job build, all 24 named logical declarations, fresh replay and complete
+source review pass without own warnings. Three development checks failed
+before the corrected source passed; a rejected axiom driver was corrected
+and all 24 declarations then checked.
+
+Two encryption proof bodies now follow the actual worker sequence directly,
+preserving all sixteen contracts, arbitrary product callbacks and limits.
+This removes a generated-helper collision when their modules are imported
+together. Both scoped builds, sixteen named axiom checks, fresh replays and
+independent reviews pass. The complete 141-declaration R3 source check then
+passes with zero warnings; its first two import attempts failed on the
+collision. Ring encryption retains three older warnings in other bodies.
+Four changed-source encryption checks failed before the final two passed.
+These were deterministic failures, not infrastructure reruns.
+
 Remaining work is the routing/origin terminal carry,
-RX admission, ingress and outer history layers, warning
+RX ingress and outer history layers, warning
 cleanup, the full proof gate and terminal replay. Deterministic source/proof
 failures are failures; source edits are checked anew, never described as
 infrastructure retries. Recovery admissions printed by failed elaborations
@@ -419,6 +439,7 @@ Each infrastructure rerun below occurred once for its affected invocation:
 | RunnerSafety diagnostic31 | EnvTimersAudit artifact absent during central rebuild | PASS unchanged after rebuild |
 | RxConsumeProtection fresh replay | tool returned no completion status; handle subsequently absent | PASS with explicit zero status |
 | RxPollDisposition diagnostic | missing Completion artifact | FAIL on proof obligations; changed-source checks later passed |
+| DeliveryOrder diagnostic | RxRingHandshake artifact absent during central rebuild | PASS unchanged after rebuild, first 109 declarations |
 
 Explicitly stopped elaborations, signal/KILLED outcomes, driver crashes and
 toolchain panics were preserved to snapshot refs before work resumed; they
