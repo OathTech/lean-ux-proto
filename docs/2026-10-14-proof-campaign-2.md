@@ -15,22 +15,22 @@ merged; the executable mirror remains byte-identical to b700659.
 | H3 Roaming | 17 | 186 | Full terminal closure and invalid-MAC1/rate-limit/admitted-response/initiation rejection preservation current; callback authentication provenance and broader caller coverage open. |
 | H4 Configuration | 84 | 609 | Full terminal closure and ordered mixed-peer, mixed port-refusal/private-key readback and repeated-callback/DONE support current; global ownership, queued cleanup and general pagination open. |
 | H5 Progress | 43 | 293 | Full terminal closure, exact bounded outcomes and recorded batch completion-guard soundness current; global progress/coherent-ring adequacy open. |
-| H6 Timers | 52 | 445 | Full terminal closure, first outer timer turn and intermediate retransmit receipt current; whole scheduler episodes, complete caller coverage and session-relative counts open. |
+| H6 Timers | 53 | 453 | Full terminal closure and every actual timer-loop turn with immediate retransmit receipts current; complete caller coverage, scheduler retry bounds and session-relative counts open. |
 
-The checked surface is 2,184 theorems in all 694 campaign-owned modules.
+The checked surface is 2,192 theorems in all 697 campaign-owned modules.
 The completed retrofit accounts for 1,983: 1,321 retyped, 244 explicitly
 corrected, 239 retained and 179 added support/finding declarations. One hundred twenty-two
 subsequent H2 declarations add table preservation and local owner coherence.
 Eleven H1 declarations add whole-response entry and actual derivation-clock provenance; twenty-seven H4 declarations
 add mixed fwmark/scalar, ordered peer-attribute, port-refusal/private-key readback and repeated-callback/DONE support. Twenty-nine H3 declarations
 add invalid-MAC1, rate-limit and admitted-response/initiation rejection preservation. Five H5 declarations
-establish recorded batch completion-guard soundness. Seven H6 declarations
-connect the first outer timer turn and its retransmit receipt. Of the 1,831 baseline theorems, 22 frames
+establish recorded batch completion-guard soundness. Fifteen H6 declarations
+connect first-turn and full actual timer-loop receipts, including immediate retransmit effects. Of the 1,831 baseline theorems, 22 frames
 were deleted because types supply their facts and five false cookie supports
 were separately retired with checked counterexamples. No baseline declaration
 remains awaiting retrofit; all 258 original terminal names/order survive,
 with two new H1 headlines, thirty-one new H2 headlines, four new H3 headlines,
-five new H4 headlines, one new H5 headline and two new H6 headlines (303 total).
+five new H4 headlines, one new H5 headline and three new H6 headlines (304 total).
 
 The [retrofit report](2026-10-16-proof-campaign-2-state-split.md) records
 claim/frame files, corrections, before/after counts and validation.
@@ -42,9 +42,9 @@ No shared lemma or mirror implementation was edited. The campaign-owned
 retrofit is not a claim that the full gate or any entire charter result passes.
 
 None of H1–H6 is a completed charter result. The timer retry-sequence contracts
-concern supplied wheel units and their actual inspection. A separate first-turn
-contract now connects actual outer selection to its unchanged continuation;
-the complete scheduler-to-retry sequence connection remains open. No new
+concern supplied wheel units and their actual inspection. The first-turn and whole-episode
+contracts now connect actual outer selection and every executed turn to their
+unchanged continuation/finish; the scheduler-to-retry-bound connection remains open. No new
 mirror-team request arises from these statement-domain findings.
 
 ## H2 continuation: confirmation preserves the index invariant
@@ -1211,6 +1211,61 @@ Config.PaginationCallbackSource and Config.PaginationDoneSource under
 Leanux.Proofs.WG, using capped, scripts/in-bundle, 32 threads and 16 QEMU slots.
 No new mirror-team request arises.
 
+## H6 continuation: every actual timer-loop turn
+
+The observer now covers one complete original runTimers call from an arbitrary
+Product entry and jPass. It resets queuedThisCall once, uses the actual record
+budget, records every executed loop turn including a terminating turn, and
+executes the original timerOuterFinish. Each turn retains its iteration,
+incoming control, entry/exit Product snapshots, result and same-entry selected
+unit inspection. The unit choice reads the actual next non-passive record and
+rescans the current wheel on that turn. Successful execution derives worker/
+timer agreement; it is not a callback-readiness premise.
+
+Selected timer receipts connect the actual prefix snapshot and immediate
+callback exit. Retransmit selection preserves identity and changes attempts to
+nextAttempts with no remaining logical expiry at that immediate exit. Yield
+receipts thread the exact observed snapshots and control through the finite
+range; done receipts retain the terminating turn and exclude the unused tail.
+Absent-device calls have their actual reset and false result. Errors from
+selection, callback, loop or finish remain errors under whole-call erasure;
+there is no partial receipt history on failure.
+
+OuterEpisodeModel contains eleven data/model declarations; Source contains four
+observer definitions, five public source theorems and one private selection
+factor. Claims holds the projected episode theorem and Statements its literal
+wrapper. Eight added theorems bring H6 to 453 theorems and 53 headlines. No frame
+file, shared-layer copy or type-deletion is needed. The complete Product
+observations retain the existing fixture projection; executable states are never
+reconstructed from snapshots.
+
+[AGENT 2026-10-17] Use a source-specific finite-loop observer over actual
+timerOuterTurn rather than copying C1's absent Logged/TimerPass closure.
+Its erasure keeps the real worker interleavings, reset and finish. The episode
+certificate does not separately characterize finish's queue checks, prove fuel
+adequacy, assert no remaining due timer, or establish a retry-19/session-once
+bound. The supplied-unit sequence remains a separate theorem awaiting a
+history invariant connecting its pairs to the actual episode.
+
+Ten changed development probes were used. Probes 1–9 fail with errors/warnings
+7/5, 3/0, 7/7, 11/1, 7/2, 1/0, 2/3, 1/0 and 1/0 respectively, on run/lift
+normalization, annotations, eliminated locals, Boolean branches and bind form.
+Probe 10 checks the complete package with zero diagnostics and only standard
+axioms on all seven public roots. Default proof limits/caps are unchanged;
+no suppression, unchanged retry or infrastructure failure occurs.
+
+Installed split build passes 317 jobs, with only inherited Env:865 String.mk.
+Axiom inspection checks 1,402 logical roots in 275 modules, including 790 public
+theorems, standard only. Fresh terminal kernel replay passes
+without diagnostics after all artifact writers stop.
+Independent source review finds no correctness issue and confirms the limits
+above. Static checks, original terminal names/order and mirror/shared boundaries
+remain unchanged. The campaign now has 2,192 theorems in 697 owned modules and
+304 headlines, versus 2,184/694/303 at ba6f537a. All H1–H6 remain in progress;
+the inherited full-gate failure is not rerun or reclassified. Reproduce build
+and fresh replay on Leanux.Proofs.WG.TimerDiscipline.Statements under capped,
+scripts/in-bundle, 32 Lean threads and 16 QEMU slots. No new mirror request.
+
 ## H3 continuation: rate-limit refusal preserves peers and endpoints
 
 The whole original non-cookie receiver now has an actual strict-prefix
@@ -1334,7 +1389,8 @@ not implemented. This is a proof dependency, not a mirror request or a new H5 re
 
 ## Remaining outer timer-episode dependency
 
-The selected-unit H6 sequence does not yet describe an entire runTimers call.
+The selected-unit H6 retry sequence does not yet give a retry bound for an
+entire runTimers call. The OuterEpisode observer now records every actual turn.
 The actual scheduler can interleave clear, crypt and send work with timers,
 finish several callbacks at the same wheel step before running send work,
 rescan a changed wheel, and reset queuedThisCall only once. A supplied sequence
@@ -1350,8 +1406,8 @@ The alternative is campaign 1's Logged/TimerPass observer, whose erasure theorem
 already follows the actual timer/clear/send/crypt scheduler. Its Capture and
 PrefixLoops dependencies are absent here; copying that layer is outside the
 allowed few local variants. Its current receipts also need selected-wheel
-information before they can connect to the retry certificates. Neither
-architecture currently establishes an entire retry episode.
+information before they can connect to the retry certificates. The source-specific observer now has a checked complete turn chain, but neither
+architecture establishes the complete scheduler retry bound.
 
 The enclosing requireNothingDue also reads fixture.hiddenAhead, outside the
 campaign Product projection. Comparisons from the same actual product entry

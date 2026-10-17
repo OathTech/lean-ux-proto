@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.TimerDiscipline.OuterEpisodeClaims
 import Leanux.Proofs.WG.TimerDiscipline.OuterFirstReceiptClaims
 import Leanux.Proofs.WG.TimerDiscipline.OuterFirstTurnClaims
 import Leanux.Proofs.WG.TimerDiscipline.RetryBoundaryClaims
@@ -717,5 +718,15 @@ theorem original_run_timers_first_retransmit_receipt (jPass : UInt64) (pid : Pee
         retryObservation selected.toSnapshot pid = some (identity, attempts, expiry) ∧
         retryObservation afterUnit.toSnapshot pid = some (identity, nextAttempts attempts, none)) :=
   runTimers_first_retransmit_receipt jPass pid we identity attempts expiry
+
+/-- One actual complete `runTimers` episode, with every executed turn and its
+immediate selected callback receipt. No supplied units, callback readiness,
+no-due result or retry bound is assumed or concluded. Stops are retained by
+`observedRunTimersEpisode_erase`. -/
+theorem original_timer_episode_receipt (jPass : UInt64) (entry : Campaign2.Product.Snapshot) :
+    Campaign2.Product.Ensures (observedRunTimersEpisode jPass)
+      (fun initial => initial = entry)
+      (fun result final => OuterTimerEpisodeValid jPass entry result.1 result.2 final) :=
+  runTimers_episode_receipt jPass entry
 
 end Leanux.Proofs.WG.TimerDiscipline
