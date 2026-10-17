@@ -71,14 +71,14 @@ numeric-ID uniqueness in that operation language, not driver reachability, live
 key residency, or a claim about history before the sequence. All original
 rejections and errors must remain.
 
-The required transport spans six existing structural families:
+The historical pre-split plan spanned six structural families:
 
 | Shared declaration | Local status |
 | --- | --- |
 | `Keypairs/Frames/WGBase.setPeer_spec` | Checked `Noise/RestartFrames.setPeer_spec_restart_variant` |
 | `Keypairs/Frames/WGBase.peerGetMaybeZero_spec` | Checked `peerGetMaybeZero_spec_restart_variant` |
 | `Keypairs/Frames/WGBase.pubkeyLookup_spec` | Checked `pubkeyLookup_spec_restart_variant` |
-| `Keypairs/Frames/WGBase.peerPut_spec` | Not implemented; failed-consumer release may delete the tracked peer |
+| `Keypairs/Frames/WGBase.peerPut_spec` | Historical general transport deferred; actual held cleanup has acquisition-derived support, below |
 | `Keypairs/Frames/WGTransitions.consumeInitiation_spec` | Not implemented; must include every rejection after lookup |
 | `Keypairs/Frames/WGTransitions.createResponse_spec` | Not implemented; must include early returns and index insertion |
 
@@ -95,6 +95,22 @@ variants as authorization to finish the larger layer. Initial next-ID bounds
 do not establish key residency: aliased releases may erase a key while its ID
 remains in a slot. Bare consumer calls also retain successful lookup references;
 full packet-caller cleanup is outside the proposed operation language.
+
+Current owned-source alternative (2026-10-17): InitiationTagFrames derives a
+reference count above one from actual public-key acquisition.
+Config.PeerScalars.peerPut_retained gives the exact decrement, so failed-consumer
+cleanup cannot delete that held peer. The old general-release obstacle is not
+the current minimum. InitiationTagSource and CreationTagSource already expose
+the actual whole consume/create source shapes; Index.ConsumeFrames and retained
+release supply cursor support. A bounded transport package can compose these
+owned contracts before the finite-history induction, without implementing a
+parallel six-family layer. This route is not a claim that the next-slot
+transports or history theorem are proved.
+
+C1's lifetime projection still omits peer slots and the Device allocation
+cursor. Extending it and all driver callers is broader and remains a shared
+dependency. The initial next-slot bound does not imply resident keys; the
+native operation language does not establish initialized whole-driver history.
 
 ## H2: data ingress and later workers
 

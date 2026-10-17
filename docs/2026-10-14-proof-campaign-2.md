@@ -1882,7 +1882,10 @@ ones that erase the new key during rotation. Neither self-owner equality nor
 referenced-peer residency is assumed: this mirror's dereference checks only
 the non-null word. These facts do not establish final key coherence or
 reachability. Birthdate remains existential; exact decoded-clock and final
-record-suffix claims, other input outcomes and broader call totality remain open.
+record-suffix claims, other input outcomes and broader call totality were open
+at this checkpoint. The later original_begin_session_clock proves actual
+birthdate provenance through rotation/publication without readiness; it does
+not assert receipts on stopped calls or general totality.
 
 The full original `createInitiation` now succeeds under resident-peer/identity,
 non-null stored-word and pure crypto guards, with a 32-byte ephemeral record,
@@ -1906,9 +1909,11 @@ installation after successful begin zeroes the handshake tag. A genuine mixed
 history needs actual consume/create operations. Three checked restart variants
 preserve the relevant cursor/next predicate; release/consumer/creator transport
 would complete six shared families and awaits the reported scope decision.
-The proposed initial-next-below-cursor condition is design analysis, not a
-proved mixed-history result. Whole-call coverage, reachable slot/key coherence
-and lifetime confirmation remain open.
+The proposed initial-next-below-cursor condition is not yet a proved
+fresh-installation history result. Later whole-call tag maps and finite mixed
+tag histories cover all seven native tag owners. The owned-source audit below
+removes the general failed-consumer release obstacle; fresh-installation
+confirmation, reachable slot/key coherence and lifetime closure remain open.
 
 ## H2 — Session index uniqueness
 
@@ -3740,3 +3745,53 @@ remains FAILED, not rerun unchanged. No mirror request arises. Reproduce the
 scoped build, axiom inspection and fresh replay of
 Leanux.Proofs.WG.TimerDiscipline.Statements under capped/scripts/in-bundle
 with LEAN_NUM_THREADS=32 and LEANUX_QEMU_SLOTS=16.
+
+
+## Coverage audit: H1 and H5
+
+H1's seven whole-call tag maps and finite actual histories cover the native IK
+edge clauses. Each slot's Option type gives one value per slot, not pairwise
+distinct slots or a three-object store bound. Ordered rotation/clear/expiry
+contracts retain aliases and the initiator-with-next arm. The remaining core
+confirmation obligation is across fresh installations: consecutive-confirmation
+contracts exclude intervening installation, and direct helper reinstallation
+is not an initialized accepted-run witness.
+
+The historical six-family transport inventory is no longer the minimum after
+newer owned acquisition/cleanup contracts. Actual acquisition supplies a
+retained reference for rejected consumption; exact peerPut decrement prevents
+deletion of that held peer. The next bounded architecture composes owned
+consume/create source shapes and cursor effects, then a finite native history
+under an explicit initial next-ID-below-cursor premise. C1's lifetime projection
+omits slots and the Device cursor; extending it and all callers is a distinct
+larger architecture. This audit takes no fresh-history proof credit.
+
+H5's mathematical termination follows from actual total finite-recursive Lean
+definitions, including terminating Stops. Record-budget adequacy is different.
+Existing dispatch/turn/resumption contracts connect the recorded choice to the
+real activation, including detached-state rerun and all failures. Fairness and
+unconditional successful resumption are stronger than relative progress.
+
+The substantive H5 gap is initialized accepted-operation pending-unit consistency.
+RunnerBoundaryClean checks only consumed records, no suspended activation and
+netRxRaised=false. afterBatch's recorded guard explicitly omits pendingWork and
+relies on an unproved pending-to-queue relation. Later syscall worker/timer tails
+also prevent transporting an earlier drain cut directly to the final boundary.
+
+One architecture establishes the initialized relation through queue production,
+section-start clearing, physical ring transitions, NAPI, retirement, syscall
+tails and Runner.executeTrace. It overlaps C1 Queues/RingGeometry, RingSteps,
+RingJournal, RxScheduleHistory, RxEnvBatchHistory, JointSyscalls and JointRunner;
+those layers are not copied, and their erasures alone do not supply the relation.
+The alternative investigates a current initialized accepted trace with an actual
+pending boundary. A rejected prefix or manufactured successor cannot settle
+this. Placeholder/recordless bookkeeping must be distinguished from supplied
+record execution.
+
+The old accepted backlog is now a proved refusal on the current mirror.
+QueueRefill is an initialized executable prefix rejection; arbitrary cookie
+ring witnesses refute their stated local domains. None supplies a current
+kernel-proved accepted pending-unit trace. Investigation remains open and may
+find no witness. Independent audits found no theorem defect in the inspected
+coverage. Stale terminal-lag wording in backlog, removal and timer notes is
+corrected; no proof counts change and the inherited aggregate gate remains FAILED.

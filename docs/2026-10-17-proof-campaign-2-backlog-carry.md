@@ -19,7 +19,9 @@ current runner's FIB boot and rejects at the route/source invariant, returning
 no backlog. That direct fixture result is distinct from the actual runner
 rejection above. The general runner-boundary audit is now carried. Historical backlog wrappers
 explicitly state the direct-fixture or actual/audited refusal; the old accepted
-finding remains historical. Full H5 terminal closure still lags.
+finding remains historical. The complete H5 headline module now builds with
+standard axioms and fresh replay; general progress and initialized pending-unit
+consistency remain open. The inherited aggregate gate still fails elsewhere.
 No captured Linux run or general progress property is claimed.
 
 Reproduce with:

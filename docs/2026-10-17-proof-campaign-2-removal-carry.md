@@ -25,8 +25,8 @@ The witness negates total return even with postcondition True under the old
 resident-device precondition. It therefore refutes both old quiet and live
 after-death totality conclusions on their stated domains. It does not
 establish reachability, coherent peer-list membership or kernel behavior.
-The existing broader removal callers remain pending; they were not silently
-given extra readiness assumptions.
+At this finding checkpoint the broader removal callers remained pending;
+they were not silently given extra readiness assumptions.
 
 [AGENT 2026-10-17] Classify the failed totality as statement lag following the
 landed guard. Retain the pending contracts and report the counterexample;
@@ -40,12 +40,16 @@ Reproduce with scripts/in-bundle lake build
 Leanux.Proofs.WG.Config.QuietRemovalFindings, then
 scripts/in-bundle lake env leanchecker --fresh
 Leanux.Proofs.WG.Config.QuietRemovalFindings. Use capped on this host.
-The full H4 terminal closure and full proof gate remain lagging.
+The full H4 terminal closure subsequently passed scoped build, standard-axiom
+inspection and fresh replay. The aggregate gate still fails in inherited
+CounterWindow/ReplayWindow files.
 
 The two quiet-removal contracts now classify exact refusal or the original
 successful cleanup effect on the same premises, including the actual outer
 removal prefix. Four private exact-prefix helpers retain the actual native
 states and decision logs. The three general live-removal source contracts now classify exact outcomes
 using actual clear/timer/outer-prefix execution witnesses for diagnostics.
-Their terminal projected wrappers remain pending.
+Their terminal projected wrappers are now checked in Config.Statements,
+including original_peer_remove_quiet and original_peer_remove_live. Initial-state
+REPLACE_PEERS cleanup/ownership transport remains separate and open.
 Validation and the complete failed-probe ledger are in the retrofit report.

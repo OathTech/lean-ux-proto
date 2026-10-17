@@ -85,8 +85,8 @@ axiom inspection and fresh replay are recorded in the retrofit report.
 
 The later projected correction retains the finding and checks `ArmingClaims`
 with a scoped build, standard-axiom inspection and fresh replay; counts and
-commands are in the retrofit report. The complete H6 terminal closure remains
-lagging while downstream timer and worker consumers are carried.
+commands are in the retrofit report. At that checkpoint the complete H6
+terminal closure still awaited downstream timer and worker carries.
 
 The 904-theorem retrofit checkpoint additionally corrects three QuietTimers
 total-return contracts and three RecordedSiteSource effects. Quiet cleanup
@@ -94,8 +94,8 @@ clears both fields in the complete Peer, preserving its original resident
 and empty-clear-queue premises. Recorded-site effects retain the actual
 clock-read product witnesses and describe same-expiry/changed-expiry wheel
 behavior. These six downstream corrections do not strengthen the witness
-into a reachability claim. Further timer/worker consumers and the full H6
-terminal closure remain pending; validation and the process-failure ledger
+into a reachability claim. At that checkpoint further timer/worker consumers
+and the full H6 terminal closure remained pending; validation and the process-failure ledger
 are in the retrofit report.
 
 The 987-theorem checkpoint also corrects armIfGuard_recorded,
@@ -136,3 +136,12 @@ due-peer selector. Current unit contracts retain actual prefix/callback
 execution and worker-kind agreement; they do not establish selection by
 the outer runTimers loop. The scoped build, standard-axiom audit and fresh
 replay pass; reproduction and scope corrections are in the retrofit report.
+
+
+Current status: the campaign-owned H6 retrofit and complete terminal closure
+are checked, with standard axioms and fresh kernel replay. Subsequent actual
+timer-loop receipts connect outer selection, and all direct traversal call
+sites now have local all-mode effects. The historical witnesses retain their
+stated arbitrary-state domains. General initialized histories and session-relative
+counts remain open; the inherited aggregate gate still fails outside H6.
+Current scope is in the [campaign report](2026-10-14-proof-campaign-2.md).
