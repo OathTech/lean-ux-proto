@@ -1,3 +1,9 @@
+import Leanux.Proofs.WG.Packets.NativeTransmitPreservation
+import Leanux.Proofs.WG.Packets.TransmitStack
+import Leanux.Proofs.WG.Lifetimes.TxCallSource
+import Leanux.Proofs.WG.Lifetimes.BatchItemSource
+import Leanux.Proofs.WG.Queues.PollSource
+import Leanux.Proofs.WG.Queues.ObservePollSource
 import Leanux.Proofs.WG.Packets.InitializedEntries
 import Leanux.Proofs.WG.Packets.TxFront
 import Leanux.Proofs.WG.Packets.PublicationRunner
@@ -4475,5 +4481,117 @@ theorem original_transmit_handoff_stopped (v4 : Bool) (addr : Nat) (pkts : List 
       ∀ pkt ∈ pkts, destinationField (if v4 then 4 else 6) pkt.bytes = addr :=
   wgXmit_stopped_after_handoff v4 addr pkts mtu w s ambient afterSplice pid xs stop routing front tail
 end InitializedAuthorization
+
+section TransmitSource
+
+open Leanux Leanux.WG Leanux.Proofs.Logged
+open Lifetimes Queues AllowedIps Packets
+
+/-- The actual lifetime observer factors at the completed staging splice. -/
+theorem original_transmit_observer_front (family addr : Nat) (packets : List Packet) (mtu : Nat) :
+    wgXmitPrefix family addr packets mtu = (do
+      match ← txFrontPrefix family addr packets mtu with
+      | .error err => pure err
+      | .ok pid => txTailPrefix pid) :=
+  wgXmitPrefix_front_factor family addr packets mtu
+
+/-- Removing only handoff receipts gives the old joint execution on its actual
+incoming history, including every stopped prefix. -/
+theorem original_transmit_handoff_projection (family addr : Nat) (packets : List Packet) (mtu : Nat) :
+    StateProjectsPrefix TransmitJoint.oldEvent id (TransmitJoint.transmit family addr packets mtu)
+      (RoutingJoint.access (wgXmitPrefix family addr packets mtu)) :=
+  TransmitJoint.transmit_projects family addr packets mtu
+
+/-- The same single observer executes the original native WireGuard call. -/
+theorem original_transmit_handoff_erasure (family addr : Nat) (packets : List Packet) (mtu : Nat) :
+    ErasesStatePrefix (TransmitJoint.transmit family addr packets mtu) (wgXmit family addr packets mtu) :=
+  TransmitJoint.transmit_erases family addr packets mtu
+
+/-- Each completed handoff extends the journal even if the later tail stops. -/
+theorem original_transmit_handoff_appends (family addr : Nat) (packets : List Packet) (mtu : Nat) :
+    StateAppends (TransmitJoint.transmit family addr packets mtu) :=
+  TransmitJoint.transmit_appends family addr packets mtu
+
+/-- A native call retains routing at every recorded handoff's strict prefix;
+its normal endpoint permits the source's reference-payment deletion. -/
+theorem original_transmit_positional_checks (initial : FlatTable × FlatTable)
+    (family addr : Nat) (packets : List Packet) (mtu : Nat) :
+    StatePrefixPreserves
+      (fun h w _ => GlobalCompletionState initial (TransmitJoint.routes h) w ∧ TransmitJoint.Checks initial h)
+      (TransmitJoint.Safe initial) (TransmitJoint.transmit family addr packets mtu) :=
+  TransmitJoint.transmit_preserves initial family addr packets mtu
+
+/-- Actual product callers use the canonical native lift. -/
+theorem original_transmit_product_checks (initial : FlatTable × FlatTable)
+    (family addr : Nat) (packets : List Packet) (mtu : Nat) :
+    PrefixPreserves (TransmitJoint.Inv initial) (TransmitJoint.Safe initial)
+      (liftWGObserver (TransmitJoint.transmit family addr packets mtu)) :=
+  TransmitJoint.transmit_product initial family addr packets mtu
+
+/-- The specified occurrence, rather than a later endpoint, supplies this
+longest-prefix owner and every supplied packet's destination. -/
+theorem checked_transmit_handoff_winner {initial : FlatTable × FlatTable}
+    {h : List TransmitJoint.Event} (checked : TransmitJoint.Checks initial h)
+    (pre post : List TransmitJoint.Event) (receipt : TransmitJoint.Receipt)
+    (position : h = pre ++ .transmit receipt :: post) :
+    ∃ (pid : PeerId) (v4 : Bool), receipt.run.value = .ok pid ∧
+      receipt.family = (if v4 then 4 else 6) ∧
+      TxFrontCut (if v4 then 4 else 6) receipt.addr receipt.packets receipt.mtu receipt.run.before
+        receipt.run.after receipt.run.ambientBefore receipt.run.ambientAfter pid ∧
+      PeerWinner (rootWidth v4) receipt.addr
+        (selectedFlat v4 (completionFold (TransmitJoint.routes pre) initial)) (some pid) ∧
+      ∀ pkt ∈ receipt.packets, destinationField (if v4 then 4 else 6) pkt.bytes = receipt.addr :=
+  checked.winner pre post receipt position
+
+/-- The direct syscall retains its socket acquisition/payment and route body. -/
+theorem original_direct_transmit_source (family addr : Nat) (payload : List UInt8) (opts : Env.XmitOpts) :
+    RxHistory.syscallDispatch (.wgXmit family addr payload opts) =
+      RxHistory.audit (syscallXmitWith xmitMulticastLoopAudit
+        (fun family addr packets mtu => auditFocus (liftWGObserver (wgXmitPrefix family addr packets mtu)))
+        family addr payload opts) := rxDispatch_xmit_factor family addr payload opts
+
+/-- Batch items use the original section wrapper and multicast/receive callbacks. -/
+theorem original_batch_transmit_source (d : Device) (cqes : List Int) (item : Env.BatchItem) :
+    RxHistory.batchItem d cqes item =
+      batchItemWith (fun msg src => RxHistory.mixed (liftWGObserver (wgReceivePrefix msg src)))
+        RxHistory.pollScheduledInline
+        (fun family addr => RxHistory.audit (xmitMulticastLoopAudit family addr))
+        (fun family addr packets mtu => RxHistory.mixed (liftWGObserver (wgXmitPrefix family addr packets mtu)))
+        d cqes item := rxBatchItem_factor d cqes item
+
+/-- The actual Stack callback reaches transmission through the original IPv4 reply. -/
+theorem original_stack_transmit_source (packet : List UInt8) :
+    stackReceivePrefix packet = stackReceiveWith (receive4With (reply4With
+      (fun family addr packets mtu => liftWGObserver (wgXmitPrefix family addr packets mtu)))) packet := rfl
+
+/-- The Stack source with the concrete handoff observer preserves all earlier
+routing certificates and checks each newly reached reply handoff. -/
+theorem original_stack_transmit_checks (initial : FlatTable × FlatTable) (packet : List UInt8) :
+    PrefixPreserves (TransmitJoint.Inv initial) (TransmitJoint.Safe initial)
+      (stackReceiveWith (receive4With (reply4With
+        (fun family addr packets mtu => liftWGObserver (TransmitJoint.transmit family addr packets mtu)))) packet) :=
+  TransmitJoint.stack_preserves initial _ (TransmitJoint.transmit_product initial) packet
+
+/-- GRO entry precedes the original Stack callback, and normal completion is
+recorded only when that same callback actually returns. -/
+theorem original_gro_stack_source (entry : RxJoint.Entry) :
+    RxJoint.enter entry = RxJoint.GroSource.enterWith id
+      (fun bytes => RxJoint.access (stackReceivePrefix bytes)) entry :=
+  RxJoint.GroSource.enter_factor entry
+
+/-- The entire old poll is the shared body with its actual old atoms and GRO
+callbacks; this factor changes neither input history nor callback domains. -/
+theorem original_poll_transmit_source (pid : PeerId) (budget : Nat) :
+    RxJoint.poll pid budget = RxJoint.PollSource.pollWith (fun {_} a => a)
+      RxJoint.receive RxJoint.flushAll pid budget := RxJoint.PollSource.poll_factor pid budget
+
+/-- Each actual observed poll starts with its fresh lifetime seed and promotes
+only the new suffix, retaining the older global prefix verbatim. -/
+theorem original_observed_poll_seed (pid : PeerId) (budget : Nat) :
+    RxHistory.observePoll pid budget = RxHistory.ObserveSource.seededWith
+      (fun h => RxJoint.seed (RxHistory.prior h)) RxHistory.promote (RxJoint.poll pid budget) :=
+  RxHistory.ObserveSource.observePoll_factor pid budget
+
+end TransmitSource
 
 end Leanux.Proofs.WG.CryptokeyRouting

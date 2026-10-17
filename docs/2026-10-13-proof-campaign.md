@@ -164,6 +164,17 @@ The proof gate passes 675 build jobs and 639 terminal declarations in 7.319 seco
 The [short report](2026-10-17-r3-initialized-authorization.md) records scope,
 failed development checks and independent review.
 
+The transmit-source checkpoint adds fourteen modules and 115 theorems:
+631 files/8,750 theorems, 653 terminal declarations and 277 R3 exports.
+The concrete native observer records actual completed staging handoffs and
+retains them through later Stops, with exact old-journal projection. Positional
+routing checks authorize each selected receipt at its own strict prefix.
+Actual direct/batch/Stack/GRO/poll source factors and concrete Stack transport
+are proved; initialized transmit caller closure remains open. All preceding
+263 R3 terminal bodies are unchanged. Gate689/653 passes; Fresh kernel replay passes in 105.441 seconds without warnings.
+The [short report](2026-10-17-r3-transmit-source.md) records the corrected
+routing premise, scoped failures, independent reviews and remaining joins.
+
 The pre-split checkpoint validated every baseline result surface over
 `cb2348e`. Initialized R3 packet authorization and R4 receive-pipeline
 conservation remain open. Earlier positive results and runtime findings retain
