@@ -20,9 +20,9 @@ and attributed theorem declarations. Campaign 2 owns 427 Lean files,
 | --- | ---: | ---: | ---: | ---: | --- |
 | Common projection | 2 | 0 | 0 | 0 | Actual native WG/Ambient and full Product observations carried; no reconstructed execution states. |
 | H1 Noise | 35 | 171 | 22 | 185 | The full Noise closure is current, including restart support. Six type-given frames are deleted. Wider caller/lifetime/reachability and clock-provenance charter claims remain open. |
-| H2 Index | 68 | 318 | 52 | 262 | Table, lookup, collision records, allocation, owner invariants and lifecycle support carried; seven type-given frames deleted. Exact peer-release outcomes replace stale totality, with checked counterexamples. Terminal closure and whole-driver coherence remain pending. |
+| H2 Index | 68 | 318 | 52 | 266 | Table, lookup, collision records, allocation, owner invariants and lifecycle support carried; seven type-given frames deleted. Exact peer-release outcomes replace stale totality, with checked counterexamples. Terminal closure and whole-driver coherence remain pending. |
 | H3 Roaming | 35 | 119 | 13 | 157 | Endpoint/publication, polling, attempt facts, crypto, lookup and response-caller factors/facts carried with full Product certificates; two type-given frames deleted. The full terminal closure is current, including initiation/response audits with actual Product outcomes. Wider roaming/provenance charter gaps remain open. |
-| H4 Configuration | 130 | 554 | 79 | 406 | Scalar, identity, port, dump, allowed-IP and structural support carried; three type-given frames deleted. Quiet timer cleanup and queued-send observations are corrected; queued-send and removal totality have checked stale-statement counterexamples. Remaining readback/effects and terminal closure remain pending. |
+| H4 Configuration | 130 | 554 | 79 | 411 | Scalar, identity, port, dump, allowed-IP and structural support carried; three type-given frames deleted. Quiet timer cleanup and queued-send observations are corrected; queued-send and removal totality have checked stale-statement counterexamples. Remaining readback/effects and terminal closure remain pending. |
 | H5 Progress | 59 | 265 | 42 | 188 | Pure/control, cut, jitter, index, poll bounds, dispatch, scheduler turns, stack/probe frames, queue flush contracts, drain selection and Product observation bridge carried; one type-given index frame deleted. The old backlog fixture has checked exact runner and direct-fixture rejections. Drain bounds are carried. Receive-ring activation models, general runner boundaries and terminal closure remain pending. |
 | H6 Timer discipline | 98 | 404 | 50 | 174 | Base/guard/jitter, arming/wheel, recorded clock and initiation-send arming contracts carried; three type-given frames deleted. Exact wheel corrections are explicit; queue/pending and retained-worker frames are carried; broader timer episodes and terminal closure remain pending. |
 
@@ -4234,4 +4234,52 @@ Reproduce with scripts/in-bundle lake build on Config.ReadbackFrames,
 Config.KeyRequest, Index.ClearFrames, Index.FlushFrames, Index.TimerFrames and
 TimerDiscipline.PendingGiveUpSource under Leanux.Proofs.WG, then #print axioms
 and scripts/in-bundle lake env leanchecker --fresh MODULE for each root.
+Use capped, 32 Lean threads and 16 QEMU slots on this host.
+
+
+## Scalar readback composition and actual clear-worker dispatch
+
+| Tranche | Before | Retyped | Corrected | Deleted | Kept | Added | After |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Config.RemoveFlagRequestSource | 1 | 1 | 0 | 0 | 0 | 0 | 1 |
+| Config.ScalarGetterFrames, ScalarGetter | 4 | 4 | 0 | 0 | 0 | 0 | 4 |
+| Index.ClearSource | 4 | 4 | 0 | 0 | 0 | 0 | 4 |
+| This tranche | 9 | 9 | 0 | 0 | 0 | 0 | 9 |
+| Cumulative processed baseline and checked support | 1,252 | 965 | 52 | 22 | 213 | 151 | 1,381 |
+
+There are 538 campaign-owned files, 1,960 theorems and 419 checked proof
+modules; 579 baseline declarations await validation. H1 185, H2 266, H3 157,
+H4 411, H5 188 and H6 174 are checked. H1/H3 terminals remain current;
+other terminals and the full gate remain lagging.
+
+ScalarGetterFrames now holds the three original total socket/fixture-device
+frame contracts and their two unchanged data definitions. ScalarGetter keeps
+the projected total set/get roundtrip. All singleton, allowed-IP, room, selector,
+reference, stopped-device and idle/empty-socket premises remain. Actual post-set
+state and Ambient feed the getter. A malformed trailing peer still returns
+EINVAL after applying the valid peer; exact canonical JSON and the completed
+socket are retained. RemoveFlagRequest remains partial, preserving all flags,
+protocol, NodePairs, reference/count and empty-workqueue premises through lookup,
+generation increment, the actual single peer command and its error-sensitive
+suffix. Prior corrected removal semantics are inherited, not recounted.
+
+ClearSource retains three native table contracts and one full Product dispatcher
+contract. Ordered nullable peer-word dereference, immediate unhash, peer reset,
+next/previous/current releases and final put remain, including all alias and
+failure cases. The dispatcher retains head/named selection, one queue erase,
+actual section start/stop inputs and lifted body. No new readiness, totality,
+or Product predicate restriction is introduced.
+
+Independent reviews find no issues. Both configuration scratch probes pass on
+their first runs. Clear probes 1–2 fail match distribution/unused simplifications
+and branch indentation; probe 3 passes cleanly. The actual 236-job package build
+passes; the only warning is the inherited unchanged Env String.mk deprecation.
+Axiom inspection checks 966 logical roots in 194 proof modules, including 619
+public theorem roots, with standard axioms only. All three fresh kernel replays,
+static checks, 258 terminal names/order and mirror/shared boundaries pass. No
+unchanged rerun, infrastructure retry, cap or proof-limit increase occurred.
+
+Reproduce with scripts/in-bundle lake build on Config.RemoveFlagRequestSource,
+Config.ScalarGetter and Index.ClearSource under Leanux.Proofs.WG, then #print
+axioms and scripts/in-bundle lake env leanchecker --fresh MODULE for each root.
 Use capped, 32 Lean threads and 16 QEMU slots on this host.
