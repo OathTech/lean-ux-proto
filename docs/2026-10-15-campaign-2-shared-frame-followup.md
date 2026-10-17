@@ -372,7 +372,9 @@ full optional endpoint map. Existing native Ambient and owned consumeData
 contracts supply the rest; shared files remain unchanged.
 
 The complete wgReceive claim stops at ingress normal return. General later-poll
-authentication depends on C1 PublicationHistory, PublicationFrontier,
-PublicationChecks.actual_poll and Queues/PollAuthorization. A bounded
+endpoint authentication needs C1 PublicationHistory, PublicationFrontier and
+PublicationChecks.actual_poll to retain the packet occurrence and its earlier
+publication receipt. Queues/PollAuthorization concerns the later routing/Stack
+entry; it is not a premise for the earlier endpoint mutation. A bounded
 fresh-queue/decrypt/NAPI alternative also needs occurrence/geometry transport.
 Neither is reduced to a few frame facts, and neither layer is copied here.

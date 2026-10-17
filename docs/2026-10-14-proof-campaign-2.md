@@ -1909,11 +1909,12 @@ installation after successful begin zeroes the handshake tag. A genuine mixed
 history needs actual consume/create operations. Three checked restart variants
 preserve the relevant cursor/next predicate; release/consumer/creator transport
 would complete six shared families and awaits the reported scope decision.
-The proposed initial-next-below-cursor condition is not yet a proved
-fresh-installation history result. Later whole-call tag maps and finite mixed
-tag histories cover all seven native tag owners. The owned-source audit below
-removes the general failed-consumer release obstacle; fresh-installation
-confirmation, reachable slot/key coherence and lifetime closure remain open.
+Later whole-call tag maps and finite mixed tag histories cover all seven
+native tag owners. The later nine-operation fresh-confirmation history now
+also proves the initial-next-below-cursor result for the tracked peer, including
+actual create/consume calls. The owned-source audit removes the general
+failed-consumer release obstacle. Broader driver/recreation/reset histories,
+reachable slot/key coherence and lifetime closure remain separate.
 
 ## H2 — Session index uniqueness
 
@@ -5018,9 +5019,11 @@ The [shared follow-up](2026-10-15-campaign-2-shared-frame-followup.md)
 records counterpart paths for eventual unification.
 
 The remaining historical-authentication gap has two audited architectures.
-Persistent provenance should reuse C1 PublicationHistory, PublicationFrontier,
-PublicationChecks.actual_poll and Queues/PollAuthorization. These distinguish
+Persistent endpoint provenance should reuse C1 PublicationHistory,
+PublicationFrontier and PublicationChecks.actual_poll. These distinguish
 packet occurrences and their earlier successful publication/consume events.
+Queues/PollAuthorization is for the later routing/Stack join, not a required
+premise for endpoint mutation before routing.
 A bounded fresh-admission/decrypt/NAPI alternative could instead start with
 empty coherent queues, but still needs queue geometry and occurrence transport.
 Current first-cut authentication requires the publication owner's actual queue
@@ -5727,3 +5730,38 @@ main integration or push. Reproduce with capped/scripts/in-bundle lake build
 Leanux.Proofs.WG.Config.Statements, closure axiom inspection and lake env
 leanchecker --fresh on that root, with LEAN_NUM_THREADS=32 and
 LEANUX_QEMU_SLOTS=16.
+
+
+## Remaining-scope audit after the replacement checkpoint
+
+A read-only audit at main b3f56807 and campaign 1's 4e71927e distinguishes
+literal obligations from stronger initialized-driver claims. H2's named
+index operations, ownership lookup and collision retry core are checked;
+initialized driver/lifetime propagation is separate. General H4 nonempty
+insertion and final replace-peers erasure still require the represented-trie,
+ownership and free layers already inventoried.
+
+For H5, outer activation exit accounting does not supply finite execution
+and hidden-record suffix decrease for every inner worker, or a relation
+between pending identities and physical queued work. Composing C1 represented
+rings/resources and instead deriving an initialized runner invariant both reach
+the deferred queue/callback/history families. The accepted placeholder witness
+only proves retained bookkeeping; it is not evidence of supplied-record work
+left unexecuted. No new progress headline is claimed from this audit.
+
+For H6, the local arm-site delays, traversal receipts and qualifying retry
+blocks already have actual-call contracts. Whole-call allocation labels and
+arbitrary interleavings need the documented serial transport: direct expansion
+duplicates socket/cache families; C1 SameSnapshot can reduce the outgoing case
+to four facts once that support reaches this branch. Incoming staged sending
+still admits allocation. This audit supplies no additional arm-count proof.
+
+The current H3 follow-up is corrected: PollAuthorization governs routing/Stack
+entry after endpoint mutation and is not itself a prerequisite of the narrow
+endpoint-authentication join. Persistent publication history or a bounded
+fresh-queue/decrypt/NAPI alternative still requires packet occurrence and queue
+geometry transport. The bad-MAC2/no-cookie reply-preservation suffix remains
+the separately inventoried six-operation socket/cache path. No shared layer
+is copied. An old H1 status sentence is also brought current with the already
+checked nine-operation fresh-confirmation history; no theorem changes follow
+from either documentation correction.
