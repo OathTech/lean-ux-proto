@@ -2674,3 +2674,87 @@ with `scripts/in-bundle lake build` on those modules under `Leanux.Proofs.WG`,
 inspect logical declarations with `#print axioms`, and replay with
 `scripts/in-bundle lake env leanchecker --fresh MODULE`. On this host use
 `capped`, 32 Lean threads and 16 QEMU slots.
+
+## Dispatch, initiation erasure and downstream wheel corrections
+
+| Tranche | Before | Retyped | Corrected | Deleted | Kept | Added | After |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Config quiet timers and separated drain frame | 8 | 1 | 3 | 0 | 4 | 0 | 8 |
+| Progress.Dispatch | 4 | 4 | 0 | 0 | 0 | 0 | 4 |
+| TimerDiscipline.RecordedJitterFrames | 1 | 1 | 0 | 0 | 0 | 0 | 1 |
+| Initiation exit frames and consumption erasure | 2 | 2 | 0 | 0 | 0 | 2 | 4 |
+| TimerDiscipline.RecordedSiteSource | 3 | 0 | 3 | 0 | 0 | 0 | 3 |
+| This tranche | 18 | 8 | 6 | 0 | 4 | 2 | 20 |
+| Cumulative processed baseline and checked support | 862 | 638 | 14 | 21 | 189 | 63 | 904 |
+
+The census is 502 campaign-owned files, 1,873 theorems and 298 checked proof
+modules; 969 baseline declarations await validation. Checked counts are H1 180,
+H2 188, H3 99, H4 313, H5 74 and H6 50. H1's 22-headline terminal closure
+remains current over b700659; H2–H6 terminal closures and the full gate remain
+lagging. All 258 original terminal names/order remain, as do the wider charter
+obligations. No new charter result is claimed.
+
+QuietModel now clears both expiry and wheel entry for each selected timer,
+retaining list order and repeated identifiers. Three pure QuietFrames lemmas
+and the residence lemma retain their meaning; three total QuietTimers
+contracts explicitly correct their complete Peer effects. Their original
+resident/empty-clear-queue domains remain. The drain-empty frame moves to
+QuietDrainFrames and preserves the complete actual product state through
+liftWG, including fixture data and arbitrary other owners. Claims and frames
+remain separate. Later quiet/live peer-removal totality is a separate pending
+audit: the actual removal path includes an additional crypt-queue/NAPI guard.
+
+Progress.Dispatch keeps the actual product scheduler, selected activation,
+section-start read and intermediate-state witnesses. Its four contracts
+preserve exact false/success behavior and unchanged complete product state
+when no work exists. Receive work now observes PtrRing.empty, matching the
+actual head slot rather than replacing it with an item-list/count predicate.
+The scheduler priority order is unchanged.
+
+The recorded-jitter bound retains its arbitrary predicate over WG, FS, Task
+and Seccomp owners, actual Ambient lift, mode and numeric bound. Initiation
+exit framing likewise retains arbitrary four-owner predicates; its native
+companion describes the real exit, including a peerPut that may stop. Native
+and Product consumption erasure use the actual native run and lift, preserve
+every Stop and return only the peer identifier. They do not claim the
+remaining transcript/fixture facts are carried. Those two original bodies
+remain pending, with independent supplied lookup/beforeDh certificates in
+scope.
+
+RecordedSiteSource corrects three current timer effects. The projected
+caller-entry contract retains the actual clock record, mode, resident peer
+and guard premises. The two technical Product source witnesses retain the
+complete original initial/final product and the actual caller-read state.
+Their complete WG effects distinguish same expiry from changed expiry and
+use the actual signed clock gap. No execution state is reconstructed from a
+projection and no readiness premise is added.
+
+Scoped builds pass 126 jobs for the first seventeen contracts and 65 jobs
+for RecordedSiteSource, without warnings. Axiom inspection covers 515
+logical roots in 97 modules, including 278 public theorem roots, and finds
+only the three standard axioms. All five fresh replays pass. Independent review
+of quiet cleanup and initiation erasure is clear; dispatch and timer-source
+reviews are clear too. Static checks, whitespace and mirror/shared boundaries
+pass.
+
+Development ledger: quiet timers passed the first scratch probe. Dispatch
+passed probe five after fixing polymorphic hidden-action annotations, nested
+native/product reduction and match distribution; the first two drafts also
+had unused simplification warnings. Recorded jitter passed probe four after
+three local reduction failures (error/warning counts 2/0, 2/1 and 2/0).
+Initiation erasure made three runs over two changed drafts: the first failed
+with redundant steps and thirty unused simplifications; a cleanup edit then
+failed its assertion, and an incorrectly batched command reran the unchanged
+failing source. That second run was a process failure, not an infrastructure
+retry or a pass. The third run followed an inspected successful edit and
+passed cleanly. Subsequent edit and probe calls are separate. Recorded-site
+probes one through three failed product-bind normalization (2/0, 2/9 and
+1/0); four passed cleanly. Full output was saved before previews. No cap or
+proof-limit increase, infrastructure retry or guest run occurred.
+
+Reproduce with scripts/in-bundle lake build on Config.QuietTimers,
+TimerDiscipline.RecordedJitterFrames, Progress.Dispatch,
+Roaming.InitiationConsumeErasureSource and TimerDiscipline.RecordedSiteSource
+under Leanux.Proofs.WG; inspect logical declarations with #print axioms and
+replay with scripts/in-bundle lake env leanchecker --fresh MODULE. On this
+host use capped, 32 Lean threads and 16 QEMU slots.

@@ -15,7 +15,7 @@ def dispatchPrefix (w : Worker) : M (Option (Option Nat)) := do
   match w with
   | .encryptWorker => if d.encryptQueue.empty then return none
   | .decryptWorker => if d.decryptQueue.empty then return none
-  | .receiveWorker => if d.handshakeQueue.isEmpty then return none
+  | .receiveWorker => if d.handshakeQueue.empty then return none
   | .txWorker =>
     let some headPid := d.txWorkQueue.head? | return none
     let p ← match ← peekUnit .txWorker with
@@ -38,16 +38,16 @@ theorem dispatch_source (w : Worker) :
   cases w <;> simp only [dispatch, dispatchPrefix, dispatchAfterPrefix, bind_assoc, pure_bind]
   all_goals congr 1
   all_goals funext d
-  all_goals split <;> simp_all only [bind_assoc, pure_bind, dispatchAfterPrefix]
+  all_goals split <;> simp_all only [bind_assoc, pure_bind]
   all_goals congr 1
-  all_goals funext unit
-  all_goals cases unit <;> simp only [bind_assoc, pure_bind, dispatchAfterPrefix]
+  all_goals funext completed
+  all_goals cases completed <;> simp only [bind_assoc, pure_bind]
 
 /-- The selected activation really executes after the original start read. -/
 def DispatchRun (w : Worker) (initial final : World) : Prop :=
   ∃ pid selected bytes afterStart,
     (dispatchPrefix w).run initial = .ok (some pid, selected) ∧
-    (hidden (.sectionStart w)).run selected = .ok (bytes, afterStart) ∧
+    (hidden (.sectionStart w) : Leanux.M (List UInt8)).run selected = .ok (bytes, afterStart) ∧
     (Activation.run { worker := w, pid }).run afterStart = .ok ((), final)
 
 theorem dispatch_success_iff (w : Worker) (initial final : World) :
@@ -65,10 +65,10 @@ theorem dispatch_success_iff (w : Worker) (initial final : World) :
       change Except.ok (false, selected) = Except.ok (true, final) ↔ _
       simp
     | some pid =>
-      change ((hidden (.sectionStart w)).run selected >>= fun out =>
+      change ((hidden (.sectionStart w) : Leanux.M (List UInt8)).run selected >>= fun out =>
         ((Activation.run { worker := w, pid }).run out.2 >>= fun result =>
           pure (true, result.2))) = .ok (true, final) ↔ _
-      cases hs : (hidden (.sectionStart w)).run selected with
+      cases hs : (hidden (.sectionStart w) : Leanux.M (List UInt8)).run selected with
       | error e =>
         change Except.error e = Except.ok (true, final) ↔ _
         simp [hs]
@@ -81,8 +81,8 @@ theorem dispatch_success_iff (w : Worker) (initial final : World) :
           change Except.error e = Except.ok (true, final) ↔ _
           simp [hs, ha]
         | ok pair =>
-          obtain ⟨unit, afterRun⟩ := pair
-          cases unit
+          obtain ⟨completed, afterRun⟩ := pair
+          cases completed
           change Except.ok (true, afterRun) = Except.ok (true, final) ↔ _
           simp only [Except.ok.injEq, Prod.mk.injEq, true_and, Option.some.injEq]
           constructor
@@ -96,22 +96,22 @@ theorem dispatch_success_iff (w : Worker) (initial final : World) :
             exact (congrArg Prod.snd (Except.ok.inj ran))
 
 theorem dispatch_no_work (worker : Worker) (d : Device) (initial : World)
-    (device : initial.k.wg = some d) (empty : NoDispatchWork worker d) :
+    (device : initial.wg.dev = some d) (empty : NoDispatchWork worker d) :
     (dispatch worker).run initial = .ok (false, initial) := by
-  have ht : Returns getDev (fun w => w = initial)
-      (fun result w => result = d ∧ w = initial) := by
-    rw [returns_iff]
-    mvcgen [getDev, getK, invariant]
-    all_goals try dsimp +zetaDelta only at *
-    all_goals repeat intro
-    all_goals simp_all
-  obtain ⟨result, after, hd, rfl, rfl⟩ := ht initial rfl
+  have hd : (monadLift getDev : Leanux.M Device).run initial = .ok (d, initial) := by
+    have native : ((getDev.run initial.wg).run initial.ambient) = .ok ((d, initial.wg), initial.ambient) := by
+      simp [getDev, device]
+      rfl
+    change (((getDev.run initial.wg).run initial.ambient) >>= fun ((value, wg), ambient) =>
+      Except.ok (value, {initial with wg, ambient})) = _
+    rw [native]
+    rfl
   have hok {α β : Type} (x : α) (f : α → Except Stop β) :
       (Except.ok x >>= f) = f x := rfl
   have hpure {α : Type} (x : α) (v : World) : (pure x : M α).run v = .ok (x, v) := rfl
   cases worker <;> simp only [NoDispatchWork] at empty
   all_goals simp only [dispatch, StateT.run_bind, hd, hok]
-  all_goals simp [empty, hpure, StateT.run_pure]
+  all_goals simp [empty, hpure]
 
 theorem dispatch_false_iff (worker : Worker) (initial final : World) :
     (dispatch worker).run initial = .ok (false, final) ↔
@@ -128,10 +128,10 @@ theorem dispatch_false_iff (worker : Worker) (initial final : World) :
       change Except.ok (false, selected) = Except.ok (false, final) ↔ _
       simp
     | some pid =>
-      change ((hidden (.sectionStart worker)).run selected >>= fun out =>
+      change ((hidden (.sectionStart worker) : Leanux.M (List UInt8)).run selected >>= fun out =>
         ((Activation.run { worker, pid }).run out.2 >>= fun result =>
           pure (true, result.2))) = .ok (false, final) ↔ _
-      cases hs : (hidden (.sectionStart worker)).run selected with
+      cases hs : (hidden (.sectionStart worker) : Leanux.M (List UInt8)).run selected with
       | error e =>
         change Except.error e = Except.ok (false, final) ↔ _
         simp

@@ -19,6 +19,6 @@ theorem quietCleanup_frame (d : Device) (pid : PeerId) (p : Peer) :
   deleteTimers_withoutPeers _ _ _ _
 
 theorem quietCleanup_refcount (p : Peer) : (quietCleanupPeer p).refcount = p.refcount := by
-  simp [quietCleanupPeer, deleteTimersPeer, PeerTimer.all, Peer.setTimer, emptyKeysPeer]
+  simp [quietCleanupPeer, deleteTimersPeer, PeerTimer.all, Peer.setTimer, Peer.setWheel, emptyKeysPeer]
 
 end Leanux.Proofs.WG.Config

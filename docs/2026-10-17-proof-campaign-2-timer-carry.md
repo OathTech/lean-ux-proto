@@ -87,3 +87,13 @@ The later projected correction retains the finding and checks `ArmingClaims`
 with a scoped build, standard-axiom inspection and fresh replay; counts and
 commands are in the retrofit report. The complete H6 terminal closure remains
 lagging while downstream timer and worker consumers are carried.
+
+The 904-theorem retrofit checkpoint additionally corrects three QuietTimers
+total-return contracts and three RecordedSiteSource effects. Quiet cleanup
+clears both fields in the complete Peer, preserving its original resident
+and empty-clear-queue premises. Recorded-site effects retain the actual
+clock-read product witnesses and describe same-expiry/changed-expiry wheel
+behavior. These six downstream corrections do not strengthen the witness
+into a reachability claim. Further timer/worker consumers and the full H6
+terminal closure remain pending; validation and the process-failure ledger
+are in the retrofit report.

@@ -11,12 +11,12 @@ open Leanux Leanux.WG Leanux.Proofs.WG.Noise Std.Do
 
 def deleteTimersPeer : List PeerTimer → Peer → Peer
   | [], p => p
-  | t :: ts, p => deleteTimersPeer ts (p.setTimer t none)
+  | t :: ts, p => deleteTimersPeer ts ((p.setTimer t none).setWheel t none)
 
 def deleteTimersDevice : List PeerTimer → Device → PeerId → Peer → Device
   | [], d, _, _ => d
   | t :: ts, d, pid, p =>
-    deleteTimersDevice ts (withPeer d pid (p.setTimer t none)) pid (p.setTimer t none)
+    deleteTimersDevice ts (withPeer d pid ((p.setTimer t none).setWheel t none)) pid ((p.setTimer t none).setWheel t none)
 
 def quietCleanupPeer (p : Peer) : Peer := deleteTimersPeer PeerTimer.all (emptyKeysPeer p)
 

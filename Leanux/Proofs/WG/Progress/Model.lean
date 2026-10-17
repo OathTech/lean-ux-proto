@@ -13,7 +13,7 @@ def NoDispatchWork (worker : Worker) (d : Device) : Prop :=
   match worker with
   | .encryptWorker => d.encryptQueue.empty = true
   | .decryptWorker => d.decryptQueue.empty = true
-  | .receiveWorker => d.handshakeQueue.isEmpty = true
+  | .receiveWorker => d.handshakeQueue.empty = true
   | .txWorker => d.txWorkQueue = []
   | _ => True
 
@@ -21,7 +21,7 @@ def NoDispatchWork (worker : Worker) (d : Device) : Prop :=
 def placeholderSelection (d : Device) : Option Worker :=
   [Worker.receiveWorker, .decryptWorker, .encryptWorker, .txWorker].find? fun worker =>
     match worker with
-    | .receiveWorker => !d.handshakeQueue.isEmpty
+    | .receiveWorker => !d.handshakeQueue.empty
     | .decryptWorker => !d.decryptQueue.empty
     | .encryptWorker => !d.encryptQueue.empty
     | _ => !d.txWorkQueue.isEmpty
