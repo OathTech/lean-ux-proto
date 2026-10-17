@@ -1,4 +1,4 @@
-import Leanux.Proofs.WG.Index.Lookup
+import Leanux.Proofs.WG.Index.Table
 
 set_option autoImplicit false
 set_option pp.structureInstances false
@@ -9,7 +9,7 @@ open Leanux Leanux.WG Leanux.Proofs.WG.Noise Leanux.Proofs.WG.Config Std.Do
 
 abbrev bucketHas := noise_const _private.Leanux.WG.Peer.«0».Leanux.WG.bucketHas
 
-def bucketWalk (walk collide : Decision) (index : Nat) (entries : List IndexEntry) : M Bool := do
+def bucketWalk (walk collide : Decision) (index : Nat) (entries : List IndexEntry) : IndexM Bool := do
   for e in entries do
     _ ← branch walk true
     if ← branch collide (e.index == index) then return true
@@ -27,27 +27,40 @@ theorem bucketWalk_cons (walk collide : Decision) (index : Nat) (e : IndexEntry)
       _ ← branch walk true
       let equal ← branch collide (e.index == index)
       if equal then pure true else bucketWalk walk collide index es) := by
-  simp [bucketWalk, List.forIn_cons, branch, bind_assoc]
-  split <;> simp [bind_assoc]
+  simp [bucketWalk, List.forIn_cons, branch, AmbientM.branch, bind_assoc]
+  split <;> simp
 
 theorem bucketWalk_returns (walk collide : Decision) (index : Nat)
-    (entries : List IndexEntry) (k : Kernel) :
-    Returns (bucketWalk walk collide index entries) (fun w => w.k = k)
-      (fun result w => result = entries.any (·.index == index) ∧ w.k = k) := by
+    (entries table : List IndexEntry) :
+    Returns (bucketWalk walk collide index entries) (fun t => t = table)
+      (fun result t => result = entries.any (·.index == index) ∧ t = table) := by
   induction entries with
   | nil =>
-    rw [returns_iff]
-    simp only [bucketWalk, List.forIn_nil, bind_pure_comp, pure_bind]
-    mvcgen [branch]
-    all_goals try dsimp +zetaDelta only at *
-    all_goals simp_all
+    intro t ambient ht
+    let after := {ambient with steps := ambient.steps.push {
+      decision := walk, outcome := false, netRx := ambient.netRxSection}}
+    refine ⟨false, t, after, ?_, rfl, ht⟩
+    simp [bucketWalk, branch, AmbientM.branch, after]
+    rfl
   | cons e es ih =>
-    have ht := (returns_iff _ _ _).mp ih
-    rw [returns_iff, bucketWalk_cons]
-    mvcgen [branch, ht]
-    all_goals try dsimp +zetaDelta only at *
-    all_goals simp_all
-    all_goals grind
+    intro t ambient ht
+    let next := {ambient with steps := (ambient.steps.push {
+      decision := walk, outcome := true, netRx := ambient.netRxSection}).push {
+      decision := collide, outcome := e.index == index, netRx := ambient.netRxSection}}
+    cases matched : e.index == index with
+    | true =>
+      refine ⟨true, t, next, ?_, ?_, ht⟩
+      · rw [bucketWalk_cons]
+        simp [branch, AmbientM.branch, matched, next]
+        rfl
+      · simp [matched]
+    | false =>
+      obtain ⟨result, final, after, run, found, state⟩ := ih t next ht
+      refine ⟨result, final, after, ?_, ?_, state⟩
+      · rw [bucketWalk_cons]
+        simpa [StateT.run_bind, Except.bind, Except.map, branch, AmbientM.branch,
+          matched, next] using run
+      · simpa [matched] using found
 
 theorem bucket_any (index : Nat) (table : List IndexEntry) :
     (bucket index table).any (·.index == index) = table.any (·.index == index) := by
@@ -57,21 +70,18 @@ theorem bucket_any (index : Nat) (table : List IndexEntry) :
   by_cases same : e.index = index <;> simp [same]
 
 theorem bucketHas_returns (walk collide : Decision) (index : Nat) (d : Device) :
-    Returns (bucketHas walk collide index) (fun w => w.k.wg = some d)
-      (fun result w => result = d.indexTable.any (·.index == index) ∧ w.k.wg = some d) := by
-  have hg : Returns (indexBucket index) (fun w => w.k.wg = some d)
-      (fun entries w => entries = bucket index d.indexTable ∧ w.k.wg = some d) := by
-    rw [returns_iff]
-    mvcgen [indexBucket, getDev, getK, invariant]
-    all_goals try dsimp +zetaDelta only at *
-    all_goals simp_all [bucket]
-  rw [bucketHas_source]
-  apply returns_bind _ _ hg
-  intro entries w pre
-  obtain ⟨he, hd⟩ := pre
-  subst entries
-  obtain ⟨result, final, run, found, kernel⟩ :=
-    bucketWalk_returns walk collide index (bucket index d.indexTable) w.k w rfl
-  exact ⟨result, final, run, by simpa [bucket_any] using found, by rw [kernel]; exact hd⟩
+    Returns (liftIndex (bucketHas walk collide index)) (fun g => g.dev = some d)
+      (fun result g => result = d.indexTable.any (·.index == index) ∧ g.dev = some d) := by
+  intro g ambient device
+  obtain ⟨result, table, after, run, found, same⟩ :=
+    bucketWalk_returns walk collide index (bucket index d.indexTable)
+      d.indexTable d.indexTable ambient rfl
+  subst table
+  refine ⟨result, {g with dev := some d}, after, ?_, ?_, rfl⟩
+  · rw [bucketHas_source]
+    simp [liftIndex, getDev, device, indexBucket, bucket, StateT.run_bind, modifyDev] at *
+    rw [run]
+    rfl
+  · simpa [bucket_any] using found
 
 end Leanux.Proofs.WG.Index

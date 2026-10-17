@@ -19,12 +19,12 @@ and attributed theorem declarations. Campaign 2 owns 427 Lean files,
 | Result | Files | Before theorems | Before headlines | Retrofit status |
 | --- | ---: | ---: | ---: | --- |
 | Common projection | 2 | 0 | 0 | Native and product observations carried |
-| H1 Noise | 35 | 171 | 22 | Native execution/access and seven crypto frames carried; six type-given frames deleted; pure release/rotation/confirmation relations checked; terminal closure pending |
-| H2 Index | 68 | 318 | 52 | Three table contracts and 36 pure theorems checked; lookup/caller closure pending |
+| H1 Noise | 35 | 171 | 22 | Native execution/access, seven crypto frames and three slot frames carried; six type-given frames deleted; pure release/rotation/confirmation relations checked; terminal closure pending |
+| H2 Index | 68 | 318 | 52 | Table contracts, lookup scan, collision scan and 36 pure theorems checked; full lookup/caller closure pending |
 | H3 Roaming | 35 | 119 | 13 | Pure observation models build; native calls and product callbacks pending |
 | H4 Configuration | 130 | 554 | 79 | Total-return laws and one pure theorem checked; operational carry pending |
 | H5 Progress | 59 | 265 | 42 | Twelve pure/control theorems checked; operational carry pending |
-| H6 Timer discipline | 98 | 404 | 50 | Pure views build; timer wheel and worker semantics pending |
+| H6 Timer discipline | 98 | 404 | 50 | Two pure session-liveness relations checked; timer wheel and worker semantics pending |
 
 Retyped, deleted and retained counts will be reported per validated tranche.
 All six results remain lagging, with their previous charter gaps unchanged.
@@ -189,7 +189,7 @@ terminal or full-tree gate pass.
 | This tranche | 55 | 7 | 6 | 42 | 3 | 52 |
 | Cumulative processed baseline and checked support | 85 | 16 | 6 | 63 | 7 | 86 |
 
-The tree now has 429 campaign-owned files and 1,832 theorems. Of the baseline,
+At `43bb1d8` the tree has 429 campaign-owned files and 1,832 theorems. Of the baseline,
 1,746 theorems still await validation. All 258 headline names remain, and no
 terminal closure has passed on the split mirror. Retained-pending declarations
 are excluded from the checked-kept count.
@@ -253,3 +253,69 @@ module suffixes under `Leanux.Proofs.WG`:
 
 Fresh-replay those roots with `scripts/in-bundle lake env leanchecker --fresh`
 (`CryptoFrames` includes `ComponentFrames`). Use `capped` on this host.
+
+## Native lookup/collision scans and slot frames
+
+| Tranche | Before | Retyped | Deleted | Kept | Added | After |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `Index.LookupSource` | 6 | 4 | 0 | 2 | 0 | 6 |
+| `Index.Collision` | 5 | 4 | 0 | 1 | 0 | 5 |
+| `Noise.SlotFrames` | 3 | 3 | 0 | 0 | 0 | 3 |
+| `TimerDiscipline.ResponseSessionFrames/Effects` | 2 | 0 | 0 | 2 | 0 | 2 |
+| This tranche | 16 | 11 | 0 | 5 | 0 | 16 |
+| Cumulative processed baseline and checked support | 101 | 27 | 6 | 68 | 7 | 102 |
+
+The tree remains 429 campaign-owned files and 1,832 theorems; 1,730 original
+theorems still await validation. The 258 terminal names and all six lagging
+terminal closures are unchanged.
+
+`Index.LookupSource` retains the exact original operation decomposition,
+including the owner-word store after a failed reference get. Its total scan
+still selects the first equal numeric index, including stopping at an excluded
+kind, for arbitrary entries, initial scan state and Ambient. The substantive
+state equality now names `WGWorld`; other subsystems are inaccessible through
+the operation type. Its branch trace helper now acts on Ambient directly.
+
+`Index.Collision` uses native `IndexM` for its scan. Its total return law keeps
+the full table equality; this is within the component and is not supplied by
+the type. The original Device contract calls the real guarded `liftIndex`,
+retains the original resident-device premise and returns the exact any-match
+result with the exact original Device. Its unnecessary operational `Lookup`
+import is replaced by `Table`.
+
+`Noise.SlotFrames` retains all three original partial-correctness obligations:
+arbitrary peer-predicate preservation under suitable Device updates and
+keypair release, and handshake-tag preservation through key rotation.
+The proof still covers null references, missing stores, null peer words,
+zero reference counts and slot aliases. No validity, nonaliasing or successful
+execution premise is added. Direct native composition replaces deprecated
+tactic use; proof-local helpers add no named theorem or shared layer.
+
+Two unchanged H6 relations establish that slot writes preserve a peer's dead
+flag and that a successful pure session effect has a live resident peer.
+They do not validate timer execution. The next H6 source carry must account
+for `ambient.armRecords`, conditional clock/enqueue records and wheel placement,
+expiry plus wheel deletion, and the actual wheel dispatcher. Old expiry-only
+models cannot become current merely by compiling.
+
+Scoped builds pass without warnings: lookup 31 jobs, collision 31, slot frames
+28, pure H6 38. Axioms pass for respectively 46, 42, 23 and 78 named logical
+roots in their dependency closures, with only the standard three. All four
+fresh replay roots pass. Independent source review found no contract weakening
+in lookup, collision or slot frames. Static gate checks, scoped whitespace
+and mirror/shared boundaries pass. No terminal
+or full-tree gate pass is claimed.
+
+Development: lookup used three changed-source stdin probes (two failed, one
+clean pass); collision used two (one failed, one clean pass); slot frames used
+eight (six failed, one pass with an unused-argument warning, one clean pass).
+The slot draft's underspecified bind hit the default heartbeat limit; explicit
+composition fixed it without raising the limit. Each packaging build and the
+pure H6 build passed first time. No unchanged failure rerun, infrastructure
+retry or cap increase.
+
+Reproduce with `scripts/in-bundle lake build` on the four roots
+`Leanux.Proofs.WG.Index.LookupSource`, `Leanux.Proofs.WG.Index.Collision`,
+`Leanux.Proofs.WG.Noise.SlotFrames` and
+`Leanux.Proofs.WG.TimerDiscipline.ResponseSessionEffects`; replay each with
+`scripts/in-bundle lake env leanchecker --fresh MODULE`. Use `capped` here.

@@ -9,14 +9,14 @@ open Leanux Leanux.WG Leanux.Proofs.WG.Noise Leanux.Proofs.WG.Config Std.Do
 abbrev LookupState := Option IndexEntry × Bool
 
 def lookupStep (kinds : List IndexKind) (index : Nat) (e : IndexEntry)
-    (state : LookupState) : M (ForInStep LookupState) := do
+    (state : LookupState) : WG.M (ForInStep LookupState) := do
   _ ← branch .idxWalk true
   if ← branch .idxMatch (e.index == index) then
     let permitted ← branch .idxTypeMatch (kinds.contains e.kind)
     return .done (if permitted then some e else state.1, true)
   return .yield state
 
-def lookupFinish (state : LookupState) : M (Option (IndexOwner × PeerId)) := do
+def lookupFinish (state : LookupState) : WG.M (Option (IndexOwner × PeerId)) := do
   let (entry, stopped) := state
   if !stopped then _ ← branch .idxWalk false
   if ← branch .idxFound entry.isSome then
@@ -33,7 +33,7 @@ theorem indexLookup_source (kinds : List IndexKind) (index : Nat) :
       let entries ← indexBucket index
       let state ← forIn entries (none, false) (lookupStep kinds index)
       lookupFinish state) := by
-  simp only [indexLookup, lookupStep, lookupFinish]
+  simp only [indexLookup, lookupFinish]
   congr 1
   funext entries
   congr 1
@@ -65,14 +65,14 @@ theorem lookupScan_cons (kinds : List IndexKind) (index : Nat) (e : IndexEntry)
         _ ← branch .idxTypeMatch (kinds.contains e.kind)
         pure (if kinds.contains e.kind then some e else initial.1, true)
       else forIn es initial (lookupStep kinds index)) := by
-  simp [List.forIn_cons, lookupStep, branch, bind_assoc]
-  split <;> simp [bind_assoc]
+  simp [List.forIn_cons, lookupStep, branch, AmbientM.branch, bind_assoc]
+  split <;> simp
 
-def recordStep (w : World) (decision : Decision) (outcome : Bool) : World :=
+def recordStep (w : Ambient) (decision : Decision) (outcome : Bool) : Ambient :=
   { w with steps := w.steps.push { decision, outcome, netRx := w.netRxSection } }
 
-@[simp] theorem branch_run (w : World) (decision : Decision) (outcome : Bool) :
-    (branch decision outcome).run w = .ok (outcome, recordStep w decision outcome) := rfl
+@[simp] theorem branch_run (w : Ambient) (decision : Decision) (outcome : Bool) :
+    (AmbientM.branch decision outcome).run w = .ok (outcome, recordStep w decision outcome) := rfl
 
 @[simp] theorem except_bind_ok {α β : Type} (x : α) (f : α → Except Stop β) :
     (Except.ok x >>= f) = f x := rfl
@@ -81,26 +81,28 @@ def recordStep (w : World) (decision : Decision) (outcome : Bool) : World :=
     f <$> (Except.ok x : Except Stop α) = Except.ok (f x) := rfl
 
 theorem lookupScan_returns (kinds : List IndexKind) (index : Nat)
-    (entries : List IndexEntry) (initial : LookupState) (k : Kernel) :
-    Returns (forIn entries initial (lookupStep kinds index)) (fun w => w.k = k)
-      (fun result w => result = selectedState kinds index entries initial ∧ w.k = k) := by
-  induction entries generalizing initial k with
+    (entries : List IndexEntry) (initial : LookupState) (g : WGWorld) :
+    Returns (forIn entries initial (lookupStep kinds index)) (fun w => w = g)
+      (fun result w => result = selectedState kinds index entries initial ∧ w = g) := by
+  induction entries generalizing initial g with
   | nil =>
-    intro w hw
-    exact ⟨initial, w, rfl, rfl, hw⟩
+    intro w ambient hw
+    exact ⟨initial, w, ambient, rfl, rfl, hw⟩
   | cons e es ih =>
-    intro w hw
-    let next := recordStep (recordStep w .idxWalk true) .idxMatch (e.index == index)
+    intro w ambient hw
+    let next := recordStep (recordStep ambient .idxWalk true) .idxMatch (e.index == index)
     by_cases matched : e.index = index
     · let final := recordStep next .idxTypeMatch (kinds.contains e.kind)
-      refine ⟨(if kinds.contains e.kind then some e else initial.1, true), final, ?_, ?_, hw⟩
+      refine ⟨(if kinds.contains e.kind then some e else initial.1, true), w, final, ?_, ?_, hw⟩
       · rw [lookupScan_cons]
-        simp [StateT.run_bind, Except.bind, Except.map, branch_run, matched, next, final, StateT.run_pure]
+        simp [StateT.run_bind, branch, AmbientM.branch, matched, next, final, recordStep]
+        rfl
       · simp [selectedState, matched]
-    · obtain ⟨result, final, run, selected, kernel⟩ := ih initial k next hw
-      refine ⟨result, final, ?_, ?_, kernel⟩
+    · obtain ⟨result, final, after, run, selected, state⟩ := ih initial g w next hw
+      refine ⟨result, final, after, ?_, ?_, state⟩
       · rw [lookupScan_cons]
-        simpa [StateT.run_bind, Except.bind, Except.map, branch_run, matched, next] using run
+        simpa [StateT.run_bind, Except.bind, Except.map, branch, AmbientM.branch,
+          matched, next, recordStep] using run
       · simpa [selectedState, matched] using selected
 
 end Leanux.Proofs.WG.Index
