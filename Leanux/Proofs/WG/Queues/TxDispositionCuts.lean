@@ -132,41 +132,59 @@ theorem free_run (id : SkbId) (w : World) (h : List Event) :
 normal returned WGWorld; its failed release prefix is specified separately. -/
 theorem dispose_no_send (pid : PeerId) (item : List SkbId) (key : KeypairId) :
     Framing.SameView (fun w : WGWorld => w.sent) (disposeSource pid item key) := by
-  apply Framing.SameView.of_wp
   intro sent
-  have index_spec (α : Type) (a : IndexM α) :
-      ⦃fun w : WGWorld => ⌜w.sent = sent⌝⦄ (MonadLift.monadLift a : WG.M α)
-      ⦃⇓? _ w => ⌜w.sent = sent⌝⦄ := by
-    apply hoare_liftIndex a (fun w => w.sent = sent)
-    intro g d table hg _
-    exact hg
-  have skb_spec (α : Type) (a : SkbM α) :
-      ⦃fun w : WGWorld => ⌜w.sent = sent⌝⦄ liftSkb a
-      ⦃⇓? _ w => ⌜w.sent = sent⌝⦄ := by
-    apply hoare_liftSkb a (fun w : WGWorld => w.sent = sent)
-    intro g d packets hg _
-    exact hg
-  have kp : ⦃fun w : WGWorld => ⌜w.sent = sent⌝⦄ keypairPut (some key) false
-      ⦃⇓? _ w => ⌜w.sent = sent⌝⦄ := by
-    have hd := fun o => indexOwner_peerDeref_preserves o (fun w : WGWorld => w.sent = sent)
-    unfold Preserves Hoare at hd
-    mvcgen [index_spec, hd, keypairPut, getKeypair, getDev,
-      setKeypair, modifyDev, refcountDecAndTest, branch, branchCmp,
-      AmbientM.branch, AmbientM.branchCmp, invariant, unsupported,
-      AmbientM.invariant, AmbientM.unsupported]
-    all_goals try dsimp +zetaDelta only at *
-    all_goals simp_all
-  have pp : ⦃fun w : WGWorld => ⌜w.sent = sent⌝⦄ peerPut (some pid)
-      ⦃⇓? _ w => ⌜w.sent = sent⌝⦄ := by
-    mvcgen [index_spec, peerPut, requireNotPending, getPeer, getDev, setPeer, modifyDev,
-      retirePeerUnits, modifyAmbient, refcountDecAndTest, branch, branchCmp,
-      AmbientM.branch, AmbientM.branchCmp, invariant, unsupported,
-      AmbientM.invariant, AmbientM.unsupported]
-    all_goals try dsimp +zetaDelta only at *
-    all_goals simp_all
-  mvcgen [disposeSource, freeTxSkb, skb_spec, kp, pp]
-  all_goals try exact ((⇓? _ w => ⌜w.sent = sent⌝) :
-    Std.Do.PostCond _ (.arg WGWorld (.arg Ambient (.except Stop .pure))))
-  all_goals simp_all
+  let P := fun w : WGWorld => w.sent = sent
+  have ambient {α : Type} (a : AmbientM α) :
+      Preserves P (monadLift a : WG.M α) := hoare_liftAmbient a P
+  have index {α : Type} (a : IndexM α) :
+      Preserves P (monadLift a : WG.M α) := by
+    apply hoare_liftIndex a
+    intro w d table h _
+    exact h
+  have skb {α : Type} (a : SkbM α) : Preserves P (liftSkb a) := by
+    apply hoare_liftSkb a
+    intro w d packets h _
+    exact h
+  have read : Preserves P (get : WG.M WGWorld) :=
+    hoare_consequence (hoare_get P) (fun _ h => h) (fun _ _ h => h.2)
+  have write (f : Device → Device) : Preserves P (modifyDev f) := by
+    unfold modifyDev
+    apply hoare_modify
+    intro w h
+    exact h
+  have owner (o : IndexOwner) : Preserves P (IndexOwner.peerDeref o) :=
+    indexOwner_peerDeref_preserves o P
+  have kp : Preserves P (keypairPut (some key) false) := by
+    unfold keypairPut getKeypair getDev setKeypair
+    simp only [branch, branchCmp, refcountDecAndTest, invariant, unsupported]
+    repeat' first
+      | (allocation_release_head IndexOwner.peerDeref; exact owner _)
+      | (allocation_release_head modifyDev; exact write _)
+      | (allocation_release_lift_from IndexM; exact index _)
+      | (allocation_release_lift_from AmbientM; exact ambient _)
+      | allocation_release_step
+    all_goals exact read
+  have pp : Preserves P (peerPut (some pid)) := by
+    unfold peerPut getPeer getDev setPeer
+    simp only [branch, branchCmp, refcountDecAndTest, invariant, unsupported,
+      requireNotPending, retirePeerUnits, modifyAmbient]
+    repeat' first
+      | (allocation_release_head modifyDev; exact write _)
+      | (allocation_release_lift_from IndexM; exact index _)
+      | (allocation_release_lift_from AmbientM; exact ambient _)
+      | allocation_release_step
+    all_goals first
+      | exact read
+      | (apply hoare_modify; intro w h; exact h)
+  have frees (id : SkbId) : Preserves P (freeTxSkb id) := skb _
+  change Preserves P (disposeSource pid item key)
+  unfold disposeSource
+  have allFrees : Preserves P (forIn item () (fun id _ => do
+      freeTxSkb id
+      pure (ForInStep.yield ()))) :=
+    list_view_spec (fun w : WGWorld => w.sent) (fun s => s = sent)
+      item () _ (fun id _ => preserves_bind (frees id) (fun _ => preserves_pure _))
+  exact preserves_bind allFrees (fun _ =>
+    preserves_bind kp (fun _ => preserves_bind pp (fun _ => preserves_pure true)))
 
 end Leanux.Proofs.WG.Queues.TxDisposition

@@ -96,9 +96,20 @@ theorem removeStep_binary_wp (k : WGWorld) (d : WG.Device) (hd : k.dev = some d)
   have hl := listDel_wp k d hd id
   have hb := removeNodeBody_binary_wp { k with dev := some (unlisted d id) }
     (unlisted d id) rfl id left right n hn hbits
-  mvcgen [removeStep, branch, AmbientM.branch, hl, hb]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all
+  apply (total_iff_run_ambient _ _ _).mpr
+  intro w ambient hw
+  subst w
+  let afterDecision := record ambient .removeListIter true
+  obtain ⟨returned, current, nextAmbient, hlist, hunit, hcurrent⟩ :=
+    (total_iff_run_ambient _ _ _).mp hl k afterDecision rfl
+  subst returned
+  subst current
+  obtain ⟨result, out, finalAmbient, hbody, hpost⟩ :=
+    (total_iff_run_ambient _ _ _).mp hb _ nextAmbient rfl
+  refine ⟨result, out, finalAmbient, ?_, hpost⟩
+  change ((WG.listDel id >>= fun _ => removeNodeBody id).run k).run afterDecision = _
+  simp only [StateT.run_bind, hlist]
+  exact hbody
 
 theorem removeStep_root_leaf_wp (k : WGWorld) (d : WG.Device) (hd : k.dev = some d)
     (v4 : Bool) (id : Nat) (n : WG.AipNode) (hn : d.nodes[id]? = some n)
@@ -109,9 +120,20 @@ theorem removeStep_root_leaf_wp (k : WGWorld) (d : WG.Device) (hd : k.dev = some
   have hl := listDel_wp k d hd id
   have hb := removeNodeBody_root_leaf_wp { k with dev := some (unlisted d id) }
     (unlisted d id) rfl v4 id n hn hbits hparent
-  mvcgen [removeStep, branch, AmbientM.branch, hl, hb]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all
+  apply (total_iff_run_ambient _ _ _).mpr
+  intro w ambient hw
+  subst w
+  let afterDecision := record ambient .removeListIter true
+  obtain ⟨returned, current, nextAmbient, hlist, hunit, hcurrent⟩ :=
+    (total_iff_run_ambient _ _ _).mp hl k afterDecision rfl
+  subst returned
+  subst current
+  obtain ⟨result, out, finalAmbient, hbody, hpost⟩ :=
+    (total_iff_run_ambient _ _ _).mp hb _ nextAmbient rfl
+  refine ⟨result, out, finalAmbient, ?_, hpost⟩
+  change ((WG.listDel id >>= fun _ => removeNodeBody id).run k).run afterDecision = _
+  simp only [StateT.run_bind, hlist]
+  exact hbody
 
 theorem removeStep_root_unary_wp (k : WGWorld) (d : WG.Device) (hd : k.dev = some d)
     (v4 left : Bool) (id child : Nat) (n cn : WG.AipNode)
@@ -125,8 +147,19 @@ theorem removeStep_root_unary_wp (k : WGWorld) (d : WG.Device) (hd : k.dev = som
   have hl := listDel_wp k d hd id
   have hb := removeNodeBody_root_unary_wp { k with dev := some (unlisted d id) }
     (unlisted d id) rfl v4 left id child n cn hn hc hne hbits hparent
-  mvcgen [removeStep, branch, AmbientM.branch, hl, hb]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all
+  apply (total_iff_run_ambient _ _ _).mpr
+  intro w ambient hw
+  subst w
+  let afterDecision := record ambient .removeListIter true
+  obtain ⟨returned, current, nextAmbient, hlist, hunit, hcurrent⟩ :=
+    (total_iff_run_ambient _ _ _).mp hl k afterDecision rfl
+  subst returned
+  subst current
+  obtain ⟨result, out, finalAmbient, hbody, hpost⟩ :=
+    (total_iff_run_ambient _ _ _).mp hb _ nextAmbient rfl
+  refine ⟨result, out, finalAmbient, ?_, hpost⟩
+  change ((WG.listDel id >>= fun _ => removeNodeBody id).run k).run afterDecision = _
+  simp only [StateT.run_bind, hlist]
+  exact hbody
 
 end Leanux.Proofs.WG.AllowedIps

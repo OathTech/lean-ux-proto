@@ -11,14 +11,17 @@ namespace Leanux.Proofs.WG.Lifetimes
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing Std.Do
 
 theorem cpumaskNextOnlineFrom_sameStore (last : Int) : SameWGStore (cpumaskNextOnlineFrom last) := by
-  apply SameView.of_wp
   intro initial
-  mvcgen [cpumaskNextOnlineFrom, branch, AmbientM.branch]
+  unfold cpumaskNextOnlineFrom
+  apply preserves_bind (hoare_liftAmbient (AmbientM.branch .cpumaskWrap (last + 1 ≥ 1)) _)
+  intro wrap
+  cases wrap <;> exact preserves_pure _
 
 theorem keypairGetNull_sameStore : SameWGStore keypairGetNull := by
-  apply SameView.of_wp
   intro initial
-  mvcgen [keypairGetNull, branch, AmbientM.branch]
+  unfold keypairGetNull
+  exact preserves_bind (hoare_liftAmbient (AmbientM.branch .keypairGetNull true) _)
+    (fun _ => preserves_pure ())
 
 def enqueuePerDeviceAndPeerRxPrefix (id : SkbId) : MixedM Int := do
   setRxSkbPrefix id fun p => {p with state := .uncrypted}
@@ -91,9 +94,13 @@ theorem enqueuePerDeviceAndPeerRxPrefix_preserves_ambient (c : AmbientContracts 
       (fun _ _ _ hi => ⟨hi.1, True.intro, hi.2⟩) (fun _ _ _ _ hi => hi.1))
     intro _
     apply StatePrefixEnsures.bind (AmbientContracts.drop (c.store (fun _ => True) _ (by
-      apply SameView.of_wp
       intro initial
-      mvcgen [getDev, invariant, AmbientM.invariant])))
+      unfold getDev
+      apply preserves_bind (hoare_consequence (hoare_get _) (fun _ h => h) (fun _ _ h => h.2))
+      intro w
+      cases w.dev with
+      | none => exact hoare_liftAmbient (AmbientM.invariant _) _
+      | some d => exact preserves_pure d)))
     intro d
     apply StatePrefixEnsures.bind (AmbientContracts.drop (c.store (fun _ => True) _ (cpumaskNextOnlineFrom_sameStore _)))
     intro cpu
@@ -308,9 +315,15 @@ theorem consumeDataPrefix_preserves_ambient (c : AmbientContracts I)
                     peerPutMixed (some pid)
                     freeRxSkbPrefix skb) := by
               apply StatePrefixEnsures.bind (AmbientContracts.drop (c.store (fun _ => True) _ (by
-                apply SameView.of_wp
                 intro initial
-                mvcgen [WG.orM, branch, AmbientM.branch])))
+                unfold WG.orM
+                apply preserves_bind (hoare_liftAmbient
+                  (AmbientM.branch .dataEnqueueOk (ret == 0)) _)
+                intro okay
+                cases okay with
+                | false =>
+                  exact hoare_liftAmbient (AmbientM.branch .dataEnqueueOkEpipe (ret == -EPIPE)) _
+                | true => exact preserves_pure true)))
               intro okay
               split
               · exact StatePrefixEnsures.pure () (fun h w _ hi => c.safe h w hi) (fun _ _ _ hi => hi)
@@ -362,9 +375,13 @@ theorem enqueuePerDeviceAndPeerRxPrefix_preserves_product (c : ProductAmbientCon
       (fun _ _ hi => ⟨hi.1, True.intro, hi.2⟩) (fun _ _ _ hi => hi.1))
     intro _
     apply PrefixPreserves.bind (ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ (by
-      apply SameView.of_wp
       intro initial
-      mvcgen [getDev, invariant, AmbientM.invariant])))
+      unfold getDev
+      apply preserves_bind (hoare_consequence (hoare_get _) (fun _ h => h) (fun _ _ h => h.2))
+      intro w
+      cases w.dev with
+      | none => exact hoare_liftAmbient (AmbientM.invariant _) _
+      | some d => exact preserves_pure d)))
     intro d
     apply PrefixPreserves.bind (ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ (cpumaskNextOnlineFrom_sameStore _)))
     intro cpu
@@ -496,9 +513,15 @@ theorem consumeDataPrefix_preserves_product (c : ProductAmbientContracts I)
                     liftWGObserver (peerPutMixed (some pid))
                     liftWGObserver (freeRxSkbPrefix skb)) := by
               apply PrefixPreserves.bind (ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ (by
-                apply SameView.of_wp
                 intro initial
-                mvcgen [WG.orM, branch, AmbientM.branch])))
+                unfold WG.orM
+                apply preserves_bind (hoare_liftAmbient
+                  (AmbientM.branch .dataEnqueueOk (ret == 0)) _)
+                intro okay
+                cases okay with
+                | false =>
+                  exact hoare_liftAmbient (AmbientM.branch .dataEnqueueOkEpipe (ret == -EPIPE)) _
+                | true => exact preserves_pure true)))
               intro okay
               split
               · exact PrefixPreserves.pure c.safe ()

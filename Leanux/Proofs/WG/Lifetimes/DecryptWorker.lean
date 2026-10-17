@@ -81,8 +81,16 @@ theorem decryptIterPrefix_erases (hs : ErasesPrefix softirq originalSoftirq)
 
 theorem getDev_sameWGStore : SameWGStore getDev := by
   intro initial
-  unfold Hoare
-  mvcgen [getDev, invariant, AmbientM.invariant]
+  apply (hoare_iff_run_ambient _ _ _).mpr
+  intro w ambient d v ambient' hp hr
+  cases hd : w.dev with
+  | none =>
+    simp [getDev, hd, invariant, AmbientM.invariant] at hr
+    cases hr
+  | some dev =>
+    simp [getDev, hd] at hr
+    rcases hr with ⟨⟨rfl, rfl⟩, rfl⟩
+    exact hp
 
 theorem getDev_identity : SameView identityView getDev :=
   identity_sameWGStore (project := id) getDev_sameWGStore

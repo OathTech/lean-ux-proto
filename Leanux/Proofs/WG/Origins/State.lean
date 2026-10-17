@@ -165,8 +165,21 @@ def keyAt (v : View) (id : KeypairId) : Option Keypair := v.bind fun s => s.2 id
 theorem getKeypair_spec (P : View → Prop) (id : KeypairId) :
     ⦃fun w => ⌜P (view w)⌝⦄ getKeypair id
     ⦃⇓? k w => ⌜P (view w) ∧ keyAt (view w) id = some k⌝⦄ := by
-  mvcgen [getKeypair, getDev, invariant, AmbientM.invariant]
-  all_goals simp_all [keyAt, view]
+  apply (hoare_iff_run_ambient _ _ _).mpr
+  intro w ambient k v ambient' hp hr
+  cases hd : w.dev with
+  | none =>
+    simp [getKeypair, getDev, hd, invariant, AmbientM.invariant] at hr
+    cases hr
+  | some d =>
+    cases hk : d.keypairs[id]? with
+    | none =>
+      simp [getKeypair, getDev, hd, hk, invariant, AmbientM.invariant] at hr
+      cases hr
+    | some key =>
+      simp [getKeypair, getDev, hd, hk] at hr
+      rcases hr with ⟨⟨rfl, rfl⟩, rfl⟩
+      exact ⟨hp, by simp [keyAt, view, hd, hk]⟩
 
 theorem setKeypair_spec (P : View → Prop) (stable : Stable P) (id : KeypairId) (k : Keypair) :
     ⦃fun w => ⌜P (view w) ∧ (k.receiving.isValid = true → ∃ old,
@@ -232,19 +245,62 @@ theorem setPeer_view (id : PeerId) (p : Peer) : SameView view (setPeer id p) := 
   simpa only [setPeer] using modifyDev_spec (fun v => v = s) (fun d => {d with peers := d.peers.insert id p}) (fun _ => rfl) (fun _ => rfl)
 
 theorem getPeer_view (id : PeerId) : SameView view (getPeer id) := by
-  apply SameView.of_wp
-  intro s
-  mvcgen [getPeer, getDev, invariant, AmbientM.invariant]
+  intro initial
+  apply (hoare_iff_run_ambient _ _ _).mpr
+  intro w ambient p v ambient' hp hr
+  cases hd : w.dev with
+  | none =>
+    simp [getPeer, getDev, hd, invariant, AmbientM.invariant] at hr
+    cases hr
+  | some d =>
+    cases hk : d.peers[id]? with
+    | none =>
+      simp [getPeer, getDev, hd, hk, invariant, AmbientM.invariant] at hr
+      cases hr
+    | some peer =>
+      simp [getPeer, getDev, hd, hk] at hr
+      rcases hr with ⟨⟨rfl, rfl⟩, rfl⟩
+      exact hp
 
 theorem keypairGet_spec (P : View → Prop) (stable : Stable P) (id : Option KeypairId) :
     ⦃fun w => ⌜P (view w)⌝⦄ keypairGet id ⦃⇓? _ w => ⌜P (view w)⌝⦄ := by
-  have hg := getKeypair_spec P
-  have hs := setKeypair_spec P stable
-  mvcgen [keypairGet, hg, hs, refcountIncNotZero, branch, branchCmp, invariant, unsupported,
-    AmbientM.branch, AmbientM.branchCmp, AmbientM.invariant, AmbientM.unsupported]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [KeyLe, material, WordLe, view, keyAt]
-  all_goals grind
+  apply (hoare_iff_run_ambient _ _ _).mpr
+  intro w ambient x v ambient' hp hr
+  cases id with
+  | none =>
+    simp [keypairGet, branch, AmbientM.branch] at hr
+    rcases hr with ⟨⟨rfl, rfl⟩, rfl⟩
+    exact hp
+  | some id =>
+    cases hd : w.dev with
+    | none =>
+      simp [keypairGet, getKeypair, getDev, hd, branch, AmbientM.branch,
+        invariant, AmbientM.invariant] at hr
+      cases hr
+    | some d =>
+      cases hk : d.keypairs[id]? with
+      | none =>
+        simp [keypairGet, getKeypair, getDev, hd, hk, branch, AmbientM.branch,
+          invariant, AmbientM.invariant] at hr
+        cases hr
+      | some key =>
+        simp only [keypairGet, getKeypair, getDev, setKeypair, modifyDev,
+          branch, branchCmp, AmbientM.branch, AmbientM.branchCmp, refcountIncNotZero,
+          unsupported, invariant, AmbientM.unsupported, AmbientM.invariant,
+          StateT.run_bind] at hr
+        simp [hd, hk] at hr
+        repeat' split at hr <;> simp_all
+        all_goals rcases hr with ⟨⟨rfl, rfl⟩, rfl⟩
+        all_goals first
+          | exact hp
+          | apply stable _ _ ?_ hp
+            simp only [view, hd, Option.map_some]
+            apply (show RetainsView (some (d.ifindex, fun q => d.keypairs[q]?))
+              (some (d.ifindex, fun q => (d.keypairs.insert id {key with refcount := key.refcount + 1})[q]?)) from ?_)
+            simpa [Std.TreeMap.getElem?_insert, Std.LawfulEqOrd.compare_eq_iff_eq] using
+              (retains_insert d.ifindex (fun q => d.keypairs[q]?) id
+                {key with refcount := key.refcount + 1}
+                (fun valid => ⟨key, hk, valid, rfl, WordLe.refl _⟩))
 
 theorem retains_map_insert (d : Device) (id : KeypairId) (old k : Keypair)
     (hk : d.keypairs[id]? = some old) (valid : k.receiving.isValid = true → old.receiving.isValid = true)
@@ -262,49 +318,71 @@ theorem retains_map_insert_erase (d : Device) (id : KeypairId) (k : Keypair) :
 
 theorem keypairPut_spec (P : View → Prop) (stable : Stable P) (id : Option KeypairId) (now : Bool) :
     ⦃fun w => ⌜P (view w)⌝⦄ keypairPut id now ⦃⇓? _ w => ⌜P (view w)⌝⦄ := by
-  have action : Lifetimes.ProjectedAction view RetainsView (keypairPut id now) := by
-    apply Lifetimes.ProjectedAction.of_wp
-    intro s
-    simp only [keypairPut, indexRemove_eq]
-    have hd := fun o g => indexOwner_peerDeref_preserves o (fun w => w = g)
-    have hu (a : IndexM Unit) (g : WGWorld) : Hoare (monadLift a : WG.M Unit)
-        (fun w => w = g)
-        (fun _ w => ∃ table, w = {g with dev := g.dev.map fun d => {d with indexTable := table}}) := by
-      apply (hoare_iff_run_ambient _ _ _).mpr
-      intro w ambient x w' ambient' hw hr
-      subst w
-      change ((liftIndex a).run g).run ambient = .ok ((x, w'), ambient') at hr
-      rw [liftIndex_run] at hr
-      cases hg : g.dev with
-      | none => simp [hg] at hr
-      | some d =>
-        simp only [hg] at hr
-        cases ha : (a.run d.indexTable).run ambient with
-        | error e => simp [ha, Except.map] at hr
-        | ok out =>
-          rcases out with ⟨⟨y, table⟩, ambient''⟩
-          simp only [ha, Except.map, Except.ok.injEq, Prod.mk.injEq] at hr
-          rcases hr with ⟨⟨_, hw⟩, _⟩
-          exact ⟨table, by simpa [hg] using hw.symm⟩
-    unfold Preserves Hoare at hd hu
-    mvcgen [hd, hu, getKeypair, getDev, setKeypair, modifyDev,
-      branch, branchCmp, refcountDecAndTest, unsupported, invariant,
-      AmbientM.branch, AmbientM.branchCmp, AmbientM.unsupported, AmbientM.invariant]
-    all_goals try dsimp +zetaDelta only at *
-    all_goals try obtain ⟨table, rfl⟩ := ‹∃ table, _ = _›
-    all_goals try simp_all [view]
-    all_goals subst_vars
-    all_goals try dsimp +zetaDelta only at *
-    all_goals try simp_all [Function.comp_def]
-    all_goals try obtain ⟨table, rfl⟩ := ‹∃ table, _ = _›
-    all_goals try dsimp +zetaDelta only at *
-    all_goals try simp_all
-    all_goals subst_vars
-    all_goals first
-      | exact RetainsView.refl _
-      | exact retains_map_insert_erase _ _ _
-      | apply retains_map_insert <;> first | assumption | exact fun h => h | exact KeyLe.refl _
-  exact action.wp P stable
+  let Q := fun w : WGWorld => P (view w)
+  have ambient {α : Type} (a : AmbientM α) (R : WGWorld → Prop) :
+      Preserves R (monadLift a : WG.M α) := hoare_liftAmbient a R
+  have remove (kid : KeypairId) (R : View → Prop) : Preserves (fun w => R (view w))
+      (do let _ ← IndexOwner.peerDeref (.keypair kid); indexRemove (.keypair kid)) := by
+    apply preserves_bind (indexOwner_peerDeref_preserves _ _)
+    intro _
+    rw [indexRemove_eq]
+    apply hoare_liftIndex
+    intro w d table hi hd
+    simpa [view, hd] using hi
+  cases id with
+  | none =>
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient x v ambient' hp hr
+    simp [keypairPut, branch, AmbientM.branch] at hr
+    rcases hr with ⟨⟨rfl, rfl⟩, rfl⟩
+    exact hp
+  | some kid =>
+    change Preserves Q (keypairPut (some kid) now)
+    unfold keypairPut
+    apply preserves_bind (ambient _ Q)
+    intro null
+    split
+    · exact preserves_pure _
+    · simp only
+      apply hoare_bind _ _ (getKeypair_spec P kid)
+      intro key
+      let R := fun w : WGWorld => Q w ∧ keyAt (view w) kid = some key
+      have unhash : Preserves R
+          (do let _ ← IndexOwner.peerDeref (.keypair kid); indexRemove (.keypair kid)) :=
+        remove kid (fun s => P s ∧ keyAt s kid = some key)
+      let releaseEntry : WG.M Unit := do
+        let _ ← IndexOwner.peerDeref (.keypair kid)
+        indexRemove (.keypair kid)
+      have afterRef : Hoare (do
+          setKeypair kid {key with refcount := key.refcount - 1}
+          if ← branch .keypairKrefPutReleased (← refcountDecAndTest key.refcount) then
+            releaseEntry
+            modifyDev fun d => {d with keypairs := d.keypairs.erase kid})
+          R (fun _ => Q) := by
+        apply hoare_bind _ _ (hoare_consequence
+          (setKeypair_spec P stable kid {key with refcount := key.refcount - 1})
+          (fun w h => ⟨h.1, fun valid => ⟨key, h.2, valid, rfl, WordLe.refl _⟩⟩)
+          (fun _ _ h => h))
+        intro _
+        change Preserves Q _
+        have rc : Preserves Q (refcountDecAndTest key.refcount : WG.M Bool) := by
+          unfold refcountDecAndTest
+          simp only [branch, branchCmp, unsupported]
+          repeat' first
+            | (allocation_release_lift_from AmbientM; exact ambient _ Q)
+            | allocation_release_step
+        apply preserves_bind rc
+        intro released
+        apply preserves_bind (ambient _ Q)
+        intro release
+        split
+        · exact preserves_bind (remove kid P) (fun _ => eraseKey_spec P stable kid)
+        · exact preserves_pure _
+      apply hoare_bind _ _ (ambient (AmbientM.branch .keypairPutUnreferenceNow now) R)
+      intro unref
+      split
+      · exact hoare_bind _ _ unhash (fun _ => afterRef)
+      · exact afterRef
 
 theorem modifyPeer_spec (P : View → Prop) (pid : PeerId) (f : Peer → Peer) :
     ⦃fun w => ⌜P (view w)⌝⦄
@@ -314,24 +392,39 @@ theorem modifyPeer_spec (P : View → Prop) (pid : PeerId) (f : Peer → Peer) :
   have hs := fun p => (setPeer_view pid p).wp P
   change ⦃fun w => ⌜P (view w)⌝⦄ (do setPeer pid (f (← getPeer pid)))
     ⦃⇓? _ w => ⌜P (view w)⌝⦄
-  mvcgen [hg, hs]
+  exact preserves_bind hg (fun p => hs (f p))
 
 theorem addNewKeypair_spec (P : View → Prop) (stable : Stable P) (pid kid : Nat) :
     ⦃fun w => ⌜P (view w)⌝⦄ addNewKeypair pid kid ⦃⇓? _ w => ⌜P (view w)⌝⦄ := by
-  have hg := (getPeer_view pid).wp P
-  have hk := getKeypair_spec P
-  have hm := modifyPeer_spec P
-  have hp := keypairPut_spec P stable
-  mvcgen [addNewKeypair, hg, hk, hm, hp, branch, AmbientM.branch]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [view]
+  let Q := fun w : WGWorld => P (view w)
+  have hg : Preserves Q (getPeer pid) := (getPeer_view pid).wp P
+  have hk (kid : KeypairId) : Preserves Q (getKeypair kid) :=
+    hoare_consequence (getKeypair_spec P kid) (fun _ h => h) (fun _ _ h => h.1)
+  have hm (pid : PeerId) (f : Peer → Peer) : Preserves Q
+      ((pinned_const _private.Leanux.WG.Keypair.«0».Leanux.WG.modifyPeer) pid f) :=
+    modifyPeer_spec P pid f
+  have hp (id : Option KeypairId) (now : Bool) : Preserves Q (keypairPut id now) :=
+    keypairPut_spec P stable id now
+  have ambient {α : Type} (a : AmbientM α) : Preserves Q (monadLift a : WG.M α) :=
+    hoare_liftAmbient a Q
+  change Preserves Q (addNewKeypair pid kid)
+  unfold addNewKeypair
+  simp only [branch]
+  repeat' first
+    | (allocation_release_head getPeer; exact hg)
+    | (allocation_release_head getKeypair; exact hk _)
+    | (allocation_release_head keypairPut; exact hp _ _)
+    | (allocation_release_lift_from AmbientM; exact ambient _)
+    | allocation_release_step
+  all_goals exact hm _ _
 
 theorem handshakeZero_view (pid : PeerId) : SameView view (handshakeZero pid) := by
   apply SameView.of_wp
   intro s
   have hg := (getPeer_view pid).wp (fun v => v = s)
   have hs := fun p => (setPeer_view pid p).wp (fun v => v = s)
-  mvcgen [handshakeZero, hg, hs]
+  unfold handshakeZero
+  exact preserves_bind hg (fun p => hs _)
 
 theorem tail_spec (P : View → Prop) (stable : Stable P) (pid kp : Nat) :
     ⦃fun w => ⌜P (view w)⌝⦄ SessionOrigin.tail pid kp ⦃⇓? _ w => ⌜P (view w)⌝⦄ := by
@@ -344,9 +437,20 @@ theorem tail_spec (P : View → Prop) (stable : Stable P) (pid kp : Nat) :
     apply hoare_liftIndex
     intro g d table hp hdev
     simpa [view, hdev] using hp
-  unfold Preserves Hoare at hd hi
-  mvcgen [SessionOrigin.tail, SessionOrigin.tailWith, hg, hz, hk, hd, hi, branch,
-    unsupported, AmbientM.branch, AmbientM.unsupported]
+  let Q := fun w : WGWorld => P (view w)
+  have ambient {α : Type} (a : AmbientM α) : Preserves Q (monadLift a : WG.M α) :=
+    hoare_liftAmbient a Q
+  change Preserves Q (SessionOrigin.tail pid kp)
+  unfold SessionOrigin.tail SessionOrigin.tailWith
+  simp only [branch, unsupported]
+  repeat' first
+    | (allocation_release_head getPeer; exact hg)
+    | (allocation_release_head handshakeZero; exact hz)
+    | (allocation_release_head addNewKeypair; exact hk)
+    | (allocation_release_head IndexOwner.peerDeref; exact hd)
+    | (allocation_release_head liftIndex; exact hi)
+    | (allocation_release_lift_from AmbientM; exact ambient _)
+    | allocation_release_step
 
 theorem tail_retains (pid kp : Nat) (ambient ambient' : Ambient)
     (hr : ((SessionOrigin.tail pid kp).run w).run ambient = .ok ((x, v), ambient')) :

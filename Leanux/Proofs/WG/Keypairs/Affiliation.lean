@@ -81,13 +81,28 @@ theorem keypairCreate_affiliation (word : Option PeerId) :
     ⦃⇓? result w => ⌜Inv w ∧ ∀ kid, result = some kid →
       ∃ s stamp, view w = some s ∧ s.keys kid = some (stamp, word) ∧ kid < s.nextKey⌝⦄ := by
   rw [Lifetimes.keypairCreate_factor]
-  have ha {α : Type} (a : AmbientM α) :
-      Hoare (MonadLift.monadLift a : WG.M α) (CreationInput word) (fun _ => CreationInput word) :=
-    hoare_liftAmbient a (CreationInput word)
-  unfold Hoare at ha
-  have hc := keypairCreateCore_affiliation word
-  mvcgen [-Std.Do.Spec.monadLift_StateT, ha, hc, branch, hiddenAlloc]
-  all_goals simp_all [CreationInput, Inv]
+  apply hoare_bind _ _ (hoare_liftAmbient (AmbientM.hiddenAlloc .kzallocKeypair) (CreationInput word))
+  intro ok
+  apply hoare_bind _ _ (hoare_liftAmbient (AmbientM.branch .keypairCreateNoMem (!ok)) (CreationInput word))
+  intro no
+  cases no with
+  | true =>
+    apply hoare_consequence (hoare_pure none (CreationInput word))
+    · exact fun _ h => h
+    · intro x w h
+      rcases h with ⟨rfl, hi, _⟩
+      exact ⟨hi, fun _ h => by cases h⟩
+  | false =>
+    apply hoare_bind _ _ (keypairCreateCore_affiliation word)
+    intro kid
+    apply hoare_consequence (hoare_pure (some kid) _)
+    · exact fun _ h => h
+    · intro x w h
+      rcases h with ⟨rfl, hi, hs⟩
+      refine ⟨hi, ?_⟩
+      intro k hk
+      cases hk
+      exact hs
 
 /-- Nullable slot compatibility supplies identity only when the actual word is
 non-NULL; no residency of its peer is inferred. -/
@@ -107,14 +122,39 @@ theorem keyAt_view (w : WGWorld) (kid : KeypairId) :
 theorem keypairGet_affiliation (kp : Option KeypairId) (s : Option State) :
     ⦃fun w => ⌜view w = s⌝⦄ keypairGet kp
     ⦃⇓? result w => ⌜view w = s ∧ (result = none ∨ result = kp)⌝⦄ := by
-  have hg := fun id => getKeypair_spec (fun t => t = s) id
-  have hs := fun id k => setKeypair_spec (fun t => t = s) id k
-  mvcgen [keypairGet, hg, hs, branch, branchCmp, refcountIncNotZero,
-    invariant, unsupported, AmbientM.branch, AmbientM.branchCmp,
-    AmbientM.invariant, AmbientM.unsupported]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [keyCell, keyAt_view, view]
-  all_goals grind
+  apply (hoare_iff_run_ambient _ _ _).mpr
+  intro w ambient x v ambient' hp hr
+  cases kp with
+  | none =>
+    simp [keypairGet, branch, AmbientM.branch] at hr
+    rcases hr with ⟨⟨rfl, rfl⟩, rfl⟩
+    exact ⟨hp, Or.inl rfl⟩
+  | some id =>
+    cases hd : w.dev with
+    | none =>
+      simp [keypairGet, getKeypair, getDev, hd, branch, AmbientM.branch,
+        invariant, AmbientM.invariant] at hr
+      cases hr
+    | some d =>
+      cases hk : d.keypairs[id]? with
+      | none =>
+        simp [keypairGet, getKeypair, getDev, hd, hk, branch, AmbientM.branch,
+          invariant, AmbientM.invariant] at hr
+        cases hr
+      | some key =>
+        simp only [keypairGet, getKeypair, getDev, setKeypair, modifyDev,
+          branch, branchCmp, AmbientM.branch, AmbientM.branchCmp, refcountIncNotZero,
+          unsupported, invariant, AmbientM.unsupported, AmbientM.invariant,
+          StateT.run_bind] at hr
+        simp [hd, hk] at hr
+        split at hr <;> simp_all
+        all_goals try split at hr <;> simp_all
+        all_goals try split at hr <;> simp_all
+        all_goals try split at hr <;> simp_all
+        all_goals rcases hr with ⟨⟨rfl, rfl⟩, rfl⟩
+        all_goals
+          simpa only [view, hd, Option.map_some,
+            state_key_same d id key {key with refcount := key.refcount + 1} hk rfl] using hp
 
 /-- Erasing a key preserves every nullable reference: absent slots are allowed. -/
 def State.eraseKey (s : State) (kid : KeypairId) : State :=
@@ -180,31 +220,71 @@ theorem keypairPut_affiliation (P : Option State → Prop)
     (kp : Option KeypairId) (now : Bool) :
     ⦃fun w => ⌜P (view w)⌝⦄ keypairPut kp now
     ⦃⇓? _ w => ⌜P (view w)⌝⦄ := by
-  apply (hoare_iff_run_ambient _ _ _).mpr
-  intro w ambient result v ambient' hp hr
-  have hg := fun id => getKeypair_spec (fun t => t = view w) id
-  have hs := fun id k => setKeypair_spec (fun t => t = view w) id k
-  have hw := fun o => indexOwner_peerDeref_preserves o (fun t => view t = view w)
-  have hi {α : Type} (a : IndexM α) :
-      Hoare (MonadLift.monadLift a : WG.M α) (fun t => view t = view w) (fun _ t => view t = view w) := by
-    apply hoare_liftIndex
-    intro g d table hg hd
-    simpa only [view, hd, Option.map_some, state] using hg
-  unfold Preserves Hoare at hw hi
-  have he (kid) :
-      ⦃fun u => ⌜view u = view w⌝⦄ modifyDev (fun d => {d with keypairs := d.keypairs.erase kid})
-      ⦃⇓? _ u => ⌜P (view u)⌝⦄ := by
-    exact hoare_consequence (eraseKey_spec P closed kid)
-      (fun _ hv => hv ▸ hp) (fun _ _ h => h)
-  have spec : ⦃fun u => ⌜view u = view w⌝⦄ keypairPut kp now ⦃⇓? _ u => ⌜P (view u)⌝⦄ := by
-    mvcgen [keypairPut, hg, hs, hw, hi, he, branch, branchCmp, refcountDecAndTest,
-      invariant, unsupported, AmbientM.branch, AmbientM.branchCmp,
-      AmbientM.invariant, AmbientM.unsupported]
-    all_goals try dsimp +zetaDelta only at *
-    all_goals simp_all [keyCell, keyAt_view, view]
-    all_goals grind
-  exact (hoare_iff_run_ambient _ _ _).mp spec w ambient result v ambient' rfl hr
-
+  have ambient {α : Type} (a : AmbientM α) (Q : WGWorld → Prop) :
+      Preserves Q (monadLift a : WG.M α) := hoare_liftAmbient a Q
+  have index {α : Type} (a : IndexM α) (Q : Option State → Prop) :
+      Preserves (fun w => Q (view w)) (monadLift a : WG.M α) := by
+    apply hoare_liftIndex a
+    intro w d table h hd
+    simpa only [view, hd, Option.map_some, state] using h
+  have remove (id : KeypairId) (Q : Option State → Prop) :
+      Preserves (fun w => Q (view w)) (do
+        _ ← IndexOwner.peerDeref (.keypair id)
+        indexRemove (.keypair id) : WG.M Unit) :=
+    preserves_bind (indexOwner_peerDeref_preserves _ _) (fun _ => index _ Q)
+  have refcount (old : Nat) (Q : WGWorld → Prop) :
+      Preserves Q (refcountDecAndTest old : WG.M Bool) := by
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w a x v a' h hr
+    simp [refcountDecAndTest, branch, branchCmp, AmbientM.branch,
+      AmbientM.branchCmp, unsupported, AmbientM.unsupported] at hr
+    repeat' split at hr
+    all_goals simp_all
+    all_goals rcases hr with ⟨⟨rfl, rfl⟩, rfl⟩
+    all_goals exact h
+  change Preserves (fun w => P (view w)) (keypairPut kp now)
+  unfold keypairPut
+  apply preserves_bind (ambient (AmbientM.branch .keypairPutNull kp.isNone) _)
+  intro isNull
+  cases isNull with
+  | true => exact preserves_pure ()
+  | false =>
+    cases kp with
+    | none => exact ambient (AmbientM.invariant "unreachable") _
+    | some id =>
+      have getter : Hoare (getKeypair id) (fun w => P (view w))
+          (fun k w => P (view w) ∧ (view w).bind (fun s => s.keys id) = some (keyCell k)) := by
+        simpa only [Hoare, keyAt_view] using getKeypair_spec P id
+      apply hoare_bind _ _ getter
+      intro key
+      let Q := fun s : Option State => P s ∧ s.bind (fun s => s.keys id) = some (keyCell key)
+      let removeEntry : WG.M Unit := do
+        _ ← IndexOwner.peerDeref (.keypair id)
+        indexRemove (.keypair id)
+      have setter : Hoare (setKeypair id {key with refcount := key.refcount - 1})
+          (fun w => Q (view w)) (fun _ w => P (view w)) := by
+        simpa only [Hoare, Q, keyAt_view, keyCell] using
+          setKeypair_spec P id {key with refcount := key.refcount - 1}
+      have tail : Hoare (do
+          setKeypair id {key with refcount := key.refcount - 1}
+          if ← branch .keypairKrefPutReleased (← refcountDecAndTest key.refcount) then
+            removeEntry
+            modifyDev fun d => {d with keypairs := d.keypairs.erase id})
+          (fun w => Q (view w)) (fun _ w => P (view w)) := by
+        apply hoare_bind _ _ setter
+        intro _
+        apply preserves_bind (refcount key.refcount _)
+        intro released
+        apply preserves_bind (ambient (AmbientM.branch .keypairKrefPutReleased released) _)
+        intro release
+        cases release with
+        | false => exact preserves_pure ()
+        | true => exact preserves_bind (remove id P) (fun _ => eraseKey_spec P closed id)
+      apply hoare_bind _ _ (ambient (AmbientM.branch .keypairPutUnreferenceNow now) (fun w => Q (view w)))
+      intro unreference
+      cases unreference with
+      | false => exact tail
+      | true => exact hoare_bind _ _ (remove id Q) (fun _ => tail)
 
 def State.setSlots (s : State) (pid : PeerId) (current previous next : Option KeypairId) : State :=
   {s with peers := fun q => if q = pid then (s.peers q).map (fun p => (p.1, p.2.1, current, previous, next)) else s.peers q}
@@ -377,7 +457,10 @@ theorem rotateSource_affiliation (pid kid : Nat) (p : Peer) :
     ⦃fun w => ⌜References pid ([kid] ++ peerKeys p) (view w)⌝⦄ rotateSource pid kid p
     ⦃⇓? _ w => ⌜References pid ([kid] ++ peerKeys p) (view w)⌝⦄ := by
   let keys := [kid] ++ peerKeys p
-  have hkey := getKeypair_spec (References pid keys) kid
+  let P := fun w => References pid keys (view w)
+  have hkey : Preserves P (getKeypair kid) :=
+    hoare_consequence (getKeypair_spec (References pid keys) kid)
+      (fun _ h => h) (fun _ _ h => h.1)
   have hp := fun old => keypairPut_affiliation (References pid keys)
     (fun _ _ h => h.erase _) old true
   have h1 := modifyPeer_slots pid keys (fun q => {q with keypairNext := none, keypairPrevious := p.keypairNext})
@@ -390,9 +473,25 @@ theorem rotateSource_affiliation (pid kid : Nat) (p : Peer) :
     (fun _ => rfl) (fun _ => rfl) (by intro q k hh; simp_all [keys, peerKeys]; grind)
   have h5 := modifyPeer_slots pid keys (fun q => {q with keypairPrevious := none})
     (fun _ => rfl) (fun _ => rfl) (by intro q k hh; simp_all [keys, peerKeys]; grind)
-  mvcgen [rotateSource, hkey, hp, h1, h2, h3, h4, h5, branch, AmbientM.branch]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [References, view]
+  change Preserves P (rotateSource pid kid p)
+  unfold rotateSource
+  apply preserves_bind hkey
+  intro key
+  apply preserves_bind (hoare_liftAmbient (AmbientM.branch .addKeypairInitiator key.iAmTheInitiator) P)
+  intro initiator
+  cases initiator with
+  | false =>
+    exact preserves_bind h4 (fun _ =>
+      preserves_bind (hp p.keypairNext) (fun _ =>
+        preserves_bind h5 (fun _ => hp p.keypairPrevious)))
+  | true =>
+    apply preserves_bind (hoare_liftAmbient (AmbientM.branch .addKeypairHasNext p.keypairNext.isSome) P)
+    intro hasNext
+    cases hasNext with
+    | false => exact preserves_bind h2 (fun _ => preserves_bind (hp p.keypairPrevious) (fun _ => h3))
+    | true => exact preserves_bind h1 (fun _ =>
+        preserves_bind (hp p.keypairCurrent) (fun _ =>
+          preserves_bind (hp p.keypairPrevious) (fun _ => h3)))
 
 /-- Actual original rotation under nullable compatibility of the incoming key.
 Old slots may alias or already name absent keys; original getters may Stop. -/
@@ -400,11 +499,10 @@ theorem addNewKeypair_affiliation (pid : PeerId) (kid : KeypairId) :
     ⦃fun w => ⌜References pid [kid] (view w)⌝⦄ addNewKeypair pid kid
     ⦃⇓? _ w => ⌜Inv w⌝⦄ := by
   rw [rotateSource_eq]
-  have hg := getPeer_references pid [kid]
-  have ht := rotateSource_affiliation pid kid
-  mvcgen [hg, ht]
-  all_goals simp_all [References, Inv]
-
+  apply hoare_bind _ _ (getPeer_references pid [kid])
+  intro p
+  exact hoare_consequence (rotateSource_affiliation pid kid p)
+    (fun _ h => h) (fun _ _ h s hs => (h s hs).1)
 
 theorem handshake_creation_input (pid : PeerId) :
     ⦃fun w => ⌜Inv w⌝⦄ IndexOwner.peerWord (.handshake pid)
@@ -451,26 +549,28 @@ theorem keypairCreate_for_peer (pid : PeerId) (word : Option PeerId) :
 
 theorem deriveKeys_view (kid : KeypairId) (initiator : Bool) (ck : List UInt8) :
     SameView view (deriveKeys kid initiator ck) := by
-  apply SameView.of_wp
   intro s
-  have hg := getKeypair_spec (fun t => t = s) kid
-  have hs := fun k => setKeypair_spec (fun t => t = s) kid k
-  have hc {α : Type} (a : AmbientM α) :
-      Hoare (MonadLift.monadLift a : WG.M α) (fun w => view w = s) (fun _ w => view w = s) :=
-    hoare_liftAmbient a (fun w => view w = s)
-  have hk := fun b c ck d => (kdf_sameWGWorld b c ck d).wp (fun w => view w = s)
-  have ho := fun xs i => (kdfOut_sameWGWorld xs i).wp (fun w => view w = s)
-  unfold Hoare at hc
-  mvcgen [-Std.Do.Spec.monadLift_StateT, deriveKeys, hg, hs, hc, hk, ho, hiddenClock64]
-  all_goals split <;> simp_all [keyCell]
+  unfold deriveKeys
+  apply hoare_bind _ _ (hoare_liftAmbient (AmbientM.hiddenClock64 .deriveKeysBirthdate)
+    (fun w => view w = s))
+  intro birthdate
+  apply hoare_bind _ _ ((kdf_sameWGWorld true false ck []).wp (fun w => view w = s))
+  intro outs
+  apply hoare_bind _ _ ((kdfOut_sameWGWorld outs 0).wp (fun w => view w = s))
+  intro first
+  apply hoare_bind _ _ ((kdfOut_sameWGWorld outs 1).wp (fun w => view w = s))
+  intro second
+  apply hoare_bind _ _ (getKeypair_spec (fun t => t = s) kid)
+  intro key
+  cases initiator <;>
+    exact setKeypair_spec (fun t => t = s) kid _
 
 theorem handshakeZero_view (pid : PeerId) : SameView view (handshakeZero pid) := by
-  apply SameView.of_wp
   intro s
-  have hg := getPeer_spec (fun t => t = s) pid
-  have hs := fun p => setPeer_spec (fun t => t = s) pid p
-  mvcgen [handshakeZero, hg, hs]
-
+  unfold handshakeZero
+  apply hoare_bind _ _ (getPeer_spec (fun t => t = s) pid)
+  intro peer
+  exact setPeer_spec (fun t => t = s) pid _
 
 /-- The original post-allocation session suffix, with fresh source getters. -/
 def sessionTail (pid st kp : Nat) : WG.M Bool := do
@@ -499,36 +599,112 @@ theorem sessionTail_eq (pid : PeerId) : beginSession pid = (do
 theorem sessionTail_affiliation (pid st kp : Nat) :
     ⦃fun w => ⌜References pid [kp] (view w)⌝⦄ sessionTail pid st kp
     ⦃⇓? _ w => ⌜Inv w⌝⦄ := by
-  have hg := getPeer_spec (References pid [kp]) pid
-  have hk := getKeypair_spec (References pid [kp]) kp
-  have hs := fun k => setKeypair_spec (References pid [kp]) kp k
-  have hd := fun b ck => (deriveKeys_view kp b ck).wp (References pid [kp])
-  have hz := (handshakeZero_view pid).wp (References pid [kp])
-  have ha := addNewKeypair_affiliation pid kp
-  have hf := indexOwner_peerDeref_preserves (.handshake pid) Inv
-  have hi : Hoare (MonadLift.monadLift (indexReplaceHandshake pid kp) : WG.M Bool) Inv (fun _ => Inv) := by
+  let R := fun w => References pid [kp] (view w)
+  have peer : Preserves R (getPeer pid) :=
+    hoare_consequence (getPeer_spec (References pid [kp]) pid)
+      (fun _ h => h) (fun _ _ h => h.1)
+  have stopped {α : Type} (why : String) (P : WGWorld → Prop) (Q : α → WGWorld → Prop) :
+      Hoare (unsupported why : WG.M α) P Q := by
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w a x v a' h hr
+    simp [unsupported, AmbientM.unsupported] at hr
+    cases hr
+  have hi : Preserves Inv (monadLift (indexReplaceHandshake pid kp) : WG.M Bool) := by
     apply hoare_liftIndex
     intro g d table h hdev
     simpa only [Inv, view, hdev, Option.map_some, state] using h
-  unfold Preserves Hoare at hf hi
-  mvcgen [sessionTail, hg, hk, hs, hd, hz, ha, hf, hi, branch, unsupported,
-    AmbientM.branch, AmbientM.unsupported]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [Inv, References, keyAt_view, keyCell, view]
-  all_goals grind
+  have finish : Hoare (do
+      handshakeZero pid
+      if ← branch .sessionAlive !(← getPeer pid).isDead then
+        addNewKeypair pid kp
+        _ ← IndexOwner.peerDeref (.handshake pid)
+        if !(← indexReplaceHandshake pid kp) then unsupported "begin_session: the handshake entry was unhashed"
+        return true
+      unsupported "a dead peer finishing a session") R (fun _ => Inv) := by
+    apply hoare_bind _ _ ((handshakeZero_view pid).wp (References pid [kp]))
+    intro _
+    apply hoare_bind _ _ peer
+    intro p
+    apply hoare_bind _ _ (hoare_liftAmbient (AmbientM.branch .sessionAlive (!p.isDead)) R)
+    intro alive
+    cases alive with
+    | false => exact stopped _ _ _
+    | true =>
+      apply hoare_bind _ _ (addNewKeypair_affiliation pid kp)
+      intro _
+      apply preserves_bind (indexOwner_peerDeref_preserves (.handshake pid) Inv)
+      intro _
+      apply preserves_bind hi
+      intro replaced
+      cases replaced with
+      | false => exact stopped _ _ _
+      | true => exact preserves_pure true
+  unfold sessionTail
+  apply hoare_bind _ _ peer
+  intro p
+  apply hoare_bind _ _ (getKeypair_spec (References pid [kp]) kp)
+  intro key
+  apply hoare_bind _ _ (setKeypair_spec (References pid [kp]) kp
+    {key with iAmTheInitiator := st == HANDSHAKE_CONSUMED_RESPONSE, remoteIndex := p.remoteIndex})
+  intro _
+  apply hoare_bind _ _ (hoare_liftAmbient
+    (AmbientM.branch .sessionInitiator (st == HANDSHAKE_CONSUMED_RESPONSE)) R)
+  intro initiator
+  cases initiator with
+  | false =>
+    exact hoare_bind _ _ ((deriveKeys_view kp false p.chainingKey).wp (References pid [kp]))
+      (fun _ => finish)
+  | true =>
+    exact hoare_bind _ _ ((deriveKeys_view kp true p.chainingKey).wp (References pid [kp]))
+      (fun _ => finish)
 
 /-- The complete original session creation derives allocation compatibility
 from its actual handshake-word read and carries it into original rotation. -/
 theorem beginSession_affiliation (pid : PeerId) :
     ⦃fun w => ⌜Inv w⌝⦄ beginSession pid ⦃⇓? _ w => ⌜Inv w⌝⦄ := by
+  have ambient {α : Type} (a : AmbientM α) (P : WGWorld → Prop) :
+      Preserves P (monadLift a : WG.M α) := hoare_liftAmbient a P
+  have condition (st : Nat) : Preserves Inv
+      (WG.andM (branch .sessionNotCreatedResponse (st != HANDSHAKE_CREATED_RESPONSE))
+        (branch .sessionNotConsumedResponse (st != HANDSHAKE_CONSUMED_RESPONSE))) := by
+    unfold WG.andM
+    apply preserves_bind (ambient
+      (AmbientM.branch .sessionNotCreatedResponse (st != HANDSHAKE_CREATED_RESPONSE)) Inv)
+    intro b
+    cases b with
+    | false => exact preserves_pure false
+    | true =>
+      exact ambient (AmbientM.branch .sessionNotConsumedResponse (st != HANDSHAKE_CONSUMED_RESPONSE)) Inv
   rw [sessionTail_eq]
-  have hg := getPeer_spec (fun t => ∀ s, t = some s → s.Inv) pid
-  have hw := handshake_creation_input pid
-  have hc := keypairCreate_for_peer pid
-  have ht := sessionTail_affiliation pid
-  mvcgen [hg, hw, hc, ht, WG.andM, branch, invariant, AmbientM.branch, AmbientM.invariant]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [Inv, References, view]
-  all_goals grind
+  apply hoare_bind _ _ (hoare_consequence
+    (getPeer_spec (fun t => ∀ s, t = some s → s.Inv) pid)
+    (fun _ h => h) (fun _ _ h => h.1))
+  intro peer
+  apply hoare_bind _ _ (condition peer.handshakeState)
+  intro skip
+  cases skip with
+  | true => exact preserves_pure false
+  | false =>
+    apply hoare_bind _ _ (handshake_creation_input pid)
+    intro word
+    apply hoare_bind _ _ (keypairCreate_for_peer pid word)
+    intro created
+    apply hoare_bind _ _ (ambient (AmbientM.branch .sessionNoKeypair created.isNone)
+      (fun w => Inv w ∧ ∀ kid, created = some kid → References pid [kid] (view w)))
+    intro noKey
+    cases noKey with
+    | true =>
+      exact hoare_consequence (preserves_pure false)
+        (fun _ h => h.1) (fun _ _ h => h)
+    | false =>
+      cases created with
+      | none =>
+        apply (hoare_iff_run_ambient _ _ _).mpr
+        intro w a x v a' h hr
+        simp [invariant, AmbientM.invariant] at hr
+        cases hr
+      | some kp =>
+        exact hoare_consequence (sessionTail_affiliation pid peer.handshakeState kp)
+          (fun _ h => h.2 kp rfl) (fun _ _ h => h)
 
 end Leanux.Proofs.WG.Affiliation

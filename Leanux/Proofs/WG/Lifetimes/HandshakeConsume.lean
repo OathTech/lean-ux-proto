@@ -400,9 +400,7 @@ theorem consumeInitiationPrefix_preserves (c : AmbientContracts I) (msg : List U
     · intro initial; exact hoare_liftAmbient (AmbientM.branchCmp _ _ _ _) _
   have dev : StatePrefixPreserves (fun h w _ => I h w) LifetimeEvent.Safe (liftWGPrefix getDev) := by
     apply store
-    intro initial
-    unfold Hoare
-    mvcgen [getDev, invariant, AmbientM.invariant]
+    exact getDev_sameWGStore
   change StatePrefixEnsures _ _ _ (fun _ h w _ => I h w)
   unfold consumeInitiationPrefix
   repeat' first
@@ -445,9 +443,7 @@ theorem consumeResponsePrefix_preserves (c : AmbientContracts I) (msg : List UIn
     AmbientContracts.drop (c.store (fun _ => True) _ (by intro initial; exact hoare_liftAmbient a _))
   have dev : StatePrefixPreserves (fun h w _ => I h w) LifetimeEvent.Safe (liftWGPrefix getDev) := by
     apply AmbientContracts.drop (c.store (fun _ => True) getDev _)
-    intro initial
-    unfold Hoare
-    mvcgen [getDev, invariant, AmbientM.invariant]
+    exact getDev_sameWGStore
   have done : StatePrefixPreserves (fun h w _ => I h w) LifetimeEvent.Safe
       (pure (none : Option PeerId) : MixedM (Option PeerId)) :=
     StatePrefixEnsures.pure none (fun h w _ hi => c.safe h w hi) (fun _ _ _ hi => hi)
@@ -501,9 +497,7 @@ theorem consumeInitiationPrefix_preserves_product (c : ProductAmbientContracts I
     · intro initial; exact hoare_liftAmbient (AmbientM.branchCmp _ _ _ _) _
   have dev : PrefixPreserves I LifetimeEvent.Safe (liftWGObserver (liftWGPrefix getDev)) := by
     apply store
-    intro initial
-    unfold Hoare
-    mvcgen [getDev, invariant, AmbientM.invariant]
+    exact getDev_sameWGStore
   apply PrefixEnsures.preserves
   unfold consumeInitiationPrefix
   repeat' first
@@ -547,9 +541,7 @@ theorem consumeResponsePrefix_preserves_product (c : ProductAmbientContracts I) 
     ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ (by intro initial; exact hoare_liftAmbient a _))
   have dev : PrefixPreserves I LifetimeEvent.Safe (liftWGObserver (liftWGPrefix getDev)) := by
     apply ProductAmbientContracts.drop (c.nativeStore (fun _ => True) getDev _)
-    intro initial
-    unfold Hoare
-    mvcgen [getDev, invariant, AmbientM.invariant]
+    exact getDev_sameWGStore
   have done : PrefixPreserves I LifetimeEvent.Safe
       (liftWGObserver (pure (none : Option PeerId) : MixedM (Option PeerId))) := by
     rw [liftWGObserver_pure]

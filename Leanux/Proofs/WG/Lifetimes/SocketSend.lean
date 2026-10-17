@@ -189,7 +189,7 @@ theorem send6Prefix_spec (c : AmbientContracts I) (sc : SocketContracts I) (P : 
     | (maintenance_head tunnelXmitPrefix; exact tunnelXmitPrefix_spec c sc P _ _ _ _ _)
     | (maintenance_head modifyPeerKeysPrefix; exact update _)
     | (maintenance_lift_action_head getDev; exact c.store P _
-        (by intro initial; unfold Hoare; mvcgen [getDev, invariant, AmbientM.invariant]))
+        getDev_sameWGStore)
     | (maintenance_lift_action_head liftRouting; exact c.store P _
         (fun initial => hoare_liftRouting _ _ (fun _ _ hi => hi)))
     | (maintenance_lift_action_head getRouting; exact getRoutingSpec)
@@ -271,7 +271,7 @@ theorem send6Prefix_spec_product (c : ProductAmbientContracts I) (sc : ProductSo
     | (maintenance_head tunnelXmitPrefix; exact tunnelXmitPrefix_spec_product c sc P _ _ _ _ _)
     | (maintenance_head modifyPeerKeysPrefix; exact update _)
     | (maintenance_lift_action_head getDev; exact c.nativeStore P _
-        (by intro initial; unfold Hoare; mvcgen [getDev, invariant, AmbientM.invariant]))
+        getDev_sameWGStore)
     | (maintenance_lift_action_head liftRouting; exact c.nativeStore P _
         (fun initial => hoare_liftRouting _ _ (fun _ _ hi => hi)))
     | (maintenance_lift_action_head getRouting; exact getRoutingSpec)

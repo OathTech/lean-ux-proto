@@ -29,18 +29,18 @@ theorem add_placed_exact_wp (k : WGWorld) (d : WG.Device) (hd : k.dev = some d)
       (h : ⦃fun s => ⌜s = store d⌝⦄ a ⦃⇓ x s => ⌜x = value ∧ s = store d⌝⦄) :
       ⦃fun w => ⌜w = g⌝⦄ (MonadLift.monadLift a : WG.M α)
       ⦃⇓ x w => ⌜x = value ∧ w = g⌝⦄ := by
-    apply total_liftAip_of
-    · intro w hw; subst w; exact ⟨d, hd⟩
-    · intro w d' hw hd'
-      subst w
-      have hdd : d' = d := Option.some.inj (hd'.symm.trans hd)
-      subst d'
-      mvcgen [h]
-      all_goals try dsimp +zetaDelta only at *
-      all_goals simp_all []
-      intro _ _ _
-      change {g with dev := some d} = g
-      rw [← hd']
+    apply (total_iff_run_ambient _ _ _).mpr
+    intro w ambient hw
+    subst w
+    obtain ⟨x, s, ambient', hr, hv, hs⟩ := (total_iff_run_ambient _ _ _).mp h _ ambient rfl
+    subst s
+    refine ⟨x, g, ambient', ?_, hv, rfl⟩
+    change ((WG.liftAip a).run g).run ambient = _
+    rw [liftAip_run, hd]
+    simp only [store] at hr
+    simp only [hr, Except.map]
+    change Except.ok ((x, {g with dev := some d}), ambient') = _
+    rw [← hd]
   have rootNative := slotGet_root_wp (store d) v4
   have rootValueEq : (if v4 then (store d).trie.root4 else (store d).trie.root6) = some trie := hroot
   simp only [rootValueEq] at rootNative
@@ -52,16 +52,13 @@ theorem add_placed_exact_wp (k : WGWorld) (d : WG.Device) (hd : k.dev = some d)
   have setter : ⦃fun w => ⌜w = k⌝⦄
       (MonadLift.monadLift (WG.setNode id {old with peer := some pid}) : WG.M Unit)
       ⦃⇓ result w => ⌜result = () ∧ w = kn⌝⦄ := by
-    apply total_liftAip_of
-    · intro w hw; subst w; exact ⟨d, hd⟩
-    · intro w d' hw hd'
-      subst w
-      have hdd : d' = d := Option.some.inj (hd'.symm.trans hd)
-      subst d'
-      have hs := setNode_wp (store d) id {old with peer := some pid}
-      mvcgen [hs]
-      all_goals try dsimp +zetaDelta only at *
-      all_goals simp_all []
+    apply (total_iff_run_ambient _ _ _).mpr
+    intro w ambient hw
+    subst w
+    refine ⟨(), kn, ambient, ?_, rfl, rfl⟩
+    change ((WG.liftAip (WG.setNode id {old with peer := some pid})).run k).run ambient = _
+    rw [liftAip_run, hd]
+    rfl
   have deleting := listDel_wp kn dn rfl id
   let dl := unlisted dn id
   let kl : WGWorld := { k with dev := some dl }
@@ -69,37 +66,45 @@ theorem add_placed_exact_wp (k : WGWorld) (d : WG.Device) (hd : k.dev = some d)
     rw [unlisted_get]
     simp [dn, hp]
   have appending := listAddTail_wp kl dl rfl pid id (unlist id p) hpl
-  clear read rootNative
-  mvcgen [WG.add, branchCmp, AmbientM.branchCmp, branch, AmbientM.branch,
-    hgetRoot, invariant, AmbientM.invariant]
-  all_goals try dsimp only at *
-  all_goals try simp_all
-  all_goals try omega
-  obtain ⟨hptr, hframe⟩ := (show _ = some trie ∧ _ = k from by assumption)
-  cases hptr
-  cases hframe
-  mvcgen [placed]
-  all_goals try dsimp only at *
-  obtain ⟨hplaced, hplacedFrame⟩ := (show _ = (some id, true) ∧ _ = k from by assumption)
-  cases hplaced
-  cases hplacedFrame
-  clear hgetRoot placed
-  iterate 8
-    all_goals try mvcgen [getter, setter, deleting, appending,
-      branch, AmbientM.branch, invariant, AmbientM.invariant]
-    all_goals try dsimp only at *
-    all_goals repeat intro
-    all_goals try
-      obtain ⟨rfl, rfl⟩ := (show _ = old ∧ _ = k from by assumption)
-    all_goals try
-      obtain ⟨rfl, rfl⟩ := (show _ = () ∧ _ = kn from by assumption)
-    all_goals try
-      obtain ⟨rfl, rfl⟩ := (show _ = () ∧ _ = kl from by assumption)
-    all_goals try simp_all
-    all_goals try simp_all only [kn, kl, dn, dl]
-  all_goals clear getter setter deleting appending
-  all_goals simp_all [unlisted]
-  all_goals grind
+  apply (total_iff_run_ambient _ _ _).mpr
+  intro w ambient hw
+  subst w
+  let a1 := Leanux.Proofs.WG.CounterWindow.recordCmp ambient .addCidrTooLong false cidr (rootWidth v4)
+  let a2 := Leanux.Proofs.WG.CounterWindow.record a1 .addNoPeer false
+  obtain ⟨x, g, a3, hr, hx, hg⟩ := (total_iff_run_ambient _ _ _).mp hgetRoot k a2 rfl
+  subst x g
+  let a4 := Leanux.Proofs.WG.CounterWindow.record a3 .addEmptyTrie false
+  obtain ⟨x, g, a5, ht, hx, hg⟩ := (total_iff_run_ambient _ _ _).mp placed k a4 rfl
+  subst x g
+  let a6 := Leanux.Proofs.WG.CounterWindow.record a5 .addExact true
+  obtain ⟨x, g, a7, hnrun, hx, hg⟩ := (total_iff_run_ambient _ _ _).mp getter k a6 rfl
+  subst x g
+  obtain ⟨x, g, a8, hs, hx, hg⟩ := (total_iff_run_ambient _ _ _).mp setter k a7 rfl
+  subst x g
+  obtain ⟨x, g, a9, hdRun, hx, hg⟩ := (total_iff_run_ambient _ _ _).mp deleting kn a8 rfl
+  subst x g
+  obtain ⟨x, g, a10, haRun, hx, hg⟩ := (total_iff_run_ambient _ _ _).mp appending kl a9 rfl
+  subst x g
+  change ((monadLift (WG.slotGet (rootSlot v4)) : WG.M _).run k).run a2 =
+    .ok ((some trie, k), a3) at hr
+  change ((monadLift (WG.nodePlacement (some trie) addr cidr (rootWidth v4)) : WG.M _).run k).run a4 =
+    .ok (((some id, true), k), a5) at ht
+  change ((monadLift (WG.getNode id) : WG.M _).run k).run a6 = .ok ((old, k), a7) at hnrun
+  change ((monadLift (WG.setNode id {old with peer := some pid}) : WG.M _).run k).run a7 =
+    .ok (((), kn), a8) at hs
+  change ((WG.listDel id).run kn).run a8 = .ok (((), kl), a9) at hdRun
+  change ((WG.listAddTail pid id).run kl).run a9 =
+    .ok (((), { k with dev := some (exactInstalled d id old pid p) }), a10) at haRun
+  dsimp only [a1, a2] at hr
+  dsimp only [a4] at ht
+  dsimp only [a6] at hnrun
+  refine ⟨0, { k with dev := some (exactInstalled d id old pid p) }, a10, ?_, rfl, rfl⟩
+  have hcidr : decide (cidr > rootWidth v4) = false := by simp [Nat.not_lt.mpr hc]
+  simp only [WG.add, branchCmp, branch, Leanux.Proofs.WG.CounterWindow.branchCmp_run,
+    Leanux.Proofs.WG.CounterWindow.branch_run, StateT.run_bind, StateT.run_pure,
+    StateT.run_monadLift, monadLift_self, liftM, Leanux.Proofs.WG.CounterWindow.except_ok_bind,
+    Leanux.Proofs.WG.CounterWindow.except_pure, hcidr, Bool.false_eq_true,
+    Option.isNone_some, ↓reduceIte, hr, ht, hnrun, hs, hdRun, haRun]
 
 
 theorem add_context_exact_wp (k : WGWorld) (d : WG.Device) (hd : k.dev = some d)

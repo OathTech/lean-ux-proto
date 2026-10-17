@@ -378,7 +378,7 @@ theorem send4ClearSrcPrefix_spec (c : AmbientContracts I) (P : IdentityView → 
     | (maintenance_head dstCacheResetMixed; exact dstCacheResetMixed_spec c P _)
     | (maintenance_head modifyPeerKeysPrefix; exact modifyPeerKeysPrefix_spec_ambient c P _ _ (fun _ => rfl))
     | (maintenance_lift_action_head getDev; exact c.store P _
-        (by intro initial; unfold Hoare; mvcgen [getDev, invariant, AmbientM.invariant]))
+        getDev_sameWGStore)
     | (maintenance_lift_action_head liftRouting; exact c.store P _
         (fun initial => hoare_liftRouting _ _ (fun _ _ hi => hi)))
     | (maintenance_lift_action_head getRouting; exact c.store P _
@@ -415,7 +415,7 @@ theorem send4FinishPrefix_spec (c : AmbientContracts I) (sc : SocketContracts I)
     | (maintenance_head dstCacheResetMixed; exact dstCacheResetMixed_spec c P _)
     | (maintenance_head modifyPeerKeysPrefix; exact modifyPeerKeysPrefix_spec_ambient c P _ _ (fun _ => rfl))
     | (maintenance_lift_action_head getDev; exact c.store P _
-        (by intro initial; unfold Hoare; mvcgen [getDev, invariant, AmbientM.invariant]))
+        getDev_sameWGStore)
     | (maintenance_lift_action_head liftRouting; exact c.store P _
         (fun initial => hoare_liftRouting _ _ (fun _ _ hi => hi)))
     | (maintenance_lift_action_head getRouting; exact c.store P _
@@ -454,7 +454,7 @@ theorem send4RouteDonePrefix_spec (c : AmbientContracts I) (sc : SocketContracts
     | (maintenance_head dstCacheResetMixed; exact dstCacheResetMixed_spec c P _)
     | (maintenance_head modifyPeerKeysPrefix; exact modifyPeerKeysPrefix_spec_ambient c P _ _ (fun _ => rfl))
     | (maintenance_lift_action_head getDev; exact c.store P _
-        (by intro initial; unfold Hoare; mvcgen [getDev, invariant, AmbientM.invariant]))
+        getDev_sameWGStore)
     | (maintenance_lift_action_head liftRouting; exact c.store P _
         (fun initial => hoare_liftRouting _ _ (fun _ _ hi => hi)))
     | (maintenance_lift_action_head getRouting; exact c.store P _
@@ -494,7 +494,7 @@ theorem send4RetryPrefix_spec (c : AmbientContracts I) (sc : SocketContracts I) 
     | (maintenance_head dstCacheResetMixed; exact dstCacheResetMixed_spec c P _)
     | (maintenance_head modifyPeerKeysPrefix; exact modifyPeerKeysPrefix_spec_ambient c P _ _ (fun _ => rfl))
     | (maintenance_lift_action_head getDev; exact c.store P _
-        (by intro initial; unfold Hoare; mvcgen [getDev, invariant, AmbientM.invariant]))
+        getDev_sameWGStore)
     | (maintenance_lift_action_head liftRouting; exact c.store P _
         (fun initial => hoare_liftRouting _ _ (fun _ _ hi => hi)))
     | (maintenance_lift_action_head getRouting; exact c.store P _
@@ -535,7 +535,7 @@ theorem send4MissPrefix_spec (c : AmbientContracts I) (sc : SocketContracts I) (
     | (maintenance_head dstCacheResetMixed; exact dstCacheResetMixed_spec c P _)
     | (maintenance_head modifyPeerKeysPrefix; exact modifyPeerKeysPrefix_spec_ambient c P _ _ (fun _ => rfl))
     | (maintenance_lift_action_head getDev; exact c.store P _
-        (by intro initial; unfold Hoare; mvcgen [getDev, invariant, AmbientM.invariant]))
+        getDev_sameWGStore)
     | (maintenance_lift_action_head liftRouting; exact c.store P _
         (fun initial => hoare_liftRouting _ _ (fun _ _ hi => hi)))
     | (maintenance_lift_action_head getRouting; exact c.store P _
@@ -576,7 +576,7 @@ theorem send4AfterCachePrefix_spec (c : AmbientContracts I) (sc : SocketContract
     | (maintenance_head dstCacheResetMixed; exact dstCacheResetMixed_spec c P _)
     | (maintenance_head modifyPeerKeysPrefix; exact modifyPeerKeysPrefix_spec_ambient c P _ _ (fun _ => rfl))
     | (maintenance_lift_action_head getDev; exact c.store P _
-        (by intro initial; unfold Hoare; mvcgen [getDev, invariant, AmbientM.invariant]))
+        getDev_sameWGStore)
     | (maintenance_lift_action_head liftRouting; exact c.store P _
         (fun initial => hoare_liftRouting _ _ (fun _ _ hi => hi)))
     | (maintenance_lift_action_head getRouting; exact c.store P _
@@ -618,7 +618,7 @@ theorem send4Prefix_spec (c : AmbientContracts I) (sc : SocketContracts I) (P : 
     | (maintenance_head dstCacheResetMixed; exact dstCacheResetMixed_spec c P _)
     | (maintenance_head modifyPeerKeysPrefix; exact modifyPeerKeysPrefix_spec_ambient c P _ _ (fun _ => rfl))
     | (maintenance_lift_action_head getDev; exact c.store P _
-        (by intro initial; unfold Hoare; mvcgen [getDev, invariant, AmbientM.invariant]))
+        getDev_sameWGStore)
     | (maintenance_lift_action_head liftRouting; exact c.store P _
         (fun initial => hoare_liftRouting _ _ (fun _ _ hi => hi)))
     | (maintenance_lift_action_head getRouting; exact c.store P _
@@ -671,7 +671,7 @@ theorem send4ClearSrcPrefix_spec_product (c : ProductAmbientContracts I) (P : Id
     | (maintenance_head dstCacheResetMixed; exact dstCacheResetMixed_spec_product c P _)
     | (maintenance_head modifyPeerKeysPrefix; exact modifyPeerKeysPrefix_spec_product c P _ _ (fun _ => rfl))
     | (maintenance_lift_action_head getDev; exact c.nativeStore P _
-        (by intro initial; unfold Hoare; mvcgen [getDev, invariant, AmbientM.invariant]))
+        getDev_sameWGStore)
     | (maintenance_lift_action_head liftRouting; exact c.nativeStore P _
         (fun initial => hoare_liftRouting _ _ (fun _ _ hi => hi)))
     | (maintenance_lift_action_head getRouting; exact c.nativeStore P _
@@ -709,7 +709,7 @@ theorem send4FinishPrefix_spec_product (c : ProductAmbientContracts I) (sc : Pro
     | (maintenance_head dstCacheResetMixed; exact dstCacheResetMixed_spec_product c P _)
     | (maintenance_head modifyPeerKeysPrefix; exact modifyPeerKeysPrefix_spec_product c P _ _ (fun _ => rfl))
     | (maintenance_lift_action_head getDev; exact c.nativeStore P _
-        (by intro initial; unfold Hoare; mvcgen [getDev, invariant, AmbientM.invariant]))
+        getDev_sameWGStore)
     | (maintenance_lift_action_head liftRouting; exact c.nativeStore P _
         (fun initial => hoare_liftRouting _ _ (fun _ _ hi => hi)))
     | (maintenance_lift_action_head getRouting; exact c.nativeStore P _
@@ -749,7 +749,7 @@ theorem send4RouteDonePrefix_spec_product (c : ProductAmbientContracts I) (sc : 
     | (maintenance_head dstCacheResetMixed; exact dstCacheResetMixed_spec_product c P _)
     | (maintenance_head modifyPeerKeysPrefix; exact modifyPeerKeysPrefix_spec_product c P _ _ (fun _ => rfl))
     | (maintenance_lift_action_head getDev; exact c.nativeStore P _
-        (by intro initial; unfold Hoare; mvcgen [getDev, invariant, AmbientM.invariant]))
+        getDev_sameWGStore)
     | (maintenance_lift_action_head liftRouting; exact c.nativeStore P _
         (fun initial => hoare_liftRouting _ _ (fun _ _ hi => hi)))
     | (maintenance_lift_action_head getRouting; exact c.nativeStore P _
@@ -790,7 +790,7 @@ theorem send4RetryPrefix_spec_product (c : ProductAmbientContracts I) (sc : Prod
     | (maintenance_head dstCacheResetMixed; exact dstCacheResetMixed_spec_product c P _)
     | (maintenance_head modifyPeerKeysPrefix; exact modifyPeerKeysPrefix_spec_product c P _ _ (fun _ => rfl))
     | (maintenance_lift_action_head getDev; exact c.nativeStore P _
-        (by intro initial; unfold Hoare; mvcgen [getDev, invariant, AmbientM.invariant]))
+        getDev_sameWGStore)
     | (maintenance_lift_action_head liftRouting; exact c.nativeStore P _
         (fun initial => hoare_liftRouting _ _ (fun _ _ hi => hi)))
     | (maintenance_lift_action_head getRouting; exact c.nativeStore P _
@@ -832,7 +832,7 @@ theorem send4MissPrefix_spec_product (c : ProductAmbientContracts I) (sc : Produ
     | (maintenance_head dstCacheResetMixed; exact dstCacheResetMixed_spec_product c P _)
     | (maintenance_head modifyPeerKeysPrefix; exact modifyPeerKeysPrefix_spec_product c P _ _ (fun _ => rfl))
     | (maintenance_lift_action_head getDev; exact c.nativeStore P _
-        (by intro initial; unfold Hoare; mvcgen [getDev, invariant, AmbientM.invariant]))
+        getDev_sameWGStore)
     | (maintenance_lift_action_head liftRouting; exact c.nativeStore P _
         (fun initial => hoare_liftRouting _ _ (fun _ _ hi => hi)))
     | (maintenance_lift_action_head getRouting; exact c.nativeStore P _
@@ -874,7 +874,7 @@ theorem send4AfterCachePrefix_spec_product (c : ProductAmbientContracts I) (sc :
     | (maintenance_head dstCacheResetMixed; exact dstCacheResetMixed_spec_product c P _)
     | (maintenance_head modifyPeerKeysPrefix; exact modifyPeerKeysPrefix_spec_product c P _ _ (fun _ => rfl))
     | (maintenance_lift_action_head getDev; exact c.nativeStore P _
-        (by intro initial; unfold Hoare; mvcgen [getDev, invariant, AmbientM.invariant]))
+        getDev_sameWGStore)
     | (maintenance_lift_action_head liftRouting; exact c.nativeStore P _
         (fun initial => hoare_liftRouting _ _ (fun _ _ hi => hi)))
     | (maintenance_lift_action_head getRouting; exact c.nativeStore P _
@@ -917,7 +917,7 @@ theorem send4Prefix_spec_product (c : ProductAmbientContracts I) (sc : ProductSo
     | (maintenance_head dstCacheResetMixed; exact dstCacheResetMixed_spec_product c P _)
     | (maintenance_head modifyPeerKeysPrefix; exact modifyPeerKeysPrefix_spec_product c P _ _ (fun _ => rfl))
     | (maintenance_lift_action_head getDev; exact c.nativeStore P _
-        (by intro initial; unfold Hoare; mvcgen [getDev, invariant, AmbientM.invariant]))
+        getDev_sameWGStore)
     | (maintenance_lift_action_head liftRouting; exact c.nativeStore P _
         (fun initial => hoare_liftRouting _ _ (fun _ _ hi => hi)))
     | (maintenance_lift_action_head getRouting; exact c.nativeStore P _

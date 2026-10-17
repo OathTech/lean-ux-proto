@@ -187,9 +187,7 @@ theorem createInitiationPrefix_preserves (c : AmbientContracts I)
     store a (ha.of_factor wgStoreView wgStoreView (fun _ => rfl))
   have dev : StatePrefixPreserves (fun h w _ => I h w) LifetimeEvent.Safe (liftWGPrefix getDev) := by
     apply store
-    intro initial
-    unfold Hoare
-    mvcgen [getDev, invariant, AmbientM.invariant]
+    exact getDev_sameWGStore
   unfold createInitiationPrefix
   repeat' first
     | (maintenance_head setChainPrefix; exact setChainPrefix_preserves c _ _ _)
@@ -227,9 +225,7 @@ theorem createResponsePrefix_preserves (c : AmbientContracts I)
     store a (ha.of_factor wgStoreView wgStoreView (fun _ => rfl))
   have dev : StatePrefixPreserves (fun h w _ => I h w) LifetimeEvent.Safe (liftWGPrefix getDev) := by
     apply store
-    intro initial
-    unfold Hoare
-    mvcgen [getDev, invariant, AmbientM.invariant]
+    exact getDev_sameWGStore
   unfold createResponsePrefix
   repeat' first
     | (maintenance_head setChainPrefix; exact setChainPrefix_preserves c _ _ _)
@@ -301,9 +297,7 @@ theorem createInitiationPrefix_preserves_product (c : ProductAmbientContracts I)
     whole _ (Framing.kdf_sameWGWorld second third ck data)
   have dev : PrefixPreserves I LifetimeEvent.Safe (liftWGObserver (liftWGPrefix getDev)) := by
     apply store
-    intro initial
-    unfold Hoare
-    mvcgen [getDev, invariant, AmbientM.invariant]
+    exact getDev_sameWGStore
   apply PrefixEnsures.preserves
   unfold createInitiationPrefix
   simp only [liftWGObserver_bind, liftWGObserver_pure, apply_ite]
@@ -355,9 +349,7 @@ theorem createResponsePrefix_preserves_product (c : ProductAmbientContracts I)
     whole _ (Framing.kdf_sameWGWorld second third ck data)
   have dev : PrefixPreserves I LifetimeEvent.Safe (liftWGObserver (liftWGPrefix getDev)) := by
     apply store
-    intro initial
-    unfold Hoare
-    mvcgen [getDev, invariant, AmbientM.invariant]
+    exact getDev_sameWGStore
   apply PrefixEnsures.preserves
   unfold createResponsePrefix
   simp only [liftWGObserver_bind, liftWGObserver_pure, apply_ite]

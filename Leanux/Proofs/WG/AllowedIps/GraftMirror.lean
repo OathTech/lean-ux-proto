@@ -29,10 +29,11 @@ theorem freeNode_wp (k : WG.AipStore) (id : Nat) (n : WG.AipNode)
     (hn : k.nodes[id]? = some n) :
     ⦃fun w => ⌜w = k⌝⦄ WG.freeNode id
     ⦃⇓ x w => ⌜x = () ∧ w = { k with nodes := k.nodes.erase id }⌝⦄ := by
-  have hg := getNode_wp k id n hn
-  mvcgen [WG.freeNode, hg]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all
+  apply (total_iff_run_ambient _ _ _).mpr
+  intro w ambient hw
+  subst w
+  refine ⟨(), _, ambient, ?_, rfl, rfl⟩
+  simp [WG.freeNode, WG.getNode, hn]
 
 theorem chooseAndConnectNode_wp (k : WG.AipStore)
     (parent id : Nat) (pn n : WG.AipNode) (hp : k.nodes[parent]? = some pn)
@@ -241,12 +242,26 @@ theorem finishGraft_root_wp (k : WGWorld) (d : WG.Device) (hd : k.dev = some d)
       ⦃⇓ x w => ⌜x = () ∧ w = {k with dev := some (connectedRoot d v4 id n)}⌝⦄ := by
     apply adapt k d hd
     have hn := connectNode_root_wp (store d) v4 id n hn
-    mvcgen [hn]
-    all_goals try dsimp +zetaDelta only at *
-    all_goals simp_all [connectedRoot, rootWrite]
-  clear adapt
-  mvcgen [finishGraft, branch, AmbientM.branch, h]
-  all_goals simp_all
+    apply (total_iff_run_ambient _ _ _).mpr
+    intro entry ambient hi
+    obtain ⟨result, finish, finalAmbient, he, hr, hf⟩ :=
+      (total_iff_run_ambient _ _ _).mp hn entry ambient hi
+    refine ⟨result, finish, finalAmbient, he, ?_⟩
+    subst result
+    subst finish
+    simp [connectedRoot, rootWrite, store]
+  apply (total_iff_run_ambient _ _ _).mpr
+  intro w ambient hw
+  subst w
+  let recorded := {ambient with steps := ambient.steps.push {decision, outcome := true, netRx := ambient.netRxSection}}
+  obtain ⟨result, finish, finalAmbient, he, hr, hf⟩ :=
+    (total_iff_run_ambient _ _ _).mp h k recorded rfl
+  subst result
+  subst finish
+  refine ⟨0, _, finalAmbient, ?_, rfl, rfl⟩
+  change (((MonadLift.monadLift (WG.connectNode (rootSlot v4) id) : WG.M Unit) >>= fun _ => pure (0 : Int)).run k).run recorded = _
+  simp only [StateT.run_bind, he]
+  rfl
 
 theorem finishGraft_child_wp (k : WGWorld) (d : WG.Device) (hd : k.dev = some d)
     (decision : Decision) (root : WG.Slot) (parent id : Nat) (pn n : WG.AipNode)
@@ -274,12 +289,26 @@ theorem finishGraft_child_wp (k : WGWorld) (d : WG.Device) (hd : k.dev = some d)
       ⦃⇓ x w => ⌜x = () ∧ w = {k with dev := some (connectedChild d parent (bit pn.bitlen pn.cidr n.bits) id pn n)}⌝⦄ := by
     apply adapt k d hd
     have hn := chooseAndConnectNode_wp (store d) parent id pn n hp hn hne hc
-    mvcgen [hn]
-    all_goals try dsimp +zetaDelta only at *
-    all_goals simp_all [connectedChild]
-  clear adapt
-  mvcgen [finishGraft, branch, AmbientM.branch, h]
-  all_goals simp_all
+    apply (total_iff_run_ambient _ _ _).mpr
+    intro entry ambient hi
+    obtain ⟨result, finish, finalAmbient, he, hr, hf⟩ :=
+      (total_iff_run_ambient _ _ _).mp hn entry ambient hi
+    refine ⟨result, finish, finalAmbient, he, ?_⟩
+    subst result
+    subst finish
+    simp [connectedChild, store]
+  apply (total_iff_run_ambient _ _ _).mpr
+  intro w ambient hw
+  subst w
+  let recorded := {ambient with steps := ambient.steps.push {decision, outcome := false, netRx := ambient.netRxSection}}
+  obtain ⟨result, finish, finalAmbient, he, hr, hf⟩ :=
+    (total_iff_run_ambient _ _ _).mp h k recorded rfl
+  subst result
+  subst finish
+  refine ⟨0, _, finalAmbient, ?_, rfl, rfl⟩
+  change (((MonadLift.monadLift (WG.chooseAndConnectNode parent id) : WG.M Unit) >>= fun _ => pure (0 : Int)).run k).run recorded = _
+  simp only [StateT.run_bind, he]
+  rfl
 
 theorem graftTail_wp (k : WGWorld) (d : WG.Device) (v4 : Bool)
     (id : Nat) (old : WG.AipNode) (addr cidr pid : Nat) (p : WG.Peer) (placed : Option Nat)
@@ -343,18 +372,28 @@ theorem graftTail_wp (k : WGWorld) (d : WG.Device) (v4 : Bool)
       ⦃⇓ x w => ⌜x = () ∧ w = {g with dev := some (connectedChild d parent (bit pn.bitlen pn.cidr n.bits) id pn n)}⌝⦄ := by
     apply adapt g d hd
     have hnative := Leanux.Proofs.WG.AllowedIps.chooseAndConnectNode_wp (store d) parent id pn n hp hn hne hc
-    mvcgen [hnative]
-    all_goals try dsimp +zetaDelta only at *
-    all_goals simp_all [connectedChild]
+    apply (total_iff_run_ambient _ _ _).mpr
+    intro entry ambient hi
+    obtain ⟨result, finish, finalAmbient, he, hr, hf⟩ :=
+      (total_iff_run_ambient _ _ _).mp hnative entry ambient hi
+    refine ⟨result, finish, finalAmbient, he, ?_⟩
+    subst result
+    subst finish
+    simp [connectedChild, store]
   have freeNode_wp (g : WGWorld) (d : WG.Device) (hd : g.dev = some d)
       (id : Nat) (n : WG.AipNode) (hn : d.nodes[id]? = some n) :
       ⦃fun w => ⌜w = g⌝⦄ (MonadLift.monadLift (WG.freeNode id) : WG.M Unit)
       ⦃⇓ x w => ⌜x = () ∧ w = {g with dev := some {d with nodes := d.nodes.erase id}}⌝⦄ := by
     apply adapt g d hd
     have hnative := Leanux.Proofs.WG.AllowedIps.freeNode_wp (store d) id n hn
-    mvcgen [hnative]
-    all_goals try dsimp +zetaDelta only at *
-    all_goals simp_all []
+    apply (total_iff_run_ambient _ _ _).mpr
+    intro entry ambient hi
+    obtain ⟨result, finish, finalAmbient, he, hr, hf⟩ :=
+      (total_iff_run_ambient _ _ _).mp hnative entry ambient hi
+    refine ⟨result, finish, finalAmbient, he, ?_⟩
+    subst result
+    subst finish
+    simp [store]
   have allocNode_wp (g : WGWorld) (d : WG.Device) (hd : g.dev = some d)
       (site : AllocSite) (n : WG.AipNode) :
       ⦃fun w => ⌜w = g⌝⦄ (MonadLift.monadLift (WG.allocNode site n) : WG.M (Option Nat))
@@ -378,109 +417,126 @@ theorem graftTail_wp (k : WGWorld) (d : WG.Device) (v4 : Bool)
   let leaf := WG.newNode addr cidr (rootWidth v4) (some pid)
   let dl := graftListed d (rootWidth v4) addr cidr pid p
   let kl : WGWorld := { k with dev := some dl }
+  let split := min cidr (common (rootWidth v4) old.bits addr)
   have hne : d.nextNode ≠ id := Nat.ne_of_gt hid
   have hnl : dl.nodes[id]? = some old := by
     simp [dl, graftListed, allocated, Std.TreeMap.getElem?_insert, hne, hn]
   have hg := getNode_wp kl dl id old rfl hnl
-  mvcgen [graftTail, hg, branch, AmbientM.branch, invariant, AmbientM.invariant]
-  all_goals try assumption
-  obtain ⟨hold, holdFrame⟩ := (show _ = old ∧ _ = kl from by assumption)
-  cases hold
   have hcommon := commonBits_wp kl old addr (rootWidth v4) hw
-  mvcgen [hcommon]
-  all_goals try exact holdFrame
-  obtain ⟨hcommonValue, hcommonFrame⟩ := (show _ = common (rootWidth v4) old.bits addr ∧ _ = kl from by assumption)
-  cases hcommonValue
-  let leaf := WG.newNode addr cidr (rootWidth v4) (some pid)
   have hleaf : dl.nodes[d.nextNode]? = some leaf := by simp [dl, graftListed, allocated, leaf]
   have hglf := getNode_wp kl dl d.nextNode leaf rfl hleaf
-  mvcgen [hglf, branch, AmbientM.branch, invariant, AmbientM.invariant]
-  all_goals try exact hcommonFrame
-  all_goals try exact (show _ = leaf ∧ _ = kl from by assumption).2
-  all_goals obtain ⟨hleafValue, hleafFrame⟩ := (show _ = leaf ∧ _ = kl from by assumption)
-  all_goals cases hleafValue
-  all_goals try dsimp only [leaf, WG.newNode] at *
-  all_goals try
-    obtain ⟨hprev, hprevFrame⟩ := (show _ = leaf ∧ _ = kl from by assumption)
-    cases hprev
-  all_goals try dsimp only [leaf, WG.newNode] at *
-  · have he : min cidr (common (rootWidth v4) old.bits addr) = cidr := by grind
+  have branchRule {β : Type} (decision : Decision) (value : Bool)
+      (P : WGWorld → Prop) (Q : β → WGWorld → Prop) (f : Bool → WG.M β)
+      (hf : Hoare (f value) P Q) :
+      Hoare ((branch decision value : WG.M Bool) >>= f) P Q := by
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient x out ambient' hi hr
+    change ((f value).run w).run _ = .ok ((x, out), ambient') at hr
+    exact (hoare_iff_run_ambient _ _ _).mp hf _ _ _ _ _ hi hr
+  have mayReturn {β : Type} (a : WG.M β) (P : WGWorld → Prop)
+      (Q : β → WGWorld → Prop) (h : ⦃fun w => ⌜P w⌝⦄ a ⦃⇓ x w => ⌜Q x w⌝⦄) :
+      Hoare a P Q := by
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient x out ambient' hi hr
+    obtain ⟨y, v, b, he, hq⟩ := (total_iff_run_ambient _ _ _).mp h w ambient hi
+    rw [hr] at he
+    cases he
+    exact hq
+  have known {α β : Type} (a : WG.M α) (f : α → WG.M β)
+      (entry finish : WGWorld) (value : α) (Q : β → WGWorld → Prop)
+      (h : ⦃fun w => ⌜w = entry⌝⦄ a ⦃⇓ x w => ⌜x = value ∧ w = finish⌝⦄)
+      (hf : Hoare (f value) (fun w => w = finish) Q) :
+      Hoare (a >>= f) (fun w => w = entry) Q := by
+    apply hoare_bind _ _ (mayReturn _ _ _ h)
+    intro x
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient result out ambient' hx hr
+    rcases hx with ⟨hvalue, hstate⟩
+    subst x
+    subst w
+    exact (hoare_iff_run_ambient _ _ _).mp hf _ ambient result out ambient' rfl hr
+  let Post := fun result (w : WGWorld) =>
+    (result = -ENOMEM ∧ w = k) ∨
+      (result = -ENOMEM ∧ split ≠ cidr ∧
+        w = {k with dev := some (graftRolledBack d (rootWidth v4) addr cidr pid p)}) ∨
+      (result = 0 ∧ w = {k with dev := some (if split = cidr then outOne else outTwo)})
+  change Hoare (graftTail (rootSlot v4) (rootWidth v4) addr cidr placed d.nextNode id)
+    (fun w => w = kl) Post
+  unfold graftTail
+  apply known _ _ kl kl _ _ hg
+  apply known _ _ kl kl _ _ hcommon
+  apply known _ _ kl kl _ _ hglf
+  apply branchRule .addNewnodeCoversDown (leaf.cidr == split)
+  by_cases he : split = cidr
+  · have hb : (leaf.cidr == split) = true := by simp [leaf, WG.newNode, he]
+    simp only [hb, ↓reduceIte]
     have hconn := chooseAndConnectNode_wp kl dl rfl d.nextNode id leaf old hleaf hnl
       (Ne.symm hne) (by change cidr < rootWidth v4; omega)
-    mvcgen [hconn]
-    all_goals try exact hleafFrame
-    intro currentConn currentAmbient hconnFrame
-    let side := bit (rootWidth v4) cidr old.bits
-    let dc := connectedChild dl d.nextNode side id leaf old
-    let kc : WGWorld := { k with dev := some dc }
-    have hnc : dc.nodes[d.nextNode]? = some { leaf with bit := leaf.bit.set! side (some id) } := by
-      simp [dc, connectedChild]
-    mvcgen [hfinishOne]
-    all_goals try exact hconnFrame
-    all_goals try dsimp only at *
-    all_goals simp_all [graftOneReady]
-  · have he : min cidr (common (rootWidth v4) old.bits addr) ≠ cidr := by grind
-    let split := min cidr (common (rootWidth v4) old.bits addr)
+    apply known _ _ kl _ () _ hconn
+    apply hoare_consequence (mayReturn _ _ _ hfinishOne)
+    · intro w hw; exact hw
+    · intro result w hw
+      apply Or.inr
+      apply Or.inr
+      simpa only [he, ↓reduceIte] using hw
+  · have hb : (leaf.cidr == split) = false := by simp [leaf, WG.newNode, Ne.symm he]
+    simp only [hb, Bool.false_eq_true, ↓reduceIte]
+    apply known _ _ kl kl _ _ hglf
     let mid := WG.newNode addr split (rootWidth v4) none
     have halloc2 := allocNode_wp kl dl rfl .allocNode234 mid
-    simp only [mid, WG.newNode] at halloc2
-    mvcgen [halloc2, branch, AmbientM.branch, invariant, AmbientM.invariant]
-    all_goals try exact hleafFrame
-    all_goals try dsimp only at *
-    all_goals try simp_all
-    · rename_i hNoFrame
+    apply hoare_bind _ _ halloc2
+    intro allocation
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient result out ambient' hi hr
+    rcases hi with ⟨ha, hw⟩ | ⟨ha, hw⟩
+    · subst allocation
+      subst w
+      apply (hoare_iff_run_ambient _ (fun w => w = kl) Post).mp ?_ kl ambient result out ambient' rfl hr
+      apply branchRule .addIntermediateNoMem true
+      simp only [↓reduceIte]
       have hdel := listDel_wp kl dl rfl d.nextNode
-      mvcgen [hdel]
-      all_goals try exact hNoFrame
-      intro currentDel currentAmbient hdelFrame
       let dr := unlisted dl d.nextNode
-      let kr : WGWorld := { k with dev := some dr }
-      let leaf := WG.newNode addr cidr (rootWidth v4) (some pid)
+      let kr : WGWorld := {k with dev := some dr}
+      apply known _ _ kl kr () _ hdel
       have hnr : dr.nodes[d.nextNode]? = some leaf := hleaf
       have hfree := freeNode_wp kr dr rfl d.nextNode leaf hnr
-      mvcgen [hfree]
-      all_goals try dsimp +zetaDelta only at *
-      all_goals simp_all [graftRolledBack]
-    · let mid := WG.newNode addr split (rootWidth v4) none
-      obtain ⟨hmId, hYesFrame⟩ := (show _ = dl.nextNode ∧ _ = { kl with dev := some (allocated dl mid) } from by assumption)
-      change _ = d.nextNode + 1 at hmId
-      cases hmId
-      simp only [show dl.nextNode = d.nextNode + 1 from rfl]
+      apply known _ _ kr _ () _ hfree
+      apply hoare_consequence (hoare_pure (-ENOMEM) _)
+      · intro w hw; exact hw
+      · intro result w hw
+        exact Or.inr (Or.inl ⟨hw.1, he, hw.2⟩)
+    · subst allocation
+      subst w
       let dm := allocated dl mid
-      let km : WGWorld := { k with dev := some dm }
+      let km : WGWorld := {k with dev := some dm}
+      apply (hoare_iff_run_ambient _ (fun w => w = km) Post).mp ?_ km ambient result out ambient' rfl hr
+      apply branchRule .addIntermediateNoMem false
+      simp only [Bool.false_eq_true, ↓reduceIte]
       have hmid : dm.nodes[d.nextNode + 1]? = some mid := by simp [dm, allocated, dl, graftListed]
       have hne2 : d.nextNode + 1 ≠ id := Nat.ne_of_gt (Nat.lt_trans hid (Nat.lt_succ_self _))
       have hdown : dm.nodes[id]? = some old := by
         simp [dm, allocated, dl, graftListed, Std.TreeMap.getElem?_insert, hne, hn, hne2]
       have hconn1 := chooseAndConnectNode_wp km dm rfl (d.nextNode + 1) id mid old hmid hdown
         (Ne.symm hne2) hs
-      mvcgen [hconn1]
-      all_goals try exact hYesFrame
-      intro currentConn1 currentAmbient1 hconn1Frame
       let sd := bit (rootWidth v4) split old.bits
       let sn := bit (rootWidth v4) split addr
-      let mid' := { mid with bit := mid.bit.set! sd (some id) }
+      let mid' := {mid with bit := mid.bit.set! sd (some id)}
       let dc := connectedChild dm (d.nextNode + 1) sd id mid old
-      let kc : WGWorld := { k with dev := some dc }
+      let kc : WGWorld := {k with dev := some dc}
+      apply known _ _ km kc () _ hconn1
       have hmid' : dc.nodes[d.nextNode + 1]? = some mid' := by simp [dc, connectedChild, mid']
-      let leaf := WG.newNode addr cidr (rootWidth v4) (some pid)
       have hleaf' : dc.nodes[d.nextNode]? = some leaf := by
         simp [dc, connectedChild, dm, allocated, dl, graftListed,
           Ne.symm hne, leaf, Std.TreeMap.getElem_insert]
       have hconn2 := chooseAndConnectNode_wp kc dc rfl (d.nextNode + 1) d.nextNode mid' leaf hmid' hleaf'
         (by omega) hs
-      mvcgen [hconn2]
-      all_goals try exact hconn1Frame
-      intro currentConn2 currentAmbient2 hconn2Frame
-      let sn := bit (rootWidth v4) split addr
-      let db := connectedChild dc (d.nextNode + 1) sn d.nextNode mid' leaf
-      let kb : WGWorld := { k with dev := some db }
-      have hmid'' : db.nodes[d.nextNode + 1]? = some { mid' with bit := mid'.bit.set! sn (some d.nextNode) } := by
-        simp [db, connectedChild]
-      mvcgen [hfinishTwo]
-      all_goals try exact hconn2Frame
-      all_goals try dsimp only at *
-      all_goals simp_all [graftTwoReady]
+      apply known _ _ kc _ () _ hconn2
+      apply hoare_consequence (mayReturn _ _ _ hfinishTwo)
+      · intro w hw; exact hw
+      · intro result w hw
+        apply Or.inr
+        apply Or.inr
+        simpa only [he, ↓reduceIte] using hw
 
 theorem add_placed_root_graft_wp (k : WGWorld) (d : WG.Device) (hd : k.dev = some d)
     (v4 : Bool) (id : Nat) (old : WG.AipNode) (addr cidr pid : Nat) (p : WG.Peer)
@@ -583,42 +639,88 @@ theorem add_placed_root_graft_wp (k : WGWorld) (d : WG.Device) (hd : k.dev = som
         (graftTwoReady d v4 id old addr cidr pid (min cidr (common (rootWidth v4) old.bits addr)) p)
         rfl .addIntermediateAtRoot v4 (d.nextNode + 1) _ hnode)
   have htail := graftTail_wp k d v4 id old addr cidr pid p none hn hid hs _ _ hOne hTwo
-  clear adapt read allocNode_wp hOne hTwo
+  have branchRule {β : Type} (decision : Decision) (value : Bool)
+      (P : WGWorld → Prop) (Q : β → WGWorld → Prop) (f : Bool → WG.M β)
+      (hf : Hoare (f value) P Q) :
+      Hoare ((branch decision value : WG.M Bool) >>= f) P Q := by
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient x out ambient' hi hr
+    change ((f value).run w).run _ = .ok ((x, out), ambient') at hr
+    exact (hoare_iff_run_ambient _ _ _).mp hf _ _ _ _ _ hi hr
+  have comparisonRule {β : Type} (decision : Decision) (value : Bool) (a b : Int)
+      (P : WGWorld → Prop) (Q : β → WGWorld → Prop) (f : Bool → WG.M β)
+      (hf : Hoare (f value) P Q) :
+      Hoare ((branchCmp decision value a b : WG.M Bool) >>= f) P Q := by
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient x out ambient' hi hr
+    change ((f value).run w).run _ = .ok ((x, out), ambient') at hr
+    exact (hoare_iff_run_ambient _ _ _).mp hf _ _ _ _ _ hi hr
+  have mayReturn {β : Type} (a : WG.M β) (P : WGWorld → Prop)
+      (Q : β → WGWorld → Prop) (h : ⦃fun w => ⌜P w⌝⦄ a ⦃⇓ x w => ⌜Q x w⌝⦄) :
+      Hoare a P Q := by
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient x out ambient' hi hr
+    obtain ⟨y, v, b, he, hq⟩ := (total_iff_run_ambient _ _ _).mp h w ambient hi
+    rw [hr] at he
+    cases he
+    exact hq
+  have known {α β : Type} (a : WG.M α) (f : α → WG.M β)
+      (entry finish : WGWorld) (value : α) (Q : β → WGWorld → Prop)
+      (h : ⦃fun w => ⌜w = entry⌝⦄ a ⦃⇓ x w => ⌜x = value ∧ w = finish⌝⦄)
+      (hf : Hoare (f value) (fun w => w = finish) Q) :
+      Hoare (a >>= f) (fun w => w = entry) Q := by
+    apply hoare_bind _ _ (mayReturn _ _ _ h)
+    intro x
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient result out ambient' hx hr
+    rcases hx with ⟨hvalue, hstate⟩
+    subst x
+    subst w
+    exact (hoare_iff_run_ambient _ _ _).mp hf _ ambient result out ambient' rfl hr
+  let Post := fun result (w : WGWorld) =>
+    (result = -ENOMEM ∧ w = k) ∨
+      (result = -ENOMEM ∧ min cidr (common (rootWidth v4) old.bits addr) ≠ cidr ∧
+        w = {k with dev := some (graftRolledBack d (rootWidth v4) addr cidr pid p)}) ∨
+      (result = 0 ∧ w = {k with dev := some (graftInstalled d v4 id old addr cidr pid p)})
+  change Hoare (WG.add (rootSlot v4) (rootWidth v4) addr cidr (some pid)) _ Post
   rw [← addWithTail_eq]
-  mvcgen [addWithTail, branchCmp, AmbientM.branchCmp, branch, AmbientM.branch, hgetRoot,
-    invariant, AmbientM.invariant]
-  all_goals try dsimp only at *
-  all_goals try simp_all
-  all_goals try omega
-  obtain ⟨hptr, hframe⟩ := (show _ = some id ∧ _ = k from by assumption)
-  cases hptr
-  cases hframe
-  mvcgen [hplacement, branch, AmbientM.branch, invariant, AmbientM.invariant]
-  all_goals try dsimp only at *
-  all_goals try simp_all
-  obtain ⟨hplaced, hplacedFrame⟩ := (show _ = (none, false) ∧ _ = k from by assumption)
-  cases hplaced
-  cases hplacedFrame
-  mvcgen [halloc, branch, AmbientM.branch, invariant, AmbientM.invariant]
-  all_goals try dsimp only at *
-  all_goals
-    obtain hcases := (show (_ = none ∧ _ = k) ∨
-      (_ = some d.nextNode ∧ _ = {k with dev := some (allocated d (WG.newNode addr cidr (rootWidth v4) (some pid)))}) from by assumption)
-    rcases hcases with ⟨hresult, hstate⟩ | ⟨hresult, hstate⟩
-    all_goals try cases hresult
-    all_goals try cases hstate
-  all_goals clear hplacement halloc hgetRoot
-  all_goals try simp_all
-  all_goals try
-    have heq := (show some d.nextNode = some _ from by assumption)
-    cases Option.some.inj heq
-  iterate 6
-    all_goals try mvcgen [hlist, hgetDown, htail, branch, AmbientM.branch, invariant, AmbientM.invariant]
-    all_goals try dsimp only at *
-    all_goals repeat intro
-    all_goals try obtain ⟨rfl, rfl⟩ := (show _ = some id ∧ _ = kl from by assumption)
-    all_goals try simp_all [graftInstalled]
-  all_goals clear hlist hgetDown htail
-  all_goals simp_all [graftInstalled]
+  unfold addWithTail
+  apply comparisonRule .addCidrTooLong (decide (cidr > rootWidth v4)) cidr (rootWidth v4)
+  simp only [show decide (cidr > rootWidth v4) = false by simp [Nat.not_lt.mpr hc],
+    Bool.false_eq_true, ↓reduceIte]
+  apply branchRule .addNoPeer false
+  simp only [Bool.false_eq_true, ↓reduceIte]
+  apply known _ _ k k _ _ hgetRoot
+  apply branchRule .addEmptyTrie false
+  simp only [Bool.false_eq_true, ↓reduceIte]
+  apply known _ _ k k _ _ hplacement
+  dsimp only
+  apply branchRule .addExact false
+  simp only [Bool.false_eq_true, ↓reduceIte]
+  apply hoare_bind _ _ halloc
+  intro allocation
+  apply (hoare_iff_run_ambient _ _ _).mpr
+  intro w ambient result out ambient' hi hr
+  rcases hi with ⟨ha, hw⟩ | ⟨ha, hw⟩
+  · subst allocation
+    subst w
+    apply (hoare_iff_run_ambient _ (fun w => w = k) Post).mp ?_ k ambient result out ambient' rfl hr
+    apply branchRule .addNewnodeNoMem true
+    simp only [↓reduceIte]
+    exact hoare_consequence (hoare_pure (-ENOMEM) _)
+      (fun _ h => h) (fun _ _ h => Or.inl h)
+  · subst allocation
+    subst w
+    apply (hoare_iff_run_ambient _ (fun w => w = ka) Post).mp ?_ ka ambient result out ambient' rfl hr
+    apply branchRule .addNewnodeNoMem false
+    simp only [Bool.false_eq_true, ↓reduceIte]
+    apply known _ _ ka kl () _ hlist
+    apply branchRule .addNoParentNode true
+    simp only [↓reduceIte]
+    apply known _ _ kl kl _ _ hgetDown
+    apply hoare_consequence htail
+    · intro w hw; exact hw
+    · intro result w hw
+      simpa only [Post, graftInstalled] using hw
 
 end Leanux.Proofs.WG.AllowedIps

@@ -77,7 +77,7 @@ theorem dstCacheGetPrefix_spec (c : AmbientContracts I) (P : IdentityView → Pr
     (by intro initial; exact hoare_liftAmbient (get : AmbientM Ambient) _))
   intro a
   apply StatePrefixEnsures.bind (c.store P (get : WG.M WGWorld)
-    (by intro initial; unfold Hoare; mvcgen))
+    (by intro initial; exact hoare_consequence (hoare_get _) (fun _ h => h) (fun _ _ h => h.2)))
   intro w
   split
   · exact c.pure P _
@@ -124,7 +124,7 @@ theorem dstCacheGetPrefix_spec_product (c : ProductAmbientContracts I) (P : Iden
     (by intro initial; exact hoare_liftAmbient (get : AmbientM Ambient) _))
   intro a
   apply PrefixEnsures.bind (c.nativeStore P (get : WG.M WGWorld)
-    (by intro initial; unfold Hoare; mvcgen))
+    (by intro initial; exact hoare_consequence (hoare_get _) (fun _ h => h) (fun _ _ h => h.2)))
   intro w
   split
   · exact c.pure P _

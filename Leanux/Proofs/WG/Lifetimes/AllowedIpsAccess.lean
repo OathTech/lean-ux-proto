@@ -88,8 +88,16 @@ private theorem allowed_readAip {a : AipM α} (ha : SameView (fun s : AipStore =
 
 private theorem allowed_getDev : SameWGStore getDev := by
   intro initial
-  unfold Hoare
-  mvcgen [getDev, invariant, AmbientM.invariant]
+  apply (hoare_iff_run_ambient _ _ _).mpr
+  intro w ambient d v ambient' hp hr
+  cases hd : w.dev with
+  | none =>
+    simp [getDev, hd, invariant, AmbientM.invariant] at hr
+    cases hr
+  | some dev =>
+    simp [getDev, hd] at hr
+    rcases hr with ⟨⟨rfl, rfl⟩, rfl⟩
+    exact hp
 
 private theorem allowed_erase_bind_pure {g : MixedM α} {x : α}
     {f : α → MixedM β} {a : WG.M β}

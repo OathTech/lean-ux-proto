@@ -18,15 +18,36 @@ def loopbackFinish : WG.M Unit := do
   _ ← hidden (.sectionStop .netRx)
 
 theorem loopbackFinish_sameStore : SameWGStore loopbackFinish := by
-  apply SameView.of_wp
-  intro k
-  have ambient {α : Type} (a : AmbientM α) :
-      Hoare (MonadLift.monadLift a : WG.M α)
-        (fun w => wgStoreView w = k) (fun _ w => wgStoreView w = k) :=
-    hoare_liftAmbient a _
-  unfold Hoare at ambient
-  mvcgen [-Std.Do.Spec.monadLift_StateT, loopbackFinish, ambient, getAmbient,
-    peekHiddenSite, hidden, skipCut]
+  intro initial
+  let P := fun w : WGWorld => wgStoreView w = initial
+  change Preserves P loopbackFinish
+  have ambient {α : Type} (a : AmbientM α) : Preserves P (monadLift a : WG.M α) :=
+    hoare_liftAmbient a P
+  have stopped (e : Stop) : Preserves P (throw e : WG.M Unit) := by
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w a x v a' h hr
+    cases hr
+  have finish : Preserves P (do
+      _ ← hidden (.sectionStart .netRx)
+      skipCut loopbackRxSites
+      _ ← hidden (.sectionStop .netRx) : WG.M Unit) :=
+    preserves_bind (ambient (AmbientM.hidden (.sectionStart .netRx))) (fun _ =>
+      preserves_bind (ambient (AmbientM.skipCut loopbackRxSites)) (fun _ =>
+        preserves_bind (ambient (AmbientM.hidden (.sectionStop .netRx))) (fun _ => preserves_pure ())))
+  unfold loopbackFinish
+  apply preserves_bind (hoare_modify (fun w : WGWorld => {w with netRxRaised := false}) (fun _ h => h))
+  intro _
+  apply preserves_bind (ambient (get : AmbientM Ambient))
+  intro a
+  split
+  · exact preserves_pure ()
+  · apply preserves_bind (ambient AmbientM.peekHiddenSite)
+    intro site
+    split
+    · apply preserves_bind (ambient AmbientM.peekHiddenSite)
+      intro next
+      exact preserves_bind (stopped _) (fun _ => finish)
+    · exact finish
 
 def loopbackSoftirqPrefix : MixedM Unit := do
   if !(← liftWGPrefix (get : WG.M WGWorld)).netRxRaised then return
@@ -63,7 +84,7 @@ theorem loopbackSoftirqPrefix_erases : ErasesStatePrefix loopbackSoftirqPrefix l
 theorem loopbackSoftirqPrefix_spec (c : AmbientContracts I) (P : IdentityView → Prop) :
     AmbientSpec I P loopbackSoftirqPrefix (fun _ => P) := by
   unfold loopbackSoftirqPrefix
-  apply StatePrefixEnsures.bind (c.store P get (by apply SameView.of_wp; intro initial; mvcgen))
+  apply StatePrefixEnsures.bind (c.store P get (by intro initial; exact hoare_consequence (hoare_get _) (fun _ h => h) (fun _ _ h => h.2)))
   intro w
   split
   · exact c.pure P _
@@ -104,7 +125,7 @@ theorem loopbackSoftirqPrefix_spec_product (c : ProductAmbientContracts I) (P : 
     ProductAmbientSpec I P (liftWGObserver loopbackSoftirqPrefix) (fun _ => P) := by
   simp only [loopbackSoftirqPrefix, liftWGObserver_bind, apply_ite, liftWGObserver_pure]
   apply PrefixEnsures.bind (c.nativeStore P (get : WG.M WGWorld)
-    (by apply SameView.of_wp; intro initial; mvcgen))
+    (by intro initial; exact hoare_consequence (hoare_get _) (fun _ h => h) (fun _ _ h => h.2)))
   intro w
   split
   · exact c.pure P _

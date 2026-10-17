@@ -22,13 +22,55 @@ def unlisted (d : WG.Device) (id : Nat) : WG.Device :=
 theorem listDel_wp (k : WGWorld) (d : WG.Device) (hd : k.dev = some d) (id : Nat) :
     ⦃fun w => ⌜w = k⌝⦄ WG.listDel id
     ⦃⇓ result w => ⌜result = () ∧ w = { k with dev := some (unlisted d id) }⌝⦄ := by
-  mvcgen [WG.listDel, WG.getDev, invariant, AmbientM.invariant, WG.setPeer, WG.modifyDev]
-  invariants
-  | inv1 => (fun cursor w => ⌜w = { k with dev := some { d with
-      peers := delFold id cursor.1.prefix d.peers } }⌝, ExceptConds.false)
-  all_goals try dsimp +zetaDelta only at *
-  all_goals try simp_all [delFold, delStep, unlist, unlisted, List.foldl_append]
-  rw [← hd]
+  have getter : ⦃fun w => ⌜w = k⌝⦄ WG.getDev
+      ⦃⇓ result w => ⌜result = d ∧ w = k⌝⦄ := by
+    apply (total_iff_run_ambient _ _ _).mpr
+    intro w ambient hw
+    subst w
+    exact ⟨d, k, ambient, by simp [WG.getDev, hd], rfl, rfl⟩
+  unfold WG.listDel
+  refine Triple.bind _ _ getter ?_
+  intro current
+  apply (total_iff_run_ambient _ _ _).mpr
+  intro w ambient ⟨hcurrent, hw⟩
+  subst current
+  subst w
+  apply (total_iff_run_ambient _ (fun w => w = k) _).mp ?_ k ambient rfl
+  let inv : Invariant d.peers.toList PUnit
+      (PostShape.arg WGWorld (PostShape.arg Ambient (PostShape.except Stop PostShape.pure))) :=
+    ⟨fun cursor w => ⌜w = {k with dev := some {d with peers := delFold id cursor.1.prefix d.peers}}⌝,
+      ExceptConds.false⟩
+  refine Triple.bind (Q := fun state => inv.1 (⟨d.peers.toList, [], by simp⟩, state)) _ _ ?_ ?_
+  · apply Triple.entails_wp_of_pre (Spec.forIn_list inv ?_)
+    · intro w ambient hw
+      subst w
+      change k = {k with dev := some d}
+      rw [← hd]
+    · intro pref cur suff h state
+      rcases cur with ⟨pid, peer⟩
+      let next := {k with dev := some {d with
+        peers := delFold id (pref ++ [(pid, peer)]) d.peers}}
+      apply Triple.entails_wp_of_post (Q' := PostCond.noThrow
+        (ps := PostShape.arg WGWorld (PostShape.arg Ambient (PostShape.except Stop PostShape.pure)))
+        (fun result w => ⌜result = .yield PUnit.unit ∧ w = next⌝))
+      · apply (total_iff_run_ambient _ _ _).mpr
+        intro w ambient hw
+        subst w
+        by_cases hmem : id ∈ peer.allowedipsList
+        · refine ⟨.yield PUnit.unit, next, ambient, ?_, rfl, rfl⟩
+          simp [hmem, WG.setPeer, WG.modifyDev, next,
+            delFold, List.foldl_append, delStep, unlist] <;> rfl
+        · refine ⟨.yield PUnit.unit, next, ambient, ?_, rfl, rfl⟩
+          simp [hmem, next, delFold, List.foldl_append, delStep] <;> rfl
+      · constructor
+        · intro result w ambient ⟨hr, hw⟩
+          subst result
+          exact hw
+        · exact ExceptConds.entails.refl _
+  · intro result
+    apply Triple.pure
+    intro w ambient hw
+    exact ⟨rfl, hw⟩
 
 private theorem delFold_get (id : Nat) (xs : List (Nat × WG.Peer))
     (original current : Std.TreeMap Nat WG.Peer)

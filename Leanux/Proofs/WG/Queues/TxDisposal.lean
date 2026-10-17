@@ -48,15 +48,22 @@ theorem freeList_wp (item : List SkbId) (before : SkbId → Option DataPacket) :
     ⦃fun w => ⌜txPackets w = before⌝⦄ freeList item
     ⦃⇓? _ w => ⌜txPackets w = fun j => if j ∈ item then none else before j⌝⦄ := by
   induction item generalizing before with
-  | nil => simp only [freeList_nil]; mvcgen
+  | nil =>
+    rw [freeList_nil]
+    apply hoare_consequence (hoare_pure () (fun w => txPackets w = before))
+    · exact fun _ h => h
+    · intro x w h
+      simpa using h.2
   | cons id rest ih =>
     rw [freeList_cons]
-    mvcgen [free_packet_wp, ih]
-    all_goals try dsimp +zetaDelta only at *
-    all_goals intro _ he
-    all_goals rw [he]
-    all_goals funext j
-    all_goals by_cases he : id = j <;> by_cases hm : j ∈ rest <;> simp_all [eq_comm]
+    apply hoare_bind _ _ (free_packet_wp id before)
+    intro _
+    apply hoare_consequence (ih (fun j => if id = j then none else before j))
+    · exact fun _ h => h
+    · intro x w h
+      rw [h]
+      funext j
+      by_cases he : id = j <;> by_cases hm : j ∈ rest <;> simp_all [eq_comm]
 
 theorem freeList_absent (item : List SkbId) :
     ⦃fun _ => ⌜True⌝⦄ freeList item
@@ -68,50 +75,78 @@ theorem freeList_absent (item : List SkbId) :
 
 theorem keyPut_packets (key : Option KeypairId) (now : Bool) :
     SameView txPackets (keypairPut key now) := by
-  apply SameView.of_wp
-  intro s
-  have owner := fun o => indexOwner_peerDeref_preserves o (fun w => txPackets w = s)
-  unfold Preserves Hoare at owner
-  have index_spec {α : Type} (a : IndexM α) :
-      Hoare (MonadLift.monadLift a : WG.M α) (fun w => txPackets w = s)
-        (fun _ w => txPackets w = s) := by
-    apply hoare_liftIndex
-    intro w d table hi hd
-    unfold txPackets at hi ⊢
-    simpa [hd] using hi
-  unfold Hoare at index_spec
-  mvcgen [keypairPut, owner, index_spec, getKeypair, getDev, setKeypair, modifyDev,
-    refcountDecAndTest, branch, branchCmp, invariant, unsupported,
-    AmbientM.branch, AmbientM.branchCmp, AmbientM.invariant, AmbientM.unsupported]
-  all_goals unfold txPackets at *
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [Option.bind_map, Function.comp_def]
-  all_goals subst_vars
-  all_goals simp_all
+  intro initial
+  let P := fun w : WGWorld => txPackets w = initial
+  have ambient {α : Type} (a : AmbientM α) :
+      Preserves P (monadLift a : WG.M α) := hoare_liftAmbient a P
+  have index {α : Type} (a : IndexM α) :
+      Preserves P (monadLift a : WG.M α) := by
+    apply hoare_liftIndex a
+    intro w d table h hd
+    change txPackets _ = initial
+    funext id
+    have point := congrFun h id
+    simpa [txPackets, hd] using point
+  have read : Preserves P (get : WG.M WGWorld) :=
+    hoare_consequence (hoare_get P) (fun _ h => h) (fun _ _ h => h.2)
+  have write (f : Device → Device) (hf : ∀ d, (f d).txSkbs = d.txSkbs) :
+      Preserves P (modifyDev f) := by
+    unfold modifyDev
+    apply hoare_modify
+    intro w h
+    change txPackets _ = initial
+    funext id
+    have point := congrFun h id
+    simpa [txPackets, Option.bind_map, Function.comp_def, hf] using point
+  change Preserves P (keypairPut key now)
+  unfold keypairPut getKeypair getDev setKeypair
+  simp only [branch, branchCmp, refcountDecAndTest, invariant, unsupported]
+  repeat' first
+    | (allocation_release_head IndexOwner.peerDeref
+       exact indexOwner_peerDeref_preserves _ P)
+    | (allocation_release_head modifyDev; apply write; intro; rfl)
+    | (allocation_release_lift_from IndexM; exact index _)
+    | (allocation_release_lift_from AmbientM; exact ambient _)
+    | allocation_release_step
+  all_goals first
+    | exact read
+    | (apply hoare_modify; intro w h; exact h)
 
 theorem peerPut_packets (peer : Option PeerId) : SameView txPackets (peerPut peer) := by
-  apply SameView.of_wp
-  intro s
-  have index_spec {α : Type} (a : IndexM α) :
-      Hoare (MonadLift.monadLift a : WG.M α) (fun w => txPackets w = s)
-        (fun _ w => txPackets w = s) := by
-    apply hoare_liftIndex
-    intro w d table hi hd
-    unfold txPackets at hi ⊢
-    simpa [hd] using hi
-  unfold Hoare at index_spec
+  intro initial
+  let P := fun w : WGWorld => txPackets w = initial
   have ambient {α : Type} (a : AmbientM α) :
-      Hoare (MonadLift.monadLift a : WG.M α) (fun w => txPackets w = s)
-        (fun _ w => txPackets w = s) := hoare_liftAmbient a _
-  unfold Hoare at ambient
-  mvcgen [-Std.Do.Spec.monadLift_StateT, peerPut, requireNotPending, index_spec, ambient,
-    getPeer, getDev, setPeer, modifyDev, retirePeerUnits, modifyAmbient,
-    refcountDecAndTest, branch, branchCmp, invariant, unsupported]
-  all_goals unfold txPackets at *
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [Option.bind_map, Function.comp_def]
-  all_goals subst_vars
-  all_goals simp_all
+      Preserves P (monadLift a : WG.M α) := hoare_liftAmbient a P
+  have index {α : Type} (a : IndexM α) :
+      Preserves P (monadLift a : WG.M α) := by
+    apply hoare_liftIndex a
+    intro w d table h hd
+    change txPackets _ = initial
+    funext id
+    have point := congrFun h id
+    simpa [txPackets, hd] using point
+  have read : Preserves P (get : WG.M WGWorld) :=
+    hoare_consequence (hoare_get P) (fun _ h => h) (fun _ _ h => h.2)
+  have write (f : Device → Device) (hf : ∀ d, (f d).txSkbs = d.txSkbs) :
+      Preserves P (modifyDev f) := by
+    unfold modifyDev
+    apply hoare_modify
+    intro w h
+    change txPackets _ = initial
+    funext id
+    have point := congrFun h id
+    simpa [txPackets, Option.bind_map, Function.comp_def, hf] using point
+  change Preserves P (peerPut peer)
+  unfold peerPut getPeer getDev setPeer
+  simp only [branch, branchCmp, refcountDecAndTest, invariant, unsupported, requireNotPending, retirePeerUnits, modifyAmbient]
+  repeat' first
+    | (allocation_release_head modifyDev; apply write; intro; rfl)
+    | (allocation_release_lift_from IndexM; exact index _)
+    | (allocation_release_lift_from AmbientM; exact ambient _)
+    | allocation_release_step
+  all_goals first
+    | exact read
+    | (apply hoare_modify; intro w h; exact h)
 
 theorem dispose_packets (pid : PeerId) (item : List SkbId) (key : KeypairId) :
     ⦃fun _ => ⌜True⌝⦄ disposeSource pid item key
@@ -124,7 +159,13 @@ theorem dispose_packets (pid : PeerId) (item : List SkbId) (key : KeypairId) :
   rw [he]
   have hk := (keyPut_packets (some key) false).wp (fun s => ∀ id ∈ item, s id = none)
   have hp := (peerPut_packets (some pid)).wp (fun s => ∀ id ∈ item, s id = none)
-  mvcgen [freeList_absent, hk, hp]
+  apply hoare_bind _ _ (freeList_absent item)
+  intro _
+  apply hoare_bind _ _ hk
+  intro _
+  apply hoare_bind _ _ hp
+  intro _
+  exact hoare_pure true _
 
 def cleanupSource (pid : PeerId) (item : List SkbId) (first : SkbId) : WG.M Unit := do
   keypairPut (some (← getTxSkb first).keypair) false
@@ -139,8 +180,12 @@ theorem cleanup_absent (pid : PeerId) (item : List SkbId) (first : SkbId) :
   have skb {α : Type} (a : SkbM α) :
       Hoare (liftSkb a) (fun _ => True) (fun _ _ => True) :=
     hoare_liftSkb a _ (fun _ _ _ _ _ => trivial)
-  unfold Hoare at skb
-  mvcgen [cleanupSource, freeList_absent, hk, hp, getTxSkb, skb]
+  unfold cleanupSource
+  apply hoare_bind _ _ (skb (SkbStore.getTx first))
+  intro packet
+  apply hoare_bind _ _ (hk packet.keypair)
+  intro _
+  exact hoare_bind _ _ hp (fun _ => freeList_absent item)
 
 
 def createTailSource (pid : PeerId) (item : List SkbId) (first : SkbId) (ret : Int) : WG.M Unit := do
@@ -171,15 +216,40 @@ theorem enqueue_full (pid : PeerId) (item : List SkbId) (q : PrevQueue (List Skb
     intro w d store hi hd
     unfold txQueues at hi ⊢
     simpa [PeerBorrow.resident, wgStoreView, hd] using hi
-  unfold Hoare at skb
-  mvcgen [enqueuePerDeviceAndPeer, setTxSkb, skb, getPeer, getDev,
-    modifyDev, setPeer, branch, invariant, AmbientM.branch, AmbientM.invariant]
-  all_goals unfold txQueues at *
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [wgStoreView, PeerBorrow.resident]
-  all_goals subst_vars
-  all_goals simp_all
-  all_goals omega
+  let P := fun w : WGWorld => txQueues w pid = some q
+  have getter : Hoare (getPeer pid) P (fun p w => p.txQueue = q ∧ P w) := by
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient p v ambient' hi hr
+    cases hd : w.dev with
+    | none =>
+      simp [getPeer, getDev, hd, invariant, AmbientM.invariant] at hr
+      cases hr
+    | some d =>
+      cases hp : d.peers[pid]? with
+      | none =>
+        simp [getPeer, getDev, hd, hp, invariant, AmbientM.invariant] at hr
+        cases hr
+      | some peer =>
+        simp [getPeer, getDev, hd, hp] at hr
+        rcases hr with ⟨⟨rfl, rfl⟩, rfl⟩
+        exact ⟨by simpa [P, txQueues, PeerBorrow.resident, wgStoreView, hd, hp] using hi, hi⟩
+  unfold enqueuePerDeviceAndPeer
+  cases item.head? with
+  | none =>
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient x v ambient' _ hr
+    cases hr
+  | some first =>
+    apply hoare_bind _ _ (skb (SkbStore.setTx first (fun p => {p with state := .uncrypted})))
+    intro _
+    apply hoare_bind _ _ getter
+    intro p
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient x v ambient' ⟨hqueue, hi⟩ hr
+    have full : decide (p.txQueue.count ≥ MAX_QUEUED_PACKETS) = true := by simpa [hqueue] using hfull
+    simp [branch, AmbientM.branch, full] at hr
+    rcases hr with ⟨⟨rfl, rfl⟩, rfl⟩
+    rfl
 
 /-- An actual full peer queue forces normal createData to finish direct cleanup.
 This proves packet absence only: its peer put can remove an unrelated old queue. -/
@@ -188,11 +258,60 @@ theorem create_noSpace (pid : PeerId) (item : List SkbId) (q : PrevQueue (List S
     ⦃fun w => ⌜∃ p, PeerBorrow.resident (wgStoreView w) pid = some p ∧
       p.isDead = false ∧ p.txQueue = q⌝⦄ createData pid item
     ⦃⇓? _ w => ⌜∀ id ∈ item, txPackets w id = none⌝⦄ := by
+  have getter : Hoare (getPeer pid)
+      (fun w => ∃ p, PeerBorrow.resident (wgStoreView w) pid = some p ∧
+        p.isDead = false ∧ p.txQueue = q)
+      (fun p w => p.isDead = false ∧ txQueues w pid = some q) := by
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient p v ambient' hi hr
+    cases hd : w.dev with
+    | none =>
+      simp [getPeer, getDev, hd, invariant, AmbientM.invariant] at hr
+      cases hr
+    | some d =>
+      cases hp : d.peers[pid]? with
+      | none =>
+        simp [getPeer, getDev, hd, hp, invariant, AmbientM.invariant] at hr
+        cases hr
+      | some peer =>
+        simp [getPeer, getDev, hd, hp] at hr
+        rcases hr with ⟨⟨rfl, rfl⟩, rfl⟩
+        obtain ⟨old, hold, alive, queue⟩ := hi
+        have he : old = peer := by
+          simpa [PeerBorrow.resident, wgStoreView, hd, hp] using hold.symm
+        subst old
+        exact ⟨alive, by simp [txQueues, PeerBorrow.resident, wgStoreView, hd, hp, queue]⟩
+  have branchRule {α : Type} (decision : Decision) (value : Bool)
+      (P : WGWorld → Prop) (Q : α → WGWorld → Prop) (f : Bool → WG.M α)
+      (hf : Hoare (f value) P Q) :
+      Hoare ((branch decision value : WG.M Bool) >>= f) P Q := by
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient x v ambient' hi hr
+    change ((f value).run w).run _ = .ok ((x, v), ambient') at hr
+    exact (hoare_iff_run_ambient _ _ _).mp hf _ _ _ _ _ hi hr
   rw [createSource_factor]
-  have he := enqueue_full pid item q hfull
-  mvcgen [createTailSource, he, cleanup_absent, getPeer, getDev, branch, invariant, AmbientM.branch, AmbientM.invariant]
-  all_goals unfold txQueues at *
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [wgStoreView, PeerBorrow.resident, WG.EPIPE, WG.ENOSPC]
+  cases item.head? with
+  | none =>
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient x v ambient' _ hr
+    cases hr
+  | some first =>
+    apply hoare_bind _ _ getter
+    intro peer
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient x v ambient' ⟨alive, queue⟩ hr
+    simp only [alive] at hr
+    apply (hoare_iff_run_ambient _ (fun w => txQueues w pid = some q) _).mp ?_
+      w ambient x v ambient' queue hr
+    apply branchRule .createDataDead false
+    simp only [Bool.false_eq_true, ↓reduceIte]
+    apply hoare_bind _ _ (enqueue_full pid item q hfull)
+    intro result
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient x v ambient' hresult hr
+    subst result
+    simp [createTailSource, branch, AmbientM.branch, WG.EPIPE, WG.ENOSPC] at hr
+    exact (hoare_iff_run_ambient _ _ _).mp (cleanup_absent pid item first)
+      _ _ _ _ _ trivial hr
 
 end Leanux.Proofs.WG.Queues.TxDisposition
