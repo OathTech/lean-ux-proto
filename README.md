@@ -51,11 +51,12 @@ each; the [scope table](#scope) below is its summary.
   controls and sentinel mutants.
 - **A proof tree:** theorems about the model, in `Leanux/Proofs/`, with their
   own build target and gate. The first result, replay freedom of WireGuard's
-  receive counter window, is current over the state split on this branch.
+  receive counter window, is current over the state split.
   The [register](docs/proofs.md#results) records the six campaign results and
-  their exact scope: R1, R2 and R3 have positive proofs; R5 and R6 include
-  counterexamples. R4 has initialized entry/completion and receipt-linkage
-  proofs and an order counterexample; initialized conservation remains open.
+  their exact scope: R1, R2 and R3 have positive proofs; R4 has initialized
+  ingress conservation proved, the C's first-in-first-out order up to GRO
+  proved within one poll, and a post-GRO order counterexample; R5 and R6
+  include counterexamples.
 - **A tray of kernel findings:** [docs/upstream-tray/](docs/upstream-tray/INDEX.md),
   reports on kernel behaviour that might concern its maintainers, drafted for
   future filing; reports only, no patches.
