@@ -2982,8 +2982,8 @@ probes 3–5 pass the combined candidate, exact split with six standard-only
 axiom roots, and standalone narrow Frames. The scoped build passes 364 jobs
 with only inherited Env:865 String.mk. The closure axiom audit checks 1,362
 logical roots in 300 modules, including 910 public theorem roots, standard
-only. Final fresh replay and independent review remain to be recorded before
-the commit checkpoint.
+only and without diagnostics. Fresh kernel replay passes. Independent source
+review finds no issue in the whole callback, all arm modes or variant scope.
 
 Current totals are 2,363 theorems in all 793 owned modules, 335 headlines.
 Static trust/import checks, original 258-name order and mirror/shared
