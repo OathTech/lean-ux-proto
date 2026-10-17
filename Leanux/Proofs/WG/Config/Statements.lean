@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Config.ReplacementMixedGetterClaims
 import Leanux.Proofs.WG.Config.ZeroPortMixedGetterClaims
 import Leanux.Proofs.WG.Config.NonzeroPortMixedGetterClaims
 import Leanux.Proofs.WG.Config.PortMixedGetterClaims
@@ -2347,5 +2348,50 @@ theorem original_zero_port_mixed_get_after_set (d : Device) (peers : PeerId → 
           CursorHeld postSet (mixedPagesDevice postSet pages) none) :=
   zero_port_mixed_get_after_set d peers nodes sock net residents readable ready headerFits
     fresh cursorData within idle emptyQueue
+
+/-- Actual empty allowed-IP replacement followed by complete mixed readback.
+All original peer occurrences remain, with every removed ID filtered from
+their lists. Only readable nonremoved dump nodes need a non-null owner.
+The normal-return setter derives its structural removal effect; the getter
+runs on that same successor, with its exact ordered cursor effects. -/
+theorem original_replacement_mixed_get_after_set (d : Device) (peers : PeerId → Peer)
+    (nodes : NodeId → AipNode) (key : Key) (pid : PeerId) (sock : NlSock)
+    (found : d.peerHashtable.find? (·.1 == key) = some (key,pid))
+    (resident : d.peers[pid]? = some (peers pid)) (pairs : NodePairs d)
+    (live : 0 < (peers pid).refcount) (bounded : (peers pid).refcount+1 < 2^31)
+    (down : d.running = false)
+    (residents : ∀ q ∈ d.peerList, d.peers[q]? = some (peers q))
+    (readable : ∀ q ∈ d.peerList, ∀ id ∈ (peers q).allowedipsList, d.nodes[id]? = some (nodes id))
+    (owned : ∀ q ∈ d.peerList, ∀ id ∈ (peers q).allowedipsList,
+      id ∉ (peers pid).allowedipsList → (nodes id).peer.isSome = true)
+    (idle : sock.cbRunning = false) (emptyQueue : sock.queue = []) :
+    let ids := (peers pid).allowedipsList
+    let baseline := replacementReadbackInputs d ids
+    let configured := fun q => erasePeerList ids (peers q)
+    ∀ ready : MixedPageReady baseline configured nodes (mixedInitialRows baseline configured) {hasWg := true},
+    devicePrefixSpace baseline ≤ NLMSG_GOODSIZE →
+    MixedPlanFresh baseline configured
+      (mixedPages baseline configured nodes (mixedInitialRows baseline configured) {hasWg := true} ready) →
+    MixedPlanCursorData baseline
+      (mixedPages baseline configured nodes (mixedInitialRows baseline configured) {hasWg := true} ready) →
+    mixedPageReceiveCount
+      (mixedPages baseline configured nodes (mixedInitialRows baseline configured) {hasWg := true} ready) ≤ 4096 →
+    Campaign2.Ensures (do
+      let ret ← wgSetDevice (replaceAllowedipsDeviceAttrs d key)
+      let dump ← wgGetDevice (byIndex d)
+      pure (ret,dump))
+      (fun s => s.wg.device = some d ∧ ClaimView.selectsDevice s d ∧ s.wg.nlSock7 = sock)
+      (fun result s =>
+        let pages := mixedPages baseline configured nodes (mixedInitialRows baseline configured) {hasWg := true} ready
+        result = (0,.ok (mixedGetterJson baseline configured nodes)) ∧
+        ∃ removed,
+          RemovalEffect (withPeer (requestGeneration d) pid
+            {peers pid with refcount := (peers pid).refcount+1}) ids removed ∧
+          let current := generalReplacementDevice removed pid (peers pid)
+          s.wg.device = some (mixedPagesDevice current pages) ∧
+          s.wg.nlSock7 = socketReadbackFinal sock current ∧
+          CursorHeld current (mixedPagesDevice current pages) none) :=
+  replacement_mixed_get_after_set d peers nodes key pid sock found resident pairs live bounded down
+    residents readable owned idle emptyQueue
 
 end Leanux.Proofs.WG.Config
