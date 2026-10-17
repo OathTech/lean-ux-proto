@@ -1,4 +1,4 @@
-import Leanux.Proofs.WG.Index.IndexFieldFrames
+import Leanux.Proofs.WG.Index.IndexOperationFrames
 
 set_option autoImplicit false
 set_option pp.structureInstances false
@@ -6,41 +6,6 @@ set_option maxHeartbeats 800000
 
 namespace Leanux.Proofs.WG.Index
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise Leanux.Proofs.WG.Config Std.Do
-
-theorem indexRemove_indices_spec (owner : IndexOwner) :
-    ⦃fun w => ⌜IndicesSafe w⌝⦄ indexRemove owner ⦃⇓? _ w => ⌜IndicesSafe w⌝⦄ := by
-  apply (ensures_iff _ _ _).mp
-  intro w result final pre run
-  obtain ⟨d, device, unique⟩ := pre
-  obtain ⟨r, v, hr, hd⟩ := indexRemove_exact owner d w device
-  rw [run] at hr
-  cases hr
-  exact ⟨_, hd, remove_indices owner _ unique⟩
-
-theorem indexInsert_indices_spec (owner : IndexOwner) :
-    ⦃fun w => ⌜IndicesSafe w⌝⦄ indexInsert owner ⦃⇓? _ w => ⌜IndicesSafe w⌝⦄ := by
-  apply (ensures_iff _ _ _).mp
-  intro w result final pre run
-  obtain ⟨d, device, unique⟩ := pre
-  obtain ⟨hd, fresh⟩ := indexInsert_exact owner d w result final device run
-  refine ⟨_, hd, insert_indices owner result _ unique ?_⟩
-  intro e member
-  have absent := List.any_eq_false.mp fresh e member
-  have different : e.index ≠ result := by simpa using absent
-  exact Ne.symm different
-
-theorem indexReplace_indices_spec (pid : PeerId) (kp : KeypairId) :
-    ⦃fun w => ⌜IndicesSafe w⌝⦄ indexReplaceHandshake pid kp ⦃⇓? _ w => ⌜IndicesSafe w⌝⦄ := by
-  apply (ensures_iff _ _ _).mp
-  intro w result final pre run
-  obtain ⟨d, device, unique⟩ := pre
-  obtain ⟨r, v, hr, value, hd⟩ := indexReplace_exact pid kp d w device
-  rw [run] at hr
-  cases hr
-  refine ⟨_, hd, ?_⟩
-  cases result
-  · exact unique
-  · exact replace_indices pid kp _ unique
 
 theorem keypairPut_indices_spec (kp : Option KeypairId) (now : Bool) :
     ⦃fun w => ⌜IndicesSafe w⌝⦄ keypairPut kp now ⦃⇓? _ w => ⌜IndicesSafe w⌝⦄ := by

@@ -1,13 +1,8 @@
 import Leanux.Proofs.WG.TimerDiscipline.ObservationBridge
+import Leanux.Proofs.WG.TimerDiscipline.JitterBoundClaims
 
 namespace Leanux.Proofs.WG.TimerDiscipline
 open Leanux Leanux.WG Campaign2
-
-/-- Jitter preserves the WG core; the concrete residual frame is in SourceClaims. -/
-theorem projected_jitter_bound (site : HiddenSite) (initial : Core) :
-    Campaign2.Ensures (jitterBelowRekeyTimeout site) (fun s => s.wg.toCore = initial)
-      (fun n s => s.wg.toCore = initial ∧ n < HZ / 3) := by
-  exact (Noise.ensures_iff _ _ _).mpr (jitter_bounded (fun k => core k = initial) site)
 
 theorem projected_jitter_records (site : JitterSite) (rejected : List UInt8) (accepted : UInt8)
     (rest : List HiddenRecord) (bad : ∀ byte ∈ rejected, ¬jitterAccepted byte)

@@ -20,11 +20,11 @@ and attributed theorem declarations. Campaign 2 owns 427 Lean files,
 | --- | ---: | ---: | ---: | --- |
 | Common projection | 2 | 0 | 0 | Native and product observations carried |
 | H1 Noise | 35 | 171 | 22 | Native access, crypto/slot/peer frames, slot/clear/zero operations and all four state-edge contracts carried; six type-given frames deleted; full caller/reachability closure pending |
-| H2 Index | 68 | 318 | 52 | Table/scans/insertion, full lookup/miss and success/empty-result inversion, exact allocation, ten projected table claims, all ten record contracts, exact draw exhaustion/corpus pair, five lifecycle contracts and 55 pure theorems checked; native receive factor and retirement frame carried; seven Ambient frames deleted; whole terminal closure/callers pending |
+| H2 Index | 68 | 318 | 52 | Table/scans/insertion, full lookup/miss and success/empty-result inversion, exact allocation/release, eight native numeric-index frames, ten projected table claims, all ten record contracts, exact draw exhaustion/corpus pair, five lifecycle contracts and 55 pure theorems checked; native receive factor and retirement frame carried; seven Ambient frames deleted; whole terminal closure/callers pending |
 | H3 Roaming | 35 | 119 | 13 | Six native endpoint/destination contracts carried; two Ambient frames deleted; authentication callers and product callbacks pending |
-| H4 Configuration | 130 | 554 | 79 | Total-return/branch laws, four exact source factors, three endpoint-clearing frames, three empty-root insertion contracts, total first placement, validation, concrete dump cancellation and one pure theorem checked; three Ambient frames deleted; remaining effects/readback carry pending |
+| H4 Configuration | 130 | 554 | 79 | Total-return/branch laws, four exact source factors, three endpoint-clearing frames, three empty-root insertion contracts, total first placement, validation/identity, partial and total empty-list peer dumps, ordered allowed-list deletion, concrete dump cancellation and pure transfer consequences checked; three Ambient frames deleted; remaining effects/readback carry pending |
 | H5 Progress | 59 | 265 | 42 | Twenty-nine pure/control or pure-source theorems, three generalized worker control contracts and one Ambient record frame and seven exact cut-source/projected contracts checked; two pointer-ring snapshot contracts and remaining operational carry pending |
-| H6 Timer discipline | 98 | 404 | 50 | Two pure session-liveness relations, map/guard base, two current wheel effects, separated jitter bound/frame and a checked stale-statement counterexample; three Ambient frames deleted; seven exact-peer arming claims and wider timer/worker semantics pending |
+| H6 Timer discipline | 98 | 404 | 50 | Two pure session-liveness relations, map/guard base, two current wheel effects, separated jitter bound/frame and two projected bound claims, plus a checked stale-statement counterexample; three Ambient frames deleted; seven exact-peer arming claims and wider timer/worker semantics pending |
 
 Retyped, deleted and retained counts will be reported per validated tranche.
 All six results remain lagging, with their previous charter gaps unchanged.
@@ -830,3 +830,85 @@ on `Index.TableClaims`, `Index.Allocation`, `Index.LookupProvenanceSource`,
 `Index.LookupNoneSource`, `Config.Validation`, `Config.DumpCancellation`,
 `Progress.CutSource`, `Progress.CutClaims`, `TimerDiscipline.ArmingWheelSource`
 and `TimerDiscipline.JitterFrames`, each under `Leanux.Proofs.WG`.
+
+## Native serialization, release and within-WireGuard frames
+
+| Tranche | Before | Retyped/generalized | Deleted | Kept | Added | After |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `Config.PeerDump`, `DumpReturns`, `Identity` | 8 | 8 | 0 | 0 | 0 | 8 |
+| `Config.AllowedLists`, `AllowedListView`, `AllowedListFrames`, `AllowedTransferModel` | 12 | 5 | 0 | 7 | 0 | 12 |
+| `Index.Release`, `IndexFieldFrames`, `IndexOperationFrames` | 9 | 9 | 0 | 0 | 0 | 9 |
+| `TimerDiscipline.JitterBoundClaims` | 2 | 2 | 0 | 0 | 0 | 2 |
+| This tranche | 31 | 24 | 0 | 7 | 0 | 31 |
+| Cumulative validated surface | 290 | 156 | 21 | 113 | 22 | 291 |
+
+The tree has 444 campaign-owned files and 1,832 theorem declarations;
+1,541 baseline declarations still await validation. The checked closure now
+has 121 proof modules: H1 49 theorems, H2 141, H3 6, H4 43, H5 40 and H6 12.
+All six full result closures and all 258 terminal declarations remain lagging.
+No new charter result or type-given deletion is claimed in this tranche.
+
+H4 carries the partial and total peer-dump contracts separately. The exact
+room/JSON/cursor result retains the original empty allowed-IP list, fresh
+cursor and 168-byte room premises, with arbitrary endpoint families and
+Ambient inputs. Totality excludes the actual error paths before reusing the
+partial effect. Identity updates retain the null-secret/public-key behavior,
+clamping and selected-peer precomputation; no empty-peer-list premise replaces
+the original pure pending-work check.
+
+Allowed-list deletion remains an exact ordered fold over arbitrary supplied
+peer records; it does not assume unique entries or current residency for that
+helper. Public deletion snapshots the original peer map once. The per-peer
+view retains its explicit original-store snapshot hypothesis, including repeated
+identities. The unused Fwmark import is removed. Three pure Device frames and
+the transfer model consequence are unchanged; this does not yet carry the
+executable transfer path.
+
+H2's keypair release keeps totality with only the original resident keypair,
+positive count and non-NULL peer word premises. It retains optional first
+unhash, decrement, second unhash on last release, and erase, with the actual
+ordered Ambient trace. Referenced-peer residency is not added. The five
+`IndexFieldFrames` and three extracted `IndexOperationFrames` preserve numeric
+uniqueness inside WGWorld and remain substantive frames. The latter are removed
+from `HandshakeClaims`; its five other contracts remain unchanged and pending.
+
+H6's two bound claims are extracted into `JitterBoundClaims` from
+`ObservationClaims` and `SourceFrames`, which retain fourteen and two pending
+contracts respectively. The public Core bound is unchanged. The source bound
+states the stronger full WG observation, universally quantified over its initial
+projection without new readiness, device or record assumptions. Whole-snapshot
+record contracts and arbitrary product-callback observations still require their
+Product carry. The removed `Env.fireTimer` path additionally needs the actual
+wheel dispatcher relation; it cannot be restored by monad retyping alone.
+
+New claim file: `TimerDiscipline/JitterBoundClaims`. New frame file:
+`Index/IndexOperationFrames`; `IndexFieldFrames` and `AllowedListFrames` remain
+frames. No public headline name moves out of a `Statements.lean` file.
+
+Scoped builds pass without warnings: peer dumps 44 jobs, total dumps 45,
+identity 30, keypair release 42, index field frames 53, index operation frames
+54, projected jitter bounds 32, allowed-list source 46, list frames 47 and
+list view/transfer model 50. Axiom inspection covers 172, 174 and 207 named
+logical roots in the three groups, with only the three permitted axioms.
+Fresh kernel replay passes for all eight roots. The retained gate's token/import
+checks and the whitespace check pass.
+Independent reviews found no correctness issue; mirror/shared layers remain
+unchanged. No full terminal or full proof-gate pass is claimed.
+
+Development: peer-dump drafts had one warning-bearing pass, two failures and
+a clean pass; total dumps had six failures then a clean pass. Identity had one
+failed draft then a clean pass. Keypair release had one agent failure then a
+clean pass, following the three root failures recorded in the prior tranche.
+Index field frames and projected jitter bounds passed first time. The three
+index-operation frames passed their first draft; a separate extension into
+pending release/caller frames failed and is excluded from this checkpoint.
+Allowed-list source had one failure then a clean pass; its view had a pass with
+unused/deprecated simp warnings, then a clean pass. All package builds passed
+first time. No infrastructure rerun, cap change or guest run occurred; complete
+output was captured before preview.
+
+Reproduce scoped builds and fresh replay using the capped bundle commands above
+on `Config.PeerDump`, `Config.DumpReturns`, `Config.Identity`,
+`Config.AllowedTransferModel`, `Index.Release`, `Index.IndexFieldFrames`,
+`Index.IndexOperationFrames` and `TimerDiscipline.JitterBoundClaims`, each under
+`Leanux.Proofs.WG`.

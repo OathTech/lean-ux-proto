@@ -1,6 +1,5 @@
 import Leanux.Proofs.WG.Config.AllowedListFrames
 import Leanux.Proofs.WG.Config.AllowedLists
-import Leanux.Proofs.WG.Config.Fwmark
 
 set_option pp.structureInstances false
 set_option autoImplicit false
@@ -28,14 +27,14 @@ theorem deleteListedNode_view (id : NodeId) (initial current : Device) (seen : L
         simp [eraseListedPeer, listRemove, List.filter_bne_eq_self_of_not_mem absent]
       by_cases same : q = pid
       · subst q
-        simp [deleteListedNode, contains, absent, view pid, resident, unchanged]
-      · simp [deleteListedNode, contains, absent, view q, same]
+        simp [deleteListedNode, absent, view pid, resident, unchanged]
+      · simp [deleteListedNode, absent, view q, same]
   | true =>
       have present : id ∈ p.allowedipsList := by simpa using contains
       by_cases same : q = pid
       · subst q
-        simp [deleteListedNode, contains, present, resident, eraseListedPeer]
-      · simp [deleteListedNode, contains, present, Std.TreeMap.getElem?_insert, Ne.symm same, same, view q]
+        simp [deleteListedNode, present, resident, eraseListedPeer]
+      · simp [deleteListedNode, present, Std.TreeMap.getElem?_insert, Ne.symm same, same, view q]
 
 theorem deleteListedNodes_view (id : NodeId) (initial current : Device) (seen : List PeerId)
     (entries : List (PeerId × Peer))
@@ -68,15 +67,15 @@ theorem deleteListedNodes_lookup (id : NodeId) (d : Device) (q : PeerId) :
       have member : (q, p) ∈ d.peers.toList :=
         Std.TreeMap.mem_toList_iff_getElem?_eq_some.mpr found
       have seen : q ∈ d.peers.toList.map Prod.fst := List.mem_map.mpr ⟨(q, p), member, rfl⟩
-      simpa only [if_pos seen, found, Option.map_some] using hq
+      simpa only [ite_eq_left seen, found, Option.map_some] using hq
 
 theorem listDel_peer_lists (id : NodeId) (d : Device) :
-    Returns (listDel id) (fun w => w.k.wg = some d)
-      (fun _ w => ∃ final, w.k.wg = some final ∧
+    Returns (listDel id) (fun w => w.dev = some d)
+      (fun _ w => ∃ final, w.dev = some final ∧
         ∀ q : PeerId, final.peers[q]? = d.peers[q]?.map (eraseListedPeer id)) := by
-  intro w h
-  obtain ⟨result, final, run, post⟩ := listDel_returns id d w h
-  exact ⟨result, final, run, deleteListedNodes id d d.peers.toList, post,
+  intro w ambient h
+  obtain ⟨result, final, after, run, post⟩ := listDel_returns id d w ambient h
+  exact ⟨result, final, after, run, deleteListedNodes id d d.peers.toList, post,
     deleteListedNodes_lookup id d⟩
 
 end Leanux.Proofs.WG.Config

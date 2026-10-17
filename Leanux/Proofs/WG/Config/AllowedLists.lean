@@ -7,7 +7,7 @@ set_option maxHeartbeats 800000
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise Lean Std.Do
 
-def listDelEntries (id : NodeId) (entries : List (PeerId × Peer)) : M Unit := do
+def listDelEntries (id : NodeId) (entries : List (PeerId × Peer)) : WG.M Unit := do
   for (pid, p) in entries do
     if p.allowedipsList.contains id then
       setPeer pid { p with allowedipsList := listRemove p.allowedipsList id }
@@ -29,42 +29,47 @@ theorem listDelEntries_cons (id : NodeId) (pid : PeerId) (p : Peer) (rest : List
       if p.allowedipsList.contains id then
         setPeer pid { p with allowedipsList := listRemove p.allowedipsList id }
       listDelEntries id rest) := by
-  simp [listDelEntries, List.forIn_cons, bind_assoc]
-  split <;> simp [bind_assoc]
+  simp [listDelEntries, List.forIn_cons]
+  split <;> simp
 
 theorem listDelEntries_returns (id : NodeId) (entries : List (PeerId × Peer)) (d : Device) :
-    Returns (listDelEntries id entries) (fun w => w.k.wg = some d)
-      (fun _ w => w.k.wg = some (deleteListedNodes id d entries)) := by
+    Returns (listDelEntries id entries) (fun w => w.dev = some d)
+      (fun _ w => w.dev = some (deleteListedNodes id d entries)) := by
   induction entries generalizing d with
   | nil =>
-      rw [returns_iff]
-      simp [listDelEntries, deleteListedNodes]
-      mvcgen
+    intro g ambient device
+    exact ⟨(), g, ambient, rfl, device⟩
   | cons entry rest ih =>
-      obtain ⟨pid, p⟩ := entry
-      have ht := fun next => (returns_iff _ _ _).mp (ih next)
-      rw [returns_iff]
-      rw [listDelEntries_cons]
-      mvcgen [setPeer, modifyDev, modifyK, ht]
-      all_goals try dsimp +zetaDelta only at *
-      all_goals repeat intro
-      all_goals simp_all [deleteListedNodes, deleteListedNode]
-      all_goals subst_vars
-      all_goals exact ht _ _ (by assumption)
+    obtain ⟨pid, p⟩ := entry
+    intro g ambient device
+    by_cases listed : id ∈ p.allowedipsList
+    · let next := deleteListedNode id d (pid, p)
+      obtain ⟨result, final, after, run, effect⟩ :=
+        ih next {g with dev := some next} ambient rfl
+      refine ⟨result, final, after, ?_, ?_⟩
+      · rw [listDelEntries_cons]
+        simpa [listed, setPeer, modifyDev, device, next, deleteListedNode] using run
+      · simpa [deleteListedNodes, next] using effect
+    · obtain ⟨result, final, after, run, effect⟩ := ih d g ambient device
+      refine ⟨result, final, after, ?_, ?_⟩
+      · rw [listDelEntries_cons]
+        simpa [listed] using run
+      · simpa [deleteListedNodes, deleteListedNode, listed] using effect
 
 theorem listDel_returns (id : NodeId) (d : Device) :
-    Returns (listDel id) (fun w => w.k.wg = some d)
-      (fun _ w => w.k.wg = some (deleteListedNodes id d d.peers.toList)) := by
-  have hg : Returns getDev (fun w => w.k.wg = some d)
-      (fun result w => result = d ∧ w.k.wg = some d) := by
-    rw [returns_iff]
-    mvcgen [getDev, getK, invariant]
-    all_goals simp_all
+    Returns (listDel id) (fun w => w.dev = some d)
+      (fun _ w => w.dev = some (deleteListedNodes id d d.peers.toList)) := by
+  have hg : Returns getDev (fun w => w.dev = some d)
+      (fun result w => result = d ∧ w.dev = some d) := by
+    intro g ambient device
+    refine ⟨d, g, ambient, ?_, rfl, device⟩
+    simp [getDev, device]
+    rfl
   rw [listDel_source]
   apply returns_bind _ _ hg
-  intro result w h
+  intro result w ambient h
   obtain ⟨heq, hd⟩ := h
   subst result
-  exact listDelEntries_returns id d.peers.toList d w hd
+  exact listDelEntries_returns id d.peers.toList d w ambient hd
 
 end Leanux.Proofs.WG.Config
