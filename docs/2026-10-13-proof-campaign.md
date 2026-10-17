@@ -175,9 +175,19 @@ are proved; initialized transmit caller closure remains open. All preceding
 The [short report](2026-10-17-r3-transmit-source.md) records the corrected
 routing premise, scoped failures, independent reviews and remaining joins.
 
+The [initialized outgoing closure](2026-10-17-r3-initialized-transmit.md)
+adds 31 modules and 409 theorems: 662 files/9,159 theorems, 665 terminal
+declarations and 289 R3 exports. All 277 preceding R3 terminal bodies remain
+unchanged. Every actual committed transmit caller now reaches the native
+handoff observer, with strict-prefix routing and exact old RX/executable
+projection through the initialized runner. Parsed traces discharge address
+shape; both flags and indexed-Stop prefixes are included. Together with the
+trie and incoming results, this completes R3. Gate720/665 passes in 7.759s;
+fresh kernel replay passes in 105.8 seconds with no warnings. R4 conservation remains open.
+
 The pre-split checkpoint validated every baseline result surface over
-`cb2348e`. Initialized R3 packet authorization and R4 receive-pipeline
-conservation remain open. Earlier positive results and runtime findings retain
+`cb2348e`. R3 packet authorization is now closed over the current split tree;
+R4 receive-pipeline conservation remains open. Earlier positive results and runtime findings retain
 their scope below; the [register](proofs.md#results) gives the authoritative
 pins and status. No main integration, push, differential check or guest run
 was made by this campaign.
@@ -186,7 +196,7 @@ was made by this campaign.
 | --- | --- |
 | R1 | Replay uniqueness proved; inclusive-floor correction witnessed. |
 | R2 | Initialized allocation-identity access safety proved, including failures/trials; affiliation/credits separate. |
-| R3 | Initialized routing, material support and captured current/owner checks; initialized incoming authorization, strict-prefix configured publication certificates and actual consumed-position routing; initialized transmit handoff open. |
+| R3 | Trie history refinement and initialized incoming/outgoing cryptokey routing proved for shaped typed traces, including parsed traces and stopped prefixes. |
 | R4 | Initialized entry/completion uniqueness and packet/receipt linkage; chronology refuted; receive-pipeline conservation open. |
 | R5 | Accepted age/post-zero/wire-nonce counterexamples; thirteen positive local contracts. |
 | R6 | Cookie exclusion proved; literal MAX=18 refuted, without a replacement universal bound. |
@@ -400,18 +410,21 @@ under the then-serial plan; both exits were collected.
 altitude-preserving, separately validated. (2) Keep named allocation/deletion/same-object updates: altitude-preserving.
 No production history field.
 
-## R3 — cryptokey routing (in progress)
+## R3 — cryptokey routing
 
 **Original versus proved.** [Terminal contracts](../Leanux/Proofs/WG/CryptokeyRouting/Statements.lean) establish
-trie/configuration refinement and parsed initialized completion history, not full RX/TX identity binding. Public parsing
-supplies address shape required for failed-history validity and normal endpoint agreement. Unconditional erasure covers
-all typed traces/both placeholder settings. No R3 Rule Zero counterexample is asserted.
+trie/configuration refinement and both initialized packet-routing halves. Incoming Stack entries carry their
+strict-prefix source winner and configured publication certificate; outgoing completed handoffs carry their
+destination winner at the actual front entry. Public parsing supplies configuration address shape. Both
+placeholder settings and indexed-Stop prefixes are included. Unconditional executable erasure covers all
+typed traces. The [outgoing report](2026-10-17-r3-initialized-transmit.md) records complete caller coverage
+and its precise selected-occurrence theorem boundary. No R3 Rule Zero counterexample is asserted.
 
 **Configured source cuts (validated).**
 [ConfiguredIdentity](../Leanux/Proofs/WG/Peers/ConfiguredIdentity.lean) follows original table insertion,
 lookup acquisition, list unlink/table filtering/dead setter, retirement and fresh owner store-back, including
 aliasing and NULL. Its supplied invariant permits stale rows and dead residents. Concrete configuration/removal caller closure and initialized captured current/owner
-checks now hold; full packet authorization remains separate.
+checks now hold; the initialized joins above complete packet authorization.
 [ConfiguredSession](../Leanux/Proofs/WG/Origins/ConfiguredSession.lean) couples the same actual front
 RunWitness/Context, material/stamp/epoch, owner and configured entry row; actual whole normal session
 completion supplies live/self facts before support is retained through the tail. A stopped tail retains the old
@@ -426,7 +439,8 @@ publication to actual normal consumption. Whole-call packet transport now holds 
 the original initialized runner for all typed traces and both flags, including stopped
 prefixes. The contemporaneous initialized lookup/Stack join is now proved for
 all shaped typed traces, with shape supplied by successful public parsing.
-Initialized transmit handoff authorization remains open. No Noise authenticity is claimed.
+Initialized transmit handoff authorization is also proved through the concrete
+caller chain; no later wire-send guarantee or Noise authenticity is claimed.
 
 **Architecture.** The [map](proofs.md#layers) details these refinements:
 

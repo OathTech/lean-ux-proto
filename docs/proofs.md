@@ -15,9 +15,9 @@ the register of its results.
 The campaign's complete proof tree is current over `b3f56807`, whose executable
 mirror is identical to split landing `b700659` (the `6089dc4` split). All seven
 result rows pass the complete proof gate and fresh root kernel replay. The
-nondefault proof target and gate remain on this branch. Initialized R3 transmit
-authorization and R4 receive-pipeline conservation remain open; current status
-covers the carried statements and does not claim those extensions.
+nondefault proof target and gate remain on this branch. R3 now includes initialized
+incoming and outgoing authorization. R4 receive-pipeline conservation remains
+open; its carried statements and chronological GRO-order finding remain current.
 
 The validated baseline `00641c6` has 471 Lean files and 7,715 named theorems.
 The validated retrofit checkpoint has 452 files and 6,564 theorems: 3,197 retyped/generalized,
@@ -60,13 +60,14 @@ The [current-identity extension](2026-10-17-r3-current-identity.md),
 [initialized-owner extension](2026-10-17-r3-initialized-owner.md),
 [consume-entry extension](2026-10-17-r3-consume-entries.md),
 [publication-closure extension](2026-10-17-r3-publication-closure.md),
-[initialized incoming extension](2026-10-17-r3-initialized-authorization.md) and
-[transmit source extension](2026-10-17-r3-transmit-source.md) add
-179 modules and 2,186 theorems after the retrofit: 631 proof files and 8,750
-theorems. The latest fourteen exports preserve all 263 preceding R3 terminal
-bodies; R3 has 277 and the full terminal surface has 653 declarations.
-The proof gate passes 689 build jobs and 653 terminal declarations in 7.342
-seconds. Fresh kernel replay passes in 105.441 seconds without warnings.
+[initialized incoming extension](2026-10-17-r3-initialized-authorization.md),
+[transmit source extension](2026-10-17-r3-transmit-source.md) and
+[initialized transmit closure](2026-10-17-r3-initialized-transmit.md) add
+210 modules and 2,595 theorems after the retrofit: 662 proof files and 9,159
+theorems. The latest twelve exports preserve all 277 preceding R3 terminal
+bodies; R3 has 289 and the full terminal surface has 665 declarations.
+The proof gate passes 720 build jobs and 665 terminal declarations in 7.759
+seconds. Fresh kernel replay passes in 105.8 seconds with no warnings.
 The executable mirror and pin remain b3f56807.
 
 Native maintenance, receive, peer/device lifecycle and the actual stack
@@ -106,9 +107,12 @@ actual buffer, consume and decrypt positions. The initialized runner now
 supplies routing checks at that consume position. Public parsing discharges
 its address-shape premise. Thus every selected actual Stack entry has its
 strict-prefix source winner and the same configured publication certificate,
-including entries before a later Stop. Local transmit authorization now covers
-a completed staged splice followed by a stopped tail; initialized transmit
-handoff authorization remains open.
+including entries before a later Stop. Initialized outgoing authorization now
+covers every selected completed staging handoff at its own routing prefix,
+through direct, batch and Stack-reply callers, including stopped tails. The
+concrete NAPI, crypt workers, scheduler, deferred work and syscall continuations
+are connected to the original initialized runner. Public parsing supplies the
+configuration shape premise; exact erasure retains JSON and indexed Stops.
 
 ## Layers
 
@@ -680,8 +684,9 @@ original checkpoints. The current mirror/toolchain carry status is in
   identity at successful pre-IRQ publication; the original historical certificate follows
   by projection. Initialized current/owner and packet publication transport now
   hold through all concrete callers. Initialized routing now closes the incoming
-  Stack-entry join. Initialized transmit handoff authorization remains open.
-  `WG/CryptokeyRouting/` exports these components of campaign R3.
+  Stack-entry join. `Packets/InitializedTransmit` closes outgoing handoff
+  authorization through the actual callback chain and initialized runner.
+  `WG/CryptokeyRouting/` exports both path halves and the trie result.
   `RemovalSource` retains the original saved-list loop and both continues by an
   all-input equation while importing only the original AllowedIps module.
   `RemovalMirror` proves total exact binary and root-tagged leaf/unary iterations;
@@ -962,7 +967,7 @@ ReplayWindow. The conventions that keep proof work cheap are in
 | Receive counter window: replay freedom (S1, S2, S3) | S1: every accepted execution has its exact acceptance history, and no two events share an allocation lifetime and a wire counter. S2: `counterValidate` returns exactly what receive.c's rule returns and leaves exactly its replay state. S3: every non-receive syscall and every validator call leave every other keypair's window unchanged, per call and for whole syscalls including the runner's ambient step. | `Leanux/Proofs/WG/ReplayWindow/` (`Statements.lean`, 15 terminal declarations; `Counterexamples.lean`) | [charter](2026-10-12-charter-window-proof.md) | [independent review, two parts](2026-10-12-spike-window-review.md); the spike's [report](2026-10-13-spike-window.md) and [self-review](2026-10-13-spike-window-self-review.md) | b3f56807 | current: split carry validated |
 | R1: anti-replay uniqueness and inclusive floor | No wire counter is accepted twice in one allocation lifetime; every accepted counter is at or above the inclusive lower edge, for pure runs, original validator calls and accepted runner histories. Equality at the charter's floor is intentionally permitted, with a concrete recorded replay. | `Leanux/Proofs/WG/AntiReplay/` (`Statements.lean`, 9 terminal theorems) | [campaign charter](2026-10-13-charter-proof-campaign.md) | [campaign report](2026-10-13-proof-campaign.md#r1--anti-replay-uniqueness-and-the-inclusive-floor) | b3f56807 | current: split carry validated |
 | R2: initialized lifetime safety | For every typed Runner trace and both placeholder settings, committed peer/keypair/packet access histories are safe from release-before-access, including failed prefixes. Every actual reached consistency-filter entry is allocation-valid and supplies exact ordered filter correspondence and safe isolated copied-trial histories. The observer preserves exact original JSON or indexed Stop without parser, array-length, progress or success premises. Original local contracts and endpoint identity refinements remain available. Historical stale-cursor inputs retargeted replacement identities; their current full recipes reject at operation 3 under the pending-dump guard. Raw-reference affiliation/credit is a separate stronger property. | `Leanux/Proofs/WG/LifetimeSafety/` (`Statements.lean`, 202 terminal theorems) | [campaign charter](2026-10-13-charter-proof-campaign.md) | [campaign report](2026-10-13-proof-campaign.md#r2--lifetime-identity-and-retained-references) | b3f56807 | current: split carry validated |
-| R3: initialized incoming authorization and routing; outgoing initialization open | Trie lookup agrees with the independent flat longest-prefix history for both families, including insertion, removal and lifecycle cleanup. The actual initialized joint runner retains exact RX and routing projections, the public JSON outcome and indexed Stops. All typed traces and both flags derive current/owner checks and strict-prefix publication certificates; positional routing retains address shape, discharged by successful public parsing. Each selected actual Stack entry links to its earlier buffer, consume and decrypt/publication occurrences in that same journal. Its source winner is the consuming peer at the consume prefix, with one configured session/material/current-peer publication witness. No final-state or packet-authorization premise is supplied. The native outgoing observer records each completed staged splice, retains it through a stopped send/payment tail, and projects exactly to the old joint journal. Positional checks prove the destination winner at that same front entry. Actual direct/batch/Stack/GRO/poll source factors and concrete Stack routing transport are proved. Connecting every initialized direct, batch and Stack-reply handoff to its reached routing state remains open. No Noise authenticity or later wire-send property is claimed. The extension passes independent review, the proof gate and fresh kernel replay; full R3 is not yet complete. | `Leanux/Proofs/WG/CryptokeyRouting/` (`Statements.lean`, 277 terminal theorems) | [campaign charter](2026-10-13-charter-proof-campaign.md) | [incoming report](2026-10-17-r3-initialized-authorization.md), [transmit source report](2026-10-17-r3-transmit-source.md), [campaign report](2026-10-13-proof-campaign.md#r3--cryptokey-routing-in-progress) | b3f56807 | current: split carry and initialized incoming extension validated |
+| R3: cryptokey routing | Trie lookup agrees with the independent flat longest-prefix history for both families, including insertion, removal and lifecycle cleanup. Each initialized Stack entry links to its earlier buffer, consume and configured decrypt/publication occurrences, and its source winner is the consuming peer at that consume prefix. Each initialized outgoing handoff selects the longest-prefix owner of every supplied packet’s destination at its captured native front entry. Actual direct, batch and Stack-reply callers, NAPI, crypt workers, scheduler, timers and syscall continuations are connected. Public parsing discharges configuration address shape; both placeholder settings and prefixes preceding indexed Stops are included. Exact executable erasure and complete old RX-journal projection hold for arbitrary incoming histories. No final-state authorization premise, Noise authenticity or later wire-send property is claimed. Complete caller coverage uses checked source factors and reviewed wiring; selected-occurrence authorization is kernel-proved. | `Leanux/Proofs/WG/CryptokeyRouting/` (`Statements.lean`, 289 terminal theorems) | [campaign charter](2026-10-13-charter-proof-campaign.md) | [incoming report](2026-10-17-r3-initialized-authorization.md), [outgoing report](2026-10-17-r3-initialized-transmit.md), [campaign report](2026-10-13-proof-campaign.md#r3--cryptokey-routing) | b3f56807 | current: trie and both initialized path halves validated |
 | R4 components and GRO order finding | Initialized entries/completions and packet/receipt linkage remain proved, including Stops. Local normal Stack/poll preserve supplied funded carrier ledgers and nullable key compatibility; fresh poll removals join named dispositions. New whole normal consumeData conservation joins the exact admission receipt, allocation, enqueue and finish: success/EPIPE retain the queued carrier, ENOSPC repays and frees it. Stable RX preserves logical uncrypted-ring correspondence and cold-head readiness; physical ring-empty plus NAPI-cold implies empty RX inventory/store, including size zero. Initialized ingress/decrypt-worker/lifecycle/work conservation remains open. The split carry withdraws the false selected-cleanup totality compound, preserves its supported cuts, and separately exports the checked local queued-peer counterexample and successful-cleanup contract. Chronological GRO order is refuted; Stack return is not inbox arrival. The extension passes independent review, the proof gate, fresh kernel replay and fast-tier validation. | `Leanux/Proofs/WG/DeliveryOrder/` (`Statements.lean`, 131 terminal theorems; `ReplayGro.lean`) | [campaign charter](2026-10-13-charter-proof-campaign.md) | [campaign report](2026-10-13-proof-campaign.md#r4--queue-poll-and-delivery-order-components-in-progress) | b3f56807 | current: split carry validated |
 | R5: key lifetime enforcement; Rule Zero findings | Thirteen local theorems identify exact original clock tests, RX AEAD admission and failed-tag coverage, accepted-wire-nonce bounds, TX staging certificates, zero-timer store framing and timer-pass erasure. Accepted original/observed replays authenticate nonce R+1 before rejection and encrypt queued transport keepalives after recorded expiry or zero/clear before a new handshake, using the same packet-held material. New time inputs have coherent coarse/jiffies/arm arithmetic, without a Linux schedule claim. The original unconditional statement is false; universal replacement transport theorems are not claimed. | `Leanux/Proofs/WG/KeyLifetime/` (`Statements.lean`, 13 terminal theorems; `Replay.lean`, `ReplayDelayed.lean`, `ReplayPostClear.lean`) | [campaign charter](2026-10-13-charter-proof-campaign.md) | [campaign report](2026-10-13-proof-campaign.md#r5--key-lifetime-enforcement-rule-zero-findings) | b3f56807 | current: split carry validated |
 | R6: cookie exclusion and retry-limit finding | Original under-load calculation and rejected-initiation suffix are exact. Invalid MAC2 against the actual original cookie result executes only the cookie reply; invalid MAC1 drops earlier. Ordinary completion preserves full Noise stores, indices and peer/keypair allocation counters. An accepted generated episode has 19 retries and 20 total initiations with MAX=18, then gives up on callback 20; this refutes the literal limit without claiming a universal replacement bound. The whole advance observer has exact original erasure. | `Leanux/Proofs/WG/FloodResistance/` (`Statements.lean`, 6 terminal theorems; `Replay.lean`) | [campaign charter](2026-10-13-charter-proof-campaign.md) | [campaign report](2026-10-13-proof-campaign.md#r6--cookie-exclusion-and-retry-limit-finding) | b3f56807 | current: split carry validated |
@@ -1069,10 +1074,12 @@ contracts retain recorded caller-jiffies operands and failure order. Main repair
 the historical R6 IPv6 rate-table lifecycle source discrepancy; the original
 proof-side report did not claim an accepted replay or differential finding.
 
-## Result table: claim, theorem, boundary, premises, counterexample, pin
+## Historical pre-split contract table
 
-What each result's statements establish and what must not be inferred from
-them, following the [pre-release review](2026-10-14-pre-release-review.md) §4.
+This table preserves the pre-split contract boundary recorded for the
+[pre-release review](2026-10-14-pre-release-review.md) §4. Its open R3 obligations
+are historical: the current register and initialized incoming/outgoing reports
+above record their closure. R4 conservation remains open.
 These rows describe campaign contracts over mirror `cb2348e`. Preceding checkpoints have passed independent
 review and coordinated validation. The initialized committed-support checkpoint passed its scoped/full builds,
 exact checks, independent review and coordinated gates. The new configured-identity/session/publication rows

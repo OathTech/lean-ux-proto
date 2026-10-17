@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Packets.InitializedTransmit
 import Leanux.Proofs.WG.Packets.NativeTransmitPreservation
 import Leanux.Proofs.WG.Packets.TransmitStack
 import Leanux.Proofs.WG.Lifetimes.TxCallSource
@@ -4593,5 +4594,93 @@ theorem original_observed_poll_seed (pid : PeerId) (budget : Nat) :
   RxHistory.ObserveSource.observePoll_factor pid budget
 
 end TransmitSource
+
+
+section TransmitClosure
+open Leanux Leanux.WG Leanux.Proofs.Logged
+open Lifetimes Queues Packets AllowedIps Configuration
+open TransmitJoint
+
+theorem initialized_transmit_checks (trace : Leanux.Runner.Trace) (shape : TraceAddressShape trace) (placeholders : Bool) :
+    Safe ([],[]) (runPrefixOuter (TransmitJoint.Initialized.executeTrace trace placeholders) []).2 :=
+  TransmitJoint.Initialized.checks trace shape placeholders
+
+theorem parsed_initialized_transmit_checks (json : Lean.Json) (trace : Leanux.Runner.Trace)
+    (parsed : Leanux.Runner.parseTrace json = .ok trace) (placeholders : Bool) :
+    Safe ([],[]) (runPrefixOuter (TransmitJoint.Initialized.executeTrace trace placeholders) []).2 :=
+  TransmitJoint.Initialized.parsed_checks json trace parsed placeholders
+
+theorem initialized_transmit_rx_projection (trace : Leanux.Runner.Trace) (placeholders : Bool) :
+    ProjectsOuter RxTransmit.globalRx id (TransmitJoint.Initialized.executeTrace trace placeholders)
+      (RxHistory.executeTraceHistory trace placeholders) :=
+  TransmitJoint.Initialized.projects trace placeholders
+
+theorem initialized_transmit_executable (trace : Leanux.Runner.Trace) (placeholders : Bool) :
+    ErasesOuter (TransmitJoint.Initialized.executeTrace trace placeholders) (Leanux.Runner.executeTrace trace placeholders) :=
+  TransmitJoint.Initialized.erases trace placeholders
+
+theorem initialized_transmit_receipt (trace : Leanux.Runner.Trace) (shape : TraceAddressShape trace) (placeholders : Bool)
+    (pre post : List Event) (receipt : Receipt)
+    (position : (runPrefixOuter (TransmitJoint.Initialized.executeTrace trace placeholders) []).2 = pre ++ .transmit receipt :: post) :
+    receipt.Valid ∧ GlobalCompletionState ([],[]) (routes pre) receipt.run.before :=
+  TransmitJoint.Initialized.checked trace shape placeholders pre post receipt position
+
+theorem initialized_transmit_authorization (trace : Leanux.Runner.Trace) (shape : TraceAddressShape trace) (placeholders : Bool)
+    (pre post : List Event) (receipt : Receipt)
+    (position : (runPrefixOuter (TransmitJoint.Initialized.executeTrace trace placeholders) []).2 = pre ++ .transmit receipt :: post) :
+    ∃ (pid : PeerId) (v4 : Bool), receipt.run.value = .ok pid ∧
+      receipt.family = (if v4 then 4 else 6) ∧
+      TxFrontCut (if v4 then 4 else 6) receipt.addr receipt.packets receipt.mtu receipt.run.before
+        receipt.run.after receipt.run.ambientBefore receipt.run.ambientAfter pid ∧
+      PeerWinner (rootWidth v4) receipt.addr
+        (selectedFlat v4 (completionFold (routes pre) ([],[]))) (some pid) ∧
+      ∀ pkt ∈ receipt.packets, destinationField (if v4 then 4 else 6) pkt.bytes = receipt.addr :=
+  TransmitJoint.Initialized.winner trace shape placeholders pre post receipt position
+
+theorem parsed_initialized_transmit_authorization (json : Lean.Json) (trace : Leanux.Runner.Trace)
+    (parsed : Leanux.Runner.parseTrace json = .ok trace) (placeholders : Bool)
+    (pre post : List Event) (receipt : Receipt)
+    (position : (runPrefixOuter (TransmitJoint.Initialized.executeTrace trace placeholders) []).2 = pre ++ .transmit receipt :: post) :
+    ∃ (pid : PeerId) (v4 : Bool), receipt.run.value = .ok pid ∧
+      receipt.family = (if v4 then 4 else 6) ∧
+      TxFrontCut (if v4 then 4 else 6) receipt.addr receipt.packets receipt.mtu receipt.run.before
+        receipt.run.after receipt.run.ambientBefore receipt.run.ambientAfter pid ∧
+      PeerWinner (rootWidth v4) receipt.addr
+        (selectedFlat v4 (completionFold (routes pre) ([],[]))) (some pid) ∧
+      ∀ pkt ∈ receipt.packets, destinationField (if v4 then 4 else 6) pkt.bytes = receipt.addr :=
+  TransmitJoint.Initialized.parsed_winner json trace parsed placeholders pre post receipt position
+
+/-- Every concrete syscall preserves handoff checks through its actual
+traffic and return-to-user callbacks. Only configuration shape is an input. -/
+theorem original_syscall_transmit_checks (initial : FlatTable × FlatTable) (call : Syscall)
+    (shape : SyscallAddressShape call) :
+    PrefixPreserves (Inv initial) (Safe initial) (TransmitJoint.Actual.syscall call) :=
+  TransmitJoint.Actual.syscall_preserves initial call shape
+
+/-- The complete original RX journal, actual result and Stop are retained. -/
+theorem original_syscall_transmit_projection (call : Syscall) :
+    ProjectsPrefix RxTransmit.globalRx id (TransmitJoint.Actual.syscall call) (RxHistory.syscall call) :=
+  TransmitJoint.Actual.syscall_projects call
+
+/-- The direct syscall checks the original socket/route/multicast body and
+records the native completed handoff before its send tail. -/
+theorem original_direct_transmit_checks (initial : FlatTable × FlatTable)
+    (family addr : Nat) (payload : List UInt8) (opts : Env.XmitOpts) :
+    PrefixPreserves (Inv initial) (Safe initial) (TransmitJoint.direct family addr payload opts) :=
+  TransmitJoint.direct_preserves initial family addr payload opts
+
+/-- A poll promotes only its new local suffix and retains the old joint
+routing/RX journal at the actual incoming positions. -/
+theorem original_observed_transmit_projection (pid : PeerId) (budget : Nat) :
+    ProjectsPrefix oldEvent id (RxTransmit.observePoll pid budget)
+      (RoutingJoint.rxAction (RxHistory.observePoll pid budget)) :=
+  RxTransmit.observePoll_projects pid budget
+
+/-- Poll-local Stack transmissions use their actual outer routing prefix. -/
+theorem original_observed_transmit_checks (initial : FlatTable × FlatTable) (pid : PeerId) (budget : Nat) :
+    PrefixPreserves (Inv initial) (Safe initial) (RxTransmit.observePoll pid budget) :=
+  RxTransmit.observePoll_preserves initial pid budget
+
+end TransmitClosure
 
 end Leanux.Proofs.WG.CryptokeyRouting
