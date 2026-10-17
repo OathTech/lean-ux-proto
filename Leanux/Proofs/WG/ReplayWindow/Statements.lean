@@ -135,12 +135,16 @@ def syscallWithAmbientLogged (call : Syscall) : GhostM Int := do
   skipAmbient
   return ret
 
+/-- The logged form of a syscall with its ambient step erases to the committed
+action: the acceptance observer changes no behaviour. -/
 theorem syscallWithAmbientLogged_erases (call : Syscall) :
     Erases (syscallWithAmbientLogged call) (syscallWithAmbient call) := by
   unfold syscallWithAmbientLogged syscallWithAmbient
   exact erases_bind (syscallLogged_erases call) fun ret =>
     erases_bind (erases_liftM skipAmbient) (fun _ => erases_pure ret)
 
+/-- The logged syscall with its ambient step evolves the keypair snapshot the
+way the committed action does, the ambient step leaving it unchanged. -/
 theorem syscallWithAmbientLogged_evolves (call : Syscall) :
     Evolves (syscallWithAmbientLogged call) := by
   unfold syscallWithAmbientLogged

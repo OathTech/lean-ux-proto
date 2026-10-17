@@ -4604,30 +4604,47 @@ open Leanux Leanux.WG Leanux.Proofs.Logged
 open Lifetimes Queues Packets AllowedIps Configuration
 open TransmitJoint
 
+/-- Every transmit event the outgoing observer records on an initialized run of
+the trace passes the global completion checks: the outgoing history is safe from
+the empty routing state. -/
 theorem initialized_transmit_checks (trace : Leanux.Runner.Trace) (shape : TraceAddressShape trace) (placeholders : Bool) :
     Safe ([],[]) (runPrefixOuter (TransmitJoint.Initialized.executeTrace trace placeholders) []).2 :=
   TransmitJoint.Initialized.checks trace shape placeholders
 
+/-- The same as `initialized_transmit_checks` for a trace obtained from a
+successfully parsed JSON, which discharges the address-shape premise. -/
 theorem parsed_initialized_transmit_checks (json : Lean.Json) (trace : Leanux.Runner.Trace)
     (parsed : Leanux.Runner.parseTrace json = .ok trace) (placeholders : Bool) :
     Safe ([],[]) (runPrefixOuter (TransmitJoint.Initialized.executeTrace trace placeholders) []).2 :=
   TransmitJoint.Initialized.parsed_checks json trace parsed placeholders
 
+/-- The outgoing observer's run projects, through the global receive view, onto
+the receive-history execution of the same trace: the observer adds transmit
+events and changes nothing the receive history sees. -/
 theorem initialized_transmit_rx_projection (trace : Leanux.Runner.Trace) (placeholders : Bool) :
     ProjectsOuter RxTransmit.globalRx id (TransmitJoint.Initialized.executeTrace trace placeholders)
       (RxHistory.executeTraceHistory trace placeholders) :=
   TransmitJoint.Initialized.projects trace placeholders
 
+/-- The outgoing observer erases to the executable mirror: running the observed
+trace and running `Runner.executeTrace` are the same computation once the
+observer's events are dropped. -/
 theorem initialized_transmit_executable (trace : Leanux.Runner.Trace) (placeholders : Bool) :
     ErasesOuter (TransmitJoint.Initialized.executeTrace trace placeholders) (Leanux.Runner.executeTrace trace placeholders) :=
   TransmitJoint.Initialized.erases trace placeholders
 
+/-- Every transmit receipt in the outgoing history is valid and was issued in a
+completion state consistent with the routing history before it. -/
 theorem initialized_transmit_receipt (trace : Leanux.Runner.Trace) (shape : TraceAddressShape trace) (placeholders : Bool)
     (pre post : List Event) (receipt : Receipt)
     (position : (runPrefixOuter (TransmitJoint.Initialized.executeTrace trace placeholders) []).2 = pre ++ .transmit receipt :: post) :
     receipt.Valid ∧ GlobalCompletionState ([],[]) (routes pre) receipt.run.before :=
   TransmitJoint.Initialized.checked trace shape placeholders pre post receipt position
 
+/-- R3, outgoing, over the typed trace: every completed handoff names a peer,
+a family, a front cut of the transmit path, and that peer is the longest-prefix
+owner of the routed address in the flat routing history before the handoff;
+every supplied packet's destination equals that address. -/
 theorem initialized_transmit_authorization (trace : Leanux.Runner.Trace) (shape : TraceAddressShape trace) (placeholders : Bool)
     (pre post : List Event) (receipt : Receipt)
     (position : (runPrefixOuter (TransmitJoint.Initialized.executeTrace trace placeholders) []).2 = pre ++ .transmit receipt :: post) :
@@ -4640,6 +4657,9 @@ theorem initialized_transmit_authorization (trace : Leanux.Runner.Trace) (shape 
       ∀ pkt ∈ receipt.packets, destinationField (if v4 then 4 else 6) pkt.bytes = receipt.addr :=
   TransmitJoint.Initialized.winner trace shape placeholders pre post receipt position
 
+/-- R3's outgoing headline: `initialized_transmit_authorization` for a trace
+obtained from a successfully parsed JSON, which discharges the address-shape
+premise, so the claim holds for every trace the runner accepts. -/
 theorem parsed_initialized_transmit_authorization (json : Lean.Json) (trace : Leanux.Runner.Trace)
     (parsed : Leanux.Runner.parseTrace json = .ok trace) (placeholders : Bool)
     (pre post : List Event) (receipt : Receipt)
