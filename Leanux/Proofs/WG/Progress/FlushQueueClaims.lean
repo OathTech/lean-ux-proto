@@ -11,8 +11,8 @@ theorem source_flushed_send_queue (pid : PeerId) (d : Device) :
       (fun _ final => flushQueues final = some (flushedSendQueues pid d) ∧
         (pid ∈ d.sendWorkQueue →
           flushQueueCount (flushedSendQueues pid d) + 1 = flushQueueCount (workQueues d))) := by
-  intro w result final pre run
-  exact ⟨runFlushedSendWork_queues pid d w result final pre run,
+  intro g ambient result final after pre run
+  exact ⟨runFlushedSendWork_queues pid d g ambient result final after pre run,
     flushedSendQueues_count pid d⟩
 
 theorem source_flushed_clear_queue (pid : PeerId) (d : Device) :
@@ -20,8 +20,8 @@ theorem source_flushed_clear_queue (pid : PeerId) (d : Device) :
       (fun _ final => flushQueues final = some (flushedClearQueues pid d) ∧
         (pid ∈ d.clearWorkQueue →
           flushQueueCount (flushedClearQueues pid d) + 1 = flushQueueCount (workQueues d))) := by
-  intro w result final pre run
-  exact ⟨runFlushedClearWork_queues pid d w result final pre run,
+  intro g ambient result final after pre run
+  exact ⟨runFlushedClearWork_queues pid d g ambient result final after pre run,
     flushedClearQueues_count pid d⟩
 
 end Leanux.Proofs.WG.Progress

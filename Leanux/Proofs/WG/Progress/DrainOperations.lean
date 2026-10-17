@@ -6,7 +6,7 @@ set_option maxHeartbeats 800000
 namespace Leanux.Proofs.WG.Progress
 open Leanux Leanux.WG
 
-def drainSelect : M DrainSelection := do
+def drainSelect : WG.M DrainSelection := do
   let d ← getDev
   if d.sendWorkQueue.isEmpty && d.clearWorkQueue.isEmpty then return .drained
   match ← peekUnit .sendWorker with
@@ -15,7 +15,7 @@ def drainSelect : M DrainSelection := do
     match ← peekUnit .clearPeerWorker with
     | some u => return .clear (← resolveUnit .clearPeerWorker u d.clearWorkQueue)
     | none =>
-      if (← get).hidden.isSome then
+      if (← getAmbient).hidden.isSome then
         throw (.hidden s!"a flush of handshake_send_wq must run queued work ({d.sendWorkQueue.length} send, {d.clearWorkQueue.length} clear items), but no section names it")
       match d.sendWorkQueue.head?, d.clearWorkQueue.head? with
       | some pid, _ => return .send pid
@@ -24,7 +24,7 @@ def drainSelect : M DrainSelection := do
 
 abbrev DrainLoopState := Option Unit × Unit
 
-def drainSelectedTurn (upTo : Option PeerId) : DrainSelection → M (ForInStep DrainLoopState)
+def drainSelectedTurn (upTo : Option PeerId) : DrainSelection → WG.M (ForInStep DrainLoopState)
   | .drained => pure (.done (some (), ()))
   | .send pid => do
     runFlushedSendWork pid
@@ -34,15 +34,15 @@ def drainSelectedTurn (upTo : Option PeerId) : DrainSelection → M (ForInStep D
     if upTo == some pid then return .done (some (), ())
     return .yield (none, ())
 
-def drainTurn (upTo : Option PeerId) (_ : Nat) (_ : DrainLoopState) : M (ForInStep DrainLoopState) :=
+def drainTurn (upTo : Option PeerId) (_ : Nat) (_ : DrainLoopState) : WG.M (ForInStep DrainLoopState) :=
   drainSelect >>= drainSelectedTurn upTo
 
-def drainFinish (s : DrainLoopState) : M Unit :=
+def drainFinish (s : DrainLoopState) : WG.M Unit :=
   match s.1 with
   | some result => pure result
   | none => invariant "handshake_send_wq did not drain"
 
-def drainSource (upTo : Option PeerId) : M Unit := do
+def drainSource (upTo : Option PeerId) : WG.M Unit := do
   let s ← forIn ([:4096] : Std.Legacy.Range) (none, ()) (drainTurn upTo)
   drainFinish s
 
@@ -52,7 +52,7 @@ theorem drain_source (upTo : Option PeerId) :
   congr 1
   congr 1
   funext n s
-  simp only [drainTurn, drainSelect, drainSelectedTurn, bind_assoc, pure_bind]
+  simp only [drainTurn, drainSelect, bind_assoc]
   congr 1
   funext d
   split
@@ -61,13 +61,13 @@ theorem drain_source (upTo : Option PeerId) :
     congr 1
     funext send
     cases send with
-    | some u => simp [bind_assoc, drainSelectedTurn]
+    | some u => simp [drainSelectedTurn]
     | none =>
       simp only [bind_assoc]
       congr 1
       funext clear
       cases clear with
-      | some u => simp [bind_assoc, drainSelectedTurn]
+      | some u => simp [drainSelectedTurn]
       | none =>
         simp only [bind_assoc]
         congr 1
@@ -75,7 +75,7 @@ theorem drain_source (upTo : Option PeerId) :
         split
         · rfl
         · cases d.sendWorkQueue.head? <;> cases d.clearWorkQueue.head? <;>
-            simp [bind_assoc, drainSelectedTurn]
+            simp [drainSelectedTurn]
 
   all_goals (funext s; dsimp +zetaDelta only; cases s.1 <;> rfl)
 end Leanux.Proofs.WG.Progress

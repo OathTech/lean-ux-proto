@@ -1,4 +1,4 @@
-import Leanux.Proofs.WG.Config.StagedFallback
+import Leanux.Proofs.WG.Config.StagedLeaves
 
 set_option pp.structureInstances false
 set_option autoImplicit false
@@ -6,47 +6,6 @@ set_option maxHeartbeats 800000
 
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise Std.Do
-
-def clearedStaged (d : Device) (pid : PeerId) (p : Peer) : Device :=
-  withPeer d pid { p with staged := [] }
-
-theorem staged_empty (pid : PeerId) (d : Device) (p : Peer)
-    (resident : d.peers[pid]? = some p) (empty : p.staged = []) :
-    Returns (sendStagedPackets pid) (fun w => w.k.wg = some d)
-      (fun _ w => w.k.wg = some d) := by
-  rw [← sendStaged_source, returns_iff]
-  mvcgen [stagedSource, getPeer, getDev, getK, branch, invariant]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals repeat intro
-  all_goals simp_all
-
-theorem staged_compose (pid : PeerId) (d : Device) (p : Peer)
-    (resident : d.peers[pid]? = some p) (nonempty : p.staged ≠ [])
-    (kp : Option KeypairId) (middle : Device) (Q : Unit → World → Prop)
-    (get : Ensures (keypairGet p.keypairCurrent) (fun w => w.k.wg = some (clearedStaged d pid p))
-      (fun result w => result = kp ∧ w.k.wg = some middle))
-    (tail : Ensures (stagedAfterGet pid p.staged kp) (fun w => w.k.wg = some middle) Q) :
-    Ensures (sendStagedPackets pid) (fun w => w.k.wg = some d) Q := by
-  have hg := (ensures_iff _ _ _).mp get
-  have ht := (ensures_iff _ _ _).mp tail
-  rw [← sendStaged_source, ensures_iff]
-  mvcgen [stagedSource, getPeer, getDev, getK, setPeer, modifyDev, modifyK, branch, invariant, hg, ht]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals repeat intro
-  all_goals simp_all [clearedStaged, withPeer]
-  all_goals subst_vars
-  all_goals mvcgen [hg, ht]
-  all_goals repeat intro
-  all_goals simp_all
-  all_goals exact ht _ (by assumption)
-
-theorem keypairGet_missing (id : KeypairId) (d : Device) (missing : d.keypairs[id]? = none) :
-    Ensures (keypairGet (some id)) (fun w => w.k.wg = some d) (fun _ _ => False) := by
-  rw [ensures_iff]
-  mvcgen [keypairGet, getKeypair, getDev, getK, branch, invariant]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals repeat intro
-  all_goals simp_all
 
 def invalidStagedDevice (d : Device) (pid : PeerId) (p : Peer) (now : Int64) : Device :=
   fallbackDevice (keyReferenceRoundTrip (clearedStaged d pid p) p.keypairCurrent)

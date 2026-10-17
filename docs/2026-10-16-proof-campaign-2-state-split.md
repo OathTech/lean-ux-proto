@@ -22,9 +22,9 @@ and attributed theorem declarations. Campaign 2 owns 427 Lean files,
 | H1 Noise | 35 | 171 | 22 | 180 | All original Noise obligations carried, including the full terminal closure; six type-given frames deleted. Wider caller/lifetime/reachability and clock-provenance charter claims remain open. |
 | H2 Index | 68 | 318 | 52 | 212 | Table, lookup, collision records, allocation, owner invariants and lifecycle support carried; seven type-given frames deleted. Exact peer-release outcomes replace stale totality, with checked counterexamples. Terminal closure and whole-driver coherence remain pending. |
 | H3 Roaming | 35 | 119 | 13 | 119 | Endpoint/publication, polling, attempt facts, crypto, lookup and response-caller factors/facts carried with full Product certificates; two type-given frames deleted. Initiation transcript facts and broader authentication/caller closure remain pending. |
-| H4 Configuration | 130 | 554 | 79 | 357 | Scalar, identity, port, dump, allowed-IP and structural support carried; three type-given frames deleted. Quiet timer cleanup and queued-send observations are corrected; queued-send and removal totality have checked stale-statement counterexamples. Remaining readback/effects and terminal closure remain pending. |
-| H5 Progress | 59 | 265 | 42 | 145 | Pure/control, cut, jitter, index, poll bounds, dispatch, scheduler turns, stack/probe frames, base flush frames and Product observation bridge carried; one type-given index frame deleted. The old backlog fixture now has a checked exact runner rejection. Receive-ring activation models, general runner boundaries, remaining drain/flush claims and terminal closure remain pending. |
-| H6 Timer discipline | 98 | 404 | 50 | 122 | Base/guard/jitter, arming/wheel, recorded clock and initiation-send arming contracts carried; three type-given frames deleted. Exact wheel corrections are explicit; broader timer episodes, worker composition and terminal closure remain pending. |
+| H4 Configuration | 130 | 554 | 79 | 360 | Scalar, identity, port, dump, allowed-IP and structural support carried; three type-given frames deleted. Quiet timer cleanup and queued-send observations are corrected; queued-send and removal totality have checked stale-statement counterexamples. Remaining readback/effects and terminal closure remain pending. |
+| H5 Progress | 59 | 265 | 42 | 154 | Pure/control, cut, jitter, index, poll bounds, dispatch, scheduler turns, stack/probe frames, queue flush contracts, drain selection and Product observation bridge carried; one type-given index frame deleted. The old backlog fixture now has a checked exact runner rejection. Receive-ring activation models, general runner boundaries, remaining drain/flush claims and terminal closure remain pending. |
+| H6 Timer discipline | 98 | 404 | 50 | 147 | Base/guard/jitter, arming/wheel, recorded clock and initiation-send arming contracts carried; three type-given frames deleted. Exact wheel corrections are explicit; queue/pending and retained-worker frames are carried; broader timer episodes and terminal closure remain pending. |
 
 Retyped, deleted and retained counts will be reported per validated tranche.
 H1 now has a checked split terminal closure; H2–H6 remain lagging.
@@ -3542,3 +3542,78 @@ TimerDiscipline.RetryBaseSource, Progress.FlushBaseFrames and
 Progress.FlushQueueEffects under Leanux.Proofs.WG, then #print axioms and
 scripts/in-bundle lake env leanchecker --fresh MODULE for each root.
 Use capped, 32 Lean threads and 16 QEMU slots on this host.
+
+
+## Work-state preservation, queue flushes and drain selection
+
+| Tranche | Before | Retyped | Corrected | Deleted | Kept | Added | After |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| TimerDiscipline.WorkStateFrames | 21 | 21 | 0 | 0 | 0 | 4 | 25 |
+| Progress.FlushQueueFrames, Source and Claims | 6 | 6 | 0 | 0 | 0 | 0 | 6 |
+| Progress.DrainOperations and DrainSelectionSource | 3 | 3 | 0 | 0 | 0 | 0 | 3 |
+| Config.StagedLeaves | 3 | 3 | 0 | 0 | 0 | 0 | 3 |
+| This tranche | 33 | 33 | 0 | 0 | 0 | 4 | 37 |
+| Cumulative processed baseline and checked support | 1,093 | 836 | 36 | 22 | 199 | 101 | 1,172 |
+
+The census is 523 campaign-owned files, 1,910 theorems and 367 checked proof
+modules; 738 baseline declarations await validation. Counts are H1 180, H2 212,
+H3 119, H4 360, H5 154 and H6 147. H1 remains current at its terminal closure;
+H2–H6 and the full gate remain lagging. No new charter result is claimed.
+
+WorkStateFrames retains ten queue/pending contracts, nine work-only projections
+and two retained-worker contracts. Both index-insert callers use the actual
+getDev-guarded liftIndex. Timer off/same/changed cases use the checked wheel
+effects. Work-only projections obtain the actual initial clear queue internally;
+no new clear-queue, readiness or success premise is added. Four private support
+lemmas handle peer stores, timer arming and the native projection adapter. The
+existing arbitrary Product adapter is unchanged.
+
+FlushQueueFrames contains the two send-dependent queue frames;
+FlushQueueSource contains the two substantive worker effect contracts; and
+FlushQueueClaims contains their projected claims. Normal-return scope includes
+final peer release, first-occurrence removal, duplicates and actual section
+reads. Count decrease still requires only the original membership premise.
+The drain source factor and selection contract preserve the actual send-before-
+clear peek order, recorded-mode refusal, placeholder queue order and requested-
+clear stop. The resolver uses the first actual matching unit association and
+its rejecting membership guard, for arbitrary unit, queue and Ambient inputs.
+No deletion is based on compilation failure.
+
+StagedLeaves extracts empty-staged totality, missing-key partial impossibility
+and the full Product staged_compose contract. The latter retains arbitrary
+Q over the entire actual Product and actual liftWG callback executions. The
+fourth staged_invalid contract remains pending, with its historical pure device
+prediction explicitly outside the checked closure.
+
+Independent reviews found no issues in the worker-state and drain source
+contracts. Independent review also found no issues in all six flush contracts and the
+three configuration leaves against their original scopes. The drain review identified an obligation
+for the pending audit layer: native DrainOutcome alone omits original fixture
+observations. Its exact audit equalities must also retain the full Product view;
+the three source contracts here do not depend on those outcome equalities.
+
+Scoped builds pass 103 jobs for WorkStateFrames, 160 for the drain/flush closure
+and 74 for StagedLeaves, all warning-free. Axiom inspection covers 787 logical
+roots in 149 proof modules, including 473 public theorem roots, with only the
+three standard axioms. All four fresh kernel replays pass. Static checks,
+all 258 terminal names/order, and mirror/shared boundaries pass.
+
+Work-state probes 1–2 failed updated-peer inference, wheel predicate unfolding
+and an unspecified intermediate bind predicate; unused simplifications were
+removed. Probe 3 passes. Flush probe 1 failed Option.map normalization and
+reported unused simplifications; probe 2 closed the goals but warned about an
+unnecessary simpa; probe 3 uses explicit elimination and passes. Drain probe 1
+substituted away the wrong device name and reported five unused simplifications;
+probe 2 left the local action uninferred; probe 3 split a nested match before
+the intended hidden-input test; probe 4 passed with one unused simplification;
+probe 5 removes it and passes. Staged-leaf probe 1 failed record-update layout;
+probes 2–4 failed successive native/Product run-factor normalizations and
+reported unused simplifications; probe 5 had one obsolete trailing tactic;
+probe 6 passes. Complete diagnostic outputs were saved and inspected. No
+unchanged rerun, infrastructure retry, limit increase or guest run occurred.
+
+Reproduce with scripts/in-bundle lake build on TimerDiscipline.WorkStateFrames,
+Progress.FlushQueueClaims, Progress.DrainSelectionSource and Config.StagedLeaves
+under Leanux.Proofs.WG, then #print axioms and scripts/in-bundle lake env
+leanchecker --fresh MODULE for each root. Use capped, 32 Lean threads and
+16 QEMU slots on this host.
