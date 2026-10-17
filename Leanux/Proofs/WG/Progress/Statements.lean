@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Progress.AdvanceWaitClaims
 import Leanux.Proofs.WG.Progress.TimerWaitClaims
 import Leanux.Proofs.WG.Progress.TimerCompletionClaims
 import Leanux.Proofs.WG.Progress.BatchDrainClaims
@@ -661,5 +662,21 @@ theorem original_recorded_idle_wait_nothing_due :
       (fun _ s => ∃ j, s.wg.jiffiesLast = some j ∧ NoTimerDue j s) :=
   idleTimers_recorded_nothing_due
 
+
+/-- The original post-advance wait with its actual bound receipt. Erasure
+covers every mode and every original error. On recorded normal return, the
+stored clock equals the receipt's end read; the no-due assertion holds at
+its pass bound, which may differ from that end read. No totality, queue emptiness or preceding-advance claim. -/
+theorem original_recorded_advance_wait_nothing_due :
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (do let _ ← observedAfterAdvance; pure ()) afterAdvance ∧
+    Campaign2.Product.Ensures observedAfterAdvance
+      (fun s => s.ambient.hidden.isSome = true)
+      (fun result s => ∃ receipt, result = some receipt ∧
+        s.wg.jiffiesLast = some receipt.jEnd ∧ NoTimerDue receipt.pass s) := by
+  constructor
+  · intro initial _
+    rw [observedAfterAdvance_erase]
+  · exact observedAfterAdvance_recorded_checks
 
 end Leanux.Proofs.WG.Progress
