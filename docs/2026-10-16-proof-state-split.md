@@ -14,7 +14,7 @@ new worlds; new R3/R4 results follow the retrofit.
 | Completed retrofit checkpoints | 452 | 6,531 |
 
 Completed changes comprise **2,575 retyped/generalized, 1,686 deleted,
-1,742 retained contract shapes and 502 added theorems**. Retyping changes the
+1,754 retained contract shapes and 502 added theorems**. Retyping changes the
 actual carrier or observation, including shorthand contracts whose functions
 move to a native monad. Namespace-only product qualification and equivalent
 projection relocation count as retained. The census includes private and
@@ -154,6 +154,17 @@ to proof contracts over arbitrary local states, not initialized reachability
 or Linux-bug claims. The [finding](2026-10-16-proof-state-split-findings.md#cleanup-totality)
 records the declarations and reproduction commands. Withdrawal of the old
 false exports and caller repairs remain part of the unfinished R4 terminal carry.
+
+Stamped environment traffic retains all twelve original product theorem
+headers and its four observer definitions. The source copy includes the current
+IPv4 route/neighbour checks, native WG adapters, exact record-driven scheduling
+and handshake-queue completion guards. Its 350-job build, all sixteen named
+axiom checks, fresh replay and complete independent source review pass.
+The module builds in 31 seconds with zero own warnings; 1,277 inherited warnings
+remain. The final output-free traffic check passed; the combined timer/traffic
+development ledger has nineteen changed-source checks (four passes, fifteen
+failures) and nine isolated diagnostics (three passes, six failures).
+No infrastructure rerun, cap increase or proof-limit change occurred.
 
 Remaining work is the routing/origin terminal carry, stamped
 traffic/environment/runner history, material lifecycle/support callers, RX

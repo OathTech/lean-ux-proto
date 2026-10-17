@@ -21,7 +21,7 @@ conservation remain open; their next extensions follow the retrofit.
 
 The validated baseline `00641c6` has 471 Lean files and 7,715 named theorems.
 The current tree has 452 files and 6,531 theorems: completed changes comprise
-2,575 retyped, 1,686 deleted, 1,742 retained contract shapes and 502 added theorems.
+2,575 retyped, 1,686 deleted, 1,754 retained contract shapes and 502 added theorems.
 All 26 generic helpers and the additional update rule identified by the scope
 audit now retain arbitrary actual product-action scope, with three duplicate
 WP wrappers removed. Their dependent build, axioms, fresh replays and review pass.
