@@ -13,8 +13,8 @@ new worlds; new R3/R4 results follow the retrofit.
 | Validated baseline `00641c6` | 471 | 7,715 |
 | Completed retrofit checkpoints | 452 | 6,544 |
 
-Completed changes comprise **2,738 retyped/generalized, 1,699 deleted,
-1,913 retained contract shapes and 528 added theorems**. Retyping changes the
+Completed changes comprise **2,890 retyped/generalized, 1,704 deleted,
+1,913 retained contract shapes and 533 added theorems**. Retyping changes the
 actual carrier or observation, including shorthand contracts whose functions
 move to a native monad. Namespace-only product qualification and equivalent
 projection relocation count as retained. The census includes private and
@@ -292,8 +292,38 @@ and complete source/contract review pass. Development had two failed full
 checks, one diagnostic pass and two full passes, without an infrastructure
 retry, panic or limit change.
 
-Remaining work is the routing/origin terminal carry, material configuration,
-dump and runner support, RX credit/protection layers, warning
+Receive consumption carries 73→76 theorems: all seventy-three original
+contracts move to native or generalized actual-state carriers, with three
+private conditional composition helpers. Receive key protection carries
+59→56: fifty-four native/generalized contracts, five packet-component frames
+deleted and two run-equivalence bridges added. The deleted frames observe no
+packet-store field; their concrete callers use the canonical component adapter.
+Nullable owner words, actual promotion, timer clocks, normal-return cuts and
+the original seven-field store premise remain. Arbitrary product actions
+remain available through the generalized StateT/project contracts.
+
+The 319- and 320-job closures build without warnings in these two modules;
+their wider closures report 1,338 inherited warnings. All 165 explicitly named
+declarations have standard-only axioms, fresh replay passes and complete source
+reviews pass. Consumption development recorded twelve ordinary failed checks
+and seven passing prefix/full checks. Key protection recorded ten ordinary failed
+checks and five passing prefix/full checks. No proof limit or cap changed.
+Consumption's first fresh replay returned no completion status and is recorded
+as an infrastructure failure; its sole rerun returned an explicit zero status.
+
+Material configuration and dump retain all twenty-five names: twenty-three
+native contracts and two generalized actual-state transports. They preserve
+the original allocation/dump observations and seven-field store mask, including
+negative errno returns and partial updates. Their 317- and 330-job closures
+build with zero own warnings; all twenty-five named declarations have standard
+axioms only and fresh replay and complete source review pass. Configuration
+development had three ordinary failures followed by a pass. Dump's first check
+failed before reaching its body because two imported proofs generated the same
+cryptAhead matcher helper; removing an unused import let its second check pass.
+The combined graph collision still requires its separate proof-body repair.
+
+Remaining work is the routing/origin terminal carry, material runner support,
+RX stack/carrier layers, the combined import repair, warning
 cleanup, the full proof gate and terminal replay. Deterministic source/proof
 failures are failures; source edits are checked anew, never described as
 infrastructure retries. Recovery admissions printed by failed elaborations
@@ -312,6 +342,7 @@ Each infrastructure rerun below occurred once for its affected invocation:
 | RxPhase diagnostic | missing shared artifact | FAIL at unchanged heartbeat limit |
 | SyscallsAudit diagnostic | missing shared artifact | FAIL on proof obligations |
 | RunnerSafety diagnostic31 | EnvTimersAudit artifact absent during central rebuild | PASS unchanged after rebuild |
+| RxConsumeProtection fresh replay | tool returned no completion status; handle subsequently absent | PASS with explicit zero status |
 
 Explicitly stopped elaborations, signal/KILLED outcomes, driver crashes and
 toolchain panics were preserved to snapshot refs before work resumed; they
