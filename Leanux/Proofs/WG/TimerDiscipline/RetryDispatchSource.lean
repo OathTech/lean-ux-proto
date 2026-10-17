@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.TimerDiscipline.RetryDispatchLeaves
 import Leanux.Proofs.WG.TimerDiscipline.RetryDispatchModel
 import Leanux.Proofs.WG.TimerDiscipline.RetryDispatchFrames
 import Leanux.Proofs.WG.TimerDiscipline.SendDispatchClaims
@@ -24,22 +25,6 @@ def observedRetryDispatch (horizon : UInt64) : M RetryDispatchObservation := do
   let afterTimer ← Campaign2.read
   let send ← observed Env.runOneSendWorker sendWorkerExecution
   return ⟨timer.1, afterTimer, send.1⟩
-
-/-- Eligible queueing must successfully acquire its original reference. -/
-theorem queuedAfterClock_positive (pid : PeerId) (d : Device) (p : Peer) (now : Int64)
-    (resident : d.peers[pid]? = some p)
-    (expired : p.lastSentHandshake + REKEY_TIMEOUT.toInt64 * NSEC_PER_SEC64 ≤ now)
-    (alive : p.isDead = false) :
-    Ensures (queuedAfterClock pid p now) (fun w => w.k.wg = some d)
-      (fun _ _ => 0 < p.refcount) := by
-  have hg := peerGet_exact pid d p resident
-  have hp := unconstrained_prefix (peerPut (some pid))
-  have hq := unconstrained_prefix (recordQueued .sendWorker pid)
-  rw [ensures_iff]
-  mvcgen [queuedAfterClock, branchCmp, branch, expired, alive, hg, hp, hq,
-    getPeer, getDev, getK, setPeer, modifyDev, modifyK, invariant]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all
 
 /-- An empty entry queue either remains empty or receives exactly this newly
 pending peer, with the positive old count established by original acquisition. -/
@@ -174,61 +159,6 @@ theorem fireSelected_empty (pid : PeerId) (d : Device) (p : Peer)
   simp only [fireSelected, timerCallback, StateT.run_bind, deletion] at run
   have result' := (ensures_iff _ _ _).mpr hs after result final device run
   simpa [detached, FreshRetryPeer, Peer.setTimer] using result'
-
-/-- Selection supplies nonemptiness without any reference-count assumption. -/
-theorem sendDispatch_nonempty (d : Device) :
-    Ensures Env.runOneSendWorker (fun w => w.k.wg = some d)
-      (fun _ _ => d.sendWorkQueue ≠ []) := by
-  intro w result final pre run
-  rw [runOneSendWorker_source, StateT.run_bind] at run
-  cases hs : sendWorkerSelection.run w with
-  | error e => rw [hs] at run; cases run
-  | ok pair =>
-    obtain ⟨selected, after⟩ := pair
-    have effect := sendWorkerSelection_effect d w.unitPeers w selected after ⟨pre, rfl⟩ hs
-    intro empty
-    have member := effect.2.2.1
-    simp [empty] at member
-
-/-- Normal worker selection eliminates the callback's empty-queue alternatives.
-Only then is the retained-worker contract applied. -/
-theorem retry_send_completed (pid : PeerId) (before : Peer) (afterTimer final : World)
-    (facts : ∃ d, afterTimer.k.wg = some d ∧
-      (d.sendWorkQueue = [] ∨ (d.sendWorkQueue = [pid] ∧
-        ∃ queued, d.peers[pid]? = some queued ∧ FreshRetryPeer before queued)))
-    (run : Env.runOneSendWorker.run afterTimer = .ok ((), final)) :
-    ∃ send, sendWorkerExecution.run afterTimer = .ok (send, final) ∧
-      CompletedRetryDispatch pid before (Campaign2.snapshot afterTimer) send (Campaign2.snapshot final) := by
-  obtain ⟨d, device, queueCases⟩ := facts
-  have nonempty := sendDispatch_nonempty d afterTimer () final device run
-  rcases queueCases with empty | ⟨single, queued, resident, fresh⟩
-  · exact False.elim (nonempty empty)
-  · have retained : RetainedSendQueue d := by
-      intro selected member peer same
-      have selectedEq : selected = pid := by simpa [single] using member
-      subst selected
-      rw [resident] at same
-      cases same
-      have oldPositive := fresh.2.2.1
-      have increment := fresh.2.2.2.2.2.1
-      omega
-    obtain ⟨send, execution⟩ := sendWorkerExecution_success afterTimer final run
-    have completed := sendWorkerExecution_effect d afterTimer.unitPeers retained
-      afterTimer send final ⟨device, rfl⟩ execution
-    have selectedEq : send.pid = pid := by simpa [single] using completed.1.1
-    have finalView := completed.2
-    obtain ⟨actual, actualResident, _, _, _, _, view⟩ := finalView
-    rw [selectedEq, resident] at actualResident
-    cases actualResident
-    have work := sendWorkerExecution_workView d afterTimer.unitPeers retained
-      afterTimer send final ⟨device, rfl⟩ execution
-    refine ⟨send, execution, d, queued, device, single, resident, fresh, selectedEq, completed, ?_, ?_⟩
-    · rw [selectedEq] at view
-      have identity := fresh.2.2.2.1
-      have attempts := fresh.2.2.2.2.1
-      have refs := fresh.2.2.2.2.2.1
-      simpa [identity, attempts, refs] using view
-    · simpa [selectedEq, single] using work
 
 /-- Above the retry limit, the original callback leaves the send queue empty. -/
 theorem expiredRetransmit_giveUp_empty (pid : PeerId) (d : Device) (p : Peer)

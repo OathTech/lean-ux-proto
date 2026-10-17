@@ -60,3 +60,21 @@ The scoped trust checks and cumulative H1–H6 status are recorded in
 took two changed probes: record-update syntax and result normalization failed
 first, then the kernel-checked witness passed without warnings. No cap or
 proof limit was increased; no infrastructure retry or guest run occurred.
+
+
+The timer retry carry checks a second witness on the original empty-queue
+domain. TimerDiscipline.RetryQueueFindings.pending_empty_queue_counterexample
+keeps a resident already-pending peer with reference count two, starts with
+sendWorkQueue empty, and supplies the matching queue record/unit association.
+Actual queuedAfterClock returns normally with queue [0]. The old
+queuedAfterClock_empty conclusion is false: its nonempty arm requires the
+entry peer's handshakePending to be false. The empty queue does not supply
+that fact. This refutes the automatic retry eligibility inference, including
+its downstream use to derive FreshRetryPeer, without changing the valid
+conditional completion theorem that assumes FreshRetryPeer explicitly.
+
+The witness leaves unrelated Ambient inputs arbitrary and asserts neither
+reachability nor a kernel discrepancy. Reproduce with scripts/in-bundle lake
+build Leanux.Proofs.WG.TimerDiscipline.RetryQueueFindings and fresh leanchecker
+replay on that module under the capped settings above. The retrofit report
+records its checked counts and the outstanding corrected retry composition.

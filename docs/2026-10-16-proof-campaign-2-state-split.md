@@ -23,8 +23,8 @@ and attributed theorem declarations. Campaign 2 owns 427 Lean files,
 | H2 Index | 68 | 318 | 52 | 333 | Table, lookup, collision records, allocation, owner invariants and lifecycle support carried; seven type-given frames deleted. Exact peer-release outcomes replace stale totality, with checked counterexamples. All 52 headlines and their closure are current, including full Product session observations; whole-driver coherence remains pending. |
 | H3 Roaming | 35 | 119 | 13 | 157 | Endpoint/publication, polling, attempt facts, crypto, lookup and response-caller factors/facts carried with full Product certificates; two type-given frames deleted. The full terminal closure is current, including initiation/response audits with actual Product outcomes. Wider roaming/provenance charter gaps remain open. |
 | H4 Configuration | 130 | 554 | 79 | 582 | Scalar, identity, port, dump, allowed-IP and structural support carried; three type-given frames deleted. Quiet timer cleanup and queued-send observations are corrected; queued-send and removal totality have checked stale-statement counterexamples. All 79 projected headlines and their full closure check; exact refusal corrections and actual socket/scalar readback are current. Wider configuration charter gaps remain open. |
-| H5 Progress | 59 | 265 | 42 | 287 | Pure/control, cut, jitter, index, poll bounds, dispatch, scheduler turns, stack/probe frames, queue flush contracts, drain selection and Product observation bridge carried; one type-given index frame deleted. The old backlog fixture has checked exact runner and direct-fixture rejections. Drain bounds are carried. General runner boundaries, corrected historical rejection wrappers and receive-source leaves are carried; All 42 headlines and their closure check, with exact bounded cookie activation/schedule corrections and checked counterexamples. Historical snapshot/composition supports and global-progress charter gaps remain pending. |
-| H6 Timer discipline | 98 | 404 | 50 | 327 | Base/guard/jitter, arming/wheel, recorded clock and initiation-send arming contracts carried; three type-given frames deleted. Exact wheel corrections are explicit; queue/pending and retained-worker frames are carried; broader timer episodes and terminal closure remain pending. |
+| H5 Progress | 59 | 265 | 42 | 288 | Pure/control, cut, jitter, index, poll bounds, dispatch, scheduler turns, stack/probe frames, queue flush contracts, drain selection and Product observation bridge carried; one type-given index frame deleted. The old backlog fixture has checked exact runner and direct-fixture rejections. Drain bounds are carried. General runner boundaries, corrected historical rejection wrappers and receive-source leaves are carried; All 42 headlines and their closure check, with exact bounded cookie activation/schedule corrections and checked counterexamples. Five false historical count/totality supports are retired with checked refutations; the valid physical-transform projection is retained. Global-progress charter gaps remain pending. |
+| H6 Timer discipline | 98 | 404 | 50 | 338 | Base/guard/jitter, arming/wheel, recorded clock and initiation-send arming contracts carried; three type-given frames deleted. Exact wheel corrections are explicit; queue/pending and retained-worker frames are carried; broader timer episodes and terminal closure remain pending. |
 
 Retyped, deleted and retained counts will be reported per validated tranche.
 H1–H5 now have checked split terminal closures; H6 remains lagging.
@@ -5173,3 +5173,77 @@ and Progress.CookieActivationFrames, CookieActivationLoop, CookieScheduleLeaves,
 CookieScheduleSupportFindings under Leanux.Proofs.WG. Inspect axioms and replay
 those roots with scripts/in-bundle lake env leanchecker --fresh MODULE;
 use capped, 32 threads and 16 QEMU slots on the shared host.
+
+
+## Refuted cookie supports and conditional retry contracts
+
+[AGENT 2026-10-17] Retire five false legacy cookie support claims using their
+checked counterexamples, separately from type-given frame deletions. Retain
+and retype the valid finished_snapshot projection; an unused valid frame is
+not removed merely because its historical consumer is gone.
+
+| Tranche | Before | Retyped | Corrected | Type-deleted | Refuted/retired | Kept | Added | After |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Progress.Cookie legacy support | 6 | 1 | 0 | 0 | 5 | 0 | 0 | 1 |
+| TimerDiscipline.ResponseTraversal | 5 | 2 | 3 | 0 | 0 | 0 | 0 | 5 |
+| TimerDiscipline.SectionFrames/RetryDispatchLeaves/RetryQueueFindings | 5 | 5 | 0 | 0 | 0 | 0 | 1 | 6 |
+| This tranche | 16 | 8 | 3 | 0 | 5 | 0 | 1 | 12 |
+| Cumulative processed baseline and checked support | 1,738 | 1,306 | 168 | 22 | 5 | 237 | 172 | 1,883 |
+
+There are 573 campaign-owned files, 1,976 theorems and 550 checked proof
+modules. Ninety-three baseline declarations remain pending. Counts: H1 185,
+H2 333, H3 157, H4 582, H5 288 and H6 338. H1–H5 terminal closures are
+current; H6 and the full gate still lag. Wider charter gaps are unchanged.
+
+The retired originals are cookieActivationSnapshot_drained (bad-tail count
+and retained physical-slot witnesses), final_composition (count-recomposition
+witness), turn_stop and schedulerLoop_run (actual bad-tail occupancy failure),
+and turn_yield (the physical-hole witness). These are refuted claims, not
+proofs made trivial by types and not successful retypings. In particular, the
+old arbitrary-turn loop totality is not replaced by the narrower actual-schedule
+factor. Its schedulerLoop definition remains, with arbitrary supplied turns.
+CookieScheduleModel/Frames retain physical ring transforms and the exact
+finished_snapshot full Product projection without an operational completion
+claim. No coherence, reachability or new readiness premise is introduced.
+
+ResponseTraversal's two exact source/erasure laws and three corrected
+wheel-effect facts preserve actual session/traversal cuts, optional hooks,
+full Product observations and every error. SectionFrames retains both generic
+worker/section contracts over arbitrary Product callbacks. The old Kernel
+predicate becomes a joint predicate over WG, FS, Task and Seccomp owners;
+the callback scope is not restricted to WG.M. Actual Ambient section reads
+and NET_RX bookkeeping remain in order.
+
+RetryDispatchLeaves retains reference positivity, successful worker selection's
+nonempty queue, and conditional retry completion. FreshRetryPeer still explicitly
+requires its original pending=false premise; this tranche does not infer that
+premise from an empty queue. RetryQueueFindings checks why that inference is
+false: with an empty queue, a resident already-pending peer and a matching
+queue record, actual queuedAfterClock returns normally with queue [0].
+That refutes the entire original queuedAfterClock_empty postcondition on its
+original resident/empty domain. It is a statement artefact already related to
+the earlier queue-record finding, with no reachable-state or kernel claim.
+Downstream automatic retry-certificate construction remains pending.
+
+Development: ResponseTraversal probe 1 fails one lifted-pure normalization
+and reports five unused-simp warnings; changed probe 2 passes cleanly.
+The cookie retirement/frame package passes its first probe. Retry-frontier
+probes 1–4 fail 10/0, 4/0, 1/0 and 1/1 errors/warnings; probe 5 checks the
+initial five declarations. Positivity extension probe 6 fails two unavailable
+tactic uses; changed probe 7 checks the complete package without warnings.
+No cap or proof limit changes, infrastructure reruns or unchanged failed-source
+reruns occur.
+
+The combined scoped build passes 242 jobs with only the inherited
+Env:865 String.mk warning. Axiom inspection checks 1,079 logical roots in
+200 proof modules, including 608 public theorem roots, with standard axioms
+only. All five fresh kernel replays pass. Static checks and all 258 terminal
+names/order pass; mirror and shared-layer boundaries are unchanged.
+Root review finds no issue in the installed packages.
+
+Reproduce with scripts/in-bundle lake build on
+TimerDiscipline.ResponseTraversalClaims, TimerDiscipline.SectionFrames,
+TimerDiscipline.RetryDispatchLeaves, TimerDiscipline.RetryQueueFindings and
+Progress.CookieScheduleSource under Leanux.Proofs.WG. Inspect axioms and
+replay these five roots with scripts/in-bundle lake env leanchecker --fresh
+MODULE, under capped with 32 threads and 16 QEMU slots.
