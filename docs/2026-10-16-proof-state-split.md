@@ -156,8 +156,10 @@ it is not part of that baseline.
 
 | Initialized runner erasure, routing syscalls and persistent worker history | 91 | 0 | 0 | 91 | 3 | 94 |
 
+| Native index material and product activation history | 27 | 8 | 0 | 19 | 0 | 27 |
+
 The whole tree currently contains 451 Lean files and 6,506 theorems. The completed
-changes total 2,339 retyped theorems, 1,673 deletions, 1,555 retained contract shapes and 464 added.
+changes total 2,347 retyped theorems, 1,673 deletions, 1,574 retained contract shapes and 464 added.
 Retyping changes or generalizes the actual state/monad carrier or observation.
 This includes shorthand contracts whose source functions or named views move
 to a native monad. Mere namespace qualification and equivalent relocation of a
@@ -3689,8 +3691,10 @@ Development failures remain failures. SyscallCompletion needed three central
 module attempts (two failed, one passed) and thirteen output-free diagnostics
 (six failed, seven passed); four of the failed attempts were explicitly stopped
 stalled elaborations, with exit143/KILLED and preservation snapshots. These were
-not infrastructure retries or successful cap outcomes. HistoryAdapters needed
-eight failed local proof attempts before its output-free pass; Worker needed
+not infrastructure retries or successful cap outcomes. HistoryAdapters had
+six failed changed-source attempts and one failed isolated probe before its
+output-free pass; one other isolated probe passed. This corrects the previous
+checkpoint count of eight failures; Worker needed
 one no-progress tactic repair. RunnerCompletion's isolated projection and
 parameterized composition diagnostics included failed layout/normalization
 attempts before passing; only the later complete built module establishes its
@@ -3704,3 +3708,35 @@ replay each root with
 'cap scripts/in-bundle lake env leanchecker --fresh MODULE'.
 Full gate and remaining initialized safety/history chains are pending. Every
 register row remains lagging; mirror sources are byte-identical to b700659.
+
+
+## Native index material and activation history
+
+IndexMaterial retypes all eight contracts over the actual WG/Ambient stack.
+Read, borrow and fresh setter endpoints retain their original sequence. A
+normal failed acquisition may clear the owner's peer word while preserving
+receiving material; missing owners still stop. The existing supplied-support
+theorem remains distinct from initialized material origin. The build, eight
+named axiom checks, fresh replay and independent complete review pass without
+own warnings. One ordinary proof attempt failed before the corrected check.
+
+ActivationHistory and ActivationRunHistory retain all nineteen product
+contracts, arbitrary callbacks, actual copied worlds and the original43-field
+store premise. The actual cryptAhead, suspension, occupancy loop and dispatch
+continue through native WG and Ambient adapters. Their builds, all23 named
+roots, fresh scoped replay and independent complete source review pass without
+own warnings.
+
+Across the four-file history tranche (including the preceding checkpoint's
+HistoryAdapters and Worker), seventeen changed-source checks had twelve failures
+and five passes; two isolated probes had one failure and one pass. Failures
+included unchanged proof-limit exhaustion and concrete adapter/normalization
+errors. There was no infrastructure retry, crash, cap increase or proof-limit
+increase in that tranche. The final scoped graph passes347 jobs.
+
+Reproduce with
+'cap scripts/in-bundle lake build Leanux.Proofs.WG.Origins.IndexMaterial Leanux.Proofs.WG.Queues.RxActivationRunHistory';
+replay each root with
+'cap scripts/in-bundle lake env leanchecker --fresh MODULE'.
+The remaining outer-runner and origin chains, full gate and terminal replay
+are pending. Every register row remains lagging; the mirror is unchanged.
