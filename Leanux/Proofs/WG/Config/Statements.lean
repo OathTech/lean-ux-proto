@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Config.MixedGetterClaims
 import Leanux.Proofs.WG.Config.MixedPageContentSource
 import Leanux.Proofs.WG.Config.MixedPageBoundsClaims
 import Leanux.Proofs.WG.Config.MixedHeldCallbackSource
@@ -2019,5 +2020,31 @@ theorem original_key_paginated_multi_peer_get_after_set (d : Device) (peers : Pe
           CursorHeld postSet (peerGetterFinalDevice postSet values) none) :=
   key_paginated_peers_get_after_set d peers key sock established changed absent
     residents emptyIps headerFits firstFits fresh cursorData within idle emptyQueue
+
+/-- Complete original finite peer/allowed-IP getter under computed static
+boundary, capacity and lifetime conditions; all execution is derived. -/
+theorem original_finite_mixed_getter (d : Device) (peers : PeerId → Peer)
+    (nodes : NodeId → AipNode) (sock : NlSock)
+    (ready : MixedPageReady d peers nodes (mixedInitialRows d peers) {hasWg := true})
+    (residents : ∀ id ∈ d.peerList, d.peers[id]? = some (peers id))
+    (readable : ∀ pid ∈ d.peerList, ∀ id ∈ (peers pid).allowedipsList,
+      d.nodes[id]? = some (nodes id))
+    (headerFits : devicePrefixSpace d ≤ NLMSG_GOODSIZE)
+    (fresh : MixedPlanFresh d peers
+      (mixedPages d peers nodes (mixedInitialRows d peers) {hasWg := true} ready))
+    (cursorData : MixedPlanCursorData d
+      (mixedPages d peers nodes (mixedInitialRows d peers) {hasWg := true} ready))
+    (idle : sock.cbRunning = false) (emptyQueue : sock.queue = [])
+    (within : mixedPageReceiveCount
+      (mixedPages d peers nodes (mixedInitialRows d peers) {hasWg := true} ready) ≤ 4096) :
+    let pages := mixedPages d peers nodes (mixedInitialRows d peers) {hasWg := true} ready
+    Campaign2.Returns (wgGetDevice (byIndex d))
+      (fun s => s.wg.device = some d ∧ s.wg.nlSock7 = sock ∧ ClaimView.selectsDevice s d)
+      (fun result s => result = .ok (mixedGetterJson d peers nodes) ∧
+        s.wg.device = some (mixedPagesDevice d pages) ∧
+        s.wg.nlSock7 = socketReadbackFinal sock d ∧
+        CursorHeld d (mixedPagesDevice d pages) none) :=
+  mixed_getter_returns d peers nodes sock ready residents readable headerFits
+    fresh cursorData idle emptyQueue within
 
 end Leanux.Proofs.WG.Config
