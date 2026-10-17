@@ -490,3 +490,54 @@ before erase; a pending timer stopping after erase; and staged packets allowing
 release while contributing their length to txDropped. Correct event formulas
 keep release only after the actual erase, including a subsequent timer Stop.
 These are source-observer corrections, not initialized R2 counterexamples.
+
+
+## Cleanup totality
+
+The state-split carry exposed false unrestricted totality claims in the old RX
+credit layer. Positive peer credit alone does not make peerPut total: a final
+release checks both queues before erasing the peer, and checks timer state after
+the erase. The mirror is unchanged.
+
+[RxCleanupFindings.lean](../Leanux/Proofs/WG/Queues/RxCleanupFindings.lean) contains
+two kernel-reduced local fixtures. The first has one peer reference and an RX
+queue item; it refutes peerPut_returns and the stronger selected_payment.
+The second has one peer reference, a nonempty TX queue, one RX store cell, and
+a keypair with two references. Its selected carrier satisfies the complete
+Inventory and Protected premises. The actual keypair payment succeeds with
+its exact intermediate Ambient, but the following peer payment produces the
+queue invariant Stop. The theorem cleanup_discharge_totality_refuted negates
+the complete selected-cleanup contract, including packet/owner/caller equality,
+and therefore the third conjunct of the historical R4
+original_rx_cleanup_credit_discharge. It also refutes cleanup_discharge.
+
+Changing the supplied carrier to unpublished additionally satisfies QueueOwners,
+because the peer has no RX queue item. The actual key-put/peer-put/free suffix
+still stops; discard_unpublished_totality_refuted negates that older contract.
+No successful endpoint is manufactured for either Stop.
+
+The normal-return effect and preservation statements are not refuted. Neither
+are the first two R4 conjuncts or its actual-ENOSPC specialization: the latter
+has an additional enqueue receipt and queue-ownership premises absent from these
+fixtures. Initialized reachability, cryptographic input generation and Linux
+behavior are outside these local counterexamples.
+
+All eighteen theorems and fifteen fixture definitions pass explicit standard-only
+axiom checks, fresh kernel replay and independent source review. Reproduce with
+the usual optional cap wrapper from the retrofit report:
+
+~~~sh
+cap scripts/in-bundle lake build Leanux.Proofs.WG.Queues.RxCleanupFindings
+cap scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Queues.RxCleanupFindings
+~~~
+
+For the four refutations, an input to lake env lean --stdin is:
+
+~~~lean
+import Leanux.Proofs.WG.Queues.RxCleanupFindings
+open Leanux.Proofs.WG.Queues.CleanupFindings
+#print axioms positive_credit_totality_refuted
+#print axioms selected_payment_totality_refuted
+#print axioms cleanup_discharge_totality_refuted
+#print axioms discard_unpublished_totality_refuted
+~~~

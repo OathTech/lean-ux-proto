@@ -11,10 +11,10 @@ new worlds; new R3/R4 results follow the retrofit.
 | Census | Lean files | Named theorems |
 | --- | ---: | ---: |
 | Validated baseline `00641c6` | 471 | 7,715 |
-| Completed retrofit checkpoints | 451 | 6,518 |
+| Completed retrofit checkpoints | 452 | 6,531 |
 
-Completed changes comprise **2,534 retyped/generalized, 1,677 deleted,
-1,713 retained contract shapes and 480 added theorems**. Retyping changes the
+Completed changes comprise **2,575 retyped/generalized, 1,686 deleted,
+1,742 retained contract shapes and 502 added theorems**. Retyping changes the
 actual carrier or observation, including shorthand contracts whose functions
 move to a native monad. Namespace-only product qualification and equivalent
 projection relocation count as retained. The census includes private and
@@ -128,6 +128,32 @@ source review pass. The module builds in 1.2 seconds with zero own warnings;
 662 inherited warnings remain in its closure. The first output-free check
 passed with one unused-simp warning; the corrected second check is warning-free.
 No infrastructure rerun was needed.
+
+Material retention carries 79→74 theorems: 41 native/view retypings, 29
+retained product contracts, nine component-derived Skb-frame deletions and
+four composition helpers. Arbitrary checksum, softirq, IRQ, reschedule and
+Stack callbacks remain product actions. The 253-job scoped build, all 75 named
+declaration axiom checks, fresh replay and complete independent source review
+pass. The module builds in 109 seconds with zero own warnings; 983 inherited
+warnings remain. Fifteen output-free development checks comprised thirteen
+ordinary failures, one scoped-prefix pass and the final full-file pass.
+Three edit-driver syntax failures executed no tool; no infrastructure rerun
+was used.
+
+The cleanup finding adds eighteen theorems and fifteen fixture definitions.
+Its 200-job scoped build, all 33 named axiom checks, fresh replay and independent
+source review pass; the module builds in 2.2 seconds with zero own warnings.
+Four ordinary failed file checks preceded the fifth, warning-free pass.
+The exact old selected-cleanup premises permit a last-reference peer with a
+nonempty TX queue. Key payment returns, then peer payment stops at the queue
+guard. This refutes the third conjunct of the historical
+original_rx_cleanup_credit_discharge and four unrestricted totality helpers.
+The unpublished fixture also satisfies QueueOwners. Normal-return preservation
+and the stronger actual-ENOSPC contract are not refuted. These are counterexamples
+to proof contracts over arbitrary local states, not initialized reachability
+or Linux-bug claims. The [finding](2026-10-16-proof-state-split-findings.md#cleanup-totality)
+records the declarations and reproduction commands. Withdrawal of the old
+false exports and caller repairs remain part of the unfinished R4 terminal carry.
 
 Remaining work is the routing/origin terminal carry, stamped
 traffic/environment/runner history, material lifecycle/support callers, RX
