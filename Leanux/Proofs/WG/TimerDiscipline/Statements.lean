@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.TimerDiscipline.ActualRetryBlockClaims
+import Leanux.Proofs.WG.TimerDiscipline.OuterAdjacentClaims
 import Leanux.Proofs.WG.TimerDiscipline.OuterEpisodeClaims
 import Leanux.Proofs.WG.TimerDiscipline.OuterFirstReceiptClaims
 import Leanux.Proofs.WG.TimerDiscipline.OuterFirstTurnClaims
@@ -728,5 +730,28 @@ theorem original_timer_episode_receipt (jPass : UInt64) (entry : Campaign2.Produ
       (fun initial => initial = entry)
       (fun result final => OuterTimerEpisodeValid jPass entry result.1 result.2 final) :=
   runTimers_episode_receipt jPass entry
+
+/-- Conditional retry certificates for adjacent actual retransmit/send turns,
+using their immediate snapshots inside a normal original timer episode. This
+adds no whole-history pairing, no-due, fairness or retry-19 assertion. -/
+theorem original_timer_adjacent_retry_pairs (jPass : UInt64) :
+    Campaign2.Product.Ensures (observedRunTimersEpisode jPass) (fun _ => True)
+      (fun result _ => ∀ front suffix left right,
+        result.1.turns = front ++ left :: right :: suffix → OuterAdjacentRetryPair jPass left right) :=
+  runTimers_adjacent_retry_pairs jPass
+
+/-- A nonempty contiguous block of qualifying same-peer retransmit/send pairs
+inside one normal actual timer episode preserves identity and references and
+increases attempts by the number of pairs. At its last send exit attempts are
+at most 19, pending is false and the send queue is empty. This does not assert
+that arbitrary episodes are paired, nor bound retry counts after later turns
+or final delivery. All errors remain those of `observedRunTimersEpisode_erase`. -/
+theorem original_timer_actual_retry_block_counts (jPass : UInt64) :
+    Campaign2.Product.Ensures (observedRunTimersEpisode jPass) (fun _ => True)
+      (fun result _ => ∀ front suffix first rest pid,
+        result.1.turns = front ++ actualRetryBlockTurns (first :: rest) ++ suffix →
+        (∀ pair ∈ first :: rest, ActualRetryPairMatches jPass pid pair) →
+        ActualRetryBlockEffect pid first rest) :=
+  runTimers_actual_retry_block_counts jPass
 
 end Leanux.Proofs.WG.TimerDiscipline

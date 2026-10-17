@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Config.PaginationClaims
 import Leanux.Proofs.WG.Config.KeyReadbackClaims
 import Leanux.Proofs.WG.Config.PortRefusalClaims
 import Leanux.Proofs.WG.Config.MixedPeerClaims
@@ -1432,5 +1433,25 @@ theorem original_private_key_rotation_get_after_set (d : Device) (key : Key) (pi
         s.wg.nlSock7 = {sock with queue := [], ctx := {hasWg := true}, prevSeq := d.deviceUpdateGen + 1, dumpDoneErrno := 0, cbRunning := false} ∧
         ∃ now, s.wg.device = some (keyReadbackDevice d key pid p now)) :=
   rotation_get_after_set d key pid p sock established changed absent members resident noIps room idle empty
+
+/-- The original getter drains any finite IPv4 allowed-IP list for one peer
+through its actual fixed-capacity callbacks and receives, then coalesces every
+occurrence in order. Cursor freshness is required only at canonical chunk
+boundaries; the exact receive bound includes a separate DONE envelope when
+needed. This is not a global ownership invariant or multi-peer pagination. -/
+theorem original_finite_ipv4_pagination (pid : PeerId) (d : Device) (p : Peer)
+    (nodes : NodeId → AipNode) (ids : List NodeId) (sock : NlSock)
+    (peers : d.peerList = [pid]) (resident : d.peers[pid]? = some p)
+    (listed : p.allowedipsList = ids) (fresh : ipv4PaginationFresh d ids)
+    (readable : Ipv4Residents d nodes ids) (endpoint : p.endpoint = none)
+    (room : devicePrefixSpace d + 168 ≤ NLMSG_GOODSIZE)
+    (idle : sock.cbRunning = false) (empty : sock.queue = [])
+    (enough : ipv4PaginationReceiveCount d ids ≤ 4096) :
+    Campaign2.Returns (wgGetDevice (byIndex d))
+      (fun s => s.wg.device = some d ∧ s.wg.nlSock7 = sock ∧ ClaimView.selectsDevice s d)
+      (fun result s => result = .ok (suffixJson d p nodes ids) ∧
+        s.wg.device = some d ∧ s.wg.nlSock7 = socketReadbackFinal sock d) :=
+  ipv4Pagination_returns pid d p nodes ids sock peers resident listed fresh readable endpoint
+    room idle empty enough
 
 end Leanux.Proofs.WG.Config
