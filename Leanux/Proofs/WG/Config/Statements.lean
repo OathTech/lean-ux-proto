@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Config.ScalarMixedGetterClaims
 import Leanux.Proofs.WG.Config.MixedGetterClaims
 import Leanux.Proofs.WG.Config.MixedPageContentSource
 import Leanux.Proofs.WG.Config.MixedPageBoundsClaims
@@ -2046,5 +2047,45 @@ theorem original_finite_mixed_getter (d : Device) (peers : PeerId → Peer)
         CursorHeld d (mixedPagesDevice d pages) none) :=
   mixed_getter_returns d peers nodes sock ready residents readable headerFits
     fresh cursorData idle emptyQueue within
+
+/-- Actual existing-peer scalar setter followed by the complete finite mixed
+peer/allowed-IP getter, including retained first-peer writes before later EINVAL.
+The native getter returns every original occurrence and stored-width/endpoint
+serialization under the computed successor's static progress, boundary freshness,
+cursor-reference and finite receive-budget conditions. The exact final Device
+retains ordered cursor handoffs; no callback-success premise is supplied. -/
+theorem original_scalar_mixed_pagination_get_after_set (d : Device) (peers : PeerId → Peer)
+    (nodes : NodeId → AipNode) (key psk : Key) (interval : Nat) (bad : Bool)
+    (pid : PeerId) (sock : NlSock)
+    (found : d.peerHashtable.find? (·.1 == key) = some (key,pid))
+    (resident : d.peers[pid]? = some (peers pid))
+    (live : 0 < (peers pid).refcount) (bounded : (peers pid).refcount+1 < 2^31)
+    (down : d.running = false)
+    (residents : ∀ q ∈ d.peerList, d.peers[q]? = some (peers q))
+    (readable : ∀ q ∈ d.peerList, ∀ id ∈ (peers q).allowedipsList, d.nodes[id]? = some (nodes id))
+    (idle : sock.cbRunning = false) (emptyQueue : sock.queue = []) :
+    let updated := scalarRequestDevice d pid (peers pid) psk interval
+    let configured := scalarPeerView peers pid psk interval
+    ∀ ready : MixedPageReady updated configured nodes (mixedInitialRows updated configured) {hasWg := true},
+    devicePrefixSpace updated ≤ NLMSG_GOODSIZE →
+    MixedPlanFresh updated configured
+      (mixedPages updated configured nodes (mixedInitialRows updated configured) {hasWg := true} ready) →
+    MixedPlanCursorData updated
+      (mixedPages updated configured nodes (mixedInitialRows updated configured) {hasWg := true} ready) →
+    mixedPageReceiveCount
+      (mixedPages updated configured nodes (mixedInitialRows updated configured) {hasWg := true} ready) ≤ 4096 →
+    Campaign2.Returns (do
+      let ret ← wgSetDevice (scalarDeviceAttrs d key psk interval bad)
+      let dump ← wgGetDevice (byIndex d)
+      pure (ret,dump))
+      (fun s => s.wg.device = some d ∧ s.wg.nlSock7 = sock ∧ ClaimView.selectsDevice s d)
+      (fun result s =>
+        let pages := mixedPages updated configured nodes (mixedInitialRows updated configured) {hasWg := true} ready
+        result = ((if bad then -EINVAL else 0),.ok (mixedGetterJson updated configured nodes)) ∧
+        s.wg.device = some (mixedPagesDevice updated pages) ∧
+        s.wg.nlSock7 = socketReadbackFinal sock updated ∧
+        CursorHeld updated (mixedPagesDevice updated pages) none) :=
+  scalar_mixed_get_after_set d peers nodes key psk interval bad pid sock
+    found resident live bounded down residents readable idle emptyQueue
 
 end Leanux.Proofs.WG.Config
