@@ -1,4 +1,4 @@
-import Leanux.Proofs.WG.TimerDiscipline.RetryDispatchModel
+import Leanux.WG.State
 set_option autoImplicit false
 namespace Leanux.Proofs.WG.TimerDiscipline
 open Leanux Leanux.WG

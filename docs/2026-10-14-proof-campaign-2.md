@@ -14,13 +14,13 @@ attempted before the retrofit finishes.
 | H3 Roaming | 13 | 157 | Full terminal closure current; callback authentication provenance and broader caller coverage open. |
 | H4 Configuration | 79 | 582 | Full terminal closure current; global ownership, queued cleanup and general pagination open. |
 | H5 Progress | 42 | 288 | Full terminal closure current with exact bounded outcomes and checked refutations; global progress/coherent-ring adequacy open. |
-| H6 Timers | 50 | 351 | Selected-unit, caller and rearm support checked; retry composition and full terminal closure pending. |
+| H6 Timers | 50 | 370 | Selected-unit, caller and rearm support checked; retry composition and full terminal closure pending. |
 
-The checked surface is 1,896 theorems: 1,309 retyped, 175 explicitly
-corrected, 237 retained and 175 added support/finding declarations.
+The checked surface is 1,915 theorems: 1,310 retyped, 187 explicitly
+corrected, 239 retained and 179 added support/finding declarations.
 Twenty-two frames are deleted because the types give their facts; five
 false cookie supports are separately retired using checked counterexamples.
-Eighty-three baseline declarations remain pending, including H6's 50
+Sixty-eight baseline declarations remain pending, including H6's 50
 terminal declarations. All 258 original terminal names/order remain intact.
 
 The [retrofit report](2026-10-16-proof-campaign-2-state-split.md) records

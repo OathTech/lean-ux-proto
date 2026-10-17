@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.TimerDiscipline.RetrySelectedSource
+import Leanux.Proofs.WG.TimerDiscipline.RetryInspectionClaims
 import Leanux.Proofs.WG.TimerDiscipline.RetryGiveUpFrames
 import Leanux.Proofs.WG.TimerDiscipline.RetryEligibilitySource
 import Leanux.Proofs.WG.TimerDiscipline.RetryDispatchLeaves
@@ -27,72 +29,6 @@ def observedRetryDispatch (horizon : UInt64) : M RetryDispatchObservation := do
   let afterTimer ← Campaign2.read
   let send ← observed Env.runOneSendWorker sendWorkerExecution
   return ⟨timer.1, afterTimer, send.1⟩
-
-theorem fireSelected_empty (pid : PeerId) (d : Device) (p : Peer)
-    (resident : d.peers[pid]? = some p) (empty : d.sendWorkQueue = [])
-    (limit : p.timerHandshakeAttempts ≤ MAX_TIMER_HANDSHAKES) :
-    Ensures (fireSelected .timerRetransmit pid .retransmitHandshake)
-      (fun w => w.k.wg = some d)
-      (fun _ w => ∃ out, w.k.wg = some out ∧
-        (out.sendWorkQueue = [] ∨ (out.sendWorkQueue = [pid] ∧
-          ∃ queued, out.peers[pid]? = some queued ∧ FreshRetryPeer p queued))) := by
-  intro w result final pre run
-  let detached := p.setTimer .retransmitHandshake none
-  let detachedDevice := withPeer d pid detached
-  have resident' : detachedDevice.peers[pid]? = some detached := by simp [detachedDevice, withPeer]
-  have empty' : detachedDevice.sendWorkQueue = [] := empty
-  have limit' : detached.timerHandshakeAttempts ≤ MAX_TIMER_HANDSHAKES := limit
-  have hc := (ensures_iff _ _ _).mp
-    (expiredRetransmit_empty pid detachedDevice detached resident' empty' rfl limit')
-  have hs := runTimerSection_kernel_contract .timerRetransmit (expiredRetransmitHandshake pid)
-    (fun k => k.wg = some detachedDevice)
-    (fun k => ∃ out, k.wg = some out ∧
-      (out.sendWorkQueue = [] ∨ (out.sendWorkQueue = [pid] ∧
-        ∃ queued, out.peers[pid]? = some queued ∧ FreshRetryPeer detached queued))) hc
-  obtain ⟨u, after, deletion, device⟩ := delTimer_returns pid .retransmitHandshake d p resident w pre
-  simp only [fireSelected, timerCallback, StateT.run_bind, deletion] at run
-  have result' := (ensures_iff _ _ _).mpr hs after result final device run
-  simpa [detached, FreshRetryPeer, Peer.setTimer] using result'
-
-theorem fireSelected_giveUp_empty (pid : PeerId) (d : Device) (p : Peer)
-    (resident : d.peers[pid]? = some p) (empty : d.sendWorkQueue = [])
-    (limit : MAX_TIMER_HANDSHAKES < p.timerHandshakeAttempts) :
-    Ensures (fireSelected .timerRetransmit pid .retransmitHandshake)
-      (fun w => w.k.wg = some d)
-      (fun _ w => w.k.wg.map Device.sendWorkQueue = some []) := by
-  intro w result final pre run
-  let detached := p.setTimer .retransmitHandshake none
-  let detachedDevice := withPeer d pid detached
-  have resident' : detachedDevice.peers[pid]? = some detached := by simp [detachedDevice, withPeer]
-  have empty' : detachedDevice.sendWorkQueue = [] := empty
-  have limit' : MAX_TIMER_HANDSHAKES < detached.timerHandshakeAttempts := limit
-  have hc := (ensures_iff _ _ _).mp
-    (expiredRetransmit_giveUp_empty pid detachedDevice detached resident' empty' limit')
-  have hs := runTimerSection_kernel_contract .timerRetransmit (expiredRetransmitHandshake pid)
-    (fun k => k.wg = some detachedDevice)
-    (fun k => k.wg.map Device.sendWorkQueue = some []) hc
-  obtain ⟨u, after, deletion, device⟩ := delTimer_returns pid .retransmitHandshake d p resident w pre
-  simp only [fireSelected, timerCallback, StateT.run_bind, deletion] at run
-  exact (ensures_iff _ _ _).mpr hs after result final device run
-
-/-- The following original worker cannot select work after an empty give-up path. -/
-theorem fireSelected_send_limit (pid : PeerId) (d : Device) (p : Peer)
-    (resident : d.peers[pid]? = some p) (empty : d.sendWorkQueue = [])
-    (selected afterTimer final : World) (device : selected.k.wg = some d)
-    (timerRun : (fireSelected .timerRetransmit pid .retransmitHandshake).run selected = .ok ((), afterTimer))
-    (sendRun : Env.runOneSendWorker.run afterTimer = .ok ((), final)) :
-    p.timerHandshakeAttempts ≤ MAX_TIMER_HANDSHAKES := by
-  by_cases limit : p.timerHandshakeAttempts ≤ MAX_TIMER_HANDSHAKES
-  · exact limit
-  apply False.elim
-  have above : MAX_TIMER_HANDSHAKES < p.timerHandshakeAttempts := by omega
-  have queue := fireSelected_giveUp_empty pid d p resident empty above
-    selected () afterTimer device timerRun
-  cases hd : afterTimer.k.wg with
-  | none => simp [hd] at queue
-  | some out =>
-    have emptied : out.sendWorkQueue = [] := by simpa [hd] using queue
-    exact sendDispatch_nonempty out afterTimer () final hd sendRun emptied
 
 theorem observedRetryDispatch_run (horizon : UInt64) (w : World) :
     (observedRetryDispatch horizon).run w =

@@ -5328,3 +5328,74 @@ TimerDiscipline.RetryBoundarySource, TimerDiscipline.SendRearmClaims and
 TimerDiscipline.RetryEligibilitySource and TimerDiscipline.RetryGiveUpFrames
 under Leanux.Proofs.WG. Inspect axioms and replay these four roots with scripts/in-bundle lake env leanchecker
 --fresh MODULE, under capped with 32 threads and 16 QEMU slots.
+
+## Selected wheel units and actual retry inspection
+
+[AGENT 2026-10-17] Represent a retry input by RetryUnit's peer, wheel entry
+and optional preceding step. Omit the former horizon parameter: the actual
+unit factor has no horizon guard. This is an explicit scope correction,
+not a renamed scheduler theorem. Complete outer selection remains open.
+
+| Tranche | Before | Retyped | Corrected | Type-deleted | Refuted/retired | Kept | Added | After |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| FireRetrySource/SelectionFrames/FireSelectionSource/SourceClaims/ObservationBridge/ObservationClaims | 12 | 1 | 9 | 0 | 0 | 2 | 0 | 12 |
+| RetryInspectionClaims/RetrySelectedFrames/RetrySelectedSource | 3 | 0 | 3 | 0 | 0 | 0 | 0 | 3 |
+| RetryInspectionSource/RetryInspectedSource/WheelUnitSelectionFindings | 0 | 0 | 0 | 0 | 0 | 0 | 4 | 4 |
+| This tranche | 15 | 1 | 12 | 0 | 0 | 2 | 4 | 19 |
+| Cumulative processed baseline and checked support | 1,763 | 1,310 | 187 | 22 | 5 | 239 | 179 | 1,915 |
+
+There are 586 campaign-owned files, 1,983 theorems and 570 checked proof
+modules; 68 baseline declarations remain pending. H1–H6 checked counts are
+185, 333, 157, 582, 288 and 370. H1–H5 terminal closures remain current;
+H6's 50 terminals and 18 retry support declarations remain pending. Wider
+charter gaps and inherited full-gate lag are unchanged.
+
+SelectionFrames and RetrySelectedFrames contain the substantive preservation
+facts; claims live in ObservationClaims and RetryInspectionClaims, with
+concrete source factors/erasures in the corresponding Source files.
+RetryUnitModel and RetryInspectedModel are data-only. FireSelectionSource's
+actual unit has an earlier checked connection to runTimers; this tranche
+does not assert that its supplied unit is selected by that loop or that the
+loop completes. Worker/timer agreement, actual prefix state, callback and
+full Product observations remain. The old logical-expiry, due-peer and
+horizon conclusions are explicitly dropped, rather than silently treated as
+retypings. Two pure worker-kind facts are unchanged.
+
+RetryInspectionSource's two additional erasures relate the observer to the
+actual section and selected callback, including errors. The corrected
+fireSelected_empty retains resident/empty/attempt-limit premises and records
+the callback's actual optional queue-inspection bit. The separate above-limit
+frame preserves an empty queue; successful following send dispatch therefore
+derives the attempt limit. RetryInspectedSource adds a conditional completion
+companion using the separately named inspected-eligibility relation. The old
+FreshRetryPeer/CompletedRetryDispatch relations keep their stronger predicates.
+
+WheelUnitSelectionFindings checks the converse of the earlier wheel witness:
+a resident, listed peer can have a selectable wheel entry without a logical
+expiry. Its actual prefix succeeds while logical duePeers is empty. This
+is a statement-domain counterexample, without reachability or complete-callback
+claims; no mirror repair is requested.
+
+Development: selection probes 1, 3–9 and 11–12 fail on changed source;
+2 checks the initial pair, 10 the combined factors, and 13 the final projected
+finding and contracts. Retry observer probe 5 fails one trailing-Unit
+normalization; 6 checks its two erasures. Probe 7 fails two unresolved field
+projections and the resulting contract goal; 8 checks the corrected queue
+claim. Probe 9 fails a Unit binder removed by case elimination; 10 checks
+both selected-unit contracts. The separately scoped inspected-completion
+companion passes its first probe. These are changed-source development
+probes, with no raised proof limits/caps or infrastructure reruns.
+
+Scoped builds pass 191, 197 and finally 213 jobs; the only warning is inherited
+Env:865 String.mk. Axiom inspection checks 835 logical roots in 171 proof
+modules, including 510 public theorem roots, with standard axioms only.
+All five fresh kernel replays pass. Static checks, all 258 terminal
+names/order, and mirror/shared-layer boundaries pass. Root review finds no
+remaining issue in these packages.
+
+Reproduce with scripts/in-bundle lake build on TimerDiscipline.
+RetryInspectionClaims, RetrySelectedSource, ObservationClaims,
+WheelUnitSelectionFindings and RetryInspectedSource under Leanux.Proofs.WG
+(join each module name after TimerDiscipline). Inspect axioms and run
+scripts/in-bundle lake env leanchecker --fresh on each of these five roots.
+Use capped, 32 threads and 16 QEMU slots on the shared host.

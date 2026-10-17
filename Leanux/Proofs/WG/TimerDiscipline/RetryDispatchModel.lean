@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.TimerDiscipline.RetryInspectedModel
+import Leanux.Proofs.WG.TimerDiscipline.RetryUnitModel
 import Leanux.Proofs.WG.TimerDiscipline.SendDispatchModel
 import Leanux.Proofs.WG.TimerDiscipline.SendView
 
@@ -7,6 +9,7 @@ open Leanux Leanux.WG Campaign2
 structure RetryDispatchObservation where
   timer : Campaign2.Product.Outcome (PeerId × PeerTimer × Campaign2.Product.Snapshot)
   afterTimer : Campaign2.Product.Snapshot
+  inspection : Campaign2.Product.Outcome (Option Bool)
   send : Campaign2.Product.Outcome SendWorkerExecution
 
 /-- A freshly queued retry has one additional reference and a detached timer. -/
@@ -28,17 +31,17 @@ def CompletedRetryDispatch (pid : PeerId) (before : Peer)
       some (before.internalId, before.timerHandshakeAttempts + 1, before.refcount) ∧
     workObservation final.toSnapshot pid = (some [], some false)
 
-/-- A normal pair exposes its selected resident peer and derives its entry
-attempt bound, without an assumed output-reference invariant. -/
-def RetryDispatchCertificate (d : Device) (horizon : UInt64)
+/-- A normal selected-unit pair exposes its actual resident and inspected
+eligibility, deriving the attempt bound. No outer wheel-selection or logical
+expiry condition is inferred from this explicitly supplied unit. -/
+def RetryDispatchCertificate (d : Device) (unit : RetryUnit)
     (result : RetryDispatchObservation) (final : Campaign2.Product.Snapshot) : Prop :=
-  ∃ pid selected send p expiry,
-    result.timer = .ok ((pid, .retransmitHandshake, selected), result.afterTimer) ∧
+  ∃ selected send p seen,
+    result.timer = .ok ((unit.pid, .retransmitHandshake, selected), result.afterTimer) ∧
+    result.inspection = .ok (seen, result.afterTimer) ∧
     result.send = .ok (send, final) ∧ selected.wg.device = some d ∧
-    pid ∈ d.peerList ∧ d.peers[pid]? = some p ∧
-    p.timerRetransmitHandshake = some expiry ∧ timeBefore expiry horizon = true ∧
+    d.peers[unit.pid]? = some p ∧
     p.timerHandshakeAttempts ≤ MAX_TIMER_HANDSHAKES ∧
-    CompletedRetryDispatch pid p result.afterTimer send final
-
+    CompletedInspectedRetryDispatch unit.pid p seen result.afterTimer send final
 
 end Leanux.Proofs.WG.TimerDiscipline

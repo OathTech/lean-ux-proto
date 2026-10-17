@@ -2,12 +2,14 @@ import Leanux.Proofs.WG.TimerDiscipline.Model
 import Leanux.Proofs.WG.TimerDiscipline.SelectionFrames
 import Leanux.Proofs.WG.TimerDiscipline.FireRetrySource
 
+/-! Current selected wheel-unit contracts. The outer nextDue branch and complete runTimers loop are separate obligations. -/
+
 set_option autoImplicit false
 set_option pp.structureInstances false
 set_option maxHeartbeats 800000
 
 namespace Leanux.Proofs.WG.TimerDiscipline
-open Leanux Leanux.WG Leanux.Env Leanux.Proofs.WG.Noise Leanux.Proofs.WG.Config Std.Do
+open Leanux Leanux.WG Leanux.Env Noise Std.Do
 
 theorem singleton_filter_member (ids : List PeerId) (test : PeerId → Bool) (pid : PeerId)
     (singleton : ids.filter test = [pid]) : pid ∈ ids ∧ test pid = true := by
@@ -15,34 +17,50 @@ theorem singleton_filter_member (ids : List PeerId) (test : PeerId → Bool) (pi
   rw [singleton]
   simp
 
-theorem timerSelection_due (worker : Worker) (jHi : UInt64) (d : Device) :
-    Ensures (timerSelection worker jHi) (fun w => w.k.wg = some d)
-      (fun selected w => worker.timer? = some selected.2 ∧
-        selected.1 ∈ duePeers d selected.2 jHi ∧ w.k.wg = some d) := by
-  have hp := peekUnit_spec_kernel_variant (fun k => k.wg = some d) worker
-  rw [ensures_iff]
-  mvcgen [timerSelection, getDev, getK, invariant, unsupported, hp]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals repeat intro
-  all_goals simp_all [duePeers]
-  all_goals grind [singleton_filter_member]
+/-- Corrected to worker-kind and device preservation on the actual selected-unit prefix. The obsolete logical-expiry implication is refuted separately. -/
+theorem timerSelection_due (worker : Worker) (pid : PeerId) (timer : PeerTimer)
+    (we : WheelEntry) (step : Option UInt64) (d : Device) :
+    Noise.Product.Ensures (timerDispatchPrefix_variant worker pid timer we step)
+      (fun w => w.wg.dev = some d)
+      (fun _ w => worker.timer? = some timer ∧ w.wg.dev = some d) := by
+  intro initial result final pre run
+  have same := (Noise.Product.ensures_iff _ _ _).mpr
+    (timerSelection_kernel_spec (fun g _ _ _ => g.dev = some d) worker pid timer we step)
+    initial result final pre run
+  refine ⟨?_, same⟩
+  let expected : Worker := match timer with
+    | .retransmitHandshake => .timerRetransmit
+    | .sendKeepalive => .timerSendKeepalive
+    | .newHandshake => .timerNewHandshake
+    | .zeroKeyMaterial => .timerZeroKey
+    | .persistentKeepalive => .timerPersistentKeepalive
+  have workerRun : timerWorker timer = pure expected := by cases timer <;> rfl
+  have chosen : worker = expected := by
+    by_cases sameWorker : worker = expected
+    · exact sameWorker
+    · have wrong : (worker != expected) = true := by
+        cases worker <;> cases timer <;> first | rfl | exact False.elim (sameWorker rfl)
+      simp only [timerDispatchPrefix_variant, workerRun, pure_bind, wrong, ite_true] at run
+      cases run
+  rw [chosen]
+  cases timer <;> rfl
 
-theorem fireTimer_retransmit (pid : PeerId) (jHi : UInt64)
+/-- Corrected selected-unit retry effect conditional on its actual prefix run; this does not establish outer wheel selection. -/
+theorem fireTimer_retransmit (pid : PeerId) (we : WheelEntry) (step : Option UInt64)
     (identity attempts : Nat) (timer : Option UInt64) :
-    Ensures (fireTimer .timerRetransmit jHi)
-      (fun w => retryAt w pid = some (identity, attempts, timer) ∧
-        ∃ selected, (timerSelection .timerRetransmit jHi).run w =
-          .ok ((pid, .retransmitHandshake), selected))
-      (fun _ w => retryAt w pid = some (identity, nextAttempts attempts, none)) := by
+    Noise.Product.Ensures (timerDispatchUnit_variant .timerRetransmit pid .retransmitHandshake we step)
+      (fun w => retryAt w.wg pid = some (identity, attempts, timer) ∧
+        ∃ selected, (timerDispatchPrefix_variant .timerRetransmit pid .retransmitHandshake we step).run w =
+          .ok ((), selected))
+      (fun _ w => retryAt w.wg pid = some (identity, nextAttempts attempts, none)) := by
   intro initial result final pre run
   obtain ⟨counter, selected, selection⟩ := pre
-  have frame := (ensures_iff _ _ _).mpr
-    (timerSelection_kernel_spec (fun k => retryKernel k pid = some (identity, attempts, timer))
-      .timerRetransmit jHi)
-  have after : retryAt selected pid = some (identity, attempts, timer) :=
-    frame initial _ selected counter selection
+  have frame := (Noise.Product.ensures_iff _ _ _).mpr
+    (timerSelection_kernel_spec (fun g _ _ _ => retryAt g pid = some (identity, attempts, timer))
+      .timerRetransmit pid .retransmitHandshake we step)
+  have after := frame initial () selected counter selection
   rw [fireTimer_source, StateT.run_bind, selection] at run
-  exact fireSelected_retransmit pid identity attempts timer selected result final after run
+  exact fireSelected_retransmit pid we identity attempts timer selected result final after run
 
 theorem duePeer_resident (d : Device) (timer : PeerTimer) (jHi : UInt64) (pid : PeerId)
     (member : pid ∈ duePeers d timer jHi) :
@@ -61,22 +79,23 @@ theorem duePeer_resident (d : Device) (timer : PeerTimer) (jHi : UInt64) (pid : 
     | some expiry =>
       exact ⟨p, expiry, rfl, armed, by simpa [resident, armed] using due⟩
 
-theorem fireTimer_execution (worker : Worker) (jHi : UInt64) (initial final : World) (d : Device)
-    (device : initial.k.wg = some d) (run : (fireTimer worker jHi).run initial = .ok ((), final)) :
-    ∃ pid timer selected,
-      (timerSelection worker jHi).run initial = .ok ((pid, timer), selected) ∧
-      (fireSelected worker pid timer).run selected = .ok ((), final) ∧
-      worker.timer? = some timer ∧ selected.k.wg = some d ∧
-      pid ∈ d.peerList ∧ ∃ p expiry, d.peers[pid]? = some p ∧
-        p.timer timer = some expiry ∧ timeBefore expiry jHi = true := by
+/-- Exact prefix and detached suffix of an already selected wheel unit. No peer-list or logical-expiry inference is made. -/
+theorem fireTimer_execution (worker : Worker) (pid : PeerId) (timer : PeerTimer)
+    (we : WheelEntry) (step : Option UInt64) (initial final : World) (d : Device)
+    (device : initial.wg.dev = some d)
+    (run : (timerDispatchUnit_variant worker pid timer we step).run initial = .ok ((), final)) :
+    ∃ selected,
+      (timerDispatchPrefix_variant worker pid timer we step).run initial = .ok ((), selected) ∧
+      (fireWheelSelected worker pid timer we).run selected = .ok ((), final) ∧
+      worker.timer? = some timer ∧ selected.wg.dev = some d := by
   rw [fireTimer_source, StateT.run_bind] at run
-  cases selection : (timerSelection worker jHi).run initial with
-  | error e => rw [selection] at run; cases run
+  cases selection : (timerDispatchPrefix_variant worker pid timer we step).run initial with
+  | error stop => rw [selection] at run; cases run
   | ok pair =>
-    obtain ⟨⟨pid, timer⟩, selected⟩ := pair
+    obtain ⟨value, selected⟩ := pair
+    cases value
     rw [selection] at run
-    have contract := timerSelection_due worker jHi d initial (pid, timer) selected device selection
-    exact ⟨pid, timer, selected, rfl, run, contract.1, contract.2.2,
-      duePeer_resident d timer jHi pid contract.2.1⟩
+    exact ⟨selected, rfl, run,
+      timerSelection_due worker pid timer we step d initial () selected device selection⟩
 
 end Leanux.Proofs.WG.TimerDiscipline

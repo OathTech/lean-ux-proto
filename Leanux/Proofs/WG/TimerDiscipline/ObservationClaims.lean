@@ -3,49 +3,59 @@ import Leanux.Proofs.WG.TimerDiscipline.ObservationBridge
 import Leanux.Proofs.WG.TimerDiscipline.JitterBoundClaims
 import Leanux.Proofs.WG.TimerDiscipline.JitterOutcomeClaims
 
-namespace Leanux.Proofs.WG.TimerDiscipline
-open Leanux Leanux.WG Campaign2
+/-! Current selected wheel-unit contracts. The outer nextDue branch and complete runTimers loop are separate obligations. -/
 
-theorem projected_timer_dispatch_due (worker : Worker) (jHi : UInt64) (d : Device) :
-    Campaign2.Ensures (observed (Env.fireTimer worker jHi) (timerExecutionPath worker jHi))
+set_option autoImplicit false
+
+namespace Leanux.Proofs.WG.TimerDiscipline
+open Leanux Leanux.WG Leanux.Env Noise Std.Do
+
+/-- Full Product observation of an already selected unit, retaining exact prefix and final snapshots. This corrects the obsolete logical-due conclusion. -/
+theorem projected_timer_dispatch_due (worker : Worker) (pid : PeerId) (timer : PeerTimer)
+    (we : WheelEntry) (step : Option UInt64) (d : Device) :
+    Campaign2.Product.Ensures (observed (timerDispatchUnit_variant worker pid timer we step)
+      (timerExecutionPath worker pid timer we step))
       (fun s => s.wg.device = some d)
-      (fun result final => ∃ pid timer selected,
+      (fun result final => ∃ selected,
         result.1 = .ok ((pid, timer, selected), final) ∧
-        worker.timer? = some timer ∧ selected.wg.device = some d ∧
-        pid ∈ d.peerList ∧ ∃ p expiry, d.peers[pid]? = some p ∧
-          p.timer timer = some expiry ∧ timeBefore expiry jHi = true) := by
+        worker.timer? = some timer ∧ selected.wg.device = some d) := by
   apply observed_effect
   intro initial result final device run
   cases result
-  obtain ⟨pid, timer, selected, selection, callback, kind, same, due⟩ :=
-    source_timer_dispatch_due worker jHi initial final d device run
-  refine ⟨pid, timer, snapshot selected, ?_, kind, same, due⟩
+  obtain ⟨selected, selection, callback, kind, same⟩ :=
+    source_timer_dispatch_due worker pid timer we step initial final d device run
+  refine ⟨Campaign2.Product.snapshot selected, ?_, kind, same⟩
   apply observe_ok
   simp only [timerExecutionPath, StateT.run_bind, selection]
-  change ((fireSelected worker pid timer).run selected >>= fun out =>
-    Except.ok ((pid, timer, snapshot selected), out.2)) = _
-  rw [callback]; rfl
+  change ((fireWheelSelected worker pid timer we).run selected >>= fun out =>
+    Except.ok ((pid, timer, Campaign2.Product.snapshot selected), out.2)) = _
+  rw [callback]
+  rfl
 
-theorem projected_retransmit_dispatch (pid : PeerId) (jHi : UInt64)
+/-- Conditional retry effect from the actual selected-unit prefix observation, preserving the original full Product payload. -/
+theorem projected_retransmit_dispatch (pid : PeerId) (we : WheelEntry) (step : Option UInt64)
     (identity attempts : Nat) (timer : Option UInt64) :
-    Campaign2.Ensures (observed (Env.fireTimer .timerRetransmit jHi)
-      (timerSelection .timerRetransmit jHi))
-      (fun s => retryObservation s pid = some (identity, attempts, timer))
+    Campaign2.Product.Ensures (observed
+      (timerDispatchUnit_variant .timerRetransmit pid .retransmitHandshake we step)
+      (do timerDispatchPrefix_variant .timerRetransmit pid .retransmitHandshake we step
+          pure (pid, PeerTimer.retransmitHandshake)))
+      (fun s => retryObservation s.toSnapshot pid = some (identity, attempts, timer))
       (fun result final => ∀ selected,
         result.1 = .ok ((pid, .retransmitHandshake), selected) →
-        retryObservation final pid = some (identity, nextAttempts attempts, none)) := by
+        retryObservation final.toSnapshot pid = some (identity, nextAttempts attempts, none)) := by
   apply observed_effect
   intro initial result final pre run selected selection
-  cases hp : (timerSelection .timerRetransmit jHi).run initial with
-  | error e => simp [observeResult, hp, Except.map] at selection
+  cases hp : (timerDispatchPrefix_variant .timerRetransmit pid .retransmitHandshake we step).run initial with
+  | error stop =>
+    change Campaign2.Product.observeResult
+      ((timerDispatchPrefix_variant .timerRetransmit pid .retransmitHandshake we step).run initial >>=
+        fun out => Except.ok ((pid, PeerTimer.retransmitHandshake), out.2)) = _ at selection
+    rw [hp] at selection
+    cases selection
   | ok pair =>
-    obtain ⟨⟨actualPid, actualTimer⟩, middle⟩ := pair
-    rw [observe_ok hp] at selection
-    obtain ⟨values, _⟩ := Prod.mk.inj (Except.ok.inj selection)
-    obtain ⟨pidEq, timerEq⟩ := Prod.mk.inj values
-    subst actualPid
-    subst actualTimer
-    exact source_retransmit_dispatch pid jHi identity attempts timer initial result final
+    obtain ⟨ignored, middle⟩ := pair
+    cases ignored
+    exact source_retransmit_dispatch pid we step identity attempts timer initial result final
       ⟨pre, middle, hp⟩ run
 
 end Leanux.Proofs.WG.TimerDiscipline

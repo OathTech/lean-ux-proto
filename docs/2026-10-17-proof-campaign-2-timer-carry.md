@@ -124,3 +124,15 @@ actual wheel selection and execution. Validation: scoped build, standard
 axioms and fresh replay pass; reproduce with scripts/in-bundle lake build
 Leanux.Proofs.WG.TimerDiscipline.WheelSelectionFindings and scripts/in-bundle
 lake env leanchecker --fresh on that module, under capped on the shared host.
+
+The 1,915-theorem checkpoint checks the converse witness in
+WheelUnitSelectionFindings: a resident, listed peer has retransmit expiry
+none, logical duePeers is empty, but TimerWheel.nextDue at time 2 selects
+its wheel entry. The actual timer-unit prefix succeeds for every Product
+realization with that device and no hidden records. This proves neither
+reachability nor completion of the callback. Together the two witnesses
+exclude equating arbitrary wheel metadata with the historical logical
+due-peer selector. Current unit contracts retain actual prefix/callback
+execution and worker-kind agreement; they do not establish selection by
+the outer runTimers loop. The scoped build, standard-axiom audit and fresh
+replay pass; reproduction and scope corrections are in the retrofit report.
