@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Progress.CookieScheduleOutcomeSource
 import Leanux.Proofs.WG.Progress.CookieScheduleFrames
 import Leanux.Proofs.WG.Progress.CookieSchedulerSource
 
@@ -100,31 +101,5 @@ theorem schedulerLoop_run (ys : List (List UInt8)) (turns : List Nat)
       change (schedulerLoop turns).run (yieldedWorld a w d (records ys stop)) = _
       rw [next, final_composition a w d (records ys stop) nonempty]
 
-theorem schedule_run (ys : List (List UInt8)) (a : Activation) (w : World)
-    (d : Device) (stop : List UInt8)
-    (receive : a.worker = .receiveWorker) (device : w.k.wg = some d)
-    (table : d.indexTable = []) (cookies : CookieOnly d)
-    (present : w.hidden = some (records ys stop)) (suspended : w.suspended = [a])
-    (valid : ∀ bytes ∈ ys, bytes.length = 8) (stopLen : stop.length = 8)
-    (occupancy : ys.length ≤ d.handshakeQueue.length) :
-    (schedule none).run w = .ok ((), finished w d) := by
-  have budget : recordBudget.run w = .ok (ys.length+2,w) := by
-    simp [recordBudget, StateT.run, bind, pure, get, getThe, MonadStateOf.get,
-      StateT.bind, StateT.pure, StateT.get, Except.bind, Except.pure, present, records, Nat.add_assoc]
-  have loop := schedulerLoop_run ys (List.range' 0 (ys.length+2)) a w d stop
-    receive device table cookies present suspended valid stopLen occupancy (by simp)
-  rw [schedule_source, StateT.run_bind, budget]
-  change ((do let result ← forIn [0:ys.length+2] ((none,()) : Option Unit × Unit) (fun _ _ => scheduleTurn none)
-              match result.1 with
-              | some ret => pure ret
-              | none => budgetExhausted "the scheduler loop").run w) = _
-  simp only [Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size, Nat.sub_zero,
-    Nat.add_sub_cancel, Nat.div_one]
-  change ((do let result ← schedulerLoop (List.range' 0 (ys.length+2))
-              match result.1 with
-              | some ret => pure ret
-              | none => budgetExhausted "the scheduler loop").run w) = _
-  rw [StateT.run_bind, loop]
-  rfl
 
 end Leanux.Proofs.WG.Progress.CookieFull

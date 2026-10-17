@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.Progress.CookieScheduleClaims
+import Leanux.Proofs.WG.Progress.SourceClaims
 import Leanux.Proofs.WG.Progress.CookieActivationClaims
 import Leanux.Proofs.WG.Progress.ObservationBridge
 import Leanux.Proofs.WG.Progress.CutClaims
@@ -13,42 +14,44 @@ import Leanux.Proofs.WG.Progress.JitterProgressClaims
 /-! Projected H5 contracts. Inspection adapters report the exact original
 outcomes from the same concrete entry; their totality is not a claim that the
 inspected operation succeeds. Generic callback laws are explicitly generic. -/
+set_option autoImplicit false
 namespace Leanux.Proofs.WG.Progress
-open Leanux Leanux.WG Leanux.Env Campaign2
+open Leanux Leanux.WG Leanux.Env Campaign2.Product
 
-/-- Historical accepted runner counterexample over the registered mirror revision. -/
-theorem original_pending_batch_accepted : accepted = true :=
+/-- The historical trace is rejected at the current batch-completion boundary. -/
+theorem original_pending_batch_accepted : accepted = false :=
   SourceClaims.original_pending_batch_accepted
 
-/-- The actual initialized two-operation fixture's pending receive backlog. -/
-theorem original_pending_batch_state : backlog = some (1, 1, [1], some 0, 0, false) :=
+
+/-- The old direct-call fixture omits current FIB initialization and yields no backlog. -/
+theorem original_pending_batch_state : backlog = none :=
   SourceClaims.original_pending_batch_state
+
 
 /-- Every accepted original trace supplies exactly its ordered operation
 boundaries after ambient stripping and the original three completion guards.
 These guards say nothing about pending workers or scheduled NAPI. -/
 theorem original_accepted_operation_boundaries (trace : Runner.Trace)
-    (placeholders floodExact : Bool) (output : Lean.Json)
-    (acceptedRun : Runner.executeTrace trace placeholders floodExact = .ok output) :
-    ∃ audit, executeTraceWithBoundaries trace placeholders floodExact = .ok audit ∧
+    (placeholders : Bool) (output : Lean.Json)
+    (acceptedRun : Runner.executeTrace trace placeholders = .ok output) :
+    ∃ audit, executeTraceWithBoundaries trace placeholders = .ok audit ∧
       audit.output = output ∧
       audit.boundaries.map RunnerBoundary.index = List.range trace.ops.size ∧
       audit.boundaries.length = trace.ops.size ∧
       ∀ cut ∈ audit.boundaries, RunnerBoundaryClean cut :=
-  runnerAudit_of_accepted trace placeholders floodExact output acceptedRun
+  runnerAudit_of_accepted trace placeholders output acceptedRun
 
-/-- The historical constructed trace is accepted by the original runner, with
-its checked backlog at the actual final operation boundary. The absent record,
-suspension and NET_RX obligations coexist with runnable pending worker work. -/
+/-- Actual execution and its boundary audit retain the same exact batch refusal.
+There is no accepted final-state witness. -/
 theorem original_pending_batch_boundary :
-    ∃ audit first second,
-      executeTraceWithBoundaries pendingTrace false false = .ok audit ∧
-      Runner.executeTrace pendingTrace = .ok audit.output ∧
-      audit.boundaries = [first, second] ∧
-      first.index = 0 ∧ second.index = 1 ∧
-      RunnerBoundaryClean first ∧ RunnerBoundaryClean second ∧
-      boundaryBacklog second.after = some (1, 1, [1], some 0, 0, false) :=
+    Runner.executeTrace pendingTrace =
+      .error (1, .outsideDomain "drivers/net/wireguard/queueing.h:128"
+        "work the batch queued outlived the guest's wait (its records would be missing)") ∧
+    executeTraceWithBoundaries pendingTrace false =
+      .error (1, .outsideDomain "drivers/net/wireguard/queueing.h:128"
+        "work the batch queued outlived the guest's wait (its records would be missing)") :=
   pending_accepted_boundary
+
 
 /-- The original probe reports successful execution or hidden mismatch on its
 entry snapshot, and propagates every other exact error. -/
@@ -77,8 +80,8 @@ theorem original_resume_probe_success (a : Activation) :
   change observeResult ((Activation.consistent a).run w) = .ok (true, final) ↔ _
   rw [consistent_exact]
   cases h : (Activation.run a).run w with
-  | ok pair => simp [probeObservation, h, probeResult, observeResult, Except.map, eq_comm]
-  | error err => cases err <;> simp [probeObservation, h, probeResult, observeResult, Except.map]
+  | ok pair => simp [probeResult, observeResult, Except.map, eq_comm]
+  | error err => cases err <;> simp [probeResult, observeResult, Except.map]
 
 /-- False means exactly a hidden-input error from that same original activation;
 the inspected entry is preserved. -/
@@ -93,8 +96,8 @@ theorem original_resume_probe_mismatch (a : Activation) :
   change observeResult ((Activation.consistent a).run w) = .ok (false, final) ↔ _
   rw [consistent_exact]
   cases h : (Activation.run a).run w with
-  | ok pair => simp [probeObservation, h, probeResult, observeResult, Except.map]
-  | error err => cases err <;> simp [probeObservation, h, probeResult, observeResult, Except.map, eq_comm]
+  | ok pair => simp [probeResult, observeResult, Except.map]
+  | error err => cases err <;> simp [probeResult, observeResult, Except.map, eq_comm]
 
 /-- Generic control law, instantiated to the complete original worker by
 workerIter_control. Arbitrary callbacks have no assumed WG locality. -/
@@ -378,7 +381,7 @@ theorem original_turn_napi (stack : Option Worker) (d : Device) :
 /-- Recordless local no-work returns and preserves the entire retained snapshot.
 Suspended activations, timers and NAPI are not part of this branch's tests. -/
 theorem original_recordless_turn_empty (stack : Option Worker) (d : Device) (entry : Snapshot)
-    (empty : d.handshakeQueue.isEmpty = true ∧ d.decryptQueue.empty = true ∧
+    (empty : d.handshakeQueue.empty = true ∧ d.decryptQueue.empty = true ∧
       d.encryptQueue.empty = true ∧ d.txWorkQueue.isEmpty = true) :
     Returns (scheduleTurn stack)
       (fun s => s = entry ∧ s.ambient.hidden = none ∧ s.wg.device = some d)
@@ -450,24 +453,26 @@ present, from its entry send queue and preserves the clear queue, even if peer r
 pid. If pid was queued, the total queued-work count decreases by exactly one.
 No successful completion, queue-selection policy or whole-drain bound is asserted. -/
 theorem original_flushed_send_queue (pid : PeerId) (d : Device) :
-    Ensures (runFlushedSendWork pid) (fun entry => entry.wg.device = some d)
+    Campaign2.Ensures (runFlushedSendWork pid) (fun entry => entry.wg.device = some d)
       (fun _ final => flushQueues final = some (flushedSendQueues pid d) ∧
         (pid ∈ d.sendWorkQueue →
           flushQueueCount (flushedSendQueues pid d) + 1 =
             flushQueueCount (TimerDiscipline.workQueues d))) :=
   source_flushed_send_queue pid d
 
+
 /-- On normal return, the original clear flush erases the first matching occurrence of pid, if
 present, from its entry clear queue and preserves the send queue, including final peer release.
 Membership in the entry clear queue gives an exact decrease of one in total work;
 duplicates are allowed. This does not promise successful completion or a drain bound. -/
 theorem original_flushed_clear_queue (pid : PeerId) (d : Device) :
-    Ensures (runFlushedClearWork pid) (fun entry => entry.wg.device = some d)
+    Campaign2.Ensures (runFlushedClearWork pid) (fun entry => entry.wg.device = some d)
       (fun _ final => flushQueues final = some (flushedClearQueues pid d) ∧
         (pid ∈ d.clearWorkQueue →
           flushQueueCount (flushedClearQueues pid d) + 1 =
             flushQueueCount (TimerDiscipline.workQueues d))) :=
   source_flushed_clear_queue pid d
+
 
 /-- The original pure modular-exponentiation loop agrees with a finite,
 non-exhausted evaluation of its exact accumulator steps whenever the initial
@@ -488,22 +493,24 @@ not its error text. Normal completion is at empty queues or the requested clear.
 Inspection itself keeps entry state; the drain's final state is inside its datum.
 No successful drain, failed-worker state, or global runner termination is promised. -/
 theorem original_drain_bounded (upTo : Option PeerId) :
-    ((do let outcome ← observedDrain upTo; pure (eraseDrainOutcome outcome)) =
-      inspect (drainHandshakeSendWq upTo)) ∧
+    ((do let outcome ← Product.observedDrain upTo; pure (Product.eraseDrainOutcome outcome)) =
+      inspect (liftWG (drainHandshakeSendWq upTo))) ∧
     (∀ d : Device, flushQueueCount (TimerDiscipline.workQueues d) < 4096 →
-      Returns (observedDrain upTo) (fun entry => entry.wg.device = some d)
-        (fun outcome _ => DrainBounded upTo
+      Returns (Product.observedDrain upTo) (fun entry => entry.wg.device = some d)
+        (fun outcome _ => Product.DrainBounded upTo
           (flushQueueCount (TimerDiscipline.workQueues d)) outcome)) :=
-  ⟨observedDrain_source upTo, fun d enough => source_drain_bounded upTo d enough⟩
+  ⟨Product.observedDrain_source upTo, fun d enough => Product.source_drain_bounded upTo d enough⟩
+
 
 /-- With no requested early-clear boundary, every normal original drain return
 has both queues empty. The static bound excludes own-budget exhaustion, but
 does not exclude a selector or worker failure and does not assert successful return. -/
 theorem original_drain_to_empty (d : Device)
     (enough : flushQueueCount (TimerDiscipline.workQueues d) < 4096) :
-    Ensures (drainHandshakeSendWq none) (fun entry => entry.wg.device = some d)
-      (fun _ final => flushQueues final = some ([], [])) :=
-  source_drain_to_empty d enough
+    Ensures (liftWG (drainHandshakeSendWq none)) (fun entry => entry.wg.device = some d)
+      (fun _ final => flushQueues final.toSnapshot = some ([], [])) :=
+  Product.source_drain_to_empty d enough
+
 
 /-- The original rxPoll has this exact phase audit, preserving callback errors
 and the historical state before completion. For budget ≤ MAX_QUEUED_PACKETS+1,
@@ -519,11 +526,12 @@ physical queue depletion, or global scheduler progress. -/
 theorem original_poll_loop_bound (pid : PeerId) (budget : Nat)
     (toStack : List (List UInt8) → M Unit) :
     ((do let audit ← observedPollBound pid budget toStack
-         pure (erasePollBoundAudit audit)) = inspect (rxPoll pid budget toStack)) ∧
+         pure (erasePollBoundAudit audit)) = inspect (WG.rxPoll pid budget toStack)) ∧
     (budget ≤ MAX_QUEUED_PACKETS + 1 →
       Returns (observedPollBound pid budget toStack) (fun _ => True)
         (fun audit _ => PollBoundFacts budget audit)) :=
   ⟨observedPollBound_source pid budget toStack, source_poll_bound pid budget toStack⟩
+
 
 /-- Exact original insertion over any finite supplied record list. Passive
 records are skipped without validating their payloads; malformed/missing draws
@@ -588,50 +596,41 @@ theorem original_jitter_record_progress (site : TimerDiscipline.JitterSite) (rec
           jitter < HZ / 3 ∧ rest.IsSuffix records ∧ rest.length < records.length) :=
   jitter_record_progress site records
 
-/-- The original receive activation has enough occupancy fuel on an empty-index, cookie-only queue, for every supplied record list. Exact failures and projected effects are retained. The queue premise does not assert ingress provenance; its independent counter is decremented, not assumed consistent. -/
+/-- The original entry domain determines exact bounded hybrid execution,
+including receive, record and occupancy-exhaustion failures. It does not establish
+drain adequacy for arbitrary physical ring metadata. -/
 theorem original_cookie_activation_outcome (a : Activation) (d : Device) (records : List HiddenRecord)
     (receive : a.worker = .receiveWorker) (table : d.indexTable = []) (cookies : CookieOnly d) :
-    Campaign2.Observes (Activation.run a)
+    Campaign2.Product.AgreesOn
       (fun s => s.wg.device = some d ∧ s.ambient.hidden = some records)
-      (fun entry outcome => outcome =
-        match resolveCookieActivation d.handshakeQueue.length records with
-        | .error error => .error error
-        | .ok summary => .ok ((), cookieActivationSnapshot a d entry summary)) :=
+      (Activation.run a) (cookieHybridRun a d.handshakeQueue.count) :=
   cookieActivation_outcome a d records receive table cookies
 
-/-- One complete original scheduler turn derives the singleton candidate by
-probing the original activation, removes it, and commits the successful run.
-Only pure record validation is assumed; no execution success is a premise. -/
+
+/-- The original record resolver premise selects the control branch; actual
+probe and detached bounded rerun retain all errors. Pure resolver success does
+not establish a drain or a strict suffix of the original records. -/
 theorem original_cookie_scheduled_resumption_progress (a : Activation) (d : Device) (records : List HiddenRecord)
     (summary : CookieActivationSummary) (receive : a.worker = .receiveWorker)
     (table : d.indexTable = []) (cookies : CookieOnly d)
-    (resolve : resolveCookieActivation d.handshakeQueue.length records = .ok summary) :
-    Campaign2.Observes (scheduleTurn none)
+    (resolve : resolveCookieActivation d.handshakeQueue.count records = .ok summary) :
+    Campaign2.Product.AgreesOn
       (fun s => s.wg.device = some d ∧ s.ambient.hidden = some records ∧ s.ambient.suspended = [a])
-      (fun entry outcome =>
-        outcome = .ok (turnContinue, cookieActivationSnapshot a d
-          {entry with ambient := {entry.ambient with suspended := []}} summary) ∧
-        CookieActivationProgress d.handshakeQueue.length records summary ∧
-        (summary.yielded = true → summary.processed = 1)) :=
+      (scheduleTurn none) (cookieBoundedScheduler a d.handshakeQueue.count) :=
   cookieScheduler_progress a d records summary receive table cookies resolve
 
-/-- The full original scheduler finishes the cookie-only receive activation,
-including every recorded yield/resumption and the final no-candidate return.
-Its original record budget is sufficient for any n reschedule records followed
-by one stop record, when n does not exceed the initial queue length. All payloads
-are arbitrary eight-byte lists. The exact final projection has empty queue,
-records and suspended list, the independent counter decreased by the initial
-queue length, and five decisions per item plus the final empty poll. No ingress
-provenance, counter consistency or fairness for other queues is asserted. -/
+
+/-- The original full-schedule domain gives exact bounded-first-turn outcome
+agreement, followed by the actual remaining turns and budget guard. It does
+not guarantee successful drain on arbitrary physical ring metadata. -/
 theorem original_cookie_schedule_outcome (ys : List (List UInt8)) (a : Activation)
     (d : Device) (stop : List UInt8)
     (receive : a.worker = .receiveWorker) (table : d.indexTable = []) (cookies : CookieOnly d)
     (valid : ∀ bytes ∈ ys, bytes.length = 8) (stopLen : stop.length = 8)
-    (occupancy : ys.length ≤ d.handshakeQueue.length) :
-    Campaign2.Observes (schedule none)
-      (fun s => s.wg.device = some d ∧ s.ambient.hidden = some (CookieFull.records ys stop) ∧
-        s.ambient.suspended = [a])
-      (fun entry outcome => outcome = .ok ((), CookieFull.finishedSnapshot d entry)) :=
+    (occupancy : ys.length ≤ d.handshakeQueue.count) :
+    Campaign2.Product.AgreesOn
+      (fun s => s.wg.device = some d ∧ s.ambient.hidden = some (CookieFull.records ys stop) ∧ s.ambient.suspended = [a])
+      (schedule none) (CookieFull.boundedSchedule a d.handshakeQueue.count (ys.length + 1)) :=
   CookieFull.schedule_outcome ys a d stop receive table cookies valid stopLen occupancy
 
 end Leanux.Proofs.WG.Progress

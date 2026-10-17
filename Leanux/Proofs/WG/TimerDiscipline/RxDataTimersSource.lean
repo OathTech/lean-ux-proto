@@ -5,12 +5,12 @@ set_option autoImplicit false
 set_option pp.structureInstances false
 set_option maxHeartbeats 800000
 namespace Leanux.Proofs.WG.TimerDiscipline
-open Leanux Leanux.WG Noise Campaign2 Std.Do
+open Leanux Leanux.WG Campaign2 Noise Roaming Std.Do
 
-def rxDataTimersTail (pid : PeerId) (pkt : RxPacket) : M (Option (List UInt8)) := do
+def rxDataTimersTail (pid : PeerId) (pkt : RxPacket) : WG.M (Option (List UInt8)) := do
   let bytes := pkt.bytes
   let len := bytes.length
-  let reject (why : Dishonest) : M (Option (List UInt8)) := do
+  let reject (why : Dishonest) : WG.M (Option (List UInt8)) := do
     dishonest why
     return none
   -- `skb_network_header(skb) < skb->head`: the decrypted skb's network header is its data
@@ -46,7 +46,7 @@ def rxDataTimersTail (pid : PeerId) (pkt : RxPacket) : M (Option (List UInt8)) :
   updateRxStats pid (lenBeforeTrim + MESSAGE_DATA_LEN_0)   -- message_data_len(len_before_trim)
   return some (bytes.take ipLen)
 
-def rxDataTimersPrelude (pid : PeerId) (pkt : RxPacket) (endpoint : Endpoint) : M Unit := do
+def rxDataTimersPrelude (pid : PeerId) (pkt : RxPacket) (endpoint : Endpoint) : WG.M Unit := do
   setPeerEndpoint pid endpoint
   if ← branch .doneReceivedNew (← receivedWithKeypair pid pkt.keypair) then
     timersHandshakeComplete pid .walltimeLastHandshakeData
@@ -54,7 +54,7 @@ def rxDataTimersPrelude (pid : PeerId) (pkt : RxPacket) (endpoint : Endpoint) : 
   keepKeyFreshRx pid
   timersAnyAuthenticatedPacketReceived pid
 
-def rxDataTimersPrefix (pid : PeerId) (pkt : RxPacket) (endpoint : Endpoint) : M Bool := do
+def rxDataTimersPrefix (pid : PeerId) (pkt : RxPacket) (endpoint : Endpoint) : WG.M Bool := do
   rxDataTimersPrelude pid pkt endpoint
   timersTraversal pid
   let keepalive ← branch .doneRxKeepalive (pkt.bytes.length == 0)
@@ -64,29 +64,38 @@ def rxDataTimersPrefix (pid : PeerId) (pkt : RxPacket) (endpoint : Endpoint) : M
   timersDataReceived pid
   return false
 
-def rxDataTimersSuffix (pid : PeerId) (pkt : RxPacket) (keepalive : Bool) : M (Option (List UInt8)) :=
+def rxDataTimersSuffix (pid : PeerId) (pkt : RxPacket) (keepalive : Bool) : WG.M (Option (List UInt8)) :=
   if keepalive then pure none else rxDataTimersTail pid pkt
 
 theorem rxDataTimers_source (pid : PeerId) (pkt : RxPacket) (e : Endpoint) :
     (rxDataTimersPrefix pid pkt e >>= rxDataTimersSuffix pid pkt) = consumeDataDone pid pkt e := by
-  simp only [rxDataTimersPrefix, rxDataTimersPrelude, rxDataTimersSuffix, rxDataTimersTail, consumeDataDone, bind_assoc,
-    Roaming.bind_if, pure_bind, Bool.false_eq_true, ite_false, ite_true]
+  have bindIf {α β : Type} (condition : Prop) [Decidable condition]
+      (yes no : WG.M α) (next : α → WG.M β) :
+      ((if condition then yes else no) >>= next) =
+        (if condition then yes >>= next else no >>= next) := by
+    split <;> rfl
+  simp only [rxDataTimersPrefix, rxDataTimersPrelude, rxDataTimersSuffix, rxDataTimersTail,
+    consumeDataDone, bind_assoc, bindIf, pure_bind, Bool.false_eq_true, ite_false, ite_true]
 
-def rxDataTimersObservedPrefix (pid : PeerId) (pkt : RxPacket) (e : Endpoint) : M RxDataTimersCut := do
-  rxDataTimersPrelude pid pkt e
-  let traversal ← dataDoneCapture (timersTraversal pid)
-    (prefixClockPath (traversalPrefix pid) .timerJiffiesTraversal)
-  let keepalive ← branch .doneRxKeepalive (pkt.bytes.length == 0)
+def rxDataTimersObservedPrefix (pid : PeerId) (pkt : RxPacket) (e : Endpoint) : Leanux.M RxDataTimersCut := do
+  liftWG (rxDataTimersPrelude pid pkt e)
+  let traversal ← dataDoneCapture (liftWG (timersTraversal pid))
+    (prefixClockPath (liftWG (traversalPrefix pid)) .timerJiffiesTraversal)
+  let keepalive ← (branch .doneRxKeepalive (pkt.bytes.length == 0) : Leanux.M Bool)
   if keepalive then
-    updateRxStats pid MESSAGE_DATA_LEN_0
+    liftWG (updateRxStats pid MESSAGE_DATA_LEN_0)
     return ⟨traversal, none, true⟩
-  let receipt ← dataDoneCapture (timersDataReceived pid)
-    (prefixClockPath (dataReceivedPrefix pid) .timerJiffiesDataReceived)
+  let receipt ← dataDoneCapture (liftWG (timersDataReceived pid))
+    (prefixClockPath (liftWG (dataReceivedPrefix pid)) .timerJiffiesDataReceived)
   return ⟨traversal, some receipt, false⟩
 
 theorem rxDataTimersObservedPrefix_erase (pid : PeerId) (pkt : RxPacket) (e : Endpoint) :
-    (do let cut ← rxDataTimersObservedPrefix pid pkt e; pure cut.keepalive) = rxDataTimersPrefix pid pkt e := by
-  simp only [rxDataTimersObservedPrefix, rxDataTimersPrefix, bind_assoc, Roaming.bind_if, pure_bind]
+    (do let cut ← rxDataTimersObservedPrefix pid pkt e; pure cut.keepalive) = liftWG (rxDataTimersPrefix pid pkt e) := by
+  have lift_pure {α : Type} (value : α) : liftWG (pure value) = (pure value : Leanux.M α) := rfl
+  have lift_branch (decision : Decision) (value : Bool) :
+      liftWG (branch decision value : WG.M Bool) = (branch decision value : Leanux.M Bool) := rfl
+  simp only [rxDataTimersObservedPrefix, rxDataTimersPrefix, liftWG_bind_variant,
+    lift_branch, bind_assoc, Roaming.bind_if, pure_bind]
   congr 1
   funext u
   rw [dataDoneCapture_bind]
@@ -95,21 +104,23 @@ theorem rxDataTimersObservedPrefix_erase (pid : PeerId) (pkt : RxPacket) (e : En
   congr 1
   funext keepalive
   cases keepalive
-  · exact dataDoneCapture_bind _ _ (pure false)
-  · rfl
+  · simp only [Bool.false_eq_true, ite_false, liftWG_bind_variant, lift_pure]
+    exact dataDoneCapture_bind _ _ (pure false)
+  · simp only [ite_true, liftWG_bind_variant, lift_pure]
 
-/-- The decorated prefix feeds the unchanged suffix at the same actual state. -/
+/-- The decorated prefix feeds the unchanged native suffix at its actual state. -/
 def observedRxDataTimers (pid : PeerId) (pkt : RxPacket) (e : Endpoint) :
-    M (RxDataTimersCut × Option (List UInt8)) := do
+    Leanux.M (RxDataTimersCut × Option (List UInt8)) := do
   let cut ← rxDataTimersObservedPrefix pid pkt e
-  let result ← rxDataTimersSuffix pid pkt cut.keepalive
+  let result ← liftWG (rxDataTimersSuffix pid pkt cut.keepalive)
   return (cut, result)
 
 /-- Erasure preserves the complete original return value and every error. -/
 theorem observedRxDataTimers_erase (pid : PeerId) (pkt : RxPacket) (e : Endpoint) :
     (do let observed ← observedRxDataTimers pid pkt e; pure observed.2) =
-      consumeDataDone pid pkt e := by
-  rw [← rxDataTimers_source pid pkt e, ← rxDataTimersObservedPrefix_erase pid pkt e]
-  simp only [observedRxDataTimers, ← bind_pure_comp, bind_assoc, pure_bind, bind_pure]
+      liftWG (consumeDataDone pid pkt e) := by
+  rw [← rxDataTimers_source pid pkt e, liftWG_bind_variant, ← rxDataTimersObservedPrefix_erase pid pkt e]
+  simp only [observedRxDataTimers, bind_assoc, pure_bind, bind_pure]
+
 
 end Leanux.Proofs.WG.TimerDiscipline

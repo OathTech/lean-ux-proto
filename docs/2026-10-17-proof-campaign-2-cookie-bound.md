@@ -36,3 +36,21 @@ Leanux.Proofs.WG.Progress.CookieActivationBoundFindings.
 Use capped on this host, 32 Lean threads and LEANUX_QEMU_SLOTS=16.
 The scoped axiom audit and counts are in the
 [retrofit report](2026-10-16-proof-campaign-2-state-split.md).
+
+The later full-schedule witness in Progress.CookieScheduleFindings establishes
+the actual scheduler failure on the same malformed size-one ring. It supplies
+a singleton suspended receive activation and a correctly sized section-stop
+record, with no yield records. Initial logical CookieOnly classification,
+empty index table and the original yield-count bound all hold. Actual schedule
+none propagates the receive occupancy-exhaustion invariant while probing the
+candidate. Unrelated Product fields remain arbitrary. Thus the former
+unconditional full-schedule completion claim is false on its stated domain,
+not merely unsupported by the earlier activation theorem.
+
+The corrected CookieScheduleOutcomeSource and CookieScheduleClaims retain that
+domain and describe the actual bounded first turn, unchanged remaining scheduler
+turns and original budget guard, including errors. They do not assert drain
+adequacy, tail cookie classification, reachability or a kernel defect. Reproduce
+the witness with scripts/in-bundle lake build
+Leanux.Proofs.WG.Progress.CookieScheduleFindings and scripts/in-bundle lake env
+leanchecker --fresh on that module; scoped validation is in the retrofit report.

@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.TimerDiscipline.RecordedSourceClaims
 import Leanux.Proofs.WG.TimerDiscipline.ArmingSourceClaims
 import Leanux.Proofs.WG.TimerDiscipline.SourceFrames
 import Leanux.Proofs.WG.TimerDiscipline.SendWorkerSource
@@ -15,153 +16,8 @@ import Leanux.Proofs.WG.TimerDiscipline.FireSelectionSource
 namespace Leanux.Proofs.WG.TimerDiscipline
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise
 
-/-- With arm-record mode enabled, a normally completed guarded arm uses
-the original callerJiffies operation at the supplied site. When the guard passes, expiry equals
-that read plus delay; the arm's own read is zero or one signed tick later. -/
-theorem source_guarded_arm_recorded (site : HiddenSite) (pid : PeerId) (timer : PeerTimer)
-    (delay : Nat) (d : Device) (p : Peer) (resident : d.peers[pid]? = some p)
-    (initial final : World) (result : Bool) (device : initial.k.wg = some d)
-    (records : initial.armRecords = true)
-    (run : (modPeerTimer site pid timer delay).run initial = .ok (result, final)) :
-    ∃ caller afterRead,
-      (callerJiffies site).run initial = .ok (some caller, afterRead) ∧
-      result = (d.running && !p.isDead) ∧
-      if result then
-        peerAt final pid = some (p.setTimer timer (some (caller + delay.toUInt64))) ∧
-        ∃ now, final.jiffiesLast = some now ∧
-          0 ≤ (now - caller).toInt64 ∧ (now - caller).toInt64 ≤ 1
-      else peerAt final pid = some p :=
-  modPeerTimer_recorded_clock site pid timer delay d p resident initial final result device records run
 
-/-- With arm-record mode enabled, the original session-derived hook on a
-running live peer arms zero-key material at its original caller-read result
-plus REJECT_AFTER_TIME * 3 * HZ ticks.
-This exact site and delay contract covers one hook invocation. -/
-theorem source_session_derived_recorded (pid : PeerId) (d : Device) (p : Peer)
-    (resident : d.peers[pid]? = some p) (running : d.running = true) (alive : p.isDead = false)
-    (initial final : World) (device : initial.k.wg = some d) (records : initial.armRecords = true)
-    (run : (timersSessionDerived pid).run initial = .ok ((), final)) :
-    ∃ caller afterRead,
-      (callerJiffies .timerJiffiesSessionDerived).run initial = .ok (some caller, afterRead) ∧
-      peerAt final pid = some (p.setTimer .zeroKeyMaterial
-        (some (caller + ZERO_KEY_MATERIAL_TICKS.toUInt64))) ∧
-      ∃ now, final.jiffiesLast = some now ∧
-        0 ≤ (now - caller).toInt64 ∧ (now - caller).toInt64 ≤ 1 :=
-  sessionDerived_recorded_clock pid d p resident running alive initial final device records run
 
-/-- With arm-record mode enabled, original handshake-initiated arming
-uses its caller-read result plus REKEY_TIMEOUT * HZ and a jitter below HZ/3.
-The caller read precedes the original jitter computation, and both executions
-are witnessed; supplied records and permitted placeholders are both covered. -/
-theorem source_handshake_initiated_recorded (pid : PeerId) (d : Device) (p : Peer)
-    (resident : d.peers[pid]? = some p) (running : d.running = true) (alive : p.isDead = false)
-    (initial final : World) (device : initial.k.wg = some d) (records : initial.armRecords = true)
-    (run : (timersHandshakeInitiated pid).run initial = .ok ((), final)) :
-    ∃ caller afterRead jitter afterJitter,
-      (callerJiffies .timerJiffiesHandshakeInitiated).run initial = .ok (some caller, afterRead) ∧
-      (jitterBelowRekeyTimeout .retransmitJitter).run afterRead = .ok (jitter, afterJitter) ∧
-      jitter < HZ / 3 ∧
-      peerAt final pid = some (p.setTimer .retransmitHandshake
-        (some (caller + (REKEY_TIMEOUT_TICKS + jitter).toUInt64))) ∧
-      ∃ now, final.jiffiesLast = some now ∧
-        0 ≤ (now - caller).toInt64 ∧ (now - caller).toInt64 ≤ 1 := by
-  rw [handshakeInitiated_source] at run
-  exact jitteredArm_recorded_clock .timerJiffiesHandshakeInitiated .retransmitJitter
-    pid .retransmitHandshake REKEY_TIMEOUT_TICKS d p resident running alive
-    initial final device records run
-
-/-- With arm-record mode enabled and no pending new-handshake timer,
-original data-sent arming on a running live peer uses its caller-read result
-plus keepalive and rekey delays and bounded jitter, in original read order. -/
-theorem source_data_sent_recorded (pid : PeerId) (d : Device) (p : Peer)
-    (resident : d.peers[pid]? = some p) (absent : p.timerPending .newHandshake = false)
-    (running : d.running = true) (alive : p.isDead = false)
-    (initial final : World) (device : initial.k.wg = some d) (records : initial.armRecords = true)
-    (run : (timersDataSent pid).run initial = .ok ((), final)) :
-    ∃ beforeRead caller afterRead jitter afterJitter,
-      (dataSentPrefix pid).run initial = .ok (true, beforeRead) ∧
-      (callerJiffies .timerJiffiesDataSent).run beforeRead = .ok (some caller, afterRead) ∧
-      (jitterBelowRekeyTimeout .newHandshakeJitter).run afterRead = .ok (jitter, afterJitter) ∧
-      jitter < HZ / 3 ∧
-      peerAt final pid = some (p.setTimer .newHandshake
-        (some (caller + (KEEPALIVE_TIMEOUT_TICKS + REKEY_TIMEOUT_TICKS + jitter).toUInt64))) ∧
-      ∃ now, final.jiffiesLast = some now ∧
-        0 ≤ (now - caller).toInt64 ∧ (now - caller).toInt64 ≤ 1 :=
-  dataSent_recorded_clock pid d p resident absent running alive initial final device records run
-
-/-- With arm-record mode enabled, original traversal on a running live peer
-with nonzero interval sets persistent keepalive to its caller-read result plus
-interval * HZ, even if that timer was already pending. -/
-theorem source_traversal_recorded (pid : PeerId) (d : Device) (p : Peer)
-    (resident : d.peers[pid]? = some p) (enabled : p.persistentKeepaliveInterval ≠ 0)
-    (running : d.running = true) (alive : p.isDead = false)
-    (initial final : World) (device : initial.k.wg = some d) (records : initial.armRecords = true)
-    (run : (timersTraversal pid).run initial = .ok ((), final)) :
-    ∃ beforeRead caller afterRead,
-      (traversalPrefix pid).run initial = .ok ((p.persistentKeepaliveInterval, true), beforeRead) ∧
-      (callerJiffies .timerJiffiesTraversal).run beforeRead = .ok (some caller, afterRead) ∧
-      peerAt final pid = some (p.setTimer .persistentKeepalive
-        (some (caller + (p.persistentKeepaliveInterval * HZ).toUInt64))) ∧
-      ∃ now, final.jiffiesLast = some now ∧
-        0 ≤ (now - caller).toInt64 ∧ (now - caller).toInt64 ≤ 1 :=
-  traversal_recorded_clock pid d p resident enabled running alive initial final device records run
-
-/-- With arm-record mode enabled, original data receipt on a running live peer
-with no send-keepalive timer arms that timer at its caller-read result plus
-KEEPALIVE_TIMEOUT * HZ ticks, after the original running and pending tests. -/
-theorem source_data_received_recorded (pid : PeerId) (d : Device) (p : Peer)
-    (resident : d.peers[pid]? = some p) (absent : p.timerPending .sendKeepalive = false)
-    (running : d.running = true) (alive : p.isDead = false)
-    (initial final : World) (device : initial.k.wg = some d) (records : initial.armRecords = true)
-    (run : (timersDataReceived pid).run initial = .ok ((), final)) :
-    ∃ beforeRead caller afterRead,
-      (dataReceivedPrefix pid).run initial = .ok (some true, beforeRead) ∧
-      (callerJiffies .timerJiffiesDataReceived).run beforeRead = .ok (some caller, afterRead) ∧
-      peerAt final pid = some (p.setTimer .sendKeepalive
-        (some (caller + KEEPALIVE_TIMEOUT_TICKS.toUInt64))) ∧
-      ∃ now, final.jiffiesLast = some now ∧
-        0 ≤ (now - caller).toInt64 ∧ (now - caller).toInt64 ≤ 1 :=
-  dataReceived_recorded_clock pid d p resident absent running alive initial final device records run
-
-/-- After the original keepalive send completes, a running live peer needing
-another keepalive clears that flag and rearms at its caller-read result plus
-KEEPALIVE_TIMEOUT * HZ. Residency and flag premises concern the actual post-send
-state, not callback entry; arm-record mode is enabled there. -/
-theorem source_expired_keepalive_recorded (pid : PeerId) (d : Device) (p : Peer)
-    (resident : d.peers[pid]? = some p) (needed : p.timerNeedAnotherKeepalive = true)
-    (running : d.running = true) (alive : p.isDead = false)
-    (initial afterSend final : World)
-    (send : (sendKeepalive pid).run initial = .ok ((), afterSend))
-    (device : afterSend.k.wg = some d) (records : afterSend.armRecords = true)
-    (run : (expiredSendKeepalive pid).run initial = .ok ((), final)) :
-    ∃ beforeRead caller afterRead,
-      (keepaliveRearmPrefix pid).run afterSend = .ok (true, beforeRead) ∧
-      (callerJiffies .timerJiffiesExpiredKeepalive).run beforeRead = .ok (some caller, afterRead) ∧
-      peerAt final pid = some (({ p with timerNeedAnotherKeepalive := false } : Peer).setTimer
-        .sendKeepalive (some (caller + KEEPALIVE_TIMEOUT_TICKS.toUInt64))) ∧
-      ∃ now, final.jiffiesLast = some now ∧
-        0 ≤ (now - caller).toInt64 ∧ (now - caller).toInt64 ≤ 1 :=
-  expiredKeepalive_recorded_clock pid d p resident needed running alive initial afterSend final send device records run
-
-/-- With arm-record mode enabled, original retransmit give-up above the attempt
-limit deletes send-keepalive, purges staged packets and arms an absent zero-key
-timer on a running live peer. Expiry is the original site read plus
-REJECT_AFTER_TIME * 3 * HZ; both original decision prefixes are witnessed. -/
-theorem source_retransmit_giveup_recorded (pid : PeerId) (d : Device) (p : Peer)
-    (resident : d.peers[pid]? = some p) (limit : p.timerHandshakeAttempts > MAX_TIMER_HANDSHAKES)
-    (absent : p.timerPending .zeroKeyMaterial = false)
-    (running : d.running = true) (alive : p.isDead = false)
-    (initial final : World) (device : initial.k.wg = some d) (records : initial.armRecords = true)
-    (run : (expiredRetransmitHandshake pid).run initial = .ok ((), final)) :
-    ∃ afterDecision beforeRead caller afterRead,
-      (retransmitDecision pid).run initial = .ok (true, afterDecision) ∧
-      (giveUpArmPrefix pid).run afterDecision = .ok (true, beforeRead) ∧
-      (callerJiffies .timerJiffiesRetransmitZeroKey).run beforeRead = .ok (some caller, afterRead) ∧
-      peerAt final pid = some ((giveUpPeer p).setTimer .zeroKeyMaterial
-        (some (caller + ZERO_KEY_MATERIAL_TICKS.toUInt64))) ∧
-      ∃ now, final.jiffiesLast = some now ∧
-        0 ≤ (now - caller).toInt64 ∧ (now - caller).toInt64 ≤ 1 :=
-  retransmitGiveUp_recorded_clock pid d p resident limit absent running alive initial final device records run
 
 /-- Every normally completed original timer dispatch selects a resident peer's
 pending timer of the worker's kind whose expiry precedes the supplied horizon
@@ -193,49 +49,7 @@ theorem source_retransmit_dispatch (pid : PeerId) (jHi : UInt64)
       (fun _ w => retryAt w pid = some (identity, nextAttempts attempts, none)) :=
   fireTimer_retransmit pid jHi identity attempts timer
 
-/-- Every normal original handshake send either exits in its actual prefix
-or executes the final retransmit arm hook. Reaching the hook means creation
-succeeded, not that the ignored socket-send result was successful. The prefix
-retains rate-limit and creation decisions and every intervening operation. -/
-theorem source_initiation_arm_path (pid : PeerId) (initial final : World)
-    (run : (sendHandshakeInitiation pid).run initial = .ok ((), final)) :
-    ∃ reached beforeArm,
-      (initiationArmPrefix pid).run initial = .ok (reached, beforeArm) ∧
-      if reached then (timersHandshakeInitiated pid).run beforeArm = .ok ((), final)
-      else final = beforeArm :=
-  sendInitiation_arm_execution pid initial final run
 
-/-- When the original initiation-send prefix reaches the hook with a live peer
-on a running device, a normal arm-record-mode completion stores the original
-caller-read result plus rekey delay and bounded jitter. Premises concern the actual
-post-prefix state; this does not frame the send from function entry, establish
-a full retry episode or prove a successful network transmission. -/
-theorem source_initiation_send_arm (pid : PeerId) (d : Device) (p : Peer)
-    (resident : d.peers[pid]? = some p) (running : d.running = true) (alive : p.isDead = false)
-    (initial afterPrefix final : World)
-    (hprefix : (initiationArmPrefix pid).run initial = .ok (true, afterPrefix))
-    (device : afterPrefix.k.wg = some d) (records : afterPrefix.armRecords = true)
-    (run : (sendHandshakeInitiation pid).run initial = .ok ((), final)) :
-    ∃ caller afterRead jitter afterJitter,
-      (callerJiffies .timerJiffiesHandshakeInitiated).run afterPrefix = .ok (some caller, afterRead) ∧
-      (jitterBelowRekeyTimeout .retransmitJitter).run afterRead = .ok (jitter, afterJitter) ∧
-      jitter < HZ / 3 ∧
-      peerAt final pid = some (p.setTimer .retransmitHandshake
-        (some (caller + (REKEY_TIMEOUT_TICKS + jitter).toUInt64))) ∧
-      ∃ now, final.jiffiesLast = some now ∧
-        0 ≤ (now - caller).toInt64 ∧ (now - caller).toInt64 ≤ 1 :=
-  sendInitiation_arm_recorded pid d p resident running alive initial afterPrefix final
-    hprefix device records run
 
-/-- A normally returning original handshake-send worker preserves identity and
-retry attempts and releases one reference. More than one entry reference keeps
-the peer resident after that release. This is the worker body, before composition
-with the environment's selection/dequeue and a complete retry episode. -/
-theorem source_send_worker_frame (pid : PeerId) (identity attempts refs : Nat)
-    (retained : 1 < refs) :
-    Ensures (handshakeSendWorker pid)
-      (fun w => workerAt w pid = some (identity, attempts, refs))
-      (fun _ w => workerAt w pid = some (identity, attempts, refs - 1)) :=
-  handshakeSendWorker_workerView pid identity attempts refs retained
 
 end Leanux.Proofs.WG.TimerDiscipline

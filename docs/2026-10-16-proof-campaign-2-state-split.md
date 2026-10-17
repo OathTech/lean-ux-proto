@@ -23,11 +23,11 @@ and attributed theorem declarations. Campaign 2 owns 427 Lean files,
 | H2 Index | 68 | 318 | 52 | 333 | Table, lookup, collision records, allocation, owner invariants and lifecycle support carried; seven type-given frames deleted. Exact peer-release outcomes replace stale totality, with checked counterexamples. All 52 headlines and their closure are current, including full Product session observations; whole-driver coherence remains pending. |
 | H3 Roaming | 35 | 119 | 13 | 157 | Endpoint/publication, polling, attempt facts, crypto, lookup and response-caller factors/facts carried with full Product certificates; two type-given frames deleted. The full terminal closure is current, including initiation/response audits with actual Product outcomes. Wider roaming/provenance charter gaps remain open. |
 | H4 Configuration | 130 | 554 | 79 | 582 | Scalar, identity, port, dump, allowed-IP and structural support carried; three type-given frames deleted. Quiet timer cleanup and queued-send observations are corrected; queued-send and removal totality have checked stale-statement counterexamples. All 79 projected headlines and their full closure check; exact refusal corrections and actual socket/scalar readback are current. Wider configuration charter gaps remain open. |
-| H5 Progress | 59 | 265 | 42 | 235 | Pure/control, cut, jitter, index, poll bounds, dispatch, scheduler turns, stack/probe frames, queue flush contracts, drain selection and Product observation bridge carried; one type-given index frame deleted. The old backlog fixture has checked exact runner and direct-fixture rejections. Drain bounds are carried. General runner boundaries, corrected historical rejection wrappers and receive-source leaves are carried; whole receive-ring activation models and terminal closure remain pending. |
-| H6 Timer discipline | 98 | 404 | 50 | 260 | Base/guard/jitter, arming/wheel, recorded clock and initiation-send arming contracts carried; three type-given frames deleted. Exact wheel corrections are explicit; queue/pending and retained-worker frames are carried; broader timer episodes and terminal closure remain pending. |
+| H5 Progress | 59 | 265 | 42 | 280 | Pure/control, cut, jitter, index, poll bounds, dispatch, scheduler turns, stack/probe frames, queue flush contracts, drain selection and Product observation bridge carried; one type-given index frame deleted. The old backlog fixture has checked exact runner and direct-fixture rejections. Drain bounds are carried. General runner boundaries, corrected historical rejection wrappers and receive-source leaves are carried; All 42 headlines and their closure check, with exact bounded cookie activation/schedule corrections and checked counterexamples. Historical snapshot/composition supports and global-progress charter gaps remain pending. |
+| H6 Timer discipline | 98 | 404 | 50 | 280 | Base/guard/jitter, arming/wheel, recorded clock and initiation-send arming contracts carried; three type-given frames deleted. Exact wheel corrections are explicit; queue/pending and retained-worker frames are carried; broader timer episodes and terminal closure remain pending. |
 
 Retyped, deleted and retained counts will be reported per validated tranche.
-H1–H4 now have checked split terminal closures; H5 and H6 remain lagging.
+H1–H5 now have checked split terminal closures; H6 remains lagging.
 All six results retain their previous charter gaps.
 The last scoped validation at `04b2f7c` does not validate the split mirror.
 
@@ -5004,3 +5004,84 @@ of arbitrary callback domains, Product fixture observations, or precise errors.
 Five original headline corrections are explicit: historical accepted/state/
 boundary claims and bounded activation/resumption claims. None of these scratch
 headlines has terminal census credit at this checkpoint.
+
+## Progress terminal closure and initiation/data timer callers
+
+| Tranche | Before | Retyped | Corrected | Deleted | Kept | Added | After |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Progress.CookieScheduleOutcomeSource/Claims/Findings | 2 | 0 | 2 | 0 | 0 | 1 | 3 |
+| Progress.Statements | 42 | 33 | 6 | 0 | 3 | 0 | 42 |
+| TimerDiscipline.RecordedSourceClaims | 11 | 2 | 9 | 0 | 0 | 0 | 11 |
+| TimerDiscipline.InitiationTraversal | 3 | 2 | 1 | 0 | 0 | 0 | 3 |
+| TimerDiscipline.RxDataTimers | 6 | 3 | 3 | 0 | 0 | 0 | 6 |
+| This tranche | 64 | 40 | 21 | 0 | 3 | 1 | 65 |
+| Cumulative processed baseline and checked support | 1,670 | 1,268 | 147 | 22 | 233 | 169 | 1,817 |
+
+The census has 563 campaign-owned files, 1,978 theorems and 515 checked
+proof modules, with 161 baseline declarations pending. Counts: H1 185,
+H2 333, H3 157, H4 582, H5 280 and H6 280. H5's 42 original terminal
+names/order now check over b700659 with fresh replay; H6,
+unimported legacy support and the full gate remain lagging. Wider charter
+gaps remain unchanged.
+
+CookieScheduleFindings composes the existing bad-tail activation witness
+through the actual scheduler probe. A nil-yield, eight-byte stop stream and
+initial logical cookie membership satisfy the former full-schedule domain,
+yet the scheduler propagates the occupancy-exhaustion invariant. This is
+a statement-domain counterexample, not a reachable-state or kernel claim.
+CookieScheduleOutcomeSource replaces only schedule_run: exact first-turn
+bounded execution is followed by the unchanged actual remaining scheduler
+turns and original budget guard. CookieScheduleClaims gives full Product
+agreement on the original domain. No coherent-ring, success or new readiness
+premise is added; old snapshot/composition helpers remain pending.
+
+Progress.Statements carries all 42 names, with six explicit corrections:
+historical acceptance/state/boundary, activation, scheduled resumption and
+full schedule. Generic worker callbacks retain arbitrary StateT state/error
+types; polling retains arbitrary Product callbacks; scheduler, drain, poll
+and jitter certificates retain full Product observations including fixtures.
+Native cut, flush and index facts keep their original selected observations.
+The two pure generic worker laws and modular-power theorem are retained.
+The runner wrapper follows the current executeTrace interface, which no
+longer takes the removed floodExact argument.
+
+RecordedSourceClaims extracts eleven non-dispatch source wrappers. Nine
+propagate complete recorded wheel effects at actual prefix/read states;
+initiation-path and worker identity/reference effects are retyped. SourceClaims
+retains only its two obsolete dispatcher wrappers pending their actual-wheel
+carry, alongside imports. No original declaration is dropped.
+
+InitiationTraversal preserves actual rate/creation/MAC early exits, native
+suffix execution and Product erasure, and corrects its aggregate timer fact.
+RxDataTimers retains the raw-packet scope and actual native suffix, without
+inferring authentication or successful routing. Its receipt effect uses both
+actual before/after snapshots and complete conditional WG/wheel updates.
+Receipt, prefix and whole-call facts are explicitly corrected. Models, source
+connections and projected claims stay in separate files; new frame lemmas
+are not introduced.
+
+Development: cookie schedule probes 1–2 fail 4/3 and 5/0 errors/warnings
+in Product budget/bind normalization and the concrete fixture; probe 3 passes
+without warnings. Root's first full42 generator extension fails before Lean
+because a stale comment had already been removed; the corrected generator
+and full42 scratch probe 3 pass. RecordedSourceClaims passes its first probe.
+InitiationTraversal probe 1 elaborates with two unused-simp warnings; probe 2
+passes cleanly. RxDataTimers probe 3 fails native bind/witness/syntax/predicate
+normalization; changed probe 4 passes cleanly. No cap/limit is raised and no
+infrastructure rerun occurs.
+
+Scoped package builds pass 169 and 148 jobs. The final 305-job build passes
+with only the inherited Env:865 String.mk warning. Axiom inspection checks
+1,375 logical roots in 241 proof modules, including 844 public theorem roots,
+with standard axioms only. All five fresh kernel replays pass.
+Static checks and all 258 terminal names/order pass; mirror and shared-layer
+boundaries are unchanged. Independent review finds no issue in the recorded
+wrappers or the cookie schedule correction/finding; root review finds none
+in the initiation/receipt caller packages.
+
+Reproduce with scripts/in-bundle lake build on Progress.Statements,
+Progress.CookieScheduleFindings, TimerDiscipline.RecordedSourceClaims,
+TimerDiscipline.InitiationTraversalClaims and TimerDiscipline.RxDataTimersClaims
+under Leanux.Proofs.WG. Inspect axioms and replay those roots with
+scripts/in-bundle lake env leanchecker --fresh MODULE. Use capped, 32 threads
+and 16 QEMU slots on the shared host.
