@@ -1,18 +1,8 @@
+import Leanux.Proofs.WG.TimerDiscipline.SendRearmModel
 import Leanux.Proofs.WG.TimerDiscipline.RetryDispatchModel
 
 namespace Leanux.Proofs.WG.TimerDiscipline
 open Leanux Leanux.WG Campaign2
-
-abbrev InitiationArmProbe := Bool × Snapshot × Outcome (Option UInt64 × Snapshot × Nat)
-
-/-- The original send's prefix inspection and its actual return before peerPut. -/
-structure InitiationRearmExecution where
-  path : Outcome InitiationArmProbe
-  beforeRelease : Snapshot
-
-structure SendRearmExecution where
-  send : SendWorkerExecution
-  arm : InitiationRearmExecution
 
 structure RetryRearmObservation where
   timer : Outcome (PeerId × PeerTimer × Snapshot)

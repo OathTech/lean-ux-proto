@@ -54,3 +54,20 @@ adequacy, tail cookie classification, reachability or a kernel defect. Reproduce
 the witness with scripts/in-bundle lake build
 Leanux.Proofs.WG.Progress.CookieScheduleFindings and scripts/in-bundle lake env
 leanchecker --fresh on that module; scoped validation is in the retrofit report.
+
+
+CookieScheduleSupportFindings checks two additional consequences of the same
+unrestricted domain. On the bad-tail ring, consuming once and then consuming
+the successor's recomputed count differs from consuming the initial count.
+Thus the former final-composition helper is false on physical ring state.
+A separate size-three ring has a hole at its physical head but one logical
+cookie item. With a valid yield/stop record stream, scheduleTurn probes a
+receive activation that encounters the wrong hidden site and declines to
+resume. It returns turnReturn, contradicting the old yield prediction
+turnContinue. The exported finding negates the original projected total-return
+contract; its concrete Product witness is local to the proof. No reachability
+or coherence premise is inferred.
+
+Reproduce both with scripts/in-bundle lake build
+Leanux.Proofs.WG.Progress.CookieScheduleSupportFindings and fresh leanchecker
+replay on that module, under the same capped settings above.

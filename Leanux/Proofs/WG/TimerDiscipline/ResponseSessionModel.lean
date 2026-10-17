@@ -1,26 +1,29 @@
-import Leanux.Proofs.WG.TimerDiscipline.View
+import Leanux.Proofs.WG.TimerDiscipline.DataDoneModel
 import Leanux.Proofs.WG.Noise.SessionModel
-import Leanux.Proofs.WG.Roaming.ResponseModel
+import Leanux.Proofs.WG.Roaming.ResponseCallProductModel
 
+set_option autoImplicit false
+set_option pp.structureInstances false
+set_option maxHeartbeats 800000
 namespace Leanux.Proofs.WG.TimerDiscipline
-open Leanux Leanux.WG Campaign2 Noise Roaming
+open Leanux Leanux.WG Campaign2 Noise Roaming Std.Do
 
 structure ResponseSessionArm where
-  caller : Outcome (Option UInt64)
-  afterArm : Snapshot
+  caller : Campaign2.Product.Outcome (Option UInt64)
+  afterArm : Campaign2.Product.Snapshot
 
 structure ResponseSessionCut where
-  beforeSession : Snapshot
+  beforeSession : Campaign2.Product.Snapshot
   begun : Bool
-  afterSession : Snapshot
-  beforeArm : Snapshot
+  afterSession : Campaign2.Product.Snapshot
+  beforeArm : Campaign2.Product.Snapshot
   arm : Option ResponseSessionArm
 
 structure ResponseSessionCall where
-  response : ResponseCallCut
+  response : Roaming.Product.ResponseCallCut
   session : ResponseSessionCut
 
-def responseSessionEnd (cut : ResponseSessionCut) : Snapshot :=
+def responseSessionEnd (cut : ResponseSessionCut) : Campaign2.Product.Snapshot :=
   match cut.arm with
   | none => cut.beforeArm
   | some arm => arm.afterArm
@@ -37,19 +40,19 @@ def ResponseSessionFacts (pid : PeerId) (cut : ResponseSessionCut) : Prop :=
     ∀ arm, cut.arm = some arm →
       cut.beforeArm.wg.keypairCounter = cut.beforeSession.wg.keypairCounter + 1 ∧
       ∃ q, next.peers[pid]? = some q ∧ q.isDead = false ∧
-        (next.running = true → cut.beforeArm.wg.armRecords = true →
+        (next.running = true → cut.beforeArm.ambient.armRecords = true →
           ∃ caller afterRead,
             arm.caller = .ok (some caller, afterRead) ∧
-            arm.afterArm.peerAt pid = some (q.setTimer .zeroKeyMaterial
-              (some (caller + ZERO_KEY_MATERIAL_TICKS.toUInt64))) ∧
-            clockGap arm.afterArm caller)
+            recordedTimerEffect cut.beforeArm.wg pid q .zeroKeyMaterial
+              ZERO_KEY_MATERIAL_TICKS caller arm.afterArm.wg)
 
 def ResponseSessionObservation (msg : List UInt8)
-    (outcome : Outcome (Option ResponseSessionCall)) : Prop :=
+    (outcome : Campaign2.Product.Outcome (Option ResponseSessionCall)) : Prop :=
   ∃ candidate afterPrefix, outcome = .ok (candidate, afterPrefix) ∧
     ∀ cut, candidate = some cut →
-      ResponseCallFacts msg cut.response ∧
+      Roaming.Product.ResponseCallFacts msg cut.response ∧
       ResponseSessionFacts cut.response.consumed.input.pid cut.session ∧
       responseSessionEnd cut.session = afterPrefix
+
 
 end Leanux.Proofs.WG.TimerDiscipline

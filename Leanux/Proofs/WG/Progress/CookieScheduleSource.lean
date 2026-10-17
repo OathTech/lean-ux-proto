@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Progress.CookieScheduleLeaves
 import Leanux.Proofs.WG.Progress.CookieScheduleOutcomeSource
 import Leanux.Proofs.WG.Progress.CookieScheduleFrames
 import Leanux.Proofs.WG.Progress.CookieSchedulerSource
@@ -33,15 +34,6 @@ theorem turn_yield (a : Activation) (w : World) (d : Device) (bytes : List UInt8
     rw [cookieScheduler_run a w d _ _ receive device table cookies present suspended resolved]
     simp [cookieActivationWorld, records_drop, detached, suspended, activation_ne_self,
       cookieFinalSteps, cookieProcessedSteps, yieldedWorld, cookieTailDevice]
-theorem turn_finished (w : World) (d : Device) (device : w.k.wg = some d)
-    (hiddenEmpty : w.hidden = some []) (suspendedEmpty : w.suspended = []) :
-    (scheduleTurn none).run w = .ok (turnReturn,w) := by
-  have peek : peekHiddenSite.run w = .ok (none,w) := by
-    simpa only [List.dropWhile_nil, List.head?_nil, Option.map_none, ← hiddenEmpty] using cookiePeek_run w [] hiddenEmpty
-  have filter : (w.suspended.filterM Activation.consistent).run w = .ok ([],w) := by
-    rw [suspendedEmpty]; rfl
-  exact turn_no_candidates none w w none d (by simp [hiddenEmpty]) peek (by simp) device
-    (by simp) filter
 
 def schedulerLoop (turns : List Nat) : M (Option Unit × Unit) :=
   forIn turns (none,()) (fun _ _ => scheduleTurn none)

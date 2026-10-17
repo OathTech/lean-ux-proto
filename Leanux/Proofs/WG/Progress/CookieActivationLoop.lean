@@ -1,7 +1,5 @@
-import Leanux.Proofs.WG.Progress.CookieBoundedSource
-import Leanux.Proofs.WG.Campaign2.Bridge
-/-! Historical list-based continuation support pending the ring carry. The corrected
-bounded operational contracts are in CookieBoundedSource; no drain adequacy is claimed. -/
+import Leanux.Proofs.WG.Progress.CookieActivationCompositionModel
+import Leanux.Proofs.WG.Progress.CookieActivationSource
 
 set_option autoImplicit false
 namespace Leanux.Proofs.WG.Progress
@@ -10,24 +8,29 @@ open Leanux Leanux.WG Leanux.Env
 def cookieActivationWorld (a : Activation) (w : World) (d : Device)
     (summary : CookieActivationSummary) : World :=
   {w with
-    k := {w.k with wg := some {d with
-      handshakeQueue := d.handshakeQueue.drop summary.processed
+    wg := {w.wg with dev := some {d with
+      handshakeQueue := cookieRingAfter summary.processed d.handshakeQueue
       handshakeQueueLen := d.handshakeQueueLen - summary.processed}}
-    hidden := some summary.rest
-    suspended := if summary.yielded then
-      w.suspended ++ [{a with iterations := a.iterations + summary.processed}]
-      else w.suspended
-    steps := cookieFinalSteps w.netRxSection summary w.steps}
+    ambient := {w.ambient with
+      hidden := some summary.rest
+      suspended := if summary.yielded then
+        w.ambient.suspended ++ [{a with iterations := a.iterations + summary.processed}]
+        else w.ambient.suspended
+      steps := cookieFinalSteps w.ambient.netRxSection summary w.ambient.steps}}
 
 theorem cookieActivationWorld_continue (a : Activation) (w : World) (d : Device)
-    (msg : List UInt8) (src : SkbSource) (rest : List (List UInt8 × SkbSource))
+    (msg : List UInt8) (src : SkbSource) (rest : PtrRing (List UInt8 × SkbSource))
     (records : List HiddenRecord) (summary : CookieActivationSummary)
-    (queue : d.handshakeQueue = (msg,src)::rest) :
+    (queue : d.handshakeQueue.consume = (some (msg,src), rest)) :
     cookieActivationWorld {a with iterations := a.iterations+1}
-      {cookieMissStepView w d rest with hidden := some records} (cookieTailDevice d) summary =
+      {cookieMissStepView w d rest with ambient := {(cookieMissStepView w d rest).ambient with hidden := some records}}
+      (cookieTailDevice d) summary =
     cookieActivationWorld a w d {summary with processed := summary.processed+1} := by
-  simp [cookieActivationWorld, cookieMissStepView, cookieTailDevice, cookieFinalSteps,
-    cookieProcessedSteps, cookiePacketSteps, queue, Nat.sub_sub,
-    Nat.add_assoc, Nat.add_comm, Nat.add_left_comm]
+  have tail : d.handshakeQueue.consume.2 = rest := congrArg Prod.snd queue
+  simp [cookieActivationWorld, cookieMissStepView, cookieTailDevice,
+    cookieRingTailDevice, cookieRingAfter, cookieFinalSteps,
+    cookieProcessedSteps, cookiePacketSteps, tail, Nat.sub_sub,
+    Nat.add_comm, Nat.add_left_comm]
+
 
 end Leanux.Proofs.WG.Progress
