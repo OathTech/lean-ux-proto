@@ -487,10 +487,10 @@ including snapshots at 20261017T001124Z and 20261017T001204Z, before further wor
 One central Lake writer now coordinates this worktree's artifact mutations; independent
 checks and work in other worktrees remain concurrent.
 
-## Runtime witnesses still needing reconstruction
+## Runtime witness reconstruction
 
-The existing witness programs compile. Each recipe below was run once, with
-no infrastructure rerun:
+The existing witness programs compile. Each old recipe below was run once,
+with no infrastructure rerun:
 
 | Recipe | Current runtime result |
 | --- | --- |
@@ -502,11 +502,28 @@ no infrastructure rerun:
 | r5-coherent-post-clear | FAIL at operation 1: expected site 428, saw 8 |
 | r5-post-clear-transport | FAIL at operation 4: no modeled timer bucket due at jiffies 135005 |
 
-All four failures precede the proof observers. The historical generator uses
-an older roaming seed and synthesizes timer inputs without the current wheel
-clock records. These exact recipes still need reconstruction; a different
-passing fixture would not establish them. The mirror and generator were
-unchanged at this checkpoint. These failures are not guest timeouts or passes.
+All four failures preceded the proof observers and remain failures. The three
+arm-enabled recipes now generate the wheel's base-clock and enqueue records,
+including its distinct same-expiry and same-slot paths. Their recorded timer
+units follow the actual detach/cancel operations. The mirror validates every
+generated record; these synthetic inputs are not Linux captures.
+
+[AGENT 2026-10-17] Reconstruct the same post-clear behaviors using the actual
+wheel firing windows. The coherent variant moves encryption from 673 to 679
+seconds and ends at 680 seconds: its zero-key bucket becomes due at 678.832.
+The legacy 25-second recipe cannot preserve its five-unit schedule because
+post-transmit rearming is already due. Its replacement uses a 535-second
+keepalive and wait endpoints 1000, 1001, 2000, 139263, 139264; persistence runs
+before zero-key in their shared bucket and rearms beyond the final wait.
+Only the corresponding numeric runtime assertions change. The exact retained
+key, nonce, ciphertext, reference counts, callback order and erasure checks remain.
+
+Each of the four changed recipes passes its first runtime run with zero
+warnings, no infrastructure rerun and all original/observer comparisons intact.
+R6 still has nineteen retry callbacks, twenty initiations total and give-up on
+callback twenty. The three R5 cases retain lifetime 1 and wire nonce 1, with
+identical ciphertext. Independent source review passes. No theorem or mirror
+behavior changed, and the old fixtures are not presented as passing unchanged.
 
 ## Reproduction
 

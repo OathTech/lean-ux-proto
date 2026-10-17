@@ -710,15 +710,17 @@ admitted at 311s against deadline 312s. At 322s, expiry invalidates sending, sta
 handshake; crypt encrypts/transmits the earlier packet with unchanged material first. Unit order, identity, references
 and new ciphertext are checked directly.
 
-Seven-operation `r5-coherent-post-clear` moves that second expiry to 673s. Zero expiry is 132+540=672s; zero and real
+Seven-operation `r5-coherent-post-clear` moves that second expiry to 679s. Zero expiry is 132+540=672s;
+its level-4 wheel bucket becomes due at 678.832s. Zero and real
 clear work precede crypt. All published key slots are empty, index absent and handshake zero, while the same packet
 keeps one reference to the same material. Ciphertext precedes queued handshake work; transmission frees packet and final
 key reference. Older five-operation `r5-post-clear-transport` deliberately has incoherent coarse/jiffies clocks and
-disabled arm records; the coherent witness does not upgrade that evidence.
+disabled arm records; the coherent witness does not upgrade that evidence. Its reconstructed wheel schedule
+uses a 535-second keepalive and final jiffies 139264, so post-transmit rearming falls beyond the wait.
 
 Both coherent variants check monotone clocks, arm records, exact delays and `J(t)=2^32-75000+250*t`; kind-310/site-128
-windows end at 323/674s. TAI follows elapsed coarse time, queue/timer identities remain stable and cache clocks are
-disabled. Complete original advance agreement includes Kernel, decisions, endpoint, jiffies and record exhaustion.
+windows end at 323/680s. TAI follows elapsed coarse time, queue/timer identities remain stable and cache clocks are
+disabled. Complete original advance agreement includes product state, decisions, endpoint, jiffies and record exhaustion.
 Arithmetic coherence and the late-callback window do not prove Linux scheduling reachability.
 
 ```sh

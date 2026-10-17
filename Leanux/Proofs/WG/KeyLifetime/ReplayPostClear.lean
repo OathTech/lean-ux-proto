@@ -65,7 +65,9 @@ def main : IO UInt32 := do
     wg := { before.wg with netRxRaised := false, queuedThisCall := [] }
     fs := { before.fs with userOut := none, userFds := none }
     seccomp := { before.seccomp with emitted := {}, translatedLen := none } }
-  let (result, units) := runPrefix (timerPassObserved 135005) entry []
+  -- Both timers occupy bucket 139264; persistence was enqueued last. The
+  -- generated 535-second interval puts its post-transmit rearm beyond this wait.
+  let (result, units) := runPrefix (timerPassObserved 139264) entry []
   let (fired, final) ← match result with
     | .error e => throw (IO.userError s!"observed timer pass: {e.message}")
     | .ok r => pure r
@@ -99,7 +101,7 @@ def main : IO UInt32 := do
   require (final.ambient.hidden.map (List.map (·.site)) == some [128])
     "timer pass left records other than its caller's end-of-wait word"
   let some last := checkpoints[4]? | throw (IO.userError "missing final runner checkpoint")
-  require (store43 last == store43 final && last.wg.jiffiesLast == some 135005 && last.ambient.hidden == some [])
+  require (store43 last == store43 final && last.wg.jiffiesLast == some 139264 && last.ambient.hidden == some [])
     "timer-pass endpoint disagrees with the accepted runner checkpoint"
   let branches ← match original.getObjValAs? (Array Json) "branches" with
     | .error e => throw (IO.userError e)

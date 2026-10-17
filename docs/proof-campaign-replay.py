@@ -70,6 +70,69 @@ def add_wait_bounds(trace, operation_indices):
         records.append([128, bound.to_bytes(8, "little").hex()])
 
 
+def add_timer_wheel_records(operations, retransmit_unit=None):
+    """Supply B3 base-clock/enqueue records for these successful timer paths.
+
+    The recipes name one peer's timers with distinct nonzero units. Their
+    section starts detach the named timer; the successful handshake's wall
+    read follows retransmit deletion, and a successful send deletes keepalive.
+    Same-expiry and same-slot rearms deliberately emit different record sets.
+    All values are generated inputs, checked again by the actual mirror.
+    """
+    pending = {}
+    last_clock = 0
+
+    def words(record):
+        raw = bytes.fromhex(record[1])
+        return [int.from_bytes(raw[i:i + 8], "little")
+                for i in range(0, len(raw), 8)]
+
+    def record(site, *values):
+        return [site, b"".join(v.to_bytes(8, "little") for v in values).hex()]
+
+    for records in operations:
+        output = []
+        for r in records:
+            site = r[0]
+            if site in {102, 104, 106, 108, 112}:
+                unit = words(r)[1]
+                if unit not in pending:
+                    raise ValueError(f"timer section {site} names an unarmed unit {unit}")
+                del pending[unit]
+            elif site == 15 and retransmit_unit is not None:
+                pending.pop(retransmit_unit, None)
+            elif site in {40, 46}:
+                # These recipes' successful sends cancel the send-keepalive
+                # timer (unit 20 in the delayed-encryption pair).
+                pending.pop(20, None)
+            output.append(r)
+            if site != 100:
+                continue
+            now, expiry, unit = words(r)
+            old = pending.get(unit)
+            if old is not None and old[0] == expiry:
+                continue
+            overdue = [p[2] for p in pending.values() if p[2] <= now]
+            clock = min([now, *overdue])
+            if clock < last_clock:
+                raise ValueError("generated timer base clock moved backward")
+            last_clock = clock
+            output.append(record(428, clock, unit))
+            delta = expiry - clock
+            level = next((n - 1 for n in range(1, 10)
+                          if 0 <= delta < 63 << (3 * (n - 1))), None)
+            if level is None:
+                raise ValueError("recipe timer lies outside the ordinary wheel levels")
+            rounded = (expiry >> (3 * level)) + 1
+            slot, bucket = 64 * level + (rounded & 63), rounded << (3 * level)
+            if old is not None and old[1] == slot:
+                pending[unit] = (expiry, old[1], old[2])
+            else:
+                output.append(record(429, slot, bucket, unit))
+                pending[unit] = (expiry, slot, bucket)
+        records[:] = output
+
+
 def inclusive_floor():
     trace = historical_session_seed()
     window = json.loads((ROOT / "corpus/wireguard/rx_window.json").read_text())
@@ -192,6 +255,12 @@ def post_clear_transport():
     tail += copy.deepcopy(response[7:13] + [response[14]])
     trace["id"] = "r5_post_clear_transport"
     trace["ops"] = trace["ops"][:4] + [{"op": "wg_observe"}]
+    # The former 25-second recipe cannot retain this schedule under the wheel:
+    # its post-clear transmit rearms a bucket already due in the same wait.
+    # At 535 seconds, response processing moves persistence from bucket 135168
+    # to 139264, after zero-key was enqueued there. Persistence therefore runs
+    # first; the transmit later rearms it beyond this wait, at 274432.
+    trace["ops"][0]["config"]["peers"][0]["keepalive"] = 535
     trace["hidden"] = trace["hidden"][:4] + [tail]
     for operation in trace["hidden"]:
         for record in operation:
@@ -200,8 +269,8 @@ def post_clear_transport():
     trace.pop("steer")
     trace["dst_cache_records"] = False
     trace["arm_records"] = False
-    add_wait_bounds(trace, range(4))
-    trace["hidden"][4].append([128, (135005).to_bytes(8, "little").hex()])
+    for records, end in zip(trace["hidden"], [1000, 1001, 2000, 139263, 139264]):
+        records.append([128, end.to_bytes(8, "little").hex()])
     return trace
 
 
@@ -210,7 +279,9 @@ def delayed_encryption(clear=False):
     trace = historical_session_seed()
     data = json.loads((ROOT / "corpus/wireguard/d3_keepalive_rearm_deleted.json").read_text())
     initial_jiffies = 2**32 - 75000
-    after_expiry = 673 if clear else 322
+    # Zero-key expiry is 672 seconds, but its level-4 bucket is due only
+    # at 678.832 seconds. Keep the clear variant's later clocks coherent.
+    after_expiry = 679 if clear else 322
     wait_end = after_expiry + 1
     jiffies = lambda seconds: initial_jiffies + seconds * 250
     def record(site, *words):
@@ -340,6 +411,7 @@ def delayed_encryption(clear=False):
         {"op": "wg_advance", "ticks": (311 - 134) * 250}]
     trace["ops"][0]["config"]["peers"][0]["keepalive"] = 1000
     trace["hidden"] = [setup, up, [], response, *receives, tail]
+    add_timer_wheel_records(trace["hidden"], retransmit_unit=18)
     for records, seconds in zip(trace["hidden"], [130, 131, 131, 132, 133, 134, wait_end]):
         records.append(record(128, jiffies(seconds)))
     trace.pop("steer")
@@ -466,6 +538,7 @@ def retransmit_limit():
             raise ValueError("advance duration differs from the generated jiffies")
         if tick(i - 1) + 1250 >= tick(i) + 1:
             raise ValueError("retry timer is not due in its recorded firing window")
+    add_timer_wheel_records(trace["hidden"])
     # Validate source clocks and each original mod_timer arm, including the
     # final zero-key timer. These checks do not establish Linux provenance.
     last_ns, last_tick = 0, initial_jiffies

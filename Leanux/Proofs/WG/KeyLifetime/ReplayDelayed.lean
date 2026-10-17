@@ -57,7 +57,9 @@ def main : IO UInt32 := do
     ambient := { before.ambient with hidden := trace.hidden.map (·[6]!) }
     fixture := { before.fixture with hiddenAhead := trace.hidden.map (fun h => (h.drop (7)).toList) }
     wg := { before.wg with netRxRaised := false } }
-  let jEnd : UInt64 := if clears then 4295060796 else 4294973046
+  -- The zero-key timer's level-4 bucket is due at 4295061504 (678.832s),
+  -- so the coherent clear witness encrypts at 679s and ends its wait at 680s.
+  let jEnd : UInt64 := if clears then 4295062296 else 4294973046
   let (result, units) := runPrefix (advanceSyscallObserved 44250) entry []
   let (ret, final) ← match result with
     | .error e => throw (IO.userError s!"observed advance syscall: {e.message}")
@@ -134,7 +136,7 @@ def main : IO UInt32 := do
   require ((selected[0]!.getObjValAs? (List Int) "operands").toOption ==
       some [312000000000, 311000000000] &&
     (selected[1]!.getObjValAs? (List Int) "operands").toOption ==
-      some [312000000000, if clears then 673000000000 else 322000000000]) "unexpected recorded age operands"
+      some [312000000000, if clears then 679000000000 else 322000000000]) "unexpected recorded age operands"
   (← IO.getStdout).putStrLn (Json.mkObj [("id", toJson trace.id),
     ("accepted", toJson true), ("original_json_matches", toJson true),
     ("wire_nonce", toJson packet.nonce), ("lifetime", toJson retained.internalId),
