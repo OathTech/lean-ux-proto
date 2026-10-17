@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.TimerDiscipline.OuterFirstReceiptClaims
 import Leanux.Proofs.WG.TimerDiscipline.OuterFirstTurnClaims
 import Leanux.Proofs.WG.TimerDiscipline.RetryBoundaryClaims
 import Leanux.Proofs.WG.TimerDiscipline.ArmingSourceClaims
@@ -700,5 +701,21 @@ theorem original_run_timers_first_selected (jPass : UInt64) (worker : Worker)
     Campaign2.Product.AgreesOn (FirstTimerSelected jPass worker pid timer we)
       (Env.runTimers jPass) (firstTimerSelectedSource jPass worker pid timer we) :=
   runTimers_first_timer_agrees jPass worker pid timer we
+
+/-- Receipt for the first actual outer retransmit unit, with its effect before
+the original continuation. No final-state retry-count claim is made. -/
+theorem original_run_timers_first_retransmit_receipt (jPass : UInt64) (pid : PeerId) (we : WheelEntry)
+    (identity attempts : Nat) (expiry : Option UInt64) :
+    Campaign2.Product.Ensures
+      (observed (Env.runTimers jPass)
+        (firstTimerReceiptPath jPass .timerRetransmit pid .retransmitHandshake we))
+      (fun entry => FirstTimerSelected jPass .timerRetransmit pid .retransmitHandshake we entry ∧
+        retryObservation entry.toSnapshot pid = some (identity, attempts, expiry))
+      (fun result final => ∃ remaining selected afterUnit,
+        result.1 = .ok ((remaining, (pid, .retransmitHandshake, selected),
+          .ok (result.2, final)), afterUnit) ∧
+        retryObservation selected.toSnapshot pid = some (identity, attempts, expiry) ∧
+        retryObservation afterUnit.toSnapshot pid = some (identity, nextAttempts attempts, none)) :=
+  runTimers_first_retransmit_receipt jPass pid we identity attempts expiry
 
 end Leanux.Proofs.WG.TimerDiscipline

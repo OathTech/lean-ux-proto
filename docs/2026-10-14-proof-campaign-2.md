@@ -11,23 +11,23 @@ merged; the executable mirror remains byte-identical to b700659.
 | Result | Headlines | Checked support | Split status |
 | --- | ---: | ---: | --- |
 | H1 Noise | 22 | 185 | Full terminal closure current; wider caller/lifetime/clock claims open. |
-| H2 Index | 69 | 388 | Full terminal closure current; reachable whole-driver uniqueness/coherence open. |
+| H2 Index | 70 | 398 | Full terminal closure and consumeData owner coherence current; reachable whole-driver uniqueness/coherence open. |
 | H3 Roaming | 13 | 157 | Full terminal closure current; callback authentication provenance and broader caller coverage open. |
 | H4 Configuration | 80 | 586 | Full terminal closure current; global ownership, queued cleanup and general pagination open. |
 | H5 Progress | 42 | 288 | Full terminal closure current with exact bounded outcomes and checked refutations; global progress/coherent-ring adequacy open. |
-| H6 Timers | 51 | 442 | Full terminal closure and first outer timer turn current; whole scheduler episodes, complete caller coverage and session-relative counts open. |
+| H6 Timers | 52 | 445 | Full terminal closure, first outer timer turn and intermediate retransmit receipt current; whole scheduler episodes, complete caller coverage and session-relative counts open. |
 
-The checked surface is 2,046 theorems in all 618 campaign-owned modules.
+The checked surface is 2,059 theorems in all 625 campaign-owned modules.
 The completed retrofit accounts for 1,983: 1,321 retyped, 244 explicitly
-corrected, 239 retained and 179 added support/finding declarations. Fifty-five
+corrected, 239 retained and 179 added support/finding declarations. Sixty-five
 subsequent H2 declarations add table preservation and local owner coherence.
-Four H4 declarations add mixed fwmark/scalar readback and four H6 declarations
-connect the first outer timer turn. Of the 1,831 baseline theorems, 22 frames
+Four H4 declarations add mixed fwmark/scalar readback and seven H6 declarations
+connect the first outer timer turn and its retransmit receipt. Of the 1,831 baseline theorems, 22 frames
 were deleted because types supply their facts and five false cookie supports
 were separately retired with checked counterexamples. No baseline declaration
 remains awaiting retrofit; all 258 original terminal names/order survive,
-with seventeen new H2 headlines, one new H4 headline and one new H6 headline
-(277 total).
+with eighteen new H2 headlines, one new H4 headline and two new H6 headlines
+(279 total).
 
 The [retrofit report](2026-10-16-proof-campaign-2-state-split.md) records
 claim/frame files, corrections, before/after counts and validation.
@@ -483,6 +483,86 @@ including 780 public theorem roots, with standard axioms only. Fresh replay
 passes. Static checks, original 258-name order and mirror/shared boundaries
 pass. The inherited full-gate failure remains unchanged and is not rerun.
 Reproduce with scripts/in-bundle lake build Leanux.Proofs.WG.TimerDiscipline.Statements
+and scripts/in-bundle lake env leanchecker --fresh on that module, under
+capped with 32 Lean threads and 16 QEMU slots.
+
+## H6 continuation: first retransmission receipt
+
+A normal actual runTimers return now supplies the first selected retransmission
+unit's intermediate observations. The receipt records the original remaining
+budget, the actual selected-prefix snapshot, the immediate post-unit snapshot,
+and the exact outcome of the remaining original continuation. Its retry count
+is nextAttempts of the entry count and its retransmit timer is detached at
+that intermediate point. Later turns can change those fields again; no claim
+is made about their values at the whole call's final state.
+
+The entry premises are actual first record/wheel selection and the existing
+retry observation. Prefix, callback and suffix success follow from the
+normal whole-call return; no readiness, empty-queue, attempt-bound or successful
+callback premise is inserted. The existing observed_erase theorem retains
+every original error, independently of these entry premises. The receipt
+inspects its suffix on the actual post-unit product, preserving all fixture
+inputs rather than reconstructing a state from its projection.
+
+OuterFirstReceiptSource contains the small receipt path and native decomposition;
+OuterFirstReceiptClaims contains the projected effect; Statements adds the
+literal wrapper. The three new theorems add no frame layer, changed statement
+or mirror request. This supplies an intermediate transition for later induction,
+but does not establish adjacency to a send worker or the inspection conditions
+needed for a complete retry pair.
+
+Development: probe 1 fails eight parser errors from a reserved local name;
+changed probe 2 passes without diagnostics. The integrated build passes 314
+jobs with only the inherited Env:865 warning. All 1,380 logical roots in 272
+modules, including 783 public theorem roots, use standard axioms. Independent
+review finds no issue. Fresh replay passes; no cap/limit increase or
+infrastructure rerun occurred. Reproduction uses the same TimerDiscipline.Statements
+build and fresh replay commands as the preceding first-turn increment.
+
+## H2 continuation: data-ingress owner coherence
+
+The actual consumeData now preserves hashed-owner coherence on every normal
+return, with coherence alone at entry. Lookup supplies a newly held positive
+peer reference and the selected hashed key's original positive reference;
+keypairGet then supplies its extra reference. Dead-peer and failed-enqueue
+cleanup release those acquired references, so the problematic final-peer
+detachment case cannot occur. EPIPE publication temporarily acquires another
+peer reference and restores it. Missing lookup, all aliases and arbitrary
+Ambient inputs retain their original domains; missing objects, overflow,
+queue membership and recorded-work refusals remain Stops. This establishes
+local preservation, not completion or initialized whole-driver reachability.
+
+OwnerReferenceModel retains the index table, keypair store and pointwise peer
+presence/owner-word/reference count. OwnerReferenceFrames contains its pure
+coherence transport and key-acquisition preservation. RxQueueOwnerFrames
+contains the guarded Skb adapter and stronger variants of the same two queue
+families already covered by RxQueueFrames. It asserts no arbitrary callback
+preservation: publication uses the actual pure callback. The lookup-held
+and final caller claims are projected in OwnerCoherenceLookupHeldClaims and
+OwnerCoherenceReceiveClaims; Statements appends the literal headline. No
+broader shared-layer inventory is copied, and no existing shared lemma or
+mirror operation is edited. The ten new theorems bring H2 to 70 headlines
+and 398 theorems; together with the H6 receipt, the campaign has 279 headlines
+and 2,059 theorems in 625 modules. No statement is reshaped or new mirror
+change requested.
+
+Development: support/caller author probes 1–4 fail with 2, 1, 1 and 5 errors;
+5 passes, 6 passes with one unused-simp warning, and corrected 7 passes clean.
+Probe 8 fails three diagnostics from continuation indentation; its later caller
+portion is not accepted. Root's changed caller probe 1 exposes one remaining
+positive-count obligation, and changed probe 2 closes it without diagnostics.
+The separate lookup-held helper has one failed probe (two normalization/kind
+errors and three unused-simp warnings), followed by a clean changed probe.
+All use default limits and the unchanged memory cap; there is no infrastructure
+or unchanged-source rerun. Independent review of support and the final caller
+finds no issue.
+
+The support build passes 183 jobs without warnings; final Index.Statements
+passes 299 jobs with only inherited Env:865 String.mk. Axioms: 1,181 logical
+roots in 235 modules, including 786 public theorem roots, standard only.
+Fresh Index replay passes. Static checks, original terminal-name order and
+mirror/shared boundaries pass; the unchanged inherited full-gate failure is
+not rerun. Reproduce with scripts/in-bundle lake build Leanux.Proofs.WG.Index.Statements
 and scripts/in-bundle lake env leanchecker --fresh on that module, under
 capped with 32 Lean threads and 16 QEMU slots.
 

@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Index.OwnerCoherenceReceiveClaims
 import Leanux.Proofs.WG.Index.OwnerCoherenceKeypairCallerClaims
 import Leanux.Proofs.WG.Index.OwnerCoherenceSessionClaims
 import Leanux.Proofs.WG.Index.OwnerCoherenceKeypairReleaseClaims
@@ -828,5 +829,13 @@ theorem original_keypairs_clear_owner_coherence (pid : PeerId) :
     Campaign2.Ensures (keypairsClear pid) View.OwnerCoherentSafe
       (fun _ s => View.OwnerCoherentSafe s) :=
   keypairsClear_owner_coherent pid
+
+/-- Normal data ingress preserves every hashed owner's resident peer/key
+relation. Actual lookup/acquisition supply the references used by cleanup;
+there is no entry reference bound, readiness or alias-distinctness premise. -/
+theorem original_consume_data_owner_coherence (msg : List UInt8) (src : SkbSource) (ds : Nat) :
+    Campaign2.Ensures (consumeData msg src ds) View.OwnerCoherentSafe
+      (fun _ s => View.OwnerCoherentSafe s) :=
+  consumeData_owner_coherent msg src ds
 
 end Leanux.Proofs.WG.Index
