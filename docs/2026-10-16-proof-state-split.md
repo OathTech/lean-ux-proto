@@ -11,10 +11,10 @@ new worlds; new R3/R4 results follow the retrofit.
 | Census | Lean files | Named theorems |
 | --- | ---: | ---: |
 | Validated baseline `00641c6` | 471 | 7,715 |
-| Completed retrofit checkpoints | 452 | 6,550 |
+| Completed retrofit checkpoints | 452 | 6,551 |
 
-Completed changes comprise **2,928 retyped/generalized, 1,706 deleted,
-2,141 retained contract shapes and 541 added theorems**. Retyping changes the
+Completed changes comprise **2,955 retyped/generalized, 1,707 deleted,
+2,175 retained contract shapes and 543 added theorems**. Retyping changes the
 actual carrier or observation, including shorthand contracts whose functions
 move to a native monad. Namespace-only product qualification and equivalent
 projection relocation count as retained. The census includes private and
@@ -367,8 +367,23 @@ source reviews pass with zero own warnings; their closures report 1,181 or
 one missing-artifact failure and a final pass; each link module had one ordinary
 failure then a pass, and completion callers passed their first source check.
 
+The complete normal-poll carrier checkpoint carries 62→63 theorems:
+25 native retypes, two generalizations removing unused premises, 34 retained,
+one component-derived frame deleted and two private bridges added. Arbitrary
+product actions retain their full domain and original store mask. Queue selection,
+counter validation, consume, Stack/GRO transfer, cleanup and the complete poll
+retain the same original ledger at every normal endpoint. Cleanup uses the
+actual successful peer-payment receipt, without assuming totality or survival.
+The deleted free-buffer key frame follows the actual SkbStore write boundary;
+packet compatibility remains substantive. Its 345-job build, all 76 named
+declaration axiom checks, explicit fresh replay and complete independent source
+review pass with zero own warnings and 1,342 inherited warnings. Fourteen
+development checks recorded five ordinary failures and nine passes; three of
+those passes exposed warnings subsequently fixed. No infrastructure rerun or
+limit change occurred.
+
 Remaining work is the routing/origin terminal carry,
-RX carrier and receipt-link layers, warning
+RX admission, ingress and outer history layers, warning
 cleanup, the full proof gate and terminal replay. Deterministic source/proof
 failures are failures; source edits are checked anew, never described as
 infrastructure retries. Recovery admissions printed by failed elaborations
