@@ -13,8 +13,8 @@ new worlds; new R3/R4 results follow the retrofit.
 | Validated baseline `00641c6` | 471 | 7,715 |
 | Completed retrofit checkpoints | 451 | 6,518 |
 
-Completed changes comprise **2,527 retyped/generalized, 1,677 deleted,
-1,711 retained contract shapes and 480 added theorems**. Retyping changes the
+Completed changes comprise **2,534 retyped/generalized, 1,677 deleted,
+1,713 retained contract shapes and 480 added theorems**. Retyping changes the
 actual carrier or observation, including shorthand contracts whose functions
 move to a native monad. Namespace-only product qualification and equivalent
 projection relocation count as retained. The census includes private and
@@ -119,6 +119,15 @@ ConfiguredSession had one ordinary failed development check before passing;
 timer history passed its fourteenth changed-source check. No infrastructure
 rerun occurred. A worker edit-driver syntax failure ran no tool; all dirty
 worktrees were preserved at 20261017T005241Z before further edits.
+
+RX carrier-state accounting retains all nine theorem names: seven native
+retypings and two pure arithmetic contracts. The original seven-field store
+mask and strict nonfinal-reference premise remain. Its 199-job scoped build,
+all 22 named declaration axiom checks, fresh kernel replay and independent
+source review pass. The module builds in 1.2 seconds with zero own warnings;
+662 inherited warnings remain in its closure. The first output-free check
+passed with one unused-simp warning; the corrected second check is warning-free.
+No infrastructure rerun was needed.
 
 Remaining work is the routing/origin terminal carry, stamped
 traffic/environment/runner history, material lifecycle/support callers, RX
