@@ -1,3 +1,7 @@
+import Leanux.Proofs.WG.Origins.OwnerRunner
+import Leanux.Proofs.WG.Packets.PublicationFrontierPrepare
+import Leanux.Proofs.WG.Packets.PublicationFrontierLifecycle
+import Leanux.Proofs.WG.Packets.PublicationStack
 import Leanux.Proofs.WG.Origins.OwnerDeferred
 import Leanux.Proofs.WG.Packets.PublicationConsumeHistory
 import Leanux.Proofs.WG.Queues.JointRunner
@@ -3960,5 +3964,79 @@ theorem original_packet_history_consume (history : List Queues.RxHistory.Event) 
       t = h ++ before ++ [.consumed occurrence id stamp receipt] ++ after ∧
       ∀ e, value = some e → e.origin = some receipt ∧ receipt.run.value = some e.tag.bytes :=
   PublicationHistory.consume_anchored history pid occurrence id stamp pkt ep w v h t value packets selected peer crypted hr
+
+/-- Every remaining environment constructor keeps the actual owner/current
+checks and failed prefix, with no substituted callback. -/
+theorem original_owner_remaining (call : Lifetimes.EnvRemainingCall) :
+    OwnerChecks.Preserves (Queues.RxHistory.remaining call) :=
+  OwnerRemaining.remaining call
+
+/-- Every original syscall dispatch arm and its source-designated wait suffix
+preserves the checked journal, including normal errno and Stop paths. -/
+theorem original_owner_syscall (call : Syscall) :
+    OwnerChecks.Preserves (Queues.RxHistory.syscallDispatch call) ∧
+    OwnerChecks.Preserves (Queues.RxHistory.syscall call) :=
+  ⟨OwnerSyscalls.dispatch call,OwnerSyscalls.syscall call⟩
+
+/-- The fixture starts with no crypted RX cells. Actual publication establishes
+the peer frontier bound used by later creation, separately from key validity. -/
+theorem original_packet_frontier_initial (net bare : Bool) (w : WGWorld)
+    (hw : Framing.wgStoreView w = Framing.wgStoreView (Runner.initialWG net bare)) :
+    PublicationFrontier.Inv [] w := PublicationFrontier.initial net bare w hw
+
+/-- The existing prepare observer carries both the earlier publication anchor
+and its concrete peer-slot bound; Stop asserts only the actual safe prefix. -/
+theorem original_packet_frontier_prepare :
+    Logged.PrefixPreserves (fun h w => OwnerChecks.Inv h w ∧ PublicationFrontier.Inv h w.wg)
+      OwnerChecks.Safe Origins.HistoryAdapters.prepare :=
+  PublicationFrontier.prepare_preserves
+
+/-- Fresh peer creation preserves old published packets without a vacant-slot
+premise. Their saved peer IDs lie below the allocation frontier. -/
+theorem original_packet_frontier_create (key : Key) (psk : Option Key)
+    (history : List Queues.RxHistory.Event) :
+    Framing.Preserves (PublicationFrontier.Inv history) (WG.peerCreate key psk) :=
+  PublicationFrontier.peerCreate_preserves key psk history
+
+/-- Packet freeing removes only that obligation; setup establishes an empty
+population. Neither operation transports a certificate across an arbitrary reset. -/
+theorem original_packet_frontier_lifecycle (id : SkbId) (history : List Queues.RxHistory.Event) :
+    Framing.Preserves (PublicationFrontier.Inv history) (WG.freeRxSkb id) ∧
+    Framing.Hoare WG.wgSetup (fun _ => True) (fun _ w => PublicationFrontier.Inv history w) :=
+  ⟨PublicationFrontier.freeRxSkb_preserves id history,PublicationFrontier.wgSetup_establishes history⟩
+
+/-- Actual completion preserves each stored packet's earlier publication,
+including staged sends and peer disappearance, without later key validity. -/
+theorem original_packet_history_completion (pid : PeerId) (pkt : RxPacket) (endpoint : Endpoint)
+    (history : List Queues.RxHistory.Event) :
+    Framing.Preserves (PublicationHistory.Inv history) (WG.consumeDataDone pid pkt endpoint) :=
+  PublicationCompletion.consumeDataDone_preserves pid pkt endpoint history
+
+/-- Every typed initialized trace, under either placeholder setting, preserves
+all captured current/owner checks on its actual completed or stopped journal. -/
+theorem original_owner_runner (trace : Runner.Trace) (placeholders : Bool) :
+    OwnerChecks.Safe (Logged.runPrefixOuter
+      (Queues.RxHistory.executeTraceHistory trace placeholders) []).2 :=
+  OwnerRunner.executeTrace trace placeholders
+
+/-- Each reached initialized decrypt uses one specified strict earlier session
+prefix, together with the owner bounds of that exact captured WG state. -/
+theorem original_initialized_decrypt (trace : Runner.Trace) (placeholders : Bool)
+    (pre post : List Queues.RxHistory.Event) (id : SkbId)
+    (r : Logged.WGRunWitness (RxPacket × Option RxPacket))
+    (position : (Logged.runPrefixOuter (Queues.RxHistory.executeTraceHistory trace placeholders) []).2 =
+      pre ++ .rx (.decrypt id r) :: post) :
+    CurrentLifecycle.Inv (Origins.HistorySupport.sessions pre) r.before ∧ OwnerBounds.Carrier r.before :=
+  OwnerRunner.decrypt trace placeholders pre post id r position
+
+/-- Copied-trial probes have their actual earlier allocation history and
+captured current/owner facts; the trial is not a committed callback occurrence. -/
+theorem original_initialized_owner_probe (trace : Runner.Trace) (placeholders : Bool)
+    (pre post : List Queues.RxHistory.Event) (p : Lifetimes.ProbeEntry)
+    (position : (Logged.runPrefixOuter (Queues.RxHistory.executeTraceHistory trace placeholders) []).2 =
+      pre ++ .audit (.probe p) :: post) :
+    p.history = Queues.RxHistory.prior pre ∧ CurrentSessionPrefix.StateInv pre p.world ∧
+      OwnerBounds.Carrier p.world.wg :=
+  OwnerRunner.probe trace placeholders pre post p position
 
 end Leanux.Proofs.WG.CryptokeyRouting

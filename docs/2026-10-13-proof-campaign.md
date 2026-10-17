@@ -119,6 +119,16 @@ declarations in 6.631 seconds. Fresh kernel replay passes in
 The [short report](2026-10-17-r3-scheduler-cuts.md) records the conditional
 saved-scan architecture, failed checks, review repair and remaining closure.
 
+The initialized-owner checkpoint adds thirteen modules and 171 theorems:
+566 files/8,013 theorems, 597 terminal declarations and 221 R3 exports.
+Every concrete syscall and the initialized runner derive captured current/owner
+checks for all typed traces and both flags, including Stop. Packet publication
+now carries a peer-frontier bound; concrete creation/reset/free, completion,
+poll and Stack have their stated packet-retention contracts. Gate: 624
+jobs/597 declarations in 6.651 seconds. Fresh kernel replay passes in 103.207 seconds without warnings.
+The [short report](2026-10-17-r3-initialized-owner.md) records the unchanged
+older terminal bodies, failed source checks and remaining packet/routing joins.
+
 The pre-split checkpoint validated every baseline result surface over
 `cb2348e`. Initialized R3 packet authorization and R4 receive-pipeline
 conservation remain open. Earlier positive results and runtime findings retain
@@ -130,7 +140,7 @@ was made by this campaign.
 | --- | --- |
 | R1 | Replay uniqueness proved; inclusive-floor correction witnessed. |
 | R2 | Initialized allocation-identity access safety proved, including failures/trials; affiliation/credits separate. |
-| R3 | Initialized routing/committed material support and local configured identity/publication cuts; initialized packet authorization open. |
+| R3 | Initialized routing, material support and captured current/owner checks; local publication/frontier/consume contracts; initialized packet authorization open. |
 | R4 | Initialized entry/completion uniqueness and packet/receipt linkage; chronology refuted; receive-pipeline conservation open. |
 | R5 | Accepted age/post-zero/wire-nonce counterexamples; thirteen positive local contracts. |
 | R6 | Cookie exclusion proved; literal MAX=18 refuted, without a replacement universal bound. |
@@ -354,8 +364,8 @@ all typed traces/both placeholder settings. No R3 Rule Zero counterexample is as
 **Configured source cuts (validated).**
 [ConfiguredIdentity](../Leanux/Proofs/WG/Peers/ConfiguredIdentity.lean) follows original table insertion,
 lookup acquisition, list unlink/table filtering/dead setter, retirement and fresh owner store-back, including
-aliasing and NULL. Its supplied invariant permits stale rows and dead residents. Full configuration/removal
-caller closure and an initialized configured registry are still separate.
+aliasing and NULL. Its supplied invariant permits stale rows and dead residents. Concrete configuration/removal caller closure and initialized captured current/owner
+checks now hold; full packet authorization remains separate.
 [ConfiguredSession](../Leanux/Proofs/WG/Origins/ConfiguredSession.lean) couples the same actual front
 RunWitness/Context, material/stamp/epoch, owner and configured entry row; actual whole normal session
 completion supplies live/self facts before support is retained through the tail. A stopped tail retains the old
@@ -364,9 +374,10 @@ observer's receipt, not a configured endpoint claim.
 captured ring pop to its actual stored decrypt receipt and pre-IRQ publication. Successful decrypt gives
 historical session caller/public key, exact packet/AEAD transformation and preserved allocation stamp;
 Some prepare can instead publish DEAD. Arbitrary older receipt history is retained, and the new receipt has
-an exact fresh position. Supplied configured support is not an initialized occurrence proof; historical caller
-identity does not identify a later resident peer at the same raw slot. RX/key-frontier continuity, admission
-injection, configured caller propagation and lookup/Stack alignment remain open. No Noise authenticity is claimed.
+an exact fresh position. The initialized runner now derives captured configured/current support at each decrypt.
+A packet peer-frontier invariant handles fresh creation, while local retention connects the earlier
+publication to actual normal consumption. Whole-call packet transport and the contemporaneous
+initialized lookup/Stack join remain open. No Noise authenticity is claimed.
 
 **Architecture.** The [map](proofs.md#layers) details these refinements:
 
@@ -486,7 +497,8 @@ history, including Stops. This is an initialized material chain, not a configure
 
 **Remaining obligations.** Initialized committed support now preserves ordinary-negative cleanup and Stops.
 Routing parser shape follows its operation cursor, but local lookup agreement still needs connection to the
-actual contemporaneous initialized routing history. Historical session/key/public-key ownership and packet origin, and initialized RX/TX identity binding remain open.
+actual contemporaneous initialized routing history. Historical session/key/public-key support is now captured from initialization; whole-run
+packet-origin transport and initialized RX/TX identity binding remain open.
 Copied-trial packet certificates are optional separate coverage, not a prerequisite of the committed charter path claim. Nullable compatibility is insufficient for historical key identity.
 Partial failing clear has no completion marker. The historical R2 orphan recipe is now rejected, not a current
 misrouting witness; no new accepted counterexample is claimed.
