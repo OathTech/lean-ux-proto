@@ -1,5 +1,8 @@
-import Leanux.Proofs.WG.Progress.CookieActivationFrames
+import Leanux.Proofs.WG.Progress.CookieBoundedSource
+import Leanux.Proofs.WG.Progress.ScheduleTurn
+
 set_option autoImplicit false
+set_option pp.structureInstances false
 namespace Leanux.Proofs.WG.Progress
 open Leanux Leanux.WG Leanux.Env
 
@@ -48,40 +51,54 @@ theorem cookieActivation_next (count : Nat) (records : List HiddenRecord)
         have result := ih _ out resolved
         simpa only [cookieNext_drop] using result
 
+/-- Run the exact bounded activation after the actual singleton detachment. -/
+def cookieBoundedResumption (a : Activation) (occupancy : Nat) : Leanux.M TurnResult := fun w =>
+  cookieHybridRun a occupancy (detached w a) >>= fun out => .ok (turnContinue, out.2)
+
+/-- The current scheduler probes a copy and commits a separately detached run.
+Only a hidden mismatch excludes the candidate. Other errors propagate exactly. -/
+def cookieBoundedScheduler (a : Activation) (occupancy : Nat) : Leanux.M TurnResult := do
+  let _ ← peekHiddenSite
+  let accepted ← (fun w => probeResult w (cookieHybridRun a occupancy w) : Leanux.M Bool)
+  if accepted then cookieBoundedResumption a occupancy else pure turnReturn
+
+/-- Correction: pure control-record success selects the resumption branch but
+does not establish actual activation success. This factor retains both actual
+bounded runs and their precise error, return, suspension and exhaustion outcomes. -/
 theorem cookieScheduler_run (a : Activation) (w : World) (d : Device)
     (records : List HiddenRecord) (summary : CookieActivationSummary)
-    (receive : a.worker = .receiveWorker) (device : w.k.wg = some d)
-    (table : d.indexTable = []) (cookies : CookieOnly d) (present : w.hidden = some records)
-    (suspended : w.suspended = [a])
-    (resolve : resolveCookieActivation d.handshakeQueue.length records = .ok summary) :
-    (scheduleTurn none).run w = .ok (turnContinue,
-      cookieActivationWorld a (detached {w with hidden := some (records.dropWhile fun r => HiddenSite.passive r.site)} a) d summary) := by
-  let afterPeek := {w with hidden := some (records.dropWhile fun r => HiddenSite.passive r.site)}
-  have parsed : resolveCookieActivation d.handshakeQueue.length
-      (records.dropWhile fun r => HiddenSite.passive r.site) = .ok summary := by
-    rw [cookieActivation_drop, resolve]
+    (receive : a.worker = .receiveWorker) (device : w.wg.dev = some d)
+    (table : d.indexTable = []) (cookies : CookieOnly d) (present : w.ambient.hidden = some records)
+    (suspended : w.ambient.suspended = [a])
+    (resolve : resolveCookieActivation d.handshakeQueue.count records = .ok summary) :
+    (scheduleTurn none).run w = (cookieBoundedScheduler a d.handshakeQueue.count).run w := by
+  let afterPeek := {w with ambient := {w.ambient with
+    hidden := some (records.dropWhile fun r => HiddenSite.passive r.site)}}
   have probe := cookieActivation_run a afterPeek d _ receive device table cookies rfl
-  rw [parsed] at probe
   have actual := cookieActivation_run a (detached afterPeek a) d _ receive device table cookies rfl
-  rw [parsed] at actual
-  have candidates : (afterPeek.suspended.filterM Activation.consistent).run afterPeek = .ok ([a], afterPeek) := by
-    have same : afterPeek.suspended = [a] := suspended
-    rw [same]
-    have consistent : (Activation.consistent a).run afterPeek = .ok (true, afterPeek) := by
-      rw [consistent_exact, probe]
-      rfl
-    simp only [List.filterM, List.filterAuxM, StateT.run_bind]
-    rw [consistent]
-    rfl
-  have next := cookieActivation_next d.handshakeQueue.length records summary resolve
-  have noStart : ∀ worker, (cookieNext records).bind sectionOf ≠ some (worker,true) := by
+  have next := cookieActivation_next d.handshakeQueue.count records summary resolve
+  have noStart : ∀ worker, (cookieNext records).bind sectionOf ≠ some (worker, true) := by
     intro worker
     rcases next with next | next <;> rw [next] <;> cases worker <;> decide
   have noPoll : ((cookieNext records) == some (HiddenSite.sectionStart .netRx).info.id &&
       d.peers.toList.any (·.2.napiScheduled)) = false := by
     rcases next with next | next <;> simp [next, HiddenSite.info, Worker.sectionId, Worker.index]
-  rw [turn_resumes_singleton w afterPeek (cookieNext records) d a
-    (by simp [present]) (cookiePeek_run w records present) noStart device noPoll candidates, actual]
-  rfl
+  rw [turn_resumption none w afterPeek (cookieNext records) d
+    (by simp [present]) (cookiePeek_run w records present) noStart device noPoll]
+  have same : afterPeek.ambient.suspended = [a] := suspended
+  rw [same]
+  simp only [cookieBoundedScheduler, StateT.run_bind, cookiePeek_run w records present]
+  change (([a].filterM Activation.consistent).run afterPeek >>= fun out =>
+    (resumeCandidates none out.1).run out.2) =
+    (probeResult afterPeek (cookieHybridRun a d.handshakeQueue.count afterPeek) >>= fun out =>
+      ((if out.1 then cookieBoundedResumption a d.handshakeQueue.count else pure turnReturn) : Leanux.M TurnResult).run out.2)
+  simp only [List.filterM, List.filterAuxM, StateT.run_bind, consistent_exact, probe]
+  cases tested : cookieHybridRun a d.handshakeQueue.count afterPeek with
+  | error error => cases error <;> rfl
+  | ok pair =>
+    obtain ⟨u, final⟩ := pair
+    change (resumeCandidates none [a]).run afterPeek = _
+    rw [resumeCandidates_singleton, actual]
+    rfl
 
 end Leanux.Proofs.WG.Progress

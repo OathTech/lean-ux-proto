@@ -1,15 +1,5 @@
 import Leanux.Proofs.WG.TimerDiscipline.SendWorkerSource
-import Leanux.Proofs.WG.TimerDiscipline.JitterExhaustionSource
 import Leanux.Proofs.WG.TimerDiscipline.InitiationArmSource
-import Leanux.Proofs.WG.TimerDiscipline.ArmingSource
-import Leanux.Proofs.WG.TimerDiscipline.JitterFrames
-import Leanux.Proofs.WG.TimerDiscipline.JitterBoundClaims
-import Leanux.Proofs.WG.TimerDiscipline.RetrySource
-import Leanux.Proofs.WG.TimerDiscipline.RecordedSiteSource
-import Leanux.Proofs.WG.TimerDiscipline.RecordedJitterSource
-import Leanux.Proofs.WG.TimerDiscipline.ArmingPrefixesSource
-import Leanux.Proofs.WG.TimerDiscipline.RemainingSitesSource
-import Leanux.Proofs.WG.TimerDiscipline.FireSelectionSource
 
 namespace Leanux.Proofs.WG.TimerDiscipline
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise

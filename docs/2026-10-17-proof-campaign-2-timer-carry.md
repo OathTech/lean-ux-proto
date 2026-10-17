@@ -110,3 +110,17 @@ and traversal recorded-clock contracts in ArmingPrefixesSource. Their original
 prefix/record domains and actual Product intermediate-state witnesses remain.
 Complete wheel effects are anchored at the real pre-arm state; see the retrofit
 report for the four retypes, three corrections and private composition support.
+
+
+The 1,613-theorem checkpoint adds the checked
+`WheelSelectionFindings.logical_expiry_without_wheel_selection` witness.
+Its device has resident peer 0, peerList [0], retransmit expiry some 1 and
+no wheel entry. At time 2 the historical logical due-peer selector returns
+[0], whereas actual TimerWheel.nextDue returns none. Thus a logical expiry
+alone does not supply selection by the current dispatcher. The witness
+neither claims the fixture is reachable nor evaluates a complete dispatcher
+episode; no kernel defect follows. Current dispatcher contracts must retain
+actual wheel selection and execution. Validation: scoped build, standard
+axioms and fresh replay pass; reproduce with scripts/in-bundle lake build
+Leanux.Proofs.WG.TimerDiscipline.WheelSelectionFindings and scripts/in-bundle
+lake env leanchecker --fresh on that module, under capped on the shared host.

@@ -64,8 +64,8 @@ remain historical and lagging during the retrofit. The
 [retrofit report](2026-10-16-proof-campaign-2-state-split.md) records baseline
 counts, carries, deletions and validation. This branch retains the proof
 target and gate removed from main pending campaign 1's landing.
-The support tranches check 1,575 theorems (1,115 retyped/generalized, eighty-three corrected statements,
-215 retained, 162 support/finding declarations), and delete twenty-two type-given
+The support tranches check 1,613 theorems (1,125 retyped/generalized, 105 corrected statements,
+219 retained, 164 support/finding declarations), and delete twenty-two type-given
 frames. H1, H2 and H3 terminal modules now check over the split mirror;
 H4, H5, H6 terminal closures and the full gate remain lagging. The [cookie-bound finding](2026-10-17-proof-campaign-2-cookie-bound.md)
 refutes the old unrestricted activation prediction on malformed ring metadata.
@@ -81,7 +81,9 @@ check; all 258 original audit names remain
 in their Statements files.
 The [H6 retrofit finding](2026-10-17-proof-campaign-2-timer-carry.md) is a
 checked counterexample to the legacy timer-deletion statement after wheel state
-was added. Projected arming and deletion contracts now describe the complete
+was added. A second witness shows that a logical expiry can be due without
+a corresponding entry selected by the actual wheel; its scope is arbitrary
+model states, not reachability. Projected arming and deletion contracts now describe the complete
 current wheel effects; guarded arming and session-derived effects also account
 for all wheel changes. Traversal, data-receipt and handshake-completion effects
 are corrected too; all seven identified contracts are carried. Their downstream
