@@ -206,6 +206,14 @@ base/work/TX/cursor accounts retain actual callback acquisitions and payments.
 Gate: 761 jobs/703 declarations in 5.238 seconds; fresh root replay passes in
 109.546 seconds without warnings. Full initialized conservation remains open.
 
+The [complete-holder flow checkpoint](2026-10-17-r4-holder-flow.md) adds
+seventeen modules and 216 theorems: 720 files/9,911 theorems, 182 R4 terminals
+and 716 total declarations. All prior bodies remain unchanged. Admission,
+whole poll/NAPI/decrypt, work dispatch/drains, dump serialization/socket calls
+and encrypted TX completion retain the complete supplied account. Initialized
+conservation remains open. Gate: 778 jobs/716 declarations in 4.955 seconds,
+after an export-name repair; fresh root replay passes in 106.857 seconds.
+
 The pre-split checkpoint validated every baseline result surface over
 `cb2348e`. R3 packet authorization is now closed over the current split tree;
 R4 receive-pipeline conservation remains open. Earlier positive results and runtime findings retain
@@ -603,15 +611,15 @@ correspondence remains informal.
 
 ## R4 — queue, poll and delivery-order components (in progress)
 
-**State-split reference-account extension.** The [current report](2026-10-17-r4-reference-accounts.md)
-records 156 additional theorems in thirteen modules and thirteen terminal exports.
-The tree has 703 proof files/9,695 theorems, with 169 R4 terminals and all 156
-preceding bodies unchanged. Durable accounts align actual base entries, work
-occurrences, TX batches and active cursors, charging them with transient loans
-and receive carriers. Creation, detachment, DEAD TX, freshness and cursor
-exchange have local source contracts. Completion, Stack and selected poll/GRO
-cuts preserve new acquisitions. Whole-poll, other worker/lifecycle funding and
-initialized conservation remain open. Chronological GRO order stays refuted.
+**State-split holder-flow extension.** The [current report](2026-10-17-r4-holder-flow.md)
+records 216 additional theorems in seventeen modules and thirteen terminal exports.
+The tree has 720 proof files/9,911 theorems, with 182 R4 terminals and all 169
+preceding bodies unchanged. The complete account now survives actual admission,
+whole poll/NAPI/decrypt, ordered work dispatch, bounded drains, dump serialization
+and socket calls. Encrypted TX completion pays its batch owner while retaining
+the actual freshness work delta. Lifecycle retirement, durable TX selection,
+remaining callers and initialized conservation remain open. Chronological GRO
+order stays refuted.
 
 **Original versus proved.** The charter requires accepted-schedule order and no silent loss/duplication.
 [Terminals](../Leanux/Proofs/WG/DeliveryOrder/Statements.lean) prove initialized committed callback-entry stamp

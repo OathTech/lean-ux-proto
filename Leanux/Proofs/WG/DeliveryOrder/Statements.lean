@@ -1,3 +1,13 @@
+import Leanux.Proofs.WG.Queues.HolderPollBoundary
+import Leanux.Proofs.WG.Queues.HolderDecryptHistory
+import Leanux.Proofs.WG.Queues.HolderAdmission
+import Leanux.Proofs.WG.Queues.HolderSendDispatch
+import Leanux.Proofs.WG.Queues.HolderClearDispatch
+import Leanux.Proofs.WG.Queues.HolderDrains
+import Leanux.Proofs.WG.Queues.DumpSerialization
+import Leanux.Proofs.WG.Queues.DumpSockets
+import Leanux.Proofs.WG.Queues.CryptedTxDebit
+import Leanux.Proofs.WG.Queues.TxCompletionQueues
 import Leanux.Proofs.WG.Queues.BaseCreation
 import Leanux.Proofs.WG.Queues.BaseRemoval
 import Leanux.Proofs.WG.Queues.DurableHolders
@@ -2335,6 +2345,134 @@ theorem original_dump_cursor_exchange (ctx : DumpCtx) (old : Option Owner) (next
         o=⟨d.ifindex,o.slot,p.internalId⟩ ∧ 0<p.refcount) ∧
       ClearWork.Inv cs (next.toList ++ loans) v :=
   DumpReservation.replace_normal ctx old nextCursor done cursor hi a b run
+
+
+open Leanux Leanux.WG Queues Queues.RxCredits Framing Logged Lifetimes
+open Queues.RxJoint Queues.RxCredits.PollCarrier
+open WorkReservations
+
+open DurableHolders in
+/-- The actual poll retains all durable holders and subtracts its exact removal suffix. -/
+theorem original_funded_poll (pid : PeerId) (budget : Nat) (w v : World) (n : Nat)
+    (initial : Ledger) (loans : Reservations) (prior : List LifetimeEvent)
+    (hi : Boundary initial loans w.wg)
+    (hr : (WG.rxPoll pid budget (fun packets => packets.forM Leanux.Env.deliverInner)).run w = .ok (n,v)) :
+    let h := (runPrefix (poll pid budget) w (seed prior)).2
+    Boundary (remaining initial (removedPackets h)) loans v.wg ∧
+      ∀ p ∈ removedPackets h, packetAt v.wg p = none :=
+  DurableHolders.poll_normal_funded pid budget w v n initial loans prior hi hr
+
+open HolderDecryptHistory in
+/-- The actual decrypt iteration retains its funded holder account and physical ring witness. -/
+theorem original_funded_decrypt_iteration (hi : DurableHolders.Boundary cs loans w.wg) (physical : Queues.RxCredits.DecryptIteration.Physical w)
+    (run : (WG.decryptIter Env.napiSoftirq Env.napiIrqExit
+      (Env.condResched .decryptWorker)).run w = .ok (result,v)) (h : Queues.RxCredits.DecryptIteration.Journal) :
+    let k := (runPrefix RxHistory.decryptIteration w h).2
+    (∃ suffix, k = h ++ suffix ∧ DurableHolders.Boundary (remaining cs (NapiCarrier.removedPackets suffix)) loans v.wg) ∧
+      Queues.RxCredits.DecryptIteration.Physical v :=
+  HolderDecryptHistory.native_normal hi physical run h
+
+open HolderAdmission in
+/-- The complete holder account accompanies the exact admission and enqueue receipt. -/
+theorem original_funded_admission {holders : DurableHolders}
+    (hi : holders.Funded cs loans w) (stable : StableRx cs w) (fresh : Packets.Inv w)
+    (physical : NativeRxInv epoch (PtrRing.init n) history w) (a b : Ambient)
+    (run : ((consumeData msg src ds).run w).run a = .ok (((),v),b)) :
+    holders.Aligned v ∧
+      ∃ receipt, StableConsumption cs (holders.owners ++ loans) msg src ds w v a b receipt :=
+  HolderAdmission.consume_funded hi stable fresh physical a b run
+
+open DurableHolders in
+/-- One actual send dispatch pays its selected ordered holder occurrence. -/
+theorem original_send_worker_holders {holders : DurableHolders} (w v : World)
+    (hi : holders.Funded cs loans w.wg) (stable : StableRx cs w.wg)
+    (hr : Env.runOneSendWorker.run w = .ok ((),v)) :
+    ∃ pid o rest, Selected holders.send pid o rest ∧
+      (holders.withoutSend rest).Funded cs loans v.wg ∧ StableRx cs v.wg :=
+  DurableHolders.runOneSendWorker_funded w v hi stable hr
+
+open DurableHolders in
+/-- One actual clear dispatch pays its selected ordered holder occurrence. -/
+theorem original_clear_worker_holders {holders : DurableHolders} (w v : World)
+    (hi : holders.Funded cs loans w.wg) (stable : StableRx cs w.wg)
+    (hr : Env.runOneClearWorker.run w = .ok ((),v)) :
+    ∃ pid o rest, Selected holders.clear pid o rest ∧
+      (holders.withoutClear rest).Funded cs loans v.wg ∧ StableRx cs v.wg :=
+  DurableHolders.runOneClearWorker_funded w v hi stable hr
+
+open DurableHolders in
+/-- The actual bounded drain retains all holders except the work occurrences it pays. -/
+theorem original_work_drain_holders (upTo : Option PeerId) {holders : DurableHolders}
+    (hi : holders.Funded cs loans w) (stable : StableRx cs w) (a b : Ambient)
+    (hr : ((drainHandshakeSendWq upTo).run w).run a = .ok (((),v),b)) :
+    DuringWork holders cs loans v :=
+  DurableHolders.drain_normal upTo hi stable a b hr
+
+open DurableHolders in
+/-- Timer stopping and its conditional drain retain supplied caller loans. -/
+theorem original_timer_stop_holders (pid : PeerId) {holders : DurableHolders}
+    (hi : holders.Funded cs loans w) (stable : StableRx cs w) (a b : Ambient)
+    (hr : ((timersStop pid).run w).run a = .ok (((),v),b)) :
+    DuringWork holders cs loans v :=
+  DurableHolders.timersStop_normal pid hi stable a b hr
+
+open DumpReservation in
+/-- A full dump chunk derives cursor alignment from its actual serialization walk. -/
+theorem original_dump_serialization_funding (ctx : DumpCtx) (prevSeq : Nat) (skb : NlSkb) (old : Option Owner)
+    (cursor : ctx.nextPeer=old.map Owner.slot)
+    (hi : ClearWork.Inv cs (old.toList ++ loans) w) (a b : Ambient)
+    (run : ((wgGetDeviceDump ctx prevSeq skb).run w).run a=.ok ((result,v),b)) :
+    ∃ next : Option Owner, result.ctx.nextPeer=next.map Owner.slot ∧
+      ClearWork.Inv cs (next.toList ++ loans) v :=
+  DumpReservation.dump_normal ctx prevSeq skb old cursor hi a b run
+
+open DurableHolders in
+/-- The original dump start establishes active-cursor accounting through its source guards. -/
+theorem original_dump_start_holders {h : DurableHolders} (fd : Nat) (ref : DeviceRef)
+    (hi : h.Funded cs loans w) (stable : StableRx cs w) (a b : Ambient)
+    (run : ((netlinkDumpStart fd ref).run w).run a = .ok (((),v),b)) :
+    ∃ next : Option Owner, (h.withCursor fd next).Funded cs loans v ∧ StableRx cs v :=
+  DurableHolders.netlinkDumpStart_funded fd ref hi stable a b run
+
+open DurableHolders in
+/-- The original receive call retains or pays its socket cursor and all other holders. -/
+theorem original_dump_recv_holders {h : DurableHolders} (fd : Nat)
+    (hi : h.Funded cs loans w) (stable : StableRx cs w) (a b : Ambient)
+    (run : ((netlinkRecvmsg fd).run w).run a = .ok ((result,v),b)) :
+    ∃ next : Option Owner, (h.withCursor fd next).Funded cs loans v ∧ StableRx cs v :=
+  DurableHolders.netlinkRecvmsg_funded fd hi stable a b run
+
+open TxReservation in
+/-- The actual encrypted TX step debits one batch and retains its send-only freshness delta. -/
+theorem original_crypted_tx_account (o : Owner) (first : SkbId) (rest : List SkbId)
+    (hi : ClearWork.Inv cs (o :: loans) w)
+    (queue : ∃ p, resident w o = some p ∧ p.txQueue.all.head? = some (first :: rest))
+    (head : TxDisposition.HeadState first .crypted w) (a b : Ambient)
+    (hr : ((txStep o.slot).run w).run a = .ok ((result,v),b)) :
+    result = true ∧ ∃ delta : HandoffDelta,
+      delta.tx = [] ∧ ClearWork.Inv cs (loans ++ delta.owners) v ∧
+      sendView v = (sendView w).map (· ++ delta.send.map Owner.slot) ∧
+      (∀ other, other ≠ o.slot → handoffTxView v other = handoffTxView w other) ∧
+      (∀ before after, handoffTxView w o.slot = some before →
+        handoffTxView v o.slot = some after → after = before.tail) :=
+  TxReservation.crypted_step_account o first rest hi queue head a b hr
+
+open TxReservation in
+/-- The send-only completion handoff is anchored at the original completion entry. -/
+theorem original_tx_completion_handoff (pid : PeerId) (item : List SkbId)
+    (hi : ClearWork.Inv cs loans w) (a b : Ambient)
+    (hr : ((createDataDone pid item).run w).run a = .ok (((),v),b)) :
+    ∃ delta, Handoff w v [] [] delta ∧ delta.tx = [] ∧
+      ClearWork.Inv cs (loans ++ delta.owners) v :=
+  TxReservation.createDataDone_handoff pid item hi a b hr
+
+/-- All three original NAPI dispatch forms retain the same fixed accounting cut. -/
+theorem original_funded_napi (initial : Ledger) (loans : Reservations) (before : List RxHistory.Event) :
+    PrefixPreserves (HolderNapi.At initial loans before) (fun _ => True) RxHistory.napiSoftirq ∧
+    PrefixPreserves (HolderNapi.At initial loans before) (fun _ => True) RxHistory.pollScheduledInline ∧
+    PrefixPreserves (HolderNapi.At initial loans before) (fun _ => True) RxHistory.napiIrqExit :=
+  ⟨HolderNapi.softirq_preserves initial loans before,HolderNapi.inline_preserves initial loans before,
+    HolderNapi.irq_preserves initial loans before⟩
 
 
 end Leanux.Proofs.WG.DeliveryOrder
