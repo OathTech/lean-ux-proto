@@ -64,8 +64,8 @@ remain historical and lagging during the retrofit. The
 [retrofit report](2026-10-16-proof-campaign-2-state-split.md) records baseline
 counts, carries, deletions and validation. This branch retains the proof
 target and gate removed from main pending campaign 1's landing.
-The support tranches check 291 theorems (156 retyped/generalized,
-113 retained, twenty-two support/finding declarations), and delete twenty-one type-given
+The support tranches check 302 theorems (165 retyped/generalized,
+113 retained, twenty-four support/finding declarations), and delete twenty-one type-given
 frames. All six campaign 2 terminal
 closures remain lagging; no split terminal pass is claimed. Ten H2 table
 claims have checked projected support; all 258 original audit names remain
@@ -74,6 +74,9 @@ The [H6 retrofit finding](2026-10-17-proof-campaign-2-timer-carry.md) is a
 checked counterexample to the legacy timer-deletion statement after wheel state
 was added; the seven legacy arming contracts remain pending, with current
 deletion and handshake-completion effects carried separately.
+The [H2 peer-release finding](2026-10-17-proof-campaign-2-peer-release.md)
+checks two stopped outcomes within the old totality domain. The original
+peer-release contract remains pending; no reachability claim is made.
 
 | Result | Statements | Directory | Charter | Review | Mirror commit | Status |
 | --- | --- | --- | --- | --- | --- | --- |

@@ -8,7 +8,7 @@ namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise Lean Std.Do
 
 /-- Local exact source cut after the original initial device read. -/
-def deviceDumpSource (d : Device) (ctx0 : DumpCtx) (prevSeq0 : Nat) (skb0 : NlSkb) : M DumpCall := do
+def deviceDumpSource (d : Device) (ctx0 : DumpCtx) (prevSeq0 : Nat) (skb0 : NlSkb) : WG.M DumpCall := do
   let seq := d.deviceUpdateGen   -- cb->seq (:222)
   let mut ctx := ctx0
   let mut nextCursor := ctx.nextPeer
@@ -45,7 +45,7 @@ def deviceDumpSource (d : Device) (ctx0 : DumpCtx) (prevSeq0 : Nat) (skb0 : NlSk
   let ret : Int := 0
   let mut done := true
   let mut peers : Option (Array PeerDumpAttrs) := some #[]
-  let cursorDead : M Bool := do
+  let cursorDead : WG.M Bool := do
     let some pid := ctx.nextPeer | invariant "unreachable"
     return (← getPeer pid).isDead
   if ← WG.orM (branch .dumpPeerListEmpty d.peerList.isEmpty)

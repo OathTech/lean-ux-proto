@@ -7,14 +7,17 @@
 all six results are lagging until carried. Counts, type-justified frame
 deletions and scoped validation are tracked in the
 [retrofit report](2026-10-16-proof-campaign-2-state-split.md).
-The support tranches retype 156 original theorems, retain 113,
-delete twenty-one type-given frames and add twenty-two support/finding declarations: 291
+The support tranches retype 165 original theorems, retain 113,
+delete twenty-one type-given frames and add twenty-four support/finding declarations: 302
 checked theorems, with 258 terminal names still awaiting whole-result validation.
 Ten H2 table claims now have checked projected support and unchanged public
 audit names; this is not a build of the full H2 Statements module.
 The frame/claim file map and pending consumers are in the retrofit report.
 The [timer carry finding](2026-10-17-proof-campaign-2-timer-carry.md) checks a
 counterexample to a pre-wheel exact-peer statement; no mirror repair is requested.
+The [peer-release carry finding](2026-10-17-proof-campaign-2-peer-release.md)
+checks two counterexamples to a legacy totality domain; no reachable-state
+or mirror-bug claim follows.
 
 Historical checkpoint: branch `proofs/campaign-2`, worktree `.worktrees/proofs-campaign-2`,
 Lean v4.35.0, mirror **`de62c9d`**. The proofs are **lagging main's

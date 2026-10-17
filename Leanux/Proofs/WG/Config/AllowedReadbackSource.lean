@@ -1,5 +1,6 @@
 import Leanux.Proofs.WG.Config.AllowedInsertSource
 import Leanux.Proofs.WG.Config.DumpReturns
+import Leanux.Proofs.WG.Config.AllowedReadbackLeaves
 
 set_option autoImplicit false
 set_option pp.structureInstances false
@@ -7,31 +8,6 @@ set_option maxHeartbeats 800000
 set_option maxRecDepth 2048
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise Lean Std.Do
-
-theorem readInsertedNode (v4 : Bool) (addr cidr : Nat) (pid : PeerId)
-    (parent : Slot) (P : Kernel → Prop) :
-    ⦃fun w => ⌜P w.k⌝⦄ readNode { newNode addr cidr (allowedBits v4) (some pid) with parent }
-    ⦃⇓ result w => ⌜P w.k ∧ result = (allowedFamily v4, allowedMasked v4 addr cidr, cidr)⌝⦄ := by
-  cases v4
-  all_goals mvcgen [readNode, swapEndian, branch]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [newNode, allowedBits, allowedFamily, allowedMasked]
-  all_goals grind only
-
-theorem getAllowedips_inserted (v4 : Bool) (addr cidr : Nat) (skb : NlSkb)
-    (room : allowedIpSpace (allowedFamily v4) ≤ skb.room) (P : Kernel → Prop) :
-    ⦃fun w => ⌜P w.k⌝⦄ getAllowedips skb (allowedFamily v4) (allowedMasked v4 addr cidr) cidr
-    ⦃⇓ result w => ⌜P w.k ∧ result =
-      ({ skb with room := skb.room - allowedIpSpace (allowedFamily v4) },
-        some (allowedJson v4 addr cidr))⌝⦄ := by
-  cases v4
-  all_goals mvcgen [getAllowedips, NlSkb.put, branch]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals repeat intro
-  all_goals simp_all [allowedIpSpace, allowedFamily, allowedJson, nlaTotal, Nat.sub_sub]
-  all_goals split at * <;> simp_all
-  all_goals try simp_all [Nat.sub_sub]
-  all_goals grind only
 
 theorem dumpAllowed_single (v4 : Bool) (d : Device) (p : Peer) (id : NodeId)
     (pid : PeerId) (addr cidr : Nat) (parent : Slot) (ctx : DumpCtx) (skb0 skb : NlSkb)

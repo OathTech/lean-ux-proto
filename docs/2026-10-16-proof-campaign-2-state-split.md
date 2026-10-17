@@ -20,11 +20,11 @@ and attributed theorem declarations. Campaign 2 owns 427 Lean files,
 | --- | ---: | ---: | ---: | --- |
 | Common projection | 2 | 0 | 0 | Native and product observations carried |
 | H1 Noise | 35 | 171 | 22 | Native access, crypto/slot/peer frames, slot/clear/zero operations and all four state-edge contracts carried; six type-given frames deleted; full caller/reachability closure pending |
-| H2 Index | 68 | 318 | 52 | Table/scans/insertion, full lookup/miss and success/empty-result inversion, exact allocation/release, eight native numeric-index frames, ten projected table claims, all ten record contracts, exact draw exhaustion/corpus pair, five lifecycle contracts and 55 pure theorems checked; native receive factor and retirement frame carried; seven Ambient frames deleted; whole terminal closure/callers pending |
+| H2 Index | 68 | 318 | 52 | Table/scans/insertion, full lookup/miss and success/empty-result inversion, exact allocation/release, eight native numeric-index frames, ten projected table claims, all ten record contracts, exact draw exhaustion/corpus pair, five lifecycle contracts and 55 pure theorems checked; native receive factor and retirement frame carried; seven Ambient frames deleted; two stale peer-release totality counterexamples checked; whole terminal closure/callers pending |
 | H3 Roaming | 35 | 119 | 13 | Six native endpoint/destination contracts carried; two Ambient frames deleted; authentication callers and product callbacks pending |
-| H4 Configuration | 130 | 554 | 79 | Total-return/branch laws, four exact source factors, three endpoint-clearing frames, three empty-root insertion contracts, total first placement, validation/identity, partial and total empty-list peer dumps, ordered allowed-list deletion, concrete dump cancellation and pure transfer consequences checked; three Ambient frames deleted; remaining effects/readback carry pending |
+| H4 Configuration | 130 | 554 | 79 | Total-return/branch laws, five exact source factors, three endpoint-clearing frames, three empty-root insertion contracts, total first placement, validation/identity, partial and total empty-list peer dumps, ordered allowed-list deletion, concrete dump cancellation and pure transfer consequences and two total inserted-node readback leaves checked; three Ambient frames deleted; remaining effects/readback carry pending |
 | H5 Progress | 59 | 265 | 42 | Twenty-nine pure/control or pure-source theorems, three generalized worker control contracts and one Ambient record frame and seven exact cut-source/projected contracts checked; two pointer-ring snapshot contracts and remaining operational carry pending |
-| H6 Timer discipline | 98 | 404 | 50 | Two pure session-liveness relations, map/guard base, two current wheel effects, separated jitter bound/frame and two projected bound claims, plus a checked stale-statement counterexample; three Ambient frames deleted; seven exact-peer arming claims and wider timer/worker semantics pending |
+| H6 Timer discipline | 98 | 404 | 50 | Two pure session-liveness relations, map/guard base, two current wheel effects, separated jitter bound/frame and two projected bound claims, six exact jitter-record contracts, plus a checked stale-statement counterexample; three Ambient frames deleted; seven exact-peer arming claims and wider timer/worker semantics pending |
 
 Retyped, deleted and retained counts will be reported per validated tranche.
 All six results remain lagging, with their previous charter gaps unchanged.
@@ -912,3 +912,71 @@ on `Config.PeerDump`, `Config.DumpReturns`, `Config.Identity`,
 `Config.AllowedTransferModel`, `Index.Release`, `Index.IndexFieldFrames`,
 `Index.IndexOperationFrames` and `TimerDiscipline.JitterBoundClaims`, each under
 `Leanux.Proofs.WG`.
+
+
+## Exact recorded jitter, configuration leaves and release-domain finding
+
+| Tranche | Before | Retyped/generalized | Deleted | Kept | Added | After |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `Config.DeviceDumpSource`, `AllowedReadbackLeaves` | 3 | 3 | 0 | 0 | 0 | 3 |
+| `TimerDiscipline.JitterRecordsSource` | 6 | 6 | 0 | 0 | 0 | 6 |
+| `Index.PeerReleaseFindings` | 0 | 0 | 0 | 0 | 2 | 2 |
+| This tranche | 9 | 9 | 0 | 0 | 2 | 11 |
+| Cumulative validated surface | 299 | 165 | 21 | 113 | 24 | 302 |
+
+The tree has 446 campaign-owned files and 1,834 theorem declarations;
+1,532 baseline declarations still await validation. The checked closure now
+has 125 proof modules: H1 49 theorems, H2 143, H3 6, H4 46, H5 40 and H6 18.
+All six full result closures and all 258 terminal declarations remain lagging.
+There is no new charter result or type-given deletion in this tranche.
+
+H6's six recorded-jitter contracts retain both supported sites, the ordered
+rejected/accepted byte predicates, arbitrary suffix and original turn-budget
+condition. Their exact nested native runs preserve all WG state and all
+Ambient fields except the consumed hidden prefix. The original source factor
+uses the actual record budget. Product fixture observations remain separate
+pending obligations.
+
+H4's device-dump source equality changes only its two action annotations to
+`WG.M`; branch order, saved device, cursor updates, cancellations and failures
+are unchanged. `AllowedReadbackLeaves` extracts two original total contracts
+from `AllowedReadbackSource`: inserted-node readback and its serialized
+allowed-IP attribute. Their arbitrary address, CIDR and parent inputs and
+original space premise remain. The other three source contracts are
+byte-for-byte unchanged and pending; the entire source module is not validated.
+
+The [peer-release finding](2026-10-17-proof-campaign-2-peer-release.md) adds
+two exact stopped runs refuting the old unconditional total contract. Queued
+work and a locally consistent pending timer are separately permitted by the
+old resident-peer/positive-count premises. These witnesses neither establish
+reachability nor expose a stopped poststate. The legacy contract remains
+pending, and no mirror repair is requested.
+
+Claim files: `Config/DeviceDumpSource`, `Config/AllowedReadbackLeaves`,
+`TimerDiscipline/JitterRecordsSource`, and the counterexample file
+`Index/PeerReleaseFindings`. There are no new frame files. The proof root
+now imports both this finding and the earlier `ArmingWheelFindings`, so they
+remain in its build closure. This corrects the earlier omission of the timer
+finding from the root; the gate script and all public headline declarations
+are unchanged.
+
+Scoped builds pass without warnings: peer-release findings 43 jobs, device
+dump factor 46, jitter records 37 and readback leaves 48. Axiom inspection
+covers 144, 63 and 91 named logical roots in the three groups, with only the
+three permitted axioms. Fresh kernel replay passes for all four roots.
+The retained gate's token/import checks and the whitespace check pass.
+Independent reviews found no correctness issue. Mirror and shared layers are
+unchanged; no full terminal or full proof-gate pass is claimed.
+
+Development: the queued-release probe passed; its timer extension had one
+string-interpolation type failure, then both passed. The device-dump prototype
+passed first time. Jitter had one failed draft on budget-lift normalization
+and deprecated conditional rewrites, then a clean draft; the warnings were
+fixed. Readback had one failed room-bookkeeping draft, then a clean draft.
+All packaged builds passed first time. No infrastructure rerun, cap change
+or guest run occurred. Complete compiler output was captured before preview.
+
+Reproduce scoped builds and fresh replay using the capped bundle commands above
+on `Index.PeerReleaseFindings`, `Config.DeviceDumpSource`,
+`TimerDiscipline.JitterRecordsSource` and `Config.AllowedReadbackLeaves`,
+each under `Leanux.Proofs.WG`.
