@@ -45,6 +45,15 @@ the fixture and key clearing also preserve nullable affiliation. All 144 prior
 R3 terminal bodies are unchanged. Gate: 522 jobs/524 declarations, 2.55 seconds.
 Fresh kernel replay: 99.01 seconds, no warnings. Whole-run R3 closure remains open.
 
+The reached-routing checkpoint adds five modules and 73 theorems: 469 files,
+6,714 theorems, 528 terminal declarations and 152 R3 exports. Native index
+acquisition, bounded peer creation and handshake sending retain current identity.
+Actual Stack entries are linked to their earlier consumed receipts and the
+supplied flat source winner in the same new poll suffix, even on a later Stop.
+Gate: 527 jobs/528 declarations in 2.50 seconds. Fresh replay: 99.55 seconds,
+no warnings. The [short report](2026-10-17-r3-reached-routing.md) records the
+remaining initialized identity and positional configuration-history joins.
+
 The pre-split checkpoint validated every baseline result surface over
 `cb2348e`. Initialized R3 packet authorization and R4 receive-pipeline
 conservation remain open. Earlier positive results and runtime findings retain

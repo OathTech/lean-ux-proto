@@ -1,3 +1,7 @@
+import Leanux.Proofs.WG.Origins.CurrentIndex
+import Leanux.Proofs.WG.Origins.CurrentPeerCreation
+import Leanux.Proofs.WG.Origins.ConfiguredHandshake
+import Leanux.Proofs.WG.Queues.PollAuthorization
 import Leanux.Proofs.WG.Peers.AffiliationMaintenance
 import Leanux.Proofs.WG.Origins.CurrentSession
 import Leanux.Proofs.WG.Origins.CurrentPeerRetains
@@ -3192,5 +3196,72 @@ theorem original_rx_publication_current_identity
       t = h ++ pre ++ [MaterialOrigin.Event.receipt (RxOrigin.Receipt.decrypt id r)] ++ suffix ∧
       ∀ out, r.value.2 = some out → PublicationIdentity.CurrentCertificate history id r out pid v :=
   PublicationIdentity.prepare_current_identity history w v ambient ambient' h t pid support compat hr
+
+
+/-- The actual nullable owner acquisition and complete index scan retain
+receiving material and full current peer identity, including normal None.
+Configured table coherence is separately preserved by the same original scan. -/
+theorem original_current_index_transport :
+    (∀ owner, Lifetimes.ProjectedAction id CurrentIdentity.Retains (Affiliation.acquireOwner owner)) ∧
+    (∀ kinds index, Lifetimes.ProjectedAction id CurrentIdentity.Retains (WG.indexLookup kinds index)) ∧
+    (∀ kinds index, Framing.Preserves ConfiguredIdentity.Inv (WG.indexLookup kinds index)) :=
+  ⟨CurrentIdentity.acquireOwner_current,CurrentIdentity.indexLookup_current,
+    ConfiguredIdentity.indexLookup_preserves⟩
+
+/-- Creation needs only bounds on named owners of valid receiving keys;
+nullable affiliation supplies those bounds. The actual allocation/refusal
+result and all initializer writes remain in the original native run. -/
+theorem original_current_creation_transport :
+    (∀ w, Affiliation.Inv w → CurrentIdentity.ReceivingOwnersBelow w) ∧
+    (∀ key psk w v ambient ambient' result, CurrentIdentity.ReceivingOwnersBelow w →
+      ((WG.peerCreate key psk).run w).run ambient = .ok ((result,v),ambient') →
+      CurrentIdentity.Retains w v) ∧
+    (∀ key psk history, Framing.Hoare (WG.peerCreate key psk)
+      (fun w => CurrentIdentity.Inv history w ∧ CurrentIdentity.ReceivingOwnersBelow w)
+      (fun _ w => CurrentIdentity.Inv history w)) :=
+  ⟨fun _ => CurrentIdentity.receivingOwnersBelow_of_affiliation,
+    CurrentIdentity.peerCreate_retains,CurrentIdentity.peerCreate_current⟩
+
+/-- Concrete handshake construction, transmission and the worker's final peer
+payment retain configured/current support. Deletion remains permitted, and
+normal-only preservation adds no positivity or totality premise. -/
+theorem original_configured_handshake_send :
+    (∀ pid history, Framing.Preserves
+      (fun w => ConfiguredIdentity.Inv w ∧ CurrentIdentity.Inv history w)
+      (WG.createInitiation pid)) ∧
+    (∀ pid history, Framing.Preserves
+      (fun w => ConfiguredIdentity.Inv w ∧ CurrentIdentity.Inv history w)
+      (WG.sendHandshakeInitiation pid)) ∧
+    (∀ pid history, Framing.Preserves
+      (fun w => ConfiguredIdentity.Inv w ∧ CurrentIdentity.Inv history w)
+      (WG.handshakeSendWorker pid)) :=
+  ⟨ConfiguredHandshake.createInitiation_preserves,ConfiguredHandshake.sendHandshakeInitiation_preserves,
+    ConfiguredHandshake.handshakeSendWorker_preserves⟩
+
+/-- Each new actual Stack entry has a strictly earlier successful consume
+receipt in this poll's exact observed suffix, with routing at that consume's
+real entry state and longest-prefix authorization of the delivered bytes.
+The flat tables are supplied at poll entry; initialized historical key identity
+is a separate obligation. A later Stop retains the reached certificates. -/
+theorem original_poll_routing_entries (xs : FlatTable × FlatTable) (pid : PeerId) (budget : Nat)
+    (w : World) (h : List Queues.RxHistory.Event)
+    (hi : RoutedView (routingView w.wg) xs) :
+    ∃ suffix : List Queues.RxJoint.Event,
+      (Logged.runPrefix (Queues.RxHistory.observePoll pid budget) w h).2 =
+        h ++ suffix.map Queues.RxHistory.promote ∧
+      ∀ e, Queues.RxJoint.Event.entered e ∈ suffix →
+        ∃ (r : Queues.RxDisposition.ConsumeReceipt), ∃ before between after,
+          suffix = before ++ [.consumed e.tag.occurrence e.tag.skb e.stamp r] ++
+            between ++ [.entered e] ++ after ∧
+          e.origin = some r ∧ r.run.value = some e.tag.bytes ∧
+          Queues.RxLink.Source e.tag.skb e.stamp r ∧
+          RoutedView (routingView r.run.before) xs ∧
+          ∃ v4 : Bool,
+            ipTunnelParseProtocol e.tag.bytes = (if v4 then 4 else 6) ∧
+            ipTunnelParseProtocol r.packet.bytes = (if v4 then 4 else 6) ∧
+            PeerWinner (rootWidth v4) (sourceAddress v4 e.tag.bytes)
+              (selectedFlat v4 xs) (some r.peer) ∧
+            sourceAddress v4 e.tag.bytes = sourceAddress v4 r.packet.bytes :=
+  Queues.PollAuthorization.observePoll_entries xs pid budget w h hi
 
 end Leanux.Proofs.WG.CryptokeyRouting
