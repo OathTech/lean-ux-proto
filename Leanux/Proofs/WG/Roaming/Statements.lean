@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Roaming.NapiPublicationClaims
 import Leanux.Proofs.WG.Roaming.ConsumeEndpointClaims
 import Leanux.Proofs.WG.Roaming.CookieEndpointClaims
 import Leanux.Proofs.WG.Roaming.InitiationRejectionClaims
@@ -307,5 +308,16 @@ theorem original_consume_data_endpoints (msg : List UInt8) (src : SkbSource) (ds
       (fun _ final => responseEndpointMap final.wg.device = responseEndpointMap entry.wg.device ∧
         ∀ pid, remoteAt final pid = remoteAt entry pid) :=
   consumeData_preserves_endpoints msg src ds entry
+
+/-- On normal return of the actual native decrypt step with Env.napiSoftirq
+and Env.napiIrqExit, any observed first pre-put setter selects the published
+owner. If that owner's actual publication queue head is the published packet,
+the selected packet identity is derived and carries its actual earlier AEAD
+plaintext. Skipped polls and every original failure remain; no final endpoint,
+other poll iterations, or persistent queue authentication invariant is claimed. -/
+theorem original_native_napi_publication_authentication :
+    Campaign2.Product.Ensures observedNativeDecryptFirstPoll (fun _ => True)
+      (fun result _ => NativePublicationOwnerObservation result) :=
+  observedNativeDecryptFirstPoll_authenticated
 
 end Leanux.Proofs.WG.Roaming
