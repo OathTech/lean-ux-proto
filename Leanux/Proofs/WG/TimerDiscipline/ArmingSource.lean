@@ -1,4 +1,4 @@
-import Leanux.Proofs.WG.TimerDiscipline.ArmingClaims
+import Leanux.Proofs.WG.TimerDiscipline.GuardedArmingClaims
 import Leanux.Proofs.WG.Noise.CryptoFrames
 import Leanux.Proofs.WG.Noise.Slots
 import Leanux.WG.Timers
@@ -9,22 +9,6 @@ set_option maxHeartbeats 800000
 
 namespace Leanux.Proofs.WG.TimerDiscipline
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise Std.Do
-
-theorem modPeerTimer_effect (site : HiddenSite) (pid : PeerId) (timer : PeerTimer)
-    (delay : Nat) (d : Device) (p : Peer) (resident : d.peers[pid]? = some p) :
-    Ensures (modPeerTimer site pid timer delay) (fun w => w.k.wg = some d)
-      (fun ok w => ok = (d.running && !p.isDead) ∧
-        if ok then ∃ expiry, peerAt w pid = some (p.setTimer timer (some expiry))
-        else peerAt w pid = some p) := by
-  rw [ensures_iff]
-  have hh := hidden_kernel_spec (fun k => k.wg = some d)
-  mvcgen [modPeerTimer, callerJiffies, hiddenJiffies, modPeerTimerGuard,
-    Leanux.WG.andM, armTimer, getPeer, getDev, getK, setPeer, modifyDev, modifyK,
-    branch, invariant, unsupported, hh]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals repeat intro
-  all_goals simp_all [peerAt, Option.bind_map, Function.comp_def, Std.TreeMap.getElem?_insert]
-  all_goals grind only
 
 theorem timersTraversal_effect (pid : PeerId) (d : Device) (p : Peer)
     (resident : d.peers[pid]? = some p) :
@@ -42,25 +26,6 @@ theorem timersTraversal_effect (pid : PeerId) (d : Device) (p : Peer)
   all_goals repeat intro
   all_goals simp_all [peerAt]
   all_goals first | exact hd _ (by assumption) | exact hd _ _ _ _ (by assumption) | grind only
-
-theorem timersSessionDerived_effect (pid : PeerId) (d : Device) (p : Peer)
-    (resident : d.peers[pid]? = some p) :
-    Ensures (timersSessionDerived pid) (fun w => w.k.wg = some d)
-      (fun _ w => if d.running && !p.isDead
-        then ∃ expiry, peerAt w pid = some (p.setTimer .zeroKeyMaterial (some expiry))
-        else peerAt w pid = some p) := by
-  rw [ensures_iff]
-  have hm := (ensures_iff _ _ _).mp
-    (modPeerTimer_effect .timerJiffiesSessionDerived pid .zeroKeyMaterial
-      ZERO_KEY_MATERIAL_TICKS d p resident)
-  have hd := map_result_spec (fun _ : Bool => PUnit.unit) _ _ _ hm
-  simp only [timersSessionDerived, Functor.discard, Functor.mapConst, Function.const]
-  mvcgen [hd]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals repeat intro
-  all_goals simp_all
-  all_goals first | exact hd _ (by assumption) | exact hd _ _ _ _ (by assumption) | grind only
-
 
 theorem timersDataReceived_effect (pid : PeerId) (d : Device) (p : Peer)
     (resident : d.peers[pid]? = some p) :

@@ -44,23 +44,30 @@ theorem original_confirmation_no_repeat (pid : PeerId) (received : KeypairId)
       pure (first, second))
       (fun s => s.peerAt pid = some p)
       (fun result _ => result.1 = true → result.2 = false) := by
-  intro w result z hp run first
-  simp only [StateT.run_bind, StateT.run_pure] at run
-  cases hfirst : (receivedWithKeypair pid received).run w with
-  | error e => simp [hfirst, bind, Except.bind] at run
+  intro g ambient result final after hp run first
+  change (((receivedWithKeypair pid received).run g).run ambient >>= fun ((one, current), middle) =>
+    (((receivedWithKeypair pid received).run current).run middle >>= fun ((two, last), ending) =>
+      Except.ok (((one, two), last), ending))) = .ok ((result, final), after) at run
+  cases hfirst : ((receivedWithKeypair pid received).run g).run ambient with
+  | error e => rw [hfirst] at run; cases run
   | ok out =>
-    rcases out with ⟨one, v⟩
-    cases hsecond : (receivedWithKeypair pid received).run v with
-    | error e => simp [hfirst, hsecond, bind, Except.bind] at run
+    rcases out with ⟨⟨one, current⟩, middle⟩
+    rw [hfirst] at run
+    change (((receivedWithKeypair pid received).run current).run middle >>= fun ((two, last), ending) =>
+      Except.ok (((one, two), last), ending)) = .ok ((result, final), after) at run
+    cases hsecond : ((receivedWithKeypair pid received).run current).run middle with
+    | error e => rw [hsecond] at run; cases run
     | ok out =>
-      rcases out with ⟨two, final⟩
-      simp [hfirst, hsecond, bind, Except.bind, pure, Except.pure] at run
-      rcases run with ⟨rfl, rfl⟩
-      obtain ⟨p', hp', hs⟩ := receivedWithKeypair_slots pid received p w one v hp hfirst
+      rcases out with ⟨⟨two, last⟩, ending⟩
+      rw [hsecond] at run
+      cases run
+      obtain ⟨p', hp', hs⟩ := receivedWithKeypair_slots pid received p
+        g ambient one current middle hp hfirst
       have hn : (slots p').next = none := by
         unfold confirm at hs
         split at hs <;> simp_all [Prod.mk.injEq]
-      obtain ⟨p'', _, hs'⟩ := receivedWithKeypair_slots pid received p' v two final hp' hsecond
+      obtain ⟨p'', _, hs'⟩ := receivedWithKeypair_slots pid received p'
+        current middle two final after hp' hsecond
       simpa [confirm, hn] using congrArg Prod.fst hs'
 
 /-- Normal keypair clearing empties all three slots and preserves every

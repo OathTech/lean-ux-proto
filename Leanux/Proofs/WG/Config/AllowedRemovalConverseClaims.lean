@@ -15,8 +15,8 @@ theorem source_allowedips_remove_pairs (pid : PeerId) (p : Peer) (d : Device)
         (erasePeerList p.allowedipsList p).allowedipsList = [] ∧
         final.peerAllowedips.seq = d.peerAllowedips.seq + (if p.allowedipsList.isEmpty then 0 else 1) ∧
         ∀ id ∈ p.allowedipsList, nodeOwner final id = none) := by
-  intro w result final pre run
-  obtain ⟨out, device, steps⟩ := removeByPeer_effect_pairs pid d p resident pairs w result final pre run
+  intro w ambient result final after pre run
+  obtain ⟨out, device, steps⟩ := removeByPeer_effect_pairs pid d p resident pairs w ambient result final after pre run
   refine ⟨out, device, removalEffect_nodePairs steps pairs, steps, removalEffect_peers steps, ?_,
     erasePeerList_own_empty p, removalEffect_seq steps, ?_⟩
   · simpa [resident] using removalEffect_peers steps pid
@@ -36,8 +36,8 @@ theorem source_peer_make_dead_pairs (pid : PeerId) (p : Peer) (d : Device)
         (erasePeerList p.allowedipsList p).allowedipsList = [] ∧
         (erasePeerList p.allowedipsList p).refcount = p.refcount ∧
         ∀ id ∈ p.allowedipsList, nodeOwner final id = none) := by
-  intro w result final pre run
-  obtain ⟨removed, steps, device⟩ := peerMakeDead_effect_pairs pid d p resident pairs w result final pre run
+  intro w ambient result final after pre run
+  obtain ⟨removed, steps, device⟩ := peerMakeDead_effect_pairs pid d p resident pairs w ambient result final after pre run
   refine ⟨removed, steps, device, ?_, deadPeerDevice_effects pid p d removed steps⟩
   have shape : NodePairs removed := removalEffect_nodePairs steps (show NodePairs (unlistPeer d pid) from pairs)
   exact shape
