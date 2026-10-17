@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Index.OwnerCoherenceCallbackClaims
 import Leanux.Proofs.WG.Index.OwnerCoherenceQueuedClaims
 import Leanux.Proofs.WG.Index.OwnerCoherenceClearWorkerClaims
 import Leanux.Proofs.WG.Index.OwnerCoherenceZeroWorkerClaims
@@ -994,5 +995,20 @@ theorem original_send_queued_handshake_owner_coherence (pid : PeerId) (retry : B
     Campaign2.Ensures (sendQueuedHandshakeInitiation pid retry) View.OwnerCoherentSafe
       (fun _ => View.OwnerCoherentSafe) :=
   sendQueuedHandshakeInitiation_owner_coherent pid retry
+
+/-- Every normal original new-handshake timer callback preserves local hashed
+owner coherence, including endpoint-source/cache clearing and the actual send-queue test. -/
+theorem original_new_handshake_owner_coherence (pid : PeerId) :
+    Campaign2.Ensures (expiredNewHandshake pid) View.OwnerCoherentSafe
+      (fun _ => View.OwnerCoherentSafe) :=
+  expiredNewHandshake_owner_coherent pid
+
+/-- Every normal original zero-key timer callback preserves local hashed owner
+coherence while attempting to queue clear work. This does not execute the
+worker or assert its later release obligation. -/
+theorem original_zero_key_callback_owner_coherence (pid : PeerId) :
+    Campaign2.Ensures (expiredZeroKeyMaterial pid) View.OwnerCoherentSafe
+      (fun _ => View.OwnerCoherentSafe) :=
+  expiredZeroKeyMaterial_owner_coherent pid
 
 end Leanux.Proofs.WG.Index

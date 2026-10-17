@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.Config.MixedEndpointPaginationClaims
+import Leanux.Proofs.WG.Config.KeyEndpointPaginationClaims
 import Leanux.Proofs.WG.Config.EndpointPaginationClaims
 import Leanux.Proofs.WG.Config.MultiMixedClaims
 import Leanux.Proofs.WG.Config.MultiPeerScalarClaims
@@ -1610,4 +1612,61 @@ theorem original_endpoint_ipv4_pagination (pid : PeerId) (d : Device) (p : Peer)
       (fun result s => result = .ok (suffixJson d p nodes ids) ∧
         s.wg.device = some d ∧ s.wg.nlSock7 = socketReadbackFinal sock d) :=
   endpointIpv4Pagination_returns pid d p nodes ids sock peers resident listed fresh readable room idle empty enough
+/-- The actual mixed fwmark/scalar setter followed by the finite IPv4 getter
+with arbitrary endpoint values under the endpoint-aware capacity and cursor
+bounds. Readback uses the actual endpoint serializer; the Device retains
+source clearing and cache invalidation, and a later malformed peer retains the
+earlier writes. Hidden reset failures remain outside this normal-return claim. -/
+theorem original_mixed_fwmark_scalars_endpoint_pagination (d : Device) (mark : Nat) (key psk : Key)
+    (interval : Nat) (bad : Bool) (pid : PeerId) (p : Peer)
+    (nodes : NodeId → AipNode) (ids : List NodeId) (sock : NlSock)
+    (peers : d.peerList = [pid]) (net : d.creatingNet = true)
+    (found : d.peerHashtable.find? (·.1 == key) = some (key, pid))
+    (resident : d.peers[pid]? = some p) (live : 0 < p.refcount)
+    (bounded : p.refcount + 1 < 2 ^ 31) (down : d.running = false)
+    (listed : p.allowedipsList = ids) (fresh : endpointPaginationFresh d p ids)
+    (readable : Ipv4Residents d nodes ids)
+    (room : devicePrefixSpace d + max 168 (peerFixedSpace p + 32) ≤ NLMSG_GOODSIZE)
+    (enough : endpointPaginationReceiveCount d p ids ≤ 4096)
+    (idle : sock.cbRunning = false) (empty : sock.queue = []) :
+    Campaign2.Ensures (do
+      let ret ← wgSetDevice (mixedFwmarkAttrs d mark key psk interval bad)
+      let dump ← wgGetDevice (byIndex d)
+      pure (ret, dump))
+      (fun s => s.wg.device = some d ∧ s.wg.nlSock7 = sock ∧ ClaimView.selectsDevice s d)
+      (fun result s =>
+        result = ((if bad then -EINVAL else 0), .ok
+          (suffixJson (mixedFwmarkBase d mark)
+            {p with presharedKey := psk, persistentKeepaliveInterval := interval} nodes ids)) ∧
+        s.wg.nlSock7 = {sock with queue := [], ctx := {hasWg := true}, prevSeq := d.deviceUpdateGen + 1, dumpDoneErrno := 0, cbRunning := false} ∧
+        ∃ current reset, s.wg.device = some current ∧
+          MixedFwmarkEffect d mark pid p psk interval reset current) :=
+  mixed_fwmark_scalar_endpoint_pagination_get_after_set d mark key psk interval bad pid p nodes ids sock peers net found resident live bounded down listed fresh readable room enough idle empty
+
+/-- The actual established-identity setter followed by finite IPv4 pagination
+with arbitrary endpoint values. Capacities and JSON use the effective installed
+identity, including clamping and null-key behavior. The actual expiry effect and
+socket completion are retained; clock/reference failures are not assumed away. -/
+theorem original_private_key_endpoint_pagination (d : Device) (key : Key) (pid : PeerId) (p : Peer)
+    (nodes : NodeId → AipNode) (ids : List NodeId) (sock : NlSock)
+    (established : d.staticIdentity.hasIdentity = true)
+    (changed : d.staticIdentity.staticPrivate ≠ key) (absent : noKeyCollision d key)
+    (members : d.peerList = [pid]) (resident : d.peers[pid]? = some p)
+    (listed : p.allowedipsList = ids)
+    (fresh : endpointPaginationFresh (keyReadbackBase d key) p ids)
+    (readable : Ipv4Residents d nodes ids)
+    (room : devicePrefixSpace (keyReadbackBase d key) + max 168 (peerFixedSpace p + 32) ≤ NLMSG_GOODSIZE)
+    (enough : endpointPaginationReceiveCount (keyReadbackBase d key) p ids ≤ 4096)
+    (idle : sock.cbRunning = false) (empty : sock.queue = []) :
+    Campaign2.Ensures (do
+      let ret ← wgSetDevice (privateKeyAttrs d key)
+      let dump ← wgGetDevice (byIndex d)
+      pure (ret, dump))
+      (fun s => s.wg.device = some d ∧ s.wg.nlSock7 = sock ∧ ClaimView.selectsDevice s d)
+      (fun result s => result = (0, .ok (suffixJson (keyReadbackBase d key) p nodes ids)) ∧
+        s.wg.nlSock7 = {sock with queue := [], ctx := {hasWg := true}, prevSeq := d.deviceUpdateGen + 1, dumpDoneErrno := 0, cbRunning := false} ∧
+        ∃ now, s.wg.device = some (keyReadbackDevice d key pid p now)) :=
+  rotation_endpoint_pagination_get_after_set d key pid p nodes ids sock established changed absent members resident listed fresh readable room enough idle empty
+
+
 end Leanux.Proofs.WG.Config

@@ -11,17 +11,17 @@ merged; the executable mirror remains byte-identical to b700659.
 | Result | Headlines | Checked support | Split status |
 | --- | ---: | ---: | --- |
 | H1 Noise | 32 | 231 | Full terminal closure, all seven whole-call tag maps, their actual finite mixed histories and session derivation-clock receipt current; wider caller/lifetime claims open. |
-| H2 Index | 85 | 465 | Full terminal closure and ingress/expiry/handshake/peer-creation owner coherence and whole-removal lifecycle finding/slot-covered arbitrary-AIP preservation and actual clear-work dispatch and both-mode handshake queueing current; reachable whole-driver uniqueness/coherence open. |
+| H2 Index | 87 | 471 | Full terminal closure and ingress/expiry/handshake/peer-creation owner coherence and whole-removal lifecycle finding/slot-covered arbitrary-AIP preservation and actual clear-work dispatch and both-mode handshake queueing and new-handshake/zero-key callbacks current; reachable whole-driver uniqueness/coherence open. |
 | H3 Roaming | 18 | 190 | Full terminal closure and invalid-MAC1/rate-limit/admitted-response/initiation rejection and cookie-message preservation current; callback authentication provenance and broader caller coverage open. |
-| H4 Configuration | 91 | 676 | Full terminal closure, actual mixed/key setter paginated readback, finite single-peer IPv4 getter with arbitrary endpoints and fitting multi-peer scalar and mixed fwmark/scalar set/get current; global ownership, queued cleanup, general mixed setters and multi-peer/IPv6 pagination open. |
+| H4 Configuration | 93 | 681 | Full terminal closure, actual mixed/key setter paginated readback with arbitrary endpoints, finite single-peer IPv4 getter and fitting multi-peer scalar and mixed fwmark/scalar set/get current; global ownership, queued cleanup, general mixed setters and multi-peer/IPv6 pagination open. |
 | H5 Progress | 45 | 301 | Full terminal closure, exact bounded outcomes and recorded batch, actual timer completion guards and recorded idle-wait wheel completion current; global progress/coherent-ring adequacy open. |
 | H6 Timers | 59 | 483 | Full terminal closure, actual retry blocks and allocation-labelled guarded session-arm events with outgoing call-entry origin and initialized give-up runtime witness current; complete caller coverage, general mixed histories and session-relative counts open. |
 
-The checked surface is 2,346 theorems in all 785 campaign-owned modules.
+The checked surface is 2,357 theorems in all 791 campaign-owned modules.
 The completed retrofit accounts for 1,983: 1,321 retyped, 244 explicitly
-corrected, 239 retained and 179 added support/finding declarations. One hundred thirty-two
+corrected, 239 retained and 179 added support/finding declarations. One hundred thirty-eight
 subsequent H2 declarations add table preservation and local owner coherence.
-Forty-six H1 declarations add whole-operation and finite mixed-history tag ownership and actual derivation-clock provenance; ninety-four H4 declarations
+Forty-six H1 declarations add whole-operation and finite mixed-history tag ownership and actual derivation-clock provenance; ninety-nine H4 declarations
 add mixed fwmark/scalar, ordered peer-attribute, port-refusal/private-key readback and finite IPv4 getter/setter pagination and actual fitting multi-peer readback. Thirty-three H3 declarations
 add invalid-MAC1, rate-limit and admitted-response/initiation rejection and cookie-message preservation. Thirteen H5 declarations
 establish recorded batch, actual timer completion guards and recorded idle-wait wheel completion. Forty-five H6 declarations
@@ -29,8 +29,8 @@ connect actual timer-loop receipts, contiguous retry-block counts/bounds, local 
 were deleted because types supply their facts and five false cookie supports
 were separately retired with checked counterexamples. No baseline declaration
 remains awaiting retrofit; all 258 original terminal names/order survive,
-with ten new H1 headlines, thirty-three new H2 headlines, five new H3 headlines,
-twelve new H4 headlines, three new H5 headlines and nine new H6 headlines (330 total).
+with ten new H1 headlines, thirty-five new H2 headlines, five new H3 headlines,
+fourteen new H4 headlines, three new H5 headlines and nine new H6 headlines (334 total).
 
 The [retrofit report](2026-10-16-proof-campaign-2-state-split.md) records
 claim/frame files, corrections, before/after counts and validation.
@@ -2862,3 +2862,89 @@ remains unchanged. Reproduce the scoped build and fresh replay of
 Leanux.Proofs.WG.Config.Statements with scripts/in-bundle under capped,
 LEAN_NUM_THREADS=32 and LEANUX_QEMU_SLOTS=16. Existing ranked mirror requests
 are unchanged; this extension needs no mirror-team change.
+
+
+## H2 continuation: new-handshake and zero-key callback coherence
+
+Original expiredNewHandshake and expiredZeroKeyMaterial now preserve the
+local hashed-owner invariant on normal return, with OwnerCoherentSafe as
+their sole projected entry condition. The former composes actual endpoint
+source/cache clearing and both-mode handshake queueing. The latter derives
+the held reference from successful actual peerGet; its compensating put
+therefore cannot be the last release. Actual queue membership and
+peekQueuedUnit remain separate inputs to the original branch. The alternate
+path records and enqueues clear work. Neither branch assumes the later
+worker's release coverage or completion.
+
+Optional Device, arbitrary Ambient, aliases and unpublished owner words
+remain allowed. Missing state, zero/overflow reference checks and clock/record
+failures retain their original Stops. This is local normal-return coherence,
+not queue consistency, reachable global ownership or failed-call rollback.
+
+OwnerCoherenceCallbackFrames holds the endpoint-source preservation variant.
+OwnerCoherenceCallbackSource holds the acquisition-effect variant, deriving
+residency and count greater than one. Both names cite the corresponding
+C1 WGBase helper; proofs reuse owned exact source contracts. CallbackClaims
+and Statements supply the two projected claims and literal wrappers.
+Six theorems in three modules bring H2 to 471 theorems and 87 headlines.
+No new definitions or shared-layer edit.
+
+Probe 1 fails three proof-form diagnostics without warnings; changed probe 2
+passes the complete candidate, probe 3 the exact split and six standard-only
+axiom roots, and probe 4 standalone narrow support. Independent review finds
+no semantic issue. Its two P3 findings are corrected separately: acquisition
+is an effect, so it moves from Frames to Source; terminal wording now says
+endpoint-source/cache clearing, since the remote endpoint is preserved.
+No formula or premise changed. The final source organization is built and
+replayed below.
+
+## H4 continuation: endpoint-aware setter/readback composition
+
+The actual mixed fwmark/scalar and private-key requests now compose with the
+endpoint-aware finite IPv4 getter. The old no-endpoint claims remain unchanged.
+Both new claims derive every getter input from the same actual normal setter
+successor and its remaining Ambient inputs; no callback/receive-success
+premise is supplied. Explicit readbackFrame contracts transport socket and
+selector state, rather than inferring them from Device effects.
+
+The mixed request retains its singleton, creatingNet, lookup/resident,
+live/reference-bound and stopped-device domain. It changes the actual
+endpoint source/cache fields; only their serialized remote endpoint fields
+agree with the pre-clear value. A later malformed peer returns -EINVAL after
+the earlier mark and scalar writes, while reset-record Stops remain Stops.
+The key request retains its established/changed/no-collision domain and
+derives its actual expiry timestamp and ordered key effects. Capacity and
+boundary calculations use the effective installed identity, including
+clamping and null-key serialization, not the initial identity.
+
+EndpointPaginationCapacityFrames transports freshness and DATA/DONE count
+from equal serialized prefix sizes. MixedEndpointPaginationClaims and
+KeyEndpointPaginationClaims hold the two projected compositions; Statements
+adds two literal wrappers. Five theorems in three modules, no definitions,
+bring H4 to 681 theorems and 93 headlines. The endpoint getter and resumed
+induction are reused unchanged. Single-peer IPv4 list, fresh cursor boundaries,
+capacity, bounded receive count and idle/empty socket premises stay explicit;
+global ownership and multi-peer/mixed-family pagination remain open.
+
+Both development probes pass without warnings: full three-theorem composition,
+then exact split package with the two wrappers and five standard-only axiom
+roots. Independent review finds no issue, confirming same-run linkage,
+effective key capacity and serializer rather than raw-endpoint equality.
+
+Combined validation: the Index/Config scoped build passes 523 jobs, then the
+terminal wording correction rebuilds Index in 360 jobs. Only inherited
+Env:865 String.mk appears. The combined axiom audit checks 2,004 logical roots
+in 459 modules, including 1,382 public theorem roots, standard only and without
+diagnostics. Fresh kernel replay passes for both changed roots.
+Static trust/import checks, all 258 original headline names/order and
+mirror/shared boundaries pass. No default limit/cap change, suppression,
+infrastructure rerun or unchanged failed-source rerun occurs.
+
+Current totals: 2,357 theorems in all 791 owned modules, 334 headlines.
+All H1–H6 remain in progress; the inherited CounterWindow/ReplayWindow gate
+failure is unchanged. Reproduce the scoped build and fresh replay of
+Leanux.Proofs.WG.Index.Statements and Leanux.Proofs.WG.Config.Statements with
+scripts/in-bundle under capped, LEAN_NUM_THREADS=32 and LEANUX_QEMU_SLOTS=16.
+Existing ranked mirror requests are unchanged; these steps request no mirror
+change. The two named native helper variants are listed in the shared-frame
+followup for eventual unification.

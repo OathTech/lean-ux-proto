@@ -227,3 +227,20 @@ The socket helpers also need their cache-free instantiations. Existing
 keypairPut_counter, ECN/crypto and exact timer effects are reusable; the Skb
 component needs one generic guarded adapter rather than copies for each leaf.
 This inventory is not an implementation or a request to change the mirror.
+
+
+## Bounded callback helpers after the split
+
+The new-handshake/zero-key owner-coherence composition adds two named
+WGBase variants inside Index: clearPeerEndpointSrc_spec_ownerCoherent_variant
+in OwnerCoherenceCallbackFrames, and peerGet_spec_ownerHeld_variant in
+OwnerCoherenceCallbackSource. The first transports owner words and references
+through the owned pointwise endpoint-source/cache effect. The second derives
+residency and a held reference from the actual acquisition; it is an effect
+contract, not an unchanged-state frame.
+
+Both proofs reuse existing campaign-owned exact source contracts. C1's older
+snapshot alone omits owner words and peer references, so eventual unification
+must preserve these stronger obligations rather than merely substitute an old
+snapshot theorem. No existing C1 definition or lemma is changed, and no broader
+timer, socket or ingress frame layer is copied.
