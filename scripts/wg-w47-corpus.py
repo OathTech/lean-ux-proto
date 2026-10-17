@@ -183,9 +183,12 @@ def traces():
     # and the held one-byte segment was flushed by napi_complete_done before
     # the second arrived; neither `pp = p` nor dev_gro_receive's completion
     # (gro.c:546-549) was reached, the design's P9 exclusion (one packet per
-    # poll). The mirror's divergence on both paths is latent, not
-    # observable on this fixture; the traces stay as the record and as the
-    # witnesses should a poll ever hold two packets.
+    # poll). The mirror was then corrected to the C's rules by reading
+    # (RxData.lean: groNetwork, groFinalFlush, groSameFlow, groMergeRefused,
+    # napiGroReceive), unconfirmed by the differential check on this
+    # fixture, which cannot reach the paths; both traces agree before and
+    # after, and stay as the regression witnesses should a poll ever hold
+    # two packets.
     ops, sess, steer = d3.session(keepalive=5)
     wg0 = noise.WG0_ADDR4
     def tcp_item(counter, segment):
