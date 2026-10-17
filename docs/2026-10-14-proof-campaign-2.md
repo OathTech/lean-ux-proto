@@ -12,25 +12,25 @@ merged; the executable mirror remains byte-identical to b700659.
 | --- | ---: | ---: | --- |
 | H1 Noise | 34 | 264 | Full terminal closure, all seven whole-call tag maps, their actual finite mixed histories and session derivation-clock receipt current; direct helper reinstallation refutes unrestricted repeat-confirmation uniqueness; successful confirmation IDs are distinct across actual finite histories of all four handshake create/consume calls, session installation/confirmation, clearing and expiry under an explicit initial next/cursor bound; broader driver/lifetime closure remains separate. |
 | H2 Index | 91 | 491 | Full terminal closure and ingress/expiry/handshake/peer-creation owner coherence and whole-removal lifecycle finding/slot-covered arbitrary-AIP preservation and actual clear-work dispatch and both-mode handshake queueing and new-handshake/zero-key/retransmit callbacks and persistent-callback and successful-session slot-alias invariant counterexamples and positive publication-to-lookup handoff under explicit rotation freshness current; core named-operation H2 coverage checked; whole initialized driver/lifetime closure is a separate stronger scope; aggregate gate inherited-blocked. |
-| H3 Roaming | 20 | 213 | Full terminal closure and invalid-MAC1/rate-limit/admitted-response/initiation rejection and cookie-message and whole data-admission endpoint preservation and actual first pre-put NAPI owner/packet authentication under the publication owner-head condition current; later polls, persistent queue provenance and broader caller coverage open. |
+| H3 Roaming | 21 | 219 | Full terminal closure and invalid-MAC1/rate-limit/admitted-response/initiation rejection and cookie-message and whole data-admission/ingress endpoint preservation and actual first pre-put NAPI owner/packet authentication under the publication owner-head condition current; later polls, persistent queue provenance and broader caller coverage open. |
 | H4 Configuration | 105 | 835 | Full terminal closure, actual mixed/key setter paginated readback with arbitrary endpoints, whole finite single-peer mixed-width getter and actual finite empty-IP peer getter and exact arbitrary-room empty-IP serializer/whole normal cursor callback and actual mixed/key setter composition with exact DATA/DONE count and arbitrary endpoints and arbitrary finite empty-IP multi-peer scalar, mixed fwmark/scalar and established-identity private-key set/get and actual endpoint set/weighted readback current; global ownership, queued cleanup, general mixed setters, mixed peer/allowed-IP pagination open. |
 | H5 Progress | 53 | 349 | Full terminal closure, exact bounded outcomes and recorded batch, actual timer completion guards and recorded idle/post-advance wait completion and actual advance-syscall/runner linkage and send-worker completion guard and four final-idle syscall/runner receipts and exact all-mode finite allocation and successful modular-power evaluation bridges and actual activation-exit inspection current; global progress/coherent-ring adequacy open. |
 | H6 Timers | 65 | 502 | Full terminal closure, actual retry blocks and allocation-labelled guarded session-arm events with outgoing call-entry origin and initialized give-up runtime witness with checked concrete curve outputs and all five syntactic traversal call sites covered by six observer branches with all-mode immediate effects; upstream data authentication, broader caller histories and session-relative counts remain open. |
 
-The checked surface is 2,654 theorems in all 927 campaign-owned modules.
+The checked surface is 2,660 theorems in all 930 campaign-owned modules.
 The completed retrofit accounts for 1,983: 1,321 retyped, 244 explicitly
 corrected, 239 retained and 179 added support/finding declarations. One hundred fifty-eight
 subsequent H2 declarations add table preservation and local owner coherence.
 Seventy-nine H1 declarations add whole-operation and finite mixed-history tag ownership, actual derivation-clock provenance, direct-helper reinstallation and bounded fresh-installation confirmation history; two hundred fifty-three H4 declarations
-add mixed fwmark/scalar, ordered peer-attribute, port-refusal/private-key readback and finite IPv4 getter/setter pagination and actual fitting multi-peer readback and complete finite single-peer mixed-width pagination plus actual finite empty-IP peer pagination with ordered cursor handoffs and complete receive/coalescer composition. Fifty-six H3 declarations
+add mixed fwmark/scalar, ordered peer-attribute, port-refusal/private-key readback and finite IPv4 getter/setter pagination and actual fitting multi-peer readback and complete finite single-peer mixed-width pagination plus actual finite empty-IP peer pagination with ordered cursor handoffs and complete receive/coalescer composition. Sixty-two H3 declarations
 add invalid-MAC1, rate-limit and admitted-response/initiation rejection, cookie-message and whole data-admission endpoint preservation, plus actual first pre-put NAPI owner selection and conditional packet authentication. Sixty-one H5 declarations
 establish recorded batch, actual timer completion guards and recorded idle/post-advance wait wheel completion and the actual send-worker completion guard and four final-idle syscall/runner links, exact finite evaluation and actual bounded activation exits. Sixty-four H6 declarations
 connect actual timer-loop receipts, contiguous retry-block counts/bounds, local partial-exchange arming and allocation-labelled session-arm events, plus concrete original curve outputs. Of the 1,831 baseline theorems, 22 frames
 were deleted because types supply their facts and five false cookie supports
 were separately retired with checked counterexamples. No baseline declaration
 remains awaiting retrofit; all 258 original terminal names/order survive,
-with twelve new H1 headlines, thirty-nine new H2 headlines, seven new H3 headlines,
-twenty-six new H4 headlines, eleven new H5 headlines and fifteen new H6 headlines (368 total).
+with twelve new H1 headlines, thirty-nine new H2 headlines, eight new H3 headlines,
+twenty-six new H4 headlines, eleven new H5 headlines and fifteen new H6 headlines (369 total).
 
 The [retrofit report](2026-10-16-proof-campaign-2-state-split.md) records
 claim/frame files, corrections, before/after counts and validation.
@@ -4996,3 +4996,58 @@ Reproduce with capped/scripts/in-bundle lake build
 Leanux.Proofs.WG.Config.Statements, closure axiom inspection and lake env
 leanchecker --fresh on that root, with LEAN_NUM_THREADS=32 and
 LEANUX_QEMU_SLOTS=16.
+
+## H3 continuation: complete ingress endpoint preservation
+
+The original wgReceive call now preserves every optional endpoint and remote
+destination on normal return for arbitrary messages, sources, optional Device,
+queues and Ambient inputs. The proof follows the actual header-validation,
+handshake-enqueue/CPU-selection and data-admission branches. It assumes no
+readiness, authentication, successful prefix or reference premise. Source
+Stops remain Stops; this is neither totality nor a post-error state claim.
+Handshake work is queued here, so later worker/NAPI execution is separate.
+
+ReceiveIngressSource composes the actual packetReceive with the existing
+consumeData endpoint contract. ReceiveIngressClaims projects the whole
+wgReceive result; Statements adds original_receive_ingress_endpoints.
+ReceiveIngressFrames contains exactly three named local endpoint variants
+of C1's prepareSkbHeader (including its internal length check),
+cpumaskNextOnline and ipTunnelGetDsfield contracts. Their native originals
+are reused directly; no shared file or broad frame layer is copied.
+The [shared follow-up](2026-10-15-campaign-2-shared-frame-followup.md)
+records counterpart paths for eventual unification.
+
+The remaining historical-authentication gap has two audited architectures.
+Persistent provenance should reuse C1 PublicationHistory, PublicationFrontier,
+PublicationChecks.actual_poll and Queues/PollAuthorization. These distinguish
+packet occurrences and their earlier successful publication/consume events.
+A bounded fresh-admission/decrypt/NAPI alternative could instead start with
+empty coherent queues, but still needs queue geometry and occurrence transport.
+Current first-cut authentication requires the publication owner's actual queue
+head to be the published packet; CRYPTED status, counter acceptance and numeric
+ID equality do not establish prior AEAD for arbitrary earlier queue contents.
+Neither architecture is replaced by this ingress preservation result, and no
+parallel queue/history layer is added.
+
+Development has three probes: FAIL with one CPU-update projection reduction
+error and no warnings; PASS after explicit optional-state cases; PASS for the
+exact split package, all six roots standard-only with no diagnostics.
+Independent review finds no mathematical/source/domain issue. Its one wording
+finding is fixed: the literal headline explicitly qualifies normal return.
+No cap/limit increase, warning suppression or infrastructure rerun occurs.
+
+The installed scoped build passes 262 jobs without warnings. Axiom inspection
+checks 1,104 roots in 228 modules, including 649 public theorem roots,
+standard-only without diagnostics. Fresh Roaming.Statements kernel replay
+passes. Static checks, all 258 original headline names/order and mirror/shared
+boundaries pass. The aggregate gate remains FAILED in inherited modules and
+is not rerun unchanged.
+
+Six new theorems in three modules bring H3 from 213/20 to 219/21.
+Campaign totals move from 2,654/927/368 to 2,660 theorems, 930 modules and
+369 headlines. H1 264/34, H2 491/91, H4 835/105, H5 349/53 and H6 502/65
+are unchanged; all six charter results remain in progress. No mirror change,
+new mirror-team request, main integration or push. Reproduce with
+capped/scripts/in-bundle lake build Leanux.Proofs.WG.Roaming.Statements,
+closure axiom inspection and lake env leanchecker --fresh on that root,
+with LEAN_NUM_THREADS=32 and LEANUX_QEMU_SLOTS=16.

@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Roaming.ReceiveIngressClaims
 import Leanux.Proofs.WG.Roaming.NapiPublicationClaims
 import Leanux.Proofs.WG.Roaming.ConsumeEndpointClaims
 import Leanux.Proofs.WG.Roaming.CookieEndpointClaims
@@ -319,5 +320,15 @@ theorem original_native_napi_publication_authentication :
     Campaign2.Product.Ensures observedNativeDecryptFirstPoll (fun _ => True)
       (fun result _ => NativePublicationOwnerObservation result) :=
   observedNativeDecryptFirstPoll_authenticated
+
+/-- Whole UDP admission, before asynchronous worker dispatch, preserves every
+optional endpoint and remote destination on normal return. No readiness/authentication premise. -/
+theorem original_receive_ingress_endpoints (msg : List UInt8) (src : SkbSource)
+    (entry : Campaign2.Snapshot) :
+    Campaign2.Ensures (wgReceive msg src) (fun s => s = entry)
+      (fun _ final => responseEndpointMap final.wg.device = responseEndpointMap entry.wg.device ∧
+        ∀ pid, remoteAt final pid = remoteAt entry pid) :=
+  wgReceive_preserves_endpoints msg src entry
+
 
 end Leanux.Proofs.WG.Roaming

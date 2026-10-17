@@ -358,3 +358,21 @@ pubkeyLookup_spec_initiationTagMap_variant in InitiationTagSource, and
 pubkeyLookup_spec_freshTransport_variant in FreshInstallSource. Their statements
 and proof bodies are unchanged. Pure owner/view helpers remain in frame files,
 with public visibility for cross-file use. C1's existing files remain untouched.
+
+## Whole ingress endpoint preservation
+
+Roaming/ReceiveIngressFrames adds exactly three narrow variants:
+prepareSkbHeader_spec_endpoints_variant (including its internal length check),
+cpumaskNextOnline_spec_endpoints_variant and
+ipTunnelGetDsfield_spec_endpoints_variant. The C1 counterparts inspected at
+aebd0f0a506ac08763b6839faa4f8f0b5a2320c9 are prepareSkbHeader_spec and
+cpumaskNextOnline_spec in Keypairs/Frames/WGMore, and
+ipTunnelGetDsfield_spec in Keypairs/Frames/WGTransitions. These preserve the
+full optional endpoint map. Existing native Ambient and owned consumeData
+contracts supply the rest; shared files remain unchanged.
+
+The complete wgReceive claim stops at ingress normal return. General later-poll
+authentication depends on C1 PublicationHistory, PublicationFrontier,
+PublicationChecks.actual_poll and Queues/PollAuthorization. A bounded
+fresh-queue/decrypt/NAPI alternative also needs occurrence/geometry transport.
+Neither is reduced to a few frame facts, and neither layer is copied here.
