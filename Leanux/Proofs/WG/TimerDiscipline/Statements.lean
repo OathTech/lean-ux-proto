@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.TimerDiscipline.OuterFirstTurnClaims
 import Leanux.Proofs.WG.TimerDiscipline.RetryBoundaryClaims
 import Leanux.Proofs.WG.TimerDiscipline.ArmingSourceClaims
 import Leanux.Proofs.WG.TimerDiscipline.HookObservationClaims
@@ -691,5 +692,13 @@ theorem original_send_worker_ready (pid : PeerId) (d : Device) (p : Peer)
       (WorkerReady.runOneSendWorkerContinuation pid d p createdPeer rate last ephemeral clock tailClock stop
         collisions fresh input rest) :=
   WorkerReady.runOneSendWorker_projected pid d p resident rate last ephemeral clock tailClock rateLen lastLen expired identity word nonnull randomWidth width secretNonNull pubOk dhOk collisions fresh rest allCollide isFresh createdPeer createdResident cookieInvalid interval endpoint running alive retained tailLen input valid headPid unit head queued pending start stop startLen stopLen address nonnullUnit
+
+/-- First-turn connection to the actual outer scheduler. This does not assert
+that every due timer is selected, nor that the callback or suffix succeeds. -/
+theorem original_run_timers_first_selected (jPass : UInt64) (worker : Worker)
+    (pid : PeerId) (timer : PeerTimer) (we : WheelEntry) :
+    Campaign2.Product.AgreesOn (FirstTimerSelected jPass worker pid timer we)
+      (Env.runTimers jPass) (firstTimerSelectedSource jPass worker pid timer we) :=
+  runTimers_first_timer_agrees jPass worker pid timer we
 
 end Leanux.Proofs.WG.TimerDiscipline

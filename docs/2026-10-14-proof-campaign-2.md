@@ -5,6 +5,8 @@
 **Campaign-owned state-split retrofit complete over b700659.** Main was incorporated on
 the campaign branch; the mirror and existing shared layers remain unchanged.
 The branch retains its proof target and gate. All six terminal closures now check; broader charter work resumes with H2.
+Main's subsequent b3f56807 documentation-only review/proposal update is also
+merged; the executable mirror remains byte-identical to b700659.
 
 | Result | Headlines | Checked support | Split status |
 | --- | ---: | ---: | --- |
@@ -13,17 +15,19 @@ The branch retains its proof target and gate. All six terminal closures now chec
 | H3 Roaming | 13 | 157 | Full terminal closure current; callback authentication provenance and broader caller coverage open. |
 | H4 Configuration | 80 | 586 | Full terminal closure current; global ownership, queued cleanup and general pagination open. |
 | H5 Progress | 42 | 288 | Full terminal closure current with exact bounded outcomes and checked refutations; global progress/coherent-ring adequacy open. |
-| H6 Timers | 50 | 438 | Full terminal closure current; outer scheduler episodes, complete caller coverage and session-relative counts open. |
+| H6 Timers | 51 | 442 | Full terminal closure and first outer timer turn current; whole scheduler episodes, complete caller coverage and session-relative counts open. |
 
-The checked surface is 2,042 theorems in all 615 campaign-owned modules.
+The checked surface is 2,046 theorems in all 618 campaign-owned modules.
 The completed retrofit accounts for 1,983: 1,321 retyped, 244 explicitly
 corrected, 239 retained and 179 added support/finding declarations. Fifty-five
-subsequent H2 declarations add table preservation and local owner coherence;
-four H4 declarations add mixed fwmark/scalar readback. Of the 1,831 baseline theorems, 22 frames
+subsequent H2 declarations add table preservation and local owner coherence.
+Four H4 declarations add mixed fwmark/scalar readback and four H6 declarations
+connect the first outer timer turn. Of the 1,831 baseline theorems, 22 frames
 were deleted because types supply their facts and five false cookie supports
 were separately retired with checked counterexamples. No baseline declaration
 remains awaiting retrofit; all 258 original terminal names/order survive,
-with seventeen new H2 headlines and one new H4 headline (276 total).
+with seventeen new H2 headlines, one new H4 headline and one new H6 headline
+(277 total).
 
 The [retrofit report](2026-10-16-proof-campaign-2-state-split.md) records
 claim/frame files, corrections, before/after counts and validation.
@@ -34,10 +38,11 @@ shapes and failed-elaboration diagnostics remain campaign 1's responsibility.
 No shared lemma or mirror implementation was edited. The campaign-owned
 retrofit is not a claim that the full gate or any entire charter result passes.
 
-None of H1–H6 is a completed charter result. The timer retry contracts now
-explicitly concern supplied wheel units and their actual inspection, not
-selection by the outer scheduler. No new mirror-team request arises from
-these statement-domain findings.
+None of H1–H6 is a completed charter result. The timer retry-sequence contracts
+concern supplied wheel units and their actual inspection. A separate first-turn
+contract now connects actual outer selection to its unchanged continuation;
+the complete scheduler-to-retry sequence connection remains open. No new
+mirror-team request arises from these statement-domain findings.
 
 ## H2 continuation: confirmation preserves the index invariant
 
@@ -443,6 +448,44 @@ Leanux.Proofs.WG.Index.Statements Leanux.Proofs.WG.Config.Statements, followed
 by scripts/in-bundle lake env leanchecker --fresh for each module, under capped
 with 32 Lean threads and 16 QEMU slots.
 
+## H6 continuation: first actual outer timer turn
+
+The actual runTimers now has an exact first-turn connection to the checked
+timerDispatchUnit_variant. Its projected entry predicate requires a present
+device, an initial non-passive record naming a non-clear timer worker, and
+the actual TimerWheel.nextDue selection. No callback-success, readiness,
+record-sufficiency or logical-expiry premise is added. The original initial
+queue reset and captured record budget are retained; the remaining original
+turns, early breaks, step checks, delivery and final queue rejection follow
+the unit unchanged. Worker/unit mismatches, callback failures and suffix
+failures therefore remain exact outcomes from the same actual Product entry.
+
+Architecture: TimerDiscipline/OuterFirstTurnSource contains the operational
+factors and native equality proofs; OuterFirstTurnModel contains the projected
+selection predicate; OuterFirstTurnClaims contains the projected agreement.
+Statements appends its literal wrapper. No frame lemma, shared-layer copy,
+state reconstruction or mirror edit is needed. Four theorems bring H6 to
+51 headlines and 442 theorems, and the campaign to 277 headlines and 2,046
+theorems in 618 modules. No existing statement is reshaped. This establishes
+neither successful dispatch nor an entire retry episode, and does not move
+the caller's requireNothingDue check into runTimers.
+
+Development: seven changed probes fail with error/warning counts 1/2, 5/1,
+7/6, 2/0, 5/0, 2/1 and 3/0 (source-factor congruence, monadic normalization,
+branch rewrites and type/destructuring syntax). Probe 8 passes without
+diagnostics. All proofs use default limits and the unchanged memory cap;
+there is no unchanged retry or infrastructure failure. Independent review
+finds no issue. No mirror change is requested.
+
+The integrated scoped build passes 312 jobs with only the inherited Env:865
+String.mk warning. Axiom inspection checks 1,375 logical roots in 270 modules,
+including 780 public theorem roots, with standard axioms only. Fresh replay
+passes. Static checks, original 258-name order and mirror/shared boundaries
+pass. The inherited full-gate failure remains unchanged and is not rerun.
+Reproduce with scripts/in-bundle lake build Leanux.Proofs.WG.TimerDiscipline.Statements
+and scripts/in-bundle lake env leanchecker --fresh on that module, under
+capped with 32 Lean threads and 16 QEMU slots.
+
 ## Remaining coherent-ring progress dependency
 
 A positive H5 activation/drain theorem now has a precise proof-layer dependency:
@@ -461,6 +504,33 @@ claim remains false even for coherent rings. Initial queue-length equality
 is needed only to conclude handshakeQueueLen = 0. The alternative direct physical-state
 induction would duplicate the same absent ring layer; it was inventoried,
 not implemented. This is a proof dependency, not a mirror request or a new H5 result.
+
+## Remaining outer timer-episode dependency
+
+The selected-unit H6 sequence does not yet describe an entire runTimers call.
+The actual scheduler can interleave clear, crypt and send work with timers,
+finish several callbacks at the same wheel step before running send work,
+rescan a changed wheel, and reset queuedThisCall only once. A supplied sequence
+of timer/send pairs, each beginning with an empty send queue, therefore needs
+a separate invariant identifying those pairs inside the actual event sequence.
+Normal runTimers completion also does not imply that no timer remains due:
+the requireNothingDue check belongs to the enclosing idle/advance path.
+
+[AGENT 2026-10-17] Start with an exact connection to the first actual iteration,
+retaining the original remaining loop and final checks. This avoids assuming
+callback success and supplies a bounded basis for a later event-sequence proof.
+The alternative is campaign 1's Logged/TimerPass observer, whose erasure theorem
+already follows the actual timer/clear/send/crypt scheduler. Its Capture and
+PrefixLoops dependencies are absent here; copying that layer is outside the
+allowed few local variants. Its current receipts also need selected-wheel
+information before they can connect to the retry certificates. Neither
+architecture currently establishes an entire retry episode.
+
+The enclosing requireNothingDue also reads fixture.hiddenAhead, outside the
+campaign Product projection. Comparisons from the same actual product entry
+retain that input; equality of projected snapshots alone does not determine
+its error classification. No execution state is reconstructed from a projection.
+This is a proof obligation, not a mirror finding or change request.
 
 ## Historical checkpoint before the split
 
