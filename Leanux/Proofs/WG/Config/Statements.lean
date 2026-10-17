@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Config.FactoredTailClaims
 import Leanux.Proofs.WG.Config.EndpointSetClaims
 import Leanux.Proofs.WG.Config.MixedWeightedPaginationClaims
 import Leanux.Proofs.WG.Config.KeyWeightedPaginationClaims
@@ -1808,5 +1809,17 @@ theorem original_endpoint_weighted_get_after_set (d : Device) (key : Key) (a : E
         ∃ reset, s.wg.device = some
           (endpointSetterDevice {d with deviceUpdateGen := d.deviceUpdateGen + 1} pid p a reset)) :=
   endpoint_weighted_get_after_set d key a updateOnly bad pid p nodes ids sock peers found resident live bounded down listed readable header nest fresh within idle empty
+
+
+/-- Original resident-peer serialization with no stored allowed-IP entries,
+for every initial room. Exact capacity gives the original fixed attributes and
+residual room; shortage cancels to the original skb and context. Only the
+allowed-IP cursor and sequence reset on completion. -/
+theorem original_peer_dump_fixed_room (pid : PeerId) (d : Device) (p : Peer)
+    (ctx : DumpCtx) (skb : NlSkb) (resident : d.peers[pid]? = some p)
+    (fresh : ctx.nextAllowedip = none) (empty : p.allowedipsList = []) :
+    Campaign2.Returns (getPeerDump pid ctx skb) (fun s => s.wg.device = some d)
+      (fun result s => s.wg.device = some d ∧ result = fixedPeerResult p ctx skb) :=
+  getPeerDump_fixed_room pid d p ctx skb resident fresh empty
 
 end Leanux.Proofs.WG.Config

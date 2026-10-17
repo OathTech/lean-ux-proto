@@ -13,15 +13,15 @@ merged; the executable mirror remains byte-identical to b700659.
 | H1 Noise | 34 | 264 | Full terminal closure, all seven whole-call tag maps, their actual finite mixed histories and session derivation-clock receipt current; direct helper reinstallation refutes unrestricted repeat-confirmation uniqueness; successful confirmation IDs are distinct across actual finite histories of all four handshake create/consume calls, session installation/confirmation, clearing and expiry under an explicit initial next/cursor bound; broader driver/lifetime closure remains separate. |
 | H2 Index | 91 | 491 | Full terminal closure and ingress/expiry/handshake/peer-creation owner coherence and whole-removal lifecycle finding/slot-covered arbitrary-AIP preservation and actual clear-work dispatch and both-mode handshake queueing and new-handshake/zero-key/retransmit callbacks and persistent-callback and successful-session slot-alias invariant counterexamples and positive publication-to-lookup handoff under explicit rotation freshness current; core named-operation H2 coverage checked; whole initialized driver/lifetime closure is a separate stronger scope; aggregate gate inherited-blocked. |
 | H3 Roaming | 19 | 196 | Full terminal closure and invalid-MAC1/rate-limit/admitted-response/initiation rejection and cookie-message and whole data-admission endpoint preservation current; callback authentication provenance and broader caller coverage open. |
-| H4 Configuration | 98 | 733 | Full terminal closure, actual mixed/key setter paginated readback with arbitrary endpoints, whole finite single-peer mixed-width getter and actual mixed/key setter composition with exact DATA/DONE count and arbitrary endpoints and fitting multi-peer scalar and mixed fwmark/scalar set/get and actual endpoint set/weighted readback current; global ownership, queued cleanup, general mixed setters and multi-peer pagination open. |
+| H4 Configuration | 99 | 739 | Full terminal closure, actual mixed/key setter paginated readback with arbitrary endpoints, whole finite single-peer mixed-width getter and exact arbitrary-room empty-IP serializer and actual mixed/key setter composition with exact DATA/DONE count and arbitrary endpoints and fitting multi-peer scalar and mixed fwmark/scalar set/get and actual endpoint set/weighted readback current; global ownership, queued cleanup, general mixed setters and multi-peer pagination open. |
 | H5 Progress | 51 | 335 | Full terminal closure, exact bounded outcomes and recorded batch, actual timer completion guards and recorded idle/post-advance wait completion and actual advance-syscall/runner linkage and send-worker completion guard and four final-idle syscall/runner receipts and exact all-mode finite allocation bridge current; global progress/coherent-ring adequacy open. |
 | H6 Timers | 65 | 498 | Full terminal closure, actual retry blocks and allocation-labelled guarded session-arm events with outgoing call-entry origin and initialized give-up runtime witness and all five syntactic traversal call sites covered by six observer branches with all-mode immediate effects; upstream data authentication, broader caller histories and session-relative counts remain open. |
 
-The checked surface is 2,517 theorems in all 867 campaign-owned modules.
+The checked surface is 2,523 theorems in all 871 campaign-owned modules.
 The completed retrofit accounts for 1,983: 1,321 retyped, 244 explicitly
 corrected, 239 retained and 179 added support/finding declarations. One hundred fifty-eight
 subsequent H2 declarations add table preservation and local owner coherence.
-Seventy-nine H1 declarations add whole-operation and finite mixed-history tag ownership, actual derivation-clock provenance, direct-helper reinstallation and bounded fresh-installation confirmation history; one hundred fifty-one H4 declarations
+Seventy-nine H1 declarations add whole-operation and finite mixed-history tag ownership, actual derivation-clock provenance, direct-helper reinstallation and bounded fresh-installation confirmation history; one hundred fifty-seven H4 declarations
 add mixed fwmark/scalar, ordered peer-attribute, port-refusal/private-key readback and finite IPv4 getter/setter pagination and actual fitting multi-peer readback and complete finite single-peer mixed-width pagination. Thirty-nine H3 declarations
 add invalid-MAC1, rate-limit and admitted-response/initiation rejection, cookie-message and whole data-admission endpoint preservation. Forty-seven H5 declarations
 establish recorded batch, actual timer completion guards and recorded idle/post-advance wait wheel completion and the actual send-worker completion guard and four final-idle syscall/runner links. Sixty H6 declarations
@@ -3239,9 +3239,10 @@ fail-closed outcomes, not accepted-backlog counterexamples.
 Finite recursion/ranges bound the explicit outer iterations provided their
 bodies terminate, but a total logical
 denotation does not itself prove executable termination of loop-backed helpers.
-The modular-power helper has a checked finite-evaluation bridge; arbitrary
-exact-count allocation needs its own bridge beyond the checked single successful
-keypair-allocation case. Further H5 work includes derived-fuel adequacy with callback refill and an
+At this checkpoint the modular-power helper had a checked finite-evaluation
+bridge, while arbitrary exact-count allocation remained beyond the single
+successful keypair-allocation case. The later exact finite allocation tranche
+closes that iteration gap. Further H5 work includes derived-fuel adequacy with callback refill and an
 initialized queue/pending-work consistency invariant strong enough to lift
 the exact local completion guards to all accepted operations. Fairness,
 erasing physical stale ring slots, disarming future timers and unconditional
@@ -3770,8 +3771,9 @@ omits slots and the Device cursor; extending it and all callers is a distinct
 larger architecture. This audit takes no fresh-history proof credit.
 
 H5's outer finite recursion is separate from finite execution of its loop-backed
-helpers. The modular-power bridge is checked; general exact-count allocation
-remains open beyond the single-site successful case. Total logical denotation
+helpers. At this audit the modular-power bridge was checked and general exact-count
+allocation remained beyond the single-site successful case; the later exact
+finite allocation tranche closes that iteration gap. Total logical denotation
 alone is insufficient. Record-budget adequacy is a further separate obligation.
 Existing dispatch/turn/resumption contracts connect the recorded choice to the
 real activation, including detached-state rerun and all failures. Fairness and
@@ -4043,9 +4045,10 @@ the allocation-loop equation and the exact single successful kzallocKeypair
 record case. It does not establish the general exact-n allocation loop over
 arbitrary returns, errors and records. This is a proof-coverage/reporting
 finding, not an observed nonterminating trace or mirror defect. Stock executable
-overrides remain reported and are not used as proof oracles.
+overrides remain reported and are not used as proof oracles. The following
+exact finite allocation tranche subsequently closes this specific iteration gap.
 
-A minimal candidate is equality of the original allocation loop to a structurally
+A minimal candidate at this audit was equality of the original allocation loop to a structurally
 recursive evaluator with at most n encounters, retaining early false returns and
 the first Stop. The actual encounter helpers must then be connected explicitly;
 arbitrary callbacks cannot be declared terminating merely from their types.
@@ -4187,3 +4190,64 @@ occurs. These are proof-development failures, not semantic counterexamples or
 mirror-team requests. A smaller exact source factor with one-put-at-a-time
 contracts is the next architecture to assess; no stronger capacity/readiness
 premise is introduced to force the original claim through.
+
+
+## H4 continuation: exact fit or cancellation at arbitrary room
+
+[AGENT 2026-10-17] Factor the fixed put chain and endpoint tail before
+reasoning about capacity. Exact equality to the original getPeerDumpTailSource
+holds for every context and room, including its resumed allowed-IP path and
+all original errors. The proof unfolds only the local source factors and
+literal lists; actual puts, branch effects and run semantics remain opaque.
+
+The projected total getter claim assumes a resident peer, a fresh allowed-IP
+cursor and an empty stored allowed-IP list. It has no capacity, liveness,
+reference, endpoint-validity, record-readiness or supplied-success premise.
+At exact sufficient capacity it returns the original attributes, subtracts
+peerFixedSpace and resets only nextAllowedip/allowedipsSeq; otherwise it returns
+the original skb/context and cancellation. Device and existing messages remain
+unchanged. Fixed cost is 136 plus 20 for AF_INET or 32 for AF_INET6.
+Other present endpoint families retain the mirror's original serializer and
+zero endpoint-space accounting; this is not a reachable-endpoint or Linux
+correspondence claim.
+
+FactoredTailModel holds two result definitions. FactoredTailSource holds three
+operational factors and their equality to the original. FactoredTailReturns
+holds the put-chain induction and the endpoint/original-tail total contracts.
+FactoredTailClaims holds the projected native getter claim, wrapped literally
+as original_peer_dump_fixed_room in Statements. These are mixed return/effect
+contracts; no preservation-only frame or shared-layer variant is added.
+No cursor planner, callback reference handoff, multi-peer pagination or socket
+transport is claimed by this step.
+
+Nine changed-source probes: 1 fails the final syntax equality, fixed by
+reflexivity in passing probe 2; 3 fails five endpoint witness-shape obligations
+and warns once; 4 fails two unspecified witness obligations; 5 fails three
+Boolean family normalizations and warns twice; 6 fails five composition/result
+obligations and warns twice; 7 leaves two; 8 leaves the whole-contract
+simplification mismatch. Probe 9 extracts the actual run and normalizes its
+result locally, checking all five package roots standard-only without warnings.
+The seven failed drafts and their recovery environments are rejected. This
+successful architecture does not reclassify the earlier failed cursor or
+mvcgen probes. No timeout, cap/limit increase or infrastructure rerun occurs.
+
+The installed Config.Statements build passes 350 jobs, with only inherited
+Env:865 String.mk. Axiom inspection checks 1,223 roots in 286 modules, including
+829 public theorem roots, standard-only and without diagnostics. Fresh kernel
+replay passes. Static token/import/root/default checks, the original 258-name
+order and mirror/shared boundaries pass. The inherited aggregate gate remains
+FAILED and is not rerun unchanged.
+
+Independent source/domain review finds no issue.
+
+Six new theorems including the headline bring H4 to 739/99 and campaign totals
+to 2,523 theorems, 871 owned modules and 359 headlines. Other result counts
+are unchanged. The next native obligation is ordered multi-peer cursor
+handoff, including acquisition before the previous cursor reference is put;
+the fit/cancel result now supplies its exact per-peer capacity behavior.
+
+Reproduce with capped -- scripts/in-bundle lake build
+Leanux.Proofs.WG.Config.Statements, axiom inspection of its proof closure,
+and capped -- scripts/in-bundle lake env leanchecker --fresh
+Leanux.Proofs.WG.Config.Statements, with LEAN_NUM_THREADS=32 and
+LEANUX_QEMU_SLOTS=16. No mirror change is requested.
