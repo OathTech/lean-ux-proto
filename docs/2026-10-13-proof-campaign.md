@@ -214,6 +214,14 @@ and encrypted TX completion retain the complete supplied account. Initialized
 conservation remains open. Gate: 778 jobs/716 declarations in 4.955 seconds,
 after an export-name repair; fresh root replay passes in 106.857 seconds.
 
+The [lifecycle/worker checkpoint](2026-10-17-r4-lifecycle-workers.md) adds
+fifteen modules and 158 theorems: 735 files/10,069 theorems, 194 R4 terminals
+and 728 total declarations. All previous bodies remain unchanged. Actual
+creation/retirement, full TX selection/publication/encryption, dump callers,
+session setup and two timers retain the supplied complete account. Initialized
+conservation remains open. Gate: 793 jobs/728 declarations in 5.190 seconds;
+fresh root replay passes in 110.672 seconds without warnings.
+
 The pre-split checkpoint validated every baseline result surface over
 `cb2348e`. R3 packet authorization is now closed over the current split tree;
 R4 receive-pipeline conservation remains open. Earlier positive results and runtime findings retain
@@ -611,14 +619,14 @@ correspondence remains informal.
 
 ## R4 — queue, poll and delivery-order components (in progress)
 
-**State-split holder-flow extension.** The [current report](2026-10-17-r4-holder-flow.md)
-records 216 additional theorems in seventeen modules and thirteen terminal exports.
-The tree has 720 proof files/9,911 theorems, with 182 R4 terminals and all 169
-preceding bodies unchanged. The complete account now survives actual admission,
-whole poll/NAPI/decrypt, ordered work dispatch, bounded drains, dump serialization
-and socket calls. Encrypted TX completion pays its batch owner while retaining
-the actual freshness work delta. Lifecycle retirement, durable TX selection,
-remaining callers and initialized conservation remain open. Chronological GRO
+**State-split lifecycle/worker extension.** The [current report](2026-10-17-r4-lifecycle-workers.md)
+records 158 additional theorems in fifteen modules and twelve terminal exports.
+The tree has 735 proof files/10,069 theorems, with 194 R4 terminals and all 182
+preceding bodies unchanged. Creation, bulk retirement, full TX selection/payment,
+publication, encryption/activation iteration, dump callers, session setup and two
+timers retain the complete supplied account. Single removal exposes its base
+uniqueness/membership domain. Remaining consumers/timers, lifecycle coherence,
+outer callers and initialized conservation remain open. Chronological GRO
 order stays refuted.
 
 **Original versus proved.** The charter requires accepted-schedule order and no silent loss/duplication.

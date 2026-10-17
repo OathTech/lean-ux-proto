@@ -1,3 +1,12 @@
+import Leanux.Proofs.WG.Queues.HolderCreation
+import Leanux.Proofs.WG.Queues.HolderBaseRetirement
+import Leanux.Proofs.WG.Queues.TxHolderStep
+import Leanux.Proofs.WG.Queues.DumpCallers
+import Leanux.Proofs.WG.Queues.HolderEncryptHistory
+import Leanux.Proofs.WG.Queues.SessionCarrier
+import Leanux.Proofs.WG.Queues.HolderSingleRetirement
+import Leanux.Proofs.WG.Queues.HolderTimers
+import Leanux.Proofs.WG.Queues.HolderTxHistory
 import Leanux.Proofs.WG.Queues.HolderPollBoundary
 import Leanux.Proofs.WG.Queues.HolderDecryptHistory
 import Leanux.Proofs.WG.Queues.HolderAdmission
@@ -2474,5 +2483,117 @@ theorem original_funded_napi (initial : Ledger) (loans : Reservations) (before :
   ⟨HolderNapi.softirq_preserves initial loans before,HolderNapi.inline_preserves initial loans before,
     HolderNapi.irq_preserves initial loans before⟩
 
+
+open Leanux Leanux.WG Queues Queues.RxCredits Framing Logged Lifetimes
+
+/-- The actual creation call publishes only its source-funded base occurrence. -/
+theorem original_peer_creation_holders (key : Key) (psk : Option Key)
+    {holders : DurableHolders} (hi : holders.Funded cs loans w) (stable : StableRx cs w)
+    (configured : ConfiguredIdentity.Inv w) (a b : Ambient)
+    (run : ((peerCreate key psk).run w).run a = .ok ((result,v),b)) :
+    match result with
+    | .error _ => holders.Funded cs loans v ∧ StableRx cs v
+    | .ok pid => ∃ d, w.dev = some d ∧ pid = d.nextPeer ∧
+        (HolderCreation.addBase holders (BaseCreation.owner w d)).Funded cs loans v ∧ StableRx cs v :=
+  HolderCreation.peerCreate_funded key psk hi stable configured a b run
+
+/-- Bulk removal pays the saved base occurrences in order through its actual drains. -/
+theorem original_bulk_retirement_holders {holders : DurableHolders}
+    (hi : holders.Funded cs loans w) (stable : StableRx cs w) (a b : Ambient)
+    (run : (peerRemoveAll.run w).run a = .ok (((),v),b)) :
+    DurableHolders.DuringWork (holders.withoutBase []) cs loans v :=
+  DurableHolders.peerRemoveAll_funded hi stable a b run
+
+/-- Every normal TX step retains idle holders or pays its actual selected batch. -/
+theorem original_full_tx_step_holders {holders : DurableHolders} (pid : PeerId)
+    (hi : holders.Funded cs loans w) (stable : StableRx cs w) (a b : Ambient)
+    (run : ((txStep pid).run w).run a = .ok ((result,v),b)) :
+    (result = false ∧ holders.Funded cs loans v ∧ StableRx cs v) ∨
+    (result = true ∧ ∃ chosen rest delta,
+      DurableHolders.TxSelected holders.tx pid chosen rest ∧ chosen.item ≠ [] ∧ delta.tx = [] ∧
+      ((holders.withoutTx rest).absorb delta).Funded cs loans v ∧ StableRx cs v) :=
+  DurableHolders.txStep_funded pid hi stable a b run
+
+/-- Native TX publication acquires and repays its own temporary reference. -/
+theorem original_tx_publication_holders (item : List SkbId) (state : PacketState)
+    {holders : DurableHolders} (hi : holders.Funded cs loans w) (stable : StableRx cs w)
+    (a b : Ambient)
+    (run : ((enqueuePerPeerTx item state).run w).run a = .ok (((),v),b)) :
+    holders.Funded cs loans v ∧ StableRx cs v :=
+  DurableHolders.enqueuePerPeerTx_funded item state hi stable a b run
+
+/-- The complete original bounded dump caller changes only its selected cursor account. -/
+theorem original_whole_dump_holders (ref : DeviceRef) {holders : DurableHolders}
+    (hi : holders.Funded cs loans w) (stable : StableRx cs w) (a b : Ambient)
+    (run : ((wgGetDevice ref).run w).run a = .ok ((result,v),b)) :
+    DurableHolders.DuringDump holders 7 cs loans v :=
+  DurableHolders.wgGetDevice_funded ref hi stable a b run
+
+/-- All three actual dump dispatcher arms retain their supplied complete account. -/
+theorem original_dump_dispatch_holders (ref : DeviceRef) {holders : DurableHolders}
+    (w v : World) (hi : holders.Funded cs loans w.wg) (stable : StableRx cs w.wg) :
+    ((dispatch (.wgGet ref)).run w = .ok (result,v) → DurableHolders.DuringDump holders 7 cs loans v.wg) ∧
+    ((dispatch (.wgGetStart ref)).run w = .ok (result,v) → DurableHolders.DuringDump holders DUMP_FD cs loans v.wg) ∧
+    ((dispatch .wgGetRecv).run w = .ok (result,v) → DurableHolders.DuringDump holders DUMP_FD cs loans v.wg) :=
+  ⟨DurableHolders.dispatchGet_funded ref w v hi stable,
+    DurableHolders.dispatchStart_funded ref w v hi stable,
+    DurableHolders.dispatchRecv_funded w v hi stable⟩
+
+/-- Encryption and its actual NAPI callback retain the same removal suffix and ring witness. -/
+theorem original_funded_encrypt_iteration (hi : DurableHolders.Boundary cs loans w.wg)
+    (physical : Queues.RxCredits.DecryptIteration.Physical w)
+    (run : (encryptIter Env.checksumHelp Env.napiSoftirq (Env.condResched .encryptWorker)).run w = .ok (result,v))
+    (h : List RxHistory.Event) :
+    let k := (runPrefix RxHistory.encryptIteration w h).2
+    (∃ suffix, k = h ++ suffix ∧ DurableHolders.Boundary (remaining cs (NapiCarrier.removedPackets suffix)) loans v.wg) ∧
+      Queues.RxCredits.DecryptIteration.Physical v :=
+  HolderEncrypt.native_funded hi physical run h
+
+/-- The actual session supplies endpoint key facts from the stated entry bounds. -/
+theorem original_session_holder_account (pid : PeerId) {holders : DurableHolders}
+    (hi : holders.Funded cs loans w) (stable : StableRx cs w)
+    (configured : ConfiguredIdentity.Inv w) (owners : OwnerBounds.Carrier w)
+    (slots : CurrentSlots.Inv w) (a b : Ambient)
+    (run : ((beginSession pid).run w).run a = .ok ((result,v),b)) :
+    holders.Funded cs loans v ∧ StableRx cs v ∧ ConfiguredIdentity.Inv v ∧
+      OwnerBounds.Carrier v ∧ CurrentSlots.Inv v :=
+  SessionCarrier.beginSession_funded pid hi stable configured owners slots a b run
+
+/-- Single-peer removal pays its unique supplied live base occurrence. -/
+theorem original_single_peer_retirement (pid : PeerId) {holders : DurableHolders}
+    (hi : holders.Funded cs loans w) (stable : StableRx cs w)
+    (unique : (holders.base.map Owner.slot).Nodup)
+    (present : pid ∈ holders.base.map Owner.slot) (a b : Ambient)
+    (run : ((peerRemove (some pid)).run w).run a = .ok (((),v),b)) :
+    DurableHolders.DuringWork (holders.withoutBase (BaseRemoval.live holders.base pid)) cs loans v :=
+  DurableHolders.peerRemove_some_funded pid hi stable unique present a b run
+
+/-- The actual zero-key timer adds only the reservation acquired in its source. -/
+theorem original_zero_key_timer_holders (pid : PeerId) {holders : DurableHolders}
+    (hi : holders.Funded cs loans w) (stable : StableRx cs w) (a b : Ambient)
+    (run : ((expiredZeroKeyMaterial pid).run w).run a = .ok (((),v),b)) :
+    ∃ added : Reservations,
+      (added = [] ∨ ∃ d p, w.dev = some d ∧ d.peers[pid]? = some p ∧
+        added = [⟨d.ifindex,pid,p.internalId⟩]) ∧
+      (HolderTimers.addClear holders added).Funded cs loans v ∧ StableRx cs v :=
+  HolderTimers.expiredZero_funded pid hi stable a b run
+
+/-- The new-handshake timer retains its endpoint-reset cut and funded queue delta. -/
+theorem original_new_handshake_timer_holders (pid : PeerId) {holders : DurableHolders}
+    (hi : holders.Funded cs loans w) (stable : StableRx cs w) (a b : Ambient)
+    (run : ((expiredNewHandshake pid).run w).run a = .ok (((),v),b)) :
+    ∃ u middle delta,
+      ((clearPeerEndpointSrc pid).run w).run a = .ok (((),u),middle) ∧
+      ((sendQueuedHandshakeInitiation pid false).run u).run middle = .ok (((),v),b) ∧
+      Handoff u v [] [] delta ∧ (holders.absorb delta).Funded cs loans v ∧ StableRx cs v :=
+  HolderTimers.expiredNew_funded pid hi stable a b run
+
+/-- The actual TX activation includes crypt-ahead and its NAPI removal suffix. -/
+theorem original_tx_activation_holders (initial : Ledger) (loans : Reservations)
+    (before : List RxHistory.Event) (activation : Activation)
+    (worker : activation.worker = .txWorker) :
+    PrefixPreserves (HolderNapi.At initial loans before) (fun _ => True)
+      (RxHistory.activationIteration activation) :=
+  HolderTxHistory.activationIteration_preserves initial loans before activation worker
 
 end Leanux.Proofs.WG.DeliveryOrder
