@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Config.WeightedGetterClaims
 import Leanux.Proofs.WG.Config.MixedEndpointPaginationClaims
 import Leanux.Proofs.WG.Config.KeyEndpointPaginationClaims
 import Leanux.Proofs.WG.Config.EndpointPaginationClaims
@@ -1668,5 +1669,30 @@ theorem original_private_key_endpoint_pagination (d : Device) (key : Key) (pid :
         ∃ now, s.wg.device = some (keyReadbackDevice d key pid p now)) :=
   rotation_endpoint_pagination_get_after_set d key pid p nodes ids sock established changed absent members resident listed fresh readable room enough idle empty
 
+
+/-- The whole original getter terminates with exact JSON and an empty,
+completed socket for a resident singleton listed peer and finite readable
+mixed-width allowed-IP list. Greedy 28/40-byte pages preserve all occurrences;
+every resumed cursor is fresh against all prior emissions. Empty input and an
+empty first fitting prefix take their distinct original branches. The exact
+DATA-plus-DONE-spill count must fit 4096 receives. Endpoints and stored-width
+mask/hex serialization are unchanged; no valid-IPv6 or global ownership
+claim is inferred from an arbitrary stored width. -/
+theorem original_finite_mixed_width_pagination (pid : PeerId) (d : Device) (p : Peer)
+    (nodes : NodeId → AipNode) (ids : List NodeId) (sock : NlSock)
+    (peers : d.peerList = [pid]) (resident : d.peers[pid]? = some p)
+    (listed : p.allowedipsList = ids)
+    (readable : ∀ id ∈ ids, d.nodes[id]? = some (nodes id))
+    (header : devicePrefixSpace d + 168 ≤ NLMSG_GOODSIZE)
+    (nest : ids ≠ [] → devicePrefixSpace d + (peerFixedSpace p+4) ≤ NLMSG_GOODSIZE)
+    (fresh : weightedGetterFresh d p nodes ids)
+    (idle : sock.cbRunning = false) (empty : sock.queue = [])
+    (within : weightedGetterReceives d p nodes ids ≤ 4096) :
+    Campaign2.Returns (wgGetDevice (byIndex d))
+      (fun s => s.wg.device = some d ∧ s.wg.nlSock7 = sock ∧ ClaimView.selectsDevice s d)
+      (fun result s => result = .ok (jsonPaginationResult d p
+        (ids.map (fun id => dumpNodeJson (nodes id)))) ∧ s.wg.device = some d ∧
+        s.wg.nlSock7 = socketReadbackFinal sock d) :=
+  mixed_weighted_getter pid d p nodes ids sock peers resident listed readable header nest fresh idle empty within
 
 end Leanux.Proofs.WG.Config

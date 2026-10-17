@@ -13,16 +13,16 @@ merged; the executable mirror remains byte-identical to b700659.
 | H1 Noise | 33 | 235 | Full terminal closure, all seven whole-call tag maps, their actual finite mixed histories and session derivation-clock receipt current; direct helper reinstallation refutes unrestricted repeat-confirmation uniqueness; fresh-session uniqueness remains open; broader driver closure is separate from the checked native histories. |
 | H2 Index | 89 | 481 | Full terminal closure and ingress/expiry/handshake/peer-creation owner coherence and whole-removal lifecycle finding/slot-covered arbitrary-AIP preservation and actual clear-work dispatch and both-mode handshake queueing and new-handshake/zero-key/retransmit callbacks and persistent-callback invariant counterexample current; reachable whole-driver uniqueness/coherence open. |
 | H3 Roaming | 18 | 190 | Full terminal closure and invalid-MAC1/rate-limit/admitted-response/initiation rejection and cookie-message preservation current; callback authentication provenance and broader caller coverage open. |
-| H4 Configuration | 93 | 702 | Full terminal closure, actual mixed/key setter paginated readback with arbitrary endpoints, finite single-peer IPv4 getter, exact mixed-width scans, weighted plans/resumed callbacks and generic coalescing and fitting multi-peer scalar and mixed fwmark/scalar set/get current; global ownership, queued cleanup, general mixed setters and multi-peer/IPv6 pagination open. |
+| H4 Configuration | 94 | 712 | Full terminal closure, actual mixed/key setter paginated readback with arbitrary endpoints, whole finite single-peer mixed-width getter with exact DATA/DONE count and arbitrary endpoints and fitting multi-peer scalar and mixed fwmark/scalar set/get current; global ownership, queued cleanup, general mixed setters and multi-peer pagination open. |
 | H5 Progress | 49 | 326 | Full terminal closure, exact bounded outcomes and recorded batch, actual timer completion guards and recorded idle/post-advance wait completion and actual advance-syscall/runner linkage and send-worker completion guard and four final-idle syscall/runner receipts current; global progress/coherent-ring adequacy open. |
 | H6 Timers | 59 | 483 | Full terminal closure, actual retry blocks and allocation-labelled guarded session-arm events with outgoing call-entry origin and initialized give-up runtime witness current; complete caller coverage, general mixed histories and session-relative counts open. |
 
-The checked surface is 2,417 theorems in all 824 campaign-owned modules.
+The checked surface is 2,427 theorems in all 829 campaign-owned modules.
 The completed retrofit accounts for 1,983: 1,321 retyped, 244 explicitly
 corrected, 239 retained and 179 added support/finding declarations. One hundred forty-eight
 subsequent H2 declarations add table preservation and local owner coherence.
-Fifty H1 declarations add whole-operation and finite mixed-history tag ownership and actual derivation-clock provenance and direct-helper reinstallation; one hundred twenty H4 declarations
-add mixed fwmark/scalar, ordered peer-attribute, port-refusal/private-key readback and finite IPv4 getter/setter pagination and actual fitting multi-peer readback. Thirty-three H3 declarations
+Fifty H1 declarations add whole-operation and finite mixed-history tag ownership and actual derivation-clock provenance and direct-helper reinstallation; one hundred thirty H4 declarations
+add mixed fwmark/scalar, ordered peer-attribute, port-refusal/private-key readback and finite IPv4 getter/setter pagination and actual fitting multi-peer readback and complete finite single-peer mixed-width pagination. Thirty-three H3 declarations
 add invalid-MAC1, rate-limit and admitted-response/initiation rejection and cookie-message preservation. Thirty-eight H5 declarations
 establish recorded batch, actual timer completion guards and recorded idle/post-advance wait wheel completion and the actual send-worker completion guard and four final-idle syscall/runner links. Forty-five H6 declarations
 connect actual timer-loop receipts, contiguous retry-block counts/bounds, local partial-exchange arming and allocation-labelled session-arm events. Of the 1,831 baseline theorems, 22 frames
@@ -30,7 +30,7 @@ were deleted because types supply their facts and five false cookie supports
 were separately retired with checked counterexamples. No baseline declaration
 remains awaiting retrofit; all 258 original terminal names/order survive,
 with eleven new H1 headlines, thirty-seven new H2 headlines, five new H3 headlines,
-fourteen new H4 headlines, seven new H5 headlines and nine new H6 headlines (341 total).
+fifteen new H4 headlines, seven new H5 headlines and nine new H6 headlines (342 total).
 
 The [retrofit report](2026-10-16-proof-campaign-2-state-split.md) records
 claim/frame files, corrections, before/after counts and validation.
@@ -3384,4 +3384,66 @@ Current totals: 2,417 theorems in 824 owned modules and 341 headlines.
 All six results remain in progress; the inherited full gate remains FAILED
 and is not rerun unchanged. Reproduce with scoped build, axiom inspection
 and fresh replay of Leanux.Proofs.WG.Progress.Statements under
+capped/scripts/in-bundle, LEAN_NUM_THREADS=32 and LEANUX_QEMU_SLOTS=16.
+
+
+## H4 continuation: complete finite mixed-width getter
+
+The original wgGetDevice now returns the exact single-peer JSON for a finite
+readable allowed-IP list of arbitrary stored widths, under an exact receive
+count of at most 4096. Greedy pages use the actual 28/40-byte costs. The count
+includes each DATA envelope and an extra DONE envelope precisely when the
+final DATA leaves less than 20 bytes. Empty input and a nonempty input with
+an empty first fitting prefix retain their distinct raw attribute shapes.
+Coalescing preserves every original occurrence in order.
+
+Static premises are one listed resident peer, its exact list and node
+residency, first-header and conditional nest room, resumed cursor freshness
+against all earlier emissions, an idle empty socket7 and interface selection.
+No actual callback/receive success, readiness or global ownership invariant is
+assumed. IDs may repeat away from resumed boundaries; endpoints remain
+arbitrary. Non-32-bit stored nodes use the original family-6 mask/hex branch,
+without claiming those arbitrary widths are valid IPv6 configurations.
+
+The source derives an internal indexed receive receipt from actual first and
+resumed callbacks, including exact socket state at every receive. That receipt
+is not a public premise. The existing getterReceive_sequence supplies the
+only getter-loop induction; no IPv4 drain layer or shared frame is copied.
+The final total-return theorem preserves the entire Device and gives the
+exact completed, empty socket. The source count is also the number of receives
+constructed by that receipt.
+
+WeightedGetterModel holds count/message/freshness definitions and the pure
+resumed-prefix equation. WeightedReceiveSource, WeightedTailSource and
+WeightedGetterSource hold actual transport, coalescing and whole-call
+composition; WeightedGetterClaims and Statements expose the projection.
+Five definitions and ten theorems in five modules bring H4 to 712 theorems
+and 94 headlines. No new frame is needed. Root independent review of all
+files, planner and existing receive contracts finds no issue.
+
+Nine changed-source probes: 1 fails constructor/layout syntax with recovery
+warnings; 2 fails an array conversion name; 3 fails transitivity, array
+rewrite, positivity and termination arithmetic, plus a deprecated rewrite;
+4 fails array normalization and a deprecated integer rewrite; 5–6 fail
+nil-array/freshness layout; 7 fails record-update normalization. Failed
+recovery/sorry or misleading empty-axiom reports are rejected. Probe 8
+passes all ten mathematical roots; 9 passes the corrected literal terminal
+namespace. Both final passes have only standard axioms and no warnings.
+
+Root installation also catches a namespace guard mismatch before wiring the
+headline. The intervening cached old-root build is not evidence for the new
+package. After correcting the installation, the new scoped closure passes
+337 jobs, with only inherited Env:865 String.mk. Axiom inspection checks
+1,181 logical roots in 273 modules, including 803 public theorem roots,
+standard-only and without diagnostics.
+Fresh kernel replay passes the changed Config terminal root.
+Static trust/import checks, all 258 original terminal names/order and
+mirror/shared boundaries pass. No cap/limit changes, suppression or
+infrastructure reruns.
+
+Current totals: 2,427 theorems in 829 owned modules and 342 headlines.
+Multi-peer pagination, broader mixed setters, ownership and queued cleanup
+remain open; no whole charter result is completed. The inherited full gate
+remains FAILED and is not rerun unchanged. Reproduce the build, axiom
+inspection and fresh replay of Leanux.Proofs.WG.Config.Statements under
 capped/scripts/in-bundle, LEAN_NUM_THREADS=32 and LEANUX_QEMU_SLOTS=16.
