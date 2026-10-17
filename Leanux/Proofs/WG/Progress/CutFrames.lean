@@ -8,10 +8,10 @@ open Leanux
 
 /-- The section ordinal update leaves both records and the error-location
 decisions untouched. -/
-theorem noteNetRxStart_records (site : Nat) (w : World) :
-    ∃ final, (noteNetRxStart site).run w = .ok ((), final) ∧
+theorem noteNetRxStart_records (site : Nat) (w : Ambient) :
+    ∃ final, (AmbientM.noteNetRxStart site).run w = .ok ((), final) ∧
       final.hidden = w.hidden ∧ final.steps = w.steps := by
-  unfold noteNetRxStart
+  unfold AmbientM.noteNetRxStart
   split <;> exact ⟨_, rfl, rfl, rfl⟩
 
 end Leanux.Proofs.WG.Progress

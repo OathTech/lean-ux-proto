@@ -1,4 +1,4 @@
-import Leanux.Proofs.WG.Index.Insert
+import Leanux.Proofs.WG.Index.DrawRecordSource
 
 set_option autoImplicit false
 set_option pp.structureInstances false
@@ -6,89 +6,6 @@ set_option maxHeartbeats 800000
 
 namespace Leanux.Proofs.WG.Index
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise Leanux.Proofs.WG.Config Std.Do
-
-/-- Exactly the four payload bytes recorded by get_random_bytes for an index. -/
-structure Draw where
-  a : UInt8
-  b : UInt8
-  c : UInt8
-  d : UInt8
-  deriving Repr
-
-def Draw.bytes (draw : Draw) : List UInt8 := [draw.a, draw.b, draw.c, draw.d]
-def Draw.value (draw : Draw) : Nat := draw.bytes.foldr (fun b acc => acc * 256 + b.toNat) 0
-
-def Draw.record (draw : Draw) : HiddenRecord :=
-  { site := HiddenSite.indexDraw.info.id, bytes := draw.bytes ++ [0, 0, 0, 0] }
-
-/-- Local index-draw variant of Config.hiddenUdp_run; the nonambient record
-is consumed without any other World change. -/
-theorem hiddenIndex_run (w : World) (draw : Draw) (rest : List HiddenRecord)
-    (records : w.hidden = some (draw.record :: rest)) :
-    (hidden .indexDraw).run w = .ok (draw.bytes, { w with hidden := some rest }) := by
-  have passive : HiddenSite.passive 4 = false := by decide
-  simp [hidden, skipAmbient, noteNetRxStart, StateT.run, bind, pure,
-    get, getThe, MonadStateOf.get, set, modify, modifyGet, StateT.bind, StateT.pure, StateT.get, StateT.set,
-    records, Draw.record, Draw.bytes, HiddenSite.info, passive, Worker.sectionId, Worker.index,
-    Except.pure, Except.bind]
-
-theorem bucketWalk_records_returns (walk collide : Decision) (index : Nat)
-    (entries : List IndexEntry) (k : Kernel) (records : Option (List HiddenRecord)) :
-    Returns (bucketWalk walk collide index entries) (fun w => w.k = k ∧ w.hidden = records)
-      (fun result w => result = entries.any (·.index == index) ∧ w.k = k ∧ w.hidden = records) := by
-  induction entries with
-  | nil =>
-    rw [returns_iff]
-    simp only [bucketWalk, List.forIn_nil, bind_pure_comp, pure_bind]
-    mvcgen [branch]
-    all_goals try dsimp +zetaDelta only at *
-    all_goals simp_all
-  | cons e es ih =>
-    have ht := (returns_iff _ _ _).mp ih
-    rw [returns_iff, bucketWalk_cons]
-    mvcgen [branch, ht]
-    all_goals try dsimp +zetaDelta only at *
-    all_goals simp_all
-    all_goals grind
-
-theorem bucketHas_records_returns (walk collide : Decision) (index : Nat) (d : Device)
-    (records : Option (List HiddenRecord)) :
-    Returns (bucketHas walk collide index) (fun w => w.k.wg = some d ∧ w.hidden = records)
-      (fun result w => result = d.indexTable.any (·.index == index) ∧
-        w.k.wg = some d ∧ w.hidden = records) := by
-  have hg : Returns (indexBucket index) (fun w => w.k.wg = some d ∧ w.hidden = records)
-      (fun entries w => entries = bucket index d.indexTable ∧ w.k.wg = some d ∧ w.hidden = records) := by
-    rw [returns_iff]
-    mvcgen [indexBucket, getDev, getK, invariant]
-    all_goals try dsimp +zetaDelta only at *
-    all_goals simp_all [bucket]
-  rw [bucketHas_source]
-  apply returns_bind _ _ hg
-  intro entries w pre
-  obtain ⟨he, hd, hh⟩ := pre
-  subst entries
-  obtain ⟨result, final, run, found, kernel, tail⟩ :=
-    bucketWalk_records_returns walk collide index (bucket index d.indexTable) w.k records w ⟨rfl, hh⟩
-  exact ⟨result, final, run, by simpa [bucket_any] using found, by rw [kernel]; exact hd, tail⟩
-
-theorem unhash_records_returns (decision : Decision) (owner : IndexOwner) (d : Device)
-    (records : Option (List HiddenRecord)) :
-    Returns (unhashEntry decision (·.owner == owner)) (fun w => w.k.wg = some d ∧ w.hidden = records)
-      (fun _ w => w.k.wg = some { d with indexTable := removeOwner owner d.indexTable } ∧
-        w.hidden = records) := by
-  rw [returns_iff]
-  noise_vcgen [_private.Leanux.WG.Peer.«0».Leanux.WG.unhashEntry,
-    getDev, getK, branch, modifyDev, modifyK, invariant]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [removeOwner]
-
-theorem hiddenIndex_returns (draw : Draw) (rest : List HiddenRecord) (d : Device) :
-    Returns (hidden .indexDraw)
-      (fun w => w.k.wg = some d ∧ w.hidden = some (draw.record :: rest))
-      (fun bytes w => bytes = draw.bytes ∧ w.k.wg = some d ∧ w.hidden = some rest) := by
-  intro w pre
-  exact ⟨draw.bytes, { w with hidden := some rest }, hiddenIndex_run w draw rest pre.2,
-    rfl, pre.1, rfl⟩
 
 theorem insertStep_collision (owner : IndexOwner) (turn : Nat) (state : InsertState)
     (d : Device) (draw : Draw) (rest : List HiddenRecord)

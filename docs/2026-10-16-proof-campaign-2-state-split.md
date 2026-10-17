@@ -19,11 +19,11 @@ and attributed theorem declarations. Campaign 2 owns 427 Lean files,
 | Result | Files | Before theorems | Before headlines | Retrofit status |
 | --- | ---: | ---: | ---: | --- |
 | Common projection | 2 | 0 | 0 | Native and product observations carried |
-| H1 Noise | 35 | 171 | 22 | Native access, crypto/slot/peer frames, slot/clear/zero operations, expiry, initiation and response tag contracts carried; six type-given frames deleted; session/caller closure pending |
-| H2 Index | 68 | 318 | 52 | Table/scans/insertion, full lookup owner/table contracts, five owner-word contracts and 53 pure theorems checked; native receive factor and retirement frame carried; seven Ambient frames deleted; remaining exact lookup finishes/callers pending |
-| H3 Roaming | 35 | 119 | 13 | Three native endpoint/destination contracts carried; two Ambient frames deleted; setter/caller and product callbacks pending |
-| H4 Configuration | 130 | 554 | 79 | Total-return/branch laws, three exact source factors, three endpoint-clearing frames and one pure theorem checked; three Ambient frames deleted; effects/readback carry pending |
-| H5 Progress | 59 | 265 | 42 | Seventeen pure/control or pure-source theorems and three generalized worker control contracts checked; pointer-ring activation and remaining operational carry pending |
+| H1 Noise | 35 | 171 | 22 | Native access, crypto/slot/peer frames, slot/clear/zero operations and all four state-edge contracts carried; six type-given frames deleted; full caller/reachability closure pending |
+| H2 Index | 68 | 318 | 52 | Table/scans/insertion, full lookup owner/table and ten owner-word/finish contracts, five record contracts, five lifecycle contracts and 53 pure theorems checked; native receive factor and retirement frame carried; seven Ambient frames deleted; insertion record loop/callers pending |
+| H3 Roaming | 35 | 119 | 13 | Six native endpoint/destination contracts carried; two Ambient frames deleted; authentication callers and product callbacks pending |
+| H4 Configuration | 130 | 554 | 79 | Total-return/branch laws, three exact source factors, three endpoint-clearing frames, three empty-root insertion contracts and one pure theorem checked; three Ambient frames deleted; remaining effects/readback carry pending |
+| H5 Progress | 59 | 265 | 42 | Seventeen pure/control or pure-source theorems, three generalized worker control contracts and one Ambient record frame checked; pointer-ring activation and remaining operational carry pending |
 | H6 Timer discipline | 98 | 404 | 50 | Two pure session-liveness relations checked; three Ambient frames deleted; timer wheel and worker semantics pending |
 
 Retyped, deleted and retained counts will be reported per validated tranche.
@@ -559,3 +559,97 @@ Reproduce by building and fresh-replaying the roots named in this section
 with the capped bundle commands above. `Lookup` imports its prefix;
 `OperationFrames` includes the endpoint roots. The explicit per-root checks
 recorded here also validated their earlier packaged closures.
+
+## Exact lookup finishes, session admission and configuration insertion
+
+| Tranche | Before | Retyped/generalized | Deleted | Kept | Added | After |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Remaining `Index.PeerWords` | 5 | 5 | 0 | 0 | 0 | 5 |
+| `Noise.SessionEdgeSource` from `StateEdges` | 1 | 1 | 0 | 0 | 0 | 1 |
+| `Config.AllowedInsertSource` | 3 | 3 | 0 | 0 | 0 | 3 |
+| `Index.LifecycleSource`, `Progress.CutFrames` | 6 | 6 | 0 | 0 | 0 | 6 |
+| `Index.DrawRecordSource` from `DrawRecords` | 5 | 5 | 0 | 0 | 0 | 5 |
+| `Roaming.EndpointClaims` | 3 | 3 | 0 | 0 | 0 | 3 |
+| This tranche | 23 | 23 | 0 | 0 | 0 | 23 |
+| Cumulative validated surface | 209 | 97 | 21 | 91 | 7 | 195 |
+
+The tree has 436 campaign-owned files and 1,817 theorems, with 1,622
+baseline theorems awaiting validation. The 258 headline names and all six
+terminal closures remain lagging. No new charter result or deletion is
+counted in this tranche. Claims stay in source/claim files; `CutFrames`
+keeps the substantive within-Ambient record frame separate.
+
+All ten owner-word/lookup-finish contracts are now native. The last five
+retain totality for every Ambient input under their original first-match,
+kind, resident-word, positive-reference and strict-bound premises. The live
+path acquires the peer before writing the owner word into the resulting
+Device; handshake-owner aliasing therefore keeps the increment. NULL and
+zero-reference paths preserve the landed NULL storeback. No uniqueness or
+owner-coherence premise was introduced.
+
+`StateEdges` is now an import-only aggregate of its four original contracts.
+The last session tag theorem retains its partial scope: normal false keeps
+the old tag; true zeroes it and requires one of the two original admission
+states. The proof follows short-circuit admission, allocation, derivation,
+zeroing, rotation, dereference and guarded replacement. Dead, NULL and
+unhashed replacement paths remain stops. This does not close the broader H1
+reachability and lifetime obligations.
+
+The three empty-root insertion claims use the actual guarded AIP adapter
+and native WG actions. Allocation may fail or overwrite an occupied next-node
+identifier, exactly as before; no freshness or list-disjointness premise is
+added. Peer-list, parent and root writes retain their order. The configuration
+sequence increment remains visible even when allocation returns `-ENOMEM`.
+The three endpoint claims retain exact destination behavior, including the
+endpoint-equal early return, valid-family premise, source extraction and
+cache reset; missing state or records remain partial-correctness stops.
+
+Lifecycle initialization projects `Runner.initialWG`'s actual core into the
+existing snapshot, leaving its other WG observations and Ambient arbitrary.
+The old filesystem/task parameters disappear because that initializer no
+longer accepts them and they never affected the projected core. Destruction
+uses the real ring-empty guard and clears only the handshake counter before
+removing the device; it does not replace physical ring slots or cursors with
+a fabricated empty ring. Setup remains total, while destruction's absent-device
+conclusion remains conditional on normal completion. `CutFrames` retains the
+total Ambient operation's exact record/decision preservation.
+
+[AGENT 2026-10-17] Record-sensitive component contracts reuse the existing
+generic `Config.Product.Returns` on actual native runs, instead of adding
+another contract layer. This exposes real Ambient inputs/outputs and the
+returned native state together. The five draw-record contracts preserve
+exact suffixes, totality and table/Device effects. The bucket walk remains
+unguarded `IndexM`; only the public wrappers use the actual device guard.
+Whole-Ambient equality is retained where originally promised, and excluded
+outer state follows the native capability. The remaining five insertion
+record/loop contracts stay named in unported `DrawRecords`.
+
+Scoped builds: owner words 38 jobs; state edges 42; allowed insertion 34;
+lifecycle plus cut 81; draw prefix 34; endpoint claims 35. Proof modules
+are warning-free. Axiom checks cover respectively 82, 77, 36, 100, 69 and
+41 named logical roots, with only the three permitted axioms. All seven
+fresh kernel replay roots and final static/whitespace checks pass.
+Independent source reviews found no substantive issue. Mirror and shared
+layers remain unchanged; no full-tree or terminal pass is claimed.
+
+Development: owner words used two changed-source probes (one failure, one
+clean); session admission four (two failures, two clean); allowed insertion
+thirteen (eleven failures, one warning-bearing pass, one clean); draw prefix
+three (two warning-bearing passes, one clean); endpoint claims passed first
+time. Every package build passed on its first attempt. No limit increased.
+The first lifecycle probe failed because the imported Runner artifact had
+not been refreshed. After its required dependency build (64 jobs), the same
+probe passed on its single rerun. That dependency-ordering mistake is
+recorded here; there were no killed runs or guest timeouts. Complete compiler
+output was retained before preview.
+
+Inherited warning: `Leanux/Env.lean:865` uses deprecated `String.mk`. It was
+reported by the Runner build and replayed by the lifecycle build. The mirror
+is outside this campaign's edit boundary; the warning is unsuppressed and
+pending its owner's repair. It is not a proof-module warning or an axiom
+finding.
+
+Reproduce scoped builds and fresh replay for `Index.PeerWords`,
+`Noise.StateEdges`, `Config.AllowedInsertSource`, `Index.LifecycleSource`,
+`Progress.CutFrames`, `Index.DrawRecordSource` and `Roaming.EndpointClaims`,
+each under `Leanux.Proofs.WG`, using the capped bundle commands above.
