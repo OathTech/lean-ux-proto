@@ -1,20 +1,20 @@
-import Leanux.Proofs.WG.Progress.DrainEffects
+import Leanux.Proofs.WG.Progress.DrainProductEffects
 
 set_option autoImplicit false
 
-namespace Leanux.Proofs.WG.Progress
-open Leanux Leanux.WG Campaign2 TimerDiscipline
+namespace Leanux.Proofs.WG.Progress.Product
+open Leanux Leanux.WG TimerDiscipline
 
 theorem source_drain_bounded (upTo : Option PeerId) (d : Device)
     (enough : flushQueueCount (workQueues d) < 4096) :
-    Campaign2.Returns (observedDrain upTo) (fun entry => entry.wg.device = some d)
+    Campaign2.Product.Returns (observedDrain upTo) (fun entry => entry.wg.device = some d)
       (fun outcome _ => DrainBounded upTo (flushQueueCount (workQueues d)) outcome) := by
   intro entry resident
   exact ⟨_, entry, rfl, drainAuditRun_bounded upTo 4096 entry d resident enough⟩
 
-theorem drainBounded_none (count : Nat) (success : DrainSuccess) (final : Snapshot)
+theorem drainBounded_none (count : Nat) (success : DrainSuccess) (final : Campaign2.Product.Snapshot)
     (bounded : DrainBounded none count (.ok (success, final))) :
-    flushQueues final = some ([], []) := by
+    flushQueues final.toSnapshot = some ([], []) := by
   have reason := bounded.2
   cases chosen : success.reason with
   | empty => simpa [chosen] using reason
@@ -22,9 +22,9 @@ theorem drainBounded_none (count : Nat) (success : DrainSuccess) (final : Snapsh
 
 theorem source_drain_to_empty (d : Device)
     (enough : flushQueueCount (workQueues d) < 4096) :
-    Campaign2.Ensures (drainHandshakeSendWq none)
+    Campaign2.Product.Ensures (liftWG (drainHandshakeSendWq none))
       (fun entry => entry.wg.device = some d)
-      (fun _ final => flushQueues final = some ([], [])) := by
+      (fun _ final => flushQueues final.toSnapshot = some ([], [])) := by
   intro entry returned final resident run
   cases returned
   have exactRun := drainAuditRun_original none entry
@@ -37,6 +37,6 @@ theorem source_drain_to_empty (d : Device)
     simp only [audit, drainEraseRaw, Except.ok.injEq, Prod.mk.injEq, true_and] at exactRun
     subst after
     rw [audit] at bound
-    exact drainBounded_none _ success (snapshot final) bound
+    exact drainBounded_none _ success (Campaign2.Product.snapshot final) bound
 
-end Leanux.Proofs.WG.Progress
+end Leanux.Proofs.WG.Progress.Product
