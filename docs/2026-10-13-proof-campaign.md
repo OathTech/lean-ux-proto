@@ -108,6 +108,17 @@ in 6.981 seconds; fresh kernel replay passes in 106.362 seconds without warnings
 The [short report](2026-10-17-r3-lifecycle-cuts.md) records source failures,
 reviewed reuse repairs and the remaining initialized joins.
 
+The scheduler-cuts checkpoint adds ten modules and 138 theorems:
+553 files/7,842 theorems, 587 terminal declarations and 211 R3 exports.
+Actual handshake receive, scheduling and all deferred calls retain joint
+owner checks. Prepare establishes selected publication anchors and transports
+older ones; normal consume links its exact receipt under the supplied caller
+invariant. Earlier terminal bodies remain unchanged. Gate: 611 jobs/587
+declarations in 6.631 seconds. Fresh kernel replay passes in
+107.325 seconds without warnings.
+The [short report](2026-10-17-r3-scheduler-cuts.md) records the conditional
+saved-scan architecture, failed checks, review repair and remaining closure.
+
 The pre-split checkpoint validated every baseline result surface over
 `cb2348e`. Initialized R3 packet authorization and R4 receive-pipeline
 conservation remain open. Earlier positive results and runtime findings retain

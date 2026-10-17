@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.Origins.OwnerDeferred
+import Leanux.Proofs.WG.Packets.PublicationConsumeHistory
 import Leanux.Proofs.WG.Queues.JointRunner
 import Leanux.Proofs.WG.Origins.CurrentRemaining
 import Leanux.Proofs.WG.Origins.CurrentConfiguration
@@ -3892,5 +3894,71 @@ theorem original_joint_runner_json (trace : Runner.Trace) (placeholders : Bool)
     (Logged.runPrefixOuter (Queues.RoutingJoint.executeTrace trace placeholders) history).1.map Prod.fst =
       Runner.executeTrace trace placeholders :=
   Queues.RoutingJoint.executeTrace_json trace placeholders history
+
+/-- The actual handshake worker retains current and owner checks on its exact
+journal. Session creation supplies actual receipts and Stops retain safe prefixes. -/
+theorem original_owner_receive_worker :
+    OwnerChecks.Preserves Origins.HistoryAdapters.receiveStep ∧
+    OwnerChecks.Preserves Origins.HistoryAdapters.receiveIteration :=
+  ⟨OwnerHandshake.receiveStep,OwnerHandshake.receiveIteration⟩
+
+/-- Every recorded scheduler choice and nested reschedule retains owner/current
+checks, including crypt-ahead and the existing copied-trial marker. -/
+theorem original_owner_scheduler (stack : Option Worker) (self : Worker) :
+    OwnerChecks.Preserves (Queues.RxHistory.schedule stack) ∧
+    OwnerChecks.Preserves (Queues.RxHistory.nestedResched self) :=
+  ⟨OwnerEnvironment.schedule stack,OwnerEnvironment.nestedResched self⟩
+
+/-- All five actual timer callbacks preserve receiving-owner bounds and the
+original checked journal, including duplicate-work refusal and final payment. -/
+theorem original_owner_timer (pid : PeerId) (timer : PeerTimer) :
+    Framing.Preserves OwnerBounds.Carrier (WG.timerCallback pid timer) ∧
+    OwnerChecks.Preserves (Queues.RxHistory.mixed
+      (Logged.liftWGObserver (Lifetimes.timerCallbackPrefix pid timer))) :=
+  ⟨OwnerTimers.timerCallback_preserves pid timer,OwnerTimers.timerCallback_checked pid timer⟩
+
+/-- All fourteen deferred calls preserve the same checked invariant. Timer
+scans obtain their saved-peer conditions from their actual preceding getters. -/
+theorem original_owner_deferred (call : Lifetimes.EnvDeferredCall) :
+    OwnerChecks.Preserves (Queues.RxHistory.deferred call) :=
+  OwnerDeferred.deferred call
+
+/-- The actual fixture has no crypted RX packet needing a historical anchor,
+for both flags. This is initialization only, not whole-run transport. -/
+theorem original_packet_history_initial (net bare : Bool) (w : WGWorld)
+    (hw : Framing.wgStoreView w = Framing.wgStoreView (Runner.initialWG net bare)) :
+    PublicationHistory.Inv [] w :=
+  PublicationHistory.initial net bare w hw
+
+/-- Actual prepare preserves every old crypted-packet anchor and establishes
+its selected anchor at successful publication. Failed decryption publishes DEAD;
+a Stop keeps the actual safe journal and has no fictitious final state. -/
+theorem original_packet_history_prepare :
+    Logged.PrefixPreserves (fun h w => OwnerChecks.Inv h w ∧ PublicationHistory.Inv h w.wg)
+      OwnerChecks.Safe Origins.HistoryAdapters.prepare :=
+  PublicationHistory.prepare_preserves
+
+/-- Normal consume, including nondelivery, links its exact receipt to a strict
+earlier decrypt occurrence under the supplied packet invariant. The caller must
+carry that invariant on its own real prefix; initialized reachability is separate. -/
+theorem original_packet_history_consume (history : List Queues.RxHistory.Event) (pid occurrence id : Nat)
+    (stamp : Lifetimes.PacketStamp) (pkt : RxPacket) (ep : Endpoint) (w v : World)
+    (h t : List Queues.RxJoint.Event) (value : Option Queues.RxJoint.Entry)
+    (packets : PublicationHistory.Inv history w.wg)
+    (selected : Queues.RxDisposition.SelectedAt id stamp pkt w)
+    (peer : pkt.peer = pid) (crypted : pkt.state = .crypted)
+    (hr : Logged.runPrefix (Queues.RxJoint.consume pid occurrence id stamp pkt ep) w h = (.ok (value,v),t)) :
+    ∃ prior later, ∃ (decrypt : Logged.WGRunWitness (RxPacket × Option RxPacket)),
+      ∃ out publishedPeer published publicationAmbient,
+      ∃ (receipt : Queues.RxDisposition.ConsumeReceipt), ∃ before after,
+      history = prior ++ .rx (.decrypt id decrypt) :: later ∧
+      PublicationIdentity.Published id decrypt out publishedPeer published publicationAmbient ∧
+      receipt.run.before = w.wg ∧ receipt.run.ambientBefore = w.ambient ∧
+      receipt.run.after = v.wg ∧ receipt.run.ambientAfter = v.ambient ∧
+      PublicationIdentity.ConsumeCertificate (Origins.HistorySupport.sessions prior)
+        id decrypt out publishedPeer published stamp receipt ∧
+      t = h ++ before ++ [.consumed occurrence id stamp receipt] ++ after ∧
+      ∀ e, value = some e → e.origin = some receipt ∧ receipt.run.value = some e.tag.bytes :=
+  PublicationHistory.consume_anchored history pid occurrence id stamp pkt ep w v h t value packets selected peer crypted hr
 
 end Leanux.Proofs.WG.CryptokeyRouting
