@@ -13,8 +13,8 @@ new worlds; new R3/R4 results follow the retrofit.
 | Validated baseline `00641c6` | 471 | 7,715 |
 | Completed retrofit checkpoints | 452 | 6,551 |
 
-Completed changes comprise **2,955 retyped/generalized, 1,707 deleted,
-2,175 retained contract shapes and 543 added theorems**. Retyping changes the
+Completed changes comprise **2,968 retyped/generalized, 1,707 deleted,
+2,196 retained contract shapes and 543 added theorems**. Retyping changes the
 actual carrier or observation, including shorthand contracts whose functions
 move to a native monad. Namespace-only product qualification and equivalent
 projection relocation count as retained. The census includes private and
@@ -381,6 +381,21 @@ review pass with zero own warnings and 1,342 inherited warnings. Fourteen
 development checks recorded five ordinary failures and nine passes; three of
 those passes exposed warnings subsequently fixed. No infrastructure rerun or
 limit change occurred.
+
+Publication identity carries all thirteen native contracts and five definitions.
+The continuation retains arbitrary source and target monads, including product
+callbacks. Actual owner read, positive borrowing, queue guard, stored packet and
+historical configured identity remain linked to one exact WG/Ambient receipt.
+The publication store conclusion retains the original seven-field mask.
+Completion environment retains all twenty-one product/history contracts,
+including arbitrary worker/socket callbacks, current wheel paths, negative
+returns and failed prefixes. Their 323- and 389-job builds, all 39 named
+declaration axiom checks, fresh replays and complete source reviews pass with
+zero own warnings; closures report 1,359 and 1,325 inherited warnings.
+Publication development had five ordinary failures and a final pass; its third
+check accidentally repeated the second source after a rejected edit driver.
+Completion environment had two ordinary failures and a final pass. Neither
+required an infrastructure rerun or limit change.
 
 Remaining work is the routing/origin terminal carry,
 RX admission, ingress and outer history layers, warning
