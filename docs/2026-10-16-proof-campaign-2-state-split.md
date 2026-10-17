@@ -1990,3 +1990,95 @@ above under `Leanux.Proofs.WG`, audit logical declarations with
 `#print axioms`, and replay using
 `scripts/in-bundle lake env leanchecker --fresh MODULE`. On this host use
 `capped`, 32 Lean threads and 16 QEMU slots.
+
+## Configuration claims, general removal and initiation continuations
+
+| Tranche | Before | Retyped | Deleted | Kept | Added | After |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `Config.AllowedGeneralReplacement`, `Fwmark`, `PeerDead` | 9 | 7 | 0 | 2 | 0 | 9 |
+| `Config.LeafSourceClaims` | 12 | 12 | 0 | 0 | 0 | 12 |
+| `Noise.InitiationReadyFinishSource`, `InitiationReadyWriteSource`, `InitiationReadyClockSource`, `InitiationReadyContinuationSource` | 10 | 10 | 0 | 0 | 0 | 10 |
+| `TimerDiscipline.ArmingOffSource` | 0 | 0 | 0 | 0 | 1 | 1 |
+| This tranche | 31 | 29 | 0 | 2 | 1 | 32 |
+| Cumulative processed baseline and checked support | 687 | 489 | 21 | 177 | 34 | 700 |
+
+The census is 472 campaign-owned files, 1,844 theorems and 233 checked proof
+modules. Of the baseline, 1,144 theorems await validation. Checked support
+is H1 141, H2 187, H3 54, H4 220, H5 70 and H6 28. All 258 terminal names
+and their order remain; all six whole-result closures and the full gate
+remain lagging. The retrofit continues before new charter results.
+
+General allowed-IP replacement retains the general `RemovalEffect` domain,
+including empty lists and non-root structural removal. Lookup acquires the
+reference before removal; the tail releases once. Device selection and
+generation increment retain their original order, and the inner selector
+remains independent. Peer death retains its original general-removal
+totality domain and Device effects. Its proof-local source factor now
+includes the landed `pubkeyRemoveHashed` decision and device read before
+hash removal, matching the actual mirror. No new table/residency premise
+was added. Its pure effect theorem is unchanged.
+
+The fwmark contract remains partial, with only the original creating-net
+and device-selection premises. Its source reduction and loop preserve all
+Device fields outside peers, while writing the mark and incrementing the
+generation. Missing or repeated peer-list entries and reset-record Stops
+remain in its original domain.
+
+Twelve source claims moved to `LeafSourceClaims`: six partial contracts,
+four total contracts and two exact source equations. The ten state
+predicates now explicitly use the campaign projection. It retains every
+original observation: Device, the selected peer, port/socket/running
+fields and fixture-interface selection. These claims contain no arbitrary
+product callback or full-product equality that could be lost by narrowing.
+The remaining source-claim suffix is unchanged. No terminal Statements
+module is counted as validated by this extraction.
+
+The ten initiation contracts preserve the original resident/non-NULL word,
+crypto-success, clock-width and collision/fresh-draw premises. The stored
+handshake peer word need not equal the selected peer or point to a resident
+peer. Each call receives the actual returned WG and Ambient states from
+the preceding call. Ordered peer writes, index insertion, message bytes
+and unused hidden-record suffixes are exact. The two write contracts still
+allow an absent record stream. Local exact native crypto reductions leave
+the separately checked product-predicate contracts unchanged. Six theorem
+bodies remain pending in the original initiation source.
+
+The new unrecorded-arm support describes every normally successful run
+with records disabled and a resident peer. Its caller option is arbitrary,
+as the source ignores it in that mode. It retains the exact kept/enqueued
+wheel metadata and enqueue counter through `wheelPlacementState`.
+It adds no consistency/readiness premise and is not counted as a retyping
+of one of the seven legacy arming contracts.
+
+Scoped builds pass: general replacement 69 jobs, fwmark/unrecorded arm 60,
+initiation finish 36, writes/clock 41, continuations 43, projected leaf
+claims 62 and peer death 65. No warning remains. Axiom audits cover 393
+logical roots in 71 proof modules, using only the three standard axioms.
+Fresh replay passes for AllowedGeneralReplacement, Fwmark, LeafSourceClaims,
+InitiationReadyClockSource, ArmingOffSource, InitiationReadyContinuationSource
+and PeerDead. Independent reviews found no remaining issue. Static checks,
+whitespace and mirror/shared-layer boundaries pass.
+
+Development: general replacement, unrecorded arm and continuation contracts
+passed their first probes. Initiation finish passed the third after native
+result normalization and record-update layout fixes; writes/clock passed
+the second after exposing the exact clock site. Native and then projected
+leaf claims both passed. Peer death passed the second after an explicit
+import restored its existing `withPeer` dependency. Fwmark took eight
+changed probes: the first six failed at nested run/lift/state/map
+normalization, the seventh closed the goal before a redundant tactic, and
+the eighth was clean. Full outputs were saved before preview; truncated
+fwmark previews were followed by diagnostic-list and tail inspection.
+
+The recorded-arm draft remains unclosed and uncounted. After the first
+unrecorded-arm pass, three recorded drafts failed at the hidden-read bind;
+four later same-expiry drafts reached that bind but still failed at
+read-equation normalization. These failures establish no semantic
+counterexample. No infrastructure retry, cap/proof-limit increase or guest
+run occurred.
+
+Reproduce with `scripts/in-bundle lake build` on the seven replay roots
+above under `Leanux.Proofs.WG`, inspect logical declarations with
+`#print axioms`, and replay using
+`scripts/in-bundle lake env leanchecker --fresh MODULE`. On this host use
+`capped`, 32 Lean threads and 16 QEMU slots.

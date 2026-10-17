@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Config.PeerScalars
 import Leanux.Proofs.WG.Config.AllowedOwnerClear
 
 set_option autoImplicit false
@@ -13,7 +14,8 @@ def deadPeerDevice (removed : Device) (pid : PeerId) (p : Peer) : Device :=
   withPeer { removed with peerHashtable := removed.peerHashtable.filter (·.2 != pid) }
     pid { erasePeerList p.allowedipsList p with isDead := true }
 
-def makeDeadAfterRemoval (pid : PeerId) : M Unit := do
+def makeDeadAfterRemoval (pid : PeerId) : WG.M Unit := do
+  _ ← branch .pubkeyRemoveHashed ((← getDev).peerHashtable.any (·.2 == pid))
   modifyDev fun d => { d with peerHashtable := d.peerHashtable.filter (·.2 != pid) }
   setPeer pid { (← getPeer pid) with isDead := true }
 
@@ -26,26 +28,26 @@ theorem peerMakeDead_source (pid : PeerId) :
 theorem peerMakeDead_returns (pid : PeerId) (p : Peer) (d removed : Device)
     (resident : d.peers[pid]? = some p)
     (steps : RemovalEffect (unlistPeer d pid) p.allowedipsList removed) :
-    Returns (peerMakeDead pid) (fun w => w.k.wg = some d)
-      (fun _ w => w.k.wg = some (deadPeerDevice removed pid p)) := by
+    Returns (peerMakeDead pid) (fun w => w.dev = some d)
+      (fun _ w => w.dev = some (deadPeerDevice removed pid p)) := by
   have removedPeer : removed.peers[pid]? = some (erasePeerList p.allowedipsList p) := by
     simpa only [unlistPeer, resident, Option.map_some] using removalEffect_peers steps pid
-  have hl : Returns (modifyDev (unlistPeer · pid)) (fun w => w.k.wg = some d)
-      (fun _ w => w.k.wg = some (unlistPeer d pid)) := by
-    rw [returns_iff]
-    mvcgen [modifyDev, modifyK, getK, invariant]
-    all_goals try dsimp +zetaDelta only at *
-    all_goals repeat intro
-    all_goals simp_all
-  have ht : Returns (makeDeadAfterRemoval pid) (fun w => w.k.wg = some removed)
-      (fun _ w => w.k.wg = some (deadPeerDevice removed pid p)) := by
-    rw [returns_iff]
-    mvcgen [makeDeadAfterRemoval, modifyDev, modifyK, setPeer, getPeer, getDev, getK, invariant]
-    all_goals try dsimp +zetaDelta only at *
-    all_goals repeat intro
-    all_goals simp_all only [Option.map_some, Option.some.injEq]
-    all_goals subst_vars
-    all_goals simp_all [deadPeerDevice, withPeer]
+  have hl : Returns (modifyDev (unlistPeer · pid)) (fun w => w.dev = some d)
+      (fun _ w => w.dev = some (unlistPeer d pid)) := by
+    intro g ambient device
+    refine ⟨(), {g with dev := some (unlistPeer d pid)}, ambient, ?_, rfl⟩
+    simp [modifyDev, device]
+    rfl
+  have ht : Returns (makeDeadAfterRemoval pid) (fun w => w.dev = some removed)
+      (fun _ w => w.dev = some (deadPeerDevice removed pid p)) := by
+    intro g ambient device
+    let after := {ambient with steps := ambient.steps.push {
+      decision := .pubkeyRemoveHashed, outcome := removed.peerHashtable.any (·.2 == pid),
+      netRx := ambient.netRxSection}}
+    refine ⟨(), {g with dev := some (deadPeerDevice removed pid p)}, after, ?_, rfl⟩
+    simp [makeDeadAfterRemoval, getDev, device, branch, AmbientM.branch, modifyDev,
+      setPeer, getPeer, removedPeer, deadPeerDevice, withPeer, after]
+    rfl
   rw [peerMakeDead_source]
   refine returns_bind _ _ hl ?_
   intro u
