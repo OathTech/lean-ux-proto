@@ -34,49 +34,23 @@ theorem setAllowedip_outcome (pid : PeerId) (ip : AllowedIpAttrs) (hs : AddressS
     (w v : WGWorld) (ambient finalAmbient : Ambient) (ret : Int)
     (hr : ((setAllowedip pid ip).run w).run ambient = .ok ((ret, v), finalAmbient)) :
     AllowedipOutcome (wgStoreView w) pid ip ret v finalAmbient := by
-  have hi (v4 : Bool) :
-      ⦃fun u _ => ⌜wgStoreView u = wgStoreView w ∧ ip.family.getD 0 = (if v4 then AF_INET else AF_INET6) ∧ ip.addr.getD 0 < 2 ^ rootWidth v4 ∧ ip.cidr.getD 0 ≤ rootWidth v4⌝⦄
-        insert (if v4 then 4 else 6) (ip.addr.getD 0) (ip.cidr.getD 0) pid
-      ⦃⇓? result u nextAmbient => ⌜AllowedipOutcome (wgStoreView w) pid ip result u nextAmbient⌝⦄ := by
-    intro u cutAmbient hu
-    cases hrun : ((insert (if v4 then 4 else 6) (ip.addr.getD 0) (ip.cidr.getD 0) pid).run u).run cutAmbient with
-    | error e =>
-      dsimp only [StateT.run] at hrun
-      simp [WP.wp, PredTrans.pushArg, PredTrans.pushExcept, PredTrans.apply,
-        StateT.run, Except.instWP._aux_1, ExceptT.run, Id.run, PredTrans.pure,
-        Pure.pure, ExceptConds.true, ExceptConds.const, hrun]
-    | ok out =>
-      rcases out with ⟨⟨result, finish⟩, nextAmbient⟩
-      have hq : AllowedipOutcome (wgStoreView w) pid ip result finish nextAmbient :=
-        Or.inr ⟨v4, u, cutAmbient, hu.1, hu.2.1, hu.2.2.1, hu.2.2.2, hrun⟩
-      dsimp only [StateT.run] at hrun
-      simpa [WP.wp, PredTrans.pushArg, PredTrans.pushExcept, PredTrans.apply,
-        StateT.run, Except.instWP._aux_1, ExceptT.run, Id.run, PredTrans.pure,
-        Pure.pure, ExceptConds.true, ExceptConds.const, hrun] using hq
-  have h4 : ⦃fun u _ => ⌜wgStoreView u = wgStoreView w ∧ ip.family.getD 0 = AF_INET ∧ ip.addr.getD 0 < 2 ^ 32 ∧ ip.cidr.getD 0 ≤ 32⌝⦄
-      insert 4 (ip.addr.getD 0) (ip.cidr.getD 0) pid
-      ⦃⇓? result u nextAmbient => ⌜AllowedipOutcome (wgStoreView w) pid ip result u nextAmbient⌝⦄ := by simpa [rootWidth] using hi true
-  have h6 : ⦃fun u _ => ⌜wgStoreView u = wgStoreView w ∧ ip.family.getD 0 = AF_INET6 ∧ ip.addr.getD 0 < 2 ^ 128 ∧ ip.cidr.getD 0 ≤ 128⌝⦄
-      insert 6 (ip.addr.getD 0) (ip.cidr.getD 0) pid
-      ⦃⇓? result u nextAmbient => ⌜AllowedipOutcome (wgStoreView w) pid ip result u nextAmbient⌝⦄ := by simpa [rootWidth] using hi false
-  have hspec : ⦃fun u _ => ⌜wgStoreView u = wgStoreView w⌝⦄ setAllowedip pid ip
-      ⦃⇓? result u nextAmbient => ⌜AllowedipOutcome (wgStoreView w) pid ip result u nextAmbient⌝⦄ := by
-    mvcgen [setAllowedip, WG.orM, WG.andM, h4, h6, branch, AmbientM.branch]
-    all_goals try dsimp +zetaDelta only at *
-    all_goals try simp_all only [beq_iff_eq, decide_eq_true_eq, rootWidth, Bool.false_eq_true]
-    all_goals try simp only [true_and, and_true]
-    all_goals first
-      | exact Or.inl ⟨rfl, by assumption⟩
-      | apply hs.width true
-      | apply hs.width false
-      | assumption
-    all_goals simp_all
-    all_goals cases hx : ip.addr <;> simp_all
-  have hh := hspec w ambient rfl
-  dsimp only [StateT.run] at hr
-  simpa [WP.wp, PredTrans.pushArg, PredTrans.pushExcept, PredTrans.apply,
-    StateT.run, Except.instWP._aux_1, ExceptT.run, Id.run, PredTrans.pure,
-    Pure.pure, ExceptConds.true, ExceptConds.const, hr] using hh
+  have branch_run (decision : Decision) (value : Bool) (g : WGWorld) (a : Ambient) :
+      ((branch decision value : WG.M Bool).run g).run a =
+        .ok ((value, g), CounterWindow.record a decision value) := rfl
+  unfold setAllowedip at hr
+  simp only [WG.orM, WG.andM] at hr
+  repeat' first
+    | simp only [StateT.run_bind, StateT.run_pure, branch_run,
+        CounterWindow.except_ok_bind, CounterWindow.except_pure] at hr
+    | split at hr
+    | contradiction
+  all_goals try simp only [beq_iff_eq, decide_eq_true_eq, Bool.not_eq_true] at *
+  all_goals first
+    | (cases hr; exact Or.inl ⟨rfl, rfl⟩)
+    | exact Or.inr ⟨true, w, _, rfl, by assumption,
+        hs.width true (by assumption) (by assumption), by assumption, hr⟩
+    | exact Or.inr ⟨false, w, _, rfl, by assumption,
+        hs.width false (by assumption) (by assumption), by assumption, hr⟩
 
 /-- Parser success supplies the address-shape premise rather than requiring
 it from callers. Malformed entries keep their separate constructor. -/

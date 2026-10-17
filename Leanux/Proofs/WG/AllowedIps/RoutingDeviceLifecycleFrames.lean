@@ -58,51 +58,69 @@ theorem wgCreate_global_completion (initial : FlatTable × FlatTable) :
   exact ⟨hi.1, wgCreate_global hi.2 hr⟩
 
 theorem purgeStagedPackets_routing (pid : PeerId) : SameView routingView (purgeStagedPackets pid) := by
-  apply SameView.of_wp
-  intro s
-  have hg := routing_getPeer (fun t => t = s) pid
-  have hs := fun p => routing_setPeer (fun t => t = s) pid p
-  mvcgen [purgeStagedPackets, hg, hs, modifyDev]
-  all_goals dsimp +zetaDelta only at *
-  all_goals try simp_all [routingView, routingState, Option.map_map, Option.bind_map, Function.comp_def]
-  all_goals exact And.left (by assumption)
+  have dropped (n : Nat) := modifyDev_routing
+    (fun d => {d with txDropped := d.txDropped + n}) (fun _ => rfl)
+  routing_handshake_source [purgeStagedPackets] using [dropped]
+
 
 theorem wgStop_routing : RetainsRoutingCall wgStop := by
-  apply ProjectedAction.of_wp
   intro s
-  have hn := fun pid => (requireNotPending_routing pid "wg_stop while a handshake is queued").wp (RetainsRouting s)
-  have hp := fun pid => (purgeStagedPackets_routing pid).wp (RetainsRouting s)
-  have ht := fun pid => RetainsRoutingCall.wp (timersStop_routing pid) s
-  have hh := fun pid => (handshakeClear_routing pid).wp (RetainsRouting s)
-  have hk := fun pid => (keypairsClear_routing pid).wp (RetainsRouting s)
-  have hr := fun pid => (resetLastSentHandshake_routing pid).wp (RetainsRouting s)
-  have hm := (modifyDev_routing (fun d => {d with handshakeQueueLen := 0}) (fun _ => rfl)).wp (RetainsRouting s)
-  have hs := (socketControl_routing_native _ (socketReinit_sameSocket none none)).wp (RetainsRouting s)
-  have ambient {α : Type} (a : AmbientM α) :
-      Hoare (MonadLift.monadLift a : WG.M α)
-        (fun w => RetainsRouting s (routingView w))
-        (fun _ w => RetainsRouting s (routingView w)) := hoare_liftAmbient a _
-  unfold Hoare at ambient
-  mvcgen [-Std.Do.Spec.monadLift_StateT, ambient, wgStop, hn, hp, ht, hh, hk,
-    hr, hm, hs, getDev, branch, AmbientM.branch, invariant, AmbientM.invariant,
-    unsupported, AmbientM.unsupported]
-  all_goals try exact ((⇓? _ w => ⌜RetainsRouting s (routingView w)⌝) :
-    PostCond _ (.arg WGWorld (.arg Ambient (.except Stop .pure))))
-  all_goals try dsimp +zetaDelta only at *
-  all_goals try assumption
-  all_goals try exact id
-  all_goals try trivial
-  all_goals subst s
-  all_goals exact RetainsRouting.refl _
+  let Q := RetainsRouting s
+  let P := fun w : WGWorld => Q (routingView w)
+  have ambient {α : Type} (a : AmbientM α) : Preserves P (monadLift a : WG.M α) :=
+    hoare_liftAmbient a P
+  have dev : Preserves P getDev := (routing_kernel _ getDev_sameWGStore).wp Q
+  have pending := fun pid => (requireNotPending_routing pid "wg_stop while a handshake is queued").wp Q
+  have purge := fun pid => (purgeStagedPackets_routing pid).wp Q
+  have timers := fun pid => RetainsRoutingCall.wp (timersStop_routing pid) s
+  have handshake := fun pid => (handshakeClear_routing pid).wp Q
+  have keys := fun pid => (keypairsClear_routing pid).wp Q
+  have reset := fun pid => (resetLastSentHandshake_routing pid).wp Q
+  have clear := (modifyDev_routing (fun d => {d with handshakeQueueLen := 0})
+    (fun _ => rfl)).wp Q
+  have socket := (socketControl_routing_native _ (socketReinit_sameSocket none none)).wp Q
+  have loop {α β : Type} (xs : List α) (b : β) (f : α → β → WG.M (ForInStep β))
+      (hf : ∀ x b, Preserves P (f x b)) : Preserves P (forIn xs b f) :=
+    list_view_spec id P xs b f hf
+  have main : Preserves P wgStop := by
+    unfold wgStop
+    simp (config := { zeta := false }) only [branch, unsupported]
+    repeat' first
+      | (rx_retention_head requireNotPending; exact pending _)
+      | (rx_retention_head purgeStagedPackets; exact purge _)
+      | (rx_retention_head timersStop; exact timers _)
+      | (rx_retention_head handshakeClear; exact handshake _)
+      | (rx_retention_head keypairsClear; exact keys _)
+      | (rx_retention_head resetLastSentHandshake; exact reset _)
+      | (rx_retention_head modifyDev; exact clear)
+      | (rx_retention_head socketReinit; exact socket)
+      | (rx_retention_head getDev; exact dev)
+      | (rx_retention_head MonadLiftT.monadLift; exact ambient _)
+      | (rx_retention_head MonadLift.monadLift; exact ambient _)
+      | (rx_retention_head ForIn.forIn; apply loop)
+      | rx_retention_step
+  apply hoare_consequence main
+  · intro w h
+    change RetainsRouting s (routingView w)
+    dsimp only [_root_.id] at h
+    rw [h]
+    exact RetainsRouting.refl _
+  · exact fun _ _ h => h
+
 
 theorem wgDown_routing : RetainsRoutingCall wgDown := by
-  apply ProjectedAction.of_wp
   intro s
-  have hm := (modifyDev_routing (fun d => {d with running := false}) (fun _ => rfl)).wp (RetainsRouting s)
+  have hm := (modifyDev_routing (fun d => {d with running := false})
+    (fun _ => rfl)).wp (RetainsRouting s)
   have hs := RetainsRoutingCall.wp wgStop_routing s
-  mvcgen [wgDown, hm, hs]
-  all_goals subst s
-  all_goals exact RetainsRouting.refl _
+  have main := preserves_bind hm (fun _ => hs)
+  apply hoare_consequence main
+  · intro w h
+    dsimp only [_root_.id] at h
+    rw [h]
+    exact RetainsRouting.refl _
+  · exact fun _ _ h => h
+
 
 theorem initialWG_global (net bare : Bool) :
     GlobalRoutedView (routingView (Runner.initialWG net bare)) ([], []) := by

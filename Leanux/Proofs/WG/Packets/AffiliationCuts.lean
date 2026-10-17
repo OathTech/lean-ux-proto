@@ -119,17 +119,22 @@ theorem receiveTail_fields (pkt out : RxPacket) (k : Keypair) (w v : WGWorld)
     (hr : ((KeyTimes.receiveTail pkt k).run w).run ambient = .ok ((some out, v), ambient')) :
     out.peer = pkt.peer ∧ out.keypair = pkt.keypair ∧
       aeadDecrypt k.receiving.key (counterNonce (u64le pkt.bytes 8)) (pkt.bytes.drop 16) [] = some out.bytes := by
-  have hspec : ⦃fun _ => ⌜True⌝⦄ KeyTimes.receiveTail pkt k
-      ⦃⇓? result _ => ⌜∀ out, result = some out → out.peer = pkt.peer ∧ out.keypair = pkt.keypair ∧
-        aeadDecrypt k.receiving.key (counterNonce (u64le pkt.bytes 8)) (pkt.bytes.drop 16) [] = some out.bytes⌝⦄ := by
-    have ha : ⦃fun (_ : WGWorld) => ⌜True⌝⦄ (hiddenAlloc .skbCowDataRx : WG.M Bool)
-        ⦃⇓? _ _ => ⌜True⌝⦄ :=
-      hoare_liftAmbient (AmbientM.hiddenAlloc .skbCowDataRx) (fun (_ : WGWorld) => True)
-    mvcgen [KeyTimes.receiveTail, WG.orM, ha,
-      branch, invariant, AmbientM.branch, AmbientM.invariant]
-    all_goals try dsimp +zetaDelta only at *
-    all_goals simp_all
-  exact (hoare_iff_run_ambient _ _ _).mp hspec w ambient (some out) v ambient' True.intro hr out rfl
+
+  unfold KeyTimes.receiveTail at hr
+  simp only [StateT.run_bind] at hr
+  cases ha : ((hiddenAlloc .skbCowDataRx : WG.M Bool).run w).run ambient with
+  | error e =>
+    simp only [ha] at hr
+    change (Except.error e : Except Stop _) = _ at hr
+    cases hr
+  | ok result =>
+    rcases result with ⟨⟨cow, entered⟩, enteredAmbient⟩
+    simp only [ha, except_ok_bind] at hr
+    cases cow <;>
+      cases hp : aeadDecrypt k.receiving.key (counterNonce (u64le pkt.bytes 8)) (pkt.bytes.drop 16) [] <;>
+      simp [WG.orM, branch, AmbientM.branch, invariant, AmbientM.invariant, hp] at hr
+    all_goals rcases hr with ⟨⟨rfl, rfl⟩, rfl⟩
+    all_goals exact ⟨rfl, rfl, rfl⟩
 
 /-- Source-linked AEAD statement for the complete original decrypt call. -/
 theorem decryptPacket_fields (pkt out : RxPacket) (w v : WGWorld)
@@ -233,14 +238,38 @@ theorem receiveKeyAcquire_spec (entry : Option (IndexOwner × PeerId)) (s : Opti
     ⦃fun w => ⌜view w = s⌝⦄ receiveKeyAcquire entry
     ⦃⇓? result w => ⌜view w = s ∧ ∀ kid pid,
       result = (some kid, some pid) → entry = some (.keypair kid, pid)⌝⦄ := by
-  have hk := fun kp => keypairGet_affiliation kp s
+
   cases entry with
-  | none => mvcgen [receiveKeyAcquire, keypairGetNull, branch, AmbientM.branch] <;> simp_all
+  | none =>
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient result v ambient' hs hr
+    simp [receiveKeyAcquire, keypairGetNull, branch, AmbientM.branch] at hr
+    rcases hr with ⟨⟨rfl, rfl⟩, rfl⟩
+    exact ⟨hs, by simp⟩
   | some entry =>
     rcases entry with ⟨owner, pid⟩
-    cases owner <;> mvcgen [receiveKeyAcquire, hk, invariant, AmbientM.invariant]
-    all_goals simp_all
-    all_goals grind
+    cases owner with
+    | handshake id =>
+      apply (hoare_iff_run_ambient _ _ _).mpr
+      intro w ambient result v ambient' _ hr
+      simp [receiveKeyAcquire, invariant, AmbientM.invariant] at hr
+      cases hr
+    | keypair kid =>
+      simp only [receiveKeyAcquire, pure_bind]
+      refine hoare_bind _ _ (keypairGet_affiliation (some kid) s) ?_
+      intro kp
+      apply hoare_consequence (hoare_pure (kp, some pid) _) (fun _ h => h)
+      intro result w h
+      rcases h with ⟨rfl, hs, hk⟩
+      refine ⟨hs, ?_⟩
+      intro actualKey actualPeer he
+      cases hk with
+      | inl hnull => simp [hnull] at he
+      | inr hkey =>
+        rcases Prod.mk.inj he with ⟨heKey, hePeer⟩
+        have ek := Option.some.inj (hkey.symm.trans heKey)
+        have ep := Option.some.inj hePeer
+        simp [ek, ep]
 
 /-- Literal full receive admission with only its existing acquisition named. -/
 def consumeDataSource (msg : List UInt8) (src : SkbSource) (ds : Nat) : WG.M Unit := do

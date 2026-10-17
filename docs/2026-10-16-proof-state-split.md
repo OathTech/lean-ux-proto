@@ -1,6 +1,7 @@
 # Proof campaign: state-split retrofit
 
-The campaign branch contains main `b700659`, including the split at `6089dc4`.
+The campaign branch contains main `b700659`, including the split at `6089dc4`,
+and the later documentation-only review/proposal merge from `b3f56807`.
 The executable mirror remains byte-identical to that landing. This branch keeps
 the nondefault `LeanuxProofs` target and `scripts/proof-gate`, which return with
 the proof tree. The [split design](2026-10-15-design-state-split.md) governs the
@@ -587,6 +588,40 @@ independent source review. Its 43-job build passes in 1.91 seconds without
 warnings. Its 41-module import closure was already rebuilt and was disjoint
 from the active artifact writers; the timer target is outside the larger
 batch's import graph.
+
+A subsequent output-free aggregate import probe failed in 0.33 seconds:
+TxRxProtection had no built object file. It inspected no terminal axioms and
+was not rerun unchanged. The complete build still has to establish the full
+import closure before the gate and fresh kernel replay can pass.
+
+## Remaining lifecycle, packet and endpoint warning repairs
+
+Eight further modules preserve 69 theorem contracts and thirteen other logical
+declarations. All 82 named logical-root axiom checks and final source checks pass
+with standard axioms only and zero own warnings; independent full-source
+reviews pass. The five routing/configuration modules retain the original
+seven-field initialization premise, exact guarded insertion cut and both
+Ambient endpoints. Packet constructors and ECN operations retain byte-slice
+address semantics and existing complete-header premises. Transmit endpoints
+retain partial publication, both saved/current peer getters and actual DEAD
+disposal order. The two packet tactic guards only select source heads and
+add no logical declaration.
+
+The five routing modules had 21 checks: fifteen ordinary failures and six
+exit-zero runs. One intermediate Lifecycle run retained an unused-simp warning;
+all five final runs are warning-free. Two failures reached the existing
+1,500,000-heartbeat limit before the source equality was factored explicitly.
+AffiliationCuts had one ordinary failure and AddressShape four before their
+final clean passes. Transmit endpoints had eight ordinary failures before its
+clean source and eleven-root axiom passes. No limit was raised, no failed
+recovery axioms were accepted, and no infrastructure retry occurred in this
+batch. RoutingCuts remains under repair and outside this checkpoint.
+
+The eight-module build passes all 293 jobs in 92.87 seconds. It removes 32
+deprecated automation sites and emits no warnings from the changed proofs.
+The sole replayed warning is the existing `String.mk` deprecation in the
+unchanged executable environment; mirror ownership remains with its lane.
+The full gate and fresh aggregate replay are still pending.
 
 ## Runtime witness reconstruction
 

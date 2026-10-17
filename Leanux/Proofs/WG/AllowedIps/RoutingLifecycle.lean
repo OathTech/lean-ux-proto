@@ -94,28 +94,108 @@ theorem peerCreate_routing_spec (start : WGWorld) (key : Key) (psk : Option Key)
       | .error err => err = -ENOMEM ∧ routingView w = routingView start
       | .ok pid => ∃ s, routingView start = some s ∧ pid = s.peerFrontier ∧
           routingView w = some s.allocate⌝⦄ := by
-  have ha :
-      ⦃fun w => ⌜wgStoreView w = wgStoreView start⌝⦄
-        (hiddenAlloc .kmemCacheZallocPeer : WG.M Bool)
-      ⦃⇓? _ w => ⌜wgStoreView w = wgStoreView start⌝⦄ :=
-    hoare_liftAmbient (AmbientM.hiddenAlloc .kmemCacheZallocPeer)
-      (fun w => wgStoreView w = wgStoreView start)
-  have hd := fun pid => (dstCacheReset_routing pid).wp
-    (fun s => s = (routingView start).map RoutingState.allocate)
-  have hh := fun pid => (handshakeInit_routing pid psk).wp
-    (fun s => s = (routingView start).map RoutingState.allocate)
-  have ht := fun pid => (resetLastSentHandshake_routing pid).wp
-    (fun s => s = (routingView start).map RoutingState.allocate)
-  mvcgen [peerCreate, ha, hd, hh, ht, getDev, setPeer, modifyDev,
-    branch, branchCmp, AmbientM.branch, AmbientM.branchCmp, invariant, AmbientM.invariant]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals try simp_all only [routingView, wgStoreView, WGStoreView.mk.injEq]
-  all_goals obtain ⟨hdev, _⟩ := ‹some _ = start.dev ∧ _›
-  all_goals simp only [← hdev, Option.map_some] at *
-  all_goals clear hdev
-  all_goals try simp_all [routingState, RoutingState.allocate,
-    Std.TreeMap.getElem?_insert]
-  all_goals first | assumption | (funext q; split <;> simp_all [eq_comm])
+  let P := fun w : WGWorld => wgStoreView w = wgStoreView start
+  let Q := fun (result : Except Int PeerId) (w : WGWorld) => match result with
+    | .error err => err = -ENOMEM ∧ routingView w = routingView start
+    | .ok pid => ∃ s, routingView start = some s ∧ pid = s.peerFrontier ∧
+        routingView w = some s.allocate
+  have view_eq (w : WGWorld) (h : P w) : routingView w = routingView start :=
+    congrArg (fun k : WGStoreView => k.dev.map routingState) h
+  have ambient {α : Type} (a : AmbientM α) (R : WGWorld → Prop) :
+      Preserves R (StateT.lift a) := hoare_liftAmbient a R
+  have getter : Hoare getDev P (fun d w => P w ∧ w.dev = some d) := by
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient d out ambient' hi hr
+    cases hd : w.dev with
+    | none =>
+      simp [getDev, hd, invariant, AmbientM.invariant] at hr
+      cases hr
+    | some saved =>
+      simp [getDev, hd] at hr
+      rcases hr with ⟨⟨rfl, rfl⟩, rfl⟩
+      exact ⟨hi, hd⟩
+  have fail (d : Device) : Hoare (pure (.error (-ENOMEM)) : WG.M (Except Int PeerId))
+      (fun w => P w ∧ w.dev = some d) Q := by
+    apply hoare_consequence (hoare_pure (Except.error (-ENOMEM) : Except Int PeerId) _)
+    · intro _ h; exact h
+    · intro result w h
+      rcases h with ⟨rfl, h⟩
+      exact ⟨rfl, view_eq w h.1⟩
+  have core (d : Device) : Hoare (Peers.peerCreateCore d.nextPeer key)
+      (fun w => P w ∧ w.dev = some d)
+      (fun _ w => routingView start = some (routingState d) ∧
+        routingView w = some (routingState d).allocate) := by
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient u out ambient' hi hr
+    rw [Peers.peerCreateCore_run] at hr
+    cases hr
+    refine ⟨(view_eq w hi.1).symm.trans (by simp [routingView, hi.2]), ?_⟩
+    simpa only [Peers.creationCoreWorld, hi.2, Option.map_some, routingView] using
+      congrArg some (routingState_allocate d (Peers.createdPeer key (w.peerCounter + 1)) rfl)
+  let tail (pid : PeerId) : WG.M (Except Int PeerId) := do
+    dstCacheReset pid
+    handshakeInit pid psk
+    resetLastSentHandshake pid
+    modifyDev fun d => {d with peerList := d.peerList ++ [pid], peerHashtable := (key, pid) :: d.peerHashtable, numPeers := d.numPeers + 1}
+    return .ok pid
+  have tail_spec (d : Device) : Hoare (tail d.nextPeer)
+      (fun w => routingView start = some (routingState d) ∧
+        routingView w = some (routingState d).allocate) Q := by
+    let R := fun v => routingView start = some (routingState d) ∧
+      v = some (routingState d).allocate
+    unfold tail
+    apply hoare_bind _ _ ((dstCacheReset_routing d.nextPeer).wp R)
+    intro _
+    apply hoare_bind _ _ ((handshakeInit_routing d.nextPeer psk).wp R)
+    intro _
+    apply hoare_bind _ _ ((resetLastSentHandshake_routing d.nextPeer).wp R)
+    intro _
+    apply hoare_bind _ _ ((modifyDev_routing (fun d' => {d' with
+      peerList := d'.peerList ++ [d.nextPeer],
+      peerHashtable := (key, d.nextPeer) :: d'.peerHashtable,
+      numPeers := d'.numPeers + 1}) (fun _ => rfl)).wp R)
+    intro _
+    apply hoare_consequence (hoare_pure (Except.ok d.nextPeer : Except Int PeerId) _)
+    · intro _ h; exact h
+    · intro result w h
+      rcases h with ⟨rfl, h⟩
+      exact ⟨routingState d, h.1, rfl, h.2⟩
+  have source : Peers.peerCreateFactored key psk = (do
+    let d ← getDev
+    if ← branchCmp .peerCreateMaxPeers (d.numPeers ≥ MAX_PEERS_PER_DEVICE)
+        d.numPeers MAX_PEERS_PER_DEVICE then return .error (-ENOMEM)
+    if ← branch .peerCreateNoMem !(← hiddenAlloc .kmemCacheZallocPeer) then
+      return .error (-ENOMEM)
+    if ← branch .peerCreateDstCacheFail false then return .error (-ENOMEM)
+    Peers.peerCreateCore d.nextPeer key
+    tail d.nextPeer) := by
+    simp only [Peers.peerCreateFactored, tail]
+  rw [← Peers.peerCreateFactored_eq, source]
+  change Hoare _ P Q
+  apply hoare_bind _ _ getter
+  intro d
+  apply hoare_bind _ _ (ambient (AmbientM.branchCmp .peerCreateMaxPeers
+    (d.numPeers ≥ MAX_PEERS_PER_DEVICE) d.numPeers MAX_PEERS_PER_DEVICE)
+    (fun w => P w ∧ w.dev = some d))
+  intro maxPeers
+  cases maxPeers with
+  | true => exact fail d
+  | false =>
+    apply hoare_bind _ _ (ambient (AmbientM.hiddenAlloc .kmemCacheZallocPeer)
+      (fun w => P w ∧ w.dev = some d))
+    intro allocated
+    apply hoare_bind _ _ (ambient (AmbientM.branch .peerCreateNoMem !allocated)
+      (fun w => P w ∧ w.dev = some d))
+    intro noMem
+    cases noMem with
+    | true => exact fail d
+    | false =>
+      apply hoare_bind _ _ (ambient (AmbientM.branch .peerCreateDstCacheFail false)
+        (fun w => P w ∧ w.dev = some d))
+      intro cacheFailed
+      cases cacheFailed with
+      | true => exact fail d
+      | false => exact hoare_bind _ _ (core d) (fun _ => tail_spec d)
 
 theorem peerCreate_routing (w v : WGWorld) (ambient ambient' : Ambient) (key : Key) (psk : Option Key)
     (result : Except Int PeerId) (hr : ((peerCreate key psk).run w).run ambient = .ok ((result, v), ambient')) :
@@ -153,39 +233,60 @@ theorem peerPut_routing_spec (start : WGWorld) (peer : Option PeerId) :
     ⦃fun w => ⌜wgStoreView w = wgStoreView start⌝⦄ peerPut peer
     ⦃⇓? _ w => ⌜routingView w = routingView start ∨
       ∃ pid, routingView w = (routingView start).map (fun s => s.erase pid)⌝⦄ := by
-  have hi (pid : PeerId) :
-      ⦃fun w => ⌜routingView w = routingView start⌝⦄
-        (MonadLift.monadLift (indexRemove (.handshake pid)) : WG.M Unit)
-      ⦃⇓? _ w => ⌜routingView w = routingView start⌝⦄ := by
-    apply hoare_liftIndex _ (fun w => routingView w = routingView start)
-    intro g d table hg hd
-    simpa [routingView, hd, routingState] using hg
+  apply (hoare_iff_run_ambient _ _ _).mpr
+  intro w ambient result out ambient' initial hr
+  have view_eq : routingView w = routingView start :=
+    congrArg (fun k : WGStoreView => k.dev.map routingState) initial
+  rw [← view_eq]
   cases peer with
   | none =>
-    mvcgen [peerPut, branch, AmbientM.branch]
-    simp_all [routingView, wgStoreView]
+    simp [peerPut, branch, AmbientM.branch] at hr
+    rcases hr with ⟨rfl, rfl⟩
+    exact Or.inl rfl
   | some pid =>
-    simp only [peerPut, Option.isNone_some]
-    mvcgen [hi, getPeer, getDev, setPeer, modifyDev,
-      requireNotPending, refcountDecAndTest, branch, branchCmp, branchCmpExcluded,
-      AmbientM.branch, AmbientM.branchCmp, AmbientM.branchCmpExcluded,
-      retirePeerUnits, modifyAmbient, invariant, unsupported, AmbientM.invariant, AmbientM.unsupported]
-    all_goals try dsimp +zetaDelta only at *
-    all_goals try simp_all only [routingView, wgStoreView, WGStoreView.mk.injEq]
-    all_goals obtain ⟨hdev, _⟩ := ‹some _ = start.dev ∧ _›
-    all_goals simp only [← hdev, Option.map_some] at *
-    all_goals clear hdev
-    all_goals try simp_all [routingState, RoutingState.erase,
-      Std.TreeMap.getElem?_insert, Std.TreeMap.getElem?_erase]
-    all_goals try (funext q; split <;> simp_all)
-    all_goals try (apply Or.inl; funext q; split <;> simp_all)
-    apply Or.inr
-    refine ⟨pid, ?_⟩
-    obtain ⟨out, hout, hn, ht, hnf, hpf, hl⟩ := ‹∃ a, _›
-    refine ⟨out, hout, hn, ht, hnf, hpf, ?_⟩
-    funext q
-    have hq := congrFun hl q
-    split <;> simp_all [eq_comm]
+    cases hd : w.dev with
+    | none =>
+      simp [peerPut, requireNotPending, getPeer, getDev, hd, branch, AmbientM.branch,
+        invariant, AmbientM.invariant] at hr
+      cases hr
+    | some d =>
+      cases hp : d.peers[pid]? with
+      | none =>
+        simp [peerPut, requireNotPending, getPeer, getDev, hd, hp, branch, AmbientM.branch,
+          invariant, AmbientM.invariant] at hr
+        cases hr
+      | some p =>
+        have hl (a : IndexM Unit) : (liftM a : WG.M Unit) = liftIndex a := rfl
+        by_cases positive : 0 < p.refcount
+        · have nonzero : p.refcount ≠ 0 := by omega
+          by_cases final : p.refcount = 1
+          all_goals
+            simp [peerPut, requireNotPending, getPeer, getDev, setPeer, modifyDev,
+              refcountDecAndTest, branch, branchCmp, indexRemove_eq, indexUnhash,
+              hl, liftIndex_run, retirePeerUnits, modifyAmbient,
+              CounterWindow.branch_run, CounterWindow.branchCmp_run,
+              hd, hp, positive, nonzero, final,
+              StateT.run_bind, StateT.run_pure, StateT.run_monadLift,
+              CounterWindow.except_ok_bind, CounterWindow.except_pure,
+              invariant, AmbientM.invariant, unsupported, AmbientM.unsupported] at hr
+          all_goals repeat' first | split at hr | contradiction
+          all_goals rcases hr with ⟨rfl, rfl⟩
+          all_goals simp only [routingView, hd, Option.map_some]
+          all_goals first
+            | exact Or.inl (congrArg some (routingState_insert_same d pid p _ hp rfl))
+            | apply Or.inr; refine ⟨pid, ?_⟩
+              exact congrArg some ((routingState_erase
+                {d with peers := d.peers.insert pid {p with refcount := 0}} pid).trans
+                (congrArg (fun state => state.erase pid)
+                  (routingState_insert_same d pid p {p with refcount := 0} hp rfl)))
+        · have zero : p.refcount = 0 := by omega
+          simp [peerPut, requireNotPending, getPeer, getDev, setPeer, modifyDev,
+            refcountDecAndTest, branch, branchCmp, CounterWindow.branch_run,
+            CounterWindow.branchCmp_run, hd, hp, zero,
+            StateT.run_bind, StateT.run_pure, StateT.run_monadLift,
+            CounterWindow.except_ok_bind, CounterWindow.except_pure,
+            unsupported, AmbientM.unsupported] at hr
+          cases hr
 
 theorem peerPut_routing_preserved (w v : WGWorld) (ambient ambient' : Ambient) (d : Device)
     (hd : w.dev = some d) (hi : RoutingInvariant d t4 t6)

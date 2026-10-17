@@ -9,100 +9,197 @@ set_option maxHeartbeats 1200000
 set_option pp.structureInstances false
 
 theorem runFlushedSendWork_routing (pid : PeerId) : RetainsRoutingCall (runFlushedSendWork pid) := by
-  apply ProjectedAction.of_wp
+  let prelude : WG.M Unit := do
+    modifyDev fun d => {d with sendWorkQueue := d.sendWorkQueue.erase pid}
+    let p ← getPeer pid
+    if !p.handshakePending then invariant "queued work without a pending flag"
+    setPeer pid {p with handshakePending := (← getDev).sendWorkQueue.contains pid}
+  have hp : SameView routingView prelude := by
+    have queue := modifyDev_routing (fun d => {d with sendWorkQueue := d.sendWorkQueue.erase pid})
+      (fun _ => rfl)
+    routing_handshake_source [prelude] using [queue]
   intro s
-  have ambient {α : Type} (a : AmbientM α) (Q : WGWorld → Prop) :
-      Hoare (MonadLift.monadLift a : WG.M α) Q (fun _ w => Q w) :=
-    hoare_liftAmbient a Q
-  unfold Hoare at ambient
-  let P := RetainsRouting s
-  have hg := routing_getPeer P pid
-  have hs := fun p => routing_setPeer P pid p
-  have hm := (modifyDev_routing (fun d => {d with sendWorkQueue := d.sendWorkQueue.erase pid}) (fun _ => rfl)).wp P
-  have hw := RetainsRoutingCall.wp (handshakeSendWorker_routing pid) s
-  mvcgen [-Std.Do.Spec.monadLift_StateT, ambient, getDev, getAmbient, hidden, peekUnit, resolveUnit, invariant, unsupported, branch, AmbientM.invariant, AmbientM.unsupported, AmbientM.branch, runFlushedSendWork, hg, hs, hm, hw, invariant]
-  all_goals try dsimp +zetaDelta only [P] at *
-  all_goals try simp_all
-  all_goals try exact id
-  all_goals try trivial
-  all_goals subst s
-  all_goals exact RetainsRouting.refl _
+  let P := fun w : WGWorld => RetainsRouting s (routingView w)
+  have ambient {α : Type} (a : AmbientM α) : Preserves P (monadLift a : WG.M α) :=
+    hoare_liftAmbient a P
+  have main : Preserves P (runFlushedSendWork pid) := by
+    have source : runFlushedSendWork pid = (do
+        prelude
+        _ ← hidden (.sectionStart .sendWorker)
+        handshakeSendWorker pid
+        _ ← hidden (.sectionStop .sendWorker)) := by
+      have distribute {α β : Type} (test : Prop) [Decidable test]
+          (yes no : WG.M α) (f : α → WG.M β) :
+          ((if test then yes else no) >>= f) =
+            (if test then yes >>= f else no >>= f) := by split <;> rfl
+      simp only [runFlushedSendWork, prelude, bind_assoc, distribute]
+    rw [source]
+    apply preserves_bind (hp.wp (RetainsRouting s))
+    intro _
+    apply preserves_bind (ambient (AmbientM.hidden (.sectionStart .sendWorker)))
+    intro _
+    apply preserves_bind (RetainsRoutingCall.wp (handshakeSendWorker_routing pid) s)
+    intro _
+    apply preserves_bind (ambient (AmbientM.hidden (.sectionStop .sendWorker)))
+    intro _
+    exact preserves_pure ()
+  apply hoare_consequence main
+  · intro w h
+    change RetainsRouting s (routingView w)
+    dsimp only [_root_.id] at h
+    rw [h]
+    exact RetainsRouting.refl _
+  · exact fun _ _ h => h
+
 
 theorem runFlushedClearWork_routing (pid : PeerId) : RetainsRoutingCall (runFlushedClearWork pid) := by
-  apply ProjectedAction.of_wp
   intro s
-  have ambient {α : Type} (a : AmbientM α) :
-      Hoare (MonadLift.monadLift a : WG.M α)
-        (fun w => RetainsRouting s (routingView w))
-        (fun _ w => RetainsRouting s (routingView w)) := hoare_liftAmbient a _
-  unfold Hoare at ambient
-  have hm := (modifyDev_routing (fun d => {d with clearWorkQueue := d.clearWorkQueue.erase pid}) (fun _ => rfl)).wp (RetainsRouting s)
-  have hw := RetainsRoutingCall.wp (queuedExpiredZeroKeyMaterial_routing pid) s
-  mvcgen [-Std.Do.Spec.monadLift_StateT, ambient, getDev, getAmbient, hidden, peekUnit, resolveUnit, invariant, unsupported, branch, AmbientM.invariant, AmbientM.unsupported, AmbientM.branch, runFlushedClearWork, hm, hw]
-  all_goals try exact id
-  all_goals try trivial
-  all_goals subst s
-  all_goals exact RetainsRouting.refl _
+  let P := fun w : WGWorld => RetainsRouting s (routingView w)
+  have ambient {α : Type} (a : AmbientM α) : Preserves P (monadLift a : WG.M α) :=
+    hoare_liftAmbient a P
+  have hm := (modifyDev_routing (fun d => {d with clearWorkQueue := d.clearWorkQueue.erase pid})
+    (fun _ => rfl)).wp (RetainsRouting s)
+  have main : Preserves P (runFlushedClearWork pid) := by
+    unfold runFlushedClearWork
+    apply preserves_bind hm
+    intro _
+    apply preserves_bind (ambient (AmbientM.hidden (.sectionStart .clearPeerWorker)))
+    intro _
+    apply preserves_bind (RetainsRoutingCall.wp (queuedExpiredZeroKeyMaterial_routing pid) s)
+    intro _
+    apply preserves_bind (ambient (AmbientM.hidden (.sectionStop .clearPeerWorker)))
+    intro _
+    exact preserves_pure ()
+  apply hoare_consequence main
+  · intro w h
+    change RetainsRouting s (routingView w)
+    dsimp only [_root_.id] at h
+    rw [h]
+    exact RetainsRouting.refl _
+  · exact fun _ _ h => h
+
 
 theorem drainHandshakeSendWq_routing (upTo : Option PeerId) : RetainsRoutingCall (drainHandshakeSendWq upTo) := by
-  apply ProjectedAction.of_wp
   intro s
-  have ambient {α : Type} (a : AmbientM α) :
-      Hoare (MonadLift.monadLift a : WG.M α)
-        (fun w => RetainsRouting s (routingView w))
-        (fun _ w => RetainsRouting s (routingView w)) := hoare_liftAmbient a _
-  unfold Hoare at ambient
-  have hs := fun pid => RetainsRoutingCall.wp (runFlushedSendWork_routing pid) s
-  have hc := fun pid => RetainsRoutingCall.wp (runFlushedClearWork_routing pid) s
-  mvcgen [-Std.Do.Spec.monadLift_StateT, ambient, getDev, getAmbient, hidden, peekUnit, resolveUnit, invariant, unsupported, branch, AmbientM.invariant, AmbientM.unsupported, AmbientM.branch, drainHandshakeSendWq, hs, hc, getDev, invariant]
-  all_goals try exact ((⇓? _ w => ⌜RetainsRouting s (routingView w)⌝) : PostCond _ (.arg WGWorld (.arg Ambient (.except Stop .pure))))
-  all_goals try dsimp +zetaDelta only at *
-  all_goals try simp_all
-  all_goals try assumption
-  all_goals try exact id
-  all_goals try trivial
-  all_goals subst s
-  all_goals exact RetainsRouting.refl _
+  let Q := RetainsRouting s
+  let P := fun w : WGWorld => Q (routingView w)
+  have ambient {α : Type} (a : AmbientM α) : Preserves P (monadLift a : WG.M α) :=
+    hoare_liftAmbient a P
+  have dev : Preserves P getDev := (routing_kernel _ getDev_sameWGStore).wp Q
+  have stopped {α : Type} (e : Stop) : Preserves P (throw e : WG.M α) := by
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient x v ambient' _ hr
+    cases hr
+  have loop {α β : Type} (xs : List α) (b : β) (f : α → β → WG.M (ForInStep β))
+      (hf : ∀ x b, Preserves P (f x b)) : Preserves P (forIn xs b f) :=
+    list_view_spec id P xs b f hf
+  have send := fun pid => RetainsRoutingCall.wp (runFlushedSendWork_routing pid) s
+  have clear := fun pid => RetainsRoutingCall.wp (runFlushedClearWork_routing pid) s
+  have main : Preserves P (drainHandshakeSendWq upTo) := by
+    unfold drainHandshakeSendWq
+    simp (config := { zeta := false }) only [peekUnit, resolveUnit, getAmbient, invariant]
+    repeat' first
+      | (rx_retention_head runFlushedSendWork; exact send _)
+      | (rx_retention_head runFlushedClearWork; exact clear _)
+      | (rx_retention_head getDev; exact dev)
+      | (rx_retention_head MonadLiftT.monadLift; exact ambient _)
+      | (rx_retention_head MonadLift.monadLift; exact ambient _)
+      | (rx_retention_head MonadExceptOf.throw; exact stopped _)
+      | (rx_retention_head throw; exact stopped _)
+      | (rx_retention_head ForIn.forIn; first | apply loop | rw [Std.Legacy.Range.forIn_eq_forIn_range'])
+      | rx_retention_step
+  apply hoare_consequence main
+  · intro w h
+    change RetainsRouting s (routingView w)
+    dsimp only [_root_.id] at h
+    rw [h]
+    exact RetainsRouting.refl _
+  · exact fun _ _ h => h
+
 
 theorem timersStop_routing (pid : PeerId) : RetainsRoutingCall (timersStop pid) := by
-  apply ProjectedAction.of_wp
   intro s
-  have ambient {α : Type} (a : AmbientM α) :
-      Hoare (MonadLift.monadLift a : WG.M α)
-        (fun w => RetainsRouting s (routingView w))
-        (fun _ w => RetainsRouting s (routingView w)) := hoare_liftAmbient a _
-  unfold Hoare at ambient
-  have hd := fun t => (delTimer_routing pid t).wp (RetainsRouting s)
-  have hw := RetainsRoutingCall.wp (drainHandshakeSendWq_routing (some pid)) s
-  mvcgen [-Std.Do.Spec.monadLift_StateT, ambient, getDev, getAmbient, hidden, peekUnit, resolveUnit, invariant, unsupported, branch, AmbientM.invariant, AmbientM.unsupported, AmbientM.branch, timersStop, hd, hw, getDev, invariant]
-  all_goals try exact ((⇓? _ w => ⌜RetainsRouting s (routingView w)⌝) : PostCond _ (.arg WGWorld (.arg Ambient (.except Stop .pure))))
-  all_goals try dsimp +zetaDelta only at *
-  all_goals try assumption
-  all_goals try exact id
-  all_goals try trivial
-  all_goals subst s
-  all_goals exact RetainsRouting.refl _
+  let Q := RetainsRouting s
+  let P := fun w : WGWorld => Q (routingView w)
+  have ambient {α : Type} (a : AmbientM α) : Preserves P (monadLift a : WG.M α) :=
+    hoare_liftAmbient a P
+  have dev : Preserves P getDev := (routing_kernel _ getDev_sameWGStore).wp Q
+  have stopped {α : Type} (e : Stop) : Preserves P (throw e : WG.M α) := by
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient x v ambient' _ hr
+    cases hr
+  have loop {α β : Type} (xs : List α) (b : β) (f : α → β → WG.M (ForInStep β))
+      (hf : ∀ x b, Preserves P (f x b)) : Preserves P (forIn xs b f) :=
+    list_view_spec id P xs b f hf
+  have del := fun t => (delTimer_routing pid t).wp Q
+  have drain := RetainsRoutingCall.wp (drainHandshakeSendWq_routing (some pid)) s
+  have main : Preserves P (timersStop pid) := by
+    unfold timersStop
+
+    repeat' first
+      | (rx_retention_head delTimer; exact del _)
+      | (rx_retention_head drainHandshakeSendWq; exact drain)
+      | (rx_retention_head getDev; exact dev)
+      | (rx_retention_head MonadLiftT.monadLift; exact ambient _)
+      | (rx_retention_head MonadLift.monadLift; exact ambient _)
+      | (rx_retention_head MonadExceptOf.throw; exact stopped _)
+      | (rx_retention_head throw; exact stopped _)
+      | (rx_retention_head ForIn.forIn; first | apply loop | rw [Std.Legacy.Range.forIn_eq_forIn_range'])
+      | rx_retention_step
+  apply hoare_consequence main
+  · intro w h
+    change RetainsRouting s (routingView w)
+    dsimp only [_root_.id] at h
+    rw [h]
+    exact RetainsRouting.refl _
+  · exact fun _ _ h => h
+
 
 theorem peerRemoveAfterDead_routing (pid : PeerId) : RetainsRoutingCall (peerRemoveAfterDead pid) := by
-  apply ProjectedAction.of_wp
   intro s
-  have ambient {α : Type} (a : AmbientM α) :
-      Hoare (MonadLift.monadLift a : WG.M α)
-        (fun w => RetainsRouting s (routingView w))
-        (fun _ w => RetainsRouting s (routingView w)) := hoare_liftAmbient a _
-  unfold Hoare at ambient
-  have hg := (getPeer_routing pid).wp (RetainsRouting s)
-  have hk := (keypairsClear_routing pid).wp (RetainsRouting s)
-  have ht := RetainsRoutingCall.wp (timersStop_routing pid) s
-  have hw := RetainsRoutingCall.wp (drainHandshakeSendWq_routing none) s
-  have hm := (modifyDev_routing (fun d => {d with numPeers := d.numPeers - 1}) (fun _ => rfl)).wp (RetainsRouting s)
-  have hp := RetainsRoutingCall.wp (peerPut_retainsRouting (some pid)) s
-  mvcgen [-Std.Do.Spec.monadLift_StateT, ambient, getDev, getAmbient, hidden, peekUnit, resolveUnit, invariant, unsupported, branch, AmbientM.invariant, AmbientM.unsupported, AmbientM.branch, peerRemoveAfterDead, hg, hk, ht, hw, hm, hp, getDev, branch, unsupported, invariant]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals try assumption
-  all_goals try exact id
-  all_goals try trivial
-  all_goals subst s
-  all_goals exact RetainsRouting.refl _
+  let Q := RetainsRouting s
+  let P := fun w : WGWorld => Q (routingView w)
+  have ambient {α : Type} (a : AmbientM α) : Preserves P (monadLift a : WG.M α) :=
+    hoare_liftAmbient a P
+  have dev : Preserves P getDev := (routing_kernel _ getDev_sameWGStore).wp Q
+  have stopped {α : Type} (e : Stop) : Preserves P (throw e : WG.M α) := by
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient x v ambient' _ hr
+    cases hr
+  have loop {α β : Type} (xs : List α) (b : β) (f : α → β → WG.M (ForInStep β))
+      (hf : ∀ x b, Preserves P (f x b)) : Preserves P (forIn xs b f) :=
+    list_view_spec id P xs b f hf
+  have peer := (getPeer_routing pid).wp Q
+  have keys := (keypairsClear_routing pid).wp Q
+  have timers := RetainsRoutingCall.wp (timersStop_routing pid) s
+  have drain := RetainsRoutingCall.wp (drainHandshakeSendWq_routing none) s
+  have modify := (modifyDev_routing (fun d => {d with numPeers := d.numPeers - 1})
+    (fun _ => rfl)).wp Q
+  have release := RetainsRoutingCall.wp (peerPut_retainsRouting (some pid)) s
+  have main : Preserves P (peerRemoveAfterDead pid) := by
+    unfold peerRemoveAfterDead
+    simp (config := { zeta := false }) only [branch, invariant, unsupported]
+    repeat' first
+      | (rx_retention_head getPeer; exact peer)
+      | (rx_retention_head keypairsClear; exact keys)
+      | (rx_retention_head timersStop; exact timers)
+      | (rx_retention_head drainHandshakeSendWq; exact drain)
+      | (rx_retention_head modifyDev; exact modify)
+      | (rx_retention_head peerPut; exact release)
+      | (rx_retention_head getDev; exact dev)
+      | (rx_retention_head MonadLiftT.monadLift; exact ambient _)
+      | (rx_retention_head MonadLift.monadLift; exact ambient _)
+      | (rx_retention_head MonadExceptOf.throw; exact stopped _)
+      | (rx_retention_head throw; exact stopped _)
+      | (rx_retention_head ForIn.forIn; first | apply loop | rw [Std.Legacy.Range.forIn_eq_forIn_range'])
+      | rx_retention_step
+  apply hoare_consequence main
+  · intro w h
+    change RetainsRouting s (routingView w)
+    dsimp only [_root_.id] at h
+    rw [h]
+    exact RetainsRouting.refl _
+  · exact fun _ _ h => h
+
 
 end Leanux.Proofs.WG.AllowedIps
