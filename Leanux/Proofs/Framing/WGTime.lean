@@ -11,51 +11,55 @@ theorem birthdateTest_sameWGWorld (birthday : Int64) (seconds : Nat) :
     SameView (id : WGWorld → WGWorld) (birthdateTest birthday seconds) := by
   apply SameView.of_wp
   intro k
-  have hs : Hoare (hiddenClock64 .birthdateExpired : WG.M Int64)
-      (fun w => w = k) (fun _ w => w = k) :=
-    hoare_liftAmbient (AmbientM.hiddenClock64 .birthdateExpired) (fun w => w = k)
-  unfold Hoare at hs
-  mvcgen [birthdateTest, hs]
+  unfold birthdateTest
+  exact preserves_bind
+    (hoare_liftAmbient (AmbientM.hiddenClock64 .birthdateExpired) (fun w => w = k))
+    (fun _ => preserves_pure _)
 
 theorem birthdateHasExpired_sameWGWorld (birthday : Int64) (seconds : Nat) :
     SameView (id : WGWorld → WGWorld) (birthdateHasExpired birthday seconds) := by
-  apply SameView.of_wp
-  intro k
-  have hs := (birthdateTest_sameWGWorld birthday seconds).wp (fun k' => k' = k)
-  mvcgen [birthdateHasExpired, hs]
+  unfold birthdateHasExpired
+  exact SameView.bind (birthdateTest_sameWGWorld birthday seconds) (fun _ => SameView.pure _ _)
 
 theorem branchExpired_sameWGWorld (d : Decision) (birthday : Int64) (seconds : Nat)
     (f : Bool → Bool := id) :
     SameView (id : WGWorld → WGWorld) (branchExpired d birthday seconds f) := by
-  apply SameView.of_wp
-  intro k
-  have hs := (birthdateTest_sameWGWorld birthday seconds).wp (fun k' => k' = k)
-  mvcgen [branchExpired, hs, branchCmp, AmbientM.branchCmp]
+  unfold branchExpired
+  apply SameView.bind (birthdateTest_sameWGWorld birthday seconds)
+  intro tested
+  exact fun k => hoare_liftAmbient (AmbientM.branchCmp d (f tested.1) tested.2.1 tested.2.2)
+    (fun w => w = k)
 
 theorem jitterBelowRekeyTimeout_sameWGWorld (site : HiddenSite) :
     SameView (id : WGWorld → WGWorld) (jitterBelowRekeyTimeout site) := by
   apply SameView.of_wp
   intro k
-  have hh : Hoare (hidden site : WG.M (List UInt8)) (fun w => w = k) (fun _ w => w = k) :=
-    hoare_liftAmbient (AmbientM.hidden site) (fun w => w = k)
-  have hb : Hoare (recordBudget : WG.M Nat) (fun w => w = k) (fun _ w => w = k) :=
-    hoare_liftAmbient AmbientM.recordBudget (fun w => w = k)
-  have he : Hoare (budgetExhausted "jitter draws" : WG.M Nat)
-      (fun w => w = k) (fun _ w => w = k) :=
-    hoare_liftAmbient (AmbientM.budgetExhausted "jitter draws") (fun w => w = k)
-  unfold Hoare at hh hb he
-  mvcgen [jitterBelowRekeyTimeout, hh, hb, he]
-  all_goals try exact ((⇓? _ w => ⌜w = k⌝) : PostCond _ (.arg WGWorld (.arg Ambient (.except Stop .pure))))
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all
+  unfold jitterBelowRekeyTimeout
+  apply preserves_bind (hoare_liftAmbient AmbientM.recordBudget (fun w => w = k))
+  intro n
+  simp only [Std.Legacy.Range.forIn_eq_forIn_range']
+  apply preserves_bind
+  · apply list_view_spec id (fun w => w = k)
+    intro i state
+    apply preserves_bind (hoare_liftAmbient (AmbientM.hidden site) (fun w => w = k))
+    intro bytes
+    split <;> exact preserves_pure _
+  · intro result
+    split
+    all_goals first
+      | exact preserves_pure _
+      | exact hoare_liftAmbient (AmbientM.budgetExhausted "jitter draws") (fun w => w = k)
 
 theorem callerJiffies_sameWGWorld (site : HiddenSite) :
     SameView (id : WGWorld → WGWorld) (callerJiffies site) := by
   apply SameView.of_wp
   intro k
-  have hh : Hoare (hiddenJiffies site : WG.M UInt64) (fun w => w = k) (fun _ w => w = k) :=
-    hoare_liftAmbient (AmbientM.hiddenJiffies site) (fun w => w = k)
-  unfold Hoare at hh
-  mvcgen [callerJiffies, getAmbient, hh]
+  unfold callerJiffies
+  apply preserves_bind (hoare_liftAmbient (get : AmbientM Ambient) (fun w => w = k))
+  intro a
+  split
+  · exact SameView.map (fun initial => hoare_liftAmbient (AmbientM.hiddenJiffies site)
+      (fun w => w = initial)) some k
+  · exact preserves_pure _
 
 end Leanux.Proofs.Framing

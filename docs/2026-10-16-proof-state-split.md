@@ -109,6 +109,17 @@ had three failures (including the unchanged two-million-heartbeat limit) before
 its direct proof passed; keypair base had two failures before two passes.
 No theorem counts change in this maintenance.
 
+The timer observer and three native time/Noise/index frame modules preserve
+all 48 contracts. Their combined 348-job dependency build, 59 named logical
+axiom checks, three scoped fresh replays and independent reviews pass, with
+zero warnings in the four modules and 1,109 warnings in the complete closure.
+The timer observer's four failed development checks included 23 heartbeat
+timeouts, a parser error, a tactic quotation defect and an unhandled throw
+head. Passing the actual Ambient operand to its checked lift rule removes the
+expensive inference. The final check passes at the original limits. The small
+Noise and index repairs each had one failed draft before passing; time passed
+its first check. None changes a statement or the executable mirror.
+
 Deterministic development failures, including generated-helper import
 collisions and heartbeat exhaustion, are failures. Changed source was
 checked anew; these were not infrastructure retries. Recovery admissions

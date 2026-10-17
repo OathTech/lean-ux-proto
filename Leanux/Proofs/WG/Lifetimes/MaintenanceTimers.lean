@@ -267,19 +267,55 @@ elab "maintenance_match" : tactic => Lean.Elab.Tactic.withMainContext do
       return
   Lean.throwError "not a head matcher"
 
+elab "maintenance_store_leaf" : tactic => Lean.Elab.Tactic.withMainContext do
+  let target := (← Lean.instantiateMVars (← (← Lean.Elab.Tactic.getMainGoal).getType)).consumeMData
+  let args := target.getAppArgs
+  unless args.size ≥ 3 do Lean.throwError "not a state contract"
+  let action := if target.isAppOf ``Preserves then args.back! else args[args.size - 3]!
+  let .const head _ := action.consumeMData.getAppFn
+    | Lean.throwError "not a constant-headed state action"
+  if head == ``getDev then
+    Lean.Elab.Tactic.evalTactic (← `(tactic| exact getDev_sameWGStore _))
+  else if head == ``get || head == ``MonadStateOf.get then
+    Lean.Elab.Tactic.evalTactic (← `(tactic|
+      exact hoare_consequence (hoare_get _) (fun _ h => h) (fun _ _ h => h.2)))
+  else if head == ``modify then
+    Lean.Elab.Tactic.evalTactic (← `(tactic| apply hoare_modify))
+    Lean.Elab.Tactic.evalTactic (← `(tactic| intro w hw))
+    Lean.Elab.Tactic.evalTactic (← `(tactic| assumption))
+  else if head == ``MonadExceptOf.throw || head == ``MonadExcept.throw then
+    let callArgs := action.getAppArgs
+    unless callArgs.size ≥ 2 do Lean.throwError "missing exception arguments"
+    let resultType ← Lean.PrettyPrinter.delab callArgs[callArgs.size - 2]!
+    let error ← Lean.PrettyPrinter.delab callArgs.back!
+    Lean.Elab.Tactic.evalTactic (← `(tactic|
+      exact hoare_liftAmbient (throw $error : AmbientM $resultType) _))
+  else if #[``getAmbient, ``hidden, ``hiddenJiffies, ``peekHiddenSite,
+      ``branch, ``branchCmp, ``unsupported, ``invariant].contains head then
+    let some lifted ← Lean.Meta.unfoldDefinition? action
+      | Lean.throwError "cannot expose the ambient lift"
+    let lifted := lifted.consumeMData
+    let .const liftHead _ := lifted.getAppFn
+      | Lean.throwError "ambient wrapper is not a constant-headed lift"
+    unless liftHead.toString == "monadLift" || liftHead.toString.endsWith ".monadLift" do
+      Lean.throwError m!"ambient wrapper does not expose a lift: {liftHead}"
+    unless lifted.getAppArgs.size > 0 do Lean.throwError "missing ambient operand"
+    let ambient := lifted.getAppArgs.back!
+    let ambientTerm ← Lean.PrettyPrinter.delab ambient
+    let ambientType ← Lean.PrettyPrinter.delab (← Lean.Meta.inferType ambient)
+    Lean.Elab.Tactic.evalTactic (← `(tactic|
+      exact hoare_liftAmbient ($ambientTerm : $ambientType) _))
+  else Lean.throwError m!"unsupported store-frame action: {head}"
+
+macro "maintenance_store_frame" : tactic => `(tactic| (
+  apply SameView.of_wp
+  intro initial
+  maintenance_store_leaf))
+
 macro "maintenance_store" c:ident P:term : tactic => `(tactic| (
   maintenance_lift_head
   apply AmbientContracts.store $c $P
-  apply SameView.of_wp
-  intro initial
-  have ha (α : Type) (a : AmbientM α) :
-      Hoare (MonadLift.monadLift a : WG.M α) (fun w => wgStoreView w = initial)
-        (fun _ w => wgStoreView w = initial) :=
-    hoare_liftAmbient a (fun w => wgStoreView w = initial)
-  unfold Hoare at ha
-  mvcgen [-Std.Do.Spec.monadLift_StateT, getAmbient, getDev, hidden, hiddenJiffies,
-    peekHiddenSite, branch, branchCmp, unsupported, invariant, ha]
-  all_goals first | assumption | rfl))
+  maintenance_store_frame))
 
 elab "maintenance_product_bind" : tactic => do
   let goal ← Lean.Elab.Tactic.getMainGoal
@@ -292,22 +328,37 @@ elab "maintenance_product_bind" : tactic => do
 macro "maintenance_product_store" c:ident P:term : tactic => `(tactic| (
   maintenance_head liftWGPrefix
   apply ProductAmbientContracts.nativeStore $c $P
-  apply SameView.of_wp
-  intro initial
-  have ha (α : Type) (a : AmbientM α) :
-      Hoare (MonadLift.monadLift a : WG.M α) (fun w => wgStoreView w = initial)
-        (fun _ w => wgStoreView w = initial) :=
-    hoare_liftAmbient a (fun w => wgStoreView w = initial)
-  unfold Hoare at ha
-  mvcgen [-Std.Do.Spec.monadLift_StateT, getAmbient, getDev, hidden, hiddenJiffies,
-    peekHiddenSite, branch, branchCmp, unsupported, invariant, ha]
-  all_goals first | assumption | rfl))
+  maintenance_store_frame))
 
 theorem endpointEq_sameStore (a : Endpoint) (b : Option Endpoint) :
     SameWGStore (endpointEq a b) := by
   apply SameView.of_wp
   intro k
-  mvcgen [endpointEq, WG.andM, branch, AmbientM.branch]
+  have ha (a : AmbientM Bool) :
+      Preserves (fun w => wgStoreView w = k) (MonadLift.monadLift a : WG.M Bool) :=
+    hoare_liftAmbient a _
+  have both (x y : WG.M Bool)
+      (hx : Preserves (fun w => wgStoreView w = k) x)
+      (hy : Preserves (fun w => wgStoreView w = k) y) :
+      Preserves (fun w => wgStoreView w = k) (WG.andM x y) := by
+    unfold WG.andM
+    apply preserves_bind hx
+    intro b
+    split
+    · exact hy
+    · exact preserves_pure _
+  unfold endpointEq
+  apply preserves_bind (both _ _ (ha _) (both _ _ (ha _)
+    (both _ _ (ha _) (both _ _ (ha _) (both _ _ (ha _) (ha _))))))
+  intro v4
+  split
+  · exact preserves_pure _
+  · apply preserves_bind (both _ _ (ha _) (both _ _ (ha _)
+      (both _ _ (ha _) (both _ _ (ha _) (both _ _ (ha _) (ha _))))))
+    intro v6
+    split
+    · exact preserves_pure _
+    · exact both _ _ (ha _) (ha _)
 
 def dstCacheResetMixed (pid : PeerId) : MixedM Unit := do
   let a ← liftWGPrefix (getAmbient : WG.M Ambient)
@@ -335,9 +386,7 @@ theorem dstCacheResetMixed_spec (c : AmbientContracts I) (P : IdentityView → P
     (get : AmbientM Ambient) (fun w => wgStoreView w = initial)))
   intro a
   apply StatePrefixEnsures.bind (c.store P (get : WG.M WGWorld) (by
-    apply SameView.of_wp
-    intro initial
-    mvcgen))
+    maintenance_store_frame))
   intro w
   split
   · exact c.pure P _
@@ -615,14 +664,19 @@ theorem modPeerTimerGuardPrefix_erases (pid : PeerId) :
 
 theorem modPeerTimerGuardPrefix_spec (c : AmbientContracts I) (P : IdentityView → Prop) (pid : PeerId) :
     AmbientSpec I P (modPeerTimerGuardPrefix pid) (fun _ => P) := by
-  apply StatePrefixEnsures.bind (c.store P _ (by apply SameView.of_wp; intro initial; mvcgen [getDev, invariant, AmbientM.invariant]))
+  apply StatePrefixEnsures.bind (c.store P _ getDev_sameWGStore)
   intro d
   apply StatePrefixEnsures.bind (c.getPeer_frame P pid)
   intro p
   apply c.store P
   apply SameView.of_wp
   intro initial
-  mvcgen [WG.andM, branch, AmbientM.branch]
+  unfold WG.andM
+  apply preserves_bind (hoare_liftAmbient (AmbientM.branch _ _) _)
+  intro running
+  split
+  · exact hoare_liftAmbient (AmbientM.branch _ _) _
+  · exact preserves_pure _
 
 def modPeerTimerPrefix (site : HiddenSite) (pid : PeerId) (t : PeerTimer) (delay : Nat) : MixedM Bool := do
   let jc ← liftWGPrefix (callerJiffies site)
@@ -813,18 +867,13 @@ theorem dstCacheResetMixed_spec_product (c : ProductAmbientContracts I) (P : Ide
   apply PrefixEnsures.bind (c.nativeStore P _ (fun initial => hoare_liftAmbient
     (get : AmbientM Ambient) (fun w => wgStoreView w = initial)))
   intro a
-  try simp only [liftWGObserver_bind, liftWGObserver_pure, apply_ite]
   apply PrefixEnsures.bind (c.nativeStore P (get : WG.M WGWorld) (by
-    apply SameView.of_wp
-    intro initial
-    mvcgen))
+    maintenance_store_frame))
   intro w
-  try simp only [liftWGObserver_bind, liftWGObserver_pure, apply_ite]
   split
   · exact c.pure P _
   · apply PrefixEnsures.bind (c.nativeStore P _ (fun initial => hoare_liftAmbient (AmbientM.hiddenJiffies _) (fun w => wgStoreView w = initial)))
     intro ts
-    try simp only [liftWGObserver_bind, liftWGObserver_pure, apply_ite]
     exact modifyPeerKeysPrefix_spec_product c P pid _ (fun _ => rfl)
 
 theorem setPeerEndpointPrefix_spec_product (c : ProductAmbientContracts I) (P : IdentityView → Prop)
@@ -920,17 +969,20 @@ theorem delTimerPrefix_spec_product (c : ProductAmbientContracts I) (P : Identit
 
 theorem modPeerTimerGuardPrefix_spec_product (c : ProductAmbientContracts I) (P : IdentityView → Prop) (pid : PeerId) :
     ProductAmbientSpec I P (liftWGObserver (modPeerTimerGuardPrefix pid)) (fun _ => P) := by
-  simp only [modPeerTimerGuardPrefix, liftWGObserver_bind, liftWGObserver_pure, apply_ite]
-  apply PrefixEnsures.bind (c.nativeStore P _ (by apply SameView.of_wp; intro initial; mvcgen [getDev, invariant, AmbientM.invariant]))
+  simp only [modPeerTimerGuardPrefix, liftWGObserver_bind]
+  apply PrefixEnsures.bind (c.nativeStore P _ getDev_sameWGStore)
   intro d
-  try simp only [liftWGObserver_bind, liftWGObserver_pure, apply_ite]
   apply PrefixEnsures.bind (c.getPeer_frame P pid)
   intro p
-  try simp only [liftWGObserver_bind, liftWGObserver_pure, apply_ite]
   apply c.nativeStore P
   apply SameView.of_wp
   intro initial
-  mvcgen [WG.andM, branch, AmbientM.branch]
+  unfold WG.andM
+  apply preserves_bind (hoare_liftAmbient (AmbientM.branch _ _) _)
+  intro running
+  split
+  · exact hoare_liftAmbient (AmbientM.branch _ _) _
+  · exact preserves_pure _
 
 theorem modPeerTimerPrefix_spec_product (c : ProductAmbientContracts I) (P : IdentityView → Prop)
     (site : HiddenSite) (pid : PeerId) (t : PeerTimer) (delay : Nat) :
@@ -938,27 +990,22 @@ theorem modPeerTimerPrefix_spec_product (c : ProductAmbientContracts I) (P : Ide
   simp only [modPeerTimerPrefix, liftWGObserver_bind, liftWGObserver_pure, apply_ite]
   apply PrefixEnsures.bind (c.nativeStore P _ ((callerJiffies_sameWGWorld site).factor wgStoreView))
   intro jc
-  try simp only [liftWGObserver_bind, liftWGObserver_pure, apply_ite]
   apply PrefixEnsures.bind (modPeerTimerGuardPrefix_spec_product c P pid)
   intro b
-  try simp only [liftWGObserver_bind, liftWGObserver_pure, apply_ite]
   split
   · exact PrefixEnsures.bind (armTimerPrefix_spec_product c P pid t delay jc) (fun _ => c.pure P _)
   · exact c.pure P _
 
 theorem timersHandshakeCompletePrefix_spec_product (c : ProductAmbientContracts I) (P : IdentityView → Prop)
     (pid : PeerId) (site : HiddenSite) : ProductAmbientSpec I P (liftWGObserver (timersHandshakeCompletePrefix pid site)) (fun _ => P) := by
-  simp only [timersHandshakeCompletePrefix, liftWGObserver_bind, liftWGObserver_pure, apply_ite]
+  simp only [timersHandshakeCompletePrefix, liftWGObserver_bind]
   apply PrefixEnsures.bind (delTimerPrefix_spec_product c P _ _)
   intro _
-  try simp only [liftWGObserver_bind, liftWGObserver_pure, apply_ite]
   apply PrefixEnsures.bind (modifyPeerKeysPrefix_spec_product c P pid
     (fun p => {p with timerHandshakeAttempts := 0, sentLastminuteHandshake := false}) (fun _ => rfl))
   intro _
-  try simp only [liftWGObserver_bind, liftWGObserver_pure, apply_ite]
   apply PrefixEnsures.bind (c.nativeStore P _ (fun initial => hoare_liftAmbient (AmbientM.hidden site) (fun w => wgStoreView w = initial)))
   intro now
-  try simp only [liftWGObserver_bind, liftWGObserver_pure, apply_ite]
   exact modifyPeerKeysPrefix_spec_product c P _ _ (fun _ => rfl)
 
 theorem timersAnyAuthenticatedPacketReceivedPrefix_spec_product (c : ProductAmbientContracts I) (P : IdentityView → Prop)
