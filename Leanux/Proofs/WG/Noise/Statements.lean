@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Noise.InterleavedFreshClaims
 import Leanux.Proofs.WG.Noise.FreshHistoryClaims
 import Leanux.Proofs.WG.Noise.ConfirmationReinstallClaims
 import Leanux.Proofs.WG.Noise.TagSequenceClaims
@@ -454,6 +455,27 @@ theorem original_fresh_confirmation_history (pid : PeerId)
         (freshConfirmedIds receipts).Nodup) := by
   refine ⟨?_,fresh_confirmation_history pid operations entry⟩
   rw [observedFreshSequence_erase]
+  intro g ambient _
+  rfl
+
+/-- Arbitrary-peer interleavings of the nine original native lifecycle calls
+retain distinct successful confirmation IDs for each tracked peer under its
+initial next/cursor bound. Observation erasure preserves complete native
+results, state and first Stop. Shared initial next IDs are allowed: global
+cross-peer uniqueness, key residency, peer recreation and device reset are
+not concluded. This is a finite native history, not initialized runner closure. -/
+theorem original_interleaved_confirmation_history (tracked : PeerId)
+    (operations : List InterleavedFreshOperation) (entry : Campaign2.Snapshot) :
+    Campaign2.AgreesOn (fun _ => True)
+      (do let receipts ← observedInterleavedFreshSequence operations
+          pure (receipts.map fun receipt => receipt.call.result))
+      (runInterleavedFreshSequence operations) ∧
+    Campaign2.Ensures (observedInterleavedFreshSequence operations)
+      (fun s => s = entry ∧ FreshNextBound tracked entry)
+      (fun receipts final => InterleavedFreshChain tracked entry operations receipts final ∧
+        (interleavedConfirmedIds tracked receipts).Nodup) := by
+  refine ⟨?_,interleaved_fresh_confirmation_history tracked operations entry⟩
+  rw [observedInterleavedFreshSequence_erase]
   intro g ambient _
   rfl
 
