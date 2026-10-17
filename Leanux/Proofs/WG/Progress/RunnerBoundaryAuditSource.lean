@@ -7,14 +7,18 @@ namespace Leanux.Proofs.WG.Progress
 open Lean Leanux Leanux.Runner Campaign2
 
 def runnerEntry (trace : Trace) (state : RunnerAccumulator) : World :=
-  { state.1 with hidden := trace.hidden.map (·[state.2.1.size]!), netRxRaised := false }
+  { state.1 with
+    ambient := { state.1.ambient with hidden := trace.hidden.map (·[state.2.1.size]!) }
+    fixture := { state.1.fixture with
+      hiddenAhead := trace.hidden.map fun h => (h.drop (state.2.1.size + 1)).toList }
+    wg := { state.1.wg with netRxRaised := false } }
 
 theorem runnerOperation_facts (trace : Trace) (op : Operation) (state : RunnerAccumulator)
     (ret : Int) (after : World) (run : runnerOperation trace op state = .ok (ret, after)) :
     (∃ middle, (syscall (toSyscall state.2.1 state.2.2.1 state.2.1.size op)).run
         (runnerEntry trace state) = .ok (ret, middle) ∧
-      skipAmbient.run middle = .ok ((), after)) ∧
-    RunnerBoundaryClean ⟨state.2.1.size, ret, snapshot after⟩ := by
+      (skipAmbient : M Unit).run middle = .ok ((), after)) ∧
+    RunnerBoundaryClean ⟨state.2.1.size, ret, Campaign2.Product.snapshot after⟩ := by
   unfold runnerOperation at run
   change ((Except.mapError (fun e => (state.2.1.size, e))
     ((syscall (toSyscall state.2.1 state.2.2.1 state.2.1.size op)).run
@@ -25,26 +29,26 @@ theorem runnerOperation_facts (trace : Trace) (op : Operation) (state : RunnerAc
   | ok pair =>
     obtain ⟨value, middle⟩ := pair
     simp only [hs, Except.mapError, Bind.bind, Except.bind] at run
-    cases ha : skipAmbient.run middle with
-    | error error => simp [ha, Except.mapError, bind, Except.bind] at run
+    cases ha : (skipAmbient : M Unit).run middle with
+    | error error => simp [ha] at run
     | ok pair =>
       obtain ⟨u, final⟩ := pair
       cases u
-      simp only [ha, Except.mapError, Bind.bind, Except.bind] at run
-      cases hh : final.hidden with
+      simp only [ha] at run
+      cases hh : final.ambient.hidden with
       | none =>
-        cases hsusp : final.suspended <;> cases hn : final.netRxRaised
-        all_goals simp [hh, hsusp, hn, pure, Except.pure, bind, Except.bind] at run
+        cases hsusp : final.ambient.suspended <;> cases hn : final.wg.netRxRaised
+        all_goals simp [hh, hsusp, hn, pure, Except.pure] at run
         all_goals obtain ⟨rfl, rfl⟩ := run
-        all_goals exact ⟨⟨middle, rfl, ha⟩, by simp [RunnerBoundaryClean, snapshot, hh, hsusp, hn]⟩
+        all_goals exact ⟨⟨middle, rfl, ha⟩, by simp [RunnerBoundaryClean, Campaign2.Product.snapshot, Campaign2.snapshot, hh, hsusp, hn]⟩
       | some records =>
         cases records with
-        | cons record rest => simp [hh, pure, Except.pure, bind, Except.bind] at run
+        | cons record rest => simp [hh, pure, Except.pure] at run
         | nil =>
-          cases hsusp : final.suspended <;> cases hn : final.netRxRaised
-          all_goals simp [hh, hsusp, hn, pure, Except.pure, bind, Except.bind] at run
+          cases hsusp : final.ambient.suspended <;> cases hn : final.wg.netRxRaised
+          all_goals simp [hh, hsusp, hn, pure, Except.pure] at run
           all_goals obtain ⟨rfl, rfl⟩ := run
-          all_goals exact ⟨⟨middle, rfl, ha⟩, by simp [RunnerBoundaryClean, snapshot, hh, hsusp, hn]⟩
+          all_goals exact ⟨⟨middle, rfl, ha⟩, by simp [RunnerBoundaryClean, Campaign2.Product.snapshot, Campaign2.snapshot, hh, hsusp, hn]⟩
 
 theorem runnerPresent_facts (op : Operation) (state : RunnerAccumulator) (ret : Int)
     (after : World) (step : ForInStep RunnerAccumulator)
@@ -64,7 +68,7 @@ theorem runnerStep_facts (trace : Trace) (op : Operation) (state : RunnerAccumul
     (step : ForInStep RunnerAccumulator) (run : runnerStep trace op state = .ok step) :
     ∃ next ret, step = .yield next ∧ next.2.1 = state.2.1.push ret ∧
       runnerOperation trace op state = .ok (ret, next.1) ∧
-      RunnerBoundaryClean ⟨state.2.1.size, ret, snapshot next.1⟩ := by
+      RunnerBoundaryClean ⟨state.2.1.size, ret, Campaign2.Product.snapshot next.1⟩ := by
   rw [runnerStep_operation_source] at run
   cases hr : runnerOperation trace op state with
   | error error => simp [hr, bind, Except.bind] at run
@@ -83,7 +87,7 @@ def runnerAuditLoop (trace : Trace) : List Operation → RunnerAccumulator →
   | op :: ops, state => do
     let (ret, after) ← runnerOperation trace op state
     let step ← runnerPresent op state ret after
-    let cut : RunnerBoundary := ⟨state.2.1.size, ret, snapshot after⟩
+    let cut : RunnerBoundary := ⟨state.2.1.size, ret, Campaign2.Product.snapshot after⟩
     match step with
     | .done next => return (next, [cut])
     | .yield next =>
@@ -97,7 +101,7 @@ theorem runnerAuditLoop_cons_success (trace : Trace) (op : Operation) (ops : Lis
       runnerOperation trace op state = .ok (ret, after) ∧
       next.1 = after ∧ next.2.1 = state.2.1.push ret ∧
       runnerAuditLoop trace ops next = .ok (final, rest) ∧
-      cuts = ⟨state.2.1.size, ret, snapshot after⟩ :: rest := by
+      cuts = ⟨state.2.1.size, ret, Campaign2.Product.snapshot after⟩ :: rest := by
   simp only [runnerAuditLoop] at run
   cases ho : runnerOperation trace op state with
   | error error => simp [ho, Bind.bind, Except.bind] at run
@@ -105,15 +109,15 @@ theorem runnerAuditLoop_cons_success (trace : Trace) (op : Operation) (ops : Lis
     obtain ⟨ret, after⟩ := pair
     simp only [ho, Bind.bind, Except.bind] at run
     cases hp : runnerPresent op state ret after with
-    | error error => simp [hp, Bind.bind, Except.bind] at run
+    | error error => simp [hp] at run
     | ok step =>
       obtain ⟨next, rfl, hw, hr⟩ := runnerPresent_facts op state ret after step hp
-      simp only [hp, Bind.bind, Except.bind] at run
+      simp only [hp] at run
       cases hl : runnerAuditLoop trace ops next with
-      | error error => simp [hl, Bind.bind, Except.bind] at run
+      | error error => simp [hl] at run
       | ok pair =>
         obtain ⟨last, rest⟩ := pair
-        simp only [hl, Bind.bind, Except.bind, Pure.pure, Except.pure,
+        simp only [hl, Pure.pure, Except.pure,
           Except.ok.injEq, Prod.mk.injEq] at run
         obtain ⟨rfl, rfl⟩ := run
         exact ⟨ret, after, next, rest, rfl, hw, hr, hl, rfl⟩
@@ -138,7 +142,7 @@ theorem runnerAuditLoop_erases (trace : Trace) (ops : List Operation)
         | yield next =>
           specialize ih next
           cases hl : runnerAuditLoop trace ops next <;>
-            simp_all [Except.map, Bind.bind, Except.bind, Pure.pure, Except.pure]
+            simp_all [Except.map, Pure.pure, Except.pure]
 
 theorem runnerAuditLoop_facts (trace : Trace) (ops : List Operation)
     (state final : RunnerAccumulator) (cuts : List RunnerBoundary)
@@ -159,15 +163,15 @@ theorem runnerAuditLoop_facts (trace : Trace) (ops : List Operation)
       obtain ⟨ret, after⟩ := pair
       simp only [ho, Bind.bind, Except.bind] at run
       cases hp : runnerPresent op state ret after with
-      | error error => simp [hp, Bind.bind, Except.bind] at run
+      | error error => simp [hp] at run
       | ok step =>
         obtain ⟨next, rfl, hw, hr⟩ := runnerPresent_facts op state ret after step hp
-        simp only [hp, Bind.bind, Except.bind] at run
+        simp only [hp] at run
         cases hl : runnerAuditLoop trace ops next with
-        | error error => simp [hl, Bind.bind, Except.bind] at run
+        | error error => simp [hl] at run
         | ok pair =>
           obtain ⟨last, rest⟩ := pair
-          simp only [hl, Bind.bind, Except.bind, Pure.pure, Except.pure,
+          simp only [hl, Pure.pure, Except.pure,
             Except.ok.injEq, Prod.mk.injEq] at run
           obtain ⟨rfl, rfl⟩ := run
           obtain ⟨indices, clean, size⟩ := ih next last rest hl
@@ -183,20 +187,20 @@ theorem runnerAuditLoop_facts (trace : Trace) (ops : List Operation)
           · simp only [List.length_cons]
             omega
 
-def executeTraceWithBoundaries (trace : Trace) (placeholders floodExact : Bool := false) :
+def executeTraceWithBoundaries (trace : Trace) (placeholders : Bool := false) :
     Except (Nat × Stop) RunnerBoundaryAudit := do
-  let initial ← runnerInitial trace placeholders floodExact
+  let initial ← runnerInitial trace placeholders
   let (final, cuts) ← runnerAuditLoop trace trace.ops.toList
     (initial, #[], #[], #[], #[], #[])
   let output ← runnerFinish trace final
   return ⟨output, cuts⟩
 
-theorem executeTraceWithBoundaries_erases (trace : Trace) (placeholders floodExact : Bool) :
-    (executeTraceWithBoundaries trace placeholders floodExact).map RunnerBoundaryAudit.output =
-      executeTrace trace placeholders floodExact := by
+theorem executeTraceWithBoundaries_erases (trace : Trace) (placeholders : Bool) :
+    (executeTraceWithBoundaries trace placeholders).map RunnerBoundaryAudit.output =
+      executeTrace trace placeholders := by
   rw [← executeTrace_boundary_source]
   unfold executeTraceWithBoundaries runnerBoundarySource
-  cases hi : runnerInitial trace placeholders floodExact with
+  cases hi : runnerInitial trace placeholders with
   | error error => rfl
   | ok initial =>
     simp only [Bind.bind, Except.bind]
@@ -205,29 +209,29 @@ theorem executeTraceWithBoundaries_erases (trace : Trace) (placeholders floodExa
     | error error => rfl
     | ok pair =>
       obtain ⟨final, cuts⟩ := pair
-      simp only [Except.map, Bind.bind, Except.bind]
+      simp only [Except.map]
       cases runnerFinish trace final <;> rfl
 
-theorem executeTraceWithBoundaries_facts (trace : Trace) (placeholders floodExact : Bool)
+theorem executeTraceWithBoundaries_facts (trace : Trace) (placeholders : Bool)
     (audit : RunnerBoundaryAudit)
-    (run : executeTraceWithBoundaries trace placeholders floodExact = .ok audit) :
+    (run : executeTraceWithBoundaries trace placeholders = .ok audit) :
     audit.boundaries.map RunnerBoundary.index = List.range trace.ops.size ∧
     audit.boundaries.length = trace.ops.size ∧
     ∀ cut ∈ audit.boundaries, RunnerBoundaryClean cut := by
   unfold executeTraceWithBoundaries at run
-  cases hi : runnerInitial trace placeholders floodExact with
+  cases hi : runnerInitial trace placeholders with
   | error error => simp [hi, Bind.bind, Except.bind] at run
   | ok initial =>
     simp only [hi, Bind.bind, Except.bind] at run
     cases hl : runnerAuditLoop trace trace.ops.toList (initial, #[], #[], #[], #[], #[]) with
-    | error error => simp [hl, Bind.bind, Except.bind] at run
+    | error error => simp [hl] at run
     | ok pair =>
       obtain ⟨final, cuts⟩ := pair
-      simp only [hl, Bind.bind, Except.bind] at run
+      simp only [hl] at run
       cases hf : runnerFinish trace final with
-      | error error => simp [hf, Bind.bind, Except.bind] at run
+      | error error => simp [hf] at run
       | ok output =>
-        simp only [hf, Bind.bind, Except.bind, Pure.pure, Except.pure, Except.ok.injEq] at run
+        simp only [hf, Pure.pure, Except.pure, Except.ok.injEq] at run
         subst audit
         obtain ⟨indices, clean, _⟩ := runnerAuditLoop_facts trace trace.ops.toList
           (initial, #[], #[], #[], #[], #[]) final cuts hl
