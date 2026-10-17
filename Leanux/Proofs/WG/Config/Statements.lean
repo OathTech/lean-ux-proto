@@ -1,3 +1,6 @@
+import Leanux.Proofs.WG.Config.CursorReadySource
+import Leanux.Proofs.WG.Config.MixedPeerSerializerSource
+import Leanux.Proofs.WG.Config.MixedPeerCoalesceSource
 import Leanux.Proofs.WG.Config.PeerKeyGetterClaims
 import Leanux.Proofs.WG.Config.PeerMixedGetterClaims
 import Leanux.Proofs.WG.Config.PeerScalarGetterClaims
