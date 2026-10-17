@@ -1,7 +1,7 @@
 import Leanux.Proofs.WG.Config.PortRefusalModel
 import Leanux.Proofs.WG.Config.PortRefusalFrames
 import Leanux.Proofs.WG.Config.DevicePorts
-import Leanux.Proofs.WG.Config.ScalarGetterFrames
+import Leanux.Proofs.WG.Config.ScalarGetterSource
 
 set_option autoImplicit false
 set_option pp.structureInstances false

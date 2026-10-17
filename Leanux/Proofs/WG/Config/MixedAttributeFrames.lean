@@ -1,4 +1,4 @@
-import Leanux.Proofs.WG.Config.ReadbackFrames
+import Leanux.Proofs.WG.Config.ReadbackSource
 import Leanux.Proofs.WG.Noise.AccessSource
 import Leanux.Proofs.WG.Noise.ComponentFrames
 

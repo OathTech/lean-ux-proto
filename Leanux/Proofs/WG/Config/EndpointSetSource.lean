@@ -1,5 +1,5 @@
 import Leanux.Proofs.WG.Config.EndpointSetModel
-import Leanux.Proofs.WG.Config.ScalarGetterFrames
+import Leanux.Proofs.WG.Config.ScalarGetterSource
 
 set_option autoImplicit false
 namespace Leanux.Proofs.WG.Config

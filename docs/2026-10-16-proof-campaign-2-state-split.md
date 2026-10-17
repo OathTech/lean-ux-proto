@@ -5494,3 +5494,15 @@ lake env leanchecker --fresh MODULE. Build all owned modules by passing module
 paths under Campaign2, Noise, Index, Roaming, Config, Progress and TimerDiscipline.
 The separately failing inherited aggregate is scripts/in-bundle scripts/proof-gate.
 Use capped, 32 Lean threads and 16 QEMU slots on the shared host.
+
+## Subsequent source/frame classification correction
+
+Eight owned native execution contracts were later moved without changing their
+statements, proofs or existing options: five from Config/ReadbackFrames to
+ReadbackSource and three from ScalarGetterFrames to ScalarGetterSource.
+ReadbackFrames retains its two pure data declarations; ScalarGetterFrames is
+removed after its full contents move. Direct imports follow the Source files.
+This correction removes no theorem and changes no historical retrofit count.
+The later finite-peer setter compositions keep their projected claims in
+PeerScalarGetterClaims and PeerMixedGetterClaims; pure preservation lives in
+PeerPageCapacityFrames and PeerMixedGetterFrames.

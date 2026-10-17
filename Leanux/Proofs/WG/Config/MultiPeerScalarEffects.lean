@@ -1,5 +1,5 @@
 import Leanux.Proofs.WG.Config.MultiPeerScalarModel
-import Leanux.Proofs.WG.Config.ScalarGetterFrames
+import Leanux.Proofs.WG.Config.ScalarGetterSource
 
 set_option autoImplicit false
 set_option pp.structureInstances false

@@ -1,4 +1,4 @@
-import Leanux.Proofs.WG.Config.ScalarGetterFrames
+import Leanux.Proofs.WG.Config.ScalarGetterSource
 import Leanux.Proofs.WG.Config.ClaimView
 
 set_option pp.structureInstances false

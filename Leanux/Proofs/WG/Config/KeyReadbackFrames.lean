@@ -1,6 +1,6 @@
 import Leanux.Proofs.WG.Config.KeyReadbackModel
 import Leanux.Proofs.WG.Config.KeyRequest
-import Leanux.Proofs.WG.Config.ScalarGetterFrames
+import Leanux.Proofs.WG.Config.ScalarGetterSource
 
 /-! Substantive native socket/selector and within-Device rotation frames. -/
 

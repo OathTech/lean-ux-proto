@@ -1,4 +1,4 @@
-import Leanux.Proofs.WG.Config.ReadbackFrames
+import Leanux.Proofs.WG.Config.ReadbackSource
 
 set_option pp.structureInstances false
 set_option autoImplicit false

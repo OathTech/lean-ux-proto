@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.Config.PeerMixedGetterClaims
+import Leanux.Proofs.WG.Config.PeerScalarGetterClaims
 import Leanux.Proofs.WG.Config.PeerGetterClaims
 import Leanux.Proofs.WG.Config.PeerPagePlanClaims
 import Leanux.Proofs.WG.Config.PeerPageCoalesceClaims
@@ -1893,5 +1895,80 @@ theorem original_finite_empty_ips_getter (d : Device) (peers : PeerId → Peer) 
         s.wg.nlSock7 = socketReadbackFinal sock d ∧
         CursorHeld d (peerGetterFinalDevice d peers) none) := by
   exact peer_getter_returns d peers sock residents empty headerFits firstFits fresh cursorData idle emptyQueue within
+
+/-- Actual scalar set/get across the canonical finite empty-IP peer pages.
+A malformed second peer retains the first peer writes and returns -EINVAL.
+The ordered getter cursor handoffs produce the stated final Device; boundary
+freshness and cursor lifetime premises concern the effective post-set plan.
+Empty/repeated lists and arbitrary endpoints are admitted subject to those
+explicit plan conditions and the actual getter loop budget. -/
+theorem original_scalar_paginated_multi_peer_get_after_set (d : Device) (peers : PeerId → Peer)
+    (key psk : Key) (interval : Nat) (bad : Bool) (pid : PeerId) (sock : NlSock)
+    (found : d.peerHashtable.find? (·.1 == key) = some (key,pid))
+    (resident : d.peers[pid]? = some (peers pid))
+    (live : 0 < (peers pid).refcount) (bounded : (peers pid).refcount + 1 < 2 ^ 31)
+    (down : d.running = false)
+    (residents : ∀ q ∈ d.peerList, d.peers[q]? = some (peers q))
+    (emptyIps : ∀ q ∈ d.peerList, (peers q).allowedipsList = [])
+    (idle : sock.cbRunning = false) (emptyQueue : sock.queue = []) :
+    let updated := scalarRequestDevice d pid (peers pid) psk interval
+    let configured := scalarPeerView peers pid psk interval
+    devicePrefixSpace updated ≤ NLMSG_GOODSIZE →
+    (∀ q rest, updated.peerList = q :: rest →
+      peerFixedSpace (configured q) ≤ NLMSG_GOODSIZE-devicePrefixSpace updated) →
+    peerPageBoundaryFresh [] (peerPages configured updated updated.peerList) →
+    PeerPageCursorData configured (peerPages configured updated updated.peerList) →
+    peerPageReceiveCount configured updated updated.peerList ≤ 4096 →
+    Campaign2.Returns (do
+      let ret ← wgSetDevice (scalarDeviceAttrs d key psk interval bad)
+      let dump ← wgGetDevice (byIndex d)
+      pure (ret,dump))
+      (fun s => s.wg.device = some d ∧ s.wg.nlSock7 = sock ∧ ClaimView.selectsDevice s d)
+      (fun result s =>
+        result = ((if bad then -EINVAL else 0),.ok (multiPeerJson updated configured)) ∧
+        s.wg.device = some (peerGetterFinalDevice updated configured) ∧
+        s.wg.nlSock7 = socketReadbackFinal sock updated ∧
+        CursorHeld updated (peerGetterFinalDevice updated configured) none) :=
+  scalar_paginated_peers_get_after_set d peers key psk interval bad pid sock
+    found resident live bounded down residents emptyIps idle emptyQueue
+
+/-- Actual fwmark and selected-peer scalar writes followed by complete finite
+empty-IP peer pagination. Every list occurrence is returned in order, including
+duplicates and arbitrary endpoint serialization; an unlisted target is changed
+only in the Device. Hidden reset Stops and earlier writes before later EINVAL
+remain. The setter successor and the getter's ordered cursor writes are distinct;
+no raw peer-map equality, callback success or readiness premise is supplied. -/
+theorem original_mixed_peer_pages_get_after_set (d : Device) (peers : PeerId → Peer)
+    (mark : Nat) (key psk : Key) (interval : Nat) (bad : Bool) (pid : PeerId) (sock : NlSock)
+    (net : d.creatingNet = true)
+    (found : d.peerHashtable.find? (·.1 == key) = some (key,pid))
+    (resident : d.peers[pid]? = some (peers pid))
+    (live : 0 < (peers pid).refcount) (bounded : (peers pid).refcount + 1 < 2 ^ 31)
+    (down : d.running = false)
+    (residents : ∀ q ∈ d.peerList, d.peers[q]? = some (peers q))
+    (emptyIps : ∀ q ∈ d.peerList, (peers q).allowedipsList = [])
+    (headerFits : devicePrefixSpace d ≤ NLMSG_GOODSIZE)
+    (firstFits : ∀ q rest, d.peerList = q :: rest →
+      peerFixedSpace (peers q) ≤ NLMSG_GOODSIZE-devicePrefixSpace d)
+    (fresh : peerPageBoundaryFresh [] (peerPages peers d d.peerList))
+    (cursorData : PeerPageCursorData peers (peerPages peers d d.peerList))
+    (idle : sock.cbRunning = false) (emptyQueue : sock.queue = [])
+    (within : peerPageReceiveCount peers d d.peerList ≤ 4096) :
+    Campaign2.Ensures (do
+      let ret ← wgSetDevice (mixedFwmarkAttrs d mark key psk interval bad)
+      let dump ← wgGetDevice (byIndex d)
+      pure (ret,dump))
+      (fun s => s.wg.device = some d ∧ s.wg.nlSock7 = sock ∧ ClaimView.selectsDevice s d)
+      (fun result s =>
+        result = ((if bad then -EINVAL else 0),.ok
+          (multiPeerJson (mixedFwmarkBase d mark) (scalarPeerView peers pid psk interval))) ∧
+        s.wg.nlSock7 = {sock with queue := [],ctx := {hasWg := true},prevSeq := d.deviceUpdateGen + 1,dumpDoneErrno := 0,cbRunning := false} ∧
+        ∃ postSet values, MultiMixedEffect d mark pid psk interval postSet ∧
+          (∀ q ∈ d.peerList, postSet.peers[q]? = some (values q)) ∧
+          s.wg.device = some (peerGetterFinalDevice postSet values) ∧
+          CursorHeld postSet (peerGetterFinalDevice postSet values) none) := by
+  exact multi_mixed_pages_get_after_set d peers mark key psk interval bad pid sock net
+    found resident live bounded down residents emptyIps headerFits firstFits fresh cursorData
+    idle emptyQueue within
 
 end Leanux.Proofs.WG.Config
