@@ -11,10 +11,10 @@ new worlds; new R3/R4 results follow the retrofit.
 | Census | Lean files | Named theorems |
 | --- | ---: | ---: |
 | Validated baseline `00641c6` | 471 | 7,715 |
-| Completed retrofit checkpoints | 452 | 6,531 |
+| Completed retrofit checkpoints | 452 | 6,535 |
 
-Completed changes comprise **2,640 retyped/generalized, 1,691 deleted,
-1,799 retained contract shapes and 507 added theorems**. Retyping changes the
+Completed changes comprise **2,693 retyped/generalized, 1,691 deleted,
+1,816 retained contract shapes and 511 added theorems**. Retyping changes the
 actual carrier or observation, including shorthand contracts whose functions
 move to a native monad. Namespace-only product qualification and equivalent
 projection relocation count as retained. The census includes private and
@@ -214,6 +214,36 @@ parse failure printed no roots; its corrected input passed all fifty roots.
 Recovery snapshots include 20261017T010823Z for the panic, 010900Z for a root
 driver syntax failure before tool execution, and 011410Z for the worker
 serialization error following its failed import check. No limit was raised.
+
+The receive-credit and syscall-history checkpoint carries 70→74 theorems:
+fifty-three native/generalized contracts, seventeen retained shapes and four
+private additions. No old theorem is deleted. Ingress retains all twenty-four
+claims; its two new private lemmas derive nonfinal repayment from the actual
+ENOSPC branch and existing queue/carrier funding. The original successful
+key-put premise is unchanged. Thus this specialization survives the separate
+unrestricted-totality counterexample. Protection retains all thirty-three
+names, including arbitrary actual StateT/project instances for its generic
+frames. TX packet frames remain substantive because the packet component can
+also write the RX store.
+
+Dispatch and syscall history retain all thirteen original product contracts.
+The literal syscall observer now includes the current FIB-shape output suffix;
+two private projection cuts separate entry from return-to-user work. Arbitrary
+socket bodies and projected continuations keep their original domains.
+Independent full source/contract reviews pass for all four modules. Central
+builds pass (386 and 313 jobs); these modules emit no warnings, while their
+closures report 1,325 and 1,285 inherited warnings respectively. All ninety-five
+explicit named declarations have standard-only axioms, and all four fresh
+kernel replays pass. These are scoped passes, not a full proof-gate pass.
+
+Ingress worker checks recorded eight ordinary failures and two passes; the
+root's earlier index-loan prefix also passed. Protection-frame development
+recorded six ordinary failures and two passes. Dispatch/syscall development
+recorded nine changed-source failures, two passes and three failed isolated
+diagnostics before the final central pass. Three receive-layer axiom-driver
+setup failures printed incomplete inventories; the corrected exact-Name
+driver passed all seventy-six receive roots. No infrastructure retry or limit
+change occurred in this checkpoint.
 
 Remaining work is the routing/origin terminal carry, stamped
 traffic/environment/runner history, material lifecycle/support callers, RX
