@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Noise.ResponseEdgeClaims
 import Leanux.Proofs.WG.Noise.RotationClaims
 import Leanux.Proofs.WG.Noise.ConfirmationSequenceClaims
 import Leanux.Proofs.WG.Noise.ClearClaims
@@ -309,5 +310,16 @@ theorem original_create_initiation_ready (pid : PeerId) (d : Device) (p : Peer) 
         s.wg.device = some (InitiationReady.result pid d p ephemeral clock fresh.value).2 ∧ s.ambient.hidden = some rest ∧ s.ambient.armRecords = mode) :=
   InitiationReady.createInitiation_projected pid d p mode resident identity word nonnull
     ephemeral clock randomWidth width secretNonNull pubOk dhOk collisions fresh rest allCollide isFresh
+
+/-- Whole response consumption returns a peer only from its entry
+created-initiation state and leaves it in consumed-response state. This derives
+the initial tag from the actual successful run; it assumes no owner coherence,
+residency or record readiness and does not describe failed-call rollback. -/
+theorem original_consume_response_entry_edge (msg : List UInt8) (before : Campaign2.Snapshot) :
+    Campaign2.Ensures (consumeResponse msg) (fun s => s = before)
+      (fun result after => ∀ pid, result = some pid →
+        before.tagAt pid = some HANDSHAKE_CREATED_INITIATION ∧
+        after.tagAt pid = some HANDSHAKE_CONSUMED_RESPONSE) :=
+  consumeResponse_entry_edge msg before
 
 end Leanux.Proofs.WG.Noise

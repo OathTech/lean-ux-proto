@@ -10,24 +10,25 @@ merged; the executable mirror remains byte-identical to b700659.
 
 | Result | Headlines | Checked support | Split status |
 | --- | ---: | ---: | --- |
-| H1 Noise | 22 | 185 | Full terminal closure current; wider caller/lifetime/clock claims open. |
-| H2 Index | 72 | 405 | Full terminal closure and ingress/expiry owner coherence current; reachable whole-driver uniqueness/coherence open. |
+| H1 Noise | 23 | 189 | Full terminal closure and whole-response entry edge current; wider caller/lifetime/clock claims open. |
+| H2 Index | 74 | 412 | Full terminal closure and ingress/expiry/response owner coherence current; reachable whole-driver uniqueness/coherence open. |
 | H3 Roaming | 13 | 157 | Full terminal closure current; callback authentication provenance and broader caller coverage open. |
-| H4 Configuration | 80 | 586 | Full terminal closure current; global ownership, queued cleanup and general pagination open. |
+| H4 Configuration | 81 | 590 | Full terminal closure and ordered mixed-peer readback current; global ownership, queued cleanup and general pagination open. |
 | H5 Progress | 42 | 288 | Full terminal closure current with exact bounded outcomes and checked refutations; global progress/coherent-ring adequacy open. |
 | H6 Timers | 52 | 445 | Full terminal closure, first outer timer turn and intermediate retransmit receipt current; whole scheduler episodes, complete caller coverage and session-relative counts open. |
 
-The checked surface is 2,066 theorems in all 627 campaign-owned modules.
+The checked surface is 2,081 theorems in all 638 campaign-owned modules.
 The completed retrofit accounts for 1,983: 1,321 retyped, 244 explicitly
-corrected, 239 retained and 179 added support/finding declarations. Seventy-two
+corrected, 239 retained and 179 added support/finding declarations. Seventy-nine
 subsequent H2 declarations add table preservation and local owner coherence.
-Four H4 declarations add mixed fwmark/scalar readback and seven H6 declarations
+Four H1 declarations add whole-response entry provenance; eight H4 declarations
+add mixed fwmark/scalar and ordered peer-attribute readback. Seven H6 declarations
 connect the first outer timer turn and its retransmit receipt. Of the 1,831 baseline theorems, 22 frames
 were deleted because types supply their facts and five false cookie supports
 were separately retired with checked counterexamples. No baseline declaration
 remains awaiting retrofit; all 258 original terminal names/order survive,
-with twenty new H2 headlines, one new H4 headline and two new H6 headlines
-(281 total).
+with one new H1 headline, twenty-two new H2 headlines, two new H4 headlines
+and two new H6 headlines (285 total).
 
 The [retrofit report](2026-10-16-proof-campaign-2-state-split.md) records
 claim/frame files, corrections, before/after counts and validation.
@@ -594,6 +595,106 @@ No limit/cap increase or infrastructure rerun occurs; the unchanged inherited
 full-gate failure is not rerun. Reproduce with scripts/in-bundle lake build
 Leanux.Proofs.WG.Index.Statements and scripts/in-bundle lake env leanchecker
 --fresh on that module, under capped with 32 Lean threads and 16 QEMU slots.
+
+## H1 continuation: the response edge starts at whole-call entry
+
+An actual consumeResponse returning a peer now derives that peer's entry
+CREATED_INITIATION tag and final CONSUMED_RESPONSE tag. Previously the H3
+observer established the former only after lookup. The new pure lookup-update
+frame proves that acquisition and owner-word storeback preserve the referenced
+peer's tag, including owner/peer aliases. Actual prefix execution and existing
+observer erasure connect that fact to the whole call. No residency, coherence,
+authentication or record-readiness premise is added.
+
+ResponseEdgeFrames, ResponseEdgeSource and ResponseEdgeClaims separate the
+pure frame, native bridge and projected claim; Statements adds a literal wrapper.
+Four theorems bring H1 to 23 headlines/189 theorems. Failed-call rollback,
+whole-driver edge ownership and allocation-lifetime confirmation remain open.
+
+## H2 continuation: response and cookie consumers retain owner coherence
+
+Actual consumeResponse and cookieMessageConsume now preserve local hashed-owner
+coherence on every normal exit. A general indexLookup_peer_held contract derives
+the retained peer reference from the actual returned lookup for any owner mask.
+OwnerCoherenceHeldFrames contains the internal native held-reference predicate,
+metadata-preserving peer writes and non-final cleanup; the two public caller
+claims remain projected. Response composition reuses the existing exact H3
+observer; cookie composition factors the actual original consumer.
+
+Rejected paths, optional devices, arbitrary records and all aliases remain in
+the original partial domain. Crypto/clock errors remain Stops. No entry reference
+budget or cleanup readiness is assumed; successful lookup supplies count greater
+than one, which discharges final-release detachment internally. Seven theorems
+bring H2 to 74 headlines/412 theorems. Whole-driver reachable ownership remains
+open; publication and genuinely final release retain their separate obligations.
+
+## H4 continuation: ordered mixed peer attributes and their readback
+
+One actual setPeerCmd now combines PSK, one valid Allowed-IP, an optional malformed
+second entry and keepalive, followed by actual getPeerDump. Normal allocation
+refusal retains the PSK and sequence increment; later malformed input retains
+the PSK and inserted address; only complete success reaches keepalive. Cleanup
+restores the original positive peer reference count. Exact readback includes
+the result code, peer fields, JSON address masking, cursor reset and consumed room.
+
+Premises are explicit: matching resident peer lookup, positive bounded reference
+count, stopped device, empty selected root, legal prefix width, and, for readback,
+empty target list and finite dump cursor/sequence/capacity conditions. There is
+no allocation-record readiness, allocation-ID freshness or singleton-device
+premise. Cursor aliases retain their actual overwrite effect, without asserting
+global trie consistency. Stops are retained and no totality or wire-format claim
+is made. MixedPeerModel/Frames/Source/Claims separate exact transforms, their
+readback facts, native execution and projected composition. Four theorems bring
+H4 to 81 headlines/590 theorems.
+
+### Validation of the H1/H2/H4 continuation
+
+All independent reviews find no correctness/domain issue. New proofs use stock
+limits, with no suppressions or cap increase. H1 probes 1 and 2 fail three and
+one proof-form errors (three unused-simp warnings in the first); probe 3 checks
+with one unused-simp warning; probe 4 is clean. H2 held-support probes 1 and 2
+fail three and two errors with twelve cascade warnings each; probe 3 is clean.
+Response probes 4 and 5 fail three and four parser/cascade errors; probe 6 is
+clean. Root's general lookup probe passes first time. Cookie probes 1 and 2 fail
+three import/layout and two native-postcondition inference diagnostics; probe 3
+is clean.
+
+H4 probes 1–5 fail respectively: one source-reduction goal/one warning; two
+diagnostic sites with nine bind-reduction goals/seventeen warnings; eight final
+device goals/two warnings; record-layout parsing at two sites and a cascade;
+missing Bridge import and its intro cascade. Probes 6 and 7 check the full
+package and narrowed split imports cleanly. One early preview of probe 2 was
+premature; its completed diagnostic output was subsequently read in full.
+
+Integration first fails one unqualified Json.arr in the H4 terminal wrapper;
+the corrected Index/Config build passes 429 jobs. Adding H1 first fails two
+diagnostics from copying the scratch import/namespace shell into Statements;
+extracting only its documented theorem fixes that packaging error. Final combined
+Noise/Index/Config build passes 446 jobs, with only inherited Env:865 String.mk.
+Support builds pass 114, 67 and 136 jobs. Axioms: 1,840 logical roots in 382
+modules, including 1,286 public theorem roots, standard only. All three fresh
+kernel replays pass. Static checks, original 258-name order and mirror/shared
+boundaries pass. There is no infrastructure retry or unchanged failed-source
+rerun. The inherited full-gate failure remains recorded and is not rerun.
+
+Reproduce with scripts/in-bundle lake build on Leanux.Proofs.WG.{Noise,Index,Config}.Statements,
+then scripts/in-bundle lake env leanchecker --fresh on each target, under capped
+with 32 Lean threads and 16 QEMU slots. No mirror change is requested for this tranche.
+
+## Remaining general Allowed-IP ownership dependency
+
+Campaign 1 already has native AllowedIps/InsertionRouting contracts for original
+insertion success and normal allocation refusal, using represented Patricia trees,
+RoutingInvariant, NodesBelow and ResidentLists. That layer is absent here.
+A second architecture based on direct node/list preservation would duplicate
+the same layer, so it is inventoried rather than copied.
+
+The eventual H4 setAllowedip bridge can reuse insert_routing_outcome,
+insert_routing_success and insert_routing_refusal after their landing, retaining
+target residency, address/prefix bounds and represented-input premises.
+OwnersBelow bounds labels; it does not imply that every labeled peer is resident.
+A stronger resident-owner claim therefore needs its own explicit invariant.
+This is a proof dependency, not a mirror discrepancy or change request.
 
 ## Remaining coherent-ring progress dependency
 

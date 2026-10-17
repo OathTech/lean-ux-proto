@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Config.MixedPeerClaims
 import Leanux.Proofs.WG.Config.MixedAttributeClaims
 import Leanux.Proofs.WG.Config.LiveRemovalObservation
 import Leanux.Proofs.WG.Config.SocketReadbackClaims
@@ -1330,5 +1331,38 @@ theorem original_mixed_fwmark_scalar_get_after_set (d : Device) (mark : Nat) (ke
           MixedFwmarkEffect d mark pid p psk interval reset current) :=
   mixed_fwmark_scalar_get_after_set d mark key psk interval bad pid p sock
     peers net found resident live bounded down noIps room idle empty
+
+/-- Actual set/readback for a resident peer on a stopped device. Allocation refusal and a
+malformed second Allowed-IP retain earlier writes; only full success reaches
+the keepalive assignment. The JSON uses the mirror's exact address masking. -/
+theorem original_mixed_peer_allowedip_get_after_set (v4 : Bool) (key psk : Key)
+    (interval addr cidr : Nat) (bad : Bool) (d : Device) (pid : PeerId) (p : Peer)
+    (ctx : DumpCtx) (skb : NlSkb)
+    (found : d.peerHashtable.find? (·.1 == key) = some (key, pid))
+    (resident : d.peers[pid]? = some p) (live : 0 < p.refcount)
+    (bounded : p.refcount + 1 < 2 ^ 31) (down : d.running = false)
+    (empty : p.allowedipsList = []) (root : allowedRootValue v4 d = none)
+    (width : cidr ≤ allowedBits v4) (fresh : ctx.nextAllowedip = none)
+    (sequence : ctx.allowedipsSeq = 0 ∨ ctx.allowedipsSeq = d.peerAllowedips.seq + 1)
+    (room : 172 + allowedIpSpace (allowedFamily v4) ≤ skb.room) :
+    Campaign2.Ensures (do
+      let ret ← setPeerCmd (mixedPeerAttrs v4 key psk interval addr cidr bad)
+      let dump ← getPeerDump pid ctx skb
+      pure (ret, dump))
+      (fun s => s.wg.device = some d)
+      (fun result s => ∃ inserted final,
+        s.wg.device = some final ∧
+        MixedPeerEffect v4 d pid p psk interval addr cidr bad result.1 final ∧
+        result.1 = (if inserted then (if bad then -EINVAL else 0) else -ENOMEM) ∧
+        result.2 =
+          ({skb with room := skb.room - (peerFixedSpace p +
+              (if inserted then 4 + allowedIpSpace (allowedFamily v4) else 0))},
+           {ctx with nextAllowedip := none, allowedipsSeq := 0},
+           .complete {
+             publicKey := hexKey p.remoteStatic
+             attrs := peerFixedAttrs (mixedPeerReadback p psk interval d.nextNode bad inserted) ++
+               (if inserted then [("allowed_ips", Lean.Json.arr #[allowedJson v4 addr cidr])] else [])})) :=
+  mixed_peer_allowedip_get_after_set v4 key psk interval addr cidr bad d pid p ctx skb
+    found resident live bounded down empty root width fresh sequence room
 
 end Leanux.Proofs.WG.Config

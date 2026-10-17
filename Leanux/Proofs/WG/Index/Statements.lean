@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.Index.OwnerCoherenceResponseClaims
+import Leanux.Proofs.WG.Index.OwnerCoherenceCookieClaims
 import Leanux.Proofs.WG.Index.OwnerCoherenceExpiryClaims
 import Leanux.Proofs.WG.Index.OwnerCoherenceReceiveClaims
 import Leanux.Proofs.WG.Index.OwnerCoherenceKeypairCallerClaims
@@ -853,5 +855,20 @@ theorem original_expire_current_peer_keypairs_owner_coherence (pid : PeerId) :
       (fun _ s => View.OwnerCoherentSafe s) :=
   expireCurrentPeerKeypairs_owner_coherent pid
 
+
+/-- Original response consumption preserves local hashed-owner coherence on
+all normal returns, including every rejection that releases its acquired peer. -/
+theorem original_consume_response_owner_coherence (msg : List UInt8) :
+    Campaign2.Ensures (consumeResponse msg) View.OwnerCoherentSafe
+      (fun _ s => View.OwnerCoherentSafe s) :=
+  consumeResponse_owner_coherent msg
+
+/-- The actual cookie-reply consumer preserves local hashed-owner coherence
+on every normal return, including lookup misses and rejected replies. Its
+lookup supplies the held reference released after any cookie-field update. -/
+theorem original_cookie_message_consume_owner_coherence (msg : List UInt8) :
+    Campaign2.Ensures (cookieMessageConsume msg) View.OwnerCoherentSafe
+      (fun _ s => View.OwnerCoherentSafe s) :=
+  cookieMessageConsume_owner_coherent msg
 
 end Leanux.Proofs.WG.Index
