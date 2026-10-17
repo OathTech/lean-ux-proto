@@ -1,3 +1,11 @@
+import Leanux.Proofs.WG.Queues.BaseCreation
+import Leanux.Proofs.WG.Queues.BaseRemoval
+import Leanux.Proofs.WG.Queues.DurableHolders
+import Leanux.Proofs.WG.Queues.HolderCallbacks
+import Leanux.Proofs.WG.Queues.HolderPollCallbacks
+import Leanux.Proofs.WG.Queues.TxQueueDebit
+import Leanux.Proofs.WG.Queues.TxFreshReservation
+import Leanux.Proofs.WG.Queues.DumpReservation
 import Leanux.Proofs.WG.Queues.DecryptConcrete
 import Leanux.Proofs.WG.Queues.RxPollBoundary
 import Leanux.Proofs.WG.Queues.CurrentSlotCompletion
@@ -2195,6 +2203,138 @@ theorem original_concrete_decrypt_stable_rx (cs : Ledger) (loans : Reservations)
     ∃ ds, DecryptIteration.Stable ds loans v ∧ DecryptIteration.Physical v ∧
       DecryptConcrete.Path cs loans w history result ds v k :=
   DecryptConcrete.native_normal hi physical run history
+
+
+open Queues.RxCredits.PollCarrier
+
+open BaseCreation in
+/-- Actual creation adds its initial stamped reference to the funded base list. -/
+theorem original_base_creation_account (key : Key) (psk : Option Key)
+    (hi : CarrierState cs (owners ++ loans) w) (hs : StableRx cs w)
+    (configured : ConfiguredIdentity.Inv w) (hd : w.dev = some d)
+    (list : d.peerList = owners.map Owner.slot) (a b : Ambient)
+    (run : ((peerCreate key psk).run w).run a = .ok ((.ok pid,v),b)) :
+    pid = d.nextPeer ∧
+      CarrierState cs ((owners ++ [owner w d]) ++ loans) v ∧ StableRx cs v ∧
+      v.dev.map Device.peerList = some ((owners ++ [owner w d]).map Owner.slot) ∧
+      pid ∉ d.peerList :=
+  BaseCreation.peerCreate_accounts key psk hi hs configured hd list a b run
+
+open BaseRemoval in
+/-- Detaching a peer retains every base reservation until its actual payment. -/
+theorem original_base_detachment_account (pid : PeerId)
+    (hi : CarrierState cs (owners ++ loans) w) (hs : StableRx cs w)
+    (listed : w.dev.map Device.peerList = some (owners.map Owner.slot))
+    (a b : Ambient) (hr : ((peerMakeDead pid).run w).run a = .ok (((),v),b)) :
+    CarrierState cs (live owners pid ++ (detached owners pid ++ loans)) v ∧
+      StableRx cs v ∧ v.dev.map Device.peerList = some ((live owners pid).map Owner.slot) :=
+  BaseRemoval.peerMakeDead_accounts pid hi hs listed a b hr
+
+open BaseRemoval in
+/-- Bulk removal saves the actual ordered base list after clearing the trie. -/
+theorem original_bulk_removal_saved_account (hi : CarrierState cs (owners ++ loans) w) (hs : StableRx cs w)
+    (listed : w.dev.map Device.peerList = some (owners.map Owner.slot))
+    (a b : Ambient) (hr : (entry.run w).run a = .ok ((dead,v),b)) :
+    dead = owners.map Owner.slot ∧ CarrierState cs (owners ++ loans) v ∧
+      StableRx cs v ∧ v.dev.map Device.peerList = some dead :=
+  BaseRemoval.entry_normal hi hs listed a b hr
+
+open DurableHolders in
+/-- The original fixture starts with a complete empty durable-holder account. -/
+theorem original_durable_holders_initial (net bare : Bool) : Boundary [] [] (Runner.initialWG net bare) :=
+  DurableHolders.boundary_initial net bare
+
+open DurableHolders in
+/-- Receive completion retains its actual new TX/send holders and all supplied obligations. -/
+theorem original_completion_durable_holders {holders : DurableHolders} {c : Carrier}
+    (hi : holders.Funded cs loans w) (hs : StableRx stable w)
+    (stored : packetAt w c.packet = some pkt) (guard : pkt.peer = pid)
+    (a b : Ambient)
+    (run : ((consumeDataDone pid pkt ep).run w).run a = .ok ((result,v),b)) :
+    ∃ delta, Handoff w v [] [] delta ∧
+      (holders.absorb delta).Funded cs loans v ∧ StableRx stable v :=
+  DurableHolders.consume_normal hi hs stored guard a b run
+
+open DurableHolders in
+/-- Concrete Stack replies retain complete durable-holder alignment and funding. -/
+theorem original_stack_durable_holders {holders : DurableHolders} {w v : World}
+    (packets : List (List UInt8)) (hi : holders.Funded cs loans w.wg)
+    (hs : StableRx stable w.wg)
+    (run : (packets.forM Leanux.Env.deliverInner).run w = .ok ((),v)) :
+    ∃ delta, Handoff w.wg v.wg [] [] delta ∧
+      (holders.absorb delta).Funded cs loans v.wg ∧ StableRx stable v.wg :=
+  DurableHolders.stack_normal packets hi hs run
+
+open DurableHolders in
+/-- The original poll consume cut retains new holders with its actual selected-carrier phase. -/
+theorem original_poll_consume_durable_holders (initial : Ledger) (loans : Reservations) (pid n skb : Nat)
+    (stamp : PacketStamp) (pkt : RxPacket) (ep : Endpoint) (guard : pkt.peer = pid) :
+    PrefixEnsures
+      (Accounted (fun ls h w => Live initial ls pid skb stamp pkt h w ∧ StableAt initial h w) loans)
+      (fun _ => True) (consume pid n skb stamp pkt ep)
+      (fun _ => Accounted (fun ls h w => Bare initial ls pid skb stamp h w ∧ StableAt initial h w) loans) :=
+  DurableHolders.consume_accounted initial loans pid n skb stamp pkt ep guard
+
+open DurableHolders in
+/-- The original GRO receive cut retains new holders before selected-packet cleanup. -/
+theorem original_poll_gro_durable_holders (initial : Ledger) (loans : Reservations) (pid skb : Nat)
+    (stamp : PacketStamp) (g : Gro) (entry : Entry) :
+    PrefixPreserves
+      (Accounted (fun ls h w => Bare initial ls pid skb stamp h w ∧ StableAt initial h w) loans)
+      (fun _ => True) (receive g entry) :=
+  DurableHolders.receive_bare_accounted initial loans pid skb stamp g entry
+
+open DurableHolders in
+/-- The original GRO flush retains the actual remaining ledger and every new holder. -/
+theorem original_poll_flush_durable_holders (front initial : Ledger) (loans : Reservations) (g : Gro) :
+    PrefixPreserves (Accounted (fun ls h w => Context front initial ls h w ∧ StableAt initial h w) loans)
+      (fun _ => True) (flushAll g) :=
+  DurableHolders.flush_context_accounted front initial loans g
+
+open TxReservation in
+/-- The actual DEAD transmit step debits one batch and pays its supplied owner, allowing final deletion. -/
+theorem original_dead_tx_batch_account (o : Owner) (first : SkbId) (rest : List SkbId)
+    (hi : ClearWork.Inv cs (o :: loans) w)
+    (queue : ∃ p, resident w o = some p ∧ p.txQueue.all.head? = some (first :: rest))
+    (head : TxDisposition.HeadState first .dead w) (a b : Ambient)
+    (hr : ((txStep o.slot).run w).run a = .ok ((result,v),b)) :
+    result = true ∧ ClearWork.Inv cs loans v ∧
+      (∀ id ∈ first :: rest, TxDisposition.txPackets v id = none) ∧ v.sent = w.sent ∧
+      (∀ other, other ≠ o.slot → TxDisposition.txQueues v other = TxDisposition.txQueues w other) ∧
+      (∀ before after, TxDisposition.txQueues w o.slot = some before →
+        TxDisposition.txQueues v o.slot = some after → after.all = before.all.tail) :=
+  TxReservation.dead_step_account o first rest hi queue head a b hr
+
+open TxReservation in
+/-- The actual TX freshness check retains acquired handoff reservations in the combined budget. -/
+theorem original_tx_freshness_reservations (pid : PeerId) (hi : CarrierState cs loans w)
+    (hs : StableRx cs w) (a b : Ambient)
+    (hr : ((keepKeyFresh pid).run w).run a = .ok (((),v),b)) :
+    ∃ delta, Handoff w v [] [] delta ∧
+      CarrierState cs (loans ++ delta.owners) v ∧ StableRx cs v :=
+  TxReservation.keepKeyFresh_funded pid hi hs a b hr
+
+open DumpReservation in
+/-- Dump completion pays the supplied optional cursor after its actual hasWg record. -/
+theorem original_dump_cursor_payment (ctx : DumpCtx) (old : Option Owner)
+    (cursor : ctx.nextPeer = old.map Owner.slot)
+    (hi : ClearWork.Inv cs (old.toList ++ loans) w) (a b : Ambient)
+    (run : ((wgGetDeviceDone ctx).run w).run a = .ok (((),v),b)) :
+    ClearWork.Inv cs loans v :=
+  DumpReservation.done_normal ctx old cursor hi a b run
+
+open DumpReservation in
+/-- The literal dump replacement acquires the new cursor before paying the old, including aliasing. -/
+theorem original_dump_cursor_exchange (ctx : DumpCtx) (old : Option Owner) (nextCursor : Option PeerId) (done : Bool)
+    (cursor : ctx.nextPeer = old.map Owner.slot)
+    (hi : ClearWork.Inv cs (old.toList ++ loans) w) (a b : Ambient)
+    (run : ((replaceSource ctx nextCursor done).run w).run a = .ok (((),v),b)) :
+    ∃ next : Option Owner,
+      next.map Owner.slot = (if done then none else nextCursor) ∧
+      (∀ o, next = some o → ∃ d p, w.dev=some d ∧ d.peers[o.slot]?=some p ∧
+        o=⟨d.ifindex,o.slot,p.internalId⟩ ∧ 0<p.refcount) ∧
+      ClearWork.Inv cs (next.toList ++ loans) v :=
+  DumpReservation.replace_normal ctx old nextCursor done cursor hi a b run
 
 
 end Leanux.Proofs.WG.DeliveryOrder

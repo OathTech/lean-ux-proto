@@ -199,6 +199,13 @@ remains unchanged. Concrete poll/NAPI/IRQ/decrypt boundaries and queued-work
 payments pass gate748/690 and fresh root replay (4.736s/105.281s). Complete
 source-owned funding and initialized conservation remain open.
 
+The [reference-account checkpoint](2026-10-17-r4-reference-accounts.md) adds
+thirteen modules and 156 theorems: 703 files/9,695 theorems, 169 R4 terminals
+and 703 total declarations. All prior bodies remain unchanged. Source-owned
+base/work/TX/cursor accounts retain actual callback acquisitions and payments.
+Gate: 761 jobs/703 declarations in 5.238 seconds; fresh root replay passes in
+109.546 seconds without warnings. Full initialized conservation remains open.
+
 The pre-split checkpoint validated every baseline result surface over
 `cb2348e`. R3 packet authorization is now closed over the current split tree;
 R4 receive-pipeline conservation remains open. Earlier positive results and runtime findings retain
@@ -596,15 +603,15 @@ correspondence remains informal.
 
 ## R4 — queue, poll and delivery-order components (in progress)
 
-**State-split poll/work extension.** The [current report](2026-10-17-r4-poll-work-conservation.md)
-records 208 additional theorems in sixteen modules and thirteen terminal exports.
-The tree has 690 proof files/9,539 theorems, with 156 R4 terminals and all 143
-preceding bodies unchanged. Concrete poll/NAPI/IRQ/decrypt boundaries restore
-stable funded receive carriers; send/clear work consumes explicit source-supplied
-reservations. Nullable key-slot compatibility survives admission, staged traffic
-and completion. Complete lifecycle/work/TX/dump/transient funding, newly generated
-handoffs and initialized conservation remain open. Chronological GRO order stays
-refuted.
+**State-split reference-account extension.** The [current report](2026-10-17-r4-reference-accounts.md)
+records 156 additional theorems in thirteen modules and thirteen terminal exports.
+The tree has 703 proof files/9,695 theorems, with 169 R4 terminals and all 156
+preceding bodies unchanged. Durable accounts align actual base entries, work
+occurrences, TX batches and active cursors, charging them with transient loans
+and receive carriers. Creation, detachment, DEAD TX, freshness and cursor
+exchange have local source contracts. Completion, Stack and selected poll/GRO
+cuts preserve new acquisitions. Whole-poll, other worker/lifecycle funding and
+initialized conservation remain open. Chronological GRO order stays refuted.
 
 **Original versus proved.** The charter requires accepted-schedule order and no silent loss/duplication.
 [Terminals](../Leanux/Proofs/WG/DeliveryOrder/Statements.lean) prove initialized committed callback-entry stamp
