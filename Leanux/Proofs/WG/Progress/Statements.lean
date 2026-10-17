@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Progress.SendCompletionClaims
 import Leanux.Proofs.WG.Progress.RunnerAdvanceSource
 import Leanux.Proofs.WG.Progress.AdvanceWaitClaims
 import Leanux.Proofs.WG.Progress.TimerWaitClaims
@@ -697,5 +698,13 @@ theorem original_advance_operation_receipt (ticks : Nat) :
   · intro initial _
     rw [observedAdvanceOperation_erase]
   · exact observedAdvanceOperation_checks ticks
+
+/-- Normal return of the actual handshake-send worker loop leaves no Device
+or an empty send-work queue. All record modes, queue growth and original Stops
+remain; this is not a global quiescence or whole-syscall completion claim. -/
+theorem original_send_workers_completion :
+    Campaign2.Product.Ensures runSendWorkers (fun _ => True)
+      (fun _ final => SendWorkersComplete final) :=
+  runSendWorkers_completion
 
 end Leanux.Proofs.WG.Progress

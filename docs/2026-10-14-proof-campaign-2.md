@@ -10,27 +10,27 @@ merged; the executable mirror remains byte-identical to b700659.
 
 | Result | Headlines | Checked support | Split status |
 | --- | ---: | ---: | --- |
-| H1 Noise | 32 | 231 | Full terminal closure, all seven whole-call tag maps, their actual finite mixed histories and session derivation-clock receipt current; confirmation across reinstallation remains open; broader driver closure is separate from the checked native histories. |
+| H1 Noise | 33 | 235 | Full terminal closure, all seven whole-call tag maps, their actual finite mixed histories and session derivation-clock receipt current; direct helper reinstallation refutes unrestricted repeat-confirmation uniqueness; fresh-session uniqueness remains open; broader driver closure is separate from the checked native histories. |
 | H2 Index | 89 | 481 | Full terminal closure and ingress/expiry/handshake/peer-creation owner coherence and whole-removal lifecycle finding/slot-covered arbitrary-AIP preservation and actual clear-work dispatch and both-mode handshake queueing and new-handshake/zero-key/retransmit callbacks and persistent-callback invariant counterexample current; reachable whole-driver uniqueness/coherence open. |
 | H3 Roaming | 18 | 190 | Full terminal closure and invalid-MAC1/rate-limit/admitted-response/initiation rejection and cookie-message preservation current; callback authentication provenance and broader caller coverage open. |
 | H4 Configuration | 93 | 702 | Full terminal closure, actual mixed/key setter paginated readback with arbitrary endpoints, finite single-peer IPv4 getter, exact mixed-width scans, weighted plans/resumed callbacks and generic coalescing and fitting multi-peer scalar and mixed fwmark/scalar set/get current; global ownership, queued cleanup, general mixed setters and multi-peer/IPv6 pagination open. |
-| H5 Progress | 47 | 313 | Full terminal closure, exact bounded outcomes and recorded batch, actual timer completion guards and recorded idle/post-advance wait completion and actual advance-syscall/runner linkage current; global progress/coherent-ring adequacy open. |
+| H5 Progress | 48 | 318 | Full terminal closure, exact bounded outcomes and recorded batch, actual timer completion guards and recorded idle/post-advance wait completion and actual advance-syscall/runner linkage and send-worker completion guard current; global progress/coherent-ring adequacy open. |
 | H6 Timers | 59 | 483 | Full terminal closure, actual retry blocks and allocation-labelled guarded session-arm events with outgoing call-entry origin and initialized give-up runtime witness current; complete caller coverage, general mixed histories and session-relative counts open. |
 
-The checked surface is 2,400 theorems in all 814 campaign-owned modules.
+The checked surface is 2,409 theorems in all 820 campaign-owned modules.
 The completed retrofit accounts for 1,983: 1,321 retyped, 244 explicitly
 corrected, 239 retained and 179 added support/finding declarations. One hundred forty-eight
 subsequent H2 declarations add table preservation and local owner coherence.
-Forty-six H1 declarations add whole-operation and finite mixed-history tag ownership and actual derivation-clock provenance; one hundred twenty H4 declarations
+Fifty H1 declarations add whole-operation and finite mixed-history tag ownership and actual derivation-clock provenance and direct-helper reinstallation; one hundred twenty H4 declarations
 add mixed fwmark/scalar, ordered peer-attribute, port-refusal/private-key readback and finite IPv4 getter/setter pagination and actual fitting multi-peer readback. Thirty-three H3 declarations
-add invalid-MAC1, rate-limit and admitted-response/initiation rejection and cookie-message preservation. Twenty-five H5 declarations
-establish recorded batch, actual timer completion guards and recorded idle/post-advance wait wheel completion. Forty-five H6 declarations
+add invalid-MAC1, rate-limit and admitted-response/initiation rejection and cookie-message preservation. Thirty H5 declarations
+establish recorded batch, actual timer completion guards and recorded idle/post-advance wait wheel completion and the actual send-worker completion guard. Forty-five H6 declarations
 connect actual timer-loop receipts, contiguous retry-block counts/bounds, local partial-exchange arming and allocation-labelled session-arm events. Of the 1,831 baseline theorems, 22 frames
 were deleted because types supply their facts and five false cookie supports
 were separately retired with checked counterexamples. No baseline declaration
 remains awaiting retrofit; all 258 original terminal names/order survive,
-with ten new H1 headlines, thirty-seven new H2 headlines, five new H3 headlines,
-fourteen new H4 headlines, five new H5 headlines and nine new H6 headlines (338 total).
+with eleven new H1 headlines, thirty-seven new H2 headlines, five new H3 headlines,
+fourteen new H4 headlines, six new H5 headlines and nine new H6 headlines (340 total).
 
 The [retrofit report](2026-10-16-proof-campaign-2-state-split.md) records
 claim/frame files, corrections, before/after counts and validation.
@@ -3264,3 +3264,74 @@ Reproduce the changed closures with scoped build and fresh replay of
 Leanux.Proofs.WG.Progress.Statements and
 Leanux.Proofs.WG.Config.WeightedStartClaims under capped/scripts/in-bundle,
 LEAN_NUM_THREADS=32 and LEANUX_QEMU_SLOTS=16.
+
+
+## H1 continuation: direct reinstallation and the confirmation domain
+
+The broad local wording, confirmation succeeds at most once for a resident
+key, is false when arbitrary direct installation-helper calls are admitted.
+The checked witness starts with one positively referenced responder key at ID
+0, internal serial 17, and one peer with next = 0 and other slots empty.
+The original sequence receivedWithKeypair 0 0; addNewKeypair 0 0;
+receivedWithKeypair 0 0 returns true twice. The entire resident key, global
+keypairCounter and device allocation cursor are unchanged. The final previous
+and current slots both contain 0; next is empty. Every Ambient is permitted.
+
+This is a statement-domain finding, not an initialized accepted trace or a
+mirror/kernel discrepancy. The arbitrary entry does not establish an
+allocation history; the direct helper does not allocate. Consequently the
+fresh beginSession installation language and once-per-allocation-lifetime
+claim remain open, with their larger transport inventory unchanged. The
+existing adjacent-call no-repeat theorem remains valid. No premise is added
+to it and no mirror-team repair is requested.
+
+ConfirmationReinstallModel gives the concrete data and entry shape; Source
+runs the three actual calls through the existing exact rotation factors;
+Claims and the terminal expose the observation over the campaign projection.
+Four theorems in three modules bring H1 to 235 theorems and 33 headlines.
+No frame or shared variant is added. Independent review corrects “allocation”
+to “positively referenced responder key” in the entry description, since
+residency and a positive refcount alone do not establish allocation provenance.
+No formula/domain issue remains.
+
+Changed probes 1–3 fail on private-write reduction, existential witnesses and
+the final peer witness; probe 1 also has four unused-simp warnings. Probes
+4–5 pass, the last checking the exact split and four standard-only roots.
+The installed scoped build passes 167 jobs without warnings.
+
+## H5 continuation: the actual send-worker completion guard
+
+Normal runSendWorkers return now guarantees absent Device or an empty final
+sendWorkQueue, for both record modes and arbitrary entry state. The exact
+source factor retains initial Device absence, requireNoCryptWork, queuedThisCall
+reset, captured budget, every worker/scheduler call and every Stop. A completed
+turn has observed an empty send queue and then run actual deliverSent, whose
+existing named Device frame transports that fact to return. Finite-loop
+induction follows the actual early-return branch; exhaustion reaches the real
+budgetExhausted and cannot be accepted as completion in either mode.
+
+SendCompletionModel contains the projected predicate; Source contains the
+concrete loop factor and reasoning; Claims and Statements use Product.Ensures.
+This adds five theorems in three modules, bringing H5 to 318 theorems and
+48 headlines. It does not prove successful completion, fuel adequacy,
+pendingWork/ring consistency, whole-operation emptiness or fairness. No
+additional shared frame is copied. Independent source review finds no issue.
+
+Changed probes 1–3 fail respectively with 6/10, 3/0 and 2/0 error/warning
+counts, on option matching, lifted reads, eliminated names and budget-error
+reduction. Probes 4–5 pass; the exact final split checks five standard-only
+roots without warnings. Installed build passes 287 jobs, with only the
+inherited Env:865 String.mk warning.
+
+The combined axiom audit checks 1,537 logical roots in 295 modules, including
+936 public theorem roots, using standard axioms only and no diagnostics.
+Fresh kernel replay passes both changed terminal roots.
+Static trust/import checks, all 258 original terminal names/order and mirror/
+shared-layer boundaries pass. No proof-limit/cap change, suppression or
+infrastructure rerun occurs. Totals are 2,409 theorems in 820 owned modules
+and 340 headlines. All H1–H6 remain in progress; the inherited full gate
+remains FAILED and is not rerun unchanged.
+
+Reproduce with scoped build and fresh replay of
+Leanux.Proofs.WG.Noise.Statements and Leanux.Proofs.WG.Progress.Statements
+under capped/scripts/in-bundle, LEAN_NUM_THREADS=32 and LEANUX_QEMU_SLOTS=16.

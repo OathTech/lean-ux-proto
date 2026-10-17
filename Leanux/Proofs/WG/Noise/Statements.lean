@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Noise.ConfirmationReinstallClaims
 import Leanux.Proofs.WG.Noise.TagSequenceClaims
 import Leanux.Proofs.WG.Noise.SessionTagClaims
 import Leanux.Proofs.WG.Noise.CreationTagClaims
@@ -18,7 +19,8 @@ import Leanux.Proofs.WG.Noise.SessionReadyClaims
 import Leanux.Proofs.WG.Noise.ConfirmationSequenceSource
 
 /-! H1's whole-operation contracts and finite mixed native tag histories.
-Confirmation across reinstallation remains distinct from consecutive calls;
+Direct helper reinstallation admits repeated confirmation of one resident key;
+fresh-session confirmation uniqueness remains open.
 closure over every driver caller is outside this native operation language. -/
 namespace Leanux.Proofs.WG.Noise
 open Leanux Leanux.WG
@@ -419,5 +421,18 @@ theorem original_mixed_tag_history (operations : List TagOperation) (entry : Cam
     Campaign2.Ensures (observedTagSequence operations) (fun s => s = entry)
       (fun receipts final => TagChain entry operations receipts final) :=
   observedTagSequence_chain operations entry
+
+/-- Direct responder helper reinstallation permits two confirmations of the
+same resident key. It is not a fresh-session or initialized-driver trace. -/
+theorem original_confirmation_reinstallation_counterexample :
+    ∃ d : Device, ∃ k : Keypair,
+      d.keypairs[0]? = some k ∧ k.internalId = 17 ∧
+      Campaign2.Observes ConfirmationReinstallWitness.calls (fun entry => entry.wg.device = some d)
+        (fun entry out => ∃ after final,
+          out = .ok ((true, true), after) ∧ after.wg.device = some final ∧
+          final.keypairs[0]? = some k ∧
+          after.wg.keypairCounter = entry.wg.keypairCounter ∧
+          final.nextKeypairId = d.nextKeypairId) :=
+  confirmation_same_allocation_reinstallation
 
 end Leanux.Proofs.WG.Noise
