@@ -55,6 +55,7 @@ Read these before the README's claims are taken at face value:
 | [2026-10-11-dispatch-order.md](2026-10-11-dispatch-order.md) | Recording which queued work unit a section runs, at the source |
 | [2026-10-12-kernel-scout.md](2026-10-12-kernel-scout.md) | Candidate next mirror targets scored; epoll and seccomp chosen |
 | [2026-10-12-simulation-target-review.md](2026-10-12-simulation-target-review.md) | Whether the mirror is a suitable target for a later simulation proof: suitable with named representation changes, since landed |
+| [2026-10-15-state-split-companion.md](2026-10-15-state-split-companion.md) | Proposed revision of the state split after independent review: shared task services, localized worlds, cheap leaf narrowing and staged proof repair |
 
 ## WireGuard
 
