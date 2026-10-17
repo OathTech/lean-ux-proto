@@ -11,10 +11,10 @@ new worlds; new R3/R4 results follow the retrofit.
 | Census | Lean files | Named theorems |
 | --- | ---: | ---: |
 | Validated baseline `00641c6` | 471 | 7,715 |
-| Completed retrofit checkpoints | 452 | 6,531 |
+| Completed retrofit checkpoints | 452 | 6,530 |
 
-Completed changes comprise **2,575 retyped/generalized, 1,686 deleted,
-1,766 retained contract shapes and 502 added theorems**. Retyping changes the
+Completed changes comprise **2,596 retyped/generalized, 1,691 deleted,
+1,766 retained contract shapes and 506 added theorems**. Retyping changes the
 actual carrier or observation, including shorthand contracts whose functions
 move to a native monad. Namespace-only product qualification and equivalent
 projection relocation count as retained. The census includes private and
@@ -152,8 +152,8 @@ The unpublished fixture also satisfies QueueOwners. Normal-return preservation
 and the stronger actual-ENOSPC contract are not refuted. These are counterexamples
 to proof contracts over arbitrary local states, not initialized reachability
 or Linux-bug claims. The [finding](2026-10-16-proof-state-split-findings.md#cleanup-totality)
-records the declarations and reproduction commands. Withdrawal of the old
-false exports and caller repairs remain part of the unfinished R4 terminal carry.
+records the declarations and reproduction commands. The four false helper exports are now withdrawn; terminal withdrawal and caller
+repairs remain part of the unfinished R4 carry.
 
 Stamped environment traffic retains all twelve original product theorem
 headers and its four observer definitions. The source copy includes the current
@@ -175,6 +175,20 @@ and complete independent source review pass. Both modules have zero own
 warnings; their closure still reports 1,283 inherited warnings. Two changed-source
 batch checks were run: one failed, then the corrected source passed. No
 infrastructure rerun, cap increase or proof-limit change occurred.
+
+RX cleanup carries 26→25 theorems: twenty-one native contracts, four false
+totality claims withdrawn, one type-derived freeRxSkb peer-view frame deleted,
+and four separately named normal-return/nonfinal-payment contracts added.
+These four withdrawals are included in the deletion total but are findings,
+not consequences of the split's types. The thirty named declarations pass
+standard-only axiom checks, fresh replay and complete independent source review.
+The final source builds in 4.5 seconds without own warnings in the 401-job graph.
+Twelve output-free development checks recorded eight ordinary failures, three
+passes (two prefixes and one full candidate with a subsequently corrected binder
+warning), and one missing-artifact failure. The final exact bytes passed the
+central build after its dependency closure was restored; there was no redundant
+output-free rerun. The stricter nonfinal theorem does not reuse the withdrawn
+positive-credit theorem's name or claim.
 
 Remaining work is the routing/origin terminal carry, stamped
 traffic/environment/runner history, material lifecycle/support callers, RX
