@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.TimerDiscipline.ReceiveTraversalAllModeClaims
 import Leanux.Proofs.WG.TimerDiscipline.SessionOriginClaims
 import Leanux.Proofs.WG.TimerDiscipline.SessionArmEventClaims
 import Leanux.Proofs.WG.TimerDiscipline.PartialExchangeArmClaims
@@ -811,5 +812,41 @@ theorem original_outgoing_session_counter_origin (pid : PeerId)
           SessionArmEvent pid cut.session ∧
           cut.session.beforeSession.wg.keypairCounter = entry.wg.keypairCounter) :=
   observedOutgoingResponseSession_counter_origin pid entry
+
+/-- Full original initiation receive erasure preserves every Stop. On a
+normal authenticated return, the existing cut has its exact all-mode persistent
+keepalive effect; the resident peer is derived and disabled guards are retained.
+The claim concerns the immediate hook boundary, not final expiry or delivery. -/
+theorem original_initiation_receive_traversal_all_modes (msg : List UInt8) (src : SkbSource)
+    (kind : messageType msg = MESSAGE_HANDSHAKE_INITIATION) :
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (do let _ ← observedInitiationReceiveTraversal msg src; pure ())
+      (liftWG (receiveHandshakePacket msg src)) ∧
+    Campaign2.Product.Ensures (observedInitiationReceiveTraversal msg src) (fun _ => True)
+      (fun result _ => ∀ cut, result = some cut → InitiationReceiveTraversalFacts msg cut ∧
+        TraversalAllModeEffect cut.authentication.consumed.pid
+          cut.traversal.before.toSnapshot cut.traversal.after.toSnapshot) := by
+  constructor
+  · intro entry pre
+    rw [observedInitiationReceiveTraversal_erase msg src kind]
+  · exact observedInitiationReceiveTraversal_all_modes msg src
+
+/-- Full original response receive erasure preserves every Stop. On a
+normal authenticated return, the existing cut has its exact all-mode persistent
+keepalive effect; the resident peer is derived and disabled guards are retained.
+The claim concerns the immediate hook boundary, not final expiry or delivery. -/
+theorem original_response_receive_traversal_all_modes (msg : List UInt8) (src : SkbSource)
+    (kind : messageType msg = MESSAGE_HANDSHAKE_RESPONSE) :
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (do let _ ← observedResponseReceiveTraversal msg src; pure ())
+      (liftWG (receiveHandshakePacket msg src)) ∧
+    Campaign2.Product.Ensures (observedResponseReceiveTraversal msg src) (fun _ => True)
+      (fun result _ => ∀ cut, result = some cut → ResponseReceiveTraversalFacts msg cut ∧
+        TraversalAllModeEffect cut.authentication.consumed.input.pid
+          cut.traversal.before.toSnapshot cut.traversal.after.toSnapshot) := by
+  constructor
+  · intro entry pre
+    rw [observedResponseReceiveTraversal_erase msg src kind]
+  · exact observedResponseReceiveTraversal_all_modes msg src
 
 end Leanux.Proofs.WG.TimerDiscipline
