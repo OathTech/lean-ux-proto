@@ -324,9 +324,9 @@ This is total execution of the original sampler, not a distribution claim. -/
 theorem original_jitter_records (site : JitterSite) (rejected : List UInt8) (accepted : UInt8)
     (rest : List HiddenRecord) (bad : ∀ byte ∈ rejected, ¬jitterAccepted byte)
     (good : jitterAccepted accepted) :
-    Campaign2.Observes (jitterBelowRekeyTimeout site.hiddenSite)
+    Campaign2.Product.Observes (liftWG (jitterBelowRekeyTimeout site.hiddenSite))
       (fun s => s.ambient.hidden = some (jitterStream site rejected accepted rest))
-      (fun initial out => out = .ok (jitterValue accepted, withRecords initial rest)) :=
+      (fun initial out => out = .ok (jitterValue accepted, {initial with ambient := {initial.ambient with hidden := some rest}})) :=
   projected_jitter_records site rejected accepted rest bad good
 
 /-- A finite contiguous stream containing only rejected jitter bytes ends at
@@ -336,7 +336,7 @@ streams are included; recordless placeholder execution and ambient interleavings
 are outside this contract. -/
 theorem original_jitter_exhausted (site : JitterSite) (rejected : List UInt8)
     (bad : ∀ byte ∈ rejected, ¬jitterAccepted byte) :
-    Campaign2.Observes (jitterBelowRekeyTimeout site.hiddenSite)
+    Campaign2.Product.Observes (liftWG (jitterBelowRekeyTimeout site.hiddenSite))
       (fun s => s.ambient.hidden = some (rejected.map (jitterRecord site)))
       (fun _ out => out = .error (.hidden s!"no record left for {site.hiddenSite.info.label}")) :=
   projected_jitter_exhausted site rejected bad

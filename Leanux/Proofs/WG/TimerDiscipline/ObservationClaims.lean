@@ -1,28 +1,9 @@
 import Leanux.Proofs.WG.TimerDiscipline.ObservationBridge
 import Leanux.Proofs.WG.TimerDiscipline.JitterBoundClaims
+import Leanux.Proofs.WG.TimerDiscipline.JitterOutcomeClaims
 
 namespace Leanux.Proofs.WG.TimerDiscipline
 open Leanux Leanux.WG Campaign2
-
-theorem projected_jitter_records (site : JitterSite) (rejected : List UInt8) (accepted : UInt8)
-    (rest : List HiddenRecord) (bad : ∀ byte ∈ rejected, ¬jitterAccepted byte)
-    (good : jitterAccepted accepted) :
-    Campaign2.Observes (jitterBelowRekeyTimeout site.hiddenSite)
-      (fun s => s.ambient.hidden = some (jitterStream site rejected accepted rest))
-      (fun initial out => out = .ok (jitterValue accepted, withRecords initial rest)) := by
-  intro w records
-  rw [source_jitter_records site rejected accepted rest bad good w records]
-  rfl
-
-theorem projected_jitter_exhausted (site : JitterSite) (rejected : List UInt8)
-    (bad : ∀ byte ∈ rejected, ¬jitterAccepted byte) :
-    Campaign2.Observes (jitterBelowRekeyTimeout site.hiddenSite)
-      (fun s => s.ambient.hidden = some (rejected.map (jitterRecord site)))
-      (fun _ out => out = .error (.hidden s!"no record left for {site.hiddenSite.info.label}")) := by
-  intro w records
-  rw [source_jitter_exhausted site rejected bad w records]
-  rfl
-
 
 /-- Caller provenance is observed from the same entry as the original guarded arm. -/
 theorem projected_guarded_arm_recorded (site : HiddenSite) (pid : PeerId) (timer : PeerTimer)

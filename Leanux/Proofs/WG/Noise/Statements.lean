@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Noise.ClearClaims
 import Leanux.Proofs.WG.Noise.InitiationReadyClaims
 import Leanux.Proofs.WG.Campaign2.Bridge
 import Leanux.Proofs.WG.Noise.ConsumeEdges
@@ -138,13 +139,8 @@ theorem original_clear_ordered (pid : PeerId) (d : Device) (p : Peer)
       (fun _ s => ∃ final, s.wg.device = some final ∧
         ClearRun pid d [.next, .previous, .current] final ∧
         final.peers[pid]? = some { p with
-          keypairNext := none, keypairPrevious := none, keypairCurrent := none }) := by
-  intro w result final pre run
-  change w.k.wg = some d at pre
-  obtain ⟨out, device, effect⟩ := keypairsClear_effect pid d p resident w result final pre run
-  have peer := keypairsClear_peer pid p w result final
-    (by simp [peerAt, pre, resident]) run
-  exact ⟨out, device, effect, by simpa [peerAt, device] using peer⟩
+          keypairNext := none, keypairPrevious := none, keypairCurrent := none }) :=
+  clear_ordered pid d p resident
 
 /-- Static local reference counts guarantee the original clear completes.
 Each referenced key is resident, has a non-NULL peer word, and has at least
@@ -157,10 +153,8 @@ theorem original_clear_ready_returns (pid : PeerId) (d : Device) (p : Peer)
       (fun _ s => ∃ final, s.wg.device = some final ∧
         ClearRun pid d [.next, .previous, .current] final ∧
         final.peers[pid]? = some { p with
-          keypairNext := none, keypairPrevious := none, keypairCurrent := none }) := by
-  intro w pre
-  obtain ⟨result, final, run, effect⟩ := keypairsClear_returns_ready pid d p resident ready w pre
-  exact ⟨result, final, run, original_clear_ordered pid d p resident w result final pre run⟩
+          keypairNext := none, keypairPrevious := none, keypairCurrent := none }) :=
+  clear_ready_returns pid d p resident ready
 
 /-- Every normal original rotation derives the exact ordered peer writes and
 immediate releases, including table removals, decrements and final erasures.
