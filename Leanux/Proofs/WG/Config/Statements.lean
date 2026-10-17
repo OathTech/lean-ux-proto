@@ -1,3 +1,7 @@
+import Leanux.Proofs.WG.Config.PeerPagePlanClaims
+import Leanux.Proofs.WG.Config.PeerPageCoalesceClaims
+import Leanux.Proofs.WG.Config.PageTransitionSource
+import Leanux.Proofs.WG.Config.MiddlePageSource
 import Leanux.Proofs.WG.Config.TwoPageGetterClaims
 import Leanux.Proofs.WG.Config.TwoPageCoalesceClaims
 import Leanux.Proofs.WG.Config.CursorCallbackClaims
