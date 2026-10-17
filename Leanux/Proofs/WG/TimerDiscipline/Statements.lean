@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.TimerDiscipline.InitializedGiveUpCurveSource
 import Leanux.Proofs.WG.TimerDiscipline.OutgoingTraversalAllModeClaims
 import Leanux.Proofs.WG.TimerDiscipline.DataTraversalAllModeClaims
 import Leanux.Proofs.WG.TimerDiscipline.ReceiveTraversalAllModeClaims

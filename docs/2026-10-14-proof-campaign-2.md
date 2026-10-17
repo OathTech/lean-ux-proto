@@ -14,23 +14,23 @@ merged; the executable mirror remains byte-identical to b700659.
 | H2 Index | 91 | 491 | Full terminal closure and ingress/expiry/handshake/peer-creation owner coherence and whole-removal lifecycle finding/slot-covered arbitrary-AIP preservation and actual clear-work dispatch and both-mode handshake queueing and new-handshake/zero-key/retransmit callbacks and persistent-callback and successful-session slot-alias invariant counterexamples and positive publication-to-lookup handoff under explicit rotation freshness current; core named-operation H2 coverage checked; whole initialized driver/lifetime closure is a separate stronger scope; aggregate gate inherited-blocked. |
 | H3 Roaming | 19 | 196 | Full terminal closure and invalid-MAC1/rate-limit/admitted-response/initiation rejection and cookie-message and whole data-admission endpoint preservation current; callback authentication provenance and broader caller coverage open. |
 | H4 Configuration | 99 | 739 | Full terminal closure, actual mixed/key setter paginated readback with arbitrary endpoints, whole finite single-peer mixed-width getter and exact arbitrary-room empty-IP serializer and actual mixed/key setter composition with exact DATA/DONE count and arbitrary endpoints and fitting multi-peer scalar and mixed fwmark/scalar set/get and actual endpoint set/weighted readback current; global ownership, queued cleanup, general mixed setters and multi-peer pagination open. |
-| H5 Progress | 51 | 335 | Full terminal closure, exact bounded outcomes and recorded batch, actual timer completion guards and recorded idle/post-advance wait completion and actual advance-syscall/runner linkage and send-worker completion guard and four final-idle syscall/runner receipts and exact all-mode finite allocation bridge current; global progress/coherent-ring adequacy open. |
-| H6 Timers | 65 | 498 | Full terminal closure, actual retry blocks and allocation-labelled guarded session-arm events with outgoing call-entry origin and initialized give-up runtime witness and all five syntactic traversal call sites covered by six observer branches with all-mode immediate effects; upstream data authentication, broader caller histories and session-relative counts remain open. |
+| H5 Progress | 52 | 340 | Full terminal closure, exact bounded outcomes and recorded batch, actual timer completion guards and recorded idle/post-advance wait completion and actual advance-syscall/runner linkage and send-worker completion guard and four final-idle syscall/runner receipts and exact all-mode finite allocation and successful modular-power evaluation bridges current; global progress/coherent-ring adequacy open. |
+| H6 Timers | 65 | 502 | Full terminal closure, actual retry blocks and allocation-labelled guarded session-arm events with outgoing call-entry origin and initialized give-up runtime witness with checked concrete curve outputs and all five syntactic traversal call sites covered by six observer branches with all-mode immediate effects; upstream data authentication, broader caller histories and session-relative counts remain open. |
 
-The checked surface is 2,523 theorems in all 871 campaign-owned modules.
+The checked surface is 2,532 theorems in all 874 campaign-owned modules.
 The completed retrofit accounts for 1,983: 1,321 retyped, 244 explicitly
 corrected, 239 retained and 179 added support/finding declarations. One hundred fifty-eight
 subsequent H2 declarations add table preservation and local owner coherence.
 Seventy-nine H1 declarations add whole-operation and finite mixed-history tag ownership, actual derivation-clock provenance, direct-helper reinstallation and bounded fresh-installation confirmation history; one hundred fifty-seven H4 declarations
 add mixed fwmark/scalar, ordered peer-attribute, port-refusal/private-key readback and finite IPv4 getter/setter pagination and actual fitting multi-peer readback and complete finite single-peer mixed-width pagination. Thirty-nine H3 declarations
-add invalid-MAC1, rate-limit and admitted-response/initiation rejection, cookie-message and whole data-admission endpoint preservation. Forty-seven H5 declarations
-establish recorded batch, actual timer completion guards and recorded idle/post-advance wait wheel completion and the actual send-worker completion guard and four final-idle syscall/runner links. Sixty H6 declarations
-connect actual timer-loop receipts, contiguous retry-block counts/bounds, local partial-exchange arming and allocation-labelled session-arm events. Of the 1,831 baseline theorems, 22 frames
+add invalid-MAC1, rate-limit and admitted-response/initiation rejection, cookie-message and whole data-admission endpoint preservation. Fifty-two H5 declarations
+establish recorded batch, actual timer completion guards and recorded idle/post-advance wait wheel completion and the actual send-worker completion guard and four final-idle syscall/runner links and exact finite evaluation. Sixty-four H6 declarations
+connect actual timer-loop receipts, contiguous retry-block counts/bounds, local partial-exchange arming and allocation-labelled session-arm events, plus concrete original curve outputs. Of the 1,831 baseline theorems, 22 frames
 were deleted because types supply their facts and five false cookie supports
 were separately retired with checked counterexamples. No baseline declaration
 remains awaiting retrofit; all 258 original terminal names/order survive,
 with twelve new H1 headlines, thirty-nine new H2 headlines, six new H3 headlines,
-nineteen new H4 headlines, nine new H5 headlines and fifteen new H6 headlines (358 total).
+twenty new H4 headlines, ten new H5 headlines and fifteen new H6 headlines (360 total).
 
 The [retrofit report](2026-10-16-proof-campaign-2-state-split.md) records
 claim/frame files, corrections, before/after counts and validation.
@@ -4251,3 +4251,64 @@ Leanux.Proofs.WG.Config.Statements, axiom inspection of its proof closure,
 and capped -- scripts/in-bundle lake env leanchecker --fresh
 Leanux.Proofs.WG.Config.Statements, with LEAN_NUM_THREADS=32 and
 LEANUX_QEMU_SLOTS=16. No mirror change is requested.
+
+## H5/H6 continuation: exact finite power and curve evaluation
+
+[AGENT 2026-10-17] Connect a successful finite square-and-multiply evaluation
+to the original private modular-power loop by induction on evaluation fuel.
+This improves the earlier exponent-sized adequacy bridge: a successful
+256-step evaluation suffices for these concrete curve inputs without fuel
+proportional to their large exponent. Exhaustion gives no conclusion and no
+fallback value is used.
+
+Progress/PowEvaluationSource holds the two exact evaluation contracts.
+Progress/CurveEvaluationSource factors the original finite ladder immediately
+before inversion and connects successful inversion evaluation to the original
+X25519 output. The ladder equality is definitional source factoring, not a
+cryptographic-specification claim. Progress/Statements adds the literal
+original_pow_mod_of_evaluation headline. No frame is added.
+
+TimerDiscipline/InitializedGiveUpCurveSource checks four original curve-output
+facts for the tracked initialized give-up recipe: configured secret/basepoint,
+secret/remote, ephemeral/basepoint and ephemeral/remote. The latter three
+retain both raw and actual caller-clamped inputs. The recipe reuses the same
+ephemeral value across initiations; different messages do not mean twenty
+different curve inputs. Candidate arithmetic values were obtained at runtime,
+but every installed equality is proved by kernel-checked finite evaluation.
+There is no runner acceptance or timer-history theorem in this package;
+the first initialized operation remains a separate open obligation.
+
+Development: root probe 1 checks both power contracts; probe 2 fails the
+ladder equality under rfl, and probe 3 fails two unavailable Id names and
+its split. The continuation's probes 1--3 check the source factor, inversion
+and configured output. Before probe 4, a recipe-extraction preparation
+mistakenly selected a later repeated draw directive and failed before Lean;
+using the actual generator's first three directives corrects it. Probe 4
+checks candidate outputs. Probe 5 fails three default recursion-depth
+obligations while identifying raw and clamped inputs. Probe 6 instead checks
+their actual finite inversions independently; all eight support roots pass
+standard-only without warnings. Failed recovery environments are rejected.
+No warning suppression, limit/cap increase, timeout or infrastructure rerun
+occurs.
+
+The combined Progress.Statements/TimerDiscipline.Statements build passes
+485 jobs, with only inherited Env:865 String.mk. Axiom inspection checks
+2,130 roots in 421 modules, including 1,251 public theorem roots, standard-only
+and without diagnostics. Both fresh kernel replays pass. Static checks,
+original 258-name order and mirror/shared boundaries pass. The inherited
+aggregate gate remains FAILED and is not rerun unchanged.
+
+Independent source/domain/trust review finds no issue in the original loop,
+ladder factor, finite inversion or concrete caller inputs.
+
+Nine new theorems, including the one headline, bring H5 to 340/52 and H6
+to 502/65; totals are 2,532 theorems, 874 owned modules and 360 headlines.
+H1 264/34, H2 491/91, H3 196/19 and H4 739/99 are unchanged. All six
+charter results remain in progress. The current summary's previous stale
+358-headline count is corrected; the preceding H4 checkpoint had 359.
+
+Reproduce with capped/scripts/in-bundle lake build on the two named
+Statements roots, standard-axiom inspection of their proof closure, and
+lake env leanchecker --fresh on each, with LEAN_NUM_THREADS=32 and
+LEANUX_QEMU_SLOTS=16. No mirror-team request arises from this proof
+reduction work.

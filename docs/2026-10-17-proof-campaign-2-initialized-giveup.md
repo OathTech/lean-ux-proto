@@ -133,3 +133,20 @@ runnerAuditLoop; the existing unconditional executeTraceWithBoundaries_erases
 then gives original acceptance. This requires substantially more source
 composition. Neither architecture is claimed complete, and no mirror change
 is requested on the strength of reduction failure.
+
+## Checked curve evaluations
+
+A later support checkpoint proves the original curve outputs for the recipe's
+configured secret/basepoint, secret/remote, ephemeral/basepoint and
+ephemeral/remote computations. The latter three include both raw and actual
+caller-clamped inputs. The repeated initiation recipe uses the same ephemeral
+input. Progress.PowEvaluationSource proves that successful finite evaluation
+equals the original private modular-power result; CurveEvaluationSource
+factors the original finite ladder and applies that equality to inversion.
+TimerDiscipline.InitializedGiveUpCurveSource checks each concrete output
+with kernel reduction and only standard axioms.
+
+These four support theorems do not prove initialized-operation acceptance
+or the 23-operation execution. The whole-history evidence above remains
+runtime-only. The main campaign report records the scoped build, full support
+axiom closure and fresh replay of this separate checkpoint.

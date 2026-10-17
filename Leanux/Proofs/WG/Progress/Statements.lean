@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Progress.PowEvaluationSource
 import Leanux.Proofs.WG.Progress.AllocationProgressClaims
 import Leanux.Proofs.WG.Progress.PlaceholderBoundaryClaims
 import Leanux.Proofs.WG.Progress.RunnerIdleOperationSource
@@ -748,5 +749,14 @@ theorem original_allocation_finite (site : AllocSite) :
     Campaign2.AgreesOn (fun _ => True) (hiddenAlloc site : WG.M Bool)
       (monadLift (hiddenAllocFinite site) : WG.M Bool) :=
   hiddenAlloc_finite_agrees site
+
+
+/-- Any successful finite evaluation gives the exact original modular-power
+result, even with fuel below the initial exponent. Exhaustion yields no
+conclusion; no runtime computation is used as a proof oracle. -/
+theorem original_pow_mod_of_evaluation (b e modulus fuel : Nat) (final : PowState)
+    (evaluated : powEval modulus fuel (1, b % modulus, e) = some final) :
+    originalPowMod b e modulus = final.1 :=
+  powMod_of_evaluation b e modulus fuel final evaluated
 
 end Leanux.Proofs.WG.Progress
