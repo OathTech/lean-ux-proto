@@ -11,10 +11,10 @@ new worlds; new R3/R4 results follow the retrofit.
 | Census | Lean files | Named theorems |
 | --- | ---: | ---: |
 | Validated baseline `00641c6` | 471 | 7,715 |
-| Completed retrofit checkpoints | 451 | 6,514 |
+| Completed retrofit checkpoints | 451 | 6,518 |
 
-Completed changes comprise **2,514 retyped/generalized, 1,676 deleted,
-1,688 retained contract shapes and 475 added theorems**. Retyping changes the
+Completed changes comprise **2,527 retyped/generalized, 1,677 deleted,
+1,711 retained contract shapes and 480 added theorems**. Retyping changes the
 actual carrier or observation, including shorthand contracts whose functions
 move to a native monad. Namespace-only product qualification and equivalent
 projection relocation count as retained. The census includes private and
@@ -98,8 +98,31 @@ trials and the original store-view premises remain. One changed-source forwardin
 check failed before the corrected full-file check passed; no infrastructure
 rerun was needed. The six earlier filesystem deletions are not counted again.
 
+Configured-session support carries 18→17 theorems: thirteen native retypings,
+four pure contracts retained, and the index-only replace_view frame deleted.
+The actual adapter supplies its table-only write boundary inside tail_view;
+the configured view observes peers, table rows and frontier, not the index.
+Timer history retains all nineteen written theorem headers and adds four
+private generic composition rules. Its deferred domain follows the current
+fourteen-constructor source API; the removed raw-fire constructor is replaced
+by wheel dispatch, not silently retained as a fifteenth case. Exact bucket
+ordering, actual saved-map scans, missing-device/reset guards, end-of-wait
+clocks, full product callbacks and failed journals remain in the source copy.
+One new lookup adapter theorem carries the existing represented-tree total
+lookup through the actual guarded AipStore adapter with both Ambient endpoints.
+
+This checkpoint passes its 358-job scoped graph, 54 explicitly named axiom
+checks, fresh replay of all three modules and independent source reviews.
+ConfiguredSession and RxEnvTimersHistory build in 1.2 and 13 seconds with zero
+module warnings; 1,305 warnings in the wider closure remain cleanup work.
+ConfiguredSession had one ordinary failed development check before passing;
+timer history passed its fourteenth changed-source check. No infrastructure
+rerun occurred. A worker edit-driver syntax failure ran no tool; all dirty
+worktrees were preserved at 20261017T005241Z before further edits.
+
 Remaining work is the routing/origin terminal carry, stamped
-timer/traffic/environment/runner history, material support callers, warning
+traffic/environment/runner history, material lifecycle/support callers, RX
+credit/protection layers, warning
 cleanup, the full proof gate and terminal replay. Deterministic source/proof
 failures are failures; source edits are checked anew, never described as
 infrastructure retries. Recovery admissions printed by failed elaborations

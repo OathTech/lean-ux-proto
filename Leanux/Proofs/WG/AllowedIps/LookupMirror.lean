@@ -171,4 +171,25 @@ theorem findNode_refines (w w' : WG.AipStore) (ambient ambient' : Ambient)
   cases hex
   exact ⟨rfl, hframe⟩
 
+/-- The actual trie adapter carries a successful native lookup back to WGWorld.
+Its node-store write-back is the identity because the traversal preserves the
+complete AipStore; the recorded Ambient endpoint remains explicit. -/
+theorem findNode_lift_run (w : WGWorld) (ambient : Ambient) (d : WG.Device)
+    (hd : w.dev = some d) (width key : Nat)
+    (hw : width = 32 ∨ width = 128) (hk : key < 2 ^ width)
+    (t : Tree) (parent : WG.Slot)
+    (hr : RepAt d.nodes width parent t) (hv : t.Valid width) :
+    ∃ ambient', ((WG.liftAip (WG.findNode t.root width key)).run w).run ambient =
+      .ok ((t.lookupId width key, w), ambient') := by
+  let entry : WG.AipStore :=
+    { nodes := d.nodes, nextNode := d.nextNode, trie := d.peerAllowedips }
+  obtain ⟨finish, ambient', he, hf⟩ := findNode_run entry ambient width key hw hk t parent hr hv
+  subst finish
+  dsimp only [entry] at he
+  refine ⟨ambient', ?_⟩
+  rw [liftAip_run, hd]
+  simp only [he, Except.map]
+  change Except.ok ((_, {w with dev := some d}), ambient') = Except.ok ((_, w), ambient')
+  rw [← hd]
+
 end Leanux.Proofs.WG.AllowedIps
