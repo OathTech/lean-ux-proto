@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Config.PeerGetterClaims
 import Leanux.Proofs.WG.Config.PeerPagePlanClaims
 import Leanux.Proofs.WG.Config.PeerPageCoalesceClaims
 import Leanux.Proofs.WG.Config.PageTransitionSource
@@ -1872,5 +1873,25 @@ theorem original_two_page_empty_ips_getter (d : Device) (peers : PeerId → Peer
         s.wg.nlSock7 = socketReadbackFinal sock d) :=
   two_pages_getter_returns d peers sock before cursor next tail members fresh residents emptyIps
     live positive bounded firstFits firstFull lastFits idle emptyQueue
+
+/-- The original finite empty-IP peer getter, with every callback and receive
+derived from its canonical plan and actual boundary data. -/
+theorem original_finite_empty_ips_getter (d : Device) (peers : PeerId → Peer) (sock : NlSock)
+    (residents : ∀ id ∈ d.peerList, d.peers[id]? = some (peers id))
+    (empty : ∀ id ∈ d.peerList, (peers id).allowedipsList = [])
+    (headerFits : devicePrefixSpace d ≤ NLMSG_GOODSIZE)
+    (firstFits : ∀ id rest, d.peerList = id :: rest →
+      peerFixedSpace (peers id) ≤ NLMSG_GOODSIZE-devicePrefixSpace d)
+    (fresh : peerPageBoundaryFresh [] (peerPages peers d d.peerList))
+    (cursorData : PeerPageCursorData peers (peerPages peers d d.peerList))
+    (idle : sock.cbRunning = false) (emptyQueue : sock.queue = [])
+    (within : peerPageReceiveCount peers d d.peerList ≤ 4096) :
+    Campaign2.Returns (wgGetDevice (byIndex d))
+      (fun s => s.wg.device = some d ∧ s.wg.nlSock7 = sock ∧ ClaimView.selectsDevice s d)
+      (fun result s => result = .ok (multiPeerJson d peers) ∧
+        s.wg.device = some (peerGetterFinalDevice d peers) ∧
+        s.wg.nlSock7 = socketReadbackFinal sock d ∧
+        CursorHeld d (peerGetterFinalDevice d peers) none) := by
+  exact peer_getter_returns d peers sock residents empty headerFits firstFits fresh cursorData idle emptyQueue within
 
 end Leanux.Proofs.WG.Config
