@@ -11,10 +11,10 @@ new worlds; new R3/R4 results follow the retrofit.
 | Census | Lean files | Named theorems |
 | --- | ---: | ---: |
 | Validated baseline `00641c6` | 471 | 7,715 |
-| Completed retrofit checkpoints | 452 | 6,530 |
+| Completed retrofit checkpoints | 452 | 6,531 |
 
-Completed changes comprise **2,596 retyped/generalized, 1,691 deleted,
-1,766 retained contract shapes and 506 added theorems**. Retyping changes the
+Completed changes comprise **2,640 retyped/generalized, 1,691 deleted,
+1,799 retained contract shapes and 507 added theorems**. Retyping changes the
 actual carrier or observation, including shorthand contracts whose functions
 move to a native monad. Namespace-only product qualification and equivalent
 projection relocation count as retained. The census includes private and
@@ -189,6 +189,31 @@ warning), and one missing-artifact failure. The final exact bytes passed the
 central build after its dependency closure was restored; there was no redundant
 output-free rerun. The stricter nonfinal theorem does not reuse the withdrawn
 positive-credit theorem's name or claim.
+
+Material lifecycle retains forty-two names, with thirty-eight native/state
+contracts and four generalized StateT/project transports. Support history carries
+35→36: two native receipt/execution retypings, twenty-four retained product
+contracts, nine retained pure history facts and one private exact focus/lift
+equality. Arbitrary product actions, the original store masks, strict positional
+history prefixes and full saved probe Worlds remain in scope.
+
+The combined import graph exposed independently generated socket helpers with
+the same name. RxRingSocket now imports RoutingSocketFrames before elaborating
+the common source; this acyclic import-only repair changes no contract. The
+312-job lifecycle graph and final 352-job support graph pass, with zero own
+warnings in the two carried modules. All 103 named declarations across those
+modules and the socket repair have standard axioms only; all three fresh
+closure replays and complete independent source reviews pass. The socket module's
+eleven existing tactic deprecations remain warning-cleanup work.
+
+Lifecycle development recorded six ordinary failed checks, one exit-zero
+index-out-of-bounds panic (rejected), and one final pass. Support history's
+first check failed on the generated-helper import collision; its final
+warning-clean check passed after the graph repair. A separate axiom-driver
+parse failure printed no roots; its corrected input passed all fifty roots.
+Recovery snapshots include 20261017T010823Z for the panic, 010900Z for a root
+driver syntax failure before tool execution, and 011410Z for the worker
+serialization error following its failed import check. No limit was raised.
 
 Remaining work is the routing/origin terminal carry, stamped
 traffic/environment/runner history, material lifecycle/support callers, RX

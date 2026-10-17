@@ -3,7 +3,7 @@ import Leanux.Proofs.WG.Origins.RetainingLifecycle
 import Leanux.Proofs.WG.Lifetimes.BatchAudit
 
 /-! Stateful material support on the existing committed RX journal. A decrypt
-or saved probe is justified at its exact earlier prefix and captured World.
+or saved probe is justified at its exact earlier prefix and captured state.
 All input history/support is supplied; initialized execution is separate. -/
 namespace Leanux.Proofs.WG.Origins.HistorySupport
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing
@@ -14,12 +14,13 @@ abbrev Obs := RxHistory.Obs
 def sessionEvent : Event → Option SessionOrigin.Receipt
   | .session r => some r | _ => none
 def sessions (h : List Event) := h.filterMap sessionEvent
-def StateSupported (h : List Event) (w : World) : Prop := Origins.Inv (sessions h) w
+def StateSupported (h : List Event) (w : World) : Prop := Origins.Inv (sessions h) w.wg
 
 /-- The prefix is positional, so two equal receipt values remain separate
-occurrences. The decrypt entry is the actual getter/decrypt receipt World. -/
+occurrences. The decrypt entry retains its native WG and Ambient endpoints;
+the saved probe retains its actual product World. -/
 def Checked (pre : List Event) : Event → Prop
-  | .rx (.decrypt _ r) => StateSupported pre r.before
+  | .rx (.decrypt _ r) => Origins.Inv (sessions pre) r.before
   | .audit (.probe p) => p.history = RxHistory.prior pre ∧ StateSupported pre p.world
   | _ => True
 
@@ -90,19 +91,21 @@ theorem sessions_decoded (h : List Event) :
   cases e <;> try rfl
   case audit a => cases a <;> rfl
 
-theorem SupportInv.kernel (hi : SupportInv h w) (hk : v.k = w.k) : SupportInv h v := by
+theorem SupportInv.kernel (hi : SupportInv h w)
+    (hk : productStoreView v = productStoreView w) : SupportInv h v := by
   refine ⟨hi.1,?_⟩
-  exact hi.2.retain (by unfold Retains; simp only [view,hk]; exact RetainsView.refl _)
+  have hd : v.wg.dev = w.wg.dev := congrArg (fun k : ProductStore43 => k.2.2.2.dev) hk
+  exact hi.2.retain (by unfold Retains; simp only [view,hd]; exact RetainsView.refl _)
 
-theorem lift_retains (a : M α) (ha : RetainsCall a) : Preserves (liftPrefix a) :=
+theorem lift_retains (a : Leanux.M α) (ha : ProductRetainsCall a) : Preserves (liftPrefix a) :=
   (PrefixEnsures.lift a safe (fun _ _ _ _ hi hr => ⟨hi.1,ha.support hi.2 hr⟩)).preserves
 
-theorem lift_kernel (a : M α) (ha : SameKernel a) : Preserves (liftPrefix a) :=
+theorem lift_kernel (a : Leanux.M α) (ha : SameProductStore a) : Preserves (liftPrefix a) :=
   lift_retains a (of_view (kernel ha))
 
 /-- Quiet means the actual appended suffix contains neither an origin receipt
 nor a probe. Erasure and a concrete full-material frame are separate premises. -/
-theorem quiet (g : Obs α) (a : M α) (he : ErasesPrefix g a) (ha : RetainsCall a)
+theorem quiet (g : Obs α) (a : Leanux.M α) (he : ErasesPrefix g a) (ha : ProductRetainsCall a)
     (hs : ∀ w h, ∃ s, (runPrefix g w h).2 = h ++ s ∧
       s.filterMap HistoryAdapters.decode = [] ∧ s.filterMap sensitive = [] ∧
       s.filterMap sessionEvent = []) : Preserves g := by
@@ -118,12 +121,13 @@ theorem quiet (g : Obs α) (a : M α) (he : ErasesPrefix g a) (ha : RetainsCall 
   | ok out =>
     refine ⟨hv,?_⟩
     have hx : sessions (runPrefix g w h).2 = sessions h := by simp only [sessions,hist,List.filterMap_append,hse,List.append_nil]
-    change Origins.Inv (sessions (runPrefix g w h).2) out.2
+    change Origins.Inv (sessions (runPrefix g w h).2) out.2.wg
     rw [hx]
     exact ha.support hi.2 ((he w h).symm.trans hr)
 
 /-- Lifetime access events may be added; they carry no origin obligation. -/
-theorem mixed (g : MixedM α) (a : M α) (he : ErasesPrefix g a) (ha : RetainsCall a) :
+theorem mixed (g : PrefixM LifetimeEvent α) (a : Leanux.M α)
+    (he : ErasesPrefix g a) (ha : ProductRetainsCall a) :
     Preserves (RxHistory.mixed g) := by
   intro w h hi
   let s := ((runPrefix g w (RxHistory.prior h)).2.drop (RxHistory.prior h).length).map
@@ -157,7 +161,7 @@ theorem mixed (g : MixedM α) (a : M α) (he : ErasesPrefix g a) (ha : RetainsCa
   | error e => trivial
   | ok out =>
     refine ⟨safeOut,?_⟩
-    change Origins.Inv (sessions (h ++ s)) out.2
+    change Origins.Inv (sessions (h ++ s)) out.2.wg
     rw [noSession]
     exact ha.support hi.2 ((he w _).symm.trans hr)
 
@@ -172,6 +176,12 @@ theorem focus_compose (enc : E → F) (dec : F → Option E)
       ((h.filterMap dec').filterMap dec).length).map enc).drop (h.filterMap dec').length).map enc') = _
   simp only [List.drop_left,List.filterMap_filterMap,List.map_map]
   rfl
+
+/-- Focusing a native journal commutes with its actual product adapter. The
+native observer executes once, with the same input history and both states. -/
+private theorem liftWGObserver_focus (enc : E → F) (dec : F → Option E)
+    (g : WGPrefix E α) :
+    liftWGObserver (focusStatePrefix enc dec g) = focusPrefix enc dec (liftWGObserver g) := rfl
 
 theorem preserve_facts (g : Obs α) (ha : Appends g)
     (hv : PrefixPreserves (fun h _ => HistoryAdapters.Valid h) HistoryAdapters.Valid g)
@@ -203,8 +213,9 @@ theorem session (pid : PeerId) : Preserves (HistoryAdapters.session pid) := by
     apply Checks.of_unchanged (Appends.focus _ _ _) _ hi.1.2
     intro w h
     change (runPrefix (focusPrefix HistoryAdapters.encode HistoryAdapters.decode
-      (focusPrefix Origins.sessionEncode Origins.sessionDecode (SessionOrigin.observed pid))) w h).2.filterMap sensitive = _
-    rw [focus_compose]
+      (liftWGObserver (focusStatePrefix Origins.sessionEncode Origins.sessionDecode
+        (SessionOrigin.observed pid)))) w h).2.filterMap sensitive = _
+    rw [liftWGObserver_focus,focus_compose]
     exact focusPrefix_other _ _ sensitive (by intro e; cases e <;> rfl) _ w h
   · intro w h x v hi hr
     have input : MaterialOrigin.Valid SessionOrigin.Receipt.Valid
@@ -214,16 +225,18 @@ theorem session (pid : PeerId) : Preserves (HistoryAdapters.session pid) := by
       have truth := hi.1.1 a ha
       cases a <;> simp only [Origins.sessionDecode,Option.some.injEq,reduceCtorEq] at he
       all_goals subst e; exact truth
-    let I := fun (h : List Origins.Event) (w : World) => MaterialOrigin.Valid SessionOrigin.Receipt.Valid (h.filterMap Origins.sessionDecode) ∧ Origins.Inv (Origins.sessions h) w
+    let I := fun (h : List Origins.Event) (w : World) =>
+      MaterialOrigin.Valid SessionOrigin.Receipt.Valid (h.filterMap Origins.sessionDecode) ∧
+        Origins.Inv (Origins.sessions h) w.wg
     let S := fun (h : List Origins.Event) => MaterialOrigin.Valid SessionOrigin.Receipt.Valid (h.filterMap Origins.sessionDecode)
-    have localProof : PrefixEnsures I S (Origins.localSession pid) (fun _ => I) := by
-      exact Origins.localSession_support pid
+    have localProof : PrefixEnsures I S (liftWGObserver (Origins.localSession pid)) (fun _ => I) := by
+      exact (Origins.localSession_support pid).liftWGObserver
     have hp := PrefixEnsures.focus HistoryAdapters.encode HistoryAdapters.decode
       HistoryAdapters.decode_encode localProof
     have out := (hp w h ⟨input,by simpa only [StateSupported,sessions_decoded] using hi.2⟩).choose_spec.2.2
     dsimp only [I] at out
     have hrun : (runPrefix (focusPrefix HistoryAdapters.encode HistoryAdapters.decode
-        (Origins.localSession pid)) w h).1 = .ok (x,v) := hr
+        (liftWGObserver (Origins.localSession pid))) w h).1 = .ok (x,v) := hr
     rw [hrun] at out
     simpa only [StateSupported,sessions_decoded] using out.2
 
@@ -248,21 +261,25 @@ theorem life_sessions (h : List Event) (s : List LifetimeEvent) :
   exact List.append_nil _
 
 theorem decrypt_run (id : SkbId) (w : World) (h : List Event) :
-    let out := runPrefix (RxOrigin.readDecryptPrefix id) w (RxHistory.prior h)
+    let out := runWGPrefix (RxOrigin.readDecryptPrefix id) w.wg w.ambient (RxHistory.prior h)
     let suffix := (out.2.drop (RxHistory.prior h).length).map lifeEncode
     runPrefix (HistoryAdapters.decrypt id) w h = match out.1 with
       | .error e => (.error e,h ++ suffix)
-      | .ok (result,v) => (.ok (result,v),h ++ suffix ++ [.rx (.decrypt id ⟨result,w,v⟩)]) := by
-  change ((runPrefix (Origins.localDecrypt id) w (h.filterMap HistoryAdapters.decode)).1,
-    h ++ ((runPrefix (Origins.localDecrypt id) w (h.filterMap HistoryAdapters.decode)).2.drop
+      | .ok ((result,v),ambient') =>
+        (.ok (result,{w with wg := v, ambient := ambient'}),
+          h ++ suffix ++ [.rx (.decrypt id ⟨result,w.wg,v,w.ambient,ambient'⟩)]) := by
+  change ((runWGPrefix (Origins.localDecrypt id) w.wg w.ambient
+      (h.filterMap HistoryAdapters.decode)).1.map
+        (fun ((x,g),ambient) => (x,{w with wg := g, ambient})),
+    h ++ ((runWGPrefix (Origins.localDecrypt id) w.wg w.ambient (h.filterMap HistoryAdapters.decode)).2.drop
       (h.filterMap HistoryAdapters.decode).length).map HistoryAdapters.encode) = _
   rw [Origins.localDecrypt_run,HistoryAdapters.input_lifetime]
-  cases hr : runPrefix (RxOrigin.readDecryptPrefix id) w (RxHistory.prior h) with
+  cases hr : runWGPrefix (RxOrigin.readDecryptPrefix id) w.wg w.ambient (RxHistory.prior h) with
   | mk result hist =>
     cases result with
     | error e => simp only [List.drop_left,List.map_map]; rfl
     | ok out =>
-      rcases out with ⟨result,v⟩
+      rcases out with ⟨⟨result,v⟩,ambient'⟩
       simp only [List.append_assoc,List.drop_left,List.map_append,List.map_map,List.map_cons,List.map_nil]
       rfl
 
@@ -271,7 +288,7 @@ theorem decrypt (id : SkbId) : Preserves (HistoryAdapters.decrypt id) := by
   · intro w h hi
     change Checks (runPrefix (HistoryAdapters.decrypt id) w h).2
     rw [decrypt_run]
-    cases hr : runPrefix (RxOrigin.readDecryptPrefix id) w (RxHistory.prior h) with
+    cases hr : runWGPrefix (RxOrigin.readDecryptPrefix id) w.wg w.ambient (RxHistory.prior h) with
     | mk result hist =>
       have quiet : Checks (h ++ (hist.drop (RxHistory.prior h).length).map lifeEncode) :=
         hi.1.2.quiet (filterMap_disjoint _ _ (fun _ => rfl) _)
@@ -279,20 +296,24 @@ theorem decrypt (id : SkbId) : Preserves (HistoryAdapters.decrypt id) := by
       | error e => exact quiet
       | ok out =>
         apply quiet.snoc
-        change Origins.Inv (sessions (h ++ _)) w
+        change Origins.Inv (sessions (h ++ _)) w.wg
         rw [life_sessions]
         exact hi.2
   · intro w h x v hi hr
-    have run := (HistoryAdapters.decrypt_erases id w h).symm.trans hr
-    have keep := hi.2.retain (readDecrypt_retains id w v x run)
+    have native : RetainsCall (RxOrigin.readDecrypt id) := by
+      apply (ProjectedAction.iff_run_ambient _ _ _).mpr
+      intro g ambient result g' ambient' hrun
+      exact readDecrypt_retains id g g' result ambient ambient' hrun
+    have keep := native.product.support hi.2
+      ((HistoryAdapters.decrypt_erases id w h).symm.trans hr)
     have hs : sessions (runPrefix (HistoryAdapters.decrypt id) w h).2 = sessions h := by
       rw [decrypt_run]
-      cases hrun : runPrefix (RxOrigin.readDecryptPrefix id) w (RxHistory.prior h) with
+      cases hrun : runWGPrefix (RxOrigin.readDecryptPrefix id) w.wg w.ambient (RxHistory.prior h) with
       | mk result hist =>
         cases result <;> simp only [sessions,List.filterMap_append,List.filterMap_cons,List.filterMap_nil,sessionEvent,
-          List.append_nil,Option.map_none,Option.map_some]
+          List.append_nil]
         all_goals rw [filterMap_disjoint lifeEncode sessionEvent (fun _ => rfl)]; exact List.append_nil _
-    change Origins.Inv (sessions (runPrefix (HistoryAdapters.decrypt id) w h).2) v
+    change Origins.Inv (sessions (runPrefix (HistoryAdapters.decrypt id) w h).2) v.wg
     rw [hs]
     exact keep
 
@@ -319,7 +340,7 @@ theorem poll (pid : PeerId) (budget : Nat) : Preserves (RxHistory.observePoll pi
     have keep := (actualRxPoll_material pid budget).support hi.2
       ((RxHistory.observePoll_erases pid budget w h).symm.trans hr)
     refine ⟨by rw [hs]; exact ⟨hv,hc⟩,?_⟩
-    change Origins.Inv (sessions (runPrefix (RxHistory.observePoll pid budget) w h).2) out.2
+    change Origins.Inv (sessions (runPrefix (RxHistory.observePoll pid budget) w h).2) out.2.wg
     have eq : sessions (h ++ s) = sessions h := by
       simp only [sessions,List.filterMap_append]
       rw [filterMap_disjoint _ _ (by intro e; cases e <;> rfl)]
@@ -330,7 +351,7 @@ theorem poll (pid : PeerId) (budget : Nat) : Preserves (RxHistory.observePoll pi
 theorem filter_probe : Preserves (RxHistory.audit consistentFilterAudit) := by
   intro w h hi
   have run : runPrefix (RxHistory.audit consistentFilterAudit) w h =
-      ((w.suspended.filterM Env.Activation.consistent).run w,
+      ((w.ambient.suspended.filterM Env.Activation.consistent).run w,
         h ++ [.audit (.probe ⟨w,RxHistory.prior h⟩)]) := by
     change ((runPrefix consistentFilterAudit w (h.filterMap RxHistory.auditEvent)).1,
       h ++ ((runPrefix consistentFilterAudit w (h.filterMap RxHistory.auditEvent)).2.drop
@@ -344,12 +365,13 @@ theorem filter_probe : Preserves (RxHistory.audit consistentFilterAudit) := by
       HistoryAdapters.decode,List.append_nil] using hi.1.1
   rw [run]
   refine ⟨_,rfl,⟨hv,hc⟩,?_⟩
-  cases hr : (w.suspended.filterM Env.Activation.consistent).run w with
+  cases hr : (w.ambient.suspended.filterM Env.Activation.consistent).run w with
   | error e => trivial
   | ok out =>
-    have he := filterM_sameKernel _ activationConsistent_sameKernel _ w out.1 out.2 hr
     refine ⟨⟨hv,hc⟩,?_⟩
-    have keep := hi.2.retain (retains_of_sameView (kernel (filterM_sameKernel _ activationConsistent_sameKernel _)) hr)
+    have frame : ProductRetainsCall (w.ambient.suspended.filterM Env.Activation.consistent) :=
+      of_view (kernel (filterM_sameKernel productStoreView _ activationConsistent_sameKernel _))
+    have keep := frame.support hi.2 hr
     simpa only [StateSupported,sessions,List.filterMap_append,List.filterMap_cons,List.filterMap_nil,
       sessionEvent,List.append_nil] using keep
 
@@ -366,7 +388,8 @@ theorem focus_pure (enc : E → Event) (dec : Event → Option E) (x : α) :
   change (Except.ok (ε := Stop) (x,w),h) = (.ok (x,w),h ++ ((h.filterMap dec).drop (h.filterMap dec).length).map enc)
   simp
 
-theorem focus_lift (enc : E → Event) (dec : Event → Option E) (a : M α) (ha : RetainsCall a) :
+theorem focus_lift (enc : E → Event) (dec : Event → Option E)
+    (a : Leanux.M α) (ha : ProductRetainsCall a) :
     Preserves (focusPrefix enc dec (liftPrefix a)) := by
   apply congr (lift_retains a ha)
   intro w h
@@ -409,7 +432,8 @@ theorem focused_life (enc : E → Event) (dec : Event → Option E)
     (inj : LifetimeEvent → E) (proj : E → Option LifetimeEvent)
     (hin : ∀ h, (h.filterMap dec).filterMap proj = RxHistory.prior h)
     (hout : ∀ e, enc (inj e) = lifeEncode e)
-    (g : MixedM α) (a : M α) (he : ErasesPrefix g a) (ha : RetainsCall a) :
+    (g : PrefixM LifetimeEvent α) (a : Leanux.M α)
+    (he : ErasesPrefix g a) (ha : ProductRetainsCall a) :
     Preserves (focusPrefix enc dec (focusPrefix inj proj g)) := by
   apply congr (mixed g a he ha)
   intro w h
@@ -433,7 +457,8 @@ theorem focused_life (enc : E → Event) (dec : Event → Option E)
   have ho : enc ∘ inj = lifeEncode := funext hout
   rw [ho]
 
-theorem origin_life (g : MixedM α) (a : M α) (he : ErasesPrefix g a) (ha : RetainsCall a) :
+theorem origin_life (g : PrefixM LifetimeEvent α) (a : Leanux.M α)
+    (he : ErasesPrefix g a) (ha : ProductRetainsCall a) :
     Preserves (HistoryAdapters.focus (HistoryAdapters.life g)) :=
   focused_life _ _ _ _ HistoryAdapters.input_lifetime (fun _ => rfl) g a he ha
 
@@ -442,7 +467,8 @@ def rxDecode (e : Event) := (HistoryAdapters.decode e).bind Origins.rxDecode
 
 theorem rx_decode_encode (e : MaterialOrigin.Event RxOrigin.Receipt) : rxDecode (rxEncode e) = some e := by cases e <;> rfl
 
-theorem rx_life (g : MixedM α) (a : M α) (he : ErasesPrefix g a) (ha : RetainsCall a) :
+theorem rx_life (g : PrefixM LifetimeEvent α) (a : Leanux.M α)
+    (he : ErasesPrefix g a) (ha : ProductRetainsCall a) :
     Preserves (focusPrefix rxEncode rxDecode (MaterialOrigin.access g)) := by
   change Preserves (focusPrefix rxEncode rxDecode (focusPrefix MaterialOrigin.Event.life MaterialOrigin.life? g))
   apply focused_life rxEncode rxDecode MaterialOrigin.Event.life MaterialOrigin.life? _ (fun _ => rfl) g a he ha
@@ -453,22 +479,27 @@ theorem rx_life (g : MixedM α) (a : M α) (he : ErasesPrefix g a) (ha : Retains
   cases e <;> try rfl
   case audit a => cases a <;> rfl
 
-theorem rx_decrypt (id : SkbId) : Preserves (focusPrefix rxEncode rxDecode (RxOrigin.decrypt id)) := by
+theorem rx_decrypt (id : SkbId) :
+    Preserves (focusPrefix rxEncode rxDecode (liftWGObserver (RxOrigin.decrypt id))) := by
   apply congr (decrypt id)
   intro w h
+  change runPrefix (focusPrefix HistoryAdapters.encode HistoryAdapters.decode
+    (liftWGObserver (focusStatePrefix Origins.rxEncode Origins.rxDecode (RxOrigin.decrypt id)))) w h = _
+  rw [liftWGObserver_focus]
   exact focus_compose _ _ _ _ _ w h
 
 /-- A successful stored decrypt is supported by session receipts in its strict
-positional prefix, at its actual captured entry World. The supplied input
+positional prefix, at its actual captured WG and Ambient entry. The supplied input
 history is not asserted to have arisen from initialization. -/
 theorem HistorySafe.decrypt (h pre post : List Event) (id : SkbId)
-    (r : RunWitness (RxPacket × Option RxPacket)) (out : RxPacket)
+    (r : WGRunWitness (RxPacket × Option RxPacket)) (out : RxPacket)
     (hh : HistorySafe h) (he : h = pre ++ .rx (.decrypt id r) :: post)
     (ho : r.value.2 = some out) :
-    ∃ d k, r.before.k.wg = some d ∧ d.rxSkbs[id]? = some r.value.1 ∧
+    ∃ d k, r.before.dev = some d ∧ d.rxSkbs[id]? = some r.value.1 ∧
       d.keypairs[r.value.1.keypair]? = some k ∧
       Origins.Supported (sessions pre) d.ifindex r.value.1.keypair k ∧
-      (decryptPacket r.value.1).run r.before = .ok (some out,r.after) ∧
+      ((decryptPacket r.value.1).run r.before).run r.ambientBefore =
+        .ok ((some out,r.after),r.ambientAfter) ∧
       out = {r.value.1 with nonce := u64le r.value.1.bytes 8, bytes := out.bytes} ∧
       aeadDecrypt k.receiving.key (counterNonce (u64le r.value.1.bytes 8))
         (r.value.1.bytes.drop 16) [] = some out.bytes := by

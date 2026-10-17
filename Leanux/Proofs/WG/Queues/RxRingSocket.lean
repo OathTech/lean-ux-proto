@@ -1,5 +1,8 @@
 import Leanux.Proofs.WG.Queues.RxRingEncrypt
 import Leanux.Proofs.WG.Lifetimes.SocketSend4
+import Leanux.Proofs.WG.AllowedIps.RoutingSocketFrames
+
+-- Elaborate the common socket source once before generating its ring frames.
 
 /-! Concrete socket sends retain the full decrypt-ring cell, including
 loopback sections and ordinary route errors. The original socket-port Stops
