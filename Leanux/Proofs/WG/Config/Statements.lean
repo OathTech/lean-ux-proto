@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Config.TwoPageGetterClaims
 import Leanux.Proofs.WG.Config.TwoPageCoalesceClaims
 import Leanux.Proofs.WG.Config.CursorCallbackClaims
 import Leanux.Proofs.WG.Config.CursorBodySource
@@ -1842,5 +1843,30 @@ theorem original_cursor_callback_normal (d : Device) (peers : PeerId → Peer) (
           state.1 state.2.1 state.2.2.1 state.2.2.2.1 state.2.2.2.2 ∧
         s.wg.device = some (cursorReleased (cursorAcquired d (if state.2.2.2.1 then none else state.2.1)) state.1.nextPeer)) :=
   wgGetDeviceDump_cursor_normal d peers ctx prev skb residents empty fresh oldResident
+
+/-- The original getter coalesces two complete-peer DATA pages into canonical
+JSON, with actual endpoint serialization and inline or separate DONE. Only the boundary
+cursor needs liveness and reference bounds; later repeated peer IDs remain
+allowed. The exact final Device records acquisition followed by release, while
+its peer lookups and all other Device fields agree with the entry Device. -/
+theorem original_two_page_empty_ips_getter (d : Device) (peers : PeerId → Peer) (sock : NlSock)
+    (before : List PeerId) (cursor next : PeerId) (tail : List PeerId)
+    (members : d.peerList = (before ++ [cursor]) ++ next :: tail)
+    (fresh : cursor ∉ before)
+    (residents : ∀ pid ∈ d.peerList, d.peers[pid]? = some (peers pid))
+    (emptyIps : ∀ pid ∈ d.peerList, (peers pid).allowedipsList = [])
+    (live : (peers cursor).isDead = false)
+    (positive : 0 < (peers cursor).refcount) (bounded : (peers cursor).refcount+1 < 2^31)
+    (firstFits : devicePrefixSpace d + multiPeerSpace peers (before ++ [cursor]) ≤ NLMSG_GOODSIZE)
+    (firstFull : NLMSG_GOODSIZE < devicePrefixSpace d + multiPeerSpace peers (before ++ [cursor]) + peerFixedSpace (peers next))
+    (lastFits : 24 + multiPeerSpace peers (next::tail) ≤ NLMSG_GOODSIZE)
+    (idle : sock.cbRunning = false) (emptyQueue : sock.queue = []) :
+    Campaign2.Returns (wgGetDevice (byIndex d))
+      (fun s => s.wg.device = some d ∧ s.wg.nlSock7 = sock ∧ ClaimView.selectsDevice s d)
+      (fun result s => result = .ok (multiPeerJson d peers) ∧
+        s.wg.device = some (cursorReleased (cursorAcquired d (some cursor)) (some cursor)) ∧
+        s.wg.nlSock7 = socketReadbackFinal sock d) :=
+  two_pages_getter_returns d peers sock before cursor next tail members fresh residents emptyIps
+    live positive bounded firstFits firstFull lastFits idle emptyQueue
 
 end Leanux.Proofs.WG.Config

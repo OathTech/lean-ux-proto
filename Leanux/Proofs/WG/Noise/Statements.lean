@@ -21,8 +21,9 @@ import Leanux.Proofs.WG.Noise.ConfirmationSequenceSource
 
 /-! H1's whole-operation contracts and finite mixed native tag histories.
 Direct helper reinstallation admits repeated confirmation of one resident key;
-fresh-session confirmation uniqueness remains open.
-closure over every driver caller is outside this native operation language. -/
+the nine-operation confirmation history proves distinct successful IDs under
+its explicit initial next/cursor bound. Closure over every driver caller
+remains outside this native operation language. -/
 namespace Leanux.Proofs.WG.Noise
 open Leanux Leanux.WG
 
