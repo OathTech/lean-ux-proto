@@ -8,11 +8,11 @@ structure PollAttemptCut where
   id : SkbId
   packet : RxPacket
   endpoint : Endpoint
-  beforeRead : Snapshot
-  beforeCounter : Snapshot
-  afterCounter : Snapshot
-  counter : Outcome Bool
-  beforeSetter : Snapshot
+  beforeRead : Campaign2.Product.Snapshot
+  beforeCounter : Campaign2.Product.Snapshot
+  afterCounter : Campaign2.Product.Snapshot
+  counter : Campaign2.Product.Outcome Bool
+  beforeSetter : Campaign2.Product.Snapshot
 
 inductive PollAttemptPrepared where
   | drained
@@ -22,11 +22,11 @@ inductive PollAttemptPrepared where
 /-- Every attempted iteration is recorded, including a failing prefix.
 A successful prefix records its actual suffix outcome, even when that fails. -/
 structure PollAttemptIteration where
-  entry : Snapshot
-  admission : Outcome PollAttemptPrepared
-  continuation : Option (Outcome (ForInStep PollState))
+  entry : Campaign2.Product.Snapshot
+  admission : Campaign2.Product.Outcome PollAttemptPrepared
+  continuation : Option (Campaign2.Product.Outcome (ForInStep PollState))
 
-def PollAttemptFacts (pid : PeerId) (entry : Snapshot) (cut : PollAttemptCut) : Prop :=
+def PollAttemptFacts (pid : PeerId) (entry : Campaign2.Product.Snapshot) (cut : PollAttemptCut) : Prop :=
   packetAt entry cut.id = some cut.packet ∧
   packetAt cut.beforeRead cut.id = some cut.packet ∧
   cut.packet.peer = pid ∧ cut.packet.state = .crypted ∧
@@ -42,6 +42,6 @@ def PollAttemptIterationFacts (pid : PeerId) (iteration : PollAttemptIteration) 
 
 structure PollAttemptAudit where
   iterations : List PollAttemptIteration
-  outcome : Outcome Nat
+  outcome : Campaign2.Product.Outcome Nat
 
 end Leanux.Proofs.WG.Roaming

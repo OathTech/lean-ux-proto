@@ -3,14 +3,13 @@ import Leanux.Proofs.WG.Roaming.PublicationClaims
 
 set_option autoImplicit false
 set_option pp.structureInstances false
-set_option maxHeartbeats 800000
 
 namespace Leanux.Proofs.WG.Roaming
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise Std.Do
 
 /-- One unchanged iteration of the current original poll, including GRO and cleanup. -/
-def pollStep (pid : PeerId) (budget : Nat) (toStack : List (List UInt8) → M Unit)
-    (_ : Nat) (state : PollState) : M (ForInStep PollState) := do
+def pollStep (pid : PeerId) (budget : Nat) (toStack : List (List UInt8) → Leanux.M Unit)
+    (_ : Nat) (state : PollState) : Leanux.M (ForInStep PollState) := do
   let mut workDone := state.1
   let mut gro := state.2.1
   let drained := state.2.2
@@ -46,8 +45,8 @@ def pollStep (pid : PeerId) (budget : Nat) (toStack : List (List UInt8) → M Un
   if ← branch .rxPollBudgetDone (workDone ≥ budget) then return .done (workDone, gro, drained)
   return .yield (workDone, gro, drained)
 
-def pollFinish (pid : PeerId) (budget : Nat) (toStack : List (List UInt8) → M Unit)
-    (state : PollState) : M Nat := do
+def pollFinish (pid : PeerId) (budget : Nat) (toStack : List (List UInt8) → Leanux.M Unit)
+    (state : PollState) : Leanux.M Nat := do
   let workDone := state.1
   let gro := state.2.1
   let drained := state.2.2
@@ -61,7 +60,7 @@ def pollFinish (pid : PeerId) (budget : Nat) (toStack : List (List UInt8) → M 
 
 
 /-- Exact current-source factorization, retaining every callback and error. -/
-theorem rxPoll_source (pid : PeerId) (budget : Nat) (toStack : List (List UInt8) → M Unit) :
+theorem rxPoll_source (pid : PeerId) (budget : Nat) (toStack : List (List UInt8) → Leanux.M Unit) :
     rxPoll pid budget toStack = (do
       if ← branch .rxPollNoBudget (budget == 0) then return 0
       let state ← forIn ([:MAX_QUEUED_PACKETS + 1] : Std.Legacy.Range)
@@ -70,7 +69,7 @@ theorem rxPoll_source (pid : PeerId) (budget : Nat) (toStack : List (List UInt8)
   rfl
 
 /-- The exact remainder after consumeDataDone's first endpoint setter. -/
-def consumeDataAfterEndpoint (pid : PeerId) (pkt : RxPacket) : M (Option (List UInt8)) := do
+def consumeDataAfterEndpoint (pid : PeerId) (pkt : RxPacket) : WG.M (Option (List UInt8)) := do
   if ← branch .doneReceivedNew (← receivedWithKeypair pid pkt.keypair) then
     timersHandshakeComplete pid .walltimeLastHandshakeData
     sendStagedPackets pid
@@ -79,7 +78,7 @@ def consumeDataAfterEndpoint (pid : PeerId) (pkt : RxPacket) : M (Option (List U
   timersTraversal pid
   let bytes := pkt.bytes
   let len := bytes.length   -- skb->len
-  let reject (why : Dishonest) : M (Option (List UInt8)) := do
+  let reject (why : Dishonest) : WG.M (Option (List UInt8)) := do
     dishonest why   -- then packet_processed: dev_kfree_skb
     return none
   -- a packet with length 0 is a keepalive
@@ -127,7 +126,7 @@ theorem consumeDataDone_source (pid : PeerId) (pkt : RxPacket) (e : Endpoint) :
 /-- The original first-iteration prefix through the endpoint setter, with
 state reads at the packet/counter/setter cuts. Rejected packets retain cleanup
 context; a drained queue is distinct from a rejected packet. -/
-def pollEndpointPrefix (pid : PeerId) : M PollPrepared := do
+def pollEndpointPrefix (pid : PeerId) : Leanux.M PollPrepared := do
   let (first, q) ← (← getPeer pid).rxQueue.peek
   setPeer pid { (← getPeer pid) with rxQueue := q }
   let go ← WG.andM (branch .rxPollPacket first.isSome) do
@@ -135,25 +134,25 @@ def pollEndpointPrefix (pid : PeerId) : M PollPrepared := do
     branch .rxPollNotUncrypted ((← getRxSkb f).state != .uncrypted)
   if !go then return .drained
   let some id := first | invariant "unreachable"
-  let beforeRead ← Campaign2.read
+  let beforeRead ← Campaign2.Product.read
   let pkt ← getRxSkb id
   if pkt.peer != pid then invariant "a packet on another peer's rx_queue"
   setPeer pid { (← getPeer pid) with rxQueue := (← getPeer pid).rxQueue.dropPeeked }
   if ← branch .rxPollNotCrypted (pkt.state != .crypted) then return .rejected id pkt
-  let beforeCounter ← Campaign2.read
+  let beforeCounter ← Campaign2.Product.read
   let valid ← counterValidate pkt.keypair pkt.nonce
-  let afterCounter ← Campaign2.read
+  let afterCounter ← Campaign2.Product.read
   if ← branch .rxPollCounterInvalid !valid then return .rejected id pkt
   let endpoint ← endpointFromSkb pkt.source
   if ← branch .rxPollEndpointFailed endpoint.isNone then return .rejected id pkt
   let some e := endpoint | invariant "unreachable"
   setPeerEndpoint pid e
-  let atEndpoint ← Campaign2.read
+  let atEndpoint ← Campaign2.Product.read
   return .endpoint ⟨id, pkt, e, beforeRead, beforeCounter, afterCounter,
     .ok (valid, afterCounter), atEndpoint⟩
 
 def pollPacketCleanup (pid : PeerId) (budget : Nat) (state : PollState)
-    (id : SkbId) (pkt : RxPacket) (free : Bool) : M (ForInStep PollState) := do
+    (id : SkbId) (pkt : RxPacket) (free : Bool) : Leanux.M (ForInStep PollState) := do
   keypairPut (some pkt.keypair) false
   peerPut (some pid)
   _ ← branch .rxPollFree free
@@ -166,8 +165,8 @@ def pollPacketCleanup (pid : PeerId) (budget : Nat) (state : PollState)
 /-- Every original operation after the prefix, including arbitrary stack
 callbacks, reference release and skb freeing. -/
 def pollEndpointSuffix (pid : PeerId) (budget : Nat)
-    (toStack : List (List UInt8) → M Unit) (state : PollState)
-    (prepared : PollPrepared) : M (ForInStep PollState) := do
+    (toStack : List (List UInt8) → Leanux.M Unit) (state : PollState)
+    (prepared : PollPrepared) : Leanux.M (ForInStep PollState) := do
   match prepared with
   | .drained => return .done (state.1, state.2.1, true)
   | .rejected id pkt => pollPacketCleanup pid budget state id pkt true
@@ -177,31 +176,51 @@ def pollEndpointSuffix (pid : PeerId) (budget : Nat)
       gro ← napiGroReceive toStack gro inner
     pollPacketCleanup pid budget (state.1, gro, state.2.2) cut.id cut.packet false
 
-theorem read_ignore {α : Type} (next : M α) :
-    (do let _ ← Campaign2.read; next) = next := rfl
+theorem read_ignore {α : Type} (next : Leanux.M α) :
+    (do let _ ← Campaign2.Product.read; next) = next := rfl
 
 theorem bind_if {α β : Type} (condition : Prop) [Decidable condition]
-    (yes no : M α) (next : α → M β) :
+    (yes no : Leanux.M α) (next : α → Leanux.M β) :
     ((if condition then yes else no) >>= next) =
       if condition then yes >>= next else no >>= next := by
   split <;> rfl
 
-theorem invariant_bind {α β : Type} (message : String) (next : α → M β) :
-    ((invariant message : M α) >>= next) = (invariant message : M β) := rfl
+theorem invariant_bind {α β : Type} (message : String) (next : α → Leanux.M β) :
+    ((invariant message : Leanux.M α) >>= next) = (invariant message : Leanux.M β) := rfl
 
 theorem bind_option {α β γ : Type} (value : Option α)
-    (noneCase : M β) (someCase : α → M β) (next : β → M γ) :
+    (noneCase : Leanux.M β) (someCase : α → Leanux.M β) (next : β → Leanux.M γ) :
     ((match value with | some a => someCase a | _ => noneCase) >>= next) =
       (match value with | some a => someCase a >>= next | _ => noneCase >>= next) := by
   cases value <;> rfl
 
 /-- No original suffix is dropped by stopping the observation at the setter. -/
 theorem pollStep_endpoint_source (pid : PeerId) (budget : Nat)
-    (toStack : List (List UInt8) → M Unit) (turn : Nat) (state : PollState) :
+    (toStack : List (List UInt8) → Leanux.M Unit) (turn : Nat) (state : PollState) :
     pollStep pid budget toStack turn state =
       (pollEndpointPrefix pid >>= pollEndpointSuffix pid budget toStack state) := by
-  simp only [pollStep, pollEndpointPrefix, pollEndpointSuffix, pollPacketCleanup,
-    consumeDataDone_source, bind_assoc, pure_bind, bind_if, invariant_bind, bind_option, pollEndpointSuffix, pollPacketCleanup, read_ignore]
+  -- Local forms of campaign 1's Framing.liftWG_run and liftWG_bind.
+  have liftWG_run_variant {α : Type} (a : WG.M α) (w) :
+      (liftWG a).run w = ((a.run w.wg).run w.ambient).map
+        (fun ((x, g), ambient) => (x, {w with wg := g, ambient})) := by
+    unfold liftWG StateT.run
+    cases a w.wg w.ambient <;> rfl
+  have liftWG_bind_variant {α β : Type} (a : WG.M α) (f : α → WG.M β) :
+      (monadLift (a >>= f) : Leanux.M β) =
+        (do let x ← (monadLift a : Leanux.M α); monadLift (f x)) := by
+    funext w
+    change (liftWG (a >>= f)).run w = (liftWG a >>= fun x => liftWG (f x)).run w
+    rw [liftWG_run_variant]
+    simp only [StateT.run_bind]
+    rw [liftWG_run_variant]
+    cases hr : (a.run w.wg).run w.ambient with
+    | error e => rfl
+    | ok out =>
+      rcases out with ⟨⟨x, g⟩, ambient⟩
+      simp only [Except.map]
+      exact (liftWG_run_variant (f x) {w with wg := g, ambient}).symm
+  simp only [pollStep, pollEndpointPrefix, pollEndpointSuffix,
+    consumeDataDone_source, bind_assoc, pure_bind, bind_if, invariant_bind]
   congr 1
   funext peer
   congr 1
@@ -210,31 +229,29 @@ theorem pollStep_endpoint_source (pid : PeerId) (budget : Nat)
   congr 1
   funext peer
   congr 1
-  funext unit
+  funext stepUnit
   congr 1
   funext go
-  cases go <;> simp only [Bool.not_true, Bool.not_false, Bool.false_eq_true, ite_false, ite_true,
-    pure_bind, bind_if, invariant_bind]
+  cases go <;> simp only [Bool.not_true, Bool.not_false, Bool.false_eq_true, ite_false, ite_true]
   all_goals try rfl
-  cases first <;> simp only [bind_assoc, pure_bind, bind_if, invariant_bind, bind_option, pollEndpointSuffix, pollPacketCleanup, read_ignore]
+  cases first <;> simp only [bind_assoc, pure_bind, bind_if, invariant_bind, pollEndpointSuffix, pollPacketCleanup]
   all_goals try rfl
   apply Eq.trans (read_ignore _).symm
   congr 1
   funext beforeRead
   congr 1
   funext pkt
-  split <;> try simp only [bind_assoc, pure_bind, bind_if, invariant_bind, bind_option, pollEndpointSuffix, pollPacketCleanup, read_ignore]
+  split <;> try rfl
   all_goals try rfl
   congr 1
   funext peer
   congr 1
   funext peer2
   congr 1
-  funext unit
+  funext stepUnit
   congr 1
   funext crypted
-  cases crypted <;> simp only [Bool.not_true, Bool.not_false, Bool.false_eq_true, ite_false, ite_true,
-    bind_assoc, pure_bind, bind_if, invariant_bind, bind_option, pollEndpointSuffix, pollPacketCleanup, read_ignore]
+  cases crypted <;> simp only [Bool.not_true, Bool.not_false, Bool.false_eq_true, ite_false, ite_true]
   all_goals try rfl
   apply Eq.trans (read_ignore _).symm
   congr 1
@@ -246,26 +263,24 @@ theorem pollStep_endpoint_source (pid : PeerId) (budget : Nat)
   funext afterCounter
   congr 1
   funext rejected
-  cases rejected <;> simp only [Bool.not_true, Bool.not_false, Bool.false_eq_true, ite_false, ite_true,
-    bind_assoc, pure_bind, bind_if, invariant_bind, bind_option, pollEndpointSuffix, pollPacketCleanup, read_ignore]
+  cases rejected <;> simp only [Bool.not_true, Bool.not_false, Bool.false_eq_true, ite_false, ite_true]
   all_goals try rfl
   congr 1
   funext endpoint
   congr 1
   funext failed
-  cases failed <;> simp only [Bool.not_true, Bool.not_false, Bool.false_eq_true, ite_false, ite_true,
-    bind_assoc, pure_bind, bind_if, invariant_bind, bind_option, pollEndpointSuffix, pollPacketCleanup, read_ignore]
+  cases failed <;> simp only [Bool.not_true, Bool.not_false, Bool.false_eq_true, ite_false, ite_true]
   all_goals try rfl
-  cases endpoint <;> simp only [bind_assoc, pure_bind, invariant_bind, bind_option, pollEndpointSuffix, pollPacketCleanup, read_ignore]
-  all_goals rfl
+  cases endpoint <;> simp only [bind_assoc, pure_bind, invariant_bind, pollEndpointSuffix, pollPacketCleanup, read_ignore]
+  all_goals first | rfl | simp only [liftWG_bind_variant, bind_assoc]
 
 /-- Includes the original no-budget decision before touching the first queue item. -/
-def pollInitialPrefix (pid : PeerId) (budget : Nat) : M (Option PollPrepared) := do
+def pollInitialPrefix (pid : PeerId) (budget : Nat) : Leanux.M (Option PollPrepared) := do
   if ← branch .rxPollNoBudget (budget == 0) then return none
   return some (← pollEndpointPrefix pid)
 
 def pollInitialSuffix (pid : PeerId) (budget : Nat)
-    (toStack : List (List UInt8) → M Unit) (prepared : Option PollPrepared) : M Nat := do
+    (toStack : List (List UInt8) → Leanux.M Unit) (prepared : Option PollPrepared) : Leanux.M Nat := do
   match prepared with
   | none => return 0
   | some prepared =>
@@ -276,7 +291,7 @@ def pollInitialSuffix (pid : PeerId) (budget : Nat)
     pollFinish pid budget toStack state
 
 theorem rxPoll_first_source (pid : PeerId) (budget : Nat)
-    (toStack : List (List UInt8) → M Unit) :
+    (toStack : List (List UInt8) → Leanux.M Unit) :
     rxPoll pid budget toStack =
       (pollInitialPrefix pid budget >>= pollInitialSuffix pid budget toStack) := by
   rw [rxPoll_source]
@@ -295,26 +310,26 @@ theorem rxPoll_first_source (pid : PeerId) (budget : Nat)
   cases step <;> rfl
 
 def observedRxPoll (pid : PeerId) (budget : Nat)
-    (toStack : List (List UInt8) → M Unit) :
-    M (Nat × Campaign2.Outcome (Option PollPrepared)) := do
-  let observation ← Campaign2.inspect (pollInitialPrefix pid budget)
+    (toStack : List (List UInt8) → Leanux.M Unit) :
+    Leanux.M (Nat × Campaign2.Product.Outcome (Option PollPrepared)) := do
+  let observation ← Campaign2.Product.inspect (pollInitialPrefix pid budget)
   let count ← rxPoll pid budget toStack
   pure (count, observation)
 
 theorem observedRxPoll_erase (pid : PeerId) (budget : Nat)
-    (toStack : List (List UInt8) → M Unit) :
+    (toStack : List (List UInt8) → Leanux.M Unit) :
     (do let result ← observedRxPoll pid budget toStack; pure result.1) =
       rxPoll pid budget toStack := by
   funext w
   change (((rxPoll pid budget toStack).run w >>= fun out =>
-    Except.ok ((out.1, Campaign2.observeResult ((pollInitialPrefix pid budget).run w)), out.2))
+    Except.ok ((out.1, Campaign2.Product.observeResult ((pollInitialPrefix pid budget).run w)), out.2))
       >>= fun out => Except.ok (out.1.1, out.2)) = (rxPoll pid budget toStack).run w
   cases h : (rxPoll pid budget toStack).run w <;> rfl
 
 /-- Decorate the actual original publication and its immediately invoked
 poll callback. Later release/softirq operations are retained verbatim. -/
-def observedDecryptPoll (softirq : M Unit) (pid : PeerId) (budget : Nat)
-    (toStack : List (List UInt8) → M Unit) : M PublicationPollResult := do
+def observedDecryptPoll (softirq : Leanux.M Unit) (pid : PeerId) (budget : Nat)
+    (toStack : List (List UInt8) → Leanux.M Unit) : Leanux.M PublicationPollResult := do
   let publication ← publicationPrefix softirq
   match publication with
   | none => pure (false, none)
@@ -324,8 +339,8 @@ def observedDecryptPoll (softirq : M Unit) (pid : PeerId) (budget : Nat)
     softirq
     pure (true, some (pub, poll))
 
-theorem observedDecryptPoll_erase (softirq : M Unit) (pid : PeerId) (budget : Nat)
-    (toStack : List (List UInt8) → M Unit) :
+theorem observedDecryptPoll_erase (softirq : Leanux.M Unit) (pid : PeerId) (budget : Nat)
+    (toStack : List (List UInt8) → Leanux.M Unit) :
     (do let result ← observedDecryptPoll softirq pid budget toStack; pure result.1) =
       decryptStep softirq (discard (rxPoll pid budget toStack)) := by
   rw [decryptStep_publication]

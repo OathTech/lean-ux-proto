@@ -11,20 +11,20 @@ structure PollEndpointCut where
   id : SkbId
   packet : RxPacket
   endpoint : Endpoint
-  beforeRead : Snapshot
-  beforeCounter : Snapshot
-  afterCounter : Snapshot
-  counter : Outcome Bool
-  atEndpoint : Snapshot
+  beforeRead : Campaign2.Product.Snapshot
+  beforeCounter : Campaign2.Product.Snapshot
+  afterCounter : Campaign2.Product.Snapshot
+  counter : Campaign2.Product.Outcome Bool
+  atEndpoint : Campaign2.Product.Snapshot
 
-def PollEndpointFacts (pid : PeerId) (entry : Snapshot) (cut : PollEndpointCut) : Prop :=
+def PollEndpointFacts (pid : PeerId) (entry : Campaign2.Product.Snapshot) (cut : PollEndpointCut) : Prop :=
   packetAt entry cut.id = some cut.packet ∧
   packetAt cut.beforeRead cut.id = some cut.packet ∧
   cut.packet.peer = pid ∧ cut.packet.state = .crypted ∧
   cut.counter = .ok (true, cut.afterCounter) ∧
   cut.endpoint = sourceEndpoint cut.packet.source ∧
   (cut.packet.source.family = 4 ∨ cut.packet.source.family = 6) ∧
-  remoteAt cut.atEndpoint pid = some (destination cut.endpoint)
+  remoteAt cut.atEndpoint.toSnapshot pid = some (destination cut.endpoint)
 
 inductive PollPrepared where
   | drained
@@ -37,8 +37,8 @@ def PollPrepared.endpoint? : PollPrepared → Option PollEndpointCut
 
 /-- On normal full-poll return, its budget-guarded first prefix succeeded.
 Endpoint facts refer to the immediate setter cut, not the final poll state. -/
-def PollEndpointObservation (pid : PeerId) (budget : Nat) (entry : Snapshot)
-    (result : Nat × Outcome (Option PollPrepared)) : Prop :=
+def PollEndpointObservation (pid : PeerId) (budget : Nat) (entry : Campaign2.Product.Snapshot)
+    (result : Nat × Campaign2.Product.Outcome (Option PollPrepared)) : Prop :=
   ∃ prepared atCut, result.2 = .ok (prepared, atCut) ∧
     ∀ cut, prepared = some (.endpoint cut) →
       budget ≠ 0 ∧ PollEndpointFacts pid entry cut
@@ -55,7 +55,7 @@ def PollEndpointAuthentication (pub : PublicationCut) (cut : PollEndpointCut) : 
       (pub.input.bytes.drop 16) [] = some cut.packet.bytes
 
 abbrev PublicationPollResult :=
-  Bool × Option (PublicationCut × (Nat × Outcome (Option PollPrepared)))
+  Bool × Option (PublicationCut × (Nat × Campaign2.Product.Outcome (Option PollPrepared)))
 
 /-- The selected first packet gets decryption provenance when its
 id matches the packet just published in this same original execution. -/

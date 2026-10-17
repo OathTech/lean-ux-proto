@@ -13,27 +13,37 @@ def withPeer (d : Device) (pid : PeerId) (p : Peer) : Device :=
 theorem pubkeyLookup_present (key : Key) (pid : PeerId) (d : Device) (p : Peer)
     (found : d.peerHashtable.find? (·.1 == key) = some (key, pid))
     (resident : d.peers[pid]? = some p) (live : 0 < p.refcount) :
-    ⦃fun w => ⌜w.k.wg = some d⌝⦄ pubkeyLookup key
-    ⦃⇓? ret w => ⌜ret = some pid ∧ w.k.wg = some
+    ⦃fun w => ⌜w.dev = some d⌝⦄ pubkeyLookup key
+    ⦃⇓? ret w => ⌜ret = some pid ∧ w.dev = some
       (withPeer d pid { p with refcount := p.refcount + 1 })⌝⦄ := by
-  mvcgen [pubkeyLookup, peerGetMaybeZero, requireNotPending, refcountIncNotZero,
-    branch, branchCmp, getPeer, getDev, getK, setPeer, modifyDev, modifyK,
-    invariant, unsupported]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals repeat intro
-  all_goals simp_all [-List.find?_eq_none, withPeer]
-  all_goals grind only
+  apply (ensures_iff _ _ _).mp
+  intro g ambient result final after device run
+  have nonzero : p.refcount ≠ 0 := by omega
+  by_cases overflow : 2147483647 ≤ p.refcount
+  · simp [pubkeyLookup, peerGetMaybeZero, requireNotPending, refcountIncNotZero,
+      branch, branchCmp, AmbientM.branch, AmbientM.branchCmp, getPeer, getDev,
+      device, found, resident, nonzero, overflow, unsupported, AmbientM.unsupported] at run
+    cases run
+  · simp [pubkeyLookup, peerGetMaybeZero, requireNotPending, refcountIncNotZero,
+      branch, branchCmp, AmbientM.branch, AmbientM.branchCmp, getPeer, getDev,
+      device, found, resident, nonzero, overflow, setPeer, modifyDev] at run
+    rcases run with ⟨⟨rfl, rfl⟩, rfl⟩
+    exact ⟨rfl, rfl⟩
 
 theorem peerPut_retained (pid : PeerId) (d : Device) (p : Peer)
     (resident : d.peers[pid]? = some p) (retained : 1 < p.refcount) :
-    ⦃fun w => ⌜w.k.wg = some d⌝⦄ peerPut (some pid)
-    ⦃⇓? _ w => ⌜w.k.wg = some (withPeer d pid { p with refcount := p.refcount - 1 })⌝⦄ := by
-  mvcgen [peerPut, requireNotPending, refcountDecAndTest, branch, branchCmp,
-    getPeer, getDev, getK, setPeer, modifyDev, modifyK, invariant, unsupported]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals repeat intro
-  all_goals simp_all [withPeer]
-  all_goals omega
+    ⦃fun w => ⌜w.dev = some d⌝⦄ peerPut (some pid)
+    ⦃⇓? _ w => ⌜w.dev = some (withPeer d pid { p with refcount := p.refcount - 1 })⌝⦄ := by
+  apply (ensures_iff _ _ _).mp
+  intro g ambient result final after device run
+  have positive : 0 < p.refcount := by omega
+  have nonzero : p.refcount ≠ 0 := by omega
+  have notLast : p.refcount ≠ 1 := by omega
+  simp [peerPut, requireNotPending, refcountDecAndTest, branch, branchCmp,
+    AmbientM.branch, AmbientM.branchCmp, getPeer, getDev, device, resident,
+    setPeer, modifyDev, positive, nonzero, notLast] at run
+  rcases run with ⟨⟨rfl, rfl⟩, rfl⟩
+  rfl
 
 def scalarAttrs (key psk : Key) (interval : Nat) : PeerAttrs :=
   { publicKey := some key, presharedKey := some psk, keepalive := some interval }
@@ -41,44 +51,48 @@ def scalarAttrs (key psk : Key) (interval : Nat) : PeerAttrs :=
 theorem scalarTail_down (key psk : Key) (interval : Nat) (pid : PeerId)
     (d : Device) (p : Peer) (resident : d.peers[pid]? = some p)
     (down : d.running = false) (retained : 1 < p.refcount) :
-    ⦃fun w => ⌜w.k.wg = some d⌝⦄ peerConfigTailSource (scalarAttrs key psk interval) (some pid) pid
-    ⦃⇓? ret w => ⌜ret = 0 ∧ w.k.wg = some (withPeer (withPeer d pid { p with persistentKeepaliveInterval := interval }) pid
+    ⦃fun w => ⌜w.dev = some d⌝⦄ peerConfigTailSource (scalarAttrs key psk interval) (some pid) pid
+    ⦃⇓? ret w => ⌜ret = 0 ∧ w.dev = some (withPeer (withPeer d pid { p with persistentKeepaliveInterval := interval }) pid
       { p with persistentKeepaliveInterval := interval, refcount := p.refcount - 1 })⌝⦄ := by
-  let p1 := { p with persistentKeepaliveInterval := interval }
-  let d1 := withPeer d pid p1
-  have hp := peerPut_retained pid d1 p1
-    (by simp [d1, withPeer]) (by simpa [p1] using retained)
-  simp [peerConfigTailSource, scalarAttrs]
-  mvcgen [Leanux.WG.andM, branch, getPeer, getDev, getK, setPeer,
-    modifyDev, modifyK, invariant, hp]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals repeat intro
-  all_goals simp_all [withPeer, d1, p1]
-  all_goals grind only
+  apply (ensures_iff _ _ _).mp
+  intro g ambient result final after device run
+  have positive : 0 < p.refcount := by omega
+  have nonzero : p.refcount ≠ 0 := by omega
+  have notLast : p.refcount ≠ 1 := by omega
+  all_goals by_cases wasZero : p.persistentKeepaliveInterval = 0
+  all_goals by_cases intervalZero : interval = 0
+  all_goals simp [scalarAttrs, peerConfigTailSource, WG.andM, branch, branchCmp,
+    AmbientM.branch, AmbientM.branchCmp, peerPut, requireNotPending, refcountDecAndTest,
+    getPeer, getDev, device, resident, setPeer, modifyDev, down, nonzero, wasZero, intervalZero, positive, notLast] at run
+  all_goals try (solve | cases run)
+  all_goals rcases run with ⟨⟨rfl, rfl⟩, rfl⟩
+  all_goals simp [withPeer, down, intervalZero]
 
 theorem scalarUpdate_down (key psk : Key) (interval : Nat) (pid : PeerId)
     (d : Device) (p : Peer) (resident : d.peers[pid]? = some p)
     (down : d.running = false) (retained : 1 < p.refcount) :
-    ⦃fun w => ⌜w.k.wg = some d⌝⦄
+    ⦃fun w => ⌜w.dev = some d⌝⦄
       peerConfigUpdateSource (scalarAttrs key psk interval) (some pid) 0 (some psk) pid
-    ⦃⇓? ret w => ⌜ret = 0 ∧ w.k.wg = some
+    ⦃⇓? ret w => ⌜ret = 0 ∧ w.dev = some
       (withPeer
         (withPeer (withPeer d pid { p with presharedKey := psk }) pid
           { p with presharedKey := psk, persistentKeepaliveInterval := interval }) pid
         { p with
           presharedKey := psk, persistentKeepaliveInterval := interval,
           refcount := p.refcount - 1 })⌝⦄ := by
-  let p1 := { p with presharedKey := psk }
-  let d1 := withPeer d pid p1
-  have ht := scalarTail_down key psk interval pid d1 p1
-    (by simp [d1, withPeer]) (by simpa [d1, withPeer] using down)
-    (by simpa [p1] using retained)
-  simp [peerConfigUpdateSource, scalarAttrs, WGPEER_F_REMOVE_ME, WGPEER_F_REPLACE_ALLOWEDIPS]
-  mvcgen [branch, getPeer, getDev, getK, setPeer, modifyDev, modifyK, invariant, ht]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals repeat intro
-  all_goals simp_all [withPeer, d1, p1]
-  all_goals first | exact ht _ (by simp_all [withPeer, d1, p1]) | grind only
+  apply (ensures_iff _ _ _).mp
+  intro g ambient result final after device run
+  have positive : 0 < p.refcount := by omega
+  have nonzero : p.refcount ≠ 0 := by omega
+  have notLast : p.refcount ≠ 1 := by omega
+  all_goals by_cases wasZero : p.persistentKeepaliveInterval = 0
+  all_goals by_cases intervalZero : interval = 0
+  all_goals simp [scalarAttrs, peerConfigTailSource, WG.andM, branch, branchCmp,
+    AmbientM.branch, AmbientM.branchCmp, peerPut, requireNotPending, refcountDecAndTest,
+    getPeer, getDev, device, resident, setPeer, modifyDev, down, nonzero, wasZero, intervalZero, peerConfigUpdateSource, positive, notLast, WGPEER_F_REMOVE_ME, WGPEER_F_REPLACE_ALLOWEDIPS] at run
+  all_goals try (solve | cases run)
+  all_goals rcases run with ⟨⟨rfl, rfl⟩, rfl⟩
+  all_goals simp [withPeer, down, intervalZero, wasZero]
 
 /-- Concrete map updates in the order performed by lookup, set and put. -/
 def scalarDevice (d : Device) (pid : PeerId) (p : Peer) (psk : Key) (interval : Nat) : Device :=
@@ -92,21 +106,22 @@ theorem setPeer_scalars_down (key psk : Key) (interval : Nat) (pid : PeerId)
     (d : Device) (p : Peer)
     (found : d.peerHashtable.find? (·.1 == key) = some (key, pid))
     (resident : d.peers[pid]? = some p) (live : 0 < p.refcount) (down : d.running = false) :
-    Ensures (setPeerCmd (scalarAttrs key psk interval)) (fun w => w.k.wg = some d)
-      (fun ret w => ret = 0 ∧ w.k.wg = some (scalarDevice d pid p psk interval)) := by
-  let p1 := { p with refcount := p.refcount + 1 }
-  let d1 := withPeer d pid p1
-  have hl := pubkeyLookup_present key pid d p found resident live
-  have hu := scalarUpdate_down key psk interval pid d1 p1
-    (by simp [d1, withPeer]) (by simpa [d1, withPeer] using down)
-    (by simpa [p1] using live)
-  rw [← setPeerCmd_source, ensures_iff]
-  simp [setPeerCmdSource, scalarAttrs, WGPEER_F_ALL]
-  mvcgen [Leanux.WG.andM, branch, invariant, hl, hu]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals repeat intro
-  all_goals simp_all [scalarDevice, withPeer, p1, d1]
-  all_goals first | exact hu _ (by simp_all [withPeer, d1, p1]) | grind only
+    Ensures (setPeerCmd (scalarAttrs key psk interval)) (fun w => w.dev = some d)
+      (fun ret w => ret = 0 ∧ w.dev = some (scalarDevice d pid p psk interval)) := by
+  intro g ambient result final after device run
+  rw [← setPeerCmd_source] at run
+  have nonzero : p.refcount ≠ 0 := by omega
+  by_cases overflow : 2147483647 ≤ p.refcount
+  all_goals by_cases wasZero : p.persistentKeepaliveInterval = 0
+  all_goals by_cases intervalZero : interval = 0
+  all_goals simp [scalarAttrs, peerConfigTailSource, WG.andM, branch, branchCmp,
+    AmbientM.branch, AmbientM.branchCmp, peerPut, requireNotPending, refcountDecAndTest,
+    getPeer, getDev, device, resident, setPeer, modifyDev, down, nonzero, wasZero, intervalZero, setPeerCmdSource, peerConfigUpdateSource, pubkeyLookup, peerGetMaybeZero,
+    refcountIncNotZero, found, overflow, WGPEER_F_ALL, WGPEER_F_REMOVE_ME,
+    WGPEER_F_REPLACE_ALLOWEDIPS, unsupported, AmbientM.unsupported] at run
+  all_goals try (solve | cases run)
+  all_goals rcases run with ⟨⟨rfl, rfl⟩, rfl⟩
+  all_goals simp [scalarDevice, withPeer, down, intervalZero, wasZero]
 
 theorem scalarDevice_peer (d : Device) (pid : PeerId) (p : Peer) (psk : Key) (interval : Nat) :
     (scalarDevice d pid p psk interval).peers[pid]? = some

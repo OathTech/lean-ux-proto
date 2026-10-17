@@ -22,10 +22,10 @@ theorem beginSession_ready_projected (pid : PeerId) (d : Device) (p : Peer) (cou
         s.ambient.allocArmed.contains "kzallocKeypair" = true)
       (fun ok s => ok = true ∧ ∃ final, s.wg.device = some final ∧
         SessionEffect pid d p counter ok final s.wg.keypairCounter) := by
-  intro w pre
-  obtain ⟨ok, final, run, success⟩ := beginSession_returns_ready pid d p counter resident
-    accepted alive word hashed ready allocation clock allocWidth allocSuccess clockWidth rest w pre
-  obtain ⟨out, device, effect⟩ := beginSession_effect pid d p counter resident w ok final pre.1 run
-  exact ⟨ok, final, run, success, out, device, effect⟩
+  intro w ambient pre
+  obtain ⟨⟨ok, final⟩, after, run, success⟩ := beginSession_returns_ready pid d p counter resident
+    accepted alive word hashed ready allocation clock allocWidth allocSuccess clockWidth rest w ambient pre
+  obtain ⟨out, device, effect⟩ := beginSession_effect pid d p counter resident w ambient ok final after pre.1 run
+  exact ⟨ok, final, after, run, success, out, device, effect⟩
 
 end Leanux.Proofs.WG.Noise
