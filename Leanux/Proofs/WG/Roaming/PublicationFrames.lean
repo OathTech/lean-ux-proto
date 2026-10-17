@@ -5,12 +5,14 @@ set_option autoImplicit false
 namespace Leanux.Proofs.WG.Roaming
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise Std.Do
 
-theorem read_snapshot (P : World → Prop) :
-    ⦃fun w => ⌜P w⌝⦄ Campaign2.read
-      ⦃⇓? result w => ⌜result = Campaign2.snapshot w ∧ P w⌝⦄ := by
-  apply (ensures_iff _ _ _).mp
+/-- Reading an observation preserves an arbitrary predicate of the entire input.
+Specialize the state and observation to the actual product snapshot at callers. -/
+theorem read_snapshot {σ α : Type} (P : σ → Prop) (observe : σ → α) :
+    ⦃fun w => ⌜P w⌝⦄ ((do let w ← get; pure (observe w)) : StateT σ (Except Stop) α)
+      ⦃⇓? result w => ⌜result = observe w ∧ P w⌝⦄ := by
+  apply (Noise.Product.ensures_iff _ _ _).mp
   intro w result final pre run
-  change Except.ok (Campaign2.snapshot w, w) = Except.ok (result, final) at run
+  change Except.ok (observe w, w) = Except.ok (result, final) at run
   cases run
   exact ⟨rfl, pre⟩
 

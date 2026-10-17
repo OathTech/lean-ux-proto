@@ -19,11 +19,11 @@ and attributed theorem declarations. Campaign 2 owns 427 Lean files,
 | Result | Files | Before theorems | Before headlines | Retrofit status |
 | --- | ---: | ---: | ---: | --- |
 | Common projection | 2 | 0 | 0 | Native and product observations carried |
-| H1 Noise | 35 | 171 | 22 | Native access, crypto/slot/peer frames, slot/clear/zero operations and all four state-edge contracts and eleven ordered clear/release contracts, ten rotation/confirmation source contracts and projected clear support carried; six type-given frames deleted; full caller/reachability closure pending |
+| H1 Noise | 35 | 171 | 22 | Native access, crypto/slot/peer frames, slot/clear/zero operations and all four state-edge contracts and eleven ordered clear/release contracts, ten rotation/confirmation source contracts projected clear support, both normal consume-tag contracts and four consecutive-confirmation contracts carried; six type-given frames deleted; full caller/reachability closure pending |
 | H2 Index | 68 | 318 | 52 | Table/scans/insertion, full lookup/miss and success/empty-result inversion, exact allocation/release, eight native numeric-index frames, seven native owner frames plus their pure bound, ten projected table claims, all ten record contracts, exact draw exhaustion/corpus pair, five lifecycle contracts and 55 pure theorems checked; native receive factor and retirement frame carried; seven Ambient frames deleted; two stale peer-release totality counterexamples checked; whole terminal closure/callers pending |
-| H3 Roaming | 35 | 119 | 13 | Six native endpoint/destination contracts carried; two Ambient frames deleted; authentication callers and product callbacks pending |
+| H3 Roaming | 35 | 119 | 13 | Six native endpoint/destination contracts plus three product publication source factors and a generic observation-read frame carried; two Ambient frames deleted; authentication callers and product callbacks pending |
 | H4 Configuration | 130 | 554 | 79 | Total-return/branch laws, seven exact source factors, three endpoint-clearing frames, three empty-root insertion contracts, total first placement, validation/identity, partial and total empty-list peer dumps, ordered allowed-list deletion, concrete dump cancellation and three total root-transfer contracts and two total inserted-node readback leaves checked; three Ambient frames deleted; remaining effects/readback carry pending |
-| H5 Progress | 59 | 265 | 42 | Twenty-nine pure/control or pure-source theorems, three generalized worker control contracts and one Ambient record frame and seven exact cut-source/projected contracts and six arbitrary-record jitter source/projected contracts checked; two pointer-ring snapshot contracts and remaining operational carry pending |
+| H5 Progress | 59 | 265 | 42 | Twenty-nine pure/control or pure-source theorems, three generalized worker control contracts and one Ambient record frame and seven exact cut-source/projected contracts and six arbitrary-record jitter source/projected contracts and six arbitrary-record index insertion source contracts checked; two pointer-ring snapshot contracts and remaining operational carry pending |
 | H6 Timer discipline | 98 | 404 | 50 | Two pure session-liveness relations, map/guard base, two current wheel effects, separated jitter bound/frame and two projected bound claims, six exact jitter-record contracts and four exact exhaustion contracts and four source/product outcome claims, plus a checked stale-statement counterexample; three Ambient frames deleted; seven exact-peer arming claims and wider timer/worker semantics pending |
 
 Retyped, deleted and retained counts will be reported per validated tranche.
@@ -1138,3 +1138,81 @@ Reproduce scoped builds and fresh replay using the capped bundle commands above
 on `Noise.ClearClaims`, `Noise.RotationSource`,
 `Config.AllowedTransferSource` and `TimerDiscipline.JitterOutcomeClaims`,
 each under `Leanux.Proofs.WG`.
+
+
+## Consume tags, product publication and consecutive confirmation
+
+| Tranche | Before | Retyped/generalized | Deleted | Kept | Added | After |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `Noise.ConsumeEdges`, `ConfirmationSequenceSource` | 7 | 7 | 0 | 0 | 0 | 7 |
+| `Roaming.PublicationSource`, `PublicationFrames` | 4 | 4 | 0 | 0 | 0 | 4 |
+| `Progress.IndexProgressSource` | 6 | 6 | 0 | 0 | 0 | 6 |
+| This tranche | 17 | 17 | 0 | 0 | 0 | 17 |
+| Cumulative validated surface | 364 | 229 | 21 | 114 | 26 | 369 |
+
+The tree still has 450 campaign-owned files and 1,836 theorem declarations;
+1,467 baseline declarations await validation. The checked closure has 142 proof
+modules: H1 79 theorems, H2 151, H3 10, H4 51, H5 52 and H6 26. All six
+whole-result closures and all 258 terminal declarations remain lagging.
+
+H1's two successful-consumption tag contracts retain unconditional entry and
+normal-return scope. They derive final residency and tag from the actual final
+peer read/write; prefix computations need no invented frame, successful-return
+or cryptographic premise. Initiation's successful tail takes the actual false
+failed-release branch. The generic prefix law retains arbitrary product
+computations through `StateT σ (Except Stop)`, rather than silently narrowing
+that original domain to native WG.
+
+Consecutive confirmation retains the actual finite `mapM`, its intermediate
+WG/Ambient states and its first-match behavior. Normal completion needs only
+caller residency. Totality uses exactly the original conditional old-previous
+release budget when an input matches the initial next slot. Repeated identifiers
+and aliases remain; no interleaved installation, lifetime or reachable-state
+claim is added.
+
+H3's publication data and source factors use the full product projection.
+The `softirq` and `irqExit` callbacks remain arbitrary `Leanux.M` actions;
+all source equalities preserve the actual empty-queue path, both callback
+positions, held-owner reference release and exact errors. The packet owner
+comes from the embedded keypair word. The snapshot-read frame generalizes
+over arbitrary state and observation, retaining its full-state predicate domain.
+Its returned observation and preservation are substantive, so it is not
+deleted. Authentication, enqueue and complete projected caller claims remain
+pending; the three source equations do not establish them alone.
+
+H5's index-input source equations retain every supplied record list, passive
+prefix stripping, malformed-input errors, collision behavior, both original
+bucket scans and the record-derived turn bound. Helpers run on actual
+`AmbientM` or `IndexM` state; the whole insertion uses the actual guarded
+`liftIndex`. Its original resident-device premise remains and success retains
+the exact new Device/table and record suffix. Errors retain their exact Stop
+without a poststate. Projected caller claims remain pending in this tranche.
+
+Claim files: `Noise/ConsumeEdges`, `Noise/ConfirmationSequenceSource`,
+`Roaming/PublicationSource` and `Progress/IndexProgressSource`.
+`Roaming/PublicationFrames` remains a separate frame file; its data shape is
+in `PublicationModel`. No headline, shared layer, mirror file or gate changes.
+
+Scoped capped builds pass without warnings: consume edges 43 jobs, publication
+39, consecutive confirmation 56 and index progress 38. Axiom inspection covers
+240 and 93 logical roots in the two groups, using only the three permitted
+axioms. Fresh kernel replay passes for all five roots. Static gate token/import
+and whitespace checks pass. Independent reviews found no correctness issue.
+No full terminal or full proof-gate pass is claimed.
+
+Development: after the root consume draft recorded in the preceding tranche,
+three changed agent drafts had a continuation-shape failure, a record-field
+parse failure, then a clean pass. Publication first passed with unused simp
+warnings, then passed clean after removing them. Its generic read-frame draft
+had a triple-elaboration failure for a raw lambda, then passed with the same
+read expressed through the state monad. Confirmation had one nested-pair
+bookkeeping failure, then a clean pass. Index progress had two failed drafts
+(tuple/branch normalization with unused simp arguments, then an induction
+substitution), followed by a clean pass. All package builds passed first time.
+No infrastructure rerun, cap/proof-limit change or guest run occurred. Complete
+compiler output was captured before preview.
+
+Reproduce scoped builds and fresh replay using the capped bundle commands above
+on `Noise.ConsumeEdges`, `Noise.ConfirmationSequenceSource`,
+`Roaming.PublicationSource`, `Roaming.PublicationFrames` and
+`Progress.IndexProgressSource`, each under `Leanux.Proofs.WG`.
