@@ -1,3 +1,8 @@
+import Leanux.Proofs.WG.Origins.ConfiguredReceiveLeaves
+import Leanux.Proofs.WG.Origins.ConfiguredReceive
+import Leanux.Proofs.WG.Origins.CurrentDevice
+import Leanux.Proofs.WG.Origins.CurrentHistory
+import Leanux.Proofs.WG.Queues.JointPrimitives
 import Leanux.Proofs.WG.Origins.CurrentIndex
 import Leanux.Proofs.WG.Origins.CurrentPeerCreation
 import Leanux.Proofs.WG.Origins.ConfiguredHandshake
@@ -3263,5 +3268,75 @@ theorem original_poll_routing_entries (xs : FlatTable × FlatTable) (pid : PeerI
               (selectedFlat v4 xs) (some r.peer) ∧
             sourceAddress v4 e.tag.bytes = sourceAddress v4 r.packet.bytes :=
   Queues.PollAuthorization.observePoll_entries xs pid budget w h hi
+
+/-- Normal native Noise construction and consumption preserve configured/current
+identity. Authentication refusal may delete a peer; a Stop has no endpoint. -/
+theorem original_current_receive_transport :
+    (∀ pid history, Framing.Preserves (CurrentLifecycle.Inv history) (WG.createResponse pid)) ∧
+    (∀ msg history, Framing.Preserves (CurrentLifecycle.Inv history) (WG.consumeInitiation msg)) ∧
+    (∀ msg history, Framing.Preserves (CurrentLifecycle.Inv history) (WG.consumeResponse msg)) :=
+  ⟨ConfiguredReceive.createResponse_preserves,ConfiguredReceive.consumeInitiation_preserves,
+    ConfiguredReceive.consumeResponse_preserves⟩
+
+/-- Real flushed work, timer stop and peer removal retain the same configured
+identity support on normal returns. All queue budgets and release guards remain
+those of the original calls; no positivity or completion premise is added. -/
+theorem original_current_peer_lifecycle :
+    (∀ pid history, Framing.Preserves (CurrentLifecycle.Inv history)
+      (WG.queuedExpiredZeroKeyMaterial pid)) ∧
+    (∀ pid history, Framing.Preserves (CurrentLifecycle.Inv history) (WG.runFlushedSendWork pid)) ∧
+    (∀ pid history, Framing.Preserves (CurrentLifecycle.Inv history) (WG.runFlushedClearWork pid)) ∧
+    (∀ upTo history, Framing.Preserves (CurrentLifecycle.Inv history) (WG.drainHandshakeSendWq upTo)) ∧
+    (∀ pid history, Framing.Preserves (CurrentLifecycle.Inv history) (WG.timersStop pid)) ∧
+    (∀ pid history, Framing.Preserves (CurrentLifecycle.Inv history) (WG.peerRemoveAfterDead pid)) ∧
+    (∀ peer history, Framing.Preserves (CurrentLifecycle.Inv history) (WG.peerRemove peer)) :=
+  ⟨CurrentLifecycle.queuedExpiredZeroKeyMaterial_preserves,
+    CurrentLifecycle.runFlushedSendWork_preserves,CurrentLifecycle.runFlushedClearWork_preserves,
+    CurrentLifecycle.drainHandshakeSendWq_preserves,CurrentLifecycle.timersStop_preserves,
+    CurrentLifecycle.peerRemoveAfterDead_preserves,CurrentLifecycle.peerRemove_preserves⟩
+
+/-- Creation, stopping and destruction preserve supplied identity support.
+Native deletion callbacks remain arbitrary under their explicit preservation
+contracts; empty newly registered devices need no historical session receipt. -/
+theorem original_current_device_lifecycle :
+    (∀ history, Framing.Preserves (CurrentLifecycle.Inv history) WG.peerRemoveAll) ∧
+    (∀ history, Framing.Preserves (CurrentLifecycle.Inv history) WG.wgStop) ∧
+    (∀ history, Framing.Preserves (CurrentLifecycle.Inv history) WG.wgDown) ∧
+    (∀ history, Framing.Preserves (CurrentLifecycle.Inv history) WG.wgDestruct) ∧
+    (∀ history (onDown onUnregister : WG.M Unit),
+      Framing.Preserves (CurrentLifecycle.Inv history) onDown →
+      Framing.Preserves (CurrentLifecycle.Inv history) onUnregister →
+      Framing.Preserves (CurrentLifecycle.Inv history) (WG.wgDelete onDown onUnregister)) ∧
+    (∀ history, Framing.Preserves (CurrentLifecycle.Inv history) WG.wgCreate) :=
+  ⟨CurrentLifecycle.peerRemoveAll_preserves,CurrentLifecycle.wgStop_preserves,
+    CurrentLifecycle.wgDown_preserves,CurrentLifecycle.wgDestruct_preserves,
+    CurrentLifecycle.wgDelete_preserves,CurrentLifecycle.wgCreate_preserves⟩
+
+/-- The existing session observer preserves reached material/history safety
+and stronger configured/current identity for the identical actual execution.
+Incoming support is supplied; initialized whole-run support is separate. -/
+theorem original_current_session_journal (pid : PeerId) :
+    Logged.PrefixPreserves
+      (fun h w => Origins.HistorySupport.SupportInv h w ∧ CurrentSessionPrefix.StateInv h w)
+      Origins.HistorySupport.HistorySafe (Origins.HistoryAdapters.session pid) :=
+  CurrentSessionPrefix.session_supported pid
+
+/-- Each joint adapter executes the actual lifetime observer once and projects
+exactly to the original routing completion stream. Every normal errno emits a
+completion; a Stop retains the earlier access prefix without a completion. -/
+theorem original_joint_routing_observers :
+    (∀ pid attrs, Logged.ErasesStatePrefix (Queues.RoutingJoint.completedAllowedip pid attrs)
+      (WG.setAllowedip pid attrs)) ∧
+    (∀ pid, Logged.ErasesStatePrefix (Queues.RoutingJoint.completedRemovePeer pid) (WG.removeByPeer pid)) ∧
+    Logged.ErasesStatePrefix Queues.RoutingJoint.completedFree WG.free ∧
+    (∀ pid attrs, Logged.StateProjectsPrefix Queues.RoutingJoint.routingEvent id
+      (Queues.RoutingJoint.completedAllowedip pid attrs) (AllowedIps.completedAllowedip pid attrs)) ∧
+    (∀ pid, Logged.StateProjectsPrefix Queues.RoutingJoint.routingEvent id
+      (Queues.RoutingJoint.completedRemovePeer pid) (AllowedIps.completedRemovePeer pid)) ∧
+    Logged.StateProjectsPrefix Queues.RoutingJoint.routingEvent id Queues.RoutingJoint.completedFree
+      AllowedIps.completedFree :=
+  ⟨Queues.RoutingJoint.completedAllowedip_erases,Queues.RoutingJoint.completedRemovePeer_erases,
+    Queues.RoutingJoint.completedFree_erases,Queues.RoutingJoint.completedAllowedip_routing,
+    Queues.RoutingJoint.completedRemovePeer_routing,Queues.RoutingJoint.completedFree_routing⟩
 
 end Leanux.Proofs.WG.CryptokeyRouting

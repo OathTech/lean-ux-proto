@@ -54,6 +54,16 @@ Gate: 527 jobs/528 declarations in 2.50 seconds. Fresh replay: 99.55 seconds,
 no warnings. The [short report](2026-10-17-r3-reached-routing.md) records the
 remaining initialized identity and positional configuration-history joins.
 
+The current-journal checkpoint adds seven modules and 74 theorems:
+476 files/6,788 theorems, 533 terminal declarations and 157 R3 exports.
+Native receive and lifecycle calls preserve configured/current identity, and
+the actual session journal transports it through the original focuses.
+Joint primitives retain both existing observation streams from one execution.
+Gate: 534 jobs/533 declarations in 7.43 seconds; EOF normalization also passes
+the gate with unchanged replayed objects. Fresh replay passes in 102.68 seconds.
+The [short report](2026-10-17-r3-current-journal.md) records review findings,
+validation and the remaining initialized joins.
+
 The pre-split checkpoint validated every baseline result surface over
 `cb2348e`. Initialized R3 packet authorization and R4 receive-pipeline
 conservation remain open. Earlier positive results and runtime findings retain
