@@ -203,10 +203,27 @@ not directly supply this arbitrary-entry fact.
 
 [AGENT 2026-10-17] Keep the complete-call layer inventoried rather than copy it.
 Proceed only with the independently useful outgoing prefix-origin contract:
-two counter frames for createResponse and addMacToPacket, one actual prefix
+two counter variants of WGTransitions.createResponse_spec and addMacToPacket_spec, one actual prefix
 bridge, one projected full-call observation claim and its literal headline.
 This anchors a reached session event to the actual call's entry counter.
 It does not claim final-call preservation or cross-call serial uniqueness,
 and is not a first installment of the eight-site copy. The larger overlap
 remains for a scope decision or shared support. This is a proof-support
 dependency, not a mirror-change request.
+
+
+The bounded prefix-origin package is now checked: SessionOriginFrames contains
+createResponse_spec_counter_variant and addMacToPacket_spec_counter_variant;
+Source/Claims and the literal terminal connect them to the original full caller.
+Its five declarations do not implement the larger suffix layer.
+
+The incoming audit identifies responseLoad; makeCookie, ratelimiterAllow,
+cookieValidatePacket and cookieMessageCreate; sendBufferAsReplyToSkb and
+sendHandshakeCookie; responseWithLookup/consumeResponse, indexLookup and
+peerPut; setPeerEndpointFromSkb; and the staged path's sendKeepalive,
+sendStagedPackets, createData, enqueuePerDeviceAndPeer, enqueuePerPeerTx,
+sendQueuedHandshakeInitiation, keypairGet, peerGet and cpumaskChooseOnline.
+The socket helpers also need their cache-free instantiations. Existing
+keypairPut_counter, ECN/crypto and exact timer effects are reusable; the Skb
+component needs one generic guarded adapter rather than copies for each leaf.
+This inventory is not an implementation or a request to change the mirror.

@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Config.MultiPeerScalarClaims
 import Leanux.Proofs.WG.Config.MultiPeerGetterClaims
 import Leanux.Proofs.WG.Config.KeyPaginationClaims
 import Leanux.Proofs.WG.Config.MixedPaginationClaims
@@ -1530,5 +1531,33 @@ theorem original_fitting_multi_peer_getter (d : Device) (peers : PeerId → Peer
       (fun result s => result = .ok (multiPeerJson d peers) ∧ s.wg.device = some d ∧
         s.wg.nlSock7 = socketReadbackFinal sock d) :=
   fitting_peers_getter_returns d peers sock residents emptyIps room idle emptyQueue
+
+/-- The actual getter returns the fitting peer list in order, reflecting the
+scalar update at each occurrence of the selected peer, even when a malformed
+second request returns -EINVAL. An unlisted target still changes in the exact
+Device but is absent from the JSON. Empty/repeated lists and arbitrary endpoints
+remain admitted; this is not a fwmark or multi-peer pagination claim. -/
+theorem original_scalar_fitting_multi_peer_get_after_set (d : Device) (peers : PeerId → Peer)
+    (key psk : Key) (interval : Nat) (bad : Bool) (pid : PeerId) (sock : NlSock)
+    (found : d.peerHashtable.find? (·.1 == key) = some (key,pid))
+    (resident : d.peers[pid]? = some (peers pid))
+    (live : 0 < (peers pid).refcount) (bounded : (peers pid).refcount + 1 < 2 ^ 31)
+    (down : d.running = false)
+    (residents : ∀ q ∈ d.peerList, d.peers[q]? = some (peers q))
+    (emptyIps : ∀ q ∈ d.peerList, (peers q).allowedipsList = [])
+    (room : devicePrefixSpace d + 168 * d.peerList.length + 20 ≤ NLMSG_GOODSIZE)
+    (idle : sock.cbRunning = false) (emptyQueue : sock.queue = []) :
+    Campaign2.Returns (do
+      let ret ← wgSetDevice (scalarDeviceAttrs d key psk interval bad)
+      let dump ← wgGetDevice (byIndex d)
+      pure (ret,dump))
+      (fun s => s.wg.device = some d ∧ s.wg.nlSock7 = sock ∧ ClaimView.selectsDevice s d)
+      (fun result s =>
+        let updated := scalarRequestDevice d pid (peers pid) psk interval
+        result = ((if bad then -EINVAL else 0),.ok
+          (multiPeerJson updated (scalarPeerView peers pid psk interval))) ∧
+        s.wg.device = some updated ∧ s.wg.nlSock7 = socketReadbackFinal sock updated) :=
+  scalar_fitting_peers_get_after_set d peers key psk interval bad pid sock
+    found resident live bounded down residents emptyIps room idle emptyQueue
 
 end Leanux.Proofs.WG.Config

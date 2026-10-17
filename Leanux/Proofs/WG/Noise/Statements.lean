@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Noise.SessionTagClaims
 import Leanux.Proofs.WG.Noise.CreationTagClaims
 import Leanux.Proofs.WG.Noise.InitiationTagClaims
 import Leanux.Proofs.WG.Noise.ResponseTagClaims
@@ -377,5 +378,34 @@ theorem original_create_response_tag_map (pid : PeerId) (entry : Campaign2.Snaps
         else entry.tagAt target) ∧
         (result.isSome → entry.tagAt pid = some HANDSHAKE_CONSUMED_INITIATION)) :=
   createResponse_tagMap_projected pid entry
+
+/-- The whole session operation preserves all tags on normal false and zeroes
+only its peer on normal true, from an actual accepted old tag. Arbitrary optional
+entry states, aliased slots and records remain; no readiness or budget premise. -/
+theorem original_begin_session_tag_map (pid : PeerId) (entry : Campaign2.Snapshot) :
+    Campaign2.Ensures (beginSession pid) (fun s => s = entry)
+      (fun ok after => (∀target, after.tagAt target =
+        if ok then if pid = target then some HANDSHAKE_ZEROED else entry.tagAt target
+        else entry.tagAt target) ∧
+        (ok = true → entry.tagAt pid = some HANDSHAKE_CREATED_RESPONSE ∨
+          entry.tagAt pid = some HANDSHAKE_CONSUMED_RESPONSE)) :=
+  beginSession_tagMap_projected pid entry
+
+/-- Original handshake clearing zeroes only the requested tag on normal return.
+Missing peers or NULL owner words keep the actual failures. -/
+theorem original_handshake_clear_tag_map (pid : PeerId) (entry : Campaign2.Snapshot) :
+    Campaign2.Ensures (handshakeClear pid) (fun s => s = entry)
+      (fun _ after => ∀target, after.tagAt target =
+        if pid = target then some HANDSHAKE_ZEROED else entry.tagAt target) :=
+  handshakeClear_tagMap_projected pid entry
+
+/-- Whole expiry zeroes only the requested tag, including the real reset clock
+and ordered optional key invalidations. This is normal-return partiality, not
+clock readiness, reference safety, or completion. -/
+theorem original_expire_current_tag_map (pid : PeerId) (entry : Campaign2.Snapshot) :
+    Campaign2.Ensures (expireCurrentPeerKeypairs pid) (fun s => s = entry)
+      (fun _ after => ∀target, after.tagAt target =
+        if pid = target then some HANDSHAKE_ZEROED else entry.tagAt target) :=
+  expireCurrentPeerKeypairs_tagMap_projected pid entry
 
 end Leanux.Proofs.WG.Noise

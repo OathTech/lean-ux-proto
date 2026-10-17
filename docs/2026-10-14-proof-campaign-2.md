@@ -10,27 +10,27 @@ merged; the executable mirror remains byte-identical to b700659.
 
 | Result | Headlines | Checked support | Split status |
 | --- | ---: | ---: | --- |
-| H1 Noise | 28 | 215 | Full terminal closure, all four creators/consumers' whole-call all-peer tag effects and actual session derivation-clock receipt current; wider caller/lifetime claims open. |
+| H1 Noise | 31 | 226 | Full terminal closure, all seven creation/consumption/session/clear/expiry whole-call tag maps and actual session derivation-clock receipt current; wider caller/lifetime claims open. |
 | H2 Index | 84 | 462 | Full terminal closure and ingress/expiry/handshake/peer-creation owner coherence and whole-removal lifecycle finding/slot-covered arbitrary-AIP preservation and actual clear-work dispatch current; reachable whole-driver uniqueness/coherence open. |
 | H3 Roaming | 17 | 186 | Full terminal closure and invalid-MAC1/rate-limit/admitted-response/initiation rejection preservation current; callback authentication provenance and broader caller coverage open. |
-| H4 Configuration | 88 | 654 | Full terminal closure, actual mixed/key setter paginated readback, finite single-peer IPv4 getter and fitting multi-peer getter current; global ownership, queued cleanup, general mixed setters and multi-peer/IPv6 pagination open. |
+| H4 Configuration | 89 | 657 | Full terminal closure, actual mixed/key setter paginated readback, finite single-peer IPv4 getter and fitting multi-peer scalar set/get current; global ownership, queued cleanup, general mixed setters and multi-peer/IPv6 pagination open. |
 | H5 Progress | 44 | 296 | Full terminal closure, exact bounded outcomes and recorded batch and actual timer completion-guard soundness current; global progress/coherent-ring adequacy open. |
-| H6 Timers | 58 | 478 | Full terminal closure, actual retry blocks and allocation-labelled guarded session-arm events current; complete caller coverage, general mixed histories and session-relative counts open. |
+| H6 Timers | 59 | 483 | Full terminal closure, actual retry blocks and allocation-labelled guarded session-arm events with outgoing call-entry origin current; complete caller coverage, general mixed histories and session-relative counts open. |
 
-The checked surface is 2,291 theorems in all 753 campaign-owned modules.
+The checked surface is 2,310 theorems in all 762 campaign-owned modules.
 The completed retrofit accounts for 1,983: 1,321 retyped, 244 explicitly
 corrected, 239 retained and 179 added support/finding declarations. One hundred twenty-nine
 subsequent H2 declarations add table preservation and local owner coherence.
-Thirty H1 declarations add whole-creator/consumer tag ownership and actual derivation-clock provenance; seventy-two H4 declarations
+Forty-one H1 declarations add whole-operation tag ownership and actual derivation-clock provenance; seventy-five H4 declarations
 add mixed fwmark/scalar, ordered peer-attribute, port-refusal/private-key readback and finite IPv4 getter/setter pagination and actual fitting multi-peer readback. Twenty-nine H3 declarations
 add invalid-MAC1, rate-limit and admitted-response/initiation rejection preservation. Eight H5 declarations
-establish recorded batch and actual timer completion-guard soundness. Forty H6 declarations
+establish recorded batch and actual timer completion-guard soundness. Forty-five H6 declarations
 connect actual timer-loop receipts, contiguous retry-block counts/bounds, local partial-exchange arming and allocation-labelled session-arm events. Of the 1,831 baseline theorems, 22 frames
 were deleted because types supply their facts and five false cookie supports
 were separately retired with checked counterexamples. No baseline declaration
 remains awaiting retrofit; all 258 original terminal names/order survive,
-with six new H1 headlines, thirty-two new H2 headlines, four new H3 headlines,
-nine new H4 headlines, two new H5 headlines and eight new H6 headlines (319 total).
+with nine new H1 headlines, thirty-two new H2 headlines, four new H3 headlines,
+ten new H4 headlines, two new H5 headlines and nine new H6 headlines (324 total).
 
 The [retrofit report](2026-10-16-proof-campaign-2-state-split.md) records
 claim/frame files, corrections, before/after counts and validation.
@@ -2496,3 +2496,109 @@ Reproduce with capped scripts/in-bundle lake build on
 Leanux.Proofs.WG.Noise.Statements and Leanux.Proofs.WG.Config.Statements,
 then capped scripts/in-bundle lake env leanchecker --fresh on each module,
 with LEAN_NUM_THREADS=32 and LEANUX_QEMU_SLOTS=16.
+
+
+## H1 continuation: session, clearing and expiry tag maps
+
+The original beginSession now preserves every optional peer tag on a normal
+false return. A true return changes only the selected peer to ZEROED and
+derives its actual entry CREATED_RESPONSE or CONSUMED_RESPONSE tag.
+The original handshakeClear and whole expireCurrentPeerKeypairs each zero
+only the selected peer on normal return. Residency comes from the actual first
+read, not a supplied precondition. Missing/NULL owners, hidden clocks, missing
+keys and aliased releases keep their actual stopped paths.
+
+SessionTagFrames contains two pure preservation facts: ordered rotation keeps
+peer tags through every slot write/release, and validity-only key updates keep
+tags. SessionTagSource reuses the exact SessionEffect and configuration expiry
+effects; SessionTagClaims contains the three projected contracts. Three literal
+headlines bring this package to eleven theorems and three modules, with no
+data definition or shared variant. The seven creation, consumption, session,
+clear and expiry operations now have whole optional tag-map contracts.
+This is not a mixed-history, full-driver or allocation-lifetime theorem.
+
+The full eleven-theorem candidate and narrowed standalone Frames probe each
+pass on the first check, with no diagnostics and default limits. Root and
+independent review find no issue. The installed Noise closure passes 161 jobs
+without warnings. No mirror change is requested.
+
+## H6 continuation: outgoing session-counter origin
+
+The actual outgoing response prefix preserves keypairCounter through the
+sender clock/write, response creation and MAC publication. A reached session
+cut therefore starts at the original whole-call counter. The projected claim
+retains the existing complete outgoing observer and SessionArmEvent. When
+that event is an allocation, its serial is entry counter plus one at the
+actual hook cut. False session returns and normal creation refusal keep their
+existing observations. Exact erasure keeps all stopped executions; no stopped
+post-state, final-call counter delta, final key residency or cross-call
+uniqueness is asserted.
+
+SessionOriginFrames has two narrow named variants of C1's
+WGTransitions.createResponse_spec and addMacToPacket_spec, using only their
+counter/frontier observation. SessionOriginSource links the actual prefix;
+SessionOriginClaims projects the whole-call observation; Statements has one
+literal headline. Five theorems and three modules are added, with no data
+definition. The eight-site complete outgoing preservation layer and larger
+incoming layer remain inventoried in the shared-frame follow-up, not copied.
+
+Probes 1 and 2 fail two inference and one consumed-binder diagnostics,
+respectively. Changed probes 3--5 pass, including narrowed imports and all five
+standard-only axiom roots. None emits warnings or raises limits.
+Independent review finds the two shared variants were not named after their
+C1 counterparts; both names and docstrings are corrected before this commit.
+The initial 333-job build and fresh replay pass; the renamed source is rebuilt
+and replayed again. This is changed-source validation, not an infrastructure
+retry. The reviewer finds no semantic or domain issue.
+
+## H4 continuation: scalar update followed by fitting multi-peer readback
+
+The original scalar request followed by the original getter is now total on
+the existing stopped-device/selected-peer reference domain and the finite
+fitting getter domain. The response contains every listed occurrence in order,
+with arbitrary endpoints; each occurrence of the selected peer reflects the
+PSK and keepalive update. The selected peer may be absent from the dump list:
+the exact Device still changes but that peer is absent from JSON. A malformed
+second request retains the successful first mutation and returns -EINVAL.
+No callback-success or post-set invariant premise is supplied.
+
+MultiPeerScalarModel defines the updated peer view.
+MultiPeerScalarEffects computes the actual ordered peer-map writes and derives
+all getter inputs. MultiPeerScalarClaims composes the two original calls
+through their actual intermediate native state and Ambient; Statements adds
+one literal headline. Three theorems, one definition and three modules are
+added. The existing scalar setter premises remain explicit; arbitrary-list
+fwmark composition and multi-peer pagination are separate obligations.
+
+Probe 1 fails two default-heartbeat diagnostics; probe 2 fails record syntax
+and a selected-peer goal; probe 3 tries an unnecessary structural TreeMap
+equality; probe 4 fails two default-heartbeat diagnostics and the downstream
+missing helper. Preserving the actual repeated inserts and reducing explicitly
+closes probes 5 and 6, the latter with all three standard-only roots.
+No probe warning or limit increase occurs. Independent review finds two form
+issues: the substantive helper belonged in Effects rather than Frames, and
+the terminal prose did not explicitly distinguish an unlisted target.
+Both are fixed without changing any proposition or adding a membership premise.
+No mathematical/source-linkage finding remains.
+
+The combined pre-form-correction build passes 534 jobs; the corrected Config
+closure passes 308 jobs. Their only warning is the unchanged Env:865 String.mk
+deprecation. Final axiom inspection checks 2,387 logical roots in 511 modules,
+including 1,507 public theorem roots, using only standard axioms.
+Fresh Noise replay passes; final Config and TimerDiscipline replays pass after
+all artifact writers stop. Static trust/import checks, all 258 original
+terminal names/order, diff formatting and mirror/shared boundaries pass.
+The census rises from 2,291/753/319 to 2,310/762/324
+(theorems/modules/headlines). All three independent reviews are dispositioned.
+No infrastructure retry, cap increase, guest run, merge to main or push occurs.
+The inherited full gate remains FAILED and is not rerun unchanged.
+
+Reproduce with capped scripts/in-bundle lake build on the Noise, Config and
+TimerDiscipline Statements modules, then capped scripts/in-bundle lake env
+leanchecker --fresh on each, with LEAN_NUM_THREADS=32 and LEANUX_QEMU_SLOTS=16.
+
+A documentation-update guard matched the full H6 label too broadly and
+stopped before writing the register. Dirty worktrees, including untracked
+files, were snapshotted to recovery refs before correcting that guard. Branch
+tips and working indexes stayed unchanged; no Lean validation was rerun for
+this documentation-only correction.

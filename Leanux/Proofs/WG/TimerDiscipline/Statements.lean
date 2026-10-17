@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.TimerDiscipline.SessionOriginClaims
 import Leanux.Proofs.WG.TimerDiscipline.SessionArmEventClaims
 import Leanux.Proofs.WG.TimerDiscipline.PartialExchangeArmClaims
 import Leanux.Proofs.WG.TimerDiscipline.ActualRetryBlockClaims
@@ -795,5 +796,20 @@ theorem original_outgoing_response_session_arm_event (pid : PeerId) :
         ∀ cut afterPrefix, observation = .ok (some cut,afterPrefix) →
           SessionArmEvent pid cut.session) :=
   observedOutgoingResponseSession_arm_event pid
+
+/-- A normal full outgoing response labels every reached session event from
+its actual call-entry allocation serial. The all-mode hook effect and original
+complete observation remain. This makes no final-call counter-delta,
+cross-call uniqueness or final-key-residency claim; the original observer
+erasure retains all Stops. -/
+theorem original_outgoing_session_counter_origin (pid : PeerId)
+    (entry : Campaign2.Product.Snapshot) :
+    Campaign2.Product.Ensures (observedOutgoingResponseSession pid)
+      (fun initial => initial = entry)
+      (fun observation _ => OutgoingResponseSessionObservation pid observation ∧
+        ∀ cut afterPrefix, observation = .ok (some cut,afterPrefix) →
+          SessionArmEvent pid cut.session ∧
+          cut.session.beforeSession.wg.keypairCounter = entry.wg.keypairCounter) :=
+  observedOutgoingResponseSession_counter_origin pid entry
 
 end Leanux.Proofs.WG.TimerDiscipline
