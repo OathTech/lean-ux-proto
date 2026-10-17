@@ -7,7 +7,7 @@ open Leanux Leanux.WG
 
 /-- Original load test and historical-load decay, passing the resulting flag
 to the continuation at the MAC-validation boundary. -/
-def receiveLoadThen (next : Bool → M Unit) : M Unit := do
+def receiveLoadThen (next : Bool → WG.M Unit) : WG.M Unit := do
   -- `under_load = handshake_queue_len >= MAX_QUEUED_INCOMING_HANDSHAKES / 8`
   -- (receive.c:112): the counter, which a `wg_flood`'s batch has filled before
   -- the worker runs (E-B v2, the queue-depth design).
@@ -37,7 +37,7 @@ def receiveLoadThen (next : Bool → M Unit) : M Unit := do
 
 /-- Original packet body after the load test; early returns remain local to the
 whole packet body, including the cookie-response and failed-consumption paths. -/
-def receivePacketBody (msg : List UInt8) (src : SkbSource) (underLoad : Bool) : M Unit := do
+def receivePacketBody (msg : List UInt8) (src : SkbSource) (underLoad : Bool) : WG.M Unit := do
   let macState ← cookieValidatePacket msg src underLoad
   -- packet_needs_cookie (receive.c:123-132):
   -- `(under_load && mac == WITH_COOKIE) || (!under_load && mac == NO_COOKIE)`
@@ -90,7 +90,7 @@ def receivePacketBody (msg : List UInt8) (src : SkbSource) (underLoad : Bool) : 
   peerPut peer
 
 
-def receivePacketSource (msg : List UInt8) (src : SkbSource) : M Unit := do
+def receivePacketSource (msg : List UInt8) (src : SkbSource) : WG.M Unit := do
   if ← branch .hsCookie (messageType msg == MESSAGE_HANDSHAKE_COOKIE) then
     cookieMessageConsume msg
     return

@@ -1,57 +1,13 @@
 import Leanux.Proofs.WG.Noise.PeerFrames
 import Leanux.Proofs.WG.Noise.ExpirySource
+import Leanux.Proofs.WG.Noise.InitiationSource
+import Leanux.Proofs.WG.Noise.ResponseSource
 
 set_option pp.structureInstances false
 set_option maxHeartbeats 800000
 
 namespace Leanux.Proofs.WG.Noise
 open Leanux Leanux.WG Std.Do
-
-theorem createInitiation_tag (pid : PeerId) (old : Nat) :
-    Ensures (createInitiation pid)
-      (fun w => tagAt w.k pid = some old)
-      (fun result w => tagAt w.k pid = some
-        (if result.isSome then HANDSHAKE_CREATED_INITIATION else old)) := by
-  rw [ensures_iff]
-  let P := fun k : Kernel => tagAt k pid = some old
-  have hh := hidden_kernel_spec P
-  have hg := generatePublic_wg_spec P
-  have he := messageEphemeral_wg_spec P
-  have hd := mixDh_wg_spec P
-  have hs := mixPrecomputedDh_wg_spec P
-  have hi := indexInsert_peers_spec (fun ps => (ps pid).map Peer.handshakeState = some old)
-  noise_vcgen [createInitiation, _private.Leanux.WG.Handshake.«0».Leanux.WG.setChain,
-    IndexOwner.peerDeref, IndexOwner.peerWord, unsupported, getPeer, getDev, getK, setPeer, modifyDev, modifyK, branch, invariant,
-    hh, hg, he, hd, hs, hi]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals repeat intro
-  all_goals simp_all [P, tagAt, peerAt, Option.bind_map, Function.comp_def,
-    Std.TreeMap.getElem?_insert]
-  all_goals grind
-
-theorem createResponse_tag (pid : PeerId) (old : Nat) :
-    Ensures (createResponse pid)
-      (fun w => tagAt w.k pid = some old)
-      (fun result w => tagAt w.k pid = some
-        (if result.isSome then HANDSHAKE_CREATED_RESPONSE else old) ∧
-        (result.isSome → old = HANDSHAKE_CONSUMED_INITIATION)) := by
-  rw [ensures_iff]
-  let P := fun k : Kernel => tagAt k pid = some old
-  have hh := hidden_kernel_spec P
-  have hg := generatePublic_wg_spec P
-  have he := messageEphemeral_wg_spec P
-  have hd := mixDh_wg_spec P
-  have hk := kdf_wg_spec P
-  have ho := kdfOut_wg_spec P
-  have hi := indexInsert_peers_spec (fun ps => (ps pid).map Peer.handshakeState = some old)
-  noise_vcgen [createResponse, _private.Leanux.WG.Handshake.«0».Leanux.WG.setChain,
-    IndexOwner.peerDeref, IndexOwner.peerWord, unsupported, getPeer, getDev, getK, setPeer, modifyDev, modifyK, branch, invariant,
-    hh, hg, he, hd, hk, ho, hi]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals repeat intro
-  all_goals simp_all [P, tagAt, peerAt, Option.bind_map, Function.comp_def,
-    Std.TreeMap.getElem?_insert]
-  all_goals grind
 
 theorem beginSession_tag (pid : PeerId) (old : Nat) :
     Ensures (beginSession pid) (fun w => tagAt w.k pid = some old)

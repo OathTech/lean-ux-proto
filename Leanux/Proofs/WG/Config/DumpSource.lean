@@ -11,7 +11,7 @@ set_option maxHeartbeats 1000000
 
 def getPeerDumpAllowedSource (p : Peer) (ctx : DumpCtx) (skb0 skb : NlSkb)
     (pubkey : String) (attrs : List (String × Json)) (node : Option NodeId) :
-    M (NlSkb × DumpCtx × PeerDump) := do
+    WG.M (NlSkb × DumpCtx × PeerDump) := do
   let mut ctx := ctx
   let mut skb := skb
   let done (ctx : DumpCtx) (attrs : List (String × Json)) : DumpCtx × PeerDump :=
@@ -50,7 +50,7 @@ def getPeerDumpAllowedSource (p : Peer) (ctx : DumpCtx) (skb0 skb : NlSkb)
   return (skb, c, r)
 
 def getPeerDumpTailSource (p : Peer) (ctx0 : DumpCtx) (skb0 : NlSkb) :
-    M (NlSkb × DumpCtx × PeerDump) := do
+    WG.M (NlSkb × DumpCtx × PeerDump) := do
   let mut ctx := ctx0
   -- peer_nest = nla_nest_start(skb, 0); allowedips_node = ctx->next_allowedip
   let (fail, skb) := skb0.put (nlaTotal 0)

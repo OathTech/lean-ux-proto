@@ -7,8 +7,8 @@
 all six results are lagging until carried. Counts, type-justified frame
 deletions and scoped validation are tracked in the
 [retrofit report](2026-10-16-proof-campaign-2-state-split.md).
-The support tranches retype fifty-four original theorems, retain sixty-eight,
-delete twenty-one type-given frames and add seven native laws/adapters: 129
+The support tranches retype seventy-four original theorems, retain ninety-one,
+delete twenty-one type-given frames and add seven native laws/adapters: 172
 checked theorems, with 258 terminal names still awaiting retrofit validation.
 The frame/claim file map and pending consumers are in the retrofit report.
 

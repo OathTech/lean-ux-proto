@@ -8,8 +8,8 @@ namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG
 set_option maxHeartbeats 1000000
 
-def devicePeersSource (a : DeviceAttrs) : M Int := do
-  let zero (ret : Int) : M Int := do
+def devicePeersSource (a : DeviceAttrs) : WG.M Int := do
+  let zero (ret : Int) : WG.M Int := do
     _ ← branch .setDevZeroKey a.privateKey.isSome   -- memzero_explicit
     return ret
   if ← branch .setDevHasPeers a.peers.isSome then
@@ -26,7 +26,7 @@ def devicePeersSource (a : DeviceAttrs) : M Int := do
     _ ← branch .setDevPeersIter false
   zero 0
 
-def deviceKeySource (a : DeviceAttrs) : M Int := do
+def deviceKeySource (a : DeviceAttrs) : WG.M Int := do
   if ← WG.andM (branch .setDevHasPrivateKey a.privateKey.isSome) (branch .setDevPrivateKeyLen true) then
     let some key := a.privateKey | invariant "unreachable"
     -- `!crypto_memneq(static_private, private_key)`: the stored key is clamped
@@ -54,8 +54,8 @@ def deviceKeySource (a : DeviceAttrs) : M Int := do
       _ ← branch .setDevKeyPeerIter false
   devicePeersSource a
 
-def deviceUpdateSource (a : DeviceAttrs) (flags : UInt32) : M Int := do
-  let zero (ret : Int) : M Int := do
+def deviceUpdateSource (a : DeviceAttrs) (flags : UInt32) : WG.M Int := do
+  let zero (ret : Int) : WG.M Int := do
     _ ← branch .setDevZeroKey a.privateKey.isSome   -- memzero_explicit
     return ret
   modifyDev fun d => { d with deviceUpdateGen := d.deviceUpdateGen + 1 }
@@ -71,8 +71,8 @@ def deviceUpdateSource (a : DeviceAttrs) (flags : UInt32) : M Int := do
   if ← branch .setDevReplacePeers (flags &&& WGDEVICE_F_REPLACE_PEERS != 0) then peerRemoveAll
   deviceKeySource a
 
-def wgSetDeviceSource (a : DeviceAttrs) : M Int := do
-  let zero (ret : Int) : M Int := do
+def wgSetDeviceSource (a : DeviceAttrs) : WG.M Int := do
+  let zero (ret : Int) : WG.M Int := do
     _ ← branch .setDevZeroKey a.privateKey.isSome   -- memzero_explicit
     return ret
   let wg ← lookupInterface a.device

@@ -19,11 +19,11 @@ and attributed theorem declarations. Campaign 2 owns 427 Lean files,
 | Result | Files | Before theorems | Before headlines | Retrofit status |
 | --- | ---: | ---: | ---: | --- |
 | Common projection | 2 | 0 | 0 | Native and product observations carried |
-| H1 Noise | 35 | 171 | 22 | Native access, crypto/slot/peer frames, slot/clear/zero operations and full expiry slot/tag contract carried; six type-given frames deleted; terminal closure pending |
-| H2 Index | 68 | 318 | 52 | Table/scans/insertion, five owner-word and lookup-finish contracts and 36 pure theorems checked; seven Ambient frames deleted; full lookup/caller closure pending |
-| H3 Roaming | 35 | 119 | 13 | Two Ambient frames deleted; pure observation models build; native calls and product callbacks pending |
-| H4 Configuration | 130 | 554 | 79 | Total-return/branch laws and one pure theorem checked; three Ambient frames deleted; operational carry pending |
-| H5 Progress | 59 | 265 | 42 | Twelve pure/control theorems checked; operational carry pending |
+| H1 Noise | 35 | 171 | 22 | Native access, crypto/slot/peer frames, slot/clear/zero operations, expiry, initiation and response tag contracts carried; six type-given frames deleted; session/caller closure pending |
+| H2 Index | 68 | 318 | 52 | Table/scans/insertion, full lookup owner/table contracts, five owner-word contracts and 53 pure theorems checked; native receive factor and retirement frame carried; seven Ambient frames deleted; remaining exact lookup finishes/callers pending |
+| H3 Roaming | 35 | 119 | 13 | Three native endpoint/destination contracts carried; two Ambient frames deleted; setter/caller and product callbacks pending |
+| H4 Configuration | 130 | 554 | 79 | Total-return/branch laws, three exact source factors, three endpoint-clearing frames and one pure theorem checked; three Ambient frames deleted; effects/readback carry pending |
+| H5 Progress | 59 | 265 | 42 | Seventeen pure/control or pure-source theorems and three generalized worker control contracts checked; pointer-ring activation and remaining operational carry pending |
 | H6 Timer discipline | 98 | 404 | 50 | Two pure session-liveness relations checked; three Ambient frames deleted; timer wheel and worker semantics pending |
 
 Retyped, deleted and retained counts will be reported per validated tranche.
@@ -466,3 +466,96 @@ packaging builds passed first time. No infrastructure retry or limit increase.
 Reproduce scoped builds and fresh replay for
 `Leanux.Proofs.WG.Noise.PeerFrames`, `Leanux.Proofs.WG.Index.PeerWordSource`
 and `Leanux.Proofs.WG.Noise.ExpirySource` using the capped bundle commands above.
+
+## Endpoint, lookup, creation and source contracts
+
+| Tranche | Before | Retyped/generalized | Deleted | Kept | Added | After |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `Roaming.EndpointSource`, remaining `Roaming.Frames` | 3 | 3 | 0 | 0 | 0 | 3 |
+| `Noise.InitiationSource`, `Noise.ResponseSource` from `StateEdges` | 2 | 2 | 0 | 0 | 0 | 2 |
+| `Index.LookupPrefixSource`, `Index.Lookup` | 5 | 4 | 0 | 1 | 0 | 5 |
+| Remaining `Config.OperationFrames` | 3 | 3 | 0 | 0 | 0 | 3 |
+| Three configuration source factors and `Index.ReceiveOperations` | 4 | 4 | 0 | 0 | 0 | 4 |
+| `Progress.ControlSource`, `Index.LifecycleFrames` | 4 | 4 | 0 | 0 | 0 | 4 |
+| Four pure index roots, `SessionAllocationEffects`, `Progress.PowSource` | 22 | 0 | 0 | 22 | 0 | 22 |
+| This tranche | 43 | 20 | 0 | 23 | 0 | 43 |
+| Cumulative validated surface | 186 | 74 | 21 | 91 | 7 | 172 |
+
+The tree now has 434 campaign-owned files and 1,817 theorems. Of the
+baseline, 1,645 still await retrofit validation. All 258 headline names
+remain unvalidated against the split mirror; the six terminal closures
+remain lagging. This tranche adds no new charter result or type-based deletion.
+
+The endpoint source contracts preserve exact source-family results and the
+valid-family premise on endpoint equality. The cache-reset frame is a
+within-WireGuard fact and follows the actual Ambient/WG flags and recorded
+clock path. `Config.OperationFrames` likewise retains exact Device modulo
+peers, port/socket/running observations, and `WGWorld.portBound`; these are
+substantive frames in their own file.
+
+Initiation and response tag claims move from `StateEdges` into separate
+source files. They retain their original old-tag premise, all normal failure
+outcomes, and response's success admission condition. The proofs include
+the actual chain/ephemeral writes, crypto results, owner dereference and
+guarded insertion. They add no identity, allocation, randomness, residency
+or success premises. `beginSession_tag` alone remains in the unported
+`StateEdges` body.
+
+The lookup prefix retains total selection over arbitrary Ambient inputs
+and tables, including first numeric matches with an excluded kind. Full
+lookup retains its normal-return owner-origin and unchanged-table claims.
+The proof covers missing owner objects, NULL/dead/live words and overflow
+stops without adding a consistency premise. The five exact finishing/caller
+contracts still in `PeerWords` remain pending.
+
+`Config.DeviceSource`, `DumpSource`, `PeerSource` and
+`Index.ReceiveOperations` require only explicit `WG.M` annotations.
+Their four unconditional definitional source equations retain early returns,
+stopped executions and branch order. These claims remain separate from frames.
+`Progress.ControlSource` generalizes its state parameter with the lift
+instances required by the actual worker, retaining the original product
+instance and arbitrary callbacks. It proves one iteration's control flow,
+not whole-loop termination. `Index.LifecycleFrames` keeps the substantive
+Device-preservation fact while retirement changes timer and dispatch data.
+
+The unchanged pure index roots are `ReleaseBounds`, `PeerReleaseEffects`,
+`SessionCoherenceEffects`, `SessionAllocationFrames` and
+`SessionAllocationEffects`. Their release/rotation/session relations are
+premises; they do not establish native execution or ownership invariants.
+The five `Progress.PowSource` claims additionally connect the actual private
+mirror loop to a finite evaluation with zero remaining exponent. They make
+no modular-arithmetic correctness or wall-clock claim.
+
+Scoped builds pass without warnings: pure index roots 45 jobs; endpoint
+roots 31; initiation 37; lookup prefix/full lookup 32/34; configuration
+frames 36; source factors with pure allocation/power roots 47; response 38;
+control/retirement 31. The corresponding axiom checks cover 111, 30, 72,
+50/56, 45, 115, 74 and 27 named logical roots, all using only the permitted
+three axioms. All nineteen fresh kernel replay roots pass.
+Independent reviews found no substantive issue. Static proof-tree and
+whitespace checks pass; mirror and shared proof layers remain unchanged.
+No full-tree or terminal pass is claimed.
+
+Development: endpoint work used eight changed-source probes (five failures,
+two warning-bearing passes, then a clean pass). Initiation used three (one
+failure, two clean); response passed its first. Lookup used eight (five
+ordinary failures, one warning-bearing pass, two clean prefixes/final
+versions). Configuration frames used two (one failure, one clean).
+Control/retirement passed its prototype with two unused simp arguments,
+removed before the clean package build. All package builds passed first
+time. No infrastructure rerun or limit increase occurred.
+
+One broader source build failed: the four source factors needed native
+annotations, while `Progress.CookieActivationModel` still applies list
+operations to the new pointer ring. That failed module also emitted unused
+simp and elaborator-generated incomplete-proof warnings; it is not trusted
+or counted here. Its exact queue/snapshot semantics and warnings remain
+pending together. The four changed factors passed a combined stdin check
+and their subsequent scoped build; the other two pure roots had already
+built cleanly. Complete diagnostics were captured before preview for these
+runs. This representation carry is not justified as a frame deletion.
+
+Reproduce by building and fresh-replaying the roots named in this section
+with the capped bundle commands above. `Lookup` imports its prefix;
+`OperationFrames` includes the endpoint roots. The explicit per-root checks
+recorded here also validated their earlier packaged closures.
