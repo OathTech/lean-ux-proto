@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Config.MultiPeerGetterClaims
 import Leanux.Proofs.WG.Config.KeyPaginationClaims
 import Leanux.Proofs.WG.Config.MixedPaginationClaims
 import Leanux.Proofs.WG.Config.PaginationClaims
@@ -1513,5 +1514,21 @@ theorem original_private_key_rotation_pagination_get_after_set (d : Device) (key
         ∃ now, s.wg.device = some (keyReadbackDevice d key pid p now)) :=
   rotation_pagination_get_after_set d key pid p nodes ids sock established changed absent
     members resident listed fresh readable endpoint room enough idle empty
+
+/-- Every occurrence in the finite peer list is returned by the original
+getter in order, with actual endpoint attributes and empty allowed_ips. The
+conservative capacity includes all peers and DONE in one envelope. The whole
+Device is retained, including for an empty list or repeated peer identifiers;
+this does not claim multi-peer pagination or global owner/list consistency. -/
+theorem original_fitting_multi_peer_getter (d : Device) (peers : PeerId → Peer) (sock : NlSock)
+    (residents : ∀ pid ∈ d.peerList, d.peers[pid]? = some (peers pid))
+    (emptyIps : ∀ pid ∈ d.peerList, (peers pid).allowedipsList = [])
+    (room : devicePrefixSpace d + 168 * d.peerList.length + 20 ≤ NLMSG_GOODSIZE)
+    (idle : sock.cbRunning = false) (emptyQueue : sock.queue = []) :
+    Campaign2.Returns (wgGetDevice (byIndex d))
+      (fun s => s.wg.device = some d ∧ s.wg.nlSock7 = sock ∧ ClaimView.selectsDevice s d)
+      (fun result s => result = .ok (multiPeerJson d peers) ∧ s.wg.device = some d ∧
+        s.wg.nlSock7 = socketReadbackFinal sock d) :=
+  fitting_peers_getter_returns d peers sock residents emptyIps room idle emptyQueue
 
 end Leanux.Proofs.WG.Config

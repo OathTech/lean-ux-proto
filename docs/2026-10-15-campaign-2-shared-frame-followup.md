@@ -171,3 +171,42 @@ operations; a second specializes the whole reply source directly to no cache
 and lax NET_RX, avoiding general socket support but duplicating the same shared
 control flow. Neither is implemented as a way to divide the overlap into smaller
 batches. This is a proof-support dependency, not a mirror-change request.
+
+## H6: allocation serials across complete response callers
+
+The checked session-arm observations identify the serial at the actual
+beginSession cut. Relating consecutive complete caller executions requires
+the allocation-counter origin at that cut and its preservation through every
+other part of the caller. A normal outgoing call would then have final counter
+equal to entry counter plus one exactly when the observed session began.
+Stopped calls can allocate before failing; no returned-state delta is claimed
+for them.
+
+The missing outgoing counter-preservation sites are createResponse,
+addMacToPacket, dstCacheGet, dstCacheReset, tunnelXmit, send4, send6 and
+sendBufferToPeer: eight substantive sites. Existing native Ambient/Index
+adapters, whole-WireGuard loopback preservation, ordinary access operations and
+the exact timer effects cover the remaining components. Exposing the owned
+routing adapter unchanged is possible; it does not discharge the eight sites.
+
+Incoming response handling adds load handling, cookie generation/validation
+and ratelimiting, cookie reply, lookup/consumer/release, endpoint publication
+and the staged/keepalive/data/fallback path. That is a larger shared-layer
+overlap, not another small leaf contract.
+
+Two architectures were audited. Compositional native counter frames combine
+with the existing exact observer factors and retain arbitrary states and
+errors. Expanding the complete source instead duplicates the same eight
+outgoing obligations and the incoming subtrees inline; it does not reduce the
+overlap. Campaign 1's lifetime observer uses its allocation invariant and does
+not directly supply this arbitrary-entry fact.
+
+[AGENT 2026-10-17] Keep the complete-call layer inventoried rather than copy it.
+Proceed only with the independently useful outgoing prefix-origin contract:
+two counter frames for createResponse and addMacToPacket, one actual prefix
+bridge, one projected full-call observation claim and its literal headline.
+This anchors a reached session event to the actual call's entry counter.
+It does not claim final-call preservation or cross-call serial uniqueness,
+and is not a first installment of the eight-site copy. The larger overlap
+remains for a scope decision or shared support. This is a proof-support
+dependency, not a mirror-change request.

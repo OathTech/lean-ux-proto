@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Noise.CreationTagClaims
 import Leanux.Proofs.WG.Noise.InitiationTagClaims
 import Leanux.Proofs.WG.Noise.ResponseTagClaims
 import Leanux.Proofs.WG.Noise.SessionClockClaims
@@ -355,5 +356,26 @@ theorem original_consume_initiation_tag_map (msg : List UInt8) (entry : Campaign
       (fun result after => ∀pid, after.tagAt pid = if result = some pid then
         some HANDSHAKE_CONSUMED_INITIATION else entry.tagAt pid) :=
   consumeInitiation_tagMap_projected msg entry
+
+/-- Whole normal creation effect on every peer tag, with all actual Stops
+retained. This makes no completion, full-state rollback or owner-word claim. -/
+theorem original_create_initiation_tag_map (pid : PeerId) (entry : Campaign2.Snapshot) :
+    Campaign2.Ensures (createInitiation pid) (fun s => s = entry)
+      (fun result after => (∀target, after.tagAt target =
+        if result.isSome then
+          if pid = target then some HANDSHAKE_CREATED_INITIATION else entry.tagAt target
+        else entry.tagAt target)) :=
+  createInitiation_tagMap_projected pid entry
+
+/-- Whole normal creation effect on every peer tag, with all actual Stops
+retained. This makes no completion, full-state rollback or owner-word claim. -/
+theorem original_create_response_tag_map (pid : PeerId) (entry : Campaign2.Snapshot) :
+    Campaign2.Ensures (createResponse pid) (fun s => s = entry)
+      (fun result after => (∀target, after.tagAt target =
+        if result.isSome then
+          if pid = target then some HANDSHAKE_CREATED_RESPONSE else entry.tagAt target
+        else entry.tagAt target) ∧
+        (result.isSome → entry.tagAt pid = some HANDSHAKE_CONSUMED_INITIATION)) :=
+  createResponse_tagMap_projected pid entry
 
 end Leanux.Proofs.WG.Noise
