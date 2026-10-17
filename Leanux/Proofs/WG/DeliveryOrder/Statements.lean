@@ -1,3 +1,10 @@
+import Leanux.Proofs.WG.Queues.HolderEntryDispatch
+import Leanux.Proofs.WG.Queues.HolderEntryDeferred
+import Leanux.Proofs.WG.Queues.HolderDumpEntry
+import Leanux.Proofs.WG.Queues.HolderEntryControls
+import Leanux.Proofs.WG.Queues.HolderTrafficEntry
+import Leanux.Proofs.WG.Queues.PlaceholderFindings
+
 import Leanux.Proofs.WG.Queues.BaseCoherenceTimers
 import Leanux.Proofs.WG.Queues.HolderXmit
 import Leanux.Proofs.WG.Queues.DevicePhysical
@@ -3144,6 +3151,150 @@ theorem original_transmit_auxiliary_account (initial : Ledger) (loans : Reservat
     PrefixPreserves (HolderAuxiliary.Inv initial loans before) OwnerChecks.Safe
       (RxHistory.mixed (liftWGObserver (wgXmitPrefix family addr packets mtu))) :=
   HolderXmit.mixed initial loans before family addr packets mtu
+
+
+
+open Leanux Leanux.WG Leanux.Proofs Leanux.Proofs.Logged
+open Framing Lifetimes Queues Queues.RxCredits
+
+/-- The actual mixed batch selects its unique remaining ledger through all
+receive/transmit items, their error CQEs and the original completion tail. -/
+theorem original_batch_complete_account (entries : List Env.BatchItem)
+    (account : DurableHolders.Boundary cs loans w.wg)
+    (physical : HolderDeviceCreate.OptionalPhysical w.wg)
+    (owners : OwnerChecks.Inv h w) (slots : CurrentSlots.Inv w.wg)
+    (run : runPrefix (RxHistory.batch entries) w h=(.ok (result,v),k)) :
+    ∃ next,BatchAccount.Outcome cs next entries w v h k result ∧
+      HolderAuxiliary.Inv next loans k k v :=
+  BatchAccount.normal account physical owners slots run
+
+/-- Batch's source path fixes its final ledger without assuming funding or
+empty queues in the output state. -/
+theorem original_batch_account_unique (entries : List Env.BatchItem)
+    (left : BatchAccount.Outcome cs next entries w v h k result)
+    (right : BatchAccount.Outcome cs other entries w v h k result) : next=other :=
+  left.unique right
+
+/-- Both original fixture flags establish the outer entry with no carriers
+or loans. An absent device supplies no fictitious physical ring. -/
+theorem original_outer_entry_fixture (net bare : Bool) (w : World)
+    (same : wgStoreView w.wg=wgStoreView (Runner.initialWG net bare)) :
+    HolderEntry.Inv [] [] [] w := HolderEntry.initialized net bare w same
+
+/-- Original creation and configuration retain the combined account and
+owner journal on normal return; reached stopped journals remain owner-safe. -/
+theorem original_outer_entry_configuration (attrs : DeviceAttrs) :
+    PrefixPreserves (HolderEntry.Inv cs loans) OwnerChecks.Safe
+      (RxHistory.mixed (liftWGObserver wgCreatePrefix)) ∧
+    PrefixPreserves (HolderEntry.Inv cs loans) OwnerChecks.Safe
+      (RxHistory.mixed (liftWGObserver (wgSetDevicePrefix attrs))) :=
+  ⟨HolderEntry.create,HolderEntry.configure attrs⟩
+
+/-- Actual guarded deletion derives an empty incoming receive ledger and
+returns the next absent-device entry on the same original observer run. -/
+theorem original_outer_entry_deletion (hi : HolderEntry.Inv cs [] h w)
+    (run : runPrefix (RxHistory.audit envWgDeleteAudit) w h=(.ok (result,v),k)) :
+    cs=[] ∧ v.wg.dev=none ∧ HolderEntry.Inv cs [] k v :=
+  HolderEntry.delete_normal hi run
+
+/-- Original up/down and namespace cleanup retain the same outer entry at
+normal endpoints. Cleanup clears sockets and endpoints without destroying the device. -/
+theorem original_outer_entry_lifecycle :
+    PrefixPreserves (HolderEntry.Inv cs loans) OwnerChecks.Safe (RxHistory.audit envWgUpAudit) ∧
+    PrefixPreserves (HolderEntry.Inv cs loans) OwnerChecks.Safe (RxHistory.audit envWgDownAudit) ∧
+    PrefixPreserves (HolderEntry.Inv cs loans) OwnerChecks.Safe (RxHistory.audit envNetnsCleanupAudit) :=
+  ⟨HolderEntryControls.up,HolderEntryControls.down,HolderEntryControls.cleanup⟩
+
+/-- Original MTU and route/address controls retain the supplied carriers,
+durable holders, structural identity and owner history on normal return. -/
+theorem original_outer_entry_controls (mtu family : Nat) :
+    PrefixPreserves (HolderEntry.Inv cs loans) OwnerChecks.Safe (RxHistory.audit (setMtuAudit mtu)) ∧
+    PrefixPreserves (HolderEntry.Inv cs loans) OwnerChecks.Safe (RxHistory.audit routeIntoWg0Audit) ∧
+    PrefixPreserves (HolderEntry.Inv cs loans) OwnerChecks.Safe (RxHistory.audit (wgDeladdrAudit family)) ∧
+    PrefixPreserves (HolderEntry.Inv cs loans) OwnerChecks.Safe (RxHistory.audit (wgDelrouteAudit family)) :=
+  ⟨HolderEntryControls.mtu mtu,HolderEntryControls.route,
+    HolderEntryControls.deladdr family,HolderEntryControls.delroute family⟩
+
+/-- Complete inject derives its actual admission receipt and next empty
+outer entry from the real final guard; output funding is a conclusion. -/
+theorem original_inject_outer_entry (hi : HolderEntry.Inv cs loans h w)
+    (run : runPrefix (RxHistory.inject family port msg tos ll dest) w h=(.ok (result,v),k)) :
+    ∃ admitted,InjectAccount.Outcome cs admitted family port msg tos ll dest w v h k result ∧
+      HolderEntry.Inv [] loans k v ∧ result=(msg.length : Int) ∧
+      (∀ (d : Device) (id : SkbId) (packet : RxPacket),v.wg.dev=some d→d.rxSkbs[id]?≠some packet) :=
+  HolderTrafficEntry.inject_normal hi run
+
+/-- The full flood returns its source-selected residual ledger as the next
+outer entry, including the placeholder branch without an empty-queue claim. -/
+theorem original_flood_outer_entry (hi : HolderEntry.Inv cs loans h w)
+    (run : runPrefix (RxHistory.flood count port family input) w h=(.ok (result,v),k)) :
+    ∃ next,FloodAccount.Outcome cs next count port family input w v h k result ∧
+      HolderEntry.Inv next loans k v :=
+  HolderTrafficEntry.flood_normal hi run
+
+/-- The full mixed batch returns its actual residual ledger as the next
+outer entry; structural coherence is transported on that identical run. -/
+theorem original_batch_outer_entry (entries : List Env.BatchItem)
+    (hi : HolderEntry.Inv cs loans h w)
+    (run : runPrefix (RxHistory.batch entries) w h=(.ok (result,v),k)) :
+    ∃ next,BatchAccount.Outcome cs next entries w v h k result ∧ HolderEntry.Inv next loans k v :=
+  HolderTrafficEntry.batch_normal entries hi run
+
+/-- All original deferred actions retain the exact base peer list and public-key
+rows on normal return, independently of ownership or funding assumptions. -/
+theorem original_deferred_base_structure (initial) (call : EnvDeferredCall) :
+    PrefixPreserves (fun _ w=>BaseCoherence.view w.wg=initial) (fun _=>True) (RxHistory.deferred call) :=
+  BaseCoherence.deferred_structure initial call
+
+/-- The concrete scheduler and nested reschedule retain the exact structural
+base view through cryptAhead, actual workers and copied-trial filtering. -/
+theorem original_scheduler_base_structure (initial) (stack : Option Worker) (worker : Worker) :
+    PrefixPreserves (fun _ w=>BaseCoherence.view w.wg=initial) (fun _=>True) (RxHistory.schedule stack) ∧
+    PrefixPreserves (fun _ w=>BaseCoherence.view w.wg=initial) (fun _=>True) (RxHistory.nestedResched worker) :=
+  ⟨BaseCoherence.schedule_structure initial stack,BaseCoherence.nestedResched_structure initial worker⟩
+
+/-- A concrete funded, stable arbitrary-entry placeholder world returns from
+afterBatch with a queued RX packet and pending NAPI. No initialized reachability
+or kernel finding is claimed for this local completion counterexample. -/
+theorem placeholder_arbitrary_entry_pending :
+    DurableHolders.Boundary [PlaceholderFindings.carrier] [] PlaceholderFindings.world.wg ∧
+    NativeRxInv 4 (PtrRing.init MAX_QUEUED_PACKETS) [] PlaceholderFindings.world.wg ∧
+    ∃ v d p pkt, Env.afterBatch.run PlaceholderFindings.world=.ok ((),v) ∧
+      v.wg.dev=some d ∧ d.peers[0]?=some p ∧ p.napiScheduled=true ∧ d.rxSkbs[0]?=some pkt :=
+  ⟨PlaceholderFindings.boundary,PlaceholderFindings.physical,PlaceholderFindings.afterBatch_returns⟩
+
+/-- Full and stepped dump dispatches retain the same receive ledger while
+exchanging their actual funded cursor; reached stopped journals remain owner-safe. -/
+theorem original_dump_outer_entry (ref : DeviceRef) :
+    PrefixPreserves (HolderEntry.Inv cs loans) OwnerChecks.Safe
+      (RxHistory.syscallDispatch (.wgGet ref)) ∧
+    PrefixPreserves (HolderEntry.Inv cs loans) OwnerChecks.Safe
+      (RxHistory.syscallDispatch (.wgGetStart ref)) ∧
+    PrefixPreserves (HolderEntry.Inv cs loans) OwnerChecks.Safe
+      (RxHistory.syscallDispatch .wgGetRecv) :=
+  ⟨HolderDumpEntry.dispatchGet ref,HolderDumpEntry.dispatchStart ref,HolderDumpEntry.dispatchRecv⟩
+
+/-- The original transmit dispatcher retains the receive ledger through its
+socket, routing, packetization and errno paths while charging acquired TX holders. -/
+theorem original_transmit_outer_entry (family addr : Nat) (payload : List UInt8) (opts : Env.XmitOpts) :
+    PrefixPreserves (HolderEntry.Inv cs loans) OwnerChecks.Safe
+      (RxHistory.syscallDispatch (.wgXmit family addr payload opts)) :=
+  HolderEntryDispatch.xmit family addr payload opts
+
+/-- The actual return-to-user waits carry the precise fresh removal suffix
+into the next entry, including absent devices. Stops supply only owner-safe
+histories; no final state or empty RX account is asserted there. -/
+theorem original_return_wait_outer_entries (cs : Ledger) (loans : Reservations)
+    (before : List RxHistory.Event) :
+    let input := fun h w=>h=before ∧ HolderEntry.Inv cs loans h w
+    let output := fun (_ : Unit) k v=>∃ suffix,k=before++suffix ∧
+      HolderEntry.Inv (remaining cs (NapiCarrier.removedPackets suffix)) loans k v
+    PrefixEnsures input OwnerChecks.Safe RxHistory.runSendWorkers output ∧
+    PrefixEnsures input OwnerChecks.Safe RxHistory.idleTimers output ∧
+    PrefixEnsures input OwnerChecks.Safe RxHistory.afterXmit output ∧
+    PrefixEnsures input OwnerChecks.Safe RxHistory.afterAdvance output :=
+  ⟨HolderEntryDeferred.sendAll,HolderEntryDeferred.idle,
+    HolderEntryDeferred.afterXmit,HolderEntryDeferred.afterAdvance⟩
 
 
 end Leanux.Proofs.WG.DeliveryOrder

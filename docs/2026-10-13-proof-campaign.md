@@ -281,6 +281,17 @@ lifecycle composition and initialized conservation remain open. Previous bodies
 are unchanged. Gate: 868 jobs/793 declarations, 6.066 seconds; fresh replay:
 115.435 seconds, no warnings. One reviewed Stop comment was corrected.
 
+The [outer-boundary checkpoint](2026-10-17-r4-outer-boundary.md)
+adds fifteen modules and 234 theorems: 825 files/11,308 theorems, 275 R4 terminals
+and 809 total declarations. Full batch now selects a unique remaining ledger;
+whole traffic calls supply the next outer entry. Fixture, lifecycle/configuration,
+controls, dump/transmit dispatch and return-to-user waits retain those entries,
+including absent devices. A local placeholder completion counterexample makes
+no initialized or kernel claim. Initialized admission-to-disposition conservation
+remains open. All prior bodies are unchanged. The first aggregate gate failed
+on implicit binder collisions; explicit binders repair them. Final gate:
+883 jobs/809 declarations in 6.089 seconds. Fresh root replay passes in 112.708 seconds without warnings.
+
 The pre-split checkpoint validated every baseline result surface over
 `cb2348e`. R3 packet authorization is now closed over the current split tree;
 R4 receive-pipeline conservation remains open. Earlier positive results and runtime findings retain
@@ -678,16 +689,17 @@ correspondence remains informal.
 
 ## R4 — queue, poll and delivery-order components (in progress)
 
-**State-split traffic-boundary extension.** The [current report](2026-10-17-r4-traffic-boundary.md)
-records 207 additional theorems in fifteen modules and twelve terminal exports.
-The tree has 810 proof files/11,074 theorems, with 259 R4 terminals and all 247
-preceding bodies unchanged. Whole inject derives empty RX completion, while
-whole flood retains the unique ledger selected by its actual finite source path.
-Native lifecycle/configuration entries, transmit, all deferred calls and batch
-waits retain the combined local account. Recorded batch completion uses its actual
-final guard; placeholder completion is not asserted. Structural traffic/session
-and timer frames support the outer join. Full batch, global lifecycle composition
-and initialized conservation remain open. Chronological GRO order stays refuted.
+**State-split outer-boundary extension.** The [current report](2026-10-17-r4-outer-boundary.md)
+records 234 additional theorems in fifteen modules and sixteen terminal exports.
+The tree has 825 proof files/11,308 theorems, with 275 R4 terminals and all 259
+preceding bodies unchanged. Full batch and whole traffic callers now select
+actual residual ledgers and next outer entries. Fixture, lifecycle/configuration,
+controls, dump/transmit dispatch and the four return-to-user waits retain the
+combined entry, including absent devices. Structural frames follow concrete
+Stack, crypt/TX, scheduler and deferred calls. A checked arbitrary-entry
+placeholder witness refutes unconditional batch completion; initialized reachability
+and a kernel finding are not claimed. The actual syscall/runner chain and
+admission-to-disposition conservation remain open. Chronological GRO order stays refuted.
 
 **Original versus proved.** The charter requires accepted-schedule order and no silent loss/duplication.
 [Terminals](../Leanux/Proofs/WG/DeliveryOrder/Statements.lean) prove initialized committed callback-entry stamp
@@ -858,11 +870,15 @@ in prose on `requireNotPending`, actually `State.lean:102`'s `pure ()`. Later in
 quiescence. No accepted loss/ duplication witness was found: arbitrary last-peer erasure is not initialized, and the
 poll's last-put candidate Stops at a later getter. No kernel bug claim.
 
-**Remaining obligations.** Initialized nullable compatibility, source-acquired credits, worker-local ownership
-and committed ingress/decrypt-worker propagation; concrete normal admission/stable and poll/Stack preservation are local groundwork. Stores/rings/queues/locals/GRO overlap; counts cannot be added. Named
-rejection, validation, keepalive, purge/free and handoff dispositions still need initialized admission-to-carrier composition
-beyond the proved local post-removal partition. Queue idleness does not empty
-stores/peer queues; finite prefixes retain pending obligations. W7 item/mark transport remains open.
+**Remaining obligations.** The supplied-entry account now includes nullable
+compatibility, source-acquired credits, worker-local holders, physical rings and
+concrete ingress/decrypt propagation. Actual full traffic calls and most outer
+boundaries select their dynamic ledger. The initialized syscall/runner chain
+must retain each source occurrence, and join admitted carriers to named rejection,
+validation, keepalive, purge/free and handoff dispositions beyond the local
+post-removal partition. Queue idleness does not imply empty stores or peer queues;
+finite prefixes retain pending obligations. Stopped admission and selected/GRO
+phases need separate accounting. W7 item/mark transport remains open.
 
 **Effort/process/review.** Earlier ring, receipt and caller ledgers are in `00fafa4`, `57cb46e`,
 `c4ef635`, `ec95fa8`, `3dec2c3`, `79dce53`, `1b76322`, `983f84b` and `65e6a6d`;
