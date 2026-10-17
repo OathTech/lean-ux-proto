@@ -16,8 +16,8 @@ The campaign's complete proof tree is current over `b3f56807`, whose executable
 mirror is identical to split landing `b700659` (the `6089dc4` split). All seven
 result rows pass the complete proof gate and fresh root kernel replay. The
 nondefault proof target and gate remain on this branch. R3 now includes initialized
-incoming and outgoing authorization. R4 receive-pipeline conservation remains
-open; its carried statements and chronological GRO-order finding remain current.
+incoming and outgoing authorization. R4 now covers normal initialized ingress dispositions; W7 caller transport remains
+open. Its carried statements and chronological GRO-order finding remain current.
 
 The validated baseline `00641c6` has 471 Lean files and 7,715 named theorems.
 The validated retrofit checkpoint has 452 files and 6,564 theorems: 3,197 retyped/generalized,
@@ -116,22 +116,27 @@ configuration shape premise; exact erasure retains JSON and indexed Stops.
 
 ## Current R4 extension
 
-The [initialized-account extension](2026-10-17-r4-initial-account.md)
-adds thirteen modules and 132 theorems: 838 proof files and 11,440 named theorems.
-All 275 previous R4 terminal bodies remain unchanged; R4 has 289 terminal
-theorems and the full terminal surface has 823 declarations. No existing
-theorem is retyped or deleted by this extension.
+The [initialized ingress extension](2026-10-17-r4-ingress-coverage.md) adds
+33 modules and 305 theorems: 893 proof files, 12,032 named theorems, 312 R4
+terminals and 846 total terminal declarations. All 300 earlier R4 terminal
+bodies and every previous support theorem remain unchanged. No theorem is
+retyped or deleted in this extension.
 
-Every original syscall constructor and the initialized runner now derive a
-source-selected residual ledger and funded entry. Exact projection retains the
-actual returned World, RX journal and executable JSON or indexed Stop. Traffic
-paths locate accepted receive positions and prove local pending-or-removal fates.
-These source certificates add neither output funding nor an empty-completion
-premise. Peer-queue-full ENOSPC cleanup is distinguished from decrypt-ring-full
-EPIPE and its queued DEAD/NAPI path. Original chronology remains refuted;
-initialized admission-to-named-disposition conservation remains open.
-The gate passes 896 jobs/823 declarations in 8.223 seconds. Fresh root replay:
-PASS in 113.801 seconds without warnings. All proof warnings are cleared.
+Every successful initialized runner supplies actual initialization, operation,
+syscall and entry cuts. Complete inject, flood and executed batch positions
+are exposed before carrier selection. Every accepted admission has a pending
+or completed-poll disposition, including one removed before its operation
+returns. The final funded account separates exactly one pending identity from
+an actual release without a residual copy. No supplied query, output funding
+or empty-completion premise is required. Original chronology remains refuted;
+stopped admissions have no new disposition account.
+
+The complete encrypt iteration retains a freshly refused DEAD head, deriving
+saved-item separation from the earlier allocation and live logical ring.
+Full staging, concrete NAPI/Stack and native maintenance preserve the needed
+local contracts. Initialized W7 ring-bound and whole-caller transport remain
+open. Gate: 951 jobs and all 846 declarations PASS in 6.952 seconds after one
+reported export-name failure and repair. Fresh root replay passes in 113.512 seconds without warnings.
 
 ## Layers
 
@@ -998,7 +1003,7 @@ open. All earlier theorem bodies are unchanged. Gate: 918 jobs/834 declarations,
 | R1: anti-replay uniqueness and inclusive floor | No wire counter is accepted twice in one allocation lifetime; every accepted counter is at or above the inclusive lower edge, for pure runs, original validator calls and accepted runner histories. Equality at the charter's floor is intentionally permitted, with a concrete recorded replay. | `Leanux/Proofs/WG/AntiReplay/` (`Statements.lean`, 9 terminal theorems) | [campaign charter](2026-10-13-charter-proof-campaign.md) | [campaign report](2026-10-13-proof-campaign.md#r1--anti-replay-uniqueness-and-the-inclusive-floor) | b3f56807 | current: split carry validated |
 | R2: initialized lifetime safety | For every typed Runner trace and both placeholder settings, committed peer/keypair/packet access histories are safe from release-before-access, including failed prefixes. Every actual reached consistency-filter entry is allocation-valid and supplies exact ordered filter correspondence and safe isolated copied-trial histories. The observer preserves exact original JSON or indexed Stop without parser, array-length, progress or success premises. Original local contracts and endpoint identity refinements remain available. Historical stale-cursor inputs retargeted replacement identities; their current full recipes reject at operation 3 under the pending-dump guard. Raw-reference affiliation/credit is a separate stronger property. | `Leanux/Proofs/WG/LifetimeSafety/` (`Statements.lean`, 202 terminal theorems) | [campaign charter](2026-10-13-charter-proof-campaign.md) | [campaign report](2026-10-13-proof-campaign.md#r2--lifetime-identity-and-retained-references) | b3f56807 | current: split carry validated |
 | R3: cryptokey routing | Trie lookup agrees with the independent flat longest-prefix history for both families, including insertion, removal and lifecycle cleanup. Each initialized Stack entry links to its earlier buffer, consume and configured decrypt/publication occurrences, and its source winner is the consuming peer at that consume prefix. Each initialized outgoing handoff selects the longest-prefix owner of every supplied packet’s destination at its captured native front entry. Actual direct, batch and Stack-reply callers, NAPI, crypt workers, scheduler, timers and syscall continuations are connected. Public parsing discharges configuration address shape; both placeholder settings and prefixes preceding indexed Stops are included. Exact executable erasure and complete old RX-journal projection hold for arbitrary incoming histories. No final-state authorization premise, Noise authenticity or later wire-send property is claimed. Complete caller coverage uses checked source factors and reviewed wiring; selected-occurrence authorization is kernel-proved. | `Leanux/Proofs/WG/CryptokeyRouting/` (`Statements.lean`, 289 terminal theorems) | [campaign charter](2026-10-13-charter-proof-campaign.md) | [incoming report](2026-10-17-r3-initialized-authorization.md), [outgoing report](2026-10-17-r3-initialized-transmit.md), [campaign report](2026-10-13-proof-campaign.md#r3--cryptokey-routing) | b3f56807 | current: trie and both initialized path halves validated |
-| R4 components and GRO order finding | Initialized entry/completion uniqueness and packet linkage remain proved. Every accepted initialized runner derives its funded residual ledger and actual completed-poll release certificates. Every source-selected normal syscall admission has a named pending-or-removal fate; the two outcomes are exclusive in its funded final account. Actual staged allocation and selected encryption advance W7 mark transport. Complete initialized admission selection and W7 caller/item separation remain open. Chronological GRO order is refuted; cleanup-totality finding remains. | `Leanux/Proofs/WG/DeliveryOrder/` (`Statements.lean`, 300 terminal theorems; `ReplayGro.lean`) | [campaign charter](2026-10-13-charter-proof-campaign.md) | [disposition report](2026-10-17-r4-dispositions.md) | b3f56807 | current: split carry and local extension validated |
+| R4 components and GRO order finding | Initialized entry/completion uniqueness and packet linkage remain proved. Every accepted runner exposes its actual initialization and operation cuts and covers every accepted inject, flood and executed batch receive position, including admissions removed before syscall return. Each has a pending or actual completed-poll disposition; the funded final account separates one pending identity from release without a residual copy. Fresh full-ring refusal survives the entire adjacent encrypt iteration; initialized W7 caller transport remains open. Chronological GRO order is refuted; cleanup-totality finding remains. | `Leanux/Proofs/WG/DeliveryOrder/` (`Statements.lean`, 312 terminal theorems; `ReplayGro.lean`) | [campaign charter](2026-10-13-charter-proof-campaign.md) | [ingress coverage report](2026-10-17-r4-ingress-coverage.md) | b3f56807 | current: split carry and initialized normal ingress validated; W7 transport open |
 | R5: key lifetime enforcement; Rule Zero findings | Thirteen local theorems identify exact original clock tests, RX AEAD admission and failed-tag coverage, accepted-wire-nonce bounds, TX staging certificates, zero-timer store framing and timer-pass erasure. Accepted original/observed replays authenticate nonce R+1 before rejection and encrypt queued transport keepalives after recorded expiry or zero/clear before a new handshake, using the same packet-held material. New time inputs have coherent coarse/jiffies/arm arithmetic, without a Linux schedule claim. The original unconditional statement is false; universal replacement transport theorems are not claimed. | `Leanux/Proofs/WG/KeyLifetime/` (`Statements.lean`, 13 terminal theorems; `Replay.lean`, `ReplayDelayed.lean`, `ReplayPostClear.lean`) | [campaign charter](2026-10-13-charter-proof-campaign.md) | [campaign report](2026-10-13-proof-campaign.md#r5--key-lifetime-enforcement-rule-zero-findings) | b3f56807 | current: split carry validated |
 | R6: cookie exclusion and retry-limit finding | Original under-load calculation and rejected-initiation suffix are exact. Invalid MAC2 against the actual original cookie result executes only the cookie reply; invalid MAC1 drops earlier. Ordinary completion preserves full Noise stores, indices and peer/keypair allocation counters. An accepted generated episode has 19 retries and 20 total initiations with MAX=18, then gives up on callback 20; this refutes the literal limit without claiming a universal replacement bound. The whole advance observer has exact original erasure. | `Leanux/Proofs/WG/FloodResistance/` (`Statements.lean`, 6 terminal theorems; `Replay.lean`) | [campaign charter](2026-10-13-charter-proof-campaign.md) | [campaign report](2026-10-13-proof-campaign.md#r6--cookie-exclusion-and-retry-limit-finding) | b3f56807 | current: split carry validated |
 

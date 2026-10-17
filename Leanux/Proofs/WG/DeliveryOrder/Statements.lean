@@ -1,3 +1,9 @@
+import Leanux.Proofs.WG.Queues.RunnerCoverage
+import Leanux.Proofs.WG.Queues.IngressCoverage
+import Leanux.Proofs.WG.Queues.TxRxHeadNapi
+import Leanux.Proofs.WG.Queues.TxLiveNapi
+import Leanux.Proofs.WG.Queues.TxSavedWorker
+import Leanux.Proofs.WG.Queues.TxLiveMaintenance
 import Leanux.Proofs.WG.Queues.AdmissionAccounting
 import Leanux.Proofs.WG.Queues.TxMarkTransport
 import Leanux.Proofs.WG.Queues.SyscallFate
@@ -3536,5 +3542,111 @@ theorem original_selected_encryption_saved_head (target : SkbId) (item : List Sk
     (run : runPrefix (RxHistory.mixed (RxWorkers.encryptTail (some item))) w history=(.ok (result,v),after)) :
     TxDisposition.HeadState target state v.wg :=
   TxDisposition.SelectedEncrypt.observed_head target item outside state head run
+
+/-- The initialized normal runner derives source ledgers and poll-input
+allocation validity, then gives each selected admission its actual fate. -/
+theorem initialized_runner_selected_admission_fates (trace : Leanux.Runner.Trace) (placeholders : Bool)
+    (run : runPrefixOuter (RunnerAccount.observed trace placeholders) []=(.ok (result,w),h)) :
+    ∃next,∃source : (RunnerAccount.rule trace placeholders).relation [] [] (result,w) h next,
+      HolderEntry.Inv next [] h w ∧
+      ∀operation inner c,(RunnerSelection.account trace placeholders).query operation inner source c→
+        AdmissionRelease.Fate c next [] h := RunnerFate.normal trace placeholders run
+
+/-- The normal initialized endpoint has one pending identity or the actual
+completed poll's named disposition and release, with no residual copy. -/
+theorem initialized_runner_selected_admission_partition (trace : Leanux.Runner.Trace) (placeholders : Bool)
+    (run : runPrefixOuter (RunnerAccount.observed trace placeholders) []=(.ok (result,w),h))
+    (source : (RunnerAccount.rule trace placeholders).relation [] [] (result,w) h next)
+    (chosen : (RunnerSelection.account trace placeholders).query operation inner source c) :
+    ∃msg src cs admitted u v before after suffix,
+      AdmissionCaller.Step cs admitted msg src u v before after ∧
+      ReceiveEffects.Accepted cs admitted msg src u.wg v.wg u.ambient v.ambient c ∧
+      h=after++suffix ∧
+      ((c∈next ∧ (next.map Carrier.packet).count c.packet=1 ∧
+          ¬AdmissionRelease.Removed c after h) ∨
+        (c.packet∉next.map Carrier.packet ∧ AdmissionRelease.Removed c after h ∧
+          RxHistory.Released h (CarrierIdentity.stamp c.packet))) :=
+  RunnerFate.partition trace placeholders run source chosen
+
+/-- Actual entry and all ingress positions are exposed before any carrier is
+chosen; a source query does not require the admission to survive dispatch. -/
+theorem original_syscall_ingress_source_coverage (call : Syscall)
+    (traffic : SyscallEntryCuts.TrafficCall call)
+    (source : (ConservationSyscall.rule call).relation cs w h result v k next) :
+    ∃entered,runPrefix (SyscallEntryCuts.enter call) w h=(.ok ((),entered),h) ∧
+      IngressCoverage.Complete call cs entered h
+        (fun index c=>SyscallSelection.syscall call index source c) :=
+  IngressCoverage.syscall call traffic source
+
+/-- Full native staging derives fresh-item separation and keeps the saved
+old packet state through key rejection, nonce work and actual submission. -/
+theorem original_staged_send_saved_head (pid : PeerId) (target : SkbId) (state : PacketState) :
+    Framing.Hoare (sendStagedPackets pid)
+      (fun w=>Leanux.Proofs.WG.Packets.Inv w ∧ TxDisposition.HeadState target state w)
+      (fun _=>TxDisposition.HeadState target state) :=
+  TxDisposition.StagedHead.send pid target state
+
+/-- Concrete RX softirq, including grouped Stack callbacks and their sends,
+retains an old TX head using an existing allocation-validity witness. -/
+theorem original_napi_softirq_saved_head (target : SkbId) (state : PacketState) :
+    Framing.Preserves (fun w : World=>TxDisposition.StackHead.Inv target state w.wg) Env.napiSoftirq :=
+  TxDisposition.RxHeadNapi.softirq target state
+
+/-- Full staging carries the logical live-item bound and physical ring
+refinement; stale consumed slots impose no packet-residency premise. -/
+theorem original_staged_send_live_ring_bound (pid : PeerId) :
+    Framing.Preserves TxDisposition.LiveFrontier.Ready (sendStagedPackets pid) :=
+  TxDisposition.LiveFrontier.send pid
+
+/-- Real Stack replies can re-enter transmit while retaining the logical
+live encryption ring's numeric allocation bound and physical refinement. -/
+theorem original_stack_live_ring_bound (packets : List (List UInt8)) :
+    Framing.Preserves (fun w : World=>TxDisposition.LiveFrontier.Ready w.wg)
+      (packets.forM Env.deliverInner) := TxDisposition.LiveFrontier.stack packets
+
+/-- A successful original run supplies every operation's actual initialization,
+entry and ingress source path. Every accepted carrier has a pending or actual
+completed-poll disposition, with no selection or funding premise. -/
+theorem initialized_runner_all_ingress_fates (trace : Leanux.Runner.Trace) (placeholders : Bool)
+    (run : runPrefixOuter (RunnerAccount.observed trace placeholders) []=(.ok (result,w),h)) :
+    ∃next,HolderEntry.Inv next [] h w ∧ RunnerCoverage.Complete trace placeholders next h :=
+  RunnerCoverage.normal trace placeholders run
+
+/-- Executable acceptance supplies complete ingress coverage in both placeholder
+modes, including admissions removed before their original syscall returns. -/
+theorem accepted_runner_all_ingress_fates (trace : Leanux.Runner.Trace) (placeholders : Bool)
+    (run : Runner.executeTrace trace placeholders=.ok result) :
+    ∃w h next,runPrefixOuter (RunnerAccount.observed trace placeholders) []=(.ok (result,w),h) ∧
+      HolderEntry.Inv next [] h w ∧ RunnerCoverage.Complete trace placeholders next h :=
+  RunnerCoverage.accepted trace placeholders run
+
+/-- Fresh full-ring refusal followed by the entire original encrypt iteration
+keeps the refused head DEAD. Separation from the consumed live item and later
+allocation validity follow from the earlier allocation/create entry. -/
+theorem original_full_ring_refusal_saved_worker (pid : PeerId) (packets : List DataPacket)
+    {first : SkbId} {rest : List SkbId}
+    (device : before.dev=some d) (peer : d.peers[pid]?=some p)
+    (live : p.isDead=false) (room : p.txQueue.count<MAX_QUEUED_PACKETS)
+    (full : d.encryptQueue.full=true)
+    (bounded : ∀old∈d.encryptQueue.items,∀id∈old,id<d.nextSkb)
+    (physical : TxRing.Refines (PtrRing.init n) ringHistory d.encryptQueue)
+    (allocation : Leanux.Proofs.WG.Lifetimes.AllocationInv history before)
+    (created : (((do let item←packets.mapM newTxSkb;createData pid item;pure item) : WG.M (List SkbId)).run before).run ambient=
+      .ok ((first::rest,w.wg),w.ambient))
+    (run : (encryptIter Env.checksumHelp Env.napiSoftirq (Env.condResched .encryptWorker)).run w=
+      .ok (result,v)) : TxDisposition.HeadState first .dead v.wg :=
+  TxDisposition.SavedWorker.refusal_entry pid packets device peer live room full bounded physical allocation created run
+
+/-- Actual NAPI softirq and its Stack sends preserve the logical live ring's
+numeric bound and physical refinement across all normal return branches. -/
+theorem original_napi_live_ring_bound :
+    Framing.Preserves (fun w : World=>TxDisposition.LiveFrontier.Ready w.wg) Env.napiSoftirq :=
+  TxDisposition.LiveNapi.softirq
+
+/-- Native retirement after the dead mark retains the logical TX live frontier
+through timer stopping, queued sends, key clearing and final reference payment. -/
+theorem original_peer_retirement_live_ring_bound (pid : PeerId) :
+    Framing.Preserves TxDisposition.LiveFrontier.Ready (peerRemoveAfterDead pid) :=
+  TxDisposition.LiveFrontier.remove_after_dead pid
 
 end Leanux.Proofs.WG.DeliveryOrder

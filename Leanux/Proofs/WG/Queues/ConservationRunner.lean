@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.Queues.ConservationCertified
+import Leanux.Proofs.WG.Queues.RunnerOperation
 
 /-! Build a concrete certificate for the existing runner body. Only proof
 constructors are composed; the runner action and its accumulator are unchanged. -/
@@ -90,23 +91,19 @@ elab "conservation_runner_match" : tactic => Lean.Elab.Tactic.withMainContext do
   unless (← Lean.Meta.matchMatcherApp? action).isSome do Lean.throwError "not a head matcher"
   Lean.Elab.Tactic.replaceMainGoal (← Lean.Meta.Split.splitMatch goal action)
 
-def tail (call : Syscall→RxHistory.Obs Int)
-    (rules : ∀c,ConservationSource.Rule (call c))
-    (established : ∀c,HolderTrafficDispatch.Established (rules c) [])
-    (trace : Trace) (w : World) :
-    Certified (RoutingJoint.runnerTailWith call (fun j v=>(j,v)) trace w)
-      (entry w) (fun out=>entry out.2) := by
-  have syscall (index : Nat) (w : World) (c : Syscall)
-      {P : Ledger→List RxHistory.Event→Prop} {Q : Int × World→Ledger→List RxHistory.Event→Prop} :=
-    ConservationCertified.runAt (P:=P) (Q:=Q) index w (rules c) (established c)
+/-- The post-call source has no admission callback. Its actual skipAmbient,
+normal-exit guards and metadata loops retain the returned World entry. -/
+def afterCallCertified (op : Operation) (state : RunnerOperation.State) (ret : Int) (w : World) :
+    Certified (RunnerOperation.afterCall op state ret w) (entry w)
+      (fun step=>entry (match step with | .done out=>out | .yield out=>out).1) := by
   have ambient (index : Nat) (w : World)
       {P : Ledger→List RxHistory.Event→Prop} {Q : Unit × World→Ledger→List RxHistory.Event→Prop} :=
     ConservationCertified.runAt (P:=P) (Q:=Q) index w (HolderTrafficDispatch.lift (skipAmbient : Leanux.M Unit))
       (HolderTrafficDispatch.lift_established _
         (fun initial=>productAmbient_spec _ _ (fun _ _ hi=>hi)) (loans:=[]))
-  unfold RoutingJoint.runnerTailWith
+  unfold RunnerOperation.afterCall
   repeat' first
-    | (conservation_runner_head runAtPrefix; first | apply syscall | apply ambient)
+    | (conservation_runner_head runAtPrefix; apply ambient)
     | (conservation_runner_head Pure.pure; apply ConservationCertified.pure)
     | (conservation_runner_head throw; exact ConservationCertified.stopped _)
     | conservation_runner_bind
@@ -121,6 +118,67 @@ def tail (call : Syscall→RxHistory.Obs Int)
   all_goals rename_i hi
   all_goals exact HolderEntryDispatch.wg_store hi rfl
 
+/-- The original indexed syscall is the exposed first certificate. Its exact
+converted call uses the current saved results and descriptor ends. -/
+def operationCertified (call : Syscall→RxHistory.Obs Int)
+    (rules : ∀c,ConservationSource.Rule (call c))
+    (established : ∀c,HolderTrafficDispatch.Established (rules c) [])
+    (trace : Trace) (op : Operation) (state : RunnerOperation.State) :
+    Certified (RunnerOperation.operation call trace op state) (entry state.1)
+      (fun step=>entry (match step with | .done out=>out | .yield out=>out).1) :=
+  ConservationCertified.bind
+    (ConservationCertified.runAt state.2.1.size (RunnerOperation.prepare trace state)
+      (rules (toSyscall state.2.1 state.2.2.1 state.2.1.size op))
+      (established _)
+      (fun _ _ hi=>HolderEntryDispatch.wg_store hi rfl)
+      (fun _ _ _ hi=>hi))
+    (fun out=>afterCallCertified op state out.1 out.2)
+
+/-- The unchanged final guards and JSON projection do not execute a syscall. -/
+def finishCertified (trace : Trace) (state : RunnerOperation.State) :
+    Certified (RunnerOperation.finishWith (fun j v=>(j,v)) trace state)
+      (entry state.1) (fun out=>entry out.2) := by
+  unfold RunnerOperation.finishWith
+  repeat' first
+    | (conservation_runner_head Pure.pure; apply ConservationCertified.pure)
+    | (conservation_runner_head throw; exact ConservationCertified.stopped _)
+    | conservation_runner_bind
+    | conservation_runner_reduce
+    | (conservation_runner_head ite; apply ConservationCertified.branch)
+    | maintenance_intro
+  all_goals intros; assumption
+
+/-- The actual finite array loop uses the named operation certificate. -/
+def loopCertified (call : Syscall→RxHistory.Obs Int)
+    (rules : ∀c,ConservationSource.Rule (call c))
+    (established : ∀c,HolderTrafficDispatch.Established (rules c) [])
+    (trace : Trace) (state : RunnerOperation.State) :
+    Certified (forIn trace.ops state (RunnerOperation.operation call trace))
+      (entry state.1) (fun out=>entry out.1) :=
+  ConservationCertified.array trace.ops state (RunnerOperation.operation call trace)
+    (fun out=>entry out.1) (fun op state=>
+      { rule := (operationCertified call rules established trace op state).rule
+        establishes := by
+          intro cs h out k hi run
+          obtain ⟨next,certificate,post⟩ :=
+            (operationCertified call rules established trace op state).establishes hi run
+          refine ⟨next,certificate,?_⟩
+          cases out <;> exact post })
+    (fun _ _ hi=>hi) (fun _ _ _ hi=>hi)
+
+def tail (call : Syscall→RxHistory.Obs Int)
+    (rules : ∀c,ConservationSource.Rule (call c))
+    (established : ∀c,HolderTrafficDispatch.Established (rules c) [])
+    (trace : Trace) (w : World) :
+    Certified (RoutingJoint.runnerTailWith call (fun j v=>(j,v)) trace w)
+      (entry w) (fun out=>entry out.2) := by
+  let checked := ConservationCertified.bind
+    (loopCertified call rules established trace (w,#[],#[],#[],#[],#[]))
+    (finishCertified trace)
+  exact ⟨ConservationOuter.reindex (RunnerOperation.tail_factor call (fun j v=>(j,v)) trace w).symm checked.rule,
+    ConservationOuter.reindex_ensures (RunnerOperation.tail_factor call (fun j v=>(j,v)) trace w).symm
+      checked.rule checked.establishes⟩
+
 private theorem boot_store (foreign : Bool) : SameView (fun w=>wgStoreView w.wg)
     (do Net.Fib.bootTables
         if foreign then Net.Fib.inCreatorNs Net.Fib.bootTables : Leanux.M Unit) := by
@@ -133,6 +191,105 @@ private theorem boot_store (foreign : Bool) : SameView (fun w=>wgStoreView w.wg)
       exact productRouting_spec _ (fun s=>s.2.2.2=initial)
     · exact SameView.pure _ _
 
+/-- The literal initial World used by the existing runner. -/
+def fixture (trace : Trace) (placeholders : Bool) : World :=
+  { ambient :=
+      { env := harnessEnv
+        timing := Env.timing
+        allocArmed := trace.allocArmed
+        hiddenPlaceholders := placeholders && trace.hidden.isNone
+        steerValues := if placeholders then trace.steer else []
+        armRecords := trace.armRecords
+        allocSteered := if placeholders then
+          (trace.steer.map (·.1)).filter fun l => AllocSite.all.any (·.info.label == l)
+          else [] }
+    fs := initialFS trace.net trace.foreign trace.stepped trace.seccompChild
+    tasks := initialTasks trace.rlimit trace.foreign trace.stepped trace.seccompChild
+    wg := { initialWG trace.net trace.bare with
+      portBound := Env.portBound
+      fixtureNetDevices := Env.fixtureNetDevices
+      dstCacheRecords := trace.dstCacheRecords
+      routing := { foreignCreator := trace.foreign } }
+    fixture :=
+      { netnsCHolders := if trace.foreign then [9,8,5,4] else []
+        routes := trace.routes
+        napiBeforePut := trace.napiBeforePut } }
+
+/-- The actual prefill choice, with its following source left explicit. -/
+def prefillWith (count : Nat) (w : World) (next : World → PrefixOuter E α) : PrefixOuter E α :=
+  if count > 0 then
+    match Env.seccompPrefill count w.seccomp w.tasks with
+    | .ok (seccomp,tasks) => next { w with seccomp,tasks }
+    | .error reason => throw (0,.invariant reason)
+  else next w
+
+/-- The actual optional boot, including the recorded-step reset on success. -/
+def bootWith (net foreign : Bool) (w : World) (next : World → PrefixOuter E α) : PrefixOuter E α :=
+  if net then
+    match (do Net.Fib.bootTables
+              if foreign then Net.Fib.inCreatorNs Net.Fib.bootTables : Leanux.M Unit).run w with
+    | .ok (_,v) => next { v with ambient := { v.ambient with steps := #[], envCalls := [] } }
+    | .error reason => throw (0,reason)
+  else next w
+
+/-- Exact factorization of the unchanged runner; failures retain their index. -/
+theorem initialized_factor (call : Syscall → RxHistory.Obs Int)
+    (trace : Trace) (placeholders : Bool) :
+    RoutingJoint.executeTraceWith call (fun j v => (j,v)) trace placeholders =
+      prefillWith trace.seccompPrefill (fixture trace placeholders) (fun w =>
+        bootWith trace.net trace.foreign w (RoutingJoint.runnerTailWith call (fun j v => (j,v)) trace)) := by
+  rfl
+
+private def reindexCertified {action other : PrefixOuter RxHistory.Event α}
+    (same : action = other) (checked : Certified action P Q) : Certified other P Q :=
+  ⟨ConservationOuter.reindex same checked.rule,
+    ConservationOuter.reindex_ensures same checked.rule checked.establishes⟩
+
+/-- Prefill changes only the seccomp/task fixture fields. -/
+def prefillCertified (count : Nat) (w : World) (next : World → PrefixOuter RxHistory.Event α)
+    (checked : ∀v, wgStoreView v.wg = wgStoreView w.wg → Certified (next v) P Q) :
+    Certified (prefillWith count w next) P Q :=
+  if positive : count > 0 then
+    match actual : Env.seccompPrefill count w.seccomp w.tasks with
+    | .ok out => reindexCertified
+        (by simp only [prefillWith, positive, ↓reduceIte, actual])
+        (checked { w with seccomp := out.1, tasks := out.2 } rfl)
+    | .error reason => reindexCertified
+        (by simp only [prefillWith, positive, ↓reduceIte, actual])
+        (ConservationCertified.stopped (0,.invariant reason))
+  else reindexCertified (by simp only [prefillWith, positive, ↓reduceIte]) (checked w rfl)
+
+/-- Boot retains the WG store while preserving its actual success/error result. -/
+def bootCertified (net foreign : Bool) (w : World) (next : World → PrefixOuter RxHistory.Event α)
+    (checked : ∀v, wgStoreView v.wg = wgStoreView w.wg → Certified (next v) P Q) :
+    Certified (bootWith net foreign w next) P Q :=
+  if enabled : net then
+    match actual : (do
+        Net.Fib.bootTables
+        if foreign then Net.Fib.inCreatorNs Net.Fib.bootTables : Leanux.M Unit).run w with
+    | .ok out => reindexCertified
+        (by simp only [bootWith, enabled, ↓reduceIte, actual])
+        (checked { out.2 with ambient := { out.2.ambient with steps := #[], envCalls := [] } }
+          ((Lifetimes.ProjectedAction.iff_run _ _ _).mp (boot_store foreign) w out.1 out.2 actual))
+    | .error reason => reindexCertified
+        (by simp only [bootWith, enabled, ↓reduceIte, actual])
+        (ConservationCertified.stopped (0,reason))
+  else reindexCertified (by rw [bootWith, ite_eq_right enabled]) (checked w rfl)
+
+/-- The existing tail certificate with the actual initialized entry assertion. -/
+def initialTail (call : Syscall→RxHistory.Obs Int)
+    (rules : ∀c,ConservationSource.Rule (call c))
+    (established : ∀c,HolderTrafficDispatch.Established (rules c) [])
+    (trace : Trace) (w : World)
+    (store : wgStoreView w.wg = wgStoreView (initialWG trace.net trace.bare)) :
+    Certified (RoutingJoint.runnerTailWith call (fun j v=>(j,v)) trace w)
+      (fun cs h=>cs=[] ∧ h=[]) (fun out=>entry out.2) := by
+  refine ⟨(tail call rules established trace w).rule,?_⟩
+  intro cs h out k hi run
+  obtain ⟨rfl,rfl⟩ := hi
+  exact (tail call rules established trace w).establishes
+    (HolderEntry.initialized trace.net trace.bare w store) run
+
 /-- Initialization uses the actual fixture, seccomp prefill and optional FIB
 boot. Their failure arms have no normal certificate. -/
 def initialized (call : Syscall→RxHistory.Obs Int)
@@ -141,37 +298,10 @@ def initialized (call : Syscall→RxHistory.Obs Int)
     (trace : Trace) (placeholders : Bool) :
     Certified (RoutingJoint.executeTraceWith call (fun j v=>(j,v)) trace placeholders)
       (fun cs h=>cs=[] ∧ h=[]) (fun out=>entry out.2) := by
-  have tail_spec (w : World) {P : Ledger→List RxHistory.Event→Prop}
-      (pre : ∀cs h,P cs h→entry w cs h) :
-      Certified (RoutingJoint.runnerTailWith call (fun j v=>(j,v)) trace w) P (fun out=>entry out.2) := by
-    refine ⟨(tail call rules established trace w).rule,?_⟩
-    intro cs h out k hi run
-    exact (tail call rules established trace w).establishes (pre cs h hi) run
-  have boot_initial (w v : World) (x : Unit)
-      (hr : (do Net.Fib.bootTables
-                if trace.foreign then Net.Fib.inCreatorNs Net.Fib.bootTables : Leanux.M Unit).run w=.ok (x,v))
-      (hi : wgStoreView w.wg=wgStoreView (initialWG trace.net trace.bare)) :
-      wgStoreView v.wg=wgStoreView (initialWG trace.net trace.bare) :=
-    ((Lifetimes.ProjectedAction.iff_run _ _ _).mp (boot_store trace.foreign) w x v hr).trans hi
-  unfold RoutingJoint.executeTraceWith
-  by_cases hp : trace.seccompPrefill > 0
-  all_goals simp only [hp,↓reduceIte]
-  all_goals cases Env.seccompPrefill trace.seccompPrefill ({} : SeccompWorld) (initialTasks trace.rlimit trace.foreign trace.stepped trace.seccompChild)
-  all_goals repeat' first
-    | (conservation_runner_head RoutingJoint.runnerTailWith; apply tail_spec)
-    | (conservation_runner_head throw; exact ConservationCertified.stopped _)
-    | conservation_runner_reduce
-    | (conservation_runner_head ite; apply ConservationCertified.branch)
-    | conservation_runner_match
-    | (conservation_runner_head Bind.bind; exact ConservationCertified.stopped _)
-    | (intro)
-  all_goals rename_i hi
-  all_goals obtain ⟨rfl,rfl⟩ := hi
-  all_goals apply HolderEntry.initialized trace.net trace.bare
-  all_goals first
-    | rfl
-    | rename_i run
-      have hb := boot_initial _ _ _ run (by rfl)
-      exact hb
+  let checked := prefillCertified trace.seccompPrefill (fixture trace placeholders) _ (fun w prefill =>
+    bootCertified trace.net trace.foreign w _ (fun v boot =>
+      initialTail call rules established trace v (boot.trans prefill)))
+  exact ⟨ConservationOuter.reindex (initialized_factor call trace placeholders).symm checked.rule,
+    ConservationOuter.reindex_ensures (initialized_factor call trace placeholders).symm checked.rule checked.establishes⟩
 
 end Leanux.Proofs.WG.Queues.RxCredits.ConservationRunner

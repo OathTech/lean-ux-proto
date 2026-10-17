@@ -312,6 +312,18 @@ Earlier bodies are unchanged. Gate: 918 jobs/834 declarations in 6.622 seconds;
 fresh replay PASS in 116.213 seconds with no warnings. The report records failed development checks,
 the repaired history-prefix omission and the temporary log-number collision.
 
+The [initialized ingress checkpoint](2026-10-17-r4-ingress-coverage.md) adds
+33 modules and 305 theorems: 893 files, 12,032 named theorems, 312 R4 terminals
+and 846 total terminal declarations. Every accepted original runner now supplies
+actual initialization/operation/source cuts and complete normal ingress coverage,
+with a pending or actual completed-poll fate for every accepted admission.
+The full adjacent encrypt iteration preserves a fresh full-ring refusal's DEAD
+head. Initialized W7 caller transport remains open. No old theorem is retyped,
+deleted or changed. The gate passes 951 jobs/all 846 declarations in 6.952 seconds
+after one export-name failure and source repair; fresh root replay passes in
+113.512 seconds with no warnings.
+
+
 The pre-split checkpoint validated every baseline result surface over
 `cb2348e`. R3 packet authorization is now closed over the current split tree;
 R4 receive-pipeline conservation remains open. Earlier positive results and runtime findings retain
