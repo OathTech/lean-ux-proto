@@ -1,3 +1,13 @@
+import Leanux.Proofs.WG.Queues.BaseCoherenceTimers
+import Leanux.Proofs.WG.Queues.HolderXmit
+import Leanux.Proofs.WG.Queues.DevicePhysical
+import Leanux.Proofs.WG.Queues.DeviceAuxEntry
+import Leanux.Proofs.WG.Queues.HolderAuxTimers
+import Leanux.Proofs.WG.Queues.InjectAccount
+import Leanux.Proofs.WG.Queues.FloodAccount
+import Leanux.Proofs.WG.Queues.AfterBatchCompletion
+import Leanux.Proofs.WG.Queues.BaseCoherenceHandshake
+
 import Leanux.Proofs.WG.Queues.SlotDevice
 import Leanux.Proofs.WG.Queues.HolderDeviceDelete
 import Leanux.Proofs.WG.Queues.AdmissionSection
@@ -3026,6 +3036,114 @@ theorem original_timer_dispatch_slots (kind : Worker) (pid : PeerId) (timer : Pe
     (entry : WheelEntry) (prior : Option UInt64) :
     Preserves (fun w : World => CurrentSlots.Inv w.wg) (timerDispatchUnit kind pid timer entry prior) :=
   CurrentSlots.Timer.dispatch kind pid timer entry prior
+
+
+
+open Leanux Leanux.WG Leanux.Proofs Leanux.Proofs.Logged
+open Framing Lifetimes Queues Queues.RxCredits
+
+/-- Native configuration retains the actual physical ring alongside the supplied
+account and structural/configured identity, on the same normal run. -/
+theorem original_device_physical_entry (attrs : DeviceAttrs) :
+    Preserves (fun w => DeviceBoundary.Entry cs loans w ∧ HolderDeviceCreate.OptionalPhysical w)
+      (wgSetDevice attrs) :=
+  DevicePhysical.device_entry attrs
+
+/-- Creation, shutdown and opening retain all supplied local entry components.
+Fresh creation derives structural/slot facts from its actual guarded endpoint. -/
+theorem original_device_lifecycle_entry :
+    Preserves (DeviceAuxEntry.Entry cs loans) wgCreate ∧
+    Preserves (DeviceAuxEntry.Entry cs loans) wgStop ∧
+    Preserves (DeviceAuxEntry.Entry cs loans) wgDown ∧
+    Preserves (DeviceAuxEntry.Entry cs loans) wgOpen ∧
+    Preserves (DeviceAuxEntry.Entry cs loans) wgUp :=
+  ⟨DeviceAuxEntry.create,DeviceAuxEntry.stop,DeviceAuxEntry.down,
+    DeviceAuxEntry.open_preserves,DeviceAuxEntry.up⟩
+
+/-- Whole inject selects its actual admission ledger and derives empty RX
+storage from the source completion guard after the crypt wait. -/
+theorem original_inject_complete_account
+    (account : DurableHolders.Boundary cs loans w.wg)
+    (physical : HolderDeviceCreate.OptionalPhysical w.wg)
+    (owners : OwnerChecks.Inv h w) (slots : CurrentSlots.Inv w.wg)
+    (run : runPrefix (RxHistory.inject family port msg tos ll dest) w h=(.ok (result,v),k)) :
+    ∃ next, InjectAccount.Outcome cs next family port msg tos ll dest w v h k result ∧
+      HolderAuxiliary.Inv [] loans k k v ∧ result=(msg.length : Int) ∧
+      (∀ (d : Device) (id : SkbId) (packet : RxPacket), v.wg.dev=some d → d.rxSkbs[id]?≠some packet) :=
+  InjectAccount.normal account physical owners slots run
+
+/-- Inject's source relation determines the admission ledger without a funded
+endpoint field. It is distinct from the empty ledger after completion. -/
+theorem original_inject_admission_unique
+    (left : InjectAccount.Outcome cs next family port msg tos ll dest w v h k result)
+    (right : InjectAccount.Outcome cs other family port msg tos ll dest w v h k result) : next=other :=
+  left.unique right
+
+/-- Whole flood follows every actual finite message occurrence and retains its
+source-selected final ledger. This permits a residual ledger in placeholder mode. -/
+theorem original_flood_complete_account
+    (account : DurableHolders.Boundary cs loans w.wg)
+    (physical : HolderDeviceCreate.OptionalPhysical w.wg)
+    (owners : OwnerChecks.Inv h w) (slots : CurrentSlots.Inv w.wg)
+    (run : runPrefix (RxHistory.flood count port family input) w h=(.ok (result,v),k)) :
+    ∃ next, FloodAccount.Outcome cs next count port family input w v h k result ∧
+      HolderAuxiliary.Inv next loans k k v :=
+  FloodAccount.normal account physical owners slots run
+
+/-- The final flood ledger is unique for the original source execution; the
+ordered path and final removal suffix contain no funding certificate. -/
+theorem original_flood_account_unique
+    (left : FloodAccount.Outcome cs next count port family input w v h k result)
+    (right : FloodAccount.Outcome cs other count port family input w v h k result) : next=other :=
+  left.unique right
+
+/-- All fourteen deferred constructors carry the same combined account,
+including the actual timer scan's saved getter and both scheduling modes. -/
+theorem original_deferred_auxiliary_account (initial : Ledger) (loans : Reservations)
+    (before : List RxHistory.Event) (call : EnvDeferredCall) :
+    PrefixPreserves (HolderAuxiliary.Inv initial loans before) OwnerChecks.Safe (RxHistory.deferred call) :=
+  HolderAuxTimers.deferred initial loans before call
+
+/-- The concrete batch tail and inline poll retain funding, physical ring,
+owner history and slots at normal endpoints; stopped journals remain owner-safe. -/
+theorem original_batch_wait_auxiliary_account (initial : Ledger) (loans : Reservations)
+    (before : List RxHistory.Event) :
+    PrefixPreserves (HolderAuxiliary.Inv initial loans before) OwnerChecks.Safe RxHistory.afterBatch ∧
+    PrefixPreserves (HolderAuxiliary.Inv initial loans before) OwnerChecks.Safe RxHistory.pollScheduledInline :=
+  ⟨HolderAfterBatch.afterBatch initial loans before,HolderAfterBatch.inlinePoll initial loans before⟩
+
+/-- Recorded-mode completion derives an empty current ledger and RX store
+from the actual final guard. No placeholder-mode completion is asserted. -/
+theorem original_recorded_batch_completion
+    (hi : HolderAuxiliary.Inv initial loans before h w)
+    (recorded : w.ambient.hidden.isSome=true)
+    (run : runPrefix RxHistory.afterBatch w h=(.ok ((),v),k)) :
+    HolderAuxiliary.Inv [] loans k k v ∧
+      (∀ (d : Device) (id : SkbId) (packet : RxPacket), v.wg.dev=some d → d.rxSkbs[id]?≠some packet) :=
+  AfterBatchCompletion.recorded_normal hi recorded run
+
+/-- Native session and handshake receiving leave the structural peer list and
+public-key table unchanged, with no extra configured-identity input. -/
+theorem original_handshake_base_structure (pid : PeerId) (msg : List UInt8) (src : SkbSource) :
+    SameView BaseCoherence.view (beginSession pid) ∧
+    SameView BaseCoherence.view (receiveHandshakePacket msg src) ∧
+    SameView BaseCoherence.view WG.receiveStep :=
+  ⟨BaseCoherence.beginSession_view pid,BaseCoherence.receiveHandshakePacket_view msg src,
+    BaseCoherence.receiveStep_view⟩
+
+/-- All five native timer callbacks retain the structural peer list and
+public-key table on normal return, without assuming callback totality. -/
+theorem original_timer_base_structure (pid : PeerId) (timer : PeerTimer) :
+    SameView BaseCoherence.view (timerCallback pid timer) :=
+  BaseCoherence.timerCallback_view pid timer
+
+/-- Actual transmit absorbs its newly acquired durable holders and retains
+one complete account, physical ring, original owner journal and nullable slots. -/
+theorem original_transmit_auxiliary_account (initial : Ledger) (loans : Reservations)
+    (before : List RxHistory.Event) (family addr : Nat) (packets : List WG.Packet) (mtu : Nat) :
+    PrefixPreserves (HolderAuxiliary.Inv initial loans before) OwnerChecks.Safe
+      (RxHistory.mixed (liftWGObserver (wgXmitPrefix family addr packets mtu))) :=
+  HolderXmit.mixed initial loans before family addr packets mtu
 
 
 end Leanux.Proofs.WG.DeliveryOrder

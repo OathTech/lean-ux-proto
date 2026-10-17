@@ -270,6 +270,17 @@ open. All previous bodies are unchanged. Final gate: 853 jobs/781 declarations,
 6.072 seconds; fresh replay: 112.728 seconds, no warnings. One reviewed comment
 was corrected before final validation.
 
+The [traffic-boundary checkpoint](2026-10-17-r4-traffic-boundary.md)
+adds fifteen modules and 207 theorems: 810 files/11,074 theorems, 259 R4 terminals
+and 793 total declarations. Whole inject derives its admission ledger and empty
+completion; whole flood derives a unique remaining ledger through every actual
+occurrence. Native lifecycle/configuration, transmit, all deferred calls and
+batch waits retain their complete local entries. Recorded completion derives
+empty RX storage; placeholder completion is not asserted. Full batch, global
+lifecycle composition and initialized conservation remain open. Previous bodies
+are unchanged. Gate: 868 jobs/793 declarations, 6.066 seconds; fresh replay:
+115.435 seconds, no warnings. One reviewed Stop comment was corrected.
+
 The pre-split checkpoint validated every baseline result surface over
 `cb2348e`. R3 packet authorization is now closed over the current split tree;
 R4 receive-pipeline conservation remains open. Earlier positive results and runtime findings retain
@@ -667,16 +678,16 @@ correspondence remains informal.
 
 ## R4 — queue, poll and delivery-order components (in progress)
 
-**State-split ingress-boundary extension.** The [current report](2026-10-17-r4-ingress-boundary.md)
-records 165 additional theorems in twelve modules and eleven terminal exports.
-The tree has 795 proof files/10,867 theorems, with 247 R4 terminals and all 236
-preceding bodies unchanged. Native device configuration retains the funded and
-structural/configured account plus slots; environment deletion derives an empty
-ledger from its actual guards. Receive and NET_RX execution select the dynamic
-ledger on their original journal. Concrete crypt/send/afterXmit waits retain the
-combined invariant, and completion emptiness uses the actual decrypt-ring flag.
-Complete traffic callers, global lifecycle and initialized conservation remain
-open. Chronological GRO order stays refuted.
+**State-split traffic-boundary extension.** The [current report](2026-10-17-r4-traffic-boundary.md)
+records 207 additional theorems in fifteen modules and twelve terminal exports.
+The tree has 810 proof files/11,074 theorems, with 259 R4 terminals and all 247
+preceding bodies unchanged. Whole inject derives empty RX completion, while
+whole flood retains the unique ledger selected by its actual finite source path.
+Native lifecycle/configuration entries, transmit, all deferred calls and batch
+waits retain the combined local account. Recorded batch completion uses its actual
+final guard; placeholder completion is not asserted. Structural traffic/session
+and timer frames support the outer join. Full batch, global lifecycle composition
+and initialized conservation remain open. Chronological GRO order stays refuted.
 
 **Original versus proved.** The charter requires accepted-schedule order and no silent loss/duplication.
 [Terminals](../Leanux/Proofs/WG/DeliveryOrder/Statements.lean) prove initialized committed callback-entry stamp
