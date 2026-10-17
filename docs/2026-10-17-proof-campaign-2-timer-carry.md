@@ -60,3 +60,13 @@ Leanux.Proofs.WG.TimerDiscipline.ArmingWheelFindings`, then
 Leanux.Proofs.WG.TimerDiscipline.ArmingWheelFindings`; use `capped --` on the
 shared host. The seven pending contracts and the full H6 terminal closure
 are not claimed to build.
+
+The next retrofit tranche adds two separately named contracts in
+`ArmingWheelSource`: `delTimer_wheel_exact` and
+`timersHandshakeComplete_wheel_effect`. Both keep the original resident-peer
+and normal-return scope and state the complete current peer update, including
+the selected wheel clear. Handshake completion also resets attempts and the
+last-minute flag and records the actual hidden clock bytes. The seven legacy
+contracts remain pending; these companions do not invalidate the counterexample
+or establish reachability. The scoped build passes 32 jobs without warnings;
+axiom inspection and fresh replay are recorded in the retrofit report.

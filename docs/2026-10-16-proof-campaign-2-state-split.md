@@ -20,11 +20,11 @@ and attributed theorem declarations. Campaign 2 owns 427 Lean files,
 | --- | ---: | ---: | ---: | --- |
 | Common projection | 2 | 0 | 0 | Native and product observations carried |
 | H1 Noise | 35 | 171 | 22 | Native access, crypto/slot/peer frames, slot/clear/zero operations and all four state-edge contracts carried; six type-given frames deleted; full caller/reachability closure pending |
-| H2 Index | 68 | 318 | 52 | Table/scans/insertion, full lookup and miss contracts, all ten record contracts, exact draw exhaustion/corpus pair, five lifecycle contracts and 55 pure theorems checked; native receive factor and retirement frame carried; seven Ambient frames deleted; projected terminals/callers pending |
+| H2 Index | 68 | 318 | 52 | Table/scans/insertion, full lookup/miss and success/empty-result inversion, exact allocation, ten projected table claims, all ten record contracts, exact draw exhaustion/corpus pair, five lifecycle contracts and 55 pure theorems checked; native receive factor and retirement frame carried; seven Ambient frames deleted; whole terminal closure/callers pending |
 | H3 Roaming | 35 | 119 | 13 | Six native endpoint/destination contracts carried; two Ambient frames deleted; authentication callers and product callbacks pending |
-| H4 Configuration | 130 | 554 | 79 | Total-return/branch laws, four exact source factors, three endpoint-clearing frames, three empty-root insertion contracts, total first placement and one pure theorem checked; three Ambient frames deleted; remaining effects/readback carry pending |
-| H5 Progress | 59 | 265 | 42 | Twenty-nine pure/control or pure-source theorems, three generalized worker control contracts and one Ambient record frame checked; two pointer-ring snapshot contracts and remaining operational carry pending |
-| H6 Timer discipline | 98 | 404 | 50 | Two pure session-liveness relations, map/guard base and a checked stale-statement counterexample; three Ambient frames deleted; seven exact-peer arming claims and wider timer/worker semantics pending |
+| H4 Configuration | 130 | 554 | 79 | Total-return/branch laws, four exact source factors, three endpoint-clearing frames, three empty-root insertion contracts, total first placement, validation, concrete dump cancellation and one pure theorem checked; three Ambient frames deleted; remaining effects/readback carry pending |
+| H5 Progress | 59 | 265 | 42 | Twenty-nine pure/control or pure-source theorems, three generalized worker control contracts and one Ambient record frame and seven exact cut-source/projected contracts checked; two pointer-ring snapshot contracts and remaining operational carry pending |
+| H6 Timer discipline | 98 | 404 | 50 | Two pure session-liveness relations, map/guard base, two current wheel effects, separated jitter bound/frame and a checked stale-statement counterexample; three Ambient frames deleted; seven exact-peer arming claims and wider timer/worker semantics pending |
 
 Retyped, deleted and retained counts will be reported per validated tranche.
 All six results remain lagging, with their previous charter gaps unchanged.
@@ -739,3 +739,94 @@ Reproduce by building and fresh-replaying `Config.AllowedTransferOperations`,
 `TimerDiscipline.ArmingBaseSource`, `TimerDiscipline.ArmingWheelFindings`,
 `Index.DrawExhaustion`, `Index.CorpusDraws` and `Index.LookupMiss`, each under
 `Leanux.Proofs.WG`, with the capped bundle commands above.
+
+## Projected index claims, inversion and native cut contracts
+
+| Tranche | Before | Retyped/generalized | Deleted | Kept | Added | After |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `Index.TableClaims` scoped support | 0 | 0 | 0 | 0 | 10 | 10 |
+| `Index.Allocation`, `LookupProvenanceSource`, `LookupNoneSource` | 6 | 6 | 0 | 0 | 0 | 6 |
+| `Config.Validation`, `DumpCancellation` | 5 | 4 | 0 | 1 | 0 | 5 |
+| `Progress.CutSource`, `CutClaims` | 7 | 7 | 0 | 0 | 0 | 7 |
+| `TimerDiscipline.ArmingWheelSource` | 0 | 0 | 0 | 0 | 2 | 2 |
+| `TimerDiscipline.JitterBoundSource`, `JitterFrames` | 1 | 1 | 0 | 0 | 1 | 2 |
+| This tranche | 19 | 18 | 0 | 1 | 13 | 32 |
+| Cumulative validated surface | 259 | 132 | 21 | 106 | 22 | 260 |
+
+The tree has 442 campaign-owned files and 1,832 theorem declarations;
+1,572 baseline declarations still await validation. The checked closure has
+110 proof modules: H1 49 theorems, H2 132, H3 6, H4 23, H5 40 and H6 10.
+All six results remain lagging and their remaining charter obligations stand.
+The 258 headline declarations remain in their original `Statements.lean`
+files. No full terminal closure or full proof-gate pass is claimed.
+
+`TableClaims` provides ten scoped proofs over the campaign projection for
+existing H2 table, lookup and recorded-insertion claims. The public ten
+wrappers stay in `Statements.lean`, preserving the gate's literal declaration
+audit. Their isolated wrapper forms check, but the enclosing module remains
+unvalidated. These ten support declarations are additions in the census;
+the ten public wrappers are not double-counted as validated baseline claims.
+Index-only operations use the actual guarded `liftIndex`; lookup remains
+native `WG.M`. No device, owner word or record state is reconstructed.
+
+Allocation preserves the original normal-return scope and exact device and
+counter updates. Lookup inversion derives owner-word identity, peer residency,
+positive reference count and the strict increment bound from successful runs;
+none becomes a premise. Empty-result inversion retains the exclusive three
+causes, first-numeric-match behavior and exact owner-word clearing. Missing
+objects and overflow remain actual stopped outcomes; alias cases remain.
+
+Configuration validation keeps its invalid-shape/sufficient-room premises,
+exact error/JSON/room effects and native state preservation. The concrete dump
+witness retains the same fixture observations through actual WG/Ambient runs;
+its 3,720-byte result and cancellation arithmetic are unchanged. Removed
+FS/task fixture data is outside that callback's type, not an assumed frame.
+
+The five cut-source contracts now run over actual `AmbientM`; two claims
+observe their real lift through the campaign projection. They retain the
+pre-strip budget, exact consumed suffix, failure location/message and the
+accepted-prefix condition for total return. The numerical outcome proof
+includes allocation failure and does not claim every supplied stream succeeds.
+
+Claim files added here are `Index/TableClaims`, `TimerDiscipline/ArmingWheelSource`
+and `TimerDiscipline/JitterBoundSource`; `Progress/CutClaims` is carried in place.
+The existing `JitterFrames` now proves arbitrary native WG predicate preservation
+separately. Jitter is still `WG.M`, so that frame is substantive; no theorem
+is deleted here. Together, the bound and frame reconstruct the old combined
+claim. Five consumers remain pending: timer `ObservationClaims`, `SourceFrames`,
+`InitiationPreservationFrames`, `WorkStateFrames`, and index `SendFrames`.
+
+The two wheel contracts state the current exact selected-peer update for
+deleting a timer and completing a handshake. They retain the original resident
+peer and partial-correctness scope while explicitly clearing the selected wheel
+entry. They are counted as current-semantics companions, not retypings of the
+seven legacy exact-peer statements. The earlier counterexample remains valid.
+
+Scoped builds pass: table claims 50 jobs, allocation 41, lookup provenance 40,
+lookup absence 42, validation 29, dump cancellation 65, cut source 13, cut
+claims 14, wheel effects 32 and jitter split 28. The dump build repeats the
+already recorded inherited `Env.lean:865` deprecation; proof modules have no
+warnings. Closure axiom checks cover 180, 83, 50, 87, 25, 17 and 92 named
+logical roots in their respective groups, with only the three permitted axioms.
+Fresh kernel replay passes for all ten roots. The retained gate's token/import
+checks and the whitespace check pass.
+Independent reviews found no correctness issue. Mirror/shared layers and the
+gate/root are unchanged.
+
+Development: table support and isolated wrappers passed clean; a wrapper
+extraction boundary was corrected before its first check. Allocation, cut
+source, cut claims and lookup absence passed their first prototypes. Lookup
+provenance had three failed coarse root drafts, then one failed agent draft,
+a clean first-claim draft and a clean three-claim draft. Validation had two
+failures then a clean draft. Dump cancellation had two fixture-notation parse
+failures then a clean draft. Wheel effects had one corrected annotation failure;
+jitter had three corrected proof failures. All packaged builds passed first
+time. Three exploratory keypair-release drafts failed and remain outside this
+checkpoint. No infrastructure rerun, cap increase or guest run occurred.
+Complete compiler output was captured before display.
+
+Reproduce scoped builds and fresh replay using the capped bundle commands above
+on `Index.TableClaims`, `Index.Allocation`, `Index.LookupProvenanceSource`,
+`Index.LookupNoneSource`, `Config.Validation`, `Config.DumpCancellation`,
+`Progress.CutSource`, `Progress.CutClaims`, `TimerDiscipline.ArmingWheelSource`
+and `TimerDiscipline.JitterFrames`, each under `Leanux.Proofs.WG`.
