@@ -20,11 +20,11 @@ and attributed theorem declarations. Campaign 2 owns 427 Lean files,
 | --- | ---: | ---: | ---: | ---: | --- |
 | Common projection | 2 | 0 | 0 | 0 | Actual native WG/Ambient and full Product observations carried; no reconstructed execution states. |
 | H1 Noise | 35 | 171 | 22 | 185 | The full Noise closure is current, including restart support. Six type-given frames are deleted. Wider caller/lifetime/reachability and clock-provenance charter claims remain open. |
-| H2 Index | 68 | 318 | 52 | 266 | Table, lookup, collision records, allocation, owner invariants and lifecycle support carried; seven type-given frames deleted. Exact peer-release outcomes replace stale totality, with checked counterexamples. Terminal closure and whole-driver coherence remain pending. |
+| H2 Index | 68 | 318 | 52 | 271 | Table, lookup, collision records, allocation, owner invariants and lifecycle support carried; seven type-given frames deleted. Exact peer-release outcomes replace stale totality, with checked counterexamples. Terminal closure and whole-driver coherence remain pending. |
 | H3 Roaming | 35 | 119 | 13 | 157 | Endpoint/publication, polling, attempt facts, crypto, lookup and response-caller factors/facts carried with full Product certificates; two type-given frames deleted. The full terminal closure is current, including initiation/response audits with actual Product outcomes. Wider roaming/provenance charter gaps remain open. |
-| H4 Configuration | 130 | 554 | 79 | 411 | Scalar, identity, port, dump, allowed-IP and structural support carried; three type-given frames deleted. Quiet timer cleanup and queued-send observations are corrected; queued-send and removal totality have checked stale-statement counterexamples. Remaining readback/effects and terminal closure remain pending. |
-| H5 Progress | 59 | 265 | 42 | 188 | Pure/control, cut, jitter, index, poll bounds, dispatch, scheduler turns, stack/probe frames, queue flush contracts, drain selection and Product observation bridge carried; one type-given index frame deleted. The old backlog fixture has checked exact runner and direct-fixture rejections. Drain bounds are carried. Receive-ring activation models, general runner boundaries and terminal closure remain pending. |
-| H6 Timer discipline | 98 | 404 | 50 | 174 | Base/guard/jitter, arming/wheel, recorded clock and initiation-send arming contracts carried; three type-given frames deleted. Exact wheel corrections are explicit; queue/pending and retained-worker frames are carried; broader timer episodes and terminal closure remain pending. |
+| H4 Configuration | 130 | 554 | 79 | 413 | Scalar, identity, port, dump, allowed-IP and structural support carried; three type-given frames deleted. Quiet timer cleanup and queued-send observations are corrected; queued-send and removal totality have checked stale-statement counterexamples. Remaining readback/effects and terminal closure remain pending. |
+| H5 Progress | 59 | 265 | 42 | 194 | Pure/control, cut, jitter, index, poll bounds, dispatch, scheduler turns, stack/probe frames, queue flush contracts, drain selection and Product observation bridge carried; one type-given index frame deleted. The old backlog fixture has checked exact runner and direct-fixture rejections. Drain bounds are carried. Receive-ring activation models, general runner boundaries and terminal closure remain pending. |
+| H6 Timer discipline | 98 | 404 | 50 | 182 | Base/guard/jitter, arming/wheel, recorded clock and initiation-send arming contracts carried; three type-given frames deleted. Exact wheel corrections are explicit; queue/pending and retained-worker frames are carried; broader timer episodes and terminal closure remain pending. |
 
 Retyped, deleted and retained counts will be reported per validated tranche.
 H1 and H3 now have checked split terminal closures; H2, H4, H5 and H6 remain lagging.
@@ -4283,3 +4283,89 @@ Reproduce with scripts/in-bundle lake build on Config.RemoveFlagRequestSource,
 Config.ScalarGetter and Index.ClearSource under Leanux.Proofs.WG, then #print
 axioms and scripts/in-bundle lake env leanchecker --fresh MODULE for each root.
 Use capped, 32 Lean threads and 16 QEMU slots on this host.
+
+
+## Current runner/control factors, observed collision and send/flush dispatch
+
+| Tranche | Before | Retyped | Corrected | Deleted | Kept | Added | After |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Config.CollisionRequestSource | 2 | 1 | 1 | 0 | 0 | 0 | 2 |
+| Progress.RunnerBoundarySource | 2 | 2 | 0 | 0 | 0 | 0 | 2 |
+| Progress.CookieControlSource | 4 | 4 | 0 | 0 | 0 | 0 | 4 |
+| TimerDiscipline.SendDispatchFrames, SendDispatchSource | 8 | 3 | 5 | 0 | 0 | 0 | 8 |
+| Index.FlushSource | 5 | 5 | 0 | 0 | 0 | 0 | 5 |
+| This tranche | 21 | 15 | 6 | 0 | 0 | 0 | 21 |
+| Cumulative processed baseline and checked support | 1,273 | 980 | 58 | 22 | 213 | 151 | 1,402 |
+
+The census is 540 campaign-owned files, 1,960 theorems and 428 checked proof
+modules; 558 baseline declarations remain pending. Counts: H1 185, H2 271,
+H3 157, H4 413, H5 194 and H6 182. H1/H3 terminal closures remain current;
+other terminals and the full gate remain lagging. These are retrofit carries.
+
+CollisionRequest retains every acquisition, removal, NodePairs, reference,
+count, empty-queue and device-selector premise. Its actual post-removal state
+feeds the installation erasure. The new pure ObservedCollisionKeyEffect uses
+that baseline and actual peer-loop observations; the historical prediction
+remains explicitly labeled in CollisionModel for pending wrappers. The collision
+leaf is retyped; the outer installation effect is corrected.
+
+RunnerBoundarySource retains two unconditional source equalities, now factoring
+current executeTrace: split initialization, seccomp prefill, actual FIB boot,
+boot errors/log reset, operation hiddenAhead, syscall and ambient-strip errors,
+three completion guards, FS/Task presentation and final NAPI/steer checks.
+RunnerBoundaryModel observes full Product snapshots. The removed floodExact
+argument follows the current runner API; no ignored legacy mode is introduced.
+The general audit and its public acceptance claims remain pending.
+
+CookieControlSource extracts three full Product hidden/peek/reschedule contracts
+and the unconditional activation-loop source factor from CookieActivationSource.
+The four names and three definitions occur once, with no theorem addition.
+Arbitrary actual Product state, passive records, exact site/padding/missing-record
+errors, yielded suspension and occupancy-plus-one exhaustion remain. The five
+ring-dependent source contracts and whole activation/schedule claims are still
+pending; this extraction does not validate their old list-based prediction.
+
+SendDispatch now removes one occurrence and sets pending status from membership
+in the remaining queue. Duplicate peers are allowed by the original premises;
+no distinctness assumption is added. Full Product snapshots and arbitrary Product
+section callbacks remain. The frame retains a joint predicate over all four
+old Kernel owners and unit associations. Selection, frame and section source
+are retypes; the runOne source, dequeue effect, observer erasure, completed effect
+and success witness are five explicit corrections. Only the original retained
+queue reference premise qualifies the completed worker observation.
+
+FlushSource carries all five original partial table contracts. Actual duplicate
+queue behavior, both section reads, named/head/placeholder selection, 4096 drain
+budget, requested-clear early return, missing-dispatch/exhaustion errors, five
+timer deletions and deadness/crypt-work/count/release guards remain. A local
+finite-list induction proves preservation without changing any executable loop.
+No frame is deleted here and no shared layer is edited.
+
+Independent reviews find no scope or correctness issues. The 278-job build
+passes with no changed-proof warnings; the unchanged Env String.mk warning is
+inherited. SendDispatchFrames retains its original default heartbeat limit.
+Axiom inspection covers 1,141 logical roots in 214 proof modules, including
+697 public theorem roots, using only standard axioms. All five fresh kernel
+replays pass, as do static checks, 258 terminal names/order and mirror/shared
+boundaries.
+
+Collision's first scratch probe passes cleanly. Runner root probes 1–6 fail
+import placement, record syntax, equality normalization, diagnostic open goals
+and default simplification limits; recovery/unused warnings are not accepted as
+validation. The replacement proof names actual local seed/boot/continuation
+values: its first probe closes with eight deprecation/unused-simp warnings;
+its second removes them and passes cleanly. Cookie-control probe 1 fails lift
+normalization and monad inference, with 29 cascading unused simplifications;
+probe 2 makes the actual Ambient lift explicit and passes cleanly. Send-dispatch
+probes 1–8 all fail, with error counts 16,11,8,2,1,3,2,2 and warning counts
+19,26,0,0,0,0,0,0. Root probe 9 fixes the two remaining concrete-read/reflexivity
+obligations and passes cleanly. Flush probes 1–2 fail lifted-spec/return-match
+composition and report five deprecation/two unused-simp warnings; probe 3 closes
+with a constructor-shadowing warning, and probe 4 fixes it. No unchanged rerun,
+infrastructure retry, memory-cap or proof-limit increase is retained.
+
+Reproduce with scripts/in-bundle lake build on Config.CollisionRequestSource,
+Progress.RunnerBoundarySource, Progress.CookieControlSource,
+TimerDiscipline.SendDispatchSource and Index.FlushSource under Leanux.Proofs.WG,
+then #print axioms and scripts/in-bundle lake env leanchecker --fresh MODULE
+for each root. Use capped, 32 Lean threads and 16 QEMU slots on this host.

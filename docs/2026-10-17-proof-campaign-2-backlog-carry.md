@@ -14,9 +14,11 @@ initialization, FIB boot and operation boundaries. A kernel-checked projection
 identifies the precise failure; ordinary case analysis recovers equality of the
 complete Except result. No compiled evaluation is used as proof.
 
-The legacy runTwo/backlog construction remains unported and is not used here.
-It omitted the current runner's FIB boot. General runner-boundary and accepted
-backlog wrappers remain lagging; the old accepted finding remains historical.
+The legacy runTwo/backlog construction is separately carried: it omits the
+current runner's FIB boot and rejects at the route/source invariant, returning
+no backlog. That direct fixture result is distinct from the actual runner
+rejection above. General runner-boundary acceptance and historical backlog
+wrappers remain lagging; the old accepted finding remains historical.
 No captured Linux run or general progress property is claimed.
 
 Reproduce with:

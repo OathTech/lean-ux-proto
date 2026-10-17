@@ -1,4 +1,4 @@
-import Leanux.Proofs.WG.Campaign2.View
+import Leanux.Proofs.WG.Campaign2.ProductView
 import Leanux.Runner
 
 namespace Leanux.Proofs.WG.Progress
@@ -8,7 +8,7 @@ open Leanux Leanux.Runner Campaign2
 structure RunnerBoundary where
   index : Nat
   result : Int
-  after : Snapshot
+  after : Campaign2.Product.Snapshot
 
 /-- Exactly the three per-operation guards of the pinned runner. No worker
 queue, pending-work or scheduled-NAPI emptiness is included. -/

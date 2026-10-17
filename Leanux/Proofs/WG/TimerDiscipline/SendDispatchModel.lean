@@ -1,12 +1,13 @@
 import Leanux.Proofs.WG.TimerDiscipline.Model
+import Leanux.Proofs.WG.Campaign2.ProductView
 
 namespace Leanux.Proofs.WG.TimerDiscipline
 open Leanux Leanux.WG Campaign2
 
-/-- The original dequeue removes one occurrence and clears the selected flag. -/
+/-- Dequeue removes one occurrence and retains pending status for a remaining instance. -/
 def dequeuedSendDevice (d : Device) (pid : PeerId) (p : Peer) : Device :=
   { d with sendWorkQueue := d.sendWorkQueue.erase pid
-           peers := d.peers.insert pid { p with handshakePending := false } }
+           peers := d.peers.insert pid { p with handshakePending := (d.sendWorkQueue.erase pid).contains pid } }
 
 /-- Every resident queued peer has reference count greater than one. -/
 def RetainedSendQueue (d : Device) : Prop :=
@@ -25,22 +26,22 @@ def SendSelectionMatches (d : Device) (units : List (Nat × Nat × Nat))
 structure SendWorkerExecution where
   named : Option Nat
   pid : PeerId
-  beforeSection : Snapshot
+  beforeSection : Campaign2.Product.Snapshot
   startBytes : List UInt8
-  afterStart : Snapshot
-  afterBody : Snapshot
+  afterStart : Campaign2.Product.Snapshot
+  afterBody : Campaign2.Product.Snapshot
   stopBytes : List UInt8
 
 /-- Selection/dequeue facts and the retained worker outcome at actual section points. -/
 def CompletedSendWorker (d : Device) (units : List (Nat × Nat × Nat))
-    (execution : SendWorkerExecution) (final : Snapshot) : Prop :=
+    (execution : SendWorkerExecution) (final : Campaign2.Product.Snapshot) : Prop :=
   SendSelectionMatches d units execution.named execution.pid ∧
   ∃ p, d.peers[execution.pid]? = some p ∧ p.handshakePending = true ∧
     execution.beforeSection.wg.device = some (dequeuedSendDevice d execution.pid p) ∧
     execution.afterStart.wg.device = some (dequeuedSendDevice d execution.pid p) ∧
-    workerObservation execution.afterBody execution.pid =
+    workerObservation execution.afterBody.toSnapshot execution.pid =
       some (p.internalId, p.timerHandshakeAttempts, p.refcount - 1) ∧
-    workerObservation final execution.pid =
+    workerObservation final.toSnapshot execution.pid =
       some (p.internalId, p.timerHandshakeAttempts, p.refcount - 1)
 
 end Leanux.Proofs.WG.TimerDiscipline

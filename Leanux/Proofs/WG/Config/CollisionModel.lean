@@ -4,8 +4,9 @@ import Leanux.Proofs.WG.Config.KeyInstallEffects
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG
 
-/-- Installation starts at the actual post-removal baseline. In particular its
-peer list and staged-send test are not taken from the request-entry device. -/
+/-- Historical predicted peer-loop effect, retained for the pending terminal carry.
+Current request contracts use ObservedCollisionKeyEffect and actual installation
+observations. Both relations start at the post-removal baseline. -/
 def CollisionKeyEffect (pid : PeerId) (d : Device) (p : Peer) (key : Key)
     (final : Device) : Prop :=
   ∃ baseline,
