@@ -214,12 +214,14 @@ equal to entry counter plus one exactly when the observed session began.
 Stopped calls can allocate before failing; no returned-state delta is claimed
 for them.
 
-The missing outgoing counter-preservation sites are createResponse,
+The original outgoing inventory had eight sites: createResponse,
 addMacToPacket, dstCacheGet, dstCacheReset, tunnelXmit, send4, send6 and
-sendBufferToPeer: eight substantive sites. Existing native Ambient/Index
-adapters, whole-WireGuard loopback preservation, ordinary access operations and
-the exact timer effects cover the remaining components. Exposing the owned
-routing adapter unchanged is possible; it does not discharge the eight sites.
+sendBufferToPeer. The first two now have checked origin variants, below.
+The six socket/cache sites remain in this branch; dstCacheSet is an additional
+small supporting leaf. Existing native Ambient/Index/Skb/Routing adapters,
+whole-WireGuard loopback preservation, ordinary access operations and exact
+timer effects cover their respective components. The remaining composite
+socket operations are WG.M, so their types alone do not preserve the serial.
 
 Incoming response handling adds load handling, cookie generation/validation
 and ratelimiting, cookie reply, lookup/consumer/release, endpoint publication
@@ -230,8 +232,8 @@ Two architectures were audited. Compositional native counter frames combine
 with the existing exact observer factors and retain arbitrary states and
 errors. Expanding the complete source instead duplicates the same eight
 outgoing obligations and the incoming subtrees inline; it does not reduce the
-overlap. Campaign 1's lifetime observer uses its allocation invariant and does
-not directly supply this arbitrary-entry fact.
+overlap. The earlier lifetime-observer route used an allocation invariant;
+current C1 also has unconditional snapshot contracts, distinguished below.
 
 [AGENT 2026-10-17] Keep the complete-call layer inventoried rather than copy it.
 Proceed only with the independently useful outgoing prefix-origin contract:
@@ -259,6 +261,30 @@ The socket helpers also need their cache-free instantiations. Existing
 keypairPut_counter, ECN/crypto and exact timer effects are reusable; the Skb
 component needs one generic guarded adapter rather than copies for each leaf.
 This inventory is not an implementation or a request to change the mirror.
+
+
+Current source audit (2026-10-17, C1 branch commit 0268b1fc): Lifetimes.snapshot
+observes WGWorld.keypairCounter as frontier. The retyped WGBase has
+unconditional dstCacheGet/reset/set, tunnelXmit, send4 and send6 SameSnapshot
+contracts, and WGTransitions has sendBufferToPeer_sameSnapshot. Their use
+does not require the lifetime invariant. Our local shared copies still use
+the older state shape; no external artifact or unlanded layer is imported.
+
+Once those contracts reach this branch, the outgoing composition needs four
+small facts: exact counter preservation of outgoingResponseSessionFinish,
+the complete prefix's allocation delta, the projected normal full-call delta,
+and a literal terminal. Existing unconditional erasure continues to retain
+every Stop. An error can follow allocation but contains no returned WG state;
+unchanged serial on error is not asserted.
+
+The incoming inventory remains broader. Current C1 sendStagedPackets_spec and
+sendKeepalive_spec use OrdinaryAction with Stable predicates, a relation that
+permits allocation. Exact frontier equality is not a usable stable predicate
+there, so those contracts do not close the incoming serial gap. An independent
+alternative would generalize the existing owned SendPeerFrames through
+SendSocketFrames and SendBufferFrame while preserving their old interfaces;
+that is a substantive family refactor, not a few new variants. Keep it deferred
+under the existing overlap decision rather than implementing a parallel layer.
 
 
 ## Bounded callback helpers after the split

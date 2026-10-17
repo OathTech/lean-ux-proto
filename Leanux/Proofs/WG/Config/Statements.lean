@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Config.CursorCallbackClaims
 import Leanux.Proofs.WG.Config.CursorBodySource
 import Leanux.Proofs.WG.Config.FactoredTailClaims
 import Leanux.Proofs.WG.Config.EndpointSetClaims
@@ -1822,5 +1823,23 @@ theorem original_peer_dump_fixed_room (pid : PeerId) (d : Device) (p : Peer)
     Campaign2.Returns (getPeerDump pid ctx skb) (fun s => s.wg.device = some d)
       (fun result s => s.wg.device = some d ∧ result = fixedPeerResult p ctx skb) :=
   getPeerDump_fixed_room pid d p ctx skb resident fresh empty
+
+/-- One original normal callback: exact completed prefix and ordered cursor references.
+No initial capacity, reference bound, live flag, cursor membership or sequence
+consistency is assumed. Last-reference Stops remain outside normal completion. -/
+theorem original_cursor_callback_normal (d : Device) (peers : PeerId → Peer) (ctx : DumpCtx)
+    (prev : Nat) (skb : NlSkb)
+    (residents : ∀ pid ∈ cursorSelected d ctx, d.peers[pid]? = some (peers pid))
+    (empty : ∀ pid ∈ cursorSelected d ctx, (peers pid).allowedipsList = [])
+    (fresh : ctx.nextAllowedip = none)
+    (oldResident : ∀ pid, ctx.nextPeer = some pid → ∃ p, d.peers[pid]? = some p) :
+    let header := cursorHeaderSkb d ctx skb
+    let state := cursorBodyState d peers ctx {header with room := header.room-4}
+    Campaign2.Ensures (wgGetDeviceDump ctx prev skb) (fun s => s.wg.device = some d)
+      (fun result s => result = cursorCallResult d (2 + if prev != 0 && prev != d.deviceUpdateGen then 16 else 0)
+          (if ctx.nextPeer.isNone then deviceFixedAttrs d else [])
+          state.1 state.2.1 state.2.2.1 state.2.2.2.1 state.2.2.2.2 ∧
+        s.wg.device = some (cursorReleased (cursorAcquired d (if state.2.2.2.1 then none else state.2.1)) state.1.nextPeer)) :=
+  wgGetDeviceDump_cursor_normal d peers ctx prev skb residents empty fresh oldResident
 
 end Leanux.Proofs.WG.Config

@@ -108,11 +108,15 @@ incorrect budget premise, not proof of a complete capturable schedule being
 rejected. Legacy arm records and zero dispatch identities are supported model
 paths. No arbitrary preloaded World is used.
 
-The initialized-prefix equation has not been proved by kernel reduction:
-JSON parsing first obstructed reduction; a typed trace removes that obstruction,
-but the cryptographic arithmetic's `repeatM.impl` remains non-reducing. The
-executable reproduction is explicitly separate from H5's kernel-checked batch
-backlog witness and local scheduler contracts.
+The initialized-prefix equation has not been proved by kernel reduction.
+Historically JSON parsing obstructed reduction; the typed trace removed that
+obstruction, leaving the arithmetic's private repeatM implementation.
+Progress.PowEvaluationSource and CurveEvaluationSource now provide exact
+finite-evaluation bridges around that arithmetic obstruction. They have not
+been composed into this initialized prefix, and further reduction or source
+composition can still be necessary. The executable reproduction remains
+separate from H5's kernel-checked boundary witnesses and local scheduler
+contracts.
 
 Statement-artifact check: the concern is the mirror's own “nothing refills”
 premise, not an extra protocol assumption. The nested callback is already in
