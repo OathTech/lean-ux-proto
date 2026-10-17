@@ -9,21 +9,21 @@ The branch retains its proof target and gate. All six terminal closures now chec
 | Result | Headlines | Checked support | Split status |
 | --- | ---: | ---: | --- |
 | H1 Noise | 22 | 185 | Full terminal closure current; wider caller/lifetime/clock claims open. |
-| H2 Index | 62 | 364 | Full terminal closure current; reachable whole-driver uniqueness/coherence open. |
+| H2 Index | 65 | 374 | Full terminal closure current; reachable whole-driver uniqueness/coherence open. |
 | H3 Roaming | 13 | 157 | Full terminal closure current; callback authentication provenance and broader caller coverage open. |
 | H4 Configuration | 79 | 582 | Full terminal closure current; global ownership, queued cleanup and general pagination open. |
 | H5 Progress | 42 | 288 | Full terminal closure current with exact bounded outcomes and checked refutations; global progress/coherent-ring adequacy open. |
 | H6 Timers | 50 | 438 | Full terminal closure current; outer scheduler episodes, complete caller coverage and session-relative counts open. |
 
-The checked surface is 2,014 theorems in all 600 campaign-owned modules.
+The checked surface is 2,024 theorems in all 604 campaign-owned modules.
 The completed retrofit accounts for 1,983: 1,321 retyped, 244 explicitly
-corrected, 239 retained and 179 added support/finding declarations. Thirty-one
-subsequent H2 declarations add confirmation propagation, local owner coherence,
-data-ingress table preservation and the release-ownership obstruction. Of the 1,831 baseline theorems, 22 frames
+corrected, 239 retained and 179 added support/finding declarations. Forty-one
+subsequent H2 declarations add confirmation, data-ingress and removal table
+preservation, local owner coherence and its release-ownership obstruction. Of the 1,831 baseline theorems, 22 frames
 were deleted because types supply their facts and five false cookie supports
 were separately retired with checked counterexamples. No baseline declaration
 remains awaiting retrofit; all 258 original terminal names/order survive,
-with ten new H2 headlines (268 total).
+with thirteen new H2 headlines (271 total).
 
 The [retrofit report](2026-10-16-proof-campaign-2-state-split.md) records
 claim/frame files, corrections, before/after counts and validation.
@@ -231,6 +231,58 @@ Static checks, original-name order and mirror/shared boundaries pass.
 The inherited full-gate failure remains recorded and is not rerun unchanged.
 Reproduce using the same scoped Index.Statements build and fresh replay
 commands above, under capped with 32 Lean threads and 16 QEMU slots.
+
+## H2 continuation: removal and conditional release coherence
+
+Original removeByPeer and outer peerRemove now preserve table safety on
+every normal return, with only TablesSafe at entry. The removal frame keeps
+the exact optional (indexTable,nextKeypairId) pair. It uses the actual
+allowedipsList snapshot, ordered listDel operations, every malformed-node
+branch and the original pubkey-removal branch before marking the current
+peer dead. Outer removal retains NULL handling, key clearing, actual worker
+flushes, crypt-work refusals and final peer release through the existing
+after-dead contract. No NodePairs, residency, readiness or owner-coherence
+premise is added; no completion or owner-coherence conclusion is claimed.
+
+The split supplies preservation for slotSet/subtree through their AipM types
+and a guarded liftAip adapter. Only two mixed-WG removal families remain
+necessary here. Index/AipRemovalFrames has three local variants of campaign
+1's hoare_liftAip, removeByPeer_spec and peerMakeDead_spec, following its
+native lift shape. Index/PeerRemovalClaims holds the two projected claims.
+The broader rootRemovePeerLists/free and peerRemoveAll layer remains pending;
+this package does not copy it or establish H4's general ownership transport.
+
+The actual peerPut also has a normal-return owner-coherence contract using
+the checked release obligation. It requires the actual resident positive
+peer and explicitly requires every retained hashed owner to be detached on
+last release. Nonfinal decrement preserves coherence without detachment:
+the actual resident peer retains positive count and its embedded word.
+Queue/timer refusals remain actual stopped outcomes; no readiness premise
+is supplied. Index/OwnerCoherenceDecrementFrames holds the pure frame and
+OwnerCoherenceReleaseClaims the projected source contract. This derives no
+reachability or global reference-ownership invariant.
+
+Three literal documented headlines are appended. Seven removal declarations
+and three conditional-release declarations bring H2 to 65 headlines/374
+theorems, and campaign totals to 271 headlines/2,024 theorems in 604 modules.
+No existing claim is reshaped, shared lemma or mirror code edited, or mirror
+change requested. Independent reviews of both packages find no issues.
+
+Removal probe 1 fails record syntax, a projection mismatch and broad
+automation at the default heartbeat limit. Probe 2 fails remaining record
+syntax/liftM leaf mismatches and has one binder-name warning. Changed probe 3
+passes the adapter/removal frame; probe 4 passes all five support/claim
+declarations cleanly. Conditional-release probe 1 fails a nested-run rewrite
+and reports one deprecation warning; probe 2 fails an Except.map reduction;
+changed probe 3 passes cleanly. All final new proofs use default limits,
+without cap/limit increases, suppression or infrastructure retries.
+
+Final scoped Index.Statements build passes 287 jobs, with only inherited
+Env:865 String.mk warning. Axioms: 1,156 logical roots in 223 modules, including
+763 public theorem roots, standard only. Fresh kernel replay passes. Static
+checks retain all 258 original names/order; mirror/shared boundaries pass. The inherited full-gate failure remains recorded and
+is not rerun unchanged. Reproduce with the scoped Index.Statements build and
+fresh replay above, under capped with 32 Lean threads and 16 QEMU slots.
 
 ## Historical checkpoint before the split
 

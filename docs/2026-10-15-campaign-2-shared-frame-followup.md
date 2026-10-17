@@ -33,6 +33,16 @@ it is not implemented as a way to divide the larger shared support layer.
 Decrypt/NAPI and environment closure are broader again. The independent
 inventory does not expose a mirror change or relax the scope boundary.
 
+For single-peer removal, slotSet and subtree now have AipM types. A local
+guarded hoare_liftAip variant supplies table/cursor preservation for their
+whole component; no per-operation frame is copied. The checked
+removeByPeer_spec_tableCursor_variant and peerMakeDead_spec_tableCursor_variant
+then compose existing campaign-owned exact source effects, permitting the
+projected original peerRemove table claim without NodePairs or readiness.
+The rootRemovePeerLists/free layer and peerRemoveAll remain pending, as does
+H4's stronger initial ownership transport. This update is table-specific;
+it does not settle the original request for the broader shared snapshots.
+
 ## H1: genuine reinstallation between confirmations
 
 The proposed result concerns a finite sequence of original `consumeInitiation`,

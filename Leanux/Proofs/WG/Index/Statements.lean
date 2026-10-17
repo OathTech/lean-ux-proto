@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.Index.PeerRemovalClaims
+import Leanux.Proofs.WG.Index.OwnerCoherenceReleaseClaims
 import Leanux.Proofs.WG.Index.OwnerCoherenceReleaseFindings
 import Leanux.Proofs.WG.Index.OwnerCoherenceReleaseFrames
 import Leanux.Proofs.WG.Index.ReceiveDataClaims
@@ -755,5 +757,35 @@ theorem last_peer_release_owner_coherence_iff (d : Device) (pid : PeerId) (p : P
       ∀ e ∈ d.indexTable, e.owner ≠ .handshake pid →
         ownerWord d e.owner ≠ some (some pid) :=
   lastPeerRelease_coherent_iff d pid p last coherent
+
+/-- Removing a peer's Allowed IPs preserves numeric and owner index uniqueness
+and the hashed-keypair allocation bound on normal return. The only premise
+is table safety; trie shape, residency and completion are not assumed. -/
+theorem original_remove_by_peer_tables (pid : PeerId) :
+    Campaign2.Ensures (removeByPeer pid) View.TablesSafe
+      (fun _ s => View.TablesSafe s) :=
+  removeByPeer_tables pid
+
+/-- Original outer peer removal preserves index table safety through its
+NULL branch, dead-marking, actual worker flushes and final peer release.
+This is normal-return preservation, with no owner-residency, trie-shape,
+record-readiness or completion premise. -/
+theorem original_peer_remove_tables (peer : Option PeerId) :
+    Campaign2.Ensures (peerRemove peer) View.TablesSafe
+      (fun _ s => View.TablesSafe s) :=
+  peerRemove_tables peer
+
+/-- Actual normal peer release preserves local hashed-owner coherence when
+the entry peer is resident and positive and, on final release, no retained
+hashed owner names it. That detachment remains an explicit caller obligation.
+Queue/timer refusal paths are retained, without any readiness premise. -/
+theorem original_peer_put_owner_coherence (pid : PeerId) (d : Device) (p : Peer)
+    (resident : d.peers[pid]? = some p) (live : 0 < p.refcount)
+    (detached : p.refcount = 1 → ∀ e ∈ d.indexTable,
+      e.owner ≠ .handshake pid → ownerWord d e.owner ≠ some (some pid)) :
+    Campaign2.Ensures (peerPut (some pid))
+      (fun s => s.wg.device = some d ∧ View.OwnerCoherentSafe s)
+      (fun _ s => View.OwnerCoherentSafe s) :=
+  peerPut_owner_coherent pid d p resident live detached
 
 end Leanux.Proofs.WG.Index
