@@ -11,24 +11,25 @@ merged; the executable mirror remains byte-identical to b700659.
 | Result | Headlines | Checked support | Split status |
 | --- | ---: | ---: | --- |
 | H1 Noise | 23 | 189 | Full terminal closure and whole-response entry edge current; wider caller/lifetime/clock claims open. |
-| H2 Index | 74 | 412 | Full terminal closure and ingress/expiry/response owner coherence current; reachable whole-driver uniqueness/coherence open. |
-| H3 Roaming | 13 | 157 | Full terminal closure current; callback authentication provenance and broader caller coverage open. |
+| H2 Index | 77 | 421 | Full terminal closure and ingress/expiry/handshake owner coherence current; reachable whole-driver uniqueness/coherence open. |
+| H3 Roaming | 14 | 161 | Full terminal closure and invalid-MAC1 Device preservation current; callback authentication provenance and broader caller coverage open. |
 | H4 Configuration | 81 | 590 | Full terminal closure and ordered mixed-peer readback current; global ownership, queued cleanup and general pagination open. |
 | H5 Progress | 42 | 288 | Full terminal closure current with exact bounded outcomes and checked refutations; global progress/coherent-ring adequacy open. |
 | H6 Timers | 52 | 445 | Full terminal closure, first outer timer turn and intermediate retransmit receipt current; whole scheduler episodes, complete caller coverage and session-relative counts open. |
 
-The checked surface is 2,081 theorems in all 638 campaign-owned modules.
+The checked surface is 2,094 theorems in all 646 campaign-owned modules.
 The completed retrofit accounts for 1,983: 1,321 retyped, 244 explicitly
-corrected, 239 retained and 179 added support/finding declarations. Seventy-nine
+corrected, 239 retained and 179 added support/finding declarations. Eighty-eight
 subsequent H2 declarations add table preservation and local owner coherence.
 Four H1 declarations add whole-response entry provenance; eight H4 declarations
-add mixed fwmark/scalar and ordered peer-attribute readback. Seven H6 declarations
+add mixed fwmark/scalar and ordered peer-attribute readback. Four H3 declarations
+add invalid-MAC1 rejection preservation. Seven H6 declarations
 connect the first outer timer turn and its retransmit receipt. Of the 1,831 baseline theorems, 22 frames
 were deleted because types supply their facts and five false cookie supports
 were separately retired with checked counterexamples. No baseline declaration
 remains awaiting retrofit; all 258 original terminal names/order survive,
-with one new H1 headline, twenty-two new H2 headlines, two new H4 headlines
-and two new H6 headlines (285 total).
+with one new H1 headline, twenty-five new H2 headlines, one new H3 headline,
+two new H4 headlines and two new H6 headlines (289 total).
 
 The [retrofit report](2026-10-16-proof-campaign-2-state-split.md) records
 claim/frame files, corrections, before/after counts and validation.
@@ -680,6 +681,77 @@ rerun. The inherited full-gate failure remains recorded and is not rerun.
 Reproduce with scripts/in-bundle lake build on Leanux.Proofs.WG.{Noise,Index,Config}.Statements,
 then scripts/in-bundle lake env leanchecker --fresh on each target, under capped
 with 32 Lean threads and 16 QEMU slots. No mirror change is requested for this tranche.
+
+## H2 continuation: initiation consumption and handshake publication
+
+Actual consumeInitiation now preserves hashed-owner coherence on every normal
+return from the sole projected coherence premise. The actual public-key lookup
+derives its retained peer reference; misses and zero counts return normally,
+while missing peers, overflow and hidden-input failures retain their Stops.
+Post-lookup rejection releases only the acquired reference. Successful metadata
+writes preserve owner words and counts. No public-key-table coherence, entry
+reference budget or readiness premise is added.
+
+OwnerCoherencePubkeyFrames holds the native acquisition fact;
+OwnerCoherenceInitiationClaims composes the actual source through the existing
+exact initiation observer and its erasure. Its literal Statements wrapper adds
+the third theorem. The result remains local coherence, not reachability or
+failed-call state preservation.
+
+Actual createInitiation and createResponse also preserve coherence under an
+explicit coherent-publisher premise: for a present Device, the caller's peer
+is resident, positively referenced and has its own handshake owner word, even
+when that owner is not yet hashed. Hashed-table coherence alone does not imply
+this premise. OwnerCoherenceCreatorModel defines it, CreatorFrames proves
+metadata/publication preservation, and CreatorClaims connects both actual
+creators. Two literal wrappers bring this package to six theorems. No readiness,
+success, cursor-bound, hash-membership or uniqueness premise is introduced.
+
+Together these packages bring H2 to 77 headlines and 421 theorems. Global
+driver propagation and caller discharge of publication/lifetime obligations
+remain open. Neither package changes a shared layer or the mirror.
+
+## H3 continuation: invalid MAC1 preserves the Device
+
+The whole actual non-cookie receiveHandshakePacket call preserves the complete
+optional Device, and thus every remote endpoint, on normal return when the
+entry Device's actual MAC1 comparison fails. The predicate uses the source's
+saturating message slices and has no packet-shape or type-1/type-2 premise.
+Missing Device and earlier clock failures retain their stopped behavior;
+Ambient and load-history changes are not claimed to roll back.
+
+InvalidMac1Frames covers the actual load/decay prefix; InvalidMac1Source covers
+both load outcomes of the actual receive body; InvalidMac1Claims is projected,
+and Statements adds its literal wrapper. Four theorems bring H3 to 14 headlines
+and 161 theorems. Later authentication failures, queued data callbacks and
+whole-driver endpoint provenance remain open.
+
+### Validation of the H2/H3 continuation
+
+Independent reviews of all three packages find no correctness/domain issue.
+The initiation package's probe 1 passes support only; probes 2–5 fail,
+respectively, four parser/cascade diagnostics; five proof-construction errors
+and two unused-simp warnings; one bind-normalization error and one warning;
+two eliminated-successor-name errors. Changed probe 6 is clean. Creator probe
+1 fails a projected/native Device rewrite; probe 2 is clean. Invalid-MAC1
+probe 1 fails the final projected endpoint equation with one unused-simp warning;
+probe 2 is clean. All final proofs use default limits without suppression.
+
+The H3 support build passes 115 jobs; combined integration passes 348 jobs,
+and the final Index/Roaming build passes 351 jobs. Only inherited Env:865
+String.mk is reported. Axioms: 1,412 logical roots in 287 modules, including
+918 public theorem roots, standard only and no missing roots. Both fresh kernel
+replays pass. Static checks, original 258-name order and mirror/shared boundaries
+pass. Current totals are 2,094 theorems, 646 owned modules and 289 headlines.
+One static-check invocation mistakenly sent its Python body to the shell and
+failed to parse; the corrected Python invocation passes all static checks.
+No infrastructure retry, cap increase or unchanged failed-source rerun occurs.
+The inherited full-gate failure remains recorded and is not rerun unchanged.
+
+Reproduce with scripts/in-bundle lake build on
+Leanux.Proofs.WG.{Index,Roaming}.Statements and scripts/in-bundle lake env
+leanchecker --fresh on each target, under capped with 32 Lean threads and
+16 QEMU slots. No new mirror request arises.
 
 ## Remaining general Allowed-IP ownership dependency
 

@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Roaming.InvalidMac1Claims
 import Leanux.Proofs.WG.Campaign2.Bridge
 import Leanux.Proofs.WG.Roaming.View
 import Leanux.Proofs.WG.Roaming.Authentication
@@ -235,5 +236,19 @@ theorem original_poll_all_endpoint_attempts (pid : PeerId) (budget : Nat)
   · intro entry pre
     rw [observedPollAttempts_erase]
   · exact observedPollAttempts_facts pid budget toStack
+
+/-- The complete original non-cookie receiver preserves the Device and all
+remote destinations when the entry MAC1 comparison is invalid. -/
+theorem original_invalid_mac1_preserves_endpoints (msg : List UInt8) (src : SkbSource)
+    (before : Campaign2.Snapshot)
+    (noncookie : messageType msg ≠ MESSAGE_HANDSHAKE_COOKIE)
+    (invalid : ∀ d, before.wg.device = some d →
+      blake2s 16 d.mac1Key (msg.take (msg.length - 32)) ≠
+        (msg.drop (msg.length - 32)).take 16) :
+    Campaign2.Ensures (receiveHandshakePacket msg src) (fun s => s = before)
+      (fun _ after => after.wg.device = before.wg.device ∧
+        ∀ pid, remoteAt after pid = remoteAt before pid) :=
+  receiveHandshakePacket_invalid_mac1 msg src before noncookie invalid
+
 
 end Leanux.Proofs.WG.Roaming

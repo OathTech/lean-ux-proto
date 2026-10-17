@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.Index.OwnerCoherenceCreatorClaims
+import Leanux.Proofs.WG.Index.OwnerCoherenceInitiationClaims
 import Leanux.Proofs.WG.Index.OwnerCoherenceResponseClaims
 import Leanux.Proofs.WG.Index.OwnerCoherenceCookieClaims
 import Leanux.Proofs.WG.Index.OwnerCoherenceExpiryClaims
@@ -870,5 +872,28 @@ theorem original_cookie_message_consume_owner_coherence (msg : List UInt8) :
     Campaign2.Ensures (cookieMessageConsume msg) View.OwnerCoherentSafe
       (fun _ s => View.OwnerCoherentSafe s) :=
   cookieMessageConsume_owner_coherent msg
+
+/-- Every normal initiation-consumption outcome retains local hashed-owner
+coherence, including rejected messages after their acquired reference is put. -/
+theorem original_consume_initiation_owner_coherence (msg : List UInt8) :
+    Campaign2.Ensures (consumeInitiation msg) View.OwnerCoherentSafe
+      (fun _ => View.OwnerCoherentSafe) :=
+  consumeInitiation_owner_coherent msg
+
+
+/-- The publishing peer's live self-owner relation is explicit, even if its
+handshake entry is initially unhashed. This is partial preservation. -/
+theorem original_create_initiation_owner_coherence (pid : PeerId) :
+    Campaign2.Ensures (createInitiation pid) (View.HandshakePublisherSafe pid)
+      (fun _ => View.HandshakePublisherSafe pid) :=
+  createInitiation_owner_coherent pid
+
+/-- Response creation preserves the same explicit publisher invariant on
+all normal returns, including a wrong-state early return. -/
+theorem original_create_response_owner_coherence (pid : PeerId) :
+    Campaign2.Ensures (createResponse pid) (View.HandshakePublisherSafe pid)
+      (fun _ => View.HandshakePublisherSafe pid) :=
+  createResponse_owner_coherent pid
+
 
 end Leanux.Proofs.WG.Index
