@@ -150,3 +150,20 @@ These four support theorems do not prove initialized-operation acceptance
 or the 23-operation execution. The whole-history evidence above remains
 runtime-only. The main campaign report records the scoped build, full support
 axiom closure and fresh replay of this separate checkpoint.
+
+## First-operation reduction after the curve bridge
+
+Eight later capped stdin probes still do not prove the first initialized wgSet.
+The recipe, all future record batches, actual runnerInitial and runnerOperation
+are retained. Checked curve rules remove the earlier curve obstruction.
+Further local exact rules pass the initial ring's eager 4,096-slot expansion
+and FIB boot's no-leaf insertion, but the whole-operation proof still reaches
+the default recursion limit. No full-operation theorem is installed.
+
+The final diagnostic is deliberately interrupted by SIGTERM to its verified
+own Lean process. Exit 143 and capped's KILLED banner count as failure; it is
+not a passing run, timeout diagnosis or evidence that the memory cap was hit.
+The main campaign report records all eight failed outcomes. No cap/limit
+increase, warning suppression or infrastructure rerun occurs. The next
+architecture needs composition from the actual initialized state rather than
+eager normalization of every state component. No mirror change is requested.

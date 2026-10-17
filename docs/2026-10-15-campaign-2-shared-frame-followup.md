@@ -106,9 +106,14 @@ release supply cursor support. A bounded transport package can compose these
 owned contracts before the finite-history induction, without implementing a
 parallel six-family layer. FreshInstallModel/Frames/Source/Claims now check
 that exact optional cursor/next transport and its projected bound. The finite
-history theorem remains open. Four named variants stand for modifyPeer,
-pubkeyLookup, consumeInitiation and createResponse; exact held cleanup reuses
-Config.peerPut_retained without a new general release frame.
+history theorem subsequently closed, and commit 07bbaa02 extends its original
+four-operation language to nine native create/consume, install/confirm, clear
+and expiry operations. Its sole initial freshness bound remains explicit.
+Source acquisition and lifecycle transports compose campaign-owned contracts;
+the shared six-family layer is not copied. The earlier four named variants
+and exact Config.peerPut_retained cleanup retain their recorded scope.
+This closes the bounded operation-language gap, not initialized whole-driver
+or arbitrary helper-reinstallation histories.
 
 C1's lifetime projection still omits peer slots and the Device allocation
 cursor. Extending it and all driver callers is broader and remains a shared

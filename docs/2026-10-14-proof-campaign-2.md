@@ -4312,3 +4312,39 @@ Statements roots, standard-axiom inspection of their proof closure, and
 lake env leanchecker --fresh on each, with LEAN_NUM_THREADS=32 and
 LEANUX_QEMU_SLOTS=16. No mirror-team request arises from this proof
 reduction work.
+
+## H6 follow-up: first initialized operation remains open
+
+The eight-probe first-operation tranche adds no theorem. It keeps all 23
+operations, all supplied record batches and future lookahead from the generated
+recipe, calls actual runnerInitial with placeholders disabled, then actual
+runnerOperation for its first wgSet. The checked predicate would require return
+zero, consumed records, no suspended activation and no pending NET_RX; errors
+map to false. No state is reconstructed from a projection.
+
+Probes 1--2 fail respectively a request layout error plus two default recursion
+limits, then two recursion limits. Probe 3 isolates the curve-rule smoke failure
+at the 32-element basepoint map. Probe 4 uses a kernel-proved literal basepoint
+equality: curve reduction passes, but the whole operation still hits the default
+recursion limit. Probe 5 locates eager expansion of the actual 4,096-slot initial
+ring. Probe 6 checks a generic exact initial-ring empty rule, keeping init opaque
+to cbv; the operation instead becomes stuck at the original FIB boot insertAlias.
+Probe 7 proves its no-leaf logged insertNode equality by reflexivity and passes
+that point, but the whole operation again hits the default recursion limit.
+
+Probe 8 enables diagnostic tracing and is deliberately interrupted when it
+continues producing no useful diagnosis. Only its verified own Lean PID is
+sent SIGTERM. Exit 143 and capped's KILLED/signal banner are a failure, never
+a passing or infrastructure-rerun result. No deeper failure location is inferred
+from this interrupted probe. All eight outcomes remain failed; recovery axioms
+are rejected. There are no warnings, cap/limit increases or infrastructure
+reruns. The separately committed curve package retains its own successful
+validation and does not receive whole-operation credit.
+
+[AGENT 2026-10-17] Stop this reduction architecture at the bounded tranche.
+The next alternatives are exact composition through an independently checked
+actual initialization cut, or native setter/record contracts from that state;
+do not copy a FIB or shared layer, alter the recipe, or increase limits to force
+reduction. The full initialized give-up execution remains runtime-only.
+H1--H6 statuses and the 2,532/874/360 census are unchanged. No mirror request
+is warranted by a tactic reduction failure.
