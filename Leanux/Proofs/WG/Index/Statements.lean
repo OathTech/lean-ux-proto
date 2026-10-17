@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Index.OwnerCoherenceExpiryClaims
 import Leanux.Proofs.WG.Index.OwnerCoherenceReceiveClaims
 import Leanux.Proofs.WG.Index.OwnerCoherenceKeypairCallerClaims
 import Leanux.Proofs.WG.Index.OwnerCoherenceSessionClaims
@@ -837,5 +838,20 @@ theorem original_consume_data_owner_coherence (msg : List UInt8) (src : SkbSourc
     Campaign2.Ensures (consumeData msg src ds) View.OwnerCoherentSafe
       (fun _ s => View.OwnerCoherentSafe s) :=
   consumeData_owner_coherent msg src ds
+
+/-- Normal handshake clearing preserves local hashed-owner coherence; no
+residency, reference-budget or completion premise is added. -/
+theorem original_handshake_clear_owner_coherence (pid : PeerId) :
+    Campaign2.Ensures (handshakeClear pid) View.OwnerCoherentSafe
+      (fun _ s => View.OwnerCoherentSafe s) :=
+  handshakeClear_owner_coherent pid
+
+/-- Normal expiry preserves local hashed-owner coherence with arbitrary clock
+inputs and aliased slots. This does not assert that the operation returns. -/
+theorem original_expire_current_peer_keypairs_owner_coherence (pid : PeerId) :
+    Campaign2.Ensures (expireCurrentPeerKeypairs pid) View.OwnerCoherentSafe
+      (fun _ s => View.OwnerCoherentSafe s) :=
+  expireCurrentPeerKeypairs_owner_coherent pid
+
 
 end Leanux.Proofs.WG.Index

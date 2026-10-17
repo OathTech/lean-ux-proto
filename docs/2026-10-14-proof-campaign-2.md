@@ -11,23 +11,23 @@ merged; the executable mirror remains byte-identical to b700659.
 | Result | Headlines | Checked support | Split status |
 | --- | ---: | ---: | --- |
 | H1 Noise | 22 | 185 | Full terminal closure current; wider caller/lifetime/clock claims open. |
-| H2 Index | 70 | 398 | Full terminal closure and consumeData owner coherence current; reachable whole-driver uniqueness/coherence open. |
+| H2 Index | 72 | 405 | Full terminal closure and ingress/expiry owner coherence current; reachable whole-driver uniqueness/coherence open. |
 | H3 Roaming | 13 | 157 | Full terminal closure current; callback authentication provenance and broader caller coverage open. |
 | H4 Configuration | 80 | 586 | Full terminal closure current; global ownership, queued cleanup and general pagination open. |
 | H5 Progress | 42 | 288 | Full terminal closure current with exact bounded outcomes and checked refutations; global progress/coherent-ring adequacy open. |
 | H6 Timers | 52 | 445 | Full terminal closure, first outer timer turn and intermediate retransmit receipt current; whole scheduler episodes, complete caller coverage and session-relative counts open. |
 
-The checked surface is 2,059 theorems in all 625 campaign-owned modules.
+The checked surface is 2,066 theorems in all 627 campaign-owned modules.
 The completed retrofit accounts for 1,983: 1,321 retyped, 244 explicitly
-corrected, 239 retained and 179 added support/finding declarations. Sixty-five
+corrected, 239 retained and 179 added support/finding declarations. Seventy-two
 subsequent H2 declarations add table preservation and local owner coherence.
 Four H4 declarations add mixed fwmark/scalar readback and seven H6 declarations
 connect the first outer timer turn and its retransmit receipt. Of the 1,831 baseline theorems, 22 frames
 were deleted because types supply their facts and five false cookie supports
 were separately retired with checked counterexamples. No baseline declaration
 remains awaiting retrofit; all 258 original terminal names/order survive,
-with eighteen new H2 headlines, one new H4 headline and two new H6 headlines
-(279 total).
+with twenty new H2 headlines, one new H4 headline and two new H6 headlines
+(281 total).
 
 The [retrofit report](2026-10-16-proof-campaign-2-state-split.md) records
 claim/frame files, corrections, before/after counts and validation.
@@ -565,6 +565,35 @@ mirror/shared boundaries pass; the unchanged inherited full-gate failure is
 not rerun. Reproduce with scripts/in-bundle lake build Leanux.Proofs.WG.Index.Statements
 and scripts/in-bundle lake env leanchecker --fresh on that module, under
 capped with 32 Lean threads and 16 QEMU slots.
+
+## H2 continuation: handshake clearing and expiry preserve coherence
+
+Both actual handshakeClear and expireCurrentPeerKeypairs now preserve local
+hashed-owner coherence on every normal return. Coherence is the sole entry
+premise: optional device, missing or NULL peer words, zero counts on unhashed
+objects, arbitrary clocks and repeated next/current identities retain the
+original partial domain. The exact native Config contracts carry ordered
+handshake removal/zeroing, last-sent time reset and both validity writes.
+The pure missing-key identity in invalidateDevice is not a claim that native
+expiry succeeds when a selected key is absent.
+
+Architecture: OwnerCoherenceExpiryFrames holds three pure preservation facts;
+OwnerCoherenceExpiryClaims holds two projected claims; Statements appends two
+literal headlines. No broader owner-reference projection is weakened to hide
+validity writes, and no shared lemma or mirror operation is edited. Seven
+theorems bring H2 to 72 headlines/405 theorems and the campaign to 281
+headlines/2,066 theorems in 627 owned modules. Whole-driver reachability and
+final queued-worker release ownership remain open. No new mirror request.
+
+The sole capped source probe passes with no diagnostics at the default limits.
+Independent review finds no issue. Index.Statements builds 301 jobs, with only
+inherited Env:865 String.mk. Axioms: 1,188 logical roots in 237 modules,
+including 793 public theorem roots, standard only. Fresh kernel replay passes.
+Static checks, original terminal-name order and mirror/shared boundaries pass.
+No limit/cap increase or infrastructure rerun occurs; the unchanged inherited
+full-gate failure is not rerun. Reproduce with scripts/in-bundle lake build
+Leanux.Proofs.WG.Index.Statements and scripts/in-bundle lake env leanchecker
+--fresh on that module, under capped with 32 Lean threads and 16 QEMU slots.
 
 ## Remaining coherent-ring progress dependency
 
