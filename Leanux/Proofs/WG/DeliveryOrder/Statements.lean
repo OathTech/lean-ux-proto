@@ -1,3 +1,12 @@
+import Leanux.Proofs.WG.Queues.CreationLoan
+import Leanux.Proofs.WG.Queues.HolderAuxScheduler
+import Leanux.Proofs.WG.Queues.AdmissionOutcome
+import Leanux.Proofs.WG.Queues.SetPeerBoundary
+import Leanux.Proofs.WG.Queues.HolderDeviceCreate
+import Leanux.Proofs.WG.Queues.AdmissionJournal
+import Leanux.Proofs.WG.Queues.AdmissionPath
+import Leanux.Proofs.WG.Queues.HandshakeAfterMac
+import Leanux.Proofs.WG.Queues.HandshakeReception
 import Leanux.Proofs.WG.Queues.HolderAuxiliary
 import Leanux.Proofs.WG.Queues.HolderConfigUpdate
 import Leanux.Proofs.WG.Queues.BaseCoherenceConfiguration
@@ -2756,5 +2765,106 @@ theorem original_response_funded_entry (msg : List UInt8) {holders : DurableHold
     (run : ((consumeResponse msg).run w).run a = .ok ((result,v),b)) :
     HandshakeLoans.FundedResult holders cs loans result v ∧ HandshakeEntry.Entry v :=
   HandshakeEntry.response_funded msg hi stable entry a b run
+
+/-- Creation funds its published base and the actual subsequent caller loan separately. -/
+theorem original_creation_caller_account (key : Key) (psk : Option Key) {holders : DurableHolders}
+    (funded : holders.Funded cs loans w) (stable : StableRx cs w)
+    (coherent : BaseCoherence.Inv w) (configured : ConfiguredIdentity.Inv w)
+    (a middle b : Ambient)
+    (create : ((peerCreate key psk).run w).run a=.ok ((.ok pid,u),middle))
+    (acquire : ((peerGet pid).run u).run (CounterWindow.record middle .peerCreateErr false)=.ok (((),v),b)) :
+    ∃ d, w.dev=some d ∧ pid=d.nextPeer ∧
+      (HolderCreation.addBase holders (BaseCreation.owner w d)).Funded cs (BaseCreation.owner w d::loans) v ∧
+      StableRx cs v ∧ BaseCoherence.Inv v ∧ ConfiguredIdentity.Inv v ∧ pid ∈ BaseCoherence.slots v :=
+  CreationLoan.creation_acquire key psk funded stable coherent configured a middle b create acquire
+
+/-- Original TX execution preserves three-slot compatibility with its real reschedule callback. -/
+theorem original_transmit_slot_compatibility (pid : PeerId) :
+    PrefixPreserves (fun _ w => CurrentSlots.Inv w.wg) (fun _ => True)
+      (RxHistory.mixed (txIterPrefix pid (liftPrefix (Env.condResched .txWorker)))) :=
+  CurrentSlots.TxSource.tx_observed pid
+
+/-- The original scheduler shares one complete account and owner history; its remaining receive contract uses that same domain. -/
+theorem original_schedule_auxiliary_conditional (initial : Ledger) (loans : Reservations)
+    (before : List RxHistory.Event) (stack : Option Worker)
+    (receive : PrefixPreserves (HolderAuxiliary.Inv initial loans before) OwnerChecks.Safe
+      Origins.HistoryAdapters.receiveIteration) :
+    PrefixPreserves (HolderAuxiliary.Inv initial loans before) OwnerChecks.Safe (RxHistory.schedule stack) :=
+  HolderAuxScheduler.schedule_preserves initial loans before receive stack
+
+/-- The actual admission/enqueue receipt chooses the new ledger while retaining every durable charge. -/
+theorem original_admission_selected_account {holders : DurableHolders}
+    (funded : holders.Funded cs loans w) (stable : StableRx cs w) (fresh : Packets.Inv w)
+    (physical : NativeRxInv epoch (PtrRing.init n) history w) (a b : Ambient)
+    (run : ((consumeData msg src ds).run w).run a=.ok (((),v),b)) :
+    ∃ r next, AdmissionOutcome.Outcome cs next msg src ds w v a b r ∧
+      holders.Funded next loans v ∧ StableRx next v :=
+  AdmissionOutcome.consume funded stable fresh physical a b run
+
+/-- Source receipts and their complete ledger updates are unique on the same actual native entry. -/
+theorem original_admission_ledger_unique
+    (left : AdmissionOutcome.Outcome cs xs msg src ds w v a b r)
+    (right : AdmissionOutcome.Outcome cs ys msg src ds w v a b s) : r=s ∧ xs=ys :=
+  AdmissionOutcome.unique left right
+
+/-- An independently supplied source receipt reconstructs the exact original consumption call. -/
+theorem original_admission_receipt_execution
+    (outcome : AdmissionOutcome.Outcome cs next msg src ds w v a b r) :
+    ((consumeData msg src ds).run w).run a=.ok (((),v),b) :=
+  AdmissionOutcome.source outcome
+
+/-- The complete original peer command discharges lookup/creation loans and retains base coherence on every normal return. -/
+theorem original_peer_command_account (attrs : PeerAttrs) :
+    Hoare (WG.setPeerCmd attrs)
+      (fun w => DurableHolders.Boundary cs loans w ∧ BaseCoherence.Inv w ∧ ConfiguredIdentity.Inv w)
+      (fun _ w => DurableHolders.Boundary cs loans w ∧ BaseCoherence.Inv w) :=
+  SetPeerBoundary.setPeerCmd attrs
+
+/-- Guarded original device creation preserves the account and initializes a new physical ring only when a device is created. -/
+theorem original_device_creation_account :
+    Preserves (DurableHolders.Boundary cs loans) wgCreate ∧
+    Preserves HolderDeviceCreate.OptionalPhysical wgCreate :=
+  ⟨HolderDeviceCreate.create,HolderDeviceCreate.create_physical⟩
+
+/-- The optional receipt observer preserves the original return and exact audit projection, including stopped prefixes. -/
+theorem original_admission_journal_projection (msg : List UInt8) (src : SkbSource) (ds : Nat)
+    (w : World) (h : List RxHistory.Event) (hi : AuditInv (RxHistory.auditHistory h) w) :
+    ((runPrefix (AdmissionJournal.observe msg src ds) w h).1,
+      (runPrefix (AdmissionJournal.observe msg src ds) w h).2.filterMap RxHistory.auditEvent) =
+    ((runPrefix (RxHistory.mixed (liftWGObserver (consumeDataPrefix msg src ds))) w h).1,
+      (runPrefix (RxHistory.mixed (liftWGObserver (consumeDataPrefix msg src ds))) w h).2.filterMap RxHistory.auditEvent) :=
+  AdmissionJournal.original_audit msg src ds w h hi
+
+/-- A normal rich observation selects one actual admission occurrence and the same funded ledger; the runner does not yet use this splice. -/
+theorem original_admission_funded_occurrence
+    (run : runPrefix (AdmissionJournal.observe msg src ds) w h = (.ok ((),v),k))
+    (hi : DurableHolders.Boundary cs loans w.wg) (fresh : Packets.Inv w.wg)
+    (physical : NativeRxInv epoch (PtrRing.init n) ringHistory w.wg) :
+    ∃ receipt next front tail,
+      AdmissionOutcome.Outcome cs next msg src ds w.wg v.wg w.ambient v.ambient receipt ∧
+      k=h++front++[.rx (.admission msg src ds receipt)]++tail ∧
+      DurableHolders.Boundary next loans v.wg :=
+  AdmissionJournal.normal run hi fresh physical
+
+/-- The unchanged original admission observer establishes a source transition and its funded ledger; neither is an output premise. -/
+theorem original_dynamic_admission_step
+    (run : runPrefix (AdmissionPath.consume msg src ds) w h = (.ok ((),v),k))
+    (hi : DurableHolders.Boundary cs loans w.wg) (fresh : Packets.Inv w.wg)
+    (physical : NativeRxInv epoch (PtrRing.init n) ringHistory w.wg) :
+    ∃ next, AdmissionPath.Step cs w h next v k ∧ DurableHolders.Boundary next loans v.wg :=
+  AdmissionPath.admission_step run hi fresh physical
+
+/-- The original after-MAC dispatcher retains cookie/drop early returns and pays only a source-selected peer. -/
+theorem original_handshake_dispatch_account (msg : List UInt8) (src : SkbSource)
+    (loaded : Bool) (mac : MacState) :
+    Hoare (Cookies.afterMac msg src loaded mac) (HandshakeResponse.Input cs loans)
+      (fun _ => DurableHolders.Boundary cs loans) :=
+  HandshakeAfterMac.afterMac msg src loaded mac
+
+/-- The complete original handshake receiver obtains all session entry facts from its input and retains the funded account on every normal return. -/
+theorem original_handshake_receive_account (msg : List UInt8) (src : SkbSource) :
+    Hoare (receiveHandshakePacket msg src) (HandshakeResponse.Input cs loans)
+      (fun _ => DurableHolders.Boundary cs loans) :=
+  HandshakeReception.receive msg src
 
 end Leanux.Proofs.WG.DeliveryOrder

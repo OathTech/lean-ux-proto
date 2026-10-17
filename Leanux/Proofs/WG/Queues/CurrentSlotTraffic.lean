@@ -1,6 +1,6 @@
 import Leanux.Proofs.WG.Queues.CurrentSlotFrames
 
-/-! Actual staged-send operations retain all three nullable key slots. The
+/-! Actual staged-send operations retain three-slot compatibility. The
 source may delete keys or peers; no exact-store or liveness premise is used. -/
 namespace Leanux.Proofs.WG.CurrentSlots
 open Leanux Leanux.WG Leanux.Proofs.Framing Std.Do

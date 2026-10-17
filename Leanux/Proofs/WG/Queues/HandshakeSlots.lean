@@ -1,7 +1,7 @@
 import Leanux.Proofs.WG.Queues.HandshakeReceive
 import Leanux.Proofs.WG.Queues.CurrentSlotTraffic
 
-/-! Three nullable key slots survive the actual handshake consumers. Owner
+/-! Three-slot compatibility survives the actual handshake consumers. Owner
 acquisition and final payment reuse the existing source-aware slot contracts. -/
 namespace Leanux.Proofs.WG.HandshakeSlots
 open Leanux Leanux.WG Leanux.Proofs.Framing Leanux.Proofs.Logged Lifetimes Std.Do

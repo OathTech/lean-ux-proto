@@ -240,6 +240,15 @@ handshake/Stack/poll/NAPI/crypt retain slot compatibility. Full receive, stronge
 scheduler and initialized conservation remain open. Gate: 816 jobs/749
 declarations in 5.421 seconds. Fresh root replay passes in 107.381 seconds.
 
+The [source-composition checkpoint](2026-10-17-r4-source-composition.md)
+adds fifteen modules and 146 theorems: 773 files/10,582 theorems, 228 R4 terminals
+and 762 total declarations. All previous theorem bodies remain unchanged.
+The complete native handshake receiver, peer command and device creation
+preserve supplied accounts; actual admission outcomes and fresh receipt
+observations support finite admission/poll composition. Observed receive-worker,
+whole device configuration and initialized conservation remain open. Gate:
+831 jobs/762 declarations in 21.831 seconds. Fresh root replay passes in 113.136 seconds without warnings.
+
 The pre-split checkpoint validated every baseline result surface over
 `cb2348e`. R3 packet authorization is now closed over the current split tree;
 R4 receive-pipeline conservation remains open. Earlier positive results and runtime findings retain
@@ -637,15 +646,17 @@ correspondence remains informal.
 
 ## R4 — queue, poll and delivery-order components (in progress)
 
-**State-split auxiliary/configuration extension.** The [current report](2026-10-17-r4-auxiliary-configuration.md)
-records 146 additional theorems in eleven modules and nine terminal exports.
-The tree has 758 proof files/10,436 theorems, with 215 R4 terminals and all 206
-preceding bodies unchanged. Full acquired-peer updates and their lookup retain
-funding; single/bulk removal and updates retain structural coherence. Actual
-handshake/Stack/poll/NAPI/crypt calls retain three-slot compatibility, and
-session accounting joins the sourced auxiliary domain. Full receive, stronger
-scheduler, public configuration/device lifecycle and dynamic ingress/initialized
-conservation remain open. Chronological GRO order stays refuted.
+**State-split source-composition extension.** The [current report](2026-10-17-r4-source-composition.md)
+records 146 additional theorems in fifteen modules and thirteen terminal exports.
+The tree has 773 proof files/10,582 theorems, with 228 R4 terminals and all 215
+preceding bodies unchanged. The complete native handshake receiver pays actual
+references, including early returns and cookie replies. The complete peer
+command and device creation preserve supplied accounts. Exact admission
+outcomes and fresh receipts select and fund finite admission/poll paths.
+Transmit slots compose with the auxiliary scheduler, whose receive premise
+remains explicit. Observed receive-worker, whole device configuration/lifecycle
+and dynamic ingress/initialized conservation remain open. Chronological GRO
+order stays refuted.
 
 **Original versus proved.** The charter requires accepted-schedule order and no silent loss/duplication.
 [Terminals](../Leanux/Proofs/WG/DeliveryOrder/Statements.lean) prove initialized committed callback-entry stamp
