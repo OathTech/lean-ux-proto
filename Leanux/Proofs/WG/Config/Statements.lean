@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Config.EndpointSetClaims
 import Leanux.Proofs.WG.Config.MixedWeightedPaginationClaims
 import Leanux.Proofs.WG.Config.KeyWeightedPaginationClaims
 import Leanux.Proofs.WG.Config.WeightedGetterClaims
@@ -1760,5 +1761,52 @@ theorem original_private_key_weighted_pagination (d : Device) (key : Key) (pid :
         ∃ now, s.wg.device = some (keyReadbackDevice d key pid p now)) :=
   rotation_weighted_pagination_get_after_set d key pid p nodes ids sock established changed absent
     members resident listed fresh readable header nest enough idle empty
+
+/-- Exact normal effects of the original peer endpoint request, including
+existing-peer UPDATE_ONLY, ignored invalid encodings, equality/no-write and
+balanced reference stores. This does not assert reset-record availability. -/
+theorem original_peer_endpoint_set (key : Key) (a : EndpointAttr) (updateOnly : Bool)
+    (pid : PeerId) (d : Device) (p : Peer)
+    (found : d.peerHashtable.find? (·.1 == key) = some (key, pid))
+    (resident : d.peers[pid]? = some p) (live : 0 < p.refcount)
+    (bounded : p.refcount + 1 < 2 ^ 31) (down : d.running = false) :
+    Campaign2.Ensures (setPeerCmd (endpointPeerAttrs key a updateOnly))
+      (fun s => s.wg.device = some d)
+      (fun ret s => ret = 0 ∧ ∃ reset, s.wg.device = some (endpointSetterDevice d pid p a reset)) := by
+  intro entry ambient ret final after pre run
+  obtain ⟨code, reset, device, _⟩ := setPeer_endpoint_down key a updateOnly pid d p found
+    resident live bounded down entry.nlSock7 entry.fixtureNetDevices entry ambient ret final after
+    ⟨pre, rfl, rfl⟩ run
+  exact ⟨code, reset, device⟩
+
+/-- Normal original device set/get composition. Effective endpoint equality
+preserves old flowinfo; malformed later-peer rejection retains preceding writes.
+The getter uses the effective post-set endpoint's weighted capacities. -/
+theorem original_endpoint_weighted_get_after_set (d : Device) (key : Key) (a : EndpointAttr)
+    (updateOnly bad : Bool) (pid : PeerId) (p : Peer)
+    (nodes : NodeId → AipNode) (ids : List NodeId) (sock : NlSock)
+    (peers : d.peerList = [pid])
+    (found : d.peerHashtable.find? (·.1 == key) = some (key, pid))
+    (resident : d.peers[pid]? = some p) (live : 0 < p.refcount)
+    (bounded : p.refcount + 1 < 2 ^ 31) (down : d.running = false)
+    (listed : p.allowedipsList = ids)
+    (readable : ∀ id ∈ ids, d.nodes[id]? = some (nodes id))
+    (header : devicePrefixSpace d + 168 ≤ NLMSG_GOODSIZE)
+    (nest : ids ≠ [] → devicePrefixSpace d + (peerFixedSpace (endpointApplied p a) + 4) ≤ NLMSG_GOODSIZE)
+    (fresh : weightedGetterFresh d (endpointApplied p a) nodes ids)
+    (within : weightedGetterReceives d (endpointApplied p a) nodes ids ≤ 4096)
+    (idle : sock.cbRunning = false) (empty : sock.queue = []) :
+    Campaign2.Ensures (do
+      let ret ← wgSetDevice (endpointDeviceAttrs d key a updateOnly bad)
+      let dump ← wgGetDevice (byIndex d)
+      pure (ret, dump))
+      (fun s => s.wg.device = some d ∧ s.wg.nlSock7 = sock ∧ ClaimView.selectsDevice s d)
+      (fun result s =>
+        result = ((if bad then -EINVAL else 0), .ok (jsonPaginationResult d (endpointApplied p a)
+          (ids.map (fun id => dumpNodeJson (nodes id))))) ∧
+        s.wg.nlSock7 = {sock with queue := [], ctx := {hasWg := true}, prevSeq := d.deviceUpdateGen + 1, dumpDoneErrno := 0, cbRunning := false} ∧
+        ∃ reset, s.wg.device = some
+          (endpointSetterDevice {d with deviceUpdateGen := d.deviceUpdateGen + 1} pid p a reset)) :=
+  endpoint_weighted_get_after_set d key a updateOnly bad pid p nodes ids sock peers found resident live bounded down listed readable header nest fresh within idle empty
 
 end Leanux.Proofs.WG.Config
