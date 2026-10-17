@@ -12,7 +12,7 @@ theorem precomputeDevice_other (pid q : PeerId) (d : Device) (p : Peer) (other :
     (precomputeDevice d pid p).peers[q]? = d.peers[q]? := by
   simp only [precomputeDevice]
   split <;> simp_all [withPeer, Std.TreeMap.getElem?_insert, Ne.symm other]
-  split <;> simp_all [withPeer, Std.TreeMap.getElem?_insert, Ne.symm other]
+  split <;> simp_all [Std.TreeMap.getElem?_insert, Ne.symm other]
 
 theorem invalidateDevice_peers (d : Device) (kp : Option KeypairId) :
     (invalidateDevice d kp).peers = d.peers := by

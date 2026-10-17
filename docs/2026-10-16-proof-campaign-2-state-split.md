@@ -1918,3 +1918,75 @@ roots above under `Leanux.Proofs.WG`, audit logical declarations with
 `#print axioms`, and replay each using
 `scripts/in-bundle lake env leanchecker --fresh MODULE`. On this host use
 `capped`, 32 Lean threads and 16 QEMU slots.
+
+## Quiet key installation and initiation crypto
+
+| Tranche | Before | Retyped | Deleted | Kept | Added | After |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `Config.KeyPeerLoop`, `KeyInstall` | 6 | 6 | 0 | 0 | 0 | 6 |
+| `Config.KeyFieldFrames` | 2 | 0 | 0 | 2 | 0 | 2 |
+| `Noise.InitiationReadyCryptoModel`, `InitiationReadyCryptoFrames` | 7 | 5 | 0 | 2 | 0 | 7 |
+| This tranche | 15 | 11 | 0 | 4 | 0 | 15 |
+| Cumulative processed baseline and checked support | 656 | 460 | 21 | 175 | 33 | 668 |
+
+The census is 466 campaign-owned files, 1,843 theorems and 224 checked proof
+modules. Of the original baseline, 1,175 theorems await validation.
+Checked support is H1 131, H2 187, H3 54, H4 199, H5 70 and H6 27.
+All 258 terminal names/order remain; all six terminal closures and the full
+proof gate remain lagging. No new charter result is claimed.
+
+Quiet key installation retains the original partial domain and snapshotted
+peer list. Identity installation and cookie precomputation precede each
+peer's precomputation and key expiry. Repeated peer IDs and keypair aliases
+remain allowed; absent peers and dangling state still Stop. The quiet
+premise excludes only the staged-send case. The source factor retains its
+unconditional equation, including staged sends outside that premise.
+The two pure field frames still describe preservation within Device and
+remain separate in `KeyFieldFrames`.
+
+The five crypto contracts retain totality, their original nonzero/DH/public
+premises, arbitrary byte lengths and hidden streams. Their arbitrary
+predicate relates the actual WG, FS, Task and Seccomp worlds and hidden
+records through the actual product lift: all 43 old Kernel fields remain
+represented by their new subsystem owners. No default reconstruction or
+fixture restriction was introduced. Decision-trace changes are permitted,
+as before. These substantive frames moved to
+`InitiationReadyCryptoFrames`; the two unchanged KDF identities moved to
+`InitiationReadyCryptoModel`. The other sixteen initiation-source theorem
+bodies remain unchanged and pending.
+
+Scoped builds pass: KeyPeerLoop 63 jobs, crypto 32, KeyInstall/KeyFieldFrames
+65, then warning-free KeyFieldFrames 62. The latter's first build reported
+one unused simp argument; it was removed without changing the statement.
+Axiom audits cover 192 logical roots in 42 proof modules, using only the
+three standard axioms. Fresh replay passes for KeyPeerLoop,
+InitiationReadyCryptoFrames, KeyInstall and KeyFieldFrames. Independent
+review found no remaining issue. Token/import/name checks, whitespace and
+mirror/shared-layer boundaries pass.
+
+Development: KeyPeerLoop passed its first changed probe. Crypto took six
+changed probes for native normalization and nested result witnesses,
+including removal of one unused simp argument. KeyInstall took seven:
+the first five failed at branch markers, substituted variables and the
+actual nested StateT continuation; the sixth closed with one unused simp
+argument and the seventh was warning-free. Full outputs were saved before
+preview; truncated diagnostic previews were followed by inspection of the
+remaining diagnostics. One further changed root timer-queue draft failed
+at the same two source-equality obligations and remains uncounted. No
+infrastructure rerun, cap/proof-limit increase or guest run occurred.
+
+[AGENT 2026-10-17] The pending timer correction will describe the actual
+entry/exit WG and Ambient state, including wheel entries and enqueue
+counters. It will distinguish records-off placement, recorded same-expiry
+metadata updates and recorded changed-expiry placement. A kept wheel slot
+retains its old bucket and stamp; enqueue bounds apply only to enqueues.
+This preserves the mirror's actual cases without a readiness premise.
+The seven stale exact-peer contracts remain pending until their corrected
+counterparts close; these are statement-artefact corrections, not type-only
+retypes or type-given deletions.
+
+Reproduce with `scripts/in-bundle lake build` on the four fresh-replay roots
+above under `Leanux.Proofs.WG`, audit logical declarations with
+`#print axioms`, and replay using
+`scripts/in-bundle lake env leanchecker --fresh MODULE`. On this host use
+`capped`, 32 Lean threads and 16 QEMU slots.

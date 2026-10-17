@@ -6,12 +6,12 @@ set_option maxHeartbeats 800000
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise Std.Do
 
-def keyPeerSource (pid : PeerId) (sendStaged : Bool) : M Unit := do
+def keyPeerSource (pid : PeerId) (sendStaged : Bool) : WG.M Unit := do
   precomputeStaticStatic pid
   expireCurrentPeerKeypairs pid
   if ← branch .setDevSendStagedPeer sendStaged then sendStagedPackets pid
 
-def keyPeerLoopSource (pids : List PeerId) (sendStaged : Bool) : M Unit := do
+def keyPeerLoopSource (pids : List PeerId) (sendStaged : Bool) : WG.M Unit := do
   for pid in pids do
     _ ← branch .setDevKeyPeerIter true
     keyPeerSource pid sendStaged
@@ -22,37 +22,52 @@ def peerUpdatedDevice (d : Device) (pid : PeerId) (p : Peer) (now : Int64) : Dev
 
 theorem keyPeer_quiet_exact (pid : PeerId) (d : Device) (p : Peer)
     (resident : d.peers[pid]? = some p) :
-    Ensures (keyPeerSource pid false) (fun w => w.k.wg = some d)
-      (fun _ w => ∃ now, w.k.wg = some (peerUpdatedDevice d pid p now)) := by
-  have hp := (returns_iff _ _ _).mp (precomputeStaticStatic_returns pid d p resident)
-  have he := (ensures_iff _ _ _).mp (expireCurrent_exact pid (precomputeDevice d pid p)
-    { p with precomputedStaticStatic := precomputedAfter d.staticIdentity p } (precomputeDevice_peer pid d p))
-  rw [ensures_iff]
-  simp [keyPeerSource, branch, bind_assoc]
-  mvcgen [hp, he]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals repeat intro
-  all_goals simp_all [peerUpdatedDevice]
+    Ensures (keyPeerSource pid false) (fun w => w.dev = some d)
+      (fun _ w => ∃ now, w.dev = some (peerUpdatedDevice d pid p now)) := by
+  have hp : Ensures (precomputeStaticStatic pid) (fun g => g.dev = some d)
+      (fun _ g => g.dev = some (precomputeDevice d pid p)) := by
+    intro g ambient result final after device run
+    obtain ⟨u, out, tail, execution, post⟩ :=
+      precomputeStaticStatic_returns pid d p resident g ambient device
+    rw [run] at execution
+    cases execution
+    exact post
+  have he := expireCurrent_exact pid (precomputeDevice d pid p)
+    {p with precomputedStaticStatic := precomputedAfter d.staticIdentity p}
+    (precomputeDevice_peer pid d p)
+  unfold keyPeerSource
+  refine ensures_bind _ _ hp ?_
+  intro _
+  refine ensures_bind _ _ he ?_
+  intro _ g ambient result final after pre run
+  simp [branch, AmbientM.branch] at run
+  rcases run with ⟨rfl, rfl⟩
+  exact pre
 
 theorem keyPeer_missing (pid : PeerId) :
     Ensures (keyPeerSource pid false) (fun w => peerAt w pid = none) (fun _ _ => False) := by
-  have he := unconstrained_prefix (expireCurrentPeerKeypairs pid)
-  rw [ensures_iff]
-  simp [keyPeerSource, branch, bind_assoc]
-  mvcgen [precomputeStaticStatic, requireNotPending, getPeer, getDev, getK,
-    setPeer, modifyDev, modifyK, branch, invariant, unsupported, he]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals repeat intro
-  all_goals simp_all [peerAt]
+  intro g ambient result final after pre run
+  cases device : g.dev with
+  | none =>
+    simp [keyPeerSource, precomputeStaticStatic, requireNotPending, getDev, device,
+      invariant, AmbientM.invariant] at run
+    cases run
+  | some d =>
+    have missing : d.peers[pid]? = none := by simpa [peerAt, device] using pre
+    simp [keyPeerSource, precomputeStaticStatic, requireNotPending, getPeer, getDev, device,
+      missing, invariant, AmbientM.invariant] at run
+    cases run
 
 theorem keyPeer_quiet_step (pid : PeerId) (d : Device) :
-    Ensures (keyPeerSource pid false) (fun w => w.k.wg = some d)
-      (fun _ w => ∃ p now, d.peers[pid]? = some p ∧ w.k.wg = some (peerUpdatedDevice d pid p now)) := by
-  intro w ret v hd hr
+    Ensures (keyPeerSource pid false) (fun w => w.dev = some d)
+      (fun _ w => ∃ p now, d.peers[pid]? = some p ∧ w.dev = some (peerUpdatedDevice d pid p now)) := by
+  intro w ambient ret v after hd hr
   cases resident : d.peers[pid]? with
-  | none => exact False.elim (keyPeer_missing pid w ret v (by simp [peerAt, hd, resident]) hr)
+  | none =>
+    exact False.elim (keyPeer_missing pid w ambient ret v after
+      (by simp [peerAt, hd, resident]) hr)
   | some p =>
-    obtain ⟨now, hv⟩ := keyPeer_quiet_exact pid d p resident w ret v hd hr
+    obtain ⟨now, hv⟩ := keyPeer_quiet_exact pid d p resident w ambient ret v after hd hr
     exact ⟨p, now, rfl, hv⟩
 
 /-- Ordered peer-list effects when staged sending is disabled. Each step
@@ -67,13 +82,13 @@ inductive KeyPeerUpdates : Device → List PeerId → Device → Prop
       KeyPeerUpdates d (pid :: rest) final
 
 theorem keyPeerLoop_quiet (pids : List PeerId) (d : Device) :
-    Ensures (keyPeerLoopSource pids false) (fun w => w.k.wg = some d)
-      (fun _ w => ∃ final, w.k.wg = some final ∧ KeyPeerUpdates d pids final) := by
+    Ensures (keyPeerLoopSource pids false) (fun w => w.dev = some d)
+      (fun _ w => ∃ final, w.dev = some final ∧ KeyPeerUpdates d pids final) := by
   induction pids generalizing d with
   | nil =>
-    intro w ret v hp hr
-    simp [keyPeerLoopSource, StateT.run] at hr
-    obtain ⟨rfl, rfl⟩ := hr
+    intro w ambient ret v after hp hr
+    simp [keyPeerLoopSource] at hr
+    rcases hr with ⟨rfl, rfl⟩
     exact ⟨d, hp, .nil d⟩
   | cons pid rest ih =>
     have factor : keyPeerLoopSource (pid :: rest) false = ((do
@@ -82,20 +97,22 @@ theorem keyPeerLoop_quiet (pids : List PeerId) (d : Device) :
       simp [keyPeerLoopSource, List.forIn_cons, bind_assoc]
     have hstep : Ensures (do
         _ ← branch .setDevKeyPeerIter true
-        keyPeerSource pid false) (fun w => w.k.wg = some d)
-        (fun _ w => ∃ p now, d.peers[pid]? = some p ∧ w.k.wg = some (peerUpdatedDevice d pid p now)) := by
-      have hs := (ensures_iff _ _ _).mp (keyPeer_quiet_step pid d)
-      rw [ensures_iff]
-      mvcgen [branch, hs]
+        keyPeerSource pid false) (fun w => w.dev = some d)
+        (fun _ w => ∃ p now, d.peers[pid]? = some p ∧ w.dev = some (peerUpdatedDevice d pid p now)) := by
+      refine ensures_bind _ _
+        ((ensures_iff _ _ _).mpr (hoare_liftAmbient_variant
+          (AmbientM.branch .setDevKeyPeerIter true) (fun g : WGWorld => g.dev = some d))) ?_
+      intro _
+      exact keyPeer_quiet_step pid d
     rw [factor]
-    refine ensures_bind (R := fun (_ : Unit) w => ∃ final, w.k.wg = some final ∧ KeyPeerUpdates d (pid :: rest) final)
+    refine ensures_bind (R := fun (_ : Unit) w => ∃ final, w.dev = some final ∧ KeyPeerUpdates d (pid :: rest) final)
       _ _ hstep ?_
-    intro _ w ret v hp hr
+    intro _ w ambient ret v after hp hr
     obtain ⟨p, now, resident, hd⟩ := hp
-    obtain ⟨final, hv, tail⟩ := ih (peerUpdatedDevice d pid p now) w ret v hd hr
+    obtain ⟨final, hv, tail⟩ := ih (peerUpdatedDevice d pid p now) w ambient ret v after hd hr
     exact ⟨final, hv, .cons d pid p now rest final resident tail⟩
 
-def keyInstallSource (key : Key) : M Unit := do
+def keyInstallSource (key : Key) : WG.M Unit := do
   let d ← getDev
   let sendStaged ← WG.andM (branch .setDevSendStagedNoIdentity !d.staticIdentity.hasIdentity)
     (branch .setDevSendStagedRunning d.running)
@@ -106,7 +123,7 @@ def keyInstallSource (key : Key) : M Unit := do
   keyPeerLoopSource (← getDev).peerList sendStaged
   _ ← branch .setDevKeyPeerIter false
 
-def deviceKeyFactoredSource (a : DeviceAttrs) : M Int := do
+def deviceKeyFactoredSource (a : DeviceAttrs) : WG.M Int := do
   if ← WG.andM (branch .setDevHasPrivateKey a.privateKey.isSome) (branch .setDevPrivateKeyLen true) then
     let some key := a.privateKey | invariant "unreachable"
     -- `!crypto_memneq(static_private, private_key)`: the stored key is clamped
@@ -125,7 +142,7 @@ def deviceKeyFactoredSource (a : DeviceAttrs) : M Int := do
 
 theorem deviceKey_loop_factor (a : DeviceAttrs) :
     deviceKeyFactoredSource a = deviceKeySource a := by
-  have map_cond (b : Bool) (act : M Unit) :
+  have map_cond (b : Bool) (act : WG.M Unit) :
       ((fun (_ : Unit) => ForInStep.yield PUnit.unit) <$> (if b then act else pure ())) =
       (if b then (fun (_ : Unit) => ForInStep.yield PUnit.unit) <$> act else pure (ForInStep.yield PUnit.unit)) := by
     cases b <;> simp

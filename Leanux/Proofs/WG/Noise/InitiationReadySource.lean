@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Noise.InitiationReadyCryptoFrames
 import Leanux.Proofs.WG.Noise.InitiationReadyInputSource
 import Leanux.Proofs.WG.Noise.InitiationReadyModel
 import Leanux.Proofs.WG.Noise.SessionReadySource
@@ -10,53 +11,6 @@ that these cuts compose to the unmodified original call. World-dependent
 intermediate posts stay in this source file; public claims use the projection. -/
 namespace Leanux.Proofs.WG.Noise.InitiationReady
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise Leanux.Proofs.WG.Config Std.Do
-theorem kdf_pair (ck data : List UInt8) : kdfOutputs ck data 2 = [first ck data, second ck data] := by
-  simp [kdfOutputs, first, second, List.range']
-theorem kdf_single (ck data : List UInt8) : kdfOutputs ck data 1 = [first ck data] := by
-  simp [kdfOutputs, first, List.range']
-theorem kdf_returns (two : Bool) (ck data : List UInt8)
-    (P : Kernel → Option (List HiddenRecord) → Prop) :
-    ⦃fun w => ⌜P w.k w.hidden⌝⦄ kdf two false ck data
-    ⦃⇓ out w => ⌜out = (if two then [first ck data, second ck data] else [first ck data]) ∧ P w.k w.hidden⌝⦄ := by
-  cases two <;> mvcgen [kdf, WG.orM, branch]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [kdf_pair, kdf_single]
-theorem ephemeral_returns (e ck hash : List UInt8)
-    (P : Kernel → Option (List HiddenRecord) → Prop) :
-    ⦃fun w => ⌜P w.k w.hidden⌝⦄ messageEphemeral false e ck hash
-    ⦃⇓ out w => ⌜out = (first ck e, noiseHash (hash ++ e)) ∧ P w.k w.hidden⌝⦄ := by
-  have hk := kdf_returns false ck e P
-  mvcgen [messageEphemeral, branch, kdfOut, invariant, hk]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all
-theorem dh_returns (ck secret pub : List UInt8)
-    (ok : (curve25519 secret pub).2 = true)
-    (P : Kernel → Option (List HiddenRecord) → Prop) :
-    ⦃fun w => ⌜P w.k w.hidden⌝⦄ mixDh true ck secret pub
-    ⦃⇓ out w => ⌜out = some (first ck (curve25519 secret pub).1,
-      second ck (curve25519 secret pub).1) ∧ P w.k w.hidden⌝⦄ := by
-  have hk := kdf_returns true ck (curve25519 secret pub).1 P
-  mvcgen [mixDh, branch, kdfOut, invariant, hk]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all
-theorem precomputed_returns (ck precomputed : List UInt8)
-    (ok : precomputed ≠ List.replicate 32 0)
-    (P : Kernel → Option (List HiddenRecord) → Prop) :
-    ⦃fun w => ⌜P w.k w.hidden⌝⦄ mixPrecomputedDh ck precomputed
-    ⦃⇓ out w => ⌜out = some (first ck precomputed, second ck precomputed) ∧ P w.k w.hidden⌝⦄ := by
-  have hk := kdf_returns true ck precomputed P
-  noise_vcgen [mixPrecomputedDh, _private.Leanux.WG.Handshake.«0».Leanux.WG.zeroKey, branch, kdfOut, invariant, hk]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all
-theorem public_returns (secret : List UInt8) (nonnull : secret ≠ nullPoint)
-    (ok : (curve25519 secret basePoint).2 = true)
-    (P : Kernel → Option (List HiddenRecord) → Prop) :
-    ⦃fun w => ⌜P w.k w.hidden⌝⦄ generatePublic secret
-    ⦃⇓ out w => ⌜out = (some (curve25519 secret basePoint).1, true) ∧ P w.k w.hidden⌝⦄ := by
-  mvcgen [generatePublic, branch]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all
-
 def finish (pid : PeerId) (e encStatic encTime : List UInt8) : M (Option (List UInt8)) := do
   _ ← IndexOwner.peerDeref (.handshake pid)
   let index ← indexInsert (.handshake pid)
