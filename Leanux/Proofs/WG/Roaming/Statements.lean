@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Roaming.ConsumeEndpointClaims
 import Leanux.Proofs.WG.Roaming.CookieEndpointClaims
 import Leanux.Proofs.WG.Roaming.InitiationRejectionClaims
 import Leanux.Proofs.WG.Roaming.ResponseRejectionClaims
@@ -296,5 +297,15 @@ theorem original_cookie_message_endpoints (msg : List UInt8) (src : SkbSource)
     Campaign2.Product.Ensures (liftWG (receiveHandshakePacket msg src)) (fun s => s = entry)
       (fun _ final => ∀ pid, remoteAt final.toSnapshot pid = remoteAt entry.toSnapshot pid) :=
   receiveHandshakePacket_cookie_endpoints msg src entry kind
+
+/-- The original data admission/enqueue/cleanup call preserves every optional
+peer endpoint, hence every remote destination, on normal return. Later decrypt
+workers and NAPI callbacks are outside this call. All initial states remain. -/
+theorem original_consume_data_endpoints (msg : List UInt8) (src : SkbSource) (ds : Nat)
+    (entry : Campaign2.Snapshot) :
+    Campaign2.Ensures (consumeData msg src ds) (fun s => s = entry)
+      (fun _ final => responseEndpointMap final.wg.device = responseEndpointMap entry.wg.device ∧
+        ∀ pid, remoteAt final pid = remoteAt entry pid) :=
+  consumeData_preserves_endpoints msg src ds entry
 
 end Leanux.Proofs.WG.Roaming

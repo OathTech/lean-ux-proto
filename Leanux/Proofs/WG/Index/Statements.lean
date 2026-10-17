@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Index.SessionAliasClaims
 import Leanux.Proofs.WG.Index.OwnerCoherencePersistentFindingClaims
 import Leanux.Proofs.WG.Index.OwnerCoherenceRetransmitClaims
 import Leanux.Proofs.WG.Index.OwnerCoherenceCallbackClaims
@@ -1029,5 +1030,19 @@ theorem original_persistent_keepalive_owner_coherence_counterexample :
         (fun s => s.wg.device = some d ∧ s.ambient.hidden = some [PersistentOwnerWitness.clock])
         (fun _ out => ∃ final, out = .ok ((), final) ∧ ¬ View.OwnerCoherentSafe final) :=
   expiredPersistent_ownerCoherentSafe_counterexample
+
+/-- Actual session success can publish a missing allocation from an arbitrary
+slot-incoherent entry satisfying all three tested index invariants. The actual
+following lookup Stops; neither initialized reachability nor a kernel bug is asserted. -/
+theorem original_session_alias_owner_coherence_counterexample (counter : Nat) :
+    DeviceTablesSafe SessionAliasWitness.device ∧ HashedOwnersCoherent SessionAliasWitness.device ∧ KeypairStoreBounded SessionAliasWitness.device ∧
+    Campaign2.Observes (beginSession 0) (SessionAliasWitness.input counter)
+      (fun _ out => ∃ s final, out = .ok (true,s) ∧ s.wg.device = some final ∧
+        final.keypairs[1]? = none ∧ final.indexTable = [SessionAliasWitness.published] ∧
+        DeviceTablesSafe final ∧ ¬ HashedOwnersCoherent final ∧
+        s.wg.keypairCounter = counter + 1) ∧
+    Campaign2.Observes (do let _ ← beginSession 0; indexLookup [.keypair] 7) (SessionAliasWitness.input counter)
+      (fun _ out => out = .error (.invariant "dangling keypair 1")) :=
+  session_alias_owner_coherence_counterexample counter
 
 end Leanux.Proofs.WG.Index

@@ -11,26 +11,26 @@ merged; the executable mirror remains byte-identical to b700659.
 | Result | Headlines | Checked support | Split status |
 | --- | ---: | ---: | --- |
 | H1 Noise | 33 | 235 | Full terminal closure, all seven whole-call tag maps, their actual finite mixed histories and session derivation-clock receipt current; direct helper reinstallation refutes unrestricted repeat-confirmation uniqueness; fresh-session uniqueness remains open; broader driver closure is separate from the checked native histories. |
-| H2 Index | 89 | 481 | Full terminal closure and ingress/expiry/handshake/peer-creation owner coherence and whole-removal lifecycle finding/slot-covered arbitrary-AIP preservation and actual clear-work dispatch and both-mode handshake queueing and new-handshake/zero-key/retransmit callbacks and persistent-callback invariant counterexample current; reachable whole-driver uniqueness/coherence open. |
-| H3 Roaming | 18 | 190 | Full terminal closure and invalid-MAC1/rate-limit/admitted-response/initiation rejection and cookie-message preservation current; callback authentication provenance and broader caller coverage open. |
+| H2 Index | 90 | 487 | Full terminal closure and ingress/expiry/handshake/peer-creation owner coherence and whole-removal lifecycle finding/slot-covered arbitrary-AIP preservation and actual clear-work dispatch and both-mode handshake queueing and new-handshake/zero-key/retransmit callbacks and persistent-callback and successful-session slot-alias invariant counterexamples current; reachable whole-driver uniqueness/coherence open. |
+| H3 Roaming | 19 | 196 | Full terminal closure and invalid-MAC1/rate-limit/admitted-response/initiation rejection and cookie-message and whole data-admission endpoint preservation current; callback authentication provenance and broader caller coverage open. |
 | H4 Configuration | 94 | 712 | Full terminal closure, actual mixed/key setter paginated readback with arbitrary endpoints, whole finite single-peer mixed-width getter with exact DATA/DONE count and arbitrary endpoints and fitting multi-peer scalar and mixed fwmark/scalar set/get current; global ownership, queued cleanup, general mixed setters and multi-peer pagination open. |
 | H5 Progress | 49 | 326 | Full terminal closure, exact bounded outcomes and recorded batch, actual timer completion guards and recorded idle/post-advance wait completion and actual advance-syscall/runner linkage and send-worker completion guard and four final-idle syscall/runner receipts current; global progress/coherent-ring adequacy open. |
 | H6 Timers | 59 | 483 | Full terminal closure, actual retry blocks and allocation-labelled guarded session-arm events with outgoing call-entry origin and initialized give-up runtime witness current; complete caller coverage, general mixed histories and session-relative counts open. |
 
-The checked surface is 2,427 theorems in all 829 campaign-owned modules.
+The checked surface is 2,439 theorems in all 835 campaign-owned modules.
 The completed retrofit accounts for 1,983: 1,321 retyped, 244 explicitly
-corrected, 239 retained and 179 added support/finding declarations. One hundred forty-eight
+corrected, 239 retained and 179 added support/finding declarations. One hundred fifty-four
 subsequent H2 declarations add table preservation and local owner coherence.
 Fifty H1 declarations add whole-operation and finite mixed-history tag ownership and actual derivation-clock provenance and direct-helper reinstallation; one hundred thirty H4 declarations
-add mixed fwmark/scalar, ordered peer-attribute, port-refusal/private-key readback and finite IPv4 getter/setter pagination and actual fitting multi-peer readback and complete finite single-peer mixed-width pagination. Thirty-three H3 declarations
-add invalid-MAC1, rate-limit and admitted-response/initiation rejection and cookie-message preservation. Thirty-eight H5 declarations
+add mixed fwmark/scalar, ordered peer-attribute, port-refusal/private-key readback and finite IPv4 getter/setter pagination and actual fitting multi-peer readback and complete finite single-peer mixed-width pagination. Thirty-nine H3 declarations
+add invalid-MAC1, rate-limit and admitted-response/initiation rejection, cookie-message and whole data-admission endpoint preservation. Thirty-eight H5 declarations
 establish recorded batch, actual timer completion guards and recorded idle/post-advance wait wheel completion and the actual send-worker completion guard and four final-idle syscall/runner links. Forty-five H6 declarations
 connect actual timer-loop receipts, contiguous retry-block counts/bounds, local partial-exchange arming and allocation-labelled session-arm events. Of the 1,831 baseline theorems, 22 frames
 were deleted because types supply their facts and five false cookie supports
 were separately retired with checked counterexamples. No baseline declaration
 remains awaiting retrofit; all 258 original terminal names/order survive,
-with eleven new H1 headlines, thirty-seven new H2 headlines, five new H3 headlines,
-fifteen new H4 headlines, seven new H5 headlines and nine new H6 headlines (342 total).
+with eleven new H1 headlines, thirty-eight new H2 headlines, six new H3 headlines,
+fifteen new H4 headlines, seven new H5 headlines and nine new H6 headlines (344 total).
 
 The [retrofit report](2026-10-16-proof-campaign-2-state-split.md) records
 claim/frame files, corrections, before/after counts and validation.
@@ -2168,78 +2168,56 @@ budget adequacy. General arm-record mode can permit placeholders.
 There is no distribution claim. The applicable running/live/interval guards qualify each arm;
 a final timer value alone does not prove an arm event.
 
-The original retransmit arming hook is now total for a resident peer and valid
-supplied caller/jitter/arm records. Any finite rejected-draw prefix followed by an
-accepted draw is allowed. The running/live guard gives either the exact wrapped
-expiry, last clock, registration replacement and two guard decisions, or a skipped
-arm after consuming the caller and jitter reads. A skipped arm leaves its record,
-all timers, last clock and registrations unchanged, with only the guards actually
-evaluated logged. The explicit arm-validity premise also applies to that unused
-record, so this is narrower than all skipped calls. No new frame variant is needed.
-This hook contract does not supply the full send-worker or retry-history proof.
+The supplied caller/jitter/arm domain now gives exact Product agreement with
+the retransmit hook's actual continuation (original_retransmit_hook_ready).
+It retains caller and jitter reads, running/live guards, and timer-clock or
+wheel-record refusals. Normal enabled arming has the documented wrapped delay
+and full WG wheel/registration effect; an inactive guard follows the actual
+skipped path. The supplied domain does not guarantee completion.
 
-The full original `sendHandshakeInitiation` now succeeds from static guards and
-supplied rate-test/last-sent, creation, tail-clock and retransmit records. Its
-premises include pure cryptographic guards and tail readiness on the deterministic
-creation result: resident live peer, running device, invalid cached cookie, zero
-persistent-keepalive interval and no endpoint. Send-buffer allocation is unarmed
-and therefore consumes no allocation record. The original no-endpoint send returns
-an ignored address-family error; control still reaches retransmit rearming.
-The headline establishes exact ordered Device updates, unused record suffix,
-recorded mode and final arm clock. It does not claim complete log/registration/
-sent-state framing or finish the enclosing worker's reference release. The three
-new allocation-mode frames adapt campaign 2's own mode frames; no shared layer is
-copied. No successful intermediate execution is assumed. Broader endpoint/cookie/
-keepalive cases, dispatcher composition and the full retry history remain open.
+The supplied creation/send-tail domain gives exact Product agreement through
+actual initiation, send and rearm (original_send_initiation_ready). Existing
+creation, cookie, interval, endpoint and allocation conditions remain explicit.
+The caller ignores the no-endpoint address-family return, but subsequent arm
+refusals remain Stops. No unconditional completion, packet delivery or whole
+retry-history claim follows.
 
-The original retransmit `fireTimer` now completes from a recorded nonzero timer
-identity whose first matching registration names a due peer, with attempts at
-most 18. Static live/not-pending, signed age and bounded positive-reference guards,
-recorded cache mode and a matching existing send-work identity establish callback
-success. The five explicit records are section start, cache-reset clock, age-test
-clock, queue record and section stop; the suffix is arbitrary. Selection may occur
-among several due peers. The exact projected result includes timer detachment,
-attempt increment, endpoint-source/cache clearing, acquired reference, queued send
-work, eight callback decisions, fired symbol and the section-start pending-work
-filter. Registrations and all other projected fields are preserved. Queue
-consistency and timer-registration provenance are not inferred from the entry
-guards. This ends at dispatch completion; the later worker's send/rearm and complete
-retry history still require composition. Retaining the pending-work filter corrected
-a draft statement assumption, not the mirror.
+The supplied ready domain does prove successful execution of the actual
+selected retransmit wheel unit (original_fire_retry_ready). Due/horizon,
+identity, records, reference and queue conditions remain explicit. Its full
+Product effect includes wheel detachment, pass-step reset, pending-work
+filtering and queuedThisCall preservation. This is timerDispatchUnit_variant,
+not outer selection or completion of runTimers; the later first-turn and
+whole-episode contracts address those original control paths separately.
 
-The original `runOneSendWorker` now also completes from a valid named section,
-nonempty queue, selected membership and pending flag. The selected peer need not
-be the head. Dequeue erases one occurrence and clears its flag before the actual
-section start, initiation/send/rearm and worker `peerPut`; the final stop is then
-consumed. Static creation/tail guards are stated on the deterministic post-dequeue
-state, with reference count greater than one for retained release. The exact
-Device includes that final decrement, and the headline also gives unused records,
-recorded mode and final arm clock. It makes no queue uniqueness, full-snapshot,
-packet-delivery or all-work-completion claim. The source proof retains the section
-start's pending-work filter. No new structural frame layer was needed. A complete
-retry pair and repeated scheduler history remain to be composed.
+The named-worker domain gives exact Product agreement through selection,
+dequeue, creation, arm, release and section stop (original_send_worker_ready).
+Dequeue erases one selected occurrence and derives pending from residual
+queue membership: a duplicate may leave it true (original_send_dispatch_path).
+Arm, release and section failures stay visible. The theorem does not promise
+unconditional worker completion, packet transmission or queue exhaustion.
 
-From a resident device and initially empty send queue, original timer/send pairs derive same-peer selection, entry attempts ≤18,
-enqueue/reference acquisition, detach, increment and worker release. Consecutive
-successful same-peer pairs from zero number at most 19. This excludes 20 such
-pairs, not a twentieth callback. The immediate original callback after 19 has
-exact all-outcome give-up behavior; normal return preserves identity/count and
-empty queue. No intervening scheduler action or later invocation is inferred.
+From a resident device and initially empty send queue, normal selected
+timer/send pairs derive same-peer selection, entry attempts at most 18,
+enqueue/reference acquisition, detach, increment and worker release.
+Consecutive successful same-peer pairs from zero number at most 19. This
+excludes 20 such pairs, not a twentieth callback. The immediate original
+callback after 19 has exact all-outcome give-up behavior; normal return
+preserves identity/count and empty queue. Later episode observers also derive
+actual adjacent-pair certificates and qualifying contiguous-block counts;
+they do not prove every arbitrary history decomposes into those blocks.
 
 Above the limit with zero-key already pending, give-up is total: retain its
-expiry, delete send-keepalive, purge staged packets, add their length to dropped,
+expiry, delete send-keepalive expiry and wheel entry, purge staged packets, add their length to dropped,
 and append exact true-give-up/false-zero-key-absent decisions. Hidden records,
 clocks, attempts and device queues stay unchanged. No running/live/record-mode
 premise is needed.
 
-With zero-key absent, a running device/live peer and two valid contiguous
-supplied caller/arm records give total original give-up behavior. It purges
-staged packets, accounts drops, deletes send-keepalive and arms zero-key at the
-wrapped caller-clock plus delay. The projected outcome fixes all four decisions,
-the unused record suffix, last jiffies and registration: unit zero leaves the
-registration list unchanged; a nonzero unit replaces all registrations at that
-address. Other projected fields are unchanged. These static input premises do
-not establish scheduler selection or a session history.
+With zero-key absent, the supplied-record domain gives exact Product agreement
+with the actual post-give-up arm continuation (original_giveup_absent_zero_key).
+Timer-clock and wheel-record refusals remain possible. A normal enabled arm
+retains the original zero-key delay and complete WG timer effects. These
+conditions establish neither scheduler selection nor a session history.
 
 Both response callers observe actual session results; the session-derived hook
 is reached exactly on true. Traversal compositions cover outgoing initiation,
@@ -2248,14 +2226,20 @@ data receipt in their stated contexts. Data completion traverses once per
 encrypted item/list before its per-packet send loop (`Data.lean:181–194`,
 C `send.c:242–260`), not per packet/transmission. Successful nonkeepalive sends
 control data-sent; nonzero received length controls data-received. Guarded
-recorded expiry is established at each actual hook cut. These normal caller
-certificates do not retain later failures or promise final expiry/delivery.
-Common response traversal does not require session success.
+recorded wheel effects are established at actual hook cuts. Current observer
+erasures preserve original failures; cut facts do not promise final expiry or
+delivery. Common response traversal does not require session success.
 
-Zero-key firing queues clearing; it does not immediately erase keys.
-Give-up can also arm zero-key for a partial exchange, so two session-hook proofs
-cannot establish once-per-session. Complete caller coverage, scheduler episodes
-and mixed-history/session-relative arm counts remain open. No H6 mismatch found.
+Zero-key firing queues clearing; it does not immediately erase keys. Give-up
+can arm it without session creation, as shown by the local checked finding and
+separate initialized runner replay in their stated scopes. Actual session
+events tie their hook to beginSession success and the allocation serial, with
+zero or one physical enqueue under the guard. Whole timer episodes, actual
+adjacent retry certificates and qualifying contiguous same-peer block counts
+are now checked. Universal history decomposition and cross-call session-relative
+counts remain open. The give-up finding rejects attributing every zero-key arm
+to session creation; it does not settle every interpretation of at-most-one
+arm per completed session. No mirror discrepancy is established.
 
 ## Findings and mirror requests
 
@@ -2264,7 +2248,7 @@ changes as altitude-preserving. No mirror/kernel edit or upstream report occurre
 
 | Finding | Evidence and limit | Status |
 | --- | --- | --- |
-| H5 batch backlog | Kernel-checked accepted constructed fixture and backlog, with symbolic proof locating it at the actual final runner boundary; not parsed/captured Linux | Historical over de62c9d. Main `9db558b` adds completion guard; corrected refusal/carry open |
+| H5 batch backlog | Kernel-checked accepted constructed fixture and backlog, with symbolic proof locating it at the actual final runner boundary; not parsed/captured Linux | Historical over de62c9d. Main `9db558b` adds completion guard; actual runner/audit refusal carry checks over b700659 |
 | H5 nested refill | Evaluated initialized prefix/source review; operation 4 reaches worker occupancy-budget invariant; later suffix incomplete | Neither accepted complete trace nor kernel-proved prefix; callback-aware bound requested |
 | H4 dump cancellation | Accepted getter, kernel-checked internal room 3720 versus source-derived C 3724 | Restore pre-nest snapshot; no demonstrated compared-output mismatch. Dead-cursor extension only inspected |
 
@@ -2273,7 +2257,7 @@ accepted-run findings. H1/H2/H3/H6 have no ranked mirror-change request.
 
 ## Validation and trust limitations
 
-Latest six-target build passed **482 jobs**. All **258 headlines** and eight new
+The historical pre-split six-target checkpoint passed **482 jobs**. All **258 headlines** and eight new
 worker-ready supports use only the three standard axioms; token/import/root/default/
 projected-name checks pass. Independent read-only review found no issues. Fresh
 TimerDiscipline replay passed. New tracked/untracked whitespace checks passed
@@ -2322,10 +2306,11 @@ source correspondence, explicit supplied dump envelopes and cursor-reset scope.
 Standalone H1 restart support separately passed 116 jobs, seven declarations
 and fresh replay; it adds no headline.
 
-Full gate last actually ran at **`69f988a`: failed** in inherited
+The pre-split full gate at **`69f988a` failed** in inherited
 `WG/CounterWindow/Refinement.lean` and `WG/ReplayWindow/Counterexamples.lean`
-(counter operands/index-owner carries). Campaign 1 owns repair. Scoped passes
-are not a full-gate pass; existing shared lemmas were not edited.
+(counter operands/index-owner carries). Campaign 1 owns repair. The later split-gate failure and its
+diagnostics are recorded in the current checkpoint and retrofit report.
+Scoped passes are not a full-gate pass; existing shared lemmas were not edited.
 
 **Two infrastructure failures, one rerun each:** `84355d1` import overlapped
 rebuild and missed ReceiveFrames.olean; `9019ca8` repeated that orchestration
@@ -3447,3 +3432,107 @@ remain open; no whole charter result is completed. The inherited full gate
 remains FAILED and is not rerun unchanged. Reproduce the build, axiom
 inspection and fresh replay of Leanux.Proofs.WG.Config.Statements under
 capped/scripts/in-bundle, LEAN_NUM_THREADS=32 and LEANUX_QEMU_SLOTS=16.
+
+
+## H2 continuation: successful session publication with an aliased old slot
+
+The [session-alias finding](2026-10-17-proof-campaign-2-session-alias.md)
+checks an entry satisfying table safety, hashed-owner coherence and the key
+store bound. Its old previous slot names the absent next allocation ID.
+The original beginSession allocates that key, releases it during responder
+rotation, then publishes its index row and returns true. Its immediate
+original lookup stops at the missing owner object. Numeric table safety
+survives, but owner coherence does not. Actual allocation/birthdate records
+and the derived release readiness retain arbitrary other native/Ambient
+fields; no successful intermediate execution is supplied.
+
+This tests a local invariant, not initialized reachability. The checked C
+ordering agrees, but no reachable C-state argument is made. No mirror
+repair is requested. The alternative positive handoff architecture needs
+the existing SessionRotationFresh premise; adding it would name an unresolved
+caller obligation, not derive it from the three tested invariants.
+The actual-effect witness instead settles their insufficiency without
+copying a shared family. Primitive uniqueness, exact lookup and collision
+clauses were already checked; broader initialized driver coherence remains
+open.
+
+SessionAliasModel gives eight witness/input definitions and the entry
+invariants. Source derives the real rotation effect, total session return and
+exact lookup Stop; Claims and Statements expose both executions over the
+projection. Six theorems in three modules, including one private effect fact,
+bring H2 to 487 theorems and 90 headlines. Independent source/domain review
+finds no issue.
+
+Probe 1 fails three role/cursor/count reductions with one unused-simp warning;
+2 passes the session witness; 3 fails one final throw/string normalization;
+4 passes the full finding; 5 passes the exact split and all six standard-only
+roots; 6 checks Model alone with its narrower imports. Final probes have no
+warnings. No frame or shared variant is added.
+
+## H3 continuation: whole data admission preserves endpoints
+
+The original consumeData now preserves the full optional endpoint map and
+every remote destination on normal return, from arbitrary initial state.
+Actual lookup and key acquisition derive the references needed by cleanup.
+The no-key, dead-peer, successful enqueue, full peer queue and full device
+ring arms remain, including EPIPE's real pure-callback publication. Endpoint
+presence is retained as well as its full value. Missing owners, NULL words,
+overflow, malformed queues and hidden-input failures keep their actual Stops.
+
+This is before decryption and NAPI; it does not establish queued packet
+authentication provenance or frame arbitrary later callbacks. Two named
+local frame variants match C1 WGMore.enqueuePerDeviceAndPeerRx_spec and
+enqueuePerPeerRx_pure_spec. Their SkbM reasoning follows the component
+writeback locally. A private pure peer-map fact completes Frames; Source
+proves the whole original operation; Claims and Statements use the campaign
+projection. Six theorems in three modules bring H3 to 196 theorems and
+19 headlines, without new definitions or changed old claims.
+
+Independent review finds no issue and confirms reference effects are derived,
+including actual owner-word dereference during EPIPE publication. Probe 1
+fails seven record/witness/component-type errors; 2 fails five projection/
+metavariable errors and two unused-simp warnings; 3 passes both queue frames;
+4 fails one local-predicate unfolding; 5 passes the whole contract; 6 passes
+the exact split and all six standard-only roots without warnings.
+
+The broader architectures remain distinct: completing authenticated setter
+receipts still needs substantive preservation through send/session/release
+suffixes; persistent decrypt/NAPI authentication needs packet occurrence and
+queue/lifetime history beyond current optional-endpoint frames. Both overlap
+larger C1 layers and are not copied locally. Arbitrary initial CRYPTED packets
+or arbitrary callbacks do not establish authentication.
+
+Combined scoped build passes 433 jobs, with only inherited Env:865 String.mk.
+The audit checks 1,668 logical roots in 369 modules, including 1,096 public
+theorem roots, standard-only and without diagnostics.
+Fresh kernel replay passes both changed terminal roots.
+Static trust/import checks, all 258 original terminal names/order and mirror/
+shared boundaries pass. No proof-limit/cap change, suppression or infrastructure
+rerun occurs. Totals: 2,439 theorems in 835 owned modules and 344 headlines.
+All H1–H6 remain in progress; the inherited full gate remains FAILED.
+Reproduce the scoped build, axiom inspection and fresh replay of
+Leanux.Proofs.WG.Index.Statements and Leanux.Proofs.WG.Roaming.Statements
+under capped/scripts/in-bundle, LEAN_NUM_THREADS=32 and LEANUX_QEMU_SLOTS=16.
+
+
+## H6 report audit correction
+
+Independent audit found stale base-report prose that promised total success
+for four supplied-record contracts now expressed as Product agreement:
+retransmit-hook, initiation-send, named send-worker and absent-zero-key
+give-up. Those paragraphs now retain the actual clock/wheel/release/section
+refusals. The worker paragraph also now derives pending from residual queue
+membership rather than claiming every dequeue clears it.
+
+The selected retry-unit theorem remains a successful-outcome theorem under
+its stated domain; its report now names that unit instead of outer fireTimer
+selection, and includes wheel/pass-step effects. Pending-zero-key give-up
+likewise remains total on its own stated domain. Current episode/block
+coverage and the narrower meaning of the initialized give-up finding replace
+stale gaps. No H6 theorem changed and no new H6 proof credit is taken.
+
+The same audit corrects a stale backlog-table carry status and labels old
+validation counts as historical. These are report repairs. Remaining H6 work
+includes broader caller-local all-mode hook effects and the inventoried
+cross-call lifetime/counter transport. Firing fairness and universal arbitrary
+history decomposition are separate stronger questions. No new mirror request.

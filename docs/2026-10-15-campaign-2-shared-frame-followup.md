@@ -52,6 +52,14 @@ of Framing/EnvLeaves, used after the actual recorded batch completion guard.
 These variants are candidates for replacement by the shared contracts on their
 landing; the broader pending inventories are unchanged.
 
+Roaming/ConsumeEndpointFrames now adds exactly two endpoint-map variants:
+enqueuePerDeviceAndPeerRx_spec_endpoints_variant and
+enqueuePerPeerRx_pure_spec_endpoints_variant, standing for the corresponding
+WGMore declarations. Actual acquisitions supply the references for cleanup;
+component-typed skb writes are handled locally. The whole consumeData claim
+retains arbitrary input state and Stops. These do not implement the deferred
+header/CPU layer, decrypt/NAPI provenance or cookie-reply send layer.
+
 ## H1: genuine reinstallation between confirmations
 
 The proposed result concerns a finite sequence of original `consumeInitiation`,
