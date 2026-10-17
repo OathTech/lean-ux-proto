@@ -2168,3 +2168,87 @@ above under `Leanux.Proofs.WG`, inspect logical declarations with
 `#print axioms`, and replay using
 `scripts/in-bundle lake env leanchecker --fresh MODULE`. On this host use
 `capped`, 32 Lean threads and 16 QEMU slots.
+
+## Port semantics, handshake inspection and crypto frames
+
+| Tranche | Before | Retyped | Deleted | Kept | Added | After |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `Config.EmptyKeypairs`, `RunningPort`, `DevicePorts` | 8 | 8 | 0 | 0 | 0 | 8 |
+| `Roaming.HandshakeAuditSource` | 3 | 3 | 0 | 0 | 3 | 6 |
+| Roaming response/initiation crypto effects and frames | 12 | 8 | 0 | 4 | 0 | 12 |
+| `TimerDiscipline.ArmingChangedExpirySource` | 0 | 0 | 0 | 0 | 1 | 1 |
+| This tranche | 23 | 19 | 0 | 4 | 4 | 27 |
+| Cumulative processed baseline and checked support | 741 | 535 | 21 | 185 | 40 | 760 |
+
+The census is 481 campaign-owned files, 1,850 theorems and 255 checked proof
+modules. Of the baseline, 1,090 theorems await validation. Checked support
+is H1 147, H2 187, H3 72, H4 254, H5 70 and H6 30. All six result closures
+and the full gate remain lagging; all 258 terminal names remain in order.
+The unchanged RestartModel, ResponseModel and InitiationModel definitions
+also build; they add no theorem count.
+
+Empty-keypair cleanup retains arbitrary pure slot selectors and peer updates,
+the resident/empty premises and all three ordered writes. Port cleanup keeps
+arbitrary peer lists, accumulated visits and current/initial Device relations.
+Nonzero socket contracts include the original no-network and occupied-port
+outcomes. Device configuration still increments the generation before calling
+setPort, retains the same-port shortcut and preserves the full bound-port
+function during lookup. Reset-record and absent-peer Stops remain within the
+partial contracts; no list readiness is added.
+
+Handshake inspection keeps its original three arbitrary-product contracts in
+`Roaming.Product`. Their prefix and suffix receive actual full product
+states, and exact outcomes retain the eight original fixture observations.
+Three native companions receive actual WG and Ambient successor states.
+Inspection preserves entry state and reports prefix errors exactly; successful
+prefix facts survive suffix failure. `HandshakeAuditFacts` is parameterized
+by snapshot type without changing its three clauses.
+
+Crypto statements are separated into pure `ResponseCryptoEffects` and
+`InitiationCryptoEffects`, and preservation contracts in the corresponding
+`CryptoFrames` files. Their old Source files are import facades. All eight
+operational contracts keep total correctness and arbitrary predicates over
+WG, FS, Task and Seccomp owners through the actual product lift. Both DH
+outcomes, failed/successful decrypts and zero/nonzero precomputation remain
+covered with no new trace, byte-width or crypto-success assumption. One
+unused simplification argument was removed from an unchanged pure KDF claim.
+
+The changed-expiry arm support follows the actual record, unit, clock,
+previous-clock, overdue-bucket and pass-step guards. Successful execution
+implies the signed caller gap is 0 or 1 and the exact complete WG state:
+jiffies and optional unit registration, the recorded base clock, then
+`wheelPlacementState` including kept/enqueued metadata and counter effects.
+It adds no consistency/readiness premise. This completes the three supporting
+arm cases; the seven legacy arming contracts still await correction.
+
+Scoped builds pass: empty-keypair/pure models 71 jobs, audit model 9,
+running-port/audit 65, response effects 31, response crypto 34,
+initiation effects 33, initiation crypto 36, changed-expiry 35 and device
+ports 61. No campaign warning remains. Axiom inspection covers 359 logical
+roots in 68 proof modules, using only the three standard axioms.
+Independent review found no remaining issue; static checks, whitespace and
+mirror/shared-layer boundaries pass.
+
+Development: empty-keypair cleanup passed its second probe after replacing a
+private-name reference with its actual get/set composition. Both product and
+native audit probes passed first time. RunningPort passed the third changed
+probe after conditional/update and logged Boolean normalization; DevicePorts
+passed the fourth after signature, native continuation and branch-focus fixes.
+Response frames passed the second after list-take/postcondition normalization;
+initiation frames passed the second after preserving the exact private
+zero-key comparison during rewriting. The first response-effects build
+reported an unused simp argument; the corrected build is warning-free.
+
+Changed-expiry probes six through ten failed at native read normalization,
+branch focus and finally a redundant tactic after the goal closed. Removing
+that tactic passed the root probe and package build. All failed probes remain
+failures, not validation. Full outputs were saved before preview; truncated
+port previews were followed by the remaining diagnostics. No infrastructure
+retry, cap/proof-limit increase or guest run occurred.
+
+Fresh replay passes for EmptyKeypairs, DevicePorts, HandshakeAuditSource,
+ResponseCryptoSource, InitiationCryptoSource and ArmingChangedExpirySource.
+Reproduce with `scripts/in-bundle lake build` on those modules under
+`Leanux.Proofs.WG`, inspect logical declarations with `#print axioms`,
+and replay with `scripts/in-bundle lake env leanchecker --fresh MODULE`.
+On this host use `capped`, 32 Lean threads and 16 QEMU slots.

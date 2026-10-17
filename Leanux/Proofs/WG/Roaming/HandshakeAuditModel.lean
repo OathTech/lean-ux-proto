@@ -9,8 +9,8 @@ abbrev HandshakeAudit (C : Type) :=
 
 /-- Prefix errors are the original error; a rejected no-cut prefix completes
 without the setter. A present cut retains its facts even if the suffix fails. -/
-def HandshakeAuditFacts {C : Type} (facts : C → Campaign2.Snapshot → Prop)
-    (audited : HandshakeAudit C) : Prop :=
+def HandshakeAuditFacts {C S : Type} (facts : C → S → Prop)
+    (audited : Except Stop (Option C × S) × Except Stop (Unit × S)) : Prop :=
   match audited.1 with
   | .error err => audited.2 = .error err
   | .ok (none, atCut) => audited.2 = .ok ((), atCut)
