@@ -1,3 +1,12 @@
+import Leanux.Proofs.WG.Queues.JointRunner
+import Leanux.Proofs.WG.Origins.CurrentRemaining
+import Leanux.Proofs.WG.Origins.CurrentConfiguration
+import Leanux.Proofs.WG.Origins.OwnerDeviceCreation
+import Leanux.Proofs.WG.Origins.OwnerPeerConfiguration
+import Leanux.Proofs.WG.Origins.OwnerCryptWorkers
+import Leanux.Proofs.WG.Origins.OwnerEncrypt
+import Leanux.Proofs.WG.Origins.OwnerTransmit
+import Leanux.Proofs.WG.Origins.JointOwnerDevice
 import Leanux.Proofs.WG.Queues.JointSyscallSet
 import Leanux.Proofs.WG.Origins.OwnerReceive
 import Leanux.Proofs.WG.Origins.OwnerDecrypt
@@ -3745,5 +3754,143 @@ theorem original_joint_set_syscall (attrs : DeviceAttrs) :
     Logged.ErasesPrefix (Queues.RoutingJoint.syscallSet attrs) (Leanux.syscall (.wgSet attrs)) :=
   ⟨Queues.RoutingJoint.syscallSet_routing attrs,
     Queues.RoutingJoint.syscallSet_rx attrs,Queues.RoutingJoint.syscallSet_erases attrs⟩
+
+
+/-- All fifteen remaining environment cases retain positional current checks
+on the original journals, including failed prefixes. -/
+theorem original_current_remaining (call : Lifetimes.EnvRemainingCall) :
+    CurrentChecks.Preserves (Queues.RxHistory.remaining call) :=
+  CurrentRemaining.remaining call
+
+/-- Native consume completion and its original lifetime observer preserve
+receiving-owner bounds through key updates, staging and final payment. -/
+theorem original_owner_completion (pid : PeerId) (pkt : RxPacket) (endpoint : Endpoint) :
+    Framing.Preserves OwnerBounds.Carrier (WG.consumeDataDone pid pkt endpoint) ∧
+    OwnerChecks.Preserves (Queues.RxHistory.mixed
+      (Logged.liftWGObserver (Lifetimes.consumeDataDonePrefix pid pkt endpoint))) :=
+  ⟨OwnerCompletion.consumeDataDone_preserves pid pkt endpoint,
+    OwnerCompletion.consumeDataDone_checked pid pkt endpoint⟩
+
+/-- The product poll retains arbitrary callbacks under their precise carrier
+contract; the actual stack callback discharges that contract. -/
+theorem original_owner_poll (pid : PeerId) (budget : Nat)
+    (callback : List (List UInt8) → Leanux.M Unit)
+    (hc : ∀ xs, Framing.Preserves (fun w : World => OwnerBounds.Carrier w.wg) (callback xs)) :
+    Framing.Preserves (fun w : World => OwnerBounds.Carrier w.wg)
+      (WG.rxPoll pid budget callback) ∧
+    Framing.Preserves (fun w : World => OwnerBounds.Carrier w.wg)
+      (WG.rxPoll pid budget (fun packets => packets.forM Leanux.Env.deliverInner)) :=
+  ⟨OwnerPoll.poll pid budget callback hc,OwnerStack.poll_stack pid budget⟩
+
+/-- Actual poll and NAPI observers retain current checks, owner bounds and
+the same allocation journal, including stopped prefixes. -/
+theorem original_owner_checked_poll (pid : PeerId) (budget : Nat) :
+    OwnerChecks.Preserves (Queues.RxHistory.observePoll pid budget) ∧
+    OwnerChecks.Preserves Queues.RxHistory.napiSoftirq ∧
+    OwnerChecks.Preserves Queues.RxHistory.pollScheduledInline ∧
+    OwnerChecks.Preserves Queues.RxHistory.napiIrqExit :=
+  ⟨OwnerWorkers.poll pid budget,OwnerWorkers.napiSoftirq,
+    OwnerWorkers.pollScheduledInline,OwnerWorkers.napiIrqExit⟩
+
+/-- Both concrete crypt workers retain the checked carrier. Prepare checks
+the captured decrypt entry before its actual publication. -/
+theorem original_owner_checked_crypt :
+    OwnerChecks.Preserves Origins.HistoryAdapters.prepare ∧
+    OwnerChecks.Preserves Queues.RxHistory.decryptStep ∧
+    OwnerChecks.Preserves Queues.RxHistory.decryptIteration ∧
+    OwnerChecks.Preserves Queues.RxHistory.encryptIteration :=
+  ⟨OwnerPrepare.prepare,OwnerCryptWorkers.decryptStep,
+    OwnerCryptWorkers.decryptIteration,OwnerEncrypt.encryptIteration⟩
+
+/-- Concrete transmit completion and the actual transmit observer retain
+receiving-owner checks through final key/peer payments. -/
+theorem original_owner_checked_transmit (pid : PeerId) :
+    Framing.Preserves OwnerBounds.Carrier (WG.txStep pid) ∧
+    OwnerChecks.Preserves (Queues.RxHistory.mixed
+      (Lifetimes.txIterPrefix pid (Logged.liftPrefix (Env.condResched .txWorker)))) :=
+  ⟨OwnerTransmit.txStep_preserves pid,OwnerTransmit.txIteration pid⟩
+
+/-- Peer configuration retains nullable ownership and every source guard;
+ordinary errors may retain partial changes and final payment may delete. -/
+theorem original_owner_configuration_tail (attrs : PeerAttrs) (peer : Option PeerId)
+    (flags : UInt32) (psk : Option Key) (pid : PeerId) :
+    Framing.Preserves OwnerBounds.Carrier
+      (Configuration.peerConfigUpdateSource attrs peer flags psk pid) :=
+  OwnerPeerConfiguration.peerConfigUpdate_preserves attrs peer flags psk pid
+
+/-- The whole peer command carries current identity and owner bounds jointly,
+including actual creation at the peer frontier and all normal errno returns. -/
+theorem original_owner_checked_peer_command (attrs : PeerAttrs)
+    (history : List SessionOrigin.Receipt) :
+    Framing.Preserves (JointOwnerConfiguration.Inv history) (WG.setPeerCmd attrs) ∧
+    OwnerChecks.Preserves (Queues.RxHistory.mixed
+      (Logged.liftWGObserver (Lifetimes.setPeerCmdPrefix attrs))) :=
+  ⟨JointOwnerConfiguration.setPeerCmd_preserves attrs history,
+    JointOwnerConfiguration.setPeerCmd_checked attrs⟩
+
+/-- Whole device configuration derives joint owner/current preservation
+through key changes, remove-all, and every actual peer command. -/
+theorem original_owner_checked_device_configuration (attrs : DeviceAttrs)
+    (history : List SessionOrigin.Receipt) :
+    Framing.Preserves (JointOwnerConfiguration.Inv history) (WG.wgSetDevice attrs) ∧
+    OwnerChecks.Preserves (Queues.RxHistory.mixed
+      (Logged.liftWGObserver (Lifetimes.wgSetDevicePrefix attrs))) :=
+  ⟨JointOwnerDevice.wgSetDevice_preserves attrs history,
+    JointOwnerDevice.wgSetDevice_checked attrs⟩
+
+/-- Actual peer removal and device teardown preserve receiving-owner bounds.
+Queued-work rejection and all other source Stops remain possible. -/
+theorem original_owner_removal (peer : Option PeerId) :
+    Framing.Preserves OwnerBounds.Carrier (WG.peerRemove peer) ∧
+    Framing.Preserves OwnerBounds.Carrier WG.peerRemoveAll ∧
+    Framing.Preserves OwnerBounds.Carrier WG.wgStop ∧
+    Framing.Preserves OwnerBounds.Carrier WG.wgDown ∧
+    Framing.Preserves OwnerBounds.Carrier WG.wgDestruct :=
+  ⟨OwnerRemoval.peerRemove_preserves peer,OwnerDevice.peerRemoveAll_preserves,
+    OwnerDevice.wgStop_preserves,OwnerDevice.wgDown_preserves,OwnerDevice.wgDestruct_preserves⟩
+
+/-- Creation derives empty-key/RX bounds for a fresh device. Deletion keeps
+its arbitrary native notifier callbacks and their stated contracts. -/
+theorem original_owner_device_lifecycle (onDown onUnregister : WG.M Unit)
+    (down : Framing.Preserves OwnerBounds.Carrier onDown)
+    (unregister : Framing.Preserves OwnerBounds.Carrier onUnregister) :
+    Framing.Preserves OwnerBounds.Carrier WG.wgCreate ∧
+    Framing.Preserves OwnerBounds.Carrier (WG.wgDelete onDown onUnregister) :=
+  ⟨OwnerDeviceCreation.wgCreate_preserves,
+    OwnerDeviceCreation.wgDelete_preserves onDown onUnregister down unregister⟩
+
+/-- Every actual syscall constructor has both original journal projections
+and exact executable erasure, for arbitrary incoming histories and Stops. -/
+theorem original_joint_syscall (call : Syscall) :
+    Logged.ProjectsPrefix Queues.RoutingJoint.routingEvent id
+      (Queues.RoutingJoint.syscall call) (Configuration.syscallObserved call) ∧
+    Logged.ProjectsPrefix Queues.RoutingJoint.rxEvent id
+      (Queues.RoutingJoint.syscall call) (Queues.RxHistory.syscall call) ∧
+    Logged.ErasesPrefix (Queues.RoutingJoint.syscall call) (Leanux.syscall call) :=
+  ⟨Queues.RoutingJoint.syscall_routing call,Queues.RoutingJoint.syscall_rx call,
+    Queues.RoutingJoint.syscall_erases call⟩
+
+/-- Both original initialized observers arise from one typed execution. The
+RX projection drops the successful final World only; errors keep their index. -/
+theorem original_joint_runner (trace : Runner.Trace) (placeholders : Bool) :
+    Logged.ProjectsOuter Queues.RoutingJoint.routingEvent id
+      (Queues.RoutingJoint.executeTrace trace placeholders)
+      (Configuration.executeTraceObserved trace placeholders) ∧
+    Logged.ProjectsOuter Queues.RoutingJoint.rxEvent Prod.fst
+      (Queues.RoutingJoint.executeTrace trace placeholders)
+      (Queues.RxHistory.executeTraceHistory trace placeholders) ∧
+    Logged.ErasesOuter (Queues.RoutingJoint.executeTrace trace placeholders)
+      (Configuration.sourceRunner trace placeholders) :=
+  ⟨Queues.RoutingJoint.executeTrace_routing trace placeholders,
+    Queues.RoutingJoint.executeTrace_rx trace placeholders,
+    Queues.RoutingJoint.executeTrace_erases trace placeholders⟩
+
+/-- The joint runner has the public runner's exact JSON/error result without
+an address-shape, successful-run or initialized-authorization assumption. -/
+theorem original_joint_runner_json (trace : Runner.Trace) (placeholders : Bool)
+    (history : List Queues.RoutingJoint.Event) :
+    (Logged.runPrefixOuter (Queues.RoutingJoint.executeTrace trace placeholders) history).1.map Prod.fst =
+      Runner.executeTrace trace placeholders :=
+  Queues.RoutingJoint.executeTrace_json trace placeholders history
 
 end Leanux.Proofs.WG.CryptokeyRouting

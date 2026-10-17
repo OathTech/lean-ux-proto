@@ -98,6 +98,16 @@ All prior statements remain unchanged. Gate: 569 jobs/566 declarations in
 The [short report](2026-10-17-r3-caller-cuts.md) records failed development
 checks, the reviewed reuse repair and the remaining initialized joins.
 
+The lifecycle-cuts checkpoint adds thirty-two modules and 331 theorems:
+543 files/7,704 theorems, 580 terminal declarations and 204 R3 exports.
+All syscalls and one initialized typed runner retain both original journals
+and exact JSON/indexed errors. Concrete poll/stack, crypt and transmit workers,
+peer/device configuration and lifecycle carry receiving-owner bounds.
+All earlier terminal bodies remain unchanged. Gate: 601 jobs/580 declarations
+in 6.981 seconds; fresh kernel replay passes in 106.362 seconds without warnings.
+The [short report](2026-10-17-r3-lifecycle-cuts.md) records source failures,
+reviewed reuse repairs and the remaining initialized joins.
+
 The pre-split checkpoint validated every baseline result surface over
 `cb2348e`. Initialized R3 packet authorization and R4 receive-pipeline
 conservation remain open. Earlier positive results and runtime findings retain
