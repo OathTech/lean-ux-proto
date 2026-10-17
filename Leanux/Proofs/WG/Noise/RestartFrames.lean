@@ -9,8 +9,8 @@ namespace Leanux.Proofs.WG.Noise
 open Leanux Leanux.WG Std.Do
 
 def RestartKernel (tracked : PeerId) (cursor : Nat) (allowed : Option KeypairId → Prop)
-    (k : Kernel) : Prop :=
-  ∃ d, k.wg = some d ∧ RestartDevice tracked cursor allowed d
+    (k : WGWorld) : Prop :=
+  ∃ d, k.dev = some d ∧ RestartDevice tracked cursor allowed d
 
 theorem restartDevice_insert (tracked pid : PeerId) (cursor : Nat)
     (allowed : Option KeypairId → Prop) (d : Device) (old replacement : Peer)
@@ -44,37 +44,65 @@ theorem restartDevice_erase (tracked pid : PeerId) (cursor : Nat)
 which the shared snapshot omits. The replacement must retain the read next slot. -/
 theorem setPeer_spec_restart_variant (tracked pid : PeerId) (cursor : Nat)
     (allowed : Option KeypairId → Prop) (replacement : Peer) :
-    ⦃fun w => ⌜RestartKernel tracked cursor allowed w.k ∧
+    ⦃fun w => ⌜RestartKernel tracked cursor allowed w ∧
       ∃ old, peerAt w pid = some old ∧ replacement.keypairNext = old.keypairNext⌝⦄
       setPeer pid replacement
-    ⦃⇓? _ w => ⌜RestartKernel tracked cursor allowed w.k⌝⦄ := by
+    ⦃⇓? _ w => ⌜RestartKernel tracked cursor allowed w⌝⦄ := by
   rw [← ensures_iff]
-  intro w u out pre run
+  intro w ambient u out after pre run
   obtain ⟨⟨d, device, valid⟩, old, read, same⟩ := pre
   have result := restartDevice_insert tracked pid cursor allowed d old replacement valid
     (by simpa [peerAt, device] using read) same
-  simp [setPeer, modifyDev, modifyK, device, StateT.run_bind] at run
   cases run
-  exact ⟨_, rfl, result⟩
+  exact ⟨_, by simp [device], result⟩
 
 /-- Local variant of Keypairs.Frames.WGBase.peerGetMaybeZero_spec. -/
 theorem peerGetMaybeZero_spec_restart_variant (tracked : PeerId) (cursor : Nat)
     (allowed : Option KeypairId → Prop) (peer : Option PeerId) :
-    ⦃fun w => ⌜RestartKernel tracked cursor allowed w.k⌝⦄ peerGetMaybeZero peer
-      ⦃⇓? _ w => ⌜RestartKernel tracked cursor allowed w.k⌝⦄ := by
-  have hs := setPeer_spec_restart_variant tracked
-  mvcgen [peerGetMaybeZero, requireNotPending, getPeer, getDev, getK,
-    refcountIncNotZero, branchCmp, unsupported, branch, invariant, hs]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [peerAt]
-  all_goals grind
+    ⦃fun w => ⌜RestartKernel tracked cursor allowed w⌝⦄ peerGetMaybeZero peer
+      ⦃⇓? _ w => ⌜RestartKernel tracked cursor allowed w⌝⦄ := by
+  apply (ensures_iff _ _ _).mp
+  intro g ambient result final after pre run
+  obtain ⟨d, device, valid⟩ := pre
+  cases peer with
+  | none =>
+    simp [peerGetMaybeZero, branch, AmbientM.branch] at run
+    rcases run with ⟨⟨rfl, rfl⟩, rfl⟩
+    exact ⟨d, device, valid⟩
+  | some pid =>
+    cases resident : d.peers[pid]? with
+    | none =>
+      simp [peerGetMaybeZero, requireNotPending, getPeer, getDev, device, resident,
+        branch, AmbientM.branch, invariant, AmbientM.invariant] at run
+      cases run
+    | some p =>
+      by_cases zero : p.refcount = 0
+      · simp [peerGetMaybeZero, requireNotPending, refcountIncNotZero,
+          getDev, device, getPeer, resident, zero, branch, branchCmp,
+          AmbientM.branch, AmbientM.branchCmp] at run
+        rcases run with ⟨⟨rfl, rfl⟩, rfl⟩
+        exact ⟨d, device, valid⟩
+      · by_cases overflow : 2147483647 ≤ p.refcount
+        · simp [peerGetMaybeZero, requireNotPending, refcountIncNotZero,
+            getDev, device, getPeer, resident, zero, overflow, branch, branchCmp,
+            AmbientM.branch, AmbientM.branchCmp, unsupported, AmbientM.unsupported] at run
+          cases run
+        · simp [peerGetMaybeZero, requireNotPending, refcountIncNotZero,
+            getDev, device, getPeer, resident, zero, overflow, branch, branchCmp,
+            AmbientM.branch, AmbientM.branchCmp, setPeer, modifyDev] at run
+          rcases run with ⟨⟨rfl, rfl⟩, rfl⟩
+          exact ⟨_, rfl, restartDevice_insert tracked pid cursor allowed d p _ valid resident rfl⟩
 
 /-- Local variant of Keypairs.Frames.WGBase.pubkeyLookup_spec. -/
 theorem pubkeyLookup_spec_restart_variant (tracked : PeerId) (cursor : Nat)
     (allowed : Option KeypairId → Prop) (key : Key) :
-    ⦃fun w => ⌜RestartKernel tracked cursor allowed w.k⌝⦄ pubkeyLookup key
-      ⦃⇓? _ w => ⌜RestartKernel tracked cursor allowed w.k⌝⦄ := by
-  have hg := peerGetMaybeZero_spec_restart_variant tracked cursor allowed
-  mvcgen [pubkeyLookup, getDev, getK, branch, invariant, hg]
+    ⦃fun w => ⌜RestartKernel tracked cursor allowed w⌝⦄ pubkeyLookup key
+      ⦃⇓? _ w => ⌜RestartKernel tracked cursor allowed w⌝⦄ := by
+  apply (ensures_iff _ _ _).mp
+  intro g ambient result final after pre run
+  obtain ⟨d, device, valid⟩ := pre
+  simp [pubkeyLookup, getDev, device, branch, AmbientM.branch] at run
+  exact (ensures_iff _ _ _).mpr (peerGetMaybeZero_spec_restart_variant tracked cursor allowed _)
+    g _ result final after ⟨d, device, valid⟩ run
 
 end Leanux.Proofs.WG.Noise

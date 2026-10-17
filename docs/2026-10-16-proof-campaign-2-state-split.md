@@ -19,10 +19,10 @@ and attributed theorem declarations. Campaign 2 owns 427 Lean files,
 | Result | Baseline files | Baseline theorems | Headlines | Checked now | Retrofit status |
 | --- | ---: | ---: | ---: | ---: | --- |
 | Common projection | 2 | 0 | 0 | 0 | Actual native WG/Ambient and full Product observations carried; no reconstructed execution states. |
-| H1 Noise | 35 | 171 | 22 | 180 | The full terminal closure is current; five restart-support lemmas remain pending. Six type-given frames are deleted. Wider caller/lifetime/reachability and clock-provenance charter claims remain open. |
-| H2 Index | 68 | 318 | 52 | 212 | Table, lookup, collision records, allocation, owner invariants and lifecycle support carried; seven type-given frames deleted. Exact peer-release outcomes replace stale totality, with checked counterexamples. Terminal closure and whole-driver coherence remain pending. |
-| H3 Roaming | 35 | 119 | 13 | 137 | Endpoint/publication, polling, attempt facts, crypto, lookup and response-caller factors/facts carried with full Product certificates; two type-given frames deleted. Initiation transcript facts are carried with full Product certificates; broader authentication/caller closure remains pending. |
-| H4 Configuration | 130 | 554 | 79 | 368 | Scalar, identity, port, dump, allowed-IP and structural support carried; three type-given frames deleted. Quiet timer cleanup and queued-send observations are corrected; queued-send and removal totality have checked stale-statement counterexamples. Remaining readback/effects and terminal closure remain pending. |
+| H1 Noise | 35 | 171 | 22 | 185 | The full Noise closure is current, including restart support. Six type-given frames are deleted. Wider caller/lifetime/reachability and clock-provenance charter claims remain open. |
+| H2 Index | 68 | 318 | 52 | 224 | Table, lookup, collision records, allocation, owner invariants and lifecycle support carried; seven type-given frames deleted. Exact peer-release outcomes replace stale totality, with checked counterexamples. Terminal closure and whole-driver coherence remain pending. |
+| H3 Roaming | 35 | 119 | 13 | 142 | Endpoint/publication, polling, attempt facts, crypto, lookup and response-caller factors/facts carried with full Product certificates; two type-given frames deleted. Initiation transcript facts are carried with full Product certificates; broader authentication/caller closure remains pending. |
+| H4 Configuration | 130 | 554 | 79 | 371 | Scalar, identity, port, dump, allowed-IP and structural support carried; three type-given frames deleted. Quiet timer cleanup and queued-send observations are corrected; queued-send and removal totality have checked stale-statement counterexamples. Remaining readback/effects and terminal closure remain pending. |
 | H5 Progress | 59 | 265 | 42 | 177 | Pure/control, cut, jitter, index, poll bounds, dispatch, scheduler turns, stack/probe frames, queue flush contracts, drain selection and Product observation bridge carried; one type-given index frame deleted. The old backlog fixture now has a checked exact runner rejection. Receive-ring activation models, general runner boundaries, drain bounds are carried; terminal closure remains pending. |
 | H6 Timer discipline | 98 | 404 | 50 | 156 | Base/guard/jitter, arming/wheel, recorded clock and initiation-send arming contracts carried; three type-given frames deleted. Exact wheel corrections are explicit; queue/pending and retained-worker frames are carried; broader timer episodes and terminal closure remain pending. |
 
@@ -3774,5 +3774,82 @@ infrastructure retry, limit increase or guest run occurred in these tranches.
 Reproduce with scripts/in-bundle lake build on Progress.DrainClaims,
 Roaming.InitiationCallProductSource, TimerDiscipline.RetrySource and
 Config.KeyPeerEffects under Leanux.Proofs.WG, then #print axioms and
+scripts/in-bundle lake env leanchecker --fresh MODULE for each root.
+Use capped, 32 Lean threads and 16 QEMU slots on this host.
+
+
+## Restart support, complete device dump and initiation caller claims
+
+| Tranche | Before | Retyped | Corrected | Deleted | Kept | Added | After |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Noise.RestartFrames | 5 | 3 | 0 | 0 | 2 | 0 | 5 |
+| Config.DeviceDump | 3 | 3 | 0 | 0 | 0 | 0 | 3 |
+| Index.StagedFrames | 10 | 10 | 0 | 0 | 0 | 2 | 12 |
+| Roaming.InitiationCallClaims and Product companion | 3 | 3 | 0 | 0 | 0 | 2 | 5 |
+| This tranche | 21 | 19 | 0 | 0 | 2 | 4 | 25 |
+| Cumulative processed baseline and checked support | 1,147 | 878 | 38 | 22 | 209 | 130 | 1,255 |
+
+The census is 531 campaign-owned files, 1,939 theorems and 388 checked proof
+modules; 684 baseline declarations await validation. Counts are H1 185, H2 224,
+H3 142, H4 371, H5 177 and H6 156. Every Noise module is now in the checked
+closure, resolving the support gap recorded at the preceding checkpoint.
+H2–H6 terminal closures and the full gate remain lagging. This carries existing
+claims; no new charter result is claimed.
+
+RestartFrames retains its two pure insert/erase lemmas and carries three
+native Device frames. The arbitrary allowed-key predicate, tracked-peer
+residence, keypairNext and nextKeypairId obligations remain. The setPeer
+contract still requires the actual old peer and unchanged keypairNext;
+reference acquisition retains null, missing, zero and overflow paths, and
+public-key lookup retains first-match selection. These are substantive
+within-WireGuard frames, so none is deleted on type grounds.
+
+DeviceDump carries all three total contracts over arbitrary Ambient inputs.
+The singleton peer list, resident peer, empty allowed-IP list and room premises
+are unchanged. The first leaf still accepts arbitrary context and skb with
+the original cursor and 168-byte bound. Source composition threads the actual
+decision-log prefix through getPeerDump and the complete suffix. The returned
+DumpCall has the exact room, data attributes, cleared cursor, default context
+and generation. No new premise or global proof setting is introduced.
+
+StagedFrames carries its ten original contracts and adds a private guarded
+liftSkb frame and a native ECN companion. The original ECN arbitrary predicate
+is preserved under Index.Product, jointly over WG, FS, Task and Seccomp state.
+The remaining table contracts retain malformed tables, missing references,
+identifier collisions, mapM and queue-failure paths. Skb wrappers still have
+type WG.M and execute a device guard and actual component action; their
+preservation is substantive, not a type-given deletion.
+
+InitiationCallClaims now supplies two native support facts; the three
+original-scope claims are in InitiationCallProductClaims. They retain arbitrary
+underLoad, full Product cut/outcome snapshots and independently supplied
+nested lookup fixtures. beforeSetter observes the actual state after
+hsInitNoPeer, distinct from the earlier committed Ambient state. The caller
+still requires the original packet-kind premise and retains actual prefix,
+suffix and error behavior. No default execution state is constructed.
+
+Independent reviews found no substantive issue in these four carries.
+The combined scoped build passes 161 jobs without warnings. Axiom inspection
+covers 691 logical roots in 131 proof modules, including 379 public theorem
+roots, with only standard axioms. All four fresh kernel replays pass. Static
+checks, all 258 terminal names/order, and mirror/shared boundaries pass.
+
+Restart probes 1–2 failed a substituted variable and large unification at the
+existing heartbeat bound; direct actual-run composition passes in probe 3.
+Device-dump probe 1 failed two arithmetic goals and warned about deprecated
+VCG and unused simplifications; probe 2 failed the replacement VCG's missing
+rule. Manual probes 3–8 successively exposed suffix composition, tactic syntax,
+record layout, Except/StateT normalization and an over-decomposed arithmetic
+goal. Probe 9 closes the latter directly and passes without warnings.
+The failed drafts are not validation and no recovery placeholder is retained.
+Staged-frame probes 1–3 failed record layout, component normalization and an
+error-branch contradiction; probe 4 passes. Initiation-call probe 1 passes;
+probe 2 additionally checks an isolated public wrapper, which is not yet
+counted here. Complete diagnostics were saved and inspected. No unchanged
+rerun, infrastructure retry, cap increase or proof-limit change occurred.
+
+Reproduce with scripts/in-bundle lake build on Noise.RestartFrames,
+Config.DeviceDump, Index.StagedFrames and Roaming.InitiationCallProductClaims
+under Leanux.Proofs.WG, then #print axioms and
 scripts/in-bundle lake env leanchecker --fresh MODULE for each root.
 Use capped, 32 Lean threads and 16 QEMU slots on this host.
