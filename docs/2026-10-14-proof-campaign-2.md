@@ -14,23 +14,23 @@ merged; the executable mirror remains byte-identical to b700659.
 | H2 Index | 89 | 481 | Full terminal closure and ingress/expiry/handshake/peer-creation owner coherence and whole-removal lifecycle finding/slot-covered arbitrary-AIP preservation and actual clear-work dispatch and both-mode handshake queueing and new-handshake/zero-key/retransmit callbacks and persistent-callback invariant counterexample current; reachable whole-driver uniqueness/coherence open. |
 | H3 Roaming | 18 | 190 | Full terminal closure and invalid-MAC1/rate-limit/admitted-response/initiation rejection and cookie-message preservation current; callback authentication provenance and broader caller coverage open. |
 | H4 Configuration | 93 | 702 | Full terminal closure, actual mixed/key setter paginated readback with arbitrary endpoints, finite single-peer IPv4 getter, exact mixed-width scans, weighted plans/resumed callbacks and generic coalescing and fitting multi-peer scalar and mixed fwmark/scalar set/get current; global ownership, queued cleanup, general mixed setters and multi-peer/IPv6 pagination open. |
-| H5 Progress | 48 | 318 | Full terminal closure, exact bounded outcomes and recorded batch, actual timer completion guards and recorded idle/post-advance wait completion and actual advance-syscall/runner linkage and send-worker completion guard current; global progress/coherent-ring adequacy open. |
+| H5 Progress | 49 | 326 | Full terminal closure, exact bounded outcomes and recorded batch, actual timer completion guards and recorded idle/post-advance wait completion and actual advance-syscall/runner linkage and send-worker completion guard and four final-idle syscall/runner receipts current; global progress/coherent-ring adequacy open. |
 | H6 Timers | 59 | 483 | Full terminal closure, actual retry blocks and allocation-labelled guarded session-arm events with outgoing call-entry origin and initialized give-up runtime witness current; complete caller coverage, general mixed histories and session-relative counts open. |
 
-The checked surface is 2,409 theorems in all 820 campaign-owned modules.
+The checked surface is 2,417 theorems in all 824 campaign-owned modules.
 The completed retrofit accounts for 1,983: 1,321 retyped, 244 explicitly
 corrected, 239 retained and 179 added support/finding declarations. One hundred forty-eight
 subsequent H2 declarations add table preservation and local owner coherence.
 Fifty H1 declarations add whole-operation and finite mixed-history tag ownership and actual derivation-clock provenance and direct-helper reinstallation; one hundred twenty H4 declarations
 add mixed fwmark/scalar, ordered peer-attribute, port-refusal/private-key readback and finite IPv4 getter/setter pagination and actual fitting multi-peer readback. Thirty-three H3 declarations
-add invalid-MAC1, rate-limit and admitted-response/initiation rejection and cookie-message preservation. Thirty H5 declarations
-establish recorded batch, actual timer completion guards and recorded idle/post-advance wait wheel completion and the actual send-worker completion guard. Forty-five H6 declarations
+add invalid-MAC1, rate-limit and admitted-response/initiation rejection and cookie-message preservation. Thirty-eight H5 declarations
+establish recorded batch, actual timer completion guards and recorded idle/post-advance wait wheel completion and the actual send-worker completion guard and four final-idle syscall/runner links. Forty-five H6 declarations
 connect actual timer-loop receipts, contiguous retry-block counts/bounds, local partial-exchange arming and allocation-labelled session-arm events. Of the 1,831 baseline theorems, 22 frames
 were deleted because types supply their facts and five false cookie supports
 were separately retired with checked counterexamples. No baseline declaration
 remains awaiting retrofit; all 258 original terminal names/order survive,
 with eleven new H1 headlines, thirty-seven new H2 headlines, five new H3 headlines,
-fourteen new H4 headlines, six new H5 headlines and nine new H6 headlines (340 total).
+fourteen new H4 headlines, seven new H5 headlines and nine new H6 headlines (341 total).
 
 The [retrofit report](2026-10-16-proof-campaign-2-state-split.md) records
 claim/frame files, corrections, before/after counts and validation.
@@ -3335,3 +3335,53 @@ remains FAILED and is not rerun unchanged.
 Reproduce with scoped build and fresh replay of
 Leanux.Proofs.WG.Noise.Statements and Leanux.Proofs.WG.Progress.Statements
 under capped/scripts/in-bundle, LEAN_NUM_THREADS=32 and LEANUX_QEMU_SLOTS=16.
+
+
+## H5 continuation: final idle waits at syscall and runner return
+
+The original wgSet, wgInject, wgXmit and wgBatch syscall tails now have exact
+final-wait observers. The prefix retains actual network entry resets/guard,
+dispatch, tail calls, task work, and the correct send/afterXmit worker
+continuation. Erasing the receipt yields the original syscall with the same
+numeric result and every Stop. A receipt exists exactly when the actual idle
+wait entered recorded mode; its value is the clock stored by that wait.
+A present receipt proves NoTimerDue at the final syscall state. Recorded mode
+at syscall entry is not assumed to survive arbitrary preceding work.
+
+The actual runner operation executes that same observer at runnerEntry,
+then its real skipAmbient and completion guards. Ambient stripping preserves
+the clock/wheel fact by the lift's writeback type, without a new frame lemma.
+Negative syscall returns remain included. wgUp is excluded because routing
+work follows its wait. Nothing here establishes queue/ring/pendingWork
+consistency, successful execution, future-timer absence or recordless no-due
+behavior.
+
+IdleOperationModel names the four accepted syscall forms; Source contains
+the exact factors/erasures and read-only observer definitions; Claims contains
+the three projected receipt facts; RunnerIdleOperationSource contains the
+actual runner link and is imported by Statements. Eight theorems in four
+modules bring H5 to 326 theorems and 49 headlines. Independent review finds
+three overbroad comments on unrestricted helper definitions/theorems; they
+are qualified by HasFinalIdleWait. Exact erasure and the terminal already
+have that restriction, so no formula changes.
+
+Six changed-source probes: 1 fails three read-normalization/witness errors
+and four unused-simp warnings; 2 passes the first five facts; 3 fails one
+projected-mode reduction and one unused-simp warning; 4 fails two uses of
+Syscall where the runner needs Operation; 5 passes all eight facts; 6 passes
+the reordered exact split and all standard-only roots, without diagnostics.
+Recovery declarations from failed probes are not accepted trust evidence.
+The installed scoped build passes 291 jobs, with only inherited Env:865
+String.mk. The axiom audit checks 1,207 logical roots in 227 modules,
+including 738 public theorem roots, standard-only and without diagnostics.
+Fresh kernel replay passes the changed terminal root. The subsequent
+comment-only clarification rebuild also passes 291 jobs.
+Static trust/import checks, all 258 original terminal names/order and the
+mirror/shared-layer boundaries pass. No cap/limit increase, suppression or
+infrastructure rerun occurs.
+
+Current totals: 2,417 theorems in 824 owned modules and 341 headlines.
+All six results remain in progress; the inherited full gate remains FAILED
+and is not rerun unchanged. Reproduce with scoped build, axiom inspection
+and fresh replay of Leanux.Proofs.WG.Progress.Statements under
+capped/scripts/in-bundle, LEAN_NUM_THREADS=32 and LEANUX_QEMU_SLOTS=16.

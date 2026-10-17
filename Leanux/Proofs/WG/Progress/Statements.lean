@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Progress.RunnerIdleOperationSource
 import Leanux.Proofs.WG.Progress.SendCompletionClaims
 import Leanux.Proofs.WG.Progress.RunnerAdvanceSource
 import Leanux.Proofs.WG.Progress.AdvanceWaitClaims
@@ -706,5 +707,14 @@ theorem original_send_workers_completion :
     Campaign2.Product.Ensures runSendWorkers (fun _ => True)
       (fun _ final => SendWorkersComplete final) :=
   runSendWorkers_completion
+
+/-- The four final-idle syscall forms have the original execution and its
+optional final clock receipt, without an entry-mode or readiness assumption. -/
+theorem original_final_idle_wait_receipt (call : Syscall) (waited : HasFinalIdleWait call) :
+    (do let out ← observedIdleWaitOperation call; pure out.1) = syscall call ∧
+    Campaign2.Product.Ensures (observedIdleWaitOperation call) (fun _ => True)
+      (fun out final => ∀ j, out.2 = some j →
+        final.wg.jiffiesLast = some j ∧ NoTimerDue j final) :=
+  ⟨observedIdleWaitOperation_erase call waited,observedIdleWaitOperation_checks call⟩
 
 end Leanux.Proofs.WG.Progress
