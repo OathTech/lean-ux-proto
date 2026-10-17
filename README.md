@@ -51,12 +51,11 @@ each; the [scope table](#scope) below is its summary.
   controls and sentinel mutants.
 - **A proof tree:** theorems about the model, in `Leanux/Proofs/`, with their
   own build target and gate. The first result, replay freedom of WireGuard's
-  receive counter window, is landed; at this revision the
-  [register](docs/proofs.md) records it as lagging since 247beec, with the
-  repair on the proof campaign's branch pending its landing. Six further
-  WireGuard properties are chartered as a campaign; each is a theorem about
-  the model at a stated boundary, listed with its original claim and its
-  counterexamples in the register's result table.
+  receive counter window, is current over the state split on this branch.
+  The [register](docs/proofs.md#results) records the six campaign results and
+  their exact scope: R1, R2 and R3 have positive proofs; R5 and R6 include
+  counterexamples. R4 has initialized entry/completion and receipt-linkage
+  proofs and an order counterexample; initialized conservation remains open.
 - **A tray of kernel findings:** [docs/upstream-tray/](docs/upstream-tray/INDEX.md),
   reports on kernel behaviour that might concern its maintainers, drafted for
   future filing; reports only, no patches.

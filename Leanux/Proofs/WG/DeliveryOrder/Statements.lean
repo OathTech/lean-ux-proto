@@ -1,3 +1,8 @@
+import Leanux.Proofs.WG.Queues.HolderTxActivation
+import Leanux.Proofs.WG.Queues.HolderTimerPhysical
+import Leanux.Proofs.WG.Queues.BaseLookupRemoval
+import Leanux.Proofs.WG.Queues.HolderAllowedIps
+import Leanux.Proofs.WG.Queues.HandshakeReceive
 import Leanux.Proofs.WG.Queues.HolderCreation
 import Leanux.Proofs.WG.Queues.HolderBaseRetirement
 import Leanux.Proofs.WG.Queues.TxHolderStep
@@ -2595,5 +2600,97 @@ theorem original_tx_activation_holders (initial : Ledger) (loans : Reservations)
     PrefixPreserves (HolderNapi.At initial loans before) (fun _ => True)
       (RxHistory.activationIteration activation) :=
   HolderTxHistory.activationIteration_preserves initial loans before activation worker
+
+/-- The actual initiation consumer accounts for its optional acquired reference. -/
+theorem original_initiation_holder_loan (msg : List UInt8) {holders : DurableHolders}
+    (hi : holders.Funded cs loans w) (stable : StableRx cs w) (a b : Ambient)
+    (run : ((consumeInitiation msg).run w).run a=.ok ((result,v),b)) :
+    HandshakeLoans.FundedResult holders cs loans result v :=
+  HandshakeLoans.consumeInitiation_funded msg hi stable a b run
+
+/-- The actual response consumer accounts for its optional acquired reference. -/
+theorem original_response_holder_loan (msg : List UInt8) {holders : DurableHolders}
+    (hi : holders.Funded cs loans w) (stable : StableRx cs w) (a b : Ambient)
+    (run : ((consumeResponse msg).run w).run a=.ok ((result,v),b)) :
+    HandshakeLoans.FundedResult holders cs loans result v :=
+  HandshakeLoans.consumeResponse_funded msg hi stable a b run
+
+/-- Each original timer callback retains a complete funded account, including new work. -/
+theorem original_timer_callback_account (pid : PeerId) (timer : PeerTimer) :
+    Preserves (DurableHolders.Boundary cs loans) (timerCallback pid timer) :=
+  HolderTimers.callback_boundary pid timer
+
+/-- The whole original TX activation uses its committed removal suffix. -/
+theorem original_tx_run_account (a : Activation) (worker : a.worker = .txWorker)
+    (hi : DurableHolders.Boundary cs loans w.wg)
+    (run : (Env.Activation.run a).run w = .ok ((),v)) (h : List RxHistory.Event) :
+    let k := (runPrefix (RxHistory.activationRun a) w h).2
+    ∃ suffix, k = h ++ suffix ∧ DurableHolders.Boundary (remaining cs (NapiCarrier.removedPackets suffix)) loans v.wg :=
+  HolderTxActivation.activationRun_normal a worker hi run h
+
+/-- A whole nonreceive activation retains its account and physical ring witness. -/
+theorem original_nonreceive_run_account (a : Activation) (other : a.worker ≠ .receiveWorker)
+    (funded : DurableHolders.Boundary cs loans w.wg) (physical : Queues.RxCredits.DecryptIteration.Physical w)
+    (run : (Env.Activation.run a).run w = .ok ((),v)) (h : List RxHistory.Event) :
+    (∃ suffix, (runPrefix (RxHistory.activationRun a) w h).2 = h ++ suffix ∧
+      DurableHolders.Boundary (remaining cs (NapiCarrier.removedPackets suffix)) loans v.wg) ∧ Queues.RxCredits.DecryptIteration.Physical v :=
+  HolderScheduler.run_normal a other funded physical run h
+
+/-- Actual nonreceive dispatch uses the selected activation and the same removal history. -/
+theorem original_nonreceive_dispatch_account (worker : Worker) (other : worker ≠ .receiveWorker)
+    (funded : DurableHolders.Boundary cs loans w.wg) (physical : Queues.RxCredits.DecryptIteration.Physical w)
+    (run : (Env.dispatch worker).run w = .ok (result,v)) (h : List RxHistory.Event) :
+    (∃ suffix, (runPrefix (RxHistory.dispatch worker) w h).2 = h ++ suffix ∧
+      DurableHolders.Boundary (remaining cs (NapiCarrier.removedPackets suffix)) loans v.wg) ∧ Queues.RxCredits.DecryptIteration.Physical v :=
+  HolderScheduler.dispatch_normal worker other funded physical run h
+
+/-- Whole scheduling retains the exact remaining receive-worker contract explicitly. -/
+theorem original_schedule_account_conditional (stack : Option Worker) (h : List RxHistory.Event)
+    (receive : PrefixPreserves (HolderScheduler.Inv cs loans h) (fun _ => True) Origins.HistoryAdapters.receiveIteration)
+    (funded : DurableHolders.Boundary cs loans w.wg) (physical : Queues.RxCredits.DecryptIteration.Physical w)
+    (run : (Env.schedule stack).run w = .ok ((),v)) :
+    (∃ suffix, (runPrefix (RxHistory.schedule stack) w h).2 = h ++ suffix ∧
+      DurableHolders.Boundary (remaining cs (NapiCarrier.removedPackets suffix)) loans v.wg) ∧ Queues.RxCredits.DecryptIteration.Physical v :=
+  HolderScheduler.schedule_normal stack h receive funded physical run
+
+/-- Every deferred constructor uses concrete timers and workers, with the receive contract explicit. -/
+theorem original_deferred_account_conditional (call : EnvDeferredCall) {result : call.Result} (h : List RxHistory.Event)
+    (receive : PrefixPreserves (HolderScheduler.Inv cs loans h) (fun _ => True)
+      Origins.HistoryAdapters.receiveIteration)
+    (funded : DurableHolders.Boundary cs loans w.wg) (physical : Queues.RxCredits.DecryptIteration.Physical w)
+    (run : call.original.run w = .ok (result,v)) :
+    (∃ suffix, (runPrefix (RxHistory.deferred call) w h).2 = h ++ suffix ∧
+      DurableHolders.Boundary (remaining cs (NapiCarrier.removedPackets suffix)) loans v.wg) ∧
+      Queues.RxCredits.DecryptIteration.Physical v :=
+  HolderTimerPhysical.deferred_normal call h receive funded physical run
+
+/-- Actual creation retains unique base slots and public-key target membership. -/
+theorem original_creation_base_coherence (key : Key) (psk : Option Key) {h : DurableHolders}
+    (hi : BaseCoherence.Inv w) (funded : h.Funded cs loans w) (configured : ConfiguredIdentity.Inv w)
+    (a b : Ambient) (run : ((peerCreate key psk).run w).run a=.ok ((result,v),b)) : BaseCoherence.Inv v :=
+  BaseCoherence.creation_preserves key psk hi funded configured a b run
+
+/-- The actual lookup and removal pay the separate base and caller references. -/
+theorem original_lookup_removal_accounts (key : Key) (attrs : PeerAttrs) (flags : UInt32) (psk : Option Key)
+    {h : DurableHolders} (hi : h.Funded cs loans w) (stable : StableRx cs w)
+    (coherent : BaseCoherence.Inv w) (configured : ConfiguredIdentity.Inv w)
+    (remove : (flags &&& WGPEER_F_REMOVE_ME != 0)=true) (a middle b : Ambient)
+    (lookup : ((pubkeyLookup key).run w).run a=.ok ((some pid,u),middle))
+    (update : ((Configuration.peerConfigUpdateSource attrs (some pid) flags psk pid).run u).run middle=.ok ((result,v),b)) :
+    result=0 ∧ DurableHolders.DuringWork (h.withoutBase (BaseRemoval.live h.base pid)) cs loans v :=
+  BaseLookupRemoval.lookup_update_remove key attrs flags psk hi stable coherent configured remove a middle b lookup update
+
+/-- Original allowed-IP configuration retains the complete holder account. -/
+theorem original_allowedip_holder_account (pid : PeerId) (ip : AllowedIpAttrs) :
+    Preserves (DurableHolders.Boundary cs loans) (setAllowedip pid ip) :=
+  HolderAllowedIps.setAllowedip_boundary pid ip
+
+/-- At the real session entry, explicit key facts suffice for the final caller payment. -/
+theorem original_response_session_payment (o : Owner) (msg : List UInt8) :
+    Hoare (HandshakeReceive.responseSession o.slot >>= fun _ => HandshakeReceive.finishSelected (some o.slot) msg)
+      (fun w => DurableHolders.Boundary cs (o::loans) w ∧ ConfiguredIdentity.Inv w ∧
+        OwnerBounds.Carrier w ∧ CurrentSlots.Inv w)
+      (fun _ => DurableHolders.Boundary cs loans) :=
+  HandshakeReceive.response_paid o msg
 
 end Leanux.Proofs.WG.DeliveryOrder

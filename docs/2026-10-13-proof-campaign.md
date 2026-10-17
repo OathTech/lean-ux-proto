@@ -222,6 +222,15 @@ session setup and two timers retain the supplied complete account. Initialized
 conservation remains open. Gate: 793 jobs/728 declarations in 5.190 seconds;
 fresh root replay passes in 110.672 seconds without warnings.
 
+The [scheduler/lifecycle checkpoint](2026-10-17-r4-scheduler-lifecycle.md)
+adds twelve modules and 221 theorems: 747 files/10,290 theorems, 206 R4 terminals
+and 740 total declarations. All previous bodies remain unchanged. Handshake
+acquisition, all timers, nonreceive scheduling, base/caller payments and
+allowed-IP edits retain their supplied accounts. Full scheduler/deferred
+contracts expose the remaining receive premise. Initialized conservation
+remains open. The corrected gate passes 805 jobs/740 declarations in 5.309
+seconds after one namespace-qualification failure. Fresh root kernel replay passes in 108.189 seconds without warnings.
+
 The pre-split checkpoint validated every baseline result surface over
 `cb2348e`. R3 packet authorization is now closed over the current split tree;
 R4 receive-pipeline conservation remains open. Earlier positive results and runtime findings retain
@@ -619,15 +628,15 @@ correspondence remains informal.
 
 ## R4 — queue, poll and delivery-order components (in progress)
 
-**State-split lifecycle/worker extension.** The [current report](2026-10-17-r4-lifecycle-workers.md)
-records 158 additional theorems in fifteen modules and twelve terminal exports.
-The tree has 735 proof files/10,069 theorems, with 194 R4 terminals and all 182
-preceding bodies unchanged. Creation, bulk retirement, full TX selection/payment,
-publication, encryption/activation iteration, dump callers, session setup and two
-timers retain the complete supplied account. Single removal exposes its base
-uniqueness/membership domain. Remaining consumers/timers, lifecycle coherence,
-outer callers and initialized conservation remain open. Chronological GRO
-order stays refuted.
+**State-split scheduler/lifecycle extension.** The [current report](2026-10-17-r4-scheduler-lifecycle.md)
+records 221 additional theorems in twelve modules and twelve terminal exports.
+The tree has 747 proof files/10,290 theorems, with 206 R4 terminals and all 194
+preceding bodies unchanged. Actual handshake acquisition, all timer callbacks,
+nonreceive scheduling, base/caller payments and allowed-IP edits retain the
+complete supplied account. Whole scheduling/deferred calls retain the exact
+receive-worker contract; the response session tail retains explicit auxiliary
+entry bounds. Full receive, lifecycle coherence, ingress and initialized
+conservation remain open. Chronological GRO order stays refuted.
 
 **Original versus proved.** The charter requires accepted-schedule order and no silent loss/duplication.
 [Terminals](../Leanux/Proofs/WG/DeliveryOrder/Statements.lean) prove initialized committed callback-entry stamp
