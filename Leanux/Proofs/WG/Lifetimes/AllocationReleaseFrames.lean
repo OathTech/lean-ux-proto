@@ -1,5 +1,6 @@
 import Leanux.Proofs.WG.Lifetimes.AllocationRetention
 import Leanux.Proofs.WG.Keypairs.Ordinary
+import Lean
 
 set_option maxHeartbeats 1000000
 set_option pp.structureInstances false
@@ -42,64 +43,178 @@ theorem setRxSkb_metadata (i : SkbId) (f : RxPacket → RxPacket) :
       cases hr
       simp [allocationMetadata, deviceAllocationMetadata, Packets.update, hd]
 
+open Lean Meta Elab Tactic in
+elab "allocation_release_head " n:ident : tactic => withMainContext do
+  let target := (← instantiateMVars (← (← getMainGoal).getType)).consumeMData
+  unless target.isAppOf ``Preserves do throwError "not a frame contract"
+  let action := target.getAppArgs.back!.consumeMData.headBeta
+  let expected ← realizeGlobalConstNoOverloadWithInfo n
+  unless action.getAppFn.constName? == some expected do throwError "different action head"
+
+open Lean Meta Elab Tactic in
+elab "allocation_release_step" : tactic => withMainContext do
+  let goal ← getMainGoal
+  let target := (← instantiateMVars (← goal.getType)).consumeMData
+  if target.isForall then
+    evalTactic (← `(tactic| intro))
+    return
+  unless target.isAppOf ``Preserves do throwError "not a frame contract"
+  let .app property action := target | throwError "missing action"
+  let action := action.consumeMData
+  if let .letE _ _ value body _ := action then
+    replaceMainGoal [← goal.replaceTargetDefEq (mkApp property (body.instantiate1 value))]
+    return
+  let reduced := action.headBeta
+  if !Expr.equal action reduced then
+    replaceMainGoal [← goal.replaceTargetDefEq (mkApp property reduced)]
+    return
+  let head := action.getAppFn.constName?
+  if head == some ``Bind.bind then
+    evalTactic (← `(tactic| refine preserves_bind ?_ ?_))
+  else if head == some ``Pure.pure then
+    evalTactic (← `(tactic| exact preserves_pure _))
+  else if head == some ``ite || head == some ``dite then
+    evalTactic (← `(tactic| split))
+  else if head == some ``liftM then
+    evalTactic (← `(tactic| unfold liftM))
+  else if (← Lean.Meta.matchMatcherApp? action).isSome then
+    replaceMainGoal (← Lean.Meta.Split.splitMatch goal action)
+  else
+    throwError "unhandled frame action head {head}"
+
+open Lean Meta Elab Tactic in
+elab "allocation_release_lift_from " carrier:ident : tactic => withMainContext do
+  let target := (← getMainTarget).consumeMData
+  unless target.isAppOf ``Preserves do
+    throwError "expected a frame contract"
+  let action := target.getAppArgs.back! |>.consumeMData |>.headBeta
+  unless action.isAppOf ``liftM || action.isAppOf ``MonadLift.monadLift ||
+      action.isAppOf ``MonadLiftT.monadLift do
+    throwError "expected a lifted action"
+  let source := action.getAppArgs.back!
+  let sourceType ← inferType source
+  unless sourceType.isApp do throwError "expected an applied source monad"
+  let name ← realizeGlobalConstNoOverloadWithInfo carrier
+  let expected ← mkAppM name #[sourceType.getAppArgs.back!]
+  unless ← withReducible (isDefEq sourceType expected) do
+    throwError "different source monad"
+
+
 theorem peerGet_metadata (id : PeerId) : SameView allocationMetadata (peerGet id) := by
-  apply SameView.of_wp
-  intro s
-  mvcgen [peerGet, requireNotPending, getPeer, getDev, setPeer,
-    modifyDev, refcountInc, branch, branchCmp, invariant, unsupported,
-    AmbientM.branch, AmbientM.branchCmp, AmbientM.invariant, AmbientM.unsupported]
-  all_goals dsimp +zetaDelta only at *
-  all_goals simp_all [allocationMetadata, deviceAllocationMetadata]
+  apply (ProjectedAction.iff_run_ambient _ _ _).mpr
+  intro w ambient x v ambient' hr
+  cases hd : w.dev with
+  | none =>
+    simp [peerGet, requireNotPending, getPeer, getDev, hd,
+      invariant, AmbientM.invariant] at hr
+    cases hr
+  | some d =>
+    cases hp : d.peers[id]? with
+    | none =>
+      simp [peerGet, requireNotPending, getPeer, getDev, hd, hp,
+        invariant, AmbientM.invariant] at hr
+      cases hr
+    | some peer =>
+      simp [peerGet, requireNotPending, getPeer, getDev, setPeer, modifyDev,
+        hd, hp, refcountInc, branch, branchCmp, AmbientM.branch, AmbientM.branchCmp,
+        unsupported, AmbientM.unsupported] at hr
+      split at hr <;> simp_all
+      all_goals try split at hr <;> simp_all
+      all_goals rcases hr with ⟨⟨rfl, rfl⟩, rfl⟩
+      all_goals simp [allocationMetadata, deviceAllocationMetadata, hd]
 
 theorem peerPut_metadata (id : Option PeerId) : SameView allocationMetadata (peerPut id) := by
   apply SameView.of_wp
-  intro s
-  have index_spec (a : IndexM Unit) :
-      Hoare (MonadLift.monadLift a : WG.M Unit)
-        (fun w => allocationMetadata w = s) (fun _ w => allocationMetadata w = s) := by
+  intro initial
+  let P := fun w : WGWorld => allocationMetadata w = initial
+  have ambient {α : Type} (a : AmbientM α) :
+      Preserves P (monadLift a : WG.M α) := hoare_liftAmbient a P
+  have index {α : Type} (a : IndexM α) :
+      Preserves P (monadLift a : WG.M α) := by
     apply hoare_liftIndex a
     intro w d table hi hd
-    have same : allocationMetadata {w with dev := some {d with indexTable := table}} =
-        allocationMetadata w := by
-      simp only [allocationMetadata, hd, Option.map_some, deviceAllocationMetadata]
-    exact same.trans hi
-  unfold Hoare at index_spec
-  mvcgen [peerPut, requireNotPending, getPeer, getDev, setPeer, modifyDev,
-    refcountDecAndTest, branch, branchCmp, AmbientM.branch, AmbientM.branchCmp,
-    index_spec, retirePeerUnits, modifyAmbient, invariant, unsupported,
-    AmbientM.invariant, AmbientM.unsupported]
-  all_goals dsimp +zetaDelta only at *
-  all_goals simp_all [allocationMetadata, deviceAllocationMetadata]
-  all_goals subst_vars
-  all_goals simp_all [deviceAllocationMetadata]
+    simpa [P, allocationMetadata, deviceAllocationMetadata, hd] using hi
+  have rc (old : Nat) : Preserves P (refcountDecAndTest old : WG.M Bool) := by
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w a x v a' hp hr
+    simp [refcountDecAndTest, branch, branchCmp, AmbientM.branch,
+      AmbientM.branchCmp, unsupported, AmbientM.unsupported] at hr
+    repeat' split at hr
+    all_goals simp_all
+    all_goals rcases hr with ⟨⟨rfl, rfl⟩, rfl⟩
+    all_goals exact hp
+  have read (pid : PeerId) : Preserves P (getPeer pid) := by
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w a p v a' h hr
+    rw [(Peers.getPeer_current pid w v p a a' hr).1]
+    exact h
+  change Preserves P (peerPut id)
+  unfold peerPut
+  simp (config := { zeta := true }) only [branch, invariant, requireNotPending,
+    retirePeerUnits, modifyAmbient]
+  repeat' first
+    | (allocation_release_head getPeer; exact read _)
+    | (allocation_release_head setPeer; exact (setPeer_metadata _ _).wp (fun t => t = initial))
+    | (allocation_release_head modifyDev
+       apply (hoare_iff_run_ambient _ _ _).mpr
+       intro w a x v a' h hr
+       cases hr
+       cases hd : w.dev <;>
+         simpa [P, allocationMetadata, deviceAllocationMetadata, hd] using h)
+    | (allocation_release_head refcountDecAndTest; exact rc _)
+    | (allocation_release_lift_from IndexM; exact index _)
+    | (allocation_release_lift_from AmbientM; exact ambient _)
+    | (allocation_release_head _root_.modify; apply hoare_modify; intro w h; exact h)
+    | allocation_release_step
 
 def keypairReleaseRest (w : WGWorld) := (Peers.snapshot w, packetResidents w, allocationMetadata w)
 
 theorem keypairPut_rest (kp : Option KeypairId) (now : Bool) :
     SameView keypairReleaseRest (keypairPut kp now) := by
   apply SameView.of_wp
-  intro s
-  have hd := fun o => indexOwner_peerDeref_preserves o (fun w => keypairReleaseRest w = s)
-  have index_spec (a : IndexM Unit) :
-      Hoare (MonadLift.monadLift a : WG.M Unit)
-        (fun w => keypairReleaseRest w = s) (fun _ w => keypairReleaseRest w = s) := by
+  intro initial
+  let P := fun w : WGWorld => keypairReleaseRest w = initial
+  have ambient {α : Type} (a : AmbientM α) :
+      Preserves P (monadLift a : WG.M α) := hoare_liftAmbient a P
+  have index {α : Type} (a : IndexM α) :
+      Preserves P (monadLift a : WG.M α) := by
     apply hoare_liftIndex a
     intro w d table hi hd
-    have same : keypairReleaseRest {w with dev := some {d with indexTable := table}} =
-        keypairReleaseRest w := by
-      unfold keypairReleaseRest Peers.snapshot packetResidents allocationMetadata
-      simp only [hd, Option.bind_some, Option.map_some, deviceAllocationMetadata]
-    exact same.trans hi
-  unfold Preserves Hoare at hd
-  unfold Hoare at index_spec
-  mvcgen [hd, index_spec, keypairPut, getKeypair, getDev, setKeypair, modifyDev,
-    branch, branchCmp, refcountDecAndTest, unsupported, invariant,
-    AmbientM.branch, AmbientM.branchCmp, AmbientM.unsupported, AmbientM.invariant]
-  all_goals dsimp +zetaDelta only at *
-  all_goals unfold keypairReleaseRest Peers.snapshot packetResidents allocationMetadata at *
-  all_goals simp_all [deviceAllocationMetadata, Option.bind_map, Function.comp_def]
-  all_goals subst_vars
-  all_goals simp_all [deviceAllocationMetadata]
+    unfold P keypairReleaseRest Peers.snapshot packetResidents allocationMetadata at hi ⊢
+    simpa only [hd, Option.bind_some, Option.map_some, deviceAllocationMetadata] using hi
+  have rc (old : Nat) : Preserves P (refcountDecAndTest old : WG.M Bool) := by
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w a x v a' hp hr
+    simp [refcountDecAndTest, branch, branchCmp, AmbientM.branch,
+      AmbientM.branchCmp, unsupported, AmbientM.unsupported] at hr
+    repeat' split at hr
+    all_goals simp_all
+    all_goals rcases hr with ⟨⟨rfl, rfl⟩, rfl⟩
+    all_goals exact hp
+  have read (i : KeypairId) : Preserves P (getKeypair i) := by
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w a k v a' h hr
+    rw [(Keypairs.getKeypair_current i w v a a' k hr).1]
+    exact h
+  change Preserves P (keypairPut kp now)
+  unfold keypairPut
+  simp (config := { zeta := true }) only [branch, invariant]
+  repeat' first
+    | (allocation_release_head getKeypair; exact read _)
+    | (allocation_release_head IndexOwner.peerDeref; exact indexOwner_peerDeref_preserves _ P)
+    | (allocation_release_head setKeypair; unfold setKeypair)
+    | (allocation_release_head modifyDev
+       apply (hoare_iff_run_ambient _ _ _).mpr
+       intro w a x v a' h hr
+       cases hr
+       unfold P keypairReleaseRest Peers.snapshot packetResidents allocationMetadata at h ⊢
+       cases hd : w.dev <;>
+         simpa [deviceAllocationMetadata, hd] using h)
+    | (allocation_release_head refcountDecAndTest; exact rc _)
+    | (allocation_release_lift_from IndexM; exact index _)
+    | (allocation_release_lift_from AmbientM; exact ambient _)
+    | (allocation_release_head _root_.modify; apply hoare_modify; intro w h; exact h)
+    | allocation_release_step
 
 theorem ordinary_same_frontier (ho : Keypairs.Ordinary s t) (hf : t.frontier = s.frontier) :
     ∀ i c, t.slots i = some c → s.slots i = some c := by

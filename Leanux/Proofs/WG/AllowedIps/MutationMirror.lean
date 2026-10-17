@@ -18,27 +18,37 @@ theorem allocNode_wp (k : WG.AipStore) (site : AllocSite) (n : WG.AipNode) :
       (result = some k.nextNode ∧ w = { k with nextNode := k.nextNode + 1, nodes := k.nodes.insert k.nextNode n })⌝⦄ := by
   have hs : Hoare (hiddenAlloc site : WG.AipM Bool) (fun w => w = k) (fun _ w => w = k) :=
     hoare_liftAmbient (AmbientM.hiddenAlloc site) _
-  unfold Hoare at hs
-  mvcgen [WG.allocNode, hs]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all
+  unfold WG.allocNode
+  apply hoare_bind _ _ hs
+  intro allocated
+  cases allocated <;> apply (hoare_iff_run_ambient _ _ _).mpr
+  · intro w ambient result out ambient' hk hr
+    subst w
+    cases hr
+    exact Or.inl ⟨rfl, rfl⟩
+  · intro w ambient result out ambient' hk hr
+    subst w
+    cases hr
+    exact Or.inr ⟨rfl, rfl⟩
 
 theorem setNode_wp (k : WG.AipStore) (id : Nat) (n : WG.AipNode) :
     ⦃fun w => ⌜w = k⌝⦄ WG.setNode id n
     ⦃⇓ result w => ⌜result = () ∧ w = { k with nodes := k.nodes.insert id n }⌝⦄ := by
-  mvcgen [WG.setNode]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all
+  apply (total_iff_run_ambient _ _ _).mpr
+  intro w ambient hk
+  subst w
+  exact ⟨(), _, ambient, rfl, rfl, rfl⟩
 
 theorem listAddTail_wp (k : WGWorld) (d : WG.Device) (hd : k.dev = some d)
     (pid id : Nat) (p : WG.Peer) (hp : d.peers[pid]? = some p) :
     ⦃fun w => ⌜w = k⌝⦄ WG.listAddTail pid id
     ⦃⇓ result w => ⌜result = () ∧ w = { k with dev := some { d with
       peers := d.peers.insert pid { p with allowedipsList := p.allowedipsList ++ [id] } } }⌝⦄ := by
-  mvcgen [WG.listAddTail, WG.getPeer, WG.getDev, WG.setPeer,
-    WG.modifyDev, invariant, AmbientM.invariant]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all
+  apply (total_iff_run_ambient _ _ _).mpr
+  intro w ambient hk
+  subst w
+  refine ⟨(), _, ambient, ?_, rfl, rfl⟩
+  simp [WG.listAddTail, WG.getPeer, WG.getDev, WG.setPeer, WG.modifyDev, hd, hp]
 
 def rootSlot (v4 : Bool) : WG.Slot := if v4 then .root4 else .root6
 
@@ -54,26 +64,29 @@ def rootWrite (d : WG.Device) (v4 : Bool) (value : Option Nat) : WG.Device :=
 theorem slotGet_root_wp (k : WG.AipStore) (v4 : Bool) :
     ⦃fun w => ⌜w = k⌝⦄ WG.slotGet (rootSlot v4)
     ⦃⇓ result w => ⌜result = (if v4 then k.trie.root4 else k.trie.root6) ∧ w = k⌝⦄ := by
-  cases v4 <;> mvcgen [rootSlot, WG.slotGet]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all
+  apply (total_iff_run_ambient _ _ _).mpr
+  intro w ambient hk
+  subst w
+  cases v4 <;> exact ⟨_, k, ambient, rfl, rfl, rfl⟩
 
 theorem slotSet_root_wp (k : WG.AipStore) (v4 : Bool) (value : Option Nat) :
     ⦃fun w => ⌜w = k⌝⦄ WG.slotSet (rootSlot v4) value
     ⦃⇓ result w => ⌜result = () ∧ w = { k with trie :=
       if v4 then { k.trie with root4 := value } else { k.trie with root6 := value } }⌝⦄ := by
-  cases v4 <;> mvcgen [rootSlot, WG.slotSet]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all
+  apply (total_iff_run_ambient _ _ _).mpr
+  intro w ambient hk
+  subst w
+  cases v4 <;> exact ⟨(), _, ambient, rfl, rfl, rfl⟩
 
 theorem connectNode_root_wp (k : WG.AipStore)
     (v4 : Bool) (id : Nat) (n : WG.AipNode) (hn : k.nodes[id]? = some n) :
     ⦃fun w => ⌜w = k⌝⦄ WG.connectNode (rootSlot v4) id
     ⦃⇓ result w => ⌜result = () ∧ w = { k with nodes := k.nodes.insert id { n with parent := rootSlot v4 }, trie := if v4 then { k.trie with root4 := some id } else { k.trie with root6 := some id } }⌝⦄ := by
-  cases v4 <;> mvcgen [WG.connectNode, rootSlot, WG.getNode,
-    WG.setNode, WG.slotSet, invariant, AmbientM.invariant]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [rootSlot]
+  apply (total_iff_run_ambient _ _ _).mpr
+  intro w ambient hk
+  subst w
+  refine ⟨(), _, ambient, ?_, rfl, rfl⟩
+  cases v4 <;> simp [WG.connectNode, WG.getNode, WG.setNode, WG.slotSet, rootSlot, hn]
 
 /-- The endpoint retains the two source node writes: allocation with the
 detached default backlink, followed by connection with the selected root. -/
@@ -144,21 +157,118 @@ theorem add_empty_wp (k : WGWorld) (d : WG.Device) (hd : k.dev = some d)
     have hs := connectNode_root_wp
       {nodes := listed.nodes, nextNode := listed.nextNode, trie := listed.peerAllowedips}
       v4 d.nextNode n hn
-    unfold Hoare
-    mvcgen [hs]
-    all_goals try dsimp +zetaDelta only at *
-    all_goals simp_all [allocated, emptyInstalled, rootWrite]
-  mvcgen [WG.add, branchCmp, AmbientM.branchCmp, branch, AmbientM.branch,
-    hg, ha, hl, hconnect, invariant, AmbientM.invariant]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals clear ha hg
-  all_goals subst_vars
-  all_goals try simp_all [rootValue]
-  all_goals try omega
-  all_goals mvcgen [hl, hconnect]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals clear hl hconnect
-  all_goals cases v4 <;> simp_all [allocated, emptyInstalled, rootWrite, rootSlot, rootWidth]
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro entry ambient result out ambient' hi hr
+    obtain ⟨r, finish, b, he, hresult, hfinish⟩ :=
+      (total_iff_run_ambient _ _ _).mp hs entry ambient hi
+    rw [hr] at he
+    cases he
+    rcases hresult with rfl
+    rcases hfinish with rfl
+    cases v4 <;> simp [listed, n, allocated, emptyInstalled, rootWrite]
+  have branchRule {β : Type} (decision : Decision) (value : Bool)
+      (P : WGWorld → Prop) (Q : β → WGWorld → Prop) (f : Bool → WG.M β)
+      (hf : Hoare (f value) P Q) :
+      Hoare ((branch decision value : WG.M Bool) >>= f) P Q := by
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient x out ambient' hi hr
+    change ((f value).run w).run _ = .ok ((x, out), ambient') at hr
+    exact (hoare_iff_run_ambient _ _ _).mp hf _ _ _ _ _ hi hr
+  have comparisonRule {β : Type} (decision : Decision) (value : Bool) (a b : Int)
+      (P : WGWorld → Prop) (Q : β → WGWorld → Prop) (f : Bool → WG.M β)
+      (hf : Hoare (f value) P Q) :
+      Hoare ((branchCmp decision value a b : WG.M Bool) >>= f) P Q := by
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient x out ambient' hi hr
+    change ((f value).run w).run _ = .ok ((x, out), ambient') at hr
+    exact (hoare_iff_run_ambient _ _ _).mp hf _ _ _ _ _ hi hr
+  have mayReturn {β : Type} (a : WG.M β) (P : WGWorld → Prop)
+      (Q : β → WGWorld → Prop) (h : ⦃fun w => ⌜P w⌝⦄ a ⦃⇓ x w => ⌜Q x w⌝⦄) :
+      Hoare a P Q := by
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient x out ambient' hi hr
+    obtain ⟨y, v, b, he, hq⟩ := (total_iff_run_ambient _ _ _).mp h w ambient hi
+    rw [hr] at he
+    cases he
+    exact hq
+  let Post := fun result (w : WGWorld) =>
+    (result = -ENOMEM ∧ w = k) ∨
+      (result = 0 ∧ w = {k with dev := some (emptyInstalled d v4 addr cidr pid p)})
+  have finish : Hoare (pure (0 : Int) : WG.M Int)
+      (fun w => w = {k with dev := some (emptyInstalled d v4 addr cidr pid p)}) Post := by
+    apply hoare_consequence (hoare_pure (0 : Int) _)
+    · exact fun _ h => h
+    · intro r w h
+      exact Or.inr h
+  have install : Hoare (do
+      WG.listAddTail pid d.nextNode
+      WG.connectNode (rootSlot v4) d.nextNode
+      pure (0 : Int) : WG.M Int)
+      (fun w => w = {k with dev := some (allocated d n)}) Post := by
+    apply hoare_bind _ _ (mayReturn _ _ _ hl)
+    intro u
+    apply hoare_consequence
+      (hoare_bind _ _ hconnect (fun _ =>
+        hoare_consequence finish (fun _ h => h.2) (fun _ _ h => h)))
+    · intro w hi
+      exact hi.2
+    · exact fun _ _ h => h
+  let empty : WG.M Int := do
+    let some id ← (do
+      let r ← WG.allocNode .allocNode190 (WG.newNode addr cidr (rootWidth v4) (some pid))
+      if ← branch .addRootNoMem r.isNone then return none
+      pure r : WG.M (Option Nat)) | return -ENOMEM
+    WG.listAddTail pid id
+    WG.connectNode (rootSlot v4) id
+    return 0
+  have emptySpec : Hoare empty (fun w => w = k) Post := by
+    unfold empty
+    simp only [bind_assoc]
+    apply hoare_bind _ _ ha
+    intro allocation
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient result out ambient' hi hr
+    rcases hi with ⟨ha, hw⟩ | ⟨ha, hw⟩
+    · subst allocation
+      subst w
+      apply (hoare_iff_run_ambient _ (fun w => w = k) Post).mp ?_ k ambient result out ambient' rfl hr
+      apply branchRule .addRootNoMem true
+      simp only [↓reduceIte, pure_bind]
+      exact hoare_consequence (hoare_pure (-ENOMEM) _)
+        (fun _ h => h) (fun _ _ h => Or.inl h)
+    · subst allocation
+      subst w
+      apply (hoare_iff_run_ambient _
+        (fun w => w = {k with dev := some (allocated d n)}) Post).mp ?_
+        _ ambient result out ambient' rfl hr
+      apply branchRule .addRootNoMem false
+      simpa only [Bool.false_eq_true, ↓reduceIte, pure_bind] using install
+  have rootSpec : Hoare (MonadLift.monadLift (WG.slotGet (rootSlot v4)) : WG.M (Option Nat))
+      (fun w => w = k) (fun r w => r = none ∧ w = k) := by
+    apply hoare_consequence (mayReturn _ _ _ hg)
+    · exact fun _ h => h
+    · intro r w h
+      simpa only [he] using h
+  change Hoare (WG.add (rootSlot v4) (rootWidth v4) addr cidr (some pid)) _ Post
+  unfold WG.add
+  apply comparisonRule .addCidrTooLong (decide (cidr > rootWidth v4)) cidr (rootWidth v4)
+  simp only [show decide (cidr > rootWidth v4) = false by simp [Nat.not_lt.mpr hc],
+    Bool.false_eq_true, ↓reduceIte]
+  apply branchRule .addNoPeer false
+  simp only [Bool.false_eq_true, ↓reduceIte]
+  apply hoare_bind _ _ rootSpec
+  intro root
+  apply (hoare_iff_run_ambient _ _ _).mpr
+  intro w ambient result out ambient' hi hr
+  rcases hi with ⟨hroot, hw⟩
+  subst root
+  subst w
+  apply (hoare_iff_run_ambient _ (fun w => w = k) Post).mp ?_ k ambient result out ambient' rfl hr
+  apply branchRule .addEmptyTrie true
+  simp only [↓reduceIte]
+  refine Eq.mp (congrArg (fun a : WG.M Int => Hoare a (fun w => w = k) Post) ?_) emptySpec
+  simp only [empty, liftM, bind_assoc]
+  rfl
 
 def bumpSeq (d : WG.Device) : WG.Device :=
   { d with peerAllowedips := { d.peerAllowedips with seq := d.peerAllowedips.seq + 1 } }
@@ -183,19 +293,14 @@ theorem insert_empty_wp (k : WGWorld) (d : WG.Device) (hd : k.dev = some d)
     ⦃fun w => ⌜w = k⌝⦄ WG.insert family addr cidr pid
     ⦃⇓? result w => ⌜(result = -ENOMEM ∧ w = { k with dev := some (bumpSeq d) }) ∨
       (result = 0 ∧ w = { k with dev := some (emptyInstalled (bumpSeq d) (family == 4) addr cidr pid p) })⌝⦄ := by
-  have h := add_empty_wp { k with dev := some (bumpSeq d) } (bumpSeq d) rfl
-    (family == 4) addr cidr pid p hp he hc
-  by_cases hf : family = 4
-  · subst family
-    simp only [beq_self_eq_true, rootSlot, rootWidth, ↓reduceIte] at h ⊢
-    mvcgen [WG.insert, WG.modifyDev, h]
-    all_goals try dsimp +zetaDelta only at *
-    all_goals simp_all [bumpSeq]
-  · have hb : (family == 4) = false := by simp [hf]
-    simp only [hb, rootSlot, rootWidth, Bool.false_eq_true, ↓reduceIte] at h ⊢
-    mvcgen [WG.insert, WG.modifyDev, h]
-    all_goals try dsimp +zetaDelta only at *
-    all_goals simp_all [bumpSeq]
+  apply (hoare_iff_run_ambient _ _ _).mpr
+  intro w ambient result out ambient' hk hr
+  subst w
+  rw [insert_run_bump k ambient d hd family addr cidr pid] at hr
+  exact (hoare_iff_run_ambient _ _ _).mp
+    (add_empty_wp {k with dev := some (bumpSeq d)} (bumpSeq d) rfl
+      (family == 4) addr cidr pid p hp he hc)
+    _ ambient result out ambient' rfl hr
 
 theorem add_empty_exact (w w' : WGWorld) (ambient ambient' : Ambient)
     (d : WG.Device) (hd : w.dev = some d)

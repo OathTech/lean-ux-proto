@@ -12,16 +12,28 @@ namespace Leanux.Proofs.WG.Lifetimes
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing Std.Do
 
 theorem prevQueuePeek_sameWGStore (q : PrevQueue α) : SameWGStore q.peek := by
-  apply SameView.of_wp
-  intro k
-  mvcgen [PrevQueue.peek, PrevQueue.dequeue, branch, invariant, unsupported,
-    AmbientM.branch, AmbientM.invariant, AmbientM.unsupported]
+  intro initial
+  let P := fun w : WGWorld => wgStoreView w = initial
+  have ambient {α : Type} (a : AmbientM α) :
+      Preserves P (monadLift a : WG.M α) := hoare_liftAmbient a P
+  change Preserves P (q.peek)
+  unfold PrevQueue.peek PrevQueue.dequeue
+  simp (config := { zeta := false }) only [branch, invariant, unsupported]
+  repeat' first
+    | (allocation_release_lift_from AmbientM; exact ambient _)
+    | allocation_release_step
 
 theorem endpointFromSkb_sameWGStore (src : SkbSource) : SameWGStore (endpointFromSkb src) := by
-  apply SameView.of_wp
-  intro k
-  mvcgen [endpointFromSkb, branch, invariant, unsupported,
-    AmbientM.branch, AmbientM.invariant, AmbientM.unsupported]
+  intro initial
+  let P := fun w : WGWorld => wgStoreView w = initial
+  have ambient {α : Type} (a : AmbientM α) :
+      Preserves P (monadLift a : WG.M α) := hoare_liftAmbient a P
+  change Preserves P (endpointFromSkb src)
+  unfold endpointFromSkb
+  simp (config := { zeta := false }) only [branch, invariant, unsupported]
+  repeat' first
+    | (allocation_release_lift_from AmbientM; exact ambient _)
+    | allocation_release_step
 
 def rxDropPeekedPrefix (pid : PeerId) : MixedM Unit := do
   setPeerMixed pid {(← getPeerMixed pid) with rxQueue := (← getPeerMixed pid).rxQueue.dropPeeked}

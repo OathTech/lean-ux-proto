@@ -157,12 +157,89 @@ Triple composition over the actual runner. All eleven theorem contracts and
 three pure definitions remain unchanged, including arbitrary syscall contracts,
 initialization, indexed Stops and both placeholder settings.
 The routing enqueue repair preserves all nineteen module contracts and passes
-its standard-axiom and generated-helper absence checks; twelve older tactic
-sites remain. Independent source review passes. A separate output-free
+its standard-axiom and generated-helper absence checks. The remaining twelve tactic
+sites now pass with zero warnings and all nineteen standard-only axiom checks.
+Independent review found two redundant local elaborators; removing them and
+repeating the complete check passed. No logical declaration was added.
+A separate output-free
 refcount diagnostic failed because a generic WG action is not definitionally
 equal to the proposed native Ambient lift; no source was published from it.
+The TX-ring enqueue replacement passes its complete source and ten axiom
+checks and confirms the conflicting helper is absent. Its direct composition
+retains both peer reference operations and every malformed-input guard;
+independent review passes. The remaining six old bodies now pass their full
+source and ten axiom checks
+with zero warnings. Independent full-module review passes; the original
+generic StateT boundary and both native Ambient endpoints are unchanged.
+Product syscall ordinary transitions pass without warnings and with standard
+axioms on all twelve logical roots. The ten theorem contracts and two pure
+definitions are unchanged, including the original receive-call exclusion and
+arbitrary dispatch premise; the getter follows its actual Task-to-FS lift.
+Independent source review passes.
+The complete receive-ring callback replacement passes without warnings, with
+standard axioms on all 48 original contracts and explicit absence checks for
+the three generated lookup/enqueue/staging helpers. Independent review confirms
+the generic StateT boundary, product callbacks and actual native adapters.
+Its five failures include a handshake consumer import collision; that failure
+gave no verdict on the handshake proof body. All existing limits remain.
+The receive-ring handshake consumer now passes its first complete source
+check after the import repair, with no warnings and standard-only axioms on
+all 23 original contracts. Independent review passes. Allocation release
+frames similarly pass all eleven unchanged theorem contracts and their pure
+definition, with no warnings; both source axiom checks and independent review
+pass. Native endpoint and released-resident semantics remain unchanged.
+These two modules pass the subsequent central build.
+The combined restoration build passes: 288 jobs, 248 dependency warnings,
+with RoutingTxFrames restored. The changed routing-send, transmit-ring,
+receive-ring callback and product syscall modules each build without warnings.
+Fresh replay passes over both the routing closure and syscall module.
+Routing environment workers and timer frames preserve their seventeen original
+contracts, including arbitrary product callbacks and exact timer dispatch bounds.
+Both complete source checks and all seventeen named axiom checks pass without
+warnings; independent reviews pass. Worker development had two ordinary failures
+before its source and axiom passes. Timer development had a missing-artifact
+infrastructure failure; its sole unchanged retry failed on proof obligations.
+The repaired source and its axiom check pass. The subsequent central build
+passes all 327 jobs in 219 seconds, with 363 dependency warnings. The changed
+allocation-release, ring-handshake, worker and timer modules have no own warnings.
+Fresh replay of the timer and worker closures passes.
+Transmit-routing frames preserve all 24 theorem contracts and their original
+product callback domains. Three ordinary development failures preceded a
+warning-free source pass and all 25 named logical axiom checks. Independent
+full-module/source review passes. A trailing blank line was removed after its
+format check; proof tokens were unchanged. Its subsequent combined artifact build passes.
+Handshake routing similarly retains all eighteen contracts. Its source and
+all eighteen named axiom checks pass without warnings, as does independent
+source review. Development had two ordinary failures and three passes,
+including one isolated composition diagnostic. Its subsequent central build passes.
+Peer-allocation initialization and geometry retain seven contracts and three
+pure definitions. The complete source passes without warnings; all ten named
+axiom outputs contain only standard axioms, and independent source review
+passes. The first four-frame draft passed with warnings; two subsequent full
+geometry drafts failed on parsing and normalization before the final pass.
+No fresh-slot assumption was added. The combined build passes all 321 jobs
+in 91 seconds, with 293 dependency warnings; all three changed modules build
+without warnings. Fresh replay remains pending.
+Receive-poll order and transmit-ring cuts retain twenty theorem contracts and
+six pure definitions. Both complete source checks, all 26 named axiom checks
+and independent source reviews pass without warnings. Two ordinary poll
+proof failures preceded its source and axiom passes; the ring proof had one
+ordinary failure, including the existing heartbeat limit, before both passes.
+Their central build and fresh replay remain pending.
+Receive-ring cuts preserve five more contracts and two pure definitions.
+The final source and seven named axiom checks pass without warnings;
+independent review confirms all original ring geometries and native endpoints.
+One draft failed on execution normalization, and the next passed with one
+unused simplifier removed before the final warning-free check.
+Trie-mutation refinement preserves eighteen theorem contracts and seven pure
+definitions. Its complete source and all 25 named axiom checks pass without
+warnings; independent source review passes. Nine ordinary development checks
+failed before the final source and axiom passes. Total native leaf contracts,
+normal allocation outcomes and the exact insertion sequence bump remain.
 No complete gate or root replay is claimed yet. Older
 proof modules still use deprecated automation or redundant simplifiers.
+The unchanged mirror also emits a String.mk deprecation in Leanux/Env.lean;
+this is reported separately and left to the mirror lane under Rule Zero.
 Lean 4.35's vcgen is a different implementation from mvcgen; blind renaming
 does not preserve these proofs. Nine foundation/logged warning repairs preserve
 all eighty theorem contracts and options. Their 69-job build, 105 named logical
@@ -239,6 +316,12 @@ closure still reports 187 warnings. This is a scoped pass, not a root pass.
 | TX packet ECN frame | 2 | 2 |
 | Runner uniqueness/window-bound composition, including fourteen source axiom prints | 1 | 3 |
 | Routing enqueue collision, including axiom and helper-absence checks | 1 | 1 |
+| Remaining routing-send frames and review repair, including nineteen source axiom prints | 2 | 2 |
+| TX-ring enqueue collision, including ten source axiom prints | 3 | 2 |
+| Remaining TX-ring frames, including ten source axiom prints | 3 | 2 |
+| Product syscall ordinary transition, including twelve source axiom prints | 4 | 2 |
+| Receive-ring callback/handshake frames and isolated transmit diagnostics, including 71 source axiom prints | 5 | 3 |
+| Allocation release frames, including twelve source axiom prints | 2 | 2 |
 
 Earlier transition passes retained two deprecated bodies; only its final three
 passes validate the complete replacement and relocation. Peer borrowing's first
@@ -289,7 +372,7 @@ Each infrastructure rerun below occurred once for its affected invocation:
 | RxPollDisposition diagnostic | missing Completion artifact | FAIL on proof obligations; changed-source checks later passed |
 | DeliveryOrder diagnostic | RxRingHandshake artifact absent during central rebuild | PASS unchanged after rebuild, first 109 declarations |
 | Operations collision repair | WGBase artifact absent during the warning-composition build | FAIL on proof obligations; changed-source checks later passed |
-| Routing timer warning repair | RoutingTxFrames artifact absent after the failed full build | Pending dependency repair; no rerun yet |
+| Routing timer warning repair | RoutingTxFrames artifact absent after the failed full build | Sole unchanged retry failed on proof obligations; repaired source passes |
 
 Explicitly stopped elaborations, signal/KILLED outcomes, driver crashes and
 toolchain panics were preserved to snapshot refs before work resumed; they
@@ -315,6 +398,54 @@ after the Lean check had passed. Four dirty worktrees were preserved under
 `refs/snapshots/proof-campaign-lookup-ledger-recovery-20261017T040418Z/`
 (campaign `b798306d7cef9a951def0555089eb9c933e3e975`). The failure changed no
 tracked source and is separate from the Lean validation; branch tips stayed put.
+
+Two ephemeral preparation drivers failed JavaScript parsing before executing.
+The three dirty worktrees were preserved under preparation-recovery snapshot
+refs at 20261017T043626Z and 20261017T043939Z; the latter campaign snapshot is
+fc4f9af2a0d09655bb7c5d7d94f22be43aed21f8. Neither failed invocation ran a shell
+or source operation. Branch tips remained unchanged.
+
+The peer-allocation axiom-report driver rejected wrapped standard-axiom output.
+All dirty worktrees were preserved under axiom-parser-recovery refs at
+20261017T044528Z (campaign cb684b0b5655b207c53a83fa6a6f90ff0628a90b).
+The corrected parser accepted all ten names from the existing output, with
+no unexpected lines or warnings; no Lean rerun was needed.
+
+The receive-poll frame carry preserves seven theorem contracts and two
+definitions. Its two changed bodies follow the native previous-queue and
+endpoint operations using the shared checked composition rules. The source
+check and all nine named axiom checks pass without warnings; independent
+source review passes. Artifact rebuild and full-root replay remain pending.
+
+The third complete proof gate fails at two additional generated matcher
+collisions: keypairGet between Origins.State and Keypairs.Affiliation, and
+allowed-IP add between ChildMutation and ExactMutation. It ran 155.06 seconds
+and reported 267 warnings. The forbidden-token and import-boundary checks pass;
+terminal axiom inspection is skipped after the build failure. No unchanged
+retry was made. The receive-poll and queue-cut modules published before this
+run rebuilt successfully; that does not establish a full-tree pass.
+
+The lookup and placement carries preserve thirteen theorem contracts and two
+definitions, including both total 130-iteration traversal contracts. Their
+source checks, fifteen named axiom checks and independent review pass without
+warnings. Lookup had eight ordinary failures, one intermediate pass with
+deprecated rewrites, then a clean final pass. Placement had one parser failure
+and two clean passes. Current/source-freeze details are reconstructible from
+the tracked files; their next artifact rebuild is pending.
+
+AllowedLookupAccess preserves twelve theorem contracts and three definitions,
+including its private native frame and arbitrary product observers. Its first
+source check passed with one unused simp argument; the corrected source and all
+fifteen axiom prints pass without warnings. The report parser initially rejected
+the private theorem's generated name; the existing output was checked against
+the actual private name with no Lean rerun. Independent review passes.
+
+RxStackFrames preserves ten theorem contracts, including native receive
+retention and product stack callbacks. Three ordinary development checks failed;
+the final source and ten named axiom checks pass without warnings. Independent
+review confirms the saved receive-queue setter receipts and all action domains.
+Two checked tactic commands compose existing rules; no logical claims were added.
+The latter four modules await artifact rebuild and root kernel replay.
 
 ## Runtime witness reconstruction
 

@@ -39,99 +39,247 @@ theorem modify (f : Device → Device) (he : ∀ d, (f d).ifindex = d.ifindex)
   simp [nativeCell, Option.map_map, Function.comp_def, he, hq]
 
 theorem getPeer_frame (pid : PeerId) : SameView nativeCell (getPeer pid) := by
-  apply SameView.of_wp
-  intro s
-  mvcgen [getPeer, getDev, invariant, AmbientM.invariant]
+  apply (ProjectedAction.iff_run_ambient _ _ _).mpr
+  intro w ambient p v ambient' hr
+  exact congrArg nativeCell (Peers.getPeer_current pid w v p ambient ambient' hr).1
 
 theorem getKeypair_frame (id : KeypairId) : SameView nativeCell (getKeypair id) := by
-  apply SameView.of_wp
-  intro s
-  mvcgen [getKeypair, getDev, invariant, AmbientM.invariant]
+  apply (ProjectedAction.iff_run_ambient _ _ _).mpr
+  intro w ambient k v ambient' hr
+  exact congrArg nativeCell (Keypairs.getKeypair_current id w v ambient ambient' k hr).1
 
 theorem setPeer_frame (pid : PeerId) (p : Peer) : SameView nativeCell (setPeer pid p) :=
   modify _ (fun _ => rfl) (fun _ => rfl)
 
+open Lean Meta Elab Tactic in
+elab "tx_ring_head " n:ident : tactic => withMainContext do
+  let target := (← instantiateMVars (← (← getMainGoal).getType)).consumeMData
+  unless target.isAppOf ``Preserves do throwError "not a frame contract"
+  let action := target.getAppArgs.back!.consumeMData.headBeta
+  let expected ← realizeGlobalConstNoOverloadWithInfo n
+  unless action.getAppFn.constName? == some expected do throwError "different action head"
+
+open Lean Meta Elab Tactic in
+elab "tx_ring_step" : tactic => withMainContext do
+  let goal ← getMainGoal
+  let target := (← instantiateMVars (← goal.getType)).consumeMData
+  if target.isForall then
+    evalTactic (← `(tactic| intro))
+    return
+  unless target.isAppOf ``Preserves do throwError "not a frame contract"
+  let .app property action := target | throwError "missing action"
+  let action := action.consumeMData
+  if let .letE _ _ value body _ := action then
+    replaceMainGoal [← goal.replaceTargetDefEq (mkApp property (body.instantiate1 value))]
+    return
+  let reduced := action.headBeta
+  if !Expr.equal action reduced then
+    replaceMainGoal [← goal.replaceTargetDefEq (mkApp property reduced)]
+    return
+  let head := action.getAppFn.constName?
+  if head == some ``Bind.bind then
+    evalTactic (← `(tactic| refine preserves_bind ?_ ?_))
+  else if head == some ``Pure.pure then
+    evalTactic (← `(tactic| exact preserves_pure _))
+  else if head == some ``ite || head == some ``dite then
+    evalTactic (← `(tactic| split))
+  else if head == some ``liftM then
+    evalTactic (← `(tactic| unfold liftM))
+  else if (← Lean.Meta.matchMatcherApp? action).isSome then
+    replaceMainGoal (← Lean.Meta.Split.splitMatch goal action)
+  else
+    throwError "unhandled frame action head {head}"
+
+open Lean Meta Elab Tactic in
+elab "tx_ring_lift_from " carrier:ident : tactic => withMainContext do
+  let target := (← getMainTarget).consumeMData
+  unless target.isAppOf ``Preserves do
+    throwError "expected a frame contract"
+  let action := target.getAppArgs.back! |>.consumeMData |>.headBeta
+  unless action.isAppOf ``liftM || action.isAppOf ``MonadLift.monadLift ||
+      action.isAppOf ``MonadLiftT.monadLift do
+    throwError "expected a lifted action"
+  let source := action.getAppArgs.back!
+  let sourceType ← inferType source
+  unless sourceType.isApp do throwError "expected an applied source monad"
+  let name ← realizeGlobalConstNoOverloadWithInfo carrier
+  let expected ← mkAppM name #[sourceType.getAppArgs.back!]
+  unless ← withReducible (isDefEq sourceType expected) do
+    throwError "different source monad"
+
 theorem keypairPut_frame (id : Option KeypairId) (now : Bool) : SameView nativeCell (keypairPut id now) := by
   apply SameView.of_wp
-  intro s
-  have hd := fun o => indexOwner_peerDeref_preserves o (fun w => nativeCell w = s)
-  unfold Preserves Hoare at hd
-  have hi {α : Type} (a : IndexM α) :
-      Hoare (MonadLift.monadLift a : WG.M α) (fun w => nativeCell w = s) (fun _ w => nativeCell w = s) := by
-    apply hoare_liftIndex
-    intro g d table hg hd
-    simpa [nativeCell, hd] using hg
-  unfold Hoare at hi
-  mvcgen [keypairPut, hd, hi, getKeypair, getDev, setKeypair, modifyDev,
-    refcountDecAndTest, branch, branchCmp, AmbientM.branch, AmbientM.branchCmp,
-    invariant, unsupported, AmbientM.invariant, AmbientM.unsupported]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [nativeCell, Option.map_map, Function.comp_def]
-  all_goals subst_vars
-  all_goals simp_all
+  intro initial
+  let P := fun w : WGWorld => nativeCell w = initial
+  have ambient {α : Type} (a : AmbientM α) :
+      Preserves P (monadLift a : WG.M α) := hoare_liftAmbient a P
+  have index {α : Type} (a : IndexM α) :
+      Preserves P (monadLift a : WG.M α) := by
+    apply hoare_liftIndex a
+    intro w d table hi hd
+    simpa [P, nativeCell, hd] using hi
+  have rc (old : Nat) : Preserves P (refcountDecAndTest old : WG.M Bool) := by
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w a x v a' hp hr
+    simp [refcountDecAndTest, branch, branchCmp, AmbientM.branch,
+      AmbientM.branchCmp, unsupported, AmbientM.unsupported] at hr
+    repeat' split at hr
+    all_goals simp_all
+    all_goals rcases hr with ⟨⟨rfl, rfl⟩, rfl⟩
+    all_goals exact hp
+  change Preserves P (keypairPut id now)
+  unfold keypairPut
+  simp (config := { zeta := true }) only [branch, invariant]
+  repeat' first
+    | (tx_ring_head getKeypair; exact (getKeypair_frame _).wp (fun t => t = initial))
+    | (tx_ring_head IndexOwner.peerDeref; exact indexOwner_peerDeref_preserves _ P)
+    | (tx_ring_head setKeypair; unfold setKeypair)
+    | (tx_ring_head modifyDev; apply hoare_modify; intro w h
+       simpa [P, nativeCell, Option.map_map, Function.comp_def] using h)
+    | (tx_ring_head refcountDecAndTest; exact rc _)
+    | (tx_ring_lift_from IndexM; exact index _)
+    | (tx_ring_lift_from AmbientM; exact ambient _)
+    | (tx_ring_head _root_.modify; apply hoare_modify; intro w h; exact h)
+    | tx_ring_step
 
 theorem peerGet_frame (id : PeerId) : SameView nativeCell (peerGet id) := by
-  apply SameView.of_wp
-  intro s
-  mvcgen [peerGet, requireNotPending, getPeer, getDev, setPeer, modifyDev, refcountInc, branch, branchCmp, AmbientM.branch, AmbientM.branchCmp, invariant, unsupported, AmbientM.invariant, AmbientM.unsupported]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [nativeCell]
-  all_goals subst_vars
-  all_goals simp_all
+  apply (ProjectedAction.iff_run_ambient _ _ _).mpr
+  intro w ambient x v ambient' hr
+  cases hd : w.dev with
+  | none =>
+    simp [peerGet, requireNotPending, getPeer, getDev, hd,
+      invariant, AmbientM.invariant] at hr
+    cases hr
+  | some d =>
+    cases hp : d.peers[id]? with
+    | none =>
+      simp [peerGet, requireNotPending, getPeer, getDev, hd, hp,
+        invariant, AmbientM.invariant] at hr
+      cases hr
+    | some peer =>
+      simp [peerGet, requireNotPending, getPeer, getDev, setPeer, modifyDev,
+        hd, hp, refcountInc, branch, branchCmp, AmbientM.branch, AmbientM.branchCmp,
+        unsupported, AmbientM.unsupported] at hr
+      split at hr <;> simp_all
+      all_goals try split at hr <;> simp_all
+      all_goals rcases hr with ⟨⟨rfl, rfl⟩, rfl⟩
+      all_goals simp [nativeCell, hd]
 
 theorem peerPut_frame (id : Option PeerId) : SameView nativeCell (peerPut id) := by
   apply SameView.of_wp
-  intro s
-  have hi {α : Type} (a : IndexM α) :
-      Hoare (MonadLift.monadLift a : WG.M α) (fun w => nativeCell w = s) (fun _ w => nativeCell w = s) := by
-    apply hoare_liftIndex
-    intro g d table hg hd
-    simpa [nativeCell, hd] using hg
-  unfold Hoare at hi
-  mvcgen [peerPut, hi, requireNotPending, getPeer, getDev, setPeer, modifyDev,
-    refcountDecAndTest, retirePeerUnits, modifyAmbient, branch, branchCmp,
-    AmbientM.branch, AmbientM.branchCmp, invariant, unsupported, AmbientM.invariant, AmbientM.unsupported]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [nativeCell, Option.map_map, Function.comp_def]
-  all_goals subst_vars
-  all_goals simp_all
+  intro initial
+  let P := fun w : WGWorld => nativeCell w = initial
+  have ambient {α : Type} (a : AmbientM α) :
+      Preserves P (monadLift a : WG.M α) := hoare_liftAmbient a P
+  have index {α : Type} (a : IndexM α) :
+      Preserves P (monadLift a : WG.M α) := by
+    apply hoare_liftIndex a
+    intro w d table hi hd
+    simpa [P, nativeCell, hd] using hi
+  have rc (old : Nat) : Preserves P (refcountDecAndTest old : WG.M Bool) := by
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w a x v a' hp hr
+    simp [refcountDecAndTest, branch, branchCmp, AmbientM.branch,
+      AmbientM.branchCmp, unsupported, AmbientM.unsupported] at hr
+    repeat' split at hr
+    all_goals simp_all
+    all_goals rcases hr with ⟨⟨rfl, rfl⟩, rfl⟩
+    all_goals exact hp
+  change Preserves P (peerPut id)
+  unfold peerPut
+  simp (config := { zeta := true }) only [branch, invariant, requireNotPending,
+    retirePeerUnits, modifyAmbient]
+  repeat' first
+    | (tx_ring_head getPeer; exact (getPeer_frame _).wp (fun t => t = initial))
+    | (tx_ring_head setPeer; exact (setPeer_frame _ _).wp (fun t => t = initial))
+    | (tx_ring_head modifyDev; apply hoare_modify; intro w h
+       simpa [P, nativeCell, Option.map_map, Function.comp_def] using h)
+    | (tx_ring_head refcountDecAndTest; exact rc _)
+    | (tx_ring_lift_from IndexM; exact index _)
+    | (tx_ring_lift_from AmbientM; exact ambient _)
+    | (tx_ring_head _root_.modify; apply hoare_modify; intro w h; exact h)
+    | tx_ring_step
 
 theorem cpu_frame (pid : PeerId) : SameView nativeCell (cpumaskChooseOnline pid) := by
-  apply SameView.of_wp
-  intro s
-  have hg := (getPeer_frame pid).wp (fun t => t = s)
-  have hs := fun p => (setPeer_frame pid p).wp (fun t => t = s)
-  mvcgen [cpumaskChooseOnline, hg, hs, branch, AmbientM.branch]
-  all_goals try exact ((⇓? _ w => ⌜nativeCell w = s⌝) : PostCond _ (.arg WGWorld (.arg Ambient (.except Stop .pure))))
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [nativeCell]
+  apply (ProjectedAction.iff_run_ambient _ _ _).mpr
+  intro w ambient x v ambient' hr
+  cases hd : w.dev with
+  | none =>
+    simp [cpumaskChooseOnline, getPeer, getDev, hd, invariant, AmbientM.invariant] at hr
+    cases hr
+  | some d =>
+    cases hp : d.peers[pid]? with
+    | none =>
+      simp [cpumaskChooseOnline, getPeer, getDev, hd, hp, invariant, AmbientM.invariant] at hr
+      cases hr
+    | some p =>
+      simp [cpumaskChooseOnline, getPeer, getDev, setPeer, modifyDev, hd, hp,
+        branch, AmbientM.branch, Nat.mod_one] at hr
+      repeat' split at hr
+      all_goals simp_all
+      all_goals rcases hr with ⟨⟨rfl, rfl⟩, rfl⟩
+      all_goals simp [nativeCell, hd]
 
 theorem enqueuePeer_frame (item : List SkbId) (state : PacketState) :
     SameView nativeCell (enqueuePerPeerTx item state) := by
   apply SameView.of_wp
   intro s
-  have hk := fun id => (getKeypair_frame id).wp (fun t => t = s)
-  have hp := fun id => (getPeer_frame id).wp (fun t => t = s)
-  have hg := fun id => (peerGet_frame id).wp (fun t => t = s)
-  have hu := fun id => (peerPut_frame id).wp (fun t => t = s)
-  have hc := fun id => (cpu_frame id).wp (fun t => t = s)
+  let P := fun w : WGWorld => nativeCell w = s
   have ambient {α : Type} (a : AmbientM α) :
-      Hoare (MonadLift.monadLift a : WG.M α) (fun w => nativeCell w = s) (fun _ w => nativeCell w = s) :=
-    hoare_liftAmbient a _
-  have packet {α : Type} (a : SkbM α) :
-      Hoare (liftSkb a) (fun w => nativeCell w = s) (fun _ w => nativeCell w = s) := by
-    apply hoare_liftSkb
-    intro g d packets hg hd
-    simpa [nativeCell, hd] using hg
-  unfold Hoare at ambient packet
-  have hm := fun id => (modify (fun d => {d with txWorkQueue := d.txWorkQueue ++ [id]})
-    (fun _ => rfl) (fun _ => rfl)).wp (fun t => t = s)
-  have hw := fun o => indexOwner_peerDeref_preserves o (fun w => nativeCell w = s)
-  unfold Preserves Hoare at hw
-  mvcgen [-Std.Do.Spec.monadLift_StateT, hw, enqueuePerPeerTx, packet, ambient, hk, hp, hg, hu, hc, hm,
-    getDev, getTxSkb, setTxSkb, recordQueued, peekQueuedUnit, branch, AmbientM.branch,
-    invariant, AmbientM.invariant]
-  all_goals try exact ((⇓? _ w => ⌜nativeCell w = s⌝) : PostCond _ (.arg WGWorld (.arg Ambient (.except Stop .pure))))
-  all_goals simp_all [nativeCell]
+      Preserves P (monadLift a : WG.M α) := hoare_liftAmbient a P
+  have packet {α : Type} (a : SkbM α) : Preserves P (liftSkb a) := by
+    apply hoare_liftSkb a
+    intro w d store hi hd
+    simpa [P, nativeCell, hd] using hi
+  have device : Preserves P getDev := (kernel (project := id) getDev_sameWGStore).wp (fun t => t = s)
+  unfold enqueuePerPeerTx
+  cases item.head? with
+  | none => exact ambient (AmbientM.invariant "an empty ring item")
+  | some first =>
+    apply preserves_bind (packet (SkbStore.getTx first))
+    intro tx
+    apply preserves_bind (indexOwner_peerDeref_preserves (.keypair tx.keypair) P)
+    intro pid
+    apply preserves_bind ((peerGet_frame pid).wp (fun t => t = s))
+    intro _
+    apply preserves_bind ((getPeer_frame pid).wp (fun t => t = s))
+    intro p
+    dsimp only
+    split
+    · apply preserves_bind (ambient (AmbientM.invariant
+        "an item for the tx worker that is not on its peer's tx_queue"))
+      intro _
+      apply preserves_bind (packet (SkbStore.setTx first fun p => {p with state}))
+      intro _
+      apply preserves_bind ((cpu_frame pid).wp (fun t => t = s))
+      intro cpu
+      apply preserves_bind device
+      intro d
+      apply preserves_bind (ambient (AmbientM.peekQueuedUnit .txWorker pid))
+      intro queued
+      split
+      · apply preserves_bind (ambient (AmbientM.recordQueued .txWorker pid))
+        intro _
+        apply preserves_bind ((modify (fun d => {d with txWorkQueue := d.txWorkQueue ++ [pid]})
+          (fun _ => rfl) (fun _ => rfl)).wp (fun t => t = s))
+        intro _
+        exact (peerPut_frame (some pid)).wp (fun t => t = s)
+      · exact (peerPut_frame (some pid)).wp (fun t => t = s)
+    · apply preserves_bind (packet (SkbStore.setTx first fun p => {p with state}))
+      intro _
+      apply preserves_bind ((cpu_frame pid).wp (fun t => t = s))
+      intro cpu
+      apply preserves_bind device
+      intro d
+      apply preserves_bind (ambient (AmbientM.peekQueuedUnit .txWorker pid))
+      intro queued
+      split
+      · apply preserves_bind (ambient (AmbientM.recordQueued .txWorker pid))
+        intro _
+        apply preserves_bind ((modify (fun d => {d with txWorkQueue := d.txWorkQueue ++ [pid]})
+          (fun _ => rfl) (fun _ => rfl)).wp (fun t => t = s))
+        intro _
+        exact (peerPut_frame (some pid)).wp (fun t => t = s)
+      · exact (peerPut_frame (some pid)).wp (fun t => t = s)
 
 end Leanux.Proofs.WG.Queues.TxRing

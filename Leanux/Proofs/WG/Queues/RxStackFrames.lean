@@ -21,46 +21,102 @@ elab "rxstack_head " n:ident : tactic => Lean.Elab.Tactic.withMainContext do
   let name ← Lean.Elab.realizeGlobalConstNoOverloadWithInfo n
   unless a.isAppOf name do Lean.throwError "different action head"
 
+
+/- Reuse checked continuation factoring and fixed-predicate composition. -/
+open Lean Meta Elab Tactic in
+elab "rxstack_preserves_join" : tactic => withMainContext do
+  let goal ← getMainGoal
+  let target := (← instantiateMVars (← goal.getType)).consumeMData
+  unless target.isAppOf ``Preserves do throwError "not a receive frame"
+  let .app property action := target | throwError "missing action"
+  let action := action.consumeMData
+  if let .letE name ty value body nonDep := action then
+    if name.eraseMacroScopes == `err then
+      replaceMainGoal [← goal.replaceTargetDefEq
+        (mkApp property (.letE `__do_jp_err ty value body nonDep))]
+    evalTactic (← `(tactic| env_operation_step))
+  else if action.getAppFn.isFVar then
+    evalTactic (← `(tactic| env_operation_step))
+  else
+    throwError "not a local continuation"
+
+macro "rxstack_preserves_source" "[" fs:ident,* "]" "using" "[" facts:ident,* "]" : tactic => do
+  let mut use ← `(tactic| fail "no checked receive frame")
+  for fact in facts.getElems.reverse do
+    use ← `(tactic| first | env_operation_fact $fact | ($use:tactic))
+  let expand ← if fs.getElems.isEmpty then `(tactic| skip) else `(tactic| unfold $fs:ident*)
+  `(tactic| ($expand:tactic; repeat' first | rxstack_preserves_join | ($use:tactic) | rx_retention_step))
+
 theorem loopbackSoftirq_kernel : SameWGStore loopbackSoftirq := by
   rw [loopbackSoftirq_source]
-  apply SameView.of_wp
-  intro k
-  have hf := loopbackFinish_sameStore.wp (fun s => s = k)
-  mvcgen [getDev, hf, unsupported, invariant, AmbientM.unsupported, AmbientM.invariant]
+  intro initial
+  change Preserves (fun w => wgStoreView w = initial) _
+  have hf : Preserves (fun w => wgStoreView w = initial) loopbackFinish :=
+    loopbackFinish_sameStore.wp (fun s => s = initial)
+  have hg : Preserves (fun w => wgStoreView w = initial) getDev :=
+    getDev_sameWGStore.wp (fun s => s = initial)
+  have read : Preserves (fun w => wgStoreView w = initial) (get : WG.M WGWorld) :=
+    hoare_consequence (hoare_get _) (fun _ h => h) (fun _ _ h => h.2)
+  have ambient {α : Type} (a : AmbientM α) :
+      Preserves (fun w => wgStoreView w = initial) (monadLift a : WG.M α) :=
+    hoare_liftAmbient a _
+  rxstack_preserves_source [unsupported] using [hf, hg, read, ambient]
 
 theorem loopbackSend_kernel (sites : List HiddenSite) (raised : Bool) :
     SameWGStore (loopbackSend sites raised) := by
-  apply SameView.of_wp
-  intro k
-  have ambient {α : Type} (a : AmbientM α) :
-      Hoare (MonadLift.monadLift a : WG.M α)
-        (fun w => wgStoreView w = k) (fun _ w => wgStoreView w = k) :=
-    hoare_liftAmbient a _
-  unfold Hoare at ambient
-  have hr := raiseLoopbackRx_sameStore.wp (fun s => s = k)
-  have hl := loopbackSoftirq_kernel.wp (fun s => s = k)
-  mvcgen [-Std.Do.Spec.monadLift_StateT, loopbackSend, skipCut, ambient, hr, hl]
+  unfold loopbackSend
+  apply SameView.bind
+  · intro initial
+    exact hoare_liftAmbient (AmbientM.skipCut sites) _
+  · intro _
+    split
+    · exact raiseLoopbackRx_sameStore.bind (fun _ => loopbackSoftirq_kernel)
+    · exact SameView.pure _ _
 
 theorem lookupDst_rxQueues (family addr : Nat) :
     SameView rxQueues (lookupDst family addr) := by
-  apply SameView.of_wp
-  intro s
-  have hl := fun root bits key => (lookup_rxQueues root bits key).wp (fun t => t = s)
-  mvcgen [lookupDst, hl, getDev, branch, AmbientM.branch, invariant, AmbientM.invariant]
+  intro initial
+  change Preserves (fun w => rxQueues w = initial) _
+  have hg : Preserves (fun w => rxQueues w = initial) getDev :=
+    (rxQueues_kernel (project := id) getDev_sameWGStore).wp (fun s => s = initial)
+  have lookup (root : Option NodeId) (bits key : Nat) :
+      Preserves (fun w => rxQueues w = initial) (WG.lookup root bits key) :=
+    (lookup_rxQueues root bits key).wp (fun s => s = initial)
+  have ambient {α : Type} (a : AmbientM α) :
+      Preserves (fun w => rxQueues w = initial) (monadLift a : WG.M α) :=
+    hoare_liftAmbient a _
+  rxstack_preserves_source [lookupDst, branch] using [hg, lookup, ambient]
 
 theorem xmitTrim_rxQueues (pid : PeerId) : SameView rxQueues (xmitTrim pid) := by
-  apply SameView.of_wp
-  intro s
-  have hg := getPeer_rx_spec (fun t => t = s) pid
-  have hs := fun p => setPeer_rx_spec (fun t => t = s) pid p
-  have hd := (modifyDev_rxQueues (fun d => {d with txDropped := d.txDropped + 1})
-    (fun _ => rfl) (fun _ => rfl)).wp (fun t => t = s)
-  have hl (α β : Type) := list_view_spec (m := AmbientM) rxQueues (α := α) (β := β) (fun t => t = s)
-  simp only [xmitTrim, Std.Legacy.Range.forIn_eq_forIn_range']
-  mvcgen [-Std.Do.Spec.forIn_list, -Std.Do.Spec.forIn'_list, hl, hg, hs, hd, branch, AmbientM.branch]
-  all_goals try exact ((⇓? _ w => ⌜rxQueues w = s⌝) : PostCond _ (.arg WGWorld (.arg Ambient (.except Stop .pure))))
-  all_goals try dsimp +zetaDelta only at *
-  all_goals unfold rxQueues at *; simp_all [CurrentRx]
+  intro initial
+  let P := fun w : WGWorld => rxQueues w = initial
+  change Preserves P _
+  have dropped : Preserves P (modifyDev fun d => { d with txDropped := d.txDropped + 1 }) :=
+    (modifyDev_rxQueues (fun d => {d with txDropped := d.txDropped + 1})
+      (fun _ => rfl) (fun _ => rfl)).wp (fun s => s = initial)
+  unfold xmitTrim
+  apply hoare_bind _ _ ((getPeer_rxQueues pid).wp (fun s => s = initial))
+  intro before
+  simp only [Std.Legacy.Range.forIn_eq_forIn_range']
+  refine hoare_bind _ _ (list_view_spec rxQueues (fun s => s = initial) _ _ _ ?_)
+    (fun _ => preserves_pure ())
+  intro i b
+  apply hoare_bind _ _ (getPeer_rx_spec (fun s => s = initial) pid)
+  intro p
+  apply hoare_bind _ _ (hoare_liftAmbient
+    (AmbientM.branch .xmitStagedTrimIter (p.staged.length > MAX_STAGED_PACKETS))
+    (fun w => P w ∧ CurrentRx (rxQueues w) pid p))
+  intro trim
+  cases trim with
+  | false =>
+    exact hoare_consequence (preserves_pure _)
+      (fun _ h => h.1) (fun _ _ h => h)
+  | true =>
+    apply hoare_bind _ _ (setPeer_rx_spec (fun s => s = initial) pid {p with staged := p.staged.drop 1})
+    intro _
+    apply hoare_bind _ _ dropped
+    intro _
+    exact preserves_pure _
 
 theorem xmitSplice_rxQueues (pid : PeerId) (packets : List Packet) :
     SameView rxQueues (xmitSplice pid packets) := by
@@ -76,68 +132,75 @@ theorem wgXmit_rxQueues (family addr : Nat) (packets : List Packet) (mtu : Nat) 
   rw [wgXmitSource_eq]
   apply ProjectedAction.of_wp
   intro s
-  let P := ResidentsRetained s
-  have hg := fun pid => (getPeer_rxQueues pid).wp P
-  have hlookup := (lookupDst_rxQueues family addr).wp P
-  have htrim := fun pid => (xmitTrim_rxQueues pid).wp P
-  have hsplice := fun pid packets => (xmitSplice_rxQueues pid packets).wp P
-  have hstage := fun pid => RetainsRx.wp (sendStagedPackets_rxQueues pid) s
-  have hput := fun pid => RetainsRx.wp (peerPut_rxQueues pid) s
-  have hloop := fun sites raised => (rxQueues_kernel (loopbackSend_kernel sites raised)).wp P
+  let P := fun w : WGWorld => ResidentsRetained s (rxQueues w)
+  have hg (pid : PeerId) : Preserves P (getPeer pid) :=
+    (getPeer_rxQueues pid).wp (ResidentsRetained s)
+  have hlookup : Preserves P (lookupDst family addr) :=
+    (lookupDst_rxQueues family addr).wp (ResidentsRetained s)
+  have htrim (pid : PeerId) : Preserves P (xmitTrim pid) :=
+    (xmitTrim_rxQueues pid).wp (ResidentsRetained s)
+  have hsplice (pid : PeerId) (packets : List Packet) : Preserves P (xmitSplice pid packets) :=
+    (xmitSplice_rxQueues pid packets).wp (ResidentsRetained s)
+  have hstage (pid : PeerId) : Preserves P (sendStagedPackets pid) :=
+    RetainsRx.wp (sendStagedPackets_rxQueues pid) s
+  have hput (pid : Option PeerId) : Preserves P (peerPut pid) :=
+    RetainsRx.wp (peerPut_rxQueues pid) s
+  have hloop (sites : List HiddenSite) (raised : Bool) : Preserves P (loopbackSend sites raised) :=
+    (rxQueues_kernel (loopbackSend_kernel sites raised)).wp (ResidentsRetained s)
   have ambient {α : Type} (a : AmbientM α) :
-      Hoare (MonadLift.monadLift a : WG.M α)
-        (fun w => P (rxQueues w)) (fun _ w => P (rxQueues w)) :=
-    hoare_liftAmbient a _
+      Preserves P (monadLift a : WG.M α) := hoare_liftAmbient a _
   have routing {α : Type} (a : Net.M α) :
-      Hoare (MonadLift.monadLift a : WG.M α)
-        (fun w => P (rxQueues w)) (fun _ w => P (rxQueues w)) := by
+      Preserves P (monadLift a : WG.M α) := by
     apply hoare_liftRouting a
     intro w route hi
     exact hi
-  unfold Hoare at ambient routing
-  have herr := (modifyDev_rxQueues (fun d => {d with txErrors := d.txErrors + 1})
-    (fun _ => rfl) (fun _ => rfl)).wp P
-  have hl (α β : Type) := list_view_spec (m := AmbientM) rxQueues (α := α) (β := β) P
-  mvcgen [-Std.Do.Spec.forIn_list, -Std.Do.Spec.forIn'_list, -Std.Do.Spec.monadLift_StateT,
-    hl, wgXmitSource, hg, hlookup, htrim, hsplice, hstage, hput, hloop, ambient, routing, herr,
-    WG.andM, branch, invariant, unsupported, skipCutSites, envOk]
-  all_goals try dsimp +zetaDelta only [P] at *
-  all_goals try subst s
-  all_goals first | exact rx_retained_refl _ | trivial
+  have errors : Preserves P (modifyDev fun d => {d with txErrors := d.txErrors + 1}) :=
+    (modifyDev_rxQueues (fun d => {d with txErrors := d.txErrors + 1})
+      (fun _ => rfl) (fun _ => rfl)).wp (ResidentsRetained s)
+  have loop {α β : Type} (xs : List α) (init : β) (f : α → β → WG.M (ForInStep β))
+      (hf : ∀ x b, Preserves P (f x b)) : Preserves P (forIn xs init f) :=
+    list_view_spec rxQueues (ResidentsRetained s) xs init f hf
+  have hp : Preserves P (wgXmitSource family addr packets mtu) := by
+    rxstack_preserves_source [wgXmitSource, WG.andM, branch, invariant, skipCutSites, envOk]
+      using [hg, hlookup, htrim, hsplice, hstage, hput, hloop, ambient, routing, errors, loop]
+  apply hoare_consequence hp
+  · intro w h
+    change rxQueues w = s at h
+    change ResidentsRetained s (rxQueues w)
+    rw [h]
+    exact rx_retained_refl _
+  · exact fun _ _ h => h
 
 theorem reply4_rxQueues (dst : Nat) (bytes : List UInt8) :
     ProductRetainsRx (Leanux.Env.Stack.reply4 dst bytes) := by
   apply ProjectedAction.of_wp
   intro s
-  let P := ResidentsRetained s
+  let P := fun w : World => ResidentsRetained s (rxQueues w.wg)
   have ambient {α : Type} (a : AmbientM α) :
-      Hoare (MonadLift.monadLift a : Leanux.M α)
-        (fun w => P (rxQueues w.wg)) (fun _ w => P (rxQueues w.wg)) :=
+      Preserves P (monadLift a : Leanux.M α) :=
     productAmbient_spec a _ (fun _ _ h => h)
   have routing {α : Type} (a : Net.M α) :
-      Hoare (MonadLift.monadLift (MonadLift.monadLift a : WG.M α) : Leanux.M α)
-        (fun w => P (rxQueues w.wg)) (fun _ w => P (rxQueues w.wg)) :=
+      Preserves P (monadLift a : Leanux.M α) :=
     productRouting_spec a
-      (fun store => P (fun i => store.2.2.2.dev.bind fun d => rxMap d.ifindex d.peers i))
-  have hg : SameView rxQueues getDev := by
-    apply SameView.of_wp
-    intro initial
-    mvcgen [getDev, invariant, AmbientM.invariant]
-  have hd := (sameView_liftWG (fun w => rxQueues w.wg) rxQueues getDev hg
-    (fun _ _ _ h => h)).wp P
+      (fun store => ResidentsRetained s (fun i => store.2.2.2.dev.bind fun d => rxMap d.ifindex d.peers i))
+  have hd : Preserves P (monadLift getDev : Leanux.M Device) :=
+    (sameView_liftWG (fun w => rxQueues w.wg) rxQueues getDev
+      (rxQueues_kernel (project := id) getDev_sameWGStore) (fun _ _ _ h => h)).wp (ResidentsRetained s)
   have hx (family addr : Nat) (packets : List Packet) (mtu : Nat) :
-      ⦃fun w : World => ⌜P (rxQueues w.wg)⌝⦄
-        (MonadLift.monadLift (wgXmit family addr packets mtu) : Leanux.M Int)
-      ⦃⇓? _ w => ⌜P (rxQueues w.wg)⌝⦄ :=
+      Preserves P (monadLift (wgXmit family addr packets mtu) : Leanux.M Int) :=
     RetainsRx.wp (ProductRetainsRx.of_native (wgXmit_rxQueues family addr packets mtu)) s
-  have discardSpec (α : Type) :=
-    discard_view_spec (m := Except Stop) (fun w : World => rxQueues w.wg) (α := α) P
-  unfold Hoare at ambient routing
-  mvcgen [-Std.Do.Spec.monadLift_StateT, Leanux.Env.Stack.reply4,
-    skipCut, ambient, routing, hd, hx, discardSpec, unsupported]
-  all_goals try dsimp +zetaDelta only [P] at *
-  all_goals subst s
-  all_goals exact rx_retained_refl _
+  have discarded {α : Type} (a : Leanux.M α) (ha : Preserves P a) : Preserves P (discard a) :=
+    discard_view_spec (fun w : World => rxQueues w.wg) (ResidentsRetained s) a ha
+  have hp : Preserves P (Leanux.Env.Stack.reply4 dst bytes) := by
+    rxstack_preserves_source [Leanux.Env.Stack.reply4, skipCut, unsupported]
+      using [hd, hx, ambient, routing, discarded]
+  apply hoare_consequence hp
+  · intro w h
+    change rxQueues w.wg = s at h
+    change ResidentsRetained s (rxQueues w.wg)
+    rw [h]
+    exact rx_retained_refl _
+  · exact fun _ _ h => h
 
 theorem receive4_rxQueues (bytes : List UInt8) :
     ProductRetainsRx (Leanux.Env.Stack.receive4 bytes) := by
@@ -214,39 +277,44 @@ theorem deliverInner_rxQueues (bytes : List UInt8) :
     ProductRetainsRx (Leanux.Env.deliverInner bytes) := by
   apply ProjectedAction.of_wp
   intro s
-  let P := ResidentsRetained s
-  have h4 := RetainsRx.wp (receive4_rxQueues bytes) s
-  have h6 := ((stackReceive6_sameKernel bytes).of_factor
-    (fun store : ProductStore43 => fun i => store.2.2.2.dev.bind fun d => rxMap d.ifindex d.peers i)
-    (fun w => rxQueues w.wg) (fun _ => rfl)).wp P
-  have ambient {α : Type} (a : AmbientM α) :
-      Hoare (MonadLift.monadLift a : Leanux.M α)
-        (fun w => P (rxQueues w.wg)) (fun _ w => P (rxQueues w.wg)) :=
+  let P := fun w : World => ResidentsRetained s (rxQueues w.wg)
+  have h4 : Preserves P (Leanux.Env.Stack.receive4 bytes) :=
+    RetainsRx.wp (receive4_rxQueues bytes) s
+  have h6 : Preserves P (Leanux.Env.Stack.receive6 bytes) :=
+    ((stackReceive6_sameKernel bytes).of_factor
+      (fun store : ProductStore43 => fun i => store.2.2.2.dev.bind fun d => rxMap d.ifindex d.peers i)
+      (fun w => rxQueues w.wg) (fun _ => rfl)).wp (ResidentsRetained s)
+  have ambient {α : Type} (a : AmbientM α) : Preserves P (monadLift a : Leanux.M α) :=
     productAmbient_spec a _ (fun _ _ h => h)
-  unfold Hoare at ambient
-  mvcgen [-Std.Do.Spec.monadLift_StateT, Leanux.Env.deliverInner,
-    Leanux.Env.Stack.receive, h4, h6, invariant, ambient]
-  all_goals try dsimp +zetaDelta only [P] at *
-  all_goals subst s
-  all_goals exact rx_retained_refl _
+  have hp : Preserves P (Leanux.Env.deliverInner bytes) := by
+    rxstack_preserves_source [Leanux.Env.deliverInner, Leanux.Env.Stack.receive, invariant]
+      using [h4, h6, ambient]
+  apply hoare_consequence hp
+  · intro w h
+    change rxQueues w.wg = s at h
+    change ResidentsRetained s (rxQueues w.wg)
+    rw [h]
+    exact rx_retained_refl _
+  · exact fun _ _ h => h
 
 theorem stackForM_rxQueues (packets : List (List UInt8)) :
     ProductRetainsRx (packets.forM Leanux.Env.deliverInner) := by
   apply ProjectedAction.of_wp
   intro s
-  let P := ResidentsRetained s
-  have hi : ∀ packets : List (List UInt8),
-      ⦃fun w => ⌜P (rxQueues w.wg)⌝⦄ packets.forM Leanux.Env.deliverInner
-        ⦃⇓? _ w => ⌜P (rxQueues w.wg)⌝⦄ := by
+  let P := fun w : World => ResidentsRetained s (rxQueues w.wg)
+  have hi : ∀ packets : List (List UInt8), Preserves P (packets.forM Leanux.Env.deliverInner) := by
     intro xs
     induction xs with
-    | nil => mvcgen
+    | nil => exact preserves_pure _
     | cons bytes xs ih =>
-      have hb := RetainsRx.wp (deliverInner_rxQueues bytes) s
-      simp only [List.forM_eq_forM, List.forM_cons] at *
-      mvcgen [hb, ih]
-  mvcgen [hi]
-  subst s
-  exact rx_retained_refl _
+      simp only [List.forM_eq_forM, List.forM_cons]
+      exact preserves_bind (RetainsRx.wp (deliverInner_rxQueues bytes) s) (fun _ => ih)
+  apply hoare_consequence (hi packets)
+  · intro w h
+    change rxQueues w.wg = s at h
+    change ResidentsRetained s (rxQueues w.wg)
+    rw [h]
+    exact rx_retained_refl _
+  · exact fun _ _ h => h
 
 end Leanux.Proofs.WG.Queues

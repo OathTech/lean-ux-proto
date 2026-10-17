@@ -50,14 +50,18 @@ theorem choose_wp (k : WG.AipStore) (n : WG.AipNode) (key : Nat)
     ⦃fun w => ⌜w = k⌝⦄ (WG.choose n key : WG.AipM Nat)
     ⦃⇓ x w => ⌜x = bit n.bitlen n.cidr key ∧ w = k⌝⦄ := by
   rw [choose_run n key hc]
-  mvcgen
+  apply (total_iff_run_ambient _ _ _).mpr
+  intro w ambient h
+  exact ⟨_, w, ambient, rfl, rfl, h⟩
 
 theorem bitAt_wp (k : WG.AipStore) (width : Nat) (parent : WG.Slot) (n : NodeData)
     (l r : Tree) (b : Nat) (hb : b < 2) :
     ⦃fun w => ⌜w = k⌝⦄ ((encode width parent n l r).bitAt b : WG.AipM (Option WG.NodeId))
     ⦃⇓ x w => ⌜x = (Tree.child l r b).root ∧ w = k⌝⦄ := by
   rw [encode_bitAt_run width parent n l r b hb]
-  mvcgen
+  apply (total_iff_run_ambient _ _ _).mpr
+  intro w ambient h
+  exact ⟨_, w, ambient, rfl, rfl, h⟩
 
 /-- The answer still lies in the current subtree, unless the previous best
 match is the winner. There is one iteration reserved for an empty cursor. -/
@@ -74,77 +78,134 @@ theorem findNode_wp (k : WG.AipStore) (width key : Nat)
     (hr : RepAt k.nodes width parent t) (hv : t.Valid width) :
     ⦃fun w => ⌜w = k⌝⦄ WG.findNode t.root width key
     ⦃⇓ x w => ⌜x = t.lookupId width key ∧ w = k⌝⦄ := by
-  mvcgen [WG.findNode, branch, AmbientM.branch, invariant, AmbientM.invariant]
-  invariants
-  | inv1 => Invariant.withEarlyReturnNewDo
-      (fun cursor state w => ⌜SearchState k width key (t.lookupId width key)
-        cursor.suffix.length state.1 state.2 w⌝)
-      (fun result _ w => ⌜result = t.lookupId width key ∧ w = k⌝)
-      ExceptConds.false
-  case vc1.step.h_1 =>
-    dsimp +zetaDelta only at *
-    rename_i _ _ _ _ _ hnone w ambient hi _
-    try simp only [List.cons_ne_nil, and_false, false_and, exists_false, or_false] at hi
-    rcases hi.2 with ⟨hkw, p, u, hrep, hvalid, hroot, hans, hbudget⟩
-    cases u with
-    | empty => simp_all [Tree.root]
-    | node n l r => simp [Tree.root] at hroot; grind
-  case vc2.step.h_2 =>
-    dsimp +zetaDelta only at *
-    rename_i _ _ _ _ _ id hsome w ambient hi _
-    try simp only [List.cons_ne_nil, and_false, false_and, exists_false, or_false] at hi
-    rcases hi.2 with ⟨hkw, p, u, hrep, hvalid, hroot, hans, hbudget⟩
-    cases u with
-    | empty => simp [Tree.root] at hroot; grind
-    | node n l r =>
-      have hid : id = n.id := by simpa [Tree.root, hsome] using hroot
-      subst id
-      have getter := getNode_wp k n.id (encode width p n l r) hrep.1
-      have matching := prefixMatches_wp k (encode width p n l r) key width hw
-        hvalid.1 hk hvalid.2.1
-      mvcgen [getter]
-      rename_i fetched current ambient hfetched
-      rcases hfetched with ⟨rfl, hcurrent⟩
-      mvcgen [matching]
-      all_goals try dsimp +zetaDelta only at *
-      all_goals try simp_all [encode, Tree.lookupId_node, Tree.root]
-      all_goals try mvcgen [WG.choose, WG.AipNode.bitAt, invariant, AmbientM.invariant]
-      all_goals try dsimp +zetaDelta only at *
-      all_goals try simp_all
-      all_goals try (have bound := hvalid.2.1; omega)
-      all_goals try (have bound := Nat.mod_lt (key / 2 ^ (width - 1 - n.cidr)) (by decide : 0 < 2); omega)
-      all_goals
-        first
-        | have hm := of_decide_eq_false (p := prefixBits width n.cidr n.addr =
-              prefixBits width n.cidr key) (by assumption)
-          simp_all
-        | have hm := of_decide_eq_true (p := prefixBits width n.cidr n.addr =
-              prefixBits width n.cidr key) (by assumption)
-          simp_all
-          refine ⟨rfl, .child n.id (bit width n.cidr key),
-            Tree.child l r (bit width n.cidr key),
-            hrep.child (bit_lt_two ..), hvalid.child _, ?_, ?_, ?_⟩
-          · have cases : bit width n.cidr key = 0 ∨ bit width n.cidr key = 1 := by
-              have bound := bit_lt_two width n.cidr key
-              omega
-            rcases cases with hb | hb <;> simp_all [Tree.child, bit, Tree.root]
-          · simp_all
-          · have decrease := Tree.child_height_lt n l r (bit width n.cidr key)
-            try simp only [List.length_cons] at hbudget
-            omega
-  case vc3.pre =>
-    dsimp +zetaDelta only at *
-    rename_i w ambient hkw
-    refine Or.inl ⟨trivial, hkw, parent, t, hr, hv, rfl, by simp, ?_⟩
-    change t.height + 1 ≤ 130
-    have height := Tree.height_le hv
-    rcases hw with rfl | rfl <;> omega
-  case vc4.post.success.h_1 =>
-    dsimp +zetaDelta only at *
-    grind
-  case vc5.post.success.h_2 =>
-    dsimp +zetaDelta only at *
-    simp_all [SearchState]
+  have branchRule {α : Type} (decision : Decision) (value : Bool)
+      (f : Bool → WG.AipM α) (P : WG.AipStore → Prop) (Q : α → WG.AipStore → Prop)
+      (h : ⦃fun w => ⌜P w⌝⦄ f value ⦃⇓ r w => ⌜Q r w⌝⦄) :
+      ⦃fun w => ⌜P w⌝⦄ ((branch decision value : WG.AipM Bool) >>= f)
+      ⦃⇓ r w => ⌜Q r w⌝⦄ := by
+    apply (total_iff_run_ambient _ _ _).mpr
+    intro w ambient hp
+    obtain ⟨r, out, b, hr, hq⟩ := (total_iff_run_ambient _ _ _).mp h w
+      {ambient with steps := ambient.steps.push {decision, outcome := value, netRx := ambient.netRxSection}} hp
+    exact ⟨r, out, b, hr, hq⟩
+  let range : Std.Legacy.Range := [:130]
+  let loopPred (remaining : Nat) (state : Option (Option Nat) × Option Nat × Option Nat)
+      (w : WG.AipStore) : Prop :=
+    (state.1 = none ∧ SearchState k width key (t.lookupId width key)
+      remaining state.2.1 state.2.2 w) ∨
+    ∃ result, state.1 = some result ∧ remaining = 0 ∧
+      result = t.lookupId width key ∧ w = k
+  let inv : Invariant range.toList (Option (Option Nat) × Option Nat × Option Nat)
+      (PostShape.arg WG.AipStore (PostShape.arg Ambient (PostShape.except Stop PostShape.pure))) :=
+    ⟨fun p w => ⌜loopPred p.1.suffix.length p.2 w⌝, ExceptConds.false⟩
+  unfold WG.findNode
+  refine Triple.bind (Q := fun state => inv.1 (⟨range.toList, [], by simp⟩, state)) _ _ ?_ ?_
+  · apply Triple.entails_wp_of_pre (Spec.forIn_range inv ?_)
+    · intro w ambient hkw
+      refine Or.inl ⟨rfl, hkw, parent, t, hr, hv, rfl, by simp, ?_⟩
+      dsimp only [range]
+      simp only [Std.Legacy.Range.toList, List.length_range']
+      have height := Tree.height_le hv
+      rcases hw with rfl | rfl <;> omega
+    · intro pref cur suff h state
+      let post (r : ForInStep (Option (Option Nat) × Option Nat × Option Nat)) (w : WG.AipStore) :=
+        match r with
+        | .yield state => loopPred suff.length state w
+        | .done state => loopPred 0 state w
+      apply Triple.entails_wp_of_post (Q' := PostCond.noThrow
+        (ps := PostShape.arg WG.AipStore (PostShape.arg Ambient (PostShape.except Stop PostShape.pure)))
+        (fun r w => ⌜post r w⌝))
+      · apply (total_iff_run_ambient _ _ _).mpr
+        intro w ambient hi
+        change loopPred (suff.length + 1) state w at hi
+        rcases hi with ⟨hearly, hkw, p, u, hrep, hvalid, hroot, hans, hbudget⟩ |
+          ⟨result, hearly, hlength, hresult, hkw⟩
+        · subst w
+          cases u with
+          | empty =>
+            simp only [Tree.root] at hroot
+            simp only [hroot]
+            apply (total_iff_run_ambient _ (fun w => w = k) post).mp ?_ k ambient rfl
+            apply branchRule
+            apply Triple.pure
+            intro w ambient hw
+            right
+            exact ⟨state.2.2, rfl, rfl, by simpa using hans.symm, hw⟩
+          | node n l r =>
+            simp only [Tree.root] at hroot
+            simp only [hroot]
+            apply (total_iff_run_ambient _ (fun w => w = k) post).mp ?_ k ambient rfl
+            apply branchRule
+            simp only [pure_bind]
+            refine Triple.bind _ _ (getNode_wp k n.id (encode width p n l r) hrep.1) ?_
+            intro fetched
+            apply (total_iff_run_ambient _ _ _).mpr
+            intro current ambient ⟨hfetched, hcurrent⟩
+            subst fetched
+            subst current
+            apply (total_iff_run_ambient _ (fun w => w = k) post).mp ?_ k ambient rfl
+            refine Triple.bind _ _
+              (prefixMatches_wp k (encode width p n l r) key width hw hvalid.1 hk hvalid.2.1) ?_
+            intro matching
+            apply (total_iff_run_ambient _ _ _).mpr
+            intro current ambient ⟨hmatching, hcurrent⟩
+            subst matching
+            subst current
+            apply (total_iff_run_ambient _ (fun w => w = k) post).mp ?_ k ambient rfl
+            apply branchRule
+            dsimp only [encode]
+            by_cases hm : prefixBits width n.cidr n.addr = prefixBits width n.cidr key
+            · simp only [hm, decide_true, Bool.not_true, Bool.false_eq_true, ↓reduceIte]
+              apply branchRule
+              cases hpeer : n.peer.isSome <;> simp only [Bool.false_eq_true, ↓reduceIte]
+              all_goals apply branchRule
+              all_goals by_cases hc : n.cidr = width
+              all_goals simp only [hc, beq_self_eq_true, beq_iff_eq, ↓reduceIte]
+              all_goals first
+                | (apply Triple.pure
+                   intro w ambient hw
+                   right
+                   refine ⟨_, rfl, rfl, ?_, hw⟩
+                   rw [Tree.lookupId_node, ite_eq_left hm, ite_eq_left hc] at hans
+                   simpa [hpeer] using hans.symm)
+                | (have hlt : n.cidr < width := by
+                     have bound := hvalid.2.1
+                     omega
+                   have choice := choose_run (m := WG.AipM) (encode width p n l r) key hlt
+                   have child := encode_bitAt_run (m := WG.AipM) width p n l r
+                     (bit width n.cidr key) (bit_lt_two width n.cidr key)
+                   dsimp only [encode] at choice child
+                   rw [choice, pure_bind, child, pure_bind]
+                   apply Triple.pure
+                   intro w ambient hw
+                   left
+                   refine ⟨rfl, hw, .child n.id (bit width n.cidr key),
+                     Tree.child l r (bit width n.cidr key),
+                     hrep.child (bit_lt_two ..), hvalid.child _, rfl, ?_, ?_⟩
+                   · rw [Tree.lookupId_node, ite_eq_left hm, ite_eq_right hc] at hans
+                     simpa [hpeer, Option.or_assoc] using hans
+                   · have decrease := Tree.child_height_lt n l r (bit width n.cidr key)
+                     omega)
+            · simp only [hm, decide_false, Bool.not_false, ↓reduceIte]
+              apply Triple.pure
+              intro w ambient hw
+              right
+              exact ⟨state.2.2, rfl, rfl, by simpa [Tree.lookupId_node, hm] using hans.symm, hw⟩
+        · omega
+      · constructor
+        · intro r
+          cases r <;> exact SPred.entails.refl _
+        · exact ExceptConds.entails.refl _
+  · intro state
+    apply (total_iff_run_ambient _ _ _).mpr
+    intro w ambient hi
+    change loopPred 0 state w at hi
+    rcases hi with ⟨_, _, p, u, hrep, hvalid, hroot, hans, hbudget⟩ |
+      ⟨result, hearly, hlength, hresult, hkw⟩
+    · omega
+    · refine ⟨result, w, ambient, ?_, hresult, hkw⟩
+      simp only [hearly]
+      rfl
 
 /-- The original traversal always returns normally on a represented valid
 tree of either supported family, with the pure answer and unchanged AipStore. -/

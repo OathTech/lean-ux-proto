@@ -161,36 +161,47 @@ theorem dispatch_noReceive_ordinary (call : Syscall) (hc : NoReceiveDispatch cal
 /-- Ordinary dispatch and an ordinary return-to-user branch compose. -/
 theorem syscall_ordinary_of_dispatch (call : Syscall) (hc : NoReceiveCall call)
     (hd : ProductOrdinaryAction (Leanux.dispatch call)) : ProductOrdinaryAction (Leanux.syscall call) := by
-  apply (ordinaryAction_iff_wp _).mpr
-  intro P hp
-  have dispatchSpec := hd.wp P hp
-  have fsSpec {α : Type} (a : FS.M α) :=
-    productFS_spec a (fun w => P (snapshot w.wg)) (fun _ _ _ _ h => h)
-  have seccompSpec {α : Type} (a : Seccomp.M α) :
-      Hoare (liftSeccomp a) (fun w => P (snapshot w.wg)) (fun _ w => P (snapshot w.wg)) :=
-    productSeccomp_spec a (fun w => P (snapshot w.wg)) (fun _ _ _ _ h => h)
-  have taskSpec {α : Type} (a : TaskM α) :=
-    productTask_spec a (fun w => P (snapshot w.wg)) (fun _ _ _ h => h)
-  have ambientSpec {α : Type} (a : AmbientM α) :=
-    productAmbient_spec a (fun w => P (snapshot w.wg)) (fun _ _ h => h)
-  have routingSpec {α : Type} (a : Net.M α) :=
-    productRouting_spec a (fun s => P (snapshotOfWGStoreView s.2.2.2))
-  have queuedSpec :
-      ⦃fun w : World => ⌜P (snapshot w.wg)⌝⦄
-        (modifyWG fun g => {g with queuedThisCall := []} : Leanux.M Unit)
-      ⦃⇓? _ w => ⌜P (snapshot w.wg)⌝⦄ := by
-    apply (hoare_iff_run _ _ _).mpr
-    intro w x v hw hr
-    cases hr
-    exact hw
-  have cleanupSpec := netnsCleanup_spec P
-  unfold Hoare at fsSpec seccompSpec taskSpec ambientSpec routingSpec
-  mvcgen [-Std.Do.Spec.monadLift_StateT, Leanux.syscall,
-    Leanux.modifyAmbient, Leanux.getRouting, Leanux.getCurrent, unsupported,
-    dispatchSpec, fsSpec, seccompSpec, taskSpec, ambientSpec, routingSpec, queuedSpec, cleanupSpec]
-  all_goals try exact (⇓? _ w => ⌜P (snapshot w.wg)⌝)
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [NoReceiveCall]
+  have ambient {α : Type} (a : AmbientM α) :
+      ProductOrdinaryAction (MonadLift.monadLift a : Leanux.M α) :=
+    SameView.ordinary (fun initial =>
+      productAmbient_spec a (fun w => snapshot w.wg = initial) (fun _ _ h => h))
+  have fs {α : Type} (a : FS.M α) :
+      ProductOrdinaryAction (MonadLift.monadLift a : Leanux.M α) :=
+    SameView.ordinary (fun initial =>
+      productFS_spec a (fun w => snapshot w.wg = initial) (fun _ _ _ _ h => h))
+  have seccomp {α : Type} (a : Seccomp.M α) :
+      ProductOrdinaryAction (liftSeccomp a) :=
+    SameView.ordinary (fun initial =>
+      productSeccomp_spec a (fun w => snapshot w.wg = initial) (fun _ _ _ _ h => h))
+  have routing {α : Type} (a : Net.M α) :
+      ProductOrdinaryAction (liftM a : Leanux.M α) :=
+    SameView.ordinary (fun initial =>
+      productRouting_spec a (fun s => snapshotOfWGStoreView s.2.2.2 = initial))
+  have queued : ProductOrdinaryAction
+      (modifyWG fun g => {g with queuedThisCall := []} : Leanux.M Unit) :=
+    OrdinaryAction.liftWG (ordinary_modify (fun g : WGWorld => {g with queuedThisCall := []})
+      (fun _ => Ordinary.refl _))
+  unfold Leanux.syscall
+  repeat' first
+    | (solve | exfalso; exact hc)
+    | (unfold ProductOrdinaryAction)
+    | (ordinary_head Leanux.dispatch; exact hd)
+    | (ordinary_head Leanux.modifyWG; exact queued)
+    | (ordinary_head Leanux.modifyAmbient; unfold Leanux.modifyAmbient)
+    | (ordinary_head Leanux.getCurrent
+       unfold Leanux.getCurrent
+       change ProductOrdinaryAction (liftFS (StateT.lift TaskM.getCurrent))
+       exact fs _)
+    | (ordinary_head Leanux.getRouting; unfold Leanux.getRouting)
+    | (ordinary_head Leanux.unsupported; exact ambient (AmbientM.unsupported
+        "a network operation after a seccomp mode was set (the fixture's calls are not modelled under a filter)"))
+    | (ordinary_head Leanux.liftSeccomp; exact seccomp _)
+    | (ordinary_head Env.netnsCleanup; exact SameView.ordinary netnsCleanup_sameSnapshot)
+    | (syscall_lift_from AmbientM; exact ambient _)
+    | (syscall_lift_from FS.M; exact fs _)
+    | (syscall_lift_from Net.M; exact routing _)
+    | syscall_structure_step
+  all_goals simp_all only [NoReceiveCall]
 
 theorem syscall_noReceive_ordinary (call : Syscall) (hc : NoReceiveCall call) :
     ProductOrdinaryAction (Leanux.syscall call) := by

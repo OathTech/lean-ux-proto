@@ -11,21 +11,38 @@ namespace Leanux.Proofs.WG.Lifetimes
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing Std.Do
 
 theorem swapEndian_sameWGStore (bits : Nat) : SameWGStore (swapEndian bits) := by
-  apply SameView.of_wp
   intro initial
-  mvcgen [swapEndian, branch, AmbientM.branch]
+  let P := fun w : WGWorld => wgStoreView w = initial
+  have ambient {α : Type} (a : AmbientM α) :
+      Preserves P (monadLift a : WG.M α) := hoare_liftAmbient a P
+  change Preserves P (swapEndian bits)
+  unfold swapEndian
+  simp only [branch]
+  repeat' first
+    | (allocation_release_lift_from AmbientM; exact ambient _)
+    | allocation_release_step
 
 theorem findNode_sameAipStore (root : Option NodeId) (bits key : Nat) :
     SameView (fun s : AipStore => s) (findNode root bits key) := by
-  apply SameView.of_wp
   intro initial
-  mvcgen [findNode, getNode, prefixMatches, commonBits, choose, AipNode.bitAt,
-    branch, invariant, unsupported, AmbientM.branch, AmbientM.invariant, AmbientM.unsupported]
-  invariants
-  | inv1 => ((⇓? _ s => ⌜s = initial⌝) :
-      PostCond _ (.arg AipStore (.arg Ambient (.except Stop .pure))))
-  all_goals dsimp +zetaDelta only at *
-  all_goals simp_all
+  let P := fun s : AipStore => s = initial
+  have ambient {α : Type} (a : AmbientM α) :
+      Preserves P (monadLift a : AipM α) := hoare_liftAmbient a P
+  have node (id : NodeId) : Preserves P (getNode id) :=
+    (getNode_sameAipStore id).wp (fun s => s = initial)
+  have loop {α β : Type} (xs : List α) (b : β) (f : α → β → AipM (ForInStep β))
+      (hf : ∀ x b, Preserves P (f x b)) : Preserves P (forIn xs b f) :=
+    list_view_spec id P xs b f hf
+  change Preserves P (findNode root bits key)
+  unfold findNode prefixMatches commonBits choose AipNode.bitAt
+  simp only [branch, invariant]
+  repeat' first
+    | (allocation_release_head getNode; exact node _)
+    | (allocation_release_lift_from AmbientM; exact ambient _)
+    | (allocation_release_head ForIn.forIn; first
+        | apply loop
+        | rw [Std.Legacy.Range.forIn_eq_forIn_range'])
+    | allocation_release_step
 
 private theorem lookup_readAip {a : AipM α} (ha : SameView (fun s : AipStore => s) a) :
     SameWGStore (liftAip a) := by
@@ -109,7 +126,7 @@ theorem lookupSrcPrefix_spec (c : AmbientContracts I) (P : IdentityView → Prop
   unfold lookupSrcPrefix
   repeat' first
     | (maintenance_head lookupPrefix; exact lookupPrefix_spec c P _ _ _)
-    | (maintenance_lift_action_head getDev; exact c.store P _ (by intro initial; unfold Hoare; mvcgen [getDev, invariant, AmbientM.invariant]))
+    | (maintenance_lift_action_head getDev; exact c.store P _ getDev_sameWGStore)
     | (maintenance_lift_action_head branch; exact c.branch P _ _)
     | exact c.pure P _
     | apply StatePrefixEnsures.bind
@@ -132,7 +149,7 @@ theorem lookupDstPrefix_spec (c : AmbientContracts I) (P : IdentityView → Prop
   unfold lookupDstPrefix
   repeat' first
     | (maintenance_head lookupPrefix; exact lookupPrefix_spec c P _ _ _)
-    | (maintenance_lift_action_head getDev; exact c.store P _ (by intro initial; unfold Hoare; mvcgen [getDev, invariant, AmbientM.invariant]))
+    | (maintenance_lift_action_head getDev; exact c.store P _ getDev_sameWGStore)
     | (maintenance_lift_action_head branch; exact c.branch P _ _)
     | exact c.pure P _
     | apply StatePrefixEnsures.bind
@@ -177,7 +194,7 @@ theorem lookupSrcPrefix_spec_product (c : ProductAmbientContracts I) (P : Identi
   repeat' first
     | simp only []
     | (maintenance_head lookupPrefix; exact lookupPrefix_spec_product c P _ _ _)
-    | (maintenance_lift_action_head getDev; exact c.nativeStore P _ (by intro initial; unfold Hoare; mvcgen [getDev, invariant, AmbientM.invariant]))
+    | (maintenance_lift_action_head getDev; exact c.nativeStore P _ getDev_sameWGStore)
     | (maintenance_lift_action_head branch; exact branch_spec P _ _)
     | exact c.pure P _
     | apply PrefixEnsures.bind
@@ -197,7 +214,7 @@ theorem lookupDstPrefix_spec_product (c : ProductAmbientContracts I) (P : Identi
   repeat' first
     | simp only []
     | (maintenance_head lookupPrefix; exact lookupPrefix_spec_product c P _ _ _)
-    | (maintenance_lift_action_head getDev; exact c.nativeStore P _ (by intro initial; unfold Hoare; mvcgen [getDev, invariant, AmbientM.invariant]))
+    | (maintenance_lift_action_head getDev; exact c.nativeStore P _ getDev_sameWGStore)
     | (maintenance_lift_action_head branch; exact branch_spec P _ _)
     | exact c.pure P _
     | apply PrefixEnsures.bind

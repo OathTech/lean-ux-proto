@@ -22,14 +22,29 @@ theorem requireNotPending_routing (pid : PeerId) (why : String) :
   SameView.pure _ _
 
 theorem getPeer_routing (pid : PeerId) : SameView routingView (getPeer pid) := by
-  apply SameView.of_wp
-  intro s
-  mvcgen [getPeer, getDev, invariant, AmbientM.invariant]
+  apply (ProjectedAction.iff_run_ambient _ _ _).mpr
+  intro w ambient p v ambient' hr
+  have hv := (Peers.getPeer_current pid w v p ambient ambient' hr).1
+  cases hv
+  rfl
 
 theorem getKeypair_routing (id : KeypairId) : SameView routingView (getKeypair id) := by
-  apply SameView.of_wp
-  intro s
-  mvcgen [getKeypair, getDev, invariant, AmbientM.invariant]
+  apply (ProjectedAction.iff_run_ambient _ _ _).mpr
+  intro w ambient k v ambient' hr
+  cases hd : w.dev with
+  | none =>
+    simp [getKeypair, getDev, hd, invariant, AmbientM.invariant] at hr
+    cases hr
+  | some d =>
+    cases hk : d.keypairs[id]? with
+    | none =>
+      simp [getKeypair, getDev, hd, hk, invariant, AmbientM.invariant] at hr
+      cases hr
+    | some old =>
+      have he := CounterWindow.getKeypair_run w ambient d id old hd hk
+      rw [he] at hr
+      cases hr
+      rfl
 
 theorem ownerDeref_routing (owner : IndexOwner) : SameView routingView owner.peerDeref := by
   intro s
@@ -43,111 +58,251 @@ theorem setKeypair_routing (id : KeypairId) (k : Keypair) : SameView routingView
   modifyDev_routing _ (fun _ => rfl)
 
 theorem peerGet_routing (pid : PeerId) : SameView routingView (peerGet pid) := by
-  apply SameView.of_wp
   intro s
-  have hg := routing_getPeer (fun t => t = s) pid
-  have hs := fun p => routing_setPeer (fun t => t = s) pid p
-  have hn := (requireNotPending_routing pid "taking a reference").wp (fun t => t = s)
-  mvcgen [peerGet, requireNotPending, hg, hs, refcountInc, branch, branchCmp, AmbientM.branch, AmbientM.branchCmp, unsupported, AmbientM.unsupported]
-  all_goals simp_all
+  let P := fun view : Option RoutingState => view = s
+  have inc (old : Nat) (Q : WGWorld → Prop) : Preserves Q (refcountInc old : WG.M Unit) := by
+    unfold refcountInc
+    simp only [branch, branchCmp, unsupported]
+    repeat' first
+      | (rx_retention_head MonadLiftT.monadLift; exact hoare_liftAmbient _ Q)
+      | (rx_retention_head MonadLift.monadLift; exact hoare_liftAmbient _ Q)
+      | rx_retention_step
+  unfold peerGet requireNotPending
+  simp only [pure_bind]
+  apply hoare_bind _ _ (routing_getPeer P pid)
+  intro p
+  apply hoare_bind _ _ (inc p.refcount (fun w => P (routingView w) ∧
+    (w.dev.bind fun d => d.peers[pid]?.map (·.allowedipsList)) = some p.allowedipsList))
+  intro _
+  exact routing_setPeer P pid {p with refcount := p.refcount + 1}
 
 theorem keypairGet_routing (kp : Option KeypairId) : SameView routingView (keypairGet kp) := by
-  apply SameView.of_wp
   intro s
-  have hg := fun id => (getKeypair_routing id).wp (fun t => t = s)
-  have hs := fun id k => (setKeypair_routing id k).wp (fun t => t = s)
-  mvcgen [keypairGet, hg, hs, refcountIncNotZero, branch, branchCmp, AmbientM.branch, AmbientM.branchCmp, unsupported, AmbientM.unsupported]
+  let P := fun w : WGWorld => routingView w = s
+  change Preserves P (keypairGet kp)
+  have ambient {α : Type} (a : AmbientM α) : Preserves P (monadLift a : WG.M α) :=
+    hoare_liftAmbient a P
+  unfold keypairGet refcountIncNotZero
+  simp (config := { zeta := true }) only [branch, branchCmp, invariant, unsupported]
+  repeat' first
+    | (rx_retention_head getKeypair; exact (getKeypair_routing _).wp (fun view => view = s))
+    | (rx_retention_head setKeypair; exact (setKeypair_routing _ _).wp (fun view => view = s))
+    | (rx_retention_head MonadLiftT.monadLift; exact ambient _)
+    | (rx_retention_head MonadLift.monadLift; exact ambient _)
+    | rx_retention_step
 
 theorem keypairPut_routing (kp : Option KeypairId) (now : Bool) :
     SameView routingView (keypairPut kp now) := by
-  apply SameView.of_wp
   intro s
-  have hd := fun o => indexOwner_peerDeref_preserves o (fun w => routingView w = s)
-  unfold Preserves Hoare at hd
-  have index_spec (a : IndexM Unit) :
-      Hoare (MonadLift.monadLift a : WG.M Unit)
-        (fun w => routingView w = s) (fun _ w => routingView w = s) := by
-    apply hoare_liftIndex a (fun w => routingView w = s)
-    intro w d table hi hw
-    unfold routingView at hi ⊢
-    simpa only [hw, Option.map_some, routingState] using hi
-  unfold Hoare at index_spec
-  mvcgen [keypairPut, hd, index_spec, getKeypair, getDev, setKeypair, modifyDev,
-    refcountDecAndTest, branch, branchCmp, AmbientM.branch, AmbientM.branchCmp,
-    invariant, unsupported, AmbientM.invariant, AmbientM.unsupported]
-  all_goals dsimp +zetaDelta only at *
-  all_goals dsimp only [routingView, routingState] at *; simp_all [routingState, Option.map_some, Function.comp_def]
-  all_goals subst_vars
-  all_goals simp_all
-  all_goals
-    rename_i h
-    obtain ⟨d, hd, hr⟩ := h
-    exact ⟨d, hd, by simpa only [routingState, RoutingState.mk.injEq] using hr⟩
+  let P := fun w : WGWorld => routingView w = s
+  change Preserves P (keypairPut kp now)
+  have ambient {α : Type} (a : AmbientM α) : Preserves P (monadLift a : WG.M α) :=
+    hoare_liftAmbient a P
+  have remove (id : KeypairId) : Preserves P (monadLift (indexRemove (.keypair id)) : WG.M Unit) := by
+    apply hoare_liftIndex (indexRemove (.keypair id)) P
+    intro w d table hi hd
+    unfold P routingView at hi ⊢
+    simpa only [hd, Option.map_some, routingState] using hi
+  have removal (id : KeypairId) : Preserves P (do
+      _ ← IndexOwner.peerDeref (.keypair id)
+      monadLift (indexRemove (.keypair id)) : WG.M Unit) :=
+    preserves_bind (indexOwner_peerDeref_preserves (.keypair id) P) (fun _ => remove id)
+  have erase (id : KeypairId) : Preserves P (modifyDev fun d => {d with keypairs := d.keypairs.erase id}) :=
+    (modifyDev_routing (fun d => {d with keypairs := d.keypairs.erase id})
+      (fun _ => rfl)).wp (fun view => view = s)
+  have dec (old : Nat) : Preserves P (refcountDecAndTest old : WG.M Bool) := by
+    unfold refcountDecAndTest
+    simp only [branch, branchCmp, unsupported]
+    repeat' first
+      | (rx_retention_head MonadLiftT.monadLift; exact ambient _)
+      | (rx_retention_head MonadLift.monadLift; exact ambient _)
+      | rx_retention_step
+  let tail (id : KeypairId) (k : Keypair) : WG.M Unit := do
+    setKeypair id {k with refcount := k.refcount - 1}
+    if ← branch .keypairKrefPutReleased (← refcountDecAndTest k.refcount) then
+      _ ← IndexOwner.peerDeref (.keypair id)
+      indexRemove (.keypair id)
+      modifyDev fun d => {d with keypairs := d.keypairs.erase id}
+  have ht (id : KeypairId) (k : Keypair) : Preserves P (tail id k) := by
+    unfold tail
+    apply preserves_bind ((setKeypair_routing id {k with refcount := k.refcount - 1}).wp
+      (fun view => view = s))
+    intro _
+    apply preserves_bind (dec k.refcount)
+    intro released
+    apply preserves_bind (ambient (AmbientM.branch .keypairKrefPutReleased released))
+    intro result
+    split
+    · simpa only [bind_assoc] using preserves_bind (removal id) (fun _ => erase id)
+    · exact preserves_pure _
+  unfold keypairPut
+  apply preserves_bind (ambient (AmbientM.branch .keypairPutNull kp.isNone))
+  intro isNull
+  split
+  · exact preserves_pure _
+  · cases kp with
+    | none => exact ambient (AmbientM.invariant "unreachable")
+    | some id =>
+      apply preserves_bind ((getKeypair_routing id).wp (fun view => view = s))
+      intro k
+      apply preserves_bind (ambient (AmbientM.branch .keypairPutUnreferenceNow now))
+      intro unreference
+      split
+      · simpa only [bind_assoc, tail] using preserves_bind (removal id) (fun _ => ht id k)
+      · simpa only [bind_assoc, tail] using ht id k
 
 theorem sendQueuedHandshakeInitiation_routing (pid : PeerId) (retry : Bool) :
     RetainsRoutingCall (sendQueuedHandshakeInitiation pid retry) := by
-  apply ProjectedAction.of_wp
   intro s
-  let P := RetainsRouting s
-  have hg := routing_getPeer P pid
-  have hs := fun p => routing_setPeer P pid p
-  have hn := (requireNotPending_routing pid "queueing a handshake").wp P
-  have hc := fun date => (branchExpired_sameWGWorld .queuedNotExpired date REKEY_TIMEOUT (!·)).wp (fun w => P (routingView w))
-  have hget := (peerGet_routing pid).wp P
-  have hput := RetainsRoutingCall.wp (peerPut_retainsRouting (some pid)) s
+  let P := fun w : WGWorld => RetainsRouting s (routingView w)
+  have ambient {α : Type} (a : AmbientM α) : Preserves P (monadLift a : WG.M α) :=
+    hoare_liftAmbient a P
+  have reset : Preserves P (do
+      setPeer pid {(← getPeer pid) with timerHandshakeAttempts := 0}) :=
+    hoare_bind _ _ (routing_getPeer (RetainsRouting s) pid)
+      (fun p => routing_setPeer (RetainsRouting s) pid {p with timerHandshakeAttempts := 0})
+  have pending : Preserves P (do
+      setPeer pid {(← getPeer pid) with handshakePending := true}) :=
+    hoare_bind _ _ (routing_getPeer (RetainsRouting s) pid)
+      (fun p => routing_setPeer (RetainsRouting s) pid {p with handshakePending := true})
   have hqueue := (modifyDev_routing (fun d => {d with sendWorkQueue := d.sendWorkQueue ++ [pid]})
-    (fun _ => rfl)).wp P
-  have ambient {α : Type} (a : AmbientM α) :
-      Hoare (MonadLift.monadLift a : WG.M α) (fun w => P (routingView w)) (fun _ w => P (routingView w)) :=
-    hoare_liftAmbient a (fun w => P (routingView w))
-  unfold Hoare at ambient
-  mvcgen [-Std.Do.Spec.monadLift_StateT, sendQueuedHandshakeInitiation, hg, hs, hn, hc, hget, hput, hqueue, branch, peekQueuedUnit, recordQueued, ambient]
-  all_goals try dsimp +zetaDelta only [P] at *
-  all_goals try (dsimp only [routingView, routingState] at *; simp_all [])
-  all_goals try assumption
-  all_goals subst s
-  all_goals exact RetainsRouting.refl _
+    (fun _ => rfl)).wp (RetainsRouting s)
+  have scheduled : Preserves P (do
+      setPeer pid { (← getPeer pid) with handshakePending := true }
+      recordQueued .sendWorker pid
+      modifyDev fun d => {d with sendWorkQueue := d.sendWorkQueue ++ [pid]}) := by
+    simpa only [bind_assoc, recordQueued, P] using preserves_bind pending (fun _ =>
+      preserves_bind (ambient (AmbientM.recordQueued .sendWorker pid)) (fun _ => hqueue))
+  let tail : WG.M Unit := do
+    let p ← getPeer pid
+    if ← branchExpired .queuedNotExpired p.lastSentHandshake REKEY_TIMEOUT (!·) then return
+    if ← branch .queuedDead p.isDead then return
+    peerGet pid
+    if ← branch .queuedAlreadyQueued (p.handshakePending && !(← peekQueuedUnit .sendWorker pid)) then
+      peerPut (some pid)
+      return
+    setPeer pid { (← getPeer pid) with handshakePending := true }
+    recordQueued .sendWorker pid
+    modifyDev fun d => {d with sendWorkQueue := d.sendWorkQueue ++ [pid]}
+  have ht : Preserves P tail := by
+    unfold tail
+    apply preserves_bind ((getPeer_routing pid).wp (RetainsRouting s))
+    intro p
+    apply preserves_bind ((branchExpired_sameWGWorld .queuedNotExpired p.lastSentHandshake
+      REKEY_TIMEOUT (!·)).wp P)
+    intro expired
+    split
+    · exact preserves_pure _
+    · apply preserves_bind (ambient (AmbientM.branch .queuedDead p.isDead))
+      intro dead
+      split
+      · exact preserves_pure _
+      · apply preserves_bind ((peerGet_routing pid).wp (RetainsRouting s))
+        intro _
+        apply preserves_bind (ambient (AmbientM.peekQueuedUnit .sendWorker pid))
+        intro queued
+        apply preserves_bind (ambient (AmbientM.branch .queuedAlreadyQueued (p.handshakePending && !queued)))
+        intro already
+        split
+        · exact preserves_bind (RetainsRoutingCall.wp (peerPut_retainsRouting (some pid)) s)
+            (fun _ => preserves_pure _)
+        · exact scheduled
+  have main : Preserves P (sendQueuedHandshakeInitiation pid retry) := by
+    unfold sendQueuedHandshakeInitiation
+    apply preserves_bind (ambient (AmbientM.branch .queuedNotRetry !retry))
+    intro notRetry
+    split
+    · simpa only [bind_assoc] using preserves_bind reset (fun _ => ht)
+    · exact ht
+  apply hoare_consequence main
+  · intro w he
+    change RetainsRouting s (routingView w)
+    change routingView w = s at he
+    rw [he]
+    exact RetainsRouting.refl _
+  · exact fun _ _ h => h
 
 theorem txDevice_routing (u : TxDeviceUpdate) : SameView routingView (modifyDev u.apply) :=
   modifyDev_routing _ (fun d => by cases u <;> rfl)
 
 theorem cpumaskChooseOnline_routing (pid : PeerId) : SameView routingView (cpumaskChooseOnline pid) := by
-  apply SameView.of_wp
-  intro s
-  have hg := routing_getPeer (fun t => t = s) pid
-  have hs := fun p => routing_setPeer (fun t => t = s) pid p
-  mvcgen [cpumaskChooseOnline, hg, hs, branch, AmbientM.branch]
-  all_goals try exact ((⇓? _ w => ⌜routingView w = s⌝) : PostCond _ (.arg WGWorld (.arg Ambient (.except Stop .pure))))
-  all_goals try dsimp +zetaDelta only at *
-  all_goals try (dsimp only [routingView, routingState] at *; simp_all [])
-  all_goals trivial
+  apply (ProjectedAction.iff_run_ambient _ _ _).mpr
+  intro w ambient x v ambient' hr
+  cases hd : w.dev with
+  | none =>
+    simp [cpumaskChooseOnline, getPeer, getDev, hd, invariant, AmbientM.invariant] at hr
+    cases hr
+  | some d =>
+    cases hp : d.peers[pid]? with
+    | none =>
+      simp [cpumaskChooseOnline, getPeer, getDev, hd, hp, invariant, AmbientM.invariant] at hr
+      cases hr
+    | some p =>
+      simp [cpumaskChooseOnline, getPeer, getDev, setPeer, modifyDev, hd, hp,
+        branch, AmbientM.branch, Nat.mod_one] at hr
+      repeat' split at hr
+      all_goals simp_all
+      all_goals rcases hr with ⟨⟨rfl, rfl⟩, rfl⟩
+      all_goals first
+        | rfl
+        | (simpa only [routingView, hd, Option.map_some] using congrArg some
+            (routingState_insert_same d pid p {p with serialWorkCpu := some 0} hp rfl))
 
 theorem enqueuePerDeviceAndPeer_routing (pid : PeerId) (item : List SkbId) :
     SameView routingView (enqueuePerDeviceAndPeer pid item) := by
   apply SameView.of_wp
-  intro s
+  intro initial
+  let P := fun view : Option RoutingState => view = initial
   have skb {α : Type} (a : SkbM α) :
-      Hoare (liftSkb a) (fun w => routingView w = s) (fun _ w => routingView w = s) := by
+      Preserves (fun w => P (routingView w)) (liftSkb a) := by
     apply hoare_liftSkb a
     intro w d store hi hd
     unfold routingView at hi ⊢
     simpa only [hd, Option.map_some, routingState] using hi
-  unfold Hoare at skb
-  have hg := routing_getPeer (fun t => t = s) pid
-  have hs := fun p => routing_setPeer (fun t => t = s) pid p
-  have hc := fun last => (routing_kernel _ (cpumaskNextOnlineFrom_sameStore last)).wp (fun t => t = s)
-  have hd := fun u => (txDevice_routing u).wp (fun t => t = s)
-  have hcpu := fun cpu => hd (.cpu cpu)
-  have hring := hd (.ring item)
-  have queued : Hoare (queueDeviceWork .encryptWorker : WG.M Unit)
-      (fun w => routingView w = s) (fun _ w => routingView w = s) :=
-    hoare_liftAmbient (AmbientM.queueDeviceWork .encryptWorker) _
-  unfold Hoare at queued
-  mvcgen [enqueuePerDeviceAndPeer, hg, hs, hc, hcpu, hring,
-    setTxSkb, skb, queued, getDev, modifyDev, branch, AmbientM.branch, invariant, AmbientM.invariant]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals dsimp only [routingView, routingState] at *; simp_all [routingState, Function.comp_def]
-  all_goals assumption
+  have ambient {α : Type} (a : AmbientM α) (Q : WGWorld → Prop) :
+      Preserves Q (monadLift a : WG.M α) := hoare_liftAmbient a Q
+  unfold enqueuePerDeviceAndPeer
+  cases item.head? with
+  | none =>
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient x v ambient' _ hr
+    cases hr
+  | some first =>
+    apply hoare_bind _ _ (skb (SkbStore.setTx first fun p => {p with state := .uncrypted}))
+    intro _
+    apply hoare_bind _ _ (routing_getPeer P pid)
+    intro p
+    let Q := fun w => P (routingView w) ∧ (w.dev.bind fun d => d.peers[pid]?.map (·.allowedipsList)) = some p.allowedipsList
+    apply hoare_bind _ _ (ambient (AmbientM.branch .enqueuePeerQueueFull
+      (p.txQueue.count ≥ MAX_QUEUED_PACKETS)) Q)
+    intro full
+    cases full with
+    | true =>
+      exact hoare_consequence (hoare_pure (-ENOSPC) Q) (fun _ h => h)
+        (fun _ _ h => h.2.1)
+    | false =>
+      apply hoare_bind _ _ (hoare_consequence
+        (routing_setPeer P pid {p with txQueue := p.txQueue.enqueue item})
+        (fun _ h => h) (fun _ _ h => h))
+      intro _
+      apply preserves_bind ((routing_kernel _ getDev_sameWGStore).wp P)
+      intro d
+      apply preserves_bind ((routing_kernel _ (cpumaskNextOnlineFrom_sameStore d.encryptLastCpu)).wp P)
+      intro cpu
+      apply preserves_bind ((txDevice_routing (.cpu cpu)).wp P)
+      intro _
+      apply preserves_bind (ambient (AmbientM.branch .enqueueRingFull d.encryptQueue.full) _)
+      intro full
+      cases full with
+      | true => exact preserves_pure (-EPIPE)
+      | false =>
+        apply preserves_bind (ambient (AmbientM.queueDeviceWork .encryptWorker) _)
+        intro _
+        apply preserves_bind ((txDevice_routing (.ring item)).wp P)
+        intro _
+        exact preserves_pure 0
+
+
 
 theorem enqueuePerPeerTx_routing (item : List SkbId) (state : PacketState) :
     RetainsRoutingCall (enqueuePerPeerTx item state) := by
@@ -189,105 +344,214 @@ theorem enqueuePerPeerTx_routing (item : List SkbId) (state : PacketState) :
 theorem createData_routing (pid : PeerId) (item : List SkbId) : RetainsRoutingCall (createData pid item) := by
   apply ProjectedAction.of_wp
   intro s
-  let P := RetainsRouting s
-  have skb {α : Type} (a : SkbM α) :
-      Hoare (liftSkb a) (fun w => P (routingView w)) (fun _ w => P (routingView w)) := by
-    apply hoare_liftSkb a
-    intro w d store hi hd
-    unfold routingView at hi ⊢
-    simpa only [hd, Option.map_some, routingState] using hi
-  unfold Hoare at skb
-  have hg := (getPeer_routing pid).wp P
-  have hd := (enqueuePerDeviceAndPeer_routing pid item).wp P
-  have hp := RetainsRoutingCall.wp (enqueuePerPeerTx_routing item .dead) s
-  have hk := fun id => (keypairPut_routing id false).wp P
-  have hr := RetainsRoutingCall.wp (peerPut_retainsRouting (some pid)) s
-  mvcgen [createData, hg, hd, hp, hk, hr,
-    getTxSkb, freeTxSkb, skb, branch, AmbientM.branch, invariant, AmbientM.invariant]
-  all_goals try exact ((⇓? _ w => ⌜P (routingView w)⌝) : PostCond _ (.arg WGWorld (.arg Ambient (.except Stop .pure))))
-  all_goals try dsimp +zetaDelta only [P] at *
-  all_goals try (dsimp only [routingView, routingState] at *; simp_all [])
-  all_goals try subst s
-  all_goals first | exact RetainsRouting.refl _ | trivial
+  let P := fun w : WGWorld => RetainsRouting s (routingView w)
+  have main : Preserves P (createData pid item) := by
+    have ambient {α : Type} (a : AmbientM α) :
+        Preserves P (monadLift a : WG.M α) := hoare_liftAmbient a P
+    have skb {α : Type} (a : SkbM α) : Preserves P (liftSkb a) := by
+      apply hoare_liftSkb a
+      intro w d store hi hd
+      unfold P routingView at hi ⊢
+      simpa only [hd, Option.map_some, routingState] using hi
+    have loop {α β : Type} (xs : List α) (initial : β)
+        (f : α → β → WG.M (ForInStep β))
+        (hf : ∀ a b, Preserves P (f a b)) : Preserves P (forIn xs initial f) :=
+      list_view_spec routingView (RetainsRouting s) xs initial f hf
+    unfold createData
+    simp (config := { zeta := true }) only [branch, invariant, getTxSkb, freeTxSkb]
+    repeat' first
+      | (rx_retention_head getPeer; exact (getPeer_routing _).wp (RetainsRouting s))
+      | (rx_retention_head enqueuePerDeviceAndPeer; exact (enqueuePerDeviceAndPeer_routing _ _).wp (RetainsRouting s))
+      | (rx_retention_head enqueuePerPeerTx; exact RetainsRoutingCall.wp (enqueuePerPeerTx_routing _ _) s)
+      | (rx_retention_head keypairPut; exact (keypairPut_routing _ _).wp (RetainsRouting s))
+      | (rx_retention_head peerPut; exact RetainsRoutingCall.wp (peerPut_retainsRouting _) s)
+      | (rx_retention_head liftSkb; exact skb _)
+      | (rx_retention_head MonadLiftT.monadLift; exact ambient _)
+      | (rx_retention_head MonadLift.monadLift; exact ambient _)
+      | (rx_retention_head ForIn.forIn; apply loop)
+      | rx_retention_step
+  apply hoare_consequence main
+  · intro w he
+    dsimp only [P]
+    change routingView w = s at he
+    rw [he]
+    exact RetainsRouting.refl _
+  · exact fun _ _ h => h
 
 theorem stagedOutNokey_routing (pid : PeerId) (packets : List Packet)
     (keypair : Option KeypairId) (invalid : Bool) :
     RetainsRoutingCall (stagedOutNokey pid packets keypair invalid) := by
-  cases invalid <;> cases keypair <;> apply ProjectedAction.of_wp <;> intro s
-  all_goals
-    let P := RetainsRouting s
-    have hg := routing_getPeer P pid
-    have hs := fun p => routing_setPeer P pid p
-    have hk := fun id => (getKeypair_routing id).wp P
-    have hset := fun id k => (setKeypair_routing id k).wp P
-    have hp := fun kp => (keypairPut_routing kp false).wp P
-    have hq := RetainsRoutingCall.wp (sendQueuedHandshakeInitiation_routing pid false) s
-    have hl (α β : Type) := list_view_spec (m := AmbientM) routingView (α := α) (β := β) P
-    simp only [stagedOutNokey, getPeer_twice, Bool.false_eq_true, ↓reduceIte]
-    mvcgen [-Std.Do.Spec.forIn_list, -Std.Do.Spec.forIn'_list, hl,
-      hg, hs, hk, hset, hp, hq, branch, invariant, AmbientM.branch, AmbientM.invariant]
-  all_goals try exact ((⇓? _ w => ⌜RetainsRouting s (routingView w)⌝) : PostCond _ (.arg WGWorld (.arg Ambient (.except Stop .pure))))
-  all_goals try dsimp +zetaDelta only at *
-  all_goals try (dsimp only [routingView, routingState] at *; simp_all [])
-  all_goals try subst s
-  all_goals first | exact RetainsRouting.refl _ | trivial
+  intro s
+  let P := fun w : WGWorld => RetainsRouting s (routingView w)
+  have ambient {α : Type} (a : AmbientM α) :
+      Preserves P (monadLift a : WG.M α) := hoare_liftAmbient a P
+  have restore : Preserves P (do
+      setPeer pid {(← getPeer pid) with staged := packets ++ (← getPeer pid).staged}) := by
+    simp only [getPeer_twice]
+    exact hoare_bind _ _ (routing_getPeer (RetainsRouting s) pid)
+      (fun p => routing_setPeer (RetainsRouting s) pid {p with staged := packets ++ p.staged})
+  let tail : WG.M Unit := do
+    keypairPut keypair false
+    for _ in packets do _ ← branch .stagedOrphanWalk true
+    _ ← branch .stagedOrphanWalk false
+    setPeer pid {(← getPeer pid) with staged := packets ++ (← getPeer pid).staged}
+    sendQueuedHandshakeInitiation pid false
+  have ht : Preserves P tail := by
+    unfold tail
+    apply preserves_bind ((keypairPut_routing keypair false).wp (RetainsRouting s))
+    intro _
+    apply preserves_bind
+    · apply list_view_spec routingView (RetainsRouting s)
+      intro _ _
+      exact preserves_bind (ambient (AmbientM.branch .stagedOrphanWalk true))
+        (fun _ => preserves_pure _)
+    · intro _
+      apply preserves_bind (ambient (AmbientM.branch .stagedOrphanWalk false))
+      intro _
+      simpa only [bind_assoc] using preserves_bind restore
+        (fun _ => RetainsRoutingCall.wp (sendQueuedHandshakeInitiation_routing pid false) s)
+  have main : Preserves P (stagedOutNokey pid packets keypair invalid) := by
+    unfold stagedOutNokey
+    cases invalid with
+    | false => exact ht
+    | true =>
+      cases keypair with
+      | none =>
+        apply (hoare_iff_run_ambient _ _ _).mpr
+        intro w ambient x v ambient' _ hr
+        cases hr
+      | some id =>
+        apply preserves_bind ((getKeypair_routing id).wp (RetainsRouting s))
+        intro key
+        apply preserves_bind ((setKeypair_routing id
+          {key with sending := {key.sending with isValid := false}}).wp (RetainsRouting s))
+        intro _
+        exact ht
+  apply hoare_consequence main
+  · intro w he
+    change RetainsRouting s (routingView w)
+    change routingView w = s at he
+    rw [he]
+    exact RetainsRouting.refl _
+  · exact fun _ _ h => h
 
 theorem sendStagedPackets_routing (pid : PeerId) : RetainsRoutingCall (sendStagedPackets pid) := by
-  apply ProjectedAction.of_wp
   intro s
-  let P := RetainsRouting s
-  have skb {α : Type} (a : SkbM α) :
-      Hoare (liftSkb a) (fun w => P (routingView w)) (fun _ w => P (routingView w)) := by
+  let P := fun w : WGWorld => RetainsRouting s (routingView w)
+  have ambient {α : Type} (a : AmbientM α) :
+      Preserves P (monadLift a : WG.M α) := hoare_liftAmbient a P
+  have skb {α : Type} (a : SkbM α) : Preserves P (liftSkb a) := by
     apply hoare_liftSkb a
     intro w d store hi hd
-    unfold routingView at hi ⊢
+    unfold P routingView at hi ⊢
     simpa only [hd, Option.map_some, routingState] using hi
-  unfold Hoare at skb
-  have hg := routing_getPeer P pid
-  have hs := fun p => routing_setPeer P pid p
-  have hk := fun id => (getKeypair_routing id).wp P
-  have hset := fun id k => (setKeypair_routing id k).wp P
-  have hget := fun kp => (keypairGet_routing kp).wp P
-  have hp := fun pid => (peerGet_routing pid).wp P
-  have hout := fun packets kp invalid => RetainsRoutingCall.wp (stagedOutNokey_routing pid packets kp invalid) s
-  have hput := fun kp => (keypairPut_routing kp false).wp P
-  have hqueue := RetainsRoutingCall.wp (sendQueuedHandshakeInitiation_routing pid false) s
-  have ht := fun date => (branchExpired_sameWGWorld .stagedBirthdateExpired date REJECT_AFTER_TIME).wp (fun w => P (routingView w))
-  have he := fun pkt => (ipTunnelEcnEncap_sameWGWorld pkt).wp (fun w => P (routingView w))
-  have hn (packets : List DataPacket) := mapM_view_spec routingView P newTxSkb packets
-    (fun p => skb (SkbStore.newTx p))
-  have hc := fun item => RetainsRoutingCall.wp (createData_routing pid item) s
-  have hl (α β : Type) := list_view_spec (m := AmbientM) routingView (α := α) (β := β) P
-  simp only [sendStagedPackets, getPeer_twice]
-  have hw := fun o => indexOwner_peerDeref_preserves o (fun w => P (routingView w))
-  unfold Preserves Hoare at hw
-  mvcgen [hw, -Std.Do.Spec.forIn_list, -Std.Do.Spec.forIn'_list,
-    hl, hg, hs, hk, hset, hget, hp, hout, hput, hqueue, ht, he, hn, hc, branch, branchCmp, AmbientM.branch, AmbientM.branchCmp, invariant, AmbientM.invariant]
-  all_goals try exact ((⇓? _ w => ⌜P (routingView w)⌝) : PostCond _ (.arg WGWorld (.arg Ambient (.except Stop .pure))))
-  all_goals try dsimp +zetaDelta only [P] at *
-  all_goals try (dsimp only [routingView, routingState] at *; simp_all [])
-  all_goals try subst s
-  all_goals first | exact RetainsRouting.refl _ | trivial
+  have loop {α β : Type} (xs : List α) (initial : β)
+      (f : α → β → WG.M (ForInStep β))
+      (hf : ∀ a b, Preserves P (f a b)) : Preserves P (forIn xs initial f) :=
+    list_view_spec routingView (RetainsRouting s) xs initial f hf
+  have allocate (packets : List DataPacket) : Preserves P (packets.mapM newTxSkb) :=
+    mapM_view_spec routingView (RetainsRouting s) newTxSkb packets (fun p => skb (SkbStore.newTx p))
+  have noKey (packets : List Packet) (kp : Option KeypairId) (invalid : Bool) :
+      Preserves P (stagedOutNokey pid packets kp invalid) :=
+    RetainsRoutingCall.wp (stagedOutNokey_routing pid packets kp invalid) s
+  have main : Preserves P (sendStagedPackets pid) := by
+    unfold sendStagedPackets
+    apply hoare_bind _ _ (routing_getPeer (RetainsRouting s) pid)
+    intro p
+    let Q := fun w => P w ∧ (w.dev.bind fun d => d.peers[pid]?.map (·.allowedipsList)) = some p.allowedipsList
+    apply hoare_bind _ _ (hoare_liftAmbient (AmbientM.branch .stagedEmpty p.staged.isEmpty) Q)
+    intro empty
+    cases empty with
+    | true =>
+      exact hoare_consequence (hoare_pure () Q) (fun _ h => h) (fun _ _ h => h.2.1)
+    | false =>
+      apply hoare_bind _ _ (hoare_consequence
+        (routing_setPeer (RetainsRouting s) pid {p with staged := []})
+        (fun _ h => h) (fun _ _ h => h))
+      intro _
+      change Preserves P (do
+        let keypair ← keypairGet p.keypairCurrent
+        let outNokey := stagedOutNokey pid p.staged keypair
+        if ← branch .stagedNoKeypair keypair.isNone then return ← outNokey false
+        let some id := keypair | invariant "unreachable"
+        let k ← getKeypair id
+        if ← branch .stagedKeyInvalid !k.sending.isValid then return ← outNokey false
+        if ← branchExpired .stagedBirthdateExpired k.sending.birthdate REJECT_AFTER_TIME then
+          return ← outNokey true
+        let mut packetsCb : List DataPacket := []
+        for pkt in p.staged do
+          _ ← branch .stagedNonceIterate true
+          let ds ← ipTunnelEcnEncap pkt
+          let k ← getKeypair id
+          let nonce := k.sendingCounter   -- atomic64_inc_return(&sending_counter) - 1
+          setKeypair id { k with sendingCounter := k.sendingCounter + 1 }
+          if ← branchCmp .stagedNonceRejected (nonce ≥ REJECT_AFTER_MESSAGES) nonce REJECT_AFTER_MESSAGES then return ← outNokey true
+          packetsCb := packetsCb ++ [{ peer := pid, keypair := id, nonce, plaintext := pkt, ds }]
+        _ ← branch .stagedNonceIterate false
+        peerGet (← IndexOwner.peerDeref (.keypair id))
+        let item ← packetsCb.mapM newTxSkb
+        createData pid item)
+      simp (config := { zeta := true }) only [branch, branchCmp, invariant]
+      repeat' first
+        | (rx_retention_head stagedOutNokey; exact noKey _ _ _)
+        | (rx_retention_head keypairGet; exact (keypairGet_routing _).wp (RetainsRouting s))
+        | (rx_retention_head getKeypair; exact (getKeypair_routing _).wp (RetainsRouting s))
+        | (rx_retention_head setKeypair; exact (setKeypair_routing _ _).wp (RetainsRouting s))
+        | (rx_retention_head branchExpired; exact (branchExpired_sameWGWorld _ _ _ _).wp P)
+        | (rx_retention_head ipTunnelEcnEncap; exact (ipTunnelEcnEncap_sameWGWorld _).wp P)
+        | (rx_retention_head IndexOwner.peerDeref; exact indexOwner_peerDeref_preserves _ P)
+        | (rx_retention_head peerGet; exact (peerGet_routing _).wp (RetainsRouting s))
+        | (rx_retention_head createData; exact RetainsRoutingCall.wp (createData_routing _ _) s)
+        | (rx_retention_head List.mapM; exact allocate _)
+        | (rx_retention_head MonadLiftT.monadLift; exact ambient _)
+        | (rx_retention_head MonadLift.monadLift; exact ambient _)
+        | (rx_retention_head ForIn.forIn; apply loop)
+        | rx_retention_step
+  apply hoare_consequence main
+  · intro w he
+    change RetainsRouting s (routingView w)
+    change routingView w = s at he
+    rw [he]
+    exact RetainsRouting.refl _
+  · exact fun _ _ h => h
 
 theorem sendKeepalive_routing (pid : PeerId) : RetainsRoutingCall (sendKeepalive pid) := by
-  apply ProjectedAction.of_wp
   intro s
-  let P := RetainsRouting s
-  have hg := routing_getPeer P pid
-  have hs := fun p => routing_setPeer P pid p
-  have ha (p : Peer) : Hoare (hiddenAlloc .keepaliveSkb : WG.M Bool)
-      (fun w => P (routingView w) ∧
-        (w.dev.bind fun d => (d.peers[pid]?).map (·.allowedipsList)) = some p.allowedipsList)
-      (fun _ w => P (routingView w) ∧
-        (w.dev.bind fun d => (d.peers[pid]?).map (·.allowedipsList)) = some p.allowedipsList) :=
-    hoare_liftAmbient (AmbientM.hiddenAlloc .keepaliveSkb) _
-  unfold Hoare at ha
-  have ht := RetainsRoutingCall.wp (sendStagedPackets_routing pid) s
-  mvcgen [sendKeepalive, hg, hs, ha, ht, getDev, branch, AmbientM.branch, invariant, AmbientM.invariant]
-  all_goals try dsimp +zetaDelta only [P] at *
-  all_goals try (dsimp only [routingView, routingState] at *; simp_all [])
-  all_goals try assumption
-  all_goals subst s
-  all_goals try exact RetainsRouting.refl _
+  let P := fun w : WGWorld => RetainsRouting s (routingView w)
+  have send := RetainsRoutingCall.wp (sendStagedPackets_routing pid) s
+  have main : Preserves P (sendKeepalive pid) := by
+    unfold sendKeepalive
+    apply hoare_bind _ _ (routing_getPeer (RetainsRouting s) pid)
+    intro p
+    let Q := fun w => P w ∧
+      (w.dev.bind fun d => d.peers[pid]?.map (·.allowedipsList)) = some p.allowedipsList
+    apply hoare_bind _ _ (hoare_liftAmbient (AmbientM.branch .keepaliveStagedEmpty p.staged.isEmpty) Q)
+    intro empty
+    cases empty with
+    | false => exact hoare_consequence send (fun _ h => h.1) (fun _ _ h => h)
+    | true =>
+      apply hoare_bind _ _ (hoare_liftAmbient (AmbientM.hiddenAlloc .keepaliveSkb) Q)
+      intro allocated
+      apply hoare_bind _ _ (hoare_liftAmbient (AmbientM.branch .keepaliveNoMem !allocated) Q)
+      intro noMem
+      cases noMem with
+      | true => exact hoare_consequence (hoare_pure () Q) (fun _ h => h) (fun _ _ h => h.2.1)
+      | false =>
+        have readDev := getDev_sameWGStore.wp (fun store =>
+          RetainsRouting s (store.dev.map routingState) ∧
+          (store.dev.bind fun d => d.peers[pid]?.map (·.allowedipsList)) = some p.allowedipsList)
+        apply hoare_bind _ _ readDev
+        intro d
+        apply hoare_bind _ _ (routing_setPeer (RetainsRouting s) pid
+          {p with staged := p.staged ++ [{mtu := d.mtu}]})
+        intro _
+        exact send
+  apply hoare_consequence main
+  · intro w he
+    change RetainsRouting s (routingView w)
+    change routingView w = s at he
+    rw [he]
+    exact RetainsRouting.refl _
+  · exact fun _ _ h => h
 
 end Leanux.Proofs.WG.AllowedIps

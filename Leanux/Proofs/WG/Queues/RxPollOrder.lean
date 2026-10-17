@@ -115,16 +115,27 @@ theorem rxGo_rxQueues (first : Option SkbId) : SameView rxQueues
     (WG.andM (branch .rxPollPacket first.isSome) do
       let some f := first | invariant "unreachable"
       branch .rxPollNotUncrypted ((← getRxSkb f).state != .uncrypted)) := by
-  apply SameView.of_wp
-  intro s
-  have hs {α : Type} (a : SkbM α) :
-      Hoare (liftSkb a) (fun w => rxQueues w = s) (fun _ w => rxQueues w = s) := by
+  intro initial
+  let P := fun w : WGWorld => rxQueues w = initial
+  have ambient {α : Type} (a : AmbientM α) :
+      Preserves P (monadLift a : WG.M α) := hoare_liftAmbient a P
+  have packet {α : Type} (a : SkbM α) : Preserves P (liftSkb a) := by
     apply hoare_liftSkb
     intro w d store hi hd
-    unfold rxQueues at hi ⊢
+    unfold P rxQueues at hi ⊢
     simpa only [hd, Option.bind_some] using hi
-  unfold Hoare at hs
-  mvcgen [WG.andM, branch, invariant, AmbientM.branch, AmbientM.invariant, getRxSkb, hs]
+  change Preserves P _
+  unfold WG.andM
+  apply preserves_bind (ambient (AmbientM.branch .rxPollPacket first.isSome))
+  intro go
+  cases go with
+  | false => exact preserves_pure false
+  | true =>
+    cases first with
+    | none => exact ambient (AmbientM.invariant "unreachable")
+    | some id =>
+      exact preserves_bind (packet (SkbStore.getRx id))
+        (fun pkt => ambient (AmbientM.branch .rxPollNotUncrypted (pkt.state != .uncrypted)))
 
 theorem prefix_lift_safe (a : Leanux.M α) (entry : List SkbId) :
     PrefixEnsures (fun h _ => RemovalPrefix entry h) (RemovalPrefix entry)
@@ -148,10 +159,27 @@ theorem prefix_invariant (why : String) (f : Unit → PrefixM SkbId α)
   exact ⟨[], by simp only [List.append_nil]; rfl, hs h w hi, True.intro⟩
 
 theorem endpoint_rxQueues (src : SkbSource) : SameView rxQueues (endpointFromSkb src) := by
-  apply SameView.of_wp
-  intro s
-  mvcgen [endpointFromSkb, branch, invariant, unsupported,
-    AmbientM.branch, AmbientM.invariant, AmbientM.unsupported]
+  intro initial
+  let P := fun w : WGWorld => rxQueues w = initial
+  have ambient {α : Type} (a : AmbientM α) :
+      Preserves P (monadLift a : WG.M α) := hoare_liftAmbient a P
+  change Preserves P (endpointFromSkb src)
+  unfold endpointFromSkb
+  apply preserves_bind (ambient (AmbientM.branch .epFromSkbInet (src.family == 4)))
+  intro inet
+  cases inet with
+  | true => exact preserves_pure _
+  | false =>
+    simp only [Bool.false_eq_true, ↓reduceIte]
+    apply preserves_bind (ambient (AmbientM.branch .epFromSkbInet6 (src.family == 6)))
+    intro inet6
+    cases inet6 with
+    | false => exact ambient (AmbientM.invariant _)
+    | true =>
+      simp only [↓reduceIte]
+      split
+      · exact preserves_bind (ambient (AmbientM.unsupported _)) (fun _ => preserves_pure _)
+      · exact preserves_pure _
 
 /-- The complete original poll retains removal order on success and failure.
 Batch callbacks can precede later removals, so every successful callback must
