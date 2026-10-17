@@ -80,7 +80,12 @@ development account describe their checkpoint; the aggregate result supersedes
 the pending statuses without converting any failed invocation into a pass.
 
 The carried LifetimeSafety terminal has 202 declarations: 119 native/mixed
-retypes and 83 retained contracts. CryptokeyRouting retains all 141 names:
+retypes and 83 retained contracts, from 208 before the split. The six
+deleted are the filesystem-family frame theorems (`filesystem_family_*` and
+`filesystem_local_family_*`: `wg_frame`, `exact_lift`,
+`allocation_preserves`), removed at 9aac8d5f because `FS.M := StateT
+FSWorld TaskM` cannot touch WireGuard state: the design's deletion rule, a
+fact of the types rather than of a failed compile. CryptokeyRouting retains all 141 names:
 110 retyped/generalized and 31 retained (twenty pure, eleven product).
 Their scoped builds, every named axiom check, fresh replay and complete
 reviews pass. The terminal modules have zero own warnings.

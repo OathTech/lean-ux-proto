@@ -1020,8 +1020,28 @@ open. All earlier theorem bodies are unchanged. Gate: 918 jobs/834 declarations,
 | R6: cookie exclusion and retry-limit finding | Original under-load calculation and rejected-initiation suffix are exact. Invalid MAC2 against the actual original cookie result executes only the cookie reply; invalid MAC1 drops earlier. Ordinary completion preserves full Noise stores, indices and peer/keypair allocation counters. An accepted generated episode has 19 retries and 20 total initiations with MAX=18, then gives up on callback 20; this refutes the literal limit without claiming a universal replacement bound; the give-up behaviour is also shown on Linux by the differentially checked corpus trace `corpus/wireguard/d3_retransmit_gives_up.json` (20 `wg_advance`s in the `wireguard` suite). The whole advance observer has exact original erasure. | `Leanux/Proofs/WG/FloodResistance/` (`Statements.lean`, 6 terminal theorems; `Replay.lean`) | [campaign charter](2026-10-13-charter-proof-campaign.md) | [campaign report](2026-10-13-proof-campaign.md#r6--cookie-exclusion-and-retry-limit-finding) | b3f56807 | current: split carry validated |
 
 The gate for every row: `capped -- scripts/in-bundle scripts/proof-gate`
-(the build, the axioms of every terminal statement, the forbidden tokens,
-the imports and the default targets).
+(the build, the axioms of every declaration of every module the root
+imports, the forbidden tokens, the imports and the default targets). The
+declarations the gate prints are the terminal statements, 860 at this
+landing; the theorems that carry each result's claim are these:
+
+| Result | Claim-carrying theorems |
+| --- | --- |
+| Receive counter window | `S1`, `S2`, `S3` (`ReplayWindow/Statements.lean`) |
+| R1 | `runner_uniqueness`, `runner_floor` (`AntiReplay/Statements.lean:29`, `:39`); the floor finding `inclusive_boundary_witness` (`:91`) |
+| R2 | `runner_initialized_access_safety` (`LifetimeSafety/Statements.lean:1901`), `runner_audit_erasure` (`:1892`) |
+| R3 | `parsed_initialized_routing_execution` (`CryptokeyRouting/Statements.lean:2503`), `parsed_initialized_incoming_authorization` (`:4432`), `parsed_initialized_transmit_authorization` (`:4643`) |
+| R4 | `accepted_runner_all_ingress_fates` (`DeliveryOrder/Statements.lean:3625`), `original_poll_buffered_entry_subsequence` (`:536`), the GRO finding `original_gro_held_then_normal` (`:430`), `two_carried_full_ring_result` (`:3688`) |
+| R5 | the thirteen local contracts of `KeyLifetime/Statements.lean`; no run-wide theorem |
+| R6 | `original_invalid_mac2_cookie_only` (`FloodResistance/Statements.lean:41`), `original_invalid_mac2_noise_preserved` (`:53`) |
+
+The speedbump beside the gate, run at claim points and never blocking:
+`capped -- scripts/in-bundle scripts/proof-counterexamples`, which replays
+the twelve published counterexample and witness recipes (R1's floor, R2's
+two, the W7 scheduler regression, R4's GRO order, R5's five, R6's retry
+limit, the W7 full ring) through `lake env lean --run`; these run in the
+interpreter outside the kernel and their modules are outside the gate's
+build, so the speedbump is what keeps them reproducible.
 
 The following validation history predates the split. Its checkout mirror was
 byte-identical to `cb2348e`. The rows above instead reflect the completed
