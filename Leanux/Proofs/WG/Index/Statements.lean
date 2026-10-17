@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Index.OwnerCoherenceClearWorkerClaims
 import Leanux.Proofs.WG.Index.OwnerCoherenceZeroWorkerClaims
 import Leanux.Proofs.WG.Index.OwnerCoherenceAipRemovalClaims
 import Leanux.Proofs.WG.Index.OwnerCoherenceSlotRemovalClaims
@@ -974,5 +975,12 @@ theorem original_queued_zero_owner_coherence (pid : PeerId) (d : Device) (p : Pe
       (fun s => s.wg.device = some d ∧ View.OwnerCoherentSafe s)
       (fun _ s => View.OwnerCoherentSafe s) :=
   queuedExpiredZeroKeyMaterial_owner_coherent pid d p resident live covered
+
+/-- Actual queued clear-work dispatch, with the lifecycle obligation confined
+to the peer its recorded identity or queue head selects. -/
+theorem original_clear_worker_owner_coherence :
+    Campaign2.Product.Ensures Env.runOneClearWorker ClearWorkerOwnerEntry
+      (fun _ s => View.OwnerCoherentSafe s.toSnapshot) :=
+  runOneClearWorker_owner_coherent
 
 end Leanux.Proofs.WG.Index

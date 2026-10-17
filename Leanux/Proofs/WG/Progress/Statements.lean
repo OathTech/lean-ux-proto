@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Progress.TimerCompletionClaims
 import Leanux.Proofs.WG.Progress.BatchDrainClaims
 import Leanux.Proofs.WG.Progress.CookieScheduleClaims
 import Leanux.Proofs.WG.Progress.SourceClaims
@@ -641,5 +642,13 @@ theorem original_after_batch_recorded_drained :
     Campaign2.Product.Ensures afterBatch
       (fun s => s.ambient.hidden.isSome = true) (fun _ s => BatchDrained s) :=
   afterBatch_recorded_drained
+
+/-- A true normal return of the original timer episode has a present device
+and satisfies exactly the four final queue tests. False returns, pending-work
+flags, wheel exhaustion and fairness are outside this conclusion. -/
+theorem original_timer_completion (jPass : UInt64) :
+    Campaign2.Product.Ensures (Env.runTimers jPass) (fun _ => True)
+      (fun result final => result = true → TimerCompletionGuard final) :=
+  runTimers_completion jPass
 
 end Leanux.Proofs.WG.Progress

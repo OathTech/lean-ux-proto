@@ -11,26 +11,26 @@ merged; the executable mirror remains byte-identical to b700659.
 | Result | Headlines | Checked support | Split status |
 | --- | ---: | ---: | --- |
 | H1 Noise | 24 | 196 | Full terminal closure, whole-response entry edge and actual session derivation-clock receipt current; wider caller/lifetime claims open. |
-| H2 Index | 83 | 455 | Full terminal closure and ingress/expiry/handshake/peer-creation owner coherence and whole-removal lifecycle finding/slot-covered arbitrary-AIP preservation and zero-key worker current; reachable whole-driver uniqueness/coherence open. |
+| H2 Index | 84 | 462 | Full terminal closure and ingress/expiry/handshake/peer-creation owner coherence and whole-removal lifecycle finding/slot-covered arbitrary-AIP preservation and actual clear-work dispatch current; reachable whole-driver uniqueness/coherence open. |
 | H3 Roaming | 17 | 186 | Full terminal closure and invalid-MAC1/rate-limit/admitted-response/initiation rejection preservation current; callback authentication provenance and broader caller coverage open. |
-| H4 Configuration | 84 | 609 | Full terminal closure and ordered mixed-peer, mixed port-refusal/private-key readback and repeated-callback/DONE support current; global ownership, queued cleanup and general pagination open. |
-| H5 Progress | 43 | 293 | Full terminal closure, exact bounded outcomes and recorded batch completion-guard soundness current; global progress/coherent-ring adequacy open. |
+| H4 Configuration | 84 | 618 | Full terminal closure and ordered mixed-peer, mixed port-refusal/private-key readback and repeated-callback/DONE/finite-drain/coalescing support current; global ownership, queued cleanup and general pagination open. |
+| H5 Progress | 44 | 296 | Full terminal closure, exact bounded outcomes and recorded batch and actual timer completion-guard soundness current; global progress/coherent-ring adequacy open. |
 | H6 Timers | 53 | 453 | Full terminal closure and every actual timer-loop turn with immediate retransmit receipts current; complete caller coverage, scheduler retry bounds and session-relative counts open. |
 
-The checked surface is 2,192 theorems in all 697 campaign-owned modules.
+The checked surface is 2,211 theorems in all 709 campaign-owned modules.
 The completed retrofit accounts for 1,983: 1,321 retyped, 244 explicitly
-corrected, 239 retained and 179 added support/finding declarations. One hundred twenty-two
+corrected, 239 retained and 179 added support/finding declarations. One hundred twenty-nine
 subsequent H2 declarations add table preservation and local owner coherence.
-Eleven H1 declarations add whole-response entry and actual derivation-clock provenance; twenty-seven H4 declarations
-add mixed fwmark/scalar, ordered peer-attribute, port-refusal/private-key readback and repeated-callback/DONE support. Twenty-nine H3 declarations
-add invalid-MAC1, rate-limit and admitted-response/initiation rejection preservation. Five H5 declarations
-establish recorded batch completion-guard soundness. Fifteen H6 declarations
+Eleven H1 declarations add whole-response entry and actual derivation-clock provenance; thirty-six H4 declarations
+add mixed fwmark/scalar, ordered peer-attribute, port-refusal/private-key readback and repeated-callback/DONE/finite-drain/coalescing support. Twenty-nine H3 declarations
+add invalid-MAC1, rate-limit and admitted-response/initiation rejection preservation. Eight H5 declarations
+establish recorded batch and actual timer completion-guard soundness. Fifteen H6 declarations
 connect first-turn and full actual timer-loop receipts, including immediate retransmit effects. Of the 1,831 baseline theorems, 22 frames
 were deleted because types supply their facts and five false cookie supports
 were separately retired with checked counterexamples. No baseline declaration
 remains awaiting retrofit; all 258 original terminal names/order survive,
-with two new H1 headlines, thirty-one new H2 headlines, four new H3 headlines,
-five new H4 headlines, one new H5 headline and three new H6 headlines (304 total).
+with two new H1 headlines, thirty-two new H2 headlines, four new H3 headlines,
+five new H4 headlines, two new H5 headlines and three new H6 headlines (306 total).
 
 The [retrofit report](2026-10-16-proof-campaign-2-state-split.md) records
 claim/frame files, corrections, before/after counts and validation.
@@ -1265,6 +1265,104 @@ remain unchanged. The campaign now has 2,192 theorems in 697 owned modules and
 the inherited full-gate failure is not rerun or reclassified. Reproduce build
 and fresh replay on Leanux.Proofs.WG.TimerDiscipline.Statements under capped,
 scripts/in-bundle, 32 Lean threads and 16 QEMU slots. No new mirror request.
+
+## H2 continuation: the actual clear-work dispatcher
+
+The original Env.runOneClearWorker now preserves owner coherence with a lifecycle
+obligation confined to the peer it actually selects. The pure entry selector
+matches passive-record stripping, the optional recorded unit, its worker-specific
+unitPeers lookup, queue membership and the head fallback. A successful source
+selection proves agreement and actual queue membership. Missing devices,
+empty queues, unknown or unqueued identities, malformed inputs, section failures
+and worker-body Stops remain possible.
+
+ClearWorkerOwnerEntry requires local coherence and, only for that selector's
+result, a resident positively referenced peer with LastOwnerCovered. It requires
+neither queue-wide coverage nor completion readiness. The actual dequeue
+preserves those fields; the real section wrapper then composes the checked
+zero-key worker. Duplicated queues and arbitrary records are retained.
+
+OwnerCoherenceClearWorkerModel has three pure definitions; Frames has the
+dequeue and section contracts; Source has the selector, exact source factor,
+private peek equation and selected-peer theorem; Claims and Statements have the
+projected whole-call claim and wrapper. Seven theorems bring H2 to 462 theorems
+and 84 headlines. No shared variant or mirror change is added.
+
+Probes 1–6 fail with 6, 7, 3, 3, 3 and 2 errors. The first also reports two
+failed-elaboration sorry warnings; the sixth has two unused-simp warnings.
+These are failed drafts, not accepted trust evidence. A bounded continuation
+corrects two reduced equality witnesses and removes the unused arguments;
+probes 7–8 check the complete and split packages without diagnostics. No limit,
+cap, premise or source-semantics change occurs. Root source review finds no issue.
+
+## H4 continuation: finite receive composition and complete page coalescing
+
+PaginationPlanModel defines canonical first/resumed capacities and positive-sized
+tail partitioning, with two flatten proofs. PaginationFinalSource connects the
+actual final callback without a DONE-room premise and the fitting inline-DONE
+transport. PaginationReceiveSource connects pop/refill, ordinary DATA drain
+steps and a finite original receive-loop induction. Its bound counts each
+ordinary DATA receive plus the finishing receive, including a separate DONE.
+The one-step contracts are internal composition hypotheses: the eventual public
+getter must discharge them from its canonical plan. The empty allowed-IP case
+still needs its real single peer DATA envelope.
+
+PaginationCoalesceModel defines recursive continuation DATA messages and DONE;
+Claims proves the actual adjacent continuation merge and finite-page result.
+The merge keeps the untouched later tail, including later Stops. Coalescing
+preserves every IP occurrence in order, even for empty or repeated pages.
+Only the first-page endpoint-none domain is imposed; no global ID uniqueness is
+needed for this JSON theorem. Actual cursor progress still needs boundary
+freshness, and production of those pages by the getter remains a separate task.
+
+Nine added theorems and seven definitions bring H4 to 618 theorems, with
+84 headlines unchanged. No arbitrary-pagination headline is claimed.
+The source tranche uses seven changed probes: probes 1–5 fail on termination
+reduction, parser/record syntax, nil witnesses, arithmetic or array normalization;
+probes 2 and 4/5 additionally expose warnings or default simplifier recursion
+limits. Probes 6–7 check the complete and narrowed packages without diagnostics.
+No limit is raised; finite rewrites replace the recursive simplification.
+Coalescing probe 1 checks adjacent merging; probe 2 exits zero with one unused
+simp warning and is not accepted; probe 3 removes it and checks both standard
+axiom roots. Independent reviews find no correctness issue and retain the
+first-page capacity and cursor-freshness boundaries explicitly.
+
+## H5 continuation: actual timer-completion guards
+
+A true normal return of the original Env.runTimers establishes exactly its
+final tests: Device present, empty send/clear work lists, encryptQueue.empty,
+and empty txWorkQueue. The predicate uses the ring's own empty operation;
+it says nothing about all physical slots, pendingWork, wheel exhaustion,
+fairness or the adequacy of the loop budget. A false return carries no guard
+conclusion. No callback or readiness premise is assumed.
+
+TimerCompletionModel holds the projected predicate. Source proves the unchanged
+finish guard, Claims connects the original complete call, and Statements adds
+the wrapper. Three theorems bring H5 to 296 theorems and 44 headlines.
+Probe 1 fails one source-bind factoring goal; probe 2 fails two optional-step/
+Boolean normalization goals and emits two warnings. Probes 3–4 check the whole
+and split package without diagnostics, standard axioms only. Root source review
+and independent source reviews find no issue.
+
+## Validation of clear dispatch, pagination support and timer completion
+
+Builds pass 318 jobs for pagination/Progress, 91 for coalescing, and 489 for
+Index/H6. The latter exposes the existing owned timerOuterTurn_selected_run
+source theorem publicly, unchanged, so the next actual-history bridge can reuse
+it without copying its proof. This changes visibility, not the theorem count.
+The only warning remains inherited Env:865 String.mk.
+
+The combined audit covers 2,567 logical roots in 532 proof modules, including
+1,626 public theorem roots, with standard axioms only. All five fresh kernel replays
+pass without diagnostics after dependency artifact writers stop.
+Static checks, original terminal order and mirror/shared boundaries pass.
+This adds 19 theorems and 12 modules to 7118b842: 2,211 theorems in 709 owned
+modules, 306 headlines. All H1–H6 remain in progress; the inherited full gate
+remains failed and is not rerun unchanged. Reproduce builds/fresh replays on
+Index.Statements, Progress.Statements, TimerDiscipline.Statements,
+Config.PaginationReceiveSource and Config.PaginationCoalesceClaims under
+Leanux.Proofs.WG, through capped and scripts/in-bundle with 32 threads and
+16 QEMU slots. No new mirror request or infrastructure retry.
 
 ## H3 continuation: rate-limit refusal preserves peers and endpoints
 

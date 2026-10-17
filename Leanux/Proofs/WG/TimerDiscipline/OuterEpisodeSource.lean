@@ -24,7 +24,7 @@ def observedTimerOuterTurn (jPass : UInt64) (iteration : Nat) (control : TimerOu
       Campaign2.Product.snapshot out.2⟩),out.2)
 
 /-- Exact original turn when its own current record and wheel choose a timer. -/
-private theorem timerOuterTurn_selected_run (jPass : UInt64) (iteration : Nat)
+theorem timerOuterTurn_selected_run (jPass : UInt64) (iteration : Nat)
     (control : TimerOuterControl) (initial : World) (choice : OuterTimerChoice)
     (chosen : outerTimerChoice jPass (Campaign2.Product.snapshot initial) = some choice) :
     (timerOuterTurn jPass iteration control).run initial =
