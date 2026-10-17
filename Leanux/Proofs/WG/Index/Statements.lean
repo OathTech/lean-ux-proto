@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Index.SessionLookupClaims
 import Leanux.Proofs.WG.Index.SessionAliasClaims
 import Leanux.Proofs.WG.Index.OwnerCoherencePersistentFindingClaims
 import Leanux.Proofs.WG.Index.OwnerCoherenceRetransmitClaims
@@ -1044,5 +1045,22 @@ theorem original_session_alias_owner_coherence_counterexample (counter : Nat) :
     Campaign2.Observes (do let _ ← beginSession 0; indexLookup [.keypair] 7) (SessionAliasWitness.input counter)
       (fun _ out => out = .error (.invariant "dangling keypair 1")) :=
   session_alias_owner_coherence_counterexample counter
+
+/-- Session creation followed only on true by the original old-index lookup:
+every normal successful handoff returns the newly allocated owner and caller.
+Explicit rotation freshness excludes the checked SessionAlias witness; it is
+not inferred from table safety, owner coherence, or initialized reachability.
+False preserves Device only. Every actual Stop remains in the computation. -/
+theorem original_session_lookup_handoff (pid : PeerId) (index : Nat) (d : Device) (p : Peer)
+    (resident : d.peers[pid]? = some p) (safe : DeviceTablesSafe d)
+    (coherent : HashedOwnersCoherent d)
+    (handshake : {index, owner := IndexOwner.handshake pid} ∈ d.indexTable)
+    (fresh : SessionRotationFresh p d.nextKeypairId) :
+    Campaign2.Ensures (sessionThenLookup pid index) (fun s => s.wg.device = some d)
+      (fun result s => ∃ final, s.wg.device = some final ∧ DeviceTablesSafe final ∧
+        HashedOwnersCoherent final ∧
+        (result.1 = false → result.2 = none ∧ final = d) ∧
+        (result.1 = true → result.2 = some (.keypair d.nextKeypairId,pid))) :=
+  session_lookup_handoff pid index d p resident safe coherent handshake fresh
 
 end Leanux.Proofs.WG.Index

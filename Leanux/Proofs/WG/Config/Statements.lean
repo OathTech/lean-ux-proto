@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.Config.MixedWeightedPaginationClaims
+import Leanux.Proofs.WG.Config.KeyWeightedPaginationClaims
 import Leanux.Proofs.WG.Config.WeightedGetterClaims
 import Leanux.Proofs.WG.Config.MixedEndpointPaginationClaims
 import Leanux.Proofs.WG.Config.KeyEndpointPaginationClaims
@@ -1694,5 +1696,69 @@ theorem original_finite_mixed_width_pagination (pid : PeerId) (d : Device) (p : 
         (ids.map (fun id => dumpNodeJson (nodes id)))) ∧ s.wg.device = some d ∧
         s.wg.nlSock7 = socketReadbackFinal sock d) :=
   mixed_weighted_getter pid d p nodes ids sock peers resident listed readable header nest fresh idle empty within
+
+/-- Actual mixed fwmark/scalar set followed by the whole weighted getter on
+normal completion. A malformed later peer retains the earlier writes and
+returns -EINVAL. The Device includes actual source/cache clearing; JSON uses
+original endpoint and stored-width serializers. Freshness covers all prior
+emissions and the bound includes a separate DONE when required. Reset-record
+Stops remain outside this normal-return contract; no success witness is assumed. -/
+theorem original_mixed_fwmark_scalars_weighted_pagination (d : Device) (mark : Nat) (key psk : Key)
+    (interval : Nat) (bad : Bool) (pid : PeerId) (p : Peer)
+    (nodes : NodeId → AipNode) (ids : List NodeId) (sock : NlSock)
+    (peers : d.peerList = [pid]) (net : d.creatingNet = true)
+    (found : d.peerHashtable.find? (·.1 == key) = some (key, pid))
+    (resident : d.peers[pid]? = some p) (live : 0 < p.refcount)
+    (bounded : p.refcount + 1 < 2 ^ 31) (down : d.running = false)
+    (listed : p.allowedipsList = ids) (fresh : weightedGetterFresh d p nodes ids)
+    (readable : ∀ id ∈ ids, d.nodes[id]? = some (nodes id))
+    (header : devicePrefixSpace d + 168 ≤ NLMSG_GOODSIZE)
+    (nest : ids ≠ [] → devicePrefixSpace d + (peerFixedSpace p + 4) ≤ NLMSG_GOODSIZE)
+    (enough : weightedGetterReceives d p nodes ids ≤ 4096)
+    (idle : sock.cbRunning = false) (empty : sock.queue = []) :
+    Campaign2.Ensures (do
+      let ret ← wgSetDevice (mixedFwmarkAttrs d mark key psk interval bad)
+      let dump ← wgGetDevice (byIndex d)
+      pure (ret, dump))
+      (fun s => s.wg.device = some d ∧ s.wg.nlSock7 = sock ∧ ClaimView.selectsDevice s d)
+      (fun result s =>
+        result = ((if bad then -EINVAL else 0), .ok
+          (jsonPaginationResult (mixedFwmarkBase d mark)
+            {p with presharedKey := psk, persistentKeepaliveInterval := interval}
+            (ids.map (fun id => dumpNodeJson (nodes id))))) ∧
+        s.wg.nlSock7 = {sock with queue := [], ctx := {hasWg := true}, prevSeq := d.deviceUpdateGen + 1, dumpDoneErrno := 0, cbRunning := false} ∧
+        ∃ current reset, s.wg.device = some current ∧
+          MixedFwmarkEffect d mark pid p psk interval reset current) :=
+  mixed_fwmark_scalar_weighted_pagination_get_after_set d mark key psk interval bad pid p nodes ids sock
+    peers net found resident live bounded down listed fresh readable header nest enough idle empty
+
+/-- Actual established-identity private-key set followed by the whole weighted
+getter on normal completion. Size, freshness, count and JSON are based on the
+effective post-key identity, including null-key behavior. Actual expiry and
+ordered key effects remain in the final Device; clock/reference Stops are
+retained. Arbitrary endpoints and stored widths use original serialization,
+without inferring valid IPv6 or global allowed-IP ownership. -/
+theorem original_private_key_weighted_pagination (d : Device) (key : Key) (pid : PeerId) (p : Peer)
+    (nodes : NodeId → AipNode) (ids : List NodeId) (sock : NlSock)
+    (established : d.staticIdentity.hasIdentity = true)
+    (changed : d.staticIdentity.staticPrivate ≠ key) (absent : noKeyCollision d key)
+    (members : d.peerList = [pid]) (resident : d.peers[pid]? = some p)
+    (listed : p.allowedipsList = ids)
+    (fresh : weightedGetterFresh (keyReadbackBase d key) p nodes ids)
+    (readable : ∀ id ∈ ids, d.nodes[id]? = some (nodes id))
+    (header : devicePrefixSpace (keyReadbackBase d key) + 168 ≤ NLMSG_GOODSIZE)
+    (nest : ids ≠ [] → devicePrefixSpace (keyReadbackBase d key) + (peerFixedSpace p + 4) ≤ NLMSG_GOODSIZE)
+    (enough : weightedGetterReceives (keyReadbackBase d key) p nodes ids ≤ 4096)
+    (idle : sock.cbRunning = false) (empty : sock.queue = []) :
+    Campaign2.Ensures (do
+      let ret ← wgSetDevice (privateKeyAttrs d key)
+      let dump ← wgGetDevice (byIndex d)
+      pure (ret, dump))
+      (fun s => s.wg.device = some d ∧ s.wg.nlSock7 = sock ∧ ClaimView.selectsDevice s d)
+      (fun result s => result = (0, .ok (jsonPaginationResult (keyReadbackBase d key) p (ids.map (fun id => dumpNodeJson (nodes id))))) ∧
+        s.wg.nlSock7 = {sock with queue := [], ctx := {hasWg := true}, prevSeq := d.deviceUpdateGen + 1, dumpDoneErrno := 0, cbRunning := false} ∧
+        ∃ now, s.wg.device = some (keyReadbackDevice d key pid p now)) :=
+  rotation_weighted_pagination_get_after_set d key pid p nodes ids sock established changed absent
+    members resident listed fresh readable header nest enough idle empty
 
 end Leanux.Proofs.WG.Config
