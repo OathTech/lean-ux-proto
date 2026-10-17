@@ -309,3 +309,21 @@ instead Stops on its later caller read, so that theorem needs a relational
 send effect if pursued. A future strengthened invariant must record its new
 ownership premise openly and link it to initialization; it cannot replace
 the refuted arbitrary-state claim without naming the distinction.
+
+
+## Complete named handshake lifecycle transport
+
+The extended nine-operation fresh-confirmation history adds three bounded
+family variants: indexLookup_spec_freshTransport_variant,
+createInitiation_spec_freshTransport_variant and
+consumeResponse_spec_freshTransport_variant, all in Noise/FreshLifecycleSource.
+The owner-word/view and clear-run cursor facts stay in FreshLifecycleFrames.
+Actual acquired references supply retained rejection cleanup; no new general
+lookup, crypto or deletion-capable release layer is copied.
+
+Acquisition effects are also relocated within the owned tree:
+indexLookup_spec_responseTagMap_variant is in ResponseTagSource,
+pubkeyLookup_spec_initiationTagMap_variant in InitiationTagSource, and
+pubkeyLookup_spec_freshTransport_variant in FreshInstallSource. Their statements
+and proof bodies are unchanged. Pure owner/view helpers remain in frame files,
+with public visibility for cross-file use. C1's existing files remain untouched.

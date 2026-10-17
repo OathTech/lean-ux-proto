@@ -45,7 +45,7 @@ theorem observedFreshSequence_chain (pid : PeerId) (operations : List FreshOpera
           (ih (Campaign2.snapshot next inputs) next inputs tail final after rfl later)
 
 /-- Successful confirmations have distinct numeric IDs throughout a finite
-sequence of the four original calls. The explicit initial next/cursor bound
+sequence of the nine original calls. The explicit initial next/cursor bound
 is the only state premise. This language excludes direct reinstallation,
 peer recreation and device reset; it asserts neither global reachability nor
 allocation-lifetime identity outside this finite execution. -/

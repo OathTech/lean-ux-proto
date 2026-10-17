@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Noise.InitiationTagSource
 import Leanux.Proofs.WG.Noise.FreshInstallFrames
 import Leanux.Proofs.WG.Noise.CryptoFrames
 import Leanux.Proofs.WG.Config.BranchSource
@@ -7,6 +8,51 @@ set_option autoImplicit false
 set_option pp.structureInstances false
 namespace Leanux.Proofs.WG.Noise
 open Leanux Leanux.WG Std.Do
+
+/-- Actual lookup effect plus its already checked held-reference contract.
+Variant of Keypairs.Frames.WGBase.pubkeyLookup_spec; acquisition uses the
+already checked original lookup effect. -/
+theorem pubkeyLookup_spec_freshTransport_variant (tracked : PeerId) (entry : Option Device)
+    (key : Key) : Ensures (pubkeyLookup key) (FreshTransport tracked entry)
+      (fun result g => FreshTransport tracked entry g ∧
+        ∀ pid, result = some pid → FreshTransportHeld tracked entry pid g) := by
+  intro g ambient result final after pre run
+  have acquired := pubkeyLookup_spec_initiationTagMap_variant key g.dev
+    g ambient result final after rfl run
+  have preserved : FreshTransport tracked entry final := by
+    cases device : g.dev with
+    | none => simp [pubkeyLookup,getDev,device,invariant,AmbientM.invariant] at run; cases run
+    | some d =>
+      cases found : d.peerHashtable.find? (·.1 == key) with
+      | none =>
+        simp [pubkeyLookup,getDev,device,found,peerGetMaybeZero,branch,AmbientM.branch] at run
+        rcases run with ⟨⟨rfl,rfl⟩,rfl⟩; exact pre
+      | some pair =>
+        obtain ⟨name,pid⟩ := pair
+        cases resident : d.peers[pid]? with
+        | none =>
+          simp [pubkeyLookup,getDev,device,found,peerGetMaybeZero,requireNotPending,getPeer,
+            resident,branch,AmbientM.branch,invariant,AmbientM.invariant] at run
+          cases run
+        | some p =>
+          by_cases zero : p.refcount = 0
+          · simp [pubkeyLookup,getDev,device,found,peerGetMaybeZero,requireNotPending,getPeer,
+              resident,refcountIncNotZero,zero,branch,branchCmp,AmbientM.branch,AmbientM.branchCmp] at run
+            rcases run with ⟨⟨rfl,rfl⟩,rfl⟩; exact pre
+          · have nameEq : name = key := by
+              have member := List.find?_some found
+              simpa using member
+            subst name
+            have effect := ((ensures_iff _ _ _).mpr (Config.pubkeyLookup_present key pid d p found resident (by omega)))
+              g ambient result final after device run
+            change freshInstallView tracked final.dev = _
+            rw [effect.2]
+            exact (freshInstallView_write tracked pid d p {p with refcount := p.refcount+1} resident rfl).trans
+              (by simpa [FreshTransport,device] using pre)
+  refine ⟨preserved,?_⟩
+  intro pid returned
+  exact ⟨preserved,(acquired.2 pid returned).2⟩
+
 
 /-- Variant of Keypairs.Frames.WGTransitions.consumeInitiation_spec. Actual
 initiation consumption preserves the exact tracked next slot and allocation

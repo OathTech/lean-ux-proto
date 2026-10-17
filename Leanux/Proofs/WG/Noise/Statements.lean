@@ -437,8 +437,8 @@ theorem original_confirmation_reinstallation_counterexample :
   confirmation_same_allocation_reinstallation
 
 
-/-- The finite responder-setup/session/confirmation language executes the
-original calls and preserves their first Stop. From the explicit initial
+/-- The finite nine-operation handshake/session/confirmation/clearing language
+executes the original calls and preserves their first Stop. From the explicit initial
 next-slot bound, every normal complete history has pairwise distinct successful
 confirmation IDs. No readiness, reference-budget, coherence or alias premise
 is assumed. This is not a whole-driver or initialized lifetime theorem. -/

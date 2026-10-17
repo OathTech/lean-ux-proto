@@ -5,14 +5,20 @@ set_option pp.structureInstances false
 namespace Leanux.Proofs.WG.Noise
 open Leanux Leanux.WG
 
-/-- This finite language uses actual responder setup, session allocation and
-confirmation calls for one tracked peer. It excludes direct helper installation,
-peer recreation and device reset; it is not the driver scheduler. -/
+/-- This finite language uses actual handshake creation/consumption, session
+allocation, confirmation and clearing calls for one tracked peer. It excludes
+direct helper installation, peer recreation and device reset; it is not the
+driver scheduler. -/
 inductive FreshOperation where
   | consume (message : List UInt8)
   | respond
   | beginSession
   | confirm (id : KeypairId)
+  | createInitiation
+  | consumeResponse (message : List UInt8)
+  | handshakeClear
+  | expireCurrentPeerKeypairs
+  | keypairsClear
 
 /-- Original returns, including the entire created response. -/
 inductive FreshReturn where
@@ -20,6 +26,7 @@ inductive FreshReturn where
   | created (message : Option (List UInt8))
   | begun (ok : Bool)
   | confirmed (ok : Bool)
+  | cleared
 
 structure FreshReceipt where
   operation : FreshOperation
@@ -46,6 +53,8 @@ inductive FreshViewStep : (Option Nat × Option (Option KeypairId)) → Option K
   | allocate (cursor : Nat) (beforeNext : Option (Option KeypairId))
       (next : Option KeypairId) (role : next = none ∨ next = some cursor) :
       FreshViewStep (some cursor,beforeNext) none (some (cursor+1),some next)
+  | clearNext (cursor : Nat) (beforeNext : Option KeypairId) :
+      FreshViewStep (some cursor,some beforeNext) none (some cursor,some none)
   | confirm (cursor id : Nat) :
       FreshViewStep (some cursor,some (some id)) (some id) (some cursor,some none)
 

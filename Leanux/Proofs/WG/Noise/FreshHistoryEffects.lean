@@ -98,6 +98,13 @@ theorem freshSeen_step {before after : Option Nat × Option (Option KeypairId)}
       · have idEq : cursor = id := Option.some.inj (Option.some.inj pending)
         rw [← currentEq,← idEq]
         exact Nat.lt_succ_self cursor
+  | clearNext cursor beforeNext =>
+    simp only [Option.toList_none,List.nil_append]
+    refine ⟨valid.distinct,valid.past,?_,?_⟩
+    · intro id member
+      simp
+    · intro current id eq pending
+      simp at pending
   | confirm cursor id =>
     simp only [Option.toList_some,List.singleton_append]
     have fresh : id ∉ seen := by
@@ -128,6 +135,7 @@ theorem FreshChain.preserves {pid : PeerId} {entry final : Campaign2.Snapshot}
     have after := freshSeen_step step valid
     have finish := ih after
     simpa only [freshConfirmedIds,List.append_assoc] using finish
+
 
 
 end Leanux.Proofs.WG.Noise

@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.Noise.FreshHistoryEffects
+import Leanux.Proofs.WG.Noise.FreshLifecycleSource
 import Leanux.Proofs.WG.Noise.FreshInstallSource
 import Leanux.Proofs.WG.Noise.SessionSource
 import Leanux.Proofs.WG.Noise.RotationSource
@@ -10,12 +11,17 @@ namespace Leanux.Proofs.WG.Noise
 open Leanux Leanux.WG
 
 
-/-- Dispatch to the original four native calls with their complete returns. -/
+/-- Dispatch to the original nine native calls with their complete returns. -/
 def runFreshOperation (pid : PeerId) : FreshOperation → WG.M FreshReturn
   | .consume message => do return .consumed (← consumeInitiation message)
   | .respond => do return .created (← createResponse pid)
   | .beginSession => do return .begun (← beginSession pid)
   | .confirm id => do return .confirmed (← receivedWithKeypair pid id)
+  | .createInitiation => do return .created (← createInitiation pid)
+  | .consumeResponse message => do return .consumed (← consumeResponse message)
+  | .handshakeClear => do handshakeClear pid; return .cleared
+  | .expireCurrentPeerKeypairs => do expireCurrentPeerKeypairs pid; return .cleared
+  | .keypairsClear => do keypairsClear pid; return .cleared
 
 /-- Bind retains the original first Stop and does not execute later calls. -/
 def runFreshSequence (pid : PeerId) : List FreshOperation → WG.M (List FreshReturn)
@@ -143,5 +149,46 @@ theorem runFreshOperation_effect (pid : PeerId) (operation : FreshOperation)
         have summary := confirmationEffect_freshView pid id d p result last resident effect
         cases result <;> change FreshViewStep (freshInstallView pid g.dev) _ (freshInstallView pid final.dev)
         all_goals simpa [FreshReceipt.confirmed,device,finalDevice] using summary
+  | createInitiation =>
+    apply mapped
+    intro g ambient result final after pre run
+    subst entry
+    have preserved := createInitiation_spec_freshTransport_variant pid pid g.dev
+      g ambient result final after rfl run
+    change FreshViewStep (freshInstallView pid g.dev) none (freshInstallView pid final.dev)
+    rw [preserved]
+    exact .same _
+  | consumeResponse message =>
+    apply mapped
+    intro g ambient result final after pre run
+    subst entry
+    have preserved := consumeResponse_spec_freshTransport_variant message pid g.dev
+      g ambient result final after rfl run
+    change FreshViewStep (freshInstallView pid g.dev) none (freshInstallView pid final.dev)
+    rw [preserved]
+    exact .same _
+  | handshakeClear =>
+    apply mapped
+    intro g ambient result final after pre run
+    subst entry
+    have preserved := handshakeClear_freshTransport pid pid g.dev
+      g ambient result final after rfl run
+    change FreshViewStep (freshInstallView pid g.dev) none (freshInstallView pid final.dev)
+    rw [preserved]
+    exact .same _
+  | expireCurrentPeerKeypairs =>
+    apply mapped
+    intro g ambient result final after pre run
+    subst entry
+    have preserved := expireCurrentPeerKeypairs_freshTransport pid pid g.dev
+      g ambient result final after rfl run
+    change FreshViewStep (freshInstallView pid g.dev) none (freshInstallView pid final.dev)
+    rw [preserved]
+    exact .same _
+  | keypairsClear =>
+    apply mapped
+    intro g ambient result final after pre run
+    subst entry
+    exact keypairsClear_freshView pid g.dev g ambient result final after rfl run
 
 end Leanux.Proofs.WG.Noise

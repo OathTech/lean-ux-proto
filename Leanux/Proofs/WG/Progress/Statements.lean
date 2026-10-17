@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Progress.AllocationProgressClaims
 import Leanux.Proofs.WG.Progress.PlaceholderBoundaryClaims
 import Leanux.Proofs.WG.Progress.RunnerIdleOperationSource
 import Leanux.Proofs.WG.Progress.SendCompletionClaims
@@ -737,5 +738,15 @@ theorem original_placeholder_pending_identity :
       d.sendWorkQueue.isEmpty = true ∧ d.clearWorkQueue.isEmpty = true ∧
       d.peers.toList.any (fun item => item.2.napiScheduled) = false :=
   CurrentBoundaryWitness.placeholder_accepted_pending
+
+
+/-- The original allocation consumer agrees on every projected entry with a
+finite evaluator. Exact-count sites perform at most their declared count of
+actual encounters, with the original entry mode, unarmed bypass, early false
+and errors. Arbitrary callback termination and runner progress are separate. -/
+theorem original_allocation_finite (site : AllocSite) :
+    Campaign2.AgreesOn (fun _ => True) (hiddenAlloc site : WG.M Bool)
+      (monadLift (hiddenAllocFinite site) : WG.M Bool) :=
+  hiddenAlloc_finite_agrees site
 
 end Leanux.Proofs.WG.Progress

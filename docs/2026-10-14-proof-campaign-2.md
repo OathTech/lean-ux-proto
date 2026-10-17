@@ -10,27 +10,27 @@ merged; the executable mirror remains byte-identical to b700659.
 
 | Result | Headlines | Checked support | Split status |
 | --- | ---: | ---: | --- |
-| H1 Noise | 34 | 256 | Full terminal closure, all seven whole-call tag maps, their actual finite mixed histories and session derivation-clock receipt current; direct helper reinstallation refutes unrestricted repeat-confirmation uniqueness; successful confirmation IDs are distinct across actual finite responder setup/install/confirmation histories under an explicit initial next/cursor bound; broader driver/lifetime closure remains separate. |
+| H1 Noise | 34 | 264 | Full terminal closure, all seven whole-call tag maps, their actual finite mixed histories and session derivation-clock receipt current; direct helper reinstallation refutes unrestricted repeat-confirmation uniqueness; successful confirmation IDs are distinct across actual finite histories of all four handshake create/consume calls, session installation/confirmation, clearing and expiry under an explicit initial next/cursor bound; broader driver/lifetime closure remains separate. |
 | H2 Index | 91 | 491 | Full terminal closure and ingress/expiry/handshake/peer-creation owner coherence and whole-removal lifecycle finding/slot-covered arbitrary-AIP preservation and actual clear-work dispatch and both-mode handshake queueing and new-handshake/zero-key/retransmit callbacks and persistent-callback and successful-session slot-alias invariant counterexamples and positive publication-to-lookup handoff under explicit rotation freshness current; core named-operation H2 coverage checked; whole initialized driver/lifetime closure is a separate stronger scope; aggregate gate inherited-blocked. |
 | H3 Roaming | 19 | 196 | Full terminal closure and invalid-MAC1/rate-limit/admitted-response/initiation rejection and cookie-message and whole data-admission endpoint preservation current; callback authentication provenance and broader caller coverage open. |
 | H4 Configuration | 98 | 733 | Full terminal closure, actual mixed/key setter paginated readback with arbitrary endpoints, whole finite single-peer mixed-width getter and actual mixed/key setter composition with exact DATA/DONE count and arbitrary endpoints and fitting multi-peer scalar and mixed fwmark/scalar set/get and actual endpoint set/weighted readback current; global ownership, queued cleanup, general mixed setters and multi-peer pagination open. |
-| H5 Progress | 50 | 329 | Full terminal closure, exact bounded outcomes and recorded batch, actual timer completion guards and recorded idle/post-advance wait completion and actual advance-syscall/runner linkage and send-worker completion guard and four final-idle syscall/runner receipts current; global progress/coherent-ring adequacy open. |
+| H5 Progress | 51 | 335 | Full terminal closure, exact bounded outcomes and recorded batch, actual timer completion guards and recorded idle/post-advance wait completion and actual advance-syscall/runner linkage and send-worker completion guard and four final-idle syscall/runner receipts and exact all-mode finite allocation bridge current; global progress/coherent-ring adequacy open. |
 | H6 Timers | 65 | 498 | Full terminal closure, actual retry blocks and allocation-labelled guarded session-arm events with outgoing call-entry origin and initialized give-up runtime witness and all five syntactic traversal call sites covered by six observer branches with all-mode immediate effects; upstream data authentication, broader caller histories and session-relative counts remain open. |
 
-The checked surface is 2,503 theorems in all 862 campaign-owned modules.
+The checked surface is 2,517 theorems in all 867 campaign-owned modules.
 The completed retrofit accounts for 1,983: 1,321 retyped, 244 explicitly
 corrected, 239 retained and 179 added support/finding declarations. One hundred fifty-eight
 subsequent H2 declarations add table preservation and local owner coherence.
-Seventy-one H1 declarations add whole-operation and finite mixed-history tag ownership, actual derivation-clock provenance, direct-helper reinstallation and bounded fresh-installation confirmation history; one hundred fifty-one H4 declarations
+Seventy-nine H1 declarations add whole-operation and finite mixed-history tag ownership, actual derivation-clock provenance, direct-helper reinstallation and bounded fresh-installation confirmation history; one hundred fifty-one H4 declarations
 add mixed fwmark/scalar, ordered peer-attribute, port-refusal/private-key readback and finite IPv4 getter/setter pagination and actual fitting multi-peer readback and complete finite single-peer mixed-width pagination. Thirty-nine H3 declarations
-add invalid-MAC1, rate-limit and admitted-response/initiation rejection, cookie-message and whole data-admission endpoint preservation. Forty-one H5 declarations
+add invalid-MAC1, rate-limit and admitted-response/initiation rejection, cookie-message and whole data-admission endpoint preservation. Forty-seven H5 declarations
 establish recorded batch, actual timer completion guards and recorded idle/post-advance wait wheel completion and the actual send-worker completion guard and four final-idle syscall/runner links. Sixty H6 declarations
 connect actual timer-loop receipts, contiguous retry-block counts/bounds, local partial-exchange arming and allocation-labelled session-arm events. Of the 1,831 baseline theorems, 22 frames
 were deleted because types supply their facts and five false cookie supports
 were separately retired with checked counterexamples. No baseline declaration
 remains awaiting retrofit; all 258 original terminal names/order survive,
 with twelve new H1 headlines, thirty-nine new H2 headlines, six new H3 headlines,
-nineteen new H4 headlines, eight new H5 headlines and fifteen new H6 headlines (357 total).
+nineteen new H4 headlines, nine new H5 headlines and fifteen new H6 headlines (358 total).
 
 The [retrofit report](2026-10-16-proof-campaign-2-state-split.md) records
 claim/frame files, corrections, before/after counts and validation.
@@ -3817,9 +3817,10 @@ that held peer. Ordinary refusal, missing/NULL inputs, overflow and all original
 Stops remain. Response creation uses the actual index adapter; no general
 deletion-capable release layer is copied.
 
-FreshInstallModel contains the data view and projected bound; FreshInstallFrames
-contains two native predicates and six pure/preservation facts; FreshInstallSource
-contains two whole-operation transports; FreshInstallClaims contains two projected
+FreshInstallModel contains the data view and projected bound. After the later
+acquisition-contract relocation, FreshInstallFrames contains two native predicates
+and five preservation facts; FreshInstallSource contains the acquisition effect
+and two whole-operation transports; FreshInstallClaims contains two projected
 contracts. Four named variants correspond to shared modifyPeer, pubkeyLookup,
 consumeInitiation and createResponse contracts. Owned lookup/retained-release,
 crypto, index-adapter and observer-erasure support supplies their substantive
@@ -4053,3 +4054,136 @@ acceptance; they do not establish termination for all subsystem operations.
 For example, the separate FS pipe path has its own loop-backed rounding helper.
 Whole-operation fuel adequacy and initialized pending-work consistency remain
 separate. No theorem count changes or full-gate rerun accompany this correction.
+
+
+## H1 continuation: all named handshake lifecycle operations
+
+The existing fresh-confirmation language now includes createInitiation,
+consumeResponse, handshakeClear, expireCurrentPeerKeypairs and keypairsClear.
+Together with the four previously checked operations, these cover all handshake
+create/consume calls, session installation, confirmation, handshake clearing,
+expiry and slot clearing for the tracked peer. The existing headline and all
+eleven prior theorem signatures are unchanged; the operation/return inductives
+and the history claim's coverage are extended.
+
+The sole initial FreshNextBound still suffices. Both additional handshake calls
+preserve the exact optional next/cursor view; response lookup derives its held
+reference for every normal rejection cleanup. Handshake clearing and expiry
+preserve next, while actual keypair clearing supplies the new clearNext effect
+without rewinding allocation. Aliased releases and all original Stops remain.
+No readiness, coherence, reference ceiling, static release budget or successful
+prefix is introduced. This still excludes direct helper reinstallation, peer
+recreation and device reset, and makes no global driver/lifetime claim.
+
+FreshLifecycleFrames holds the owner-word/view preservation and ClearRun cursor
+fact. FreshLifecycleSource holds the actual lookup acquisition and five whole-call
+contracts. Three named shared-family variants correspond to index lookup,
+initiation creation and response consumption; they compose existing owned source,
+crypto, lookup and retained-release facts. No new shared lookup/crypto/release
+layer is copied. FreshHistoryEffects owns the changing clearNext invariant case;
+Model/Source/Claims retain the single existing observer/sequence architecture.
+
+Independent review finds one placement issue: lookup derives an acquired reference,
+so its mixed effect belongs in Source. The same correction is made for three
+older owned acquisition contracts: the response-tag lookup moves to
+ResponseTagSource, initiation-tag pubkey lookup to InitiationTagSource, and
+fresh-transport pubkey lookup to FreshInstallSource. Their propositions and proof
+bodies are unchanged; pure owner/view facts stay in Frames and are made public
+where cross-file use requires it. This is a factoring correction, not a new
+theorem or an edit to C1's shared layer. Review finds no semantic or domain issue.
+
+Eight new support theorems in two new modules strengthen the existing headline.
+Probe 1 fails one cursor definitional-equality application without warnings;
+2 checks lookup plus both handshake transports; 3 checks all nine operations;
+4 checks the split bodies and nineteen roots standard-only without diagnostics.
+The final scratch edits are comments only. No proof-limit/cap changes or
+infrastructure reruns occur.
+
+A root packaging script copies the support files but fails while locating the
+terminal comment. Incorrect unconditional shell sequencing then launches a build
+before the required recovery snapshot; that process error is not treated as a
+completed checkpoint. The build passes 177 jobs, but the dirty tracked/untracked
+source state is subsequently preserved at recovery ref
+refs/snapshots/campaign2-lifecycle-package-recovery-20261017T110512583822Z before
+further edits. Corrected scripts validate all edits before writing and fail
+closed before dependent commands. The literal comment is fixed and reviewed
+acquisition relocations applied. The final Noise build passes 177 jobs without
+diagnostics. No source is reset or discarded.
+
+## H5 continuation: exact finite allocation loop
+
+AllocationIterationSource identifies the original fixed-bound while loop with
+a structurally recursive evaluator using at most n-k encounter invocations.
+Early false returns retain the actual successor state and counter; an error
+retains the exact Stop without manufacturing a successor. The generic theorem
+does not infer executable termination of an arbitrary callback from its type.
+
+AllocationProgressSource connects every actual hiddenAlloc branch to that
+evaluator: exact counts including zero, lax/unrecorded success, below-cut
+refusal and unarmed bypass. The record/placeholder choice is captured once at
+entry as in the source. The evaluator calls the actual private native helpers;
+paired source equations expose their original finite list/byte operations,
+record handling and steering failures. No record shape, readiness, success
+or state-preservation premise is supplied.
+
+AllocationProgressClaims and the new literal original_allocation_finite headline
+state exact projected agreement, including all errors. There are three support
+modules, six theorems and three definitions; no frame file or copied C1 Allocation
+layer. This closes the general exact-count allocation iteration gap identified
+by the preceding audit, rather than using logical totality as a termination
+argument. Scheduler fuel adequacy, initialized pending-unit consistency and
+all-subsystem runner termination remain separate.
+
+Ten changed-source probes: 1 checks the generic loop; 2 fails an unexpanded
+source let; 3 fails five count-case/variable obligations; 4 fails source equality
+and warns on an unused simp argument; 5–6 fail generated-matcher equality;
+7 fails an alternate forIn spelling; 8 isolates the two Option continuation
+matchers. The initial eight-probe tranche stops there. A narrowly bounded
+matcher-correction tranche uses bind congruence and Option cases: 9 closes the
+source bridge, and 10 checks the exact split package and six standard-only roots
+without diagnostics. Failed recovery environments are rejected. No infrastructure
+rerun, warning suppression, proof-limit or cap increase occurs. Independent
+review finds no issue.
+
+The combined Progress/standalone FreshInstallClaims build passes 318 jobs,
+inherited Env:865 String.mk only. The H1/H5 axiom audit checks 1,612 logical roots
+in 316 modules, including 985 public theorem roots, standard-only and without
+diagnostics. All three fresh kernel replays pass (Noise.Statements,
+Noise.FreshInstallClaims and Progress.Statements). Static trust/import, original
+258-name/order and mirror/shared boundaries pass.
+
+H1 moves from 256/34 to 264 theorems/34 headlines; H5 from 329/50 to 335/51.
+Totals move from 2,503/862/357 to 2,517 theorems/867 modules/358 headlines.
+The other results' counts are unchanged. The inherited aggregate gate remains
+FAILED and is not rerun unchanged. Reproduce the builds, axiom inspection and
+fresh replay of the three named roots under Leanux.Proofs.WG using
+capped/scripts/in-bundle with LEAN_NUM_THREADS=32 and LEANUX_QEMU_SLOTS=16.
+
+## H4 attempted cursor tranche: native serializer still open
+
+The ten-probe cursor tranche does not close its requested native milestone.
+Only two pure greedy-prefix facts check: decomposition/capacity/first-refusal
+and progress when the first peer fits. They are not installed or counted as
+native H4 coverage. The first missing source fact is exact arbitrary-room
+empty-IP serialization; callback cursor handoff and finite multi-peer transport
+are not implemented.
+
+Probe 1 fails six import/type/tactic obligations. Probes 2–3 fail respectively
+four and six reduction/default-limit obligations. Probe 4 fails two obligations
+around an unavailable progress tactic. Probe 5 fails three obligations beginning
+with the symbolic first-put Bool.rec; 6 fails two. Probe 7's small/large helper
+split fails three obligations and has two unused-simp warnings. Probe 8 fails
+four default reduction obligations. Probe 9 fails an unavailable experimental
+vcgen dependency and warns. Probe 10 passes only the pure model, standard-only.
+All native recovery axioms and warned/failed drafts are rejected.
+
+Direct path reduction and compositional branch contracts both reach default
+simp/heartbeat limits. One separate root diagnostic changes the experimental
+tactic to the earlier mvcgen spelling; it fails the same 200,000-heartbeat limit,
+also reporting deprecated syntax, an unused simp argument and a downstream
+unknown helper/recovery constant. That diagnostic stops after one probe.
+No warning suppression, cap/limit increase, infrastructure outcome or rerun
+occurs. These are proof-development failures, not semantic counterexamples or
+mirror-team requests. A smaller exact source factor with one-put-at-a-time
+contracts is the next architecture to assess; no stronger capacity/readiness
+premise is introduced to force the original claim through.
