@@ -249,6 +249,16 @@ observations support finite admission/poll composition. Observed receive-worker,
 whole device configuration and initialized conservation remain open. Gate:
 831 jobs/762 declarations in 21.831 seconds. Fresh root replay passes in 113.136 seconds without warnings.
 
+The [worker-closure checkpoint](2026-10-17-r4-worker-closure.md)
+adds ten modules and 120 theorems: 783 files/10,702 theorems, 236 R4 terminals
+and 770 total declarations. All previous theorem bodies remain unchanged.
+The original observed receive worker closes the complete auxiliary scheduler's
+receive premise. Configured identity enables repeated peer commands; shutdown
+retains funding and physical geometry. Both fixture flags establish local
+entry facts. Whole device configuration/deletion, dynamic ingress and initialized
+conservation remain open. Gate: 841 jobs/770 declarations in 5.755 seconds.
+Fresh root replay passes in 112.958 seconds without warnings.
+
 The pre-split checkpoint validated every baseline result surface over
 `cb2348e`. R3 packet authorization is now closed over the current split tree;
 R4 receive-pipeline conservation remains open. Earlier positive results and runtime findings retain
@@ -646,17 +656,16 @@ correspondence remains informal.
 
 ## R4 — queue, poll and delivery-order components (in progress)
 
-**State-split source-composition extension.** The [current report](2026-10-17-r4-source-composition.md)
-records 146 additional theorems in fifteen modules and thirteen terminal exports.
-The tree has 773 proof files/10,582 theorems, with 228 R4 terminals and all 215
-preceding bodies unchanged. The complete native handshake receiver pays actual
-references, including early returns and cookie replies. The complete peer
-command and device creation preserve supplied accounts. Exact admission
-outcomes and fresh receipts select and fund finite admission/poll paths.
-Transmit slots compose with the auxiliary scheduler, whose receive premise
-remains explicit. Observed receive-worker, whole device configuration/lifecycle
-and dynamic ingress/initialized conservation remain open. Chronological GRO
-order stays refuted.
+**State-split worker-closure extension.** The [current report](2026-10-17-r4-worker-closure.md)
+records 120 additional theorems in ten modules and eight terminal exports.
+The tree has 783 proof files/10,702 theorems, with 236 R4 terminals and all 228
+preceding bodies unchanged. The original observed receive worker preserves the
+complete account, physical ring, owner checks and slots, discharging the
+auxiliary scheduler's receive premise. Configured identity enables the actual
+device peer loop. Shutdown retains supplied funding and physical geometry;
+initialization covers both flags and rebasing retains the exact removal suffix.
+Whole device configuration/deletion, dynamic ingress and initialized conservation
+remain open. Chronological GRO order stays refuted.
 
 **Original versus proved.** The charter requires accepted-schedule order and no silent loss/duplication.
 [Terminals](../Leanux/Proofs/WG/DeliveryOrder/Statements.lean) prove initialized committed callback-entry stamp

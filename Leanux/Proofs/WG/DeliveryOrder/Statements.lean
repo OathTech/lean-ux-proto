@@ -1,3 +1,7 @@
+import Leanux.Proofs.WG.Queues.HandshakeWorker
+import Leanux.Proofs.WG.Queues.DeviceBoundary
+import Leanux.Proofs.WG.Queues.HolderInitial
+import Leanux.Proofs.WG.Queues.HolderStopPhysical
 import Leanux.Proofs.WG.Queues.CreationLoan
 import Leanux.Proofs.WG.Queues.HolderAuxScheduler
 import Leanux.Proofs.WG.Queues.AdmissionOutcome
@@ -2866,5 +2870,58 @@ theorem original_handshake_receive_account (msg : List UInt8) (src : SkbSource) 
     Hoare (receiveHandshakePacket msg src) (HandshakeResponse.Input cs loans)
       (fun _ => DurableHolders.Boundary cs loans) :=
   HandshakeReception.receive msg src
+
+
+open Leanux Leanux.WG Leanux.Proofs Leanux.Proofs.Logged
+open Framing Lifetimes Queues Queues.RxCredits
+
+/-- The original observed receive worker retains one complete funded account,
+physical ring and auxiliary domain, including its safe stopped histories. -/
+theorem original_receive_worker_account (initial : Ledger) (loans : Reservations)
+    (before : List RxHistory.Event) :
+    PrefixPreserves (HolderAuxiliary.Inv initial loans before) OwnerChecks.Safe
+      Origins.HistoryAdapters.receiveIteration :=
+  HandshakeWorker.iteration_preserves initial loans before
+
+/-- Every recorded scheduler branch now uses the concrete receive worker;
+there is no remaining receive-callback premise. The entry account is explicit. -/
+theorem original_schedule_auxiliary_account (initial : Ledger) (loans : Reservations)
+    (before : List RxHistory.Event) (stack : Option Worker) :
+    PrefixPreserves (HolderAuxiliary.Inv initial loans before) OwnerChecks.Safe (RxHistory.schedule stack) :=
+  HandshakeWorker.schedule initial loans before stack
+
+/-- Nested rescheduling retains that same combined invariant and incoming journal. -/
+theorem original_nested_auxiliary_account (initial : Ledger) (loans : Reservations)
+    (before : List RxHistory.Event) (worker : Worker) :
+    PrefixPreserves (HolderAuxiliary.Inv initial loans before) OwnerChecks.Safe (RxHistory.nestedResched worker) :=
+  HandshakeWorker.nestedResched initial loans before worker
+
+/-- The next actual command receives its configured identity from this command's run. -/
+theorem original_peer_command_complete_entry (attrs : PeerAttrs) :
+    Preserves (DeviceBoundary.Entry cs loans) (WG.setPeerCmd attrs) := DeviceBoundary.command attrs
+
+/-- The actual device peer-list stage preserves one account through every command and error exit. -/
+theorem original_device_peers_account (attrs : DeviceAttrs) :
+    Preserves (DeviceBoundary.Entry cs loans) (Configuration.devicePeersSource attrs) := DeviceBoundary.peers attrs
+
+/-- Shutdown retains supplied carriers and the real physical alternative through actual work drains. -/
+theorem original_device_stop_account :
+    Preserves (fun w => DurableHolders.Boundary cs loans w ∧ HolderDeviceCreate.OptionalPhysical w) wgStop ∧
+    Preserves (fun w => DurableHolders.Boundary cs loans w ∧ HolderDeviceCreate.OptionalPhysical w) wgDown :=
+  ⟨HolderStopPhysical.stop,HolderStopPhysical.down⟩
+
+/-- The original fixture establishes all local entry facts for both flags;
+absent-device cases carry no fabricated physical ring. -/
+theorem original_holder_fixture (net bare : Bool) (w : World)
+    (same : wgStoreView w.wg=wgStoreView (Runner.initialWG net bare)) :
+    DurableHolders.Boundary [] [] w.wg ∧ HolderDeviceCreate.OptionalPhysical w.wg ∧
+      OwnerChecks.Inv [] w ∧ CurrentSlots.Inv w.wg ∧ BaseCoherence.Inv w.wg :=
+  HolderInitial.initial net bare w same
+
+/-- A new accounting cut retains exactly the ledger selected by the old cut's actual removal suffix. -/
+theorem original_holder_rebase (hi : HolderAuxiliary.Inv cs loans before h w) :
+    ∃ suffix, h=before++suffix ∧
+      HolderAuxiliary.Inv (remaining cs (NapiCarrier.removedPackets suffix)) loans h h w :=
+  HolderInitial.rebase hi
 
 end Leanux.Proofs.WG.DeliveryOrder
