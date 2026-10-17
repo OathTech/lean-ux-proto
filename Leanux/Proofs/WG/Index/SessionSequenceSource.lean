@@ -29,23 +29,42 @@ theorem beginSession_allocation_normal (pid : PeerId) (d : Device)
   obtain ⟨p, resident⟩ := beginSession_entry_resident pid d w out ambient after ok pre run
   exact beginSession_allocation pid d p resident bound w ambient ok out after pre run
 
-/-- Consecutive original calls with read-only entry observations. No handshake
+/-- Consecutive original calls with full Product entry observations. No handshake
 installation or other operation is inserted between the calls. -/
-def observedSessionCalls (pids : List PeerId) : WG.M (List SessionAllocationCall) :=
+def observedSessionCalls (pids : List PeerId) : Leanux.M (List SessionAllocationCall) :=
   pids.mapM fun pid => do
-    let entry ← Campaign2.read
-    let ok ← beginSession pid
+    let entry ← Campaign2.Product.read
+    let ok ← liftWG (beginSession pid)
     return ⟨pid, entry, ok⟩
 
 /-- Exact erasure retains every original error, including absent peers and
 stopped session suffixes, rather than returning a partial observation list. -/
 theorem observedSessionCalls_erase (pids : List PeerId) :
     (do let calls ← observedSessionCalls pids
-        pure (calls.map SessionAllocationCall.result)) = pids.mapM beginSession := by
+        pure (calls.map SessionAllocationCall.result)) = liftWG (pids.mapM beginSession) := by
+  have liftBind {α β : Type} (action : WG.M α) (next : α → WG.M β) :
+      liftWG (do let result ← action; next result) =
+        (do let result ← liftWG action; liftWG (next result)) := by
+    funext w
+    change (((action.run w.wg).run w.ambient >>= fun ((value, current), ambient) =>
+      ((next value).run current).run ambient) >>= fun ((value, current), ambient) =>
+        Except.ok (value, {w with wg := current, ambient})) =
+      (((action.run w.wg).run w.ambient >>= fun ((value, current), ambient) =>
+        Except.ok (value, {w with wg := current, ambient})) >>= fun (value, middle) =>
+          ((next value).run middle.wg).run middle.ambient >>= fun ((result, current), ambient) =>
+            Except.ok (result, {middle with wg := current, ambient}))
+    simp only [bind_assoc]
+    cases executed : (action.run w.wg).run w.ambient with
+    | error stop => rfl
+    | ok pair =>
+      obtain ⟨⟨value, current⟩, ambient⟩ := pair
+      rfl
+  have liftPure {α : Type} (value : α) :
+      liftWG (pure value : WG.M α) = (pure value : Leanux.M α) := rfl
   induction pids with
   | nil => rfl
   | cons pid rest ih =>
-    simp only [observedSessionCalls, List.mapM_cons, bind_assoc, pure_bind,
+    simp only [observedSessionCalls, List.mapM_cons, liftBind, liftPure, bind_assoc, pure_bind,
       List.map_cons] at ih ⊢
     simp only [← ih]
     simp only [bind_assoc, pure_bind]
@@ -53,37 +72,48 @@ theorem observedSessionCalls_erase (pids : List PeerId) :
 
 theorem observedSessionCalls_facts (pids : List PeerId) (d : Device)
     (bound : KeypairStoreBounded d) :
-    Campaign2.Ensures (observedSessionCalls pids) (fun s => s.wg.device = some d)
+    Campaign2.Product.Ensures (observedSessionCalls pids) (fun s => s.wg.device = some d)
       (SessionAllocationSequenceFacts d pids) := by
   induction pids generalizing d with
   | nil =>
-    intro w ambient calls out after pre run
-    change Except.ok (([], w), ambient) = .ok ((calls, out), after) at run
+    intro w calls out pre run
+    change Except.ok ([], w) = .ok (calls, out) at run
     cases run
-    exact sessionAllocationSequence_nil d (snapshot w ambient) pre bound
+    exact sessionAllocationSequence_nil d (Campaign2.Product.snapshot w) pre bound
   | cons pid rest ih =>
-    intro w ambient calls out after pre run
+    intro w calls out pre run
     rw [observedSessionCalls, List.mapM_cons] at run
     simp only [bind_assoc, pure_bind] at run
-    change (((beginSession pid).run w).run ambient >>= fun ((ok, middle), nextAmbient) =>
-      ((observedSessionCalls rest).run middle).run nextAmbient >>= fun ((tail, finish), finalAmbient) =>
-        Except.ok ((SessionAllocationCall.mk pid (snapshot w ambient) ok :: tail, finish), finalAmbient)) =
-      .ok ((calls, out), after) at run
-    cases headRun : ((beginSession pid).run w).run ambient with
+    change ((liftWG (beginSession pid)).run w >>= fun (ok, middle) =>
+      (observedSessionCalls rest).run middle >>= fun (tail, finish) =>
+        Except.ok (SessionAllocationCall.mk pid (Campaign2.Product.snapshot w) ok :: tail, finish)) =
+      .ok (calls, out) at run
+    cases headRun : (liftWG (beginSession pid)).run w with
     | error stop => rw [headRun] at run; cases run
     | ok pair =>
-      obtain ⟨⟨ok, middle⟩, nextAmbient⟩ := pair
+      obtain ⟨ok, middle⟩ := pair
       simp only [headRun, Bind.bind, Except.bind] at run
-      obtain ⟨next, device, bounded, cursor, fresh⟩ :=
-        beginSession_allocation_normal pid d bound w ambient ok middle nextAmbient pre headRun
-      cases tailRun : ((observedSessionCalls rest).run middle).run nextAmbient with
+      have head : ∃ next, middle.wg.dev = some next ∧ KeypairStoreBounded next ∧
+          next.nextKeypairId = d.nextKeypairId + (if ok then 1 else 0) ∧
+          d.keypairs[d.nextKeypairId]? = none := by
+        change (((beginSession pid).run w.wg).run w.ambient >>= fun ((value, current), ambient) =>
+          Except.ok (value, {w with wg := current, ambient})) = .ok (ok, middle) at headRun
+        cases nativeRun : ((beginSession pid).run w.wg).run w.ambient with
+        | error stop => rw [nativeRun] at headRun; cases headRun
+        | ok pair =>
+          obtain ⟨⟨value, current⟩, ambient⟩ := pair
+          rw [nativeRun] at headRun
+          cases headRun
+          exact beginSession_allocation_normal pid d bound w.wg w.ambient _ current ambient pre nativeRun
+      obtain ⟨next, device, bounded, cursor, fresh⟩ := head
+      cases tailRun : (observedSessionCalls rest).run middle with
       | error stop => rw [tailRun] at run; cases run
       | ok pair =>
-        obtain ⟨⟨tail, finish⟩, finalAmbient⟩ := pair
+        obtain ⟨tail, finish⟩ := pair
         rw [tailRun] at run
-        obtain ⟨⟨rfl, rfl⟩, rfl⟩ := Prod.mk.inj (Except.ok.inj run)
-        exact sessionAllocationSequence_cons pid (snapshot w ambient) d next ok rest tail
-          (snapshot finish finalAmbient) pre bound cursor
-          (ih next bounded middle nextAmbient tail finish finalAmbient device tailRun)
+        obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Except.ok.inj run)
+        exact sessionAllocationSequence_cons pid (Campaign2.Product.snapshot w) d next ok rest tail
+          (Campaign2.Product.snapshot finish) pre bound cursor
+          (ih next bounded middle tail finish device tailRun)
 
 end Leanux.Proofs.WG.Index

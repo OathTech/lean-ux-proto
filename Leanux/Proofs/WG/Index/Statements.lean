@@ -172,8 +172,8 @@ theorem original_keypair_create_index_fresh (peer : Option PeerId) (d : Device)
           ownerWord (createdDevice d counter peer) (.keypair id) = some peer ∧
           KeypairOwnersBounded (createdDevice d counter peer) ∧
           KeypairStoreBounded (createdDevice d counter peer)) := by
-  intro w result final pre run
-  have effect := keypairCreate_exact peer d counter w result final pre run
+  intro w ambient result final after pre run
+  have effect := keypairCreate_exact peer d counter w ambient result final after pre run
   cases result with
   | none => exact effect
   | some id =>
@@ -228,9 +228,9 @@ theorem original_keypair_release (id : KeypairId) (now : Bool) (d : Device) (k :
         final.keypairs[id]? = (if k.refcount = 1 then none else some { k with refcount := k.refcount - 1 }) ∧
         (∀ other : KeypairId, id ≠ other → final.keypairs[other]? = d.keypairs[other]?) ∧
         UniqueIndices final.indexTable ∧ UniqueOwners final.indexTable) := by
-  intro w pre
-  obtain ⟨ret, final, run, device⟩ := keypairPut_exact id now d k resident live word w pre
-  exact ⟨ret, final, run, device, released_table d id k now, released_keypair d id k now,
+  intro w ambient pre
+  obtain ⟨ret, final, after, run, device⟩ := keypairPut_exact id now d k resident live word w ambient pre
+  exact ⟨ret, final, after, run, device, released_table d id k now, released_keypair d id k now,
     fun other different => released_other_keypair d id other k now different,
     released_indices d id k now indices, released_owners d id k now owners⟩
 
@@ -246,9 +246,9 @@ theorem original_keypair_release_allocation_bounds (id : KeypairId) (now : Bool)
         (releasedDevice d id k now).nextKeypairId = d.nextKeypairId ∧
         KeypairOwnersBounded (releasedDevice d id k now) ∧
         KeypairStoreBounded (releasedDevice d id k now)) := by
-  intro w pre
-  obtain ⟨ret, final, run, device⟩ := keypairPut_exact id now d k resident live word w pre
-  exact ⟨ret, final, run, device, released_next d id k now,
+  intro w ambient pre
+  obtain ⟨ret, final, after, run, device⟩ := keypairPut_exact id now d k resident live word w ambient pre
+  exact ⟨ret, final, after, run, device, released_next d id k now,
     released_owners_bounded d id k now owners, released_store_bounded d id k now resident store⟩
 
 /-- Original initiation creation preserves uniqueness of embedded table owners
@@ -285,11 +285,11 @@ an accepted runner trace or expose a final state on error. -/
 theorem original_index_insert_exhausted (owner : IndexOwner) (d : Device) (draws : List Draw)
     (allCollide : ∀ draw ∈ draws,
       (removeOwner owner d.indexTable).any (·.index == draw.value) = true) :
-    Campaign2.Observes (indexInsert owner)
+    Campaign2.Observes (liftIndex (indexInsert owner))
       (fun s => s.wg.device = some d ∧ s.ambient.hidden = some (draws.map Draw.record))
       (fun _ out => out = .error (.hidden "no record left for index_draw")) := by
-  intro w pre
-  rw [indexInsert_exhausted owner d draws allCollide w pre.1 pre.2]
+  intro w ambient pre
+  rw [indexInsert_exhausted owner d draws allCollide w ambient pre.1 pre.2]
   rfl
 
 /-- The original resident/live domain has an exact refusal or normal return.
@@ -330,22 +330,24 @@ theorem original_peer_release_allocation_bounds (pid : PeerId) (d : Device) (p :
 /-- The original runner initializer establishes the optional-device table
 invariant for every fixture-flag combination. Only its core projection is
 installed here; the remaining observed context is arbitrary. This is an
-initial-state theorem, not preservation through a runner trace. -/
-theorem original_initial_kernel_tables (rlimit : Nat)
-    (net bare foreign stepped seccompChild : Bool) (s : Campaign2.Snapshot) :
-    View.TablesSafe (initialSnapshot rlimit net bare foreign stepped seccompChild s) :=
-  initialSnapshot_safe rlimit net bare foreign stepped seccompChild s
+initial-state theorem, not preservation through a runner trace. The legacy
+fixture arguments remain universally quantified; the native WireGuard initializer
+reads only net and bare. -/
+theorem original_initial_kernel_tables (_rlimit : Nat)
+    (net bare _foreign _stepped _seccompChild : Bool) (s : Campaign2.Snapshot) :
+    View.TablesSafe (initialSnapshot net bare s) :=
+  initialSnapshot_safe net bare s
 
 /-- Original setup always installs its empty device table and establishes
 numeric uniqueness, owner uniqueness and the hashed-keypair allocation bound.
 No pre-existing device or invariant is required. -/
 theorem original_setup_tables : Campaign2.Returns wgSetup (fun _ => True)
     (fun _ s => s.wg.device = some setupDevice ∧ View.TablesSafe s) := by
-  intro w pre
-  obtain ⟨result, final, run, device⟩ := wgSetup_device w pre
-  refine ⟨result, final, run, device, ?_⟩
+  intro w ambient pre
+  obtain ⟨result, final, after, run, device⟩ := wgSetup_device w ambient pre
+  refine ⟨result, final, after, run, device, ?_⟩
   intro d present
-  change final.k.wg = some d at present
+  change final.dev = some d at present
   rw [device] at present
   cases present
   exact setupDevice_safe
@@ -355,8 +357,8 @@ the optional-device table invariant holds. This does not promise destruction
 completes, preserve intermediate states, or establish whole-driver coverage. -/
 theorem original_destruct_tables : Campaign2.Ensures wgDestruct (fun _ => True)
     (fun _ s => s.wg.device = none ∧ View.TablesSafe s) := by
-  intro w result final pre run
-  have absent := wgDestruct_absent w result final pre run
+  intro w ambient result final after pre run
+  have absent := wgDestruct_absent w ambient result final after pre run
   exact ⟨absent, absent_tables_safe _ absent⟩
 
 /-- Original newlink preserves the optional-device table invariant on every
@@ -379,8 +381,8 @@ the already-absent ENODEV return, hence establishes the table invariant. The
 down/destruction prefix may stop; its intermediate states are not covered. -/
 theorem original_delete_tables : Campaign2.Ensures wgDelete (fun _ => True)
     (fun _ s => s.wg.device = none ∧ View.TablesSafe s) := by
-  intro w result final pre run
-  have absent := wgDelete_absent w result final pre run
+  intro w ambient result final after pre run
+  have absent := wgDelete_absent w ambient result final after pre run
   exact ⟨absent, absent_tables_safe _ absent⟩
 
 /-- Every normal return of original handshake-initiation sending preserves
@@ -407,8 +409,8 @@ The actual selection, dequeue, pending check and section reads execute around
 the worker body. No resident-peer or reference-count premise is required;
 completion on arbitrary records and stopped prefixes are not asserted. -/
 theorem original_send_dispatch_tables :
-    Campaign2.Ensures Env.runOneSendWorker View.TablesSafe
-      (fun _ s => View.TablesSafe s) :=
+    Campaign2.Product.Ensures Env.runOneSendWorker (fun s => View.TablesSafe s.toSnapshot)
+      (fun _ s => View.TablesSafe s.toSnapshot) :=
   runOneSendWorker_tables
 
 /-- Every normal return of original handshake-response sending preserves
@@ -500,7 +502,8 @@ index uniqueness, owner uniqueness and the hashed-keypair allocation bound.
 This includes actual named/head selection, queue removal and both section reads;
 it does not assert that arbitrary queue states or records permit completion. -/
 theorem original_clear_dispatch_tables :
-    Campaign2.Ensures Env.runOneClearWorker View.TablesSafe (fun _ s => View.TablesSafe s) :=
+    Campaign2.Product.Ensures Env.runOneClearWorker (fun s => View.TablesSafe s.toSnapshot)
+      (fun _ s => View.TablesSafe s.toSnapshot) :=
   runOneClearWorker_tables
 
 /-- All five original timer callbacks preserve the optional-device table
@@ -512,14 +515,18 @@ theorem original_timer_callback_tables (pid : PeerId) (timer : PeerTimer) :
       (fun _ s => View.TablesSafe s) :=
   timerCallback_tables pid timer
 
-/-- Original timer dispatch preserves the table invariant on every normal
-return, including its actual timer/peer selection, due checks, detachment and
-section-wrapped callback. This adds no callback assumption or ready-timer premise
-and makes no whole-timer-loop or arbitrary-record completion claim. -/
-theorem original_fire_timer_tables (worker : Worker) (horizon : UInt64) :
-    Campaign2.Ensures (Env.fireTimer worker horizon) View.TablesSafe
-      (fun _ s => View.TablesSafe s) :=
-  fireTimer_tables worker horizon
+/-- The current wheel dispatch unit preserves table safety on every normal
+return through its actual worker/unit/step checks, detachment and section-wrapped
+callback, without callback or readiness assumptions. This explicitly replaces
+the removed horizon-based dispatcher: due selection belongs to the surrounding
+wheel-loop source factor; whole-loop preservation is not claimed here. -/
+theorem original_fire_timer_tables (worker : Worker) (pid : PeerId) (timer : PeerTimer)
+    (entry : WheelEntry) (step : Option UInt64) :
+    Campaign2.Product.Ensures
+      (TimerDiscipline.timerDispatchUnit_variant worker pid timer entry step)
+      (fun s => View.TablesSafe s.toSnapshot)
+      (fun _ s => View.TablesSafe s.toSnapshot) :=
+  fireTimer_tables worker pid timer entry step
 
 /-- Original handshake-work draining preserves optional-device numeric-index
 uniqueness, owner uniqueness and the hashed-keypair allocation bound on normal
@@ -589,17 +596,18 @@ actual entry, and the final bound and cursor account for every true result.
 Only an initial device and store bound are assumed. Final key residency,
 lifetime ownership, reachability and successful completion are not claimed. -/
 theorem original_session_allocation_sequence (pids : List PeerId) :
-    Campaign2.AgreesOn (fun _ => True) (pids.mapM beginSession)
+    Campaign2.Product.AgreesOn (fun _ => True) (liftWG (pids.mapM beginSession))
       (do let calls ← observedSessionCalls pids
           pure (calls.map SessionAllocationCall.result)) ∧
     (∀ d, KeypairStoreBounded d →
-      Campaign2.Ensures (observedSessionCalls pids) (fun s => s.wg.device = some d)
+      Campaign2.Product.Ensures (observedSessionCalls pids) (fun s => s.wg.device = some d)
         (SessionAllocationSequenceFacts d pids)) := by
   constructor
   · intro entry pre
     rw [observedSessionCalls_erase]
   · intro d bound
     exact observedSessionCalls_facts pids d bound
+
 
 /-- Any successful original index lookup derives its first equal-index row and
 permitted kind, initial owner word and resident peer, positive reference count

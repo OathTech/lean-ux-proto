@@ -1,4 +1,4 @@
-import Leanux.Proofs.WG.Campaign2.View
+import Leanux.Proofs.WG.Campaign2.ProductView
 import Leanux.Proofs.WG.Index.AllocationModel
 
 namespace Leanux.Proofs.WG.Index
@@ -7,7 +7,7 @@ open Leanux Leanux.WG Campaign2
 /-- The entry snapshot and result of one actual original call. -/
 structure SessionAllocationCall where
   pid : PeerId
-  entry : Snapshot
+  entry : Campaign2.Product.Snapshot
   result : Bool
 
 /-- Successful IDs come from the observed entry device, not a generated counter
@@ -17,7 +17,7 @@ def sessionSuccessfulIds (calls : List SessionAllocationCall) : List KeypairId :
     if call.result then call.entry.wg.device.map Device.nextKeypairId else none
 
 structure SessionAllocationSequenceFacts (initial : Device) (pids : List PeerId)
-    (calls : List SessionAllocationCall) (final : Snapshot) : Prop where
+    (calls : List SessionAllocationCall) (final : Campaign2.Product.Snapshot) : Prop where
   peers : calls.map SessionAllocationCall.pid = pids
   length : (calls.map SessionAllocationCall.result).length = pids.length
   entries : ∀ call ∈ calls, ∃ d, call.entry.wg.device = some d ∧

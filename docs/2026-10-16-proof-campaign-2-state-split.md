@@ -20,14 +20,14 @@ and attributed theorem declarations. Campaign 2 owns 427 Lean files,
 | --- | ---: | ---: | ---: | ---: | --- |
 | Common projection | 2 | 0 | 0 | 0 | Actual native WG/Ambient and full Product observations carried; no reconstructed execution states. |
 | H1 Noise | 35 | 171 | 22 | 185 | The full Noise closure is current, including restart support. Six type-given frames are deleted. Wider caller/lifetime/reachability and clock-provenance charter claims remain open. |
-| H2 Index | 68 | 318 | 52 | 281 | Table, lookup, collision records, allocation, owner invariants and lifecycle support carried; seven type-given frames deleted. Exact peer-release outcomes replace stale totality, with checked counterexamples. Terminal closure and whole-driver coherence remain pending. |
+| H2 Index | 68 | 318 | 52 | 333 | Table, lookup, collision records, allocation, owner invariants and lifecycle support carried; seven type-given frames deleted. Exact peer-release outcomes replace stale totality, with checked counterexamples. All 52 headlines and their closure are current, including full Product session observations; whole-driver coherence remains pending. |
 | H3 Roaming | 35 | 119 | 13 | 157 | Endpoint/publication, polling, attempt facts, crypto, lookup and response-caller factors/facts carried with full Product certificates; two type-given frames deleted. The full terminal closure is current, including initiation/response audits with actual Product outcomes. Wider roaming/provenance charter gaps remain open. |
-| H4 Configuration | 130 | 554 | 79 | 420 | Scalar, identity, port, dump, allowed-IP and structural support carried; three type-given frames deleted. Quiet timer cleanup and queued-send observations are corrected; queued-send and removal totality have checked stale-statement counterexamples. Remaining readback/effects and terminal closure remain pending. |
-| H5 Progress | 59 | 265 | 42 | 209 | Pure/control, cut, jitter, index, poll bounds, dispatch, scheduler turns, stack/probe frames, queue flush contracts, drain selection and Product observation bridge carried; one type-given index frame deleted. The old backlog fixture has checked exact runner and direct-fixture rejections. Drain bounds are carried. General runner boundaries and receive-source leaf contracts are carried; whole receive-ring activation models and terminal closure remain pending. |
-| H6 Timer discipline | 98 | 404 | 50 | 182 | Base/guard/jitter, arming/wheel, recorded clock and initiation-send arming contracts carried; three type-given frames deleted. Exact wheel corrections are explicit; queue/pending and retained-worker frames are carried; broader timer episodes and terminal closure remain pending. |
+| H4 Configuration | 130 | 554 | 79 | 444 | Scalar, identity, port, dump, allowed-IP and structural support carried; three type-given frames deleted. Quiet timer cleanup and queued-send observations are corrected; queued-send and removal totality have checked stale-statement counterexamples. Remaining readback/effects and terminal closure remain pending. |
+| H5 Progress | 59 | 265 | 42 | 214 | Pure/control, cut, jitter, index, poll bounds, dispatch, scheduler turns, stack/probe frames, queue flush contracts, drain selection and Product observation bridge carried; one type-given index frame deleted. The old backlog fixture has checked exact runner and direct-fixture rejections. Drain bounds are carried. General runner boundaries, corrected historical rejection wrappers and receive-source leaves are carried; whole receive-ring activation models and terminal closure remain pending. |
+| H6 Timer discipline | 98 | 404 | 50 | 191 | Base/guard/jitter, arming/wheel, recorded clock and initiation-send arming contracts carried; three type-given frames deleted. Exact wheel corrections are explicit; queue/pending and retained-worker frames are carried; broader timer episodes and terminal closure remain pending. |
 
 Retyped, deleted and retained counts will be reported per validated tranche.
-H1 and H3 now have checked split terminal closures; H2, H4, H5 and H6 remain lagging.
+H1, H2 and H3 now have checked split terminal closures; H4, H5 and H6 remain lagging.
 All six results retain their previous charter gaps.
 The last scoped validation at `04b2f7c` does not validate the split mirror.
 
@@ -4487,3 +4487,111 @@ Reproduce with scripts/in-bundle lake build on Config.RemoveAllSource,
 Index.TimerSource and Progress.CookieActivationBoundFindings under
 Leanux.Proofs.WG, followed by #print axioms and scripts/in-bundle lake env
 leanchecker --fresh MODULE. Use capped, 32 Lean threads and 16 QEMU slots here.
+
+
+## H2 terminal closure and remaining configuration/observation carries
+
+| Tranche | Before | Retyped | Corrected | Deleted | Kept | Added | After |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Index.Statements | 52 | 49 | 3 | 0 | 0 | 0 | 52 |
+| Config.RemoveAllObservationSource | 3 | 3 | 0 | 0 | 0 | 0 | 3 |
+| Config.ConcreteFrames | 6 | 6 | 0 | 0 | 0 | 1 | 7 |
+| Config.ReplacePeersRequestSource | 2 | 2 | 0 | 0 | 0 | 0 | 2 |
+| Config.SourceClaims | 12 | 5 | 7 | 0 | 0 | 0 | 12 |
+| Progress.BacklogSource, RunnerBoundaryClaims | 5 | 1 | 4 | 0 | 0 | 0 | 5 |
+| TimerDiscipline.ObservationProductSource, SendDispatchClaims, SendDispatchWorkSource | 6 | 5 | 1 | 0 | 0 | 0 | 6 |
+| TimerDiscipline.RetransmitSkipSource | 3 | 3 | 0 | 0 | 0 | 0 | 3 |
+| This tranche, excluding revalidation | 89 | 74 | 15 | 0 | 0 | 1 | 90 |
+| Cumulative processed baseline and checked support | 1,392 | 1,081 | 74 | 22 | 215 | 154 | 1,524 |
+
+The census is 544 campaign-owned files, 1,963 theorems and 451 checked proof
+modules. Of the original 1,831 declarations, 439 remain pending. H1 185,
+H2 333, H3 157, H4 444, H5 214 and H6 191 are checked. H1/H2/H3 terminal
+closures are current over b700659; H4/H5/H6 and the full gate remain lagging.
+All six retain their previously reported wider charter gaps.
+
+Independent review found a real scope error in the earlier SessionSequence
+retrofit: native entry snapshots had lost the eight original fixture fields.
+The numerical claims and final result erasure did not restore those payloads.
+The repair uses Product.read at every actual successive entry, followed by
+liftWG beginSession, with full Product entry/final snapshots in the effects
+and terminal facts. Exact erasure still equals the lifted whole native mapM.
+Re-review confirms the finding fixed. Six existing support declarations were
+revalidated, including two unchanged native support lemmas, without new census
+credit. The two pure effect declarations formerly counted as kept are now
+classified as retyped; this moves two from kept to retyped in the cumulative
+row. No fixture state is reconstructed.
+
+H2 retains all 52 headline names/order and original domains. Its three explicit
+corrections are the two previously refuted peer-release totalities and the
+removed horizon dispatch, now the actual wheel unit. Native table/caller
+properties use the WG projection; product dispatch and sequence observation
+retain Product scope. All former initializer arguments remain quantified,
+including flags no longer read by the native WG initializer. This does not
+establish reachable owner-word coherence, all-driver preservation, or timer
+loop preservation.
+
+RemoveAllObservation retains actual post-free and between-pass Product cuts,
+all cleanup failures and partial NodePairs/ListedResidents facts. ReplacePeers
+keeps an unrestricted Product callback between exact native prefix/suffix
+factors. Selection errors precede generation/removal; every logged branch and
+the final return remain in order. ConcreteFrames preserves all four former
+Kernel owners jointly through actual liftWG, with the six original exact
+return/dump contracts and one private generic adapter. These are substantive
+WG/return facts, so no frame is deleted here.
+
+SourceClaims carries five original expiry/readback/root-replacement contracts.
+Seven corrected queued/staged/key-install/removal wrappers reuse the checked
+actual queue observations and refusal semantics, retaining original premises.
+The two clock contracts still expose actual full Product intermediate states.
+No fresh queue/readiness premise rescues an old prediction or totality.
+
+The general runner acceptance theorem still derives a successful actual audit,
+ordered indices, cardinality and the three clean guards from actual acceptance.
+The four fixed-trace corrections distinguish the unbooted direct fixture's
+route invariant from the actual FIB-booted runner's indexed queued-work refusal.
+There is no accepted-boundary backlog on this mirror and no final state is
+invented on error. The backlog finding note is updated accordingly.
+
+ObservationProductSource extracts the three original generic observation
+contracts, retaining arbitrary Product actions, probes, predicates and exact
+errors. SendDispatchClaims retains two original projected consequences.
+SendDispatchWorkSource corrects the pending flag to membership in the remaining
+queue; duplicate peers are allowed. RetransmitSkipSource extracts three exact
+full Product read/skip contracts: caller and jitter reads precede the inactive
+guard, and the unused arm record remains. The two active arming totalities
+remain pending; their old record premises omit the newly required base-clock
+read on changed expiry. That source-inspection concern is not yet credited as
+a checked counterexample in this tranche.
+
+The final 353-job build passes; earlier 297-job and 235-job package builds also
+pass. No changed-proof warning remains; the unchanged Env String.mk warning
+is inherited. Axiom inspection checks 1,527 logical roots in 289 proof modules,
+including 1,004 public theorem roots, with standard axioms only. All eight fresh
+kernel replays, static checks, 258 terminal names/order and mirror/shared
+boundaries pass. No mirror/shared edit, cap increase or infrastructure retry
+occurred.
+
+Development ledger: H2 probe 1 closes with four unused legacy-initializer
+warnings; probe 2 marks those still-quantified binders intentionally unused.
+Session repair probes 1–2 fail lift/bind reduction and an eliminated variable,
+with one unused simplification in probe 2; probe 3 passes. RemoveAll/replacement
+combined probes 1–5 fail lift/continuation reduction, with error/warning counts
+3/4, 1/0, 3/5, 3/15 and 3/0; the fifth includes two original-limit whnf failures.
+Probe 6 isolates the clean RemoveAll observer. Replacement factoring probe 1
+then fails suffix/bind normalization with 2 errors/1 unused simplification;
+changed probe 2 passes. Backlog probes 1–5 fail initializer, Except result types
+and boot-case/routing reduction; probe 1 also reports one unused simplification.
+Probe 6 passes. Both root observation/send probes and ConcreteFrames probe 1
+pass cleanly. SourceClaims probe 1 fails reserved-identifier syntax and a missing
+Ambient witness; changed probe 2 passes. Retransmit-skip probes 1–4 fail lift
+normalization/source factoring, with error/warning counts 3/20, 3/12, 2/6 and 1/3;
+probe 5 passes. Original per-file proof limits are retained throughout.
+
+Reproduce the scoped build with scripts/in-bundle lake build on Index.Statements,
+Config.RemoveAllObservationSource, Config.SourceClaims,
+Config.ReplacePeersRequestSource, Progress.RunnerBoundaryClaims,
+TimerDiscipline.SendDispatchClaims, TimerDiscipline.SendDispatchWorkSource and
+TimerDiscipline.RetransmitSkipSource under Leanux.Proofs.WG. Inspect axioms and
+run scripts/in-bundle lake env leanchecker --fresh MODULE for those roots.
+Use capped, 32 Lean threads and LEANUX_QEMU_SLOTS=16 on this host.

@@ -34,129 +34,126 @@ import Leanux.Proofs.WG.Config.ConcreteFrames
 namespace Leanux.Proofs.WG.Config.SourceClaims
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise
 
-/-- Every normally completed original expiry run has an actual prefix and
-reset-clock read whose returned value determines the final store, including
-last-sent time minus six seconds in wrapping Int64 arithmetic. The read is tied
-to that run; this is not merely an unconstrained existential timestamp. -/
+/-- Every successful lifted expiry exposes the actual Product prefix and
+clock states, preserving all original fixture observations. -/
 theorem original_expiry_clock_relation (pid : PeerId) (d : Device) (p : Peer)
-    (resident : d.peers[pid]? = some p) (w v : World) (device : w.k.wg = some d)
-    (run : (expireCurrentPeerKeypairs pid).run w = .ok ((), v)) :
+    (resident : d.peers[pid]? = some p) (w v : World) (device : w.wg.dev = some d)
+    (run : (liftWG (expireCurrentPeerKeypairs pid)).run w = .ok ((), v)) :
     ∃ now before after,
-      (expiryReadPrefix pid).run w = .ok ((), before) ∧
-      (hiddenClock64 .resetLastSent).run before = .ok (now, after) ∧
-      v.k.wg = some (expiredDevice d pid p now) :=
-  expireCurrent_clock pid d p resident w v device run
+      (liftWG (expiryReadPrefix pid)).run w = .ok ((), before) ∧
+      (liftWG (hiddenClock64 .resetLastSent : WG.M Int64)).run before = .ok (now, after) ∧
+      v.wg.dev = some (expiredDevice d pid p now) := by
+  change (((expireCurrentPeerKeypairs pid).run w.wg).run w.ambient >>= _) = _ at run
+  cases executed : ((expireCurrentPeerKeypairs pid).run w.wg).run w.ambient with
+  | error stop => rw [executed] at run; cases run
+  | ok pair =>
+    obtain ⟨⟨value, final⟩, inputs⟩ := pair
+    rw [executed] at run
+    cases run
+    obtain ⟨now, before, beforeAmbient, after, afterAmbient, prefixRun, read, effect⟩ :=
+      expireCurrent_clock pid d p resident w.wg final w.ambient inputs device executed
+    refine ⟨now, {w with wg := before, ambient := beforeAmbient},
+      {w with wg := after, ambient := afterAmbient}, ?_, ?_, effect⟩
+    · change (((expiryReadPrefix pid).run w.wg).run w.ambient >>= _) = _
+      rw [prefixRun]; rfl
+    · change (((hiddenClock64 .resetLastSent : WG.M Int64).run before).run beforeAmbient >>= _) = _
+      rw [read]; rfl
 
-
-/-- The original non-retry handshake queue call resets attempts, reads the
-age-test clock, and has the exact Device effect selected by that actual read:
-no queue change, a balanced pending reference pair, or a fresh queued reference.
-World bookkeeping and record availability are outside this normal-run claim. -/
+/-- The corrected queue effect follows the actual dispatch observation after
+the age-test read. Product prefix/clock states and every original premise remain. -/
 theorem original_queued_handshake_clock (pid : PeerId) (d : Device) (p : Peer)
-    (resident : d.peers[pid]? = some p) (w v : World) (device : w.k.wg = some d)
-    (run : (sendQueuedHandshakeInitiation pid false).run w = .ok ((), v)) :
-    ∃ now before after,
-      (queuedReadPrefix pid).run w = .ok ({ p with timerHandshakeAttempts := 0 }, before) ∧
-      (hiddenClock64 .birthdateExpired).run before = .ok (now, after) ∧
-      v.k.wg = some (queuedDevice (withPeer d pid { p with timerHandshakeAttempts := 0 })
-        pid { p with timerHandshakeAttempts := 0 } now) :=
-  sendQueued_clock pid d p resident w v device run
+    (resident : d.peers[pid]? = some p) (w v : World) (device : w.wg.dev = some d)
+    (run : (liftWG (sendQueuedHandshakeInitiation pid false)).run w = .ok ((), v)) :
+    ∃ now seen before after,
+      (liftWG (queuedReadPrefix pid)).run w =
+        .ok ({p with timerHandshakeAttempts := 0}, before) ∧
+      (liftWG (hiddenClock64 .birthdateExpired : WG.M Int64)).run before = .ok (now, after) ∧
+      (liftWG (observedQueuedAfterClock pid {p with timerHandshakeAttempts := 0} now)).run after =
+        .ok (seen, v) ∧
+      match seen with
+      | none => v.wg.dev = some (withPeer d pid {p with timerHandshakeAttempts := 0}) ∧
+          (¬p.lastSentHandshake + REKEY_TIMEOUT.toInt64 * NSEC_PER_SEC64 ≤ now ∨ p.isDead = true)
+      | some queued => p.lastSentHandshake + REKEY_TIMEOUT.toInt64 * NSEC_PER_SEC64 ≤ now ∧
+          p.isDead = false ∧ v.wg.dev = some (queuedDeviceAfterInspection
+            (withPeer d pid {p with timerHandshakeAttempts := 0}) pid {p with timerHandshakeAttempts := 0} now queued) := by
+  change (((sendQueuedHandshakeInitiation pid false).run w.wg).run w.ambient >>= _) = _ at run
+  cases executed : ((sendQueuedHandshakeInitiation pid false).run w.wg).run w.ambient with
+  | error stop => rw [executed] at run; cases run
+  | ok pair =>
+    obtain ⟨⟨value, final⟩, inputs⟩ := pair
+    rw [executed] at run
+    cases run
+    obtain ⟨now, seen, before, beforeAmbient, after, afterAmbient, prefixRun, read, observed, effect⟩ :=
+      sendQueued_clock pid d p resident w.wg final w.ambient inputs device executed
+    refine ⟨now, seen, {w with wg := before, ambient := beforeAmbient},
+      {w with wg := after, ambient := afterAmbient}, ?_, ?_, ?_, effect⟩
+    · change (((queuedReadPrefix pid).run w.wg).run w.ambient >>= _) = _
+      rw [prefixRun]; rfl
+    · change (((hiddenClock64 .birthdateExpired : WG.M Int64).run before).run beforeAmbient >>= _) = _
+      rw [read]; rfl
+    · change (((observedQueuedAfterClock pid {p with timerHandshakeAttempts := 0} now).run after).run afterAmbient >>= _) = _
+      rw [observed]; rfl
 
-
-/-- Original staging with absent or invalid current sending material either
-returns unchanged for an empty staged list, or restores packets and has the
-specified handshake-queue Device effects. Temporary key references preserve
-lookups. Dangling current slots cannot complete with nonempty staging. Clock
-values here are existential; World bookkeeping and record consumption are not
-characterized, and no return guarantee is claimed. -/
+/-- Corrected staged fallback uses the actual queue inspection, on the original invalid-key domain. -/
 theorem original_staged_invalid_key (pid : PeerId) (d : Device) (p : Peer)
     (resident : d.peers[pid]? = some p)
     (invalid : ∀ id k, p.keypairCurrent = some id → d.keypairs[id]? = some k → k.sending.isValid = false) :
-    Ensures (sendStagedPackets pid) (fun w => w.k.wg = some d)
-      (fun _ w => if p.staged = [] then w.k.wg = some d
-        else ∃ now, w.k.wg = some (invalidStagedDevice d pid p now)) :=
+    Campaign2.Ensures (observedInvalidStaged pid) (fun s => s.wg.device = some d)
+      (invalidStagedObservation d pid p) :=
   staged_invalid pid d p resident invalid
 
-
-/-- Both branches of the original key-update peer body have the specified
-Device effects: precomputation, expiry, and optional staged-packet restoration
-and handshake queueing. The clocks are existential and completion is assumed. -/
+/-- Corrected peer effects include the actual staged-send observation. -/
 theorem original_key_peer_effects (pid : PeerId) (d : Device) (p : Peer) (sendStaged : Bool)
     (resident : d.peers[pid]? = some p) :
-    Ensures (keyPeerSource pid sendStaged) (fun w => w.k.wg = some d)
-      (fun _ w => ∃ expiryNow queueNow,
-        w.k.wg = some (keyPeerDevice d pid p expiryNow sendStaged queueNow)) :=
+    Campaign2.Ensures (observedKeyPeerSource pid sendStaged) (fun s => s.wg.device = some d)
+      (keyPeerObservation d pid p sendStaged) :=
   keyPeer_complete pid d p sendStaged resident
 
-
-/-- The original peer-list loop realizes the ordered Device relation for
-both staged-send settings. Repeated peers and keypair aliases are permitted.
-This normal-completion result does not assert aggregate clock provenance. -/
+/-- Corrected ordered peer effects retain duplicates and actual intermediate observations. -/
 theorem original_key_peer_loop_effects (pids : List PeerId) (d : Device) (sendStaged : Bool) :
-    Ensures (keyPeerLoopSource pids sendStaged) (fun w => w.k.wg = some d)
-      (fun _ w => ∃ final, w.k.wg = some final ∧ KeyPeerRun sendStaged d pids final) :=
+    Campaign2.Ensures (observedKeyPeerLoopSource pids sendStaged)
+      (fun s => s.wg.device = some d)
+      (fun observations s => ∃ final, s.wg.device = some final ∧
+        ObservedKeyPeerRun sendStaged d pids observations final) :=
   keyPeerLoop_complete pids d sendStaged
 
-
-/-- The installation block composes identity and cookie keys with the full
-snapshotted peer-list relation, using the code's staged-send condition. The
-baseline is after optional self-peer removal and before later peer attributes;
-this is a Device-state normal-completion contract for that block. -/
+/-- Corrected installation effects follow actual peer observations after key publication. -/
 theorem original_key_install_effects (d : Device) (key : Key) :
-    Ensures (keyInstallSource key) (fun w => w.k.wg = some d)
-      (fun _ w => ∃ final, w.k.wg = some final ∧
-        KeyPeerRun (requestsStagedSend d key) (installedDevice d key) d.peerList final) :=
+    Campaign2.Ensures (observedKeyInstallSource key) (fun s => s.wg.device = some d)
+      (fun observations s => ∃ final, s.wg.device = some final ∧
+        ObservedKeyPeerRun (requestsStagedSend d key) (installedDevice d key) d.peerList observations final) :=
   keyInstall_complete d key
 
-
-/-- A changed private-key-only outer request with no generated-public-key
-peer-table match returns zero on normal completion, increments generation, and
-performs the full installation relation including optional staged sending.
-The raw request differs from the stored key; no peer-removal arm is taken.
-This does not guarantee input records or establish aggregate clock provenance. -/
+/-- The unchanged no-collision domain has the corrected observed installation effect. -/
 theorem original_private_key_request_no_collision (d : Device) (key : Key)
     (changed : d.staticIdentity.staticPrivate ≠ key) (absent : noKeyCollision d key) :
-    Ensures (wgSetDevice (privateKeyAttrs d key))
-      (fun w => w.k.wg = some d ∧ selectsDevice w d)
-      (fun ret w => ret = 0 ∧ ∃ final, w.k.wg = some final ∧
-        KeyPeerRun (requestsStagedSend d key) (installedDevice (requestGeneration d) key) d.peerList final) :=
+    Campaign2.Ensures (wgSetDevice (privateKeyAttrs d key))
+      (fun s => s.wg.device = some d ∧ ClaimView.selectsDevice s d)
+      (fun ret s => ret = 0 ∧ ∃ final observations, s.wg.device = some final ∧
+        ObservedKeyPeerRun (requestsStagedSend d key)
+          (installedDevice (requestGeneration d) key) d.peerList observations final) :=
   setDevice_private_changed_no_collision d key changed absent
 
-
-/-- A fresh original callback for one resident peer without allowed IPs
-returns all fixed device and peer attributes, completes its cursor and preserves
-the device. The bound reserves room for the transport's final DONE message. -/
+/-- The original bounded single-peer callback returns its exact dump and device. -/
 theorem original_single_peer_dump_callback (pid : PeerId) (d : Device) (p : Peer)
     (peers : d.peerList = [pid]) (resident : d.peers[pid]? = some p)
     (empty : p.allowedipsList = []) (room : devicePrefixSpace d + 168 + 20 ≤ NLMSG_GOODSIZE) :
-    Returns (wgGetDeviceDump { hasWg := true } 0 {}) (fun w => w.k.wg = some d)
-      (fun result w => result = singlePeerDump d p ∧ w.k.wg = some d) :=
+    Returns (wgGetDeviceDump { hasWg := true } 0 {}) (fun w => w.dev = some d)
+      (fun result w => result = singlePeerDump d p ∧ w.dev = some d) :=
   wgGetDeviceDump_single pid d p peers resident empty room
 
-
-/-- The original public getter for one resident peer without allowed IPs
-returns exact canonical JSON, including the empty allowed-IP array, preserves
-the device and leaves socket 7 drained and finished. The socket starts idle
-with an empty queue; its bound flag is unrestricted. This is a total-return
-contract for one complete chunk, not a multipart snapshot theorem. -/
+/-- The original one-chunk getter returns canonical JSON and its drained socket. -/
 theorem original_single_peer_getter (pid : PeerId) (d : Device) (p : Peer) (sock : NlSock)
     (peers : d.peerList = [pid]) (resident : d.peers[pid]? = some p)
     (noIps : p.allowedipsList = []) (room : devicePrefixSpace d + 168 + 20 ≤ NLMSG_GOODSIZE)
     (idle : sock.cbRunning = false) (empty : sock.queue = []) :
     Returns (wgGetDevice (byIndex d))
-      (fun w => w.k.wg = some d ∧ w.k.nlSock7 = sock ∧ selectsDevice w d)
-      (fun result w => result = .ok (singlePeerJson d p) ∧ w.k.wg = some d ∧
-        w.k.nlSock7 = { completedSock sock d p with queue := [] }) :=
+      (fun w => w.dev = some d ∧ w.nlSock7 = sock ∧ selectsDevice w d)
+      (fun result w => result = .ok (singlePeerJson d p) ∧ w.dev = some d ∧
+        w.nlSock7 = { completedSock sock d p with queue := [] }) :=
   wgGetDevice_single pid d p sock peers resident noIps room idle empty
 
-
-/-- Setting an existing stopped peer's preshared key and keepalive interval,
-then calling the original public getter after either setter return, returns the
-exact applied configuration
-and a drained socket. A malformed second peer entry makes the setter return
-EINVAL but does not roll back the first update; the same readback holds.
-The bound on the live reference count guarantees the temporary lookup reference
-can be acquired. The single peer has no allowed IPs and fits one dump chunk. -/
+/-- Scalar set/get retains exact applied configuration, including a later malformed peer. -/
 theorem original_scalar_get_after_set (d : Device) (key psk : Key) (interval : Nat) (bad : Bool)
     (pid : PeerId) (p : Peer) (sock : NlSock)
     (peers : d.peerList = [pid])
@@ -165,20 +162,17 @@ theorem original_scalar_get_after_set (d : Device) (key psk : Key) (interval : N
     (bounded : p.refcount + 1 < 2 ^ 31) (down : d.running = false)
     (noIps : p.allowedipsList = []) (room : devicePrefixSpace d + 168 + 20 ≤ NLMSG_GOODSIZE)
     (idle : sock.cbRunning = false) (empty : sock.queue = []) :
-    Returns (do
+    Campaign2.Returns (do
       let ret ← wgSetDevice (scalarDeviceAttrs d key psk interval bad)
       let dump ← wgGetDevice (byIndex d)
       pure (ret, dump))
-      (fun w => w.k.wg = some d ∧ w.k.nlSock7 = sock ∧ selectsDevice w d)
+      (fun w => w.wg.device = some d ∧ w.wg.nlSock7 = sock ∧ ClaimView.selectsDevice w d)
       (fun result w =>
         let updated := scalarRequestDevice d pid p psk interval
         let configured := { p with presharedKey := psk, persistentKeepaliveInterval := interval }
-        result = ((if bad then -EINVAL else 0), .ok (singlePeerJson updated configured)) ∧
-          w.k.wg = some updated ∧
-          w.k.nlSock7 = { completedSock sock updated configured with queue := [] }) :=
-  scalar_outer_get_after_set d key psk interval bad pid p sock peers found resident live bounded
-    down noIps room idle empty
-
+        result = ((if bad then -EINVAL else 0), .ok (singlePeerJson updated configured)) ∧ w.wg.device = some updated ∧
+          w.wg.nlSock7 = { completedSock sock updated configured with queue := [] }) :=
+  scalar_outer_get_after_set d key psk interval bad pid p sock peers found resident live bounded down noIps room idle empty
 
 /-- Replacing a stopped peer's singleton root-leaf allowed-IP list with an
 empty list removes the node, clears its family root, increments the trie
@@ -189,36 +183,30 @@ theorem original_allowedips_replace_single_root (v4 : Bool) (key : Key) (pid : P
     (found : d.peerHashtable.find? (·.1 == key) = some (key, pid))
     (peer : d.peers[pid]? = some p) (listed : p.allowedipsList = [id])
     (resident : d.nodes[id]? = some n) (leaf : n.bit = #[none, none])
-    (parent : n.parent = rootSlot v4) (owned : n.peer = some pid)
-    (root : (if v4 then d.peerAllowedips.root4 else d.peerAllowedips.root6) = some id)
+    (parent : n.parent = rootSlot v4) (_owned : n.peer = some pid)
+    (_root : (if v4 then d.peerAllowedips.root4 else d.peerAllowedips.root6) = some id)
     (live : 0 < p.refcount) (bounded : p.refcount + 1 < 2 ^ 31) (down : d.running = false) :
     Returns (wgSetDevice (replaceAllowedipsDeviceAttrs d key))
-      (fun w => w.k.wg = some d ∧ selectsDevice w d)
+      (fun w => w.dev = some d ∧ selectsDevice w d)
       (fun ret w =>
         let updated := { d with deviceUpdateGen := d.deviceUpdateGen + 1 }
-        ret = 0 ∧ w.k.wg = some (rootReplacementDevice v4 updated pid p id n) ∧
+        ret = 0 ∧ w.dev = some (rootReplacementDevice v4 updated pid p id n) ∧
           RootReplacementEffects v4 updated id (rootReplacementDevice v4 updated pid p id n)) := by
-  intro w pre
-  obtain ⟨ret, final, run, result, device⟩ :=
-    setDevice_replace_root v4 key pid d p id n found peer listed resident leaf parent live bounded down w pre
-  exact ⟨ret, final, run, result, device, rootReplacement_effects v4 _ pid p id n peer⟩
+  intro w ambient pre
+  obtain ⟨ret, final, after, run, result, device⟩ :=
+    setDevice_replace_root v4 key pid d p id n found peer listed resident leaf parent live bounded down w ambient pre
+  exact ⟨ret, final, after, run, result, device, rootReplacement_effects v4 _ pid p id n peer⟩
 
 
-/-- Original peer removal returns for an empty-slot peer with empty send/clear
-queues and a supplied allowed-IP removal witness. The exact Device performs
-membership/death updates, three slot writes, five timer deletions, the empty
-drain, peer-count decrement and final release in source order. Final release
-erases the peer only on its last reference; otherwise the dead peer remains.
-This is a Device contract, not a whole-World frame, a claim about every pending
-flag or a theorem for queued work and live keypair slots. -/
+/-- The original quiet-removal domain now has exact refusal or normal effects; totality was refuted. -/
 theorem original_peer_remove_quiet (pid : PeerId) (d removed : Device) (p : Peer)
     (resident : d.peers[pid]? = some p) (live : 0 < p.refcount) (count : 0 < d.numPeers)
     (empty : p.keypairNext = none ∧ p.keypairPrevious = none ∧ p.keypairCurrent = none)
     (send : d.sendWorkQueue = []) (clear : d.clearWorkQueue = [])
     (steps : RemovalEffect (unlistPeer d pid) p.allowedipsList removed) :
-    Returns (peerRemove (some pid)) (fun w => w.k.wg = some d)
-      (fun _ w => w.k.wg = some (quietRemovedDevice (deadPeerDevice removed pid p) pid
-        { erasePeerList p.allowedipsList p with isDead := true })) :=
+    Campaign2.Observes (peerRemove (some pid)) (fun s => s.wg.device = some d)
+      (fun _ out => quietRemovalOutcome (deadPeerDevice removed pid p) pid
+        {erasePeerList p.allowedipsList p with isDead := true} out) :=
   peerRemove_quiet_returns pid d removed p resident live count empty send clear steps
 
 end Leanux.Proofs.WG.Config.SourceClaims

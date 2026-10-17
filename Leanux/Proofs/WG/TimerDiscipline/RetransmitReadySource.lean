@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.TimerDiscipline.RetransmitSkipSource
 import Leanux.Proofs.WG.TimerDiscipline.RetransmitReadyModel
 import Leanux.Proofs.WG.TimerDiscipline.RecordedJitterSource
 import Leanux.Proofs.WG.TimerDiscipline.JitterRecordsSource
@@ -8,22 +9,6 @@ set_option autoImplicit false
 set_option pp.structureInstances false
 namespace Leanux.Proofs.WG.TimerDiscipline
 open Leanux Leanux.WG Campaign2
-theorem retransmitCaller_run (input : RetransmitArmInput) (rest : List HiddenRecord)
-    (len : input.callerData.length = 8) (w : World) (mode : w.armRecords = true)
-    (records : w.hidden = some ({ site := HiddenSite.timerJiffiesHandshakeInitiated.info.id, bytes := input.callerData } :: rest)) :
-    (callerJiffies .timerJiffiesHandshakeInitiated).run w =
-      .ok (some input.caller, {w with hidden := some rest}) := by
-  have passive : HiddenSite.passive HiddenSite.timerJiffiesHandshakeInitiated.info.id = false := by decide
-  have drop : input.callerData.drop 8 = [] := by simp [← len]
-  have take : input.callerData.take 8 = input.callerData := by simp [← len]
-  change HiddenSite.passive 424 = false at passive
-  simp [callerJiffies, hiddenJiffies, hidden, skipAmbient, noteNetRxStart,
-    mode, records, HiddenSite.info, passive, len, drop, take,
-    RetransmitArmInput.caller, Functor.map, StateT.map,
-    StateT.run, bind, pure, get, getThe, MonadStateOf.get, set,
-    StateT.bind, StateT.pure, StateT.get, StateT.set, Except.bind, Except.pure,
-    Worker.sectionId, Worker.index]
-
 theorem retransmitGuardArm_run (pid : PeerId) (d : Device) (p : Peer)
     (input : RetransmitArmInput) (rest : List HiddenRecord)
     (resident : d.peers[pid]? = some p) (running : d.running = true) (alive : p.isDead = false)
@@ -83,36 +68,5 @@ theorem retransmitReady_run (pid : PeerId) (d : Device) (p : Peer)
   exact retransmitGuardArm_run pid d p input rest resident running alive valid
     {w with hidden := some afterJitter} device mode rfl
 
-theorem retransmitGuardSkip_run (pid : PeerId) (d : Device) (p : Peer)
-    (delay : Nat) (caller : UInt64) (resident : d.peers[pid]? = some p)
-    (inactive : (d.running && !p.isDead) = false) (w : World) (device : w.k.wg = some d) :
-    (armIfGuard pid .retransmitHandshake delay caller).run w =
-      .ok ((), {w with steps := retransmitSkippedSteps d.running w.netRxSection w.steps}) := by
-  cases running : d.running <;> cases dead : p.isDead <;>
-    simp [running, dead] at inactive
-  all_goals simp [armIfGuard, modPeerTimerGuard, Leanux.WG.andM,
-    branch, getPeer, getDev, getK, device, resident, running, dead, retransmitSkippedSteps,
-    StateT.run, Bind.bind, Pure.pure, get, getThe, MonadStateOf.get,
-    modify, modifyGet, StateT.bind, StateT.pure, StateT.get,
-    MonadStateOf.modifyGet, StateT.modifyGet, Except.bind, Except.pure]
-
-theorem retransmitSkipped_run (pid : PeerId) (d : Device) (p : Peer)
-    (input : RetransmitArmInput) (rest : List HiddenRecord)
-    (resident : d.peers[pid]? = some p) (inactive : (d.running && !p.isDead) = false)
-    (valid : input.Valid) (w : World) (device : w.k.wg = some d)
-    (mode : w.armRecords = true) (records : w.hidden = some (input.records rest)) :
-    (timersHandshakeInitiated pid).run w =
-      .ok ((), {w with
-        hidden := some ({site := HiddenSite.modTimerArm.info.id, bytes := input.armData} :: rest)
-        steps := retransmitSkippedSteps d.running w.netRxSection w.steps}) := by
-  let afterJitter := {site := HiddenSite.modTimerArm.info.id, bytes := input.armData} :: rest
-  let draws := jitterStream .retransmit input.rejected input.accepted afterJitter
-  have caller := retransmitCaller_run input draws valid.1 w mode records
-  rw [handshakeInitiated_source, jitteredArm, StateT.run_bind, caller]
-  change ((jitterBelowRekeyTimeout JitterSite.retransmit.hiddenSite).run {w with hidden := some draws}
-    >>= fun out => (armIfGuard pid .retransmitHandshake (REKEY_TIMEOUT_TICKS + out.1) input.caller).run out.2) = _
-  rw [jitter_records .retransmit input.rejected input.accepted afterJitter valid.2.1 valid.2.2.1 _ rfl]
-  exact retransmitGuardSkip_run pid d p input.delay input.caller resident inactive
-    {w with hidden := some afterJitter} device
 
 end Leanux.Proofs.WG.TimerDiscipline

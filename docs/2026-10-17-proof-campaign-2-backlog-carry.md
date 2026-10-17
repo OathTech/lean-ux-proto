@@ -17,8 +17,9 @@ complete Except result. No compiled evaluation is used as proof.
 The legacy runTwo/backlog construction is separately carried: it omits the
 current runner's FIB boot and rejects at the route/source invariant, returning
 no backlog. That direct fixture result is distinct from the actual runner
-rejection above. General runner-boundary acceptance and historical backlog
-wrappers remain lagging; the old accepted finding remains historical.
+rejection above. The general runner-boundary audit is now carried. Historical backlog wrappers
+explicitly state the direct-fixture or actual/audited refusal; the old accepted
+finding remains historical. Full H5 terminal closure still lags.
 No captured Linux run or general progress property is claimed.
 
 Reproduce with:

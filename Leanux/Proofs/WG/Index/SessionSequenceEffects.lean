@@ -5,7 +5,7 @@ set_option autoImplicit false
 namespace Leanux.Proofs.WG.Index
 open Leanux Leanux.WG Campaign2
 
-theorem sessionAllocationSequence_nil (d : Device) (entry : Snapshot)
+theorem sessionAllocationSequence_nil (d : Device) (entry : Campaign2.Product.Snapshot)
     (device : entry.wg.device = some d) (bound : KeypairStoreBounded d) :
     SessionAllocationSequenceFacts d [] [] entry := by
   refine ⟨rfl, rfl, ?_, rfl, by simp [sessionSuccessfulIds], d, device, bound, ?_⟩
@@ -13,9 +13,9 @@ theorem sessionAllocationSequence_nil (d : Device) (entry : Snapshot)
   · simp
 
 /-- Compose numerical and store facts at the observed original call boundary. -/
-theorem sessionAllocationSequence_cons (pid : PeerId) (entry : Snapshot)
+theorem sessionAllocationSequence_cons (pid : PeerId) (entry : Campaign2.Product.Snapshot)
     (d next : Device) (ok : Bool) (pids : List PeerId)
-    (calls : List SessionAllocationCall) (final : Snapshot)
+    (calls : List SessionAllocationCall) (final : Campaign2.Product.Snapshot)
     (device : entry.wg.device = some d) (bound : KeypairStoreBounded d)
     (cursor : next.nextKeypairId = d.nextKeypairId + (if ok then 1 else 0))
     (tail : SessionAllocationSequenceFacts next pids calls final) :
