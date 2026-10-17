@@ -320,10 +320,18 @@ axioms only and fresh replay and complete source review pass. Configuration
 development had three ordinary failures followed by a pass. Dump's first check
 failed before reaching its body because two imported proofs generated the same
 cryptAhead matcher helper; removing an unused import let its second check pass.
-The combined graph collision still requires its separate proof-body repair.
+The combined graph collision is repaired in RxRingTx.cryptAhead_cell by direct
+bind/case composition over the actual scheduler calls. All eight module
+statements and their options are unchanged. The 269-job rebuild, eight named
+axiom checks, fresh replay, independent source review and rebuilt joint import
+with RoutingSchedulerFrames pass. Six earlier tactic deprecations remain in
+other proofs in that module. Two candidate checks failed before the third
+passed; the first axiom driver rejected its mistaken seven-name inventory
+before invoking Lean, and the corrected eight-name check passed. This
+proof-body maintenance does not change the census.
 
 Remaining work is the routing/origin terminal carry, material runner support,
-RX stack/carrier layers, the combined import repair, warning
+RX stack/carrier and receipt-link layers, warning
 cleanup, the full proof gate and terminal replay. Deterministic source/proof
 failures are failures; source edits are checked anew, never described as
 infrastructure retries. Recovery admissions printed by failed elaborations

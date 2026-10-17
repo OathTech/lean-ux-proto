@@ -116,10 +116,52 @@ theorem cryptAhead_cell pid : SameView cell (Leanux.Env.cryptAhead pid) := by
       (modifyDev_cell _ (fun _ => rfl) (fun _ => rfl))
   have hma := hm (fun q => q ++ [pid])
   have hme := hm (fun q => q.erase pid)
-  unfold Hoare at skb ambient hp hma hme
-  mvcgen [-Std.Do.Spec.monadLift_StateT, Leanux.Env.cryptAhead,
-    hp, getTxSkb, skb, ambient, he, hma, hme, getAmbient, peekHiddenSite, modifyAmbient, invariant]
-  all_goals try dsimp +zetaDelta only [P] at *
-  all_goals simp_all [cell]
+  change Preserves (fun w => P (cell w)) (Leanux.Env.cryptAhead pid)
+  unfold Leanux.Env.cryptAhead
+  apply preserves_bind (ambient (get : AmbientM Ambient))
+  intro inputs
+  split
+  · exact preserves_pure _
+  · apply preserves_bind hp
+    intro peer
+    cases hitem : peer.txQueue.all.head? with
+    | none => dsimp only; exact preserves_pure _
+    | some item =>
+      dsimp only
+      cases hid : item.head? with
+      | none => dsimp only; exact ambient (AmbientM.invariant _)
+      | some id =>
+        dsimp only
+        apply preserves_bind (skb (SkbStore.getTx id))
+        intro packet
+        split
+        · exact preserves_pure _
+        · apply preserves_bind (ambient peekHiddenSite)
+          intro site
+          split
+          · apply preserves_bind (ambient (get : AmbientM Ambient))
+            intro inputs
+            cases henc : inputs.suspended.find? (·.worker == .encryptWorker) with
+            | none =>
+              dsimp only
+              apply (hoare_iff_run _ _ _).mpr
+              intro w x v hi hr
+              cases hr
+            | some enc =>
+              dsimp only
+              apply preserves_bind hma
+              intro _
+              apply preserves_bind he
+              intro result
+              apply preserves_bind hme
+              intro _
+              cases result with
+              | continued => exact ambient (modifyThe Ambient _ : AmbientM Unit)
+              | ended =>
+                apply (hoare_iff_run _ _ _).mpr
+                intro w x v hi hr
+                cases hr
+              | yielded => exact ambient (AmbientM.invariant _)
+          · exact preserves_pure _
 
 end Leanux.Proofs.WG.Queues.RxRing
