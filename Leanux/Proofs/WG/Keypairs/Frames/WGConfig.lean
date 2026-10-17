@@ -1,0 +1,96 @@
+import Leanux.Proofs.WG.Keypairs.Frames.WGMore
+
+/-! Framing the two configuration callers while sharing the contracts of
+compiler-generated continuations. All tactic output is checked by Lean. -/
+
+namespace Leanux.Proofs.WG.Keypairs.WGConfig
+open Leanux Leanux.WG Std.Do Leanux.Proofs.WG.Keypairs Leanux.Proofs.Framing Leanux.Proofs.WG.Keypairs.WGFrames Leanux.Proofs.WG.Keypairs.WGTransitions Leanux.Proofs.WG.Keypairs.WGMore
+
+set_option maxHeartbeats 200000
+set_option pp.structureInstances false
+
+open Lean Meta Elab Tactic
+
+macro "ordinary_strict_step" : tactic => `(tactic|
+  first
+    | contradiction
+    | keypairs_intro_forall
+    | with_reducible assumption
+    | ordinary_join_let
+    | ordinary_join_use
+    | (ordinary_head Pure.pure; exact ordinary_pure _)
+    | (ordinary_head MonadExceptOf.throw; exact ordinary_throw _)
+    | (ordinary_head get; exact ordinary_get)
+    | (ordinary_head modify; refine ordinary_modify _ ?_; intro w; exact Ordinary.refl _)
+    | (ordinary_head Leanux.WG.modifyDev; refine ordinary_modifyDev _ ?_; intro d; rfl)
+    | (ordinary_head Leanux.WG.andM; refine ordinary_andM _ _ ?_ ?_)
+    | (ordinary_head Leanux.WG.orM; refine ordinary_orM _ _ ?_ ?_)
+    | (ordinary_head ite; refine ordinary_ite _ ?_ ?_)
+    | (ordinary_head Bind.bind; refine ordinary_bind ?_ ?_)
+    | (ordinary_head Functor.discard; refine ordinary_discard ?_)
+    | (ordinary_head Functor.map; refine ordinary_map _ ?_)
+    | (ordinary_head ForIn.forIn; with_reducible refine ordinary_range _ _ _ ?_)
+    | (ordinary_head ForIn.forIn; with_reducible refine ordinary_forIn _ _ _ ?_)
+    | (ordinary_head List.forM; with_reducible refine ordinary_forM _ _ ?_)
+    | (ordinary_head ForM.forM; with_reducible refine ordinary_forM _ _ ?_)
+    | (ordinary_head ForIn.forIn; with_reducible refine ordinary_array _ _ _ ?_)
+    | ordinary_head_reduce
+    | ordinary_head_match)
+
+theorem setPeerCmd_ordinary (a : PeerAttrs) : OrdinaryAction (Leanux.WG.setPeerCmd a) := by
+  unfold Leanux.WG.setPeerCmd
+  repeat' first
+    | (ordinary_head Leanux.WG.peerRemove; with_reducible exact @peerRemove_ordinary _)
+    | (ordinary_head Leanux.WG.sendKeepalive; with_reducible exact @sendKeepalive_ordinary _)
+    | (ordinary_head Leanux.WG.sendStagedPackets; with_reducible exact @sendStagedPackets_ordinary _)
+    | (ordinary_head Leanux.WG.getDev; refine SameView.ordinary ?_; with_reducible exact @getDev_sameSnapshot)
+    | (ordinary_head Leanux.WG.getPeer; refine SameView.ordinary ?_; with_reducible exact @getPeer_sameSnapshot _)
+    | (ordinary_head Leanux.WG.peerCreate; refine SameView.ordinary ?_; with_reducible exact @peerCreate_sameSnapshot _ _)
+    | (ordinary_head Leanux.WG.peerGet; refine SameView.ordinary ?_; with_reducible exact @peerGet_sameSnapshot _)
+    | (ordinary_head Leanux.WG.peerPut; refine SameView.ordinary ?_; with_reducible exact @peerPut_sameSnapshot _)
+    | (ordinary_head Leanux.WG.pubkeyLookup; refine SameView.ordinary ?_; with_reducible exact @pubkeyLookup_sameSnapshot _)
+    | (ordinary_head Leanux.WG.removeByPeer; refine SameView.ordinary ?_; with_reducible exact @removeByPeer_sameSnapshot _)
+    | (ordinary_head Leanux.WG.setAllowedip; refine SameView.ordinary ?_; with_reducible exact @setAllowedip_sameSnapshot _ _)
+    | (ordinary_head Leanux.WG.setPeerEndpoint; refine SameView.ordinary ?_; with_reducible exact @setPeerEndpoint_sameSnapshot _ _)
+    | (ordinary_head Leanux.WG.setPeer; refine SameView.ordinary ?_; with_reducible exact @setPeer_sameSnapshot _ _)
+    | (ordinary_head Leanux.branch; apply SameView.ordinary; intro initial; exact hoare_liftAmbient (AmbientM.branch _ _) (fun s => snapshot s = initial))
+    | (ordinary_head Leanux.branchCmp; apply SameView.ordinary; intro initial; exact hoare_liftAmbient (AmbientM.branchCmp _ _ _ _) (fun s => snapshot s = initial))
+    | (ordinary_head Leanux.branchCmpExcluded; apply SameView.ordinary; intro initial; exact hoare_liftAmbient (AmbientM.branchCmpExcluded _ _ _) (fun s => snapshot s = initial))
+    | (ordinary_head Leanux.invariant; apply SameView.ordinary; intro initial; exact hoare_liftAmbient (AmbientM.invariant _) (fun s => snapshot s = initial))
+    | (ordinary_head Leanux.unsupported; apply SameView.ordinary; intro initial; exact hoare_liftAmbient (AmbientM.unsupported _) (fun s => snapshot s = initial))
+    | ordinary_strict_step
+
+theorem setPeerCmd_spec (P : Snapshot → Prop) (hp : Stable P) (a : PeerAttrs) :
+    ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.setPeerCmd a
+    ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (setPeerCmd_ordinary a).wp P hp
+
+theorem wgSetDevice_ordinary (a : DeviceAttrs) : OrdinaryAction (Leanux.WG.wgSetDevice a) := by
+  unfold Leanux.WG.wgSetDevice
+  repeat' first
+    | (ordinary_head Leanux.WG.peerRemoveAll; with_reducible exact @peerRemoveAll_ordinary)
+    | (ordinary_head Leanux.WG.peerRemove; with_reducible exact @peerRemove_ordinary _)
+    | (ordinary_head Leanux.WG.sendStagedPackets; with_reducible exact @sendStagedPackets_ordinary _)
+    | (ordinary_head Leanux.WG.setPeerCmd; with_reducible exact @setPeerCmd_ordinary _)
+    | (ordinary_head Leanux.WG.clearPeerEndpointSrc; refine SameView.ordinary ?_; with_reducible exact @clearPeerEndpointSrc_sameSnapshot _)
+    | (ordinary_head Leanux.WG.cookiePrecomputeDeviceKeys; refine SameView.ordinary ?_; with_reducible exact @cookiePrecomputeDeviceKeys_sameSnapshot)
+    | (ordinary_head Leanux.WG.expireCurrentPeerKeypairs; refine SameView.ordinary ?_; with_reducible exact @expireCurrentPeerKeypairs_sameSnapshot _)
+    | (ordinary_head Leanux.WG.generatePublic; refine SameView.ordinary ?_; with_reducible exact @generatePublic_sameSnapshot _)
+    | (ordinary_head Leanux.WG.getDev; refine SameView.ordinary ?_; with_reducible exact @getDev_sameSnapshot)
+    | (ordinary_head Leanux.WG.lookupInterface; refine SameView.ordinary ?_; with_reducible exact @lookupInterface_sameSnapshot _)
+    | (ordinary_head Leanux.WG.peerPut; refine SameView.ordinary ?_; with_reducible exact @peerPut_sameSnapshot _)
+    | (ordinary_head Leanux.WG.precomputeStaticStatic; refine SameView.ordinary ?_; with_reducible exact @precomputeStaticStatic_sameSnapshot _)
+    | (ordinary_head Leanux.WG.pubkeyLookup; refine SameView.ordinary ?_; with_reducible exact @pubkeyLookup_sameSnapshot _)
+    | (ordinary_head Leanux.WG.setPort; refine SameView.ordinary ?_; with_reducible exact @setPort_sameSnapshot _)
+    | (ordinary_head Leanux.WG.setStaticIdentityPrivateKey; refine SameView.ordinary ?_; with_reducible exact @setStaticIdentityPrivateKey_sameSnapshot _)
+    | (ordinary_head Leanux.branch; apply SameView.ordinary; intro initial; exact hoare_liftAmbient (AmbientM.branch _ _) (fun s => snapshot s = initial))
+    | (ordinary_head Leanux.branchCmp; apply SameView.ordinary; intro initial; exact hoare_liftAmbient (AmbientM.branchCmp _ _ _ _) (fun s => snapshot s = initial))
+    | (ordinary_head Leanux.branchCmpExcluded; apply SameView.ordinary; intro initial; exact hoare_liftAmbient (AmbientM.branchCmpExcluded _ _ _) (fun s => snapshot s = initial))
+    | (ordinary_head Leanux.invariant; apply SameView.ordinary; intro initial; exact hoare_liftAmbient (AmbientM.invariant _) (fun s => snapshot s = initial))
+    | (ordinary_head Leanux.unsupported; apply SameView.ordinary; intro initial; exact hoare_liftAmbient (AmbientM.unsupported _) (fun s => snapshot s = initial))
+    | ordinary_strict_step
+
+theorem wgSetDevice_spec (P : Snapshot → Prop) (hp : Stable P) (a : DeviceAttrs) :
+    ⦃fun w => ⌜P (snapshot w)⌝⦄ Leanux.WG.wgSetDevice a
+    ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (wgSetDevice_ordinary a).wp P hp
+
+end Leanux.Proofs.WG.Keypairs.WGConfig

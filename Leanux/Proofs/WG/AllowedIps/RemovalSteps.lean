@@ -1,0 +1,210 @@
+import Leanux.Proofs.WG.AllowedIps.RemovalCollapse
+
+/-! Total original steps, including list deletion before the target read.
+Collapse premises describe resident input snapshots and distinct slots;
+all intermediate parent and sibling reads are derived from those inputs. -/
+set_option maxHeartbeats 1000000
+set_option pp.structureInstances false
+namespace Leanux.Proofs.WG.AllowedIps
+open Leanux Std.Do Leanux.Proofs.Framing
+
+def removalCollapseRoot (d : WG.Device) (id : Nat) (n : WG.AipNode)
+    (parent side : Nat) (pn : WG.AipNode) (v4 : Bool)
+    (sibling : Option (Nat × WG.AipNode)) : WG.Device :=
+  removalParentRoot (removalLeafDetached d id n parent side pn) parent v4 sibling
+
+def removalCollapseChild (d : WG.Device) (id : Nat) (n : WG.AipNode)
+    (parent side : Nat) (pn : WG.AipNode) (grand gside : Nat) (gn : WG.AipNode)
+    (sibling : Option (Nat × WG.AipNode)) : WG.Device :=
+  removalParentChild (removalLeafDetached d id n parent side pn) parent grand gside gn sibling
+
+theorem removalLeafDetached_parent (d : WG.Device) (id : Nat) (n : WG.AipNode)
+    (parent side : Nat) (pn : WG.AipNode) (hip : id ≠ parent) :
+    (removalLeafDetached d id n parent side pn).nodes[parent]? =
+      some { pn with bit := pn.bit.set! side none } := by
+  simp [removalLeafDetached, hip]
+
+theorem removalLeafDetached_other (d : WG.Device) (id : Nat) (n : WG.AipNode)
+    (parent side : Nat) (pn : WG.AipNode) (q : Nat) (hi : id ≠ q) (hp : parent ≠ q) :
+    (removalLeafDetached d id n parent side pn).nodes[q]? = d.nodes[q]? := by
+  simp [removalLeafDetached, removalCleared, Std.TreeMap.getElem?_erase,
+    Std.TreeMap.getElem?_insert, hi, hp]
+
+theorem removeNodeBody_leaf_collapse_root_wp (k : WGWorld) (d : WG.Device)
+    (hd : k.dev = some d) (id parent side : Nat) (n pn : WG.AipNode)
+    (hn : d.nodes[id]? = some n) (hp : d.nodes[parent]? = some pn)
+    (hip : id ≠ parent) (hb : side ≤ 1) (howner : pn.peer = none)
+    (hbits : n.bit = #[none, none]) (hparent : n.parent = .child parent side)
+    (v4 : Bool) (hbase : pn.parent = rootSlot v4) (sibling : Option (Nat × WG.AipNode))
+    (hbit : pn.bit[1-side]? = some (sibling.map Prod.fst))
+    (hs : ∀ c cn, sibling = some (c, cn) → d.nodes[c]? = some cn ∧ c ≠ id ∧ c ≠ parent) :
+    ⦃fun w => ⌜w = k⌝⦄ removeNodeBody id
+    ⦃⇓ result w => ⌜result = .yield () ∧ w = { k with dev := some (removalCollapseRoot d id n parent side pn v4 sibling) }⌝⦄ := by
+  let dp := removalLeafDetached d id n parent side pn
+  have hpp := removalLeafDetached_parent d id n parent side pn hip
+  have hsp : ∀ c cn, sibling = some (c, cn) → dp.nodes[c]? = some cn ∧ c ≠ parent := by
+    intro c cn he
+    obtain ⟨hc, hci, hcp⟩ := hs c cn he
+    exact ⟨(removalLeafDetached_other d id n parent side pn c (Ne.symm hci) (Ne.symm hcp)).trans hc, hcp⟩
+  have ht := removeParentTail_root_wp { k with dev := some dp } dp rfl parent
+    { pn with bit := pn.bit.set! side none } v4 sibling hpp hbase hsp
+  apply (total_iff_run_ambient _ _ _).mpr
+  intro w ambient hkw
+  let start : WGWorld := { k with dev := some dp }
+  let startAmbient := removalRecords ambient removalCollapseRecords
+  obtain ⟨result, w', ambient', he, hx, hk⟩ :=
+    (total_iff_run_ambient _ _ _).mp ht start startAmbient rfl
+  refine ⟨result, w', ambient', ?_, hx, ?_⟩
+  · rw [removeNodeBody_leaf_collapse_run w ambient d (hkw ▸ hd) id parent side n pn hn hp hip hb
+      howner hbits hparent (sibling.map Prod.fst) hbit]
+    simpa only [hkw] using he
+  · exact hk
+
+theorem removeNodeBody_leaf_collapse_child_wp (k : WGWorld) (d : WG.Device)
+    (hd : k.dev = some d) (id parent side grand gside : Nat) (n pn gn : WG.AipNode)
+    (hn : d.nodes[id]? = some n) (hp : d.nodes[parent]? = some pn)
+    (hg : d.nodes[grand]? = some gn) (hip : id ≠ parent) (hig : id ≠ grand)
+    (hpg : parent ≠ grand) (hb : side ≤ 1) (hgb : gside ≤ 1) (howner : pn.peer = none)
+    (hbits : n.bit = #[none, none]) (hparent : n.parent = .child parent side)
+    (hbase : pn.parent = .child grand gside) (sibling : Option (Nat × WG.AipNode))
+    (hbit : pn.bit[1-side]? = some (sibling.map Prod.fst))
+    (hs : ∀ c cn, sibling = some (c, cn) →
+      d.nodes[c]? = some cn ∧ c ≠ id ∧ c ≠ parent ∧ c ≠ grand) :
+    ⦃fun w => ⌜w = k⌝⦄ removeNodeBody id
+    ⦃⇓ result w => ⌜result = .yield () ∧ w = { k with dev := some (removalCollapseChild d id n parent side pn grand gside gn sibling) }⌝⦄ := by
+  let dp := removalLeafDetached d id n parent side pn
+  have hpp := removalLeafDetached_parent d id n parent side pn hip
+  have hgp : dp.nodes[grand]? = some gn :=
+    (removalLeafDetached_other d id n parent side pn grand hig hpg).trans hg
+  have hsp : ∀ c cn, sibling = some (c, cn) →
+      dp.nodes[c]? = some cn ∧ c ≠ parent ∧ c ≠ grand := by
+    intro c cn he
+    obtain ⟨hc, hci, hcp, hcg⟩ := hs c cn he
+    exact ⟨(removalLeafDetached_other d id n parent side pn c (Ne.symm hci) (Ne.symm hcp)).trans hc,
+      hcp, hcg⟩
+  have ht := removeParentTail_child_wp { k with dev := some dp } dp rfl parent grand gside
+    { pn with bit := pn.bit.set! side none } gn sibling hpp hgp hbase hpg hgb hsp
+  apply (total_iff_run_ambient _ _ _).mpr
+  intro w ambient hkw
+  let start : WGWorld := { k with dev := some dp }
+  let startAmbient := removalRecords ambient removalCollapseRecords
+  obtain ⟨result, w', ambient', he, hx, hk⟩ :=
+    (total_iff_run_ambient _ _ _).mp ht start startAmbient rfl
+  refine ⟨result, w', ambient', ?_, hx, ?_⟩
+  · rw [removeNodeBody_leaf_collapse_run w ambient d (hkw ▸ hd) id parent side n pn hn hp hip hb
+      howner hbits hparent (sibling.map Prod.fst) hbit]
+    simpa only [hkw] using he
+  · exact hk
+
+theorem removeStep_child_unary_wp (k : WGWorld) (d : WG.Device) (hd : k.dev = some d)
+    (left : Bool) (id parent side child : Nat) (n pn cn : WG.AipNode)
+    (hn : d.nodes[id]? = some n) (hp : d.nodes[parent]? = some pn)
+    (hc : d.nodes[child]? = some cn) (hip : id ≠ parent) (hic : id ≠ child)
+    (hcp : child ≠ parent) (hb : side ≤ 1)
+    (hbits : n.bit = if left then #[some child, none] else #[none, some child])
+    (hparent : n.parent = .child parent side) :
+    ⦃fun w => ⌜w = k⌝⦄ removeStep id
+    ⦃⇓ result w => ⌜result = .yield () ∧ w = { k with dev := some (removalChildUnary (unlisted d id) id n parent side pn child cn) }⌝⦄ := by
+  have hl := listDel_wp k d hd id
+  have hn := removeNodeBody_child_unary_wp { k with dev := some (unlisted d id) }
+    (unlisted d id) rfl left id parent side child n pn cn hn hp hc hip hic hcp hb hbits hparent
+  apply (total_iff_run_ambient _ _ _).mpr
+  intro w ambient hw
+  subst w
+  let afterDecision := record ambient .removeListIter true
+  obtain ⟨returned, current, nextAmbient, hlist, hunit, hcurrent⟩ :=
+    (total_iff_run_ambient _ _ _).mp hl k afterDecision rfl
+  subst returned
+  subst current
+  obtain ⟨result, out, finalAmbient, hbody, hpost⟩ :=
+    (total_iff_run_ambient _ _ _).mp hn _ nextAmbient rfl
+  refine ⟨result, out, finalAmbient, ?_, hpost⟩
+  change ((WG.listDel id >>= fun _ => removeNodeBody id).run k).run afterDecision = _
+  simp only [StateT.run_bind, hlist]
+  exact hbody
+
+theorem removeStep_child_leaf_owned_wp (k : WGWorld) (d : WG.Device)
+    (hd : k.dev = some d) (id parent side : Nat) (n pn : WG.AipNode)
+    (hn : d.nodes[id]? = some n) (hp : d.nodes[parent]? = some pn)
+    (hip : id ≠ parent) (hb : side ≤ 1) (howner : pn.peer.isSome)
+    (hbits : n.bit = #[none, none]) (hparent : n.parent = .child parent side) :
+    ⦃fun w => ⌜w = k⌝⦄ removeStep id
+    ⦃⇓ result w => ⌜result = .yield () ∧ w = { k with dev := some (removalLeafDetached (unlisted d id) id n parent side pn) }⌝⦄ := by
+  have hl := listDel_wp k d hd id
+  have hn := removeNodeBody_child_leaf_owned_wp { k with dev := some (unlisted d id) }
+    (unlisted d id) rfl id parent side n pn hn hp hip hb howner hbits hparent
+  apply (total_iff_run_ambient _ _ _).mpr
+  intro w ambient hw
+  subst w
+  let afterDecision := record ambient .removeListIter true
+  obtain ⟨returned, current, nextAmbient, hlist, hunit, hcurrent⟩ :=
+    (total_iff_run_ambient _ _ _).mp hl k afterDecision rfl
+  subst returned
+  subst current
+  obtain ⟨result, out, finalAmbient, hbody, hpost⟩ :=
+    (total_iff_run_ambient _ _ _).mp hn _ nextAmbient rfl
+  refine ⟨result, out, finalAmbient, ?_, hpost⟩
+  change ((WG.listDel id >>= fun _ => removeNodeBody id).run k).run afterDecision = _
+  simp only [StateT.run_bind, hlist]
+  exact hbody
+
+theorem removeStep_leaf_collapse_root_wp (k : WGWorld) (d : WG.Device)
+    (hd : k.dev = some d) (id parent side : Nat) (n pn : WG.AipNode)
+    (hn : d.nodes[id]? = some n) (hp : d.nodes[parent]? = some pn)
+    (hip : id ≠ parent) (hb : side ≤ 1) (howner : pn.peer = none)
+    (hbits : n.bit = #[none, none]) (hparent : n.parent = .child parent side)
+    (v4 : Bool) (hbase : pn.parent = rootSlot v4) (sibling : Option (Nat × WG.AipNode))
+    (hbit : pn.bit[1-side]? = some (sibling.map Prod.fst))
+    (hs : ∀ c cn, sibling = some (c, cn) → d.nodes[c]? = some cn ∧ c ≠ id ∧ c ≠ parent) :
+    ⦃fun w => ⌜w = k⌝⦄ removeStep id
+    ⦃⇓ result w => ⌜result = .yield () ∧ w = { k with dev := some (removalCollapseRoot (unlisted d id) id n parent side pn v4 sibling) }⌝⦄ := by
+  have hl := listDel_wp k d hd id
+  have hn := removeNodeBody_leaf_collapse_root_wp { k with dev := some (unlisted d id) }
+    (unlisted d id) rfl id parent side n pn hn hp hip hb howner hbits hparent v4 hbase sibling hbit hs
+  apply (total_iff_run_ambient _ _ _).mpr
+  intro w ambient hw
+  subst w
+  let afterDecision := record ambient .removeListIter true
+  obtain ⟨returned, current, nextAmbient, hlist, hunit, hcurrent⟩ :=
+    (total_iff_run_ambient _ _ _).mp hl k afterDecision rfl
+  subst returned
+  subst current
+  obtain ⟨result, out, finalAmbient, hbody, hpost⟩ :=
+    (total_iff_run_ambient _ _ _).mp hn _ nextAmbient rfl
+  refine ⟨result, out, finalAmbient, ?_, hpost⟩
+  change ((WG.listDel id >>= fun _ => removeNodeBody id).run k).run afterDecision = _
+  simp only [StateT.run_bind, hlist]
+  exact hbody
+
+theorem removeStep_leaf_collapse_child_wp (k : WGWorld) (d : WG.Device)
+    (hd : k.dev = some d) (id parent side grand gside : Nat) (n pn gn : WG.AipNode)
+    (hn : d.nodes[id]? = some n) (hp : d.nodes[parent]? = some pn)
+    (hg : d.nodes[grand]? = some gn) (hip : id ≠ parent) (hig : id ≠ grand)
+    (hpg : parent ≠ grand) (hb : side ≤ 1) (hgb : gside ≤ 1) (howner : pn.peer = none)
+    (hbits : n.bit = #[none, none]) (hparent : n.parent = .child parent side)
+    (hbase : pn.parent = .child grand gside) (sibling : Option (Nat × WG.AipNode))
+    (hbit : pn.bit[1-side]? = some (sibling.map Prod.fst))
+    (hs : ∀ c cn, sibling = some (c, cn) →
+      d.nodes[c]? = some cn ∧ c ≠ id ∧ c ≠ parent ∧ c ≠ grand) :
+    ⦃fun w => ⌜w = k⌝⦄ removeStep id
+    ⦃⇓ result w => ⌜result = .yield () ∧ w = { k with dev := some (removalCollapseChild (unlisted d id) id n parent side pn grand gside gn sibling) }⌝⦄ := by
+  have hl := listDel_wp k d hd id
+  have hn := removeNodeBody_leaf_collapse_child_wp { k with dev := some (unlisted d id) }
+    (unlisted d id) rfl id parent side grand gside n pn gn hn hp hg hip hig hpg hb hgb
+    howner hbits hparent hbase sibling hbit hs
+  apply (total_iff_run_ambient _ _ _).mpr
+  intro w ambient hw
+  subst w
+  let afterDecision := record ambient .removeListIter true
+  obtain ⟨returned, current, nextAmbient, hlist, hunit, hcurrent⟩ :=
+    (total_iff_run_ambient _ _ _).mp hl k afterDecision rfl
+  subst returned
+  subst current
+  obtain ⟨result, out, finalAmbient, hbody, hpost⟩ :=
+    (total_iff_run_ambient _ _ _).mp hn _ nextAmbient rfl
+  refine ⟨result, out, finalAmbient, ?_, hpost⟩
+  change ((WG.listDel id >>= fun _ => removeNodeBody id).run k).run afterDecision = _
+  simp only [StateT.run_bind, hlist]
+  exact hbody
+
+end Leanux.Proofs.WG.AllowedIps

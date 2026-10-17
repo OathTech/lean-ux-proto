@@ -958,4 +958,3 @@ result and the `Logged`, `Framing` and `CounterWindow` layers it rests on
 results, retyped over the split worlds; campaign 2's, its additions over
 those layers once campaign 1's are retyped; the binary track's `R` over
 `WGWorld` and its `proof-gate --binary` into its own script at its merge.
-

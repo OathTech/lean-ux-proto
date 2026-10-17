@@ -1,0 +1,224 @@
+#!/usr/bin/python3
+"""The proof tree's gate (AGENTS.md, "Gates and speedbumps").
+
+Run through the bundle: `capped -- scripts/in-bundle scripts/proof-gate`.
+Four checks, every one fail-closed and fail-noisy; the exit status is 0 only
+when all four pass:
+
+1. `lake build LeanuxProofs` (the proof tree's own lake target, root
+   `Leanux/Proofs.lean`, outside the default build), under the box's `capped`
+   wrapper when it is installed.
+2. `#print axioms` for every terminal statement: each declaration of every
+   `Statements.lean` under `Leanux/Proofs/` (one per result directory; the
+   map is `docs/proofs.md`). Each printed set must be a subset of {propext,
+   Classical.choice, Quot.sound}; `sorryAx`, any other axiom, a name that does
+   not print, or any output line the parser does not recognise fails the gate.
+3. No `sorry`, `admit`, `axiom`, `native_decide`, `unsafe`, `implemented_by`
+   or `extern` token anywhere in the proof tree outside comments.
+4. Nothing outside `Leanux/Proofs/` imports `Leanux.Proofs`, the root
+   `Leanux/Proofs.lean` imports every result's `Statements` module (so a new
+   result cannot be left out of the build), and `LeanuxProofs` is not a
+   default lake target (the mirror's fast gate stays the mirror's).
+"""
+import os
+import re
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+PROOFS = ROOT / 'Leanux' / 'Proofs'
+PROOFS_ROOT = ROOT / 'Leanux' / 'Proofs.lean'
+TARGET = 'LeanuxProofs'
+PERMITTED = {'propext', 'Classical.choice', 'Quot.sound'}
+FORBIDDEN = re.compile(r'\b(sorry|admit|axiom|native_decide|unsafe|implemented_by|extern)\b')
+DECL = re.compile(r'^(?:theorem|lemma|def|abbrev|instance)\s+([A-Za-z_][\w\'.]*)')
+NAMESPACE = re.compile(r'^namespace\s+(\S+)\s*$')
+DEPENDS = re.compile(r"^'([^']+)' depends on axioms: \[([^\]]*)\]$")
+NO_AXIOMS = re.compile(r"^'([^']+)' does not depend on any axioms$")
+
+failures = []
+
+
+def fail(message):
+    failures.append(message)
+    print(f'FAIL: {message}', file=sys.stderr, flush=True)
+
+
+def capped(command):
+    named = os.environ.get('LEANUX_CAPPED')
+    if named:
+        if not os.access(named, os.X_OK):
+            raise SystemExit(f'LEANUX_CAPPED names no executable: {named}')
+        return [named, '--'] + command
+    available = shutil.which('capped')
+    if available:
+        return [available, '--'] + command
+    print('note: capped is not installed; building uncapped', file=sys.stderr, flush=True)
+    return command
+
+
+def strip_comments(text):
+    """Blank out `--` line comments and (nested) `/- ... -/` block comments,
+    keeping line structure so hits report the right line."""
+    out = []
+    i, depth, n = 0, 0, len(text)
+    while i < n:
+        two = text[i:i + 2]
+        if depth == 0 and two == '--':
+            while i < n and text[i] != '\n':
+                i += 1
+            continue
+        if two == '/-':
+            depth += 1
+            i += 2
+            continue
+        if depth > 0 and two == '-/':
+            depth -= 1
+            i += 2
+            continue
+        out.append(text[i] if depth == 0 or text[i] == '\n' else ' ')
+        i += 1
+    if depth != 0:
+        raise SystemExit('unterminated block comment while scanning the proof tree')
+    return ''.join(out)
+
+
+def namespace_of(path):
+    names = [m.group(1) for line in path.read_text().splitlines() if (m := NAMESPACE.match(line))]
+    if len(names) != 1:
+        raise SystemExit(f'{path.relative_to(ROOT)}: expected exactly one namespace, found {names}')
+    return names[0]
+
+
+def module_name(path):
+    return '.'.join(path.relative_to(ROOT).with_suffix('').parts)
+
+
+def statement_files():
+    files = sorted(PROOFS.rglob('Statements.lean'))
+    if not files:
+        raise SystemExit(f'no Statements.lean under {PROOFS.relative_to(ROOT)}')
+    return files
+
+
+def terminal_statements():
+    """Every declaration of every result's Statements.lean, fully qualified."""
+    names = []
+    for path in statement_files():
+        ns = namespace_of(path)
+        found = [f'{ns}.{m.group(1)}' for line in path.read_text().splitlines() if (m := DECL.match(line))]
+        if not found:
+            raise SystemExit(f'{path.relative_to(ROOT)} declares nothing the gate recognises')
+        names.extend(found)
+    return names
+
+
+def check_build():
+    print(f'[1/4] lake build {TARGET}', flush=True)
+    result = subprocess.run(capped(['lake', 'build', TARGET]), cwd=ROOT)
+    if result.returncode != 0:
+        fail(f'lake build {TARGET} exited {result.returncode}')
+
+
+def check_axioms(names):
+    print(f'[2/4] #print axioms for {len(names)} terminal statements', flush=True)
+    artifacts = Path(os.environ.get('LEANUX_ARTIFACTS', ROOT / '.artifacts')) / 'proof-gate'
+    artifacts.mkdir(parents=True, exist_ok=True)
+    scratch = artifacts / 'axioms.lean'
+    scratch.write_text(''.join(f'import {module_name(path)}\n' for path in statement_files())
+                       + ''.join(f'#print axioms {name}\n' for name in names))
+    result = subprocess.run(['lake', 'env', 'lean', str(scratch)], cwd=ROOT, capture_output=True, text=True)
+    (artifacts / 'axioms.out').write_text(result.stdout + result.stderr)
+    # Lean wraps a long axiom list over continuation lines that start with a
+    # space; join them back before parsing.
+    lines = []
+    for raw in (result.stdout + result.stderr).splitlines():
+        if raw[:1] == ' ' and lines:
+            lines[-1] += ' ' + raw.strip()
+        else:
+            lines.append(raw)
+    seen = {}
+    for line in lines:
+        if not line.strip():
+            continue
+        if (m := DEPENDS.match(line)):
+            axioms = {a.strip() for a in m.group(2).split(',') if a.strip()}
+        elif (m := NO_AXIOMS.match(line)):
+            axioms = set()
+        else:
+            fail(f'unrecognised line from lean: {line}')
+            continue
+        name = m.group(1)
+        if name in seen:
+            fail(f'{name} printed twice')
+        seen[name] = axioms
+        extra = axioms - PERMITTED
+        print(f'  {name}: {sorted(axioms) or "no axioms"}', flush=True)
+        if extra:
+            fail(f'{name} depends on {sorted(extra)}')
+    for name in names:
+        if name not in seen:
+            fail(f'{name} did not print its axioms')
+    for name in seen:
+        if name not in names:
+            fail(f'unexpected statement printed: {name}')
+    if result.returncode != 0:
+        fail(f'lean exited {result.returncode} on the axiom scratch file')
+
+
+def check_tokens():
+    print('[3/4] forbidden tokens in the proof tree', flush=True)
+    files = [PROOFS_ROOT] + sorted(PROOFS.rglob('*.lean'))
+    if len(files) < 2:
+        fail(f'no .lean files under {PROOFS.relative_to(ROOT)}')
+    for path in files:
+        for number, line in enumerate(strip_comments(path.read_text()).splitlines(), 1):
+            for m in FORBIDDEN.finditer(line):
+                fail(f'{path.relative_to(ROOT)}:{number}: {m.group(1)}')
+
+
+def check_imports():
+    print('[4/4] imports of the proof tree, the root, and the default targets', flush=True)
+    skip = {'.lake', '.artifacts', '.tmp', '.worktrees', '.cache', '.deps', '.tools'}
+    for path in sorted(ROOT.rglob('*.lean')):
+        rel = path.relative_to(ROOT)
+        if rel.parts[0] in skip or rel.parts[:2] == ('Leanux', 'Proofs') or path == PROOFS_ROOT:
+            continue
+        for number, line in enumerate(path.read_text().splitlines(), 1):
+            if re.match(r'^import\s+Leanux\.Proofs(\.|\s|$)', line):
+                fail(f'{rel}:{number} imports the proof tree')
+    if not PROOFS_ROOT.exists():
+        fail(f'{PROOFS_ROOT.relative_to(ROOT)} is missing')
+    else:
+        imported = {line.split()[1] for line in PROOFS_ROOT.read_text().splitlines() if line.startswith('import ')}
+        for path in statement_files():
+            if module_name(path) not in imported:
+                fail(f'{PROOFS_ROOT.relative_to(ROOT)} does not import {module_name(path)}')
+    lakefile = (ROOT / 'lakefile.toml').read_text()
+    m = re.search(r'^defaultTargets\s*=\s*\[([^\]]*)\]', lakefile, re.M)
+    if not m:
+        fail('lakefile.toml has no defaultTargets line')
+    elif TARGET in m.group(1):
+        fail(f'{TARGET} is a default lake target')
+    if not re.search(r'^name\s*=\s*"' + TARGET + r'"\s*$', lakefile, re.M):
+        fail(f'lakefile.toml declares no lean_lib named {TARGET}')
+
+
+def main():
+    names = terminal_statements()
+    check_build()
+    if not failures:
+        check_axioms(names)
+    check_tokens()
+    check_imports()
+    if failures:
+        print(f'proof gate: FAILED ({len(failures)} finding{"s" if len(failures) != 1 else ""})', flush=True)
+        return 1
+    print(f'proof gate: PASS ({len(names)} terminal statements, axioms within {sorted(PERMITTED)})', flush=True)
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())
