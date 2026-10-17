@@ -14,7 +14,7 @@ new worlds; new R3/R4 results follow the retrofit.
 | Completed retrofit checkpoints | 452 | 6,531 |
 
 Completed changes comprise **2,575 retyped/generalized, 1,686 deleted,
-1,754 retained contract shapes and 502 added theorems**. Retyping changes the
+1,766 retained contract shapes and 502 added theorems**. Retyping changes the
 actual carrier or observation, including shorthand contracts whose functions
 move to a native monad. Namespace-only product qualification and equivalent
 projection relocation count as retained. The census includes private and
@@ -165,6 +165,16 @@ remain. The final output-free traffic check passed; the combined timer/traffic
 development ledger has nineteen changed-source checks (four passes, fifteen
 failures) and nine isolated diagnostics (three passes, six failures).
 No infrastructure rerun, cap increase or proof-limit change occurred.
+
+Batch and environment-control history retain all twelve original product
+contracts and four observer definitions, including arbitrary callbacks. The
+batch observer follows the actual route, MTU and neighbour checks and native
+WG/Ambient adapters; controls retain the existing fifteen-constructor domain.
+The 368-job scoped build, sixteen named axiom checks, two fresh closure replays
+and complete independent source review pass. Both modules have zero own
+warnings; their closure still reports 1,283 inherited warnings. Two changed-source
+batch checks were run: one failed, then the corrected source passed. No
+infrastructure rerun, cap increase or proof-limit change occurred.
 
 Remaining work is the routing/origin terminal carry, stamped
 traffic/environment/runner history, material lifecycle/support callers, RX
