@@ -7,11 +7,10 @@ set_option maxRecDepth 2048
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise Lean Std.Do
 
-def socketDumpHeaderSource (d : Device) (ctx0 : DumpCtx) (prevSeq0 : Nat) (skb0 : NlSkb)
-    (finish : Nat → List (String × Json) → NlSkb → M DumpCall) : M DumpCall := do
+def socketDumpHeaderSource {m : Type → Type} [Monad m] [MonadLiftT AmbientM m] (d : Device) (ctx0 : DumpCtx) (prevSeq0 : Nat) (skb0 : NlSkb)
+    (finish : Nat → List (String × Json) → NlSkb → m DumpCall) : m DumpCall := do
   let seq := d.deviceUpdateGen   -- cb->seq (:222)
   let mut ctx := ctx0
-  let mut nextCursor := ctx.nextPeer
   let (fail, skb) := skb0.put (nlmsgTotal 4)   -- genlmsg_put: nlmsghdr + genlmsghdr
   if ← branch .dumpNoHdr fail then unsupported "a dump chunk without room for its header (unreachable: every chunk is fresh)"
   let mut skb := skb
@@ -40,7 +39,7 @@ def socketDumpHeaderSource (d : Device) (ctx0 : DumpCtx) (prevSeq0 : Nat) (skb0 
         ("public_key", toJson (hexKey identity.staticPublic))]
   finish flags device skb
 
-def socketDumpPeerSource (d : Device) (ctx0 : DumpCtx) (flags : Nat) (device : List (String × Json)) (skb : NlSkb) : M DumpCall := do
+def socketDumpPeerSource (d : Device) (ctx0 : DumpCtx) (flags : Nat) (device : List (String × Json)) (skb : NlSkb) : WG.M DumpCall := do
   let seq := d.deviceUpdateGen
   let mut ctx := ctx0
   let mut nextCursor := ctx.nextPeer
@@ -52,7 +51,7 @@ def socketDumpPeerSource (d : Device) (ctx0 : DumpCtx) (flags : Nat) (device : L
   let ret : Int := 0
   let mut done := true
   let mut peers : Option (Array PeerDumpAttrs) := some #[]
-  let cursorDead : M Bool := do
+  let cursorDead : WG.M Bool := do
     let some pid := ctx.nextPeer | invariant "unreachable"
     return (← getPeer pid).isDead
   if ← WG.orM (branch .dumpPeerListEmpty d.peerList.isEmpty)
@@ -111,15 +110,15 @@ theorem socketDump_source (d : Device) (ctx : DumpCtx) (prev : Nat) (skb : NlSkb
 
 /-- Header cut: all original put guards succeed at the stated capacity. -/
 theorem socketDumpHeader_contract (d : Device) (ctx : DumpCtx) (prev : Nat)
-    (finish : Nat → List (String × Json) → NlSkb → M DumpCall) (result : DumpCall)
+    (finish : Nat → List (String × Json) → NlSkb → Leanux.M DumpCall) (result : DumpCall)
     (first : ctx.nextPeer = none) (consistent : prev = 0 ∨ prev = d.deviceUpdateGen)
     (fits : devicePrefixSpace d + 168 ≤ NLMSG_GOODSIZE)
-    (hf : ∀ flags attrs skb, ⦃fun w => ⌜w.k.wg = some d ∧ flags = 2 ∧
+    (hf : ∀ flags attrs skb, ⦃fun w => ⌜w.wg.dev = some d ∧ flags = 2 ∧
         attrs = deviceFixedAttrs d ∧ skb.room = NLMSG_GOODSIZE - devicePrefixSpace d + 4 ∧ skb.messages = []⌝⦄
-      finish flags attrs skb ⦃⇓ q w => ⌜q = result ∧ w.k.wg = some d⌝⦄) :
-    Returns (socketDumpHeaderSource d ctx prev {} finish) (fun w => w.k.wg = some d)
-      (fun q w => q = result ∧ w.k.wg = some d) := by
-  have flags : (2 + if prev != 0 && prev != d.deviceUpdateGen then 16 else 0) = (2 : Nat) := by
+      finish flags attrs skb ⦃⇓ q w => ⌜q = result ∧ w.wg.dev = some d⌝⦄) :
+    Product.Returns (socketDumpHeaderSource d ctx prev {} finish) (fun w => w.wg.dev = some d)
+      (fun q w => q = result ∧ w.wg.dev = some d) := by
+  have flags : (2 + if prev ≠ 0 ∧ prev ≠ d.deviceUpdateGen then 16 else 0) = (2 : Nat) := by
     rcases consistent with rfl | rfl <;> simp
   have rn : nlaTotal (d.ifname.length + 1) + 216 ≤ 3776 := by
     unfold devicePrefixSpace NLMSG_GOODSIZE at fits
@@ -130,16 +129,122 @@ theorem socketDumpHeader_contract (d : Device) (ctx : DumpCtx) (prev : Nat)
   have n2 : nlaTotal 2 = 8 := rfl
   have n4 : nlaTotal 4 = 8 := rfl
   have n32 : nlaTotal 32 = 36 := rfl
-  have hb := branch_state_returns (fun k => k.wg = some d)
-  rw [returns_iff]
-  cases identity : d.staticIdentity.hasIdentity
-  all_goals simp [socketDumpHeaderSource, first, identity, flags, bind_assoc,
-    NlSkb.put, nlmsgTotal, n2, n4, n32, Nat.sub_sub, rname, r36, r72]
-  all_goals mvcgen [hf, hb, unsupported]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals repeat intro
-  all_goals simp_all [deviceFixedAttrs, devicePrefixSpace, identity, NLMSG_GOODSIZE, nlaTotal]
-  all_goals omega
+  let mark (a : Ambient) (decision : Decision) (outcome : Bool) : Ambient :=
+    {a with steps := a.steps.push {decision, outcome, netRx := a.netRxSection}}
+  have branchRun (decision : Decision) (outcome : Bool) (w : World) :
+      (branch decision outcome : Leanux.M Bool).run w =
+        .ok (outcome, {w with ambient := {w.ambient with steps := w.ambient.steps.push {decision, outcome, netRx := w.ambient.netRxSection}}}) := rfl
+  have okbind {α β : Type} (x : α) (f : α → Except Stop β) :
+      ((Except.ok x : Except Stop α) >>= f) = f x := rfl
+  intro w device
+  let common := mark (mark (mark (mark (mark (mark w.ambient
+    .dumpNoHdr false) .dumpFirst true) .dumpPutPort false) .dumpPutFwmark false)
+    .dumpPutIfindex false) .dumpPutIfname false
+  cases identity : d.staticIdentity.hasIdentity with
+  | false =>
+    let before := mark common .dumpHasIdentity false
+    let attrs := [("listen_port", toJson d.incomingPort), ("fwmark", toJson d.fwmark),
+      ("ifindex", toJson d.ifindex), ("ifname", toJson d.ifname)]
+    let skb : NlSkb := {room := 3732 - nlaTotal (d.ifname.length + 1)}
+    have pre : ({w with ambient := before} : World).wg.dev = some d ∧ (2 : Nat) = 2 ∧
+        attrs = deviceFixedAttrs d ∧ skb.room = NLMSG_GOODSIZE - devicePrefixSpace d + 4 ∧ skb.messages = [] := by
+      refine ⟨device, rfl, ?_, ?_, rfl⟩
+      · simp [attrs, deviceFixedAttrs, identity]
+      · dsimp [skb, devicePrefixSpace, NLMSG_GOODSIZE]
+        simp [identity]
+        omega
+    obtain ⟨q, final, run, resultEq, finalDevice⟩ :=
+      ((Product.returns_iff _ _ _).mpr (hf 2 attrs skb)) {w with ambient := before} pre
+    refine ⟨q, final, ?_, resultEq, finalDevice⟩
+    simpa [socketDumpHeaderSource, first, identity, flags, NlSkb.put, nlmsgTotal,
+      n2, n4, n32, Nat.sub_sub, rname, r36, r72, StateT.run_bind, branchRun, okbind,
+      mark, before, common, attrs, skb] using run
+  | true =>
+    let before := mark (mark (mark common .dumpHasIdentity true) .dumpPutPrivate false) .dumpPutPublic false
+    let attrs := [("listen_port", toJson d.incomingPort), ("fwmark", toJson d.fwmark),
+      ("ifindex", toJson d.ifindex), ("ifname", toJson d.ifname)] ++
+      [("private_key", toJson (hexKey d.staticIdentity.staticPrivate)),
+       ("public_key", toJson (hexKey d.staticIdentity.staticPublic))]
+    let skb : NlSkb := {room := 3732 - nlaTotal (d.ifname.length + 1) - 36 - 36}
+    have pre : ({w with ambient := before} : World).wg.dev = some d ∧ (2 : Nat) = 2 ∧
+        attrs = deviceFixedAttrs d ∧ skb.room = NLMSG_GOODSIZE - devicePrefixSpace d + 4 ∧ skb.messages = [] := by
+      refine ⟨device, rfl, ?_, ?_, rfl⟩
+      · simp [attrs, deviceFixedAttrs, identity]
+      · dsimp [skb, devicePrefixSpace, NLMSG_GOODSIZE]
+        simp [identity]
+        omega
+    obtain ⟨q, final, run, resultEq, finalDevice⟩ :=
+      ((Product.returns_iff _ _ _).mpr (hf 2 attrs skb)) {w with ambient := before} pre
+    refine ⟨q, final, ?_, resultEq, finalDevice⟩
+    simpa [socketDumpHeaderSource, first, identity, flags, NlSkb.put, nlmsgTotal,
+      n2, n4, n32, Nat.sub_sub, rname, r36, r72, StateT.run_bind, branchRun, okbind,
+      mark, before, common, attrs, skb] using run
+
+theorem socketDumpHeader_contract_native (d : Device) (ctx : DumpCtx) (prev : Nat)
+    (finish : Nat → List (String × Json) → NlSkb → WG.M DumpCall) (result : DumpCall)
+    (first : ctx.nextPeer = none) (consistent : prev = 0 ∨ prev = d.deviceUpdateGen)
+    (fits : devicePrefixSpace d + 168 ≤ NLMSG_GOODSIZE)
+    (hf : ∀ flags attrs skb, ⦃fun w => ⌜w.dev = some d ∧ flags = 2 ∧
+        attrs = deviceFixedAttrs d ∧ skb.room = NLMSG_GOODSIZE - devicePrefixSpace d + 4 ∧ skb.messages = []⌝⦄
+      finish flags attrs skb ⦃⇓ q w => ⌜q = result ∧ w.dev = some d⌝⦄) :
+    Returns (socketDumpHeaderSource d ctx prev {} finish) (fun w => w.dev = some d)
+      (fun q w => q = result ∧ w.dev = some d) := by
+  have flags : (2 + if prev ≠ 0 ∧ prev ≠ d.deviceUpdateGen then 16 else 0) = (2 : Nat) := by
+    rcases consistent with rfl | rfl <;> simp
+  have rn : nlaTotal (d.ifname.length + 1) + 216 ≤ 3776 := by
+    unfold devicePrefixSpace NLMSG_GOODSIZE at fits
+    omega
+  have rname : ¬ 3732 < nlaTotal (d.ifname.length + 1) := by omega
+  have r36 : ¬ 3732 - nlaTotal (d.ifname.length + 1) < 36 := by omega
+  have r72 : ¬ 3696 - nlaTotal (d.ifname.length + 1) < 36 := by omega
+  have n2 : nlaTotal 2 = 8 := rfl
+  have n4 : nlaTotal 4 = 8 := rfl
+  have n32 : nlaTotal 32 = 36 := rfl
+  let mark (a : Ambient) (decision : Decision) (outcome : Bool) : Ambient :=
+    {a with steps := a.steps.push {decision, outcome, netRx := a.netRxSection}}
+  intro g ambient device
+  let common := mark (mark (mark (mark (mark (mark ambient
+    .dumpNoHdr false) .dumpFirst true) .dumpPutPort false) .dumpPutFwmark false)
+    .dumpPutIfindex false) .dumpPutIfname false
+  cases identity : d.staticIdentity.hasIdentity with
+  | false =>
+    let before := mark common .dumpHasIdentity false
+    let attrs := [("listen_port", toJson d.incomingPort), ("fwmark", toJson d.fwmark),
+      ("ifindex", toJson d.ifindex), ("ifname", toJson d.ifname)]
+    let skb : NlSkb := {room := 3732 - nlaTotal (d.ifname.length + 1)}
+    have pre : g.dev = some d ∧ (2 : Nat) = 2 ∧
+        attrs = deviceFixedAttrs d ∧ skb.room = NLMSG_GOODSIZE - devicePrefixSpace d + 4 ∧ skb.messages = [] := by
+      refine ⟨device, rfl, ?_, ?_, rfl⟩
+      · simp [attrs, deviceFixedAttrs, identity]
+      · dsimp [skb, devicePrefixSpace, NLMSG_GOODSIZE]
+        simp [identity]
+        omega
+    obtain ⟨q, final, after, run, resultEq, finalDevice⟩ :=
+      ((returns_iff _ _ _).mpr (hf 2 attrs skb)) g before pre
+    refine ⟨q, final, after, ?_, resultEq, finalDevice⟩
+    simpa [socketDumpHeaderSource, first, identity, flags, NlSkb.put, nlmsgTotal,
+      n2, n4, n32, Nat.sub_sub, rname, r36, r72, branch, AmbientM.branch,
+      mark, before, common, attrs, skb] using run
+  | true =>
+    let before := mark (mark (mark common .dumpHasIdentity true) .dumpPutPrivate false) .dumpPutPublic false
+    let attrs := [("listen_port", toJson d.incomingPort), ("fwmark", toJson d.fwmark),
+      ("ifindex", toJson d.ifindex), ("ifname", toJson d.ifname)] ++
+      [("private_key", toJson (hexKey d.staticIdentity.staticPrivate)),
+       ("public_key", toJson (hexKey d.staticIdentity.staticPublic))]
+    let skb : NlSkb := {room := 3732 - nlaTotal (d.ifname.length + 1) - 36 - 36}
+    have pre : g.dev = some d ∧ (2 : Nat) = 2 ∧
+        attrs = deviceFixedAttrs d ∧ skb.room = NLMSG_GOODSIZE - devicePrefixSpace d + 4 ∧ skb.messages = [] := by
+      refine ⟨device, rfl, ?_, ?_, rfl⟩
+      · simp [attrs, deviceFixedAttrs, identity]
+      · dsimp [skb, devicePrefixSpace, NLMSG_GOODSIZE]
+        simp [identity]
+        omega
+    obtain ⟨q, final, after, run, resultEq, finalDevice⟩ :=
+      ((returns_iff _ _ _).mpr (hf 2 attrs skb)) g before pre
+    refine ⟨q, final, after, ?_, resultEq, finalDevice⟩
+    simpa [socketDumpHeaderSource, first, identity, flags, NlSkb.put, nlmsgTotal,
+      n2, n4, n32, Nat.sub_sub, rname, r36, r72, branch, AmbientM.branch,
+      mark, before, common, attrs, skb] using run
 
 /-- The single-peer body uses the original getter result, loop exit, cursor
 reference guards and DATA construction. -/
@@ -147,44 +252,52 @@ theorem socketDumpPeer_contract (pid : PeerId) (d : Device) (ctx outCtx : DumpCt
     (room : Nat) (peer : PeerDumpAttrs) (more : Bool)
     (peers : d.peerList = [pid]) (first : ctx.nextPeer = none)
     (outFirst : outCtx.nextPeer = none)
-    (hp : ∀ skb, ⦃fun w => ⌜w.k.wg = some d ∧
+    (hp : ∀ skb, ⦃fun w => ⌜w.dev = some d ∧
         skb.room = NLMSG_GOODSIZE - devicePrefixSpace d ∧ skb.messages = []⌝⦄
-      getPeerDump pid ctx skb ⦃⇓ q w => ⌜w.k.wg = some d ∧
+      getPeerDump pid ctx skb ⦃⇓ q w => ⌜w.dev = some d ∧
         q = ({ room }, outCtx, if more then .split peer else .complete peer)⌝⦄) :
     Returns (socketDumpPeerSource d ctx 2 (deviceFixedAttrs d)
-      { room := NLMSG_GOODSIZE - devicePrefixSpace d + 4 }) (fun w => w.k.wg = some d)
-      (fun q w => q = socketCallbackResult d outCtx room peer more ∧ w.k.wg = some d) := by
+      { room := NLMSG_GOODSIZE - devicePrefixSpace d + 4 }) (fun w => w.dev = some d)
+      (fun q w => q = socketCallbackResult d outCtx room peer more ∧ w.dev = some d) := by
   have fits : ¬ NLMSG_GOODSIZE - devicePrefixSpace d + 4 < 4 := by omega
-  simp [socketDumpPeerSource, peers, first, branch, WG.orM, WG.andM, bind_assoc,
-    NlSkb.put, nlaTotal, fits, List.forIn_cons, List.forIn_nil, requireNotPending]
-  apply returns_bind (Q := fun _ w => w.k.wg = some d)
-  · rw [returns_iff]; mvcgen
-  · intro _
-    apply returns_bind (Q := fun _ w => w.k.wg = some d)
-    · rw [returns_iff]; mvcgen
-    · intro _
-      apply returns_bind (Q := fun _ w => w.k.wg = some d)
-      · rw [returns_iff]; mvcgen
-      · intro _
-        apply returns_bind (Q := fun _ w => w.k.wg = some d)
-        · rw [returns_iff]; mvcgen
-        · intro _
-          have hg : Returns (getPeerDump pid ctx { room := NLMSG_GOODSIZE - devicePrefixSpace d })
-              (fun w => w.k.wg = some d)
-              (fun q w => w.k.wg = some d ∧ q =
-                ({ room }, outCtx, if more then .split peer else .complete peer)) := by
-            rw [returns_iff]
-            intro w hd
-            exact hp _ w ⟨hd, rfl, rfl⟩
-          apply returns_bind _ _ hg
-          intro q
-          rw [returns_iff]
-          intro w h
-          obtain ⟨hd, rfl⟩ := h
-          cases more
-          all_goals simp [List.forIn_cons, List.forIn_nil, outFirst, socketCallbackResult, bind_assoc]
-          all_goals mvcgen [peerPut, branch]
-          all_goals simp_all
+  intro g ambient device
+  let mark (a : Ambient) (decision : Decision) (outcome : Bool) : Ambient :=
+    {a with steps := a.steps.push {decision, outcome, netRx := a.netRxSection}}
+  let before := mark (mark (mark (mark ambient .dumpNoPeersNest false)
+    .dumpPeerListEmpty false) .dumpCursorSet false) .dumpPeerIter true
+  obtain ⟨q, final, afterGetter, getter, finalDevice, value⟩ :=
+    ((returns_iff _ _ _).mpr (hp {room := NLMSG_GOODSIZE - devicePrefixSpace d}))
+      g before ⟨device, rfl, rfl⟩
+  subst q
+  cases more with
+  | false =>
+    let after := mark (mark (mark (mark (mark (mark (mark afterGetter
+      .dumpGetPeerFail false) .dumpPeerIter false) .dumpOutRetZero true)
+      .dumpOutNotDone false) .peerPutNull true) .dumpRetErr false) .dumpDone true
+    refine ⟨socketCallbackResult d outCtx room peer false, final, after, ?_, rfl, finalDevice⟩
+    simp [socketDumpPeerSource, peers, first, branch, AmbientM.branch,
+      WG.orM, WG.andM, NlSkb.put, nlaTotal, fits, List.forIn_cons, List.forIn_nil,
+      requireNotPending, before, mark] at getter ⊢
+    rw [getter]
+    dsimp only [bind, Except.bind]
+    simp [outFirst, peerPut, branch, AmbientM.branch, after, mark, socketCallbackResult,
+      StateT.run, StateT.bind, StateT.pure, StateT.lift, liftM, monadLift, MonadLift.monadLift,
+      Pure.pure, Except.pure, Bind.bind, Except.bind, Functor.map, StateT.map,
+      modify, modifyGet, MonadStateOf.modifyGet, StateT.modifyGet]
+  | true =>
+    let after := mark (mark (mark (mark (mark (mark (mark afterGetter
+      .dumpGetPeerFail true) .dumpOutRetZero true) .dumpOutNotDone true)
+      .dumpOutHasCursor false) .peerPutNull true) .dumpRetErr false) .dumpDone false
+    refine ⟨socketCallbackResult d outCtx room peer true, final, after, ?_, rfl, finalDevice⟩
+    simp [socketDumpPeerSource, peers, first, branch, AmbientM.branch,
+      WG.orM, WG.andM, NlSkb.put, nlaTotal, fits, List.forIn_cons, List.forIn_nil,
+      requireNotPending, before, mark] at getter ⊢
+    rw [getter]
+    dsimp only [bind, Except.bind]
+    simp [outFirst, peerPut, branch, AmbientM.branch, after, mark, socketCallbackResult,
+      StateT.run, StateT.bind, StateT.pure, StateT.lift, liftM, monadLift, MonadLift.monadLift,
+      Pure.pure, Except.pure, Bind.bind, Except.bind, Functor.map, StateT.map,
+      modify, modifyGet, MonadStateOf.modifyGet, StateT.modifyGet]
 
 theorem deviceDump_single_contract (pid : PeerId) (d : Device) (ctx outCtx : DumpCtx)
     (prevSeq room : Nat) (peer : PeerDumpAttrs) (more : Bool)
@@ -193,41 +306,45 @@ theorem deviceDump_single_contract (pid : PeerId) (d : Device) (ctx outCtx : Dum
     (consistent : prevSeq = 0 ∨ prevSeq = d.deviceUpdateGen)
     (fits : devicePrefixSpace d + 168 ≤ NLMSG_GOODSIZE)
     (hp : Returns (getPeerDump pid ctx { room := NLMSG_GOODSIZE - devicePrefixSpace d })
-      (fun w => w.k.wg = some d)
-      (fun q w => w.k.wg = some d ∧ q =
+      (fun w => w.dev = some d)
+      (fun q w => w.dev = some d ∧ q =
         ({ room }, outCtx, if more then .split peer else .complete peer))) :
-    Returns (wgGetDeviceDump ctx prevSeq {}) (fun w => w.k.wg = some d)
-      (fun q w => q = socketCallbackResult d outCtx room peer more ∧ w.k.wg = some d) := by
+    Returns (wgGetDeviceDump ctx prevSeq {}) (fun w => w.dev = some d)
+      (fun q w => q = socketCallbackResult d outCtx room peer more ∧ w.dev = some d) := by
   have hpAny (skb : NlSkb) :
-      ⦃fun w => ⌜w.k.wg = some d ∧ skb.room = NLMSG_GOODSIZE - devicePrefixSpace d ∧ skb.messages = []⌝⦄
-      getPeerDump pid ctx skb ⦃⇓ q w => ⌜w.k.wg = some d ∧ q =
+      ⦃fun w => ⌜w.dev = some d ∧ skb.room = NLMSG_GOODSIZE - devicePrefixSpace d ∧ skb.messages = []⌝⦄
+      getPeerDump pid ctx skb ⦃⇓ q w => ⌜w.dev = some d ∧ q =
         ({ room }, outCtx, if more then .split peer else .complete peer)⌝⦄ := by
-    intro w ⟨hd, hr, hm⟩
+    apply (returns_iff _ _ _).mp
+    intro w ambient ⟨hd, hr, hm⟩
     have heq : skb = { room := NLMSG_GOODSIZE - devicePrefixSpace d } := by
       cases skb; simp_all
     rw [heq]
-    exact (returns_iff _ _ _).mp hp w hd
+    exact hp w ambient hd
   have ht := socketDumpPeer_contract pid d ctx outCtx room peer more peers first outFirst hpAny
-  have hh := socketDumpHeader_contract d ctx prevSeq (socketDumpPeerSource d ctx)
+  have hh := socketDumpHeader_contract_native d ctx prevSeq (socketDumpPeerSource d ctx)
     (socketCallbackResult d outCtx room peer more) first consistent fits
-  have body : Returns (deviceDumpSource d ctx prevSeq {}) (fun w => w.k.wg = some d)
-      (fun q w => q = socketCallbackResult d outCtx room peer more ∧ w.k.wg = some d) := by
+  have body : Returns (deviceDumpSource d ctx prevSeq {}) (fun w => w.dev = some d)
+      (fun q w => q = socketCallbackResult d outCtx room peer more ∧ w.dev = some d) := by
     rw [socketDump_source]
     apply hh
-    intro flags attrs skb w ⟨hd, hf, ha, hr, hm⟩
+    intro flags attrs skb
+    apply (returns_iff _ _ _).mp
+    intro w ambient ⟨hd, hf, ha, hr, hm⟩
     have heq : skb = { room := NLMSG_GOODSIZE - devicePrefixSpace d + 4 } := by
       cases skb; simp_all
     subst flags; subst attrs; subst skb
-    exact (returns_iff _ _ _).mp ht w hd
-  have hg : Returns getDev (fun w => w.k.wg = some d)
-      (fun q w => q = d ∧ w.k.wg = some d) := by
-    rw [returns_iff]
-    mvcgen [getDev, getK, invariant]
-    all_goals simp_all
+    exact ht w ambient hd
+  have hg : Returns getDev (fun w => w.dev = some d)
+      (fun q w => q = d ∧ w.dev = some d) := by
+    intro g ambient device
+    refine ⟨d, g, ambient, ?_, rfl, device⟩
+    simp [getDev, device]
+    rfl
   rw [wgGetDeviceDump_source]
   apply returns_bind _ _ hg
-  intro q w ⟨heq, hd⟩
+  intro q w ambient ⟨heq, hd⟩
   subst q
-  exact body w hd
+  exact body w ambient hd
 
 end Leanux.Proofs.WG.Config

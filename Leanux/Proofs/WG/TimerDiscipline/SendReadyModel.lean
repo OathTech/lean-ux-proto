@@ -20,10 +20,10 @@ def initiationTailClock (bytes : List UInt8) : Int64 :=
 def initiationMacPeer (p : Peer) (msg : List UInt8) : Peer :=
   {p with lastMac1Sent := blake2s 16 p.cookieMac1Key (msg.take (msg.length-32)), haveSentMac1 := true}
 def initiationTailPeer (p : Peer) (msg bytes : List UInt8) : Peer :=
-  {((initiationMacPeer p msg).setTimer .sendKeepalive none) with lastSentHandshake := initiationTailClock bytes}
+  {(((initiationMacPeer p msg).setTimer .sendKeepalive none).setWheel .sendKeepalive none) with lastSentHandshake := initiationTailClock bytes}
 def initiationTailDevice (d : Device) (pid : PeerId) (p : Peer) (msg bytes : List UInt8) : Device :=
   let mac := initiationMacPeer p msg
-  let deleted := mac.setTimer .sendKeepalive none
+  let deleted := (mac.setTimer .sendKeepalive none).setWheel .sendKeepalive none
   {d with peers := ((d.peers.insert pid mac).insert pid deleted).insert pid (initiationTailPeer p msg bytes)}
 def initiationTailSteps (netRx : Nat) (steps : Array Step) : Array Step :=
   (steps.push {decision := .addMacCookieValid, outcome := false, netRx}).push

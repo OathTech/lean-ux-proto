@@ -14,8 +14,8 @@ theorem socketFirstCall_returns (pid : PeerId) (d : Device) (p : Peer)
     (readable : Ipv4Residents d nodes (front ++ [b])) (endpoint : p.endpoint = none)
     (fits : devicePrefixSpace d + 140 + 28 * front.length ≤ NLMSG_GOODSIZE)
     (short : NLMSG_GOODSIZE < devicePrefixSpace d + 140 + 28 * (front.length + 1)) :
-    Returns (wgGetDeviceDump { hasWg := true } 0 {}) (fun w => w.k.wg = some d)
-      (fun q w => q = socketFirstCall d p nodes front b ∧ w.k.wg = some d) := by
+    Returns (wgGetDeviceDump { hasWg := true } 0 {}) (fun w => w.dev = some d)
+      (fun q w => q = socketFirstCall d p nodes front b ∧ w.dev = some d) := by
   have len : 0 < front.length := List.length_pos_iff.mpr nonempty
   have ht := dumpTail_front d nodes p front b tail listed nonempty readable endpoint
     { hasWg := true } { room := NLMSG_GOODSIZE - devicePrefixSpace d }
@@ -37,8 +37,8 @@ theorem socketLastCall_returns (pid : PeerId) (d : Device) (p : Peer)
     (fits : devicePrefixSpace d + 44 + 28 * (b :: tail).length + 20 ≤ NLMSG_GOODSIZE) :
     Returns (wgGetDeviceDump
       { hasWg := true, nextAllowedip := some b, allowedipsSeq := d.peerAllowedips.seq }
-      d.deviceUpdateGen {}) (fun w => w.k.wg = some d)
-      (fun q w => q = socketLastCall d p nodes (b :: tail) ∧ w.k.wg = some d) := by
+      d.deviceUpdateGen {}) (fun w => w.dev = some d)
+      (fun q w => q = socketLastCall d p nodes (b :: tail) ∧ w.dev = some d) := by
   have ht := dumpTail_after_front d nodes p front b tail listed absent readable
     { hasWg := true, nextAllowedip := some b, allowedipsSeq := d.peerAllowedips.seq }
     { room := NLMSG_GOODSIZE - devicePrefixSpace d } rfl rfl (by simp only [List.length_cons] at fits ⊢; omega)

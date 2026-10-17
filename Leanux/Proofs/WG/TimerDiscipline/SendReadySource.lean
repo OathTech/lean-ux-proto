@@ -10,21 +10,44 @@ no-endpoint send result. The factorization retains both original guards. -/
 namespace Leanux.Proofs.WG.TimerDiscipline.SendReady
 open Leanux Leanux.WG Campaign2
 
+-- Local variant of campaign 1 Framing.liftWG_bind, retaining actual Product states.
+private theorem liftWG_bind_variant {α β : Type} (action : WG.M α) (next : α → WG.M β) :
+    liftWG (action >>= next) = (liftWG action >>= fun x => liftWG (next x)) := by
+  have lifted {γ : Type} (a : WG.M γ) (entry) :
+      (liftWG a).run entry = ((a.run entry.wg).run entry.ambient).map
+        (fun ((x, g), ambient) => (x, {entry with wg := g, ambient})) := by
+    unfold liftWG StateT.run
+    cases a entry.wg entry.ambient <;> rfl
+  funext entry
+  change (liftWG (action >>= next)).run entry =
+    (liftWG action >>= fun x => liftWG (next x)).run entry
+  rw [lifted]
+  simp only [StateT.run_bind]
+  rw [lifted]
+  cases actual : (action.run entry.wg).run entry.ambient with
+  | error stop => rfl
+  | ok out =>
+    obtain ⟨⟨value, current⟩, ambient⟩ := out
+    simp only [Except.map]
+    exact (lifted (next value) {entry with wg := current, ambient}).symm
+
 theorem sendBuffer_no_endpoint (pid : PeerId) (d : Device) (p : Peer)
     (msg : List UInt8) (records : List HiddenRecord) (w : World)
-    (device : w.k.wg = some d) (resident : d.peers[pid]? = some p)
-    (endpoint : p.endpoint = none) (present : w.hidden = some records)
-    (unarmed : w.allocArmed.contains "sendBufSkb" = false) :
-    (sendBufferToPeer pid msg).run w = .ok
-      ((), {w with steps := noEndpointSendSteps w.netRxSection w.steps}) := by
-  have notArmed : "sendBufSkb" ∉ w.allocArmed := by simpa using unarmed
-  simp [notArmed, sendBufferToPeer, hiddenAlloc, AllocSite.info, getPeer, getDev, getK,
-    branch, device, resident, endpoint, present, AF_INET, AF_INET6, EAFNOSUPPORT,
+    (device : w.wg.dev = some d) (resident : d.peers[pid]? = some p)
+    (endpoint : p.endpoint = none) (present : w.ambient.hidden = some records)
+    (unarmed : w.ambient.allocArmed.contains "sendBufSkb" = false) :
+    (liftWG (sendBufferToPeer pid msg)).run w = .ok
+      ((), {w with ambient := {w.ambient with steps := noEndpointSendSteps w.ambient.netRxSection w.ambient.steps}}) := by
+  have notArmed : "sendBufSkb" ∉ w.ambient.allocArmed := by simpa using unarmed
+  have ambientLift {α : Type} (action : AmbientM α) :
+      (monadLift action : WG.M α) = StateT.lift action := rfl
+  simp [liftWG, StateT.lift, ambientLift, notArmed, sendBufferToPeer, hiddenAlloc, AmbientM.hiddenAlloc, AllocSite.info, getPeer, getDev,
+    branch, AmbientM.branch, device, resident, endpoint, present, AF_INET, AF_INET6, EAFNOSUPPORT,
     noEndpointSendSteps, StateT.run, Bind.bind, Pure.pure, get, getThe,
     MonadStateOf.get, modify, modifyGet, StateT.bind, StateT.pure, StateT.get,
     MonadStateOf.modifyGet, StateT.modifyGet, Except.bind, Except.pure]
 
-def initiationSendPrefix (pid : PeerId) (msg : List UInt8) : M (List UInt8) := do
+def initiationSendPrefix (pid : PeerId) (msg : List UInt8) : WG.M (List UInt8) := do
   let packet ← addMacToPacket pid msg
   timersTraversal pid
   timersAnyAuthenticatedPacketSent pid
@@ -32,57 +55,69 @@ def initiationSendPrefix (pid : PeerId) (msg : List UInt8) : M (List UInt8) := d
   setPeer pid {(← getPeer pid) with lastSentHandshake := now}
   return packet
 
+/-- Current exact prefix effect, including removal of the send-keepalive wheel entry. -/
 theorem initiationSendPrefix_run (pid : PeerId) (d : Device) (p : Peer)
     (msg bytes : List UInt8) (rest : List HiddenRecord) (w : World)
-    (device : w.k.wg = some d) (resident : d.peers[pid]? = some p)
+    (device : w.wg.dev = some d) (resident : d.peers[pid]? = some p)
     (cookieInvalid : p.cookieIsValid = false) (interval : p.persistentKeepaliveInterval = 0)
     (len : bytes.length = 8)
-    (present : w.hidden = some ({site := HiddenSite.initLastSentAgain.info.id, bytes} :: rest)) :
-    (initiationSendPrefix pid msg).run w =
+    (present : w.ambient.hidden = some ({site := HiddenSite.initLastSentAgain.info.id, bytes} :: rest)) :
+    (liftWG (initiationSendPrefix pid msg)).run w =
       .ok (initiationPacket p msg, {w with
-        k := {w.k with wg := some (initiationTailDevice d pid p msg bytes)}
-        hidden := some rest
-        steps := initiationTailSteps w.netRxSection w.steps}) := by
+        wg := {w.wg with dev := some (initiationTailDevice d pid p msg bytes)}
+        ambient := {w.ambient with
+          hidden := some rest
+          steps := initiationTailSteps w.ambient.netRxSection w.ambient.steps}}) := by
   have passive : HiddenSite.passive 8 = false := by decide
   have drop : bytes.drop 8 = [] := by simp [← len]
   have take : bytes.take 8 = bytes := by simp [← len]
-  simp [initiationSendPrefix, addMacToPacket, WG.andM, timersTraversal, timersAnyAuthenticatedPacketSent,
-    delTimer, hiddenClock64, hidden, skipAmbient, noteNetRxStart, HiddenSite.info,
-    getPeer, getDev, getK, setPeer, modifyDev, modifyK, branch, branchCmp,
+  have ambientLift {α : Type} (action : AmbientM α) :
+      (monadLift action : WG.M α) = StateT.lift action := rfl
+  simp [liftWG, StateT.lift, ambientLift, initiationSendPrefix, addMacToPacket, WG.andM, timersTraversal, timersAnyAuthenticatedPacketSent,
+    delTimer, hiddenClock64, AmbientM.hiddenClock64, AmbientM.hidden, AmbientM.skipAmbient, AmbientM.noteNetRxStart, HiddenSite.info,
+    getPeer, getDev, setPeer, modifyDev, branch, AmbientM.branch, branchCmp, AmbientM.branchCmp,
     device, resident, cookieInvalid, interval, present, passive, len, drop, take,
     initiationPacket, initiationMacPeer, initiationTailPeer, initiationTailDevice,
-    initiationTailSteps, initiationTailClock, Peer.setTimer,
+    initiationTailSteps, initiationTailClock, Peer.setTimer, Peer.setWheel,
     Functor.discard, Functor.mapConst,
     StateT.run, Bind.bind, Pure.pure, get, getThe, MonadStateOf.get, set,
     modify, modifyGet, StateT.bind, StateT.pure, StateT.get, StateT.set,
     MonadStateOf.modifyGet, StateT.modifyGet, Except.bind, Except.pure, Worker.sectionId, Worker.index]
 
-def initiationTail (pid : PeerId) (msg : List UInt8) : M Unit := do
+def initiationTail (pid : PeerId) (msg : List UInt8) : WG.M Unit := do
   let packet ← initiationSendPrefix pid msg
   sendBufferToPeer pid packet
   timersHandshakeInitiated pid
 
+/-- Exact recorded-arm entry after MAC, traversal, timer deletion, sender
+clock, ignored endpoint send, caller/jitter reads and successful arm guard. -/
+def initiationArmState (w : World) (d : Device) (pid : PeerId) (p : Peer)
+    (msg bytes : List UInt8) (input : RetransmitArmInput) (rest : List HiddenRecord) : World :=
+  {w with
+    wg := {w.wg with dev := some (initiationTailDevice d pid p msg bytes)}
+    ambient := {w.ambient with
+      hidden := some ({site := HiddenSite.modTimerArm.info.id, bytes := input.armData} :: rest)
+      steps := retransmitReadySteps w.ambient.netRxSection
+        (noEndpointSendSteps w.ambient.netRxSection (initiationTailSteps w.ambient.netRxSection w.ambient.steps))}}
+
+/-- The original domain determines the complete prefix and actual arm-tail outcome.
+The old unconditional success assertion omitted wheel record requirements. -/
 theorem initiationTail_run (pid : PeerId) (d : Device) (p : Peer)
     (msg bytes : List UInt8) (input : RetransmitArmInput) (rest : List HiddenRecord) (w : World)
-    (device : w.k.wg = some d) (resident : d.peers[pid]? = some p)
+    (device : w.wg.dev = some d) (resident : d.peers[pid]? = some p)
     (cookieInvalid : p.cookieIsValid = false) (interval : p.persistentKeepaliveInterval = 0)
     (endpoint : p.endpoint = none) (running : d.running = true) (alive : p.isDead = false)
-    (len : bytes.length = 8) (valid : input.Valid) (mode : w.armRecords = true)
-    (unarmed : w.allocArmed.contains "sendBufSkb" = false)
-    (present : w.hidden = some ({site := HiddenSite.initLastSentAgain.info.id, bytes} :: input.records rest)) :
-    ∃ final, (initiationTail pid msg).run w = .ok ((), final) ∧
-      final.k.wg = some {initiationTailDevice d pid p msg bytes with
-        peers := (initiationTailDevice d pid p msg bytes).peers.insert pid
-          ((initiationTailPeer p msg bytes).setTimer .retransmitHandshake
-            (some (input.caller + input.delay.toUInt64)))} ∧
-      final.hidden = some rest ∧ final.armRecords = true ∧
-      final.jiffiesLast = some input.now ∧
-      final.timerUnits = retransmitReadyUnits pid input w.timerUnits ∧
-      final.sent = w.sent := by
+    (len : bytes.length = 8) (valid : input.Valid) (mode : w.ambient.armRecords = true)
+    (unarmed : w.ambient.allocArmed.contains "sendBufSkb" = false)
+    (present : w.ambient.hidden = some ({site := HiddenSite.initLastSentAgain.info.id, bytes} :: input.records rest)) :
+    (liftWG (initiationTail pid msg)).run w =
+      (liftWG (armTimer pid .retransmitHandshake input.delay (some input.caller))).run
+        (initiationArmState w d pid p msg bytes input rest) := by
   let mid := {w with
-    k := {w.k with wg := some (initiationTailDevice d pid p msg bytes)}
-    hidden := some (input.records rest)
-    steps := initiationTailSteps w.netRxSection w.steps}
+    wg := {w.wg with dev := some (initiationTailDevice d pid p msg bytes)}
+    ambient := {w.ambient with
+      hidden := some (input.records rest)
+      steps := initiationTailSteps w.ambient.netRxSection w.ambient.steps}}
   have first := initiationSendPrefix_run pid d p msg bytes (input.records rest) w
     device resident cookieInvalid interval len present
   have resident' : (initiationTailDevice d pid p msg bytes).peers[pid]? =
@@ -90,31 +125,30 @@ theorem initiationTail_run (pid : PeerId) (d : Device) (p : Peer)
   have send := sendBuffer_no_endpoint pid (initiationTailDevice d pid p msg bytes)
     (initiationTailPeer p msg bytes) (initiationPacket p msg) (input.records rest) mid rfl resident'
     endpoint rfl unarmed
-  let beforeArm := {mid with steps := noEndpointSendSteps mid.netRxSection mid.steps}
+  let beforeArm := {mid with ambient := {mid.ambient with
+    steps := noEndpointSendSteps mid.ambient.netRxSection mid.ambient.steps}}
+  have running' : (initiationTailDevice d pid p msg bytes).running = true := by
+    simpa only [initiationTailDevice] using running
+  have alive' : (initiationTailPeer p msg bytes).isDead = false := by
+    simpa only [initiationTailPeer, initiationMacPeer, Peer.setTimer, Peer.setWheel] using alive
+  have device' : beforeArm.wg.dev = some (initiationTailDevice d pid p msg bytes) := rfl
+  have mode' : beforeArm.ambient.armRecords = true := mode
+  have records' : beforeArm.ambient.hidden = some (input.records rest) := rfl
   have arm := retransmitReady_run pid (initiationTailDevice d pid p msg bytes)
-    (initiationTailPeer p msg bytes) input rest resident' running alive valid beforeArm rfl mode rfl
-  let final := {beforeArm with
-    k := {beforeArm.k with wg := some {initiationTailDevice d pid p msg bytes with
-      peers := (initiationTailDevice d pid p msg bytes).peers.insert pid
-        ((initiationTailPeer p msg bytes).setTimer .retransmitHandshake (some (input.caller + input.delay.toUInt64)))}}
-    hidden := some rest
-    steps := retransmitReadySteps beforeArm.netRxSection beforeArm.steps
-    jiffiesLast := some input.now
-    timerUnits := retransmitReadyUnits pid input beforeArm.timerUnits}
-  have run : (initiationTail pid msg).run w = .ok ((), final) := by
-    rw [initiationTail, StateT.run_bind, first]
-    change ((sendBufferToPeer pid (initiationPacket p msg)).run mid >>= fun out =>
-      (timersHandshakeInitiated pid).run out.2) = _
-    rw [send]
-    exact arm
-  exact ⟨_, run, rfl, rfl, mode, rfl, rfl, rfl⟩
+    (initiationTailPeer p msg bytes) input rest resident' running' alive' valid beforeArm device' mode' records'
+  rw [initiationTail, liftWG_bind_variant, StateT.run_bind, first]
+  change ((liftWG (do
+    sendBufferToPeer pid (initiationPacket p msg)
+    timersHandshakeInitiated pid)).run mid) = _
+  rw [liftWG_bind_variant, StateT.run_bind, send]
+  exact arm
 
 end Leanux.Proofs.WG.TimerDiscipline.SendReady
 
 namespace Leanux.Proofs.WG.TimerDiscipline.SendReady
 open Leanux Leanux.WG Campaign2 Noise
 
-def initiationEntry (pid : PeerId) : M Bool := do
+def initiationEntry (pid : PeerId) : WG.M Bool := do
   if ← branchExpired .initRateLimited (← getPeer pid).lastSentHandshake REKEY_TIMEOUT (!·) then return false
   let now ← hiddenClock64 .initLastSent
   setPeer pid {(← getPeer pid) with lastSentHandshake := now}
@@ -122,15 +156,16 @@ def initiationEntry (pid : PeerId) : M Bool := do
 
 theorem initiationEntry_run (pid : PeerId) (d : Device) (p : Peer)
     (rate last : List UInt8) (rest : List HiddenRecord) (w : World)
-    (device : w.k.wg = some d) (resident : d.peers[pid]? = some p)
+    (device : w.wg.dev = some d) (resident : d.peers[pid]? = some p)
     (rateLen : rate.length = 8) (lastLen : last.length = 8)
     (expired : p.lastSentHandshake + REKEY_TIMEOUT.toInt64 * NSEC_PER_SEC64 ≤ initiationTailClock rate)
-    (present : w.hidden = some ({site := HiddenSite.birthdateExpired.info.id, bytes := rate} ::
+    (present : w.ambient.hidden = some ({site := HiddenSite.birthdateExpired.info.id, bytes := rate} ::
       {site := HiddenSite.initLastSent.info.id, bytes := last} :: rest)) :
-    (initiationEntry pid).run w = .ok (true, {w with
-      k := {w.k with wg := some (initiationEntryDevice d pid p last)}
-      hidden := some rest
-      steps := w.steps.push {decision := .initRateLimited, outcome := false, operands := some ((p.lastSentHandshake + REKEY_TIMEOUT.toInt64 * NSEC_PER_SEC64).toInt, (initiationTailClock rate).toInt), netRx := w.netRxSection}}) := by
+    (liftWG (initiationEntry pid)).run w = .ok (true, {w with
+      wg := {w.wg with dev := some (initiationEntryDevice d pid p last)}
+      ambient := {w.ambient with
+        hidden := some rest
+        steps := w.ambient.steps.push {decision := .initRateLimited, outcome := false, operands := some ((p.lastSentHandshake + REKEY_TIMEOUT.toInt64 * NSEC_PER_SEC64).toInt, (initiationTailClock rate).toInt), netRx := w.ambient.netRxSection}}}) := by
   have passiveRate : HiddenSite.passive 6 = false := by decide
   have passiveLast : HiddenSite.passive 7 = false := by decide
   have rateDrop : rate.drop 8 = [] := by simp [← rateLen]
@@ -139,16 +174,18 @@ theorem initiationEntry_run (pid : PeerId) (d : Device) (p : Peer)
   have lastTake : last.take 8 = last := by simp [← lastLen]
   have expired' : p.lastSentHandshake + REKEY_TIMEOUT.toInt64 * NSEC_PER_SEC64 ≤
       Int64.ofNat (rate.foldr (fun (b : UInt8) (acc : Nat) => acc * 256 + b.toNat) 0) := expired
-  simp [initiationEntry, branchExpired, birthdateTest, hiddenClock64, hidden, skipAmbient,
-    noteNetRxStart, HiddenSite.info, getPeer, getDev, getK, setPeer, modifyDev, modifyK,
-    branchCmp, device, resident, present, passiveRate, passiveLast, rateLen, lastLen,
+  have ambientLift {α : Type} (action : AmbientM α) :
+      (monadLift action : WG.M α) = StateT.lift action := rfl
+  simp [liftWG, StateT.lift, ambientLift, initiationEntry, branchExpired, birthdateTest, hiddenClock64, AmbientM.hiddenClock64, AmbientM.hidden, AmbientM.skipAmbient,
+    AmbientM.noteNetRxStart, HiddenSite.info, getPeer, getDev, setPeer, modifyDev,
+    branchCmp, AmbientM.branchCmp, device, resident, present, passiveRate, passiveLast, rateLen, lastLen,
     rateDrop, rateTake, lastDrop, lastTake, initiationEntryDevice, initiationEntryPeer,
     initiationTailClock, expired', StateT.run, Bind.bind, Pure.pure, get, getThe,
     MonadStateOf.get, set, modify, modifyGet, StateT.bind, StateT.pure, StateT.get,
     StateT.set, MonadStateOf.modifyGet, StateT.modifyGet, Except.bind, Except.pure,
     Worker.sectionId, Worker.index]
 
-def afterEntry (pid : PeerId) : M Unit := do
+def afterEntry (pid : PeerId) : WG.M Unit := do
   let created ← createInitiation pid
   if ← branch .initCreated created.isSome then
     let some msg := created | invariant "unreachable"
@@ -171,12 +208,29 @@ namespace Leanux.Proofs.WG.TimerDiscipline.SendReady
 open Leanux Leanux.WG Campaign2 Noise
 
 theorem afterEntry_created (pid : PeerId) (msg : List UInt8) (w created : World)
-    (run : (createInitiation pid).run w = .ok (some msg, created)) :
-    (afterEntry pid).run w = (initiationTail pid msg).run
-      {created with steps := created.steps.push {decision := .initCreated, outcome := true, netRx := created.netRxSection}} := by
-  rw [afterEntry, StateT.run_bind, run]
+    (run : (liftWG (createInitiation pid)).run w = .ok (some msg, created)) :
+    (liftWG (afterEntry pid)).run w = (liftWG (initiationTail pid msg)).run
+      {created with ambient := {created.ambient with steps := created.ambient.steps.push {decision := .initCreated, outcome := true, netRx := created.ambient.netRxSection}}} := by
+  rw [afterEntry, liftWG_bind_variant, StateT.run_bind, run]
   rfl
 
+end Leanux.Proofs.WG.TimerDiscipline.SendReady
+
+namespace Leanux.Proofs.WG.TimerDiscipline.SendReady
+open Leanux Leanux.WG Campaign2 Noise
+
+/-- The actual successful entry prefix, retaining all unmodified Product fields. -/
+def initiationCreationState (w : World) (d : Device) (pid : PeerId) (p : Peer)
+    (rate last : List UInt8) (records : List HiddenRecord) : World :=
+  {w with
+    wg := {w.wg with dev := some (initiationEntryDevice d pid p last)}
+    ambient := {w.ambient with
+      hidden := some records
+      steps := w.ambient.steps.push {decision := .initRateLimited, outcome := false, operands := some ((p.lastSentHandshake + REKEY_TIMEOUT.toInt64 * NSEC_PER_SEC64).toInt, (initiationTailClock rate).toInt), netRx := w.ambient.netRxSection}}}
+
+/-- Correct the former unconditional totality claim: the original static and
+record premises establish actual entry/creation success, followed by the exact
+current arm action. Missing wheel records retain their actual errors. -/
 theorem sendInitiation_total (pid : PeerId) (d : Device) (p : Peer)
     (resident : d.peers[pid]? = some p)
     (rate last ephemeral clock tailClock : List UInt8)
@@ -200,46 +254,59 @@ theorem sendInitiation_total (pid : PeerId) (d : Device) (p : Peer)
     (running : (sendCreationResult pid d p last ephemeral clock fresh.value).2.running = true)
     (alive : createdPeer.isDead = false)
     (tailLen : tailClock.length = 8) (input : RetransmitArmInput) (valid : input.Valid)
-    (w : World) (device : w.k.wg = some d) (mode : w.armRecords = true)
-    (unarmed : w.allocArmed.contains "sendBufSkb" = false)
-    (present : w.hidden = some ({site := 6, bytes := rate} :: {site := 7, bytes := last} ::
+    (w : World) (device : w.wg.dev = some d) (mode : w.ambient.armRecords = true)
+    (unarmed : w.ambient.allocArmed.contains "sendBufSkb" = false)
+    (present : w.ambient.hidden = some ({site := 6, bytes := rate} :: {site := 7, bytes := last} ::
       {site := 1, bytes := ephemeral} :: {site := 3, bytes := clock} ::
       Index.drawStream collisions fresh ({site := 8, bytes := tailClock} :: input.records rest))) :
+    let supplied := {site := 1, bytes := ephemeral} :: {site := 3, bytes := clock} ::
+      Index.drawStream collisions fresh ({site := 8, bytes := tailClock} :: input.records rest)
+    let beforeCreate := initiationCreationState w d pid p rate last supplied
     let made := sendCreationResult pid d p last ephemeral clock fresh.value
-    ∃ final, (sendHandshakeInitiation pid).run w = .ok ((), final) ∧
-      final.k.wg = some {initiationTailDevice made.2 pid createdPeer made.1 tailClock with
-        peers := (initiationTailDevice made.2 pid createdPeer made.1 tailClock).peers.insert pid
-          ((initiationTailPeer createdPeer made.1 tailClock).setTimer .retransmitHandshake
-            (some (input.caller + input.delay.toUInt64)))} ∧
-      final.hidden = some rest ∧ final.armRecords = true ∧ final.jiffiesLast = some input.now := by
+    ∃ created,
+      (liftWG (createInitiation pid)).run beforeCreate = .ok (some made.1, created) ∧
+      created.wg.dev = some made.2 ∧
+      created.ambient.hidden = some ({site := 8, bytes := tailClock} :: input.records rest) ∧
+      created.ambient.armRecords = true ∧
+      (liftWG (sendHandshakeInitiation pid)).run w =
+        (liftWG (armTimer pid .retransmitHandshake input.delay (some input.caller))).run
+          (initiationArmState
+            {created with ambient := {created.ambient with
+              steps := created.ambient.steps.push {decision := .initCreated, outcome := true, netRx := created.ambient.netRxSection}}}
+            made.2 pid createdPeer made.1 tailClock input rest) := by
   let supplied := {site := 1, bytes := ephemeral} :: {site := 3, bytes := clock} ::
     Index.drawStream collisions fresh ({site := 8, bytes := tailClock} :: input.records rest)
-  let beforeCreate := {w with
-    k := {w.k with wg := some (initiationEntryDevice d pid p last)}
-    hidden := some supplied
-    steps := w.steps.push {decision := .initRateLimited, outcome := false, operands := some ((p.lastSentHandshake + REKEY_TIMEOUT.toInt64 * NSEC_PER_SEC64).toInt, (initiationTailClock rate).toInt), netRx := w.netRxSection}}
-  have entry : (initiationEntry pid).run w = .ok (true, beforeCreate) :=
+  let beforeCreate := initiationCreationState w d pid p rate last supplied
+  let made := sendCreationResult pid d p last ephemeral clock fresh.value
+  have entry : (liftWG (initiationEntry pid)).run w = .ok (true, beforeCreate) :=
     initiationEntry_run pid d p rate last supplied w device resident rateLen lastLen expired present
-  obtain ⟨msg, created, creationRun, exactMsg, exactDevice, exactRecords, exactMode⟩ :=
+  obtain ⟨out, createdG, createdAmbient, creationNative, exactMsg, exactDevice, exactRecords, exactMode⟩ :=
     InitiationReady.createInitiation_projected pid (initiationEntryDevice d pid p last)
       (initiationEntryPeer p last) true (by simp [initiationEntryDevice]) identity word nonnull
       ephemeral clock randomWidth width secretNonNull pubOk dhOk collisions fresh
       ({site := 8, bytes := tailClock} :: input.records rest) allCollide isFresh
-      beforeCreate ⟨rfl, rfl, mode⟩
-  have allocSame := (Noise.ensures_iff _ _ _).mpr
-    (createInitiation_allocArmed w.allocArmed pid)
-    beforeCreate msg created rfl creationRun
-  subst msg
-  let made := sendCreationResult pid d p last ephemeral clock fresh.value
-  let beforeTail := {created with steps := created.steps.push {decision := .initCreated, outcome := true, netRx := created.netRxSection}}
-  obtain ⟨final, tailRun, finalDevice, records, finalMode, now, units, sent⟩ :=
-    initiationTail_run pid made.2 createdPeer made.1 tailClock input rest beforeTail
-      exactDevice createdResident cookieInvalid interval endpoint running alive tailLen valid exactMode
-      (by change created.allocArmed.contains "sendBufSkb" = false; rw [allocSame]; exact unarmed)
-      exactRecords
-  refine ⟨final, ?_, finalDevice, records, finalMode, now⟩
-  rw [sendInitiation_factored, StateT.run_bind, entry]
-  change (afterEntry pid).run beforeCreate = .ok ((), final)
+      beforeCreate.wg beforeCreate.ambient ⟨rfl, rfl, mode⟩
+  have allocSame := createInitiation_allocArmed w.ambient.allocArmed pid beforeCreate.wg
+    beforeCreate.ambient (out, createdG) createdAmbient rfl creationNative
+  subst out
+  let created := {beforeCreate with wg := createdG, ambient := createdAmbient}
+  have creationRun : (liftWG (createInitiation pid)).run beforeCreate = .ok (some made.1, created) := by
+    change (((createInitiation pid).run beforeCreate.wg).run beforeCreate.ambient >>= _) = _
+    rw [creationNative]
+    rfl
+  have createdDevice : created.wg.dev = some made.2 := exactDevice
+  have createdRecords : created.ambient.hidden = some ({site := 8, bytes := tailClock} :: input.records rest) := exactRecords
+  have createdMode : created.ambient.armRecords = true := exactMode
+  let beforeTail := {created with ambient := {created.ambient with
+    steps := created.ambient.steps.push {decision := .initCreated, outcome := true, netRx := created.ambient.netRxSection}}}
+  have tailRun := initiationTail_run pid made.2 createdPeer made.1 tailClock input rest beforeTail
+    createdDevice createdResident cookieInvalid interval endpoint running alive tailLen valid createdMode
+    (by change createdAmbient.allocArmed.contains "sendBufSkb" = false; rw [allocSame]; exact unarmed)
+    createdRecords
+  refine ⟨created, creationRun, createdDevice, createdRecords, createdMode, ?_⟩
+  rw [sendInitiation_factored, liftWG_bind_variant, StateT.run_bind, entry]
+  change (liftWG (afterEntry pid)).run beforeCreate = _
   rw [afterEntry_created pid made.1 beforeCreate created creationRun]
   exact tailRun
+
 end Leanux.Proofs.WG.TimerDiscipline.SendReady

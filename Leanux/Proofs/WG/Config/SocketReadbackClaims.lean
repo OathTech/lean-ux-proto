@@ -43,9 +43,9 @@ theorem socketReadback_returns (pid : PeerId) (d : Device) (p : Peer)
   have start := netlinkDumpStart_front d p nodes front b sock idle first
   have drain := getterDrain_two d p nodes front b tail sock empty endpoint lastFits last
   have whole : Returns (wgGetDevice (byIndex d))
-      (fun w => w.k.wg = some d ∧ w.k.nlSock7 = sock ∧ selectsDevice w d)
+      (fun w => w.dev = some d ∧ w.nlSock7 = sock ∧ selectsDevice w d)
       (fun q w => q = .ok (suffixJson d p nodes (front ++ b :: tail)) ∧
-        w.k.wg = some d ∧ w.k.nlSock7 = socketReadbackFinal sock d) := by
+        w.dev = some d ∧ w.nlSock7 = socketReadbackFinal sock d) := by
     rw [wgGetDevice_source]
     exact returns_bind _ _ start (fun _ => drain)
   exact whole

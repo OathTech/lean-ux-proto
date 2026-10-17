@@ -29,18 +29,18 @@ theorem scalarSocketReadback_source (d : Device) (key psk : Key) (interval : Nat
       let ret ← wgSetDevice (scalarDeviceAttrs d key psk interval bad)
       let dump ← wgGetDevice (byIndex d)
       pure (ret, dump))
-      (fun w => w.k.wg = some d ∧ w.k.nlSock7 = sock ∧ selectsDevice w d)
+      (fun w => w.dev = some d ∧ w.nlSock7 = sock ∧ selectsDevice w d)
       (fun result w =>
         let updated := scalarRequestDevice d pid p psk interval
         let configured := { p with presharedKey := psk, persistentKeepaliveInterval := interval }
         result = ((if bad then -EINVAL else 0),
           .ok (suffixJson updated configured nodes (front ++ b :: tail))) ∧
-        w.k.wg = some updated ∧ w.k.nlSock7 = socketReadbackFinal sock updated) := by
-  intro initial h
+        w.dev = some updated ∧ w.nlSock7 = socketReadbackFinal sock updated) := by
+  intro initial ambient h
   obtain ⟨hd, hs, selected⟩ := h
-  obtain ⟨ret, afterSet, setRun, hret, hdev, hframe⟩ :=
+  obtain ⟨ret, afterSet, setAmbient, setRun, hret, hdev, hframe⟩ :=
     setDevice_scalars_framed d key psk interval bad pid p sock initial.fixtureNetDevices
-      found resident live bounded down initial ⟨hd, ⟨hs, rfl⟩, selected⟩
+      found resident live bounded down initial ambient ⟨hd, ⟨hs, rfl⟩, selected⟩
   let updated := scalarRequestDevice d pid p psk interval
   let configured := { p with presharedKey := psk, persistentKeepaliveInterval := interval }
   have hg := socketReadback_returns pid updated configured nodes front b tail sock
@@ -55,17 +55,14 @@ theorem scalarSocketReadback_source (d : Device) (key psk : Key) (interval : Nat
     idle empty
   have selected' : selectsDevice afterSet updated := by
     simpa [selectsDevice, updated, scalarRequestDevice, scalarDevice, withPeer, hframe.2] using selected
-  obtain ⟨dump, final, getRun, hresult, hfinal, hsocket⟩ :=
-    hg afterSet ⟨hdev, hframe.1, selected'⟩
-  refine ⟨(ret, dump), final, ?_, ?_⟩
-  · change (do
-      let ret ← wgSetDevice (scalarDeviceAttrs d key psk interval bad)
-      let dump ← wgGetDevice (byIndex d)
-      pure (ret, dump)).run initial = .ok ((ret, dump), final)
-    rw [StateT.run_bind, setRun]
-    change (do let dump ← wgGetDevice (byIndex d); pure (ret, dump)).run afterSet = _
+  obtain ⟨dump, final, finalAmbient, getRun, hresult, hfinal, hsocket⟩ :=
+    hg afterSet setAmbient ⟨hdev, hframe.1, selected'⟩
+  refine ⟨(ret, dump), final, finalAmbient, ?_, ?_⟩
+  · change (((wgSetDevice (scalarDeviceAttrs d key psk interval bad)).run initial).run ambient >>= _) = _
+    rw [setRun]
+    change (((wgGetDevice (byIndex d)).run afterSet).run setAmbient >>= _) = _
     have selector : byIndex d = byIndex updated := rfl
-    rw [selector, StateT.run_bind, getRun]
+    rw [selector, getRun]
     rfl
   · exact ⟨by simp [hret, hresult, updated, configured], hfinal, hsocket⟩
 

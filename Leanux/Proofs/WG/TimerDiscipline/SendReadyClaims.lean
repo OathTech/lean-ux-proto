@@ -1,13 +1,31 @@
 import Leanux.Proofs.WG.Campaign2.Bridge
 import Leanux.Proofs.WG.TimerDiscipline.SendReadySource
 
+set_option autoImplicit false
 namespace Leanux.Proofs.WG.TimerDiscipline.SendReady
 open Leanux Leanux.WG Campaign2 Noise
 
-/-- Total original initiation send and retransmit arm from supplied records and
-static pure-state readiness. No endpoint means no packet is emitted by the
-send-buffer cut; its error is ignored by the original caller, which still arms
-the timer. The claim records Device, hidden suffix, mode and final clock. -/
+/-- Retain the actual creation execution and every Product component before
+continuing with the current wheel arm. The entry/send prefix changes only the
+fields fixed by the checked source cuts. -/
+def sendInitiationContinuation (pid : PeerId) (d : Device) (p createdPeer : Peer)
+    (rate last ephemeral clock tailClock : List UInt8)
+    (collisions : List Index.Draw) (fresh : Index.Draw) (input : RetransmitArmInput)
+    (rest : List HiddenRecord) : Leanux.M Unit := do
+  let supplied := {site := 1, bytes := ephemeral} :: {site := 3, bytes := clock} ::
+    Index.drawStream collisions fresh ({site := 8, bytes := tailClock} :: input.records rest)
+  modify fun initial => initiationCreationState initial d pid p rate last supplied
+  let _ ← liftWG (createInitiation pid)
+  let made := sendCreationResult pid d p last ephemeral clock fresh.value
+  modify fun created => initiationArmState
+    {created with ambient := {created.ambient with
+      steps := created.ambient.steps.push {decision := .initCreated, outcome := true, netRx := created.ambient.netRxSection}}}
+    made.2 pid createdPeer made.1 tailClock input rest
+  liftWG (armTimer pid .retransmitHandshake input.delay (some input.caller))
+
+/-- The original supplied-record domain determines exact outcome agreement
+through actual creation and the arm continuation, including wheel-record errors.
+No unconditional sender success is asserted. -/
 theorem sendInitiation_projected (pid : PeerId) (d : Device) (p : Peer)
     (resident : d.peers[pid]? = some p)
     (rate last ephemeral clock tailClock : List UInt8)
@@ -31,23 +49,24 @@ theorem sendInitiation_projected (pid : PeerId) (d : Device) (p : Peer)
     (running : (sendCreationResult pid d p last ephemeral clock fresh.value).2.running = true)
     (alive : createdPeer.isDead = false)
     (tailLen : tailClock.length = 8) (input : RetransmitArmInput) (valid : input.Valid) :
-    Campaign2.Returns (sendHandshakeInitiation pid)
-      (fun s => s.wg.device = some d ∧ s.wg.armRecords = true ∧
+    Product.AgreesOn
+      (fun s => s.wg.device = some d ∧ s.ambient.armRecords = true ∧
         s.ambient.allocArmed.contains "sendBufSkb" = false ∧ s.ambient.hidden = some ({site := 6, bytes := rate} :: {site := 7, bytes := last} ::
         {site := 1, bytes := ephemeral} :: {site := 3, bytes := clock} ::
         Index.drawStream collisions fresh ({site := 8, bytes := tailClock} :: input.records rest)))
-      (fun _ s =>
-        let made := sendCreationResult pid d p last ephemeral clock fresh.value
-        s.wg.device = some {initiationTailDevice made.2 pid createdPeer made.1 tailClock with
-          peers := (initiationTailDevice made.2 pid createdPeer made.1 tailClock).peers.insert pid
-            ((initiationTailPeer createdPeer made.1 tailClock).setTimer .retransmitHandshake
-              (some (input.caller + input.delay.toUInt64)))} ∧
-        s.ambient.hidden = some rest ∧ s.wg.armRecords = true ∧ s.wg.jiffiesLast = some input.now) := by
-  intro w pre
-  obtain ⟨final, run, post⟩ := sendInitiation_total pid d p resident rate last ephemeral clock tailClock rateLen lastLen expired identity
-    word nonnull randomWidth width secretNonNull pubOk dhOk collisions fresh rest allCollide isFresh
+      (liftWG (sendHandshakeInitiation pid))
+      (sendInitiationContinuation pid d p createdPeer rate last ephemeral clock tailClock
+        collisions fresh input rest) := by
+  intro initial pre
+  obtain ⟨created, creation, _, _, _, effect⟩ := sendInitiation_total pid d p resident
+    rate last ephemeral clock tailClock rateLen lastLen expired identity word nonnull
+    randomWidth width secretNonNull pubOk dhOk collisions fresh rest allCollide isFresh
     createdPeer createdResident cookieInvalid interval endpoint running alive tailLen input valid
-    w pre.1 pre.2.1 pre.2.2.1 pre.2.2.2
-  exact ⟨(), final, run, post⟩
+    initial pre.1 pre.2.1 pre.2.2.1 pre.2.2.2
+  apply congrArg Product.observeResult
+  rw [effect]
+  change _ = ((liftWG (createInitiation pid)).run _ >>= _)
+  rw [creation]
+  rfl
 
 end Leanux.Proofs.WG.TimerDiscipline.SendReady

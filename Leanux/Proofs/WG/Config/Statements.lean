@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Config.LiveRemovalObservation
 import Leanux.Proofs.WG.Config.SocketReadbackClaims
 import Leanux.Proofs.WG.Config.ScalarSocketReadbackClaims
 import Leanux.Proofs.WG.Config.SourceClaims
@@ -15,6 +16,7 @@ import Leanux.Proofs.WG.Config.RemoveAllObservationSource
 import Leanux.Proofs.WG.Config.ReplacePeersRequestClaims
 import Leanux.Proofs.WG.Config.MultipartClaims
 
+set_option autoImplicit false
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise
 
@@ -24,9 +26,10 @@ theorem original_invalid_allowedip (pid : PeerId) (ip : AllowedIpAttrs)
     (invalid : ¬ validAllowedIp ip) (initial : Campaign2.Core) :
     Campaign2.Ensures (setAllowedip pid ip) (fun w => w.wg.toCore = initial)
       (fun ret w => ret = -EINVAL ∧ w.wg.toCore = initial) := by
-  intro w ret v hp hr
-  have h := SourceClaims.original_invalid_allowedip pid ip invalid w.k w ret v rfl hr
+  intro g ambient ret final after hp hr
+  have h := setAllowedip_rejected pid ip invalid g g ambient ret final after rfl hr
   exact ⟨h.1, (congrArg Campaign2.core h.2).trans hp⟩
+
 
 /-- With sufficient tailroom, the original allowed-IP dump emits exactly
 its family/address/prefix fields, preserves the WireGuard core and consumes their space. -/
@@ -38,9 +41,10 @@ theorem original_allowedip_dump (skb : NlSkb) (family masked cidr : Nat)
           some (Lean.Json.mkObj [("family", Lean.toJson family),
             ("addr", Lean.toJson (hexBE masked (if family = 6 then 16 else 4))),
             ("cidr", Lean.toJson cidr)]))) := by
-  intro w ret v hp hr
-  have h := SourceClaims.original_allowedip_dump skb family masked cidr room w.k w ret v rfl hr
+  intro g ambient ret final after hp hr
+  have h := getAllowedips_exact skb family masked cidr room g g ambient ret final after rfl hr
   exact ⟨(congrArg Campaign2.core h.1).trans hp, h.2⟩
+
 
 /-- The private-key leaf clamps the stored key, uses generation's identity
 flag, and retains the previous public bytes when the null-secret arm writes none. -/
@@ -78,12 +82,11 @@ theorem original_absent_remove_update (a : PeerAttrs) (key : Key) (flags : UInt3
     (noCreate : flags &&& (WGPEER_F_REMOVE_ME ||| WGPEER_F_UPDATE_ONLY) ≠ 0) :
     Campaign2.Ensures (setPeerCmd a) (fun w => w.wg.toCore = initial)
       (fun ret w => ret = 0 ∧ w.wg.toCore = initial) := by
-  intro w ret v hp hr
-  have hd : w.k.wg = some d := by
-    have h := congrArg Campaign2.Core.device hp
-    exact h.trans device
-  have h := SourceClaims.original_absent_remove_update a key flags w.k d hd missing pubkey flagattr valid protocol noCreate w ret v rfl hr
+  intro g ambient ret final after hp hr
+  have hd : g.dev = some d := (congrArg Campaign2.Core.device hp).trans device
+  have h := setPeer_absent_remove_update a key flags g d hd missing pubkey flagattr valid protocol noCreate g ambient ret final after rfl hr
   exact ⟨h.1, (congrArg Campaign2.core h.2).trans hp⟩
+
 
 /-- An unknown peer flag with a supplied public key returns EOPNOTSUPP
 and preserves the WireGuard core on normal completion. -/
@@ -92,9 +95,10 @@ theorem original_invalid_peer_flags (a : PeerAttrs) (key : Key) (flags : UInt32)
     (invalid : flags &&& ~~~WGPEER_F_ALL ≠ 0) (initial : Campaign2.Core) :
     Campaign2.Ensures (setPeerCmd a) (fun w => w.wg.toCore = initial)
       (fun ret w => ret = -EOPNOTSUPP ∧ w.wg.toCore = initial) := by
-  intro w ret v hp hr
-  have h := SourceClaims.original_invalid_peer_flags a key flags pubkey flagattr invalid w.k w ret v rfl hr
+  intro g ambient ret final after hp hr
+  have h := setPeer_invalid_flags a key flags pubkey flagattr invalid g g ambient ret final after rfl hr
   exact ⟨h.1, (congrArg Campaign2.core h.2).trans hp⟩
+
 
 /-- A supplied unsupported protocol version, after valid flags, returns
 EPFNOSUPPORT and preserves the WireGuard core on normal completion. -/
@@ -105,9 +109,10 @@ theorem original_invalid_peer_protocol (a : PeerAttrs) (key : Key) (flags : UInt
     (initial : Campaign2.Core) :
     Campaign2.Ensures (setPeerCmd a) (fun w => w.wg.toCore = initial)
       (fun ret w => ret = -EPFNOSUPPORT ∧ w.wg.toCore = initial) := by
-  intro w ret v hp hr
-  have h := SourceClaims.original_invalid_peer_protocol a key flags version pubkey flagattr valid protocol invalid w.k w ret v rfl hr
+  intro g ambient ret final after hp hr
+  have h := setPeer_invalid_protocol a key flags version pubkey flagattr valid protocol invalid g g ambient ret final after rfl hr
   exact ⟨h.1, (congrArg Campaign2.core h.2).trans hp⟩
+
 
 /-- A valid request for the device identity, absent from the public-key table,
 returns zero without changing the WireGuard core on normal completion. -/
@@ -121,32 +126,33 @@ theorem original_absent_self_peer (a : PeerAttrs) (key : Key) (flags : UInt32)
     (identity : d.staticIdentity.hasIdentity = true) (self : key = d.staticIdentity.staticPublic) :
     Campaign2.Ensures (setPeerCmd a) (fun w => w.wg.toCore = initial)
       (fun ret w => ret = 0 ∧ w.wg.toCore = initial) := by
-  intro w ret v hp hr
-  have hd : w.k.wg = some d := by
-    have h := congrArg Campaign2.Core.device hp
-    exact h.trans device
-  have h := SourceClaims.original_absent_self_peer a key flags w.k d hd missing pubkey flagattr valid protocol identity self w ret v rfl hr
+  intro g ambient ret final after hp hr
+  have hd : g.dev = some d := (congrArg Campaign2.Core.device hp).trans device
+  have h := setPeer_absent_self a key flags g d hd missing pubkey flagattr valid protocol identity self g ambient ret final after rfl hr
   exact ⟨h.1, (congrArg Campaign2.core h.2).trans hp⟩
+
 
 /-- At the acquired-peer stage, removal takes precedence over every
 attribute update; the projected agreement includes the subsequent peer put. -/
 theorem original_acquired_remove_precedence (a : PeerAttrs) (peer : Option PeerId) (flags : UInt32)
     (psk : Option Key) (pid : PeerId) (remove : flags &&& WGPEER_F_REMOVE_ME ≠ 0) :
-    Campaign2.AgreesOn (fun _ => True) (peerConfigUpdateSource a peer flags psk pid) (do
+    Campaign2.Product.AgreesOn (fun _ => True) (liftWG (peerConfigUpdateSource a peer flags psk pid)) (liftWG (do
       _ ← branch .peerRemoveMe true
       peerRemove peer
       peerPut peer
       _ ← branch .peerZeroPsk a.presharedKey.isSome
-      pure 0) := by
+      pure 0)) := by
   intro w _
   rw [SourceClaims.original_acquired_remove_precedence a peer flags psk pid remove]
+
 
 /-- The validation, lookup and acquired-peer stages used above are exactly
 the original peer setter, including every return and Stop. -/
 theorem original_peer_set_source (a : PeerAttrs) :
-    Campaign2.AgreesOn (fun _ => True) (setPeerCmdSource a) (setPeerCmd a) := by
+    Campaign2.Product.AgreesOn (fun _ => True) (liftWG (setPeerCmdSource a)) (liftWG (setPeerCmd a)) := by
   intro w _
   rw [SourceClaims.original_peer_set_source a]
+
 
 /-- For an existing peer with positive reference count while down, normal completion stores the
 preshared key and keepalive interval through the exact device updates. -/
@@ -492,19 +498,21 @@ last-sent time minus six seconds in wrapping Int64 arithmetic. The prefix and re
 original operation; this is not merely an unconstrained existential timestamp. -/
 theorem original_expiry_clock_relation (pid : PeerId) (d : Device) (p : Peer)
     (resident : d.peers[pid]? = some p) :
-    Campaign2.Ensures (observedExpiry pid) (fun w => w.wg.device = some d)
+    Campaign2.Product.Ensures (observedExpiry pid) (fun s => s.wg.device = some d)
       (fun observation final => ∃ now before after,
         observation = .ok ((before, now), after) ∧
         final.wg.device = some (expiredDevice d pid p now)) :=
   observedExpiry_effect pid d p resident
 
+
 /-- Exact projected source agreement exposing identity installation and the peer-list
 loop after optional self-peer removal, before later peer attributes. This is
 unconditional; the effects below separately require normal completion. -/
 theorem original_private_key_factor (a : DeviceAttrs) :
-    Campaign2.AgreesOn (fun _ => True) (deviceKeyFactoredSource a) (deviceKeySource a) := by
+    Campaign2.Product.AgreesOn (fun _ => True) (liftWG (deviceKeyFactoredSource a)) (liftWG (deviceKeySource a)) := by
   intro w _
   rw [SourceClaims.original_private_key_factor a]
+
 
 /-- With staged sending disabled, a completed peer update precomputes its
 static-static value and performs the exact expiry store transformation. The
@@ -534,60 +542,67 @@ theorem original_quiet_key_install (d : Device) (key : Key)
         KeyPeerUpdates (installedDevice d key) d.peerList final) :=
   SourceClaims.original_quiet_key_install d key quiet
 
-/-- The original non-retry handshake queue call resets attempts, reads the
-age-test clock, and has the exact Device effect selected by that actual read:
-no queue change, a balanced pending reference pair, or a fresh queued reference.
-Ambient bookkeeping and record availability are outside this normal-run claim. -/
+/-- The actual prefix and clock read come from the same full Product entry.
+The final Device is selected by an existential actual queue inspection, retaining
+age/dead guards and the inspection-dependent reference effect. The returned
+payload records clock states, not a queue-inspection certificate. -/
 theorem original_queued_handshake_clock (pid : PeerId) (d : Device) (p : Peer)
     (resident : d.peers[pid]? = some p) :
-    Campaign2.Ensures (observedQueuedHandshake pid) (fun w => w.wg.device = some d)
-      (fun observation final => ∃ now before after,
+    Campaign2.Product.Ensures (observedQueuedHandshake pid) (fun s => s.wg.device = some d)
+      (fun observation final => ∃ now seen before after,
         observation = .ok (({ p with timerHandshakeAttempts := 0 }, before, now), after) ∧
-        final.wg.device = some (queuedDevice (withPeer d pid { p with timerHandshakeAttempts := 0 })
-          pid { p with timerHandshakeAttempts := 0 } now)) :=
+        match seen with
+        | none => final.wg.device = some (withPeer d pid {p with timerHandshakeAttempts := 0}) ∧
+            (¬p.lastSentHandshake + REKEY_TIMEOUT.toInt64 * NSEC_PER_SEC64 ≤ now ∨ p.isDead = true)
+        | some queued => p.lastSentHandshake + REKEY_TIMEOUT.toInt64 * NSEC_PER_SEC64 ≤ now ∧
+            p.isDead = false ∧ final.wg.device = some (queuedDeviceAfterInspection
+              (withPeer d pid {p with timerHandshakeAttempts := 0})
+              pid {p with timerHandshakeAttempts := 0} now queued)) :=
   observedQueuedHandshake_effect pid d p resident
 
-/-- Original staging with absent or invalid current sending material either
-returns unchanged for an empty staged list, or restores packets and has the
-specified handshake-queue Device effects. Temporary key references preserve
-lookups. Dangling current slots cannot complete with nonempty staging. Clock
-values here are existential; Ambient bookkeeping and record consumption are not
-characterized, and no return guarantee is claimed. -/
+
+/-- Corrected invalid-key effects use the observation of actual staging and
+queue inspection. The original invalid-key domain is retained; an empty list
+returns unchanged, while missing prerequisites may still stop. This is a
+normal-completion claim over the decorated original action. -/
 theorem original_staged_invalid_key (pid : PeerId) (d : Device) (p : Peer)
     (resident : d.peers[pid]? = some p)
     (invalid : ∀ id k, p.keypairCurrent = some id → d.keypairs[id]? = some k → k.sending.isValid = false) :
-    Campaign2.Ensures (sendStagedPackets pid) (fun w => w.wg.device = some d)
-      (fun _ w => if p.staged = [] then w.wg.device = some d
-        else ∃ now, w.wg.device = some (invalidStagedDevice d pid p now)) :=
+    Campaign2.Ensures (observedInvalidStaged pid) (fun s => s.wg.device = some d)
+      (invalidStagedObservation d pid p) :=
   SourceClaims.original_staged_invalid_key pid d p resident invalid
 
-/-- Both branches of the original key-update peer body have the specified
-Device effects: precomputation, expiry, and optional staged-packet restoration
-and handshake queueing. The clocks are existential and completion is assumed. -/
+
+/-- Corrected peer effects retain actual precomputation, expiry and optional
+staged-send observations, on the original resident-peer domain. Clock and queue
+consequences are taken from those actual inspections; completion is assumed. -/
 theorem original_key_peer_effects (pid : PeerId) (d : Device) (p : Peer) (sendStaged : Bool)
     (resident : d.peers[pid]? = some p) :
-    Campaign2.Ensures (keyPeerSource pid sendStaged) (fun w => w.wg.device = some d)
-      (fun _ w => ∃ expiryNow queueNow,
-        w.wg.device = some (keyPeerDevice d pid p expiryNow sendStaged queueNow)) :=
+    Campaign2.Ensures (observedKeyPeerSource pid sendStaged) (fun s => s.wg.device = some d)
+      (keyPeerObservation d pid p sendStaged) :=
   SourceClaims.original_key_peer_effects pid d p sendStaged resident
 
-/-- The original peer-list loop realizes the ordered Device relation for
-both staged-send settings. Repeated peers and keypair aliases are permitted.
-This normal-completion result does not assert aggregate clock provenance. -/
+
+/-- The actual ordered peer observations determine the corrected Device
+relation for either staged-send setting. Repeated peers and aliases remain
+permitted, and normal completion is assumed. -/
 theorem original_key_peer_loop_effects (pids : List PeerId) (d : Device) (sendStaged : Bool) :
-    Campaign2.Ensures (keyPeerLoopSource pids sendStaged) (fun w => w.wg.device = some d)
-      (fun _ w => ∃ final, w.wg.device = some final ∧ KeyPeerRun sendStaged d pids final) :=
+    Campaign2.Ensures (observedKeyPeerLoopSource pids sendStaged)
+      (fun s => s.wg.device = some d)
+      (fun observations s => ∃ final, s.wg.device = some final ∧
+        ObservedKeyPeerRun sendStaged d pids observations final) :=
   SourceClaims.original_key_peer_loop_effects pids d sendStaged
 
-/-- The installation block composes identity and cookie keys with the full
-snapshotted peer-list relation, using the code's staged-send condition. The
-baseline is after optional self-peer removal and before later peer attributes;
-this is a Device-state normal-completion contract for that block. -/
+
+/-- The installation relation follows actual peer observations after identity
+and cookie-key publication. It starts after optional collision removal and
+preserves the original domain; this is a normal-completion contract. -/
 theorem original_key_install_effects (d : Device) (key : Key) :
-    Campaign2.Ensures (keyInstallSource key) (fun w => w.wg.device = some d)
-      (fun _ w => ∃ final, w.wg.device = some final ∧
-        KeyPeerRun (requestsStagedSend d key) (installedDevice d key) d.peerList final) :=
+    Campaign2.Ensures (observedKeyInstallSource key) (fun s => s.wg.device = some d)
+      (fun observations s => ∃ final, s.wg.device = some final ∧
+        ObservedKeyPeerRun (requestsStagedSend d key) (installedDevice d key) d.peerList observations final) :=
   SourceClaims.original_key_install_effects d key
+
 
 /-- A single empty-device getter is accepted from the runner's ordinary
 fixture with an empty hidden record list. This establishes reachability of the
@@ -608,18 +623,18 @@ theorem empty_dump_cancellation_accounting :
     DumpCancellation.cancelledNestRoom = 3724 ∧ 3720 + nlaTotal 0 = DumpCancellation.cancelledNestRoom :=
   SourceClaims.empty_dump_cancellation_accounting
 
-/-- A changed private-key-only outer request with no generated-public-key
-peer-table match returns zero on normal completion, increments generation, and
-performs the full installation relation including optional staged sending.
-The raw request differs from the stored key; no peer-removal arm is taken.
-This does not guarantee input records or establish aggregate clock provenance. -/
+/-- On the original changed-key/no-collision domain, normal completion returns
+zero and the observed installation relation after generation update. No input
+record availability or aggregate clock provenance is assumed. -/
 theorem original_private_key_request_no_collision (d : Device) (key : Key)
     (changed : d.staticIdentity.staticPrivate ≠ key) (absent : noKeyCollision d key) :
     Campaign2.Ensures (wgSetDevice (privateKeyAttrs d key))
-      (fun w => w.wg.device = some d ∧ ClaimView.selectsDevice w d)
-      (fun ret w => ret = 0 ∧ ∃ final, w.wg.device = some final ∧
-        KeyPeerRun (requestsStagedSend d key) (installedDevice (requestGeneration d) key) d.peerList final) :=
+      (fun s => s.wg.device = some d ∧ ClaimView.selectsDevice s d)
+      (fun ret s => ret = 0 ∧ ∃ final observations, s.wg.device = some final ∧
+        ObservedKeyPeerRun (requestsStagedSend d key)
+          (installedDevice (requestGeneration d) key) d.peerList observations final) :=
   SourceClaims.original_private_key_request_no_collision d key changed absent
+
 
 /-- A fresh original callback for one resident peer without allowed IPs
 returns all fixed device and peer attributes, completes its cursor and preserves
@@ -754,52 +769,97 @@ theorem original_peer_make_dead (pid : PeerId) (p : Peer) (d removed : Device)
         (∀ id ∈ p.allowedipsList, nodeOwner final id = none)) :=
   SourceClaims.original_peer_make_dead pid p d removed resident steps
 
-/-- Original peer removal returns for an empty-slot peer with empty send/clear
-queues and a supplied allowed-IP removal witness. The exact Device performs
-membership/death updates, three slot writes, five timer deletions, the empty
-drain, peer-count decrement and final release in source order. Final release
-erases the peer only on its last reference; otherwise the dead peer remains.
-This is a Device contract, not a frame for unrelated subsystems, a claim about every pending
-flag or a theorem for queued work and live keypair slots. -/
+/-- The original quiet-removal domain admits exact crypt-work and final-reference
+refusals, so its former totality is corrected to an outcome contract. Successful
+cleanup has the exact ordered Device effect. No new queue/readiness premise
+is added; the original empty-key and send/clear-queue premises remain. -/
 theorem original_peer_remove_quiet (pid : PeerId) (d removed : Device) (p : Peer)
     (resident : d.peers[pid]? = some p) (live : 0 < p.refcount) (count : 0 < d.numPeers)
     (empty : p.keypairNext = none ∧ p.keypairPrevious = none ∧ p.keypairCurrent = none)
     (send : d.sendWorkQueue = []) (clear : d.clearWorkQueue = [])
     (steps : RemovalEffect (unlistPeer d pid) p.allowedipsList removed) :
-    Campaign2.Returns (peerRemove (some pid)) (fun w => w.wg.device = some d)
-      (fun _ w => w.wg.device = some (quietRemovedDevice (deadPeerDevice removed pid p) pid
-        { erasePeerList p.allowedipsList p with isDead := true })) :=
+    Campaign2.Observes (peerRemove (some pid)) (fun s => s.wg.device = some d)
+      (fun _ out => quietRemovalOutcome (deadPeerDevice removed pid p) pid
+        {erasePeerList p.allowedipsList p with isDead := true} out) :=
   SourceClaims.original_peer_remove_quiet pid d removed p resident live count empty send clear steps
 
-/-- A resident dead peer with a static reference budget for its possibly aliased
-key slots and empty send/clear queues completes original after-death removal.
-The exact effect starts with ordered key clearing, then deletes timers, decrements
-the peer count and releases the peer. It supplies no clear-run witness as a premise
-and does not cover queued work. -/
+
+/-- Corrected totality: the actual guard, key-clear and timer prefix determines
+the exact crypt-work or reference refusal, or the original successful Device
+effect. All original static premises remain; both observations share the same
+actual native entry states. -/
 theorem original_peer_remove_after_dead_live (pid : PeerId) (d : Device) (p : Peer)
     (resident : d.peers[pid]? = some p) (dead : p.isDead = true)
     (live : 0 < p.refcount) (count : 0 < d.numPeers)
     (ready : ClearReady d (clearKeys p))
     (send : d.sendWorkQueue = []) (clear : d.clearWorkQueue = []) :
-    Campaign2.Returns (peerRemoveAfterDead pid) (fun w => w.wg.device = some d)
-      (fun _ w => ∃ final, w.wg.device = some final ∧ LiveRemovalEffect pid d p final) :=
-  peerRemoveAfterDead_live_returns pid d p resident dead live count ready send clear
+    RemovalJointObserves (removalAfterDeadPrefix pid) (peerRemoveAfterDead pid)
+      (fun s => s.wg.device = some d) (LiveRemovalOutcomes pid d p) := by
+  intro g ambient device
+  change g.dev = some d at device
+  obtain ⟨guarded, clearedState, clearAmbient, cleared, timedState, timerAmbient,
+      guardRun, clearRun, clearedDevice, steps, clearedPeer, timerRun, timedDevice, outcome⟩ :=
+    peerRemoveAfterDead_live_returns pid d p resident dead live count ready send clear
+      g ambient device
+  refine ⟨cleared, Campaign2.snapshot timedState timerAmbient, ?_, steps, clearedPeer,
+    timedDevice, outcome⟩
+  have read : ((getDev.run clearedState).run clearAmbient) =
+      .ok ((cleared, clearedState), clearAmbient) := by
+    simp [getDev, clearedDevice]
+    rfl
+  have bindRun {α β : Type} (action : WG.M α) (next : α → WG.M β)
+      (state : WGWorld) (input : Ambient) :
+      (((action >>= next).run state).run input) =
+        (((action.run state).run input) >>= fun ((value, middle), after) =>
+          ((next value).run middle).run after) := rfl
+  have okBind {α β : Type} (value : α) (next : α → Except Stop β) :
+      (Except.ok value >>= next) = next value := rfl
+  simp only [removalAfterDeadPrefix, bindRun, guardRun, clearRun, read, timerRun, okBind]
+  rfl
 
-/-- Original peer removal supports live and aliased key slots under their static
-reference budget. The supplied allowed-IP removal witness is followed by death,
-actual key releases, timer deletions, the empty work drain, count decrement and
-final peer release. The peer remains resident when its final put is not its last
-reference. Empty send/clear queues remain an explicit boundary. -/
+
+/-- Corrected totality for full removal: the actual non-null/death/clear/timer
+prefix supplies the successful cut and precise diagnostic site. Its outcome and
+the original operation are observed from the same actual entry. All original
+static premises remain and every continuation refusal is retained. -/
 theorem original_peer_remove_live (pid : PeerId) (d removed : Device) (p : Peer)
     (resident : d.peers[pid]? = some p) (live : 0 < p.refcount) (count : 0 < d.numPeers)
     (ready : ClearReady d (clearKeys p))
     (send : d.sendWorkQueue = []) (clear : d.clearWorkQueue = [])
     (steps : RemovalEffect (unlistPeer d pid) p.allowedipsList removed) :
-    Campaign2.Returns (peerRemove (some pid)) (fun w => w.wg.device = some d)
-      (fun _ w => ∃ final, w.wg.device = some final ∧
-        LiveRemovalEffect pid (deadPeerDevice removed pid p)
-          { erasePeerList p.allowedipsList p with isDead := true } final) :=
-  peerRemove_live_returns pid d removed p resident live count ready send clear steps
+    RemovalJointObserves (removalLivePrefix pid) (peerRemove (some pid))
+      (fun s => s.wg.device = some d)
+      (LiveRemovalOutcomes pid (deadPeerDevice removed pid p)
+        {erasePeerList p.allowedipsList p with isDead := true}) := by
+  intro g ambient device
+  change g.dev = some d at device
+  obtain ⟨current, middle, made, currentDevice,
+      guarded, clearedState, clearAmbient, cleared, timedState, timerAmbient,
+      guardRun, clearRun, clearedDevice, clearSteps, clearedPeer, timerRun, timedDevice, outcome⟩ :=
+    peerRemove_live_returns pid d removed p resident live count ready send clear steps
+      g ambient device
+  refine ⟨cleared, Campaign2.snapshot timedState timerAmbient, ?_, clearSteps, clearedPeer,
+    timedDevice, outcome⟩
+  let afterNull := {ambient with steps := ambient.steps.push {
+    decision := .peerRemoveNull, outcome := false, netRx := ambient.netRxSection}}
+  change ((peerMakeDead pid).run g).run afterNull = .ok (((), current), middle) at made
+  have nullRun : ((branch .peerRemoveNull false : WG.M Bool).run g).run ambient =
+      .ok ((false, g), afterNull) := rfl
+  have read : ((getDev.run clearedState).run clearAmbient) =
+      .ok ((cleared, clearedState), clearAmbient) := by
+    simp [getDev, clearedDevice]
+    rfl
+  have bindRun {α β : Type} (action : WG.M α) (next : α → WG.M β)
+      (state : WGWorld) (input : Ambient) :
+      (((action >>= next).run state).run input) =
+        (((action.run state).run input) >>= fun ((value, middle), after) =>
+          ((next value).run middle).run after) := rfl
+  have okBind {α β : Type} (value : α) (next : α → Except Stop β) :
+      (Except.ok value >>= next) = next value := rfl
+  simp only [removalLivePrefix, removalAfterDeadPrefix, bindRun, nullRun, made,
+    guardRun, clearRun, read, timerRun, okBind]
+  rfl
+
 
 /-- A normally returning original removal derives its structural witness from
 the actual successive reads. The only structural premise is that resident nodes
@@ -854,14 +914,10 @@ theorem original_peer_remove_live_effect (pid : PeerId) (d : Device) (p : Peer)
       (fun _ s => ∃ final, s.wg.device = some final ∧ CollisionRemovalEffect pid d p final) :=
   peerRemove_live_effect_pairs pid d p resident pairs live count send clear
 
-/-- A changed private-key-only request with a live generated-public-key match
-returns zero on normal completion and performs the exact collision removal and
-installation relation. Lookup acquires one reference and its immediate caller
-put restores the original reference count before removal; both store writes
-are retained. Installation uses the actual post-removal device and peer list.
-NodePairs and quiet work queues are static scope premises; no supplied removal
-or execution witness, clear budget, completion guarantee or aggregate clock
-provenance is claimed. -/
+/-- Normal completion on the original collision domain derives the actual
+lookup, balanced reference, removal and observed installation relation. The
+post-removal Device supplies the actual peer list; no completion or new
+readiness assumption is introduced. -/
 theorem original_private_key_request_collision (d : Device) (key pub : Key)
     (pid : PeerId) (p : Peer) (changed : d.staticIdentity.staticPrivate ≠ key)
     (generated : publicResult key = (some pub, true))
@@ -872,7 +928,7 @@ theorem original_private_key_request_collision (d : Device) (key pub : Key)
     Campaign2.Ensures (wgSetDevice (privateKeyAttrs d key))
       (fun s => s.wg.device = some d ∧ ClaimView.selectsDevice s d)
       (fun ret s => ret = 0 ∧ ∃ final, s.wg.device = some final ∧
-        CollisionKeyEffect pid (requestGeneration d) p key final) :=
+        ObservedCollisionKeyEffect pid (requestGeneration d) p key final) :=
   setDevice_private_collision d key pub pid p changed generated found resident pairs
     live bounded count send clear
 
@@ -940,10 +996,10 @@ theorem original_allowedip_root_transfer (v4 : Bool) (d : Device) (id : NodeId)
         let final := transferRequestDevice d id { newNode addr cidr (allowedBits v4) owner with parent } target p
         s.wg.device = some final ∧ ∀ q : PeerId, final.peers[q]? =
           if q = target then some (transferredPeer id p) else d.peers[q]?.map (eraseListedPeer id)) := by
-  intro initial pre
-  obtain ⟨ret, final, run, zero, device⟩ :=
-    setAllowedip_root_transfer v4 d id addr cidr owner parent target p width root node resident initial pre
-  refine ⟨ret, final, run, zero, device, ?_⟩
+  intro initial ambient pre
+  obtain ⟨ret, final, after, run, zero, device⟩ :=
+    setAllowedip_root_transfer v4 d id addr cidr owner parent target p width root node resident initial ambient pre
+  refine ⟨ret, final, after, run, zero, device, ?_⟩
   intro q
   exact transferRootDevice_peers (insertSequenceDevice d) id _ target q p
 
@@ -1005,10 +1061,10 @@ theorem original_remove_flag (a : PeerAttrs) (key : Key) (flags : UInt32)
         RemoveFlagEffect pid d p final ∧
         (final.peers[pid]? = none ↔ p.refcount = 1) ∧
         (p.refcount ≠ 1 → ∃ q, final.peers[pid]? = some q ∧ q.refcount = p.refcount - 1)) := by
-  intro entry ret out pre run
+  intro entry ambient ret out after pre run
   obtain ⟨zero, final, device, effect⟩ := setPeer_remove_flag a key flags pid d p
     pubkey flagattr valid protocol remove found resident pairs live bounded count send clear
-    entry ret out pre run
+    entry ambient ret out after pre run
   exact ⟨zero, final, device, effect, removeFlag_residency effect⟩
 
 /-- The original device setter carries the REMOVE_ME effect through a single
@@ -1032,10 +1088,10 @@ theorem original_device_remove_flag (a : PeerAttrs) (key : Key) (flags : UInt32)
         RemoveFlagEffect pid (requestGeneration d) p final ∧
         (final.peers[pid]? = none ↔ p.refcount = 1) ∧
         (p.refcount ≠ 1 → ∃ q, final.peers[pid]? = some q ∧ q.refcount = p.refcount - 1)) := by
-  intro entry ret out pre run
+  intro entry ambient ret out after pre run
   obtain ⟨zero, final, device, effect⟩ := setDevice_remove_flag a key flags pid d p
     pubkey flagattr valid protocol remove found resident pairs live bounded count send clear
-    entry ret out pre run
+    entry ambient ret out after pre run
   exact ⟨zero, final, device, effect, removeFlag_residency effect⟩
 
 /-- A normally returning original REPLACE_ALLOWEDIPS request with an empty
@@ -1060,9 +1116,9 @@ theorem original_allowedips_replace_pairs (key : Key) (pid : PeerId) (d : Device
         ∃ q, (generalReplacementDevice removed pid p).peers[pid]? = some q ∧
           q.allowedipsList = [] ∧ q.refcount = p.refcount ∧ q.internalId = p.internalId ∧
           ∀ id ∈ p.allowedipsList, nodeOwner (generalReplacementDevice removed pid p) id = none) := by
-  intro entry ret out pre run
+  intro entry ambient ret out after pre run
   obtain ⟨zero, removed, steps, device⟩ := setDevice_replace_effect_pairs key pid d p
-    found resident pairs live bounded down entry ret out pre run
+    found resident pairs live bounded down entry ambient ret out after pre run
   obtain ⟨q, peer, empty, refs, identity⟩ := generalReplacement_peer removed pid p
   refine ⟨zero, removed, steps, device, ?_, q, peer, empty, refs, identity, ?_⟩
   · simpa only [generalReplacementDevice, withPeer, requestGeneration] using removalEffect_seq steps
@@ -1078,21 +1134,22 @@ and dead at the cut before cleanup, including duplicate selections. This is a
 phase-order contract: it does not assert cleanup completion, final peer erasure,
 free's global trie correctness, or the outer REPLACE_PEERS flag composition. -/
 theorem original_peer_remove_all_phase_order :
-    Campaign2.AgreesOn (fun _ => True) peerRemoveAll (do
+    Campaign2.Product.AgreesOn (fun _ => True) (liftWG peerRemoveAll) (liftWG (do
       free
       let selected := (← getDev).peerList
       removeAllMark selected
-      removeAllCleanup selected) ∧
-    Campaign2.AgreesOn (fun _ => True)
-      (do let _ ← observedRemoveAll; pure ()) peerRemoveAll ∧
-    Campaign2.Ensures observedRemoveAll (fun _ => True) (fun cut _ => RemoveAllFacts cut) := by
+      removeAllCleanup selected)) ∧
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (do let _ ← observedRemoveAll; pure ()) (liftWG peerRemoveAll) ∧
+    Campaign2.Product.Ensures observedRemoveAll (fun _ => True) (fun cut _ => RemoveAllFacts cut) := by
   constructor
-  · intro entry pre
+  · intro entry _pre
     rw [peerRemoveAll_phases]
   · constructor
-    · intro entry pre
+    · intro entry _pre
       rw [observedRemoveAll_erase]
     · exact observedRemoveAll_facts
+
 
 /-- A flag-only REPLACE_PEERS request retains the original selection, generation
 update, branch records and cleanup, including errors. Present cuts carry the
@@ -1101,17 +1158,18 @@ return has such a cut and result zero. The shape/residency premises of those
 phase facts concern the actual post-free device; no completion, final peer
 erasure, free correctness, or mixed-attribute contract is asserted. -/
 theorem original_replace_peers_phase_order (selector : DeviceRef) (d : Device) :
-    Campaign2.AgreesOn (fun _ => True)
+    Campaign2.Product.AgreesOn (fun _ => True)
       (do let result ← observedReplacePeers selector; pure result.2)
-      (wgSetDevice (replacePeersAttrs selector)) ∧
-    Campaign2.Ensures (observedReplacePeers selector) (fun _ => True)
+      (liftWG (wgSetDevice (replacePeersAttrs selector))) ∧
+    Campaign2.Product.Ensures (observedReplacePeers selector) (fun _ => True)
       (fun result _ => ∀ cut, result.1 = some cut → result.2 = 0 ∧ RemoveAllFacts cut) ∧
-    Campaign2.Ensures (observedReplacePeers (byIndex d))
-      (fun s => s.wg.device = some d ∧ ClaimView.selectsDevice s d)
+    Campaign2.Product.Ensures (observedReplacePeers (byIndex d))
+      (fun s => s.wg.device = some d ∧ ClaimView.selectsDevice s.toSnapshot d)
       (fun result _ => ∃ cut, result = (some cut, 0) ∧ RemoveAllFacts cut) := by
   refine ⟨?_, observedReplacePeers_facts selector, observedReplacePeers_selected d⟩
-  intro entry pre
+  intro entry _pre
   rw [observedReplacePeers_erase]
+
 
 /-- With two distinct resident IPv4 nodes and no endpoint, the original peer
 getter spends 168 bytes emitting its fixed attributes and first IP, then splits
