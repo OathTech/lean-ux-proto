@@ -379,7 +379,7 @@ theorem runTimerSectionAudit_preserves (worker : Worker) (hb : PrefixPreserves A
         (fun _ _ _ he hi => hi.store (congrArg (fun s : ProductStore43 => s.2.2.2) he)) worker hb)
     | timer_audit_basic
 
-private def timerDispatchAudit (w : Worker) (pid : PeerId) (t : PeerTimer)
+def timerDispatchAudit (w : Worker) (pid : PeerId) (t : PeerTimer)
     (we : WheelEntry) (step : Option UInt64) : AuditM Unit := do
   let expected ← liftPrefix (Env.timerWorker t)
   if w != expected then
@@ -528,7 +528,7 @@ macro "timer_audit_calls" : tactic => `(tactic|
   | (audit_contract_head ForIn.forIn; apply PrefixEnsures.rangeInvariant (State := World)
       (I := fun _ h w => AuditInv h w) (hs := fun _ _ _ hi => hi.safe)))
 
-private theorem timerDispatchAudit_erases (w : Worker) (pid : PeerId) (t : PeerTimer)
+theorem timerDispatchAudit_erases (w : Worker) (pid : PeerId) (t : PeerTimer)
     (we : WheelEntry) (step : Option UInt64) :
     ErasesPrefix (timerDispatchAudit w pid t we step) (timerDispatchUnit w pid t we step) := by
   unfold timerDispatchAudit timerDispatchUnit
@@ -550,7 +550,7 @@ private theorem timerDispatchAudit_erases (w : Worker) (pid : PeerId) (t : PeerT
     | (with_reducible split; all_goals try simp_all only []; all_goals try subst_vars)
     | maintenance_intro
 
-private theorem timerDispatchAudit_preserves (w : Worker) (pid : PeerId) (t : PeerTimer)
+theorem timerDispatchAudit_preserves (w : Worker) (pid : PeerId) (t : PeerTimer)
     (we : WheelEntry) (step : Option UInt64) :
     PrefixPreserves AuditInv AuditSafe (timerDispatchAudit w pid t we step) := by
   apply PrefixEnsures.preserves
@@ -569,7 +569,7 @@ private theorem timerDispatchAudit_preserves (w : Worker) (pid : PeerId) (t : Pe
     | (with_reducible split)
     | maintenance_intro
 
-private theorem timerDispatchAudit_suffix_erases {α : Type} (w : Worker) (pid : PeerId) (t : PeerTimer)
+theorem timerDispatchAudit_suffix_erases {α : Type} (w : Worker) (pid : PeerId) (t : PeerTimer)
     (we : WheelEntry) (step : Option UInt64) (x : α) :
     ErasesPrefix (do timerDispatchAudit w pid t we step; pure x)
       (do
