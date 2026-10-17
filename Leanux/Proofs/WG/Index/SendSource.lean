@@ -1,7 +1,7 @@
 import Leanux.Proofs.WG.Index.TablePreservationSource
 import Leanux.Proofs.WG.Index.SendFrames
 import Leanux.Proofs.WG.Index.OwnerCreation
-import Leanux.Proofs.WG.Index.PeerRelease
+import Leanux.Proofs.WG.Index.PeerReleaseTableFrames
 
 set_option autoImplicit false
 set_option pp.structureInstances false
@@ -23,19 +23,6 @@ theorem sendHandshakeInitiation_tables (pid : PeerId) : Ensures (sendHandshakeIn
   rw [ensures_iff]
   mvcgen [sendHandshakeInitiation, branchExpired, birthdateTest, getPeer, getDev, getK,
     branch, branchCmp, invariant, hc, hm, ht, hd, hs, hf, hh, hp]
-
-/-- A normal final release may remove the peer; no retained-reference premise is needed. -/
-theorem peerPut_tables (peer : Option PeerId) :
-    ⦃fun w => ⌜TablesSafeKernel w.k⌝⦄ peerPut peer
-      ⦃⇓? _ w => ⌜TablesSafeKernel w.k⌝⦄ := by
-  have hp := setPeer_tables
-  have hr := indexRemove_tables
-  have hc := refcountDecAndTest_kernel_variant TablesSafeKernel
-  mvcgen [peerPut, requireNotPending, getPeer, getDev, getK,
-    branch, invariant, modifyDev, modifyK, retirePeerUnits, hp, hr, hc]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [TablesSafeKernel, DeviceTablesSafe, KeypairOwnersBounded]
-  all_goals grind
 
 theorem handshakeSendWorker_tables (pid : PeerId) : Ensures (handshakeSendWorker pid)
     (fun w => TablesSafeKernel w.k) (fun _ w => TablesSafeKernel w.k) := by

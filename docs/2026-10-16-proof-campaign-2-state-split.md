@@ -20,11 +20,11 @@ and attributed theorem declarations. Campaign 2 owns 427 Lean files,
 | --- | ---: | ---: | ---: | ---: | --- |
 | Common projection | 2 | 0 | 0 | 0 | Actual native WG/Ambient and full Product observations carried; no reconstructed execution states. |
 | H1 Noise | 35 | 171 | 22 | 180 | All original Noise obligations carried, including the full terminal closure; six type-given frames deleted. Wider caller/lifetime/reachability and clock-provenance charter claims remain open. |
-| H2 Index | 68 | 318 | 52 | 190 | Table, lookup, collision records, allocation, owner invariants and lifecycle support carried; seven type-given frames deleted. Exact peer-release outcomes replace stale totality, with checked counterexamples. Terminal closure and whole-driver coherence remain pending. |
-| H3 Roaming | 35 | 119 | 13 | 115 | Endpoint/publication, polling, attempt facts, crypto, lookup and response-caller factors/facts carried with full Product certificates; two type-given frames deleted. Initiation transcript facts and broader authentication/caller closure remain pending. |
-| H4 Configuration | 130 | 554 | 79 | 330 | Scalar, identity, port, dump, allowed-IP and structural support carried; three type-given frames deleted. Quiet timer cleanup is corrected; queued-send and removal totality have checked stale-statement counterexamples. Remaining readback/effects and terminal closure remain pending. |
+| H2 Index | 68 | 318 | 52 | 191 | Table, lookup, collision records, allocation, owner invariants and lifecycle support carried; seven type-given frames deleted. Exact peer-release outcomes replace stale totality, with checked counterexamples. Terminal closure and whole-driver coherence remain pending. |
+| H3 Roaming | 35 | 119 | 13 | 119 | Endpoint/publication, polling, attempt facts, crypto, lookup and response-caller factors/facts carried with full Product certificates; two type-given frames deleted. Initiation transcript facts and broader authentication/caller closure remain pending. |
+| H4 Configuration | 130 | 554 | 79 | 338 | Scalar, identity, port, dump, allowed-IP and structural support carried; three type-given frames deleted. Quiet timer cleanup is corrected; queued-send and removal totality have checked stale-statement counterexamples. Remaining readback/effects and terminal closure remain pending. |
 | H5 Progress | 59 | 265 | 42 | 136 | Pure/control, cut, jitter, index, poll bounds, dispatch, scheduler turns, stack/probe frames and Product observation bridge carried. Receive-ring activation models, historical backlog/runner claims, remaining drain/flush claims and terminal closure remain pending. |
-| H6 Timer discipline | 98 | 404 | 50 | 98 | Base/guard/jitter, arming/wheel, recorded clock and initiation-send arming contracts carried; three type-given frames deleted. Exact wheel corrections are explicit; broader timer episodes, worker composition and terminal closure remain pending. |
+| H6 Timer discipline | 98 | 404 | 50 | 105 | Base/guard/jitter, arming/wheel, recorded clock and initiation-send arming contracts carried; three type-given frames deleted. Exact wheel corrections are explicit; broader timer episodes, worker composition and terminal closure remain pending. |
 
 Retyped, deleted and retained counts will be reported per validated tranche.
 H1 now has a checked split terminal closure; H2–H6 remain lagging.
@@ -3113,3 +3113,97 @@ Config.LiveRemovalSource and Roaming.ResponseCallProductClaims under
 Leanux.Proofs.WG, then #print axioms for logical declarations and
 scripts/in-bundle lake env leanchecker --fresh MODULE for each root.
 Use capped, 32 Lean threads and 16 QEMU slots on this host.
+
+
+## Response audits, normal removal effects and IPv4/IPv6 send frames
+
+| Tranche | Before | Retyped | Corrected | Deleted | Kept | Added | After |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Roaming.ResponseAuditClaims | 2 | 2 | 0 | 0 | 0 | 2 | 4 |
+| Config.RemoveFlagEffects | 2 | 0 | 0 | 0 | 2 | 0 | 2 |
+| Config.CollisionFrames/CollisionRemovalSource/RemoveFlagSource | 6 | 6 | 0 | 0 | 0 | 0 | 6 |
+| Index.PeerReleaseTableFrames | 1 | 1 | 0 | 0 | 0 | 0 | 1 |
+| TimerDiscipline.SendSocketFrames | 6 | 6 | 0 | 0 | 0 | 1 | 7 |
+| This tranche | 17 | 15 | 0 | 0 | 2 | 3 | 20 |
+| Cumulative processed baseline and checked support | 1,004 | 761 | 26 | 21 | 196 | 86 | 1,069 |
+
+The census is 517 campaign-owned files, 1,896 theorems and 338 checked proof
+modules; 827 baseline declarations await validation. Checked counts are H1
+180, H2 191, H3 119, H4 338, H5 136 and H6 105. H1's terminal module remains
+current; H2–H6 and the full gate remain lagging. No new charter result is claimed.
+
+ResponseAuditClaims separates the two existing response audits from the
+pending initiation audit. It retains their native exact-inspection meanings
+and adds the two Product companions using the checked generic Product audit.
+The actual prefix outcome is retained even when the suffix fails; inspection
+preserves the actual entry and error outcomes have no final state. Full fixture
+observations remain in the Product certificate. HandshakeAuditClaims imports
+this response closure and retains its pending initiation declarations.
+
+The remove-flag source contracts were partial originally. Their original
+premises, lookup acquisition, two ordered releases, return code and successful
+effect remain; this is a retype, not another totality correction. The actual
+crypt/final-release refusals are eliminated only against a supplied successful
+run. CollisionFrames retains the substantive native dead-guard frame, while
+the two removal converses and three remove-flag claims remain in their source
+files. Two pure residency/count effects are unchanged.
+
+An attempted build of RemoveFlagEffects failed through CollisionModel's
+unnecessary KeyInstallEffects import, which reached the known stale
+QueuedHandshake proofs. The full output was retained and inspected, including
+its queued-state type/source errors and two unused simplifications. Only
+CollisionKeyEffect needs that installation layer. CollisionRemovalModel now
+holds the two unchanged pure lookup/removal definitions; CollisionModel
+imports it and retains the key-installation definition. RemoveFlagModel and
+CollisionFrames import the smaller removal model. This is dependency factoring,
+not a repaired or copied installation layer. The resulting 96-job scoped
+build passed without warnings.
+
+PeerReleaseTableFrames moves the original peerPut table-safety contract out
+of the pending send-source composition. Its proof retains arbitrary optional
+peers/states and all normal-return paths, deriving positive refcount from the
+actual run rather than assuming it. Exact release outcomes then preserve
+numeric uniqueness, owner uniqueness and keypair allocation bounds together.
+The frame asserts no completion of refused releases.
+
+SendSocketFrames carries all six concrete socket-send frames, preserving
+arbitrary endpoints/bytes/DS/exactRx inputs and optional view predicates.
+IPv4 source/interface retry, route errors, cache writes, IPv6 source reset
+and both transmit branches follow actual source composition. One private
+hoare_liftRouting_variant follows campaign 1's Framing/Lift shape: the
+actual adapter supplies WG interface facts and writes back routing only.
+Its arbitrary WG predicate has the explicit routing-stability premise.
+This minimal variant is pending campaign 1's shared retyped layer; no FIB
+proof layer is copied. Independent review of statements, source and the
+campaign 1 counterpart found no issue. No frame is deleted.
+
+Further scoped packaging passes 143 jobs and the final four-root build passes
+184 jobs, both without warnings. Axiom inspection covers 778 logical roots
+in 154 proof modules, including 467 public theorem roots, using only the three
+standard axioms. All four fresh kernel replays pass. Static token/import/root/
+default-target checks pass, all 258 original terminal names/order remain intact,
+and mirror/shared-layer boundary checks are clear.
+
+Development ledger: ResponseAuditClaims passed its first probe.
+PeerReleaseTableFrames probe 1 failed one unreduced outcome-map contradiction;
+probe 2 passed without warnings. RemoveFlag probes 1–6 were: multiline do
+syntax failure; clean frame/first-converse closure; stale imported-environment
+collision; untyped branch/deprecated-tactic/simplification failure; continuation
+indentation failure; clean closure of all six declarations. The stale-import
+failure was followed by the source dependency factoring and rebuild described
+above, not an unchanged retry. The final files use the default heartbeat bound.
+
+Socket-frame probes 1–2 failed composition; probe 3 also used an unavailable
+tactic; probes 4–6 failed cache matcher joins; probe 7 reached route-match and
+endpoint-clear joins; probe 8 introduced indentation errors. Probe 9 closed
+all six contracts, and probe 10 passed after removing unused match helpers.
+All ten were warning-free and only the final two passed. Existing limits were
+retained. Complete outputs were saved before previews. No cap increase,
+unchanged-source rerun, infrastructure retry or guest run occurred.
+Initiation-consume facts remain outside the census and under further factoring.
+
+Reproduce with scripts/in-bundle lake build on Roaming.ResponseAuditClaims,
+Config.RemoveFlagSource, Index.PeerReleaseTableFrames and
+TimerDiscipline.SendSocketFrames under Leanux.Proofs.WG, then #print axioms
+for logical declarations and scripts/in-bundle lake env leanchecker --fresh
+MODULE for each root. Use capped, 32 Lean threads and 16 QEMU slots on this host.

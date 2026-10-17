@@ -1,4 +1,4 @@
-import Leanux.Proofs.WG.Config.CollisionModel
+import Leanux.Proofs.WG.Config.CollisionRemovalModel
 
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG
