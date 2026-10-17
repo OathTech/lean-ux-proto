@@ -2397,3 +2397,64 @@ under `Leanux.Proofs.WG`, inspect logical declarations with
 `#print axioms`, and replay with
 `scripts/in-bundle lake env leanchecker --fresh MODULE`. On this host use
 `capped`, 32 Lean threads and 16 QEMU slots.
+
+## Complete removal converse and response-consumer scope
+
+| Tranche | Before | Retyped | Corrected | Deleted | Kept | Added | After |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `Config.AllowedRemovalConverseSource` (remaining contracts) | 8 | 8 | 0 | 0 | 0 | 0 | 8 |
+| `Roaming.ResponseConsumeSource`, `ResponseConsumeProductSource` | 2 | 2 | 0 | 0 | 0 | 2 | 4 |
+| This tranche | 10 | 10 | 0 | 0 | 0 | 2 | 12 |
+| Cumulative processed baseline and checked support | 792 | 584 | 2 | 21 | 185 | 46 | 817 |
+
+The census is 490 campaign-owned files, 1,856 theorems and 269 checked proof
+modules. Of the baseline, 1,039 await whole-module validation. Checked support
+is H1 154, H2 187, H3 76, H4 296, H5 70 and H6 34. All six terminal closures
+and the full gate remain lagging. All 258 terminal names and their order
+remain intact.
+
+The final eight removal-converse contracts now compose the checked leaves
+and branches in the aggregate source module. Original NodePairs, shape,
+residency and effect premises remain, including arbitrary aliases and duplicate
+identifiers. Actual guarded node reads establish intermediate residency.
+The peer-death composition follows the current public-key removal and actual
+normal execution; it does not substitute the refuted peer-release totality
+claim. The full removal-converse source aggregate now builds.
+
+The native response consumer retains its exact erased computation, including
+all errors, and its authenticated-cut facts and committed successor snapshot.
+The old snapshot also observed eight fixture fields. Two explicitly added
+product companions preserve that full scope: the model captures the actual
+fixture, executes the native consumer once through the actual WG lift and
+records the full product observation. They preserve listeners, NAPI choices,
+route state, sender inbox and namespace holder observations; no default or
+reconstructed execution state is used. The native and product claims retain
+the original identity/state hypotheses, arbitrary failed peer writes and
+independent lookup-owner identity. No success/readiness premise is added.
+These are claims, not cross-subsystem frame lemmas. The separate
+`ResponseConsumeProductModel` contains the fixture-extended certificate and
+execution only, with no theorem.
+
+The existing `Noise.InitiationReady.hidden_mode` helper is now public with
+its proof unchanged, so timer input frames can reuse it without copying a
+layer. This visibility change does not affect theorem counts.
+
+The combined scoped build passes 97 jobs without warnings. Axiom inspection
+covers 410 logical roots in 70 proof modules and finds only the three standard
+axioms. Independent review, static checks, whitespace and unchanged mirror/
+shared-layer boundaries pass. Removal-tail probes: the first failed on local
+case equalities/binders and reported two unused simplifications; the second
+passed cleanly. Response native probes one and three closed with unused simp
+warnings, probe two failed local read/commit normalization, and four passed
+cleanly. Product probes one through five failed progressively exposed bind
+reductions; six closed substantive goals but had a redundant tactic and two
+unused simplifications; the authorized seventh cleanup passed without
+warnings. These development failures are not passes. No infrastructure
+retry, cap/proof-limit increase or guest run occurred.
+
+Fresh replay passes for AllowedRemovalConverseSource, ResponseConsumeProductSource
+and InitiationReadyClaims. Reproduce with `scripts/in-bundle lake build` on
+those modules under `Leanux.Proofs.WG`, inspect logical declarations with
+`#print axioms`, and replay with
+`scripts/in-bundle lake env leanchecker --fresh MODULE`. On this host use
+`capped`, 32 Lean threads and 16 QEMU slots.

@@ -43,7 +43,7 @@ theorem bucketHas_mode (mode : Bool) (walk collide : Decision) (index : Nat)
   exact hwalk (Index.bucket index table) table ambient result after pre
     (by simpa [indexBucket, Index.bucket, StateT.run_bind] using run)
 
-private theorem hidden_mode (mode : Bool) (site : HiddenSite) :
+theorem hidden_mode (mode : Bool) (site : HiddenSite) :
     Product.Ensures (AmbientM.hidden site)
       (fun ambient => ambient.armRecords = mode)
       (fun _ ambient => ambient.armRecords = mode) := by
