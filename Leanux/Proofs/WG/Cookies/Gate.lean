@@ -181,16 +181,32 @@ theorem afterMac_noCookie (msg : List UInt8) (src : SkbSource) (w : WGWorld) (a 
     MESSAGE_HANDSHAKE_INITIATION, replyEntry]
 
 theorem loadPhase_sameStore : SameWGStore loadPhase := by
-  apply SameView.of_wp
   intro initial
-  have hc : Hoare (hiddenClock64 .underLoadNow : WG.M Int64)
-      (fun w => wgStoreView w = initial) (fun _ w => wgStoreView w = initial) :=
-    hoare_liftAmbient (AmbientM.hiddenClock64 .underLoadNow) _
-  have hb := fun t => ((birthdateTest_sameWGWorld t 1).factor wgStoreView).wp
-    (fun s => s = initial)
-  unfold Hoare at hc
-  mvcgen [loadPhase, hc, hb, getDev, branch, branchCmp, invariant,
-    AmbientM.branch, AmbientM.branchCmp, AmbientM.invariant]
+  let P := fun w : WGWorld => wgStoreView w = initial
+  change Preserves P _
+  have ambient {α : Type} (a : AmbientM α) :
+      Preserves P (monadLift a : WG.M α) := hoare_liftAmbient a P
+  have read : Preserves P (get : WG.M WGWorld) :=
+    hoare_consequence (hoare_get P) (fun _ h => h) (fun _ _ h => h.2)
+  have device : Preserves P getDev := by
+    unfold getDev
+    apply preserves_bind read
+    intro w
+    cases w.dev
+    · exact ambient (AmbientM.invariant "no WireGuard device in this trace's fixture")
+    · exact preserves_pure _
+  have expired (last : Int64) : Preserves P (birthdateTest last 1) :=
+    ((birthdateTest_sameWGWorld last 1).factor wgStoreView).wp (fun s => s = initial)
+  unfold loadPhase hiddenClock64
+  simp (config := { zeta := false }) only [branch, branchCmp, invariant]
+  repeat' first
+    | cookie_source_fact expired
+    | (cookie_source_head getDev; exact device)
+    | (cookie_source_head get; exact read)
+    | (cookie_source_head MonadStateOf.get; exact read)
+    | (cookie_source_head modify; apply hoare_modify; intro w hi; exact hi)
+    | (cookie_source_lift AmbientM; exact ambient _)
+    | cookie_source_step
 
 def mac1Given (msg : List UInt8) := (msg.drop (msg.length - 32)).take 16
 def mac1Computed (d : Device) (msg : List UInt8) :=

@@ -247,49 +247,27 @@ theorem peerPut_release_snapshot (pid : PeerId) (w w' : WGWorld) (ambient ambien
     (hp : w.dev.bind (fun d => d.peers[pid]?) = some p) (hc : p.refcount = 1)
     (hr : ((peerPut (some pid)).run w).run ambient = .ok (((), w'), ambient')) :
     snapshot w' = (snapshot w).put pid none := by
-  have full : Hoare (peerPut (some pid)) (fun g => g = w)
-      (fun _ g => snapshot g = (snapshot w).put pid none) := by
-    clear hr w' ambient ambient'
-    obtain ⟨d, hd, hp⟩ := Option.bind_eq_some_iff.mp hp
-    have unhash (a : IndexM Unit) (g : WGWorld) : Hoare (MonadLift.monadLift a : WG.M Unit)
-        (fun w => w = g)
-        (fun _ w => ∃ table, w = {g with dev := g.dev.map fun d => {d with indexTable := table}}) := by
-      apply (hoare_iff_run_ambient _ _ _).mpr
-      intro w ambient x w' ambient' hw hr
-      subst w
-      change ((liftIndex a).run g).run ambient = .ok ((x, w'), ambient') at hr
-      rw [liftIndex_run] at hr
-      cases hg : g.dev with
-      | none => simp [hg] at hr
-      | some d =>
-        simp only [hg] at hr
-        cases ha : (a.run d.indexTable).run ambient with
-        | error e => simp [ha, Except.map] at hr
-        | ok out =>
-          rcases out with ⟨⟨y, table⟩, ambient''⟩
-          simp only [ha, Except.map, Except.ok.injEq, Prod.mk.injEq] at hr
-          rcases hr with ⟨⟨_, hw⟩, _⟩
-          exact ⟨table, by simpa [hg] using hw.symm⟩
-    unfold Hoare at unhash ⊢
-    mvcgen [peerPut, requireNotPending, getPeer, getDev, setPeer, modifyDev,
-      branch, branchCmp, AmbientM.branch, AmbientM.branchCmp,
-      refcountDecAndTest, unhash, retirePeerUnits, modifyAmbient,
-      unsupported, invariant, AmbientM.unsupported, AmbientM.invariant]
-    all_goals try dsimp +zetaDelta only at *
-    all_goals try obtain ⟨table, rfl⟩ := ‹∃ table, _ = _›
-    all_goals subst_vars
-    all_goals simp_all
-    all_goals apply Store.ext
-    all_goals first
+
+  obtain ⟨d, hd, hp⟩ := Option.bind_eq_some_iff.mp hp
+  have hl (a : IndexM Unit) : (liftM a : WG.M Unit) = liftIndex a := rfl
+  simp [peerPut, requireNotPending, getPeer, getDev, setPeer, modifyDev,
+    refcountDecAndTest, branch, branchCmp, indexRemove_eq, indexUnhash,
+    hl, liftIndex_run, retirePeerUnits, modifyAmbient,
+    CounterWindow.branch_run, CounterWindow.branchCmp_run,
+    hd, hp, hc, StateT.run_bind, StateT.run_pure, StateT.run_monadLift,
+    CounterWindow.except_ok_bind, CounterWindow.except_pure,
+    invariant, AmbientM.invariant] at hr
+  repeat' first | split at hr | contradiction
+  all_goals rcases hr with ⟨rfl, rfl⟩
+  all_goals apply Store.ext
+  all_goals first
     | rfl
     | (funext j
        by_cases hj : pid = j
        · subst j
-         simp_all [snapshot, Store.put, Std.TreeMap.getElem?_erase,
-           Std.TreeMap.getElem?_insert]
-       · simp_all [snapshot, Store.put, Std.TreeMap.getElem?_erase,
-           Std.TreeMap.getElem?_insert, Ne.symm hj])
-  exact (hoare_iff_run_ambient _ _ _).mp full w ambient () w' ambient' rfl hr
+         simp [snapshot, Store.put, hd, Std.TreeMap.getElem?_erase, Std.TreeMap.getElem?_insert]
+       · simp [snapshot, Store.put, hd, Std.TreeMap.getElem?_erase,
+           Std.TreeMap.getElem?_insert, hj, Ne.symm hj])
 
 theorem peerPutPrefix_preserves (peer : Option PeerId) :
     StatePrefixPreserves (fun h w _ => AccessInv h w) AccessEvent.Safe (peerPutPrefix peer) := by

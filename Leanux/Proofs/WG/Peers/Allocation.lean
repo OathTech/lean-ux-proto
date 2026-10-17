@@ -25,27 +25,113 @@ theorem peerCreate_spec (start : WGWorld) (publicKey : Key) (psk : Option Key) :
     ⦃⇓? result w => ⌜snapshot w = match result with
       | .error _ => snapshot start
       | .ok pid => (snapshot start).allocate pid⌝⦄ := by
-  have alloc_spec :
-      ⦃fun w => ⌜wgStoreView w = wgStoreView start⌝⦄
-        (hiddenAlloc .kmemCacheZallocPeer : WG.M Bool)
-      ⦃⇓? _ w => ⌜wgStoreView w = wgStoreView start⌝⦄ :=
-    hoare_liftAmbient (AmbientM.hiddenAlloc .kmemCacheZallocPeer)
-      (fun w => wgStoreView w = wgStoreView start)
-  have reset_spec := fun pid => (dstCacheReset_samePeerSnapshot pid).wp
-    (fun s => s = (snapshot start).allocate pid)
-  have handshake_spec := fun pid => (handshakeInit_samePeerSnapshot pid psk).wp
-    (fun s => s = (snapshot start).allocate pid)
-  have time_spec := fun pid => (resetLastSentHandshake_samePeerSnapshot pid).wp
-    (fun s => s = (snapshot start).allocate pid)
-  mvcgen [peerCreate, alloc_spec, reset_spec, handshake_spec, time_spec,
-    getDev, setPeer, modifyDev, branch, branchCmp, AmbientM.branch, AmbientM.branchCmp,
-    invariant, AmbientM.invariant]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals try simp_all [snapshot, wgStoreView, Option.bind_map, Function.comp_def]
-  obtain ⟨hd, _⟩ := ‹some _ = start.dev ∧ _›
-  rw [← hd]
-  apply mapStore_allocate
-  rfl
+
+  let core (pid : PeerId) : WG.M Unit := do
+    let internalId := (← get).peerCounter + 1
+    modify fun k => { k with peerCounter := internalId }
+    modifyDev fun d => { d with nextPeer := pid + 1 }
+    setPeer pid { remoteStatic := publicKey, presharedKey := List.replicate 32 0, precomputedStaticStatic := List.replicate 32 0, internalId, cookieDecryptionKey := blake2s 32 [] ("cookie--".toUTF8.toList ++ publicKey), cookieMac1Key := blake2s 32 [] ("mac1----".toUTF8.toList ++ publicKey) }
+  let tail (pid : PeerId) : WG.M (Except Int PeerId) := do
+    dstCacheReset pid
+    handshakeInit pid psk
+    resetLastSentHandshake pid
+    modifyDev fun d => {d with peerList := d.peerList ++ [pid], peerHashtable := (publicKey, pid) :: d.peerHashtable, numPeers := d.numPeers + 1}
+    return .ok pid
+  have source : peerCreate publicKey psk = (do
+      let d ← getDev
+      if ← branchCmp .peerCreateMaxPeers (d.numPeers ≥ MAX_PEERS_PER_DEVICE)
+          d.numPeers MAX_PEERS_PER_DEVICE then return .error (-ENOMEM)
+      if ← branch .peerCreateNoMem !(← hiddenAlloc .kmemCacheZallocPeer) then
+        return .error (-ENOMEM)
+      if ← branch .peerCreateDstCacheFail false then return .error (-ENOMEM)
+      core d.nextPeer
+      tail d.nextPeer) := by
+    simp only [peerCreate, core, tail, bind_assoc]
+  let P := fun w : WGWorld => wgStoreView w = wgStoreView start
+  let Q := fun (result : Except Int PeerId) (w : WGWorld) =>
+    snapshot w = match result with
+      | .error _ => snapshot start
+      | .ok pid => (snapshot start).allocate pid
+  have snapshot_eq (w : WGWorld) (h : P w) : snapshot w = snapshot start :=
+    congrArg snapshotOfWGStoreView h
+  have ambient {α : Type} (a : AmbientM α) (R : WGWorld → Prop) :
+      Preserves R (StateT.lift a) := hoare_liftAmbient a R
+  have getter : Hoare getDev P (fun d w => P w ∧ w.dev = some d) := by
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient d out ambient' hi hr
+    cases hd : w.dev with
+    | none =>
+      simp [getDev, hd, invariant, AmbientM.invariant] at hr
+      cases hr
+    | some saved =>
+      simp [getDev, hd] at hr
+      rcases hr with ⟨⟨rfl, rfl⟩, rfl⟩
+      exact ⟨hi, hd⟩
+  have fail (d : Device) : Hoare (pure (.error (-ENOMEM)) : WG.M (Except Int PeerId))
+      (fun w => P w ∧ w.dev = some d) Q := by
+    apply hoare_consequence (hoare_pure (Except.error (-ENOMEM) : Except Int PeerId) _)
+    · intro _ h; exact h
+    · intro result w h
+      rcases h with ⟨rfl, h⟩
+      exact snapshot_eq w h.1
+  have core_spec (pid : PeerId) (d : Device) :
+      Hoare (core pid) (fun w => P w ∧ w.dev = some d)
+        (fun _ w => snapshot w = (snapshot start).allocate pid) := by
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient u out ambient' hi hr
+    simp [core, setPeer, modifyDev, hi.2] at hr
+    rcases hr with ⟨rfl, rfl⟩
+    rw [← snapshot_eq w hi.1]
+    simpa [snapshot, hi.2, mapStore] using
+      mapStore_allocate w.peerCounter d.peers pid
+        {remoteStatic := publicKey, presharedKey := List.replicate 32 0, precomputedStaticStatic := List.replicate 32 0, internalId := w.peerCounter + 1, cookieDecryptionKey := blake2s 32 [] ("cookie--".toUTF8.toList ++ publicKey), cookieMac1Key := blake2s 32 [] ("mac1----".toUTF8.toList ++ publicKey)} rfl
+  have tail_spec (pid : PeerId) : Hoare (tail pid)
+      (fun w => snapshot w = (snapshot start).allocate pid) Q := by
+    unfold tail
+    apply hoare_bind _ _ (SameView.wp (dstCacheReset_samePeerSnapshot pid)
+      (fun t => t = (snapshot start).allocate pid))
+    intro _
+    apply hoare_bind _ _ (SameView.wp (handshakeInit_samePeerSnapshot pid psk)
+      (fun t => t = (snapshot start).allocate pid))
+    intro _
+    apply hoare_bind _ _ (SameView.wp (resetLastSentHandshake_samePeerSnapshot pid)
+      (fun t => t = (snapshot start).allocate pid))
+    intro _
+    apply hoare_bind _ _ (modifyDev_peer_spec (fun t => t = (snapshot start).allocate pid)
+      (fun d => {d with peerList := d.peerList ++ [pid], peerHashtable := (publicKey, pid) :: d.peerHashtable, numPeers := d.numPeers + 1})
+      (fun _ => rfl))
+    intro _
+    apply hoare_consequence (hoare_pure (Except.ok pid : Except Int PeerId) _)
+    · intro _ h; exact h
+    · intro result w h
+      rcases h with ⟨rfl, h⟩
+      exact h
+  rw [source]
+  apply hoare_bind _ _ getter
+  intro d
+  apply hoare_bind _ _ (ambient (AmbientM.branchCmp .peerCreateMaxPeers
+    (d.numPeers ≥ MAX_PEERS_PER_DEVICE) d.numPeers MAX_PEERS_PER_DEVICE)
+    (fun w => P w ∧ w.dev = some d))
+  intro maxPeers
+  cases maxPeers with
+  | true => exact fail d
+  | false =>
+    apply hoare_bind _ _ (ambient (AmbientM.hiddenAlloc .kmemCacheZallocPeer)
+      (fun w => P w ∧ w.dev = some d))
+    intro allocated
+    apply hoare_bind _ _ (ambient (AmbientM.branch .peerCreateNoMem !allocated)
+      (fun w => P w ∧ w.dev = some d))
+    intro noMem
+    cases noMem with
+    | true => exact fail d
+    | false =>
+      apply hoare_bind _ _ (ambient (AmbientM.branch .peerCreateDstCacheFail false)
+        (fun w => P w ∧ w.dev = some d))
+      intro cacheFailed
+      cases cacheFailed with
+      | true => exact fail d
+      | false =>
+        exact hoare_bind _ _ (core_spec d.nextPeer d) (fun _ => tail_spec d.nextPeer)
 
 /-- Exact refinement needs no well-formedness assumption about the old store.
 In particular it does not assert that the old nextPeer slot was empty. -/

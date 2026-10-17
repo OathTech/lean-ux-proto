@@ -12,34 +12,24 @@ open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing Std.Do
 
 theorem receiveIter_cell : SameView cell
     (workerIter .receiveWorker none (MonadLift.monadLift receiveStep) (Env.condResched .receiveWorker)) := by
-  apply SameView.of_wp
-  intro s
-  have hr := (sameView_liftWG cell nativeCell receiveStep receiveStep_cell
-    (fun _ _ _ h => h)).wp (fun t => t = s)
-  have hc := ((condResched_sameKernel .receiveWorker).of_factor
-    (fun store : ProductStore43 => store.2.2.2.dev.map fun d => (d.ifindex, d.decryptQueue)) cell (fun _ => rfl)).wp (fun t => t = s)
-  mvcgen [workerIter, hr, hc]
+  have cond := (condResched_sameKernel .receiveWorker).of_factor
+    (fun store : ProductStore43 => store.2.2.2.dev.map fun d => (d.ifindex, d.decryptQueue))
+    cell (fun _ => rfl)
+  have step : SameView cell (MonadLift.monadLift receiveStep : Leanux.M Bool) :=
+    sameView_liftWG cell nativeCell receiveStep receiveStep_cell (fun _ _ _ h => h)
+  ring_poll_source [workerIter] using [cond, step] with []
 
 /-- The original non-decrypt activation includes cryptAhead's actual encrypt
 iteration before TX. A malformed activation still executes its original Stop. -/
 theorem otherIter_cell (a : Activation) (h : a.worker ≠ .decryptWorker) :
     SameView cell (Env.Activation.iter a) := by
-  apply SameView.of_wp
-  intro initial
-  have he := actualEncryptIter_cell.wp (fun t => t = initial)
-  have hr := receiveIter_cell.wp (fun t => t = initial)
-  have ht := fun pid => (txIter_cell pid (Env.condResched .txWorker)
+  have tx := fun pid => txIter_cell pid (Env.condResched .txWorker)
     ((condResched_sameKernel .txWorker).of_factor
       (fun store : ProductStore43 => store.2.2.2.dev.map fun d => (d.ifindex, d.decryptQueue))
-      cell (fun _ => rfl))).wp (fun t => t = initial)
-  have hc := fun pid => (cryptAhead_cell pid).wp (fun t => t = initial)
-  have ambient {α : Type} (b : AmbientM α) :
-      Hoare (MonadLift.monadLift b : Leanux.M α)
-        (fun w => cell w = initial) (fun _ w => cell w = initial) :=
-    productAmbient_spec b _ (fun _ _ hi => hi)
-  unfold Hoare at ambient
-  mvcgen [-Std.Do.Spec.monadLift_StateT, Env.Activation.iter, he, hr, ht, hc, invariant, ambient]
-  all_goals simp_all
+      cell (fun _ => rfl))
+  ring_poll_source [Env.Activation.iter]
+    using [actualEncryptIter_cell, receiveIter_cell, tx, cryptAhead_cell] with []
+  all_goals first | exact receiveIter_cell | contradiction
 
 def activationIter (a : Activation) : Obs IterResult :=
   if a.worker = .decryptWorker then

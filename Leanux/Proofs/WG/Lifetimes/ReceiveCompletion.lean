@@ -97,10 +97,47 @@ theorem allocationRx : RxContracts AllocationInv where
 
 theorem inetEcnDecapsulate_sameWGStore (protocol outer : Nat) (bytes : List UInt8) :
     SameWGStore (inetEcnDecapsulate protocol outer bytes) := by
-  apply SameView.of_wp
-  intro k
-  mvcgen [inetEcnDecapsulate, inetEcnSet, ipEcnSetCe, ipEcnSetEct1,
-    ip6EcnSetCe, ip6EcnSetEct1, branch, AmbientM.branch]
+  intro initial
+  let P := fun w : WGWorld => wgStoreView w = initial
+  change Preserves P _
+  have ambient {α : Type} (a : AmbientM α) :
+      Preserves P (monadLift a : WG.M α) := hoare_liftAmbient a P
+  have ce4 : Preserves P (ipEcnSetCe bytes) := by
+    unfold ipEcnSetCe
+    apply preserves_bind (ambient (AmbientM.branch _ _))
+    intro b
+    cases b <;> exact preserves_pure _
+  have ect4 : Preserves P (ipEcnSetEct1 bytes) := by
+    unfold ipEcnSetEct1
+    apply preserves_bind (ambient (AmbientM.branch _ _))
+    intro b
+    cases b <;> exact preserves_pure _
+  have ce6 : Preserves P (ip6EcnSetCe bytes) := by
+    unfold ip6EcnSetCe
+    apply preserves_bind (ambient (AmbientM.branch _ _))
+    intro b
+    cases b <;> exact preserves_pure _
+  have ect6 : Preserves P (ip6EcnSetEct1 bytes) := by
+    unfold ip6EcnSetEct1
+    apply preserves_bind (ambient (AmbientM.branch _ _))
+    intro b
+    cases b <;> exact preserves_pure _
+  have setSpec (ce : Bool) : Preserves P (inetEcnSet ce protocol bytes) := by
+    unfold inetEcnSet
+    simp (config := { zeta := false }) only [branch, invariant]
+    repeat' first
+      | exact ce4
+      | exact ect4
+      | exact ce6
+      | exact ect6
+      | (allocation_release_lift_from AmbientM; exact ambient _)
+      | allocation_release_step
+  unfold inetEcnDecapsulate
+  simp (config := { zeta := false }) only [branch]
+  repeat' first
+    | (allocation_release_head inetEcnSet; exact setSpec _)
+    | (allocation_release_lift_from AmbientM; exact ambient _)
+    | allocation_release_step
 
 def updateRxStatsPrefix (pid : PeerId) (len : Nat) : MixedM Unit := do
   liftWGPrefix (modifyDev (rxStatsUpdate len))

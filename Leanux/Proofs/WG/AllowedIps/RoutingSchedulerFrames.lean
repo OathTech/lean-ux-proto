@@ -12,63 +12,66 @@ set_option maxHeartbeats 1000000
 set_option pp.structureInstances false
 
 theorem cryptAhead_routing (pid : PeerId) : ProductRetainsRoutingCall (Env.cryptAhead pid) := by
-  apply ProjectedAction.of_wp
   intro s
-  let P := RetainsRouting s
-  have native {α : Type} (a : WG.M α) (ha : SameView routingView a) :
-      Hoare (MonadLift.monadLift a : Leanux.M α)
-        (fun w => P (routingView w.wg)) (fun _ w => P (routingView w.wg)) :=
-    (sameView_liftWG (fun w => routingView w.wg) routingView a ha
-      (fun _ _ _ h => h)).wp P
-  have hg := native _ (getPeer_routing pid)
-  have skb {α : Type} (a : SkbM α) :
-      Hoare (MonadLift.monadLift (liftSkb a) : Leanux.M α)
-        (fun w => P (routingView w.wg)) (fun _ w => P (routingView w.wg)) := by
-    apply native
-    apply SameView.of_wp
+  let Q : Option RoutingState → Prop := RetainsRouting s
+  let P := fun w : World => Q (routingView w.wg)
+  have ambient {α : Type} (a : AmbientM α) : Preserves P (monadLift a : Leanux.M α) :=
+    productAmbient_spec a P (fun _ _ h => h)
+  have lifted {α : Type} (a : WG.M α) (ha : SameView routingView a) :
+      Preserves P (monadLift a : Leanux.M α) :=
+    (sameView_liftWG (fun w => routingView w.wg) routingView a ha (fun _ _ _ h => h)).wp Q
+  have peer : Preserves P (monadLift (getPeer pid) : Leanux.M Peer) := lifted _ (getPeer_routing pid)
+  have packets {α : Type} (a : SkbM α) : SameView routingView (liftSkb a) := by
     intro initial
     apply hoare_liftSkb a
     intro w d store hi hd
-    unfold routingView at hi ⊢
-    simpa only [hd, Option.map_some, routingState] using hi
-  have ambient {α : Type} (a : AmbientM α) :
-      Hoare (MonadLift.monadLift a : Leanux.M α)
-        (fun w => P (routingView w.wg)) (fun _ w => P (routingView w.wg)) :=
-    productAmbient_spec a _ (fun _ _ h => h)
-  have ha := native _ (modifyDev_routing
-    (fun d => {d with txWorkQueue := d.txWorkQueue ++ [pid]}) (fun _ => rfl))
-  have he := native _ (modifyDev_routing
-    (fun d => {d with txWorkQueue := d.txWorkQueue.erase pid}) (fun _ => rfl))
-  have hi := RetainsRoutingCall.wp actualEncryptIter_routing s
-  unfold Hoare at hg skb ambient ha he
-  mvcgen [-Std.Do.Spec.monadLift_StateT, Env.cryptAhead, getTxSkb,
-    getAmbient, modifyAmbient, peekHiddenSite, invariant, hg, skb, ambient, ha, he, hi]
-  all_goals try dsimp +zetaDelta only [P] at *
-  all_goals try subst s
-  all_goals first | exact RetainsRouting.refl _ | assumption
+    simpa only [routingView, hd, Option.map_some, routingState] using hi
+  have skb (id : SkbId) : Preserves P (monadLift (getTxSkb id) : Leanux.M DataPacket) :=
+    lifted _ (packets _)
+  have append : Preserves P (monadLift (modifyDev fun d =>
+      {d with txWorkQueue := d.txWorkQueue ++ [pid]}) : Leanux.M Unit) :=
+    lifted _ (modifyDev_routing _ (fun _ => rfl))
+  have erase : Preserves P (monadLift (modifyDev fun d =>
+      {d with txWorkQueue := d.txWorkQueue.erase pid}) : Leanux.M Unit) :=
+    lifted _ (modifyDev_routing _ (fun _ => rfl))
+  have iteration : Preserves P (encryptIter Env.checksumHelp Env.napiSoftirq (Env.condResched .encryptWorker)) :=
+    RetainsRoutingCall.wp actualEncryptIter_routing s
+  have stopped {α : Type} (e : Stop) : Preserves P (throw e : Leanux.M α) := hoare_throw e
+  have main : Preserves P (Env.cryptAhead pid) := by
+    routing_tx_source [Env.cryptAhead, getAmbient, modifyAmbient, peekHiddenSite] using
+      [peer, skb, append, erase, iteration, ambient, stopped]
+  apply hoare_consequence main
+  · intro w he
+    change RetainsRouting s _
+    dsimp only [id] at he
+    rw [he]
+    exact RetainsRouting.refl _
+  · exact fun _ _ h => h
 
 theorem activationIter_routing (a : Activation) : ProductRetainsRoutingCall (Env.Activation.iter a) := by
-  apply ProjectedAction.of_wp
   intro s
-  have he := RetainsRoutingCall.wp actualEncryptIter_routing s
-  have hd := RetainsRoutingCall.wp actualDecryptIter_routing s
-  have hr :
-      ⦃fun w => ⌜RetainsRouting s (routingView w.wg)⌝⦄
-      workerIter .receiveWorker none (MonadLift.monadLift receiveStep : Leanux.M Bool)
-        (Env.condResched .receiveWorker)
-      ⦃⇓? _ w => ⌜RetainsRouting s (routingView w.wg)⌝⦄ :=
-    RetainsRoutingCall.wp actualReceiveIter_routing s
-  have ht := fun pid => RetainsRoutingCall.wp (actualTxIter_routing pid) s
-  have hc := fun pid => RetainsRoutingCall.wp (cryptAhead_routing pid) s
-  have ambient {α : Type} (a : AmbientM α) :
-      Hoare (MonadLift.monadLift a : Leanux.M α)
-        (fun w => RetainsRouting s (routingView w.wg))
-        (fun _ w => RetainsRouting s (routingView w.wg)) :=
-    productAmbient_spec a _ (fun _ _ h => h)
-  unfold Hoare at ambient
-  mvcgen [-Std.Do.Spec.monadLift_StateT, Env.Activation.iter, he, hd, hr, ht, hc, invariant, ambient]
-  all_goals try subst s
-  all_goals first | exact RetainsRouting.refl _ | assumption
+  let Q : Option RoutingState → Prop := RetainsRouting s
+  let P := fun w : World => Q (routingView w.wg)
+  have ambient {α : Type} (a : AmbientM α) : Preserves P (monadLift a : Leanux.M α) :=
+    productAmbient_spec a P (fun _ _ h => h)
+  have encrypt : Preserves P (encryptIter Env.checksumHelp Env.napiSoftirq (Env.condResched .encryptWorker)) :=
+    RetainsRoutingCall.wp actualEncryptIter_routing s
+  have decrypt : Preserves P (decryptIter Env.napiSoftirq Env.napiIrqExit (Env.condResched .decryptWorker)) :=
+    RetainsRoutingCall.wp actualDecryptIter_routing s
+  have receive : Preserves P (workerIter .receiveWorker none (monadLift receiveStep : Leanux.M Bool)
+      (Env.condResched .receiveWorker)) := RetainsRoutingCall.wp actualReceiveIter_routing s
+  have transmit (pid : PeerId) : Preserves P (txIter pid (Env.condResched .txWorker)) :=
+    RetainsRoutingCall.wp (actualTxIter_routing pid) s
+  have ahead (pid : PeerId) : Preserves P (Env.cryptAhead pid) := RetainsRoutingCall.wp (cryptAhead_routing pid) s
+  have main : Preserves P (Env.Activation.iter a) := by
+    routing_tx_source [Env.Activation.iter] using [encrypt, decrypt, receive, transmit, ahead, ambient]
+  apply hoare_consequence main
+  · intro w he
+    change RetainsRouting s _
+    dsimp only [id] at he
+    rw [he]
+    exact RetainsRouting.refl _
+  · exact fun _ _ h => h
 
 private def Holds (s : Option RoutingState) (_ : List Unit) (w : World) : Prop :=
   RetainsRouting s (routingView w.wg)
@@ -128,14 +131,24 @@ theorem schedule_routing (stack : Option Worker := none) : ProductRetainsRouting
       (lift_holds s _ napiSoftirq_routing) stack
 
 theorem nestedResched_routing (self : Worker) : ProductRetainsRoutingCall (Env.nestedResched self) := by
-  apply ProjectedAction.of_wp
   intro s
-  have hc := ((condResched_sameKernel self).of_factor
-    (fun store : ProductStore43 => store.2.2.2.dev.map routingState)
-    (fun w : World => routingView w.wg) (fun _ => rfl)).wp (RetainsRouting s)
-  have hs := RetainsRoutingCall.wp (schedule_routing (some self)) s
-  mvcgen [Env.nestedResched, hc, hs]
-  all_goals subst s
-  all_goals exact RetainsRouting.refl _
+  let Q : Option RoutingState → Prop := RetainsRouting s
+  let P := fun w : World => Q (routingView w.wg)
+  have ambient {α : Type} (a : AmbientM α) : Preserves P (monadLift a : Leanux.M α) :=
+    productAmbient_spec a P (fun _ _ h => h)
+  have cond : Preserves P (Env.condResched self) :=
+    ((condResched_sameKernel self).of_factor
+      (fun store : ProductStore43 => store.2.2.2.dev.map routingState)
+      (fun w : World => routingView w.wg) (fun _ => rfl)).wp Q
+  have schedule : Preserves P (Env.schedule (some self)) := RetainsRoutingCall.wp (schedule_routing (some self)) s
+  have main : Preserves P (Env.nestedResched self) := by
+    routing_tx_source [Env.nestedResched] using [cond, schedule]
+  apply hoare_consequence main
+  · intro w he
+    change RetainsRouting s _
+    dsimp only [id] at he
+    rw [he]
+    exact RetainsRouting.refl _
+  · exact fun _ _ h => h
 
 end Leanux.Proofs.WG.AllowedIps

@@ -129,59 +129,80 @@ theorem setPeer_same (i : PeerId) (p : Peer) (w w' : WGWorld)
       · simp only [ite_eq_right h]
 
 theorem peerGet_retained (i : PeerId) : ProjectedAction snapshot Retained (peerGet i) := by
-  apply ProjectedAction.of_wp
-  intro s
-  mvcgen [peerGet, requireNotPending, getPeer, getDev, setPeer, modifyDev,
-    branch, branchCmp, AmbientM.branch, AmbientM.branchCmp, refcountInc,
-    unsupported, invariant, AmbientM.unsupported, AmbientM.invariant]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals try solve | simp_all [snapshot]; exact .refl _
-  all_goals try simp_all [snapshot]
-  subst s
-  change Retained (mapStore _ _) (mapStore _ _)
-  apply mapStore_insert_retained
-  · assumption
-  · rfl
+
+  apply (ProjectedAction.iff_run_ambient _ _ _).mpr
+  intro w ambient result out ambient' hr
+  cases hd : w.dev with
+  | none =>
+    simp [peerGet, requireNotPending, getPeer, getDev, hd, invariant, AmbientM.invariant] at hr
+    cases hr
+  | some d =>
+    cases hp : d.peers[i]? with
+    | none =>
+      simp [peerGet, requireNotPending, getPeer, getDev, hd, hp, invariant, AmbientM.invariant] at hr
+      cases hr
+    | some p =>
+      by_cases zero : p.refcount = 0 <;> by_cases overflow : 2147483647 ≤ p.refcount <;>
+        simp [peerGet, requireNotPending, getPeer, getDev, setPeer, modifyDev,
+          refcountInc, branch, branchCmp, AmbientM.branch, AmbientM.branchCmp,
+          hd, hp, zero, overflow, unsupported, AmbientM.unsupported] at hr
+      all_goals try solve | cases hr
+      all_goals rcases hr with ⟨rfl, rfl⟩
+      all_goals
+        simp only [snapshot, hd, Option.bind_some]
+        change Retained (mapStore w.peerCounter d.peers) (mapStore w.peerCounter _)
+        exact mapStore_insert_retained _ _ _ p _ hp rfl
 
 theorem peerPut_retained (i : Option PeerId) : ProjectedAction snapshot Retained (peerPut i) := by
-  apply ProjectedAction.of_wp
-  intro s
-  have unhash (a : IndexM Unit) (g : WGWorld) : Hoare (MonadLift.monadLift a : WG.M Unit)
-      (fun w => w = g)
-      (fun _ w => ∃ table, w = {g with dev := g.dev.map fun d => {d with indexTable := table}}) := by
-    apply (hoare_iff_run_ambient _ _ _).mpr
-    intro w ambient x w' ambient' hw hr
-    subst w
-    change ((liftIndex a).run g).run ambient = .ok ((x, w'), ambient') at hr
-    rw [liftIndex_run] at hr
-    cases hg : g.dev with
-    | none => simp [hg] at hr
-    | some d =>
-      simp only [hg] at hr
-      cases ha : (a.run d.indexTable).run ambient with
-      | error e => simp [ha, Except.map] at hr
-      | ok out =>
-        rcases out with ⟨⟨y, table⟩, ambient''⟩
-        simp only [ha, Except.map, Except.ok.injEq, Prod.mk.injEq] at hr
-        rcases hr with ⟨⟨_, hw⟩, _⟩
-        exact ⟨table, by simpa [hg] using hw.symm⟩
-  unfold Hoare at unhash
-  mvcgen [peerPut, requireNotPending, getPeer, getDev, setPeer, modifyDev,
-    branch, branchCmp, AmbientM.branch, AmbientM.branchCmp,
-    refcountDecAndTest, unhash, retirePeerUnits, modifyAmbient,
-    unsupported, invariant, AmbientM.unsupported, AmbientM.invariant]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals try obtain ⟨table, rfl⟩ := ‹∃ table, _ = _›
-  all_goals try simp_all [snapshot]
-  all_goals subst_vars
-  all_goals try dsimp +zetaDelta only at *
-  all_goals try simp_all [Function.comp_def]
-  all_goals try subst s
-  all_goals first
-  | exact .refl _
-  | exact mapStore_insert_erase _ _ _ _
-  | apply mapStore_insert_retained <;> first | assumption | rfl
 
+  apply (ProjectedAction.iff_run_ambient _ _ _).mpr
+  intro w ambient result out ambient' hr
+  cases i with
+  | none =>
+    simp [peerPut, branch, AmbientM.branch] at hr
+    rcases hr with ⟨rfl, rfl⟩
+    exact .refl _
+  | some pid =>
+    cases hd : w.dev with
+    | none =>
+      simp [peerPut, requireNotPending, getPeer, getDev, hd, branch, AmbientM.branch,
+        invariant, AmbientM.invariant] at hr
+      cases hr
+    | some d =>
+      cases hp : d.peers[pid]? with
+      | none =>
+        simp [peerPut, requireNotPending, getPeer, getDev, hd, hp, branch, AmbientM.branch,
+          invariant, AmbientM.invariant] at hr
+        cases hr
+      | some p =>
+        have hl (a : IndexM Unit) : (liftM a : WG.M Unit) = liftIndex a := rfl
+        by_cases positive : 0 < p.refcount
+        · have nonzero : p.refcount ≠ 0 := by omega
+          by_cases final : p.refcount = 1
+          all_goals
+            simp [peerPut, requireNotPending, getPeer, getDev, setPeer, modifyDev,
+              refcountDecAndTest, branch, branchCmp, indexRemove_eq, indexUnhash,
+              hl, liftIndex_run, retirePeerUnits, modifyAmbient,
+              CounterWindow.branch_run, CounterWindow.branchCmp_run,
+              hd, hp, positive, nonzero, final,
+              StateT.run_bind, StateT.run_pure, StateT.run_monadLift,
+              CounterWindow.except_ok_bind, CounterWindow.except_pure,
+              invariant, AmbientM.invariant, unsupported, AmbientM.unsupported] at hr
+          all_goals repeat' first | split at hr | contradiction
+          all_goals rcases hr with ⟨rfl, rfl⟩
+          all_goals
+            simp only [snapshot, hd, Option.bind_some, Option.map_some]
+            first
+            | exact mapStore_insert_erase _ _ _ _
+            | exact mapStore_insert_retained _ _ _ p _ hp rfl
+        · have zero : p.refcount = 0 := by omega
+          simp [peerPut, requireNotPending, getPeer, getDev, setPeer, modifyDev,
+            refcountDecAndTest, branch, branchCmp, CounterWindow.branch_run,
+            CounterWindow.branchCmp_run, hd, hp, zero,
+            StateT.run_bind, StateT.run_pure, StateT.run_monadLift,
+            CounterWindow.except_ok_bind, CounterWindow.except_pure,
+            unsupported, AmbientM.unsupported] at hr
+          cases hr
 /-- Only original lookup, reference acquisition and reference release. The
 conditional raw-setter theorem above and peer allocation are separate. -/
 inductive Primitive : (α : Type) → WG.M α → Prop where

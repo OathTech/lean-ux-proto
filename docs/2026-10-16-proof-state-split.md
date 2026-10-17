@@ -543,8 +543,50 @@ failed because the coordinator launched it while a transitive CreationAccess
 artifact was being replaced. That infrastructure failure is recorded separately;
 its sole infrastructure rerun passes after the complete import closure
 became stable: all 22 named roots use standard axioms only, with no warnings.
-The LookupAccess and AllowedIpsInsert candidates remain outside this committed
-checkpoint pending their next shared artifact window.
+The next shared artifact window includes the checked LookupAccess and
+AllowedIpsInsert candidates, as recorded below.
+
+## Native routing, identity and cookie warning repairs
+
+Twenty further modules preserve all 293 theorem contracts and their options,
+removing 106 deprecated tactic uses. Their final source checks and all 388
+named logical-root axiom checks pass with standard axioms only and no own
+warnings. Independent full-source reviews pass. The seven routing modules
+retain actual socket, Noise, handshake, timer, scheduler and grouped-GRO behavior,
+including arbitrary product callbacks and surviving-resident routing.
+The six peer modules retain lookup, allocation, release, nullable owner words
+and configured-table identity. Receive-ring TX/scheduler, three lifetime
+leaves and the two cookie modules retain their existing observations and Stops.
+No logical declaration is added or removed. The shared build passes all
+324 jobs in 398.74 seconds; its thirteen warnings occur in dependencies outside
+these twenty modules. The complete gate and fresh root replay remain pending,
+and all result register rows remain lagging.
+
+The routing cohort's full eight-module ledger, including RoutingAcquire from
+the preceding checkpoint, has 21 checks: nine passes, eleven ordinary failures
+and the Socket tactic panic recorded above. The peer cohort has 26 checks:
+eight passes and eighteen ordinary failures; an intermediate pass still had
+one unused-argument warning, removed before its final check. The receive-ring
+TX and scheduler each have an ordinary first-check failure followed by clean
+source and axiom passes. Their endpoint-disposition sibling remains outside
+this checkpoint while its separate proof failures are repaired.
+
+LookupAccess had one ordinary normalization failure; AllowedIpsInsert had two,
+followed by the separate infrastructure failure and sole retry already recorded.
+ReceiveCompletion had one ordinary composition failure. Cookies.Frames had
+three ordinary composition failures before its final source-and-axiom pass;
+Cookies.Gate passed its first source and axiom checks. The preliminary cookie
+frame build passed 103 jobs in 9.92 seconds, with three dependency warnings.
+No limit or cap was raised, and no failed or warning-bearing intermediate
+check is presented as final validation.
+
+ZeroTimer separately preserves its one theorem and complete keypair-store
+observation. Its native acquisition, release, index and queue composition
+passes the first source check, both named logical-root axiom checks and
+independent source review. Its 43-job build passes in 1.91 seconds without
+warnings. Its 41-module import closure was already rebuilt and was disjoint
+from the active artifact writers; the timer target is outside the larger
+batch's import graph.
 
 ## Runtime witness reconstruction
 

@@ -81,8 +81,22 @@ theorem state_key_same (d : Device) (kid : KeypairId) (old k : Keypair)
 theorem getPeer_spec (P : Option State → Prop) (pid : PeerId) :
     ⦃fun w => ⌜P (view w)⌝⦄ getPeer pid
     ⦃⇓? p w => ⌜P (view w) ∧ peerAt w pid = some (peerCell p)⌝⦄ := by
-  mvcgen [getPeer, getDev, invariant, AmbientM.invariant]
-  all_goals simp_all [peerAt]
+
+  apply (hoare_iff_run_ambient _ _ _).mpr
+  intro w ambient value out ambient' hi hr
+  cases hd : w.dev with
+  | none =>
+    simp [getPeer, getDev, hd, invariant, AmbientM.invariant] at hr
+    cases hr
+  | some d =>
+    cases hp : d.peers[pid]? with
+    | none =>
+      simp [getPeer, getDev, hd, hp, invariant, AmbientM.invariant] at hr
+      cases hr
+    | some p =>
+      simp [getPeer, getDev, hd, hp] at hr
+      rcases hr with ⟨⟨rfl, rfl⟩, rfl⟩
+      exact ⟨hi, by simp [peerAt, hd, hp]⟩
 
 theorem setPeer_spec (P : Option State → Prop) (pid : PeerId) (p : Peer) :
     ⦃fun w => ⌜P (view w) ∧ peerAt w pid = some (peerCell p)⌝⦄ setPeer pid p
@@ -100,8 +114,22 @@ theorem setPeer_spec (P : Option State → Prop) (pid : PeerId) (p : Peer) :
 theorem getKeypair_spec (P : Option State → Prop) (kid : KeypairId) :
     ⦃fun w => ⌜P (view w)⌝⦄ getKeypair kid
     ⦃⇓? k w => ⌜P (view w) ∧ keyAt w kid = some (keyCell k)⌝⦄ := by
-  mvcgen [getKeypair, getDev, invariant, AmbientM.invariant]
-  all_goals simp_all [keyAt]
+
+  apply (hoare_iff_run_ambient _ _ _).mpr
+  intro w ambient value out ambient' hi hr
+  cases hd : w.dev with
+  | none =>
+    simp [getKeypair, getDev, hd, invariant, AmbientM.invariant] at hr
+    cases hr
+  | some d =>
+    cases hp : d.keypairs[kid]? with
+    | none =>
+      simp [getKeypair, getDev, hd, hp, invariant, AmbientM.invariant] at hr
+      cases hr
+    | some p =>
+      simp [getKeypair, getDev, hd, hp] at hr
+      rcases hr with ⟨⟨rfl, rfl⟩, rfl⟩
+      exact ⟨hi, by simp [keyAt, hd, hp]⟩
 
 theorem setKeypair_spec (P : Option State → Prop) (kid : KeypairId) (k : Keypair) :
     ⦃fun w => ⌜P (view w) ∧ keyAt w kid = some (keyCell k)⌝⦄ setKeypair kid k
@@ -227,8 +255,38 @@ def wordAt (w : WGWorld) (o : IndexOwner) := (view w).bind (fun s => s.word o)
 theorem peerWord_spec (o : IndexOwner) (P : Option State → Prop) :
     ⦃fun w => ⌜P (view w)⌝⦄ o.peerWord
     ⦃⇓? word w => ⌜P (view w) ∧ wordAt w o = some word⌝⦄ := by
-  cases o <;> mvcgen [IndexOwner.peerWord, getPeer, getKeypair, getDev, invariant, AmbientM.invariant]
-  all_goals simp_all [wordAt, view, state, State.word, peerCell, keyCell]
+
+  cases o with
+  | handshake pid =>
+    unfold IndexOwner.peerWord
+    apply hoare_bind _ _ (getPeer_spec P pid)
+    intro p
+    apply hoare_consequence (hoare_pure p.handshakeEntryPeer
+      (fun w => P (view w) ∧ peerAt w pid = some (peerCell p)))
+    · intro _ h; exact h
+    · intro word w h
+      rcases h with ⟨rfl, hi, hp⟩
+      refine ⟨hi, ?_⟩
+      cases hd : w.dev with
+      | none => simp [peerAt, hd] at hp
+      | some d =>
+        simpa [wordAt, view, state, State.word, hd, peerAt, peerCell] using
+          congrArg (Option.map (fun c => c.2.1)) hp
+  | keypair kid =>
+    unfold IndexOwner.peerWord
+    apply hoare_bind _ _ (getKeypair_spec P kid)
+    intro k
+    apply hoare_consequence (hoare_pure k.peer
+      (fun w => P (view w) ∧ keyAt w kid = some (keyCell k)))
+    · intro _ h; exact h
+    · intro word w h
+      rcases h with ⟨rfl, hi, hk⟩
+      refine ⟨hi, ?_⟩
+      cases hd : w.dev with
+      | none => simp [keyAt, hd] at hk
+      | some d =>
+        simpa [wordAt, view, state, State.word, hd, keyAt, keyCell] using
+          congrArg (Option.map Prod.snd) hk
 
 theorem setPeerWord_view (o : IndexOwner) (word : Option PeerId) (w v : WGWorld)
     (ambient ambient' : Ambient)
@@ -394,22 +452,90 @@ theorem indexLookup_spec (kinds : List IndexKind) (index : Nat) :
     ⦃fun w => ⌜Inv w⌝⦄ indexLookup kinds index
     ⦃⇓? result w => ⌜Inv w ∧ ∀ owner borrowed,
       result = some (.handshake owner, borrowed) → borrowed = owner⌝⦄ := by
+
   rw [← indexLookupSource_eq]
-  have ambient {α : Type} (a : AmbientM α) :
-      Hoare (MonadLift.monadLift a : WG.M α) Inv (fun _ => Inv) :=
-    hoare_liftAmbient a Inv
-  have hi : Hoare (liftIndex (indexBucket index)) Inv (fun _ => Inv) := by
+  let Q := fun (result : Option (IndexOwner × PeerId)) (w : WGWorld) =>
+    Inv w ∧ ∀ owner borrowed, result = some (.handshake owner, borrowed) → borrowed = owner
+  have ambient {α : Type} (a : AmbientM α) (P : WGWorld → Prop) :
+      Preserves P (MonadLift.monadLift a : WG.M α) := hoare_liftAmbient a P
+  have absent (P : WGWorld → Prop) (hp : ∀ w, P w → Inv w) :
+      Hoare (pure none : WG.M (Option (IndexOwner × PeerId))) P Q := by
+    apply hoare_consequence (hoare_pure none P)
+    · intro _ h; exact h
+    · intro result w h
+      rcases h with ⟨rfl, h⟩
+      exact ⟨hp w h, by simp⟩
+  have impossible {α β : Type} (f : α → WG.M β) (P : WGWorld → Prop)
+      (R : β → WGWorld → Prop) :
+      Hoare ((invariant "unreachable" : WG.M α) >>= f) P R := by
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w a x v a' _ hr
+    change Except.error (Stop.invariant "unreachable") = Except.ok ((x, v), a') at hr
+    cases hr
+  have finish (entry : Option IndexEntry) :
+      Hoare (do
+        if ← branch .idxFound entry.isSome then
+          let some e := entry | invariant "unreachable"
+          let peer ← acquireOwner e.owner
+          if ← branch .idxPeerAlive peer.isSome then
+            let some pid := peer | invariant "unreachable"
+            return some (e.owner, pid)
+        return none) Inv Q := by
+    apply hoare_bind _ _ (ambient (AmbientM.branch .idxFound entry.isSome) Inv)
+    intro found
+    cases found with
+    | false => exact absent Inv (fun _ h => h)
+    | true =>
+      cases entry with
+      | none => exact impossible _ _ _
+      | some e =>
+        apply hoare_bind _ _ (acquireOwner_spec e.owner)
+        intro peer
+        apply hoare_bind _ _ (ambient (AmbientM.branch .idxPeerAlive peer.isSome)
+          (fun w => Inv w ∧ ∀ pid borrowed,
+            e.owner = .handshake pid → peer = some borrowed → borrowed = pid))
+        intro alive
+        cases alive with
+        | false => exact absent _ (fun _ h => h.1)
+        | true =>
+          cases peer with
+          | none => exact impossible _ _ _
+          | some pid =>
+            apply hoare_consequence (hoare_pure (some (e.owner, pid)) _)
+            · intro _ h; exact h
+            · intro result w h
+              rcases h with ⟨rfl, hi, hf⟩
+              refine ⟨hi, ?_⟩
+              intro owner borrowed he
+              have he' := Option.some.inj he
+              have ho := congrArg Prod.fst he'
+              have hb : pid = borrowed := congrArg Prod.snd he'
+              exact hb.symm.trans (hf owner pid ho rfl)
+  have hi : Preserves Inv (liftIndex (indexBucket index)) := by
     apply hoare_liftIndex
     intro g d table hg hd
     simpa only [Inv, view, hd, Option.map_some, state] using hg
-  have ha := acquireOwner_spec
-  unfold Hoare at ambient hi
-  mvcgen [-Std.Do.Spec.monadLift_StateT, indexLookupSource, branch, ambient, hi, ha,
-    invariant, AmbientM.invariant]
-  all_goals try exact ((⇓? _ w => ⌜Inv w⌝) :
-    PostCond _ (.arg WGWorld (.arg Ambient (.except Stop .pure))))
-  all_goals dsimp +zetaDelta only at *
-  all_goals simp_all
-  all_goals grind
+  unfold indexLookupSource
+  apply hoare_bind _ _ hi
+  intro entries
+  refine hoare_bind _ _ (list_view_spec id Inv entries _ _ ?_) ?_
+  · intro e acc
+    apply preserves_bind (ambient (AmbientM.branch .idxWalk true) Inv)
+    intro _
+    apply preserves_bind (ambient (AmbientM.branch .idxMatch (e.index == index)) Inv)
+    intro matched
+    cases matched with
+    | false => exact preserves_pure _
+    | true =>
+      apply preserves_bind (ambient (AmbientM.branch .idxTypeMatch (kinds.contains e.kind)) Inv)
+      intro included
+      cases included <;> exact preserves_pure _
+  · rintro ⟨entry, stopped⟩
+    cases stopped with
+    | true => exact finish entry
+    | false =>
+      apply hoare_bind _ _ (ambient (AmbientM.branch .idxWalk false) Inv)
+      intro _
+      exact finish entry
 
 end Leanux.Proofs.WG.Affiliation

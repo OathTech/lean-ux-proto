@@ -60,10 +60,8 @@ theorem modifyDev_peer_spec (P : Store PeerId → Prop) (f : Device → Device)
 
 theorem requireNotPending_samePeerSnapshot (pid : PeerId) (what : String) :
     SamePeerSnapshot (requireNotPending pid what) := by
-  apply samePeerSnapshot_of_wp
-  intro s
-  mvcgen [requireNotPending]
-  all_goals simp_all
+
+  exact SameView.pure snapshot ()
 
 theorem requireNotPending_peer_spec (P : Store PeerId → Prop) (pid : PeerId) (what : String) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ requireNotPending pid what
@@ -72,65 +70,140 @@ theorem requireNotPending_peer_spec (P : Store PeerId → Prop) (pid : PeerId) (
 
 theorem peerGetMaybeZero_samePeerSnapshot (peer : Option PeerId) :
     SamePeerSnapshot (peerGetMaybeZero peer) := by
-  apply samePeerSnapshot_of_wp
-  intro s
-  have get_spec := getPeer_live_spec (fun t => t = s)
-  have set_spec := setPeer_live_spec (fun t => t = s)
-  have pending_spec := requireNotPending_peer_spec (fun t => t = s)
-  mvcgen [peerGetMaybeZero, pending_spec, get_spec, set_spec,
-    refcountIncNotZero, branch, branchCmp, AmbientM.branch, AmbientM.branchCmp,
-    unsupported, invariant, AmbientM.unsupported, AmbientM.invariant]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [snapshot]
+
+  apply (ProjectedAction.iff_run_ambient _ _ _).mpr
+  intro w ambient result out ambient' hr
+  cases peer with
+  | none =>
+    simp [peerGetMaybeZero, branch, AmbientM.branch] at hr
+    rcases hr with ⟨⟨rfl, rfl⟩, rfl⟩
+    rfl
+  | some pid =>
+    cases hd : w.dev with
+    | none =>
+      simp [peerGetMaybeZero, requireNotPending, getPeer, getDev, hd, branch,
+        AmbientM.branch, invariant, AmbientM.invariant] at hr
+      cases hr
+    | some d =>
+      cases hp : d.peers[pid]? with
+      | none =>
+        simp [peerGetMaybeZero, requireNotPending, getPeer, getDev, hd, hp, branch,
+          AmbientM.branch, invariant, AmbientM.invariant] at hr
+        cases hr
+      | some p =>
+        by_cases zero : p.refcount = 0 <;> by_cases overflow : 2147483647 ≤ p.refcount <;>
+          simp [peerGetMaybeZero, requireNotPending, getPeer, getDev, setPeer, modifyDev,
+            refcountIncNotZero, branch, branchCmp, AmbientM.branch, AmbientM.branchCmp,
+            hd, hp, zero, overflow, unsupported, AmbientM.unsupported] at hr
+        all_goals try solve | cases hr
+        all_goals rcases hr with ⟨⟨rfl, rfl⟩, rfl⟩
+        all_goals first
+          | rfl
+          | (simp only [snapshot, hd, Option.bind_some]
+             exact mapStore_insert_same _ _ _ p _ hp rfl)
 
 theorem dstCacheReset_samePeerSnapshot (pid : PeerId) : SamePeerSnapshot (dstCacheReset pid) := by
+
   apply samePeerSnapshot_of_wp
   intro s
-  have get_spec := getPeer_live_spec (fun t => t = s)
-  have set_spec := setPeer_live_spec (fun t => t = s)
-  have ambient_spec (α : Type) (a : AmbientM α) :
-      ⦃fun w => ⌜snapshot w = s⌝⦄ (MonadLift.monadLift a : WG.M α)
-      ⦃⇓? _ w => ⌜snapshot w = s⌝⦄ :=
-    hoare_liftAmbient a (fun w => snapshot w = s)
-  mvcgen [-Std.Do.Spec.monadLift_StateT, dstCacheReset, getAmbient,
-    hiddenJiffies, get_spec, set_spec, ambient_spec]
-  all_goals simp_all
+  let P := fun w : WGWorld => snapshot w = s
+  have ambient {α : Type} (a : AmbientM α) : Preserves P (StateT.lift a) :=
+    hoare_liftAmbient a P
+  have read : Preserves P (get : WG.M WGWorld) :=
+    hoare_consequence (hoare_get P) (fun _ h => h) (fun _ _ h => h.2)
+  unfold dstCacheReset
+  apply preserves_bind (ambient (get : AmbientM Ambient))
+  intro a
+  apply preserves_bind read
+  intro w
+  split
+  · exact preserves_pure _
+  · apply preserves_bind (ambient (AmbientM.hiddenJiffies .dstCacheResetTs))
+    intro ts
+    apply hoare_bind _ _ (getPeer_live_spec (fun t => t = s) pid)
+    intro p
+    exact setPeer_live_spec (fun t => t = s) pid _
 
 theorem resetLastSentHandshake_samePeerSnapshot (pid : PeerId) :
     SamePeerSnapshot (resetLastSentHandshake pid) := by
+
   apply samePeerSnapshot_of_wp
   intro s
-  have get_spec := getPeer_live_spec (fun t => t = s)
-  have set_spec := setPeer_live_spec (fun t => t = s)
-  have ambient_spec (α : Type) (a : AmbientM α) :
-      ⦃fun w => ⌜snapshot w = s⌝⦄ (MonadLift.monadLift a : WG.M α)
-      ⦃⇓? _ w => ⌜snapshot w = s⌝⦄ :=
-    hoare_liftAmbient a (fun w => snapshot w = s)
-  mvcgen [-Std.Do.Spec.monadLift_StateT, resetLastSentHandshake,
-    hiddenClock64, get_spec, set_spec, ambient_spec]
-  all_goals simp_all
+  unfold resetLastSentHandshake
+  apply preserves_bind (hoare_liftAmbient (AmbientM.hiddenClock64 .resetLastSent)
+    (fun w => snapshot w = s))
+  intro now
+  apply hoare_bind _ _ (getPeer_live_spec (fun t => t = s) pid)
+  intro p
+  exact setPeer_live_spec (fun t => t = s) pid _
 
 theorem precomputeStaticStatic_samePeerSnapshot (pid : PeerId) :
     SamePeerSnapshot (precomputeStaticStatic pid) := by
+
   apply samePeerSnapshot_of_wp
   intro s
-  have get_spec := getPeer_live_spec (fun t => t = s)
-  have set_spec := setPeer_live_spec (fun t => t = s)
-  have pending_spec := requireNotPending_peer_spec (fun t => t = s)
-  mvcgen [precomputeStaticStatic, pending_spec, get_spec, set_spec,
-    getDev, branch, AmbientM.branch, invariant, AmbientM.invariant]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [snapshot]
+  let P := fun w : WGWorld => snapshot w = s
+  have ambient {α : Type} (a : AmbientM α) (Q : WGWorld → Prop) :
+      Preserves Q (StateT.lift a) := hoare_liftAmbient a Q
+  have device : Preserves P getDev := by
+    unfold getDev
+    apply preserves_bind (hoare_consequence (hoare_get P)
+      (fun _ h => h) (fun _ _ h => h.2))
+    intro w
+    cases w.dev
+    · exact ambient (AmbientM.invariant "no WireGuard device in this trace's fixture") P
+    · exact preserves_pure _
+  have clear : Preserves P (do
+      let current ← getPeer pid
+      setPeer pid {current with precomputedStaticStatic := List.replicate 32 0}) := by
+    apply hoare_bind _ _ (getPeer_live_spec (fun t => t = s) pid)
+    intro current
+    exact setPeer_live_spec (fun t => t = s) pid _
+  simp only [precomputeStaticStatic, requireNotPending, pure_bind]
+  apply hoare_bind _ _ device
+  intro d
+  apply hoare_bind _ _ (getPeer_live_spec (fun t => t = s) pid)
+  intro p
+  apply hoare_bind _ _ (ambient (AmbientM.branch .precomputeNoIdentity !d.staticIdentity.hasIdentity)
+    (fun w => P w ∧ (snapshot w).slots pid = some p.internalId))
+  intro noIdentity
+  cases noIdentity with
+  | true =>
+    exact hoare_consequence clear (fun _ h => h.1) (fun _ _ h => h)
+  | false =>
+    apply hoare_bind _ _ (setPeer_live_spec (fun t => t = s) pid _)
+    intro _
+    apply preserves_bind (ambient (AmbientM.branch .precomputeNullPoint
+      !(curve25519 d.staticIdentity.staticPrivate p.remoteStatic).2) P)
+    intro zero
+    cases zero
+    · exact preserves_pure _
+    · exact clear
 
 theorem handshakeInit_samePeerSnapshot (pid : PeerId) (psk : Option Key) :
     SamePeerSnapshot (handshakeInit pid psk) := by
+
   apply samePeerSnapshot_of_wp
   intro s
-  have get_spec := getPeer_live_spec (fun t => t = s)
-  have set_spec := setPeer_live_spec (fun t => t = s)
-  have precompute_spec := SameView.wp (precomputeStaticStatic_samePeerSnapshot pid) (fun t => t = s)
-  mvcgen [handshakeInit, IndexOwner.setPeerWord, get_spec, set_spec, precompute_spec,
-    branch, AmbientM.branch]
-  all_goals simp_all [snapshot]
+  let P := fun w : WGWorld => snapshot w = s
+  have init : Preserves P (IndexOwner.setPeerWord (.handshake pid) (some pid)) := by
+    unfold IndexOwner.setPeerWord
+    apply hoare_bind _ _ (getPeer_live_spec (fun t => t = s) pid)
+    intro p
+    exact setPeer_live_spec (fun t => t = s) pid _
+  have tail := SameView.wp (precomputeStaticStatic_samePeerSnapshot pid) (fun t => t = s)
+  unfold handshakeInit
+  apply preserves_bind init
+  intro _
+  apply preserves_bind (hoare_liftAmbient (AmbientM.branch .handshakeInitHasPsk psk.isSome) P)
+  intro keyed
+  cases keyed with
+  | false => exact tail
+  | true =>
+    apply hoare_bind _ _ (getPeer_live_spec (fun t => t = s) pid)
+    intro p
+    apply hoare_bind _ _ (setPeer_live_spec (fun t => t = s) pid _)
+    intro _
+    exact tail
 
 end Leanux.Proofs.WG.Peers

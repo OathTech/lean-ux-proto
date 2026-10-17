@@ -205,9 +205,38 @@ theorem addAllowedIpPrefix_preserves (c : AmbientContracts I) (hc : NodeAllocati
     | (maintenance_lift_action_head branchCmp; exact AmbientContracts.drop (c.branchCmp (fun _ => True) _ _ _ _))
     | (maintenance_lift_action_head invariant; exact AmbientContracts.drop (c.invariant (fun _ => True) _))
     | (maintenance_head Pure.pure; exact pure_ok _)
-    | (maintenance_lift_action_head choose; exact ambient_ok (choose _ _) (by intro initial; unfold Hoare; mvcgen [choose, invariant, AmbientM.invariant]))
-    | (maintenance_lift_action_head AipNode.bitAt; exact ambient_ok (AipNode.bitAt _ _) (by intro initial; unfold Hoare; mvcgen [AipNode.bitAt, invariant, AmbientM.invariant]))
-    | (maintenance_lift_action_head commonBits; exact ambient_ok (commonBits _ _ _) (by intro initial; unfold Hoare; mvcgen [commonBits, branch, AmbientM.branch]))
+    | (maintenance_lift_action_head choose; exact ambient_ok (choose _ _) (by
+        intro initial
+        apply (hoare_iff_run_ambient _ _ _).mpr
+        intro w ambient result out ambient' hi hr
+        simp [choose, invariant, AmbientM.invariant] at hr
+        split at hr <;> simp_all
+        all_goals try split at hr <;> simp_all
+        all_goals rcases hr with ⟨⟨rfl, rfl⟩, rfl⟩
+        all_goals exact hi))
+    | (maintenance_lift_action_head AipNode.bitAt; exact ambient_ok (AipNode.bitAt _ _) (by
+        intro initial
+        apply (hoare_iff_run_ambient _ _ _).mpr
+        intro w ambient result out ambient' hi hr
+        simp [AipNode.bitAt, invariant, AmbientM.invariant] at hr
+        split at hr <;> simp_all
+        all_goals try split at hr <;> simp_all
+        all_goals rcases hr with ⟨⟨rfl, rfl⟩, rfl⟩
+        all_goals exact hi))
+    | (maintenance_lift_action_head commonBits; exact ambient_ok (commonBits _ _ _) (by
+        intro initial
+        unfold commonBits
+        apply preserves_bind (hoare_liftAmbient (AmbientM.branch .commonBits32 _) _)
+        intro is32
+        cases is32
+        · apply preserves_bind (hoare_liftAmbient (AmbientM.branch .commonBits128 _) _)
+          intro is128
+          cases is128
+          · exact preserves_pure _
+          · apply preserves_bind (hoare_liftAmbient (AmbientM.branch .fls128High _) _)
+            intro high
+            cases high <;> exact preserves_pure _
+        · exact preserves_pure _))
     | (maintenance_head Bind.bind; apply StatePrefixEnsures.bind (Q := fun _ h w (_ : Ambient) => I h w))
     | (maintenance_head ite; apply insert_state_ite)
     | (maintenance_intro; try dsimp only)
@@ -259,9 +288,38 @@ theorem addAllowedIpPrefix_preserves_product (c : ProductAmbientContracts I)
     | (maintenance_lift_action_head branchCmp; exact ambient_ok (branchCmp _ _ _ _) (by intro initial; exact hoare_liftAmbient (AmbientM.branchCmp _ _ _ _) _))
     | (maintenance_lift_action_head invariant; exact ambient_ok (invariant _) (by intro initial; exact hoare_liftAmbient (AmbientM.invariant _) _))
     | (maintenance_head Pure.pure; exact PrefixPreserves.pure c.safe _)
-    | (maintenance_lift_action_head choose; exact ambient_ok (choose _ _) (by intro initial; unfold Hoare; mvcgen [choose, invariant, AmbientM.invariant]))
-    | (maintenance_lift_action_head AipNode.bitAt; exact ambient_ok (AipNode.bitAt _ _) (by intro initial; unfold Hoare; mvcgen [AipNode.bitAt, invariant, AmbientM.invariant]))
-    | (maintenance_lift_action_head commonBits; exact ambient_ok (commonBits _ _ _) (by intro initial; unfold Hoare; mvcgen [commonBits, branch, AmbientM.branch]))
+    | (maintenance_lift_action_head choose; exact ambient_ok (choose _ _) (by
+        intro initial
+        apply (hoare_iff_run_ambient _ _ _).mpr
+        intro w ambient result out ambient' hi hr
+        simp [choose, invariant, AmbientM.invariant] at hr
+        split at hr <;> simp_all
+        all_goals try split at hr <;> simp_all
+        all_goals rcases hr with ⟨⟨rfl, rfl⟩, rfl⟩
+        all_goals exact hi))
+    | (maintenance_lift_action_head AipNode.bitAt; exact ambient_ok (AipNode.bitAt _ _) (by
+        intro initial
+        apply (hoare_iff_run_ambient _ _ _).mpr
+        intro w ambient result out ambient' hi hr
+        simp [AipNode.bitAt, invariant, AmbientM.invariant] at hr
+        split at hr <;> simp_all
+        all_goals try split at hr <;> simp_all
+        all_goals rcases hr with ⟨⟨rfl, rfl⟩, rfl⟩
+        all_goals exact hi))
+    | (maintenance_lift_action_head commonBits; exact ambient_ok (commonBits _ _ _) (by
+        intro initial
+        unfold commonBits
+        apply preserves_bind (hoare_liftAmbient (AmbientM.branch .commonBits32 _) _)
+        intro is32
+        cases is32
+        · apply preserves_bind (hoare_liftAmbient (AmbientM.branch .commonBits128 _) _)
+          intro is128
+          cases is128
+          · exact preserves_pure _
+          · apply preserves_bind (hoare_liftAmbient (AmbientM.branch .fls128High _) _)
+            intro high
+            cases high <;> exact preserves_pure _
+        · exact preserves_pure _))
     | (maintenance_head Bind.bind; apply PrefixEnsures.bind (Q := fun _ => I))
     | (maintenance_head ite; first | apply lifted_conditional | apply conditional)
     | (maintenance_intro; try dsimp only; try simp only [liftWGObserver_bind, liftWGObserver_pure, apply_ite])

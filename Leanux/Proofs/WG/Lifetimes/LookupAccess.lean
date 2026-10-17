@@ -72,13 +72,16 @@ theorem peerGetMaybeZeroPrefix_spec_ambient (c : AmbientContracts I)
       have href : AmbientSpec I Q (liftWGPrefix (refcountIncNotZero p.refcount)) (fun _ => Q) := by
         apply c.store
         intro initial
-        have ambient (α : Type) (a : AmbientM α) :
-            Hoare (MonadLift.monadLift a : WG.M α) (fun w => wgStoreView w = initial)
-              (fun _ w => wgStoreView w = initial) :=
-          hoare_liftAmbient a (fun w => wgStoreView w = initial)
-        unfold Hoare at *
-        mvcgen [-Std.Do.Spec.monadLift_StateT, refcountIncNotZero,
-          branchCmp, branch, unsupported, ambient]
+        apply (hoare_iff_run_ambient _ _ _).mpr
+        intro w ambient result out ambient' hi hr
+        simp [refcountIncNotZero, branchCmp, branch,
+          AmbientM.branchCmp, AmbientM.branch, unsupported,
+          AmbientM.unsupported] at hr
+        split at hr <;> simp_all
+        all_goals try split at hr <;> simp_all
+        all_goals try split at hr <;> simp_all
+        all_goals rcases hr with ⟨⟨rfl, rfl⟩, rfl⟩
+        all_goals exact hi
       apply StatePrefixEnsures.bind href
       intro live
       apply StatePrefixEnsures.bind (c.branch Q _ _)
@@ -314,13 +317,16 @@ theorem peerGetMaybeZeroPrefix_spec_product (c : ProductAmbientContracts I)
           (liftWGObserver (liftWGPrefix (refcountIncNotZero p.refcount))) (fun _ => Q) := by
         apply c.nativeStore
         intro initial
-        have ambient (α : Type) (a : AmbientM α) :
-            Hoare (MonadLift.monadLift a : WG.M α) (fun w => wgStoreView w = initial)
-              (fun _ w => wgStoreView w = initial) :=
-          hoare_liftAmbient a (fun w => wgStoreView w = initial)
-        unfold Hoare at *
-        mvcgen [-Std.Do.Spec.monadLift_StateT, refcountIncNotZero,
-          branchCmp, branch, unsupported, ambient]
+        apply (hoare_iff_run_ambient _ _ _).mpr
+        intro w ambient result out ambient' hi hr
+        simp [refcountIncNotZero, branchCmp, branch,
+          AmbientM.branchCmp, AmbientM.branch, unsupported,
+          AmbientM.unsupported] at hr
+        split at hr <;> simp_all
+        all_goals try split at hr <;> simp_all
+        all_goals try split at hr <;> simp_all
+        all_goals rcases hr with ⟨⟨rfl, rfl⟩, rfl⟩
+        all_goals exact hi
       apply PrefixEnsures.bind href
       intro live
       apply PrefixEnsures.bind (branch_spec Q _ _)

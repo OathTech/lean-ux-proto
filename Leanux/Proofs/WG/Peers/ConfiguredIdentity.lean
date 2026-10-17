@@ -168,8 +168,22 @@ theorem kernel {S α : Type} {m : Type → Type} {ps : PostShape}
 theorem getPeer_spec (P : Option State→Prop) (pid : PeerId) :
     ⦃fun w=>⌜P (view w)⌝⦄ getPeer pid
     ⦃⇓? p w=>⌜P (view w) ∧ (view w).bind (fun s=>s.peers pid)=some (cell p)⌝⦄ := by
-  mvcgen [getPeer,getDev,invariant,AmbientM.invariant]
-  all_goals simp_all [view,state]
+
+  apply (hoare_iff_run_ambient _ _ _).mpr
+  intro w ambient value out ambient' hi hr
+  cases hd : w.dev with
+  | none =>
+    simp [getPeer, getDev, hd, invariant, AmbientM.invariant] at hr
+    cases hr
+  | some d =>
+    cases hp : d.peers[pid]? with
+    | none =>
+      simp [getPeer, getDev, hd, hp, invariant, AmbientM.invariant] at hr
+      cases hr
+    | some p =>
+      simp [getPeer, getDev, hd, hp] at hr
+      rcases hr with ⟨⟨rfl, rfl⟩, rfl⟩
+      exact ⟨hi, by simp [view, state, hd, hp]⟩
 
 theorem setPeer_spec (P : Option State→Prop) (pid : PeerId) (p : Peer) :
     ⦃fun w=>⌜P (view w) ∧ (view w).bind (fun s=>s.peers pid)=some (cell p)⌝⦄ setPeer pid p
@@ -220,32 +234,80 @@ theorem modifyDev_spec (P : Option State→Prop) (f : Device→Device)
   simpa [view,modifyDev,Option.map_map,Function.comp_def,h] using hp
 
 theorem precompute (pid : PeerId) : SameView view (precomputeStaticStatic pid) := by
-  apply SameView.of_wp; intro s
-  have hg:=getPeer_spec (fun t=>t=s) pid
-  have hs:=setPeer_spec (fun t=>t=s) pid
-  mvcgen [precomputeStaticStatic,requireNotPending,hg,hs,getDev,branch,invariant,AmbientM.branch,AmbientM.invariant]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [view]
+
+  apply SameView.of_wp
+  intro s
+  let P := fun w : WGWorld => view w = s
+  have ambient {α : Type} (a : AmbientM α) (Q : WGWorld → Prop) :
+      Preserves Q (StateT.lift a) := hoare_liftAmbient a Q
+  have device : Preserves P getDev := by
+    unfold getDev
+    apply preserves_bind (hoare_consequence (hoare_get P)
+      (fun _ h => h) (fun _ _ h => h.2))
+    intro w
+    cases w.dev
+    · exact ambient (AmbientM.invariant "no WireGuard device in this trace's fixture") P
+    · exact preserves_pure _
+  have clear : Preserves P (do
+      let current ← getPeer pid
+      setPeer pid {current with precomputedStaticStatic := List.replicate 32 0}) := by
+    apply hoare_bind _ _ (getPeer_spec (fun t => t = s) pid)
+    intro current
+    exact setPeer_spec (fun t => t = s) pid _
+  simp only [precomputeStaticStatic, requireNotPending, pure_bind]
+  apply hoare_bind _ _ device
+  intro d
+  apply hoare_bind _ _ (getPeer_spec (fun t => t = s) pid)
+  intro p
+  apply hoare_bind _ _ (ambient (AmbientM.branch .precomputeNoIdentity !d.staticIdentity.hasIdentity)
+    (fun w => P w ∧ (view w).bind (fun state => state.peers pid) = some (cell p)))
+  intro noIdentity
+  cases noIdentity with
+  | true =>
+    exact hoare_consequence clear (fun _ h => h.1) (fun _ _ h => h)
+  | false =>
+    apply hoare_bind _ _ (setPeer_spec (fun t => t = s) pid _)
+    intro _
+    apply preserves_bind (ambient (AmbientM.branch .precomputeNullPoint
+      !(curve25519 d.staticIdentity.staticPrivate p.remoteStatic).2) P)
+    intro zero
+    cases zero
+    · exact preserves_pure _
+    · exact clear
 
 theorem cacheReset (pid : PeerId) : SameView view (dstCacheReset pid) := by
-  apply SameView.of_wp; intro s
-  have hg:=getPeer_spec (fun t=>t=s) pid
-  have hs:=setPeer_spec (fun t=>t=s) pid
-  have hc {α : Type} (a : AmbientM α) :
-      Hoare (MonadLift.monadLift a : WG.M α) (fun w => view w = s) (fun _ w => view w = s) :=
-    hoare_liftAmbient a _
-  unfold Hoare at hc
-  mvcgen [-Std.Do.Spec.monadLift_StateT,dstCacheReset,hg,hs,hc,hiddenJiffies,getAmbient]
+
+  apply SameView.of_wp
+  intro s
+  let P := fun w : WGWorld => view w = s
+  have ambient {α : Type} (a : AmbientM α) : Preserves P (StateT.lift a) :=
+    hoare_liftAmbient a P
+  have read : Preserves P (get : WG.M WGWorld) :=
+    hoare_consequence (hoare_get P) (fun _ h => h) (fun _ _ h => h.2)
+  unfold dstCacheReset
+  apply preserves_bind (ambient (get : AmbientM Ambient))
+  intro a
+  apply preserves_bind read
+  intro w
+  split
+  · exact preserves_pure _
+  · apply preserves_bind (ambient (AmbientM.hiddenJiffies .dstCacheResetTs))
+    intro ts
+    apply hoare_bind _ _ (getPeer_spec (fun t => t = s) pid)
+    intro p
+    exact setPeer_spec (fun t => t = s) pid _
 
 theorem resetHandshake (pid : PeerId) : SameView view (resetLastSentHandshake pid) := by
-  apply SameView.of_wp; intro s
-  have hg:=getPeer_spec (fun t=>t=s) pid
-  have hs:=setPeer_spec (fun t=>t=s) pid
-  have ht {α : Type} (a : AmbientM α) :
-      Hoare (MonadLift.monadLift a : WG.M α) (fun w => view w = s) (fun _ w => view w = s) :=
-    hoare_liftAmbient a _
-  unfold Hoare at ht
-  mvcgen [-Std.Do.Spec.monadLift_StateT,resetLastSentHandshake,hg,hs,ht,hiddenClock64]
+
+  apply SameView.of_wp
+  intro s
+  unfold resetLastSentHandshake
+  apply preserves_bind (hoare_liftAmbient (AmbientM.hiddenClock64 .resetLastSent)
+    (fun w => view w = s))
+  intro now
+  apply hoare_bind _ _ (getPeer_spec (fun t => t = s) pid)
+  intro p
+  exact setPeer_spec (fun t => t = s) pid _
 
 def State.setWord (s : State) (pid : PeerId) (word : Option PeerId) : State :=
   {s with peers:=fun q=>if pid=q then (s.peers q).map (fun p=>{p with word}) else s.peers q}
@@ -294,9 +356,17 @@ theorem handshakeInit_effect (pid : PeerId) (psk : Option Key) (w v : WGWorld) (
     have hg:=getPeer_spec (fun t=>t=(view w).map (fun (s : State)=>s.setWord pid (some pid))) pid
     have hs:=setPeer_spec (fun t=>t=(view w).map (fun (s : State)=>s.setWord pid (some pid))) pid
     have hp:=(precompute pid).wp (fun t=>t=(view w).map (fun (s : State)=>s.setWord pid (some pid)))
-    mvcgen [hg,hs,hp,branch,AmbientM.branch]
-    all_goals try dsimp +zetaDelta only at *
-    all_goals simp_all [view]
+    apply hoare_bind _ _ (hoare_liftAmbient (AmbientM.branch .handshakeInitHasPsk psk.isSome)
+      (fun u => view u = (view w).map (fun (s : State) => s.setWord pid (some pid))))
+    intro keyed
+    cases keyed with
+    | false => exact hp
+    | true =>
+      apply hoare_bind _ _ hg
+      intro p
+      apply hoare_bind _ _ (hs {p with presharedKey := psk.getD p.presharedKey})
+      intro _
+      exact hp
   unfold handshakeInit at hr
   rw [MaterialOrigin.bind_ok_ambient] at hr
   obtain ⟨u,a,middle,ha,hr⟩:=hr; cases u
@@ -377,32 +447,88 @@ theorem publishRow_spec (pid : PeerId) (key : Key) :
 theorem peerCreate_spec (key : Key) (psk : Option Key) :
     ⦃fun w=>⌜Inv w⌝⦄ peerCreate key psk
     ⦃⇓? result w=>⌜Inv w ∧ ∀pid,result=.ok pid → ∃s p,view w=some s ∧ s.peers pid=some p ∧ p.static=key⌝⦄ := by
+
   apply (hoare_iff_run_ambient _ _ _).mpr
   intro w ambient result v ambient' initial hr
-  have proof : ⦃fun u=>⌜view u=view w⌝⦄ peerCreate key psk
-      ⦃⇓? result u=>⌜Inv u ∧ ∀pid,result=.ok pid → ∃s p,view u=some s ∧ s.peers pid=some p ∧ p.static=key⌝⦄ := by
-    rw [←Peers.peerCreateFactored_eq]
-    have hc:=fun pid=>core_spec pid key
-    have hi:=fun pid=>init_creating pid key psk
-    have hd:=fun pid=>(cacheReset pid).wp (Creating pid key)
-    have hh:=fun pid=>(resetHandshake pid).wp (Creating pid key)
-    have hp:=fun pid=>publishRow_spec pid key
-    dsimp only [publishRow] at hp
-    have hg : ⦃fun u => ⌜view u = view w⌝⦄ getDev
-        ⦃⇓? d u => ⌜view u = view w ∧ some (state d) = view w⌝⦄ := by
-      mvcgen [getDev,invariant,AmbientM.invariant]
-      all_goals simp_all [view]
-    have ha {α : Type} (a : AmbientM α) :
-        Hoare (MonadLift.monadLift a : WG.M α)
-          (fun u => view u = view w) (fun _ u => view u = view w) :=
-      hoare_liftAmbient a _
-    unfold Hoare at ha
-    mvcgen [-Std.Do.Spec.monadLift_StateT,Peers.peerCreateFactored,hc,hi,hd,hh,hp,hg,ha,hiddenAlloc,branch,branchCmp,invariant,AmbientM.branch,AmbientM.branchCmp,AmbientM.invariant]
-    all_goals try dsimp +zetaDelta only at *
-    all_goals simp_all [Inv,InvExcept]
-    all_goals
-      rename_i hview hget hmax hbranch halloc hnomem hmore hdst hlast
-      exact ⟨_, hget.2.symm, rfl⟩
+  let P := fun u : WGWorld => view u = view w
+  let Q := fun (result : Except Int PeerId) (u : WGWorld) =>
+    Inv u ∧ ∀ pid, result = .ok pid →
+      ∃ s p, view u = some s ∧ s.peers pid = some p ∧ p.static = key
+  have invariant_of (u : WGWorld) (hu : P u) : Inv u := by
+    intro st hs
+    exact initial st (hu ▸ hs)
+  have getter : Hoare getDev P (fun d u => P u ∧ some (state d) = view w) := by
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro u a d out b hu hrun
+    cases hd : u.dev with
+    | none =>
+      simp [getDev, hd, invariant, AmbientM.invariant] at hrun
+      cases hrun
+    | some saved =>
+      simp [getDev, hd] at hrun
+      rcases hrun with ⟨⟨rfl, rfl⟩, rfl⟩
+      exact ⟨hu, by simpa only [P, view, hd, Option.map_some] using hu⟩
+  have ambient_rule {α : Type} (a : AmbientM α) (R : WGWorld → Prop) :
+      Preserves R (StateT.lift a) := hoare_liftAmbient a R
+  have failure (d : Device) : Hoare (pure (.error (-ENOMEM)) : WG.M (Except Int PeerId))
+      (fun u => P u ∧ some (state d) = view w) Q := by
+    apply hoare_consequence (hoare_pure (Except.error (-ENOMEM) : Except Int PeerId) _)
+    · intro _ h; exact h
+    · intro result u h
+      rcases h with ⟨rfl, h⟩
+      exact ⟨invariant_of u h.1, by simp⟩
+  have proof : Hoare (peerCreate key psk) P Q := by
+    rw [← Peers.peerCreateFactored_eq]
+    unfold Peers.peerCreateFactored
+    apply hoare_bind _ _ getter
+    intro d
+    apply hoare_bind _ _ (ambient_rule (AmbientM.branchCmp .peerCreateMaxPeers
+      (d.numPeers ≥ MAX_PEERS_PER_DEVICE) d.numPeers MAX_PEERS_PER_DEVICE)
+      (fun u => P u ∧ some (state d) = view w))
+    intro maxPeers
+    cases maxPeers with
+    | true => exact failure d
+    | false =>
+      apply hoare_bind _ _ (ambient_rule (AmbientM.hiddenAlloc .kmemCacheZallocPeer)
+        (fun u => P u ∧ some (state d) = view w))
+      intro allocated
+      apply hoare_bind _ _ (ambient_rule (AmbientM.branch .peerCreateNoMem !allocated)
+        (fun u => P u ∧ some (state d) = view w))
+      intro noMem
+      cases noMem with
+      | true => exact failure d
+      | false =>
+        apply hoare_bind _ _ (ambient_rule (AmbientM.branch .peerCreateDstCacheFail false)
+          (fun u => P u ∧ some (state d) = view w))
+        intro cacheFailed
+        cases cacheFailed with
+        | true => exact failure d
+        | false =>
+          have core : Hoare (Peers.peerCreateCore d.nextPeer key)
+              (fun u => P u ∧ some (state d) = view w)
+              (fun _ u => Creating d.nextPeer key (view u)) := by
+            apply hoare_consequence (core_spec d.nextPeer key)
+            · intro u h
+              exact ⟨invariant_of u h.1, state d, h.1.trans h.2.symm, rfl⟩
+            · intro _ _ h; exact h
+          apply hoare_bind _ _ core
+          intro _
+          apply hoare_bind _ _ (SameView.wp (cacheReset d.nextPeer) (Creating d.nextPeer key))
+          intro _
+          apply hoare_bind _ _ (init_creating d.nextPeer key psk)
+          intro _
+          apply hoare_bind _ _ (SameView.wp (resetHandshake d.nextPeer) (Creating d.nextPeer key))
+          intro _
+          apply hoare_bind _ _ (publishRow_spec d.nextPeer key)
+          intro _
+          apply hoare_consequence (hoare_pure (Except.ok d.nextPeer : Except Int PeerId) _)
+          · intro _ h; exact h
+          · intro result u h
+            rcases h with ⟨rfl, hi, hx⟩
+            refine ⟨hi, ?_⟩
+            intro pid he
+            cases he
+            exact hx
   exact (hoare_iff_run_ambient _ _ _).mp proof w ambient result v ambient' rfl hr
 
 /-- Successful lookup resolves the actual matching table row and actual
@@ -447,8 +573,22 @@ theorem index {S α : Type} {m : Type → Type} {ps : PostShape}
     (fun s => by cases h : (project s).dev <;> simp [view,h,state])
 
 theorem getKeypair_view (id : KeypairId) : SameView view (getKeypair id) := by
-  apply SameView.of_wp; intro s
-  mvcgen [getKeypair,getDev,invariant,AmbientM.invariant]
+
+  apply (ProjectedAction.iff_run_ambient _ _ _).mpr
+  intro w ambient k out ambient' hr
+  cases hd : w.dev with
+  | none =>
+    simp [getKeypair, getDev, hd, invariant, AmbientM.invariant] at hr
+    cases hr
+  | some d =>
+    cases hk : d.keypairs[id]? with
+    | none =>
+      simp [getKeypair, getDev, hd, hk, invariant, AmbientM.invariant] at hr
+      cases hr
+    | some saved =>
+      simp [getKeypair, getDev, hd, hk] at hr
+      rcases hr with ⟨⟨rfl, rfl⟩, rfl⟩
+      rfl
 
 theorem setKeypair_view (id : KeypairId) (k : Keypair) : SameView view (setKeypair id k) := by
   apply SameView.of_wp; intro s
@@ -456,48 +596,142 @@ theorem setKeypair_view (id : KeypairId) (k : Keypair) : SameView view (setKeypa
     (fun d=>{d with keypairs:=d.keypairs.insert id k}) (fun _=>rfl)
 
 theorem handshakeZero_view (pid : PeerId) : SameView view (handshakeZero pid) := by
-  apply SameView.of_wp; intro s
-  have hg:=getPeer_spec (fun t=>t=s) pid
-  have hs:=setPeer_spec (fun t=>t=s) pid
-  mvcgen [handshakeZero,hg,hs]
+
+  apply SameView.of_wp
+  intro s
+  unfold handshakeZero
+  apply hoare_bind _ _ (getPeer_spec (fun t => t = s) pid)
+  intro p
+  exact setPeer_spec (fun t => t = s) pid _
 
 theorem keypairPut_view (kp : Option KeypairId) (unreference : Bool) : SameView view (keypairPut kp unreference) := by
-  apply SameView.of_wp; intro s
-  have hg:=fun id=>(getKeypair_view id).wp (fun t=>t=s)
-  have hs:=fun id k=>(setKeypair_view id k).wp (fun t=>t=s)
-  have hi {α : Type} (a : IndexM α) :
-      Hoare (MonadLift.monadLift a : WG.M α) (fun w => view w = s) (fun _ w => view w = s) := by
+
+  apply SameView.of_wp
+  intro s
+  let P := fun w : WGWorld => view w = s
+  have ambient {α : Type} (a : AmbientM α) : Preserves P (StateT.lift a) :=
+    hoare_liftAmbient a P
+  have dec (old : Nat) : Preserves P (refcountDecAndTest old : WG.M Bool) := by
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w a r v b hp hr
+    by_cases positive : 0 < old <;> by_cases final : old = 1 <;>
+      simp [refcountDecAndTest, branch, branchCmp, AmbientM.branch, AmbientM.branchCmp,
+        positive, final, unsupported, AmbientM.unsupported] at hr
+    all_goals repeat' first | split at hr | contradiction
+    all_goals rcases hr with ⟨⟨rfl, rfl⟩, rfl⟩
+    all_goals exact hp
+  have remove (id : KeypairId) : Preserves P (do
+      _ ← IndexOwner.peerDeref (.keypair id)
+      indexRemove (.keypair id)) := by
+    apply preserves_bind (indexOwner_peerDeref_preserves (.keypair id) P)
+    intro _
     apply hoare_liftIndex
     intro g d table hg hd
-    simpa only [view,hd,Option.map_some,state] using hg
-  have hd:=fun owner=>indexOwner_peerDeref_preserves owner (fun w=>view w=s)
-  unfold Hoare at hi
-  unfold Preserves Hoare at hd
-  have hm:=fun id=>modifyDev_spec (fun t=>t=s) (fun d=>{d with keypairs:=d.keypairs.erase id}) (fun _=>rfl)
-  mvcgen [keypairPut,hg,hs,hi,hd,hm,refcountDecAndTest,branch,branchCmp,invariant,unsupported,
-    AmbientM.branch,AmbientM.branchCmp,AmbientM.invariant,AmbientM.unsupported]
+    simpa only [P, view, hd, Option.map_some, state] using hg
+  have tail (id : KeypairId) (k : Keypair) : Preserves P (do
+      setKeypair id {k with refcount := k.refcount - 1}
+      if ← branch .keypairKrefPutReleased (← refcountDecAndTest k.refcount) then
+        (do
+          _ ← IndexOwner.peerDeref (.keypair id)
+          indexRemove (.keypair id))
+        modifyDev fun d => {d with keypairs := d.keypairs.erase id}) := by
+    apply preserves_bind (SameView.wp (setKeypair_view id _) (fun t => t = s))
+    intro _
+    apply preserves_bind (dec k.refcount)
+    intro released
+    apply preserves_bind (ambient (AmbientM.branch .keypairKrefPutReleased released))
+    intro last
+    cases last with
+    | false => exact preserves_pure _
+    | true =>
+      apply preserves_bind (remove id)
+      intro _
+      exact modifyDev_spec (fun t => t = s) _ (fun _ => rfl)
+  have branchValue {α : Type} (decision : Decision) (value : Bool)
+      (f : Bool → WG.M α) (hf : Preserves P (f value)) :
+      Preserves P ((branch decision value : WG.M Bool) >>= f) := by
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w a r v b hp hr
+    change ((f value).run w).run _ = .ok ((r, v), b) at hr
+    exact (hoare_iff_run_ambient _ _ _).mp hf _ _ _ _ _ hp hr
+  cases kp with
+  | none =>
+    unfold keypairPut
+    apply branchValue
+    exact preserves_pure _
+  | some id =>
+    unfold keypairPut
+    apply branchValue
+    apply preserves_bind (SameView.wp (getKeypair_view id) (fun t => t = s))
+    intro k
+    apply preserves_bind (ambient (AmbientM.branch .keypairPutUnreferenceNow unreference))
+    intro now
+    cases now with
+    | false => exact tail id k
+    | true => exact preserves_bind (remove id) (fun _ => tail id k)
 
 theorem modifyPeer_view (pid : PeerId) (f : Peer→Peer) (hf : ∀p,cell (f p)=cell p) :
     SameView view ((pinned_const _private.Leanux.WG.Keypair.«0».Leanux.WG.modifyPeer) pid f) := by
-  apply SameView.of_wp; intro s
-  have hg:=getPeer_spec (fun t=>t=s) pid
-  have hs:=setPeer_spec (fun t=>t=s) pid
-  change ⦃fun w => ⌜view w = s⌝⦄ (do setPeer pid (f (← getPeer pid))) ⦃⇓? _ w => ⌜view w = s⌝⦄
-  mvcgen [hg,hs]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all []
-  all_goals grind only
+
+  apply SameView.of_wp
+  intro s
+  change Hoare (do setPeer pid (f (← getPeer pid))) (fun w => view w = s) (fun _ w => view w = s)
+  apply hoare_bind _ _ (getPeer_spec (fun t => t = s) pid)
+  intro p
+  apply hoare_consequence (setPeer_spec (fun t => t = s) pid (f p))
+  · intro w h
+    exact ⟨h.1, by simpa only [hf p] using h.2⟩
+  · intro _ _ h; exact h
 
 theorem addNewKeypair_view (pid : PeerId) (kp : KeypairId) : SameView view (addNewKeypair pid kp) := by
-  apply SameView.of_wp; intro s
-  have hg:=getPeer_spec (fun t=>t=s) pid
-  have hs:=setPeer_spec (fun t=>t=s) pid
-  have hk:=fun id=>(getKeypair_view id).wp (fun t=>t=s)
-  have hp:=fun id b=>(keypairPut_view id b).wp (fun t=>t=s)
-  have hm := fun f hf=>(modifyPeer_view pid f hf).wp (fun t=>t=s)
-  mvcgen [addNewKeypair,hg,hs,hk,hp,hm,branch,AmbientM.branch]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [view,cell]
+
+  apply SameView.of_wp
+  intro s
+  let P := fun w : WGWorld => view w = s
+  have ambient (decision : Decision) (value : Bool) :
+      Preserves P (branch decision value : WG.M Bool) :=
+    hoare_liftAmbient (AmbientM.branch decision value) P
+  have read : Preserves P (getPeer pid) :=
+    hoare_consequence (getPeer_spec (fun t => t = s) pid)
+      (fun _ h => h) (fun _ _ h => h.1)
+  have key (id : KeypairId) := SameView.wp (getKeypair_view id) (fun t => t = s)
+  have put (id : Option KeypairId) := SameView.wp (keypairPut_view id true) (fun t => t = s)
+  have modify (f : Peer → Peer) (hf : ∀ p, cell (f p) = cell p) :=
+    SameView.wp (modifyPeer_view pid f hf) (fun t => t = s)
+  unfold addNewKeypair
+  apply preserves_bind read
+  intro p
+  apply preserves_bind (key kp)
+  intro k
+  apply preserves_bind (ambient .addKeypairInitiator k.iAmTheInitiator)
+  intro initiator
+  cases initiator with
+  | false =>
+    apply preserves_bind (modify (fun p => {p with keypairNext := some kp}) (fun _ => rfl))
+    intro _
+    apply preserves_bind (put p.keypairNext)
+    intro _
+    apply preserves_bind (modify (fun p => {p with keypairPrevious := none}) (fun _ => rfl))
+    intro _
+    exact put p.keypairPrevious
+  | true =>
+    apply preserves_bind (ambient .addKeypairHasNext p.keypairNext.isSome)
+    intro hasNext
+    cases hasNext with
+    | false =>
+      apply preserves_bind (modify (fun q => {q with keypairPrevious := p.keypairCurrent}) (fun _ => rfl))
+      intro _
+      apply preserves_bind (put p.keypairPrevious)
+      intro _
+      exact modify (fun q => {q with keypairCurrent := some kp}) (fun _ => rfl)
+    | true =>
+      apply preserves_bind (modify (fun q => {q with keypairNext := none, keypairPrevious := p.keypairNext}) (fun _ => rfl))
+      intro _
+      apply preserves_bind (put p.keypairCurrent)
+      intro _
+      apply preserves_bind (put p.keypairPrevious)
+      intro _
+      exact modify (fun q => {q with keypairCurrent := some kp}) (fun _ => rfl)
 
 /-- Retirement removes a slot, and need not remove its stale hash rows. -/
 theorem erase_inv (d : Device) (pid dropped : Nat) (hi : (state d).Inv) :
@@ -509,34 +743,61 @@ theorem erase_inv (d : Device) (pid dropped : Nat) (hi : (state d).Inv) :
 
 theorem peerPut_preserves (peer : Option PeerId) :
     ⦃fun w=>⌜Inv w⌝⦄ peerPut peer ⦃⇓? _ w=>⌜Inv w⌝⦄ := by
-  let P := fun v : Option State=>∀s,v=some s→s.Inv
-  have hg:=getPeer_spec P
-  have hs:=setPeer_spec P
-  have hi {α : Type} (a : IndexM α) :
-      Hoare (MonadLift.monadLift a : WG.M α) Inv (fun _ => Inv) := by
-    apply hoare_liftIndex
-    intro g d table hg hd
-    simpa only [Inv,InvExcept,view,hd,Option.map_some,state] using hg
-  have ha {α : Type} (a : AmbientM α) :
-      Hoare (MonadLift.monadLift a : WG.M α) Inv (fun _ => Inv) :=
-    hoare_liftAmbient a _
-  unfold Hoare at hi ha
-  have hm (pid dropped : Nat) :
-      ⦃fun w=>⌜Inv w⌝⦄ modifyDev (fun d=>{d with txDropped:=d.txDropped+dropped,peers:=d.peers.erase pid})
-      ⦃⇓? _ w=>⌜Inv w⌝⦄ := by
-    apply (hoare_iff_run_ambient _ _ _).mpr
-    intro w ambient x v ambient' hw hr
-    cases hr
-    intro s he
-    cases hd:w.dev with
-    | none=>simp [view,hd] at he
-    | some d=>
-      have h := hw (state d) (by simp [view,hd])
-      have eq : s=state {d with txDropped:=d.txDropped+dropped,peers:=d.peers.erase pid} := by
-        simpa [view,modifyDev,hd] using he.symm
-      subst s; exact erase_inv d pid _ h
-  mvcgen [-Std.Do.Spec.monadLift_StateT,peerPut,requireNotPending,hg,hs,hi,hm,ha,refcountDecAndTest,retirePeerUnits,
-    branch,branchCmp,unsupported,invariant,AmbientM.branch,AmbientM.branchCmp,AmbientM.unsupported,AmbientM.invariant]
+
+  apply (hoare_iff_run_ambient _ _ _).mpr
+  intro w ambient result out ambient' hinv hr
+  cases peer with
+  | none =>
+    simp [peerPut, branch, AmbientM.branch] at hr
+    rcases hr with ⟨rfl, rfl⟩
+    exact hinv
+  | some pid =>
+    cases hd : w.dev with
+    | none =>
+      simp [peerPut, requireNotPending, getPeer, getDev, hd, branch, AmbientM.branch,
+        invariant, AmbientM.invariant] at hr
+      cases hr
+    | some d =>
+      cases hp : d.peers[pid]? with
+      | none =>
+        simp [peerPut, requireNotPending, getPeer, getDev, hd, hp, branch, AmbientM.branch,
+          invariant, AmbientM.invariant] at hr
+        cases hr
+      | some p =>
+        have initial : (state d).Inv := hinv (state d) (by simp [view, hd])
+        have updated : (state {d with peers := d.peers.insert pid {p with refcount := p.refcount - 1}}).Inv := by
+          rw [state_peer_same d pid p {p with refcount := p.refcount - 1} hp rfl]
+          exact initial
+        have erased : (state {d with peers := (d.peers.insert pid {p with refcount := p.refcount - 1}).erase pid}).Inv :=
+          erase_inv {d with peers := d.peers.insert pid {p with refcount := p.refcount - 1}} pid d.txDropped updated
+        have hl (a : IndexM Unit) : (liftM a : WG.M Unit) = liftIndex a := rfl
+        by_cases positive : 0 < p.refcount
+        · have nonzero : p.refcount ≠ 0 := by omega
+          by_cases final : p.refcount = 1
+          all_goals
+            simp [peerPut, requireNotPending, getPeer, getDev, setPeer, modifyDev,
+              refcountDecAndTest, branch, branchCmp, indexRemove_eq, indexUnhash,
+              hl, liftIndex_run, retirePeerUnits, modifyAmbient,
+              CounterWindow.branch_run, CounterWindow.branchCmp_run,
+              hd, hp, positive, nonzero, final,
+              StateT.run_bind, StateT.run_pure, StateT.run_monadLift,
+              CounterWindow.except_ok_bind, CounterWindow.except_pure,
+              invariant, AmbientM.invariant, unsupported, AmbientM.unsupported] at hr
+          all_goals repeat' first | split at hr | contradiction
+          all_goals rcases hr with ⟨rfl, rfl⟩
+          all_goals
+            intro st hs
+            simp only [view, Option.map_some, Option.some.injEq] at hs
+            subst st
+            first | simpa only [state, final, Nat.sub_self] using erased | exact updated
+        · have zero : p.refcount = 0 := by omega
+          simp [peerPut, requireNotPending, getPeer, getDev, setPeer, modifyDev,
+            refcountDecAndTest, branch, branchCmp, CounterWindow.branch_run,
+            CounterWindow.branchCmp_run, hd, hp, zero,
+            StateT.run_bind, StateT.run_pure, StateT.run_monadLift,
+            CounterWindow.except_ok_bind, CounterWindow.except_pure,
+            unsupported, AmbientM.unsupported] at hr
+          cases hr
 
 /-- Snapshot list deletion changes only allowed-IP links in saved peer records. -/
 theorem listDel_view (id : NodeId) : SameView view (listDel id) := by
@@ -556,17 +817,40 @@ theorem listDel_view (id : NodeId) : SameView view (listDel id) := by
     simpa [view,hd,hs] using congrArg view hk
 
 theorem removeByPeer_view (pid : PeerId) : SameView view (removeByPeer pid) := by
+
   rw [← AllowedIps.removeByPeerWithStep_eq]
-  apply SameView.of_wp; intro s
-  have hg:=getPeer_spec (fun t=>t=s) pid
-  have hlst:=fun id=>(listDel_view id).wp (fun t=>t=s)
-  have hn:=fun nodeId=>(node (project := fun w => w) (removeNodeBody_sameNode nodeId)).wp (fun t=>t=s)
-  have hm:=modifyDev_spec (fun t=>t=s) (fun d=>{d with peerAllowedips:={d.peerAllowedips with seq:=d.peerAllowedips.seq+1}}) (fun _=>rfl)
-  have hl (α β : Type):=list_view_spec (m := AmbientM) view (α:=α) (β:=β) (fun t=>t=s)
-  mvcgen [-Std.Do.Spec.forIn_list,-Std.Do.Spec.forIn'_list,hl,
-    AllowedIps.removeByPeerWithStep,AllowedIps.removeStep,hg,hlst,hn,hm,branch,AmbientM.branch]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [view]
+  apply SameView.of_wp
+  intro s
+  let P := fun w : WGWorld => view w = s
+  have read : Preserves P (getPeer pid) :=
+    hoare_consequence (getPeer_spec (fun t => t = s) pid)
+      (fun _ h => h) (fun _ _ h => h.1)
+  have step (id : NodeId) : Preserves P (AllowedIps.removeStep id) := by
+    unfold AllowedIps.removeStep
+    apply preserves_bind (hoare_liftAmbient (AmbientM.branch .removeListIter true) P)
+    intro _
+    apply preserves_bind (SameView.wp (listDel_view id) (fun t => t = s))
+    intro _
+    exact SameView.wp (node (project := fun w => w) (removeNodeBody_sameNode id))
+      (fun t => t = s)
+  unfold AllowedIps.removeByPeerWithStep
+  apply preserves_bind read
+  intro p
+  apply preserves_bind (hoare_liftAmbient (AmbientM.branch .removeListEmpty p.allowedipsList.isEmpty) P)
+  intro empty
+  cases empty with
+  | true => exact preserves_pure _
+  | false =>
+    apply preserves_bind (modifyDev_spec (fun t => t = s)
+      (fun d => {d with peerAllowedips := {d.peerAllowedips with seq := d.peerAllowedips.seq + 1}})
+      (fun _ => rfl))
+    intro _
+    apply preserves_bind (list_view_spec view (fun t => t = s) p.allowedipsList ()
+      (fun id _ => AllowedIps.removeStep id) (fun id _ => step id))
+    intro _
+    apply preserves_bind (hoare_liftAmbient (AmbientM.branch .removeListIter false) P)
+    intro _
+    exact preserves_pure _
 
 /-- Table removal precedes the fresh dead setter. Its temporary absence is
 contained inside this exact source cut. -/
@@ -616,8 +900,27 @@ theorem peerMakeDead_preserves (pid : PeerId) (w v : WGWorld)
   unfold Hoare at hk
   have hs : Hoare (peerMakeDead pid) Inv (fun _ => Inv) := by
     rw [factor]
-    unfold Hoare
-    mvcgen [hm,hb,hk,getDev,branch,invariant,AmbientM.branch,AmbientM.invariant]
+    apply preserves_bind hm
+    intro _
+    apply preserves_bind hb
+    intro _
+    have getter : Preserves Inv getDev := by
+      apply (hoare_iff_run_ambient _ _ _).mpr
+      intro u a d out b hu hrun
+      cases hd : u.dev with
+      | none =>
+        simp [getDev, hd, invariant, AmbientM.invariant] at hrun
+        cases hrun
+      | some saved =>
+        simp [getDev, hd] at hrun
+        rcases hrun with ⟨⟨rfl, rfl⟩, rfl⟩
+        exact hu
+    apply preserves_bind getter
+    intro d
+    apply preserves_bind (hoare_liftAmbient
+      (AmbientM.branch .pubkeyRemoveHashed (d.peerHashtable.any (·.2 == pid))) Inv)
+    intro _
+    exact hk
   exact (hoare_iff_run_ambient _ _ _).mp hs w ambient () v ambient' hi hr
 
 /-- Successful fresh owner store-back cannot redirect a handshake's self word.
@@ -638,7 +941,10 @@ theorem acquireOwner_preserves (owner : IndexOwner) (w v : WGWorld) (result : Op
       apply SameView.of_wp; intro s
       have hg:=(getKeypair_view kid).wp (fun t=>t=s)
       have hs:=fun k=>(setKeypair_view kid k).wp (fun t=>t=s)
-      mvcgen [IndexOwner.setPeerWord,hg,hs]
+      unfold IndexOwner.setPeerWord
+      apply hoare_bind _ _ hg
+      intro k
+      exact hs {k with peer := result}
     have hv:=(ProjectedAction.iff_run_ambient _ _ _).mp frame b ambientB () v ambient' store
     intro s hs; exact hi s (by simpa [hv,hb,ha] using hs)
   | handshake pid=>

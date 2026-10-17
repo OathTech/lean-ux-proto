@@ -9,87 +9,37 @@ namespace Leanux.Proofs.WG.Queues.RxRing
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing Leanux.Proofs.WG.Lifetimes Std.Do
 
 theorem sendSkbToPeer_cell pid bytes ds : SameView nativeCell (sendSkbToPeer pid bytes ds) := by
-  apply SameView.of_wp
-  intro s
-  have hp := (getPeer_frame pid).wp (fun t => t = s)
-  have hs := fun p => (setPeer_frame pid p).wp (fun t => t = s)
-  have h4 := fun e => (send4_cell e (some pid) bytes ds true).wp (fun t => t = s)
-  have h6 := fun e => (send6_cell e (some pid) bytes ds true).wp (fun t => t = s)
-  mvcgen [sendSkbToPeer, hp, hs, h4, h6, branch, AmbientM.branch]
+  ring_cell_source [sendSkbToPeer] using [send4_cell, send6_cell]
 
 theorem timersDataSent_cell pid : SameView nativeCell (timersDataSent pid) := by
-  apply SameView.of_wp
-  intro s
-  have hp := (getPeer_frame pid).wp (fun t => t = s)
-  have hj := (jitterBelowRekeyTimeout_sameWGWorld .newHandshakeJitter).wp (fun w => nativeCell w = s)
-  have hg := (modPeerTimerGuard_cell pid).wp (fun t => t = s)
-  have ha := fun n jc => (armTimer_cell pid .newHandshake n jc).wp (fun t => t = s)
-  have hc := (callerJiffies_sameWGWorld .timerJiffiesDataSent).wp (fun w => nativeCell w = s)
-  mvcgen [timersDataSent, hp, hj, hg, ha, hc, branch, AmbientM.branch]
+  have clock : SameView nativeCell (callerJiffies .timerJiffiesDataSent) :=
+    (callerJiffies_sameWGWorld .timerJiffiesDataSent).factor nativeCell
+  have jitter : SameView nativeCell (jitterBelowRekeyTimeout .newHandshakeJitter) :=
+    (jitterBelowRekeyTimeout_sameWGWorld .newHandshakeJitter).factor nativeCell
+  have arm (delay : Nat) (jc : Option UInt64) :
+      SameView nativeCell (armTimer pid .newHandshake delay jc) := armTimer_cell pid _ delay jc
+  ring_cell_source [timersDataSent] using [clock, jitter, modPeerTimerGuard_cell, arm]
 
 theorem timersAnyAuthenticatedPacketSent_cell pid : SameView nativeCell (timersAnyAuthenticatedPacketSent pid) :=
   delTimer_cell pid .sendKeepalive
 
 theorem keepKeyFresh_cell pid : SameView nativeCell (keepKeyFresh pid) := by
-  apply SameView.of_wp
-  intro s
-  have hp := (getPeer_frame pid).wp (fun t => t = s)
-  have hk := fun id => (getKeypair_frame id).wp (fun t => t = s)
-  have he := fun d birth age => (branchExpired_sameWGWorld d birth age).wp (fun w => nativeCell w = s)
-  have hh := (sendQueuedHandshakeInitiation_cell pid false).wp (fun t => t = s)
-  mvcgen [keepKeyFresh, hp, hk, he, hh, WG.andM, WG.orM, branch, branchCmp, invariant, AmbientM.branch, AmbientM.branchCmp, AmbientM.invariant]
+  have expired (d : Decision) (birth : Int64) (age : Nat) :
+      SameView nativeCell (branchExpired d birth age) :=
+    (branchExpired_sameWGWorld d birth age).factor nativeCell
+  ring_cell_source [keepKeyFresh] using [expired, sendQueuedHandshakeInitiation_cell]
 
 theorem createDataDone_cell pid item : SameView nativeCell (createDataDone pid item) := by
-  apply SameView.of_wp
-  intro s
-  have ht := (timersTraversal_cell pid).wp (fun t => t = s)
-  have ha := (timersAnyAuthenticatedPacketSent_cell pid).wp (fun t => t = s)
-  have skb {α : Type} (a : SkbM α) :
-      Hoare (liftSkb a) (fun w => nativeCell w = s) (fun _ w => nativeCell w = s) := by
-    apply hoare_liftSkb a
-    intro w d store hi hd
-    simpa [nativeCell, hd] using hi
-  unfold Hoare at skb
-  have hs := fun bytes ds => (sendSkbToPeer_cell pid bytes ds).wp (fun t => t = s)
-  have hd := (timersDataSent_cell pid).wp (fun t => t = s)
-  have hk := (keepKeyFresh_cell pid).wp (fun t => t = s)
-  have hl (α β : Type) := list_view_spec (m := AmbientM) nativeCell (α := α) (β := β) (fun t => t = s)
-  mvcgen [-Std.Do.Spec.forIn_list, -Std.Do.Spec.forIn'_list, hl,
-    createDataDone, ht, ha, getTxSkb, skb, hs, hd, hk, WG.andM, branch, AmbientM.branch]
-  all_goals try exact ((⇓? _ w => ⌜nativeCell w = s⌝) : PostCond _ (.arg WGWorld (.arg Ambient (.except Stop .pure))))
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all
+  ring_cell_source [createDataDone] using [timersTraversal_cell,
+    timersAnyAuthenticatedPacketSent_cell, sendSkbToPeer_cell, timersDataSent_cell, keepKeyFresh_cell]
 
 theorem txStep_cell pid : SameView nativeCell (txStep pid) := by
-  apply SameView.of_wp
-  intro s
-  have hp := (getPeer_frame pid).wp (fun t => t = s)
-  have hs := fun p => (setPeer_frame pid p).wp (fun t => t = s)
-  have skb {α : Type} (a : SkbM α) :
-      Hoare (liftSkb a) (fun w => nativeCell w = s) (fun _ w => nativeCell w = s) := by
-    apply hoare_liftSkb a
-    intro w d store hi hd
-    simpa [nativeCell, hd] using hi
-  unfold Hoare at skb
-  have hq := fun (q : PrevQueue (List SkbId)) => (kernel (prevQueuePeek_sameWGStore q)).wp (fun t => t = s)
-  have hd := fun item => (createDataDone_cell pid item).wp (fun t => t = s)
-  have hk := fun kp => (keypairPut_frame kp false).wp (fun t => t = s)
-  have hu := (peerPut_frame (some pid)).wp (fun t => t = s)
-  have hl (α β : Type) := list_view_spec (m := AmbientM) nativeCell (α := α) (β := β) (fun t => t = s)
-  mvcgen [-Std.Do.Spec.forIn_list, -Std.Do.Spec.forIn'_list, hl,
-    txStep, hp, hs, getTxSkb, skb, hq, hd, freeTxSkb, hk, hu, WG.andM, branch, invariant, AmbientM.branch, AmbientM.invariant]
-  all_goals try exact ((⇓? _ w => ⌜nativeCell w = s⌝) : PostCond _ (.arg WGWorld (.arg Ambient (.except Stop .pure))))
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all
+  have peek := fun (q : PrevQueue (List SkbId)) => kernel (prevQueuePeek_sameWGStore q)
+  ring_cell_source [txStep] using [peek, createDataDone_cell, keypairPut_frame, peerPut_frame]
 
 theorem txIter_cell (pid : PeerId) (resched : Leanux.M Bool)
     (hr : SameView cell resched) : SameView cell (txIter pid resched) := by
-  apply SameView.of_wp
-  intro s
-  have ht := (sameView_liftWG cell nativeCell (txStep pid)
-    (txStep_cell pid) (fun _ _ _ h => h)).wp (fun t => t = s)
-  have hh := hr.wp (fun t => t = s)
-  mvcgen [txIter, workerIter, ht, hh, branch, AmbientM.branch]
+  ring_poll_source [txIter, workerIter] using [hr] with [txStep_cell]
 
 theorem cryptAhead_cell pid : SameView cell (Leanux.Env.cryptAhead pid) := by
   apply SameView.of_wp
