@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Roaming.CookieEndpointClaims
 import Leanux.Proofs.WG.Roaming.InitiationRejectionClaims
 import Leanux.Proofs.WG.Roaming.ResponseRejectionClaims
 import Leanux.Proofs.WG.Roaming.RateLimitClaims
@@ -285,5 +286,15 @@ theorem original_initiation_rejection_preserves_endpoints (msg : List UInt8) (sr
     Campaign2.Product.Ensures (observedInitiationRejection msg src) (fun s => s = entry)
       (fun receipt final => InitiationRejectionObservation entry receipt final) :=
   receiveHandshakePacket_initiation_rejection msg src entry kind
+
+/-- Every normal original type-3 handshake-receive call preserves all remote
+endpoints, including valid-cookie updates and lookup/decryption refusals.
+Stops remain actual Stops; this neither asserts totality nor a post-error state. -/
+theorem original_cookie_message_endpoints (msg : List UInt8) (src : SkbSource)
+    (entry : Campaign2.Product.Snapshot)
+    (kind : messageType msg = MESSAGE_HANDSHAKE_COOKIE) :
+    Campaign2.Product.Ensures (liftWG (receiveHandshakePacket msg src)) (fun s => s = entry)
+      (fun _ final => ∀ pid, remoteAt final.toSnapshot pid = remoteAt entry.toSnapshot pid) :=
+  receiveHandshakePacket_cookie_endpoints msg src entry kind
 
 end Leanux.Proofs.WG.Roaming

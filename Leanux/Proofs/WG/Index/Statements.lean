@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Index.OwnerCoherenceQueuedClaims
 import Leanux.Proofs.WG.Index.OwnerCoherenceClearWorkerClaims
 import Leanux.Proofs.WG.Index.OwnerCoherenceZeroWorkerClaims
 import Leanux.Proofs.WG.Index.OwnerCoherenceAipRemovalClaims
@@ -982,5 +983,16 @@ theorem original_clear_worker_owner_coherence :
     Campaign2.Product.Ensures Env.runOneClearWorker ClearWorkerOwnerEntry
       (fun _ s => View.OwnerCoherentSafe s.toSnapshot) :=
   runOneClearWorker_owner_coherent
+
+/-- Original handshake queueing preserves hashed-owner coherence on every
+normal return in both retry modes. Arbitrary unpublished owner words, aliases,
+queue states and Ambient inputs remain allowed. Actual acquisition supplies
+the reference used on a rejected enqueue; missing inputs, reference faults and
+record failures retain their original Stops. This is not worker completion or
+a global reference-ownership claim. -/
+theorem original_send_queued_handshake_owner_coherence (pid : PeerId) (retry : Bool) :
+    Campaign2.Ensures (sendQueuedHandshakeInitiation pid retry) View.OwnerCoherentSafe
+      (fun _ => View.OwnerCoherentSafe) :=
+  sendQueuedHandshakeInitiation_owner_coherent pid retry
 
 end Leanux.Proofs.WG.Index

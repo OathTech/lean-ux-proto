@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Progress.TimerWaitClaims
 import Leanux.Proofs.WG.Progress.TimerCompletionClaims
 import Leanux.Proofs.WG.Progress.BatchDrainClaims
 import Leanux.Proofs.WG.Progress.CookieScheduleClaims
@@ -650,5 +651,15 @@ theorem original_timer_completion (jPass : UInt64) :
     Campaign2.Product.Ensures (Env.runTimers jPass) (fun _ => True)
       (fun result final => result = true → TimerCompletionGuard final) :=
   runTimers_completion jPass
+
+/-- Every normal recorded idle wait stores the actual end read and leaves the
+modeled wheel with no timer due at that read. The claim allows an absent device
+and arbitrary records, retains original Stops, and does not assert that an
+operation succeeds, all work is empty, or recordless mode has the same effect. -/
+theorem original_recorded_idle_wait_nothing_due :
+    Campaign2.Product.Ensures idleTimers (fun s => s.ambient.hidden.isSome = true)
+      (fun _ s => ∃ j, s.wg.jiffiesLast = some j ∧ NoTimerDue j s) :=
+  idleTimers_recorded_nothing_due
+
 
 end Leanux.Proofs.WG.Progress

@@ -11,26 +11,26 @@ merged; the executable mirror remains byte-identical to b700659.
 | Result | Headlines | Checked support | Split status |
 | --- | ---: | ---: | --- |
 | H1 Noise | 32 | 231 | Full terminal closure, all seven whole-call tag maps, their actual finite mixed histories and session derivation-clock receipt current; wider caller/lifetime claims open. |
-| H2 Index | 84 | 462 | Full terminal closure and ingress/expiry/handshake/peer-creation owner coherence and whole-removal lifecycle finding/slot-covered arbitrary-AIP preservation and actual clear-work dispatch current; reachable whole-driver uniqueness/coherence open. |
-| H3 Roaming | 17 | 186 | Full terminal closure and invalid-MAC1/rate-limit/admitted-response/initiation rejection preservation current; callback authentication provenance and broader caller coverage open. |
+| H2 Index | 85 | 465 | Full terminal closure and ingress/expiry/handshake/peer-creation owner coherence and whole-removal lifecycle finding/slot-covered arbitrary-AIP preservation and actual clear-work dispatch and both-mode handshake queueing current; reachable whole-driver uniqueness/coherence open. |
+| H3 Roaming | 18 | 190 | Full terminal closure and invalid-MAC1/rate-limit/admitted-response/initiation rejection and cookie-message preservation current; callback authentication provenance and broader caller coverage open. |
 | H4 Configuration | 90 | 663 | Full terminal closure, actual mixed/key setter paginated readback, finite single-peer IPv4 getter and fitting multi-peer scalar and mixed fwmark/scalar set/get current; global ownership, queued cleanup, general mixed setters and multi-peer/IPv6 pagination open. |
-| H5 Progress | 44 | 296 | Full terminal closure, exact bounded outcomes and recorded batch and actual timer completion-guard soundness current; global progress/coherent-ring adequacy open. |
+| H5 Progress | 45 | 301 | Full terminal closure, exact bounded outcomes and recorded batch, actual timer completion guards and recorded idle-wait wheel completion current; global progress/coherent-ring adequacy open. |
 | H6 Timers | 59 | 483 | Full terminal closure, actual retry blocks and allocation-labelled guarded session-arm events with outgoing call-entry origin and initialized give-up runtime witness current; complete caller coverage, general mixed histories and session-relative counts open. |
 
-The checked surface is 2,321 theorems in all 771 campaign-owned modules.
+The checked surface is 2,333 theorems in all 779 campaign-owned modules.
 The completed retrofit accounts for 1,983: 1,321 retyped, 244 explicitly
-corrected, 239 retained and 179 added support/finding declarations. One hundred twenty-nine
+corrected, 239 retained and 179 added support/finding declarations. One hundred thirty-two
 subsequent H2 declarations add table preservation and local owner coherence.
 Forty-six H1 declarations add whole-operation and finite mixed-history tag ownership and actual derivation-clock provenance; eighty-one H4 declarations
-add mixed fwmark/scalar, ordered peer-attribute, port-refusal/private-key readback and finite IPv4 getter/setter pagination and actual fitting multi-peer readback. Twenty-nine H3 declarations
-add invalid-MAC1, rate-limit and admitted-response/initiation rejection preservation. Eight H5 declarations
-establish recorded batch and actual timer completion-guard soundness. Forty-five H6 declarations
+add mixed fwmark/scalar, ordered peer-attribute, port-refusal/private-key readback and finite IPv4 getter/setter pagination and actual fitting multi-peer readback. Thirty-three H3 declarations
+add invalid-MAC1, rate-limit and admitted-response/initiation rejection and cookie-message preservation. Thirteen H5 declarations
+establish recorded batch, actual timer completion guards and recorded idle-wait wheel completion. Forty-five H6 declarations
 connect actual timer-loop receipts, contiguous retry-block counts/bounds, local partial-exchange arming and allocation-labelled session-arm events. Of the 1,831 baseline theorems, 22 frames
 were deleted because types supply their facts and five false cookie supports
 were separately retired with checked counterexamples. No baseline declaration
 remains awaiting retrofit; all 258 original terminal names/order survive,
-with ten new H1 headlines, thirty-two new H2 headlines, four new H3 headlines,
-eleven new H4 headlines, two new H5 headlines and nine new H6 headlines (326 total).
+with ten new H1 headlines, thirty-three new H2 headlines, five new H3 headlines,
+eleven new H4 headlines, three new H5 headlines and nine new H6 headlines (329 total).
 
 The [retrofit report](2026-10-16-proof-campaign-2-state-split.md) records
 claim/frame files, corrections, before/after counts and validation.
@@ -2070,13 +2070,12 @@ total collision completion remain open.
 
 ## H5 — Termination and progress
 
-The accepted constructed backlog witness below refutes historical
-no-pending-at-completion. Original acceptance and backlog equations are
-kernel-checked. A symbolic bridge now proves that this backlog occurs at the
-original runner's actual final operation boundary, identifying both syscall and
-ambient-strip successors without reevaluating the trace. Runnable backlog uses
-the original activation predicate. This is a constructed fixture, not a parsed
-or captured Linux run. Main's corrected refusal is not yet carried.
+The historical constructed backlog witness refuted no-pending-at-completion
+over de62c9d. The current runner and the boundary audit both reject that trace
+at the batch-completion guard, as the checked carry report records. The old
+acceptance and backlog statements were corrected explicitly during the retrofit;
+no accepted final backlog boundary is claimed over b700659. This was a
+constructed fixture, not a parsed or captured Linux run.
 
 Every accepted original trace now supplies exactly one ordered projected boundary
 per operation, with consecutive indices and identical output JSON. Each boundary
@@ -2703,3 +2702,102 @@ remains FAILED and is not rerun unchanged.
 Reproduce the scoped builds and fresh replays on those three modules under
 capped scripts/in-bundle with LEAN_NUM_THREADS=32 and LEANUX_QEMU_SLOTS=16.
 The runtime reproduction command is in its linked report.
+
+
+## H2 continuation: owner coherence through actual handshake queueing
+
+Both modes of original sendQueuedHandshakeInitiation now preserve
+HashedOwnersCoherent on every normal return, with OwnerCoherentSafe as the
+sole projected entry invariant. Actual false-mode attempt reset and true-mode
+unchanged prefix remain distinct. The existing observers supply the actual
+clock and queue-inspection result; their exact erasures identify the same
+original run. Repeated peer writes are compared pointwise. Successful
+acquisition supplies the reference restored on an already-pending refusal;
+no residency, publisher, readiness, queue-state or reference-budget premise
+is added. This is neither worker completion nor global reference ownership,
+and it asserts no state after a Stop.
+
+OwnerCoherenceQueuedFrames contains the one pure preservation fact for
+queuedDeviceAfterInspection. OwnerCoherenceQueuedClaims contains the projected
+whole-call theorem; Statements adds its literal wrapper. Three theorems, two
+modules, no new definitions or shared variants: H2 reaches 465 theorems and
+85 headlines. The obsolete queuedDevice approximation is not used.
+
+Probe 1 fails five proof-form diagnostics and probe 2 fails two; neither emits
+warnings. Changed probes 3–5 pass: complete candidate, exact split package
+with all three standard-only axiom roots, and standalone narrowed Frames.
+The scoped build passes 356 jobs with only inherited Env:865 String.mk.
+Independent review finds no issue. No limit change or infrastructure rerun.
+
+## H3 continuation: the original cookie-message branch
+
+Every normal type-3 receiveHandshakePacket call preserves all remote endpoints.
+The actual cookie path runs lookup, optional decryption and cookie-field update,
+then releases its held reference. Existing generic lookup contracts supply
+that reference even for arbitrary aliases and owner words; the new write
+preserves both the endpoint and reference. No coherence, residency, clock,
+decryption-success, packet-length or reference-budget premise is introduced.
+The native frame preserves the full optional Endpoint map; the projected
+headline promises remote family/address/port/IPv6 scope. It retains actual
+Stops and does not claim totality or post-error rollback.
+
+CookieEndpointFrames holds the native preservation theorem;
+CookieEndpointSource is the exact original type-3 source factor, including
+errors; CookieEndpointClaims and Statements connect the lifted whole call
+through the campaign projection. Four theorems in three modules bring H3 to
+190 theorems and 18 headlines. No definition or shared variant is added.
+The deferred cookie-reply/socket layer is not needed for this branch.
+
+Probe 1 fails 11 elaboration errors and six warnings; probe 2 fails four
+errors without warnings. Recovery placeholders in those failed drafts are not
+accepted. Changed probes 3–4 pass the complete candidate and exact split
+package with four standard-only axiom roots, without warnings. The scoped
+build passes 145 jobs without warnings. Independent review finds no issue;
+its scope is this receiver branch, not queue provenance or full H3.
+
+## H5 continuation: recorded idle-wait wheel completion
+
+Every normal recorded idleTimers return stores its actual end-of-wait read
+and satisfies TimerWheel.nextDue = none at that read. Device absence is
+allowed. The source suffix keeps pass bound and end read separate; this caller
+supplies equal values. The actual guard excludes its due branch because all
+of that branch's worker/lookahead outcomes stop. The following Ambient-only
+clock read cannot change WireGuard state, and the final write changes only
+jiffiesLast. No frame lemma is added for that type-given fact.
+
+NoTimerDue means exactly the wheel's nextDue test over resident IDs in
+device.peerList and their wheel entries. It does not establish peer-list/store
+or wheel/expiry coherence, absence of timers on unlisted residents, successful
+execution for arbitrary records, global work emptiness or recordless behavior.
+The differing pass bound in afterAdvance is not silently equated with its
+end read.
+
+TimerWaitModel holds the predicate; TimerWaitSource contains the actual suffix,
+its guard/suffix contracts and exact recorded idle source equation;
+TimerWaitClaims and Statements contain the projected claim and wrapper.
+Five theorems and two definitions in three modules bring H5 to 301 theorems
+and 45 headlines. No shared variant or mirror change is needed.
+
+Development probes 1–6 fail respectively 3, 2, 1, 1, 1 and 1 proof-form
+errors; only probe 1 emits warnings (five). Probe 7 passes the guard.
+Probe 8 fails four suffix/source proof-form errors; probe 9 fails one and
+emits one unused-simp warning. Changed probe 10 passes the complete package;
+probe 11 passes the exact split and all five axiom roots, standard only.
+All final proofs use default limits, without suppression or cap changes.
+The scoped build passes 278 jobs with only inherited Env:865 String.mk.
+Independent review finds no issue and confirms the nextDue scope above.
+
+The three-result continuation adds 12 theorems, eight modules and three
+headlines: 2,333 theorems in 779 owned modules, 329 headlines. The combined
+axiom audit checks 2,041 logical roots in 425 modules, including 1,321 public
+theorem roots, standard only and without diagnostics. All three fresh kernel
+replays pass. Static trust/import checks, all 258
+original terminal names/order, and mirror/shared-layer boundaries pass.
+No infrastructure rerun occurs. All H1–H6 remain in progress; the inherited
+CounterWindow/ReplayWindow full-gate failure is unchanged and is not rerun.
+
+Reproduce the scoped build and fresh replay for
+Leanux.Proofs.WG.Index.Statements, Leanux.Proofs.WG.Roaming.Statements and
+Leanux.Proofs.WG.Progress.Statements with scripts/in-bundle under capped,
+LEAN_NUM_THREADS=32 and LEANUX_QEMU_SLOTS=16. Existing ranked mirror requests
+are unchanged; no mirror-team change is requested for these local contracts.
