@@ -1,5 +1,5 @@
 import Leanux.Proofs.WG.Index.Collision
-import Leanux.Proofs.WG.Noise.CryptoFrames
+import Leanux.Proofs.WG.Noise.ComponentFrames
 
 set_option autoImplicit false
 set_option pp.structureInstances false
@@ -11,16 +11,16 @@ open Leanux Leanux.WG Leanux.Proofs.WG.Noise Leanux.Proofs.WG.Config Std.Do
 abbrev unhashEntry := noise_const _private.Leanux.WG.Peer.«0».Leanux.WG.unhashEntry
 abbrev InsertState := Option Nat × Unit
 
-def insertStep (owner : IndexOwner) (_ : Nat) (_ : InsertState) : M (ForInStep InsertState) := do
+def insertStep (owner : IndexOwner) (_ : Nat) (_ : InsertState) : IndexM (ForInStep InsertState) := do
   let draw ← hidden .indexDraw
   let index := draw.foldr (fun b acc => acc * 256 + b.toNat) 0
   if ← bucketHas .idxInsWalk1 .idxInsCollide1 index then return .yield (none, ())
   if ← bucketHas .idxInsWalk2 .idxInsCollide2 index then
     unsupported "an index stolen during insertion"
-  modifyDev fun d => { d with indexTable := { index, owner } :: d.indexTable }
+  modify fun table => { index, owner } :: table
   return .done (some index, ())
 
-def insertFinish (state : InsertState) : M Nat := do
+def insertFinish (state : InsertState) : IndexM Nat := do
   match state.1 with
   | some index => pure index
   | none => budgetExhausted "index draws"
@@ -40,116 +40,177 @@ theorem indexInsert_source (owner : IndexOwner) :
   funext state
   cases state.1 <;> rfl
 
-
 def insertedDevice (owner : IndexOwner) (d : Device) (index : Option Nat) : Device :=
   match index with
   | none => d
   | some n => { d with indexTable := { index := n, owner } :: d.indexTable }
 
-def InsertPost (owner : IndexOwner) (d : Device) (state : InsertState) (w : World) : Prop :=
-  w.k.wg = some (insertedDevice owner d state.1) ∧
-    ∀ n, state.1 = some n → d.indexTable.any (·.index == n) = false
+def insertedTable (owner : IndexOwner) (table : List IndexEntry) (index : Option Nat) :
+    List IndexEntry :=
+  match index with
+  | none => table
+  | some n => {index := n, owner} :: table
 
-theorem insertStep_spec (owner : IndexOwner) (turn : Nat) (state : InsertState) (d : Device) :
-    Ensures (insertStep owner turn state) (fun w => w.k.wg = some d)
-      (fun result w => match result with
-        | .yield next => next = (none, ()) ∧ w.k.wg = some d
-        | .done next => InsertPost owner d next w ∧ next.1 ≠ none) := by
-  have hh := hidden_kernel_spec (fun k => k.wg = some d)
-  have hb := fun walk collide index => (ensures_iff _ _ _).mp
-    (show Ensures (bucketHas walk collide index) (fun w => w.k.wg = some d)
-      (fun result w => result = d.indexTable.any (·.index == index) ∧ w.k.wg = some d) from by
-        intro w result final pre run
-        obtain ⟨r, v, hr, hpost⟩ := bucketHas_returns walk collide index d w pre
-        rw [run] at hr
-        cases hr
-        exact hpost)
-  rw [ensures_iff]
-  mvcgen [insertStep, branch, modifyDev, modifyK, unsupported, hh, hb]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals repeat intro
-  all_goals simp_all [InsertPost, insertedDevice]
-  all_goals grind
+def InsertPost (owner : IndexOwner) (table : List IndexEntry) (state : InsertState)
+    (current : List IndexEntry) : Prop :=
+  current = insertedTable owner table state.1 ∧
+    ∀ n, state.1 = some n → table.any (·.index == n) = false
 
-def insertLoop (owner : IndexOwner) (turns : List Nat) : M InsertState :=
+theorem insertStep_spec (owner : IndexOwner) (turn : Nat) (state : InsertState)
+    (table : List IndexEntry) :
+    Ensures (insertStep owner turn state) (fun t => t = table)
+      (fun result t => match result with
+        | .yield next => next = (none, ()) ∧ t = table
+        | .done next => InsertPost owner table next t ∧ next.1 ≠ none) := by
+  have hh : Ensures (hidden .indexDraw : IndexM (List UInt8)) (fun t => t = table)
+      (fun _ t => t = table) :=
+    (ensures_iff _ _ _).mpr (hoare_liftAmbient_variant (AmbientM.hidden .indexDraw) _)
+  have hb (walk collide : Decision) (index : Nat) :
+      Ensures (bucketHas walk collide index) (fun t => t = table)
+        (fun result t => result = table.any (·.index == index) ∧ t = table) := by
+    intro t ambient result final after ht hr
+    subst t
+    obtain ⟨actual, same, ambient', run, found, preserved⟩ :=
+      bucketWalk_returns walk collide index (bucket index table) table table ambient rfl
+    subst same
+    have source : ((bucketHas walk collide index).run table).run ambient =
+        .ok ((actual, table), ambient') := by
+      rw [bucketHas_source]
+      simpa [indexBucket, bucket] using run
+    rw [source] at hr
+    cases hr
+    exact ⟨by simpa [bucket_any] using found, rfl⟩
+  unfold insertStep
+  refine ensures_bind _ _ hh ?_
+  intro draw
+  let index := draw.foldr (fun b acc => acc * 256 + b.toNat) 0
+  refine ensures_bind _ _ (hb .idxInsWalk1 .idxInsCollide1 index) ?_
+  intro first
+  cases first with
+  | true =>
+    intro t ambient result final after pre run
+    cases run
+    exact ⟨rfl, pre.2⟩
+  | false =>
+    have second : Ensures (bucketHas .idxInsWalk2 .idxInsCollide2 index)
+        (fun t => false = table.any (·.index == index) ∧ t = table)
+        (fun result t => result = table.any (·.index == index) ∧
+          t = table ∧ false = table.any (·.index == index)) := by
+      intro t ambient result final after pre run
+      have h := hb .idxInsWalk2 .idxInsCollide2 index t ambient result final after pre.2 run
+      exact ⟨h.1, h.2, pre.1⟩
+    refine ensures_bind _ _ second ?_
+    intro found
+    cases found with
+    | true =>
+      intro t ambient result final after pre _
+      have impossible : true = false := pre.1.trans pre.2.2.symm
+      cases impossible
+    | false =>
+      intro t ambient result final after pre run
+      simp at run
+      rcases run with ⟨⟨rfl, rfl⟩, rfl⟩
+      exact ⟨⟨by simp [insertedTable, pre.2.1],
+        by intro n hn; cases hn; exact pre.2.2.symm⟩, by simp⟩
+
+def insertLoop (owner : IndexOwner) (turns : List Nat) : IndexM InsertState :=
   forIn turns (none, ()) (insertStep owner)
 
-theorem insertLoop_spec (owner : IndexOwner) (turns : List Nat) (d : Device) :
-    Ensures (insertLoop owner turns) (fun w => w.k.wg = some d) (InsertPost owner d) := by
+theorem insertLoop_spec (owner : IndexOwner) (turns : List Nat) (table : List IndexEntry) :
+    Ensures (insertLoop owner turns) (fun t => t = table) (InsertPost owner table) := by
   induction turns with
   | nil =>
-    rw [ensures_iff]
-    simp [insertLoop, InsertPost, insertedDevice]
-    mvcgen
-    all_goals simp_all
+    intro t ambient result final after pre run
+    cases run
+    exact ⟨pre, by simp⟩
   | cons turn turns ih =>
-    intro w result final pre run
+    intro t ambient result final after pre run
     simp only [insertLoop, List.forIn_cons, StateT.run_bind] at run
-    cases first : (insertStep owner turn (none, ())).run w with
+    cases first : ((insertStep owner turn (none, ())).run t).run ambient with
     | error err =>
       rw [first] at run
-      change Except.error err = Except.ok (result, final) at run
       cases run
     | ok pair =>
-      obtain ⟨step, middle⟩ := pair
-      have hs := insertStep_spec owner turn (none, ()) d w step middle pre first
+      obtain ⟨⟨step, middle⟩, next⟩ := pair
+      have hs := insertStep_spec owner turn (none, ()) table t ambient step middle next pre first
       rw [first] at run
       cases step with
       | done value =>
-        change Except.ok (value, middle) = Except.ok (result, final) at run
-        simp only [Except.ok.injEq, Prod.mk.injEq] at run
-        obtain ⟨rfl, rfl⟩ := run
+        change Except.ok ((value, middle), next) = Except.ok ((result, final), after) at run
+        cases run
         exact hs.1
       | yield value =>
-        obtain ⟨heq, hd⟩ := hs
+        obtain ⟨heq, ht⟩ := hs
         subst value
-        exact ih middle result final hd run
+        exact ih middle next result final after ht run
 
-theorem insertRange_spec (owner : IndexOwner) (budget : Nat) (d : Device) :
+theorem insertRange_spec (owner : IndexOwner) (budget : Nat) (table : List IndexEntry) :
     Ensures (forIn ([:budget] : Std.Legacy.Range) (none, ()) (insertStep owner))
-      (fun w => w.k.wg = some d) (InsertPost owner d) := by
+      (fun t => t = table) (InsertPost owner table) := by
   rw [Std.Legacy.Range.forIn_eq_forIn_range']
-  exact insertLoop_spec owner _ d
+  exact insertLoop_spec owner _ table
 
-theorem insertFinish_spec (owner : IndexOwner) (state : InsertState) (d : Device) :
-    Ensures (insertFinish state) (InsertPost owner d state)
-      (fun index w => w.k.wg = some (insertedDevice owner d (some index)) ∧
-        d.indexTable.any (·.index == index) = false) := by
-  rw [ensures_iff]
-  unfold insertFinish
-  cases hs : state.1 <;>
-    mvcgen [budgetExhausted, unsupported, invariant]
-  all_goals simp_all [InsertPost]
+theorem insertFinish_spec (owner : IndexOwner) (state : InsertState) (table : List IndexEntry) :
+    Ensures (insertFinish state) (InsertPost owner table state)
+      (fun index t => t = insertedTable owner table (some index) ∧
+        table.any (·.index == index) = false) := by
+  intro t ambient index final after pre run
+  cases hs : state.1 with
+  | none =>
+    simp [insertFinish, hs, budgetExhausted, AmbientM.budgetExhausted,
+      AmbientM.invariant, AmbientM.unsupported] at run
+    split at run <;> cases run
+  | some n =>
+    simp [insertFinish, hs] at run
+    rcases run with ⟨⟨rfl, rfl⟩, rfl⟩
+    exact ⟨by simpa [InsertPost, hs] using pre.1, pre.2 _ hs⟩
 
-theorem unhash_exact (decision : Decision) (owner : IndexOwner) (d : Device) :
-    Ensures (unhashEntry decision (·.owner == owner)) (fun w => w.k.wg = some d)
-      (fun _ w => w.k.wg = some { d with indexTable := removeOwner owner d.indexTable }) := by
-  rw [ensures_iff]
-  noise_vcgen [_private.Leanux.WG.Peer.«0».Leanux.WG.unhashEntry,
-    getDev, getK, branch, modifyDev, modifyK, invariant]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [removeOwner]
+theorem unhash_exact (decision : Decision) (owner : IndexOwner) (table : List IndexEntry) :
+    Ensures (unhashEntry decision (·.owner == owner)) (fun t => t = table)
+      (fun _ t => t = removeOwner owner table) := by
+  intro t ambient x final after pre run
+  subst t
+  let action : IndexM Unit := do
+    _ ← branch decision (table.any (·.owner == owner))
+    modify fun current => current.filter (fun e => !(e.owner == owner))
+  change ((action.run table).run ambient) = _ at run
+  simp [action, branch, AmbientM.branch] at run
+  rcases run with ⟨⟨rfl, rfl⟩, rfl⟩
+  rfl
 
 /-- A normally returning original insertion unhashes this owner first and
 then inserts at a numeric index absent from the remaining table. -/
 theorem indexInsert_exact (owner : IndexOwner) (d : Device) :
-    Ensures (indexInsert owner) (fun w => w.k.wg = some d)
-      (fun index w =>
+    Ensures (liftIndex (indexInsert owner)) (fun g => g.dev = some d)
+      (fun index g =>
         let remaining := removeOwner owner d.indexTable
-        w.k.wg = some { d with indexTable := { index, owner } :: remaining } ∧
+        g.dev = some { d with indexTable := { index, owner } :: remaining } ∧
           remaining.any (·.index == index) = false) := by
-  let removed := { d with indexTable := removeOwner owner d.indexTable }
-  have hb : Ensures recordBudget (fun w => w.k.wg = some removed)
-      (fun _ w => w.k.wg = some removed) := by
-    rw [ensures_iff]
-    mvcgen [recordBudget]
-  rw [indexInsert_source]
-  refine ensures_bind _ _ (unhash_exact .idxInsertHashed owner d) ?_
-  intro u
-  refine ensures_bind _ _ hb ?_
-  intro budget
-  refine ensures_bind _ _ (insertRange_spec owner budget removed) ?_
-  intro state
-  simpa [insertedDevice, removed] using insertFinish_spec owner state removed
+  have native : Ensures (indexInsert owner) (fun t => t = d.indexTable)
+      (fun index t =>
+        let remaining := removeOwner owner d.indexTable
+        t = {index, owner} :: remaining ∧ remaining.any (·.index == index) = false) := by
+    let removed := removeOwner owner d.indexTable
+    have hb : Ensures (recordBudget : IndexM Nat) (fun t => t = removed)
+        (fun _ t => t = removed) :=
+      (ensures_iff _ _ _).mpr (hoare_liftAmbient_variant AmbientM.recordBudget _)
+    rw [indexInsert_source]
+    refine ensures_bind _ _ (unhash_exact .idxInsertHashed owner d.indexTable) ?_
+    intro u
+    refine ensures_bind _ _ hb ?_
+    intro budget
+    refine ensures_bind _ _ (insertRange_spec owner budget removed) ?_
+    intro state
+    simpa [insertedTable, removed] using insertFinish_spec owner state removed
+  intro g ambient index final after device run
+  rw [liftIndex_run_variant, device] at run
+  cases actual : ((indexInsert owner).run d.indexTable).run ambient with
+  | error err => simp [actual, Except.map] at run
+  | ok out =>
+    rcases out with ⟨⟨n, table⟩, next⟩
+    have h := native d.indexTable ambient n table next rfl actual
+    simp [actual, Except.map] at run
+    rcases run with ⟨⟨rfl, rfl⟩, rfl⟩
+    exact ⟨by simp [h.1], h.2⟩
 
 end Leanux.Proofs.WG.Index

@@ -48,7 +48,7 @@ theorem dumpAllowed_single (v4 : Bool) (d : Device) (p : Peer) (id : NodeId)
   have hn := readInsertedNode v4 addr cidr pid parent (fun k => k.wg = some d)
   have ha := getAllowedips_inserted v4 addr cidr { skb with room := skb.room - 4 }
     (by dsimp; omega) (fun k => k.wg = some d)
-  have hb := branch_kernel_returns (fun k => k.wg = some d)
+  have hb := branch_state_returns (fun k => k.wg = some d)
   have hg : ⦃fun w => ⌜w.k.wg = some d⌝⦄ getNode id
       ⦃⇓ n w => ⌜w.k.wg = some d ∧ n = { newNode addr cidr (allowedBits v4) (some pid) with parent }⌝⦄ := by
     mvcgen [getNode, getDev, getK, invariant]
@@ -95,7 +95,7 @@ theorem dumpTail_single (v4 : Bool) (d : Device) (p : Peer) (id : NodeId)
   have r168 : ¬ skb.room - 136 < 32 := by omega
   have ha := fun out pubkey attrs bound => dumpAllowed_single v4 d p id pid addr cidr parent
     ctx skb out pubkey attrs listed node sequence bound
-  have hb := branch_kernel_returns (fun k => k.wg = some d)
+  have hb := branch_state_returns (fun k => k.wg = some d)
   simp only [getPeerDumpTailSource, fresh, listed, List.head?_cons]
   simp [NlSkb.put, nlaTotal, Nat.sub_sub,
     r4, r40, r76, r96, r104, r116, r128, r136, r156, r168]

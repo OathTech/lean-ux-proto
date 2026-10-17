@@ -19,10 +19,10 @@ and attributed theorem declarations. Campaign 2 owns 427 Lean files,
 | Result | Files | Before theorems | Before headlines | Retrofit status |
 | --- | ---: | ---: | ---: | --- |
 | Common projection | 2 | 0 | 0 | Native and product observations carried |
-| H1 Noise | 35 | 171 | 22 | Native execution/access, seven crypto frames and three slot frames carried; six type-given frames deleted; pure release/rotation/confirmation relations checked; terminal closure pending |
-| H2 Index | 68 | 318 | 52 | Table contracts, lookup scan, collision scan and 36 pure theorems checked; full lookup/caller closure pending |
+| H1 Noise | 35 | 171 | 22 | Native access, crypto/slot frames and nine exact slot/clear/zero contracts carried; six type-given frames deleted; pure effect relations checked; terminal closure pending |
+| H2 Index | 68 | 318 | 52 | Table, lookup/collision scans, insertion exactness and 36 pure theorems checked; full lookup/caller closure pending |
 | H3 Roaming | 35 | 119 | 13 | Pure observation models build; native calls and product callbacks pending |
-| H4 Configuration | 130 | 554 | 79 | Total-return laws and one pure theorem checked; operational carry pending |
+| H4 Configuration | 130 | 554 | 79 | Total-return/branch laws and one pure theorem checked; two Ambient frames deleted; operational carry pending |
 | H5 Progress | 59 | 265 | 42 | Twelve pure/control theorems checked; operational carry pending |
 | H6 Timer discipline | 98 | 404 | 50 | Two pure session-liveness relations checked; timer wheel and worker semantics pending |
 
@@ -265,7 +265,7 @@ Fresh-replay those roots with `scripts/in-bundle lake env leanchecker --fresh`
 | This tranche | 16 | 11 | 0 | 5 | 0 | 16 |
 | Cumulative processed baseline and checked support | 101 | 27 | 6 | 68 | 7 | 102 |
 
-The tree remains 429 campaign-owned files and 1,832 theorems; 1,730 original
+At `1e067bd` the tree remains 429 campaign-owned files and 1,832 theorems; 1,730 original
 theorems still await validation. The 258 terminal names and all six lagging
 terminal closures are unchanged.
 
@@ -319,3 +319,68 @@ Reproduce with `scripts/in-bundle lake build` on the four roots
 `Leanux.Proofs.WG.Noise.SlotFrames` and
 `Leanux.Proofs.WG.TimerDiscipline.ResponseSessionEffects`; replay each with
 `scripts/in-bundle lake env leanchecker --fresh MODULE`. Use `capped` here.
+
+## Branch results, exact insertion and slot operations
+
+| Tranche | Before | Retyped | Deleted | Kept | Added | After |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Four selected `Config.OperationFrames` contracts | 4 | 2 | 2 | 0 | 0 | 2 |
+| `Index.Insert` | 7 | 7 | 0 | 0 | 0 | 7 |
+| `Noise.Slots` | 9 | 9 | 0 | 0 | 0 | 9 |
+| This tranche | 20 | 18 | 2 | 0 | 0 | 18 |
+| Cumulative processed baseline and checked support | 121 | 45 | 8 | 68 | 7 | 120 |
+
+The tree now has 430 campaign-owned files and 1,830 theorems. Of the baseline,
+1,710 theorems still await validation. The terminal closures remain lagging;
+all 258 headline names remain present.
+
+`Config.BranchSource` separates the two result-bearing branch contracts from
+preservation frames. The native contracts keep the exact Boolean result,
+arbitrary outer-state predicate, all Ambient inputs and the distinction
+between partial and total correctness. They do not claim a specialization
+to the flat product monad. No arbitrary callback domain is narrowed: these
+contracts concern a fixed Ambient primitive. Six consumer references were
+renamed; their enclosing proofs remain pending.
+
+Two further `OperationFrames` leaves are deleted: `recordQueued_kernel` and
+`hidden_portBound`. The actual `AmbientM.recordQueued` and `AmbientM.hidden`
+actions have no access to the preserved state; `portBound` belongs to
+`WGWorld`. Their wrappers only lift Ambient actions. Neither deleted contract
+contained a return-value or totality promise. Three substantive endpoint
+frames and six uses of the deleted leaves remain pending, not validated-kept.
+
+`Index.Insert` now factors the actual `IndexM` computation. Its seven original
+theorems retain unhashing before the record budget and draws, both collision
+scans, and insertion at an index absent from the table after unhashing. The
+within-component postcondition records the exact table; the final Device
+contract uses the real guarded lift and keeps the original resident-device
+premise. Arbitrary draws, malformed/duplicate tables and missing-record stops
+remain in scope. These are normal-return laws, not new totality claims.
+
+`Noise.Slots` carries nine exact original contracts: peer access/update,
+clear-one and ordered clear factor, cleared slots/peer, handshake zeroing,
+confirmation and all rotation arms. The new proofs keep arbitrary slot aliases
+and original resident-peer/key premises. Keypair release failure remains a
+possible stopped execution under the existing partial contracts. The actual
+double check and next/current/previous writes are retained.
+
+Scoped builds are warning-free: branch source 29 jobs, insertion 33 and slot
+operations 29. Axioms pass for 22, 60 and 33 named roots in the corresponding
+closures; only the three permitted axioms occur. All three fresh replay roots
+pass, and independent review found no contract weakening in all three source
+changes or the type-based deletions. Static gate checks, scoped whitespace
+and mirror/shared boundaries pass. No terminal/full-tree pass is
+claimed.
+
+Development: the branch prototype passed on its first capped stdin run;
+insertion used three changed-source probes (failure, a pass with one unused
+simp argument, then a clean pass); slot operations used four (seven-contract
+and eight-contract passes, a failed full draft, then all nine clean).
+The failed slot draft had a captured-versus-current peer-field annotation and
+unused simplification arguments; the final proof corrects both. All three
+packaging builds passed first time. No unchanged failure rerun, infrastructure
+retry, cap increase or proof-limit increase.
+
+Reproduce by building and fresh-replaying the roots
+`Leanux.Proofs.WG.Config.BranchSource`, `Leanux.Proofs.WG.Index.Insert` and
+`Leanux.Proofs.WG.Noise.Slots` with the same capped bundle commands above.

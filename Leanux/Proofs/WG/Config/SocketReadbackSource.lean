@@ -130,7 +130,7 @@ theorem socketDumpHeader_contract (d : Device) (ctx : DumpCtx) (prev : Nat)
   have n2 : nlaTotal 2 = 8 := rfl
   have n4 : nlaTotal 4 = 8 := rfl
   have n32 : nlaTotal 32 = 36 := rfl
-  have hb := branch_kernel_returns (fun k => k.wg = some d)
+  have hb := branch_state_returns (fun k => k.wg = some d)
   rw [returns_iff]
   cases identity : d.staticIdentity.hasIdentity
   all_goals simp [socketDumpHeaderSource, first, identity, flags, bind_assoc,

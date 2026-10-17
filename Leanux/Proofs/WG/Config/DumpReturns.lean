@@ -36,7 +36,7 @@ theorem dumpTail_no_allowedips_returns (p : Peer) (ctx : DumpCtx) (skb : NlSkb)
   have r156 : ¬ skb.room - 136 < 20 := by omega
   have r168 : ¬ skb.room - 136 < 32 := by omega
   have ha := fun out pubkey attrs => dumpAllowed_none_returns p ctx skb out pubkey attrs P
-  have hb := branch_kernel_returns P
+  have hb := branch_state_returns P
   simp only [getPeerDumpTailSource, fresh, empty, List.head?_nil]
   simp [NlSkb.put, nlaTotal, Nat.sub_sub,
     r4, r40, r76, r96, r104, r116, r128, r136, r156, r168]

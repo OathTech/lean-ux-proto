@@ -41,7 +41,7 @@ theorem dumpAllowed_two_split (d : Device) (p : Peer) (a b : NodeId)
     (by change allowedIpSpace 4 ≤ 28; decide) (fun k => k.wg = some d)
   have hz := getAllowedips_zero { skb with room := 0 } 4 (allowedMasked true addr₂ cidr₂)
     cidr₂ rfl (fun k => k.wg = some d)
-  have hb := branch_kernel_returns (fun k => k.wg = some d)
+  have hb := branch_state_returns (fun k => k.wg = some d)
   simp [getPeerDumpAllowedSource, listed, List.forIn_cons, List.forIn_nil,
     NlSkb.put, nlaTotal, room, bind_assoc]
   mvcgen [getDev, getK, invariant, hb, hg₁, hg₂, hn₁, hn₂, ha, hz]
