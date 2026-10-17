@@ -135,6 +135,18 @@ Read these before the README's claims are taken at face value:
 | [2026-10-17-r4-reference-accounts.md](2026-10-17-r4-reference-accounts.md) | R4 source-owned base/work/TX/cursor accounts and callback acquisition retention; validation and remaining initialized conservation |
 | [2026-10-17-r4-holder-flow.md](2026-10-17-r4-holder-flow.md) | R4 complete reference accounts through admission, poll/NAPI/decrypt, work drains, dump sockets and encrypted TX completion; validation and remaining initialized conservation |
 | [2026-10-17-r4-lifecycle-workers.md](2026-10-17-r4-lifecycle-workers.md) | R4 complete accounts through creation/retirement, TX/encryption, dump callers, session setup and two timers; validation and remaining initialized conservation |
+| [2026-10-17-r4-auxiliary-configuration.md](2026-10-17-r4-auxiliary-configuration.md) | R4: auxiliary state and peer configuration; checkpoint scope, validation and review |
+| [2026-10-17-r4-dispositions.md](2026-10-17-r4-dispositions.md) | R4: source-selected packet dispositions; checkpoint scope, validation and review |
+| [2026-10-17-r4-full-ring.md](2026-10-17-r4-full-ring.md) | R4: the two carried slots and the W7 drain; checkpoint scope, validation and review |
+| [2026-10-17-r4-ingress-boundary.md](2026-10-17-r4-ingress-boundary.md) | R4: device boundaries and dynamic ingress; checkpoint scope, validation and review |
+| [2026-10-17-r4-ingress-coverage.md](2026-10-17-r4-ingress-coverage.md) | R4: initialized ingress coverage and saved TX work; checkpoint scope, validation and review |
+| [2026-10-17-r4-initial-account.md](2026-10-17-r4-initial-account.md) | R4: initialized source accounts; checkpoint scope, validation and review |
+| [2026-10-17-r4-live-frontier.md](2026-10-17-r4-live-frontier.md) | R4: initialized live encryption-ring bounds; checkpoint scope, validation and review |
+| [2026-10-17-r4-outer-boundary.md](2026-10-17-r4-outer-boundary.md) | R4: outer entries and complete batch accounts; checkpoint scope, validation and review |
+| [2026-10-17-r4-scheduler-lifecycle.md](2026-10-17-r4-scheduler-lifecycle.md) | R4: scheduler and lifecycle accounts; checkpoint scope, validation and review |
+| [2026-10-17-r4-source-composition.md](2026-10-17-r4-source-composition.md) | R4: native receivers and source composition; checkpoint scope, validation and review |
+| [2026-10-17-r4-traffic-boundary.md](2026-10-17-r4-traffic-boundary.md) | R4: complete traffic calls and lifecycle entries; checkpoint scope, validation and review |
+| [2026-10-17-r4-worker-closure.md](2026-10-17-r4-worker-closure.md) | R4: observed receive and scheduler closure; checkpoint scope, validation and review |
 | [2026-10-15-design-b4-load-ratelimiter.md](2026-10-15-design-b4-load-ratelimiter.md) | B4 design, revised against its review: the flood run exactly over `wg_batch` with a named checker rule change (no counter record: the instruments already carry it), the entry allocation as a kind-305 site with no kernel change, the two-table uninit fix; the ratelimiter GC deferred to its own stream with the exclusion's reason sharpened; 21 findings dispositioned |
 | [2026-10-15-design-b4-review.md](2026-10-15-design-b4-review.md) | Independent review of the B4 design: 21 findings; build questions 1 and 3 with changes, redesign the GC |
 | [2026-10-15-design-c-fib-trie.md](2026-10-15-design-c-fib-trie.md) | Design C: the IPv4 FIB trie as a mirror module; the fixture's tables measured from the coverage and comparison streams, the trie's shape, scope, corpus, mutants, frames, estimate |

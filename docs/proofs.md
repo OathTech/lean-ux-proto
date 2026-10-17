@@ -16,8 +16,9 @@ The campaign's complete proof tree is current over `b3f56807`, whose executable
 mirror is identical to split landing `b700659` (the `6089dc4` split). All seven
 result rows pass the complete proof gate and fresh root kernel replay. The
 nondefault proof target and gate remain on this branch. R3 now includes initialized
-incoming and outgoing authorization. R4 now covers normal initialized ingress dispositions; W7 caller transport remains
-open. Its carried statements and chronological GRO-order finding remain current.
+incoming and outgoing authorization. R4 now covers normal initialized ingress dispositions and the named W7
+full-ring episode. The six-result campaign has its proved or Rule Zero
+counterexample dispositions; chronological GRO order remains refuted.
 
 The validated baseline `00641c6` has 471 Lean files and 7,715 named theorems.
 The validated retrofit checkpoint has 452 files and 6,564 theorems: 3,197 retyped/generalized,
@@ -116,31 +117,37 @@ configuration shape premise; exact erasure retains JSON and indexed Stops.
 
 ## Current R4 extension
 
-The [initialized live-ring extension](2026-10-17-r4-live-frontier.md) adds
-17 modules and 217 theorems after the
-[ingress extension](2026-10-17-r4-ingress-coverage.md): 910 proof files,
-12,249 named theorems, 315 R4 terminals and 849 total terminal declarations.
-All 312 earlier R4 terminal bodies and every previous support theorem remain
-unchanged. No theorem is retyped or deleted in this extension.
+The [full-ring closure](2026-10-17-r4-full-ring.md) adds five support modules,
+one executable witness and eleven terminal exports after the
+[initialized live-ring checkpoint](2026-10-17-r4-live-frontier.md):
+916 proof files, 12,302 named theorems, 326 R4 terminals and 860 total terminal
+declarations (858 theorems and two helpers). All previous theorem statements
+and proof bodies remain unchanged. Nine obsolete R3/R4 status comments were
+corrected; no theorem was retyped or deleted in this extension.
 
-Every successful initialized runner supplies actual initialization, operation,
-syscall and entry cuts. Complete inject, flood and executed batch positions
-are exposed before carrier selection. Every accepted admission has a pending
-or completed-poll disposition, including one removed before its operation
-returns. The final funded account separates exactly one pending identity from
-an actual release without a residual copy. No supplied query, output funding
-or empty-completion premise is required. Original chronology remains refuted;
-stopped admissions have no new disposition account.
+Every accepted initialized runner exposes original initialization, operation,
+syscall and ingress cuts before carrier selection. Each accepted receive
+admission has exactly one pending identity or an actual completed-poll
+removal/release and named disposition, including admissions removed before
+syscall return. Initialized allocation-stamp uniqueness prevents duplicate
+Stack entries. Pending carriers are conserved work; eventual delivery or an
+empty finite endpoint is not asserted. Chronological GRO order is refuted by
+its accepted replay. Stopped prefixes retain the earlier receipt contracts,
+without a returned World or a new funded endpoint account.
 
-The complete encrypt iteration retains a freshly refused DEAD head, deriving
-saved-item separation from the earlier allocation and live logical ring.
-Full staging, concrete NAPI/Stack and native maintenance preserve the needed
-local contracts. Every normal initialized runner now derives live logical
-encryption-ring bounds and physical refinement at its endpoint and each actual
-operation entry. Concrete syscalls discharge all callback contracts. This does
-not establish selected-item exclusion or eventual disposal; the complete W7
-source episode and its drain remain open. Gate: 968 jobs and all 849 declarations
-PASS in 7.832 seconds. Fresh root replay passes in 114.850 seconds without warnings.
+The named W7 episode is now connected through original batch, staging,
+dispatch and activation source cuts. A kernel-proved payload-generic geometry
+computes 1022 successes and two refusals from two uncleared carried slots.
+The generated explicit-record replay is accepted by the original initialized
+runner and checks the same two refused allocations through their later DEAD
+head disposal and release, without completion. That concrete check is compiled
+execution evidence; it is not a universal initialized TX-disposal theorem or a
+Linux capture. Independent review accepts the repaired source connections.
+The five-tier Linux comparison remains the mirror lane's separate result.
+
+The complete proof gate passes 973 build jobs and all 860 declarations in
+7.912 seconds. The final published W7 replay passes in 14.762 seconds without
+warnings. Fresh root kernel replay passes in 112.641 seconds with no warnings.
 
 ## Layers
 
@@ -857,8 +864,9 @@ original checkpoints. The current mirror/toolchain carry status is in
   and separate HistoryReceiptsValid through the unchanged concrete observers. Both
   hold from empty initialization for every typed Trace and both placeholder settings,
   including Stops. Global committed order does not label individual poll boundaries;
-  the fresh local suffix contract remains separate. Key/session material identity and
-  admission credits remain open; no observer hierarchy or old invariant is changed.
+  the fresh local suffix contract remains separate. Initialized key/session
+  identity and admission credits are supplied by the later R3/R4 compositions;
+  no observer hierarchy or old invariant is changed.
   `RxCarrierState`, `RxIngressProtection` and `RxCleanupProtection` separate complete
   resident inventory, exact queue multiplicities and explicit unpaid-credit/reservation
   bounds. Actual lookup and admission derive the loan and key word; vacant allocation
@@ -867,8 +875,8 @@ original checkpoints. The current mirror/toolchain carry status is in
   demand derives non-retirement, and paid/free cleanup retains the remaining ledger.
   The actual ENOSPC suffix preserves all three recorded decisions and queue ownership.
   Vacancy and successful key payment are explicit premises of those older local cuts. Whole consumeData
-  composition is now proved below; initialized conservation remains open; ghost phase predicates do not
-  establish past payments. `RxProtectionFrames`, `TxRxProtection` and `RxConsumeProtection`
+  composition and initialized conservation are supplied by the later contracts;
+  ghost phase predicates alone do not establish past payments. `RxProtectionFrames`, `TxRxProtection` and `RxConsumeProtection`
   now retain the same supplied ledger through full original staged-send and consumeDataDone
   normal returns. Actual acquisition/disposal/publication/queued-handshake cuts derive typed
   TX-batch/send-work append deltas and exact balances. Nullable current-key compatibility
@@ -1007,7 +1015,7 @@ open. All earlier theorem bodies are unchanged. Gate: 918 jobs/834 declarations,
 | R1: anti-replay uniqueness and inclusive floor | No wire counter is accepted twice in one allocation lifetime; every accepted counter is at or above the inclusive lower edge, for pure runs, original validator calls and accepted runner histories. Equality at the charter's floor is intentionally permitted, with a concrete recorded replay. | `Leanux/Proofs/WG/AntiReplay/` (`Statements.lean`, 9 terminal theorems) | [campaign charter](2026-10-13-charter-proof-campaign.md) | [campaign report](2026-10-13-proof-campaign.md#r1--anti-replay-uniqueness-and-the-inclusive-floor) | b3f56807 | current: split carry validated |
 | R2: initialized lifetime safety | For every typed Runner trace and both placeholder settings, committed peer/keypair/packet access histories are safe from release-before-access, including failed prefixes. Every actual reached consistency-filter entry is allocation-valid and supplies exact ordered filter correspondence and safe isolated copied-trial histories. The observer preserves exact original JSON or indexed Stop without parser, array-length, progress or success premises. Original local contracts and endpoint identity refinements remain available. Historical stale-cursor inputs retargeted replacement identities; their current full recipes reject at operation 3 under the pending-dump guard. Raw-reference affiliation/credit is a separate stronger property. | `Leanux/Proofs/WG/LifetimeSafety/` (`Statements.lean`, 202 terminal theorems) | [campaign charter](2026-10-13-charter-proof-campaign.md) | [campaign report](2026-10-13-proof-campaign.md#r2--lifetime-identity-and-retained-references) | b3f56807 | current: split carry validated |
 | R3: cryptokey routing | Trie lookup agrees with the independent flat longest-prefix history for both families, including insertion, removal and lifecycle cleanup. Each initialized Stack entry links to its earlier buffer, consume and configured decrypt/publication occurrences, and its source winner is the consuming peer at that consume prefix. Each initialized outgoing handoff selects the longest-prefix owner of every supplied packet’s destination at its captured native front entry. Actual direct, batch and Stack-reply callers, NAPI, crypt workers, scheduler, timers and syscall continuations are connected. Public parsing discharges configuration address shape; both placeholder settings and prefixes preceding indexed Stops are included. Exact executable erasure and complete old RX-journal projection hold for arbitrary incoming histories. No final-state authorization premise, Noise authenticity or later wire-send property is claimed. Complete caller coverage uses checked source factors and reviewed wiring; selected-occurrence authorization is kernel-proved. | `Leanux/Proofs/WG/CryptokeyRouting/` (`Statements.lean`, 289 terminal theorems) | [campaign charter](2026-10-13-charter-proof-campaign.md) | [incoming report](2026-10-17-r3-initialized-authorization.md), [outgoing report](2026-10-17-r3-initialized-transmit.md), [campaign report](2026-10-13-proof-campaign.md#r3--cryptokey-routing) | b3f56807 | current: trie and both initialized path halves validated |
-| R4 components and GRO order finding | Initialized entry/completion uniqueness and packet linkage remain proved. Every accepted runner exposes its actual initialization and operation cuts and covers every accepted inject, flood and executed batch receive position, including admissions removed before syscall return. Each has a pending or actual completed-poll disposition; the funded final account separates one pending identity from release without a residual copy. Fresh full-ring refusal survives the entire adjacent encrypt iteration. Every normal initialized runner derives live-ring bounds and physical refinement at its endpoint and actual operation entries; W7 refusal-to-disposal transport remains open. Chronological GRO order is refuted; cleanup-totality finding remains. | `Leanux/Proofs/WG/DeliveryOrder/` (`Statements.lean`, 315 terminal theorems; `ReplayGro.lean`) | [campaign charter](2026-10-13-charter-proof-campaign.md) | [live-ring report](2026-10-17-r4-live-frontier.md), [ingress coverage report](2026-10-17-r4-ingress-coverage.md) | b3f56807 | current: split carry, initialized ingress and live-ring bounds validated; W7 transport open |
+| R4: ingress conservation, W7 characterization and GRO order finding | Every accepted runner exposes all actual ingress positions, including admissions removed before syscall return. Each accepted carrier has exactly one pending identity or an actual named completed-poll disposition/release; initialized stamp uniqueness prevents duplicate Stack entries. Live logical ring bounds and physical refinement are derived from initialization. Kernel-proved arbitrary-payload geometry and an accepted generated original-run replay characterize the named W7 episode: 1022 enqueues and two refused allocations, later released as DEAD heads without completion. Chronological GRO order is refuted. The finite W7 runtime checks are compiled evidence, not universal outgoing-disposal or eventual-delivery theorems. Local cleanup-totality findings remain. | `Leanux/Proofs/WG/DeliveryOrder/` (`Statements.lean`, 326 terminal theorems; `ReplayGro.lean`, `ReplayFullRing.lean`) | [campaign charter](2026-10-13-charter-proof-campaign.md) | [full-ring report](2026-10-17-r4-full-ring.md), [ingress coverage report](2026-10-17-r4-ingress-coverage.md), [campaign report](2026-10-13-proof-campaign.md#r4--ingress-conservation-full-ring-characterization-and-gro-order-finding) | b3f56807 | current: charter disposition complete; proofs and accepted runtime findings validated |
 | R5: key lifetime enforcement; Rule Zero findings | Thirteen local theorems identify exact original clock tests, RX AEAD admission and failed-tag coverage, accepted-wire-nonce bounds, TX staging certificates, zero-timer store framing and timer-pass erasure. Accepted original/observed replays authenticate nonce R+1 before rejection and encrypt queued transport keepalives after recorded expiry or zero/clear before a new handshake, using the same packet-held material. New time inputs have coherent coarse/jiffies/arm arithmetic, without a Linux schedule claim. The original unconditional statement is false; universal replacement transport theorems are not claimed. | `Leanux/Proofs/WG/KeyLifetime/` (`Statements.lean`, 13 terminal theorems; `Replay.lean`, `ReplayDelayed.lean`, `ReplayPostClear.lean`) | [campaign charter](2026-10-13-charter-proof-campaign.md) | [campaign report](2026-10-13-proof-campaign.md#r5--key-lifetime-enforcement-rule-zero-findings) | b3f56807 | current: split carry validated |
 | R6: cookie exclusion and retry-limit finding | Original under-load calculation and rejected-initiation suffix are exact. Invalid MAC2 against the actual original cookie result executes only the cookie reply; invalid MAC1 drops earlier. Ordinary completion preserves full Noise stores, indices and peer/keypair allocation counters. An accepted generated episode has 19 retries and 20 total initiations with MAX=18, then gives up on callback 20; this refutes the literal limit without claiming a universal replacement bound. The whole advance observer has exact original erasure. | `Leanux/Proofs/WG/FloodResistance/` (`Statements.lean`, 6 terminal theorems; `Replay.lean`) | [campaign charter](2026-10-13-charter-proof-campaign.md) | [campaign report](2026-10-13-proof-campaign.md#r6--cookie-exclusion-and-retry-limit-finding) | b3f56807 | current: split carry validated |
 
@@ -1102,8 +1110,9 @@ The preceding `a0cf252` carry also passed eleven reproductions (nine accepted
 agreements, two pending-dump rejections with accepted pre-delete boundaries).
 Those eleven Runner recipes were not rerun at the preceding local-origin checkpoint;
 the current carry changes their Runner observers and reruns all eleven successfully.
-No differential/guest run is part of this extension. Initialized R3 affiliation/
-packet authorization and R4 credits/conservation remain open.
+No differential/guest run was part of that extension. At that historical
+checkpoint, initialized R3 packet authorization and R4 credits/conservation
+were still open; the current register records their later closure.
 The supplementary six-checker export covers only its historical 417-declaration
 checkpoint, not later changes.
 
@@ -1118,7 +1127,10 @@ proof-side report did not claim an accepted replay or differential finding.
 This table preserves the pre-split contract boundary recorded for the
 [pre-release review](2026-10-14-pre-release-review.md) §4. Its open R3 obligations
 are historical: the current register and initialized incoming/outgoing reports
-above record their closure. R4 conservation remains open.
+above record their closure. The R4 rows below also describe the pre-split
+checkpoint; current normal ingress accounting is in the register and its
+linked reports. Historical open obligations in this table are not current
+status.
 These rows describe campaign contracts over mirror `cb2348e`. Preceding checkpoints have passed independent
 review and coordinated validation. The initialized committed-support checkpoint passed its scoped/full builds,
 exact checks, independent review and coordinated gates. The new configured-identity/session/publication rows
@@ -1155,10 +1167,10 @@ checked separately and are not included in the terminal declaration count.
 | AntiReplay | 9 | 9 | 0 |
 | LifetimeSafety | 202 | 202 | 0 |
 | CryptokeyRouting | 289 | 289 | 0 |
-| DeliveryOrder | 289 | 289 | 0 |
+| DeliveryOrder | 326 | 326 | 0 |
 | KeyLifetime | 13 | 13 | 0 |
 | FloodResistance | 6 | 6 | 0 |
-| Total | 823 | 821 | 2 |
+| Total | 860 | 858 | 2 |
 
 C memory safety, constant time, cryptographic security and the physical
 erasure of secrets are separate claims that no row makes.

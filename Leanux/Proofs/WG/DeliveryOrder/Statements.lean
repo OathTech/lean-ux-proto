@@ -1,3 +1,8 @@
+import Leanux.Proofs.WG.Queues.FullRingGeometry
+import Leanux.Proofs.WG.Queues.TxProducerCuts
+import Leanux.Proofs.WG.Queues.TxStagingCuts
+import Leanux.Proofs.WG.Queues.TxDispatchCuts
+import Leanux.Proofs.WG.Queues.TxBatchDispatchCuts
 import Leanux.Proofs.WG.Queues.TxLiveInitialized
 import Leanux.Proofs.WG.Queues.RunnerCoverage
 import Leanux.Proofs.WG.Queues.IngressCoverage
@@ -1239,8 +1244,8 @@ theorem original_crypt_ahead_joint (pid : PeerId) :
 
 /-- One original activation iteration composes all concrete crypt callbacks
 with poll-free TX/receive observers. This is a local allocation-valid contract;
-the enclosing scheduler is composed below. Initialized Env/Runner coverage and
-completed stack delivery remain open. -/
+the enclosing scheduler, initialized Env/Runner coverage and completed
+Stack calls are supplied by the separate contracts below. -/
 theorem original_activation_iteration_joint (a : Activation) :
     ErasesPrefix (Queues.RxHistory.activationIteration a) (Leanux.Env.Activation.iter a) ∧
     ProjectsUnder Lifetimes.AuditInv Queues.RxHistory.auditEvent
@@ -1575,7 +1580,8 @@ consume-run payload witnesses, even on Stop. Normal None is classified
 by the original executed source factors; the endpoint helper never returns
 None normally. This run/payload contract alone does not identify the consume
 packet with the captured allocation or its earlier consumed event. The stronger
-local source/history link is exported below; initialized routing remains open. -/
+local source/history link is exported below; initialized routing is supplied
+by CryptokeyRouting's separate initialized authorization contracts. -/
 theorem original_poll_disposition_receipts (pid : PeerId) (budget : Nat)
     (w : World) (prior : List Lifetimes.LifetimeEvent) :
     Queues.RxDisposition.Valid
@@ -1858,8 +1864,8 @@ endpoint (Some and None). Only the packet key's nullable, validity-independent
 owner compatibility is required; actual promotion supplies the staged call's
 current-key condition. The source-derived queue/reference delta retains funded
 handoffs. This local theorem does not itself supply Stack/IRQ or output-key
-frames; the concrete Stack and normal-poll results appear below. Initialized
-carrier conservation remains open; Stops have no claimed endpoint World. -/
+frames; the concrete Stack, normal-poll and initialized carrier-account
+results appear below. Stops have no claimed endpoint World. -/
 theorem original_consume_data_done_rx_protection (pid : PeerId) (pkt : RxPacket)
     (endpoint : Endpoint) (w v : WGWorld) (ambient ambient' : Ambient) (result : Option (List UInt8))
     (cs : List Carrier) (loans : List Owner)
@@ -1913,7 +1919,8 @@ journal contains lifetime accesses only, so subtraction uses this poll's fresh
 removals. No caller/base reservation, peer-survival, totality, allocation-frontier
 or initialized premise is added. Uncrypted-head normal exits may retain queued
 carriers. Stops retain the existing prefix contracts but have no endpoint World;
-whole admission/ring/lifecycle conservation and initialized identity remain open. -/
+whole initialized admission accounting is supplied by the later runner
+coverage contracts, rather than by this local theorem. -/
 theorem original_poll_carrier_conservation (pid : PeerId) (budget : Nat) (w v : World) (n : Nat)
     (cs : List Carrier) (loans : List Owner) (prior : List Lifetimes.LifetimeEvent)
     (hi : Inventory cs w.wg) (hq : QueueOwners cs w.wg) (hp : Protected cs loans w.wg)
@@ -2880,7 +2887,7 @@ theorem original_admission_journal_projection (msg : List UInt8) (src : SkbSourc
       (runPrefix (RxHistory.mixed (liftWGObserver (consumeDataPrefix msg src ds))) w h).2.filterMap RxHistory.auditEvent) :=
   AdmissionJournal.original_audit msg src ds w h hi
 
-/-- A normal rich observation selects one actual admission occurrence and the same funded ledger; the runner does not yet use this splice. -/
+/-- A normal rich observation selects one actual admission occurrence and the same funded ledger; the later runner coverage connects complete operation paths before carrier selection. -/
 theorem original_admission_funded_occurrence
     (run : runPrefix (AdmissionJournal.observe msg src ds) w h = (.ok ((),v),k))
     (hi : DurableHolders.Boundary cs loans w.wg) (fresh : Packets.Inv w.wg)
@@ -3674,5 +3681,106 @@ theorem accepted_runner_live_ring_bound (trace : Runner.Trace) (placeholders : B
       TxDisposition.LiveRunner.Inv h w ∧
       ∀index,index<trace.ops.size→TxDisposition.LiveRunner.OperationEntry trace placeholders index :=
   TxDisposition.LiveInitialized.accepted trace placeholders run
+
+/-- Two actual produce/consume pairs leave uncleared slots. Any subsequent
+1024 offered payloads yield exactly 1022 successes and two refusals, without
+moving the producer on either refusal. The payloads need not be distinct. -/
+theorem two_carried_full_ring_result (first second : α) (offered : List α)
+    (size : offered.length=1024) :
+    produceMany (FullRingGeometry.pairs (PtrRing.init 1024) first second) offered =
+      (List.replicate 1022 true ++ [false,false],
+        Ring.ringOf 1024 16 0 [first,second] (offered.take 1022)) :=
+  FullRingGeometry.w7_result first second offered size
+
+/-- The live FIFO contains exactly the successful source prefix. Consumed
+occurrences in uncleared physical slots do not become live again. -/
+theorem two_carried_full_ring_live_items (first second : α) (offered : List α)
+    (size : offered.length=1024) :
+    (produceMany (FullRingGeometry.pairs (PtrRing.init 1024) first second) offered).2.items =
+      offered.take 1022 := FullRingGeometry.w7_items first second offered size
+
+/-- Every normally returned original all-transmit batch exposes the actual
+entry, all ordered producer calls, and the deferred finishing call. -/
+theorem original_batch_all_producer_cuts
+    {entries : List Env.BatchItem}
+    (all : TxDisposition.ProducerCuts.AllXmit entries)
+    (run : (Env.batch entries).run w=.ok (result,v)) :
+    ∃ d u cqes t,TxDisposition.ProducerCuts.front.run w=.ok (d,u) ∧
+      TxDisposition.ProducerCuts.Path d entries [] u cqes t ∧
+      (TxDisposition.ProducerCuts.finish entries cqes).run t=.ok (result,v) :=
+  TxDisposition.ProducerCuts.batch_normal all run
+
+/-- Selecting an original batch occurrence retains its actual prefix and
+suffix, including ordinary errno outcomes and repeated equal input values. -/
+theorem original_batch_selected_producer_cut
+    {entries : List Env.BatchItem}
+    (path : TxDisposition.ProducerCuts.Path d entries cqes w out v)
+    (selected : entries[index]?=some (.xmit family addr payload opts)) :
+    ∃ before after u t,
+      (TxDisposition.ProducerCuts.loop d (entries.take index) cqes).run w=.ok (before,u) ∧
+      TxDisposition.ProducerCuts.Cut d family addr payload opts before after u t ∧
+      (TxDisposition.ProducerCuts.loop d (entries.drop (index+1)) after).run t=.ok (out,v) :=
+  TxDisposition.ProducerCuts.Path.select path selected
+
+/-- Capturing adjacent allocation/create calls preserves the entire native
+transmit result, subsystem states and Stop outcomes. -/
+theorem original_transmit_staging_receipts_erasure
+    (family addr : Nat) (packets : List WG.Packet) (mtu : Nat) :
+    ErasesStatePrefix (TxDisposition.StagingCuts.transmit family addr packets mtu)
+      (wgXmit family addr packets mtu) :=
+  TxDisposition.StagingCuts.transmit_erases family addr packets mtu
+
+/-- Every captured allocation/create pair is an actual adjacent source run.
+A later Stop retains valid prior receipts without fabricating a final World. -/
+theorem original_transmit_staging_receipts_valid
+    (family addr : Nat) (packets : List WG.Packet) (mtu : Nat) :
+    StatePrefixPreserves (fun h _ _=>TxDisposition.StagingCuts.Good h)
+      TxDisposition.StagingCuts.Good (TxDisposition.StagingCuts.transmit family addr packets mtu) :=
+  TxDisposition.StagingCuts.transmit_safe family addr packets mtu
+
+/-- An actual captured fresh allocation into a full encryption ring keeps
+that ring, marks its new head DEAD and separates it from all older live items.
+The device, live-peer, peer-room and earlier numeric bounds are explicit. -/
+theorem original_captured_full_ring_refusal {r : TxDisposition.StagingCuts.Receipt}
+    {d : Device} {p : Peer} {first : SkbId} {rest : List SkbId}
+    (valid : r.Valid) (device : r.allocation.before.dev=some d)
+    (peer : d.peers[r.peer]?=some p) (live : p.isDead=false)
+    (room : p.txQueue.count<MAX_QUEUED_PACKETS) (full : d.encryptQueue.full=true)
+    (bounded : ∀old∈d.encryptQueue.items,∀id∈old,id<d.nextSkb)
+    (item : r.allocation.value=first::rest) :
+    TxDisposition.HeadState first .dead r.creation.after ∧
+      TxRing.nativeCell r.creation.after=some (d.ifindex,d.encryptQueue) ∧
+      ∀old∈d.encryptQueue.items,first∉old :=
+  TxDisposition.StagingCuts.Receipt.refusal valid device peer live room full bounded item
+
+/-- The original dispatch consists of its guarded unit-selection and section
+entry followed by the original activation. Every failure arm is retained. -/
+theorem original_dispatch_source_factor (worker : Worker) :
+    Env.dispatch worker=(do
+      match ← TxDisposition.DispatchCuts.begin worker with
+      | none=>return false
+      | some a=>Env.Activation.run a;return true) :=
+  TxDisposition.DispatchCuts.dispatch_factor worker
+
+/-- The exposed activation body is the original loop, with the same
+occupancy-derived bound, counters, yields, section stop and failure. -/
+theorem original_activation_source_factor (activation : Activation) :
+    Env.Activation.run activation=TxDisposition.DispatchCuts.run activation :=
+  TxDisposition.DispatchCuts.run_factor activation
+
+/-- The batch's deferred work starts only after its original CQE publication
+and queued-this-call reset. The exposed suffix retains all original branches. -/
+theorem original_batch_deferred_entry_factor (items : List Env.BatchItem) (cqes : List Int) :
+    TxDisposition.ProducerCuts.finish items cqes = (do
+      TxDisposition.BatchDispatchCuts.finishBegin cqes
+      TxDisposition.BatchDispatchCuts.afterReset
+      return items.length) :=
+  TxDisposition.BatchDispatchCuts.finish_factor items cqes
+
+/-- The exposed scheduler body is the original record-budgeted loop, including
+recorded dispatches, suspended trials, NET_RX, missing records and Stops. -/
+theorem original_scheduler_source_factor (stack : Option Worker) :
+    Env.schedule stack=TxDisposition.BatchDispatchCuts.scheduleRun stack :=
+  TxDisposition.BatchDispatchCuts.schedule_factor stack
 
 end Leanux.Proofs.WG.DeliveryOrder

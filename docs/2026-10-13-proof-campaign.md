@@ -2,6 +2,30 @@
 
 ## Progress
 
+The six-result campaign is complete over main `b3f56807`, executable-identical
+to the state-split landing `b700659`. R1, R4, R5 and R6 retain their explicit
+counterexamples to the false original wording; the positive claims and named
+W7 characterization are validated within their documented scope. R2 and R3
+have initialized runner closure. The mirror is unchanged, and the branch keeps
+the nondefault `LeanuxProofs` target and `scripts/proof-gate`.
+
+The final [W7 report](2026-10-17-r4-full-ring.md) connects the two actual
+refusals to their later releases in the accepted finite episode. It distinguishes
+compiled concrete replay evidence from kernel-proved source and geometry
+contracts, and conservation from eventual delivery. Current totals are
+916 Lean files, 12,302 named theorems and 860 terminal declarations. The gate
+passes 973 jobs/all 860 declarations; the original-run W7 reproduction passes.
+Fresh root kernel replay passes in 112.641 seconds without warnings. The
+report records each review disposition.
+
+The completed retrofit itself changed 7,715 to 6,564 named theorems:
+3,197 retyped/generalized, 1,709 deleted, 2,809 retained and 558 added.
+Later R3/R4 extensions add statements on the split types. Current status is in
+[the register](proofs.md#results); the following checkpoint entries preserve
+what was established at each stage, including then-open obligations.
+
+### Earlier checkpoints
+
 Work on `proofs/campaign` in `.worktrees/proofs-campaign` follows
 [the charter](2026-10-13-charter-proof-campaign.md). The branch contains main
 `b700659` plus documentation-only `b3f56807` and preserves its own proof tree,
@@ -337,8 +361,9 @@ chain remains open.
 
 The pre-split checkpoint validated every baseline result surface over
 `cb2348e`. R3 packet authorization is now closed over the current split tree;
-R4 normal ingress conservation is closed, with stopped-admission accounting
-and W7 caller transport still open. Earlier positive results and runtime findings retain
+R4 normal ingress conservation and the named finite W7 characterization are
+closed. Stopped-endpoint funding and universal eventual TX disposal are
+stronger properties outside these claims. Earlier positive results and runtime findings retain
 their scope below; the [register](proofs.md#results) gives the authoritative
 pins and status. No main integration, push, differential check or guest run
 was made by this campaign.
@@ -348,7 +373,7 @@ was made by this campaign.
 | R1 | Replay uniqueness proved; inclusive-floor correction witnessed. |
 | R2 | Initialized allocation-identity access safety proved, including failures/trials; affiliation/credits separate. |
 | R3 | Trie history refinement and initialized incoming/outgoing cryptokey routing proved for shaped typed traces, including parsed traces and stopped prefixes. |
-| R4 | Initialized entry/completion uniqueness, normal ingress dispositions and live-ring bounds; chronology refuted; stopped-admission accounting and W7 transport open. |
+| R4 | Initialized duplicate freedom and normal ingress conservation proved; named finite W7 two-refusal/two-disposal episode characterized; chronological GRO order refuted. No eventual-delivery or universal outgoing-disposal claim. |
 | R5 | Accepted age/post-zero/wire-nonce counterexamples; thirteen positive local contracts. |
 | R6 | Cookie exclusion proved; literal MAX=18 refuted, without a replacement universal bound. |
 
@@ -667,8 +692,10 @@ history (empty qualifies), independently of AllocationInv.
 [AGENT 2026-10-15] Reuse captureObserved and existing R2 source cuts with a shared receipt journal; retain the local
 projection domain rather than add invalid-history append infrastructure. No initialized origin premise or new Runner
 hierarchy was introduced. Initialized committed material/stamp matching is now established below. Configured peer
-public-key provenance, ingress/packet transport to poll/Stack and identity closure remain open. Copied-trial origins are optional separate coverage.
-A snapshot or raw peer winner does not settle those remaining links.
+public-key provenance, ingress/packet transport to poll/Stack and identity closure
+are supplied by the later initialized authorization contracts. Copied-trial
+origins remain optional separate coverage. A snapshot or raw peer winner alone
+does not supply those links.
 
 **Local material retention.** [Origins/State](../Leanux/Proofs/WG/Origins/State.lean) supports every resident valid
 receiving key with one full successful derivation-front witness and its keep-or-clear owner; invalid keys require no support.
@@ -681,8 +708,9 @@ index-lookup frame, including nullable store-back, and reuses the existing acces
 The new `RetainingLeaves`, `RetainingTraffic` and `RetainingLifecycle` source contracts extend normal
 material retention through concrete non-installing traffic, timers and lifecycle operations. They reuse actual
 record getters and stronger canonical masks, with no affiliation/residency/credit or successful-drain premise.
-Persistent ingress admission injection and configured peer/packet provenance remain unfinished. The supplied-state caller propagation
-below is validated; the new Runner composition establishes initialized committed material provenance.
+These local material-retention contracts alone do not provide ingress injection
+or configured peer/packet provenance. The later initialized authorization
+composition supplies both, building on the caller propagation below.
 
 **Actual caller injection.** [ReceiptTypes](../Leanux/Proofs/WG/Origins/ReceiptTypes.lean) keeps existing qualified
 receipt/context names while removing the import cycle. [HandshakeSources](../Leanux/Proofs/WG/Origins/HandshakeSources.lean)
@@ -709,10 +737,12 @@ syscall wrappers, dispatch and source post-workers. The original fixture and suc
 initial support; failed prefill leaves empty safe history. Every typed trace/both flags retain checked committed
 history, including Stops. This is an initialized material chain, not a configured-public-key or packet-binding theorem.
 
-**Remaining obligations.** Initialized committed support now preserves ordinary-negative cleanup and Stops.
-Routing parser shape follows its operation cursor, but local lookup agreement still needs connection to the
-actual contemporaneous initialized routing history. Historical session/key/public-key support is now captured from initialization; whole-run
-packet-origin transport and initialized RX/TX identity binding remain open.
+**Initialized closure and limits.** Initialized committed support preserves
+ordinary-negative cleanup and Stops. Public parsing supplies configuration shape;
+the incoming and outgoing authorization theorems connect each selected actual
+packet occurrence to its contemporaneous initialized routing history and
+configured identity. Whole-run packet transport is supplied by the concrete
+caller composition, rather than inferred from a local material certificate.
 Copied-trial packet certificates are optional separate coverage, not a prerequisite of the committed charter path claim. Nullable compatibility is insufficient for historical key identity.
 Partial failing clear has no completion marker. The historical R2 orphan recipe is now rejected, not a current
 misrouting witness; no new accepted counterexample is claimed.
@@ -731,24 +761,29 @@ counterexample resulted from these failed attempts.
 **Ranked mirror suggestions.** None. Integer-address refinement needs no production restructure; C byte-layout
 correspondence remains informal.
 
-## R4 — queue, poll and delivery-order components (in progress)
+## R4 — ingress conservation, full-ring characterization and GRO order finding
 
-**State-split initialized-account extension.** The [current report](2026-10-17-r4-initial-account.md)
-records 132 additional theorems in thirteen modules and fourteen terminal exports.
-The tree has 838 proof files/11,440 theorems, with 289 R4 terminals and all 275
-preceding bodies unchanged. Every original syscall and accepted initialized
-runner now derives a concrete source-selected residual ledger and funded entry.
-Exact projection retains its actual World, journal, JSON and indexed errors.
-Traffic paths identify accepted receive positions and local pending-or-removal
-fates. Peer-queue ENOSPC cleanup is distinct from ring-full EPIPE's queued DEAD
-path. Stopped-state accounts and initialized admission-to-named-disposition
-conservation remain open. Chronological GRO order stays refuted.
+**Current disposition.** The [full-ring report](2026-10-17-r4-full-ring.md)
+completes the named W7 episode with 1022 enqueues and two source-connected
+refused allocations later released as DEAD heads. Its compiled replay and
+kernel-proved source/geometry contracts are stated separately.
+
+**Current initialized account.** The [ingress coverage report](2026-10-17-r4-ingress-coverage.md)
+connects original initialization, every actual operation and every accepted
+receive position to a pending or actual completed-poll disposition. The
+[live-ring report](2026-10-17-r4-live-frontier.md) supplies initialized numeric
+bounds and physical refinement. Peer-queue ENOSPC cleanup remains distinct
+from ring-full EPIPE's queued DEAD path. Chronological GRO order is refuted.
+The named W7 source episode is handled separately in the
+[full-ring report](2026-10-17-r4-full-ring.md).
 
 **Original versus proved.** The charter requires accepted-schedule order and no silent loss/duplication.
 [Terminals](../Leanux/Proofs/WG/DeliveryOrder/Statements.lean) prove initialized committed callback-entry stamp
 uniqueness for every typed Trace and both placeholder settings, including Stops. Chronological GRO order is false. Local/persistent
 polls and every initialized Runner normal return pair entries with actual normal Stack returns. Failed histories
-retain valid receipts and at most one trailing unfinished entry; joint conservation remains open.
+retain valid receipts and at most one trailing unfinished entry. Normal
+accepted runs have the initialized pending-or-disposed account; no final World
+or funded endpoint is asserted for a Stop.
 
 **Local reference protection.** [Carrier state](../Leanux/Proofs/WG/Queues/RxCarrierState.lean),
 [ingress cuts](../Leanux/Proofs/WG/Queues/RxIngressProtection.lean) and
@@ -768,8 +803,9 @@ selects the actual cached queue occurrence, retains its charge until peer paymen
 filters the same original ledger by fresh removal identities. Completion getters and actual GRO/Stack calls remain
 in source order. No extra caller/base reservation, residency, totality or key-allocation frontier premise is used.
 Uncrypted-head normal return retains unremoved queued carriers. Whole local consumeData admission and its
-stable ring/head boundary are now proved below; general IRQ, base/work/dump provenance, decrypt-worker
-propagation and initialized compatibility/protection remain open.
+stable ring/head boundary are proved below. The later initialized account
+composes concrete IRQ, base/work/dump, worker and lifecycle contracts; these
+local lemmas alone do not derive that initialized protection.
 Handoff alone supplies no key-word/slot frame or TX ownership; the new separate source frames supply the local
 compatibility needed here. Stopped calls have no claimed final World.
 
@@ -783,9 +819,10 @@ adds all-queued phases, ring-items permutation with uncrypted carriers, and an u
 not forbid dead/crypted tails. The physical journal starts at the existing supplied Refines/Inv premise and its
 actual existing observer is preserved independently on the same normal execution, including ring size zero.
 Stable drainedness plus ring-empty/NAPI-cold implies empty inventory/store. Arbitrary malformed rings, hidden-none
-afterBatch exits, suspended worker locals, initialized compatibility and durable work funding are not discharged.
-The actual admission receipt is not yet injected into the enclosing initialized history spine. These local source
-contracts advance that composition without adding an initial Runner premise or claiming all-prefix endpoint state.
+afterBatch exits and suspended worker locals require their concrete caller
+contracts. The later initialized composition supplies compatibility, durable
+funding and actual admission occurrences. These local source contracts alone
+do not assert an all-prefix endpoint state.
 
 Independent architecture review identified a source-level arbitrary-World countermodel to framing all consumeDataDone
 by RX credits alone: P owns a selected credit plus reservation at count two, but its next key belongs to Q; staging
@@ -816,8 +853,9 @@ persistent promotion retains the exact prior audit seed/probes, and finite polls
 These local contracts need no allocation or World premise. The new `RxLinkCallers`/`RxLinkEnvironment`/`RxLinkRunner`
 proofs propagate linkage and separate checked-receipt validity through the existing concrete callers. Every typed Trace
 and both placeholder settings derive them from empty initialization, also on Stop. Their global committed order retains
-full receipts and the exact R2/probe history, but does not identify poll-local segments. Key/session/public-key identity,
-initialized admission credits and joint carrier conservation remain open.
+full receipts and the exact R2/probe history, but does not identify poll-local
+segments. Initialized identity is supplied by R3; the later R4 account supplies
+admission credits and normal carrier conservation.
 
 Independent review checked two potentially false joins. The standalone consume helper accepts arbitrary skb/stamp
 labels, so its SelectedAt/peer premises must be discharged by the literal poll; they are. Earlier removal plus final
@@ -913,16 +951,18 @@ in prose on `requireNotPending`, actually `State.lean:102`'s `pure ()`. Later in
 quiescence. No accepted loss/ duplication witness was found: arbitrary last-peer erasure is not initialized, and the
 poll's last-put candidate Stops at a later getter. No kernel bug claim.
 
-**Remaining obligations.** The initialized runner derives its actual funded
+**Closure and limits.** The initialized runner derives its actual funded
 residual ledger, complete normal ingress source coverage and completed-poll
 release certificates. Every accepted admission has a named fate or exactly
 one pending identity, including one removed before its syscall returns. Finite
-accepted prefixes may retain work; stopped admissions need separate accounting.
-W7 has actual allocator freshness, complete staging/softirq mark transport,
-the adjacent full encrypt iteration and initialized live-ring bounds. These
-do not yet connect a selected refusal through the later committed drain to
-its actual peer-head disposal. Earlier uncrypted queue items and saved worker
-items must be accounted for; empty work bookkeeping alone is insufficient.
+accepted prefixes may retain work. Stopped admissions have no claimed endpoint
+World; an additional funded account for them is not part of this result.
+The named W7 replay now follows every producer position and the actual
+record-selected encrypt/TX drain to the same two refused packet releases.
+The source factors retain the preceding CQE/reset, actual worker selection,
+iteration counters, earlier queued items and final poll. Empty work bookkeeping
+alone is never the justification. Universal outgoing completion and fairness
+are not asserted.
 
 **Effort/process/review.** Earlier ring, receipt and caller ledgers are in `00fafa4`, `57cb46e`,
 `c4ef635`, `ec95fa8`, `3dec2c3`, `79dce53`, `1b76322`, `983f84b` and `65e6a6d`;
@@ -942,7 +982,8 @@ No R4 memory cap was hit.
 
 Independent reviews required direct provenance and corrected EPIPE-at-return, failed-entry, ownership,
 ifindex, uniqueness and census wording. Immediate repayment appends actual steps, not hidden records.
-The remaining initialized conservation obligations are stated above.
+The current initialized conservation and finite W7 claims, and their limits,
+are stated above; dated checkpoint reports retain the earlier open stages.
 
 **Ranked mirror suggestions.** None; physical occupancy explains W7 and proof-side observations suffice for the checked
 properties.

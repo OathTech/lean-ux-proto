@@ -523,7 +523,7 @@ Both root values, the sequence, and any supplied opposite-family representation
 are framed. Separate dispatch, coherence and finite-call history contracts below
 cover those additional boundaries; whole device-command composition is supplied
 separately below, together with lifecycle and initialized Runner composition.
-Packet paths remain open. -/
+The initialized packet-path contracts are exported separately below. -/
 theorem original_add_context_empty_child_correct (w w' : WGWorld) (ambient ambient' : Ambient) (d : WG.Device)
     (hd : w.dev = some d) (v4 : Bool) (c : Context) (n : NodeData) (side : Nat) (sibling : Tree)
     (addr cidr pid : Nat) (p : WG.Peer) (hp : d.peers[pid]? = some p)
@@ -809,7 +809,8 @@ theorem original_root_graft_rollback_effects (d : WG.Device) (width addr cidr pi
 /-- The original family wrapper increments the sequence before grafting. Every
 normal endpoint retains that increment, including either allocation refusal.
 Success endpoints are exact source updates. The separate success theorem gives
-pure-tree refinement; general configuration-history composition remains open. -/
+pure-tree refinement; the later initialized contracts supply configuration
+history composition. -/
 theorem original_insert_root_graft_endpoints (w w' : WGWorld) (ambient ambient' : Ambient) (d : WG.Device)
     (hd : w.dev = some d) (family : Nat) (n : NodeData) (l r : Tree)
     (addr cidr pid : Nat) (p : WG.Peer) (hp : d.peers[pid]? = some p)
@@ -973,7 +974,8 @@ theorem original_add_context_graft_endpoints (w w' : WGWorld) (ambient ambient' 
 the existing pure insertion, with exact allocation count, both root values,
 whole-store freshness and a supplied opposite-family representation preserved.
 Validity and distinct node identifiers are structural input premises; orphan
-owner labels are permitted. This does not yet close complete configuration histories. -/
+owner labels are permitted. Complete configuration histories are supplied
+by separate composition contracts below. -/
 theorem original_add_context_graft_correct (w w' : WGWorld) (ambient ambient' : Ambient) (d : WG.Device) (hd : w.dev = some d)
     (v4 : Bool) (c : Context) (parent : NodeData) (side : Nat) (sibling : Tree)
     (n : NodeData) (l r : Tree) (addr cidr pid : Nat) (p : WG.Peer)
@@ -3155,7 +3157,8 @@ configured session caller, exact AEAD transformation and state-only stored
 publication before IRQ. Some prepare may instead publish DEAD. The endpoint
 claim is normal-only; lower receiptObserved separately retains later Stop
 prefixes. Supplied support/compatibility are explicit, and current peer-slot
-identity, initialized publication and later Stack/routing joins remain open. -/
+identity, initialized publication and later Stack/routing joins are supplied
+by the separate initialized authorization contracts below. -/
 theorem original_rx_publication_identity :
     Logged.ErasesStatePrefix RxOrigin.prepare Queues.RxWorkers.prepareSource ∧
     Logged.StateProjectsUnder (fun h w _ => Lifetimes.AllocationInv h w) MaterialOrigin.life?
