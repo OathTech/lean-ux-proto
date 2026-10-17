@@ -20,11 +20,11 @@ and attributed theorem declarations. Campaign 2 owns 427 Lean files,
 | --- | ---: | ---: | ---: | ---: | --- |
 | Common projection | 2 | 0 | 0 | 0 | Actual native WG/Ambient and full Product observations carried; no reconstructed execution states. |
 | H1 Noise | 35 | 171 | 22 | 180 | All original Noise obligations carried, including the full terminal closure; six type-given frames deleted. Wider caller/lifetime/reachability and clock-provenance charter claims remain open. |
-| H2 Index | 68 | 318 | 52 | 211 | Table, lookup, collision records, allocation, owner invariants and lifecycle support carried; seven type-given frames deleted. Exact peer-release outcomes replace stale totality, with checked counterexamples. Terminal closure and whole-driver coherence remain pending. |
+| H2 Index | 68 | 318 | 52 | 212 | Table, lookup, collision records, allocation, owner invariants and lifecycle support carried; seven type-given frames deleted. Exact peer-release outcomes replace stale totality, with checked counterexamples. Terminal closure and whole-driver coherence remain pending. |
 | H3 Roaming | 35 | 119 | 13 | 119 | Endpoint/publication, polling, attempt facts, crypto, lookup and response-caller factors/facts carried with full Product certificates; two type-given frames deleted. Initiation transcript facts and broader authentication/caller closure remain pending. |
-| H4 Configuration | 130 | 554 | 79 | 348 | Scalar, identity, port, dump, allowed-IP and structural support carried; three type-given frames deleted. Quiet timer cleanup and queued-send observations are corrected; queued-send and removal totality have checked stale-statement counterexamples. Remaining readback/effects and terminal closure remain pending. |
+| H4 Configuration | 130 | 554 | 79 | 353 | Scalar, identity, port, dump, allowed-IP and structural support carried; three type-given frames deleted. Quiet timer cleanup and queued-send observations are corrected; queued-send and removal totality have checked stale-statement counterexamples. Remaining readback/effects and terminal closure remain pending. |
 | H5 Progress | 59 | 265 | 42 | 139 | Pure/control, cut, jitter, index, poll bounds, dispatch, scheduler turns, stack/probe frames and Product observation bridge carried. The old backlog fixture now has a checked exact runner rejection. Receive-ring activation models, general runner boundaries, remaining drain/flush claims and terminal closure remain pending. |
-| H6 Timer discipline | 98 | 404 | 50 | 114 | Base/guard/jitter, arming/wheel, recorded clock and initiation-send arming contracts carried; three type-given frames deleted. Exact wheel corrections are explicit; broader timer episodes, worker composition and terminal closure remain pending. |
+| H6 Timer discipline | 98 | 404 | 50 | 118 | Base/guard/jitter, arming/wheel, recorded clock and initiation-send arming contracts carried; three type-given frames deleted. Exact wheel corrections are explicit; broader timer episodes, worker composition and terminal closure remain pending. |
 
 Retyped, deleted and retained counts will be reported per validated tranche.
 H1 now has a checked split terminal closure; H2–H6 remain lagging.
@@ -3397,3 +3397,64 @@ Index.ResponseFrames, Config.StagedFallbackSource and
 TimerDiscipline.InitiationPreservationFrames under Leanux.Proofs.WG, then
 #print axioms and scripts/in-bundle lake env leanchecker --fresh MODULE for
 each root. Use capped, 32 Lean threads and 16 QEMU slots on this host.
+
+
+## Response sending, worker references and keypair references
+
+| Tranche | Before | Retyped | Corrected | Deleted | Kept | Added | After |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Index.ResponseSource | 1 | 1 | 0 | 0 | 0 | 0 | 1 |
+| TimerDiscipline.SendWorkerFrame/SendWorkerSource | 4 | 4 | 0 | 0 | 0 | 0 | 4 |
+| Config.KeyReferences | 5 | 4 | 0 | 0 | 1 | 0 | 5 |
+| This tranche | 10 | 9 | 0 | 0 | 1 | 0 | 10 |
+| Cumulative processed baseline and checked support | 1,048 | 798 | 32 | 21 | 197 | 94 | 1,121 |
+
+The census remains 520 campaign-owned files and 1,904 theorems, with 354 checked
+proof modules; 783 baseline declarations await validation. Counts are H1 180,
+H2 212, H3 119, H4 353, H5 139 and H6 118. H1's terminal closure is current;
+H2–H6 and the full gate remain lagging. No new charter result is claimed.
+
+ResponseSource preserves table safety through the actual create/session/send
+sequence, including false creation/session branches and both last-send clock
+writes. It assumes neither authentication nor successful network transmission.
+SendWorkerFrame retains the exact internal-id/attempt-count/reference-count
+WorkerView, deriving its finer prefix view from the actual resident peer.
+SendWorkerSource composes the actual initiation with release on the same run;
+its pre-existing reference-count-greater-than-one premise rules out final
+release refusal. Queue, timer and all other peer fields remain arbitrary.
+
+KeyReferences keeps its total/partial distinctions. The present-key get is
+partial under residency alone: zero returns none, a successful positive get
+increments, and overflow is excluded only by the supplied successful run.
+Retained keypairPut remains total with its original resident and greater-than-one
+premises, including NULL, nonresident and otherwise arbitrary peer words.
+With immediate unreference disabled and a nonfinal decrement, neither index
+removal nor peer dereference executes. Null get/put remain total. The pure
+round-trip lookup theorem and exact ordered Device writes are unchanged.
+
+Independent reviews of all ten declarations found no issues. The scoped build
+passes 169 jobs without warnings. Axiom inspection covers 690 logical roots in
+140 proof modules, including 423 public theorem roots, with only standard
+axioms. All three fresh replays pass (ResponseSource, SendWorkerSource and
+KeyReferences). Static checks, all 258 terminal names/order, and mirror/shared
+boundaries pass.
+
+ResponseSource passed its first probe. Worker probe 1 failed a reserved local
+identifier and reported a deprecated rewrite; probe 2 fixed both and passed
+cleanly. Key-reference probe 1 failed concrete Step equality for the zero/one
+tests and reported two unused simplifications; probe 2 derived the Boolean
+test equalities and removed unused arguments, then passed. Complete outputs
+were retained and inspected. No unchanged rerun, infrastructure retry, limit
+increase or guest run occurred.
+
+The independent initiation-facts effort remains outside the count. Probe 21
+accepted its four named helpers but the original fact still failed kernel
+recursion. Probe 22 exposed an incorrectly inferred entry Ambient at the
+post-guard continuation and still failed recursion in its new guard helper;
+the next attempt supplies the actual post-guard Ambient explicitly while
+retaining the original before-checks snapshot. No scope or proof limit changed.
+
+Reproduce with scripts/in-bundle lake build on Index.ResponseSource,
+TimerDiscipline.SendWorkerSource and Config.KeyReferences under Leanux.Proofs.WG,
+then #print axioms and scripts/in-bundle lake env leanchecker --fresh MODULE
+for each root. Use capped, 32 Lean threads and 16 QEMU slots on this host.
