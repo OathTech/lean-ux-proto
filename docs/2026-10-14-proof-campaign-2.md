@@ -11,26 +11,26 @@ merged; the executable mirror remains byte-identical to b700659.
 | Result | Headlines | Checked support | Split status |
 | --- | ---: | ---: | --- |
 | H1 Noise | 24 | 196 | Full terminal closure, whole-response entry edge and actual session derivation-clock receipt current; wider caller/lifetime claims open. |
-| H2 Index | 81 | 445 | Full terminal closure and ingress/expiry/handshake/peer-creation owner coherence and whole-removal lifecycle finding/slot-covered preservation current; reachable whole-driver uniqueness/coherence open. |
-| H3 Roaming | 16 | 179 | Full terminal closure and invalid-MAC1/rate-limit/admitted-response rejection preservation current; callback authentication provenance and broader caller coverage open. |
-| H4 Configuration | 84 | 604 | Full terminal closure and ordered mixed-peer, mixed port-refusal and private-key readback current; global ownership, queued cleanup and general pagination open. |
+| H2 Index | 83 | 455 | Full terminal closure and ingress/expiry/handshake/peer-creation owner coherence and whole-removal lifecycle finding/slot-covered arbitrary-AIP preservation and zero-key worker current; reachable whole-driver uniqueness/coherence open. |
+| H3 Roaming | 17 | 186 | Full terminal closure and invalid-MAC1/rate-limit/admitted-response/initiation rejection preservation current; callback authentication provenance and broader caller coverage open. |
+| H4 Configuration | 84 | 609 | Full terminal closure and ordered mixed-peer, mixed port-refusal/private-key readback and repeated-callback/DONE support current; global ownership, queued cleanup and general pagination open. |
 | H5 Progress | 43 | 293 | Full terminal closure, exact bounded outcomes and recorded batch completion-guard soundness current; global progress/coherent-ring adequacy open. |
 | H6 Timers | 52 | 445 | Full terminal closure, first outer timer turn and intermediate retransmit receipt current; whole scheduler episodes, complete caller coverage and session-relative counts open. |
 
-The checked surface is 2,162 theorems in all 682 campaign-owned modules.
+The checked surface is 2,184 theorems in all 694 campaign-owned modules.
 The completed retrofit accounts for 1,983: 1,321 retyped, 244 explicitly
-corrected, 239 retained and 179 added support/finding declarations. One hundred twelve
+corrected, 239 retained and 179 added support/finding declarations. One hundred twenty-two
 subsequent H2 declarations add table preservation and local owner coherence.
-Eleven H1 declarations add whole-response entry and actual derivation-clock provenance; twenty-two H4 declarations
-add mixed fwmark/scalar, ordered peer-attribute, port-refusal and private-key readback. Twenty-two H3 declarations
-add invalid-MAC1, rate-limit and admitted-response rejection preservation. Five H5 declarations
+Eleven H1 declarations add whole-response entry and actual derivation-clock provenance; twenty-seven H4 declarations
+add mixed fwmark/scalar, ordered peer-attribute, port-refusal/private-key readback and repeated-callback/DONE support. Twenty-nine H3 declarations
+add invalid-MAC1, rate-limit and admitted-response/initiation rejection preservation. Five H5 declarations
 establish recorded batch completion-guard soundness. Seven H6 declarations
 connect the first outer timer turn and its retransmit receipt. Of the 1,831 baseline theorems, 22 frames
 were deleted because types supply their facts and five false cookie supports
 were separately retired with checked counterexamples. No baseline declaration
 remains awaiting retrofit; all 258 original terminal names/order survive,
-with two new H1 headlines, twenty-nine new H2 headlines, three new H3 headlines,
-five new H4 headlines, one new H5 headline and two new H6 headlines (300 total).
+with two new H1 headlines, thirty-one new H2 headlines, four new H3 headlines,
+five new H4 headlines, one new H5 headline and two new H6 headlines (303 total).
 
 The [retrofit report](2026-10-16-proof-campaign-2-state-split.md) records
 claim/frame files, corrections, before/after counts and validation.
@@ -1096,6 +1096,120 @@ package also received independent source review with no findings. Reproduce
 the scoped builds and fresh replays on Config.Statements, Index.Statements and
 Roaming.Statements under capped, scripts/in-bundle, LEAN_NUM_THREADS=32 and
 LEANUX_QEMU_SLOTS=16. No new mirror-team request arises from these increments.
+
+## H2 continuation: arbitrary allowed-IP removal and zero-key work
+
+The whole peerRemove coherence contract now permits arbitrary allowed-IP lists
+and trie representations. The entry resident/positive peer, positive numPeers,
+empty send/clear work queues and LastOwnerCovered obligations remain. A pointwise
+peer observation hides only allowedipsList; index/keypair stores, embedded owner
+words, references, slots and cleanup queues remain visible. Actual listDel and
+removeByPeer preserve this observation even when lists contain duplicates or
+nodes have malformed shape. Missing nodes, invalid bit accesses and all later
+cleanup refusals remain actual Stops; no NodePairs, readiness or reference
+budget premise is introduced.
+
+OwnerCoherenceAipRemovalModel holds the two observations. Frames contains two
+pure transports and the named local listDel_spec/removeByPeer_spec variants;
+Source contains the peerMakeDead_spec variant. These are three bounded variants
+of C1 WGBase contracts, not a copied shared layer. Claims composes the actual
+whole removal and Statements adds a wrapper. Seven theorems remove the prior
+empty-allowed-IP restriction; broader root/free/remove-all overlap stays pending.
+
+The actual queuedExpiredZeroKeyMaterial worker also preserves coherence under
+resident/positive peer and LastOwnerCovered, with no numPeers, queue/list
+emptiness or readiness premise. Handshake zeroing retains coverage, the actual
+ClearRun derives detachment, and the final peerPut uses that derived fact.
+OwnerCoherenceZeroWorkerFrames holds one pure coverage transport; Claims and
+Statements contain the projected whole-worker claim and wrapper. These three
+theorems do not establish scheduler selection or global reachability. Dropping
+coverage still leaves the existing off-slot lifecycle obligation; no new
+worker-specific counterexample is claimed.
+
+AIP development probes 1–4 fail with 16, 7, 2 and 1 diagnostics respectively;
+probe 3 also has one corrected unused-simp warning. Probes 5–6 check the complete
+and narrowed packages without diagnostics. Both zero-worker probes pass without
+diagnostics at default limits. Independent AIP review and root zero-worker
+source review find no issue. No limit increase, suppression or infrastructure
+rerun occurs. H2 now has 455 theorems and 83 headlines.
+
+## H3 continuation: admitted initiation rejection preserves endpoints
+
+The whole initiation-kind receiver now has the corresponding rejection contract:
+same-entry Product receipts show actual MAC admission and no initiation-consumer
+cut, and every remote endpoint is preserved on normal whole-call return. The
+source observer executes the original receiver once after its two inspections;
+erasure retains every original error and normal result. Normal execution derives
+both successful prefix receipts. Admission excludes cookie-reply paths, and the
+no-cut suffix is pure.
+
+The supporting full optional Endpoint-map frame follows all of consumeInitiation,
+including decrypt, timestamp/replay/flood rejection and successful handshake
+writes. Public-key lookup supplies the retained reference used by rejection
+cleanup. No owner coherence, self-word, residency, alias, reference-budget,
+source-family or clock/decrypt readiness premise is added. Ambient logging and
+handshake metadata may change; endpoint preservation does not assert a complete
+peer-map frame.
+
+InitiationRejectionModel holds admission and observation predicates; Frames holds
+three native contracts and one private map helper. Source contains both inspection
+definitions and all-errors erasure; Claims and Statements contain the projected
+whole-call claim and wrapper. Existing owned response endpoint/cleanup support
+is reused; no pending cookie-reply/socket layer is copied. Seven theorems bring
+H3 to 186 theorems and 17 headlines.
+
+Probe 1 checks the consumer frames. Probe 2 fails two linked rename/map diagnostics;
+probes 3–4 check the whole claim, wrapper and six public axiom roots without
+warnings. The first installed split build fails because the model header opens
+an unavailable Noise namespace, causing three diagnostics; removing that
+unneeded open resolves the package error. No proof body, limit or premise
+changes. The corrected build passes. Independent review finds no correctness
+or domain issue.
+
+## H4 continuation: repeated callbacks and separate DONE transport
+
+Five support contracts connect a resumed allowed-IP dump that splits again,
+its actual fixed-size callback, final DATA without room for DONE, the subsequent
+DONE-only dump, and the receive that triggers it. Resumed capacity is the actual
+44-byte overhead plus 28 bytes per IPv4 item; DONE consumes its actual 20 bytes.
+The failing next item must be readable because the source reads it before the
+serialization refusal. The cursor is set to the next un-emitted node; repeated
+IDs may revisit the same first occurrence, so no progress theorem is claimed.
+
+Completion spill retains DATA and the callback-running flag. DONE-only retains
+the actual nonpositive errno, accepts any optional Device with a NULL peer
+cursor, and runs no WireGuard callback. The receive contract derives its actual
+pop and queued DONE. PaginationCallbackSource and PaginationDoneSource contain
+all five facts; there is no new model, frame file or headline. General bounded
+pagination still requires a capacity partition, cursor freshness, callback/
+receive induction and JSON coalescing. H4 now has 609 theorems and 84 headlines.
+
+Probe 1 fails three parser/elaboration diagnostics. Probe 2 exits zero with one
+unused-simp warning and is not accepted. Probe 3 fails one exposed Except.map
+normalization goal. Probes 4–7 check the whole and split packages without
+diagnostics and print standard axioms for all five facts. Independent review
+finds no correctness issue and catches the overstrong cursor-progress docstring;
+the installed text now describes the exact cursor assignment. No limit increase,
+unchanged retry or infrastructure failure occurs.
+
+## Validation of removal, initiation rejection and pagination support
+
+The initial AIP/pagination build passes 369 jobs. After the corrected initiation
+module header, the combined build passes 418 jobs; zero-worker installation
+passes 347 jobs. The only build warning is inherited Env:865 String.mk.
+The combined axiom audit covers 1,640 logical roots in 356 proof modules,
+including 1,064 public theorems, with standard axioms only. All four fresh kernel
+replays pass without diagnostics after dependency artifact writers stop.
+Static checks and all 258 original terminal names/order pass. Mirror and
+existing shared-layer boundaries are unchanged.
+
+This checkpoint adds 22 theorems and 12 modules to 9dcb9646: 2,184 theorems,
+694 owned modules and 303 headlines. No whole H1–H6 result is declared complete;
+the inherited full-gate failure remains failed and is not rerun unchanged.
+Reproduce builds and fresh replays on Index.Statements, Roaming.Statements,
+Config.PaginationCallbackSource and Config.PaginationDoneSource under
+Leanux.Proofs.WG, using capped, scripts/in-bundle, 32 threads and 16 QEMU slots.
+No new mirror-team request arises.
 
 ## H3 continuation: rate-limit refusal preserves peers and endpoints
 

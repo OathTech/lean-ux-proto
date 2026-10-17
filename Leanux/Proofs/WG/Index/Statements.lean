@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.Index.OwnerCoherenceZeroWorkerClaims
+import Leanux.Proofs.WG.Index.OwnerCoherenceAipRemovalClaims
 import Leanux.Proofs.WG.Index.OwnerCoherenceSlotRemovalClaims
 import Leanux.Proofs.WG.Index.OwnerCoherenceQuietRemovalClaims
 import Leanux.Proofs.WG.Index.OwnerCoherenceRemovalFindings
@@ -949,5 +951,28 @@ theorem original_peer_remove_slot_owner_coherence (pid : PeerId) (d : Device) (p
       (fun s => s.wg.device = some d ∧ View.OwnerCoherentSafe s)
       (fun _ s => View.OwnerCoherentSafe s) :=
   peerRemove_slot_owner_coherent pid d p resident live count noList send clear covered
+
+/-- Whole peer removal admits arbitrary allowed-IP lists while retaining the
+entry last-reference slot-coverage obligation and empty handshake work queues.
+The claim is normal-return preservation, not a readiness or reachability claim. -/
+theorem original_peer_remove_covered_owner_coherence (pid : PeerId) (d : Device) (p : Peer)
+    (resident : d.peers[pid]? = some p) (live : 0 < p.refcount)
+    (count : 0 < d.numPeers) (send : d.sendWorkQueue = []) (clear : d.clearWorkQueue = [])
+    (covered : LastOwnerCovered d pid p) :
+    Campaign2.Ensures (peerRemove (some pid))
+      (fun s => s.wg.device = some d ∧ View.OwnerCoherentSafe s)
+      (fun _ s => View.OwnerCoherentSafe s) :=
+  peerRemove_covered_owner_coherent pid d p resident live count send clear covered
+
+/-- Normal completion of the original zero-key worker preserves owner coherence
+under explicit entry slot coverage at a last reference. The work item's
+scheduling, reference readiness and reachability are not asserted. -/
+theorem original_queued_zero_owner_coherence (pid : PeerId) (d : Device) (p : Peer)
+    (resident : d.peers[pid]? = some p) (live : 0 < p.refcount)
+    (covered : LastOwnerCovered d pid p) :
+    Campaign2.Ensures (queuedExpiredZeroKeyMaterial pid)
+      (fun s => s.wg.device = some d ∧ View.OwnerCoherentSafe s)
+      (fun _ s => View.OwnerCoherentSafe s) :=
+  queuedExpiredZeroKeyMaterial_owner_coherent pid d p resident live covered
 
 end Leanux.Proofs.WG.Index

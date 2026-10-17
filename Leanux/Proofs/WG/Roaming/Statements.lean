@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Roaming.InitiationRejectionClaims
 import Leanux.Proofs.WG.Roaming.ResponseRejectionClaims
 import Leanux.Proofs.WG.Roaming.RateLimitClaims
 import Leanux.Proofs.WG.Roaming.InvalidMac1Claims
@@ -273,5 +274,16 @@ theorem original_response_rejection_preserves_endpoints (msg : List UInt8) (src 
     Campaign2.Product.Ensures (observedResponseRejection msg src) (fun s => s = entry)
       (fun receipt final => ResponseRejectionObservation entry receipt final) :=
   receiveHandshakePacket_response_rejection msg src entry kind
+
+/-- A normal initiation-kind receiver preserves every remote endpoint when its
+same-entry receipts show MAC admission and no initiation-consumer result. The
+original receiver, including every error, is retained by observation erasure;
+cookie-reply drops are not classified as admitted consumer rejections. -/
+theorem original_initiation_rejection_preserves_endpoints (msg : List UInt8) (src : SkbSource)
+    (entry : Campaign2.Product.Snapshot)
+    (kind : messageType msg = MESSAGE_HANDSHAKE_INITIATION) :
+    Campaign2.Product.Ensures (observedInitiationRejection msg src) (fun s => s = entry)
+      (fun receipt final => InitiationRejectionObservation entry receipt final) :=
+  receiveHandshakePacket_initiation_rejection msg src entry kind
 
 end Leanux.Proofs.WG.Roaming
