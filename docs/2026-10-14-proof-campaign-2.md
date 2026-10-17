@@ -9,20 +9,21 @@ The branch retains its proof target and gate. All six terminal closures now chec
 | Result | Headlines | Checked support | Split status |
 | --- | ---: | ---: | --- |
 | H1 Noise | 22 | 185 | Full terminal closure current; wider caller/lifetime/clock claims open. |
-| H2 Index | 59 | 356 | Full terminal closure current; reachable whole-driver uniqueness/coherence open. |
+| H2 Index | 62 | 364 | Full terminal closure current; reachable whole-driver uniqueness/coherence open. |
 | H3 Roaming | 13 | 157 | Full terminal closure current; callback authentication provenance and broader caller coverage open. |
 | H4 Configuration | 79 | 582 | Full terminal closure current; global ownership, queued cleanup and general pagination open. |
 | H5 Progress | 42 | 288 | Full terminal closure current with exact bounded outcomes and checked refutations; global progress/coherent-ring adequacy open. |
 | H6 Timers | 50 | 438 | Full terminal closure current; outer scheduler episodes, complete caller coverage and session-relative counts open. |
 
-The checked surface is 2,006 theorems in all 596 campaign-owned modules.
+The checked surface is 2,014 theorems in all 600 campaign-owned modules.
 The completed retrofit accounts for 1,983: 1,321 retyped, 244 explicitly
-corrected, 239 retained and 179 added support/finding declarations. Twenty-three
-subsequent H2 declarations add confirmation propagation and local owner coherence. Of the 1,831 baseline theorems, 22 frames
+corrected, 239 retained and 179 added support/finding declarations. Thirty-one
+subsequent H2 declarations add confirmation propagation, local owner coherence,
+data-ingress table preservation and the release-ownership obstruction. Of the 1,831 baseline theorems, 22 frames
 were deleted because types supply their facts and five false cookie supports
 were separately retired with checked counterexamples. No baseline declaration
 remains awaiting retrofit; all 258 original terminal names/order survive,
-with seven new H2 headlines (265 total).
+with ten new H2 headlines (268 total).
 
 The [retrofit report](2026-10-16-proof-campaign-2-state-split.md) records
 claim/frame files, corrections, before/after counts and validation.
@@ -136,6 +137,100 @@ full-gate failure remains recorded and is not rerun unchanged.
 Reproduce with scripts/in-bundle lake build Leanux.Proofs.WG.Index.Statements
 and scripts/in-bundle lake env leanchecker --fresh on that module, under
 capped with 32 Lean threads and 16 QEMU slots.
+
+## H2 continuation: data-ingress table preservation
+
+The actual consumeData now preserves numeric-index uniqueness, embedded-owner
+uniqueness and the hashed-keypair allocation bound on every normal return.
+The only entry premise is TablesSafe; optional device, arbitrary Ambient inputs,
+aliases, malformed objects and queue states retain their actual stopped outcomes.
+Lookup, NULL/keypair acquisition, dead-peer cleanup, skb allocation, device/peer
+enqueue, EPIPE publication and unsuccessful-enqueue cleanup all remain in the
+source order. The short-circuit enqueue condition is the actual WG.orM.
+
+Architecture: Index/RxQueueFrames contains two receive-queue preservation
+contracts, named as local variants of WGMore.enqueuePerDeviceAndPeerRx_spec
+and enqueuePerPeerRx_pure_spec. They reuse the guarded skb-store adapter and
+existing reference/release contracts. Index/ReceiveDataClaims contains the projected source claim, composed
+through proof-local factors whose equality to consumeData is reflexive.
+Index/Statements appends one literal headline. The publication frame covers
+the actual empty WG callback in consumeData, not arbitrary interrupt callbacks.
+Full packetReceive/wgReceive, decrypt/poll workers and environment closure remain
+open. This does not establish owner coherence or reachability.
+
+The split removes the need for separate skb allocation/update/free frames:
+their SkbM types and the existing guarded adapter supply table preservation.
+This tranche uses two substantive queue families from the old ingress inventory,
+not the broader worker layer. No shared lemma or mirror operation is edited.
+No existing claim is reshaped; four new theorems bring H2 to 60 headlines and
+360 theorems, and campaign totals to 266 headlines and 2,010 theorems in 598
+owned modules. No mirror change is requested.
+
+Development: probes 1–3 fail five, 101 and two diagnostics respectively
+(composition, malformed pair-case tactic, then matcher branches). Probe 4
+reaches the default heartbeat limit. Probe 5 has ambiguous orM/factor errors,
+two default-limit failures and one warning; probe 6 has two default-limit
+failures. Probe 7 has two unspecified-intermediate-predicate errors and two
+unused-simp warnings. Changed probe 8 passes cleanly after explicit local source
+factoring. An earlier package-generation search fails before Lean because the
+reused skb helper had been promoted from private. No limit/cap increase, warning
+suppression, infrastructure retry or unchanged failed-source rerun occurs.
+
+Final scoped Index.Statements build passes 267 jobs; only inherited Env:865
+String.mk warns. Axiom audit checks 1,024 logical roots in 203 modules, including
+670 public theorem roots, standard only. Its first fresh replay passes; after
+renaming the two frames as shared-lemma variants, the 267-job rebuild also
+passes. Final combined replay is reported below. Static
+checks, original 258-name order and mirror/shared boundaries pass. Independent
+review finds no correctness/domain issue and confirms the callback restriction.
+The inherited full-gate failure remains recorded, without an unchanged rerun.
+Reproduce with scripts/in-bundle lake build Leanux.Proofs.WG.Index.Statements
+and scripts/in-bundle lake env leanchecker --fresh on that module, under capped
+with 32 Lean threads and 16 QEMU slots.
+
+## H2 continuation: coherence needs release ownership
+
+The proposed unrestricted preservation of OwnerCoherentSafe by peerPut is
+false. A checked native witness starts with peer 0 and keypair 0 each at
+reference count 1, keypair.peer = some 0, one hashed keypair row at index 7,
+and empty queues/timers. Every actual WG/Ambient realization of that device
+returns normally from peerPut (some 0): it removes the handshake owner if
+present, erases peer 0 and retains the keypair row/object. The initial device
+is coherent under the local predicate; the final device is not.
+
+[AGENT 2026-10-17] Classify this as a statement-domain artefact: the predicate
+omits reference ownership and release/unhash ordering. The witness does not
+establish reachability, an accepted runner trace or a mirror/kernel defect.
+No existing theorem is weakened or retired, and no mirror repair is requested.
+
+A second checked theorem characterizes the missing obligation exactly for
+the pure last-release device effect. Under initial hashed-owner coherence
+and p.refcount = 1, final coherence holds iff every retained hashed owner
+does not name the released peer. Other handshake owners already satisfy this
+under coherence; retained keypair owners supply the substantive obligation.
+This pure equivalence needs no resident-peer premise. Applying it to the
+actual release still requires the resident peer and actual normal outcome;
+the theorem supplies neither readiness nor reachability.
+
+Architecture: Index/OwnerCoherenceReleaseFindings holds the native witness;
+OwnerCoherenceReleaseFrames holds the pure preservation equivalence.
+Statements appends two literal documented headlines. Four new theorems bring
+H2 to 62 headlines/364 theorems and the campaign to 268 headlines/2,014 theorems
+in 600 owned modules. The completed retrofit counts remain unchanged.
+
+Finding probe 1 fails three record-layout syntax diagnostics; changed probe 2
+passes. The equivalence's probe 3 fails four lookup/case goals and four
+unused-simp warnings; changed probe 4 passes cleanly. No limit/cap increase,
+warning suppression or infrastructure rerun occurs. Independent review finds
+no correctness/domain issue and confirms the pure/operational distinction.
+
+The final combined Index.Statements build passes 269 jobs; only inherited
+Env:865 String.mk warns. Axiom audit checks 1,028 logical roots in 205 modules,
+including 674 public theorem roots, standard only. Fresh kernel replay passes.
+Static checks, original-name order and mirror/shared boundaries pass.
+The inherited full-gate failure remains recorded and is not rerun unchanged.
+Reproduce using the same scoped Index.Statements build and fresh replay
+commands above, under capped with 32 Lean threads and 16 QEMU slots.
 
 ## Historical checkpoint before the split
 

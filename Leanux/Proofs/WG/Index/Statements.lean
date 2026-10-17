@@ -1,3 +1,6 @@
+import Leanux.Proofs.WG.Index.OwnerCoherenceReleaseFindings
+import Leanux.Proofs.WG.Index.OwnerCoherenceReleaseFrames
+import Leanux.Proofs.WG.Index.ReceiveDataClaims
 import Leanux.Proofs.WG.Index.OwnerCoherenceAllocationClaims
 import Leanux.Proofs.WG.Index.OwnerCoherenceTableSource
 import Leanux.Proofs.WG.Index.OwnerCoherenceClaims
@@ -722,5 +725,35 @@ theorem original_index_replace_owner_coherence (pid : PeerId) (kp : KeypairId) (
         hashed = d.indexTable.any (·.owner == .handshake pid) ∧
         s.wg.device = some updated ∧ HashedOwnersCoherent updated) :=
   indexReplace_owner_coherence pid kp d coherent published
+
+/-- Every normal return of the original data receive path preserves numeric
+index and owner uniqueness and the hashed-keypair allocation bound, including
+failed acquisition, dead peers, queue-full returns and immediate cleanup.
+No queue consistency, ownership coherence or readiness premise is assumed.
+This covers consumeData, not its caller or the later decrypt/poll workers. -/
+theorem original_consume_data_tables (msg : List UInt8) (src : SkbSource) (ds : Nat) :
+    Campaign2.Ensures (consumeData msg src ds) View.TablesSafe (fun _ => View.TablesSafe) :=
+  consumeData_tables msg src ds
+
+/-- Local hashed-owner coherence alone does not survive final peer release:
+a coherent hashed keypair may still name the released peer. This witness runs
+the original peerPut normally for arbitrary Ambient and other WG fields;
+it makes no assertion about reachable states or a driver defect. -/
+theorem original_peer_put_owner_coherence_counterexample :
+    ∃ d : Device, HashedOwnersCoherent d ∧
+      Campaign2.Observes (peerPut (some 0)) (fun s => s.wg.device = some d)
+        (fun _ out => ∃ final, out = .ok ((), final) ∧ ¬ View.OwnerCoherentSafe final) :=
+  peerPut_ownerCoherentSafe_counterexample
+
+/-- For the exact last-release device transform, entry coherence survives
+exactly when every retained hashed owner does not name the released peer.
+This characterizes the missing ownership obligation; it does not establish
+the original operation's release readiness or reachable-state invariant. -/
+theorem last_peer_release_owner_coherence_iff (d : Device) (pid : PeerId) (p : Peer)
+    (last : p.refcount = 1) (coherent : HashedOwnersCoherent d) :
+    HashedOwnersCoherent (releasedPeerDevice d pid p) ↔
+      ∀ e ∈ d.indexTable, e.owner ≠ .handshake pid →
+        ownerWord d e.owner ≠ some (some pid) :=
+  lastPeerRelease_coherent_iff d pid p last coherent
 
 end Leanux.Proofs.WG.Index

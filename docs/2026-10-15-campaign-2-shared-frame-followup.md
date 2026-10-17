@@ -10,6 +10,29 @@ the shared lemmas they replace. If an increment needs more than a few, report
 the overlap before copying a layer. The original six-family decision remains
 pending and does not authorize these additional families.
 
+## State-split update, 2026-10-17
+
+The inventory below records the pre-split overlap. With b700659, the skb store
+is a separate component: the existing guarded liftSkb adapter now supplies
+table/cursor preservation for allocation, updates and frees. The checked H2
+consumeData continuation needs two substantive queue families, implemented
+locally in Index/RxQueueFrames, with claims in ReceiveDataClaims. Its callback
+is the actual empty WG callback. This bounded package does not copy the old
+nine-family layer. The broader ingress/worker and H1 inventories remain open;
+see the campaign report for checked scope and validation. No mirror request
+or authorization to duplicate the wider shared layers is inferred.
+
+The next packetReceive/wgReceive composition still needs four leaf families:
+validateHeaderLen, prepareSkbHeader, ipTunnelGetDsfield and cpumaskNextOnline.
+Campaign 1 now has native full-WG header frames in Framing/WGReceiveHeaders;
+the CPU helper still requires a table/cursor-specific frame. These operations
+remain WG.M, so their preservation is not supplied by type alone. The callers
+have no callback parameter, and handshake receipt only enqueues its worker.
+The four-family addition remains pending under the existing overlap request;
+it is not implemented as a way to divide the larger shared support layer.
+Decrypt/NAPI and environment closure are broader again. The independent
+inventory does not expose a mirror change or relax the scope boundary.
+
 ## H1: genuine reinstallation between confirmations
 
 The proposed result concerns a finite sequence of original `consumeInitiation`,
