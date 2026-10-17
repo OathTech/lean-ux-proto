@@ -2252,3 +2252,84 @@ Reproduce with `scripts/in-bundle lake build` on those modules under
 `Leanux.Proofs.WG`, inspect logical declarations with `#print axioms`,
 and replay with `scripts/in-bundle lake env leanchecker --fresh MODULE`.
 On this host use `capped`, 32 Lean threads and 16 QEMU slots.
+
+## Initiation mode, zero ports and timer queue frames
+
+| Tranche | Before | Retyped | Deleted | Kept | Added | After |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `Noise.InitiationReadyFrames`, `InitiationReadyClaims` | 4 | 4 | 0 | 0 | 3 | 7 |
+| `Config.ZeroPortDrawFrames`, `ZeroPort` | 5 | 5 | 0 | 0 | 0 | 5 |
+| `TimerDiscipline.TimerQueueFrames` | 2 | 2 | 0 | 0 | 0 | 2 |
+| `Config.AllowedRemovalConverseLeaves` | 7 | 7 | 0 | 0 | 1 | 8 |
+| This tranche | 18 | 18 | 0 | 0 | 4 | 22 |
+| Cumulative processed baseline and checked support | 759 | 553 | 21 | 185 | 44 | 782 |
+
+The census is 485 campaign-owned files, 1,854 theorems and 262 checked proof
+modules. Of the baseline, 1,072 theorems await whole-module validation.
+Checked support is H1 154, H2 187, H3 72, H4 267, H5 70 and H6 32.
+All six terminal closures and the full gate remain lagging; all 258 terminal
+names and their order remain intact.
+
+The three initiation mode frames retain arbitrary index tables and Ambient
+states. The actual guarded index lift, all hidden-input modes, placeholder
+and passive records, and normal returns from rejected paths remain covered.
+These frames are substantive because their action types still permit Ambient
+updates. Three small private execution supports accompany them; no shared
+layer is copied. The projected total creation claim retains its exact
+message, ordered Device writes, hidden suffix and all original static/draw
+premises. Mode now projects from Ambient. The existing
+`original_create_initiation_ready` declaration remains in Statements, with
+only its two mode projections changed. Its isolated body and axiom check pass;
+it is excluded from the checked-module census until the whole terminal module
+can be validated.
+
+The zero-port draw/range frame moves to `ZeroPortDrawFrames`, with the
+original arbitrary former-Kernel predicate preserved across all actual
+subsystem owners. Four native port contracts remain in `ZeroPort`.
+They retain the current/initial Device relation, socket/port updates, captured
+peer list and initial-peer effects. Colliding draws and bad records still
+stop; no new success or record assumption is introduced.
+
+The two queue frames move intact in scope to `TimerQueueFrames`.
+Residency is derived from successful guard execution, rather than assumed.
+All timer modes and caller options are covered using the three current arm
+effects; recorded execution without a caller still stops. Give-up follows
+the actual expiry/wheel deletion, staged-packet accounting, pending check and
+guarded zero-key arm. Its helper moves from `RetryBaseSource` into
+`RetryGiveUpSource` with the same body and native type. Remaining retry
+contracts are unchanged, including those pending on the stale queue prediction.
+
+Seven removal-converse leaves moved from their aggregate. Six operational
+contracts retain arbitrary slots, node IDs and partial-success domains
+through the actual guarded AIP adapter. Only slotSet retains its original
+NodePairs premise; child bounds and node residence follow from execution.
+The original returns-to-ensures law generalizes over arbitrary product
+StateT state; a separate native companion quantifies every Ambient
+realization. Fifteen original aggregate declarations remain unchanged and
+pending.
+
+Scoped builds pass: zero ports/initiation 84 jobs and queue/removal leaves 78.
+Axiom inspection covers 435 logical roots in 83 proof modules using only
+the three standard axioms, including every dependency of the private mode
+supports. The isolated initiation headline uses only those axioms as well.
+Independent reviews, static checks, whitespace and mirror/shared boundaries
+pass. No campaign warning remains.
+
+Development: mode-frame probes seven through eleven had four reduction/
+tactic failures then a clean prefix; twelve through seventeen had five
+source-composition, binder or simplification failures, including one unchanged
+heartbeat limit, then a warning-free combined proof. Zero ports passed the
+second changed probe after binder/generated-block fixes. The guarded timer
+queue and give-up extension each passed their first probes. Packaging the
+helper initially left an orphaned documentation comment and failed; relocating
+the comment fixed the build. Removal leaves passed the second probe after
+using the equalities already established by case inversion. All failures
+remain recorded as failures. Full outputs preceded previews; no infrastructure
+retry, cap/proof-limit increase or guest run occurred.
+
+Fresh replay passes for ZeroPort, InitiationReadyClaims, TimerQueueFrames and
+AllowedRemovalConverseLeaves. Reproduce with `scripts/in-bundle lake build`
+on those modules under `Leanux.Proofs.WG`, inspect logical declarations
+with `#print axioms`, and use
+`scripts/in-bundle lake env leanchecker --fresh MODULE`. On this host use
+`capped`, 32 Lean threads and 16 QEMU slots.

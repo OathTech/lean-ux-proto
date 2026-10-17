@@ -21,15 +21,14 @@ theorem createInitiation_projected (pid : PeerId) (d : Device) (p : Peer) (mode 
     (isFresh : (Index.removeOwner (.handshake pid) d.indexTable).any (·.index == fresh.value) = false) :
     Campaign2.Returns (createInitiation pid)
       (fun s => s.wg.device = some d ∧ s.ambient.hidden = some ({site := 1, bytes := ephemeral} ::
-        {site := 3, bytes := clock} :: Index.drawStream collisions fresh rest) ∧ s.wg.armRecords = mode)
+        {site := 3, bytes := clock} :: Index.drawStream collisions fresh rest) ∧ s.ambient.armRecords = mode)
       (fun out s => out = some (result pid d p ephemeral clock fresh.value).1 ∧
-        s.wg.device = some (result pid d p ephemeral clock fresh.value).2 ∧ s.ambient.hidden = some rest ∧ s.wg.armRecords = mode) := by
-  intro w pre
-  obtain ⟨out, final, run, message, device, records⟩ :=
+        s.wg.device = some (result pid d p ephemeral clock fresh.value).2 ∧ s.ambient.hidden = some rest ∧ s.ambient.armRecords = mode) := by
+  intro g ambient pre
+  obtain ⟨pair, after, run, message, device, records⟩ :=
     createInitiation_total pid d p resident identity word nonnull ephemeral clock randomWidth width
-      secretNonNull pubOk dhOk collisions fresh rest allCollide isFresh w ⟨pre.1, pre.2.1⟩
-  have preserved := (Noise.ensures_iff _ _ _).mpr (createInitiation_mode mode pid)
-    w out final pre.2.2 run
-  exact ⟨out, final, run, message, device, records, preserved⟩
+      secretNonNull pubOk dhOk collisions fresh rest allCollide isFresh g ambient ⟨pre.1, pre.2.1⟩
+  have preserved := createInitiation_mode mode pid g ambient pair after pre.2.2 run
+  exact ⟨pair.1, pair.2, after, run, message, device, records, preserved⟩
 
 end Leanux.Proofs.WG.Noise.InitiationReady

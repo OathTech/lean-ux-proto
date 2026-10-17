@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.TimerDiscipline.RetryGiveUpSource
 import Leanux.Proofs.WG.TimerDiscipline.Model
 import Leanux.Proofs.WG.TimerDiscipline.View
 import Leanux.Proofs.WG.TimerDiscipline.ArmingSource
@@ -61,10 +62,5 @@ theorem sendQueuedRetry_exact (pid : PeerId) (d : Device) (p : Peer)
 def retryAt (w : World) (pid : PeerId) : Option RetryView :=
   (peerAt w pid).map retryView
 
-def retransmitGiveUp (pid : PeerId) : M Unit := do
-  delTimer pid .sendKeepalive
-  purgeStagedPackets pid
-  if ← branch .retransmitZeroKeyNotPending !((← getPeer pid).timerPending .zeroKeyMaterial) then
-    discard <| modPeerTimer .timerJiffiesRetransmitZeroKey pid .zeroKeyMaterial ZERO_KEY_MATERIAL_TICKS
 
 end Leanux.Proofs.WG.TimerDiscipline

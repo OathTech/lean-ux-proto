@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Config.AllowedRemovalConverseLeaves
 import Leanux.Proofs.WG.Config.AllowedPairsEffects
 import Leanux.Proofs.WG.Config.PeerDead
 
@@ -6,100 +7,6 @@ set_option pp.structureInstances false
 set_option maxHeartbeats 1000000
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise Std.Do
-
-theorem slotSet_effect_pairs (d : Device) (slot : Slot) (value : Option NodeId)
-    (pairs : NodePairs d) :
-    Ensures (slotSet slot value) (fun w => w.k.wg = some d)
-      (fun _ w => ∃ final, w.k.wg = some final ∧ SlotWrite d slot value final) := by
-  rw [ensures_iff]
-  cases slot with
-  | root4 =>
-    mvcgen [slotSet, modifyDev, modifyK]
-    all_goals try dsimp +zetaDelta only at *
-    all_goals repeat intro
-    all_goals simp_all
-    all_goals exact .root4 _ value
-  | root6 =>
-    mvcgen [slotSet, modifyDev, modifyK]
-    all_goals try dsimp +zetaDelta only at *
-    all_goals repeat intro
-    all_goals simp_all
-    all_goals exact .root6 _ value
-  | child parent bit =>
-    mvcgen [slotSet, getNode, getDev, getK, setNode, modifyDev, modifyK, invariant]
-    all_goals try dsimp +zetaDelta only at *
-    all_goals repeat intro
-    all_goals simp_all [writeNode]
-    all_goals exact .child _ parent bit _ value (by assumption) (by omega) (pairs _ _ (by assumption))
-
-theorem reparentSibling_effect (d : Device) (sibling : Option NodeId) (slot : Slot) :
-    Ensures (reparentSibling sibling slot) (fun w => w.k.wg = some d)
-      (fun _ w => ∃ final, w.k.wg = some final ∧ ChildReparent d sibling slot final) := by
-  rw [ensures_iff]
-  cases sibling with
-  | none =>
-    mvcgen [reparentSibling, branch]
-    all_goals exact ⟨d, by assumption, .none d slot⟩
-  | some id =>
-    mvcgen [reparentSibling, reparentNode, branch, getNode, getDev, getK, setNode,
-      modifyDev, modifyK, invariant]
-    all_goals try dsimp +zetaDelta only at *
-    all_goals repeat intro
-    all_goals simp_all [writeNode]
-    all_goals exact .some _ id _ slot (by assumption)
-
-theorem freeNode_effect (d : Device) (id : NodeId) :
-    Ensures (freeNode id) (fun w => w.k.wg = some d)
-      (fun _ w => (∃ n, d.nodes[id]? = some n) ∧
-        w.k.wg = some { d with nodes := d.nodes.erase id }) := by
-  rw [ensures_iff]
-  mvcgen [freeNode, getNode, getDev, getK, modifyDev, modifyK, invariant]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals repeat intro
-  all_goals simp_all
-
-theorem leafParentDecision_effect (d : Device) (slot : Slot) :
-    Ensures (leafParentDecision slot) (fun w => w.k.wg = some d)
-      (fun choice w => w.k.wg = some d ∧ ParentChoice d slot choice) := by
-  rw [ensures_iff]
-  cases slot with
-  | root4 => mvcgen [leafParentDecision, branch]; exact ⟨by assumption, .root4 d⟩
-  | root6 => mvcgen [leafParentDecision, branch]; exact ⟨by assumption, .root6 d⟩
-  | child parent bit =>
-    mvcgen [leafParentDecision, branch, getNode, getDev, getK, invariant]
-    all_goals try dsimp +zetaDelta only at *
-    all_goals repeat intro
-    all_goals simp_all
-    all_goals exact .child _ parent bit _ (by assumption)
-
-theorem removal_returns_ensures {α : Type} {a : M α} {P : World → Prop}
-    {Q : α → World → Prop} (returns : Returns a P Q) : Ensures a P Q := by
-  intro w result final pre run
-  obtain ⟨r, v, actual, post⟩ := returns w pre
-  rw [run] at actual
-  cases actual
-  exact post
-
-theorem reparentNode_effect (d : Device) (id : NodeId) (slot : Slot) :
-    Ensures (reparentNode id slot) (fun w => w.k.wg = some d)
-      (fun _ w => ∃ n, d.nodes[id]? = some n ∧
-        w.k.wg = some (writeNode d id { n with parent := slot })) := by
-  rw [ensures_iff]
-  mvcgen [reparentNode, getNode, getDev, getK, setNode, modifyDev, modifyK, invariant]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals repeat intro
-  all_goals simp_all [writeNode]
-  all_goals grind
-
-theorem unaryAfterLink_effect (side : Bool) (d : Device) (id : NodeId) :
-    Ensures (unaryAfterLink side id) (fun w => w.k.wg = some d)
-      (fun result w => result = .yield () ∧ (∃ n, d.nodes[id]? = some n) ∧
-        w.k.wg = some { d with nodes := d.nodes.erase id }) := by
-  have hf := (ensures_iff _ _ _).mp (freeNode_effect d id)
-  rw [ensures_iff]
-  mvcgen [unaryAfterLink, branch, hf]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all
 
 theorem removeNodeSource_unary_effect (d : Device) (id : NodeId) (n : AipNode)
     (child : NodeId) (side : Bool) (pairs : NodePairs d)

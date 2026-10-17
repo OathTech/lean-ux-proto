@@ -297,9 +297,9 @@ theorem original_create_initiation_ready (pid : PeerId) (d : Device) (p : Peer) 
     (isFresh : (Index.removeOwner (.handshake pid) d.indexTable).any (·.index == fresh.value) = false) :
     Campaign2.Returns (createInitiation pid)
       (fun s => s.wg.device = some d ∧ s.ambient.hidden = some ({site := 1, bytes := ephemeral} ::
-        {site := 3, bytes := clock} :: Index.drawStream collisions fresh rest) ∧ s.wg.armRecords = mode)
+        {site := 3, bytes := clock} :: Index.drawStream collisions fresh rest) ∧ s.ambient.armRecords = mode)
       (fun out s => out = some (InitiationReady.result pid d p ephemeral clock fresh.value).1 ∧
-        s.wg.device = some (InitiationReady.result pid d p ephemeral clock fresh.value).2 ∧ s.ambient.hidden = some rest ∧ s.wg.armRecords = mode) :=
+        s.wg.device = some (InitiationReady.result pid d p ephemeral clock fresh.value).2 ∧ s.ambient.hidden = some rest ∧ s.ambient.armRecords = mode) :=
   InitiationReady.createInitiation_projected pid d p mode resident identity word nonnull
     ephemeral clock randomWidth width secretNonNull pubOk dhOk collisions fresh rest allCollide isFresh
 
