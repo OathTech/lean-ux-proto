@@ -21,9 +21,9 @@ and attributed theorem declarations. Campaign 2 owns 427 Lean files,
 | Common projection | 2 | 0 | 0 | 0 | Actual native WG/Ambient and full Product observations carried; no reconstructed execution states. |
 | H1 Noise | 35 | 171 | 22 | 180 | All original Noise obligations carried, including the full terminal closure; six type-given frames deleted. Wider caller/lifetime/reachability and clock-provenance charter claims remain open. |
 | H2 Index | 68 | 318 | 52 | 212 | Table, lookup, collision records, allocation, owner invariants and lifecycle support carried; seven type-given frames deleted. Exact peer-release outcomes replace stale totality, with checked counterexamples. Terminal closure and whole-driver coherence remain pending. |
-| H3 Roaming | 35 | 119 | 13 | 119 | Endpoint/publication, polling, attempt facts, crypto, lookup and response-caller factors/facts carried with full Product certificates; two type-given frames deleted. Initiation transcript facts and broader authentication/caller closure remain pending. |
-| H4 Configuration | 130 | 554 | 79 | 360 | Scalar, identity, port, dump, allowed-IP and structural support carried; three type-given frames deleted. Quiet timer cleanup and queued-send observations are corrected; queued-send and removal totality have checked stale-statement counterexamples. Remaining readback/effects and terminal closure remain pending. |
-| H5 Progress | 59 | 265 | 42 | 154 | Pure/control, cut, jitter, index, poll bounds, dispatch, scheduler turns, stack/probe frames, queue flush contracts, drain selection and Product observation bridge carried; one type-given index frame deleted. The old backlog fixture now has a checked exact runner rejection. Receive-ring activation models, general runner boundaries, remaining drain/flush claims and terminal closure remain pending. |
+| H3 Roaming | 35 | 119 | 13 | 129 | Endpoint/publication, polling, attempt facts, crypto, lookup and response-caller factors/facts carried with full Product certificates; two type-given frames deleted. Initiation transcript facts are carried with full Product certificates; broader authentication/caller closure remains pending. |
+| H4 Configuration | 130 | 554 | 79 | 363 | Scalar, identity, port, dump, allowed-IP and structural support carried; three type-given frames deleted. Quiet timer cleanup and queued-send observations are corrected; queued-send and removal totality have checked stale-statement counterexamples. Remaining readback/effects and terminal closure remain pending. |
+| H5 Progress | 59 | 265 | 42 | 166 | Pure/control, cut, jitter, index, poll bounds, dispatch, scheduler turns, stack/probe frames, queue flush contracts, drain selection and Product observation bridge carried; one type-given index frame deleted. The old backlog fixture now has a checked exact runner rejection. Receive-ring activation models, general runner boundaries, remaining drain bounds and terminal closure remain pending. |
 | H6 Timer discipline | 98 | 404 | 50 | 147 | Base/guard/jitter, arming/wheel, recorded clock and initiation-send arming contracts carried; three type-given frames deleted. Exact wheel corrections are explicit; queue/pending and retained-worker frames are carried; broader timer episodes and terminal closure remain pending. |
 
 Retyped, deleted and retained counts will be reported per validated tranche.
@@ -3617,3 +3617,81 @@ Progress.FlushQueueClaims, Progress.DrainSelectionSource and Config.StagedLeaves
 under Leanux.Proofs.WG, then #print axioms and scripts/in-bundle lake env
 leanchecker --fresh MODULE for each root. Use capped, 32 Lean threads and
 16 QEMU slots on this host.
+
+
+## Complete initiation facts, full drain audit and invalid-key caller
+
+| Tranche | Before | Retyped | Corrected | Deleted | Kept | Added | After |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Roaming.InitiationConsumeSource and Product companions | 2 | 2 | 0 | 0 | 0 | 8 | 10 |
+| Progress.DrainAuditSource and Product companions | 7 | 4 | 0 | 0 | 3 | 5 | 12 |
+| Config.StagedInvalid | 1 | 0 | 1 | 0 | 0 | 2 | 3 |
+| This tranche | 10 | 6 | 1 | 0 | 3 | 15 | 25 |
+| Cumulative processed baseline and checked support | 1,103 | 842 | 37 | 22 | 202 | 116 | 1,197 |
+
+The census is 527 campaign-owned files, 1,925 theorems and 374 checked proof
+modules; 728 baseline declarations await validation. Counts are H1 180, H2 212,
+H3 129, H4 363, H5 166 and H6 147. H1's terminal closure remains current;
+H2–H6 and the full gate remain lagging. No new charter result is claimed.
+
+The initiation finish and whole-consumer fact contracts are now carried on
+their complete original domains. InitiationConsumeProductSource contains the
+two original-scope claims and an unconditional actual-consumer erasure;
+InitiationConsumeSource contains the two native companions and five private
+source-composition lemmas. The Product model preserves independently supplied
+lookup/beforeDh snapshots in the finish contract, including arbitrary fixture
+fields. Observations actually captured by the consumer retain the actual
+entry fixture through liftWG. No state is reconstructed for execution. The
+True-entry partial scope, arbitrary messages, all rejection/release paths,
+signed wrapping time comparisons, clock-read order and exact peer writes are
+unchanged. Fact composition helpers are substantive source proofs, not frames.
+
+DrainAuditSource has one recursive audit over actual WGWorld and Ambient,
+with five native companion equalities and the two unchanged private Except
+bind lemmas. DrainProductModel retains complete Product outcomes;
+DrainProductAuditSource maps successful native states through the exact
+liftWG update on the actual entry Product. Its five original-scope equalities
+retain every other component and all eight fixture observations. No second
+recursive audit or default state is introduced. The range correspondence
+preserves every selector/worker error and exact success; the observation
+retains the entry state. The pure increment erasure is kept unchanged.
+
+StagedInvalid corrects the old deterministic queued-device prediction using
+an actual optional clock/peek observation. The original resident and universal
+invalid-current-key premises are unchanged. Empty packets bypass key access;
+absent and zero-count keys take their actual fallback; missing and overflowing
+key references keep their Stops. Positive acquisition and release preserve
+the ordered key-store writes. A private tail contract and a domain-scoped
+exact observer erasure support the projected claim, including failures. The
+historical invalidStagedDevice definition remains for pending downstream
+consumers and does not state the checked current effect.
+
+Independent reviews found no issues in the complete initiation family or the
+invalid-key observer and erasure. Root reviewed the native/Product drain audit
+against the original exact outcomes. Scoped builds pass 72 jobs for the two
+audit families and 75 for StagedInvalid, without warnings. A later 39-job drain
+build follows removal of an extra final blank line. Axiom inspection covers
+394 logical roots in 69 proof modules, including 165 public theorem roots,
+with only the standard axioms. All three fresh kernel replays pass. Static
+checks, all 258 terminal names/order, and mirror/shared boundaries pass.
+
+Initiation probe 25 failed leaf/source-factor normalization, 26 failed the
+remaining precomputed-key condition and reported an unused simplification,
+27 passed with a deprecated rewrite warning, and 28 fixed that warning but
+failed one Product lookup-result constructor reduction. Probe 29 passes with
+no warnings. This follows the previously recorded probes 1–24; all original
+scope is now included rather than crediting only the native finish fragment.
+The proof limits remain 800000 heartbeats and recursion depth 2048.
+Drain audit probe 1 closed the native goals but reported nine unused
+simplifications; probe 2 removed them and added full Product derivations,
+then passed. Invalid-key probe 7 failed an eliminated variable name and a
+rewritten current-key branch; probe 8 failed the outer Except bind reduction;
+probe 9 made that reduction explicit and passed. Complete diagnostics were
+saved and inspected. No unchanged rerun, infrastructure retry, limit increase
+or guest run occurred in this tranche.
+
+Reproduce with scripts/in-bundle lake build on
+Roaming.InitiationConsumeProductSource, Progress.DrainProductAuditSource and
+Config.StagedInvalid under Leanux.Proofs.WG, then #print axioms and
+scripts/in-bundle lake env leanchecker --fresh MODULE for each root.
+Use capped, 32 Lean threads and 16 QEMU slots on this host.
