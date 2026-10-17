@@ -9,18 +9,20 @@ The branch retains its proof target and gate. All six terminal closures now chec
 | Result | Headlines | Checked support | Split status |
 | --- | ---: | ---: | --- |
 | H1 Noise | 22 | 185 | Full terminal closure current; wider caller/lifetime/clock claims open. |
-| H2 Index | 52 | 333 | Full terminal closure current; reachable whole-driver uniqueness/coherence open. |
+| H2 Index | 53 | 335 | Full terminal closure current; reachable whole-driver uniqueness/coherence open. |
 | H3 Roaming | 13 | 157 | Full terminal closure current; callback authentication provenance and broader caller coverage open. |
 | H4 Configuration | 79 | 582 | Full terminal closure current; global ownership, queued cleanup and general pagination open. |
 | H5 Progress | 42 | 288 | Full terminal closure current with exact bounded outcomes and checked refutations; global progress/coherent-ring adequacy open. |
 | H6 Timers | 50 | 438 | Full terminal closure current; outer scheduler episodes, complete caller coverage and session-relative counts open. |
 
-The checked surface is 1,983 theorems in all 587 campaign-owned modules:
-1,321 retyped, 244 explicitly corrected, 239 retained and 179 added
-support/finding declarations. Of the 1,831 baseline theorems, 22 frames
+The checked surface is 1,985 theorems in all 588 campaign-owned modules.
+The completed retrofit accounts for 1,983: 1,321 retyped, 244 explicitly
+corrected, 239 retained and 179 added support/finding declarations. Two
+subsequent H2 declarations add confirmation table preservation. Of the 1,831 baseline theorems, 22 frames
 were deleted because types supply their facts and five false cookie supports
 were separately retired with checked counterexamples. No baseline declaration
-remains awaiting retrofit; all 258 original terminal names/order survive.
+remains awaiting retrofit; all 258 original terminal names/order survive,
+with one new H2 headline (259 total).
 
 The [retrofit report](2026-10-16-proof-campaign-2-state-split.md) records
 claim/frame files, corrections, before/after counts and validation.
@@ -35,6 +37,39 @@ None of H1–H6 is a completed charter result. The timer retry contracts now
 explicitly concern supplied wheel units and their actual inspection, not
 selection by the outer scheduler. No new mirror-team request arises from
 these statement-domain findings.
+
+## H2 continuation: confirmation preserves the index invariant
+
+The original receivedWithKeypair now preserves numeric-index uniqueness,
+embedded-owner uniqueness and the hashed-keypair allocation bound through
+both false exits, ordered slot writes and immediate old-previous release.
+The claim keeps an optional device and arbitrary Ambient inputs; it adds no
+residency, distinct-slot, reference-budget or successful-confirmation premise.
+Failures remain outside its normal-return conclusion. This is one missing
+confirmation edge toward whole-driver propagation, not owner-word coherence,
+reachability or complete H2 coverage.
+
+Architecture: Index/ConfirmationClaims uses the campaign projection directly
+and composes existing get/branch/peer-write/key-release contracts. Existing
+frames stay in their separate files; no shared-layer variant is added.
+Index/Statements appends one documented headline without changing the prior
+52. H2 now has 53 headlines and 335 theorems; the campaign has 259 headlines
+and 1,985 theorems. No existing statement is reshaped and no new finding occurs.
+
+The first capped probe passes at the default limit. The scoped Index.Statements
+build passes 257 jobs; its only warning is inherited Env:865 String.mk.
+Axioms: 995 logical roots in 193 modules, including 644 public theorem roots,
+standard only. Fresh kernel replay passes. Static checks and original-name
+order pass; independent review finds no issue. No limit/cap increase, failed
+probe or infrastructure rerun. The full-gate failure in inherited
+CounterWindow/ReplayWindow remains as recorded; it is not rerun unchanged.
+Reproduce with scripts/in-bundle lake build Leanux.Proofs.WG.Index.Statements
+and scripts/in-bundle lake env leanchecker --fresh on that module, under
+capped with 32 threads and 16 QEMU slots.
+
+No mirror change is requested for this step: existing narrowed operations and
+proof contracts suffice. The next bounded obligations are lookup preservation
+of an explicit hashed-owner coherence predicate and data-ingress table safety.
 
 ## Historical checkpoint before the split
 

@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Index.ConfirmationClaims
 import Leanux.Proofs.WG.Campaign2.Bridge
 import Leanux.Proofs.WG.Index.TableClaims
 import Leanux.Proofs.WG.Index.View
@@ -641,5 +642,15 @@ theorem original_index_lookup_none (kinds : List IndexKind) (index : Nat) (d : D
         ∃ cause, LookupNoneCase kinds index d d' cause ∧
           ∀ other, LookupNoneCase kinds index d d' other → other = cause) :=
   indexLookup_none kinds index d
+
+
+/-- Every normal return of the original responder confirmation preserves numeric
+index and owner uniqueness and the hashed-keypair allocation bound, including
+its immediate release of the displaced previous key. No resident-peer, distinct
+slot, reference-budget or successful-confirmation premise is assumed. -/
+theorem original_received_with_keypair_tables (pid : PeerId) (received : KeypairId) :
+    Campaign2.Ensures (receivedWithKeypair pid received) View.TablesSafe
+      (fun _ s => View.TablesSafe s) :=
+  receivedWithKeypair_tables pid received
 
 end Leanux.Proofs.WG.Index
