@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.Packets.InitializedEntries
+import Leanux.Proofs.WG.Packets.TxFront
 import Leanux.Proofs.WG.Packets.PublicationRunner
 import Leanux.Proofs.WG.Packets.PublicationEntries
 import Leanux.Proofs.WG.Configuration.RoutingTraffic
@@ -4365,5 +4367,113 @@ theorem original_publication_entry_coupling {h pre post : List RoutingJoint.Even
 
 
 end PublicationClosure
+
+section InitializedAuthorization
+open Leanux Leanux.WG Leanux.Proofs.Logged
+open Lifetimes Queues PublicationIdentity AllowedIps Configuration Packets
+
+/-- All actual syscall callbacks retain routing at captured consume positions;
+only the original configuration address-shape premise is supplied. -/
+theorem original_positional_routing_syscall (initial : FlatTable × FlatTable)
+    (call : Syscall) (shape : SyscallAddressShape call) :
+    PrefixPreserves (RoutingPosition.Inv initial) (RoutingPosition.Safe initial)
+      (RoutingJoint.syscall call) := RoutingPosition.Calls.syscall initial call shape
+
+/-- The original initialized runner derives routing at each consume position,
+including the reached journal of an indexed Stop. -/
+theorem initialized_positional_routing (trace : Runner.Trace)
+    (shape : TraceAddressShape trace) (placeholders : Bool) :
+    RoutingPosition.Safe ([],[])
+      (runPrefixOuter (RoutingJoint.executeTrace trace placeholders) []).2 :=
+  RoutingPosition.Runner.executeTrace trace shape placeholders
+
+/-- Successful public parsing discharges the routing shape premise. -/
+theorem parsed_initialized_positional_routing (json : Lean.Json) (trace : Runner.Trace)
+    (parsed : Runner.parseTrace json = .ok trace) (placeholders : Bool) :
+    RoutingPosition.Safe ([],[])
+      (runPrefixOuter (RoutingJoint.executeTrace trace placeholders) []).2 :=
+  initialized_positional_routing trace (parseTrace_shape json trace parsed) placeholders
+
+/-- An initialized Stack entry couples its actual earlier configured publication,
+consume and strict-prefix source winner, without assuming normal termination. -/
+theorem initialized_incoming_authorization (trace : Runner.Trace) (shape : TraceAddressShape trace) (placeholders : Bool)
+    (pre post : List RoutingJoint.Event) (e : RxJoint.Entry)
+    (position : (runPrefixOuter (RoutingJoint.executeTrace trace placeholders) []).2 =
+      pre ++ .rx (.entered e) :: post) :
+    ∃ (receipt : RxDisposition.ConsumeReceipt), ∃ before between afterBuffer beforeDecrypt afterDecrypt,
+      ∃ (decrypt : WGRunWitness (RxPacket × Option RxPacket)), ∃ out pid published ambient,
+      pre = before ++ .rx (.consumed e.tag.occurrence e.tag.skb e.stamp receipt) ::
+        (between ++ .rx (.buffered e) :: afterBuffer) ∧
+      before = beforeDecrypt ++ .rx (.rx (.decrypt e.tag.skb decrypt)) :: afterDecrypt ∧
+      e.origin = some receipt ∧ receipt.run.value = some e.tag.bytes ∧
+      Published e.tag.skb decrypt out pid published ambient ∧
+      ConsumeCertificate (Origins.HistorySupport.sessions (beforeDecrypt.filterMap RoutingJoint.rxEvent))
+        e.tag.skb decrypt out pid published e.stamp receipt ∧
+      ∃ v4 : Bool,
+        ipTunnelParseProtocol e.tag.bytes = (if v4 then 4 else 6) ∧
+        ipTunnelParseProtocol receipt.packet.bytes = (if v4 then 4 else 6) ∧
+        PeerWinner (rootWidth v4) (sourceAddress v4 e.tag.bytes)
+          (selectedFlat v4 (completionFold (before.filterMap RoutingJoint.routingEvent) ([],[])))
+          (some receipt.peer) ∧
+        sourceAddress v4 e.tag.bytes = sourceAddress v4 receipt.packet.bytes :=
+  InitializedEntries.entered trace shape placeholders pre post e position
+
+/-- The same incoming authorization for every successfully parsed public trace. -/
+theorem parsed_initialized_incoming_authorization (json : Lean.Json) (trace : Runner.Trace)
+    (parsed : Runner.parseTrace json = .ok trace) (placeholders : Bool)
+    (pre post : List RoutingJoint.Event) (e : RxJoint.Entry)
+    (position : (runPrefixOuter (RoutingJoint.executeTrace trace placeholders) []).2 =
+      pre ++ .rx (.entered e) :: post) :
+    ∃ (receipt : RxDisposition.ConsumeReceipt), ∃ before between afterBuffer beforeDecrypt afterDecrypt,
+      ∃ (decrypt : WGRunWitness (RxPacket × Option RxPacket)), ∃ out pid published ambient,
+      pre = before ++ .rx (.consumed e.tag.occurrence e.tag.skb e.stamp receipt) ::
+        (between ++ .rx (.buffered e) :: afterBuffer) ∧
+      before = beforeDecrypt ++ .rx (.rx (.decrypt e.tag.skb decrypt)) :: afterDecrypt ∧
+      e.origin = some receipt ∧ receipt.run.value = some e.tag.bytes ∧
+      Published e.tag.skb decrypt out pid published ambient ∧
+      ConsumeCertificate (Origins.HistorySupport.sessions (beforeDecrypt.filterMap RoutingJoint.rxEvent))
+        e.tag.skb decrypt out pid published e.stamp receipt ∧
+      ∃ v4 : Bool,
+        ipTunnelParseProtocol e.tag.bytes = (if v4 then 4 else 6) ∧
+        ipTunnelParseProtocol receipt.packet.bytes = (if v4 then 4 else 6) ∧
+        PeerWinner (rootWidth v4) (sourceAddress v4 e.tag.bytes)
+          (selectedFlat v4 (completionFold (before.filterMap RoutingJoint.routingEvent) ([],[])))
+          (some receipt.peer) ∧
+        sourceAddress v4 e.tag.bytes = sourceAddress v4 receipt.packet.bytes :=
+  InitializedEntries.parsed_entered json trace parsed placeholders pre post e position
+
+/-- The original transmit call factors through its actual completed splice. -/
+theorem original_transmit_front_factor (family addr : Nat) (pkts : List Packet) (mtu : Nat) :
+    wgXmit family addr pkts mtu = (do
+      match ← txFront family addr pkts mtu with
+      | .error err => pure err
+      | .ok pid => txTail pid) :=
+  wgXmit_front_factor family addr pkts mtu
+
+/-- Local routing authorizes the completed splice independently of its later tail. -/
+theorem original_transmit_handoff_front (v4 : Bool) (addr : Nat) (pkts : List Packet) (mtu : Nat)
+    (w s : WGWorld) (ambient afterSplice : Ambient) (pid : PeerId)
+    (xs : FlatTable × FlatTable) (hi : RoutedView (routingView w) xs)
+    (hr : ((txFront (if v4 then 4 else 6) addr pkts mtu).run w).run ambient =
+      .ok ((.ok pid,s),afterSplice)) :
+    TxFrontCut (if v4 then 4 else 6) addr pkts mtu w s ambient afterSplice pid ∧
+      PeerWinner (rootWidth v4) addr (selectedFlat v4 xs) (some pid) ∧
+      ∀ pkt ∈ pkts, destinationField (if v4 then 4 else 6) pkt.bytes = addr :=
+  txFront_authorized v4 addr pkts mtu w s ambient afterSplice pid xs hi hr
+
+/-- A later actual Stop retains the completed handoff certificate. -/
+theorem original_transmit_handoff_stopped (v4 : Bool) (addr : Nat) (pkts : List Packet) (mtu : Nat)
+    (w s : WGWorld) (ambient afterSplice : Ambient) (pid : PeerId)
+    (xs : FlatTable × FlatTable) (stop : Stop)
+    (routing : RoutedView (routingView w) xs)
+    (front : ((txFront (if v4 then 4 else 6) addr pkts mtu).run w).run ambient =
+      .ok ((.ok pid,s),afterSplice))
+    (tail : ((txTail pid).run s).run afterSplice = .error stop) :
+    ((wgXmit (if v4 then 4 else 6) addr pkts mtu).run w).run ambient = .error stop ∧
+      TxFrontCut (if v4 then 4 else 6) addr pkts mtu w s ambient afterSplice pid ∧
+      PeerWinner (rootWidth v4) addr (selectedFlat v4 xs) (some pid) ∧
+      ∀ pkt ∈ pkts, destinationField (if v4 then 4 else 6) pkt.bytes = addr :=
+  wgXmit_stopped_after_handoff v4 addr pkts mtu w s ambient afterSplice pid xs stop routing front tail
+end InitializedAuthorization
 
 end Leanux.Proofs.WG.CryptokeyRouting

@@ -152,6 +152,18 @@ older R3 terminal bodies remain unchanged. Gate: 670 jobs/631 declarations in
 The [short report](2026-10-17-r3-publication-closure.md) records failed development
 checks, independent review and the remaining authorization joins.
 
+The initialized incoming checkpoint adds five modules and 38 theorems:
+617 files/8,635 theorems, 639 terminal declarations and 263 R3 exports.
+The actual initialized runner supplies routing at every consumed occurrence;
+public parsing supplies address shape. Each selected Stack entry now has its
+actual earlier configured publication and source winner at consumption, even
+before a later Stop. Local transmit authorization covers a completed staged
+splice with a subsequently stopped tail. Initialized transmit authorization
+remains open. All 255 older R3 terminal bodies remain unchanged.
+The proof gate passes 675 build jobs and 639 terminal declarations in 7.319 seconds. Fresh kernel replay passes in 102.759 seconds without warnings.
+The [short report](2026-10-17-r3-initialized-authorization.md) records scope,
+failed development checks and independent review.
+
 The pre-split checkpoint validated every baseline result surface over
 `cb2348e`. Initialized R3 packet authorization and R4 receive-pipeline
 conservation remain open. Earlier positive results and runtime findings retain
@@ -163,7 +175,7 @@ was made by this campaign.
 | --- | --- |
 | R1 | Replay uniqueness proved; inclusive-floor correction witnessed. |
 | R2 | Initialized allocation-identity access safety proved, including failures/trials; affiliation/credits separate. |
-| R3 | Initialized routing, material support and captured current/owner checks; initialized strict-prefix publication certificates and actual poll positional routing; initialized positional authorization and transmit handoff open. |
+| R3 | Initialized routing, material support and captured current/owner checks; initialized incoming authorization, strict-prefix configured publication certificates and actual consumed-position routing; initialized transmit handoff open. |
 | R4 | Initialized entry/completion uniqueness and packet/receipt linkage; chronology refuted; receive-pipeline conservation open. |
 | R5 | Accepted age/post-zero/wire-nonce counterexamples; thirteen positive local contracts. |
 | R6 | Cookie exclusion proved; literal MAX=18 refuted, without a replacement universal bound. |
@@ -401,8 +413,9 @@ an exact fresh position. The initialized runner now derives captured configured/
 A packet peer-frontier invariant handles fresh creation, while local retention connects the earlier
 publication to actual normal consumption. Whole-call packet transport now holds through
 the original initialized runner for all typed traces and both flags, including stopped
-prefixes. The contemporaneous initialized lookup/Stack join and transmit handoff
-authorization remain open. No Noise authenticity is claimed.
+prefixes. The contemporaneous initialized lookup/Stack join is now proved for
+all shaped typed traces, with shape supplied by successful public parsing.
+Initialized transmit handoff authorization remains open. No Noise authenticity is claimed.
 
 **Architecture.** The [map](proofs.md#layers) details these refinements:
 
