@@ -20,10 +20,10 @@ and attributed theorem declarations. Campaign 2 owns 427 Lean files,
 | --- | ---: | ---: | ---: | ---: | --- |
 | Common projection | 2 | 0 | 0 | 0 | Actual native WG/Ambient and full Product observations carried; no reconstructed execution states. |
 | H1 Noise | 35 | 171 | 22 | 185 | The full Noise closure is current, including restart support. Six type-given frames are deleted. Wider caller/lifetime/reachability and clock-provenance charter claims remain open. |
-| H2 Index | 68 | 318 | 52 | 232 | Table, lookup, collision records, allocation, owner invariants and lifecycle support carried; seven type-given frames deleted. Exact peer-release outcomes replace stale totality, with checked counterexamples. Terminal closure and whole-driver coherence remain pending. |
+| H2 Index | 68 | 318 | 52 | 251 | Table, lookup, collision records, allocation, owner invariants and lifecycle support carried; seven type-given frames deleted. Exact peer-release outcomes replace stale totality, with checked counterexamples. Terminal closure and whole-driver coherence remain pending. |
 | H3 Roaming | 35 | 119 | 13 | 157 | Endpoint/publication, polling, attempt facts, crypto, lookup and response-caller factors/facts carried with full Product certificates; two type-given frames deleted. The full terminal closure is current, including initiation/response audits with actual Product outcomes. Wider roaming/provenance charter gaps remain open. |
 | H4 Configuration | 130 | 554 | 79 | 390 | Scalar, identity, port, dump, allowed-IP and structural support carried; three type-given frames deleted. Quiet timer cleanup and queued-send observations are corrected; queued-send and removal totality have checked stale-statement counterexamples. Remaining readback/effects and terminal closure remain pending. |
-| H5 Progress | 59 | 265 | 42 | 180 | Pure/control, cut, jitter, index, poll bounds, dispatch, scheduler turns, stack/probe frames, queue flush contracts, drain selection and Product observation bridge carried; one type-given index frame deleted. The old backlog fixture has checked exact runner and direct-fixture rejections. Receive-ring activation models, general runner boundaries, drain bounds are carried; terminal closure remains pending. |
+| H5 Progress | 59 | 265 | 42 | 186 | Pure/control, cut, jitter, index, poll bounds, dispatch, scheduler turns, stack/probe frames, queue flush contracts, drain selection and Product observation bridge carried; one type-given index frame deleted. The old backlog fixture has checked exact runner and direct-fixture rejections. Drain bounds are carried. Receive-ring activation models, general runner boundaries and terminal closure remain pending. |
 | H6 Timer discipline | 98 | 404 | 50 | 171 | Base/guard/jitter, arming/wheel, recorded clock and initiation-send arming contracts carried; three type-given frames deleted. Exact wheel corrections are explicit; queue/pending and retained-worker frames are carried; broader timer episodes and terminal closure remain pending. |
 
 Retyped, deleted and retained counts will be reported per validated tranche.
@@ -4010,4 +4010,75 @@ Reproduce with scripts/in-bundle lake build on Config.KeyInstallEffects,
 Config.DumpTransport, Index.StagedSource and Progress.BatchBacklog under
 Leanux.Proofs.WG, then #print axioms and
 scripts/in-bundle lake env leanchecker --fresh MODULE for each root.
+Use capped, 32 Lean threads and 16 QEMU slots on this host.
+
+
+## Receive table preservation and physical cookie-ring findings
+
+| Tranche | Before | Retyped | Corrected | Deleted | Kept | Added | After |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Index.ReceiveFrames | 16 | 16 | 0 | 0 | 0 | 3 | 19 |
+| Progress.CookieRingModel, CookieRingSource, CookieRingFindings | 0 | 0 | 0 | 0 | 0 | 6 | 6 |
+| This tranche | 16 | 16 | 0 | 0 | 0 | 9 | 25 |
+| Cumulative processed baseline and checked support | 1,212 | 931 | 47 | 22 | 212 | 150 | 1,340 |
+
+The census is 536 campaign-owned files, 1,959 theorems and 402 checked proof
+modules; 619 baseline declarations await validation. Counts are H1 185, H2 251,
+H3 157, H4 390, H5 186 and H6 171. H1/H3 terminal closures remain current;
+the other terminals and full gate remain lagging. No new charter result is
+claimed.
+
+ReceiveFrames keeps the original unrestricted Bool-to-Product-action callback
+contract under Index.Product.receiveLoadThen_tables; a native companion serves
+the actual WG callers. The other fifteen original contracts retain arbitrary
+Ambient and optional-device states, identifiers, endpoints, messages, sites
+and exactRx values. They preserve table/owner/cursor invariants on normal
+returns, without totality or returned-error-state claims. Actual IPv4 route
+retries, IPv6 routing, hidden/allocation errors and timer-wheel updates remain
+in the computations. The other two additions are a private guarded routing
+frame variant and a native load-prefix support fact. No readiness or residence
+premise is added and no shared layer is copied.
+
+CookieRingModel describes repeated actual PtrRing.consume operations,
+retaining every slot and cursor. Its continuation equality is data-only.
+CookieRingSource connects one actual cookie-miss receive step to that model,
+with exact consume-result, original empty-index and packet-kind premises;
+its Product observation retains actual WG/Ambient and all fixture fields.
+CookieRingFindings supplies three bounded facts: malformed tail metadata can
+leave a packet readable after count consumptions; the same witness occurs in
+an actual native receive step; even a coherent initialized ring retains its
+occupied slot and cursor after logical draining. The malformed witness makes
+no reachability claim, and none of these is a kernel or mirror-bug finding.
+
+All six ring declarations are additions. The old CookieActivationModel,
+CookieActivationLoop and CookieActivationSource remain pending. In particular,
+neither replacing list length by ring count nor resetting the ring to an empty
+container preserves the old full domain and exact physical state. Classification
+of packets from ring.items alone also does not classify arbitrary malformed
+future peeks. Whole-activation correspondence must follow actual poll/consume
+behavior and retain exhaustion errors. Review found that the previous H5 top
+row overstated activation coverage; that sentence is corrected. The census
+already excluded the uncarried modules, so no count is revised.
+
+Independent reviews found no theorem/domain issues in either package and
+confirmed the two distinct earlier backlog rejection paths. The combined
+153-job build passes without warnings. Axiom inspection covers 684 logical
+roots in 123 proof modules, including 387 public theorem roots, with standard
+axioms only. Both fresh kernel replays pass. Static checks, all 258 headline names/order
+and mirror/shared boundaries pass.
+
+Receive probes 1–3 fail ordinary composition and branch reduction; probe 4
+checks eleven originals cleanly. Probe 5 adds the full family but fails on an
+unavailable tactic; probe 6 fails six route-result case goals. Probe 7 cases
+the actual returned routes explicitly and passes all nineteen declarations.
+Ring probe 1 fails record layout and dependent equalities; probe 2 passes with
+one unused simplification; probe 3 adds Product correspondence but fails
+Except.map reduction. Probe 4 passes after explicit reduction; probe 5 checks
+the distinct packaged names/imports cleanly. The scoped build checks the
+actual three-file packaging. No unchanged rerun, infrastructure retry, cap
+or proof-limit increase occurred.
+
+Reproduce with scripts/in-bundle lake build on Index.ReceiveFrames and
+Progress.CookieRingFindings under Leanux.Proofs.WG, then #print axioms and
+scripts/in-bundle lake env leanchecker --fresh MODULE for both roots.
 Use capped, 32 Lean threads and 16 QEMU slots on this host.
