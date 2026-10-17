@@ -173,7 +173,7 @@ theorem peerPutPrefix_events (peer : Option PeerId) (w : WGWorld) (ambient : Amb
                 intro he
                 rcases he with ⟨⟨⟨h1, h2⟩, h3⟩, h4⟩
                 simp_all
-              simp only [if_neg hempty]
+              simp only [ite_eq_right hempty]
               rfl
 
 /-- Erasure and exact source observation together, for every input including
@@ -219,10 +219,10 @@ theorem peerPutEvents_safe (peer : Option PeerId) (w : WGWorld) (h : List PeerEv
         (p.txQueue.peeked.isSome || !p.txQueue.items.isEmpty || p.rxQueue.peeked.isSome || !p.rxQueue.items.isEmpty) = false
       · have three := AccessEvent.safe_append_release (slot := pid) (stamp := p.internalId) two
         simp only [peerPutEvents, hp]
-        rw [if_pos released]
+        rw [ite_eq_left released]
         simpa [List.append_assoc] using three
       · simp only [peerPutEvents, hp]
-        rw [if_neg released]
+        rw [ite_eq_right released]
         simpa [List.append_assoc] using two
 
 theorem peerPutEvents_release (peer : Option PeerId) (w : WGWorld) (stamp : Nat)
@@ -238,9 +238,9 @@ theorem peerPutEvents_release (peer : Option PeerId) (w : WGWorld) (stamp : Nat)
       by_cases released : p.refcount = 1 ∧
         (p.txQueue.peeked.isSome || !p.txQueue.items.isEmpty || p.rxQueue.peeked.isSome || !p.rxQueue.items.isEmpty) = false
       · refine ⟨pid, p, rfl, hp, released.1, ?_⟩
-        simp only [peerPutEvents, hp, if_pos released] at hr
+        simp only [peerPutEvents, hp, ite_eq_left released] at hr
         simpa [AccessEvent.Released] using hr
-      · simp only [peerPutEvents, hp, if_neg released] at hr
+      · simp only [peerPutEvents, hp, ite_eq_right released] at hr
         simp [AccessEvent.Released] at hr
 
 theorem peerPut_release_snapshot (pid : PeerId) (w w' : WGWorld) (ambient ambient' : Ambient) (p : Peer)

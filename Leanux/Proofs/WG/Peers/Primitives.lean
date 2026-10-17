@@ -126,7 +126,7 @@ theorem setPeer_same (i : PeerId) (p : Peer) (w w' : WGWorld)
       by_cases h : i = j
       · subst j
         simpa only [ite_true, Option.map_some] using hl.symm
-      · simp only [if_neg h]
+      · simp only [ite_eq_right h]
 
 theorem peerGet_retained (i : PeerId) : ProjectedAction snapshot Retained (peerGet i) := by
   apply ProjectedAction.of_wp

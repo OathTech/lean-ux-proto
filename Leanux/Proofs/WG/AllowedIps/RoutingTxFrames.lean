@@ -317,8 +317,8 @@ theorem receive4_routing (bytes : List UInt8) :
       (ha : p → ProductRetainsRoutingCall a) (hb : ¬p → ProductRetainsRoutingCall b) :
       ProductRetainsRoutingCall (if p then a else b) := by
     by_cases hp : p
-    · simpa only [if_pos hp] using ha hp
-    · simpa only [if_neg hp] using hb hp
+    · simpa only [ite_eq_left hp] using ha hp
+    · simpa only [ite_eq_right hp] using hb hp
   unfold ProductRetainsRoutingCall ProjectedRetainsRoutingCall
   unfold Leanux.Env.Stack.receive4
   repeat' first

@@ -115,7 +115,7 @@ theorem graftTwo_rep (d : WG.Device) (v4 : Bool) (n : NodeData) (l r : Tree)
 theorem root_graft_insertFresh (width fresh addr cidr pid : Nat) (n : NodeData) (l r : Tree)
     (hstop : ¬ (n.cidr ≤ cidr ∧ prefixBits width n.cidr n.addr = prefixBits width n.cidr addr)) :
     (Tree.node n l r).insertFresh width fresh addr cidr pid = graft width fresh addr cidr pid (.node n l r) := by
-  rw [Tree.insertFresh, if_neg hstop]
+  rw [Tree.insertFresh, ite_eq_right hstop]
 
 theorem graftInstalled_rep (d : WG.Device) (v4 : Bool) (n : NodeData) (l r : Tree)
     (addr cidr pid : Nat) (p : WG.Peer) (hb : NodesBelow d)

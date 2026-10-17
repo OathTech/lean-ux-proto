@@ -58,7 +58,7 @@ theorem peerCreate_peerSlots (key : Key) (psk : Option Key) (w v : WGWorld)
     by_cases he : i = pid
     · subst i; exact Nat.lt_succ_self _
     · rw [hp] at live
-      simp only [Store.allocate, if_neg he, Peers.snapshot, hd, Option.bind_some] at live
+      simp only [Store.allocate, ite_eq_right he, Peers.snapshot, hd, Option.bind_some] at live
       cases hx : d.peers[i]? with
       | none => simp [hx] at live
       | some old =>

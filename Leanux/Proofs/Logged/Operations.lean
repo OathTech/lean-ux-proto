@@ -213,7 +213,7 @@ def observeLogged : GhostM (Int × Lean.Json) := do
   let foreignCreator := (← getRouting).foreignCreator
   let hex (bs : List UInt8) : String := String.join (bs.map fun b =>
     let d := "0123456789abcdef".toList
-    String.mk [d[b.toNat / 16]!, d[b.toNat % 16]!])
+    String.ofList [d[b.toNat / 16]!, d[b.toNat % 16]!])
   -- the guest reports type 0 for a datagram shorter than 4 bytes
   let type (bs : List UInt8) : Nat := if bs.length ≥ 4 then WG.u32le bs 0 else 0
   -- W8: after wg_netns_close the listeners are closed: `recvfrom(4)` is
@@ -276,6 +276,7 @@ theorem observeLogged_erases  :
     | with_reducible exact idleTimersLogged_erases
     | with_reducible exact afterAdvanceLogged_erases
     | ghost_env_step
+  all_goals exact erases_pure _
 
 def injectLogged (family port : Nat) (msg : List UInt8) (tos : Nat := 0) (ll : Bool := false) (dest : Nat := 0) : GhostM Int := do
   -- W8 (design 3.1, 3.4): in the foreign-creator fixture the injector lives

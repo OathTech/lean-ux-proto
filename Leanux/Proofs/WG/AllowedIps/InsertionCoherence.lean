@@ -50,7 +50,7 @@ theorem insertionPeer_zero_nodup (p : WG.Peer) (binding pid q : Nat)
     have hne : a ≠ binding := by simpa [WG.listRemove] using (List.mem_filter.mp ha).2
     have hb' : b = binding := by simpa using hb
     exact hne (he.trans hb')
-  · simp only [insertionPeer, ↓reduceIte, if_neg hq, unlist]
+  · simp only [insertionPeer, ↓reduceIte, ite_eq_right hq, unlist]
     exact hn.filter _
 
 /-- Generic coherence transport for an exact binding-ID update. The premise is

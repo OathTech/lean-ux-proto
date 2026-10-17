@@ -418,7 +418,7 @@ theorem graftTail_wp (k : WGWorld) (d : WG.Device) (v4 : Bool)
     mvcgen [hfinishOne]
     all_goals try exact hconnFrame
     all_goals try dsimp only at *
-    all_goals simp_all [if_pos he, graftOneReady]
+    all_goals simp_all [ite_eq_left he, graftOneReady]
   · have he : min cidr (common (rootWidth v4) old.bits addr) ≠ cidr := by grind
     let split := min cidr (common (rootWidth v4) old.bits addr)
     let mid := WG.newNode addr split (rootWidth v4) none
@@ -480,7 +480,7 @@ theorem graftTail_wp (k : WGWorld) (d : WG.Device) (v4 : Bool)
       mvcgen [hfinishTwo]
       all_goals try exact hconn2Frame
       all_goals try dsimp only at *
-      all_goals simp_all [if_neg he, graftTwoReady]
+      all_goals simp_all [ite_eq_right he, graftTwoReady]
 
 theorem add_placed_root_graft_wp (k : WGWorld) (d : WG.Device) (hd : k.dev = some d)
     (v4 : Bool) (id : Nat) (old : WG.AipNode) (addr cidr pid : Nat) (p : WG.Peer)

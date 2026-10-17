@@ -635,8 +635,8 @@ theorem receive4_cell (bytes : List UInt8) :
       (ha : p → SameView cell a) (hb : ¬p → SameView cell b) :
       SameView cell (if p then a else b) := by
     by_cases hp : p
-    · simpa only [if_pos hp] using ha hp
-    · simpa only [if_neg hp] using hb hp
+    · simpa only [ite_eq_left hp] using ha hp
+    · simpa only [ite_eq_right hp] using hb hp
   unfold Leanux.Env.Stack.receive4
   repeat' first
     | (env_bind_head Leanux.Env.Stack.excluded; exact excluded _ _)

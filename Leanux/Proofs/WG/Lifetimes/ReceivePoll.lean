@@ -185,8 +185,8 @@ theorem rxPollPrefix_preserves_ambient (c : ProductAmbientContracts I) (t : Prod
       (hb : ¬p → PrefixEnsures I LifetimeEvent.Safe b (fun _ => I)) :
       PrefixEnsures I LifetimeEvent.Safe (if p then a else b) (fun _ => I) := by
     by_cases h : p
-    · simpa only [if_pos h] using ha h
-    · simpa only [if_neg h] using hb h
+    · simpa only [ite_eq_left h] using ha h
+    · simpa only [ite_eq_right h] using hb h
   change PrefixEnsures I LifetimeEvent.Safe _ (fun _ => I)
   unfold rxPollPrefix
   repeat' first

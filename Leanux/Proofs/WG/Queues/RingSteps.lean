@@ -146,12 +146,12 @@ theorem retire_lookup (hb : Bounds n t stale (x :: xs)) (hj : j < n) :
   have hl := hb.2
   simp only [List.length_cons] at hl
   by_cases hc : t ≤ j ∧ j ≤ t + stale.length
-  · rw [if_pos hc]
+  · rw [ite_eq_left hc]
     symm
     apply List.getElem?_eq_none
     unfold offset loc
     split <;> split <;> omega
-  · rw [if_neg hc]
+  · rw [ite_eq_right hc]
     have ho : stale.length + 1 ≤ offset n t j ∧
         offset n (loc n t (stale.length + 1)) j = offset n t j - (stale.length + 1) := by
       unfold offset loc
@@ -222,8 +222,8 @@ theorem consume_eq (hb : Bounds n t stale live) :
   | cons x xs =>
     simp only
     by_cases h : stale.length + 1 < batch ∧ t + (stale.length + 1) < n
-    · rw [if_pos h]; exact consume_retain hb h.1 h.2
-    · rw [if_neg h]; exact consume_retire hb (by omega)
+    · rw [ite_eq_left h]; exact consume_retain hb h.1 h.2
+    · rw [ite_eq_right h]; exact consume_retire hb (by omega)
 
 /-- A successor representation is derived from the entry bounds and the
 original consume result. Its live FIFO is precisely the old FIFO's tail. -/

@@ -35,7 +35,7 @@ theorem Context.eraseId_nonempty (c : Context) (u : Tree) {id : Nat}
       exact Tree.eraseId_compressed _ _
     change Tree.compact (if n.id = id then {n with peer := none} else n)
       ((c.plug u).eraseId id) (r.eraseId id) = .node n (c.plug (u.eraseId id)) r
-    rw [if_neg hn, hrec, Tree.eraseId_absent hc.2.1 hr]
+    rw [ite_eq_right hn, hrec, Tree.eraseId_absent hc.2.1 hr]
     exact Tree.compact_eq ⟨hcomp, hc.2.1, fun hp => ⟨c.plug_nonempty he, (hc.2.2 hp).2⟩⟩
   | right n l c ih =>
     have hn : n.id ≠ id := fun h => hi (by simp [Context.plug, Tree.nodeIds, h])
@@ -47,7 +47,7 @@ theorem Context.eraseId_nonempty (c : Context) (u : Tree) {id : Nat}
       exact Tree.eraseId_compressed _ _
     change Tree.compact (if n.id = id then {n with peer := none} else n)
       (l.eraseId id) ((c.plug u).eraseId id) = .node n l (c.plug (u.eraseId id))
-    rw [if_neg hn, Tree.eraseId_absent hc.1 hl, hrec]
+    rw [ite_eq_right hn, Tree.eraseId_absent hc.1 hl, hrec]
     exact Tree.compact_eq ⟨hc.1, hcomp, fun hp => ⟨(hc.2.2 hp).1, c.plug_nonempty he⟩⟩
 
 /-- Removing a binary or unary target cannot affect any ancestor's node
@@ -81,9 +81,9 @@ theorem Tree.eraseId_leaf_parent_nonempty {parent n : NodeData} {sibling : Tree}
   split
   · rename_i hp
     by_cases hs : side = 0
-    · simp only [Tree.fork, if_pos hs, Tree.Compressed] at hc
+    · simp only [Tree.fork, ite_eq_left hs, Tree.Compressed] at hc
       exact (hc.2.2 hp).2
-    · simp only [Tree.fork, if_neg hs, Tree.Compressed] at hc
+    · simp only [Tree.fork, ite_eq_right hs, Tree.Compressed] at hc
       exact (hc.2.2 hp).1
   · rw [Tree.fork_root]
     rfl

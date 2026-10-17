@@ -95,7 +95,7 @@ theorem setKeypair_identity (id : KeypairId) (k : Keypair) (w v : WGWorld) (ambi
         by_cases hj : id = j
         · subst j
           simpa only [ite_true, Option.map_some] using live.symm
-        · simp only [if_neg hj]
+        · simp only [ite_eq_right hj]
     · unfold identityView packetResidents
       simp [Option.bind_map, Function.comp_def]
 

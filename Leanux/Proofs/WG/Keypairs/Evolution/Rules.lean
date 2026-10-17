@@ -76,8 +76,8 @@ theorem evolves_discard {g : GhostM α} (hg : Evolves g) : Evolves (discard g) :
 theorem evolves_ite (p : Prop) [Decidable p] {gt ge : GhostM α}
     (ht : p → Evolves gt) (he : ¬p → Evolves ge) : Evolves (if p then gt else ge) := by
   by_cases hp : p
-  · simpa only [if_pos hp] using ht hp
-  · simpa only [if_neg hp] using he hp
+  · simpa only [ite_eq_left hp] using ht hp
+  · simpa only [ite_eq_right hp] using he hp
 
 theorem evolves_forIn (xs : List α) (b : β) (f : α → β → GhostM (ForInStep β))
     (hf : ∀ a b, Evolves (f a b)) : Evolves (forIn xs b f) := by

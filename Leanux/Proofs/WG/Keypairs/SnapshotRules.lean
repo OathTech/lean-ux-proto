@@ -20,8 +20,8 @@ theorem snapshot_ite {S : Type} {m : Type → Type} {ps : PostShape}
     (ha : p → SameView project a) (hb : ¬p → SameView project b) :
     SameView project (if p then a else b) := by
   by_cases hp : p
-  · simpa only [if_pos hp] using ha hp
-  · simpa only [if_neg hp] using hb hp
+  · simpa only [ite_eq_left hp] using ha hp
+  · simpa only [ite_eq_right hp] using hb hp
 
 theorem snapshot_modify
     {S : Type} {m : Type → Type} {ps : PostShape}

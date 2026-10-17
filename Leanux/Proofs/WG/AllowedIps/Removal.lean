@@ -142,7 +142,7 @@ theorem Tree.eraseId_absent {t : Tree} {id : Nat} (hc : t.Compressed) (hi : id �
     have hn : n.id ≠ id := fun he => hi (by simp [Tree.nodeIds, he])
     have hl : id ∉ l.nodeIds := fun h => hi (by simp [Tree.nodeIds, h])
     have hr : id ∉ r.nodeIds := fun h => hi (by simp [Tree.nodeIds, h])
-    simpa only [eraseId, if_neg hn, ihl hc.1 hl, ihr hc.2.1 hr] using compact_eq hc
+    simpa only [eraseId, ite_eq_right hn, ihl hc.1 hl, ihr hc.2.1 hr] using compact_eq hc
 
 theorem Tree.eraseId_nodup {t : Tree} (hn : t.nodeIds.Nodup) (id : Nat) :
     (t.eraseId id).nodeIds.Nodup := hn.sublist (eraseId_nodeIds t id)
@@ -195,7 +195,7 @@ theorem Tree.eraseId_empty_iff {t : Tree} (hc : t.Compressed) (hn : t.nodeIds.No
       have er := ihr hc.2.1 nd.2.1
       have notEmpty : (Tree.node n l r).eraseId id ≠ .empty := by
         intro he
-        rw [eraseId, if_neg hi, compact_eq_empty] at he
+        rw [eraseId, ite_eq_right hi, compact_eq_empty] at he
         have ln := (hc.2.2 he.1).1
         have rn := (hc.2.2 he.1).2
         obtain ⟨a, ha, hid⟩ := (el.mp he.2.1).resolve_left (root_isSome_iff _ |>.mp ln)
@@ -252,7 +252,7 @@ theorem Tree.eraseId_retired_le_two {t : Tree} (hc : t.Compressed)
       have h := compact_length {n with peer := none} l r
       simp only [Tree.nodeIds, List.length_cons, List.length_append]
       omega
-    · simp only [eraseId, if_neg hi]
+    · simp only [eraseId, ite_eq_right hi]
       by_cases hl : id ∈ l.nodeIds
       · have hr : id ∉ r.nodeIds := fun h => nd.2.2 id hl id h rfl
         rw [eraseId_absent hc.2.1 hr]
@@ -301,7 +301,7 @@ theorem Tree.eraseId_leaf_left {parent n : NodeData} {sibling : Tree}
   have hne : parent.id ≠ n.id := fun he => nh.1 (by simp [Tree.nodeIds, he])
   have hs : n.id ∉ sibling.nodeIds := fun h =>
     nd.2.2 n.id (by simp [Tree.nodeIds]) n.id h rfl
-  rw [eraseId, if_neg hne, eraseId_leaf, eraseId_absent hc.2.1 hs]
+  rw [eraseId, ite_eq_right hne, eraseId_leaf, eraseId_absent hc.2.1 hs]
 
 theorem Tree.eraseId_leaf_right {parent n : NodeData} {sibling : Tree}
     (hc : (Tree.node parent sibling (.node n .empty .empty)).Compressed)
@@ -313,7 +313,7 @@ theorem Tree.eraseId_leaf_right {parent n : NodeData} {sibling : Tree}
   have hne : parent.id ≠ n.id := fun he => nh.1 (by simp [Tree.nodeIds, he])
   have hs : n.id ∉ sibling.nodeIds := fun h =>
     nd.2.2 n.id h n.id (by simp [Tree.nodeIds]) rfl
-  rw [eraseId, if_neg hne, eraseId_leaf, eraseId_absent hc.1 hs]
+  rw [eraseId, ite_eq_right hne, eraseId_leaf, eraseId_absent hc.1 hs]
 
 /-- A targeted leaf either leaves its owned parent in place or promotes
 the sibling of an ownerless parent. Compression makes that sibling nonempty. -/
@@ -323,10 +323,10 @@ theorem Tree.eraseId_leaf_parent {parent n : NodeData} {sibling : Tree} {side : 
     (Tree.fork parent side (.node n .empty .empty) sibling).eraseId n.id =
       if parent.peer = none then sibling else Tree.fork parent side .empty sibling := by
   by_cases hs : side = 0
-  · simp only [Tree.fork, if_pos hs] at *
+  · simp only [Tree.fork, ite_eq_left hs] at *
     rw [eraseId_leaf_left hc hn]
     cases hp : parent.peer <;> cases sibling <;> simp [compact, hp]
-  · simp only [Tree.fork, if_neg hs] at *
+  · simp only [Tree.fork, ite_eq_right hs] at *
     rw [eraseId_leaf_right hc hn]
     cases hp : parent.peer <;> cases sibling <;> simp [compact, hp]
 
