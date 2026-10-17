@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Index.OwnerCoherenceSlotRemovalClaims
 import Leanux.Proofs.WG.Index.OwnerCoherenceQuietRemovalClaims
 import Leanux.Proofs.WG.Index.OwnerCoherenceRemovalFindings
 import Leanux.Proofs.WG.Index.OwnerCoherencePeerCreateClaims
@@ -935,5 +936,18 @@ theorem original_peer_remove_quiet_owner_coherence (pid : PeerId) (d : Device) (
       (fun s => s.wg.device = some d ∧ View.OwnerCoherentSafe s)
       (fun _ s => View.OwnerCoherentSafe s) :=
   peerRemove_quiet_owner_coherent pid d p resident live count empty noList send clear detached
+
+/-- Local owner coherence survives whole peer removal with live or aliased slots
+under entry coverage at a last peer reference. This is partial correctness and
+asserts neither adequate references nor global reachability. -/
+theorem original_peer_remove_slot_owner_coherence (pid : PeerId) (d : Device) (p : Peer)
+    (resident : d.peers[pid]? = some p) (live : 0 < p.refcount)
+    (count : 0 < d.numPeers) (noList : p.allowedipsList = [])
+    (send : d.sendWorkQueue = []) (clear : d.clearWorkQueue = [])
+    (covered : LastOwnerCovered d pid p) :
+    Campaign2.Ensures (peerRemove (some pid))
+      (fun s => s.wg.device = some d ∧ View.OwnerCoherentSafe s)
+      (fun _ s => View.OwnerCoherentSafe s) :=
+  peerRemove_slot_owner_coherent pid d p resident live count noList send clear covered
 
 end Leanux.Proofs.WG.Index

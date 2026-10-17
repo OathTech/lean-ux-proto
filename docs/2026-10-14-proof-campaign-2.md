@@ -11,26 +11,26 @@ merged; the executable mirror remains byte-identical to b700659.
 | Result | Headlines | Checked support | Split status |
 | --- | ---: | ---: | --- |
 | H1 Noise | 24 | 196 | Full terminal closure, whole-response entry edge and actual session derivation-clock receipt current; wider caller/lifetime claims open. |
-| H2 Index | 80 | 436 | Full terminal closure and ingress/expiry/handshake/peer-creation owner coherence and whole-removal lifecycle finding/conditional preservation current; reachable whole-driver uniqueness/coherence open. |
-| H3 Roaming | 15 | 170 | Full terminal closure and invalid-MAC1/rate-limit rejection preservation current; callback authentication provenance and broader caller coverage open. |
-| H4 Configuration | 83 | 597 | Full terminal closure and ordered mixed-peer and mixed port-refusal readback current; global ownership, queued cleanup and general pagination open. |
+| H2 Index | 81 | 445 | Full terminal closure and ingress/expiry/handshake/peer-creation owner coherence and whole-removal lifecycle finding/slot-covered preservation current; reachable whole-driver uniqueness/coherence open. |
+| H3 Roaming | 16 | 179 | Full terminal closure and invalid-MAC1/rate-limit/admitted-response rejection preservation current; callback authentication provenance and broader caller coverage open. |
+| H4 Configuration | 84 | 604 | Full terminal closure and ordered mixed-peer, mixed port-refusal and private-key readback current; global ownership, queued cleanup and general pagination open. |
 | H5 Progress | 43 | 293 | Full terminal closure, exact bounded outcomes and recorded batch completion-guard soundness current; global progress/coherent-ring adequacy open. |
 | H6 Timers | 52 | 445 | Full terminal closure, first outer timer turn and intermediate retransmit receipt current; whole scheduler episodes, complete caller coverage and session-relative counts open. |
 
-The checked surface is 2,137 theorems in all 670 campaign-owned modules.
+The checked surface is 2,162 theorems in all 682 campaign-owned modules.
 The completed retrofit accounts for 1,983: 1,321 retyped, 244 explicitly
-corrected, 239 retained and 179 added support/finding declarations. One hundred three
+corrected, 239 retained and 179 added support/finding declarations. One hundred twelve
 subsequent H2 declarations add table preservation and local owner coherence.
-Eleven H1 declarations add whole-response entry and actual derivation-clock provenance; fifteen H4 declarations
-add mixed fwmark/scalar, ordered peer-attribute and port-refusal readback. Thirteen H3 declarations
-add invalid-MAC1 and rate-limit rejection preservation. Five H5 declarations
+Eleven H1 declarations add whole-response entry and actual derivation-clock provenance; twenty-two H4 declarations
+add mixed fwmark/scalar, ordered peer-attribute, port-refusal and private-key readback. Twenty-two H3 declarations
+add invalid-MAC1, rate-limit and admitted-response rejection preservation. Five H5 declarations
 establish recorded batch completion-guard soundness. Seven H6 declarations
 connect the first outer timer turn and its retransmit receipt. Of the 1,831 baseline theorems, 22 frames
 were deleted because types supply their facts and five false cookie supports
 were separately retired with checked counterexamples. No baseline declaration
 remains awaiting retrofit; all 258 original terminal names/order survive,
-with two new H1 headlines, twenty-eight new H2 headlines, two new H3 headlines,
-four new H4 headlines, one new H5 headline and two new H6 headlines (297 total).
+with two new H1 headlines, twenty-nine new H2 headlines, three new H3 headlines,
+five new H4 headlines, one new H5 headline and two new H6 headlines (300 total).
 
 The [retrofit report](2026-10-16-proof-campaign-2-state-split.md) records
 claim/frame files, corrections, before/after counts and validation.
@@ -887,9 +887,8 @@ OwnerCoherenceQuietRemovalFrames holds four small pure transports;
 OwnerCoherenceQuietRemovalClaims contains the projected claim, and Statements
 its documented wrapper. No shared variant or mirror change is needed.
 Six new theorems bring H2 to 436 theorems and 80 headlines; campaign totals
-are 2,137 theorems, 670 modules and 297 headlines. The live-slot alternative
-is being developed separately using entry coverage and actual ordered unhashing;
-it is not credited by this empty-slot theorem.
+are 2,137 theorems, 670 modules and 297 headlines. The later live-slot theorem separately discharges entry coverage through actual
+ordered unhashing; this empty-slot theorem alone does not establish it.
 
 Six changed scratch probes were used. Probe 1 fails with one record-normalization
 goal and two default-heartbeat diagnostics in final composition. Splitting a
@@ -967,6 +966,136 @@ Config.Statements under scripts/in-bundle, capped, LEAN_NUM_THREADS=32 and
 LEANUX_QEMU_SLOTS=16. Scratch diagnostics are reconstructible and not committed.
 The separate H3 reply/socket overlap is inventoried in the shared-frame
 follow-up; neither of its two architectures has been implemented.
+
+## H2 continuation: actual slot clearing discharges coverage
+
+Whole peerRemove now preserves owner coherence with live or aliased key slots.
+At a last peer reference, every hashed owner naming that peer must be either
+its own handshake entry or a keypair in one of its three original slots.
+The public condition concerns the entry Device. The actual successful clearing
+prefix supplies the ClearRun certificate; it is not a caller premise.
+Each immediate key put unhashes its owner even when the key retains references,
+and ordered clearing removes every covered owner. No slot distinctness, static
+reference budget or ClearReady premise is imposed. Missing keys and insufficient
+references on repeated aliases remain actual Stops.
+
+The theorem keeps positive peer reference/count, a resident peer, an empty
+allowed-IP list and empty send/clear work queues. It follows actual unlisting,
+dead-marking, key clearing, timer cleanup, the crypt/NAPI guard, count decrement
+and final release. Queue/timer refusals are eliminated only from the supplied
+normal whole-call run. This establishes a local conditional preservation law,
+not global reachable-state coherence or removal totality.
+
+OwnerCoherenceSlotRemovalModel holds LastOwnerCovered; Frames contains six
+pure transports; Source connects the actual post-dead removal; Claims lifts
+the whole call through the campaign projection. Statements adds its documented
+wrapper. Nine theorems bring H2 to 445 theorems and 81 headlines. No shared
+variant or mirror edit is introduced.
+
+Six changed probes were used. Probe 1 fails with two errors and three unused-simp
+warnings; probe 2 checks the three initial pure transports without diagnostics.
+Probe 3 fails with five diagnostics from parsing/cascades and an unreduced crypt
+refusal; probe 4 fails on an unreduced observed Except-map contradiction.
+Probes 5 and 6 check the complete and reordered split packages without
+diagnostics. No limit increase or unchanged retry occurred. Independent review
+finds no issue in the entry coverage, actual clearing certificate or refusals.
+
+## H3 continuation: admitted response rejection preserves endpoints
+
+The actual whole response-kind receiver now preserves every remote endpoint
+when its same-entry receipts show MAC admission and no response-consumer cut.
+The entry is otherwise arbitrary. Two read-only inspections observe the actual
+MAC/load prefix and response prefix from the same complete Product state;
+their erasure executes the original receiver once and retains every original
+normal result and Stop. Normal whole-call execution supplies both successful
+prefix receipts. MAC admission excludes the cookie-reply path, so a missing
+response cut identifies actual consumer rejection and the remaining suffix
+performs no endpoint write.
+
+A stronger supporting frame preserves every optional full Endpoint observation
+through consumeResponse, for every normal result. Actual index lookup derives
+the extra reference needed by rejection cleanup. Arbitrary owner words, owner/
+peer aliases, NULL clears and zero-reference misses retain their source behavior.
+No coherence, residency, self-owner, reference-budget, source-family or hidden
+input readiness premise is added. The peer map itself may change; an owner-word
+clear is compatible with endpoint preservation. Broader caller and callback
+authentication coverage remains open.
+
+ResponseRejectionModel contains the admission and observation predicates;
+Frames contains four native frames and two private pure map helpers, including
+the native held-reference predicate. Source defines the two inspections and
+their all-errors erasure; Claims contains the projected whole-call result.
+Statements adds one documented wrapper. Nine theorems bring H3 to 179 theorems
+and 16 headlines. Existing campaign-owned exact effects suffice; the pending
+six-family cookie-reply/socket layer is not copied.
+
+Seven changed probes were used. Probes 1–4 fail on projection normalization,
+source bind reduction, eliminated-variable names or source/projection bookkeeping;
+probes 2 and 3 also emit one warning each. Probe 5 fails on a nonexistent Option
+lemma and emits two warnings. Its axiom output includes sorryAx from failed
+elaboration recovery: that run is failed and supplies no accepted proof.
+Probes 6 and 7 pass the complete and split-body checks without warnings,
+printing only standard axioms for all seven public roots. Independent review
+finds no issue. No suppression, limit increase or infrastructure retry occurred.
+
+## H4 continuation: private-key update and actual getter
+
+The actual private-key-only setter/getter composition now reads back its effective
+identity and exact peer expiry effect. The source comparison distinguishes the
+supplied key from the stored private key; clamping may affect the final value.
+The initial identity is established, the generated public key has no peer-table
+collision, and the getter domain is one resident peer without allowed IPs,
+enough room for the effective installed identity, and an idle empty socket.
+Running state, staged packets, keypair aliases and counts remain arbitrary.
+
+An established old identity disables the staged-send branch even when the new
+key removes the identity. Actual precomputation, handshake unhash/zero, expiry
+clock and current/next invalidation produce the exact final Device. The expiry
+time is derived from the actual ObservedKeyPeerRun, not a supplied historical
+relation; the public conclusion exposes an existential effect, not a clock
+receipt. Missing clocks, NULL handshake words and missing keypairs remain Stops.
+On a normal set/get sequence the setter returns zero, JSON contains the effective
+clamped identity and original serialized peer fields, and the getter empties
+socket 7 at the incremented generation. A null key omits identity fields through
+the actual JSON convention. No byte-level encoding claim is made.
+
+KeyReadbackModel contains two pure effects; Frames has three substantive native
+socket/selector frames and one pure Device-field frame. Source derives the exact
+whole-setter effect; Claims composes the actual getter; Statements adds its
+documented wrapper. Socket and fixture preservation are proved from execution,
+not inferred from Device equality. Seven theorems bring H4 to 604 theorems and
+84 headlines. No shared lemma or mirror code is changed.
+
+Six changed probes were used. Probe 1 fails on bind grouping and action
+metavariables. Probe 2 accepts the frames with one unused-simp warning, removed
+in the next draft. Probe 3 fails on dependent inversion/projection and emits
+three unused-simp warnings; probe 4 fails on projection elaboration and two
+unnormalized pure-frame branches. The complete diagnostic output was inspected;
+a truncated preview was not treated as complete evidence. Probes 5 and 6 pass
+the whole and split-body checks without diagnostics and with seven standard-axiom
+outputs. Independent review finds no issue. No limit increase, suppression or
+infrastructure rerun occurred.
+
+## Validation of slot removal, response rejection and key readback
+
+The installed Config build passes 277 jobs. Its axiom audit covers 1,028 logical
+roots in 213 modules, including 698 public theorems; fresh Config replay passes
+without diagnostics. The installed Index/Roaming build passes 386 jobs and
+their combined axiom audit covers 1,512 roots in 322 modules, including 983 public
+theorems, all standard only. Both fresh terminal kernel replays pass without diagnostics, after
+dependency artifact writers stopped.
+Only the unchanged Env:865 String.mk warning remains in builds; all added proofs
+are warning-free. Static token/import/root/default checks, all 258 original
+headline names/order, source census and diff formatting pass. The mirror and
+existing C1 shared layers remain unchanged.
+
+The campaign now has 2,162 theorems in 682 owned modules and 300 headlines.
+No whole H1–H6 charter result is declared complete; the inherited full-gate
+failure remains failed and is not rerun unchanged. The preceding quiet-removal
+package also received independent source review with no findings. Reproduce
+the scoped builds and fresh replays on Config.Statements, Index.Statements and
+Roaming.Statements under capped, scripts/in-bundle, LEAN_NUM_THREADS=32 and
+LEANUX_QEMU_SLOTS=16. No new mirror-team request arises from these increments.
 
 ## H3 continuation: rate-limit refusal preserves peers and endpoints
 

@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Roaming.ResponseRejectionClaims
 import Leanux.Proofs.WG.Roaming.RateLimitClaims
 import Leanux.Proofs.WG.Roaming.InvalidMac1Claims
 import Leanux.Proofs.WG.Campaign2.Bridge
@@ -261,5 +262,16 @@ theorem original_ratelimited_preserves_endpoints (msg : List UInt8) (src : SkbSo
     Campaign2.Product.Ensures (observedRateLimitHandshake msg src) (fun s => s = entry)
       (fun result final => RateLimitRejectionObservation entry result.1 final) :=
   receiveHandshakePacket_ratelimited msg src entry noncookie
+
+/-- A normal response-kind receiver preserves every remote endpoint when its
+same-entry receipts show MAC admission and no response-consumer result. The
+original receiver, including every error, is retained by observation erasure;
+cookie-reply drops are not classified as admitted consumer rejections. -/
+theorem original_response_rejection_preserves_endpoints (msg : List UInt8) (src : SkbSource)
+    (entry : Campaign2.Product.Snapshot)
+    (kind : messageType msg = MESSAGE_HANDSHAKE_RESPONSE) :
+    Campaign2.Product.Ensures (observedResponseRejection msg src) (fun s => s = entry)
+      (fun receipt final => ResponseRejectionObservation entry receipt final) :=
+  receiveHandshakePacket_response_rejection msg src entry kind
 
 end Leanux.Proofs.WG.Roaming

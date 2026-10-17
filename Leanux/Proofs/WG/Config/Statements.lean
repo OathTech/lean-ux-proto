@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Config.KeyReadbackClaims
 import Leanux.Proofs.WG.Config.PortRefusalClaims
 import Leanux.Proofs.WG.Config.MixedPeerClaims
 import Leanux.Proofs.WG.Config.MixedAttributeClaims
@@ -1410,5 +1411,26 @@ theorem original_mixed_port_refusal_get_after_set (d : Device) (mark port : Nat)
         ClaimView.clearedPeers d s.wg.toCore d.peerList) :=
   mixed_port_refusal_get_after_set d mark port flags key peers bound pid p sock
     supported net running nonzero changed collision members resident noIps room idle empty
+
+/-- Full setter/getter on the actual established-identity, no-collision path.
+The supplied key is read back through effective identityAfter/clamping and the
+model's JSON convention; a null key removes the serialized identity fields.
+No missing-clock, NULL-owner or missing-keypair failure is assumed away. -/
+theorem original_private_key_rotation_get_after_set (d : Device) (key : Key) (pid : PeerId) (p : Peer) (sock : NlSock)
+    (established : d.staticIdentity.hasIdentity = true)
+    (changed : d.staticIdentity.staticPrivate ≠ key) (absent : noKeyCollision d key)
+    (members : d.peerList = [pid]) (resident : d.peers[pid]? = some p)
+    (noIps : p.allowedipsList = [])
+    (room : devicePrefixSpace (keyReadbackBase d key) + 168 + 20 ≤ NLMSG_GOODSIZE)
+    (idle : sock.cbRunning = false) (empty : sock.queue = []) :
+    Campaign2.Ensures (do
+      let ret ← wgSetDevice (privateKeyAttrs d key)
+      let dump ← wgGetDevice (byIndex d)
+      pure (ret, dump))
+      (fun s => s.wg.device = some d ∧ s.wg.nlSock7 = sock ∧ ClaimView.selectsDevice s d)
+      (fun result s => result = (0, .ok (singlePeerJson (keyReadbackBase d key) p)) ∧
+        s.wg.nlSock7 = {sock with queue := [], ctx := {hasWg := true}, prevSeq := d.deviceUpdateGen + 1, dumpDoneErrno := 0, cbRunning := false} ∧
+        ∃ now, s.wg.device = some (keyReadbackDevice d key pid p now)) :=
+  rotation_get_after_set d key pid p sock established changed absent members resident noIps room idle empty
 
 end Leanux.Proofs.WG.Config
