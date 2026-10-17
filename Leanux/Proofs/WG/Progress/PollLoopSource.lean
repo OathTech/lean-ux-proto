@@ -1,17 +1,16 @@
 import Leanux.Proofs.WG.Progress.PollStepSource
 
 set_option autoImplicit false
-set_option maxHeartbeats 800000
 namespace Leanux.Proofs.WG.Progress
 open Leanux Leanux.WG Noise Roaming Std.Do
 
 /-- The original list forIn stops before fuel exhaustion when its remaining
 turns cover the remaining requested work budget. Callback errors are untouched. -/
 theorem pollLoop_ready (pid : PeerId) (budget : Nat)
-    (toStack : List (List UInt8) → M Unit) (turns : List Nat)
+    (toStack : List (List UInt8) → Leanux.M Unit) (turns : List Nat)
     (state : PollState) (below : state.1 < budget)
     (enough : budget ≤ state.1 + turns.length) :
-    Ensures (forIn turns state (pollStep pid budget toStack)) (fun _ => True)
+    Noise.Product.Ensures (forIn turns state (pollStep pid budget toStack)) (fun _ => True)
       (fun result _ => PollLoopReady budget result) := by
   induction turns generalizing state with
   | nil => simp only [List.length_nil, Nat.add_zero] at enough; omega
@@ -38,8 +37,8 @@ theorem pollLoop_ready (pid : PeerId) (budget : Nat)
           middle result out trivial run
 
 theorem pollRange_ready (pid : PeerId) (budget : Nat)
-    (toStack : List (List UInt8) → M Unit) (enough : budget ≤ MAX_QUEUED_PACKETS + 1) :
-    Ensures (forIn ([:MAX_QUEUED_PACKETS + 1] : Std.Legacy.Range)
+    (toStack : List (List UInt8) → Leanux.M Unit) (enough : budget ≤ MAX_QUEUED_PACKETS + 1) :
+    Noise.Product.Ensures (forIn ([:MAX_QUEUED_PACKETS + 1] : Std.Legacy.Range)
       ((0, {}, false) : PollState) (pollStep pid budget toStack)) (fun _ => 0 < budget)
       (fun result _ => PollLoopReady budget result) := by
   rw [Std.Legacy.Range.forIn_eq_forIn_range']

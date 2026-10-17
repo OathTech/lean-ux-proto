@@ -6,7 +6,7 @@ namespace Leanux.Proofs.WG.Progress
 open Leanux Leanux.Env Leanux.Proofs.WG.Noise
 
 /-- The exact probe result, including errors that must propagate. -/
-def probeResult (w : World) : Except Stop (Unit × World) → Except Stop (Bool × World)
+def probeResult {σ : Type} (w : σ) : Except Stop (Unit × σ) → Except Stop (Bool × σ)
   | .ok _ => .ok (true, w)
   | .error (.hidden _) => .ok (false, w)
   | .error e => .error e

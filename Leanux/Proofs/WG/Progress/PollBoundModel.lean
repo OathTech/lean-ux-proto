@@ -17,10 +17,10 @@ def PollLoopReady (budget : Nat) (state : PollState) : Prop :=
 the finish cut is historical and is not a failed completion's final state. -/
 inductive PollBoundAudit where
   | prefixError (error : Stop)
-  | zero (final : Snapshot)
-  | finish (state : PollState) (before : Snapshot) (outcome : Outcome Nat)
+  | zero (final : Product.Snapshot)
+  | finish (state : PollState) (before : Product.Snapshot) (outcome : Product.Outcome Nat)
 
-def erasePollBoundAudit : PollBoundAudit → Outcome Nat
+def erasePollBoundAudit : PollBoundAudit → Product.Outcome Nat
   | .prefixError error => .error error
   | .zero final => .ok (0, final)
   | .finish _ _ outcome => outcome

@@ -39,8 +39,8 @@ inductive NodeRemoval (d : Device) (id : NodeId) (n : AipNode) : Device → Prop
 
 theorem nodeRemoval_returns {d final : Device} {id : NodeId} {n : AipNode}
     (step : NodeRemoval d id n final) :
-    Returns (removeNodeSource id n) (fun w => w.k.wg = some d)
-      (fun result w => result = .yield () ∧ w.k.wg = some final) := by
+    Returns (removeNodeSource id n) (fun w => w.dev = some d)
+      (fun result w => result = .yield () ∧ w.dev = some final) := by
   cases step with
   | branching left right shape => exact removeNodeSource_branching d id n left right shape
   | unary child c side shape childRead linked write remaining resident =>
@@ -60,13 +60,13 @@ inductive RemovalRun : Device → List NodeId → Device → Prop where
       (step : NodeRemoval (deleteListedNodes id d d.peers.toList) id n next)
       (tail : RemovalRun next rest final) : RemovalRun d (id :: rest) final
 
-def removeEntry (id : NodeId) : M (ForInStep Unit) := do
+def removeEntry (id : NodeId) : WG.M (ForInStep Unit) := do
   _ ← branch .removeListIter true
   listDel id
   let n ← getNode id
   removeNodeSource id n
 
-def removeEntries (ids : List NodeId) : M Unit :=
+def removeEntries (ids : List NodeId) : WG.M Unit :=
   forIn ids () (fun id _ => removeEntry id)
 
 theorem removeEntries_cons (id : NodeId) (rest : List NodeId) :
@@ -82,42 +82,44 @@ theorem removeEntries_cons (id : NodeId) (rest : List NodeId) :
 theorem removeEntry_returns (d next : Device) (id : NodeId) (n : AipNode)
     (read : (deleteListedNodes id d d.peers.toList).nodes[id]? = some n)
     (step : NodeRemoval (deleteListedNodes id d d.peers.toList) id n next) :
-    Returns (removeEntry id) (fun w => w.k.wg = some d)
-      (fun result w => result = .yield () ∧ w.k.wg = some next) := by
-  have hb : Returns (branch .removeListIter true) (fun w => w.k.wg = some d)
-      (fun _ w => w.k.wg = some d) := by
-    rw [returns_iff]
-    mvcgen [branch]
-  have hg : Returns (getNode id) (fun w => w.k.wg = some (deleteListedNodes id d d.peers.toList))
-      (fun result w => result = n ∧ w.k.wg = some (deleteListedNodes id d d.peers.toList)) := by
-    rw [returns_iff]
-    mvcgen [getNode, getDev, getK, invariant]
-    all_goals simp_all
+    Returns (removeEntry id) (fun w => w.dev = some d)
+      (fun result w => result = .yield () ∧ w.dev = some next) := by
+  have hb : Returns (branch .removeListIter true : WG.M Bool) (fun w => w.dev = some d)
+      (fun _ w => w.dev = some d) := by
+    intro g ambient device
+    exact ⟨true, g, {ambient with steps := ambient.steps.push {
+      decision := .removeListIter, outcome := true, netRx := ambient.netRxSection}}, rfl, device⟩
+  have hg : Returns (liftAip (getNode id)) (fun w => w.dev = some (deleteListedNodes id d d.peers.toList))
+      (fun result w => result = n ∧ w.dev = some (deleteListedNodes id d d.peers.toList)) := by
+    intro g ambient device
+    refine ⟨n, {g with dev := some (deleteListedNodes id d d.peers.toList)}, ambient, ?_, rfl, rfl⟩
+    simp [liftAip, getNode, getDev, modifyDev, device, read]
+    rfl
   unfold removeEntry
   refine returns_bind _ _ hb ?_
   intro u
   refine returns_bind _ _ (listDel_returns id d) ?_
   intro u
   refine returns_bind _ _ hg ?_
-  intro result w pre
+  intro result w ambient pre
   obtain ⟨value, device⟩ := pre
   subst result
-  exact nodeRemoval_returns step w device
+  exact nodeRemoval_returns step w ambient device
 
 theorem removalRun_returns {d final : Device} {ids : List NodeId} (steps : RemovalRun d ids final) :
-    Returns (removeEntries ids) (fun w => w.k.wg = some d)
-      (fun _ w => w.k.wg = some final) := by
+    Returns (removeEntries ids) (fun w => w.dev = some d)
+      (fun _ w => w.dev = some final) := by
   induction steps with
   | nil d =>
-    intro w device
-    exact ⟨(), w, rfl, device⟩
+    intro w ambient device
+    exact ⟨(), w, ambient, rfl, device⟩
   | cons d id rest n next final read step tail ih =>
     rw [removeEntries_cons]
     refine returns_bind _ _ (removeEntry_returns d next id n read step) ?_
-    intro result w pre
+    intro result w ambient pre
     obtain ⟨value, device⟩ := pre
     subst result
-    exact ih w device
+    exact ih w ambient device
 
 def RemovalEffect (d : Device) (ids : List NodeId) (final : Device) : Prop :=
   match ids with
@@ -134,43 +136,63 @@ theorem removeByPeerSource_entries (p : Peer) :
 
 theorem removeByPeerSource_general (p : Peer) (d final : Device)
     (steps : RemovalEffect d p.allowedipsList final) :
-    Returns (removeByPeerSource p) (fun w => w.k.wg = some d)
-      (fun _ w => w.k.wg = some final) := by
+    Returns (removeByPeerSource p) (fun w => w.dev = some d)
+      (fun _ w => w.dev = some final) := by
+  have hb (site : Decision) (value : Bool) (entry : Device) :
+      Returns (branch site value : WG.M Bool) (fun g => g.dev = some entry)
+        (fun result g => result = value ∧ g.dev = some entry) := by
+    intro g ambient device
+    exact ⟨value, g, {ambient with steps := ambient.steps.push {
+      decision := site, outcome := value, netRx := ambient.netRxSection}}, rfl, rfl, device⟩
   rw [removeByPeerSource_entries]
+  refine returns_bind _ _ (hb .removeListEmpty p.allowedipsList.isEmpty d) ?_
+  intro empty g ambient pre
+  obtain ⟨rfl, device⟩ := pre
   cases ids : p.allowedipsList with
   | nil =>
     have same : final = d := by simpa [RemovalEffect, ids] using steps
     subst final
-    rw [returns_iff]
-    simp [ids]
-    mvcgen [branch]
-    all_goals simp_all
+    simp only [List.isEmpty_nil, ite_true]
+    exact ⟨(), g, ambient, rfl, device⟩
   | cons id rest =>
     have chain : RemovalRun (bumpAllowedips d) (id :: rest) final := by
       simpa [RemovalEffect, ids] using steps
-    have hr := (returns_iff _ _ _).mp (removalRun_returns chain)
-    rw [returns_iff]
-    simp [ids]
-    mvcgen [branch, modifyDev, modifyK, hr]
-    all_goals try dsimp +zetaDelta only at *
-    all_goals repeat intro
-    all_goals simp_all [bumpAllowedips]
-    all_goals exact hr _ (by assumption)
+    have hm : Returns (modifyDev bumpAllowedips) (fun g => g.dev = some d)
+        (fun _ g => g.dev = some (bumpAllowedips d)) := by
+      intro g ambient device
+      refine ⟨(), {g with dev := some (bumpAllowedips d)}, ambient, ?_, rfl⟩
+      simp [modifyDev, device]
+      rfl
+    have tail : Returns (do
+        modifyDev bumpAllowedips
+        removeEntries (id :: rest)
+        _ ← branch .removeListIter false
+        pure ()) (fun g => g.dev = some d) (fun _ g => g.dev = some final) := by
+      refine returns_bind _ _ hm ?_
+      intro _
+      refine returns_bind _ _ (removalRun_returns chain) ?_
+      intro _
+      refine returns_bind _ _ (hb .removeListIter false final) ?_
+      intro result g ambient pre
+      exact ⟨(), g, ambient, rfl, pre.2⟩
+    simp only [List.isEmpty_cons, Bool.false_eq_true, ite_false]
+    exact tail g ambient device
 
 theorem removeByPeer_general (pid : PeerId) (p : Peer) (d final : Device)
     (resident : d.peers[pid]? = some p) (steps : RemovalEffect d p.allowedipsList final) :
-    Returns (removeByPeer pid) (fun w => w.k.wg = some d)
-      (fun _ w => w.k.wg = some final) := by
-  have hg : Returns (getPeer pid) (fun w => w.k.wg = some d)
-      (fun result w => result = p ∧ w.k.wg = some d) := by
-    rw [returns_iff]
-    mvcgen [getPeer, getDev, getK, invariant]
-    all_goals simp_all
+    Returns (removeByPeer pid) (fun w => w.dev = some d)
+      (fun _ w => w.dev = some final) := by
+  have hg : Returns (getPeer pid) (fun w => w.dev = some d)
+      (fun result w => result = p ∧ w.dev = some d) := by
+    intro g ambient device
+    refine ⟨p, g, ambient, ?_, rfl, device⟩
+    simp [getPeer, getDev, device, resident]
+    rfl
   rw [removeByPeer_source]
   refine returns_bind _ _ hg ?_
-  intro result w pre
+  intro result w ambient pre
   obtain ⟨value, device⟩ := pre
   subst result
-  exact removeByPeerSource_general p d final steps w device
+  exact removeByPeerSource_general p d final steps w ambient device
 
 end Leanux.Proofs.WG.Config
