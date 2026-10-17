@@ -20,10 +20,10 @@ and attributed theorem declarations. Campaign 2 owns 427 Lean files,
 | --- | ---: | ---: | ---: | ---: | --- |
 | Common projection | 2 | 0 | 0 | 0 | Actual native WG/Ambient and full Product observations carried; no reconstructed execution states. |
 | H1 Noise | 35 | 171 | 22 | 185 | The full Noise closure is current, including restart support. Six type-given frames are deleted. Wider caller/lifetime/reachability and clock-provenance charter claims remain open. |
-| H2 Index | 68 | 318 | 52 | 280 | Table, lookup, collision records, allocation, owner invariants and lifecycle support carried; seven type-given frames deleted. Exact peer-release outcomes replace stale totality, with checked counterexamples. Terminal closure and whole-driver coherence remain pending. |
+| H2 Index | 68 | 318 | 52 | 281 | Table, lookup, collision records, allocation, owner invariants and lifecycle support carried; seven type-given frames deleted. Exact peer-release outcomes replace stale totality, with checked counterexamples. Terminal closure and whole-driver coherence remain pending. |
 | H3 Roaming | 35 | 119 | 13 | 157 | Endpoint/publication, polling, attempt facts, crypto, lookup and response-caller factors/facts carried with full Product certificates; two type-given frames deleted. The full terminal closure is current, including initiation/response audits with actual Product outcomes. Wider roaming/provenance charter gaps remain open. |
-| H4 Configuration | 130 | 554 | 79 | 413 | Scalar, identity, port, dump, allowed-IP and structural support carried; three type-given frames deleted. Quiet timer cleanup and queued-send observations are corrected; queued-send and removal totality have checked stale-statement counterexamples. Remaining readback/effects and terminal closure remain pending. |
-| H5 Progress | 59 | 265 | 42 | 207 | Pure/control, cut, jitter, index, poll bounds, dispatch, scheduler turns, stack/probe frames, queue flush contracts, drain selection and Product observation bridge carried; one type-given index frame deleted. The old backlog fixture has checked exact runner and direct-fixture rejections. Drain bounds are carried. General runner boundaries and receive-source leaf contracts are carried; whole receive-ring activation models and terminal closure remain pending. |
+| H4 Configuration | 130 | 554 | 79 | 420 | Scalar, identity, port, dump, allowed-IP and structural support carried; three type-given frames deleted. Quiet timer cleanup and queued-send observations are corrected; queued-send and removal totality have checked stale-statement counterexamples. Remaining readback/effects and terminal closure remain pending. |
+| H5 Progress | 59 | 265 | 42 | 209 | Pure/control, cut, jitter, index, poll bounds, dispatch, scheduler turns, stack/probe frames, queue flush contracts, drain selection and Product observation bridge carried; one type-given index frame deleted. The old backlog fixture has checked exact runner and direct-fixture rejections. Drain bounds are carried. General runner boundaries and receive-source leaf contracts are carried; whole receive-ring activation models and terminal closure remain pending. |
 | H6 Timer discipline | 98 | 404 | 50 | 182 | Base/guard/jitter, arming/wheel, recorded clock and initiation-send arming contracts carried; three type-given frames deleted. Exact wheel corrections are explicit; queue/pending and retained-worker frames are carried; broader timer episodes and terminal closure remain pending. |
 
 Retyped, deleted and retained counts will be reported per validated tranche.
@@ -4430,3 +4430,60 @@ Progress.CookieActivationSource, Index.CallbackSource and Index.DispatchSource
 under Leanux.Proofs.WG, followed by #print axioms and scripts/in-bundle
 lake env leanchecker --fresh MODULE for each root. Use capped, 32 Lean threads
 and 16 QEMU slots on this host.
+
+
+## Bulk-removal phases, current timer unit and cookie-bound finding
+
+| Tranche | Before | Retyped | Corrected | Deleted | Kept | Added | After |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Config.RemoveAllFrames, RemoveAllEffects, RemoveAllSource | 7 | 3 | 0 | 0 | 4 | 0 | 7 |
+| Index.TimerSource | 1 | 0 | 1 | 0 | 0 | 0 | 1 |
+| Progress.CookieActivationBoundFindings | 0 | 0 | 0 | 0 | 0 | 2 | 2 |
+| This tranche | 8 | 3 | 1 | 0 | 4 | 2 | 10 |
+| Cumulative processed baseline and checked support | 1,303 | 1,005 | 59 | 22 | 217 | 153 | 1,434 |
+
+There are 542 campaign-owned files, 1,962 theorems and 439 checked proof
+modules. Baseline declarations pending: 528. Counts: H1 185, H2 281, H3 157,
+H4 420, H5 209 and H6 182. H1/H3 terminals remain current; other terminals
+and the full gate remain lagging.
+
+RemoveAll preserves the fixed post-free peer list and successive actual
+first-pass removal states, then the actual cleanup pass and its errors.
+NodePairs and ListedResidents are unchanged; duplicate IDs remain permitted.
+Four pure frame/effect proofs are byte-identical, three source contracts now
+run in WG.M over arbitrary Ambient. RemoveAllCall's dormant intermediate
+observation is a full Product snapshot; its observer contracts are not yet
+credited. CollisionModel's broad import is narrowed to CollisionRemovalModel.
+
+Index.fireTimer_tables explicitly replaces its removed Env.fireTimer/horizon
+interface with the actual timerDispatchUnit_variant embedded in the checked
+runTimers_wheel_source. It retains arbitrary full Product inputs and arbitrary
+worker, peer, timer, wheel entry and prior step, with no callback or readiness
+premise. Worker/unit/step checks, timer deletion, wheel pass bookkeeping and
+all five concrete callbacks remain operational. Due selection and the whole
+outer timer loop are not established by this corrected unit contract.
+
+The two new cookie findings compare the old count-only resolver with actual
+Activation.run on the same malformed ring and finite stop-record stream.
+Count is one, but two polls are productive; the resolver predicts completion
+while the actual count-plus-one loop returns its exact exhaustion invariant.
+The counterexample preserves arbitrary unrelated Product state and requires
+the original cookie/empty-index domain. No reachability or kernel-bug claim is
+made. The whole-loop adequacy statement remains uncarried; no coherence
+premise is silently added to rescue it. See the
+[cookie-bound note](2026-10-17-proof-campaign-2-cookie-bound.md).
+
+Independent reviews find no issues. RemoveAll probe 1 closes with one unused
+simplification; changed probe 2 removes it. Timer-unit probes 1–2 fail reserved
+identifier/match-case syntax and explicit Ambient action inference; probe 3
+passes cleanly. The cookie-bound first probe passes cleanly at default limits.
+The 234-job build passes with only the inherited unchanged Env deprecation.
+Axiom inspection covers 1,053 logical roots in 192 modules, including 648 public
+theorem roots; only standard axioms occur. All three fresh kernel replays,
+static checks, 258 audit names/order and mirror/shared boundaries pass.
+No unchanged rerun, infrastructure retry, cap or proof-limit increase occurred.
+
+Reproduce with scripts/in-bundle lake build on Config.RemoveAllSource,
+Index.TimerSource and Progress.CookieActivationBoundFindings under
+Leanux.Proofs.WG, followed by #print axioms and scripts/in-bundle lake env
+leanchecker --fresh MODULE. Use capped, 32 Lean threads and 16 QEMU slots here.

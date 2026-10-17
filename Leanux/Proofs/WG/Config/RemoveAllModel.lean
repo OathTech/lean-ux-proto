@@ -1,6 +1,6 @@
-import Leanux.Proofs.WG.Config.CollisionModel
+import Leanux.Proofs.WG.Config.CollisionRemovalModel
 import Leanux.Proofs.WG.Config.AllowedPairsModel
-import Leanux.Proofs.WG.Campaign2.View
+import Leanux.Proofs.WG.Campaign2.ProductView
 
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG
@@ -22,7 +22,7 @@ inductive DeadPassEffect : Device → List PeerId → Device → Prop
 /-- Actual post-free device and the snapshot between the two removal passes. -/
 structure RemoveAllCall where
   afterFree : Device
-  afterMark : Campaign2.Snapshot
+  afterMark : Campaign2.Product.Snapshot
 
 def RemoveAllFacts (cut : RemoveAllCall) : Prop :=
   NodePairs cut.afterFree → ListedResidents cut.afterFree cut.afterFree.peerList →

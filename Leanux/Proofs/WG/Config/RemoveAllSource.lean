@@ -7,13 +7,13 @@ set_option maxHeartbeats 800000
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise Std.Do
 
-def removeAllMark (ids : List PeerId) : M Unit := do
+def removeAllMark (ids : List PeerId) : WG.M Unit := do
   for pid in ids do
     _ ← branch .peerRemoveAllIter1 true
     peerMakeDead pid
   _ ← branch .peerRemoveAllIter1 false
 
-def removeAllCleanup (ids : List PeerId) : M Unit := do
+def removeAllCleanup (ids : List PeerId) : WG.M Unit := do
   for pid in ids do
     _ ← branch .peerRemoveAllIter2 true
     peerRemoveAfterDead pid
@@ -24,7 +24,7 @@ theorem removeAllMark_cons (pid : PeerId) (rest : List PeerId) :
       _ ← branch .peerRemoveAllIter1 true
       peerMakeDead pid
       removeAllMark rest) := by
-  simp [removeAllMark, List.forIn_cons, List.forIn_nil, bind_assoc]
+  simp [removeAllMark, List.forIn_cons, bind_assoc]
 
 theorem peerRemoveAll_phases : peerRemoveAll = (do
     free
@@ -35,32 +35,33 @@ theorem peerRemoveAll_phases : peerRemoveAll = (do
 
 theorem removeAllMark_effect (ids : List PeerId) (d : Device)
     (pairs : NodePairs d) (listed : ListedResidents d ids) :
-    Ensures (removeAllMark ids) (fun w => w.k.wg = some d)
-      (fun _ w => ∃ final, w.k.wg = some final ∧ DeadPassEffect d ids final) := by
+    Ensures (removeAllMark ids) (fun w => w.dev = some d)
+      (fun _ w => ∃ final, w.dev = some final ∧ DeadPassEffect d ids final) := by
   induction ids generalizing d with
   | nil =>
-    rw [ensures_iff]
-    simp only [removeAllMark, List.forIn_nil, pure_bind]
-    mvcgen [branch]
-    all_goals exact ⟨d, by assumption, .nil d⟩
+    intro g ambient result final after device run
+    simp [removeAllMark, branch, AmbientM.branch] at run
+    rcases run with ⟨⟨rfl, rfl⟩, rfl⟩
+    exact ⟨d, device, .nil d⟩
   | cons pid rest ih =>
     obtain ⟨p, resident⟩ := listed pid (by simp)
-    have head : Ensures (branch .peerRemoveAllIter1 true)
-        (fun w => w.k.wg = some d) (fun _ w => w.k.wg = some d) := by
-      rw [ensures_iff]
-      mvcgen [branch]
+    have head : Ensures (branch .peerRemoveAllIter1 true : WG.M Bool)
+        (fun g => g.dev = some d) (fun _ g => g.dev = some d) := by
+      intro g ambient result final after device run
+      cases run
+      exact device
     rw [removeAllMark_cons]
     refine ensures_bind _ _ head (fun _ => ?_)
     refine ensures_bind _ _ (peerMakeDead_effect_pairs pid d p resident pairs) ?_
-    intro u w result out pre run
+    intro u g ambient result final after pre run
     obtain ⟨removed, steps, device⟩ := pre
     have nextListed : ListedResidents (deadPeerDevice removed pid p) rest := by
       intro other member
       obtain ⟨q, found⟩ := listed other (List.mem_cons_of_mem pid member)
       obtain ⟨next, nextResident, deadness⟩ := deadStep_residents d removed pid other p q steps resident found
       exact ⟨next, nextResident⟩
-    obtain ⟨final, actual, tail⟩ := ih (deadPeerDevice removed pid p)
-      (deadStep_nodePairs d removed pid p steps pairs) nextListed w result out device run
-    exact ⟨final, actual, .cons d pid rest p removed final resident steps tail⟩
+    obtain ⟨out, actual, tail⟩ := ih (deadPeerDevice removed pid p)
+      (deadStep_nodePairs d removed pid p steps pairs) nextListed g ambient result final after device run
+    exact ⟨out, actual, .cons d pid rest p removed out resident steps tail⟩
 
 end Leanux.Proofs.WG.Config
