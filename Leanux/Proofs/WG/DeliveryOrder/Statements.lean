@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.Queues.RunnerAccount
+import Leanux.Proofs.WG.Queues.TrafficOccurrences
 import Leanux.Proofs.WG.Queues.HolderEntryDispatch
 import Leanux.Proofs.WG.Queues.HolderEntryDeferred
 import Leanux.Proofs.WG.Queues.HolderDumpEntry
@@ -3295,6 +3297,113 @@ theorem original_return_wait_outer_entries (cs : Ledger) (loans : Reservations)
     PrefixEnsures input OwnerChecks.Safe RxHistory.afterAdvance output :=
   ⟨HolderEntryDeferred.sendAll,HolderEntryDeferred.idle,
     HolderEntryDeferred.afterXmit,HolderEntryDeferred.afterAdvance⟩
+
+
+/-- A normal original receive either admits no data, performs the actual
+peer-queue-full cleanup, or accepts a carrier into the peer receive queue.
+Decrypt-ring full remains in the accepted DEAD/NAPI path. -/
+theorem source_receive_dispositions
+    (outcome : AdmissionReceive.Outcome cs next msg src w v a b) :
+    ReceiveEffects.NoAdmission cs next msg src w v a b ∨
+      (∃c,ReceiveEffects.PeerQueueFull cs next msg src w v a b c) ∨
+      ∃c,ReceiveEffects.Accepted cs next msg src w v a b c :=
+  ReceiveEffects.disposition outcome
+
+/-- The complete original inject retains every incoming carrier or records
+its removal in the exact fresh suffix, including the post-admission finish. -/
+theorem source_inject_conserved
+    (outcome : ConservationSource.InjectFinal cs family port msg tos ll dest w h result v k next) :
+    TrafficEffects.Conserved cs next h k := TrafficEffects.inject outcome
+
+/-- Every incoming flood carrier remains pending or appears in the exact
+fresh removal suffix; residual carriers are permitted on normal return. -/
+theorem source_flood_conserved
+    (outcome : FloodAccount.Outcome cs next count port family messages w v h k result) :
+    TrafficEffects.Conserved cs next h k := TrafficEffects.flood outcome
+
+/-- The actual mixed batch, including early done and its finish, retains
+every incoming carrier or records its removal in the fresh suffix. -/
+theorem source_batch_conserved (entries : List Env.BatchItem)
+    (outcome : BatchAccount.Outcome cs next entries w v h k result) :
+    TrafficEffects.Conserved cs next h k := TrafficEffects.batch outcome
+
+/-- Each new final inject carrier has an accepted receive occurrence in
+that exact source certificate, rather than an equal event chosen elsewhere. -/
+theorem source_inject_carrier_origin
+    (outcome : ConservationSource.InjectFinal cs family port msg tos ll dest w h result v k next)
+    (member : c ∈ next) : c ∈ cs ∨
+      TrafficOccurrences.InjectAdmission cs next family port msg tos ll dest w v h k result c :=
+  TrafficOccurrences.inject_origin outcome member
+
+/-- A new final flood carrier identifies an accepted receive at a position
+in the actual ordered source path; equal inputs keep their distinct positions. -/
+theorem source_flood_carrier_origin
+    (outcome : FloodAccount.Outcome cs next count port family messages w v h k result)
+    (member : c ∈ next) : c ∈ cs ∨
+      ∃index,TrafficOccurrences.FloodAdmission cs next count port family messages w v h k result index c :=
+  TrafficOccurrences.flood_origin outcome member
+
+/-- A new final batch carrier identifies an accepted receive in the actual
+done/yield source path and its exact descriptor and section cuts. -/
+theorem source_batch_carrier_origin (entries : List Env.BatchItem)
+    (outcome : BatchAccount.Outcome cs next entries w v h k result)
+    (member : c ∈ next) : c ∈ cs ∨
+      ∃index,TrafficOccurrences.BatchAdmission cs next entries w v h k result index c :=
+  TrafficOccurrences.batch_origin outcome member
+
+/-- A selected accepted inject occurrence is pending at return or removed
+after that exact receive return; named disposition classification is separate. -/
+theorem source_inject_selected_fate
+    (selected : TrafficOccurrences.InjectAdmission cs next family port msg tos ll dest w v h k result c) :
+    TrafficOccurrences.Fate c next h k := TrafficOccurrences.inject_fate selected
+
+/-- Every selected flood occurrence has pending-or-removal fate, including
+occurrences removed before the full source loop returns. -/
+theorem source_flood_selected_fate
+    (selected : TrafficOccurrences.FloodAdmission cs next count port family messages w v h k result index c) :
+    TrafficOccurrences.Fate c next h k := TrafficOccurrences.flood_fate selected
+
+/-- Every selected batch occurrence has pending-or-removal fate in the
+actual continuation, including inline polling and final deferred work. -/
+theorem source_batch_selected_fate (entries : List Env.BatchItem)
+    (selected : TrafficOccurrences.BatchAdmission cs next entries w v h k result index c) :
+    TrafficOccurrences.Fate c next h k := TrafficOccurrences.batch_fate selected
+
+/-- Every original normal syscall derives its source-selected residual
+ledger and next funded entry, including errno returns and return-to-user work. -/
+theorem original_syscall_source_account (call : Syscall)
+    (hi : HolderEntry.Inv cs [] h w)
+    (run : runPrefix (RxHistory.syscall call) w h=(.ok (result,v),k)) :
+    ∃next,(ConservationSyscall.rule call).relation cs w h result v k next ∧ HolderEntry.Inv next [] k v :=
+  ConservationSyscall.normal call hi run
+
+/-- Keeping the actual returned World preserves the original RX journal
+and executable JSON or indexed Stop exactly. No new interpreter is introduced. -/
+theorem initialized_runner_account_correspondence (trace : Leanux.Runner.Trace)
+    (placeholders : Bool) (h : List RxHistory.Event) :
+    runPrefixOuter (RxHistory.executeTraceHistory trace placeholders) h =
+      ((runPrefixOuter (RunnerAccount.observed trace placeholders) h).1.map Prod.fst,
+        (runPrefixOuter (RunnerAccount.observed trace placeholders) h).2) ∧
+    (runPrefixOuter (RunnerAccount.observed trace placeholders) h).1.map Prod.fst=
+      Leanux.Runner.executeTrace trace placeholders :=
+  ⟨RunnerAccount.correspondence trace placeholders h,RunnerAccount.json trace placeholders h⟩
+
+/-- Acceptance by the executable initialized runner derives an actual
+World, unchanged journal and funded source-selected residual receive ledger.
+It does not assert empty completion or whole-pipeline packet-fate conservation. -/
+theorem initialized_runner_source_account (trace : Leanux.Runner.Trace)
+    (placeholders : Bool) (run : Leanux.Runner.executeTrace trace placeholders=.ok result) :
+    ∃v h next,runPrefixOuter (RunnerAccount.observed trace placeholders) []=(.ok (result,v),h) ∧
+      (RunnerAccount.rule trace placeholders).relation [] [] (result,v) h next ∧ HolderEntry.Inv next [] h v :=
+  RunnerAccount.accepted trace placeholders run
+
+/-- The concrete initialized source certificate selects one residual ledger
+for a fixed actual run. This is ledger determinacy, not packet multiplicity. -/
+theorem initialized_runner_source_ledger_unique (trace : Leanux.Runner.Trace)
+    (placeholders : Bool)
+    (left : (RunnerAccount.rule trace placeholders).relation [] [] out h cs)
+    (right : (RunnerAccount.rule trace placeholders).relation [] [] out h next) : cs=next :=
+  RunnerAccount.unique trace placeholders left right
 
 
 end Leanux.Proofs.WG.DeliveryOrder

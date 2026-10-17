@@ -292,6 +292,16 @@ remains open. All prior bodies are unchanged. The first aggregate gate failed
 on implicit binder collisions; explicit binders repair them. Final gate:
 883 jobs/809 declarations in 6.089 seconds. Fresh root replay passes in 112.708 seconds without warnings.
 
+The [initialized-account checkpoint](2026-10-17-r4-initial-account.md)
+adds thirteen modules and 132 theorems: 838 files/11,440 theorems, 289 R4 terminals
+and 823 total declarations. Every original syscall and the accepted initialized
+runner derives its actual source-selected funded residual ledger. Exact erasure
+retains JSON/Stops and the original RX journal. Traffic paths locate accepted
+positions and local pending-or-removal fates. Peer-queue ENOSPC cleanup and
+ring-full EPIPE are now correctly named. Earlier theorem bodies are unchanged.
+Gate: 896 jobs/823 declarations, 8.223 seconds. Fresh replay: PASS in 113.801 seconds without warnings.
+Initialized admission-to-named-disposition conservation remains open.
+
 The pre-split checkpoint validated every baseline result surface over
 `cb2348e`. R3 packet authorization is now closed over the current split tree;
 R4 receive-pipeline conservation remains open. Earlier positive results and runtime findings retain
@@ -689,17 +699,16 @@ correspondence remains informal.
 
 ## R4 — queue, poll and delivery-order components (in progress)
 
-**State-split outer-boundary extension.** The [current report](2026-10-17-r4-outer-boundary.md)
-records 234 additional theorems in fifteen modules and sixteen terminal exports.
-The tree has 825 proof files/11,308 theorems, with 275 R4 terminals and all 259
-preceding bodies unchanged. Full batch and whole traffic callers now select
-actual residual ledgers and next outer entries. Fixture, lifecycle/configuration,
-controls, dump/transmit dispatch and the four return-to-user waits retain the
-combined entry, including absent devices. Structural frames follow concrete
-Stack, crypt/TX, scheduler and deferred calls. A checked arbitrary-entry
-placeholder witness refutes unconditional batch completion; initialized reachability
-and a kernel finding are not claimed. The actual syscall/runner chain and
-admission-to-disposition conservation remain open. Chronological GRO order stays refuted.
+**State-split initialized-account extension.** The [current report](2026-10-17-r4-initial-account.md)
+records 132 additional theorems in thirteen modules and fourteen terminal exports.
+The tree has 838 proof files/11,440 theorems, with 289 R4 terminals and all 275
+preceding bodies unchanged. Every original syscall and accepted initialized
+runner now derives a concrete source-selected residual ledger and funded entry.
+Exact projection retains its actual World, journal, JSON and indexed errors.
+Traffic paths identify accepted receive positions and local pending-or-removal
+fates. Peer-queue ENOSPC cleanup is distinct from ring-full EPIPE's queued DEAD
+path. Stopped-state accounts and initialized admission-to-named-disposition
+conservation remain open. Chronological GRO order stays refuted.
 
 **Original versus proved.** The charter requires accepted-schedule order and no silent loss/duplication.
 [Terminals](../Leanux/Proofs/WG/DeliveryOrder/Statements.lean) prove initialized committed callback-entry stamp
@@ -870,13 +879,12 @@ in prose on `requireNotPending`, actually `State.lean:102`'s `pure ()`. Later in
 quiescence. No accepted loss/ duplication witness was found: arbitrary last-peer erasure is not initialized, and the
 poll's last-put candidate Stops at a later getter. No kernel bug claim.
 
-**Remaining obligations.** The supplied-entry account now includes nullable
-compatibility, source-acquired credits, worker-local holders, physical rings and
-concrete ingress/decrypt propagation. Actual full traffic calls and most outer
-boundaries select their dynamic ledger. The initialized syscall/runner chain
-must retain each source occurrence, and join admitted carriers to named rejection,
-validation, keepalive, purge/free and handoff dispositions beyond the local
-post-removal partition. Queue idleness does not imply empty stores or peer queues;
+**Remaining obligations.** The initialized syscall/runner chain now selects
+its actual residual ledger and derives the full funded entry. Actual traffic
+paths identify accepted receive positions and their local pending-or-removal
+fates. These selected occurrences must be carried through outer continuations
+and joined to named rejection, validation, keepalive, purge/free and completed
+Stack dispositions. Queue idleness does not imply empty stores or peer queues;
 finite prefixes retain pending obligations. Stopped admission and selected/GRO
 phases need separate accounting. W7 item/mark transport remains open.
 

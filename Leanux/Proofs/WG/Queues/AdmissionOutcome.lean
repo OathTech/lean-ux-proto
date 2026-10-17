@@ -14,7 +14,8 @@ def carrier (w : WGWorld) (ctx : RxOrigin.Admission) : Option Carrier := do
   return ⟨⟨d.ifindex,ctx.slot⟩,⟨d.ifindex,ctx.packet.peer,p.internalId⟩,.unpublished⟩
 
 /-- Every ledger choice is fixed by the actual source cuts, including rejection
-before admission and disposal on the full-ring return. -/
+before admission and disposal on the full peer-queue (-ENOSPC) return.
+Decrypt-ring full (-EPIPE) retains the queued DEAD carrier. -/
 def Outcome (cs next : Ledger) (msg : List UInt8) (src : SkbSource) (ds : Nat)
     (w v : WGWorld) (a b : Ambient) (r : WGRunWitness (Option RxOrigin.Admission)) : Prop :=
   r.before=w ∧ r.ambientBefore=a ∧ r.Valid (RxOrigin.admitSource msg src ds) ∧
