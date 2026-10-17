@@ -49,7 +49,7 @@ theorem clear_loop_run (a : Array Nat) (current : Nat) (xs : List Nat)
   | nil => rfl
   | cons i xs ih =>
     have hj : ¬(i + current) % 128 ≥ a.size := by rw [hsize]; omega
-    simp only [List.forIn_cons, clearBody, hj, if_false, bind_pure_comp,
+    simp only [List.forIn_cons, clearBody, hj, ite_false, bind_pure_comp,
       StateT.run_bind]
     change (forIn xs (a.set! ((i + current) % 128) 0) (clearBody current)).run
       (record ambient .ctrClearIter true) = _
@@ -136,13 +136,11 @@ theorem mirror_clear_loop (a : Array Nat) (current top : Nat)
       (fun i a => StateT.lift (clearBody current i a)) := by
     funext i a g env
     by_cases hj : (i + current) % 128 ≥ a.size <;>
-      simp [clearBody, hj, branch, AmbientM.branch, invariant, AmbientM.invariant,
-        StateT.run_bind, StateT.run_lift] <;> rfl
+      simp [clearBody, hj, branch, AmbientM.branch, invariant, AmbientM.invariant] <;> rfl
   rw [hbody, Std.Legacy.Range.forIn_eq_forIn_range']
   simp only [forIn_lift, StateT.run_lift, StateT.run_bind]
   have h := clear_loop_run a current (List.range' 1 top) ambient hsize
-  simpa [Std.Legacy.Range.size, h] using congrArg (fun out => out >>= fun (x, a) =>
-    Except.ok ((x, w), a)) h
+  simp [Std.Legacy.Range.size, h]
 
 /-- Exact successful execution equality for the fixed mirror's validator. -/
 theorem counterValidate_execution (w : WGWorld) (ambient : Ambient) (d : Device)
@@ -152,21 +150,21 @@ theorem counterValidate_execution (w : WGWorld) (ambient : Ambient) (d : Device)
   change d.keypairs[kp]? = some k at hk
   by_cases h1 : k.receivingCounter.counter ≥ REJECT_AFTER_MESSAGES + 1
   · simp [counterValidate, getKeypair, getDev, hd, hk, WG.orM, h1, cExecution,
-      branchCmp, AmbientM.branchCmp, recordCmp, StateT.run_bind, StateT.run_lift]
+      branchCmp, AmbientM.branchCmp, recordCmp, StateT.run_bind]
     rfl
   · by_cases h2 : nonce ≥ REJECT_AFTER_MESSAGES
     · simp [counterValidate, getKeypair, getDev, hd, hk, WG.orM, h1, h2, cExecution,
-        branchCmp, AmbientM.branchCmp, recordCmp, StateT.run_bind, StateT.run_lift]
+        branchCmp, AmbientM.branchCmp, recordCmp, StateT.run_bind]
       rfl
     · by_cases h3 : 8128 + (nonce + 1) < k.receivingCounter.counter
       · simp [counterValidate, getKeypair, getDev, hd, hk, WG.orM, h1, h2, h3,
           cExecution, COUNTER_WINDOW_SIZE, branch, branchCmp, AmbientM.branch,
-          AmbientM.branchCmp, record, recordCmp, StateT.run_bind, StateT.run_lift]
+          AmbientM.branchCmp, record, recordCmp, StateT.run_bind]
         rfl
       · by_cases h4 : nonce + 1 > k.receivingCounter.counter
         · simp only [counterValidate, StateT.run_bind, getKeypair_run w ambient d kp k hd hk,
             except_ok_bind, WG.orM, h1, h2, h3, h4, decide_false, decide_true,
-            Bool.false_eq_true, if_false, if_true, COUNTER_WINDOW_SIZE,
+            ite_false, ite_true, COUNTER_WINDOW_SIZE,
             COUNTER_BITS_TOTAL, BITS_PER_LONG, cExecution]
           simp only [show 8192 / 64 = 128 from rfl]
           have hloop := mirror_clear_loop _ (k.receivingCounter.counter / 64)
@@ -176,8 +174,7 @@ theorem counterValidate_execution (w : WGWorld) (ambient : Ambient) (d : Device)
               .ctrTooOld false) .ctrAdvance true) hsize
           simp only [branch, branchCmp, StateT.run_monadLift, monadLift_self, StateT.run_bind,
             branch_run, branchCmp_run, except_ok_bind, StateT.run_pure, except_pure,
-            h1, h2, h3, h4, decide_false, decide_true, Bool.false_eq_true,
-            Bool.true_eq_false, ite_false, ite_true]
+            Bool.false_eq_true, ite_false, ite_true]
           simp only [branch] at hloop
           rw [hloop]
           simp only [except_ok_bind]
@@ -185,14 +182,13 @@ theorem counterValidate_execution (w : WGWorld) (ambient : Ambient) (d : Device)
           · rfl
           · simp [hsize, Nat.mod_lt _ (by decide : 0 < 128)]
         · simp only [counterValidate, StateT.run_bind, getKeypair_run w ambient d kp k hd hk,
-            except_ok_bind, WG.orM, h1, h2, h3, h4, decide_false, decide_true,
-            Bool.false_eq_true, ite_false, ite_true, COUNTER_WINDOW_SIZE,
+            except_ok_bind, WG.orM, h1, h2, h3, h4, decide_false,
+            ite_false, COUNTER_WINDOW_SIZE,
             COUNTER_BITS_TOTAL, BITS_PER_LONG, cExecution]
           simp only [show 8192 / 64 = 128 from rfl]
           simp only [branch, branchCmp, StateT.run_monadLift, monadLift_self, StateT.run_bind,
             branch_run, branchCmp_run, except_ok_bind, StateT.run_pure, except_pure,
-            h1, h2, h3, h4, decide_false, decide_true, Bool.false_eq_true,
-            Bool.true_eq_false, ite_false, ite_true]
+            Bool.false_eq_true, ite_false]
           rw [Array.getElem?_eq_some_getElem!]
           · rfl
           · simp [hsize, Nat.mod_lt _ (by decide : 0 < 128)]
@@ -227,7 +223,7 @@ theorem cExecution_refines_step (w : WGWorld) (ambient : Ambient) (d : Device) (
   · have h1 : ¬ k.receivingCounter.counter ≥ REJECT_AFTER_MESSAGES + 1 := by have := he.1; omega
     have h2 : ¬ nonce ≥ REJECT_AFTER_MESSAGES := by have := he.2.1; omega
     have h3 : ¬8128 + (nonce + 1) < k.receivingCounter.counter := by have := he.2.2; omega
-    rw [step, if_pos he]
+    rw [step, ite_eq_left he]
     by_cases h4 : nonce + 1 > k.receivingCounter.counter
     · simp [cExecution, h1, h2, h3, h4, fresh, prepared, update,
         zero_bit_equiv, Nat.max_eq_right (by omega : k.receivingCounter.counter ≤ nonce + 1),
@@ -235,7 +231,7 @@ theorem cExecution_refines_step (w : WGWorld) (ambient : Ambient) (d : Device) (
     · simp [cExecution, h1, h2, h3, h4, fresh, prepared, update,
         zero_bit_equiv, Nat.max_eq_left (by omega : nonce + 1 ≤ k.receivingCounter.counter),
         counterAt, store, record, recordCmp, hd]
-  · rw [step, if_neg he]
+  · rw [step, ite_eq_right he]
     by_cases h1 : k.receivingCounter.counter ≥ REJECT_AFTER_MESSAGES + 1
     · simp [cExecution, h1, hlookup]
     · by_cases h2 : nonce ≥ REJECT_AFTER_MESSAGES
@@ -260,12 +256,12 @@ theorem step_accepts_iff (c : ReplayCounter) (nonce : Nat) :
     (step c nonce).1 = true ↔ eligible c nonce ∧
       (prepared c (nonce + 1))[slot (nonce + 1)]!.testBit (bit (nonce + 1)) = false := by
   by_cases he : eligible c nonce
-  · rw [step, if_pos he]
+  · rw [step, ite_eq_left he]
     dsimp only [fresh]
     cases hb : (prepared c (nonce + 1))[slot (nonce + 1)]!.testBit (bit (nonce + 1)) with
     | false => exact ⟨fun _ => ⟨he, rfl⟩, fun _ => rfl⟩
     | true => exact ⟨fun h => Bool.noConfusion h, fun h => Bool.noConfusion h.2⟩
-  · rw [step, if_neg he]
+  · rw [step, ite_eq_right he]
     simp [he]
 
 /-- S2's acceptance characterization, stated directly for the mirror.
@@ -298,6 +294,6 @@ theorem S2_update (w w' : WGWorld) (ambient ambient' : Ambient) (d : Device) (kp
   have hb : (step k.receivingCounter nonce).1 = true := (congrArg (fun out => out.1.1) hp).symm
   have he := (step_accepts_iff _ _).mp hb |>.1
   rw [hw]
-  simpa only [step, if_pos he] using hcounter
+  simpa only [step, ite_eq_left he] using hcounter
 
 end Leanux.Proofs.WG.CounterWindow

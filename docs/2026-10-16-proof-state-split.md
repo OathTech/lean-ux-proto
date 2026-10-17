@@ -83,6 +83,12 @@ deprecated tactics and unused-simp warnings; those remain migration work.
 Lean 4.35's vcgen is a different implementation from mvcgen, so a blind rename
 does not preserve the existing proof scripts.
 
+CounterWindow/Refinement's warning cleanup preserves all statements and
+premises. Its 31-job scoped build, all 24 named declaration axiom checks,
+fresh kernel replay and independent source review pass, with zero own warnings.
+One changed-source development check failed before the final cleanup passed.
+This proof-body maintenance does not change the retrofit census.
+
 Remaining work is the lifetime and routing/origin terminal carry, stamped
 timer/traffic/environment/runner history, material support callers, warning
 cleanup, the full proof gate and terminal replay. Deterministic source/proof
