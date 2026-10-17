@@ -120,11 +120,13 @@ theorem setPort_nonzero_configurationFrame (port : Nat) (nonzero : port ≠ 0)
     · exact whole d g _ value final after pre
         (by simpa [setPortSource, getDev, device, same, branch, AmbientM.branch] using run)
 
-/-- The original selected-device port request preserves the getter socket,
-fixture selector, and bind lookup. No running, network, or clearing-success
-premise is required; Stops remain outside this partial postcondition. -/
-theorem setDevice_port_nonzero_configurationFrame (d : Device) (port : Nat)
-    (nonzero : port ≠ 0) (bound : Nat → Bool) (sock : NlSock) (fixtures : FixtureDevices) :
+/-- The actual selected-device setter prefix transports a preservation contract
+for its port operation. The permission-refusal branch is included. -/
+theorem setDevice_port_configurationFrame_of_setPort (d : Device) (port : Nat)
+    (bound : Nat → Bool) (sock : NlSock) (fixtures : FixtureDevices)
+    (portFrame : Ensures (setPort port)
+      (fun g => g.portBound = bound ∧ readbackFrame g sock fixtures)
+      (fun _ g => g.portBound = bound ∧ readbackFrame g sock fixtures)) :
     Ensures (wgSetDevice (portAttrs d port))
       (fun g => g.dev = some d ∧ selectsDevice g d ∧ g.portBound = bound ∧
         readbackFrame g sock fixtures)
@@ -151,7 +153,7 @@ theorem setDevice_port_nonzero_configurationFrame (d : Device) (port : Nat)
       rcases run with ⟨⟨rfl, rfl⟩, rfl⟩
       exact pre
   have whole : Ensures (setPort port >>= finish) P (fun _ => P) :=
-    ensures_bind _ _ (setPort_nonzero_configurationFrame port nonzero bound sock fixtures) tail
+    ensures_bind _ _ portFrame tail
   intro g ambient value final after pre run
   obtain ⟨looked, middle, next, lookupRun, result, device, boundAt⟩ :=
     (returns_iff _ _ _).mpr (lookupInterface_index_bound d bound) g ambient
@@ -198,5 +200,18 @@ theorem setDevice_port_nonzero_configurationFrame (d : Device) (port : Nat)
       split <;> rfl
     exact whole {middle with dev := some updated} before value final after
       ⟨boundAt, saved⟩ (source.symm.trans run)
+
+
+/-- The original selected-device port request preserves the getter socket,
+fixture selector, and bind lookup. No running, network, or clearing-success
+premise is required; Stops remain outside this partial postcondition. -/
+theorem setDevice_port_nonzero_configurationFrame (d : Device) (port : Nat)
+    (nonzero : port ≠ 0) (bound : Nat → Bool) (sock : NlSock) (fixtures : FixtureDevices) :
+    Ensures (wgSetDevice (portAttrs d port))
+      (fun g => g.dev = some d ∧ selectsDevice g d ∧ g.portBound = bound ∧
+        readbackFrame g sock fixtures)
+      (fun _ g => g.portBound = bound ∧ readbackFrame g sock fixtures) := by
+  exact setDevice_port_configurationFrame_of_setPort d port bound sock fixtures
+    (setPort_nonzero_configurationFrame port nonzero bound sock fixtures)
 
 end Leanux.Proofs.WG.Config

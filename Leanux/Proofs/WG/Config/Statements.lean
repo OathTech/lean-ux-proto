@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Config.ZeroPortMixedGetterClaims
 import Leanux.Proofs.WG.Config.NonzeroPortMixedGetterClaims
 import Leanux.Proofs.WG.Config.PortMixedGetterClaims
 import Leanux.Proofs.WG.Config.FwmarkMixedGetterClaims
@@ -2303,5 +2304,48 @@ theorem original_nonzero_port_mixed_get_after_set (d : Device) (peers : PeerId �
           CursorHeld postSet (mixedPagesDevice postSet pages) none) :=
   nonzero_port_mixed_get_after_set d peers nodes port bound sock nonzero net residents readable
     ready headerFits fresh cursorData within idle emptyQueue
+
+/-- On normal return, a zero-port setter followed by full finite mixed readback
+exposes the actual selected port and socket fields, or the unchanged/stopped
+branch, with ordered source clearing and getter cursor effects. Missing draws,
+random collisions and reset Stops are retained; no draw-success premise. -/
+theorem original_zero_port_mixed_get_after_set (d : Device) (peers : PeerId → Peer)
+    (nodes : NodeId → AipNode) (sock : NlSock) (net : d.creatingNet = true)
+    (residents : ∀ q ∈ d.peerList, d.peers[q]? = some (peers q))
+    (readable : ∀ pid ∈ d.peerList, ∀ id ∈ (peers pid).allowedipsList, d.nodes[id]? = some (nodes id))
+    (ready : MixedPageReady (requestGeneration d) peers nodes
+      (mixedInitialRows (requestGeneration d) peers) {hasWg := true})
+    (headerFits : devicePrefixSpace (requestGeneration d) ≤ NLMSG_GOODSIZE)
+    (fresh : MixedPlanFresh (requestGeneration d) peers
+      (mixedPages (requestGeneration d) peers nodes (mixedInitialRows (requestGeneration d) peers)
+        {hasWg := true} ready))
+    (cursorData : MixedPlanCursorData (requestGeneration d)
+      (mixedPages (requestGeneration d) peers nodes (mixedInitialRows (requestGeneration d) peers)
+        {hasWg := true} ready))
+    (within : mixedPageReceiveCount
+      (mixedPages (requestGeneration d) peers nodes (mixedInitialRows (requestGeneration d) peers)
+        {hasWg := true} ready) ≤ 4096)
+    (idle : sock.cbRunning = false) (emptyQueue : sock.queue = []) :
+    let pages := mixedPages (requestGeneration d) peers nodes
+      (mixedInitialRows (requestGeneration d) peers) {hasWg := true} ready
+    Campaign2.Ensures (do
+      let ret ← wgSetDevice (portAttrs d 0)
+      let dump ← wgGetDevice (byIndex d)
+      pure (ret,dump))
+      (fun s => s.wg.device = some d ∧ ClaimView.selectsDevice s d ∧
+        s.wg.nlSock7 = sock)
+      (fun result s => ∃ chosen, ZeroPortRequestChoice d chosen ∧
+        result = (0,.ok (mixedGetterJson (zeroPortRequestDevice d chosen) peers nodes)) ∧
+        ∃ postSet, ∃ values : PeerId → Peer,
+          withoutPeers postSet = withoutPeers (zeroPortRequestDevice d chosen) ∧
+          (if d.incomingPort = 0 then postSet = requestGeneration d
+            else ClearedPeerStore d postSet d.peerList) ∧
+          (∀ q ∈ d.peerList, postSet.peers[q]? = some (values q)) ∧
+          (∀ q, keyGetterPeerView (values q) = keyGetterPeerView (peers q)) ∧
+          s.wg.device = some (mixedPagesDevice postSet pages) ∧
+          s.wg.nlSock7 = socketReadbackFinal sock postSet ∧
+          CursorHeld postSet (mixedPagesDevice postSet pages) none) :=
+  zero_port_mixed_get_after_set d peers nodes sock net residents readable ready headerFits
+    fresh cursorData within idle emptyQueue
 
 end Leanux.Proofs.WG.Config
