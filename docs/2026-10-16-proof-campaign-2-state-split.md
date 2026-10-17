@@ -20,10 +20,10 @@ and attributed theorem declarations. Campaign 2 owns 427 Lean files,
 | --- | ---: | ---: | ---: | ---: | --- |
 | Common projection | 2 | 0 | 0 | 0 | Actual native WG/Ambient and full Product observations carried; no reconstructed execution states. |
 | H1 Noise | 35 | 171 | 22 | 185 | The full Noise closure is current, including restart support. Six type-given frames are deleted. Wider caller/lifetime/reachability and clock-provenance charter claims remain open. |
-| H2 Index | 68 | 318 | 52 | 224 | Table, lookup, collision records, allocation, owner invariants and lifecycle support carried; seven type-given frames deleted. Exact peer-release outcomes replace stale totality, with checked counterexamples. Terminal closure and whole-driver coherence remain pending. |
+| H2 Index | 68 | 318 | 52 | 232 | Table, lookup, collision records, allocation, owner invariants and lifecycle support carried; seven type-given frames deleted. Exact peer-release outcomes replace stale totality, with checked counterexamples. Terminal closure and whole-driver coherence remain pending. |
 | H3 Roaming | 35 | 119 | 13 | 157 | Endpoint/publication, polling, attempt facts, crypto, lookup and response-caller factors/facts carried with full Product certificates; two type-given frames deleted. The full terminal closure is current, including initiation/response audits with actual Product outcomes. Wider roaming/provenance charter gaps remain open. |
-| H4 Configuration | 130 | 554 | 79 | 374 | Scalar, identity, port, dump, allowed-IP and structural support carried; three type-given frames deleted. Quiet timer cleanup and queued-send observations are corrected; queued-send and removal totality have checked stale-statement counterexamples. Remaining readback/effects and terminal closure remain pending. |
-| H5 Progress | 59 | 265 | 42 | 177 | Pure/control, cut, jitter, index, poll bounds, dispatch, scheduler turns, stack/probe frames, queue flush contracts, drain selection and Product observation bridge carried; one type-given index frame deleted. The old backlog fixture now has a checked exact runner rejection. Receive-ring activation models, general runner boundaries, drain bounds are carried; terminal closure remains pending. |
+| H4 Configuration | 130 | 554 | 79 | 390 | Scalar, identity, port, dump, allowed-IP and structural support carried; three type-given frames deleted. Quiet timer cleanup and queued-send observations are corrected; queued-send and removal totality have checked stale-statement counterexamples. Remaining readback/effects and terminal closure remain pending. |
+| H5 Progress | 59 | 265 | 42 | 180 | Pure/control, cut, jitter, index, poll bounds, dispatch, scheduler turns, stack/probe frames, queue flush contracts, drain selection and Product observation bridge carried; one type-given index frame deleted. The old backlog fixture has checked exact runner and direct-fixture rejections. Receive-ring activation models, general runner boundaries, drain bounds are carried; terminal closure remains pending. |
 | H6 Timer discipline | 98 | 404 | 50 | 171 | Base/guard/jitter, arming/wheel, recorded clock and initiation-send arming contracts carried; three type-given frames deleted. Exact wheel corrections are explicit; queue/pending and retained-worker frames are carried; broader timer episodes and terminal closure remain pending. |
 
 Retyped, deleted and retained counts will be reported per validated tranche.
@@ -3920,5 +3920,94 @@ or guest run occurred in this tranche.
 Reproduce with scripts/in-bundle lake build on Roaming.Statements,
 TimerDiscipline.RemainingSitesSource and Config.DumpCoalesce under
 Leanux.Proofs.WG, followed by #print axioms and
+scripts/in-bundle lake env leanchecker --fresh MODULE for each root.
+Use capped, 32 Lean threads and 16 QEMU slots on this host.
+
+
+## Ordered key installation, dump transport and staged table invariants
+
+| Tranche | Before | Retyped | Corrected | Deleted | Kept | Added | After |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Config.KeyInstallEffects | 4 | 1 | 3 | 0 | 0 | 5 | 9 |
+| Config.DumpTransport and DeviceDumpFrames | 4 | 3 | 0 | 0 | 1 | 3 | 7 |
+| Index.StagedSource | 8 | 8 | 0 | 0 | 0 | 0 | 8 |
+| Progress.BatchBacklog | 1 | 0 | 1 | 0 | 0 | 2 | 3 |
+| This tranche | 17 | 12 | 4 | 0 | 1 | 10 | 27 |
+| Cumulative processed baseline and checked support | 1,196 | 915 | 47 | 22 | 212 | 141 | 1,315 |
+
+The census is 533 campaign-owned files, 1,950 theorems and 398 checked proof
+modules; 635 baseline declarations await validation. Counts are H1 185, H2 232,
+H3 157, H4 390, H5 180 and H6 171. H1/H3 terminal closures remain current;
+H2/H4/H5/H6 and the full gate remain lagging. No new charter result is claimed.
+
+KeyInstallEffects replaces three stale deterministic queued-send predictions
+with the actual observed per-peer relation and ordered observations. The
+original arbitrary peer-list, aliasing, duplicate-id and Device-present domains
+remain; missing peers retain their actual prefix failures. Each successful
+cons uses the actual head execution and successor Device before the tail.
+The identity/cookie prefix preserves source ordering and short-circuit flags.
+Loop and installation erasures cover failures as well as normal returns.
+The missing-peer contract is retyped unchanged. Three private supports and
+two public erasures are added. The old KeyPeerRun definition remains for
+pending consumers; review corrected its comment to identify its prediction
+as historical, not current source coverage.
+
+DumpTransport retains every original singleton/resident/empty/room, context,
+sequence, active/idle and device-selector premise, with arbitrary initial
+socket queue and Ambient. Completion appends exactly the data and DONE chunk,
+clears the running callback and preserves Device; recvmsg returns the exact
+chunk and clears the consumed queue. Three separate DeviceDumpFrames companions
+thread arbitrary WG predicates through the actual total dump path. They prove
+substantive within-WG preservation; they are not type-given deletions.
+
+Index.StagedSource carries all eight original table-invariant contracts,
+including immediate and final unhash, queued initiation, peer publication,
+data creation and staged fallbacks. Native table predicates preserve the
+original observed table/owner/cursor scope. Missing references, nullable owner
+words, record/queue refusal, allocation failure and all partial error paths
+remain. Local composition proofs use the existing checked contracts; no
+shared lemma or generic shared layer is copied.
+
+BatchBacklog's historical direct-call fixture is now explicitly labeled as
+omitting the current runner's FIB boot. Its formerly positive backlog claim
+is corrected to no returned backlog, with two supporting claims proving the
+exact route/source-disagreement invariant Stop. This is a fixture/statement
+artifact, not a mirror or kernel finding. The actual executeTrace rejection
+is already checked separately in BatchBacklogAcceptance and is a different
+batch-boundary Stop. A compiled diagnostic exposed the distinction; only the
+subsequent kernel-checked exact equality is credited.
+
+Independent review found no proof/domain issues in the configuration carries;
+its historical-relation documentation finding is fixed. Root reviewed the
+staged table contracts against their original scopes. Scoped builds pass
+78 jobs for key installation, 82 for dump/install, 169 for staged source,
+and 218 combined. All changed proof files are warning-free. The combined
+closure reports one inherited String.mk deprecation in unchanged
+Leanux/Env.lean:865; the mirror boundary prevents repairing it here.
+A subsequent 78-job build checks the review comment repair.
+Axiom inspection covers 789 logical roots in 154 proof modules, including
+481 public theorem roots, with only standard axioms.
+All four fresh kernel replays pass.
+Static checks, all 258 terminal names/order and mirror/shared boundaries pass.
+
+Key-install probes 1–6 failed dependent equality, record layout, Except bind
+normalization and substituted-name handling; probe 7 passes with no warnings
+after using the exact induction hypothesis. Dump-frame probe 1 failed only
+conjunction association and its two dependent destructurings; probe 2 passes.
+Transport probes 1–3 failed bind normalization, a missing null-release log
+entry and an overbroad scratch replacement; probe 4 closes the dump contract.
+Probe 5 adds start/receive and fails record layout; probe 6 fixes it and
+passes all four original contracts. Staged probes 1–3 fail matcher reduction,
+the unchanged heartbeat bound, comparison operand type and guarded skb
+normalization; probe 4 passes all eight contracts. Backlog probes 1–3 expose
+record layout, generic monad inference, unavailable Stop equality and the
+wrong expected rejection. One compiled diagnostic identifies the fixture
+Stop; probe 4 proves it and the corrected backlog. Every failure remains a
+failure; no unchanged rerun, infrastructure retry, cap or proof-limit increase
+occurred.
+
+Reproduce with scripts/in-bundle lake build on Config.KeyInstallEffects,
+Config.DumpTransport, Index.StagedSource and Progress.BatchBacklog under
+Leanux.Proofs.WG, then #print axioms and
 scripts/in-bundle lake env leanchecker --fresh MODULE for each root.
 Use capped, 32 Lean threads and 16 QEMU slots on this host.
