@@ -88,6 +88,25 @@ Reconstruction covers table membership/order within buckets, embedded owner
 words and peer reference counts. It does not reconstruct a whole World.
 Environment records and diagnostic histories remain separate.
 
+The allowed-IPs extension runs the same experiment at trie headers, helper
+returns and loop exits for IPv4 and IPv6. Prepare its independent three-way
+check and run both paired suites from the worktree root:
+
+```sh
+LEANUX_QEMU_SLOTS=16 capped -- python3 -B binary/allowedips_probe.py --budget 100000
+(cd binary && capped -- lake build binary-pair-allowedips)
+capped -- binary/.lake/build/bin/binary-pair-allowedips .tmp/binary-allowedips/input-5.json
+capped -- binary/.lake/build/bin/binary-pair-allowedips .tmp/binary-allowedips/input-8.json
+```
+
+`allowedips_probe.py --check PATH --budget 100000` reuses an existing
+allowed-IPs-profile recording. These trie entries are materialized source
+prefixes, not captured kernel states. The suites include persistent repeated
+calls, structural variations and corruption controls. A dying peer is an
+explicit source refusal, checked against the executed binary retry edge;
+it is not a passing lookup simulation. See the plan's tested-trie checkpoint
+for counts and the distinction between testing and the pending symbolic join.
+
 `capture_lookup.py` separately captures actual entry/return registers and
 memory on a rerun of that recorded workload, using QEMU TCG hardware
 breakpoints and register/memory reads. After the first command above, use

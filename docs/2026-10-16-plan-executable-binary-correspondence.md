@@ -539,3 +539,52 @@ complete a universal proof, memory-permission/lifetime proof, whole-World
 reconstruction, actual concurrent replay, or the M2 experiment. The next
 checkpoint is executable trie reconstruction and loop assertions on IPv4 and
 IPv6, followed by the frozen-candidate proof experiment on an unfinished join.
+
+### Tested trie candidate, 2026-10-17
+
+Stage 5 now has an executable candidate in `PairTrie.lean`,
+`PairAllowedips.lean` and `PairAllowedipsMain.lean`. This checkpoint freezes
+those definitions before the stage-6 proof attempt. The target is the
+existing source `AllowedipsSource.iteration`, whose connection to the actual
+mirror is already proved. Reconstruction decodes all named trie nodes and
+peer refcounts; the executable heap assertion checks parent uniqueness,
+prefix consistency and increasing CIDRs. Parent bookkeeping and unrelated
+World fields remain outside reconstruction. Roots and pointer identities
+are fixed call inputs. These fixtures are materialized from recorded source
+prefixes; they are **not captured allowed-IPs kernel heaps**.
+
+Both address families run through common_bits and the real callback bodies.
+Headers check the current node, remembered node, width, saved root, swapped
+query and preempt count, beside reconstruction. A common_bits return checks
+AL, its actual ABI result; the old helper proof already explains why the
+whole RAX is not that result on IPv6. Exits check the independently chosen
+successor and remembered node. Return checks reconstructed state, result,
+ABI, preempt count, pending softirq, coverage and memory-access footprints.
+Repeated calls retain binary memory. Neither intermediate memory nor a
+binary successor is manufactured from the mirror's expected result.
+
+The independent three-way tests against the existing `b1_trie_routing`
+recording pass: operation 5 executes 1,592 instructions with 50 coverage and
+21 comparison records; operation 8 executes 1,510 instructions with 47
+coverage and 22 comparison records. The paired IPv4 suite has 9 positive
+cases, 20 calls over two undefined seeds and 112 headers; IPv6 has 10 cases,
+22 calls and 106 headers. Each suite has 11 corruption controls plus one
+explicit dying-peer refusal. Structural cases cover empty roots, full
+prefixes, mismatches, absent children, remembered peers and 2/8/32-node
+walks. The dying-peer binary reaches its retry edge; the source explicitly
+refuses that path. This is not counted as a successful function simulation.
+
+Runtime development found no new correspondence discrepancy. The 32-node
+IPv6 case did fail the 10,000-instruction whole-call budget (10,994 are
+required); that was a failed run. The explicit budget is now 100,000 for
+this suite. A premature run while regenerated inputs were still being
+prepared repeated that same failure; the completed preparation and both
+suites then passed. Capped runtime was about 0.4 seconds for IPv4 and 0.6
+seconds for IPv6, excluding build and input preparation. These are tiny
+fixtures and no campaign-wide performance estimate follows.
+
+[AGENT 2026-10-17] The next experiment is the bounded trie-loop join using
+this exact reconstruction, reusing the already-proved physical bodies and
+source presentation. Existing callback contracts remain explicit. Record
+any missing separation or representation bridge as proof work, not as a
+runtime-discovered invariant or a completed function theorem.
