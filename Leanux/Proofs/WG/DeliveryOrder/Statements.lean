@@ -1,3 +1,11 @@
+import Leanux.Proofs.WG.Queues.RxCarrierInitial
+import Leanux.Proofs.WG.Queues.RxDrainBoundary
+import Leanux.Proofs.WG.Queues.DecryptStable
+import Leanux.Proofs.WG.Queues.RxClearQueue
+import Leanux.Proofs.WG.Queues.CurrentSlots
+import Leanux.Proofs.WG.Queues.NapiFrames
+import Leanux.Proofs.WG.Queues.RxStableFrames
+
 import Leanux.Proofs.WG.Queues.RxIngressStable
 import Leanux.Proofs.WG.Queues.RxConsumeProtection
 import Leanux.Proofs.WG.Queues.RxCleanupFindings
@@ -1887,5 +1895,136 @@ theorem original_consume_data_stable_rx
     exact ⟨consume_stable hi hf hs physical w.ambient v.ambient native,
       consume_ring_normal physical hr⟩
   · exact stable_drained hi hs physical
+
+
+open Leanux Leanux.WG Queues.RxCredits Framing Lifetimes
+
+/-- Every original fixture starts with empty receive carriers and a stable
+boundary. This establishes initialization, not closure through the runner. -/
+theorem original_rx_carrier_fixture (net bare : Bool) (w : WGWorld)
+    (same : wgStoreView w = wgStoreView (Runner.initialWG net bare)) :
+    CarrierState [] [] w ∧ StableRx [] w ∧
+      (w.dev = none ∨ NativeRxInv 3 (PtrRing.init MAX_QUEUED_PACKETS) [] w) :=
+  ⟨carrier_initial net bare w same,stable_initial net bare w same,
+    ring_initial net bare w same⟩
+
+/-- The actual idle guard discharges the supplied stable carrier boundary;
+no empty-inventory premise or endpoint after Stop is supplied. -/
+theorem original_idle_guard_drains_rx (w v : World) (cs : Ledger) (loans : Reservations)
+    (hi : CarrierState cs loans w.wg) (hs : StableRx cs w.wg)
+    (physical : NativeRxInv epoch (PtrRing.init n) h w.wg)
+    (run : Env.requireIdleDevice.run w = .ok ((),v)) :
+    cs = [] ∧ ∀ (d : Device) (id : SkbId) (pkt : RxPacket),
+      v.wg.dev = some d → d.rxSkbs[id]? ≠ some pkt :=
+  idleDevice_empty w v cs loans hi hs physical run
+
+/-- Completion has the same consequence when its actual input flags include
+the decrypt ring. Omitting that caller fact would not justify draining RX. -/
+theorem original_completion_guard_drains_rx (what : String) (flags : List Bool)
+    (w v : World) (cs : Ledger) (loans : Reservations)
+    (hi : CarrierState cs loans w.wg) (hs : StableRx cs w.wg)
+    (physical : NativeRxInv epoch (PtrRing.init n) h w.wg)
+    (ringFlag : ∀ d, w.wg.dev = some d → (!d.decryptQueue.empty) ∈ flags)
+    (run : (Env.requireDrained what flags).run w = .ok ((),v)) :
+    cs = [] ∧ ∀ (d : Device) (id : SkbId) (pkt : RxPacket),
+      v.wg.dev = some d → d.rxSkbs[id]? ≠ some pkt :=
+  requireDrained_empty what flags w v cs loans hi hs physical ringFlag run
+
+/-- Native decrypt preparation keeps the same carriers and restores their
+stable ring/head boundary. A published packet leaves its actual acquired peer
+reservation outstanding for the later IRQ callback and payment. -/
+theorem original_decrypt_preparation_carriers (cs : Ledger) (loans : Reservations)
+    (w v : WGWorld) (result : Option PeerId) (ambient ambient' : Ambient)
+    (hi : CarrierState cs loans w) (hs : StableRx cs w)
+    (physical : NativeRxInv epoch (PtrRing.init n) h w)
+    (run : ((Queues.RxWorkers.prepareSource).run w).run ambient = .ok ((result,v),ambient')) :
+    DecryptCarrier.Prepared cs loans result v ∧ StableRx cs v :=
+  ⟨DecryptCarrier.prepare_state hi ambient ambient' run,
+    DecryptStable.prepare_stable hi hs physical ambient ambient' run⟩
+
+/-- An explicitly source-owned reservation pays one actual release, including
+final peer deletion, while the remaining receive obligations stay funded. -/
+theorem original_rx_reservation_payment (cs : Ledger) (loans : Reservations) (o : Owner)
+    (w v : WGWorld) (ambient ambient' : Ambient)
+    (hi : CarrierState cs (o :: loans) w) (hs : StableRx cs w)
+    (run : ((peerPut (some o.slot)).run w).run ambient = .ok (((),v),ambient')) :
+    CarrierState cs loans v ∧ StableRx cs v :=
+  reservation_payment_stable hi hs ambient ambient' run
+
+/-- The exact timer callback either adds no reservation or appends one clear
+work item backed by its actual entry peer get. Existing queue funding is not
+inferred from membership or unexplained count slack. -/
+theorem original_clear_timer_rx_reservation (pid : PeerId) (cs : Ledger) (loans : Reservations)
+    (w v : WGWorld) (ambient ambient' : Ambient)
+    (hi : ClearWork.Inv cs loans w)
+    (run : ((expiredZeroKeyMaterial pid).run w).run ambient = .ok (((),v),ambient')) :
+    ∃ added : Reservations,
+      (added = [] ∨ ∃ d p, w.dev = some d ∧ d.peers[pid]? = some p ∧
+        added = [⟨d.ifindex,pid,p.internalId⟩]) ∧
+      ClearWork.Inv cs (added ++ loans) v ∧
+      ClearWork.queueView v = (ClearWork.queueView w).map
+        (fun q => (q.1,q.2 ++ added.map Owner.slot)) :=
+  ClearWork.timer_normal hi ambient ambient' run
+
+/-- The queued clear worker consumes its supplied queue reservation after the
+original handshake/key-slot clearing. Slot aliases and absent keys are allowed;
+failed getters or puts retain their original Stop behavior. -/
+theorem original_clear_worker_rx_reservation (cs : Ledger) (loans : Reservations) (o : Owner)
+    (w v : WGWorld) (ambient ambient' : Ambient)
+    (hi : ClearWork.Inv cs (o :: loans) w)
+    (run : ((queuedExpiredZeroKeyMaterial o.slot).run w).run ambient = .ok (((),v),ambient')) :
+    ClearWork.Inv cs loans v := ClearWork.queued_normal o hi ambient ambient' run
+
+/-- Slot-bounded nullable compatibility is sufficient for actual session and
+responder rotation. The session gets its self word from configured identity;
+neither call assumes full affiliation, peer residency or a successful result. -/
+theorem original_nullable_key_slot_preservation (pid : PeerId) (kid : KeypairId)
+    (word : Option PeerId) (now : Bool) :
+    Framing.Hoare (beginSession pid)
+      (fun w => CurrentSlots.Inv w ∧ ConfiguredIdentity.Inv w) (fun _ => CurrentSlots.Inv) ∧
+    Framing.Preserves CurrentSlots.Inv (receivedWithKeypair pid kid) ∧
+    Framing.Preserves CurrentSlots.Inv (keypairCreate word) ∧
+    Framing.Preserves CurrentSlots.Inv (keypairPut (some kid) now) ∧
+    Framing.Preserves CurrentSlots.Inv (keypairsClear pid) :=
+  ⟨CurrentSlots.beginSession_preserves pid,CurrentSlots.receivedWithKeypair_preserves pid kid,
+    CurrentSlots.keypairCreate_preserves word,CurrentSlots.keypairPut_preserves (some kid) now,
+    CurrentSlots.keypairsClear_preserves pid⟩
+
+/-- An arbitrary local state can satisfy current compatibility and RX owner
+bounds yet lose compatibility at the next fresh key allocation. This refutes
+that insufficient local invariant; it is not an initialized mirror finding. -/
+theorem local_current_compatibility_requires_frontier (ambient : Ambient) :
+    ∃ v, ((keypairCreateCore (some 1)).run CurrentKeys.danglingWorld).run ambient =
+        .ok ((0,v),ambient) ∧
+      OwnerBounds.Carrier CurrentKeys.danglingWorld ∧
+      CurrentsCompatible CurrentKeys.danglingWorld ∧ ¬ CurrentsCompatible v :=
+  CurrentKeys.actual_core_counterexample ambient
+
+/-- Receive completion and the actual product Stack retain every surviving
+peer's NAPI bit. Separate inventory, queue and ring contracts supply the other
+stable-boundary facts; this bit frame alone is not poll conservation. -/
+theorem original_completion_stack_napi_bits (pid : PeerId) (pkt : RxPacket)
+    (endpoint : Endpoint) (packets : List (List UInt8)) (initial : PeerId → Option Bool) :
+    Framing.Preserves (Queues.NapiFrames.Retained initial) (consumeDataDone pid pkt endpoint) ∧
+    Framing.Preserves (fun w : World => Queues.NapiFrames.Retained initial w.wg)
+      (packets.forM Env.deliverInner) :=
+  ⟨Queues.NapiFrames.consumeDataDone_preserves pid pkt endpoint initial,
+    Queues.NapiFrames.stack_preserves packets initial⟩
+
+/-- Actual receive completion preserves the supplied stable receive ledger.
+It may delete a peer; all surviving cold heads retain their packet-state fact. -/
+theorem original_completion_stable_rx (pid : PeerId) (pkt : RxPacket) (endpoint : Endpoint)
+    (cs : Ledger) (w v : WGWorld) (ambient ambient' : Ambient)
+    (hs : StableRx cs w)
+    (run : ((consumeDataDone pid pkt endpoint).run w).run ambient = .ok ((result,v),ambient')) :
+    StableRx cs v := stable_consumeDataDone pid pkt endpoint hs ambient ambient' run
+
+/-- The concrete Stack callback preserves the stable receive boundary even
+when it produces reply traffic. Nullable key compatibility supplies the same
+existing TX handoff frame used by the carrier proof. -/
+theorem original_stack_stable_rx (packets : List (List UInt8)) (cs : Ledger) (w v : World)
+    (hs : StableRx cs w.wg) (hk : KeysCompatible w.wg)
+    (run : (packets.forM Env.deliverInner).run w = .ok ((),v)) : StableRx cs v.wg :=
+  stable_stack packets hs hk run
 
 end Leanux.Proofs.WG.DeliveryOrder

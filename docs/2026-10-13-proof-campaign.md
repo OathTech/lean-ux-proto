@@ -185,6 +185,13 @@ shape; both flags and indexed-Stop prefixes are included. Together with the
 trie and incoming results, this completes R3. Gate720/665 passes in 7.759s;
 fresh kernel replay passes in 105.8 seconds with no warnings. R4 conservation remains open.
 
+The [R4 stable-boundary extension](2026-10-17-r4-stable-boundaries.md) adds 172
+theorems, retaining every prior statement: 674 proof files/9,331 theorems,
+143 R4 terminals and 677 terminal declarations overall. Its gate732/677 and
+fresh root replay pass (4.483s/104.224s). Whole initialized conservation remains
+open; the local closure now includes fixture/drain boundaries, native decrypt
+preparation, clear-work reservations and completion/Stack stable transport.
+
 The pre-split checkpoint validated every baseline result surface over
 `cb2348e`. R3 packet authorization is now closed over the current split tree;
 R4 receive-pipeline conservation remains open. Earlier positive results and runtime findings retain
@@ -581,6 +588,15 @@ counterexample resulted from these failed attempts.
 correspondence remains informal.
 
 ## R4 — queue, poll and delivery-order components (in progress)
+
+**State-split stable-boundary extension.** The [current report](2026-10-17-r4-stable-boundaries.md)
+records 172 additional theorems in twelve modules and terminal exports. The tree
+has 674 proof files/9,331 theorems, with 143 R4 terminals and all 131 preceding
+bodies unchanged. Actual fixture and drain guards, decrypt preparation, clear
+work reservations and consumeDataDone/Stack stable transport are checked.
+Nullable compatibility now has a minimal bounded three-slot invariant for key
+rotation. These local contracts leave whole poll/IRQ, lifecycle/work funding and
+initialized conservation open; they do not change the chronological counterexample.
 
 **Original versus proved.** The charter requires accepted-schedule order and no silent loss/duplication.
 [Terminals](../Leanux/Proofs/WG/DeliveryOrder/Statements.lean) prove initialized committed callback-entry stamp
