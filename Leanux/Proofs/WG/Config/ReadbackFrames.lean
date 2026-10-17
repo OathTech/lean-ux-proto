@@ -9,94 +9,123 @@ open Leanux Leanux.WG Leanux.Proofs.WG.Noise Lean Std.Do
 
 abbrev FixtureDevices := List (String × Nat × Option String)
 
-def readbackFrame (w : World) (sock : NlSock) (fixtures : FixtureDevices) : Prop :=
-  w.k.nlSock7 = sock ∧ w.fixtureNetDevices = fixtures
+def readbackFrame (w : WGWorld) (sock : NlSock) (fixtures : FixtureDevices) : Prop :=
+  w.nlSock7 = sock ∧ w.fixtureNetDevices = fixtures
 
 theorem pubkeyLookup_present_returns_framed (sock : NlSock) (fixtures : FixtureDevices) (key : Key) (pid : PeerId) (d : Device) (p : Peer)
     (found : d.peerHashtable.find? (·.1 == key) = some (key, pid))
     (resident : d.peers[pid]? = some p) (live : 0 < p.refcount) (bounded : p.refcount + 1 < 2 ^ 31) :
-    ⦃fun w => ⌜w.k.wg = some d ∧ readbackFrame w sock fixtures⌝⦄ pubkeyLookup key
-    ⦃⇓ ret w => ⌜ret = some pid ∧ w.k.wg = some
+    ⦃fun w => ⌜w.dev = some d ∧ readbackFrame w sock fixtures⌝⦄ pubkeyLookup key
+    ⦃⇓ ret w => ⌜ret = some pid ∧ w.dev = some
       (withPeer d pid { p with refcount := p.refcount + 1 }) ∧ readbackFrame w sock fixtures⌝⦄ := by
-  mvcgen [pubkeyLookup, peerGetMaybeZero, requireNotPending, refcountIncNotZero,
-    branch, branchCmp, getPeer, getDev, getK, setPeer, modifyDev, modifyK,
-    invariant, unsupported]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals repeat intro
-  all_goals simp_all [readbackFrame, -List.find?_eq_none, withPeer]
-  all_goals grind only
+  apply (returns_iff _ _ _).mp
+  intro g ambient pre
+  obtain ⟨device, framed⟩ := pre
+  have nonzero : p.refcount ≠ 0 := by omega
+  have noOverflow : ¬ 2147483647 ≤ p.refcount := by omega
+  have complete : ∃ x final after, ((pubkeyLookup key).run g).run ambient = .ok ((x, final), after) ∧ readbackFrame final sock fixtures := by
+    simp [readbackFrame, framed.1, framed.2, pubkeyLookup, peerGetMaybeZero, requireNotPending, refcountIncNotZero, branch, branchCmp,
+      AmbientM.branch, AmbientM.branchCmp, getPeer, getDev, device, found, resident, nonzero, noOverflow,
+      setPeer, modifyDev]
+    all_goals exact ⟨_, _, ⟨_, rfl⟩, rfl, rfl⟩
+  obtain ⟨x, final, after, run, frame⟩ := complete
+  have effect := ((ensures_iff _ _ _).mpr (pubkeyLookup_present key pid d p found resident live)) g ambient x final after device run
+  exact ⟨x, final, after, run, effect.1, effect.2, frame⟩
 
 theorem peerPut_retained_returns_framed (sock : NlSock) (fixtures : FixtureDevices) (pid : PeerId) (d : Device) (p : Peer)
     (resident : d.peers[pid]? = some p) (retained : 1 < p.refcount) :
-    ⦃fun w => ⌜w.k.wg = some d ∧ readbackFrame w sock fixtures⌝⦄ peerPut (some pid)
-    ⦃⇓ _ w => ⌜w.k.wg = some (withPeer d pid { p with refcount := p.refcount - 1 }) ∧ readbackFrame w sock fixtures⌝⦄ := by
-  mvcgen [peerPut, requireNotPending, refcountDecAndTest, branch, branchCmp,
-    getPeer, getDev, getK, setPeer, modifyDev, modifyK, invariant, unsupported]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals repeat intro
-  all_goals simp_all [readbackFrame, withPeer]
-  all_goals omega
+    ⦃fun w => ⌜w.dev = some d ∧ readbackFrame w sock fixtures⌝⦄ peerPut (some pid)
+    ⦃⇓ _ w => ⌜w.dev = some (withPeer d pid { p with refcount := p.refcount - 1 }) ∧ readbackFrame w sock fixtures⌝⦄ := by
+  apply (returns_iff _ _ _).mp
+  intro g ambient pre
+  obtain ⟨device, framed⟩ := pre
+  have positive : 0 < p.refcount := by omega
+  have nonzero : p.refcount ≠ 0 := by omega
+  have notLast : p.refcount ≠ 1 := by omega
+  have complete : ∃ x final after, ((peerPut (some pid)).run g).run ambient = .ok ((x, final), after) ∧ readbackFrame final sock fixtures := by
+    simp [readbackFrame, framed.1, framed.2, peerPut, requireNotPending, refcountDecAndTest, branch, branchCmp, AmbientM.branch,
+      AmbientM.branchCmp, getPeer, getDev, device, resident, setPeer, modifyDev, positive, nonzero,
+      notLast]
+    all_goals exact ⟨_, _, ⟨_, rfl⟩, rfl, rfl⟩
+  obtain ⟨x, final, after, run, frame⟩ := complete
+  have effect := ((ensures_iff _ _ _).mpr (peerPut_retained pid d p resident retained)) g ambient x final after device run
+  exact ⟨x, final, after, run, effect, frame⟩
 
 theorem scalarTail_down_returns_framed (sock : NlSock) (fixtures : FixtureDevices) (key psk : Key) (interval : Nat) (pid : PeerId)
     (d : Device) (p : Peer) (resident : d.peers[pid]? = some p)
     (down : d.running = false) (retained : 1 < p.refcount) :
-    ⦃fun w => ⌜w.k.wg = some d ∧ readbackFrame w sock fixtures⌝⦄ peerConfigTailSource (scalarAttrs key psk interval) (some pid) pid
-    ⦃⇓ ret w => ⌜ret = 0 ∧ w.k.wg = some (withPeer (withPeer d pid { p with persistentKeepaliveInterval := interval }) pid
+    ⦃fun w => ⌜w.dev = some d ∧ readbackFrame w sock fixtures⌝⦄ peerConfigTailSource (scalarAttrs key psk interval) (some pid) pid
+    ⦃⇓ ret w => ⌜ret = 0 ∧ w.dev = some (withPeer (withPeer d pid { p with persistentKeepaliveInterval := interval }) pid
       { p with persistentKeepaliveInterval := interval, refcount := p.refcount - 1 }) ∧ readbackFrame w sock fixtures⌝⦄ := by
-  let p1 := { p with persistentKeepaliveInterval := interval }
-  let d1 := withPeer d pid p1
-  have hp := peerPut_retained_returns_framed sock fixtures pid d1 p1
-    (by simp [d1, withPeer]) (by simpa [p1] using retained)
-  simp [peerConfigTailSource, scalarAttrs]
-  mvcgen [Leanux.WG.andM, branch, getPeer, getDev, getK, setPeer,
-    modifyDev, modifyK, invariant, hp]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals repeat intro
-  all_goals simp_all [readbackFrame, withPeer, d1, p1]
-  all_goals grind only
+  apply (returns_iff _ _ _).mp
+  intro g ambient pre
+  obtain ⟨device, framed⟩ := pre
+  have positive : 0 < p.refcount := by omega
+  have nonzero : p.refcount ≠ 0 := by omega
+  have notLast : p.refcount ≠ 1 := by omega
+  have complete : ∃ x final after, ((peerConfigTailSource (scalarAttrs key psk interval) (some pid) pid).run g).run ambient = .ok ((x, final), after) ∧ readbackFrame final sock fixtures := by
+    by_cases wasZero : p.persistentKeepaliveInterval = 0
+    all_goals by_cases intervalZero : interval = 0
+    all_goals simp [readbackFrame, framed.1, framed.2, scalarAttrs, peerConfigTailSource, WG.andM, branch, branchCmp, AmbientM.branch,
+      AmbientM.branchCmp, peerPut, requireNotPending, refcountDecAndTest, getPeer, getDev, device,
+      resident, setPeer, modifyDev, down, nonzero, positive, notLast, wasZero, intervalZero]
+    all_goals exact ⟨_, _, ⟨_, rfl⟩, rfl, rfl⟩
+  obtain ⟨x, final, after, run, frame⟩ := complete
+  have effect := ((ensures_iff _ _ _).mpr (scalarTail_down key psk interval pid d p resident down retained)) g ambient x final after device run
+  exact ⟨x, final, after, run, effect.1, effect.2, frame⟩
 
 theorem scalarUpdate_down_returns_framed (sock : NlSock) (fixtures : FixtureDevices) (key psk : Key) (interval : Nat) (pid : PeerId)
     (d : Device) (p : Peer) (resident : d.peers[pid]? = some p)
     (down : d.running = false) (retained : 1 < p.refcount) :
-    ⦃fun w => ⌜w.k.wg = some d ∧ readbackFrame w sock fixtures⌝⦄
+    ⦃fun w => ⌜w.dev = some d ∧ readbackFrame w sock fixtures⌝⦄
       peerConfigUpdateSource (scalarAttrs key psk interval) (some pid) 0 (some psk) pid
-    ⦃⇓ ret w => ⌜ret = 0 ∧ w.k.wg = some
+    ⦃⇓ ret w => ⌜ret = 0 ∧ w.dev = some
       (withPeer
         (withPeer (withPeer d pid { p with presharedKey := psk }) pid
           { p with presharedKey := psk, persistentKeepaliveInterval := interval }) pid
         { p with
           presharedKey := psk, persistentKeepaliveInterval := interval,
           refcount := p.refcount - 1 }) ∧ readbackFrame w sock fixtures⌝⦄ := by
-  let p1 := { p with presharedKey := psk }
-  let d1 := withPeer d pid p1
-  have ht := scalarTail_down_returns_framed sock fixtures key psk interval pid d1 p1
-    (by simp [d1, withPeer]) (by simpa [d1, withPeer] using down)
-    (by simpa [p1] using retained)
-  simp [peerConfigUpdateSource, scalarAttrs, WGPEER_F_REMOVE_ME, WGPEER_F_REPLACE_ALLOWEDIPS]
-  mvcgen [branch, getPeer, getDev, getK, setPeer, modifyDev, modifyK, invariant, ht]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals repeat intro
-  all_goals simp_all [readbackFrame, withPeer, d1, p1]
-  all_goals first | exact ht _ (by simp_all [readbackFrame, withPeer, d1, p1]) | grind only
+  apply (returns_iff _ _ _).mp
+  intro g ambient pre
+  obtain ⟨device, framed⟩ := pre
+  have positive : 0 < p.refcount := by omega
+  have nonzero : p.refcount ≠ 0 := by omega
+  have notLast : p.refcount ≠ 1 := by omega
+  have complete : ∃ x final after, ((peerConfigUpdateSource (scalarAttrs key psk interval) (some pid) 0 (some psk) pid).run g).run ambient = .ok ((x, final), after) ∧ readbackFrame final sock fixtures := by
+    by_cases wasZero : p.persistentKeepaliveInterval = 0
+    all_goals by_cases intervalZero : interval = 0
+    all_goals simp [readbackFrame, framed.1, framed.2, scalarAttrs, peerConfigTailSource, WG.andM, branch, branchCmp, AmbientM.branch,
+      AmbientM.branchCmp, peerPut, requireNotPending, refcountDecAndTest, getPeer, getDev, device,
+      resident, setPeer, modifyDev, down, nonzero, positive, notLast, peerConfigUpdateSource,
+      WGPEER_F_REMOVE_ME, WGPEER_F_REPLACE_ALLOWEDIPS, wasZero, intervalZero]
+    all_goals exact ⟨_, _, ⟨_, rfl⟩, rfl, rfl⟩
+  obtain ⟨x, final, after, run, frame⟩ := complete
+  have effect := ((ensures_iff _ _ _).mpr (scalarUpdate_down key psk interval pid d p resident down retained)) g ambient x final after device run
+  exact ⟨x, final, after, run, effect.1, effect.2, frame⟩
 
 theorem setPeer_scalars_down_returns_framed (sock : NlSock) (fixtures : FixtureDevices) (key psk : Key) (interval : Nat) (pid : PeerId)
     (d : Device) (p : Peer)
     (found : d.peerHashtable.find? (·.1 == key) = some (key, pid))
     (resident : d.peers[pid]? = some p) (live : 0 < p.refcount) (bounded : p.refcount + 1 < 2 ^ 31) (down : d.running = false) :
-    Returns (setPeerCmd (scalarAttrs key psk interval)) (fun w => w.k.wg = some d ∧ readbackFrame w sock fixtures)
-      (fun ret w => ret = 0 ∧ w.k.wg = some (scalarDevice d pid p psk interval) ∧ readbackFrame w sock fixtures) := by
-  let p1 := { p with refcount := p.refcount + 1 }
-  let d1 := withPeer d pid p1
-  have hl := pubkeyLookup_present_returns_framed sock fixtures key pid d p found resident live bounded
-  have hu := scalarUpdate_down_returns_framed sock fixtures key psk interval pid d1 p1
-    (by simp [d1, withPeer]) (by simpa [d1, withPeer] using down)
-    (by simpa [p1] using live)
-  rw [← setPeerCmd_source, returns_iff]
-  simp [setPeerCmdSource, scalarAttrs, WGPEER_F_ALL]
-  mvcgen [Leanux.WG.andM, branch, invariant, hl, hu]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals repeat intro
-  all_goals simp_all [readbackFrame, scalarDevice, withPeer, p1, d1]
-  all_goals first | exact hu _ (by simp_all [readbackFrame, withPeer, d1, p1]) | grind only
+    Returns (setPeerCmd (scalarAttrs key psk interval)) (fun w => w.dev = some d ∧ readbackFrame w sock fixtures)
+      (fun ret w => ret = 0 ∧ w.dev = some (scalarDevice d pid p psk interval) ∧ readbackFrame w sock fixtures) := by
+  intro g ambient pre
+  obtain ⟨device, framed⟩ := pre
+  have nonzero : p.refcount ≠ 0 := by omega
+  have noOverflow : ¬ 2147483647 ≤ p.refcount := by omega
+  have complete : ∃ x final after, ((setPeerCmd (scalarAttrs key psk interval)).run g).run ambient = .ok ((x, final), after) ∧ readbackFrame final sock fixtures := by
+    rw [← setPeerCmd_source]
+    by_cases wasZero : p.persistentKeepaliveInterval = 0
+    all_goals by_cases intervalZero : interval = 0
+    all_goals simp [readbackFrame, framed.1, framed.2, scalarAttrs, peerConfigTailSource, WG.andM, branch, branchCmp, AmbientM.branch,
+      AmbientM.branchCmp, peerPut, requireNotPending, refcountDecAndTest, getPeer, getDev, device,
+      resident, setPeer, modifyDev, down, nonzero, setPeerCmdSource, peerConfigUpdateSource,
+      pubkeyLookup, peerGetMaybeZero, refcountIncNotZero, found, noOverflow, WGPEER_F_ALL,
+      WGPEER_F_REMOVE_ME, WGPEER_F_REPLACE_ALLOWEDIPS, wasZero, intervalZero]
+    all_goals exact ⟨_, _, ⟨_, rfl⟩, rfl, rfl⟩
+  obtain ⟨x, final, after, run, frame⟩ := complete
+  have effect := (setPeer_scalars_down key psk interval pid d p found resident live down) g ambient x final after device run
+  exact ⟨x, final, after, run, effect.1, effect.2, frame⟩
 
 end Leanux.Proofs.WG.Config

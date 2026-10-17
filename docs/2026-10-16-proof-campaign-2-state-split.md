@@ -20,11 +20,11 @@ and attributed theorem declarations. Campaign 2 owns 427 Lean files,
 | --- | ---: | ---: | ---: | ---: | --- |
 | Common projection | 2 | 0 | 0 | 0 | Actual native WG/Ambient and full Product observations carried; no reconstructed execution states. |
 | H1 Noise | 35 | 171 | 22 | 185 | The full Noise closure is current, including restart support. Six type-given frames are deleted. Wider caller/lifetime/reachability and clock-provenance charter claims remain open. |
-| H2 Index | 68 | 318 | 52 | 254 | Table, lookup, collision records, allocation, owner invariants and lifecycle support carried; seven type-given frames deleted. Exact peer-release outcomes replace stale totality, with checked counterexamples. Terminal closure and whole-driver coherence remain pending. |
+| H2 Index | 68 | 318 | 52 | 262 | Table, lookup, collision records, allocation, owner invariants and lifecycle support carried; seven type-given frames deleted. Exact peer-release outcomes replace stale totality, with checked counterexamples. Terminal closure and whole-driver coherence remain pending. |
 | H3 Roaming | 35 | 119 | 13 | 157 | Endpoint/publication, polling, attempt facts, crypto, lookup and response-caller factors/facts carried with full Product certificates; two type-given frames deleted. The full terminal closure is current, including initiation/response audits with actual Product outcomes. Wider roaming/provenance charter gaps remain open. |
-| H4 Configuration | 130 | 554 | 79 | 400 | Scalar, identity, port, dump, allowed-IP and structural support carried; three type-given frames deleted. Quiet timer cleanup and queued-send observations are corrected; queued-send and removal totality have checked stale-statement counterexamples. Remaining readback/effects and terminal closure remain pending. |
+| H4 Configuration | 130 | 554 | 79 | 406 | Scalar, identity, port, dump, allowed-IP and structural support carried; three type-given frames deleted. Quiet timer cleanup and queued-send observations are corrected; queued-send and removal totality have checked stale-statement counterexamples. Remaining readback/effects and terminal closure remain pending. |
 | H5 Progress | 59 | 265 | 42 | 188 | Pure/control, cut, jitter, index, poll bounds, dispatch, scheduler turns, stack/probe frames, queue flush contracts, drain selection and Product observation bridge carried; one type-given index frame deleted. The old backlog fixture has checked exact runner and direct-fixture rejections. Drain bounds are carried. Receive-ring activation models, general runner boundaries and terminal closure remain pending. |
-| H6 Timer discipline | 98 | 404 | 50 | 172 | Base/guard/jitter, arming/wheel, recorded clock and initiation-send arming contracts carried; three type-given frames deleted. Exact wheel corrections are explicit; queue/pending and retained-worker frames are carried; broader timer episodes and terminal closure remain pending. |
+| H6 Timer discipline | 98 | 404 | 50 | 174 | Base/guard/jitter, arming/wheel, recorded clock and initiation-send arming contracts carried; three type-given frames deleted. Exact wheel corrections are explicit; queue/pending and retained-worker frames are carried; broader timer episodes and terminal closure remain pending. |
 
 Retyped, deleted and retained counts will be reported per validated tranche.
 H1 and H3 now have checked split terminal closures; H2, H4, H5 and H6 remain lagging.
@@ -4159,5 +4159,79 @@ cap or proof-limit increase occurred.
 Reproduce with scripts/in-bundle lake build on Config.Getter,
 Config.KeyCollision, Progress.SourceClaims, Index.ReceiveSource and
 TimerDiscipline.WheelDispatchSource under Leanux.Proofs.WG, then #print axioms
+and scripts/in-bundle lake env leanchecker --fresh MODULE for each root.
+Use capped, 32 Lean threads and 16 QEMU slots on this host.
+
+
+## Readback frames, observed key request and queue/timer support
+
+| Tranche | Before | Retyped | Corrected | Deleted | Kept | Added | After |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Config.ReadbackFrames | 5 | 5 | 0 | 0 | 0 | 0 | 5 |
+| Config.KeyRequest | 1 | 0 | 1 | 0 | 0 | 0 | 1 |
+| Index.ClearFrames, FlushFrames, TimerFrames | 8 | 8 | 0 | 0 | 0 | 0 | 8 |
+| TimerDiscipline.PendingGiveUpSource | 2 | 0 | 2 | 0 | 0 | 0 | 2 |
+| This tranche | 16 | 13 | 3 | 0 | 0 | 0 | 16 |
+| Cumulative processed baseline and checked support | 1,243 | 956 | 52 | 22 | 213 | 151 | 1,372 |
+
+The census remains 537 campaign-owned files and 1,960 theorems; 415 proof
+modules are checked and 588 baseline declarations remain pending. Counts are
+H1 185, H2 262, H3 157, H4 406, H5 188 and H6 174. H1/H3 terminal closures
+remain current; H2/H4/H5/H6 terminals and the full gate remain lagging.
+
+ReadbackFrames retains all five original total domains. Socket7 and
+fixtureNetDevices are both WGWorld fields; their preservation remains a
+substantive frame and is not deleted. The original live/bounded or retained,
+resident and stopped-device premises suffice for actual total runs on
+arbitrary Ambient states; those same runs supply the scalar partial effects.
+No readiness or new reference premise is added.
+
+KeyRequest retains the actual wgSetDevice action, changed/no-collision key
+premises and original device selection. Its partial postcondition uses actual
+ObservedKeyPeerRun observations, obtained by inverting the checked erasure of
+the observed installation action. Generation still precedes installation;
+intermediate states, aliases, duplicates and errors remain actual. This is
+one explicit semantic correction, not an unobserved prediction or a new
+assumption of successful execution.
+
+The eight index frames preserve the table/owner/cursor invariant through
+arbitrary peer and workqueue updates, peer-count decrement, timer deletion,
+endpoint-source reset and staged-packet purge. Optional devices, all Ambient
+states, arbitrary transformers and normal-return-only scope remain. Timer
+expiry and wheel removal change peers, so their table frames remain substantive.
+No shared lemma is edited or copied.
+
+PendingGiveUp retains both exact full Product contracts and their original
+resident, attempts-above-limit and zero-key-pending premises. The correction
+clears the keepalive expiry and wheel entry, retains the ordered two peer
+writes, purges staged packets and adds their count to drops. Zero-key state,
+clocks, hidden records, other subsystems and fixtures remain unchanged. The
+two decisions keep their original order and operands. No timer-consistency
+premise is introduced; execution starts from every actual full Product state.
+
+Independent reviews find no theorem/domain issues. Review caught an elevated
+scratch heartbeat setting for the two FlushFrames facts; those probes are not
+credited as their validation. Actual separate FlushFrames packaging retains
+its original default limit. The first combined build fails on an unclosed
+section introduced while splitting the scratch file; after fixing that scope,
+the 174-job build passes without warnings. Axiom inspection covers 759 logical
+roots in 144 proof modules, including 432 public theorem roots, using only
+standard axioms. All six fresh kernel replays pass. Static checks, 258 terminal
+names/order and mirror/shared boundaries pass.
+
+Readback probes 1–3 fail the simplified existential/conjunction shape; probe 3
+prints that goal, and probe 4 supplies its exact witnesses and passes cleanly.
+KeyRequest probes 1–3 fail numeric type and logical/Bool branch reductions;
+probe 1 also has eleven cascading unused simplifications. Probe 4 passes cleanly.
+Clear/flush scratch probe 1 passes with three unused simplifications; changed
+probe 2 removes them. Timer-frame probe 1 passes with one unused simplification;
+probe 2 fixes it. PendingGiveUp probe 1 fails on a redundant final tactic;
+probe 2 passes. The combined build validates original per-file limits. No
+unchanged rerun, infrastructure retry, memory-cap or retained proof-limit
+increase occurred.
+
+Reproduce with scripts/in-bundle lake build on Config.ReadbackFrames,
+Config.KeyRequest, Index.ClearFrames, Index.FlushFrames, Index.TimerFrames and
+TimerDiscipline.PendingGiveUpSource under Leanux.Proofs.WG, then #print axioms
 and scripts/in-bundle lake env leanchecker --fresh MODULE for each root.
 Use capped, 32 Lean threads and 16 QEMU slots on this host.
