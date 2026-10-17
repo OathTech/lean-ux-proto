@@ -22,9 +22,9 @@ and attributed theorem declarations. Campaign 2 owns 427 Lean files,
 | H1 Noise | 35 | 171 | 22 | 180 | All original Noise obligations carried, including the full terminal closure; six type-given frames deleted. Wider caller/lifetime/reachability and clock-provenance charter claims remain open. |
 | H2 Index | 68 | 318 | 52 | 190 | Table, lookup, collision records, allocation, owner invariants and lifecycle support carried; seven type-given frames deleted. Exact peer-release outcomes replace stale totality, with checked counterexamples. Terminal closure and whole-driver coherence remain pending. |
 | H3 Roaming | 35 | 119 | 13 | 109 | Endpoint/publication, polling, attempt facts, crypto, lookup and response-caller factors carried with full Product certificates; two type-given frames deleted. Initiation transcript facts and broader authentication/caller closure remain pending. |
-| H4 Configuration | 130 | 554 | 79 | 317 | Scalar, identity, port, dump, allowed-IP and structural support carried; three type-given frames deleted. Quiet timer cleanup is corrected; queued-send and removal totality have checked stale-statement counterexamples. Remaining readback/effects and terminal closure remain pending. |
+| H4 Configuration | 130 | 554 | 79 | 323 | Scalar, identity, port, dump, allowed-IP and structural support carried; three type-given frames deleted. Quiet timer cleanup is corrected; queued-send and removal totality have checked stale-statement counterexamples. Remaining readback/effects and terminal closure remain pending. |
 | H5 Progress | 59 | 265 | 42 | 136 | Pure/control, cut, jitter, index, poll bounds, dispatch, scheduler turns, stack/probe frames and Product observation bridge carried. Receive-ring activation models, historical backlog/runner claims, remaining drain/flush claims and terminal closure remain pending. |
-| H6 Timer discipline | 98 | 404 | 50 | 69 | Base/guard/jitter, arming/wheel, recorded clock and initiation-send arming contracts carried; three type-given frames deleted. Exact wheel corrections are explicit; broader timer episodes, worker composition and terminal closure remain pending. |
+| H6 Timer discipline | 98 | 404 | 50 | 71 | Base/guard/jitter, arming/wheel, recorded clock and initiation-send arming contracts carried; three type-given frames deleted. Exact wheel corrections are explicit; broader timer episodes, worker composition and terminal closure remain pending. |
 
 Retyped, deleted and retained counts will be reported per validated tranche.
 H1 now has a checked split terminal closure; H2–H6 remain lagging.
@@ -2942,3 +2942,74 @@ TimerDiscipline.InitiationFrames, Config.QuietRemovalLeaves and
 Index.PeerReleaseClaims under Leanux.Proofs.WG, followed by #print axioms and
 scripts/in-bundle lake env leanchecker --fresh MODULE for each root.
 Use capped, 32 Lean threads and 16 QEMU slots on this host.
+
+## Quiet removal outcomes and the loopback send frame
+
+| Tranche | Before | Retyped | Corrected | Deleted | Kept | Added | After |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Config.QuietRemoval | 2 | 0 | 2 | 0 | 0 | 4 | 6 |
+| TimerDiscipline.SendCutFrames | 1 | 1 | 0 | 0 | 0 | 1 | 2 |
+| This tranche | 3 | 1 | 2 | 0 | 0 | 5 | 8 |
+| Cumulative processed baseline and checked support | 952 | 718 | 23 | 21 | 190 | 78 | 1,009 |
+
+The census is 513 campaign-owned files, 1,888 theorems and 323 checked proof
+modules; 879 baseline declarations await validation. Checked counts are H1
+180, H2 190, H3 109, H4 323, H5 136 and H6 71. H1's terminal closure remains
+current; H2–H6 and the full gate remain lagging. No new charter result is
+claimed.
+
+Both quiet removal contracts now classify exact projected outcomes on all
+their original resident/live/count/empty-slot/empty-work-queue premises.
+The actual crypt/NAPI guard can refuse after cleanup; otherwise the exact
+final-reference queue/timer guard may refuse or the original successful
+Device effect holds. The outer contract retains its original RemovalEffect
+premise. Neither gains a readiness assumption or invents a post-error state.
+The constant crypt diagnostic site follows the actual three empty-slot
+release decisions, rather than an arbitrary reconstructed log.
+
+QuietRemovalOutcomeModel is the pure outcome selector. QuietRemoval contains
+the two projected claims and four private exact-execution prefix helpers;
+these helpers carry complete native WG/Ambient runs and are not preservation
+frames. The two earlier leaves stay in QuietRemovalLeaves/QuietRemovalFrames.
+This corrects known statement lag documented by the removal counterexample.
+
+SendCutFrames retains the original arbitrary joint predicate over all four
+former Kernel owners and adds a native companion over all WGWorld fields.
+The actual raise/clear sequence restores netRxRaised on normal return, so
+this is a substantive frame, not a deletion justified by the split type.
+The proof keeps absent-device, pending-NAPI and malformed-record failures
+partial, with no new readiness premise. Its obsolete FireSelectionSource
+dependency is removed; the already-carried InitiationFrames dependency remains
+for downstream users. Independent review found no scope or execution mismatch.
+No shared layer or mirror source is changed.
+
+Scoped build passes 137 jobs without warnings. Axiom inspection covers 517
+logical roots in 109 proof modules, including 307 public theorem roots,
+using only the three standard axioms. Fresh kernel replay passes both roots.
+Static token/import/root/default-target checks pass; all 258 original terminal
+names/order remain intact. Mirror and shared-layer boundary checks are clear.
+
+Development ledger: quiet-removal probe 1 (the two earlier leaves) passed.
+Probe 2 failed native full-state equality with an unused simplification;
+probe 3 exposed an incorrectly supplied intermediate peer. Probe 4 closed
+the four prefix helpers. Probe 5 failed log/run reductions and the unchanged
+default heartbeat bound; probe 6 retained a redundant step and that heartbeat
+failure. Probe 7 failed cleanup/drain/outer-branch normalization with two
+warnings; probe 8 failed only an internal matcher join, without warnings.
+Probe 9 closed after-death outcomes by ordinary case analysis of the exact
+refusal expression, and probe 10 closed the outer contract. All passing probes
+were warning-free. Probes 3, 5 and 7 had bounded previews; complete saved
+outputs were inspected before subsequent edits. No private matcher name or
+increased proof limit is used. These probes are distinct from the ten
+earlier counterexample probes already reported.
+
+SendCutFrames probes 1–3 each failed one definitional join; probe 4 failed
+two branch-normalization joins and had one unused simplification warning.
+Probe 5 passed cleanly. No unchanged-source rerun, infrastructure retry,
+cap increase, dependency rebuild during fresh replay or guest run occurred.
+
+Reproduce with scripts/in-bundle lake build on Config.QuietRemoval and
+TimerDiscipline.SendCutFrames under Leanux.Proofs.WG, then inspect logical
+declarations using #print axioms and replay each root with scripts/in-bundle
+lake env leanchecker --fresh MODULE. Use capped, 32 Lean threads and 16 QEMU
+slots on this host.

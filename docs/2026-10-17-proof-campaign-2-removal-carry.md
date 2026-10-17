@@ -41,3 +41,9 @@ Leanux.Proofs.WG.Config.QuietRemovalFindings, then
 scripts/in-bundle lake env leanchecker --fresh
 Leanux.Proofs.WG.Config.QuietRemovalFindings. Use capped on this host.
 The full H4 terminal closure and full proof gate remain lagging.
+
+The two quiet-removal contracts now classify exact refusal or the original
+successful cleanup effect on the same premises, including the actual outer
+removal prefix. Four private exact-prefix helpers retain the actual native
+states and decision logs. General live-removal callers remain pending.
+Validation and the complete failed-probe ledger are in the retrofit report.
