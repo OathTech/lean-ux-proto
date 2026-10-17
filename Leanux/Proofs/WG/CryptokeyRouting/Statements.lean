@@ -1,4 +1,8 @@
 import Leanux.Proofs.WG.Packets.PublicationIdentity
+import Leanux.Proofs.WG.Packets.PublicationCurrent
+import Leanux.Proofs.WG.Origins.CurrentMaintenance
+import Leanux.Proofs.WG.Peers.ConfiguredAllowedIps
+import Leanux.Proofs.WG.Peers.ConfiguredTimers
 import Leanux.Proofs.WG.Origins.SupportRunner
 import Leanux.Proofs.WG.Origins.SupportEnvironment
 import Leanux.Proofs.WG.Origins.RetainingLifecycle
@@ -3099,5 +3103,31 @@ theorem original_rx_publication_identity :
         t=h++pre++[MaterialOrigin.Event.receipt (RxOrigin.Receipt.decrypt id r)]++suffix ∧
         ∀out,r.value.2=some out → PublicationIdentity.Identity history id r out pid v) :=
   ⟨RxOrigin.prepare_erases,RxOrigin.prepare_projects,PublicationIdentity.prepare_identity⟩
+
+/-- The actual empty fixture establishes configured-table and same-receipt
+current identity for every flag combination. Only the original seven WG store
+fields are fixed; initialized transport through later calls is separate. -/
+theorem configured_identity_initial (net bare : Bool) (w : WGWorld)
+    (hw : Framing.wgStoreView w = Framing.wgStoreView (Runner.initialWG net bare)) :
+    ConfiguredIdentity.Inv w ∧ CurrentIdentity.Inv [] w :=
+  ⟨ConfiguredMaintenance.configured_initial net bare w hw, CurrentIdentity.initial net bare w hw⟩
+
+/-- Nullable affiliation supplies exactly the compatibility used by RX
+publication and current-key handoff; missing keys and NULL words remain allowed. -/
+theorem nullable_affiliation_key_compatibility (w : WGWorld) (hi : Affiliation.Inv w) :
+    Queues.RxCredits.KeysCompatible w :=
+  Queues.RxCredits.keysCompatible_of_affiliation hi
+
+/-- At the actual successful publication before IRQ, one session witness
+supports key material and the resident peer's allocation stamp/static key.
+This retains the weaker RX compatibility premise; full initialized transport
+and the later routing/Stack join are not implied by this local certificate. -/
+theorem successful_publication_current_identity (history : List SessionOrigin.Receipt) (id : SkbId)
+    (r : Logged.WGRunWitness (RxPacket × Option RxPacket)) (out : RxPacket) (pid : PeerId)
+    (v : WGWorld) (ambient : Ambient)
+    (support : CurrentIdentity.Inv history r.before) (compat : Queues.RxCredits.RxCompatible r.before)
+    (published : PublicationIdentity.Published id r out pid v ambient) :
+    PublicationIdentity.CurrentCertificate history id r out pid v :=
+  PublicationIdentity.published_current history id r out pid v ambient support compat published
 
 end Leanux.Proofs.WG.CryptokeyRouting

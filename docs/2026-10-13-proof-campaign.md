@@ -26,6 +26,16 @@ unrestricted cleanup-totality claims and checked local counterexamples.
 Five failed aggregate gates remain reported as failures; each preceded source
 repairs, and none was accepted as a pass. R3/R4 work resumes on the new types.
 
+The first post-retrofit R3 extension adds 58 theorems in eight new modules
+and three terminal exports. The tree now has 460 files/6,622 theorems and 520
+terminal declarations; all 141 earlier R3 terminal bodies are unchanged.
+The complete gate passes 518 jobs/520 declarations in 5.52 seconds, and fresh
+root replay passes in 98.01 seconds without warnings. The
+[current-identity report](2026-10-17-r3-current-identity.md) records fixture
+initialization, native maintenance, nullable compatibility and the same-witness
+resident identity certificate at successful publication. Whole-run identity
+closure, packet transport and the reached routing/Stack join remain open.
+
 The pre-split checkpoint validated every baseline result surface over
 `cb2348e`. Initialized R3 packet authorization and R4 receive-pipeline
 conservation remain open. Earlier positive results and runtime findings retain
