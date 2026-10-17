@@ -1,3 +1,7 @@
+import Leanux.Proofs.WG.Config.MixedPageSelectionClaims
+import Leanux.Proofs.WG.Config.MixedPageReferenceFrames
+import Leanux.Proofs.WG.Config.MixedCallbackSource
+import Leanux.Proofs.WG.Config.CursorStepEffects
 import Leanux.Proofs.WG.Config.MixedPagePlanClaims
 import Leanux.Proofs.WG.Config.MixedPageScanSource
 import Leanux.Proofs.WG.Config.CursorReadySource
