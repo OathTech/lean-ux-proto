@@ -1,5 +1,4 @@
-import Leanux.Proofs.WG.Config.SuffixReadbackModel
-import Leanux.Proofs.WG.Config.MultipartClaims
+import Leanux.Proofs.WG.Config.SuffixReadbackFrames
 
 set_option autoImplicit false
 set_option pp.structureInstances false
@@ -11,7 +10,7 @@ open Leanux Leanux.WG Leanux.Proofs.WG.Noise Lean Std.Do
 /-- The original allowed-IP loop and its completion, with the accumulated IPs
 explicit for induction. All original node reads, guards and split exits remain. -/
 def suffixScan (ctx : DumpCtx) (pubkey : String) (attrs : List (String × Json))
-    (ids : List NodeId) (skb : NlSkb) (ips : Array Json) : M PeerDumpResult := do
+    (ids : List NodeId) (skb : NlSkb) (ips : Array Json) : WG.M PeerDumpResult := do
   let mut skb := skb
   let mut ips := ips
   for id in ids do
@@ -81,154 +80,163 @@ theorem dumpAllowed_suffix_source (p : Peer) (ctx : DumpCtx) (skb0 skb : NlSkb)
       suffixScan ctx pubkey attrs rest s #[]) := by
   rfl
 
-theorem readNode_ipv4 (n : AipNode) (width : n.bitlen = 32) (P : Kernel → Prop) :
-    ⦃fun w => ⌜P w.k⌝⦄ readNode n
-    ⦃⇓ result w => ⌜P w.k ∧ result = (4, allowedMasked true n.bits n.cidr, n.cidr)⌝⦄ := by
-  mvcgen [readNode, swapEndian, branch]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [width, allowedMasked, allowedBits]
-  all_goals grind only
-
-/-- An arbitrary finite resident IPv4 suffix fits and is serialized in order.
-Repeated IDs are allowed: this theorem scans once, without a cursor restart. -/
 theorem suffixScan_all (d : Device) (nodes : NodeId → AipNode) (ids : List NodeId)
     (resident : Ipv4Residents d nodes ids) (ctx : DumpCtx) (pubkey : String)
     (attrs : List (String × Json)) (skb : NlSkb) (ips : Array Json)
     (room : 28 * ids.length ≤ skb.room) :
-    ⦃fun w => ⌜w.k.wg = some d⌝⦄ suffixScan ctx pubkey attrs ids skb ips
-    ⦃⇓ result w => ⌜w.k.wg = some d ∧ result =
+    ⦃fun w => ⌜w.dev = some d⌝⦄ suffixScan ctx pubkey attrs ids skb ips
+    ⦃⇓ result w => ⌜w.dev = some d ∧ result =
       ({ skb with room := skb.room - 28 * ids.length },
        { ctx with nextAllowedip := none, allowedipsSeq := 0 },
        .complete { publicKey := pubkey, attrs := attrs ++ [("allowed_ips", Json.arr (ips ++ ipv4Jsons nodes ids))] })⌝⦄ := by
   induction ids generalizing skb ips with
   | nil =>
-    rw [suffixScan_nil]
-    mvcgen [branch]
-    all_goals simp_all [ipv4Jsons]
+    apply (returns_iff _ _ _).mp
+    intro g ambient device
+    let after := {ambient with steps := ambient.steps.push {
+      decision := Decision.getPeerAipIter, outcome := false, netRx := ambient.netRxSection}}
+    refine ⟨_, g, after, ?_, device, rfl⟩
+    simp [suffixScan_nil, branch, AmbientM.branch, ipv4Jsons]
+    rfl
   | cons id ids ih =>
     have here := resident id (by simp)
     have tail : Ipv4Residents d nodes ids := fun n hn => resident n (by simp [hn])
-    have hg := multipart_getNode id d (nodes id) here.1
-    have hn := readNode_ipv4 (nodes id) here.2 (fun k => k.wg = some d)
-    have ha := getAllowedips_inserted true (nodes id).bits (nodes id).cidr skb
-      (by change 28 ≤ skb.room; simp only [List.length_cons] at room; omega)
-      (fun k => k.wg = some d)
-    have ht := ih tail { skb with room := skb.room - 28 }
-      (ips.push (ipv4NodeJson (nodes id)))
-      (by simp only [List.length_cons] at room; dsimp; omega)
-    rw [suffixScan_cons]
-    mvcgen [branch, hg, hn, ha, ht]
-    all_goals try dsimp +zetaDelta only at *
-    all_goals repeat intro
-    all_goals simp_all [allowedFamily, allowedIpSpace, nlaTotal, ipv4NodeJson]
-    all_goals subst_vars
-    all_goals mvcgen [hn, ha, ht, branch]
-    all_goals try dsimp +zetaDelta only at *
-    all_goals repeat intro
-    all_goals simp_all [allowedFamily, allowedIpSpace, nlaTotal, ipv4NodeJson,
-      ipv4Jsons, List.length_cons, Nat.mul_add, Nat.sub_sub, Array.push_append, Array.append_assoc]
-    all_goals subst_vars
-    all_goals mvcgen [hn, ha, ht, branch]
-    all_goals try dsimp +zetaDelta only at *
-    all_goals repeat intro
-    all_goals simp_all [allowedFamily, allowedIpSpace, nlaTotal, ipv4NodeJson,
-      ipv4Jsons, List.length_cons, Nat.mul_add, Nat.sub_sub, Nat.add_comm]
-    all_goals subst_vars
-    all_goals mvcgen [ht, branch]
-    all_goals try dsimp +zetaDelta only at *
-    all_goals repeat intro
-    all_goals simp_all [allowedFamily, allowedIpSpace, nlaTotal, ipv4NodeJson,
-      ipv4Jsons, List.length_cons, Nat.mul_add, Nat.sub_sub, Nat.add_comm]
+    apply (returns_iff _ _ _).mp
+    intro g ambient device
+    let mark (a : Ambient) (decision : Decision) (outcome : Bool) : Ambient :=
+      {a with steps := a.steps.push {decision, outcome, netRx := a.netRxSection}}
+    let before := mark ambient .getPeerAipIter true
+    obtain ⟨n, g1, a1, getRun, dev1, value1⟩ :=
+      (returns_iff _ _ _).mpr (multipart_getNode id d _ here.1) g before device
+    subst n
+    obtain ⟨r, g2, a2, readRun, dev2, value2⟩ :=
+      (returns_iff _ _ _).mpr (readNode_ipv4_native (nodes id) here.2
+        (fun g => g.dev = some d)) g1 a1 dev1
+    subst r
+    obtain ⟨serialized, g3, a3, serializeRun, dev3, value3⟩ :=
+      (returns_iff _ _ _).mpr (getAllowedips_inserted true (nodes id).bits (nodes id).cidr skb
+        (by change 28 ≤ skb.room; simp only [List.length_cons] at room; omega)
+        (fun g => g.dev = some d)) g2 a2 dev2
+    subst serialized
+    let next := mark a3 .getPeerAipFail false
+    obtain ⟨result, final, after, tailRun, finalDevice, value⟩ :=
+      (returns_iff _ _ _).mpr (ih tail {skb with room := skb.room - 28}
+        (ips.push (ipv4NodeJson (nodes id)))
+        (by simp only [List.length_cons] at room; dsimp; omega)) g3 next dev3
+    refine ⟨result, final, after, ?_, finalDevice, ?_⟩
+    · have getLift (nid : NodeId) : (monadLift (getNode nid) : WG.M AipNode) =
+          liftAip (getNode nid) := rfl
+      simp only [suffixScan_cons, getLift]
+      simp [branch, AmbientM.branch, before, next, mark, allowedFamily, allowedIpSpace,
+        nlaTotal] at getRun readRun serializeRun tailRun ⊢
+      rw [getRun]
+      dsimp only [bind, Except.bind]
+      rw [readRun]
+      dsimp only [bind, Except.bind]
+      rw [serializeRun]
+      simpa [branch, AmbientM.branch, ipv4NodeJson] using tailRun
+    · simpa [ipv4Jsons, List.length_cons, Nat.mul_add, Nat.sub_sub, Array.push_append,
+        Array.append_assoc, Nat.add_comm] using value
 
-/-- The unchanged original header selects this nonempty suffix and reserves
-its outer nest. The supplied scan contract is over its actual initialized seq. -/
 theorem dumpAllowed_scan (d : Device) (p : Peer) (ctx : DumpCtx)
     (skb0 skb : NlSkb) (pubkey : String) (attrs : List (String × Json))
     (start : NodeId) (ids : List NodeId) (expected : PeerDumpResult)
     (selected : p.allowedipsList.dropWhile (· != start) = ids) (nonempty : ids ≠ [])
     (sequence : ctx.allowedipsSeq = 0 ∨ ctx.allowedipsSeq = d.peerAllowedips.seq)
     (room : 4 ≤ skb.room)
-    (scan : ⦃fun w => ⌜w.k.wg = some d⌝⦄
+    (scan : ⦃fun w => ⌜w.dev = some d⌝⦄
       suffixScan { ctx with allowedipsSeq := d.peerAllowedips.seq } pubkey attrs ids
         { skb with room := skb.room - 4 } #[]
-      ⦃⇓ result w => ⌜w.k.wg = some d ∧ result = expected⌝⦄) :
-    ⦃fun w => ⌜w.k.wg = some d⌝⦄
+      ⦃⇓ result w => ⌜w.dev = some d ∧ result = expected⌝⦄) :
+    ⦃fun w => ⌜w.dev = some d⌝⦄
       getPeerDumpAllowedSource p ctx skb0 skb pubkey attrs (some start)
-    ⦃⇓ result w => ⌜w.k.wg = some d ∧ result = expected⌝⦄ := by
-  rcases sequence with sequence | sequence
-  all_goals rw [dumpAllowed_suffix_source]
-  all_goals simp [selected, nonempty, NlSkb.put, nlaTotal, show ¬ skb.room < 4 by omega]
-  all_goals mvcgen [branch, getDev, getK, invariant, scan]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals repeat intro
-  all_goals try simp_all
-  all_goals subst_vars
-  all_goals mvcgen [branch, scan]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals repeat intro
-  all_goals try simp_all
-  all_goals mvcgen [branch, scan]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals repeat intro
-  all_goals try simp_all
+    ⦃⇓ result w => ⌜w.dev = some d ∧ result = expected⌝⦄ := by
+  apply (returns_iff _ _ _).mp
+  intro g ambient device
+  let mark (a : Ambient) (decision : Decision) (outcome : Bool) : Ambient :=
+    {a with steps := a.steps.push {decision, outcome, netRx := a.netRxSection}}
+  let a0 := mark ambient .getPeerNoAips false
+  let a1 := mark a0 .getPeerSeqUnset (ctx.allowedipsSeq == 0)
+  let a2 := if ctx.allowedipsSeq = 0 then a1 else mark a1 .getPeerSeqChanged false
+  let before := mark a2 .getPeerAipsNestFail false
+  obtain ⟨result, final, after, run, finalDevice, value⟩ :=
+    (returns_iff _ _ _).mpr scan g before device
+  refine ⟨result, final, after, ?_, finalDevice, value⟩
+  rw [dumpAllowed_suffix_source]
+  have enough : ¬ skb.room < 4 := by omega
+  by_cases zero : ctx.allowedipsSeq = 0
+  · simpa [branch, AmbientM.branch, getDev, device, selected, nonempty,
+      NlSkb.put, nlaTotal, enough, zero, before, a2, a1, a0, mark] using run
+  · have stable : ctx.allowedipsSeq = d.peerAllowedips.seq := sequence.resolve_left zero
+    have nonzero : d.peerAllowedips.seq ≠ 0 := by intro eq; exact zero (stable.trans eq)
+    have unchanged : {ctx with allowedipsSeq := d.peerAllowedips.seq} = ctx := by
+      cases ctx; simp_all
+    simpa [branch, AmbientM.branch, getDev, device, selected, nonempty,
+      NlSkb.put, nlaTotal, enough, stable, nonzero, before, a2, a1, a0, mark,
+      unchanged] using run
 
-  all_goals cases ctx
-  all_goals simp_all
-  all_goals mvcgen [scan]
-  all_goals assumption
-
-/-- The first IPv4 node fits; reading the second then discovers no remaining
-space. Later nodes are neither read nor required resident by this contract. -/
 theorem suffixScan_split_one (d : Device) (nodes : NodeId → AipNode)
     (a b : NodeId) (tail : List NodeId) (ctx : DumpCtx) (pubkey : String)
     (attrs : List (String × Json)) (skb : NlSkb)
     (resident : Ipv4Residents d nodes [a, b]) (room : skb.room = 28) :
-    ⦃fun w => ⌜w.k.wg = some d⌝⦄ suffixScan ctx pubkey attrs (a :: b :: tail) skb #[]
-    ⦃⇓ result w => ⌜w.k.wg = some d ∧ result =
+    ⦃fun w => ⌜w.dev = some d⌝⦄ suffixScan ctx pubkey attrs (a :: b :: tail) skb #[]
+    ⦃⇓ result w => ⌜w.dev = some d ∧ result =
       ({ skb with room := 0 }, { ctx with nextAllowedip := some b },
         .split { publicKey := pubkey, attrs := attrs ++ [("allowed_ips", Json.arr #[ipv4NodeJson (nodes a)])], split := true })⌝⦄ := by
   have ra := resident a (by simp)
   have rb := resident b (by simp)
-  have ga := multipart_getNode a d (nodes a) ra.1
-  have gb := multipart_getNode b d (nodes b) rb.1
-  have na := readNode_ipv4 (nodes a) ra.2 (fun k => k.wg = some d)
-  have nb := readNode_ipv4 (nodes b) rb.2 (fun k => k.wg = some d)
-  have ha := getAllowedips_inserted true (nodes a).bits (nodes a).cidr skb
-    (by change 28 ≤ skb.room; omega) (fun k => k.wg = some d)
-  have hz := getAllowedips_zero { skb with room := 0 } 4
-    (allowedMasked true (nodes b).bits (nodes b).cidr) (nodes b).cidr rfl
-    (fun k => k.wg = some d)
-  rw [suffixScan_cons]
-  simp only [suffixScan_cons]
-  mvcgen [branch, ga, gb, na, nb, ha, hz]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals repeat intro
-  all_goals simp_all [room, allowedFamily, allowedIpSpace, nlaTotal, ipv4NodeJson]
-  all_goals subst_vars
-  all_goals mvcgen [branch, ga, gb, na, nb, ha, hz]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals repeat intro
-  all_goals simp_all [room, allowedFamily, allowedIpSpace, nlaTotal, ipv4NodeJson]
-  all_goals subst_vars
-  all_goals mvcgen [branch, ga, gb, na, nb, ha, hz]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals repeat intro
-  all_goals simp_all [room, allowedFamily, allowedIpSpace, nlaTotal, ipv4NodeJson]
-  all_goals subst_vars
-  all_goals mvcgen [branch, ga, gb, na, nb, ha, hz]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals repeat intro
-  all_goals simp_all [room, allowedFamily, allowedIpSpace, nlaTotal, ipv4NodeJson]
-  all_goals subst_vars
-  all_goals mvcgen [branch, ga, gb, na, nb, ha, hz]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals repeat intro
-  all_goals simp_all [room, allowedFamily, allowedIpSpace, nlaTotal, ipv4NodeJson]
-  all_goals subst_vars
-  all_goals mvcgen [branch, ga, gb, na, nb, ha, hz]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals repeat intro
-  all_goals simp_all [room, allowedFamily, allowedIpSpace, nlaTotal, ipv4NodeJson]
+  apply (returns_iff _ _ _).mp
+  intro g ambient device
+  let mark (a : Ambient) (decision : Decision) (outcome : Bool) : Ambient :=
+    {a with steps := a.steps.push {decision, outcome, netRx := a.netRxSection}}
+  let before := mark ambient .getPeerAipIter true
+  obtain ⟨n1, g1, a1, get1, dev1, val1⟩ :=
+    (returns_iff _ _ _).mpr (multipart_getNode a d _ ra.1) g before device
+  subst n1
+  obtain ⟨r1, g2, a2, read1, dev2, rval1⟩ :=
+    (returns_iff _ _ _).mpr (readNode_ipv4_native (nodes a) ra.2
+      (fun g => g.dev = some d)) g1 a1 dev1
+  subst r1
+  obtain ⟨s1, g3, a3, ser1, dev3, sval1⟩ :=
+    (returns_iff _ _ _).mpr (getAllowedips_inserted true (nodes a).bits (nodes a).cidr
+      skb (by change 28 ≤ skb.room; omega) (fun g => g.dev = some d)) g2 a2 dev2
+  subst s1
+  let middle := mark (mark a3 .getPeerAipFail false) .getPeerAipIter true
+  obtain ⟨n2, g4, a4, get2, dev4, val2⟩ :=
+    (returns_iff _ _ _).mpr (multipart_getNode b d _ rb.1) g3 middle dev3
+  subst n2
+  obtain ⟨r2, g5, a5, read2, dev5, rval2⟩ :=
+    (returns_iff _ _ _).mpr (readNode_ipv4_native (nodes b) rb.2
+      (fun g => g.dev = some d)) g4 a4 dev4
+  subst r2
+  obtain ⟨s2, g6, a6, ser2, dev6, sval2⟩ :=
+    (returns_iff _ _ _).mpr (getAllowedips_zero_native {skb with room := 0}
+      4 (allowedMasked true (nodes b).bits (nodes b).cidr) (nodes b).cidr rfl
+      (fun g => g.dev = some d)) g5 a5 dev5
+  subst s2
+  let after := mark a6 .getPeerAipFail true
+  refine ⟨_, g6, after, ?_, dev6, rfl⟩
+  have getLift (nid : NodeId) : (monadLift (getNode nid) : WG.M AipNode) =
+      liftAip (getNode nid) := rfl
+  simp only [suffixScan_cons, getLift]
+  simp [branch, AmbientM.branch, room, mark, before, middle, after,
+    allowedFamily, allowedIpSpace, nlaTotal, ipv4NodeJson] at get1 read1 ser1 get2 read2 ser2 ⊢
+  rw [get1]
+  dsimp only [bind, Except.bind]
+  rw [read1]
+  dsimp only [bind, Except.bind]
+  rw [ser1]
+  simp only [Option.isNone, Option.get!, reduceCtorEq, ↓reduceIte]
+  dsimp only [Pure.pure, Except.pure, Bind.bind, Except.bind, StateT.run, StateT.bind, StateT.pure,
+    liftM, monadLift, MonadLift.monadLift, StateT.lift, modify, modifyGet,
+    MonadStateOf.modifyGet, StateT.modifyGet, Functor.map, StateT.map, Except.map]
+  dsimp only [StateT.run] at get2 read2 ser2
+  rw [get2]
+  dsimp only [bind, Except.bind]
+  rw [read2]
+  dsimp only [bind, Except.bind]
+  rw [ser2]
+  rfl
 
 theorem dumpAllowed_suffix_all (d : Device) (nodes : NodeId → AipNode)
     (p : Peer) (ctx : DumpCtx) (skb0 skb : NlSkb)
@@ -237,8 +245,8 @@ theorem dumpAllowed_suffix_all (d : Device) (nodes : NodeId → AipNode)
     (selected : p.allowedipsList.dropWhile (· != start) = ids) (nonempty : ids ≠ [])
     (sequence : ctx.allowedipsSeq = 0 ∨ ctx.allowedipsSeq = d.peerAllowedips.seq)
     (room : 4 + 28 * ids.length ≤ skb.room) :
-    ⦃fun w => ⌜w.k.wg = some d⌝⦄ getPeerDumpAllowedSource p ctx skb0 skb pubkey attrs (some start)
-    ⦃⇓ result w => ⌜w.k.wg = some d ∧ result =
+    ⦃fun w => ⌜w.dev = some d⌝⦄ getPeerDumpAllowedSource p ctx skb0 skb pubkey attrs (some start)
+    ⦃⇓ result w => ⌜w.dev = some d ∧ result =
       ({ skb with room := skb.room - (4 + 28 * ids.length) },
        { ctx with nextAllowedip := none, allowedipsSeq := 0 },
        .complete { publicKey := pubkey, attrs := attrs ++ [("allowed_ips", Json.arr (ipv4Jsons nodes ids))] })⌝⦄ := by
@@ -252,8 +260,8 @@ theorem dumpAllowed_suffix_split (d : Device) (nodes : NodeId → AipNode)
     (pubkey : String) (attrs : List (String × Json))
     (listed : p.allowedipsList = a :: b :: tail) (resident : Ipv4Residents d nodes [a, b])
     (sequence : ctx.allowedipsSeq = 0) (room : skb.room = 32) :
-    ⦃fun w => ⌜w.k.wg = some d⌝⦄ getPeerDumpAllowedSource p ctx skb0 skb pubkey attrs (some a)
-    ⦃⇓ result w => ⌜w.k.wg = some d ∧ result =
+    ⦃fun w => ⌜w.dev = some d⌝⦄ getPeerDumpAllowedSource p ctx skb0 skb pubkey attrs (some a)
+    ⦃⇓ result w => ⌜w.dev = some d ∧ result =
       ({ skb with room := 0 }, { ctx with nextAllowedip := some b, allowedipsSeq := d.peerAllowedips.seq },
        .split { publicKey := pubkey, attrs := attrs ++ [("allowed_ips", Json.arr #[ipv4NodeJson (nodes a)])], split := true })⌝⦄ := by
   apply dumpAllowed_scan d p ctx skb0 skb pubkey attrs a (a :: b :: tail) _
@@ -267,23 +275,31 @@ theorem dumpTail_suffix_split (d : Device) (nodes : NodeId → AipNode)
     (listed : p.allowedipsList = a :: b :: tail) (endpoint : p.endpoint = none)
     (resident : Ipv4Residents d nodes [a, b])
     (fresh : ctx.nextAllowedip = none) (sequence : ctx.allowedipsSeq = 0) (room : skb.room = 168) :
-    ⦃fun w => ⌜w.k.wg = some d⌝⦄ getPeerDumpTailSource p ctx skb
-    ⦃⇓ result w => ⌜w.k.wg = some d ∧ result =
+    ⦃fun w => ⌜w.dev = some d⌝⦄ getPeerDumpTailSource p ctx skb
+    ⦃⇓ result w => ⌜w.dev = some d ∧ result =
       ({ skb with room := 0 }, { ctx with nextAllowedip := some b, allowedipsSeq := d.peerAllowedips.seq },
        .split (multipartFirst p (nodes a).bits (nodes a).cidr))⌝⦄ := by
-  have ha := dumpAllowed_suffix_split d nodes p a b tail ctx skb
-    { skb with room := 32 } (hexKey p.remoteStatic) (peerFixedAttrs p)
-    listed resident sequence rfl
-  simp only [getPeerDumpTailSource, fresh]
-  simp [NlSkb.put, nlaTotal, room, endpoint, AF_INET, AF_INET6, listed]
-  mvcgen [branch, ha]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals repeat intro
-  all_goals simp_all [peerFixedAttrs, endpoint, multipartFirst, ipv4NodeJson]
-  all_goals subst_vars
-  all_goals mvcgen [ha]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [peerFixedAttrs, endpoint, multipartFirst, ipv4NodeJson]
+  apply (returns_iff _ _ _).mp
+  intro g ambient device
+  let mark (a : Ambient) (decision : Decision) (outcome : Bool) : Ambient :=
+    {a with steps := a.steps.push {decision, outcome, netRx := a.netRxSection}}
+  let before := mark (mark (mark (mark (mark (mark (mark (mark (mark (mark
+    (mark (mark ambient .getPeerNoNest false) .getPeerPubkeyFail false) .getPeerFirst true)
+    .getPeerPskFail false) .getPeerPutHandshake false) .getPeerPutKeepalive false)
+    .getPeerPutTx false) .getPeerPutRx false) .getPeerPutProto false)
+    .getPeerEp4 false) .getPeerEp6 false) .getPeerEpFail false
+  obtain ⟨result, final, after, run, finalDevice, value⟩ :=
+    (returns_iff _ _ _).mpr (dumpAllowed_suffix_split d nodes p a b tail
+      ctx skb {skb with room := 32} (hexKey p.remoteStatic) (peerFixedAttrs p)
+      listed resident sequence rfl) g before device
+  refine ⟨result, final, after, ?_, finalDevice, ?_⟩
+  · have source : ((getPeerDumpTailSource p ctx skb).run g).run ambient =
+        ((getPeerDumpAllowedSource p ctx skb {skb with room := 32} (hexKey p.remoteStatic)
+          (peerFixedAttrs p) (some a)).run g).run before := by
+      simp [getPeerDumpTailSource, fresh, listed, branch, AmbientM.branch, NlSkb.put,
+        nlaTotal, room, endpoint, AF_INET, AF_INET6, peerFixedAttrs, before, mark]
+    exact source.trans run
+  · simpa [multipartFirst, ipv4NodeJson] using value
 
 theorem dumpTail_suffix_resume (d : Device) (nodes : NodeId → AipNode)
     (p : Peer) (a b : NodeId) (tail : List NodeId) (ctx : DumpCtx) (skb : NlSkb)
@@ -291,21 +307,30 @@ theorem dumpTail_suffix_resume (d : Device) (nodes : NodeId → AipNode)
     (resident : Ipv4Residents d nodes (b :: tail))
     (cursor : ctx.nextAllowedip = some b) (sequence : ctx.allowedipsSeq = d.peerAllowedips.seq)
     (room : 44 + 28 * (1 + tail.length) ≤ skb.room) :
-    ⦃fun w => ⌜w.k.wg = some d⌝⦄ getPeerDumpTailSource p ctx skb
-    ⦃⇓ result w => ⌜w.k.wg = some d ∧ result =
+    ⦃fun w => ⌜w.dev = some d⌝⦄ getPeerDumpTailSource p ctx skb
+    ⦃⇓ result w => ⌜w.dev = some d ∧ result =
       ({ skb with room := skb.room - (44 + 28 * (1 + tail.length)) },
        { ctx with nextAllowedip := none, allowedipsSeq := 0 },
        .complete (suffixLast p nodes (b :: tail)))⌝⦄ := by
-  have ha := dumpAllowed_suffix_all d nodes p ctx skb
-    { skb with room := skb.room - 40 } (hexKey p.remoteStatic)
-    [("public_key", toJson (hexKey p.remoteStatic))] b (b :: tail) resident
-    (by simp [listed, distinct]) (by simp) (.inr sequence)
-    (by simp only [List.length_cons]; omega)
-  rw [dumpTail_resume_source p b ctx skb cursor (by omega)]
-  mvcgen [branch, ha]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals repeat intro
-  all_goals simp_all [suffixLast, Nat.sub_sub, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm]
-  all_goals omega
+  apply (returns_iff _ _ _).mp
+  intro g ambient device
+  let mark (a : Ambient) (decision : Decision) (outcome : Bool) : Ambient :=
+    {a with steps := a.steps.push {decision, outcome, netRx := a.netRxSection}}
+  let before := mark (mark (mark ambient .getPeerNoNest false)
+    .getPeerPubkeyFail false) .getPeerFirst false
+  obtain ⟨result, final, after, run, finalDevice, value⟩ :=
+    (returns_iff _ _ _).mpr (dumpAllowed_suffix_all d nodes p ctx skb
+      {skb with room := skb.room - 40} (hexKey p.remoteStatic)
+      [("public_key", toJson (hexKey p.remoteStatic))] b (b :: tail) resident
+      (by simp [listed, distinct]) (by simp) (.inr sequence)
+      (by simp only [List.length_cons]; omega)) g before device
+  refine ⟨result, final, after, ?_, finalDevice, ?_⟩
+  · rw [dumpTail_resume_source p b ctx skb cursor (by omega)]
+    simpa [branch, AmbientM.branch, before, mark] using run
+  · have arithmetic : skb.room - 40 - (4 + 28 * (b :: tail).length) =
+        skb.room - (44 + 28 * (1 + tail.length)) := by
+      simp only [List.length_cons]
+      omega
+    simpa only [arithmetic, suffixLast, List.cons_append, List.nil_append] using value
 
 end Leanux.Proofs.WG.Config

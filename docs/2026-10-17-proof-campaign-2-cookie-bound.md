@@ -15,8 +15,11 @@ that the receive worker consumed more items than its queue held (1).
 The proof composes the actual occupancy read and two actual cookie iterations,
 with an empty index table and the original cookie classification. Other
 Product fields and activation inputs remain arbitrary. It uses no compiled
-evaluation or added axiom. The old whole-loop adequacy is still pending;
-a coherent-ring theorem would require an explicit domain and separate proof.
+evaluation or added axiom. The corrected CookieBoundedSource factors the exact bounded Product execution,
+using the checked cookie leaf when applicable and actual receiveStep otherwise.
+It retains zero-fuel, yield, rescheduling and exhaustion errors. This replaces
+the two false count-only operational predictions; drain adequacy remains open.
+A coherent-ring theorem would require an explicit domain and separate proof.
 
 Progress.CookieItemsFindings gives a separate size-two witness: producer one
 and head zero expose one logical cookie item, but slot one also contains a

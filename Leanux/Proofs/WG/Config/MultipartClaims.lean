@@ -1,4 +1,3 @@
-import Leanux.Proofs.WG.Config.MultipartLeaves
 import Leanux.Proofs.WG.Config.MultipartSource
 import Leanux.Proofs.WG.Campaign2.Bridge
 
@@ -8,8 +7,6 @@ set_option maxHeartbeats 800000
 set_option maxRecDepth 2048
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise Lean Std.Do
-
-
 
 /-- The original peer getter splits after one IPv4 prefix, resumes at its
 returned cursor, and feeds both actual fragments to the original coalescer. -/
@@ -41,10 +38,10 @@ theorem multipartPeerDump_returns (d : Device) (p : Peer) (a b : NodeId)
     ((returns_iff _ _ _).mpr (dumpTail_resume d p a b pid addr₂ cidr₂ parent₂
       { ctx with nextAllowedip := some b, allowedipsSeq := d.peerAllowedips.seq }
       secondSkb listed distinct secondNode rfl rfl secondRoom))
-  intro entry pre
-  obtain ⟨first, afterFirst, firstRun, firstDevice, rfl⟩ := hf entry pre
-  obtain ⟨second, afterSecond, secondRun, secondDevice, rfl⟩ := hs afterFirst firstDevice
-  refine ⟨_, afterSecond, ?_, secondDevice, rfl⟩
+  intro entry ambient pre
+  obtain ⟨first, afterFirst, ambientFirst, firstRun, firstDevice, rfl⟩ := hf entry ambient pre
+  obtain ⟨second, afterSecond, ambientSecond, secondRun, secondDevice, rfl⟩ := hs afterFirst ambientFirst firstDevice
+  refine ⟨_, afterSecond, ambientSecond, ?_, secondDevice, rfl⟩
   have okbind {α β : Type} (x : α) (f : α → Except Stop β) :
       ((Except.ok x : Except Stop α) >>= f) = f x := rfl
   simp only [multipartPeerDump, StateT.run_bind, firstRun, okbind, secondRun,

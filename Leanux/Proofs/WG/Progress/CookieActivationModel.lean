@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Progress.CookieDomain
 import Leanux.Proofs.WG.Progress.CookieControlModel
 import Leanux.Env.Batch
 import Leanux.Proofs.WG.Campaign2.View
@@ -50,8 +51,5 @@ theorem cookieActivationSnapshot_continue (a : Activation) (d : WG.Device)
   simp [cookieActivationSnapshot, cookiePacketSnapshot, cookieTailDevice,
     cookieFinalSteps, cookieProcessedSteps, List.drop_drop, Nat.sub_sub,
     Nat.add_assoc, Nat.add_comm, Nat.add_left_comm]
-
-def CookieOnly (d : WG.Device) : Prop :=
-  ∀ msg src, (msg, src) ∈ d.handshakeQueue → WG.messageType msg = WG.MESSAGE_HANDSHAKE_COOKIE
 
 end Leanux.Proofs.WG.Progress

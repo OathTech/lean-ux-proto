@@ -57,10 +57,10 @@ theorem suffixPeerDump_returns (d : Device) (p : Peer) (nodes : NodeId → AipNo
     ((returns_iff _ _ _).mpr (dumpTail_suffix_resume d nodes p a b tail
       { ctx with nextAllowedip := some b, allowedipsSeq := d.peerAllowedips.seq }
       secondSkb listed distinct remaining rfl rfl secondRoom))
-  intro entry pre
-  obtain ⟨first, afterFirst, firstRun, firstDevice, rfl⟩ := hf entry pre
-  obtain ⟨second, afterSecond, secondRun, secondDevice, rfl⟩ := hs afterFirst firstDevice
-  refine ⟨_, afterSecond, ?_, secondDevice, rfl⟩
+  intro entry ambient pre
+  obtain ⟨first, afterFirst, ambientFirst, firstRun, firstDevice, rfl⟩ := hf entry ambient pre
+  obtain ⟨second, afterSecond, ambientSecond, secondRun, secondDevice, rfl⟩ := hs afterFirst ambientFirst firstDevice
+  refine ⟨_, afterSecond, ambientSecond, ?_, secondDevice, rfl⟩
   have okbind {α β : Type} (x : α) (f : α → Except Stop β) :
       ((Except.ok x : Except Stop α) >>= f) = f x := rfl
   simp only [multipartPeerDump, StateT.run_bind, firstRun, okbind, secondRun,

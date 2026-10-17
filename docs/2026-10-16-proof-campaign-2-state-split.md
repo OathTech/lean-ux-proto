@@ -22,9 +22,9 @@ and attributed theorem declarations. Campaign 2 owns 427 Lean files,
 | H1 Noise | 35 | 171 | 22 | 185 | The full Noise closure is current, including restart support. Six type-given frames are deleted. Wider caller/lifetime/reachability and clock-provenance charter claims remain open. |
 | H2 Index | 68 | 318 | 52 | 333 | Table, lookup, collision records, allocation, owner invariants and lifecycle support carried; seven type-given frames deleted. Exact peer-release outcomes replace stale totality, with checked counterexamples. All 52 headlines and their closure are current, including full Product session observations; whole-driver coherence remains pending. |
 | H3 Roaming | 35 | 119 | 13 | 157 | Endpoint/publication, polling, attempt facts, crypto, lookup and response-caller factors/facts carried with full Product certificates; two type-given frames deleted. The full terminal closure is current, including initiation/response audits with actual Product outcomes. Wider roaming/provenance charter gaps remain open. |
-| H4 Configuration | 130 | 554 | 79 | 456 | Scalar, identity, port, dump, allowed-IP and structural support carried; three type-given frames deleted. Quiet timer cleanup and queued-send observations are corrected; queued-send and removal totality have checked stale-statement counterexamples. Remaining readback/effects and terminal closure remain pending. |
-| H5 Progress | 59 | 265 | 42 | 216 | Pure/control, cut, jitter, index, poll bounds, dispatch, scheduler turns, stack/probe frames, queue flush contracts, drain selection and Product observation bridge carried; one type-given index frame deleted. The old backlog fixture has checked exact runner and direct-fixture rejections. Drain bounds are carried. General runner boundaries, corrected historical rejection wrappers and receive-source leaves are carried; whole receive-ring activation models and terminal closure remain pending. |
-| H6 Timer discipline | 98 | 404 | 50 | 195 | Base/guard/jitter, arming/wheel, recorded clock and initiation-send arming contracts carried; three type-given frames deleted. Exact wheel corrections are explicit; queue/pending and retained-worker frames are carried; broader timer episodes and terminal closure remain pending. |
+| H4 Configuration | 130 | 554 | 79 | 475 | Scalar, identity, port, dump, allowed-IP and structural support carried; three type-given frames deleted. Quiet timer cleanup and queued-send observations are corrected; queued-send and removal totality have checked stale-statement counterexamples. Remaining readback/effects and terminal closure remain pending. |
+| H5 Progress | 59 | 265 | 42 | 221 | Pure/control, cut, jitter, index, poll bounds, dispatch, scheduler turns, stack/probe frames, queue flush contracts, drain selection and Product observation bridge carried; one type-given index frame deleted. The old backlog fixture has checked exact runner and direct-fixture rejections. Drain bounds are carried. General runner boundaries, corrected historical rejection wrappers and receive-source leaves are carried; whole receive-ring activation models and terminal closure remain pending. |
+| H6 Timer discipline | 98 | 404 | 50 | 204 | Base/guard/jitter, arming/wheel, recorded clock and initiation-send arming contracts carried; three type-given frames deleted. Exact wheel corrections are explicit; queue/pending and retained-worker frames are carried; broader timer episodes and terminal closure remain pending. |
 
 Retyped, deleted and retained counts will be reported per validated tranche.
 H1, H2 and H3 now have checked split terminal closures; H4, H5 and H6 remain lagging.
@@ -4717,3 +4717,92 @@ TimerDiscipline.RetryReadySource, Progress.CookieItemsFindings and
 TimerDiscipline.AbsentGiveUpClaims under Leanux.Proofs.WG, then inspect axioms
 and run scripts/in-bundle lake env leanchecker --fresh MODULE for those roots.
 Use capped, 32 Lean threads and LEANUX_QEMU_SLOTS=16 on this host.
+
+
+## Finite suffix readback, active retransmit factors and bounded receive execution
+
+| Tranche | Before | Retyped | Corrected | Deleted | Kept | Added | After |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Config.MultipartSource/Claims remaining | 5 | 5 | 0 | 0 | 0 | 0 | 5 |
+| Config.SuffixReadbackFrames/Source/Claims | 13 | 13 | 0 | 0 | 0 | 1 | 14 |
+| TimerDiscipline.RetransmitReadySource/Claims | 3 | 0 | 3 | 0 | 0 | 0 | 3 |
+| TimerDiscipline.ObservationPathsSource | 6 | 6 | 0 | 0 | 0 | 0 | 6 |
+| Progress.CookieBoundedSource | 2 | 0 | 2 | 0 | 0 | 3 | 5 |
+| This tranche | 29 | 24 | 5 | 0 | 0 | 4 | 33 |
+| Cumulative processed baseline and checked support | 1,435 | 1,115 | 83 | 22 | 215 | 162 | 1,575 |
+
+Accounting correction: coalesce_multipart in the preceding tranche is retyped,
+not kept. Its proof body largely survives, but its equation changes from the
+old Product monad to native WG.M. The cumulative row moves one declaration
+from kept to retyped without changing the checked total. coalesce_suffix is
+classified on the same basis. The tree has 552 campaign-owned files, 1,971
+theorems and 474 checked proof modules; 396 baseline declarations remain.
+Counts: H1 185, H2 333, H3 157, H4 475, H5 221, H6 204. H1/H2/H3 terminal
+closures remain current; H4/H5/H6 and the full gate remain lagging.
+
+MultipartSource/Claims now compose the actual two getter calls, exact first
+split and returned resume cursor, and actual coalescer result. Original room,
+IPv4-node and distinctness premises are unchanged. SuffixReadbackFrames keeps
+the original arbitrary joint owner predicate through actual liftWG, with one
+native companion. Source retains every cancellation, changed-sequence and
+stale-cursor arm before its premises; finite scans preserve repeated IDs and
+read only the nodes they reach. Claims uses the actual returned context and
+fragments. Socket-generated pagination remains a separate pending chain.
+
+RetransmitReadySource replaces two false active totalities by exact actual
+arm-tail factors. The projected hook claim retains all original premises and
+full Product entry observations: the inactive branch succeeds after caller
+and jitter reads, while the active branch retains the actual arm errors. The
+old record validity conditions are retained even where a prefix needs only a
+subset; no base-clock, enqueue or success premise is added. ObservationPathsSource
+extracts six generic path contracts with arbitrary Product first/tail actions
+and predicates, full Product snapshots and exact errors. Actual lifted caller
+and jitter reads share the same concrete intermediate states. The obsolete
+dispatch path stays pending in ObservationBridge.
+
+CookieDomain retains initial logical-items classification. CookieBoundedSource
+replaces two old drain/count predictions by exact finite source correspondence.
+It checks the current physical consume and empty table for the proven cookie
+leaf, and runs actual receiveStep in every other case. It threads the complete
+Product state, real rescheduling and stop-record outcomes, explicit zero fuel,
+yielded activation and captured-occupancy exhaustion. Three private source
+identities justify the factor. The old pure summary/drained/continuation and
+scheduler consequences remain pending; this is not drain adequacy.
+
+Development ledger: multipart tail probes 1–7 fail parsing and native/bind
+normalization; error/warning counts are 1/0, 2/0, 5/0, 1/3, 1/2, 1/0, 1/0;
+probe 8 passes. Suffix probes 1–2 pass their growing slices; full-chain probes
+3–5 fail capacity/list normalization (2, 1, 1 errors, no warnings), and probe 6
+passes. Active retransmit source probe 1 closes but fails warning cleanliness
+on three unused old domain parameters; probe 2 retains them with explicit
+underscore names and passes. Projected hook and generic observation-path
+probes 1 pass. Cookie hybrid probes 1–4 fail syntax/exact-run reduction with
+3/5, 6/1, 3/0 and 1/0 errors/warnings; probe 5 passes. Original proof limits
+and memory caps are unchanged; no infrastructure rerun occurs.
+
+The final 142-job build passes without warnings, after successful 82-, 135-
+and 138-job package builds. Axiom inspection checks 543 logical roots in 108
+proof modules, including 296 public theorem roots, with standard axioms only.
+All five fresh kernel replays pass. Independent reviews of the bounded cookie
+factor and generic Product observations find no issues; the root review of
+the readback and retransmit packages also finds none. Static checks, original terminal
+names/order and mirror/shared-layer boundaries pass. No mirror or shared
+lemma is edited. The source/claim/frame split remains explicit in the files.
+
+Reproduce with scripts/in-bundle lake build on Config.MultipartClaims,
+Config.SuffixReadbackClaims, TimerDiscipline.RetransmitReadyClaims,
+TimerDiscipline.ObservationPathsSource and Progress.CookieBoundedSource under
+Leanux.Proofs.WG. Inspect axioms and run scripts/in-bundle lake env leanchecker
+--fresh MODULE for those roots, with capped, 32 threads and 16 QEMU slots here.
+
+Root scratch preparation also checks 74 of the 79 configuration headlines,
+with five intentionally excluded pending complete dependency/semantic carries;
+none earns terminal census credit yet. Its first generator attempt fails before
+Lean input exists. The next Lean probe fails five orphaned documentation
+comments and one stale collision-effect name; the changed probe passes cleanly.
+Independent review finds no additional domain or correctness issue in that
+74-claim slice. The next changed scratch probe incorporates the checked suffix
+claim and two exact joint-outcome live-removal corrections; all 77 pass without
+warnings. The two socket headlines remain excluded. The comments are rewritten
+to explain the corrected effects. The tracked Statements file remains
+unchanged at this checkpoint.

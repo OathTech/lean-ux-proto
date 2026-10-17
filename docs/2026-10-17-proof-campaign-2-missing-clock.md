@@ -21,7 +21,9 @@ AbsentGiveUpSource and AbsentGiveUpClaims now retain the old domain and prove
 exact execution agreement with the actual arm tail, including its failures.
 They consume the real caller/guard prefix and preserve the remaining records
 and all unrelated Product data. This corrects the old totality claim; it does
-not prove that the arm succeeds. Other active consumers remain pending.
+not prove that the arm succeeds. RetransmitReadySource/Claims now make the same
+correction: actual caller/jitter/guard prefix, inactive success or the actual
+active arm outcome, with full Product observations. Other consumers remain pending.
 
 Reproduce with scripts/in-bundle lake build
 Leanux.Proofs.WG.TimerDiscipline.MissingClockFindings and scripts/in-bundle
