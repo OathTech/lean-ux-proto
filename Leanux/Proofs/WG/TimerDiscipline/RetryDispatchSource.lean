@@ -1,60 +1,61 @@
-import Leanux.Proofs.WG.TimerDiscipline.RetrySelectedSource
 import Leanux.Proofs.WG.TimerDiscipline.RetryInspectionClaims
-import Leanux.Proofs.WG.TimerDiscipline.RetryGiveUpFrames
-import Leanux.Proofs.WG.TimerDiscipline.RetryEligibilitySource
 import Leanux.Proofs.WG.TimerDiscipline.RetryDispatchLeaves
-import Leanux.Proofs.WG.TimerDiscipline.RetryDispatchModel
-import Leanux.Proofs.WG.TimerDiscipline.RetryDispatchFrames
-import Leanux.Proofs.WG.TimerDiscipline.SendDispatchClaims
-import Leanux.Proofs.WG.TimerDiscipline.SendDispatchWorkSource
-import Leanux.Proofs.WG.TimerDiscipline.FireSelectionSource
-import Leanux.Proofs.WG.Config.QuietTimers
+import Leanux.Proofs.WG.TimerDiscipline.RetryUnitModel
+import Leanux.Proofs.WG.TimerDiscipline.RetrySelectedSource
+import Leanux.Proofs.WG.TimerDiscipline.SectionFrames
+import Leanux.Proofs.WG.TimerDiscipline.RetryInspectedSource
+import Leanux.Proofs.WG.TimerDiscipline.ObservationBridge
+import Leanux.Proofs.WG.TimerDiscipline.SelectionFrames
 
 set_option autoImplicit false
 set_option pp.structureInstances false
 set_option maxHeartbeats 800000
-
 namespace Leanux.Proofs.WG.TimerDiscipline
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise Leanux.Proofs.WG.Config Std.Do
 
-/-- The original pair, without a scheduler inserted between its two calls. -/
-def retryDispatch (horizon : UInt64) : M Unit := do
-  Env.fireTimer .timerRetransmit horizon
+/-- Inspect the same actual selected-unit execution, retaining the queue bit. -/
+def retryInspectionPath (unit : RetryUnit) : Leanux.M (Option Bool) := do
+  timerDispatchPrefix_variant .timerRetransmit unit.pid .retransmitHandshake unit.wheel unit.step
+  observedFireSelected unit.pid unit.wheel
+
+def retryDispatch (unit : RetryUnit) : Leanux.M Unit := do
+  timerDispatchUnit_variant .timerRetransmit unit.pid .retransmitHandshake unit.wheel unit.step
   Env.runOneSendWorker
 
-/-- Each copied observation begins at that original call's actual entry. -/
-def observedRetryDispatch (horizon : UInt64) : M RetryDispatchObservation := do
-  let timer ← observed (Env.fireTimer .timerRetransmit horizon)
-    (timerExecutionPath .timerRetransmit horizon)
-  let afterTimer ← Campaign2.read
+def observedRetryDispatch (unit : RetryUnit) : Leanux.M RetryDispatchObservation := do
+  let inspection ← Campaign2.Product.inspect (retryInspectionPath unit)
+  let timer ← observed
+    (timerDispatchUnit_variant .timerRetransmit unit.pid .retransmitHandshake unit.wheel unit.step)
+    (timerExecutionPath .timerRetransmit unit.pid .retransmitHandshake unit.wheel unit.step)
+  let afterTimer ← Campaign2.Product.read
   let send ← observed Env.runOneSendWorker sendWorkerExecution
-  return ⟨timer.1, afterTimer, send.1⟩
+  return ⟨timer.1, afterTimer, inspection, send.1⟩
 
-theorem observedRetryDispatch_run (horizon : UInt64) (w : World) :
-    (observedRetryDispatch horizon).run w =
-      ((Env.fireTimer .timerRetransmit horizon).run w >>= fun timerOut =>
+theorem observedRetryDispatch_run (unit : RetryUnit) (w : World) :
+    (observedRetryDispatch unit).run w =
+      ((timerDispatchUnit_variant .timerRetransmit unit.pid .retransmitHandshake unit.wheel unit.step).run w >>= fun timerOut =>
         Env.runOneSendWorker.run timerOut.2 >>= fun sendOut =>
           Except.ok (RetryDispatchObservation.mk
-            (Campaign2.observeResult ((timerExecutionPath .timerRetransmit horizon).run w))
-            (Campaign2.snapshot timerOut.2)
-            (Campaign2.observeResult (sendWorkerExecution.run timerOut.2)), sendOut.2)) := by
+            (Campaign2.Product.observeResult ((timerExecutionPath .timerRetransmit unit.pid .retransmitHandshake unit.wheel unit.step).run w))
+            (Campaign2.Product.snapshot timerOut.2)
+            (Campaign2.Product.observeResult ((retryInspectionPath unit).run w))
+            (Campaign2.Product.observeResult (sendWorkerExecution.run timerOut.2)), sendOut.2)) := by
   simp only [observedRetryDispatch, observed, StateT.run_bind, StateT.run_pure]
-  dsimp only [Campaign2.inspect, Campaign2.read, StateT.run, Bind.bind, Except.bind, Pure.pure]
-  cases ht : Env.fireTimer .timerRetransmit horizon w with
+  dsimp only [Campaign2.Product.inspect, Campaign2.Product.read, StateT.run, Bind.bind, Except.bind, Pure.pure]
+  cases ht : timerDispatchUnit_variant .timerRetransmit unit.pid .retransmitHandshake unit.wheel unit.step w with
   | error e => rfl
   | ok pair =>
     obtain ⟨u, after⟩ := pair
     dsimp only [Except.pure]
     cases hs : Env.runOneSendWorker after <;> rfl
 
-/-- Removing both observations preserves the exact original pair, including errors. -/
-theorem observedRetryDispatch_erase (horizon : UInt64) :
-    (do let _ ← observedRetryDispatch horizon; pure ()) = retryDispatch horizon := by
+theorem observedRetryDispatch_erase (unit : RetryUnit) :
+    (do let _ ← observedRetryDispatch unit; pure ()) = retryDispatch unit := by
   funext w
   change StateT.run _ w = StateT.run _ w
   rw [StateT.run_bind, observedRetryDispatch_run]
-  simp only [retryDispatch, StateT.run_bind, StateT.run_pure]
-  cases ht : (Env.fireTimer .timerRetransmit horizon).run w with
+  simp only [StateT.run_bind, StateT.run_pure]
+  cases ht : (timerDispatchUnit_variant .timerRetransmit unit.pid .retransmitHandshake unit.wheel unit.step).run w with
   | error e => rfl
   | ok pair =>
     obtain ⟨u, after⟩ := pair
@@ -65,5 +66,6 @@ theorem observedRetryDispatch_erase (horizon : UInt64) :
       obtain ⟨u, final⟩ := pair
       cases u
       rfl
+
 
 end Leanux.Proofs.WG.TimerDiscipline

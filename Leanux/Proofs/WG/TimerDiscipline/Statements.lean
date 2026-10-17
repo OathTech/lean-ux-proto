@@ -1,98 +1,111 @@
-import Leanux.Proofs.WG.TimerDiscipline.WorkerReadyClaims
-import Leanux.Proofs.WG.TimerDiscipline.FireReadyClaims
-import Leanux.Proofs.WG.TimerDiscipline.SendReadyClaims
-import Leanux.Proofs.WG.TimerDiscipline.RetransmitReadyClaims
-import Leanux.Proofs.WG.TimerDiscipline.AbsentGiveUpClaims
-import Leanux.Proofs.WG.TimerDiscipline.PendingGiveUpSource
+import Leanux.Proofs.WG.TimerDiscipline.RetryBoundaryClaims
+import Leanux.Proofs.WG.TimerDiscipline.ArmingSourceClaims
+import Leanux.Proofs.WG.TimerDiscipline.HookObservationClaims
+import Leanux.Proofs.WG.TimerDiscipline.ObservationClaims
+import Leanux.Proofs.WG.TimerDiscipline.JitterBoundClaims
+import Leanux.Proofs.WG.TimerDiscipline.JitterOutcomeClaims
+import Leanux.Proofs.WG.TimerDiscipline.SourceFrames
+import Leanux.Proofs.WG.TimerDiscipline.RecordedSourceClaims
+import Leanux.Proofs.WG.TimerDiscipline.SendDispatchClaims
+import Leanux.Proofs.WG.TimerDiscipline.ResponseSessionClaims
+import Leanux.Proofs.WG.TimerDiscipline.OutgoingResponseSessionClaims
+import Leanux.Proofs.WG.TimerDiscipline.DataDoneClaims
 import Leanux.Proofs.WG.TimerDiscipline.RxDataTimersClaims
 import Leanux.Proofs.WG.TimerDiscipline.ResponseTraversalClaims
 import Leanux.Proofs.WG.TimerDiscipline.InitiationTraversalClaims
 import Leanux.Proofs.WG.TimerDiscipline.ReceiveTraversalClaims
-import Leanux.Proofs.WG.TimerDiscipline.DataDoneClaims
-import Leanux.Proofs.WG.TimerDiscipline.OutgoingResponseSessionClaims
-import Leanux.Proofs.WG.TimerDiscipline.ObservationClaims
-import Leanux.Proofs.WG.TimerDiscipline.SendDispatchClaims
-import Leanux.Proofs.WG.TimerDiscipline.RetryDispatchClaims
-import Leanux.Proofs.WG.TimerDiscipline.RetryRearmClaims
-import Leanux.Proofs.WG.TimerDiscipline.RetrySequenceClaims
-import Leanux.Proofs.WG.TimerDiscipline.RetryBoundaryClaims
-import Leanux.Proofs.WG.TimerDiscipline.ResponseSessionClaims
+import Leanux.Proofs.WG.TimerDiscipline.PendingGiveUpSource
+import Leanux.Proofs.WG.TimerDiscipline.AbsentGiveUpClaims
+import Leanux.Proofs.WG.TimerDiscipline.RetransmitReadyClaims
+import Leanux.Proofs.WG.TimerDiscipline.SendReadyClaims
+import Leanux.Proofs.WG.TimerDiscipline.WorkerReadyClaims
+import Leanux.Proofs.WG.TimerDiscipline.FireReadyClaims
 
-/-! The public H6 interface names only WireGuard and explicit execution
-observations. Concrete source connections and residual frames are separate.
-`observed_erase` retains exact original errors for decorated prefix claims. -/
-
+set_option autoImplicit false
 namespace Leanux.Proofs.WG.TimerDiscipline
 open Leanux Leanux.WG Campaign2
 
-/-- A successful recorded arm stores exactly caller jiffies plus delay, with unsigned wrapping; the signed gap to the arm read is zero or one tick. -/
+/-- A normal recorded arm retains the caller-clock gap and exact current WG effect: timer registration, unchanged-expiry shortcut, and any wheel placement/counter update. The arbitrary entry snapshot adds no readiness condition. -/
 theorem original_recorded_arm (pid : PeerId) (timer : PeerTimer) (delay : Nat)
-    (caller : UInt64) (p : Peer) :
+    (caller : UInt64) (p : Peer) (entry : Campaign2.Snapshot) :
     Campaign2.Ensures (armTimer pid timer delay (some caller))
-      (fun w => w.wg.armRecords = true ∧ w.peerAt pid = some p)
-      (fun _ w => w.peerAt pid = some (p.setTimer timer (some (caller + delay.toUInt64))) ∧
-        ∃ now, w.wg.jiffiesLast = some now ∧
-          0 ≤ (now - caller).toInt64 ∧ (now - caller).toInt64 ≤ 1) :=
-  source_recorded_arm pid timer delay caller p
+      (fun s => s = entry ∧ s.ambient.armRecords = true ∧ s.peerAt pid = some p)
+      (fun _ final => ∃ now unit,
+        0 ≤ (now - caller).toInt64 ∧ (now - caller).toInt64 ≤ 1 ∧
+        if p.timer timer = some (caller + delay.toUInt64) then
+          final.wg = recordedArmPrefixView entry.wg pid timer now unit
+        else ∃ clk, final.wg = wheelPlacementView
+          {recordedArmPrefixView entry.wg pid timer now unit with timerClk := some clk}
+          pid p timer (caller + delay.toUInt64) clk) :=
+  source_recorded_arm pid timer delay caller p entry
 
-/-- Deleting a timer changes exactly that timer field to absent. -/
-theorem original_delete (pid : PeerId) (timer : PeerTimer) (p : Peer) :
-    Campaign2.Ensures (delTimer pid timer) (fun w => w.peerAt pid = some p)
-      (fun _ w => w.peerAt pid = some (p.setTimer timer none)) :=
-  source_delete pid timer p
+/-- Deletion clears both the expiry and wheel entry and preserves every other native observation. -/
+theorem original_delete (pid : PeerId) (timer : PeerTimer) (p : Peer)
+    (entry : Campaign2.Snapshot) :
+    Campaign2.Ensures (delTimer pid timer)
+      (fun s => s = entry ∧ s.peerAt pid = some p)
+      (fun _ final => final = delTimerView entry pid p timer) :=
+  source_delete pid timer p entry
 
 /-- The arm guard returns running and not dead and leaves the device unchanged. -/
 theorem original_arm_guard (pid : PeerId) (d : Device) (p : Peer)
     (resident : d.peers[pid]? = some p) :
-    Campaign2.Ensures (modPeerTimerGuard pid) (fun w => w.wg.device = some d)
-      (fun ok w => ok = (d.running && !p.isDead) ∧ w.wg.device = some d) :=
+    Campaign2.Ensures (modPeerTimerGuard pid) (fun s => s.wg.device = some d)
+      (fun allowed s => allowed = (d.running && !p.isDead) ∧ s.wg.device = some d) :=
   source_arm_guard pid d p resident
 
-/-- A normal guarded arm changes only the selected peer timer when running and alive; otherwise it preserves the peer. -/
+/-- A normal guarded arm reports the running/live guard and its complete current WG effect; the failed guard preserves the WG state. -/
 theorem original_guarded_arm (site : HiddenSite) (pid : PeerId) (timer : PeerTimer)
-    (delay : Nat) (d : Device) (p : Peer) (resident : d.peers[pid]? = some p) :
-    Campaign2.Ensures (modPeerTimer site pid timer delay) (fun w => w.wg.device = some d)
-      (fun ok w => ok = (d.running && !p.isDead) ∧
-        if ok then ∃ expiry, w.peerAt pid = some (p.setTimer timer (some expiry))
-        else w.peerAt pid = some p) :=
-  source_guarded_arm site pid timer delay d p resident
+    (delay : Nat) (d : Device) (p : Peer) (resident : d.peers[pid]? = some p)
+    (entry : Campaign2.Snapshot) :
+    Campaign2.Ensures (modPeerTimer site pid timer delay)
+      (fun s => s = entry ∧ s.wg.device = some d)
+      (fun allowed final => allowed = (d.running && !p.isDead) ∧
+        if allowed then peerTimerArmEffect entry pid p timer delay final.wg
+        else final.wg = entry.wg) :=
+  source_guarded_arm site pid timer delay d p resident entry
 
-/-- With a nonzero interval and running/live guard, normal traversal has the peer-state effect of setting persistent keepalive to some expiry; otherwise it preserves the peer. -/
+/-- Traversal retains the interval/running/live guards and the complete current persistent-keepalive wheel effect. Disabled traversal preserves the WG state. -/
 theorem original_traversal (pid : PeerId) (d : Device) (p : Peer)
-    (resident : d.peers[pid]? = some p) :
-    Campaign2.Ensures (timersTraversal pid) (fun w => w.wg.device = some d)
-      (fun _ w => if p.persistentKeepaliveInterval ≠ 0 ∧ d.running = true ∧ p.isDead = false
-        then ∃ expiry, w.peerAt pid = some (p.setTimer .persistentKeepalive (some expiry))
-        else w.peerAt pid = some p) :=
-  source_traversal pid d p resident
+    (resident : d.peers[pid]? = some p) (entry : Campaign2.Snapshot) :
+    Campaign2.Ensures (timersTraversal pid)
+      (fun s => s = entry ∧ s.wg.device = some d)
+      (fun _ final => if p.persistentKeepaliveInterval ≠ 0 ∧ d.running = true ∧ p.isDead = false then
+        peerTimerArmEffect entry pid p .persistentKeepalive (p.persistentKeepaliveInterval * HZ) final.wg
+      else final.wg = entry.wg) :=
+  source_traversal pid d p resident entry
 
-/-- On normal completion the session-derived hook sets only the zero-key timer to some expiry when running and alive, and otherwise preserves the peer. -/
+/-- Session-derived arming retains the running/live guards and the complete current zero-key wheel effect; the failed guard preserves the WG state. -/
 theorem original_session_derived (pid : PeerId) (d : Device) (p : Peer)
-    (resident : d.peers[pid]? = some p) :
-    Campaign2.Ensures (timersSessionDerived pid) (fun w => w.wg.device = some d)
-      (fun _ w => if d.running && !p.isDead
-        then ∃ expiry, w.peerAt pid = some (p.setTimer .zeroKeyMaterial (some expiry))
-        else w.peerAt pid = some p) :=
-  source_session_derived pid d p resident
+    (resident : d.peers[pid]? = some p) (entry : Campaign2.Snapshot) :
+    Campaign2.Ensures (timersSessionDerived pid)
+      (fun s => s = entry ∧ s.wg.device = some d)
+      (fun _ final => if d.running && !p.isDead then
+        peerTimerArmEffect entry pid p .zeroKeyMaterial ZERO_KEY_MATERIAL_TICKS final.wg
+      else final.wg = entry.wg) :=
+  source_session_derived pid d p resident entry
 
-/-- Data receipt while running arms an absent keepalive timer on a live peer, or requests another keepalive when the timer is already pending. -/
+/-- Receipt preserves the original running/pending/dead cases. An absent live timer has the current wheel effect; a pending timer sets the additional-keepalive flag. -/
 theorem original_data_received (pid : PeerId) (d : Device) (p : Peer)
-    (resident : d.peers[pid]? = some p) :
-    Campaign2.Ensures (timersDataReceived pid) (fun w => w.wg.device = some d)
-      (fun _ w => if d.running then
+    (resident : d.peers[pid]? = some p) (entry : Campaign2.Snapshot) :
+    Campaign2.Ensures (timersDataReceived pid)
+      (fun s => s = entry ∧ s.wg.device = some d)
+      (fun _ final => if d.running then
         if p.timerPending .sendKeepalive then
-          w.peerAt pid = some { p with timerNeedAnotherKeepalive := true }
-        else if p.isDead then w.peerAt pid = some p
-        else ∃ expiry, w.peerAt pid = some (p.setTimer .sendKeepalive (some expiry))
-        else w.peerAt pid = some p) :=
-  source_data_received pid d p resident
+          final.wg = {entry.wg with device := some {d with peers := d.peers.insert pid {p with timerNeedAnotherKeepalive := true}}}
+        else if p.isDead then final.wg = entry.wg
+        else peerTimerArmEffect entry pid p .sendKeepalive KEEPALIVE_TIMEOUT_TICKS final.wg
+      else final.wg = entry.wg) :=
+  source_data_received pid d p resident entry
 
-/-- Handshake completion deletes the retransmit timer, resets attempts and the last-minute flag, and records the wall-clock bytes; other peer fields are preserved. -/
+/-- Handshake completion clears both retransmit expiry and wheel entry, resets attempts and the last-minute flag, and records the actual wall-clock bytes. -/
 theorem original_handshake_complete (pid : PeerId) (site : HiddenSite) (p : Peer) :
-    Campaign2.Ensures (timersHandshakeComplete pid site) (fun w => w.peerAt pid = some p)
-      (fun _ w => ∃ now, w.peerAt pid = some
-        { (p.setTimer .retransmitHandshake none) with
-          timerHandshakeAttempts := 0, sentLastminuteHandshake := false, walltimeLastHandshake := now }) :=
+    Campaign2.Ensures (timersHandshakeComplete pid site)
+      (fun s => s.peerAt pid = some p)
+      (fun _ s => ∃ now, s.peerAt pid = some
+        {((p.setTimer .retransmitHandshake none).setWheel .retransmitHandshake none) with
+          timerHandshakeAttempts := 0, sentLastminuteHandshake := false,
+          walltimeLastHandshake := now}) :=
   source_handshake_complete pid site p
 
 /-- Every successful jitter draw returns fewer than HZ/3 ticks and leaves
@@ -102,218 +115,190 @@ theorem original_jitter_bound (site : HiddenSite) (initial : Core) :
       (fun n s => s.wg.toCore = initial ∧ n < HZ / 3) :=
   projected_jitter_bound site initial
 
-/-- The authenticated-send hook deletes only the send-keepalive timer. -/
-theorem original_authenticated_sent (pid : PeerId) (p : Peer) :
-    Campaign2.Ensures (timersAnyAuthenticatedPacketSent pid) (fun w => w.peerAt pid = some p)
-      (fun _ w => w.peerAt pid = some (p.setTimer .sendKeepalive none)) :=
-  source_authenticated_sent pid p
+/-- Authenticated sending clears send-keepalive expiry and wheel entry, preserving the remaining native snapshot. -/
+theorem original_authenticated_sent (pid : PeerId) (p : Peer) (entry : Campaign2.Snapshot) :
+    Campaign2.Ensures (timersAnyAuthenticatedPacketSent pid)
+      (fun s => s = entry ∧ s.peerAt pid = some p)
+      (fun _ final => final = delTimerView entry pid p .sendKeepalive) :=
+  source_authenticated_sent pid p entry
 
-/-- The authenticated-receive hook deletes only the new-handshake timer. -/
-theorem original_authenticated_received (pid : PeerId) (p : Peer) :
-    Campaign2.Ensures (timersAnyAuthenticatedPacketReceived pid) (fun w => w.peerAt pid = some p)
-      (fun _ w => w.peerAt pid = some (p.setTimer .newHandshake none)) :=
-  source_authenticated_received pid p
+/-- Authenticated receipt clears new-handshake expiry and wheel entry, preserving the remaining native snapshot. -/
+theorem original_authenticated_received (pid : PeerId) (p : Peer) (entry : Campaign2.Snapshot) :
+    Campaign2.Ensures (timersAnyAuthenticatedPacketReceived pid)
+      (fun s => s = entry ∧ s.peerAt pid = some p)
+      (fun _ final => final = delTimerView entry pid p .newHandshake) :=
+  source_authenticated_received pid p entry
 
 /-- The original retransmit callback increments attempts through 18 to 19,
 then leaves the count unchanged on give-up. Every normal completion preserves
 the peer's allocation identity and retransmit-timer field; rearming belongs
 to the later handshake worker. This is a callback contract, not a whole episode. -/
 theorem original_retransmit_counter (pid : PeerId) (p : Peer) :
-    Campaign2.Ensures (expiredRetransmitHandshake pid) (fun w => w.peerAt pid = some p)
-      (fun _ w => ∃ q, w.peerAt pid = some q ∧ q.internalId = p.internalId ∧
+    Campaign2.Ensures (expiredRetransmitHandshake pid) (fun s => s.peerAt pid = some p)
+      (fun _ s => ∃ q, s.peerAt pid = some q ∧ q.internalId = p.internalId ∧
         q.timerHandshakeAttempts =
           (if p.timerHandshakeAttempts > 18 then p.timerHandshakeAttempts else p.timerHandshakeAttempts + 1) ∧
         q.timerRetransmitHandshake = p.timerRetransmitHandshake) :=
   source_retransmit_counter pid p
 
-/-- With arm-record mode enabled, a normally completed guarded arm uses
-the original callerJiffies operation at the supplied site. When the guard passes, expiry equals
-that read plus delay; the arm's own read is zero or one signed tick later. -/
+/-- The actual recorded caller read and guarded arm retain full Product observations. Successful arming has its current registration and wheel effect; the failed guard preserves WG state. -/
 theorem original_guarded_arm_recorded (site : HiddenSite) (pid : PeerId) (timer : PeerTimer)
-    (delay : Nat) (d : Device) (p : Peer) (resident : d.peers[pid]? = some p) :
-    Campaign2.Ensures (observed (modPeerTimer site pid timer delay) (callerJiffies site))
-      (fun s => s.wg.device = some d ∧ s.wg.armRecords = true)
+    (delay : Nat) (d : Device) (p : Peer) (resident : d.peers[pid]? = some p) (entry : Product.Snapshot) :
+    Campaign2.Product.Ensures (observed (liftWG (modPeerTimer site pid timer delay)) (liftWG (callerJiffies site)))
+      (fun s => s = entry ∧ s.wg.device = some d ∧ s.ambient.armRecords = true)
       (fun result final => ∃ caller afterRead,
         result.1 = .ok (some caller, afterRead) ∧ result.2 = (d.running && !p.isDead) ∧
         if result.2 then
-          final.peerAt pid = some (p.setTimer timer (some (caller + delay.toUInt64))) ∧
-          clockGap final caller
-        else final.peerAt pid = some p) :=
-  projected_guarded_arm_recorded site pid timer delay d p resident
+          recordedTimerEffect entry.wg pid p timer delay caller final.wg
+        else final.wg = entry.wg) :=
+  projected_guarded_arm_recorded site pid timer delay d p resident entry
 
-/-- With arm-record mode enabled, the original session-derived hook on a
-running live peer arms zero-key material at its original caller-read result
-plus REJECT_AFTER_TIME * 3 * HZ ticks.
-This exact site and delay contract covers one hook invocation. -/
+/-- A recorded session-derived hook on a running live peer uses the actual caller read and the complete zero-key wheel effect at its original delay. -/
 theorem original_session_derived_recorded (pid : PeerId) (d : Device) (p : Peer)
-    (resident : d.peers[pid]? = some p) (running : d.running = true) (alive : p.isDead = false) :
-    Campaign2.Ensures (observed (timersSessionDerived pid)
-      (callerJiffies .timerJiffiesSessionDerived))
-      (fun s => s.wg.device = some d ∧ s.wg.armRecords = true)
+    (resident : d.peers[pid]? = some p) (running : d.running = true) (alive : p.isDead = false) (entry : Product.Snapshot) :
+    Campaign2.Product.Ensures (observed (liftWG (timersSessionDerived pid))
+      (liftWG (callerJiffies .timerJiffiesSessionDerived)))
+      (fun s => s = entry ∧ s.wg.device = some d ∧ s.ambient.armRecords = true)
       (fun result final => ∃ caller afterRead,
         result.1 = .ok (some caller, afterRead) ∧
-        final.peerAt pid = some (p.setTimer .zeroKeyMaterial
-          (some (caller + ZERO_KEY_MATERIAL_TICKS.toUInt64))) ∧ clockGap final caller) :=
-  projected_session_derived_recorded pid d p resident running alive
+        recordedTimerEffect entry.wg pid p .zeroKeyMaterial ZERO_KEY_MATERIAL_TICKS caller final.wg) :=
+  projected_session_derived_recorded pid d p resident running alive entry
 
-/-- With arm-record mode enabled, original handshake-initiated arming
-uses its caller-read result plus REKEY_TIMEOUT * HZ and a jitter below HZ/3.
-The caller read precedes the original jitter computation, and both executions
-are witnessed; supplied records and permitted placeholders are both covered. -/
+/-- Recorded handshake initiation observes the original caller then bounded jitter and retains the complete retransmit wheel effect, including same-expiry and placement cases. -/
 theorem original_handshake_initiated_recorded (pid : PeerId) (d : Device) (p : Peer)
-    (resident : d.peers[pid]? = some p) (running : d.running = true) (alive : p.isDead = false) :
-    Campaign2.Ensures (observed (timersHandshakeInitiated pid)
+    (resident : d.peers[pid]? = some p) (running : d.running = true) (alive : p.isDead = false) (entry : Product.Snapshot) :
+    Campaign2.Product.Ensures (observed (liftWG (timersHandshakeInitiated pid))
       (clockJitterPath .timerJiffiesHandshakeInitiated .retransmitJitter))
-      (fun s => s.wg.device = some d ∧ s.wg.armRecords = true)
+      (fun s => s = entry ∧ s.wg.device = some d ∧ s.ambient.armRecords = true)
       (fun result final => ∃ caller afterRead jitter afterJitter,
         result.1 = .ok ((some caller, afterRead, jitter), afterJitter) ∧ jitter < HZ / 3 ∧
-        final.peerAt pid = some (p.setTimer .retransmitHandshake
-          (some (caller + (REKEY_TIMEOUT_TICKS + jitter).toUInt64))) ∧ clockGap final caller) :=
-  projected_handshake_initiated_recorded pid d p resident running alive
+        recordedTimerEffect entry.wg pid p .retransmitHandshake (REKEY_TIMEOUT_TICKS + jitter) caller final.wg) :=
+  projected_handshake_initiated_recorded pid d p resident running alive entry
 
-/-- With arm-record mode enabled and no pending new-handshake timer,
-original data-sent arming on a running live peer uses its caller-read result
-plus keepalive and rekey delays and bounded jitter, in original read order. -/
+/-- Recorded data sending preserves the original absent/running/live domain and ordered prefix, caller and jitter observations, with the complete new-handshake wheel effect. -/
 theorem original_data_sent_recorded (pid : PeerId) (d : Device) (p : Peer)
     (resident : d.peers[pid]? = some p) (absent : p.timerPending .newHandshake = false)
     (running : d.running = true) (alive : p.isDead = false) :
-    Campaign2.Ensures (observed (timersDataSent pid)
-      (prefixClockJitterPath (dataSentPrefix pid) .timerJiffiesDataSent .newHandshakeJitter))
-      (fun s => s.wg.device = some d ∧ s.wg.armRecords = true)
+    Campaign2.Product.Ensures (observed (liftWG (timersDataSent pid))
+      (prefixClockJitterPath (liftWG (dataSentPrefix pid)) .timerJiffiesDataSent .newHandshakeJitter))
+      (fun s => s.wg.device = some d ∧ s.ambient.armRecords = true)
       (fun result final => ∃ beforeRead caller afterRead jitter afterJitter,
         result.1 = .ok ((true, beforeRead, some caller, afterRead, jitter), afterJitter) ∧
-        jitter < HZ / 3 ∧ final.peerAt pid = some (p.setTimer .newHandshake
-          (some (caller + (KEEPALIVE_TIMEOUT_TICKS + REKEY_TIMEOUT_TICKS + jitter).toUInt64))) ∧
-        clockGap final caller) :=
+        jitter < HZ / 3 ∧ recordedTimerEffect beforeRead.wg pid p .newHandshake
+          (KEEPALIVE_TIMEOUT_TICKS + REKEY_TIMEOUT_TICKS + jitter) caller final.wg) :=
   projected_data_sent_recorded pid d p resident absent running alive
 
-/-- With arm-record mode enabled, original traversal on a running live peer
-with nonzero interval sets persistent keepalive to its caller-read result plus
-interval * HZ, even if that timer was already pending. -/
+/-- Recorded traversal preserves the original nonzero-interval/running/live domain and actual prefix/caller observations, with the complete persistent-keepalive wheel effect. -/
 theorem original_traversal_recorded (pid : PeerId) (d : Device) (p : Peer)
     (resident : d.peers[pid]? = some p) (enabled : p.persistentKeepaliveInterval ≠ 0)
     (running : d.running = true) (alive : p.isDead = false) :
-    Campaign2.Ensures (observed (timersTraversal pid)
-      (prefixClockPath (traversalPrefix pid) .timerJiffiesTraversal))
-      (fun s => s.wg.device = some d ∧ s.wg.armRecords = true)
+    Campaign2.Product.Ensures (observed (liftWG (timersTraversal pid))
+      (prefixClockPath (liftWG (traversalPrefix pid)) .timerJiffiesTraversal))
+      (fun s => s.wg.device = some d ∧ s.ambient.armRecords = true)
       (fun result final => ∃ beforeRead caller afterRead,
         result.1 = .ok (((p.persistentKeepaliveInterval, true), beforeRead, some caller), afterRead) ∧
-        final.peerAt pid = some (p.setTimer .persistentKeepalive
-          (some (caller + (p.persistentKeepaliveInterval * HZ).toUInt64))) ∧ clockGap final caller) :=
+        recordedTimerEffect beforeRead.wg pid p .persistentKeepalive
+          (p.persistentKeepaliveInterval * HZ) caller final.wg) :=
   projected_traversal_recorded pid d p resident enabled running alive
 
-/-- With arm-record mode enabled, original data receipt on a running live peer
-with no send-keepalive timer arms that timer at its caller-read result plus
-KEEPALIVE_TIMEOUT * HZ ticks, after the original running and pending tests. -/
+/-- Recorded data receipt preserves the original absent/running/live domain and actual prefix/caller observations, with the complete send-keepalive wheel effect. -/
 theorem original_data_received_recorded (pid : PeerId) (d : Device) (p : Peer)
     (resident : d.peers[pid]? = some p) (absent : p.timerPending .sendKeepalive = false)
     (running : d.running = true) (alive : p.isDead = false) :
-    Campaign2.Ensures (observed (timersDataReceived pid)
-      (prefixClockPath (dataReceivedPrefix pid) .timerJiffiesDataReceived))
-      (fun s => s.wg.device = some d ∧ s.wg.armRecords = true)
+    Campaign2.Product.Ensures (observed (liftWG (timersDataReceived pid))
+      (prefixClockPath (liftWG (dataReceivedPrefix pid)) .timerJiffiesDataReceived))
+      (fun s => s.wg.device = some d ∧ s.ambient.armRecords = true)
       (fun result final => ∃ beforeRead caller afterRead,
         result.1 = .ok ((some true, beforeRead, some caller), afterRead) ∧
-        final.peerAt pid = some (p.setTimer .sendKeepalive
-          (some (caller + KEEPALIVE_TIMEOUT_TICKS.toUInt64))) ∧ clockGap final caller) :=
+        recordedTimerEffect beforeRead.wg pid p .sendKeepalive KEEPALIVE_TIMEOUT_TICKS caller final.wg) :=
   projected_data_received_recorded pid d p resident absent running alive
 
-/-- After the original keepalive send completes, a running live peer needing
-another keepalive clears that flag and rearms at its caller-read result plus
-KEEPALIVE_TIMEOUT * HZ. Residency and flag premises concern the actual post-send
-state, not callback entry; arm-record mode is enabled there. -/
+/-- The keepalive rearm contract applies at the actual post-send cut under the original needed/running/live premises. It clears the flag and records the complete wheel effect. -/
 theorem original_expired_keepalive_recorded (pid : PeerId) (d : Device) (p : Peer)
     (resident : d.peers[pid]? = some p) (needed : p.timerNeedAnotherKeepalive = true)
     (running : d.running = true) (alive : p.isDead = false) :
-    Campaign2.Ensures (observed (expiredSendKeepalive pid)
-      (prefixInspect (sendKeepalive pid)
-        (prefixClockPath (keepaliveRearmPrefix pid) .timerJiffiesExpiredKeepalive)))
+    Campaign2.Product.Ensures (observed (liftWG (expiredSendKeepalive pid))
+      (prefixInspect (liftWG (sendKeepalive pid))
+        (prefixClockPath (liftWG (keepaliveRearmPrefix pid)) .timerJiffiesExpiredKeepalive)))
       (fun _ => True)
       (fun result final => ∀ choice afterSend tail,
         result.1 = .ok ((choice, afterSend, tail), afterSend) →
-        afterSend.wg.device = some d → afterSend.wg.armRecords = true →
+        afterSend.wg.device = some d → afterSend.ambient.armRecords = true →
         ∃ beforeRead caller afterRead,
           tail = .ok ((true, beforeRead, some caller), afterRead) ∧
-          final.peerAt pid = some (({ p with timerNeedAnotherKeepalive := false } : Peer).setTimer
-            .sendKeepalive (some (caller + KEEPALIVE_TIMEOUT_TICKS.toUInt64))) ∧ clockGap final caller) :=
+          recordedTimerEffect beforeRead.wg pid {p with timerNeedAnotherKeepalive := false}
+            .sendKeepalive KEEPALIVE_TIMEOUT_TICKS caller final.wg) :=
   projected_expired_keepalive_recorded pid d p resident needed running alive
 
-/-- With arm-record mode enabled, original retransmit give-up above the attempt
-limit deletes send-keepalive, purges staged packets and arms an absent zero-key
-timer on a running live peer. Expiry is the original site read plus
-REJECT_AFTER_TIME * 3 * HZ; both original decision prefixes are witnessed. -/
+/-- Recorded give-up retains both actual decision cuts, the original attempt/absence/running/live domain, and the zero-key wheel effect after send-keepalive deletion and staged purge. -/
 theorem original_retransmit_giveup_recorded (pid : PeerId) (d : Device) (p : Peer)
     (resident : d.peers[pid]? = some p) (limit : p.timerHandshakeAttempts > MAX_TIMER_HANDSHAKES)
     (absent : p.timerPending .zeroKeyMaterial = false)
     (running : d.running = true) (alive : p.isDead = false) :
-    Campaign2.Ensures (observed (expiredRetransmitHandshake pid) (giveUpClockPath pid))
-      (fun s => s.wg.device = some d ∧ s.wg.armRecords = true)
+    Campaign2.Product.Ensures (observed (liftWG (expiredRetransmitHandshake pid)) (giveUpClockPath pid))
+      (fun s => s.wg.device = some d ∧ s.ambient.armRecords = true)
       (fun result final => ∃ afterDecision beforeRead caller afterRead,
         result.1 = .ok ((true, afterDecision, true, beforeRead, some caller), afterRead) ∧
-        final.peerAt pid = some ((giveUpPeer p).setTimer .zeroKeyMaterial
-          (some (caller + ZERO_KEY_MATERIAL_TICKS.toUInt64))) ∧ clockGap final caller) :=
+        recordedTimerEffect beforeRead.wg pid (giveUpWheelPeer p) .zeroKeyMaterial
+          ZERO_KEY_MATERIAL_TICKS caller final.wg) :=
   projected_retransmit_giveup_recorded pid d p resident limit absent running alive
 
-/-- Every normally completed original timer dispatch selects a resident peer's
-pending timer of the worker's kind whose expiry precedes the supplied horizon
-under the mirror's time comparison. The actual selection and detached section
-suffix execute in sequence. Selection may consume ambient records; it preserves
-the device. No firing-order or wall-clock theorem is claimed. -/
-theorem original_timer_dispatch_due (worker : Worker) (jHi : UInt64) (d : Device) :
-    Campaign2.Ensures (observed (Env.fireTimer worker jHi) (timerExecutionPath worker jHi))
+/-- Corrected to an already selected wheel unit. Every normal completion retains
+its actual prefix and final Product observations, validates the worker kind, and
+preserves the entry device through the prefix. This does not establish outer
+wheel selection, peer-list membership, a logical expiry, or readiness by a horizon. -/
+theorem original_timer_dispatch_due (worker : Worker) (pid : PeerId) (timer : PeerTimer)
+    (we : WheelEntry) (step : Option UInt64) (d : Device) :
+    Campaign2.Product.Ensures (observed (timerDispatchUnit_variant worker pid timer we step)
+      (timerExecutionPath worker pid timer we step))
       (fun s => s.wg.device = some d)
-      (fun result final => ∃ pid timer selected,
+      (fun result final => ∃ selected,
         result.1 = .ok ((pid, timer, selected), final) ∧
-        worker.timer? = some timer ∧ selected.wg.device = some d ∧
-        pid ∈ d.peerList ∧ ∃ p expiry, d.peers[pid]? = some p ∧
-          p.timer timer = some expiry ∧ timeBefore expiry jHi = true) :=
-  projected_timer_dispatch_due worker jHi d
+        worker.timer? = some timer ∧ selected.wg.device = some d) :=
+  projected_timer_dispatch_due worker pid timer we step d
 
-/-- When original selection chooses this peer's retransmit timer, a normally
-completed original dispatch preserves its allocation identity, increments the
-attempt counter at or below the limit, and retains it above the limit. The
-retransmit timer is detached and remains detached through this callback; later
-worker rearming is outside this call. Selection is an actual prefix run, not an
-assumed callback outcome. This is not a universal retry-episode theorem. -/
-theorem original_retransmit_dispatch (pid : PeerId) (jHi : UInt64)
+/-- Corrected to the actual selected retransmit wheel unit. On normal completion,
+its actual successful prefix observation gives the original identity, next-attempt
+and detached-expiry postcondition. All Product snapshot fields remain observable.
+No outer wheel selection, complete timer pass, or later worker rearming is asserted. -/
+theorem original_retransmit_dispatch (pid : PeerId) (we : WheelEntry) (step : Option UInt64)
     (identity attempts : Nat) (timer : Option UInt64) :
-    Campaign2.Ensures (observed (Env.fireTimer .timerRetransmit jHi)
-      (timerSelection .timerRetransmit jHi))
-      (fun s => retryObservation s pid = some (identity, attempts, timer))
+    Campaign2.Product.Ensures (observed
+      (timerDispatchUnit_variant .timerRetransmit pid .retransmitHandshake we step)
+      (do timerDispatchPrefix_variant .timerRetransmit pid .retransmitHandshake we step
+          pure (pid, PeerTimer.retransmitHandshake)))
+      (fun s => retryObservation s.toSnapshot pid = some (identity, attempts, timer))
       (fun result final => ∀ selected,
         result.1 = .ok ((pid, .retransmitHandshake), selected) →
-        retryObservation final pid = some (identity, nextAttempts attempts, none)) :=
-  projected_retransmit_dispatch pid jHi identity attempts timer
+        retryObservation final.toSnapshot pid = some (identity, nextAttempts attempts, none)) :=
+  projected_retransmit_dispatch pid we step identity attempts timer
 
 /-- Every normal original handshake send either exits in its actual prefix
 or executes the final retransmit arm hook. Reaching the hook means creation
 succeeded, not that the ignored socket-send result was successful. The prefix
 retains rate-limit and creation decisions and every intervening operation. -/
 theorem original_initiation_arm_path (pid : PeerId) :
-    Campaign2.Ensures (observed (sendHandshakeInitiation pid) (initiationExecutionPath pid))
+    Campaign2.Product.Ensures (observed (liftWG (sendHandshakeInitiation pid)) (initiationExecutionPath pid))
       (fun _ => True)
       (fun result final => ∃ reached beforeArm,
         result.1 = .ok ((reached, beforeArm), final) ∧
         (reached = false → final = beforeArm)) :=
   projected_initiation_arm_path pid
 
-/-- When the original initiation-send prefix reaches the hook with a live peer
-on a running device, a normal arm-record-mode completion stores the original
-caller-read result plus rekey delay and bounded jitter. Premises concern the actual
-post-prefix state; this does not frame the send from function entry, establish
-a full retry episode or prove a successful network transmission. -/
+/-- At the actual reached initiation hook, the original running/live/recorded conditions give ordered caller/jitter observations and the complete retransmit wheel effect. No completion or transmission guarantee is added. -/
 theorem original_initiation_send_arm (pid : PeerId) (d : Device) (p : Peer)
     (resident : d.peers[pid]? = some p) (running : d.running = true) (alive : p.isDead = false) :
-    Campaign2.Ensures (observed (sendHandshakeInitiation pid)
-      (prefixInspect (initiationArmPrefix pid)
+    Campaign2.Product.Ensures (observed (liftWG (sendHandshakeInitiation pid))
+      (prefixInspect (liftWG (initiationArmPrefix pid))
         (clockJitterPath .timerJiffiesHandshakeInitiated .retransmitJitter)))
       (fun _ => True)
       (fun result final => ∀ reached afterPrefix tail,
         result.1 = .ok ((reached, afterPrefix, tail), afterPrefix) → reached = true →
-        afterPrefix.wg.device = some d → afterPrefix.wg.armRecords = true →
+        afterPrefix.wg.device = some d → afterPrefix.ambient.armRecords = true →
         ∃ caller afterRead jitter afterJitter,
           tail = .ok ((some caller, afterRead, jitter), afterJitter) ∧ jitter < HZ / 3 ∧
-          final.peerAt pid = some (p.setTimer .retransmitHandshake
-            (some (caller + (REKEY_TIMEOUT_TICKS + jitter).toUInt64))) ∧ clockGap final caller) :=
+          recordedTimerEffect afterPrefix.wg pid p .retransmitHandshake
+            (REKEY_TIMEOUT_TICKS + jitter) caller final.wg) :=
   projected_initiation_send_arm pid d p resident running alive
 
 /-- At either original timer-jitter site, a finite contiguous rejected-draw
@@ -326,7 +311,8 @@ theorem original_jitter_records (site : JitterSite) (rejected : List UInt8) (acc
     (good : jitterAccepted accepted) :
     Campaign2.Product.Observes (liftWG (jitterBelowRekeyTimeout site.hiddenSite))
       (fun s => s.ambient.hidden = some (jitterStream site rejected accepted rest))
-      (fun initial out => out = .ok (jitterValue accepted, {initial with ambient := {initial.ambient with hidden := some rest}})) :=
+      (fun initial out => out = .ok (jitterValue accepted,
+        {initial with ambient := {initial.ambient with hidden := some rest}})) :=
   projected_jitter_records site rejected accepted rest bad good
 
 /-- A finite contiguous stream containing only rejected jitter bytes ends at
@@ -349,8 +335,9 @@ theorem original_initiation_prefix_frame (pid : PeerId) (identity attempts refs 
     (expiry : Option UInt64) :
     Campaign2.Ensures (initiationArmPrefix pid)
       (fun w => initiationObservation w pid = some (identity, attempts, refs, expiry))
-      (fun _ w => initiationObservation w pid = some (identity, attempts, refs, expiry)) :=
-  source_initiation_prefix_frame pid identity attempts refs expiry
+      (fun _ w => initiationObservation w pid = some (identity, attempts, refs, expiry)) := by
+  intro g ambient value final after pre run
+  exact source_initiation_prefix_frame pid identity attempts refs expiry g ambient value final after pre run
 
 /-- Original initiation sending preserves peer identity, retry attempts and
 references whenever it returns normally. Its final hook may change the
@@ -358,8 +345,9 @@ retransmit expiry. A normal return does not assert transmission success. -/
 theorem original_handshake_send_frame (pid : PeerId) (identity attempts refs : Nat) :
     Campaign2.Ensures (sendHandshakeInitiation pid)
       (fun w => workerObservation w pid = some (identity, attempts, refs))
-      (fun _ w => workerObservation w pid = some (identity, attempts, refs)) :=
-  source_handshake_send_frame pid identity attempts refs
+      (fun _ w => workerObservation w pid = some (identity, attempts, refs)) := by
+  intro g ambient value final after pre run
+  exact source_handshake_send_frame pid identity attempts refs g ambient value final after pre run
 
 /-- A normally returning original handshake-send worker preserves identity and
 retry attempts and releases one reference. More than one entry reference keeps
@@ -369,112 +357,86 @@ theorem original_send_worker_frame (pid : PeerId) (identity attempts refs : Nat)
     (retained : 1 < refs) :
     Campaign2.Ensures (handshakeSendWorker pid)
       (fun w => workerObservation w pid = some (identity, attempts, refs))
-      (fun _ w => workerObservation w pid = some (identity, attempts, refs - 1)) :=
-  source_send_worker_frame pid identity attempts refs retained
+      (fun _ w => workerObservation w pid = some (identity, attempts, refs - 1)) := by
+  intro g ambient value final after pre run
+  exact source_send_worker_frame pid identity attempts refs retained g ambient value final after pre run
 
 /-- A normally completed original environment send dispatch selects the queue
 head or the first matching named association, erases one queue occurrence, and
-requires then clears the selected peer's pending flag before its section starts.
+requires the selected peer's pending flag, then sets it to residual queue
+membership before its section starts; duplicates can leave it true.
 The observations retain the actual ordered section reads and worker execution.
 The retained peer keeps its identity and attempt count and loses one reference.
 No final queue or pending-flag frame, or successful transmission, is asserted. -/
 theorem original_send_dispatch_path (d : Device) (units : List (Nat × Nat × Nat))
     (retained : RetainedSendQueue d) :
-    Campaign2.Ensures (observed Env.runOneSendWorker sendWorkerExecution)
+    Campaign2.Product.Ensures (observed Env.runOneSendWorker sendWorkerExecution)
       (fun s => s.wg.device = some d ∧ s.ambient.unitPeers = units)
       (fun result final => ∃ execution, result.1 = .ok (execution, final) ∧
         CompletedSendWorker d units execution final) :=
   source_send_dispatch_path d units retained
 
-/-- A successful original environment dispatch releases one reference from an
-originally queued, pending peer, preserving that allocation's identity and retry
-attempts. The entry reference assumption ensures the selected peer remains resident.
-This normal-return preservation contract does not promise successful completion. -/
+/-- Original scope retained through the native or full Product projection. -/
 theorem original_send_dispatch (d : Device) (retained : RetainedSendQueue d) :
-    Campaign2.Ensures Env.runOneSendWorker (fun s => s.wg.device = some d)
+    Campaign2.Product.Ensures Env.runOneSendWorker (fun s => s.wg.device = some d)
       (fun _ final => ∃ pid p, pid ∈ d.sendWorkQueue ∧ d.peers[pid]? = some p ∧
-        p.handshakePending = true ∧ workerObservation final pid =
+        p.handshakePending = true ∧ workerObservation final.toSnapshot pid =
           some (p.internalId, p.timerHandshakeAttempts, p.refcount - 1)) :=
   source_send_dispatch d retained
 
-/-- A normally completed original retransmit-timer dispatch followed immediately
-by one original send-worker dispatch, starting with no queued send work, exposes
-the actual selected due peer and post-timer state. Successful worker selection
-forces fresh retry queueing: the entry peer was alive, not pending, had a positive
-reference count and was at or below the retry limit. Queueing acquires one
-reference and the callback increments attempts once. The worker releases the
-reference, preserving identity and the incremented attempt count, leaves the send
-queue empty and the selected pending flag false. The observations
-record the original timer selection/result and ordered worker section observations.
-Erasure to the original pair is exact, including errors, by
-observedRetryDispatch_erase. Scheduler coverage, rearming, successful transmission and a complete retry episode remain open. -/
-theorem original_retry_dispatch (d : Device) (horizon : UInt64)
+/-- The supplied selected wheel-unit/send pair retains actual inspection,
+empty final queue, cleared pending flag and acquired/released reference.
+Exact erasure retains errors. Outer selection, successful transmission and
+completion of a scheduler retry episode remain open. -/
+theorem original_retry_dispatch (d : Device) (unit : RetryUnit)
     (empty : d.sendWorkQueue = []) :
-    Campaign2.Ensures (observedRetryDispatch horizon)
-      (fun s => s.wg.device = some d)
-      (RetryDispatchCertificate d horizon) :=
-  source_retry_dispatch d horizon empty
+    Campaign2.Product.Ensures (observedRetryDispatch unit)
+      (fun s => s.wg.device = some d) (RetryDispatchCertificate d unit) :=
+  source_retry_dispatch d unit empty
 
-/-- A normal original timer/send pair retains the retry certificate, including
-final empty queue, cleared pending flag and acquired/released reference, and
-exposes its actual initiation prefix and pre-release state. If that prefix
-reaches the arm hook with a running device, live selected peer and arm-record
-mode, the original caller read plus rekey delay and bounded jitter determines
-the exact wrapped retransmit expiry. That expiry survives retained release and
-section stop; the clock-gap fact stays at the actual pre-release snapshot.
-These are conditions at beforeArm, not added assumptions at retry entry.
-Exact projection/erasure retain original errors. Reaching the hook and successful
-network transmission are not guaranteed, and a full retry episode remains open. -/
-theorem original_retry_rearm (d : Device) (horizon : UInt64)
+/-- The supplied wheel-unit/send pair retains its inspected retry certificate
+and actual initiation prefix and pre-release observations. At a reached arm hook,
+the original running/live/record conditions determine its complete wheel effect.
+Rearming remains conditional; no outer selection or successful transmission
+is asserted, and exact projection/erasure retain errors. -/
+theorem original_retry_rearm (d : Device) (unit : RetryUnit)
     (empty : d.sendWorkQueue = []) :
-    Campaign2.Ensures (observedRetryRearm horizon)
-      (fun s => s.wg.device = some d) (RetryRearmCertificate d horizon) :=
-  source_retry_rearm d horizon empty
+    Campaign2.Product.Ensures (observedRetryRearm unit)
+      (fun s => s.wg.device = some d) (RetryRearmCertificate d unit) :=
+  source_retry_rearm d unit empty
 
-/-- A normal sequence of consecutive original timer/send pairs has adjacent actual
-snapshots and retains every pair's conditional rearm certificate. The send queue
-ends empty. If every actual timer selection names one initial resident peer, its
-identity/reference count are preserved and attempts increase by the sequence
-length; a nonempty sequence also clears pending and bounds initial attempts plus
-length by 19. An empty sequence preserves the entire snapshot, with no attempt or
-pending restriction. observedRetrySequence_erase preserves original errors exactly.
-This is a sequence of the original calls, not an environment scheduler theorem or
-a promise that any positive number of retries completes. -/
-theorem original_retry_sequence (d : Device) (horizons : List UInt64)
+/-- Consecutive supplied wheel-unit/send pairs retain adjacent full Product
+observations, each pair's inspected eligibility and conditional rearm, and an
+empty final send queue. Same-peer successful pairs preserve identity/reference
+and increment attempts by the length; a nonempty chain clears pending and bounds
+initial attempts plus length by 19. The empty chain preserves its entire snapshot.
+This is not a selection or success guarantee for an outer scheduler episode. -/
+theorem original_retry_sequence (d : Device) (units : List RetryUnit)
     (empty : d.sendWorkQueue = []) :
-    Campaign2.Ensures (observedRetrySequence horizons)
-      (fun s => s.wg.device = some d) (RetrySequenceCertificate d horizons) :=
-  source_retry_sequence d horizons empty
+    Campaign2.Product.Ensures (observedRetrySequence units)
+      (fun s => s.wg.device = some d) (RetrySequenceCertificate d units) :=
+  source_retry_sequence d units empty
 
-/-- Starting at zero attempts, at most 19 consecutive pairs can return normally
-with this same actual selected peer. In particular 20 such successful pairs are
-excluded; this does not say that the twentieth timer callback itself fails. -/
-theorem original_retry_sequence_zero_bound (d : Device) (horizons : List UInt64)
+/-- From zero attempts, at most 19 consecutive supplied wheel-unit/send
+pairs can return normally with the same actual selected peer. This excludes
+20 successful pairs, without asserting that the twentieth callback fails
+or that an outer scheduler selects any of these units. -/
+theorem original_retry_sequence_zero_bound (d : Device) (units : List RetryUnit)
     (empty : d.sendWorkQueue = []) (pid : PeerId) (p : Peer)
     (resident : d.peers[pid]? = some p) (zero : p.timerHandshakeAttempts = 0) :
-    Campaign2.Ensures (observedRetrySequence horizons)
+    Campaign2.Product.Ensures (observedRetrySequence units)
       (fun s => s.wg.device = some d)
-      (fun result _ => SameRetryPeer pid result.2 → horizons.length ≤ 19) :=
-  source_retry_sequence_zero_bound d horizons empty pid p resident zero
+      (fun result _ => SameRetryPeer pid result.2 → units.length ≤ 19) :=
+  source_retry_sequence_zero_bound d units empty pid p resident zero
 
-/-- For response-kind packets, the exact original caller and its decorated
-execution factor through the actual session-derived hook. Normal full return
-reports whether the session stage was reached. A present session cut records
-the entry, returned Bool and before/after-hook observations, and derives H1's
-ordered SessionEffect. The hook is present exactly when that session returned
-true; this successful case derives a counter increment and live resident peer.
-At a reached hook, running-device and arm-record conditions at that actual cut
-give caller-jiffies plus wrapped zero-key delay and clockGap immediately after
-the hook. Caller reads may use permitted placeholders. No successful caller,
-final expiry preservation, failed-call prefix retention or global once-per-session
-arm count is asserted. Erasure retains every original error. -/
+/-- Response-kind execution and its full Product transcript retain the original session cut and ordered session effect. The reached hook carries its actual guarded zero-key wheel effect; erasure retains all errors. -/
 theorem original_response_session_arm (msg : List UInt8) (src : SkbSource)
     (kind : messageType msg = MESSAGE_HANDSHAKE_RESPONSE) :
-    Campaign2.AgreesOn (fun _ => True) (receiveHandshakePacket msg src)
+    Campaign2.Product.AgreesOn (fun _ => True) (liftWG (receiveHandshakePacket msg src))
       (responseSessionCallPrefix msg src >>= responseSessionCallSuffix msg) ∧
-    Campaign2.AgreesOn (fun _ => True) (observedResponseSession msg src)
+    Campaign2.Product.AgreesOn (fun _ => True) (observedResponseSession msg src)
       (responseSessionTranscript msg src) ∧
-    Campaign2.Ensures (observedResponseSession msg src) (fun _ => True)
+    Campaign2.Product.Ensures (observedResponseSession msg src) (fun _ => True)
       (fun observation _ => ResponseSessionObservation msg observation) := by
   constructor
   · intro entry pre
@@ -484,23 +446,13 @@ theorem original_response_session_arm (msg : List UInt8) (src : SkbSource)
       rw [observedResponseSession_source msg src kind]
     · exact observedResponseSession_facts msg src kind
 
-/-- The original outgoing response sender and its decorated execution factor
-through the actual session-derived hook. On normal full return, response creation
-may have rejected the call without reaching the session stage. A present cut
-records the actual session result and ordered SessionEffect; its hook observation
-is present exactly when beginSession returned true. That case derives the counter
-increment and a live resident peer. Running-device and arm-record conditions at
-the actual before-hook cut give the caller-jiffies read, exact wrapped zero-key
-expiry and clockGap at the after-hook cut. The remaining original timer hooks,
-second clock/write and socket send execute unchanged. No successful completion,
-transmission, final expiry preservation, failed-call prefix retention or global
-once-per-session count is asserted. Erasure preserves every original error. -/
+/-- Outgoing response execution and its full Product transcript retain the actual creation/session cut and guarded zero-key wheel effect. Early rejection and every original error remain in scope. -/
 theorem original_outgoing_response_session_arm (pid : PeerId) :
-    Campaign2.AgreesOn (fun _ => True) (sendHandshakeResponse pid)
+    Campaign2.Product.AgreesOn (fun _ => True) (liftWG (sendHandshakeResponse pid))
       (outgoingResponseSessionPrefix pid >>= outgoingResponseSessionSuffix pid) ∧
-    Campaign2.AgreesOn (fun _ => True) (observedOutgoingResponseSession pid)
+    Campaign2.Product.AgreesOn (fun _ => True) (observedOutgoingResponseSession pid)
       (outgoingResponseSessionTranscript pid) ∧
-    Campaign2.Ensures (observedOutgoingResponseSession pid) (fun _ => True)
+    Campaign2.Product.Ensures (observedOutgoingResponseSession pid) (fun _ => True)
       (fun observation _ => OutgoingResponseSessionObservation pid observation) := by
   constructor
   · intro entry pre
@@ -510,81 +462,48 @@ theorem original_outgoing_response_session_arm (pid : PeerId) :
       rw [observedOutgoingResponseSession_source pid]
     · exact observedOutgoingResponseSession_facts pid
 
-/-- The original data-completion caller invokes traversal once before the whole
-supplied list, including an empty list. Its ordered observations retain each
-actual packet read and send Boolean. The data-sent hook is reached exactly when
-some actual send returned true for a packet whose length is not the keepalive
-length. Each hook's own running/live/recorded-mode guards (and interval or pending
-guard) give its caller-clock observation and exact wrapped expiry; data-sent also
-records bounded jitter. These expiry and clock-gap facts hold at each hook's
-after-state. The authenticated-sent hook, loop markers and keepKeyFresh suffix
-remain original. Erasure preserves all errors; the certificate describes normal
-full returns and promises neither transmission nor final expiry preservation. -/
+/-- Data completion retains ordered packet/send observations and the original hook-presence tests, including an empty item list. Hook facts now include their complete wheel effects; exact Product erasure retains all errors. -/
 theorem original_data_done_timers (pid : PeerId) (items : List SkbId) :
-    Campaign2.AgreesOn (fun _ => True)
-      (do let _ ← observedDataDone pid items; pure ()) (createDataDone pid items) ∧
-    Campaign2.Ensures (observedDataDone pid items) (fun _ => True)
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (do let _ ← observedDataDone pid items; pure ()) (liftWG (createDataDone pid items)) ∧
+    Campaign2.Product.Ensures (observedDataDone pid items) (fun _ => True)
       (fun observation _ => DataDoneFacts pid items observation) := by
   constructor
   · intro entry pre
     rw [observedDataDone_erase pid items]
   · exact observedDataDone_facts pid items
 
-/-- The original consumeDataDone caller invokes traversal before its keepalive
-test and invokes data-received exactly for nonzero packet length. Its endpoint
-write, confirmation/handshake-complete path, staged sends, freshness check and
-authenticated-received deletion remain original, as do the zero-byte statistics
-return and complete inner-packet validation/routing suffix. On normal full
-return each captured hook has its own guarded timer effect: traversal's enabled
-live/running recorded arm has the exact persistent expiry; data receipt while
-running requests another keepalive when one is pending, and an absent timer on
-a live peer has its recorded caller-plus-delay expiry. The expiry and clock-gap
-facts refer to each hook's after-state. Erasure preserves the original returned
-packet option and every error. This raw-packet contract establishes neither
-authentication nor delivery, final expiry preservation or failed-call cut retention. -/
+/-- Raw data receipt retains traversal, the keepalive/receipt test, and the complete original suffix. Each actual hook cut records its current wheel effect; exact Product erasure retains the packet option and all errors. -/
 theorem original_consume_data_done_timers (pid : PeerId) (pkt : RxPacket) (e : Endpoint) :
-    Campaign2.AgreesOn (fun _ => True)
+    Campaign2.Product.AgreesOn (fun _ => True)
       (do let result ← observedRxDataTimers pid pkt e; pure result.2)
-      (consumeDataDone pid pkt e) ∧
-    Campaign2.Ensures (observedRxDataTimers pid pkt e) (fun _ => True)
+      (liftWG (consumeDataDone pid pkt e)) ∧
+    Campaign2.Product.Ensures (observedRxDataTimers pid pkt e) (fun _ => True)
       (fun result _ => RxDataTimersFacts pid pkt result.1) := by
   constructor
   · intro entry pre
     rw [observedRxDataTimers_erase pid pkt e]
   · exact observedRxDataTimers_facts pid pkt e
 
-/-- The original outgoing response sender reaches traversal exactly when its
-actual creation/session prefix returns a present successful session. The cut
-retains the original session effect and zero-key hook facts, and traversal starts
-at that prefix's end. Its enabled/live/running/recorded guards give the exact
-caller-plus-interval persistent expiry and clock gap at the hook's after-state.
-The authenticated-sent deletion, later clock/write and socket send remain in
-the original continuation. Erasure preserves every error; normal certificates
-do not promise transmission, final expiry preservation or failed-call retention. -/
+/-- Outgoing response traversal retains its actual successful-session cut and complete guarded persistent-keepalive wheel effect. Exact Product erasure includes all errors and makes no final-expiry or delivery claim. -/
 theorem original_outgoing_response_traversal (pid : PeerId) :
-    Campaign2.AgreesOn (fun _ => True)
-      (do let _ ← observedResponseTraversal pid; pure ()) (sendHandshakeResponse pid) ∧
-    Campaign2.Ensures (observedResponseTraversal pid) (fun _ => True)
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (do let _ ← observedResponseTraversal pid; pure ()) (liftWG (sendHandshakeResponse pid)) ∧
+    Campaign2.Product.Ensures (observedResponseTraversal pid) (fun _ => True)
       (fun cut _ => ResponseTraversalFacts pid cut) := by
   constructor
   · intro entry pre
     rw [observedResponseTraversal_erase pid]
   · exact observedResponseTraversal_facts pid
 
-/-- The original initiation sender invokes traversal exactly when its original
-rate-check/creation/MAC prefix yields a message. Early exits yield no hook. On
-normal full return, the actual hook's enabled/live/running/recorded guards give
-the exact persistent expiry and clock gap at its after-state. Authenticated-sent
-deletion, the second clock/write, socket send and final retransmit hook remain
-unchanged. Erasure includes errors; no transmission, final expiry or retained
-failed-call certificate is asserted. -/
+/-- Outgoing initiation traversal retains its actual creation-prefix cut and complete guarded persistent-keepalive wheel effect. Both source factor and Product erasure preserve errors and early exits. -/
 theorem original_outgoing_initiation_traversal (pid : PeerId) :
-    Campaign2.AgreesOn (fun _ => True)
-      (initiationTraversalPrelude pid >>= initiationTraversalSuffix pid)
-      (sendHandshakeInitiation pid) ∧
-    Campaign2.AgreesOn (fun _ => True)
-      (do let _ ← observedInitiationTraversal pid; pure ()) (sendHandshakeInitiation pid) ∧
-    Campaign2.Ensures (observedInitiationTraversal pid) (fun _ => True)
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (liftWG (initiationTraversalPrelude pid >>= initiationTraversalSuffix pid))
+      (liftWG (sendHandshakeInitiation pid)) ∧
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (do let _ ← observedInitiationTraversal pid; pure ()) (liftWG (sendHandshakeInitiation pid)) ∧
+    Campaign2.Product.Ensures (observedInitiationTraversal pid) (fun _ => True)
       (fun cut _ => InitiationTraversalFacts pid cut) := by
   constructor
   · intro entry pre
@@ -594,126 +513,88 @@ theorem original_outgoing_initiation_traversal (pid : PeerId) :
       rw [observedInitiationTraversal_erase pid]
     · exact observedInitiationTraversal_facts pid
 
-/-- For an initiation message, the original receive caller's common traversal
-hook carries the actual accepted consumer/MAC certificate and its selected peer.
-The endpoint setter, response sender, statistics, authenticated-received deletion
-and final release remain original. A normal present cut gives guarded recorded
-persistent expiry at the traversal hook; rejected paths may return no cut. Exact
-erasure retains errors. No final expiry or failed-call retention is claimed. -/
+/-- Initiation receipt retains the actual accepted consumer/MAC certificate and traversal cut, including complete guarded wheel effects. Product erasure preserves every original error; rejected paths may have no cut. -/
 theorem original_initiation_receive_traversal (msg : List UInt8) (src : SkbSource)
     (kind : messageType msg = MESSAGE_HANDSHAKE_INITIATION) :
-    Campaign2.AgreesOn (fun _ => True)
-      (do let _ ← observedInitiationReceiveTraversal msg src; pure ()) (receiveHandshakePacket msg src) ∧
-    Campaign2.Ensures (observedInitiationReceiveTraversal msg src) (fun _ => True)
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (do let _ ← observedInitiationReceiveTraversal msg src; pure ()) (liftWG (receiveHandshakePacket msg src)) ∧
+    Campaign2.Product.Ensures (observedInitiationReceiveTraversal msg src) (fun _ => True)
       (fun result _ => ∀ cut, result = some cut → InitiationReceiveTraversalFacts msg cut) := by
   constructor
   · intro entry pre
     rw [observedInitiationReceiveTraversal_erase msg src kind]
   · exact observedInitiationReceiveTraversal_facts msg src
 
-/-- For a response message, the common receive traversal follows the actual
-accepted consumer/MAC certificate, endpoint setter and original session/keepalive
-branch. A normal present cut gives the selected peer's guarded recorded persistent
-expiry at the hook. Statistics, authenticated-received deletion and final release
-remain original; exact erasure retains all errors. Hook facts neither require a
-successful new session nor assert final expiry or failed-call retention. -/
+/-- Response receipt retains its actual consumer/MAC and session/keepalive prefix before traversal, with complete guarded wheel effects. Product erasure preserves every original error. -/
 theorem original_response_receive_traversal (msg : List UInt8) (src : SkbSource)
     (kind : messageType msg = MESSAGE_HANDSHAKE_RESPONSE) :
-    Campaign2.AgreesOn (fun _ => True)
-      (do let _ ← observedResponseReceiveTraversal msg src; pure ()) (receiveHandshakePacket msg src) ∧
-    Campaign2.Ensures (observedResponseReceiveTraversal msg src) (fun _ => True)
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (do let _ ← observedResponseReceiveTraversal msg src; pure ()) (liftWG (receiveHandshakePacket msg src)) ∧
+    Campaign2.Product.Ensures (observedResponseReceiveTraversal msg src) (fun _ => True)
       (fun result _ => ∀ cut, result = some cut → ResponseReceiveTraversalFacts msg cut) := by
   constructor
   · intro entry pre
     rw [observedResponseReceiveTraversal_erase msg src kind]
   · exact observedResponseReceiveTraversal_facts msg src
 
-/-- After 19 consecutive normal retry/send pairs from zero, if all selected the
-same peer, an immediately invoked retransmit callback takes the give-up branch.
-The comparison log and entire tail are retained, including errors. A normal
-callback return preserves attempt count 19 and the empty send queue. This does
-not assert another timer is armed, selected, or invoked, or that give-up returns;
-there is no intervening scheduler/environment action in this boundary contract. -/
-theorem original_retry_boundary (d : Device) (horizons : List UInt64)
-    (empty : d.sendWorkQueue = []) (nineteen : horizons.length = 19)
+/-- At the actual exit of 19 successful same-peer supplied wheel-unit/send
+pairs from zero attempts, the immediate callback follows its original give-up
+decision and tail, including errors. Normal return preserves the empty queue,
+identity and attempt count 19. No intervening scheduler action, further arm,
+callback invocation or successful give-up return is assumed. -/
+theorem original_retry_boundary (d : Device) (units : List RetryUnit)
+    (empty : d.sendWorkQueue = []) (nineteen : units.length = 19)
     (pid : PeerId) (p : Peer) (resident : d.peers[pid]? = some p)
     (zero : p.timerHandshakeAttempts = 0) :
-    Campaign2.Ensures (observedRetrySequence horizons)
+    Campaign2.Product.Ensures (observedRetrySequence units)
       (fun s => s.wg.device = some d)
       (fun result boundary => SameRetryPeer pid result.2 →
-        Campaign2.AgreesOn (fun s => s = boundary)
-          (expiredRetransmitHandshake pid)
-          (do let _ ← retransmitDecision pid; retransmitGiveUp pid) ∧
-        Campaign2.Ensures (expiredRetransmitHandshake pid) (fun s => s = boundary)
+        Campaign2.Product.AgreesOn (fun s => s = boundary)
+          (liftWG (expiredRetransmitHandshake pid))
+          (liftWG (do let _ ← retransmitDecision pid; retransmitGiveUp pid)) ∧
+        Campaign2.Product.Ensures (liftWG (expiredRetransmitHandshake pid)) (fun s => s = boundary)
           (fun _ final => final.wg.device.map Device.sendWorkQueue = some [] ∧
-            ∃ q, final.peerAt pid = some q ∧ q.internalId = p.internalId ∧
+            ∃ q, final.toSnapshot.peerAt pid = some q ∧ q.internalId = p.internalId ∧
               q.timerHandshakeAttempts = 19)) :=
-  source_retry_boundary d horizons empty nineteen pid p resident zero
+  source_retry_boundary d units empty nineteen pid p resident zero
 
-/-- Above the retry limit, an already-pending zero-key timer makes the original
-callback return without any clock or arm-record read. It deletes send-keepalive,
-purges staged packets and accounts their original length in txDropped, retaining
-the existing zero-key expiry. Exactly two original decisions are appended, with
-the give-up comparison operands and the entry section stamp. Every other
-projected field is unchanged, including hidden records, clocks, attempts and
-work queues. No running/live/record-mode premise is needed. This is one callback,
-not a whole scheduler episode or a once-per-session count. -/
-theorem original_giveup_pending_zero_key (pid : PeerId) (d : Device) (p : Peer)
-    (expiry : UInt64) (resident : d.peers[pid]? = some p)
+/-- Pending-zero-key give-up remains total on the original resident/attempt domain. The full Product effect includes clearing send-keepalive expiry and wheel entry and purging staged packets. -/
+theorem original_giveup_pending_zero_key (pid : PeerId) (d : Device) (p : Peer) (expiry : UInt64)
+    (resident : d.peers[pid]? = some p)
     (limit : MAX_TIMER_HANDSHAKES < p.timerHandshakeAttempts)
-    (pending : p.timerZeroKeyMaterial = some expiry) (entry : Campaign2.Snapshot) :
-    Campaign2.Returns (expiredRetransmitHandshake pid)
+    (pending : p.timerZeroKeyMaterial = some expiry) (entry : Campaign2.Product.Snapshot) :
+    Campaign2.Product.Returns (liftWG (expiredRetransmitHandshake pid))
       (fun s => s = entry ∧ s.wg.device = some d)
       (fun _ final => final = pendingGiveUpView entry d pid p) :=
   pendingGiveUp_returns pid d p expiry resident limit pending entry
 
-/-- Above the retry limit, a running live peer with zero-key absent returns
-from the original give-up callback when its two contiguous supplied records
-have the original sizes, caller-derived expiry and signed zero-or-one-tick gap.
-The complete projected effect deletes send-keepalive, purges staged packets and
-accounts their length, arms zero-key, consumes exactly these two records, stores
-the arm clock and applies the original zero/nonzero timer-address registration.
-Four original decisions are appended; all other projected fields are unchanged.
-The suffix is arbitrary, and successful execution is a conclusion, not a premise.
-This is one callback; no session provenance or scheduler episode is asserted. -/
+/-- The original supplied-record give-up domain gives exact Product agreement with the actual arm continuation, including timer-clock and wheel-record refusals. It no longer asserts unconditional completion. -/
 theorem original_giveup_absent_zero_key (pid : PeerId) (d : Device) (p : Peer)
     (input : GiveUpArmInput) (rest : List HiddenRecord)
     (resident : d.peers[pid]? = some p)
     (limit : MAX_TIMER_HANDSHAKES < p.timerHandshakeAttempts)
     (absent : p.timerZeroKeyMaterial = none)
     (running : d.running = true) (alive : p.isDead = false)
-    (valid : input.Valid) (entry : Campaign2.Snapshot) :
-    Campaign2.Returns (expiredRetransmitHandshake pid)
-      (fun s => s = entry ∧ s.wg.device = some d ∧ s.wg.armRecords = true ∧
+    (valid : input.Valid) (entry : Product.Snapshot) :
+    Product.AgreesOn
+      (fun s => s = entry ∧ s.wg.device = some d ∧ s.ambient.armRecords = true ∧
         s.ambient.hidden = some (input.records rest))
-      (fun _ final => final = absentGiveUpView entry d pid p input rest) :=
+      (liftWG (expiredRetransmitHandshake pid))
+      (absentGiveUpArmContinuation pid d p input rest) :=
   absentGiveUp_returns pid d p input rest resident limit absent running alive valid entry
 
-/-- The original retransmit hook completes from valid supplied caller, jitter
-and arm records. Running/live peers receive the exact wrapped expiry and timer
-registration; otherwise the guard skips the arm after consuming the caller and
-jitter reads, preserving the arm record. This is a hook contract, not a complete
-send-worker or scheduler episode. -/
+/-- The original retransmit-hook record domain gives exact Product agreement with the actual caller/jitter/guard/arm continuation, including refusals and the inactive guard path. -/
 theorem original_retransmit_hook_ready (pid : PeerId) (d : Device) (p : Peer)
     (input : RetransmitArmInput) (rest : List HiddenRecord)
-    (resident : d.peers[pid]? = some p) (valid : input.Valid) (entry : Snapshot) :
-    Campaign2.Returns (timersHandshakeInitiated pid)
-      (fun s => s = entry ∧ s.wg.device = some d ∧ s.wg.armRecords = true ∧
+    (resident : d.peers[pid]? = some p) (valid : input.Valid) (entry : Product.Snapshot) :
+    Product.AgreesOn
+      (fun s => s = entry ∧ s.wg.device = some d ∧ s.ambient.armRecords = true ∧
         s.ambient.hidden = some (input.records rest))
-      (fun _ final => final = if d.running && !p.isDead
-        then retransmitReadyView entry d pid p input rest
-        else retransmitSkippedView entry d input rest) :=
+      (liftWG (timersHandshakeInitiated pid))
+      (retransmitHookContinuation pid d p input rest) :=
   retransmitHook_returns pid d p input rest resident valid entry
 
-/-- The full original initiation-send call completes from static creation and
-tail readiness with supplied rate-test, first last-sent, ephemeral, timestamp,
-index, second last-sent and retransmit records. It returns the exact ordered
-Device effect, consumes that prefix, preserves recorded mode and observes the
-final arm clock. Readiness for the send tail names the pure creation result.
-This covers a live peer on a running device with no endpoint, invalid cookie,
-zero keepalive interval and unarmed send-buffer allocation: the original ignores
-the failed no-endpoint send and still rearms. No successful-run premise, packet
-delivery, reachable-state invariant or arbitrary callback history is asserted. -/
+/-- The original creation and send-tail domain gives exact Product agreement through actual creation and current wheel arming. All supplied records, allocation conditions and failures are retained; unconditional completion is not asserted. -/
 theorem original_send_initiation_ready (pid : PeerId) (d : Device) (p : Peer)
     (resident : d.peers[pid]? = some p)
     (rate last ephemeral clock tailClock : List UInt8)
@@ -737,30 +618,18 @@ theorem original_send_initiation_ready (pid : PeerId) (d : Device) (p : Peer)
     (running : (SendReady.sendCreationResult pid d p last ephemeral clock fresh.value).2.running = true)
     (alive : createdPeer.isDead = false)
     (tailLen : tailClock.length = 8) (input : RetransmitArmInput) (valid : input.Valid) :
-    Campaign2.Returns (sendHandshakeInitiation pid)
-      (fun s => s.wg.device = some d ∧ s.wg.armRecords = true ∧
+    Product.AgreesOn
+      (fun s => s.wg.device = some d ∧ s.ambient.armRecords = true ∧
         s.ambient.allocArmed.contains "sendBufSkb" = false ∧ s.ambient.hidden = some ({site := 6, bytes := rate} :: {site := 7, bytes := last} ::
         {site := 1, bytes := ephemeral} :: {site := 3, bytes := clock} ::
         Index.drawStream collisions fresh ({site := 8, bytes := tailClock} :: input.records rest)))
-      (fun _ s =>
-        let made := SendReady.sendCreationResult pid d p last ephemeral clock fresh.value
-        s.wg.device = some {SendReady.initiationTailDevice made.2 pid createdPeer made.1 tailClock with
-          peers := (SendReady.initiationTailDevice made.2 pid createdPeer made.1 tailClock).peers.insert pid
-            ((SendReady.initiationTailPeer createdPeer made.1 tailClock).setTimer .retransmitHandshake
-              (some (input.caller + input.delay.toUInt64)))} ∧
-        s.ambient.hidden = some rest ∧ s.wg.armRecords = true ∧ s.wg.jiffiesLast = some input.now) :=
-  SendReady.sendInitiation_projected pid d p resident rate last ephemeral clock tailClock rateLen lastLen expired identity
-    word nonnull randomWidth width secretNonNull pubOk dhOk collisions fresh rest allCollide isFresh
-    createdPeer createdResident cookieInvalid interval endpoint running alive tailLen input valid
+      (liftWG (sendHandshakeInitiation pid))
+      (SendReady.sendInitiationContinuation pid d p createdPeer rate last ephemeral clock tailClock
+        collisions fresh input rest) :=
+  SendReady.sendInitiation_projected pid d p resident rate last ephemeral clock tailClock rateLen lastLen expired identity word nonnull randomWidth width secretNonNull pubOk dhOk collisions fresh rest allCollide isFresh createdPeer createdResident cookieInvalid interval endpoint running alive tailLen input valid
 
-/-- The original timer dispatcher selects a named due retransmit timer, detaches
-it, consumes its section records and runs the ready callback. Static readiness
-and explicit records suffice for success: no callback-success premise is used.
-The exact projection includes the attempt increment, endpoint/cache reset,
-acquired reference and queued send work, fired symbol, section-start pending-work
-filter, decisions and unused record suffix. This does not claim send completion
-or rearming by the later worker. -/
-theorem original_fire_retry_ready (d : Device) (p : Peer) (pid : PeerId) (horizon : UInt64)
+/-- The original ready domain applies to the actual selected retransmit wheel unit; horizon/due premises remain explicit. The full Product result includes wheel detachment, pass-step reset and queuedThisCall preservation. Outer wheel selection and whole runTimers completion are separate claims. -/
+theorem original_fire_retry_ready (d : Device) (p : Peer) (pid : PeerId) (horizon : UInt64) (we : WheelEntry)
     (start cache clock queue stop : List UInt8) (suffix : List HiddenRecord)
     (resident : d.peers[pid]? = some p) (due : pid ∈ duePeers d .retransmitHandshake horizon)
     (startLen : start.length=16) (stopLen : stop.length=8)
@@ -770,26 +639,19 @@ theorem original_fire_retry_ready (d : Device) (p : Peer) (pid : PeerId) (horizo
     (alive : p.isDead=false) (pending : p.handshakePending=false)
     (positive : 0<p.refcount) (bounded : p.refcount+1<2^31)
     (expired : p.lastSentHandshake + REKEY_TIMEOUT.toInt64*NSEC_PER_SEC64 ≤ (RetryReady.word clock).toInt64) :
-    Campaign2.Observes (Env.fireTimer .timerRetransmit horizon)
+    Campaign2.Product.Observes (timerDispatchUnit_variant .timerRetransmit pid .retransmitHandshake we none)
       (fun s => s.wg.device=some d ∧
         s.ambient.hidden=some (FireReady.suppliedRecords start cache clock queue stop suffix) ∧
-        s.wg.armRecords=true ∧ s.wg.dstCacheRecords=true ∧
+        s.ambient.armRecords=true ∧ s.wg.dstCacheRecords=true ∧
         s.wg.timerUnits.find? (·.1 == recordWordOf start 1) =
           some (recordWordOf start 1,pid,.retransmitHandshake) ∧
         s.ambient.unitPeers.find? (fun e => e.2.1 == Worker.sendWorker.index && e.2.2 == pid) =
           some (recordWordOf queue 0,Worker.sendWorker.index,pid))
       (fun entry outcome => outcome=.ok ((),FireReady.fireView entry d p pid cache clock suffix)) :=
-  FireReady.fire_outcome d p pid horizon start cache clock queue stop suffix resident due
+  FireReady.fire_outcome d p pid horizon we start cache clock queue stop suffix resident due
     startLen stopLen cacheLen clockLen queueLen nonzero limit alive pending positive bounded expired
 
-/-- One original named send-worker dispatch completes from a queued resident
-peer with its pending flag set and a matching nonzero recorded unit. It performs
-the actual selection, dequeue, pending clear, section start, initiation/send/rearm,
-retained reference decrement and section stop, with exact Device, record suffix,
-mode and final clock. Readiness names the pure creation result after dequeue;
-the tail has no endpoint, an invalid cookie, zero keepalive interval and an
-unarmed send allocation. The original still rearms after that failed send.
-This is one complete dispatch, not an arbitrary history or packet-delivery claim. -/
+/-- The original named-worker domain gives exact Product agreement through selection, dequeue, creation, arm, release and stop. Residual duplicate queue membership determines pending, and all arm/release/section refusals remain visible. -/
 theorem original_send_worker_ready (pid : PeerId) (d : Device) (p : Peer)
     (resident : d.peers[pid]? = some p)
     (rate last ephemeral clock tailClock : List UInt8)
@@ -819,17 +681,15 @@ theorem original_send_worker_ready (pid : PeerId) (d : Device) (p : Peer)
     (queued : pid ∈ d.sendWorkQueue) (pending : p.handshakePending = true)
     (start stop : List UInt8) (startLen : start.length = 16) (stopLen : stop.length = 8)
     (address : recordWordOf start 1 = unit) (nonnullUnit : unit ≠ 0) :
-    Campaign2.Returns Env.runOneSendWorker
-      (fun s => s.wg.device = some d ∧ s.wg.armRecords = true ∧
+    Campaign2.Product.AgreesOn
+      (fun s => s.wg.device = some d ∧ s.ambient.armRecords = true ∧
         s.ambient.allocArmed.contains "sendBufSkb" = false ∧
         s.ambient.unitPeers.find? (fun e => e.1 == unit && e.2.1 == Worker.sendWorker.index) =
           some (unit, Worker.sendWorker.index, pid) ∧
         s.ambient.hidden = some (WorkerReady.records start rate last ephemeral clock tailClock stop collisions fresh input rest))
-      (fun _ s => s.wg.device = some (WorkerReady.result pid d p createdPeer last ephemeral clock tailClock fresh.value input) ∧
-        s.ambient.hidden = some rest ∧ s.wg.armRecords = true ∧ s.wg.jiffiesLast = some input.now) :=
-  WorkerReady.runOneSendWorker_projected pid d p resident rate last ephemeral clock tailClock rateLen lastLen expired identity word
-    nonnull randomWidth width secretNonNull pubOk dhOk collisions fresh rest allCollide isFresh
-    createdPeer createdResident cookieInvalid interval endpoint running alive retained tailLen input valid
-    headPid unit head queued pending start stop startLen stopLen address nonnullUnit
+      Env.runOneSendWorker
+      (WorkerReady.runOneSendWorkerContinuation pid d p createdPeer rate last ephemeral clock tailClock stop
+        collisions fresh input rest) :=
+  WorkerReady.runOneSendWorker_projected pid d p resident rate last ephemeral clock tailClock rateLen lastLen expired identity word nonnull randomWidth width secretNonNull pubOk dhOk collisions fresh rest allCollide isFresh createdPeer createdResident cookieInvalid interval endpoint running alive retained tailLen input valid headPid unit head queued pending start stop startLen stopLen address nonnullUnit
 
 end Leanux.Proofs.WG.TimerDiscipline

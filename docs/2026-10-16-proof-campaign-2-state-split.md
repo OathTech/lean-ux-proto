@@ -3,7 +3,7 @@
 The retrofit starts from `04b2f7c` and incorporates main `b700659`. The
 mirror is unchanged. The branch retains its proof tree, nondefault
 `LeanuxProofs` target and `scripts/proof-gate`; main removed those pending
-campaign 1's landing. No new result is attempted before this retrofit.
+campaign 1's landing. The campaign-owned retrofit is complete; new charter work resumes with H2.
 
 [USER 2026-10-16] Carry campaign 2 to the split worlds, retaining its
 projection boundary. Remove frames only when the new types provide the
@@ -24,12 +24,15 @@ and attributed theorem declarations. Campaign 2 owns 427 Lean files,
 | H3 Roaming | 35 | 119 | 13 | 157 | Endpoint/publication, polling, attempt facts, crypto, lookup and response-caller factors/facts carried with full Product certificates; two type-given frames deleted. The full terminal closure is current, including initiation/response audits with actual Product outcomes. Wider roaming/provenance charter gaps remain open. |
 | H4 Configuration | 130 | 554 | 79 | 582 | Scalar, identity, port, dump, allowed-IP and structural support carried; three type-given frames deleted. Quiet timer cleanup and queued-send observations are corrected; queued-send and removal totality have checked stale-statement counterexamples. All 79 projected headlines and their full closure check; exact refusal corrections and actual socket/scalar readback are current. Wider configuration charter gaps remain open. |
 | H5 Progress | 59 | 265 | 42 | 288 | Pure/control, cut, jitter, index, poll bounds, dispatch, scheduler turns, stack/probe frames, queue flush contracts, drain selection and Product observation bridge carried; one type-given index frame deleted. The old backlog fixture has checked exact runner and direct-fixture rejections. Drain bounds are carried. General runner boundaries, corrected historical rejection wrappers and receive-source leaves are carried; All 42 headlines and their closure check, with exact bounded cookie activation/schedule corrections and checked counterexamples. Five false historical count/totality supports are retired with checked refutations; the valid physical-transform projection is retained. Global-progress charter gaps remain pending. |
-| H6 Timer discipline | 98 | 404 | 50 | 351 | Base/guard/jitter, arming/wheel, recorded clock and initiation-send arming contracts carried; three type-given frames deleted. Exact wheel corrections are explicit; queue/pending and retained-worker frames are carried; broader timer episodes and terminal closure remain pending. |
+| H6 Timer discipline | 98 | 404 | 50 | 438 | All 50 terminals and their closure check, including selected wheel-unit/retry composition with actual inspection and full Product snapshots. Three type-given frames are deleted. Exact wheel, queue and totality corrections are explicit; complete caller coverage, outer scheduler episodes and session-relative counting remain open. |
 
-Retyped, deleted and retained counts will be reported per validated tranche.
-H1–H5 now have checked split terminal closures; H6 remains lagging.
-All six results retain their previous charter gaps.
-The last scoped validation at `04b2f7c` does not validate the split mirror.
+The completed census is 587 owned modules and 1,983 checked theorems:
+1,321 retyped, 244 corrected, 239 kept and 179 additions. All 1,831 baseline
+theorems are accounted for, including 22 type-given deletions and five
+separately refuted/retired claims. Every terminal closure is current over
+b700659; wider charter gaps remain. The full gate fails in inherited
+CounterWindow.Refinement and ReplayWindow.Counterexamples. Tranches below
+retain their historical checkpoint statuses.
 
 ## Migration boundaries
 
@@ -5399,3 +5402,95 @@ WheelUnitSelectionFindings and RetryInspectedSource under Leanux.Proofs.WG
 (join each module name after TimerDiscipline). Inspect axioms and run
 scripts/in-bundle lake env leanchecker --fresh on each of these five roots.
 Use capped, 32 threads and 16 QEMU slots on the shared host.
+
+
+## Retry composition and completed campaign-owned retrofit
+
+| Tranche | Before | Retyped | Corrected | Type-deleted | Refuted/retired | Kept | Added | After |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| RetryDispatchSource/Claims and RetryRearmSource/Claims | 7 | 0 | 7 | 0 | 0 | 0 | 0 | 7 |
+| RetrySequenceSource/PureClaims/Claims and RetryBoundaryClaims | 11 | 1 | 10 | 0 | 0 | 0 | 0 | 11 |
+| TimerDiscipline.Statements | 50 | 10 | 40 | 0 | 0 | 0 | 0 | 50 |
+| This tranche | 68 | 11 | 57 | 0 | 0 | 0 | 0 | 68 |
+| Complete baseline and checked support | 1,831 | 1,321 | 244 | 22 | 5 | 239 | 179 | 1,983 |
+
+All 587 owned modules are covered, including six files outside terminal
+closures. H1–H6 counts are 185, 333, 157, 582, 288 and 438. All 258 original
+headline names and order remain; no terminal signature names World or Kernel.
+This completes the owned retrofit, not the wider charter or inherited gate.
+
+RetryDispatchClaims and RetryRearmClaims retain actual selected wheel-unit
+and queue-inspection observations. Successful timer/send execution derives
+residency, eligibility and the attempt limit from the original empty-queue
+domain. Full Product observations retain fixture fields and failures. The
+rearm certificate uses that same send and its conditional complete wheel
+effect. No readiness, coherence or reachability premise is added.
+
+RetrySequenceModel/PureClaims are separate from the actual Source computations
+and projected Claims. Inputs are RetryUnit values, not horizons. Each pair runs
+at the previous actual exit; erasure retains the first error. Same-peer
+completed chains preserve identity/references and increment attempts by the
+length; a nonempty chain clears pending and bounds the total by 19. The empty
+chain preserves the entire Product snapshot and leaves attempts unrestricted.
+RetryBoundaryClaims uses the actual exit of 19 successful pairs from zero.
+The immediate callback agrees with its original comparison and give-up tail,
+including errors and every fixture field. Its normal-return count/identity/
+queue conclusions assume no next selection, arm, callback invocation or success.
+The proof uses the concrete native decision and actual lift, without deriving
+concrete-state equality from a partial snapshot.
+
+Frames remain separate. The 50 terminal claims use native or full Product
+projections; 40 explicit corrections include wheel effects, residual-queue
+pending behavior, exact stopped continuations and selected-unit scope.
+Complete caller coverage, outer scheduler episodes and once-per-session
+counting remain open.
+
+[AGENT 2026-10-17] Remove the unreferenced historical timerSelection and
+fireSelected definitions after all consumers use the actual wheel unit.
+The logical selector is demonstrably different from the current wheel
+selector. Neither removal is a theorem or a type-given frame deletion.
+FireSource remains an import of FireUnitSource. CollisionKeyEffect remains
+a historical pure comparison, with its obsolete pending-carry comment fixed.
+
+Development: the pure sequence package passes its first probe. Composition
+probe 1 checks the companion counted in the previous tranche. Probe 2 exits
+zero with an unused-simp warning and is not accepted; changed probes 3–6 fail
+9/0, 2/4, 2/1 and 1/0 errors/warnings. Probes 7 and 8 check dispatch and rearm
+cleanly. Independent review catches an unintended new 800,000-heartbeat
+setting in RetryDispatchClaims; removing it and rechecking at the original
+default resolves the finding. Other existing proof limits and all caps stay
+unchanged. No infrastructure rerun occurs.
+
+Installed builds pass 221 and 223 jobs. Boundary build 1 fails one opaque
+projected lookup and emits two unused-simp warnings; explicit native lookup
+fixes all three. Build 2 passes 224 jobs, including the default-limit dispatch.
+The terminal module passes 309 jobs. Independent sequence/boundary review
+finds one stale pending-flag docstring, fixed to residual membership, and no
+other correctness/domain issue. Final standalone/terminal coverage passes
+374 jobs; QueueRefill's executable check reproduces operation 4's occupancy
+rejection. Only the inherited Env:865 String.mk warning remains in scoped runs.
+
+The H6 audit checks 1,365 logical roots in 267 modules (776 public theorem
+roots). The complete owned audit checks 2,980 logical roots in 587 modules
+(1,944 public theorem roots; private proofs are reached through consumers),
+standard axioms only. All seven final fresh kernel replays pass. Static
+gate stages, mirror/shared boundaries and all terminal names/order pass.
+
+The full capped gate is attempted once and **fails** in inherited
+ReplayWindow.Counterexamples and CounterWindow.Refinement on old state/entry
+shapes: 62 source error diagnostics, 22 warnings including Env, and a Lean
+metavariable panic in Refinement. Failed elaboration reports generated
+sorry/metavariable declarations; those are findings in the failed build,
+not accepted trust evidence. The gate exits 1 before its axiom stage;
+token/import/root/default-target stages pass. No KILLED banner, guest run or
+retry occurs. Existing shared files stay untouched.
+
+Reproduce the final tranche with scripts/in-bundle lake build on
+Leanux.Proofs.WG.TimerDiscipline.Statements, Index.HandshakeFrames,
+Index.OwnerFrames, Config.CollisionModel, Progress.QueueRefill,
+TimerDiscipline.FireSource and TimerDiscipline.RetryDispatchFrames (the latter
+six share the Leanux.Proofs.WG prefix). Replay each with scripts/in-bundle
+lake env leanchecker --fresh MODULE. Build all owned modules by passing module
+paths under Campaign2, Noise, Index, Roaming, Config, Progress and TimerDiscipline.
+The separately failing inherited aggregate is scripts/in-bundle scripts/proof-gate.
+Use capped, 32 Lean threads and 16 QEMU slots on the shared host.

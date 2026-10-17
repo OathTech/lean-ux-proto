@@ -2,10 +2,9 @@
 
 ## Current checkpoint
 
-**State-split retrofit in progress over b700659.** Main was incorporated on
+**Campaign-owned state-split retrofit complete over b700659.** Main was incorporated on
 the campaign branch; the mirror and existing shared layers remain unchanged.
-The branch retains its proof target and gate. No new charter result is
-attempted before the retrofit finishes.
+The branch retains its proof target and gate. All six terminal closures now check; broader charter work resumes with H2.
 
 | Result | Headlines | Checked support | Split status |
 | --- | ---: | ---: | --- |
@@ -14,23 +13,28 @@ attempted before the retrofit finishes.
 | H3 Roaming | 13 | 157 | Full terminal closure current; callback authentication provenance and broader caller coverage open. |
 | H4 Configuration | 79 | 582 | Full terminal closure current; global ownership, queued cleanup and general pagination open. |
 | H5 Progress | 42 | 288 | Full terminal closure current with exact bounded outcomes and checked refutations; global progress/coherent-ring adequacy open. |
-| H6 Timers | 50 | 370 | Selected-unit, caller and rearm support checked; retry composition and full terminal closure pending. |
+| H6 Timers | 50 | 438 | Full terminal closure current; outer scheduler episodes, complete caller coverage and session-relative counts open. |
 
-The checked surface is 1,915 theorems: 1,310 retyped, 187 explicitly
-corrected, 239 retained and 179 added support/finding declarations.
-Twenty-two frames are deleted because the types give their facts; five
-false cookie supports are separately retired using checked counterexamples.
-Sixty-eight baseline declarations remain pending, including H6's 50
-terminal declarations. All 258 original terminal names/order remain intact.
+The checked surface is 1,983 theorems in all 587 campaign-owned modules:
+1,321 retyped, 244 explicitly corrected, 239 retained and 179 added
+support/finding declarations. Of the 1,831 baseline theorems, 22 frames
+were deleted because types supply their facts and five false cookie supports
+were separately retired with checked counterexamples. No baseline declaration
+remains awaiting retrofit; all 258 original terminal names/order survive.
 
 The [retrofit report](2026-10-16-proof-campaign-2-state-split.md) records
-each claim/frame file, precise correction, before/after census, failure and
-scoped trust check. H1–H5 terminal closures have passed scoped builds,
-standard-axiom audits and fresh replay. H6's current support checks do not
-validate its historical terminal module. The full gate remains unvalidated
-on the split tree while the remaining campaign and inherited layers lag.
-None of H1–H6 is a completed charter result. No new mirror-team request arises
-from these statement-domain findings.
+claim/frame files, corrections, before/after counts and validation.
+Scoped builds and the complete 2,980-root standard-axiom audit pass.
+All seven final fresh replays pass. The full gate **fails** in inherited
+CounterWindow.Refinement and ReplayWindow.Counterexamples; their old state
+shapes and failed-elaboration diagnostics remain campaign 1's responsibility.
+No shared lemma or mirror implementation was edited. The campaign-owned
+retrofit is not a claim that the full gate or any entire charter result passes.
+
+None of H1–H6 is a completed charter result. The timer retry contracts now
+explicitly concern supplied wheel units and their actual inspection, not
+selection by the outer scheduler. No new mirror-team request arises from
+these statement-domain findings.
 
 ## Historical checkpoint before the split
 
