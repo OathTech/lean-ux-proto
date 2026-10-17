@@ -9,21 +9,21 @@ The branch retains its proof target and gate. All six terminal closures now chec
 | Result | Headlines | Checked support | Split status |
 | --- | ---: | ---: | --- |
 | H1 Noise | 22 | 185 | Full terminal closure current; wider caller/lifetime/clock claims open. |
-| H2 Index | 65 | 374 | Full terminal closure current; reachable whole-driver uniqueness/coherence open. |
+| H2 Index | 66 | 377 | Full terminal closure current; reachable whole-driver uniqueness/coherence open. |
 | H3 Roaming | 13 | 157 | Full terminal closure current; callback authentication provenance and broader caller coverage open. |
 | H4 Configuration | 79 | 582 | Full terminal closure current; global ownership, queued cleanup and general pagination open. |
 | H5 Progress | 42 | 288 | Full terminal closure current with exact bounded outcomes and checked refutations; global progress/coherent-ring adequacy open. |
 | H6 Timers | 50 | 438 | Full terminal closure current; outer scheduler episodes, complete caller coverage and session-relative counts open. |
 
-The checked surface is 2,024 theorems in all 604 campaign-owned modules.
+The checked surface is 2,027 theorems in all 606 campaign-owned modules.
 The completed retrofit accounts for 1,983: 1,321 retyped, 244 explicitly
-corrected, 239 retained and 179 added support/finding declarations. Forty-one
+corrected, 239 retained and 179 added support/finding declarations. Forty-four
 subsequent H2 declarations add confirmation, data-ingress and removal table
 preservation, local owner coherence and its release-ownership obstruction. Of the 1,831 baseline theorems, 22 frames
 were deleted because types supply their facts and five false cookie supports
 were separately retired with checked counterexamples. No baseline declaration
 remains awaiting retrofit; all 258 original terminal names/order survive,
-with thirteen new H2 headlines (271 total).
+with fourteen new H2 headlines (272 total).
 
 The [retrofit report](2026-10-16-proof-campaign-2-state-split.md) records
 claim/frame files, corrections, before/after counts and validation.
@@ -283,6 +283,45 @@ Env:865 String.mk warning. Axioms: 1,156 logical roots in 223 modules, including
 checks retain all 258 original names/order; mirror/shared boundaries pass. The inherited full-gate failure remains recorded and
 is not rerun unchanged. Reproduce with the scoped Index.Statements build and
 fresh replay above, under capped with 32 Lean threads and 16 QEMU slots.
+
+## H2 continuation: keypair release preserves owner coherence
+
+Original keypairPut preserves local hashed-owner coherence on every normal
+return, with that invariant as its sole entry predicate. The key argument,
+immediate-unhash flag, optional device and Ambient inputs are arbitrary.
+Last release unhashes all rows for the key before erasing it; retained hashed
+keys keep their peer word and positive count. Peers are unchanged, so no
+peer-release detachment obligation is needed.
+
+The source proof retains NULL input, absent device, missing key, zero count,
+immediate-unhash dereference and deferred final-NULL refusal. A deferred
+nonfinal key with a NULL word may return normally; the proof uses the existing
+retained-key contract rather than imposing the non-NULL premise of the
+stronger total exact-effect helper. No reference upper bound, readiness,
+freshness or object-residency premise is added to the projected theorem.
+
+Architecture: Index/OwnerCoherenceKeypairReleaseFrames holds pure preservation
+of the actual resident/live key effect. OwnerCoherenceKeypairReleaseClaims
+derives the actual normal-run cases and applies it; Statements appends one
+literal documented headline. These three new theorems bring H2 to 66
+headlines/377 theorems, and campaign totals to 272 headlines/2,027 theorems
+in 606 modules. No existing claim is reshaped or shared/mirror code edited.
+This does not establish global ownership or reachability. No mirror request
+is needed.
+
+Probe 1 elaborates with two unused-simp warnings; changed probe 2 fixes them
+and passes cleanly at default limits. The warnings are fixed before
+integration, without limit/cap increases, suppression or infrastructure retry.
+Independent review finds no correctness/domain issue, including the retained
+NULL-word case and the distinction from peer release.
+
+The scoped Index.Statements build passes 289 jobs, with only inherited
+Env:865 String.mk warning. Audit checks 1,159 logical roots in 225 modules,
+including 766 public theorem roots, standard only. Fresh kernel replay passes.
+Static checks retain all 258 original terminal names/order; mirror/shared
+boundaries pass. The inherited full-gate failure remains recorded without an
+unchanged rerun. Reproduce with the scoped Index.Statements build and fresh
+replay commands above, under capped with 32 threads and 16 QEMU slots.
 
 ## Historical checkpoint before the split
 

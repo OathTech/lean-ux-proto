@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Index.OwnerCoherenceKeypairReleaseClaims
 import Leanux.Proofs.WG.Index.PeerRemovalClaims
 import Leanux.Proofs.WG.Index.OwnerCoherenceReleaseClaims
 import Leanux.Proofs.WG.Index.OwnerCoherenceReleaseFindings
@@ -787,5 +788,14 @@ theorem original_peer_put_owner_coherence (pid : PeerId) (d : Device) (p : Peer)
       (fun s => s.wg.device = some d ∧ View.OwnerCoherentSafe s)
       (fun _ s => View.OwnerCoherentSafe s) :=
   peerPut_owner_coherent pid d p resident live detached
+
+/-- Every normal keypair release preserves local hashed-owner coherence.
+The only entry premise is that invariant: NULL input, retained NULL peer words,
+immediate unhashing and final erasure retain their actual source behavior.
+No residency, upper reference bound, detachment or readiness is assumed. -/
+theorem original_keypair_put_owner_coherence (key : Option KeypairId) (now : Bool) :
+    Campaign2.Ensures (keypairPut key now) View.OwnerCoherentSafe
+      (fun _ s => View.OwnerCoherentSafe s) :=
+  keypairPut_owner_coherent key now
 
 end Leanux.Proofs.WG.Index
