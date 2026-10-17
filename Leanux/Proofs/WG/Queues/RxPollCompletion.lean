@@ -94,11 +94,11 @@ theorem quiet (hf : HistoryFrame ρ a) (ha : Appends a) : Preserves ρ a := by
   refine ⟨s, hs, hc.prefix, ?_⟩
   cases (runPrefix a w h).1 <;> simp_all
 
-theorem access_quiet (a : MixedM α) : Preserves jointEvent (RxJoint.access a) :=
+theorem access_quiet (a : PrefixM LifetimeEvent α) : Preserves jointEvent (RxJoint.access a) :=
   quiet (fun w h => focusPrefix_other RxJoint.Event.access RxJoint.accessEvent jointEvent
     (fun _ => rfl) a w h) (RxJoint.access_appends a)
 
-theorem lift_quiet (a : M α) : Preserves ρ (liftPrefix a) :=
+theorem lift_quiet (a : Leanux.M α) : Preserves ρ (liftPrefix a) :=
   quiet (HistoryFrame.lift _ _) (Appends.lift _)
 
 theorem emit_quiet (e : E) (he : ρ e = none) : Preserves ρ (emitPrefix e) :=
@@ -213,7 +213,7 @@ theorem capture_quiet (skb : SkbId) : Preserves jointEvent (RxJoint.capture skb)
   apply quiet ?_ (RxJoint.capture_appends skb)
   intro w h
   rw [RxJoint.capture_run]
-  cases (getRxSkb skb).run w <;> simp [List.filterMap_append, jointEvent]
+  cases (liftWG (getRxSkb skb)).run w <;> simp [List.filterMap_append, jointEvent]
 
 theorem receipt_quiet (a : PrefixM E α) (f : RunWitness α → E)
     (ha : Preserves ρ a) (hf : ∀ r, ρ (f r) = none) : Preserves ρ (receiptObserved a f) := by

@@ -11,10 +11,10 @@ new worlds; new R3/R4 results follow the retrofit.
 | Census | Lean files | Named theorems |
 | --- | ---: | ---: |
 | Validated baseline `00641c6` | 471 | 7,715 |
-| Completed retrofit checkpoints | 452 | 6,544 |
+| Completed retrofit checkpoints | 452 | 6,545 |
 
-Completed changes comprise **2,890 retyped/generalized, 1,704 deleted,
-1,913 retained contract shapes and 533 added theorems**. Retyping changes the
+Completed changes comprise **2,926 retyped/generalized, 1,704 deleted,
+1,944 retained contract shapes and 534 added theorems**. Retyping changes the
 actual carrier or observation, including shorthand contracts whose functions
 move to a native monad. Namespace-only product qualification and equivalent
 projection relocation count as retained. The census includes private and
@@ -330,8 +330,21 @@ passed; the first axiom driver rejected its mistaken seven-name inventory
 before invoking Lean, and the corrected eight-name check passed. This
 proof-body maintenance does not change the census.
 
+The RX stack/protection and poll-completion checkpoint carries 67→68 theorems:
+36 retyped/generalized, 31 retained and one private helper added. Native stack
+facts observe WGWorld; arbitrary product callbacks retain their full domain and
+the original store mask. Positive borrow repayment, durable handoff, negative
+errno paths and the first-packet transmit error remain covered. Completion
+retains all 29 original product/pure contracts and follows the actual lifted
+receive-buffer read. The combined 341-job build, all 81 named declaration
+axiom checks, explicit fresh replays and complete source reviews pass, with zero
+own warnings and 1,342 inherited warnings. Stack development had seven ordinary
+failures and five changed-source passes; an accidental unchanged prefix repeat
+also passed and adds no evidence. Completion passed its one development check.
+Neither module required an infrastructure rerun.
+
 Remaining work is the routing/origin terminal carry, material runner support,
-RX stack/carrier and receipt-link layers, warning
+RX carrier and receipt-link layers, warning
 cleanup, the full proof gate and terminal replay. Deterministic source/proof
 failures are failures; source edits are checked anew, never described as
 infrastructure retries. Recovery admissions printed by failed elaborations
