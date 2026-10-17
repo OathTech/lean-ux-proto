@@ -78,3 +78,13 @@ reachability nor a kernel discrepancy. Reproduce with scripts/in-bundle lake
 build Leanux.Proofs.WG.TimerDiscipline.RetryQueueFindings and fresh leanchecker
 replay on that module under the capped settings above. The retrofit report
 records its checked counts and the outstanding corrected retry composition.
+
+
+RetryEligibilitySource now corrects the four queue/callback contracts on
+their original input domains. The actual observer returns the inspection bit;
+the singleton queue case records the exact updated peer and the actual
+eligibility test. Two erasure laws tie the decorated callback and clear/queue
+continuation to the original computations, including errors. The distinct
+InspectedFreshRetryPeer relation carries this evidence. It does not silently
+change the older FreshRetryPeer predicate, and selected-unit/whole-sequence
+composition remains a separate obligation.

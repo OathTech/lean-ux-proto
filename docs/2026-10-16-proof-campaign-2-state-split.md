@@ -24,7 +24,7 @@ and attributed theorem declarations. Campaign 2 owns 427 Lean files,
 | H3 Roaming | 35 | 119 | 13 | 157 | Endpoint/publication, polling, attempt facts, crypto, lookup and response-caller factors/facts carried with full Product certificates; two type-given frames deleted. The full terminal closure is current, including initiation/response audits with actual Product outcomes. Wider roaming/provenance charter gaps remain open. |
 | H4 Configuration | 130 | 554 | 79 | 582 | Scalar, identity, port, dump, allowed-IP and structural support carried; three type-given frames deleted. Quiet timer cleanup and queued-send observations are corrected; queued-send and removal totality have checked stale-statement counterexamples. All 79 projected headlines and their full closure check; exact refusal corrections and actual socket/scalar readback are current. Wider configuration charter gaps remain open. |
 | H5 Progress | 59 | 265 | 42 | 288 | Pure/control, cut, jitter, index, poll bounds, dispatch, scheduler turns, stack/probe frames, queue flush contracts, drain selection and Product observation bridge carried; one type-given index frame deleted. The old backlog fixture has checked exact runner and direct-fixture rejections. Drain bounds are carried. General runner boundaries, corrected historical rejection wrappers and receive-source leaves are carried; All 42 headlines and their closure check, with exact bounded cookie activation/schedule corrections and checked counterexamples. Five false historical count/totality supports are retired with checked refutations; the valid physical-transform projection is retained. Global-progress charter gaps remain pending. |
-| H6 Timer discipline | 98 | 404 | 50 | 338 | Base/guard/jitter, arming/wheel, recorded clock and initiation-send arming contracts carried; three type-given frames deleted. Exact wheel corrections are explicit; queue/pending and retained-worker frames are carried; broader timer episodes and terminal closure remain pending. |
+| H6 Timer discipline | 98 | 404 | 50 | 351 | Base/guard/jitter, arming/wheel, recorded clock and initiation-send arming contracts carried; three type-given frames deleted. Exact wheel corrections are explicit; queue/pending and retained-worker frames are carried; broader timer episodes and terminal closure remain pending. |
 
 Retyped, deleted and retained counts will be reported per validated tranche.
 H1–H5 now have checked split terminal closures; H6 remains lagging.
@@ -5247,3 +5247,84 @@ TimerDiscipline.RetryDispatchLeaves, TimerDiscipline.RetryQueueFindings and
 Progress.CookieScheduleSource under Leanux.Proofs.WG. Inspect axioms and
 replay these five roots with scripts/in-bundle lake env leanchecker --fresh
 MODULE, under capped with 32 threads and 16 QEMU slots.
+
+
+## Actual retry eligibility and send-rearm certificates
+
+| Tranche | Before | Retyped | Corrected | Type-deleted | Refuted/retired | Kept | Added | After |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| TimerDiscipline.RetryBoundarySource/RetryGiveUpFrames | 3 | 3 | 0 | 0 | 0 | 0 | 0 | 3 |
+| TimerDiscipline.SendRearmClaims | 3 | 0 | 3 | 0 | 0 | 0 | 1 | 4 |
+| TimerDiscipline.RetryEligibilitySource | 4 | 0 | 4 | 0 | 0 | 0 | 2 | 6 |
+| This tranche | 10 | 3 | 7 | 0 | 0 | 0 | 3 | 13 |
+| Cumulative processed baseline and checked support | 1,748 | 1,309 | 175 | 22 | 5 | 237 | 175 | 1,896 |
+
+The census has 578 campaign-owned files, 1,979 theorems and 556 checked proof
+modules, with 83 baseline declarations pending. Counts: H1 185, H2 333,
+H3 157, H4 582, H5 288 and H6 351. H1–H5 terminal closures remain current;
+H6's terminal closure and the full gate remain pending. No charter gap is
+closed by the support census alone.
+
+RetryBoundarySource has no sequence dependency: above-limit decision totality
+retains arbitrary native Ambient inputs, without recorded-mode or timer-arm
+premises. The original give-up-tail agreement retains the actual decision log
+and exact errors. Both contracts use the native Campaign2 projection.
+RetryGiveUpFrames separately carries the original normal-return empty-queue
+frame through this decision and the actual give-up body.
+
+SendRearmCertificateModel/Claims extract the three sender/release/worker
+contracts from the pending retry aggregate. Full Product observations and
+original preconditions remain. Their complete recordedTimerEffect replaces
+the obsolete exact-peer-only arm clause; caller-clock gap and final raw
+retransmit expiry survive the native retained release and Ambient section stop.
+One private pure helper derives those observations from the exact wheel effect.
+All three public claims use Campaign2.Product.Ensures; source runs stay inside
+their proofs. RetryRearmFrames remains separate and unchanged by this tranche.
+
+RetryEligibilityModel/Source explicitly corrects queuedAfterClock_empty,
+sendQueuedRetry_empty, retryClearQueue_empty and expiredRetransmit_empty.
+They retain the original resident/empty/detached/attempt-limit domains and
+observe the actual Option Bool inspection. Enqueue eligibility is the actual
+pending-and-inspected test, not a new input assumption. InspectedFreshRetryPeer
+is a separately named corrected relation; the old FreshRetryPeer still has
+its stronger entry-pending premise. Two additional erasure laws connect the
+new clear/queue and callback observers to their actual native computations,
+including failures. Higher selected-unit, dispatch and sequence certificates
+remain pending; the new eligibility relation alone does not prove them.
+
+Development: boundary probe 1 fails one final Except-pure normalization goal;
+changed probe 2 passes cleanly; the separate give-up frame passes its first
+probe. SendRearm probe 1 fails seven elaboration
+diagnostics from overloaded hidden reads and cascading projections; changed
+probe 2 passes cleanly. Eligibility probe 1 checks its first two originals;
+probe 2 fails two bind normalizations, probe 3 fails six rewritten-name/goal
+normalizations, and probe 4 checks all six declarations without warnings.
+The first package build fails seven cascading diagnostics because an unused
+Noise namespace opening is unavailable under the model's narrower imports.
+Removing the unused openings fixes that packaging error. No cap or proof
+limit is raised and no infrastructure or unchanged-failure rerun occurs.
+
+The first sender/boundary build passes 182 jobs. The corrected combined build
+passes 189 jobs; the final frame extension passes 191 jobs, with only the
+inherited Env:865 String.mk warning. Axiom inspection checks 774 logical
+roots in 149 proof modules, including 467 public theorem roots, with standard
+axioms only. All four fresh kernel replays pass. Static checks and all 258
+terminal names/order pass; mirror and shared-layer boundaries are unchanged.
+Independent review finds one misleading eligibility comment, fixed to say
+that the actual bit and pending flag jointly determine eligibility. No code
+or proposition changes in that fix. Review finds no remaining correctness
+or domain issue; root review finds none in the boundary and give-up frame.
+
+A 43-of-50 terminal scratch carrier also checks in two clean probes; its
+names retain original order. Root review fixes one stale description of
+send dequeue: pending follows residual queue membership and may remain true
+with duplicates. The scratch subset has 10 retypes and 33 explicit semantic
+corrections, no additions, and no terminal census credit. The seven remaining
+dispatch/retry headlines are retained unchanged in the tracked Statements
+file until the complete terminal module closes.
+
+Reproduce the support with scripts/in-bundle lake build on
+TimerDiscipline.RetryBoundarySource, TimerDiscipline.SendRearmClaims and
+TimerDiscipline.RetryEligibilitySource and TimerDiscipline.RetryGiveUpFrames
+under Leanux.Proofs.WG. Inspect axioms and replay these four roots with scripts/in-bundle lake env leanchecker
+--fresh MODULE, under capped with 32 threads and 16 QEMU slots.

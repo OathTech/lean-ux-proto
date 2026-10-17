@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.TimerDiscipline.RetryGiveUpFrames
+import Leanux.Proofs.WG.TimerDiscipline.RetryEligibilitySource
 import Leanux.Proofs.WG.TimerDiscipline.RetryDispatchLeaves
 import Leanux.Proofs.WG.TimerDiscipline.RetryDispatchModel
 import Leanux.Proofs.WG.TimerDiscipline.RetryDispatchFrames
@@ -26,114 +28,6 @@ def observedRetryDispatch (horizon : UInt64) : M RetryDispatchObservation := do
   let send ← observed Env.runOneSendWorker sendWorkerExecution
   return ⟨timer.1, afterTimer, send.1⟩
 
-/-- An empty entry queue either remains empty or receives exactly this newly
-pending peer, with the positive old count established by original acquisition. -/
-theorem queuedAfterClock_empty (pid : PeerId) (d : Device) (p : Peer) (now : Int64)
-    (resident : d.peers[pid]? = some p) (empty : d.sendWorkQueue = []) :
-    Ensures (queuedAfterClock pid p now) (fun w => w.k.wg = some d)
-      (fun _ w => ∃ out, w.k.wg = some out ∧
-        (out.sendWorkQueue = [] ∨ (out.sendWorkQueue = [pid] ∧
-          out.peers[pid]? = some { p with refcount := p.refcount + 1, handshakePending := true } ∧
-          p.isDead = false ∧ p.handshakePending = false ∧ 0 < p.refcount))) := by
-  intro w result final pre run
-  have device := queuedAfterClock_exact pid d p now resident w result final pre run
-  refine ⟨queuedDevice d pid p now, device, ?_⟩
-  by_cases expired : p.lastSentHandshake + REKEY_TIMEOUT.toInt64 * NSEC_PER_SEC64 ≤ now
-  · by_cases dead : p.isDead = true
-    · left; simp [queuedDevice, expired, dead, empty]
-    · have alive : p.isDead = false := by simpa using dead
-      by_cases pending : p.handshakePending = true
-      · left; simp [queuedDevice, expired, alive, pending, withPeer, empty]
-      · have fresh : p.handshakePending = false := by simpa using pending
-        have positive := queuedAfterClock_positive pid d p now resident expired alive w result final pre run
-        right
-        simp [queuedDevice, expired, alive, fresh, withPeer, empty, positive]
-  · left; simp [queuedDevice, expired, empty]
-
-theorem sendQueuedRetry_empty (pid : PeerId) (d : Device) (p : Peer)
-    (resident : d.peers[pid]? = some p) (empty : d.sendWorkQueue = []) :
-    Ensures (sendQueuedHandshakeInitiation pid true) (fun w => w.k.wg = some d)
-      (fun _ w => ∃ out, w.k.wg = some out ∧
-        (out.sendWorkQueue = [] ∨ (out.sendWorkQueue = [pid] ∧
-          out.peers[pid]? = some { p with refcount := p.refcount + 1, handshakePending := true } ∧
-          p.isDead = false ∧ p.handshakePending = false ∧ 0 < p.refcount))) := by
-  intro w result final pre run
-  cases result
-  obtain ⟨value, before, first, same, device⟩ := retryReadPrefix_returns pid d p resident w pre
-  subst value
-  rw [sendQueuedRetry_factor, StateT.run_bind, first] at run
-  change ((hiddenClock64 .birthdateExpired).run before >>= fun out =>
-    (queuedAfterClock pid p out.1).run out.2) = .ok ((), final) at run
-  cases clock : (hiddenClock64 .birthdateExpired).run before with
-  | error e => rw [clock] at run; cases run
-  | ok pair =>
-    obtain ⟨now, after⟩ := pair
-    rw [clock] at run
-    have afterDevice := (ensures_iff _ _ _).mpr
-      (hiddenClock64_kernel_spec (fun k => k.wg = some d) .birthdateExpired)
-      before now after device clock
-    exact queuedAfterClock_empty pid d p now resident empty after () final afterDevice run
-
-def retryClearQueue (pid : PeerId) : M Unit := do
-  clearPeerEndpointSrc pid
-  sendQueuedHandshakeInitiation pid true
-
-theorem retryClearQueue_empty (pid : PeerId) (d : Device) (p : Peer)
-    (resident : d.peers[pid]? = some p) (empty : d.sendWorkQueue = [])
-    (detached : p.timerRetransmitHandshake = none) :
-    Ensures (retryClearQueue pid)
-      (fun w => w.k.wg = some (withPeer d pid { p with timerHandshakeAttempts := p.timerHandshakeAttempts + 1 }))
-      (fun _ w => ∃ out, w.k.wg = some out ∧
-        (out.sendWorkQueue = [] ∨ (out.sendWorkQueue = [pid] ∧
-          ∃ queued, out.peers[pid]? = some queued ∧ FreshRetryPeer p queued))) := by
-  intro w result final pre run
-  simp only [retryClearQueue, StateT.run_bind] at run
-  cases hc : (clearPeerEndpointSrc pid).run w with
-  | error e => rw [hc] at run; cases run
-  | ok pair =>
-    obtain ⟨u, after⟩ := pair
-    rw [hc] at run
-    obtain ⟨cleared, reset, device, fields, peer, others⟩ := clearEndpointSource_exact pid
-      (withPeer d pid { p with timerHandshakeAttempts := p.timerHandshakeAttempts + 1 })
-      { p with timerHandshakeAttempts := p.timerHandshakeAttempts + 1 }
-      (by simp [withPeer]) w u after pre hc
-    have queue : cleared.sendWorkQueue = [] := by
-      have h := congrArg Device.sendWorkQueue fields
-      simpa [withPeer, empty] using h
-    obtain ⟨out, outDevice, casesQueue⟩ := sendQueuedRetry_empty pid cleared
-      (clearedSource { p with timerHandshakeAttempts := p.timerHandshakeAttempts + 1 } reset)
-      peer queue after result final device run
-    refine ⟨out, outDevice, ?_⟩
-    rcases casesQueue with none | ⟨single, stored, alive, fresh, positive⟩
-    · exact Or.inl none
-    · right
-      refine ⟨single, _, stored, ?_⟩
-      simpa [FreshRetryPeer, clearedSource, detached] using And.intro alive (And.intro fresh positive)
-
-theorem expiredRetransmit_empty (pid : PeerId) (d : Device) (p : Peer)
-    (resident : d.peers[pid]? = some p) (empty : d.sendWorkQueue = [])
-    (detached : p.timerRetransmitHandshake = none)
-    (limit : p.timerHandshakeAttempts ≤ MAX_TIMER_HANDSHAKES) :
-    Ensures (expiredRetransmitHandshake pid) (fun w => w.k.wg = some d)
-      (fun _ w => ∃ out, w.k.wg = some out ∧
-        (out.sendWorkQueue = [] ∨ (out.sendWorkQueue = [pid] ∧
-          ∃ queued, out.peers[pid]? = some queued ∧ FreshRetryPeer p queued))) := by
-  have ht := (ensures_iff _ _ _).mp (retryClearQueue_empty pid d p resident empty detached)
-  rw [expiredRetransmit_source]
-  change Ensures (do
-    let attempts := (← getPeer pid).timerHandshakeAttempts
-    if ← branchCmp .retransmitGiveUp (attempts > MAX_TIMER_HANDSHAKES) attempts MAX_TIMER_HANDSHAKES then
-      retransmitGiveUp pid
-    else
-      let current ← getPeer pid
-      setPeer pid { current with timerHandshakeAttempts := current.timerHandshakeAttempts + 1 }
-      retryClearQueue pid) _ _
-  rw [ensures_iff]
-  mvcgen [getPeer, getDev, getK, setPeer, modifyDev, modifyK, branchCmp, invariant, ht]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [withPeer]
-  all_goals omega
-
 theorem fireSelected_empty (pid : PeerId) (d : Device) (p : Peer)
     (resident : d.peers[pid]? = some p) (empty : d.sendWorkQueue = [])
     (limit : p.timerHandshakeAttempts ≤ MAX_TIMER_HANDSHAKES) :
@@ -159,19 +53,6 @@ theorem fireSelected_empty (pid : PeerId) (d : Device) (p : Peer)
   simp only [fireSelected, timerCallback, StateT.run_bind, deletion] at run
   have result' := (ensures_iff _ _ _).mpr hs after result final device run
   simpa [detached, FreshRetryPeer, Peer.setTimer] using result'
-
-/-- Above the retry limit, the original callback leaves the send queue empty. -/
-theorem expiredRetransmit_giveUp_empty (pid : PeerId) (d : Device) (p : Peer)
-    (resident : d.peers[pid]? = some p) (empty : d.sendWorkQueue = [])
-    (limit : MAX_TIMER_HANDSHAKES < p.timerHandshakeAttempts) :
-    Ensures (expiredRetransmitHandshake pid) (fun w => w.k.wg = some d)
-      (fun _ w => w.k.wg.map Device.sendWorkQueue = some []) := by
-  have hg := retransmitGiveUp_sendQueue pid (some [])
-  rw [expiredRetransmit_source, ensures_iff]
-  mvcgen [getPeer, getDev, getK, branchCmp, invariant, hg]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all
-  all_goals omega
 
 theorem fireSelected_giveUp_empty (pid : PeerId) (d : Device) (p : Peer)
     (resident : d.peers[pid]? = some p) (empty : d.sendWorkQueue = [])

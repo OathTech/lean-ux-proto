@@ -2,22 +2,37 @@
 
 ## Current checkpoint
 
-**State-split retrofit in progress:** the branch now incorporates main
-`b700659`. The previous validation below is historical, over `de62c9d`;
-all six results are lagging until carried. Counts, type-justified frame
-deletions and scoped validation are tracked in the
-[retrofit report](2026-10-16-proof-campaign-2-state-split.md).
-The support tranches retype 449 original theorems, retain 171,
-delete twenty-one type-given frames and add thirty-three support/finding declarations: 653
-checked theorems, with 258 terminal names still awaiting whole-result validation.
-Ten H2 table claims now have checked projected support and unchanged public
-audit names; this is not a build of the full H2 Statements module.
-The frame/claim file map and pending consumers are in the retrofit report.
-The [timer carry finding](2026-10-17-proof-campaign-2-timer-carry.md) checks a
-counterexample to a pre-wheel exact-peer statement; no mirror repair is requested.
-The [peer-release carry finding](2026-10-17-proof-campaign-2-peer-release.md)
-checks two counterexamples to a legacy totality domain; no reachable-state
-or mirror-bug claim follows.
+**State-split retrofit in progress over b700659.** Main was incorporated on
+the campaign branch; the mirror and existing shared layers remain unchanged.
+The branch retains its proof target and gate. No new charter result is
+attempted before the retrofit finishes.
+
+| Result | Headlines | Checked support | Split status |
+| --- | ---: | ---: | --- |
+| H1 Noise | 22 | 185 | Full terminal closure current; wider caller/lifetime/clock claims open. |
+| H2 Index | 52 | 333 | Full terminal closure current; reachable whole-driver uniqueness/coherence open. |
+| H3 Roaming | 13 | 157 | Full terminal closure current; callback authentication provenance and broader caller coverage open. |
+| H4 Configuration | 79 | 582 | Full terminal closure current; global ownership, queued cleanup and general pagination open. |
+| H5 Progress | 42 | 288 | Full terminal closure current with exact bounded outcomes and checked refutations; global progress/coherent-ring adequacy open. |
+| H6 Timers | 50 | 351 | Selected-unit, caller and rearm support checked; retry composition and full terminal closure pending. |
+
+The checked surface is 1,896 theorems: 1,309 retyped, 175 explicitly
+corrected, 237 retained and 175 added support/finding declarations.
+Twenty-two frames are deleted because the types give their facts; five
+false cookie supports are separately retired using checked counterexamples.
+Eighty-three baseline declarations remain pending, including H6's 50
+terminal declarations. All 258 original terminal names/order remain intact.
+
+The [retrofit report](2026-10-16-proof-campaign-2-state-split.md) records
+each claim/frame file, precise correction, before/after census, failure and
+scoped trust check. H1–H5 terminal closures have passed scoped builds,
+standard-axiom audits and fresh replay. H6's current support checks do not
+validate its historical terminal module. The full gate remains unvalidated
+on the split tree while the remaining campaign and inherited layers lag.
+None of H1–H6 is a completed charter result. No new mirror-team request arises
+from these statement-domain findings.
+
+## Historical checkpoint before the split
 
 Historical checkpoint: branch `proofs/campaign-2`, worktree `.worktrees/proofs-campaign-2`,
 Lean v4.35.0, mirror **`de62c9d`**. The proofs are **lagging main's
