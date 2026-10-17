@@ -1,21 +1,21 @@
 import Leanux.Proofs.WG.Noise.InitiationReadySource
 
-/-! Ambient-mode preservation remains substantive: these actions can access Ambient. -/
+/-! Ambient-metadata preservation remains substantive: these actions can access Ambient. -/
 set_option autoImplicit false
 set_option pp.structureInstances false
 
 namespace Leanux.Proofs.WG.Noise.InitiationReady
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise Std.Do
 
-theorem bucketHas_mode (mode : Bool) (walk collide : Decision) (index : Nat)
+theorem bucketHas_metadata (metadata : Bool → List String → Prop) (walk collide : Decision) (index : Nat)
     (table : List IndexEntry) :
     Product.Ensures ((Index.bucketHas walk collide index).run table)
-      (fun ambient => ambient.armRecords = mode)
-      (fun _ ambient => ambient.armRecords = mode) := by
+      (fun ambient => metadata ambient.armRecords ambient.allocArmed)
+      (fun _ ambient => metadata ambient.armRecords ambient.allocArmed) := by
   have hwalk (entries table : List IndexEntry) :
       Product.Ensures ((Index.bucketWalk walk collide index entries).run table)
-        (fun ambient => ambient.armRecords = mode)
-        (fun _ ambient => ambient.armRecords = mode) := by
+        (fun ambient => metadata ambient.armRecords ambient.allocArmed)
+        (fun _ ambient => metadata ambient.armRecords ambient.allocArmed) := by
     induction entries with
     | nil =>
       intro ambient result after pre run
@@ -43,13 +43,13 @@ theorem bucketHas_mode (mode : Bool) (walk collide : Decision) (index : Nat)
   exact hwalk (Index.bucket index table) table ambient result after pre
     (by simpa [indexBucket, Index.bucket, StateT.run_bind] using run)
 
-theorem hidden_mode (mode : Bool) (site : HiddenSite) :
+theorem hidden_metadata (metadata : Bool → List String → Prop) (site : HiddenSite) :
     Product.Ensures (AmbientM.hidden site)
-      (fun ambient => ambient.armRecords = mode)
-      (fun _ ambient => ambient.armRecords = mode) := by
+      (fun ambient => metadata ambient.armRecords ambient.allocArmed)
+      (fun _ ambient => metadata ambient.armRecords ambient.allocArmed) := by
   intro ambient result after pre run
   have skip : ∃ next, AmbientM.skipAmbient.run ambient = .ok ((), next) ∧
-      next.armRecords = mode := by
+      metadata next.armRecords next.allocArmed := by
     cases records : ambient.hidden with
     | none => exact ⟨ambient, by simp [AmbientM.skipAmbient, records]; rfl, pre⟩
     | some rs =>
@@ -58,7 +58,7 @@ theorem hidden_mode (mode : Bool) (site : HiddenSite) :
       rfl
   obtain ⟨skipped, hskip, skipMode⟩ := skip
   have note : ∃ next, (AmbientM.noteNetRxStart site.info.id).run skipped = .ok ((), next) ∧
-      next.armRecords = mode := by
+      metadata next.armRecords next.allocArmed := by
     unfold AmbientM.noteNetRxStart
     split <;> exact ⟨_, rfl, skipMode⟩
   obtain ⟨noted, hnote, noteMode⟩ := note
@@ -92,24 +92,24 @@ theorem hidden_mode (mode : Bool) (site : HiddenSite) :
         | split at run
 
 
-private theorem mode_bind {σ α β : Type} (mode : Bool)
+private theorem metadata_bind {σ α β : Type} (metadata : Bool → List String → Prop)
     (action : StateT σ AmbientM α) (next : α → StateT σ AmbientM β)
     (first : ∀ state, Product.Ensures (action.run state)
-      (fun ambient => ambient.armRecords = mode) (fun _ ambient => ambient.armRecords = mode))
+      (fun ambient => metadata ambient.armRecords ambient.allocArmed) (fun _ ambient => metadata ambient.armRecords ambient.allocArmed))
     (rest : ∀ value state, Product.Ensures ((next value).run state)
-      (fun ambient => ambient.armRecords = mode) (fun _ ambient => ambient.armRecords = mode))
+      (fun ambient => metadata ambient.armRecords ambient.allocArmed) (fun _ ambient => metadata ambient.armRecords ambient.allocArmed))
     (state : σ) :
     Product.Ensures ((action >>= next).run state)
-      (fun ambient => ambient.armRecords = mode) (fun _ ambient => ambient.armRecords = mode) := by
+      (fun ambient => metadata ambient.armRecords ambient.allocArmed) (fun _ ambient => metadata ambient.armRecords ambient.allocArmed) := by
   change Product.Ensures (action.run state >>= fun (value, current) => (next value).run current) _ _
   exact Product.ensures_bind _ _ (first state) (fun (value, current) => rest value current)
 
-private theorem mode_lift {σ α : Type} (mode : Bool) (action : AmbientM α)
+private theorem metadata_lift {σ α : Type} (metadata : Bool → List String → Prop) (action : AmbientM α)
     (preserves : Product.Ensures action
-      (fun ambient => ambient.armRecords = mode) (fun _ ambient => ambient.armRecords = mode))
+      (fun ambient => metadata ambient.armRecords ambient.allocArmed) (fun _ ambient => metadata ambient.armRecords ambient.allocArmed))
     (state : σ) :
     Product.Ensures ((StateT.lift action : StateT σ AmbientM α).run state)
-      (fun ambient => ambient.armRecords = mode) (fun _ ambient => ambient.armRecords = mode) := by
+      (fun ambient => metadata ambient.armRecords ambient.allocArmed) (fun _ ambient => metadata ambient.armRecords ambient.allocArmed) := by
   intro ambient result after pre run
   change (action.run ambient >>= fun (value, current) => .ok ((value, state), current)) =
     .ok (result, after) at run
@@ -122,24 +122,24 @@ private theorem mode_lift {σ α : Type} (mode : Bool) (action : AmbientM α)
     cases run
     exact preserved
 
-theorem indexInsert_mode (mode : Bool) (owner : IndexOwner) (table : List IndexEntry) :
+theorem indexInsert_metadata (metadata : Bool → List String → Prop) (owner : IndexOwner) (table : List IndexEntry) :
     Product.Ensures ((indexInsert owner).run table)
-      (fun ambient => ambient.armRecords = mode) (fun _ ambient => ambient.armRecords = mode) := by
+      (fun ambient => metadata ambient.armRecords ambient.allocArmed) (fun _ ambient => metadata ambient.armRecords ambient.allocArmed) := by
   have step (turn : Nat) (state : Index.InsertState) (table : List IndexEntry) :
       Product.Ensures ((Index.insertStep owner turn state).run table)
-        (fun ambient => ambient.armRecords = mode) (fun _ ambient => ambient.armRecords = mode) := by
+        (fun ambient => metadata ambient.armRecords ambient.allocArmed) (fun _ ambient => metadata ambient.armRecords ambient.allocArmed) := by
     unfold Index.insertStep
-    apply mode_bind mode
-    · exact mode_lift mode (AmbientM.hidden .indexDraw) (hidden_mode mode .indexDraw)
+    apply metadata_bind metadata
+    · exact metadata_lift metadata (AmbientM.hidden .indexDraw) (hidden_metadata metadata .indexDraw)
     · intro draw
-      apply mode_bind mode
-      · exact bucketHas_mode mode .idxInsWalk1 .idxInsCollide1 _
+      apply metadata_bind metadata
+      · exact bucketHas_metadata metadata .idxInsWalk1 .idxInsCollide1 _
       · intro first
         cases first with
         | true => intro table ambient result after pre run; cases run; exact pre
         | false =>
-          apply mode_bind mode
-          · exact bucketHas_mode mode .idxInsWalk2 .idxInsCollide2 _
+          apply metadata_bind metadata
+          · exact bucketHas_metadata metadata .idxInsWalk2 .idxInsCollide2 _
           · intro second table ambient result after pre run
             cases second with
             | true =>
@@ -148,7 +148,7 @@ theorem indexInsert_mode (mode : Bool) (owner : IndexOwner) (table : List IndexE
             | false => cases run; exact pre
   have loop (turns : List Nat) (state : Index.InsertState) (table : List IndexEntry) :
       Product.Ensures ((forIn turns state (Index.insertStep owner) : IndexM _).run table)
-        (fun ambient => ambient.armRecords = mode) (fun _ ambient => ambient.armRecords = mode) := by
+        (fun ambient => metadata ambient.armRecords ambient.allocArmed) (fun _ ambient => metadata ambient.armRecords ambient.allocArmed) := by
     induction turns generalizing state table with
     | nil => intro ambient result after pre run; cases run; exact pre
     | cons turn turns ih =>
@@ -164,19 +164,19 @@ theorem indexInsert_mode (mode : Bool) (owner : IndexOwner) (table : List IndexE
         | done value => cases run; exact preserved
         | yield value => exact ih value middle current result after preserved run
   rw [Index.indexInsert_source]
-  apply mode_bind mode
+  apply metadata_bind metadata
   · intro table ambient result after pre run
     simp [Index.unhashEntry] at run
     rcases run with ⟨⟨rfl, rfl⟩, rfl⟩
     exact pre
   · intro _
-    apply mode_bind mode
+    apply metadata_bind metadata
     · intro table ambient result after pre run
       simp [recordBudget, AmbientM.recordBudget] at run
       rcases run with ⟨⟨rfl, rfl⟩, rfl⟩
       exact pre
     · intro budget
-      apply mode_bind mode
+      apply metadata_bind metadata
       · intro table
         rw [Std.Legacy.Range.forIn_eq_forIn_range']
         exact loop _ _ table
@@ -192,39 +192,39 @@ theorem indexInsert_mode (mode : Bool) (owner : IndexOwner) (table : List IndexE
           split at run <;> cases run
 
 
-theorem createInitiation_mode (mode : Bool) (pid : PeerId) (state : WGWorld) :
+theorem createInitiation_metadata (metadata : Bool → List String → Prop) (pid : PeerId) (state : WGWorld) :
     Product.Ensures ((createInitiation pid).run state)
-      (fun ambient => ambient.armRecords = mode) (fun _ ambient => ambient.armRecords = mode) := by
+      (fun ambient => metadata ambient.armRecords ambient.allocArmed) (fun _ ambient => metadata ambient.armRecords ambient.allocArmed) := by
   have hpure {α : Type} (value : α) (g : WGWorld) :
       Product.Ensures ((pure value : WG.M α).run g)
-        (fun ambient => ambient.armRecords = mode) (fun _ ambient => ambient.armRecords = mode) := by
+        (fun ambient => metadata ambient.armRecords ambient.allocArmed) (fun _ ambient => metadata ambient.armRecords ambient.allocArmed) := by
     intro ambient result after pre run
     cases run
     exact pre
   have hbranch (site : Decision) (value : Bool) (g : WGWorld) :
       Product.Ensures ((branch site value : WG.M Bool).run g)
-        (fun ambient => ambient.armRecords = mode) (fun _ ambient => ambient.armRecords = mode) := by
-    exact mode_lift mode (AmbientM.branch site value) (by
+        (fun ambient => metadata ambient.armRecords ambient.allocArmed) (fun _ ambient => metadata ambient.armRecords ambient.allocArmed) := by
+    exact metadata_lift metadata (AmbientM.branch site value) (by
       intro ambient result after pre run
       cases run
       exact pre) g
   have hhidden (site : HiddenSite) (g : WGWorld) :
       Product.Ensures ((hidden site : WG.M (List UInt8)).run g)
-        (fun ambient => ambient.armRecords = mode) (fun _ ambient => ambient.armRecords = mode) :=
-    mode_lift mode (AmbientM.hidden site) (hidden_mode mode site) g
+        (fun ambient => metadata ambient.armRecords ambient.allocArmed) (fun _ ambient => metadata ambient.armRecords ambient.allocArmed) :=
+    metadata_lift metadata (AmbientM.hidden site) (hidden_metadata metadata site) g
   have hinvariant {α : Type} (message : String) (g : WGWorld) :
       Product.Ensures ((invariant message : WG.M α).run g)
-        (fun ambient => ambient.armRecords = mode) (fun _ ambient => ambient.armRecords = mode) := by
+        (fun ambient => metadata ambient.armRecords ambient.allocArmed) (fun _ ambient => metadata ambient.armRecords ambient.allocArmed) := by
     intro ambient result after _ run
     cases run
   have hunsupported {α : Type} (message : String) (g : WGWorld) :
       Product.Ensures ((unsupported message : WG.M α).run g)
-        (fun ambient => ambient.armRecords = mode) (fun _ ambient => ambient.armRecords = mode) := by
+        (fun ambient => metadata ambient.armRecords ambient.allocArmed) (fun _ ambient => metadata ambient.armRecords ambient.allocArmed) := by
     intro ambient result after _ run
     cases run
   have hdev (g : WGWorld) :
       Product.Ensures (getDev.run g)
-        (fun ambient => ambient.armRecords = mode) (fun _ ambient => ambient.armRecords = mode) := by
+        (fun ambient => metadata ambient.armRecords ambient.allocArmed) (fun _ ambient => metadata ambient.armRecords ambient.allocArmed) := by
     intro ambient result after pre run
     cases device : g.dev with
     | none =>
@@ -236,9 +236,9 @@ theorem createInitiation_mode (mode : Bool) (pid : PeerId) (state : WGWorld) :
       exact pre
   have hpeer (id : PeerId) (g : WGWorld) :
       Product.Ensures ((getPeer id).run g)
-        (fun ambient => ambient.armRecords = mode) (fun _ ambient => ambient.armRecords = mode) := by
+        (fun ambient => metadata ambient.armRecords ambient.allocArmed) (fun _ ambient => metadata ambient.armRecords ambient.allocArmed) := by
     unfold getPeer
-    apply mode_bind mode
+    apply metadata_bind metadata
     · exact hdev
     · intro d
       cases found : d.peers.get? id with
@@ -246,20 +246,20 @@ theorem createInitiation_mode (mode : Bool) (pid : PeerId) (state : WGWorld) :
       | some p => simpa only [found] using hpure p
   have hset (id : PeerId) (p : Peer) (g : WGWorld) :
       Product.Ensures ((setPeer id p).run g)
-        (fun ambient => ambient.armRecords = mode) (fun _ ambient => ambient.armRecords = mode) := by
+        (fun ambient => metadata ambient.armRecords ambient.allocArmed) (fun _ ambient => metadata ambient.armRecords ambient.allocArmed) := by
     intro ambient result after pre run
     cases run
     exact pre
   have hpublic (secret : Key) (g : WGWorld) :
       Product.Ensures ((generatePublic secret).run g)
-        (fun ambient => ambient.armRecords = mode) (fun _ ambient => ambient.armRecords = mode) := by
+        (fun ambient => metadata ambient.armRecords ambient.allocArmed) (fun _ ambient => metadata ambient.armRecords ambient.allocArmed) := by
     intro ambient result after pre run
     simp [generatePublic, branch, AmbientM.branch] at run
     split at run <;> cases run <;> exact pre
 
   have hk (second third : Bool) (ck data : List UInt8) (g : WGWorld) :
       Product.Ensures ((kdf second third ck data).run g)
-        (fun ambient => ambient.armRecords = mode) (fun _ ambient => ambient.armRecords = mode) := by
+        (fun ambient => metadata ambient.armRecords ambient.allocArmed) (fun _ ambient => metadata ambient.armRecords ambient.allocArmed) := by
     intro ambient result after pre run
     cases second <;> cases third <;>
       simp [kdf, WG.orM, branch, AmbientM.branch, StateT.run] at run
@@ -267,7 +267,7 @@ theorem createInitiation_mode (mode : Bool) (pid : PeerId) (state : WGWorld) :
     all_goals exact pre
   have ho (outs : List (List UInt8)) (i : Nat) (g : WGWorld) :
       Product.Ensures ((kdfOut outs i).run g)
-        (fun ambient => ambient.armRecords = mode) (fun _ ambient => ambient.armRecords = mode) := by
+        (fun ambient => metadata ambient.armRecords ambient.allocArmed) (fun _ ambient => metadata ambient.armRecords ambient.allocArmed) := by
     intro ambient result after pre run
     cases found : outs[i]? with
     | none =>
@@ -279,61 +279,61 @@ theorem createInitiation_mode (mode : Bool) (pid : PeerId) (state : WGWorld) :
       exact pre
   have he (copy : Bool) (e ck hash : List UInt8) (g : WGWorld) :
       Product.Ensures ((messageEphemeral copy e ck hash).run g)
-        (fun ambient => ambient.armRecords = mode) (fun _ ambient => ambient.armRecords = mode) := by
+        (fun ambient => metadata ambient.armRecords ambient.allocArmed) (fun _ ambient => metadata ambient.armRecords ambient.allocArmed) := by
     unfold messageEphemeral
-    apply mode_bind mode
+    apply metadata_bind metadata
     · exact hbranch _ _
     · intro _
-      apply mode_bind mode
+      apply metadata_bind metadata
       · exact hk _ _ _ _
       · intro outs
-        apply mode_bind mode
+        apply metadata_bind metadata
         · exact ho _ _
         · intro value; exact hpure _
   have hd (key : Bool) (ck priv pub : List UInt8) (g : WGWorld) :
       Product.Ensures ((mixDh key ck priv pub).run g)
-        (fun ambient => ambient.armRecords = mode) (fun _ ambient => ambient.armRecords = mode) := by
+        (fun ambient => metadata ambient.armRecords ambient.allocArmed) (fun _ ambient => metadata ambient.armRecords ambient.allocArmed) := by
     dsimp only [mixDh]
-    apply mode_bind mode
+    apply metadata_bind metadata
     · exact hbranch _ _
     · intro null
       cases null with
       | true => exact hpure _
       | false =>
-        apply mode_bind mode
+        apply metadata_bind metadata
         · exact hk _ _ _ _
         · intro outs
-          apply mode_bind mode
+          apply metadata_bind metadata
           · exact ho _ _
           · intro first
             cases key with
             | false => exact hpure _
             | true =>
-              apply mode_bind mode
+              apply metadata_bind metadata
               · exact ho _ _
               · intro second; exact hpure _
   have hs (ck precomputed : List UInt8) (g : WGWorld) :
       Product.Ensures ((mixPrecomputedDh ck precomputed).run g)
-        (fun ambient => ambient.armRecords = mode) (fun _ ambient => ambient.armRecords = mode) := by
+        (fun ambient => metadata ambient.armRecords ambient.allocArmed) (fun _ ambient => metadata ambient.armRecords ambient.allocArmed) := by
     unfold mixPrecomputedDh
-    apply mode_bind mode
+    apply metadata_bind metadata
     · exact hbranch _ _
     · intro null
       cases null with
       | true => exact hpure _
       | false =>
-        apply mode_bind mode
+        apply metadata_bind metadata
         · exact hk _ _ _ _
         · intro outs
-          apply mode_bind mode
+          apply metadata_bind metadata
           · exact ho _ _
           · intro first
-            apply mode_bind mode
+            apply metadata_bind metadata
             · exact ho _ _
             · intro second; exact hpure _
   have hi (owner : IndexOwner) (g : WGWorld) :
       Product.Ensures ((liftIndex (indexInsert owner)).run g)
-        (fun ambient => ambient.armRecords = mode) (fun _ ambient => ambient.armRecords = mode) := by
+        (fun ambient => metadata ambient.armRecords ambient.allocArmed) (fun _ ambient => metadata ambient.armRecords ambient.allocArmed) := by
     intro ambient result after pre run
     rw [liftIndex_run_variant] at run
     cases device : g.dev with
@@ -344,25 +344,25 @@ theorem createInitiation_mode (mode : Bool) (pid : PeerId) (state : WGWorld) :
       | error err => simp [inserted, Except.map] at run
       | ok pair =>
         obtain ⟨⟨value, table⟩, next⟩ := pair
-        have preserved := indexInsert_mode mode owner d.indexTable ambient (value, table) next pre inserted
+        have preserved := indexInsert_metadata metadata owner d.indexTable ambient (value, table) next pre inserted
         simp [inserted, Except.map] at run
         rcases run with ⟨rfl, rfl⟩
         exact preserved
 
   have hchain (ck hash : List UInt8) (g : WGWorld) :
       Product.Ensures ((setChain pid ck hash).run g)
-        (fun ambient => ambient.armRecords = mode) (fun _ ambient => ambient.armRecords = mode) := by
+        (fun ambient => metadata ambient.armRecords ambient.allocArmed) (fun _ ambient => metadata ambient.armRecords ambient.allocArmed) := by
     change Product.Ensures ((getPeer pid >>= fun p => setPeer pid {p with chainingKey := ck, hash := hash}).run g) _ _
-    apply mode_bind mode
+    apply metadata_bind metadata
     · exact hpeer _
     · intro p; exact hset _ _
   have hderef (g : WGWorld) :
       Product.Ensures ((IndexOwner.peerDeref (.handshake pid)).run g)
-        (fun ambient => ambient.armRecords = mode) (fun _ ambient => ambient.armRecords = mode) := by
+        (fun ambient => metadata ambient.armRecords ambient.allocArmed) (fun _ ambient => metadata ambient.armRecords ambient.allocArmed) := by
     unfold IndexOwner.peerDeref IndexOwner.peerWord
-    apply mode_bind mode
+    apply metadata_bind metadata
     · intro g
-      apply mode_bind mode
+      apply metadata_bind metadata
       · exact hpeer _
       · intro p; exact hpure _
     · intro word
@@ -370,35 +370,35 @@ theorem createInitiation_mode (mode : Bool) (pid : PeerId) (state : WGWorld) :
       | none => exact hunsupported _
       | some value => exact hpure _
   unfold createInitiation
-  apply mode_bind mode
+  apply metadata_bind metadata
   · exact hdev
   · intro device
-    apply mode_bind mode
+    apply metadata_bind metadata
     · exact hbranch _ _
     · intro noIdentity
       cases noIdentity with
       | true => exact hpure _
       | false =>
-        apply mode_bind mode
+        apply metadata_bind metadata
         · exact hpeer _
         · intro p
-          apply mode_bind mode
+          apply metadata_bind metadata
           · exact hchain _ _
           · intro _
-            apply mode_bind mode
+            apply metadata_bind metadata
             · exact hhidden _
             · intro random
-              apply mode_bind mode
+              apply metadata_bind metadata
               · exact hpeer _
               · intro p
-                apply mode_bind mode
+                apply metadata_bind metadata
                 · exact hset _ _
                 · intro _
-                  apply mode_bind mode
+                  apply metadata_bind metadata
                   · exact hpublic _
                   · intro generated
                     obtain ⟨publicKey, publicOk⟩ := generated
-                    apply mode_bind mode
+                    apply metadata_bind metadata
                     · exact hbranch _ _
                     · intro noEphemeral
                       cases noEphemeral with
@@ -407,17 +407,17 @@ theorem createInitiation_mode (mode : Bool) (pid : PeerId) (state : WGWorld) :
                         cases publicKey with
                         | none => simpa using hinvariant (α := Option (List UInt8)) "unreachable"
                         | some e =>
-                          apply mode_bind mode
+                          apply metadata_bind metadata
                           · exact he _ _ _ _
                           · intro pair
                             obtain ⟨ephemeralChain, ephemeralHash⟩ := pair
-                            apply mode_bind mode
+                            apply metadata_bind metadata
                             · exact hchain _ _
                             · intro _
-                              apply mode_bind mode
+                              apply metadata_bind metadata
                               · exact hd _ _ _ _
                               · intro es
-                                apply mode_bind mode
+                                apply metadata_bind metadata
                                 · exact hbranch _ _
                                 · intro esFailed
                                   cases esFailed with
@@ -427,13 +427,13 @@ theorem createInitiation_mode (mode : Bool) (pid : PeerId) (state : WGWorld) :
                                     | none => exact hinvariant _
                                     | some pair =>
                                       obtain ⟨ck, key⟩ := pair
-                                      apply mode_bind mode
+                                      apply metadata_bind metadata
                                       · exact hchain _ _
                                       · intro _
-                                        apply mode_bind mode
+                                        apply metadata_bind metadata
                                         · exact hs _ _
                                         · intro ss
-                                          apply mode_bind mode
+                                          apply metadata_bind metadata
                                           · exact hbranch _ _
                                           · intro ssFailed
                                             cases ssFailed with
@@ -443,23 +443,47 @@ theorem createInitiation_mode (mode : Bool) (pid : PeerId) (state : WGWorld) :
                                               | none => exact hinvariant _
                                               | some pair =>
                                                 obtain ⟨ck, key⟩ := pair
-                                                apply mode_bind mode
+                                                apply metadata_bind metadata
                                                 · exact hhidden _
                                                 · intro clock
-                                                  apply mode_bind mode
+                                                  apply metadata_bind metadata
                                                   · exact hchain _ _
                                                   · intro _
-                                                    apply mode_bind mode
+                                                    apply metadata_bind metadata
                                                     · exact hderef
                                                     · intro _
-                                                      apply mode_bind mode
+                                                      apply metadata_bind metadata
                                                       · exact hi _
                                                       · intro index
-                                                        apply mode_bind mode
+                                                        apply metadata_bind metadata
                                                         · exact hpeer _
                                                         · intro p
-                                                          apply mode_bind mode
+                                                          apply metadata_bind metadata
                                                           · exact hset _ _
                                                           · intro _; exact hpure _
+
+
+theorem bucketHas_mode (mode : Bool) (walk collide : Decision) (index : Nat)
+    (table : List IndexEntry) :
+    Product.Ensures ((Index.bucketHas walk collide index).run table)
+      (fun ambient => ambient.armRecords = mode)
+      (fun _ ambient => ambient.armRecords = mode) :=
+  bucketHas_metadata (fun recorded _ => recorded = mode) walk collide index table
+
+theorem hidden_mode (mode : Bool) (site : HiddenSite) :
+    Product.Ensures (AmbientM.hidden site)
+      (fun ambient => ambient.armRecords = mode)
+      (fun _ ambient => ambient.armRecords = mode) :=
+  hidden_metadata (fun recorded _ => recorded = mode) site
+
+theorem indexInsert_mode (mode : Bool) (owner : IndexOwner) (table : List IndexEntry) :
+    Product.Ensures ((indexInsert owner).run table)
+      (fun ambient => ambient.armRecords = mode) (fun _ ambient => ambient.armRecords = mode) :=
+  indexInsert_metadata (fun recorded _ => recorded = mode) owner table
+
+theorem createInitiation_mode (mode : Bool) (pid : PeerId) (state : WGWorld) :
+    Product.Ensures ((createInitiation pid).run state)
+      (fun ambient => ambient.armRecords = mode) (fun _ ambient => ambient.armRecords = mode) :=
+  createInitiation_metadata (fun recorded _ => recorded = mode) pid state
 
 end Leanux.Proofs.WG.Noise.InitiationReady

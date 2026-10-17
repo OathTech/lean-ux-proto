@@ -42,3 +42,13 @@ counts and validation. Reproduce with `scripts/in-bundle lake build
 Leanux.Proofs.WG.Index.PeerReleaseFindings`, then
 `scripts/in-bundle lake env leanchecker --fresh
 Leanux.Proofs.WG.Index.PeerReleaseFindings`; use `capped --` on the shared host.
+
+The later retrofit explicitly corrects `peerPut_exact` to a projected exact-outcome
+contract under the same resident/live hypotheses. On final release, queue
+refusal takes precedence over the first pending timer or wheel entry; each
+produces its exact invariant Stop. All other cases return the original
+releasedPeerDevice. It asserts no post-error state. This preserves the checked
+counterexamples and does not add readiness. The two original terminal wrappers
+and downstream configuration/timer users still need their own domain carry.
+The corrected source passes scoped build, standard-axiom inspection and fresh
+replay, recorded in the retrofit report.

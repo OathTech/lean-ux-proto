@@ -19,7 +19,7 @@ and attributed theorem declarations. Campaign 2 owns 427 Lean files,
 | Result | Files | Before theorems | Before headlines | Retrofit status |
 | --- | ---: | ---: | ---: | --- |
 | Common projection | 2 | 0 | 0 | Native and product observations carried |
-| H1 Noise | 35 | 171 | 22 | Whole split Statements closure checked: 22 headlines, 176 checked H1 theorems including support; six type-given frames deleted. All original Noise proof obligations carried; broader charter caller/lifetime/reachability and clock-provenance obligations remain open. |
+| H1 Noise | 35 | 171 | 22 | Whole split Statements closure checked: 22 headlines, 180 checked H1 theorems including support; six type-given frames deleted. All original Noise proof obligations carried; broader charter caller/lifetime/reachability and clock-provenance obligations remain open. |
 | H2 Index | 68 | 318 | 52 | Table/scans/insertion, full lookup/miss and success/empty-result inversion, exact allocation/release, eight native numeric-index frames, seven native owner frames plus their pure bound and both release/rotation owner invariants, ten projected table claims, all ten record contracts, exact draw exhaustion/corpus pair, five lifecycle contracts and 55 pure theorems checked; native receive factor, retirement frame and exact session-allocation factor, four session owner invariants, five handshake index invariants, three owner-creation invariants, the projected allocation effect, four sequential-allocation contracts and three new-device frames plus five link-lifecycle contracts, four combined table invariants, session coherence and three table/peer frames carried; seven Ambient frames deleted; two stale peer-release totality counterexamples checked; whole terminal closure/callers pending |
 | H3 Roaming | 35 | 119 | 13 | Six native endpoint/destination contracts plus three product publication source factors and a generic observation-read frame carried; two Ambient frames deleted; native decryption provenance and five product publication leaves carried; all six enqueue/publication caller contracts, ten poll endpoint source contracts and seven attempt-audit source contracts, three poll support frames, seven endpoint claims and five attempt facts/claims carried; broader caller/authentication closure pending |
 | H4 Configuration | 130 | 554 | 79 | Total-return/branch laws, seven exact source factors, three endpoint-clearing frames, three empty-root insertion contracts, total first placement, validation/identity, partial and total empty-list peer dumps, ordered allowed-list deletion, concrete dump cancellation and four total root-transfer contracts, all five inserted-node readback contracts and singleton root removal with its two pure effects, native port/flag/socket contracts, allowed-IP set/get composition, fourteen structural/leaf removal contracts and seven scalar/set-get contracts, six total scalar/readback contracts, paired transfer/readback, three pure removal facts, fourteen collapse/whole-removal contracts, nineteen pure removal frames, six random-port contracts, four recorded-port contracts, four total malformed-peer configuration contracts and eighteen pure removal/pair/owner effects, six endpoint/identity/precomputation contracts, seven root-replacement contracts and eleven expiry/clock contracts checked; three Ambient frames deleted; remaining effects/readback carry pending |
@@ -2590,6 +2590,87 @@ increase or guest run occurred.
 Fresh replay passes for InitiationLookupProductSource,
 ReplacementConverseRequestSource and ArmingSource. Reproduce with
 `scripts/in-bundle lake build` on those modules under `Leanux.Proofs.WG`,
+inspect logical declarations with `#print axioms`, and replay with
+`scripts/in-bundle lake env leanchecker --fresh MODULE`. On this host use
+`capped`, 32 Lean threads and 16 QEMU slots.
+
+## Exact peer-release outcomes and complete response lookup scope
+
+| Tranche | Before | Retyped | Corrected | Deleted | Kept | Added | After |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `Noise.InitiationReadyFrames` metadata generalization | 0 | 0 | 0 | 0 | 0 | 4 | 4 |
+| `TimerDiscipline.SendReadyFrames`, `RecordedFrames` | 5 | 5 | 0 | 0 | 0 | 0 | 5 |
+| `Index.PeerRelease` | 1 | 0 | 1 | 0 | 0 | 0 | 1 |
+| `Config.StructuralSourceClaims` | 4 | 4 | 0 | 0 | 0 | 0 | 4 |
+| `Roaming.ResponseLookupSource`, `ResponseLookupProductSource` | 7 | 7 | 0 | 0 | 0 | 7 | 14 |
+| This tranche | 17 | 16 | 1 | 0 | 0 | 11 | 28 |
+| Cumulative processed baseline and checked support | 844 | 630 | 8 | 21 | 185 | 61 | 884 |
+
+The census is 499 campaign-owned files, 1,871 theorems and 288 checked proof
+modules; 987 baseline declarations await validation. Checked counts are H1 180,
+H2 188, H3 95, H4 305, H5 70 and H6 46. H1's terminal closure is rechecked
+after the metadata proof change; H2–H6 terminal closures and the full gate
+remain lagging. All 258 original terminal names/order remain. Wider charter
+obligations are unchanged.
+
+Four metadata frames generalize the existing initiation-mode proof to any
+predicate of armRecords and allocArmed. The four original mode signatures
+remain exact specializations. Two private composition helpers generalize in
+place; they add no declaration count. Three original allocation-arming frames
+become short specializations over actual IndexM/WG.M runs. This avoids copying
+the initiation execution layer. The two recorded-input frames preserve the
+old arbitrary predicate over all four former-Kernel owners via the actual
+Ambient lift, plus mode, and the original projected caller result/device/mode
+facts. No new readiness premise or shared-layer edit is involved.
+
+The corrected `peerPut_exact` replaces unconditional total return with a
+precise outcome classification under exactly the same residency and positive
+reference premises. Final release checks queued transmit/receive buffers
+first, then the first pending timer/wheel entry, and reports the corresponding
+exact invariant Stop. Otherwise it returns the original released Device.
+The proof follows actual decrement, guarded index removal, dropped-packet
+accounting, erasure and dispatch-identity retirement. Errors expose no invented
+post-state. This is an explicit semantic correction supported by the existing
+[counterexamples](2026-10-17-proof-campaign-2-peer-release.md), not a weakened
+success claim or a new readiness hypothesis. Two Index headlines and six
+configuration/timer source users still require their own outcome/domain carry.
+
+Four existing configuration claims move to `StructuralSourceClaims` over
+the campaign projection: partial expiry field effects and total witnessed
+removal, replacement and peer-death effects. Original alias, RemovalEffect,
+selector, reference and running hypotheses and all node/list/store conclusions
+remain. Every success witness is the actual native result and successor states.
+Other SourceClaims bodies are unchanged and pending.
+
+The seven response lookup contracts now have native and Product forms. Product
+continuations remain arbitrary. Before/observed/after/committed certificates
+retain all eight actual fixture observations, using the real native lift and
+pure certificate extension. Lookup owner and referenced peer remain independent;
+no table coherence or success assumption is added. Failed-consumption peer puts
+can still stop. Exact prefix, continuation and erasure equations cover those
+errors too. Product models contain only data/predicates and pure extensions;
+all operational claims stay in source files.
+
+Build passes 160 jobs without warnings. Axiom inspection covers 723 logical
+roots in 131 proof modules, using only the three standard axioms. Independent
+reviews of metadata, recorded frames, peer release, structural claims and
+response lookup are clear. Static checks, whitespace and mirror/shared
+boundaries pass. Metadata/SendReady passed their first scratch probe; recorded
+frames passed the second after projection normalization. Peer-release probe one
+failed Boolean/projection normalization; two passed. Structural scratch began
+with six candidates: an unported dump dependency and redundant singleton-domain
+hypothesis warnings remain deferred with those two original bodies unchanged.
+The four carried claims passed probe three after correcting projection reduction.
+Response probes one/two failed predicate/identifier and nested-run normalization;
+three closed native contracts, four failed Product tuple/map reductions and
+reported two unused simplifications, five passed all fourteen cleanly. Full
+outputs preceded previews; a truncated peer-release preview was followed by
+inspection of its remainder. No infrastructure retry, cap/proof-limit increase
+or guest run occurred.
+
+Fresh replay passes for Noise.Statements, SendReadyFrames, RecordedFrames,
+PeerRelease, StructuralSourceClaims and ResponseLookupProductSource. Reproduce
+with `scripts/in-bundle lake build` on those modules under `Leanux.Proofs.WG`,
 inspect logical declarations with `#print axioms`, and replay with
 `scripts/in-bundle lake env leanchecker --fresh MODULE`. On this host use
 `capped`, 32 Lean threads and 16 QEMU slots.

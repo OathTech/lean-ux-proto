@@ -64,8 +64,8 @@ remain historical and lagging during the retrofit. The
 [retrofit report](2026-10-16-proof-campaign-2-state-split.md) records baseline
 counts, carries, deletions and validation. This branch retains the proof
 target and gate removed from main pending campaign 1's landing.
-The support tranches check 856 theorems (614 retyped/generalized, seven corrected statements,
-185 retained, fifty support/finding declarations), and delete twenty-one type-given
+The support tranches check 884 theorems (630 retyped/generalized, eight corrected statements,
+185 retained, sixty-one support/finding declarations), and delete twenty-one type-given
 frames. H1’s full terminal module now checks over the split mirror; H2–H6
 terminal closures and the full gate remain lagging. Ten H2 table
 claims have checked projected support; all 258 original audit names remain
@@ -78,8 +78,10 @@ for all wheel changes. Traversal, data-receipt and handshake-completion effects
 are corrected too; all seven identified contracts are carried. Their downstream
 timer and worker consumers remain pending.
 The [H2 peer-release finding](2026-10-17-proof-campaign-2-peer-release.md)
-checks two stopped outcomes within the old totality domain. The original
-peer-release contract remains pending; no reachability claim is made.
+checks two stopped outcomes within the old totality domain. The corrected
+peer-release contract now classifies the exact queue/timer refusal or successful
+Device effect under the same premises. Downstream totality users remain pending;
+no reachability claim is made.
 The [H4 queued-handshake finding](2026-10-17-proof-campaign-2-queued-handshake.md)
 checks a stale pending-peer prediction after the queue-record change in
 `1f0fbeb`; the five legacy queued-send contracts remain pending.

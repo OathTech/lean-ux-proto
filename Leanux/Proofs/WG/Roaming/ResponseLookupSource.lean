@@ -1,5 +1,5 @@
 import Leanux.Proofs.WG.Roaming.ResponseConsumeSource
-import Leanux.Proofs.WG.Roaming.PollEndpointSource
+import Leanux.Proofs.WG.Config.BranchSource
 
 set_option autoImplicit false
 set_option pp.structureInstances false
@@ -9,7 +9,7 @@ open Leanux Leanux.WG Leanux.Proofs.WG.Noise Std.Do
 
 /-- The inspection and the original lookup start at exactly the same state.
 The original lookup executes once on the continuing path. -/
-def responseLookupRead (msg : List UInt8) : M ResponseLookupRead := do
+def responseLookupRead (msg : List UInt8) : WG.M ResponseLookupRead := do
   let before ← Campaign2.read
   let observed ← Campaign2.inspect (indexLookup [.handshake] (u32le msg 8))
   let entry ← indexLookup [.handshake] (u32le msg 8)
@@ -17,20 +17,24 @@ def responseLookupRead (msg : List UInt8) : M ResponseLookupRead := do
   return ⟨before, observed, entry, after⟩
 
 theorem responseLookupRead_bind {α : Type} (msg : List UInt8)
-    (next : Option (IndexOwner × PeerId) → M α) :
+    (next : Option (IndexOwner × PeerId) → WG.M α) :
     (responseLookupRead msg >>= fun out => next out.entry) =
       (indexLookup [.handshake] (u32le msg 8) >>= next) := by
-  funext w
-  change (((indexLookup [.handshake] (u32le msg 8)).run w >>= fun pair =>
-    Except.ok (ResponseLookupRead.mk (Campaign2.snapshot w)
-      (Campaign2.observeResult ((indexLookup [.handshake] (u32le msg 8)).run w)) pair.1
-      (Campaign2.snapshot pair.2), pair.2)) >>= fun out => next out.1.entry out.2) =
-      ((indexLookup [.handshake] (u32le msg 8)).run w >>= fun out => next out.1 out.2)
-  cases hl : (indexLookup [.handshake] (u32le msg 8)).run w <;> rfl
+  funext g ambient
+  change ((((indexLookup [.handshake] (u32le msg 8)).run g).run ambient >>= fun ((entry, current), after) =>
+    Except.ok ((ResponseLookupRead.mk (Campaign2.snapshot g ambient)
+      (Campaign2.observeResult (((indexLookup [.handshake] (u32le msg 8)).run g).run ambient)) entry
+      (Campaign2.snapshot current after), current), after)) >>= fun ((out, current), after) =>
+        ((next out.entry).run current).run after) =
+    (((indexLookup [.handshake] (u32le msg 8)).run g).run ambient >>= fun ((entry, current), after) =>
+      ((next entry).run current).run after)
+  cases lookup : ((indexLookup [.handshake] (u32le msg 8)).run g).run ambient with
+  | error err => rfl
+  | ok pair => rcases pair with ⟨⟨entry, current⟩, after⟩; rfl
 
 /-- Original prefix through the read-lock state check. Invalid paths retain
 their original reference put and return no candidate. -/
-def responseLookupPrefix (msg : List UInt8) : M (Option ResponseLookupCut) := do
+def responseLookupPrefix (msg : List UInt8) : WG.M (Option ResponseLookupCut) := do
   let identity := (← getDev).staticIdentity
   if ← branch .crespNoIdentity !identity.hasIdentity then return none
   let lookup ← responseLookupRead msg
@@ -45,7 +49,7 @@ def responseLookupPrefix (msg : List UInt8) : M (Option ResponseLookupCut) := do
   return some ⟨⟨identity, owner, pid, p⟩, lookup⟩
 
 def responseEntrySuffix (msg : List UInt8) (entry : Option ResponseLookupCut) :
-    M (Option ResponseConsumed) := do
+    WG.M (Option ResponseConsumed) := do
   match entry with
   | none => return none
   | some entry => responseConsumeTail msg entry.input
@@ -54,8 +58,7 @@ def responseEntrySuffix (msg : List UInt8) (entry : Option ResponseLookupCut) :
 passes through this actual lookup prefix and the original crypto/commit tail. -/
 theorem responseConsume_lookup (msg : List UInt8) :
     (responseLookupPrefix msg >>= responseEntrySuffix msg) = responseConsume msg := by
-  simp only [responseLookupPrefix, responseEntrySuffix, responseConsume, bind_assoc,
-    pure_bind, bind_if, bind_option, invariant_bind]
+  simp only [responseLookupPrefix, responseConsume, bind_assoc]
   congr 1
   funext d
   congr 1
@@ -67,7 +70,7 @@ theorem responseConsume_lookup (msg : List UInt8) :
   funext lookup
   congr 1
   funext missing
-  cases missing <;> simp only [Bool.false_eq_true, ite_false, ite_true, pure_bind, bind_assoc]
+  cases missing <;> simp only [Bool.false_eq_true, ite_false, ite_true, pure_bind]
   all_goals try rfl
   cases entry : lookup.entry with
   | none => rfl
@@ -76,14 +79,14 @@ theorem responseConsume_lookup (msg : List UInt8) :
     cases owner with
     | keypair id => rfl
     | handshake owner =>
-      simp only [bind_assoc, pure_bind]
+      simp only [bind_assoc]
       congr 1
       funext p
       congr 1
       funext wrong
-      cases wrong <;> simp [responseEntrySuffix, bind_assoc]
+      cases wrong <;> simp [responseEntrySuffix]
 
-def responseWithLookup (msg : List UInt8) : M (Option (ResponseLookupCut × ResponseConsumed)) := do
+def responseWithLookup (msg : List UInt8) : WG.M (Option (ResponseLookupCut × ResponseConsumed)) := do
   let entry ← responseLookupPrefix msg
   match entry with
   | none => return none
@@ -111,70 +114,125 @@ theorem responseWithLookup_erase (msg : List UInt8) :
   simp only [bind_assoc, pure_bind, responsePeer, Option.map_map, Function.comp_def]
 
 theorem responseLookupRead_facts (msg : List UInt8) (identity : StaticIdentity) :
-    Ensures (responseLookupRead msg)
-      (fun w => w.k.wg.map Device.staticIdentity = some identity)
-      (fun out w => out.before.wg.device.map Device.staticIdentity = some identity ∧
-        out.after.wg.device = w.k.wg ∧ out.observed = .ok (out.entry, out.after)) := by
-  intro w out final pre run
-  change ((indexLookup [.handshake] (u32le msg 8)).run w >>= fun pair =>
-    Except.ok (ResponseLookupRead.mk (Campaign2.snapshot w)
-      (Campaign2.observeResult ((indexLookup [.handshake] (u32le msg 8)).run w)) pair.1
-      (Campaign2.snapshot pair.2), pair.2)) = .ok (out, final) at run
-  cases hl : (indexLookup [.handshake] (u32le msg 8)).run w with
-  | error err => rw [hl] at run; cases run
+    Campaign2.Ensures (responseLookupRead msg)
+      (fun s => s.wg.device.map Device.staticIdentity = some identity)
+      (fun out s => out.before.wg.device.map Device.staticIdentity = some identity ∧
+        out.after.wg.device = s.wg.device ∧ out.observed = .ok (out.entry, out.after)) := by
+  intro g ambient out final after pre run
+  change (((indexLookup [.handshake] (u32le msg 8)).run g).run ambient >>= fun ((entry, current), last) =>
+    Except.ok ((ResponseLookupRead.mk (Campaign2.snapshot g ambient)
+      (Campaign2.observeResult (((indexLookup [.handshake] (u32le msg 8)).run g).run ambient)) entry
+      (Campaign2.snapshot current last), current), last)) = .ok ((out, final), after) at run
+  cases lookup : ((indexLookup [.handshake] (u32le msg 8)).run g).run ambient with
+  | error err => rw [lookup] at run; cases run
   | ok pair =>
-    rcases pair with ⟨entry, after⟩
-    rw [hl] at run
-    obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Except.ok.inj run)
+    rcases pair with ⟨⟨entry, current⟩, last⟩
+    rw [lookup] at run
+    cases run
     exact ⟨pre, rfl, rfl⟩
 
 theorem responseLookupPrefix_facts (msg : List UInt8) :
-    Ensures (responseLookupPrefix msg) (fun _ => True)
+    Campaign2.Ensures (responseLookupPrefix msg) (fun _ => True)
       (fun out _ => ∀ cut, out = some cut → ResponseLookupFacts cut) := by
-  rw [ensures_iff]
-  have hl := fun identity => (ensures_iff _ _ _).mp (responseLookupRead_facts msg identity)
-  have hp (pid : PeerId) : ⦃fun _ => ⌜True⌝⦄ peerPut (some pid) ⦃⇓? _ _ => ⌜True⌝⦄ := by
-    apply (ensures_iff _ _ _).mp
-    intro w x final pre run
+  let Q : Option ResponseLookupCut → WGWorld → Prop := fun out _ =>
+    ∀ cut, out = some cut → ResponseLookupFacts cut
+  change Ensures _ (fun _ => True) Q
+  have hnone (P : WGWorld → Prop) : Ensures (pure none : WG.M (Option ResponseLookupCut)) P Q := by
+    intro g ambient result final after _ run
+    cases run
+    intro cut impossible
+    cases impossible
+  have hfail (pid : PeerId) (P : WGWorld → Prop) :
+      Ensures (do peerPut (some pid); pure none : WG.M _) P Q := by
+    refine ensures_bind (Q := fun _ _ => True) _ _ ?_ (fun _ => hnone _)
+    intro _ _ _ _ _ _ _
     trivial
-  mvcgen [responseLookupPrefix, getDev, getK, getPeer, branch, invariant, hl, hp]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals repeat intro
-  all_goals simp_all [ResponseLookupFacts]
-  all_goals grind
+  have hbranch {α : Type} (site : Decision) (value : Bool) (next : Bool → WG.M α)
+      (P : WGWorld → Prop) (R : α → WGWorld → Prop) (hnext : Ensures (next value) P R) :
+      Ensures ((branch site value : WG.M Bool) >>= next) P R := by
+    refine ensures_bind _ _ ((ensures_iff _ _ _).mpr (Config.branch_state_spec P site value)) ?_
+    intro found g ambient result final after pre run
+    rcases pre with ⟨rfl, pre⟩
+    exact hnext g ambient result final after pre run
+  have hdev : Ensures getDev (fun _ => True) (fun d g => g.dev = some d) := by
+    intro g ambient d final after _ run
+    cases device : g.dev with
+    | none => simp [getDev, device, invariant, AmbientM.invariant] at run; cases run
+    | some found => simp [getDev, device] at run; rcases run with ⟨⟨rfl, rfl⟩, rfl⟩; exact device
+  unfold responseLookupPrefix
+  refine ensures_bind _ _ hdev ?_
+  intro d
+  refine hbranch _ _ _ _ _ ?_
+  cases identity : d.staticIdentity.hasIdentity with
+  | false => simpa [identity] using hnone (fun g => g.dev = some d)
+  | true =>
+    simp only [Bool.not_true, Bool.false_eq_true, ↓reduceIte]
+    refine ensures_bind (Q := fun out g =>
+      out.before.wg.device.map Device.staticIdentity = some d.staticIdentity ∧
+      out.after.wg.device = g.dev ∧ out.observed = .ok (out.entry, out.after)) _ _ ?_ ?_
+    · intro g ambient out final after device run
+      exact responseLookupRead_facts msg d.staticIdentity g ambient out final after
+        (by change g.dev.map Device.staticIdentity = _; simp [device]) run
+    · intro lookup
+      refine hbranch _ _ _ _ _ ?_
+      cases entry : lookup.entry with
+      | none => simp only [Option.isNone_none, ↓reduceIte]; exact hnone _
+      | some pair =>
+        rcases pair with ⟨owner, pid⟩
+        cases owner with
+        | keypair id =>
+          simp only [Option.isNone_some, Bool.false_eq_true, ↓reduceIte]
+          intro g ambient result final after _ run
+          simp [invariant, AmbientM.invariant] at run
+          cases run
+        | handshake owner =>
+          simp only [Option.isNone_some, Bool.false_eq_true, ↓reduceIte]
+          refine ensures_bind _ _ ((ensures_iff _ _ _).mpr (getPeer_spec pid _)) ?_
+          intro p
+          refine hbranch _ _ _ _ _ ?_
+          by_cases created : p.handshakeState = HANDSHAKE_CREATED_INITIATION
+          · simp only [created, bne_self_eq_false, Bool.false_eq_true, ↓reduceIte]
+            intro g ambient result final after pre run
+            cases run
+            intro cut same
+            cases same
+            rcases pre with ⟨⟨initial, device, observed⟩, resident⟩
+            exact ⟨entry, by simpa [entry] using observed, initial,
+              by simpa [device, peerAt] using resident, identity, created⟩
+          · simp only [bne, beq_eq_false_iff_ne.mpr created, Bool.not_false, ↓reduceIte]
+            exact hfail pid _
 
 theorem responseWithLookup_facts (msg : List UInt8) :
-    Ensures (responseWithLookup msg) (fun _ => True)
-      (fun result w => ∀ cut, result = some cut →
+    Campaign2.Ensures (responseWithLookup msg) (fun _ => True)
+      (fun result s => ∀ cut, result = some cut →
         ResponseLookupFacts cut.1 ∧ cut.2.input = cut.1.input ∧
-        cut.2.committed = Campaign2.snapshot w ∧ ResponseConsumedFacts msg cut.2) := by
-  intro w result final pre run
-  simp only [responseWithLookup, StateT.run_bind] at run
-  cases hp : (responseLookupPrefix msg).run w with
-  | error err => rw [hp] at run; cases run
+        cut.2.committed = s ∧ ResponseConsumedFacts msg cut.2) := by
+  intro g ambient result final after _ run
+  dsimp only [responseWithLookup, StateT.run, StateT.bind, StateT.pure,
+    Bind.bind, Pure.pure, Except.bind, Except.pure] at run
+  cases firstRun : ((responseLookupPrefix msg).run g).run ambient with
+  | error err => simp only [StateT.run] at firstRun; rw [firstRun] at run; cases run
   | ok pair =>
-    rcases pair with ⟨entry, after⟩
-    rw [hp] at run
+    rcases pair with ⟨⟨entry, current⟩, middle⟩
+    simp only [StateT.run] at firstRun
+    rw [firstRun] at run
     cases entry with
-    | none =>
-      change Except.ok (none, after) = Except.ok (result, final) at run
-      cases run
-      simp
+    | none => cases run; simp
     | some entry =>
-      have facts := responseLookupPrefix_facts msg w (some entry) after trivial hp entry rfl
-      change ((responseConsumeTail msg entry.input).run after >>= fun out =>
-        Except.ok (out.1.map (fun consumed => (entry, consumed)), out.2)) = .ok (result, final) at run
-      cases ht : (responseConsumeTail msg entry.input).run after with
-      | error err => rw [ht] at run; cases run
+      have facts := responseLookupPrefix_facts msg g ambient (some entry) current middle trivial firstRun entry rfl
+      change (((responseConsumeTail msg entry.input).run current).run middle >>= fun ((consumed, last), ending) =>
+        Except.ok ((consumed.map (fun value => (entry, value)), last), ending)) = _ at run
+      cases tailRun : ((responseConsumeTail msg entry.input).run current).run middle with
+      | error err => rw [tailRun] at run; cases run
       | ok pair =>
-        rcases pair with ⟨consumed, finish⟩
-        rw [ht] at run
-        obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Except.ok.inj run)
+        rcases pair with ⟨⟨consumed, last⟩, ending⟩
+        rw [tailRun] at run
+        cases run
         cases consumed with
         | none => simp
         | some consumed =>
           have tail := responseConsumeTail_facts msg entry.input facts.2.2.2.2.1
-            facts.2.2.2.2.2 after (some consumed) finish trivial ht consumed rfl
+            facts.2.2.2.2.2 current middle (some consumed) final after trivial tailRun consumed rfl
           intro cut same
           cases same
           exact ⟨facts, tail⟩
