@@ -88,6 +88,26 @@ Reconstruction covers table membership/order within buckets, embedded owner
 words and peer reference counts. It does not reconstruct a whole World.
 Environment records and diagnostic histories remain separate.
 
+`capture_lookup.py` separately captures actual entry/return registers and
+memory on a rerun of that recorded workload, using QEMU TCG hardware
+breakpoints and read-only GDB requests. After the first command above, use
+its successful differential recording directory for `--check`:
+
+```sh
+LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle python3 -B binary/capture_lookup.py \
+  --input .tmp/binary-pair/d1_second_response/input.json \
+  --check .artifacts/check/<recording> --out .tmp/captured-lookup
+```
+
+Use a fresh output directory; existing snapshots are refused. The snapshot
+contains real pointer-reachable objects, stack, per-CPU/task fields and a
+bounded part of the KCOV buffer. Uncaptured bytes remain absent. The selected
+query/mask and completed-operation prefix identify the invocation; the return
+breakpoint checks stack restoration and saved registers. Snapshots and console
+output are ephemeral. Entry/return capture has run successfully; loading these
+bytes into Kraken and checking reconstruction against the source is still
+pending. The existing paired command continues to use constructed heaps.
+
 `PairNextProof.next_segment` proves one symbolic back edge using the same
 executable reconstruction, reusing M1's physical region lemma. Its explicit
 premises are initial reconstruction equality and a successful executable

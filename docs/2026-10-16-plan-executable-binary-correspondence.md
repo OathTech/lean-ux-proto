@@ -430,3 +430,56 @@ addresses must enter a persistent interpretation; missing bytes must fail.
 A separate loader and generalized call/service addresses are needed before
 the synthetic fixture can be replaced. No capture implementation or new
 oracle instrumentation has been added at this checkpoint.
+
+### Capture launch diagnosis, 2026-10-17
+
+The initial capture prototype, `binary/capture_lookup.py`, reuses the recorded
+QEMU command and adds a local GDB endpoint. It has not captured a state. The
+launch fails before guest execution: syscall tracing shows that creating the
+AF_UNIX socket succeeds, but binding `.tmp/cap-live/gdb.sock` returns `EACCES`.
+Directory permissions permit access, and `nono why --self --path <socket>
+--op write` reports `ALLOWED`. Nono sandbox unconfirmed; this permission
+failure needs a non-sandbox diagnosis. A separate socket policy is a candidate
+explanation, not an established cause. Access to nono's session-state directory
+is independently denied, so its host-side log is needed to pursue that candidate.
+
+[AGENT 2026-10-17] Keep actual entry capture as the immediate work item and
+pause the M2 extension while diagnosing the launch. A host IPC failure is not
+evidence against capture feasibility, and constructed entry tests do not meet
+the capture objective. No alternative transport or permission change was tried.
+The prototype's snapshot extraction, invocation selection and return capture
+remain unvalidated; the loader and replay of captured bytes remain unbuilt.
+
+The user-requested retry after updating the installed nono CLI to 0.80.0
+failed at the same socket bind, before guest execution. The path query still
+reports `ALLOWED`. The installed CLI version does not establish the version
+or policy of the supervisor that launched the current session.
+
+### Actual entry and return captured, 2026-10-17
+
+After the subsequent host-side change, the same launch bound and connected
+successfully. The earlier denial's precise cause was not established. Two
+prototype issues then became visible and were fixed: GDB's target XML uses
+literal `xi:include` names, and the real KCOV allocation has 4,194,304 words,
+exceeding the prototype's arbitrary limit. Capture now parses the GDB names
+without namespace expansion and reads the actual used prefix plus bounded
+write headroom, leaving all uncaptured memory absent.
+
+The checked rerun captured `d1_second_response` operation 3 at
+`wg_index_hashtable_lookup` entry `0xffffffff813a0470` and original return
+`0xffffffff81397997`, with query `0x0a0b0c0d`, mask 1, one peer and no keypairs.
+The console's completed operations were exactly 0, 1 and 2. The captured
+peer public key matches the configured peer. The snapshot contains 870,372
+bytes at both entry and return; the peer refcount changes from 1 to 2,
+the output receives the peer pointer, and the result is its embedded handshake
+entry. Stack and callee-saved registers are restored, the pending-softirq word
+remains zero, and KCOV advances from 66 to 82 entries.
+
+The physical preempt word is `0x80000000` at both endpoints, unlike the zero
+word in the constructed pilot. The capture preserves it verbatim. It is a
+concrete input the loader and executor must support or reject explicitly;
+the fixture must not overwrite it to make replay work. This result establishes
+entry/return capture, not yet reconstruction equality, Kraken replay of the
+snapshot, agreement with all records of the earlier run, or a proof. Stage 4
+remains incomplete until the captured bytes pass paired execution. Reproduce
+with the command in `binary/README.md`; the snapshot itself stays ephemeral.
