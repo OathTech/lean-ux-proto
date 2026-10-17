@@ -11,10 +11,10 @@ new worlds; new R3/R4 results follow the retrofit.
 | Census | Lean files | Named theorems |
 | --- | ---: | ---: |
 | Validated baseline `00641c6` | 471 | 7,715 |
-| Completed retrofit checkpoints | 452 | 6,545 |
+| Completed retrofit checkpoints | 452 | 6,550 |
 
-Completed changes comprise **2,926 retyped/generalized, 1,704 deleted,
-1,944 retained contract shapes and 534 added theorems**. Retyping changes the
+Completed changes comprise **2,928 retyped/generalized, 1,706 deleted,
+1,992 retained contract shapes and 541 added theorems**. Retyping changes the
 actual carrier or observation, including shorthand contracts whose functions
 move to a native monad. Namespace-only product qualification and equivalent
 projection relocation count as retained. The census includes private and
@@ -343,7 +343,19 @@ failures and five changed-source passes; an accidental unchanged prefix repeat
 also passed and adds no evidence. Completion passed its one development check.
 Neither module required an infrastructure rerun.
 
-Remaining work is the routing/origin terminal carry, material runner support,
+Material runner support carries 52→57 theorems: two retyped/generalized,
+48 retained, two deleted and seven helpers added. Initialization uses the
+original seven-field WG store mask. The removed seccomp-prefill and file
+allocation frames follow their actual foreign-component write boundaries;
+arbitrary product audit/observer callbacks remain. All traces and placeholder
+flags, exact indexed Stops, full journals and saved trial Worlds are retained.
+The 410-job build, all 59 named declaration axiom checks, explicit fresh replay
+and complete independent source review pass, with zero own warnings and 1,434
+inherited warnings. Four ordinary development failures preceded the fifth
+full-source pass; the final unused-frame deletion was then checked centrally.
+There was no infrastructure rerun or limit change.
+
+Remaining work is the routing/origin terminal carry,
 RX carrier and receipt-link layers, warning
 cleanup, the full proof gate and terminal replay. Deterministic source/proof
 failures are failures; source edits are checked anew, never described as
