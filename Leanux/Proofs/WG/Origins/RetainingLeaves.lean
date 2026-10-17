@@ -3,6 +3,7 @@ import Leanux.Proofs.WG.Queues.RxRingHandshake
 import Leanux.Proofs.Framing.WGCookie
 import Leanux.Proofs.Framing.WGConfiguration
 import Leanux.Proofs.Framing.WGDeviceLifecycle
+import Leanux.Proofs.WG.Lifetimes.CookieAccess
 
 /-! Concrete normal-return frames for the complete receiving-material view.
 Peer and packet writes retain that view; key writes use actual resident records.
@@ -12,23 +13,45 @@ open Leanux Leanux.WG Leanux.Proofs.Framing Leanux.Proofs.Logged
 open Leanux.Proofs.WG.Lifetimes Leanux.Proofs.WG.Queues Std.Do
 set_option pp.structureInstances false
 
-abbrev RetainsCall (a : M α) := ProjectedAction view RetainsView a
+/-- Actual-state relational contracts retain arbitrary product callbacks. -/
+abbrev ProjectedRetainsCall {S α : Type} {m : Type → Type} {ps : PostShape}
+    [Monad m] [WPMonad m ps] (project : S → WGWorld) (a : StateT S m α) :=
+  ProjectedAction (fun s => view (project s)) RetainsView a
+
+abbrev RetainsCall (a : WG.M α) := ProjectedRetainsCall id a
+
+theorem ProjectedRetainsCall.wp {S α : Type} {m : Type → Type} {ps : PostShape}
+    [Monad m] [WPMonad m ps] {project : S → WGWorld} {a : StateT S m α}
+    (h : ProjectedRetainsCall project a) (s : View) :
+    ⦃fun w => ⌜RetainsView s (view (project w))⌝⦄ a
+    ⦃⇓? _ w => ⌜RetainsView s (view (project w))⌝⦄ :=
+  ProjectedAction.wp h (RetainsView s) (fun _ _ hr hs => hs.trans hr)
 
 theorem RetainsCall.wp (h : RetainsCall a) (s : View) :
     ⦃fun w => ⌜RetainsView s (view w)⌝⦄ a
-    ⦃⇓? _ w => ⌜RetainsView s (view w)⌝⦄ :=
-  ProjectedAction.wp h (RetainsView s) (fun _ _ hr hs => hs.trans hr)
+    ⦃⇓? _ w => ⌜RetainsView s (view w)⌝⦄ := ProjectedRetainsCall.wp h s
 
-theorem of_view (h : SameView view a) : RetainsCall a :=
-  fun _ _ _ hr => retains_of_sameView h hr
+theorem of_view {S α : Type} {m : Type → Type} {ps : PostShape}
+    [Monad m] [WPMonad m ps] {project : S → WGWorld} {a : StateT S m α}
+    (h : SameView (fun s => view (project s)) a) : ProjectedRetainsCall project a :=
+  retains_of_sameView h
 
-theorem RetainsCall.of_same (h : SameView view a) : RetainsCall a := of_view h
+theorem ProjectedRetainsCall.of_same {S α : Type} {m : Type → Type} {ps : PostShape}
+    [Monad m] [WPMonad m ps] {project : S → WGWorld} {a : StateT S m α}
+    (h : SameView (fun s => view (project s)) a) : ProjectedRetainsCall project a := of_view h
 
-/-- Supplied session support is transported on a normal return; no returned
-World or state-retention statement is attached to a Stop. -/
+/-- Stops have no returned state. The normal endpoint bridge also covers
+arbitrary product actions via the actual World.wg projection. -/
+theorem ProjectedRetainsCall.support {S α : Type} {project : S → WGWorld}
+    {a : StateT S (Except Stop) α} {w v : S} {result : α} (ha : ProjectedRetainsCall project a)
+    (hi : Inv history (project w)) (hr : a.run w = .ok (result,v)) :
+    Inv history (project v) :=
+  hi.retain ((ProjectedAction.iff_run _ _ _).mp ha w result v hr)
+
 theorem RetainsCall.support (ha : RetainsCall a) (hi : Inv history w)
-    (hr : a.run w = .ok (result,v)) : Inv history v :=
-  hi.retain (ha w result v hr)
+    (hr : (a.run w).run ambient = .ok ((result,v),ambient')) : Inv history v :=
+  hi.retain ((ProjectedAction.iff_run_ambient view RetainsView a).mp ha
+    w ambient result v ambient' hr)
 
 def materialState (d : Device) : Nat × (KeypairId → Option Keypair) :=
   (d.ifindex, fun id => d.keypairs[id]?)
@@ -49,432 +72,538 @@ theorem modifyDev_material (f : Device → Device)
 
 theorem getPeer_material (pid : PeerId) : SameView view (getPeer pid) := getPeer_view pid
 
-theorem getKeypair_material (id : KeypairId) : SameView view (getKeypair id) :=
-by
-  apply SameView.of_wp
-  intro s
-  mvcgen [getKeypair,getDev,getK,invariant]
+theorem getKeypair_material (id : KeypairId) : SameView view (getKeypair id) := by
+  intro initial
+  exact hoare_consequence (getKeypair_spec (fun s => s = initial) id)
+    (fun _ h => h) (fun _ _ h => h.1)
 
 theorem requireNotPending_material (pid : PeerId) (why : String) :
-    SameView view (requireNotPending pid why) := by intro w x v h; cases h; rfl
+    SameView view (requireNotPending pid why) := SameView.pure view ()
 
-theorem ownerDeref_material (o : IndexOwner) : SameView view o.peerDeref := kernel (indexOwner_peerDeref_sameKernel o)
+theorem ownerDeref_material (o : IndexOwner) : SameView view o.peerDeref := fun initial => indexOwner_peerDeref_preserves o (fun w => view w = initial)
 
-theorem ownerWord_material (o : IndexOwner) : SameView view o.peerWord := kernel (indexOwner_peerWord_sameKernel o)
+theorem ownerWord_material (o : IndexOwner) : SameView view o.peerWord := fun initial => indexOwner_peerWord_preserves o (fun w => view w = initial)
 
-theorem indexRemove_material (o : IndexOwner) : SameView view (indexRemove o) := index (indexRemove_sameIndexKernel o)
+open Lean Meta Elab Tactic
+
+/-- Goal selection and continuation factoring only construct ordinary Hoare
+proofs; all branches remain kernel obligations. -/
+elab "material_join" : tactic => withMainContext do
+  let goal ← getMainGoal
+  let target := (← instantiateMVars (← goal.getType)).consumeMData
+  let args := target.getAppArgs
+  unless (target.isAppOf ``Hoare || target.isAppOf ``Triple) && args.size ≥ 3 do
+    throwError "not an endpoint contract"
+  let i := args.size - 3
+  let action := args[i]!.consumeMData
+  let .letE name ty value body _ := action | throwError "not a let"
+  unless name.toString.startsWith "__do_jp" do throwError "not a shared continuation"
+  let property := fun a => mkAppN target.getAppFn (args.set! i a)
+  let contract ← forallTelescope ty fun xs _ => mkForallFVars xs (property (mkAppN value xs))
+  let valueProof ← mkFreshExprSyntheticOpaqueMVar contract
+  let (proof, next) ← withLocalDeclD name ty fun f => do
+    let contract ← forallTelescope ty fun xs _ => mkForallFVars xs (property (mkAppN f xs))
+    withLocalDeclD `material_continuation contract fun hf => do
+      let next ← mkFreshExprSyntheticOpaqueMVar (property (body.instantiate1 f))
+      pure (← mkLambdaFVars #[f,hf] next, next.mvarId!)
+  goal.assign (mkApp2 proof value valueProof)
+  replaceMainGoal [valueProof.mvarId!,next]
+
+elab "material_join_use" : tactic => withMainContext do
+  let goal ← getMainGoal
+  let target := (← instantiateMVars (← goal.getType)).consumeMData
+  let args := target.getAppArgs
+  unless (target.isAppOf ``Hoare || target.isAppOf ``Triple) && args.size ≥ 3 do
+    throwError "not an endpoint contract"
+  let action := args[args.size-3]!.consumeMData |>.headBeta
+  unless action.getAppFn.isFVar do throwError "not a local continuation"
+  for decl in ← getLCtx do
+    if decl.userName == `material_continuation then
+      let proof := mkAppN decl.toExpr action.getAppArgs
+      if ← withReducible (isDefEq (← inferType proof) target) then
+        goal.assign proof
+        replaceMainGoal []
+        return
+  throwError "no continuation contract"
+
+macro "material_intro" : tactic => `(tactic| run_tac do
+  unless (← Lean.Elab.Tactic.getMainTarget).isForall do Lean.throwError "not a function argument"
+  Lean.Elab.Tactic.evalTactic (← `(tactic| intro x)))
+
+elab "material_component" : tactic => withMainContext do
+  let goal ← getMainGoal
+  let target := (← instantiateMVars (← goal.getType)).consumeMData
+  let args := target.getAppArgs
+  unless (target.isAppOf ``Hoare || target.isAppOf ``Triple) && args.size ≥ 3 do
+    throwError "not an endpoint contract"
+  let action := args[args.size-3]!.consumeMData
+  let .const name _ := action.getAppFn | throwError "not a component lift"
+  unless [``monadLift, ``MonadLiftT.monadLift, ``MonadLift.monadLift,
+      ``StateT.lift, ``liftIndex, ``liftRouting].contains name do
+    throwError "not a component lift"
+  let source := action.getAppArgs.back!
+  let pre := args[args.size-2]!
+  for lemma in [``hoare_liftAmbient, ``hoare_liftIndex, ``hoare_liftRouting] do
+    let saved ← saveState
+    try
+      let proof ← mkAppM lemma #[source,pre]
+      replaceMainGoal (← goal.apply proof)
+      if lemma == ``hoare_liftIndex then
+        evalTactic (← `(tactic| (intro w d table hi hd; simpa only [view,hd,Option.map_some] using hi)))
+      else if lemma == ``hoare_liftRouting then
+        evalTactic (← `(tactic| exact fun _ _ hi => hi))
+      return
+    catch _ => saved.restore
+  throwError "no applicable canonical adapter"
+
+private theorem material_ite {α : Type} (c : Prop) [Decidable c]
+    (a b : WG.M α) (P : WGWorld → Prop)
+    (ha : Hoare a P (fun _ => P)) (hb : Hoare b P (fun _ => P)) :
+    Hoare (if c then a else b) P (fun _ => P) := by
+  by_cases h : c
+  · simpa only [ite_eq_left h] using ha
+  · simpa only [ite_eq_right h] using hb
+
+private def materialHeadBZ : Nat → Expr → Expr
+  | 0, e => e
+  | n+1, e =>
+    let e := e.consumeMData
+    match e with
+    | .letE name _ v b _ =>
+      if name.toString.startsWith "__do_jp" then e else materialHeadBZ n (b.instantiate1 v)
+    | _ =>
+      match e.getAppFn.consumeMData with
+      | .letE name _ v b _ =>
+        if name.toString.startsWith "__do_jp" then e
+        else materialHeadBZ n (mkAppN (b.instantiate1 v) e.getAppArgs)
+      | .lam .. =>
+        let e' := e.headBeta
+        if Expr.equal e e' then e else materialHeadBZ n e'
+      | _ => e
+
+elab "material_reduce" : tactic => withMainContext do
+  let goal ← getMainGoal
+  let target := (← instantiateMVars (← goal.getType)).consumeMData
+  let args := target.getAppArgs
+  unless (target.isAppOf ``Hoare || target.isAppOf ``Triple) && args.size ≥ 3 do
+    throwError "not an endpoint contract"
+  let i := args.size-3
+  let action := args[i]!
+  let reduced := materialHeadBZ 64 action
+  if Expr.equal action reduced then throwError "head unchanged"
+  replaceMainGoal [← goal.replaceTargetDefEq (mkAppN target.getAppFn (args.set! i reduced))]
+
+elab "material_match" : tactic => withMainContext do
+  let goal ← getMainGoal
+  let target := (← instantiateMVars (← goal.getType)).consumeMData
+  let args := target.getAppArgs
+  unless (target.isAppOf ``Hoare || target.isAppOf ``Triple) && args.size ≥ 3 do
+    throwError "not an endpoint contract"
+  let action := args[args.size-3]!.consumeMData
+  let some _ ← matchMatcherApp? action | throwError "not an action matcher"
+  replaceMainGoal (← Lean.Meta.Split.splitMatch goal action)
+
+macro "material_basic" P:term : tactic => `(tactic|
+  first
+    | unfold Preserves
+    | material_join
+    | material_join_use
+    | (index_material_head Pure.pure; exact preserves_pure _)
+    | (index_material_head Bind.bind; apply preserves_bind)
+    | (index_material_head getPeer; exact material_getPeer $P _)
+    | (index_material_head setPeer; exact material_setPeer $P _ _)
+    | (index_material_head getKeypair; exact (getKeypair_material _).wp $P)
+    | (index_material_head IndexOwner.peerWord; exact (ownerWord_material _).wp $P)
+    | (index_material_head IndexOwner.peerDeref; exact (ownerDeref_material _).wp $P)
+    | (index_material_head requireNotPending; exact preserves_pure ())
+    | (index_material_head modifyDev; exact modifyDev_spec $P _ (fun _ => rfl) (fun _ => rfl))
+    | (index_material_head getDev; exact (sameView_of_sameWG (project := id) getDev_sameWGStore).wp $P)
+    | (first | index_material_head get | index_material_head MonadStateOf.get
+       exact hoare_consequence (hoare_get _) (fun _ h => h) (fun _ _ h => h.2))
+    | (index_material_head modify; apply hoare_modify; intro w hw; exact hw)
+    | material_component
+    | (first | index_material_head throw | index_material_head MonadExceptOf.throw
+       apply (hoare_iff_run_ambient _ _ _).mpr
+       intro w ambient x v ambient' hi hr
+       cases hr)
+    | (index_material_head ForIn.forIn; apply list_view_spec view $P; intro x b)
+    | (index_material_head discard; apply discard_view_spec view $P)
+    | material_intro
+    | (index_material_head ite; apply material_ite)
+    | material_reduce
+    | material_match
+    | contradiction)
+
+macro "material_lower" : tactic => `(tactic|
+  simp (config := {zeta := false}) only [branch,branchCmp,branchCmpExcluded,
+    invariant,unsupported,hidden,hiddenU64,hiddenClock64,hiddenJiffies,hiddenAlloc,
+    getAmbient,modifyAmbient,getRouting,liftM])
+
+macro "material_known" P:term : tactic => `(tactic|
+  first
+    | (index_material_head callerJiffies; exact (callerJiffies_sameWGWorld _).wp (fun w => $P (view w)))
+    | (index_material_head jitterBelowRekeyTimeout; exact (jitterBelowRekeyTimeout_sameWGWorld _).wp (fun w => $P (view w)))
+    | (index_material_head branchExpired; exact (branchExpired_sameWGWorld _ _ _ _).wp (fun w => $P (view w)))
+    | (index_material_head generatePublic; exact (generatePublic_sameWGWorld _).wp (fun w => $P (view w)))
+    | (index_material_head messageEphemeral; exact (messageEphemeral_sameWGWorld _ _ _ _).wp (fun w => $P (view w)))
+    | (index_material_head mixDh; exact (mixDh_sameWGWorld _ _ _ _).wp (fun w => $P (view w)))
+    | (index_material_head mixPrecomputedDh; exact (mixPrecomputedDh_sameWGWorld _ _).wp (fun w => $P (view w)))
+    | (index_material_head messageDecrypt; exact (messageDecrypt_sameWGWorld _ _ _).wp (fun w => $P (view w)))
+    | (index_material_head kdf; exact (Framing.kdf_sameWGWorld _ _ _ _).wp (fun w => $P (view w)))
+    | (index_material_head kdfOut; exact (Framing.kdfOut_sameWGWorld _ _).wp (fun w => $P (view w))))
 
 theorem peerGet_material (pid : PeerId) : SameView view (peerGet pid) := by
-  apply SameView.of_wp
-  intro s
-  have hg := material_getPeer (fun t => t = s) pid
-  have hs := material_setPeer (fun t => t = s) pid
-  mvcgen [peerGet,requireNotPending,hg,hs,refcountInc,branch,branchCmp,unsupported]
+  intro initial
+  unfold peerGet refcountInc
+  material_lower
+  repeat' material_basic (fun t => t = initial)
 
 theorem peerPut_material (pid : Option PeerId) : SameView view (peerPut pid) := by
-  apply SameView.of_wp
-  intro s
-  have hg := material_getPeer (fun t => t = s)
-  have hs := material_setPeer (fun t => t = s)
-  have hi := fun o => (indexRemove_material o).wp (fun t => t = s)
-  mvcgen [peerPut,requireNotPending,hg,hs,hi,refcountDecAndTest,retirePeerUnits,
-    getDev,getK,modifyDev,modifyK,branch,branchCmp,unsupported,invariant]
-  all_goals dsimp +zetaDelta only at *
-  all_goals simp_all [view,Function.comp_def]
+  intro initial
+  unfold peerPut retirePeerUnits refcountDecAndTest
+  material_lower
+  repeat' material_basic (fun t => t = initial)
 
 theorem keypairGet_material (kp : Option KeypairId) : RetainsCall (keypairGet kp) := by
-  intro w x v hr
-  exact (hoare_iff_triple _ _ _).mpr
-    (keypairGet_spec (RetainsView (view w)) (fun _ _ hr hi => hi.trans hr) kp)
-    w x v (RetainsView.refl _) hr
+  apply ProjectedAction.of_wp
+  intro initial
+  exact hoare_consequence (keypairGet_spec (RetainsView initial) (fun _ _ hr hi => hi.trans hr) kp)
+    (fun _ h => by dsimp only [id] at h; rw [h]; exact RetainsView.refl _) (fun _ _ h => h)
 
 theorem keypairPut_material (kp : Option KeypairId) (now : Bool) : RetainsCall (keypairPut kp now) := by
-  intro w x v hr
-  exact (hoare_iff_triple _ _ _).mpr
-    (keypairPut_spec (RetainsView (view w)) (fun _ _ hr hi => hi.trans hr) kp now)
-    w x v (RetainsView.refl _) hr
+  apply ProjectedAction.of_wp
+  intro initial
+  exact hoare_consequence (keypairPut_spec (RetainsView initial) (fun _ _ hr hi => hi.trans hr) kp now)
+    (fun _ h => by dsimp only [id] at h; rw [h]; exact RetainsView.refl _) (fun _ _ h => h)
 
-theorem keypairCreate_material (word : Option PeerId) : RetainsCall (keypairCreate word) :=
-  fun w x v hr => create_retains word w v x hr
+theorem keypairCreate_material (word : Option PeerId) : RetainsCall (keypairCreate word) := by
+  apply (ProjectedAction.iff_run_ambient view RetainsView _).mpr
+  intro w ambient x v ambient' hr
+  exact create_retains word w v x ambient ambient' hr
 
 theorem pubkeyLookup_material (key : Key) : SameView view (pubkeyLookup key) := by
-  have spec (initial : Kernel) : ⦃fun w => ⌜w.k = initial⌝⦄ pubkeyLookup key
-      ⦃⇓? result w => ⌜PeerBorrow.Borrowed initial result w.k⌝⦄ := by
-    have ha := fun peer => PeerBorrow.acquire_spec peer initial
-    mvcgen [pubkeyLookup,ha,getDev,getK,branch,invariant]
-    all_goals simp_all
-  intro w result v hr
-  have hb := (hoare_iff_triple _ _ _).mpr (spec w.k) w result v rfl hr
-  cases result with
-  | none => change v.k = w.k at hb; simp [view,hb]
-  | some pid => obtain ⟨d,p,hd,_,_,hk⟩ := hb; simp [view,hk,hd]
+  have borrow (peer : Option PeerId) : SameView view (peerGetMaybeZero peer) := by
+    intro initial
+    unfold peerGetMaybeZero refcountIncNotZero
+    material_lower
+    repeat' material_basic (fun t => t = initial)
+  intro initial
+  unfold pubkeyLookup
+  material_lower
+  repeat' first
+    | (index_material_head peerGetMaybeZero; exact (borrow _).wp (fun t => t = initial))
+    | material_basic (fun t => t = initial)
 
 theorem dstCacheReset_material (pid : PeerId) : SameView view (dstCacheReset pid) := by
-  apply SameView.of_wp
-  intro s
-  have hg := material_getPeer (fun t => t = s) pid
-  have hs := material_setPeer (fun t => t = s) pid
-  have hc := (kernel (hiddenJiffies_sameKernel .dstCacheResetTs)).wp (fun t => t = s)
-  mvcgen [dstCacheReset,hg,hs,hc]
+  intro initial
+  unfold dstCacheReset
+  material_lower
+  repeat' material_basic (fun t => t = initial)
 
 theorem dstCacheGet_material (pid : PeerId) (gen : Nat) : SameView view (dstCacheGet pid gen) := by
-  apply SameView.of_wp
-  intro s
-  have hp := material_getPeer (fun t => t = s) pid
-  have hs := fun p => material_setPeer (fun t => t = s) pid p
-  have ht := fun site => (kernel (hiddenJiffies_sameKernel site)).wp (fun t => t = s)
-  mvcgen [dstCacheGet, hp, hs, ht, branch, branchCmp]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals try simp_all [view, materialState]
-  all_goals try assumption
+  intro initial
+  unfold dstCacheGet
+  material_lower
+  repeat' material_basic (fun t => t = initial)
 
 theorem dstCacheSet_material (pid : PeerId) (src gen dev : Nat) : SameView view (dstCacheSet pid src gen dev) := by
-  apply SameView.of_wp
-  intro s
-  have hp := material_getPeer (fun t => t = s) pid
-  have hs := fun p => material_setPeer (fun t => t = s) pid p
-  have ht := fun site => (kernel (hiddenJiffies_sameKernel site)).wp (fun t => t = s)
-  mvcgen [dstCacheSet, hp, hs, ht, branch]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals try simp_all [view, materialState]
-  all_goals try assumption
+  intro initial
+  unfold dstCacheSet
+  material_lower
+  repeat' material_basic (fun t => t = initial)
 
 theorem tunnelXmit_material (e : Endpoint) (bytes : List UInt8) (ds : Nat) (r : Route) (exactRx : Bool) :
     SameView view ((pinned_const _private.Leanux.WG.Socket.«0».Leanux.WG.tunnelXmit) e bytes ds r exactRx) := by
   rw [tunnelXmitSource_eq]
-  apply SameView.of_wp
-  intro s
-  have hl := fun sites force => (kernel (Leanux.Proofs.WG.Queues.loopbackSend_kernel sites force)).wp (fun t => t = s)
-  have hc := fun sites => (kernel (skipCut_sameKernel sites)).wp (fun t => t = s)
-  have hp := fun fam => (kernel (socketPort_sameKernel fam)).wp (fun t => t = s)
-  mvcgen [tunnelXmitSource, hl, hc, hp, modifyDev, modifyK, unsupported]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [view, materialState, Option.map_map, Function.comp_def]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals try simp_all [view, materialState]
-  all_goals try assumption
+  intro initial
+  have hl := fun sites force => (sameView_of_sameWG (project := id)
+    (loopbackSend_kernel sites force)).wp (fun t => t = initial)
+  have hp := fun family => (sameView_of_sameWG (project := id)
+    (socketPort_sameStore family)).wp (fun t => t = initial)
+  unfold tunnelXmitSource
+  simp (config := {zeta := false}) only [skipCut]
+  material_lower
+  repeat' first
+    | (index_material_head loopbackSend; exact hl _ _)
+    | (index_material_head socketPort; exact hp _)
+    | material_basic (fun t => t = initial)
 
 theorem send4ClearSrc_material cache : SameView view (send4ClearSrcSource cache) := by
-  apply SameView.of_wp
-  intro s
-  have hp := fun pid => material_getPeer (fun t => t = s) pid
-  have hs := fun pid p => material_setPeer (fun t => t = s) pid p
-  mvcgen [send4ClearSrcSource, hp, hs]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals try simp_all [view, materialState]
-  all_goals try assumption
+  intro initial
+  unfold send4ClearSrcSource
+  material_lower
+  repeat' first
+    | material_basic (fun t => t = initial)
 
 theorem send4Finish_material e bytes ds exactRx route : SameView view (send4FinishSource e bytes ds exactRx route) := by
-  apply SameView.of_wp
-  intro s
-  have ht := fun r => (tunnelXmit_material e bytes ds r exactRx).wp (fun t => t = s)
-  mvcgen [send4FinishSource, ht, invariant]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals try simp_all [view, materialState]
-  all_goals try assumption
+  intro initial
+  unfold send4FinishSource
+  material_lower
+  repeat' first
+    | (index_material_head tunnelXmit; exact (tunnelXmit_material _ _ _ _ _).wp (fun t => t = initial))
+    | material_basic (fun t => t = initial)
 
 theorem send4RouteDone_material e cache bytes ds exactRx gen fallback rt :
     SameView view (send4RouteDoneSource e cache bytes ds exactRx gen fallback rt) := by
-  apply SameView.of_wp
-  intro s
-  have hs := fun pid src gen dev => (dstCacheSet_material pid src gen dev).wp (fun t => t = s)
-  have hf := fun r => (send4Finish_material e bytes ds exactRx r).wp (fun t => t = s)
-  mvcgen [send4RouteDoneSource, hs, hf, branch]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals try simp_all [view, materialState]
-  all_goals try assumption
+  intro initial
+  unfold send4RouteDoneSource
+  material_lower
+  repeat' first
+    | (index_material_head dstCacheSet; exact (dstCacheSet_material _ _ _ _).wp (fun t => t = initial))
+    | (index_material_head send4FinishSource; exact (send4Finish_material _ _ _ _ _).wp (fun t => t = initial))
+    | material_basic (fun t => t = initial)
 
 theorem send4Retry_material e cache bytes ds exactRx gen fallback srcIf rt :
     SameView view (send4RetrySource e cache bytes ds exactRx gen fallback srcIf rt) := by
-  apply SameView.of_wp
-  intro s
-  have hc := (send4ClearSrc_material cache).wp (fun t => t = s)
-  have hr := fun pid => (dstCacheReset_material pid).wp (fun t => t = s)
-  have hl := fun fam src dst => (kernel (routeLookup_sameKernel fam src dst)).wp (fun t => t = s)
-  have hd := fun rt => (send4RouteDone_material e cache bytes ds exactRx gen fallback rt).wp (fun t => t = s)
-  mvcgen [send4RetrySource, hc, hr, hl, hd, branch]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals try simp_all [view, materialState]
-  all_goals try assumption
+  intro initial
+  unfold send4RetrySource
+  material_lower
+  repeat' first
+    | (index_material_head send4ClearSrcSource; exact (send4ClearSrc_material _).wp (fun t => t = initial))
+    | (index_material_head dstCacheReset; exact (dstCacheReset_material _).wp (fun t => t = initial))
+    | (index_material_head send4RouteDoneSource; exact (send4RouteDone_material _ _ _ _ _ _ _ _).wp (fun t => t = initial))
+    | material_basic (fun t => t = initial)
 
 theorem send4Miss_material e cache bytes ds exactRx gen fallback saddr srcIf :
     SameView view (send4MissSource e cache bytes ds exactRx gen fallback saddr srcIf) := by
-  apply SameView.of_wp
-  intro s
-  have hc := (send4ClearSrc_material cache).wp (fun t => t = s)
-  have hr := fun pid => (dstCacheReset_material pid).wp (fun t => t = s)
-  have hl := fun fam src dst => (kernel (routeLookup_sameKernel fam src dst)).wp (fun t => t = s)
-  have hn := fun srcIf rt => (send4Retry_material e cache bytes ds exactRx gen fallback srcIf rt).wp (fun t => t = s)
-  mvcgen [send4MissSource, hc, hr, hl, hn, branch]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals try simp_all [view, materialState]
-  all_goals try assumption
+  intro initial
+  unfold send4MissSource
+  material_lower
+  repeat' first
+    | (index_material_head send4ClearSrcSource; exact (send4ClearSrc_material _).wp (fun t => t = initial))
+    | (index_material_head dstCacheReset; exact (dstCacheReset_material _).wp (fun t => t = initial))
+    | (index_material_head send4RetrySource; exact (send4Retry_material _ _ _ _ _ _ _ _ _).wp (fun t => t = initial))
+    | material_basic (fun t => t = initial)
 
 theorem send4AfterCache_material e cache bytes ds exactRx gen saddr srcIf route :
     SameView view (send4AfterCacheSource e cache bytes ds exactRx gen saddr srcIf route) := by
-  apply SameView.of_wp
-  intro s
-  have hm := (send4Miss_material e cache bytes ds exactRx gen route saddr srcIf).wp (fun t => t = s)
-  have hf := (send4Finish_material e bytes ds exactRx route).wp (fun t => t = s)
-  mvcgen [send4AfterCacheSource, hm, hf, branch]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals try simp_all [view, materialState]
-  all_goals try assumption
+  intro initial
+  unfold send4AfterCacheSource
+  material_lower
+  repeat' first
+    | (index_material_head send4MissSource; exact (send4Miss_material _ _ _ _ _ _ _ _ _).wp (fun t => t = initial))
+    | (index_material_head send4FinishSource; exact (send4Finish_material _ _ _ _ _).wp (fun t => t = initial))
+    | material_basic (fun t => t = initial)
 
 theorem send4_material e cache bytes ds exactRx : SameView view (send4 e cache bytes ds exactRx) := by
   rw [← send4Source_eq]
-  apply SameView.of_wp
-  intro s
-  have hg := fun pid gen => (dstCacheGet_material pid gen).wp (fun t => t = s)
-  have ha := fun gen src srcIf route => (send4AfterCache_material e cache bytes ds exactRx gen src srcIf route).wp (fun t => t = s)
-  mvcgen [send4Source, hg, ha, getDev, getK, branch, invariant]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals try simp_all [view, materialState]
-  all_goals try assumption
+  intro initial
+  unfold send4Source
+  material_lower
+  repeat' first
+    | (index_material_head dstCacheGet; exact (dstCacheGet_material _ _).wp (fun t => t = initial))
+    | (index_material_head send4AfterCacheSource; exact (send4AfterCache_material _ _ _ _ _ _ _ _ _).wp (fun t => t = initial))
+    | material_basic (fun t => t = initial)
 
 theorem send6_material e cache bytes ds exactRx : SameView view (send6 e cache bytes ds exactRx) := by
-  apply SameView.of_wp
-  intro s
-  have hg := fun pid gen => (dstCacheGet_material pid gen).wp (fun t => t = s)
-  have hp := fun pid => material_getPeer (fun t => t = s) pid
-  have hs := fun pid p => material_setPeer (fun t => t = s) pid p
-  have hr := fun pid => (dstCacheReset_material pid).wp (fun t => t = s)
-  have hl := fun fam src dst => (kernel (routeLookup_sameKernel fam src dst)).wp (fun t => t = s)
-  have hc := fun pid src gen dev => (dstCacheSet_material pid src gen dev).wp (fun t => t = s)
-  have ht := fun r => (tunnelXmit_material e bytes ds r exactRx).wp (fun t => t = s)
-  mvcgen [send6, hg, hp, hs, hr, hl, hc, ht, getDev, getK, branch, invariant]
+  intro initial
+  unfold send6
+  material_lower
+  repeat' first
+    | (index_material_head dstCacheGet; exact (dstCacheGet_material _ _).wp (fun t => t = initial))
+    | (index_material_head dstCacheReset; exact (dstCacheReset_material _).wp (fun t => t = initial))
+    | (index_material_head dstCacheSet; exact (dstCacheSet_material _ _ _ _).wp (fun t => t = initial))
+    | (index_material_head tunnelXmit; exact (tunnelXmit_material _ _ _ _ _).wp (fun t => t = initial))
+    | material_basic (fun t => t = initial)
 
-  all_goals try dsimp +zetaDelta only at *
-  all_goals try simp_all [view, materialState]
-  all_goals try assumption
 theorem modifyPeer_material (pid : PeerId) (f : Peer → Peer)
     :
     SameView view (do let p ← getPeer pid; setPeer pid (f p)) := by
-  apply SameView.of_wp
-  intro s
-  have hg := material_getPeer (fun t => t = s) pid
-  have hs := fun p => material_setPeer (fun t => t = s) pid p
-  mvcgen [hg, hs]
-  all_goals simp_all
+  intro initial
+  repeat' material_basic (fun t => t = initial)
 
 theorem setPeerEndpoint_material (pid : PeerId) (e : Endpoint) : SameView view (setPeerEndpoint pid e) := by
-  apply SameView.of_wp
-  intro s
-  have hg := material_getPeer (fun t => t = s) pid
-  have hs := fun p => material_setPeer (fun t => t = s) pid p
-  have hn := (requireNotPending_material pid "changing the endpoint").wp (fun t => t = s)
-  have he := fun old => (kernel (endpointEq_sameKernel e old)).wp (fun t => t = s)
-  have hc := (dstCacheReset_material pid).wp (fun t => t = s)
-  mvcgen [setPeerEndpoint, hg, hs, hn, he, hc, branch]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals try dsimp +zetaDelta only at *
-  all_goals try simp_all [view, materialState]
-  all_goals try assumption
+  intro initial
+  unfold setPeerEndpoint endpointEq WG.andM
+  material_lower
+  repeat' first
+    | (index_material_head dstCacheReset; exact (dstCacheReset_material _).wp (fun t => t = initial))
+    | material_basic (fun t => t = initial)
 
 theorem armTimer_material (pid : PeerId) (timer : PeerTimer) (delay : Nat) (jc : Option UInt64 := none) :
     SameView view (armTimer pid timer delay jc) := by
-  rw [armTimer_source pid timer delay jc]
-  apply SameView.bind (kernel (timerArmExpiry_sameKernel pid timer delay jc))
-  intro expiry
-  exact modifyPeer_material pid (fun p => p.setTimer timer (some expiry))
+  have wheel (t : PeerTimer) (expires clk : UInt64) (unit : Option Nat) :
+      SameView view (placeOnWheel pid t expires clk unit) := by
+    intro initial
+    unfold placeOnWheel
+    simp (config := {zeta := false}) only [peekHiddenSite]
+    material_lower
+    repeat' material_basic (fun t => t = initial)
+  intro initial
+  unfold armTimer
+  material_lower
+  repeat' first
+    | (index_material_head placeOnWheel; exact (wheel _ _ _ _).wp (fun t => t = initial))
+    | material_basic (fun t => t = initial)
 
-theorem delTimer_material (pid : PeerId) (timer : PeerTimer) : SameView view (delTimer pid timer) :=
-  modifyPeer_material pid (fun p => p.setTimer timer none)
+theorem delTimer_material (pid : PeerId) (timer : PeerTimer) : SameView view (delTimer pid timer) := modifyPeer_material pid (fun p => (p.setTimer timer none).setWheel timer none)
 
 theorem modPeerTimerGuard_material (pid : PeerId) : SameView view (modPeerTimerGuard pid) := by
-  apply SameView.of_wp
-  intro s
-  have hg := (getPeer_material pid).wp (fun t => t = s)
-  mvcgen [modPeerTimerGuard, getDev, getK, hg, WG.andM, branch, invariant]
+  intro initial
+  unfold modPeerTimerGuard WG.andM
+  material_lower
+  repeat' material_basic (fun t => t = initial)
 
 theorem modPeerTimer_material (site : HiddenSite) (pid : PeerId) (timer : PeerTimer) (delay : Nat) :
     SameView view (modPeerTimer site pid timer delay) := by
-  apply SameView.of_wp
-  intro s
-  have hg := (modPeerTimerGuard_material pid).wp (fun t => t = s)
-  have ha := fun jc => (armTimer_material pid timer delay jc).wp (fun t => t = s)
-  have hc := (kernel (callerJiffies_sameKernel site)).wp (fun t => t = s)
-  mvcgen [modPeerTimer, hg, ha, hc]
+  intro initial
+  unfold modPeerTimer
+  material_lower
+  repeat' first
+    | (index_material_head modPeerTimerGuard; exact (modPeerTimerGuard_material _).wp (fun t => t = initial))
+    | (index_material_head armTimer; exact (armTimer_material _ _ _ _).wp (fun t => t = initial))
+    | material_known (fun t => t = initial)
+    | material_basic (fun t => t = initial)
 
 theorem timersTraversal_material (pid : PeerId) : SameView view (timersTraversal pid) := by
-  apply SameView.of_wp
-  intro s
-  have hg := (getPeer_material pid).wp (fun t => t = s)
-  have ht := fun delay => (modPeerTimer_material .timerJiffiesTraversal pid .persistentKeepalive delay).wp (fun t => t = s)
-  have hd := fun delay => discard_view_spec view (fun t => t = s) _ (ht delay)
-  mvcgen [timersTraversal, hg, ht, hd, branchCmp]
-
+  intro initial
+  unfold timersTraversal
+  material_lower
+  repeat' first
+    | (index_material_head modPeerTimer; exact (modPeerTimer_material _ _ _ _).wp (fun t => t = initial))
+    | material_known (fun t => t = initial)
+    | material_basic (fun t => t = initial)
 
 theorem timersAnyAuthenticatedPacketSent_material (pid : PeerId) :
     SameView view (timersAnyAuthenticatedPacketSent pid) := delTimer_material pid .sendKeepalive
 
 theorem timersHandshakeInitiated_material (pid : PeerId) :
     SameView view (timersHandshakeInitiated pid) := by
-  apply SameView.of_wp
-  intro s
-  have hc := (kernel (callerJiffies_sameKernel .timerJiffiesHandshakeInitiated)).wp (fun t => t = s)
-  have hj := (kernel (jitterBelowRekeyTimeout_sameKernel .retransmitJitter)).wp (fun t => t = s)
-  have hg := (modPeerTimerGuard_material pid).wp (fun t => t = s)
-  have ha := fun n jc => (armTimer_material pid .retransmitHandshake n jc).wp (fun t => t = s)
-  mvcgen [timersHandshakeInitiated, hc, hj, hg, ha]
-
-theorem indexInsert_material (owner : IndexOwner) :
-    SameView view (indexInsert owner) := by
-  apply (indexInsert_sameIndexKernel owner).of_factor
-    (fun k : Kernel => k.wg.map materialState) view
-  intro w
-  simp [view, indexKernelView, indexKernel, materialState, Option.map_map, Function.comp_def]
-  try rfl
+  intro initial
+  unfold timersHandshakeInitiated
+  material_lower
+  repeat' first
+    | (index_material_head modPeerTimerGuard; exact (modPeerTimerGuard_material _).wp (fun t => t = initial))
+    | (index_material_head armTimer; exact (armTimer_material _ _ _ _).wp (fun t => t = initial))
+    | material_known (fun t => t = initial)
+    | material_basic (fun t => t = initial)
 
 theorem createInitiation_material (pid : PeerId) : SameView view (createInitiation pid) := by
-  apply SameView.of_wp
-  intro s
-  have hg := fun pid => material_getPeer (fun t => t = s) pid
-  have hs := fun pid p => material_setPeer (fun t => t = s) pid p
-  have hh := fun site => (kernel (hidden_sameKernel site)).wp (fun t => t = s)
-  have hp := fun k => (kernel (generatePublic_sameKernel k)).wp (fun t => t = s)
-  have he := fun b e ck h => (kernel (messageEphemeral_sameKernel b e ck h)).wp (fun t => t = s)
-  have hd := fun b ck p q => (kernel (mixDh_sameKernel b ck p q)).wp (fun t => t = s)
-  have hpre := fun ck p => (kernel (mixPrecomputedDh_sameKernel ck p)).wp (fun t => t = s)
-  have hi := (indexInsert_material (.handshake pid)).wp (fun t => t = s)
+  intro initial
   unfold createInitiation
   index_unfold _private.Leanux.WG.Handshake.«0».Leanux.WG.setChain
-  have hw := (ownerDeref_material (.handshake pid)).wp (fun t => t = s)
-  mvcgen [hw, hg, hs, hh, hp, he, hd, hpre, hi, getDev, getK, branch, invariant]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals try dsimp +zetaDelta only at *
-  all_goals try simp_all [view, materialState]
-  all_goals try assumption
+  material_lower
+  repeat' first
+    | material_known (fun t => t = initial)
+    | material_basic (fun t => t = initial)
 
 theorem addMacToPacket_material (pid : PeerId) (msg : List UInt8) :
     SameView view (addMacToPacket pid msg) := by
-  apply SameView.of_wp
-  intro s
-  have hg := material_getPeer (fun t => t = s) pid
-  have hs := fun p => material_setPeer (fun t => t = s) pid p
-  have he := fun d b n f => (kernel (branchExpired_sameKernel d b n f)).wp (fun t => t = s)
-  mvcgen [addMacToPacket, hg, hs, he, branch, WG.andM]
-  all_goals simp_all
+  intro initial
+  unfold addMacToPacket WG.andM
+  material_lower
+  repeat' first
+    | material_known (fun t => t = initial)
+    | material_basic (fun t => t = initial)
 
 theorem sendBufferToPeer_material (pid : PeerId) (bytes : List UInt8) :
     SameView view (sendBufferToPeer pid bytes) := by
-  apply SameView.of_wp
-  intro s
-  have hg := material_getPeer (fun t => t = s) pid
-  have hs := fun p => material_setPeer (fun t => t = s) pid p
-  have ha := fun site => (kernel (hiddenAlloc_sameKernel site)).wp (fun t => t = s)
-  have h4 := fun e => (send4_material e (some pid) bytes HANDSHAKE_DSCP true).wp (fun t => t = s)
-  have h6 := fun e => (send6_material e (some pid) bytes HANDSHAKE_DSCP true).wp (fun t => t = s)
-  mvcgen [sendBufferToPeer, hg, hs, ha, h4, h6, branch, invariant]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals try simp_all [view, materialState]
-  all_goals try assumption
+  intro initial
+  unfold sendBufferToPeer
+  material_lower
+  repeat' first
+    | (index_material_head send4; exact (send4_material _ _ _ _ _).wp (fun t => t = initial))
+    | (index_material_head send6; exact (send6_material _ _ _ _ _).wp (fun t => t = initial))
+    | material_known (fun t => t = initial)
+    | material_basic (fun t => t = initial)
 
 theorem sendHandshakeInitiation_material (pid : PeerId) : SameView view (sendHandshakeInitiation pid) := by
-  apply SameView.of_wp
-  intro s
-  have hg := material_getPeer (fun t => t = s) pid
-  have hs := fun p => material_setPeer (fun t => t = s) pid p
-  have he := fun date => (kernel (branchExpired_sameKernel .initRateLimited date REKEY_TIMEOUT (!·))).wp (fun t => t = s)
-  have hc := fun site => (kernel (hiddenClock64_sameKernel site)).wp (fun t => t = s)
-  have hi := (createInitiation_material pid).wp (fun t => t = s)
-  have hm := fun msg => (addMacToPacket_material pid msg).wp (fun t => t = s)
-  have ht := (timersTraversal_material pid).wp (fun t => t = s)
-  have ha := (timersAnyAuthenticatedPacketSent_material pid).wp (fun t => t = s)
-  have hb := fun msg => (sendBufferToPeer_material pid msg).wp (fun t => t = s)
-  have hj := (timersHandshakeInitiated_material pid).wp (fun t => t = s)
-  mvcgen [sendHandshakeInitiation, hg, hs, he, hc, hi, hm, ht, ha, hb, hj, branch, invariant]
-  all_goals try simp_all
+  intro initial
+  unfold sendHandshakeInitiation
+  material_lower
+  repeat' first
+    | (index_material_head createInitiation; exact (createInitiation_material _).wp (fun t => t = initial))
+    | (index_material_head addMacToPacket; exact (addMacToPacket_material _ _).wp (fun t => t = initial))
+    | (index_material_head timersTraversal; exact (timersTraversal_material _).wp (fun t => t = initial))
+    | (index_material_head timersAnyAuthenticatedPacketSent; exact (timersAnyAuthenticatedPacketSent_material _).wp (fun t => t = initial))
+    | (index_material_head sendBufferToPeer; exact (sendBufferToPeer_material _ _).wp (fun t => t = initial))
+    | (index_material_head timersHandshakeInitiated; exact (timersHandshakeInitiated_material _).wp (fun t => t = initial))
+    | material_known (fun t => t = initial)
+    | material_basic (fun t => t = initial)
 
 theorem createResponse_material (pid : PeerId) : SameView view (createResponse pid) := by
-  apply SameView.of_wp
-  intro s
-  have hg := material_getPeer (fun t => t = s) pid
-  have hs := fun p => material_setPeer (fun t => t = s) pid p
-  have hh := fun site => (kernel (hidden_sameKernel site)).wp (fun t => t = s)
-  have hp := fun k => (kernel (generatePublic_sameKernel k)).wp (fun t => t = s)
-  have he := fun b e ck h => (kernel (messageEphemeral_sameKernel b e ck h)).wp (fun t => t = s)
-  have hd := fun b ck p q => (kernel (mixDh_sameKernel b ck p q)).wp (fun t => t = s)
-  have hk := fun b c ck d => (kernel (Framing.kdf_sameKernel b c ck d)).wp (fun t => t = s)
-  have ho := fun xs i => (kernel (Framing.kdfOut_sameKernel xs i)).wp (fun t => t = s)
-  have hi := (indexInsert_material (.handshake pid)).wp (fun t => t = s)
+  intro initial
   unfold createResponse
   index_unfold _private.Leanux.WG.Handshake.«0».Leanux.WG.setChain
-  have hw := (ownerDeref_material (.handshake pid)).wp (fun t => t = s)
-  mvcgen [hw, hg, hs, hh, hp, he, hd, hk, ho, hi, branch, invariant]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [view, materialState]
+  material_lower
+  repeat' first
+    | material_known (fun t => t = initial)
+    | material_basic (fun t => t = initial)
 
 theorem timersSessionDerived_material (pid : PeerId) : SameView view (timersSessionDerived pid) := by
-  apply SameView.of_wp
-  intro s
-  have hm := fun site timer delay => (modPeerTimer_material site pid timer delay).wp (fun t => t = s)
-  have hd (α : Type) := discard_view_spec view (α := α) (fun t => t = s)
-  mvcgen [timersSessionDerived, hm, hd]
+  intro initial
+  unfold timersSessionDerived
+  material_lower
+  repeat' first
+    | (index_material_head modPeerTimer; exact (modPeerTimer_material _ _ _ _).wp (fun t => t = initial))
+    | material_known (fun t => t = initial)
+    | material_basic (fun t => t = initial)
 
-theorem cookie_material (a : M α) (ha : SameCookieKernel a) : SameView view a := by
-  apply ha.of_factor (fun k : Kernel => k.wg.map materialState) view
+/-- The original arbitrary product modifier domain and 43-field cookie mask. -/
+theorem cookie_material (a : Leanux.M α) (ha : SameView productCookieView a) :
+    SameView (fun w : World => view w.wg) a := by
+  apply ha.of_factor (fun k : ProductStore43 => k.2.2.2.dev.map materialState)
+    (fun w : World => view w.wg)
   intro w
-  simp [cookieKernelView, cookieKernel, cookieDevice, view,
-    Option.map_map, Function.comp_def]
-  rfl
+  simp only [productCookieView,cookieStoreView,cookieView,wgOwnedView,wgStoreView,
+    cookieDevice,view,materialState,Option.map_map,Function.comp_def]
+
+/-- Native callers use the same seven WG observations, without a stronger
+routing/timer premise. -/
+theorem cookie_material_native (a : WG.M α) (ha : SameView cookieStoreView a) :
+    SameView view a := by
+  apply ha.of_factor (fun k : WGStoreView => k.dev.map materialState) view
+  intro w
+  simp only [cookieStoreView,cookieView,wgOwnedView,wgStoreView,cookieDevice,
+    view,materialState,Option.map_map,Function.comp_def]
 
 theorem consumeInitiation_material (msg : List UInt8) : RetainsCall (consumeInitiation msg) := by
   apply ProjectedAction.of_wp
-  intro s
-  let P := RetainsView s
-  have hg := fun pid => material_getPeer P pid
-  have hs := fun pid p => material_setPeer P pid p
-  have hu := fun peer => (peerPut_material peer).wp P
-  have hc := fun site => (kernel (hiddenClock64_sameKernel site)).wp P
-  have he := fun b e ck h => (kernel (messageEphemeral_sameKernel b e ck h)).wp P
-  have hd := fun b ck p q => (kernel (mixDh_sameKernel b ck p q)).wp P
-  have hp := fun ck p => (kernel (mixPrecomputedDh_sameKernel ck p)).wp P
-  have hdec := fun a k h => (kernel (messageDecrypt_sameKernel a k h)).wp P
-  have hl := fun k => (pubkeyLookup_material k).wp P
-  have hb := fun d b => (kernel (sameKernel_branch d b)).wp P
-  have hbc := fun d b x y => (kernel (branchCmp_sameKernel d b x y)).wp P
-  mvcgen [hb, hbc, consumeInitiation, hg, hs, hu, hc, he, hd, hp, hdec, hl,
-    getDev, getK, WG.orM, invariant]
-  all_goals try dsimp +zetaDelta only [P] at *
-  all_goals try simp_all [view, materialState]
-  all_goals try subst s
-  all_goals first | exact RetainsView.refl _ | assumption
+  intro initial
+  let P := RetainsView initial
+  apply hoare_consequence (P := fun w => P (view w)) (Q := fun _ w => P (view w))
+    (a := consumeInitiation msg) ?_ (fun _ h => by
+      dsimp only [id] at h; rw [h]; exact RetainsView.refl _) (fun _ _ h => h)
+  unfold consumeInitiation WG.orM
+  material_lower
+  repeat' first
+    | (index_material_head peerPut; exact (peerPut_material _).wp P)
+    | (index_material_head pubkeyLookup; exact (pubkeyLookup_material _).wp P)
+    | (index_material_head indexLookup; exact (indexLookup_retains _ _).wp P (fun _ _ hr hi => hi.trans hr))
+    | material_known P
+    | material_basic P
 
 theorem consumeResponse_material (msg : List UInt8) : RetainsCall (consumeResponse msg) := by
   apply ProjectedAction.of_wp
-  intro s
-  let P := RetainsView s
-  have hg := fun pid => material_getPeer P pid
-  have hs := fun pid p => material_setPeer P pid p
-  have hu := fun peer => (peerPut_material peer).wp P
-  have hl := fun ks i => (indexLookup_retains ks i).wp (RetainsView s) (fun _ _ hr hi => hi.trans hr)
-  have he := fun b e ck h => (kernel (messageEphemeral_sameKernel b e ck h)).wp P
-  have hd := fun b ck p q => (kernel (mixDh_sameKernel b ck p q)).wp P
-  have hdec := fun a k h => (kernel (messageDecrypt_sameKernel a k h)).wp P
-  have hk := fun b c ck d => (kernel (Framing.kdf_sameKernel b c ck d)).wp P
-  have ho := fun xs i => (kernel (Framing.kdfOut_sameKernel xs i)).wp P
-  mvcgen [consumeResponse, hg, hs, hu, hl, he, hd, hdec, hk, ho,
-    getDev, getK, branch, invariant]
-  all_goals try dsimp +zetaDelta only [P] at *
-  all_goals try simp_all [view, materialState]
-  all_goals try subst s
-  all_goals first | exact RetainsView.refl _ | assumption
+  intro initial
+  let P := RetainsView initial
+  apply hoare_consequence (P := fun w => P (view w)) (Q := fun _ w => P (view w))
+    (a := consumeResponse msg) ?_ (fun _ h => by
+      dsimp only [id] at h; rw [h]; exact RetainsView.refl _) (fun _ _ h => h)
+  unfold consumeResponse
+  material_lower
+  repeat' first
+    | (index_material_head peerPut; exact (peerPut_material _).wp P)
+    | (index_material_head pubkeyLookup; exact (pubkeyLookup_material _).wp P)
+    | (index_material_head indexLookup; exact (indexLookup_retains _ _).wp P (fun _ _ hr hi => hi.trans hr))
+    | material_known P
+    | material_basic P
 
 theorem cookieMessageConsume_material (msg : List UInt8) :
     RetainsCall (cookieMessageConsume msg) := by
   apply ProjectedAction.of_wp
-  intro s
-  let P := RetainsView s
-  have hl := (indexLookup_retains [.handshake, .keypair] (u32le msg 4)).wp (RetainsView s) (fun _ _ hr hi => hi.trans hr)
-  have hg := fun pid => material_getPeer P pid
-  have hs := fun pid p => material_setPeer P pid p
-  have hu := fun peer => (peerPut_material peer).wp P
-  have hc := (kernel (hiddenClock64_sameKernel .cookieBirthdate)).wp P
-  mvcgen [cookieMessageConsume, hl, hg, hs, hu, hc, branch, invariant]
-  all_goals try dsimp +zetaDelta only [P] at *
-  all_goals try simp_all [view, materialState]
-  all_goals try subst s
-  all_goals first | exact RetainsView.refl _ | assumption
+  intro initial
+  let P := RetainsView initial
+  apply hoare_consequence (P := fun w => P (view w)) (Q := fun _ w => P (view w))
+    (a := cookieMessageConsume msg) ?_ (fun _ h => by
+      dsimp only [id] at h; rw [h]; exact RetainsView.refl _) (fun _ _ h => h)
+  unfold cookieMessageConsume
+  material_lower
+  repeat' first
+    | (index_material_head peerPut; exact (peerPut_material _).wp P)
+    | (index_material_head pubkeyLookup; exact (pubkeyLookup_material _).wp P)
+    | (index_material_head indexLookup; exact (indexLookup_retains _ _).wp P (fun _ _ hr hi => hi.trans hr))
+    | material_known P
+    | material_basic P
 
 end Leanux.Proofs.WG.Origins.Retaining

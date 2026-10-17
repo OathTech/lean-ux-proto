@@ -157,9 +157,10 @@ it is not part of that baseline.
 | Initialized runner erasure, routing syscalls and persistent worker history | 91 | 0 | 0 | 91 | 3 | 94 |
 
 | Native index material and product activation history | 27 | 8 | 0 | 19 | 0 | 27 |
+| Receiving-material leaves and product worker history | 69 | 48 | 2 | 19 | 4 | 71 |
 
-The whole tree currently contains 451 Lean files and 6,506 theorems. The completed
-changes total 2,347 retyped theorems, 1,673 deletions, 1,574 retained contract shapes and 464 added.
+The whole tree currently contains 451 Lean files and 6,508 theorems. The completed
+changes total 2,395 retyped theorems, 1,675 deletions, 1,593 retained contract shapes and 468 added.
 Retyping changes or generalizes the actual state/monad carrier or observation.
 This includes shorthand contracts whose source functions or named views move
 to a native monad. Mere namespace qualification and equivalent relocation of a
@@ -3740,3 +3741,39 @@ replay each root with
 'cap scripts/in-bundle lake env leanchecker --fresh MODULE'.
 The remaining outer-runner and origin chains, full gate and terminal replay
 are pending. Every register row remains lagging; the mirror is unchanged.
+
+
+## Receiving-material leaves and product worker history
+
+RetainingLeaves carries 48 native/generalized contracts and retains the arbitrary
+product cookie contract with its original 43-field mask. The two old
+indexInsert/indexRemove material frames are deleted because IndexM contains only
+the index table and Ambient; their concrete callers use the actual liftIndex
+adapter. Four additions supply native WP/support/cookie interfaces and a private
+conditional composition rule. Timer proofs follow the actual wheel placement
+and clearing operations. Supplied support remains a premise, not an initialized
+origin claim.
+
+RxScheduleHistory and RxEnvWorkersHistory retain all eighteen contracts, including
+arbitrary filter/worker callbacks, exact copied-world trials and failed prefixes.
+Their observers use the actual component getters and updates; scheduling,
+dispatch and section cleanup retain the source order.
+
+The three-module census is 69 before and 71 after: 48 retyped/generalized, two
+deleted, nineteen retained and four added. The scoped graph passes 355 jobs with
+zero own warnings. All eighty named logical roots have standard axioms only;
+fresh scoped replay and independent complete source review pass.
+
+RetainingLeaves development had six ordinary proof failures and two output-free
+passes; the last diagnostic's two deprecation warnings were corrected before
+the frozen central build. Scheduler/worker development had two passes and no
+failures. No infrastructure rerun, cap increase or proof-limit increase occurred
+in this tranche. The census now anchors declaration syntax, excluding a tactic's
+local variable named lemma; all earlier totals are unchanged.
+
+Reproduce with
+`cap scripts/in-bundle lake build Leanux.Proofs.WG.Origins.RetainingLeaves Leanux.Proofs.WG.Queues.RxEnvWorkersHistory`;
+replay each module with
+`cap scripts/in-bundle lake env leanchecker --fresh MODULE`.
+Outer-runner safety, the remaining origin/history callers and the full proof
+gate remain pending. Every register row remains lagging; the mirror is unchanged.
