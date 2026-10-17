@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Noise.FreshHistoryClaims
 import Leanux.Proofs.WG.Noise.ConfirmationReinstallClaims
 import Leanux.Proofs.WG.Noise.TagSequenceClaims
 import Leanux.Proofs.WG.Noise.SessionTagClaims
@@ -434,5 +435,25 @@ theorem original_confirmation_reinstallation_counterexample :
           after.wg.keypairCounter = entry.wg.keypairCounter ∧
           final.nextKeypairId = d.nextKeypairId) :=
   confirmation_same_allocation_reinstallation
+
+
+/-- The finite responder-setup/session/confirmation language executes the
+original calls and preserves their first Stop. From the explicit initial
+next-slot bound, every normal complete history has pairwise distinct successful
+confirmation IDs. No readiness, reference-budget, coherence or alias premise
+is assumed. This is not a whole-driver or initialized lifetime theorem. -/
+theorem original_fresh_confirmation_history (pid : PeerId)
+    (operations : List FreshOperation) (entry : Campaign2.Snapshot) :
+    Campaign2.AgreesOn (fun _ => True)
+      (do let receipts ← observedFreshSequence pid operations
+          pure (receipts.map FreshReceipt.result)) (runFreshSequence pid operations) ∧
+    Campaign2.Ensures (observedFreshSequence pid operations)
+      (fun s => s = entry ∧ FreshNextBound pid entry)
+      (fun receipts final => FreshChain pid entry operations receipts final ∧
+        (freshConfirmedIds receipts).Nodup) := by
+  refine ⟨?_,fresh_confirmation_history pid operations entry⟩
+  rw [observedFreshSequence_erase]
+  intro g ambient _
+  rfl
 
 end Leanux.Proofs.WG.Noise

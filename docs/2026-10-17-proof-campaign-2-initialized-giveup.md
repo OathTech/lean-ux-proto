@@ -94,3 +94,42 @@ The source artefacts are
 [the generator](proof-campaign-2-giveup.py) and
 [the runtime driver](../Leanux/Proofs/WG/TimerDiscipline/ReplayInitializedGiveUp.lean).
 Regenerate the JSON and runtime output; no trace dump or log is committed.
+
+
+## Attempt to obtain a closed execution theorem
+
+A six-probe bounded follow-up does not close a kernel-checked execution theorem.
+The unchanged generated recipe runtime-checks the actual audit's acceptance,
+23 boundaries, final give-up operands (19,18), retransmit detachment, zero-key
+expiry/enqueue stamp 21 and output totals. This follow-up predicate omits the
+all-boundary allocation-absence checks; those remain the original driver's
+separate runtime evidence above. No new theorem or headline is credited.
+
+The concrete obstruction is tactic reduction: decide +kernel cannot reduce
+the proposition to true or false, already for the first wgSet operation.
+This is an elaboration/reduction failure, not a kernel rejection, false
+execution result, timeout, recursion exception or memory-cap failure.
+Failed recovery declarations containing sorryAx are rejected.
+
+Probe 1 fails generated structure layout; 2 fails its remaining layout,
+and both abort evaluation. Probe 3 runtime-checks the full predicate as true
+but fails its closed proof reduction. Probe 4 fails a diagnostic access needing
+an unavailable Inhabited Operation; the isolated initialization theorem checks
+with standard axioms. Probe 5 corrects that access, runtime-checks initialization,
+the first operation and full predicate as true, but still fails first-operation
+proof reduction. Probe 6 fails diagnostic private-name syntax. Although the
+initialization proof checks within failed probes, no clean standalone package
+is installed or counted. All six runs use capped stdin at default limits;
+no warning suppression, infrastructure retry or cap increase occurs.
+
+Two continuation architectures remain. A finite-computation bridge can reuse
+Progress.PowSource.powMod_source, powLoop_unfold and powMod_finite_with_fuel
+to replace the private modular-power loop by proved finite evaluation before
+transporting through Curve25519 and the runner. The earlier small bridge
+experiment is evidence of feasibility, not a diagnosis that this is the only
+remaining blocker. Alternatively, concrete runnerOperation successors can be
+proved using configuration/send/timer contracts and composed through
+runnerAuditLoop; the existing unconditional executeTraceWithBoundaries_erases
+then gives original acceptance. This requires substantially more source
+composition. Neither architecture is claimed complete, and no mirror change
+is requested on the strength of reduction failure.
