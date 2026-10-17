@@ -21,10 +21,10 @@ and attributed theorem declarations. Campaign 2 owns 427 Lean files,
 | Common projection | 2 | 0 | 0 | 0 | Actual native WG/Ambient and full Product observations carried; no reconstructed execution states. |
 | H1 Noise | 35 | 171 | 22 | 180 | All original Noise obligations carried, including the full terminal closure; six type-given frames deleted. Wider caller/lifetime/reachability and clock-provenance charter claims remain open. |
 | H2 Index | 68 | 318 | 52 | 190 | Table, lookup, collision records, allocation, owner invariants and lifecycle support carried; seven type-given frames deleted. Exact peer-release outcomes replace stale totality, with checked counterexamples. Terminal closure and whole-driver coherence remain pending. |
-| H3 Roaming | 35 | 119 | 13 | 109 | Endpoint/publication, polling, attempt facts, crypto, lookup and response-caller factors carried with full Product certificates; two type-given frames deleted. Initiation transcript facts and broader authentication/caller closure remain pending. |
-| H4 Configuration | 130 | 554 | 79 | 323 | Scalar, identity, port, dump, allowed-IP and structural support carried; three type-given frames deleted. Quiet timer cleanup is corrected; queued-send and removal totality have checked stale-statement counterexamples. Remaining readback/effects and terminal closure remain pending. |
+| H3 Roaming | 35 | 119 | 13 | 115 | Endpoint/publication, polling, attempt facts, crypto, lookup and response-caller factors/facts carried with full Product certificates; two type-given frames deleted. Initiation transcript facts and broader authentication/caller closure remain pending. |
+| H4 Configuration | 130 | 554 | 79 | 330 | Scalar, identity, port, dump, allowed-IP and structural support carried; three type-given frames deleted. Quiet timer cleanup is corrected; queued-send and removal totality have checked stale-statement counterexamples. Remaining readback/effects and terminal closure remain pending. |
 | H5 Progress | 59 | 265 | 42 | 136 | Pure/control, cut, jitter, index, poll bounds, dispatch, scheduler turns, stack/probe frames and Product observation bridge carried. Receive-ring activation models, historical backlog/runner claims, remaining drain/flush claims and terminal closure remain pending. |
-| H6 Timer discipline | 98 | 404 | 50 | 71 | Base/guard/jitter, arming/wheel, recorded clock and initiation-send arming contracts carried; three type-given frames deleted. Exact wheel corrections are explicit; broader timer episodes, worker composition and terminal closure remain pending. |
+| H6 Timer discipline | 98 | 404 | 50 | 98 | Base/guard/jitter, arming/wheel, recorded clock and initiation-send arming contracts carried; three type-given frames deleted. Exact wheel corrections are explicit; broader timer episodes, worker composition and terminal closure remain pending. |
 
 Retyped, deleted and retained counts will be reported per validated tranche.
 H1 now has a checked split terminal closure; H2–H6 remain lagging.
@@ -3013,3 +3013,103 @@ TimerDiscipline.SendCutFrames under Leanux.Proofs.WG, then inspect logical
 declarations using #print axioms and replay each root with scripts/in-bundle
 lake env leanchecker --fresh MODULE. Use capped, 32 Lean threads and 16 QEMU
 slots on this host.
+
+
+## Send-state adapters, live-removal source outcomes and response-caller facts
+
+| Tranche | Before | Retyped | Corrected | Deleted | Kept | Added | After |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| TimerDiscipline.SendPeerFrames | 25 | 25 | 0 | 0 | 0 | 2 | 27 |
+| Config.LiveRemovalFrames | 4 | 0 | 0 | 0 | 4 | 0 | 4 |
+| Config.LiveRemovalSource | 3 | 0 | 3 | 0 | 0 | 0 | 3 |
+| Roaming.ResponseCallClaims and Product companions | 3 | 3 | 0 | 0 | 0 | 3 | 6 |
+| This tranche | 35 | 28 | 3 | 0 | 4 | 5 | 40 |
+| Cumulative processed baseline and checked support | 987 | 746 | 26 | 21 | 194 | 83 | 1,049 |
+
+The census is 514 campaign-owned files, 1,893 theorems and 329 checked proof
+modules; 844 baseline declarations await validation. Checked counts are H1
+180, H2 190, H3 115, H4 330, H5 136 and H6 98. H1's terminal closure remains
+current; H2–H6 and the full gate remain lagging. This tranche carries existing
+obligations; it claims no new charter result.
+
+SendPeerFrames retains all five higher-order adapters over arbitrary Product
+actions. Two separately named native adapters support the concrete WG actions;
+they do not restrict the original callback domain. Cache/access/tunnel frames
+keep optional-device/peer domains, normal-return failures and the one total
+getPeer contract. Send, table/cursor, initiation, work-queue and pending views
+are unchanged. Their equalities use the actual WG/Ambient observations.
+The transmit proof respects routing-back rejection and the original
+loopback, statistics, socket-read and sent-output sequence. These substantive
+preservation claims stay in the frame file; no frame is deleted.
+Independent review compared all original statements and current source and
+found no scope or behavior mismatch.
+
+LiveRemovalFrames retains four pure cleanup/keypair preservation facts.
+LiveRemovalModel still specifies only successful effects; its comments now
+make the guard distinction explicit. LiveRemovalSource corrects three false
+totality claims. The local post-clear sequence retains its exact original
+action and classifies release refusal or its original success effect. The
+two complete source contracts additionally witness actual dead-guard,
+keypair-clear and timer-stop executions; the outer one also witnesses actual
+peerMakeDead after its null guard. Those witnesses determine the crypt-work
+diagnostic site from the real Ambient decision log. The original ClearReady,
+resident/live/count, empty-work-queue and RemovalEffect premises are retained,
+as are successful LiveRemovalEffect conclusions. No readiness premise or
+post-error state is invented. Terminal projected wrappers still need to
+observe those actual prefixes; an arbitrary existential error site would
+not preserve the claim.
+
+ResponseCallClaims carries the three native packet-prefix, caller-prefix and
+full-observer facts. The accepted MAC cases come from actual proceeding
+branches, and the setter boundary is the actual read after the no-peer
+decision. Device equality to committed state permits the intervening log
+step without claiming an unchanged whole snapshot. ResponseCallProductClaims
+adds three complete Product companions: every one of the eight fixture
+observations is captured from the actual entry, preserved by liftWG and
+restored into lookup/commit/caller certificates. Full beforeSetter snapshot
+equality and lookup outcome equality remain full equalities. The two pure
+Product predicates live in ResponseCallProductModel. Independent native and
+Product reviews found no issue. Terminal wrappers still need to select the
+Product operations/facts when carried.
+
+Scoped builds pass 85 jobs for the send module, 153 for initial combined
+packaging, and 158 for the final Product closure, without warnings. Axiom
+inspection covers 681 logical roots in 129 proof modules, including 388
+public theorem roots, with only the three standard axioms. Fresh kernel replay
+passes all three roots. Static token/import/root/default-target checks and all
+258 original terminal names/order pass; mirror/shared-layer boundaries are clear.
+
+Development ledger: SendPeerFrames probe 1 failed four local elaboration/source
+joins; probe 2 failed four record-layout diagnostics; probe 3 failed one
+if/bind join; probe 4 passed cleanly. All four were warning-free.
+LiveRemoval probe 1 failed a drain alias join and two unused simplifications;
+probe 2 closed the local continuation. Probe 3 failed an extra reflexivity
+step, reverse unfolding and bind normalization, with one unused simplification.
+Probe 4 elaborated but had four warnings; probe 5 closed after-death source
+outcomes cleanly and probe 6 closed all three contracts cleanly.
+
+Response-call native probes 1 and 2 failed eight branch reductions, with
+thirteen and eight unused simplification warnings respectively. Probe 3
+reduced the source with exact local run equations but retained eight MAC
+branch goals; probe 4 reduced those to three execution cases. Probe 5 failed
+record layout/dotted notation; probe 6 failed dependent equality elimination;
+probe 7 failed a nested product projection. Probe 8 closed the packet fact,
+and probe 9 closed all three native facts, both warning-free. Complete outputs
+were saved before bounded previews; all diagnostic headings and remaining
+goals were inspected before subsequent edits. The Product companions passed
+their first probe without warnings.
+
+The separate initiation-consume attempt remains outside this census.
+Its additional probes 7–12 failed respectively on normalization, kernel
+recursion, auxiliary-extraction recursion, helper simplification/layout,
+ambiguous ordering constructors and kernel recursion. In particular, closing
+elaboration goals at probes 8 and 12 did not pass kernel checking. No proof
+limit was raised. A subsequent mechanical prefix/tail split remains pending.
+No unchanged-source rerun, infrastructure retry, cap increase or guest run
+occurred in this tranche.
+
+Reproduce with scripts/in-bundle lake build on TimerDiscipline.SendPeerFrames,
+Config.LiveRemovalSource and Roaming.ResponseCallProductClaims under
+Leanux.Proofs.WG, then #print axioms for logical declarations and
+scripts/in-bundle lake env leanchecker --fresh MODULE for each root.
+Use capped, 32 Lean threads and 16 QEMU slots on this host.

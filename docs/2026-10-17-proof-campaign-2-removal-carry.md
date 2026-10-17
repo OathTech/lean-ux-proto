@@ -45,5 +45,7 @@ The full H4 terminal closure and full proof gate remain lagging.
 The two quiet-removal contracts now classify exact refusal or the original
 successful cleanup effect on the same premises, including the actual outer
 removal prefix. Four private exact-prefix helpers retain the actual native
-states and decision logs. General live-removal callers remain pending.
+states and decision logs. The three general live-removal source contracts now classify exact outcomes
+using actual clear/timer/outer-prefix execution witnesses for diagnostics.
+Their terminal projected wrappers remain pending.
 Validation and the complete failed-probe ledger are in the retrofit report.
