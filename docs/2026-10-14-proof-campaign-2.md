@@ -9,21 +9,21 @@ The branch retains its proof target and gate. All six terminal closures now chec
 | Result | Headlines | Checked support | Split status |
 | --- | ---: | ---: | --- |
 | H1 Noise | 22 | 185 | Full terminal closure current; wider caller/lifetime/clock claims open. |
-| H2 Index | 66 | 377 | Full terminal closure current; reachable whole-driver uniqueness/coherence open. |
+| H2 Index | 69 | 388 | Full terminal closure current; reachable whole-driver uniqueness/coherence open. |
 | H3 Roaming | 13 | 157 | Full terminal closure current; callback authentication provenance and broader caller coverage open. |
-| H4 Configuration | 79 | 582 | Full terminal closure current; global ownership, queued cleanup and general pagination open. |
+| H4 Configuration | 80 | 586 | Full terminal closure current; global ownership, queued cleanup and general pagination open. |
 | H5 Progress | 42 | 288 | Full terminal closure current with exact bounded outcomes and checked refutations; global progress/coherent-ring adequacy open. |
 | H6 Timers | 50 | 438 | Full terminal closure current; outer scheduler episodes, complete caller coverage and session-relative counts open. |
 
-The checked surface is 2,027 theorems in all 606 campaign-owned modules.
+The checked surface is 2,042 theorems in all 615 campaign-owned modules.
 The completed retrofit accounts for 1,983: 1,321 retyped, 244 explicitly
-corrected, 239 retained and 179 added support/finding declarations. Forty-four
-subsequent H2 declarations add confirmation, data-ingress and removal table
-preservation, local owner coherence and its release-ownership obstruction. Of the 1,831 baseline theorems, 22 frames
+corrected, 239 retained and 179 added support/finding declarations. Fifty-five
+subsequent H2 declarations add table preservation and local owner coherence;
+four H4 declarations add mixed fwmark/scalar readback. Of the 1,831 baseline theorems, 22 frames
 were deleted because types supply their facts and five false cookie supports
 were separately retired with checked counterexamples. No baseline declaration
 remains awaiting retrofit; all 258 original terminal names/order survive,
-with fourteen new H2 headlines (272 total).
+with seventeen new H2 headlines and one new H4 headline (276 total).
 
 The [retrofit report](2026-10-16-proof-campaign-2-state-split.md) records
 claim/frame files, corrections, before/after counts and validation.
@@ -322,6 +322,145 @@ Static checks retain all 258 original terminal names/order; mirror/shared
 boundaries pass. The inherited full-gate failure remains recorded without an
 unchanged rerun. Reproduce with the scoped Index.Statements build and fresh
 replay commands above, under capped with 32 threads and 16 QEMU slots.
+
+## H2 continuation: session-wide hashed-owner coherence
+
+Every normal beginSession return now preserves coherence of all hashed
+owners. Entry requires the actual resident caller, hashed-keypair owner IDs
+below the allocation cursor, the existing SessionRotationFresh condition,
+and local hashed-owner coherence. No table uniqueness, whole-store freshness,
+self peer-word, positive-caller, reference budget, readiness or successful-result
+premise is added.
+
+The false return retains the device. On success, the actual SessionEffect
+supplies a surviving handshake row. Rotation's exact handshake-membership
+equivalence places that row in the entry table; coherence derives the caller's
+self peer-word. Coherence of the surviving row after rotation supplies the
+resident positive peer for the new key's publication. The allocation bound
+prevents overwriting a hashed key; unhashed allocation-ID objects remain
+allowed. Rotation freshness excludes only releases of the new key ID.
+All other slot aliases and repeated releases retain their actual semantics.
+
+Architecture: Index/OwnerCoherenceSessionFrames holds resident-peer write,
+prepared-device and RotationRun preservation; OwnerCoherenceSessionEffects
+composes the exact successful/false device effects; OwnerCoherenceSessionClaims
+connects them to the native operation through the projection. Statements
+appends one literal headline. Six new theorems bring H2 to 67 headlines/383
+theorems and campaign totals to 273 headlines/2,033 theorems in 609 modules.
+No existing claim is reshaped or mirror/shared layer edited. The static
+freshness/bound obligations remain unproved reachability conditions, and
+whole-driver H2 is still open. No mirror change is requested.
+
+Probe 1 fails four case-rewrite goals without warnings. Changed probe 2
+passes all five support/claim declarations cleanly at default limits.
+Independent review finds no correctness/domain issue, including derivation
+of the self-word and positive-peer facts from the actual publication row.
+No limit/cap increase, warning suppression or infrastructure retry occurs.
+
+Scoped Index.Statements build passes 292 jobs, with only inherited Env:865
+String.mk warning. Audit checks 1,165 logical roots in 228 modules, including
+772 public theorem roots, standard only. Its final replay is included in the
+combined checkpoint below; original-name/order and boundary checks pass.
+The inherited full-gate failure remains recorded, without an unchanged rerun.
+Reproduce with the scoped Index.Statements build and fresh replay commands
+above, under capped with 32 Lean threads and 16 QEMU slots.
+
+## H2 continuation: confirmation and clearing preserve owner coherence
+
+Original receivedWithKeypair and keypairsClear each preserve local coherence
+for all hashed owners on every normal return. Coherence is the only entry
+predicate; the optional device, caller IDs, slot aliases and Ambient inputs
+remain arbitrary. The actual first peer read supplies the source effect's
+residency, while each successful put supplies its resident/live/word facts.
+Missing objects and refused releases remain Stops.
+
+Confirmation's false branch retains the device; its true branch uses the
+checked ordered rotation. Clearing follows each evolving resident peer and
+its actual put, including repeated or aliased slot IDs. Neither claim promises
+completion, positive references for every slot, or global reachability.
+
+Architecture: Index/OwnerCoherenceClearFrames proves pure ClearRun
+preservation using the peer-metadata write and key-release frames.
+OwnerCoherenceKeypairCallerClaims applies actual source effects through the
+projection. Two literal terminal headlines are appended. Five new theorems
+bring H2 to 69 headlines/388 theorems. Existing claims remain unchanged.
+No shared/mirror edit or mirror request is needed.
+
+Probe 1 fails dependent ClearPut elimination; changed probe 2 fails an
+incorrectly explicit start-device argument; probe 3 passes cleanly at default
+limits. Independent review finds no issue, including the derivation of
+residency from actual execution and both confirmation branches.
+Final combined validation is recorded below.
+
+## H4 continuation: mixed fwmark and peer-setting readback
+
+The actual setter/getter sequence now has a mixed-attribute readback theorem:
+set fwmark together with one peer's preshared key and keepalive interval,
+then run wgGetDevice. The result contains the model's exact JSON and completed
+socket state. A malformed second peer returns normal -EINVAL after retaining
+the earlier fwmark, generation, endpoint-source/cache and scalar writes.
+The proof records every non-peer Device field, the selected peer's actual
+cleared/configured state and all other peer bindings.
+
+The domain is explicit: creating namespace, singleton peerList, actual
+hashtable hit and resident positive peer with room for its lookup reference,
+and a stopped device. The getter additionally requires no Allowed IPs for
+that peer, sufficient space, an idle empty socket and actual device selection.
+The claim adds no reset-record readiness: a genuine reset Stop prevents the
+getter, and the existential reset timestamp is obtained from the successful
+source prefix. It asserts no post-error state. The mark is an arbitrary Nat
+in the mirror; current dumping uses direct JSON conversion, so this is not
+a theorem about netlink byte serialization or u32 input validation.
+
+Architecture: Config/MixedAttributeModel defines the request, updated
+device, cleared/scalar peer and exact effect predicate. MixedAttributeFrames
+separates socket/selector preservation across the actual endpoint-source clear.
+MixedAttributeSource proves the native setter effects; MixedAttributeClaims
+composes the actual projected set/get. Statements appends one literal headline.
+Four new theorems bring H4 to 80 headlines/586 theorems. Together with the H2
+continuations, the campaign has 276 headlines and 2,042 theorems in 615 modules.
+No existing claim is reshaped or shared/mirror code edited. General mixed
+requests, ownership, queued-cleanup completion and pagination remain open.
+No mirror change is requested.
+
+Probes 1–2 fail source factoring/normalization, with five unused-simp warnings
+in probe 2; changed probe 3 passes the frame and source. Probe 4 fails record
+syntax and a reserved local name; probe 5 fails projection/congruence and
+nested-precondition elaboration; probe 6 passes all three new proof declarations
+cleanly. Every warning is fixed. Both H2 and H4 packages use default new-proof
+limits; no cap/limit increase, suppression or infrastructure retry occurs.
+Independent review finds no issue and confirms actual prefix failures,
+partial-mutation ordering and the JSON-only observation domain.
+
+Combined Index.Statements and Config.Statements build passes 414 jobs, with
+only inherited Env:865 String.mk warning. Axiom inspection checks 1,731 logical
+roots in 350 modules, including 1,192 public theorem roots, standard only.
+Both fresh kernel replays pass. Static checks retain all 258 original
+terminal names/order; mirror/shared boundaries pass. The full
+gate still fails in inherited CounterWindow/ReplayWindow and is not rerun
+unchanged. Reproduce with scripts/in-bundle lake build
+Leanux.Proofs.WG.Index.Statements Leanux.Proofs.WG.Config.Statements, followed
+by scripts/in-bundle lake env leanchecker --fresh for each module, under capped
+with 32 Lean threads and 16 QEMU slots.
+
+## Remaining coherent-ring progress dependency
+
+A positive H5 activation/drain theorem now has a precise proof-layer dependency:
+campaign 1's Queues/PtrRing, RingGeometry and RingSteps, available on its branch
+but absent here. Their ringOf/Bounds representation relates physical cursors
+and stale slots to logical live contents, and consume_preserves supplies the
+tail step for arbitrary batch values. Recreating that layer here would cross
+the shared-layer boundary, so no copy is made.
+
+The proposed own wrapper would induct on the live list using those pure facts
+and existing cookie source continuations. Arbitrary recorded inputs retain
+actual Stops; valid stop/reschedule records give drain/yield corollaries,
+without clock/allocation records for empty-table cookie misses. Logical count
+zero/items empty can then be proved; the retired physical reset-to-empty
+claim remains false even for coherent rings. Initial queue-length equality
+is needed only to conclude handshakeQueueLen = 0. The alternative direct physical-state
+induction would duplicate the same absent ring layer; it was inventoried,
+not implemented. This is a proof dependency, not a mirror request or a new H5 result.
 
 ## Historical checkpoint before the split
 

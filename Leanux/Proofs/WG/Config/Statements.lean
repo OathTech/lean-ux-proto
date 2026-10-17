@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Config.MixedAttributeClaims
 import Leanux.Proofs.WG.Config.LiveRemovalObservation
 import Leanux.Proofs.WG.Config.SocketReadbackClaims
 import Leanux.Proofs.WG.Config.ScalarSocketReadbackClaims
@@ -1300,5 +1301,34 @@ theorem original_scalar_socket_multipart_readback (d : Device) (key psk : Key) (
   scalarSocketReadback_returns d key psk interval bad pid p nodes front b tail sock peers found resident
     live bounded down listed nonempty absent readable endpoint firstFits firstFull lastFits idle empty
 
+
+/-- The actual mixed fwmark/peer-scalar setter followed by the getter reads
+back the model's exact JSON and retains endpoint-source/cache clearing.
+A malformed second peer returns EINVAL after the earlier writes. The finite
+single-peer, stopped-device getter domain is explicit; reset-record readiness
+is not assumed, and an actual prefix Stop prevents the getter. -/
+theorem original_mixed_fwmark_scalar_get_after_set (d : Device) (mark : Nat) (key psk : Key)
+    (interval : Nat) (bad : Bool) (pid : PeerId) (p : Peer) (sock : NlSock)
+    (peers : d.peerList = [pid]) (net : d.creatingNet = true)
+    (found : d.peerHashtable.find? (·.1 == key) = some (key, pid))
+    (resident : d.peers[pid]? = some p) (live : 0 < p.refcount)
+    (bounded : p.refcount + 1 < 2 ^ 31) (down : d.running = false)
+    (noIps : p.allowedipsList = [])
+    (room : devicePrefixSpace d + 168 + 20 ≤ NLMSG_GOODSIZE)
+    (idle : sock.cbRunning = false) (empty : sock.queue = []) :
+    Campaign2.Ensures (do
+      let ret ← wgSetDevice (mixedFwmarkAttrs d mark key psk interval bad)
+      let dump ← wgGetDevice (byIndex d)
+      pure (ret, dump))
+      (fun s => s.wg.device = some d ∧ s.wg.nlSock7 = sock ∧ ClaimView.selectsDevice s d)
+      (fun result s =>
+        result = ((if bad then -EINVAL else 0), .ok
+          (singlePeerJson (mixedFwmarkBase d mark)
+            {p with presharedKey := psk, persistentKeepaliveInterval := interval})) ∧
+        s.wg.nlSock7 = {sock with queue := [], ctx := {hasWg := true}, prevSeq := d.deviceUpdateGen + 1, dumpDoneErrno := 0, cbRunning := false} ∧
+        ∃ current reset, s.wg.device = some current ∧
+          MixedFwmarkEffect d mark pid p psk interval reset current) :=
+  mixed_fwmark_scalar_get_after_set d mark key psk interval bad pid p sock
+    peers net found resident live bounded down noIps room idle empty
 
 end Leanux.Proofs.WG.Config

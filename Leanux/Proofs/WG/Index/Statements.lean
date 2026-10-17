@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.Index.OwnerCoherenceKeypairCallerClaims
+import Leanux.Proofs.WG.Index.OwnerCoherenceSessionClaims
 import Leanux.Proofs.WG.Index.OwnerCoherenceKeypairReleaseClaims
 import Leanux.Proofs.WG.Index.PeerRemovalClaims
 import Leanux.Proofs.WG.Index.OwnerCoherenceReleaseClaims
@@ -797,5 +799,34 @@ theorem original_keypair_put_owner_coherence (key : Option KeypairId) (now : Boo
     Campaign2.Ensures (keypairPut key now) View.OwnerCoherentSafe
       (fun _ s => View.OwnerCoherentSafe s) :=
   keypairPut_owner_coherent key now
+
+/-- Every normal session start preserves coherence of all hashed owners
+under explicit allocation-owner bounds and freshness of the rotation's releases.
+The actual successful run supplies the original handshake publication witness;
+self peer-word and positive-peer facts are derived, not assumed separately.
+This local contract covers both Boolean outcomes and establishes no reachability. -/
+theorem original_begin_session_owner_coherence (pid : PeerId) (d : Device) (p : Peer)
+    (resident : d.peers[pid]? = some p) (bounded : KeypairOwnersBounded d)
+    (fresh : SessionRotationFresh p d.nextKeypairId) :
+    Campaign2.Ensures (beginSession pid)
+      (fun s => s.wg.device = some d ∧ View.OwnerCoherentSafe s)
+      (fun _ s => View.OwnerCoherentSafe s) :=
+  beginSession_owner_coherent pid d p resident bounded fresh
+
+/-- Actual responder confirmation preserves local coherence for every hashed
+owner on all normal returns. No successful-confirmation, residency, slot
+distinctness, reference-budget or readiness premise is added. -/
+theorem original_received_with_keypair_owner_coherence (pid : PeerId) (received : KeypairId) :
+    Campaign2.Ensures (receivedWithKeypair pid received) View.OwnerCoherentSafe
+      (fun _ s => View.OwnerCoherentSafe s) :=
+  receivedWithKeypair_owner_coherent pid received
+
+/-- Original slot clearing preserves local hashed-owner coherence on normal
+return, retaining aliases and actual refused puts. Coherence is the sole entry
+invariant; this theorem does not promise completion of all releases. -/
+theorem original_keypairs_clear_owner_coherence (pid : PeerId) :
+    Campaign2.Ensures (keypairsClear pid) View.OwnerCoherentSafe
+      (fun _ s => View.OwnerCoherentSafe s) :=
+  keypairsClear_owner_coherent pid
 
 end Leanux.Proofs.WG.Index
