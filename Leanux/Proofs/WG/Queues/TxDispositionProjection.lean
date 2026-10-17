@@ -121,8 +121,8 @@ theorem project_forIn (ρ : Event → Option F) (xs : List γ) (b : β)
 theorem enqueueCore_access (pid : PeerId) (item : List SkbId) :
     ProjectsPrefix accessEvent id (enqueueCore pid item) (liftWGObserver (enqueuePerDeviceAndPeerPrefix pid item)) := by
   unfold enqueueCore enqueuePerDeviceAndPeerPrefix
-  cases hh : item.head? <;> simp only [hh, liftWGObserver_bind, liftWGObserver_pure,
-    liftWGObserver_lift, liftWGObserver_forIn, apply_ite]
+  cases hh : item.head? <;> simp only [liftWGObserver_bind, liftWGObserver_pure,
+    liftWGObserver_lift, apply_ite]
   repeat' first
     | with_reducible exact nativeAccess_project (txSet_appends _ _)
     | with_reducible exact nativeAccess_project (getPeer_appends _)
@@ -143,14 +143,14 @@ theorem enqueue_access (pid : PeerId) (item : List SkbId) :
           pure ret : Obs Int) (pure ret) := by
     intro w h
     split <;> try split
-    all_goals simp only [map_eq_pure_bind, runPrefix_bind, runPrefix_emit, runPrefix_pure, accessEvent, List.filterMap_append, List.filterMap_cons, List.filterMap_nil, List.append_nil, Except.map, id]
+    all_goals simp only [runPrefix_bind, runPrefix_emit, runPrefix_pure, accessEvent, List.filterMap_append, List.filterMap_cons, List.filterMap_nil, List.append_nil, Except.map, id]
   simpa only [enqueue, bind_pure] using projectsPrefix_bind accessEvent id id (enqueueCore_access pid item) ht
 
 theorem publish_access (item : List SkbId) (state : PacketState) :
     ProjectsPrefix accessEvent id (publish item state) (liftWGObserver (enqueuePerPeerTxPrefix item state)) := by
   unfold publish enqueuePerPeerTxPrefix
-  cases hh : item.head? <;> simp only [hh, liftWGObserver_bind, liftWGObserver_pure,
-    liftWGObserver_lift, liftWGObserver_forIn, apply_ite]
+  cases hh : item.head? <;> simp only [liftWGObserver_bind,
+    liftWGObserver_lift, apply_ite]
   repeat' first
     | with_reducible exact nativeAccess_project (txGet_appends _)
     | with_reducible exact nativeAccess_project (ownerDeref_appends _)
@@ -170,7 +170,7 @@ theorem publish_access (item : List SkbId) (state : PacketState) :
 theorem create_access (pid : PeerId) (item : List SkbId) :
     ProjectsPrefix accessEvent id (create pid item) (liftWGObserver (createDataPrefix pid item)) := by
   unfold create createDataPrefix
-  cases hh : item.head? <;> simp only [hh, liftWGObserver_bind, liftWGObserver_pure,
+  cases hh : item.head? <;> simp only [liftWGObserver_bind, liftWGObserver_pure,
     liftWGObserver_lift, liftWGObserver_forIn, apply_ite]
   repeat' first
     | with_reducible exact enqueue_access _ _
@@ -240,8 +240,7 @@ theorem publish_ring_frame (item : List SkbId) (state : PacketState) : HistoryFr
 theorem create_ring (pid : PeerId) (item : List SkbId) :
     ProjectsPrefix ringEvent id (create pid item) (TxRing.create pid item) := by
   unfold create TxRing.create nativeAccess
-  cases hh : item.head? <;> simp only [hh, liftWGObserver_bind, liftWGObserver_pure,
-    liftWGObserver_lift, liftWGObserver_forIn, apply_ite]
+  cases hh : item.head? <;> simp only []
   repeat' first
     | with_reducible exact enqueue_ring _ _
     | with_reducible exact (publish_ring_frame _ _).project (publish_erases _ _)

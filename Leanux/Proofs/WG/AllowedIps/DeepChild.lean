@@ -102,7 +102,7 @@ theorem add_placed_gap_wp (k : WGWorld) (d : WG.Device) (hd : k.dev = some d)
         (gapParent (rootWidth v4) base n side sibling) leaf hnlisted hleaf hne (by omega)
       mvcgen [hs]
       all_goals try dsimp +zetaDelta only at *
-      all_goals simp_all [store, kl, dl, da, leaf, gapInstalledAt, connectedChild, allocated]
+      all_goals simp_all [gapInstalledAt, connectedChild, allocated]
   clear read rootNative
   mvcgen [WG.add, branchCmp, AmbientM.branchCmp, branch, AmbientM.branch, hgetRoot, invariant, AmbientM.invariant]
   all_goals try dsimp +zetaDelta only at *

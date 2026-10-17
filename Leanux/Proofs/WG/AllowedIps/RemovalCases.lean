@@ -307,7 +307,7 @@ theorem case_remove_collapse_root (w : WGWorld) (ambient : Ambient) (d : WG.Devi
     rw [he] at hgone
     have hqn : q = p.id ∨ q = n.id := by
       simp only [Tree.mem_fork_nodeIds, Tree.nodeIds, List.mem_cons, List.mem_append,
-        List.not_mem_nil, or_false, false_or] at hq hgone
+        List.not_mem_nil, or_false] at hq hgone
       grind only
     rcases hqn with rfl | rfl
     · simp [removalCollapseRoot_node]
@@ -382,7 +382,7 @@ theorem case_remove_collapse_child (w : WGWorld) (ambient : Ambient) (d : WG.Dev
   · intro q hq hgone
     have hqn : q = p.id ∨ q = n.id := by
       simp only [Tree.mem_fork_nodeIds, Tree.nodeIds, List.mem_cons, List.mem_append,
-        List.not_mem_nil, or_false, false_or] at hq hgone
+        List.not_mem_nil, or_false] at hq hgone
       grind only
     rcases hqn with rfl | rfl
     · simp [removalCollapseChild_node]

@@ -129,7 +129,7 @@ theorem rxPollGro_erases (pid : PeerId) (budget : Nat) :
         | (simpa [pollProject, projectStep, List.map_append, Option.toList_map] using
             erasesTo_pure (projectStep pollProject) _)
         | with_reducible exact erasesTo_pure (projectStep TaggedGro.erase) _
-      all_goals simp_all [ErasesTo, projectStep, pollProject, List.map_append, Option.toList_map, Except.map]
+      all_goals simp_all [ErasesTo, Option.toList_map, Except.map]
       all_goals exact groOption_erases _ _
     · intro acc
       dsimp only [pollProject]

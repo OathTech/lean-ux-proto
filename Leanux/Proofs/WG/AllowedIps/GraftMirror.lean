@@ -243,7 +243,7 @@ theorem finishGraft_root_wp (k : WGWorld) (d : WG.Device) (hd : k.dev = some d)
     have hn := connectNode_root_wp (store d) v4 id n hn
     mvcgen [hn]
     all_goals try dsimp +zetaDelta only at *
-    all_goals simp_all [store, connectedRoot, rootWrite]
+    all_goals simp_all [connectedRoot, rootWrite]
   clear adapt
   mvcgen [finishGraft, branch, AmbientM.branch, h]
   all_goals simp_all
@@ -276,7 +276,7 @@ theorem finishGraft_child_wp (k : WGWorld) (d : WG.Device) (hd : k.dev = some d)
     have hn := chooseAndConnectNode_wp (store d) parent id pn n hp hn hne hc
     mvcgen [hn]
     all_goals try dsimp +zetaDelta only at *
-    all_goals simp_all [store, connectedChild]
+    all_goals simp_all [connectedChild]
   clear adapt
   mvcgen [finishGraft, branch, AmbientM.branch, h]
   all_goals simp_all
@@ -345,7 +345,7 @@ theorem graftTail_wp (k : WGWorld) (d : WG.Device) (v4 : Bool)
     have hnative := Leanux.Proofs.WG.AllowedIps.chooseAndConnectNode_wp (store d) parent id pn n hp hn hne hc
     mvcgen [hnative]
     all_goals try dsimp +zetaDelta only at *
-    all_goals simp_all [store, connectedChild]
+    all_goals simp_all [connectedChild]
   have freeNode_wp (g : WGWorld) (d : WG.Device) (hd : g.dev = some d)
       (id : Nat) (n : WG.AipNode) (hn : d.nodes[id]? = some n) :
       ⦃fun w => ⌜w = g⌝⦄ (MonadLift.monadLift (WG.freeNode id) : WG.M Unit)
@@ -354,7 +354,7 @@ theorem graftTail_wp (k : WGWorld) (d : WG.Device) (v4 : Bool)
     have hnative := Leanux.Proofs.WG.AllowedIps.freeNode_wp (store d) id n hn
     mvcgen [hnative]
     all_goals try dsimp +zetaDelta only at *
-    all_goals simp_all [store]
+    all_goals simp_all []
   have allocNode_wp (g : WGWorld) (d : WG.Device) (hd : g.dev = some d)
       (site : AllocSite) (n : WG.AipNode) :
       ⦃fun w => ⌜w = g⌝⦄ (MonadLift.monadLift (WG.allocNode site n) : WG.M (Option Nat))
@@ -418,7 +418,7 @@ theorem graftTail_wp (k : WGWorld) (d : WG.Device) (v4 : Bool)
     mvcgen [hfinishOne]
     all_goals try exact hconnFrame
     all_goals try dsimp only at *
-    all_goals simp_all [ite_eq_left he, graftOneReady]
+    all_goals simp_all [graftOneReady]
   · have he : min cidr (common (rootWidth v4) old.bits addr) ≠ cidr := by grind
     let split := min cidr (common (rootWidth v4) old.bits addr)
     let mid := WG.newNode addr split (rootWidth v4) none
@@ -440,7 +440,7 @@ theorem graftTail_wp (k : WGWorld) (d : WG.Device) (v4 : Bool)
       have hfree := freeNode_wp kr dr rfl d.nextNode leaf hnr
       mvcgen [hfree]
       all_goals try dsimp +zetaDelta only at *
-      all_goals simp_all [graftRolledBack, he]
+      all_goals simp_all [graftRolledBack]
     · let mid := WG.newNode addr split (rootWidth v4) none
       obtain ⟨hmId, hYesFrame⟩ := (show _ = dl.nextNode ∧ _ = { kl with dev := some (allocated dl mid) } from by assumption)
       change _ = d.nextNode + 1 at hmId
@@ -465,8 +465,8 @@ theorem graftTail_wp (k : WGWorld) (d : WG.Device) (v4 : Bool)
       have hmid' : dc.nodes[d.nextNode + 1]? = some mid' := by simp [dc, connectedChild, mid']
       let leaf := WG.newNode addr cidr (rootWidth v4) (some pid)
       have hleaf' : dc.nodes[d.nextNode]? = some leaf := by
-        simp [dc, connectedChild, dm, allocated, dl, graftListed, Std.TreeMap.getElem?_insert,
-          Ne.symm hne, Nat.ne_of_gt (Nat.lt_succ_self d.nextNode), leaf, Std.TreeMap.getElem_insert]
+        simp [dc, connectedChild, dm, allocated, dl, graftListed,
+          Ne.symm hne, leaf, Std.TreeMap.getElem_insert]
       have hconn2 := chooseAndConnectNode_wp kc dc rfl (d.nextNode + 1) d.nextNode mid' leaf hmid' hleaf'
         (by omega) hs
       mvcgen [hconn2]
@@ -480,7 +480,7 @@ theorem graftTail_wp (k : WGWorld) (d : WG.Device) (v4 : Bool)
       mvcgen [hfinishTwo]
       all_goals try exact hconn2Frame
       all_goals try dsimp only at *
-      all_goals simp_all [ite_eq_right he, graftTwoReady]
+      all_goals simp_all [graftTwoReady]
 
 theorem add_placed_root_graft_wp (k : WGWorld) (d : WG.Device) (hd : k.dev = some d)
     (v4 : Bool) (id : Nat) (old : WG.AipNode) (addr cidr pid : Nat) (p : WG.Peer)

@@ -12,11 +12,30 @@ open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing Std.Do
 
 theorem ipTunnelEcnEncap_sameWGWorld (pkt : Packet) :
     SameView (id : WGWorld → WGWorld) (ipTunnelEcnEncap pkt) := by
-  apply SameView.of_wp
-  intro initial
-  have ds := fun protocol => (ipTunnelGetDsfield_sameWGWorld protocol pkt.bytes).wp (fun w => w = initial)
-  mvcgen [ipTunnelEcnEncap, Packet.protocol, branch, AmbientM.branch,
-    invariant, AmbientM.invariant, ds]
+  have ambient {α : Type} (a : AmbientM α) :
+      SameView (id : WGWorld → WGWorld) (monadLift a : WG.M α) :=
+    fun initial => hoare_liftAmbient a (fun w => w = initial)
+  have protocol : SameView (id : WGWorld → WGWorld) pkt.protocol := by
+    unfold Packet.protocol
+    cases pkt.bytes with
+    | nil =>
+      simp only
+      exact SameView.pure _ _
+    | cons b rest =>
+      simp only
+      split
+      · exact SameView.pure _ _
+      · split
+        · exact SameView.pure _ _
+        · exact ambient (AmbientM.invariant "a staged packet that is neither empty nor IP")
+  unfold ipTunnelEcnEncap
+  apply SameView.bind protocol
+  intro protocol
+  apply SameView.bind (ipTunnelGetDsfield_sameWGWorld protocol pkt.bytes)
+  intro inner
+  apply SameView.bind (ambient (AmbientM.branch .ecnEncapInnerCe (inner % 4 == 3)))
+  intro ce
+  split <;> exact SameView.pure _ _
 
 def purgeStagedPacketsPrefix (pid : PeerId) : MixedM Unit := do
   let p ← getPeerMixed pid
@@ -358,7 +377,7 @@ theorem sendKeepalivePrefix_preserves_ambient (c : AmbientContracts I) (t : TxCo
 theorem purgeStagedPacketsPrefix_preserves_product (c : ProductAmbientContracts I) (t : ProductTxContracts I)
     (pid : PeerId) : PrefixPreserves I LifetimeEvent.Safe (liftWGObserver (purgeStagedPacketsPrefix pid)) := by
   apply ProductAmbientContracts.drop (Q := fun _ _ => True)
-  simp only [purgeStagedPacketsPrefix, liftWGObserver_bind, liftWGObserver_pure]
+  simp only [purgeStagedPacketsPrefix, liftWGObserver_bind]
   apply PrefixEnsures.bind (c.getPeer (fun _ => True) pid)
   intro p
   apply PrefixEnsures.bind (t.device (fun s => True ∧ s.1.slots pid = some p.internalId) (.dropped p.staged.length))
@@ -422,7 +441,7 @@ theorem stagedOutNokeyPrefix_preserves_product (c : ProductAmbientContracts I) (
     intro initial
     exact hoare_liftAmbient (AmbientM.invariant why) (fun w => wgStoreView w = initial)
   have hq (pid) := ProductAmbientContracts.drop (t.device (fun _ => True) (.handshake pid))
-  simp only [stagedOutNokeyPrefix, liftWGObserver_bind, liftWGObserver_pure]
+  simp only [stagedOutNokeyPrefix]
   have tail : PrefixPreserves I LifetimeEvent.Safe
       (liftWGObserver (do
         keypairPutPrefix kp false
@@ -442,7 +461,7 @@ theorem stagedOutNokeyPrefix_preserves_product (c : ProductAmbientContracts I) (
     have hr := stagedRestore_preserves_product c pid packets
     simpa only [bind_assoc, liftWGObserver_bind] using PrefixPreserves.bind hr (fun _ =>
       sendQueuedHandshakeInitiationPrefix_preserves_product c hq pid false)
-  cases invalid <;> simp only [Bool.false_eq_true, ite_false, ite_true, liftWGObserver_bind, liftWGObserver_pure]
+  cases invalid <;> simp only [Bool.false_eq_true, ite_false, ite_true, liftWGObserver_bind]
   · simpa only [liftWGObserver_bind] using tail
   · cases kp with
     | none => exact ProductAmbientContracts.drop (invariant_spec (fun _ => True) _)
@@ -489,15 +508,15 @@ theorem sendStagedPacketsPrefix_preserves_product (c : ProductAmbientContracts I
     exact hoare_liftAmbient (AmbientM.branchCmp d b lhs rhs) (fun w => wgStoreView w = initial)
   have keyGet (P : IdentityView → Prop) (kp : Option KeypairId) :
       ProductAmbientSpec I P (liftWGObserver (keypairGetPrefix kp)) (fun _ => P) := by
-    simp only [keypairGetPrefix, liftWGObserver_bind, liftWGObserver_pure]
+    simp only [keypairGetPrefix, liftWGObserver_bind]
     apply PrefixEnsures.bind (branch_spec P _ _)
     intro isNull
-    try simp only [liftWGObserver_bind, liftWGObserver_pure, apply_ite]
+    try simp only [liftWGObserver_pure, apply_ite]
     split <;> try simp only [liftWGObserver_bind, liftWGObserver_pure]
     · exact c.pure P _
     · cases kp with
       | some id =>
-        simp only [liftWGObserver_bind, liftWGObserver_pure]
+        simp only [liftWGObserver_bind]
         apply PrefixEnsures.bind (c.getKeypair P id)
         intro k
         let Q := fun s : IdentityView => P s ∧ s.2.1 id = some k.internalId
@@ -527,7 +546,7 @@ theorem sendStagedPacketsPrefix_preserves_product (c : ProductAmbientContracts I
         intro initial
         exact hoare_liftAmbient (AmbientM.invariant _) (fun w => wgStoreView w = initial)
   have hq (pid) := ProductAmbientContracts.drop (t.device (fun _ => True) (.handshake pid))
-  simp only [sendStagedPacketsPrefix, liftWGObserver_bind, liftWGObserver_pure]
+  simp only [sendStagedPacketsPrefix, liftWGObserver_bind]
   apply PrefixEnsures.preserves
   have hg : PrefixEnsures I LifetimeEvent.Safe (liftWGObserver (getPeerMixed pid))
       (fun p h w => I h w ∧ (identityView w.wg).1.slots pid = some p.internalId) :=
@@ -548,28 +567,28 @@ theorem sendStagedPacketsPrefix_preserves_product (c : ProductAmbientContracts I
     have hout := stagedOutNokeyPrefix_preserves_product c t pid p.staged kp
     apply PrefixPreserves.bind (ProductAmbientContracts.drop (branch_spec (fun _ => True) _ _))
     intro missing
-    try simp only [liftWGObserver_bind, liftWGObserver_pure, apply_ite]
+    try simp only [apply_ite]
     split <;> try simp only [liftWGObserver_bind, liftWGObserver_pure]
     · exact hout false
     · cases kp with
       | none => exact ProductAmbientContracts.drop (invariant_spec (fun _ => True) _)
       | some id =>
         dsimp only
-        simp only [liftWGObserver_bind, liftWGObserver_pure]
+        simp only [liftWGObserver_bind]
         apply PrefixPreserves.bind (ProductAmbientContracts.drop (c.getKeypair_frame (fun _ => True) _))
         intro k
         apply PrefixPreserves.bind (ProductAmbientContracts.drop (branch_spec (fun _ => True) _ _))
         intro invalid
-        try simp only [liftWGObserver_bind, liftWGObserver_pure, apply_ite]
+        try simp only [liftWGObserver_bind, apply_ite]
         split <;> try simp only [liftWGObserver_bind, liftWGObserver_pure]
         · exact hout false
         · apply PrefixPreserves.bind (ProductAmbientContracts.drop
             (c.nativeStore (fun _ => True) _ ((branchExpired_sameWGWorld _ _ _ _).factor wgStoreView)))
           intro expired
-          try simp only [liftWGObserver_bind, liftWGObserver_pure, apply_ite]
+          try simp only [apply_ite]
           split <;> try simp only [liftWGObserver_bind, liftWGObserver_pure]
           · exact hout true
-          · simp only [liftWGObserver_bind, liftWGObserver_pure, lift_loop, lift_map]
+          · simp only [liftWGObserver_bind, lift_loop]
             apply PrefixPreserves.bind
             · apply PrefixPreserves.forIn _ _ _ c.safe
               intro pkt acc
@@ -594,7 +613,7 @@ theorem sendStagedPacketsPrefix_preserves_product (c : ProductAmbientContracts I
               cases done with
               | some result => exact PrefixPreserves.pure c.safe result
               | none =>
-                simp only [liftWGObserver_bind, liftWGObserver_pure, lift_map]
+                simp only [liftWGObserver_bind, lift_map]
                 apply PrefixPreserves.bind (ProductAmbientContracts.drop (branch_spec (fun _ => True) _ _))
                 intro _
                 apply PrefixPreserves.bind (ProductAmbientContracts.drop (c.peerDeref (fun _ => True) _))
@@ -618,7 +637,7 @@ theorem sendKeepalivePrefix_preserves_product (c : ProductAmbientContracts I) (t
     apply c.nativeStore
     intro initial
     exact hoare_liftAmbient (AmbientM.invariant why) (fun w => wgStoreView w = initial)
-  simp only [sendKeepalivePrefix, liftWGObserver_bind, liftWGObserver_pure]
+  simp only [sendKeepalivePrefix, liftWGObserver_bind]
   apply PrefixEnsures.preserves
   have hg : PrefixEnsures I LifetimeEvent.Safe (liftWGObserver (getPeerMixed pid))
       (fun p h w => I h w ∧ (identityView w.wg).1.slots pid = some p.internalId) :=
@@ -635,7 +654,7 @@ theorem sendKeepalivePrefix_preserves_product (c : ProductAmbientContracts I) (t
     intro alloc
     apply PrefixEnsures.bind (branch_spec P _ _)
     intro noMem
-    try simp only [liftWGObserver_bind, liftWGObserver_pure, apply_ite]
+    try simp only []
     split <;> try simp only [liftWGObserver_bind, liftWGObserver_pure]
     · exact PrefixEnsures.pure (fun h w hi => c.safe h w hi.1) (fun _ _ hi => hi.1)
     · apply PrefixEnsures.bind (c.nativeStore P _ getDev_sameWGStore)

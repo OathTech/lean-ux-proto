@@ -21,11 +21,11 @@ theorem getPeer_twice (pid : PeerId) (f : Peer → Peer → WG.M α) :
     (((getPeer pid >>= fun p => f p p).run w).run ambient)
   simp only [StateT.run_bind]
   cases hr : ((getPeer pid).run w).run ambient with
-  | error e => simp [hr]
+  | error e => simp []
   | ok out =>
     rcases out with ⟨⟨p, v⟩, ambient'⟩
     obtain ⟨rfl, rfl, _⟩ := Peers.getPeer_current pid w v p ambient ambient' hr
-    simp [hr, StateT.run_bind]
+    simp [hr]
 
 /-- The original arbitrary product continuation domain is retained at the
 actual adapter; it may act on every subsystem. -/
@@ -37,7 +37,7 @@ theorem getPeer_twice_product (pid : PeerId) (f : Peer → Peer → Leanux.M α)
     (liftWG (getPeer pid) >>= f p).run v) =
     ((liftWG (getPeer pid)).run w >>= fun (p, v) => (f p p).run v)
   cases hr : ((getPeer pid).run w.wg).run w.ambient with
-  | error e => simp [liftWG_run, hr, Except.map, Except.bind]
+  | error e => simp [liftWG_run, hr, Except.map]
   | ok out =>
     rcases out with ⟨⟨p, v⟩, ambient'⟩
     obtain ⟨hv, ha, _⟩ := Peers.getPeer_current pid w.wg v p w.ambient ambient' hr
@@ -118,15 +118,24 @@ theorem RetainsRx.of_same {S α : Type} {m : Type → Type} {ps : PostShape}
     (fun _ _ he => he ▸ rx_retained_refl _)
 
 theorem requireNotPending_rxQueues (pid : PeerId) (why : String) :
-    SameView rxQueues (requireNotPending pid why) := by
-  apply SameView.of_wp
-  intro s
-  mvcgen [requireNotPending]
+    SameView rxQueues (requireNotPending pid why) := SameView.pure _ ()
 
 theorem getKeypair_rxQueues (kp : KeypairId) : SameView rxQueues (getKeypair kp) := by
-  apply SameView.of_wp
-  intro s
-  mvcgen [getKeypair, getDev, invariant, AmbientM.invariant]
+  apply (ProjectedAction.iff_run_ambient _ _ _).mpr
+  intro w ambient key v ambient' hr
+  cases hd : w.dev with
+  | none =>
+    simp [getKeypair, getDev, hd, invariant, AmbientM.invariant] at hr
+    cases hr
+  | some d =>
+    cases hk : d.keypairs[kp]? with
+    | none =>
+      simp [getKeypair, getDev, hd, hk, invariant, AmbientM.invariant] at hr
+      cases hr
+    | some actual =>
+      simp [getKeypair, getDev, hd, hk] at hr
+      rcases hr with ⟨⟨rfl, rfl⟩, rfl⟩
+      rfl
 
 theorem setKeypair_rxQueues (kp : KeypairId) (k : Keypair) : SameView rxQueues (setKeypair kp k) :=
   modifyDev_rxQueues _ (fun _ => rfl) (fun _ => rfl)

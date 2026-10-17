@@ -16,31 +16,86 @@ theorem enqueue_free_wp (before : Option (PtrRing (List SkbId)))
     (pid : PeerId) (item : List SkbId) :
     ⦃fun w => ⌜encryptRing w = before⌝⦄ enqueuePerDeviceAndPeer pid item
     ⦃⇓? ret _ => ⌜ret = 0 → FreeEntry before⌝⦄ := by
+  let P := fun w : WGWorld => encryptRing w = before
   have packet_spec (id : SkbId) :
-      ⦃fun w => ⌜encryptRing w = before⌝⦄
-        setTxSkb id (fun p => {p with state := .uncrypted})
-      ⦃⇓? _ w => ⌜encryptRing w = before⌝⦄ := by
+      Preserves P (setTxSkb id (fun p => {p with state := .uncrypted})) := by
     apply hoare_liftSkb
     intro g d packets hg hd
-    simpa [encryptRing, hd] using hg
-  have peer_spec := (getPeer_encryptRing pid).wp (fun r => r = before)
-  have set_spec := fun p => (setPeer_encryptRing pid p).wp (fun r => r = before)
-  have cpu_spec := fun cpu => (encryptRing_kernel
-    (Lifetimes.cpumaskNextOnlineFrom_sameStore cpu)).wp (fun r => r = before)
-  have queue_spec :
-      ⦃fun w => ⌜encryptRing w = before⌝⦄ (queueDeviceWork .encryptWorker : WG.M Unit)
-      ⦃⇓? _ w => ⌜encryptRing w = before⌝⦄ :=
-    hoare_liftAmbient (AmbientM.queueDeviceWork .encryptWorker) (fun w => encryptRing w = before)
-  mvcgen [enqueuePerDeviceAndPeer, packet_spec, peer_spec, set_spec, cpu_spec,
-    queue_spec, getDev, modifyDev, branch, AmbientM.branch, invariant, AmbientM.invariant]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [FreeEntry, encryptRing, EPIPE, ENOSPC, WG.EPIPE, WG.ENOSPC,
-    Option.map_map, Function.comp_def]
-  all_goals
-    rename_i hfull hqueue
-    refine ⟨_, ?_, hfull⟩
-    symm
-    assumption
+    simpa [P, encryptRing, hd] using hg
+  have branch_spec (d : Decision) (b : Bool) (Q : WGWorld → Prop) :
+      Hoare (branch d b : WG.M Bool) Q (fun x w => x = b ∧ Q w) := by
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient x v ambient' hq hr
+    change Except.ok ((b, w), _) = Except.ok ((x, v), ambient') at hr
+    cases hr
+    exact ⟨rfl, hq⟩
+  have device : Hoare getDev P
+      (fun d w => P w ∧ before = some d.encryptQueue) := by
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient d v ambient' hp hr
+    cases hd : w.dev with
+    | none =>
+      simp [getDev, hd, invariant, AmbientM.invariant] at hr
+      cases hr
+    | some old =>
+      have he : (getDev.run w).run ambient = .ok ((old, w), ambient) := by
+        simp [getDev, hd] <;> rfl
+      rw [he] at hr
+      cases hr
+      exact ⟨hp, hp.symm.trans (by simp [encryptRing, hd])⟩
+  have edit (f : Device → Device) (hf : ∀ d, (f d).encryptQueue = d.encryptQueue) :
+      SameView encryptRing (modifyDev f) := by
+    apply (Lifetimes.ProjectedAction.iff_run_ambient _ _ _).mpr
+    intro w ambient x v ambient' hr
+    cases hr
+    simp [encryptRing, Option.map_map, Function.comp_def, hf]
+  have constant {α : Type} (a : WG.M α) (R : Prop) :
+      Preserves (fun _ : WGWorld => R) a := by
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient x v ambient' h _
+    exact h
+  have returned (ret : Int) (Q : WGWorld → Prop)
+      (hq : ∀ w, Q w → ret = 0 → FreeEntry before) :
+      Hoare (pure ret : WG.M Int) Q (fun ret _ => ret = 0 → FreeEntry before) :=
+    hoare_consequence (hoare_pure ret Q) (fun _ h => h)
+      (fun _ w h => h.1 ▸ hq w h.2)
+  unfold enqueuePerDeviceAndPeer
+  cases item.head? with
+  | none =>
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient x v ambient' _ hr
+    cases hr
+  | some first =>
+    apply hoare_bind _ _ (packet_spec first)
+    intro _
+    apply hoare_bind _ _ ((getPeer_encryptRing pid).wp (fun r => r = before))
+    intro p
+    apply hoare_bind _ _ (branch_spec .enqueuePeerQueueFull (p.txQueue.count ≥ MAX_QUEUED_PACKETS) P)
+    intro refused
+    cases refused with
+    | true => exact returned _ _ (by intro _ _ he; cases he)
+    | false =>
+      apply hoare_consequence ?_ (fun _ h => h.2) (fun _ _ h => h)
+      apply hoare_bind _ _ ((setPeer_encryptRing pid {p with txQueue := p.txQueue.enqueue item}).wp
+        (fun r => r = before))
+      intro _
+      apply hoare_bind _ _ device
+      intro d
+      let Q := fun r : Option (PtrRing (List SkbId)) => r = before ∧ before = some d.encryptQueue
+      apply hoare_bind _ _ ((encryptRing_kernel
+        (Lifetimes.cpumaskNextOnlineFrom_sameStore d.encryptLastCpu)).wp Q)
+      intro cpu
+      apply hoare_bind _ _ ((edit (fun d => {d with encryptLastCpu := cpu}) (fun _ => rfl)).wp Q)
+      intro _
+      apply hoare_bind _ _ (branch_spec .enqueueRingFull d.encryptQueue.full
+        (fun w => Q (encryptRing w)))
+      intro full
+      cases full with
+      | true => exact returned _ _ (by intro _ _ he; cases he)
+      | false =>
+        exact hoare_consequence (constant _ (FreeEntry before))
+          (fun _ h => ⟨d.encryptQueue, h.2.2, h.1.symm⟩)
+          (fun _ _ h _ => h)
 
 theorem enqueue_success_free (pid : PeerId) (item : List SkbId) (w v : WGWorld) (ambient ambient' : Ambient)
     (hr : ((enqueuePerDeviceAndPeer pid item).run w).run ambient = .ok ((0, v), ambient')) :
@@ -65,44 +120,93 @@ theorem setPeer_decryptRing (pid : PeerId) (p : Peer) :
   simp [decryptRing, Option.map_map, Function.comp_def]
 
 theorem getPeer_decryptRing (pid : PeerId) : SameView decryptRing (getPeer pid) := by
-  apply SameView.of_wp
-  intro r
-  mvcgen [getPeer, getDev, invariant, AmbientM.invariant]
+  apply (Lifetimes.ProjectedAction.iff_run_ambient _ _ _).mpr
+  intro w ambient p v ambient' hr
+  exact congrArg decryptRing (Peers.getPeer_current pid w v p ambient ambient' hr).1
 
 theorem enqueue_rx_free_wp (before : Option (PtrRing SkbId)) (id : SkbId) :
     ⦃fun w => ⌜decryptRing w = before⌝⦄ enqueuePerDeviceAndPeerRx id
     ⦃⇓? ret _ => ⌜ret = 0 → FreeEntry before⌝⦄ := by
-  have packet_spec :
-      ⦃fun w => ⌜decryptRing w = before⌝⦄
-        setRxSkb id (fun p => {p with state := .uncrypted})
-      ⦃⇓? _ w => ⌜decryptRing w = before⌝⦄ := by
+  let P := fun w : WGWorld => decryptRing w = before
+  have packet_spec (id : SkbId) :
+      Preserves P (setRxSkb id (fun p => {p with state := .uncrypted})) := by
     apply hoare_liftSkb
     intro g d packets hg hd
-    simpa [decryptRing, hd] using hg
-  have read_spec :
-      ⦃fun w => ⌜decryptRing w = before⌝⦄ getRxSkb id
-      ⦃⇓? _ w => ⌜decryptRing w = before⌝⦄ := by
+    simpa [P, decryptRing, hd] using hg
+  have branch_spec (d : Decision) (b : Bool) (Q : WGWorld → Prop) :
+      Hoare (branch d b : WG.M Bool) Q (fun x w => x = b ∧ Q w) := by
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient x v ambient' hq hr
+    change Except.ok ((b, w), _) = Except.ok ((x, v), ambient') at hr
+    cases hr
+    exact ⟨rfl, hq⟩
+  have device : Hoare getDev P
+      (fun d w => P w ∧ before = some d.decryptQueue) := by
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient d v ambient' hp hr
+    cases hd : w.dev with
+    | none =>
+      simp [getDev, hd, invariant, AmbientM.invariant] at hr
+      cases hr
+    | some old =>
+      have he : (getDev.run w).run ambient = .ok ((old, w), ambient) := by
+        simp [getDev, hd] <;> rfl
+      rw [he] at hr
+      cases hr
+      exact ⟨hp, hp.symm.trans (by simp [decryptRing, hd])⟩
+  have edit (f : Device → Device) (hf : ∀ d, (f d).decryptQueue = d.decryptQueue) :
+      SameView decryptRing (modifyDev f) := by
+    apply (Lifetimes.ProjectedAction.iff_run_ambient _ _ _).mpr
+    intro w ambient x v ambient' hr
+    cases hr
+    simp [decryptRing, Option.map_map, Function.comp_def, hf]
+  have constant {α : Type} (a : WG.M α) (R : Prop) :
+      Preserves (fun _ : WGWorld => R) a := by
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient x v ambient' h _
+    exact h
+  have returned (ret : Int) (Q : WGWorld → Prop)
+      (hq : ∀ w, Q w → ret = 0 → FreeEntry before) :
+      Hoare (pure ret : WG.M Int) Q (fun ret _ => ret = 0 → FreeEntry before) :=
+    hoare_consequence (hoare_pure ret Q) (fun _ h => h)
+      (fun _ w h => h.1 ▸ hq w h.2)
+  have read_spec : Preserves P (getRxSkb id) := by
     apply hoare_liftSkb
     intro g d packets hg hd
-    simpa [decryptRing, hd] using hg
-  have peer_spec := fun pid => (getPeer_decryptRing pid).wp (fun r => r = before)
-  have set_spec := fun pid p => (setPeer_decryptRing pid p).wp (fun r => r = before)
-  have cpu_spec := fun cpu => (decryptRing_kernel
-    (Lifetimes.cpumaskNextOnlineFrom_sameStore cpu)).wp (fun r => r = before)
-  have queue_spec :
-      ⦃fun w => ⌜decryptRing w = before⌝⦄ (queueDeviceWork .decryptWorker : WG.M Unit)
-      ⦃⇓? _ w => ⌜decryptRing w = before⌝⦄ :=
-    hoare_liftAmbient (AmbientM.queueDeviceWork .decryptWorker) (fun w => decryptRing w = before)
-  mvcgen [enqueuePerDeviceAndPeerRx, packet_spec, read_spec, peer_spec, set_spec, cpu_spec,
-    queue_spec, getDev, modifyDev, branch, AmbientM.branch, invariant, AmbientM.invariant]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [FreeEntry, decryptRing, EPIPE, ENOSPC, WG.EPIPE, WG.ENOSPC,
-    Option.map_map, Function.comp_def]
-  all_goals
-    rename_i hfull hqueue
-    refine ⟨_, ?_, hfull⟩
-    symm
-    assumption
+    simpa [P, decryptRing, hd] using hg
+  unfold enqueuePerDeviceAndPeerRx
+  apply hoare_bind _ _ (packet_spec id)
+  intro _
+  apply hoare_bind _ _ read_spec
+  intro pkt
+  apply hoare_bind _ _ ((getPeer_decryptRing pkt.peer).wp (fun r => r = before))
+  intro p
+  apply hoare_bind _ _ (branch_spec .enqueuePeerQueueFull (p.rxQueue.count ≥ MAX_QUEUED_PACKETS) P)
+  intro refused
+  cases refused with
+  | true => exact returned _ _ (by intro _ _ he; cases he)
+  | false =>
+    apply hoare_consequence ?_ (fun _ h => h.2) (fun _ _ h => h)
+    apply hoare_bind _ _ ((setPeer_decryptRing pkt.peer {p with rxQueue := p.rxQueue.enqueue id}).wp
+      (fun r => r = before))
+    intro _
+    apply hoare_bind _ _ device
+    intro d
+    let Q := fun r : Option (PtrRing SkbId) => r = before ∧ before = some d.decryptQueue
+    apply hoare_bind _ _ ((decryptRing_kernel
+      (Lifetimes.cpumaskNextOnlineFrom_sameStore d.decryptLastCpu)).wp Q)
+    intro cpu
+    apply hoare_bind _ _ ((edit (fun d => {d with decryptLastCpu := cpu}) (fun _ => rfl)).wp Q)
+    intro _
+    apply hoare_bind _ _ (branch_spec .enqueueRingFull d.decryptQueue.full
+      (fun w => Q (decryptRing w)))
+    intro full
+    cases full with
+    | true => exact returned _ _ (by intro _ _ he; cases he)
+    | false =>
+      exact hoare_consequence (constant _ (FreeEntry before))
+        (fun _ h => ⟨d.decryptQueue, h.2.2, h.1.symm⟩)
+        (fun _ _ h _ => h)
 
 theorem enqueue_rx_success_free (id : SkbId) (w v : WGWorld) (ambient ambient' : Ambient)
     (hr : ((enqueuePerDeviceAndPeerRx id).run w).run ambient = .ok ((0, v), ambient')) :

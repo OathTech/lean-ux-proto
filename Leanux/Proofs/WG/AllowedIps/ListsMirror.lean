@@ -68,13 +68,13 @@ theorem unlisted_get (d : WG.Device) (id pid : Nat) :
       subst j
       have := Std.TreeMap.mem_toList_iff_getElem?_eq_some.mp hj
       simp [hp] at this
-    simp only [hn, hp, Bool.false_eq_true, ite_false, Option.map_none]
+    simp only [hn, Bool.false_eq_true, ite_false, Option.map_none]
   | some p =>
     by_cases hc : p.allowedipsList.contains id = true
     · have hy : d.peers.toList.any (fun x => x.1 == pid && x.2.allowedipsList.contains id) = true := by
         simp only [List.any_eq_true, Bool.and_eq_true, beq_iff_eq]
         exact ⟨(pid,p), Std.TreeMap.mem_toList_iff_getElem?_eq_some.mpr hp, rfl, hc⟩
-      simp only [hy, hp, ite_true, Option.map_some]
+      simp only [hy, ite_true, Option.map_some]
     · have hu : unlist id p = p := by
         have hf : p.allowedipsList.filter (· != id) = p.allowedipsList := by
           apply List.filter_eq_self.mpr
@@ -83,7 +83,7 @@ theorem unlisted_get (d : WG.Device) (id pid : Nat) :
           simp only [bne_iff_ne]
           exact fun he => hn (he ▸ ha)
         simp [unlist, WG.listRemove, hf]
-      simp only [hp, Option.map_some, hu]
+      simp only [Option.map_some, hu]
       split <;> rfl
 
 theorem unlisted_identity (d : WG.Device) (id pid : Nat) :

@@ -10,35 +10,35 @@ open Leanux.Proofs.Framing WGFrames WGTransitions WGMore WGConfig
 set_option maxHeartbeats 400000
 
 theorem lookupDst_sameSnapshot (family addr : Nat) : SameSnapshot (lookupDst family addr) := by
-  frame_same [lookupDst] using [getDev_spec, lookup_spec]
+  snapshot_source [lookupDst] using [getDev_sameSnapshot, lookup_sameSnapshot]
 
 theorem lookupDst_spec (P : Snapshot → Prop) (family addr : Nat) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ (lookupDst family addr)
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (lookupDst_sameSnapshot family addr).wp P
 
 theorem wgOpen_ordinary  : OrdinaryAction wgOpen := by
-  frame_ordinary [wgOpen] using [getDev_spec, socketInit_spec, getPeer_spec] ordinary [sendStagedPackets_spec, sendKeepalive_spec]
+  transition_ordinary [wgOpen] using [getDev_sameSnapshot, socketInit_sameSnapshot, getPeer_sameSnapshot, sendStagedPackets_ordinary, sendKeepalive_ordinary]
 
 theorem wgOpen_spec (P : Snapshot → Prop) (hp : Stable P)  :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ wgOpen
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (wgOpen_ordinary ).wp P hp
 
 theorem wgUp_ordinary  : OrdinaryAction wgUp := by
-  frame_ordinary [wgUp] using [] ordinary [wgOpen_spec]
+  transition_ordinary [wgUp] using [wgOpen_ordinary]
 
 theorem wgUp_spec (P : Snapshot → Prop) (hp : Stable P)  :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ wgUp
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (wgUp_ordinary ).wp P hp
 
 theorem wgStop_ordinary  : OrdinaryAction wgStop := by
-  frame_ordinary [wgStop] using [getDev_spec, requireNotPending_spec, purgeStagedPackets_spec, handshakeClear_spec, resetLastSentHandshake_spec, socketReinit_spec] ordinary [timersStop_spec, keypairsClear_spec]
+  transition_ordinary [wgStop] using [getDev_sameSnapshot, requireNotPending_sameSnapshot, purgeStagedPackets_sameSnapshot, handshakeClear_sameSnapshot, resetLastSentHandshake_sameSnapshot, socketReinit_sameSnapshot, timersStop_ordinary, keypairsClear_ordinary]
 
 theorem wgStop_spec (P : Snapshot → Prop) (hp : Stable P)  :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ wgStop
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (wgStop_ordinary ).wp P hp
 
 theorem wgDown_ordinary  : OrdinaryAction wgDown := by
-  frame_ordinary [wgDown] using [] ordinary [wgStop_spec]
+  transition_ordinary [wgDown] using [wgStop_ordinary]
 
 theorem wgDown_spec (P : Snapshot → Prop) (hp : Stable P)  :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ wgDown
@@ -164,7 +164,9 @@ theorem wgDestruct_spec (P : Snapshot → Prop) (hp : Stable P)  :
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (wgDestruct_ordinary ).wp P hp
 
 theorem wgDelete_ordinary  : OrdinaryAction wgDelete := by
-  frame_ordinary [wgDelete, getWG] using [getDev_spec, mayHaveSlept_spec] ordinary [wgDown_spec, wgDestruct_spec]
+  unfold wgDelete getWG
+  simp (config := { zeta := false }) only [liftM, monadLift_self]
+  transition_ordinary [] using [getDev_sameSnapshot, mayHaveSlept_sameSnapshot, wgDown_ordinary, wgDestruct_ordinary]
 
 theorem wgDelete_spec (P : Snapshot → Prop) (hp : Stable P)  :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ (wgDelete : WG.M Int)
@@ -200,14 +202,14 @@ theorem wgXmit_spec (P : Snapshot → Prop) (hp : Stable P) (family addr : Nat) 
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (wgXmit_ordinary family addr pkts mtu).wp P hp
 
 theorem setMtu_sameSnapshot (mtu : Int) : SameSnapshot (setMtu mtu) := by
-  frame_same [setMtu] using []
+  snapshot_source [setMtu] using []
 
 theorem setMtu_spec (P : Snapshot → Prop) (mtu : Int) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ (setMtu mtu)
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (setMtu_sameSnapshot mtu).wp P
 
 theorem netnsPreExit_sameSnapshot  : SameSnapshot netnsPreExit := by
-  frame_same [netnsPreExit] using [getDev_spec, socketReinit_spec, clearPeerEndpointSrc_spec]
+  snapshot_source [netnsPreExit] using [getDev_sameSnapshot, socketReinit_sameSnapshot, clearPeerEndpointSrc_sameSnapshot]
 
 theorem netnsPreExit_spec (P : Snapshot → Prop)  :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ netnsPreExit

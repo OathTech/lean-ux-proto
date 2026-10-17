@@ -33,30 +33,84 @@ def Borrowed (initial : WGStoreView) (result : Option PeerId) (current : WGStore
 theorem refcountIncNotZero_spec (old : Nat) :
     ⦃fun (_ : Ambient) => ⌜True⌝⦄ (refcountIncNotZero old : AmbientM Bool)
     ⦃⇓? live _ => ⌜live = (old != 0)⌝⦄ := by
-  mvcgen [refcountIncNotZero, branchCmp, branchCmpExcluded, branch, unsupported,
-    AmbientM.branchCmp, AmbientM.branchCmpExcluded, AmbientM.branch, AmbientM.unsupported]
+  apply (hoare_iff_run _ _ _).mpr
+  intro ambient live ambient' _ run
+  by_cases zero : old = 0 <;> by_cases overflow : old + 1 ≥ 2 ^ 31 <;>
+    simp [StateT.run_bind, Leanux.Proofs.WG.CounterWindow.except_ok_bind,
+      Leanux.Proofs.WG.CounterWindow.except_pure, refcountIncNotZero, branch, branchCmp,
+      AmbientM.branch, AmbientM.branchCmp, unsupported, AmbientM.unsupported, zero,
+      overflow] at run
+  all_goals rcases run with ⟨rfl, rfl⟩ <;> simp [zero]
 
 theorem refcountDecAndTest_spec (old : Nat) :
     ⦃fun (_ : Ambient) => ⌜True⌝⦄ (refcountDecAndTest old : AmbientM Bool)
     ⦃⇓? released _ => ⌜0 < old ∧ released = (old == 1)⌝⦄ := by
-  mvcgen [refcountDecAndTest, branchCmp, branchCmpExcluded, branch, unsupported,
-    AmbientM.branchCmp, AmbientM.branchCmpExcluded, AmbientM.branch, AmbientM.unsupported]
-  all_goals simp_all
-  all_goals omega
+  apply (hoare_iff_run _ _ _).mpr
+  intro ambient released ambient' _ run
+  cases old with
+  | zero =>
+    simp [StateT.run_bind, Leanux.Proofs.WG.CounterWindow.except_ok_bind,
+      Leanux.Proofs.WG.CounterWindow.except_pure, refcountDecAndTest, branch, branchCmp,
+      AmbientM.branch, AmbientM.branchCmp, unsupported, AmbientM.unsupported] at run
+    cases run
+  | succ old =>
+    cases old with
+    | zero =>
+      simp [StateT.run_bind, Leanux.Proofs.WG.CounterWindow.except_ok_bind,
+        Leanux.Proofs.WG.CounterWindow.except_pure, refcountDecAndTest, branch, branchCmp,
+        AmbientM.branch, AmbientM.branchCmp, unsupported, AmbientM.unsupported] at run
+      rcases run with ⟨rfl, rfl⟩
+      exact ⟨by omega, rfl⟩
+    | succ n =>
+      simp [StateT.run_bind, Leanux.Proofs.WG.CounterWindow.except_ok_bind,
+        Leanux.Proofs.WG.CounterWindow.except_pure, refcountDecAndTest, branch, branchCmp,
+        AmbientM.branch, AmbientM.branchCmp, unsupported, AmbientM.unsupported] at run
+      rcases run with ⟨rfl, rfl⟩
+      exact ⟨by omega, rfl⟩
 
 theorem acquire_spec (peer : Option PeerId) (initial : WGStoreView) :
     ⦃fun w => ⌜(wgStoreView w) = initial⌝⦄ peerGetMaybeZero peer
     ⦃⇓? result w => ⌜(result = none ∨ result = peer) ∧ Borrowed initial result (wgStoreView w)⌝⦄ := by
-  mvcgen [peerGetMaybeZero, requireNotPending, getPeer, getDev, setPeer,
-    modifyDev, refcountIncNotZero, branchCmp, branchCmpExcluded, branch,
-    invariant, unsupported, AmbientM.branchCmp, AmbientM.branchCmpExcluded,
-    AmbientM.branch, AmbientM.invariant, AmbientM.unsupported]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals subst_vars
-  all_goals simp_all [Borrowed, wgStoreView]
-  all_goals first
-    | (refine ⟨_, _, ?_, ?_, ?_, ?_⟩ <;> first | assumption | rfl | omega)
-    | omega
+  apply (hoare_iff_run_ambient _ _ _).mpr
+  intro w ambient result v ambient' initialView run
+  cases peer with
+  | none =>
+    simp [StateT.run_monadLift, Leanux.Proofs.WG.CounterWindow.except_pure, peerGetMaybeZero,
+      branch, AmbientM.branch] at run
+    rcases run with ⟨rfl, rfl, rfl⟩
+    exact ⟨Or.inl rfl, initialView⟩
+  | some pid =>
+    cases hd : w.dev with
+    | none =>
+      simp [StateT.run_bind, StateT.run_monadLift, Leanux.Proofs.WG.CounterWindow.except_ok_bind,
+        Leanux.Proofs.WG.CounterWindow.except_pure, peerGetMaybeZero, branch, AmbientM.branch,
+        requireNotPending, getPeer, getDev, hd, invariant, AmbientM.invariant] at run
+      cases run
+    | some d =>
+      cases hp : d.peers[pid]? with
+      | none =>
+        simp [StateT.run_bind, StateT.run_pure, StateT.run_monadLift,
+          Leanux.Proofs.WG.CounterWindow.except_ok_bind,
+          Leanux.Proofs.WG.CounterWindow.except_pure, peerGetMaybeZero, branch, AmbientM.branch,
+          requireNotPending, getPeer, getDev, hd, hp, invariant, AmbientM.invariant] at run
+        cases run
+      | some p =>
+        by_cases zero : p.refcount = 0 <;>
+          by_cases overflow : 2147483647 ≤ p.refcount <;>
+          simp [StateT.run_bind, StateT.run_pure, StateT.run_monadLift,
+            Leanux.Proofs.WG.CounterWindow.except_ok_bind,
+            Leanux.Proofs.WG.CounterWindow.except_pure, peerGetMaybeZero, requireNotPending,
+            getPeer, getDev, setPeer, modifyDev, hd, hp, refcountIncNotZero, branch, branchCmp,
+            AmbientM.branch, AmbientM.branchCmp, unsupported, AmbientM.unsupported, zero,
+            overflow] at run
+        all_goals try (change Except.error _ = Except.ok _ at run; cases run)
+        all_goals rcases run with ⟨rfl, rfl, rfl⟩
+        all_goals first
+          | exact ⟨Or.inl rfl, initialView⟩
+          | (refine ⟨Or.inr rfl, d, p, ?_, hp, by omega, ?_⟩
+             · exact (congrArg WGStoreView.dev initialView).symm.trans hd
+             · subst initial
+               simp [wgStoreView, hd])
 
 theorem restore_view (initial : WGStoreView) (d : Device) (pid : PeerId) (p : Peer)
     (hd : initial.dev = some d) (hp : d.peers[pid]? = some p) :
@@ -91,36 +145,28 @@ No initial liveness premise is supplied: it is carried by `Borrowed`, which
 theorem repay_spec (result : Option PeerId) (initial : WGStoreView) :
     ⦃fun w => ⌜Borrowed initial result (wgStoreView w)⌝⦄ peerPut result
     ⦃⇓? _ w => ⌜view w = (outsidePeers initial, resident initial)⌝⦄ := by
+  apply (hoare_iff_run_ambient _ _ _).mpr
+  intro w ambient u v ambient' borrowed run
   cases result with
   | none =>
-    simp only [peerPut]
-    mvcgen [branch, invariant, AmbientM.branch, AmbientM.invariant]
-    all_goals try dsimp +zetaDelta only at *
-    all_goals simp_all [Borrowed, view]
+    simp [peerPut, branch, AmbientM.branch, StateT.run_monadLift] at run
+    rcases run with ⟨rfl, rfl⟩
+    exact congrArg (fun k => (outsidePeers k, resident k)) borrowed
   | some pid =>
-    apply (hoare_iff_run_ambient _ _ _).mpr
-    intro w ambient u v ambient' hb hr
-    obtain ⟨d, p, hd, hp, hpos, hk⟩ := hb
-    have hs : ⦃fun w => ⌜(wgStoreView w) = { initial with dev := some (
-          { d with peers := d.peers.insert pid { p with refcount := p.refcount + 1 } }) }⌝⦄
-        peerPut (some pid)
-        ⦃⇓? _ w => ⌜view w = (outsidePeers initial, resident initial)⌝⦄ := by
-      have hg := getPeer_known
-        { initial with dev := some { d with peers := d.peers.insert pid { p with refcount := p.refcount + 1 } } }
-        { d with peers := d.peers.insert pid { p with refcount := p.refcount + 1 } }
-        pid { p with refcount := p.refcount + 1 } rfl (by simp)
-      simp only [peerPut]
-      mvcgen [requireNotPending, hg, setPeer,
-        modifyDev, refcountDecAndTest, branchCmp, branchCmpExcluded, branch,
-        invariant, unsupported, AmbientM.branchCmp, AmbientM.branchCmpExcluded,
-        AmbientM.branch, AmbientM.invariant, AmbientM.unsupported]
-      all_goals try dsimp +zetaDelta only at *
-      all_goals simp_all [view, wgStoreView]
-      all_goals subst_vars
-      all_goals try simp_all [Std.TreeMap.getElem?_insert]
-      all_goals first
-        | simpa only [Prod.mk.injEq] using restore_view initial d pid p hd hp
-        | omega
-    exact (hoare_iff_run_ambient _ _ _).mp hs w ambient u v ambient' hk hr
+    obtain ⟨d, p, hd, hp, positive, hk⟩ := borrowed
+    have hw : w.dev = some {d with peers := d.peers.insert pid {p with refcount := p.refcount + 1}} :=
+      congrArg WGStoreView.dev hk
+    have nonzero : p.refcount ≠ 0 := by omega
+    simp [peerPut, requireNotPending, getPeer, getDev, setPeer, modifyDev, hw, refcountDecAndTest,
+      branch, branchCmp, Leanux.Proofs.WG.CounterWindow.branch_run,
+      Leanux.Proofs.WG.CounterWindow.branchCmp_run, StateT.run_bind, StateT.run_pure,
+      StateT.run_monadLift, Leanux.Proofs.WG.CounterWindow.except_ok_bind,
+      Leanux.Proofs.WG.CounterWindow.except_pure, nonzero] at run
+    rcases run with ⟨rfl, rfl⟩
+    have updated := congrArg (fun k : WGStoreView => {k with dev := k.dev.map fun (d : Device) =>
+      {d with peers := d.peers.insert pid p}}) hk
+    have observed := congrArg (fun k : WGStoreView => (outsidePeers k, resident k)) updated
+    apply Eq.trans ?_ (restore_view initial d pid p hd hp)
+    simpa [view, wgStoreView, hw] using observed
 
 end Leanux.Proofs.Framing.PeerBorrow

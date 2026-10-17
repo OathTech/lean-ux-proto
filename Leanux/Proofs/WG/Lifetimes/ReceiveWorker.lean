@@ -37,17 +37,17 @@ theorem allocationReceiveQueue : ReceiveQueueContracts AllocationInv := by
     cases hr
     apply hi.congr
     · unfold identityView Peers.snapshot keypairResidents packetResidents
-      simp [popHandshakeQueue, decHandshakeQueue, Option.bind_map, Function.comp_def]
+      simp [popHandshakeQueue, Option.bind_map, Function.comp_def]
     · simp [allocationMetadata, deviceAllocationMetadata, popHandshakeQueue,
-        decHandshakeQueue, Option.map_map, Function.comp_def] <;> rfl
+        Option.map_map, Function.comp_def] <;> rfl
   ·
     apply StatePrefixEnsures.lift _ (fun _ _ _ hi => hi.safe)
     intro h w ambient x v ambient' hi hr
     cases hr
     apply hi.congr
     · unfold identityView Peers.snapshot keypairResidents packetResidents
-      simp [popHandshakeQueue, decHandshakeQueue, Option.bind_map, Function.comp_def]
-    · simp [allocationMetadata, deviceAllocationMetadata, popHandshakeQueue,
+      simp [decHandshakeQueue, Option.bind_map, Function.comp_def]
+    · simp [allocationMetadata, deviceAllocationMetadata,
         decHandshakeQueue, Option.map_map, Function.comp_def] <;> rfl
 
 def receiveStepPrefix : MixedM Bool := do

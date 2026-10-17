@@ -29,9 +29,9 @@ theorem setPeer_encryptRing (pid : PeerId) (p : Peer) :
   simp [encryptRing, Option.map_map, Function.comp_def]
 
 theorem getPeer_encryptRing (pid : PeerId) : SameView encryptRing (getPeer pid) := by
-  apply SameView.of_wp
-  intro r
-  mvcgen [getPeer, getDev, invariant, AmbientM.invariant]
+  apply (Lifetimes.ProjectedAction.iff_run_ambient _ _ _).mpr
+  intro w ambient p v ambient' hr
+  exact congrArg encryptRing (Peers.getPeer_current pid w v p ambient ambient' hr).1
 
 /-- Exact alternatives for every ordinary return: successful production,
 peer-queue refusal, or physical ring fullness. Both refusals preserve the ring. -/
@@ -45,33 +45,97 @@ theorem enqueue_ring_wp (before : Option (PtrRing (List SkbId)))
     (pid : PeerId) (item : List SkbId) :
     ⦃fun w => ⌜encryptRing w = before⌝⦄ enqueuePerDeviceAndPeer pid item
     ⦃⇓? ret w => ⌜EnqueueResult before item ret (encryptRing w)⌝⦄ := by
+  let P := fun w : WGWorld => encryptRing w = before
   have packet_spec (id : SkbId) :
-      ⦃fun w => ⌜encryptRing w = before⌝⦄
-        setTxSkb id (fun p => {p with state := .uncrypted})
-      ⦃⇓? _ w => ⌜encryptRing w = before⌝⦄ := by
+      Preserves P (setTxSkb id (fun p => {p with state := .uncrypted})) := by
     apply hoare_liftSkb
     intro g d packets hg hd
-    simpa [encryptRing, hd] using hg
-  have peer_spec := (getPeer_encryptRing pid).wp (fun r => r = before)
-  have set_spec := fun p => (setPeer_encryptRing pid p).wp (fun r => r = before)
-  have cpu_spec := fun cpu => (encryptRing_kernel
-    (Lifetimes.cpumaskNextOnlineFrom_sameStore cpu)).wp (fun r => r = before)
-  have queue_spec :
-      ⦃fun w => ⌜encryptRing w = before⌝⦄ (queueDeviceWork .encryptWorker : WG.M Unit)
-      ⦃⇓? _ w => ⌜encryptRing w = before⌝⦄ :=
-    hoare_liftAmbient (AmbientM.queueDeviceWork .encryptWorker) (fun w => encryptRing w = before)
-  have produce_map (ds : Option Device) (hr : ds.map (·.encryptQueue) = before) :
-      ds.map (fun d => d.encryptQueue.produce item) = before.map (fun r => r.produce item) := by
-    rw [← hr]
-    cases ds <;> rfl
-  mvcgen [enqueuePerDeviceAndPeer, packet_spec, peer_spec, set_spec, cpu_spec,
-    queue_spec, getDev, modifyDev, branch, AmbientM.branch, invariant, AmbientM.invariant]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [EnqueueResult, encryptRing, EPIPE, ENOSPC, WG.EPIPE, WG.ENOSPC,
-    Option.map_map, Function.comp_def]
-  all_goals first
-    | (apply produce_map; assumption)
-    | (rename_i hfull; refine ⟨_, ?_, hfull⟩; symm; assumption)
+    simpa [P, encryptRing, hd] using hg
+  have branch_spec (d : Decision) (b : Bool) (Q : WGWorld → Prop) :
+      Hoare (branch d b : WG.M Bool) Q (fun x w => x = b ∧ Q w) := by
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient x v ambient' hq hr
+    change Except.ok ((b, w), _) = Except.ok ((x, v), ambient') at hr
+    cases hr
+    exact ⟨rfl, hq⟩
+  have device : Hoare getDev P
+      (fun d w => P w ∧ before = some d.encryptQueue) := by
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient d v ambient' hp hr
+    cases hd : w.dev with
+    | none =>
+      simp [getDev, hd, invariant, AmbientM.invariant] at hr
+      cases hr
+    | some old =>
+      have he : (getDev.run w).run ambient = .ok ((old, w), ambient) := by
+        simp [getDev, hd] <;> rfl
+      rw [he] at hr
+      cases hr
+      exact ⟨hp, hp.symm.trans (by simp [encryptRing, hd])⟩
+  have edit (f : Device → Device) (hf : ∀ d, (f d).encryptQueue = d.encryptQueue) :
+      SameView encryptRing (modifyDev f) := by
+    apply (Lifetimes.ProjectedAction.iff_run_ambient _ _ _).mpr
+    intro w ambient x v ambient' hr
+    cases hr
+    simp [encryptRing, Option.map_map, Function.comp_def, hf]
+  have returned (ret : Int) (Q : WGWorld → Prop)
+      (hq : ∀ w, Q w → EnqueueResult before item ret (encryptRing w)) :
+      Hoare (pure ret : WG.M Int) Q (fun ret w => EnqueueResult before item ret (encryptRing w)) :=
+    hoare_consequence (hoare_pure ret Q) (fun _ h => h)
+      (fun _ w h => h.1 ▸ hq w h.2)
+  unfold enqueuePerDeviceAndPeer
+  cases item.head? with
+  | none =>
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient x v ambient' _ hr
+    cases hr
+  | some first =>
+    apply hoare_bind _ _ (packet_spec first)
+    intro _
+    apply hoare_bind _ _ ((getPeer_encryptRing pid).wp (fun r => r = before))
+    intro p
+    apply hoare_bind _ _ (branch_spec .enqueuePeerQueueFull (p.txQueue.count ≥ MAX_QUEUED_PACKETS) P)
+    intro refused
+    cases refused with
+    | true =>
+      exact returned _ _ (fun _ h => Or.inr (Or.inl ⟨rfl, h.2⟩))
+    | false =>
+      apply hoare_consequence ?_ (fun _ h => h.2) (fun _ _ h => h)
+      apply hoare_bind _ _ ((setPeer_encryptRing pid {p with txQueue := p.txQueue.enqueue item}).wp
+        (fun r => r = before))
+      intro _
+      apply hoare_bind _ _ device
+      intro d
+      let Q := fun r : Option (PtrRing (List SkbId)) => r = before ∧ before = some d.encryptQueue
+      apply hoare_bind _ _ ((encryptRing_kernel
+        (Lifetimes.cpumaskNextOnlineFrom_sameStore d.encryptLastCpu)).wp Q)
+      intro cpu
+      apply hoare_bind _ _ ((edit (fun d => {d with encryptLastCpu := cpu}) (fun _ => rfl)).wp Q)
+      intro _
+      apply hoare_bind _ _ (branch_spec .enqueueRingFull d.encryptQueue.full
+        (fun w => Q (encryptRing w)))
+      intro full
+      cases full with
+      | true =>
+        exact returned _ _ (fun _ h => Or.inr (Or.inr
+          ⟨rfl, h.2.1, d.encryptQueue, h.2.2, h.1.symm⟩))
+      | false =>
+        apply hoare_consequence ?_ (fun _ h => h.2) (fun _ _ h => h)
+        apply hoare_bind _ _ (hoare_liftAmbient (AmbientM.queueDeviceWork .encryptWorker)
+          (fun w => Q (encryptRing w)))
+        intro _
+        have produced : Hoare (modifyDev fun d => {d with encryptQueue := d.encryptQueue.produce item})
+            (fun w => Q (encryptRing w))
+            (fun _ w => encryptRing w = before.map (fun r => r.produce item)) := by
+          apply (hoare_iff_run_ambient _ _ _).mpr
+          intro w ambient x v ambient' hp hr
+          cases hr
+          simp only [encryptRing, Option.map_map, Function.comp_def]
+          rw [← hp.1]
+          simp only [encryptRing, Option.map_map, Function.comp_def]
+        apply hoare_bind _ _ produced
+        intro _
+        exact returned 0 _ (fun _ h => Or.inl ⟨rfl, h⟩)
 
 theorem enqueue_ring_result (pid : PeerId) (item : List SkbId)
     (w v : WGWorld) (ambient ambient' : Ambient) (ret : Int)

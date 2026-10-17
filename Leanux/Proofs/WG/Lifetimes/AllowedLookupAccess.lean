@@ -175,7 +175,7 @@ theorem lookupSrcPrefix_spec_product (c : ProductAmbientContracts I) (P : Identi
   unfold lookupSrcPrefix
   simp only [liftWGObserver_bind, liftWGObserver_pure, apply_ite]
   repeat' first
-    | simp only [liftWGObserver_bind, liftWGObserver_pure, apply_ite]
+    | simp only []
     | (maintenance_head lookupPrefix; exact lookupPrefix_spec_product c P _ _ _)
     | (maintenance_lift_action_head getDev; exact c.nativeStore P _ (by intro initial; unfold Hoare; mvcgen [getDev, invariant, AmbientM.invariant]))
     | (maintenance_lift_action_head branch; exact branch_spec P _ _)
@@ -195,7 +195,7 @@ theorem lookupDstPrefix_spec_product (c : ProductAmbientContracts I) (P : Identi
   unfold lookupDstPrefix
   simp only [liftWGObserver_bind, liftWGObserver_pure, apply_ite]
   repeat' first
-    | simp only [liftWGObserver_bind, liftWGObserver_pure, apply_ite]
+    | simp only []
     | (maintenance_head lookupPrefix; exact lookupPrefix_spec_product c P _ _ _)
     | (maintenance_lift_action_head getDev; exact c.nativeStore P _ (by intro initial; unfold Hoare; mvcgen [getDev, invariant, AmbientM.invariant]))
     | (maintenance_lift_action_head branch; exact branch_spec P _ _)

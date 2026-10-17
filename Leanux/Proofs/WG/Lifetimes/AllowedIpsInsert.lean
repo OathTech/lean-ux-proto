@@ -125,9 +125,8 @@ theorem nodeAllocation_identity_metadata (w v : WGWorld)
   have factor (g : WGWorld) : observe (nodeAllocationView g) = (identityView g, allocationMetadata g) := by
     unfold identityView keypairResidents packetResidents allocationMetadata
     cases hg : g.dev <;>
-      simp [observe, nodeAllocationView, wgStoreView, nodeAllocationDevice, nodeDevice, identityView, Peers.snapshot,
-        Leanux.Proofs.WG.Lifetimes.keypairResidents, Leanux.Proofs.WG.Lifetimes.packetResidents,
-        allocationMetadata, deviceAllocationMetadata, hg]
+      simp [observe, nodeAllocationView, wgStoreView, nodeAllocationDevice, nodeDevice, Peers.snapshot,
+        deviceAllocationMetadata, hg]
     all_goals rfl
   simpa only [factor] using congrArg observe he
 

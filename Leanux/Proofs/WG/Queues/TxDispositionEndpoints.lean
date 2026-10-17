@@ -70,7 +70,7 @@ theorem publication_head (first : SkbId) (rest : List SkbId) (state : PacketStat
       | some p =>
         rw [Packets.setTxSkb_run w ambient d first p _ hd hp] at hr
         cases hr
-        exact ⟨{p with state}, by simp [HeadState, txPackets, Packets.update, hd], rfl⟩
+        exact ⟨{p with state}, by simp [txPackets, Packets.update, hd], rfl⟩
   have peek := fun pid => ambient (AmbientM.peekQueuedUnit .txWorker pid)
   have record := fun pid => ambient (AmbientM.recordQueued .txWorker pid)
   unfold Hoare at ambient skb written peek record
@@ -105,7 +105,7 @@ theorem enqueue_pipe (pid : PeerId) (item : List SkbId) (d : Device) (p : Peer)
   all_goals try dsimp +zetaDelta only [P] at *
   all_goals try simp_all [wgStoreView, PeerBorrow.resident, TxRing.nativeCell]
   all_goals subst_vars
-  all_goals try simp_all [wgStoreView, PeerBorrow.resident, TxRing.nativeCell]
+  all_goals try simp_all []
   all_goals omega
 
 /-- Full normal original createData endpoint for an entry ring refusal.
@@ -130,7 +130,7 @@ theorem create_pipe (pid : PeerId) (first : SkbId) (rest : List SkbId)
   mvcgen [createTailSource, enq, pub, getPeer, getDev, branch, invariant, AmbientM.branch, AmbientM.invariant]
   all_goals try dsimp +zetaDelta only at *
   all_goals unfold txQueues HeadState txPackets TxRing.nativeCell at *
-  all_goals simp_all [WG.EPIPE, EPIPE, PeerBorrow.resident]
+  all_goals simp_all [WG.EPIPE, PeerBorrow.resident]
 
 theorem dispose_endpoint (pid : PeerId) (item : List SkbId) (key : KeypairId) (sent : List SentDatagram) :
     ⦃fun w => ⌜w.sent = sent⌝⦄ disposeSource pid item key
@@ -203,7 +203,7 @@ theorem dead_step_endpoint (pid : PeerId) (first : SkbId) (rest : List SkbId) (s
     setPeer, modifyDev, invariant]
   all_goals unfold HeadState txPackets at *
   all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [wgStoreView, PeerBorrow.resident, Option.bind_map, Function.comp_def]
+  all_goals simp_all [wgStoreView, PeerBorrow.resident]
   all_goals subst_vars
   all_goals try simp_all
 

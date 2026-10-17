@@ -143,7 +143,7 @@ theorem armTimer_cell (pid : PeerId) (timer : PeerTimer) (delay : Nat) (jc : Opt
     intro w hw
     exact (hf w).trans hw
   unfold armTimer
-  simp (config := { zeta := false }) only [getAmbient, hidden, invariant, unsupported, liftM]
+  simp (config := { zeta := false }) only [getAmbient, hidden, invariant, unsupported]
   repeat' first
     | rxqueue_join_let
     | rxqueue_join_use
@@ -289,7 +289,7 @@ theorem cpumaskChooseOnline_cell (pid : PeerId) : SameView nativeCell (cpumaskCh
   mvcgen [cpumaskChooseOnline, hg, hs, branch, AmbientM.branch]
   all_goals try exact ((⇓? _ w => ⌜nativeCell w = s⌝) : PostCond _ (.arg WGWorld (.arg Ambient (.except Stop .pure))))
   all_goals try dsimp +zetaDelta only at *
-  all_goals try (unfold nativeCell at *; simp_all [CurrentRx, Option.bind_map, Function.comp_def])
+  all_goals try (unfold nativeCell at *; simp_all [])
   all_goals trivial
 
 theorem enqueuePerDeviceAndPeer_cell (pid : PeerId) (item : List SkbId) :
@@ -315,7 +315,7 @@ theorem enqueuePerDeviceAndPeer_cell (pid : PeerId) (item : List SkbId) :
   mvcgen [enqueuePerDeviceAndPeer, hg, hs, hc, hcpu, hring,
     setTxSkb, skb, queued, getDev, modifyDev, branch, AmbientM.branch, invariant, AmbientM.invariant]
   all_goals try dsimp +zetaDelta only at *
-  all_goals unfold nativeCell at *; simp_all [CurrentRx, Option.bind_map, Function.comp_def]
+  all_goals unfold nativeCell at *; simp_all [Function.comp_def]
 
 theorem enqueuePerPeerTx_cell (item : List SkbId) (state : PacketState) :
     SameView nativeCell (enqueuePerPeerTx item state) := by
@@ -347,7 +347,7 @@ theorem enqueuePerPeerTx_cell (item : List SkbId) (state : PacketState) :
     getTxSkb, setTxSkb, skb, peek, recorded, getDev, modifyDev,
     branch, AmbientM.branch, invariant, AmbientM.invariant]
   all_goals try dsimp +zetaDelta only [P] at *
-  all_goals try (unfold nativeCell at *; simp_all [Option.bind_map, Function.comp_def])
+  all_goals try (unfold nativeCell at *; simp_all [Function.comp_def])
   all_goals subst s
   all_goals rfl
 
@@ -370,7 +370,7 @@ theorem createData_cell (pid : PeerId) (item : List SkbId) : SameView nativeCell
     getTxSkb, freeTxSkb, skb, branch, AmbientM.branch, invariant, AmbientM.invariant]
   all_goals try exact ((⇓? _ w => ⌜P (nativeCell w)⌝) : PostCond _ (.arg WGWorld (.arg Ambient (.except Stop .pure))))
   all_goals try dsimp +zetaDelta only [P] at *
-  all_goals try (unfold nativeCell at *; simp_all [Option.bind_map, Function.comp_def])
+  all_goals try (unfold nativeCell at *; simp_all [])
   all_goals try subst s
   all_goals first | rfl | trivial
 
@@ -604,7 +604,7 @@ theorem receive4_cell (bytes : List UInt8) :
     apply (ProjectedAction.iff_run _ _ _).mpr
     intro w x v hr
     obtain ⟨e, he⟩ := failure w
-    simp only [StateT.run_bind, he, Except.bind] at hr
+    simp only [StateT.run_bind, he] at hr
     contradiction
   have excluded := fun row tail => stopped (Leanux.Env.Stack.excluded row)
     (stackExcluded_failure row) tail

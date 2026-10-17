@@ -94,7 +94,7 @@ theorem peerPut_otherResidents (id : Option PeerId) : SameView otherResidents (p
     have same : otherResidents {w with dev := some {d with indexTable := table}} =
         otherResidents w := by
       unfold otherResidents keypairResidents packetResidents
-      simp only [hd, Option.bind_some, Option.map_some]
+      simp only [hd, Option.bind_some]
     exact same.trans hi
   unfold Hoare at index_spec
   mvcgen [peerPut, requireNotPending, getPeer, getDev, setPeer, modifyDev,
@@ -119,7 +119,7 @@ theorem setRxSkb_identity (id : SkbId) (f : RxPacket → RxPacket) :
   intro w ambient x v ambient' hr
   cases x
   cases hd : w.dev with
-  | none => simp [setRxSkb, liftSkb_run, hd, invariant, AmbientM.invariant] at hr
+  | none => simp [setRxSkb, liftSkb_run, hd] at hr
   | some d =>
     cases hp : d.rxSkbs[id]? with
     | none =>

@@ -76,7 +76,7 @@ theorem keypairPut_routing (kp : Option KeypairId) (now : Bool) :
     refcountDecAndTest, branch, branchCmp, AmbientM.branch, AmbientM.branchCmp,
     invariant, unsupported, AmbientM.invariant, AmbientM.unsupported]
   all_goals dsimp +zetaDelta only at *
-  all_goals dsimp only [routingView, routingState] at *; simp_all [routingState, Option.map_some, Option.bind_map, Function.comp_def]
+  all_goals dsimp only [routingView, routingState] at *; simp_all [routingState, Option.map_some, Function.comp_def]
   all_goals subst_vars
   all_goals simp_all
   all_goals
@@ -103,7 +103,7 @@ theorem sendQueuedHandshakeInitiation_routing (pid : PeerId) (retry : Bool) :
   unfold Hoare at ambient
   mvcgen [-Std.Do.Spec.monadLift_StateT, sendQueuedHandshakeInitiation, hg, hs, hn, hc, hget, hput, hqueue, branch, peekQueuedUnit, recordQueued, ambient]
   all_goals try dsimp +zetaDelta only [P] at *
-  all_goals try (dsimp only [routingView, routingState] at *; simp_all [routingState])
+  all_goals try (dsimp only [routingView, routingState] at *; simp_all [])
   all_goals try assumption
   all_goals subst s
   all_goals exact RetainsRouting.refl _
@@ -119,7 +119,7 @@ theorem cpumaskChooseOnline_routing (pid : PeerId) : SameView routingView (cpuma
   mvcgen [cpumaskChooseOnline, hg, hs, branch, AmbientM.branch]
   all_goals try exact ((⇓? _ w => ⌜routingView w = s⌝) : PostCond _ (.arg WGWorld (.arg Ambient (.except Stop .pure))))
   all_goals try dsimp +zetaDelta only at *
-  all_goals try (dsimp only [routingView, routingState] at *; simp_all [routingState, Option.bind_map, Function.comp_def])
+  all_goals try (dsimp only [routingView, routingState] at *; simp_all [])
   all_goals trivial
 
 theorem enqueuePerDeviceAndPeer_routing (pid : PeerId) (item : List SkbId) :
@@ -146,44 +146,45 @@ theorem enqueuePerDeviceAndPeer_routing (pid : PeerId) (item : List SkbId) :
   mvcgen [enqueuePerDeviceAndPeer, hg, hs, hc, hcpu, hring,
     setTxSkb, skb, queued, getDev, modifyDev, branch, AmbientM.branch, invariant, AmbientM.invariant]
   all_goals try dsimp +zetaDelta only at *
-  all_goals dsimp only [routingView, routingState] at *; simp_all [routingState, Option.bind_map, Function.comp_def]
+  all_goals dsimp only [routingView, routingState] at *; simp_all [routingState, Function.comp_def]
   all_goals assumption
 
 theorem enqueuePerPeerTx_routing (item : List SkbId) (state : PacketState) :
     RetainsRoutingCall (enqueuePerPeerTx item state) := by
-  apply ProjectedAction.of_wp
   intro s
-  let P := RetainsRouting s
-  have skb {α : Type} (a : SkbM α) :
-      Hoare (liftSkb a) (fun w => P (routingView w)) (fun _ w => P (routingView w)) := by
-    apply hoare_liftSkb a
-    intro w d store hi hd
-    unfold routingView at hi ⊢
-    simpa only [hd, Option.map_some, routingState] using hi
-  unfold Hoare at skb
-  have hk := fun id => (getKeypair_routing id).wp P
-  have hg := fun pid => (getPeer_routing pid).wp P
-  have hget := fun pid => (peerGet_routing pid).wp P
-  have hput := fun pid => RetainsRoutingCall.wp (peerPut_retainsRouting pid) s
-  have hcpu := fun pid => (cpumaskChooseOnline_routing pid).wp P
-  have hdev := fun pid => (txDevice_routing (.work pid)).wp P
-  have peek (pid : PeerId) : Hoare (peekQueuedUnit .txWorker pid : WG.M Bool)
-      (fun w => P (routingView w)) (fun _ w => P (routingView w)) :=
-    hoare_liftAmbient (AmbientM.peekQueuedUnit .txWorker pid) _
-  have recorded (pid : PeerId) : Hoare (recordQueued .txWorker pid : WG.M Unit)
-      (fun w => P (routingView w)) (fun _ w => P (routingView w)) :=
-    hoare_liftAmbient (AmbientM.recordQueued .txWorker pid) _
-  unfold Hoare at peek recorded
-  have howner := fun o => indexOwner_peerDeref_preserves o (fun w => P (routingView w))
-  unfold Preserves Hoare at howner
-  mvcgen [enqueuePerPeerTx, howner, hk, hg, hget, hput, hcpu, hdev,
-    getTxSkb, setTxSkb, skb, peek, recorded, getDev, modifyDev,
-    branch, AmbientM.branch, invariant, AmbientM.invariant]
-  all_goals try dsimp +zetaDelta only [P] at *
-  all_goals try (dsimp only [routingView, routingState] at *; simp_all [routingState, Option.bind_map, Function.comp_def])
-  all_goals try assumption
-  all_goals subst s
-  all_goals exact RetainsRouting.refl _
+  let P := fun w : WGWorld => RetainsRouting s (routingView w)
+  have main : Preserves P (enqueuePerPeerTx item state) := by
+    have ambient {α : Type} (a : AmbientM α) :
+        Preserves P (monadLift a : WG.M α) := hoare_liftAmbient a P
+    have skb {α : Type} (a : SkbM α) : Preserves P (liftSkb a) := by
+      apply hoare_liftSkb a
+      intro w d store hi hd
+      unfold P routingView at hi ⊢
+      simpa only [hd, Option.map_some, routingState] using hi
+    have device := (routing_kernel _ getDev_sameWGStore).wp (RetainsRouting s)
+    unfold enqueuePerPeerTx
+    simp (config := { zeta := true }) only
+      [getTxSkb, setTxSkb, peekQueuedUnit, recordQueued, invariant]
+    repeat' first
+      | (rx_retention_head IndexOwner.peerDeref; exact indexOwner_peerDeref_preserves _ P)
+      | (rx_retention_head peerGet; exact (peerGet_routing _).wp (RetainsRouting s))
+      | (rx_retention_head getPeer; exact (getPeer_routing _).wp (RetainsRouting s))
+      | (rx_retention_head peerPut; exact RetainsRoutingCall.wp (peerPut_retainsRouting _) s)
+      | (rx_retention_head cpumaskChooseOnline; exact (cpumaskChooseOnline_routing _).wp (RetainsRouting s))
+      | (rx_retention_head getDev; exact device)
+      | (rx_retention_head modifyDev; exact (txDevice_routing (.work _)).wp (RetainsRouting s))
+      | (rx_retention_head liftSkb; exact skb _)
+      | (rx_retention_head MonadLiftT.monadLift; exact ambient _)
+      | (rx_retention_head MonadLift.monadLift; exact ambient _)
+      | (rx_retention_head MonadExceptOf.throw; exact hoare_throw _)
+      | rx_retention_step
+  apply hoare_consequence main
+  · intro w he
+    change RetainsRouting s (routingView w)
+    change routingView w = s at he
+    rw [he]
+    exact RetainsRouting.refl _
+  · exact fun _ _ h => h
 
 theorem createData_routing (pid : PeerId) (item : List SkbId) : RetainsRoutingCall (createData pid item) := by
   apply ProjectedAction.of_wp
@@ -205,7 +206,7 @@ theorem createData_routing (pid : PeerId) (item : List SkbId) : RetainsRoutingCa
     getTxSkb, freeTxSkb, skb, branch, AmbientM.branch, invariant, AmbientM.invariant]
   all_goals try exact ((⇓? _ w => ⌜P (routingView w)⌝) : PostCond _ (.arg WGWorld (.arg Ambient (.except Stop .pure))))
   all_goals try dsimp +zetaDelta only [P] at *
-  all_goals try (dsimp only [routingView, routingState] at *; simp_all [routingState, Option.bind_map, Function.comp_def])
+  all_goals try (dsimp only [routingView, routingState] at *; simp_all [])
   all_goals try subst s
   all_goals first | exact RetainsRouting.refl _ | trivial
 
@@ -227,7 +228,7 @@ theorem stagedOutNokey_routing (pid : PeerId) (packets : List Packet)
       hg, hs, hk, hset, hp, hq, branch, invariant, AmbientM.branch, AmbientM.invariant]
   all_goals try exact ((⇓? _ w => ⌜RetainsRouting s (routingView w)⌝) : PostCond _ (.arg WGWorld (.arg Ambient (.except Stop .pure))))
   all_goals try dsimp +zetaDelta only at *
-  all_goals try (dsimp only [routingView, routingState] at *; simp_all [routingState, Option.bind_map, Function.comp_def])
+  all_goals try (dsimp only [routingView, routingState] at *; simp_all [])
   all_goals try subst s
   all_goals first | exact RetainsRouting.refl _ | trivial
 
@@ -264,7 +265,7 @@ theorem sendStagedPackets_routing (pid : PeerId) : RetainsRoutingCall (sendStage
     hl, hg, hs, hk, hset, hget, hp, hout, hput, hqueue, ht, he, hn, hc, branch, branchCmp, AmbientM.branch, AmbientM.branchCmp, invariant, AmbientM.invariant]
   all_goals try exact ((⇓? _ w => ⌜P (routingView w)⌝) : PostCond _ (.arg WGWorld (.arg Ambient (.except Stop .pure))))
   all_goals try dsimp +zetaDelta only [P] at *
-  all_goals try (dsimp only [routingView, routingState] at *; simp_all [routingState, Option.bind_map, Function.comp_def])
+  all_goals try (dsimp only [routingView, routingState] at *; simp_all [])
   all_goals try subst s
   all_goals first | exact RetainsRouting.refl _ | trivial
 
@@ -284,7 +285,7 @@ theorem sendKeepalive_routing (pid : PeerId) : RetainsRoutingCall (sendKeepalive
   have ht := RetainsRoutingCall.wp (sendStagedPackets_routing pid) s
   mvcgen [sendKeepalive, hg, hs, ha, ht, getDev, branch, AmbientM.branch, invariant, AmbientM.invariant]
   all_goals try dsimp +zetaDelta only [P] at *
-  all_goals try (dsimp only [routingView, routingState] at *; simp_all [routingState])
+  all_goals try (dsimp only [routingView, routingState] at *; simp_all [])
   all_goals try assumption
   all_goals subst s
   all_goals try exact RetainsRouting.refl _

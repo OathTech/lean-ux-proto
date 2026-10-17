@@ -81,23 +81,23 @@ theorem factor (pid : PeerId) : beginSession pid = (do
     funext first
     cases first <;> simp only [Bool.false_eq_true, ↓reduceIte, monadLift_pure]
   unfold front frontWith tail tailWith beginSession initKey
-  simp only [← reject_eq, bind_assoc, pure_bind]
+  simp only [← reject_eq, bind_assoc]
   repeat' first
     | rfl
     | with_reducible apply bind_congr
     | session_origin_intro_forall
-    | (split <;> try simp_all only [bind_assoc, pure_bind, Bool.not_eq_true, Bool.not_eq_false])
+    | (split <;> try simp_all only [bind_assoc, pure_bind, Bool.not_eq_true])
     | simp only [bind_assoc, pure_bind]
 
 theorem prefix_factor (pid : PeerId) : beginSessionPrefix pid = (do
     match ← frontPrefix pid with | none => return false | some c => tailPrefix pid c.slot) := by
   unfold frontPrefix frontWith tailPrefix tailWith beginSessionPrefix
-  simp only [bind_assoc, pure_bind]
+  simp only [bind_assoc]
   repeat' first
     | rfl
     | with_reducible apply bind_congr
     | session_origin_intro_forall
-    | (split <;> try simp_all only [bind_assoc, pure_bind, Bool.not_eq_true, Bool.not_eq_false])
+    | (split <;> try simp_all only [bind_assoc, pure_bind, Bool.not_eq_true])
     | simp only [bind_assoc, pure_bind]
 
 theorem front_erases (pid : PeerId) : ErasesStatePrefix (frontPrefix pid) (front pid) := by
@@ -445,15 +445,15 @@ theorem front_material (pid : PeerId) (ctx : Context) (w v : WGWorld)
         cases hr
       | some kp =>
         simp only [bind_ok_ambient] at hr
-        obtain ⟨peer, f, fAmbient, hp, unit, g, gAmbient, hi, direction, j, jAmbient, hb,
-          unit', k, kAmbient, hd, he⟩ := hr
-        cases unit; cases unit'
+        obtain ⟨peer, f, fAmbient, hp, firstResult, g, gAmbient, hi, direction, j, jAmbient, hb,
+          secondResult, k, kAmbient, hd, he⟩ := hr
+        cases firstResult; cases secondResult
         have hg := Peers.getPeer_current pid e f peer eAmbient fAmbient hp
         have hf := hg.1
         have hfAmbient := hg.2.1
         subst f
         subst fAmbient
-        simp only [StateT.run_pure, Except.ok.injEq, Prod.mk.injEq, Option.some.injEq] at he
+        simp only [StateT.run_pure] at he
         obtain ⟨⟨rfl, rfl⟩, rfl⟩ := he
         exact ⟨e, g, j, eAmbient, gAmbient, jAmbient,
           ⟨initial, a, aAmbient, b, bAmbient, c, cAmbient, d, dAmbient, e, eAmbient,

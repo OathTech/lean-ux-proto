@@ -95,7 +95,7 @@ theorem enqueuePerPeerRxPrefix_preserves_ambient (c : ProductAmbientContracts I)
         I h w ∧ (identityView w.wg).1.slots pid = some p.internalId)
     · apply PrefixEnsures.lift _ (fun h w hn => c.safe h w hn.1)
       intro h w x v hn hr
-      simp [invariant, liftAmbient_run, AmbientM.invariant] at hr
+      simp [invariant, AmbientM.invariant] at hr
       cases hr
     intro _
     exact tail
@@ -218,7 +218,7 @@ theorem enqueuePerPeerRxNativePrefix_lift (id : SkbId) (state : PacketState) :
     liftWGObserver (enqueuePerPeerRxNativePrefix id state) =
       enqueuePerPeerRxPrefix (pure ()) id state := by
   unfold enqueuePerPeerRxNativePrefix enqueuePerPeerRxPrefix
-  simp only [liftWGObserver_bind, liftWGObserver_pure, pure_bind]
+  simp only [liftWGObserver_bind, pure_bind]
   congr 1
   funext pkt
   congr 1
@@ -227,7 +227,7 @@ theorem enqueuePerPeerRxNativePrefix_lift (id : SkbId) (state : PacketState) :
   funext u
   congr 1
   funext p
-  split <;> simp only [liftWGObserver_bind, liftWGObserver_lift, liftWGObserver_pure, pure_bind]
+  split <;> simp only [liftWGObserver_bind, liftWGObserver_lift]
   all_goals rfl
 
 end Leanux.Proofs.WG.Lifetimes

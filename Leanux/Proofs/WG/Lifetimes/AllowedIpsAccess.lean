@@ -21,9 +21,8 @@ theorem nodeView_identity_metadata (w v : WGWorld)
   have factor (g : WGWorld) : observe (nodeView g) = (identityView g, allocationMetadata g) := by
     unfold identityView keypairResidents packetResidents allocationMetadata
     cases hg : g.dev <;>
-      simp [observe, nodeView, wgStoreView, nodeDevice, identityView, Peers.snapshot,
-        Leanux.Proofs.WG.Lifetimes.keypairResidents, Leanux.Proofs.WG.Lifetimes.packetResidents,
-        allocationMetadata, deviceAllocationMetadata, hg]
+      simp [observe, nodeView, wgStoreView, nodeDevice, Peers.snapshot,
+        deviceAllocationMetadata, hg]
     all_goals rfl
   simpa only [factor] using congrArg observe he
 
@@ -210,7 +209,7 @@ theorem listDelEntriesPrefix_spec_product (c : ProductAmbientContracts I) (P : I
       (fun _ _ hi => hi) (fun _ _ _ hi => ⟨hi.1, hi.2.1⟩)
   | cons x xs ih =>
     rcases x with ⟨pid,p⟩
-    simp only [listDelEntriesPrefix, liftWGObserver_bind, apply_ite, liftWGObserver_pure]
+    simp only [listDelEntriesPrefix, liftWGObserver_bind, apply_ite]
     have hread : ProductAmbientSpec I (fun s => P s ∧ SavedPeers ((pid,p)::xs) s)
         (liftWGObserver (savedPeerRead pid p)) (fun _ s => (P s ∧ SavedPeers xs s) ∧ s.1.slots pid = some p.internalId) :=
       (savedPeerRead_spec_product c (fun s => P s ∧ SavedPeers xs s) pid p).consequence
@@ -344,7 +343,7 @@ theorem freeAllowedIpsPrefix_erases : ErasesStatePrefix freeAllowedIpsPrefix fre
 
 theorem peerMakeDeadPrefix_erases (pid : PeerId) : ErasesStatePrefix (peerMakeDeadPrefix pid) (peerMakeDead pid) := by
   unfold peerMakeDeadPrefix peerMakeDead modifyPeerKeysPrefix
-  simp only [liftWGPrefix, deadPeerList, deadPeerHashtable]
+  simp only [liftWGPrefix]
   apply erasesStatePrefix_bind (erasesStatePrefix_lift _)
   intro _
   apply erasesStatePrefix_bind (removeByPeerPrefix_erases pid)
@@ -475,7 +474,7 @@ theorem removeByPeerPrefix_preserves_product (c : ProductAmbientContracts I) (hc
       (liftWGObserver (liftWGPrefix (Leanux.invariant (α := α) why))) :=
     ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _
       (fun initial => hoare_liftAmbient (AmbientM.invariant why) (fun w => wgStoreView w = initial)))
-  simp only [removeByPeerPrefix, liftWGObserver_bind, liftWGObserver_pure, apply_ite, allowed_lift_forIn, Std.Legacy.Range.forIn_eq_forIn_range']
+  simp only [removeByPeerPrefix, liftWGObserver_bind, liftWGObserver_pure, apply_ite, allowed_lift_forIn]
   repeat' first
     | (first | rw [liftWGObserver_bind] | rw [liftWGObserver_pure] | rw [allowed_lift_forIn] | rw [Std.Legacy.Range.forIn_eq_forIn_range'] | rw [apply_ite])
     | with_reducible exact ProductAmbientContracts.drop (ProductAmbientContracts.forget (c.getPeer (fun _ => True) _) (fun _ _ hi => hi.1))
@@ -501,7 +500,7 @@ theorem rootRemovePeerListsPrefix_preserves_product (c : ProductAmbientContracts
       (liftWGObserver (liftWGPrefix (Leanux.invariant (α := α) why))) :=
     ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _
       (fun initial => hoare_liftAmbient (AmbientM.invariant why) (fun w => wgStoreView w = initial)))
-  simp only [rootRemovePeerListsPrefix, liftWGObserver_bind, liftWGObserver_pure, apply_ite, allowed_lift_forIn, Std.Legacy.Range.forIn_eq_forIn_range']
+  simp only [rootRemovePeerListsPrefix, liftWGObserver_bind, allowed_lift_forIn, Std.Legacy.Range.forIn_eq_forIn_range']
   repeat' first
     | (first | rw [liftWGObserver_bind] | rw [liftWGObserver_pure] | rw [allowed_lift_forIn] | rw [Std.Legacy.Range.forIn_eq_forIn_range'] | rw [apply_ite])
     | with_reducible exact ProductAmbientContracts.drop (ProductAmbientContracts.forget (c.getPeer (fun _ => True) _) (fun _ _ hi => hi.1))
@@ -529,7 +528,7 @@ theorem freeAllowedIpsPrefix_preserves_product (c : ProductAmbientContracts I) (
       (liftWGObserver (liftWGPrefix (Leanux.invariant (α := α) why))) :=
     ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _
       (fun initial => hoare_liftAmbient (AmbientM.invariant why) (fun w => wgStoreView w = initial)))
-  simp only [freeAllowedIpsPrefix, liftWGObserver_bind, liftWGObserver_pure, apply_ite, allowed_lift_forIn, Std.Legacy.Range.forIn_eq_forIn_range']
+  simp only [freeAllowedIpsPrefix, liftWGObserver_bind, liftWGObserver_pure, apply_ite, allowed_lift_forIn]
   repeat' first
     | (first | rw [liftWGObserver_bind] | rw [liftWGObserver_pure] | rw [allowed_lift_forIn] | rw [Std.Legacy.Range.forIn_eq_forIn_range'] | rw [apply_ite])
     | with_reducible exact rootRemovePeerListsPrefix_preserves_product c _

@@ -118,7 +118,7 @@ theorem rxPollPrefix_erases (pid : PeerId) (budget : Nat)
       exact erasesStatePrefix_bind (getRxSkbPrefix_erases f)
         (fun _ => erasesStatePrefix_lift _)
   unfold rxPollPrefix rxPoll modifyPeerKeysPrefix rxDropPeekedPrefix
-  simp only [liftWGObserver_bind, liftWGObserver_pure, bind_assoc]
+  simp only [liftWGObserver_bind, bind_assoc]
   repeat' first
     | with_reducible apply erasesPrefix_bind
     | with_reducible apply erasesPrefix_ite

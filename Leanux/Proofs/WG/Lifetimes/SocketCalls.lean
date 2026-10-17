@@ -111,6 +111,6 @@ theorem dstCacheGetPrefix_clock_failure (pid gen : Nat) (w : WGWorld) (ambient :
     runStatePrefix (dstCacheGetPrefix pid gen) w ambient h =
       (.error e, h ++ [.peer (.read pid p.internalId)]) := by
   simp [dstCacheGetPrefix, runStatePrefix_bind, runStatePrefix_lift, liftWGPrefix, getPeerMixed_run, hp, hs, ha, hc, hf,
-    getAmbient, StateT.run_bind, StateT.run_pure, StateT.run_lift]
+    getAmbient, StateT.run_pure]
 
 end Leanux.Proofs.WG.Lifetimes

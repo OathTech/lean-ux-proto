@@ -29,7 +29,7 @@ theorem run_append (r : PtrRing α) (xs ys : List (Command α)) :
       (h ++ h', t) := by
   induction xs generalizing r with
   | nil => rfl
-  | cons c cs ih => simp [Ring.Journal.run, ih, List.append_assoc]
+  | cons c cs ih => simp [Ring.Journal.run, ih]
 
 theorem Refines.step (hr : Refines initial h r) (c : Command ι) :
     Refines initial (h ++ [(step r c).1]) (step r c).2 := by
@@ -161,7 +161,7 @@ theorem poll_preserves (source : Leanux.M (Option ι))
     obtain ⟨ho, hv⟩ := hresult w out v r hc hr
     have hn : Refines initial (h ++ [.polled out]) r.consume.2 := by
       simpa [step, ho] using hj.step .poll
-    simp only [runPrefix_bind, runPrefix_emit, runPrefix_pure]
+    simp only [runPrefix_emit, runPrefix_pure]
     exact ⟨[.polled out], rfl, ⟨_, hn⟩, ⟨_, hn, hv⟩⟩
 
 theorem from_initial {g : PrefixM (Ring.Journal.Event ι) α}
@@ -173,7 +173,9 @@ theorem from_initial {g : PrefixM (Ring.Journal.Event ι) α}
       | .ok (_, v) => Inv cell deviceIndex (PtrRing.init n) (runPrefix g w []).2 v := by
   obtain ⟨_, _, hs, ho⟩ := hg w [] (initial_inv hc)
   refine ⟨hs, ?_⟩
-  cases hr : (runPrefix g w []).1 <;> simpa only [hr] using ho
+  cases hr : (runPrefix g w []).1 with
+  | error e => trivial
+  | ok out => simpa only [hr] using ho
 
 theorem initialized {g : PrefixM (Ring.Journal.Event ι) α}
     (hg : PrefixPreserves (Inv cell deviceIndex (PtrRing.init n)) (Safe (PtrRing.init n)) g)

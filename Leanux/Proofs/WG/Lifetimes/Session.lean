@@ -359,7 +359,7 @@ theorem beginSessionPrefix_preserves_product (c : ProductAmbientContracts I)
           apply PrefixPreserves.bind (ProductAmbientContracts.drop (ambient_spec (AmbientM.branch _ _)))
           intro live
           split
-          · simp only [liftWGObserver_bind, liftWGObserver_pure]
+          · simp only [liftWGObserver_bind]
             apply PrefixPreserves.bind (addNewKeypairPrefix_preserves_product c put pid kp)
             intro _
             apply PrefixPreserves.bind (ProductAmbientContracts.drop (c.peerDeref (fun _ => True) (.handshake pid)))

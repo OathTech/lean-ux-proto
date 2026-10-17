@@ -127,11 +127,11 @@ theorem freeTxSkbPrefix_erases (id : SkbId) : ErasesStatePrefix (freeTxSkbPrefix
       ((getTxSkb id >>= fun _ => modifyDev (erasePacketDevice (.inl id))).run w).run ambient
     cases hd : w.dev with
     | none => simp [freeTxSkb, getTxSkb, liftSkb_run, hd,
-        StateT.run_bind, invariant, AmbientM.invariant]
+        StateT.run_bind]
     | some d =>
       cases hp : d.txSkbs[id]? <;>
         simp [freeTxSkb, getTxSkb, liftSkb_run, SkbStore.freeTx, SkbStore.getTx,
-          hd, hp, StateT.run_bind, erasePacketDevice, modifyDev, invariant, AmbientM.invariant] <;> rfl
+          hd, hp, StateT.run_bind, modifyDev, invariant, AmbientM.invariant] <;> rfl
   rw [factor]
   exact erasesStatePrefix_bind (getTxSkbPrefix_erases id)
     (fun _ => erasePacketPrefix_erases (.inl id))
@@ -144,11 +144,11 @@ theorem freeRxSkbPrefix_erases (id : SkbId) : ErasesStatePrefix (freeRxSkbPrefix
       ((getRxSkb id >>= fun _ => modifyDev (erasePacketDevice (.inr id))).run w).run ambient
     cases hd : w.dev with
     | none => simp [freeRxSkb, getRxSkb, liftSkb_run, hd,
-        StateT.run_bind, invariant, AmbientM.invariant]
+        StateT.run_bind]
     | some d =>
       cases hp : d.rxSkbs[id]? <;>
         simp [freeRxSkb, getRxSkb, liftSkb_run, SkbStore.freeRx, SkbStore.getRx,
-          hd, hp, StateT.run_bind, erasePacketDevice, modifyDev, invariant, AmbientM.invariant] <;> rfl
+          hd, hp, StateT.run_bind, modifyDev, invariant, AmbientM.invariant] <;> rfl
   rw [factor]
   exact erasesStatePrefix_bind (getRxSkbPrefix_erases id)
     (fun _ => erasePacketPrefix_erases (.inr id))

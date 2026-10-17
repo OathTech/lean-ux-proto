@@ -100,7 +100,7 @@ theorem setRxSkbPrefix_erases (id : SkbId) (f : RxPacket → RxPacket) :
     change ((setRxSkb id f).run w).run ambient =
       ((getRxSkb id >>= fun p => modifyDev fun d => {d with rxSkbs := d.rxSkbs.insert id (f p)}).run w).run ambient
     cases hd : w.dev with
-    | none => simp [setRxSkb, getRxSkb, StateT.run_bind, liftSkb_run, hd, invariant, AmbientM.invariant]
+    | none => simp [setRxSkb, getRxSkb, StateT.run_bind, liftSkb_run, hd]
     | some d =>
       cases hp : d.rxSkbs[id]? <;>
         simp [setRxSkb, getRxSkb, StateT.run_bind, liftSkb_run, SkbStore.setRx, SkbStore.getRx,

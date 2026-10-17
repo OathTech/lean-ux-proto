@@ -54,7 +54,7 @@ theorem dstCacheGetPrefix_erases (pid : PeerId) (gen : Nat) :
     | apply erasesStatePrefix_bind
     | split
     | (intro x; try dsimp only)
-  all_goals simp_all [runStatePrefix_pure, StateT.run_pure]
+  all_goals simp_all [StateT.run_pure]
 
 theorem dstCacheResetNowPrefix_spec (c : AmbientContracts I) (P : IdentityView → Prop) (pid : PeerId) :
     AmbientSpec I P (dstCacheResetNowPrefix pid) (fun _ => P) :=

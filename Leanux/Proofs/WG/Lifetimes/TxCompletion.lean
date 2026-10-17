@@ -151,7 +151,7 @@ theorem keepKeyFreshPrefix_erases (pid : PeerId) :
 theorem createDataDonePrefix_erases (pid : PeerId) (item : List SkbId) :
     ErasesStatePrefix (createDataDonePrefix pid item) (createDataDone pid item) := by
   unfold createDataDonePrefix createDataDone
-  try simp (config := { zeta := false }) only [bind_assoc]
+  try simp (config := { zeta := false }) only []
   repeat' first
     | maintenance_erases_join
     | maintenance_erases_join_use

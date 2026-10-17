@@ -43,7 +43,7 @@ theorem dstCacheReset_peerInitView (pid : PeerId) : SameView peerInitView (dstCa
   all_goals simp_all [deviceAllocationMetadata, Option.bind_map, Function.comp_def]
   all_goals subst_vars
   all_goals try dsimp only [deviceAllocationMetadata] at *
-  all_goals simp_all [deviceAllocationMetadata, Option.bind_map, Function.comp_def]
+  all_goals simp_all []
   all_goals change Option.map deviceAllocationMetadata _ = _
   all_goals simp_all only
 
@@ -67,7 +67,7 @@ theorem resetLastSentHandshake_peerInitView (pid : PeerId) :
   all_goals simp_all [deviceAllocationMetadata, Option.bind_map, Function.comp_def]
   all_goals subst_vars
   all_goals try dsimp only [deviceAllocationMetadata] at *
-  all_goals simp_all [deviceAllocationMetadata, Option.bind_map, Function.comp_def]
+  all_goals simp_all []
   all_goals change Option.map deviceAllocationMetadata _ = _
   all_goals simp_all only
 
@@ -85,7 +85,7 @@ theorem precomputeStaticStatic_peerInitView (pid : PeerId) :
   all_goals try unfold packetResidents at *
   all_goals try unfold allocationMetadata at *
   all_goals try dsimp only [deviceAllocationMetadata] at *
-  all_goals simp_all [deviceAllocationMetadata, Option.bind_map, Function.comp_def]
+  all_goals simp_all [deviceAllocationMetadata]
   all_goals subst_vars
   all_goals simp_all
 
@@ -103,7 +103,7 @@ theorem handshakeInit_peerInitView (pid : PeerId) (psk : Option Key) :
   all_goals try unfold packetResidents at *
   all_goals try unfold allocationMetadata at *
   all_goals try dsimp only [deviceAllocationMetadata] at *
-  all_goals simp_all [deviceAllocationMetadata, Option.bind_map, Function.comp_def]
+  all_goals simp_all [deviceAllocationMetadata, Function.comp_def]
   all_goals subst_vars
   all_goals try dsimp only [deviceAllocationMetadata] at *
   all_goals simp_all [deviceAllocationMetadata, Option.bind_map, Function.comp_def]

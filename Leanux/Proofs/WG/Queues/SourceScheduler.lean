@@ -15,11 +15,9 @@ theorem hasWork_kernel (a : Activation) : SameProductStore (Env.Activation.hasWo
   activationHasWork_sameKernel a
 
 theorem pendingNapi_kernel (next : Option Nat) : SameProductStore (Lifetimes.pendingNapi next) := by
-  apply SameView.of_wp
-  intro initial
-  have hd := productGetDev_spec (fun s => s = initial)
-  unfold Hoare at hd
-  mvcgen [-Std.Do.Spec.monadLift_StateT, Lifetimes.pendingNapi, hd]
+  unfold Lifetimes.pendingNapi
+  exact (liftWG_sameProductStore getDev Lifetimes.getDev_sameWGStore).bind
+    (fun _ => SameView.pure _ _)
 
 def run (iteration : Activation → PrefixM Event IterResult) (a : Activation) : PrefixM Event Unit := do
   let occupancy ← liftPrefix (Env.Activation.occupancy a)

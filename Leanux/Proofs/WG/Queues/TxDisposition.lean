@@ -187,7 +187,7 @@ theorem stepSource_eq (pid : PeerId) : stepSource pid = txStep pid := by
 theorem enqueueCore_erases (pid : PeerId) (item : List SkbId) :
     ErasesPrefix (enqueueCore pid item) (liftWG (enqueuePerDeviceAndPeer pid item)) := by
   unfold enqueueCore enqueuePerDeviceAndPeer
-  cases hh : item.head? <;> simp only [hh, liftWG_bind, liftWG_pure, liftWG_forIn, apply_ite]
+  cases hh : item.head? <;> simp only [liftWG_bind, liftWG_pure, apply_ite]
   repeat' first
     | with_reducible exact nativeAccess_erases (setTxSkbPrefix_erases _ _)
     | with_reducible exact nativeAccess_erases (getPeerMixed_erases _)
@@ -215,7 +215,7 @@ theorem enqueue_erases (pid : PeerId) (item : List SkbId) :
 theorem publish_erases (item : List SkbId) (state : PacketState) :
     ErasesPrefix (publish item state) (liftWG (enqueuePerPeerTx item state)) := by
   unfold publish enqueuePerPeerTx
-  cases hh : item.head? <;> simp only [hh, liftWG_bind, liftWG_pure, liftWG_forIn, apply_ite]
+  cases hh : item.head? <;> simp only [liftWG_bind, apply_ite]
   repeat' first
     | with_reducible exact nativeAccess_erases (getTxSkbPrefix_erases _)
     | with_reducible exact nativeAccess_erases (peerDerefPrefix_erases _)
@@ -236,7 +236,7 @@ theorem publish_erases (item : List SkbId) (state : PacketState) :
 theorem create_erases (pid : PeerId) (item : List SkbId) :
     ErasesPrefix (create pid item) (liftWG (createData pid item)) := by
   unfold create createData
-  cases hh : item.head? <;> simp only [hh, liftWG_bind, liftWG_pure, liftWG_forIn, apply_ite]
+  cases hh : item.head? <;> simp only [liftWG_bind, liftWG_pure, liftWG_forIn, apply_ite]
   repeat' first
     | with_reducible exact enqueue_erases _ _
     | with_reducible exact publish_erases _ _
@@ -259,7 +259,7 @@ theorem drop_erases (pid : PeerId) (item : List SkbId) :
     ErasesPrefix (drop pid item)
       (liftWG (do setPeer pid {(← getPeer pid) with txQueue := (← getPeer pid).txQueue.dropPeeked})) := by
   unfold drop
-  simp only [liftWG_bind, liftWG_pure]
+  simp only [liftWG_bind]
   apply erasesPrefix_bind (nativeAccess_erases (getPeerMixed_erases pid))
   intro p
   apply erasesPrefix_bind (nativeAccess_erases (getPeerMixed_erases pid))

@@ -95,6 +95,6 @@ theorem held_then_normal (callback : List (List UInt8) → M Unit) (held normal 
         let g ← napiGroReceive callback g normal
         napiGroFlushAll callback g) = callback [normal, held] := by
   simp [napiGroReceive, hh, hn, groNormalOne, groNormalList, napiGroFlushAll,
-    GRO_NORMAL_BATCH, List.forIn_cons, List.forIn_nil]
+    GRO_NORMAL_BATCH]
 
 end Leanux.Proofs.WG.Queues

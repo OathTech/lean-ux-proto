@@ -30,7 +30,7 @@ theorem borrow_modify (pid : PeerId) (f : Device → Device)
   intro w ambient x v ambient' hr
   cases hr
   unfold borrowView txQueues
-  simp [PeerBorrow.resident, wgStoreView, Option.map_map,
+  simp [PeerBorrow.resident, wgStoreView,
     Option.bind_map, Function.comp_def, h]
 
 theorem cpu_borrow (pid : PeerId) : SameView (borrowView pid) (cpumaskChooseOnline pid) := by
@@ -41,9 +41,9 @@ theorem cpu_borrow (pid : PeerId) : SameView (borrowView pid) (cpumaskChooseOnli
   all_goals try unfold borrowView at *
   all_goals unfold txQueues at *
   all_goals dsimp +zetaDelta only [PeerBorrow.resident, wgStoreView] at *
-  all_goals simp_all [borrowView, txQueues, PeerBorrow.resident, Std.TreeMap.getElem?_insert]
+  all_goals simp_all [Std.TreeMap.getElem?_insert]
   all_goals subst_vars
-  all_goals try simp_all [Std.TreeMap.getElem?_insert]
+  all_goals try simp_all []
   all_goals try { subst s }
   all_goals try { apply Prod.ext <;> simp_all }
   all_goals simp_all only [funext_iff]
@@ -62,7 +62,7 @@ theorem strict_acquire_queues (pid : PeerId) (q : PeerId → Option (PrevQueue (
   all_goals try unfold borrowView at *
   all_goals unfold txQueues at *
   all_goals dsimp +zetaDelta only [PeerBorrow.resident, wgStoreView] at *
-  all_goals simp_all [txQueues, PeerBorrow.resident, Std.TreeMap.getElem?_insert]
+  all_goals simp_all [Std.TreeMap.getElem?_insert]
   all_goals subst_vars
   all_goals try simp_all [Std.TreeMap.getElem?_insert]
   all_goals try subst q
@@ -131,7 +131,7 @@ theorem publicationMiddle_frame (pid : PeerId) (first : SkbId) (state : PacketSt
   all_goals try unfold borrowView at *
   all_goals unfold txQueues at *
   all_goals dsimp +zetaDelta only [PeerBorrow.resident, wgStoreView] at *
-  all_goals simp_all [borrowView, txQueues, PeerBorrow.resident, wgStoreView, Option.map_map,
+  all_goals simp_all [
     Option.bind_map, Function.comp_def]
 
 theorem publication_factor (item : List SkbId) (state : PacketState) :
@@ -141,7 +141,7 @@ theorem publication_factor (item : List SkbId) (state : PacketState) :
       peerGet pid
       publicationMiddle pid first state
       peerPut (some pid)) := by
-  simp only [enqueuePerPeerTx, publicationMiddle, bind_assoc, bind_ite, pure_bind, bind_pure_unit]
+  simp only [enqueuePerPeerTx, publicationMiddle, bind_assoc, bind_ite, pure_bind]
   rfl
 
 theorem publication_queues (item : List SkbId) (state : PacketState) :
@@ -165,6 +165,6 @@ theorem publication_queues (item : List SkbId) (state : PacketState) :
   all_goals try unfold borrowView at *
   all_goals unfold txQueues at *
   all_goals dsimp +zetaDelta only [PeerBorrow.resident, wgStoreView] at *
-  all_goals simp_all [borrowView, txQueues, PeerBorrow.resident, wgStoreView]
+  all_goals simp_all []
 
 end Leanux.Proofs.WG.Queues.TxDisposition

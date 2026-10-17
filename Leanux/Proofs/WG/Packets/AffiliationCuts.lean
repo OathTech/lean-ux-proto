@@ -42,18 +42,18 @@ theorem acquisition_certificate (owner : IndexOwner) (pid : PeerId) (w v : WGWor
   | handshake id =>
     cases ho : d.peers[id]? with
     | none =>
-      simp [IndexOwner.peerWord, getPeer, getDev, wgStoreView, hd, ho, invariant, AmbientM.invariant] at read
+      simp [IndexOwner.peerWord, getPeer, getDev, hd, ho, invariant, AmbientM.invariant] at read
       cases read
     | some op =>
-      simp [IndexOwner.peerWord, getPeer, getDev, wgStoreView, hd, ho] at read
+      simp [IndexOwner.peerWord, getPeer, getDev, hd, ho] at read
       exact ⟨op, ho, read.1.trans hw⟩
   | keypair id =>
     cases ho : d.keypairs[id]? with
     | none =>
-      simp [IndexOwner.peerWord, getKeypair, getDev, wgStoreView, hd, ho, invariant, AmbientM.invariant] at read
+      simp [IndexOwner.peerWord, getKeypair, getDev, hd, ho, invariant, AmbientM.invariant] at read
       cases read
     | some key =>
-      simp [IndexOwner.peerWord, getKeypair, getDev, wgStoreView, hd, ho] at read
+      simp [IndexOwner.peerWord, getKeypair, getDev, hd, ho] at read
       exact ⟨key, ho, read.1.trans hw⟩
 
 /-- Exact original sending acquisition at Send.lean's staging handoff. -/
@@ -83,17 +83,17 @@ theorem sendAcquire_certificate (kid : KeypairId) (w v : WGWorld)
     change w.dev = some d at hd
     cases hkey : d.keypairs[kid]? with
     | none =>
-      simp [IndexOwner.peerDeref, IndexOwner.peerWord, getKeypair, getDev, wgStoreView, hd, hkey,
+      simp [IndexOwner.peerDeref, IndexOwner.peerWord, getKeypair, getDev, hd, hkey,
         invariant, AmbientM.invariant] at hderef
       cases hderef
     | some k =>
       cases hw : k.peer with
       | none =>
-        simp [IndexOwner.peerDeref, IndexOwner.peerWord, getKeypair, getDev, wgStoreView, hd, hkey, hw,
+        simp [IndexOwner.peerDeref, IndexOwner.peerWord, getKeypair, getDev, hd, hkey, hw,
           unsupported, AmbientM.unsupported] at hderef
         cases hderef
       | some actual =>
-        simp [IndexOwner.peerDeref, IndexOwner.peerWord, getKeypair, getDev, wgStoreView, hd, hkey, hw] at hderef
+        simp [IndexOwner.peerDeref, IndexOwner.peerWord, getKeypair, getDev, hd, hkey, hw] at hderef
         obtain ⟨rfl, rfl⟩ := hderef
         exact ⟨d, k, actual, p, hd, hkey, hw, hp, hpos, d, p, hd, hp, hpos, hv⟩
 
@@ -206,7 +206,7 @@ def sendStagedSource (pid : PeerId) : WG.M Unit := do
   createData pid item
 
 theorem sendStagedSource_eq (pid : PeerId) : sendStagedSource pid = sendStagedPackets pid := by
-  simp only [sendStagedSource, sendStagedPackets, sendAcquire, Lifetimes.stagedOutNokey, bind_assoc, pure_bind]
+  simp only [sendStagedSource, sendStagedPackets, sendAcquire, Lifetimes.stagedOutNokey, bind_assoc]
   rfl
 
 /-- The existing original staging observer already derives common peer/key

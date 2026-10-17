@@ -41,13 +41,13 @@ private theorem trialFilterAux (xs acc : List Activation) (w : World) (h : List 
   | nil => rfl
   | cons a xs ih =>
     simp only [List.filterAuxM, StateT.run_bind, trialDecision_eq a w h]
-    cases hr : trialDecision a w h <;> simp [hr, Except.map, ih]
+    cases hr : trialDecision a w h <;> simp [Except.map, ih]
 
 theorem trials_filter (xs : List Activation) (w : World) (h : List Event) :
     (xs.filterM Env.Activation.consistent).run w =
       (xs.filterM (fun a => trialDecision a w h)).map (fun ys => (ys, w)) := by
   simp only [List.filterM, StateT.run_bind, trialFilterAux xs [] w h]
-  cases hr : List.filterAuxM (fun a => trialDecision a w h) xs [] <;> simp [hr, Except.map]
+  cases hr : List.filterAuxM (fun a => trialDecision a w h) xs [] <;> simp [Except.map]
 
 /-- Certify any candidate's trial, including one rejected by a hidden Stop or
 ending in another Stop. This does not assert that every candidate was evaluated. -/

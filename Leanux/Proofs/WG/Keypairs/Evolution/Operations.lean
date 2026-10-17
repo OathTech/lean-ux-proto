@@ -17,23 +17,58 @@ set_option pp.structureInstances false
 
 private theorem requireStepComplete_ordinary (b : UInt64) :
     ProductOrdinaryAction (Env.requireStepComplete b) := by
-  apply (ordinaryAction_iff_wp _).mpr
-  intro P hp
-  have hd := (sameView_liftWG (fun w => snapshot w.wg) snapshot getDev
-    getDev_sameSnapshot (fun _ _ _ h => h)).wp P
-  mvcgen [-Std.Do.Spec.monadLift_StateT, Env.requireStepComplete, hd]
+  apply SameView.ordinary
+  intro initial
+  change Preserves (fun w : World => snapshot w.wg = initial) (Env.requireStepComplete b)
+  have dev := (sameView_liftWG (fun w => snapshot w.wg) snapshot getDev
+    getDev_sameSnapshot (fun _ _ _ h => h)).wp (fun value => value = initial)
+  unfold Env.requireStepComplete
+  apply preserves_bind dev
+  intro d
+  cases TimerWheel.anotherAtStep d b with
+  | none => exact preserves_pure _
+  | some due =>
+    rcases due with ⟨pid, t⟩
+    exact hoare_throw _
 
 private theorem requireNothingDue_ordinary (b : UInt64) :
     ProductOrdinaryAction (Env.requireNothingDue b) := by
-  apply (ordinaryAction_iff_wp _).mpr
-  intro P hp
-  have hg := productGetWG_spec (fun s => P (snapshotOfWGStoreView s.2.2.2))
-  have ht := timerWorker_spec P
-  have ha := fun α (a : AmbientM α) => productAmbient_spec a
-    (fun w => P (snapshot w.wg)) (fun _ _ h => h)
-  unfold Hoare at hg ha
-  mvcgen [-Std.Do.Spec.monadLift_StateT, Env.requireNothingDue, Env.sectionAppearsLater,
-    hg, ht, ha, unsupported]
+  apply (Leanux.Proofs.WG.Lifetimes.ProjectedAction.iff_run _ _ _).mpr
+  intro w x w' hr
+  have read (s : World) : (getWG : Leanux.M WGWorld).run s = .ok (s.wg, s) := rfl
+  unfold Env.requireNothingDue at hr
+  simp only [StateT.run_bind, read, Leanux.Proofs.WG.CounterWindow.except_ok_bind] at hr
+  cases hd : w.wg.dev with
+  | none =>
+    simp only [hd, StateT.run_pure] at hr
+    cases hr
+    exact .refl _
+  | some d =>
+    simp only [hd] at hr
+    cases hn : TimerWheel.nextDue d b with
+    | none =>
+      simp only [hn, StateT.run_pure] at hr
+      cases hr
+      exact .refl _
+    | some due =>
+      rcases due with ⟨pid, t, we⟩
+      simp only [hn, StateT.run_bind] at hr
+      cases hw : (Env.timerWorker t).run w with
+      | error e =>
+        rw [hw] at hr
+        cases hr
+      | ok out =>
+        rcases out with ⟨worker, w1⟩
+        simp only [hw, Leanux.Proofs.WG.CounterWindow.except_ok_bind, read] at hr
+        cases hs : (Env.sectionAppearsLater worker
+          (((w1.wg.timerUnits.find? fun e => e.2.1 == pid && e.2.2 == t).map (·.1)).getD 0)).run w1 with
+        | error e =>
+          rw [hs] at hr
+          cases hr
+        | ok out =>
+          rcases out with ⟨later, w2⟩
+          simp only [hs, Leanux.Proofs.WG.CounterWindow.except_ok_bind] at hr
+          cases later <;> cases hr
 
 private theorem operationRouting (a : Net.M α) :
     OrdinaryAction (MonadLift.monadLift a : WG.M α) := by

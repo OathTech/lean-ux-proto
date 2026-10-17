@@ -221,19 +221,19 @@ theorem addNewKeypairPrefix_preserves_product (c : ProductAmbientContracts I)
     apply PrefixPreserves.bind (ProductAmbientContracts.drop (branch_spec _ _))
     intro hasNext
     split
-    · simp only [liftWGObserver_bind, liftWGObserver_pure]
+    · simp only [liftWGObserver_bind]
       apply PrefixPreserves.bind (ProductAmbientContracts.drop (modifyPeerKeysPrefix_spec_product c (fun _ => True) pid
         (fun q => {q with keypairNext := none, keypairPrevious := p.keypairNext}) (fun _ => rfl)))
       intro _
       apply PrefixPreserves.bind (put p.keypairCurrent true)
       intro _
       exact tail
-    · simp only [liftWGObserver_bind, liftWGObserver_pure]
+    · simp only [liftWGObserver_bind]
       apply PrefixPreserves.bind (ProductAmbientContracts.drop (modifyPeerKeysPrefix_spec_product c (fun _ => True) pid
         (fun q => {q with keypairPrevious := p.keypairCurrent}) (fun _ => rfl)))
       intro _
       exact tail
-  · simp only [liftWGObserver_bind, liftWGObserver_pure]
+  · simp only [liftWGObserver_bind]
     apply PrefixPreserves.bind (ProductAmbientContracts.drop (modifyPeerKeysPrefix_spec_product c (fun _ => True) pid
       (fun q => {q with keypairNext := some kp}) (fun _ => rfl)))
     intro _
@@ -254,14 +254,14 @@ theorem receivedWithKeypairPrefix_preserves_product (c : ProductAmbientContracts
     apply c.nativeStore
     intro initial
     exact hoare_liftAmbient (AmbientM.branch d b) (fun w => wgStoreView w = initial)
-  simp only [receivedWithKeypairPrefix, liftWGObserver_bind, liftWGObserver_pure]
+  simp only [receivedWithKeypairPrefix, liftWGObserver_bind]
   apply PrefixPreserves.bind (ProductAmbientContracts.drop (c.getPeer (fun _ => True) pid))
   intro first
   apply PrefixPreserves.bind (ProductAmbientContracts.drop (branch_spec _ _))
   intro notNew
   split
   · simpa only [liftWGObserver_pure] using PrefixPreserves.pure c.safe false
-  · simp only [liftWGObserver_bind, liftWGObserver_pure]
+  · simp only [liftWGObserver_bind]
     apply PrefixPreserves.bind (ProductAmbientContracts.drop (c.getPeer (fun _ => True) pid))
     intro second
     apply PrefixPreserves.bind (ProductAmbientContracts.drop (branch_spec _ _))

@@ -45,22 +45,42 @@ private theorem requireStepComplete_routing (b : UInt64) :
 
 private theorem requireNothingDue_routing (jPass : UInt64) :
     SameView (fun w : World => routingView w.wg) (Env.requireNothingDue jPass) := by
-  apply SameView.of_wp
-  intro s
-  let P := fun t => t = s
-  have ambient {α : Type} (a : AmbientM α) :
-      Hoare (MonadLift.monadLift a : Leanux.M α)
-        (fun w => P (routingView w.wg)) (fun _ w => P (routingView w.wg)) :=
-    productAmbient_spec a _ (fun _ _ h => h)
-  have dev := productGetDev_spec (fun store => P (store.2.2.2.dev.map routingState))
-  have readWG := productGetWG_spec (fun store => P (store.2.2.2.dev.map routingState))
-  have modifyWGSpec := productModifyWG_spec (fun store => P (store.2.2.2.dev.map routingState))
-  unfold Hoare at ambient dev readWG modifyWGSpec
-  have timer := fun t => ((timerWorker_sameKernel t).of_factor
-    (fun store : ProductStore43 => store.2.2.2.dev.map routingState)
-    (fun w : World => routingView w.wg) (fun _ => rfl)).wp P
-  mvcgen [-Std.Do.Spec.monadLift_StateT, Env.requireNothingDue,
-    Env.sectionAppearsLater, timer, ambient, dev, readWG, modifyWGSpec, getAmbient, modifyAmbient, Env.peekNextSite, peekSiteU64, hiddenJiffies, peekUnit, recordBudget, invariant, unsupported]
+  apply (Leanux.Proofs.WG.Lifetimes.ProjectedAction.iff_run _ _ _).mpr
+  intro w x w' hr
+  have read (s : World) : (getWG : Leanux.M WGWorld).run s = .ok (s.wg, s) := rfl
+  unfold Env.requireNothingDue at hr
+  simp only [StateT.run_bind, read, Leanux.Proofs.WG.CounterWindow.except_ok_bind] at hr
+  cases hd : w.wg.dev with
+  | none =>
+    simp only [hd, StateT.run_pure] at hr
+    cases hr
+    rfl
+  | some d =>
+    simp only [hd] at hr
+    cases hn : TimerWheel.nextDue d jPass with
+    | none =>
+      simp only [hn, StateT.run_pure] at hr
+      cases hr
+      rfl
+    | some due =>
+      rcases due with ⟨pid, t, we⟩
+      simp only [hn, StateT.run_bind] at hr
+      cases hw : (Env.timerWorker t).run w with
+      | error e =>
+        rw [hw] at hr
+        cases hr
+      | ok out =>
+        rcases out with ⟨worker, w1⟩
+        simp only [hw, Leanux.Proofs.WG.CounterWindow.except_ok_bind, read] at hr
+        cases hs : (Env.sectionAppearsLater worker
+          (((w1.wg.timerUnits.find? fun e => e.2.1 == pid && e.2.2 == t).map (·.1)).getD 0)).run w1 with
+        | error e =>
+          rw [hs] at hr
+          cases hr
+        | ok out =>
+          rcases out with ⟨later, w2⟩
+          simp only [hs, Leanux.Proofs.WG.CounterWindow.except_ok_bind] at hr
+          cases later <;> cases hr
 
 theorem runTimers_routing (jHi : UInt64) :
     ProductRetainsRoutingCall (Env.runTimers jHi) := by

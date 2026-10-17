@@ -129,7 +129,7 @@ theorem create_erases (pid : PeerId) (item : List SkbId) :
             erasesPrefix_bind (erasesPrefix_lift (liftWG (freeTxSkb id))) (fun _ => erasesPrefix_pure _)))
           intro _
           exact erasesPrefix_pure _
-    try simp only [liftWG_bind, liftWG_pure, lift_forIn, apply_ite]
+    try simp only [apply_ite]
     split
     · simpa only [pure_bind, liftWG_bind, liftWG_pure] using tail (-EINVAL)
     · apply erasesPrefix_bind (enqueue_erases _ _)

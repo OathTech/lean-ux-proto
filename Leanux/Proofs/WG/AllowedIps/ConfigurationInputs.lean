@@ -63,7 +63,7 @@ theorem setAllowedip_outcome (pid : PeerId) (ip : AllowedIpAttrs) (hs : AddressS
       ⦃⇓? result u nextAmbient => ⌜AllowedipOutcome (wgStoreView w) pid ip result u nextAmbient⌝⦄ := by
     mvcgen [setAllowedip, WG.orM, WG.andM, h4, h6, branch, AmbientM.branch]
     all_goals try dsimp +zetaDelta only at *
-    all_goals try simp_all only [Bool.not_eq_true', beq_iff_eq, decide_eq_true_eq, rootWidth, Bool.true_eq_false, Bool.false_eq_true]
+    all_goals try simp_all only [beq_iff_eq, decide_eq_true_eq, rootWidth, Bool.false_eq_true]
     all_goals try simp only [true_and, and_true]
     all_goals first
       | exact Or.inl ⟨rfl, by assumption⟩

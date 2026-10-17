@@ -22,7 +22,7 @@ theorem removalLeafDetached_parent (d : WG.Device) (id : Nat) (n : WG.AipNode)
     (parent side : Nat) (pn : WG.AipNode) (hip : id ≠ parent) :
     (removalLeafDetached d id n parent side pn).nodes[parent]? =
       some { pn with bit := pn.bit.set! side none } := by
-  simp [removalLeafDetached, Std.TreeMap.getElem?_erase, hip]
+  simp [removalLeafDetached, hip]
 
 theorem removalLeafDetached_other (d : WG.Device) (id : Nat) (n : WG.AipNode)
     (parent side : Nat) (pn : WG.AipNode) (q : Nat) (hi : id ≠ q) (hp : parent ≠ q) :

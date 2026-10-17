@@ -224,7 +224,7 @@ theorem index {S α : Type} {m : Type → Type} {ps : PostShape}
     SameView (fun s => view (project s)) a :=
   ha.of_factor (fun k : WGStoreView => k.dev.map fun (d : Device) =>
     (d.ifindex, fun (id : KeypairId) => d.keypairs[id]?)) (fun s => view (project s))
-    (fun s => by cases h : (project s).dev <;> simp [view, wgStoreView, h])
+    (fun s => by cases h : (project s).dev <;> simp [view, h])
 
 theorem setPeer_view (id : PeerId) (p : Peer) : SameView view (setPeer id p) := by
   apply SameView.of_wp
@@ -243,7 +243,7 @@ theorem keypairGet_spec (P : View → Prop) (stable : Stable P) (id : Option Key
   mvcgen [keypairGet, hg, hs, refcountIncNotZero, branch, branchCmp, invariant, unsupported,
     AmbientM.branch, AmbientM.branchCmp, AmbientM.invariant, AmbientM.unsupported]
   all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [KeyLe, material, WordLe, view, keyAt, Option.map_map, Function.comp_def]
+  all_goals simp_all [KeyLe, material, WordLe, view, keyAt]
   all_goals grind
 
 theorem retains_map_insert (d : Device) (id : KeypairId) (old k : Keypair)
@@ -295,7 +295,7 @@ theorem keypairPut_spec (P : View → Prop) (stable : Stable P) (id : Option Key
     all_goals try simp_all [view]
     all_goals subst_vars
     all_goals try dsimp +zetaDelta only at *
-    all_goals try simp_all [Option.bind_map, Function.comp_def]
+    all_goals try simp_all [Function.comp_def]
     all_goals try obtain ⟨table, rfl⟩ := ‹∃ table, _ = _›
     all_goals try dsimp +zetaDelta only at *
     all_goals try simp_all

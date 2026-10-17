@@ -34,27 +34,81 @@ theorem lookup_spec (root : Option NodeId) (bits key : Nat) (initial : WGStoreVi
   have hf := readAip _ (Lifetimes.findNode_sameAipStore root bits key)
   have hn := fun id => readAip _ (Framing.getNode_sameAipStore id)
   unfold Hoare at hf hn
-  have ha := fun peer => acquire_spec peer initial
-  mvcgen [lookup, hs, hf, hn, ha, branch, AmbientM.branch,
-    invariant, AmbientM.invariant, unsupported, AmbientM.unsupported]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [Borrowed]
+
+  unfold lookup
+  refine hoare_bind _ _ hs ?_
+  intro _
+  refine hoare_bind _ _ hf ?_
+  intro node
+  refine hoare_bind _ _ (hoare_liftAmbient (AmbientM.branch .lookupFound node.isSome)
+    (fun w => wgStoreView w = initial)) ?_
+  intro found
+  cases found <;> dsimp only
+  · exact hoare_consequence (hoare_pure none (fun w => wgStoreView w = initial))
+      (fun _ h => h) (fun _ _ h => by rcases h with ⟨rfl, h⟩; exact h)
+  · cases node with
+    | none =>
+      apply (hoare_iff_run_ambient _ _ _).mpr
+      intro w ambient result v ambient' _ hr
+      cases hr
+    | some id =>
+      refine hoare_bind _ _ (hn id) ?_
+      intro n
+      refine hoare_bind _ _
+        (hoare_consequence (acquire_spec n.peer initial) (fun _ h => h)
+          (fun _ _ h => h.2)) ?_
+      intro peer
+      refine hoare_bind _ _ (hoare_liftAmbient (AmbientM.branch .lookupPeerGone peer.isNone)
+        (fun w => Borrowed initial peer (wgStoreView w))) ?_
+      intro gone
+      cases gone
+      · exact hoare_consequence
+          (hoare_pure peer (fun w => Borrowed initial peer (wgStoreView w)))
+          (fun _ h => h) (fun _ _ h => by rcases h with ⟨rfl, h⟩; exact h)
+      · apply (hoare_iff_run_ambient _ _ _).mpr
+        intro w ambient result v ambient' _ hr
+        simp [unsupported, AmbientM.unsupported] at hr
+        cases hr
 
 theorem lookupSrc_spec (protocol : Nat) (bytes : List UInt8) (initial : WGStoreView) :
     ⦃fun w => ⌜wgStoreView w = initial⌝⦄ lookupSrc protocol bytes
     ⦃⇓? result w => ⌜Borrowed initial result (wgStoreView w)⌝⦄ := by
-  have hl := fun root bits key => lookup_spec root bits key initial
-  mvcgen [lookupSrc, hl, getDev, branch, AmbientM.branch, invariant, AmbientM.invariant]
-  all_goals dsimp +zetaDelta only at *
-  all_goals simp_all [Borrowed]
+  unfold lookupSrc
+  refine hoare_bind _ _ ((getDev_sameWGStore).wp (fun k => k = initial)) ?_
+  intro d
+  dsimp only
+  refine hoare_bind _ _ (hoare_liftAmbient (AmbientM.branch .lookupSrcV4 (protocol == 4))
+    (fun w => wgStoreView w = initial)) ?_
+  intro ipv4
+  cases ipv4
+  · refine hoare_bind _ _ (hoare_liftAmbient (AmbientM.branch .lookupSrcV6 (protocol == 6))
+      (fun w => wgStoreView w = initial)) ?_
+    intro ipv6
+    cases ipv6
+    · exact hoare_consequence (hoare_pure none (fun w => wgStoreView w = initial))
+        (fun _ h => h) (fun _ _ h => by rcases h with ⟨rfl, h⟩; exact h)
+    · exact lookup_spec d.peerAllowedips.root6 128 (beAt bytes 8 16) initial
+  · exact lookup_spec d.peerAllowedips.root4 32 (beAt bytes 12 4) initial
 
 theorem lookupDst_spec (family addr : Nat) (initial : WGStoreView) :
     ⦃fun w => ⌜wgStoreView w = initial⌝⦄ lookupDst family addr
     ⦃⇓? result w => ⌜Borrowed initial result (wgStoreView w)⌝⦄ := by
-  have hl := fun root bits key => lookup_spec root bits key initial
-  mvcgen [lookupDst, hl, getDev, branch, AmbientM.branch, invariant, AmbientM.invariant]
-  all_goals dsimp +zetaDelta only at *
-  all_goals simp_all [Borrowed]
+  unfold lookupDst
+  refine hoare_bind _ _ ((getDev_sameWGStore).wp (fun k => k = initial)) ?_
+  intro d
+  dsimp only
+  refine hoare_bind _ _ (hoare_liftAmbient (AmbientM.branch .lookupDstV4 (family == 4))
+    (fun w => wgStoreView w = initial)) ?_
+  intro ipv4
+  cases ipv4
+  · refine hoare_bind _ _ (hoare_liftAmbient (AmbientM.branch .lookupDstV6 (family == 6))
+      (fun w => wgStoreView w = initial)) ?_
+    intro ipv6
+    cases ipv6
+    · exact hoare_consequence (hoare_pure none (fun w => wgStoreView w = initial))
+        (fun _ h => h) (fun _ _ h => by rcases h with ⟨rfl, h⟩; exact h)
+    · exact lookup_spec d.peerAllowedips.root6 128 addr initial
+  · exact lookup_spec d.peerAllowedips.root4 32 addr initial
 
 def repayLookup {m : Type → Type} [Monad m] [MonadLiftT WG.M m]
     (action : m (Option PeerId)) : m (Option PeerId) := do

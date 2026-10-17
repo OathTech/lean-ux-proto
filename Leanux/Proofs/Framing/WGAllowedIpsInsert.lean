@@ -22,18 +22,69 @@ theorem modifyDev_nodeAllocation_spec (P : WGStoreView → Prop) (f : Device →
 
 theorem nodePlacement_sameAipStore (trie : Option NodeId) (key cidr bits : Nat) :
     SameView (fun s : AipStore => s) (nodePlacement trie key cidr bits) := by
-  apply SameView.of_wp
+  have ha {α : Type} (a : AmbientM α) : SameView (fun s : AipStore => s) (monadLift a : AipM α) :=
+    fun initial => hoare_liftAmbient a (fun s => s = initial)
+  have hc (n : AipNode) (key : Nat) : SameView (fun s : AipStore => s) (choose n key : AipM Nat) := by
+    unfold choose
+    split
+    · exact SameView.bind (ha (AmbientM.invariant "choose on a full-length node"))
+        (fun _ => SameView.pure _ _)
+    · exact SameView.pure _ _
+  have hb (n : AipNode) (bit : Nat) : SameView (fun s : AipStore => s) (n.bitAt bit : AipM (Option NodeId)) := by
+    unfold AipNode.bitAt
+    split
+    · exact SameView.pure _ _
+    · exact ha (AmbientM.invariant _)
+  have common (n : AipNode) (key bits : Nat) : SameView (fun s : AipStore => s) (commonBits n key bits : AipM Nat) := by
+    unfold commonBits
+    apply SameView.bind (ha (AmbientM.branch .commonBits32 _))
+    intro b32
+    split
+    · exact SameView.pure _ _
+    · apply SameView.bind (ha (AmbientM.branch .commonBits128 _))
+      intro b128
+      split
+      · apply SameView.bind (ha (AmbientM.branch .fls128High _))
+        intro high
+        split <;> exact SameView.bind (SameView.pure _ _) (fun _ => SameView.pure _ _)
+      · exact SameView.pure _ _
+  have hp (n : AipNode) (key bits : Nat) : SameView (fun s : AipStore => s) (prefixMatches n key bits : AipM Bool) := by
+    unfold prefixMatches
+    exact SameView.bind (common n key bits) (fun _ => SameView.pure _ _)
   intro initial
-  have hn := fun node => (getNode_sameAipStore node).wp (fun s => s = initial)
-  have ha (α : Type) (a : AmbientM α) :
-      ⦃fun s : AipStore => ⌜s = initial⌝⦄ (MonadLift.monadLift a : AipM α)
-      ⦃⇓? _ s => ⌜s = initial⌝⦄ := hoare_liftAmbient a _
-  mvcgen [-Std.Do.Spec.monadLift_StateT, nodePlacement, hn, AipNode.bitAt, choose,
-    prefixMatches, commonBits, branch, branchCmp, invariant, ha]
-  all_goals try exact ((⇓? _ s => ⌜s = initial⌝) :
-    PostCond _ (.arg AipStore (.arg Ambient (.except Stop .pure))))
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all
+  unfold nodePlacement
+  simp only [Std.Legacy.Range.forIn_eq_forIn_range']
+  apply preserves_bind
+  · apply list_view_spec id (fun s => s = initial)
+    intro i accumulator
+    split
+    · exact preserves_bind (ha (AmbientM.branch .placementNode false) initial) (fun _ => preserves_pure _)
+    · apply preserves_bind (ha (AmbientM.branch .placementNode true) initial)
+      intro _
+      simp only [pure_bind]
+      apply preserves_bind (getNode_sameAipStore _ initial)
+      intro n
+      apply preserves_bind (ha (AmbientM.branchCmp .placementCidrLe _ _ _) initial)
+      intro bounded
+      split
+      · exact preserves_pure _
+      · apply preserves_bind (hp _ _ _ initial)
+        intro matched
+        apply preserves_bind (ha (AmbientM.branch .placementPrefixMatches matched) initial)
+        intro prefixAccepted
+        split
+        · exact preserves_pure _
+        · apply preserves_bind (ha (AmbientM.branchCmp .placementExact _ _ _) initial)
+          intro exactMatch
+          split
+          · exact preserves_pure _
+          · apply preserves_bind (hc _ _ initial)
+            intro bit
+            exact preserves_bind (hb _ bit initial) (fun _ => preserves_pure _)
+  · intro result
+    split
+    · exact preserves_pure _
+    · exact ha (AmbientM.invariant "node_placement deeper than MAX_ALLOWEDIPS_DEPTH") initial
 
 theorem connectNode_sameNextNode (slot : Slot) (node : NodeId) :
     SameView AipStore.nextNode (connectNode slot node) := by
@@ -44,13 +95,19 @@ theorem connectNode_sameNextNode (slot : Slot) (node : NodeId) :
 
 theorem chooseAndConnectNode_sameNextNode (parent node : NodeId) :
     SameView AipStore.nextNode (chooseAndConnectNode parent node) := by
-  apply SameView.of_wp
-  intro initial
-  have hn := fun node => ((getNode_sameAipStore node).factor AipStore.nextNode).wp (fun s => s = initial)
-  have hf := fun slot node => (connectNode_sameNextNode slot node).wp (fun s => s = initial)
-  have ha (α : Type) (a : AmbientM α) :
-      ⦃fun s : AipStore => ⌜s.nextNode = initial⌝⦄ (MonadLift.monadLift a : AipM α)
-      ⦃⇓? _ s => ⌜s.nextNode = initial⌝⦄ := hoare_liftAmbient a _
-  mvcgen [-Std.Do.Spec.monadLift_StateT, chooseAndConnectNode, choose, invariant, hn, hf, ha]
+  have hc (n : AipNode) (key : Nat) : SameView AipStore.nextNode (choose n key : AipM Nat) := by
+    unfold choose
+    split
+    · exact SameView.bind
+        (fun initial => hoare_liftAmbient (AmbientM.invariant "choose on a full-length node")
+          (fun s : AipStore => s.nextNode = initial))
+        (fun _ => SameView.pure _ _)
+    · exact SameView.pure _ _
+  unfold chooseAndConnectNode
+  apply SameView.bind ((getNode_sameAipStore parent).factor AipStore.nextNode)
+  intro pn
+  apply SameView.bind ((getNode_sameAipStore node).factor AipStore.nextNode)
+  intro child
+  exact SameView.bind (hc pn child.bits) (fun bit => connectNode_sameNextNode (.child parent bit) node)
 
 end Leanux.Proofs.Framing

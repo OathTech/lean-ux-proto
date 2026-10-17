@@ -11,70 +11,156 @@ open Leanux Leanux.WG Leanux.Proofs.Framing Leanux.Proofs.WG.Lifetimes Std.Do
 
 theorem lookup_rxQueues (root : Option NodeId) (bits key : Nat) :
     SameView rxQueues (lookup root bits key) := by
-  apply SameView.of_wp
-  intro s
-  have aip {α : Type} (a : AipM α) :
-      Hoare (MonadLift.monadLift a : WG.M α) (fun w => rxQueues w = s) (fun _ w => rxQueues w = s) := by
-    apply hoare_liftAip a
+  have ambient {α : Type} (action : AmbientM α) :
+      SameView rxQueues (MonadLift.monadLift action : WG.M α) :=
+    fun s => hoare_liftAmbient action (fun w => rxQueues w = s)
+  have aip {α : Type} (action : AipM α) :
+      SameView rxQueues (MonadLift.monadLift action : WG.M α) := by
+    intro s
+    apply hoare_liftAip action
     intro w d store hi hd
     unfold rxQueues at hi ⊢
     simpa only [hd, Option.bind_some] using hi
-  unfold Hoare at aip
-  have hp := fun pid => (peerGetMaybeZero_rxQueues pid).wp (fun t => t = s)
-  mvcgen [lookup, swapEndian, aip, hp, branch, AmbientM.branch,
-    invariant, AmbientM.invariant, unsupported, AmbientM.unsupported]
+  have endian : SameView rxQueues (swapEndian bits) := by
+    unfold swapEndian
+    apply SameView.bind (ambient _)
+    intro yes
+    cases yes
+    · exact SameView.bind (ambient _) (fun _ => SameView.pure _ _)
+    · exact SameView.pure _ _
+  unfold lookup
+  apply SameView.bind endian
+  intro _
+  apply SameView.bind (aip _)
+  intro node
+  apply SameView.bind (ambient _)
+  intro found
+  cases found <;> dsimp only
+  · exact SameView.pure _ _
+  · cases node with
+    | none => exact SameView.bind (ambient _) (fun _ => SameView.pure _ _)
+    | some id =>
+      apply SameView.bind (aip _)
+      intro n
+      apply SameView.bind (peerGetMaybeZero_rxQueues n.peer)
+      intro peer
+      apply SameView.bind (ambient _)
+      intro gone
+      cases gone
+      · exact SameView.pure _ _
+      · exact SameView.bind (ambient _) (fun _ => SameView.pure _ _)
 
 theorem lookupSrc_rxQueues (protocol : Nat) (bytes : List UInt8) :
     SameView rxQueues (lookupSrc protocol bytes) := by
-  apply SameView.of_wp
-  intro s
-  have hl := fun root bits key => (lookup_rxQueues root bits key).wp (fun t => t = s)
-  mvcgen [lookupSrc, hl, getDev, branch, AmbientM.branch, invariant, AmbientM.invariant]
+  have ambient {α : Type} (action : AmbientM α) :
+      SameView rxQueues (MonadLift.monadLift action : WG.M α) :=
+    fun s => hoare_liftAmbient action (fun w => rxQueues w = s)
+  unfold lookupSrc
+  apply SameView.bind (rxQueues_kernel (project := id) getDev_sameWGStore)
+  intro d
+  dsimp only
+  apply SameView.bind (ambient _)
+  intro ipv4
+  cases ipv4
+  · apply SameView.bind (ambient _)
+    intro ipv6
+    cases ipv6
+    · exact SameView.pure _ _
+    · exact lookup_rxQueues _ _ _
+  · exact lookup_rxQueues _ _ _
 
 theorem dishonest_rxQueues (why : Dishonest) : SameView rxQueues (dishonest why) :=
   modifyDev_rxQueues _ (fun d => by cases why <;> rfl) (fun d => by cases why <;> rfl)
 
 theorem updateRxStats_rxQueues (pid : PeerId) (len : Nat) :
     SameView rxQueues (updateRxStats pid len) := by
-  apply SameView.of_wp
-  intro s
-  have hg := getPeer_rx_spec (fun t => t = s) pid
-  have hs := fun p => setPeer_rx_spec (fun t => t = s) pid p
-  have hd := (modifyDev_rxQueues (fun d => {d with rxPackets := d.rxPackets + 1, rxBytes := d.rxBytes + len})
-    (fun _ => rfl) (fun _ => rfl)).wp (fun t => t = s)
-  mvcgen [updateRxStats, hg, hs, hd]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals unfold rxQueues at *; simp_all [CurrentRx]
+  unfold updateRxStats
+  apply SameView.bind (modifyDev_rxQueues
+    (fun d => { d with rxPackets := d.rxPackets + 1, rxBytes := d.rxBytes + len })
+    (fun _ => rfl) (fun _ => rfl))
+  intro _
+  exact modifyPeer_rxQueues pid (fun p => {p with rxBytes := p.rxBytes + len})
+    (fun _ => rfl) (fun _ => rfl)
 
 theorem consumeDataDone_rxQueues (pid : PeerId) (pkt : RxPacket) (endpoint : Endpoint) :
     RetainsRx (consumeDataDone pid pkt endpoint) := by
   apply ProjectedAction.of_wp
   intro s
-  let P := ResidentsRetained s
-  have hep := (setPeerEndpoint_rxQueues pid endpoint).wp P
-  have hk := (receivedWithKeypair_rxQueues pid pkt.keypair).wp P
-  have hh := (timersHandshakeComplete_rxQueues pid .walltimeLastHandshakeData).wp P
-  have hst := RetainsRx.wp (sendStagedPackets_rxQueues pid) s
-  have hf := RetainsRx.wp (keepKeyFreshRx_rxQueues pid) s
-  have ha := (timersAnyAuthenticatedPacketReceived_rxQueues pid).wp P
-  have htr := (timersTraversal_rxQueues pid).wp P
-  have hdata := (timersDataReceived_rxQueues pid).wp P
-  have hstats := fun len => (updateRxStats_rxQueues pid len).wp P
-  have herr := fun why => (dishonest_rxQueues why).wp P
+  let P := fun w : WGWorld => ResidentsRetained s (rxQueues w)
+  have ambient {α : Type} (action : AmbientM α) :
+      Preserves P (MonadLift.monadLift action : WG.M α) := hoare_liftAmbient action P
+  have choice {α : Type} (p : Prop) [Decidable p] (yes no : WG.M α)
+      (hy : p → Preserves P yes) (hn : ¬p → Preserves P no) :
+      Preserves P (if p then yes else no) := by
+    by_cases h : p
+    · simpa only [ite_eq_left h] using hy h
+    · simpa only [ite_eq_right h] using hn h
+  have ce4 (bytes : List UInt8) : Preserves P (ipEcnSetCe bytes) := by
+    unfold ipEcnSetCe branch
+    apply preserves_bind (ambient _)
+    intro b
+    cases b <;> exact preserves_pure _
+  have ect4 (bytes : List UInt8) : Preserves P (ipEcnSetEct1 bytes) := by
+    unfold ipEcnSetEct1 branch
+    apply preserves_bind (ambient _)
+    intro b
+    cases b <;> exact preserves_pure _
+  have ce6 (bytes : List UInt8) : Preserves P (ip6EcnSetCe bytes) := by
+    unfold ip6EcnSetCe branch
+    apply preserves_bind (ambient _)
+    intro b
+    cases b <;> exact preserves_pure _
+  have ect6 (bytes : List UInt8) : Preserves P (ip6EcnSetEct1 bytes) := by
+    unfold ip6EcnSetEct1 branch
+    apply preserves_bind (ambient _)
+    intro b
+    cases b <;> exact preserves_pure _
+  have ecnSet (ce : Bool) (protocol : Nat) (bytes : List UInt8) :
+      Preserves P (inetEcnSet ce protocol bytes) := by
+    unfold inetEcnSet branch invariant
+    repeat' first
+      | (rx_retention_head ipEcnSetCe; exact ce4 _)
+      | (rx_retention_head ipEcnSetEct1; exact ect4 _)
+      | (rx_retention_head ip6EcnSetCe; exact ce6 _)
+      | (rx_retention_head ip6EcnSetEct1; exact ect6 _)
+      | (rx_retention_head MonadLiftT.monadLift; exact ambient _)
+      | (rx_retention_head MonadLift.monadLift; exact ambient _)
+      | (rx_retention_head ite; apply choice; intro)
+      | rx_retention_step
   have hecn (protocol outer : Nat) (bytes : List UInt8) :
-      Hoare (inetEcnDecapsulate protocol outer bytes)
-        (fun w => P (rxQueues w)) (fun _ w => P (rxQueues w)) := by
-    unfold Hoare
-    mvcgen [inetEcnDecapsulate, inetEcnSet, ipEcnSetCe, ipEcnSetEct1,
-      ip6EcnSetCe, ip6EcnSetEct1, branch, AmbientM.branch]
-  unfold Hoare at hecn
-  have hl := fun protocol bytes => (lookupSrc_rxQueues protocol bytes).wp P
-  have hp := fun peer => RetainsRx.wp (peerPut_rxQueues peer) s
-  mvcgen [consumeDataDone, hep, hk, hh, hst, hf, ha, htr, hdata, hstats, herr, hecn, hl, hp,
-    WG.andM, WG.orM, branch, AmbientM.branch]
-  all_goals try dsimp +zetaDelta only [P] at *
-  all_goals try (unfold rxQueues at *; simp_all)
-  all_goals subst s
-  all_goals exact rx_retained_refl _
+      Preserves P (inetEcnDecapsulate protocol outer bytes) := by
+    unfold inetEcnDecapsulate branch
+    repeat' first
+      | (rx_retention_head inetEcnSet; exact ecnSet _ _ _)
+      | (rx_retention_head MonadLiftT.monadLift; exact ambient _)
+      | (rx_retention_head MonadLift.monadLift; exact ambient _)
+      | (rx_retention_head ite; apply choice; intro)
+      | rx_retention_step
+  have preserve : Preserves P (consumeDataDone pid pkt endpoint) := by
+    unfold consumeDataDone WG.andM WG.orM branch
+    repeat' first
+      | (rx_retention_head setPeerEndpoint; exact (setPeerEndpoint_rxQueues _ _).wp (ResidentsRetained s))
+      | (rx_retention_head receivedWithKeypair; exact (receivedWithKeypair_rxQueues _ _).wp (ResidentsRetained s))
+      | (rx_retention_head timersHandshakeComplete; exact (timersHandshakeComplete_rxQueues _ _).wp (ResidentsRetained s))
+      | (rx_retention_head sendStagedPackets; exact RetainsRx.wp (sendStagedPackets_rxQueues _) s)
+      | (rx_retention_head keepKeyFreshRx; exact RetainsRx.wp (keepKeyFreshRx_rxQueues _) s)
+      | (rx_retention_head timersAnyAuthenticatedPacketReceived; exact (timersAnyAuthenticatedPacketReceived_rxQueues _).wp (ResidentsRetained s))
+      | (rx_retention_head timersTraversal; exact (timersTraversal_rxQueues _).wp (ResidentsRetained s))
+      | (rx_retention_head timersDataReceived; exact (timersDataReceived_rxQueues _).wp (ResidentsRetained s))
+      | (rx_retention_head updateRxStats; exact (updateRxStats_rxQueues _ _).wp (ResidentsRetained s))
+      | (rx_retention_head dishonest; exact (dishonest_rxQueues _).wp (ResidentsRetained s))
+      | (rx_retention_head inetEcnDecapsulate; exact hecn _ _ _)
+      | (rx_retention_head lookupSrc; exact (lookupSrc_rxQueues _ _).wp (ResidentsRetained s))
+      | (rx_retention_head peerPut; exact RetainsRx.wp (peerPut_rxQueues _) s)
+      | (rx_retention_head MonadLiftT.monadLift; exact ambient _)
+      | (rx_retention_head MonadLift.monadLift; exact ambient _)
+      | (rx_retention_head ite; apply choice; intro)
+      | rx_retention_step
+  apply hoare_consequence preserve
+  · intro w hw
+    dsimp only [P]
+    rw [hw]
+    exact rx_retained_refl _
+  · exact fun _ _ h => h
 
 end Leanux.Proofs.WG.Queues

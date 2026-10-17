@@ -107,7 +107,7 @@ theorem step_access (pid : PeerId) :
       let (first, q) ← liftWGPrefix ((← getPeerMixed pid).txQueue.peek)
       modifyPeerKeysPrefix pid fun p => {p with txQueue := q}
       bodyAccess pid first) := by
-    simp only [txStepPrefix, bodyAccess, disposeAccess, bind_assoc]
+    simp only [txStepPrefix, bodyAccess, disposeAccess]
     rfl
   rw [hs]
   unfold step

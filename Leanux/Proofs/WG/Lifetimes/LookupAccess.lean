@@ -401,7 +401,7 @@ theorem indexLookupPrefix_preserves_product (c : ProductAmbientContracts I)
   · apply PrefixPreserves.forIn (hs := c.safe)
     intro e state
     rcases state with ⟨entry, stopped⟩
-    simp only [liftWGObserver_bind]
+    simp only []
     apply PrefixPreserves.bind (ProductAmbientContracts.drop (branch_spec _ _))
     intro _
     apply PrefixPreserves.bind (ProductAmbientContracts.drop (branch_spec _ _))

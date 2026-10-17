@@ -147,18 +147,18 @@ theorem add_empty_wp (k : WGWorld) (d : WG.Device) (hd : k.dev = some d)
     unfold Hoare
     mvcgen [hs]
     all_goals try dsimp +zetaDelta only at *
-    all_goals simp_all [listed, allocated, emptyInstalled, rootWrite, n]
+    all_goals simp_all [allocated, emptyInstalled, rootWrite]
   mvcgen [WG.add, branchCmp, AmbientM.branchCmp, branch, AmbientM.branch,
     hg, ha, hl, hconnect, invariant, AmbientM.invariant]
   all_goals try dsimp +zetaDelta only at *
   all_goals clear ha hg
   all_goals subst_vars
-  all_goals try simp_all [rootValue, listed, n]
+  all_goals try simp_all [rootValue]
   all_goals try omega
   all_goals mvcgen [hl, hconnect]
   all_goals try dsimp +zetaDelta only at *
   all_goals clear hl hconnect
-  all_goals cases v4 <;> simp_all [allocated, emptyInstalled, rootWrite, rootSlot, rootWidth, rootValue]
+  all_goals cases v4 <;> simp_all [allocated, emptyInstalled, rootWrite, rootSlot, rootWidth]
 
 def bumpSeq (d : WG.Device) : WG.Device :=
   { d with peerAllowedips := { d.peerAllowedips with seq := d.peerAllowedips.seq + 1 } }

@@ -175,7 +175,7 @@ theorem peerPut_retained (i : Option PeerId) : ProjectedAction snapshot Retained
   all_goals try simp_all [snapshot]
   all_goals subst_vars
   all_goals try dsimp +zetaDelta only at *
-  all_goals try simp_all [Option.bind_map, Function.comp_def]
+  all_goals try simp_all [Function.comp_def]
   all_goals try subst s
   all_goals first
   | exact .refl _

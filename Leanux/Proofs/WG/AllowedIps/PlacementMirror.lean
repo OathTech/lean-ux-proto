@@ -57,7 +57,7 @@ theorem nodePlacement_wp (k : WG.AipStore) (width key cidr : Nat)
       all_goals try simp_all [encode]
       all_goals try mvcgen [matching]
       all_goals try dsimp +zetaDelta only at *
-      all_goals try simp_all [encode]
+      all_goals try simp_all []
       all_goals try exact ⟨c, .node n l r, rfl, hfollow, .inl ⟨by assumption, rfl⟩⟩
       all_goals try exact ⟨c, .node n l r, rfl, hfollow,
         .inr (.inl ⟨by assumption, of_decide_eq_false (by assumption), rfl⟩)⟩
@@ -70,7 +70,7 @@ theorem nodePlacement_wp (k : WG.AipStore) (width key cidr : Nat)
         exact of_decide_eq_true (by assumption)
       mvcgen [WG.choose, WG.AipNode.bitAt, invariant, AmbientM.invariant]
       all_goals try dsimp +zetaDelta only at *
-      all_goals try simp_all [encode]
+      all_goals try simp_all []
       all_goals try omega
       refine ⟨rfl, c.append (Context.edge n l r (bit width n.cidr key)),
         Tree.child l r (bit width n.cidr key), by simp,

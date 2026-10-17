@@ -23,6 +23,12 @@ source/type deletion grounds, failed checks and remaining work. Its
 unrestricted cleanup-totality claims and checked local counterexamples.
 No full-tree pass over the split is claimed.
 
+The first two complete retrofit gates failed at generated matcher import
+collisions; both skipped terminal axiom inspection. Direct source-composition
+repairs preserve the theorem contracts. Scoped checks and reviews pass for
+the completed replacements; further import repair and warning cleanup precede
+the complete gate and fresh root replay.
+
 The pre-split checkpoint validated every baseline result surface over
 `cb2348e`. Initialized R3 packet authorization and R4 receive-pipeline
 conservation remain open. Earlier positive results and runtime findings retain

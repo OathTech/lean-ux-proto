@@ -31,14 +31,14 @@ theorem lookup_tree_spec (initial : WGStoreView) (d : Device) (width key : Nat)
       subst actual
       mvcgen [h]
       all_goals dsimp +zetaDelta only at *
-      all_goals simp_all [store, wgStoreView]
+      all_goals simp_all [wgStoreView]
   have hf := read _ _ (findNode_wp store width key hw hk t parent rep valid)
   have ha := fun peer => PeerBorrow.acquire_spec peer initial
   cases he : t.lookup width key with
   | none =>
     have hn : t.lookupId width key = none := by simp [Tree.lookupId, he]
     mvcgen [lookup, hs, hf, ha, branch, AmbientM.branch, invariant, AmbientM.invariant, unsupported, AmbientM.unsupported]
-    all_goals simp_all [hn, he]
+    all_goals simp_all []
   | some e =>
     have hm : e ∈ t.entries := by
       have h := Tree.lookup_spec valid key
@@ -50,9 +50,9 @@ theorem lookup_tree_spec (initial : WGStoreView) (d : Device) (width key : Nat)
     have hid : t.lookupId width key = some e.id := by simp [Tree.lookupId, he]
     have hg := read _ _ (getNode_wp store e.id n hn)
     mvcgen [lookup, hs, hf, hg, ha, branch, AmbientM.branch, invariant, AmbientM.invariant, unsupported, AmbientM.unsupported]
-    all_goals simp_all [hid, he, ho]
+    all_goals simp_all []
     all_goals mvcgen [hg, ha, branch, AmbientM.branch, invariant, AmbientM.invariant, unsupported, AmbientM.unsupported]
-    all_goals simp_all [ho]
+    all_goals simp_all []
 
 /-- The actual reached family root, with no initial successful-acquisition
 assumption. The normal result and its longest-prefix witness are both retained. -/
@@ -109,7 +109,7 @@ theorem lookupDst_normal (w v : WGWorld) (ambient ambient' : Ambient) (xs : Flat
     all_goals simp_all [wgStoreView, rootValue, rootWidth, selectedFlat]
     all_goals mvcgen [hl]
     all_goals try dsimp +zetaDelta only at *
-    all_goals simp_all [wgStoreView, rootValue, rootWidth, selectedFlat]
+    all_goals simp_all []
   exact (hoare_iff_run_ambient _ _ _).mp hspec w ambient peer v ambient' rfl hr
 
 def sourceAddress (v4 : Bool) (bytes : List UInt8) : Nat :=
@@ -135,7 +135,7 @@ theorem lookupSrc_normal (w v : WGWorld) (ambient ambient' : Ambient) (xs : Flat
     all_goals simp_all [wgStoreView, rootValue, rootWidth, selectedFlat, sourceAddress]
     all_goals mvcgen [hl]
     all_goals try dsimp +zetaDelta only at *
-    all_goals simp_all [wgStoreView, rootValue, rootWidth, selectedFlat, sourceAddress]
+    all_goals simp_all []
   exact (hoare_iff_run_ambient _ _ _).mp hspec w ambient peer v ambient' rfl hr
 
 end Leanux.Proofs.WG.AllowedIps

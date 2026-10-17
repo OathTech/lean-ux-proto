@@ -15,7 +15,7 @@ theorem modifyPeer_routing (pid : PeerId) (f : Peer → Peer)
   have hg := routing_getPeer (fun t => t = s) pid
   have hs := fun p => routing_setPeer (fun t => t = s) pid p
   mvcgen [hg, hs]
-  all_goals simp_all [hl]
+  all_goals simp_all []
 
 theorem setPeerEndpoint_routing (pid : PeerId) (e : Endpoint) : SameView routingView (setPeerEndpoint pid e) := by
   apply SameView.of_wp
@@ -33,7 +33,7 @@ theorem setPeerEndpoint_routing (pid : PeerId) (e : Endpoint) : SameView routing
   mvcgen [-Std.Do.Spec.monadLift_StateT, setPeerEndpoint, he, hg, hs, hc,
     requireNotPending, branch, ambient]
   all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [routingView, routingState]
+  all_goals simp_all [routingView]
 
 theorem armTimer_routing (pid : PeerId) (timer : PeerTimer) (delay : Nat) (jc : Option UInt64 := none) :
     SameView routingView (armTimer pid timer delay jc) := by
@@ -53,7 +53,7 @@ theorem armTimer_routing (pid : PeerId) (timer : PeerTimer) (delay : Nat) (jc : 
     all_goals have wheel_list (p : Peer) (e : Option WheelEntry) :
         (p.setWheel t e).allowedipsList = p.allowedipsList := by cases t <;> rfl
     all_goals try dsimp +zetaDelta only [routingView]
-    all_goals simp_all [timer_list, wheel_list, routingView]
+    all_goals simp_all [routingView]
 
   have ambient {α : Type} (a : AmbientM α) : SameView routingView (monadLift a : WG.M α) :=
     fun initial => hoare_liftAmbient a (fun w => routingView w = initial)
@@ -70,7 +70,7 @@ theorem armTimer_routing (pid : PeerId) (timer : PeerTimer) (delay : Nat) (jc : 
     intro w hw
     exact (hf w).trans hw
   unfold armTimer
-  simp (config := { zeta := false }) only [getAmbient, hidden, invariant, unsupported, liftM]
+  simp (config := { zeta := false }) only [getAmbient, hidden, invariant, unsupported]
   repeat' first
     | rxqueue_join_let
     | rxqueue_join_use
@@ -185,7 +185,7 @@ theorem sendBufferToPeer_routing (pid : PeerId) (bytes : List UInt8) :
   have h6 := fun e => (send6_routing e (some pid) bytes HANDSHAKE_DSCP true).wp (fun t => t = s)
   mvcgen [-Std.Do.Spec.monadLift_StateT, ambient, hidden, hiddenAlloc, hiddenClock64, sendBufferToPeer, hg, hs, h4, h6, branch, AmbientM.branch, invariant, AmbientM.invariant]
   all_goals try dsimp +zetaDelta only at *
-  all_goals try simp_all [routingView, routingState]
+  all_goals try simp_all [routingView]
   all_goals try assumption
 
 theorem sendHandshakeInitiation_routing (pid : PeerId) : SameView routingView (sendHandshakeInitiation pid) := by

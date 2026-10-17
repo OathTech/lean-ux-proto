@@ -69,7 +69,7 @@ theorem remove_saved_total (ids : List Nat) (w : WGWorld) (ambient : Ambient) (d
       (Tree.eraseId_compressed t4 id) (Tree.eraseId_compressed t6 id)
       (List.nodup_cons.mp hn).2 (ho.tail hn)
     refine ⟨out, wf, af, ?_, ?_, RemovedIds.cons hs hs'⟩
-    · simp only [List.forIn_cons, StateT.run_bind, he, Except.bind]
+    · simp only [List.forIn_cons, StateT.run_bind, he]
       exact he'
     · rw [hk', hk]
 

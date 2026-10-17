@@ -36,44 +36,46 @@ theorem requireNoCryptWork_spec (P : Snapshot → Prop)  :
 
 theorem requireDrained_sameSnapshot (what : String) (queues : List Bool) :
     SameView (fun w : World => snapshot w.wg) (Env.requireDrained what queues) := by
-  apply SameView.of_wp
-  intro initial
-  have ha := fun α (a : AmbientM α) => productAmbient_spec a
-    (fun w => snapshot w.wg = initial) (fun _ _ h => h)
-  unfold Hoare at ha
-  have hd := (nativeSnapshot getDev_sameSnapshot).wp (fun s => s = initial)
-  mvcgen [-Std.Do.Spec.monadLift_StateT, Env.requireDrained, hd, ha, unsupported, invariant]
+  have ambient {α : Type} (a : AmbientM α) :
+      SameView (fun w : World => snapshot w.wg) (monadLift a : Leanux.M α) :=
+    fun initial => productAmbient_spec a
+      (fun w => snapshot w.wg = initial) (fun _ _ h => h)
+  have device : SameView (fun w : World => snapshot w.wg) (monadLift getDev : Leanux.M Device) := nativeSnapshot getDev_sameSnapshot
+  env_operation_source [Env.requireDrained, unsupported, invariant] using [device, ambient]
 
 theorem requireDrained_spec (P : Snapshot → Prop) (what : String) (queues : List Bool) :
     ⦃fun w => ⌜P (snapshot w.wg)⌝⦄ Env.requireDrained what queues
     ⦃⇓? _ w => ⌜P (snapshot w.wg)⌝⦄ := (requireDrained_sameSnapshot what queues).wp P
 
 theorem runOneSendWorker_sameSnapshot  : SameView (fun w : World => snapshot w.wg) Env.runOneSendWorker := by
-  apply SameView.of_wp
-  intro initial
-  have ha := fun α (a : AmbientM α) => productAmbient_spec a
-    (fun w => snapshot w.wg = initial) (fun _ _ h => h)
-  unfold Hoare at ha
-  have hd := (nativeSnapshot getDev_sameSnapshot).wp (fun s => s = initial)
-  have hg := fun pid => (nativeSnapshot (getPeer_sameSnapshot pid)).wp (fun s => s = initial)
-  have hs := fun pid p => (nativeSnapshot (setPeer_sameSnapshot pid p)).wp (fun s => s = initial)
-  have hm (pid : PeerId) : SameView (fun w : World => snapshot w.wg)
-      (MonadLift.monadLift (modifyDev fun d => { d with sendWorkQueue := d.sendWorkQueue.erase pid }) : Leanux.M Unit) := by
+  have ambient {α : Type} (a : AmbientM α) :
+      SameView (fun w : World => snapshot w.wg) (monadLift a : Leanux.M α) :=
+    fun initial => productAmbient_spec a
+      (fun w => snapshot w.wg = initial) (fun _ _ h => h)
+  have device : SameView (fun w : World => snapshot w.wg) (monadLift getDev : Leanux.M Device) := nativeSnapshot getDev_sameSnapshot
+  have peer (pid : PeerId) : SameView (fun w : World => snapshot w.wg) (monadLift (getPeer pid) : Leanux.M Peer) := nativeSnapshot (getPeer_sameSnapshot pid)
+  have writePeer (pid : PeerId) (p : Peer) : SameView (fun w : World => snapshot w.wg) (monadLift (setPeer pid p) : Leanux.M Unit) := nativeSnapshot (setPeer_sameSnapshot pid p)
+  have edit (pid : PeerId) : SameView (fun w : World => snapshot w.wg)
+      (monadLift (modifyDev fun d => { d with sendWorkQueue := d.sendWorkQueue.erase pid }) : Leanux.M Unit) := by
     apply nativeSnapshot
-    intro k
-    exact modifyDev_snapshot_spec (fun s => s = k) _ (fun _ => rfl)
-  have hmSpec := fun pid => (hm pid).wp (fun s => s = initial)
-  have hw := fun pid => (runWorker_sameSnapshot .sendWorker _
-    (nativeSnapshot (handshakeSendWorker_sameSnapshot pid))).wp (fun s => s = initial)
-  mvcgen [-Std.Do.Spec.monadLift_StateT, Env.runOneSendWorker, hd, hg, hs, hmSpec, hw,
-    peekUnit, resolveUnit, ha, invariant]
+    exact fun initial => modifyDev_snapshot_spec (fun s => s = initial) _ (fun _ => rfl)
+  have worker (pid : PeerId) : SameView (fun w : World => snapshot w.wg)
+      (Env.runWorker .sendWorker (liftM (handshakeSendWorker pid))) :=
+    runWorker_sameSnapshot .sendWorker _ (nativeSnapshot (handshakeSendWorker_sameSnapshot pid))
+  env_operation_source [Env.runOneSendWorker, peekUnit, resolveUnit, invariant]
+    using [device, peer, writePeer, edit, worker, ambient]
 
 theorem runOneSendWorker_spec (P : Snapshot → Prop)  :
     ⦃fun w => ⌜P (snapshot w.wg)⌝⦄ Env.runOneSendWorker
     ⦃⇓? _ w => ⌜P (snapshot w.wg)⌝⦄ := (runOneSendWorker_sameSnapshot ).wp P
 
 theorem timerCallback_ordinary (pid : PeerId) (timer : PeerTimer) : OrdinaryAction (WG.timerCallback pid timer) := by
-  frame_ordinary [WG.timerCallback] using [expiredRetransmitHandshake_spec, expiredNewHandshake_spec, expiredZeroKeyMaterial_spec] ordinary [expiredSendKeepalive_spec, expiredSendPersistentKeepalive_spec]
+  cases timer with
+  | retransmitHandshake => exact SameView.ordinary (expiredRetransmitHandshake_sameSnapshot pid)
+  | sendKeepalive => exact expiredSendKeepalive_ordinary pid
+  | newHandshake => exact SameView.ordinary (expiredNewHandshake_sameSnapshot pid)
+  | zeroKeyMaterial => exact SameView.ordinary (expiredZeroKeyMaterial_sameSnapshot pid)
+  | persistentKeepalive => exact expiredSendPersistentKeepalive_ordinary pid
 
 theorem timerCallback_spec (P : Snapshot → Prop) (hp : Stable P) (pid : PeerId) (timer : PeerTimer) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ (WG.timerCallback pid timer)
@@ -90,26 +92,44 @@ theorem runTimerSection_spec (P : Snapshot → Prop) (hp : Stable P)
     ⦃⇓? _ w => ⌜P (snapshot w.wg)⌝⦄ := (runTimerSection_ordinary worker body hb).wp P hp
 
 theorem runOneClearWorker_ordinary  : ProductOrdinaryAction Env.runOneClearWorker := by
-  apply (ordinaryAction_iff_wp _).mpr
-  intro P hp
-  have ha := fun α (a : AmbientM α) => productAmbient_spec a
-    (fun w => P (snapshot w.wg)) (fun _ _ h => h)
-  have hd := (nativeSnapshot getDev_sameSnapshot).wp P
-  have hm (pid : PeerId) : SameView (fun w : World => snapshot w.wg)
-      (MonadLift.monadLift (modifyDev fun d => { d with clearWorkQueue := d.clearWorkQueue.erase pid }) : Leanux.M Unit) := by
+  have ambient {α : Type} (a : AmbientM α) :
+      ProductOrdinaryAction (monadLift a : Leanux.M α) :=
+    SameView.ordinary (fun initial => productAmbient_spec a
+      (fun w => snapshot w.wg = initial) (fun _ _ h => h))
+  have device : ProductOrdinaryAction (monadLift getDev : Leanux.M Device) :=
+    SameView.ordinary (nativeSnapshot getDev_sameSnapshot)
+  have edit (pid : PeerId) : ProductOrdinaryAction
+      (monadLift (modifyDev fun d => { d with clearWorkQueue := d.clearWorkQueue.erase pid }) : Leanux.M Unit) := by
+    apply SameView.ordinary
     apply nativeSnapshot
-    intro initial
-    exact modifyDev_snapshot_spec (fun s => s = initial) _ (fun _ => rfl)
-  have hmSpec := fun pid => (hm pid).wp P
-  have hw (pid : PeerId) :
-      ⦃fun w : World => ⌜P (snapshot w.wg)⌝⦄
-        Env.runWorker .clearPeerWorker (MonadLift.monadLift (queuedExpiredZeroKeyMaterial pid) : Leanux.M Unit)
-      ⦃⇓? _ w => ⌜P (snapshot w.wg)⌝⦄ :=
-    Lifetimes.ProjectedAction.wp (runWorker_ordinary .clearPeerWorker _
-      (OrdinaryAction.liftWG (queuedExpiredZeroKeyMaterial_ordinary pid))) P hp
-  unfold Hoare at ha
-  mvcgen [-Std.Do.Spec.monadLift_StateT, Env.runOneClearWorker, hd, hmSpec, hw,
-    peekUnit, resolveUnit, ha, invariant]
+    exact fun initial => modifyDev_snapshot_spec (fun s => s = initial) _ (fun _ => rfl)
+  have worker (pid : PeerId) : ProductOrdinaryAction
+      (Env.runWorker .clearPeerWorker (liftM (queuedExpiredZeroKeyMaterial pid))) :=
+    runWorker_ordinary .clearPeerWorker _
+      (OrdinaryAction.liftWG (queuedExpiredZeroKeyMaterial_ordinary pid))
+  unfold ProductOrdinaryAction
+  unfold Env.runOneClearWorker
+  repeat' first
+    | (unfold ProductOrdinaryAction)
+    | env_operation_fact device
+    | env_operation_fact edit
+    | env_operation_fact worker
+    | env_operation_fact ambient
+    | (ordinary_head Leanux.invariant; exact ambient _)
+    | (ordinary_head Leanux.unsupported; exact ambient _)
+    | (ordinary_head Leanux.peekUnit; exact ambient _)
+    | (ordinary_head Leanux.resolveUnit; exact ambient _)
+    | (ordinary_head liftM; unfold liftM)
+    | env_product_join_let
+    | env_product_join_use
+    | keypairs_intro_forall
+    | (ordinary_head Pure.pure; exact SameView.ordinary (SameView.pure _ _))
+    | (ordinary_head Bind.bind; refine ordinary_bind ?_ ?_)
+    | (ordinary_head ite; refine ordinary_ite _ ?_ ?_)
+    | (ordinary_head ForIn.forIn; apply ordinary_forIn)
+    | (ordinary_head Functor.discard; apply ordinary_discard)
+    | ordinary_head_reduce
+    | ordinary_head_match
 
 theorem runOneClearWorker_spec (P : Snapshot → Prop) (hp : Stable P)  :
     ⦃fun w => ⌜P (snapshot w.wg)⌝⦄ Env.runOneClearWorker
@@ -130,33 +150,59 @@ theorem advance_spec (P : Snapshot → Prop) (ticks : Nat) :
     ⦃⇓? _ w => ⌜P (snapshot w.wg)⌝⦄ := (advance_sameSnapshot ticks).wp P
 
 theorem requireIdleDevice_sameSnapshot  : SameView (fun w : World => snapshot w.wg) Env.requireIdleDevice := by
-  apply SameView.of_wp
-  intro initial
-  have ha := fun α (a : AmbientM α) => productAmbient_spec a
-    (fun w => snapshot w.wg = initial) (fun _ _ h => h)
-  unfold Hoare at ha
-  have hd := (nativeSnapshot getDev_sameSnapshot).wp (fun s => s = initial)
-  have hn := requireNoCryptWork_spec (fun s => s = initial)
-  mvcgen [-Std.Do.Spec.monadLift_StateT, Env.requireIdleDevice, hn, hd, ha, unsupported]
+  have ambient {α : Type} (a : AmbientM α) :
+      SameView (fun w : World => snapshot w.wg) (monadLift a : Leanux.M α) :=
+    fun initial => productAmbient_spec a
+      (fun w => snapshot w.wg = initial) (fun _ _ h => h)
+  have device : SameView (fun w : World => snapshot w.wg) (monadLift getDev : Leanux.M Device) := nativeSnapshot getDev_sameSnapshot
+  env_operation_source [Env.requireIdleDevice, unsupported]
+    using [requireNoCryptWork_sameSnapshot, device, ambient]
 
 theorem requireIdleDevice_spec (P : Snapshot → Prop)  :
     ⦃fun w => ⌜P (snapshot w.wg)⌝⦄ Env.requireIdleDevice
     ⦃⇓? _ w => ⌜P (snapshot w.wg)⌝⦄ := (requireIdleDevice_sameSnapshot ).wp P
 
 theorem wgUp_ordinary  : ProductOrdinaryAction Env.wgUp := by
-  apply (ordinaryAction_iff_wp _).mpr
-  intro P hp
-  have ha := fun α (a : AmbientM α) => productAmbient_spec a
-    (fun w => P (snapshot w.wg)) (fun _ _ h => h)
-  have hg := productGetSnapshot.wp P
-  have hr := fun α (a : Net.M α) => productRouting_spec a
-    (fun s => P (snapshotOfWGStoreView s.2.2.2))
-  unfold Hoare at ha hr
-  have hu :
-      ⦃fun w : World => ⌜P (snapshot w.wg)⌝⦄ (MonadLift.monadLift WG.wgUp : Leanux.M Int)
-      ⦃⇓? _ w => ⌜P (snapshot w.wg)⌝⦄ :=
-    Lifetimes.ProjectedAction.wp (OrdinaryAction.liftWG WGDevice.wgUp_ordinary) P hp
-  mvcgen [-Std.Do.Spec.monadLift_StateT, Env.wgUp, hg, hu, hr, ha, skipCut, modifyEnv]
+  have ambient {α : Type} (a : AmbientM α) :
+      ProductOrdinaryAction (monadLift a : Leanux.M α) :=
+    SameView.ordinary (fun initial => productAmbient_spec a
+      (fun w => snapshot w.wg = initial) (fun _ _ h => h))
+  have routing {α : Type} (a : Net.M α) : ProductOrdinaryAction
+      (monadLift a : Leanux.M α) :=
+    SameView.ordinary (productStoreSnapshot
+      (liftWG_sameProductStore _ (liftRouting_sameWGStore a)))
+  have edit (f : EnvWorld → EnvWorld) : ProductOrdinaryAction (modifyEnv f) := by
+    apply (Lifetimes.ProjectedAction.iff_run _ _ _).mpr
+    intro w x v hr
+    cases hr
+    exact .refl _
+  have read := SameView.ordinary productGetSnapshot
+  have up : ProductOrdinaryAction (monadLift WG.wgUp : Leanux.M Int) := OrdinaryAction.liftWG WGDevice.wgUp_ordinary
+  unfold ProductOrdinaryAction
+  unfold Env.wgUp
+  repeat' first
+    | (unfold ProductOrdinaryAction)
+    | env_operation_fact up
+    | env_operation_fact read
+    | env_operation_fact routing
+    | env_operation_fact edit
+    | (ordinary_head Leanux.skipCut; unfold Leanux.skipCut)
+    | env_operation_fact ambient
+    | (ordinary_head Leanux.invariant; exact ambient _)
+    | (ordinary_head Leanux.unsupported; exact ambient _)
+    | (ordinary_head Leanux.peekUnit; exact ambient _)
+    | (ordinary_head Leanux.resolveUnit; exact ambient _)
+    | (ordinary_head liftM; unfold liftM)
+    | env_product_join_let
+    | env_product_join_use
+    | keypairs_intro_forall
+    | (ordinary_head Pure.pure; exact SameView.ordinary (SameView.pure _ _))
+    | (ordinary_head Bind.bind; refine ordinary_bind ?_ ?_)
+    | (ordinary_head ite; refine ordinary_ite _ ?_ ?_)
+    | (ordinary_head ForIn.forIn; apply ordinary_forIn)
+    | (ordinary_head Functor.discard; apply ordinary_discard)
+    | ordinary_head_reduce
+    | ordinary_head_match
 
 theorem wgUp_spec (P : Snapshot → Prop) (hp : Stable P)  :
     ⦃fun w => ⌜P (snapshot w.wg)⌝⦄ Env.wgUp
@@ -182,50 +228,114 @@ theorem routeIntoWg0_spec (P : Snapshot → Prop)  :
     ⦃⇓? _ w => ⌜P (snapshot w.wg)⌝⦄ := (routeIntoWg0_sameSnapshot ).wp P
 
 theorem wgDown_ordinary  : ProductOrdinaryAction Env.wgDown := by
-  apply (ordinaryAction_iff_wp _).mpr
-  intro P hp
-  have ha := fun α (a : AmbientM α) => productAmbient_spec a
-    (fun w => P (snapshot w.wg)) (fun _ _ h => h)
-  have hg := productGetSnapshot.wp P
-  have hr := fun α (a : Net.M α) => productRouting_spec a
-    (fun s => P (snapshotOfWGStoreView s.2.2.2))
-  unfold Hoare at ha hr
-  have hd :
-      ⦃fun w : World => ⌜P (snapshot w.wg)⌝⦄ (MonadLift.monadLift WG.wgDown : Leanux.M Unit)
-      ⦃⇓? _ w => ⌜P (snapshot w.wg)⌝⦄ :=
-    Lifetimes.ProjectedAction.wp (OrdinaryAction.liftWG WGDevice.wgDown_ordinary) P hp
-  have hi := requireIdleDevice_spec P
-  mvcgen [-Std.Do.Spec.monadLift_StateT, Env.wgDown, hg, hd, hi, hr, ha, skipCut, modifyRouting]
+  have ambient {α : Type} (a : AmbientM α) :
+      ProductOrdinaryAction (monadLift a : Leanux.M α) :=
+    SameView.ordinary (fun initial => productAmbient_spec a
+      (fun w => snapshot w.wg = initial) (fun _ _ h => h))
+  have routing {α : Type} (a : Net.M α) : ProductOrdinaryAction
+      (monadLift a : Leanux.M α) :=
+    SameView.ordinary (productStoreSnapshot
+      (liftWG_sameProductStore _ (liftRouting_sameWGStore a)))
+  have read := SameView.ordinary productGetSnapshot
+  have down : ProductOrdinaryAction (monadLift WG.wgDown : Leanux.M Unit) := OrdinaryAction.liftWG WGDevice.wgDown_ordinary
+  have idle := SameView.ordinary requireIdleDevice_sameSnapshot
+  unfold ProductOrdinaryAction
+  unfold Env.wgDown modifyRouting
+  repeat' first
+    | (unfold ProductOrdinaryAction)
+    | env_operation_fact down
+    | env_operation_fact read
+    | env_operation_fact idle
+    | env_operation_fact routing
+    | (ordinary_head Leanux.skipCut; unfold Leanux.skipCut)
+    | env_operation_fact ambient
+    | (ordinary_head Leanux.invariant; exact ambient _)
+    | (ordinary_head Leanux.unsupported; exact ambient _)
+    | (ordinary_head Leanux.peekUnit; exact ambient _)
+    | (ordinary_head Leanux.resolveUnit; exact ambient _)
+    | (ordinary_head liftM; unfold liftM)
+    | env_product_join_let
+    | env_product_join_use
+    | keypairs_intro_forall
+    | (ordinary_head Pure.pure; exact SameView.ordinary (SameView.pure _ _))
+    | (ordinary_head Bind.bind; refine ordinary_bind ?_ ?_)
+    | (ordinary_head ite; refine ordinary_ite _ ?_ ?_)
+    | (ordinary_head ForIn.forIn; apply ordinary_forIn)
+    | (ordinary_head Functor.discard; apply ordinary_discard)
+    | ordinary_head_reduce
+    | ordinary_head_match
 
 theorem wgDown_spec (P : Snapshot → Prop) (hp : Stable P)  :
     ⦃fun w => ⌜P (snapshot w.wg)⌝⦄ Env.wgDown
     ⦃⇓? _ w => ⌜P (snapshot w.wg)⌝⦄ := (wgDown_ordinary ).wp P hp
 
 theorem wgDelete_ordinary  : ProductOrdinaryAction Env.wgDelete := by
-  apply (ordinaryAction_iff_wp _).mpr
-  intro P hp
-  have ha := fun α (a : AmbientM α) => productAmbient_spec a
-    (fun w => P (snapshot w.wg)) (fun _ _ h => h)
-  have hg := productGetSnapshot.wp P
-  have hr := fun α (a : Net.M α) => productRouting_spec a
-    (fun s => P (snapshotOfWGStoreView s.2.2.2))
-  unfold Hoare at ha hr
-  have hd := (nativeSnapshot getDev_sameSnapshot).wp P
-  have hs := (nativeSnapshot mayHaveSlept_sameSnapshot).wp P
-  have hdown :
-      ⦃fun w : World => ⌜P (snapshot w.wg)⌝⦄ (MonadLift.monadLift WG.wgDown : Leanux.M Unit)
-      ⦃⇓? _ w => ⌜P (snapshot w.wg)⌝⦄ :=
-    Lifetimes.ProjectedAction.wp (OrdinaryAction.liftWG WGDevice.wgDown_ordinary) P hp
-  have hdestruct :
-      ⦃fun w : World => ⌜P (snapshot w.wg)⌝⦄ (MonadLift.monadLift WG.wgDestruct : Leanux.M Unit)
-      ⦃⇓? _ w => ⌜P (snapshot w.wg)⌝⦄ :=
-    Lifetimes.ProjectedAction.wp (OrdinaryAction.liftWG WGDevice.wgDestruct_ordinary) P hp
-  have hi := requireIdleDevice_spec P
-  have hl (α β : Type) := list_view_spec (m := Except Stop) (fun w : World => snapshot w.wg)
-    (α := α) (β := β) P
-  mvcgen [-Std.Do.Spec.forIn_list, -Std.Do.Spec.forIn'_list, -Std.Do.Spec.monadLift_StateT,
-    Env.wgDelete, WG.wgDelete, Env.inetdevDestroy, getRouting, modifyRouting, hg, hd, hs,
-    hdown, hdestruct, hi, hr, ha, hl, skipCut, unsupported]
+  have ambient {α : Type} (a : AmbientM α) :
+      ProductOrdinaryAction (monadLift a : Leanux.M α) :=
+    SameView.ordinary (fun initial => productAmbient_spec a
+      (fun w => snapshot w.wg = initial) (fun _ _ h => h))
+  have routing {α : Type} (a : Net.M α) : ProductOrdinaryAction
+      (monadLift a : Leanux.M α) :=
+    SameView.ordinary (productStoreSnapshot
+      (liftWG_sameProductStore _ (liftRouting_sameWGStore a)))
+  have read := SameView.ordinary productGetSnapshot
+  have device : ProductOrdinaryAction (monadLift getDev : Leanux.M Device) := SameView.ordinary (nativeSnapshot getDev_sameSnapshot)
+  have slept : ProductOrdinaryAction (monadLift mayHaveSlept : Leanux.M Unit) := SameView.ordinary (nativeSnapshot mayHaveSlept_sameSnapshot)
+  have down : ProductOrdinaryAction (monadLift WG.wgDown : Leanux.M Unit) := OrdinaryAction.liftWG WGDevice.wgDown_ordinary
+  have destruct : ProductOrdinaryAction (monadLift WG.wgDestruct : Leanux.M Unit) := OrdinaryAction.liftWG WGDevice.wgDestruct_ordinary
+  have idle := SameView.ordinary requireIdleDevice_sameSnapshot
+  have destroy : ProductOrdinaryAction Env.inetdevDestroy := by
+    unfold ProductOrdinaryAction
+    unfold Env.inetdevDestroy getRouting modifyRouting
+    repeat' first
+      | (unfold ProductOrdinaryAction)
+      | env_operation_fact routing
+      | (ordinary_head ForIn.forIn; apply ordinary_forIn)
+      | env_operation_fact ambient
+      | (ordinary_head Leanux.invariant; exact ambient _)
+      | (ordinary_head Leanux.unsupported; exact ambient _)
+      | (ordinary_head Leanux.peekUnit; exact ambient _)
+      | (ordinary_head Leanux.resolveUnit; exact ambient _)
+      | (ordinary_head liftM; unfold liftM)
+      | env_product_join_let
+      | env_product_join_use
+      | keypairs_intro_forall
+      | (ordinary_head Pure.pure; exact SameView.ordinary (SameView.pure _ _))
+      | (ordinary_head Bind.bind; refine ordinary_bind ?_ ?_)
+      | (ordinary_head ite; refine ordinary_ite _ ?_ ?_)
+      | (ordinary_head ForIn.forIn; apply ordinary_forIn)
+      | (ordinary_head Functor.discard; apply ordinary_discard)
+      | ordinary_head_reduce
+      | ordinary_head_match
+  unfold ProductOrdinaryAction
+  unfold Env.wgDelete WG.wgDelete modifyRouting
+  repeat' first
+    | (unfold ProductOrdinaryAction)
+    | env_operation_fact destroy
+    | env_operation_fact down
+    | env_operation_fact destruct
+    | env_operation_fact slept
+    | env_operation_fact device
+    | env_operation_fact read
+    | env_operation_fact idle
+    | env_operation_fact routing
+    | (ordinary_head Leanux.skipCut; unfold Leanux.skipCut)
+    | env_operation_fact ambient
+    | (ordinary_head Leanux.invariant; exact ambient _)
+    | (ordinary_head Leanux.unsupported; exact ambient _)
+    | (ordinary_head Leanux.peekUnit; exact ambient _)
+    | (ordinary_head Leanux.resolveUnit; exact ambient _)
+    | (ordinary_head liftM; unfold liftM)
+    | env_product_join_let
+    | env_product_join_use
+    | keypairs_intro_forall
+    | (ordinary_head Pure.pure; exact SameView.ordinary (SameView.pure _ _))
+    | (ordinary_head Bind.bind; refine ordinary_bind ?_ ?_)
+    | (ordinary_head ite; refine ordinary_ite _ ?_ ?_)
+    | (ordinary_head ForIn.forIn; apply ordinary_forIn)
+    | (ordinary_head Functor.discard; apply ordinary_discard)
+    | ordinary_head_reduce
+    | ordinary_head_match
 
 theorem wgDelete_spec (P : Snapshot → Prop) (hp : Stable P)  :
     ⦃fun w => ⌜P (snapshot w.wg)⌝⦄ Env.wgDelete
@@ -246,17 +356,21 @@ theorem wgDelroute_spec (P : Snapshot → Prop) (family : Nat) :
     ⦃⇓? _ w => ⌜P (snapshot w.wg)⌝⦄ := (wgDelroute_sameSnapshot family).wp P
 
 theorem netnsCleanup_sameSnapshot  : SameView (fun w : World => snapshot w.wg) Env.netnsCleanup := by
-  apply SameView.of_wp
-  intro initial
-  have ha := fun α (a : AmbientM α) => productAmbient_spec a
-    (fun w => snapshot w.wg = initial) (fun _ _ h => h)
-  unfold Hoare at ha
-  have hr := fun α (a : Net.M α) => productRouting_spec a
-    (fun s => snapshotOfWGStoreView s.2.2.2 = initial)
-  have hn := (nativeSnapshot netnsPreExit_sameSnapshot).wp (fun s => s = initial)
-  unfold Hoare at hr
-  mvcgen [-Std.Do.Spec.monadLift_StateT, Env.netnsCleanup, Env.runWorker,
-    getRouting, modifyEnv, hn, hr, ha, peekUnit, resolveUnit, hidden, peekHiddenSite, skipCut, invariant, unsupported]
+  have ambient {α : Type} (a : AmbientM α) :
+      SameView (fun w : World => snapshot w.wg) (monadLift a : Leanux.M α) :=
+    fun initial => productAmbient_spec a
+      (fun w => snapshot w.wg = initial) (fun _ _ h => h)
+  have routing {α : Type} (a : Net.M α) : SameView (fun w : World => snapshot w.wg)
+      (monadLift a : Leanux.M α) :=
+    productStoreSnapshot (liftWG_sameProductStore _ (liftRouting_sameWGStore a))
+  have netns : SameView (fun w : World => snapshot w.wg) (monadLift netnsPreExit : Leanux.M Unit) := nativeSnapshot netnsPreExit_sameSnapshot
+  have edit (f : EnvWorld → EnvWorld) : SameView (fun w : World => snapshot w.wg) (modifyEnv f) := by
+    apply (Lifetimes.ProjectedAction.iff_run _ _ _).mpr
+    intro w x v hr
+    cases hr
+    rfl
+  env_operation_source [Env.netnsCleanup, getRouting, peekUnit, resolveUnit, skipCut, unsupported]
+    using [runWorker_sameSnapshot, netns, routing, edit, ambient]
 
 theorem netnsCleanup_spec (P : Snapshot → Prop)  :
     ⦃fun w => ⌜P (snapshot w.wg)⌝⦄ Env.netnsCleanup
@@ -277,13 +391,12 @@ theorem xmitPackets_spec (P : Snapshot → Prop) (family addr : Nat) (payload : 
     ⦃⇓? _ w => ⌜P (snapshot w.wg)⌝⦄ := (xmitPackets_sameSnapshot family addr payload opts).wp P
 
 theorem xmitMulticastLoop_sameSnapshot (family addr : Nat) : SameView (fun w : World => snapshot w.wg) (Env.xmitMulticastLoop family addr) := by
-  apply SameView.of_wp
-  intro initial
-  have ha := fun α (a : AmbientM α) => productAmbient_spec a
-    (fun w => snapshot w.wg = initial) (fun _ _ h => h)
-  unfold Hoare at ha
-  have hl := (nativeSnapshot (loopbackSend_sameSnapshot [] true)).wp (fun s => s = initial)
-  mvcgen [-Std.Do.Spec.monadLift_StateT, Env.xmitMulticastLoop, hl, ha, unsupported]
+  have ambient {α : Type} (a : AmbientM α) :
+      SameView (fun w : World => snapshot w.wg) (monadLift a : Leanux.M α) :=
+    fun initial => productAmbient_spec a
+      (fun w => snapshot w.wg = initial) (fun _ _ h => h)
+  have loopback : SameView (fun w : World => snapshot w.wg) (monadLift (loopbackSend [] true) : Leanux.M Unit) := nativeSnapshot (loopbackSend_sameSnapshot [] true)
+  env_operation_source [Env.xmitMulticastLoop, unsupported] using [loopback, ambient]
 
 theorem xmitMulticastLoop_spec (P : Snapshot → Prop) (family addr : Nat) :
     ⦃fun w => ⌜P (snapshot w.wg)⌝⦄ (Env.xmitMulticastLoop family addr)

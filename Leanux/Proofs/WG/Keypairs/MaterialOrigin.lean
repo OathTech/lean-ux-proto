@@ -35,7 +35,7 @@ theorem allocation_fields (w : WGWorld) (d : Device) (word : Option PeerId)
     (keyAllocationDevice d (w.keypairCounter + 1) word).keypairs[d.nextKeypairId]? =
       some {internalId := w.keypairCounter + 1, peer := word} ∧
     (keyAllocationDevice d (w.keypairCounter + 1) word).keypairs[id]? = d.keypairs[id]? := by
-  simp [keyAllocationDevice, Std.TreeMap.getElem?_insert, Nat.ne_of_lt below, Ne.symm (Nat.ne_of_lt below)]
+  simp [keyAllocationDevice, Std.TreeMap.getElem?_insert, Ne.symm (Nat.ne_of_lt below)]
 
 /-- The remaining concrete session/sending setters also retain receiving
 material. This is a field rule, not a universal contract for arbitrary setters. -/
@@ -78,7 +78,7 @@ theorem access_valid (a : PrefixT LifetimeEvent State α) (valid : R → Prop) :
   intro w h hi
   refine ⟨_, rfl, ?_, ?_⟩
   · intro e he
-    simp only [access, focusPrefix, runPrefix] at he
+    simp only [access, runPrefix] at he
     rcases List.mem_append.mp he with he | he
     · exact hi e he
     · obtain ⟨v, _, rfl⟩ := List.mem_map.mp he
@@ -87,7 +87,7 @@ theorem access_valid (a : PrefixT LifetimeEvent State α) (valid : R → Prop) :
     | error e => trivial
     | ok out =>
       intro e he
-      simp only [access, focusPrefix, runPrefix] at he
+      simp only [access, runPrefix] at he
       rcases List.mem_append.mp he with he | he
       · exact hi e he
       · obtain ⟨v, _, rfl⟩ := List.mem_map.mp he
@@ -165,10 +165,10 @@ theorem bind_ok_ambient {Outer Inner : Type}
         ((f x).run u).run middle = .ok ((y, v), ambient') := by
   simp only [StateT.run_bind]
   cases hr : (a.run w).run ambient with
-  | error e => simp [hr]
+  | error e => simp []
   | ok out =>
     rcases out with ⟨⟨x, u⟩, middle⟩
-    simp only [hr, Except.bind, Except.ok.injEq, Prod.mk.injEq]
+    simp only [Except.ok.injEq, Prod.mk.injEq]
     constructor
     · intro h; exact ⟨x, u, middle, ⟨⟨rfl, rfl⟩, rfl⟩, h⟩
     · rintro ⟨z, t, b, ⟨⟨rfl, rfl⟩, rfl⟩, h⟩; exact h

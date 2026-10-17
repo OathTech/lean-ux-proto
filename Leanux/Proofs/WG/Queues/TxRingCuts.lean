@@ -70,7 +70,7 @@ theorem poll_wp (deviceIndex : Nat) (r : PtrRing (List SkbId)) :
     ⦃⇓? out w => ⌜out = r.consume.1 ∧ nativeCell w = some (deviceIndex, r.consume.2)⌝⦄ := by
   mvcgen [pollSource, getDev, modifyDev, invariant, AmbientM.invariant]
   all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [nativeCell, Option.map_map, Function.comp_def]
+  all_goals simp_all [nativeCell]
   all_goals subst_vars
   all_goals simp_all [PtrRing.consume]
   all_goals split at * <;> simp_all

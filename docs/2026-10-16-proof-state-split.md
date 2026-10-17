@@ -115,7 +115,53 @@ branch selection and the unchanged 200,000-heartbeat limit before the fourth
 passed. No failure was relabeled as a successful check.
 
 Remaining work is compiler-warning cleanup, the full proof gate and terminal
-replay. Older
+replay. The first complete gate failed at the root import: independently
+compiled Operations and RoutingEnvTimersFrames exported the same generated
+`requireNothingDue` matcher declaration. Its other source checks passed, but
+the invocation remains **FAIL**; it reported 859 warnings and did not inspect
+the terminal axioms. The repair replaces the two offending proof bodies with
+direct execution cases and preserves all 22 module contracts. Both complete
+candidate checks pass and confirm the conflicting generated declaration is
+absent. Development had seven ordinary failures, one infrastructure failure
+and three passes; the sole infrastructure rerun failed on proof obligations
+before the source was repaired. The second complete gate also failed: its
+three import errors exposed generated matcher collisions for `enqueuePerPeerTx`
+and `lookup`. It reported 451 warnings; source checks passed and terminal axiom
+inspection was skipped. The enqueue repair passes its complete source check,
+all seven named axiom prints and an assertion that the conflicting declaration
+is absent. Its first two drafts failed on parsing and predicate normalization.
+Independent review's trailing-whitespace finding was corrected after the
+active build. That 182-job scoped build failed at an upstream `keypairGet`
+matcher collision between Ordinary and RxHelperFrames; it reported 41 warnings.
+The three Ordinary proof replacements pass without warnings, all eighteen
+logical roots have standard-only axioms, and the conflicting declaration is
+absent. The next 205-job import build also failed: RxHelperFrames and
+AllocationReleaseFrames still independently generated that helper. It reported
+83 warnings. Both repairs now pass their complete source checks, with unchanged
+theorem contracts and standard-only axioms; both conflicting declarations are
+absent in their source checks. The 297-job combined import build still failed:
+RoutingTxFrames imported a duplicate enqueue matcher from RxTxFrames and
+TxRingFrames. It reported 320 warnings; the targeted RxTx, receive completion,
+ring callback and two scheduler modules built, but the invocation is **FAIL**.
+All remaining RxTx deprecated proofs now pass their source and seven axiom
+checks without warnings, and the source check confirms the helper is absent.
+Independent review preserves saved peer receipts, physical ring semantics,
+partial Stops and the original surviving-resident relation. The next 285-job
+combined build failed at RoutingTxFrames: RoutingSendFrames and TxRingFrames
+still generated the enqueue helper independently. It reported 291 warnings;
+the changed RX/TX, completion, packet ECN, product syscall and runner modules
+built. Fresh replay of runner bounds, product syscall frames and receive
+completion passes.
+Runner uniqueness and window-bound proofs share checked
+Triple composition over the actual runner. All eleven theorem contracts and
+three pure definitions remain unchanged, including arbitrary syscall contracts,
+initialization, indexed Stops and both placeholder settings.
+The routing enqueue repair preserves all nineteen module contracts and passes
+its standard-axiom and generated-helper absence checks; twelve older tactic
+sites remain. Independent source review passes. A separate output-free
+refcount diagnostic failed because a generic WG action is not definitionally
+equal to the proposed native Ambient lift; no source was published from it.
+No complete gate or root replay is claimed yet. Older
 proof modules still use deprecated automation or redundant simplifiers.
 Lean 4.35's vcgen is a different implementation from mvcgen; blind renaming
 does not preserve these proofs. Nine foundation/logged warning repairs preserve
@@ -148,6 +194,76 @@ expensive inference. The final check passes at the original limits. The small
 Noise and index repairs each had one failed draft before passing; time passed
 its first check. None changes a statement or the executable mirror.
 
+The next maintenance batch removes 465 reported unused simplifier arguments
+from 92 modules; all 95 candidate checks pass and independent review confirms
+unchanged contracts and options. Formatting findings were corrected before
+publication. Seven further candidates remove eighteen unused arguments and
+three other diagnostics; all seven checks and reviews pass. The intentionally
+unused `stamp` premise is retained with the binder renamed `_stamp`.
+
+Native socket, cookie, device, allowed-IP and dump proofs now compose checked
+source actions directly. Product environment proofs retain the original
+43-field observation and actual mixed actions. The transition helper shares
+existing ordinary-composition support by moving one private meta helper and
+four elaborators unchanged into OrdinaryRules. The final combined 237-job
+build passes, including WGTransitions, WGMore and WGConfig; its dependency
+closure still reports 187 warnings. This is a scoped pass, not a root pass.
+
+| Additional maintenance checks | Ordinary failures | Passes |
+| --- | ---: | ---: |
+| Socket, Product and Batch | 6 | 3 |
+| Environment leaves and allowed-IP helpers | 4 | 3 |
+| Device lifecycle, cookie and header frames | 10 | 3 |
+| Environment operations and syscall frames, including source axiom prints | 7 | 4 |
+| Shared transition support and configuration consumers | 15 | 5 |
+| Receive snapshot composition | 3 | 1 |
+| Dump frames | 0 | 1 |
+| Device snapshot frames | 1 | 1 |
+| Product environment snapshot frames | 3 | 2 |
+| Peer borrowing and repayment | 5 | 3 |
+| WP and hot-path keypair contracts, including twelve source axiom prints | 7 | 4 |
+| Enqueue collision, including seven source axiom prints | 2 | 2 |
+| Remaining operation completion frame | 0 | 1 |
+| Ordinary keypair contracts, including eighteen source axiom prints | 3 | 2 |
+| Exact TX enqueue result | 2 | 1 |
+| Receive-queue primitive frames | 1 | 1 |
+| TX/RX ring admission guards | 0 | 1 |
+| Receive queue helper frames, including eight source axiom prints | 6 | 2 |
+| Lookup borrowing and wrappers, including twenty-five source axiom prints | 6 | 2 |
+| Scheduler pending-NAPI frame | 0 | 1 |
+| Receive maintenance and timer queue frames | 4 | 2 |
+| Product encryption scheduler frame | 1 | 1 |
+| Product syscall wrappers, including ten source axiom prints | 1 | 2 |
+| Remaining TX queue frames, including seven source axiom prints | 3 | 2 |
+| Receive completion frames, including five source axiom prints | 1 | 2 |
+| TX packet ECN frame | 2 | 2 |
+| Runner uniqueness/window-bound composition, including fourteen source axiom prints | 1 | 3 |
+| Routing enqueue collision, including axiom and helper-absence checks | 1 | 1 |
+
+Earlier transition passes retained two deprecated bodies; only its final three
+passes validate the complete replacement and relocation. Peer borrowing's first
+pass retained nineteen unused arguments; both subsequent checks have zero
+warnings. All these repairs retain theorem contracts and existing proof limits.
+Receive maintenance had an intermediate pass retaining three deprecated blocks;
+its final pass is warning-free. Product encryption retains the arbitrary
+product-state checksum callback and its original premise.
+WP retains the saved keypair facts across both owner/index removals and the
+original allocation-frontier premise; its final check has zero warnings.
+The two unused frame macros are removed after all callers were replaced;
+their ten logical contracts remain, and the module checks without warnings.
+The exact enqueue result keeps peer refusal before the ring-full test and
+does not treat a queue-work Stop as an ordinary return. The queue primitive
+and Ordinary replacements retain all contracts; independent reviews pass.
+The environment/admission checkpoint passes its combined 171-job build, with
+27 warnings in the dependency closure. Both scoped fresh kernel replays
+(environment frames and enqueue admission) pass with explicit zero status.
+Named failures include compiler-join normalization, action inference, ordinary
+heartbeat exhaustion and malformed drafts; none was treated as a pass or an
+infrastructure retry. The final candidates received independent source review. Receive completion
+and TX ECN each had one intermediate pass retaining two warnings; their final
+passes have zero own warnings. Explicit branch reduction and source operands
+resolved the TX ECN inference timeout without raising its existing limit.
+
 Deterministic development failures, including generated-helper import
 collisions and heartbeat exhaustion, are failures. Changed source was
 checked anew; these were not infrastructure retries. Recovery admissions
@@ -172,6 +288,8 @@ Each infrastructure rerun below occurred once for its affected invocation:
 | RxConsumeProtection fresh replay | tool returned no completion status; handle subsequently absent | PASS with explicit zero status |
 | RxPollDisposition diagnostic | missing Completion artifact | FAIL on proof obligations; changed-source checks later passed |
 | DeliveryOrder diagnostic | RxRingHandshake artifact absent during central rebuild | PASS unchanged after rebuild, first 109 declarations |
+| Operations collision repair | WGBase artifact absent during the warning-composition build | FAIL on proof obligations; changed-source checks later passed |
+| Routing timer warning repair | RoutingTxFrames artifact absent after the failed full build | Pending dependency repair; no rerun yet |
 
 Explicitly stopped elaborations, signal/KILLED outcomes, driver crashes and
 toolchain panics were preserved to snapshot refs before work resumed; they
@@ -186,6 +304,17 @@ crashed with exit134. These are failures. All dirty worktrees were preserved,
 including snapshots at 20261017T001124Z and 20261017T001204Z, before further work.
 One central Lake writer now coordinates this worktree's artifact mutations; independent
 checks and work in other worktrees remain concurrent.
+Three read-only comparison-driver mistakes (a Python index error, an
+overbroad binder-name comparison, and a JavaScript method typo) were failures,
+not Lean results. Dirty worktrees were preserved at 20261017T033106Z,
+20261017T033734Z and 20261017T034000Z before continuing; branch tips remained
+unchanged. The corrected contract census still reports 452 files and 6,558
+theorems. These checks did not publish partially validated source.
+An ephemeral lookup-report driver later failed on a Python boolean literal
+after the Lean check had passed. Four dirty worktrees were preserved under
+`refs/snapshots/proof-campaign-lookup-ledger-recovery-20261017T040418Z/`
+(campaign `b798306d7cef9a951def0555089eb9c933e3e975`). The failure changed no
+tracked source and is separate from the Lean validation; branch tips stayed put.
 
 ## Runtime witness reconstruction
 

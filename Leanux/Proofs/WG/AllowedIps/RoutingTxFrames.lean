@@ -73,7 +73,7 @@ theorem sendSkbToPeer_routing (pid : PeerId) (bytes : List UInt8) (ds : Nat) :
   have h6 := fun e => (send6_routing e (some pid) bytes ds true).wp (fun t => t = s)
   mvcgen [sendSkbToPeer, hp, hs, h4, h6, branch, AmbientM.branch]
   all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [routingView, routingState]
+  all_goals simp_all [routingView]
 
 theorem timersDataSent_routing (pid : PeerId) : SameView routingView (timersDataSent pid) := by
   apply SameView.of_wp
@@ -190,7 +190,7 @@ theorem xmitTrim_routing (pid : PeerId) : SameView routingView (xmitTrim pid) :=
   mvcgen [-Std.Do.Spec.forIn_list, -Std.Do.Spec.forIn'_list, hl, hg, hs, hd, branch, AmbientM.branch]
   all_goals try exact ((⇓? _ w => ⌜routingView w = s⌝) : PostCond _ (.arg WGWorld (.arg Ambient (.except Stop .pure))))
   all_goals try dsimp +zetaDelta only at *
-  all_goals try simp_all [routingView, routingState]
+  all_goals try simp_all [routingView]
 
 theorem xmitSplice_routing (pid : PeerId) (packets : List Packet) :
     SameView routingView (xmitSplice pid packets) := by
@@ -274,7 +274,7 @@ theorem receive4_routing (bytes : List UInt8) :
     apply (ProjectedAction.iff_run _ _ _).mpr
     intro w x v hr
     obtain ⟨e, he⟩ := failure w
-    simp only [StateT.run_bind, he, Except.bind] at hr
+    simp only [StateT.run_bind, he] at hr
     contradiction
   have excluded := fun row tail => stopped (Leanux.Env.Stack.excluded row)
     (stackExcluded_failure row) tail

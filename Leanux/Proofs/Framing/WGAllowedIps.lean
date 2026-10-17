@@ -27,42 +27,69 @@ theorem modifyDev_node_spec (P : WGStoreView → Prop) (f : Device → Device)
 
 theorem getNode_sameAipStore (id : NodeId) :
     SameView (fun s : AipStore => s) (getNode id) := by
-  apply SameView.of_wp
-  intro initial
-  mvcgen [getNode, invariant, AmbientM.invariant]
+  have read : SameView (fun s : AipStore => s) (get : AipM AipStore) := by
+    apply (Leanux.Proofs.WG.Lifetimes.ProjectedAction.iff_run_ambient _ _ _).mpr
+    intro s ambient x v ambient' hr
+    cases hr
+    rfl
+  unfold getNode
+  apply SameView.bind read
+  intro store
+  split
+  · exact SameView.pure _ _
+  · exact fun initial => hoare_liftAmbient (AmbientM.invariant _) (fun s => s = initial)
 
 theorem setNode_sameNextNode (id : NodeId) (n : AipNode) :
     SameView AipStore.nextNode (setNode id n) := by
-  apply SameView.of_wp
   intro initial
-  mvcgen [setNode]
+  exact hoare_modify (fun s : AipStore => {s with nodes := s.nodes.insert id n}) (fun _ h => h)
 
 theorem freeNode_sameNextNode (id : NodeId) :
     SameView AipStore.nextNode (freeNode id) := by
   unfold freeNode
   apply SameView.bind ((getNode_sameAipStore id).factor AipStore.nextNode)
   intro _
-  apply SameView.of_wp
-  intro initial
-  mvcgen
+  exact fun initial => hoare_modify (fun s : AipStore => {s with nodes := s.nodes.erase id}) (fun _ h => h)
 
 theorem slotGet_sameAipStore (s : Slot) :
     SameView (fun s : AipStore => s) (slotGet s) := by
-  apply SameView.of_wp
-  intro initial
-  have hn := fun id => (getNode_sameAipStore id).wp (fun s => s = initial)
-  have ha (α : Type) (a : AmbientM α) :
-      ⦃fun s : AipStore => ⌜s = initial⌝⦄ (MonadLift.monadLift a : AipM α)
-      ⦃⇓? _ s => ⌜s = initial⌝⦄ := hoare_liftAmbient a _
-  mvcgen [-Std.Do.Spec.monadLift_StateT, slotGet, hn, AipNode.bitAt, ha, invariant]
+  have read : SameView (fun s : AipStore => s) (get : AipM AipStore) := by
+    apply (Leanux.Proofs.WG.Lifetimes.ProjectedAction.iff_run_ambient _ _ _).mpr
+    intro s ambient x v ambient' hr
+    cases hr
+    rfl
+  cases s with
+  | root4 => exact SameView.bind read (fun _ => SameView.pure _ _)
+  | root6 => exact SameView.bind read (fun _ => SameView.pure _ _)
+  | child parent bit =>
+    unfold slotGet
+    apply SameView.bind (getNode_sameAipStore parent)
+    intro node
+    unfold AipNode.bitAt
+    split
+    · exact SameView.pure _ _
+    · exact fun initial => hoare_liftAmbient (AmbientM.invariant _) (fun s => s = initial)
 
 theorem slotSet_sameNextNode (s : Slot) (v : Option NodeId) :
     SameView AipStore.nextNode (slotSet s v) := by
-  apply SameView.of_wp
-  intro initial
-  have hn := fun id => ((getNode_sameAipStore id).factor AipStore.nextNode).wp (fun s => s = initial)
-  have hs := fun id n => (setNode_sameNextNode id n).wp (fun s => s = initial)
-  mvcgen [slotSet, hn, hs, invariant, AmbientM.invariant]
+  cases s with
+  | root4 =>
+    exact fun initial => hoare_modify
+      (fun s : AipStore => {s with trie := {s.trie with root4 := v}}) (fun _ h => h)
+  | root6 =>
+    exact fun initial => hoare_modify
+      (fun s : AipStore => {s with trie := {s.trie with root6 := v}}) (fun _ h => h)
+  | child parent bit =>
+    unfold slotSet
+    apply SameView.bind ((getNode_sameAipStore parent).factor AipStore.nextNode)
+    intro node
+    dsimp only
+    split
+    · exact SameView.bind
+        (fun initial => hoare_liftAmbient (AmbientM.invariant "child slot bit beyond bit[2]")
+          (fun s : AipStore => s.nextNode = initial))
+        (fun _ => setNode_sameNextNode parent {node with bit := node.bit.set! bit v})
+    · exact setNode_sameNextNode parent {node with bit := node.bit.set! bit v}
 
 theorem liftAip_sameNode {a : AipM α} (ha : SameView AipStore.nextNode a) :
     SameNode (liftAip a) := by
@@ -86,43 +113,65 @@ theorem liftAip_sameNode {a : AipM α} (ha : SameView AipStore.nextNode a) :
 
 theorem subtree_sameAipStore (nodeId : NodeId) :
     SameView (fun s : AipStore => s) (subtree nodeId) := by
-  apply SameView.of_wp
+  have read : SameView (fun s : AipStore => s) (get : AipM AipStore) := by
+    apply (Leanux.Proofs.WG.Lifetimes.ProjectedAction.iff_run_ambient _ _ _).mpr
+    intro s ambient x v ambient' hr
+    cases hr
+    rfl
   intro initial
-  have hn := fun node => (getNode_sameAipStore node).wp (fun s => s = initial)
-  have hl (α β : Type) := list_view_spec (m := AmbientM) (fun s : AipStore => s)
-    (α := α) (β := β) (fun s => s = initial)
-  mvcgen [-Std.Do.Spec.forIn_list, -Std.Do.Spec.forIn'_list,
-    subtree, hn, hl, invariant, AmbientM.invariant]
-  all_goals try exact ((⇓? _ s => ⌜s = initial⌝) :
-    PostCond _ (.arg AipStore (.arg Ambient (.except Stop .pure))))
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all
+  unfold subtree
+  apply preserves_bind (read initial)
+  intro store
+  simp only [Std.Legacy.Range.forIn_eq_forIn_range']
+  apply preserves_bind
+  · apply list_view_spec id (fun s => s = initial)
+    intro i accumulator
+    split
+    · exact preserves_pure _
+    · apply preserves_bind (getNode_sameAipStore _ initial)
+      intro node
+      apply preserves_bind
+      · apply list_view_spec id (fun s => s = initial)
+        intro child stack
+        split <;> exact preserves_pure _
+      · intro stack
+        exact preserves_pure _
+  · intro result
+    split
+    · exact preserves_pure _
+    · exact hoare_liftAmbient (AmbientM.invariant "the trie walk did not terminate")
+        (fun s : AipStore => s = initial)
 
 theorem removeParentTail_sameNode (parent : NodeId) (sibling : Option NodeId) :
     SameNode (Leanux.Proofs.WG.AllowedIps.removeParentTail parent sibling) := by
-  apply SameView.of_wp
-  intro initial
-  have hn (node : NodeId) :
-      ⦃fun g => ⌜nodeView g = initial⌝⦄ (MonadLift.monadLift (getNode node) : WG.M AipNode)
-      ⦃⇓? _ g => ⌜nodeView g = initial⌝⦄ :=
-    (liftAip_sameNode ((getNode_sameAipStore node).factor AipStore.nextNode)).wp (fun s => s = initial)
-  have hs (node : NodeId) (n : AipNode) :
-      ⦃fun g => ⌜nodeView g = initial⌝⦄ (MonadLift.monadLift (setNode node n) : WG.M Unit)
-      ⦃⇓? _ g => ⌜nodeView g = initial⌝⦄ :=
-    (liftAip_sameNode (setNode_sameNextNode node n)).wp (fun s => s = initial)
-  have hslot (s : Slot) (v : Option NodeId) :
-      ⦃fun g => ⌜nodeView g = initial⌝⦄ (MonadLift.monadLift (slotSet s v) : WG.M Unit)
-      ⦃⇓? _ g => ⌜nodeView g = initial⌝⦄ :=
-    (liftAip_sameNode (slotSet_sameNextNode s v)).wp (fun s => s = initial)
-  have hf (node : NodeId) :
-      ⦃fun g => ⌜nodeView g = initial⌝⦄ (MonadLift.monadLift (freeNode node) : WG.M Unit)
-      ⦃⇓? _ g => ⌜nodeView g = initial⌝⦄ :=
-    (liftAip_sameNode (freeNode_sameNextNode node)).wp (fun s => s = initial)
-  have ha (α : Type) (a : AmbientM α) :
-      ⦃fun g : WGWorld => ⌜nodeView g = initial⌝⦄ (MonadLift.monadLift a : WG.M α)
-      ⦃⇓? _ g => ⌜nodeView g = initial⌝⦄ := hoare_liftAmbient a _
-  mvcgen [-Std.Do.Spec.monadLift_StateT, Leanux.Proofs.WG.AllowedIps.removeParentTail,
-    hn, hs, hslot, hf, branch, ha]
+  have hn (node : NodeId) : SameNode (MonadLift.monadLift (getNode node) : WG.M AipNode) :=
+    liftAip_sameNode ((getNode_sameAipStore node).factor AipStore.nextNode)
+  have hs (node : NodeId) (n : AipNode) : SameNode (MonadLift.monadLift (setNode node n) : WG.M Unit) :=
+    liftAip_sameNode (setNode_sameNextNode node n)
+  have hslot (s : Slot) (v : Option NodeId) : SameNode (MonadLift.monadLift (slotSet s v) : WG.M Unit) :=
+    liftAip_sameNode (slotSet_sameNextNode s v)
+  have hf (node : NodeId) : SameNode (MonadLift.monadLift (freeNode node) : WG.M Unit) :=
+    liftAip_sameNode (freeNode_sameNextNode node)
+  unfold Leanux.Proofs.WG.AllowedIps.removeParentTail
+  apply SameView.bind (hn parent)
+  intro pn
+  have finish : SameNode (do
+      slotSet pn.parent sibling
+      freeNode parent
+      pure (.yield ()) : WG.M (ForInStep Unit)) :=
+    SameView.bind (hslot pn.parent sibling) (fun _ =>
+      SameView.bind (hf parent) (fun _ => SameView.pure _ _))
+  apply SameView.bind (fun initial => hoare_liftAmbient
+    (AmbientM.branch .removeSiblingExists sibling.isSome) (fun g => nodeView g = initial))
+  intro siblingExists
+  dsimp only
+  split
+  · split
+    · apply SameView.bind (hn _)
+      intro child
+      exact SameView.bind (hs _ {child with parent := pn.parent}) (fun _ => finish)
+    · exact finish
+  · exact finish
 
 /- Head-only composition for the removal suffix. Each actual shared
 continuation receives one checked frame proof before its uses are discharged. -/

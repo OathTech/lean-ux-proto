@@ -388,7 +388,7 @@ private theorem checkpointOperation_erases (project : Nat → World → α)
     | checkpoint_intro_forall
     | checkpoint_head_reduce
     | (checkpoint_head_match <;> try simp_all only
-        [reduceCtorEq, Except.ok.injEq, Except.error.injEq, Option.some.injEq, Prod.mk.injEq])
+        [])
     | rfl
 
 /-- Forgetting only checkpoint observations recovers the full original

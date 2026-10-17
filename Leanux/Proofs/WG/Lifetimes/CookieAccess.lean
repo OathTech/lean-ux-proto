@@ -156,7 +156,7 @@ theorem cookieMessageConsumePrefix_preserves_product (c : ProductAmbientContract
     intro initial
     exact hoare_liftAmbient (AmbientM.invariant why) (fun w => wgStoreView w = initial)
   unfold cookieMessageConsumePrefix
-  simp only [liftWGObserver_bind, liftWGObserver_pure]
+  simp only [liftWGObserver_bind]
   repeat' first
     | with_reducible exact indexLookupPrefix_preserves_product c _ _
     | with_reducible exact ProductAmbientContracts.drop (c.getPeer_frame (fun _ => True) _)

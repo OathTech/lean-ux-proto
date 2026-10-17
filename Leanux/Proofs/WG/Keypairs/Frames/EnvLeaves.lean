@@ -37,31 +37,35 @@ theorem excluded_spec (P : Snapshot → Prop) (row : String) :
 
 theorem reply4_ordinary (dst : Nat) (bytes : List UInt8) :
     ProductOrdinaryAction (Leanux.Env.Stack.reply4 dst bytes) := by
-  apply (ordinaryAction_iff_wp _).mpr
-  intro P hp
-  have ha := fun α (a : AmbientM α) => Framing.productAmbient_spec a
-    (fun w => P (snapshot w.wg)) (fun _ _ h => h)
-  have hd := (Framing.sameView_liftWG (fun w => snapshot w.wg) snapshot getDev
-    getDev_sameSnapshot (fun _ _ _ h => h)).wp P
-  have hr (src dst : Nat) :
-      ⦃fun w : World => ⌜P (snapshot w.wg)⌝⦄
-        (MonadLift.monadLift (MonadLift.monadLift (Net.routeOutput4 src dst) : WG.M _) : Leanux.M _)
-      ⦃⇓? _ w => ⌜P (snapshot w.wg)⌝⦄ :=
-    (productStore_snapshot (Framing.liftWG_sameProductStore _ (Framing.liftRouting_sameWGStore _))).wp P
-  have hn (index : Nat) :
-      ⦃fun w : World => ⌜P (snapshot w.wg)⌝⦄
-        (MonadLift.monadLift (MonadLift.monadLift (Net.neighbourClassify index) : WG.M _) : Leanux.M _)
-      ⦃⇓? _ w => ⌜P (snapshot w.wg)⌝⦄ :=
-    (productStore_snapshot (Framing.liftWG_sameProductStore _ (Framing.liftRouting_sameWGStore _))).wp P
-  have hx (f a : Nat) (ps : List Packet) (mtu : Nat) :
-      ⦃fun w : World => ⌜P (snapshot w.wg)⌝⦄
-        (MonadLift.monadLift (wgXmit f a ps mtu) : Leanux.M _)
-      ⦃⇓? _ w => ⌜P (snapshot w.wg)⌝⦄ :=
-    Lifetimes.ProjectedAction.wp (OrdinaryAction.liftWG (wgXmit_ordinary f a ps mtu)) P hp
-  have discardSpec := Framing.discard_view_spec (α := Int) (m := Except Stop) (fun w : World => snapshot w.wg) P
-  unfold Framing.Hoare at ha
-  mvcgen [-Std.Do.Spec.monadLift_StateT, Leanux.Env.Stack.reply4,
-    skipCut, hd, hr, hn, hx, ha, unsupported, discardSpec]
+  have ambient {α : Type} (a : AmbientM α) :
+      ProductOrdinaryAction (monadLift a : Leanux.M α) :=
+    SameView.ordinary (fun initial => Framing.productAmbient_spec a
+      (fun w => snapshot w.wg = initial) (fun _ _ h => h))
+  have device : ProductOrdinaryAction (monadLift getDev : Leanux.M Device) :=
+    OrdinaryAction.liftWG (SameView.ordinary getDev_sameSnapshot)
+  have route {α : Type} (a : Net.M α) : ProductOrdinaryAction
+      (monadLift a : Leanux.M α) :=
+    SameView.ordinary (productStore_snapshot
+      (Framing.liftWG_sameProductStore _ (Framing.liftRouting_sameWGStore a)))
+  have xmit (f a : Nat) (ps : List Packet) (mtu : Nat) :
+      ProductOrdinaryAction (monadLift (wgXmit f a ps mtu) : Leanux.M Int) :=
+    OrdinaryAction.liftWG (wgXmit_ordinary f a ps mtu)
+  unfold ProductOrdinaryAction
+  unfold Leanux.Env.Stack.reply4
+  repeat' first
+    | env_operation_fact xmit
+    | env_operation_fact device
+    | env_operation_fact route
+    | (ordinary_head Leanux.skipCut; exact ambient _)
+    | (ordinary_head Leanux.unsupported; exact ambient _)
+    | (ordinary_head liftM; unfold liftM)
+    | (ordinary_head Functor.discard; apply ordinary_discard)
+    | (ordinary_head Pure.pure; exact SameView.ordinary (Framing.SameView.pure _ _))
+    | (ordinary_head Bind.bind; refine ordinary_bind ?_ ?_)
+    | (ordinary_head ite; refine ordinary_ite _ ?_ ?_)
+    | keypairs_intro_forall
+    | ordinary_head_reduce
+    | ordinary_head_match
 
 theorem reply4_spec (P : Snapshot → Prop) (hp : Stable P) (dst : Nat) (bytes : List UInt8) :
     ⦃fun w => ⌜P (snapshot w.wg)⌝⦄ (Leanux.Env.Stack.reply4 dst bytes)
@@ -114,7 +118,7 @@ theorem receive4_ordinary (pkt : List UInt8) : ProductOrdinaryAction (Leanux.Env
     apply (Lifetimes.ProjectedAction.iff_run _ _ _).mpr
     intro w x v hr
     obtain ⟨e, he⟩ := failure w
-    simp only [StateT.run_bind, he, Except.bind] at hr
+    simp only [StateT.run_bind, he] at hr
     contradiction
   have excluded := fun row tail => stopped (Leanux.Env.Stack.excluded row)
     (Framing.stackExcluded_failure row) tail
@@ -165,15 +169,15 @@ theorem receive6_spec (P : Snapshot → Prop) (pkt : List UInt8) :
     ⦃⇓? _ w => ⌜P (snapshot w.wg)⌝⦄ := (receive6_sameSnapshot pkt).wp P
 
 theorem receive_ordinary (pkt : List UInt8) : ProductOrdinaryAction (Leanux.Env.Stack.receive pkt) := by
-  apply (ordinaryAction_iff_wp _).mpr
-  intro P hp
-  have six := receive6_spec P
-  have four := receive4_spec P hp
-  have ha := fun α (a : AmbientM α) => Framing.productAmbient_spec a
-    (fun w => P (snapshot w.wg)) (fun _ _ h => h)
-  unfold Framing.Hoare at ha
-  mvcgen [-Std.Do.Spec.monadLift_StateT, Leanux.Env.Stack.receive, six, four, ha, invariant]
-  all_goals try trivial
+  unfold ProductOrdinaryAction
+  unfold Leanux.Env.Stack.receive
+  refine ordinary_ite _ (fun _ => receive4_ordinary pkt) ?_
+  intro _
+  refine ordinary_ite _ (fun _ => SameView.ordinary (receive6_sameSnapshot pkt)) ?_
+  intro _
+  apply SameView.ordinary
+  exact fun initial => Framing.productAmbient_spec (AmbientM.invariant _)
+    (fun w => snapshot w.wg = initial) (fun _ _ h => h)
 
 theorem receive_spec (P : Snapshot → Prop) (hp : Stable P) (pkt : List UInt8) :
     ⦃fun w => ⌜P (snapshot w.wg)⌝⦄ (Leanux.Env.Stack.receive pkt)

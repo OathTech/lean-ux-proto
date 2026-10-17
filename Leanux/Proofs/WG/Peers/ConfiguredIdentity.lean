@@ -54,7 +54,7 @@ def State.put (s : State) (pid : PeerId) (p : Option Cell) : State :=
   {s with peers:=fun q=>if pid=q then p else s.peers q}
 
 theorem State.InvExcept.put_same (hi : s.InvExcept pending) (hp : s.peers pid=some old)
-    (stamp : p.stamp=old.stamp) (key : p.static=old.static) (word : Self p.word pid)
+    (_stamp : p.stamp=old.stamp) (key : p.static=old.static) (word : Self p.word pid)
     (live : p.dead=false → old.dead=false) : (s.put pid (some p)).InvExcept pending := by
   constructor
   · intro q x hx; by_cases he:pid=q
@@ -359,7 +359,7 @@ theorem publishRow_effect (pid : PeerId) (key : Key) (w v : WGWorld) (ambient am
     (hr : ((publishRow pid key).run w).run ambient=.ok (((),v),ambient')) :
     view v=(view w).map (fun s=>s.insertRow key pid) := by
   cases hr
-  simp only [view,publishRow,modifyDev,Option.map_map,Function.comp_def]
+  simp only [view,Option.map_map,Function.comp_def]
   rfl
 
 theorem publishRow_spec (pid : PeerId) (key : Key) :
@@ -444,7 +444,7 @@ theorem index {S α : Type} {m : Type → Type} {ps : PostShape}
         {d with indexTable := []}}) a) :
     SameView (fun s => view (project s)) a :=
   ha.of_factor (fun k : WGStoreView => k.dev.map state) (fun s => view (project s))
-    (fun s => by cases h : (project s).dev <;> simp [view,wgStoreView,h,state])
+    (fun s => by cases h : (project s).dev <;> simp [view,h,state])
 
 theorem getKeypair_view (id : KeypairId) : SameView view (getKeypair id) := by
   apply SameView.of_wp; intro s
@@ -485,7 +485,7 @@ theorem modifyPeer_view (pid : PeerId) (f : Peer→Peer) (hf : ∀p,cell (f p)=c
   change ⦃fun w => ⌜view w = s⌝⦄ (do setPeer pid (f (← getPeer pid))) ⦃⇓? _ w => ⌜view w = s⌝⦄
   mvcgen [hg,hs]
   all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [hf]
+  all_goals simp_all []
   all_goals grind only
 
 theorem addNewKeypair_view (pid : PeerId) (kp : KeypairId) : SameView view (addNewKeypair pid kp) := by
@@ -529,7 +529,7 @@ theorem peerPut_preserves (peer : Option PeerId) :
     cases hr
     intro s he
     cases hd:w.dev with
-    | none=>simp [view,modifyDev,hd] at he
+    | none=>simp [view,hd] at he
     | some d=>
       have h := hw (state d) (by simp [view,hd])
       have eq : s=state {d with txDropped:=d.txDropped+dropped,peers:=d.peers.erase pid} := by

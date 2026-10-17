@@ -28,14 +28,14 @@ private theorem bind_congr (a : Leanux.M α) (f g : α → Leanux.M β) (h : ∀
 
 theorem stepSource_eq (softirq irq : Leanux.M Unit) : stepSource softirq irq = decryptStep softirq irq := by
   unfold stepSource pollSource decryptStep
-  simp only [liftWG_bind, liftWG_pure, bind_assoc, pure_bind]
+  simp only [liftWG_bind, bind_assoc]
   apply bind_congr
   intro _
   apply bind_congr
   intro d
   cases hc : d.decryptQueue.consume with
   | mk item ring =>
-    cases item <;> simp only [bind_assoc, pure_bind]
+    cases item <;> simp only []
     all_goals
       repeat' first
         | rfl

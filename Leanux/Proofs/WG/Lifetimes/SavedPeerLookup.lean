@@ -15,7 +15,7 @@ theorem savedPeerLookup_run (peers : Std.TreeMap PeerId Peer) (pid : PeerId) (w 
     runStatePrefix (savedPeerLookup peers pid) w ambient h =
       (.ok ((peers[pid]?, w), ambient), h ++ (peers[pid]?).toList.map (fun p => .peer (.read pid p.internalId))) := by
   unfold savedPeerLookup
-  cases hp : peers[pid]? <;> simp [-bind_pure_comp, hp, savedPeerRead, map_eq_pure_bind, runStatePrefix_bind, runStatePrefix_emit]
+  cases hp : peers[pid]? <;> simp [-bind_pure_comp, savedPeerRead, runStatePrefix_bind, runStatePrefix_emit]
 
 theorem savedPeerLookup_erases (peers : Std.TreeMap PeerId Peer) (pid : PeerId) :
     ErasesStatePrefix (savedPeerLookup peers pid) (pure peers[pid]?) := by
@@ -55,7 +55,7 @@ theorem savedPeerLookupFlatMap_run (peers : Std.TreeMap PeerId Peer)
         h ++ ids.flatMap (fun pid => (peers[pid]?).toList.map (fun p => .peer (.read pid p.internalId)))) := by
   induction ids generalizing h with
   | nil => simp [savedPeerLookupFlatMap]
-  | cons pid ids ih => simp [-bind_pure_comp, savedPeerLookupFlatMap, map_eq_pure_bind, runStatePrefix_bind, runStatePrefix_emit, savedPeerLookup_run, ih, List.append_assoc]
+  | cons pid ids ih => simp [-bind_pure_comp, savedPeerLookupFlatMap, runStatePrefix_bind, savedPeerLookup_run, ih, List.append_assoc]
 
 theorem savedPeerLookupFlatMap_erases (peers : Std.TreeMap PeerId Peer)
     (f : PeerId → Peer → List α) (ids : List PeerId) :

@@ -19,7 +19,7 @@ theorem removeKeypairIndex_identity (id : KeypairId) : SameView identityView (re
   intro w d table hi hd
   have he : identityView {w with dev := some {d with indexTable := table}} = identityView w := by
     unfold identityView Peers.snapshot keypairResidents packetResidents
-    simp only [hd, Option.bind_some, Option.map_some]
+    simp only [hd, Option.bind_some]
   exact he.trans hi
 
 /-- Both original unhash sites first resolve the owner's peer word. -/
@@ -242,13 +242,12 @@ def keypairPutEvents (kp : Option KeypairId) (now : Bool) (w : WGWorld) : List L
 theorem keypairGetPrefix_events (kp : Option KeypairId) (w : WGWorld) (ambient : Ambient) (h : List LifetimeEvent) :
     (runStatePrefix (keypairGetPrefix kp) w ambient h).2 = h ++ keypairGetEvents kp w := by
   cases kp with
-  | none => simp [keypairGetPrefix, keypairGetEvents, runStatePrefix_bind, liftWGPrefix, branch, AmbientM.branch,
-      StateT.run_bind, StateT.run_pure] <;> rfl
+  | none => simp [keypairGetPrefix, keypairGetEvents, runStatePrefix_bind, liftWGPrefix, branch, AmbientM.branch] <;> rfl
   | some i =>
     cases hd : w.dev with
     | none => simp [keypairGetPrefix, keypairGetEvents, runStatePrefix_bind, branch,
         getKeypair, getDev, hd, invariant, AmbientM.invariant, AmbientM.branch,
-        liftWGPrefix, StateT.run_bind, StateT.run_pure] <;> rfl
+        liftWGPrefix, StateT.run_bind] <;> rfl
     | some d =>
       cases hk : d.keypairs[i]? with
       | none => simp [keypairGetPrefix, keypairGetEvents, runStatePrefix_bind, branch,
@@ -273,13 +272,12 @@ theorem keypairPutPrefix_events (kp : Option KeypairId) (now : Bool)
     (w : WGWorld) (ambient : Ambient) (h : List LifetimeEvent) :
     (runStatePrefix (keypairPutPrefix kp now) w ambient h).2 = h ++ keypairPutEvents kp now w := by
   cases kp with
-  | none => simp [keypairPutPrefix, keypairPutEvents, runStatePrefix_bind, liftWGPrefix, branch, AmbientM.branch,
-      StateT.run_bind, StateT.run_pure] <;> rfl
+  | none => simp [keypairPutPrefix, keypairPutEvents, runStatePrefix_bind, liftWGPrefix, branch, AmbientM.branch] <;> rfl
   | some i =>
     cases hd : w.dev with
     | none => simp [keypairPutPrefix, keypairPutEvents, runStatePrefix_bind, branch,
         getKeypair, getDev, hd, invariant, AmbientM.invariant, AmbientM.branch,
-        liftWGPrefix, StateT.run_bind, StateT.run_pure] <;> rfl
+        liftWGPrefix, StateT.run_bind] <;> rfl
     | some d =>
       cases hk : d.keypairs[i]? with
       | none => simp [keypairPutPrefix, keypairPutEvents, runStatePrefix_bind, branch,
@@ -292,7 +290,7 @@ theorem keypairPutPrefix_events (kp : Option KeypairId) (now : Bool)
           peerDerefPrefix, peerWordPrefix, runStatePrefix_bind, branch, branchCmp,
           getKeypair, getDev, hd, hk, hp, hz, ho, Nat.pos_iff_ne_zero, refcountDecAndTest, unsupported,
           setKeypair, modifyDev, removeKeypairIndex, indexRemove_eq, indexUnhash,
-          Std.TreeMap.getElem?_insert, List.append_assoc, liftWGPrefix, liftM, monadLift, MonadLift.monadLift, liftIndex,
+          List.append_assoc, liftWGPrefix, liftM, monadLift, MonadLift.monadLift, liftIndex,
           AmbientM.branch, AmbientM.branchCmp, AmbientM.unsupported,
           StateT.run_bind, StateT.run_get, StateT.run_pure] <;> rfl
 
@@ -328,7 +326,7 @@ theorem keypairPutPrefix_zero_failure (id : KeypairId) (now : Bool)
     simp [keypairPut, keypairPutEvents, IndexOwner.peerDeref, IndexOwner.peerWord,
       branch, branchCmp, getKeypair, getDev, hd, hk, hp, hz, setKeypair,
       modifyDev, refcountDecAndTest, unsupported, indexRemove_eq, indexUnhash,
-      List.append_assoc, liftM, monadLift, MonadLift.monadLift, liftIndex, AmbientM.branch, AmbientM.branchCmp,
+      liftM, monadLift, MonadLift.monadLift, liftIndex, AmbientM.branch, AmbientM.branchCmp,
       AmbientM.unsupported, StateT.run_bind, StateT.run_get, StateT.run_pure] <;> rfl
 
 /-- A raw last-reference call with a NULL peer word stops after the decrement
@@ -348,7 +346,7 @@ theorem keypairPutPrefix_null_last_failure (id : KeypairId)
   simp [keypairPut, keypairPutEvents, IndexOwner.peerDeref, IndexOwner.peerWord,
     branch, branchCmp, getKeypair, getDev, hd, hk, hp, hc, setKeypair,
     modifyDev, refcountDecAndTest, unsupported, indexRemove_eq, indexUnhash,
-    Std.TreeMap.getElem?_insert, List.append_assoc, liftWGPrefix, liftM, monadLift, MonadLift.monadLift, liftIndex,
+    liftM, monadLift, MonadLift.monadLift, liftIndex,
           AmbientM.branch, AmbientM.branchCmp, AmbientM.unsupported,
           StateT.run_bind, StateT.run_get, StateT.run_pure] <;> rfl
 

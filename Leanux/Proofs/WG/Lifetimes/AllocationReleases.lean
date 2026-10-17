@@ -76,7 +76,7 @@ theorem keypairPut_origin (kp : Option KeypairId) (now : Bool) (w : WGWorld) (am
           rw [hk]; rfl
     cases now <;> cases hp : k.peer <;> by_cases hc : k.refcount = 1
     all_goals constructor
-    all_goals simp [hp, hc, ReleasedFrom, List.filterMap_append, List.filterMap_cons,
+    all_goals simp [hp, hc, ReleasedFrom, List.filterMap_cons,
       List.filterMap_nil, LifetimeEvent.peer?, LifetimeEvent.keypair?,
       LifetimeEvent.packet?, AccessEvent.Released]
     all_goals exact ⟨i, live⟩

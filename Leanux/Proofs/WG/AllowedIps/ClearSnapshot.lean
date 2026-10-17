@@ -18,7 +18,7 @@ theorem NodesFrom.erase (h : NodesFrom original current) (id : NodeId) :
     NodesFrom original (current.erase id) := by
   intro q n hn
   by_cases he : id = q
-  · simp [Std.TreeMap.getElem?_erase, he] at hn
+  · simp [he] at hn
   · exact h q n (by simpa [Std.TreeMap.getElem?_erase, he] using hn)
 
 def Progress (nodes : Std.TreeMap Nat AipNode) (P : PeerId → NodeId → Prop)

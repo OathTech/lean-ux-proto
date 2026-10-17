@@ -89,7 +89,7 @@ theorem expireCurrentPeerKeypairsPrefix_erases (pid : PeerId) :
   apply erasesStatePrefix_bind (getPeerMixed_erases _)
   intro p
   simp only [invalidateSendingPrefix, bind_assoc]
-  cases hn : p.keypairNext <;> cases hc : p.keypairCurrent <;> simp only [hn, hc]
+  cases hn : p.keypairNext <;> cases hc : p.keypairCurrent <;> simp only []
   all_goals
     repeat' first
       | with_reducible exact getKeypairPrefix_erases _

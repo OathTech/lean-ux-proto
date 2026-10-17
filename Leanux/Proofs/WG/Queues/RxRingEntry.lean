@@ -144,12 +144,12 @@ def consume (msg : List UInt8) (src : SkbSource) (ds : Nat) : Obs Unit := do
 theorem consume_erases (msg : List UInt8) (src : SkbSource) (ds : Nat) :
     ErasesPrefix (consume msg src ds) (liftWG (consumeData msg src ds)) := by
   unfold consume consumeData
-  simp only [liftWG_bind, liftWG_pure, pure_bind, apply_ite]
+  simp only [liftWG_bind, pure_bind]
   apply erasesPrefix_bind (erasesPrefix_lift _)
   intro entry
   cases entry with
   | none =>
-    simp only [liftWG_bind, liftWG_pure, pure_bind, apply_ite]
+    simp only [liftWG_bind, liftWG_pure, apply_ite]
     apply erasesPrefix_bind (erasesPrefix_lift _)
     intro _
     try simp only [liftWG_bind, liftWG_pure, pure_bind, Option.map_none, apply_ite]
@@ -165,7 +165,7 @@ theorem consume_erases (msg : List UInt8) (src : SkbSource) (ds : Nat) :
       intro w h
       rfl
     | keypair key =>
-      try simp only [liftWG_bind, liftWG_pure, pure_bind, apply_ite]
+      try simp only [liftWG_bind, liftWG_pure, apply_ite]
       apply erasesPrefix_bind (erasesPrefix_lift _)
       intro kp
       apply erasesPrefix_bind (erasesPrefix_lift _)
@@ -175,7 +175,7 @@ theorem consume_erases (msg : List UInt8) (src : SkbSource) (ds : Nat) :
       · cases kp with
         | none => exact erasesPrefix_lift _
         | some id =>
-          simp only [liftWG_bind, liftWG_pure, pure_bind, apply_ite]
+          simp only [liftWG_bind, liftWG_pure, apply_ite]
           apply erasesPrefix_bind (erasesPrefix_lift _)
           intro p
           apply erasesPrefix_bind (erasesPrefix_lift _)

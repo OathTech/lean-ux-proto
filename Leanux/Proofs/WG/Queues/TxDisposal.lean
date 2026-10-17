@@ -19,7 +19,7 @@ theorem freeList_nil : freeList [] = pure () := rfl
 
 theorem freeList_cons (id : SkbId) (rest : List SkbId) :
     freeList (id :: rest) = (do freeTxSkb id; freeList rest) := by
-  simp [freeList, List.forIn_cons, bind_assoc]
+  simp [freeList]
 
 theorem free_packet_wp (id : SkbId) (before : SkbId → Option DataPacket) :
     ⦃fun w => ⌜txPackets w = before⌝⦄ freeTxSkb id
@@ -40,7 +40,7 @@ theorem free_packet_wp (id : SkbId) (before : SkbId → Option DataPacket) :
       cases hr
       subst before
       funext j
-      simp [txPackets, Packets.update, Lifetimes.erasePacketDevice, hd,
+      simp [txPackets, Packets.update, hd,
         Std.TreeMap.getElem?_erase]
 
 
@@ -120,7 +120,7 @@ theorem dispose_packets (pid : PeerId) (item : List SkbId) (key : KeypairId) :
       freeList item
       keypairPut (some key) false
       peerPut (some pid)
-      pure true) := by simp [disposeSource, freeList, bind_assoc]
+      pure true) := by simp [disposeSource, freeList]
   rw [he]
   have hk := (keyPut_packets (some key) false).wp (fun s => ∀ id ∈ item, s id = none)
   have hp := (peerPut_packets (some pid)).wp (fun s => ∀ id ∈ item, s id = none)
@@ -157,7 +157,7 @@ theorem createSource_factor (pid : PeerId) (item : List SkbId) : createData pid 
         if ← branch .createDataEpipe (ret == -WG.EPIPE) then enqueuePerPeerTx item .dead
         pure ret
     createTailSource pid item first ret) := by
-  simp only [createData, createTailSource, cleanupSource, freeList, bind_assoc]
+  simp only [createData, createTailSource, cleanupSource, freeList]
   rfl
 
 theorem enqueue_full (pid : PeerId) (item : List SkbId) (q : PrevQueue (List SkbId))
@@ -193,6 +193,6 @@ theorem create_noSpace (pid : PeerId) (item : List SkbId) (q : PrevQueue (List S
   mvcgen [createTailSource, he, cleanup_absent, getPeer, getDev, branch, invariant, AmbientM.branch, AmbientM.invariant]
   all_goals unfold txQueues at *
   all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [wgStoreView, PeerBorrow.resident, EPIPE, ENOSPC, WG.EPIPE, WG.ENOSPC]
+  all_goals simp_all [wgStoreView, PeerBorrow.resident, WG.EPIPE, WG.ENOSPC]
 
 end Leanux.Proofs.WG.Queues.TxDisposition

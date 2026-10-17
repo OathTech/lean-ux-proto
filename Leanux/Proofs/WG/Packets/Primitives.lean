@@ -186,7 +186,7 @@ theorem newTxSkb_contract (p : DataPacket) : Action Inv Step (newTxSkb p) := by
   apply (Action.iff_run_ambient _ _ _).mpr
   intro w ambient x w' ambient' hi hr
   cases hd : w.dev with
-  | none => simp [newTxSkb, liftSkb_run, SkbStore.newTx, hd, invariant, AmbientM.invariant] at hr
+  | none => simp [newTxSkb, liftSkb_run, SkbStore.newTx, hd] at hr
   | some d =>
     rw [newTxSkb_run w ambient d p hd] at hr
     cases hr
@@ -223,11 +223,11 @@ theorem setTxSkb_contract (i : SkbId) (f : DataPacket → DataPacket) :
   apply (Action.iff_run_ambient _ _ _).mpr
   intro w ambient x w' ambient' hi hr
   cases hd : w.dev with
-  | none => simp [setTxSkb, SkbStore.setTx, getTxSkb, liftSkb_run, SkbStore.getTx, hd, invariant, AmbientM.invariant] at hr
+  | none => simp [setTxSkb, SkbStore.setTx, liftSkb_run, SkbStore.getTx, hd, invariant, AmbientM.invariant] at hr
   | some d =>
     cases hp : d.txSkbs[i]? with
     | none =>
-      simp [setTxSkb, SkbStore.setTx, getTxSkb, liftSkb_run, SkbStore.getTx, hd, hp, invariant, AmbientM.invariant] at hr
+      simp [setTxSkb, SkbStore.setTx, liftSkb_run, SkbStore.getTx, hd, hp, invariant, AmbientM.invariant] at hr
       cases hr
     | some old =>
       rw [setTxSkb_run w ambient d i old f hd hp] at hr
@@ -242,11 +242,11 @@ theorem freeTxSkb_contract (i : SkbId) : Action Inv Step (freeTxSkb i) := by
   apply (Action.iff_run_ambient _ _ _).mpr
   intro w ambient x w' ambient' hi hr
   cases hd : w.dev with
-  | none => simp [freeTxSkb, SkbStore.freeTx, getTxSkb, liftSkb_run, SkbStore.getTx, hd, invariant, AmbientM.invariant] at hr
+  | none => simp [freeTxSkb, SkbStore.freeTx, liftSkb_run, SkbStore.getTx, hd, invariant, AmbientM.invariant] at hr
   | some d =>
     cases hp : d.txSkbs[i]? with
     | none =>
-      simp [freeTxSkb, SkbStore.freeTx, getTxSkb, liftSkb_run, SkbStore.getTx, hd, hp, invariant, AmbientM.invariant] at hr
+      simp [freeTxSkb, SkbStore.freeTx, liftSkb_run, SkbStore.getTx, hd, hp, invariant, AmbientM.invariant] at hr
       cases hr
     | some old =>
       rw [freeTxSkb_run w ambient d i old hd hp] at hr
@@ -261,7 +261,7 @@ theorem newRxSkb_contract (p : RxPacket) : Action Inv Step (newRxSkb p) := by
   apply (Action.iff_run_ambient _ _ _).mpr
   intro w ambient x w' ambient' hi hr
   cases hd : w.dev with
-  | none => simp [newRxSkb, liftSkb_run, SkbStore.newRx, hd, invariant, AmbientM.invariant] at hr
+  | none => simp [newRxSkb, liftSkb_run, SkbStore.newRx, hd] at hr
   | some d =>
     rw [newRxSkb_run w ambient d p hd] at hr
     cases hr
@@ -298,11 +298,11 @@ theorem setRxSkb_contract (i : SkbId) (f : RxPacket → RxPacket) :
   apply (Action.iff_run_ambient _ _ _).mpr
   intro w ambient x w' ambient' hi hr
   cases hd : w.dev with
-  | none => simp [setRxSkb, SkbStore.setRx, getRxSkb, liftSkb_run, SkbStore.getRx, hd, invariant, AmbientM.invariant] at hr
+  | none => simp [setRxSkb, SkbStore.setRx, liftSkb_run, SkbStore.getRx, hd, invariant, AmbientM.invariant] at hr
   | some d =>
     cases hp : d.rxSkbs[i]? with
     | none =>
-      simp [setRxSkb, SkbStore.setRx, getRxSkb, liftSkb_run, SkbStore.getRx, hd, hp, invariant, AmbientM.invariant] at hr
+      simp [setRxSkb, SkbStore.setRx, liftSkb_run, SkbStore.getRx, hd, hp, invariant, AmbientM.invariant] at hr
       cases hr
     | some old =>
       rw [setRxSkb_run w ambient d i old f hd hp] at hr
@@ -317,11 +317,11 @@ theorem freeRxSkb_contract (i : SkbId) : Action Inv Step (freeRxSkb i) := by
   apply (Action.iff_run_ambient _ _ _).mpr
   intro w ambient x w' ambient' hi hr
   cases hd : w.dev with
-  | none => simp [freeRxSkb, SkbStore.freeRx, getRxSkb, liftSkb_run, SkbStore.getRx, hd, invariant, AmbientM.invariant] at hr
+  | none => simp [freeRxSkb, SkbStore.freeRx, liftSkb_run, SkbStore.getRx, hd, invariant, AmbientM.invariant] at hr
   | some d =>
     cases hp : d.rxSkbs[i]? with
     | none =>
-      simp [freeRxSkb, SkbStore.freeRx, getRxSkb, liftSkb_run, SkbStore.getRx, hd, hp, invariant, AmbientM.invariant] at hr
+      simp [freeRxSkb, SkbStore.freeRx, liftSkb_run, SkbStore.getRx, hd, hp, invariant, AmbientM.invariant] at hr
       cases hr
     | some old =>
       rw [freeRxSkb_run w ambient d i old hd hp] at hr
@@ -384,11 +384,11 @@ theorem freeTxSkb_facts (i : SkbId) (w v : WGWorld)
   have hv := ((Action.iff_run_ambient _ _ _).mp (freeTxSkb_contract i)
     w ambient () v ambient' hi hr).1
   cases hd : w.dev with
-  | none => simp [freeTxSkb, SkbStore.freeTx, getTxSkb, liftSkb_run, SkbStore.getTx, hd, invariant, AmbientM.invariant] at hr
+  | none => simp [freeTxSkb, SkbStore.freeTx, liftSkb_run, SkbStore.getTx, hd, invariant, AmbientM.invariant] at hr
   | some d =>
     cases hp : d.txSkbs[i]? with
     | none =>
-      simp [freeTxSkb, SkbStore.freeTx, getTxSkb, liftSkb_run, SkbStore.getTx, hd, hp, invariant, AmbientM.invariant] at hr
+      simp [freeTxSkb, SkbStore.freeTx, liftSkb_run, SkbStore.getTx, hd, hp, invariant, AmbientM.invariant] at hr
       cases hr
     | some p =>
       have hb := hi (.inl i) (i + 1) (by simp [snapshot, deviceStore, hd, hp])
@@ -404,11 +404,11 @@ theorem freeRxSkb_facts (i : SkbId) (w v : WGWorld)
   have hv := ((Action.iff_run_ambient _ _ _).mp (freeRxSkb_contract i)
     w ambient () v ambient' hi hr).1
   cases hd : w.dev with
-  | none => simp [freeRxSkb, SkbStore.freeRx, getRxSkb, liftSkb_run, SkbStore.getRx, hd, invariant, AmbientM.invariant] at hr
+  | none => simp [freeRxSkb, SkbStore.freeRx, liftSkb_run, SkbStore.getRx, hd, invariant, AmbientM.invariant] at hr
   | some d =>
     cases hp : d.rxSkbs[i]? with
     | none =>
-      simp [freeRxSkb, SkbStore.freeRx, getRxSkb, liftSkb_run, SkbStore.getRx, hd, hp, invariant, AmbientM.invariant] at hr
+      simp [freeRxSkb, SkbStore.freeRx, liftSkb_run, SkbStore.getRx, hd, hp, invariant, AmbientM.invariant] at hr
       cases hr
     | some p =>
       have hb := hi (.inr i) (i + 1) (by simp [snapshot, deviceStore, hd, hp])

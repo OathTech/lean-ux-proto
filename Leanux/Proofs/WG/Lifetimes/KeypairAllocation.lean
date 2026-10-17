@@ -211,7 +211,7 @@ theorem keypairCreatePrefix_observation (pid : Option PeerId) (w : WGWorld)
       w ambient ok v ambient' rfl ha
     subst v
     cases ok <;>
-      simp [branch, StateT.run_monadLift, monadLift_self, StateT.run_bind,
+      simp [branch, StateT.run_monadLift, monadLift_self,
         keypairCreateCore_run, keyAllocationWorld]
     rw [map_eq_pure_bind, runStatePrefix_bind, keypairCreateCorePrefix_run, keypairCreateCore_run]
     cases w.dev <;> simp [keyAllocationWorld]

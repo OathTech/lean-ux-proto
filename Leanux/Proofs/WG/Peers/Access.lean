@@ -103,7 +103,7 @@ theorem peerPutPrefix_erases (peer : Option PeerId) :
     | exact erasesStatePrefix_pure _
     | intro x
     | split
-  all_goals simp_all [liftWGPrefix, liftStatePrefix, StateT.run, runPrefix_lift, runPrefix_pure]
+  all_goals simp_all [liftWGPrefix, liftStatePrefix, StateT.run, runPrefix_lift]
   all_goals rfl
 
 theorem wgGetDeviceDonePrefix_erases (ctx : DumpCtx) :
@@ -129,14 +129,14 @@ theorem peerPutPrefix_events (peer : Option PeerId) (w : WGWorld) (ambient : Amb
   cases peer with
   | none =>
     simp [peerPutPrefix, peerPutEvents, runStatePrefix_bind, liftWGPrefix,
-      branch, AmbientM.branch, StateT.run_bind, StateT.run_modify, StateT.run_pure] <;> rfl
+      branch, AmbientM.branch, StateT.run_modify] <;> rfl
   | some pid =>
     cases hd : w.dev with
     | none =>
       simp [peerPutPrefix, peerPutEvents, requireNotPendingPrefix,
         runStatePrefix_bind, liftWGPrefix, getPeer, getDev, hd,
         branch, AmbientM.branch, invariant, AmbientM.invariant,
-        StateT.run_bind, StateT.run_modify, StateT.run_pure] <;> rfl
+        StateT.run_bind, StateT.run_modify] <;> rfl
     | some d =>
       cases hp : d.peers[pid]? with
       | none =>
@@ -286,9 +286,9 @@ theorem peerPut_release_snapshot (pid : PeerId) (w w' : WGWorld) (ambient ambien
        by_cases hj : pid = j
        · subst j
          simp_all [snapshot, Store.put, Std.TreeMap.getElem?_erase,
-           Std.TreeMap.getElem?_insert, Std.LawfulEqOrd.compare_eq_iff_eq]
+           Std.TreeMap.getElem?_insert]
        · simp_all [snapshot, Store.put, Std.TreeMap.getElem?_erase,
-           Std.TreeMap.getElem?_insert, Std.LawfulEqOrd.compare_eq_iff_eq, Ne.symm hj])
+           Std.TreeMap.getElem?_insert, Ne.symm hj])
   exact (hoare_iff_run_ambient _ _ _).mp full w ambient () w' ambient' rfl hr
 
 theorem peerPutPrefix_preserves (peer : Option PeerId) :

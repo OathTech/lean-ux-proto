@@ -30,7 +30,7 @@ theorem setRxSkb_metadata (i : SkbId) (f : RxPacket → RxPacket) :
   intro w ambient x v ambient' hr
   cases x
   cases hd : w.dev with
-  | none => simp [setRxSkb, liftSkb_run, hd, invariant, AmbientM.invariant] at hr
+  | none => simp [setRxSkb, liftSkb_run, hd] at hr
   | some d =>
     cases hp : d.rxSkbs[i]? with
     | none =>
@@ -71,7 +71,7 @@ theorem peerPut_metadata (id : Option PeerId) : SameView allocationMetadata (pee
   all_goals dsimp +zetaDelta only at *
   all_goals simp_all [allocationMetadata, deviceAllocationMetadata]
   all_goals subst_vars
-  all_goals simp_all [allocationMetadata, deviceAllocationMetadata]
+  all_goals simp_all [deviceAllocationMetadata]
 
 def keypairReleaseRest (w : WGWorld) := (Peers.snapshot w, packetResidents w, allocationMetadata w)
 
@@ -99,7 +99,7 @@ theorem keypairPut_rest (kp : Option KeypairId) (now : Bool) :
   all_goals unfold keypairReleaseRest Peers.snapshot packetResidents allocationMetadata at *
   all_goals simp_all [deviceAllocationMetadata, Option.bind_map, Function.comp_def]
   all_goals subst_vars
-  all_goals simp_all [deviceAllocationMetadata, Option.bind_map, Function.comp_def]
+  all_goals simp_all [deviceAllocationMetadata]
 
 theorem ordinary_same_frontier (ho : Keypairs.Ordinary s t) (hf : t.frontier = s.frontier) :
     ∀ i c, t.slots i = some c → s.slots i = some c := by

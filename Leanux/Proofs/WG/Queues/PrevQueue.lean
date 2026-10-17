@@ -21,12 +21,12 @@ theorem prev_dequeue_normal (q : PrevQueue α) (w v : WGWorld)
   cases stub <;> cases items with
   | nil =>
     simp_all [PrevQueue.dequeue, branch, AmbientM.branch, invariant,
-      AmbientM.invariant, StateT.run_bind, StateT.run_lift] <;> cases hr <;> simp_all [PrevQueue.all]
+      AmbientM.invariant, StateT.run_bind] <;> cases hr <;> simp_all []
   | cons x xs =>
     cases xs <;>
       simp_all [PrevQueue.dequeue, branch, AmbientM.branch, invariant,
         AmbientM.invariant, unsupported, AmbientM.unsupported,
-        StateT.run_bind, StateT.run_lift] <;> cases hr <;> simp_all [PrevQueue.all]
+        StateT.run_bind] <;> cases hr <;> simp_all []
 
 theorem prev_peek_normal (q : PrevQueue α) (w v : WGWorld)
     (ambient ambient' : Ambient) (head : Option α) (q' : PrevQueue α)
@@ -35,19 +35,18 @@ theorem prev_peek_normal (q : PrevQueue α) (w v : WGWorld)
   rcases q with ⟨items, stub, peeked⟩
   cases peeked with
   | some x =>
-    simp_all [PrevQueue.peek, branch, AmbientM.branch, PrevQueue.all,
-      StateT.run_bind, StateT.run_lift] <;> cases hr <;> simp_all [PrevQueue.all]
+    simp_all [PrevQueue.peek, branch, AmbientM.branch, PrevQueue.all] <;> cases hr <;> simp_all []
   | none =>
     cases stub <;> cases items with
     | nil =>
       simp_all [PrevQueue.peek, PrevQueue.dequeue, branch, AmbientM.branch,
         invariant, AmbientM.invariant, PrevQueue.all,
-        StateT.run_bind, StateT.run_lift] <;> cases hr <;> simp_all [PrevQueue.all]
+        StateT.run_bind] <;> cases hr <;> simp_all []
     | cons x xs =>
       cases xs <;>
         simp_all [PrevQueue.peek, PrevQueue.dequeue, branch, AmbientM.branch,
           invariant, AmbientM.invariant, unsupported, AmbientM.unsupported,
-          PrevQueue.all, StateT.run_bind, StateT.run_lift] <;> cases hr <;> simp_all [PrevQueue.all]
+          PrevQueue.all, StateT.run_bind] <;> cases hr <;> simp_all []
 
 theorem prev_peek_then_drop (q : PrevQueue α) (w v : WGWorld)
     (ambient ambient' : Ambient) (x : α) (q' : PrevQueue α)
@@ -62,7 +61,7 @@ theorem prev_peek_malformed (q : PrevQueue α) (w : WGWorld) (ambient : Ambient)
     (hp : q.peeked = none) (ht : q.tailIsStub = false) (hi : q.items = []) :
     (q.peek.run w).run ambient = .error (.invariant "prev_queue: a tail item without an entry") := by
   simp [PrevQueue.peek, PrevQueue.dequeue, hp, ht, hi, branch, AmbientM.branch,
-    invariant, AmbientM.invariant, StateT.run_bind, StateT.run_lift]
+    invariant, AmbientM.invariant, StateT.run_bind]
   rfl
 
 /-- The only structural obstruction in the sequential queue model is a
@@ -76,11 +75,11 @@ theorem prev_dequeue_total (q : PrevQueue α) (w : WGWorld) (ambient : Ambient)
   cases stub <;> cases items with
   | nil =>
     simp_all [PrevCoherent, PrevQueue.dequeue, branch, AmbientM.branch,
-      StateT.run_bind, StateT.run_lift] <;> exact ⟨_, _, _, _, rfl⟩
+      StateT.run_bind] <;> exact ⟨_, _, _, _, rfl⟩
   | cons x xs =>
     cases xs <;>
       simp [PrevQueue.dequeue, branch, AmbientM.branch,
-        StateT.run_bind, StateT.run_lift] <;> exact ⟨_, _, _, _, rfl⟩
+        StateT.run_bind] <;> exact ⟨_, _, _, _, rfl⟩
 
 theorem prev_peek_total (q : PrevQueue α) (w : WGWorld) (ambient : Ambient)
     (hc : PrevCoherent q) :
@@ -88,16 +87,15 @@ theorem prev_peek_total (q : PrevQueue α) (w : WGWorld) (ambient : Ambient)
   rcases q with ⟨items, stub, peeked⟩
   cases peeked with
   | some x =>
-    simp [PrevQueue.peek, branch, AmbientM.branch,
-      StateT.run_bind, StateT.run_lift] <;> exact ⟨_, _, _, _, rfl⟩
+    simp [PrevQueue.peek, branch, AmbientM.branch] <;> exact ⟨_, _, _, _, rfl⟩
   | none =>
     cases stub <;> cases items with
     | nil =>
       simp_all [PrevCoherent, PrevQueue.peek, PrevQueue.dequeue, branch, AmbientM.branch,
-        StateT.run_bind, StateT.run_lift] <;> exact ⟨_, _, _, _, rfl⟩
+        StateT.run_bind] <;> exact ⟨_, _, _, _, rfl⟩
     | cons x xs =>
       cases xs <;>
         simp [PrevQueue.peek, PrevQueue.dequeue, branch, AmbientM.branch,
-          StateT.run_bind, StateT.run_lift] <;> exact ⟨_, _, _, _, rfl⟩
+          StateT.run_bind] <;> exact ⟨_, _, _, _, rfl⟩
 
 end Leanux.Proofs.WG.Queues

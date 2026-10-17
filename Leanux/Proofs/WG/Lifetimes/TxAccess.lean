@@ -28,7 +28,7 @@ theorem setTxSkbPrefix_erases (id : SkbId) (f : DataPacket → DataPacket) :
     change ((setTxSkb id f).run w).run ambient =
       ((getTxSkb id >>= fun p => modifyDev fun d => {d with txSkbs := d.txSkbs.insert id (f p)}).run w).run ambient
     cases hd : w.dev with
-    | none => simp [setTxSkb, getTxSkb, StateT.run_bind, liftSkb_run, hd, invariant, AmbientM.invariant]
+    | none => simp [setTxSkb, getTxSkb, StateT.run_bind, liftSkb_run, hd]
     | some d =>
       cases hp : d.txSkbs[id]? <;>
         simp [setTxSkb, getTxSkb, StateT.run_bind, liftSkb_run, SkbStore.setTx, SkbStore.getTx,
@@ -67,7 +67,7 @@ theorem setTxSkb_identity (id : SkbId) (f : DataPacket → DataPacket) :
   intro w ambient x v ambient' hr
   cases x
   cases hd : w.dev with
-  | none => simp [setTxSkb, liftSkb_run, hd, invariant, AmbientM.invariant] at hr
+  | none => simp [setTxSkb, liftSkb_run, hd] at hr
   | some d =>
     cases hp : d.txSkbs[id]? with
     | none =>
@@ -124,7 +124,7 @@ theorem setTxSkb_metadata (i : SkbId) (f : DataPacket → DataPacket) :
   intro w ambient x v ambient' hr
   cases x
   cases hd : w.dev with
-  | none => simp [setTxSkb, liftSkb_run, hd, invariant, AmbientM.invariant] at hr
+  | none => simp [setTxSkb, liftSkb_run, hd] at hr
   | some d =>
     cases hp : d.txSkbs[i]? with
     | none =>

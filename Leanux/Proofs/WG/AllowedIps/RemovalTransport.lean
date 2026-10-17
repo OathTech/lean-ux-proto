@@ -29,7 +29,7 @@ theorem removalChildUnary_rep (d : WG.Device) (width : Nat) (base : WG.Slot)
   have hcd := (List.nodup_cons.mp hncdup).1
   apply fork_rep_intro hb
   · rw [removalChildUnary_node]
-    simp only [Ne.symm hpn, ↓reduceIte, ite_true]
+    simp only [Ne.symm hpn, ↓reduceIte]
     exact congrArg some (forkNode_replace (after := .node c l r) hb)
   · apply hc.root_reparent
     · simp [removalChildUnary_node, hnc', hpc, encode]
@@ -59,7 +59,7 @@ theorem removalLeafDetached_rep (d : WG.Device) (width : Nat) (base : WG.Slot)
   have hnp : n.id ≠ p.id := fun he => hpt (by simp [Tree.nodeIds, he])
   apply fork_rep_intro hb
   · rw [removalLeafDetached_node]
-    simp only [hnp, ↓reduceIte, ite_true]
+    simp only [hnp, ↓reduceIte]
     exact congrArg some (forkNode_replace (after := .empty) hb)
   · trivial
   · apply hs.congr
@@ -116,7 +116,7 @@ theorem removalCollapseChild_rep (d : WG.Device) (width : Nat) (base : WG.Slot)
   have hcd := (List.nodup_cons.mp hcs).1
   apply fork_rep_intro hgb
   · rw [removalCollapseChild_node]
-    simp only [hpg, ↓reduceIte, ite_true, Option.map_some]
+    simp only [hpg, ↓reduceIte, Option.map_some]
     exact congrArg some (forkNode_replace (after := .node c l r) hgb)
   · apply hs.root_reparent
     · simp [removalCollapseChild_node, hpc, hgc, encode]

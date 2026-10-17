@@ -20,7 +20,7 @@ theorem dstCacheGet_routing (pid : PeerId) (gen : Nat) : SameView routingView (d
   mvcgen [-Std.Do.Spec.monadLift_StateT, dstCacheGet, getAmbient, hiddenJiffies,
     hp, hs, ambient, branch, branchCmp]
   all_goals try dsimp +zetaDelta only at *
-  all_goals try simp_all [routingView, routingState]
+  all_goals try simp_all [routingView]
   all_goals try assumption
 
 theorem dstCacheSet_routing (pid : PeerId) (src gen dev : Nat) : SameView routingView (dstCacheSet pid src gen dev) := by

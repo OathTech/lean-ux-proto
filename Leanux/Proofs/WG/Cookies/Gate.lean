@@ -139,7 +139,7 @@ private theorem withLoadNative_eq (next : Bool → WG.M α) :
     withLoadNative next = (loadPhase >>= next) := by
   simp only [withLoadNative, loadPhase, bind_assoc, pure_bind, if_bind, invariant_bind_wg]
   repeat' first | rfl | (apply bind_congr; intro x) | split
-  all_goals simp only [bind_assoc, pure_bind, if_bind, invariant_bind_wg]
+  all_goals simp only [bind_assoc, pure_bind, if_bind]
 
 theorem withLoad_eq {m : Type → Type} [Monad m] [MonadLiftT WG.M m]
     (next : Bool → m Unit) :

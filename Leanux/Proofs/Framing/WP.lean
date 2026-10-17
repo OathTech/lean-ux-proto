@@ -10,7 +10,11 @@ open Leanux Leanux.WG Std.Do Leanux.Proofs.Framing.Allocation
 
 theorem branch_wp (d : Decision) (b : Bool) :
     ⦃fun (_ : Ambient) => ⌜True⌝⦄ AmbientM.branch d b ⦃⇓? x _ => ⌜x = b⌝⦄ := by
-  mvcgen [AmbientM.branch]
+  apply (hoare_iff_run _ _ _).mpr
+  intro w x w' _ hr
+  change Except.ok (b, _) = Except.ok (x, w') at hr
+  cases hr
+  rfl
 
 theorem getKeypair_wp (query slot stamp : Nat) (counter : ReplayCounter) :
     ⦃fun w => ⌜Protected slot stamp counter w⌝⦄ getKeypair query
@@ -31,84 +35,251 @@ theorem setKeypair_wp (query slot stamp : Nat) (counter : ReplayCounter) (k : Ke
 theorem keypairGet_preserves (kp : Option KeypairId) (slot stamp : Nat)
     (counter : ReplayCounter) :
     Preserves (Protected slot stamp counter) (keypairGet kp) := by
-  unfold Preserves
-  refine (hoare_iff_triple (keypairGet kp) _ _).mpr ?_
-  mvcgen [keypairGet, getKeypair, getDev, setKeypair, modifyDev,
-    branch, branchCmp, AmbientM.branch, AmbientM.branchCmp, refcountIncNotZero,
-    unsupported, invariant, AmbientM.unsupported, AmbientM.invariant]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals try simp_all [Protected]
-  intro d k hd hk hid
-  subst d
-  simp only [Std.TreeMap.getElem?_insert] at hk
-  split at hk <;> simp_all
-  all_goals grind only
+  apply (hoare_iff_run_ambient _ _ _).mpr
+  intro w ambient x w' ambient' hp hr
+  cases kp with
+  | none =>
+    simp [keypairGet, branch, AmbientM.branch] at hr
+    rcases hr with ⟨⟨rfl, rfl⟩, rfl⟩
+    exact hp
+  | some id =>
+    cases hd : w.dev with
+    | none =>
+      simp [keypairGet, getKeypair, getDev, hd, branch, AmbientM.branch,
+        invariant, AmbientM.invariant] at hr
+      cases hr
+    | some d =>
+      cases hk : d.keypairs[id]? with
+      | none =>
+        simp [keypairGet, getKeypair, getDev, hd, hk, branch, AmbientM.branch,
+          invariant, AmbientM.invariant] at hr
+        cases hr
+      | some key =>
+        simp only [keypairGet, getKeypair, getDev, setKeypair, modifyDev,
+          branch, branchCmp, AmbientM.branch, AmbientM.branchCmp, refcountIncNotZero,
+          unsupported, invariant, AmbientM.unsupported, AmbientM.invariant,
+          StateT.run_bind] at hr
+        simp [hd, hk] at hr
+        split at hr <;> simp_all
+        all_goals try split at hr <;> simp_all
+        all_goals try split at hr <;> simp_all
+        all_goals try split at hr <;> simp_all
+        all_goals rcases hr with ⟨⟨rfl, rfl⟩, rfl⟩
+        all_goals
+          first
+          | exact hp
+          | refine ⟨hp.1, ?_⟩
+            intro d' k hd' hk' hi
+            cases hd'
+            simp only [Std.TreeMap.getElem?_insert] at hk'
+            by_cases he : id = slot
+            · subst id
+              simp at hk'
+              subst k
+              exact hp.2 d key hd hk hi
+            · simp [he] at hk'
+              exact hp.2 d k hd hk' hi
 
 /-- Resolving an embedded peer word reads its owner without changing the
 WireGuard state. This is not an access-coverage claim. -/
 theorem indexOwner_peerWord_preserves (owner : IndexOwner) (P : WGWorld → Prop) :
     Preserves P owner.peerWord := by
-  unfold Preserves Hoare
-  cases owner
-  all_goals mvcgen [IndexOwner.peerWord, getPeer, getKeypair, getDev,
-    invariant, AmbientM.invariant]
+  have device : Preserves P getDev := by
+    unfold getDev
+    apply preserves_bind (hoare_consequence (hoare_get P)
+      (fun _ h => h) (fun _ _ h => h.2))
+    intro w
+    cases w.dev
+    · exact hoare_liftAmbient (AmbientM.invariant _) P
+    · exact preserves_pure _
+  have peer (id : PeerId) : Preserves P (getPeer id) := by
+    unfold getPeer
+    apply preserves_bind device
+    intro d
+    cases h : d.peers.get? id
+    · exact hoare_liftAmbient (AmbientM.invariant _) P
+    · exact preserves_pure _
+  have key (id : KeypairId) : Preserves P (getKeypair id) := by
+    unfold getKeypair
+    apply preserves_bind device
+    intro d
+    cases h : d.keypairs.get? id
+    · exact hoare_liftAmbient (AmbientM.invariant _) P
+    · exact preserves_pure _
+  cases owner with
+  | handshake id =>
+    exact preserves_bind (peer id) (fun p => preserves_pure p.handshakeEntryPeer)
+  | keypair id =>
+    exact preserves_bind (key id) (fun k => preserves_pure k.peer)
 
 theorem indexOwner_peerDeref_preserves (owner : IndexOwner) (P : WGWorld → Prop) :
     Preserves P owner.peerDeref := by
-  have hw := indexOwner_peerWord_preserves owner P
-  unfold Preserves Hoare at *
-  mvcgen [IndexOwner.peerDeref, hw, unsupported, AmbientM.unsupported]
+  unfold IndexOwner.peerDeref
+  apply preserves_bind (indexOwner_peerWord_preserves owner P)
+  intro word
+  cases word with
+  | none => exact hoare_liftAmbient (AmbientM.unsupported _) P
+  | some pid => exact preserves_pure pid
 
 theorem keypairPut_preserves (kp : Option KeypairId) (now : Bool) (slot stamp : Nat)
     (counter : ReplayCounter) :
     Preserves (Protected slot stamp counter) (keypairPut kp now) := by
-  unfold Preserves
-  refine (hoare_iff_triple (keypairPut kp now) _ _).mpr ?_
-  simp only [keypairPut, IndexOwner.peerDeref, IndexOwner.peerWord, indexRemove_eq]
-  have hu : ∀ (a : IndexM Unit), Hoare (monadLift a : WG.M Unit) (Protected slot stamp counter)
-      (fun _ => Protected slot stamp counter) := by
-    intro a
-    apply hoare_liftIndex
-    intro g d table hp hd
+  let P := Protected slot stamp counter
+  have erase (id : KeypairId) :
+      Preserves P (modifyDev fun d => {d with keypairs := d.keypairs.erase id}) := by
+    apply hoare_modify
+    intro w hp
     refine ⟨hp.1, ?_⟩
-    intro d' k hd' hk hi
-    cases hd'
-    exact hp.2 d k hd hk hi
-  unfold Hoare at hu
-  have hg := fun query => getKeypair_wp query slot stamp counter
-  have hs := fun query k => setKeypair_wp query slot stamp counter k
-  mvcgen [hu, hg, hs, getDev, modifyDev,
-    branch, branchCmp, AmbientM.branch, AmbientM.branchCmp,
-    refcountDecAndTest, unsupported, invariant, AmbientM.unsupported, AmbientM.invariant]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals try simp_all [Protected]
-  all_goals try assumption
-  all_goals
-    intro d k x hx hd hk hi
-    subst d
-    simp only [Std.TreeMap.getElem?_erase] at hk
-    split at hk <;> simp_all
+    intro d key hd hk hi
+    cases hw : w.dev with
+    | none => simp [hw] at hd
+    | some old =>
+      simp only [hw, Option.map_some, Option.some.injEq] at hd
+      subst d
+      simp only [Std.TreeMap.getElem?_erase] at hk
+      split at hk
+      · cases hk
+      · exact hp.2 old key hw hk hi
+  have rc (old : Nat) : Preserves P (refcountDecAndTest old : WG.M Bool) := by
+    let finish : WG.M Bool := do
+      if ← branch .refcountSubNonpositive (old == 0) then
+        unsupported "refcount_warn_saturate (use after free)"
+      if ← branch .refcountSubUnderflow (old < 1) then
+        unsupported "refcount_warn_saturate (underflow)"
+      return false
+    have finishP : Preserves P finish := by
+      unfold finish
+      apply preserves_bind (hoare_liftAmbient
+        (AmbientM.branch .refcountSubNonpositive (old == 0)) P)
+      intro bad
+      cases bad with
+      | true =>
+        apply (hoare_iff_run_ambient _ _ _).mpr
+        intro w a x w' a' _ hr
+        change Except.error _ = Except.ok _ at hr
+        cases hr
+      | false =>
+        apply preserves_bind (hoare_liftAmbient
+          (AmbientM.branch .refcountSubUnderflow (old < 1)) P)
+        intro bad
+        cases bad with
+        | true =>
+          apply (hoare_iff_run_ambient _ _ _).mpr
+          intro w a x w' a' _ hr
+          change Except.error _ = Except.ok _ at hr
+          cases hr
+        | false => exact preserves_pure false
+    unfold refcountDecAndTest
+    apply preserves_bind (hoare_liftAmbient
+      (AmbientM.branchCmp .refcountSubPositive (old > 0) old 0) P)
+    intro positive
+    cases positive with
+    | false => exact finishP
+    | true =>
+      apply preserves_bind (hoare_liftAmbient
+        (AmbientM.branchCmp .refcountSubToZero (old == 1) old 1) P)
+      intro released
+      cases released
+      · exact finishP
+      · exact preserves_pure true
+  unfold keypairPut
+  apply preserves_bind (hoare_liftAmbient (AmbientM.branch .keypairPutNull kp.isNone) P)
+  intro null
+  cases null with
+  | true => exact preserves_pure ()
+  | false =>
+    cases kp with
+    | none => exact hoare_liftAmbient (AmbientM.invariant "unreachable") P
+    | some id =>
+      apply hoare_bind _ _ (getKeypair_spec id slot stamp counter)
+      intro key
+      dsimp only
+      let q := id = slot → key.internalId = stamp → key.receivingCounter = counter
+      let tail : WG.M Unit := do
+        setKeypair id {key with refcount := key.refcount - 1}
+        if ← branch .keypairKrefPutReleased (← refcountDecAndTest key.refcount) then
+          _ ← IndexOwner.peerDeref (.keypair id)
+          (indexRemove (.keypair id) : WG.M Unit)
+          modifyDev fun d => {d with keypairs := d.keypairs.erase id}
+      have tailP : Hoare tail (fun w => P w ∧ q) (fun _ => P) := by
+        unfold tail
+        apply hoare_bind _ _ (setKeypair_wp id slot stamp counter
+          {key with refcount := key.refcount - 1})
+        intro _
+        apply preserves_bind (rc key.refcount)
+        intro released
+        apply preserves_bind (hoare_liftAmbient
+          (AmbientM.branch .keypairKrefPutReleased released) P)
+        intro free
+        cases free with
+        | false => exact preserves_pure ()
+        | true =>
+          apply preserves_bind (indexOwner_peerDeref_preserves _ P)
+          intro _
+          apply preserves_bind
+          · rw [indexRemove_eq]
+            apply hoare_liftIndex
+            intro g d table hp hd
+            refine ⟨hp.1, ?_⟩
+            intro d' k hd' hk hi
+            cases hd'
+            exact hp.2 d k hd hk hi
+          · intro _
+            exact erase id
+      apply hoare_bind _ _ (hoare_liftAmbient
+        (AmbientM.branch .keypairPutUnreferenceNow now) (fun w => P w ∧ q))
+      intro run
+      cases run with
+      | false =>
+        simpa only [tail, Bool.false_eq_true, ite_false, bind_assoc] using tailP
+      | true =>
+        simp only [bind_assoc]
+        apply hoare_bind _ _ (indexOwner_peerDeref_preserves _ (fun w => P w ∧ q))
+        intro _
+        apply hoare_bind
+        · rw [indexRemove_eq]
+          apply hoare_liftIndex
+          intro g d table hp hd
+          refine ⟨⟨hp.1.1, ?_⟩, hp.2⟩
+          intro d' k hd' hk hi
+          cases hd'
+          exact hp.1.2 d k hd hk hi
+        · intro _
+          simpa only [tail, bind_assoc] using tailP
 
 theorem keypairCreate_preserves (pid : Option PeerId) (slot stamp : Nat)
     (counter : ReplayCounter) :
     Preserves (Protected slot stamp counter) (keypairCreate pid) := by
-  have alloc_spec : Hoare (hiddenAlloc .kzallocKeypair : WG.M Bool)
-      (Protected slot stamp counter) (fun _ => Protected slot stamp counter) :=
-    hoare_liftAmbient (AmbientM.hiddenAlloc .kzallocKeypair) (Protected slot stamp counter)
-  unfold Hoare at alloc_spec
-  unfold Preserves
-  refine (hoare_iff_triple (keypairCreate pid) _ _).mpr ?_
-  mvcgen [keypairCreate, alloc_spec, getDev, setKeypair, modifyDev,
-    branch, AmbientM.branch, invariant, AmbientM.invariant]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals try simp_all [Protected]
-  all_goals
-    constructor
-    · omega
-    · intro d k hd hk hid
-      subst d
+  unfold keypairCreate
+  apply preserves_bind (hoare_liftAmbient (AmbientM.hiddenAlloc .kzallocKeypair)
+    (Protected slot stamp counter))
+  intro allocated
+  apply preserves_bind (hoare_liftAmbient (AmbientM.branch .keypairCreateNoMem (!allocated))
+    (Protected slot stamp counter))
+  intro failed
+  cases failed with
+  | true => exact preserves_pure none
+  | false =>
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient x w' ambient' hp hr
+    cases hd : w.dev with
+    | none =>
+      simp [getDev, hd, invariant, AmbientM.invariant] at hr
+      cases hr
+    | some d =>
+      simp [getDev, modifyDev, setKeypair, hd] at hr
+      rcases hr with ⟨⟨rfl, rfl⟩, rfl⟩
+      refine ⟨Nat.le_trans hp.1 (Nat.le_succ _), ?_⟩
+      intro d' key hd' hk hi
+      cases hd'
       simp only [Std.TreeMap.getElem?_insert] at hk
-      split at hk <;> simp_all
-      all_goals grind only
+      by_cases he : d.nextKeypairId = slot
+      · simp [he] at hk
+        subst key
+        dsimp at hi
+        have := hp.1
+        omega
+      · simp [he] at hk
+        exact hp.2 d key hd hk hi
 
 end Leanux.Proofs.Framing

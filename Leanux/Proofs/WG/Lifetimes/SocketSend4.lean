@@ -169,7 +169,7 @@ theorem send4ClearSrcPrefix_erases (cache : Option PeerId) :
     ErasesStatePrefix (send4ClearSrcPrefix cache) (send4ClearSrcSource cache) := by
   unfold send4ClearSrcPrefix send4ClearSrcSource
   unfold modifyPeerKeysPrefix
-  try simp (config := { zeta := false }) only [bind_assoc]
+  try simp (config := { zeta := false }) only []
   repeat' first
     | maintenance_erases_join
     | maintenance_erases_join_use
@@ -221,7 +221,7 @@ theorem send4RouteDonePrefix_erases (e : Endpoint) (cache : Option PeerId) (byte
     (rt : Except Int Route) :
     ErasesStatePrefix (send4RouteDonePrefix e cache bytes ds exactRx gen fallback rt) (send4RouteDoneSource e cache bytes ds exactRx gen fallback rt) := by
   unfold send4RouteDonePrefix send4RouteDoneSource
-  try simp (config := { zeta := false }) only [bind_assoc]
+  try simp (config := { zeta := false }) only []
   repeat' first
     | maintenance_erases_join
     | maintenance_erases_join_use
@@ -654,7 +654,7 @@ theorem send4_clear_reset_clock_failure (pid : PeerId) (w v : WGWorld) (ambient 
       (.error err, h ++ [.peer (.read pid p.internalId), .peer (.write pid p.internalId)]) := by
   simp [send4ClearSrcPrefix, modifyPeerKeysPrefix, dstCacheResetMixed,
     runStatePrefix_bind, runStatePrefix_lift, liftWGPrefix, getPeerMixed_run, setPeerMixed_run, hd, hp, hw, ha, hc, hf,
-    getAmbient, StateT.run_bind, StateT.run_pure, StateT.run_lift,
+    getAmbient, StateT.run_pure,
     List.append_assoc]
 
 theorem send4ClearSrcPrefix_spec_product (c : ProductAmbientContracts I) (P : IdentityView → Prop)

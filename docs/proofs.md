@@ -169,8 +169,9 @@ original checkpoints. The current mirror/toolchain carry status is in
   are removed. Actual FS operations and taskWorkRun use native monads; their
   product lifts preserve WG by type separation and retain exact FS/Task/Ambient
   outcomes and Stops. Generic observer lifting retains incoming history.
-  The dispatcher, complete syscall and Runner compositions still need their
-  state-split carry. Task work keeps pop-before-release and its exhaustion Stop;
+  The dispatcher, complete syscall and Runner compositions now use their
+  actual product actions; their scoped carry is checked. Task work keeps
+  pop-before-release and its exhaustion Stop;
   fputFinal may queue netnsCleanup, whose later product-level execution is
   supplied by the Env, syscall and Runner layers.
   `AllocationRetention`, `AllocationReleaseFrames` and `AllocationReleases`

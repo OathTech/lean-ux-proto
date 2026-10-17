@@ -69,7 +69,7 @@ def rootRemoveSource (root : NodeId) : WG.M Unit := do
 
 theorem rootRemoveSource_eq (root : NodeId) : rootRemoveSource root = rootRemovePeerLists root := by
   unfold rootRemoveSource rootRemoveStep pushChildren pushChild rootRemovePeerLists
-  simp only [bind_assoc]
+  simp only []
   congr 1
   funext d
   congr 1

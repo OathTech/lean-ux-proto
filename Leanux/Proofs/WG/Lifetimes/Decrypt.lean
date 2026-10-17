@@ -64,7 +64,7 @@ theorem decryptPacketPrefix_erases (pkt : RxPacket) :
     | apply erasesStatePrefix_bind
     | intro x
     | split
-  all_goals simp_all [runStatePrefix_pure, runStatePrefix_lift]
+  all_goals simp_all []
 
 theorem decryptPacketPrefix_spec_ambient (c : AmbientContracts I) (P : IdentityView → Prop) (pkt : RxPacket) :
     AmbientSpec I P (decryptPacketPrefix pkt) (fun _ => P) := by
@@ -109,7 +109,7 @@ theorem decryptPacketPrefix_spec_ambient (c : AmbientContracts I) (P : IdentityV
 
 theorem decryptPacketPrefix_spec_product (c : ProductAmbientContracts I) (P : IdentityView → Prop) (pkt : RxPacket) :
     ProductAmbientSpec I P (liftWGObserver (decryptPacketPrefix pkt)) (fun _ => P) := by
-  simp only [decryptPacketPrefix, liftWGObserver_bind, liftWGObserver_pure]
+  simp only [decryptPacketPrefix, liftWGObserver_bind]
   apply PrefixEnsures.bind (c.nativeStore P _ (by intro initial; exact hoare_liftAmbient (AmbientM.branch _ _) (fun w => wgStoreView w = initial)))
   intro noKey
   split <;> try simp only [liftWGObserver_bind, liftWGObserver_pure]
@@ -140,9 +140,9 @@ theorem decryptPacketPrefix_spec_product (c : ProductAmbientContracts I) (P : Id
         · exact c.pure P none
         · apply PrefixEnsures.bind (c.nativeStore P _ (by intro initial; exact hoare_liftAmbient (AmbientM.branch _ _) (fun w => wgStoreView w = initial)))
           intro decryptBad
-          split <;> try simp only [liftWGObserver_bind, liftWGObserver_pure]
+          split <;> try simp only [liftWGObserver_pure]
           · exact c.pure P none
-          · split <;> try simp only [liftWGObserver_bind, liftWGObserver_pure]
+          · split <;> try simp only [liftWGObserver_bind]
             · apply PrefixEnsures.bind (c.nativeStore P _ (by intro initial; exact hoare_liftAmbient (AmbientM.branch _ _) (fun w => wgStoreView w = initial)))
               intro trimBad
               split <;> simpa only [liftWGObserver_pure] using c.pure P _

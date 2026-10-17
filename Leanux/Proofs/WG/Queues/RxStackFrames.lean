@@ -146,7 +146,7 @@ theorem receive4_rxQueues (bytes : List UInt8) :
     apply (ProjectedAction.iff_run _ _ _).mpr
     intro w x v hr
     obtain ⟨e, he⟩ := failure w
-    simp only [StateT.run_bind, he, Except.bind] at hr
+    simp only [StateT.run_bind, he] at hr
     contradiction
   have excluded := fun row tail => stopped (Leanux.Env.Stack.excluded row)
     (stackExcluded_failure row) tail

@@ -296,7 +296,7 @@ theorem completedFree_empty_spec (initial : FlatTable × FlatTable) :
     have safe := CompletionSafe.snoc hi.1 hv
     refine ⟨[e], rfl, safe, ⟨⟨safe, ?_⟩, ?_⟩⟩
     · simpa [completionFold, List.foldl_append, e, RoutingCompletion.flat] using routed
-    · simp [completionFold, List.foldl_append, e, RoutingCompletion.flat]
+    · simp [completionFold, List.foldl_append, RoutingCompletion.flat]
 
 theorem completedFree_spec (initial : FlatTable × FlatTable) :
     StatePrefixEnsures (fun h w _ => CompletionState initial h w) (CompletionSafe initial)

@@ -9,31 +9,60 @@ open Leanux Leanux.WG Std.Do Leanux.Proofs.Framing Leanux.Proofs.Framing.Allocat
 
 theorem deriveKeys_sameSnapshot (kp : KeypairId) (initiator : Bool) (chainingKey : List UInt8) :
     SameSnapshot (deriveKeys kp initiator chainingKey) := by
-  apply sameSnapshot_of_wp
-  intro s
-  have clock_spec : Hoare (hiddenClock64 .deriveKeysBirthdate : WG.M Int64)
-      (fun w => snapshot w = s) (fun _ w => snapshot w = s) :=
-    hoare_liftAmbient (AmbientM.hiddenClock64 .deriveKeysBirthdate) (fun w => snapshot w = s)
-  unfold Hoare at clock_spec
-  have kdf_spec := (kdf_sameWGWorld true false chainingKey []).wp (fun w => snapshot w = s)
-  have out_spec := fun outs i => (kdfOut_sameWGWorld outs i).wp (fun w => snapshot w = s)
-  mvcgen [deriveKeys, clock_spec, kdf_spec, out_spec,
-    getKeypair, getDev, setKeypair, modifyDev, invariant, AmbientM.invariant]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals try simp_all [snapshot]
-  all_goals try subst s
-  all_goals
-    split
-    all_goals
-      calc
-        _ = _ := by apply mapSnapshot_insert_same <;> first | assumption | rfl
-        _ = _ := by assumption
+  have saved (f : Keypair → Keypair) (hf : ∀ key, cell (f key) = cell key) :
+      SameSnapshot (do let key ← getKeypair kp; setKeypair kp (f key)) := by
+    intro initial
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient x w' ambient' hp hr
+    cases hd : w.dev with
+    | none =>
+      simp [getKeypair, getDev, hd, invariant, AmbientM.invariant] at hr
+      cases hr
+    | some d =>
+      cases hk : d.keypairs[kp]? with
+      | none =>
+        simp [getKeypair, getDev, hd, hk, invariant, AmbientM.invariant] at hr
+        cases hr
+      | some key =>
+        simp only [StateT.run_bind,
+          Leanux.Proofs.WG.CounterWindow.getKeypair_run w ambient d kp key hd hk,
+          Leanux.Proofs.WG.CounterWindow.setKeypair_run] at hr
+        cases hr
+        rw [snapshot_store w d kp (f key) hd, hf,
+          put_existing _ _ _ (snapshot_lookup w d kp key hd hk)]
+        exact hp
+  unfold deriveKeys
+  apply SameView.bind (fun initial => hoare_liftAmbient
+    (AmbientM.hiddenClock64 .deriveKeysBirthdate) (fun w => snapshot w = initial))
+  intro birthdate
+  apply SameView.bind ((kdf_sameWGWorld true false chainingKey []).factor snapshot)
+  intro outs
+  apply SameView.bind ((kdfOut_sameWGWorld outs 0).factor snapshot)
+  intro first
+  apply SameView.bind ((kdfOut_sameWGWorld outs 1).factor snapshot)
+  intro second
+  apply saved
+  intro key
+  cases initiator <;> rfl
 
 theorem getKeypair_snapshot_wp (i : Nat) (P : Snapshot → Prop) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ getKeypair i
     ⦃⇓? k w => ⌜P (snapshot w) ∧ (snapshot w).slots i = some (cell k)⌝⦄ := by
-  mvcgen [getKeypair, getDev, invariant, AmbientM.invariant]
-  all_goals simp_all [snapshot]
+  apply (hoare_iff_run_ambient _ _ _).mpr
+  intro w ambient key w' ambient' hp hr
+  cases hd : w.dev with
+  | none =>
+    simp [getKeypair, getDev, hd, invariant, AmbientM.invariant] at hr
+    cases hr
+  | some d =>
+    cases hk : d.keypairs[i]? with
+    | none =>
+      simp [getKeypair, getDev, hd, hk, invariant, AmbientM.invariant] at hr
+      cases hr
+    | some value =>
+      rw [Leanux.Proofs.WG.CounterWindow.getKeypair_run w ambient d i value hd hk] at hr
+      cases hr
+      exact ⟨hp, snapshot_lookup w d i key hd hk⟩
 
 theorem setKeypair_snapshot_wp (i : Nat) (k : Keypair) (P : Snapshot → Prop) :
     ⦃fun w => ⌜P (snapshot w) ∧ (snapshot w).slots i = some (cell k)⌝⦄ setKeypair i k
@@ -51,20 +80,74 @@ theorem setKeypair_snapshot_wp (i : Nat) (k : Keypair) (P : Snapshot → Prop) :
     exact hp.1
 
 theorem decryptPacket_sameSnapshot (pkt : RxPacket) : SameSnapshot (decryptPacket pkt) := by
-  apply sameSnapshot_of_wp
-  intro s
-  have birthday_spec := fun d birth seconds f =>
-    (branchExpired_sameWGWorld d birth seconds f).wp (fun w => snapshot w = s)
-  have alloc_spec : Hoare (hiddenAlloc .skbCowDataRx : WG.M Bool)
-      (fun w => snapshot w = s) (fun _ w => snapshot w = s) :=
-    hoare_liftAmbient (AmbientM.hiddenAlloc .skbCowDataRx) (fun w => snapshot w = s)
-  unfold Hoare at alloc_spec
-  have get_spec := fun i => getKeypair_snapshot_wp i (fun t => t = s)
-  have set_spec := fun i k => setKeypair_snapshot_wp i k (fun t => t = s)
-  mvcgen [decryptPacket, birthday_spec, alloc_spec, Leanux.WG.orM,
-    branch, branchCmp, AmbientM.branch, AmbientM.branchCmp,
-    get_spec, set_spec, invariant, AmbientM.invariant]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [snapshot, cell]
+  have ambient {α : Type} (a : AmbientM α) : SameSnapshot (StateT.lift a) :=
+    fun initial => hoare_liftAmbient a (fun w => snapshot w = initial)
+  have read (i : Nat) : SameSnapshot (getKeypair i) := by
+    intro initial
+    exact hoare_consequence (getKeypair_snapshot_wp i (fun s => s = initial))
+      (fun _ h => h) (fun _ _ h => h.1)
+  have either (a b : WG.M Bool) (ha : SameSnapshot a) (hb : SameSnapshot b) :
+      SameSnapshot (WG.orM a b) := by
+    unfold WG.orM
+    apply SameView.bind ha
+    intro x
+    cases x
+    · exact hb
+    · exact SameView.pure _ true
+  have invalidate : SameSnapshot (do
+      let key ← getKeypair pkt.keypair
+      setKeypair pkt.keypair {key with receiving := {key.receiving with isValid := false}}
+      pure (none : Option RxPacket)) := by
+    intro initial
+    apply hoare_bind _ _ (getKeypair_snapshot_wp pkt.keypair (fun s => s = initial))
+    intro key
+    apply hoare_bind _ _ (setKeypair_snapshot_wp pkt.keypair
+      {key with receiving := {key.receiving with isValid := false}} (fun s => s = initial))
+    intro _
+    exact preserves_pure none
+  unfold decryptPacket
+  apply SameView.bind (ambient (AmbientM.branch .decNoKeypair false))
+  intro missing
+  cases missing with
+  | true => exact SameView.pure _ none
+  | false =>
+    apply SameView.bind (read pkt.keypair)
+    intro key
+    apply SameView.bind (either _ _
+      (ambient (AmbientM.branch .decKeyInvalid (!key.receiving.isValid)))
+      (either _ _ ((branchExpired_sameWGWorld .decKeyExpired key.receiving.birthdate
+        REJECT_AFTER_TIME).factor snapshot)
+        (ambient (AmbientM.branchCmp .decCounterLimit
+          (key.receivingCounter.counter ≥ REJECT_AFTER_MESSAGES)
+          key.receivingCounter.counter REJECT_AFTER_MESSAGES))))
+    intro rejected
+    cases rejected with
+    | true => exact invalidate
+    | false =>
+      apply SameView.bind (ambient (AmbientM.hiddenAlloc .skbCowDataRx))
+      intro cow
+      apply SameView.bind (either _ _
+        (ambient (AmbientM.branch .decCowDataFailed (!cow)))
+        (ambient (AmbientM.branch .decTooManyFrags false)))
+      intro failed
+      cases failed with
+      | true => exact SameView.pure _ none
+      | false =>
+        apply SameView.bind (ambient (AmbientM.branch .decSgvecFailed false))
+        intro sg
+        cases sg with
+        | true => exact SameView.pure _ none
+        | false =>
+          apply SameView.bind (ambient (AmbientM.branch .decDecryptFailed _))
+          intro failed
+          cases failed with
+          | true => exact SameView.pure _ none
+          | false =>
+            simp only [Bool.false_eq_true, ite_false]
+            split
+            · apply SameView.bind (ambient (AmbientM.branch .decTrimFailed false))
+              intro trimmed
+              cases trimmed <;> exact SameView.pure _ _
+            · exact ambient (AmbientM.invariant "unreachable")
 
 end Leanux.Proofs.WG.Keypairs

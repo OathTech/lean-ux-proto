@@ -171,30 +171,34 @@ abbrev SameDump (a : WG.M α) := SameView dumpView a
 
 theorem getNlSock_sameWGWorld (fd : Nat) :
     SameView (id : WGWorld → WGWorld) (getNlSock fd) := by
-  apply SameView.of_wp
-  intro k
-  mvcgen [getNlSock]
+  apply (Leanux.Proofs.WG.Lifetimes.ProjectedAction.iff_run_ambient _ _ _).mpr
+  intro g ambient x v ambient' run
+  cases run
+  rfl
 
 theorem setNlSock_sameDump (fd : Nat) (sock : NlSock) :
     SameDump (setNlSock fd sock) := by
-  apply SameView.of_wp
-  intro k
-  by_cases hf : fd == 8
-  all_goals simp only [setNlSock, hf, ↓reduceIte]
-  all_goals mvcgen
-  all_goals simpa [dumpView, dumpStore, wgStoreView]
+  intro initial
+  apply hoare_modify
+  intro g h
+  by_cases hfd : (fd == 8) = true <;>
+    simpa [dumpView, dumpStore, wgStoreView, hfd] using h
 
 theorem getAllowedips_sameWGWorld (skb : NlSkb) (family masked cidr : Nat) :
     SameView (id : WGWorld → WGWorld) (getAllowedips skb family masked cidr) := by
-  apply SameView.of_wp
-  intro k
-  mvcgen [getAllowedips, branch, AmbientM.branch]
+  unfold getAllowedips
+  repeat' first
+    | (dump_kernel_head Leanux.branch;
+        intro initial; exact hoare_liftAmbient (AmbientM.branch _ _) (fun g => g = initial))
+    | dump_kernel_step
 
 theorem readNode_sameWGWorld (n : AipNode) :
     SameView (id : WGWorld → WGWorld) (readNode n) := by
-  apply SameView.of_wp
-  intro k
-  mvcgen [readNode, swapEndian, branch, AmbientM.branch]
+  unfold readNode swapEndian
+  repeat' first
+    | (dump_kernel_head Leanux.branch;
+        intro initial; exact hoare_liftAmbient (AmbientM.branch _ _) (fun g => g = initial))
+    | dump_kernel_step
 
 theorem getPeerDumpAllowed_sameWGWorld (p : Peer) (ctx : DumpCtx) (skb0 skb : NlSkb)
     (pubkey : String) (attrs : List (String × Lean.Json)) (node : Option NodeId) :
@@ -216,9 +220,12 @@ theorem getPeerDumpAllowed_sameWGWorld (p : Peer) (ctx : DumpCtx) (skb0 skb : Nl
       cases k
       simp_all
   have hg : SameView (id : WGWorld → WGWorld) getDev := by
-    apply SameView.of_wp
-    intro k
-    mvcgen [getDev, invariant, AmbientM.invariant]
+    apply (Leanux.Proofs.WG.Lifetimes.ProjectedAction.iff_run_ambient _ _ _).mpr
+    intro g ambient x v ambient' run
+    cases hd : g.dev <;> simp [getDev, hd, invariant, AmbientM.invariant] at run
+    · cases run
+    · cases run
+      rfl
   unfold getPeerDumpAllowedSource
   repeat' first
     | (dump_kernel_head liftM; unfold liftM)
@@ -244,20 +251,24 @@ theorem getPeerDumpTail_sameWGWorld (p : Peer) (ctx : DumpCtx) (skb : NlSkb) :
 
 theorem getPeerDump_sameWGWorld (pid : PeerId) (ctx : DumpCtx) (skb : NlSkb) :
     SameView (id : WGWorld → WGWorld) (getPeerDump pid ctx skb) := by
+  have peer : SameView (id : WGWorld → WGWorld) (getPeer pid) := by
+    apply (Leanux.Proofs.WG.Lifetimes.ProjectedAction.iff_run_ambient _ _ _).mpr
+    intro g ambient x v ambient' run
+    cases hd : g.dev <;> simp [getPeer, getDev, hd, invariant, AmbientM.invariant] at run
+    · cases run
+    · split at run
+      · cases run
+        rfl
+      · cases run
   rw [getPeerDump_source]
-  apply SameView.of_wp
-  intro k
-  have ht := fun p => (getPeerDumpTail_sameWGWorld p ctx skb).wp (fun s => s = k)
-  mvcgen [getPeer, getDev, invariant, AmbientM.invariant, ht]
+  exact SameView.bind peer (fun p => getPeerDumpTail_sameWGWorld p ctx skb)
 
 theorem coalesce_sameWGWorld (messages : List NlMessage) :
     SameView (id : WGWorld → WGWorld) (coalesce messages) := by
-  apply SameView.of_wp
-  intro k
-  have hl (α β : Type) := list_view_spec (m := AmbientM) (id : WGWorld → WGWorld)
-    (α := α) (β := β) (fun s => s = k)
-  mvcgen [-Std.Do.Spec.forIn_list, -Std.Do.Spec.forIn'_list, hl, coalesce, invariant, AmbientM.invariant]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all
+  unfold coalesce
+  repeat' first
+    | (dump_kernel_head Leanux.invariant;
+        intro initial; exact hoare_liftAmbient (AmbientM.invariant _) (fun g => g = initial))
+    | dump_kernel_step
 
 end Leanux.Proofs.Framing

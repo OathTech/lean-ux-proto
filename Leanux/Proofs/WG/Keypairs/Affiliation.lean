@@ -171,7 +171,7 @@ theorem index_frame {S α : Type} {m : Type → Type} {ps : PostShape}
         {d with indexTable := []}}) a) :
     SameView (fun s => view (project s)) a :=
   ha.of_factor (fun k : WGStoreView => k.dev.map state) (fun s => view (project s))
-    (fun s => by cases h : (project s).dev <;> simp [view, wgStoreView, h, state])
+    (fun s => by cases h : (project s).dev <;> simp [view, h, state])
 
 /-- The original release only changes counts, index entries or erases a key.
 The predicate may retain compatible references to erased keys. -/

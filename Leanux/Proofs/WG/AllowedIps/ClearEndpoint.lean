@@ -32,7 +32,7 @@ theorem free_factor : WG.free = (do
   funext d
   cases h4 : d.peerAllowedips.root4 <;> cases h6 : d.peerAllowedips.root6 <;>
     simp [freeRoot, freeNodes, resetAllowedips, branch, AmbientM.branch,
-      monadLift_bind, monadLift_pure, h4, h6, bind_assoc]
+      h4, h6, bind_assoc]
 
 def SnapshotState (nodes : Std.TreeMap Nat AipNode) (P : PeerId → NodeId → Prop)
     (k : WGWorld) : Prop := ∃ d, k.dev = some d ∧ Progress nodes P [] d
@@ -60,7 +60,7 @@ theorem freeNodes_snapshot (nodes : Std.TreeMap Nat AipNode) (P : PeerId → Nod
   | nil => simp only [freeNodes, List.forIn_nil]; mvcgen
   | cons id ids ih =>
     have he : freeNodes (id :: ids) = (do freeNode id; freeNodes ids) := by
-      simp [freeNodes, List.forIn_cons, bind_assoc]
+      simp [freeNodes]
     rw [he]
     mvcgen [freeNode_snapshot, ih]
 
@@ -186,7 +186,7 @@ theorem freeNodes_storeView (ids : List NodeId) : SameView clearStoreView (freeN
   | nil => exact SameView.pure _ _
   | cons id ids ih =>
     have he : freeNodes (id :: ids) = (do freeNode id; freeNodes ids) := by
-      simp [freeNodes, List.forIn_cons, bind_assoc]
+      simp [freeNodes]
     rw [he]
     exact SameView.bind (freeNode_storeView id) (fun _ => ih)
 
@@ -223,7 +223,7 @@ theorem free_storeView (initial : WGStoreView) :
   all_goals try subst initial
   all_goals unfold clearStoreView clearStoreProjection at *
   all_goals dsimp +zetaDelta only at *
-  all_goals simp_all [wgStoreView, resetAllowedips, Option.map_map, Option.bind_map, Function.comp_def]
+  all_goals simp_all [wgStoreView, resetAllowedips]
 
 structure Cleared (d out : Device) : Prop where
   nodes : NodesFrom d.nodes out.nodes

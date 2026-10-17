@@ -37,7 +37,7 @@ theorem add_placed_exact_wp (k : WGWorld) (d : WG.Device) (hd : k.dev = some d)
       subst d'
       mvcgen [h]
       all_goals try dsimp +zetaDelta only at *
-      all_goals simp_all [store]
+      all_goals simp_all []
       intro _ _ _
       change {g with dev := some d} = g
       rw [← hd']
@@ -61,7 +61,7 @@ theorem add_placed_exact_wp (k : WGWorld) (d : WG.Device) (hd : k.dev = some d)
       have hs := setNode_wp (store d) id {old with peer := some pid}
       mvcgen [hs]
       all_goals try dsimp +zetaDelta only at *
-      all_goals simp_all [store, dn]
+      all_goals simp_all []
   have deleting := listDel_wp kn dn rfl id
   let dl := unlisted dn id
   let kl : WGWorld := { k with dev := some dl }
@@ -98,7 +98,7 @@ theorem add_placed_exact_wp (k : WGWorld) (d : WG.Device) (hd : k.dev = some d)
     all_goals try simp_all
     all_goals try simp_all only [kn, kl, dn, dl]
   all_goals clear getter setter deleting appending
-  all_goals simp_all [exactInstalled, unlisted]
+  all_goals simp_all [unlisted]
   all_goals grind
 
 

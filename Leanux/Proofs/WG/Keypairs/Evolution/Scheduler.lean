@@ -49,24 +49,29 @@ macro "scheduler_evolves_step" : tactic => `(tactic|
 theorem encryptPacket_ordinary (checksum : Packet → Leanux.M Packet)
     (hc : ∀ pkt, ProductOrdinaryAction (checksum pkt)) (kp : KeypairId) (pkt : DataPacket) :
     ProductOrdinaryAction (WG.encryptPacket checksum kp pkt) := by
-  apply (ordinaryAction_iff_wp _).mpr
-  intro P hp
-  have checksum_spec (p : Packet) := Lifetimes.ProjectedAction.wp (hc p) P hp
-  have ambient := fun α (a : AmbientM α) => productAmbient_spec a
-    (fun w => P (snapshot w.wg)) (fun _ _ h => h)
   have padding (len mtu : Nat) :
-      ⦃fun w : World => ⌜P (snapshot w.wg)⌝⦄
-        (MonadLift.monadLift (calculateSkbPadding len mtu) : Leanux.M _)
-      ⦃⇓? _ w => ⌜P (snapshot w.wg)⌝⦄ := Lifetimes.ProjectedAction.wp
-    (OrdinaryAction.liftWG (SameView.ordinary (calculateSkbPadding_sameSnapshot len mtu))) P hp
+      ProductOrdinaryAction (monadLift (calculateSkbPadding len mtu) : Leanux.M _) :=
+    OrdinaryAction.liftWG (SameView.ordinary (calculateSkbPadding_sameSnapshot len mtu))
   have key (id : KeypairId) :
-      ⦃fun w : World => ⌜P (snapshot w.wg)⌝⦄
-        (MonadLift.monadLift (getKeypair id) : Leanux.M _)
-      ⦃⇓? _ w => ⌜P (snapshot w.wg)⌝⦄ := Lifetimes.ProjectedAction.wp
-    (OrdinaryAction.liftWG (SameView.ordinary (getKeypair_sameSnapshot id))) P hp
-  unfold Hoare at ambient
-  mvcgen [-Std.Do.Spec.monadLift_StateT, WG.encryptPacket, skipCut, hiddenAlloc,
-    branch, padding, key, checksum_spec, ambient]
+      ProductOrdinaryAction (monadLift (getKeypair id) : Leanux.M _) :=
+    OrdinaryAction.liftWG (SameView.ordinary (getKeypair_sameSnapshot id))
+  unfold ProductOrdinaryAction
+  unfold WG.encryptPacket
+  repeat' first
+    | (ordinary_head liftM; unfold liftM)
+    | env_operation_fact padding
+    | env_operation_fact key
+    | env_operation_fact hc
+    | (ordinary_head Leanux.skipCut; exact schedulerAmbient _)
+    | (ordinary_head Leanux.hiddenAlloc; exact schedulerAmbient _)
+    | (ordinary_head Leanux.branch; exact schedulerAmbient _)
+    | (ordinary_head Pure.pure; exact SameView.ordinary (SameView.pure _ _))
+    | (ordinary_head Bind.bind; refine ordinary_bind ?_ ?_)
+    | (ordinary_head Functor.discard; apply ordinary_discard)
+    | (ordinary_head ite; refine ordinary_ite _ ?_ ?_)
+    | keypairs_intro_forall
+    | ordinary_head_reduce
+    | ordinary_head_match
 
 theorem encryptStepLogged_evolves (checksum : Packet → Leanux.M Packet) (softirq : GhostM Unit)
     (hc : ∀ pkt, ProductOrdinaryAction (checksum pkt)) (hs : Evolves softirq) :

@@ -201,7 +201,7 @@ theorem consumeDataPrefix_erases (msg : List UInt8) (src : SkbSource) (ds : Nat)
       intro w ambient h
       rfl
     | keypair key =>
-      try simp only [pure_bind]
+      try simp only []
       apply erasesStatePrefix_bind (keypairGetPrefix_erases (some key))
       intro kp
       apply erasesStatePrefix_bind (erasesStatePrefix_lift _)
@@ -278,7 +278,7 @@ theorem consumeDataPrefix_preserves_ambient (c : AmbientContracts I)
       change ∃ tail, h = h ++ tail ∧ LifetimeEvent.Safe h ∧ True
       exact ⟨[], by simp, c.safe h w hi, trivial⟩
     | keypair key =>
-      try simp only [pure_bind]
+      try simp only []
       apply StatePrefixEnsures.bind (AmbientContracts.drop (keypairGetPrefix_spec_ambient c (fun _ => True) (some key)))
       intro kp
       apply StatePrefixEnsures.bind (AmbientContracts.drop (c.branch (fun _ => True) _ _))
@@ -340,7 +340,7 @@ theorem enqueuePerDeviceAndPeerRxPrefix_preserves_product (c : ProductAmbientCon
     apply c.nativeStore
     intro initial
     exact hoare_liftAmbient (AmbientM.branch d b) (fun w => wgStoreView w = initial)
-  simp only [enqueuePerDeviceAndPeerRxPrefix, liftWGObserver_bind, liftWGObserver_pure]
+  simp only [enqueuePerDeviceAndPeerRxPrefix, liftWGObserver_bind]
   apply PrefixPreserves.bind (ProductAmbientContracts.drop (c.setRx (fun _ => True) id _))
   intro _
   apply PrefixPreserves.bind (ProductAmbientContracts.drop (c.getRx (fun _ => True) id))
@@ -357,7 +357,7 @@ theorem enqueuePerDeviceAndPeerRxPrefix_preserves_product (c : ProductAmbientCon
   intro full
   split
   · exact PrefixEnsures.pure (fun h w hi => c.safe h w hi.1) (fun _ _ hi => hi.1)
-  · simp only [liftWGObserver_bind, liftWGObserver_pure]
+  · simp only [liftWGObserver_bind]
     apply PrefixEnsures.bind ((c.setPeer (fun _ => True) pkt.peer {p with rxQueue := p.rxQueue.enqueue id}).consequence
       (fun _ _ hi => ⟨hi.1, True.intro, hi.2⟩) (fun _ _ _ hi => hi.1))
     intro _
@@ -405,14 +405,14 @@ theorem consumeDataPrefix_preserves_product (c : ProductAmbientContracts I)
     exact hoare_liftAmbient (AmbientM.invariant why) (fun w => wgStoreView w = initial)
   have keyGet (P : IdentityView → Prop) (kp : Option KeypairId) :
       ProductAmbientSpec I P (liftWGObserver (keypairGetPrefix kp)) (fun _ => P) := by
-    simp only [keypairGetPrefix, liftWGObserver_bind, liftWGObserver_pure]
+    simp only [keypairGetPrefix, liftWGObserver_bind]
     apply PrefixEnsures.bind (branch_spec P _ _)
     intro isNull
     split
     · exact c.pure P _
     · cases kp with
       | some id =>
-        simp only [liftWGObserver_bind, liftWGObserver_pure]
+        simp only [liftWGObserver_bind]
         apply PrefixEnsures.bind (c.getKeypair P id)
         intro k
         let Q := fun s : IdentityView => P s ∧ s.2.1 id = some k.internalId
@@ -440,12 +440,12 @@ theorem consumeDataPrefix_preserves_product (c : ProductAmbientContracts I)
         apply c.nativeStore
         intro initial
         exact hoare_liftAmbient (AmbientM.invariant _) (fun w => wgStoreView w = initial)
-  simp only [consumeDataPrefix, pure_bind, liftWGObserver_bind, liftWGObserver_pure]
+  simp only [consumeDataPrefix, pure_bind, liftWGObserver_bind]
   apply PrefixPreserves.bind (indexLookupPrefix_preserves_product c _ _)
   intro entry
   cases entry with
   | none =>
-    simp only [liftWGObserver_bind, liftWGObserver_pure]
+    simp only [liftWGObserver_bind]
     apply PrefixPreserves.bind (ProductAmbientContracts.drop (c.nativeStore (fun _ => True) _ keypairGetNull_sameStore))
     intro _
     try simp only [pure_bind, Option.map_none, liftWGObserver_bind, liftWGObserver_pure]
@@ -462,7 +462,7 @@ theorem consumeDataPrefix_preserves_product (c : ProductAmbientContracts I)
       intro w h hi
       exact ⟨[], by change h = h ++ []; simp, c.safe h w hi, trivial⟩
     | keypair key =>
-      simp only [pure_bind, liftWGObserver_bind, liftWGObserver_pure]
+      simp only [liftWGObserver_bind]
       apply PrefixPreserves.bind (ProductAmbientContracts.drop (keyGet (fun _ => True) (some key)))
       intro kp
       apply PrefixPreserves.bind (ProductAmbientContracts.drop (branch_spec (fun _ => True) _ _))
@@ -473,7 +473,7 @@ theorem consumeDataPrefix_preserves_product (c : ProductAmbientContracts I)
       · cases kp with
         | none => exact ProductAmbientContracts.drop (invariant_spec (fun _ => True) _)
         | some id =>
-          simp only [liftWGObserver_bind, liftWGObserver_pure]
+          simp only [liftWGObserver_bind]
           apply PrefixPreserves.bind (ProductAmbientContracts.drop (c.getPeer_frame (fun _ => True) _))
           intro p
           apply PrefixPreserves.bind (ProductAmbientContracts.drop (branch_spec (fun _ => True) _ _))
@@ -482,7 +482,7 @@ theorem consumeDataPrefix_preserves_product (c : ProductAmbientContracts I)
           · simp only [liftWGObserver_bind, liftWGObserver_pure]
             exact PrefixPreserves.bind (put _ _) (fun _ =>
                 PrefixPreserves.bind (c.peerPut _) (fun _ => PrefixPreserves.pure c.safe ()))
-          · simp only [liftWGObserver_bind, liftWGObserver_pure]
+          · simp only [liftWGObserver_bind]
             apply PrefixPreserves.bind (alloc _)
             intro skb
             apply PrefixPreserves.bind (enqueuePerDeviceAndPeerRxPrefix_preserves_product c hc hq skb)
@@ -505,7 +505,7 @@ theorem consumeDataPrefix_preserves_product (c : ProductAmbientContracts I)
               · exact PrefixPreserves.bind (put _ _) (fun _ =>
                   PrefixPreserves.bind (c.peerPut _) (fun _ => free _))
             split
-            · simp only [liftWGObserver_bind, liftWGObserver_pure]
+            · simp only [liftWGObserver_bind]
               apply PrefixPreserves.bind (g := liftWGObserver (enqueuePerPeerRxNativePrefix skb .dead))
               · rw [enqueuePerPeerRxNativePrefix_lift]
                 exact enqueuePerPeerRxPrefix_preserves_ambient c (PrefixPreserves.pure c.safe ()) skb .dead

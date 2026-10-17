@@ -44,7 +44,7 @@ theorem removeNodeBody_child_unary_wp (k : WGWorld) (d : WG.Device) (hd : k.dev 
     WG.modifyDev, WG.AipNode.bitAt, WG.slotSet, WG.freeNode, branch, AmbientM.branch,
     hd, hn, hp, hc, hbits, hparent, removalChildUnary, connectedChild,
     removalCleared, removalRecords, record, events, show ¬ side > 1 from by omega,
-    Std.TreeMap.getElem?_insert, hip, Ne.symm hip, hic, Ne.symm hic, hcp, Ne.symm hcp]
+    Std.TreeMap.getElem?_insert, hip, Ne.symm hip, hic, Ne.symm hic, hcp]
   all_goals rfl
 
 theorem removeNodeBody_child_leaf_owned_wp (k : WGWorld) (d : WG.Device)

@@ -36,6 +36,137 @@ theorem ordinary_runAt_inv_wp {a : Leanux.M α} (ha : ProductOrdinaryAction a)
     rcases hr with ⟨rfl, rfl⟩
     exact ((Lifetimes.ProjectedAction.iff_run _ _ _).mp ha w _ _ he).preserves hp
 
+
+/-- Choose the current World carried by a runner result; JSON bookkeeping
+retains the current history assertion. Only checked Triple rules are built. -/
+private def lifetimeRunnerResultAssertion
+    (invariant type pre : Lean.Expr) : Lean.MetaM Lean.Expr := do
+  let type ← Lean.Meta.whnf type
+  Lean.Meta.withLocalDeclD `out type fun out => do
+    let world? ←
+      if type.isConstOf ``World then pure (some out)
+      else if type.isAppOf ``Prod && type.getAppArgs.size == 2 then
+        let args := type.getAppArgs
+        if args[0]!.isConstOf ``World then pure (some (Lean.mkProj ``Prod 0 out))
+        else if args[1]!.isConstOf ``World then pure (some (Lean.mkProj ``Prod 1 out))
+        else pure none
+      else pure none
+    let assertion := match world? with
+      | some w => Lean.mkApp invariant w
+      | none => pre
+    Lean.Meta.mkLambdaFVars #[out] assertion
+
+elab "lifetime_runner_head " name:ident : tactic => do
+  let target := (← Lean.instantiateMVars (← Lean.Elab.Tactic.getMainTarget)).consumeMData
+  unless target.isAppOf ``Triple && target.getAppArgs.size ≥ 3 do
+    Lean.throwError "not a runner triple"
+  let args := target.getAppArgs
+  let action := args[args.size - 3]!.consumeMData
+  let expected ← Lean.Elab.realizeGlobalConstNoOverloadWithInfo name
+  unless action.getAppFn.isConstOf expected do
+    Lean.throwError "different runner action head"
+
+elab "lifetime_runner_step " inv:ident : tactic => Lean.Elab.Tactic.withMainContext do
+  let goal ← Lean.Elab.Tactic.getMainGoal
+  let target := (← Lean.instantiateMVars (← goal.getType)).consumeMData
+  if target.isForall then
+    Lean.Elab.Tactic.evalTactic (← `(tactic| intro))
+    return
+  unless target.isAppOf ``Triple && target.getAppArgs.size ≥ 3 do
+    Lean.throwError "not a runner triple"
+  let args := target.getAppArgs
+  let action := args[args.size - 3]!.consumeMData
+  let pre := args[args.size - 2]!
+  let invariant ← Lean.Elab.Term.elabTerm inv none
+  if action.isAppOf ``Bind.bind then
+    let aa := action.getAppArgs
+    unless aa.size ≥ 2 do Lean.throwError "missing bind arguments"
+    let x := aa[aa.size - 2]!
+    let type ← Lean.Meta.inferType x
+    let result := type.getAppArgs.back!
+    let q ← lifetimeRunnerResultAssertion invariant result pre
+    let mut proof ← Lean.Meta.mkConstWithFreshMVarLevels ``Triple.bind
+    let mut type ← Lean.Meta.inferType proof
+    let mut goals : List Lean.MVarId := []
+    while let .forallE name domain body _ := type.consumeMData do
+      let argument ←
+        match name.toString with
+        | "m" => pure args[0]!
+        | "ps" => pure args[1]!
+        | "α" => pure result
+        | "β" => pure args[3]!
+        | "P" => pure pre
+        | "Q" => pure q
+        | "R" => pure args.back!
+        | "x" => pure x
+        | "f" => pure aa.back!
+        | "hx" | "hf" =>
+          let hole ← Lean.Meta.mkFreshExprMVar domain
+          goals := goals ++ [hole.mvarId!]
+          pure hole
+        | _ => Lean.Meta.synthInstance domain
+      unless ← Lean.Meta.isDefEq (← Lean.Meta.inferType argument) domain do
+        Lean.throwError "canonical bind parameter {name} has the wrong type"
+      proof := Lean.mkApp proof argument
+      type := body.instantiate1 argument
+    goal.assign proof
+    Lean.Elab.Tactic.replaceMainGoal goals
+    return
+  if action.isAppOf ``ForIn.forIn then
+    let aa := action.getAppArgs
+    unless aa.size ≥ 2 do Lean.throwError "missing iterator arguments"
+    let init := aa[aa.size - 2]!
+    let q ← lifetimeRunnerResultAssertion invariant (← Lean.Meta.inferType init) pre
+    let qs ← Lean.PrettyPrinter.delab q
+    let qt ← Lean.PrettyPrinter.delab (← Lean.Meta.inferType q)
+    let qsyntax ← `(term| ($qs : $qt))
+    let err ← Lean.Meta.whnf (Lean.mkProj ``Prod 1 args.back!)
+    let esyntax ← Lean.PrettyPrinter.delab err
+    let psyntax ← Lean.PrettyPrinter.delab args[1]!
+    Lean.Elab.Tactic.evalTactic (← `(tactic|
+      apply Triple.entails_wp_of_pre_post (ps := $psyntax) (Q' := ($qsyntax, $esyntax))))
+    let rest := (← Lean.Elab.Tactic.getGoals).tail
+    Lean.Elab.Tactic.setGoals [(← Lean.Elab.Tactic.getMainGoal)]
+    Lean.Elab.Tactic.evalTactic (← `(tactic| rw [← Array.forIn_toList]))
+    Lean.Elab.Tactic.evalTactic (← `(tactic|
+      apply Spec.forIn_list (fun p => $qsyntax p.2, $esyntax)))
+    Lean.Elab.Tactic.evalTactic (← `(tactic| intro pref cur suff cursor acc))
+    Lean.Elab.Tactic.setGoals ((← Lean.Elab.Tactic.getGoals) ++ rest)
+    return
+  if action.isAppOf ``Pure.pure then
+    Lean.Elab.Tactic.evalTactic (← `(tactic| apply Triple.pure))
+    return
+  if action.isAppOf ``MonadExcept.throw || action.isAppOf ``MonadExceptOf.throw then
+    Lean.Elab.Tactic.evalTactic (← `(tactic|
+      apply Triple.entails_wp_of_pre (Spec.throw_StateT
+        (m := Except (Nat × Stop)) (ps := .except (Nat × Stop) .pure) _)))
+    return
+  if action.isAppOf ``ite || action.isAppOf ``dite then
+    Lean.Elab.Tactic.evalTactic (← `(tactic| split))
+    return
+  let rec head : Nat → Lean.Expr → Lean.Expr
+    | 0, e => e
+    | n+1, e =>
+      let e := e.consumeMData
+      match e with
+      | .letE _ _ value body _ => head n (body.instantiate1 value)
+      | _ =>
+        match e.getAppFn.consumeMData with
+        | .letE _ _ value body _ => head n (Lean.mkAppN (body.instantiate1 value) e.getAppArgs)
+        | .lam .. =>
+          let next := e.headBeta
+          if Lean.Expr.equal next e then e else head n next
+        | _ => e
+  let next := head 64 action
+  if !Lean.Expr.equal action next then
+    let .app (.app (.app front _) _) _ := target | Lean.throwError "missing triple arguments"
+    Lean.Elab.Tactic.replaceMainGoal [← goal.replaceTargetDefEq (Lean.mkApp3 front next pre args.back!)]
+    return
+  if (← Lean.Meta.matchMatcherApp? action).isSome then
+    Lean.Elab.Tactic.replaceMainGoal (← Lean.Meta.Split.splitMatch goal action)
+    return
+  Lean.throwError "unhandled runner action"
+
 theorem executeTraceLogged_nodup_wp
     (calls : ∀ call, Evolves (syscallLogged call))
     (trace : Trace) (placeholders : Bool) :
@@ -71,84 +202,46 @@ theorem executeTraceLogged_nodup_wp
         if trace.foreign then Net.Fib.inCreatorNs Net.Fib.bootTables).run w = .ok (x, v)) :
       snapshot v.wg = snapshot w.wg :=
     (Lifetimes.ProjectedAction.iff_run _ _ _).mp boot w x v hr
+
+  let runnerInv : World → Assertion (.arg History (.except (Nat × Stop) .pure)) :=
+    fun w h => ⌜Inv (snapshot w.wg) h⌝
   unfold executeTraceLogged
-  mvcgen [syscall_spec, ambient_spec]
-  case inv1 =>
-    exact ((⇓? out h => ⌜Inv (snapshot out.2.1.wg) h⌝) :
-      Invariant trace.ops.toList
-        (World × Array Int × Array (Option (Nat × Nat)) × Array Json × Array Json × Array Json)
-        (.arg History (.except (Nat × Stop) .pure)))
-  case inv2 =>
-    let r : Unit × World := by assumption
-    exact ((⇓? _ h => ⌜Inv (snapshot r.2.wg) h⌝) :
-      Invariant r.2.ambient.steps.toList (Array Json)
-        (.arg History (.except (Nat × Stop) .pure)))
-  case inv3 =>
-    let r : Unit × World := by assumption
-    exact ((⇓? _ h => ⌜Inv (snapshot r.2.wg) h⌝) :
-      Invariant r.2.ambient.fired.toList (Array Json)
-        (.arg History (.except (Nat × Stop) .pure)))
-  case inv4 =>
-    exact ((⇓? out h => ⌜Inv (snapshot out.2.1.wg) h⌝) :
-      Invariant trace.ops.toList
-        (World × Array Int × Array (Option (Nat × Nat)) × Array Json × Array Json × Array Json)
-        (.arg History (.except (Nat × Stop) .pure)))
-  case inv5 =>
-    let r : Unit × World := by assumption
-    exact ((⇓? _ h => ⌜Inv (snapshot r.2.wg) h⌝) :
-      Invariant r.2.ambient.steps.toList (Array Json)
-        (.arg History (.except (Nat × Stop) .pure)))
-  case inv6 =>
-    let r : Unit × World := by assumption
-    exact ((⇓? _ h => ⌜Inv (snapshot r.2.wg) h⌝) :
-      Invariant r.2.ambient.fired.toList (Array Json)
-        (.arg History (.except (Nat × Stop) .pure)))
-  case inv7 =>
-    exact ((⇓? out h => ⌜Inv (snapshot out.2.1.wg) h⌝) :
-      Invariant trace.ops.toList
-        (World × Array Int × Array (Option (Nat × Nat)) × Array Json × Array Json × Array Json)
-        (.arg History (.except (Nat × Stop) .pure)))
-  case inv8 =>
-    let r : Unit × World := by assumption
-    exact ((⇓? _ h => ⌜Inv (snapshot r.2.wg) h⌝) :
-      Invariant r.2.ambient.steps.toList (Array Json)
-        (.arg History (.except (Nat × Stop) .pure)))
-  case inv9 =>
-    let r : Unit × World := by assumption
-    exact ((⇓? _ h => ⌜Inv (snapshot r.2.wg) h⌝) :
-      Invariant r.2.ambient.fired.toList (Array Json)
-        (.arg History (.except (Nat × Stop) .pure)))
-  case inv10 =>
-    exact ((⇓? out h => ⌜Inv (snapshot out.2.1.wg) h⌝) :
-      Invariant trace.ops.toList
-        (World × Array Int × Array (Option (Nat × Nat)) × Array Json × Array Json × Array Json)
-        (.arg History (.except (Nat × Stop) .pure)))
-  case inv11 =>
-    let r : Unit × World := by assumption
-    exact ((⇓? _ h => ⌜Inv (snapshot r.2.wg) h⌝) :
-      Invariant r.2.ambient.steps.toList (Array Json)
-        (.arg History (.except (Nat × Stop) .pure)))
-  case inv12 =>
-    let r : Unit × World := by assumption
-    exact ((⇓? _ h => ⌜Inv (snapshot r.2.wg) h⌝) :
-      Invariant r.2.ambient.fired.toList (Array Json)
-        (.arg History (.except (Nat × Stop) .pure)))
-  all_goals try dsimp +zetaDelta only at *
-  all_goals try trivial
-  all_goals try exact Inv.nodup (by assumption)
-  all_goals try exact id
-  all_goals try (rename_i history hh; subst history)
+  repeat' first
+    | (lifetime_runner_head runAtLogged;
+        apply Triple.entails_wp_of_pre_post (syscall_spec _ _ _))
+    | (lifetime_runner_head liftM;
+        apply Triple.entails_wp_of_pre_post (ambient_spec _ _))
+    | lifetime_runner_step runnerInv
+
   all_goals try
-    change Inv (snapshot (Runner.initialWG trace.net trace.bare)) []
-    rw [initial_snapshot]
-    exact inv_empty 0
+    solve
+    | simp only [WP.monadLift_StateT, WP.throw_Except]
+      intro history hi
+      trivial
+  all_goals try dsimp only [runnerInv] at *
+  all_goals try exact .rfl
+  all_goals try exact ⟨fun _ => .rfl, .rfl⟩
+  all_goals try (solve | intros; assumption)
+  all_goals try (solve | intro history hi; exact Inv.nodup hi)
   all_goals try
-    have hb := boot_run _ _ _ (by assumption)
-    change Inv _ []
-    rw [hb]
-    change Inv (snapshot (Runner.initialWG trace.net trace.bare)) []
-    rw [initial_snapshot]
-    exact inv_empty 0
+    solve
+    | intro history hh
+      change history = [] at hh
+      subst history
+      change Inv (snapshot (Runner.initialWG trace.net trace.bare)) []
+      rw [initial_snapshot]
+      exact inv_empty 0
+  all_goals try
+    solve
+    | intro history hh
+      change history = [] at hh
+      subst history
+      have hb := boot_run _ _ _ (by assumption)
+      change Inv _ []
+      rw [hb]
+      change Inv (snapshot (Runner.initialWG trace.net trace.bare)) []
+      rw [initial_snapshot]
+      exact inv_empty 0
 
 /-- Successful runner histories have no repeated event once the concrete
 syscall observer contracts are supplied. This is an intermediate composition

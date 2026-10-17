@@ -89,6 +89,6 @@ theorem sendKeepalivePrefix_alloc_failure (pid : PeerId) (w checked : WGWorld) (
     runStatePrefix (sendKeepalivePrefix pid) w ambient h =
       (.error e, h ++ [.peer (.read pid p.internalId)]) := by
   simp [sendKeepalivePrefix, runStatePrefix_bind, getPeerMixed_run, hp,
-    liftWGPrefix, liftStatePrefix, runPrefix_lift, hb, ha]
+    liftWGPrefix, hb, ha]
 
 end Leanux.Proofs.WG.Lifetimes

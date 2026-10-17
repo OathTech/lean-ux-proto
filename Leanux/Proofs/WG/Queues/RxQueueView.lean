@@ -88,7 +88,7 @@ theorem modifyPeer_rxQueues (pid : PeerId) (f : Peer → Peer)
       simp [getPeer, getDev, setPeer, modifyDev, hd, hp] at hr
       rcases hr with ⟨rfl, rfl, rfl⟩
       funext j
-      simp only [rxQueues, hd, Option.bind_some, Option.map_some]
+      simp only [rxQueues, hd, Option.bind_some]
       exact congrFun (rxMap_insert_same _ _ _ _ _ hp (hs _) (hq _)) j
 
 end Leanux.Proofs.WG.Queues

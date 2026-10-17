@@ -75,7 +75,7 @@ theorem peerGet_frame (id : PeerId) : SameView nativeCell (peerGet id) := by
   intro s
   mvcgen [peerGet, requireNotPending, getPeer, getDev, setPeer, modifyDev, refcountInc, branch, branchCmp, AmbientM.branch, AmbientM.branchCmp, invariant, unsupported, AmbientM.invariant, AmbientM.unsupported]
   all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [nativeCell, Option.map_map, Function.comp_def]
+  all_goals simp_all [nativeCell]
   all_goals subst_vars
   all_goals simp_all
 

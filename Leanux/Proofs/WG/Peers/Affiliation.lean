@@ -345,7 +345,7 @@ theorem acquireOwner_handshake (pid borrowed : PeerId) (w v : WGWorld)
   obtain ⟨p, hp, he⟩ := Option.map_eq_some_iff.mp hh
   have hc := (hi s hs).self pid p hp
   rcases hc with hc | hc
-  · simp [State.word, hc] at he
+  · simp [hc] at he
   · rw [hc] at he
     exact (Option.some.inj he).symm
 

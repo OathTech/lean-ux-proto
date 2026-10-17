@@ -46,7 +46,7 @@ theorem keypairGet_frame (id : Option KeypairId) : SameView nativeCell (keypairG
   mvcgen [keypairGet, getKeypair, getDev, setKeypair, modifyDev,
     refcountIncNotZero, branch, branchCmp, AmbientM.branch, AmbientM.branchCmp, invariant, unsupported, AmbientM.invariant, AmbientM.unsupported]
   all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [nativeCell, Option.map_map, Function.comp_def]
+  all_goals simp_all [nativeCell]
   all_goals subst_vars
   all_goals simp_all
 
@@ -74,7 +74,7 @@ theorem peerGet_frame (id : PeerId) : SameView nativeCell (peerGet id) := by
   intro s
   mvcgen [peerGet, requireNotPending, getPeer, getDev, setPeer, modifyDev, refcountInc, branch, branchCmp, AmbientM.branch, AmbientM.branchCmp, invariant, unsupported, AmbientM.invariant, AmbientM.unsupported]
   all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [nativeCell, Option.map_map, Function.comp_def]
+  all_goals simp_all [nativeCell]
   all_goals subst_vars
   all_goals simp_all
 
@@ -83,7 +83,7 @@ theorem peerGetMaybeZero_frame (id : Option PeerId) : SameView nativeCell (peerG
   intro s
   mvcgen [peerGetMaybeZero, requireNotPending, getPeer, getDev, setPeer, modifyDev, refcountIncNotZero, branch, branchCmp, AmbientM.branch, AmbientM.branchCmp, invariant, unsupported, AmbientM.invariant, AmbientM.unsupported]
   all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [nativeCell, Option.map_map, Function.comp_def]
+  all_goals simp_all [nativeCell]
   all_goals subst_vars
   all_goals simp_all
 
@@ -130,7 +130,7 @@ theorem decryptPacket_frame (pkt : RxPacket) : SameView nativeCell (decryptPacke
   mvcgen [decryptPacket, hc, hh, getKeypair, getDev, setKeypair, modifyDev,
     WG.orM, branch, branchCmp, AmbientM.branch, AmbientM.branchCmp, invariant, AmbientM.invariant]
   all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [nativeCell, Option.map_map, Function.comp_def]
+  all_goals simp_all [nativeCell]
   all_goals subst_vars
   all_goals simp_all
 

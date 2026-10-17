@@ -28,7 +28,7 @@ theorem peerGetLocal_events (id : PeerId) (w : WGWorld) (ambient : Ambient) (h :
       · simp [peerGetLocal, peerGetEvents, Peers.requireNotPendingPrefix,
           runStatePrefix_bind, getPeer, getDev, hd, hp, hz,
           refcountInc, branch, branchCmp, unsupported, AmbientM.branch, AmbientM.branchCmp,
-          AmbientM.unsupported, liftWGPrefix, StateT.run_bind, StateT.run_pure, List.append_assoc] <;> rfl
+          AmbientM.unsupported, liftWGPrefix, StateT.run_bind, StateT.run_pure] <;> rfl
       · by_cases ho : p.refcount + 1 ≥ 2 ^ 31
         all_goals have hwrap : (2147483647 ≤ p.refcount) ↔ (p.refcount + 1 ≥ 2 ^ 31) := by omega
         all_goals simp [peerGetLocal, peerGetEvents, Peers.requireNotPendingPrefix,

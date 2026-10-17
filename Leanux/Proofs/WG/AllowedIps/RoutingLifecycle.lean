@@ -84,7 +84,7 @@ theorem modifyDev_routing (f : Device → Device)
   apply (Lifetimes.ProjectedAction.iff_run_ambient _ _ _).mpr
   intro w ambient x v ambient' hr
   cases hr
-  simp [routingView, modifyDev, Option.map_map, Function.comp_def, hf]
+  simp [routingView, Option.map_map, Function.comp_def, hf]
 
 /-- Exact normal creation effects on the routing projection, including both
 original refusal arms. Initializer record failures have no returned WG/Ambient endpoint. -/
@@ -109,12 +109,12 @@ theorem peerCreate_routing_spec (start : WGWorld) (key : Key) (psk : Option Key)
   mvcgen [peerCreate, ha, hd, hh, ht, getDev, setPeer, modifyDev,
     branch, branchCmp, AmbientM.branch, AmbientM.branchCmp, invariant, AmbientM.invariant]
   all_goals try dsimp +zetaDelta only at *
-  all_goals try simp_all only [routingView, wgStoreView, WGStoreView.mk.injEq, Option.map_some]
+  all_goals try simp_all only [routingView, wgStoreView, WGStoreView.mk.injEq]
   all_goals obtain ⟨hdev, _⟩ := ‹some _ = start.dev ∧ _›
   all_goals simp only [← hdev, Option.map_some] at *
   all_goals clear hdev
-  all_goals try simp_all [routingView, routingState, RoutingState.allocate,
-    Std.TreeMap.getElem?_insert, Std.LawfulEqOrd.compare_eq_iff_eq]
+  all_goals try simp_all [routingState, RoutingState.allocate,
+    Std.TreeMap.getElem?_insert]
   all_goals first | assumption | (funext q; split <;> simp_all [eq_comm])
 
 theorem peerCreate_routing (w v : WGWorld) (ambient ambient' : Ambient) (key : Key) (psk : Option Key)
@@ -165,19 +165,18 @@ theorem peerPut_routing_spec (start : WGWorld) (peer : Option PeerId) :
     mvcgen [peerPut, branch, AmbientM.branch]
     simp_all [routingView, wgStoreView]
   | some pid =>
-    simp only [peerPut, Option.isNone_some, Option.getD_some, Bool.false_eq_true, ↓reduceIte]
+    simp only [peerPut, Option.isNone_some]
     mvcgen [hi, getPeer, getDev, setPeer, modifyDev,
       requireNotPending, refcountDecAndTest, branch, branchCmp, branchCmpExcluded,
       AmbientM.branch, AmbientM.branchCmp, AmbientM.branchCmpExcluded,
       retirePeerUnits, modifyAmbient, invariant, unsupported, AmbientM.invariant, AmbientM.unsupported]
     all_goals try dsimp +zetaDelta only at *
-    all_goals try simp_all only [routingView, wgStoreView, WGStoreView.mk.injEq, Option.map_some]
+    all_goals try simp_all only [routingView, wgStoreView, WGStoreView.mk.injEq]
     all_goals obtain ⟨hdev, _⟩ := ‹some _ = start.dev ∧ _›
     all_goals simp only [← hdev, Option.map_some] at *
     all_goals clear hdev
-    all_goals try simp_all [routingView, wgStoreView, routingState, RoutingState.erase,
-      Std.TreeMap.getElem?_insert, Std.TreeMap.getElem?_erase,
-      Std.LawfulEqOrd.compare_eq_iff_eq]
+    all_goals try simp_all [routingState, RoutingState.erase,
+      Std.TreeMap.getElem?_insert, Std.TreeMap.getElem?_erase]
     all_goals try (funext q; split <;> simp_all)
     all_goals try (apply Or.inl; funext q; split <;> simp_all)
     apply Or.inr

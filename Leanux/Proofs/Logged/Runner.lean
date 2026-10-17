@@ -245,7 +245,7 @@ private theorem loggedOperation_erases (trace : Trace) (op : Operation) (state :
     | checkpoint_intro_forall
     | checkpoint_head_reduce
     | (checkpoint_head_match <;> try simp_all only
-        [reduceCtorEq, Except.ok.injEq, Except.error.injEq, Option.some.injEq, Prod.mk.injEq])
+        [])
     | rfl
 
 /-- Exact erasure to the executable runner, including JSON and each indexed

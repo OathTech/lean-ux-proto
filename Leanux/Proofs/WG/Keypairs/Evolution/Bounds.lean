@@ -122,86 +122,48 @@ theorem executeTraceLogged_floor_wp
         if trace.foreign then Net.Fib.inCreatorNs Net.Fib.bootTables).run w = .ok (x, v)) :
       snapshot v.wg = snapshot w.wg :=
     (Lifetimes.ProjectedAction.iff_run _ _ _).mp boot w x v hr
+
+  let runnerInv : World → Assertion (.arg History (.except (Nat × Stop) .pure)) :=
+    fun w h => ⌜FloorInv (snapshot w.wg) h⌝
   unfold executeTraceLogged
-  mvcgen [syscall_spec, ambient_spec]
-  case inv1 =>
-    exact ((⇓? out h => ⌜FloorInv (snapshot out.2.1.wg) h⌝) :
-      Invariant trace.ops.toList
-        (World × Array Int × Array (Option (Nat × Nat)) × Array Json × Array Json × Array Json)
-        (.arg History (.except (Nat × Stop) .pure)))
-  case inv2 =>
-    let r : Unit × World := by assumption
-    exact ((⇓? _ h => ⌜FloorInv (snapshot r.2.wg) h⌝) :
-      Invariant r.2.ambient.steps.toList (Array Json)
-        (.arg History (.except (Nat × Stop) .pure)))
-  case inv3 =>
-    let r : Unit × World := by assumption
-    exact ((⇓? _ h => ⌜FloorInv (snapshot r.2.wg) h⌝) :
-      Invariant r.2.ambient.fired.toList (Array Json)
-        (.arg History (.except (Nat × Stop) .pure)))
-  case inv4 =>
-    exact ((⇓? out h => ⌜FloorInv (snapshot out.2.1.wg) h⌝) :
-      Invariant trace.ops.toList
-        (World × Array Int × Array (Option (Nat × Nat)) × Array Json × Array Json × Array Json)
-        (.arg History (.except (Nat × Stop) .pure)))
-  case inv5 =>
-    let r : Unit × World := by assumption
-    exact ((⇓? _ h => ⌜FloorInv (snapshot r.2.wg) h⌝) :
-      Invariant r.2.ambient.steps.toList (Array Json)
-        (.arg History (.except (Nat × Stop) .pure)))
-  case inv6 =>
-    let r : Unit × World := by assumption
-    exact ((⇓? _ h => ⌜FloorInv (snapshot r.2.wg) h⌝) :
-      Invariant r.2.ambient.fired.toList (Array Json)
-        (.arg History (.except (Nat × Stop) .pure)))
-  case inv7 =>
-    exact ((⇓? out h => ⌜FloorInv (snapshot out.2.1.wg) h⌝) :
-      Invariant trace.ops.toList
-        (World × Array Int × Array (Option (Nat × Nat)) × Array Json × Array Json × Array Json)
-        (.arg History (.except (Nat × Stop) .pure)))
-  case inv8 =>
-    let r : Unit × World := by assumption
-    exact ((⇓? _ h => ⌜FloorInv (snapshot r.2.wg) h⌝) :
-      Invariant r.2.ambient.steps.toList (Array Json)
-        (.arg History (.except (Nat × Stop) .pure)))
-  case inv9 =>
-    let r : Unit × World := by assumption
-    exact ((⇓? _ h => ⌜FloorInv (snapshot r.2.wg) h⌝) :
-      Invariant r.2.ambient.fired.toList (Array Json)
-        (.arg History (.except (Nat × Stop) .pure)))
-  case inv10 =>
-    exact ((⇓? out h => ⌜FloorInv (snapshot out.2.1.wg) h⌝) :
-      Invariant trace.ops.toList
-        (World × Array Int × Array (Option (Nat × Nat)) × Array Json × Array Json × Array Json)
-        (.arg History (.except (Nat × Stop) .pure)))
-  case inv11 =>
-    let r : Unit × World := by assumption
-    exact ((⇓? _ h => ⌜FloorInv (snapshot r.2.wg) h⌝) :
-      Invariant r.2.ambient.steps.toList (Array Json)
-        (.arg History (.except (Nat × Stop) .pure)))
-  case inv12 =>
-    let r : Unit × World := by assumption
-    exact ((⇓? _ h => ⌜FloorInv (snapshot r.2.wg) h⌝) :
-      Invariant r.2.ambient.fired.toList (Array Json)
-        (.arg History (.except (Nat × Stop) .pure)))
-  all_goals try dsimp +zetaDelta only at *
-  all_goals try trivial
-  all_goals try exact And.right (by assumption)
-  all_goals try exact id
-  all_goals try (rename_i history hh; subst history)
+  repeat' first
+    | (lifetime_runner_head runAtLogged;
+        apply Triple.entails_wp_of_pre_post (syscall_spec _ _ _))
+    | (lifetime_runner_head liftM;
+        apply Triple.entails_wp_of_pre_post (ambient_spec _ _))
+    | lifetime_runner_step runnerInv
+
   all_goals try
-    change FloorInv (snapshot (Runner.initialWG trace.net trace.bare)) []
-    constructor
-    · rw [initial_snapshot]; exact inv_empty 0
-    · simp [FloorHistory]
+    solve
+    | simp only [WP.monadLift_StateT, WP.throw_Except]
+      intro history hi
+      trivial
+  all_goals try dsimp only [runnerInv] at *
+  all_goals try exact .rfl
+  all_goals try exact ⟨fun _ => .rfl, .rfl⟩
+  all_goals try (solve | intros; assumption)
+  all_goals try (solve | intro history hi; exact hi.2)
   all_goals try
-    have hb := boot_run _ _ _ (by assumption)
-    change FloorInv _ []
-    rw [hb]
-    change FloorInv (snapshot (Runner.initialWG trace.net trace.bare)) []
-    constructor
-    · rw [initial_snapshot]; exact inv_empty 0
-    · simp [FloorHistory]
+    solve
+    | intro history hh
+      change history = [] at hh
+      subst history
+      change FloorInv (snapshot (Runner.initialWG trace.net trace.bare)) []
+      constructor
+      · rw [initial_snapshot]; exact inv_empty 0
+      · simp [FloorHistory]
+  all_goals try
+    solve
+    | intro history hh
+      change history = [] at hh
+      subst history
+      have hb := boot_run _ _ _ (by assumption)
+      change FloorInv _ []
+      rw [hb]
+      change FloorInv (snapshot (Runner.initialWG trace.net trace.bare)) []
+      constructor
+      · rw [initial_snapshot]; exact inv_empty 0
+      · simp [FloorHistory]
 
 /-- Every successful observer run obeys the bound once its concrete syscall
 contracts are supplied; the terminal result discharges that premise. -/

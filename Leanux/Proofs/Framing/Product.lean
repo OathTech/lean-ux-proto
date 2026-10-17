@@ -105,9 +105,12 @@ theorem productGetDev_spec (P : ProductStore43 → Prop) :
     Hoare (MonadLift.monadLift WG.getDev : Leanux.M WG.Device)
       (fun w => P (productStoreView w)) (fun _ w => P (productStoreView w)) := by
   have h : SameWGStore WG.getDev := by
-    intro initial
-    unfold Hoare
-    mvcgen [WG.getDev, invariant, AmbientM.invariant]
+    apply (ProjectedAction.iff_run_ambient _ _ _).mpr
+    intro w ambient d v ambient' hr
+    cases hd : w.dev <;> simp [WG.getDev, hd, invariant, AmbientM.invariant] at hr
+    · cases hr
+    · cases hr
+      rfl
   exact (liftWG_sameProductStore WG.getDev h).wp P
 
 theorem productModifyWG_spec (P : ProductStore43 → Prop) (f : WGWorld → WGWorld)
