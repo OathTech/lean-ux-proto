@@ -26,9 +26,53 @@ theorem encryptPacket_cell (checksum : Packet → Leanux.M Packet)
       Hoare (MonadLift.monadLift a : Leanux.M α)
         (fun w => P (cell w)) (fun _ w => P (cell w)) :=
     productAmbient_spec a _ (fun _ _ h => h)
-  unfold Hoare at hp hk ambient
-  mvcgen [-Std.Do.Spec.monadLift_StateT, encryptPacket, hcs, hp, hk, ambient,
-    hiddenAlloc, skipCut, branch]
+  have finish (inner : Packet) (padding : Nat) :
+      Preserves (fun w => P (cell w)) (do
+        let cowOk ← (hiddenAlloc .skbCowDataTx : Leanux.M Bool)
+        if ← branch .encCowDataFailed !cowOk then return none
+        if ← branch .encTooManyFrags false then return none
+        let k ← getKeypair key
+        if ← branch .encSgvecFailed false then return none
+        return some (dataMessage k.remoteIndex pkt.nonce k.sending.key
+          (inner.bytes ++ List.replicate padding 0))) := by
+    apply preserves_bind (ambient _)
+    intro cow
+    apply preserves_bind (ambient _)
+    intro cowFailed
+    split
+    · exact preserves_pure _
+    · apply preserves_bind (ambient _)
+      intro fragments
+      split
+      · exact preserves_pure _
+      · apply preserves_bind hk
+        intro material
+        apply preserves_bind (ambient _)
+        intro scatterFailed
+        split <;> exact preserves_pure _
+  change Preserves (fun w => P (cell w)) (encryptPacket checksum key pkt)
+  simp only [encryptPacket, hiddenAlloc, skipCut, branch]
+  apply preserves_bind (ambient _)
+  intro _
+  apply preserves_bind (hp _ _)
+  intro padding
+  apply preserves_bind (ambient _)
+  intro allocated
+  apply preserves_bind (ambient _)
+  intro failed
+  split
+  · exact preserves_pure _
+  · apply preserves_bind (ambient _)
+    intro checksumPartial
+    split
+    · apply preserves_bind (ambient _)
+      intro checksumAllocated
+      apply preserves_bind (ambient _)
+      intro checksumFailed
+      split
+      · exact preserves_pure _
+      · exact preserves_bind (hcs _) (fun inner => finish inner padding)
+    · exact finish pkt.plaintext padding
 
 
 theorem encryptStep_cell (checksum : Packet → Leanux.M Packet) (softirq : Leanux.M Unit)
@@ -51,10 +95,7 @@ theorem encryptStep_cell (checksum : Packet → Leanux.M Packet) (softirq : Lean
       Hoare (MonadLift.monadLift a : Leanux.M α)
         (fun w => P (cell w)) (fun _ w => P (cell w)) :=
     productAmbient_spec a _ (fun _ _ h => h)
-  have dev : SameView nativeCell getDev := by
-    apply SameView.of_wp
-    intro initial
-    mvcgen [getDev, invariant, AmbientM.invariant]
+  have dev : SameView nativeCell getDev := kernel (project := id) getDev_sameWGStore
   have hg := native getDev dev
   have hi := hs.wp P
   have he := fun k p => (encryptPacket_cell checksum hc k p).wp P
@@ -112,7 +153,18 @@ theorem encryptIter_cell (checksum : Packet → Leanux.M Packet) (softirq : Lean
   intro s
   have he := (encryptStep_cell checksum softirq hc hs).wp (fun t => t = s)
   have hh := hr.wp (fun t => t = s)
-  mvcgen [encryptIter, workerIter, he, hh, branch, AmbientM.branch]
+  change Preserves (fun w => cell w = s) (encryptIter checksum softirq resched)
+  unfold encryptIter workerIter
+  apply preserves_bind he
+  intro worked
+  split
+  · exact preserves_pure _
+  · apply preserves_bind
+      (preserves_bind hh (fun b =>
+        productAmbient_spec (AmbientM.branch .encWorkerNeedResched b)
+          (fun w => cell w = s) (fun _ _ h => h)))
+    intro
+    exact preserves_pure _
 
 theorem actualEncryptIter_cell : SameView cell
     (encryptIter Leanux.Env.checksumHelp Leanux.Env.napiSoftirq (Leanux.Env.condResched .encryptWorker)) :=

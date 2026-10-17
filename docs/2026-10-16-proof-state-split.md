@@ -95,8 +95,14 @@ all eighty theorem contracts and options. Their 69-job build, 105 named logical
 declaration axiom checks, four fresh replays covering all nine modules and
 independent source review pass. All nine modules have zero own warnings; their
 closure retains nine warnings. Two Hoare proof drafts failed before the final
-direct proof passed. Keypair and encryption warning repairs are still being
-validated; no theorem counts change in this maintenance.
+direct proof passed. Keypair base and encryption warning repairs preserve all
+120 contracts: both modules build without warnings, all 120 named axiom checks,
+fresh replays and independent reviews pass. Their wider 284-job invocation
+failed in Logged/Operations after a deprecated string-constructor replacement;
+that separate agreement repair remains under validation. Encryption development
+had three failures (including the unchanged two-million-heartbeat limit) before
+its direct proof passed; keypair base had two failures before two passes.
+No theorem counts change in this maintenance.
 
 Deterministic development failures, including generated-helper import
 collisions and heartbeat exhaustion, are failures. Changed source was
