@@ -146,3 +146,28 @@ Recommendation: defer the larger preservation layers until the state split,
 unless the user authorizes specific local variants sooner. Continue independent
 claims in the existing projection; delete structural frames made unnecessary
 by the narrowed types when the split lands.
+
+## H3: bad-MAC2 cookie-reply continuation
+
+The actual non-cookie receiver's loaded/noCookie branch replies for initiation
+and response types without running either authenticated consumer or endpoint
+setter. A whole-call remote-preservation claim still needs the actual reply:
+the no-cache socket path may transmit, consume hidden records, update routing
+and device transmit statistics, but its cache-free branches do not write peers.
+
+The missing shared overlap is six operation families in Keypairs/Frames:
+WGBase.tunnelXmit_sameSnapshot, send4_sameSnapshot and send6_sameSnapshot;
+WGMore.cookieMessageCreate_sameSnapshot, sendBufferAsReplyToSkb_sameSnapshot
+and sendHandshakeCookie_sameSnapshot. C1's snapshot deliberately omits remote
+endpoints, so those contracts cannot directly supply the stronger peer-map
+observation. Existing campaign cookie-secret and endpoint-extraction contracts
+cover their corresponding leaves. The no-cache/false-exactRx restriction removes
+the cache mutation and loopback callback obligations, but the outer compositions
+still span these six shared families.
+
+[AGENT 2026-10-17] Keep this overlap inventoried pending the user's scope
+decision. One architecture derives peer-map preservation through the six native
+operations; a second specializes the whole reply source directly to no cache
+and lax NET_RX, avoiding general socket support but duplicating the same shared
+control flow. Neither is implemented as a way to divide the overlap into smaller
+batches. This is a proof-support dependency, not a mirror-change request.

@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Index.OwnerCoherenceRemovalFindings
 import Leanux.Proofs.WG.Index.OwnerCoherencePeerCreateClaims
 import Leanux.Proofs.WG.Index.OwnerCoherenceCreatorClaims
 import Leanux.Proofs.WG.Index.OwnerCoherenceInitiationClaims
@@ -906,5 +907,17 @@ theorem original_peer_create_owner_coherence (publicKey : Key) (psk : Option Key
           s.wg.device = some d ∧ d.peers[pid]? = some p ∧
           p.refcount = 1 ∧ p.handshakeEntryPeer = some pid) :=
   peerCreate_owner_coherent publicKey psk
+
+/-- A checked local-state counterexample to owner-coherence preservation by
+the whole peer-removal call. The normal outcome holds for arbitrary Ambient;
+this does not assert that the fixture is reachable from driver initialization. -/
+theorem original_peer_remove_owner_coherence_counterexample :
+    HashedOwnersCoherent RemovalOwnerWitness.device ∧
+    Campaign2.Observes (peerRemove (some 0))
+      (fun s => s.wg.device = some RemovalOwnerWitness.device)
+      (fun _ out => ∃ final, out = .ok ((), final) ∧
+        final.wg.device = some RemovalOwnerWitness.finalDevice ∧
+        ¬ View.OwnerCoherentSafe final) :=
+  peerRemove_ownerCoherentSafe_counterexample
 
 end Leanux.Proofs.WG.Index

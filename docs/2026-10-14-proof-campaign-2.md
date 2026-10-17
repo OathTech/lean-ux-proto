@@ -11,26 +11,26 @@ merged; the executable mirror remains byte-identical to b700659.
 | Result | Headlines | Checked support | Split status |
 | --- | ---: | ---: | --- |
 | H1 Noise | 24 | 196 | Full terminal closure, whole-response entry edge and actual session derivation-clock receipt current; wider caller/lifetime claims open. |
-| H2 Index | 78 | 428 | Full terminal closure and ingress/expiry/handshake/peer-creation owner coherence current; reachable whole-driver uniqueness/coherence open. |
+| H2 Index | 79 | 430 | Full terminal closure and ingress/expiry/handshake/peer-creation owner coherence and whole-removal lifecycle finding current; reachable whole-driver uniqueness/coherence open. |
 | H3 Roaming | 15 | 170 | Full terminal closure and invalid-MAC1/rate-limit rejection preservation current; callback authentication provenance and broader caller coverage open. |
-| H4 Configuration | 81 | 590 | Full terminal closure and ordered mixed-peer readback current; global ownership, queued cleanup and general pagination open. |
+| H4 Configuration | 83 | 597 | Full terminal closure and ordered mixed-peer and mixed port-refusal readback current; global ownership, queued cleanup and general pagination open. |
 | H5 Progress | 43 | 293 | Full terminal closure, exact bounded outcomes and recorded batch completion-guard soundness current; global progress/coherent-ring adequacy open. |
 | H6 Timers | 52 | 445 | Full terminal closure, first outer timer turn and intermediate retransmit receipt current; whole scheduler episodes, complete caller coverage and session-relative counts open. |
 
-The checked surface is 2,122 theorems in all 661 campaign-owned modules.
+The checked surface is 2,131 theorems in all 667 campaign-owned modules.
 The completed retrofit accounts for 1,983: 1,321 retyped, 244 explicitly
-corrected, 239 retained and 179 added support/finding declarations. Ninety-five
+corrected, 239 retained and 179 added support/finding declarations. Ninety-seven
 subsequent H2 declarations add table preservation and local owner coherence.
-Eleven H1 declarations add whole-response entry and actual derivation-clock provenance; eight H4 declarations
-add mixed fwmark/scalar and ordered peer-attribute readback. Thirteen H3 declarations
+Eleven H1 declarations add whole-response entry and actual derivation-clock provenance; fifteen H4 declarations
+add mixed fwmark/scalar, ordered peer-attribute and port-refusal readback. Thirteen H3 declarations
 add invalid-MAC1 and rate-limit rejection preservation. Five H5 declarations
 establish recorded batch completion-guard soundness. Seven H6 declarations
 connect the first outer timer turn and its retransmit receipt. Of the 1,831 baseline theorems, 22 frames
 were deleted because types supply their facts and five false cookie supports
 were separately retired with checked counterexamples. No baseline declaration
 remains awaiting retrofit; all 258 original terminal names/order survive,
-with two new H1 headlines, twenty-six new H2 headlines, two new H3 headlines,
-two new H4 headlines, one new H5 headline and two new H6 headlines (293 total).
+with two new H1 headlines, twenty-seven new H2 headlines, two new H3 headlines,
+four new H4 headlines, one new H5 headline and two new H6 headlines (296 total).
 
 The [retrofit report](2026-10-16-proof-campaign-2-state-split.md) records
 claim/frame files, corrections, before/after counts and validation.
@@ -827,8 +827,101 @@ detachment obligation from coherence alone. Coherence does not require every
 hashed keypair naming a peer to occupy one of that peer's three slots. The
 existing checked peerPut counterexample already exposes this invariant gap.
 General removal needs slot coverage and retained-reference accounting, or an
-explicit detachment premise at release. The inspected whole-removal path is
-not presented here as a newly checked counterexample.
+explicit detachment premise at release. The later whole-removal finding
+below turns this inventory into a checked actual-call counterexample.
+
+## H2 continuation: whole quiet removal exposes the lifecycle obligation
+
+The earlier last-peerPut witness now extends to the complete original peerRemove.
+Its explicit Device contains one positively referenced peer, an empty three-slot
+key set, empty work/trie/packet state and a positively referenced hashed keypair
+whose peer word names that peer. The entry satisfies HashedOwnersCoherent.
+The theorem derives an actual normal removal and its exact final Device for
+every native state and Ambient realizing that Device. The keypair row remains
+hashed after the peer disappears, so final owner coherence is false.
+
+This is a checked statement-domain finding: local coherence does not connect
+hashed keypairs to peer slots or establish retained-reference accounting.
+The witness does not violate the separate numeric-index uniqueness predicate,
+establish reachability from initialization, or demonstrate a mirror/kernel bug.
+A keypair peer word alone must not be treated as a proved held-peer reference.
+No mirror-team change is requested. The next positive architecture transports
+an entry detachment condition through quiet removal; a second architecture
+would allow live slots under explicit coverage and prove their actual unhashing.
+Neither treats post-call coherence as an assumption.
+
+OwnerCoherenceRemovalFindingModel holds seven pure witness definitions;
+OwnerCoherenceRemovalFindings holds the projected whole-call claim.
+Statements adds its literal documented wrapper. There are no new native frame
+files or shared variants. Two theorems bring H2 to 430 theorems and 79 headlines.
+
+Seven changed scratch probes were used. Probes 1–6 fail respectively on concrete
+source recursion; source/cleanup recursion and membership decidability;
+concrete specialization recursion; repeated singleton-map normalization;
+ring/NAPI guard simplification; and the initialized empty-ring fact.
+Probes 1 and 2 also emitted an unused-simp warning. Probe 7 accepts both
+theorems with one unused-simp warning; removing that unused argument is checked
+by the installed 331-job build. No limits were raised or unchanged job retried.
+Independent review finds no semantic or domain issue.
+
+## H4 continuation: mixed port refusal and actual readback
+
+The actual mixed setter now has a contract for a changed nonzero listen port
+that collides while the device is running in its creating namespace. Supported
+flags include REPLACE_PEERS; private-key and peer-attribute suffixes remain
+arbitrary. On a normal return the code is -EADDRINUSE. The earlier generation
+increment, fwmark write and both endpoint-source/cache clearing passes persist.
+All other device fields, including port, sockets, identity and index/keypair
+stores, retain their original values. Listed peers have the actual final reset
+value; unlisted bindings are unchanged. Replacement and later attributes do
+not execute. Duplicate or missing listed peers are not excluded: missing-peer
+or hidden-reset failures remain actual Stops, with no post-Stop claim.
+
+A second claim composes the actual following wgGetDevice. Its bounded domain
+adds a singleton resident peer, no allowed IPs, enough dump room and an idle,
+empty socket 7. The device may remain running; there is no peer-reference bound
+or reset readiness premise. The getter returns exact mirror JSON with the new
+mark and original port, identity and serialized peer fields, empties its socket
+at the incremented generation, and retains the setter's real source/cache
+effects. This is not a byte-level netlink encoding theorem.
+
+PortRefusalModel holds the request and committed-prefix Device.
+PortRefusalFrames contains two substantive native frames for the clearing loops
+and refused bind; PortRefusalSource connects the whole original setter;
+PortRefusalClaims contains the two projected contracts. Statements adds two
+documented wrappers. Seven theorems bring H4 to 597 theorems and 83 headlines.
+The proofs use existing campaign-owned effects without changing shared lemmas.
+No mirror change is requested.
+
+Eight changed scratch probes were used. Probe 1 fails on projection elaboration,
+Boolean equality, name shadowing and a missing frame import. Probe 2 fails on
+two source-factor equalities. Probe 3 accepts the source with two unused-simp
+warnings, removed in the next draft. Probes 4–6 fail on getter record layout,
+projection congruence and dependent equality elaboration respectively.
+Probe 7 checks both claims without diagnostics; probe 8 checks the exact split
+bodies and both wrappers without warnings, with seven standard-axiom outputs.
+Independent review finds no issue. No readiness premise, suppression, limit
+increase or infrastructure rerun was introduced.
+
+## Validation of the quiet-removal finding and mixed port refusal
+
+The installed combined Index/Config build passes 449 jobs, with only the
+unchanged Env:865 String.mk deprecation. The new proofs are warning-free.
+The combined axiom audit covers 1,833 logical roots in 385 modules, including
+1,252 public theorems: only propext, Classical.choice and Quot.sound.
+Fresh kernel replays of both terminal modules pass without diagnostics,
+after dependency artifact writers stopped.
+Static token/import/root/default-target checks, all 258 original headline
+names/order, source census and diff formatting pass. The executable mirror
+and existing C1 shared layers remain unchanged. The owned tree now contains
+2,131 theorems in 667 modules and 296 headlines. The inherited full-gate failure
+is unchanged and is not rerun; no whole charter result is declared complete.
+
+Reproduce the scoped build and each fresh replay using Index.Statements and
+Config.Statements under scripts/in-bundle, capped, LEAN_NUM_THREADS=32 and
+LEANUX_QEMU_SLOTS=16. Scratch diagnostics are reconstructible and not committed.
+The separate H3 reply/socket overlap is inventoried in the shared-frame
+follow-up; neither of its two architectures has been implemented.
 
 ## H3 continuation: rate-limit refusal preserves peers and endpoints
 

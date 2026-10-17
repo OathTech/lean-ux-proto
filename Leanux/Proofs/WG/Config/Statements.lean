@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Config.PortRefusalClaims
 import Leanux.Proofs.WG.Config.MixedPeerClaims
 import Leanux.Proofs.WG.Config.MixedAttributeClaims
 import Leanux.Proofs.WG.Config.LiveRemovalObservation
@@ -1364,5 +1365,50 @@ theorem original_mixed_peer_allowedip_get_after_set (v4 : Bool) (key psk : Key)
                (if inserted then [("allowed_ips", Lean.Json.arr #[allowedJson v4 addr cidr])] else [])})) :=
   mixed_peer_allowedip_get_after_set v4 key psk interval addr cidr bad d pid p ctx skb
     found resident live bounded down empty root width fresh sequence room
+
+/-- A normal mixed request that reaches a nonzero port collision retains its
+earlier mark/generation and source-cache writes, while all later attributes are
+bypassed. No reset-record or listed-peer readiness is assumed. -/
+theorem original_mixed_port_refusal (d : Device) (mark port : Nat)
+    (flags : Option UInt32) (key : Option Key) (peers : Option (List PeerEntry))
+    (bound : Nat → Bool) (supported : flags.getD 0 &&& ~~~WGDEVICE_F_ALL = 0)
+    (net : d.creatingNet = true) (running : d.running = true)
+    (nonzero : port ≠ 0) (changed : d.incomingPort ≠ port)
+    (collision : (bound port || d.sock4 == some port || d.sock6 == some port) = true) :
+    Campaign2.Ensures (wgSetDevice (portRefusalAttrs d mark port flags key peers))
+      (fun s => s.wg.device = some d ∧ ClaimView.selectsDevice s d ∧ s.wg.portBound = bound)
+      (fun ret s => ret = -EADDRINUSE ∧
+        s.wg.device.map withoutPeers = some (withoutPeers (portRefusalBase d mark)) ∧
+        ClaimView.clearedPeers d s.wg.toCore d.peerList) :=
+  mixed_port_refusal d mark port flags key peers bound supported net running nonzero changed collision
+
+/-- The actual getter observes the retained prefix of a failed mixed request.
+This finite dump domain allows a running device and arbitrary later attributes;
+hidden reset Stops prevent the sequence rather than becoming normal refusals.
+The equality concerns the mirror's JSON, not byte-level attribute encoding. -/
+theorem original_mixed_port_refusal_get_after_set (d : Device) (mark port : Nat)
+    (flags : Option UInt32) (key : Option Key) (peers : Option (List PeerEntry))
+    (bound : Nat → Bool) (pid : PeerId) (p : Peer) (sock : NlSock)
+    (supported : flags.getD 0 &&& ~~~WGDEVICE_F_ALL = 0)
+    (net : d.creatingNet = true) (running : d.running = true)
+    (nonzero : port ≠ 0) (changed : d.incomingPort ≠ port)
+    (collision : (bound port || d.sock4 == some port || d.sock6 == some port) = true)
+    (members : d.peerList = [pid]) (resident : d.peers[pid]? = some p)
+    (noIps : p.allowedipsList = [])
+    (room : devicePrefixSpace d + 168 + 20 ≤ NLMSG_GOODSIZE)
+    (idle : sock.cbRunning = false) (empty : sock.queue = []) :
+    Campaign2.Ensures (do
+      let ret ← wgSetDevice (portRefusalAttrs d mark port flags key peers)
+      let dump ← wgGetDevice (byIndex d)
+      pure (ret, dump))
+      (fun s => s.wg.device = some d ∧ ClaimView.selectsDevice s d ∧
+        s.wg.portBound = bound ∧ s.wg.nlSock7 = sock)
+      (fun result s =>
+        result = (-EADDRINUSE, .ok (singlePeerJson (portRefusalBase d mark) p)) ∧
+        s.wg.nlSock7 = {sock with queue := [], ctx := {hasWg := true}, prevSeq := d.deviceUpdateGen + 1, dumpDoneErrno := 0, cbRunning := false} ∧
+        s.wg.device.map withoutPeers = some (withoutPeers (portRefusalBase d mark)) ∧
+        ClaimView.clearedPeers d s.wg.toCore d.peerList) :=
+  mixed_port_refusal_get_after_set d mark port flags key peers bound pid p sock
+    supported net running nonzero changed collision members resident noIps room idle empty
 
 end Leanux.Proofs.WG.Config
