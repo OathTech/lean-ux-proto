@@ -1,5 +1,6 @@
 import Leanux.Proofs.WG.Queues.RxIngressStable
 import Leanux.Proofs.WG.Queues.RxConsumeProtection
+import Leanux.Proofs.WG.Queues.RxCleanupFindings
 import Leanux.Proofs.WG.Queues.RxPollCarrier
 import Leanux.Proofs.WG.Queues.RxIngressProtection
 import Leanux.Proofs.WG.Queues.RxLinkRunner
@@ -148,19 +149,20 @@ theorem two_carried_slots_fifo :
 peer-queue refusal, or physical ring refusal with the corresponding exact
 ring effect. Original missing-object and queue-work Stops are not ruled out. -/
 theorem original_enqueue_result (pid : PeerId) (item : List SkbId)
-    (w v : World) (ret : Int)
-    (hr : (enqueuePerDeviceAndPeer pid item).run w = .ok (ret, v)) :
+    (w v : WGWorld) (ambient ambient' : Ambient) (ret : Int)
+    (hr : ((enqueuePerDeviceAndPeer pid item).run w).run ambient = .ok ((ret, v), ambient')) :
     Queues.EnqueueResult (Queues.encryptRing w) item ret (Queues.encryptRing v) :=
-  Queues.enqueue_ring_result pid item w v ret hr
+  Queues.enqueue_ring_result pid item w v ambient ambient' ret hr
 
 /-- An original -EPIPE return means the entry encrypt ring was physically
 full and is unchanged at return. Earlier peer-queue and packet-state updates
 may have occurred; no ownership or well-formedness premise is imposed. -/
-theorem original_enqueue_epipe (pid : PeerId) (item : List SkbId) (w v : World)
-    (hr : (enqueuePerDeviceAndPeer pid item).run w = .ok (-WG.EPIPE, v)) :
+theorem original_enqueue_epipe (pid : PeerId) (item : List SkbId)
+    (w v : WGWorld) (ambient ambient' : Ambient)
+    (hr : ((enqueuePerDeviceAndPeer pid item).run w).run ambient = .ok ((-WG.EPIPE, v), ambient')) :
     Queues.encryptRing v = Queues.encryptRing w ∧
       ∃ r, Queues.encryptRing w = some r ∧ r.full = true :=
-  Queues.enqueue_epipe pid item w v hr
+  Queues.enqueue_epipe pid item w v ambient ambient' hr
 
 /-- Original enqueue appends after all logically held items, including a
 cached peek. It does not itself perform the caller's capacity check. -/
@@ -168,55 +170,54 @@ theorem original_prev_enqueue (q : PrevQueue α) (x : α) :
     (q.enqueue x).all = q.all ++ [x] := Queues.prev_enqueue_all q x
 
 /-- Every normal original dequeue removes the first underlying item and
-preserves the cached peek and Kernel. No queue-validity premise is imposed. -/
-theorem original_prev_dequeue (q : PrevQueue α) (w v : World)
-    (head : Option α) (q' : PrevQueue α)
-    (hr : q.dequeue.run w = .ok ((head, q'), v)) :
+preserves the cached peek and WG state. No queue-validity premise is imposed. -/
+theorem original_prev_dequeue (q : PrevQueue α) (w v : WGWorld)
+    (ambient ambient' : Ambient) (head : Option α) (q' : PrevQueue α)
+    (hr : (q.dequeue.run w).run ambient = .ok (((head, q'), v), ambient')) :
     head = q.items.head? ∧ q'.items = q.items.tail ∧
-      q'.peeked = q.peeked ∧ v.k = w.k :=
-  Queues.prev_dequeue_normal q w v head q' hr
+      q'.peeked = q.peeked ∧ v = w :=
+  Queues.prev_dequeue_normal q w v ambient ambient' head q' hr
 
 /-- A normal original peek returns the logical first item and preserves all
 logical contents. Its cached result agrees with that item. -/
-theorem original_prev_peek (q : PrevQueue α) (w v : World)
-    (head : Option α) (q' : PrevQueue α)
-    (hr : q.peek.run w = .ok ((head, q'), v)) :
-    head = q.all.head? ∧ q'.all = q.all ∧ q'.peeked = head ∧ v.k = w.k :=
-  Queues.prev_peek_normal q w v head q' hr
+theorem original_prev_peek (q : PrevQueue α) (w v : WGWorld)
+    (ambient ambient' : Ambient) (head : Option α) (q' : PrevQueue α)
+    (hr : (q.peek.run w).run ambient = .ok (((head, q'), v), ambient')) :
+    head = q.all.head? ∧ q'.all = q.all ∧ q'.peeked = head ∧ v = w :=
+  Queues.prev_peek_normal q w v ambient ambient' head q' hr
 
 /-- Peeking a present item and dropping the peek removes exactly the logical
 head. This local queue statement does not yet describe original rxPoll. -/
-theorem original_prev_peek_drop (q : PrevQueue α) (w v : World)
-    (x : α) (q' : PrevQueue α)
-    (hr : q.peek.run w = .ok ((some x, q'), v)) :
-    q.all = x :: q'.dropPeeked.all := Queues.prev_peek_then_drop q w v x q' hr
+theorem original_prev_peek_drop (q : PrevQueue α) (w v : WGWorld)
+    (ambient ambient' : Ambient) (x : α) (q' : PrevQueue α)
+    (hr : (q.peek.run w).run ambient = .ok (((some x, q'), v), ambient')) :
+    q.all = x :: q'.dropPeeked.all := Queues.prev_peek_then_drop q w v ambient ambient' x q' hr
 
 /-- Structurally coherent queues have ordinary dequeue and peek results. -/
-theorem original_prev_total (q : PrevQueue α) (w : World) (hc : Queues.PrevCoherent q) :
-    (∃ head q' v, q.dequeue.run w = .ok ((head, q'), v)) ∧
-    (∃ head q' v, q.peek.run w = .ok ((head, q'), v)) :=
-  ⟨Queues.prev_dequeue_total q w hc, Queues.prev_peek_total q w hc⟩
+theorem original_prev_total (q : PrevQueue α) (w : WGWorld) (ambient : Ambient)
+    (hc : Queues.PrevCoherent q) :
+    (∃ head q' v ambient', (q.dequeue.run w).run ambient = .ok (((head, q'), v), ambient')) ∧
+    (∃ head q' v ambient', (q.peek.run w).run ambient = .ok (((head, q'), v), ambient')) :=
+  ⟨Queues.prev_dequeue_total q w ambient hc, Queues.prev_peek_total q w ambient hc⟩
 
 /-- The malformed nonstub empty queue fails at the original invariant,
 unless an existing cached peek avoids the dequeue. -/
-theorem original_prev_malformed (q : PrevQueue α) (w : World)
+theorem original_prev_malformed (q : PrevQueue α) (w : WGWorld) (ambient : Ambient)
     (hp : q.peeked = none) (ht : q.tailIsStub = false) (hi : q.items = []) :
-    q.peek.run w = .error (.invariant "prev_queue: a tail item without an entry") :=
-  Queues.prev_peek_malformed q w hp ht hi
+    (q.peek.run w).run ambient = .error (.invariant "prev_queue: a tail item without an entry") :=
+  Queues.prev_peek_malformed q w ambient hp ht hi
 
-/-- Complete original reference-acquisition, keypair-release and RX-free
+/-- Complete original reference-acquisition and keypair-release
 helpers preserve every peer's full receive queue with its epoch and identity.
 These are successful-endpoint frames, not internal access-history claims. -/
 theorem original_reference_queue_frames (pid : PeerId) (peer : Option PeerId)
-    (kp : Option KeypairId) (now : Bool) (id : SkbId) :
+    (kp : Option KeypairId) (now : Bool) :
     Framing.SameView Queues.rxQueues (peerGet pid) ∧
     Framing.SameView Queues.rxQueues (peerGetMaybeZero peer) ∧
     Framing.SameView Queues.rxQueues (keypairGet kp) ∧
-    Framing.SameView Queues.rxQueues (keypairPut kp now) ∧
-    Framing.SameView Queues.rxQueues (freeRxSkb id) :=
+    Framing.SameView Queues.rxQueues (keypairPut kp now) :=
   ⟨Queues.peerGet_rxQueues pid, Queues.peerGetMaybeZero_rxQueues peer,
-    Queues.keypairGet_rxQueues kp, Queues.keypairPut_rxQueues kp now,
-    Queues.freeRxSkb_rxQueues id⟩
+    Queues.keypairGet_rxQueues kp, Queues.keypairPut_rxQueues kp now⟩
 
 /-- Peer release may delete an entry; every surviving entry retains its exact
 queue, peer identity and device epoch. No reference-ownership premise is used. -/
@@ -261,7 +262,7 @@ theorem original_receive_completion_retains_queues (pid : PeerId) (pkt : RxPacke
 /-- The complete poll's failure-retaining removal observer has exactly the
 original result, full success World and Stop for every input and callback. -/
 theorem original_poll_removal_erasure (pid : PeerId) (budget : Nat)
-    (callback : List (List UInt8) → M Unit) :
+    (callback : List (List UInt8) → Leanux.M Unit) :
     Logged.ErasesPrefix (Queues.rxPollRemovals pid budget callback) (rxPoll pid budget callback) :=
   Queues.rxPollRemovals_erases pid budget callback
 
@@ -272,9 +273,9 @@ callback-internal removals are outside this log. Successful batch callbacks
 must explicitly retain surviving queues. This theorem does not assert
 packet ownership or stack delivery. -/
 theorem original_poll_removal_prefix (pid : PeerId) (budget : Nat)
-    (callback : List (List UInt8) → M Unit) (w : World) (cell : Queues.RxQueueCell)
-    (hcallback : ∀ bytes, Queues.RetainsRx (callback bytes))
-    (hc : Queues.rxQueues w pid = some cell) :
+    (callback : List (List UInt8) → Leanux.M Unit) (w : World) (cell : Queues.RxQueueCell)
+    (hcallback : ∀ bytes, Queues.ProductRetainsRx (callback bytes))
+    (hc : Queues.rxQueues w.wg pid = some cell) :
     Queues.RemovalPrefix cell.queue.all
       (Logged.runPrefix (Queues.rxPollRemovals pid budget callback) w []).2 :=
   Queues.rxPollRemovals_prefix pid budget callback w cell hcallback hc
@@ -284,7 +285,7 @@ appends exactly its one skb ID, while a failed update appends nothing. -/
 theorem original_poll_drop_observation (pid : PeerId) (id : SkbId)
     (w : World) (h : List SkbId) :
     Logged.runPrefix (Queues.dropRxPrefix pid id) w h =
-      match (Queues.dropRxQueue pid).run w with
+      match (liftWG (Queues.dropRxQueue pid)).run w with
       | .error stop => (.error stop, h)
       | .ok (_, v) => (.ok ((), v), h ++ [id]) :=
   Queues.dropRxPrefix_run pid id w h
@@ -302,7 +303,7 @@ Keepalives and other none returns emit none; failures retain the old history. -/
 theorem original_poll_completion_buffer (pid : PeerId) (occurrence : Nat) (id : SkbId)
     (pkt : RxPacket) (endpoint : Endpoint) (w : World) (h : List Queues.GroEvent) :
     Logged.runPrefix (Queues.consumeGro pid occurrence id pkt endpoint) w h =
-      match (consumeDataDone pid pkt endpoint).run w with
+      match (liftWG (consumeDataDone pid pkt endpoint)).run w with
       | .error stop => (.error stop, h)
       | .ok (none, v) => (.ok (none, v), h)
       | .ok (some bytes, v) =>
@@ -315,7 +316,7 @@ helper equation identifies the cause: a held packet then a normal packet are
 passed to the actual callback in reverse order. ReplayGro separately checks an
 accepted original runner witness. No universal selected-order or conservation
 replacement is claimed by this equation. -/
-theorem original_gro_held_then_normal (callback : List (List UInt8) → M Unit)
+theorem original_gro_held_then_normal (callback : List (List UInt8) → Leanux.M Unit)
     (held normal : List UInt8) (hh : groTakenAtOnce held = false)
     (hn : groTakenAtOnce normal = true) :
     (do let g ← napiGroReceive callback {} held
@@ -392,7 +393,7 @@ the exact receive queue, epoch and peer identity of every surviving resident.
 IPv4 TCP replies may re-enter transmit and delete peers during cleanup; this
 contract permits deletion and requires no packet-validity or ownership premise. -/
 theorem original_stack_callback_retains_receive_queues (packets : List (List UInt8)) :
-    Queues.RetainsRx (packets.forM Leanux.Env.deliverInner) :=
+    Queues.ProductRetainsRx (packets.forM Leanux.Env.deliverInner) :=
   Queues.stackForM_rxQueues packets
 
 /-- With the concrete stack callback, outer removals are a prefix of the
@@ -400,7 +401,7 @@ initial resident's exact entry queue for every normal or stopped poll.
 The initial cell identifies that queue; no callback frame, live-peer or
 packet-ID-validity assumption is required from the caller. -/
 theorem original_poll_concrete_removal_prefix (pid : PeerId) (budget : Nat)
-    (w : World) (cell : Queues.RxQueueCell) (hc : Queues.rxQueues w pid = some cell) :
+    (w : World) (cell : Queues.RxQueueCell) (hc : Queues.rxQueues w.wg pid = some cell) :
     Queues.RemovalPrefix cell.queue.all
       ((Queues.removedTags (Logged.runPrefix (Queues.rxPollGro pid budget) w []).2).map Prod.snd) :=
   Queues.rxPollGro_entry_prefix pid budget w cell hc
@@ -422,7 +423,7 @@ resident's exact entry queue under the actual stack callback, even if the poll
 stops. Repeated skb IDs remain possible; GRO may later select callback entries
 in another order. This is an occurrence/order statement, not no-loss delivery. -/
 theorem original_poll_buffered_entry_subsequence (pid : PeerId) (budget : Nat)
-    (w : World) (cell : Queues.RxQueueCell) (hc : Queues.rxQueues w pid = some cell) :
+    (w : World) (cell : Queues.RxQueueCell) (hc : Queues.rxQueues w.wg pid = some cell) :
     ((Queues.bufferedEntries (Logged.runPrefix (Queues.rxPollGro pid budget) w []).2).map
       Queues.GroEntry.skb).Sublist cell.queue.all :=
   Queues.rxPollGro_buffered_sublist pid budget w cell hc
@@ -485,25 +486,26 @@ theorem original_tagged_ring_journal_occurrences (n next : Nat)
 /-- Original TX enqueue returning zero independently establishes that its
 entry physical ring existed and was not full. EnqueueResult remains unchanged.
 No admitted event is inferred from a guard followed by a queue-work Stop. -/
-theorem original_tx_admission_not_full (pid : PeerId) (item : List SkbId) (w v : World)
-    (hr : (enqueuePerDeviceAndPeer pid item).run w = .ok (0, v)) :
+theorem original_tx_admission_not_full (pid : PeerId) (item : List SkbId)
+    (w v : WGWorld) (ambient ambient' : Ambient)
+    (hr : ((enqueuePerDeviceAndPeer pid item).run w).run ambient = .ok ((0, v), ambient')) :
     ∃ r, Queues.encryptRing w = some r ∧ r.full = false :=
-  Queues.enqueue_success_free pid item w v hr
+  Queues.enqueue_success_free pid item w v ambient ambient' hr
 
 /-- The same independent successful-admission guard for original RX enqueue,
 without queue geometry, ownership or packet-ID validity assumptions. -/
-theorem original_rx_admission_not_full (id : SkbId) (w v : World)
-    (hr : (enqueuePerDeviceAndPeerRx id).run w = .ok (0, v)) :
+theorem original_rx_admission_not_full (id : SkbId) (w v : WGWorld)
+    (ambient ambient' : Ambient)
+    (hr : ((enqueuePerDeviceAndPeerRx id).run w).run ambient = .ok ((0, v), ambient')) :
     ∃ r, Queues.decryptRing w = some r ∧ r.full = false :=
-  Queues.enqueue_rx_success_free id w v hr
-
+  Queues.enqueue_rx_success_free id w v ambient ambient' hr
 
 /-- The complete original RX enqueue and consumeData retain their exact
 result, World on success and Stop on failure, for every input and history.
 The ring log records admission/refusal only at the corresponding source cut. -/
 theorem original_rx_ring_entry_erasure (id : SkbId) (msg : List UInt8) (src : SkbSource) (ds : Nat) :
-    Logged.ErasesPrefix (Queues.RxRing.enqueue id) (enqueuePerDeviceAndPeerRx id) ∧
-      Logged.ErasesPrefix (Queues.RxRing.consume msg src ds) (consumeData msg src ds) :=
+    Logged.ErasesPrefix (Queues.RxRing.enqueue id) (liftWG (enqueuePerDeviceAndPeerRx id)) ∧
+      Logged.ErasesPrefix (Queues.RxRing.consume msg src ds) (liftWG (consumeData msg src ds)) :=
   ⟨Queues.RxRing.enqueue_erases id, Queues.RxRing.consume_erases msg src ds⟩
 
 /-- Every reached RX entry prefix refines original finite ring operations.
@@ -567,8 +569,8 @@ theorem original_rx_ring_initialized_conservation (c : Queues.RxRing.Call α)
 /-- Complete original TX enqueue/createData erasure preserves every result,
 successful World and exact Stop, with no queue or packet validity premise. -/
 theorem original_tx_ring_entry_erasure (pid : PeerId) (item : List SkbId) :
-    Logged.ErasesPrefix (Queues.TxRing.enqueue pid item) (enqueuePerDeviceAndPeer pid item) ∧
-      Logged.ErasesPrefix (Queues.TxRing.create pid item) (createData pid item) :=
+    Logged.ErasesPrefix (Queues.TxRing.enqueue pid item) (liftWG (enqueuePerDeviceAndPeer pid item)) ∧
+      Logged.ErasesPrefix (Queues.TxRing.create pid item) (liftWG (createData pid item)) :=
   ⟨Queues.TxRing.enqueue_erases pid item, Queues.TxRing.create_erases pid item⟩
 
 /-- TX admission/refusal events refine original finite ring operations.
@@ -583,8 +585,8 @@ theorem original_tx_ring_entry_prefix_refinement (deviceIndex : Nat)
   ⟨Queues.TxRing.enqueue_preserves pid item, Queues.TxRing.create_preserves pid item⟩
 
 /-- Encryption and its complete step/iteration preserve exact original
-behavior for arbitrary Worlds and callback implementations. Softirq precedes
-the ring read; checksum remains between its original guards and later reads. -/
+behavior for arbitrary Worlds and callback implementations. The ring is consumed
+and installed before softirq; checksum remains between its original guards and later reads. -/
 theorem original_encrypt_ring_worker_erasure
     (hc : ∀ p, Logged.ErasesPrefix (checksum p) (originalChecksum p))
     (hs : Logged.ErasesPrefix softirq originalSoftirq)
@@ -696,28 +698,30 @@ theorem original_rx_consistency_trial_conservation (xs : List Activation) (w : W
   Queues.RxRing.trials_initialized xs w h hi
 
 /-- The adjacent original lookupSrc/peerPut cut returns the lookup's actual
-result and restores the full outside-peer Kernel and all complete peer records.
+result and restores the outside-peer WG stores and all complete peer records.
 A Some result derives a positive pre-acquisition count in Borrowed. No initial
 liveness, represented-trie or ownership premise is required. This is normal
 partial correctness, not a total-repayment theorem. -/
 theorem original_lookup_source_reference_restoration (protocol : Nat) (bytes : List UInt8)
-    (w v : World) (result : Option PeerId)
-    (hr : (Queues.RxBorrow.source protocol bytes).run w = .ok (result, v)) :
-    ∃ acquired, (lookupSrc protocol bytes).run w = .ok (result, acquired) ∧
-      Framing.PeerBorrow.Borrowed w.k result acquired.k ∧
+    (w v : WGWorld) (ambient ambient' : Ambient) (result : Option PeerId)
+    (hr : ((Queues.RxBorrow.source protocol bytes).run w).run ambient = .ok ((result, v), ambient')) :
+    ∃ acquired acquiredAmbient, ((lookupSrc protocol bytes).run w).run ambient =
+      .ok ((result, acquired), acquiredAmbient) ∧
+      Framing.PeerBorrow.Borrowed (Framing.wgStoreView w) result (Framing.wgStoreView acquired) ∧
       Framing.PeerBorrow.view v = Framing.PeerBorrow.view w :=
-  Queues.RxBorrow.repayLookup_normal _ (Queues.RxBorrow.lookupSrc_spec protocol bytes) w v result hr
+  Queues.RxBorrow.repayLookup_normal _ (Queues.RxBorrow.lookupSrc_spec protocol bytes)
+    w v ambient ambient' result hr
 
 /-- The existing lookup/acquisition/release observers compose with exact
 result, full successful World and Stop erasure on all inputs. -/
 theorem original_lookup_repayment_access_erasure (protocol : Nat) (bytes : List UInt8) :
-    Logged.ErasesPrefix (Queues.RxBorrow.observed protocol bytes)
+    Logged.ErasesStatePrefix (Queues.RxBorrow.observed protocol bytes)
       (Queues.RxBorrow.source protocol bytes) := Queues.RxBorrow.observed_erases protocol bytes
 
 /-- Real accesses preceding any Stop remain in the safe history under the
 existing concrete allocation invariant; no failed World is manufactured. -/
 theorem original_lookup_repayment_allocation_access_preserves (protocol : Nat) (bytes : List UInt8) :
-    Logged.PrefixPreserves Lifetimes.AllocationInv Lifetimes.LifetimeEvent.Safe
+    Logged.StatePrefixPreserves (fun h w _ => Lifetimes.AllocationInv h w) Lifetimes.LifetimeEvent.Safe
       (Queues.RxBorrow.observed protocol bytes) := Queues.RxBorrow.observed_preserves protocol bytes
 
 /-- Normal repayment retains exact RX queues, resident NAPI flags and all
@@ -725,7 +729,7 @@ three key slots. It also preserves bounded slot affiliation if already true;
 affiliation initialization and the remaining pipeline are separate obligations. -/
 theorem original_lookup_repayment_carrier_projections (protocol : Nat) (bytes : List UInt8) :
     Framing.SameView Queues.rxQueues (Queues.RxBorrow.source protocol bytes) ∧
-    (∀ pid, Framing.SameView (fun w => (Framing.PeerBorrow.resident w.k pid).map fun p =>
+    (∀ pid, Framing.SameView (fun w => (Framing.PeerBorrow.resident (Framing.wgStoreView w) pid).map fun p =>
       (p.napiScheduled, p.keypairCurrent, p.keypairPrevious, p.keypairNext))
       (Queues.RxBorrow.source protocol bytes)) ∧
     Framing.SameView Queues.RxBorrow.SlotAffiliation (Queues.RxBorrow.source protocol bytes) :=
@@ -735,10 +739,10 @@ theorem original_lookup_repayment_carrier_projections (protocol : Nat) (bytes : 
 /-- The joint admission, publication, createData and TX-step observations erase
 on every input, preserving the complete original result, World and Stop. -/
 theorem original_tx_disposition_erasure (pid : PeerId) (item : List SkbId) (state : PacketState) :
-    Logged.ErasesPrefix (Queues.TxDisposition.enqueue pid item) (enqueuePerDeviceAndPeer pid item) ∧
-    Logged.ErasesPrefix (Queues.TxDisposition.publish item state) (enqueuePerPeerTx item state) ∧
-    Logged.ErasesPrefix (Queues.TxDisposition.create pid item) (createData pid item) ∧
-    Logged.ErasesPrefix (Queues.TxDisposition.step pid) (txStep pid) :=
+    Logged.ErasesPrefix (Queues.TxDisposition.enqueue pid item) (liftWG (enqueuePerDeviceAndPeer pid item)) ∧
+    Logged.ErasesPrefix (Queues.TxDisposition.publish item state) (liftWG (enqueuePerPeerTx item state)) ∧
+    Logged.ErasesPrefix (Queues.TxDisposition.create pid item) (liftWG (createData pid item)) ∧
+    Logged.ErasesPrefix (Queues.TxDisposition.step pid) (liftWG (txStep pid)) :=
   ⟨Queues.TxDisposition.enqueue_erases pid item, Queues.TxDisposition.publish_erases item state,
     Queues.TxDisposition.create_erases pid item, Queues.TxDisposition.step_erases pid⟩
 
@@ -747,11 +751,11 @@ access/ring projections are unconditional; full-step access projection uses the
 existing AllocationInv at entry and concretely discharged intermediate contracts. -/
 theorem original_tx_disposition_projections (pid : PeerId) (item : List SkbId) :
     Logged.ProjectsPrefix Queues.TxDisposition.accessEvent id
-      (Queues.TxDisposition.create pid item) (Lifetimes.createDataPrefix pid item) ∧
+      (Queues.TxDisposition.create pid item) (Logged.liftWGObserver (Lifetimes.createDataPrefix pid item)) ∧
     Logged.ProjectsPrefix Queues.TxDisposition.ringEvent id
       (Queues.TxDisposition.create pid item) (Queues.TxRing.create pid item) ∧
-    Logged.ProjectsUnder Lifetimes.AllocationInv Queues.TxDisposition.accessEvent
-      (Queues.TxDisposition.step pid) (Lifetimes.txStepPrefix pid) :=
+    Logged.ProjectsUnder (fun h w => Lifetimes.AllocationInv h w.wg) Queues.TxDisposition.accessEvent
+      (Queues.TxDisposition.step pid) (Logged.liftWGObserver (Lifetimes.txStepPrefix pid)) :=
   ⟨Queues.TxDisposition.create_access pid item, Queues.TxDisposition.create_ring pid item,
     Queues.TxDisposition.step_access pid⟩
 
@@ -759,20 +763,20 @@ theorem original_tx_disposition_projections (pid : PeerId) (item : List SkbId) :
 through the direct projections. A Stop has no retained World. -/
 theorem original_tx_disposition_prefix_refinement (pid : PeerId) (item : List SkbId)
     (w : World) (h : List Queues.TxDisposition.Event)
-    (ha : Lifetimes.AllocationInv (h.filterMap Queues.TxDisposition.accessEvent) w)
+    (ha : Lifetimes.AllocationInv (h.filterMap Queues.TxDisposition.accessEvent) w.wg)
     (hr : Queues.TxRing.Inv deviceIndex initial (h.filterMap Queues.TxDisposition.ringEvent) w) :
     (Lifetimes.LifetimeEvent.Safe
       ((Logged.runPrefix (Queues.TxDisposition.create pid item) w h).2.filterMap Queues.TxDisposition.accessEvent) ∧
       match (Logged.runPrefix (Queues.TxDisposition.create pid item) w h).1 with
       | .error _ => True
       | .ok (_, v) => Lifetimes.AllocationInv
-          ((Logged.runPrefix (Queues.TxDisposition.create pid item) w h).2.filterMap Queues.TxDisposition.accessEvent) v) ∧
+          ((Logged.runPrefix (Queues.TxDisposition.create pid item) w h).2.filterMap Queues.TxDisposition.accessEvent) v.wg) ∧
     (Lifetimes.LifetimeEvent.Safe
       ((Logged.runPrefix (Queues.TxDisposition.step pid) w h).2.filterMap Queues.TxDisposition.accessEvent) ∧
       match (Logged.runPrefix (Queues.TxDisposition.step pid) w h).1 with
       | .error _ => True
       | .ok (_, v) => Lifetimes.AllocationInv
-          ((Logged.runPrefix (Queues.TxDisposition.step pid) w h).2.filterMap Queues.TxDisposition.accessEvent) v) ∧
+          ((Logged.runPrefix (Queues.TxDisposition.step pid) w h).2.filterMap Queues.TxDisposition.accessEvent) v.wg) ∧
     (Queues.TxRing.Safe initial
       ((Logged.runPrefix (Queues.TxDisposition.create pid item) w h).2.filterMap Queues.TxDisposition.ringEvent) ∧
       match (Logged.runPrefix (Queues.TxDisposition.create pid item) w h).1 with
@@ -781,9 +785,9 @@ theorem original_tx_disposition_prefix_refinement (pid : PeerId) (item : List Sk
           ((Logged.runPrefix (Queues.TxDisposition.create pid item) w h).2.filterMap Queues.TxDisposition.ringEvent) v) :=
 by
   have hc := (Queues.TxDisposition.create_access pid item).under.preserves
-      (Lifetimes.createDataPrefix_preserves_ambient Lifetimes.allocationAmbient Lifetimes.allocationTx pid item) w h ha
+      (Lifetimes.createDataPrefix_preserves_ambient Lifetimes.allocationAmbient Lifetimes.allocationTx pid item).liftWGObserver w h ha
   have hs := (Queues.TxDisposition.step_access pid).preserves
-      (Lifetimes.txStepPrefix_preserves_ambient Lifetimes.allocationAmbient Lifetimes.allocationTx Lifetimes.allocationSocket pid) w h ha
+      (Lifetimes.txStepPrefix_preserves_ambient Lifetimes.allocationAmbient Lifetimes.allocationTx Lifetimes.allocationSocket pid).liftWGObserver w h ha
   have hj := (Queues.TxDisposition.create_ring pid item).under.preserves (Queues.TxRing.create_preserves pid item) w h hr
   constructor
   · cases he : (Logged.runPrefix (Queues.TxDisposition.create pid item) w h).1 <;> simpa only [he] using hc
@@ -816,22 +820,25 @@ theorem original_tx_disposition_continuations (pid : PeerId) (item : List SkbId)
 put failure retains the reached prefix but supplies no final World. -/
 theorem original_tx_disposition_release_cut (pid : PeerId) (item : List SkbId) (key : KeypairId)
     (id : SkbId) (w : World) (h : List Queues.TxDisposition.Event) :
-    Logged.runPrefix (Queues.TxDisposition.access (Lifetimes.freeTxSkbPrefix id)) w h =
-      (match (getTxSkb id).run w with
+    Logged.runPrefix (Queues.TxDisposition.nativeAccess (Lifetimes.freeTxSkbPrefix id)) w h =
+      (match (liftWG (getTxSkb id)).run w with
       | .error e => (.error e, h)
-      | .ok (_, _) => ((freeTxSkb id).run w,
-          h ++ [.access (.packet (.read (.inl id) (Lifetimes.packetStamp w id))),
-                .access (.packet (.release (.inl id) (Lifetimes.packetStamp w id)))])) ∧
-    Framing.SameView (fun w => w.sent) (Queues.TxDisposition.disposeSource pid item key) :=
+      | .ok (_, _) => ((liftWG (freeTxSkb id)).run w,
+          h ++ [.access (.packet (.read (.inl id) (Lifetimes.packetStamp w.wg id))),
+                .access (.packet (.release (.inl id) (Lifetimes.packetStamp w.wg id)))])) ∧
+    Framing.SameView (fun w : WGWorld => w.sent) (Queues.TxDisposition.disposeSource pid item key) :=
   ⟨Queues.TxDisposition.free_run id w h, Queues.TxDisposition.dispose_no_send pid item key⟩
 
 /-- Strict peerGet derives positivity from its original normal return. Immediate
-repayment restores the semantic Kernel; intervening publication is not covered. -/
-theorem original_tx_strict_reference_cut (pid : PeerId) (w v : World)
-    (hr : (peerGet pid).run w = .ok ((), v)) :
-    Framing.PeerBorrow.Borrowed w.k (some pid) v.k ∧
+repayment restores the WG store view; intervening publication is not covered. -/
+theorem original_tx_strict_reference_cut (pid : PeerId) (w v : WGWorld)
+    (ambient ambient' : Ambient)
+    (hr : ((peerGet pid).run w).run ambient = .ok (((), v), ambient')) :
+    Framing.PeerBorrow.Borrowed (Framing.wgStoreView w) (some pid) (Framing.wgStoreView v) ∧
     Framing.SameView Framing.PeerBorrow.view (do peerGet pid; peerPut (some pid)) :=
-  ⟨(Framing.hoare_iff_triple _ _ _).mpr (Framing.PeerBorrow.strict_acquire_spec pid w.k) w () v rfl hr,
+  ⟨(Framing.hoare_iff_run_ambient _ _ _).mp
+      (Framing.PeerBorrow.strict_acquire_spec pid (Framing.wgStoreView w))
+      w ambient () v ambient' rfl hr,
     Framing.PeerBorrow.strict_repaid pid⟩
 
 /-- The actual publication borrow spans CPU/work-queue updates. Every peer's
@@ -845,51 +852,51 @@ theorem original_tx_publication_retains_queues (item : List SkbId) (state : Pack
 marks its actual head DEAD and leaves the physical encrypt ring unchanged. The
 entry guards are source conditions; normal return is explicit, not guaranteed. -/
 theorem original_create_data_epipe_endpoint (pid : PeerId) (first : SkbId) (rest : List SkbId)
-    (d : Device) (p : Peer) (w v : World) (hd : w.k.wg = some d)
+    (d : Device) (p : Peer) (w v : WGWorld) (ambient ambient' : Ambient) (hd : w.dev = some d)
     (hp : d.peers[pid]? = some p) (hl : p.isDead = false)
     (hq : p.txQueue.count < MAX_QUEUED_PACKETS) (hf : d.encryptQueue.full = true)
-    (hr : (createData pid (first :: rest)).run w = .ok ((), v)) :
+    (hr : ((createData pid (first :: rest)).run w).run ambient = .ok (((), v), ambient')) :
     Queues.TxDisposition.txQueues v pid = some (p.txQueue.enqueue (first :: rest)) ∧
     Queues.TxDisposition.HeadState first .dead v ∧
-    Queues.TxRing.cell v = some (d.ifindex, d.encryptQueue) :=
-  (Framing.hoare_iff_triple _ _ _).mpr
-    (Queues.TxDisposition.create_pipe pid first rest d p hp hl hq hf) w () v hd hr
+    Queues.TxRing.nativeCell v = some (d.ifindex, d.encryptQueue) :=
+  (Framing.hoare_iff_run_ambient _ _ _).mp
+    (Queues.TxDisposition.create_pipe pid first rest d p hp hl hq hf) w ambient () v ambient' hd hr
 
 /-- Actual peer-queue refusal and normal cleanup remove every supplied packet
 slot. The preceding key/peer puts may Stop; peer-queue retention is not claimed. -/
 theorem original_create_data_enospc_endpoint (pid : PeerId) (item : List SkbId)
-    (p : Peer) (w v : World) (hp : Framing.PeerBorrow.resident w.k pid = some p)
+    (p : Peer) (w v : WGWorld) (ambient ambient' : Ambient) (hp : Framing.PeerBorrow.resident (Framing.wgStoreView w) pid = some p)
     (hl : p.isDead = false) (hq : MAX_QUEUED_PACKETS ≤ p.txQueue.count)
-    (hr : (createData pid item).run w = .ok ((), v)) :
+    (hr : ((createData pid item).run w).run ambient = .ok (((), v), ambient')) :
     ∀ id ∈ item, Queues.TxDisposition.txPackets v id = none :=
-  (Framing.hoare_iff_triple _ _ _).mpr
+  (Framing.hoare_iff_run_ambient _ _ _).mp
     (Queues.TxDisposition.create_noSpace pid item p.txQueue hq)
-      w () v ⟨p, hp, hl, rfl⟩ hr
+      w ambient () v ambient' ⟨p, hp, hl, rfl⟩ hr
 
 /-- Complete original txStep on its actual logical DEAD head frees the whole
 item without adding socket output. This is a local step contract, not a proof
 that every previous EPIPE reaches this state under an arbitrary schedule. -/
 theorem original_dead_tx_step_disposal (pid : PeerId) (first : SkbId) (rest : List SkbId)
-    (p : Peer) (w v : World) (result : Bool)
-    (hp : Framing.PeerBorrow.resident w.k pid = some p)
+    (p : Peer) (w v : WGWorld) (ambient ambient' : Ambient) (result : Bool)
+    (hp : Framing.PeerBorrow.resident (Framing.wgStoreView w) pid = some p)
     (hq : p.txQueue.all.head? = some (first :: rest))
     (hd : Queues.TxDisposition.HeadState first .dead w)
-    (hr : (txStep pid).run w = .ok (result, v)) :
+    (hr : ((txStep pid).run w).run ambient = .ok ((result, v), ambient')) :
     result = true ∧ (∀ id ∈ first :: rest, Queues.TxDisposition.txPackets v id = none) ∧
       v.sent = w.sent :=
-  (Framing.hoare_iff_triple _ _ _).mpr
+  (Framing.hoare_iff_run_ambient _ _ _).mp
     (Queues.TxDisposition.dead_step_endpoint pid first rest w.sent)
-      w result v ⟨⟨p, hp, hq⟩, hd, rfl⟩ hr
+      w ambient result v ambient' ⟨⟨p, hp, hq⟩, hd, rfl⟩ hr
 
 /-- Normal original list frees erase exactly the listed TX slots. Repeated IDs
 are allowed in the statement: a later missing getter instead Stops, retaining
 only its reached access prefix, and cannot satisfy this normal-run premise. -/
-theorem original_tx_list_disposal_exact (item : List SkbId) (w v : World)
-    (hr : (Queues.TxDisposition.freeList item).run w = .ok ((), v)) :
+theorem original_tx_list_disposal_exact (item : List SkbId) (w v : WGWorld) (ambient ambient' : Ambient)
+    (hr : ((Queues.TxDisposition.freeList item).run w).run ambient = .ok (((), v), ambient')) :
     Queues.TxDisposition.txPackets v = fun id =>
       if id ∈ item then none else Queues.TxDisposition.txPackets w id :=
-  (Framing.hoare_iff_triple _ _ _).mpr
-    (Queues.TxDisposition.freeList_wp item (Queues.TxDisposition.txPackets w)) w () v rfl hr
+  (Framing.hoare_iff_run_ambient _ _ _).mp
+    (Queues.TxDisposition.freeList_wp item (Queues.TxDisposition.txPackets w)) w ambient () v ambient' rfl hr
 
 open Leanux.Proofs.Logged Queues.RxJoint
 
@@ -900,14 +907,14 @@ theorem joint_poll_correspondence (pid : PeerId) (budget : Nat) :
     ErasesPrefix (poll pid budget)
       (Leanux.WG.rxPoll pid budget (fun bytes => bytes.forM Leanux.Env.deliverInner)) ∧
     ProjectsPrefix groEvent id (poll pid budget) (Queues.rxPollGro pid budget) ∧
-    ProjectsUnder Lifetimes.AllocationInv accessEvent (poll pid budget)
+    ProjectsUnder (fun h w => Lifetimes.AllocationInv h w.wg) accessEvent (poll pid budget)
       (Lifetimes.rxPollStackPrefix pid budget) :=
   ⟨poll_erases pid budget, poll_gro pid budget, poll_access pid budget⟩
 
 /-- Each poll starts a fresh occurrence journal while retaining arbitrary
 valid prior lifetime history. Every Stop retains its exact safe access suffix. -/
 theorem joint_poll_fresh_history (pid : PeerId) (budget : Nat) (w : World)
-    (prior : List Lifetimes.LifetimeEvent) (hi : Lifetimes.AllocationInv prior w) :
+    (prior : List Lifetimes.LifetimeEvent) (hi : Lifetimes.AllocationInv prior w.wg) :
     runPrefix (Queues.rxPollGro pid budget) w [] =
       ((runPrefix (poll pid budget) w (seed prior)).1,
         (runPrefix (poll pid budget) w (seed prior)).2.filterMap groEvent) ∧
@@ -915,14 +922,14 @@ theorem joint_poll_fresh_history (pid : PeerId) (budget : Nat) (w : World)
       Lifetimes.LifetimeEvent.Safe (prior ++ suffix.filterMap accessEvent) ∧
       (match (runPrefix (poll pid budget) w (seed prior)).1 with
        | .error _ => True
-       | .ok (_, v) => Lifetimes.AllocationInv (prior ++ suffix.filterMap accessEvent) v) :=
+       | .ok (_, v) => Lifetimes.AllocationInv (prior ++ suffix.filterMap accessEvent) v.wg) :=
   ⟨poll_fresh_gro pid budget w prior, poll_safe_suffix pid budget w prior hi⟩
 
 /-- Removal allocation stamps are distinct on every reached poll prefix.
 Normal return observes a real release for every removed allocation; no release
 of a pending captured stamp is asserted after a Stop. -/
 theorem joint_poll_removal_identity_safety (pid : PeerId) (budget : Nat) (w : World)
-    (prior : List Lifetimes.LifetimeEvent) (hi : Lifetimes.AllocationInv prior w) :
+    (prior : List Lifetimes.LifetimeEvent) (hi : Lifetimes.AllocationInv prior w.wg) :
     (removedStamps (runPrefix (poll pid budget) w (seed prior)).2).Nodup ∧
       (match (runPrefix (poll pid budget) w (seed prior)).1 with
        | .error _ => True
@@ -935,7 +942,7 @@ Normal poll completion has released them all, including buffered GRO payloads
 entered after their packet storage's earlier release. This is not a completed
 delivery or cross-poll uniqueness statement. -/
 theorem joint_poll_callback_identity_safety (pid : PeerId) (budget : Nat) (w : World)
-    (prior : List Lifetimes.LifetimeEvent) (hi : Lifetimes.AllocationInv prior w) :
+    (prior : List Lifetimes.LifetimeEvent) (hi : Lifetimes.AllocationInv prior w.wg) :
     let h := (runPrefix (poll pid budget) w (seed prior)).2
     ((entries h).map Entry.stamp).Nodup ∧
       (match (runPrefix (poll pid budget) w (seed prior)).1 with
@@ -973,7 +980,7 @@ theorem joint_poll_capture_read_suffix (pid : PeerId) (budget : Nat) (w : World)
 Entry stamps are distinct on failed prefixes too. Normal return has observed
 all removal and entry releases in this very suffix, including explicit drops. -/
 theorem joint_poll_suffix_lifetime (pid : PeerId) (budget : Nat) (w : World)
-    (prior : List Lifetimes.LifetimeEvent) (hi : Lifetimes.AllocationInv prior w)
+    (prior : List Lifetimes.LifetimeEvent) (hi : Lifetimes.AllocationInv prior w.wg)
     (suffix : List Queues.RxJoint.Event)
     (he : (runPrefix (poll pid budget) w (seed prior)).2 = seed prior ++ suffix) :
     ((∀ k ∈ removalKeys suffix, ¬ PriorReleased prior k.2.2) ∧
@@ -1019,7 +1026,7 @@ allocation stamps on every prefix from an allocation-valid empty-history entry.
 This is composition of polls, not initialized scheduler/Runner coverage or
 successful stack delivery. -/
 theorem joint_poll_finite_sequence (calls : List (PeerId × Nat)) (w : World)
-    (hi : Lifetimes.AllocationInv [] w) :
+    (hi : Lifetimes.AllocationInv [] w.wg) :
     ErasesPrefix (Queues.RxHistory.polls calls)
       (calls.forM fun (pid, budget) => do
         discard <| Leanux.WG.rxPoll pid budget (fun bytes => bytes.forM Leanux.Env.deliverInner)) ∧
@@ -1039,7 +1046,7 @@ theorem original_napi_softirq_joint :
       Queues.RxHistory.napiSoftirq (Lifetimes.auditFocus Lifetimes.napiSoftirqPrefix) ∧
     PrefixPreserves Queues.RxHistory.BoundaryInv Queues.RxHistory.BoundarySafe
       Queues.RxHistory.napiSoftirq ∧
-    ∀ w, Lifetimes.AllocationInv [] w →
+    ∀ w, Lifetimes.AllocationInv [] w.wg →
       Queues.RxHistory.BoundarySafe (runPrefix Queues.RxHistory.napiSoftirq w []).2 :=
   ⟨Queues.RxHistory.napiSoftirq_erases, Queues.RxHistory.napiSoftirq_projects,
     Queues.RxHistory.napiSoftirq_preserves,
@@ -1054,7 +1061,7 @@ theorem original_inline_poll_joint :
       Queues.RxHistory.pollScheduledInline (Lifetimes.auditFocus Lifetimes.pollScheduledInlinePrefix) ∧
     PrefixPreserves Queues.RxHistory.BoundaryInv Queues.RxHistory.BoundarySafe
       Queues.RxHistory.pollScheduledInline ∧
-    ∀ w, Lifetimes.AllocationInv [] w →
+    ∀ w, Lifetimes.AllocationInv [] w.wg →
       Queues.RxHistory.BoundarySafe (runPrefix Queues.RxHistory.pollScheduledInline w []).2 :=
   ⟨Queues.RxHistory.pollScheduledInline_erases, Queues.RxHistory.pollScheduledInline_projects,
     Queues.RxHistory.pollScheduledInline_preserves,
@@ -1069,7 +1076,7 @@ theorem original_napi_irq_exit_joint :
       Queues.RxHistory.napiIrqExit (Lifetimes.auditFocus Lifetimes.napiIrqExitPrefix) ∧
     PrefixPreserves Queues.RxHistory.BoundaryInv Queues.RxHistory.BoundarySafe
       Queues.RxHistory.napiIrqExit ∧
-    ∀ w, Lifetimes.AllocationInv [] w →
+    ∀ w, Lifetimes.AllocationInv [] w.wg →
       Queues.RxHistory.BoundarySafe (runPrefix Queues.RxHistory.napiIrqExit w []).2 :=
   ⟨Queues.RxHistory.napiIrqExit_erases, Queues.RxHistory.napiIrqExit_projects,
     Queues.RxHistory.napiIrqExit_preserves,
@@ -1086,7 +1093,7 @@ theorem original_encrypt_iteration_joint :
         Lifetimes.napiSoftirqPrefix (liftPrefix (Leanux.Env.condResched .encryptWorker)))) ∧
     PrefixPreserves Queues.RxHistory.BoundaryInv Queues.RxHistory.BoundarySafe
       Queues.RxHistory.encryptIteration ∧
-    ∀ w, Lifetimes.AllocationInv [] w →
+    ∀ w, Lifetimes.AllocationInv [] w.wg →
       Queues.RxHistory.BoundarySafe (runPrefix Queues.RxHistory.encryptIteration w []).2 :=
   ⟨Queues.RxHistory.encryptIteration_erases, Queues.RxHistory.encryptIteration_projects,
     Queues.RxHistory.encryptIteration_preserves,
@@ -1103,7 +1110,7 @@ theorem original_decrypt_iteration_joint :
         (liftPrefix (Leanux.Env.condResched .decryptWorker)))) ∧
     PrefixPreserves Queues.RxHistory.BoundaryInv Queues.RxHistory.BoundarySafe
       Queues.RxHistory.decryptIteration ∧
-    ∀ w, Lifetimes.AllocationInv [] w →
+    ∀ w, Lifetimes.AllocationInv [] w.wg →
       Queues.RxHistory.BoundarySafe (runPrefix Queues.RxHistory.decryptIteration w []).2 :=
   ⟨Queues.RxHistory.decryptIteration_erases, Queues.RxHistory.decryptIteration_projects,
     Queues.RxHistory.decryptIteration_preserves,
@@ -1118,7 +1125,7 @@ theorem original_crypt_ahead_joint (pid : PeerId) :
       (Queues.RxHistory.cryptAhead pid) (Lifetimes.auditFocus (Lifetimes.cryptAheadPrefix pid)) ∧
     PrefixPreserves Queues.RxHistory.BoundaryInv Queues.RxHistory.BoundarySafe
       (Queues.RxHistory.cryptAhead pid) ∧
-    ∀ w, Lifetimes.AllocationInv [] w →
+    ∀ w, Lifetimes.AllocationInv [] w.wg →
       Queues.RxHistory.BoundarySafe (runPrefix (Queues.RxHistory.cryptAhead pid) w []).2 :=
   ⟨Queues.RxHistory.cryptAhead_erases pid, Queues.RxHistory.cryptAhead_projects pid,
     Queues.RxHistory.cryptAhead_preserves pid,
@@ -1134,7 +1141,7 @@ theorem original_activation_iteration_joint (a : Activation) :
       (Queues.RxHistory.activationIteration a) (Lifetimes.auditFocus (Lifetimes.activationIterPrefix a)) ∧
     PrefixPreserves Queues.RxHistory.BoundaryInv Queues.RxHistory.BoundarySafe
       (Queues.RxHistory.activationIteration a) ∧
-    ∀ w, Lifetimes.AllocationInv [] w →
+    ∀ w, Lifetimes.AllocationInv [] w.wg →
       Queues.RxHistory.BoundarySafe (runPrefix (Queues.RxHistory.activationIteration a) w []).2 :=
   ⟨Queues.RxHistory.activationIteration_erases a, Queues.RxHistory.activationIteration_projects a,
     Queues.RxHistory.activationIteration_preserves a,
@@ -1149,7 +1156,7 @@ theorem original_activation_run_joint (a : Activation) :
       (Queues.RxHistory.activationRun a) (Lifetimes.auditFocus (Lifetimes.activationRunPrefix a)) ∧
     PrefixPreserves Queues.RxHistory.BoundaryInv Queues.RxHistory.BoundarySafe
       (Queues.RxHistory.activationRun a) ∧
-    ∀ w, Lifetimes.AllocationInv [] w →
+    ∀ w, Lifetimes.AllocationInv [] w.wg →
       Queues.RxHistory.BoundarySafe (runPrefix (Queues.RxHistory.activationRun a) w []).2 :=
   ⟨Queues.RxHistory.activationRun_erases a, Queues.RxHistory.activationRun_projects a,
     Queues.RxHistory.activationRun_preserves a,
@@ -1164,7 +1171,7 @@ theorem original_dispatch_joint (worker : Worker) :
       (Queues.RxHistory.dispatch worker) (Lifetimes.auditFocus (Lifetimes.dispatchPrefix worker)) ∧
     PrefixPreserves Queues.RxHistory.BoundaryInv Queues.RxHistory.BoundarySafe
       (Queues.RxHistory.dispatch worker) ∧
-    ∀ w, Lifetimes.AllocationInv [] w →
+    ∀ w, Lifetimes.AllocationInv [] w.wg →
       Queues.RxHistory.BoundarySafe (runPrefix (Queues.RxHistory.dispatch worker) w []).2 :=
   ⟨Queues.RxHistory.dispatch_erases worker, Queues.RxHistory.dispatch_projects worker,
     Queues.RxHistory.dispatch_preserves worker,
@@ -1180,15 +1187,15 @@ theorem original_recorded_schedule_joint (stack : Option Worker) :
       (Queues.RxHistory.schedule stack) (Lifetimes.scheduleAudit stack) ∧
     PrefixPreserves Queues.RxHistory.BoundaryInv Queues.RxHistory.BoundarySafe
       (Queues.RxHistory.schedule stack) ∧
-    ∀ w, Lifetimes.AllocationInv [] w →
+    ∀ w, Lifetimes.AllocationInv [] w.wg →
       Queues.RxHistory.BoundarySafe (runPrefix (Queues.RxHistory.schedule stack) w []).2 ∧
       ∀ p ∈ Lifetimes.probeEntries (Queues.RxHistory.auditHistory
           (runPrefix (Queues.RxHistory.schedule stack) w []).2),
-        Lifetimes.AllocationInv p.history p.world ∧
-        (p.world.suspended.filterM Leanux.Env.Activation.consistent).run p.world =
-          (p.world.suspended.filterM (fun a => Lifetimes.activationTrialDecision a p.world p.history)).map
+        Lifetimes.AllocationInv p.history p.world.wg ∧
+        (p.world.ambient.suspended.filterM Leanux.Env.Activation.consistent).run p.world =
+          (p.world.ambient.suspended.filterM (fun a => Lifetimes.activationTrialDecision a p.world p.history)).map
             (fun ys => (ys, p.world)) ∧
-        ∀ a ∈ p.world.suspended,
+        ∀ a ∈ p.world.ambient.suspended,
           Lifetimes.LifetimeEvent.Safe (runPrefix (Lifetimes.activationRunPrefix a) p.world p.history).2 :=
   ⟨Queues.RxHistory.schedule_erases stack, Queues.RxHistory.schedule_projects stack,
     Queues.RxHistory.schedule_preserves stack,
@@ -1206,7 +1213,7 @@ theorem original_nested_reschedule_joint (self : Worker) :
       (Queues.RxHistory.nestedResched self) (Lifetimes.nestedReschedAudit self) ∧
     PrefixPreserves Queues.RxHistory.BoundaryInv Queues.RxHistory.BoundarySafe
       (Queues.RxHistory.nestedResched self) ∧
-    ∀ w, Lifetimes.AllocationInv [] w →
+    ∀ w, Lifetimes.AllocationInv [] w.wg →
       Queues.RxHistory.BoundarySafe (runPrefix (Queues.RxHistory.nestedResched self) w []).2 :=
   ⟨Queues.RxHistory.nestedResched_erases self, Queues.RxHistory.nestedResched_projects self,
     Queues.RxHistory.nestedResched_preserves self,
@@ -1219,17 +1226,17 @@ theorem original_deferred_workers_joint :
     (ErasesPrefix Queues.RxHistory.runCryptWorkers (Leanux.Env.runCryptWorkers) ∧
     ProjectsUnder Lifetimes.AuditInv Queues.RxHistory.auditEvent Queues.RxHistory.runCryptWorkers Lifetimes.runCryptWorkersAudit ∧
     PrefixPreserves Queues.RxHistory.BoundaryInv Queues.RxHistory.BoundarySafe Queues.RxHistory.runCryptWorkers ∧
-    ∀ w, Lifetimes.AllocationInv [] w →
+    ∀ w, Lifetimes.AllocationInv [] w.wg →
       Queues.RxHistory.BoundarySafe (runPrefix Queues.RxHistory.runCryptWorkers w []).2) ∧
     (ErasesPrefix Queues.RxHistory.runSendWorkers (Leanux.Env.runSendWorkers) ∧
     ProjectsUnder Lifetimes.AuditInv Queues.RxHistory.auditEvent Queues.RxHistory.runSendWorkers Lifetimes.runSendWorkersAudit ∧
     PrefixPreserves Queues.RxHistory.BoundaryInv Queues.RxHistory.BoundarySafe Queues.RxHistory.runSendWorkers ∧
-    ∀ w, Lifetimes.AllocationInv [] w →
+    ∀ w, Lifetimes.AllocationInv [] w.wg →
       Queues.RxHistory.BoundarySafe (runPrefix Queues.RxHistory.runSendWorkers w []).2) ∧
     (ErasesPrefix Queues.RxHistory.afterXmit (Leanux.Env.afterXmit) ∧
     ProjectsUnder Lifetimes.AuditInv Queues.RxHistory.auditEvent Queues.RxHistory.afterXmit Lifetimes.afterXmitAudit ∧
     PrefixPreserves Queues.RxHistory.BoundaryInv Queues.RxHistory.BoundarySafe Queues.RxHistory.afterXmit ∧
-    ∀ w, Lifetimes.AllocationInv [] w →
+    ∀ w, Lifetimes.AllocationInv [] w.wg →
       Queues.RxHistory.BoundarySafe (runPrefix Queues.RxHistory.afterXmit w []).2) :=
   ⟨⟨Queues.RxHistory.runCryptWorkers_erases, Queues.RxHistory.runCryptWorkers_projects, Queues.RxHistory.runCryptWorkers_preserves,
     fun w hi => (Queues.RxHistory.runCryptWorkers_preserves w [] (Queues.RxHistory.boundary_initial w hi)).choose_spec.2.1⟩,
@@ -1245,7 +1252,7 @@ theorem original_inject_joint (family port : Nat) (msg : List UInt8) (tos : Nat)
     ErasesPrefix (Queues.RxHistory.inject family port msg tos ll dest) (Leanux.Env.inject family port msg tos ll dest) ∧
     ProjectsUnder Lifetimes.AuditInv Queues.RxHistory.auditEvent (Queues.RxHistory.inject family port msg tos ll dest) (Lifetimes.injectAudit family port msg tos ll dest) ∧
     PrefixPreserves Queues.RxHistory.BoundaryInv Queues.RxHistory.BoundarySafe (Queues.RxHistory.inject family port msg tos ll dest) ∧
-    ∀ w, Lifetimes.AllocationInv [] w →
+    ∀ w, Lifetimes.AllocationInv [] w.wg →
       Queues.RxHistory.BoundarySafe (runPrefix (Queues.RxHistory.inject family port msg tos ll dest) w []).2 :=
   ⟨Queues.RxHistory.inject_erases family port msg tos ll dest, Queues.RxHistory.inject_projects family port msg tos ll dest, Queues.RxHistory.inject_preserves family port msg tos ll dest,
     fun w hi => (Queues.RxHistory.inject_preserves family port msg tos ll dest w [] (Queues.RxHistory.boundary_initial w hi)).choose_spec.2.1⟩
@@ -1256,7 +1263,7 @@ theorem original_flood_joint (count port family : Nat) (messages : List (List UI
     ErasesPrefix (Queues.RxHistory.flood count port family messages) (Leanux.Env.flood count port family messages) ∧
     ProjectsUnder Lifetimes.AuditInv Queues.RxHistory.auditEvent (Queues.RxHistory.flood count port family messages) (Lifetimes.floodAudit count port family messages) ∧
     PrefixPreserves Queues.RxHistory.BoundaryInv Queues.RxHistory.BoundarySafe (Queues.RxHistory.flood count port family messages) ∧
-    ∀ w, Lifetimes.AllocationInv [] w →
+    ∀ w, Lifetimes.AllocationInv [] w.wg →
       Queues.RxHistory.BoundarySafe (runPrefix (Queues.RxHistory.flood count port family messages) w []).2 :=
   ⟨Queues.RxHistory.flood_erases count port family messages, Queues.RxHistory.flood_projects count port family messages, Queues.RxHistory.flood_preserves count port family messages,
     fun w hi => (Queues.RxHistory.flood_preserves count port family messages w [] (Queues.RxHistory.boundary_initial w hi)).choose_spec.2.1⟩
@@ -1270,17 +1277,17 @@ theorem original_batch_joint (d : Device) (cqes : List Int) (item : Leanux.Env.B
     (ErasesPrefix Queues.RxHistory.afterBatch (Leanux.Env.afterBatch) ∧
     ProjectsUnder Lifetimes.AuditInv Queues.RxHistory.auditEvent Queues.RxHistory.afterBatch Lifetimes.afterBatchAudit ∧
     PrefixPreserves Queues.RxHistory.BoundaryInv Queues.RxHistory.BoundarySafe Queues.RxHistory.afterBatch ∧
-    ∀ w, Lifetimes.AllocationInv [] w →
+    ∀ w, Lifetimes.AllocationInv [] w.wg →
       Queues.RxHistory.BoundarySafe (runPrefix Queues.RxHistory.afterBatch w []).2) ∧
     (ErasesPrefix (Queues.RxHistory.batchItem d cqes item) (Environment.batchItemSource d cqes item) ∧
     ProjectsUnder Lifetimes.AuditInv Queues.RxHistory.auditEvent (Queues.RxHistory.batchItem d cqes item) (Lifetimes.batchItemAudit d cqes item) ∧
     PrefixPreserves Queues.RxHistory.BoundaryInv Queues.RxHistory.BoundarySafe (Queues.RxHistory.batchItem d cqes item) ∧
-    ∀ w, Lifetimes.AllocationInv [] w →
+    ∀ w, Lifetimes.AllocationInv [] w.wg →
       Queues.RxHistory.BoundarySafe (runPrefix (Queues.RxHistory.batchItem d cqes item) w []).2) ∧
     (ErasesPrefix (Queues.RxHistory.batch items) (Leanux.Env.batch items) ∧
     ProjectsUnder Lifetimes.AuditInv Queues.RxHistory.auditEvent (Queues.RxHistory.batch items) (Lifetimes.batchAudit items) ∧
     PrefixPreserves Queues.RxHistory.BoundaryInv Queues.RxHistory.BoundarySafe (Queues.RxHistory.batch items) ∧
-    ∀ w, Lifetimes.AllocationInv [] w →
+    ∀ w, Lifetimes.AllocationInv [] w.wg →
       Queues.RxHistory.BoundarySafe (runPrefix (Queues.RxHistory.batch items) w []).2) :=
   ⟨⟨Queues.RxHistory.afterBatch_erases, Queues.RxHistory.afterBatch_projects, Queues.RxHistory.afterBatch_preserves,
     fun w hi => (Queues.RxHistory.afterBatch_preserves w [] (Queues.RxHistory.boundary_initial w hi)).choose_spec.2.1⟩,
@@ -1299,7 +1306,7 @@ theorem original_environment_deferred_joint (call : Lifetimes.EnvDeferredCall) :
       (Queues.RxHistory.deferred call) call.observed ∧
     PrefixPreserves Queues.RxHistory.BoundaryInv Queues.RxHistory.BoundarySafe
       (Queues.RxHistory.deferred call) ∧
-    ∀ w, Lifetimes.AllocationInv [] w →
+    ∀ w, Lifetimes.AllocationInv [] w.wg →
       Queues.RxHistory.BoundarySafe (runPrefix (Queues.RxHistory.deferred call) w []).2 :=
   ⟨Queues.RxHistory.deferred_erases call, Queues.RxHistory.deferred_projects call,
     Queues.RxHistory.deferred_preserves call,
@@ -1318,7 +1325,7 @@ theorem original_environment_remaining_joint (call : Lifetimes.EnvRemainingCall)
       (Queues.RxHistory.remaining call) call.observed ∧
     PrefixPreserves Queues.RxHistory.BoundaryInv Queues.RxHistory.BoundarySafe
       (Queues.RxHistory.remaining call) ∧
-    ∀ w, Lifetimes.AllocationInv [] w →
+    ∀ w, Lifetimes.AllocationInv [] w.wg →
       Queues.RxHistory.BoundarySafe (runPrefix (Queues.RxHistory.remaining call) w []).2 :=
   ⟨Queues.RxHistory.remaining_erases call, Queues.RxHistory.remaining_projects call,
     Queues.RxHistory.remaining_preserves call,
@@ -1334,7 +1341,7 @@ theorem original_syscall_family_joint (call : Lifetimes.SyscallAuditCall) :
       (Queues.RxHistory.syscallFamily call) call.observed ∧
     PrefixPreserves Queues.RxHistory.BoundaryInv Queues.RxHistory.BoundarySafe
       (Queues.RxHistory.syscallFamily call) ∧
-    ∀ w, Lifetimes.AllocationInv [] w →
+    ∀ w, Lifetimes.AllocationInv [] w.wg →
       Queues.RxHistory.BoundarySafe (runPrefix (Queues.RxHistory.syscallFamily call) w []).2 :=
   ⟨Queues.RxHistory.syscallFamily_erases call, Queues.RxHistory.syscallFamily_projects call,
     Queues.RxHistory.syscallFamily_preserves call,
@@ -1357,11 +1364,11 @@ theorem initialized_runner_joint (trace : Leanux.Runner.Trace) (placeholders : B
          (Logged.runPrefixOuter (Queues.RxHistory.executeTraceHistory trace placeholders) []).2) ∧
     ∀ p ∈ Lifetimes.probeEntries (Queues.RxHistory.auditHistory
         (Logged.runPrefixOuter (Queues.RxHistory.executeTraceHistory trace placeholders) []).2),
-      Lifetimes.AllocationInv p.history p.world ∧
-      (p.world.suspended.filterM Leanux.Env.Activation.consistent).run p.world =
-        (p.world.suspended.filterM (fun a => Lifetimes.activationTrialDecision a p.world p.history)).map
+      Lifetimes.AllocationInv p.history p.world.wg ∧
+      (p.world.ambient.suspended.filterM Leanux.Env.Activation.consistent).run p.world =
+        (p.world.ambient.suspended.filterM (fun a => Lifetimes.activationTrialDecision a p.world p.history)).map
           (fun ys => (ys, p.world)) ∧
-      ∀ a ∈ p.world.suspended,
+      ∀ a ∈ p.world.ambient.suspended,
         Lifetimes.LifetimeEvent.Safe
           (runPrefix (Lifetimes.activationRunPrefix a) p.world p.history).2 :=
   ⟨Queues.RxHistory.executeTraceHistory_erases trace placeholders,
@@ -1469,13 +1476,15 @@ theorem original_poll_disposition_receipts (pid : PeerId) (budget : Nat)
       (runPrefix (Queues.RxJoint.poll pid budget) w (Queues.RxJoint.seed prior)).2 ∧
     (∀ r : Queues.RxDisposition.ConsumeReceipt, r.Valid → r.run.value = none →
       Queues.RxDisposition.PrepareRejected r.packet ∨
-      ∃ ready u q routed paid,
-        (Packets.rxPrepare r.peer r.packet r.endpoint).run r.run.before = .ok (some ready, u) ∧
-        (lookupSrc ready.protocol ready.bytes).run u = .ok (routed, q) ∧
-        (peerPut routed).run q = .ok ((), paid) ∧ routed ≠ some r.peer ∧
-        (Packets.rxAfterLookup r.peer ready routed).run q = .ok (none, r.run.after)) ∧
+      ∃ ready u q routed paid middle afterLookup afterPaid,
+        ((Packets.rxPrepare r.peer r.packet r.endpoint).run r.run.before).run r.run.ambientBefore =
+          .ok ((some ready, u), middle) ∧
+        ((lookupSrc ready.protocol ready.bytes).run u).run middle = .ok ((routed, q), afterLookup) ∧
+        ((peerPut routed).run q).run afterLookup = .ok (((), paid), afterPaid) ∧ routed ≠ some r.peer ∧
+        ((Packets.rxAfterLookup r.peer ready routed).run q).run afterLookup =
+          .ok ((none, r.run.after), r.run.ambientAfter)) ∧
     (∀ (pkt : RxPacket) (r : Logged.RunWitness (Option Endpoint)),
-      r.Valid (endpointFromSkb pkt.source) → r.value = none → False) :=
+      r.Valid (liftWG (endpointFromSkb pkt.source)) → r.value = none → False) :=
   ⟨Queues.RxDisposition.poll_seed_valid pid budget w prior,
     Queues.RxDisposition.none_classified, Queues.RxDisposition.endpoint_none_impossible⟩
 
@@ -1632,72 +1641,94 @@ stored key word. Allocation transfers an explicit reservation into the same
 inventory, with vacancy stated openly. Pure-IRQ publication repays its own
 resolved-peer borrow. This is not full consumeData or initialized protection. -/
 theorem original_rx_credit_transfer :
-    (∀ kinds index w v result,
-      (indexLookup kinds index).run w = .ok (result,v) → Loan w (result.map Prod.snd) v) ∧
-    (∀ msg src ds ctx w v,
-      (RxOrigin.admitSource msg src ds).run w = .ok (some ctx,v) →
-      (∃ before, Loan w (some ctx.packet.peer) before ∧
-        (newRxSkb ctx.packet).run before = .ok (ctx.slot,v)) ∧
+    (∀ kinds index w v ambient ambient' result,
+      ((indexLookup kinds index).run w).run ambient = .ok ((result,v),ambient') →
+      Loan w (result.map Prod.snd) v) ∧
+    (∀ msg src ds ctx w v ambient ambient',
+      ((RxOrigin.admitSource msg src ds).run w).run ambient = .ok ((some ctx,v),ambient') →
+      (∃ before allocationAmbient, Loan w (some ctx.packet.peer) before ∧
+        ((newRxSkb ctx.packet).run before).run allocationAmbient = .ok ((ctx.slot,v),ambient')) ∧
       KeyWord ctx.packet.keypair ctx.packet.peer v) ∧
-    (∀ cs loans w d o pkt,
-      Inventory cs w → w.k.wg = some d → d.rxSkbs[d.nextSkb]? = none →
+    (∀ cs loans w d o pkt ambient,
+      Inventory cs w → w.dev = some d → d.rxSkbs[d.nextSkb]? = none →
       o.epoch = d.ifindex → pkt.peer = o.slot → Protected cs (o :: loans) w →
-      ∃ v, (newRxSkb pkt).run w = .ok (d.nextSkb,v) ∧
+      ∃ v, ((newRxSkb pkt).run w).run ambient = .ok ((d.nextSkb,v),ambient) ∧
         Inventory (⟨⟨d.ifindex,d.nextSkb⟩,o,.unpublished⟩ :: cs) v ∧
         Protected (⟨⟨d.ifindex,d.nextSkb⟩,o,.unpublished⟩ :: cs) loans v) ∧
-    (∀ id state w v, (enqueuePerPeerRx (pure ()) id state).run w = .ok ((),v) →
+    (∀ id state w v ambient ambient',
+      ((enqueuePerPeerRx (pure () : WG.M Unit) id state).run w).run ambient = .ok (((),v),ambient') →
       ∀ o, balance v o = balance w o) := by
   refine ⟨?_,?_,?_,publication_balances⟩
-  · intro kinds index w v result hr
-    exact (Framing.hoare_iff_triple _ _ _).mpr (indexLookup_loan kinds index w) w result v rfl hr
-  · intro msg src ds ctx w v hr
-    exact ⟨admitted_loan hr,admitted_key_word hr⟩
-  · intro cs loans w d o pkt hi hd fresh epoch owner hs
-    exact allocate_transfer hi hd fresh epoch owner hs
+  · intro kinds index w v ambient ambient' result hr
+    exact (Framing.hoare_iff_run_ambient _ _ _).mp
+      (indexLookup_loan kinds index w) w ambient result v ambient' rfl hr
+  · intro msg src ds ctx w v ambient ambient' hr
+    exact ⟨admitted_loan ambient ambient' hr,admitted_key_word ambient ambient' hr⟩
+  · intro cs loans w d o pkt ambient hi hd fresh epoch owner hs
+    exact allocate_transfer ambient hi hd fresh epoch owner hs
 
-/-- Actual cached-head selection and payment/free cuts preserve the supplied
-ledger. Positive remaining demand derives non-retirement. The poll cut names
-its caller pid only under the earlier peer guard; key payment must have returned.
-The ENOSPC cut retains all three original decision records and preserves queue
-multiplicities. No ledger phase is inferred retrospectively from a World, and
-these local contracts do not cover general IRQ/Stack callbacks or initialized
-admission/carrier conservation. -/
-theorem original_rx_cleanup_credit_discharge :
-    (∀ (id : SkbId) w d pid p cs loans,
-      w.k.wg = some d → d.peers[pid]? = some p → p.rxQueue.peeked = some id →
+/-- Supported cuts from the withdrawn original_rx_cleanup_credit_discharge:
+actual cached-head selection, positive-demand non-retirement, and the actual
+ENOSPC cleanup path. The former unrestricted selected-cleanup totality conjunct
+is false; its counterexample is exported separately below. -/
+theorem original_rx_cleanup_supported_cuts :
+    (∀ (id : SkbId) w d pid p cs loans ambient,
+      w.dev = some d → d.peers[pid]? = some p → p.rxQueue.peeked = some id →
       Inventory (⟨⟨d.ifindex,id⟩,⟨d.ifindex,pid,p.internalId⟩,.queued⟩ :: cs) w →
       QueueOwners (⟨⟨d.ifindex,id⟩,⟨d.ifindex,pid,p.internalId⟩,.queued⟩ :: cs) w →
       Protected (⟨⟨d.ifindex,id⟩,⟨d.ifindex,pid,p.internalId⟩,.queued⟩ :: cs) loans w →
-      ∃ v, (Queues.dropRxQueue pid).run w = .ok ((),v) ∧
+      ∃ v, ((Queues.dropRxQueue pid).run w).run ambient = .ok (((),v),ambient) ∧
         Inventory (⟨⟨d.ifindex,id⟩,⟨d.ifindex,pid,p.internalId⟩,.selected⟩ :: cs) v ∧
         QueueOwners (⟨⟨d.ifindex,id⟩,⟨d.ifindex,pid,p.internalId⟩,.selected⟩ :: cs) v ∧
         Protected (⟨⟨d.ifindex,id⟩,⟨d.ifindex,pid,p.internalId⟩,.selected⟩ :: cs) loans v) ∧
     (∀ c cs loans w, Protected (c :: cs) loans w → c.phase = .selected →
       0 < demand cs loans c.owner → ∃ p, resident w c.owner = some p ∧ 1 < p.refcount) ∧
-    (∀ c cs loans w a pkt (pid : PeerId) flag,
-      Inventory (c :: cs) w → Protected (c :: cs) loans w → c.phase = .selected →
-      packetAt w c.packet = some pkt → pkt.peer = c.owner.slot → pkt.peer = pid →
-      (keypairPut (some pkt.keypair) false).run w = .ok ((),a) →
-      ∃ v, (do keypairPut (some pkt.keypair) false; peerPut (some pid)
-               _ ← branch .rxPollFree flag; freeRxSkb c.packet.slot).run w = .ok ((),v) ∧
-        Inventory cs v ∧ Protected cs loans v ∧ packetAt v c.packet = none) ∧
-    (∀ ctx c cs loans w a b,
-      (enqueuePerDeviceAndPeerRx ctx.slot).run w = .ok (-ENOSPC,a) →
+    (∀ ctx c cs loans w a b ambient afterEnqueue afterKey,
+      ((enqueuePerDeviceAndPeerRx ctx.slot).run w).run ambient = .ok ((-ENOSPC,a),afterEnqueue) →
       Inventory (c :: cs) a → Protected (c :: cs) loans a → QueueOwners (c :: cs) a →
       c.phase = .unpublished → c.packet.slot = ctx.slot → ctx.packet.peer = c.owner.slot →
-      (keypairPut (some ctx.packet.keypair) false).run (enospcDecisions a) = .ok ((),b) →
-      ∃ v, (finishSource ctx).run w = .ok ((),v) ∧ Inventory cs v ∧
-        Protected cs loans v ∧ QueueOwners cs v ∧ packetAt v c.packet = none) := by
-  refine ⟨?_,?_,?_,?_⟩
-  · intro id w d pid p cs loans hd hp peek hi hq hs
-    exact drop_selection id hd hp peek hi hq hs
+      ((keypairPut (some ctx.packet.keypair) false).run a).run (enospcDecisions afterEnqueue) =
+        .ok (((),b),afterKey) →
+      ∃ v finalAmbient, ((finishSource ctx).run w).run ambient = .ok (((),v),finalAmbient) ∧
+        Inventory cs v ∧ Protected cs loans v ∧ QueueOwners cs v ∧ packetAt v c.packet = none) := by
+  refine ⟨?_,?_,?_⟩
+  · intro id w d pid p cs loans ambient hd hp peek hi hq hs
+    exact drop_selection id ambient hd hp peek hi hq hs
   · intro c cs loans w hi hc hr
     exact selected_nonfinal hi hc hr
-  · intro c cs loans w a pkt pid flag hi hs phase hp owner guard hk
-    obtain ⟨v,hv,iv,sv,pv⟩ := cleanup_discharge (flag := flag) hi hs phase hp owner hk
-    exact ⟨v,by simpa only [cleanup_poll_guard _ _ _ _ guard] using hv,iv,sv,pv⟩
-  · intro ctx c cs loans w a b hr hi hs hq phase slot owner hk
-    exact enospc_discharge ctx hr hi hs hq phase slot owner hk
+  · intro ctx c cs loans w a b ambient afterEnqueue afterKey hr hi hs hq phase slot owner hk
+    exact enospc_discharge ctx ambient afterEnqueue afterKey hr hi hs hq phase slot owner hk
+
+/-- Kernel-checked refutation of the third conjunct of the withdrawn
+original_rx_cleanup_credit_discharge. Positive credit does not bypass final
+peer-release queue guards. This is an unrestricted local fixture, not an
+initialized execution or a claim about Linux reachability. -/
+theorem original_rx_cleanup_totality_refuted :
+    ¬ (∀ (c : Carrier) (cs : Ledger) (loans : Reservations)
+      (w a : WGWorld) (clock midway : Ambient) (pkt : RxPacket) (pid : PeerId) (flag : Bool),
+      Inventory (c :: cs) w → Protected (c :: cs) loans w → c.phase = .selected →
+      packetAt w c.packet = some pkt → pkt.peer = c.owner.slot → pkt.peer = pid →
+      ((keypairPut (some pkt.keypair) false).run w).run clock = .ok (((),a),midway) →
+      ∃ v last,
+        ((do keypairPut (some pkt.keypair) false; peerPut (some pid)
+             _ ← branch .rxPollFree flag; freeRxSkb c.packet.slot : WG.M Unit).run w).run clock =
+          .ok (((),v),last) ∧
+        Inventory cs v ∧ Protected cs loans v ∧ packetAt v c.packet = none) :=
+  Queues.CleanupFindings.cleanup_discharge_totality_refuted
+
+/-- The selected cleanup cut preserves inventory and funding when the actual
+whole cleanup returns normally. No normal return is inferred from credit or
+from a successful key payment alone. -/
+theorem original_rx_cleanup_normal (c : Carrier) (cs : Ledger) (loans : Reservations)
+    (w v : WGWorld) (ambient ambient' : Ambient) (pkt : RxPacket) (pid : PeerId) (flag : Bool)
+    (hi : Inventory (c :: cs) w) (hs : Protected (c :: cs) loans w) (phase : c.phase = .selected)
+    (hp : packetAt w c.packet = some pkt) (owner : pkt.peer = c.owner.slot) (guard : pkt.peer = pid)
+    (hr : ((do keypairPut (some pkt.keypair) false; peerPut (some pid)
+               _ ← branch .rxPollFree flag; freeRxSkb c.packet.slot : WG.M Unit).run w).run ambient =
+          .ok (((),v),ambient')) :
+    Inventory cs v ∧ Protected cs loans v ∧ packetAt v c.packet = none := by
+  apply cleanup_discharge_normal hi hs phase hp owner ambient ambient'
+  simpa only [cleanup_poll_guard _ _ _ _ guard] using hr
 
 /-- Full original staged transmission preserves the same supplied RX inventory,
 queue assignment and funded reservations on normal return. Nullable current-key
@@ -1705,14 +1736,14 @@ compatibility supplies the actual acquisition owner. The returned delta names
 appended TX-batch/send-work occurrences and their exact reference balance; it is
 not a TX packet-ownership invariant or an output key-compatibility frame. No
 failed World, retrospective slack, or initialized conservation is asserted. -/
-theorem original_staged_send_rx_protection (pid : PeerId) (w v : World)
+theorem original_staged_send_rx_protection (pid : PeerId) (w v : WGWorld) (ambient ambient' : Ambient)
     (cs : List Carrier) (loans : List Owner)
     (hc : CurrentCompatible pid w) (hi : Inventory cs w)
     (hq : QueueOwners cs w) (hp : Protected cs loans w)
-    (hr : (sendStagedPackets pid).run w = .ok ((),v)) :
+    (hr : ((sendStagedPackets pid).run w).run ambient = .ok (((),v),ambient')) :
     ∃ delta, Handoff w v [] [] delta ∧ Inventory cs v ∧ QueueOwners cs v ∧
       Protected cs loans v ∧ Protected cs (loans ++ delta.owners) v := by
-  obtain ⟨delta,hd⟩ := staged_send_handoff pid hc hr
+  obtain ⟨delta,hd⟩ := staged_send_handoff pid hc ambient ambient' hr
   exact ⟨delta,hd,hd.protect hi hq hp⟩
 
 /-- Full original consumeDataDone, including promotion, staged send, timers and
@@ -1724,14 +1755,14 @@ handoffs. This local theorem does not itself supply Stack/IRQ or output-key
 frames; the concrete Stack and normal-poll results appear below. Initialized
 carrier conservation remains open; Stops have no claimed endpoint World. -/
 theorem original_consume_data_done_rx_protection (pid : PeerId) (pkt : RxPacket)
-    (endpoint : Endpoint) (w v : World) (result : Option (List UInt8))
+    (endpoint : Endpoint) (w v : WGWorld) (ambient ambient' : Ambient) (result : Option (List UInt8))
     (cs : List Carrier) (loans : List Owner)
     (hc : KeyCompatible pid pkt.keypair w) (hi : Inventory cs w)
     (hq : QueueOwners cs w) (hp : Protected cs loans w)
-    (hr : (consumeDataDone pid pkt endpoint).run w = .ok (result,v)) :
+    (hr : ((consumeDataDone pid pkt endpoint).run w).run ambient = .ok ((result,v),ambient')) :
     ∃ delta, Handoff w v [] [] delta ∧ Inventory cs v ∧ QueueOwners cs v ∧
       Protected cs loans v ∧ Protected cs (loans ++ delta.owners) v := by
-  obtain ⟨delta,hd⟩ := consumeDataDone_handoff pid pkt endpoint hc hr
+  obtain ⟨delta,hd⟩ := consumeDataDone_handoff pid pkt endpoint hc ambient ambient' hr
   exact ⟨delta,hd,hd.protect hi hq hp⟩
 
 /-- Actual Stack transmission (including normal negative errno) and batched
@@ -1742,21 +1773,28 @@ is supplied and preserved separately. Bytes may belong to a held GRO entry
 whose RX cell was already freed; no delivery-packet residency is required.
 These are normal endpoint contracts, not initialized ownership or inbox arrival. -/
 theorem original_stack_rx_protection (w v : World) (cs : List Carrier) (loans : List Owner)
-    (hi : Inventory cs w) (hq : QueueOwners cs w) (hp : Protected cs loans w)
-    (hk : KeysCompatible w) :
+    (hi : Inventory cs w.wg) (hq : QueueOwners cs w.wg) (hp : Protected cs loans w.wg)
+    (hk : KeysCompatible w.wg) :
     (∀ family addr (packets : List WG.Packet) mtu ret,
-      (wgXmit family addr packets mtu).run w=.ok (ret,v) →
-      ∃ delta,Handoff w v [] [] delta ∧ Inventory cs v ∧ QueueOwners cs v ∧
-        Protected cs loans v ∧ Protected cs (loans++delta.owners) v ∧ KeysCompatible v) ∧
+      (liftWG (wgXmit family addr packets mtu)).run w=.ok (ret,v) →
+      ∃ delta,Handoff w.wg v.wg [] [] delta ∧ Inventory cs v.wg ∧ QueueOwners cs v.wg ∧
+        Protected cs loans v.wg ∧ Protected cs (loans++delta.owners) v.wg ∧ KeysCompatible v.wg) ∧
     (∀ packets : List (List UInt8),
       (packets.forM Leanux.Env.deliverInner).run w=.ok ((),v) →
-      ∃ delta,Handoff w v [] [] delta ∧ Inventory cs v ∧ QueueOwners cs v ∧
-        Protected cs loans v ∧ Protected cs (loans++delta.owners) v ∧ KeysCompatible v) := by
+      ∃ delta,Handoff w.wg v.wg [] [] delta ∧ Inventory cs v.wg ∧ QueueOwners cs v.wg ∧
+        Protected cs loans v.wg ∧ Protected cs (loans++delta.owners) v.wg ∧ KeysCompatible v.wg) := by
   constructor
   · intro family addr packets mtu ret hr
-    obtain ⟨⟨delta,hd⟩,kv⟩ := wgXmit_protection family addr packets mtu hk hr
-    obtain ⟨iv,qv,pv,pd⟩ := hd.protect hi hq hp
-    exact ⟨delta,hd,iv,qv,pv,pd,kv⟩
+    rw [Framing.liftWG_run] at hr
+    cases he : ((wgXmit family addr packets mtu).run w.wg).run w.ambient with
+    | error stop => simp [he,Except.map] at hr
+    | ok out =>
+      rcases out with ⟨⟨value,g⟩,ambient⟩
+      simp [he,Except.map] at hr
+      rcases hr with ⟨rfl,rfl⟩
+      obtain ⟨⟨delta,hd⟩,kv⟩ := wgXmit_protection family addr packets mtu hk he
+      obtain ⟨iv,qv,pv,pd⟩ := hd.protect hi hq hp
+      exact ⟨delta,hd,iv,qv,pv,pd,kv⟩
   · intro packets hr
     exact stackForM_protection packets hi hq hp hk hr
 
@@ -1772,12 +1810,12 @@ carriers. Stops retain the existing prefix contracts but have no endpoint World;
 whole admission/ring/lifecycle conservation and initialized identity remain open. -/
 theorem original_poll_carrier_conservation (pid : PeerId) (budget : Nat) (w v : World) (n : Nat)
     (cs : List Carrier) (loans : List Owner) (prior : List Lifetimes.LifetimeEvent)
-    (hi : Inventory cs w) (hq : QueueOwners cs w) (hp : Protected cs loans w)
-    (hk : KeysCompatible w) (hr : (WG.rxPoll pid budget (fun packets=>packets.forM Leanux.Env.deliverInner)).run w=.ok (n,v)) :
+    (hi : Inventory cs w.wg) (hq : QueueOwners cs w.wg) (hp : Protected cs loans w.wg)
+    (hk : KeysCompatible w.wg) (hr : (WG.rxPoll pid budget (fun packets=>packets.forM Leanux.Env.deliverInner)).run w=.ok (n,v)) :
     let h := (runPrefix (Queues.RxJoint.poll pid budget) w (Queues.RxJoint.seed prior)).2
     let rest := remaining cs (PollCarrier.removedPackets h)
-    Inventory rest v ∧ QueueOwners rest v ∧ Protected rest loans v ∧ KeysCompatible v ∧
-      (∀p∈PollCarrier.removedPackets h,packetAt v p=none) ∧
+    Inventory rest v.wg ∧ QueueOwners rest v.wg ∧ Protected rest loans v.wg ∧ KeysCompatible v.wg ∧
+      (∀p∈PollCarrier.removedPackets h,packetAt v.wg p=none) ∧
       Queues.RxDisposition.Account none h ∧ Queues.RxDisposition.callbackPending h=[] ∧ Queues.RxDisposition.unentered h=[] ∧
       ((Queues.RxJoint.removalKeys h).map Prod.fst).Perm
         ((h.filterMap Queues.RxDisposition.nondeliveryKey).map Prod.fst ++
@@ -1798,20 +1836,20 @@ ring size, or peer-survival premise is asserted. This export is normal-only;
 the separate lower consume_receipt lemma also covers a later stopped finish,
 without assigning a World to that Stop. -/
 theorem original_consume_data_carrier_conservation
-    (cs : Ledger) (loans : Reservations) (w v : World)
+    (cs : Ledger) (loans : Reservations) (w v : WGWorld) (ambient ambient' : Ambient)
     (msg : List UInt8) (src : SkbSource) (ds : Nat)
     (hi : CarrierState cs loans w) (hf : Packets.Inv w)
-    (hr : (consumeData msg src ds).run w=.ok ((),v)) :
-    ∃ r, Consumption cs loans msg src ds w v r ∧
+    (hr : ((consumeData msg src ds).run w).run ambient=.ok (((),v),ambient')) :
+    ∃ r, Consumption cs loans msg src ds w v ambient ambient' r ∧
       ∀ h : List (MaterialOrigin.Event RxOrigin.Receipt),
-        runPrefix (RxOrigin.consume msg src ds) w h =
-          let next := (runPrefix (RxOrigin.admitRaw msg src ds) w h).2 ++
+        runWGPrefix (RxOrigin.consume msg src ds) w ambient h =
+          let next := (runWGPrefix (RxOrigin.admitRaw msg src ds) w ambient h).2 ++
             [.receipt (.admission msg src ds r)]
           match r.value with
-          | none => (.ok ((),r.after),next)
-          | some ctx => runPrefix (finishObserved ctx) r.after next := by
-  obtain ⟨r,hc⟩ := consume_normal hi hf hr
-  exact ⟨r,hc,fun h=>consume_receipt r hc.1 hc.2.1 h⟩
+          | none => (.ok (((),r.after),r.ambientAfter),next)
+          | some ctx => runWGPrefix (finishObserved ctx) r.after r.ambientAfter next := by
+  obtain ⟨r,hc⟩ := consume_normal hi hf ambient ambient' hr
+  exact ⟨r,hc,fun h=>consume_receipt r hc.1 hc.2.1 hc.2.2.1 h⟩
 
 /-- Normal original admission preserves the supplied stable RX boundary with
 its exact outcome-selected carrier ledger. The separately existing ring
@@ -1822,20 +1860,32 @@ not establish initialized or all-prefix receive-pipeline conservation. -/
 theorem original_consume_data_stable_rx
     (cs : Ledger) (loans : Reservations) (w : World)
     (epoch n : Nat) (h : List (Queues.Ring.Journal.Event SkbId))
-    (hi : CarrierState cs loans w) (hs : StableRx cs w)
+    (hi : CarrierState cs loans w.wg) (hs : StableRx cs w.wg)
     (physical : Queues.RxRing.Inv epoch (PtrRing.init n) h w) :
-    (∀ msg src ds v, Packets.Inv w → (consumeData msg src ds).run w=.ok ((),v) →
-      (∃r, StableConsumption cs loans msg src ds w v r) ∧
+    (∀ msg src ds v, Packets.Inv w.wg → (liftWG (consumeData msg src ds)).run w=.ok ((),v) →
+      (∃r, StableConsumption cs loans msg src ds w.wg v.wg w.ambient v.ambient r) ∧
       let out := runPrefix (Queues.RxRing.consume msg src ds) w h
       out.1=.ok ((),v) ∧ (∃suffix,out.2=h++suffix) ∧
         Queues.RxRing.Safe (PtrRing.init n) out.2 ∧
         Queues.RxRing.Inv epoch (PtrRing.init n) out.2 v) ∧
-    ((∀d,w.k.wg=some d → d.decryptQueue.empty=true) →
-      (∀(d : Device)(pid : PeerId)(p : Peer),w.k.wg=some d → d.peers[pid]?=some p → p.napiScheduled=false) →
-      cs=[] ∧ ∀(d : Device)(id : SkbId)(pkt : RxPacket),w.k.wg=some d → d.rxSkbs[id]?≠some pkt) := by
+    ((∀d,w.wg.dev=some d → d.decryptQueue.empty=true) →
+      (∀(d : Device)(pid : PeerId)(p : Peer),w.wg.dev=some d → d.peers[pid]?=some p → p.napiScheduled=false) →
+      cs=[] ∧ ∀(d : Device)(id : SkbId)(pkt : RxPacket),w.wg.dev=some d → d.rxSkbs[id]?≠some pkt) := by
   constructor
   · intro msg src ds v hf hr
-    exact ⟨consume_stable hi hf hs physical hr,consume_ring_normal physical hr⟩
+    have native : ((consumeData msg src ds).run w.wg).run w.ambient =
+        .ok (((),v.wg),v.ambient) := by
+      rw [Framing.liftWG_run] at hr
+      cases ha : ((consumeData msg src ds).run w.wg).run w.ambient with
+      | error e => simp [ha,Except.map] at hr
+      | ok out =>
+        rcases out with ⟨⟨u,g⟩,ambient⟩
+        simp only [ha,Except.map,Except.ok.injEq,Prod.mk.injEq] at hr
+        rcases hr with ⟨_,rfl⟩
+        cases u
+        rfl
+    exact ⟨consume_stable hi hf hs physical w.ambient v.ambient native,
+      consume_ring_normal physical hr⟩
   · exact stable_drained hi hs physical
 
 end Leanux.Proofs.WG.DeliveryOrder

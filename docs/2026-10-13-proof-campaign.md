@@ -2,99 +2,32 @@
 
 ## Progress
 
-Work on `proofs/campaign` in `.worktrees/proofs-campaign` follows [the charter](2026-10-13-charter-proof-campaign.md).
-The state-split retrofit onto main `b700659` precedes further R3/R4 results. All seven
-result rows remain lagging, last validated over `cb2348e`. The tree has moved from
-471 files / 7,715 named theorems to 451 files / 6,249 theorems. Completed changes
-comprise 1,114 retyped, 1,601 deleted, 315 retained contract shapes and 135 added theorems;
-six redundant LifetimeSafety exports are removed, with every retained terminal
-body unchanged (515 declarations). The native foundational, ordinary lifetime,
-clock/Noise-helper, keypair-composition, product scheduler, small native helper and WGBase ports pass their
-scoped builds, axiom checks, fresh replay and independent reviews. Obsolete
-subsystem-frame layers and unused support have been deleted, with the distinction
-recorded; the surviving consumers still need their native/product contracts.
-[The retrofit report](2026-10-16-proof-state-split.md) tracks exact counts,
-validation and remaining work. No full-tree pass is claimed.
+Work on `proofs/campaign` in `.worktrees/proofs-campaign` follows
+[the charter](2026-10-13-charter-proof-campaign.md). The branch contains main
+`b700659` and preserves its own proof tree, nondefault lake target and gate.
+The executable mirror is unchanged.
 
-Receive admission, lifetime tagging and product GRO carry 17 claims (seven
-retyped, ten retained) without additions or deletions. Scoped builds, 36
-declaration axiom checks, five fresh replays and independent reviews pass. The
-replay-window counterexample retains both exact observations. The latest full
-proof build failed on 21 targets; downstream retrofit work continues.
+The state-split retrofit precedes new R3/R4 results. Its source census is
+471 → 452 Lean files and 7,715 → 6,558 named theorems: 3,197 retyped/generalized,
+1,709 deleted, 2,809 retained and 552 added. Independent reconciliation includes
+the unchanged pure/product contracts and corrects seven duplicated retained
+Enqueue entries. There are 517 terminal declarations, including two definitions.
 
-The peer-creation, dump-source and device-lifecycle carry preserves 70 of 75
-old theorems, removes five justified support wrappers and adds five native
-bridges/helpers. Scoped builds, 111 declaration axiom checks, four fresh replays
-and independent reviews pass. Generic helpers retain arbitrary product actions;
-concrete observers use the actual WG/Ambient stack.
+All seven register rows remain lagging, last fully validated over `cb2348e`.
+Completed layers pass scoped builds, named axiom checks, fresh kernel replay and
+independent reviews. Stable receive and the 131-statement R4 carry pass the
+combined 431-job build, named axiom checks, final fresh replay and review.
+The [retrofit report](2026-10-16-proof-state-split.md) records the exact census,
+source/type deletion grounds, failed checks and remaining work. Its
+[findings](2026-10-16-proof-state-split-findings.md) include the withdrawn
+unrestricted cleanup-totality claims and checked local counterexamples.
+No full-tree pass over the split is claimed.
 
-The peer-access observer and exact clock tests carry all 24 old theorems.
-Their scoped builds, 39 declaration axiom checks, fresh replays and independent
-reviews pass. The observer now includes both actual release guards and preserves
-the corresponding failure histories; downstream result callers still lag.
-
-The native AllowedIPs tranche carries 13 of 19 old theorems, deletes six with
-explicit grounds and adds one actual adapter lemma. Its scoped build, axiom
-check, fresh replay and independent review pass. The generic scope audit is now
-repaired: 26 helpers and one update rule retain arbitrary actual product actions,
-with three duplicate WP wrappers removed. Its 121-job dependent build, 169 theorem
-axiom checks, fresh replays and independent review pass. Every result remains lagging.
-
-The product environment tranche carries 25 of 28 old theorems and adds ten actual
-adapter facts, preserving the baseline 43-field scope. Two premise repairs and
-two acyclic import edges restore the original action scope and eliminate generated
-declaration collisions. The combined 182-declaration axiom check and fresh scoped
-replays pass; the report records the failed development and probe calls.
-
-The count audit corrects seventeen scheduler namespace qualifications from
-retyped to retained contract shape. Native socket/configuration and product
-evolution now pass their closed build, axiom check, fresh replays and independent
-review. The whole-tree and deletion/addition counts are unchanged by
-the accounting correction.
-
-WGBase carries 117 of 185 claims; 68 structural/unused helpers are deleted.
-The filesystem cleanup removes 21 redundant declarations, including six terminal
-exports. Closed compilation, standard-axiom checks, fresh kernel replay and
-independent review pass. One worker compiler panic was followed by all-dirty-tree
-snapshots before work resumed; the report records every failed call. The d6f7ed4
-checkpoint's default human author was an attribution error, corrected for future
-commits through an explicit per-invocation agent identity.
-
-The transition/cookie checkpoint initially carried 109 theorems. The later
-premise correction removes one duplicate helper, leaving 108; no theorem was
-added. Its historical 95-job build, 112-declaration axiom check, two fresh
-kernel replays and independent review pass; one earlier development build failed
-on two local proof obligations. The four incoming full-store extension counterexamples
-and the timer selector difference now have kernel-checked stdin witnesses;
-permanent declarations and replay are pending their respective carry.
-
-The peer/packet primitive tranche retains all 45 theorems, with 35 retyped and
-ten pure contracts unchanged. The 23-job build, 58-declaration axiom check, two
-fresh kernel replays and independent review pass. Native getters and execution
-sequences preserve both state endpoints. Four development builds and one root
-census invocation failed before the final checks; limits and mirror are unchanged.
-
-The peer frames/allocation tranche carries 21 of 28 theorems: 20 native
-retypes, one unchanged pure claim and seven deletions with source/type
-justifications. Review caught an extra four-field entry premise; the repaired
-seven-field contract passes build, axioms, fresh replay and independent review.
-A duplicate cookie modifier helper had the same scope defect and is replaced
-by the existing generic rule; its repair passes the same scoped checks.
-The product environment carry retains the original 43-field contracts; the four
-FIB witnesses refute only the enlarged incoming 47-field extensions.
-
-The preceding `cb2348e` checkpoint validated all seven baseline result surfaces, including the
-local normal-poll carrier and initialized R3 committed-support extensions. The local R4
-whole-admission/stable-RX extension passes independent review and coordinated validation. The new R3
-configured-peer/session/publication source cuts pass independent review and coordinated validation. Earlier results include the local R4
-packet-to-receipt link extension, local R3 owner-acquisition material frame and initialized R4 linkage.
-The session/decrypt source injection is validated with the original caller, audit and R4 contracts preserved.
-The local RX reference-transfer/discharge extension passes coordinated validation.
-The full staged-send/consume callback protection contracts pass coordinated validation.
-Session/material/RX-origin receipts and local support
-are retained; initialized R3 packet authorization
-and R4 receive-pipeline conservation remain open. The [register](proofs.md#results) holds pins/counts; the
-[model map](proofs.md#layers) supplies refinement details. No main integration, push, differential check or guest run
+The pre-split checkpoint validated every baseline result surface over
+`cb2348e`. Initialized R3 packet authorization and R4 receive-pipeline
+conservation remain open. Earlier positive results and runtime findings retain
+their scope below; the [register](proofs.md#results) gives the authoritative
+pins and status. No main integration, push, differential check or guest run
 was made by this campaign.
 
 | Result | Disposition |

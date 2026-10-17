@@ -11,17 +11,26 @@ new worlds; new R3/R4 results follow the retrofit.
 | Census | Lean files | Named theorems |
 | --- | ---: | ---: |
 | Validated baseline `00641c6` | 471 | 7,715 |
-| Completed retrofit checkpoints | 452 | 6,556 |
+| Current retrofit source | 452 | 6,558 |
 
-Completed changes comprise **3,129 retyped/generalized, 1,708 deleted,
-2,280 retained contract shapes and 549 added theorems**. Retyping changes the
+The complete source census comprises **3,197 retyped/generalized, 1,709 deleted,
+2,809 retained contract shapes and 552 added theorems**. Retyping changes the
 actual carrier or observation, including shorthand contracts whose functions
 move to a native monad. Namespace-only product qualification and equivalent
 projection relocation count as retained. The census includes private and
 attributed declarations and excludes nested comments, strings and tactic-local
-variables. Uncommitted work is outside these totals.
+variables. These totals include the validated stable-receive and R4 carries below.
 
-The terminal surface has 515 declarations: 513 theorems and two definitions.
+Independent reconciliation adds 437 previously unclassified retained claims:
+286 byte-identical declarations and 151 with proof-only warning repairs. Of
+these, 420 are pure and seventeen retain product/history scope. It also removes
+seven duplicate retained Enqueue entries: their original carry was counted in
+both `4c8a99b` and `02fa172`. The latter checkpoint's corrected subtotal is
+84 old, forty retyped, three deleted, 41 retained and eleven added, yielding 92.
+Thus the baseline is 3,197 + 2,809 + 1,709 = 7,715; the current source is
+3,197 + 2,809 + 552 = 6,558. No unexplained residual remains.
+
+The terminal surface has 517 declarations: 515 theorems and two definitions.
 **All seven register rows remain lagging**, last fully validated over `cb2348e`.
 The complete proof gate and terminal kernel replay have not passed over the
 split. R1/R2/R5/R6 retain their earlier charter dispositions subject to the carry;
@@ -86,8 +95,27 @@ Stops and full failure journals. Ingress preserves its existing normal-run
 premise and uses the successful cleanup receipt, without reinstating the
 refuted totality claims.
 
-Remaining work is the stable receive boundary and DeliveryOrder terminal,
-compiler-warning cleanup, the full proof gate and terminal replay. Older
+Stable receive retains all 39 theorems: 35 native retypes, one arbitrary-state
+generalization, two pure contracts and its product physical-journal contract.
+Its 45 named logical declarations pass axiom inspection. DeliveryOrder moves
+from 129 to 131 theorems: 32 retyped, 96 retained, one false compound withdrawn
+and three separate supported-cuts, counterexample and normal-cleanup exports.
+The final combined 431-job build, all 131 R4 axiom checks, fresh kernel replay
+covering both modules and WGData, and independent reviews pass. Each changed
+module has zero own warnings; the complete dependency build reports 1,200.
+Stable receive had five failed development checks and two passes. R4 had nine
+passes, two ordinary failures and one infrastructure failure, whose sole
+unchanged rerun passed. A preliminary Stable replay passed before WGData was
+rebuilt; the final R4 replay checks their combined final dependency closure.
+
+WGData's two unchanged contracts use direct Ambient composition and the exact
+normal-run bridge. Its two named axiom checks and independent review pass;
+the final R4 replay covers this repair. Three drafts failed on source joins,
+branch selection and the unchanged 200,000-heartbeat limit before the fourth
+passed. No failure was relabeled as a successful check.
+
+Remaining work is compiler-warning cleanup, the full proof gate and terminal
+replay. Older
 proof modules still use deprecated automation or redundant simplifiers.
 Lean 4.35's vcgen is a different implementation from mvcgen; blind renaming
 does not preserve these proofs. Nine foundation/logged warning repairs preserve

@@ -20,42 +20,30 @@ remain on this branch. Initialized R3 packet authorization and R4 receive-pipeli
 conservation remain open; their next extensions follow the retrofit.
 
 The validated baseline `00641c6` has 471 Lean files and 7,715 named theorems.
-The current tree has 452 files and 6,534 theorems: completed changes comprise
-2,700 retyped, 1,693 deleted, 1,847 retained contract shapes and 512 added theorems.
-All 26 generic helpers and the additional update rule identified by the scope
-audit now retain arbitrary actual product-action scope, with three duplicate
-WP wrappers removed. Their dependent build, axioms, fresh replays and review pass.
-The count audit treats namespace-only product qualifications as retained
-contracts and corrects the earlier scheduler classification; total theorem,
-deletion and addition counts are unaffected.
-The census includes private and attributed declarations and excludes nested
-comments and strings. Deferred uncommitted R3 work is outside the baseline.
-The R3 and R4 terminal carries remain unfinished. The checked
-[cleanup-totality finding](2026-10-16-proof-state-split-findings.md#cleanup-totality)
-refutes the old R4 selected-cleanup totality conjunct and four unrestricted
-helpers; withdrawal and normal-return caller repair are underway. The stronger
-actual-ENOSPC specialization is not refuted. LifetimeSafety retains all 202
-remaining exports after the earlier deletion of six redundant filesystem frames:
-119 native or mixed retypings and 83 retained product or pure contracts. Its
-scoped build, 202 named axiom checks, fresh replay and complete source review pass.
-All six FloodResistance names remain, with native WG/Ambient endpoints
-where the source requires them. ReplayWindow and AntiReplay retain all 22 theorem
-names and two definitions; their scoped builds, axioms, fresh replay and review pass. There are 515 terminal
-declarations (513 theorems and two definitions). KeyLifetime retains all thirteen
-names, with twelve native WG/Ambient contracts and the existing product timer contract.
+The current source has 452 files and 6,558 theorems: 3,197 retyped/generalized,
+1,709 deleted, 2,809 retained and 552 added. The independent census accounts for
+437 previously unclassified retained claims and removes seven duplicate retained
+Enqueue entries. Private and attributed declarations are included; comments,
+strings and tactic-local variables are excluded. The terminal surface has
+517 declarations: 515 theorems and two definitions.
 
-The CounterWindow, generic native contracts/adapters, acceptance-observer core,
-action/projection contracts, failure-prefix/native receipts, keypair identity
-core, ordinary lifetime actions, clock/Noise-helper contracts, keypair composition
-and product scheduler observers, index-table, removal and packet helpers,
-native socket/configuration, product evolution, WGBase, transition, cookie,
-peer and packet primitives, peer frames, allocation, product environment, AllowedIPs, native peer-access, exact-clock, peer-creation, dump-source and device-lifecycle contracts pass their scoped
-builds, axiom checks, fresh kernel replay and independent reviews. The obsolete subsystem-frame layers and
-their unused support are
-removed; all previously ported targets still build after their generated
-artifacts were removed. This is not a full-tree pass. The
-[retrofit report](2026-10-16-proof-state-split.md) gives the aggregate counts,
-deletion justifications and remaining source-observer carry.
+All 26 generic helpers and the additional update rule retain arbitrary actual
+product-action scope. Concrete operations use their native worlds and monads,
+with both WG and Ambient endpoints; type-derived foreign-subsystem frames and
+their unused support are deleted. R3 retains all 141 terminal names. R4 moves
+from 129 to 131: its false cleanup-totality compound is withdrawn and three
+separately named claims preserve its supported cuts, give the counterexample,
+and state the successful-cleanup contract. The
+[cleanup finding](2026-10-16-proof-state-split-findings.md#cleanup-totality)
+does not refute the stronger actual-ENOSPC specialization or establish an
+initialized reachable failure.
+
+Stable receive retains all 39 theorem names and the original product physical
+journal scope. Its 45 logical axiom checks and the combined 431-job R4 build,
+131 R4 axiom checks and final fresh replay pass. Completed carries have scoped builds, named
+axiom checks, fresh kernel replay and independent reviews. This is not a
+full-tree pass. The [retrofit report](2026-10-16-proof-state-split.md) records
+the contract changes, findings, validation and remaining work.
 
 ## Layers
 
@@ -80,9 +68,9 @@ original checkpoints. The current mirror/toolchain carry status is in
   loop/map rules and checked references to pinned mirror constants.
   Native socket/configuration frames retain the incoming eleven-field WG-owned
   observation in `WGOwned`; their explicit seven-field store view stays separate.
-  The remaining WG source frames, borrowing contracts and environment frames
-  still need native carry. Their narrower store observations must retain their
-  original fields when retyped. The obsolete filesystem, signal, seccomp and
+  WG source frames, borrowing contracts and environment frames use their actual
+  native or product monads and retain the original store observations. The
+  obsolete filesystem, signal, seccomp and
   ambient cross-subsystem layers have been deleted; the retrofit report records
   their type justifications and the unused support removed with them.
 - `Leanux/Proofs/Logged/`: logged copies of mirror functions with erasure
@@ -898,7 +886,7 @@ ReplayWindow. The conventions that keep proof work cheap are in
 | R1: anti-replay uniqueness and inclusive floor | No wire counter is accepted twice in one allocation lifetime; every accepted counter is at or above the inclusive lower edge, for pure runs, original validator calls and accepted runner histories. Equality at the charter's floor is intentionally permitted, with a concrete recorded replay. | `Leanux/Proofs/WG/AntiReplay/` (`Statements.lean`, 9 terminal theorems) | [campaign charter](2026-10-13-charter-proof-campaign.md) | [campaign report](2026-10-13-proof-campaign.md#r1--anti-replay-uniqueness-and-the-inclusive-floor) | cb2348e | lagging: state-split retrofit to b700659 in progress |
 | R2: initialized lifetime safety | For every typed Runner trace and both placeholder settings, committed peer/keypair/packet access histories are safe from release-before-access, including failed prefixes. Every actual reached consistency-filter entry is allocation-valid and supplies exact ordered filter correspondence and safe isolated copied-trial histories. The observer preserves exact original JSON or indexed Stop without parser, array-length, progress or success premises. Original local contracts and endpoint identity refinements remain available. Historical stale-cursor inputs retargeted replacement identities; their current full recipes reject at operation 3 under the pending-dump guard. Raw-reference affiliation/credit is a separate stronger property. | `Leanux/Proofs/WG/LifetimeSafety/` (`Statements.lean`, 202 terminal theorems) | [campaign charter](2026-10-13-charter-proof-campaign.md) | [campaign report](2026-10-13-proof-campaign.md#r2--lifetime-identity-and-retained-references) | cb2348e | lagging: state-split retrofit to b700659 in progress |
 | R3 components: routing, material origin and configured source cuts | Parsed initialized routing/final-World agreement retains its parser premise. Committed material support covers all typed traces/both flags, including Stops and saved probes. New local creation/lookup/retirement/acquisition contracts preserve supplied configured-table coherence. Whole normal sessions couple one actual configured Context/material/owner witness; successful prepare publication links its fresh decrypt receipt and exact packet/key/AEAD/stamp to the historical configured caller before IRQ. DEAD publication remains separate. Initialized configured identity, current allocation transport and earlier lookup/Stack alignment remain open; copied-trial origins are optional. The local extension passes independent review, the proof gate, fresh kernel replay and fast-tier validation. | `Leanux/Proofs/WG/CryptokeyRouting/` (`Statements.lean`, 141 terminal theorems) | [campaign charter](2026-10-13-charter-proof-campaign.md) | [campaign report](2026-10-13-proof-campaign.md#r3--cryptokey-routing-in-progress) | cb2348e | lagging: state-split retrofit to b700659 in progress |
-| R4 components and GRO order finding | Initialized entries/completions and packet/receipt linkage remain proved, including Stops. Local normal Stack/poll preserve supplied funded carrier ledgers and nullable key compatibility; fresh poll removals join named dispositions. New whole normal consumeData conservation joins the exact admission receipt, allocation, enqueue and finish: success/EPIPE retain the queued carrier, ENOSPC repays and frees it. Stable RX preserves logical uncrypted-ring correspondence and cold-head readiness; physical ring-empty plus NAPI-cold implies empty RX inventory/store, including size zero. Initialized ingress/decrypt-worker/lifecycle/work conservation remains open. The split carry now refutes the old selected-cleanup totality conjunct with a checked local queued-peer counterexample; its withdrawal and caller repair are in progress. Chronological GRO order is refuted; Stack return is not inbox arrival. The extension passes independent review, the proof gate, fresh kernel replay and fast-tier validation. | `Leanux/Proofs/WG/DeliveryOrder/` (`Statements.lean`, 129 terminal theorems; `ReplayGro.lean`) | [campaign charter](2026-10-13-charter-proof-campaign.md) | [campaign report](2026-10-13-proof-campaign.md#r4--queue-poll-and-delivery-order-components-in-progress) | cb2348e | lagging: retrofit to b700659; cleanup-totality finding checked, terminal carry unfinished |
+| R4 components and GRO order finding | Initialized entries/completions and packet/receipt linkage remain proved, including Stops. Local normal Stack/poll preserve supplied funded carrier ledgers and nullable key compatibility; fresh poll removals join named dispositions. New whole normal consumeData conservation joins the exact admission receipt, allocation, enqueue and finish: success/EPIPE retain the queued carrier, ENOSPC repays and frees it. Stable RX preserves logical uncrypted-ring correspondence and cold-head readiness; physical ring-empty plus NAPI-cold implies empty RX inventory/store, including size zero. Initialized ingress/decrypt-worker/lifecycle/work conservation remains open. The split carry withdraws the false selected-cleanup totality compound, preserves its supported cuts, and separately exports the checked local queued-peer counterexample and successful-cleanup contract. Chronological GRO order is refuted; Stack return is not inbox arrival. The extension passes independent review, the proof gate, fresh kernel replay and fast-tier validation. | `Leanux/Proofs/WG/DeliveryOrder/` (`Statements.lean`, 131 terminal theorems; `ReplayGro.lean`) | [campaign charter](2026-10-13-charter-proof-campaign.md) | [campaign report](2026-10-13-proof-campaign.md#r4--queue-poll-and-delivery-order-components-in-progress) | cb2348e | lagging: scoped carry to b700659 checked; full-tree gate and replay pending |
 | R5: key lifetime enforcement; Rule Zero findings | Thirteen local theorems identify exact original clock tests, RX AEAD admission and failed-tag coverage, accepted-wire-nonce bounds, TX staging certificates, zero-timer store framing and timer-pass erasure. Accepted original/observed replays authenticate nonce R+1 before rejection and encrypt queued transport keepalives after recorded expiry or zero/clear before a new handshake, using the same packet-held material. New time inputs have coherent coarse/jiffies/arm arithmetic, without a Linux schedule claim. The original unconditional statement is false; universal replacement transport theorems are not claimed. | `Leanux/Proofs/WG/KeyLifetime/` (`Statements.lean`, 13 terminal theorems; `Replay.lean`, `ReplayDelayed.lean`, `ReplayPostClear.lean`) | [campaign charter](2026-10-13-charter-proof-campaign.md) | [campaign report](2026-10-13-proof-campaign.md#r5--key-lifetime-enforcement-rule-zero-findings) | cb2348e | lagging: state-split retrofit to b700659 in progress |
 | R6: cookie exclusion and retry-limit finding | Original under-load calculation and rejected-initiation suffix are exact. Invalid MAC2 against the actual original cookie result executes only the cookie reply; invalid MAC1 drops earlier. Ordinary completion preserves full Noise stores, indices and peer/keypair allocation counters. An accepted generated episode has 19 retries and 20 total initiations with MAX=18, then gives up on callback 20; this refutes the literal limit without claiming a universal replacement bound. The whole advance observer has exact original erasure. | `Leanux/Proofs/WG/FloodResistance/` (`Statements.lean`, 6 terminal theorems; `Replay.lean`) | [campaign charter](2026-10-13-charter-proof-campaign.md) | [campaign report](2026-10-13-proof-campaign.md#r6--cookie-exclusion-and-retry-limit-finding) | cb2348e | lagging: state-split retrofit to b700659 in progress |
 
@@ -1044,10 +1032,10 @@ checked separately and are not included in the terminal declaration count.
 | AntiReplay | 9 | 9 | 0 |
 | LifetimeSafety | 202 | 202 | 0 |
 | CryptokeyRouting | 141 | 141 | 0 |
-| DeliveryOrder | 129 | 129 | 0 |
+| DeliveryOrder | 131 | 131 | 0 |
 | KeyLifetime | 13 | 13 | 0 |
 | FloodResistance | 6 | 6 | 0 |
-| Total | 515 | 513 | 2 |
+| Total | 517 | 515 | 2 |
 
 C memory safety, constant time, cryptographic security and the physical
 erasure of secrets are separate claims that no row makes.

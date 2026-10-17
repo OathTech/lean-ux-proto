@@ -8,14 +8,18 @@ namespace Leanux.Proofs.WG.Queues.RxCredits
 open Leanux Leanux.WG Leanux.Proofs.Framing Leanux.Proofs.Logged Std.Do Lifetimes
 set_option pp.structureInstances false
 
-def uncrypted (cs : Ledger) (w : World) : List Packet :=
+/-- The same physical ring predicate projected to its native WG state. -/
+def NativeRxInv (epoch : Nat) (initial : PtrRing SkbId) (h : List RxRing.Event) (w : WGWorld) : Prop :=
+  ∃ ring, RxRing.Refines initial h ring ∧ RxRing.nativeCell w = some (epoch,ring)
+
+def uncrypted (cs : Ledger) (w : WGWorld) : List Packet :=
   (cs.filter fun c => (packetAt w c.packet).any (fun p => p.state == .uncrypted)).map (·.packet)
 
-structure StableRx (cs : Ledger) (w : World) : Prop where
+structure StableRx (cs : Ledger) (w : WGWorld) : Prop where
   queued : ∀ c ∈ cs, c.phase=.queued
-  ring : ∀ d, w.k.wg=some d →
+  ring : ∀ d, w.dev=some d →
     (d.decryptQueue.items.map fun id => Packet.mk d.ifindex id).Perm (uncrypted cs w)
-  cold : ∀ (d : Device) (pid : PeerId) (p : Peer) (id : SkbId), w.k.wg=some d → d.peers[pid]?=some p →
+  cold : ∀ (d : Device) (pid : PeerId) (p : Peer) (id : SkbId), w.dev=some d → d.peers[pid]?=some p →
     p.napiScheduled=false → p.rxQueue.all.head?=some id →
     ∃ pkt : RxPacket, d.rxSkbs[id]?=some pkt ∧ pkt.state=.uncrypted
 
@@ -57,10 +61,10 @@ theorem ring_produce_items (hr : RxRing.Refines (PtrRing.init n) h r)
 /-- At a stable boundary, the actual empty physical ring and absence of NAPI
 work force the same funded carrier ledger and the complete RX store to be empty. -/
 theorem stable_drained (hi : CarrierState cs loans w) (hs : StableRx cs w)
-    (physical : RxRing.Inv epoch (PtrRing.init n) h w)
-    (empty : ∀ d, w.k.wg=some d → d.decryptQueue.empty=true)
-    (cold : ∀ (d : Device) (pid : PeerId) (p : Peer), w.k.wg=some d → d.peers[pid]?=some p → p.napiScheduled=false) :
-    cs=[] ∧ ∀ (d : Device) (id : SkbId) (pkt : RxPacket), w.k.wg=some d → d.rxSkbs[id]?≠some pkt := by
+    (physical : NativeRxInv epoch (PtrRing.init n) h w)
+    (empty : ∀ d, w.dev=some d → d.decryptQueue.empty=true)
+    (cold : ∀ (d : Device) (pid : PeerId) (p : Peer), w.dev=some d → d.peers[pid]?=some p → p.napiScheduled=false) :
+    cs=[] ∧ ∀ (d : Device) (id : SkbId) (pkt : RxPacket), w.dev=some d → d.rxSkbs[id]?≠some pkt := by
   have nil : cs=[] := by
     apply Classical.byContradiction
     intro nonempty
@@ -74,10 +78,10 @@ theorem stable_drained (hi : CarrierState cs loans w) (hs : StableRx cs w)
     have packet : c.packet=⟨d.ifindex,c.packet.slot⟩ := by
       have ep := (hi.inventory.present c (by simp)).1
       cases he : c.packet
-      simp_all [Packet.mk.injEq]
+      simp_all
     have owner : c.owner=⟨d.ifindex,c.owner.slot,p.internalId⟩ := by
       cases he : c.owner
-      simp_all [Owner.mk.injEq]
+      simp_all
     have count := hi.queues d c.owner.slot p c.packet.slot hd hpeer
     have positive : 0<p.rxQueue.all.count c.packet.slot := by
       have test : (c.packet == ⟨d.ifindex,c.packet.slot⟩ &&
@@ -94,7 +98,7 @@ theorem stable_drained (hi : CarrierState cs loans w) (hs : StableRx cs w)
     have stored : packetAt w x.packet=some pkt := by simp [hxpacket,packetAt,hd,hpkt]
     have mem := uncrypted_member hx stored hstate
     obtain ⟨ring,href,hcell⟩ := physical
-    have ringEq : ring=d.decryptQueue := by simpa [RxRing.cell,hd] using congrArg (Option.map Prod.snd) hcell.symm
+    have ringEq : ring=d.decryptQueue := by simpa [RxRing.nativeCell,hd] using congrArg (Option.map Prod.snd) hcell.symm
     have noItems : d.decryptQueue.items=[] := ring_empty_items (ringEq ▸ href) (empty d hd)
     have perm := hs.ring d hd
     rw [noItems,List.map_nil] at perm
@@ -108,30 +112,30 @@ theorem stable_drained (hi : CarrierState cs loans w) (hs : StableRx cs w)
 
 /-- Only fields used by stable RX boundaries. Reference counts and key state
 may change without changing this view. -/
-def stableView (w : World) :=
-  (RxRing.cell w, rxView w, fun pid : PeerId =>
-    (w.k.wg.bind fun d => d.peers[pid]?).map fun p => (p.rxQueue,p.napiScheduled))
+def stableView (w : WGWorld) :=
+  (RxRing.nativeCell w, rxView w, fun pid : PeerId =>
+    (w.dev.bind fun d => d.peers[pid]?).map fun p => (p.rxQueue,p.napiScheduled))
 
 theorem StableRx.view (hs : StableRx cs w) (hv : stableView v=stableView w) : StableRx cs v := by
-  have ring : RxRing.cell v=RxRing.cell w := congrArg Prod.fst hv
+  have ring : RxRing.nativeCell v=RxRing.nativeCell w := congrArg Prod.fst hv
   have rx : rxView v=rxView w := congrArg (fun x => x.2.1) hv
-  have peers : (fun (pid : PeerId) => (v.k.wg.bind fun d => d.peers[pid]?).map fun (p : Peer) => (p.rxQueue,p.napiScheduled)) =
-      (fun (pid : PeerId) => (w.k.wg.bind fun d => d.peers[pid]?).map fun (p : Peer) => (p.rxQueue,p.napiScheduled)) := congrArg (fun x => x.2.2) hv
+  have peers : (fun (pid : PeerId) => (v.dev.bind fun d => d.peers[pid]?).map fun (p : Peer) => (p.rxQueue,p.napiScheduled)) =
+      (fun (pid : PeerId) => (w.dev.bind fun d => d.peers[pid]?).map fun (p : Peer) => (p.rxQueue,p.napiScheduled)) := congrArg (fun x => x.2.2) hv
   have packets : ∀p,packetAt v p=packetAt w p := fun p => by
     have epoch := congrArg Prod.fst rx
     have slots := congrFun (congrArg Prod.snd rx) p.slot
-    cases h₁:v.k.wg <;> cases h₂:w.k.wg <;> simp_all [rxView,packetAt]
+    cases h₁:v.dev <;> cases h₂:w.dev <;> simp_all [rxView,packetAt]
   refine ⟨hs.queued,?_,?_⟩
   · intro d hd
-    have old : ∃e,w.k.wg=some e ∧ e.ifindex=d.ifindex ∧ e.decryptQueue=d.decryptQueue := by
-      cases hw:w.k.wg <;> simp_all [stableView,RxRing.cell]
+    have old : ∃e,w.dev=some e ∧ e.ifindex=d.ifindex ∧ e.decryptQueue=d.decryptQueue := by
+      cases hw:w.dev <;> simp_all [stableView,RxRing.nativeCell]
     obtain ⟨e,he,ep,hq⟩ := old
     have perm := hs.ring e he
     simpa [ep,hq,uncrypted,packets] using perm
   · intro d pid p id hd hp cold head
-    have old : ∃e q,w.k.wg=some e ∧ e.peers[pid]?=some q ∧ q.rxQueue=p.rxQueue ∧ q.napiScheduled=p.napiScheduled := by
+    have old : ∃e q,w.dev=some e ∧ e.peers[pid]?=some q ∧ q.rxQueue=p.rxQueue ∧ q.napiScheduled=p.napiScheduled := by
       have eq := congrFun peers pid
-      simp only [stableView,hd,Option.bind_some,hp,Option.map_some] at eq
+      simp only [hd,Option.bind_some,hp,Option.map_some] at eq
       obtain ⟨q,hq,hfields⟩ := Option.map_eq_some_iff.mp eq.symm
       obtain ⟨e,he,hep⟩ := Option.bind_eq_some_iff.mp hq
       exact ⟨e,q,he,hep,(congrArg Prod.fst hfields),(congrArg Prod.snd hfields)⟩
@@ -140,39 +144,64 @@ theorem StableRx.view (hs : StableRx cs w) (hv : stableView v=stableView w) : St
     have slots := congrFun (congrArg Prod.snd rx) id
     exact ⟨pkt,by simpa [rxView,hd,he,hpkt] using slots,state⟩
 
-theorem stableView_kernel (ha : SameKernel a) : SameView stableView a := by
-  intro w x v hr
-  unfold stableView RxRing.cell rxView
-  rw [ha w x v hr]
+theorem stableView_kernel {S α : Type} {m : Type → Type} {ps : PostShape}
+    [Monad m] [WPMonad m ps] {project : S → WGWorld} {a : StateT S m α}
+    (ha : SameView (fun w => wgStoreView (project w)) a) :
+    SameView (fun w => stableView (project w)) a :=
+  ha.of_factor (fun store : WGStoreView =>
+    (store.dev.map (fun d => (d.ifindex,d.decryptQueue)),
+      (store.dev.map (·.ifindex),fun id : SkbId => store.dev.bind fun d => d.rxSkbs[id]?),
+      fun pid : PeerId => (store.dev.bind fun d => d.peers[pid]?).map fun p => (p.rxQueue,p.napiScheduled))) _
+    (fun _ => rfl)
 
 theorem stable_peerGetMaybeZero (id : Option PeerId) : SameView stableView (peerGetMaybeZero id) := by
-  apply SameView.of_wp
-  intro s
-  mvcgen [peerGetMaybeZero,requireNotPending,getPeer,getDev,getK,setPeer,modifyDev,
-    modifyK,refcountIncNotZero,branch,branchCmp,invariant,unsupported]
-  all_goals dsimp +zetaDelta only at *
-  all_goals simp_all [stableView,RxRing.cell,rxView]
-  all_goals subst_vars
-  all_goals simp_all
-  all_goals funext pid
-  all_goals simp only [Std.TreeMap.getElem?_insert]
-  all_goals split <;> simp_all
+  apply (ProjectedAction.iff_run_ambient _ _ _).mpr
+  intro w ambient result v ambient' hr
+  have hb := ((hoare_iff_run_ambient _ _ _).mp
+    (PeerBorrow.acquire_spec id (wgStoreView w)) w ambient result v ambient' rfl hr).2
+  cases result with
+  | none =>
+    have hd := congrArg WGStoreView.dev hb
+    change v.dev = w.dev at hd
+    unfold stableView RxRing.nativeCell rxView
+    rw [hd]
+  | some pid =>
+    obtain ⟨d,p,hd,hp,_,hv⟩ := hb
+    have dev := congrArg WGStoreView.dev hv
+    change v.dev = some _ at dev
+    change w.dev = some d at hd
+    simp only [stableView,RxRing.nativeCell,rxView,dev,hd,Option.map_some,Option.bind_some]
+    refine Prod.ext rfl (Prod.ext rfl ?_)
+    funext q
+    by_cases he : pid=q <;> simp_all [Std.TreeMap.getElem?_insert]
 
 theorem stable_ownerStore (owner : IndexOwner) (word : Option PeerId) : SameView stableView (owner.setPeerWord word) := by
-  apply SameView.of_wp
-  intro s
-  cases owner <;> mvcgen [IndexOwner.setPeerWord,getPeer,getKeypair,getDev,getK,setPeer,setKeypair,modifyDev,modifyK,invariant]
-  all_goals dsimp +zetaDelta only at *
-  all_goals simp_all [stableView,RxRing.cell,rxView]
-  all_goals subst_vars
-  all_goals simp_all
-  all_goals funext pid
-  all_goals simp only [Std.TreeMap.getElem?_insert]
-  all_goals split <;> simp_all
+  apply (ProjectedAction.iff_run_ambient _ _ _).mpr
+  intro w ambient u v ambient' hr
+  cases owner with
+  | handshake pid =>
+    unfold IndexOwner.setPeerWord at hr
+    rw [MaterialOrigin.bind_ok_ambient] at hr
+    obtain ⟨p,a,aa,hg,hs⟩ := hr
+    obtain ⟨ha,haa,d,hd,hp⟩ := getPeer_normal pid w a p ambient aa hg
+    subst a
+    subst aa
+    cases hs
+    simp only [stableView,RxRing.nativeCell,rxView,hd,Option.map_some,Option.bind_some]
+    refine Prod.ext rfl (Prod.ext rfl ?_)
+    funext q
+    by_cases he : pid=q <;> simp_all [Std.TreeMap.getElem?_insert]
+  | keypair kid =>
+    obtain ⟨d,k,hd,hk,hv,_⟩ := Origins.keypair_word_store kid word w v ambient ambient' hr
+    rw [hv]
+    simp only [stableView,RxRing.nativeCell,rxView,CounterWindow.store,hd,Option.map_some,Option.bind_some]
 
 theorem stable_acquireOwner (owner : IndexOwner) : SameView stableView (Affiliation.acquireOwner owner) := by
   unfold Affiliation.acquireOwner
-  exact (stableView_kernel (indexOwner_peerWord_sameKernel owner)).bind fun word =>
+  have read : SameView stableView owner.peerWord := by
+    intro s
+    exact indexOwner_peerWord_preserves owner (fun w => stableView w=s)
+  exact read.bind fun word =>
     (stable_peerGetMaybeZero word).bind fun result =>
       (stable_ownerStore owner result).bind fun _ => SameView.pure _ _
 
@@ -180,39 +209,113 @@ theorem stable_indexLookup (kinds : List IndexKind) (index : Nat) : SameView sta
   rw [←Affiliation.indexLookupSource_eq]
   apply SameView.of_wp
   intro s
+  let P := fun w => stableView w=s
   have ha := fun owner => (stable_acquireOwner owner).wp (fun t => t=s)
-  have hb := (stableView_kernel (Framing.indexBucket_sameKernel index)).wp (fun t => t=s)
-  mvcgen [Affiliation.indexLookupSource,ha,hb,getDev,getK,branch,invariant]
-  all_goals try exact ((⇓? _ w => ⌜stableView w=s⌝) : PostCond _ (.arg World (.except Stop .pure)))
-  all_goals dsimp +zetaDelta only at *
-  all_goals simp_all [stableView,RxRing.cell,rxView]
+  have hb : Preserves P (liftIndex (indexBucket index)) := by
+    apply hoare_liftIndex
+    intro g d table hg hd
+    simpa [P,stableView,RxRing.nativeCell,rxView,hd] using hg
+  have branchSpec (decision : Decision) (value : Bool) :
+      Preserves P (branch decision value : WG.M Bool) :=
+    hoare_liftAmbient (AmbientM.branch decision value) P
+  have stop {α : Type} (why : String) : Preserves P (invariant why : WG.M α) :=
+    hoare_liftAmbient (AmbientM.invariant why) P
+  unfold Affiliation.indexLookupSource
+  repeat' first
+    | unfold Preserves
+    | material_join
+    | material_join_use
+    | (index_material_head branch; exact branchSpec _ _)
+    | (index_material_head invariant; exact stop _)
+    | (index_material_head liftIndex; exact hb)
+    | (index_material_head Affiliation.acquireOwner; exact ha _)
+    | (index_material_head Pure.pure; exact preserves_pure _)
+    | (index_material_head Bind.bind; apply preserves_bind)
+    | (index_material_head ForIn.forIn; apply list_view_spec id P)
+    | material_intro
+    | material_reduce
+    | material_match
+    | (index_material_head ite; split)
 
 theorem stable_keypairGet (id : Option KeypairId) : SameView stableView (keypairGet id) := by
-  apply SameView.of_wp
-  intro s
-  mvcgen [keypairGet,getKeypair,getDev,getK,setKeypair,modifyDev,modifyK,
-    refcountIncNotZero,branch,branchCmp,invariant,unsupported]
-  all_goals dsimp +zetaDelta only at *
-  all_goals simp_all [stableView,RxRing.cell,rxView]
+  intro initial
+  let P := fun g => stableView g=initial
+  have getter (id) : Preserves P (getKeypair id) := by
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient k v ambient' hi hr
+    simpa only [(KeyTimes.getKeypair_return id w v k ambient ambient' hr).1] using hi
+  have setter (id) (k : Keypair) : Preserves P (setKeypair id k) := by
+    unfold setKeypair modifyDev
+    apply hoare_modify
+    intro w hi
+    cases hd : w.dev <;> simpa [P,stableView,RxRing.nativeCell,rxView,hd] using hi
+  unfold keypairGet refcountIncNotZero
+  material_lower
+  repeat' first
+    | unfold Preserves
+    | material_join
+    | material_join_use
+    | (index_material_head getKeypair; exact getter _)
+    | (index_material_head setKeypair; exact setter _ _)
+    | (index_material_head Pure.pure; exact preserves_pure _)
+    | (index_material_head Bind.bind; apply preserves_bind)
+    | material_component
+    | material_intro
+    | material_reduce
+    | material_match
+    | (index_material_head ite; split)
 
 theorem stable_keypairPut (id : Option KeypairId) (now : Bool) : SameView stableView (keypairPut id now) := by
-  apply SameView.of_wp
-  intro s
-  simp only [keypairPut,indexRemove_eq]
-  have hd := fun o k => sameKernel_wp _ (indexOwner_peerDeref_sameKernel o) (fun v => v=k)
-  mvcgen [hd,indexUnhash,getKeypair,getDev,getK,setKeypair,modifyDev,modifyK,
-    refcountDecAndTest,branch,branchCmp,invariant,unsupported]
-  all_goals dsimp +zetaDelta only at *
-  all_goals simp_all [stableView,RxRing.cell,rxView,Option.map_map,Option.bind_map,Function.comp_def]
-  all_goals subst_vars
-  all_goals simp_all
+  intro initial
+  let P := fun g => stableView g=initial
+  have getter (id) : Preserves P (getKeypair id) := by
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient k v ambient' hi hr
+    simpa only [(KeyTimes.getKeypair_return id w v k ambient ambient' hr).1] using hi
+  have setter (id) (k : Keypair) : Preserves P (setKeypair id k) := by
+    unfold setKeypair modifyDev
+    apply hoare_modify
+    intro w hi
+    cases hd : w.dev <;> simpa [P,stableView,RxRing.nativeCell,rxView,hd] using hi
+  have deref := fun owner => indexOwner_peerDeref_preserves owner P
+  have index (a : IndexM Unit) : Preserves P (liftIndex a) := by
+    apply hoare_liftIndex
+    intro g d table hg hd
+    simpa [P,stableView,RxRing.nativeCell,rxView,hd] using hg
+  have erase (id) : Preserves P (modifyDev fun d => {d with keypairs := d.keypairs.erase id}) := by
+    unfold modifyDev
+    apply hoare_modify
+    intro w hi
+    cases hd : w.dev <;> simpa [P,stableView,RxRing.nativeCell,rxView,hd] using hi
+  unfold keypairPut refcountDecAndTest
+  material_lower
+  repeat' first
+    | unfold Preserves
+    | material_join
+    | material_join_use
+    | (index_material_head getKeypair; exact getter _)
+    | (index_material_head setKeypair; exact setter _ _)
+    | (index_material_head IndexOwner.peerDeref; exact deref _)
+    | (index_material_head indexRemove; exact index _)
+    | (index_material_head liftIndex; exact index _)
+    | (index_material_head MonadLift.monadLift; with_reducible exact index _)
+    | (index_material_head MonadLiftT.monadLift; with_reducible exact index _)
+    | (index_material_head monadLift; with_reducible exact index _)
+    | (index_material_head modifyDev; exact erase _)
+    | (index_material_head Pure.pure; exact preserves_pure _)
+    | (index_material_head Bind.bind; apply preserves_bind)
+    | material_component
+    | material_intro
+    | material_reduce
+    | material_match
+    | (index_material_head ite; split)
+  all_goals exact index _
 
-
-theorem StableRx.peerKernel (hs : StableRx cs w) (hd : w.k.wg=some d)
+theorem StableRx.peerKernel (hs : StableRx cs w) (hd : w.dev=some d)
     (peers : Std.TreeMap PeerId Peer compare)
     (back : ∀(pid : PeerId) (p : Peer),peers[pid]?=some p → ∃q : Peer,d.peers[pid]?=some q ∧
       q.rxQueue=p.rxQueue ∧ q.napiScheduled=p.napiScheduled) :
-    StableRx cs {w with k:={w.k with wg:=some {d with peers}}} := by
+    StableRx cs {w with dev:=some {d with peers}} := by
   refine ⟨hs.queued,?_,?_⟩
   · intro out hout
     have he : out={d with peers} := Option.some.inj hout.symm
@@ -224,40 +327,56 @@ theorem StableRx.peerKernel (hs : StableRx cs w) (hd : w.k.wg=some d)
     obtain ⟨q,hq,queue,napi⟩ := back pid p hp
     exact hs.cold d pid q id hd hq (napi.trans cold) (queue ▸ head)
 
-theorem stable_payment_effect (hd : w.k.wg=some d) (hp : d.peers[pid]?=some p)
-    (hr : (peerPut (some pid)).run w=.ok ((),v)) :
-    stableView v=stableView {w with k:=paymentKernel w.k d pid p} := by
-  have hg := PeerBorrow.getPeer_known w.k d pid p hd hp
-  have hs : ⦃fun z => ⌜z.k=w.k⌝⦄ peerPut (some pid)
-      ⦃⇓? _ z => ⌜stableView z=stableView {w with k:=paymentKernel w.k d pid p}⌝⦄ := by
-    simp only [peerPut,indexRemove_eq]
-    mvcgen [hg,requireNotPending,getDev,getK,setPeer,modifyDev,modifyK,refcountDecAndTest,
-      branch,branchCmp,indexUnhash,retirePeerUnits,invariant,unsupported]
-    all_goals dsimp +zetaDelta only at *
-    all_goals simp_all [stableView,RxRing.cell,rxView,paymentKernel,Option.map_map,Option.bind_map,Function.comp_def]
-    all_goals subst_vars
-    all_goals dsimp only
-    all_goals simp [funext_iff,Std.TreeMap.getElem?_insert,Std.TreeMap.getElem?_erase]
-    all_goals intro q; by_cases h : pid=q <;> simp [h]
-  exact (hoare_iff_triple _ _ _).mpr hs w () v rfl hr
+theorem stable_payment_effect (hd : w.dev=some d) (hp : d.peers[pid]?=some p)
+    (ambient ambient' : Ambient)
+    (hr : ((peerPut (some pid)).run w).run ambient=.ok (((),v),ambient')) :
+    stableView v=stableView (paymentState w d pid p) := by
+  have positive := (peerPut_effect pid w v d p ambient ambient' hd hp hr).1
+  have nonzero : p.refcount ≠ 0 := by omega
+  have hl (a : IndexM Unit) : (liftM a : WG.M Unit) = liftIndex a := rfl
+  by_cases final : p.refcount = 1
+  all_goals
+    simp [peerPut, requireNotPending, getPeer, getDev, setPeer, modifyDev,
+      refcountDecAndTest, branch, branchCmp, indexRemove_eq, indexUnhash,
+      hl, liftIndex_run, retirePeerUnits, modifyAmbient,
+      CounterWindow.branch_run, CounterWindow.branchCmp_run,
+      hd, hp, positive, nonzero, final,
+      StateT.run_bind, StateT.run_pure, StateT.run_monadLift,
+      CounterWindow.except_ok_bind, CounterWindow.except_pure,
+      invariant, AmbientM.invariant, unsupported, AmbientM.unsupported] at hr
+  all_goals repeat' first | split at hr | contradiction
+  all_goals rcases hr with ⟨rfl,rfl⟩
+  all_goals simp_all [stableView,RxRing.nativeCell,rxView,paymentState,
+    Std.TreeMap.getElem?_insert,Std.TreeMap.getElem?_erase]
 
-theorem StableRx.put (hs : StableRx cs w)
-    (hr : (peerPut pid).run w=.ok ((),v)) : StableRx cs v := by
+theorem StableRx.put (hs : StableRx cs w) (ambient ambient' : Ambient)
+    (hr : ((peerPut pid).run w).run ambient=.ok (((),v),ambient')) : StableRx cs v := by
   cases pid with
   | none =>
-    have hv : v=CounterWindow.record w .peerPutNull true := by simpa [peerPut] using hr.symm
-    apply hs.view
-    rw [hv]
-    rfl
+    simp [peerPut,branch,CounterWindow.branch_run,StateT.run_bind,
+      StateT.run_pure,StateT.run_monadLift,CounterWindow.except_ok_bind,
+      CounterWindow.except_pure] at hr
+    rcases hr with ⟨rfl,rfl⟩
+    exact hs
   | some pid =>
-    obtain ⟨d,p,hd,hp⟩ : ∃d p,w.k.wg=some d ∧ d.peers[pid]?=some p := by
-      cases hd:w.k.wg with
-      | none => simp [peerPut,requireNotPending,getPeer,getDev,getK,hd,branch,invariant] at hr
+    obtain ⟨d,p,hd,hp⟩ : ∃d p,w.dev=some d ∧ d.peers[pid]?=some p := by
+      cases hd:w.dev with
+      | none =>
+        simp [peerPut,branch,CounterWindow.branch_run,requireNotPending,
+          getPeer,getDev,hd,invariant,AmbientM.invariant,StateT.run_bind,
+          StateT.run_monadLift,CounterWindow.except_ok_bind] at hr
+        change Except.error _ = Except.ok (((),v),ambient') at hr
+        cases hr
       | some d =>
         cases hp:d.peers[pid]? with
-        | none => simp [peerPut,requireNotPending,getPeer,getDev,getK,hd,hp,branch,invariant] at hr
+        | none =>
+          simp [peerPut,branch,CounterWindow.branch_run,requireNotPending,
+            getPeer,getDev,hd,hp,invariant,AmbientM.invariant,StateT.run_bind,
+            StateT.run_pure,StateT.run_monadLift,CounterWindow.except_ok_bind] at hr
+          change Except.error _ = Except.ok (((),v),ambient') at hr
+          cases hr
         | some p => exact ⟨d,p,rfl,hp⟩
-    apply StableRx.view (w:={w with k:=paymentKernel w.k d pid p}) _ (stable_payment_effect hd hp hr)
+    apply StableRx.view (w:=paymentState w d pid p) _ (stable_payment_effect hd hp ambient ambient' hr)
     apply hs.peerKernel hd _
     intro q out hout
     by_cases h:p.refcount=1
@@ -285,7 +404,7 @@ theorem uncrypted_eq (he : ∀c∈cs,packetAt v c.packet=packetAt w c.packet) :
   rw [he c hc]
 
 theorem StableRx.allocate (hs : StableRx cs w) (hi : Inventory cs w)
-    (hd : w.k.wg=some d) (fresh : d.rxSkbs[d.nextSkb]?=none) (pkt : RxPacket) :
+    (hd : w.dev=some d) (fresh : d.rxSkbs[d.nextSkb]?=none) (pkt : RxPacket) :
     StableRx cs (Packets.update w fun d => {d with rxSkbs:=d.rxSkbs.insert d.nextSkb pkt,nextSkb:=d.nextSkb+1}) := by
   let v := Packets.update w fun d => {d with rxSkbs:=d.rxSkbs.insert d.nextSkb pkt,nextSkb:=d.nextSkb+1}
   have keeps : ∀c∈cs,packetAt v c.packet=packetAt w c.packet := by
@@ -316,49 +435,64 @@ theorem stable_receiveKey (entry : Option (IndexOwner × PeerId)) :
     SameView stableView (Affiliation.receiveKeyAcquire entry) := by
   cases entry with
   | none =>
-    simpa [Affiliation.receiveKeyAcquire] using
-      (stableView_kernel keypairGetCurrent_sameKernel).bind (fun _ => SameView.pure _ _)
+    intro initial
+    unfold Affiliation.receiveKeyAcquire keypairGetNull
+    simp only [pure_bind,bind_assoc]
+    apply preserves_bind (hoare_liftAmbient (AmbientM.branch .keypairGetNull true) _)
+    intro _
+    exact preserves_pure _
   | some e =>
     rcases e with ⟨owner,pid⟩
-    cases owner
-    · intro w r v hr
+    cases owner with
+    | handshake id =>
+      apply (ProjectedAction.iff_run_ambient _ _ _).mpr
+      intro w ambient result v ambient' hr
+      simp [Affiliation.receiveKeyAcquire,invariant,AmbientM.invariant] at hr
       cases hr
-    · simpa [Affiliation.receiveKeyAcquire] using
-        (stable_keypairGet (some _)).bind (fun _ => SameView.pure _ _)
+    | keypair id =>
+      simpa [Affiliation.receiveKeyAcquire] using
+        (stable_keypairGet (some id)).bind (fun _ => SameView.pure _ _)
 
 theorem admitted_stable_front (hs : StableRx cs w) (hi : Inventory cs w) (hf : Packets.Inv w)
-    (hr : (RxOrigin.admitSource msg src ds).run w=.ok (some ctx,v)) : StableRx cs v := by
-  obtain ⟨entry,a,b,c,peer,d,e,hl,hk,hno,hp,hd,_,hn⟩ :=
-    RxOrigin.admission_execution msg src ds ctx w v hr
-  have vb := (stable_receiveKey entry a _ b hk).trans (stable_indexLookup [.keypair] (u32le msg 4) w _ a hl)
-  have kc := sameKernel_branch .dataNoKeypair false b false c hno
-  have kd := (getPeer_normal ctx.packet.peer c d peer hp).1
-  have ke := sameKernel_branch .dataPeerDead peer.isDead d false e hd
-  have eb : e.k=b.k := ke.trans ((congrArg World.k kd).trans kc)
-  have ve : stableView e=stableView w := by
-    simpa [stableView,RxRing.cell,rxView,eb] using vb
+    (ambient ambient' : Ambient)
+    (hr : ((RxOrigin.admitSource msg src ds).run w).run ambient=.ok ((some ctx,v),ambient')) : StableRx cs v := by
+  obtain ⟨entry,a,aa,b,ab,c,ac,peer,d,ad,e,ae,hl,hk,hno,hp,hd,_,hn⟩ :=
+    RxOrigin.admission_execution msg src ds ctx w v ambient ambient' hr
+  have vb := ((ProjectedAction.iff_run_ambient _ _ _).mp (stable_receiveKey entry) a aa _ b ab hk).trans
+    ((ProjectedAction.iff_run_ambient _ _ _).mp (stable_indexLookup [.keypair] (u32le msg 4)) w ambient _ a aa hl)
+  have kc : c=b := (hoare_iff_run_ambient _ _ _).mp
+    (hoare_liftAmbient (AmbientM.branch .dataNoKeypair false) (fun g => g=b)) b ab false c ac rfl hno
+  have kd := (getPeer_normal ctx.packet.peer c d peer ac ad hp).1
+  have ke : e=d := (hoare_iff_run_ambient _ _ _).mp
+    (hoare_liftAmbient (AmbientM.branch .dataPeerDead peer.isDead) (fun g => g=d)) d ad false e ae rfl hd
+  have eb : e=b := ke.trans (kd.trans kc)
+  have ve : stableView e=stableView w := by simpa only [eb] using vb
   have ie : Inventory cs e := inventory_view hi (congrArg (fun x => x.2.1) ve)
-  have packets := (receiveKey_packets entry a _ b hk).trans (indexLookup_packets [.keypair] (u32le msg 4) w entry a hl)
-  have pe : Packets.snapshot e=Packets.snapshot w := by simpa only [Packets.snapshot,eb] using packets
+  have packets := ((ProjectedAction.iff_run_ambient _ _ _).mp (receiveKey_packets entry) a aa _ b ab hk).trans
+    ((ProjectedAction.iff_run_ambient _ _ _).mp (indexLookup_packets [.keypair] (u32le msg 4)) w ambient entry a aa hl)
+  have pe : Packets.snapshot e=Packets.snapshot w := by simpa only [eb] using packets
   have fe : Packets.Inv e := by simpa only [Packets.Inv,pe] using hf
-  obtain ⟨dev,hdev,slot,after,stored⟩ := RxOrigin.allocation_record ctx.packet ⟨ctx.slot,e,v⟩ hn
-  change e.k.wg=some dev at hdev
+  obtain ⟨dev,hdev,slot,after,_,_⟩ := RxOrigin.allocation_record ctx.packet ⟨ctx.slot,e,v,ae,ambient'⟩ hn
+  change e.dev=some dev at hdev
   change v=Packets.update e _ at after
   rw [after]
   simpa [Packets.update,hdev] using (hs.view ve).allocate ie hdev (Packets.allocation_slots_empty e dev hdev fe).2 ctx.packet
 
+theorem StableRx.kernel (hs : StableRx cs w) (hk : wgStoreView v=wgStoreView w) : StableRx cs v :=
+  hs.view (by
+    have hd : v.dev=w.dev := congrArg WGStoreView.dev hk
+    unfold stableView RxRing.nativeCell rxView
+    rw [hd])
 
-theorem StableRx.kernel (hs : StableRx cs w) (hk : v.k=w.k) : StableRx cs v :=
-  hs.view (by unfold stableView RxRing.cell rxView; rw [hk])
-
-theorem stable_enqueue {id : SkbId} {pkt : RxPacket} (hs : StableRx cs w) (hd : w.k.wg=some d)
+theorem stable_enqueue {id : SkbId} {pkt : RxPacket} (hs : StableRx cs w) (hd : w.dev=some d)
     (hp : d.peers[pkt.peer]?=some p) (hpacket : d.rxSkbs[id]?=some pkt)
     (state : pkt.state=.uncrypted) (cp : c.packet=⟨d.ifindex,id⟩)
     (physical : RxRing.Refines (PtrRing.init n) h d.decryptQueue)
-    (hr : (enqueuePerDeviceAndPeerRx id).run w=.ok (ret,v)) :
+    (ambient ambient' : Ambient)
+    (hr : ((enqueuePerDeviceAndPeerRx id).run w).run ambient=.ok ((ret,v),ambient')) :
     if ret=0 then StableRx (enqueued c::cs) v else StableRx cs v := by
-  obtain ⟨outcomes,cpu,hv⟩ := enqueue_effect hd hpacket hp hr
-  let v0 : World := {w with k:={w.k with wg:=some (enqueueDevice d id pkt p ret cpu)}}
+  obtain ⟨outcomes,cpu,hv⟩ := enqueue_effect hd hpacket hp ambient ambient' hr
+  let v0 : WGWorld := {w with dev:=some (enqueueDevice d id pkt p ret cpu)}
   have same : {pkt with state:=PacketState.uncrypted}=pkt := by cases pkt; simp_all
   have rx : rxView v0=rxView w := by
     simp only [rxView,v0,hd,enqueueDevice,Option.map_some,Option.bind_some]
@@ -372,8 +506,8 @@ theorem stable_enqueue {id : SkbId} {pkt : RxPacket} (hs : StableRx cs w) (hd : 
     intro x
     by_cases he : d.ifindex=x.packet.epoch
     all_goals by_cases hx : id=x.packet.slot
-    all_goals simp_all [packetAt,v0,hd,enqueueDevice,Std.TreeMap.getElem?_insert,same]
-  have cold : ∀(out : Device) (pid : PeerId) (q : Peer) (sid : SkbId),v0.k.wg=some out → out.peers[pid]?=some q →
+    all_goals simp_all [packetAt,v0,enqueueDevice,Std.TreeMap.getElem?_insert]
+  have cold : ∀(out : Device) (pid : PeerId) (q : Peer) (sid : SkbId),v0.dev=some out → out.peers[pid]?=some q →
       q.napiScheduled=false → q.rxQueue.all.head?=some sid →
       ∃stored : RxPacket,out.rxSkbs[sid]?=some stored ∧ stored.state=.uncrypted := by
     intro out pid q sid hout hq hnapi hhead
@@ -381,7 +515,7 @@ theorem stable_enqueue {id : SkbId} {pkt : RxPacket} (hs : StableRx cs w) (hd : 
     subst out
     have store : ∀sid : SkbId,(enqueueDevice d id pkt p ret cpu).rxSkbs[sid]?=d.rxSkbs[sid]? := by
       intro j
-      by_cases he:id=j <;> simp_all [enqueueDevice,Std.TreeMap.getElem?_insert,same]
+      by_cases he:id=j <;> simp_all [enqueueDevice,Std.TreeMap.getElem?_insert]
     by_cases space : ret=-ENOSPC
     · obtain ⟨stored,hstored,hstate⟩ := hs.cold d pid q sid hd (by simpa [enqueueDevice,space] using hq) hnapi hhead
       exact ⟨stored,(store sid).trans hstored,hstate⟩
@@ -414,10 +548,10 @@ theorem stable_enqueue {id : SkbId} {pkt : RxPacket} (hs : StableRx cs w) (hd : 
     · intro out hout
       have eq : out=enqueueDevice d id pkt p ret cpu := Option.some.inj hout.symm
       subst out
-      have free : d.decryptQueue.full=false := RxRing.enqueue_free (deviceIndex:=d.ifindex) (r:=d.decryptQueue) id (by simp [RxRing.cell,hd]) (zero ▸ hr)
+      have free : d.decryptQueue.full=false := RxRing.enqueue_free (deviceIndex:=d.ifindex) (r:=d.decryptQueue) id (by simp [RxRing.nativeCell,hd]) (zero ▸ hr)
       have contents := ring_produce_items physical free id
       have newlist : uncrypted (enqueued c::cs) v0=c.packet::uncrypted cs w := by
-        have hc : packetAt v0 c.packet=some pkt := (packets c).trans (by simp [enqueued,cp,packetAt,hd,hpacket])
+        have hc : packetAt v0 c.packet=some pkt := (packets c).trans (by simp [cp,packetAt,hd,hpacket])
         have test : ((PacketState.uncrypted)==PacketState.uncrypted)=true := rfl
         simpa only [uncrypted,enqueued,List.filter_cons,hc,Option.any_some,state,test,ite_true,List.map_cons] using congrArg (List.cons c.packet) unchanged
       rw [newlist]
@@ -436,48 +570,56 @@ theorem stable_enqueue {id : SkbId} {pkt : RxPacket} (hs : StableRx cs w) (hd : 
     simpa [enqueueDevice,zero] using hs.ring d hd
 
 
-theorem admitted_none_stable (hs : StableRx cs w)
-    (hr : (RxOrigin.admitSource msg src ds).run w=.ok (none,v)) : StableRx cs v := by
+theorem admitted_none_stable (hs : StableRx cs w) (ambient ambient' : Ambient)
+    (hr : ((RxOrigin.admitSource msg src ds).run w).run ambient=.ok ((none,v),ambient')) : StableRx cs v := by
   rw [RxOrigin.admitSource_factor] at hr
-  obtain ⟨entry,a,hl,acquired,b,hk,noKey,c,hn,rest⟩ := (by simpa only [MaterialOrigin.bind_ok] using hr)
+  obtain ⟨entry,a,aa,hl,acquired,b,ab,hk,noKey,c,ac,hn,rest⟩ := (by simpa only [MaterialOrigin.bind_ok_ambient] using hr)
   rcases acquired with ⟨kp,pid⟩
-  have front := hs.view ((stable_receiveKey entry a _ b hk).trans (stable_indexLookup [.keypair] (u32le msg 4) w _ a hl))
-  have fc := front.kernel (sameKernel_branch .dataNoKeypair kp.isNone b noKey c hn)
+  have front := hs.view (((ProjectedAction.iff_run_ambient _ _ _).mp (stable_receiveKey entry) a aa _ b ab hk).trans
+    ((ProjectedAction.iff_run_ambient _ _ _).mp (stable_indexLookup [.keypair] (u32le msg 4)) w ambient _ a aa hl))
+  have cb : c=b := (hoare_iff_run_ambient _ _ _).mp
+    (hoare_liftAmbient (AmbientM.branch .dataNoKeypair kp.isNone) (fun g => g=b)) b ab noKey c ac rfl hn
+  have fc : StableRx cs c := cb ▸ front
   cases noKey with
   | true =>
-    simp only [↓reduceIte,MaterialOrigin.bind_ok] at rest
-    obtain ⟨u,z,hpay,he⟩ := rest
+    simp only [ite_true,MaterialOrigin.bind_ok_ambient] at rest
+    obtain ⟨u,z,az,hpay,he⟩ := rest
     cases u
-    have zv : z=v := by simpa using he
-    subst z
-    exact fc.put hpay
+    have zv : z=v := (by simpa using he : z=v ∧ az=ambient').1
+    exact zv ▸ fc.put ac az hpay
   | false =>
-    simp only [Bool.false_eq_true,↓reduceIte] at rest
+    simp only [Bool.false_eq_true,ite_false] at rest
     cases kp with
-    | none => simp [invariant] at rest
+    | none =>
+      simp [invariant,AmbientM.invariant] at rest
+      cases rest
     | some kid =>
       cases pid with
-      | none => simp [invariant] at rest
+      | none =>
+        simp [invariant,AmbientM.invariant] at rest
+        cases rest
       | some pid =>
-        obtain ⟨peer,d,hread,dead,e,hdead,rest⟩ := (by simpa only [MaterialOrigin.bind_ok] using rest)
-        have kd := (getPeer_normal pid c d peer hread).1
-        have ke := sameKernel_branch .dataPeerDead peer.isDead d dead e hdead
-        have fe := (fc.kernel (congrArg World.k kd)).kernel ke
+        obtain ⟨peer,d,ad,hread,dead,e,ae,hdead,rest⟩ := (by simpa only [MaterialOrigin.bind_ok_ambient] using rest)
+        have kd := (getPeer_normal pid c d peer ac ad hread).1
+        have ke : e=d := (hoare_iff_run_ambient _ _ _).mp
+          (hoare_liftAmbient (AmbientM.branch .dataPeerDead peer.isDead) (fun g => g=d)) d ad dead e ae rfl hdead
+        have fe : StableRx cs e := (ke.trans kd) ▸ fc
         cases dead with
         | true =>
-          simp only [↓reduceIte,MaterialOrigin.bind_ok] at rest
-          obtain ⟨u,f,hkey,u,g,hpay,he⟩ := rest
+          simp only [ite_true,MaterialOrigin.bind_ok_ambient] at rest
+          obtain ⟨u,f,af,hkey,u',g,ag,hpay,he⟩ := rest
           cases u
-          have gv : g=v := by simpa using he
-          subst g
-          exact (fe.view (stable_keypairPut (some kid) false e () f hkey)).put hpay
+          cases u'
+          have gv : g=v := (by simpa using he : g=v ∧ ag=ambient').1
+          exact gv ▸ (fe.view ((ProjectedAction.iff_run_ambient _ _ _).mp
+            (stable_keypairPut (some kid) false) e ae () f af hkey)).put af ag hpay
         | false =>
-          simp only [Bool.false_eq_true,↓reduceIte,MaterialOrigin.bind_ok] at rest
-          obtain ⟨slot,z,ha,bad⟩ := rest
+          simp only [Bool.false_eq_true,ite_false,MaterialOrigin.bind_ok_ambient] at rest
+          obtain ⟨slot,z,az,ha,bad⟩ := rest
           simp at bad
 
 
-theorem queued_head {id : SkbId} (hq : QueueOwners cs w) (hd : w.k.wg=some d) (hp : d.peers[pid]?=some p)
+theorem queued_head {id : SkbId} (hq : QueueOwners cs w) (hd : w.dev=some d) (hp : d.peers[pid]?=some p)
     (head : p.rxQueue.all.head?=some id) : ∃c∈cs,c.packet=⟨d.ifindex,id⟩ ∧
       c.owner=⟨d.ifindex,pid,p.internalId⟩ ∧ c.phase=.queued := by
   have count := hq d pid p id hd hp
@@ -487,7 +629,7 @@ theorem queued_head {id : SkbId} (hq : QueueOwners cs w) (hd : w.k.wg=some d) (h
     | cons first rest =>
       have he : first=id := by simpa [h] using head
       subst first
-      simp [h]
+      simp
   have nonempty : (cs.filter fun c => c.packet==⟨d.ifindex,id⟩ &&
       c.owner==⟨d.ifindex,pid,p.internalId⟩ && c.phase==.queued)≠[] := by
     intro he
@@ -507,7 +649,7 @@ theorem carrier_other (hi : Inventory (c::cs) w) (hx : x∈cs) : x.packet≠c.pa
   exact ne (List.mem_map.mpr ⟨x,hx,he⟩)
 
 theorem head_carrier_unique {id : SkbId} (hi : Inventory (c::cs) w) (hq : QueueOwners (c::cs) w)
-    (hd : w.k.wg=some d) (hp : d.peers[pid]?=some p) (cp : c.packet=⟨d.ifindex,id⟩)
+    (hd : w.dev=some d) (hp : d.peers[pid]?=some p) (cp : c.packet=⟨d.ifindex,id⟩)
     (head : p.rxQueue.all.head?=some id) : c.owner=⟨d.ifindex,pid,p.internalId⟩ ∧ c.phase=.queued := by
   obtain ⟨x,hx,hpacket,owner,phase⟩ := queued_head hq hd hp head
   rcases List.mem_cons.mp hx with rfl | hx
@@ -516,17 +658,18 @@ theorem head_carrier_unique {id : SkbId} (hi : Inventory (c::cs) w) (hq : QueueO
 
 theorem StableRx.free (hs : StableRx cs w) (hi : Inventory (c::cs) w)
     (hq : QueueOwners (c::cs) w) (notqueued : c.phase≠.queued)
-    (hr : (freeRxSkb c.packet.slot).run w=.ok ((),v)) : StableRx cs v := by
+    (ambient ambient' : Ambient)
+    (hr : ((freeRxSkb c.packet.slot).run w).run ambient=.ok (((),v),ambient')) : StableRx cs v := by
   obtain ⟨_,pkt,stored,_⟩ := hi.present c (by simp)
-  obtain ⟨d,hd,epoch,hpkt⟩ : ∃d,w.k.wg=some d ∧ d.ifindex=c.packet.epoch ∧ d.rxSkbs[c.packet.slot]?=some pkt := by
-    cases hd:w.k.wg with
+  obtain ⟨d,hd,epoch,hpkt⟩ : ∃d,w.dev=some d ∧ d.ifindex=c.packet.epoch ∧ d.rxSkbs[c.packet.slot]?=some pkt := by
+    cases hd:w.dev with
     | none => simp [packetAt,hd] at stored
     | some d =>
       by_cases he:d.ifindex=c.packet.epoch
       · exact ⟨d,rfl,he,by simpa [packetAt,hd,he] using stored⟩
       · simp [packetAt,hd,he] at stored
   have cp : c.packet=⟨d.ifindex,c.packet.slot⟩ := congrArg (fun e => Packet.mk e c.packet.slot) epoch.symm
-  rw [Packets.freeRxSkb_run w d c.packet.slot pkt hd hpkt] at hr
+  rw [Packets.freeRxSkb_run w ambient d c.packet.slot pkt hd hpkt] at hr
   cases hr
   let v := Packets.update w fun d => {d with rxSkbs:=d.rxSkbs.erase c.packet.slot}
   have keeps : ∀x∈cs,packetAt v x.packet=packetAt w x.packet := by
@@ -559,10 +702,12 @@ theorem StableRx.free (hs : StableRx cs w) (hi : Inventory (c::cs) w)
 
 theorem stable_discard (hs : StableRx cs w) (hi : CarrierState (c::cs) loans w)
     (phase : c.phase=.unpublished) (owner : pkt.peer=c.owner.slot)
-    (hr : (discard c.packet.slot pkt).run w=.ok ((),v)) : StableRx cs v := by
-  obtain ⟨u,a,hkey,u,b,hpay,hfree⟩ := (by simpa only [discard,MaterialOrigin.bind_ok] using hr)
+    (ambient ambient' : Ambient)
+    (hr : ((discard c.packet.slot pkt).run w).run ambient=.ok (((),v),ambient')) : StableRx cs v := by
+  obtain ⟨u,a,aa,hkey,u,b,ab,hpay,hfree⟩ := (by simpa only [discard,MaterialOrigin.bind_ok_ambient] using hr)
   cases u
-  have fr := Prod.mk.inj (keypairPut_credit_frame (some pkt.keypair) false w () a hkey)
+  have fr := Prod.mk.inj ((ProjectedAction.iff_run_ambient _ _ _).mp
+    (keypairPut_credit_frame (some pkt.keypair) false) w ambient () a aa hkey)
   have ia := inventory_selected (inventory_view hi.inventory fr.2)
   have sa := selected_protected (protected_view hi.funded fr.1) (by simp [phase,Phase.charged])
   have qa : QueueOwners (selected c::cs) a := by
@@ -570,57 +715,78 @@ theorem stable_discard (hs : StableRx cs w) (hi : CarrierState (c::cs) loans w)
     simpa [List.filter_cons,selected,phase] using (queueOwners_view hi.queues fr.1) d pid p id hd hp
   obtain ⟨p,hp,_⟩ := selected_credit sa rfl
   obtain ⟨d,hd,ep,hpeer,stamp⟩ := resident_fields hp
-  have payment : (peerPut (some (selected c).owner.slot)).run a=.ok ((),b) := by simpa [selected,owner] using hpay
-  have ib := inventory_paid (inventory_view ia (peerPut_effect _ a b d p hd hpeer payment).2.2)
-  have qb := selected_payment_queues qa rfl hd hpeer payment
-  have stable := ((hs.view (stable_keypairPut (some pkt.keypair) false w () a hkey)).put hpay)
-  exact stable.free ib qb (by simp [paid]) hfree
+  have payment : ((peerPut (some (selected c).owner.slot)).run a).run aa=.ok (((),b),ab) := by simpa [selected,owner] using hpay
+  have ib := inventory_paid (inventory_view ia (peerPut_effect _ a b d p aa ab hd hpeer payment).2.2)
+  have qb := selected_payment_queues qa rfl hd hpeer aa ab payment
+  have stable := (hs.view ((ProjectedAction.iff_run_ambient _ _ _).mp
+    (stable_keypairPut (some pkt.keypair) false) w ambient () a aa hkey)).put aa ab hpay
+  exact stable.free ib qb (by simp [paid]) ab ambient' hfree
 
 theorem stable_peerGet (pid : PeerId) : SameView stableView (peerGet pid) := by
-  apply SameView.of_wp
-  intro s
-  mvcgen [peerGet,requireNotPending,getPeer,getDev,getK,setPeer,modifyDev,modifyK,
-    refcountInc,branch,branchCmp,invariant,unsupported]
-  all_goals dsimp +zetaDelta only at *
-  all_goals simp_all [stableView,RxRing.cell,rxView]
-  all_goals subst_vars
-  all_goals simp_all
-  all_goals funext q
-  all_goals by_cases he:pid=q <;> simp_all [Std.TreeMap.getElem?_insert]
+  apply (ProjectedAction.iff_run_ambient _ _ _).mpr
+  intro w ambient u v ambient' hr
+  cases u
+  obtain ⟨d,p,hd,hp,pos,hv⟩ := peerGet_loan pid w v ambient ambient' hr
+  have dev := congrArg WGStoreView.dev hv
+  change v.dev = some _ at dev
+  change w.dev = some d at hd
+  simp only [stableView,RxRing.nativeCell,rxView,dev,hd,Option.map_some,Option.bind_some]
+  refine Prod.ext rfl (Prod.ext rfl ?_)
+  funext q
+  by_cases he : pid=q <;> simp_all [Std.TreeMap.getElem?_insert]
+
 
 def publicationDevice (d : Device) (id : SkbId) (pkt : RxPacket) (pid : PeerId) (p : Peer) : Device :=
   {d with rxSkbs:=d.rxSkbs.insert id {pkt with state:=.dead},peers:=d.peers.insert pid {p with napiScheduled:=true}}
 
 theorem publicationMiddle_effect {id : SkbId} {pkt : RxPacket}
-    (hd : w.k.wg=some d) (hp : d.peers[pid]?=some p) (hpacket : d.rxSkbs[id]?=some pkt)
-    (hr : (publicationMiddle pid id .dead).run w=.ok ((),v)) :
-    v.k={w.k with wg:=some (publicationDevice d id pkt pid p)} := by
-  have post : ⦃fun z => ⌜z.k=w.k⌝⦄ publicationMiddle pid id .dead
-      ⦃⇓? _ z => ⌜z.k={w.k with wg:=some (publicationDevice d id pkt pid p)}⌝⦄ := by
-    mvcgen [publicationMiddle,getPeer,getRxSkb,setRxSkb,getDev,getK,setPeer,modifyDev,modifyK,invariant]
-    all_goals dsimp +zetaDelta only at *
-    all_goals simp_all [hd,hp,hpacket,publicationDevice]
-  exact (hoare_iff_triple _ _ _).mpr post w () v rfl hr
+    (hd : w.dev=some d) (hp : d.peers[pid]?=some p) (hpacket : d.rxSkbs[id]?=some pkt)
+    (ambient ambient' : Ambient)
+    (hr : ((publicationMiddle pid id .dead).run w).run ambient=.ok (((),v),ambient')) :
+    wgStoreView v={wgStoreView w with dev:=some (publicationDevice d id pkt pid p)} := by
+  unfold publicationMiddle at hr
+  rw [MaterialOrigin.bind_ok_ambient] at hr
+  obtain ⟨q,a,aa,hg,hr⟩ := hr
+  obtain ⟨ha,haa,d',hd',hq⟩ := getPeer_normal pid w a q ambient aa hg
+  have eqd : d'=d := Option.some.inj (hd'.symm.trans hd)
+  subst d'
+  have eqp : q=p := Option.some.inj (hq.symm.trans hp)
+  subst q
+  subst a
+  subst aa
+  cases contains : p.rxQueue.all.contains id with
+  | false =>
+    simp only [contains,Bool.not_false,ite_true] at hr
+    cases hr
+  | true =>
+    simp only [contains,Bool.not_true,Bool.false_eq_true,ite_false] at hr
+    rw [MaterialOrigin.bind_ok_ambient] at hr
+    obtain ⟨x,b,midway,hs,ht⟩ := hr
+    have exactSet := Packets.setRxSkb_run w ambient d id pkt (fun q => {q with state:=.dead}) hd hpacket
+    rw [hs] at exactSet
+    cases exactSet
+    cases ht
+    simp [wgStoreView,publicationDevice,Packets.update,hd]
+
 
 theorem stable_publicationMiddle (hs : StableRx cs w) (hi : Inventory (c::cs) w)
     (queues : QueueOwners (c::cs) w) (owner : c.owner.slot=pid)
-    (hr : (publicationMiddle pid c.packet.slot .dead).run w=.ok ((),v)) :
+    (ambient ambient' : Ambient)
+    (hr : ((publicationMiddle pid c.packet.slot .dead).run w).run ambient=.ok (((),v),ambient')) :
     StableRx cs v ∧ ∃pkt,packetAt v c.packet=some pkt ∧ pkt.state=.dead := by
   obtain ⟨_,pkt,stored,_⟩ := hi.present c (by simp)
-  obtain ⟨d,p,hd,hp⟩ : ∃d p,w.k.wg=some d ∧ d.peers[pid]?=some p := by
-    cases hd:w.k.wg with
-    | none => simp [publicationMiddle,getPeer,getDev,getK,hd,invariant] at hr
-    | some d =>
-      cases hp:d.peers[pid]? with
-      | none => simp [publicationMiddle,getPeer,getDev,getK,hd,hp,invariant] at hr
-      | some p => exact ⟨d,p,rfl,hp⟩
+  have source := hr
+  unfold publicationMiddle at source
+  rw [MaterialOrigin.bind_ok_ambient] at source
+  obtain ⟨p,a,aa,hg,_⟩ := source
+  obtain ⟨_,_,d,hd,hp⟩ := getPeer_normal pid w a p ambient aa hg
   have epoch : d.ifindex=c.packet.epoch := by
     by_cases he:d.ifindex=c.packet.epoch
     · exact he
     · simp [packetAt,hd,he] at stored
   have hpacket : d.rxSkbs[c.packet.slot]?=some pkt := by simpa [packetAt,hd,epoch] using stored
-  have effect := publicationMiddle_effect hd hp hpacket hr
-  let v0 : World := {w with k:={w.k with wg:=some (publicationDevice d c.packet.slot pkt pid p)}}
+  have effect := publicationMiddle_effect hd hp hpacket ambient ambient' hr
+  let v0 : WGWorld := {w with dev:=some (publicationDevice d c.packet.slot pkt pid p)}
   have keeps : ∀x∈cs,packetAt v0 x.packet=packetAt w x.packet := by
     intro x hx
     obtain ⟨_,q,hq,_⟩ := hi.present x (by simp [hx])
@@ -655,35 +821,67 @@ theorem stable_publicationMiddle (hs : StableRx cs w) (hi : Inventory (c::cs) w)
         obtain ⟨stored,hstored,hstate⟩ := hs.cold d qid q id hd oldq cold head
         exact ⟨stored,by simpa [publicationDevice,Std.TreeMap.getElem?_insert,ne] using hstored,hstate⟩
   refine ⟨stable.kernel effect,?_⟩
-  exact ⟨{pkt with state:=.dead},by simp [packetAt,effect,publicationDevice,epoch],rfl⟩
+  have dev := congrArg WGStoreView.dev effect
+  change v.dev=some (publicationDevice d c.packet.slot pkt pid p) at dev
+  exact ⟨{pkt with state:=.dead},by simp [packetAt,dev,publicationDevice,epoch],rfl⟩
 
 
 theorem compatible_peerDeref (hc : KeyCompatible owner kid w)
-    (hr : (IndexOwner.peerDeref (.keypair kid)).run w=.ok (pid,v)) : pid=owner := by
-  cases hd:w.k.wg with
-  | none => simp [IndexOwner.peerDeref,IndexOwner.peerWord,getKeypair,getDev,getK,hd,invariant] at hr
+    (ambient ambient' : Ambient)
+    (hr : ((IndexOwner.peerDeref (.keypair kid)).run w).run ambient=.ok ((pid,v),ambient')) : pid=owner := by
+  cases hd:w.dev with
+  | none =>
+    simp [IndexOwner.peerDeref,IndexOwner.peerWord,getKeypair,getDev,hd,invariant,AmbientM.invariant] at hr
+    cases hr
   | some d =>
     cases hk:d.keypairs[kid]? with
-    | none => simp [IndexOwner.peerDeref,IndexOwner.peerWord,getKeypair,getDev,getK,hd,hk,invariant] at hr
+    | none =>
+      simp [IndexOwner.peerDeref,IndexOwner.peerWord,getKeypair,getDev,hd,hk,invariant,AmbientM.invariant] at hr
+      cases hr
     | some k =>
       have compatible := hc d k hd hk
       cases hw:k.peer with
-      | none => simp [IndexOwner.peerDeref,IndexOwner.peerWord,getKeypair,getDev,getK,hd,hk,hw,unsupported] at hr
+      | none =>
+        simp [IndexOwner.peerDeref,IndexOwner.peerWord,getKeypair,getDev,hd,hk,hw,unsupported,AmbientM.unsupported] at hr
+        cases hr
       | some q =>
-        simp [IndexOwner.peerDeref,IndexOwner.peerWord,getKeypair,getDev,getK,hd,hk,hw] at hr
-        obtain ⟨rfl,rfl⟩ := hr
+        have eq : q=pid := by
+          have h : (q=pid) ∧ w=v ∧ ambient=ambient' := by
+            simpa [IndexOwner.peerDeref,IndexOwner.peerWord,getKeypair,getDev,hd,hk,hw,and_assoc] using hr
+          exact h.1
+        rw [←eq]
         simpa [Affiliation.Compatible,hw] using compatible
 
 theorem peerPut_rxView (pid : Option PeerId) : SameView rxView (peerPut pid) := by
-  apply SameView.of_wp
-  intro s
-  simp only [peerPut,indexRemove_eq]
-  mvcgen [indexUnhash,requireNotPending,getPeer,getDev,getK,setPeer,modifyDev,modifyK,
-    refcountDecAndTest,retirePeerUnits,branch,branchCmp,invariant,unsupported]
-  all_goals dsimp +zetaDelta only at *
-  all_goals simp_all [rxView,Option.map_map,Option.bind_map,Function.comp_def]
-  all_goals subst_vars
-  all_goals simp_all
+  apply (ProjectedAction.iff_run_ambient _ _ _).mpr
+  intro w ambient x v ambient' hr
+  cases x
+  cases pid with
+  | none =>
+    simp [peerPut,branch,CounterWindow.branch_run,StateT.run_bind,
+      StateT.run_pure,StateT.run_monadLift,CounterWindow.except_ok_bind,
+      CounterWindow.except_pure] at hr
+    rcases hr with ⟨rfl,rfl⟩
+    rfl
+  | some pid =>
+    cases hd : w.dev with
+    | none =>
+      simp [peerPut,branch,CounterWindow.branch_run,requireNotPending,
+        getPeer,getDev,hd,invariant,AmbientM.invariant,StateT.run_bind,
+        StateT.run_monadLift,CounterWindow.except_ok_bind] at hr
+      change Except.error _ = Except.ok (((),v),ambient') at hr
+      cases hr
+    | some d =>
+      cases hp : d.peers[pid]? with
+      | none =>
+        simp [peerPut,branch,CounterWindow.branch_run,requireNotPending,
+          getPeer,getDev,hd,hp,invariant,AmbientM.invariant,StateT.run_bind,
+          StateT.run_pure,StateT.run_monadLift,CounterWindow.except_ok_bind] at hr
+        change Except.error _ = Except.ok (((),v),ambient') at hr
+        cases hr
+      | some p =>
+        have keep := (peerPut_effect pid w v d p ambient ambient' hd hp hr).2.2
+        exact keep
 
 theorem StableRx.add_dead (hs : StableRx cs w) (phase : c.phase=.queued)
     (stored : packetAt w c.packet=some pkt) (state : pkt.state=.dead) : StableRx (c::cs) w := by
@@ -702,13 +900,13 @@ theorem StableRx.add_dead (hs : StableRx cs w) (phase : c.phase=.queued)
 /-- The actual pure-IRQ EPIPE publication makes precisely the new queued cell
 ready, schedules its own peer, and repays the temporary publication reference. -/
 theorem stable_publication (hs : StableRx cs w) (hi : CarrierState (c::cs) loans w)
-    (phase : c.phase=.queued)
-    (hr : (enqueuePerPeerRx (pure ()) c.packet.slot .dead).run w=.ok ((),v)) : StableRx (c::cs) v := by
+    (phase : c.phase=.queued) (ambient ambient' : Ambient)
+    (hr : ((enqueuePerPeerRx (pure ()) c.packet.slot .dead : WG.M Unit).run w).run ambient=.ok (((),v),ambient')) : StableRx (c::cs) v := by
   rw [publication_factor] at hr
-  obtain ⟨pkt,a,hread,pid,b,hderef,u,q,hget,u,e,hmid,hput⟩ := (by simpa only [MaterialOrigin.bind_ok] using hr)
-  have ka := (Packets.getRxSkb_current c.packet.slot w a pkt hread).1
+  obtain ⟨pkt,a,aa,hread,pid,b,ab,hderef,u,q,aq,hget,u,e,ae,hmid,hput⟩ := (by simpa only [MaterialOrigin.bind_ok_ambient] using hr)
+  have ka := (Packets.getRxSkb_current c.packet.slot w a pkt ambient aa hread).1
   subst a
-  obtain ⟨d,hd,hslot⟩ := (Packets.getRxSkb_current c.packet.slot w w pkt hread).2
+  obtain ⟨_,d,hd,hslot⟩ := (Packets.getRxSkb_current c.packet.slot w w pkt ambient aa hread).2
   obtain ⟨_,old,hold,owner⟩ := hi.inventory.present c (by simp)
   have epoch : d.ifindex=c.packet.epoch := by
     by_cases he:d.ifindex=c.packet.epoch
@@ -717,25 +915,28 @@ theorem stable_publication (hs : StableRx cs w) (hi : CarrierState (c::cs) loans
   have stored : packetAt w c.packet=some pkt := by simp [packetAt,hd,epoch,hslot]
   have eq : old=pkt := Option.some.inj (hold.symm.trans stored)
   subst old
-  have resolved : pid=pkt.peer := compatible_peerDeref (hi.packet_key stored) hderef
-  have kb := indexOwner_peerDeref_sameKernel (.keypair pkt.keypair) w pid b hderef
-  obtain ⟨dev,p,hdev,hp,pos,handoff⟩ := peerGet_handoff hget
-  have hb : CarrierState (c::cs) loans b := hi.kernel kb
+  have resolved : pid=pkt.peer := compatible_peerDeref (hi.packet_key stored) aa ab hderef
+  have kb : b=w := (hoare_iff_run_ambient _ _ _).mp
+    (indexOwner_peerDeref_preserves (.keypair pkt.keypair) (fun g=>g=w)) w aa pid b ab rfl hderef
+  obtain ⟨dev,p,hdev,hp,pos,handoff⟩ := peerGet_handoff ab aq hget
+  have hb : CarrierState (c::cs) loans b := kb ▸ hi
   have iq := inventory_view hb.inventory handoff.rx
   have qq := queueOwners_base hb.queues handoff.base
-  have stableq := (hs.kernel kb).view (stable_peerGet pid b () q hget)
-  obtain ⟨stable,dead,hdead,state⟩ := stable_publicationMiddle stableq iq qq (owner.symm.trans resolved.symm) hmid
-  have keep := peerPut_rxView (some pid) e () v hput
-  exact (stable.put hput).add_dead phase ((packetAt_view keep).trans hdead) state
+  have stableq := (show StableRx cs b from kb ▸ hs).view
+    ((ProjectedAction.iff_run_ambient _ _ _).mp (stable_peerGet pid) b ab () q aq hget)
+  obtain ⟨stable,dead,hdead,state⟩ := stable_publicationMiddle stableq iq qq (owner.symm.trans resolved.symm) aq ae hmid
+  have keep := (ProjectedAction.iff_run_ambient _ _ _).mp (peerPut_rxView (some pid)) e ae () v ambient' hput
+  exact (stable.put ae ambient' hput).add_dead phase ((packetAt_view keep).trans hdead) state
 
 
 theorem finishAfter_stable (ctx : RxOrigin.Admission) (stable : StableRx cs w)
     (hi : CarrierState (c::cs) loans w) (phase : c.phase=.unpublished)
     (slot : c.packet.slot=ctx.slot) (stored : packetAt w c.packet=some ctx.packet)
     (owner : ctx.packet.peer=c.owner.slot) (state : ctx.packet.state=.uncrypted)
-    (physical : RxRing.Inv epoch (PtrRing.init n) h w)
-    (he : (enqueuePerDeviceAndPeerRx ctx.slot).run w=.ok (ret,a))
-    (ht : (finishAfter ctx ret).run a=.ok ((),v)) :
+    (physical : NativeRxInv epoch (PtrRing.init n) h w)
+    (ambient aAmbient ambient' : Ambient)
+    (he : ((enqueuePerDeviceAndPeerRx ctx.slot).run w).run ambient=.ok ((ret,a),aAmbient))
+    (ht : ((finishAfter ctx ret).run a).run aAmbient=.ok (((),v),ambient')) :
     if ret=-ENOSPC then StableRx cs v else StableRx (enqueued c::cs) v := by
   have demand : 0<demand (c::cs) loans c.owner := by simp [demand,phase,Phase.charged]; omega
   obtain ⟨p,hp,_⟩ := protected_resident hi.funded demand
@@ -745,115 +946,165 @@ theorem finishAfter_stable (ctx : RxOrigin.Admission) (stable : StableRx cs w)
     (congrArg (fun e => Packet.mk e c.packet.slot) ep.symm).trans (congrArg (Packet.mk d.ifindex) slot)
   have hpacket : d.rxSkbs[ctx.slot]?=some ctx.packet := by simpa [packetAt,hd,ep,slot] using stored
   obtain ⟨ring,href,hcell⟩ := physical
-  have ringEq : ring=d.decryptQueue := by simpa [RxRing.cell,hd] using congrArg (Option.map Prod.snd) hcell.symm
-  have stableAfter := stable_enqueue (c:=c) stable hd (by simpa [owner] using hpeer) hpacket state cp (ringEq ▸ href) he
-  obtain ⟨choices,ha⟩ := enqueue_state hi phase stored owner (by simpa [slot] using he)
+  have ringEq : ring=d.decryptQueue := by simpa [RxRing.nativeCell,hd] using congrArg (Option.map Prod.snd) hcell.symm
+  have stableAfter := stable_enqueue (c:=c) stable hd (by simpa [owner] using hpeer) hpacket state cp
+    (ringEq ▸ href) ambient aAmbient he
+  obtain ⟨choices,ha⟩ := enqueue_state hi phase stored owner ambient aAmbient (by simpa [slot] using he)
+  have whole : ((finishSource ctx).run w).run ambient=.ok (((),v),ambient') := by
+    simpa only [finish_factor,MaterialOrigin.bind_ok_ambient] using
+      (show ∃ret a aa, ((enqueuePerDeviceAndPeerRx ctx.slot).run w).run ambient=.ok ((ret,a),aa) ∧
+        ((finishAfter ctx ret).run a).run aa=.ok (((),v),ambient') from ⟨ret,a,aAmbient,he,ht⟩)
   rcases choices with rfl | rfl | rfl
-  · have hv : v=CounterWindow.record (CounterWindow.record a .dataEpipe false) .dataEnqueueOk true := by
-      simpa [finishAfter,WG.orM,branch,EPIPE,ENOSPC,CounterWindow.record] using ht.symm
+  · have vv : v=a := by
+      simp [finishAfter,WG.orM,branch,AmbientM.branch,EPIPE,
+        StateT.run_bind,StateT.run_monadLift] at ht
+      exact ht.1.symm
     have ready : StableRx (enqueued c::cs) a := by simpa using stableAfter
-    simpa [ENOSPC] using ready.kernel (by rw [hv]; rfl)
-  · have run : (discard c.packet.slot ctx.packet).run (enospcDecisions a)=.ok ((),v) := by
-      simpa [finishAfter,WG.orM,branch,EPIPE,ENOSPC,enospcDecisions,CounterWindow.record,slot] using ht
+    simpa [ENOSPC,vv] using ready
+  · have run : ((discard c.packet.slot ctx.packet).run a).run (enospcDecisions aAmbient)=.ok (((),v),ambient') := by
+      simpa [slot] using (finish_enospc ctx ambient aAmbient he).symm.trans whole
     have initial : CarrierState (c::cs) loans a := by simpa using ha
     have ready : StableRx cs a := by simpa [ENOSPC] using stableAfter
-    simpa using stable_discard (ready.kernel (v:=enospcDecisions a) rfl) (initial.kernel rfl) phase owner run
-  · simp only [finishAfter,StateT.run_bind,CounterWindow.branch_run] at ht
-    simp only [beq_self_eq_true,CounterWindow.except_ok_bind,↓reduceIte] at ht
-    obtain ⟨u,b,hpublish,tail⟩ := bind_ok ht
+    simpa using stable_discard ready initial phase owner (enospcDecisions aAmbient) ambient' run
+  · simp only [finishAfter,MaterialOrigin.bind_ok_ambient] at ht
+    obtain ⟨decision,z,az,hbranch,ht⟩ := ht
+    change Except.ok ((true,a),CounterWindow.record aAmbient .dataEpipe true) =
+      .ok ((decision,z),az) at hbranch
+    have dv : decision=true := (congrArg (fun z=>z.1.1) (Except.ok.inj hbranch)).symm
+    have zv : z=a := (congrArg (fun z=>z.1.2) (Except.ok.inj hbranch)).symm
+    have av : az=CounterWindow.record aAmbient .dataEpipe true := (congrArg Prod.snd (Except.ok.inj hbranch)).symm
+    subst decision
+    subst z
+    rw [av] at ht
+    simp only [ite_true,MaterialOrigin.bind_ok_ambient] at ht
+    obtain ⟨u,b,bb,hpublish,tail⟩ := ht
     cases u
     have initial : CarrierState (enqueued c::cs) loans a := by simpa [ENOSPC,EPIPE] using ha
     have ready : StableRx cs a := by simpa [EPIPE] using stableAfter
-    have hb := stable_publication (ready.kernel (v:=CounterWindow.record a .dataEpipe true) rfl)
-      (initial.kernel rfl) (by rfl) (by simpa [enqueued,slot] using hpublish)
-    have hv : v=CounterWindow.record (CounterWindow.record b .dataEnqueueOk false) .dataEnqueueOkEpipe true := by
-      simpa [WG.orM,branch,EPIPE,CounterWindow.record] using tail.symm
-    simpa [ENOSPC,EPIPE] using hb.kernel (by rw [hv]; rfl)
+    have hb := stable_publication ready initial rfl (CounterWindow.record aAmbient .dataEpipe true) bb
+      (by simpa [enqueued,slot] using hpublish)
+    have vv : v=b := by
+      simp [WG.orM,branch,AmbientM.branch,EPIPE,StateT.run_bind,StateT.run_monadLift] at tail
+      exact tail.1.symm
+    simpa [ENOSPC,EPIPE,vv] using hb
+
 
 theorem admit_ring (msg : List UInt8) (src : SkbSource) (ds : Nat) :
-    SameView RxRing.cell (RxOrigin.admitSource msg src ds) := by
-  apply SameView.of_wp
-  intro s
-  have hl := (RxRing.indexLookup_frame [.keypair] (u32le msg 4)).wp (fun t=>t=s)
-  have hg := fun k => (RxRing.keypairGet_frame k).wp (fun t=>t=s)
-  have hp := fun p => (RxRing.getPeer_frame p).wp (fun t=>t=s)
-  have hk := fun k b => (RxRing.keypairPut_frame k b).wp (fun t=>t=s)
-  have hput := fun p => (RxRing.peerPut_frame p).wp (fun t=>t=s)
-  have hn := fun pkt => (RxRing.newRx_frame pkt).wp (fun t=>t=s)
-  have hnull := (RxRing.kernel keypairGetCurrent_sameKernel).wp (fun t=>t=s)
-  mvcgen [RxOrigin.admitSource,RxOrigin.admitWith,hl,hg,hp,hk,hput,hn,hnull,branch,invariant]
-  all_goals dsimp +zetaDelta only at *
-  all_goals simp_all
+    SameView RxRing.nativeCell (RxOrigin.admitSource msg src ds) := by
+  intro initial
+  let P := fun g=>RxRing.nativeCell g=initial
+  have hl := (RxRing.indexLookup_frame [.keypair] (u32le msg 4)).wp (fun t=>t=initial)
+  have hg := fun k => (RxRing.keypairGet_frame k).wp (fun t=>t=initial)
+  have hp := fun p => (RxRing.getPeer_frame p).wp (fun t=>t=initial)
+  have hk := fun k b => (RxRing.keypairPut_frame k b).wp (fun t=>t=initial)
+  have hput := fun p => (RxRing.peerPut_frame p).wp (fun t=>t=initial)
+  have hn (pkt : RxPacket) : Preserves P (newRxSkb pkt) := by
+    unfold newRxSkb
+    apply hoare_liftSkb
+    intro g d packets hi hd
+    simpa [P,RxRing.nativeCell,hd] using hi
+  have hnull : Preserves P keypairGetNull := by
+    unfold keypairGetNull
+    apply preserves_bind (hoare_liftAmbient (AmbientM.branch .keypairGetNull true) P)
+    intro _
+    exact preserves_pure _
+  unfold RxOrigin.admitSource RxOrigin.admitWith
+  material_lower
+  repeat' first
+    | unfold Preserves
+    | material_join
+    | material_join_use
+    | (index_material_head indexLookup; exact hl)
+    | (index_material_head keypairGet; exact hg _)
+    | (index_material_head getPeer; exact hp _)
+    | (index_material_head keypairPut; exact hk _ _)
+    | (index_material_head peerPut; exact hput _)
+    | (index_material_head newRxSkb; exact hn _)
+    | (index_material_head keypairGetNull; exact hnull)
+    | (index_material_head Pure.pure; exact preserves_pure _)
+    | (index_material_head Bind.bind; apply preserves_bind)
+    | material_component
+    | material_intro
+    | material_reduce
+    | material_match
+    | (index_material_head ite; split)
+  all_goals exact hnull
+
 
 /-- The returned ledger is fixed by the actual admission and enqueue outcome.
 Both its credit product and its stable ring/head boundary hold; a dead
 publication is processable as a drop, not a crypted delivery. -/
 def StableConsumption (cs : Ledger) (loans : Reservations) (msg : List UInt8)
-    (src : SkbSource) (ds : Nat) (w v : World)
-    (r : RunWitness (Option RxOrigin.Admission)) : Prop :=
-  r.before=w ∧ r.Valid (RxOrigin.admitSource msg src ds) ∧
+    (src : SkbSource) (ds : Nat) (w v : WGWorld) (ambient ambient' : Ambient)
+    (r : WGRunWitness (Option RxOrigin.Admission)) : Prop :=
+  r.before=w ∧ r.ambientBefore=ambient ∧ r.Valid (RxOrigin.admitSource msg src ds) ∧
   match r.value with
-  | none => r.after=v ∧ CarrierState cs loans v ∧ StableRx cs v
+  | none => r.after=v ∧ r.ambientAfter=ambient' ∧ CarrierState cs loans v ∧ StableRx cs v
   | some ctx => ∃ o,
       let c : Carrier := ⟨⟨o.epoch,ctx.slot⟩,o,.unpublished⟩
       CarrierState (c::cs) loans r.after ∧ o.slot=ctx.packet.peer ∧
       KeyWord ctx.packet.keypair ctx.packet.peer r.after ∧
-      RxOrigin.Admitted msg src ds ctx w r.after ∧
-      ∃ ret a, (enqueuePerDeviceAndPeerRx ctx.slot).run r.after=.ok (ret,a) ∧
-        (finishAfter ctx ret).run a=.ok ((),v) ∧
+      RxOrigin.Admitted msg src ds ctx w r.after ambient r.ambientAfter ∧
+      ∃ ret a aAmbient, ((enqueuePerDeviceAndPeerRx ctx.slot).run r.after).run r.ambientAfter=.ok ((ret,a),aAmbient) ∧
+        ((finishAfter ctx ret).run a).run aAmbient=.ok (((),v),ambient') ∧
         (ret=0 ∨ ret = -ENOSPC ∨ ret = -EPIPE) ∧
         (if ret=-ENOSPC then CarrierState cs loans v ∧ StableRx cs v ∧ packetAt v c.packet=none
          else CarrierState (enqueued c::cs) loans v ∧ StableRx (enqueued c::cs) v)
 
-theorem StableConsumption.consumption (h : StableConsumption cs loans msg src ds w v r) :
-    Consumption cs loans msg src ds w v r := by
-  obtain ⟨before,valid,rest⟩ := h
-  refine ⟨before,valid,?_⟩
+theorem StableConsumption.consumption (h : StableConsumption cs loans msg src ds w v ambient ambient' r) :
+    Consumption cs loans msg src ds w v ambient ambient' r := by
+  obtain ⟨before,beforeAmbient,valid,rest⟩ := h
+  refine ⟨before,beforeAmbient,valid,?_⟩
   cases value:r.value with
-  | none => simpa [value] using (show r.after=v ∧ CarrierState cs loans v from ⟨(value ▸ rest).1,(value ▸ rest).2.1⟩)
+  | none =>
+    simp only [value] at rest ⊢
+    exact ⟨rest.1,rest.2.1,rest.2.2.1⟩
   | some ctx =>
     simp only [value] at rest ⊢
-    obtain ⟨o,hi,owner,key,admitted,ret,a,he,ht,choice,result⟩ := rest
-    refine ⟨o,hi,owner,key,admitted,ret,a,he,ht,choice,?_⟩
-    by_cases hret : ret = -ENOSPC <;> simp_all [hret]
+    obtain ⟨o,hi,owner,key,admitted,ret,a,aa,he,ht,choice,result⟩ := rest
+    refine ⟨o,hi,owner,key,admitted,ret,a,aa,he,ht,choice,?_⟩
+    by_cases hret : ret = -ENOSPC <;> simp_all
 
 /-- Original whole-call normal conservation. The physical premise is the
-existing ring journal, and no endpoint World is assigned to a Stop. -/
+existing ring journal, and no endpoint WGWorld is assigned to a Stop. -/
 theorem consume_stable (hi : CarrierState cs loans w) (hf : Packets.Inv w)
-    (hs : StableRx cs w) (physical : RxRing.Inv epoch (PtrRing.init n) h w)
-    (hr : (consumeData msg src ds).run w=.ok ((),v)) :
-    ∃r,StableConsumption cs loans msg src ds w v r := by
-  obtain ⟨r,before,valid,result⟩ := consume_normal hi hf hr
-  refine ⟨r,before,valid,?_⟩
-  have hfront : (RxOrigin.admitSource msg src ds).run w=.ok (r.value,r.after) := by simpa [RunWitness.Valid,before] using valid
+    (hs : StableRx cs w) (physical : NativeRxInv epoch (PtrRing.init n) h w)
+    (ambient ambient' : Ambient)
+    (hr : ((consumeData msg src ds).run w).run ambient=.ok (((),v),ambient')) :
+    ∃r,StableConsumption cs loans msg src ds w v ambient ambient' r := by
+  obtain ⟨r,before,beforeAmbient,valid,result⟩ := consume_normal hi hf ambient ambient' hr
+  refine ⟨r,before,beforeAmbient,valid,?_⟩
+  have hfront : ((RxOrigin.admitSource msg src ds).run w).run ambient=.ok ((r.value,r.after),r.ambientAfter) := by
+    simpa [WGRunWitness.Valid,before,beforeAmbient] using valid
   cases value:r.value with
   | none =>
     simp only [value] at result ⊢
-    have stable : StableRx cs r.after := admitted_none_stable hs (by simpa [value] using hfront)
-    exact ⟨result.1,result.2,result.1 ▸ stable⟩
+    have stable : StableRx cs r.after := admitted_none_stable hs ambient r.ambientAfter (by simpa [value] using hfront)
+    exact ⟨result.1,result.2.1,result.2.2,result.1 ▸ stable⟩
   | some ctx =>
     simp only [value] at result ⊢
-    obtain ⟨o,ha,owner,key,admitted,ret,a,he,ht,choices,endpoint⟩ := result
-    have front : (RxOrigin.admitSource msg src ds).run w=.ok (some ctx,r.after) := by simpa [value] using hfront
-    have stable := admitted_stable_front hs hi.inventory hf front
-    have physicalAfter : RxRing.Inv epoch (PtrRing.init n) h r.after := by
+    obtain ⟨o,ha,owner,key,admitted,ret,a,aa,he,ht,choices,endpoint⟩ := result
+    have front : ((RxOrigin.admitSource msg src ds).run w).run ambient=.ok ((some ctx,r.after),r.ambientAfter) := by simpa [value] using hfront
+    have stable := admitted_stable_front hs hi.inventory hf ambient r.ambientAfter front
+    have physicalAfter : NativeRxInv epoch (PtrRing.init n) h r.after := by
       obtain ⟨ring,href,hcell⟩ := physical
-      exact ⟨ring,href,(admit_ring msg src ds w _ r.after front).trans hcell⟩
+      exact ⟨ring,href,((ProjectedAction.iff_run_ambient _ _ _).mp (admit_ring msg src ds) w ambient _ r.after r.ambientAfter front).trans hcell⟩
     obtain ⟨_,pkt,hpkt,_⟩ := ha.inventory.present ⟨⟨o.epoch,ctx.slot⟩,o,.unpublished⟩ (by simp)
-    have eq : pkt=ctx.packet := admitted_packet front hpkt
+    have eq : pkt=ctx.packet := admitted_packet ambient r.ambientAfter front hpkt
     subst pkt
     have state : ctx.packet.state=.uncrypted := by
-      obtain ⟨entry,b,c,d,peer,e,f,hl,hk,hno,hpeer,hdead,packet,alloc⟩ := admitted
+      obtain ⟨entry,b,ab,c,ac,d,ad,peer,e,ae,f,af,hl,hk,hno,hpeer,hdead,packet,alloc⟩ := admitted
       rw [packet]
-    have finalStable := finishAfter_stable ctx stable ha rfl rfl hpkt owner.symm state physicalAfter he ht
-    refine ⟨o,ha,owner,key,admitted,ret,a,he,ht,choices,?_⟩
-    by_cases hret : ret = -ENOSPC <;> simp_all [hret]
+    have finalStable := finishAfter_stable ctx stable ha rfl rfl hpkt owner.symm state physicalAfter r.ambientAfter aa ambient' he ht
+    refine ⟨o,ha,owner,key,admitted,ret,a,aa,he,ht,choices,?_⟩
+    by_cases hret : ret = -ENOSPC <;> simp_all
+
 
 /-- The existing ring observer on this same original normal execution supplies
 its actual appended physical journal and endpoint refinement. This is a local
 supplied-history result, not initialized pipeline correspondence. -/
-theorem consume_ring_normal (physical : RxRing.Inv epoch (PtrRing.init n) h w)
-    (hr : (consumeData msg src ds).run w=.ok ((),v)) :
+theorem consume_ring_normal {w v : World} (physical : RxRing.Inv epoch (PtrRing.init n) h w)
+    (hr : (liftWG (consumeData msg src ds)).run w=.ok ((),v)) :
     let out := runPrefix (RxRing.consume msg src ds) w h
     out.1=.ok ((),v) ∧ (∃suffix,out.2=h++suffix) ∧
       RxRing.Safe (PtrRing.init n) out.2 ∧ RxRing.Inv epoch (PtrRing.init n) out.2 v := by
