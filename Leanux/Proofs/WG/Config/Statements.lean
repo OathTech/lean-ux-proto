@@ -1,3 +1,6 @@
+import Leanux.Proofs.WG.Config.FwmarkMixedGetterClaims
+import Leanux.Proofs.WG.Config.EndpointMixedGetterClaims
+import Leanux.Proofs.WG.Config.KeyMixedGetterClaims
 import Leanux.Proofs.WG.Config.ScalarMixedGetterClaims
 import Leanux.Proofs.WG.Config.MixedGetterClaims
 import Leanux.Proofs.WG.Config.MixedPageContentSource
@@ -2087,5 +2090,127 @@ theorem original_scalar_mixed_pagination_get_after_set (d : Device) (peers : Pee
         CursorHeld updated (mixedPagesDevice updated pages) none) :=
   scalar_mixed_get_after_set d peers nodes key psk interval bad pid sock
     found resident live bounded down residents readable idle emptyQueue
+
+/-- On normal return, actual changed-key installation followed by full finite
+mixed peer/allowed-IP readback exposes the effective installed identity and
+ordered peer/node serialization. Actual expiry observations and final cursor
+handoffs remain explicit; no global ownership or initialized-history claim. -/
+theorem original_key_mixed_get_after_set (d : Device) (peers : PeerId → Peer) (nodes : NodeId → AipNode)
+    (key : Key) (sock : NlSock)
+    (established : d.staticIdentity.hasIdentity = true)
+    (changed : d.staticIdentity.staticPrivate ≠ key) (absent : noKeyCollision d key)
+    (residents : ∀ q ∈ d.peerList, d.peers[q]? = some (peers q))
+    (readable : ∀ pid ∈ d.peerList, ∀ id ∈ (peers pid).allowedipsList, d.nodes[id]? = some (nodes id))
+    (ready : MixedPageReady (keyReadbackBase d key) peers nodes
+      (mixedInitialRows (keyReadbackBase d key) peers) {hasWg := true})
+    (headerFits : devicePrefixSpace (keyReadbackBase d key) ≤ NLMSG_GOODSIZE)
+    (fresh : MixedPlanFresh (keyReadbackBase d key) peers
+      (mixedPages (keyReadbackBase d key) peers nodes (mixedInitialRows (keyReadbackBase d key) peers)
+        {hasWg := true} ready))
+    (cursorData : MixedPlanCursorData (keyReadbackBase d key)
+      (mixedPages (keyReadbackBase d key) peers nodes (mixedInitialRows (keyReadbackBase d key) peers)
+        {hasWg := true} ready))
+    (within : mixedPageReceiveCount
+      (mixedPages (keyReadbackBase d key) peers nodes (mixedInitialRows (keyReadbackBase d key) peers)
+        {hasWg := true} ready) ≤ 4096)
+    (idle : sock.cbRunning = false) (emptyQueue : sock.queue = []) :
+    let pages := mixedPages (keyReadbackBase d key) peers nodes
+      (mixedInitialRows (keyReadbackBase d key) peers) {hasWg := true} ready
+    Campaign2.Ensures (do
+      let ret ← wgSetDevice (privateKeyAttrs d key)
+      let dump ← wgGetDevice (byIndex d)
+      pure (ret,dump))
+      (fun s => s.wg.device = some d ∧ s.wg.nlSock7 = sock ∧ ClaimView.selectsDevice s d)
+      (fun result s => result = (0,.ok (mixedGetterJson (keyReadbackBase d key) peers nodes)) ∧
+        ∃ postSet observations, ∃ values : PeerId → Peer,
+          ObservedKeyPeerRun false (keyReadbackBase d key) d.peerList observations postSet ∧
+          (∀ q ∈ d.peerList, postSet.peers[q]? = some (values q)) ∧
+          (∀ q, keyGetterPeerView (values q) = keyGetterPeerView (peers q)) ∧
+          s.wg.device = some (mixedPagesDevice postSet pages) ∧
+          s.wg.nlSock7 = socketReadbackFinal sock postSet ∧
+          CursorHeld postSet (mixedPagesDevice postSet pages) none) :=
+  key_mixed_get_after_set d peers nodes key sock established changed absent residents readable ready headerFits fresh cursorData within idle emptyQueue
+
+/-- Actual endpoint configuration followed by the complete finite mixed getter.
+Static page premises use the pure successor with no reset timestamp; any actual
+reset preserves those inputs. Earlier writes before later EINVAL, ignored endpoint
+encodings, equality-retained fields and record-driven Stops remain unchanged. -/
+theorem original_endpoint_mixed_pagination_get_after_set (d : Device) (peers : PeerId → Peer)
+    (nodes : NodeId → AipNode) (key : Key) (a : EndpointAttr)
+    (updateOnly bad : Bool) (pid : PeerId) (sock : NlSock)
+    (found : d.peerHashtable.find? (·.1 == key) = some (key,pid))
+    (resident : d.peers[pid]? = some (peers pid))
+    (live : 0 < (peers pid).refcount) (bounded : (peers pid).refcount+1 < 2^31)
+    (down : d.running = false)
+    (residents : ∀ q ∈ d.peerList, d.peers[q]? = some (peers q))
+    (readable : ∀ q ∈ d.peerList, ∀ id ∈ (peers q).allowedipsList, d.nodes[id]? = some (nodes id))
+    (idle : sock.cbRunning = false) (emptyQueue : sock.queue = []) :
+    let base := {d with deviceUpdateGen := d.deviceUpdateGen+1}
+    let updated := endpointSetterDevice base pid (peers pid) a none
+    let configured := fun q => if q = pid then endpointAttributePeer (peers q) a none else peers q
+    ∀ ready : MixedPageReady updated configured nodes (mixedInitialRows updated configured) {hasWg := true},
+    devicePrefixSpace updated ≤ NLMSG_GOODSIZE →
+    MixedPlanFresh updated configured
+      (mixedPages updated configured nodes (mixedInitialRows updated configured) {hasWg := true} ready) →
+    MixedPlanCursorData updated
+      (mixedPages updated configured nodes (mixedInitialRows updated configured) {hasWg := true} ready) →
+    mixedPageReceiveCount
+      (mixedPages updated configured nodes (mixedInitialRows updated configured) {hasWg := true} ready) ≤ 4096 →
+    Campaign2.Ensures (do
+      let ret ← wgSetDevice (endpointDeviceAttrs d key a updateOnly bad)
+      let dump ← wgGetDevice (byIndex d)
+      pure (ret,dump))
+      (fun s => s.wg.device = some d ∧ s.wg.nlSock7 = sock ∧ ClaimView.selectsDevice s d)
+      (fun result s =>
+        let pages := mixedPages updated configured nodes (mixedInitialRows updated configured) {hasWg := true} ready
+        result = ((if bad then -EINVAL else 0),.ok (mixedGetterJson updated configured nodes)) ∧
+        ∃ reset, let postSet := endpointSetterDevice base pid (peers pid) a reset
+          s.wg.device = some (mixedPagesDevice postSet pages) ∧
+          s.wg.nlSock7 = socketReadbackFinal sock postSet ∧
+          CursorHeld postSet (mixedPagesDevice postSet pages) none) :=
+  endpoint_mixed_get_after_set d peers nodes key a updateOnly bad pid sock
+    found resident live bounded down residents readable idle emptyQueue
+
+/-- Actual fwmark/source reset and scalar setter followed by the full finite
+mixed peer/allowed-IP getter. Normal returns retain earlier mutations before
+later EINVAL; hidden reset Stops remain outside this partial contract. Static
+plan conditions concern the explicit configured successor. The final Device
+is the ordered cursor handoff fold over the same actual setter successor,
+which retains MultiMixedEffect; no callback-success premise is assumed. -/
+theorem original_fwmark_scalar_mixed_pagination_get_after_set (d : Device) (peers : PeerId → Peer)
+    (nodes : NodeId → AipNode) (mark : Nat) (key psk : Key) (interval : Nat)
+    (bad : Bool) (pid : PeerId) (sock : NlSock)
+    (net : d.creatingNet = true)
+    (found : d.peerHashtable.find? (·.1 == key) = some (key,pid))
+    (resident : d.peers[pid]? = some (peers pid))
+    (live : 0 < (peers pid).refcount) (bounded : (peers pid).refcount+1 < 2^31)
+    (down : d.running = false)
+    (residents : ∀ q ∈ d.peerList, d.peers[q]? = some (peers q))
+    (readable : ∀ q ∈ d.peerList, ∀ id ∈ (peers q).allowedipsList, d.nodes[id]? = some (nodes id))
+    (idle : sock.cbRunning = false) (emptyQueue : sock.queue = []) :
+    let updated := scalarRequestDevice {d with fwmark := mark} pid (peers pid) psk interval
+    let configured := scalarPeerView peers pid psk interval
+    ∀ ready : MixedPageReady updated configured nodes (mixedInitialRows updated configured) {hasWg := true},
+    devicePrefixSpace updated ≤ NLMSG_GOODSIZE →
+    MixedPlanFresh updated configured
+      (mixedPages updated configured nodes (mixedInitialRows updated configured) {hasWg := true} ready) →
+    MixedPlanCursorData updated
+      (mixedPages updated configured nodes (mixedInitialRows updated configured) {hasWg := true} ready) →
+    mixedPageReceiveCount
+      (mixedPages updated configured nodes (mixedInitialRows updated configured) {hasWg := true} ready) ≤ 4096 →
+    Campaign2.Ensures (do
+      let ret ← wgSetDevice (mixedFwmarkAttrs d mark key psk interval bad)
+      let dump ← wgGetDevice (byIndex d)
+      pure (ret,dump))
+      (fun s => s.wg.device = some d ∧ s.wg.nlSock7 = sock ∧ ClaimView.selectsDevice s d)
+      (fun result s =>
+        let pages := mixedPages updated configured nodes (mixedInitialRows updated configured) {hasWg := true} ready
+        result = ((if bad then -EINVAL else 0),.ok (mixedGetterJson updated configured nodes)) ∧
+        s.wg.nlSock7 = socketReadbackFinal sock updated ∧
+        ∃ postSet, MultiMixedEffect d mark pid psk interval postSet ∧
+          s.wg.device = some (mixedPagesDevice postSet pages) ∧
+          CursorHeld postSet (mixedPagesDevice postSet pages) none) :=
+  fwmark_scalar_mixed_get_after_set d peers nodes mark key psk interval bad pid sock
+    net found resident live bounded down residents readable idle emptyQueue
 
 end Leanux.Proofs.WG.Config
