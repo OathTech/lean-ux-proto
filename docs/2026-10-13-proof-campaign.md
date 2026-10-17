@@ -140,6 +140,18 @@ R3 terminal bodies remain unchanged. Gate: 645 jobs/611 declarations in
 The [short report](2026-10-17-r3-consume-entries.md) records
 validation, independent review and the remaining initialized caller joins.
 
+The publication-closure checkpoint adds twenty-five modules and 339 theorems:
+612 files/8,597 theorems, 631 terminal declarations and 255 R3 exports.
+The actual initialized runner now derives joint owner/publication checks for
+all typed traces and both flags, including stopped prefixes. Each consumed
+occurrence has its strict earlier publication certificate. Specified Stack
+entries join actual buffer, consume and decrypt positions; initialized
+positional routing and transmit handoff authorization remain open. All 235
+older R3 terminal bodies remain unchanged. Gate: 670 jobs/631 declarations in
+7.012 seconds. Fresh kernel replay passes in 104.127 seconds without warnings.
+The [short report](2026-10-17-r3-publication-closure.md) records failed development
+checks, independent review and the remaining authorization joins.
+
 The pre-split checkpoint validated every baseline result surface over
 `cb2348e`. Initialized R3 packet authorization and R4 receive-pipeline
 conservation remain open. Earlier positive results and runtime findings retain
@@ -151,7 +163,7 @@ was made by this campaign.
 | --- | --- |
 | R1 | Replay uniqueness proved; inclusive-floor correction witnessed. |
 | R2 | Initialized allocation-identity access safety proved, including failures/trials; affiliation/credits separate. |
-| R3 | Initialized routing, material support and captured current/owner checks; actual poll consume certificates and positional routing; enclosing packet transport and initialized authorization open. |
+| R3 | Initialized routing, material support and captured current/owner checks; initialized strict-prefix publication certificates and actual poll positional routing; initialized positional authorization and transmit handoff open. |
 | R4 | Initialized entry/completion uniqueness and packet/receipt linkage; chronology refuted; receive-pipeline conservation open. |
 | R5 | Accepted age/post-zero/wire-nonce counterexamples; thirteen positive local contracts. |
 | R6 | Cookie exclusion proved; literal MAX=18 refuted, without a replacement universal bound. |
@@ -387,8 +399,10 @@ historical session caller/public key, exact packet/AEAD transformation and prese
 Some prepare can instead publish DEAD. Arbitrary older receipt history is retained, and the new receipt has
 an exact fresh position. The initialized runner now derives captured configured/current support at each decrypt.
 A packet peer-frontier invariant handles fresh creation, while local retention connects the earlier
-publication to actual normal consumption. Whole-call packet transport and the contemporaneous
-initialized lookup/Stack join remain open. No Noise authenticity is claimed.
+publication to actual normal consumption. Whole-call packet transport now holds through
+the original initialized runner for all typed traces and both flags, including stopped
+prefixes. The contemporaneous initialized lookup/Stack join and transmit handoff
+authorization remain open. No Noise authenticity is claimed.
 
 **Architecture.** The [map](proofs.md#layers) details these refinements:
 

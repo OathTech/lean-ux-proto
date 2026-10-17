@@ -1,3 +1,12 @@
+import Leanux.Proofs.WG.Packets.PublicationRunner
+import Leanux.Proofs.WG.Packets.PublicationEntries
+import Leanux.Proofs.WG.Configuration.RoutingTraffic
+import Leanux.Proofs.WG.Configuration.RoutingConfiguration
+import Leanux.Proofs.WG.Configuration.RoutingDeferred
+import Leanux.Proofs.WG.Packets.PublicationControls
+import Leanux.Proofs.WG.Packets.PublicationTraffic
+import Leanux.Proofs.WG.Packets.PublicationDump
+import Leanux.Proofs.WG.Packets.PublicationOuter
 import Leanux.Proofs.WG.Configuration.InitializedJoint
 import Leanux.Proofs.WG.Configuration.RoutingPoll
 import Leanux.Proofs.WG.Packets.PublicationHandshakeObserved
@@ -4149,5 +4158,212 @@ theorem original_publication_joint_receive :
     PublicationJoint.Preserves Origins.HistoryAdapters.receiveIteration :=
   PublicationJoint.receiveIteration
 
+
+section PublicationClosure
+open Leanux.Proofs.Logged
+
+/-- Actual crypt/receive iterations keep routing at each consumed occurrence.
+No routing fact is inferred from the eventual endpoint of the whole run. -/
+theorem original_positional_routing_workers (initial : AllowedIps.FlatTable × AllowedIps.FlatTable) :
+    RoutingPosition.Callers.Focused initial Origins.HistoryAdapters.receiveIteration ∧
+    RoutingPosition.Callers.Focused initial Queues.RxHistory.decryptIteration ∧
+    RoutingPosition.Callers.Focused initial Queues.RxHistory.encryptIteration :=
+  ⟨RoutingPosition.Callers.receiveIteration initial,RoutingPosition.Callers.decryptIteration initial,
+    RoutingPosition.Callers.encryptIteration initial⟩
+
+/-- The original scheduling calls retain actual captured consume prefixes,
+including cryptAhead and nested rescheduling. -/
+theorem original_positional_routing_scheduler (initial : AllowedIps.FlatTable × AllowedIps.FlatTable)
+    (activation : Activation) (worker : Worker) (stack : Option Worker) (pid : PeerId) :
+    RoutingPosition.Callers.Focused initial (Queues.RxHistory.cryptAhead pid) ∧
+    RoutingPosition.Callers.Focused initial (Queues.RxHistory.activationRun activation) ∧
+    RoutingPosition.Callers.Focused initial (Queues.RxHistory.dispatch worker) ∧
+    RoutingPosition.Callers.Focused initial (Queues.RxHistory.schedule stack) ∧
+    RoutingPosition.Callers.Focused initial (Queues.RxHistory.nestedResched worker) :=
+  ⟨RoutingPosition.Environment.cryptAhead initial pid,RoutingPosition.Environment.activationRun initial activation,
+    RoutingPosition.Environment.dispatch initial worker,RoutingPosition.Environment.schedule initial stack,
+    RoutingPosition.Environment.nestedResched initial worker⟩
+
+/-- All original deferred constructors carry the positional routing checks. -/
+theorem original_positional_routing_deferred (initial : AllowedIps.FlatTable × AllowedIps.FlatTable)
+    (call : Lifetimes.EnvDeferredCall) :
+    RoutingPosition.Callers.Focused initial (Queues.RxHistory.deferred call) :=
+  RoutingPosition.Deferred.deferred initial call
+
+/-- Configuration changes the routing journal and leaves earlier consume
+positions fixed. Address shape is the existing configuration premise. -/
+theorem original_positional_routing_configuration (initial : AllowedIps.FlatTable × AllowedIps.FlatTable)
+    (attrs : DeviceAttrs) (shape : Configuration.DeviceAddressShape attrs) :
+    PrefixPreserves (RoutingPosition.Inv initial) (RoutingPosition.Safe initial)
+      (Queues.RoutingJoint.dispatchSet attrs) ∧
+    PrefixPreserves (RoutingPosition.Inv initial) (RoutingPosition.Safe initial)
+      Queues.RoutingJoint.dispatchCreate ∧
+    PrefixPreserves (RoutingPosition.Inv initial) (RoutingPosition.Safe initial)
+      Queues.RoutingJoint.dispatchDelete :=
+  ⟨RoutingPosition.Controls.dispatchSet initial attrs shape,RoutingPosition.Controls.dispatchCreate initial,
+    RoutingPosition.Controls.dispatchDelete initial⟩
+
+/-- Actual transmit completion preserves the packet/owner checks already
+recorded in the incoming receive journal. -/
+theorem original_publication_joint_transmit (pid : PeerId) :
+    PublicationJoint.Preserves (Queues.RxHistory.mixed
+      (Lifetimes.txIterPrefix pid (liftPrefix (Env.condResched .txWorker)))) :=
+  PublicationJoint.txIteration pid
+
+/-- The combined packet journal traverses the full recorded scheduler. -/
+theorem original_publication_joint_scheduler (activation : Activation) (worker : Worker)
+    (stack : Option Worker) :
+    PublicationJoint.Preserves (Queues.RxHistory.activationRun activation) ∧
+    PublicationJoint.Preserves (Queues.RxHistory.dispatch worker) ∧
+    PublicationJoint.Preserves (Queues.RxHistory.schedule stack) ∧
+    PublicationJoint.Preserves (Queues.RxHistory.nestedResched worker) :=
+  ⟨PublicationJoint.activationRun activation,PublicationJoint.dispatch worker,
+    PublicationJoint.schedule stack,PublicationJoint.nestedResched worker⟩
+
+/-- Every actual peer timer callback retains older positional certificates. -/
+theorem original_publication_joint_timer (pid : PeerId) (timer : PeerTimer) :
+    PublicationJoint.Preserves (Queues.RxHistory.mixed
+      (liftWGObserver (Lifetimes.timerCallbackPrefix pid timer))) :=
+  PublicationJoint.timerCallback pid timer
+
+/-- All fourteen deferred constructors retain normal state and stopped checks;
+saved-device scans use the actual getter receipt. -/
+theorem original_publication_joint_deferred (call : Lifetimes.EnvDeferredCall) :
+    PublicationJoint.Preserves (Queues.RxHistory.deferred call) := PublicationDeferred.deferred call
+
+/-- Actual ingress, exact flood and full batch observers preserve the same
+packet journal through their scheduler, worker and poll calls. -/
+theorem original_publication_joint_traffic (family port : Nat) (msg : List UInt8)
+    (tos : Nat) (ll : Bool) (dest count : Nat) (messages : List (List UInt8))
+    (items : List Env.BatchItem) :
+    PublicationJoint.Preserves (Queues.RxHistory.inject family port msg tos ll dest) ∧
+    PublicationJoint.Preserves (Queues.RxHistory.flood count port family messages) ∧
+    PublicationJoint.Preserves (Queues.RxHistory.batch items) :=
+  ⟨PublicationTraffic.inject family port msg tos ll dest,
+    PublicationTraffic.flood count port family messages,PublicationTraffic.batch items⟩
+
+/-- Peer/device commands keep arbitrary old packet histories through actual
+creation, private-key replacement, removal and partial negative-errno updates. -/
+theorem original_publication_joint_configuration (pid : PeerId) (ip : AllowedIpAttrs)
+    (peer : PeerAttrs) (device : DeviceAttrs) :
+    PublicationJoint.Preserves (Queues.RxHistory.mixed
+      (liftWGObserver (Lifetimes.setAllowedipPrefix pid ip))) ∧
+    PublicationJoint.Preserves (Queues.RxHistory.mixed
+      (liftWGObserver (Lifetimes.setPeerCmdPrefix peer))) ∧
+    PublicationJoint.Preserves (Queues.RxHistory.mixed
+      (liftWGObserver (Lifetimes.wgSetDevicePrefix device))) :=
+  ⟨PublicationJoint.setAllowedip pid ip,PublicationJoint.setPeerCmd peer,PublicationJoint.wgSetDevice device⟩
+
+/-- Native lifecycle returns retain old publications, and actual creation
+starts with an empty RX store. No normal state is asserted on a Stop. -/
+theorem original_packet_frontier_device (history : List Queues.RxHistory.Event)
+    (onDown onUnregister : WG.M Unit)
+    (down : Framing.Preserves (PublicationFrontier.Inv history) onDown)
+    (unregister : Framing.Preserves (PublicationFrontier.Inv history) onUnregister) :
+    Framing.Preserves (PublicationFrontier.Inv history) WG.wgUp ∧
+    Framing.Preserves (PublicationFrontier.Inv history) WG.wgDown ∧
+    Framing.Preserves (PublicationFrontier.Inv history) WG.wgCreate ∧
+    Framing.Preserves (PublicationFrontier.Inv history) WG.netnsPreExit ∧
+    Framing.Preserves (PublicationFrontier.Inv history) (WG.wgDelete onDown onUnregister) :=
+  ⟨PublicationFrontier.wgUp_preserves history,PublicationFrontier.wgDown_preserves history,
+    PublicationFrontier.wgCreate_preserves history,PublicationFrontier.netnsPreExit_preserves history,
+    PublicationFrontier.wgDelete_preserves onDown onUnregister history down unregister⟩
+
+/-- The environment controls use the original product callbacks and guards,
+including pending-dump deletion and namespace teardown. -/
+theorem original_publication_joint_controls (mtu : Nat) :
+    PublicationJoint.Preserves (Queues.RxHistory.audit Lifetimes.envWgUpAudit) ∧
+    PublicationJoint.Preserves (Queues.RxHistory.audit Lifetimes.envWgDownAudit) ∧
+    PublicationJoint.Preserves (Queues.RxHistory.audit Lifetimes.envWgDeleteAudit) ∧
+    PublicationJoint.Preserves (Queues.RxHistory.audit Lifetimes.envNetnsCleanupAudit) ∧
+    PublicationJoint.Preserves (Queues.RxHistory.audit (Lifetimes.setMtuAudit mtu)) ∧
+    PublicationJoint.Preserves (Queues.RxHistory.mixed (liftWGObserver Lifetimes.wgCreatePrefix)) :=
+  ⟨PublicationControls.up,PublicationControls.down,PublicationControls.delete,
+    PublicationControls.netnsCleanup,PublicationControls.mtu mtu,PublicationControls.create⟩
+
+/-- All seven dump observers retain their exact access and failed-prefix
+history while carrying earlier packet publications through cursor payments. -/
+theorem original_publication_joint_dump (call : Lifetimes.NetlinkDumpCall) :
+    PublicationJoint.Preserves (Queues.RxHistory.mixed (liftWGObserver call.observed)) :=
+  PublicationJoint.dump_checked call
+
+/-- The seven syscall callbacks remain arbitrary actual product observers.
+This is the concrete entry/dispatch/wait composition, not initialization. -/
+theorem original_publication_outer_syscall (call : Syscall) (dispatch : Queues.RxHistory.Obs Int)
+    (sendWorkers timers route xmit advance cleanup : Queues.RxHistory.Obs Unit)
+    (hd : PublicationJoint.Preserves dispatch) (hs : PublicationJoint.Preserves sendWorkers)
+    (ht : PublicationJoint.Preserves timers) (hr : PublicationJoint.Preserves route)
+    (hx : PublicationJoint.Preserves xmit) (ha : PublicationJoint.Preserves advance)
+    (hc : PublicationJoint.Preserves cleanup) :
+    PublicationJoint.Preserves (Configuration.syscallWith (fun {_} a => liftPrefix a)
+      dispatch sendWorkers timers route xmit advance cleanup call) :=
+  PublicationOuter.syscallWith_preserves call dispatch sendWorkers timers route xmit advance cleanup hd hs ht hr hx ha hc
+
+/-- The actual traffic families retain routing at each captured consume. -/
+theorem original_positional_routing_traffic (initial : AllowedIps.FlatTable × AllowedIps.FlatTable)
+    (family port : Nat) (msg : List UInt8) (tos : Nat) (ll : Bool) (dest count : Nat)
+    (messages : List (List UInt8)) (items : List Env.BatchItem) :
+    RoutingPosition.Callers.Focused initial (Queues.RxHistory.inject family port msg tos ll dest) ∧
+    RoutingPosition.Callers.Focused initial (Queues.RxHistory.flood count port family messages) ∧
+    RoutingPosition.Callers.Focused initial (Queues.RxHistory.batch items) :=
+  ⟨RoutingPosition.Traffic.inject initial family port msg tos ll dest,
+    RoutingPosition.Traffic.flood initial count port family messages,RoutingPosition.Traffic.batch initial items⟩
+
+/-- Every remaining environment constructor carries publication certificates. -/
+theorem original_publication_joint_remaining (call : Lifetimes.EnvRemainingCall) :
+    PublicationJoint.Preserves (Queues.RxHistory.remaining call) := PublicationRemaining.remaining call
+
+/-- All actual syscall arms and their return-to-user continuations preserve
+packet and owner checks; no arbitrary callback premise remains. -/
+theorem original_publication_joint_syscall (call : Syscall) :
+    PublicationJoint.Preserves (Queues.RxHistory.syscall call) := PublicationSyscalls.syscall call
+
+/-- The original fixture and complete syscall composition establish packet
+publication and owner checks for every typed trace and both placeholder modes,
+including the exact reached prefix of an indexed Stop. -/
+theorem initialized_packet_publication (trace : Runner.Trace) (placeholders : Bool) :
+    PublicationJoint.Safe ((runPrefixOuter (Queues.RoutingJoint.executeTrace trace placeholders) []).2.filterMap
+      Queues.RoutingJoint.rxEvent) := PublicationRunner.joint trace placeholders
+
+/-- This specified consumed occurrence has a strictly earlier successful
+decrypt/publication with the same stored packet and historical identity witness. -/
+theorem initialized_consumed_publication (trace : Runner.Trace) (placeholders : Bool)
+    (pre post : List Queues.RoutingJoint.Event) (occurrence : Nat) (id : SkbId)
+    (stamp : Lifetimes.PacketStamp) (receipt : Queues.RxDisposition.ConsumeReceipt)
+    (position : (runPrefixOuter (Queues.RoutingJoint.executeTrace trace placeholders) []).2 =
+      pre ++ .rx (.consumed occurrence id stamp receipt) :: post) :
+    PublicationPollChecks.Certified (pre.filterMap Queues.RoutingJoint.rxEvent) id stamp receipt :=
+  PublicationRunner.joint_consumed trace placeholders pre post occurrence id stamp receipt position
+
+open Lifetimes Queues PublicationIdentity AllowedIps in
+/-- One specified Stack entry is linked to its earlier successful consume and
+configured publication. Routing uses that same consume prefix; its supplied
+positional premise is not replaced by a final-state or initialized claim. -/
+theorem original_publication_entry_coupling {h pre post : List RoutingJoint.Event} {e : RxJoint.Entry}
+    {initial : FlatTable × FlatTable}
+    (linked : RxLink.HistoryLinked (h.filterMap RoutingJoint.rxEvent))
+    (publication : PublicationChecks.Safe (h.filterMap RoutingJoint.rxEvent))
+    (routing : RoutingPosition.Checks initial h)
+    (position : h = pre ++ .rx (.entered e) :: post) :
+    ∃ (receipt : RxDisposition.ConsumeReceipt), ∃ before between afterBuffer beforeDecrypt afterDecrypt,
+      ∃ (decrypt : WGRunWitness (RxPacket × Option RxPacket)), ∃ out pid published ambient,
+      pre = before ++ .rx (.consumed e.tag.occurrence e.tag.skb e.stamp receipt) ::
+        (between ++ .rx (.buffered e) :: afterBuffer) ∧
+      before = beforeDecrypt ++ .rx (.rx (.decrypt e.tag.skb decrypt)) :: afterDecrypt ∧
+      e.origin = some receipt ∧ receipt.run.value = some e.tag.bytes ∧
+      Published e.tag.skb decrypt out pid published ambient ∧
+      ConsumeCertificate (Origins.HistorySupport.sessions (beforeDecrypt.filterMap RoutingJoint.rxEvent))
+        e.tag.skb decrypt out pid published e.stamp receipt ∧
+      ∃ v4 : Bool,
+        ipTunnelParseProtocol e.tag.bytes = (if v4 then 4 else 6) ∧
+        ipTunnelParseProtocol receipt.packet.bytes = (if v4 then 4 else 6) ∧
+        PeerWinner (rootWidth v4) (sourceAddress v4 e.tag.bytes)
+          (selectedFlat v4 (completionFold (before.filterMap RoutingJoint.routingEvent) initial))
+          (some receipt.peer) ∧
+        sourceAddress v4 e.tag.bytes = sourceAddress v4 receipt.packet.bytes :=
+  PublicationEntries.entered_authorized linked publication routing position
+
+
+end PublicationClosure
 
 end Leanux.Proofs.WG.CryptokeyRouting
