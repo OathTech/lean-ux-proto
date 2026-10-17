@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Index.OwnerCoherencePeerCreateClaims
 import Leanux.Proofs.WG.Index.OwnerCoherenceCreatorClaims
 import Leanux.Proofs.WG.Index.OwnerCoherenceInitiationClaims
 import Leanux.Proofs.WG.Index.OwnerCoherenceResponseClaims
@@ -895,5 +896,15 @@ theorem original_create_response_owner_coherence (pid : PeerId) :
       (fun _ => View.HandshakePublisherSafe pid) :=
   createResponse_owner_coherent pid
 
+
+/-- Actual peer initialization preserves hashed-owner coherence and supplies
+its own live self-owner for later handshake publication; aliases are admitted. -/
+theorem original_peer_create_owner_coherence (publicKey : Key) (psk : Option Key) :
+    Campaign2.Ensures (peerCreate publicKey psk) View.OwnerCoherentSafe
+      (fun result s => View.OwnerCoherentSafe s ∧
+        ∀pid, result = .ok pid → ∃d p,
+          s.wg.device = some d ∧ d.peers[pid]? = some p ∧
+          p.refcount = 1 ∧ p.handshakeEntryPeer = some pid) :=
+  peerCreate_owner_coherent publicKey psk
 
 end Leanux.Proofs.WG.Index

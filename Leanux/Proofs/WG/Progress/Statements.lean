@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Progress.BatchDrainClaims
 import Leanux.Proofs.WG.Progress.CookieScheduleClaims
 import Leanux.Proofs.WG.Progress.SourceClaims
 import Leanux.Proofs.WG.Progress.CookieActivationClaims
@@ -632,5 +633,13 @@ theorem original_cookie_schedule_outcome (ys : List (List UInt8)) (a : Activatio
       (fun s => s.wg.device = some d ∧ s.ambient.hidden = some (CookieFull.records ys stop) ∧ s.ambient.suspended = [a])
       (schedule none) (CookieFull.boundedSchedule a d.handshakeQueue.count (ys.length + 1)) :=
   CookieFull.schedule_outcome ys a d stop receive table cookies valid stopLen occupancy
+
+/-- The original recorded batch continuation returns only with all six
+queue/counter checks and its NAPI check satisfied at a present device. This
+normal-return statement does not cover the recordless early branch. -/
+theorem original_after_batch_recorded_drained :
+    Campaign2.Product.Ensures afterBatch
+      (fun s => s.ambient.hidden.isSome = true) (fun _ s => BatchDrained s) :=
+  afterBatch_recorded_drained
 
 end Leanux.Proofs.WG.Progress

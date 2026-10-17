@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Roaming.RateLimitClaims
 import Leanux.Proofs.WG.Roaming.InvalidMac1Claims
 import Leanux.Proofs.WG.Campaign2.Bridge
 import Leanux.Proofs.WG.Roaming.View
@@ -250,5 +251,15 @@ theorem original_invalid_mac1_preserves_endpoints (msg : List UInt8) (src : SkbS
         ∀ pid, remoteAt after pid = remoteAt before pid) :=
   receiveHandshakePacket_invalid_mac1 msg src before noncookie invalid
 
+
+/-- Whole non-cookie receive: an actual rate-limit refusal leaves the complete
+peer map and every remote destination unchanged on normal completion. Other
+MAC outcomes, including noCookie, carry no preservation conclusion here. -/
+theorem original_ratelimited_preserves_endpoints (msg : List UInt8) (src : SkbSource)
+    (entry : Campaign2.Product.Snapshot)
+    (noncookie : messageType msg ≠ MESSAGE_HANDSHAKE_COOKIE) :
+    Campaign2.Product.Ensures (observedRateLimitHandshake msg src) (fun s => s = entry)
+      (fun result final => RateLimitRejectionObservation entry result.1 final) :=
+  receiveHandshakePacket_ratelimited msg src entry noncookie
 
 end Leanux.Proofs.WG.Roaming

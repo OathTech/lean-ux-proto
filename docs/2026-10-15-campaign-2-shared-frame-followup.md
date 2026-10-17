@@ -43,6 +43,15 @@ The rootRemovePeerLists/free layer and peerRemoveAll remain pending, as does
 H4's stronger initial ownership transport. This update is table-specific;
 it does not settle the original request for the broader shared snapshots.
 
+Two later bounded packages retain narrow named variants while the corresponding
+retyped C1 layers are absent here. Roaming/RateLimitFrames has the three
+Framing/WGCookie variants for makeCookie, ratelimiterAllow and cookieValidatePacket,
+observing only the optional peer map. It adds no reply/socket layer.
+Progress/BatchDrainFrames has the Device-only deliverSent_sameKernel variant
+of Framing/EnvLeaves, used after the actual recorded batch completion guard.
+These variants are candidates for replacement by the shared contracts on their
+landing; the broader pending inventories are unchanged.
+
 ## H1: genuine reinstallation between confirmations
 
 The proposed result concerns a finite sequence of original `consumeInitiation`,

@@ -11,25 +11,26 @@ merged; the executable mirror remains byte-identical to b700659.
 | Result | Headlines | Checked support | Split status |
 | --- | ---: | ---: | --- |
 | H1 Noise | 24 | 196 | Full terminal closure, whole-response entry edge and actual session derivation-clock receipt current; wider caller/lifetime claims open. |
-| H2 Index | 77 | 421 | Full terminal closure and ingress/expiry/handshake owner coherence current; reachable whole-driver uniqueness/coherence open. |
-| H3 Roaming | 14 | 161 | Full terminal closure and invalid-MAC1 Device preservation current; callback authentication provenance and broader caller coverage open. |
+| H2 Index | 78 | 428 | Full terminal closure and ingress/expiry/handshake/peer-creation owner coherence current; reachable whole-driver uniqueness/coherence open. |
+| H3 Roaming | 15 | 170 | Full terminal closure and invalid-MAC1/rate-limit rejection preservation current; callback authentication provenance and broader caller coverage open. |
 | H4 Configuration | 81 | 590 | Full terminal closure and ordered mixed-peer readback current; global ownership, queued cleanup and general pagination open. |
-| H5 Progress | 42 | 288 | Full terminal closure current with exact bounded outcomes and checked refutations; global progress/coherent-ring adequacy open. |
+| H5 Progress | 43 | 293 | Full terminal closure, exact bounded outcomes and recorded batch completion-guard soundness current; global progress/coherent-ring adequacy open. |
 | H6 Timers | 52 | 445 | Full terminal closure, first outer timer turn and intermediate retransmit receipt current; whole scheduler episodes, complete caller coverage and session-relative counts open. |
 
-The checked surface is 2,101 theorems in all 649 campaign-owned modules.
+The checked surface is 2,122 theorems in all 661 campaign-owned modules.
 The completed retrofit accounts for 1,983: 1,321 retyped, 244 explicitly
-corrected, 239 retained and 179 added support/finding declarations. Eighty-eight
+corrected, 239 retained and 179 added support/finding declarations. Ninety-five
 subsequent H2 declarations add table preservation and local owner coherence.
 Eleven H1 declarations add whole-response entry and actual derivation-clock provenance; eight H4 declarations
-add mixed fwmark/scalar and ordered peer-attribute readback. Four H3 declarations
-add invalid-MAC1 rejection preservation. Seven H6 declarations
+add mixed fwmark/scalar and ordered peer-attribute readback. Thirteen H3 declarations
+add invalid-MAC1 and rate-limit rejection preservation. Five H5 declarations
+establish recorded batch completion-guard soundness. Seven H6 declarations
 connect the first outer timer turn and its retransmit receipt. Of the 1,831 baseline theorems, 22 frames
 were deleted because types supply their facts and five false cookie supports
 were separately retired with checked counterexamples. No baseline declaration
 remains awaiting retrofit; all 258 original terminal names/order survive,
-with two new H1 headlines, twenty-five new H2 headlines, one new H3 headline,
-two new H4 headlines and two new H6 headlines (290 total).
+with two new H1 headlines, twenty-six new H2 headlines, two new H3 headlines,
+two new H4 headlines, one new H5 headline and two new H6 headlines (293 total).
 
 The [retrofit report](2026-10-16-proof-campaign-2-state-split.md) records
 claim/frame files, corrections, before/after counts and validation.
@@ -798,6 +799,123 @@ rerun occurs. The inherited full-gate failure is unchanged.
 Reproduce with scripts/in-bundle lake build Leanux.Proofs.WG.Noise.Statements
 and scripts/in-bundle lake env leanchecker --fresh on that target, under
 capped with 32 Lean threads and 16 QEMU slots. No mirror change is requested.
+
+## H2 continuation: actual peer initialization supplies publication coherence
+
+Actual peerCreate preserves local hashed-owner coherence on every normal return
+and every successful result names a resident peer with refcount one and its
+own handshake owner word. A separate projected corollary establishes exactly
+the handshake creators' publisher premise. Numeric allocation/limit errors
+preserve the original Device; all stopped paths retain their actual behavior.
+
+The proof admits nextPeer collisions. It tracks the unchanged index/keypair
+stores and all other peer lookups through initialization, without asserting
+coherence while the replacement's handshake word is temporarily NULL. The
+actual handshakeInit self-word write restores coherence. This is positivity
+and owner-word coherence, not accounting for reference ownership, public-key
+table uniqueness or global reachability.
+
+OwnerCoherencePeerCreateModel holds the pure footprint; Frames holds the
+internal native initialization predicate and three supporting facts; Source
+proves the actual creation effect; Claims contains the two projected contracts.
+Statements adds one literal headline. Seven theorems bring H2 to 78 headlines
+and 428 theorems. No new mirror change or shared-layer copy is needed.
+
+An independent removal inventory confirms that dead-marking can preserve the
+existing ownerReferences projection, but it cannot discharge final release's
+detachment obligation from coherence alone. Coherence does not require every
+hashed keypair naming a peer to occupy one of that peer's three slots. The
+existing checked peerPut counterexample already exposes this invariant gap.
+General removal needs slot coverage and retained-reference accounting, or an
+explicit detachment premise at release. The inspected whole-removal path is
+not presented here as a newly checked counterexample.
+
+## H3 continuation: rate-limit refusal preserves peers and endpoints
+
+The whole original non-cookie receiver now has an actual strict-prefix
+observation of load selection and cookie validation. Normal whole-call return
+derives successful execution of that prefix. If its actual verdict is
+ratelimited, the final optional peer map and every remote destination equal
+their entry values. No load, MAC, clock, allocation, address-family or peer
+residency premise is added.
+
+Cookie-secret rotation, rate-limit state, load history and Ambient effects
+remain active; whole Device equality is not claimed. The noCookie verdict
+alone does not imply rejection, because the unloaded path admits it.
+The bad-MAC2 reply path and queued callback provenance remain open. Exact
+observer erasure retains all original failures, without claiming a returned
+receipt or final state on a stopped call.
+
+RateLimitModel holds the projected observation. RateLimitSource factors the
+actual prefix and unchanged suffix and proves observer erasure. RateLimitFrames
+contains three narrow local variants of C1 Framing/WGCookie's makeCookie,
+ratelimiterAllow and cookieValidatePacket frames, plus actual-prefix peer-map
+composition and the refusal suffix frame. Claims and the literal Statements
+wrapper complete nine theorems, bringing H3 to 15 headlines and 170 theorems.
+No reply/socket layer is copied.
+
+## H5 continuation: recorded batch completion guards hold at return
+
+Every normal original afterBatch call entered with recorded inputs has a
+present Device satisfying its five queue-empty tests, zero handshake queue
+counter (handshakeQueueLen) and no scheduled NAPI peer. An exact source factor retains the bounded
+schedule/peek/send-worker loop, all guard failures and all delivery failures.
+The final delivery operation preserves the Device, so the guard facts hold
+at actual return without a separate loop-success or readiness premise.
+
+These are precisely the source tests. PtrRing.empty observes its head slot;
+it does not establish that every physical slot is free, nor a ring-count
+invariant on malformed metadata. No global drain adequacy, fairness,
+pendingWork, suspension, record-exhaustion or recordless-path claim is made.
+The recordless early branch remains explicitly outside this theorem.
+
+BatchDrainModel holds the exact loop/suffix actions and projected predicate;
+BatchDrainFrames has one Device-only local variant of C1
+Framing.deliverSent_sameKernel from Framing/EnvLeaves. BatchDrainSource proves
+the original recorded factor and suffix guarantee; BatchDrainClaims and its
+literal wrapper connect the whole original call. Five theorems bring H5 to
+43 headlines and 293 theorems. No broader scheduler frame layer is copied.
+
+### Validation of peer creation, rate-limit rejection and batch completion
+
+Independent full-source reviews of all three packages find no correctness or
+scope issue. Peer creation probes 1, 3, 4, 5 and 6 fail with respectively one,
+four, four, two and one errors; probes 1, 4 and 5 also have one unused-simp
+warning each. Probe 2 checks support and probe 7 checks the full package cleanly.
+Probe 8 fails five diagnostics after import narrowing drops Campaign2.Bridge;
+the explicit import correction is validated by the integrated 319-job build.
+
+Rate-limit probes 1–3 fail respectively: peer-map projection normalization
+and one unused-simp warning; a reserved binder, opaque predicate rewrite and
+downstream no-goals diagnostic; an eliminated Unit variable. Probes 4–6 pass
+the full candidate, reordered split bodies and standalone pure model cleanly.
+The integrated Roaming.Statements build passes 120 jobs without warnings.
+
+Batch-drain probes 1–5 fail respectively: factor/getter/do-layout issues and
+three warnings; factor/getter conversion and an unavailable tactic; lift/Stop/bind
+normalization and four warnings; final factor/getter conversion and one warning;
+two getter pure-reduction obligations. Probe 6 is clean. The first packaging
+driver fails because its wrapper already contains only the theorem. The
+subsequent 266-job build checks the previous target and is not new-result
+validation. Before repairing the driver, every dirty worktree is preserved,
+including nonignored untracked files, under
+refs/snapshots/campaign2-package-recovery-20261017T074600755913Z; branch tips
+and working indexes remain unchanged. The corrected insertion and integrated
+Progress.Statements build pass 270 jobs.
+
+The Index and Progress builds report only inherited Env:865 String.mk.
+Axiom checks use standard axioms only: Index 1,244 logical roots/255 modules
+(824 public theorem roots); Roaming 444/90 (226); Progress 1,147/206 (702).
+All three fresh kernel replays pass. Static checks, original 258-name order,
+mirror/shared boundaries and the complete owned census pass.
+Current totals are 2,122 theorems, 661 modules and 293 headlines. Final proofs
+use default limits; no cap increase, infrastructure retry or unchanged failed
+source rerun occurs. The inherited full-gate failure remains recorded.
+
+Reproduce with scripts/in-bundle lake build on
+Leanux.Proofs.WG.{Index,Roaming,Progress}.Statements, and scripts/in-bundle
+lake env leanchecker --fresh on each target, under capped with 32 Lean threads
+and 16 QEMU slots. No new mirror-team request arises.
 
 ## Remaining general Allowed-IP ownership dependency
 
