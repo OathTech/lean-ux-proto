@@ -1,3 +1,9 @@
+import Leanux.Proofs.WG.Origins.CurrentPollHistory
+import Leanux.Proofs.WG.Origins.OwnerHistory
+import Leanux.Proofs.WG.Packets.PublicationRetained
+import Leanux.Proofs.WG.Queues.JointRemoval
+import Leanux.Proofs.WG.Origins.CurrentWorkers
+import Leanux.Proofs.WG.Origins.OwnerIndex
 import Leanux.Proofs.WG.Origins.CurrentReceiveChecks
 import Leanux.Proofs.WG.Origins.CurrentReceiveHistory
 import Leanux.Proofs.WG.Origins.CurrentSensitive
@@ -3475,5 +3481,142 @@ theorem original_current_receive_checks :
     CurrentChecks.Preserves Origins.HistoryAdapters.receiveIteration :=
   ⟨CurrentReceiveChecks.response,CurrentReceiveChecks.afterMac,CurrentReceiveChecks.reception,
     CurrentReceiveChecks.receiveStep,CurrentReceiveChecks.receiveIteration⟩
+
+/-- The actual transmit entry and fixture stack retain supplied configured/current
+identity on normal returns, including IPv4 replies sent back through WireGuard. -/
+theorem original_current_stack :
+    (∀ family addr packets mtu history, Framing.Preserves (CurrentLifecycle.Inv history)
+      (WG.wgXmit family addr packets mtu)) ∧
+    (∀ (packets : List (List UInt8)) history, Framing.Preserves
+      (fun w : World => CurrentLifecycle.Inv history w.wg) (packets.forM Env.deliverInner)) :=
+  ⟨CurrentStack.wgXmit_preserves, CurrentStack.stackForM_preserves⟩
+
+/-- The concrete poll uses the actual stack callback and retains prior positional
+checks even when a later action stops. Initial support is still supplied. -/
+theorem original_current_poll :
+    (∀ pid budget history, Framing.Preserves
+      (fun w : World => CurrentLifecycle.Inv history w.wg)
+      (WG.rxPoll pid budget (fun packets => packets.forM Env.deliverInner))) ∧
+    (∀ pid budget, CurrentChecks.Preserves (Queues.RxHistory.observePoll pid budget)) :=
+  ⟨CurrentPoll.actual, CurrentPoll.checked⟩
+
+/-- The real fixture starts with receiving-owner and RX key-slot bounds. These
+bounds exclude dangling RX references to a slot that allocation could reuse. -/
+theorem initial_receiving_owner_carrier (net bare : Bool) (w : WGWorld)
+    (hw : Framing.wgStoreView w = Framing.wgStoreView (Runner.initialWG net bare)) : OwnerBounds.Carrier w :=
+  OwnerBounds.initial net bare w hw
+
+/-- Concrete peer allocation preserves current identity and its receiving-owner
+carrier. Key allocation preserves that carrier for every nullable owner word;
+a newly allocated key has no valid receiving material yet. -/
+theorem original_owner_creation :
+    (∀ key psk history, Framing.Preserves
+      (fun w => CurrentLifecycle.Inv history w ∧ OwnerBounds.Carrier w)
+      (WG.peerCreate key psk)) ∧
+    (∀ word, Framing.Preserves OwnerBounds.Carrier (WG.keypairCreate word)) :=
+  ⟨OwnerCreation.peerCreate_current, OwnerBounds.keypairCreate_preserves⟩
+
+/-- The same actual session front certifies installed receiving material and
+preserves the owner/RX carrier. The statement asserts only normal executions
+and retains the exact native WG and ambient endpoints of that front. -/
+theorem original_owner_session (pid : PeerId) (w v : WGWorld) (result : Bool)
+    (a b : Ambient) (history : List SessionOrigin.Receipt)
+    (hi : CurrentLifecycle.Inv history w ∧ OwnerBounds.Carrier w)
+    (hr : ((WG.beginSession pid).run w).run a = .ok ((result, v), b)) :
+    ∃ front u middle, ((SessionOrigin.front pid).run w).run a = .ok ((front, u), middle) ∧
+      CurrentLifecycle.Inv
+        (history ++ [SessionOrigin.Receipt.material pid ⟨front, w, u, a, middle⟩]) v ∧
+      OwnerBounds.Carrier v :=
+  OwnerCreation.beginSession_current pid w v result a b history hi hr
+
+/-- One execution of the complete configuration tail retains the exact old
+routing completion stream and the exact old product RX lifetime stream,
+including their arbitrary incoming histories and stopped prefixes. -/
+theorem original_joint_configuration_tail (attrs : PeerAttrs) (peer : Option PeerId) (pid : PeerId) :
+    Logged.StateProjectsPrefix Queues.RoutingJoint.routingEvent id
+      (Queues.RoutingJoint.peerConfigTail attrs peer pid)
+      (Configuration.peerConfigTailObserved attrs peer pid) ∧
+    Logged.ProjectsPrefix Queues.RoutingJoint.rxEvent id
+      (Logged.liftWGObserver (Queues.RoutingJoint.peerConfigTail attrs peer pid))
+      (Queues.RxHistory.mixed (Logged.liftWGObserver
+        (Lifetimes.peerConfigTailPrefix attrs peer pid))) :=
+  ⟨Queues.RoutingJoint.peerConfigTail_routing attrs peer pid,
+    Queues.RoutingJoint.peerConfigTail_rx_product attrs peer pid⟩
+
+
+/-- The existing session and peer-allocation observers carry receiving-owner
+bounds on the same execution as their current/history and lifetime guarantees.
+Stops retain the original safe journal without asserting a final state. -/
+theorem original_owner_journals :
+    (∀ pid, Logged.PrefixPreserves
+      (fun h w => CurrentChecks.Inv h w ∧ OwnerBounds.Carrier w.wg)
+      CurrentChecks.Safe (Origins.HistoryAdapters.session pid)) ∧
+    (∀ key psk history, Logged.PrefixPreserves
+      (fun h w => Lifetimes.AllocationInv h w.wg ∧ CurrentLifecycle.Inv history w.wg ∧
+        OwnerBounds.Carrier w.wg)
+      Lifetimes.LifetimeEvent.Safe
+      (Logged.liftWGObserver (Lifetimes.peerCreateMixed key psk))) :=
+  ⟨OwnerHistory.session, OwnerHistory.peerCreateProduct⟩
+
+/-- A source-linked normal consume supplies its own entry peer residency.
+Earlier transport may permit absence, but must retain the anchored packet and
+both peer identity fields whenever the peer is resident. -/
+theorem original_retained_publication_receipt (history : List SessionOrigin.Receipt)
+    (id : SkbId) (r : Logged.WGRunWitness (RxPacket × Option RxPacket))
+    (out : RxPacket) (pid : PeerId) (published : WGWorld)
+    (stamp : Lifetimes.PacketStamp) (receipt : Queues.RxDisposition.ConsumeReceipt)
+    (retained : PublicationIdentity.Retained history id r out pid published receipt.run.before)
+    (source : Queues.RxLink.Source id stamp receipt) :
+    PublicationIdentity.ConsumeCertificate history id r out pid published stamp receipt :=
+  PublicationIdentity.retained_receipt retained source
+
+
+/-- The real nullable owner acquisition and index lookup preserve the receiving
+owner carrier on every normal return, including ordinary lookup refusal. -/
+theorem original_receiving_owner_lookup :
+    (∀ owner, Framing.Preserves OwnerBounds.Carrier (Affiliation.acquireOwner owner)) ∧
+    (∀ kinds index, Framing.Preserves OwnerBounds.Carrier (WG.indexLookup kinds index)) :=
+  ⟨OwnerIndex.acquireOwner_preserves, OwnerIndex.indexLookup_preserves⟩
+
+/-- Existing prepare, NAPI and crypt worker observers preserve current checks
+at their actual journal positions. Every stopped prefix retains the checks
+already emitted; no initialization, successful authentication or totality is assumed. -/
+theorem original_current_workers :
+    CurrentChecks.Preserves Origins.HistoryAdapters.prepare ∧
+    CurrentChecks.Preserves Queues.RxHistory.napiSoftirq ∧
+    CurrentChecks.Preserves Queues.RxHistory.pollScheduledInline ∧
+    CurrentChecks.Preserves Queues.RxHistory.napiIrqExit ∧
+    CurrentChecks.Preserves Queues.RxHistory.decryptStep ∧
+    CurrentChecks.Preserves Queues.RxHistory.decryptIteration ∧
+    CurrentChecks.Preserves Queues.RxHistory.encryptIteration :=
+  ⟨CurrentWorkers.prepare, CurrentWorkers.napiSoftirq, CurrentWorkers.pollScheduledInline,
+    CurrentWorkers.napiIrqExit, CurrentWorkers.decryptStep, CurrentWorkers.decryptIteration,
+    CurrentWorkers.encryptIteration⟩
+
+/-- The joint peer-removal observer retains both original streams through
+actual timer stopping, flushed work and cleanup, including all stopped prefixes. -/
+theorem original_joint_configuration_removal (peer : Option PeerId) :
+    Logged.StateProjectsPrefix Queues.RoutingJoint.routingEvent id
+      (Queues.RoutingJoint.removePeer peer) (Configuration.peerRemoveObserved peer) ∧
+    Logged.ProjectsPrefix Queues.RoutingJoint.rxEvent id
+      (Logged.liftWGObserver (Queues.RoutingJoint.removePeer peer))
+      (Queues.RxHistory.mixed (Logged.liftWGObserver (Lifetimes.peerRemovePrefix peer))) :=
+  ⟨Queues.RoutingJoint.removePeer_routing peer, Queues.RoutingJoint.removePeer_rx_product peer⟩
+
+/-- Complete configuration updates execute the actual removal and tail observers.
+Their old routing and product RX projections require no supplied callback or
+append law, and keep the arbitrary incoming journals and exact failed prefixes. -/
+theorem original_joint_configuration_update (attrs : PeerAttrs) (peer : Option PeerId)
+    (flags : UInt32) (psk : Option Key) (pid : PeerId) :
+    Logged.StateProjectsPrefix Queues.RoutingJoint.routingEvent id
+      (Queues.RoutingJoint.peerConfigUpdate Queues.RoutingJoint.removePeer attrs peer flags psk pid)
+      (Configuration.peerConfigUpdateObserved attrs peer flags psk pid) ∧
+    Logged.ProjectsPrefix Queues.RoutingJoint.rxEvent id
+      (Logged.liftWGObserver
+        (Queues.RoutingJoint.peerConfigUpdate Queues.RoutingJoint.removePeer attrs peer flags psk pid))
+      (Queues.RxHistory.mixed
+        (Logged.liftWGObserver (Lifetimes.peerConfigUpdatePrefix attrs peer flags psk pid))) :=
+  ⟨Queues.RoutingJoint.peerConfigUpdate_concrete_routing attrs peer flags psk pid,
+    Queues.RoutingJoint.peerConfigUpdate_concrete_product attrs peer flags psk pid⟩
 
 end Leanux.Proofs.WG.CryptokeyRouting

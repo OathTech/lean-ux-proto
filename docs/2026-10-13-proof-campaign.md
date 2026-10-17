@@ -76,6 +76,18 @@ Fresh kernel replay passes in 104.09 seconds without warnings.
 The [short report](2026-10-17-r3-receive-cuts.md) records the unchanged earlier
 statements, independent reviews and remaining initialized joins.
 
+The configuration-cuts checkpoint adds twelve modules and 181 theorems:
+498 files/7,122 theorems, 554 terminal declarations and 178 R3 exports.
+Actual stack/poll and prepare/NAPI/crypt workers preserve current checks.
+Receiving-owner bounds propagate through creation/session/index cuts and local
+journals; normal consume recovers entry residency from conditional identity
+transport. Complete tail/removal/update observers discharge lower callback
+obligations while retaining both original streams. All prior statements remain
+unchanged. Gate: 556 jobs/554 declarations; fresh replay passes in 100.86
+seconds without warnings.
+The [short report](2026-10-17-r3-configuration-cuts.md) records the sole
+infrastructure retry, rejected development checks and remaining initialized joins.
+
 The pre-split checkpoint validated every baseline result surface over
 `cb2348e`. Initialized R3 packet authorization and R4 receive-pipeline
 conservation remain open. Earlier positive results and runtime findings retain
