@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Config.RequestModel
 import Leanux.Proofs.WG.Config.KeyCollision
 
 set_option pp.structureInstances false
@@ -6,9 +7,6 @@ set_option maxHeartbeats 800000
 
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise Std.Do
-
-def requestGeneration (d : Device) : Device :=
-  { d with deviceUpdateGen := d.deviceUpdateGen + 1 }
 
 theorem setDevice_private_changed_no_collision (d : Device) (key : Key)
     (changed : d.staticIdentity.staticPrivate ≠ key) (absent : noKeyCollision d key) :

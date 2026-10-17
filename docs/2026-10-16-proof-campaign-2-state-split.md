@@ -24,7 +24,7 @@ and attributed theorem declarations. Campaign 2 owns 427 Lean files,
 | H3 Roaming | 35 | 119 | 13 | Six native endpoint/destination contracts plus three product publication source factors and a generic observation-read frame carried; two Ambient frames deleted; native decryption provenance and five product publication leaves carried; all six enqueue/publication caller contracts, ten poll endpoint source contracts and seven attempt-audit source contracts, three poll support frames, seven endpoint claims and five attempt facts/claims carried; broader caller/authentication closure pending |
 | H4 Configuration | 130 | 554 | 79 | Total-return/branch laws, seven exact source factors, three endpoint-clearing frames, three empty-root insertion contracts, total first placement, validation/identity, partial and total empty-list peer dumps, ordered allowed-list deletion, concrete dump cancellation and four total root-transfer contracts, all five inserted-node readback contracts and singleton root removal with its two pure effects, native port/flag/socket contracts, allowed-IP set/get composition, fourteen structural/leaf removal contracts and seven scalar/set-get contracts, six total scalar/readback contracts, paired transfer/readback, three pure removal facts, fourteen collapse/whole-removal contracts, nineteen pure removal frames, six random-port contracts, four recorded-port contracts, four total malformed-peer configuration contracts and eighteen pure removal/pair/owner effects, six endpoint/identity/precomputation contracts, seven root-replacement contracts and eleven expiry/clock contracts checked; three Ambient frames deleted; remaining effects/readback carry pending |
 | H5 Progress | 59 | 265 | 42 | Twenty-nine pure/control or pure-source theorems, three generalized worker control contracts and one Ambient record frame and seven exact cut-source/projected contracts and six arbitrary-record jitter source/projected contracts and six arbitrary-record index insertion source contracts and both projected outcome claims, thirteen complete poll-bound contracts and three original scheduler-probe source contracts checked; two pointer-ring snapshot contracts and remaining operational carry pending |
-| H6 Timer discipline | 98 | 404 | 50 | Two pure session-liveness relations, map/guard base, two current wheel effects, separated jitter bound/frame and two projected bound claims, six exact jitter-record contracts and four exact exhaustion contracts and four source/product outcome claims, plus a checked stale-statement counterexample and one exact whole-WG wheel-placement support contract; three Ambient frames deleted; four projected current wheel corrections checked; three remaining legacy arming/caller claims and wider timer/worker semantics pending |
+| H6 Timer discipline | 98 | 404 | 50 | Two pure session-liveness relations, map/guard base, two current wheel effects, separated jitter bound/frame and two projected bound claims, six exact jitter-record contracts and four exact exhaustion contracts and four source/product outcome claims, plus a checked stale-statement counterexample and one exact whole-WG wheel-placement support contract; three Ambient frames deleted; all seven projected current wheel corrections checked; wider timer/worker semantics pending |
 
 Retyped, deleted and retained counts will be reported per validated tranche.
 H1 now has a checked split terminal closure; H2–H6 remain lagging.
@@ -2523,6 +2523,72 @@ infrastructure retry, cap/proof-limit increase or guest run occurred.
 
 Fresh replay passes for Noise.Statements, AllowedRemovalConverseClaims,
 ReplacementConverseSource and GuardedArmingClaims. Reproduce with
+`scripts/in-bundle lake build` on those modules under `Leanux.Proofs.WG`,
+inspect logical declarations with `#print axioms`, and replay with
+`scripts/in-bundle lake env leanchecker --fresh MODULE`. On this host use
+`capped`, 32 Lean threads and 16 QEMU slots.
+
+## Initiation lookup scope and remaining arming corrections
+
+| Tranche | Before | Retyped | Corrected | Deleted | Kept | Added | After |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `Roaming.InitiationLookupSource`, `InitiationLookupProductSource` | 3 | 3 | 0 | 0 | 0 | 2 | 5 |
+| `Config.ReplacementConverseRequestSource` | 1 | 1 | 0 | 0 | 0 | 0 | 1 |
+| `TimerDiscipline.ArmingLifecycleClaims` | 3 | 0 | 3 | 0 | 0 | 0 | 3 |
+| This tranche | 7 | 4 | 3 | 0 | 0 | 2 | 9 |
+| Cumulative processed baseline and checked support | 827 | 614 | 7 | 21 | 185 | 50 | 856 |
+
+The census is 496 campaign-owned files, 1,860 theorems and 281 checked proof
+modules; 1,004 baseline declarations await validation. Checked support is
+H1 176, H2 187, H3 81, H4 301, H5 70 and H6 41. H1's 22-headline terminal
+closure is current over b700659; H2–H6 terminal closures and the full gate
+remain lagging. All charter gaps and all 258 terminal names/order remain.
+
+Initiation lookup provenance derives the first matching public-key entry,
+resident peer, positive/nonoverflow reference and exact increment from the
+actual successful lookup. Its projected entry fixes only the Device used by
+the original conclusion, generalizing the old enclosing-Kernel fixation.
+No key/peer coherence or readiness premise is added. Native bind/facts
+companions carry the actual WG/Ambient successors; the Product bind/facts
+retain arbitrary original product continuations and all eight fixture
+observations in before/observed/after snapshots. Inspection observes a copy;
+the actual lookup starts at the same state. Exact erasure includes every
+Stop. The separate Product model holds data/predicates only.
+
+The replacement request preserves its original lookup, reference bounds,
+NodePairs, stopped-device and selector premises. Its composition executes the
+actual generation increment and acquired-peer update, then relates the
+removal and continuation from their real intermediate states. The unchanged
+pure `requestGeneration` definition moves into `RequestModel`; both users
+import it, avoiding a dependency on the still-pending private-key request
+proof. That pending theorem is unchanged.
+
+The last three legacy arming claims now live in `ArmingLifecycleClaims`;
+`ArmingSource` is an import facade. Traversal retains its nonzero-interval,
+running and alive conditions. Data receipt retains running, pending and dead
+branches; pending writes exactly the keepalive flag in the complete WG view.
+Active arms use the current complete nominal/recorded wheel effects tied to
+the actual entry mode. Handshake completion reuses the previously checked
+wheel theorem and specifies the complete Peer, including both expiry and
+wheel clear, attempt/flag reset and actual hidden walltime. These are explicit
+semantic corrections, not type-only carries. All seven originally identified
+arming contracts are now corrected; downstream timer callers still need carry.
+
+Scoped build passes 118 jobs without warnings. Axiom inspection covers 481
+logical roots in 89 modules with only the three standard axioms. Independent
+initiation-scope review and root reviews of replacement/timer composition
+are clear. Static checks, whitespace and unchanged mirror/shared boundaries
+pass. Initiation lookup passed changed probe two after handling impossible
+successful-none branches and normalizing the actual Product lift. Replacement
+request passed probe three after correcting its singleton-loop factor and
+avoiding a conflicting simp rewrite (the preceding failed probe also warned).
+Timer lifecycle probes one through five failed local source/branch reductions
+with error/warning counts 3/4, 4/1, 3/0, 1/0, 1/0; probe six passed cleanly.
+Full outputs preceded previews. No infrastructure retry, cap/proof-limit
+increase or guest run occurred.
+
+Fresh replay passes for InitiationLookupProductSource,
+ReplacementConverseRequestSource and ArmingSource. Reproduce with
 `scripts/in-bundle lake build` on those modules under `Leanux.Proofs.WG`,
 inspect logical declarations with `#print axioms`, and replay with
 `scripts/in-bundle lake env leanchecker --fresh MODULE`. On this host use

@@ -12,8 +12,9 @@ specifies the complete WG state, with separate same-expiry and changed-expiry
 effects; deletion specifies the complete native snapshot with both timer
 fields cleared. Their original normal-return domains are retained. The guarded arming and
 session-derived callers are now corrected in GuardedArmingClaims, with separate
-TimerInputFrames establishing input mode and guard facts. Three legacy
-arming/caller contracts remain pending. These are explicit statement
+TimerInputFrames establishing input mode and guard facts. ArmingLifecycleClaims
+now carries traversal, data receipt and handshake completion; all seven identified
+contracts are corrected. Their downstream consumers remain pending. These are explicit statement
 corrections, not type-only carries; the former deletion statement remains
 refuted by the witness below.
 
@@ -85,4 +86,4 @@ axiom inspection and fresh replay are recorded in the retrofit report.
 The later projected correction retains the finding and checks `ArmingClaims`
 with a scoped build, standard-axiom inspection and fresh replay; counts and
 commands are in the retrofit report. The complete H6 terminal closure remains
-lagging while the other three legacy contracts and their consumers are carried.
+lagging while downstream timer and worker consumers are carried.
