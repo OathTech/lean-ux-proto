@@ -7,10 +7,12 @@
 all six results are lagging until carried. Counts, type-justified frame
 deletions and scoped validation are tracked in the
 [retrofit report](2026-10-16-proof-campaign-2-state-split.md).
-The support tranches retype ninety-seven original theorems, retain ninety-one,
-delete twenty-one type-given frames and add seven native laws/adapters: 195
+The support tranches retype 114 original theorems, retain 105,
+delete twenty-one type-given frames and add nine support/finding declarations: 228
 checked theorems, with 258 terminal names still awaiting retrofit validation.
 The frame/claim file map and pending consumers are in the retrofit report.
+The [timer carry finding](2026-10-17-proof-campaign-2-timer-carry.md) checks a
+counterexample to a pre-wheel exact-peer statement; no mirror repair is requested.
 
 Historical checkpoint: branch `proofs/campaign-2`, worktree `.worktrees/proofs-campaign-2`,
 Lean v4.35.0, mirror **`de62c9d`**. The proofs are **lagging main's

@@ -7,19 +7,22 @@ namespace Leanux.Proofs.WG.Index
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise Leanux.Proofs.WG.Config Std.Do
 
 theorem lookupFinish_miss (stopped : Bool) (d : Device) :
-    Returns (lookupFinish (none, stopped)) (fun w => w.k.wg = some d)
-      (fun result w => result = none ∧ w.k.wg = some d) := by
-  rw [returns_iff]
-  mvcgen [lookupFinish, branch]
+    Returns (lookupFinish (none, stopped)) (fun g => g.dev = some d)
+      (fun result g => result = none ∧ g.dev = some d) := by
+  intro g ambient device
+  let after := recordStep (if stopped then ambient else recordStep ambient .idxWalk false)
+    .idxFound false
+  refine ⟨none, g, after, ?_, rfl, device⟩
+  cases stopped <;> simp [lookupFinish, branch, AmbientM.branch, after, recordStep] <;> rfl
 
 theorem indexLookup_miss (kinds : List IndexKind) (index : Nat) (d : Device)
     (noMatch : ∀ e, d.indexTable.find? (·.index == index) = some e →
       kinds.contains e.kind = false) :
-    Returns (indexLookup kinds index) (fun w => w.k.wg = some d)
-      (fun result w => result = none ∧ w.k.wg = some d) := by
+    Returns (indexLookup kinds index) (fun g => g.dev = some d)
+      (fun result g => result = none ∧ g.dev = some d) := by
   rw [indexLookup_factor]
   apply returns_bind _ _ (lookupPrefix_returns kinds index d)
-  intro state w pre
+  intro state g ambient pre
   obtain ⟨eq, device⟩ := pre
   have missing : state.1 = none := by
     rw [eq]
@@ -30,6 +33,6 @@ theorem indexLookup_miss (kinds : List IndexKind) (index : Nat) (d : Device)
   obtain ⟨entry, stopped⟩ := state
   simp only at missing
   subst entry
-  exact lookupFinish_miss stopped d w device
+  exact lookupFinish_miss stopped d g ambient device
 
 end Leanux.Proofs.WG.Index

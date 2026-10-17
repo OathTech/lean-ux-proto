@@ -1,29 +1,13 @@
 import Leanux.Proofs.WG.Noise.CryptoFrames
 import Leanux.Proofs.WG.Noise.Slots
 import Leanux.WG.Timers
+import Leanux.Proofs.WG.TimerDiscipline.ArmingBaseSource
 
 set_option pp.structureInstances false
 set_option maxHeartbeats 800000
 
 namespace Leanux.Proofs.WG.TimerDiscipline
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise Std.Do
-
-/-- Result-sensitive map rule, local while the shared proof closure is lagging. -/
-theorem map_result_spec {α β : Type} (f : α → β) (a : M α)
-    (P : World → Prop) (Q : α → World → Prop)
-    (ha : ⦃fun w => ⌜P w⌝⦄ a ⦃⇓? x w => ⌜Q x w⌝⦄) :
-    ⦃fun w => ⌜P w⌝⦄ StateT.map f a
-    ⦃⇓? b w => ⌜∃ x, b = f x ∧ Q x w⌝⦄ := by
-  apply (ensures_iff _ _ _).mp
-  intro w b w' hp hr
-  change (a.run w >>= fun out => pure (f out.1, out.2)) = .ok (b, w') at hr
-  cases he : a.run w with
-  | error e => rw [he] at hr; cases hr
-  | ok out =>
-    rcases out with ⟨x, t⟩
-    simp [he] at hr
-    rcases hr with ⟨rfl, rfl⟩
-    exact ⟨x, rfl, (ensures_iff _ _ _).mpr ha w x t hp he⟩
 
 theorem armTimer_recorded (pid : PeerId) (timer : PeerTimer) (delay : Nat)
     (caller : UInt64) (p : Peer) :
@@ -49,16 +33,6 @@ theorem delTimer_exact (pid : PeerId) (timer : PeerTimer) (p : Peer) :
   all_goals try dsimp +zetaDelta only at *
   all_goals repeat intro
   all_goals simp_all [peerAt, Option.bind_map, Function.comp_def, Std.TreeMap.getElem?_insert]
-
-theorem modPeerTimerGuard_exact (pid : PeerId) (d : Device) (p : Peer)
-    (resident : d.peers[pid]? = some p) :
-    Ensures (modPeerTimerGuard pid) (fun w => w.k.wg = some d)
-      (fun ok w => ok = (d.running && !p.isDead) ∧ w.k.wg = some d) := by
-  rw [ensures_iff]
-  mvcgen [modPeerTimerGuard, Leanux.WG.andM, getPeer, getDev, getK, branch, invariant]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals repeat intro
-  all_goals simp_all
 
 theorem modPeerTimer_effect (site : HiddenSite) (pid : PeerId) (timer : PeerTimer)
     (delay : Nat) (d : Device) (p : Peer) (resident : d.peers[pid]? = some p) :

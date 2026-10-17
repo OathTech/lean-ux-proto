@@ -7,7 +7,7 @@ namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG
 
 def addPlacedSource (root : Slot) (bits key cidr : Nat) (pid : PeerId)
-    (placed : Option NodeId) (exact : Bool) : M Int := do
+    (placed : Option NodeId) (exact : Bool) : WG.M Int := do
   if ← branch .addExact exact then
     let some id := placed | invariant "exact placement without a node"
     setNode id { (← getNode id) with peer := some pid }
@@ -51,7 +51,7 @@ def addPlacedSource (root : Slot) (bits key cidr : Nat) (pid : PeerId)
   return 0
 
 def addRootSource (root : Slot) (bits key cidr : Nat) (pid : PeerId)
-    (trie : Option NodeId) : M Int := do
+    (trie : Option NodeId) : WG.M Int := do
   if ← branch .addEmptyTrie trie.isNone then
     let some id ← (do
         let r ← allocNode .allocNode190 (newNode key cidr bits (some pid))

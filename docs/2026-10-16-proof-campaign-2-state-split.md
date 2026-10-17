@@ -20,11 +20,11 @@ and attributed theorem declarations. Campaign 2 owns 427 Lean files,
 | --- | ---: | ---: | ---: | --- |
 | Common projection | 2 | 0 | 0 | Native and product observations carried |
 | H1 Noise | 35 | 171 | 22 | Native access, crypto/slot/peer frames, slot/clear/zero operations and all four state-edge contracts carried; six type-given frames deleted; full caller/reachability closure pending |
-| H2 Index | 68 | 318 | 52 | Table/scans/insertion, full lookup owner/table and ten owner-word/finish contracts, five record contracts, five lifecycle contracts and 53 pure theorems checked; native receive factor and retirement frame carried; seven Ambient frames deleted; insertion record loop/callers pending |
+| H2 Index | 68 | 318 | 52 | Table/scans/insertion, full lookup and miss contracts, all ten record contracts, exact draw exhaustion/corpus pair, five lifecycle contracts and 55 pure theorems checked; native receive factor and retirement frame carried; seven Ambient frames deleted; projected terminals/callers pending |
 | H3 Roaming | 35 | 119 | 13 | Six native endpoint/destination contracts carried; two Ambient frames deleted; authentication callers and product callbacks pending |
-| H4 Configuration | 130 | 554 | 79 | Total-return/branch laws, three exact source factors, three endpoint-clearing frames, three empty-root insertion contracts and one pure theorem checked; three Ambient frames deleted; remaining effects/readback carry pending |
-| H5 Progress | 59 | 265 | 42 | Seventeen pure/control or pure-source theorems, three generalized worker control contracts and one Ambient record frame checked; pointer-ring activation and remaining operational carry pending |
-| H6 Timer discipline | 98 | 404 | 50 | Two pure session-liveness relations checked; three Ambient frames deleted; timer wheel and worker semantics pending |
+| H4 Configuration | 130 | 554 | 79 | Total-return/branch laws, four exact source factors, three endpoint-clearing frames, three empty-root insertion contracts, total first placement and one pure theorem checked; three Ambient frames deleted; remaining effects/readback carry pending |
+| H5 Progress | 59 | 265 | 42 | Twenty-nine pure/control or pure-source theorems, three generalized worker control contracts and one Ambient record frame checked; two pointer-ring snapshot contracts and remaining operational carry pending |
+| H6 Timer discipline | 98 | 404 | 50 | Two pure session-liveness relations, map/guard base and a checked stale-statement counterexample; three Ambient frames deleted; seven exact-peer arming claims and wider timer/worker semantics pending |
 
 Retyped, deleted and retained counts will be reported per validated tranche.
 All six results remain lagging, with their previous charter gaps unchanged.
@@ -653,3 +653,89 @@ Reproduce scoped builds and fresh replay for `Index.PeerWords`,
 `Noise.StateEdges`, `Config.AllowedInsertSource`, `Index.LifecycleSource`,
 `Progress.CutFrames`, `Index.DrawRecordSource` and `Roaming.EndpointClaims`,
 each under `Leanux.Proofs.WG`, using the capped bundle commands above.
+
+## Record loops, placement and the timer statement artefact
+
+| Tranche | Before | Retyped/generalized | Deleted | Kept | Added | After |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `Config.AllowedPlacementSource`, `AllowedTransferOperations` | 2 | 2 | 0 | 0 | 0 | 2 |
+| Remaining `Index.DrawRecords` | 5 | 5 | 0 | 0 | 0 | 5 |
+| `Index.DrawExhaustion`, `CorpusDraws`, `LookupMiss` | 10 | 8 | 0 | 2 | 0 | 10 |
+| `Progress.CookieControlModel` from `CookieActivationModel` | 12 | 0 | 0 | 12 | 0 | 12 |
+| `TimerDiscipline.ArmingBaseSource`, `ArmingWheelFindings` | 2 | 2 | 0 | 0 | 2 | 4 |
+| This tranche | 31 | 17 | 0 | 14 | 2 | 33 |
+| Cumulative validated surface | 240 | 114 | 21 | 105 | 9 | 228 |
+
+The tree has 439 campaign-owned files and 1,819 theorems. Of the baseline,
+1,591 remain pending. All 258 terminal names remain in their original
+`Statements.lean` files and await whole-result validation; this tranche
+does not claim a terminal or full-tree pass. No frame is deleted here.
+
+The allowed-IP placement result retains its totality, width/resident-node
+premises and exact Device result through actual `liftAip`. Its dependency
+is narrowed to the models it uses. The transfer source equation remains
+unconditional and definitional with explicit `WG.M` annotations, including
+all allocation/error arms. It retains the placement import needed by
+unported consumers.
+
+All ten draw-record contracts now carry. The remaining five preserve the
+contiguous collision prefix, two fresh scans, original turn bound, exact
+table update and arbitrary unused suffix. Raw steps/loops remain unguarded
+`IndexM`; public insertion retains the actual guard and full Device effect.
+The exhaustion contracts prove the original missing-input error, not budget
+exhaustion, with one more turn than colliding records. The corpus pair keeps
+distinct owners/values and its empty-table premise. Lookup misses preserve
+the complete Device and stop selection at the first numeric match even
+when its kind is excluded.
+
+`CookieControlModel` factors twelve unchanged pure record/control/log
+theorems and their definitions. One unused simp argument is removed. Exact
+error strings, padding checks, suffix/decrease facts, yield counts and log
+composition remain unchanged. The two representation-dependent snapshot
+theorems stay in `CookieActivationModel`, pending their pointer-ring carry;
+the checked pure facts do not establish native activation correspondence.
+
+H6 supplies a checked counterexample to the old timer-deletion exact-peer
+postcondition, documented in the
+[timer carry finding](2026-10-17-proof-campaign-2-timer-carry.md). A resident
+peer has a pending timer and a wheel entry consistent under
+`peerWheelProblem`. Actual deletion clears both fields, contradicting the
+legacy conclusion that retained the wheel entry. This is a statement
+artefact after adding wheel state. The witness makes no global reachability
+claim, and no mirror repair is requested. Seven affected exact-peer
+contracts remain intact and pending in `ArmingSource`.
+
+`ArmingBaseSource` carries the unchanged semantic guard claim and generalizes
+the original result-map rule over arbitrary flat state/error computations.
+A separate native map companion retains arbitrary Ambient execution.
+The two added declarations are that companion and the concrete counterexample;
+they are retrofit support/finding artefacts, not new charter results.
+
+Scoped builds pass without warnings: allowed placement/source 34 jobs,
+cookie control 8, draw records 35, arming base/finding 29, index
+exhaustion/corpus/miss 46. Axiom checks cover 34, 23, 75, 16 and 136 named
+logical roots respectively, using only the three permitted axioms. Fresh
+kernel replay passes for all eight roots below. The retained gate's token
+and import checks and the whitespace check pass.
+Independent reviews found no theorem-correctness issue. The timer review
+clarified the witness's local consistency versus global reachability, as
+recorded above. Mirror and shared proof layers remain unchanged.
+
+Development: placement/source used four changed-source probes (three
+failures, one clean); cookie extraction passed first time; draw tail seven
+(four failures, a clean two-claim prefix, one warning-bearing full pass,
+then clean); arming base/finding three (one failure, one warning-bearing
+pass, then clean); index frontier two (one failure, then clean). Package
+builds passed first time, with full compiler output captured before preview.
+No infrastructure rerun or limit increase occurred in this tranche.
+The cookie axiom-output parser initially rejected a line-wrapped list of
+the standard three axioms because of whitespace handling. The scratch parser
+was corrected to strip each comma-separated name and checked the complete
+saved output successfully, without rerunning Lean. The retained project gate
+already handles this layout and was unchanged.
+
+Reproduce by building and fresh-replaying `Config.AllowedTransferOperations`,
+`Progress.CookieControlModel`, `Index.DrawRecords`,
+`TimerDiscipline.ArmingBaseSource`, `TimerDiscipline.ArmingWheelFindings`,
+`Index.DrawExhaustion`, `Index.CorpusDraws` and `Index.LookupMiss`, each under
+`Leanux.Proofs.WG`, with the capped bundle commands above.
