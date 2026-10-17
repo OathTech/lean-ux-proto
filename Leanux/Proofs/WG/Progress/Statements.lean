@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Progress.ActivationExitClaims
 import Leanux.Proofs.WG.Progress.PowEvaluationSource
 import Leanux.Proofs.WG.Progress.AllocationProgressClaims
 import Leanux.Proofs.WG.Progress.PlaceholderBoundaryClaims
@@ -758,5 +759,18 @@ theorem original_pow_mod_of_evaluation (b e modulus fuel : Nat) (final : PowStat
     (evaluated : powEval modulus fuel (1, b % modulus, e) = some final) :
     originalPowMod b e modulus = final.1 :=
   powMod_of_evaluation b e modulus fuel final evaluated
+
+/-- Every actual activation is inspected with its first Stop unchanged.
+The outer loop makes at most its captured occupancy plus one iteration calls.
+The projected facts give the counter, suspension append and exhaustion result;
+native last-iteration and section-stop provenance is proved separately by
+activationExitRun_source_facts. Callback termination, adequate fuel and global
+quiescence remain separate obligations. -/
+theorem original_activation_exit (a : Activation) :
+    (do let audit ← observedActivationExit a; pure audit.erase) =
+      Campaign2.Product.inspect (Activation.run a) ∧
+    Campaign2.Product.Returns (observedActivationExit a) (fun _ => True)
+      (fun audit _ => ActivationExitFacts a audit) :=
+  ⟨observedActivationExit_source a, observedActivationExit_facts a⟩
 
 end Leanux.Proofs.WG.Progress
