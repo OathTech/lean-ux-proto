@@ -1,3 +1,9 @@
+import Leanux.Proofs.WG.Queues.SlotDevice
+import Leanux.Proofs.WG.Queues.HolderDeviceDelete
+import Leanux.Proofs.WG.Queues.AdmissionSection
+import Leanux.Proofs.WG.Queues.HolderAuxSend
+import Leanux.Proofs.WG.Queues.SlotTimers
+
 import Leanux.Proofs.WG.Queues.HandshakeWorker
 import Leanux.Proofs.WG.Queues.DeviceBoundary
 import Leanux.Proofs.WG.Queues.HolderInitial
@@ -2923,5 +2929,103 @@ theorem original_holder_rebase (hi : HolderAuxiliary.Inv cs loans before h w) :
     ∃ suffix, h=before++suffix ∧
       HolderAuxiliary.Inv (remaining cs (NapiCarrier.removedPackets suffix)) loans h h w :=
   HolderInitial.rebase hi
+
+
+open Leanux Leanux.WG Leanux.Proofs Leanux.Proofs.Logged
+open Framing Lifetimes Queues Queues.RxCredits
+
+/-- The complete native configuration command retains its funded account,
+base/table coherence, configured identity and all three nullable key slots. -/
+theorem original_device_configuration_account (attrs : DeviceAttrs) :
+    Preserves (DeviceBoundary.Entry cs loans) (wgSetDevice attrs) ∧
+      Preserves CurrentSlots.Inv (wgSetDevice attrs) :=
+  ⟨DeviceStages.device attrs,CurrentSlots.Device.device attrs⟩
+
+/-- Actual environment deletion derives the empty receive account from its
+idle guard. The absent-device errno branch also has the stated endpoint. -/
+theorem original_device_deletion_account (w v : World)
+    (hi : DurableHolders.Boundary cs [] w.wg)
+    (physical : HolderDeviceCreate.OptionalPhysical w.wg)
+    (run : Env.wgDelete.run w=.ok (ret,v)) :
+    cs=[] ∧ v.wg.dev=none ∧ DurableHolders.Boundary cs [] v.wg ∧
+      HolderDeviceCreate.OptionalPhysical v.wg :=
+  HolderDeviceDelete.delete_normal w v hi physical run
+
+/-- The unchanged receive observer derives its next ledger from its actual
+native occurrence and supplies the combined scheduler entry at the same cut. -/
+theorem original_receive_admission_account
+    (account : DurableHolders.Boundary cs loans w.wg)
+    (physical : DecryptIteration.Physical w) (owner : OwnerChecks.Inv h w)
+    (slots : CurrentSlots.Inv w.wg)
+    (run : runPrefix (AdmissionCaller.receive msg src) w h=(.ok ((),v),k)) :
+    ∃ next, AdmissionCaller.Step cs next msg src w v h k ∧
+      HolderAuxiliary.Inv next loans k k v :=
+  AdmissionAuxiliary.receive_normal account physical owner slots run
+
+/-- The source transition has one selected ledger; no funded poststate is
+part of this uniqueness premise. -/
+theorem original_receive_admission_unique
+    (left : AdmissionCaller.Step cs next msg src w v h k)
+    (right : AdmissionCaller.Step cs other msg src w v h k) : next=other :=
+  AdmissionCaller.step_unique left right
+
+/-- The actual NET_RX section uses the prior cut's remaining ledger, then
+carries the exact receive occurrence through its real section markers. -/
+theorem original_receive_section_account
+    (hi : HolderAuxiliary.Inv initial loans before h w)
+    (run : runPrefix (runWorkerPrefix .netRx (AdmissionCaller.receive msg src)) w h=(.ok ((),v),k)) :
+    ∃ prior next, h=before++prior ∧
+      AdmissionSection.Step (remaining initial (NapiCarrier.removedPackets prior)) next msg src w v h k ∧
+      HolderAuxiliary.Inv next loans k k v :=
+  AdmissionSection.normal hi run
+
+/-- Stopped section executions retain their original safe journal. Dynamic
+funding and the real source transition are concluded only on normal return. -/
+theorem original_receive_section_prefix (initial : Ledger) (loans : Reservations)
+    (before : List RxHistory.Event) (msg src) :
+    PrefixEnsures (HolderAuxiliary.Inv initial loans before) OwnerChecks.Safe
+      (runWorkerPrefix .netRx (AdmissionCaller.receive msg src))
+      (fun _ k v => ∃ prior next, ∃ w h, h=before++prior ∧
+        AdmissionSection.Step (remaining initial (NapiCarrier.removedPackets prior)) next msg src w v h k ∧
+        HolderAuxiliary.Inv next loans k k v) :=
+  AdmissionSection.ensures initial loans before msg src
+
+/-- The original crypt wait uses the concrete auxiliary scheduler. -/
+theorem original_crypt_auxiliary_account (initial : Ledger) (loans : Reservations)
+    (before : List RxHistory.Event) :
+    PrefixPreserves (HolderAuxiliary.Inv initial loans before) OwnerChecks.Safe RxHistory.runCryptWorkers :=
+  HolderAuxDeferred.crypt initial loans before
+
+/-- Actual send draining retains the combined account with no receive-callback premise. -/
+theorem original_send_auxiliary_account (initial : Ledger) (loans : Reservations)
+    (before : List RxHistory.Event) :
+    PrefixPreserves (HolderAuxiliary.Inv initial loans before) OwnerChecks.Safe RxHistory.runSendWorkers :=
+  HolderAuxSend.runSendWorkers initial loans before
+
+/-- The original post-transmit wait keeps its mixed-work guard and completion
+checks while carrying one combined account and reached journal. -/
+theorem original_after_xmit_auxiliary_account (initial : Ledger) (loans : Reservations)
+    (before : List RxHistory.Event) :
+    PrefixPreserves (HolderAuxiliary.Inv initial loans before) OwnerChecks.Safe RxHistory.afterXmit :=
+  HolderAuxSend.afterXmit initial loans before
+
+/-- A normal completion guard derives an empty current ledger and empty RX
+storage from its actual decrypt-ring flag, rather than assuming either. -/
+theorem original_completion_empty_account
+    (hi : HolderAuxiliary.Inv initial loans before h w)
+    (ringFlag : ∀ d, w.wg.dev=some d → (!d.decryptQueue.empty)∈flags)
+    (run : runPrefix (RxHistory.mixed (requireDrainedPrefix what flags)) w h=(.ok ((),v),k)) :
+    ∃ prior, h=before++prior ∧ remaining initial (NapiCarrier.removedPackets prior)=[] ∧
+      (∀ (d : Device) (id : SkbId) (packet : RxPacket), v.wg.dev=some d → d.rxSkbs[id]?≠some packet) ∧
+      HolderAuxiliary.Inv initial loans before k v :=
+  HolderAuxDeferred.drained_empty hi ringFlag run
+
+/-- Recorded timer dispatch retains all three slots through its actual unit
+checks, detachment, callback and section boundaries. -/
+theorem original_timer_dispatch_slots (kind : Worker) (pid : PeerId) (timer : PeerTimer)
+    (entry : WheelEntry) (prior : Option UInt64) :
+    Preserves (fun w : World => CurrentSlots.Inv w.wg) (timerDispatchUnit kind pid timer entry prior) :=
+  CurrentSlots.Timer.dispatch kind pid timer entry prior
+
 
 end Leanux.Proofs.WG.DeliveryOrder
