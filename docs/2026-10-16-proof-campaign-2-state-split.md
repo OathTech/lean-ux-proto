@@ -22,9 +22,9 @@ and attributed theorem declarations. Campaign 2 owns 427 Lean files,
 | H1 Noise | 35 | 171 | 22 | 185 | The full Noise closure is current, including restart support. Six type-given frames are deleted. Wider caller/lifetime/reachability and clock-provenance charter claims remain open. |
 | H2 Index | 68 | 318 | 52 | 333 | Table, lookup, collision records, allocation, owner invariants and lifecycle support carried; seven type-given frames deleted. Exact peer-release outcomes replace stale totality, with checked counterexamples. All 52 headlines and their closure are current, including full Product session observations; whole-driver coherence remains pending. |
 | H3 Roaming | 35 | 119 | 13 | 157 | Endpoint/publication, polling, attempt facts, crypto, lookup and response-caller factors/facts carried with full Product certificates; two type-given frames deleted. The full terminal closure is current, including initiation/response audits with actual Product outcomes. Wider roaming/provenance charter gaps remain open. |
-| H4 Configuration | 130 | 554 | 79 | 444 | Scalar, identity, port, dump, allowed-IP and structural support carried; three type-given frames deleted. Quiet timer cleanup and queued-send observations are corrected; queued-send and removal totality have checked stale-statement counterexamples. Remaining readback/effects and terminal closure remain pending. |
+| H4 Configuration | 130 | 554 | 79 | 450 | Scalar, identity, port, dump, allowed-IP and structural support carried; three type-given frames deleted. Quiet timer cleanup and queued-send observations are corrected; queued-send and removal totality have checked stale-statement counterexamples. Remaining readback/effects and terminal closure remain pending. |
 | H5 Progress | 59 | 265 | 42 | 214 | Pure/control, cut, jitter, index, poll bounds, dispatch, scheduler turns, stack/probe frames, queue flush contracts, drain selection and Product observation bridge carried; one type-given index frame deleted. The old backlog fixture has checked exact runner and direct-fixture rejections. Drain bounds are carried. General runner boundaries, corrected historical rejection wrappers and receive-source leaves are carried; whole receive-ring activation models and terminal closure remain pending. |
-| H6 Timer discipline | 98 | 404 | 50 | 191 | Base/guard/jitter, arming/wheel, recorded clock and initiation-send arming contracts carried; three type-given frames deleted. Exact wheel corrections are explicit; queue/pending and retained-worker frames are carried; broader timer episodes and terminal closure remain pending. |
+| H6 Timer discipline | 98 | 404 | 50 | 192 | Base/guard/jitter, arming/wheel, recorded clock and initiation-send arming contracts carried; three type-given frames deleted. Exact wheel corrections are explicit; queue/pending and retained-worker frames are carried; broader timer episodes and terminal closure remain pending. |
 
 Retyped, deleted and retained counts will be reported per validated tranche.
 H1, H2 and H3 now have checked split terminal closures; H4, H5 and H6 remain lagging.
@@ -4595,3 +4595,57 @@ TimerDiscipline.SendDispatchClaims, TimerDiscipline.SendDispatchWorkSource and
 TimerDiscipline.RetransmitSkipSource under Leanux.Proofs.WG. Inspect axioms and
 run scripts/in-bundle lake env leanchecker --fresh MODULE for those roots.
 Use capped, 32 Lean threads and LEANUX_QEMU_SLOTS=16 on this host.
+
+
+## Projected replacement/clock claims and the missing-clock counterexample
+
+| Tranche | Before | Retyped | Corrected | Deleted | Kept | Added | After |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Config.ObservationBridge | 4 | 3 | 1 | 0 | 0 | 0 | 4 |
+| Config.ReplacePeersRequestClaims | 2 | 2 | 0 | 0 | 0 | 0 | 2 |
+| TimerDiscipline.MissingClockFindings | 0 | 0 | 0 | 0 | 0 | 1 | 1 |
+| This tranche | 6 | 5 | 1 | 0 | 0 | 1 | 7 |
+| Cumulative processed baseline and checked support | 1,398 | 1,086 | 75 | 22 | 215 | 155 | 1,531 |
+
+The tree has 545 campaign-owned files, 1,964 theorems and 455 checked proof
+modules. There are 433 baseline declarations pending. Counts: H1 185, H2 333,
+H3 157, H4 450, H5 214 and H6 192. H1/H2/H3 terminal closures remain current;
+H4/H5/H6 and the full gate remain lagging.
+
+ObservationBridge retains full Product prefix/read payloads, actual lifted
+actions and exact erasure including errors. The corrected queue consequence
+takes its existential queue observation from the same actual source suffix;
+no guessed pending flag or new premise is supplied. ReplacePeersRequestClaims
+retains arbitrary selectors and the original selected-device predicate,
+actual full removal cuts, zero normal return and all cleanup failures.
+Private abbreviations refer to the already checked native prefix/suffix;
+they do not introduce a parallel executable model.
+
+The new missing-clock finding executes the full expiredRetransmitHandshake
+callback under every original absent-give-up premise. The peer has attempts
+19 above limit 18, no zero-key timer, and a running/alive device. Valid caller
+and arm records end at the empty suffix. The actual callback returns exactly
+the hidden-input error for missing timer_clk. This refutes old unconditional
+totality, without a reachability claim or an error post-state. See the
+[missing-clock note](2026-10-17-proof-campaign-2-missing-clock.md).
+[AGENT 2026-10-17] Correct affected totality statements with exact factors
+through the actual arm tail on their unchanged domains; do not add a quiet
+clock/readiness premise or replace the error with an arbitrary disjunction.
+
+Independent reviews find no issues. ObservationBridge probe 1 passes cleanly.
+Replacement-claim probes 1–3 fail private-name resolution and bind/suffix
+normalization, with error/warning counts 11/3, 7/3 and 6/4; probe 4 passes.
+Counterexample probes 1–2 fail concrete record layout; probe 3 fails required
+Ambient fields, validity unfolding and whole-callback recursion; probe 4
+still fails recursion and reports two unused simplifications; probe 5 unfolds
+the actual source composition and passes cleanly. No cap, heartbeat or
+recursion limit is raised, and no unchanged source is rerun.
+
+The 215-job build passes with only the inherited Env String.mk warning.
+Axiom inspection covers 786 logical roots in 151 modules, including 484
+public theorem roots; only standard axioms occur. All three fresh kernel
+replays, static checks, 258 audit names/order and mirror/shared boundaries
+pass. Reproduce with scripts/in-bundle lake build on Config.ObservationBridge,
+Config.ReplacePeersRequestClaims and TimerDiscipline.MissingClockFindings
+under Leanux.Proofs.WG, then #print axioms and scripts/in-bundle lake env
+leanchecker --fresh MODULE. Use capped, 32 Lean threads and 16 QEMU slots here.
