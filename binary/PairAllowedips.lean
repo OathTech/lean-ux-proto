@@ -13,6 +13,26 @@ def advance (input : AllowedipsProbe.Input) (seed : UInt64) (r : Run)
   runUntil input.instructions input.labels input.hooks input.preempt r.state seed true
     input.budget input.entryPreempt stops (some r)
 
+/-- Concrete caller check for the decoder-frame proof's separation premise.
+This fixture has a 48-byte loop scratch area below its 80-byte caller frame.
+Whole node allocations are protected, a conservative cover of decoder reads. -/
+def loopSeparation (names : Names) (o : AllowedipsProbe.Offsets) : Except String Unit := do
+  let spans := names.nodes.map (fun (_,a) => (a,o.nodeSize)) ++
+    names.peers.map (fun (_,a) => (a+o.peerRefcount,4))
+  for (a,size) in spans do
+    unless a+size ≤ 2^64 && disjointRanges a size (stackAddr-128) 48 &&
+        disjointRanges a size coverageAddr coverageBytes do throw "entry.loop-separation"
+
+/-- Caller input condition, separate from reconstruction. A valid trie in
+one family cannot be passed as the root of a lookup in the other family. -/
+def callInput (names : Names) (o : AllowedipsProbe.Offsets) (memory : DataMem)
+    (root : Option NodeId) (width key : Nat) : Except String Unit := do
+  unless (width == 32 || width == 128) && key < 2^width do throw "entry.address-width"
+  if let some id := root then
+    let a ← address names.nodes (some id)
+    let node ← (decodeNode names o memory a).mapError DecodeError.message
+    unless node.width == width do throw "entry.root-family"
+
 /-- Executable correspondence of the loop's live locals. The root and key
 are call inputs, not values obtained from the expected successor. -/
 def locals (names : Names) (input : AllowedipsProbe.Input) (s : MachineState)
@@ -62,6 +82,8 @@ def lookup (names : Names) (input : AllowedipsProbe.Input) (seed : UInt64)
     (memory : DataMem) (priorCoverage : Array Nat) (w : World)
     (root : Option NodeId) (width key : Nat) : Except String (World × Run × Json) := do
   assertAt names input.offsets memory w
+  loopSeparation names input.offsets
+  callInput names input.offsets memory root width key
   let regs : Reg64s := {
     rdi := .ofNat (← address names.nodes root), rsi := .ofNat width,
     rdx := .ofNat AllowedipsProbe.keyAddr, rsp := .ofNat stackAddr,

@@ -588,3 +588,109 @@ this exact reconstruction, reusing the already-proved physical bodies and
 source presentation. Existing callback contracts remain explicit. Record
 any missing separation or representation bridge as proof work, not as a
 runtime-discovered invariant or a completed function theorem.
+
+### Symbolic trie-loop experiment, 2026-10-17
+
+The candidate was frozen at `665cd5d` (01:13:29 UTC). The new theorem
+`Binary.Pair.Trie.findNode_effect` in `PairTrieLoop.lean` connects an accepted
+execution of the **actual mirror's findNode** to Kraken execution from the
+loop boundary to lookup+0x101. The binary has the selected node in RBP and
+preserves the exact `PairTrie.reconstruct` result tested by the runner.
+`loop_effect` composes every bounded iteration, including prefix mismatch,
+full-length match, child traversal and the absent-child exit. Successful
+source finish is required; exhausted fuel is not treated as a return.
+`PairTrieFrame.reconstruct_frame` proves preservation of the executable
+decoder under disjoint memory writes. Neither reconstruction nor its target
+was changed during this proof attempt.
+
+This is a completed **loop join**, not the allowed-IPs function theorem.
+It deliberately reuses the old `AllowedipsLoop.node_body`, common_bits,
+callback/history/frame proofs and source erasure/selection results. The
+new proof files contain 308 lines together. It is not a measurement of
+building those physical foundations, nor of proving a new binary function
+from scratch. The original M1 theorem, original M2 campaign and
+`TrustBase.lean` remain unchanged.
+
+There is still a representation bridge to prove. The headline explicitly
+requires `AllowedipsLoop.Setup`: its old `TrieHeap`, query-word and ABI
+premises have **not** been derived from passing executable assertions.
+It also requires initial `Invariant` (including the callback-ready frame),
+base reconstruction equality and separation of decoder reads from loop
+scratch/coverage writes. The physical interpretation `c.nodes`/`c.peers`
+and the reconstruction's `Names` are separate parameters; this theorem
+does not prove that a tested fixture constructs the required interpretation
+and all these premises. Consequently the result cannot be described as a
+proof from the tested entry checker alone, or as proof of that checker's
+soundness. It establishes a useful join while leaving that bridge explicit.
+
+The named semantic premises inherited through Setup are
+`AllowedipsDecoderAgreement`, `AllowedipsTracePcContract`,
+`AllowedipsTraceConstCmp1Contract`, `AllowedipsTraceCmp8Contract` and
+`AllowedipsTraceCmp1Contract`, all already defined in `TrustBase.lean`.
+The runner executes their real decoded bodies; the theorem still assumes
+these contracts. Its `historyStep`/`Effects.All` formulation quantifies over
+all undefined instruction values but erases permission requests. It does
+not establish legal memory access, serialized environment audits,
+concurrent contextual refinement, prologue-to-loop entry, peer-get/BH-enable
+or the original function return. Roots remain supplied identities. This
+sibling does not transport whole-operation or whole-trace properties.
+
+Two conditions became explicit during the proof work:
+
+- **Caller family:** the frozen reconstruction and heap checks accepted a
+  root of the opposite address family. With node key 1, CIDR 0 and a live
+  peer, both a 32-bit root supplied to a 128-bit call and the converse passed
+  entry reconstruction and then failed the common_bits return comparison.
+  These are malformed standalone caller inputs, not a defect demonstrated
+  on a recorded kernel path. `callInput` now checks family/key width and the
+  decoded root's width; both cases reject at `entry.root-family`. This is
+  an added caller condition, not a weakened R or an exclusion of dead peers.
+- **Separation:** reconstruction preservation needs all of its read bytes
+  protected from callback scratch and coverage writes. The theorem names
+  this premise through `ReadBytes`; the fixture runner now checks a
+  conservative cover using node allocations and peer-count words, with
+  scratch/coverage-overlap rejection controls. Deriving the theorem's
+  bitvector separation premise from that executable check remains part of
+  the representation bridge. This was logical proof plumbing, not a
+  discrepancy found in a recorded workload.
+
+Both positive suites still pass after these additions. There are now 14
+corruption/caller-condition controls plus the dying-peer refusal per family.
+The executable changes are confined to caller checks and controls. The
+tested reconstruction and the existing M1 Pre/R did not change.
+
+Measured intervals on this box, with one agent: from the captured-state
+checkpoint at 01:05:44 to the frozen trie candidate at 01:13:29 was 7m45s.
+That interval excludes the earlier preparation of `PairTrie` and the
+recorded inputs. The completed source-to-binary loop theorem first built at
+01:18:16, 4m47s after freezing. Runtime counterexample/rejection work and
+trust checks followed, overlapping where independent. Most new-module
+Lean builds took under a second; fresh kernel replay took roughly two
+minutes. These are adaptation times over substantial existing proofs,
+not comparable to M1's original proof-development rate.
+
+Validation: the new modules build without warnings; all four printed
+headlines (`reconstruct_frame`, `node_effect`, `loop_effect`,
+`findNode_effect`) use only `propext`, `Classical.choice`, `Quot.sound`.
+`capped lake env leanchecker --fresh PairTrieLoop` exited 0. No sorry,
+native evaluation axiom, unsafe declaration, implemented_by/extern or
+kernel-check bypass was added on their proof path. Existing imported
+modules still emit their previously documented warnings. Kraken remains
+clean at `7ebba06a30eaf08c10b26b28ca14bfee1c791576`. The mirror remains pinned
+to `cb2348e`, lagging current main (`b3f5680` when checked); no compatibility
+with the newer mirror is claimed.
+
+The external gate has **not** run for this sibling. A leanexport of
+`PairTrieLoop` and its dependency closure is prepared at
+`.tmp/binary-pair-trie.ndjson` (about 1.1 GB, ephemeral). From this worktree's
+`binary/`, outside Nono, run
+`lake check --from-export ../.tmp/binary-pair-trie.ndjson`.
+Regenerate with `capped lake env leanexport PairTrieLoop` redirected there.
+
+[AGENT 2026-10-17] Stop at the plan's one-join reporting checkpoint. The
+experiment demonstrates fast executable diagnosis and inexpensive loop
+composition **when the physical regions already exist**. It does not yet
+show that discovering reconstruction makes the remaining proof mechanical
+or removes the original physical proof cost. The next focused checkpoint
+would derive Setup, the shared pointer interpretation and initial frame
+from the tested entry assertions, before expanding to more functions.

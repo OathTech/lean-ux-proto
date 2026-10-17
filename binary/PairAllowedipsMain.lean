@@ -83,6 +83,14 @@ def suite (input : AllowedipsProbe.Input) : Except String Json := do
   let check := fun memory => assertAt names input.offsets memory fullWorld
   let a := AllowedipsProbe.nodeAddr 0
   let mut controls := #[refusal]
+  let otherWidth := if width == 32 then 128 else 32
+  let mixed := withNodes w d width [(0,newNode 1 0 otherWidth (some pid))] (some 0)
+  controls := controls.push (← expectReject "wrong-call-family" "entry.root-family"
+    ((runCase input "synthetic/wrong-call-family" mixed (some 0) width 1).map (fun _ => ())))
+  controls := controls.push (← expectReject "scratch-overlap" "entry.loop-separation"
+    (loopSeparation {names with nodes := [(0,stackAddr-128)]} input.offsets))
+  controls := controls.push (← expectReject "coverage-overlap" "entry.loop-separation"
+    (loopSeparation {names with peers := [(pid,coverageAddr-input.offsets.peerRefcount)]} input.offsets))
   controls := controls.push (← expectReject "selector" "node.selectors" (check (put m (a+input.offsets.bitAtB) 1 8)))
   controls := controls.push (← expectReject "unresolved-child" "unresolved pointer" (check (put m (a+input.offsets.children) 8 42)))
   controls := controls.push (← expectReject "missing-memory" "missing 8-byte range" (check {}))

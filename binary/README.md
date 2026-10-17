@@ -105,7 +105,25 @@ prefixes, not captured kernel states. The suites include persistent repeated
 calls, structural variations and corruption controls. A dying peer is an
 explicit source refusal, checked against the executed binary retry edge;
 it is not a passing lookup simulation. See the plan's tested-trie checkpoint
-for counts and the distinction between testing and the pending symbolic join.
+for counts and the distinction between testing and the remaining symbolic obligations.
+
+The paired sibling now includes `Binary.Pair.Trie.findNode_effect` in
+`PairTrieLoop.lean`: a loop-boundary-to-exit theorem using
+the same reconstruction. It reuses the existing physical regions and keeps
+their Setup premises explicit; deriving those premises from the executable
+entry assertions remains open. It is not a function-entry-to-return theorem.
+Build with `capped lake build PairTrieLoop`; replay with
+`capped lake env leanchecker --fresh PairTrieLoop`. For the external gate,
+from `binary/`, export `capped lake env leanexport PairTrieLoop` to
+`../.tmp/binary-pair-trie.ndjson`, then run outside Nono:
+
+```sh
+lake check --from-export ../.tmp/binary-pair-trie.ndjson
+```
+
+The [symbolic experiment report](../docs/2026-10-16-plan-executable-binary-correspondence.md#symbolic-trie-loop-experiment-2026-10-17)
+names the remaining premises, the cross-family counterexample, validation
+and the limits on interpreting the measured adaptation time.
 
 `capture_lookup.py` separately captures actual entry/return registers and
 memory on a rerun of that recorded workload, using QEMU TCG hardware

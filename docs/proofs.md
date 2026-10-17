@@ -140,6 +140,12 @@ sequential Kraken execution, without internal correspondence or M1's
 permission audit. This is an experiment in proof cost, not additional
 campaign function coverage or M2 completion; M1 remains available unchanged.
 
+The separate `task/binary-pair-runner` sibling has one experimental result:
+
+| Result | Headline | Mirror pin | Status |
+| --- | --- | --- | --- |
+| Executable trie reconstruction and bounded allowed-IPs loop join | `Binary.Pair.Trie.findNode_effect` (`PairTrieLoop.lean`) | `cb2348e` | Loop boundary to selected-node exit, both families, preserving the tested reconstruction. Reuses existing physical regions; Setup/initial-frame/interpretation bridge from executable assertions remains open. Not function adequacy or additional campaign coverage. Build, standard axioms and fresh leanchecker pass; external export gate pending. Lags newer main. [Report](2026-10-16-plan-executable-binary-correspondence.md#symbolic-trie-loop-experiment-2026-10-17). |
+
 The concrete frame instance `lookup_snapshot_transport` carries exact
 frontier and source-live lifetime/replay fields through lookup, conditional
 on their initial representation and untouched-byte separation. It does not
