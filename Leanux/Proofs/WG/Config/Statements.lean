@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Config.PeerKeyGetterClaims
 import Leanux.Proofs.WG.Config.PeerMixedGetterClaims
 import Leanux.Proofs.WG.Config.PeerScalarGetterClaims
 import Leanux.Proofs.WG.Config.PeerGetterClaims
@@ -1970,5 +1971,40 @@ theorem original_mixed_peer_pages_get_after_set (d : Device) (peers : PeerId →
   exact multi_mixed_pages_get_after_set d peers mark key psk interval bad pid sock net
     found resident live bounded down residents emptyIps headerFits firstFits fresh cursorData
     idle emptyQueue within
+
+/-- Actual private-key rotation then canonical finite empty-IP peer readback.
+The established-identity path keeps the effective clamped/null identity,
+ordered expiry effects and all source Stops. On normal return the getter
+reflects every peer occurrence and ends at its exact cursor-handoff Device;
+installation effects describe the actual intermediate Device, not the final
+raw peer map. Only computed nonfinal cursors need the stated lifetime data. -/
+theorem original_key_paginated_multi_peer_get_after_set (d : Device) (peers : PeerId → Peer)
+    (key : Key) (sock : NlSock)
+    (established : d.staticIdentity.hasIdentity = true)
+    (changed : d.staticIdentity.staticPrivate ≠ key) (absent : noKeyCollision d key)
+    (residents : ∀ q ∈ d.peerList, d.peers[q]? = some (peers q))
+    (emptyIps : ∀ q ∈ d.peerList, (peers q).allowedipsList = [])
+    (headerFits : devicePrefixSpace (keyReadbackBase d key) ≤ NLMSG_GOODSIZE)
+    (firstFits : ∀ q rest, d.peerList = q :: rest →
+      peerFixedSpace (peers q) ≤ NLMSG_GOODSIZE-devicePrefixSpace (keyReadbackBase d key))
+    (fresh : peerPageBoundaryFresh [] (peerPages peers (keyReadbackBase d key) d.peerList))
+    (cursorData : PeerPageCursorData peers (peerPages peers (keyReadbackBase d key) d.peerList))
+    (within : peerPageReceiveCount peers (keyReadbackBase d key) d.peerList ≤ 4096)
+    (idle : sock.cbRunning = false) (emptyQueue : sock.queue = []) :
+    Campaign2.Ensures (do
+      let ret ← wgSetDevice (privateKeyAttrs d key)
+      let dump ← wgGetDevice (byIndex d)
+      pure (ret,dump))
+      (fun s => s.wg.device = some d ∧ s.wg.nlSock7 = sock ∧ ClaimView.selectsDevice s d)
+      (fun result s => result = (0,.ok (multiPeerJson (keyReadbackBase d key) peers)) ∧
+        ∃ postSet observations values,
+          ObservedKeyPeerRun false (keyReadbackBase d key) d.peerList observations postSet ∧
+          (∀ q ∈ d.peerList, postSet.peers[q]? = some (values q)) ∧
+          (∀ q, keyGetterPeerView (values q) = keyGetterPeerView (peers q)) ∧
+          s.wg.device = some (peerGetterFinalDevice postSet values) ∧
+          s.wg.nlSock7 = socketReadbackFinal sock postSet ∧
+          CursorHeld postSet (peerGetterFinalDevice postSet values) none) :=
+  key_paginated_peers_get_after_set d peers key sock established changed absent
+    residents emptyIps headerFits firstFits fresh cursorData within idle emptyQueue
 
 end Leanux.Proofs.WG.Config
