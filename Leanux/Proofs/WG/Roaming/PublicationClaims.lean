@@ -1,6 +1,8 @@
 import Leanux.Proofs.WG.Roaming.PublicationSource
 import Leanux.Proofs.WG.Roaming.Authentication
 import Leanux.Proofs.WG.Roaming.PublicationFrames
+import Leanux.Proofs.WG.Roaming.PublicationLeafClaims
+import Leanux.Proofs.WG.Roaming.PublicationReadFrames
 
 set_option autoImplicit false
 set_option pp.structureInstances false
@@ -8,40 +10,6 @@ set_option maxHeartbeats 800000
 
 namespace Leanux.Proofs.WG.Roaming
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise Std.Do
-
-/-- Normal original decryption necessarily read a resident keypair, even if
-its later validity, allocation or AEAD test returned none. -/
-theorem decryptPacket_key_present (pkt : RxPacket) (w final : World)
-    (result : Option RxPacket) (run : (decryptPacket pkt).run w = .ok (result, final)) :
-    ∃ key, (w.k.wg.bind fun d => d.keypairs[pkt.keypair]?) = some key := by
-  cases hd : w.k.wg with
-  | none =>
-    simp [decryptPacket, getKeypair, getDev, getK, branch, invariant,
-      StateT.run_bind, StateT.run_pure, hd] at run
-    change Except.error _ = Except.ok (result, final) at run
-    cases run
-  | some d =>
-    cases hk : d.keypairs[pkt.keypair]? with
-    | none =>
-      simp [decryptPacket, getKeypair, getDev, getK, branch, invariant,
-        StateT.run_bind, StateT.run_pure, hd, hk] at run
-      change Except.error _ = Except.ok (result, final) at run
-      cases run
-    | some key => exact ⟨key, by simp [hd, hk]⟩
-
-theorem decryptPacket_authentication_at (pkt : RxPacket) (before : Campaign2.Snapshot) :
-    Ensures (decryptPacket pkt) (fun w => Campaign2.snapshot w = before)
-      (fun result _ => ∀ plain, result = some plain → ∃ key,
-        keyAt before pkt.keypair = some key ∧
-        plain.source = pkt.source ∧ plain.peer = pkt.peer ∧ plain.keypair = pkt.keypair ∧
-        plain.nonce = u64le pkt.bytes 8 ∧
-        aeadDecrypt key.receiving.key (counterNonce (u64le pkt.bytes 8))
-          (pkt.bytes.drop 16) [] = some plain.bytes) := by
-  intro w result final pre run plain same
-  obtain ⟨key, resident⟩ := decryptPacket_key_present pkt w final result run
-  refine ⟨key, ?_, decryptPacket_authenticated pkt key w result final resident run plain same⟩
-  subst before
-  exact resident
 
 /-- Publishing the selected state preserves the packet's other fields. The
 held owner reference and callback-entry snapshot come from the original prefix. -/
@@ -64,13 +32,6 @@ theorem enqueuePublication_packet (id : SkbId) (state : PacketState) (P : RxPack
     Std.TreeMap.getElem?_insert]
   all_goals grind
 
-theorem setRxSkb_plain (id : SkbId) (plain : RxPacket) :
-    ⦃fun _ => ⌜True⌝⦄ setRxSkb id (fun _ => plain)
-      ⦃⇓? _ w => ⌜packetAt (Campaign2.snapshot w) id = some plain⌝⦄ := by
-  mvcgen [setRxSkb, getRxSkb, getDev, getK, modifyDev, modifyK, invariant]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [packetAt, Campaign2.snapshot, Campaign2.core]
-
 theorem publicationPublish_packet (id : SkbId) (decrypted : Option RxPacket) :
     Ensures (publicationPublish id decrypted) (fun _ => True)
       (fun result w => result.2 = Campaign2.snapshot w ∧ ∃ published,
@@ -92,14 +53,6 @@ theorem publicationPublish_packet (id : SkbId) (decrypted : Option RxPacket) :
     all_goals try dsimp +zetaDelta only at *
     all_goals simp_all
     all_goals grind
-
-/-- The original packet getter reads without changing the execution state. -/
-theorem getRxSkb_read (id : SkbId) (entry : World) :
-    Ensures (getRxSkb id) (fun w => w = entry)
-      (fun p w => w = entry ∧ packetAt (Campaign2.snapshot entry) id = some p) := by
-  rw [ensures_iff]
-  mvcgen [getRxSkb, getDev, getK, invariant]
-  all_goals simp_all [packetAt, Campaign2.snapshot, Campaign2.core]
 
 /-- The prefix's successful packet branch has the AEAD provenance at its
 publication snapshot. The supplied ring fact is about the actual prior read. -/
@@ -240,15 +193,6 @@ theorem publicationPrefix_authenticated (softirq : M Unit) :
             subst final
             exact (publicationSelected_authenticated (Campaign2.snapshot after) id ring
               ⟨d, ring, hdev, hc⟩ after cut finish rfl hp).2.2
-
-theorem publicationSuffix_result (softirq irqExit : M Unit) (cut : Option PublicationCut) :
-    Ensures (publicationSuffix softirq irqExit cut) (fun _ => True)
-      (fun result _ => result = cut.isSome) := by
-  have hs := unconstrained_prefix softirq
-  have hi := unconstrained_prefix irqExit
-  have hp := fun pid => unconstrained_prefix (peerPut (some pid))
-  rw [ensures_iff]
-  mvcgen [publicationSuffix, hs, hi, hp]
 
 /-- The copied prefix and complete original run start from the same concrete
 state. Exact source factoring supplies the actual intermediate publication. -/

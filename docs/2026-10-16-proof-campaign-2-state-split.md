@@ -20,9 +20,9 @@ and attributed theorem declarations. Campaign 2 owns 427 Lean files,
 | --- | ---: | ---: | ---: | --- |
 | Common projection | 2 | 0 | 0 | Native and product observations carried |
 | H1 Noise | 35 | 171 | 22 | Native access, crypto/slot/peer frames, slot/clear/zero operations and all four state-edge contracts and eleven ordered clear/release contracts, ten rotation/confirmation source contracts, projected clear/rotation/confirmation support and four session counter/word frames, both normal consume-tag contracts and four consecutive-confirmation contracts carried; six type-given frames deleted; full caller/reachability closure pending |
-| H2 Index | 68 | 318 | 52 | Table/scans/insertion, full lookup/miss and success/empty-result inversion, exact allocation/release, eight native numeric-index frames, seven native owner frames plus their pure bound, ten projected table claims, all ten record contracts, exact draw exhaustion/corpus pair, five lifecycle contracts and 55 pure theorems checked; native receive factor, retirement frame and exact session-allocation factor carried; seven Ambient frames deleted; two stale peer-release totality counterexamples checked; whole terminal closure/callers pending |
-| H3 Roaming | 35 | 119 | 13 | Six native endpoint/destination contracts plus three product publication source factors and a generic observation-read frame carried; two Ambient frames deleted; native decryption provenance carried; product authentication callers and callbacks pending |
-| H4 Configuration | 130 | 554 | 79 | Total-return/branch laws, seven exact source factors, three endpoint-clearing frames, three empty-root insertion contracts, total first placement, validation/identity, partial and total empty-list peer dumps, ordered allowed-list deletion, concrete dump cancellation and three total root-transfer contracts and two total inserted-node readback leaves checked; three Ambient frames deleted; remaining effects/readback carry pending |
+| H2 Index | 68 | 318 | 52 | Table/scans/insertion, full lookup/miss and success/empty-result inversion, exact allocation/release, eight native numeric-index frames, seven native owner frames plus their pure bound and both release/rotation owner invariants, ten projected table claims, all ten record contracts, exact draw exhaustion/corpus pair, five lifecycle contracts and 55 pure theorems checked; native receive factor, retirement frame and exact session-allocation factor carried; seven Ambient frames deleted; two stale peer-release totality counterexamples checked; whole terminal closure/callers pending |
+| H3 Roaming | 35 | 119 | 13 | Six native endpoint/destination contracts plus three product publication source factors and a generic observation-read frame carried; two Ambient frames deleted; native decryption provenance and five product publication leaves carried; six enqueue/publication caller contracts pending |
+| H4 Configuration | 130 | 554 | 79 | Total-return/branch laws, seven exact source factors, three endpoint-clearing frames, three empty-root insertion contracts, total first placement, validation/identity, partial and total empty-list peer dumps, ordered allowed-list deletion, concrete dump cancellation and four total root-transfer contracts, all five inserted-node readback contracts and singleton root removal with its two pure effects checked; three Ambient frames deleted; remaining effects/readback carry pending |
 | H5 Progress | 59 | 265 | 42 | Twenty-nine pure/control or pure-source theorems, three generalized worker control contracts and one Ambient record frame and seven exact cut-source/projected contracts and six arbitrary-record jitter source/projected contracts and six arbitrary-record index insertion source contracts and both projected outcome claims checked; two pointer-ring snapshot contracts and remaining operational carry pending |
 | H6 Timer discipline | 98 | 404 | 50 | Two pure session-liveness relations, map/guard base, two current wheel effects, separated jitter bound/frame and two projected bound claims, six exact jitter-record contracts and four exact exhaustion contracts and four source/product outcome claims, plus a checked stale-statement counterexample; three Ambient frames deleted; seven exact-peer arming claims and wider timer/worker semantics pending |
 
@@ -1289,3 +1289,82 @@ on `Noise.RotationClaims`, `Noise.ConfirmationSequenceClaims`,
 `Progress.IndexProgressClaims`, `Roaming.Authentication`,
 `Noise.SessionFrames` and `Index.SessionOperations`, each under
 `Leanux.Proofs.WG`.
+
+## Configuration composition, owner invariants and publication leaves
+
+| Tranche | Before | Retyped/generalized | Deleted | Kept | Added | After |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `Config.AllowedReadbackSource`, `AllowedTransferRequestSource` | 4 | 4 | 0 | 0 | 0 | 4 |
+| `Config.AllowedRootRemoval` | 5 | 3 | 0 | 2 | 0 | 5 |
+| `Index.OwnerUpdateClaims` | 2 | 2 | 0 | 0 | 0 | 2 |
+| `Roaming.PublicationLeafClaims`, `PublicationReadFrames` | 5 | 5 | 0 | 0 | 0 | 5 |
+| This tranche | 16 | 14 | 0 | 2 | 0 | 16 |
+| Cumulative validated surface | 388 | 250 | 21 | 117 | 32 | 399 |
+
+The tree has 455 campaign-owned files and 1,842 theorem declarations;
+1,443 baseline declarations await validation. The checked closure has 155 proof
+modules: H1 89 theorems, H2 154, H3 16, H4 60, H5 54 and H6 26. All six
+whole-result closures and all 258 terminal declarations remain lagging.
+
+H4's three remaining inserted-node readback contracts compose the actual guarded
+Aip node read with checked serialization and exact source prefixes. Their original
+singleton list, stored node, sequence, fresh-cursor and room premises remain.
+Addresses and CIDRs remain arbitrary; only the original public getter requires
+peer residency. Total completion retains exact serialized attributes, cursor
+reset and room subtraction. Root transfer now also covers the actual configuration
+request, including the preceding sequence increment. Singleton root removal
+retains ordered list deletion, both root families and exact final Device.
+The node-tail contract still needs no initial node/root residency: its first
+operation inserts the supplied node. The two pure lookup effects are unchanged.
+
+H2's release and rotation contracts preserve owner uniqueness, allocation bounds
+and designated-key freshness on every original normal-return path. In particular,
+a null peer word remains permitted when deferred release of a nonfinal reference
+does not unhash. No key/peer residency, positivity, nonnull-word or distinctness
+premise is added to these partial contracts. Actual Stops remain outside their
+normal-return conclusions.
+
+H3 extracts five existing contracts from `PublicationClaims`; its other six
+contracts remain pending. Native key presence is connected through the actual
+`liftWG` to projected product authentication. Packet replacement retains the
+guarded Skb adapter. The suffix keeps arbitrary `Leanux.M` callbacks and their
+original order; it concludes only the Boolean result. The exact packet-read
+helper belongs in `PublicationReadFrames`: it still returns the packet and
+preserves the entire actual product, including unobserved components. Its entry
+type is inferred from the actual lifted computation; that technical source/frame
+helper is not presented as a projected public claim or a type-given deletion.
+
+Claims: `Config/AllowedReadbackSource`, `AllowedTransferRequestSource`,
+`AllowedRootRemoval`, `Index/OwnerUpdateClaims` and
+`Roaming/PublicationLeafClaims`. Frames: `Roaming/PublicationReadFrames`.
+No shared layer, mirror file, public audit name or gate changes.
+
+Scoped capped builds pass without warnings: readback 49 jobs, transfer request
+54, root removal 50, owner invariants 67 and publication leaves 62. Axiom
+inspection covers 94, 114, 106, 221 and 137 logical roots respectively, using
+only the permitted axioms. Fresh kernel replay passes for all six roots.
+Static token/import and whitespace checks pass. Independent reviews found no
+correctness issue. No full terminal or proof-gate pass is claimed.
+
+Development: revisited readback had three failed drafts (bind/sequence
+normalization, nonzero-sequence rewriting, then a reserved identifier and unused
+simp arguments) before its clean fourth draft; the earlier three failed drafts
+remain recorded separately. Transfer request had three failed drafts on inferred
+state and existential-conjunction shape, including one unused simp argument,
+then a clean fourth draft. Both root-removal probes passed, first the leaf and
+then the complete five-contract module. Owner invariants passed their first
+probe. Publication's first probe failed on substitution/record eta and unused
+simp arguments, then its five-contract draft passed. A later bulk enqueue draft
+failed to normalize product lifts and emitted extensive warnings; its tool output
+was truncated without a retained complete log, a recording failure. That route
+was stopped. Two subsequent compositional enqueue drafts also failed on predicate
+annotations and syntax; their complete logs were saved. Those enqueue attempts
+are excluded from this checkpoint. All packaged builds passed first time; a
+readback blank-line cleanup changed no proof. No infrastructure rerun, cap or
+proof-limit increase, or guest run occurred.
+
+Reproduce scoped builds and fresh replay using the capped bundle commands above
+on `Config.AllowedReadbackSource`, `Config.AllowedTransferRequestSource`,
+`Config.AllowedRootRemoval`, `Index.OwnerUpdateClaims`,
+`Roaming.PublicationLeafClaims` and `Roaming.PublicationReadFrames`, each
+under `Leanux.Proofs.WG`.

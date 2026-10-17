@@ -24,62 +24,80 @@ def rootLeafRemoved (v4 : Bool) (d : Device) (id : NodeId) (n : AipNode) : Devic
 
 theorem removeNodeSource_root (v4 : Bool) (d : Device) (id : NodeId) (n : AipNode)
     (leaf : n.bit = #[none, none]) (parent : n.parent = rootSlot v4) :
-    Returns (removeNodeSource id n) (fun w => w.k.wg = some d)
-      (fun result w => result = .yield () ∧ w.k.wg = some (rootNodeRemoved v4 d id n)) := by
-  rw [returns_iff]
+    Returns (removeNodeSource id n) (fun w => w.dev = some d)
+      (fun result w => result = .yield () ∧ w.dev = some (rootNodeRemoved v4 d id n)) := by
+  intro g ambient device
+  let mark (a : Ambient) (decision : Decision) (outcome : Bool) :=
+    {a with steps := a.steps.push {decision, outcome, netRx := a.netRxSection}}
+  let after := mark (mark (mark (mark (mark (mark (mark ambient
+    .removeHasBit0 false) .removeChildExists false) .removeLeafBit0 true)
+    .removeLeafBit1 true) .removeParentIsNode false) .removeFreeParent false)
+    .removeNotFreeParent true
+  refine ⟨.yield (), {g with dev := some (rootNodeRemoved v4 d id n)}, after, ?_, rfl, rfl⟩
+  have aipLift {α : Type} (a : AipM α) : (monadLift a : WG.M α) = liftAip a := rfl
   cases v4
-  all_goals simp [removeNodeSource, AipNode.bitAt, leaf, parent, rootSlot, branch, bind_assoc]
-  all_goals mvcgen [setNode, slotSet, modifyDev, modifyK, freeNode, getNode, getDev, getK, invariant]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals repeat intro
-  all_goals simp_all [rootNodeRemoved]
-  all_goals subst_vars
-  all_goals simp_all [rootSlot]
+  all_goals
+    simp [removeNodeSource, aipLift, liftAip, setNode, slotSet, freeNode, getNode,
+      getDev, modifyDev, device, AipNode.bitAt, leaf, parent, rootSlot, branch,
+      AmbientM.branch, rootNodeRemoved, after, mark]
+    rfl
 
 theorem removeByPeerSource_root (v4 : Bool) (d : Device) (p : Peer) (id : NodeId) (n : AipNode)
     (listed : p.allowedipsList = [id]) (resident : d.nodes[id]? = some n)
     (leaf : n.bit = #[none, none]) (parent : n.parent = rootSlot v4) :
-    Returns (removeByPeerSource p) (fun w => w.k.wg = some d)
-      (fun _ w => w.k.wg = some (rootLeafRemoved v4 d id n)) := by
+    Returns (removeByPeerSource p) (fun g => g.dev = some d)
+      (fun _ g => g.dev = some (rootLeafRemoved v4 d id n)) := by
+  intro g ambient device
   let bumped := bumpAllowedips d
   let unlisted := deleteListedNodes id bumped bumped.peers.toList
-  have hl := (returns_iff _ _ _).mp (listDel_returns id bumped)
-  have hg : ⦃fun w => ⌜w.k.wg = some unlisted⌝⦄ getNode id
-      ⦃⇓ result w => ⌜result = n ∧ w.k.wg = some unlisted⌝⦄ := by
-    mvcgen [getNode, getDev, getK, invariant]
-    all_goals simp_all [unlisted, bumped, bumpAllowedips, deleteListedNodes_nodes]
-  have hn := (returns_iff _ _ _).mp (removeNodeSource_root v4 unlisted id n leaf parent)
-  rw [removeByPeer_factor, returns_iff]
-  simp [removeByPeerFactored, listed, List.forIn_cons, List.forIn_nil, branch, bind_assoc]
-  mvcgen [modifyDev, modifyK, hl, hg, hn]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals repeat intro
-  all_goals simp_all [bumped, bumpAllowedips, rootLeafRemoved, unlisted]
-  all_goals subst_vars
-  all_goals mvcgen [hg, hn]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals repeat intro
-  all_goals simp_all [bumpAllowedips, rootLeafRemoved]
-  all_goals grind only
+  let mark (a : Ambient) (decision : Decision) (outcome : Bool) :=
+    {a with steps := a.steps.push {decision, outcome, netRx := a.netRxSection}}
+  let before := mark (mark ambient .removeListEmpty false) .removeListIter true
+  let g1 := {g with dev := some bumped}
+  obtain ⟨done, g2, a2, listRun, dev2⟩ := listDel_returns id bumped g1 before rfl
+  cases done
+  let g3 := {g2 with dev := some unlisted}
+  have node : unlisted.nodes[id]? = some n := by
+    simpa [unlisted, deleteListedNodes_nodes, bumped, bumpAllowedips] using resident
+  have getRun : ((liftAip (getNode id)).run g2).run a2 = .ok ((n, g3), a2) := by
+    simp [liftAip, getNode, getDev, modifyDev, dev2, node, g3, unlisted]
+    rfl
+  obtain ⟨result, final, after, removeRun, value, dev3⟩ :=
+    removeNodeSource_root v4 unlisted id n leaf parent g3 a2 rfl
+  subst result
+  let finished := mark after .removeListIter false
+  refine ⟨(), final, finished, ?_, dev3⟩
+  rw [removeByPeer_factor]
+  have getLift (nid : NodeId) : (monadLift (getNode nid) : WG.M AipNode) =
+      liftAip (getNode nid) := rfl
+  simp only [removeByPeerFactored, getLift]
+  simp [listed, List.forIn_cons, List.forIn_nil, branch, AmbientM.branch,
+    modifyDev, device, mark, before, g1, bumped, bumpAllowedips] at listRun ⊢
+  rw [listRun]
+  dsimp only [bind, Except.bind]
+  rw [getRun]
+  dsimp only [bind, Except.bind]
+  rw [removeRun]
+  rfl
 
 theorem removeByPeer_root (v4 : Bool) (d : Device) (pid : PeerId) (p : Peer)
     (id : NodeId) (n : AipNode) (peer : d.peers[pid]? = some p)
     (listed : p.allowedipsList = [id]) (resident : d.nodes[id]? = some n)
     (leaf : n.bit = #[none, none]) (parent : n.parent = rootSlot v4) :
-    Returns (removeByPeer pid) (fun w => w.k.wg = some d)
-      (fun _ w => w.k.wg = some (rootLeafRemoved v4 d id n)) := by
-  have hg : Returns (getPeer pid) (fun w => w.k.wg = some d)
-      (fun result w => result = p ∧ w.k.wg = some d) := by
-    rw [returns_iff]
-    mvcgen [getPeer, getDev, getK, invariant]
-    all_goals simp_all
+    Returns (removeByPeer pid) (fun g => g.dev = some d)
+      (fun _ g => g.dev = some (rootLeafRemoved v4 d id n)) := by
+  have hg : Returns (getPeer pid) (fun g => g.dev = some d)
+      (fun result g => result = p ∧ g.dev = some d) := by
+    intro g ambient device
+    refine ⟨p, g, ambient, ?_, rfl, device⟩
+    simp [getPeer, getDev, device, peer]
+    rfl
   rw [removeByPeer_source]
   apply returns_bind _ _ hg
-  intro result w h
+  intro result g ambient h
   obtain ⟨heq, hd⟩ := h
   subst result
-  exact removeByPeerSource_root v4 d p id n listed resident leaf parent w hd
-
+  exact removeByPeerSource_root v4 d p id n listed resident leaf parent g ambient hd
 theorem rootLeafRemoved_peer (v4 : Bool) (d : Device) (id : NodeId) (n : AipNode) (q : PeerId) :
     (rootLeafRemoved v4 d id n).peers[q]? = d.peers[q]?.map (eraseListedPeer id) := by
   simpa [rootLeafRemoved, rootNodeRemoved, bumpAllowedips] using
@@ -92,6 +110,5 @@ theorem rootLeafRemoved_node (v4 : Bool) (d : Device) (id : NodeId) (n : AipNode
     simp [rootLeafRemoved, rootNodeRemoved]
   · simp [rootLeafRemoved, rootNodeRemoved, Std.TreeMap.getElem?_erase,
       Std.TreeMap.getElem?_insert, Ne.symm same, same, deleteListedNodes_nodes, bumpAllowedips]
-
 
 end Leanux.Proofs.WG.Config
