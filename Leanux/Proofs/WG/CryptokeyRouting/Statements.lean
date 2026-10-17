@@ -1,3 +1,8 @@
+import Leanux.Proofs.WG.Configuration.InitializedJoint
+import Leanux.Proofs.WG.Configuration.RoutingPoll
+import Leanux.Proofs.WG.Packets.PublicationHandshakeObserved
+import Leanux.Proofs.WG.Packets.PublicationEncrypt
+import Leanux.Proofs.WG.Packets.PublicationRemovalObserved
 import Leanux.Proofs.WG.Origins.OwnerRunner
 import Leanux.Proofs.WG.Packets.PublicationFrontierPrepare
 import Leanux.Proofs.WG.Packets.PublicationFrontierLifecycle
@@ -4038,5 +4043,111 @@ theorem original_initialized_owner_probe (trace : Runner.Trace) (placeholders : 
     p.history = Queues.RxHistory.prior pre ∧ CurrentSessionPrefix.StateInv pre p.world ∧
       OwnerBounds.Carrier p.world.wg :=
   OwnerRunner.probe trace placeholders pre post p position
+
+/-- Owner checks, exact packet linkage and routing-completion safety are
+projections of one actual initialized journal. Routing keeps its shape premise. -/
+theorem original_joint_initialized_checks (trace : Runner.Trace)
+    (shape : Configuration.TraceAddressShape trace) (placeholders : Bool) :
+    let h := (Logged.runPrefixOuter (Queues.RoutingJoint.executeTrace trace placeholders) []).2
+    OwnerChecks.Safe (h.filterMap Queues.RoutingJoint.rxEvent) ∧
+    Queues.RxLink.HistoryLinked (h.filterMap Queues.RoutingJoint.rxEvent) ∧
+    Queues.RxLink.HistoryReceiptsValid (h.filterMap Queues.RoutingJoint.rxEvent) ∧
+    AllowedIps.CompletionSafe ([],[]) (h.filterMap Queues.RoutingJoint.routingEvent) :=
+  RoutingPosition.executeTrace_checks trace shape placeholders
+
+/-- The actual poll preserves routing at every captured consume entry,
+including normal nondelivery and the prefix of an eventual Stop. -/
+theorem original_poll_positional_routing (initial : AllowedIps.FlatTable × AllowedIps.FlatTable)
+    (pid : PeerId) (budget : Nat) :
+    Logged.PrefixPreserves (RoutingPosition.Inv initial) (RoutingPosition.Safe initial)
+      (Queues.RoutingJoint.rxAction (Queues.RxHistory.observePoll pid budget)) :=
+  RoutingPosition.Poll.observePoll initial pid budget
+
+/-- A successful consume uses the routing table at its own strict joint
+prefix. This local theorem exposes the remaining initialized positional premise. -/
+theorem original_consumed_routing_authorization
+    (initial : AllowedIps.FlatTable × AllowedIps.FlatTable)
+    (h pre post : List Queues.RoutingJoint.Event) (occurrence id : Nat)
+    (stamp : Lifetimes.PacketStamp) (receipt : Queues.RxDisposition.ConsumeReceipt)
+    (checks : RoutingPosition.Checks initial h)
+    (position : h = pre ++ .rx (.consumed occurrence id stamp receipt) :: post)
+    (valid : receipt.Valid) (bytes : List UInt8) (delivered : receipt.run.value = some bytes) :
+    ∃ v4 : Bool, ipTunnelParseProtocol bytes = (if v4 then 4 else 6) ∧
+      ipTunnelParseProtocol receipt.packet.bytes = (if v4 then 4 else 6) ∧
+      AllowedIps.PeerWinner (AllowedIps.rootWidth v4) (AllowedIps.sourceAddress v4 bytes)
+        (AllowedIps.selectedFlat v4 (AllowedIps.completionFold
+          (pre.filterMap Queues.RoutingJoint.routingEvent) initial)) (some receipt.peer) ∧
+      AllowedIps.sourceAddress v4 bytes = AllowedIps.sourceAddress v4 receipt.packet.bytes :=
+  RoutingPosition.consume_authorized checks position valid bytes delivered
+
+/-- Native UDP admission preserves existing encrypted publications while
+its new UNCRYPTED/DEAD cells create no certificate obligation. -/
+theorem original_packet_frontier_ingress (msg : List UInt8) (src : SkbSource)
+    (history : List Queues.RxHistory.Event) :
+    Framing.Preserves (PublicationFrontier.Inv history) (WG.wgReceive msg src) :=
+  PublicationFrontier.wgReceive_preserves msg src history
+
+/-- Key allocation and rotation retain existing encrypted packet anchors;
+the allocating front is not required to keep the old key frontier. -/
+theorem original_packet_frontier_session (pid : PeerId) (history : List Queues.RxHistory.Event) :
+    Framing.Preserves (PublicationFrontier.Inv history) (WG.beginSession pid) :=
+  PublicationFrontier.beginSession_preserves pid history
+
+/-- Actual handshake reception permits authentication failures, nullable
+reference payments and new sessions while preserving older packet anchors. -/
+theorem original_packet_frontier_handshake (history : List Queues.RxHistory.Event) :
+    Framing.Preserves (PublicationFrontier.Inv history) WG.receiveStep :=
+  PublicationHandshake.receiveStep history
+
+/-- Complete native removal retains publication anchors through concrete
+queued work, both saved-peer passes and the original stopped drain behavior. -/
+theorem original_packet_frontier_removal (call : Lifetimes.PeerRemovalCall)
+    (history : List Queues.RxHistory.Event) :
+    Framing.Preserves (PublicationFrontier.Inv history) call.original :=
+  PublicationFrontier.removalCall_preserves call history
+
+/-- Every newly consumed poll occurrence has its exact certificate under
+its own strict earlier receive prefix. The concrete Stack callback is used. -/
+theorem original_poll_publication_checks (pid : PeerId) (budget : Nat) :
+    PublicationChecks.Preserves (Queues.RxHistory.observePoll pid budget) :=
+  PublicationChecks.actual_poll pid budget
+
+/-- The actual empty fixture establishes the combined packet and owner
+invariant from the WG store projection alone, for either fixture flag. -/
+theorem original_publication_joint_initial (net bare : Bool) (w : World)
+    (hw : Framing.wgStoreView w.wg = Framing.wgStoreView (Runner.initialWG net bare)) :
+    PublicationJoint.Inv [] w := PublicationJoint.initial net bare w hw
+
+/-- A real prepare publication establishes the new anchor and peer bound
+while leaving earlier consume certificates at their original positions. -/
+theorem original_publication_joint_prepare : PublicationJoint.Preserves Origins.HistoryAdapters.prepare :=
+  PublicationJoint.prepare
+
+/-- Poll combines the original owner evidence and positional publication
+certificates on exactly the same normal or stopped invocation. -/
+theorem original_publication_joint_poll (pid : PeerId) (budget : Nat) :
+    PublicationJoint.Preserves (Queues.RxHistory.observePoll pid budget) :=
+  PublicationJoint.poll pid budget
+
+/-- All three scheduling entry points use the same combined packet history. -/
+theorem original_publication_joint_napi :
+    PublicationJoint.Preserves Queues.RxHistory.napiSoftirq ∧
+    PublicationJoint.Preserves Queues.RxHistory.pollScheduledInline ∧
+    PublicationJoint.Preserves Queues.RxHistory.napiIrqExit :=
+  ⟨PublicationJoint.napiSoftirq,PublicationJoint.pollScheduledInline,PublicationJoint.napiIrqExit⟩
+
+/-- Actual crypt workers preserve the joint invariant, including prepare,
+NAPI callbacks, encryption writes and the source rescheduling decisions. -/
+theorem original_publication_joint_crypt :
+    PublicationJoint.Preserves Queues.RxHistory.decryptIteration ∧
+    PublicationJoint.Preserves Queues.RxHistory.encryptIteration :=
+  ⟨PublicationJoint.decryptIteration,PublicationJoint.encryptIteration⟩
+
+/-- The original handshake iteration carries owner facts and older packet
+certificates through the actual session journal and rescheduling call. -/
+theorem original_publication_joint_receive :
+    PublicationJoint.Preserves Origins.HistoryAdapters.receiveIteration :=
+  PublicationJoint.receiveIteration
+
 
 end Leanux.Proofs.WG.CryptokeyRouting

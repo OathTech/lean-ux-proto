@@ -129,6 +129,17 @@ jobs/597 declarations in 6.651 seconds. Fresh kernel replay passes in 103.207 se
 The [short report](2026-10-17-r3-initialized-owner.md) records the unchanged
 older terminal bodies, failed source checks and remaining packet/routing joins.
 
+The consume-entry checkpoint adds twenty-one modules and 245 theorems:
+587 files/8,258 theorems, 611 terminal declarations and 235 R3 exports.
+The initialized joint journal combines owner, linkage and routing-completion
+checks. Local poll proves contemporaneous consume-entry routing and positional
+publication certificates. Native ingress/session/handshake/removal and observed
+prepare/NAPI/crypt/receive iterations preserve packet histories. All 221 older
+R3 terminal bodies remain unchanged. Gate: 645 jobs/611 declarations in
+7.102 seconds; fresh kernel replay passes in 105.212 seconds without warnings.
+The [short report](2026-10-17-r3-consume-entries.md) records
+validation, independent review and the remaining initialized caller joins.
+
 The pre-split checkpoint validated every baseline result surface over
 `cb2348e`. Initialized R3 packet authorization and R4 receive-pipeline
 conservation remain open. Earlier positive results and runtime findings retain
@@ -140,7 +151,7 @@ was made by this campaign.
 | --- | --- |
 | R1 | Replay uniqueness proved; inclusive-floor correction witnessed. |
 | R2 | Initialized allocation-identity access safety proved, including failures/trials; affiliation/credits separate. |
-| R3 | Initialized routing, material support and captured current/owner checks; local publication/frontier/consume contracts; initialized packet authorization open. |
+| R3 | Initialized routing, material support and captured current/owner checks; actual poll consume certificates and positional routing; enclosing packet transport and initialized authorization open. |
 | R4 | Initialized entry/completion uniqueness and packet/receipt linkage; chronology refuted; receive-pipeline conservation open. |
 | R5 | Accepted age/post-zero/wire-nonce counterexamples; thirteen positive local contracts. |
 | R6 | Cookie exclusion proved; literal MAX=18 refuted, without a replacement universal bound. |
