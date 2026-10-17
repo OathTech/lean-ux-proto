@@ -22,9 +22,9 @@ and attributed theorem declarations. Campaign 2 owns 427 Lean files,
 | H1 Noise | 35 | 171 | 22 | 185 | The full Noise closure is current, including restart support. Six type-given frames are deleted. Wider caller/lifetime/reachability and clock-provenance charter claims remain open. |
 | H2 Index | 68 | 318 | 52 | 333 | Table, lookup, collision records, allocation, owner invariants and lifecycle support carried; seven type-given frames deleted. Exact peer-release outcomes replace stale totality, with checked counterexamples. All 52 headlines and their closure are current, including full Product session observations; whole-driver coherence remains pending. |
 | H3 Roaming | 35 | 119 | 13 | 157 | Endpoint/publication, polling, attempt facts, crypto, lookup and response-caller factors/facts carried with full Product certificates; two type-given frames deleted. The full terminal closure is current, including initiation/response audits with actual Product outcomes. Wider roaming/provenance charter gaps remain open. |
-| H4 Configuration | 130 | 554 | 79 | 450 | Scalar, identity, port, dump, allowed-IP and structural support carried; three type-given frames deleted. Quiet timer cleanup and queued-send observations are corrected; queued-send and removal totality have checked stale-statement counterexamples. Remaining readback/effects and terminal closure remain pending. |
-| H5 Progress | 59 | 265 | 42 | 214 | Pure/control, cut, jitter, index, poll bounds, dispatch, scheduler turns, stack/probe frames, queue flush contracts, drain selection and Product observation bridge carried; one type-given index frame deleted. The old backlog fixture has checked exact runner and direct-fixture rejections. Drain bounds are carried. General runner boundaries, corrected historical rejection wrappers and receive-source leaves are carried; whole receive-ring activation models and terminal closure remain pending. |
-| H6 Timer discipline | 98 | 404 | 50 | 192 | Base/guard/jitter, arming/wheel, recorded clock and initiation-send arming contracts carried; three type-given frames deleted. Exact wheel corrections are explicit; queue/pending and retained-worker frames are carried; broader timer episodes and terminal closure remain pending. |
+| H4 Configuration | 130 | 554 | 79 | 456 | Scalar, identity, port, dump, allowed-IP and structural support carried; three type-given frames deleted. Quiet timer cleanup and queued-send observations are corrected; queued-send and removal totality have checked stale-statement counterexamples. Remaining readback/effects and terminal closure remain pending. |
+| H5 Progress | 59 | 265 | 42 | 216 | Pure/control, cut, jitter, index, poll bounds, dispatch, scheduler turns, stack/probe frames, queue flush contracts, drain selection and Product observation bridge carried; one type-given index frame deleted. The old backlog fixture has checked exact runner and direct-fixture rejections. Drain bounds are carried. General runner boundaries, corrected historical rejection wrappers and receive-source leaves are carried; whole receive-ring activation models and terminal closure remain pending. |
+| H6 Timer discipline | 98 | 404 | 50 | 195 | Base/guard/jitter, arming/wheel, recorded clock and initiation-send arming contracts carried; three type-given frames deleted. Exact wheel corrections are explicit; queue/pending and retained-worker frames are carried; broader timer episodes and terminal closure remain pending. |
 
 Retyped, deleted and retained counts will be reported per validated tranche.
 H1, H2 and H3 now have checked split terminal closures; H4, H5 and H6 remain lagging.
@@ -4649,3 +4649,71 @@ pass. Reproduce with scripts/in-bundle lake build on Config.ObservationBridge,
 Config.ReplacePeersRequestClaims and TimerDiscipline.MissingClockFindings
 under Leanux.Proofs.WG, then #print axioms and scripts/in-bundle lake env
 leanchecker --fresh MODULE. Use capped, 32 Lean threads and 16 QEMU slots here.
+
+
+## Multipart leaves, exact timer tails and logical ring membership
+
+| Tranche | Before | Retyped | Corrected | Deleted | Kept | Added | After |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Config.MultipartFrames/Leaves | 5 | 4 | 0 | 0 | 1 | 1 | 6 |
+| TimerDiscipline.RetryReadySource | 1 | 0 | 1 | 0 | 0 | 0 | 1 |
+| TimerDiscipline.AbsentGiveUpSource/Claims | 2 | 0 | 2 | 0 | 0 | 0 | 2 |
+| Progress.CookieItemsFindings | 0 | 0 | 0 | 0 | 0 | 2 | 2 |
+| This tranche | 8 | 4 | 3 | 0 | 1 | 3 | 11 |
+| Cumulative processed baseline and checked support | 1,406 | 1,090 | 78 | 22 | 216 | 158 | 1,542 |
+
+The census is 548 campaign-owned files, 1,967 theorems and 463 checked proof
+modules. There are 425 baseline declarations pending. Counts are H1 185,
+H2 333, H3 157, H4 456, H5 216 and H6 195. H1/H2/H3 terminal closures are
+current; H4/H5/H6 and the full gate remain lagging. Charter gaps are unchanged.
+
+MultipartModel is explicitly native WG.M. MultipartFrames retains the arbitrary
+joint predicate over the four former Kernel owners through the actual Product
+lift; its native companion supplies the same total result to native serializer
+composition. MultipartLeaves retains node residency, exact resume source,
+coalescing and getter composition. The coalescing fact is kept with an unused
+simplification removed. The remaining pagination contracts are still pending
+at this checkpoint. Frames and claims remain separate.
+
+RetryReadySource corrects the callback's actual queuedThisCall effect to
+preservation. Every prior record, clock, reference and registered-unit premise
+remains, and the equality retains the full Product state. RetryReadyModel's
+callback observation retains all original fixture fields. AbsentGiveUpSource
+factors the actual give-up/caller/guard prefix through the actual armTimer;
+AbsentGiveUpClaims states projected Product agreement with that exact tail.
+The former total-return claim is false, as the missing-clock witness shows.
+The corrected claims retain all old premises and all arm failures. The old
+pure predicted Device/View definitions remain unused historical predictions.
+
+CookieItemsFindings proves a separate logical-membership nonclosure witness:
+its logical items contain only a cookie, while actual consumption exposes a
+non-cookie in the next physical slot. The second theorem checks the actual
+first receive execution with arbitrary unrelated WG/Ambient state. Neither
+claims a reachable malformed ring or a kernel bug.
+[AGENT 2026-10-17] Keep the original initial-items classification domain in
+subsequent loop corrections; use the actual receive fallback when it no longer
+classifies the current packet instead of adding a physical-slot invariant.
+
+Independent reviews of all three packages find no issues. Multipart leaf
+probes 1–2 fail native witnesses/branch reduction and an extra rfl, with two
+unused simplifications in probe 1; probe 3 passes. Retry probes 1–2 fail
+record layout and Ambient lifting (1/0 and 2/21 errors/warnings); probe 3
+closes but fails warning cleanliness (one unused simplification); probe 4
+passes. Give-up factor probes 1–3 fail continuation normalization, splitting
+the wrong result wrapper and final pair substitution (1/2, 2/0 and 1/0);
+probe 4 passes. Ring witness probes 1–2 fail concrete items/count reduction,
+with one unused simplification in probe 2; probe 3 passes. All proof limits
+are unchanged; no infrastructure rerun or cap increase occurs.
+
+The final 96-job scoped build passes without warnings; earlier package builds
+pass at 80 and 92 jobs. Axiom inspection checks 359 logical roots in 67
+modules, including 171 public theorem roots, with standard axioms only.
+All four fresh kernel replays pass. Static token/import/root/default
+checks and all 258 terminal names/order pass. Mirror and shared layers remain
+unchanged. A trailing blank line found by diff checking is removed.
+
+Reproduce with scripts/in-bundle lake build on Config.MultipartLeaves,
+TimerDiscipline.RetryReadySource, Progress.CookieItemsFindings and
+TimerDiscipline.AbsentGiveUpClaims under Leanux.Proofs.WG, then inspect axioms
+and run scripts/in-bundle lake env leanchecker --fresh MODULE for those roots.
+Use capped, 32 Lean threads and LEANUX_QEMU_SLOTS=16 on this host.

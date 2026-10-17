@@ -17,9 +17,11 @@ readiness premise, reachability claim or state after the error. The mirror is
 unchanged. This is a stale theorem-premise finding following the timer-wheel
 representation change, not evidence of a kernel bug.
 
-The affected active totality contracts remain pending. Their correction will
-retain the old domain and factor exact execution through the actual arm tail,
-including its failures, rather than silently assuming the missing input.
+AbsentGiveUpSource and AbsentGiveUpClaims now retain the old domain and prove
+exact execution agreement with the actual arm tail, including its failures.
+They consume the real caller/guard prefix and preserve the remaining records
+and all unrelated Product data. This corrects the old totality claim; it does
+not prove that the arm succeeds. Other active consumers remain pending.
 
 Reproduce with scripts/in-bundle lake build
 Leanux.Proofs.WG.TimerDiscipline.MissingClockFindings and scripts/in-bundle

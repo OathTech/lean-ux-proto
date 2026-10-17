@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Config.MultipartLeaves
 import Leanux.Proofs.WG.Config.MultipartModel
 import Leanux.Proofs.WG.Config.AllowedReadbackSource
 
@@ -8,19 +9,7 @@ set_option maxRecDepth 2048
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise Lean Std.Do
 
-theorem multipart_getNode (id : NodeId) (d : Device) (n : AipNode)
-    (resident : d.nodes[id]? = some n) :
-    ⦃fun w => ⌜w.k.wg = some d⌝⦄ getNode id
-    ⦃⇓ q w => ⌜w.k.wg = some d ∧ q = n⌝⦄ := by
-  mvcgen [getNode, getDev, getK, invariant]
-  all_goals simp_all
 
-theorem getAllowedips_zero (skb : NlSkb) (family masked cidr : Nat)
-    (room : skb.room = 0) (P : Kernel → Prop) :
-    ⦃fun w => ⌜P w.k⌝⦄ getAllowedips skb family masked cidr
-    ⦃⇓ result w => ⌜P w.k ∧ result = (skb, none)⌝⦄ := by
-  mvcgen [getAllowedips, NlSkb.put, branch]
-  all_goals simp_all [room, nlaTotal]
 
 theorem dumpAllowed_two_split (d : Device) (p : Peer) (a b : NodeId)
     (pid : PeerId) (addr₁ cidr₁ addr₂ cidr₂ : Nat) (parent₁ parent₂ : Slot)
@@ -141,18 +130,6 @@ theorem dumpAllowed_resume (d : Device) (p : Peer) (a b : NodeId) (pid : PeerId)
   all_goals repeat intro
   all_goals try simp_all [allowedBits, allowedFamily, allowedIpSpace, nlaTotal, Nat.sub_sub]
 
-theorem dumpTail_resume_source (p : Peer) (b : NodeId) (ctx : DumpCtx) (skb : NlSkb)
-    (cursor : ctx.nextAllowedip = some b) (room : 72 ≤ skb.room) :
-    getPeerDumpTailSource p ctx skb = (do
-      _ ← branch .getPeerNoNest false
-      _ ← branch .getPeerPubkeyFail false
-      _ ← branch .getPeerFirst false
-      getPeerDumpAllowedSource p ctx skb { skb with room := skb.room - 40 }
-        (hexKey p.remoteStatic) [("public_key", toJson (hexKey p.remoteStatic))] (some b)) := by
-  have r4 : ¬ skb.room < 4 := by omega
-  have r40 : ¬ skb.room - 4 < 36 := by omega
-  simp [getPeerDumpTailSource, cursor, NlSkb.put, nlaTotal, r4, r40, Nat.sub_sub,
-    branch, bind_assoc]
 
 theorem dumpTail_resume (d : Device) (p : Peer) (a b : NodeId) (pid : PeerId)
     (addr cidr : Nat) (parent : Slot) (ctx : DumpCtx) (skb : NlSkb)

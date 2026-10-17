@@ -64,13 +64,16 @@ remain historical and lagging during the retrofit. The
 [retrofit report](2026-10-16-proof-campaign-2-state-split.md) records baseline
 counts, carries, deletions and validation. This branch retains the proof
 target and gate removed from main pending campaign 1's landing.
-The support tranches check 1,531 theorems (1,086 retyped/generalized, seventy-five corrected statements,
-215 retained, 155 support/finding declarations), and delete twenty-two type-given
+The support tranches check 1,542 theorems (1,090 retyped/generalized, seventy-eight corrected statements,
+216 retained, 158 support/finding declarations), and delete twenty-two type-given
 frames. H1, H2 and H3 terminal modules now check over the split mirror;
 H4, H5, H6 terminal closures and the full gate remain lagging. The [cookie-bound finding](2026-10-17-proof-campaign-2-cookie-bound.md)
 refutes the old unrestricted activation prediction on malformed ring metadata.
+A second checked witness shows that initial logical cookie membership need not
+classify the packet exposed by the next physical consume.
 The [missing-clock finding](2026-10-17-proof-campaign-2-missing-clock.md)
-refutes the old absent-give-up totality on its original input domain.
+refutes the old absent-give-up totality on its original input domain. The corrected
+give-up contract factors its exact actual arm tail, including errors.
 All 52 H2 terminal declarations and their full Product sequence observations
 check; all 258 original audit names remain
 in their Statements files.

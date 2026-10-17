@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Config.MultipartLeaves
 import Leanux.Proofs.WG.Config.MultipartSource
 import Leanux.Proofs.WG.Campaign2.Bridge
 
@@ -8,32 +9,7 @@ set_option maxRecDepth 2048
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise Lean Std.Do
 
-theorem coalesce_multipart (d : Device) (p : Peer) (addr₁ cidr₁ addr₂ cidr₂ : Nat)
-    (endpoint : p.endpoint = none) :
-    coalesce [.data 2 (deviceFixedAttrs d) (some [multipartFirst p addr₁ cidr₁]),
-      .data 2 [] (some [multipartLast p addr₂ cidr₂]), .done 2 0] =
-      pure (.ok (multipartJson d p addr₁ cidr₁ addr₂ cidr₂)) := by
-  have hn : deviceFixedAttrs d ≠ [] := by simp [deviceFixedAttrs]
-  simp [coalesce, multipartFirst, multipartLast, multipartJson, peerFixedAttrs, endpoint,
-    hn, deviceFixedAttrs_nonempty, List.forIn_cons, List.forIn_nil, bind_assoc, List.lookup]
 
-theorem multipart_getter_returns (pid : PeerId) (d : Device) (p : Peer)
-    (ctx : DumpCtx) (skb : NlSkb) (expected : PeerDumpResult)
-    (resident : d.peers[pid]? = some p)
-    (tail : Returns (getPeerDumpTailSource p ctx skb) (fun w => w.k.wg = some d)
-      (fun result w => w.k.wg = some d ∧ result = expected)) :
-    Returns (getPeerDump pid ctx skb) (fun w => w.k.wg = some d)
-      (fun result w => w.k.wg = some d ∧ result = expected) := by
-  have hg : Returns (getPeer pid) (fun w => w.k.wg = some d)
-      (fun result w => result = p ∧ w.k.wg = some d) := by
-    rw [returns_iff]
-    mvcgen [getPeer, getDev, getK, invariant]
-    all_goals simp_all
-  rw [getPeerDump_source]
-  refine returns_bind _ _ hg ?_
-  intro q w pre
-  obtain ⟨rfl, device⟩ := pre
-  exact tail w device
 
 /-- The original peer getter splits after one IPv4 prefix, resumes at its
 returned cursor, and feeds both actual fragments to the original coalescer. -/

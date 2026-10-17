@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.TimerDiscipline.AbsentGiveUpModel
+import Leanux.Proofs.WG.TimerDiscipline.RemainingSitesModel
 import Leanux.Proofs.WG.Campaign2.Bridge
 
 set_option autoImplicit false
@@ -7,56 +8,60 @@ set_option maxHeartbeats 800000
 namespace Leanux.Proofs.WG.TimerDiscipline
 open Leanux Leanux.WG Campaign2
 
-/-- Total execution of the original absent-timer give-up branch. Its premises
-check input data and entry state, never assume successful execution. -/
+/-- Execute the actual arm after the proved give-up/caller/guard prefix.
+This transforms the actual Product input, preserving every unrelated component;
+it never reconstructs an execution state from a projected observation. -/
+def absentGiveUpArmContinuation (pid : PeerId) (d : Device) (p : Peer)
+    (input : GiveUpArmInput) (rest : List HiddenRecord) : Leanux.M Unit := do
+  modify fun initial => {initial with
+    wg := {initial.wg with dev := some (giveUpWheelDevice d pid p)}
+    ambient := {initial.ambient with
+      hidden := some ({site := HiddenSite.modTimerArm.info.id, bytes := input.armData} :: rest)
+      steps := absentGiveUpSteps p initial.ambient.netRxSection initial.ambient.steps}}
+  liftWG (armTimer pid .zeroKeyMaterial ZERO_KEY_MATERIAL_TICKS (some input.caller))
+
+/-- Correct the former unconditional-success statement: the original domain
+proves this exact arm-tail factor, including every error of the current wheel
+protocol. MissingClockFindings checks an admitted input whose timerClk read stops.
+The original static premises remain; no successful-arm premise is substituted. -/
 theorem absentGiveUp_run (pid : PeerId) (d : Device) (p : Peer)
     (input : GiveUpArmInput) (rest : List HiddenRecord)
     (resident : d.peers[pid]? = some p)
     (limit : MAX_TIMER_HANDSHAKES < p.timerHandshakeAttempts)
     (absent : p.timerZeroKeyMaterial = none)
     (running : d.running = true) (alive : p.isDead = false)
-    (valid : input.Valid) (entry : World) (device : entry.k.wg = some d)
-    (mode : entry.armRecords = true) (records : entry.hidden = some (input.records rest)) :
-    (expiredRetransmitHandshake pid).run entry = .ok ((),
-      { entry with
-        k := { entry.k with wg := some (absentGiveUpDevice d pid p input) }
-        steps := absentGiveUpSteps p entry.netRxSection entry.steps
-        hidden := some rest
-        jiffiesLast := some input.now
-        timerUnits := absentGiveUpUnits pid input entry.timerUnits }) := by
-  obtain ⟨callerLength, armLength, expiry, gapLow, gapHigh⟩ := valid
+    (valid : input.Valid) (entry : World) (device : entry.wg.dev = some d)
+    (mode : entry.ambient.armRecords = true)
+    (records : entry.ambient.hidden = some (input.records rest)) :
+    (liftWG (expiredRetransmitHandshake pid)).run entry =
+      (liftWG (armTimer pid .zeroKeyMaterial ZERO_KEY_MATERIAL_TICKS (some input.caller))).run
+        {entry with
+          wg := {entry.wg with dev := some (giveUpWheelDevice d pid p)}
+          ambient := {entry.ambient with
+            hidden := some ({site := HiddenSite.modTimerArm.info.id, bytes := input.armData} :: rest)
+            steps := absentGiveUpSteps p entry.ambient.netRxSection entry.ambient.steps}} := by
+  have callerLength := valid.1
   have callerDrop : input.callerData.drop 8 = [] := by simp [← callerLength]
   have callerTake : input.callerData.take 8 = input.callerData := by simp [← callerLength]
-  have armDrop : input.armData.drop 24 = [] := by simp [← armLength]
-  have armTake : input.armData.take 24 = input.armData := by simp [← armLength]
-  have callerPassive : HiddenSite.passive HiddenSite.timerJiffiesRetransmitZeroKey.info.id = false := by decide
-  have armPassive : HiddenSite.passive HiddenSite.modTimerArm.info.id = false := by decide
-  have notLow : ¬ (input.now - input.caller).toInt64 < 0 := by
-    rw [Int64.lt_iff_toInt_lt]
-    have bound := Int64.le_iff_toInt_le.mp gapLow
-    omega
-  have notHigh : ¬ 1 < (input.now - input.caller).toInt64 := by
-    rw [Int64.lt_iff_toInt_lt]
-    have bound := Int64.le_iff_toInt_le.mp gapHigh
-    omega
-  change HiddenSite.passive 420 = false at callerPassive
-  change HiddenSite.passive 100 = false at armPassive
-  simp only [GiveUpArmInput.caller, GiveUpArmInput.now] at expiry notLow notHigh
-  simp [-Int64.not_lt] at notLow notHigh
-  by_cases unitZero : recordWord input.armData 2 = 0
-  all_goals simp [unitZero, expiredRetransmitHandshake, getPeer, getDev, getK, setPeer, modifyDev,
-    modifyK, branchCmp, branch, delTimer, purgeStagedPackets, device, resident,
-    limit, absent, Peer.setTimer, Peer.timerPending, Peer.timer,
-    modPeerTimer, callerJiffies, hiddenJiffies, hidden, skipAmbient, noteNetRxStart,
-    modPeerTimerGuard, Leanux.WG.andM, armTimer, mode, records, GiveUpArmInput.records,
-    callerPassive, armPassive, HiddenSite.info, callerLength, armLength,
-    callerDrop, callerTake, armDrop, armTake, running, alive,
-    GiveUpArmInput.caller, GiveUpArmInput.now, GiveUpArmInput.unit,
-    giveUpDevice, giveUpPeer, absentGiveUpDevice, absentGiveUpSteps, absentGiveUpUnits,
-    expiry, notLow, notHigh, List.dropWhile_cons,
+  have callerPassive : HiddenSite.passive 420 = false := by decide
+  have ambientLift {α : Type} (action : AmbientM α) :
+      (monadLift action : WG.M α) = StateT.lift action := rfl
+  simp [liftWG, expiredRetransmitHandshake, getPeer, getDev, setPeer, modifyDev,
+    branchCmp, branch, AmbientM.branchCmp, AmbientM.branch, delTimer, purgeStagedPackets,
+    device, resident, limit, absent, Peer.setTimer, Peer.setWheel, Peer.timerPending, Peer.timer,
+    modPeerTimer, callerJiffies, hiddenJiffies, AmbientM.hiddenJiffies, AmbientM.hidden,
+    AmbientM.skipAmbient, AmbientM.noteNetRxStart, getAmbient, ambientLift, StateT.lift,
+    modPeerTimerGuard, WG.andM, mode, records, GiveUpArmInput.records,
+    callerPassive, HiddenSite.info, callerLength, callerDrop, callerTake, running, alive,
+    GiveUpArmInput.caller, giveUpWheelDevice, giveUpWheelPeer, absentGiveUpSteps,
     Functor.map, Functor.discard, Functor.mapConst, Function.const, StateT.map,
-    StateT.run_bind, StateT.run_pure, StateT.run, Bind.bind, Pure.pure, get, getThe,
+    StateT.run, Bind.bind, Pure.pure, get, getThe,
     MonadStateOf.get, set, modify, modifyGet, StateT.bind, StateT.pure, StateT.get,
-    StateT.set, MonadStateOf.modifyGet, StateT.modifyGet, Except.bind, Except.pure, Worker.sectionId, Worker.index]
+    StateT.set, MonadStateOf.modifyGet, StateT.modifyGet, Except.bind, Except.pure,
+    Worker.sectionId, Worker.index]
+  repeat' split at *
+  all_goals simp_all
+  all_goals subst_vars
+  all_goals exact ⟨rfl, rfl⟩
 
 end Leanux.Proofs.WG.TimerDiscipline

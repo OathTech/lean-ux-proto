@@ -25,7 +25,7 @@ abbrev PeerDumpResult := NlSkb × DumpCtx × PeerDump
 uses their actual fragments; unexpected fragment kinds stop explicitly. Chunk
 capacities are supplied by this composition, not by the socket dump scheduler. -/
 def multipartPeerDump (pid : PeerId) (d : Device) (ctx : DumpCtx)
-    (firstSkb secondSkb : NlSkb) : M (PeerDumpResult × PeerDumpResult × Except Int Json) := do
+    (firstSkb secondSkb : NlSkb) : WG.M (PeerDumpResult × PeerDumpResult × Except Int Json) := do
   let first ← getPeerDump pid ctx firstSkb
   let second ← getPeerDump pid first.2.1 secondSkb
   let (.split firstPeer, .complete secondPeer) := (first.2.2, second.2.2)

@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.TimerDiscipline.Model
+import Leanux.Proofs.WG.Campaign2.Bridge
 
 /-! Exact ordered retry-callback updates and decisions. Readiness is stated on
 entry fields and supplied records, including the registered send-work identity. -/
@@ -28,12 +29,11 @@ def decisions (p : Peer) (clock : List UInt8) (netRx : Nat) (steps : Array Step)
     {decision:=.refcountAddWraps,outcome:=false,netRx}).push
     {decision:=.queuedAlreadyQueued,outcome:=false,netRx})
 
-def callbackView (entry : Snapshot) (d : Device) (pid : PeerId) (p : Peer)
-    (cache clock : List UInt8) (rest : List HiddenRecord) : Snapshot :=
+def callbackView (entry : Product.Snapshot) (d : Device) (pid : PeerId) (p : Peer)
+    (cache clock : List UInt8) (rest : List HiddenRecord) : Product.Snapshot :=
   {entry with
     wg := {entry.wg with
-      device := some (result d pid p cache)
-      queuedThisCall := pid :: entry.wg.queuedThisCall}
+      device := some (result d pid p cache)}
     ambient := {entry.ambient with
       hidden := some rest
       steps := decisions p clock entry.ambient.netRxSection entry.ambient.steps}}
