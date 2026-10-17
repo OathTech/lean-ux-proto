@@ -13,8 +13,8 @@ new worlds; new R3/R4 results follow the retrofit.
 | Validated baseline `00641c6` | 471 | 7,715 |
 | Completed retrofit checkpoints | 451 | 6,514 |
 
-Completed changes comprise **2,395 retyped/generalized, 1,676 deleted,
-1,605 retained contract shapes and 475 added theorems**. Retyping changes the
+Completed changes comprise **2,514 retyped/generalized, 1,676 deleted,
+1,688 retained contract shapes and 475 added theorems**. Retyping changes the
 actual carrier or observation, including shorthand contracts whose functions
 move to a native monad. Namespace-only product qualification and equivalent
 projection relocation count as retained. The census includes private and
@@ -89,7 +89,16 @@ fresh kernel replay and independent source review pass, with zero own warnings.
 One changed-source development check failed before the final cleanup passed.
 This proof-body maintenance does not change the retrofit census.
 
-Remaining work is the lifetime and routing/origin terminal carry, stamped
+LifetimeSafety retains all 202 remaining terminal names: 119 native or mixed
+retypings and 83 retained contracts (79 product, four pure). Its 269-job scoped
+build, all 202 named axiom checks, fresh kernel replay and complete independent
+source review pass. The terminal module builds without warnings; its closure
+still reports 704 inherited warnings. Arbitrary callbacks, full copied-world
+trials and the original store-view premises remain. One changed-source forwarding
+check failed before the corrected full-file check passed; no infrastructure
+rerun was needed. The six earlier filesystem deletions are not counted again.
+
+Remaining work is the routing/origin terminal carry, stamped
 timer/traffic/environment/runner history, material support callers, warning
 cleanup, the full proof gate and terminal replay. Deterministic source/proof
 failures are failures; source edits are checked anew, never described as

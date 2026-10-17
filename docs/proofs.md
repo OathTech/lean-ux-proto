@@ -21,7 +21,7 @@ conservation remain open; their next extensions follow the retrofit.
 
 The validated baseline `00641c6` has 471 Lean files and 7,715 named theorems.
 The current tree has 451 files and 6,514 theorems: completed changes comprise
-2,395 retyped, 1,676 deleted, 1,605 retained contract shapes and 475 added theorems.
+2,514 retyped, 1,676 deleted, 1,688 retained contract shapes and 475 added theorems.
 All 26 generic helpers and the additional update rule identified by the scope
 audit now retain arbitrary actual product-action scope, with three duplicate
 WP wrappers removed. Their dependent build, axioms, fresh replays and review pass.
@@ -30,8 +30,11 @@ contracts and corrects the earlier scheduler classification; total theorem,
 deletion and addition counts are unaffected.
 The census includes private and attributed declarations and excludes nested
 comments and strings. Deferred uncommitted R3 work is outside the baseline.
-Two terminal files remain unchanged; LifetimeSafety loses six redundant filesystem
-exports. All six FloodResistance names remain, with native WG/Ambient endpoints
+The R3 and R4 terminal carries remain unfinished. LifetimeSafety retains all 202
+remaining exports after the earlier deletion of six redundant filesystem frames:
+119 native or mixed retypings and 83 retained product or pure contracts. Its
+scoped build, 202 named axiom checks, fresh replay and complete source review pass.
+All six FloodResistance names remain, with native WG/Ambient endpoints
 where the source requires them. ReplayWindow and AntiReplay retain all 22 theorem
 names and two definitions; their scoped builds, axioms, fresh replay and review pass. There are 515 terminal
 declarations (513 theorems and two definitions). KeyLifetime retains all thirteen
@@ -47,7 +50,7 @@ builds, axiom checks, fresh kernel replay and independent reviews. The obsolete 
 their unused support are
 removed; all previously ported targets still build after their generated
 artifacts were removed. This is not a full-tree pass. The
-[retrofit report](2026-10-16-proof-state-split.md) gives the per-tranche counts,
+[retrofit report](2026-10-16-proof-state-split.md) gives the aggregate counts,
 deletion justifications and remaining source-observer carry.
 
 ## Layers
