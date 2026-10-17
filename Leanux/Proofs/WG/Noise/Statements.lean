@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Noise.TagSequenceClaims
 import Leanux.Proofs.WG.Noise.SessionTagClaims
 import Leanux.Proofs.WG.Noise.CreationTagClaims
 import Leanux.Proofs.WG.Noise.InitiationTagClaims
@@ -407,5 +408,15 @@ theorem original_expire_current_tag_map (pid : PeerId) (entry : Campaign2.Snapsh
       (fun _ after => ∀target, after.tagAt target =
         if pid = target then some HANDSHAKE_ZEROED else entry.tagAt target) :=
   expireCurrentPeerKeypairs_tagMap_projected pid entry
+
+/-- A finite supplied list of original native handshake calls has exactly the
+linked all-peer tag edges its owners implement, including arbitrary-tag
+initiation restarts and normal-refusal stutters. Erasure preserves the first
+Stop; this partial claim is not a driver scheduler, lifetime-confirmation or
+reachable-state theorem, and does not return a partial history on failure. -/
+theorem original_mixed_tag_history (operations : List TagOperation) (entry : Campaign2.Snapshot) :
+    Campaign2.Ensures (observedTagSequence operations) (fun s => s = entry)
+      (fun receipts final => TagChain entry operations receipts final) :=
+  observedTagSequence_chain operations entry
 
 end Leanux.Proofs.WG.Noise

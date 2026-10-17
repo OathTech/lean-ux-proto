@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Config.MultiMixedClaims
 import Leanux.Proofs.WG.Config.MultiPeerScalarClaims
 import Leanux.Proofs.WG.Config.MultiPeerGetterClaims
 import Leanux.Proofs.WG.Config.KeyPaginationClaims
@@ -1558,6 +1559,36 @@ theorem original_scalar_fitting_multi_peer_get_after_set (d : Device) (peers : P
           (multiPeerJson updated (scalarPeerView peers pid psk interval))) ∧
         s.wg.device = some updated ∧ s.wg.nlSock7 = socketReadbackFinal sock updated) :=
   scalar_fitting_peers_get_after_set d peers key psk interval bad pid sock
+    found resident live bounded down residents emptyIps room idle emptyQueue
+
+/-- One actual mixed fwmark/scalar request followed by the original getter
+for an arbitrary fitting finite peer list. Duplicate visits and arbitrary
+endpoints remain visible; the selected peer may be absent from the dump list.
+A malformed second peer returns -EINVAL after retaining the earlier writes.
+Reset-record Stops remain Stops; no cache-reset readiness is assumed. This does
+not establish multi-peer pagination or global Allowed-IP ownership. -/
+theorem original_multi_peer_fwmark_scalars_get_after_set (d : Device) (peers : PeerId → Peer)
+    (mark : Nat) (key psk : Key) (interval : Nat) (bad : Bool) (pid : PeerId) (sock : NlSock)
+    (net : d.creatingNet = true)
+    (found : d.peerHashtable.find? (·.1 == key) = some (key,pid))
+    (resident : d.peers[pid]? = some (peers pid))
+    (live : 0 < (peers pid).refcount) (bounded : (peers pid).refcount + 1 < 2 ^ 31)
+    (down : d.running = false)
+    (residents : ∀ q ∈ d.peerList, d.peers[q]? = some (peers q))
+    (emptyIps : ∀ q ∈ d.peerList, (peers q).allowedipsList = [])
+    (room : devicePrefixSpace d + 168 * d.peerList.length + 20 ≤ NLMSG_GOODSIZE)
+    (idle : sock.cbRunning = false) (emptyQueue : sock.queue = []) :
+    Campaign2.Ensures (do
+      let ret ← wgSetDevice (mixedFwmarkAttrs d mark key psk interval bad)
+      let dump ← wgGetDevice (byIndex d)
+      pure (ret,dump))
+      (fun s => s.wg.device = some d ∧ s.wg.nlSock7 = sock ∧ ClaimView.selectsDevice s d)
+      (fun result s =>
+        result = ((if bad then -EINVAL else 0),.ok
+          (multiPeerJson (mixedFwmarkBase d mark) (scalarPeerView peers pid psk interval))) ∧
+        s.wg.nlSock7 = {sock with queue := [],ctx := {hasWg := true},prevSeq := d.deviceUpdateGen + 1,dumpDoneErrno := 0,cbRunning := false} ∧
+        ∃ current, s.wg.device = some current ∧ MultiMixedEffect d mark pid psk interval current) :=
+  multi_mixed_fitting_get_after_set d peers mark key psk interval bad pid sock net
     found resident live bounded down residents emptyIps room idle emptyQueue
 
 end Leanux.Proofs.WG.Config
