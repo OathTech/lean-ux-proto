@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Index.OwnerCoherenceQuietRemovalClaims
 import Leanux.Proofs.WG.Index.OwnerCoherenceRemovalFindings
 import Leanux.Proofs.WG.Index.OwnerCoherencePeerCreateClaims
 import Leanux.Proofs.WG.Index.OwnerCoherenceCreatorClaims
@@ -919,5 +920,20 @@ theorem original_peer_remove_owner_coherence_counterexample :
         final.wg.device = some RemovalOwnerWitness.finalDevice ∧
         ¬ View.OwnerCoherentSafe final) :=
   peerRemove_ownerCoherentSafe_counterexample
+
+/-- Actual whole removal, with empty key slots, allowed-IP list and handshake
+work queues. A last reference requires entry detachment of surviving hashed
+owners. Every normal return preserves coherence; original refusals stay possible. -/
+theorem original_peer_remove_quiet_owner_coherence (pid : PeerId) (d : Device) (p : Peer)
+    (resident : d.peers[pid]? = some p) (live : 0 < p.refcount)
+    (count : 0 < d.numPeers)
+    (empty : p.keypairNext = none ∧ p.keypairPrevious = none ∧ p.keypairCurrent = none)
+    (noList : p.allowedipsList = [])
+    (send : d.sendWorkQueue = []) (clear : d.clearWorkQueue = [])
+    (detached : LastOwnerDetached d pid p) :
+    Campaign2.Ensures (peerRemove (some pid))
+      (fun s => s.wg.device = some d ∧ View.OwnerCoherentSafe s)
+      (fun _ s => View.OwnerCoherentSafe s) :=
+  peerRemove_quiet_owner_coherent pid d p resident live count empty noList send clear detached
 
 end Leanux.Proofs.WG.Index

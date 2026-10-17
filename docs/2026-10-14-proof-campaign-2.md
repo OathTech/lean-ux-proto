@@ -11,15 +11,15 @@ merged; the executable mirror remains byte-identical to b700659.
 | Result | Headlines | Checked support | Split status |
 | --- | ---: | ---: | --- |
 | H1 Noise | 24 | 196 | Full terminal closure, whole-response entry edge and actual session derivation-clock receipt current; wider caller/lifetime claims open. |
-| H2 Index | 79 | 430 | Full terminal closure and ingress/expiry/handshake/peer-creation owner coherence and whole-removal lifecycle finding current; reachable whole-driver uniqueness/coherence open. |
+| H2 Index | 80 | 436 | Full terminal closure and ingress/expiry/handshake/peer-creation owner coherence and whole-removal lifecycle finding/conditional preservation current; reachable whole-driver uniqueness/coherence open. |
 | H3 Roaming | 15 | 170 | Full terminal closure and invalid-MAC1/rate-limit rejection preservation current; callback authentication provenance and broader caller coverage open. |
 | H4 Configuration | 83 | 597 | Full terminal closure and ordered mixed-peer and mixed port-refusal readback current; global ownership, queued cleanup and general pagination open. |
 | H5 Progress | 43 | 293 | Full terminal closure, exact bounded outcomes and recorded batch completion-guard soundness current; global progress/coherent-ring adequacy open. |
 | H6 Timers | 52 | 445 | Full terminal closure, first outer timer turn and intermediate retransmit receipt current; whole scheduler episodes, complete caller coverage and session-relative counts open. |
 
-The checked surface is 2,131 theorems in all 667 campaign-owned modules.
+The checked surface is 2,137 theorems in all 670 campaign-owned modules.
 The completed retrofit accounts for 1,983: 1,321 retyped, 244 explicitly
-corrected, 239 retained and 179 added support/finding declarations. Ninety-seven
+corrected, 239 retained and 179 added support/finding declarations. One hundred three
 subsequent H2 declarations add table preservation and local owner coherence.
 Eleven H1 declarations add whole-response entry and actual derivation-clock provenance; fifteen H4 declarations
 add mixed fwmark/scalar, ordered peer-attribute and port-refusal readback. Thirteen H3 declarations
@@ -29,8 +29,8 @@ connect the first outer timer turn and its retransmit receipt. Of the 1,831 base
 were deleted because types supply their facts and five false cookie supports
 were separately retired with checked counterexamples. No baseline declaration
 remains awaiting retrofit; all 258 original terminal names/order survive,
-with two new H1 headlines, twenty-seven new H2 headlines, two new H3 headlines,
-four new H4 headlines, one new H5 headline and two new H6 headlines (296 total).
+with two new H1 headlines, twenty-eight new H2 headlines, two new H3 headlines,
+four new H4 headlines, one new H5 headline and two new H6 headlines (297 total).
 
 The [retrofit report](2026-10-16-proof-campaign-2-state-split.md) records
 claim/frame files, corrections, before/after counts and validation.
@@ -863,6 +863,51 @@ Probes 1 and 2 also emitted an unused-simp warning. Probe 7 accepts both
 theorems with one unused-simp warning; removing that unused argument is checked
 by the installed 331-job build. No limits were raised or unchanged job retried.
 Independent review finds no semantic or domain issue.
+
+## H2 continuation: quiet removal under entry detachment
+
+The positive counterpart of the whole-removal finding is now checked.
+A resident, positively referenced peer with three empty key slots, an empty
+allowed-IP list and empty send/clear work queues can be removed while preserving
+hashed-owner coherence on every normal return. The device peer count is positive.
+At a last reference, the entry condition requires every retained owner other
+than that peer's own handshake entry to stop naming the peer. A nonlast release
+needs no additional detachment. This is an explicit local lifecycle obligation,
+not a theorem that reachable driver states establish it.
+
+The proof applies the actual whole-call quiet-removal contract. It transports
+coherence and detachment through unlisting, dead-marking, ordered slot/timer
+cleanup and the peer-count decrement, then applies the existing exact last-
+or retained-reference release law. Crypt/NAPI/packet/timer refusals remain
+possible; no hidden-record or completion readiness is introduced. The earlier
+counterexample violates this entry condition and remains unchanged.
+
+OwnerCoherenceQuietRemovalModel holds LastOwnerDetached;
+OwnerCoherenceQuietRemovalFrames holds four small pure transports;
+OwnerCoherenceQuietRemovalClaims contains the projected claim, and Statements
+its documented wrapper. No shared variant or mirror change is needed.
+Six new theorems bring H2 to 436 theorems and 80 headlines; campaign totals
+are 2,137 theorems, 670 modules and 297 headlines. The live-slot alternative
+is being developed separately using entry coverage and actual ordered unhashing;
+it is not credited by this empty-slot theorem.
+
+Six changed scratch probes were used. Probe 1 fails with one record-normalization
+goal and two default-heartbeat diagnostics in final composition. Splitting a
+named pure release frame and abstracting cleanup output yields probe 2's clean
+pass. Probe 3 fails at outcome let-bindings, and probe 4 at a redundant dsimp.
+Probe 5 passes after that removal; probe 6 checks the split package with narrowed
+imports without diagnostics. No limit increase, suppression or infrastructure
+rerun occurred. Source review checks the entry/final distinction and retained
+refusal cases without finding an issue.
+
+The installed Index build passes 334 jobs, with only inherited Env:865 String.mk.
+The axiom audit passes 1,285 logical roots in 270 modules, including 847 public
+theorems, using only the three standard axioms. Fresh Index kernel replay passes without diagnostics after dependency
+artifact writers stopped. Static checks, original headline order and the
+source census pass. Existing C1 layers and the executable mirror are unchanged.
+The inherited full gate remains failed and is not rerun. Reproduce with the
+Index.Statements scoped build and fresh leanchecker command under capped,
+scripts/in-bundle, 32 Lean threads and 16 QEMU slots.
 
 ## H4 continuation: mixed port refusal and actual readback
 
