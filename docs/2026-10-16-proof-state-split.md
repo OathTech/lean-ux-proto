@@ -11,10 +11,10 @@ new worlds; new R3/R4 results follow the retrofit.
 | Census | Lean files | Named theorems |
 | --- | ---: | ---: |
 | Validated baseline `00641c6` | 471 | 7,715 |
-| Completed retrofit checkpoints | 452 | 6,535 |
+| Completed retrofit checkpoints | 452 | 6,534 |
 
-Completed changes comprise **2,693 retyped/generalized, 1,691 deleted,
-1,816 retained contract shapes and 511 added theorems**. Retyping changes the
+Completed changes comprise **2,700 retyped/generalized, 1,693 deleted,
+1,847 retained contract shapes and 512 added theorems**. Retyping changes the
 actual carrier or observation, including shorthand contracts whose functions
 move to a native monad. Namespace-only product qualification and equivalent
 projection relocation count as retained. The census includes private and
@@ -244,6 +244,20 @@ diagnostics before the final central pass. Three receive-layer axiom-driver
 setup failures printed incomplete inventories; the corrected exact-Name
 driver passed all seventy-six receive roots. No infrastructure retry or limit
 change occurred in this checkpoint.
+
+Material-support callers carry 40→39 theorems: six native leaves, one
+saved-ring-item source-signature carry, thirty-one retained product contracts,
+two deleted Ambient-only wrappers and one private native/product adapter.
+The removed invariant/unsupported wrappers are replaced at actual callers
+by the canonical Ambient lift; this follows their write boundary. Arbitrary
+product callbacks and source_modify's exact forty-three-field premise remain.
+Encryption now follows the actual ring consumption, NAPI work and saved-item
+continuation. Independent source/contract review passes. The 365-job closure
+builds; all forty named declarations have standard-only axioms and fresh
+kernel replay passes. The module has zero warnings; its closure reports 1,389
+inherited warnings. Development recorded six failed checks, one isolated
+diagnostic pass and the final full pass, with no infrastructure retry, panic
+or limit change.
 
 Remaining work is the routing/origin terminal carry, stamped
 traffic/environment/runner history, material lifecycle/support callers, RX
