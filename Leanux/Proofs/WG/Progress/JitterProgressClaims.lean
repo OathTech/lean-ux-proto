@@ -1,14 +1,15 @@
 import Leanux.Proofs.WG.Progress.JitterProgressSource
 import Leanux.Proofs.WG.Campaign2.Bridge
 
-/-! Projected total outcomes of recorded jitter. Recordless execution and
-scheduler progress are outside these contracts. -/
+/-! Projected total outcomes of recorded jitter. The actual product lift retains
+the original fixture observations as well as WG and Ambient state. Recordless
+execution and scheduler progress are outside these contracts. -/
 set_option autoImplicit false
 namespace Leanux.Proofs.WG.Progress
 open Leanux Leanux.WG Leanux.Proofs.WG.TimerDiscipline
 
 theorem jitter_record_outcome (site : JitterSite) (records : List HiddenRecord) :
-    Campaign2.Observes (jitterBelowRekeyTimeout site.hiddenSite)
+    Campaign2.Product.Observes (liftWG (jitterBelowRekeyTimeout site.hiddenSite))
       (fun s => s.ambient.hidden = some records)
       (fun entry outcome => outcome =
         match resolveJitterSearch site records with
@@ -16,14 +17,16 @@ theorem jitter_record_outcome (site : JitterSite) (records : List HiddenRecord) 
         | .ok (jitter, rest) => .ok (jitter,
             {entry with ambient := {entry.ambient with hidden := some rest}})) := by
   intro w present
-  change Campaign2.observeResult ((jitterBelowRekeyTimeout site.hiddenSite).run w) = _
-  rw [jitter_input site records w present]
+  change Campaign2.Product.observeResult
+    (((jitterBelowRekeyTimeout site.hiddenSite).run w.wg).run w.ambient >>= fun ((value, g), ambient) =>
+      Except.ok (value, {w with wg := g, ambient})) = _
+  rw [jitter_input site records w.wg w.ambient present]
   cases resolution : resolveJitterSearch site records with
   | error error => rfl
   | ok pair => rcases pair with ⟨jitter, rest⟩; rfl
 
 theorem jitter_record_progress (site : JitterSite) (records : List HiddenRecord) :
-    Campaign2.Observes (jitterBelowRekeyTimeout site.hiddenSite)
+    Campaign2.Product.Observes (liftWG (jitterBelowRekeyTimeout site.hiddenSite))
       (fun s => s.ambient.hidden = some records)
       (fun entry outcome =>
         (∃ message, outcome = .error (.hidden message)) ∨

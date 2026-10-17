@@ -7,7 +7,7 @@ namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG
 
 /-- Exact original continuation after the peer read. -/
-def removeByPeerSource (p : Peer) : M Unit := do
+def removeByPeerSource (p : Peer) : WG.M Unit := do
   if ← branch .removeListEmpty p.allowedipsList.isEmpty then return
   modifyDev fun d => { d with peerAllowedips := { d.peerAllowedips with seq := d.peerAllowedips.seq + 1 } }
   for id in p.allowedipsList do   -- list_for_each_entry_safe over the peer's list
@@ -51,7 +51,7 @@ theorem removeByPeer_source (pid : PeerId) :
     removeByPeer pid = (do let p ← getPeer pid; removeByPeerSource p) := rfl
 
 /-- Exact original loop continuation after the node read. -/
-def removeNodeSource (id : NodeId) (n : AipNode) : M (ForInStep Unit) := do
+def removeNodeSource (id : NodeId) (n : AipNode) : WG.M (ForInStep Unit) := do
   setNode id { n with peer := none }
   -- `if (node->bit[0] && node->bit[1]) continue;`
   if ← branch .removeHasBit0 (← n.bitAt 0).isSome then
@@ -89,7 +89,7 @@ def removeNodeSource (id : NodeId) (n : AipNode) : M (ForInStep Unit) := do
   freeNode parent   -- call_rcu(&parent->rcu, node_free_rcu)
   return .yield ()
 
-def removeByPeerFactored (p : Peer) : M Unit := do
+def removeByPeerFactored (p : Peer) : WG.M Unit := do
   if ← branch .removeListEmpty p.allowedipsList.isEmpty then return
   modifyDev fun d => { d with peerAllowedips := { d.peerAllowedips with seq := d.peerAllowedips.seq + 1 } }
   let _ ← forIn p.allowedipsList () fun id _ => do

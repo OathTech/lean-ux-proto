@@ -566,7 +566,7 @@ theorem original_index_record_progress (owner : IndexOwner) (d : Device) (record
 finite supplied records, including passive records and malformed input. Success
 preserves the entire projected state except the unused record suffix. -/
 theorem original_jitter_record_outcome (site : TimerDiscipline.JitterSite) (records : List HiddenRecord) :
-    Campaign2.Observes (jitterBelowRekeyTimeout site.hiddenSite)
+    Campaign2.Product.Observes (liftWG (jitterBelowRekeyTimeout site.hiddenSite))
       (fun s => s.ambient.hidden = some records)
       (fun entry outcome => outcome =
         match resolveJitterSearch site records with
@@ -579,7 +579,7 @@ theorem original_jitter_record_outcome (site : TimerDiscipline.JitterSite) (reco
 error or a jitter below HZ / 3 with strictly fewer records. This excludes
 recordless execution and makes no distribution or scheduler-progress claim. -/
 theorem original_jitter_record_progress (site : TimerDiscipline.JitterSite) (records : List HiddenRecord) :
-    Campaign2.Observes (jitterBelowRekeyTimeout site.hiddenSite)
+    Campaign2.Product.Observes (liftWG (jitterBelowRekeyTimeout site.hiddenSite))
       (fun s => s.ambient.hidden = some records)
       (fun entry outcome =>
         (∃ message, outcome = .error (.hidden message)) ∨

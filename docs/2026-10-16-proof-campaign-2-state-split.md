@@ -19,12 +19,12 @@ and attributed theorem declarations. Campaign 2 owns 427 Lean files,
 | Result | Files | Before theorems | Before headlines | Retrofit status |
 | --- | ---: | ---: | ---: | --- |
 | Common projection | 2 | 0 | 0 | Native and product observations carried |
-| H1 Noise | 35 | 171 | 22 | Native access, crypto/slot/peer frames, slot/clear/zero operations and all four state-edge contracts carried; six type-given frames deleted; full caller/reachability closure pending |
-| H2 Index | 68 | 318 | 52 | Table/scans/insertion, full lookup/miss and success/empty-result inversion, exact allocation/release, eight native numeric-index frames, ten projected table claims, all ten record contracts, exact draw exhaustion/corpus pair, five lifecycle contracts and 55 pure theorems checked; native receive factor and retirement frame carried; seven Ambient frames deleted; two stale peer-release totality counterexamples checked; whole terminal closure/callers pending |
+| H1 Noise | 35 | 171 | 22 | Native access, crypto/slot/peer frames, slot/clear/zero operations and all four state-edge contracts and eleven ordered clear/release contracts carried; six type-given frames deleted; full caller/reachability closure pending |
+| H2 Index | 68 | 318 | 52 | Table/scans/insertion, full lookup/miss and success/empty-result inversion, exact allocation/release, eight native numeric-index frames, seven native owner frames plus their pure bound, ten projected table claims, all ten record contracts, exact draw exhaustion/corpus pair, five lifecycle contracts and 55 pure theorems checked; native receive factor and retirement frame carried; seven Ambient frames deleted; two stale peer-release totality counterexamples checked; whole terminal closure/callers pending |
 | H3 Roaming | 35 | 119 | 13 | Six native endpoint/destination contracts carried; two Ambient frames deleted; authentication callers and product callbacks pending |
-| H4 Configuration | 130 | 554 | 79 | Total-return/branch laws, five exact source factors, three endpoint-clearing frames, three empty-root insertion contracts, total first placement, validation/identity, partial and total empty-list peer dumps, ordered allowed-list deletion, concrete dump cancellation and pure transfer consequences and two total inserted-node readback leaves checked; three Ambient frames deleted; remaining effects/readback carry pending |
-| H5 Progress | 59 | 265 | 42 | Twenty-nine pure/control or pure-source theorems, three generalized worker control contracts and one Ambient record frame and seven exact cut-source/projected contracts checked; two pointer-ring snapshot contracts and remaining operational carry pending |
-| H6 Timer discipline | 98 | 404 | 50 | Two pure session-liveness relations, map/guard base, two current wheel effects, separated jitter bound/frame and two projected bound claims, six exact jitter-record contracts, plus a checked stale-statement counterexample; three Ambient frames deleted; seven exact-peer arming claims and wider timer/worker semantics pending |
+| H4 Configuration | 130 | 554 | 79 | Total-return/branch laws, seven exact source factors, three endpoint-clearing frames, three empty-root insertion contracts, total first placement, validation/identity, partial and total empty-list peer dumps, ordered allowed-list deletion, concrete dump cancellation and pure transfer consequences and two total inserted-node readback leaves checked; three Ambient frames deleted; remaining effects/readback carry pending |
+| H5 Progress | 59 | 265 | 42 | Twenty-nine pure/control or pure-source theorems, three generalized worker control contracts and one Ambient record frame and seven exact cut-source/projected contracts and six arbitrary-record jitter source/projected contracts checked; two pointer-ring snapshot contracts and remaining operational carry pending |
+| H6 Timer discipline | 98 | 404 | 50 | Two pure session-liveness relations, map/guard base, two current wheel effects, separated jitter bound/frame and two projected bound claims, six exact jitter-record contracts and four exact exhaustion contracts, plus a checked stale-statement counterexample; three Ambient frames deleted; seven exact-peer arming claims and wider timer/worker semantics pending |
 
 Retyped, deleted and retained counts will be reported per validated tranche.
 All six results remain lagging, with their previous charter gaps unchanged.
@@ -980,3 +980,84 @@ Reproduce scoped builds and fresh replay using the capped bundle commands above
 on `Index.PeerReleaseFindings`, `Config.DeviceDumpSource`,
 `TimerDiscipline.JitterRecordsSource` and `Config.AllowedReadbackLeaves`,
 each under `Leanux.Proofs.WG`.
+
+
+## Owner frames, ordered clear and record-budgeted jitter
+
+| Tranche | Before | Retyped/generalized | Deleted | Kept | Added | After |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `Index.OwnerFieldFrames`, `OwnerIndexFrames` | 8 | 7 | 0 | 1 | 0 | 8 |
+| `Noise.ClearSource` | 11 | 11 | 0 | 0 | 0 | 11 |
+| `Config.AllowedRemovalSource` | 2 | 2 | 0 | 0 | 0 | 2 |
+| `TimerDiscipline.JitterExhaustionSource` | 4 | 4 | 0 | 0 | 0 | 4 |
+| `Progress.JitterProgressSource`, `JitterProgressClaims` | 6 | 6 | 0 | 0 | 0 | 6 |
+| This tranche | 31 | 30 | 0 | 1 | 0 | 31 |
+| Cumulative validated surface | 330 | 195 | 21 | 114 | 24 | 333 |
+
+The tree has 447 campaign-owned files and 1,834 theorem declarations;
+1,501 baseline declarations still await validation. The checked closure has
+132 proof modules: H1 60 theorems, H2 151, H3 6, H4 48, H5 46 and H6 22.
+All six full result closures and all 258 terminal declarations remain lagging.
+Two H5 public jitter wrappers are carried and check in isolation; that is not
+a pass of their enclosing `Statements` module and they are not counted again.
+
+The owner predicates retain their resident-device, uniqueness, allocation-bound
+and designated-fresh-owner hypotheses. They do not imply keypair-store
+residency, peer-word coherence or slot safety. The five field frames preserve
+these predicates through actual native setters, handshake zeroing and key
+derivation. Two guarded index-adapter contracts and their unchanged pure bound
+are extracted to `OwnerIndexFrames`; the keypair-release and rotation callers
+in `OwnerUpdateClaims` remain unchanged and pending. All seven operational
+frames are substantive within WG, so none is deleted.
+
+H1's ordered-clear contracts retain both partial effects and total original
+returns under the original occurrence-count readiness condition. Normal
+keypair release derives residency, a positive reference and a non-NULL peer
+word from its actual guards. Total clear rereads, clears and releases next,
+previous and current in order, threading both native states. Repeated slot
+identities remain allowed; no owner-peer residency or record premise is added.
+
+H4 carries two exact source equalities for allowed-IP removal by changing only
+three helper annotations to `WG.M`. The actual empty-list branch, safe-loop
+order, node frees, invariant failures and final iteration record remain.
+
+H6's four exhaustion contracts retain empty streams and contiguous rejected
+byte streams at both sites. The real record-derived budget includes the next
+read, which raises the exact missing-input error rather than an invented
+budget failure. H5's four source contracts additionally cover arbitrary
+supplied records, including passive prefixes and malformed input. Their two
+projected claims use the actual `liftWG` through `Product.Observes`, retaining
+the original fixture observations as well as exact WG/Ambient state. Success
+has a bounded jitter and a strictly shorter suffix; recordless execution and
+scheduler progress remain outside the claims.
+
+Claim files: `Noise/ClearSource`, `Config/AllowedRemovalSource`,
+`TimerDiscipline/JitterExhaustionSource`, `Progress/JitterProgressSource`
+and `Progress/JitterProgressClaims`. Frame files: `Index/OwnerFieldFrames`
+and the new `Index/OwnerIndexFrames`. No public headline moves out of its
+`Statements` file. The gate, mirror and campaign-1 layers are unchanged.
+
+Scoped capped builds pass without warnings: owner frames 55 jobs, combined
+jitter/removal source 63, and ordered clear 49. Closure axiom inspection covers
+282 and 139 logical roots in the two groups, using only the permitted axioms;
+the two isolated public jitter wrappers also use only those axioms. Fresh
+kernel replay passes for all five roots. Static gate token/import checks and
+whitespace pass. Independent reviews found no correctness issue. No full
+result or full proof-gate pass is claimed.
+
+Development: both owner probes passed first time. Ordered clear had one failed
+draft on an omitted direct import and elaboration details, then a clean draft.
+Jitter exhaustion had one failed match-normalization rewrite, then a clean
+draft; arbitrary-record source, projected claims, isolated wrappers and removal
+source passed first time. All packaged builds passed first time. Separately,
+three pending readback-composition drafts failed: an existential Ambient
+witness, remaining room/sequence normalizations with unused simp warnings,
+then simplifier/heartbeat exhaustion. They are excluded from this checkpoint;
+the next approach composes checked leaves through the actual guarded node read.
+No infrastructure rerun, cap/proof-limit change or guest run occurred. Complete
+compiler output was captured before preview.
+
+Reproduce scoped builds and fresh replay using the capped bundle commands above
+on `Index.OwnerIndexFrames`, `Noise.ClearSource`,
+`Config.AllowedRemovalSource`, `TimerDiscipline.JitterExhaustionSource`
+and `Progress.JitterProgressClaims`, each under `Leanux.Proofs.WG`.
