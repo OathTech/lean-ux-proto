@@ -116,22 +116,22 @@ configuration shape premise; exact erasure retains JSON and indexed Stops.
 
 ## Current R4 extension
 
-The [scheduler/lifecycle extension](2026-10-17-r4-scheduler-lifecycle.md) adds
-twelve modules and 221 theorems: 747 proof files and 10,290 named theorems.
-All 194 previous R4 terminal bodies remain unchanged; R4 has 206 terminal
-theorems and the full terminal surface has 740 declarations. No existing
+The [auxiliary/configuration extension](2026-10-17-r4-auxiliary-configuration.md)
+adds eleven modules and 146 theorems: 758 proof files and 10,436 named theorems.
+All 206 previous R4 terminal bodies remain unchanged; R4 has 215 terminal
+theorems and the full terminal surface has 749 declarations. No existing
 theorem is retyped or deleted by this extension.
 
-Actual handshake consumers account for their optional acquired references.
-All timer callbacks, timer modes, nonreceive activations and deferred workers
-retain the complete account and physical receive ring. Whole scheduling and
-deferred execution keep the exact receive-worker contract explicit. Lookup
-and removal pay distinct base/caller references; creation retains structural
-base coherence and allowed-IP edits retain funding. The response tail exposes
-its session-entry key invariants. Full receive, lifecycle coherence, ingress
-and initialized runner composition remain open; chronological GRO order stays
-refuted. The corrected proof gate passes 805 jobs/740 declarations in 5.309
-seconds after one namespace-qualification failure. Fresh root kernel replay passes in 108.189 seconds without warnings.
+Actual peer configuration pays its acquired caller loan through early errors,
+keepalive/staged work and either update arm. Lookup derives base selection;
+single/bulk removal and complete updates retain structural coherence. The
+existing owner journal supplies auxiliary entry facts, joined with funding,
+physical ring and three-slot compatibility through the same session run.
+Handshake consumers, Stack/poll/NAPI and crypt workers retain their slot facts.
+Full receive, stronger scheduler, public configuration/device lifecycle and
+dynamic ingress/initialized runner composition remain open. Chronological GRO
+order remains refuted. The gate passes 816 jobs/749 declarations in 5.421
+seconds. Fresh root replay passes in 107.381 seconds.
 
 ## Layers
 
@@ -987,7 +987,7 @@ ReplayWindow. The conventions that keep proof work cheap are in
 | R1: anti-replay uniqueness and inclusive floor | No wire counter is accepted twice in one allocation lifetime; every accepted counter is at or above the inclusive lower edge, for pure runs, original validator calls and accepted runner histories. Equality at the charter's floor is intentionally permitted, with a concrete recorded replay. | `Leanux/Proofs/WG/AntiReplay/` (`Statements.lean`, 9 terminal theorems) | [campaign charter](2026-10-13-charter-proof-campaign.md) | [campaign report](2026-10-13-proof-campaign.md#r1--anti-replay-uniqueness-and-the-inclusive-floor) | b3f56807 | current: split carry validated |
 | R2: initialized lifetime safety | For every typed Runner trace and both placeholder settings, committed peer/keypair/packet access histories are safe from release-before-access, including failed prefixes. Every actual reached consistency-filter entry is allocation-valid and supplies exact ordered filter correspondence and safe isolated copied-trial histories. The observer preserves exact original JSON or indexed Stop without parser, array-length, progress or success premises. Original local contracts and endpoint identity refinements remain available. Historical stale-cursor inputs retargeted replacement identities; their current full recipes reject at operation 3 under the pending-dump guard. Raw-reference affiliation/credit is a separate stronger property. | `Leanux/Proofs/WG/LifetimeSafety/` (`Statements.lean`, 202 terminal theorems) | [campaign charter](2026-10-13-charter-proof-campaign.md) | [campaign report](2026-10-13-proof-campaign.md#r2--lifetime-identity-and-retained-references) | b3f56807 | current: split carry validated |
 | R3: cryptokey routing | Trie lookup agrees with the independent flat longest-prefix history for both families, including insertion, removal and lifecycle cleanup. Each initialized Stack entry links to its earlier buffer, consume and configured decrypt/publication occurrences, and its source winner is the consuming peer at that consume prefix. Each initialized outgoing handoff selects the longest-prefix owner of every supplied packet’s destination at its captured native front entry. Actual direct, batch and Stack-reply callers, NAPI, crypt workers, scheduler, timers and syscall continuations are connected. Public parsing discharges configuration address shape; both placeholder settings and prefixes preceding indexed Stops are included. Exact executable erasure and complete old RX-journal projection hold for arbitrary incoming histories. No final-state authorization premise, Noise authenticity or later wire-send property is claimed. Complete caller coverage uses checked source factors and reviewed wiring; selected-occurrence authorization is kernel-proved. | `Leanux/Proofs/WG/CryptokeyRouting/` (`Statements.lean`, 289 terminal theorems) | [campaign charter](2026-10-13-charter-proof-campaign.md) | [incoming report](2026-10-17-r3-initialized-authorization.md), [outgoing report](2026-10-17-r3-initialized-transmit.md), [campaign report](2026-10-13-proof-campaign.md#r3--cryptokey-routing) | b3f56807 | current: trie and both initialized path halves validated |
-| R4 components and GRO order finding | Initialized entries/completions and packet/receipt linkage remain proved, including Stops. Local complete-account contracts cover admission/poll/NAPI/decrypt, work, creation/removal payments, full TX, dump callers, handshake acquisition/session tail, all timers and allowed-IP edits. Nonreceive scheduling is concrete; whole scheduling/deferred calls retain an explicit receive-worker contract. Full receive, lifecycle coherence, ingress and initialized conservation remain open. Chronological GRO order is refuted; the cleanup-totality finding remains. | `Leanux/Proofs/WG/DeliveryOrder/` (`Statements.lean`, 206 terminal theorems; `ReplayGro.lean`) | [campaign charter](2026-10-13-charter-proof-campaign.md) | [scheduler/lifecycle report](2026-10-17-r4-scheduler-lifecycle.md) | b3f56807 | current: split carry and local extension validated |
+| R4 components and GRO order finding | Initialized entries/completions and packet/receipt linkage remain proved, including Stops. Local complete-account contracts cover admission, poll/NAPI/crypt, workers, creation/removal, dump, handshake acquisition/session and acquired-peer configuration. Structural base coherence follows removal and updates. Three-slot compatibility follows handshake, Stack/poll/NAPI and crypt workers; session joins the sourced auxiliary domain. Full receive, stronger scheduler, public configuration/device lifecycle and dynamic ingress/initialized conservation remain open. Chronological GRO order is refuted; the cleanup-totality finding remains. | `Leanux/Proofs/WG/DeliveryOrder/` (`Statements.lean`, 215 terminal theorems; `ReplayGro.lean`) | [campaign charter](2026-10-13-charter-proof-campaign.md) | [auxiliary/configuration report](2026-10-17-r4-auxiliary-configuration.md) | b3f56807 | current: split carry and local extension validated |
 | R5: key lifetime enforcement; Rule Zero findings | Thirteen local theorems identify exact original clock tests, RX AEAD admission and failed-tag coverage, accepted-wire-nonce bounds, TX staging certificates, zero-timer store framing and timer-pass erasure. Accepted original/observed replays authenticate nonce R+1 before rejection and encrypt queued transport keepalives after recorded expiry or zero/clear before a new handshake, using the same packet-held material. New time inputs have coherent coarse/jiffies/arm arithmetic, without a Linux schedule claim. The original unconditional statement is false; universal replacement transport theorems are not claimed. | `Leanux/Proofs/WG/KeyLifetime/` (`Statements.lean`, 13 terminal theorems; `Replay.lean`, `ReplayDelayed.lean`, `ReplayPostClear.lean`) | [campaign charter](2026-10-13-charter-proof-campaign.md) | [campaign report](2026-10-13-proof-campaign.md#r5--key-lifetime-enforcement-rule-zero-findings) | b3f56807 | current: split carry validated |
 | R6: cookie exclusion and retry-limit finding | Original under-load calculation and rejected-initiation suffix are exact. Invalid MAC2 against the actual original cookie result executes only the cookie reply; invalid MAC1 drops earlier. Ordinary completion preserves full Noise stores, indices and peer/keypair allocation counters. An accepted generated episode has 19 retries and 20 total initiations with MAX=18, then gives up on callback 20; this refutes the literal limit without claiming a universal replacement bound. The whole advance observer has exact original erasure. | `Leanux/Proofs/WG/FloodResistance/` (`Statements.lean`, 6 terminal theorems; `Replay.lean`) | [campaign charter](2026-10-13-charter-proof-campaign.md) | [campaign report](2026-10-13-proof-campaign.md#r6--cookie-exclusion-and-retry-limit-finding) | b3f56807 | current: split carry validated |
 
@@ -1135,10 +1135,10 @@ checked separately and are not included in the terminal declaration count.
 | AntiReplay | 9 | 9 | 0 |
 | LifetimeSafety | 202 | 202 | 0 |
 | CryptokeyRouting | 289 | 289 | 0 |
-| DeliveryOrder | 206 | 206 | 0 |
+| DeliveryOrder | 215 | 215 | 0 |
 | KeyLifetime | 13 | 13 | 0 |
 | FloodResistance | 6 | 6 | 0 |
-| Total | 740 | 738 | 2 |
+| Total | 749 | 747 | 2 |
 
 C memory safety, constant time, cryptographic security and the physical
 erasure of secrets are separate claims that no row makes.

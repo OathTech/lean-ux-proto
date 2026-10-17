@@ -231,6 +231,15 @@ contracts expose the remaining receive premise. Initialized conservation
 remains open. The corrected gate passes 805 jobs/740 declarations in 5.309
 seconds after one namespace-qualification failure. Fresh root kernel replay passes in 108.189 seconds without warnings.
 
+The [auxiliary/configuration checkpoint](2026-10-17-r4-auxiliary-configuration.md)
+adds eleven modules and 146 theorems: 758 files/10,436 theorems, 215 R4 terminals
+and 749 total declarations. All previous bodies remain unchanged. Acquired-peer
+configuration pays actual caller/base references; removal and updates retain
+structural coherence. Same-run session accounting joins the auxiliary domain;
+handshake/Stack/poll/NAPI/crypt retain slot compatibility. Full receive, stronger
+scheduler and initialized conservation remain open. Gate: 816 jobs/749
+declarations in 5.421 seconds. Fresh root replay passes in 107.381 seconds.
+
 The pre-split checkpoint validated every baseline result surface over
 `cb2348e`. R3 packet authorization is now closed over the current split tree;
 R4 receive-pipeline conservation remains open. Earlier positive results and runtime findings retain
@@ -628,14 +637,14 @@ correspondence remains informal.
 
 ## R4 — queue, poll and delivery-order components (in progress)
 
-**State-split scheduler/lifecycle extension.** The [current report](2026-10-17-r4-scheduler-lifecycle.md)
-records 221 additional theorems in twelve modules and twelve terminal exports.
-The tree has 747 proof files/10,290 theorems, with 206 R4 terminals and all 194
-preceding bodies unchanged. Actual handshake acquisition, all timer callbacks,
-nonreceive scheduling, base/caller payments and allowed-IP edits retain the
-complete supplied account. Whole scheduling/deferred calls retain the exact
-receive-worker contract; the response session tail retains explicit auxiliary
-entry bounds. Full receive, lifecycle coherence, ingress and initialized
+**State-split auxiliary/configuration extension.** The [current report](2026-10-17-r4-auxiliary-configuration.md)
+records 146 additional theorems in eleven modules and nine terminal exports.
+The tree has 758 proof files/10,436 theorems, with 215 R4 terminals and all 206
+preceding bodies unchanged. Full acquired-peer updates and their lookup retain
+funding; single/bulk removal and updates retain structural coherence. Actual
+handshake/Stack/poll/NAPI/crypt calls retain three-slot compatibility, and
+session accounting joins the sourced auxiliary domain. Full receive, stronger
+scheduler, public configuration/device lifecycle and dynamic ingress/initialized
 conservation remain open. Chronological GRO order stays refuted.
 
 **Original versus proved.** The charter requires accepted-schedule order and no silent loss/duplication.

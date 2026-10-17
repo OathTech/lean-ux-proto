@@ -1,3 +1,8 @@
+import Leanux.Proofs.WG.Queues.HolderAuxiliary
+import Leanux.Proofs.WG.Queues.HolderConfigUpdate
+import Leanux.Proofs.WG.Queues.BaseCoherenceConfiguration
+import Leanux.Proofs.WG.Queues.CurrentSlotHistory
+import Leanux.Proofs.WG.Queues.HandshakeEntry
 import Leanux.Proofs.WG.Queues.HolderTxActivation
 import Leanux.Proofs.WG.Queues.HolderTimerPhysical
 import Leanux.Proofs.WG.Queues.BaseLookupRemoval
@@ -2692,5 +2697,64 @@ theorem original_response_session_payment (o : Owner) (msg : List UInt8) :
         OwnerBounds.Carrier w ∧ CurrentSlots.Inv w)
       (fun _ => DurableHolders.Boundary cs loans) :=
   HandshakeReceive.response_paid o msg
+
+/-- The complete actual configuration tail pays its acquired caller loan. -/
+theorem original_configuration_tail_payment (attrs : PeerAttrs) (o : Owner) :
+    Hoare (Configuration.peerConfigTailSource attrs (some o.slot) o.slot)
+      (DurableHolders.Boundary cs (o::loans)) (fun _ => DurableHolders.Boundary cs loans) :=
+  HolderConfigTail.tail attrs o
+
+/-- Actual lookup and either update arm retain the sourced complete account. -/
+theorem original_lookup_update_account (key : Key) (attrs : PeerAttrs) (flags : UInt32) (psk : Option Key)
+    {holders : DurableHolders} (hi : holders.Funded cs loans w) (stable : StableRx cs w)
+    (coherent : BaseCoherence.Inv w) (configured : ConfiguredIdentity.Inv w)
+    (ambient middle final : Ambient)
+    (lookup : ((pubkeyLookup key).run w).run ambient = .ok ((some pid,u),middle))
+    (run : ((Configuration.peerConfigUpdateSource attrs (some pid) flags psk pid).run u).run middle =
+      .ok ((result,v),final)) : DurableHolders.Boundary cs loans v :=
+  HolderConfigUpdate.lookup_update key attrs flags psk hi stable coherent configured ambient middle final lookup run
+
+/-- Actual single and bulk removal preserve the structural base invariant. -/
+theorem original_removal_base_coherence (peer : Option PeerId) :
+    Preserves BaseCoherence.Inv (peerRemove peer) ∧ Preserves BaseCoherence.Inv peerRemoveAll :=
+  ⟨BaseCoherence.peerRemove_preserves peer,BaseCoherence.peerRemoveAll_preserves⟩
+
+/-- Complete actual peer updates retain list/table coherence, including deletion. -/
+theorem original_update_base_coherence (attrs : PeerAttrs) (peer : Option PeerId)
+    (flags : UInt32) (psk : Option Key) (pid : PeerId) :
+    Preserves BaseCoherence.Inv (Configuration.peerConfigUpdateSource attrs peer flags psk pid) :=
+  BaseCoherence.update_preserves attrs peer flags psk pid
+
+/-- All original handshake consumers retain three-slot compatibility. -/
+theorem original_handshake_slot_compatibility (msg : List UInt8) :
+    Preserves CurrentSlots.Inv (consumeInitiation msg) ∧
+    Preserves CurrentSlots.Inv (consumeResponse msg) ∧
+    Preserves CurrentSlots.Inv (cookieMessageConsume msg) :=
+  ⟨HandshakeSlots.consumeInitiation msg,HandshakeSlots.consumeResponse msg,HandshakeSlots.cookieMessageConsume msg⟩
+
+/-- The concrete Stack callback closes the original poll's slot contract. -/
+theorem original_stack_poll_slot_compatibility (pid : PeerId) (budget : Nat) :
+    Preserves (fun w : World => CurrentSlots.Inv w.wg)
+      (WG.rxPoll pid budget (fun packets => packets.forM Env.deliverInner)) :=
+  CurrentSlots.poll_stack pid budget
+
+/-- Original crypt iterations retain slots on the same arbitrary incoming history. -/
+theorem original_crypt_iteration_slot_compatibility :
+    PrefixPreserves (fun _ w => CurrentSlots.Inv w.wg) (fun _ => True) RxHistory.decryptIteration ∧
+    PrefixPreserves (fun _ w => CurrentSlots.Inv w.wg) (fun _ => True) RxHistory.encryptIteration :=
+  ⟨CurrentSlots.decryptIteration_observed,CurrentSlots.encryptIteration_observed⟩
+
+/-- Session accounting and auxiliary ownership facts share one actual observed run. -/
+theorem original_session_auxiliary_account (initial : Ledger) (loans : Reservations)
+    (before : List RxHistory.Event) (pid : PeerId) :
+    PrefixPreserves (HolderAuxiliary.Inv initial loans before) OwnerChecks.Safe (Origins.HistoryAdapters.session pid) :=
+  HolderAuxiliary.session_preserves initial loans before pid
+
+/-- Actual response acquisition preserves both its attributed loan and sourced entry facts. -/
+theorem original_response_funded_entry (msg : List UInt8) {holders : DurableHolders}
+    (hi : holders.Funded cs loans w) (stable : StableRx cs w) (entry : HandshakeEntry.Entry w) (a b : Ambient)
+    (run : ((consumeResponse msg).run w).run a = .ok ((result,v),b)) :
+    HandshakeLoans.FundedResult holders cs loans result v ∧ HandshakeEntry.Entry v :=
+  HandshakeEntry.response_funded msg hi stable entry a b run
 
 end Leanux.Proofs.WG.DeliveryOrder
