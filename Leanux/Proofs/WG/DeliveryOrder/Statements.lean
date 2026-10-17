@@ -1,3 +1,8 @@
+import Leanux.Proofs.WG.Queues.AdmissionAccounting
+import Leanux.Proofs.WG.Queues.TxMarkTransport
+import Leanux.Proofs.WG.Queues.SyscallFate
+import Leanux.Proofs.WG.Queues.CarrierIdentity
+import Leanux.Proofs.WG.Queues.OuterSelection
 import Leanux.Proofs.WG.Queues.RunnerAccount
 import Leanux.Proofs.WG.Queues.TrafficOccurrences
 import Leanux.Proofs.WG.Queues.HolderEntryDispatch
@@ -6,6 +11,10 @@ import Leanux.Proofs.WG.Queues.HolderDumpEntry
 import Leanux.Proofs.WG.Queues.HolderEntryControls
 import Leanux.Proofs.WG.Queues.HolderTrafficEntry
 import Leanux.Proofs.WG.Queues.PlaceholderFindings
+import Leanux.Proofs.WG.Queues.TxItemSeparation
+import Leanux.Proofs.WG.Queues.TxSelectedEncrypt
+import Leanux.Proofs.WG.Queues.AdmissionSelectionCuts
+import Leanux.Proofs.WG.Queues.RunnerSelectionCuts
 
 import Leanux.Proofs.WG.Queues.BaseCoherenceTimers
 import Leanux.Proofs.WG.Queues.HolderXmit
@@ -3405,5 +3414,127 @@ theorem initialized_runner_source_ledger_unique (trace : Leanux.Runner.Trace)
     (right : (RunnerAccount.rule trace placeholders).relation [] [] out h next) : cs=next :=
   RunnerAccount.unique trace placeholders left right
 
+
+/-- Each original syscall source certificate retains earlier carriers or
+records their removals in its exact fresh suffix, including normal errno returns. -/
+theorem original_syscall_carrier_conservation (call : Syscall)
+    (source : (ConservationSyscall.rule call).relation cs w h result v k next) :
+    TrafficEffects.Conserved cs next h k := SyscallEffects.syscall call source
+
+/-- A normal syscall derives its funded source ledger and a named poll fate
+for every source-selected accepted receive in its dispatch, including those
+removed before the syscall returns. Input funding and owner validity are explicit. -/
+theorem original_syscall_selected_admission_fate (call : Syscall)
+    (entry : HolderEntry.Inv cs [] h w)
+    (run : runPrefix (RxHistory.syscall call) w h=(.ok (result,v),k)) :
+    ∃next,∃source : (ConservationSyscall.rule call).relation cs w h result v k next,
+      HolderEntry.Inv next [] k v ∧
+      ∀index c,SyscallSelection.syscall call index source c→AdmissionRelease.Fate c next h k :=
+  SyscallFate.normal call entry run
+
+/-- Every removal in a normally completed initialized execution retains its
+actual completed poll and allocation-valid input, with no added World premise. -/
+theorem initialized_runner_poll_release_certificates (trace : Leanux.Runner.Trace)
+    (placeholders : Bool)
+    (run : runPrefixOuter (RxHistory.executeTraceHistory trace placeholders) []=(.ok result,h)) :
+    PollReleaseCaller.Certificates [] h := PollReleaseRunner.history_normal trace placeholders run
+
+/-- The selected global position identifies the same local poll invocation,
+seed and complete key even though local occurrence numbers restart per poll. -/
+theorem initialized_runner_removal_release (trace : Leanux.Runner.Trace)
+    (placeholders : Bool)
+    (run : runPrefixOuter (RxHistory.executeTraceHistory trace placeholders) []=(.ok result,h))
+    (position : h=pre++RxHistory.Event.removed n skb stamp::post) :
+    ∃ incoming w pid budget out v before after tail,
+      pre=incoming++before.map RxHistory.promote ∧
+      Lifetimes.AllocationInv (RxHistory.prior incoming) w.wg ∧
+      runPrefix (RxJoint.poll pid budget) w (RxJoint.seed (RxHistory.prior incoming))=
+        (.ok (out,v),RxJoint.seed (RxHistory.prior incoming)++(before++RxJoint.Event.removed n skb stamp::after)) ∧
+      h=incoming++(before++RxJoint.Event.removed n skb stamp::after).map RxHistory.promote++tail ∧
+      RxHistory.Released ((before++RxJoint.Event.removed n skb stamp::after).map RxHistory.promote) stamp :=
+  PollReleaseRunner.selected_release trace placeholders run position
+
+/-- The actual accepted receive excludes a previous pending or released
+identity, using its derived inventory and the original input owner invariant. -/
+theorem original_accepted_carrier_fresh (account : DurableHolders.Boundary cs loans w.wg)
+    (physical : DecryptIteration.Physical w) (owner : OwnerChecks.Inv h w)
+    (step : AdmissionCaller.Step cs next msg src w v h k)
+    (accepted : ReceiveEffects.Accepted cs next msg src w.wg v.wg w.ambient v.ambient c)
+    (older : old∈cs ∨ RxHistory.Released h (CarrierIdentity.stamp old.packet)) :
+    c.packet≠old.packet := CarrierIdentity.accepted_fresh account physical owner step accepted older
+
+/-- One accepted receive inserts exactly one occurrence of its packet
+identity into the source-selected ledger; output distinctness is derived. -/
+theorem original_accepted_carrier_once (account : DurableHolders.Boundary cs loans w.wg)
+    (physical : DecryptIteration.Physical w) (owner : OwnerChecks.Inv h w)
+    (step : AdmissionCaller.Step cs next msg src w v h k)
+    (accepted : ReceiveEffects.Accepted cs next msg src w.wg v.wg w.ambient v.ambient c) :
+    (next.map Carrier.packet).count c.packet=1 :=
+  CarrierIdentity.accepted_count account physical owner step accepted
+
+
+/-- A removal in the initialized normal runner identifies its actual packet
+and excludes it from the same returned, source-selected residual ledger. -/
+theorem initialized_runner_removed_carrier_absent (trace : Leanux.Runner.Trace)
+    (placeholders : Bool)
+    (run : runPrefixOuter (RunnerAccount.observed trace placeholders) []=(.ok (result,w),h))
+    (position : h=pre++RxHistory.Event.removed n skb stamp::post) :
+    ∃ next,(RunnerAccount.rule trace placeholders).relation [] [] (result,w) h next ∧
+      HolderEntry.Inv next [] h w ∧
+      CarrierIdentity.stamp (PollCarrier.packetOfStamp stamp)=stamp ∧
+      PollCarrier.packetOfStamp stamp∉next.map Carrier.packet := by
+  obtain ⟨next,source,entry⟩ := RunnerAccount.normal trace placeholders run
+  have certificate := (PollReleaseRunner.normal trace placeholders run).2.selected
+    (by simpa only [List.nil_append] using position)
+  exact ⟨next,source,entry,RemovalIdentity.certificate_stamp certificate,
+    RemovalIdentity.certificate_absent certificate entry⟩
+
+/-- For this accepted source occurrence the two outcomes are exclusive:
+exactly one pending packet identity, or a named completed poll disposition
+with actual release and no pending copy. The final funded account is explicit. -/
+theorem source_admission_residual_partition
+    (fate : AdmissionRelease.Fate c final base history)
+    (entry : HolderEntry.Inv final loans history finalWorld) :
+    ∃ msg src cs admitted w v before after lead suffix,
+      before=base++lead ∧ AdmissionCaller.Step cs admitted msg src w v before after ∧
+      ReceiveEffects.Accepted cs admitted msg src w.wg v.wg w.ambient v.ambient c ∧
+      history=after++suffix ∧
+      ((c∈final ∧ (final.map Carrier.packet).count c.packet=1 ∧
+          ¬AdmissionRelease.Removed c after history) ∨
+        (c.packet∉final.map Carrier.packet ∧ AdmissionRelease.Removed c after history ∧
+          RxHistory.Released history (CarrierIdentity.stamp c.packet))) :=
+  AdmissionAccounting.partition fate entry
+
+/-- The original full-ring refusal's DEAD mark survives later actual
+creation calls whose item IDs exclude that head. Initialized item separation
+and eventual worker disposition are separate from this concrete source cut. -/
+theorem original_epipe_mark_through_disjoint_producers (pid : PeerId) (first : SkbId) (rest : List SkbId)
+    (d : Device) (p : Peer) (hp : d.peers[pid]?=some p) (live : p.isDead=false)
+    (room : p.txQueue.count<MAX_QUEUED_PACKETS) (full : d.encryptQueue.full=true)
+    (calls : List (PeerId × List SkbId)) (outside : ∀call∈calls,first∉call.2) :
+    Framing.Hoare (do createData pid (first::rest); calls.forM fun call=>createData call.1 call.2)
+      (fun w=>w.dev=some d) (fun _=>TxDisposition.HeadState first .dead) :=
+  TxDisposition.MarkTransport.pipe_then_creates pid first rest d p hp live room full calls outside
+
+
+/-- Original staged submit derives future-item separation from the actual
+allocator and retains an older packet's mark. Allocation validity and actual
+old-head residency are explicit, with no future-item disjointness premise. -/
+theorem original_staged_submit_saved_head (pid kid : Nat) (packets : List DataPacket)
+    (target : SkbId) (state : PacketState) :
+    Framing.Hoare (RxCredits.stagedSubmit pid kid packets)
+      (fun w=>Leanux.Proofs.WG.Packets.Inv w ∧ TxDisposition.HeadState target state w)
+      (fun _=>TxDisposition.HeadState target state) :=
+  TxDisposition.ItemSeparation.staged_submit_head pid kid packets target state
+
+/-- After the original saved-item consume and softirq, the actual encryption
+continuation preserves a packet outside that item. The input exclusion is
+explicit; a stale occupied physical ring slot cannot establish it. -/
+theorem original_selected_encryption_saved_head (target : SkbId) (item : List SkbId)
+    (outside : target∉item) (state : PacketState)
+    (head : TxDisposition.HeadState target state w.wg)
+    (run : runPrefix (RxHistory.mixed (RxWorkers.encryptTail (some item))) w history=(.ok (result,v),after)) :
+    TxDisposition.HeadState target state v.wg :=
+  TxDisposition.SelectedEncrypt.observed_head target item outside state head run
 
 end Leanux.Proofs.WG.DeliveryOrder

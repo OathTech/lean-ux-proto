@@ -302,6 +302,16 @@ ring-full EPIPE are now correctly named. Earlier theorem bodies are unchanged.
 Gate: 896 jobs/823 declarations, 8.223 seconds. Fresh replay: PASS in 113.801 seconds without warnings.
 Initialized admission-to-named-disposition conservation remains open.
 
+The [disposition checkpoint](2026-10-17-r4-dispositions.md) adds 22 modules and
+287 theorems: 860 files/11,727 theorems, 300 R4 terminals and 834 total declarations.
+Original syscall selections now have named poll fates or one pending identity;
+initialized runner removals derive actual same-poll releases and final absence.
+Staged allocation and selected encryption advance W7 mark transport. Complete
+initialized admission selection and live-item/caller alignment remain open.
+Earlier bodies are unchanged. Gate: 918 jobs/834 declarations in 6.622 seconds;
+fresh replay PASS in 116.213 seconds with no warnings. The report records failed development checks,
+the repaired history-prefix omission and the temporary log-number collision.
+
 The pre-split checkpoint validated every baseline result surface over
 `cb2348e`. R3 packet authorization is now closed over the current split tree;
 R4 receive-pipeline conservation remains open. Earlier positive results and runtime findings retain
@@ -879,14 +889,14 @@ in prose on `requireNotPending`, actually `State.lean:102`'s `pure ()`. Later in
 quiescence. No accepted loss/ duplication witness was found: arbitrary last-peer erasure is not initialized, and the
 poll's last-put candidate Stops at a later getter. No kernel bug claim.
 
-**Remaining obligations.** The initialized syscall/runner chain now selects
-its actual residual ledger and derives the full funded entry. Actual traffic
-paths identify accepted receive positions and their local pending-or-removal
-fates. These selected occurrences must be carried through outer continuations
-and joined to named rejection, validation, keepalive, purge/free and completed
-Stack dispositions. Queue idleness does not imply empty stores or peer queues;
-finite prefixes retain pending obligations. Stopped admission and selected/GRO
-phases need separate accounting. W7 item/mark transport remains open.
+**Remaining obligations.** The initialized runner derives its actual funded
+residual ledger and completed-poll release certificates. Every selected syscall
+admission now has a named fate or exactly one pending identity. Independent
+source-occurrence coverage and the initialized query join remain open. Finite
+accepted prefixes may retain work; stopped admission and selected/GRO phases
+need separate accounting. W7 now has actual allocator freshness, staged-submit
+mark transport and selected-encryption frames. Full staging, softirq transport
+and live logical ring-item/peer-batch separation remain open.
 
 **Effort/process/review.** Earlier ring, receipt and caller ledgers are in `00fafa4`, `57cb46e`,
 `c4ef635`, `ec95fa8`, `3dec2c3`, `79dce53`, `1b76322`, `983f84b` and `65e6a6d`;
