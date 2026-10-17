@@ -16,15 +16,15 @@ The baseline census strips nested comments and strings and includes private
 and attributed theorem declarations. Campaign 2 owns 427 Lean files,
 1,831 theorems and 258 headline theorems at `04b2f7c`.
 
-| Result | Files | Before theorems | Before headlines | Retrofit status |
-| --- | ---: | ---: | ---: | --- |
-| Common projection | 2 | 0 | 0 | Native and product observations carried |
-| H1 Noise | 35 | 171 | 22 | Whole split Statements closure checked: 22 headlines, 180 checked H1 theorems including support; six type-given frames deleted. All original Noise proof obligations carried; broader charter caller/lifetime/reachability and clock-provenance obligations remain open. |
-| H2 Index | 68 | 318 | 52 | Table/scans/insertion, full lookup/miss and success/empty-result inversion, exact allocation/release, eight native numeric-index frames, seven native owner frames plus their pure bound and both release/rotation owner invariants, ten projected table claims, all ten record contracts, exact draw exhaustion/corpus pair, five lifecycle contracts and 55 pure theorems checked; native receive factor, retirement frame and exact session-allocation factor, four session owner invariants, five handshake index invariants, three owner-creation invariants, the projected allocation effect, four sequential-allocation contracts and three new-device frames plus five link-lifecycle contracts, four combined table invariants, session coherence and three table/peer frames carried; seven Ambient frames deleted; two stale peer-release totality counterexamples checked; whole terminal closure/callers pending |
-| H3 Roaming | 35 | 119 | 13 | Six native endpoint/destination contracts plus three product publication source factors and a generic observation-read frame carried; two Ambient frames deleted; native decryption provenance and five product publication leaves carried; all six enqueue/publication caller contracts, ten poll endpoint source contracts and seven attempt-audit source contracts, three poll support frames, seven endpoint claims and five attempt facts/claims carried; broader caller/authentication closure pending |
-| H4 Configuration | 130 | 554 | 79 | Total-return/branch laws, seven exact source factors, three endpoint-clearing frames, three empty-root insertion contracts, total first placement, validation/identity, partial and total empty-list peer dumps, ordered allowed-list deletion, concrete dump cancellation and four total root-transfer contracts, all five inserted-node readback contracts and singleton root removal with its two pure effects, native port/flag/socket contracts, allowed-IP set/get composition, fourteen structural/leaf removal contracts and seven scalar/set-get contracts, six total scalar/readback contracts, paired transfer/readback, three pure removal facts, fourteen collapse/whole-removal contracts, nineteen pure removal frames, six random-port contracts, four recorded-port contracts, four total malformed-peer configuration contracts and eighteen pure removal/pair/owner effects, six endpoint/identity/precomputation contracts, seven root-replacement contracts and eleven expiry/clock contracts checked; three Ambient frames deleted; remaining effects/readback carry pending |
-| H5 Progress | 59 | 265 | 42 | Twenty-nine pure/control or pure-source theorems, three generalized worker control contracts and one Ambient record frame and seven exact cut-source/projected contracts and six arbitrary-record jitter source/projected contracts and six arbitrary-record index insertion source contracts and both projected outcome claims, thirteen complete poll-bound contracts and three original scheduler-probe source contracts checked; two pointer-ring snapshot contracts and remaining operational carry pending |
-| H6 Timer discipline | 98 | 404 | 50 | Two pure session-liveness relations, map/guard base, two current wheel effects, separated jitter bound/frame and two projected bound claims, six exact jitter-record contracts and four exact exhaustion contracts and four source/product outcome claims, plus a checked stale-statement counterexample and one exact whole-WG wheel-placement support contract; three Ambient frames deleted; all seven projected current wheel corrections checked; wider timer/worker semantics pending |
+| Result | Baseline files | Baseline theorems | Headlines | Checked now | Retrofit status |
+| --- | ---: | ---: | ---: | ---: | --- |
+| Common projection | 2 | 0 | 0 | 0 | Actual native WG/Ambient and full Product observations carried; no reconstructed execution states. |
+| H1 Noise | 35 | 171 | 22 | 180 | All original Noise obligations carried, including the full terminal closure; six type-given frames deleted. Wider caller/lifetime/reachability and clock-provenance charter claims remain open. |
+| H2 Index | 68 | 318 | 52 | 188 | Table, lookup, collision records, allocation, owner invariants and lifecycle support carried; seven type-given frames deleted. Exact peer-release outcomes replace stale totality, with checked counterexamples. Terminal closure and whole-driver coherence remain pending. |
+| H3 Roaming | 35 | 119 | 13 | 109 | Endpoint/publication, polling, attempt facts, crypto, lookup and response-caller factors carried with full Product certificates; two type-given frames deleted. Initiation transcript facts and broader authentication/caller closure remain pending. |
+| H4 Configuration | 130 | 554 | 79 | 315 | Scalar, identity, port, dump, allowed-IP and structural support carried; three type-given frames deleted. Quiet timer cleanup is corrected; queued-send and removal totality have checked stale-statement counterexamples. Remaining readback/effects and terminal closure remain pending. |
+| H5 Progress | 59 | 265 | 42 | 136 | Pure/control, cut, jitter, index, poll bounds, dispatch, scheduler turns, stack/probe frames and Product observation bridge carried. Receive-ring activation models, historical backlog/runner claims, remaining drain/flush claims and terminal closure remain pending. |
+| H6 Timer discipline | 98 | 404 | 50 | 59 | Base/guard/jitter, arming/wheel, recorded clock and initiation-send arming contracts carried; three type-given frames deleted. Exact wheel corrections are explicit; broader timer episodes, worker composition and terminal closure remain pending. |
 
 Retyped, deleted and retained counts will be reported per validated tranche.
 H1 now has a checked split terminal closure; H2–H6 remain lagging.
@@ -2758,3 +2758,116 @@ Roaming.InitiationConsumeErasureSource and TimerDiscipline.RecordedSiteSource
 under Leanux.Proofs.WG; inspect logical declarations with #print axioms and
 replay with scripts/in-bundle lake env leanchecker --fresh MODULE. On this
 host use capped, 32 Lean threads and 16 QEMU slots.
+
+## Scheduler observations, response caller and removal-domain finding
+
+| Tranche | Before | Retyped | Corrected | Deleted | Kept | Added | After |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Scheduler turns, probe/stack frames and operational wrappers/bridge | 62 | 62 | 0 | 0 | 0 | 0 | 62 |
+| TimerDiscipline.RecordedJitterSource | 3 | 1 | 2 | 0 | 0 | 0 | 3 |
+| Config.QuietRemovalSource and QuietRemovalFindings | 1 | 0 | 1 | 0 | 0 | 1 | 2 |
+| Roaming.ResponseCallSource and Product companions | 5 | 5 | 0 | 0 | 0 | 5 | 10 |
+| TimerDiscipline.InitiationArmSource | 5 | 4 | 1 | 0 | 0 | 1 | 6 |
+| This tranche | 76 | 72 | 4 | 0 | 0 | 7 | 83 |
+| Cumulative processed baseline and checked support | 938 | 710 | 18 | 21 | 189 | 70 | 987 |
+
+The tree has 508 campaign-owned files, 1,880 theorems and 314 checked proof
+modules. Of the 1,831 baseline declarations, 893 await validation. Checked
+counts are H1 180, H2 188, H3 109, H4 315, H5 136 and H6 59. The status
+table above describes each result. H1's 22-headline terminal closure remains
+current over b700659; H2–H6 terminal closures and the full proof gate remain
+lagging. All 258 original terminal names/order remain. No new charter result
+is claimed, and no additional frame is deleted.
+
+The scheduler carry includes nine ScheduleTurn contracts (three probe/filter
+preservation facts moved to ScheduleProbeFrames), seven PlaceholderTurn
+contracts, six RecordedTurn contracts, the separate StackFrames contract,
+six StackResume contracts, twenty-three SchedulerSourceClaims wrappers and
+ten ObservationBridge contracts. The full actual Product state remains
+quantified. Candidate order/multiplicity, arbitrary callback effects,
+selected activation/start-read witnesses, post-NAPI peeks, detachment,
+stack guards and exact Stops survive. Receive readiness uses the current
+PtrRing.empty head-slot test. View and ObservationBridge use Product
+snapshots with all eight original surviving fixture fields; foreignCreator
+remains observed through WG routing. Guard/filter inversion uses proved
+full-state preservation, not injectivity of a projection. The two historical
+backlog wrappers stay unchanged and pending in SourceClaims.
+
+Recorded jitter now specifies the complete current wheel effect under its
+original recorded/running/alive/resident domains. It retains actual Product
+caller-read and jitter-draw intermediate states and the bound from that same
+draw. Initiation arming keeps the exact native factor, skipped and reached
+branches, and actual Product execution. Its recorded effect starts at the
+real post-prefix state, without assuming successful network transmission.
+One private Product factor is added and included in the census; its axioms
+are covered transitively. These three downstream effect corrections follow
+the existing timer finding and do not drop new wheel state.
+
+The response caller has five native contracts and five Product companions.
+The Product load helper accepts an unrestricted Bool-to-product-action
+continuation. Complete lookup, consumed and before-setter certificates retain
+the actual entry fixture; only pure observations are extended, while the
+actual native execution is lifted unchanged. Caller erasure is unconditional,
+including non-response messages and all Stops. Response-kind factor and
+transcript equalities retain their original kind hypothesis and the complete
+endpoint/session/keepalive/statistics/timer/release suffix. The transcript is
+the actual prefix outcome driving that suffix, not just an arbitrary observer
+with a matching erased result.
+
+The [removal finding](2026-10-17-proof-campaign-2-removal-carry.md) refutes
+the old quiet/live totality domain with a resident dead peer, refcount 2,
+empty key slots/work queues, positive device peer count, ClearReady and a
+scheduled NAPI poll. The actual prefix clears keys/timers, then stops at the
+crypt-work guard added in a7a5e1f. The exact message and actual diagnostic
+site are retained; no error post-state or reachability is asserted. The
+source factor is explicitly corrected in QuietRemovalSource. Four remaining
+QuietRemoval contracts and broader LiveRemoval users stay pending. This is
+statement lag after a known fail-closed guard, not a new mirror defect or a
+request to change the mirror. The proof root now imports both this finding
+and the previously checked queued-handshake finding; the latter root-import
+omission is corrected without changing its proof.
+
+The combined scoped build passes 148 jobs without warnings. Earlier scoped
+packaging builds pass 88, 102, 52, 43 and 54 jobs. Axiom inspection covers
+658 logical roots in 114 proof modules, including 362 public theorem roots,
+with only the three standard axioms. All four fresh replays pass. Independent
+reviews of scheduler, stack/observation scope, response caller, removal witness and timer effects
+are clear. Static forbidden-token/import/root/default-target checks pass;
+mirror and shared proof layers remain byte-identical to their registered
+pins.
+
+Development ledger: ScheduleTurn probes one and two failed local Ambient
+read reduction (the first also reported five unused simplifications);
+three passed with two warnings, four passed cleanly. PlaceholderTurn passed
+with one duplicated simplification warning, then cleanly. RecordedTurn
+passed with two warnings, then cleanly. Stack framing failed one local
+match reduction, then passed cleanly. SchedulerSourceClaims packaged cleanly
+on its first build; ObservationBridge passed its first scratch probe.
+RecordedJitterSource failed three local reduction goals, then passed.
+ResponseCall used four changed probes: two errors/twenty-three warnings;
+native success with eleven warnings; a Product helper failure with three
+redundant-step errors; then all ten clean. InitiationArmSource used four
+changed probes: reserved identifier errors and two warnings; three Product
+lift-join errors; unavailable tactic/residual goal; then all six clean.
+
+The removal witness used ten changed probes. One failed syntax; two and
+three hit the unchanged recursion limit; four inspected a larger residual;
+five exposed an inaccessible private identifier and the same limit; six
+failed a local bind equality; seven hit the same limit; eight reached the
+concrete map/guard normalization; nine failed a composed ok-bind reduction
+with warnings; ten passed cleanly by composing existing native contracts.
+No recursion limit was raised. Truncated previews of four and eight were
+followed by reading the complete saved remainder. No failure was a pass or
+an infrastructure outcome. The separately attempted initiation transcript
+facts made six changed failing probes and closed no additional theorem;
+their independent supplied lookup/beforeDh certificate scope remains
+pending. All outputs were saved before previews. No infrastructure retry,
+unchanged-source rerun, cap/proof-limit increase or guest run occurred in
+this tranche; the earlier unchanged rerun remains recorded in its own entry.
+
+Reproduce with scripts/in-bundle lake build on Progress.ObservationBridge,
+TimerDiscipline.InitiationArmSource, Config.QuietRemovalFindings and
+Roaming.ResponseCallProductSource under Leanux.Proofs.WG. Inspect logical
+declarations with #print axioms and replay each root using scripts/in-bundle
+lake env leanchecker --fresh MODULE. On this host use capped, 32 Lean
+threads and 16 QEMU slots.

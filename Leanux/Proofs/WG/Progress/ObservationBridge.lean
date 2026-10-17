@@ -1,5 +1,5 @@
 import Leanux.Proofs.WG.Progress.View
-import Leanux.Proofs.WG.Progress.SourceClaims
+import Leanux.Proofs.WG.Progress.SchedulerSourceClaims
 import Leanux.Proofs.WG.Progress.ControlSource
 import Leanux.Proofs.WG.Campaign2.Bridge
 
@@ -7,7 +7,7 @@ import Leanux.Proofs.WG.Campaign2.Bridge
 a copy of the actual entry state. Every prefix, hidden read, activation and
 post-poll peek keeps its actual concrete intermediate state. -/
 namespace Leanux.Proofs.WG.Progress
-open Leanux Leanux.WG Leanux.Env Campaign2
+open Leanux Leanux.WG Leanux.Env Campaign2.Product
 
 def probeObservation (a : Activation) : M ProbeObservation := fun w =>
   .ok (⟨observeResult ((Activation.consistent a).run w),
@@ -19,7 +19,7 @@ def tracedDispatch (worker : Worker) : M (Option DispatchTrace) := fun initial =
   (dispatchPrefix worker).run initial >>= fun (choice, selected) =>
     match choice with
     | none => .ok (none, selected)
-    | some pid => (hidden (.sectionStart worker)).run selected >>= fun (bytes, started) =>
+    | some pid => (hidden (.sectionStart worker) : Leanux.M (List UInt8)).run selected >>= fun (bytes, started) =>
       (Activation.run { worker, pid }).run started >>= fun (_, final) =>
         .ok (some ⟨pid, snapshot selected, bytes, snapshot started⟩, final)
 
@@ -35,7 +35,7 @@ theorem tracedDispatch_erase (worker : Worker) :
     (((dispatchPrefix worker).run w >>= fun (choice, selected) =>
       match choice with
       | none => .ok (none, selected)
-      | some pid => (hidden (.sectionStart worker)).run selected >>= fun (bytes, started) =>
+      | some pid => (hidden (.sectionStart worker) : Leanux.M (List UInt8)).run selected >>= fun (bytes, started) =>
         (Activation.run { worker, pid }).run started >>= fun (_, final) =>
           .ok (some (DispatchTrace.mk pid (snapshot selected) bytes (snapshot started)), final)) >>=
         fun (trace, final) => .ok (trace.isSome, final))
@@ -47,9 +47,9 @@ theorem tracedDispatch_erase (worker : Worker) :
     | none => rfl
     | some pid =>
       simp only [hok]
-      change ((hidden (.sectionStart worker)).run selected >>= fun out =>
+      change ((hidden (.sectionStart worker) : Leanux.M (List UInt8)).run selected >>= fun out =>
         ((Activation.run { worker, pid }).run out.2 >>= fun after => Except.ok (true, after.2))) = _
-      cases hs : (hidden (.sectionStart worker)).run selected with
+      cases hs : (hidden (.sectionStart worker) : Leanux.M (List UInt8)).run selected with
       | error e => rfl
       | ok pair =>
         obtain ⟨bytes, started⟩ := pair
@@ -71,7 +71,7 @@ def candidateObservation (candidates : List Activation) : M CandidateObservation
 
 def tracedNapi : M (Snapshot × Option Nat) := fun initial =>
   napiSoftirq.run initial >>= fun (_, afterPoll) =>
-    peekHiddenSite.run afterPoll >>= fun (next, final) =>
+    (peekHiddenSite : Leanux.M (Option Nat)).run afterPoll >>= fun (next, final) =>
       .ok ((snapshot afterPoll, next), final)
 
 theorem tracedNapi_erase : napiTurn = (do let observation ← tracedNapi; pure (napiResult observation)) := by
@@ -80,11 +80,11 @@ theorem tracedNapi_erase : napiTurn = (do let observation ← tracedNapi; pure (
   change napiTurn.run w = (do let observation ← tracedNapi; pure (napiResult observation) : M TurnResult).run w
   simp only [napiTurn, StateT.run_bind]
   change (napiSoftirq.run w >>= fun out =>
-    (peekHiddenSite.run out.2 >>= fun after =>
+    ((peekHiddenSite : Leanux.M (Option Nat)).run out.2 >>= fun after =>
       (if after.1 == some (HiddenSite.sectionStart .netRx).info.id then pure turnReturn
         else pure turnContinue : M TurnResult).run after.2)) =
     ((napiSoftirq.run w >>= fun (_, afterPoll) =>
-      peekHiddenSite.run afterPoll >>= fun (next, final) =>
+      (peekHiddenSite : Leanux.M (Option Nat)).run afterPoll >>= fun (next, final) =>
         Except.ok ((snapshot afterPoll, next), final)) >>= fun (value, final) =>
           Except.ok (napiResult value, final))
   cases hp : napiSoftirq.run w with
@@ -92,7 +92,7 @@ theorem tracedNapi_erase : napiTurn = (do let observation ← tracedNapi; pure (
   | ok pair =>
     obtain ⟨u, afterPoll⟩ := pair
     simp only [hok]
-    cases hn : peekHiddenSite.run afterPoll with
+    cases hn : (peekHiddenSite : Leanux.M (Option Nat)).run afterPoll with
     | error e => rfl
     | ok pair =>
       obtain ⟨next, final⟩ := pair
@@ -103,7 +103,7 @@ theorem tracedNapi_erase : napiTurn = (do let observation ← tracedNapi; pure (
 def observeAfterPeek (next : Option Nat) (w : World) : TurnAfterPeek where
   state := snapshot w
   next := next
-  candidates := observeResult ((w.suspended.filterM Activation.consistent).run w)
+  candidates := observeResult ((w.ambient.suspended.filterM Activation.consistent).run w)
   guard := fun worker => observeResult ((Activation.hasWork { worker }).run w)
   resumed := fun a => observeResult ((resumeCandidates none [a]).run w)
   dispatch := fun worker => observeDispatch worker w
@@ -111,7 +111,7 @@ def observeAfterPeek (next : Option Nat) (w : World) : TurnAfterPeek where
 
 def turnObservation (stack : Option Worker) : M TurnObservation := fun w =>
   .ok (⟨observeResult ((scheduleTurn stack).run w),
-    (peekHiddenSite.run w).map fun (next, after) => observeAfterPeek next after⟩, w)
+    ((peekHiddenSite : Leanux.M (Option Nat)).run w).map fun (next, after) => observeAfterPeek next after⟩, w)
 
 def recordlessObservation (stack : Option Worker) (worker : Worker) :
     M (Outcome TurnResult × DispatchObservation) := fun w =>
@@ -120,15 +120,15 @@ def recordlessObservation (stack : Option Worker) (worker : Worker) :
 theorem turn_contract (stack : Option Worker) (P : Snapshot → Prop)
     (Q : Outcome TurnResult → TurnAfterPeek → Prop)
     (h : ∀ initial next after, P (snapshot initial) →
-      peekHiddenSite.run initial = .ok (next, after) →
+      (peekHiddenSite : Leanux.M (Option Nat)).run initial = .ok (next, after) →
       Q (observeResult ((scheduleTurn stack).run initial)) (observeAfterPeek next after)) :
     Returns (turnObservation stack) P
       (fun observation _ => ∀ after, observation.afterPeek = .ok after → Q observation.actual after) := by
   intro w pre
   refine ⟨_, w, rfl, ?_⟩
   intro observed same
-  change (peekHiddenSite.run w).map _ = .ok observed at same
-  cases hp : peekHiddenSite.run w with
+  change ((peekHiddenSite : Leanux.M (Option Nat)).run w).map _ = .ok observed at same
+  cases hp : (peekHiddenSite : Leanux.M (Option Nat)).run w with
   | error err => rw [hp] at same; cases same
   | ok pair =>
     obtain ⟨next, v⟩ := pair

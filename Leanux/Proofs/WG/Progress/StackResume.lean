@@ -7,7 +7,7 @@ namespace Leanux.Proofs.WG.Progress
 open Leanux Leanux.WG Leanux.Env Leanux.Proofs.WG.Noise Std.Do
 
 def resumptionAmbiguity (w : World) : Stop :=
-  .outsideDomain (match w.steps.back? with
+  .outsideDomain (match w.ambient.steps.back? with
     | some s => s!"{s.decision.info.file}:{s.decision.info.line}"
     | none => "syscall entry")
     "the records do not determine which suspended worker resumed"
@@ -36,26 +36,26 @@ theorem resumeCandidates_stack_error (worker : Worker) (a : Activation) (initial
   rfl
 
 theorem turn_stack_busy (worker : Worker) (initial afterPeek : World) (next : Option Nat)
-    (d : Device) (a : Activation) (records : initial.hidden.isNone = false)
-    (peek : peekHiddenSite.run initial = .ok (next, afterPeek))
+    (d : Device) (a : Activation) (records : initial.ambient.hidden.isNone = false)
+    (peek : (peekHiddenSite : Leanux.M (Option Nat)).run initial = .ok (next, afterPeek))
     (noStart : ∀ worker, next.bind sectionOf ≠ some (worker, true))
-    (device : afterPeek.k.wg = some d)
+    (device : afterPeek.wg.dev = some d)
     (noPoll : (next == some (HiddenSite.sectionStart .netRx).info.id &&
       d.peers.toList.any (·.2.napiScheduled)) = false)
-    (candidates : (afterPeek.suspended.filterM Activation.consistent).run afterPeek = .ok ([a], afterPeek))
+    (candidates : (afterPeek.ambient.suspended.filterM Activation.consistent).run afterPeek = .ok ([a], afterPeek))
     (busy : (Activation.hasWork { worker }).run afterPeek = .ok (true, afterPeek)) :
     (scheduleTurn (some worker)).run initial = .error (resumptionAmbiguity afterPeek) := by
   rw [turn_resumption (some worker) initial afterPeek next d records peek noStart device noPoll, candidates]
   exact resumeCandidates_stack_busy worker a afterPeek afterPeek busy
 
 theorem turn_stack_idle (worker : Worker) (initial afterPeek : World) (next : Option Nat)
-    (d : Device) (a : Activation) (records : initial.hidden.isNone = false)
-    (peek : peekHiddenSite.run initial = .ok (next, afterPeek))
+    (d : Device) (a : Activation) (records : initial.ambient.hidden.isNone = false)
+    (peek : (peekHiddenSite : Leanux.M (Option Nat)).run initial = .ok (next, afterPeek))
     (noStart : ∀ worker, next.bind sectionOf ≠ some (worker, true))
-    (device : afterPeek.k.wg = some d)
+    (device : afterPeek.wg.dev = some d)
     (noPoll : (next == some (HiddenSite.sectionStart .netRx).info.id &&
       d.peers.toList.any (·.2.napiScheduled)) = false)
-    (candidates : (afterPeek.suspended.filterM Activation.consistent).run afterPeek = .ok ([a], afterPeek))
+    (candidates : (afterPeek.ambient.suspended.filterM Activation.consistent).run afterPeek = .ok ([a], afterPeek))
     (idle : (Activation.hasWork { worker }).run afterPeek = .ok (false, afterPeek)) :
     (scheduleTurn (some worker)).run initial =
       ((Activation.run a).run (detached afterPeek a) >>= fun out => pure (turnContinue, out.2)) := by
@@ -63,13 +63,13 @@ theorem turn_stack_idle (worker : Worker) (initial afterPeek : World) (next : Op
   exact resumeCandidates_stack_idle worker a afterPeek afterPeek idle
 
 theorem turn_stack_error (worker : Worker) (initial afterPeek : World) (next : Option Nat)
-    (d : Device) (a : Activation) (err : Stop) (records : initial.hidden.isNone = false)
-    (peek : peekHiddenSite.run initial = .ok (next, afterPeek))
+    (d : Device) (a : Activation) (err : Stop) (records : initial.ambient.hidden.isNone = false)
+    (peek : (peekHiddenSite : Leanux.M (Option Nat)).run initial = .ok (next, afterPeek))
     (noStart : ∀ worker, next.bind sectionOf ≠ some (worker, true))
-    (device : afterPeek.k.wg = some d)
+    (device : afterPeek.wg.dev = some d)
     (noPoll : (next == some (HiddenSite.sectionStart .netRx).info.id &&
       d.peers.toList.any (·.2.napiScheduled)) = false)
-    (candidates : (afterPeek.suspended.filterM Activation.consistent).run afterPeek = .ok ([a], afterPeek))
+    (candidates : (afterPeek.ambient.suspended.filterM Activation.consistent).run afterPeek = .ok ([a], afterPeek))
     (failed : (Activation.hasWork { worker }).run afterPeek = .error err) :
     (scheduleTurn (some worker)).run initial = .error err := by
   rw [turn_resumption (some worker) initial afterPeek next d records peek noStart device noPoll, candidates]

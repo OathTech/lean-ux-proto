@@ -15,27 +15,34 @@ def placeholderTurn (d : Device) : M TurnResult := do
   placeholderDispatch worker
 
 theorem turn_placeholder (stack : Option Worker) (initial : World) (d : Device)
-    (records : initial.hidden = none) (device : initial.k.wg = some d) :
+    (records : initial.ambient.hidden = none) (device : initial.wg.dev = some d) :
     (scheduleTurn stack).run initial = (placeholderTurn d).run initial := by
-  have hd : getDev.run initial = .ok (d, initial) := by
-    simp [getDev, getK, StateT.run, bind, pure, get, getThe, MonadStateOf.get,
-      StateT.bind, StateT.pure, StateT.get, Except.bind, Except.pure, device]
+  have hd : (monadLift getDev : Leanux.M Device).run initial = .ok (d, initial) := by
+    have native : ((getDev.run initial.wg).run initial.ambient) =
+        .ok ((d, initial.wg), initial.ambient) := by
+      simp [getDev, device]
+      rfl
+    change (((getDev.run initial.wg).run initial.ambient) >>= fun ((value, wg), ambient) =>
+      Except.ok (value, {initial with wg, ambient})) = _
+    rw [native]
+    rfl
+  have hg (w : World) : (getAmbient : Leanux.M Ambient).run w = .ok (w.ambient, w) := rfl
   have hok {α β : Type} (x : α) (f : α → Except Stop β) :
       (Except.ok x >>= f) = f x := rfl
-  simp only [scheduleTurn, StateT.run_bind, StateT.run_get, pure_bind,
+  simp only [scheduleTurn, StateT.run_bind, hg,
     records, Option.isNone_none, ite_true, hd, hok]
   rfl
 
 theorem placeholder_none_iff (d : Device) : placeholderSelection d = none ↔
-    d.handshakeQueue.isEmpty = true ∧ d.decryptQueue.empty = true ∧
+    d.handshakeQueue.empty = true ∧ d.decryptQueue.empty = true ∧
       d.encryptQueue.empty = true ∧ d.txWorkQueue.isEmpty = true := by
-  cases h1 : d.handshakeQueue.isEmpty <;> cases h2 : d.decryptQueue.empty <;>
+  cases h1 : d.handshakeQueue.empty <;> cases h2 : d.decryptQueue.empty <;>
     cases h3 : d.encryptQueue.empty <;> cases h4 : d.txWorkQueue.isEmpty <;>
     simp [placeholderSelection, h1, h2, h3, h4]
 
 theorem turn_placeholder_empty (stack : Option Worker) (initial : World) (d : Device)
-    (records : initial.hidden = none) (device : initial.k.wg = some d)
-    (empty : d.handshakeQueue.isEmpty = true ∧ d.decryptQueue.empty = true ∧
+    (records : initial.ambient.hidden = none) (device : initial.wg.dev = some d)
+    (empty : d.handshakeQueue.empty = true ∧ d.decryptQueue.empty = true ∧
       d.encryptQueue.empty = true ∧ d.txWorkQueue.isEmpty = true) :
     (scheduleTurn stack).run initial = .ok (turnReturn, initial) := by
   rw [turn_placeholder stack initial d records device]
@@ -63,8 +70,8 @@ theorem placeholderDispatch_success_iff (worker : Worker) (initial final : World
       simp
 
 theorem turn_placeholder_dispatch (stack : Option Worker) (worker : Worker)
-    (initial : World) (d : Device) (records : initial.hidden = none)
-    (device : initial.k.wg = some d) (selected : placeholderSelection d = some worker) :
+    (initial : World) (d : Device) (records : initial.ambient.hidden = none)
+    (device : initial.wg.dev = some d) (selected : placeholderSelection d = some worker) :
     (scheduleTurn stack).run initial = (placeholderDispatch worker).run initial := by
   rw [turn_placeholder stack initial d records device]
   simp only [placeholderTurn, selected]

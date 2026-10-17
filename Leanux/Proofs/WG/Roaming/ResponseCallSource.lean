@@ -7,7 +7,7 @@ set_option maxHeartbeats 800000
 namespace Leanux.Proofs.WG.Roaming
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise Std.Do
 
-def responseLoad : M Bool := do
+def responseLoad : WG.M Bool := do
   -- `under_load = handshake_queue_len >= MAX_QUEUED_INCOMING_HANDSHAKES / 8`
   -- (receive.c:112): the counter, which a `wg_flood`'s batch has filled before
   -- the worker runs (E-B v2, the queue-depth design).
@@ -37,37 +37,44 @@ def responseLoad : M Bool := do
 
 
 /-- A return-valued presentation of the existing exact load continuation. -/
-theorem responseLoad_source (next : Bool → M Unit) :
+theorem responseLoad_source (next : Bool → WG.M Unit) :
     (responseLoad >>= next) = Index.receiveLoadThen next := by
+  have bind_if {α β : Type} (condition : Prop) [Decidable condition]
+      (yes no : WG.M α) (next : α → WG.M β) :
+      ((if condition then yes else no) >>= next) =
+        if condition then yes >>= next else no >>= next := by split <;> rfl
+  have invariant_bind {α β : Type} (message : String) (next : α → WG.M β) :
+      ((invariant message : WG.M α) >>= next) = (invariant message : WG.M β) := rfl
+
   simp only [responseLoad, Index.receiveLoadThen, bind_assoc, pure_bind,
-    bind_if, bind_option, invariant_bind]
+    bind_if, invariant_bind]
   congr 1
   funext d
   congr 1
   funext loaded
-  cases loaded <;> simp only [Bool.false_eq_true, ite_false, ite_true, bind_assoc, pure_bind]
+  cases loaded <;> simp only [Bool.false_eq_true, ite_false, ite_true]
   all_goals try rfl
   congr 1
   funext w
   congr 1
   funext wasLoaded
-  cases wasLoaded <;> simp only [Bool.false_eq_true, ite_false, ite_true, bind_assoc, pure_bind]
+  cases wasLoaded <;> simp only [Bool.false_eq_true, ite_false, ite_true]
   all_goals try rfl
   congr 1
   funext w
   cases w.lastUnderLoad with
   | none => rfl
   | some last =>
-    simp only [bind_assoc, pure_bind]
+    simp only [bind_assoc]
     congr 1
     funext test
     rcases test with ⟨expired, lhs, now⟩
     congr 1
     funext changed
-    cases changed <;> simp [bind_assoc]
+    cases changed <;> simp
 
 def responsePacketPrefix (msg : List UInt8) (src : SkbSource) (underLoad : Bool) :
-    M (Option ResponseCallCut) := do
+    WG.M (Option ResponseCallCut) := do
   let mac ← cookieValidatePacket msg src underLoad
   let proceed ← WG.orM (WG.andM (branch .hsLoadedOperand underLoad)
       (branch .hsLoadedCookieOk (mac == .withCookie)))
@@ -89,7 +96,7 @@ def responsePacketPrefix (msg : List UInt8) (src : SkbSource) (underLoad : Bool)
 
 /-- Exactly the original response continuation after its endpoint setter.
 Session installation, keepalive, statistics, timers and final release remain. -/
-def responseAfterSetter (msg : List UInt8) (pid : PeerId) : M Unit := do
+def responseAfterSetter (msg : List UInt8) (pid : PeerId) : WG.M Unit := do
   if ← branch .hsRespSessionBegun (← beginSession pid) then
     timersSessionDerived pid
     timersHandshakeComplete pid
@@ -107,13 +114,13 @@ def responseAfterSetter (msg : List UInt8) (pid : PeerId) : M Unit := do
 
 /-- There is no setter in the no-cut suffix; a cut invokes the original setter
 immediately, before the full original continuation. -/
-def responseCallSuffix (msg : List UInt8) (src : SkbSource) : Option ResponseCallCut → M Unit
+def responseCallSuffix (msg : List UInt8) (src : SkbSource) : Option ResponseCallCut → WG.M Unit
   | none => pure ()
   | some cut => do
     setPeerEndpointFromSkb cut.consumed.input.pid src
     responseAfterSetter msg cut.consumed.input.pid
 
-def responseCallPrefix (msg : List UInt8) (src : SkbSource) : M (Option ResponseCallCut) := do
+def responseCallPrefix (msg : List UInt8) (src : SkbSource) : WG.M (Option ResponseCallCut) := do
   _ ← branch .hsCookie false
   let underLoad ← responseLoad
   responsePacketPrefix msg src underLoad
@@ -121,20 +128,21 @@ def responseCallPrefix (msg : List UInt8) (src : SkbSource) : M (Option Response
 /-- This observer executes the unrestricted original caller. Its response-only
 source correspondence is stated separately; discarding observations is unconditional. -/
 def observedResponseHandshake (msg : List UInt8) (src : SkbSource) :
-    M (Campaign2.Outcome (Option ResponseCallCut)) := do
+    WG.M (Campaign2.Outcome (Option ResponseCallCut)) := do
   let observed ← Campaign2.inspect (responseCallPrefix msg src)
   receiveHandshakePacket msg src
   pure observed
 
 theorem observedResponseHandshake_erase (msg : List UInt8) (src : SkbSource) :
     (do let _ ← observedResponseHandshake msg src; pure ()) = receiveHandshakePacket msg src := by
-  funext w
-  change (((receiveHandshakePacket msg src).run w >>= fun out =>
-    Except.ok (Campaign2.observeResult ((responseCallPrefix msg src).run w), out.2))
-      >>= fun out => Except.ok ((), out.2)) = (receiveHandshakePacket msg src).run w
-  cases run : (receiveHandshakePacket msg src).run w with
+  funext g ambient
+  change ((((receiveHandshakePacket msg src).run g).run ambient >>= fun ((_, current), after) =>
+    Except.ok ((Campaign2.observeResult (((responseCallPrefix msg src).run g).run ambient), current), after))
+      >>= fun ((_, current), after) => Except.ok (((), current), after)) =
+        ((receiveHandshakePacket msg src).run g).run ambient
+  cases run : ((receiveHandshakePacket msg src).run g).run ambient with
   | error e => rfl
-  | ok pair => rcases pair with ⟨unit, final⟩; cases unit; rfl
+  | ok pair => rcases pair with ⟨⟨value, final⟩, after⟩; cases value; rfl
 
 /-- Exact original response-body factor. A none cut performs no setter; every
 setter path passes the successful consumer cut and starts the unchanged suffix. -/
@@ -142,28 +150,40 @@ theorem responsePacket_source (msg : List UInt8) (src : SkbSource) (underLoad : 
     (kind : messageType msg = MESSAGE_HANDSHAKE_RESPONSE) :
     (responsePacketPrefix msg src underLoad >>= responseCallSuffix msg src) =
       Index.receivePacketBody msg src underLoad := by
+  have branch_native (decision : Decision) (value : Bool) :
+      (branch decision value : WG.M Bool) = (do
+        (monadLift (modify fun a : Ambient => {a with steps := a.steps.push {
+          decision, outcome := value, netRx := a.netRxSection}} : AmbientM Unit) : WG.M Unit)
+        pure value) := rfl
+
+  have bind_if {α β : Type} (condition : Prop) [Decidable condition]
+      (yes no : WG.M α) (next : α → WG.M β) :
+      ((if condition then yes else no) >>= next) =
+        if condition then yes >>= next else no >>= next := by split <;> rfl
+  have invariant_bind {α β : Type} (message : String) (next : α → WG.M β) :
+      ((invariant message : WG.M α) >>= next) = (invariant message : WG.M β) := rfl
+
   simp only [responsePacketPrefix, Index.receivePacketBody, kind,
     MESSAGE_HANDSHAKE_RESPONSE, MESSAGE_HANDSHAKE_INITIATION, Nat.reduceBEq,
-    ← responseWithLookup_erase msg, responseCallSuffix, responseAfterSetter,
-    bind_assoc, pure_bind, bind_if, bind_option, invariant_bind]
-  simp only [branch, bind_assoc, pure_bind, Bool.false_eq_true, ite_false, ite_true,
+    ← responseWithLookup_erase msg, responseCallSuffix,
+    bind_assoc, pure_bind, bind_if, invariant_bind]
+  simp only [branch_native, bind_assoc, pure_bind, Bool.false_eq_true, ite_false, ite_true,
     Option.isNone_map]
   congr 1
   funext mac
   congr 1
   funext proceed
-  cases proceed <;> simp only [Bool.false_eq_true, ite_false, ite_true, bind_assoc,
-    pure_bind, bind_if, bind_option, invariant_bind]
+  cases proceed <;> simp only [Bool.false_eq_true, ite_false, ite_true]
   congr 1
-  funext unit
+  funext ignored
   congr 1
-  funext unit
+  funext ignored
   congr 1
-  funext unit
+  funext ignored
   congr 1
   funext consumed
   cases consumed with
-  | none => simp [responseCallSuffix]
+  | none => simp
   | some pair =>
     simp only [Option.isNone_some, Bool.false_eq_true, ite_false, Option.map_some,
       bind_assoc, pure_bind, responseCallSuffix, responseAfterSetter]
@@ -174,10 +194,16 @@ is pure; the some-cut suffix begins with precisely the original endpoint setter.
 theorem receiveHandshakePacket_response (msg : List UInt8) (src : SkbSource)
     (kind : messageType msg = MESSAGE_HANDSHAKE_RESPONSE) :
     (responseCallPrefix msg src >>= responseCallSuffix msg src) = receiveHandshakePacket msg src := by
+  have branch_native (decision : Decision) (value : Bool) :
+      (branch decision value : WG.M Bool) = (do
+        (monadLift (modify fun a : Ambient => {a with steps := a.steps.push {
+          decision, outcome := value, netRx := a.netRxSection}} : AmbientM Unit) : WG.M Unit)
+        pure value) := rfl
+
   rw [← Index.receivePacket_source]
   simp only [responseCallPrefix, Index.receivePacketSource, kind,
     MESSAGE_HANDSHAKE_RESPONSE, MESSAGE_HANDSHAKE_COOKIE, Nat.reduceBEq,
-    branch, bind_assoc, pure_bind, Bool.false_eq_true, ite_false]
+    branch_native, bind_assoc, pure_bind, Bool.false_eq_true, ite_false]
   rw [← responseLoad_source]
   congr 1
   funext ignored
@@ -188,7 +214,7 @@ theorem receiveHandshakePacket_response (msg : List UInt8) (src : SkbSource)
 /-- The recorded cut comes from the very prefix whose result selects the
 actual continuation, rather than from an independently related run. -/
 def responseCallTranscript (msg : List UInt8) (src : SkbSource) :
-    M (Campaign2.Outcome (Option ResponseCallCut)) := do
+    WG.M (Campaign2.Outcome (Option ResponseCallCut)) := do
   let candidate ← responseCallPrefix msg src
   let atCut ← Campaign2.read
   responseCallSuffix msg src candidate
@@ -199,20 +225,21 @@ A constant-none observer would not satisfy this equality. Errors remain exact. -
 theorem observedResponseHandshake_source (msg : List UInt8) (src : SkbSource)
     (kind : messageType msg = MESSAGE_HANDSHAKE_RESPONSE) :
     observedResponseHandshake msg src = responseCallTranscript msg src := by
-  funext w
-  change ((receiveHandshakePacket msg src).run w >>= fun out =>
-    Except.ok (Campaign2.observeResult ((responseCallPrefix msg src).run w), out.2)) = _
+  funext g ambient
+  change (((receiveHandshakePacket msg src).run g).run ambient >>= fun ((_, current), after) =>
+    Except.ok ((Campaign2.observeResult (((responseCallPrefix msg src).run g).run ambient), current), after)) = _
   rw [← receiveHandshakePacket_response msg src kind]
-  change (((responseCallPrefix msg src).run w >>= fun out =>
-    (responseCallSuffix msg src out.1).run out.2) >>= fun out =>
-      Except.ok (Campaign2.observeResult ((responseCallPrefix msg src).run w), out.2)) =
-    ((responseCallPrefix msg src).run w >>= fun cut =>
-      (responseCallSuffix msg src cut.1).run cut.2 >>= fun out =>
-        Except.ok (Except.ok (cut.1, Campaign2.snapshot cut.2), out.2))
-  cases hp : (responseCallPrefix msg src).run w with
+  change ((((responseCallPrefix msg src).run g).run ambient >>= fun ((out, current), after) =>
+    ((responseCallSuffix msg src out).run current).run after) >>= fun ((_, current), after) =>
+      Except.ok ((Campaign2.observeResult (((responseCallPrefix msg src).run g).run ambient), current), after)) =
+    (((responseCallPrefix msg src).run g).run ambient >>= fun ((cut, atCut), cutAmbient) =>
+      ((responseCallSuffix msg src cut).run atCut).run cutAmbient >>= fun ((_, current), after) =>
+        Except.ok ((Except.ok (cut, Campaign2.snapshot atCut cutAmbient), current), after))
+  cases hp : ((responseCallPrefix msg src).run g).run ambient with
   | error err => rfl
   | ok pair =>
-    rcases pair with ⟨candidate, atCut⟩
-    cases hs : (responseCallSuffix msg src candidate).run atCut <;> rfl
+    rcases pair with ⟨⟨candidate, atCut⟩, cutAmbient⟩
+    cases hs : ((responseCallSuffix msg src candidate).run atCut).run cutAmbient <;> rfl
+
 
 end Leanux.Proofs.WG.Roaming

@@ -64,8 +64,8 @@ remain historical and lagging during the retrofit. The
 [retrofit report](2026-10-16-proof-campaign-2-state-split.md) records baseline
 counts, carries, deletions and validation. This branch retains the proof
 target and gate removed from main pending campaign 1's landing.
-The support tranches check 904 theorems (638 retyped/generalized, fourteen corrected statements,
-189 retained, sixty-three support/finding declarations), and delete twenty-one type-given
+The support tranches check 987 theorems (710 retyped/generalized, eighteen corrected statements,
+189 retained, seventy support/finding declarations), and delete twenty-one type-given
 frames. H1’s full terminal module now checks over the split mirror; H2–H6
 terminal closures and the full gate remain lagging. Ten H2 table
 claims have checked projected support; all 258 original audit names remain
@@ -77,7 +77,8 @@ current wheel effects; guarded arming and session-derived effects also account
 for all wheel changes. Traversal, data-receipt and handshake-completion effects
 are corrected too; all seven identified contracts are carried. Their downstream
 configuration timer cleanup and recorded-site source effects are also corrected;
-remaining timer and worker consumers are pending.
+jitter and initiation-send arming effects are corrected too. Remaining timer
+and worker consumers are pending.
 The [H2 peer-release finding](2026-10-17-proof-campaign-2-peer-release.md)
 checks two stopped outcomes within the old totality domain. The corrected
 peer-release contract now classifies the exact queue/timer refusal or successful
@@ -86,6 +87,11 @@ no reachability claim is made.
 The [H4 queued-handshake finding](2026-10-17-proof-campaign-2-queued-handshake.md)
 checks a stale pending-peer prediction after the queue-record change in
 `1f0fbeb`; the five legacy queued-send contracts remain pending.
+The [H4 removal finding](2026-10-17-proof-campaign-2-removal-carry.md)
+refutes the old quiet/live totality domain using a scheduled NAPI poll and
+the actual crypt-work Stop. Its source factor is corrected; broader removal
+contracts remain pending with their original domains.
+
 
 | Result | Statements | Directory | Charter | Review | Mirror commit | Status |
 | --- | --- | --- | --- | --- | --- | --- |

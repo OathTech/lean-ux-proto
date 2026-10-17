@@ -1,4 +1,4 @@
-import Leanux.Proofs.WG.Config.QuietTimers
+import Leanux.Proofs.WG.Config.QuietRemovalSource
 import Leanux.Proofs.WG.Index.PeerRelease
 
 set_option autoImplicit false
@@ -7,28 +7,6 @@ set_option maxHeartbeats 800000
 
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise Std.Do
-
-def removalDeadGuard (pid : PeerId) : M Unit := do
-  if ← branch .peerRemoveNotDead !(← getPeer pid).isDead then
-    unsupported "peer_remove_after_dead: WARN_ON(!peer->is_dead)"
-
-def decrementPeerCount : M Unit := do
-  if (← getDev).numPeers == 0 then invariant "--num_peers below zero"
-  modifyDev fun d => { d with numPeers := d.numPeers - 1 }
-
-theorem peerRemoveAfterDead_source (pid : PeerId) :
-    peerRemoveAfterDead pid = (do
-      removalDeadGuard pid
-      keypairsClear pid
-      timersStop pid
-      drainHandshakeSendWq none
-      decrementPeerCount
-      peerPut (some pid)) := by
-  have distribute {α β : Type} (q : Prop) [Decidable q] (a b : M α) (f : α → M β) :
-      ((if q then a else b) >>= f) = (if q then a >>= f else b >>= f) := by
-    split <;> rfl
-  simp only [peerRemoveAfterDead, removalDeadGuard, decrementPeerCount,
-    bind_assoc, distribute, pure_bind]
 
 theorem quietCleanup_resident (d : Device) (pid : PeerId) (p : Peer) :
     (quietCleanupDevice d pid p).peers[pid]? = some (quietCleanupPeer p) :=

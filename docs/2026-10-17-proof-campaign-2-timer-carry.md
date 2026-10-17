@@ -97,3 +97,10 @@ behavior. These six downstream corrections do not strengthen the witness
 into a reachability claim. Further timer/worker consumers and the full H6
 terminal closure remain pending; validation and the process-failure ledger
 are in the retrofit report.
+
+The 987-theorem checkpoint also corrects armIfGuard_recorded,
+jitteredArm_recorded_clock and sendInitiation_arm_recorded. Actual Product
+caller/jitter witnesses remain intact, and initiation's complete wheel effect
+is anchored at the real successful prefix state. No successful transmission
+or new readiness condition is assumed. The retrofit report records validation
+and the added private Product source factor.

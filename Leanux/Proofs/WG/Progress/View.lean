@@ -1,11 +1,12 @@
 import Leanux.Proofs.WG.Progress.Model
+import Leanux.Proofs.WG.Campaign2.ProductView
 import Leanux.Env.Batch
 
 /-! Data-only observations for the scheduler claims. Each execution observation
 is supplied by ObservationBridge from the same concrete entry, never by filling
 omitted subsystem state with defaults. -/
 namespace Leanux.Proofs.WG.Progress
-open Leanux Leanux.WG Leanux.Env Campaign2
+open Leanux Leanux.WG Leanux.Env Campaign2.Product
 
 def mapOutcome (f : α → β) (out : Outcome α) : Outcome β :=
   out.map fun (value, state) => (f value, state)

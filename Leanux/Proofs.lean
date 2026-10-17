@@ -5,6 +5,8 @@ import Leanux.Proofs.WG.Index.PeerReleaseFindings
 import Leanux.Proofs.WG.Noise.Statements
 import Leanux.Proofs.WG.Roaming.Statements
 import Leanux.Proofs.WG.Config.Statements
+import Leanux.Proofs.WG.Config.QueuedHandshakeFindings
+import Leanux.Proofs.WG.Config.QuietRemovalFindings
 import Leanux.Proofs.WG.Progress.Statements
 import Leanux.Proofs.WG.TimerDiscipline.Statements
 import Leanux.Proofs.WG.TimerDiscipline.ArmingWheelFindings
