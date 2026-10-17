@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.TimerDiscipline.PartialExchangeArmClaims
 import Leanux.Proofs.WG.TimerDiscipline.ActualRetryBlockClaims
 import Leanux.Proofs.WG.TimerDiscipline.OuterAdjacentClaims
 import Leanux.Proofs.WG.TimerDiscipline.OuterEpisodeClaims
@@ -753,5 +754,21 @@ theorem original_timer_actual_retry_block_counts (jPass : UInt64) :
         (∀ pair ∈ first :: rest, ActualRetryPairMatches jPass pid pair) →
         ActualRetryBlockEffect pid first rest) :=
   runTimers_actual_retry_block_counts jPass
+
+/-- Local give-up execution can arm zero-key without creating a session:
+all key slots and the key store remain empty, the handshake remains
+CREATED_INITIATION, and the allocation counter stays zero while one wheel
+enqueue occurs. This is not a reachable-history counterexample or a claim
+about how many arms occurred during any past session. Ambient inputs are
+arbitrary except that arm records are off. -/
+theorem original_giveUp_arms_without_session_creation :
+    Campaign2.Returns (expiredRetransmitHandshake 0)
+      (fun s => s.wg = partialExchangeArmView ∧ s.ambient.armRecords = false)
+      (fun _ s => s.wg.keypairCounter = 0 ∧ s.wg.timerEnqueues = 1 ∧
+        s.wg.device.map (fun d => d.keypairs.isEmpty) = some true ∧
+        (s.peerAt 0).map
+          (fun p => (p.handshakeState,p.keypairPrevious,p.keypairCurrent,p.keypairNext,p.timerZeroKeyMaterial)) =
+          some (HANDSHAKE_CREATED_INITIATION,none,none,none,some ZERO_KEY_MATERIAL_TICKS.toUInt64)) :=
+  giveUp_arms_without_session_creation
 
 end Leanux.Proofs.WG.TimerDiscipline

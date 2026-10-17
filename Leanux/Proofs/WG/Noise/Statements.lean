@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Noise.ResponseTagClaims
 import Leanux.Proofs.WG.Noise.SessionClockClaims
 import Leanux.Proofs.WG.Noise.ResponseEdgeClaims
 import Leanux.Proofs.WG.Noise.RotationClaims
@@ -331,5 +332,17 @@ theorem original_begin_session_clock (pid : PeerId) (entry : Campaign2.Product.S
       (fun s => s = entry)
       (fun result final => SessionClockObservation pid entry result.1 result.2 final) :=
   beginSession_clock_observation pid entry
+
+/-- Every normal response-consumption refusal preserves all peer state tags.
+Success changes only the returned peer from created initiation to consumed
+response. Absent peers remain absent, and all source Stops retain their domain;
+Device rollback, completion and whole-driver edge ownership are not claimed. -/
+theorem original_consume_response_tag_map (msg : List UInt8) (entry : Campaign2.Snapshot) :
+    Campaign2.Ensures (consumeResponse msg) (fun s => s = entry)
+      (fun result after =>
+        (∀pid, after.tagAt pid = if result = some pid then
+          some HANDSHAKE_CONSUMED_RESPONSE else entry.tagAt pid) ∧
+        (∀pid, result = some pid → entry.tagAt pid = some HANDSHAKE_CREATED_INITIATION)) :=
+  consumeResponse_tagMap_projected msg entry
 
 end Leanux.Proofs.WG.Noise
