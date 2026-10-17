@@ -19,11 +19,11 @@ and attributed theorem declarations. Campaign 2 owns 427 Lean files,
 | Result | Files | Before theorems | Before headlines | Retrofit status |
 | --- | ---: | ---: | ---: | --- |
 | Common projection | 2 | 0 | 0 | Native and product observations carried |
-| H1 Noise | 35 | 171 | 22 | Native access, crypto/slot/peer frames, slot/clear/zero operations and all four state-edge contracts and eleven ordered clear/release contracts, ten rotation/confirmation source contracts projected clear support, both normal consume-tag contracts and four consecutive-confirmation contracts carried; six type-given frames deleted; full caller/reachability closure pending |
-| H2 Index | 68 | 318 | 52 | Table/scans/insertion, full lookup/miss and success/empty-result inversion, exact allocation/release, eight native numeric-index frames, seven native owner frames plus their pure bound, ten projected table claims, all ten record contracts, exact draw exhaustion/corpus pair, five lifecycle contracts and 55 pure theorems checked; native receive factor and retirement frame carried; seven Ambient frames deleted; two stale peer-release totality counterexamples checked; whole terminal closure/callers pending |
-| H3 Roaming | 35 | 119 | 13 | Six native endpoint/destination contracts plus three product publication source factors and a generic observation-read frame carried; two Ambient frames deleted; authentication callers and product callbacks pending |
+| H1 Noise | 35 | 171 | 22 | Native access, crypto/slot/peer frames, slot/clear/zero operations and all four state-edge contracts and eleven ordered clear/release contracts, ten rotation/confirmation source contracts, projected clear/rotation/confirmation support and four session counter/word frames, both normal consume-tag contracts and four consecutive-confirmation contracts carried; six type-given frames deleted; full caller/reachability closure pending |
+| H2 Index | 68 | 318 | 52 | Table/scans/insertion, full lookup/miss and success/empty-result inversion, exact allocation/release, eight native numeric-index frames, seven native owner frames plus their pure bound, ten projected table claims, all ten record contracts, exact draw exhaustion/corpus pair, five lifecycle contracts and 55 pure theorems checked; native receive factor, retirement frame and exact session-allocation factor carried; seven Ambient frames deleted; two stale peer-release totality counterexamples checked; whole terminal closure/callers pending |
+| H3 Roaming | 35 | 119 | 13 | Six native endpoint/destination contracts plus three product publication source factors and a generic observation-read frame carried; two Ambient frames deleted; native decryption provenance carried; product authentication callers and callbacks pending |
 | H4 Configuration | 130 | 554 | 79 | Total-return/branch laws, seven exact source factors, three endpoint-clearing frames, three empty-root insertion contracts, total first placement, validation/identity, partial and total empty-list peer dumps, ordered allowed-list deletion, concrete dump cancellation and three total root-transfer contracts and two total inserted-node readback leaves checked; three Ambient frames deleted; remaining effects/readback carry pending |
-| H5 Progress | 59 | 265 | 42 | Twenty-nine pure/control or pure-source theorems, three generalized worker control contracts and one Ambient record frame and seven exact cut-source/projected contracts and six arbitrary-record jitter source/projected contracts and six arbitrary-record index insertion source contracts checked; two pointer-ring snapshot contracts and remaining operational carry pending |
+| H5 Progress | 59 | 265 | 42 | Twenty-nine pure/control or pure-source theorems, three generalized worker control contracts and one Ambient record frame and seven exact cut-source/projected contracts and six arbitrary-record jitter source/projected contracts and six arbitrary-record index insertion source contracts and both projected outcome claims checked; two pointer-ring snapshot contracts and remaining operational carry pending |
 | H6 Timer discipline | 98 | 404 | 50 | Two pure session-liveness relations, map/guard base, two current wheel effects, separated jitter bound/frame and two projected bound claims, six exact jitter-record contracts and four exact exhaustion contracts and four source/product outcome claims, plus a checked stale-statement counterexample; three Ambient frames deleted; seven exact-peer arming claims and wider timer/worker semantics pending |
 
 Retyped, deleted and retained counts will be reported per validated tranche.
@@ -1216,3 +1216,76 @@ Reproduce scoped builds and fresh replay using the capped bundle commands above
 on `Noise.ConsumeEdges`, `Noise.ConfirmationSequenceSource`,
 `Roaming.PublicationSource`, `Roaming.PublicationFrames` and
 `Progress.IndexProgressSource`, each under `Leanux.Proofs.WG`.
+
+## Projected rotation, index progress and session dependencies
+
+| Tranche | Before | Retyped/generalized | Deleted | Kept | Added | After |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `Noise.RotationClaims`, `ConfirmationSequenceClaims` | 0 | 0 | 0 | 0 | 6 | 6 |
+| `Progress.IndexProgressClaims` | 2 | 2 | 0 | 0 | 0 | 2 |
+| `Roaming.Authentication` | 1 | 1 | 0 | 0 | 0 | 1 |
+| `Noise.SessionFrames`, `Index.SessionOperations` | 5 | 4 | 0 | 1 | 0 | 5 |
+| This tranche | 8 | 7 | 0 | 1 | 6 | 14 |
+| Cumulative validated surface | 372 | 236 | 21 | 115 | 32 | 383 |
+
+The tree has 453 campaign-owned files and 1,842 theorem declarations;
+1,459 baseline declarations await validation. The checked closure has 149 proof
+modules: H1 89 theorems, H2 152, H3 11, H4 51, H5 54 and H6 26. All six
+whole-result closures and all 258 terminal declarations remain lagging.
+
+H1's six new helpers carry existing projected rotation and consecutive-confirmation
+headlines. Their public declarations remain in `Statements`; the helpers are
+counted as additions, and the isolated public wrappers are not counted again.
+Original Device/relation observations, arbitrary WG/Ambient inputs, aliases,
+normal-return scope and exact conditional release budgets remain unchanged.
+No original exact fixture-snapshot equation is discarded.
+
+H5's two index-progress claims use actual `liftIndex` through the native
+projection. They preserve arbitrary supplied records, exact resolver errors,
+the post-unhash table, fresh-index test and strict suffix decrease. The successful
+postcondition existentially names the actual final snapshot without asserting
+a fixture frame. No owner-residency or uniqueness premise is added.
+
+H3's native decryption-provenance contract retains its original resident-keypair
+premise and normal-return scope. It identifies the returned peer, source,
+keypair, decoded nonce and AEAD plaintext using the actual receiving key.
+It adds no key-validity or cryptographic-success hypothesis and claims neither
+totality nor authentication of the source address.
+
+The three native session counter frames remain substantive: `keypairCounter`
+belongs to WG state, which these operations can access. Their pure peer-word
+companion is retained. The new `Index.SessionOperations` extracts the two
+session tail definitions and exact `beginSession` source factor from
+`SessionOwners`; its other four owner-invariant bodies are unchanged and pending.
+The source factor retains the actual derivation, allocation, zeroing, rotation,
+owner-word dereference, guarded index replacement and error order.
+
+Claims: `Noise/RotationClaims`, `Noise/ConfirmationSequenceClaims`,
+`Progress/IndexProgressClaims`, `Roaming/Authentication` and
+`Index/SessionOperations`. Frames: `Noise/SessionFrames`.
+No shared layer, mirror file, gate or public audit name changes.
+
+Scoped capped builds pass without warnings: rotation/confirmation 61 jobs,
+index claims 41, authentication 55 and session dependencies 55. Axiom inspection
+covers 261, 90 and 176 logical roots in the three groups, using only the three
+permitted axioms. The six isolated Noise wrappers and two index-progress
+wrappers also check with standard axioms. Fresh kernel replay passes for all
+six roots; static gate token/import and whitespace checks pass. Independent
+reviews found no correctness issue. No whole-result or full proof-gate pass
+is claimed.
+
+Development: rotation/confirmation, authentication and index-claim prototypes
+passed first time; a second index prototype also checked its public wrappers.
+Session dependencies had two failed drafts (native adapter weakest-precondition
+shape and deprecated tactics; then equality/type inference and unused simp
+arguments), followed by a clean third draft. All package builds passed. Two
+session EOF formatting issues were fixed before a final successful rebuild;
+an index-claims EOF issue was fixed without changing its proof. No infrastructure
+rerun, cap/proof-limit change or guest run occurred. Complete compiler output
+was captured before preview.
+
+Reproduce scoped builds and fresh replay using the capped bundle commands above
+on `Noise.RotationClaims`, `Noise.ConfirmationSequenceClaims`,
+`Progress.IndexProgressClaims`, `Roaming.Authentication`,
+`Noise.SessionFrames` and `Index.SessionOperations`, each under
+`Leanux.Proofs.WG`.

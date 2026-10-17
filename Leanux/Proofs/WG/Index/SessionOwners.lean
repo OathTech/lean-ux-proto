@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.Index.OwnerFrames
+import Leanux.Proofs.WG.Index.SessionOperations
 
 set_option autoImplicit false
 set_option pp.structureInstances false
@@ -24,34 +25,6 @@ theorem keypairCreate_owners_spec (peer : Option PeerId) :
   | some kp =>
     obtain ⟨rfl, hd, hc⟩ := effect
     exact ⟨_, hd, unique, created_bounded d _ peer bounded, Nat.lt_succ_self _, bounded_fresh d bounded⟩
-
-/-- The unchanged original suffix after a successful keypair allocation. -/
-def sessionAfterAllocation (pid : PeerId) (st : Nat) (kp : KeypairId) : M Bool := do
-  let p ← getPeer pid
-  let initiator := st == HANDSHAKE_CONSUMED_RESPONSE
-  setKeypair kp { (← getKeypair kp) with iAmTheInitiator := initiator, remoteIndex := p.remoteIndex }
-  if ← branch .sessionInitiator initiator then deriveKeys kp true p.chainingKey
-  else deriveKeys kp false p.chainingKey
-  handshakeZero pid
-  if ← branch .sessionAlive !(← getPeer pid).isDead then
-    addNewKeypair pid kp
-    _ ← IndexOwner.peerDeref (.handshake pid)
-    if !(← indexReplaceHandshake pid kp) then unsupported "begin_session: the handshake entry was unhashed"
-    return true
-  unsupported "a dead peer finishing a session"
-
-def sessionAfterCreate (pid : PeerId) (st : Nat) (created : Option KeypairId) : M Bool := do
-  if ← branch .sessionNoKeypair created.isNone then return false
-  let some kp := created | invariant "unreachable"
-  sessionAfterAllocation pid st kp
-
-theorem beginSession_owner_source (pid : PeerId) :
-    beginSession pid = (do
-      let st := (← getPeer pid).handshakeState
-      if ← WG.andM (branch .sessionNotCreatedResponse (st != HANDSHAKE_CREATED_RESPONSE))
-          (branch .sessionNotConsumedResponse (st != HANDSHAKE_CONSUMED_RESPONSE)) then return false
-      let created ← keypairCreate (← IndexOwner.peerWord (.handshake pid))
-      sessionAfterCreate pid st created) := rfl
 
 theorem sessionAfterAllocation_owners (pid : PeerId) (st : Nat) (kp : KeypairId) :
     ⦃fun w => ⌜OwnersFresh kp w⌝⦄ sessionAfterAllocation pid st kp

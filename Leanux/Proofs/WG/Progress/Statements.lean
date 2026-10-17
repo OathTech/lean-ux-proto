@@ -531,7 +531,7 @@ retain the original hidden-input error. Search is over the table after removing
 this owner's old rows. Success records the exact inserted table and unused
 suffix. No owner-residency or table-uniqueness premise is required. -/
 theorem original_index_record_outcome (owner : IndexOwner) (d : Device) (records : List HiddenRecord) :
-    Campaign2.Observes (indexInsert owner)
+    Campaign2.Observes (liftIndex (indexInsert owner))
       (fun s => s.wg.device = some d ∧ s.ambient.hidden = some records)
       (fun _ outcome =>
         match resolveIndexSearch (Index.removeOwner owner d.indexTable) records with
@@ -550,7 +550,7 @@ this loop's budget-exhaustion nor stolen-index stop is possible. This excludes
 recordless placeholder/domain-filter execution and makes no scheduler-progress
 or table-wide uniqueness claim. -/
 theorem original_index_record_progress (owner : IndexOwner) (d : Device) (records : List HiddenRecord) :
-    Campaign2.Observes (indexInsert owner)
+    Campaign2.Observes (liftIndex (indexInsert owner))
       (fun s => s.wg.device = some d ∧ s.ambient.hidden = some records)
       (fun _ outcome =>
         (∃ message, outcome = .error (.hidden message)) ∨

@@ -8,7 +8,7 @@ namespace Leanux.Proofs.WG.Progress
 open Leanux Leanux.WG Leanux.Proofs.WG.Index
 
 theorem index_record_outcome (owner : IndexOwner) (d : Device) (records : List HiddenRecord) :
-    Campaign2.Observes (indexInsert owner)
+    Campaign2.Observes (liftIndex (indexInsert owner))
       (fun s => s.wg.device = some d ∧ s.ambient.hidden = some records)
       (fun _ outcome =>
         match resolveIndexSearch (removeOwner owner d.indexTable) records with
@@ -18,8 +18,8 @@ theorem index_record_outcome (owner : IndexOwner) (d : Device) (records : List H
           final.wg.device = some {d with indexTable :=
             {index, owner} :: removeOwner owner d.indexTable} ∧
           final.ambient.hidden = some rest) := by
-  intro w pre
-  have source := indexInsert_input owner d records w pre.1 pre.2
+  intro g ambient pre
+  have source := indexInsert_input owner d records g ambient pre.1 pre.2
   cases resolution : resolveIndexSearch (removeOwner owner d.indexTable) records with
   | error error =>
     simp only [resolution] at source ⊢
@@ -28,11 +28,11 @@ theorem index_record_outcome (owner : IndexOwner) (d : Device) (records : List H
   | ok pair =>
     rcases pair with ⟨index, rest⟩
     simp only [resolution] at source ⊢
-    obtain ⟨final, run, device, hidden⟩ := source
-    exact ⟨Campaign2.snapshot final, by rw [run]; rfl, device, hidden⟩
+    obtain ⟨final, after, run, device, hidden⟩ := source
+    exact ⟨Campaign2.snapshot final after, by rw [run]; rfl, device, hidden⟩
 
 theorem index_record_progress (owner : IndexOwner) (d : Device) (records : List HiddenRecord) :
-    Campaign2.Observes (indexInsert owner)
+    Campaign2.Observes (liftIndex (indexInsert owner))
       (fun s => s.wg.device = some d ∧ s.ambient.hidden = some records)
       (fun _ outcome =>
         (∃ message, outcome = .error (.hidden message)) ∨
@@ -42,8 +42,8 @@ theorem index_record_progress (owner : IndexOwner) (d : Device) (records : List 
           final.wg.device = some {d with indexTable :=
             {index, owner} :: removeOwner owner d.indexTable} ∧
           final.ambient.hidden = some rest) := by
-  intro w pre
-  have source := index_record_outcome owner d records w pre
+  intro g ambient pre
+  have source := index_record_outcome owner d records g ambient pre
   have shape := resolveIndexSearch_outcome (removeOwner owner d.indexTable) records
   cases resolution : resolveIndexSearch (removeOwner owner d.indexTable) records with
   | error error =>

@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.Noise.RotationClaims
+import Leanux.Proofs.WG.Noise.ConfirmationSequenceClaims
 import Leanux.Proofs.WG.Noise.ClearClaims
 import Leanux.Proofs.WG.Noise.InitiationReadyClaims
 import Leanux.Proofs.WG.Campaign2.Bridge
@@ -166,10 +168,8 @@ theorem original_rotation_ordered (pid : PeerId) (newKey : KeypairId)
     Campaign2.Ensures (addNewKeypair pid newKey) (fun s => s.wg.device = some d)
       (fun _ s => ∃ final, s.wg.device = some final ∧
         RotationRun pid d (rotationPlan p k.iAmTheInitiator newKey) final ∧
-        final.peers[pid]? = some (rotationPeer (rotationPlan p k.iAmTheInitiator newKey) p)) := by
-  intro w result final pre run
-  obtain ⟨out, device, effect⟩ := addNewKeypair_effect pid newKey d p k resident key w result final pre run
-  exact ⟨out, device, effect, rotationRun_peer effect p resident⟩
+        final.peers[pid]? = some (rotationPeer (rotationPlan p k.iAmTheInitiator newKey) p)) :=
+  rotation_ordered pid newKey d p k resident key
 
 /-- A resident new key supplies the role test. Static reference multiplicities
 for precisely the released old slots guarantee normal completion, without
@@ -183,10 +183,8 @@ theorem original_rotation_ready_returns (pid : PeerId) (newKey : KeypairId)
     Campaign2.Returns (addNewKeypair pid newKey) (fun s => s.wg.device = some d)
       (fun _ s => ∃ final, s.wg.device = some final ∧
         RotationRun pid d (rotationPlan p k.iAmTheInitiator newKey) final ∧
-        final.peers[pid]? = some (rotationPeer (rotationPlan p k.iAmTheInitiator newKey) p)) := by
-  intro w pre
-  obtain ⟨result, final, run, post⟩ := addNewKeypair_returns_ready pid newKey d p k resident key ready w pre
-  exact ⟨result, final, run, original_rotation_ordered pid newKey d p k resident key w result final pre run⟩
+        final.peers[pid]? = some (rotationPeer (rotationPlan p k.iAmTheInitiator newKey) p)) :=
+  rotation_ready_returns pid newKey d p k resident key ready
 
 /-- Normal confirmation either returns false with the original Device, or
 performs the exact previous-slot write, old-previous release and current/next
@@ -195,10 +193,8 @@ theorem original_confirmation_ordered (pid : PeerId) (received : KeypairId) (d :
     (resident : d.peers[pid]? = some p) :
     Campaign2.Ensures (receivedWithKeypair pid received) (fun s => s.wg.device = some d)
       (fun ok s => ∃ final, s.wg.device = some final ∧ ConfirmationEffect pid received d p ok final ∧
-        final.peers[pid]? = some (if ok then rotationPeer (confirmationPlan p received) p else p)) := by
-  intro w ok final pre run
-  obtain ⟨out, device, effect⟩ := receivedWithKeypair_effect pid received d p resident w ok final pre run
-  exact ⟨out, device, effect, confirmationEffect_peer pid received d out p ok resident effect⟩
+        final.peers[pid]? = some (if ok then rotationPeer (confirmationPlan p received) p else p)) :=
+  confirmation_ordered pid received d p resident
 
 /-- The next-slot mismatch needs no release budget. When it matches, static
 readiness for the old previous slot guarantees completion. The confirmed key
@@ -209,10 +205,8 @@ theorem original_confirmation_ready_returns (pid : PeerId) (received : KeypairId
     (ready : p.keypairNext = some received → ClearReady d [p.keypairPrevious]) :
     Campaign2.Returns (receivedWithKeypair pid received) (fun s => s.wg.device = some d)
       (fun ok s => ∃ final, s.wg.device = some final ∧ ConfirmationEffect pid received d p ok final ∧
-        final.peers[pid]? = some (if ok then rotationPeer (confirmationPlan p received) p else p)) := by
-  intro w pre
-  obtain ⟨ok, final, run, post⟩ := receivedWithKeypair_returns_ready pid received d p resident ready w pre
-  exact ⟨ok, final, run, original_confirmation_ordered pid received d p resident w ok final pre run⟩
+        final.peers[pid]? = some (if ok then rotationPeer (confirmationPlan p received) p else p)) :=
+  confirmation_ready_returns pid received d p resident ready
 
 /-- Every normal original session return has the exact allocation, role/remote-index,
 derived-key, handshake-zero, ordered rotation/release and index-replacement effects.
@@ -266,13 +260,8 @@ theorem original_confirmation_sequence (pid : PeerId) (ids : List KeypairId)
     Campaign2.Ensures (ids.mapM (receivedWithKeypair pid)) (fun s => s.wg.device = some d)
       (fun results s => ∃ final, s.wg.device = some final ∧
         ConfirmationSequenceEffect pid ids d p results final ∧
-        results.length = ids.length ∧ results.count true ≤ 1) := by
-  intro w results out pre run
-  obtain ⟨final, device, effect⟩ :=
-    confirmationSequence_effect pid ids d p resident w results out pre run
-  exact ⟨final, device, effect,
-    confirmationSequenceEffect_length pid ids d final p results effect,
-    confirmationSequenceEffect_count pid ids d final p results effect⟩
+        results.length = ids.length ∧ results.count true ≤ 1) :=
+  confirmation_sequence pid ids d p resident
 
 /-- Static release readiness for the initial previous slot is required only if
 some input matches the initial next slot. It guarantees termination of these
@@ -285,13 +274,8 @@ theorem original_confirmation_sequence_ready_returns (pid : PeerId) (ids : List 
     Campaign2.Returns (ids.mapM (receivedWithKeypair pid)) (fun s => s.wg.device = some d)
       (fun results s => ∃ final, s.wg.device = some final ∧
         ConfirmationSequenceEffect pid ids d p results final ∧
-        results.length = ids.length ∧ results.count true ≤ 1) := by
-  intro w pre
-  obtain ⟨results, out, run, final, device, effect⟩ :=
-    confirmationSequence_returns_ready pid ids d p resident ready w pre
-  exact ⟨results, out, run, final, device, effect,
-    confirmationSequenceEffect_length pid ids d final p results effect,
-    confirmationSequenceEffect_count pid ids d final p results effect⟩
+        results.length = ids.length ∧ results.count true ≤ 1) :=
+  confirmation_sequence_ready_returns pid ids d p resident ready
 
 /-- The original initiation returns its exact message and ordered Device/index
 updates from a resident peer, an identity, a non-null handshake peer word, pure
