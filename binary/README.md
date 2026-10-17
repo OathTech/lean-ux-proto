@@ -125,11 +125,15 @@ capped lake env leanchecker --fresh PairBoundaryWitness
 capped lake env leanexport PairBoundaryProof PairBoundaryWitness > ../.tmp/binary-pair-boundary.ndjson
 ```
 
-Run the external gate outside Nono; acceptance is still pending:
+Run the external gate outside Nono:
 
 ```sh
 lake check --from-export ../.tmp/binary-pair-boundary.ndjson
 ```
+
+On 2026-10-17 the user ran this gate with `capped` for the export of
+`PairBoundaryProof` and `PairBoundaryWitness` at `a33869e`. The default
+kernel accepted it using only `propext`, `Quot.sound`, and `Classical.choice`.
 
 The [boundary experiment report](../docs/2026-10-16-plan-executable-binary-correspondence.md#executable-boundary-to-physical-loop-2026-10-17)
 names the semantic contracts, additional assertions, concrete witnesses,

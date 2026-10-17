@@ -2,7 +2,7 @@
 
 Status: captured index replay and tested trie assertions are implemented;
 the executable-assertion-to-trie-loop proof bridge is complete, 2026-10-17.
-External kernel gate pending; whole-function trie adequacy remains open. Worktree
+External kernel gate accepted at `a33869e`; whole-function trie adequacy remains open. Worktree
 `.worktrees/binary-pair-runner`, branch `task/binary-pair-runner`, created from
 planning commit `caa6668`. The earlier experiments remain on their original
 branch; the implementation baseline is `cb845fe`.
@@ -799,8 +799,13 @@ Validation at this checkpoint:
   declaration was introduced. Existing imported warnings remain visible.
 - `capped lake env leanchecker --fresh PairBoundaryWitness` exited 0.
   Export of `PairBoundaryProof` and `PairBoundaryWitness` also exited 0;
-  `.tmp/binary-pair-boundary.ndjson` is about 1.1 GB. The external gate has
-  not run for this checkpoint. Kraken remains clean at
+  `.tmp/binary-pair-boundary.ndjson` is about 1.1 GB. On 2026-10-17 the user
+  ran `capped lake check --from-export ../.tmp/binary-pair-boundary.ndjson`
+  outside Nono from `binary/`, for the export of `PairBoundaryProof` and
+  `PairBoundaryWitness` at `a33869e`. The default kernel accepted the
+  solution with only `propext`, `Quot.sound`, and `Classical.choice`.
+  This records acceptance of that exported closure, not new function coverage.
+  Kraken remains clean at
   `7ebba06a30eaf08c10b26b28ca14bfee1c791576`.
 
 The bridge has 1,152 lines in twelve new files, including executable
