@@ -11,10 +11,10 @@ new worlds; new R3/R4 results follow the retrofit.
 | Census | Lean files | Named theorems |
 | --- | ---: | ---: |
 | Validated baseline `00641c6` | 471 | 7,715 |
-| Completed retrofit checkpoints | 452 | 6,550 |
+| Completed retrofit checkpoints | 452 | 6,556 |
 
-Completed changes comprise **2,990 retyped/generalized, 1,708 deleted,
-2,197 retained contract shapes and 543 added theorems**. Retyping changes the
+Completed changes comprise **2,995 retyped/generalized, 1,708 deleted,
+2,249 retained contract shapes and 549 added theorems**. Retyping changes the
 actual carrier or observation, including shorthand contracts whose functions
 move to a native monad. Namespace-only product qualification and equivalent
 projection relocation count as retained. The census includes private and
@@ -417,8 +417,18 @@ collision. Ring encryption retains three older warnings in other bodies.
 Four changed-source encryption checks failed before the final two passed.
 These were deterministic failures, not infrastructure reruns.
 
+Outer receive-history composition carries 57→63 theorems across link callers,
+link environment, completion runner and link runner: five unused-premise
+generalizations, 52 retained contracts and six composition helpers added.
+Arbitrary product observers, callbacks, complete trace/flag domains, exact Stops
+and failure journals remain. Four scoped builds, all 68 named logical
+declarations, explicit fresh replay and complete source reviews pass with zero
+own warnings. Development recorded one proof failure and two successful
+elaborations exposing unused-premise warnings, all repaired before handback.
+No infrastructure rerun or limit change occurred.
+
 Remaining work is the routing/origin terminal carry,
-RX ingress and outer history layers, warning
+RX ingress layers, warning
 cleanup, the full proof gate and terminal replay. Deterministic source/proof
 failures are failures; source edits are checked anew, never described as
 infrastructure retries. Recovery admissions printed by failed elaborations

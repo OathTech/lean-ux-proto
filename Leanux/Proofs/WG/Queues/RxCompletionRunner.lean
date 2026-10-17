@@ -39,41 +39,109 @@ theorem runAtCompletion_wp {g : RxHistory.Obs α} (hg : Preserves historyEvent g
   runAtPrefix_wp (show PrefixEnsures (fun h _ => Closed historyEvent h)
     (CompletionPrefix historyEvent) g (fun _ h _ => Closed historyEvent h) from hg) index w
 
+
+private theorem historyOuter_pure {E α : Type} {P S : List E → Prop} (x : α) :
+    ⦃fun h => ⌜P h⌝⦄ (pure x : PrefixOuter E α)
+    ⦃post⟨fun _ h => ⌜P h⌝, fun _ h => ⌜S h⌝⟩⦄ := by
+  apply (prefixOuter_wp_iff _ _ _ _).mpr
+  exact fun _ hi => hi
+
+private theorem historyOuter_throw {E α : Type} {P S : List E → Prop}
+    (hs : ∀ h, P h → S h) (e : Nat × Stop) :
+    ⦃fun h => ⌜P h⌝⦄ (throw e : PrefixOuter E α)
+    ⦃post⟨fun _ h => ⌜P h⌝, fun _ h => ⌜S h⌝⟩⦄ := by
+  apply (prefixOuter_wp_iff _ _ _ _).mpr
+  exact hs
+
+private theorem historyOuter_bind {E α β : Type} {P S : List E → Prop}
+    {g : PrefixOuter E α} {f : α → PrefixOuter E β}
+    (hg : ⦃fun h => ⌜P h⌝⦄ g
+      ⦃post⟨fun _ h => ⌜P h⌝, fun _ h => ⌜S h⌝⟩⦄)
+    (hf : ∀ x, ⦃fun h => ⌜P h⌝⦄ f x
+      ⦃post⟨fun _ h => ⌜P h⌝, fun _ h => ⌜S h⌝⟩⦄) :
+    ⦃fun h => ⌜P h⌝⦄ (g >>= f)
+    ⦃post⟨fun _ h => ⌜P h⌝, fun _ h => ⌜S h⌝⟩⦄ :=
+  Triple.bind g f hg hf
+
+private theorem historyOuter_array {E α β : Type} {P S : List E → Prop}
+    (xs : Array α) (init : β) (body : α → β → PrefixOuter E (ForInStep β))
+    (hb : ∀ x acc, ⦃fun h => ⌜P h⌝⦄ body x acc
+      ⦃post⟨fun _ h => ⌜P h⌝, fun _ h => ⌜S h⌝⟩⦄) :
+    ⦃fun h => ⌜P h⌝⦄ forIn xs init body
+    ⦃post⟨fun _ h => ⌜P h⌝, fun _ h => ⌜S h⌝⟩⦄ := by
+  rw [← Array.forIn_toList]
+  generalize xs.toList = ys
+  induction ys generalizing init with
+  | nil => simpa only [List.forIn_nil] using historyOuter_pure init
+  | cons x xs ih =>
+    rw [List.forIn_cons]
+    apply historyOuter_bind (hb x init)
+    intro step
+    cases step with
+    | done acc => exact historyOuter_pure acc
+    | yield acc => exact ih acc
+
+/- The target action is inspected before every composition rule. Pure JSON
+values are never traversed to select a history invariant. -/
+macro "history_outer_steps" hs:term : tactic => `(tactic| first
+  | (runner_wp_head Pure.pure; exact historyOuter_pure _)
+  | (runner_wp_head throw; exact historyOuter_throw $hs _)
+  | runner_wp_throw_bind
+  | (runner_wp_head Bind.bind; apply historyOuter_bind)
+  | (runner_wp_head ForIn.forIn; apply historyOuter_array)
+  | runner_wp_reduce
+  | ((first | runner_wp_head ite | runner_wp_head dite); split)
+  | maintenance_intro
+  | runner_wp_match)
+
+/-- The literal runner tail preserves a history predicate on success and its
+stated failed-history consequence at every indexed Stop. The syscall observer
+and both history predicates are arbitrary. -/
+theorem runnerTail_history_wp {E : Type} {P S : List E → Prop}
+    (call : Syscall → PrefixM E Int) (trace : Trace) (w : World)
+    (hs : ∀ h, P h → S h)
+    (hc : ∀ index state op,
+      ⦃fun h => ⌜P h⌝⦄ runAtPrefix index state (call op)
+      ⦃post⟨fun _ h => ⌜P h⌝, fun _ h => ⌜S h⌝⟩⦄)
+    (ha : ∀ index state,
+      ⦃fun h => ⌜P h⌝⦄ runAtPrefix index state (liftPrefix (skipAmbient : Leanux.M Unit))
+      ⦃post⟨fun _ h => ⌜P h⌝, fun _ h => ⌜S h⌝⟩⦄) :
+    ⦃fun h => ⌜P h⌝⦄ RxHistory.runnerTail call trace w
+    ⦃post⟨fun _ h => ⌜P h⌝, fun _ h => ⌜S h⌝⟩⦄ := by
+  unfold RxHistory.runnerTail
+  repeat' first
+    | (runner_wp_head runAtPrefix; first | exact hc _ _ _ | exact ha _ _)
+    | history_outer_steps hs
+
+/-- Initial prefill and routing trials commit no history. The actual runner
+then executes its literal tail with the supplied product syscall observer. -/
+theorem executeTraceWith_history_wp {E : Type} {P S : List E → Prop}
+    (call : Syscall → PrefixM E Int) (trace : Trace) (placeholders : Bool)
+    (hs : ∀ h, P h → S h)
+    (hc : ∀ index state op,
+      ⦃fun h => ⌜P h⌝⦄ runAtPrefix index state (call op)
+      ⦃post⟨fun _ h => ⌜P h⌝, fun _ h => ⌜S h⌝⟩⦄)
+    (ha : ∀ index state,
+      ⦃fun h => ⌜P h⌝⦄ runAtPrefix index state (liftPrefix (skipAmbient : Leanux.M Unit))
+      ⦃post⟨fun _ h => ⌜P h⌝, fun _ h => ⌜S h⌝⟩⦄) :
+    ⦃fun h => ⌜P h⌝⦄ RxHistory.executeTraceWith call trace placeholders
+    ⦃post⟨fun _ h => ⌜P h⌝, fun _ h => ⌜S h⌝⟩⦄ := by
+  unfold RxHistory.executeTraceWith
+  repeat' first
+    | (runner_wp_head RxHistory.runnerTail; exact runnerTail_history_wp _ _ _ hs hc ha)
+    | history_outer_steps hs
+
 /-- The actual Runner's loops retain the protocol at every returned accumulator;
 initialization and failed prefill leave the empty callback history untouched. -/
 theorem executeTraceHistory_completion_wp (trace : Trace) (placeholders : Bool) :
     ⦃fun h => ⌜Closed historyEvent h⌝⦄ RxHistory.executeTraceHistory trace placeholders
     ⦃post⟨fun _ h => ⌜Closed historyEvent h⌝,
-      fun _ h => ⌜CompletionPrefix historyEvent h⌝⟩⦄ := by
-  have syscall_spec (index : Nat) (w : World) (call : Syscall) :=
-    runAtCompletion_wp (syscall_preserves call) index w
-  have ambient_spec (index : Nat) (w : World) :=
-    runAtCompletion_wp (lift_quiet (ρ := historyEvent) skipAmbient) index w
-  unfold RxHistory.executeTraceHistory RxHistory.executeTraceWith RxHistory.runnerTail
-  mvcgen [syscall_spec, ambient_spec]
-  all_goals try exact
-    ((post⟨fun _ h => ⌜Closed historyEvent h⌝,
-      fun _ h => ⌜CompletionPrefix historyEvent h⌝⟩) :
-      Invariant trace.ops.toList
-        (World × Array Int × Array (Option (Nat × Nat)) × Array Json × Array Json × Array Json)
-        (.except (Nat × Stop) (.arg (List RxHistory.Event) .pure)))
-  all_goals try
-    let r : Unit × World := by assumption
-    exact ((post⟨fun _ h => ⌜Closed historyEvent h⌝,
-      fun _ h => ⌜CompletionPrefix historyEvent h⌝⟩) :
-      Invariant r.2.steps.toList (Array Json)
-        (.except (Nat × Stop) (.arg (List RxHistory.Event) .pure)))
-  all_goals try
-    let r : Unit × World := by assumption
-    exact ((post⟨fun _ h => ⌜Closed historyEvent h⌝,
-      fun _ h => ⌜CompletionPrefix historyEvent h⌝⟩) :
-      Invariant r.2.fired.toList (Array Json)
-        (.except (Nat × Stop) (.arg (List RxHistory.Event) .pure)))
-  all_goals try dsimp +zetaDelta only at *
-  all_goals try trivial
-  all_goals try exact Closed.prefix (by assumption)
-  all_goals try (solve | intros; assumption)
-  all_goals try (solve | intros; exact Closed.prefix (by assumption))
+      fun _ h => ⌜CompletionPrefix historyEvent h⌝⟩⦄ :=
+  executeTraceWith_history_wp RxHistory.syscall trace placeholders
+    (fun _ hi => hi.prefix)
+    (fun index state call => runAtCompletion_wp (syscall_preserves call) index state)
+    (fun index state =>
+      runAtCompletion_wp (lift_quiet (ρ := historyEvent) skipAmbient) index state)
 
 /-- All typed traces and both placeholder settings satisfy the protocol, on success or Stop.
 No allocation, parser, credit, residency or progress premise is required. -/

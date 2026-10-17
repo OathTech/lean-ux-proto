@@ -10,6 +10,7 @@ open Lean Leanux Leanux.Env Leanux.Runner Leanux.Proofs.Logged Lifetimes Std.Do
 
 variable {P : List RxHistory.Event → Prop} [Protocol P]
 
+omit [Protocol P] in
 theorem runAtHistory_wp {g : RxHistory.Obs α} (hg : Preserves P g)
     (index : Nat) (w : World) :
     ⦃fun h => ⌜P h⌝⦄ runAtPrefix index w g
@@ -23,34 +24,11 @@ accumulator. Initialization and failed prefill emit no committed poll metadata. 
 theorem executeTraceHistory_protocol_wp (trace : Trace) (placeholders : Bool) :
     ⦃fun h => ⌜P h⌝⦄ RxHistory.executeTraceHistory trace placeholders
     ⦃post⟨fun _ h => ⌜P h⌝,
-      fun _ h => ⌜P h⌝⟩⦄ := by
-  have syscall_spec (index : Nat) (w : World) (call : Syscall) :=
-    runAtHistory_wp (syscall_preserves (P := P) call) index w
-  have ambient_spec (index : Nat) (w : World) :=
-    runAtHistory_wp (lift_quiet (P := P) skipAmbient) index w
-  unfold RxHistory.executeTraceHistory RxHistory.executeTraceWith RxHistory.runnerTail
-  mvcgen [syscall_spec, ambient_spec]
-  all_goals try exact
-    ((post⟨fun _ h => ⌜P h⌝,
-      fun _ h => ⌜P h⌝⟩) :
-      Invariant trace.ops.toList
-        (World × Array Int × Array (Option (Nat × Nat)) × Array Json × Array Json × Array Json)
-        (.except (Nat × Stop) (.arg (List RxHistory.Event) .pure)))
-  all_goals try
-    let r : Unit × World := by assumption
-    exact ((post⟨fun _ h => ⌜P h⌝,
-      fun _ h => ⌜P h⌝⟩) :
-      Invariant r.2.steps.toList (Array Json)
-        (.except (Nat × Stop) (.arg (List RxHistory.Event) .pure)))
-  all_goals try
-    let r : Unit × World := by assumption
-    exact ((post⟨fun _ h => ⌜P h⌝,
-      fun _ h => ⌜P h⌝⟩) :
-      Invariant r.2.fired.toList (Array Json)
-        (.except (Nat × Stop) (.arg (List RxHistory.Event) .pure)))
-  all_goals try dsimp +zetaDelta only at *
-  all_goals try trivial
-  all_goals try (solve | intros; assumption)
+      fun _ h => ⌜P h⌝⟩⦄ :=
+  RxCompletion.executeTraceWith_history_wp RxHistory.syscall trace placeholders
+    (fun _ hi => hi)
+    (fun index state call => runAtHistory_wp (syscall_preserves call) index state)
+    (fun index state => runAtHistory_wp (lift_quiet skipAmbient) index state)
 
 /-- Both successful and failed initialized executions retain the supplied
 history-only protocol. No World premise or success assumption is introduced. -/

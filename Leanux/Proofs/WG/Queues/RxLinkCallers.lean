@@ -111,13 +111,15 @@ instance receiptsProtocol : Protocol HistoryReceiptsValid :=
 
 variable {P : List RxHistory.Event → Prop} [Protocol P]
 
+omit [Protocol P] in
 theorem history_safe : ∀ h (_ : World), P h → P h := fun _ _ hi => hi
 
 theorem audit_quiet (a : AuditM α) : Preserves P (RxHistory.audit a) := Protocol.audit a
 
-theorem mixed_quiet (a : MixedM α) : Preserves P (RxHistory.mixed a) := audit_quiet _
+theorem mixed_quiet (a : PrefixM LifetimeEvent α) : Preserves P (RxHistory.mixed a) := audit_quiet _
 
-theorem lift_quiet (a : M α) : Preserves P (liftPrefix a) := by
+omit [Protocol P] in
+theorem lift_quiet (a : Leanux.M α) : Preserves P (liftPrefix a) := by
   intro w h hi
   refine ⟨[],by simp,hi,?_⟩
   simp only [runPrefix_lift]
@@ -159,7 +161,8 @@ macro "link_steps" : tactic => `(tactic|
     | (with_reducible intro x; try dsimp only))
 
 theorem encryptIteration_preserves : Preserves P RxHistory.encryptIteration :=
-  PrefixPreserves.bind napiSoftirq_preserves (fun _ => mixed_quiet _)
+  PrefixPreserves.bind (mixed_quiet _) (fun _ =>
+    PrefixPreserves.bind napiSoftirq_preserves (fun _ => mixed_quiet _))
 
 theorem decryptStep_preserves : Preserves P RxHistory.decryptStep := by
   unfold RxHistory.decryptStep RxWorkers.decryptWith
