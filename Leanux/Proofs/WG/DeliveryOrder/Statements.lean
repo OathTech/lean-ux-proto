@@ -1,3 +1,10 @@
+import Leanux.Proofs.WG.Queues.DecryptConcrete
+import Leanux.Proofs.WG.Queues.RxPollBoundary
+import Leanux.Proofs.WG.Queues.CurrentSlotCompletion
+import Leanux.Proofs.WG.Queues.SendWork
+import Leanux.Proofs.WG.Queues.EnvClearDispatch
+import Leanux.Proofs.WG.Queues.SendEnvironment
+import Leanux.Proofs.WG.Queues.NapiCarrier
 import Leanux.Proofs.WG.Queues.RxCarrierInitial
 import Leanux.Proofs.WG.Queues.RxDrainBoundary
 import Leanux.Proofs.WG.Queues.DecryptStable
@@ -2026,5 +2033,168 @@ theorem original_stack_stable_rx (packets : List (List UInt8)) (cs : Ledger) (w 
     (hs : StableRx cs w.wg) (hk : KeysCompatible w.wg)
     (run : (packets.forM Env.deliverInner).run w = .ok ((),v)) : StableRx cs v.wg :=
   stable_stack packets hs hk run
+
+
+open Leanux Leanux.WG Queues Queues.RxCredits Framing Logged Lifetimes
+
+/-- The original poll restores a stable carrier boundary, subtracting exactly
+its own seeded removal journal. The supplied reservations survive unchanged;
+this is local normal-endpoint conservation, not initialized runner closure. -/
+theorem original_poll_stable_rx (pid : PeerId) (budget : Nat) (w v : World) (n : Nat)
+    (initial : Ledger) (loans : Reservations) (prior : List LifetimeEvent)
+    (hi : CarrierState initial loans w.wg) (hs : StableRx initial w.wg)
+    (run : (WG.rxPoll pid budget (fun packets => packets.forM Env.deliverInner)).run w = .ok (n,v)) :
+    let h := (runPrefix (RxJoint.poll pid budget) w (RxJoint.seed prior)).2
+    CarrierState (remaining initial (PollCarrier.removedPackets h)) loans v.wg ∧
+      StableRx (remaining initial (PollCarrier.removedPackets h)) v.wg ∧
+      ∀ p ∈ PollCarrier.removedPackets h, packetAt v.wg p = none :=
+  poll_normal_stable pid budget w v n initial loans prior hi hs run
+
+/-- Callback contracts retain exact ledger/history cuts and the publication
+loan through IRQ. The normal iteration restores stability for the resulting
+ledger; its ended, yielded and continued paths are all the actual source paths. -/
+theorem original_decrypt_iteration_stable_rx
+    (softirq irq : RxHistory.Obs Unit) (afterItem : RxHistory.Obs Bool)
+    (RS RI : Ledger → DecryptIteration.Journal → World → Ledger → DecryptIteration.Journal → World → Prop)
+    (RA : Ledger → DecryptIteration.Journal → World → Bool → Ledger → DecryptIteration.Journal → World → Prop)
+    (soft : DecryptIteration.Advances softirq RS) (interrupt : DecryptIteration.Advances irq RI)
+    (softPhysical : ∀ w h v k, DecryptIteration.Physical w →
+      runPrefix softirq w h = (.ok ((),v),k) → DecryptIteration.Physical v)
+    (after : ∀ cs loans w h v k more, DecryptIteration.Stable cs loans w →
+      runPrefix afterItem w h = (.ok (more,v),k) →
+      ∃ ds, RA cs h w more ds k v ∧ DecryptIteration.Stable ds loans v)
+    (hi : DecryptIteration.Stable cs loans w) (physical : DecryptIteration.Physical w)
+    (run : runPrefix (workerIterPrefix .decryptWorker none
+      (RxWorkers.decryptWith Origins.HistoryAdapters.prepare
+        (fun pid => RxHistory.mixed (liftWGObserver (peerPutMixed (some pid)))) softirq irq)
+      afterItem) w h = (.ok (result,v),k)) :
+    ∃ ds, DecryptIteration.Stable ds loans v ∧
+      DecryptIteration.IterationPath softirq irq afterItem RS RI RA cs loans w h result ds v k :=
+  DecryptIteration.iteration_normal softirq irq afterItem RS RI RA soft interrupt softPhysical after hi physical run
+
+/-- Actual read/release/creation and receive admission preserve all three
+bounded nullable key slots. No freshness, residency or non-NULL premise is
+introduced into these operations. -/
+theorem original_nullable_key_slots_admission (kinds : List IndexKind) (index : Nat)
+    (peer : Option PeerId) (key : Key) (psk : Option Key) (msg : List UInt8) (src : SkbSource) (ds : Nat) :
+    Preserves CurrentSlots.Inv (indexLookup kinds index) ∧
+    Preserves CurrentSlots.Inv (peerPut peer) ∧
+    Preserves CurrentSlots.Inv (peerCreate key psk) ∧
+    Preserves CurrentSlots.Inv (consumeData msg src ds) ∧
+    Preserves CurrentSlots.Inv (wgReceive msg src) :=
+  ⟨CurrentSlots.indexLookup_preserves kinds index,CurrentSlots.peerPut_preserves peer,
+    CurrentSlots.peerCreate_preserves key psk,CurrentSlots.consumeData_preserves msg src ds,
+    CurrentSlots.wgReceive_preserves msg src⟩
+
+/-- The original queued initiation and staged-send paths retain all three
+slots through actual key/peer release, batch publication and queue coalescing. -/
+theorem original_nullable_key_slots_traffic (pid : PeerId) (retry : Bool) :
+    Preserves CurrentSlots.Inv (sendQueuedHandshakeInitiation pid retry) ∧
+    Preserves CurrentSlots.Inv (sendStagedPackets pid) :=
+  ⟨CurrentSlots.sendQueuedHandshakeInitiation_preserves pid retry,
+    CurrentSlots.sendStagedPackets_preserves pid⟩
+
+/-- Constructing/sending a handshake preserves existing receive obligations.
+The queued worker additionally pays its supplied source-owned reservation. -/
+theorem original_send_worker_rx_reservation (pid : PeerId) (o : Owner)
+    (cs : Ledger) (loans : Reservations) (w v : WGWorld) (a b : Ambient)
+    (hi : CarrierState cs (o :: loans) w) (hs : StableRx cs w)
+    (run : ((handshakeSendWorker o.slot).run w).run a = .ok (((),v),b)) :
+    Preserves (fun g => CarrierState cs loans g ∧ StableRx cs g) (sendHandshakeInitiation pid) ∧
+    CarrierState cs loans v ∧ StableRx cs v :=
+  ⟨SendWork.initiation_preserves pid,SendWork.worker_normal o hi hs a b run⟩
+
+/-- A flush chooses one funded owner from the actual clear queue and pays it.
+Every later duplicate remains in both the queue and the reservation ledger. -/
+theorem original_clear_flush_rx_reservations (owners loans : Reservations) (cs : Ledger)
+    (w v : WGWorld) (epoch pid : Nat) (a b : Ambient)
+    (hi : ClearWork.Inv cs (owners ++ loans) w)
+    (queue : ClearWork.queueView w = some (epoch,owners.map Owner.slot))
+    (present : pid ∈ owners.map Owner.slot)
+    (run : ((runFlushedClearWork pid).run w).run a = .ok (((),v),b)) :
+    ∃ o restOwners, WorkReservations.Selected owners pid o restOwners ∧
+      ClearWork.Inv cs (restOwners ++ loans) v ∧
+      ClearWork.queueView v = some (epoch,restOwners.map Owner.slot) :=
+  ClearWork.flushed_normal hi queue present a b run
+
+/-- Ordered queue accounting begins at the actual timer's acquisition. A
+coalesced enqueue repays it; an accepted enqueue appends that stamped owner. -/
+theorem original_clear_timer_queue_accounts (owners loans : Reservations) (cs : Ledger)
+    (w v : WGWorld) (epoch pid : Nat) (a b : Ambient)
+    (hi : ClearWork.Inv cs (owners ++ loans) w)
+    (queue : ClearWork.queueView w = some (epoch,owners.map Owner.slot))
+    (run : ((expiredZeroKeyMaterial pid).run w).run a = .ok (((),v),b)) :
+    ∃ added : Reservations,
+      (added = [] ∨ ∃ d p, w.dev = some d ∧ d.peers[pid]? = some p ∧
+        added = [⟨d.ifindex,pid,p.internalId⟩]) ∧
+      ClearWork.Inv cs ((owners ++ added) ++ loans) v ∧
+      ClearWork.queueView v = some (epoch,(owners ++ added).map Owner.slot) :=
+  ClearWork.timer_accounts hi queue a b run
+
+/-- Receive completion retains the three bounded nullable slots through
+promotion, timer updates, staged transmission, source lookup and release. -/
+theorem original_nullable_key_slots_completion (pid : PeerId) (pkt : RxPacket) (endpoint : Endpoint) :
+    Preserves CurrentSlots.Inv (consumeDataDone pid pkt endpoint) :=
+  CurrentSlots.consumeDataDone_preserves pid pkt endpoint
+
+/-- The concrete NAPI, inline and IRQ callers preserve the stable receive
+boundary relative to the actual incoming history. Only their fresh removal
+records subtract carriers, and every supplied reservation remains funded. -/
+theorem original_napi_stable_rx (initial : Ledger) (loans : Reservations)
+    (before : List RxHistory.Event) :
+    PrefixPreserves (NapiCarrier.At initial loans before) (fun _ => True) RxHistory.napiSoftirq ∧
+    PrefixPreserves (NapiCarrier.At initial loans before) (fun _ => True) RxHistory.pollScheduledInline ∧
+    PrefixPreserves (NapiCarrier.At initial loans before) (fun _ => True) RxHistory.napiIrqExit :=
+  ⟨NapiCarrier.softirq_preserves initial loans before,NapiCarrier.inline_preserves initial loans before,
+    NapiCarrier.irq_preserves initial loans before⟩
+
+/-- Both recorded-unit and default-head clear dispatch select an occurrence
+from the actual queue before spending its explicitly supplied reservation. -/
+theorem original_environment_clear_rx_reservations (owners loans : Reservations) (cs : Ledger)
+    (w v : World) (epoch : Nat) (hi : ClearWork.Inv cs (owners ++ loans) w.wg)
+    (queue : ClearWork.queueView w.wg = some (epoch,owners.map Owner.slot))
+    (run : Env.runOneClearWorker.run w = .ok ((),v)) :
+    ∃ pid o restOwners, WorkReservations.Selected owners pid o restOwners ∧
+      ClearWork.Inv cs (restOwners ++ loans) v.wg ∧
+      ClearWork.queueView v.wg = some (epoch,restOwners.map Owner.slot) :=
+  ClearWork.runOneClearWorker_normal w v hi queue run
+
+/-- Native send flush retains the pending guard and clears or restores the
+pending bit from the actual remaining queue, then pays one selected owner. -/
+theorem original_send_flush_rx_reservations (owners loans : Reservations) (cs : Ledger)
+    (w v : WGWorld) (epoch pid : Nat) (a b : Ambient)
+    (hi : SendDispatch.Inv cs (owners ++ loans) w)
+    (queue : SendDispatch.queueView w = some (epoch,owners.map Owner.slot))
+    (present : pid ∈ owners.map Owner.slot)
+    (run : ((runFlushedSendWork pid).run w).run a = .ok (((),v),b)) :
+    ∃ o restOwners, WorkReservations.Selected owners pid o restOwners ∧
+      SendDispatch.Inv cs (restOwners ++ loans) v ∧
+      SendDispatch.queueView v = some (epoch,restOwners.map Owner.slot) :=
+  SendDispatch.flushed_normal hi queue present a b run
+
+/-- Actual environment send dispatch proves queue membership before the
+native pending guard and selected payment; the remaining order is exact. -/
+theorem original_environment_send_rx_reservations (owners loans : Reservations) (cs : Ledger)
+    (w v : World) (epoch : Nat) (hi : SendDispatch.Inv cs (owners ++ loans) w.wg)
+    (queue : SendDispatch.queueView w.wg = some (epoch,owners.map Owner.slot))
+    (run : Env.runOneSendWorker.run w = .ok ((),v)) :
+    ∃ pid o restOwners, WorkReservations.Selected owners pid o restOwners ∧
+      SendDispatch.Inv cs (restOwners ++ loans) v.wg ∧
+      SendDispatch.queueView v.wg = some (epoch,restOwners.map Owner.slot) :=
+  SendEnvironment.runOneSendWorker_normal w v hi queue run
+
+/-- The actual decrypt iteration has no outstanding callback premise. It
+restores stable funded carriers and a physical ring witness, retaining the
+exact concrete receive path; the physical ring witness remains separate. -/
+theorem original_concrete_decrypt_stable_rx (cs : Ledger) (loans : Reservations)
+    (w v : World) (result : IterResult) (history : DecryptIteration.Journal)
+    (hi : DecryptIteration.Stable cs loans w) (physical : DecryptIteration.Physical w)
+    (run : (WG.decryptIter Env.napiSoftirq Env.napiIrqExit
+      (Env.condResched .decryptWorker)).run w = .ok (result,v)) :
+    let k := (runPrefix RxHistory.decryptIteration w history).2
+    ∃ ds, DecryptIteration.Stable ds loans v ∧ DecryptIteration.Physical v ∧
+      DecryptConcrete.Path cs loans w history result ds v k :=
+  DecryptConcrete.native_normal hi physical run history
+
 
 end Leanux.Proofs.WG.DeliveryOrder

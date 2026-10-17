@@ -192,6 +192,13 @@ fresh root replay pass (4.483s/104.224s). Whole initialized conservation remains
 open; the local closure now includes fixture/drain boundaries, native decrypt
 preparation, clear-work reservations and completion/Stack stable transport.
 
+The [R4 poll/work extension](2026-10-17-r4-poll-work-conservation.md) adds 208
+theorems in sixteen modules and thirteen exports: 690 files/9,539 theorems,
+156 R4 terminals and 690 terminal declarations overall. Every prior theorem
+remains unchanged. Concrete poll/NAPI/IRQ/decrypt boundaries and queued-work
+payments pass gate748/690 and fresh root replay (4.736s/105.281s). Complete
+source-owned funding and initialized conservation remain open.
+
 The pre-split checkpoint validated every baseline result surface over
 `cb2348e`. R3 packet authorization is now closed over the current split tree;
 R4 receive-pipeline conservation remains open. Earlier positive results and runtime findings retain
@@ -589,14 +596,15 @@ correspondence remains informal.
 
 ## R4 — queue, poll and delivery-order components (in progress)
 
-**State-split stable-boundary extension.** The [current report](2026-10-17-r4-stable-boundaries.md)
-records 172 additional theorems in twelve modules and terminal exports. The tree
-has 674 proof files/9,331 theorems, with 143 R4 terminals and all 131 preceding
-bodies unchanged. Actual fixture and drain guards, decrypt preparation, clear
-work reservations and consumeDataDone/Stack stable transport are checked.
-Nullable compatibility now has a minimal bounded three-slot invariant for key
-rotation. These local contracts leave whole poll/IRQ, lifecycle/work funding and
-initialized conservation open; they do not change the chronological counterexample.
+**State-split poll/work extension.** The [current report](2026-10-17-r4-poll-work-conservation.md)
+records 208 additional theorems in sixteen modules and thirteen terminal exports.
+The tree has 690 proof files/9,539 theorems, with 156 R4 terminals and all 143
+preceding bodies unchanged. Concrete poll/NAPI/IRQ/decrypt boundaries restore
+stable funded receive carriers; send/clear work consumes explicit source-supplied
+reservations. Nullable key-slot compatibility survives admission, staged traffic
+and completion. Complete lifecycle/work/TX/dump/transient funding, newly generated
+handoffs and initialized conservation remain open. Chronological GRO order stays
+refuted.
 
 **Original versus proved.** The charter requires accepted-schedule order and no silent loss/duplication.
 [Terminals](../Leanux/Proofs/WG/DeliveryOrder/Statements.lean) prove initialized committed callback-entry stamp
