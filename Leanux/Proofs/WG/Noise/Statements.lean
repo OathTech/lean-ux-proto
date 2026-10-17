@@ -17,8 +17,9 @@ import Leanux.Proofs.WG.Noise.SessionSource
 import Leanux.Proofs.WG.Noise.SessionReadyClaims
 import Leanux.Proofs.WG.Noise.ConfirmationSequenceSource
 
-/-! H1's checked local endpoints. Whole-run edge ownership and confirmation
-uniqueness by allocation lifetime remain separate obligations. -/
+/-! H1's whole-operation contracts and finite mixed native tag histories.
+Confirmation across reinstallation remains distinct from consecutive calls;
+closure over every driver caller is outside this native operation language. -/
 namespace Leanux.Proofs.WG.Noise
 open Leanux Leanux.WG
 

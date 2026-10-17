@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Progress.RunnerAdvanceSource
 import Leanux.Proofs.WG.Progress.AdvanceWaitClaims
 import Leanux.Proofs.WG.Progress.TimerWaitClaims
 import Leanux.Proofs.WG.Progress.TimerCompletionClaims
@@ -678,5 +679,23 @@ theorem original_recorded_advance_wait_nothing_due :
   · intro initial _
     rw [observedAfterAdvance_erase]
   · exact observedAfterAdvance_recorded_checks
+
+/-- A normal actual wg_advance syscall certifies its own modular advance.
+An actual recorded wait receipt shares that advance's bounds and establishes
+its distinct end-read and wrapped-pass facts. All original Stops erase exactly;
+recorded mode at syscall entry is not asserted to survive arbitrary task work. -/
+theorem original_advance_operation_receipt (ticks : Nat) :
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (do let result ← observedAdvanceOperation ticks; pure result.1)
+      (syscall (.wgAdvance ticks)) ∧
+    Campaign2.Product.Ensures (observedAdvanceOperation ticks) (fun _ => True)
+      (fun out final => out.1 = 0 ∧ ∃ j0 j1,
+        out.2.1 = some (j0,j1) ∧ j1-j0 = ticks.toUInt64 ∧
+        ∀ receipt, out.2.2 = some receipt → receipt.j0 = j0 ∧ receipt.j1 = j1 ∧
+          final.wg.jiffiesLast = some receipt.jEnd ∧ NoTimerDue receipt.pass final) := by
+  constructor
+  · intro initial _
+    rw [observedAdvanceOperation_erase]
+  · exact observedAdvanceOperation_checks ticks
 
 end Leanux.Proofs.WG.Progress

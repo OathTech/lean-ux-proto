@@ -10,27 +10,27 @@ merged; the executable mirror remains byte-identical to b700659.
 
 | Result | Headlines | Checked support | Split status |
 | --- | ---: | ---: | --- |
-| H1 Noise | 32 | 231 | Full terminal closure, all seven whole-call tag maps, their actual finite mixed histories and session derivation-clock receipt current; wider caller/lifetime claims open. |
+| H1 Noise | 32 | 231 | Full terminal closure, all seven whole-call tag maps, their actual finite mixed histories and session derivation-clock receipt current; confirmation across reinstallation remains open; broader driver closure is separate from the checked native histories. |
 | H2 Index | 89 | 481 | Full terminal closure and ingress/expiry/handshake/peer-creation owner coherence and whole-removal lifecycle finding/slot-covered arbitrary-AIP preservation and actual clear-work dispatch and both-mode handshake queueing and new-handshake/zero-key/retransmit callbacks and persistent-callback invariant counterexample current; reachable whole-driver uniqueness/coherence open. |
 | H3 Roaming | 18 | 190 | Full terminal closure and invalid-MAC1/rate-limit/admitted-response/initiation rejection and cookie-message preservation current; callback authentication provenance and broader caller coverage open. |
-| H4 Configuration | 93 | 697 | Full terminal closure, actual mixed/key setter paginated readback with arbitrary endpoints, finite single-peer IPv4 getter, exact mixed-width scans, weighted plans/resumed callbacks and generic coalescing and fitting multi-peer scalar and mixed fwmark/scalar set/get current; global ownership, queued cleanup, general mixed setters and multi-peer/IPv6 pagination open. |
-| H5 Progress | 46 | 307 | Full terminal closure, exact bounded outcomes and recorded batch, actual timer completion guards and recorded idle/post-advance wait wheel completion current; global progress/coherent-ring adequacy open. |
+| H4 Configuration | 93 | 702 | Full terminal closure, actual mixed/key setter paginated readback with arbitrary endpoints, finite single-peer IPv4 getter, exact mixed-width scans, weighted plans/resumed callbacks and generic coalescing and fitting multi-peer scalar and mixed fwmark/scalar set/get current; global ownership, queued cleanup, general mixed setters and multi-peer/IPv6 pagination open. |
+| H5 Progress | 47 | 313 | Full terminal closure, exact bounded outcomes and recorded batch, actual timer completion guards and recorded idle/post-advance wait completion and actual advance-syscall/runner linkage current; global progress/coherent-ring adequacy open. |
 | H6 Timers | 59 | 483 | Full terminal closure, actual retry blocks and allocation-labelled guarded session-arm events with outgoing call-entry origin and initialized give-up runtime witness current; complete caller coverage, general mixed histories and session-relative counts open. |
 
-The checked surface is 2,389 theorems in all 808 campaign-owned modules.
+The checked surface is 2,400 theorems in all 814 campaign-owned modules.
 The completed retrofit accounts for 1,983: 1,321 retyped, 244 explicitly
 corrected, 239 retained and 179 added support/finding declarations. One hundred forty-eight
 subsequent H2 declarations add table preservation and local owner coherence.
-Forty-six H1 declarations add whole-operation and finite mixed-history tag ownership and actual derivation-clock provenance; one hundred fifteen H4 declarations
+Forty-six H1 declarations add whole-operation and finite mixed-history tag ownership and actual derivation-clock provenance; one hundred twenty H4 declarations
 add mixed fwmark/scalar, ordered peer-attribute, port-refusal/private-key readback and finite IPv4 getter/setter pagination and actual fitting multi-peer readback. Thirty-three H3 declarations
-add invalid-MAC1, rate-limit and admitted-response/initiation rejection and cookie-message preservation. Nineteen H5 declarations
+add invalid-MAC1, rate-limit and admitted-response/initiation rejection and cookie-message preservation. Twenty-five H5 declarations
 establish recorded batch, actual timer completion guards and recorded idle/post-advance wait wheel completion. Forty-five H6 declarations
 connect actual timer-loop receipts, contiguous retry-block counts/bounds, local partial-exchange arming and allocation-labelled session-arm events. Of the 1,831 baseline theorems, 22 frames
 were deleted because types supply their facts and five false cookie supports
 were separately retired with checked counterexamples. No baseline declaration
 remains awaiting retrofit; all 258 original terminal names/order survive,
 with ten new H1 headlines, thirty-seven new H2 headlines, five new H3 headlines,
-fourteen new H4 headlines, four new H5 headlines and nine new H6 headlines (337 total).
+fourteen new H4 headlines, five new H5 headlines and nine new H6 headlines (338 total).
 
 The [retrofit report](2026-10-16-proof-campaign-2-state-split.md) records
 claim/frame files, corrections, before/after counts and validation.
@@ -2131,37 +2131,33 @@ No device-residency premise is needed. Recordless execution, distribution,
 arming and scheduler progress are separate claims.
 
 
-The complete original receive activation now has an exact outcome for arbitrary
-finite supplied records when its queued messages classify as cookies and its
-index table is empty. Every packet follows the actual lookup-miss path. The
-original list-occupancy-plus-one budget suffices; outcomes are the exact hidden
-error or exact queue/counter, five-per-packet decisions, final empty-poll decision
-when applicable, suspension and unused suffix. Success consumes a strict record
-suffix and either drains the list or yields after exactly one item. The independent
-queue counter is subtracted without a consistency premise; an empty list alone
-does not imply a zero counter. Cookie classification is an entry queue premise,
-not a claim about ingress validation.
+The historical cookie-activation contracts assumed that list/count occupancy
+alone described the physical ring. That domain was insufficient. The split
+retrofit retires five false count/totality supports and checks concrete
+malformed-ring counterexamples in CookieActivationBoundFindings and
+CookieItemsFindings. Those witnesses are arbitrary-state refutations, not
+initialized accepted executions.
 
-For one suspended receive activation and pure record-resolver success, a complete
-source-connected original scheduler turn derives the candidate by running the
-original probe, excludes dispatch/NAPI branches from the next record, removes the
-old activation and commits a successful run on that detached state. It retains
-the exact projected effect and strict suffix decrease; no execution-success
-witness is assumed. This is one scheduler turn with no caller-held worker, not
-whole-schedule termination or fairness. Only two projection equations are frames,
-in `CookieActivationFrames`; the remaining files express operational claims.
+The current original_cookie_activation_outcome gives exact agreement with
+cookieHybridRun under the original cookie-only/empty-index premises. It
+retains receive, record and occupancy-exhaustion errors; it does not prove
+successful drain, strict record decrease or count adequacy on arbitrary ring
+metadata. Cookie classification remains an entry premise, not ingress
+validation.
 
-The full original scheduler now succeeds from a singleton suspended receive
-activation, an empty index and a cookie-only queue, with `n` arbitrary eight-byte
-reschedule records followed by one arbitrary eight-byte stop record and no tail.
-The premise `n ≤ initial queue length` gives exactly enough work for those yields.
-The original record budget is `n + 2`: the yielding turns, the draining/stop turn,
-and the final no-candidate return all fit. Equality and an initially empty queue
-are covered. The exact final projection empties this receive queue, the records
-and suspension list, subtracts the initial list length from the independent queue
-counter and appends the exact packet/empty-poll decisions. Other work queues and
-pending state are preserved, so this is neither global quiescence nor fairness.
-No successful-run witness, counter consistency or ingress provenance is assumed.
+The current original_cookie_scheduled_resumption_progress selects the control
+branch from pure resolver success, then retains the actual probe, detached
+bounded rerun and all their errors. Resolver success is not an execution
+success witness and does not imply a drain or a strict suffix. The two
+CookieActivationFrames projection equations remain frames; the other files
+express operational outcomes.
+
+The current original_cookie_schedule_outcome retains its explicit record
+shape and count premises but concludes agreement with the bounded first turn
+and actual remainder, including the scheduler's budget guard. It does not
+promise successful completion, empty physical queues or the historical
+list-based final projection. Positive represented-ring adequacy and initialized
+queue/pending-work consistency require the inventoried shared support.
 
 ## H6 — Timer discipline
 
@@ -3166,3 +3162,105 @@ build and fresh replay of Leanux.Proofs.WG.Index.Statements,
 Leanux.Proofs.WG.Config.WeightedPaginationClaims and
 Leanux.Proofs.WG.Config.GenericPaginationClaims under capped/scripts/in-bundle
 with LEAN_NUM_THREADS=32 and LEANUX_QEMU_SLOTS=16. No new mirror-team request.
+
+
+## H5 continuation: actual advance syscall and runner linkage
+
+The complete original wg_advance syscall now has an erased operational
+receipt. Every normal return gives result zero and the bounds written by that
+same actual advance, with j1 - j0 = ticks.toUInt64. The descriptor, entry guard,
+fdput, return work and afterAdvance remain in their original order with every
+Stop. If the actual wait returns a recorded receipt, its bounds equal this
+advance's bounds; the final clock stores jEnd and NoTimerDue holds at the
+distinct wrapped pass. No entry-mode preservation through arbitrary task work
+or successful execution is assumed.
+
+AdvanceOperationSource contains three action definitions, actual advance
+effects and exact syscall erasure. Claims uses Product. RunnerAdvanceSource
+connects the same execution through the real runnerEntry and skipAmbient to
+the existing boundary guards. The runner source is imported by Statements,
+so its proof is included in that closure. FS fixture preservation is local
+reasoning from liftFS writeback, without a named cross-subsystem frame.
+Six theorems in three modules bring H5 to 313 theorems and 47 headlines.
+
+Changed probes 1–4 fail ordinary source factoring with error/warning counts
+3/2, 5/7, 1/2 and 1/2. Probe 5 closes the three source facts. Probes 6–9 fail
+8/1, 2/3, 5/0 and 1/0, from reserved/constructor-like names, discard/tuple
+normalization and names eliminated by case substitution. Probe 10 checks the
+exact split and six standard-only roots, no warnings. All outputs were
+inspected; no rejected recovery declaration counts as proof. Independent
+review finds no issue. Root corrects the entry definition's comment, which had
+described the broader prefix rather than entry resets and the guard.
+
+## H4 continuation: original first callback and dump start
+
+WeightedStartModel distinguishes empty input from an empty first emitted
+prefix of nonempty input. Source derives the original first callback's full
+DATA, room, sequence and cursor for empty, complete and split cases. All
+inputs need the header bound; only nonempty input needs its allowed-IP nest
+to fit, and the first node need not fit. The actual netlinkDumpStart follows
+through existing transport contracts to the exact socket. Completion retains
+the real inline-DONE versus separate-DONE choice, including empty input.
+
+Claims provides the two projected total-return contracts. The two data
+definitions and five theorems occupy three modules; H4 now has 702 theorems
+and 93 headlines. The first draft fails seven syntax/shape errors and four
+recovery/unused-variable warnings; its recovery axiom output is rejected.
+Changed probe 2 passes the exact package and five standard-only roots without
+warnings. Independent source review finds no issue. Full receive sequence,
+exact envelope count, coalescing and whole weighted getter composition remain
+open; no shared variant or copied receive induction is introduced.
+
+H5's scoped build passes 284 jobs, including its source-link import update;
+H4's source build passes 120 jobs. Only the inherited Env:865 String.mk
+warning appears in the H5 build. The combined audit checks 1,468 logical roots
+in 284 modules, including 893 public theorem roots, standard-only and without
+diagnostics. Fresh kernel replay passes both changed roots. Static trust/import
+checks, all 258 original headline names/order and mirror/shared boundaries
+pass. No cap/limit change, warning suppression or infrastructure rerun.
+
+## Completion audit and documentation corrections
+
+H1 already covers all seven tag-changing whole operations and their actual
+finite mixed histories. Option-valued slots supply per-slot capacity; they do
+not imply distinct slots or a three-key store bound. The current header and
+register are narrowed accordingly. Confirmation across reinstallation remains
+open; consecutive confirmation is not once-per-allocation-lifetime uniqueness.
+Unconditional whole-call totality is not an extra requirement. No Noise
+theorem changes in this documentation correction; its comment-only rebuild
+passes 164 jobs without warnings.
+
+The H5 audit found two stale present-tense claims: the old cookie paragraphs
+still promised arbitrary-ring drain/suffix decrease, and mirror request 1 still
+called its corrected-refusal carry pending. Both are corrected in place.
+The historical claims/evidence retain their pins; current cookie contracts
+preserve bounded outcomes/errors, and the actual backlog trace and audit now
+have checked rejection equations. This is a documentation repair, not a new
+mirror request or a change to the already checked statements.
+
+[AGENT 2026-10-17] Describe operational refusal with the actual named Stop
+constructor rather than treating every refusal as outsideDomain: trailing
+records/suspension use hidden and pending NET_RX uses invariant. These are
+fail-closed outcomes, not accepted-backlog counterexamples.
+
+Mathematical termination follows from the current total Lean definitions and
+finite recursion/ranges; no new outcome-existence wrapper is needed. Genuine
+remaining H5 work is derived-fuel adequacy with callback refill and an
+initialized queue/pending-work consistency invariant strong enough to lift
+the exact local completion guards to all accepted operations. Fairness,
+erasing physical stale ring slots, disarming future timers and unconditional
+recordless success are separate stronger questions.
+
+Two architectures remain inventoried: represented-ring/resource composition
+using C1 Queues, RingGeometry and RingSteps plus actual record histories; or an
+initialized runner invariant using C1 RxRing/RxEnv/JointSyscalls/JointRunner.
+Neither is copied locally. Arbitrary malformed-ring counterexamples do not
+establish initialized accepted executions. The existing callback-refill mirror
+request remains separate from any attempt to increase a budget constant.
+
+Current totals: 2,400 theorems in 814 owned modules and 338 headlines.
+All H1–H6 remain in progress; the inherited full gate remains FAILED.
+Reproduce the changed closures with scoped build and fresh replay of
+Leanux.Proofs.WG.Progress.Statements and
+Leanux.Proofs.WG.Config.WeightedStartClaims under capped/scripts/in-bundle,
+LEAN_NUM_THREADS=32 and LEANUX_QEMU_SLOTS=16.
