@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Noise.SessionClockClaims
 import Leanux.Proofs.WG.Noise.ResponseEdgeClaims
 import Leanux.Proofs.WG.Noise.RotationClaims
 import Leanux.Proofs.WG.Noise.ConfirmationSequenceClaims
@@ -321,5 +322,14 @@ theorem original_consume_response_entry_edge (msg : List UInt8) (before : Campai
         before.tagAt pid = some HANDSHAKE_CREATED_INITIATION ∧
         after.tagAt pid = some HANDSHAKE_CONSUMED_RESPONSE) :=
   consumeResponse_entry_edge msg before
+
+/-- The actual session derivation clock supplies the successful birthdate;
+normal refusal has no derivation receipt and preserves Device and counter. -/
+theorem original_begin_session_clock (pid : PeerId) (entry : Campaign2.Product.Snapshot) :
+    Campaign2.Product.Ensures
+      (TimerDiscipline.observed (liftWG (beginSession pid)) (sessionClockPath pid))
+      (fun s => s = entry)
+      (fun result final => SessionClockObservation pid entry result.1 result.2 final) :=
+  beginSession_clock_observation pid entry
 
 end Leanux.Proofs.WG.Noise

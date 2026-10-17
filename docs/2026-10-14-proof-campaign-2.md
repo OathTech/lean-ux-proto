@@ -10,26 +10,26 @@ merged; the executable mirror remains byte-identical to b700659.
 
 | Result | Headlines | Checked support | Split status |
 | --- | ---: | ---: | --- |
-| H1 Noise | 23 | 189 | Full terminal closure and whole-response entry edge current; wider caller/lifetime/clock claims open. |
+| H1 Noise | 24 | 196 | Full terminal closure, whole-response entry edge and actual session derivation-clock receipt current; wider caller/lifetime claims open. |
 | H2 Index | 77 | 421 | Full terminal closure and ingress/expiry/handshake owner coherence current; reachable whole-driver uniqueness/coherence open. |
 | H3 Roaming | 14 | 161 | Full terminal closure and invalid-MAC1 Device preservation current; callback authentication provenance and broader caller coverage open. |
 | H4 Configuration | 81 | 590 | Full terminal closure and ordered mixed-peer readback current; global ownership, queued cleanup and general pagination open. |
 | H5 Progress | 42 | 288 | Full terminal closure current with exact bounded outcomes and checked refutations; global progress/coherent-ring adequacy open. |
 | H6 Timers | 52 | 445 | Full terminal closure, first outer timer turn and intermediate retransmit receipt current; whole scheduler episodes, complete caller coverage and session-relative counts open. |
 
-The checked surface is 2,094 theorems in all 646 campaign-owned modules.
+The checked surface is 2,101 theorems in all 649 campaign-owned modules.
 The completed retrofit accounts for 1,983: 1,321 retyped, 244 explicitly
 corrected, 239 retained and 179 added support/finding declarations. Eighty-eight
 subsequent H2 declarations add table preservation and local owner coherence.
-Four H1 declarations add whole-response entry provenance; eight H4 declarations
+Eleven H1 declarations add whole-response entry and actual derivation-clock provenance; eight H4 declarations
 add mixed fwmark/scalar and ordered peer-attribute readback. Four H3 declarations
 add invalid-MAC1 rejection preservation. Seven H6 declarations
 connect the first outer timer turn and its retransmit receipt. Of the 1,831 baseline theorems, 22 frames
 were deleted because types supply their facts and five false cookie supports
 were separately retired with checked counterexamples. No baseline declaration
 remains awaiting retrofit; all 258 original terminal names/order survive,
-with one new H1 headline, twenty-five new H2 headlines, one new H3 headline,
-two new H4 headlines and two new H6 headlines (289 total).
+with two new H1 headlines, twenty-five new H2 headlines, one new H3 headline,
+two new H4 headlines and two new H6 headlines (290 total).
 
 The [retrofit report](2026-10-16-proof-campaign-2-state-split.md) records
 claim/frame files, corrections, before/after counts and validation.
@@ -752,6 +752,52 @@ Reproduce with scripts/in-bundle lake build on
 Leanux.Proofs.WG.{Index,Roaming}.Statements and scripts/in-bundle lake env
 leanchecker --fresh on each target, under capped with 32 Lean threads and
 16 QEMU slots. No new mirror request arises.
+
+## H1 continuation: actual session derivation-clock provenance
+
+The original beginSession now has a full Product observation connecting its
+actual derivation clock read to the successful ordered preparation, rotation
+and handshake-index publication. The entry projection is arbitrary; normal
+return itself supplies the resident Device and peer. No successful allocation,
+intermediate clock run, readiness or final-key-residency premise is added.
+
+A successful receipt records the actual admission/allocation prefix, role and
+chaining key, and the complete before/after clock projections. Its birthdate
+is the same value used by SessionBirthEffect through RotationRun and final
+index replacement. Aliased puts remain admitted and can erase the allocated
+key. Normal false returns have no derivation receipt and preserve Device and
+keypair counter, while retaining the prefix's actual record consumption.
+The claim does not assert whole-snapshot rollback or receipts on stopped calls.
+Existing observed_erase retains every original error without a new copy.
+
+SessionClockModel holds the input, receipt and effect predicates;
+SessionClockSource holds two exact source factors, prefix/derivation effects,
+the native whole-run decomposition and actual Product observation path;
+SessionClockClaims holds the projected claim. Statements adds a documented
+literal wrapper. No standalone frame is added: the clock's Ambient type and
+the existing native lift rule provide WG preservation locally. Seven theorems
+bring H1 to 24 headlines and 196 theorems; campaign totals are 2,101 theorems,
+649 modules and 290 headlines. Whole-driver edge ownership, wider totality and
+allocation-lifetime confirmation remain open.
+
+Independent review finds no correctness/domain issue. Development probes 1–5
+fail, respectively: factor congruence and two record-layout sites with cascade;
+match reduction and one unused-simp warning; bind normalization, derived-record
+layout, rewritten-prefix equality and eliminated before-state names; Product/native
+lift reassociation; missing receipt-constructor type annotation. Probe 6 passes
+cleanly at default limits. Failed elaboration's generated recovery terms are
+diagnostics, not accepted proof evidence.
+
+The integrated Noise.Statements build passes 113 jobs without warnings.
+Axioms: 477 logical roots in 89 modules, including 290 public theorem roots,
+standard only with no missing roots. Fresh kernel replay passes; static checks,
+original 258-name order and mirror/shared boundaries pass. No infrastructure
+retry, dependency build during replay, cap increase or unchanged failed-source
+rerun occurs. The inherited full-gate failure is unchanged.
+
+Reproduce with scripts/in-bundle lake build Leanux.Proofs.WG.Noise.Statements
+and scripts/in-bundle lake env leanchecker --fresh on that target, under
+capped with 32 Lean threads and 16 QEMU slots. No mirror change is requested.
 
 ## Remaining general Allowed-IP ownership dependency
 
