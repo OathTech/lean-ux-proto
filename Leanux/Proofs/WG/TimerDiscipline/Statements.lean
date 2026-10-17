@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.TimerDiscipline.OutgoingTraversalAllModeClaims
+import Leanux.Proofs.WG.TimerDiscipline.DataTraversalAllModeClaims
 import Leanux.Proofs.WG.TimerDiscipline.ReceiveTraversalAllModeClaims
 import Leanux.Proofs.WG.TimerDiscipline.SessionOriginClaims
 import Leanux.Proofs.WG.TimerDiscipline.SessionArmEventClaims
@@ -848,5 +850,70 @@ theorem original_response_receive_traversal_all_modes (msg : List UInt8) (src : 
   · intro entry pre
     rw [observedResponseReceiveTraversal_erase msg src kind]
   · exact observedResponseReceiveTraversal_all_modes msg src
+
+/-- The actual outgoing initiation retains its optional creation/traversal
+certificate and now the reached hook's all-mode WG effect. Erasure preserves
+early exits and all original Stops; no final expiry or delivery is asserted. -/
+theorem original_outgoing_initiation_traversal_all_modes (pid : PeerId) :
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (do let _ ← observedInitiationTraversal pid; pure ())
+      (liftWG (sendHandshakeInitiation pid)) ∧
+    Campaign2.Product.Ensures (observedInitiationTraversal pid) (fun _ => True)
+      (fun cut _ => InitiationTraversalFacts pid cut ∧
+        ∀ hook, cut.traversal = some hook →
+          TraversalAllModeEffect pid hook.before.toSnapshot hook.after.toSnapshot) := by
+  constructor
+  · intro entry pre
+    rw [observedInitiationTraversal_erase pid]
+  · exact observedInitiationTraversal_all_modes pid
+
+/-- The actual outgoing response retains its session-selected traversal cut,
+with the exact all-mode effect before the unchanged send suffix. Erasure
+preserves refusals and every original Stop; session success is a result, not
+an added entry premise. -/
+theorem original_outgoing_response_traversal_all_modes (pid : PeerId) :
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (do let _ ← observedResponseTraversal pid; pure ())
+      (liftWG (sendHandshakeResponse pid)) ∧
+    Campaign2.Product.Ensures (observedResponseTraversal pid) (fun _ => True)
+      (fun cut _ => ResponseTraversalFacts pid cut ∧
+        ∀ hook, cut.traversal = some hook →
+          TraversalAllModeEffect pid hook.before.toSnapshot hook.after.toSnapshot) := by
+  constructor
+  · intro entry pre
+    rw [observedResponseTraversal_erase pid]
+  · exact observedResponseTraversal_all_modes pid
+
+/-- Actual encrypted-item completion has one initial traversal even for an
+empty item list. Ordered packet/send and later data-sent facts are retained,
+with an all-mode immediate traversal effect and exact original error erasure.
+No per-packet traversal count or final expiry/delivery claim is made. -/
+theorem original_data_done_traversal_all_modes (pid : PeerId) (items : List SkbId) :
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (do let _ ← observedDataDone pid items; pure ())
+      (liftWG (createDataDone pid items)) ∧
+    Campaign2.Product.Ensures (observedDataDone pid items) (fun _ => True)
+      (fun cut _ => DataDoneFacts pid items cut ∧
+        TraversalAllModeEffect pid cut.traversal.before.toSnapshot cut.traversal.after.toSnapshot) := by
+  constructor
+  · intro entry pre
+    rw [observedDataDone_erase pid items]
+  · exact observedDataDone_all_modes pid items
+
+/-- Raw consumeDataDone invocation retains its original return, receipt gating
+and cuts, now including the all-mode immediate traversal effect after its real
+endpoint/confirmation/keep-fresh prelude. No upstream authentication or inner
+packet acceptance is inferred. Erasure preserves the return and every Stop. -/
+theorem original_consume_data_done_traversal_all_modes (pid : PeerId) (pkt : RxPacket) (e : Endpoint) :
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (do let result ← observedRxDataTimers pid pkt e; pure result.2)
+      (liftWG (consumeDataDone pid pkt e)) ∧
+    Campaign2.Product.Ensures (observedRxDataTimers pid pkt e) (fun _ => True)
+      (fun result _ => RxDataTimersFacts pid pkt result.1 ∧
+        TraversalAllModeEffect pid result.1.traversal.before.toSnapshot result.1.traversal.after.toSnapshot) := by
+  constructor
+  · intro entry pre
+    rw [observedRxDataTimers_erase pid pkt e]
+  · exact observedRxDataTimers_all_modes pid pkt e
 
 end Leanux.Proofs.WG.TimerDiscipline

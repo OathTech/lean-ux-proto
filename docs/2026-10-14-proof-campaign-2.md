@@ -15,22 +15,22 @@ merged; the executable mirror remains byte-identical to b700659.
 | H3 Roaming | 19 | 196 | Full terminal closure and invalid-MAC1/rate-limit/admitted-response/initiation rejection and cookie-message and whole data-admission endpoint preservation current; callback authentication provenance and broader caller coverage open. |
 | H4 Configuration | 96 | 717 | Full terminal closure, actual mixed/key setter paginated readback with arbitrary endpoints, whole finite single-peer mixed-width getter and actual mixed/key setter composition with exact DATA/DONE count and arbitrary endpoints and fitting multi-peer scalar and mixed fwmark/scalar set/get current; global ownership, queued cleanup, general mixed setters and multi-peer pagination open. |
 | H5 Progress | 49 | 326 | Full terminal closure, exact bounded outcomes and recorded batch, actual timer completion guards and recorded idle/post-advance wait completion and actual advance-syscall/runner linkage and send-worker completion guard and four final-idle syscall/runner receipts current; global progress/coherent-ring adequacy open. |
-| H6 Timers | 61 | 490 | Full terminal closure, actual retry blocks and allocation-labelled guarded session-arm events with outgoing call-entry origin and initialized give-up runtime witness and both handshake receivers’ all-mode immediate traversal effects current; complete caller coverage, general mixed histories and session-relative counts open. |
+| H6 Timers | 65 | 498 | Full terminal closure, actual retry blocks and allocation-labelled guarded session-arm events with outgoing call-entry origin and initialized give-up runtime witness and all five syntactic traversal call sites covered by six observer branches with all-mode immediate effects; upstream data authentication, broader caller histories and session-relative counts remain open. |
 
-The checked surface is 2,455 theorems in all 843 campaign-owned modules.
+The checked surface is 2,463 theorems in all 845 campaign-owned modules.
 The completed retrofit accounts for 1,983: 1,321 retyped, 244 explicitly
 corrected, 239 retained and 179 added support/finding declarations. One hundred fifty-eight
 subsequent H2 declarations add table preservation and local owner coherence.
 Fifty H1 declarations add whole-operation and finite mixed-history tag ownership and actual derivation-clock provenance and direct-helper reinstallation; one hundred thirty-five H4 declarations
 add mixed fwmark/scalar, ordered peer-attribute, port-refusal/private-key readback and finite IPv4 getter/setter pagination and actual fitting multi-peer readback and complete finite single-peer mixed-width pagination. Thirty-nine H3 declarations
 add invalid-MAC1, rate-limit and admitted-response/initiation rejection, cookie-message and whole data-admission endpoint preservation. Thirty-eight H5 declarations
-establish recorded batch, actual timer completion guards and recorded idle/post-advance wait wheel completion and the actual send-worker completion guard and four final-idle syscall/runner links. Fifty-two H6 declarations
+establish recorded batch, actual timer completion guards and recorded idle/post-advance wait wheel completion and the actual send-worker completion guard and four final-idle syscall/runner links. Sixty H6 declarations
 connect actual timer-loop receipts, contiguous retry-block counts/bounds, local partial-exchange arming and allocation-labelled session-arm events. Of the 1,831 baseline theorems, 22 frames
 were deleted because types supply their facts and five false cookie supports
 were separately retired with checked counterexamples. No baseline declaration
 remains awaiting retrofit; all 258 original terminal names/order survive,
 with eleven new H1 headlines, thirty-nine new H2 headlines, six new H3 headlines,
-seventeen new H4 headlines, seven new H5 headlines and eleven new H6 headlines (349 total).
+seventeen new H4 headlines, seven new H5 headlines and fifteen new H6 headlines (353 total).
 
 The [retrofit report](2026-10-16-proof-campaign-2-state-split.md) records
 claim/frame files, corrections, before/after counts and validation.
@@ -3675,9 +3675,9 @@ counterexample: numeric safety survives and lookup Stops. Its positive
 counterpart explicitly retains SessionRotationFresh.
 
 These local contracts do not establish equivalence to whole initialized driver
-histories. [AGENT 2026-10-17] Treat that broader lifecycle/Runner closure as a
-separate strengthening rather than continuing unrelated owner-coherence leaves
-as if each were necessary for the named-operation H2 claim. One optional
+histories. The audit distinguishes that broader lifecycle/Runner closure from
+the named-operation H2 claim; additional isolated owner-coherence leaves would
+not by themselves establish the former. One optional
 consolidation would compose existing owned contracts into a finite native
 index history from an empty table. The full-driver architecture instead needs
 the deferred header/CPU, outer removal, decrypt/NAPI and environment layers;
@@ -3689,3 +3689,54 @@ monadic runs; ReplayWindow.Counterexamples references Runner.initialKernel,
 World.k and old peer-word types. The recorded 62 errors, 22 warnings and
 metavariable panic occur before the axiom stage. Campaign 1 owns these repairs.
 No whole-result gate completion or initialized-driver theorem is claimed.
+
+
+## H6 continuation: outgoing and data traversal callers
+
+Outgoing initiation and response, createDataDone and raw consumeDataDone now
+retain their existing observations and add exact all-mode immediate traversal
+effects. Existing source erasures preserve the original operation, return
+values, early exits and every Stop. No new observer or readiness premise is
+introduced. Initiation's hook remains conditional on message creation;
+response's remains conditional on actual session success. Common received
+response traversal, proved in the preceding tranche, does not require that
+success.
+
+createDataDone traverses once before its item loop, including an empty list;
+the theorem does not count one traversal per packet. Raw consumeDataDone
+records its real endpoint/confirmation/keep-fresh prelude, traversal, receipt
+gating and original validation/routing suffix. It supplies no upstream
+authentication or inner-packet acceptance proof. All effects are measured at
+the same actual hook boundary; later sends, release, error or timer changes
+are retained, not turned into final-expiry or delivery guarantees.
+
+OutgoingTraversalAllModeClaims and DataTraversalAllModeClaims hold four
+projected caller claims; Statements adds four literal erasure/consequence
+wrappers. Eight theorems in two modules, no definitions, frames or shared
+variants. Root source inspection finds five direct timersTraversal call sites:
+two in Handshake and one each in Receive, Data and RxData. The common received
+handshake site is exposed by two observer branches, yielding six checked
+all-mode caller statements. This local coverage is not global history or
+decrypt/NAPI authentication closure.
+
+Probe 1 fails fifteen parser/cascade errors caused by a reserved local name.
+Probes 2 and 3 exit zero but each emits one unused-simp warning; both are
+rejected as validation. The author corrects an initially mistaken clean-output
+status after inspecting the saved logs. Changed probe 4 removes the unused
+argument and checks the exact split and all eight standard-only roots without
+diagnostics. No warning suppression, limit/cap increase or infrastructure rerun.
+
+The installed scoped build passes 338 jobs, inherited Env:865 String.mk only.
+Axiom inspection checks 1,460 logical roots in 296 modules, including 834 public
+theorem roots, standard-only and without diagnostics. Independent review finds
+no issue. Fresh kernel replay passes TimerDiscipline.Statements; static trust/
+import, original 258-name/order and mirror/shared boundaries pass.
+
+H6 now has 498 theorems and 65 headlines. Totals move from 2,455/843/349 to
+2,463 theorems/845 modules/353 headlines; the other five counts are unchanged.
+Cross-call allocation transport, session-relative counting and broader
+history/authentication composition remain open. The inherited full gate
+remains FAILED, not rerun unchanged. No mirror request arises. Reproduce the
+scoped build, axiom inspection and fresh replay of
+Leanux.Proofs.WG.TimerDiscipline.Statements under capped/scripts/in-bundle
+with LEAN_NUM_THREADS=32 and LEANUX_QEMU_SLOTS=16.
