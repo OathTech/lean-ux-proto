@@ -10,27 +10,27 @@ merged; the executable mirror remains byte-identical to b700659.
 
 | Result | Headlines | Checked support | Split status |
 | --- | ---: | ---: | --- |
-| H1 Noise | 25 | 203 | Full terminal closure, whole-response all-peer tag ownership and actual session derivation-clock receipt current; wider caller/lifetime claims open. |
+| H1 Noise | 26 | 208 | Full terminal closure, both whole-consumer all-peer tag effects and actual session derivation-clock receipt current; wider caller/lifetime claims open. |
 | H2 Index | 84 | 462 | Full terminal closure and ingress/expiry/handshake/peer-creation owner coherence and whole-removal lifecycle finding/slot-covered arbitrary-AIP preservation and actual clear-work dispatch current; reachable whole-driver uniqueness/coherence open. |
 | H3 Roaming | 17 | 186 | Full terminal closure and invalid-MAC1/rate-limit/admitted-response/initiation rejection preservation current; callback authentication provenance and broader caller coverage open. |
 | H4 Configuration | 87 | 646 | Full terminal closure, actual mixed/key setter paginated readback and finite single-peer IPv4 getter current; global ownership, queued cleanup, general mixed setters and multi-peer/IPv6 pagination open. |
 | H5 Progress | 44 | 296 | Full terminal closure, exact bounded outcomes and recorded batch and actual timer completion-guard soundness current; global progress/coherent-ring adequacy open. |
-| H6 Timers | 56 | 469 | Full terminal closure, actual retry-block count/bound and a checked local partial-exchange arming example current; complete caller coverage, general mixed histories and session-relative counts open. |
+| H6 Timers | 58 | 478 | Full terminal closure, actual retry blocks and allocation-labelled guarded session-arm events current; complete caller coverage, general mixed histories and session-relative counts open. |
 
-The checked surface is 2,262 theorems in all 738 campaign-owned modules.
+The checked surface is 2,276 theorems in all 745 campaign-owned modules.
 The completed retrofit accounts for 1,983: 1,321 retyped, 244 explicitly
 corrected, 239 retained and 179 added support/finding declarations. One hundred twenty-nine
 subsequent H2 declarations add table preservation and local owner coherence.
-Eighteen H1 declarations add whole-response tag ownership and actual derivation-clock provenance; sixty-four H4 declarations
+Twenty-three H1 declarations add whole-consumer tag ownership and actual derivation-clock provenance; sixty-four H4 declarations
 add mixed fwmark/scalar, ordered peer-attribute, port-refusal/private-key readback and finite IPv4 getter/setter pagination with multi-peer coalescing support. Twenty-nine H3 declarations
 add invalid-MAC1, rate-limit and admitted-response/initiation rejection preservation. Eight H5 declarations
-establish recorded batch and actual timer completion-guard soundness. Thirty-one H6 declarations
-connect actual timer-loop receipts, contiguous retry-block counts/bounds and local partial-exchange arming. Of the 1,831 baseline theorems, 22 frames
+establish recorded batch and actual timer completion-guard soundness. Forty H6 declarations
+connect actual timer-loop receipts, contiguous retry-block counts/bounds, local partial-exchange arming and allocation-labelled session-arm events. Of the 1,831 baseline theorems, 22 frames
 were deleted because types supply their facts and five false cookie supports
 were separately retired with checked counterexamples. No baseline declaration
 remains awaiting retrofit; all 258 original terminal names/order survive,
-with three new H1 headlines, thirty-two new H2 headlines, four new H3 headlines,
-eight new H4 headlines, two new H5 headlines and six new H6 headlines (313 total).
+with four new H1 headlines, thirty-two new H2 headlines, four new H3 headlines,
+eight new H4 headlines, two new H5 headlines and eight new H6 headlines (316 total).
 
 The [retrofit report](2026-10-16-proof-campaign-2-state-split.md) records
 claim/frame files, corrections, before/after counts and validation.
@@ -1562,6 +1562,69 @@ fresh replays on Noise.Statements, Config.Statements, TimerDiscipline.Statements
 and Config.MultiPeerCoalesceClaims under Leanux.Proofs.WG, through capped and
 scripts/in-bundle with 32 Lean threads and 16 QEMU slots. No infrastructure
 retry or new mirror-team request.
+
+## H1 continuation: whole-initiation tag ownership
+
+The original consumeInitiation now preserves every optional peer tag on all
+normal refusals and changes only its returned peer on success. There is no
+required old tag: the source permits a restarted exchange. Both ordered clock
+reads, rejection cleanup, arbitrary aliases and all original Stops remain.
+No readiness, coherence, residency or reference-budget premise is added.
+
+InitiationTagFrames supplies two narrow local pubkeyLookup/setPeer variants;
+actual acquisition derives the retained reference. Source composes the existing
+erased consumer and Claims projects the result. Statements adds the literal
+headline. The owned ResponseTagFrames.tagMap_write helper is exposed unchanged
+and reused, avoiding a duplicate pure proof; no shared file is edited.
+Five added theorems in three modules bring H1 to 208 and 26 headlines.
+All three capped default-limit probes pass without diagnostics, and the
+installed build passes 144 jobs without warnings. Root review finds no issue.
+
+## H6 continuation: actual session-arm events
+
+Both full response callers now retain their original complete observations and
+attach an all-mode SessionArmEvent to each reached session cut. Its serial is
+the actual pre-session allocation counter plus one, preserved across the hook.
+The source derives the resident live peer. A running device has the exact
+peerTimerArmEffect; a false running guard preserves the entire WG projection
+while still permitting Ambient caller-read/decision effects and original Stops.
+Across the hook the physical enqueue counter stays equal or increases by one.
+
+Existing ResponseSessionFacts supplies hook presence exactly when beginSession
+returns true and the actual SessionEffect. Its premise is discharged internally
+from each original prefix, not assumed by either headline. Incoming response
+only needs its message-kind equality; both whole-call preconditions are True.
+The claim is at the actual hook cut, not final caller state. It does not imply
+survival of an aliased keypair, unique serials across an arbitrary mixed history,
+or one physical enqueue per successful session.
+
+SessionArmEventModel holds the event predicate. Frames proves the substantive
+counter consequence of the exact arm effect. Source factors the two existing
+prefixes by their original decision site and connects the actual hook; Claims
+and the two literal terminal wrappers retain the original observations.
+Nine added theorems and two definitions in four modules bring H6 to 478 and
+58 headlines. No observer, source behavior or shared layer is changed.
+Probes 1–3 fail five, three and two mechanical bind/layout/type goals;
+probes 4–5 pass the complete and exact split/axiom packages without warnings.
+Independent review finds no correctness or domain issue. No proof-limit,
+cap or premise increase occurs.
+
+## Validation of initiation tags and session-arm events
+
+The helper build passes 67 jobs, initiation 144 and session events 330;
+only the latter reports inherited Env:865 String.mk. The audit covers
+1,572 logical roots in 323 proof modules, including 914 public theorem roots,
+with standard axioms only. Both final fresh kernel replays pass after
+dependency artifact writers stop. Static checks, original terminal order,
+mirror identity and shared-layer boundaries pass.
+
+Relative to 2f3e9b7f this adds 14 theorems, seven modules and three headlines:
+2,276 theorems in all 745 campaign-owned modules, 316 headlines. All H1–H6
+remain in progress; the inherited full gate remains failed and is not rerun
+unchanged. Reproduce the scoped builds and fresh replays on
+Leanux.Proofs.WG.Noise.Statements and Leanux.Proofs.WG.TimerDiscipline.Statements
+through capped and scripts/in-bundle with 32 Lean threads and 16 QEMU slots.
+No new mirror-team request, infrastructure retry or warning suppression.
 
 ## H3 continuation: rate-limit refusal preserves peers and endpoints
 

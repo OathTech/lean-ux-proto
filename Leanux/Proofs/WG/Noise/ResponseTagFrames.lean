@@ -12,7 +12,7 @@ def ResponseTagHeld (entry : Option Device) (pid : PeerId) (g : WGWorld) : Prop 
   responseTagMap g.dev = responseTagMap entry ∧
     ∃d p, g.dev = some d ∧ d.peers[pid]? = some p ∧ 1 < p.refcount
 
-private theorem tagMap_write (d : Device) (pid : PeerId) (p q : Peer)
+theorem tagMap_write (d : Device) (pid : PeerId) (p q : Peer)
     (resident : d.peers[pid]? = some p) (tag : q.handshakeState = p.handshakeState) :
     responseTagMap (some {d with peers := d.peers.insert pid q}) = responseTagMap (some d) := by
   funext other

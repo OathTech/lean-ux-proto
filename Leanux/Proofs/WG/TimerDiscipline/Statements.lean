@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.TimerDiscipline.SessionArmEventClaims
 import Leanux.Proofs.WG.TimerDiscipline.PartialExchangeArmClaims
 import Leanux.Proofs.WG.TimerDiscipline.ActualRetryBlockClaims
 import Leanux.Proofs.WG.TimerDiscipline.OuterAdjacentClaims
@@ -770,5 +771,29 @@ theorem original_giveUp_arms_without_session_creation :
           (fun p => (p.handshakeState,p.keypairPrevious,p.keypairCurrent,p.keypairNext,p.timerZeroKeyMaterial)) =
           some (HANDSHAKE_CREATED_INITIATION,none,none,none,some ZERO_KEY_MATERIAL_TICKS.toUInt64)) :=
   giveUp_arms_without_session_creation
+
+/-- Each reached session hook in a normal full response call is attached to
+its actual allocation serial. The receipt distinguishes a suppressed guard,
+logical arming and zero or one wheel enqueue, in both timer-arm modes. It
+makes no final-key residency or later-state expiry assertion; original observer
+erasure retains all failures. -/
+theorem original_response_session_arm_event (msg : List UInt8) (src : SkbSource)
+    (kind : messageType msg = MESSAGE_HANDSHAKE_RESPONSE) :
+    Campaign2.Product.Ensures (observedResponseSession msg src) (fun _ => True)
+      (fun observation _ => ResponseSessionObservation msg observation ∧
+        ∀ cut afterPrefix, observation = .ok (some cut,afterPrefix) →
+          SessionArmEvent cut.response.consumed.input.pid cut.session) :=
+  observedResponseSession_arm_event msg src kind
+
+/-- The full outgoing response carries the same serial-indexed hook receipt.
+This counts the hook at an actual successful session cut, not all arms in a
+mixed history or survival of a keypair after aliased rotation. Original Stops
+remain those of the existing full-call observer. -/
+theorem original_outgoing_response_session_arm_event (pid : PeerId) :
+    Campaign2.Product.Ensures (observedOutgoingResponseSession pid) (fun _ => True)
+      (fun observation _ => OutgoingResponseSessionObservation pid observation ∧
+        ∀ cut afterPrefix, observation = .ok (some cut,afterPrefix) →
+          SessionArmEvent pid cut.session) :=
+  observedOutgoingResponseSession_arm_event pid
 
 end Leanux.Proofs.WG.TimerDiscipline

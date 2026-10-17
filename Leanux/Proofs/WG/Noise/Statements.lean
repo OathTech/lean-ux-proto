@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Noise.InitiationTagClaims
 import Leanux.Proofs.WG.Noise.ResponseTagClaims
 import Leanux.Proofs.WG.Noise.SessionClockClaims
 import Leanux.Proofs.WG.Noise.ResponseEdgeClaims
@@ -344,5 +345,15 @@ theorem original_consume_response_tag_map (msg : List UInt8) (entry : Campaign2.
           some HANDSHAKE_CONSUMED_RESPONSE else entry.tagAt pid) ∧
         (∀pid, result = some pid → entry.tagAt pid = some HANDSHAKE_CREATED_INITIATION)) :=
   consumeResponse_tagMap_projected msg entry
+
+/-- Every normal initiation-consumption refusal preserves all peer tags;
+success changes only the returned peer to consumed initiation. No prior state
+tag, reference budget, alias restriction or ready record stream is assumed.
+This is a normal-return edge contract, not a completion or rollback claim. -/
+theorem original_consume_initiation_tag_map (msg : List UInt8) (entry : Campaign2.Snapshot) :
+    Campaign2.Ensures (consumeInitiation msg) (fun s => s = entry)
+      (fun result after => ∀pid, after.tagAt pid = if result = some pid then
+        some HANDSHAKE_CONSUMED_INITIATION else entry.tagAt pid) :=
+  consumeInitiation_tagMap_projected msg entry
 
 end Leanux.Proofs.WG.Noise
