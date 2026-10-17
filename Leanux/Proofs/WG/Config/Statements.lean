@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.Config.MixedPagePlanClaims
+import Leanux.Proofs.WG.Config.MixedPageScanSource
 import Leanux.Proofs.WG.Config.CursorReadySource
 import Leanux.Proofs.WG.Config.MixedPeerSerializerSource
 import Leanux.Proofs.WG.Config.MixedPeerCoalesceSource
