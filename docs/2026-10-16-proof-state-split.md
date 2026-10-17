@@ -13,8 +13,8 @@ new worlds; new R3/R4 results follow the retrofit.
 | Validated baseline `00641c6` | 471 | 7,715 |
 | Completed retrofit checkpoints | 452 | 6,544 |
 
-Completed changes comprise **2,738 retyped/generalized, 1,693 deleted,
-1,876 retained contract shapes and 522 added theorems**. Retyping changes the
+Completed changes comprise **2,738 retyped/generalized, 1,699 deleted,
+1,913 retained contract shapes and 528 added theorems**. Retyping changes the
 actual carrier or observation, including shorthand contracts whose functions
 move to a native monad. Namespace-only product qualification and equivalent
 projection relocation count as retained. The census includes private and
@@ -280,8 +280,20 @@ Transmit/receive development had six failed checks and six passing prefix/full
 checks, one of the latter with two warnings subsequently corrected. No
 infrastructure retry or proof-limit change occurred.
 
-Remaining work is the routing/origin terminal carry, material environment and
-runner support, RX credit/protection layers, warning
+Material environment support carries 43→43 theorems: thirty-seven retained
+product contracts, six deleted helpers and six current composition helpers.
+Five deletions follow the removed raw timer scan/fire APIs; the sixth is the
+global getter wrapper replaced at its actual call by the canonical product
+read rule. Current wheel selection, duplicate saved-peer scans, completion
+guards and delete callbacks retain their actual source behavior. The 384-job
+closure builds with zero own warnings and 1,393 inherited warnings. All
+forty-four named declarations have standard-only axioms; fresh kernel replay
+and complete source/contract review pass. Development had two failed full
+checks, one diagnostic pass and two full passes, without an infrastructure
+retry, panic or limit change.
+
+Remaining work is the routing/origin terminal carry, material configuration,
+dump and runner support, RX credit/protection layers, warning
 cleanup, the full proof gate and terminal replay. Deterministic source/proof
 failures are failures; source edits are checked anew, never described as
 infrastructure retries. Recovery admissions printed by failed elaborations
