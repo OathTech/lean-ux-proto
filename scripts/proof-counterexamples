@@ -19,8 +19,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 REPLAY = ROOT / 'docs' / 'proof-campaign-replay.py'
 W7 = ROOT / 'docs' / 'proof-campaign-w7.py'
+# The B3 wheel records (kinds 313 and 314) are supplied by `with_wheel_records`,
+# as the mirror lane's `replay_raw` does; the campaign report's recipe predates B3.
 CRYPT_AHEAD = ('import json; from evaluator.test_model_replay import W7_CRYPT_AHEAD, with_jiffies_end, '
-               'with_timer_caller_jiffies; print(json.dumps(with_timer_caller_jiffies(with_jiffies_end(W7_CRYPT_AHEAD))))')
+               'with_timer_caller_jiffies, with_wheel_records; '
+               'print(json.dumps(with_wheel_records(with_timer_caller_jiffies(with_jiffies_end(W7_CRYPT_AHEAD)))))')
 
 # (name, generator command, replay module, extra lean flags)
 RECIPES = [

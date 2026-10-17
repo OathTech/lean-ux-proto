@@ -887,10 +887,12 @@ staged-to-socket conservation is extra scope. Independent erasures do not prove 
 keepalive slot; Linux/mirror agree on two EPIPE drops, all producers preceding consumption. The pure witness is not
 whole-run refinement. Operations are tracked in `corpus/w7-tier/w7_ring_wrap.json` and extra-ENOSPC `w7_ring_1025.json`;
 full hidden streams are not. This recipe checks only the **eight-transmit scheduler regression**, with rearranged
-records/synthetic wait bounds and qualified caller-clock reconstruction:
+records/synthetic wait bounds and qualified caller-clock reconstruction; since B3 the timer wheel's records
+(kinds 313 and 314) are supplied by `with_wheel_records`, as the mirror lane's `replay_raw` supplies them (the
+recipe's earlier form, without it, stops at the first arm with a missing `timer_clk` record):
 
 ```sh
-capped -- scripts/in-bundle bash -o pipefail -c 'python3 -B -c "import json; from evaluator.test_model_replay import W7_CRYPT_AHEAD, with_jiffies_end, with_timer_caller_jiffies; print(json.dumps(with_timer_caller_jiffies(with_jiffies_end(W7_CRYPT_AHEAD))))" | lake env lean --run Leanux/Proofs/Logged/Replay.lean'
+capped -- scripts/in-bundle bash -o pipefail -c 'python3 -B -c "import json; from evaluator.test_model_replay import W7_CRYPT_AHEAD, with_jiffies_end, with_timer_caller_jiffies, with_wheel_records; print(json.dumps(with_wheel_records(with_timer_caller_jiffies(with_jiffies_end(W7_CRYPT_AHEAD)))))" | lake env lean --run Leanux/Proofs/Logged/Replay.lean'
 ```
 
 Physical occupancy differs from live count; retirement clears consumed slots. Positive/zero-size laws and pending
