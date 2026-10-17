@@ -1,13 +1,12 @@
-import Leanux.Proofs.WG.Config.KeyReferences
+import Leanux.Proofs.WG.Config.QueuedHandshake
 
 set_option pp.structureInstances false
 set_option autoImplicit false
-set_option maxHeartbeats 800000
 
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise Std.Do
 
-def stagedFallback (pid : PeerId) (packets : List Packet) (keypair : Option KeypairId) (invalid : Bool) : M Unit := do
+def stagedFallback (pid : PeerId) (packets : List Packet) (keypair : Option KeypairId) (invalid : Bool) : WG.M Unit := do
   if invalid then
     let some id := keypair | invariant "unreachable"
     let k ← getKeypair id
@@ -19,7 +18,7 @@ def stagedFallback (pid : PeerId) (packets : List Packet) (keypair : Option Keyp
   setPeer pid { (← getPeer pid) with staged := packets ++ (← getPeer pid).staged }
   sendQueuedHandshakeInitiation pid false
 
-def stagedAfterGet (pid : PeerId) (packets : List Packet) (keypair : Option KeypairId) : M Unit := do
+def stagedAfterGet (pid : PeerId) (packets : List Packet) (keypair : Option KeypairId) : WG.M Unit := do
   if ← branch .stagedNoKeypair keypair.isNone then return ← stagedFallback pid packets keypair false
   let some id := keypair | invariant "unreachable"
   let k ← getKeypair id
@@ -47,7 +46,7 @@ def stagedAfterGet (pid : PeerId) (packets : List Packet) (keypair : Option Keyp
   let item ← packetsCb.mapM newTxSkb
   createData pid item
 
-def stagedSource (pid : PeerId) : M Unit := do
+def stagedSource (pid : PeerId) : WG.M Unit := do
   let p ← getPeer pid
   if ← branch .stagedEmpty p.staged.isEmpty then return
   let packets := p.staged
@@ -56,7 +55,7 @@ def stagedSource (pid : PeerId) : M Unit := do
   stagedAfterGet pid packets keypair
 
 theorem sendStaged_source (pid : PeerId) : stagedSource pid = sendStagedPackets pid := by
-  simp [stagedSource, stagedAfterGet, stagedFallback, sendStagedPackets, bind_assoc]
+  simp [stagedSource, stagedAfterGet, stagedFallback, sendStagedPackets]
   rfl
 
 end Leanux.Proofs.WG.Config

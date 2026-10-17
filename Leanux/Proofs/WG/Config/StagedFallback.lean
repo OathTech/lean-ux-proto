@@ -1,4 +1,5 @@
-import Leanux.Proofs.WG.Config.StagedSource
+import Leanux.Proofs.WG.Config.StagedFallbackSource
+import Leanux.Proofs.WG.Config.KeyReferences
 
 set_option pp.structureInstances false
 set_option autoImplicit false
@@ -7,32 +8,11 @@ set_option maxHeartbeats 800000
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise Std.Do
 
+/-- Historical prediction for the pending callers below; current effects use the actual inspection. -/
 def fallbackDevice (d : Device) (pid : PeerId) (p : Peer) (packets : List Packet) (now : Int64) : Device :=
   let restored := { p with staged := packets ++ p.staged }
   let reset := { restored with timerHandshakeAttempts := 0 }
   queuedDevice (withPeer (withPeer d pid restored) pid reset) pid reset now
-
-theorem stagedFallback_exact (pid : PeerId) (packets : List Packet) (kp : Option KeypairId)
-    (d afterPut : Device) (p : Peer) (resident : afterPut.peers[pid]? = some p)
-    (put : Ensures (keypairPut kp false) (fun w => w.k.wg = some d)
-      (fun _ w => w.k.wg = some afterPut)) :
-    Ensures (stagedFallback pid packets kp false) (fun w => w.k.wg = some d)
-      (fun _ w => ∃ now, w.k.wg = some (fallbackDevice afterPut pid p packets now)) := by
-  let restored := { p with staged := packets ++ p.staged }
-  have hp := (ensures_iff _ _ _).mp put
-  have hq := (ensures_iff _ _ _).mp
-    (sendQueued_exact pid (withPeer afterPut pid restored) restored (by simp [withPeer]))
-  rw [ensures_iff]
-  simp only [stagedFallback, Bool.false_eq_true, ite_eq_right, not_false_eq_true]
-  mvcgen [getPeer, getDev, getK, setPeer, modifyDev, modifyK, branch, invariant, hp, hq]
-  invariants
-  | inv1 => ((⇓? _ w => ⌜w.k.wg = some afterPut⌝) : PostCond _ (.arg World (.except Stop .pure)))
-  all_goals try dsimp +zetaDelta only at *
-  all_goals repeat intro
-  all_goals simp_all [fallbackDevice, restored, withPeer]
-  all_goals subst_vars
-  all_goals simp_all
-  all_goals grind only
 
 theorem stagedAfterGet_none (pid : PeerId) (packets : List Packet) (d : Device) (p : Peer)
     (resident : d.peers[pid]? = some p) :

@@ -20,11 +20,11 @@ and attributed theorem declarations. Campaign 2 owns 427 Lean files,
 | --- | ---: | ---: | ---: | ---: | --- |
 | Common projection | 2 | 0 | 0 | 0 | Actual native WG/Ambient and full Product observations carried; no reconstructed execution states. |
 | H1 Noise | 35 | 171 | 22 | 180 | All original Noise obligations carried, including the full terminal closure; six type-given frames deleted. Wider caller/lifetime/reachability and clock-provenance charter claims remain open. |
-| H2 Index | 68 | 318 | 52 | 201 | Table, lookup, collision records, allocation, owner invariants and lifecycle support carried; seven type-given frames deleted. Exact peer-release outcomes replace stale totality, with checked counterexamples. Terminal closure and whole-driver coherence remain pending. |
+| H2 Index | 68 | 318 | 52 | 211 | Table, lookup, collision records, allocation, owner invariants and lifecycle support carried; seven type-given frames deleted. Exact peer-release outcomes replace stale totality, with checked counterexamples. Terminal closure and whole-driver coherence remain pending. |
 | H3 Roaming | 35 | 119 | 13 | 119 | Endpoint/publication, polling, attempt facts, crypto, lookup and response-caller factors/facts carried with full Product certificates; two type-given frames deleted. Initiation transcript facts and broader authentication/caller closure remain pending. |
-| H4 Configuration | 130 | 554 | 79 | 345 | Scalar, identity, port, dump, allowed-IP and structural support carried; three type-given frames deleted. Quiet timer cleanup and queued-send observations are corrected; queued-send and removal totality have checked stale-statement counterexamples. Remaining readback/effects and terminal closure remain pending. |
+| H4 Configuration | 130 | 554 | 79 | 348 | Scalar, identity, port, dump, allowed-IP and structural support carried; three type-given frames deleted. Quiet timer cleanup and queued-send observations are corrected; queued-send and removal totality have checked stale-statement counterexamples. Remaining readback/effects and terminal closure remain pending. |
 | H5 Progress | 59 | 265 | 42 | 139 | Pure/control, cut, jitter, index, poll bounds, dispatch, scheduler turns, stack/probe frames and Product observation bridge carried. The old backlog fixture now has a checked exact runner rejection. Receive-ring activation models, general runner boundaries, remaining drain/flush claims and terminal closure remain pending. |
-| H6 Timer discipline | 98 | 404 | 50 | 110 | Base/guard/jitter, arming/wheel, recorded clock and initiation-send arming contracts carried; three type-given frames deleted. Exact wheel corrections are explicit; broader timer episodes, worker composition and terminal closure remain pending. |
+| H6 Timer discipline | 98 | 404 | 50 | 114 | Base/guard/jitter, arming/wheel, recorded clock and initiation-send arming contracts carried; three type-given frames deleted. Exact wheel corrections are explicit; broader timer episodes, worker composition and terminal closure remain pending. |
 
 Retyped, deleted and retained counts will be reported per validated tranche.
 H1 now has a checked split terminal closure; H2–H6 remain lagging.
@@ -3310,3 +3310,90 @@ Config.QueuedHandshake and Progress.BatchBacklogAcceptance under
 Leanux.Proofs.WG, then #print axioms for logical declarations and
 scripts/in-bundle lake env leanchecker --fresh MODULE for each root.
 Use capped, 32 Lean threads and 16 QEMU slots on this host.
+
+
+## Consumer table safety, initiation views and staged fallback
+
+| Tranche | Before | Retyped | Corrected | Deleted | Kept | Added | After |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Index.ConsumeFrames/ResponseFrames/ConsumeSource | 10 | 10 | 0 | 0 | 0 | 0 | 10 |
+| TimerDiscipline.InitiationPreservationFrames | 4 | 4 | 0 | 0 | 0 | 0 | 4 |
+| Config.StagedSource/StagedFallbackSource | 2 | 1 | 1 | 0 | 0 | 1 | 3 |
+| This tranche | 16 | 15 | 1 | 0 | 0 | 1 | 17 |
+| Cumulative processed baseline and checked support | 1,038 | 789 | 32 | 21 | 196 | 94 | 1,111 |
+
+The census is 520 campaign-owned files, 1,904 theorems and 350 checked proof
+modules; 793 baseline declarations await validation. Counts are H1 180, H2 211,
+H3 119, H4 348, H5 139 and H6 114. H1 retains its checked terminal closure;
+H2–H6 and the full gate remain lagging. No new charter result is claimed.
+
+ConsumeFrames retains arbitrary optional devices/cursors, complete LookupState
+values, kind masks, numeric indices, public keys and Ambient inputs. It follows
+the actual owner-word read, possibly-zero acquisition and owner-word store,
+including NULL/dead storebacks and owner/peer aliases. The cursor frames only
+the table and keypair allocation bound. ConsumeSource composes initiation,
+response and cookie consumers on their original table-safety-only partial
+domains: every early return, missing-owner case, cryptographic helper, clock
+read, peer update and failure-side release remains. Success of a release is
+never assumed. ResponseFrames carries the session-derived timer table frame.
+
+InitiationPreservationFrames retains the four original selected-view frames.
+Traversal and keepalive deletion use current timer/wheel effects; these writes
+leave the specific InitiationView unchanged. The final retransmit hook frames
+WorkerView, whose fields exclude timers. Residency comes from the original
+some-view premise. Off, recorded same-expiry, changed-expiry, missing-caller and
+record failures remain covered, and prefix composition uses the actual send
+operation. These are substantive within-WireGuard frames, so none is deleted.
+
+StagedSource's operational factors are retyped without changing their control
+flow. Its unused KeyReferences import is narrowed to checked QueuedHandshake.
+StagedFallbackSource carries the corrected fallback effect over the projection,
+indexed by the actual clock and inspection bit. Its erasure is unconditional
+over invalid/keypair arguments, including every error. The original arbitrary
+partial keypairPut Device contract and after-put residency remain the only
+premises. Packet restoration preserves order before attempt reset and the
+actual queued-send observation. StagedFallback retains the historical pure
+predictor and two pending downstream callers; no caller is silently removed.
+
+Independent reviews of the six lookup frames, two previously carried send
+compositions, three consumer contracts, four timer frames and staged-fallback
+candidate found no correctness issues. Scoped builds pass 105 jobs for the
+lookup frames, 129 for staged fallback/session timer, 88 for initiation frames
+and 138 for consumers, without warnings. Axiom inspection covers 698 logical
+roots in 141 proof modules, including 427 public theorem roots, using only the
+three standard axioms. All four fresh kernel replays pass: ConsumeSource,
+ResponseFrames, StagedFallbackSource and InitiationPreservationFrames.
+Static token/import/root/default checks pass, all 258 terminal names/order
+remain, and mirror/shared-layer boundaries are clear.
+
+Development ledger: ConsumeFrames probe 1 elaborated with one unused
+simplification warning; probe 2 passed after removing it. The first combined
+consumer proof attempt failed all three declarations at the existing heartbeat
+bound. Explicit source composition then closed cookie in probe 2, response
+and cookie in probe 3, and all three in probe 4. Probe 5 removed unused local
+supports and a duplicated source expression, and passed cleanly. No bound was
+raised. ResponseFrames passed its first scoped build. Initiation-preservation
+probes 1–2 failed projection/inference and wheel simplification respectively;
+probe 3 passed without warnings.
+
+Staged-fallback probes 1–5 failed on: erasure timeout/missing native annotation
+and one warning; control-flow erasure/projection inference and two warnings;
+a misplaced local predicate; native put-post annotation and one warning;
+and a Unit/PUnit mismatch in the actual orphan loop. Probe 6 passed at the
+default heartbeat bound with no warnings. Probe 1's shell wrapper also used
+zsh's readonly status variable; the Lean log was preserved and read, and the
+wrapper was corrected to use a task-specific variable. Complete outputs were
+saved before inspection. No failure was treated as success, and no unchanged
+rerun, infrastructure retry, cap increase or guest run occurred.
+
+The initiation-consume transcript facts remain outside the census. Probe 19
+failed kernel recursion in the extracted precheck and the original finish
+fact. Probe 20 closed the named precheck with targeted bind/run equations but
+the original fact still failed kernel recursion. Further continuation factoring
+is pending; no proof limit changed.
+
+Reproduce with scripts/in-bundle lake build on Index.ConsumeSource,
+Index.ResponseFrames, Config.StagedFallbackSource and
+TimerDiscipline.InitiationPreservationFrames under Leanux.Proofs.WG, then
+#print axioms and scripts/in-bundle lake env leanchecker --fresh MODULE for
+each root. Use capped, 32 Lean threads and 16 QEMU slots on this host.
