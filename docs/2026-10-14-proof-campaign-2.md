@@ -11,15 +11,15 @@ merged; the executable mirror remains byte-identical to b700659.
 | Result | Headlines | Checked support | Split status |
 | --- | ---: | ---: | --- |
 | H1 Noise | 32 | 231 | Full terminal closure, all seven whole-call tag maps, their actual finite mixed histories and session derivation-clock receipt current; wider caller/lifetime claims open. |
-| H2 Index | 87 | 471 | Full terminal closure and ingress/expiry/handshake/peer-creation owner coherence and whole-removal lifecycle finding/slot-covered arbitrary-AIP preservation and actual clear-work dispatch and both-mode handshake queueing and new-handshake/zero-key callbacks current; reachable whole-driver uniqueness/coherence open. |
+| H2 Index | 88 | 477 | Full terminal closure and ingress/expiry/handshake/peer-creation owner coherence and whole-removal lifecycle finding/slot-covered arbitrary-AIP preservation and actual clear-work dispatch and both-mode handshake queueing and new-handshake/zero-key/retransmit callbacks current; reachable whole-driver uniqueness/coherence open. |
 | H3 Roaming | 18 | 190 | Full terminal closure and invalid-MAC1/rate-limit/admitted-response/initiation rejection and cookie-message preservation current; callback authentication provenance and broader caller coverage open. |
 | H4 Configuration | 93 | 681 | Full terminal closure, actual mixed/key setter paginated readback with arbitrary endpoints, finite single-peer IPv4 getter and fitting multi-peer scalar and mixed fwmark/scalar set/get current; global ownership, queued cleanup, general mixed setters and multi-peer/IPv6 pagination open. |
 | H5 Progress | 45 | 301 | Full terminal closure, exact bounded outcomes and recorded batch, actual timer completion guards and recorded idle-wait wheel completion current; global progress/coherent-ring adequacy open. |
 | H6 Timers | 59 | 483 | Full terminal closure, actual retry blocks and allocation-labelled guarded session-arm events with outgoing call-entry origin and initialized give-up runtime witness current; complete caller coverage, general mixed histories and session-relative counts open. |
 
-The checked surface is 2,357 theorems in all 791 campaign-owned modules.
+The checked surface is 2,363 theorems in all 793 campaign-owned modules.
 The completed retrofit accounts for 1,983: 1,321 retyped, 244 explicitly
-corrected, 239 retained and 179 added support/finding declarations. One hundred thirty-eight
+corrected, 239 retained and 179 added support/finding declarations. One hundred forty-four
 subsequent H2 declarations add table preservation and local owner coherence.
 Forty-six H1 declarations add whole-operation and finite mixed-history tag ownership and actual derivation-clock provenance; ninety-nine H4 declarations
 add mixed fwmark/scalar, ordered peer-attribute, port-refusal/private-key readback and finite IPv4 getter/setter pagination and actual fitting multi-peer readback. Thirty-three H3 declarations
@@ -29,8 +29,8 @@ connect actual timer-loop receipts, contiguous retry-block counts/bounds, local 
 were deleted because types supply their facts and five false cookie supports
 were separately retired with checked counterexamples. No baseline declaration
 remains awaiting retrofit; all 258 original terminal names/order survive,
-with ten new H1 headlines, thirty-five new H2 headlines, five new H3 headlines,
-fourteen new H4 headlines, three new H5 headlines and nine new H6 headlines (334 total).
+with ten new H1 headlines, thirty-six new H2 headlines, five new H3 headlines,
+fourteen new H4 headlines, three new H5 headlines and nine new H6 headlines (335 total).
 
 The [retrofit report](2026-10-16-proof-campaign-2-state-split.md) records
 claim/frame files, corrections, before/after counts and validation.
@@ -2948,3 +2948,48 @@ scripts/in-bundle under capped, LEAN_NUM_THREADS=32 and LEANUX_QEMU_SLOTS=16.
 Existing ranked mirror requests are unchanged; these steps request no mirror
 change. The two named native helper variants are listed in the shared-frame
 followup for eventual unification.
+
+
+## H2 continuation: both retransmission callback branches
+
+The whole original expiredRetransmitHandshake preserves OwnerCoherentSafe
+on every normal return under that sole entry invariant. Retry increments the
+attempt count, clears endpoint source/cache fields and queues the handshake
+through existing contracts. Give-up deletes the keepalive timer, purges staged
+data, and conditionally arms zero-key cleanup through the exact all-mode arm
+effect. Owner words and counts survive all of these writes pointwise, with
+aliases allowed.
+
+No residency, readiness, running/alive, pending-timer, consistent-wheel,
+reference-budget or successful-arm premise is added. The caller clock still
+precedes the arm guard; a down/dead guard is not treated as a guaranteed
+successful no-op. Missing state, clock/cache/reference/queue and wheel failures
+remain actual Stops. This does not establish callback totality, outer timer
+selection or the remaining keepalive callbacks.
+
+OwnerCoherenceRetransmitFrames contains the pure arm-effect transport and
+three named C1-family variants: WGBase.delTimer_spec and
+WGTransitions.purgeStagedPackets_spec/modPeerTimer_spec. The proofs reuse
+owned delTimer_exact and GuardedArmingClaims.modPeerTimer_effect; no hidden,
+armTimer or wheel-placement implementation layer is copied. Claims and
+Statements contain the projected whole-call theorem and literal wrapper.
+Six theorems in two modules, no definitions: H2 reaches 477 theorems and
+88 headlines.
+
+Development probe 1 fails six proof-form errors and three unused-simp warnings;
+probe 2 fails one false-branch normalization error without warnings. Changed
+probes 3–5 pass the combined candidate, exact split with six standard-only
+axiom roots, and standalone narrow Frames. The scoped build passes 364 jobs
+with only inherited Env:865 String.mk. The closure axiom audit checks 1,362
+logical roots in 300 modules, including 910 public theorem roots, standard
+only. Final fresh replay and independent review remain to be recorded before
+the commit checkpoint.
+
+Current totals are 2,363 theorems in all 793 owned modules, 335 headlines.
+Static trust/import checks, original 258-name order and mirror/shared
+boundaries pass. No limit/cap change, suppression or infrastructure rerun.
+All H1–H6 remain in progress; the inherited full-gate failure is unchanged.
+Reproduce build and fresh replay of Leanux.Proofs.WG.Index.Statements under
+capped with scripts/in-bundle, LEAN_NUM_THREADS=32 and LEANUX_QEMU_SLOTS=16.
+No new mirror request; the three bounded variants are listed in the existing
+shared-frame followup.

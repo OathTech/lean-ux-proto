@@ -244,3 +244,14 @@ snapshot alone omits owner words and peer references, so eventual unification
 must preserve these stronger obligations rather than merely substitute an old
 snapshot theorem. No existing C1 definition or lemma is changed, and no broader
 timer, socket or ingress frame layer is copied.
+
+
+The whole retransmission callback adds three further bounded owner-coherence
+variants in Index/OwnerCoherenceRetransmitFrames: delTimer_spec_ownerCoherent_variant
+(WGBase.delTimer_spec), purgeStagedPackets_spec_ownerCoherent_variant and
+modPeerTimer_spec_ownerCoherent_variant (the respective WGTransitions helpers).
+A pure transport applies the existing full arm effect to the owner predicate.
+Existing all-mode arming/deletion contracts are reused; no hidden-input,
+armTimer or wheel-placement layer is duplicated. The remaining keepalive
+callback/send-path overlap is separate and is not authorized by this bounded
+composition.

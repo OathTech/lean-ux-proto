@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Index.OwnerCoherenceRetransmitClaims
 import Leanux.Proofs.WG.Index.OwnerCoherenceCallbackClaims
 import Leanux.Proofs.WG.Index.OwnerCoherenceQueuedClaims
 import Leanux.Proofs.WG.Index.OwnerCoherenceClearWorkerClaims
@@ -1010,5 +1011,13 @@ theorem original_zero_key_callback_owner_coherence (pid : PeerId) :
     Campaign2.Ensures (expiredZeroKeyMaterial pid) View.OwnerCoherentSafe
       (fun _ => View.OwnerCoherentSafe) :=
   expiredZeroKeyMaterial_owner_coherent pid
+
+/-- Both branches of the original retransmit timer callback preserve local
+hashed-owner coherence on normal return. Actual clock, cache, queue and wheel
+Stops remain; this does not assert callback completion or outer selection. -/
+theorem original_retransmit_owner_coherence (pid : PeerId) :
+    Campaign2.Ensures (expiredRetransmitHandshake pid) View.OwnerCoherentSafe
+      (fun _ => View.OwnerCoherentSafe) :=
+  expiredRetransmitHandshake_owner_coherent pid
 
 end Leanux.Proofs.WG.Index
