@@ -1,0 +1,14 @@
+import PairCapture
+
+open Lean Binary.Pair.Capture
+
+def main (args : List String) : IO UInt32 := do
+  let [inputPath, snapshotPath, layoutPath] := args
+    | IO.eprintln "usage: binary-pair-capture INPUT.json SNAPSHOT.json LAYOUTS.json"; return 1
+  let input := Json.parse (← IO.FS.readFile inputPath) >>= fromJson? (α := ProbeInput)
+  let snapshot := Json.parse (← IO.FS.readFile snapshotPath) >>= fromJson? (α := Snapshot)
+  let layout := Json.parse (← IO.FS.readFile layoutPath)
+  let result := do run (← input) (← snapshot) (← layout)
+  match result with
+  | .ok report => IO.println report.compress; return 0
+  | .error e => IO.eprintln s!"FAIL: {e}"; return 1

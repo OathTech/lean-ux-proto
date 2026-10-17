@@ -244,7 +244,8 @@ def interpret [Labels] (seed : UInt64) (r : Run) (i : Instr) (pc size : Nat) : E
 def runUntil (instructions : Array Instruction) (labels : Array (String × Nat))
     (hooks : Array (Nat × String)) (preempt : Nat) (initial : MachineState) (seed : UInt64)
     (actualServices : Bool) (budget entryPreempt : Nat)
-    (stops : Array Nat) (prior : Option Run := none) : Except String Run := do
+    (stops : Array Nat) (prior : Option Run := none)
+    (returnPC : Nat := stopAddr) : Except String Run := do
   -- Labels is total in Kraken. Check every reference before constructing it;
   -- its default is unreachable for this validated one-instruction input format.
   for i in instructions do
@@ -259,7 +260,7 @@ def runUntil (instructions : Array Instruction) (labels : Array (String × Nat))
   let mut r : Run := prior.getD {state := initial, history := #[initial]}
   for tick in [:budget] do
     let pc := r.state.pc.toBitVec.toNat
-    if pc == stopAddr || (tick > 0 && stops.contains pc) then return r
+    if pc == returnPC || (tick > 0 && stops.contains pc) then return r
     if let some (_, name) := hooks.find? (·.1 == pc) then
       let ra ← readNat r.state r.state.data.regs.rsp.toNat 8
       if name == "__sanitizer_cov_trace_pc" then

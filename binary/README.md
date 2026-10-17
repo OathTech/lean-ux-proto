@@ -90,23 +90,38 @@ Environment records and diagnostic histories remain separate.
 
 `capture_lookup.py` separately captures actual entry/return registers and
 memory on a rerun of that recorded workload, using QEMU TCG hardware
-breakpoints and read-only GDB requests. After the first command above, use
+breakpoints and register/memory reads. After the first command above, use
 its successful differential recording directory for `--check`:
 
 ```sh
 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle python3 -B binary/capture_lookup.py \
   --input .tmp/binary-pair/d1_second_response/input.json \
-  --check .artifacts/check/<recording> --out .tmp/captured-lookup
+  --check .artifacts/check/<recording> --out .tmp/captured-lookup \
+  --execution-mode sequential
+capped -- python3 -B binary/pair_capture.py \
+  --capture .tmp/captured-lookup --check .artifacts/check/<recording>
 ```
 
 Use a fresh output directory; existing snapshots are refused. The snapshot
 contains real pointer-reachable objects, stack, per-CPU/task fields and a
 bounded part of the KCOV buffer. Uncaptured bytes remain absent. The selected
-query/mask and completed-operation prefix identify the invocation; the return
-breakpoint checks stack restoration and saved registers. Snapshots and console
-output are ephemeral. Entry/return capture has run successfully; loading these
-bytes into Kraken and checking reconstruction against the source is still
-pending. The existing paired command continues to use constructed heaps.
+query/mask and completed-operation prefix identify the invocation. Sequential
+mode (the default) verifies QEMU's ENABLE|NOIRQ|NOTIMER stepping mode and steps
+to the original return, deferring IRQs and timers inside the call. This is the
+intentionally unrealistic sequential environment; `--execution-mode ordinary`
+retains ordinary scheduling for diagnosis and is not accepted by this replay.
+
+The replay checks the image/Kraken pins and the existing three-way comparison,
+then resolves the source prefix's hidden inputs from this capture's own boot.
+`PairCapture` loads its actual bytes and scalar registers without relocation or
+zero filling. `PairIndex.lookupFrom` runs the same segment assertions used by
+the constructed tests, with captured call/service addresses and the physical
+preempt word. The final comparison checks the exact instruction sequence, all
+general registers, Kraken's six status flags, every captured return byte and
+reconstruction equality with the source. Both index workloads pass under two
+undefined-value seeds. This is a concrete test, not a new simulation theorem.
+Snapshots and console output are ephemeral. The original `pair_run.py` command
+continues to use constructed heaps.
 
 `PairNextProof.next_segment` proves one symbolic back edge using the same
 executable reconstruction, reusing M1's physical region lemma. Its explicit

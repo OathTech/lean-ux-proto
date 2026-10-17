@@ -267,6 +267,8 @@ def main():
     parser.add_argument('--out', type=Path, required=True)
     parser.add_argument('--timeout', type=float, default=180)
     parser.add_argument('--instruction-budget', type=int, default=100000)
+    parser.add_argument('--execution-mode', choices=['sequential', 'ordinary'], default='sequential',
+                        help='Sequential stepping defers IRQs/timers within the captured call')
     args = parser.parse_args()
     if not 0 < args.instruction_budget <= 1000000:
         raise ValueError('instruction budget must be between 1 and 1000000')
@@ -328,8 +330,25 @@ def main():
             initial = capture(remote, regs, probe, layout, args.instruction_budget)
             return_pc = remote.word(regs['rsp'])
             remote.breakpoint(entry, False)
-            remote.breakpoint(return_pc)
-            returned = remote.resume()
+            executed = []
+            if args.execution_mode == 'sequential':
+                # Query, rather than modify, QEMU's documented stepping mode.
+                # ENABLE|NOIRQ|NOTIMER is this experiment's explicitly
+                # unrealistic sequential environment, not ordinary execution.
+                mode = remote.command('qqemu.sstep')
+                if int(mode, 16) != 7:
+                    raise ValueError(f'QEMU stepping mode is not ENABLE|NOIRQ|NOTIMER: {mode!r}')
+                returned = regs
+                for _ in range(args.instruction_budget):
+                    executed.append(returned['rip'])
+                    returned = remote.resume(step=True)
+                    if returned['rip'] == return_pc:
+                        break
+                else:
+                    raise ValueError('sequential capture instruction budget exhausted')
+            else:
+                remote.breakpoint(return_pc)
+                returned = remote.resume()
             if returned['rip'] != return_pc or returned['rsp'] != regs['rsp']+8:
                 raise ValueError('breakpoint did not stop at selected invocation return')
             for name in ['rbx', 'rbp', 'r12', 'r13', 'r14', 'r15']:
@@ -343,6 +362,7 @@ def main():
                           kernel=identity, image_sha256=hashlib.sha256(ORACLE.read_bytes()).hexdigest(),
                           kraken=kraken, trace=probe['trace']['id'], operation=probe['operation'],
                           instructionBudget=args.instruction_budget,
+                          executionMode=args.execution_mode, executedPCs=executed,
                           completedOperations=completed,
                           occurrence=occurrence, initial=initial,
                           returned=dict(registers=returned, blocks=final_blocks))

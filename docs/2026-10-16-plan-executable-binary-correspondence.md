@@ -483,3 +483,59 @@ entry/return capture, not yet reconstruction equality, Kraken replay of the
 snapshot, agreement with all records of the earlier run, or a proof. Stage 4
 remains incomplete until the captured bytes pass paired execution. Reproduce
 with the command in `binary/README.md`; the snapshot itself stays ephemeral.
+
+### Captured-state replay checkpoint, 2026-10-17
+
+Both specified index workloads now run from actual QEMU entry bytes through
+the paired executable. The source prefix uses the hidden-input records from
+the same captured boot, resolved with the campaign's existing section/site
+code. Captured peer public keys establish identities once; those keys are
+checked against the captured memory before constructing the address map. No
+successor memory is materialized from the source. This captured pilot has no
+keypair identity setup yet and rejects snapshots requiring it; the constructed
+keypair and dead-peer regressions continue to run unchanged.
+
+The first ordinary-execution comparison failed on status flags and scratch
+stack bytes below the lookup frame. The changed stack contains return addresses
+in `sysvec_apic_timer_interrupt` and `asm_sysvec_apic_timer_interrupt`; that run
+contains environment work omitted by the sequential model. Single-stepping
+the final decrement produced the flags Kraken predicts. The exact cause of
+the ordinary run's flag difference is not separately established. The failed
+ordinary comparison is not counted as a successful simulation or attributed
+to a mirror defect.
+
+[AGENT 2026-10-17] Make the already-declared sequential baseline explicit in
+capture: query and require QEMU's ENABLE|NOIRQ|NOTIMER stepping mode, then step
+the call to its original return. Keep ordinary execution available as a
+diagnostic mode. This changes the supplied execution environment, not the
+oracle image, the mirror, reconstruction, or the original M1 precondition.
+The sequential baseline remains unrealistic as a model of kernel concurrency.
+
+In sequential captures, both undefined seeds reproduce the exact QEMU
+instruction sequence, all 16 general registers, the six status flags Kraken
+represents, and all 870,372 captured return bytes. Reconstruction checks pass
+at entry, the loop header, loop exit and return. The live lookup executes 506
+instructions, 189 reads and 74 writes, adding 16 KCOV entries; the same-bucket
+miss executes 191 instructions, 77 reads and 31 writes, adding 7 entries.
+Both restore the captured preempt word `0x80000000`. The complete paired replay
+over both seeds took about 4.5 seconds for the hit and 3.8 seconds for the miss,
+excluding capture, build and the preceding three-way comparison.
+
+Six one-off corruptions were rejected at their intended checks: a missing
+table byte, clearing the captured preempt flag (detected against the actual
+return, demonstrating that it is not overwritten by the fixture), a corrupted
+owner pointer, a wrong captured result, a wrong instruction sequence and
+inconsistent overlapping memory blocks. The original constructed suites also
+pass after sharing the call-context implementation with captured replay.
+`PairNextProof` rebuilds with only the three standard axioms, and fresh local
+kernel replay passes after the shared executor change. The new loader and
+runner carry no new theorem claim or trust declarations; no new external
+export acceptance is claimed. The earlier M2 fixture extraction and pure trie
+decoder are present as preparation and build, but have no completed paired
+loop or new proof at this checkpoint.
+
+This completes the captured index-pilot checkpoint in stage 4. It does not
+complete a universal proof, memory-permission/lifetime proof, whole-World
+reconstruction, actual concurrent replay, or the M2 experiment. The next
+checkpoint is executable trie reconstruction and loop assertions on IPv4 and
+IPv6, followed by the frozen-candidate proof experiment on an unfinished join.
