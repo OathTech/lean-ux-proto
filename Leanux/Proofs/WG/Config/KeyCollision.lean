@@ -12,20 +12,21 @@ def publicResult (key : Key) : Option Key × Bool :=
   else (some (curve25519 key basePoint).1, (curve25519 key basePoint).2)
 
 theorem generatePublic_return (key : Key) (d : Device) :
-    Returns (generatePublic key) (fun w => w.k.wg = some d)
-      (fun result w => result = publicResult key ∧ w.k.wg = some d) := by
-  rw [returns_iff]
-  mvcgen [generatePublic, branch]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals repeat intro
-  all_goals simp_all [publicResult]
+    Returns (generatePublic key) (fun w => w.dev = some d)
+      (fun result w => result = publicResult key ∧ w.dev = some d) := by
+  intro g ambient device
+  let after := {ambient with steps := ambient.steps.push {decision := .genPublicNullSecret, outcome := key == nullPoint, netRx := ambient.netRxSection}}
+  refine ⟨publicResult key, g, after, ?_, rfl, device⟩
+  by_cases isNull : key == nullPoint
+  all_goals simp [generatePublic, publicResult, branch, AmbientM.branch, isNull, after]
+  all_goals rfl
 
 theorem publicResult_valid (key : Key) (ok : (publicResult key).2 = true) :
     ∃ pub, (publicResult key).1 = some pub := by
   unfold publicResult at *
   split at * <;> simp_all
 
-def keyCollisionSource (key : Key) : M Unit := do
+def keyCollisionSource (key : Key) : WG.M Unit := do
   let (pub, ok) ← generatePublic key
   if ← branch .setDevGenPublic ok then
     let some pub := pub | invariant "a generated public key without a write"
@@ -34,7 +35,7 @@ def keyCollisionSource (key : Key) : M Unit := do
       peerPut peer
       peerRemove peer
 
-def devicePrivateSource (a : DeviceAttrs) : M Int := do
+def devicePrivateSource (a : DeviceAttrs) : WG.M Int := do
   if ← WG.andM (branch .setDevHasPrivateKey a.privateKey.isSome) (branch .setDevPrivateKeyLen true) then
     let some key := a.privateKey | invariant "unreachable"
     if !(← branch .setDevKeyUnchanged ((← getDev).staticIdentity.staticPrivate == key)) then
@@ -78,21 +79,32 @@ def noKeyCollision (d : Device) (key : Key) : Prop :=
     d.peerHashtable.find? (·.1 == pub) = none
 
 theorem keyCollision_absent (d : Device) (key : Key) (absent : noKeyCollision d key) :
-    Returns (keyCollisionSource key) (fun w => w.k.wg = some d)
-      (fun _ w => w.k.wg = some d) := by
-  have hg := (returns_iff _ _ _).mp (generatePublic_return key d)
-  have hl (pub : Key) :
-      ⦃fun w => ⌜w.k.wg = some d ∧ d.peerHashtable.find? (·.1 == pub) = none⌝⦄ pubkeyLookup pub
-      ⦃⇓ ret w => ⌜ret = none ∧ w.k.wg = some d⌝⦄ := by
-    mvcgen [pubkeyLookup, peerGetMaybeZero, getDev, getK, branch, invariant]
-    all_goals try dsimp +zetaDelta only at *
-    all_goals repeat intro
-    all_goals simp_all [-List.find?_eq_none]
-  rw [returns_iff]
-  mvcgen [keyCollisionSource, branch, invariant, hg, hl]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals repeat intro
-  all_goals simp_all [noKeyCollision]
-  all_goals grind only [publicResult_valid]
+    Returns (keyCollisionSource key) (fun w => w.dev = some d)
+      (fun _ w => w.dev = some d) := by
+  intro g ambient device
+  let mark (a : Ambient) (site : Decision) (value : Bool) :=
+    {a with steps := a.steps.push {decision := site, outcome := value, netRx := a.netRxSection}}
+  let generated := mark ambient .genPublicNullSecret (key == nullPoint)
+  let checked := mark generated .setDevGenPublic (publicResult key).2
+  let after := if (publicResult key).2 then
+    mark (mark (mark checked .pubkeyLookupMatch false) .peerGetMaybeZeroNull true) .setDevOldPeer false
+    else checked
+  refine ⟨(), g, after, ?_, device⟩
+  by_cases isNull : key == nullPoint
+  · simp [keyCollisionSource, generatePublic, publicResult, branch, AmbientM.branch,
+      isNull, after, checked, generated, mark]
+    rfl
+  · cases valid : (curve25519 key basePoint).2 with
+    | false =>
+      simp [keyCollisionSource, generatePublic, publicResult, branch, AmbientM.branch,
+        isNull, valid, after, checked, generated, mark]
+      rfl
+    | true =>
+      have missing := absent (curve25519 key basePoint).1
+        (by simp [publicResult, isNull]) (by simp [publicResult, isNull, valid])
+      simp [keyCollisionSource, generatePublic, publicResult, branch, AmbientM.branch,
+        isNull, valid, after, checked, generated, mark, pubkeyLookup, peerGetMaybeZero,
+        getDev, device, missing]
+      rfl
 
 end Leanux.Proofs.WG.Config

@@ -8,7 +8,7 @@ open Leanux Leanux.WG Leanux.Proofs.WG.Noise Lean Std.Do
 
 abbrev DumpAccumulator := Array NlMessage × Bool
 
-def receiveDumpStep (_ : Nat) (acc : DumpAccumulator) : M (ForInStep DumpAccumulator) := do
+def receiveDumpStep (_ : Nat) (acc : DumpAccumulator) : WG.M (ForInStep DumpAccumulator) := do
   let (messages, finished) := acc
   if finished then return .done (messages, finished)
   let some ms ← netlinkRecvmsg 7 | do
@@ -23,7 +23,7 @@ def receiveDumpStep (_ : Nat) (acc : DumpAccumulator) : M (ForInStep DumpAccumul
     | .data .. => pure ()
   return .yield (messages, finished)
 
-def getterDrainSource : M (Except Int Json) := do
+def getterDrainSource : WG.M (Except Int Json) := do
   let (messages, finished) ← forIn [:4096] (#[], false) receiveDumpStep
   if !finished then invariant "op 9: the dump did not finish"
   coalesce messages.toList
@@ -54,6 +54,6 @@ theorem getterDrain_first :
   simp [bind_assoc]
   congr 1
   funext first
-  cases first <;> simp [bind_assoc]
+  cases first <;> simp
 
 end Leanux.Proofs.WG.Config

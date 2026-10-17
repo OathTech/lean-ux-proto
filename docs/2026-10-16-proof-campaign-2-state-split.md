@@ -20,11 +20,11 @@ and attributed theorem declarations. Campaign 2 owns 427 Lean files,
 | --- | ---: | ---: | ---: | ---: | --- |
 | Common projection | 2 | 0 | 0 | 0 | Actual native WG/Ambient and full Product observations carried; no reconstructed execution states. |
 | H1 Noise | 35 | 171 | 22 | 185 | The full Noise closure is current, including restart support. Six type-given frames are deleted. Wider caller/lifetime/reachability and clock-provenance charter claims remain open. |
-| H2 Index | 68 | 318 | 52 | 251 | Table, lookup, collision records, allocation, owner invariants and lifecycle support carried; seven type-given frames deleted. Exact peer-release outcomes replace stale totality, with checked counterexamples. Terminal closure and whole-driver coherence remain pending. |
+| H2 Index | 68 | 318 | 52 | 254 | Table, lookup, collision records, allocation, owner invariants and lifecycle support carried; seven type-given frames deleted. Exact peer-release outcomes replace stale totality, with checked counterexamples. Terminal closure and whole-driver coherence remain pending. |
 | H3 Roaming | 35 | 119 | 13 | 157 | Endpoint/publication, polling, attempt facts, crypto, lookup and response-caller factors/facts carried with full Product certificates; two type-given frames deleted. The full terminal closure is current, including initiation/response audits with actual Product outcomes. Wider roaming/provenance charter gaps remain open. |
-| H4 Configuration | 130 | 554 | 79 | 390 | Scalar, identity, port, dump, allowed-IP and structural support carried; three type-given frames deleted. Quiet timer cleanup and queued-send observations are corrected; queued-send and removal totality have checked stale-statement counterexamples. Remaining readback/effects and terminal closure remain pending. |
-| H5 Progress | 59 | 265 | 42 | 186 | Pure/control, cut, jitter, index, poll bounds, dispatch, scheduler turns, stack/probe frames, queue flush contracts, drain selection and Product observation bridge carried; one type-given index frame deleted. The old backlog fixture has checked exact runner and direct-fixture rejections. Drain bounds are carried. Receive-ring activation models, general runner boundaries and terminal closure remain pending. |
-| H6 Timer discipline | 98 | 404 | 50 | 171 | Base/guard/jitter, arming/wheel, recorded clock and initiation-send arming contracts carried; three type-given frames deleted. Exact wheel corrections are explicit; queue/pending and retained-worker frames are carried; broader timer episodes and terminal closure remain pending. |
+| H4 Configuration | 130 | 554 | 79 | 400 | Scalar, identity, port, dump, allowed-IP and structural support carried; three type-given frames deleted. Quiet timer cleanup and queued-send observations are corrected; queued-send and removal totality have checked stale-statement counterexamples. Remaining readback/effects and terminal closure remain pending. |
+| H5 Progress | 59 | 265 | 42 | 188 | Pure/control, cut, jitter, index, poll bounds, dispatch, scheduler turns, stack/probe frames, queue flush contracts, drain selection and Product observation bridge carried; one type-given index frame deleted. The old backlog fixture has checked exact runner and direct-fixture rejections. Drain bounds are carried. Receive-ring activation models, general runner boundaries and terminal closure remain pending. |
+| H6 Timer discipline | 98 | 404 | 50 | 172 | Base/guard/jitter, arming/wheel, recorded clock and initiation-send arming contracts carried; three type-given frames deleted. Exact wheel corrections are explicit; queue/pending and retained-worker frames are carried; broader timer episodes and terminal closure remain pending. |
 
 Retyped, deleted and retained counts will be reported per validated tranche.
 H1 and H3 now have checked split terminal closures; H2, H4, H5 and H6 remain lagging.
@@ -4081,4 +4081,83 @@ or proof-limit increase occurred.
 Reproduce with scripts/in-bundle lake build on Index.ReceiveFrames and
 Progress.CookieRingFindings under Leanux.Proofs.WG, then #print axioms and
 scripts/in-bundle lake env leanchecker --fresh MODULE for both roots.
+Use capped, 32 Lean threads and 16 QEMU slots on this host.
+
+
+## Getter, collision, receive and actual wheel dispatch
+
+| Tranche | Before | Retyped | Corrected | Deleted | Kept | Added | After |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Config.GetterSource, Getter | 6 | 6 | 0 | 0 | 0 | 0 | 6 |
+| Config.KeyCollision | 4 | 3 | 0 | 0 | 1 | 0 | 4 |
+| Index.ReceiveSource | 3 | 3 | 0 | 0 | 0 | 0 | 3 |
+| Progress.SourceClaims | 2 | 0 | 2 | 0 | 0 | 0 | 2 |
+| TimerDiscipline.WheelDispatchSource | 0 | 0 | 0 | 0 | 0 | 1 | 1 |
+| This tranche | 15 | 12 | 2 | 0 | 1 | 1 | 16 |
+| Cumulative processed baseline and checked support | 1,227 | 943 | 49 | 22 | 213 | 151 | 1,356 |
+
+The census is 537 campaign-owned files, 1,960 theorems and 408 checked proof
+modules; 604 baseline declarations await validation. Counts are H1 185, H2 254,
+H3 157, H4 400, H5 188 and H6 172. H1/H3 terminal closures remain current;
+H2/H4/H5/H6 terminals and the full gate remain lagging. These are retrofit
+contracts, not new charter results. H2's terminal carry still requires eight
+wrappers' dispatch, clear, timer and flush support; checking its other 44
+wrappers alone would not establish the full result.
+
+Getter retains the original singleton, residence, allowed-IP, capacity,
+selector, idle and empty-queue premises. Its total native outcomes cover
+arbitrary Ambient state and retain exact JSON, completed socket queue, context,
+sequence, errno and callback state. The actual 4096-step drain, early finish,
+missing receive and unfinished errors, and coalescing remain in the source.
+Three source factors change their carrier to WG.M, including two textually
+unchanged statements. KeyCollision carries total public-key generation, absent
+collision lookup and the unconditional private-key source factor. Null/false
+curve results, actual release/removal/install order, errors and original
+no-collision premise remain. Its pure public-result validity fact is retained.
+
+ReceiveSource carries the three original partial table-invariant contracts.
+The complete post-load body retains consume/install/send/timer/release branches;
+receive-step consumes the actual PtrRing and all metadata before running that
+body. The success decrement uses the current device. Its concrete WG callback
+uses the checked native load-prefix companion; the unrestricted Product
+callback contract remains separately available in ReceiveFrames.
+
+SourceClaims corrects the historical accepted-batch wrappers to accepted=false
+and absent returned backlog. The actual runner rejects at its batch boundary;
+the old direct-call fixture instead reaches the missing-FIB route/source Stop.
+The two meanings remain distinct and both are checked, without claiming a
+kernel finding.
+
+WheelDispatchSource adds one unconditional full Product action equality for
+current Env.runTimers, including its errors. The dispatch-unit factor follows
+campaign 1's Logged.TimerPass shape, and the source follows its current
+Environment.TimerSource rather than the removed fireTimer interface. The
+factor retains captured record budget, no-device exit, clear/send/crypt order,
+fresh nextDue selection each turn, worker/address guards, passive peek effects,
+previous-step completion, timer deletion before callback, timerPassStep reset
+and final delivery/work rejection. The caller still owns requireNothingDue.
+No old timer episode is counted as carried by this factor alone.
+
+Independent reviews find no domain or source-equivalence issues. The combined
+251-job build passes with no changed-proof warnings; the unchanged mirror's
+Env.lean:865 String.mk deprecation remains inherited and reported. Axiom
+inspection covers 1,000 logical roots in 187 proof modules, including 609 public
+theorem roots, with standard axioms only. All five fresh kernel replays pass.
+Static checks, 258 terminal names/order and mirror/shared boundaries pass.
+
+Getter probe 1 passes with two unused/deprecated simplification warnings;
+probe 2 fixes both and passes cleanly. KeyCollision's first probe passes cleanly.
+Receive probes 1–2 fail Bool/Unit branch normalization and indentation;
+probe 3 uses the actual cookie action and Unit continuation and passes.
+SourceClaims' first probe passes cleanly. Wheel probes 1–3 fail early-error,
+Option-bind, suffix and captured-budget reductions; probe 3 also reports four
+unused simplifications. Root probe 4 names the captured budget and closes with
+six unused simplifications; probe 5 removes them and passes cleanly. Every
+failure is recorded as a failure; no unchanged rerun, infrastructure retry,
+cap or proof-limit increase occurred.
+
+Reproduce with scripts/in-bundle lake build on Config.Getter,
+Config.KeyCollision, Progress.SourceClaims, Index.ReceiveSource and
+TimerDiscipline.WheelDispatchSource under Leanux.Proofs.WG, then #print axioms
+and scripts/in-bundle lake env leanchecker --fresh MODULE for each root.
 Use capped, 32 Lean threads and 16 QEMU slots on this host.

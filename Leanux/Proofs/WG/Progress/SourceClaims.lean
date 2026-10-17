@@ -4,16 +4,14 @@ import Leanux.Proofs.WG.Progress.BatchBacklog
 namespace Leanux.Proofs.WG.Progress.SourceClaims
 open Leanux Leanux.Env
 
-/-- The actual runner accepts this two-operation trace with no receive
-dispatch after a batch queues a handshake message. Proved by kernel reduction. -/
-theorem original_pending_batch_accepted : accepted = true :=
+/-- The historical two-operation trace is rejected by the actual runner's
+batch completion boundary; it no longer supplies an accepted backlog witness. -/
+theorem original_pending_batch_accepted : accepted = false :=
   pendingTrace_accepted
 
-/-- The same initialized fixture and two original syscalls leave one
-handshake queue item and the receive-worker identity pending, although all
-records are consumed, no activation is suspended and NET_RX is not raised. -/
-theorem original_pending_batch_state :
-    backlog = some (1, 1, [1], some 0, 0, false) :=
+/-- The old direct-call fixture omits current FIB boot and returns no backlog.
+BatchBacklog proves its exact route/source-disagreement Stop separately. -/
+theorem original_pending_batch_state : backlog = none :=
   pendingTrace_backlog
 
 end Leanux.Proofs.WG.Progress.SourceClaims
