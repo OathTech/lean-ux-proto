@@ -1,6 +1,8 @@
 # Plan: executable reconstruction and paired binary/mirror execution
 
-Status: implementation started, 2026-10-16. Worktree
+Status: captured index replay and tested trie assertions are implemented;
+the executable-assertion-to-trie-loop proof bridge is complete, 2026-10-17.
+External kernel gate pending; whole-function trie adequacy remains open. Worktree
 `.worktrees/binary-pair-runner`, branch `task/binary-pair-runner`, created from
 planning commit `caa6668`. The earlier experiments remain on their original
 branch; the implementation baseline is `cb845fe`.
@@ -611,7 +613,8 @@ building those physical foundations, nor of proving a new binary function
 from scratch. The original M1 theorem, original M2 campaign and
 `TrustBase.lean` remain unchanged.
 
-There is still a representation bridge to prove. The headline explicitly
+At this checkpoint there was still a representation bridge to prove (closed
+by the subsequent checkpoint below). This earlier headline explicitly
 requires `AllowedipsLoop.Setup`: its old `TrieHeap`, query-word and ABI
 premises have **not** been derived from passing executable assertions.
 It also requires initial `Invariant` (including the callback-ready frame),
@@ -694,3 +697,143 @@ show that discovering reconstruction makes the remaining proof mechanical
 or removes the original physical proof cost. The next focused checkpoint
 would derive Setup, the shared pointer interpretation and initial frame
 from the tested entry assertions, before expanding to more functions.
+
+
+### Executable boundary to physical loop, 2026-10-17
+
+The short independent review identified an actual gap: passing the paired
+assertions did not establish the separately supplied physical Setup and
+initial invariant, and its two pointer interpretations were unrelated.
+`Binary.Pair.Trie.findNode_checked` in `PairBoundaryProof.lean` closes that
+gap. It accepts the successful **same executable initialBoundary check**
+called by the paired runner, an accepted execution of the actual mirror's
+`WG.findNode`, and the existing named decoder/callback contracts. It derives
+Setup, the initial invariant, the decoder equality, and both separation
+premises. Its physical pointer interpretation is computed from Names;
+there is no second caller-supplied address function or heap predicate.
+
+The conclusion is eventual Kraken execution from lookup+0xd5 to
+lookup+0x101 with the mirror-selected node in RBP, equality of the tested
+reconstruction with the final device projection, and the callback-ready
+frame. This is a nonempty-loop boundary theorem. It does not establish the
+ABI prologue, empty-root entry path, peer acquisition/retry, BH-enable or
+function return. The previous `findNode_effect` remains the internal join;
+the original M1/M2 statements and TrustBase are unchanged.
+
+The bridge is split into ordinary reusable lemmas:
+
+- Successful error-returning traversals expose the checks that passed.
+  The decoder's raw loads, validated identities, and nonwrapping allocation
+  bounds follow from `reconstruct`; they are not additional hypotheses.
+- Successful pointer decoding agrees with the interpretation constructed
+  from Names. Successful node decoding supplies both-family `NodeFields`.
+  The tested heap edge check and call-input family check propagate width
+  along every reached path and establish the old `TrieHeap`.
+- The existing locals assertion supplies the ABI registers and query words.
+  Decoder reads and callback writes have executable finite span descriptions;
+  checked disjointness implies the corresponding bitvector frame properties.
+- The new callback-data assertion establishes `CallsReady` and `Frame.initial`.
+  The loop join then uses those derived facts without requiring another
+  relation, setup proof or history hypothesis. Its initial history is a
+  singleton at this sequential boundary.
+
+No tactic search or checker soundness framework was introduced. These are
+inversion and framing lemmas for the executable definitions actually used
+by the runner, followed by the already-proved physical node body.
+`PairTrie.reconstruct`, its target, and its heap predicate are unchanged;
+the two existing BEq instances now have proved lawfulness instances.
+
+The additional runtime condition exposed by this proof is **callback
+readiness at the initial header**. Earlier tests checked final coverage
+contents, but that did not state all the initial callback premises. The
+new assertion checks the conditionally read metadata, mapped buffer words,
+bounded buffer header, stack alignment and six scratch words, plus the
+required separation from scratch, metadata and preempt count. It also
+checks finite decoder/query spans against actual loop writes. The older
+conservative whole-allocation separation check remains as an entry check.
+These are added data assertions, not a runtime-discovered mirror defect or
+a change to the original M1 Pre/R. Two new corruptions, a coverage header
+above capacity and a missing scratch byte, pass the earlier trie/local
+checks but are rejected by `boundary.callback-frame`.
+
+`PairBoundaryWitness.lean` supplies small concrete positive IPv4 and IPv6
+headers. `check4` and `check6` prove that the executable boundary check
+succeeds; `simulation4` and `simulation6` instantiate the bridge and actual
+mirror acceptance, retaining the same semantic contracts. They are
+synthetic headers with one full-prefix node, one live peer, and a four-word
+coverage buffer, distinct from captured kernel states and from the larger
+recorded-prefix test heaps. Direct reduction of the concrete hash-map
+implementation failed, including a recursion-depth failure. A proved
+lookup lemma for the fixture memory removes that implementation from the
+reduction; ordinary kernel decision then checks the same boundary code.
+No native decision axiom is used.
+
+The trust inputs are still precisely the existing
+`AllowedipsDecoderAgreement`, `AllowedipsTracePcContract`,
+`AllowedipsTraceConstCmp1Contract`, `AllowedipsTraceCmp8Contract` and
+`AllowedipsTraceCmp1Contract` from TrustBase (the three middle contracts
+are grouped by `CommonBits.Callbacks`). This theorem does not prove those
+contracts from the image. Effects.All still erases permission requests;
+there is no legal-access or concurrent-context claim. Roots are supplied,
+not reconstructed device-root storage. Only the trie/count projection is
+reconstructed here; this is not whole-operation or whole-trace transport,
+nor completion of the original M2 function theorem. The mirror remains
+`cb2348e`, lagging current main `b3f5680`.
+
+Validation at this checkpoint:
+
+- The independent three-way check passes again: operation 5 has result 3,
+  1,592 instructions, 34 decisions, 50 coverage PCs and 21 comparisons;
+  operation 8 has result 4, 1,510 instructions, 32 decisions, 47 PCs and
+  22 comparisons. The inputs are regenerated with budget 100,000.
+- Both paired suites pass: IPv4 has 9 cases, 20 calls and 112 headers;
+  IPv6 has 10 cases, 22 calls and 106 headers. There are 16 corruption or
+  caller-condition rejections plus the explicit dying-peer refusal per
+  family. The new initialBoundary executes on the 38 positive nonempty
+  calls; the existing header assertion still runs at all 218 headers.
+  These allowed-IPs heaps are materialized from recorded prefixes and
+  generated variations, not captured kernel snapshots.
+- The focused build passes. All six new headline/witness declarations
+  report only `propext`, `Classical.choice`, and `Quot.sound`. No new module
+  warning, sorry, native-evaluation axiom, unsafe proof code or trust
+  declaration was introduced. Existing imported warnings remain visible.
+- `capped lake env leanchecker --fresh PairBoundaryWitness` exited 0.
+  Export of `PairBoundaryProof` and `PairBoundaryWitness` also exited 0;
+  `.tmp/binary-pair-boundary.ndjson` is about 1.1 GB. The external gate has
+  not run for this checkpoint. Kraken remains clean at
+  `7ebba06a30eaf08c10b26b28ca14bfee1c791576`.
+
+The bridge has 1,152 lines in twelve new files, including executable
+assertions, general list/span helpers, decoder/heap inversion, the join and
+the concrete witnesses. This excludes the reused physical proof tree and
+small changes to the runner and decoder-frame module. From the first
+recorded time in this work interval, 01:32:11 UTC, to the first successful
+`findNode_checked` build at 01:48:59 was 16m48s. Initial decoder-inversion
+work began before that first timestamp, so this is a partial interval,
+not the total cost. Witness development, validation and reporting followed; focused builds,
+paired tests, export and fresh local kernel replay were complete by
+01:58:15 UTC (26m04s after the first recorded timestamp, again excluding
+work before that timestamp). The earlier 4m47s loop-join measurement likewise excluded this bridge and
+all original physical-region development. Neither number is a forecast of
+new-function or campaign throughput.
+
+[AGENT 2026-10-17] The checked-boundary experiment has now removed the
+review's independent-Setup premise and provided concrete non-vacuity. Keep
+this as a sibling result and measure the next entry/exit or new-segment
+experiment separately. The remaining campaign cost cannot be inferred
+from reusing the completed trie body. The review's timing caution remains
+valid; its two stale overview descriptions have been corrected.
+
+Reproduce from this worktree's `binary/`:
+
+```sh
+capped lake build PairBoundaryWitness binary-pair-allowedips
+capped lake env leanchecker --fresh PairBoundaryWitness
+capped lake env leanexport PairBoundaryProof PairBoundaryWitness > ../.tmp/binary-pair-boundary.ndjson
+```
+
+The export is ephemeral. The user runs the external gate outside Nono:
+
+```sh
+lake check --from-export ../.tmp/binary-pair-boundary.ndjson
+```

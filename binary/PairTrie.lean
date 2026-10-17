@@ -22,14 +22,14 @@ structure Node where
   cidr : Nat
   width : Nat
   key : Nat
-  deriving Repr, BEq
+  deriving Repr, BEq, ReflBEq, LawfulBEq
 
 def targetNode (n : AipNode) : Node := ⟨n.peer, n.bit, n.cidr, n.bitlen, n.bits⟩
 
 structure State where
   nodes : List (NodeId × Node)
   counts : List (PeerId × Nat)
-  deriving Repr, BEq
+  deriving Repr, BEq, ReflBEq, LawfulBEq
 
 def target (d : Device) : State :=
   ⟨d.nodes.toList.map (fun (id, n) => (id, targetNode n)),

@@ -1,5 +1,6 @@
 import PairTrie
 import Memory
+import PairSpan
 
 namespace Binary.Pair.Trie
 
@@ -13,6 +14,17 @@ def ReadBytes (n : Names) (o : AllowedipsProbe.Offsets) (a : BitVec 64) : Prop :
   (∃ id base, (id,base) ∈ n.nodes ∧ ∃ offset size, (offset,size) ∈ nodeSpans o ∧
     InRange (.ofNat 64 (base+offset)) size a) ∨
   (∃ id base, (id,base) ∈ n.peers ∧ InRange (.ofNat 64 (base+o.peerRefcount)) 4 a)
+
+def decoderSpans (n : Names) (o : AllowedipsProbe.Offsets) : List Span :=
+  n.nodes.flatMap (fun (_,base) => (nodeSpans o).map (fun (offset,size) => (base+offset,size))) ++
+    n.peers.map (fun (_,base) => (base+o.peerRefcount,4))
+
+theorem decoderSpans_cover {n : Names} {o : AllowedipsProbe.Offsets} {a : BitVec 64}
+    (read : ReadBytes n o a) : ∃ span ∈ decoderSpans n o, span.contains a := by
+  rcases read with ⟨id,base,named,offset,size,field,inside⟩ | ⟨id,base,named,inside⟩
+  · exact ⟨(base+offset,size),List.mem_append_left _
+      (List.mem_flatMap.mpr ⟨(id,base),named,List.mem_map.mpr ⟨(offset,size),field,rfl⟩⟩),inside⟩
+  · exact ⟨(base+o.peerRefcount,4),List.mem_append_right _ (List.mem_map.mpr ⟨(id,base),named,rfl⟩),inside⟩
 
 theorem word_frame {before after : DataMem} {writes : BitVec 64 → Prop}
     (same : EqualOutside writes before after) (path : String) (base size : Nat)

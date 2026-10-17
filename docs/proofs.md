@@ -144,7 +144,7 @@ The separate `task/binary-pair-runner` sibling has one experimental result:
 
 | Result | Headline | Mirror pin | Status |
 | --- | --- | --- | --- |
-| Executable trie reconstruction and bounded allowed-IPs loop join | `Binary.Pair.Trie.findNode_effect` (`PairTrieLoop.lean`) | `cb2348e` | Loop boundary to selected-node exit, both families, preserving the tested reconstruction. Reuses existing physical regions; Setup/initial-frame/interpretation bridge from executable assertions remains open. Not function adequacy or additional campaign coverage. Build, standard axioms and fresh leanchecker pass; external export gate pending. Lags newer main. [Report](2026-10-16-plan-executable-binary-correspondence.md#symbolic-trie-loop-experiment-2026-10-17). |
+| Executable trie reconstruction and checked allowed-IPs loop boundary | `Binary.Pair.Trie.findNode_checked` (`PairBoundaryProof.lean`); positive `Witness.simulation4` / `simulation6` | `cb2348e` | Nonempty loop boundary to selected-node exit, both families, preserving the tested reconstruction. Setup and initial invariant now derived from the executable assertion; one interpretation from Names. Reuses existing physical regions and explicit callback/decoder contracts. Concrete headers pass in Lean; both paired suites and fresh kernel replay pass. Not function adequacy or additional campaign coverage. Standard axioms; external export gate pending. Lags main `b3f5680`. [Report](2026-10-16-plan-executable-binary-correspondence.md#executable-boundary-to-physical-loop-2026-10-17). |
 
 The concrete frame instance `lookup_snapshot_transport` carries exact
 frontier and source-live lifetime/replay fields through lookup, conditional

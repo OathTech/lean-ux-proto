@@ -19,11 +19,11 @@ cost, not a claim of composition into concurrent kernel contexts.
 The sibling sequential lookup experiment is implemented; its result and
 limitations are recorded below. The earlier rounds remain historical results.
 
-The proposed next experiment has a separate
-[build plan](2026-10-16-plan-executable-binary-correspondence.md): develop
-executable reconstruction and loop assertions through paired Kraken/mirror
-runs, then prove the tested definitions. That implementation has not started;
-the results below remain the completed baseline.
+The paired executable experiment is implemented on its separate worktree
+`binary-pair-runner`; its [plan and report](2026-10-16-plan-executable-binary-correspondence.md)
+record captured index replay, both-family trie tests, and the checked
+assertion-to-loop simulation bridge. The results below remain the earlier
+refactoring and sequential-proof baselines.
 
 ## Fixed target and scope
 

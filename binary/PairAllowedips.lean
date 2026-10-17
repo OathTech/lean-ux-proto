@@ -1,5 +1,7 @@
 import PairTrie
 import AllowedipsSource
+import PairLoopCheck
+import PairTrieFrame
 
 namespace Binary.Pair.Trie
 open Lean Leanux Leanux.WG
@@ -57,6 +59,30 @@ def assertHeader (names : Names) (input : AllowedipsProbe.Input) (r : Run)
     throw "loop.header"
   locals names input r.state root width key acc.2.1 acc.2.2
 
+def loopWrites (c : CommonBitsCoverage.Context) (s : MachineData) : List Span :=
+  [((s.regs.rsp.toBitVec-48).toNat,48)] ++ writeSpans c
+
+/-- The initial nonempty-loop boundary used by the symbolic sibling. Every
+data premise is checked here; instruction and callback semantics are not tests. -/
+def initialBoundary (names : Names) (input : AllowedipsProbe.Input)
+    (c : CommonBitsCoverage.Context) (s : MachineState) (w : World)
+    (root : Option NodeId) (width key : Nat) : Except String Unit := do
+  assertAt names input.offsets s.data.dmem w
+  callInput names input.offsets s.data.dmem root width key
+  locals names input s root width key root none
+  unless s.pc == AllowedipsImage.Lookup.entry+0xd5 && root.isSome do throw "boundary.header"
+  unless frameCheck c s.data do throw "boundary.callback-frame"
+  unless spansApart (decoderSpans names input.offsets) (loopWrites c s.data) do
+    throw "boundary.decoder-separation"
+  unless spansApart [((s.data.regs.rsp.toBitVec+16).toNat,width/8)] (loopWrites c s.data) do
+    throw "boundary.query-separation"
+
+/-- Metadata chosen by the synthetic materializer. initialBoundary checks it
+against current memory; captured heaps will supply their decoded context. -/
+def fixtureLoopContext (input : AllowedipsProbe.Input) : CommonBitsCoverage.Context :=
+  ⟨⟨0x800000,.ofNat 64 coverageAddr,.ofNat 32 (coverageBytes/8),2,0⟩,
+    .ofNat 32 (input.entryPreempt+512)⟩
+
 def within (a bytes base size : Nat) : Bool := base ≤ a && a+bytes ≤ base+size
 
 def footprint (names : Names) (input : AllowedipsProbe.Input) (width : Nat) (r : Run) : Except String Unit := do
@@ -91,6 +117,7 @@ def lookup (names : Names) (input : AllowedipsProbe.Input) (seed : UInt64)
   let initial : MachineState := ⟨{regs, dmem := memory}, .ofNat input.entry⟩
   let stops := #[input.entry+0xd5, input.entry+0x101, input.entry+0x184]
   let mut r ← advance input seed {state := initial, history := #[initial], coverage := priorCoverage} stops
+  if root.isSome then initialBoundary names input (fixtureLoopContext input) r.state w root width key
   let mut source := w
   let mut history := []
   let mut acc : AllowedipsSource.Acc := (none, root, none)

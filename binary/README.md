@@ -107,23 +107,33 @@ explicit source refusal, checked against the executed binary retry edge;
 it is not a passing lookup simulation. See the plan's tested-trie checkpoint
 for counts and the distinction between testing and the remaining symbolic obligations.
 
-The paired sibling now includes `Binary.Pair.Trie.findNode_effect` in
-`PairTrieLoop.lean`: a loop-boundary-to-exit theorem using
-the same reconstruction. It reuses the existing physical regions and keeps
-their Setup premises explicit; deriving those premises from the executable
-entry assertions remains open. It is not a function-entry-to-return theorem.
-Build with `capped lake build PairTrieLoop`; replay with
-`capped lake env leanchecker --fresh PairTrieLoop`. For the external gate,
-from `binary/`, export `capped lake env leanexport PairTrieLoop` to
-`../.tmp/binary-pair-trie.ndjson`, then run outside Nono:
+The paired sibling's `Binary.Pair.Trie.findNode_checked` in
+`PairBoundaryProof.lean` now derives the physical Setup and initial invariant
+from the runner's executable `initialBoundary` assertion. It uses one pointer
+interpretation computed from Names and retains the named decoder/callback
+contracts. `PairBoundaryWitness.lean` supplies kernel-checked positive
+IPv4/IPv6 headers and their conditional execution corollaries. This remains
+a nonempty-loop-boundary-to-selected-node-exit theorem, before peer-get and
+BH-enable; it is not function-entry-to-return adequacy. The added initial
+callback-readiness assertion has two rejection controls.
+
+From `binary/`, build and replay the proof, then prepare its external export:
 
 ```sh
-lake check --from-export ../.tmp/binary-pair-trie.ndjson
+capped lake build PairBoundaryWitness
+capped lake env leanchecker --fresh PairBoundaryWitness
+capped lake env leanexport PairBoundaryProof PairBoundaryWitness > ../.tmp/binary-pair-boundary.ndjson
 ```
 
-The [symbolic experiment report](../docs/2026-10-16-plan-executable-binary-correspondence.md#symbolic-trie-loop-experiment-2026-10-17)
-names the remaining premises, the cross-family counterexample, validation
-and the limits on interpreting the measured adaptation time.
+Run the external gate outside Nono; acceptance is still pending:
+
+```sh
+lake check --from-export ../.tmp/binary-pair-boundary.ndjson
+```
+
+The [boundary experiment report](../docs/2026-10-16-plan-executable-binary-correspondence.md#executable-boundary-to-physical-loop-2026-10-17)
+names the semantic contracts, additional assertions, concrete witnesses,
+validation and the limits on interpreting the measured adaptation time.
 
 `capture_lookup.py` separately captures actual entry/return registers and
 memory on a rerun of that recorded workload, using QEMU TCG hardware

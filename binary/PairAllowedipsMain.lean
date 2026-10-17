@@ -106,6 +106,13 @@ def suite (input : AllowedipsProbe.Input) : Except String Json := do
   let atHeader ← advance input 0 {state := ⟨{regs, dmem := sm}, .ofNat input.entry⟩} #[input.entry+0xd5]
   let checkHeader := fun r => assertHeader names input r fullWorld (some 0) width key (none,some 0,none)
   checkHeader atHeader
+  let checkBoundary := fun memory => initialBoundary names input (fixtureLoopContext input)
+    {atHeader.state with data := {atHeader.state.data with dmem := memory}} fullWorld (some 0) width key
+  checkBoundary atHeader.state.data.dmem
+  controls := controls.push (← expectReject "coverage-header-over-capacity" "boundary.callback-frame"
+    (checkBoundary (put atHeader.state.data.dmem coverageAddr 8 (coverageBytes/8+1))))
+  controls := controls.push (← expectReject "unmapped-callback-scratch" "boundary.callback-frame"
+    (checkBoundary (atHeader.state.data.dmem.erase (.ofNat 64 (stackAddr-128)))))
   let changeRegs := fun regs => {atHeader with state := {atHeader.state with data := {atHeader.state.data with regs}}}
   controls := controls.push (← expectReject "cursor" "loop.cursor" (checkHeader (changeRegs {atHeader.state.data.regs with rbx := 0})))
   controls := controls.push (← expectReject "remembered" "loop.remembered" (checkHeader (changeRegs {atHeader.state.data.regs with rbp := .ofNat a})))
