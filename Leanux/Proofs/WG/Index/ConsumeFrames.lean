@@ -13,12 +13,6 @@ namespace Leanux.Proofs.WG.Index
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise Std.Do
 open TimerDiscipline (TableCursor tableCursor)
 
-/-- The reference test emits decisions but does not write the kernel state. -/
-theorem refcountIncNotZero_kernel_variant (P : Kernel → Prop) (old : Nat) :
-    ⦃fun w => ⌜P w.k⌝⦄ refcountIncNotZero old
-      ⦃⇓? _ w => ⌜P w.k⌝⦄ := by
-  mvcgen [refcountIncNotZero, branch, branchCmp, unsupported]
-
 theorem peerGetMaybeZero_cursor (peer : Option PeerId) (cursor : Option TableCursor) :
     ⦃fun w => ⌜w.k.wg.map tableCursor = cursor⌝⦄ peerGetMaybeZero peer
       ⦃⇓? _ w => ⌜w.k.wg.map tableCursor = cursor⌝⦄ := by

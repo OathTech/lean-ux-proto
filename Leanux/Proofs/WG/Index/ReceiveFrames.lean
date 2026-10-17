@@ -120,22 +120,6 @@ theorem send6_reply_tables (e : Endpoint) (bytes : List UInt8) (ds : Nat) (exact
   all_goals try dsimp +zetaDelta only at *
   all_goals simp_all
 
-/-- Reply-site variant of Noise.keypairAllocation_kernel_spec. -/
-theorem keypairAllocation_kernel_spec_reply_variant (P : Kernel → Prop) :
-    ⦃fun w => ⌜P w.k⌝⦄ hiddenAlloc .replySkb ⦃⇓? _ w => ⌜P w.k⌝⦄ := by
-  have hh := hidden_kernel_spec P
-  noise_vcgen [hiddenAlloc,
-    _private.Leanux.Kernel.Defs.«0».Leanux.allocRecord,
-    _private.Leanux.Kernel.Defs.«0».Leanux.allocPlaceholder,
-    invariant, unsupported, hh]
-  case inv1 _ n _ _ _ _ _ _ => exact fun r _ => ⟨n-r.2+1⟩
-  case inv2 => exact ((⇓? _ w => ⌜P w.k⌝) : PostCond _ (.arg World (.except Stop .pure)))
-  all_goals try dsimp +zetaDelta only at *
-  all_goals try (letI : Nonempty World := ⟨by assumption⟩; infer_instance)
-  all_goals try simp_all [WhileVariant.eval, SVal.evalsTo, SVal.uncurry,
-    ExceptConds.true, ExceptConds.const]
-  all_goals omega
-
 theorem sendBufferAsReplyToSkb_tables (src : SkbSource) (buffer : List UInt8) :
     ⦃fun w => ⌜TablesSafeKernel w.k⌝⦄ sendBufferAsReplyToSkb src buffer
       ⦃⇓? _ w => ⌜TablesSafeKernel w.k⌝⦄ := by

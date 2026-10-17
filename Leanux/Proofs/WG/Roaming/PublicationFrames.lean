@@ -14,9 +14,4 @@ theorem read_snapshot (P : World → Prop) :
   cases run
   exact ⟨rfl, pre⟩
 
-/-- The reference-count check emits decisions but does not write the kernel. -/
-theorem refcountInc_kernel_frame (P : Kernel → Prop) (old : Nat) :
-    ⦃fun w => ⌜P w.k⌝⦄ refcountInc old ⦃⇓? _ w => ⌜P w.k⌝⦄ := by
-  mvcgen [refcountInc, branch, branchCmp, unsupported]
-
 end Leanux.Proofs.WG.Roaming

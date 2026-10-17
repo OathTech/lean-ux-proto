@@ -57,18 +57,6 @@ theorem freeTxSkb_tables (id : SkbId) :
   all_goals simp_all [TablesSafeKernel, DeviceTablesSafe, KeypairOwnersBounded]
   all_goals grind
 
-theorem peekQueuedUnit_kernel_variant (P : Kernel → Prop) (worker : Worker) (pid : Nat) :
-    ⦃fun w => ⌜P w.k⌝⦄ peekQueuedUnit worker pid
-      ⦃⇓? _ w => ⌜P w.k⌝⦄ := by
-  mvcgen [peekQueuedUnit, skipAmbient]
-
-theorem queueDeviceWork_kernel_variant (P : Kernel → Prop) (worker : Worker) :
-    ⦃fun w => ⌜P w.k⌝⦄ queueDeviceWork worker
-      ⦃⇓? _ w => ⌜P w.k⌝⦄ := by
-  have hp := peekQueuedUnit_kernel_variant P
-  have hr := Config.recordQueued_kernel P
-  mvcgen [queueDeviceWork, unsupported, hp, hr]
-
 theorem cpumaskChooseOnline_tables (pid : PeerId) :
     ⦃fun w => ⌜TablesSafeKernel w.k⌝⦄ cpumaskChooseOnline pid
       ⦃⇓? _ w => ⌜TablesSafeKernel w.k⌝⦄ := by
@@ -99,20 +87,6 @@ theorem newTxSkbs_tables (packets : List DataPacket) :
     | nil => mvcgen [List.mapM.loop]
     | cons x xs ih => mvcgen [List.mapM.loop, hf, ih]
   exact loop packets []
-
-/-- Keepalive-site variant of Noise.keypairAllocation_kernel_spec. -/
-theorem keypairAllocation_kernel_spec_keepalive_variant (P : Kernel → Prop) :
-    ⦃fun w => ⌜P w.k⌝⦄ hiddenAlloc .keepaliveSkb
-      ⦃⇓? _ w => ⌜P w.k⌝⦄ := by
-  have hh := hidden_kernel_spec P
-  noise_vcgen [hiddenAlloc, _private.Leanux.Kernel.Defs.«0».Leanux.allocRecord,
-    _private.Leanux.Kernel.Defs.«0».Leanux.allocPlaceholder, invariant, unsupported, hh]
-  case inv1 _ n _ _ _ _ _ _ => exact fun r _ => ⟨n - r.2 + 1⟩
-  case inv2 => exact ((⇓? _ w => ⌜P w.k⌝) : PostCond _ (.arg World (.except Stop .pure)))
-  all_goals try dsimp +zetaDelta only at *
-  all_goals try (letI : Nonempty World := ⟨by assumption⟩; infer_instance)
-  all_goals try simp_all [WhileVariant.eval, SVal.evalsTo, SVal.uncurry, ExceptConds.true, ExceptConds.const]
-  all_goals omega
 
 theorem enqueuePerDeviceAndPeer_tables (pid : PeerId) (item : List SkbId) :
     ⦃fun w => ⌜TablesSafeKernel w.k⌝⦄ enqueuePerDeviceAndPeer pid item

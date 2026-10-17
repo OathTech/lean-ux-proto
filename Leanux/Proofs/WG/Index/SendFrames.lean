@@ -88,9 +88,4 @@ theorem timersHandshakeInitiated_tables (pid : PeerId) :
   all_goals simp_all
   all_goals grind
 
-/-- Kernel projection variant of the shared refcount decrement frame. -/
-theorem refcountDecAndTest_kernel_variant (P : Kernel → Prop) (old : Nat) :
-    ⦃fun w => ⌜P w.k⌝⦄ refcountDecAndTest old ⦃⇓? _ w => ⌜P w.k⌝⦄ := by
-  mvcgen [refcountDecAndTest, branch, branchCmp, unsupported]
-
 end Leanux.Proofs.WG.Index

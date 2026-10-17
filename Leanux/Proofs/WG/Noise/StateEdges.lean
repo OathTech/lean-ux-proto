@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.Noise.PeerFrames
+import Leanux.Proofs.WG.Noise.ExpirySource
 
 set_option pp.structureInstances false
 set_option maxHeartbeats 800000
@@ -49,26 +50,6 @@ theorem createResponse_tag (pid : PeerId) (old : Nat) :
   all_goals try dsimp +zetaDelta only at *
   all_goals repeat intro
   all_goals simp_all [P, tagAt, peerAt, Option.bind_map, Function.comp_def,
-    Std.TreeMap.getElem?_insert]
-  all_goals grind
-
-theorem expireCurrentPeerKeypairs_slots (pid : PeerId) (p : Peer) :
-    Ensures (expireCurrentPeerKeypairs pid)
-      (fun w => peerAt w pid = some p)
-      (fun _ w => ∃ p', peerAt w pid = some p' ∧
-        slots p' = slots p ∧ p'.handshakeState = 0) := by
-  rw [ensures_iff]
-  let P := fun k : Kernel => ∃ p',
-    (k.wg.bind fun d => d.peers[pid]?) = some p' ∧
-      slots p' = slots p ∧ p'.handshakeState = 0
-  have hh := hiddenClock64_kernel_spec P
-  have hi := indexRemove_peers_spec (fun ps => ps pid = some p)
-  noise_vcgen [expireCurrentPeerKeypairs, requireNotPending, handshakeClear, IndexOwner.peerDeref, IndexOwner.peerWord, unsupported, handshakeZero,
-    resetLastSentHandshake, getPeer, getKeypair, getDev, getK, setPeer,
-    setKeypair, modifyDev, modifyK, branch, invariant, hh, hi]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals repeat intro
-  all_goals simp_all [P, peerAt, slots, Option.bind_map, Function.comp_def,
     Std.TreeMap.getElem?_insert]
   all_goals grind
 

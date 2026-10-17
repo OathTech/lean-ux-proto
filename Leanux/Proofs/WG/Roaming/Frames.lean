@@ -10,11 +10,6 @@ open Leanux Leanux.WG Leanux.Proofs.WG.Noise Std.Do
 def destinationAt (k : Kernel) (pid : PeerId) : Option (Nat × Nat × Nat × Nat) :=
   ((k.wg.bind fun d => d.peers[pid]?).bind Peer.endpoint).map destination
 
-theorem hiddenJiffies_kernel_spec (P : Kernel → Prop) (site : HiddenSite) :
-    ⦃fun w => ⌜P w.k⌝⦄ hiddenJiffies site ⦃⇓? _ w => ⌜P w.k⌝⦄ := by
-  have hh := hidden_kernel_spec P
-  mvcgen [hiddenJiffies, hh]
-
 theorem dstCacheReset_destination (pid : PeerId) (remote : Option (Nat × Nat × Nat × Nat)) :
     ⦃fun w => ⌜destinationAt w.k pid = remote⌝⦄ dstCacheReset pid
     ⦃⇓? _ w => ⌜destinationAt w.k pid = remote⌝⦄ := by

@@ -1,6 +1,6 @@
 import Leanux.Proofs.WG.Config.AllowedInsertModel
 import Leanux.Proofs.WG.Config.Returns
-import Leanux.Proofs.WG.Config.AllowedInsertFrames
+import Leanux.Proofs.WG.Noise.ComponentFrames
 
 set_option autoImplicit false
 set_option pp.structureInstances false

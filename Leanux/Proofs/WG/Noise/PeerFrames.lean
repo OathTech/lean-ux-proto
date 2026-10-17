@@ -1,47 +1,121 @@
 import Leanux.Proofs.WG.Noise.Slots
 import Leanux.Proofs.WG.Noise.CryptoFrames
+import Leanux.Proofs.WG.Index.Collision
 
 set_option pp.structureInstances false
 
 namespace Leanux.Proofs.WG.Noise
 open Leanux Leanux.WG Std.Do
 
-theorem bucketHas_kernel_spec (P : Kernel → Prop) (walk collide : Decision) (index : Nat) :
-    ⦃fun w => ⌜P w.k⌝⦄
+theorem bucketHas_index_spec (P : List IndexEntry → Prop) (walk collide : Decision) (index : Nat) :
+    ⦃fun table => ⌜P table⌝⦄
       (noise_const _private.Leanux.WG.Peer.«0».Leanux.WG.bucketHas) walk collide index
-    ⦃⇓? _ w => ⌜P w.k⌝⦄ := by
-  noise_vcgen [_private.Leanux.WG.Peer.«0».Leanux.WG.bucketHas,
-    indexBucket, getDev, getK, branch, invariant]
-  case inv1 => exact ((⇓? _ w => ⌜P w.k⌝) : PostCond _ (.arg World (.except Stop .pure)))
-  all_goals try dsimp +zetaDelta only at *
-  all_goals try simp_all
-  all_goals try trivial
+    ⦃⇓? _ table => ⌜P table⌝⦄ := by
+  apply (ensures_iff _ _ _).mp
+  intro table ambient result table' ambient' hp hr
+  obtain ⟨found, final, after, run, _, same⟩ :=
+    Index.bucketWalk_returns walk collide index (Index.bucket index table)
+      table table ambient rfl
+  have exactRun : (((Index.bucketHas walk collide index).run table).run ambient) =
+      .ok ((found, final), after) := by
+    rw [Index.bucketHas_source]
+    simpa [indexBucket, Index.bucket, StateT.run_bind] using run
+  rw [exactRun] at hr
+  cases hr
+  exact same ▸ hp
 
 theorem keypairCreate_peers_spec (P : (PeerId → Option Peer) → Prop) (pid : Option PeerId) :
     ⦃fun w => ⌜P (peerAt w)⌝⦄ keypairCreate pid
     ⦃⇓? _ w => ⌜P (peerAt w)⌝⦄ := by
-  have hh := keypairAllocation_kernel_spec (fun k => P (fun i => k.wg.bind fun d => d.peers[i]?))
-  mvcgen [keypairCreate, getDev, getK, setKeypair, modifyDev, modifyK, branch, invariant, hh]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals repeat intro
-  all_goals try dsimp [peerAt] at *
-  all_goals simp_all [peerAt, Option.bind_map, Function.comp_def]
-  all_goals assumption
+  let Q : WGWorld → Prop := fun g => P (peerAt g)
+  have hpure {α : Type} (x : α) : Ensures (pure x : WG.M α) Q (fun _ => Q) := by
+    intro g ambient y g' ambient' hp hr
+    cases hr
+    exact hp
+  have hget : Ensures (get : WG.M WGWorld) Q (fun _ => Q) := by
+    intro g ambient y g' ambient' hp hr
+    cases hr
+    exact hp
+  have hcounter (n : Nat) :
+      Ensures (modify (fun g : WGWorld => {g with keypairCounter := n}) : WG.M Unit)
+        Q (fun _ => Q) := by
+    intro g ambient y g' ambient' hp hr
+    cases hr
+    exact hp
+  have hdev : Ensures getDev Q (fun _ => Q) := by
+    intro g ambient d g' ambient' hp hr
+    cases hd : g.dev with
+    | none =>
+      simp [getDev, hd, invariant, AmbientM.invariant] at hr
+      cases hr
+    | some d =>
+      simp [getDev, hd] at hr
+      rcases hr with ⟨⟨rfl, rfl⟩, rfl⟩
+      exact hp
+  apply (ensures_iff _ _ _).mp
+  unfold keypairCreate
+  refine ensures_bind (Q := fun _ => Q) _ _ ?_ ?_
+  · exact (ensures_iff _ _ _).mpr
+      (hoare_liftAmbient_variant (AmbientM.hiddenAlloc .kzallocKeypair) Q)
+  · intro ok
+    refine ensures_bind (Q := fun _ => Q) _ _ ?_ ?_
+    · exact (ensures_iff _ _ _).mpr
+        (hoare_liftAmbient_variant (AmbientM.branch .keypairCreateNoMem !ok) Q)
+    · intro noMemory
+      cases noMemory with
+      | true => exact hpure none
+      | false =>
+        refine ensures_bind (Q := fun _ => Q) _ _ hget ?_
+        intro state
+        refine ensures_bind (Q := fun _ => Q) _ _ (hcounter _) ?_
+        intro _
+        refine ensures_bind (Q := fun _ => Q) _ _ hdev ?_
+        intro device
+        refine ensures_bind (Q := fun _ => Q) _ _ ?_ ?_
+        · exact (ensures_iff _ _ _).mpr (modifyDev_peers_spec P _ (fun _ => rfl))
+        · intro _
+          refine ensures_bind (Q := fun _ => Q) _ _ ?_ ?_
+          · exact (ensures_iff _ _ _).mpr (modifyDev_peers_spec P _ (fun _ => rfl))
+          · intro _
+            exact hpure _
 
 theorem deriveKeys_peers_spec (P : (PeerId → Option Peer) → Prop)
     (kp : KeypairId) (initiator : Bool) (ck : List UInt8) :
     ⦃fun w => ⌜P (peerAt w)⌝⦄ deriveKeys kp initiator ck
     ⦃⇓? _ w => ⌜P (peerAt w)⌝⦄ := by
-  let PK := fun k : Kernel => P (fun i => k.wg.bind fun d => d.peers[i]?)
-  have hh := hiddenClock64_kernel_spec PK
-  have hk := kdf_wg_spec PK
-  have ho := kdfOut_wg_spec PK
-  mvcgen [deriveKeys, getKeypair, getDev, getK, setKeypair, modifyDev, modifyK,
-    invariant, hh, hk, ho]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals repeat intro
-  all_goals try dsimp [peerAt] at *
-  all_goals simp_all [PK, peerAt, Option.bind_map, Function.comp_def]
-  all_goals assumption
+  let Q : WGWorld → Prop := fun g => P (peerAt g)
+  have hread : Ensures (getKeypair kp) Q (fun _ => Q) := by
+    intro g ambient k g' ambient' hp hr
+    cases hd : g.dev with
+    | none =>
+      simp [getKeypair, getDev, hd, invariant, AmbientM.invariant] at hr
+      cases hr
+    | some d =>
+      cases hk : d.keypairs[kp]? with
+      | none =>
+        simp [getKeypair, getDev, hd, hk, invariant, AmbientM.invariant] at hr
+        cases hr
+      | some k =>
+        simp [getKeypair, getDev, hd, hk] at hr
+        rcases hr with ⟨⟨rfl, rfl⟩, rfl⟩
+        exact hp
+  apply (ensures_iff _ _ _).mp
+  unfold deriveKeys
+  refine ensures_bind (Q := fun _ => Q) _ _ ?_ ?_
+  · exact (ensures_iff _ _ _).mpr
+      (hoare_liftAmbient_variant (AmbientM.hiddenClock64 .deriveKeysBirthdate) Q)
+  · intro birthdate
+    refine ensures_bind (Q := fun _ => Q) _ _ ?_ ?_
+    · exact (ensures_iff _ _ _).mpr (kdf_wg_spec Q true false ck [])
+    · intro outs
+      refine ensures_bind (Q := fun _ => Q) _ _ ?_ ?_
+      · exact (ensures_iff _ _ _).mpr (kdfOut_wg_spec Q outs 0)
+      · intro first
+        refine ensures_bind (Q := fun _ => Q) _ _ ?_ ?_
+        · exact (ensures_iff _ _ _).mpr (kdfOut_wg_spec Q outs 1)
+        · intro second
+          refine ensures_bind (Q := fun _ => Q) _ _ hread ?_
+          intro key
+          exact (ensures_iff _ _ _).mpr (modifyDev_peers_spec P _ (fun _ => rfl))
 
 end Leanux.Proofs.WG.Noise

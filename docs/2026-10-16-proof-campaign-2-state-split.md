@@ -19,12 +19,12 @@ and attributed theorem declarations. Campaign 2 owns 427 Lean files,
 | Result | Files | Before theorems | Before headlines | Retrofit status |
 | --- | ---: | ---: | ---: | --- |
 | Common projection | 2 | 0 | 0 | Native and product observations carried |
-| H1 Noise | 35 | 171 | 22 | Native access, crypto/slot frames and nine exact slot/clear/zero contracts carried; six type-given frames deleted; pure effect relations checked; terminal closure pending |
-| H2 Index | 68 | 318 | 52 | Table, lookup/collision scans, insertion exactness and 36 pure theorems checked; full lookup/caller closure pending |
-| H3 Roaming | 35 | 119 | 13 | Pure observation models build; native calls and product callbacks pending |
-| H4 Configuration | 130 | 554 | 79 | Total-return/branch laws and one pure theorem checked; two Ambient frames deleted; operational carry pending |
+| H1 Noise | 35 | 171 | 22 | Native access, crypto/slot/peer frames, slot/clear/zero operations and full expiry slot/tag contract carried; six type-given frames deleted; terminal closure pending |
+| H2 Index | 68 | 318 | 52 | Table/scans/insertion, five owner-word and lookup-finish contracts and 36 pure theorems checked; seven Ambient frames deleted; full lookup/caller closure pending |
+| H3 Roaming | 35 | 119 | 13 | Two Ambient frames deleted; pure observation models build; native calls and product callbacks pending |
+| H4 Configuration | 130 | 554 | 79 | Total-return/branch laws and one pure theorem checked; three Ambient frames deleted; operational carry pending |
 | H5 Progress | 59 | 265 | 42 | Twelve pure/control theorems checked; operational carry pending |
-| H6 Timer discipline | 98 | 404 | 50 | Two pure session-liveness relations checked; timer wheel and worker semantics pending |
+| H6 Timer discipline | 98 | 404 | 50 | Two pure session-liveness relations checked; three Ambient frames deleted; timer wheel and worker semantics pending |
 
 Retyped, deleted and retained counts will be reported per validated tranche.
 All six results remain lagging, with their previous charter gaps unchanged.
@@ -330,7 +330,7 @@ Reproduce with `scripts/in-bundle lake build` on the four roots
 | This tranche | 20 | 18 | 2 | 0 | 0 | 18 |
 | Cumulative processed baseline and checked support | 121 | 45 | 8 | 68 | 7 | 120 |
 
-The tree now has 430 campaign-owned files and 1,830 theorems. Of the baseline,
+At `b7481f0` the tree has 430 campaign-owned files and 1,830 theorems. Of the baseline,
 1,710 theorems still await validation. The terminal closures remain lagging;
 all 258 headline names remain present.
 
@@ -384,3 +384,85 @@ retry, cap increase or proof-limit increase.
 Reproduce by building and fresh-replaying the roots
 `Leanux.Proofs.WG.Config.BranchSource`, `Leanux.Proofs.WG.Index.Insert` and
 `Leanux.Proofs.WG.Noise.Slots` with the same capped bundle commands above.
+
+## Remaining peer frames, owner words and Ambient-only deletions
+
+| Tranche | Before | Retyped | Deleted | Kept | Added | After |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Remaining `Noise.PeerFrames` | 3 | 3 | 0 | 0 | 0 | 3 |
+| Five `Index.PeerWords` contracts moved to `PeerWordSource` | 5 | 5 | 0 | 0 | 0 | 5 |
+| Expiry contract moved from `Noise.StateEdges` to `ExpirySource` | 1 | 1 | 0 | 0 | 0 | 1 |
+| Ambient-only preservation leaves | 13 | 0 | 13 | 0 | 0 | 0 |
+| This tranche | 22 | 9 | 13 | 0 | 0 | 9 |
+| Cumulative processed baseline and checked support | 143 | 54 | 21 | 68 | 7 | 129 |
+
+The tree has 431 campaign-owned files and 1,817 theorems. The baseline's
+remaining unvalidated count is 1,688; all 258 headline names and six lagging
+terminal closures remain. Moving a declaration does not count as adding one.
+
+All three remaining `Noise.PeerFrames` contracts are carried. The renamed
+`bucketHas_index_spec` proves preservation of its own table, a substantive
+fact despite the narrower `IndexM` type. Creation and derivation keep arbitrary
+peer-map predicates under normal completion, without allocation, clock,
+residency or nonaliasing assumptions. They follow actual counter writes,
+allocation, key derivation and keypair updates.
+
+`Index.PeerWordSource` factors five original total contracts from the still
+lagging `PeerWords`: owner-word read and write, NULL and zero-reference
+lookup finishes, and live peer-reference acquisition. Absent owner objects
+remain distinct from present NULL words; the failed get still stores NULL
+in the original owner. Live acquisition retains the original positive and
+bounded-reference premises and the exact Device effect. The other five
+`PeerWords` declarations remain pending, not validated.
+
+`Noise.ExpirySource` carries the full original expiry slot/tag contract with
+unchanged premises. Its proof includes the real peer-word dereference, guarded
+index removal, handshake zeroing, clock/reset and both key invalidations.
+It promises unchanged slots and zero handshake state only on normal completion.
+The other three `StateEdges` contracts remain pending.
+
+The following thirteen leaves are removed because their actual capabilities
+exclude the preserved state; none promised a result value or totality:
+
+| File | Deleted declaration | Actual capability |
+| --- | --- | --- |
+| `Config.AllowedInsertFrames` | `hiddenAlloc_sameKernel_node_spec_variant` | `AmbientM.hiddenAlloc` |
+| `Roaming.Frames` | `hiddenJiffies_kernel_spec` | `AmbientM.hiddenJiffies` |
+| `Roaming.PublicationFrames` | `refcountInc_kernel_frame` | Ambient-only polymorphic refcount |
+| `Index.ConsumeFrames` | `refcountIncNotZero_kernel_variant` | Ambient-only polymorphic refcount |
+| `Index.SendFrames` | `refcountDecAndTest_kernel_variant` | Ambient-only polymorphic refcount |
+| `Index.NewlinkFrames` | `skipCutExactly_spec_kernel_variant` | `AmbientM.skipCutExactly` |
+| `Index.StagedFrames` | `peekQueuedUnit_kernel_variant`, `queueDeviceWork_kernel_variant`, `keypairAllocation_kernel_spec_keepalive_variant` | Ambient queue operations and allocation |
+| `Index.ReceiveFrames` | `keypairAllocation_kernel_spec_reply_variant` | `AmbientM.hiddenAlloc` |
+| `TimerDiscipline.SendCutFrames` | `keypairAllocation_kernel_spec_sendBuffer_variant`, `skipCut_spec_kernel_variant` | Ambient allocation and cut |
+| `TimerDiscipline.SelectionFrames` | `peekUnit_spec_kernel_variant` | `AmbientM.peekUnit` |
+
+The three refcount functions are polymorphic in `Monad` and `MonadLiftT
+AmbientM`; their canonical native lift preserves the outer state. This is
+the type-and-adapter reason for deletion, not a claim that their declarations
+literally return `AmbientM`. The other ten cores do return `AmbientM`.
+The empty `AllowedInsertFrames` file is deleted and its sole direct import
+replaced by `Noise.ComponentFrames`. Nine mixed files retain all substantive
+neighbors. Twenty-six deleted-name uses remain in twenty unported files;
+no replacement leaf aliases hide that lag.
+
+Scoped builds pass without warnings: peer frames 36 jobs, owner-word source
+33, expiry source 37. Axiom checks cover respectively 71, 56 and 72 named
+logical roots with only the permitted three axioms. Fresh kernel replay passes
+for all three roots; independent reviews found no substantive issues. Static
+proof-tree checks and whitespace checks pass; mirror and shared layers remain
+unchanged. The deletion audit
+checks the exact thirteen-name set and absence of imports of the removed file;
+lagging mixed files are not claimed to build. No full-tree or terminal pass.
+
+Development: peer-frame and expiry prototypes each passed first time.
+The owner-word prototype used five changed-source calls: one clean
+three-contract prefix, three failed extensions, then five contracts clean.
+One failed extension's diagnostics were truncated by the tool output cap and
+not fully retained; later calls and the final packaging build saved complete
+output before preview. It was not rerun unchanged for diagnostics. All three
+packaging builds passed first time. No infrastructure retry or limit increase.
+
+Reproduce scoped builds and fresh replay for
+`Leanux.Proofs.WG.Noise.PeerFrames`, `Leanux.Proofs.WG.Index.PeerWordSource`
+and `Leanux.Proofs.WG.Noise.ExpirySource` using the capped bundle commands above.
