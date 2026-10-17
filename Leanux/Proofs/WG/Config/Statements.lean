@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Config.EndpointPaginationClaims
 import Leanux.Proofs.WG.Config.MultiMixedClaims
 import Leanux.Proofs.WG.Config.MultiPeerScalarClaims
 import Leanux.Proofs.WG.Config.MultiPeerGetterClaims
@@ -1591,4 +1592,22 @@ theorem original_multi_peer_fwmark_scalars_get_after_set (d : Device) (peers : P
   multi_mixed_fitting_get_after_set d peers mark key psk interval bad pid sock net
     found resident live bounded down residents emptyIps room idle emptyQueue
 
+/-- The actual getter serializes every finite IPv4 allowed-IP occurrence and
+the endpoint JSON produced by the original getter, with canonical boundary
+freshness and a receive count including separate DONE envelopes. Repeated
+non-boundary IDs remain allowed; endpoint serialization follows peerFixedAttrs. This is a single-peer getter claim; it makes
+no global owner/list consistency or mixed-family packing claim. -/
+theorem original_endpoint_ipv4_pagination (pid : PeerId) (d : Device) (p : Peer)
+    (nodes : NodeId → AipNode) (ids : List NodeId) (sock : NlSock)
+    (peers : d.peerList = [pid]) (resident : d.peers[pid]? = some p)
+    (listed : p.allowedipsList = ids) (fresh : endpointPaginationFresh d p ids)
+    (readable : Ipv4Residents d nodes ids)
+    (room : devicePrefixSpace d + max 168 (peerFixedSpace p + 32) ≤ NLMSG_GOODSIZE)
+    (idle : sock.cbRunning = false) (empty : sock.queue = [])
+    (enough : endpointPaginationReceiveCount d p ids ≤ 4096) :
+    Campaign2.Returns (wgGetDevice (byIndex d))
+      (fun s => s.wg.device = some d ∧ s.wg.nlSock7 = sock ∧ ClaimView.selectsDevice s d)
+      (fun result s => result = .ok (suffixJson d p nodes ids) ∧
+        s.wg.device = some d ∧ s.wg.nlSock7 = socketReadbackFinal sock d) :=
+  endpointIpv4Pagination_returns pid d p nodes ids sock peers resident listed fresh readable room idle empty enough
 end Leanux.Proofs.WG.Config
