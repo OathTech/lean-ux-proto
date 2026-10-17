@@ -14,7 +14,7 @@ new worlds; new R3/R4 results follow the retrofit.
 | Completed retrofit checkpoints | 452 | 6,550 |
 
 Completed changes comprise **2,928 retyped/generalized, 1,706 deleted,
-1,992 retained contract shapes and 541 added theorems**. Retyping changes the
+2,141 retained contract shapes and 541 added theorems**. Retyping changes the
 actual carrier or observation, including shorthand contracts whose functions
 move to a native monad. Namespace-only product qualification and equivalent
 projection relocation count as retained. The census includes private and
@@ -355,6 +355,18 @@ inherited warnings. Four ordinary development failures preceded the fifth
 full-source pass; the final unused-frame deletion was then checked centrally.
 There was no infrastructure rerun or limit change.
 
+The receipt-disposition/link and completion-caller checkpoint retains all 149
+theorem contracts. Arbitrary product history actions and the original store
+mask remain; concrete consume receipts now carry exact WG and Ambient endpoints.
+Selection, strict earlier receipt support, GRO buffering, callback completion
+and failed prefixes remain separate observations. Encrypt iteration follows
+the actual ring-consume, NAPI and saved-item tail order. The 303-, 305- and
+350-job builds, all 177 named declaration axiom checks, fresh replays and complete
+source reviews pass with zero own warnings; their closures report 1,181 or
+1,277 inherited warnings. Disposition had three ordinary development failures,
+one missing-artifact failure and a final pass; each link module had one ordinary
+failure then a pass, and completion callers passed their first source check.
+
 Remaining work is the routing/origin terminal carry,
 RX carrier and receipt-link layers, warning
 cleanup, the full proof gate and terminal replay. Deterministic source/proof
@@ -376,6 +388,7 @@ Each infrastructure rerun below occurred once for its affected invocation:
 | SyscallsAudit diagnostic | missing shared artifact | FAIL on proof obligations |
 | RunnerSafety diagnostic31 | EnvTimersAudit artifact absent during central rebuild | PASS unchanged after rebuild |
 | RxConsumeProtection fresh replay | tool returned no completion status; handle subsequently absent | PASS with explicit zero status |
+| RxPollDisposition diagnostic | missing Completion artifact | FAIL on proof obligations; changed-source checks later passed |
 
 Explicitly stopped elaborations, signal/KILLED outcomes, driver crashes and
 toolchain panics were preserved to snapshot refs before work resumed; they

@@ -8,7 +8,8 @@ open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing Lifetimes RxJoi
 
 /-- A source-linked receipt describes the selected cell at consume entry. -/
 def Source (skb : SkbId) (stamp : PacketStamp) (r : ConsumeReceipt) : Prop :=
-  r.Valid ∧ SelectedAt skb stamp r.packet r.run.before ∧ r.packet.peer = r.peer
+  r.Valid ∧ (packetStamp r.run.before skb = stamp ∧
+    (nativeRxStore r.run.before).2 skb = some r.packet) ∧ r.packet.peer = r.peer
 
 /-- Strictly earlier, after this observation's actual incoming history. -/
 def Before (base h : List RxJoint.Event) (e : RxJoint.Event) : Prop :=
@@ -82,7 +83,7 @@ theorem Linked.events (hi : Linked base h) : ∃ s, h = base ++ s ∧
       exact ⟨s,[],by simp,by simpa only [hs] using he⟩
 
 theorem linked_emit (e : RxJoint.Event) :
-    PrefixEnsures (fun h _ => Linked base h ∧ EventLink base h e) (Linked base)
+    PrefixEnsures (fun h (_ : World) => Linked base h ∧ EventLink base h e) (Linked base)
       (emitPrefix e) (fun _ h _ => Linked base h) := by
   intro w h hi
   exact ⟨[e], rfl, hi.1.snoc hi.2, hi.1.snoc hi.2⟩
@@ -96,7 +97,7 @@ theorem linked_append_quiet (hi : Linked base h) (t : List RxJoint.Event)
     simpa only [List.append_assoc, List.singleton_append] using
       ih first (fun x hx pre => ht x (List.mem_cons_of_mem _ hx) pre)
 
-theorem linked_access (a : MixedM α) :
+theorem linked_access (a : PrefixM LifetimeEvent α) :
     PrefixPreserves (fun h _ => Linked base h) (Linked base) (access a) := by
   intro w h hi
   let t := ((runPrefix a w (h.filterMap accessEvent)).2.drop
@@ -108,7 +109,7 @@ theorem linked_access (a : MixedM α) :
   refine ⟨t,rfl,hl,?_⟩
   cases (runPrefix (access a) w h).1 <;> trivial
 
-theorem linked_lift (a : M α) :
+theorem linked_lift (a : Leanux.M α) :
     PrefixPreserves (fun h _ => Linked base h) (Linked base) (liftPrefix a) := by
   intro w h hi
   refine ⟨[],by simp,hi,?_⟩
@@ -116,7 +117,7 @@ theorem linked_lift (a : M α) :
   cases a.run w <;> trivial
 
 /-- Frame any monotone historical fact using the actual appended suffix. -/
-theorem remember {F : List RxJoint.Event → Prop} (ha : PrefixEnsures P S a Q)
+theorem remember {F : List RxJoint.Event → Prop} {a : Obs α} (ha : PrefixEnsures P S a Q)
     (hm : ∀ h t, F h → F (h ++ t)) :
     PrefixEnsures (fun h w => P h w ∧ F h) S a (fun x h w => Q x h w ∧ F h) := by
   intro w h hi
@@ -153,8 +154,7 @@ theorem linked_receipt (a : Obs α) (f : RunWitness α → RxJoint.Event)
   intro _
   exact PrefixEnsures.pure (fun _ _ hi => hi) (fun _ _ hi => hi)
 
-/-- The exact once-only consume run freezes the selected cell at its entry
-World, before the operation can release it. Its outgoing access history hc is
+/-- The exact once-only consume run freezes the selected cell at its native WG entry state, before the operation can release it. Its outgoing access history hc is
 followed by consumed, and only the Some arm then appends buffered. -/
 theorem consume_link (pid n skb : Nat) (stamp : PacketStamp) (pkt : RxPacket) (ep : Endpoint) :
     PrefixEnsures (fun h w => Linked base h ∧ SelectedAt skb stamp pkt w ∧ pkt.peer = pid ∧
@@ -162,18 +162,30 @@ theorem consume_link (pid n skb : Nat) (stamp : PacketStamp) (pkt : RxPacket) (e
       (consume pid n skb stamp pkt ep)
       (fun out h _ => Linked base h ∧ Supported base h out.toList) := by
   intro w h hi
-  obtain ⟨s,hs,hl,_⟩ := linked_access (base := base) (consumeDataDonePrefix pid pkt ep) w h hi.1
-  have he := access_erases (consumeDataDonePrefix_erases pid pkt ep) w h
+  obtain ⟨s,hs,hl,_⟩ := linked_access (base := base) (liftWGObserver (consumeDataDonePrefix pid pkt ep)) w h hi.1
+  have he := access_erases (liftWGObserver_erases (consumeDataDonePrefix_erases pid pkt ep)) w h
   rw [consume_run]
-  cases hr : runPrefix (access (consumeDataDonePrefix pid pkt ep)) w h with
+  cases hr : runPrefix (access (liftWGObserver (consumeDataDonePrefix pid pkt ep))) w h with
   | mk result hc =>
     simp only [hr] at hs hl he
     cases result with
     | error err => exact ⟨s,hs,hl,True.intro⟩
     | ok out =>
       rcases out with ⟨out,v⟩
-      let r : ConsumeReceipt := ⟨pid,pkt,ep,⟨out,w,v⟩⟩
-      have source : Source skb stamp r := ⟨he.symm,hi.2.1,hi.2.2.1⟩
+      let r : ConsumeReceipt := ⟨pid,pkt,ep,⟨out,w.wg,v.wg,w.ambient,v.ambient⟩⟩
+      have rv : r.Valid := by
+        change ((consumeDataDone pid pkt ep).run w.wg).run w.ambient =
+          .ok ((out,v.wg),v.ambient)
+        have hx := he.symm
+        rw [liftWG_run] at hx
+        cases hn : ((consumeDataDone pid pkt ep).run w.wg).run w.ambient with
+        | error e => simp [hn, Except.map] at hx
+        | ok pair =>
+          rcases pair with ⟨⟨value,wg⟩,ambient⟩
+          simp [hn, Except.map] at hx
+          rcases hx with ⟨rfl,rfl⟩
+          rfl
+      have source : Source skb stamp r := ⟨rv,hi.2.1,hi.2.2.1⟩
       have removed : ReadBeforeRemoval base hc (n, skb, stamp) := hs ▸ hi.2.2.2.append s
       have consumed := hl.snoc (e := .consumed n skb stamp r) ⟨source,removed⟩
       cases out with
@@ -196,7 +208,7 @@ by the unchanged once-only callback observer. -/
 theorem enter_link (e : Entry) :
     PrefixEnsures (fun h _ => Linked base h ∧ Buffered base h e) (Linked base)
       (enter e) (fun _ h _ => Linked base h) := by
-  have mark : PrefixEnsures (fun h _ => Linked base h ∧ Buffered base h e) (Linked base)
+  have mark : PrefixEnsures (fun h (_ : World) => Linked base h ∧ Buffered base h e) (Linked base)
       (emitPrefix (.entered e)) (fun _ h _ => Linked base h ∧ Entered base h e) := by
     intro w h hi
     obtain ⟨s,hs⟩ := hi.1.extension
@@ -322,7 +334,7 @@ theorem flushAll_link (g : Gro) :
     intro _
     exact PrefixEnsures.pure (fun _ _ hi => hi.1) (fun _ _ hi => hi.1)
 
-/-- Rebase only the incoming journal prefix; all source Worlds and full
+/-- Rebase only the incoming journal prefix; all source endpoints and full
 receipts remain the same. This is a pure witness translation, not an observer
 history-neutrality assertion. -/
 theorem read_rebase (hi : ReadBeforeRemoval base (base ++ s) k) (other : List RxJoint.Event) :

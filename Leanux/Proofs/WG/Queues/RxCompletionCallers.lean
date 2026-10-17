@@ -15,7 +15,7 @@ theorem audit_quiet (a : AuditM α) : Preserves historyEvent (RxHistory.audit a)
   quiet (fun w h => focusPrefix_other RxHistory.Event.audit RxHistory.auditEvent historyEvent
     (fun _ => rfl) a w h) (Appends.focus _ _ _)
 
-theorem mixed_quiet (a : MixedM α) : Preserves historyEvent (RxHistory.mixed a) :=
+theorem mixed_quiet (a : PrefixM LifetimeEvent α) : Preserves historyEvent (RxHistory.mixed a) :=
   audit_quiet _
 
 theorem origin_quiet (a : PrefixM Origins.Event α) :
@@ -56,7 +56,8 @@ macro "completion_steps" : tactic => `(tactic|
     | (with_reducible intro x; try dsimp only))
 
 theorem encryptIteration_preserves : Preserves historyEvent RxHistory.encryptIteration :=
-  PrefixPreserves.bind napiSoftirq_preserves (fun _ => mixed_quiet _)
+  PrefixPreserves.bind (mixed_quiet _) (fun _ =>
+    PrefixPreserves.bind napiSoftirq_preserves (fun _ => mixed_quiet _))
 
 theorem decryptStep_preserves : Preserves historyEvent RxHistory.decryptStep := by
   unfold RxHistory.decryptStep RxWorkers.decryptWith

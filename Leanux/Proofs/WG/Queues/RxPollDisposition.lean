@@ -8,52 +8,89 @@ open Leanux Leanux.WG Leanux.Env Leanux.Proofs.Logged Leanux.Proofs.Framing Life
 
 /-- The complete RX-store view needed between capture and consume; queue-only
 frames do not establish this field-level relation. -/
-def rxStore (w : World) :=
-  (w.k.wg.map (fun d => d.ifindex), fun id : SkbId => w.k.wg.bind (fun d => d.rxSkbs[id]?))
+def nativeRxStore (w : WGWorld) :=
+  (w.dev.map (fun d => d.ifindex), fun id : SkbId => w.dev.bind (fun d => d.rxSkbs[id]?))
+
+def rxStore (w : World) := nativeRxStore w.wg
 
 def SelectedAt (skb : SkbId) (stamp : PacketStamp) (pkt : RxPacket) (w : World) : Prop :=
-  packetStamp w skb = stamp ∧ (rxStore w).2 skb = some pkt
+  packetStamp w.wg skb = stamp ∧ (rxStore w).2 skb = some pkt
 
 theorem capture_selected (skb : SkbId) (w v : World) (h : List RxJoint.Event)
     (pkt : RxPacket) (stamp : PacketStamp)
     (hr : (runPrefix (capture skb) w h).1 = .ok ((pkt, stamp), v)) :
     v = w ∧ SelectedAt skb stamp pkt v := by
-  rw [capture_run] at hr
-  cases hg : (getRxSkb skb).run w with
-  | error e => simp [hg] at hr
+  rw [capture_run, liftWG_run] at hr
+  cases hg : ((getRxSkb skb).run w.wg).run w.ambient with
+  | error e => simp [hg, Except.map] at hr
   | ok out =>
-    rcases out with ⟨p, u⟩
-    simp only [hg, Except.ok.injEq, Prod.mk.injEq] at hr
+    rcases out with ⟨⟨p, u⟩, ambient⟩
+    simp only [hg, Except.map, Except.ok.injEq, Prod.mk.injEq] at hr
     rcases hr with ⟨⟨rfl, rfl⟩, rfl⟩
-    obtain ⟨rfl, d, hd, hp⟩ := Packets.getRxSkb_current skb w u p hg
-    exact ⟨rfl, rfl, by simp [rxStore, hd, hp]⟩
+    obtain ⟨rfl, rfl, d, hd, hp⟩ := Packets.getRxSkb_current skb w.wg u p w.ambient ambient hg
+    exact ⟨rfl, rfl, by simp [rxStore, nativeRxStore, hd, hp]⟩
 
 theorem drop_rxStore (pid : PeerId) : SameView rxStore
-    (do setPeer pid {(← getPeer pid) with rxQueue := (← getPeer pid).rxQueue.dropPeeked}) := by
-  apply SameView.of_wp
-  intro s
-  mvcgen [getPeer, getDev, getK, setPeer, modifyDev, modifyK, invariant]
-  all_goals dsimp +zetaDelta only at *
-  all_goals unfold rxStore at *; simp_all only [Option.bind_some, Option.bind_map, Option.map_map, Option.map_some, Function.comp_def]
+    (liftWG (do setPeer pid {(← getPeer pid) with rxQueue := (← getPeer pid).rxQueue.dropPeeked})) := by
+  have hg : SameView nativeRxStore (getPeer pid) := by
+    apply (ProjectedAction.iff_run_ambient _ _ _).mpr
+    intro w ambient p v ambient' hr
+    exact congrArg nativeRxStore (Peers.getPeer_current pid w v p ambient ambient' hr).1
+  have hs (p : Peer) : SameView nativeRxStore (setPeer pid p) := by
+    intro initial
+    unfold setPeer modifyDev
+    apply hoare_modify
+    intro w hw
+    simpa only [nativeRxStore, Option.bind_map, Option.map_map, Function.comp_def] using hw
+  exact sameView_liftWG rxStore nativeRxStore _
+    (hg.bind (fun p => hg.bind (fun q => hs {p with rxQueue := q.rxQueue.dropPeeked})))
+    (fun _ _ _ h => h)
 
 theorem counter_rxStore (kp : KeypairId) (nonce : Nat) :
-    SameView rxStore (counterValidate kp nonce) := by
-  apply SameView.of_wp
-  intro s
-  mvcgen [counterValidate, getKeypair, getDev, getK, setKeypair, modifyDev, modifyK,
-    branch, branchCmp, WG.orM, invariant]
-  all_goals try exact ((⇓? _ w => ⌜rxStore w = s⌝) : PostCond _ (.arg World (.except Stop .pure)))
-  all_goals try dsimp +zetaDelta only at *
-  all_goals try unfold rxStore at *; simp_all only [Option.bind_some, Option.bind_map, Option.map_map, Option.map_some, Function.comp_def]
-  all_goals trivial
+    SameView rxStore (liftWG (counterValidate kp nonce)) := by
+  have hg : SameView nativeRxStore (getKeypair kp) := by
+    apply (ProjectedAction.iff_run_ambient _ _ _).mpr
+    intro w ambient k v ambient' hr
+    exact congrArg nativeRxStore (Keypairs.getKeypair_current kp w v ambient ambient' k hr).1
+  have hs (k : Keypair) : SameView nativeRxStore (setKeypair kp k) := by
+    intro initial
+    unfold setKeypair modifyDev
+    apply hoare_modify
+    intro w hw
+    simpa only [nativeRxStore, Option.bind_map, Option.map_map, Function.comp_def] using hw
+  have ha {α : Type} (a : AmbientM α) :
+      SameView nativeRxStore (MonadLift.monadLift a : WG.M α) :=
+    fun initial => hoare_liftAmbient a (fun w => nativeRxStore w = initial)
+  have loop {α β : Type} (xs : List α) (init : β) (f : α → β → WG.M (ForInStep β))
+      (hf : ∀ x b, SameView nativeRxStore (f x b)) :
+      SameView nativeRxStore (forIn xs init f) :=
+    fun initial => list_view_spec nativeRxStore (· = initial) xs init f (fun x b => hf x b initial)
+  apply sameView_liftWG rxStore nativeRxStore
+  · unfold counterValidate WG.orM
+    simp only [branch, branchCmp, invariant, Std.Legacy.Range.forIn_eq_forIn_range']
+    repeat' first
+      | (snapshot_head getKeypair; exact hg)
+      | (snapshot_head setKeypair; exact hs _)
+      | (snapshot_head Pure.pure; exact SameView.pure _ _)
+      | (snapshot_head Bind.bind; apply SameView.bind)
+      | (first | snapshot_head MonadLift.monadLift | snapshot_head MonadLiftT.monadLift
+         exact ha _)
+      | (snapshot_head ForIn.forIn; apply loop)
+      | (snapshot_head ite; split)
+      | keypairs_intro_forall
+      | snapshot_head_reduce
+      | snapshot_head_match
+      | simp +failIfUnchanged only
+  · intro w g ambient hg
+    exact hg
 
 theorem selected_transport (skb : SkbId) (stamp : PacketStamp) (pkt : RxPacket)
     (w v : World) (he : rxStore v = rxStore w) (hi : SelectedAt skb stamp pkt w) :
     SelectedAt skb stamp pkt v := by
   refine ⟨?_, by simpa only [he] using hi.2⟩
   have hs := congrArg Prod.fst he
-  have hp : packetStamp v skb = packetStamp w skb := by
-    simpa only [rxStore, packetStamp] using congrArg (fun o : Option Nat => (o.getD 0, skb + 1)) hs
+  have hp : packetStamp v.wg skb = packetStamp w.wg skb := by
+    simpa only [rxStore, nativeRxStore, packetStamp] using congrArg (fun o : Option Nat => (o.getD 0, skb + 1)) hs
   exact hp.trans hi.1
 
 /-- Validity of the actual consume run and its Some payload only. This does
@@ -64,8 +101,8 @@ def ConsumePayloadValid (e : Entry) : Prop :=
 
 def EventValid : RxJoint.Event → Prop
   | .checkedState _ _ _ pkt r => r.Valid (branch .rxPollNotCrypted (pkt.state != .crypted))
-  | .checkedCounter _ _ _ pkt r => r.Valid (counterValidate pkt.keypair pkt.nonce)
-  | .checkedEndpoint _ _ _ pkt r => r.Valid (endpointFromSkb pkt.source)
+  | .checkedCounter _ _ _ pkt r => r.Valid (liftWG (counterValidate pkt.keypair pkt.nonce))
+  | .checkedEndpoint _ _ _ pkt r => r.Valid (liftWG (endpointFromSkb pkt.source))
   | .consumed _ _ _ r => r.Valid
   | .buffered e | .entered e | .completed e _ => ConsumePayloadValid e
   | _ => True
@@ -77,12 +114,12 @@ theorem valid_append (h t : List RxJoint.Event) :
   simp only [Valid, List.mem_append, or_imp, forall_and]
 
 theorem valid_emit (e : RxJoint.Event) (he : EventValid e) :
-    PrefixPreserves (fun h _ => Valid h) Valid (emitPrefix e) := by
+    PrefixPreserves (fun h (_ : World) => Valid h) Valid (emitPrefix e) := by
   intro w h hi
   have hv : Valid (h ++ [e]) := valid_append h [e] |>.mpr ⟨hi, by simpa [Valid] using he⟩
   exact ⟨[e], rfl, hv, hv⟩
 
-theorem valid_access (a : MixedM α) :
+theorem valid_access (a : PrefixM LifetimeEvent α) :
     PrefixPreserves (fun h _ => Valid h) Valid (access a) := by
   intro w h hi
   let suffix := ((runPrefix a w (h.filterMap accessEvent)).2.drop
@@ -96,7 +133,7 @@ theorem valid_access (a : MixedM α) :
   refine ⟨suffix, rfl, hv, ?_⟩
   cases (runPrefix (access a) w h).1 <;> trivial
 
-theorem valid_lift (a : M α) :
+theorem valid_lift (a : Leanux.M α) :
     PrefixPreserves (fun h _ => Valid h) Valid (liftPrefix a) :=
   by
     intro w h hi
@@ -104,7 +141,7 @@ theorem valid_lift (a : M α) :
     simp only [runPrefix_lift]
     cases a.run w <;> trivial
 
-theorem valid_receipt (a : Obs α) (original : M α) (f : RunWitness α → RxJoint.Event)
+theorem valid_receipt (a : Obs α) (original : Leanux.M α) (f : RunWitness α → RxJoint.Event)
     (ha : PrefixPreserves (fun h _ => Valid h) Valid a) (he : ErasesPrefix a original)
     (hf : ∀ r, r.Valid original → EventValid (f r)) :
     PrefixPreserves (fun h _ => Valid h) Valid (receiptObserved a f) := by
@@ -131,20 +168,20 @@ theorem valid_state (n skb : Nat) (stamp : PacketStamp) (pkt : RxPacket) :
 
 theorem valid_counter (n skb : Nat) (stamp : PacketStamp) (pkt : RxPacket) :
     PrefixPreserves (fun h _ => Valid h) Valid
-      (receiptObserved (access (counterValidatePrefix pkt.keypair pkt.nonce))
+      (receiptObserved (access (liftWGObserver (counterValidatePrefix pkt.keypair pkt.nonce)))
         (RxJoint.Event.checkedCounter n skb stamp pkt)) :=
-  valid_receipt _ _ _ (valid_access _) (access_erases (counterValidatePrefix_erases _ _)) (fun _ hv => hv)
+  valid_receipt _ _ _ (valid_access _) (access_erases (liftWGObserver_erases (counterValidatePrefix_erases _ _))) (fun _ hv => hv)
 
 theorem valid_endpoint (n skb : Nat) (stamp : PacketStamp) (pkt : RxPacket) :
     PrefixPreserves (fun h _ => Valid h) Valid
-      (receiptObserved (liftPrefix (endpointFromSkb pkt.source))
+      (receiptObserved (liftPrefix (liftWG (endpointFromSkb pkt.source)))
         (RxJoint.Event.checkedEndpoint n skb stamp pkt)) :=
   valid_receipt _ _ _ (valid_lift _) (erasesPrefix_lift _) (fun _ hv => hv)
 
 theorem valid_capture (skb : SkbId) :
     PrefixPreserves (fun h _ => Valid h) Valid (capture skb) := by
   intro w h hi
-  obtain ⟨s, he, hs, hn⟩ := valid_access (getRxSkbPrefix skb) w h hi
+  obtain ⟨s, he, hs, hn⟩ := valid_access (liftWGObserver (getRxSkbPrefix skb)) w h hi
   refine ⟨s, he, hs, ?_⟩
   cases (runPrefix (capture skb) w h).1 <;> trivial
 
@@ -156,18 +193,28 @@ theorem valid_consume (pid n skb : Nat) (stamp : PacketStamp) (pkt : RxPacket) (
     PrefixEnsures (fun h _ => Valid h) Valid (consume pid n skb stamp pkt ep)
       (fun out h _ => Valid h ∧ ∀ e ∈ out.toList, ConsumePayloadValid e) := by
   intro w h hi
-  obtain ⟨s, hs, hv, _⟩ := valid_access (consumeDataDonePrefix pid pkt ep) w h hi
-  have he := access_erases (consumeDataDonePrefix_erases pid pkt ep) w h
+  obtain ⟨s, hs, hv, _⟩ := valid_access (liftWGObserver (consumeDataDonePrefix pid pkt ep)) w h hi
+  have he := access_erases (liftWGObserver_erases (consumeDataDonePrefix_erases pid pkt ep)) w h
   rw [consume_run]
-  cases hr : runPrefix (access (consumeDataDonePrefix pid pkt ep)) w h with
+  cases hr : runPrefix (access (liftWGObserver (consumeDataDonePrefix pid pkt ep))) w h with
   | mk result t =>
     simp only [hr] at hs hv he
     cases result with
     | error err => exact ⟨s, hs, hv, True.intro⟩
     | ok out =>
       rcases out with ⟨out, v⟩
-      let r : ConsumeReceipt := ⟨pid, pkt, ep, ⟨out, w, v⟩⟩
-      have rv : r.Valid := he.symm
+      let r : ConsumeReceipt := ⟨pid, pkt, ep, ⟨out, w.wg, v.wg, w.ambient, v.ambient⟩⟩
+      have rv : r.Valid := by
+        change ((consumeDataDone pid pkt ep).run w.wg).run w.ambient = .ok ((out, v.wg), v.ambient)
+        have hx := he.symm
+        rw [liftWG_run] at hx
+        cases hn : ((consumeDataDone pid pkt ep).run w.wg).run w.ambient with
+        | error e => simp [hn, Except.map] at hx
+        | ok pair =>
+          rcases pair with ⟨⟨value, wg⟩, ambient⟩
+          simp [hn, Except.map] at hx
+          rcases hx with ⟨rfl, rfl⟩
+          rfl
       have hc : Valid (t ++ [.consumed n skb stamp r]) :=
         (valid_append _ _).mpr ⟨hv, by simpa [Valid, EventValid] using rv⟩
       cases out with
@@ -342,23 +389,26 @@ theorem unsupported_bind (g : Gro) (why : String) (f : Unit → Obs α) :
 
 macro "rx_receipt_step" : tactic => `(tactic|
   repeat' first
-    | exact PrefixEnsures.pure (fun _ _ hi => hi.1) (fun _ _ hi => hi)
-    | exact PrefixEnsures.pure (fun _ _ hi => hi.1) (fun _ _ hi => hi.1)
-    | with_reducible apply invariant_bind
-    | with_reducible apply unsupported_bind
-    | with_reducible apply PrefixEnsures.bind (consume_context _ _ _ _ _ _ _)
-    | with_reducible apply PrefixEnsures.bind (option_context _ _)
-    | with_reducible apply PrefixEnsures.bind (flushAll_valid _)
-    | with_reducible apply keep_bind _ _ _ (valid_state _ _ _ _)
-    | with_reducible apply keep_bind _ _ _ (valid_counter _ _ _ _)
-    | with_reducible apply keep_bind _ _ _ (valid_endpoint _ _ _ _)
-    | with_reducible apply keep_bind _ _ _ (valid_drop _ _ _ _)
-    | with_reducible apply keep_bind _ _ _ (valid_capture _)
-    | with_reducible apply keep_bind _ _ _ (valid_access _)
-    | with_reducible apply keep_bind _ _ _ (valid_lift _)
-    | with_reducible apply PrefixEnsures.ite
-    | (with_reducible intro x; try dsimp only)
-    | (with_reducible split))
+    | rx_phase_reduce
+    | (rx_phase_head plain Pure.pure
+       first
+         | exact PrefixEnsures.pure (fun _ _ hi => hi.1) (fun _ _ hi => hi)
+         | exact PrefixEnsures.pure (fun _ _ hi => hi.1) (fun _ _ hi => hi.1))
+    | (rx_phase_head plain invariant; apply invariant_bind)
+    | (rx_phase_head plain unsupported; apply unsupported_bind)
+    | (rx_phase_head plain consume; apply PrefixEnsures.bind (consume_context _ _ _ _ _ _ _))
+    | (rx_phase_head plain ForIn.forIn; apply PrefixEnsures.bind (option_context _ _))
+    | (rx_phase_head plain flushAll; apply PrefixEnsures.bind (flushAll_valid _))
+    | (rx_phase_head receipt branch; apply keep_bind _ _ _ (valid_state _ _ _ _))
+    | (rx_phase_head receipt counterValidatePrefix; apply keep_bind _ _ _ (valid_counter _ _ _ _))
+    | (rx_phase_head receipt endpointFromSkb; apply keep_bind _ _ _ (valid_endpoint _ _ _ _))
+    | (rx_phase_head plain drop; apply keep_bind _ _ _ (valid_drop _ _ _ _))
+    | (rx_phase_head plain capture; apply keep_bind _ _ _ (valid_capture _))
+    | (rx_phase_head plain access; apply keep_bind _ _ _ (valid_access _))
+    | (rx_phase_head plain liftPrefix; apply keep_bind _ _ _ (valid_lift _))
+    | (rx_phase_head plain ite; apply PrefixEnsures.ite)
+    | rx_phase_intro
+    | rx_phase_match)
 
 /-- Literal post-loop continuation, factored only as a proof cut. -/
 theorem poll_tail_valid (pid : PeerId) (budget : Nat) (acc : Nat × Gro × Bool) :
@@ -366,7 +416,7 @@ theorem poll_tail_valid (pid : PeerId) (budget : Nat) (acc : Nat × Gro × Bool)
       (do
         if !acc.2.2 && acc.1 < budget then liftPrefix (invariant "the rx_queue did not drain")
         if ← liftPrefix (branch .rxPollComplete (acc.1 < budget)) then
-          access (completeAccess pid)
+          access (liftWGObserver (completeAccess pid))
           flushAll acc.2.1
         else liftPrefix (unsupported "a NAPI poll that used its whole budget (a repoll)")
         return acc.1)
@@ -430,20 +480,20 @@ theorem account_quiet (p : Option EntryKey) (a : Obs α) (ha : Appends a)
   refine ⟨s, he, hi'.safe, ?_⟩
   cases (runPrefix a w h).1 <;> trivial
 
-theorem account_access (p : Option EntryKey) (a : MixedM α) :
+theorem account_access (p : Option EntryKey) (a : PrefixM LifetimeEvent α) :
     PrefixPreserves (fun h _ => Account p h) AccountSafe (access a) :=
   account_quiet p _ (access_appends a)
     (fun w h => focusPrefix_other RxJoint.Event.access accessEvent removedKey (fun _ => rfl) a w h)
     (fun w h => focusPrefix_other RxJoint.Event.access accessEvent settledKey (fun _ => rfl) a w h)
 
-theorem account_lift (p : Option EntryKey) (a : M α) :
+theorem account_lift (p : Option EntryKey) (a : Leanux.M α) :
     PrefixPreserves (fun h _ => Account p h) AccountSafe (liftPrefix a) :=
   account_quiet p _ (Appends.lift a) (HistoryFrame.lift _ a) (HistoryFrame.lift _ a)
 
 theorem account_capture (p : Option EntryKey) (skb : SkbId) :
     PrefixPreserves (fun h _ => Account p h) AccountSafe (capture skb) := by
   apply account_quiet p _ (capture_appends skb)
-  all_goals intro w h; rw [capture_run]; cases (getRxSkb skb).run w <;>
+  all_goals intro w h; rw [capture_run]; cases (liftWG (getRxSkb skb)).run w <;>
     simp [List.filterMap_append, removedKey, settledKey]
 
 theorem account_settle (k : EntryKey) (e : RxJoint.Event)
@@ -496,16 +546,16 @@ theorem account_consume (pid n skb : Nat) (stamp : PacketStamp) (pkt : RxPacket)
     PrefixEnsures (fun h _ => Account (some (n, skb, stamp)) h) AccountSafe
       (consume pid n skb stamp pkt ep) (fun _ h _ => Account none h) := by
   intro w h hi
-  obtain ⟨s, hs, hv, hn⟩ := account_access (some (n, skb, stamp)) (consumeDataDonePrefix pid pkt ep) w h hi
+  obtain ⟨s, hs, hv, hn⟩ := account_access (some (n, skb, stamp)) (liftWGObserver (consumeDataDonePrefix pid pkt ep)) w h hi
   rw [consume_run]
-  cases hr : runPrefix (access (consumeDataDonePrefix pid pkt ep)) w h with
+  cases hr : runPrefix (access (liftWGObserver (consumeDataDonePrefix pid pkt ep))) w h with
   | mk result t =>
     simp only [hr] at hs hv hn
     cases result with
     | error e => exact ⟨s, hs, hv, True.intro⟩
     | ok out =>
       rcases out with ⟨out, v⟩
-      let r : ConsumeReceipt := ⟨pid, pkt, ep, ⟨out, w, v⟩⟩
+      let r : ConsumeReceipt := ⟨pid, pkt, ep, ⟨out, w.wg, v.wg, w.ambient, v.ambient⟩⟩
       cases out with
       | none =>
         have hc := account_settle (n, skb, stamp) (.consumed n skb stamp r) rfl rfl hn
@@ -516,7 +566,7 @@ theorem account_consume (pid n skb : Nat) (stamp : PacketStamp) (pkt : RxPacket)
         have hb := account_settle (n, skb, stamp) (.buffered e) rfl rfl hc
         exact ⟨s ++ [.consumed n skb stamp r, .buffered e], by simp only [hs, List.append_assoc]; rfl, hb.safe, hb⟩
 
-theorem settled_access (a : MixedM α) : HistoryFrame settledKey (access a) :=
+theorem settled_access (a : PrefixM LifetimeEvent α) : HistoryFrame settledKey (access a) :=
   fun w h => focusPrefix_other RxJoint.Event.access accessEvent settledKey (fun _ => rfl) a w h
 
 theorem settled_enter (e : Entry) : HistoryFrame settledKey (enter e) := by
@@ -584,7 +634,7 @@ theorem account_counter_bind (n skb : Nat) (stamp : PacketStamp) (pkt : RxPacket
     (hf : PrefixEnsures (fun h _ => Account none h) AccountSafe (f false) Q)
     (ht : PrefixEnsures (fun h _ => Account (some (n, skb, stamp)) h) AccountSafe (f true) Q) :
     PrefixEnsures (fun h _ => Account (some (n, skb, stamp)) h) AccountSafe
-      (receiptObserved (access (counterValidatePrefix pkt.keypair pkt.nonce))
+      (receiptObserved (access (liftWGObserver (counterValidatePrefix pkt.keypair pkt.nonce)))
         (RxJoint.Event.checkedCounter n skb stamp pkt) >>= f) Q := by
   have hs : ∀ r, settledKey (RxJoint.Event.checkedCounter n skb stamp pkt r) =
       if !r.value then some (n, skb, stamp) else none := by
@@ -599,7 +649,7 @@ theorem account_endpoint_bind (n skb : Nat) (stamp : PacketStamp) (pkt : RxPacke
     (hn : PrefixEnsures (fun h _ => Account none h) AccountSafe (f none) Q)
     (hs : ∀ ep, PrefixEnsures (fun h _ => Account (some (n, skb, stamp)) h) AccountSafe (f (some ep)) Q) :
     PrefixEnsures (fun h _ => Account (some (n, skb, stamp)) h) AccountSafe
-      (receiptObserved (liftPrefix (endpointFromSkb pkt.source))
+      (receiptObserved (liftPrefix (liftWG (endpointFromSkb pkt.source)))
         (RxJoint.Event.checkedEndpoint n skb stamp pkt) >>= f) Q := by
   apply PrefixEnsures.bind (account_receipt (n, skb, stamp) _ _ Option.isNone (account_lift _ _) (fun _ => rfl) (fun _ => rfl))
   intro ep
@@ -617,8 +667,10 @@ theorem account_branch_bind (p : Option EntryKey) (d : Decision) (b : Bool) (f :
     (hf : PrefixEnsures (fun h _ => Account p h) AccountSafe (f b) Q) :
     PrefixEnsures (fun h _ => Account p h) AccountSafe (liftPrefix (branch d b) >>= f) Q := by
   intro w h hi
-  simpa only [runPrefix_bind, runPrefix_lift, CounterWindow.branch_run] using
-    hf (CounterWindow.record w d b) h hi
+  have hb : (branch d b : Leanux.M Bool).run w =
+      .ok (b, {w with ambient := CounterWindow.record w.ambient d b}) := rfl
+  simpa only [runPrefix_bind, runPrefix_lift, hb] using
+    hf {w with ambient := CounterWindow.record w.ambient d b} h hi
 
 theorem account_option (p : Option EntryKey) (out : Option Entry) (g : Gro) :
     PrefixPreserves (fun h _ => Account p h) AccountSafe
@@ -693,7 +745,7 @@ theorem settled_partition (h : List RxJoint.Event) :
     all_goals first
       | exact ih
       | exact (ih.cons _).trans List.perm_middle.symm
-      | (split <;> simp_all only [Option.toList_none, List.cons_append] <;> first | exact ih | exact ih.cons _)
+      | (split <;> simp_all only [List.cons_append] <;> first | exact ih | exact ih.cons _)
 
 theorem buffered_keys_tags (h : List RxJoint.Event) :
     (h.filterMap bufferedKey).map Prod.fst =
@@ -884,13 +936,22 @@ theorem poll_receipts (pid : PeerId) (budget : Nat) (w : World) (prior : List Li
 /-- The endpoint helper has no normal None path: malformed families and the
 unsupported IPv6 source stop instead. This is not a new reachable drop class. -/
 theorem endpoint_none_impossible (pkt : RxPacket) (r : RunWitness (Option Endpoint))
-    (hv : r.Valid (endpointFromSkb pkt.source)) (hn : r.value = none) : False := by
-  have spec : ⦃fun _ => ⌜True⌝⦄ endpointFromSkb pkt.source
-      ⦃⇓? out _ => ⌜out.isSome = true⌝⦄ := by
-    mvcgen [endpointFromSkb, branch]
-    all_goals simp_all
-  have hsome := (hoare_iff_triple _ _ _).mpr spec r.before r.value r.after True.intro hv
-  simpa only [hn, Option.isSome_none, Bool.false_eq_true] using hsome
+    (hv : r.Valid (liftWG (endpointFromSkb pkt.source))) (hn : r.value = none) : False := by
+  have hx := hv
+  change (liftWG (endpointFromSkb pkt.source)).run r.before = .ok (r.value, r.after) at hx
+  rw [liftWG_run] at hx
+  cases hr : ((endpointFromSkb pkt.source).run r.before.wg).run r.before.ambient with
+  | error e => simp [hr, Except.map] at hx
+  | ok out =>
+    rcases out with ⟨⟨value, wg⟩, ambient⟩
+    simp [hr, Except.map] at hx
+    obtain ⟨rfl, _⟩ := hx
+    simp [endpointFromSkb, branch, StateT.run_bind, StateT.run_monadLift,
+      CounterWindow.branch_run, invariant, unsupported, AmbientM.invariant,
+      AmbientM.unsupported] at hr
+    split at hr <;> simp_all
+    split at hr <;> simp_all
+    all_goals first | cases hr | (split at hr <;> simp_all; all_goals cases hr)
 
 /-- Promotion retains exactly the new suffix at the actual incoming audit seed.
 Old interleaved probe markers are preserved; arbitrary old metadata is not
