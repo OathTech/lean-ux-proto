@@ -81,3 +81,38 @@ export LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16
 cap scripts/in-bundle scripts/proof-gate
 cap scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs
 ~~~
+
+## Session, preparation and retirement extension
+
+Four more modules add 15 theorems and four terminal exports: 464 proof files,
+6,641 theorems, and 524 terminal declarations (522 theorems/two definitions).
+All previous 144 R3 terminal bodies remain unchanged; R3 now exports 148.
+The executable mirror remains unchanged.
+
+CurrentSession carries the same configured witness through actual session
+installation and the once-only observer. The normal whole-session tail supplies
+configuration; a completed front preceding a Stop does not. Arbitrary unrelated
+incoming receipts need no global validity premise. PublicationPrepare locates
+the fresh actual decrypt receipt and derives the current certificate only on
+successful decryption, using the existing weaker RX-compatibility premise.
+
+CurrentPeerRetains covers actual peer payment and make-dead calls without a
+positivity, affiliation or initialized-state premise. Deletion is allowed;
+survivors retain both stamp and static key. AffiliationMaintenance establishes
+the empty seven-field fixture for both flags and preserves nullable affiliation
+through slot clearing; handshake clearing and expiry retain its exact view.
+
+Full-source independent reviews pass for all four modules and terminal exports.
+The 11 output-free candidate checks comprise six failures and five passes:
+affiliation 1/1, session 2/2, retirement 3/1, preparation 0/1 (FAIL/PASS).
+These were ordinary proof-construction failures; recovery sorryAx dependencies
+in failed elaborations were rejected. The affiliation wrapper error and recovery
+ref are recorded above. The first central build failed on two incorrect
+namespace qualifiers in the new exports; the corrected build passed 482 jobs.
+The full proof gate passed 522 jobs/524 terminal declarations in 2.55 seconds;
+fresh root replay passed in 99.01 seconds without warnings. The gate still
+reports only the unchanged mirror's String.mk deprecation. No infrastructure
+rerun, cap increase, mirror or guest change occurred.
+
+Initialized configured/current support, publication-to-consume transport and
+the initialized routing/Stack join remain open.

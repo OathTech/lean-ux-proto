@@ -36,6 +36,15 @@ initialization, native maintenance, nullable compatibility and the same-witness
 resident identity certificate at successful publication. Whole-run identity
 closure, packet transport and the reached routing/Stack join remain open.
 
+A second current-identity checkpoint adds four modules and 19 theorems:
+464 files/6,641 theorems, with 524 terminal declarations and 148 R3 exports.
+Session installation and the unchanged observer retain one configured/current
+witness; actual prepare carries it to the fresh successful publication receipt.
+Native peer retirement permits deletion and retains surviving identity fields;
+the fixture and key clearing also preserve nullable affiliation. All 144 prior
+R3 terminal bodies are unchanged. Gate: 522 jobs/524 declarations, 2.55 seconds.
+Fresh kernel replay: 99.01 seconds, no warnings. Whole-run R3 closure remains open.
+
 The pre-split checkpoint validated every baseline result surface over
 `cb2348e`. Initialized R3 packet authorization and R4 receive-pipeline
 conservation remain open. Earlier positive results and runtime findings retain

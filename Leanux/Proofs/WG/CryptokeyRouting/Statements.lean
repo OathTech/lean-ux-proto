@@ -1,3 +1,7 @@
+import Leanux.Proofs.WG.Peers.AffiliationMaintenance
+import Leanux.Proofs.WG.Origins.CurrentSession
+import Leanux.Proofs.WG.Origins.CurrentPeerRetains
+import Leanux.Proofs.WG.Packets.PublicationPrepare
 import Leanux.Proofs.WG.Packets.PublicationIdentity
 import Leanux.Proofs.WG.Packets.PublicationCurrent
 import Leanux.Proofs.WG.Origins.CurrentMaintenance
@@ -3129,5 +3133,64 @@ theorem successful_publication_current_identity (history : List SessionOrigin.Re
     (published : PublicationIdentity.Published id r out pid v ambient) :
     PublicationIdentity.CurrentCertificate history id r out pid v :=
   PublicationIdentity.published_current history id r out pid v ambient support compat published
+
+
+/-- The actual fixture establishes nullable affiliation on the original seven
+WG store fields. Clearing key slots preserves it; handshake clearing and expiry
+retain its exact view. Missing keys and cleared owner words remain admissible. -/
+theorem nullable_affiliation_initial_and_maintenance :
+    (∀ net bare w, Framing.wgStoreView w = Framing.wgStoreView (Runner.initialWG net bare) →
+      Affiliation.Inv w) ∧
+    (∀ pid, Framing.Preserves Affiliation.Inv (WG.keypairsClear pid)) ∧
+    (∀ pid, Framing.SameView Affiliation.view (WG.handshakeClear pid)) ∧
+    (∀ pid, Framing.SameView Affiliation.view (WG.expireCurrentPeerKeypairs pid)) :=
+  ⟨Affiliation.initial, Affiliation.keypairsClear_affiliation,
+    Affiliation.handshakeClear_view, Affiliation.expireCurrentPeerKeypairs_view⟩
+
+/-- Both original session execution and its unchanged observer carry one
+configured receipt for receiving material and current peer identity. A normal
+whole-session tail supplies the configured facts; incoming support is explicit.
+No affiliation or global validity premise for unrelated receipts is required. -/
+theorem original_current_session_support :
+    (∀ pid w v result ambient ambient' history,
+      ConfiguredIdentity.Inv w → CurrentIdentity.Inv history w →
+      ((WG.beginSession pid).run w).run ambient = .ok ((result,v),ambient') →
+      ∃ front u middle, ((SessionOrigin.front pid).run w).run ambient = .ok ((front,u),middle) ∧
+        CurrentIdentity.Inv (history ++ [SessionOrigin.Receipt.material pid
+          ⟨front,w,u,ambient,middle⟩]) v) ∧
+    (∀ pid w v result ambient ambient' h t,
+      ConfiguredIdentity.Inv w → CurrentIdentity.Inv (h.filterMap Origins.receipt?) w →
+      Logged.runWGPrefix (SessionOrigin.observed pid) w ambient h = (.ok ((result,v),ambient'),t) →
+      CurrentIdentity.Inv (t.filterMap Origins.receipt?) v) :=
+  ⟨CurrentSession.beginSession_support, CurrentSession.observed_support⟩
+
+/-- Native peer retirement retains receiving material and both identity fields
+of surviving named residents. The relation permits deletion, invalidation and
+cleared owners; neither an initialized invariant nor positivity is a premise. -/
+theorem original_current_peer_retirement :
+    (∀ peer, Lifetimes.ProjectedAction id CurrentIdentity.Retains (WG.peerPut peer)) ∧
+    (∀ pid, Lifetimes.ProjectedAction id CurrentIdentity.Retains (WG.peerMakeDead pid)) :=
+  ⟨CurrentIdentity.peerPut_retains, CurrentIdentity.peerMakeDead_retains⟩
+
+/-- Whole normal receive preparation exposes the fresh actual decrypt receipt
+at its journal position. Successful decryption certifies the same configured
+session and the resident peer's current identity at publication before IRQ.
+DEAD publication and later Stack/routing are not authorized by this statement. -/
+theorem original_rx_publication_current_identity
+    (history : List SessionOrigin.Receipt) (w v : WGWorld) (ambient ambient' : Ambient)
+    (h t : List (MaterialOrigin.Event RxOrigin.Receipt)) (pid : PeerId)
+    (support : CurrentIdentity.Inv history w) (compat : Queues.RxCredits.RxCompatible w)
+    (hr : Logged.runWGPrefix RxOrigin.prepare w ambient h = (.ok ((some pid,v),ambient'),t)) :
+    ∃ d id ring, ∃ (r : Logged.WGRunWitness (RxPacket × Option RxPacket)), ∃ pre suffix,
+      w.dev = some d ∧ d.decryptQueue.consume = (some id,ring) ∧
+      r.before = Packets.update w (fun d => {d with decryptQueue := ring}) ∧
+      r.ambientBefore = CounterWindow.record ambient .decWorkerConsumed true ∧
+      r.Valid (RxOrigin.readDecrypt id) ∧
+      Logged.runWGPrefix (Logged.focusStatePrefix MaterialOrigin.Event.life MaterialOrigin.life?
+        (RxOrigin.readDecryptPrefix id)) r.before r.ambientBefore h =
+          (.ok ((r.value,r.after),r.ambientAfter),h ++ pre) ∧
+      t = h ++ pre ++ [MaterialOrigin.Event.receipt (RxOrigin.Receipt.decrypt id r)] ++ suffix ∧
+      ∀ out, r.value.2 = some out → PublicationIdentity.CurrentCertificate history id r out pid v :=
+  PublicationIdentity.prepare_current_identity history w v ambient ambient' h t pid support compat hr
 
 end Leanux.Proofs.WG.CryptokeyRouting
