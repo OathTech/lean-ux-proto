@@ -80,15 +80,40 @@ theorem peerGetLocal_preserves (id : PeerId) :
     exact ⟨hn.1, retained.unique hn.2.1, fun s hs => retained.absent (hn.2.2 s hs)⟩
 
 theorem peerGet_otherResidents (id : PeerId) : SameView otherResidents (peerGet id) := by
-  apply SameView.of_wp
-  intro s
-  mvcgen [peerGet, requireNotPending, getPeer, getDev, setPeer,
-    modifyDev, refcountInc, branch, branchCmp, invariant, unsupported,
-    AmbientM.branch, AmbientM.branchCmp, AmbientM.invariant, AmbientM.unsupported]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals unfold otherResidents at *
-  all_goals unfold keypairResidents packetResidents at *
-  all_goals simp_all
+  intro initial
+  apply (hoare_iff_run_ambient _ _ _).mpr
+  intro w ambient result v ambient' hi hr
+  cases hd : w.dev with
+  | none =>
+    simp [peerGet, requireNotPending, getPeer, getDev, hd,
+      invariant, AmbientM.invariant] at hr
+    cases hr
+  | some d =>
+    cases hp : d.peers[id]? with
+    | none =>
+      simp [peerGet, requireNotPending, getPeer, getDev, hd, hp,
+        invariant, AmbientM.invariant] at hr
+      cases hr
+    | some p =>
+      by_cases zero : p.refcount = 0 <;>
+        by_cases overflow : 2147483647 ≤ p.refcount <;>
+        simp [StateT.run_bind, StateT.run_pure, StateT.run_monadLift,
+          Leanux.Proofs.WG.CounterWindow.except_ok_bind,
+          Leanux.Proofs.WG.CounterWindow.except_pure, peerGet, requireNotPending,
+          getPeer, getDev, setPeer, modifyDev, hd, hp, refcountInc, branch, branchCmp,
+          AmbientM.branch, AmbientM.branchCmp, unsupported, AmbientM.unsupported, zero,
+          overflow] at hr
+      all_goals try (change Except.error _ = Except.ok _ at hr; cases hr)
+      all_goals rcases hr with ⟨rfl, rfl⟩
+      all_goals
+        rw [← hi]
+        clear hi
+        unfold otherResidents
+        apply Prod.ext
+        · funext j
+          simp [keypairResidents, hd]
+        · funext j
+          cases j <;> simp [packetResidents, hd]
 
 theorem peerGetMixed_preserves (id : PeerId) :
     StatePrefixPreserves (fun h w _ => MixedInv h w) LifetimeEvent.Safe (peerGetMixed id) :=

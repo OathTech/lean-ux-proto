@@ -33,16 +33,32 @@ theorem pushed_mem (children : List (Option NodeId)) (stack : List NodeId) (id :
 theorem pushChild_wp (c : Option NodeId) (stack : List NodeId) (k : WGStoreView) :
     ⦃fun w => ⌜wgStoreView w = k⌝⦄ pushChild c stack
     ⦃⇓ result w => ⌜result = .yield (match c with | none => stack | some id => id :: stack) ∧ wgStoreView w = k⌝⦄ := by
-  cases c <;> mvcgen [pushChild, branch, AmbientM.branch]
+
+  apply (total_iff_run_ambient _ _ _).mpr
+  intro w ambient hw
+  refine ⟨_, w, record ambient .pushRcuNonNull c.isSome, ?_, rfl, hw⟩
+  cases c <;> rfl
 
 theorem pushChildren_wp (children : List (Option NodeId)) (initial : List NodeId) (k : WGStoreView) :
     ⦃fun w => ⌜wgStoreView w = k⌝⦄ pushChildren children initial
     ⦃⇓ result w => ⌜result = pushed children initial ∧ wgStoreView w = k⌝⦄ := by
-  mvcgen [pushChildren, pushChild_wp]
-  invariants
-  | inv1 => (fun cursor w => ⌜cursor.2 = pushed cursor.1.prefix initial ∧ wgStoreView w = k⌝, ExceptConds.false)
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [pushed, List.foldl_append]
+
+  induction children generalizing initial with
+  | nil =>
+    apply (total_iff_run_ambient _ _ _).mpr
+    intro w ambient hw
+    exact ⟨initial, w, ambient, rfl, rfl, hw⟩
+  | cons c cs ih =>
+    apply (total_iff_run_ambient _ _ _).mpr
+    intro w ambient hw
+    obtain ⟨result, current, nextAmbient, he, hv, hk⟩ :=
+      (total_iff_run_ambient _ _ _).mp (pushChild_wp c initial k) w ambient hw
+    subst result
+    obtain ⟨result, out, finalAmbient, htail, hr, hs⟩ :=
+      (total_iff_run_ambient _ _ _).mp (ih _) current nextAmbient hk
+    refine ⟨result, out, finalAmbient, ?_, hr, hs⟩
+    simp only [pushChildren, List.forIn_cons, StateT.run_bind, he]
+    exact htail
 
 def rootRemoveStep (_ : Nat) (state : Option Unit × List NodeId) :
     WG.M (ForInStep (Option Unit × List NodeId)) := do
@@ -227,34 +243,69 @@ theorem rootRemoveStep_spec (nodes : Std.TreeMap Nat AipNode) (root : NodeId)
     (i : Nat) (state : Option Unit × List NodeId) :
     ⦃fun w => ⌜ClearWalkInv nodes root state w⌝⦄ rootRemoveStep i state
     ⦃⇓? result w => ⌜ClearWalkInv nodes root result.value w⌝⦄ := by
-  have hl := listDel_wp
-  have hc := pushChildren_wp
-  have hn (id : NodeId) (g : WGWorld) :
-      Hoare (MonadLift.monadLift (getNode id) : WG.M AipNode)
-        (fun w => w = g)
-        (fun n w => w = g ∧ ∃ d, g.dev = some d ∧ d.nodes[id]? = some n) := by
-    apply hoare_liftAip_of
-    intro entry d hentry hd
-    subst entry
-    unfold Hoare
-    mvcgen [getNode, invariant, AmbientM.invariant]
-    all_goals simp_all
-    change {g with dev := some d} = g
-    rw [← hd]
-  unfold Hoare at hn
-  mvcgen [rootRemoveStep, branch, AmbientM.branch, hn, getPeer, getDev, invariant, AmbientM.invariant, hl, hc]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all only [ForInStep.value]
-  all_goals try solve | apply ClearWalkInv.finish <;> first | assumption | rfl
-  all_goals obtain ⟨he, d, hdev, hnode⟩ := ‹_ = _ ∧ ∃ d, _ = some d ∧ _›
-  all_goals obtain ⟨hstack, hstore⟩ := ‹_ = pushed _ _ ∧ _›
-  all_goals have hstoredev := congrArg WGStoreView.dev hstore
-  all_goals dsimp only [wgStoreView] at hstoredev
-  all_goals subst_vars
-  all_goals try simp_all
-  all_goals solve
-    | apply ClearWalkInv.after_unlist <;> first | assumption | simp_all
-    | apply ClearWalkInv.after_unowned <;> first | assumption | simp_all
+
+  apply (hoare_iff_run_ambient _ _ _).mpr
+  intro w ambient result out ambient' hi hr
+  obtain ⟨d, seen, hd, hp, hf, hdone⟩ := hi
+  have start : ClearWalkInv nodes root state w := ⟨d, seen, hd, hp, hf, hdone⟩
+  cases hs : state.2 with
+  | nil =>
+    simp [rootRemoveStep, hs, branch, AmbientM.branch] at hr
+    rcases hr with ⟨⟨rfl, rfl⟩, rfl⟩
+    exact start.finish hs rfl
+  | cons id rest =>
+    cases hn : d.nodes[id]? with
+    | none =>
+      have hread (a : Ambient) :
+          ((liftAip (getNode id)).run w).run a =
+            .error (.invariant ("dangling allowedips node " ++ Nat.repr id)) := by
+        rw [liftAip_run, hd]
+        simp [getNode, hn, invariant, AmbientM.invariant, Except.map]
+        rfl
+      simp [rootRemoveStep, hs, branch, AmbientM.branch, liftM, MonadLiftT.monadLift,
+        MonadLift.monadLift, hread] at hr
+    | some n =>
+      have hread (a : Ambient) : ((liftAip (getNode id)).run w).run a = .ok ((n, w), a) := by
+        rw [liftAip_run, hd]
+        simp [getNode, hn, Except.map, ← hd]
+      let firstAmbient := record (record ambient .rootRemoveLenPositive true) .rootRemovePopped true
+      obtain ⟨stack, current, nextAmbient, hpush, hstack, hstore⟩ :=
+        (total_iff_run_ambient _ _ _).mp
+          (pushChildren_wp n.bit.toList rest (wgStoreView w)) w firstAmbient rfl
+      subst stack
+      dsimp only [firstAmbient, record] at hpush
+      have hdev : current.dev = some d :=
+        (congrArg WGStoreView.dev hstore).trans hd
+      cases howner : n.peer with
+      | none =>
+        simp [rootRemoveStep, hs, branch, AmbientM.branch, liftM, MonadLiftT.monadLift, MonadLift.monadLift, hread,
+          StateT.run_bind, hpush, howner] at hr
+        rcases hr with ⟨⟨rfl, rfl⟩, rfl⟩
+        exact start.after_unowned hs hd hn howner hdev
+      | some pid =>
+        cases hpeer : d.peers[pid]? with
+        | none =>
+          simp [rootRemoveStep, hs, branch, AmbientM.branch, liftM, MonadLiftT.monadLift, MonadLift.monadLift, hread,
+            StateT.run_bind, hpush, howner, getPeer, getDev, hdev, hpeer,
+            invariant, AmbientM.invariant] at hr
+          cases hr
+        | some peer =>
+          by_cases hmem : id ∈ peer.allowedipsList
+          · obtain ⟨returned, finish, finalAmbient, hlist, hunit, hfinish⟩ :=
+              (total_iff_run_ambient _ _ _).mp (listDel_wp current d hdev id)
+                current (record nextAmbient .rootRemoveHasPeer true) rfl
+            subst returned
+            subst finish
+            dsimp only [record] at hlist
+            simp [rootRemoveStep, hs, branch, AmbientM.branch, liftM, MonadLiftT.monadLift, MonadLift.monadLift, hread,
+              StateT.run_bind, hpush, howner, getPeer, getDev, hdev, hpeer,
+              hmem, hlist] at hr
+            rcases hr with ⟨⟨rfl, rfl⟩, rfl⟩
+            exact start.after_unlist hs hd hn rfl
+          · simp [rootRemoveStep, hs, branch, AmbientM.branch, liftM, MonadLiftT.monadLift, MonadLift.monadLift, hread,
+              StateT.run_bind, hpush, howner, getPeer, getDev, hdev, hpeer,
+              hmem, invariant, AmbientM.invariant] at hr
+            cases hr
 
 /-- Normal completion supplies an empty pending stack. Exhaustion and missing
 references remain Stops, with no returned failed WGWorld. -/
@@ -262,21 +313,46 @@ theorem rootRemove_spec (d : Device) (ho : ListsOwned d) (root : NodeId) :
     ⦃fun w => ⌜w.dev = some d⌝⦄ rootRemoveSource root
     ⦃⇓? _ w => ⌜∃ out seen, w.dev = some out ∧ ClearProgress d.nodes seen out ∧
       Frontier d.nodes root seen []⌝⦄ := by
-  have hs := rootRemoveStep_spec d.nodes root
-  mvcgen [rootRemoveSource, getDev, invariant, AmbientM.invariant, hs]
-  invariants
-  | inv1 => (fun cursor w => ⌜ClearWalkInv d.nodes root cursor.2 w⌝, ExceptConds.true)
-  all_goals try dsimp +zetaDelta only at *
-  case vc2.step.post.success =>
-    rename_i r
-    cases r <;> simp [ForInStep.value]
-  case vc4.h_1.pre =>
-    exact ⟨d, [], by assumption, ClearProgress.start ho, Frontier.start _ _, by simp⟩
-  case vc5.h_1.post.success.h_1 =>
-    rename_i before hbefore dd hdd state x hx finish hi
-    obtain ⟨out, seen, hout, hp, hf, done⟩ := hi
-    have hempty := done (by simp_all)
-    exact ⟨out, seen, hout, hp, by simpa [hempty] using hf⟩
+
+  have loop :
+      Hoare (forIn [0:d.nodes.size + 1] (none, [root]) rootRemoveStep)
+        (ClearWalkInv d.nodes root (none, [root])) (ClearWalkInv d.nodes root) := by
+    simp only [Std.Legacy.Range.forIn_eq_forIn_range']
+    let inv : PostCond (Option Unit × List NodeId) (.arg WGWorld (.arg Ambient (.except Stop .pure))) :=
+      (⇓? state w => ⌜ClearWalkInv d.nodes root state w⌝)
+    refine Std.Do.Spec.forIn_list_const_inv (inv := inv) ?_
+    intro i state
+    apply Triple.entails_wp_of_post (rootRemoveStep_spec d.nodes root i state)
+    constructor
+    · intro result; cases result <;> exact .rfl
+    · exact .rfl
+  apply (hoare_iff_run_ambient _ _ _).mpr
+  intro w ambient result out ambient' hd hr
+  have start : ClearWalkInv d.nodes root (none, [root]) w :=
+    ⟨d, [], hd, ClearProgress.start ho, Frontier.start _ _, by simp⟩
+  have hget : (getDev.run w).run ambient = .ok ((d, w), ambient) := by simp [getDev, hd]
+  simp only [rootRemoveSource, StateT.run_bind, hget] at hr
+  cases he : ((forIn [0:d.nodes.size + 1] (none, [root]) rootRemoveStep).run w).run ambient with
+  | error e =>
+    simp only [Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size,
+      Nat.sub_zero, Nat.add_sub_cancel, Nat.div_one] at he
+    simp [he] at hr
+  | ok result' =>
+    rcases result' with ⟨⟨state, current⟩, nextAmbient⟩
+    have hi := (hoare_iff_run_ambient _ _ _).mp loop w ambient state current nextAmbient start he
+    simp only [Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size,
+      Nat.sub_zero, Nat.add_sub_cancel, Nat.div_one] at he
+    cases hs : state.1 with
+    | none =>
+      simp [he, hs, invariant, AmbientM.invariant] at hr
+      cases hr
+    | some value =>
+      cases value
+      simp [he, hs] at hr
+      rcases hr with ⟨⟨rfl, rfl⟩, rfl⟩
+      obtain ⟨finish, seen, hout, hp, hf, done⟩ := hi
+      have hempty := done (by simp [hs])
+      exact ⟨finish, seen, hout, hp, by simpa [hempty] using hf⟩
 
 /-- On a normal return, every node represented below this root has disappeared
 from every resident peer list. Raw absent owners are permitted at entry; their
@@ -344,14 +420,78 @@ theorem rootRemove_clearListView (root : NodeId) : SameView clearListView (rootR
       change clearListView {g with dev := some d} = initial
       rw [← hd]
       exact hg
-  have hd := fun id => (listDel_clearListView id).wp (fun s => s = initial)
-  have hl (α β : Type) := list_view_spec (m := AmbientM) clearListView (α := α) (β := β) (fun s => s = initial)
-  mvcgen [-Std.Do.Spec.forIn_list, -Std.Do.Spec.forIn'_list, hl, rootRemovePeerLists,
-    hn, hd, getPeer, getDev, invariant, AmbientM.invariant, branch, AmbientM.branch]
-  all_goals try exact ((⇓? _ w => ⌜clearListView w = initial⌝) :
-    PostCond _ (.arg WGWorld (.arg Ambient (.except Stop .pure))))
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [clearListView, wgStoreView, ExceptConds.true, ExceptConds.const]
-
+  let P : WGWorld → Prop := fun w => clearListView w = initial
+  have ambient {α : Type} (a : AmbientM α) : Preserves P (StateT.lift a) :=
+    hoare_liftAmbient a P
+  have device : Preserves P getDev := by
+    unfold getDev
+    apply preserves_bind (hoare_consequence (hoare_get P)
+      (fun _ h => h) (fun _ _ h => h.2))
+    intro w
+    cases w.dev
+    · exact ambient (AmbientM.invariant _)
+    · exact preserves_pure _
+  have peer (id : PeerId) : Preserves P (getPeer id) := by
+    unfold getPeer
+    apply preserves_bind device
+    intro d
+    cases d.peers.get? id
+    · exact ambient (AmbientM.invariant _)
+    · exact preserves_pure _
+  have push (children : List (Option NodeId)) (stack : List NodeId) :
+      Preserves P (pushChildren children stack) := by
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w a result out b hp hr
+    obtain ⟨value, finish, finalAmbient, he, _, hk⟩ :=
+      (total_iff_run_ambient _ _ _).mp
+        (pushChildren_wp children stack (wgStoreView w)) w a rfl
+    rw [hr] at he
+    cases he
+    have hdev := congrArg WGStoreView.dev hk
+    change out.dev = w.dev at hdev
+    simpa only [P, clearListView, hk, hdev] using hp
+  have step (i : Nat) (state : Option Unit × List NodeId) :
+      Preserves P (rootRemoveStep i state) := by
+    unfold rootRemoveStep
+    cases state.2 with
+    | nil =>
+      apply preserves_bind (ambient (AmbientM.branch _ _))
+      intro _
+      exact preserves_pure _
+    | cons id rest =>
+      apply preserves_bind (ambient (AmbientM.branch _ _))
+      intro _
+      apply preserves_bind (ambient (AmbientM.branch _ _))
+      intro _
+      apply preserves_bind (hn id)
+      intro n
+      apply preserves_bind (push n.bit.toList rest)
+      intro stack
+      apply preserves_bind (ambient (AmbientM.branch _ _))
+      intro hasPeer
+      cases hasPeer with
+      | false => exact preserves_pure _
+      | true =>
+        cases n.peer with
+        | none => exact ambient (AmbientM.invariant _)
+        | some pid =>
+          apply preserves_bind (peer pid)
+          intro p
+          split
+          · exact ambient (AmbientM.invariant _)
+          · apply preserves_bind ((listDel_clearListView id).wp (fun s => s = initial))
+            intro _
+            exact preserves_pure _
+  rw [← rootRemoveSource_eq]
+  unfold rootRemoveSource
+  apply preserves_bind device
+  intro d
+  apply preserves_bind (a := forIn [0:d.nodes.size + 1] (none, [root]) rootRemoveStep)
+  · simp only [Std.Legacy.Range.forIn_eq_forIn_range']
+    exact list_view_spec (fun w : WGWorld => w) P _ _ _ step
+  · intro state
+    cases state.1
+    · exact ambient (AmbientM.invariant _)
+    · exact preserves_pure _
 
 end Leanux.Proofs.WG.AllowedIps

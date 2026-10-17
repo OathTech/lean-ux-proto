@@ -84,29 +84,103 @@ theorem peerStateFocus_preserves {g : WGPrefix Peers.PeerEvent α} {a : WG.M α}
       · simpa only [ht, packeq] using hi.packet
 
 theorem peerPut_otherResidents (id : Option PeerId) : SameView otherResidents (peerPut id) := by
-  apply SameView.of_wp
-  intro s
-  have index_spec (a : IndexM Unit) :
-      Hoare (MonadLift.monadLift a : WG.M Unit)
-        (fun w => otherResidents w = s) (fun _ w => otherResidents w = s) := by
+  intro initial
+  let P := fun w : WGWorld => otherResidents w = initial
+  have ambient {α : Type} (a : AmbientM α) :
+      Preserves P (monadLift a : WG.M α) := hoare_liftAmbient a P
+  have index (a : IndexM Unit) : Preserves P (monadLift a : WG.M Unit) := by
     apply hoare_liftIndex a
     intro w d table hi hd
-    have same : otherResidents {w with dev := some {d with indexTable := table}} =
-        otherResidents w := by
-      unfold otherResidents keypairResidents packetResidents
-      simp only [hd, Option.bind_some]
-    exact same.trans hi
-  unfold Hoare at index_spec
-  mvcgen [peerPut, requireNotPending, getPeer, getDev, setPeer, modifyDev,
-    refcountDecAndTest, branch, branchCmp, AmbientM.branch, AmbientM.branchCmp,
-    index_spec, retirePeerUnits, modifyAmbient, invariant, unsupported,
-    AmbientM.invariant, AmbientM.unsupported]
-  all_goals dsimp +zetaDelta only at *
-  all_goals unfold otherResidents at *
-  all_goals unfold keypairResidents packetResidents at *
-  all_goals simp_all [Option.bind_map, Function.comp_def]
-  all_goals subst_vars
-  all_goals simp_all [Option.bind_map, Function.comp_def]
+    change otherResidents _ = initial
+    change otherResidents w = initial at hi
+    rw [← hi]
+    clear hi
+    unfold otherResidents
+    apply Prod.ext
+    · funext j; simp [keypairResidents, hd]
+    · funext j; cases j <;> simp [packetResidents, hd]
+  have read (pid : PeerId) : Preserves P (getPeer pid) := by
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient p v ambient' hi hr
+    have h := (Peers.getPeer_current pid w v p ambient ambient' hr).1
+    simpa only [h] using hi
+  have write (f : Device → Device)
+      (he : ∀ d, (f d).ifindex = d.ifindex)
+      (hk : ∀ d, (f d).keypairs = d.keypairs)
+      (ht : ∀ d, (f d).txSkbs = d.txSkbs)
+      (hr : ∀ d, (f d).rxSkbs = d.rxSkbs) : Preserves P (modifyDev f) := by
+    unfold modifyDev
+    apply hoare_modify
+    intro w hi
+    change otherResidents _ = initial
+    change otherResidents w = initial at hi
+    rw [← hi]
+    clear hi
+    unfold otherResidents
+    apply Prod.ext
+    · funext j
+      simp [keypairResidents, Option.bind_map, Function.comp_def, hk]
+    · funext j
+      cases j <;> simp [packetResidents, Option.bind_map, Function.comp_def, he, ht, hr]
+  have release (count : Nat) : Preserves P (refcountDecAndTest count : WG.M Bool) := by
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient result v ambient' hi hr
+    by_cases pos : 0 < count <;> by_cases one : count = 1 <;>
+      by_cases zero : count = 0 <;> by_cases under : count < 1 <;>
+      simp [refcountDecAndTest, branch, branchCmp, AmbientM.branch, AmbientM.branchCmp,
+        unsupported, AmbientM.unsupported, pos, one, zero, under] at hr
+    all_goals try (change Except.error _ = Except.ok _ at hr; cases hr)
+    all_goals rcases hr with ⟨⟨rfl, rfl⟩, rfl⟩
+    all_goals exact hi
+  have branchRule {α : Type} (decision : Decision) (value : Bool)
+      (f : Bool → WG.M α) (hf : Preserves P (f value)) :
+      Preserves P ((branch decision value : WG.M Bool) >>= f) := by
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient x v ambient' hi hr
+    change ((f value).run w).run _ = .ok ((x, v), ambient') at hr
+    exact (hoare_iff_run_ambient _ _ _).mp hf _ _ _ _ _ hi hr
+  change Preserves P (peerPut id)
+  cases id with
+  | none =>
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient x v ambient' hi hr
+    simp [peerPut, branch, AmbientM.branch] at hr
+    rcases hr with ⟨rfl, rfl⟩
+    exact hi
+  | some pid =>
+    unfold peerPut
+    apply branchRule .peerPutNull false
+    simp only [Bool.false_eq_true, ↓reduceIte, requireNotPending, pure_bind]
+    apply preserves_bind (read pid)
+    intro p
+    apply preserves_bind (write (fun d => {d with peers := d.peers.insert pid {p with refcount := p.refcount - 1}})
+      (fun _ => rfl) (fun _ => rfl) (fun _ => rfl) (fun _ => rfl))
+    intro _
+    apply preserves_bind (release p.refcount)
+    intro released
+    apply branchRule .peerKrefPutReleased released
+    cases released <;> simp only [Bool.false_eq_true, ↓reduceIte]
+    · exact preserves_pure ()
+    · apply preserves_bind (index (indexRemove (.handshake pid)))
+      intro _
+      split
+      · apply (hoare_iff_run_ambient _ _ _).mpr
+        intro w ambient x v ambient' _ hr
+        cases hr
+      · apply preserves_bind (write
+          (fun d => {d with txDropped := d.txDropped + p.staged.length, peers := d.peers.erase pid})
+          (fun _ => rfl) (fun _ => rfl) (fun _ => rfl) (fun _ => rfl))
+        intro _
+        split
+        · apply (hoare_iff_run_ambient _ _ _).mpr
+          intro w ambient x v ambient' _ hr
+          cases hr
+        · unfold retirePeerUnits modifyAmbient
+          apply preserves_bind (ambient (modify _ : AmbientM Unit))
+          intro _
+          apply hoare_modify
+          intro w hi
+          exact hi
 
 theorem peerPutMixed_preserves (id : Option PeerId) :
     StatePrefixPreserves (fun h w _ => MixedInv h w) LifetimeEvent.Safe (peerPutMixed id) :=

@@ -34,40 +34,49 @@ theorem borrow_modify (pid : PeerId) (f : Device → Device)
     Option.bind_map, Function.comp_def, h]
 
 theorem cpu_borrow (pid : PeerId) : SameView (borrowView pid) (cpumaskChooseOnline pid) := by
-  apply SameView.of_wp
-  intro s
-  mvcgen [cpumaskChooseOnline, getPeer, getDev, setPeer, modifyDev, branch, invariant, AmbientM.branch, AmbientM.invariant]
-  all_goals try exact ((⇓? _ w => ⌜borrowView pid w = s⌝) : PostCond _ (.arg WGWorld (.arg Ambient (.except Stop .pure))))
-  all_goals try unfold borrowView at *
-  all_goals unfold txQueues at *
-  all_goals dsimp +zetaDelta only [PeerBorrow.resident, wgStoreView] at *
-  all_goals simp_all [Std.TreeMap.getElem?_insert]
-  all_goals subst_vars
-  all_goals try simp_all []
-  all_goals try { subst s }
-  all_goals try { apply Prod.ext <;> simp_all }
-  all_goals simp_all only [funext_iff]
-  all_goals intro j
-  all_goals by_cases hj : pid = j <;> simp_all
-  all_goals rename_i h
-  all_goals have he := h.1 j
-  all_goals simpa [*] using he
+  intro initial
+  apply (hoare_iff_run_ambient _ _ _).mpr
+  intro w ambient result v ambient' hi hr
+  cases hd : w.dev with
+  | none =>
+    simp [cpumaskChooseOnline, getPeer, getDev, hd, invariant, AmbientM.invariant] at hr
+    cases hr
+  | some d =>
+    cases hp : d.peers[pid]? with
+    | none =>
+      simp [cpumaskChooseOnline, getPeer, getDev, hd, hp, invariant, AmbientM.invariant] at hr
+      cases hr
+    | some p =>
+      by_cases invalid : 1 ≤ p.serialWorkCpu.getD 1 <;>
+        simp [cpumaskChooseOnline, getPeer, getDev, setPeer, modifyDev, hd, hp,
+          branch, AmbientM.branch, invalid, Nat.mod_one, List.foldlM] at hr
+      all_goals rcases hr with ⟨⟨rfl, rfl⟩, rfl⟩
+      all_goals first
+        | exact hi
+        | (rw [← hi]
+           clear hi
+           apply Prod.ext
+           · funext id
+             by_cases he : pid = id <;>
+               simp_all [borrowView, txQueues, PeerBorrow.resident, wgStoreView,
+                 Std.TreeMap.getElem?_insert]
+           · simp [borrowView, PeerBorrow.resident, wgStoreView, hd, hp])
 
 theorem strict_acquire_queues (pid : PeerId) (q : PeerId → Option (PrevQueue (List SkbId))) :
     ⦃fun w => ⌜txQueues w = q⌝⦄ peerGet pid
     ⦃⇓? _ w => ⌜txQueues w = q ∧ ∃ n, 1 < n ∧
       (PeerBorrow.resident (wgStoreView w) pid).map (·.refcount) = some n⌝⦄ := by
-  mvcgen [peerGet, requireNotPending, getPeer, getDev, setPeer, modifyDev,
-    refcountInc, branchCmp, branchCmpExcluded, branch, invariant, unsupported, AmbientM.branchCmp, AmbientM.branchCmpExcluded, AmbientM.branch, AmbientM.invariant, AmbientM.unsupported]
-  all_goals try unfold borrowView at *
-  all_goals unfold txQueues at *
-  all_goals dsimp +zetaDelta only [PeerBorrow.resident, wgStoreView] at *
-  all_goals simp_all [Std.TreeMap.getElem?_insert]
-  all_goals subst_vars
-  all_goals try simp_all [Std.TreeMap.getElem?_insert]
-  all_goals try subst q
-  all_goals try omega
-  all_goals try { constructor <;> first | omega | (funext j; by_cases hj : pid = j <;> simp_all) }
+  apply (hoare_iff_run_ambient _ _ _).mpr
+  intro w ambient result v ambient' hi hr
+  have hb := (hoare_iff_run_ambient _ _ _).mp
+    (PeerBorrow.strict_acquire_spec pid (wgStoreView w)) w ambient result v ambient' rfl hr
+  obtain ⟨d, p, hd, hp, positive, current⟩ := hb
+  refine ⟨?_, p.refcount + 1, by omega, ?_⟩
+  · rw [← hi]
+    funext id
+    simp only [txQueues, current, PeerBorrow.resident, hd, Option.bind_some]
+    by_cases he : pid = id <;> simp_all [Std.TreeMap.getElem?_insert]
+  · simp [current, PeerBorrow.resident]
 
 theorem nonfinal_put_queues (pid : PeerId) (q : PeerId → Option (PrevQueue (List SkbId))) :
     ⦃fun w => ⌜txQueues w = q ∧ ∃ n, 1 < n ∧
@@ -85,20 +94,18 @@ theorem nonfinal_put_queues (pid : PeerId) (q : PeerId → Option (PrevQueue (Li
       have hc : 1 < p.refcount := by
         have he : p.refcount = n := by simpa [PeerBorrow.resident, wgStoreView, hd, hp] using href
         omega
-      have hs : ⦃fun z => ⌜wgStoreView z = (wgStoreView w)⌝⦄ peerPut (some pid)
-          ⦃⇓? _ z => ⌜txQueues z = txQueues w⌝⦄ := by
-        clear hq
-        have hg := PeerBorrow.getPeer_known (wgStoreView w) d pid p hd hp
-        simp only [peerPut]
-        mvcgen [requireNotPending, hg, setPeer, modifyDev,
-          refcountDecAndTest, branchCmp, branchCmpExcluded, branch, invariant, unsupported, AmbientM.branchCmp, AmbientM.branchCmpExcluded, AmbientM.branch, AmbientM.invariant, AmbientM.unsupported]
-        all_goals unfold txQueues at *
-        all_goals dsimp +zetaDelta only at *
-        all_goals simp_all [PeerBorrow.resident, wgStoreView, Std.TreeMap.getElem?_insert]
-        all_goals first
-          | omega
-          | (funext j; by_cases hj : pid = j <;> simp_all)
-      exact ((hoare_iff_run_ambient _ _ _).mp hs w ambient u v ambient' rfl hr).trans hq
+      have pos : 0 < p.refcount := by omega
+      have nz : p.refcount ≠ 0 := by omega
+      have notone : p.refcount ≠ 1 := by omega
+      simp [peerPut, requireNotPending, getPeer, getDev, setPeer, modifyDev, hd, hp,
+        refcountDecAndTest, branch, branchCmp, AmbientM.branch, AmbientM.branchCmp,
+        pos, nz, notone] at hr
+      rcases hr with ⟨rfl, rfl⟩
+      rw [← hq]
+      funext id
+      by_cases he : pid = id <;>
+        simp_all [txQueues, PeerBorrow.resident, wgStoreView,
+          Std.TreeMap.getElem?_insert]
 
 def publicationMiddle (pid : PeerId) (first : SkbId) (state : PacketState) : WG.M Unit := do
   if !((← getPeer pid).txQueue.all.any (·.head? == some first)) then
@@ -111,28 +118,31 @@ def publicationMiddle (pid : PeerId) (first : SkbId) (state : PacketState) : WG.
 
 theorem publicationMiddle_frame (pid : PeerId) (first : SkbId) (state : PacketState) :
     SameView (borrowView pid) (publicationMiddle pid first state) := by
-  apply SameView.of_wp
   intro s
-  have hc := (cpu_borrow pid).wp (fun t => t = s)
+  let P := fun w : WGWorld => borrowView pid w = s
   have ambient {α : Type} (a : AmbientM α) :
-      Hoare (MonadLift.monadLift a : WG.M α)
-        (fun w => borrowView pid w = s) (fun _ w => borrowView pid w = s) :=
-    hoare_liftAmbient a _
+      Preserves P (monadLift a : WG.M α) := hoare_liftAmbient a P
   have skb {α : Type} (a : SkbM α) :
-      Hoare (liftSkb a) (fun w => borrowView pid w = s)
-        (fun _ w => borrowView pid w = s) := by
+      Preserves P (liftSkb a) := by
     apply hoare_liftSkb
     intro w d store hi hd
+    change borrowView pid _ = s at hi ⊢
     unfold borrowView txQueues at hi ⊢
     simpa [PeerBorrow.resident, wgStoreView, hd] using hi
-  unfold Hoare at ambient skb
-  mvcgen [-Std.Do.Spec.monadLift_StateT, publicationMiddle, hc, ambient, skb, getPeer, setTxSkb,
-    getDev, modifyDev, invariant, peekQueuedUnit, recordQueued]
-  all_goals try unfold borrowView at *
-  all_goals unfold txQueues at *
-  all_goals dsimp +zetaDelta only [PeerBorrow.resident, wgStoreView] at *
-  all_goals simp_all [
-    Option.bind_map, Function.comp_def]
+  have read : Preserves P (get : WG.M WGWorld) :=
+    hoare_consequence (hoare_get P) (fun _ h => h) (fun _ _ h => h.2)
+  have write (f : Device → Device) (hf : ∀ d, (f d).peers = d.peers) :
+      Preserves P (modifyDev f) := (borrow_modify pid f hf).wp (fun t => t = s)
+  change Preserves P (publicationMiddle pid first state)
+  unfold publicationMiddle getPeer getDev setTxSkb
+  simp only [invariant, peekQueuedUnit, recordQueued]
+  repeat' first
+    | (allocation_release_head cpumaskChooseOnline; exact (cpu_borrow pid).wp (fun t => t = s))
+    | (allocation_release_head modifyDev; apply write; intro; rfl)
+    | (allocation_release_head liftSkb; exact skb _)
+    | (allocation_release_lift_from AmbientM; exact ambient _)
+    | allocation_release_step
+  all_goals exact read
 
 theorem publication_factor (item : List SkbId) (state : PacketState) :
     enqueuePerPeerTx item state = (do
@@ -146,25 +156,28 @@ theorem publication_factor (item : List SkbId) (state : PacketState) :
 
 theorem publication_queues (item : List SkbId) (state : PacketState) :
     SameView txQueues (enqueuePerPeerTx item state) := by
-  apply SameView.of_wp
   intro q
   rw [publication_factor]
-  have mid := fun pid first => (publicationMiddle_frame pid first state).wp
-    (fun t => t.1 = q ∧ ∃ n, 1 < n ∧ t.2 = some n)
-  have owner := fun o => indexOwner_peerDeref_preserves o (fun w => txQueues w = q)
-  unfold Preserves Hoare at owner
+  have ambient {α : Type} (a : AmbientM α) :
+      Preserves (fun w => txQueues w = q) (monadLift a : WG.M α) := hoare_liftAmbient a _
   have skb {α : Type} (a : SkbM α) :
-      Hoare (liftSkb a) (fun w => txQueues w = q) (fun _ w => txQueues w = q) := by
+      Preserves (fun w => txQueues w = q) (liftSkb a) := by
     apply hoare_liftSkb
     intro w d store hi hd
     unfold txQueues at hi ⊢
     simpa [PeerBorrow.resident, wgStoreView, hd] using hi
-  unfold Hoare at skb
-  mvcgen [owner, strict_acquire_queues, nonfinal_put_queues, mid, getTxSkb, skb,
-    getDev, invariant, AmbientM.invariant]
-  all_goals try unfold borrowView at *
-  all_goals unfold txQueues at *
-  all_goals dsimp +zetaDelta only [PeerBorrow.resident, wgStoreView] at *
-  all_goals simp_all []
+  cases item.head? with
+  | none => exact ambient (AmbientM.invariant _)
+  | some first =>
+    apply hoare_bind _ _ (skb _)
+    intro packet
+    apply hoare_bind _ _ (indexOwner_peerDeref_preserves _ (fun w => txQueues w = q))
+    intro pid
+    apply hoare_bind _ _ (strict_acquire_queues pid q)
+    intro _
+    apply hoare_bind _ _ ((publicationMiddle_frame pid first state).wp
+      (fun t => t.1 = q ∧ ∃ n, 1 < n ∧ t.2 = some n))
+    intro _
+    exact nonfinal_put_queues pid q
 
 end Leanux.Proofs.WG.Queues.TxDisposition

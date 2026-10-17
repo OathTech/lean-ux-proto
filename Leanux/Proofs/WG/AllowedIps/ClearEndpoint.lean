@@ -41,28 +41,35 @@ theorem freeNode_snapshot (nodes : Std.TreeMap Nat AipNode) (P : PeerId → Node
     (id : NodeId) :
     ⦃fun w => ⌜SnapshotState nodes P w⌝⦄ (MonadLift.monadLift (freeNode id) : WG.M Unit)
     ⦃⇓? _ w => ⌜SnapshotState nodes P w⌝⦄ := by
+
   apply hoare_liftAip_of
   intro g d hi hd
   obtain ⟨old, hold, hp⟩ := hi
   have he : old = d := Option.some.inj (hold.symm.trans hd)
   subst old
-  unfold Hoare
-  mvcgen [freeNode, getNode, invariant, AmbientM.invariant]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals subst_vars
-  exact ⟨{d with nodes := d.nodes.erase id}, rfl, hp.erase id⟩
+  apply (hoare_iff_run_ambient _ _ _).mpr
+  intro store ambient result out ambient' hs hr
+  subst store
+  cases hn : d.nodes[id]? with
+  | none =>
+    simp [freeNode, getNode, hn, invariant, AmbientM.invariant] at hr
+    cases hr
+  | some n =>
+    simp [freeNode, getNode, hn] at hr
+    rcases hr with ⟨rfl, rfl⟩
+    exact ⟨{d with nodes := d.nodes.erase id}, rfl, hp.erase id⟩
 
 theorem freeNodes_snapshot (nodes : Std.TreeMap Nat AipNode) (P : PeerId → NodeId → Prop)
     (ids : List NodeId) :
     ⦃fun w => ⌜SnapshotState nodes P w⌝⦄ freeNodes ids
     ⦃⇓? _ w => ⌜SnapshotState nodes P w⌝⦄ := by
   induction ids with
-  | nil => simp only [freeNodes, List.forIn_nil]; mvcgen
+  | nil => simp only [freeNodes, List.forIn_nil]; exact preserves_pure _
   | cons id ids ih =>
     have he : freeNodes (id :: ids) = (do freeNode id; freeNodes ids) := by
       simp [freeNodes]
     rw [he]
-    mvcgen [freeNode_snapshot, ih]
+    exact preserves_bind (freeNode_snapshot nodes P id) (fun _ => ih)
 
 theorem rootRemove_snapshot (nodes : Std.TreeMap Nat AipNode) (P : PeerId → NodeId → Prop)
     (root : NodeId) (hroot : t.root = some root) (hrep : RepAt nodes width parent t) :
@@ -78,11 +85,21 @@ theorem freeRoot_snapshot (nodes : Std.TreeMap Nat AipNode) (P : PeerId → Node
     (t : Tree) (hrep : RepAt nodes width parent t) (decision : Decision) :
     ⦃fun w => ⌜SnapshotState nodes P w⌝⦄ freeRoot t.root decision
     ⦃⇓? _ w => ⌜SnapshotState nodes (fun pid id => P pid id ∧ id ∉ t.nodeIds) w⌝⦄ := by
+  have branchRule {β : Type} (decision : Decision) (value : Bool)
+      (P : WGWorld → Prop) (Q : β → WGWorld → Prop) (f : Bool → WG.M β)
+      (hf : Hoare (f value) P Q) :
+      Hoare ((branch decision value : WG.M Bool) >>= f) P Q := by
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient x out ambient' hi hr
+    change ((f value).run w).run _ = .ok ((x, out), ambient') at hr
+    exact (hoare_iff_run_ambient _ _ _).mp hf _ _ _ _ _ hi hr
   cases t with
   | empty =>
-    mvcgen [freeRoot, Tree.root, branch, AmbientM.branch]
-    all_goals try dsimp +zetaDelta only at *
-    all_goals simp_all [SnapshotState, Progress, Tree.nodeIds]
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient result out ambient' hi hr
+    simp [freeRoot, Tree.root, branch, AmbientM.branch] at hr
+    rcases hr with ⟨rfl, rfl⟩
+    simpa only [Tree.nodeIds, List.not_mem_nil, not_false_eq_true, and_true] using hi
   | node n l r =>
     have hr := rootRemove_snapshot nodes P n.id (t := .node n l r) rfl hrep
     have hs : Hoare (MonadLift.monadLift (subtree n.id) : WG.M (List NodeId))
@@ -98,8 +115,14 @@ theorem freeRoot_snapshot (nodes : Std.TreeMap Nat AipNode) (P : PeerId → Node
         change SnapshotState _ _ {g with dev := some d}
         rw [← hd]
         exact hg
-    unfold Hoare at hs
-    mvcgen [freeRoot, Tree.root, branch, AmbientM.branch, hr, hs, freeNodes_snapshot]
+    unfold freeRoot
+    apply branchRule
+    dsimp only [Tree.root, Option.isSome, Bool.true_eq, ite_true]
+    apply hoare_bind _ _ hr
+    intro _
+    apply hoare_bind _ _ hs
+    intro ids
+    exact freeNodes_snapshot _ _ ids
 
 theorem RoutingInvariant.snapshot (hi : RoutingInvariant d t4 t6) :
     Progress d.nodes (fun _ id => id ∈ t4.nodeIds ++ t6.nodeIds) [] d := by
@@ -131,20 +154,28 @@ theorem free_snapshot (d : Device) (t4 t6 : Tree) (hi : RoutingInvariant d t4 t6
       freeRoot d.peerAllowedips.root6 .freeHasRoot6)
       ⦃⇓? _ w => ⌜∃ out, w.dev = some out ∧ NodesFrom d.nodes out.nodes ∧
         ∀ (pid : PeerId) (p : Peer), out.peers[pid]? = some p → p.allowedipsList = []⌝⦄ := by
-    mvcgen [modifyDev, h4, h6]
-    all_goals try dsimp +zetaDelta only at *
-    case vc1 =>
-      exact ⟨resetAllowedips d, by simp_all [resetAllowedips], hi.snapshot⟩
-    all_goals intros
-    all_goals rename_i h
-    all_goals obtain ⟨out, hout, hp⟩ := h
-    all_goals refine ⟨out, hout, hp.1, ?_⟩
-    all_goals intro pid p hpeer
-    all_goals apply List.eq_nil_iff_forall_not_mem.mpr
-    all_goals intro id hid
-    all_goals have hh := hp.2 pid p hpeer id hid
-    all_goals rcases List.mem_append.mp hh.1.1.1 with hm | hm
-    all_goals first | exact hh.1.1.2 hm | exact hh.1.2 hm
+    apply hoare_bind _ _ (show
+      Hoare (modifyDev fun current => {current with peerAllowedips := (resetAllowedips d).peerAllowedips})
+        (fun w => w.dev = some d)
+        (fun _ w => SnapshotState d.nodes (fun _ id => id ∈ t4.nodeIds ++ t6.nodeIds) w) from by
+      apply hoare_modify
+      intro w hw
+      exact ⟨resetAllowedips d, by simp [hw, resetAllowedips], hi.snapshot⟩)
+    intro _
+    apply hoare_bind _ _ h4
+    intro _
+    apply hoare_consequence h6
+    · intro _ h; exact h
+    · intro _ w h
+      obtain ⟨out, hout, hp⟩ := h
+      refine ⟨out, hout, hp.1, ?_⟩
+      intro pid p hpeer
+      apply List.eq_nil_iff_forall_not_mem.mpr
+      intro id hid
+      have hh := hp.2 pid p hpeer id hid
+      rcases List.mem_append.mp hh.1.1.1 with hm | hm
+      · exact hh.1.1.2 hm
+      · exact hh.1.2 hm
   apply (hoare_iff_run_ambient _ _ _).mpr
   intro w ambient u v ambient' hd hr
   apply (hoare_iff_run_ambient _ _ _).mp hs w ambient u v ambient' hd
@@ -170,16 +201,21 @@ theorem rootRemove_storeView (root : NodeId) : SameView clearStoreView (rootRemo
 
 theorem freeNode_storeView (id : NodeId) :
     SameView clearStoreView (MonadLift.monadLift (freeNode id) : WG.M Unit) := by
-  apply SameView.of_wp
+
   intro s
   apply hoare_liftAip_of
   intro g d hg hd
-  unfold Hoare
-  mvcgen [freeNode, getNode, invariant, AmbientM.invariant]
-  all_goals unfold clearStoreView clearStoreProjection at *
-  all_goals dsimp +zetaDelta only at *
-  all_goals subst_vars
-  all_goals simp_all [wgStoreView]
+  apply (hoare_iff_run_ambient _ _ _).mpr
+  intro store ambient result out ambient' hs hr
+  subst store
+  cases hn : d.nodes[id]? with
+  | none =>
+    simp [freeNode, getNode, hn, invariant, AmbientM.invariant] at hr
+    cases hr
+  | some n =>
+    simp [freeNode, getNode, hn] at hr
+    rcases hr with ⟨rfl, rfl⟩
+    simpa [clearStoreView, clearStoreProjection, wgStoreView, hd] using hg
 
 theorem freeNodes_storeView (ids : List NodeId) : SameView clearStoreView (freeNodes ids) := by
   induction ids with
@@ -207,23 +243,64 @@ theorem freeRoot_storeView (old : Option NodeId) (decision : Decision) :
       change clearStoreView {g with dev := some d} = s
       rw [← hd]
       exact hg
-  unfold Hoare at hs
-  have hf := fun ids => (freeNodes_storeView ids).wp (fun t => t = s)
-  mvcgen [freeRoot, hr, hs, hf, branch, AmbientM.branch]
+  have branchRule {β : Type} (decision : Decision) (value : Bool)
+      (P : WGWorld → Prop) (Q : β → WGWorld → Prop) (f : Bool → WG.M β)
+      (hf : Hoare (f value) P Q) :
+      Hoare ((branch decision value : WG.M Bool) >>= f) P Q := by
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient x out ambient' hi hr
+    change ((f value).run w).run _ = .ok ((x, out), ambient') at hr
+    exact (hoare_iff_run_ambient _ _ _).mp hf _ _ _ _ _ hi hr
+  unfold freeRoot
+  apply branchRule
+  cases old with
+  | none => exact preserves_pure _
+  | some root =>
+    apply preserves_bind (hr root)
+    intro _
+    apply preserves_bind (hs root)
+    intro ids
+    exact (freeNodes_storeView ids).wp (fun t => t = s)
 
 /-- The reset is the only change visible outside nodes and resident lists. -/
 theorem free_storeView (initial : WGStoreView) :
     ⦃fun w => ⌜wgStoreView w = initial⌝⦄ WG.free
     ⦃⇓? _ w => ⌜clearStoreView w = clearStoreProjection
       {initial with dev := initial.dev.map resetAllowedips}⌝⦄ := by
+
   rw [free_factor]
   have hf := fun old dec => (freeRoot_storeView old dec).wp (fun t =>
     t = clearStoreProjection {initial with dev := initial.dev.map resetAllowedips})
-  mvcgen [hf, getDev, modifyDev, invariant, AmbientM.invariant]
-  all_goals try subst initial
-  all_goals unfold clearStoreView clearStoreProjection at *
-  all_goals dsimp +zetaDelta only at *
-  all_goals simp_all [wgStoreView, resetAllowedips]
+  have tail (d : Device) : Hoare (do
+      modifyDev fun current => {current with peerAllowedips := (resetAllowedips d).peerAllowedips}
+      freeRoot d.peerAllowedips.root4 .freeHasRoot4
+      freeRoot d.peerAllowedips.root6 .freeHasRoot6)
+      (fun w => wgStoreView w = initial ∧ w.dev = some d)
+      (fun _ w => clearStoreView w =
+        clearStoreProjection {initial with dev := initial.dev.map resetAllowedips}) := by
+    apply hoare_bind _ _ (show
+      Hoare (modifyDev fun current => {current with peerAllowedips := (resetAllowedips d).peerAllowedips})
+        (fun w => wgStoreView w = initial ∧ w.dev = some d)
+        (fun _ w => clearStoreView w =
+          clearStoreProjection {initial with dev := initial.dev.map resetAllowedips}) from by
+      apply hoare_modify
+      intro w hw
+      rcases hw with ⟨hw, hd⟩
+      subst initial
+      simp [clearStoreView, clearStoreProjection, wgStoreView, resetAllowedips, hd])
+    intro _
+    apply preserves_bind (hf _ _)
+    intro _
+    exact hf _ _
+  apply (hoare_iff_run_ambient _ _ _).mpr
+  intro w ambient result out ambient' hw hr
+  cases hd : w.dev with
+  | none =>
+    simp [getDev, hd, invariant, AmbientM.invariant] at hr
+    cases hr
+  | some d =>
+    apply (hoare_iff_run_ambient _ _ _).mp (tail d) w ambient result out ambient' ⟨hw, hd⟩
+    simpa [getDev, hd] using hr
 
 structure Cleared (d out : Device) : Prop where
   nodes : NodesFrom d.nodes out.nodes

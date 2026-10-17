@@ -66,8 +66,23 @@ theorem routing_getPeer (P : Option RoutingState → Prop) (pid : PeerId) :
     ⦃fun w => ⌜P (routingView w)⌝⦄ getPeer pid
     ⦃⇓? p w => ⌜P (routingView w) ∧
       (w.dev.bind fun d => d.peers[pid]?.map (·.allowedipsList)) = some p.allowedipsList⌝⦄ := by
-  mvcgen [getPeer, getDev, invariant, AmbientM.invariant]
-  all_goals simp_all
+  apply (hoare_iff_run_ambient _ _ _).mpr
+  intro w ambient p v ambient' h run
+  cases hd : w.dev with
+  | none =>
+    simp [getPeer, getDev, hd, invariant, AmbientM.invariant] at run
+    cases run
+  | some d =>
+    cases hp : d.peers[pid]? with
+    | none =>
+      simp [getPeer, getDev, hd, hp, invariant, AmbientM.invariant] at run
+      cases run
+    | some old =>
+      have exactRun : ((getPeer pid).run w).run ambient = .ok ((old, w), ambient) := by
+        simp [getPeer, getDev, hd, hp] <;> rfl
+      rw [exactRun] at run
+      cases run
+      exact ⟨h, by simp [hd, hp]⟩
 
 theorem routing_setPeer (P : Option RoutingState → Prop) (pid : PeerId) (p : Peer) :
     ⦃fun w => ⌜P (routingView w) ∧
@@ -94,48 +109,182 @@ theorem routing_kernel {S α : Type} {m : Type → Type} {ps : PostShape}
     (fun s => routingView (project s)) (fun _ => rfl)
 
 theorem dstCacheReset_routing (pid : PeerId) : SameView routingView (dstCacheReset pid) := by
-  apply SameView.of_wp
-  intro s
-  have hg := routing_getPeer (fun t => t = s)
-  have hs := routing_setPeer (fun t => t = s)
-  have ambient_spec (α : Type) (a : AmbientM α) :
-      ⦃fun w => ⌜routingView w = s⌝⦄ (MonadLift.monadLift a : WG.M α)
-      ⦃⇓? _ w => ⌜routingView w = s⌝⦄ :=
-    hoare_liftAmbient a (fun w => routingView w = s)
-  mvcgen [-Std.Do.Spec.monadLift_StateT, dstCacheReset, getAmbient,
-    hiddenJiffies, hg, hs, ambient_spec]
-  all_goals simp_all
+  intro initial
+  have ambient {α : Type} (a : AmbientM α) :
+      Preserves (fun w => routingView w = initial) (monadLift a : WG.M α) :=
+    hoare_liftAmbient a _
+  have readBind {α : Type} (pid : PeerId) (f : Peer → WG.M α)
+      (hf : ∀ p, initial.bind (fun view => view.lists pid) = some p.allowedipsList →
+        Preserves (fun w => routingView w = initial) (f p)) :
+      Preserves (fun w => routingView w = initial) (getPeer pid >>= f) := by
+    apply hoare_bind _ _ (routing_getPeer (fun view => view = initial) pid)
+    intro p
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w a x v b h hr
+    have saved : (routingView w).bind (fun view => view.lists pid) = some p.allowedipsList := by
+      simpa only [routingView, routingState, Option.bind_map, Function.comp_def] using h.2
+    rw [h.1] at saved
+    exact (hoare_iff_run_ambient _ _ _).mp (hf p saved) w a x v b h.1 hr
+  have knownSet (pid : PeerId) (p : Peer)
+      (hp : initial.bind (fun view => view.lists pid) = some p.allowedipsList) :
+      Preserves (fun w => routingView w = initial) (setPeer pid p) := by
+    apply hoare_consequence (routing_setPeer (fun view => view = initial) pid p)
+    · intro w h
+      refine ⟨h, ?_⟩
+      have current : (routingView w).bind (fun view => view.lists pid) = some p.allowedipsList := by
+        rw [h]; exact hp
+      simpa only [routingView, routingState, Option.bind_map, Function.comp_def] using current
+    · exact fun _ _ h => h
+  have read : Preserves (fun w => routingView w = initial) (get : WG.M WGWorld) :=
+    hoare_consequence (hoare_get _) (fun _ h => h) (fun _ _ h => h.2)
+  unfold dstCacheReset getAmbient
+  apply preserves_bind (ambient (get : AmbientM Ambient))
+  intro a
+  apply preserves_bind read
+  intro g
+  split
+  · exact preserves_pure ()
+  · apply preserves_bind (ambient (AmbientM.hiddenJiffies .dstCacheResetTs))
+    intro ts
+    apply readBind
+    intro p hp
+    exact knownSet pid {p with dstCache := {p.dstCache with resetTs := ts}} hp
 
 theorem resetLastSentHandshake_routing (pid : PeerId) : SameView routingView (resetLastSentHandshake pid) := by
-  apply SameView.of_wp
-  intro s
-  have hg := routing_getPeer (fun t => t = s)
-  have hs := routing_setPeer (fun t => t = s)
-  have ambient_spec (α : Type) (a : AmbientM α) :
-      ⦃fun w => ⌜routingView w = s⌝⦄ (MonadLift.monadLift a : WG.M α)
-      ⦃⇓? _ w => ⌜routingView w = s⌝⦄ :=
-    hoare_liftAmbient a (fun w => routingView w = s)
-  mvcgen [-Std.Do.Spec.monadLift_StateT, resetLastSentHandshake,
-    hiddenClock64, hg, hs, ambient_spec]
-  all_goals simp_all
+  intro initial
+  have ambient {α : Type} (a : AmbientM α) :
+      Preserves (fun w => routingView w = initial) (monadLift a : WG.M α) :=
+    hoare_liftAmbient a _
+  have readBind {α : Type} (pid : PeerId) (f : Peer → WG.M α)
+      (hf : ∀ p, initial.bind (fun view => view.lists pid) = some p.allowedipsList →
+        Preserves (fun w => routingView w = initial) (f p)) :
+      Preserves (fun w => routingView w = initial) (getPeer pid >>= f) := by
+    apply hoare_bind _ _ (routing_getPeer (fun view => view = initial) pid)
+    intro p
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w a x v b h hr
+    have saved : (routingView w).bind (fun view => view.lists pid) = some p.allowedipsList := by
+      simpa only [routingView, routingState, Option.bind_map, Function.comp_def] using h.2
+    rw [h.1] at saved
+    exact (hoare_iff_run_ambient _ _ _).mp (hf p saved) w a x v b h.1 hr
+  have knownSet (pid : PeerId) (p : Peer)
+      (hp : initial.bind (fun view => view.lists pid) = some p.allowedipsList) :
+      Preserves (fun w => routingView w = initial) (setPeer pid p) := by
+    apply hoare_consequence (routing_setPeer (fun view => view = initial) pid p)
+    · intro w h
+      refine ⟨h, ?_⟩
+      have current : (routingView w).bind (fun view => view.lists pid) = some p.allowedipsList := by
+        rw [h]; exact hp
+      simpa only [routingView, routingState, Option.bind_map, Function.comp_def] using current
+    · exact fun _ _ h => h
+  unfold resetLastSentHandshake
+  apply preserves_bind (ambient (AmbientM.hiddenClock64 .resetLastSent))
+  intro now
+  apply readBind
+  intro p hp
+  exact knownSet pid {p with lastSentHandshake :=
+    now - (REKEY_TIMEOUT + 1 : Nat).toInt64 * NSEC_PER_SEC64} hp
 
 theorem precomputeStaticStatic_routing (pid : PeerId) : SameView routingView (precomputeStaticStatic pid) := by
-  apply SameView.of_wp
-  intro s
-  have hg := routing_getPeer (fun t => t = s)
-  have hs := routing_setPeer (fun t => t = s)
-  mvcgen [precomputeStaticStatic, requireNotPending, hg, hs, getDev, branch, AmbientM.branch,
-    invariant, AmbientM.invariant]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [routingView]
+  intro initial
+  have ambient {α : Type} (a : AmbientM α) :
+      Preserves (fun w => routingView w = initial) (monadLift a : WG.M α) :=
+    hoare_liftAmbient a _
+  have readBind {α : Type} (pid : PeerId) (f : Peer → WG.M α)
+      (hf : ∀ p, initial.bind (fun view => view.lists pid) = some p.allowedipsList →
+        Preserves (fun w => routingView w = initial) (f p)) :
+      Preserves (fun w => routingView w = initial) (getPeer pid >>= f) := by
+    apply hoare_bind _ _ (routing_getPeer (fun view => view = initial) pid)
+    intro p
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w a x v b h hr
+    have saved : (routingView w).bind (fun view => view.lists pid) = some p.allowedipsList := by
+      simpa only [routingView, routingState, Option.bind_map, Function.comp_def] using h.2
+    rw [h.1] at saved
+    exact (hoare_iff_run_ambient _ _ _).mp (hf p saved) w a x v b h.1 hr
+  have knownSet (pid : PeerId) (p : Peer)
+      (hp : initial.bind (fun view => view.lists pid) = some p.allowedipsList) :
+      Preserves (fun w => routingView w = initial) (setPeer pid p) := by
+    apply hoare_consequence (routing_setPeer (fun view => view = initial) pid p)
+    · intro w h
+      refine ⟨h, ?_⟩
+      have current : (routingView w).bind (fun view => view.lists pid) = some p.allowedipsList := by
+        rw [h]; exact hp
+      simpa only [routingView, routingState, Option.bind_map, Function.comp_def] using current
+    · exact fun _ _ h => h
+  have device : Preserves (fun w => routingView w = initial) getDev := by
+    unfold getDev
+    apply preserves_bind (hoare_consequence (hoare_get (fun w => routingView w = initial))
+      (fun _ h => h) (fun _ _ h => h.2))
+    intro w
+    cases w.dev
+    · exact ambient (AmbientM.invariant _)
+    · exact preserves_pure _
+  unfold precomputeStaticStatic
+  simp only [requireNotPending, pure_bind]
+  apply preserves_bind device
+  intro d
+  apply readBind
+  intro p hp
+  apply preserves_bind (ambient (AmbientM.branch .precomputeNoIdentity !d.staticIdentity.hasIdentity))
+  intro noIdentity
+  cases noIdentity <;> simp only [Bool.false_eq_true, ↓reduceIte]
+  · apply preserves_bind (knownSet pid {p with precomputedStaticStatic :=
+      (curve25519 d.staticIdentity.staticPrivate p.remoteStatic).1} hp)
+    intro _
+    apply preserves_bind (ambient (AmbientM.branch .precomputeNullPoint
+      !(curve25519 d.staticIdentity.staticPrivate p.remoteStatic).2))
+    intro zero
+    cases zero <;> simp only [Bool.false_eq_true, ↓reduceIte]
+    · exact preserves_pure ()
+    · apply readBind
+      intro q hq
+      exact knownSet pid {q with precomputedStaticStatic := List.replicate 32 0} hq
+  · apply readBind
+    intro q hq
+    exact knownSet pid {q with precomputedStaticStatic := List.replicate 32 0} hq
 
 theorem handshakeInit_routing (pid : PeerId) (psk : Option Key) : SameView routingView (handshakeInit pid psk) := by
-  apply SameView.of_wp
-  intro s
-  have hg := routing_getPeer (fun t => t = s)
-  have hs := routing_setPeer (fun t => t = s)
-  have ht := (precomputeStaticStatic_routing pid).wp (fun t => t = s)
-  mvcgen [handshakeInit, IndexOwner.setPeerWord, hg, hs, ht, branch, AmbientM.branch]
-  all_goals simp_all
+  intro initial
+  have ambient {α : Type} (a : AmbientM α) :
+      Preserves (fun w => routingView w = initial) (monadLift a : WG.M α) :=
+    hoare_liftAmbient a _
+  have readBind {α : Type} (pid : PeerId) (f : Peer → WG.M α)
+      (hf : ∀ p, initial.bind (fun view => view.lists pid) = some p.allowedipsList →
+        Preserves (fun w => routingView w = initial) (f p)) :
+      Preserves (fun w => routingView w = initial) (getPeer pid >>= f) := by
+    apply hoare_bind _ _ (routing_getPeer (fun view => view = initial) pid)
+    intro p
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w a x v b h hr
+    have saved : (routingView w).bind (fun view => view.lists pid) = some p.allowedipsList := by
+      simpa only [routingView, routingState, Option.bind_map, Function.comp_def] using h.2
+    rw [h.1] at saved
+    exact (hoare_iff_run_ambient _ _ _).mp (hf p saved) w a x v b h.1 hr
+  have knownSet (pid : PeerId) (p : Peer)
+      (hp : initial.bind (fun view => view.lists pid) = some p.allowedipsList) :
+      Preserves (fun w => routingView w = initial) (setPeer pid p) := by
+    apply hoare_consequence (routing_setPeer (fun view => view = initial) pid p)
+    · intro w h
+      refine ⟨h, ?_⟩
+      have current : (routingView w).bind (fun view => view.lists pid) = some p.allowedipsList := by
+        rw [h]; exact hp
+      simpa only [routingView, routingState, Option.bind_map, Function.comp_def] using current
+    · exact fun _ _ h => h
+  unfold handshakeInit IndexOwner.setPeerWord
+  apply preserves_bind
+  · apply readBind
+    intro p hp
+    exact knownSet pid {p with handshakeEntryPeer := some pid} hp
+  · intro _
+    apply preserves_bind (ambient (AmbientM.branch .handshakeInitHasPsk psk.isSome))
+    intro hasPsk
+    cases hasPsk
+    · exact (precomputeStaticStatic_routing pid).wp (fun view => view = initial)
+    · apply readBind
+      intro p hp
+      apply preserves_bind (knownSet pid {p with presharedKey := psk.getD p.presharedKey} hp)
+      intro _
+      exact (precomputeStaticStatic_routing pid).wp (fun view => view = initial)
 
 end Leanux.Proofs.WG.AllowedIps

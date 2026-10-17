@@ -16,6 +16,26 @@ theorem lookup_tree_spec (initial : WGStoreView) (d : Device) (width key : Nat)
     (rep : RepAt d.nodes width parent t) (valid : t.Valid width) :
     ⦃fun w => ⌜wgStoreView w = initial⌝⦄ lookup t.root width key
     ⦃⇓? result _ => ⌜result = (t.lookup width key).map Entry.peer⌝⦄ := by
+
+  have branchRule {β : Type} (decision : Decision) (value : Bool)
+      (P : WGWorld → Prop) (Q : β → WGWorld → Prop) (f : Bool → WG.M β)
+      (hf : Hoare (f value) P Q) :
+      Hoare ((branch decision value : WG.M Bool) >>= f) P Q := by
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient x out ambient' hi hr
+    change ((f value).run w).run _ = .ok ((x, out), ambient') at hr
+    exact (hoare_iff_run_ambient _ _ _).mp hf _ _ _ _ _ hi hr
+  have returned {α β : Type} (a : WG.M α) (value : α) (f : α → WG.M β)
+      (P : WGWorld → Prop) (Q : β → WGWorld → Prop)
+      (ha : ⦃fun w => ⌜P w⌝⦄ a ⦃⇓ x w => ⌜x = value ∧ P w⌝⦄)
+      (hf : Hoare (f value) P Q) : Hoare (a >>= f) P Q := by
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient x out ambient' hi hr
+    obtain ⟨y, current, nextAmbient, he, hv, hp⟩ :=
+      (total_iff_run_ambient _ _ _).mp ha w ambient hi
+    subst y
+    simp only [StateT.run_bind, he] at hr
+    exact (hoare_iff_run_ambient _ _ _).mp hf _ _ _ _ _ hp hr
   have hs := (Lifetimes.swapEndian_sameWGStore width).wp (fun k => k = initial)
   let store : AipStore := {nodes := d.nodes, nextNode := d.nextNode, trie := d.peerAllowedips}
   have read {α : Type} (a : AipM α) (value : α)
@@ -29,16 +49,28 @@ theorem lookup_tree_spec (initial : WGStoreView) (d : Device) (width key : Nat)
       have hgd : g.dev = some d := (congrArg WGStoreView.dev hg).trans hd
       have he : actual = d := Option.some.inj (hactual.symm.trans hgd)
       subst actual
-      mvcgen [h]
-      all_goals dsimp +zetaDelta only at *
-      all_goals simp_all [wgStoreView]
+      apply (total_iff_run_ambient _ _ _).mpr
+      intro entry ambient hentry
+      obtain ⟨result, finish, finalAmbient, hr, hv, hf⟩ :=
+        (total_iff_run_ambient _ _ _).mp h entry ambient hentry
+      subst result
+      subst finish
+      refine ⟨value, store, finalAmbient, hr, rfl, ?_⟩
+      simpa [store, wgStoreView, ← hgd] using hg
   have hf := read _ _ (findNode_wp store width key hw hk t parent rep valid)
-  have ha := fun peer => PeerBorrow.acquire_spec peer initial
+  unfold lookup
+  apply hoare_bind _ _ hs
+  intro _
   cases he : t.lookup width key with
   | none =>
     have hn : t.lookupId width key = none := by simp [Tree.lookupId, he]
-    mvcgen [lookup, hs, hf, ha, branch, AmbientM.branch, invariant, AmbientM.invariant, unsupported, AmbientM.unsupported]
-    all_goals simp_all []
+    rw [hn] at hf
+    apply returned _ _ _ _ _ hf
+    apply branchRule
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient result out ambient' _ hr
+    cases hr
+    simp
   | some e =>
     have hm : e ∈ t.entries := by
       have h := Tree.lookup_spec valid key
@@ -49,11 +81,25 @@ theorem lookup_tree_spec (initial : WGStoreView) (d : Device) (width key : Nat)
       simpa only [hn, Option.bind_some] using rep.entry_owner hm
     have hid : t.lookupId width key = some e.id := by simp [Tree.lookupId, he]
     have hg := read _ _ (getNode_wp store e.id n hn)
-    mvcgen [lookup, hs, hf, hg, ha, branch, AmbientM.branch, invariant, AmbientM.invariant, unsupported, AmbientM.unsupported]
-    all_goals simp_all []
-    all_goals mvcgen [hg, ha, branch, AmbientM.branch, invariant, AmbientM.invariant, unsupported, AmbientM.unsupported]
-    all_goals simp_all []
-
+    rw [hid] at hf
+    apply returned _ _ _ _ _ hf
+    apply branchRule
+    dsimp only [Option.isSome, Bool.true_eq, ite_true]
+    apply returned _ _ _ _ _ hg
+    apply hoare_bind _ _ (PeerBorrow.acquire_spec n.peer initial)
+    intro peer
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient result out ambient' hp hr
+    cases peer with
+    | none =>
+      simp [branch, AmbientM.branch, unsupported, AmbientM.unsupported] at hr
+      cases hr
+    | some pid =>
+      simp [branch, AmbientM.branch] at hr
+      rcases hr with ⟨⟨rfl, rfl⟩, rfl⟩
+      rcases hp.1 with bad | good
+      · contradiction
+      · simpa [he, ho] using good
 /-- The actual reached family root, with no initial successful-acquisition
 assumption. The normal result and its longest-prefix witness are both retained. -/
 theorem lookup_normal (w v : WGWorld) (ambient ambient' : Ambient) (xs : FlatTable × FlatTable) (v4 : Bool)
@@ -100,17 +146,16 @@ theorem lookupDst_normal (w v : WGWorld) (ambient ambient' : Ambient) (xs : Flat
     (hi : RoutedView (routingView w) xs)
     (hr : ((lookupDst (if v4 then 4 else 6) addr).run w).run ambient = .ok ((peer, v), ambient')) :
     PeerWinner (rootWidth v4) addr (selectedFlat v4 xs) peer := by
+
   obtain ⟨d, t4, t6, hd, hinv, h4, h6⟩ := hi.realize
   have hl := lookup_family_spec (wgStoreView w) xs hi d hd v4 addr hk
-  have hspec : ⦃fun s => ⌜wgStoreView s = wgStoreView w⌝⦄ lookupDst (if v4 then 4 else 6) addr
-      ⦃⇓? result _ => ⌜PeerWinner (rootWidth v4) addr (selectedFlat v4 xs) result⌝⦄ := by
-    cases v4 <;> mvcgen [lookupDst, getDev, branch, AmbientM.branch, invariant, AmbientM.invariant, hl]
-    all_goals try dsimp +zetaDelta only at *
-    all_goals simp_all [wgStoreView, rootValue, rootWidth, selectedFlat]
-    all_goals mvcgen [hl]
-    all_goals try dsimp +zetaDelta only at *
-    all_goals simp_all []
-  exact (hoare_iff_run_ambient _ _ _).mp hspec w ambient peer v ambient' rfl hr
+  cases v4
+  · apply (hoare_iff_run_ambient _ _ _).mp hl w
+      (record (record ambient .lookupDstV4 false) .lookupDstV6 true) peer v ambient' rfl
+    simpa [lookupDst, getDev, hd, branch, AmbientM.branch, rootValue, rootWidth, record] using hr
+  · apply (hoare_iff_run_ambient _ _ _).mp hl w
+      (record ambient .lookupDstV4 true) peer v ambient' rfl
+    simpa [lookupDst, getDev, hd, branch, AmbientM.branch, rootValue, rootWidth, record] using hr
 
 def sourceAddress (v4 : Bool) (bytes : List UInt8) : Nat :=
   if v4 then beAt bytes 12 4 else beAt bytes 8 16
@@ -125,17 +170,16 @@ theorem lookupSrc_normal (w v : WGWorld) (ambient ambient' : Ambient) (xs : Flat
     (bytes : List UInt8) (peer : Option PeerId) (hi : RoutedView (routingView w) xs)
     (hr : ((lookupSrc (if v4 then 4 else 6) bytes).run w).run ambient = .ok ((peer, v), ambient')) :
     PeerWinner (rootWidth v4) (sourceAddress v4 bytes) (selectedFlat v4 xs) peer := by
+
   obtain ⟨d, t4, t6, hd, hinv, h4, h6⟩ := hi.realize
   have hl := lookup_family_spec (wgStoreView w) xs hi d hd v4 (sourceAddress v4 bytes)
     (sourceAddress_bound v4 bytes)
-  have hspec : ⦃fun s => ⌜wgStoreView s = wgStoreView w⌝⦄ lookupSrc (if v4 then 4 else 6) bytes
-      ⦃⇓? result _ => ⌜PeerWinner (rootWidth v4) (sourceAddress v4 bytes) (selectedFlat v4 xs) result⌝⦄ := by
-    cases v4 <;> mvcgen [lookupSrc, getDev, branch, AmbientM.branch, invariant, AmbientM.invariant, hl]
-    all_goals try dsimp +zetaDelta only at *
-    all_goals simp_all [wgStoreView, rootValue, rootWidth, selectedFlat, sourceAddress]
-    all_goals mvcgen [hl]
-    all_goals try dsimp +zetaDelta only at *
-    all_goals simp_all []
-  exact (hoare_iff_run_ambient _ _ _).mp hspec w ambient peer v ambient' rfl hr
+  cases v4
+  · apply (hoare_iff_run_ambient _ _ _).mp hl w
+      (record (record ambient .lookupSrcV4 false) .lookupSrcV6 true) peer v ambient' rfl
+    simpa [lookupSrc, getDev, hd, branch, AmbientM.branch, rootValue, rootWidth, sourceAddress, record] using hr
+  · apply (hoare_iff_run_ambient _ _ _).mp hl w
+      (record ambient .lookupSrcV4 true) peer v ambient' rfl
+    simpa [lookupSrc, getDev, hd, branch, AmbientM.branch, rootValue, rootWidth, sourceAddress, record] using hr
 
 end Leanux.Proofs.WG.AllowedIps

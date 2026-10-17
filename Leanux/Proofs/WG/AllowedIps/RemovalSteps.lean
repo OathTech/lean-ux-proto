@@ -108,9 +108,20 @@ theorem removeStep_child_unary_wp (k : WGWorld) (d : WG.Device) (hd : k.dev = so
   have hl := listDel_wp k d hd id
   have hn := removeNodeBody_child_unary_wp { k with dev := some (unlisted d id) }
     (unlisted d id) rfl left id parent side child n pn cn hn hp hc hip hic hcp hb hbits hparent
-  mvcgen [removeStep, branch, AmbientM.branch, hl, hn]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all
+  apply (total_iff_run_ambient _ _ _).mpr
+  intro w ambient hw
+  subst w
+  let afterDecision := record ambient .removeListIter true
+  obtain ⟨returned, current, nextAmbient, hlist, hunit, hcurrent⟩ :=
+    (total_iff_run_ambient _ _ _).mp hl k afterDecision rfl
+  subst returned
+  subst current
+  obtain ⟨result, out, finalAmbient, hbody, hpost⟩ :=
+    (total_iff_run_ambient _ _ _).mp hn _ nextAmbient rfl
+  refine ⟨result, out, finalAmbient, ?_, hpost⟩
+  change ((WG.listDel id >>= fun _ => removeNodeBody id).run k).run afterDecision = _
+  simp only [StateT.run_bind, hlist]
+  exact hbody
 
 theorem removeStep_child_leaf_owned_wp (k : WGWorld) (d : WG.Device)
     (hd : k.dev = some d) (id parent side : Nat) (n pn : WG.AipNode)
@@ -122,9 +133,20 @@ theorem removeStep_child_leaf_owned_wp (k : WGWorld) (d : WG.Device)
   have hl := listDel_wp k d hd id
   have hn := removeNodeBody_child_leaf_owned_wp { k with dev := some (unlisted d id) }
     (unlisted d id) rfl id parent side n pn hn hp hip hb howner hbits hparent
-  mvcgen [removeStep, branch, AmbientM.branch, hl, hn]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all
+  apply (total_iff_run_ambient _ _ _).mpr
+  intro w ambient hw
+  subst w
+  let afterDecision := record ambient .removeListIter true
+  obtain ⟨returned, current, nextAmbient, hlist, hunit, hcurrent⟩ :=
+    (total_iff_run_ambient _ _ _).mp hl k afterDecision rfl
+  subst returned
+  subst current
+  obtain ⟨result, out, finalAmbient, hbody, hpost⟩ :=
+    (total_iff_run_ambient _ _ _).mp hn _ nextAmbient rfl
+  refine ⟨result, out, finalAmbient, ?_, hpost⟩
+  change ((WG.listDel id >>= fun _ => removeNodeBody id).run k).run afterDecision = _
+  simp only [StateT.run_bind, hlist]
+  exact hbody
 
 theorem removeStep_leaf_collapse_root_wp (k : WGWorld) (d : WG.Device)
     (hd : k.dev = some d) (id parent side : Nat) (n pn : WG.AipNode)
@@ -139,9 +161,20 @@ theorem removeStep_leaf_collapse_root_wp (k : WGWorld) (d : WG.Device)
   have hl := listDel_wp k d hd id
   have hn := removeNodeBody_leaf_collapse_root_wp { k with dev := some (unlisted d id) }
     (unlisted d id) rfl id parent side n pn hn hp hip hb howner hbits hparent v4 hbase sibling hbit hs
-  mvcgen [removeStep, branch, AmbientM.branch, hl, hn]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all
+  apply (total_iff_run_ambient _ _ _).mpr
+  intro w ambient hw
+  subst w
+  let afterDecision := record ambient .removeListIter true
+  obtain ⟨returned, current, nextAmbient, hlist, hunit, hcurrent⟩ :=
+    (total_iff_run_ambient _ _ _).mp hl k afterDecision rfl
+  subst returned
+  subst current
+  obtain ⟨result, out, finalAmbient, hbody, hpost⟩ :=
+    (total_iff_run_ambient _ _ _).mp hn _ nextAmbient rfl
+  refine ⟨result, out, finalAmbient, ?_, hpost⟩
+  change ((WG.listDel id >>= fun _ => removeNodeBody id).run k).run afterDecision = _
+  simp only [StateT.run_bind, hlist]
+  exact hbody
 
 theorem removeStep_leaf_collapse_child_wp (k : WGWorld) (d : WG.Device)
     (hd : k.dev = some d) (id parent side grand gside : Nat) (n pn gn : WG.AipNode)
@@ -159,8 +192,19 @@ theorem removeStep_leaf_collapse_child_wp (k : WGWorld) (d : WG.Device)
   have hn := removeNodeBody_leaf_collapse_child_wp { k with dev := some (unlisted d id) }
     (unlisted d id) rfl id parent side grand gside n pn gn hn hp hg hip hig hpg hb hgb
     howner hbits hparent hbase sibling hbit hs
-  mvcgen [removeStep, branch, AmbientM.branch, hl, hn]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all
+  apply (total_iff_run_ambient _ _ _).mpr
+  intro w ambient hw
+  subst w
+  let afterDecision := record ambient .removeListIter true
+  obtain ⟨returned, current, nextAmbient, hlist, hunit, hcurrent⟩ :=
+    (total_iff_run_ambient _ _ _).mp hl k afterDecision rfl
+  subst returned
+  subst current
+  obtain ⟨result, out, finalAmbient, hbody, hpost⟩ :=
+    (total_iff_run_ambient _ _ _).mp hn _ nextAmbient rfl
+  refine ⟨result, out, finalAmbient, ?_, hpost⟩
+  change ((WG.listDel id >>= fun _ => removeNodeBody id).run k).run afterDecision = _
+  simp only [StateT.run_bind, hlist]
+  exact hbody
 
 end Leanux.Proofs.WG.AllowedIps

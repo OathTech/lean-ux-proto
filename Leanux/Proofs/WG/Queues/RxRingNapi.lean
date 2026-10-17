@@ -25,122 +25,88 @@ theorem groNormalOne_cell (cb : List (List UInt8) → Leanux.M Unit)
   · exact groNormalList_cell cb hc _
   · exact SameView.pure _ _
 
+/-- Product poll composition retains arbitrary stack callbacks. Native work
+is framed only through the actual WireGuard adapter. -/
+macro "ring_poll_source" "[" fs:ident,* "]" "using" "[" facts:ident,* "]"
+    "with" "[" natives:ident,* "]" : tactic => do
+  let expand ← if fs.getElems.isEmpty then `(tactic| skip) else `(tactic| unfold $fs:ident*)
+  let mut use ← `(tactic| fail "no named product ring frame")
+  for fact in facts.getElems.reverse do
+    use ← `(tactic| first | env_operation_fact $fact | ($use:tactic))
+  `(tactic|
+    (have ambient {α : Type} (a : AmbientM α) : SameView cell (monadLift a : Leanux.M α) :=
+       fun initial => productAmbient_spec a (fun w => cell w = initial) (fun _ _ h => h)
+     have native {α : Type} (a : WG.M α) (ha : SameView nativeCell a) :
+         SameView cell (liftWG a) := sameView_liftWG cell nativeCell a ha (fun _ _ _ h => h)
+     have choice {α : Type} (p : Prop) [Decidable p] (yes no : Leanux.M α)
+         (hy : p → SameView cell yes) (hn : ¬p → SameView cell no) :
+         SameView cell (if p then yes else no) := by
+       by_cases h : p
+       · simpa only [ite_eq_left h] using hy h
+       · simpa only [ite_eq_right h] using hn h
+     have loop {α β : Type} (xs : List α) (b : β) (f : α → β → Leanux.M (ForInStep β))
+         (hf : ∀ x b, SameView cell (f x b)) : SameView cell (forIn xs b f) :=
+       fun initial => list_view_spec cell (fun s => s = initial) xs b f (fun x b => hf x b initial)
+     have ignored {α : Type} (a : Leanux.M α) (ha : SameView cell a) : SameView cell (discard a) :=
+       fun initial => discard_view_spec cell (fun s => s = initial) a (ha initial)
+     $expand
+     repeat' first
+       | ($use:tactic)
+       | (snapshot_head MonadLiftT.monadLift; first
+           | (ring_lift_source AmbientM; exact ambient _)
+           | (ring_lift_source WG.M; apply native; simp only [monadLift_self]; ring_cell_source [] using [$natives,*]))
+       | (snapshot_head MonadLift.monadLift; first
+           | (ring_lift_source AmbientM; exact ambient _)
+           | (ring_lift_source WG.M; apply native; simp only [monadLift_self]; ring_cell_source [] using [$natives,*]))
+       | (snapshot_head liftWG; apply native; ring_cell_source [] using [$natives,*])
+       | (snapshot_head ForIn.forIn; first | apply loop | rw [Std.Legacy.Range.forIn_eq_forIn_range'])
+       | (snapshot_head Functor.discard; apply ignored)
+       | (snapshot_head ite; apply choice)
+       | (snapshot_head branch; unfold branch)
+       | (snapshot_head invariant; unfold invariant)
+       | (snapshot_head unsupported; unfold unsupported)
+       | (snapshot_head getAmbient; unfold getAmbient)
+       | (snapshot_head hidden; unfold hidden)
+       | (snapshot_head peekHiddenSite; unfold peekHiddenSite)
+       | (snapshot_head modifyAmbient; unfold modifyAmbient)
+       | env_operation_step))
+
 theorem napiGroReceive_cell (cb : List (List UInt8) → Leanux.M Unit)
     (hc : ∀ xs, SameView cell (cb xs)) (g : GroState) (pkt : List UInt8) :
     SameView cell (napiGroReceive cb g pkt) := by
-  apply SameView.of_wp
-  intro s
-  have hn := fun g pkt segs => (groNormalOne_cell cb hc g pkt segs).wp (fun t => t = s)
-  mvcgen [napiGroReceive, hn, unsupported, AmbientM.unsupported]
+  have normal := fun g pkt segs => groNormalOne_cell cb hc g pkt segs
+  ring_poll_source [napiGroReceive] using [normal] with []
 
 theorem napiGroFlushAll_cell (cb : List (List UInt8) → Leanux.M Unit)
     (hc : ∀ xs, SameView cell (cb xs)) (g : GroState) :
     SameView cell (napiGroFlushAll cb g) := by
-  apply SameView.of_wp
-  intro s
-  have hn := fun g pkt segs => (groNormalOne_cell cb hc g pkt segs).wp (fun t => t = s)
-  have hl := fun g => (groNormalList_cell cb hc g).wp (fun t => t = s)
-  mvcgen [napiGroFlushAll, hn, hl]
-  all_goals try exact ((⇓? _ w => ⌜cell w = s⌝) : PostCond _ (.arg World (.except Stop .pure)))
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all
+  have normal := fun g pkt segs => groNormalOne_cell cb hc g pkt segs
+  have flush := fun g => groNormalList_cell cb hc g
+  ring_poll_source [napiGroFlushAll] using [normal, flush] with []
 
 theorem rxPoll_cell (pid : PeerId) (budget : Nat) (cb : List (List UInt8) → Leanux.M Unit)
     (hc : ∀ xs, SameView cell (cb xs)) : SameView cell (rxPoll pid budget cb) := by
-  apply SameView.of_wp
-  intro s
-  let P := fun t => t = s
-  have native {α : Type} (a : WG.M α) (ha : SameView nativeCell a) :
-      Hoare (liftWG a)
-        (fun w => P (cell w)) (fun _ w => P (cell w)) :=
-    (sameView_liftWG cell nativeCell a ha (fun _ _ _ h => h)).wp P
-  have packets {α : Type} (a : SkbM α) : SameView nativeCell (liftSkb a) := by
-    intro initial
-    apply hoare_liftSkb
-    intro g d store hg hd
-    simpa [nativeCell, hd] using hg
-  have skb {α : Type} (a : SkbM α) := native (liftSkb a) (packets a)
-  have ambient {α : Type} (a : AmbientM α) :
-      Hoare (MonadLift.monadLift a : Leanux.M α)
-        (fun w => P (cell w)) (fun _ w => P (cell w)) :=
-    productAmbient_spec a _ (fun _ _ h => h)
-  have hp := native (getPeer pid) (getPeer_frame pid)
-  have hs := fun p => native (setPeer pid p) (setPeer_frame pid p)
-  have hpeek := fun (q : PrevQueue SkbId) =>
-    native q.peek (kernel (prevQueuePeek_sameWGStore q))
-  have hctr := fun key nonce => native (counterValidate key nonce) (counterValidate_cell key nonce)
-  have he := fun src => native (endpointFromSkb src) (kernel (endpointFromSkb_sameWGStore src))
-  have hd := fun pkt ep => native (consumeDataDone pid pkt ep) (consumeDataDone_cell pid pkt ep)
-  have hg := fun g pkt => (napiGroReceive_cell cb hc g pkt).wp P
-  have hf := fun g => (napiGroFlushAll_cell cb hc g).wp P
-  have hk := fun kp => native (keypairPut kp false) (keypairPut_frame kp false)
-  have hu := native (peerPut (some pid)) (peerPut_frame (some pid))
-  have hgo (a b : WG.M Bool) (ha : SameView nativeCell (WG.andM a b)) :
-      Hoare (liftWG (WG.andM a b)) (fun w => P (cell w)) (fun _ w => P (cell w)) :=
-    native _ ha
-  have hl (α β : Type) := list_view_spec (m := Except Stop) cell (α := α) (β := β) P
-  unfold Hoare at skb ambient hp hs hpeek hctr he hd hk hu hgo
-  have lift {α : Type} (a : WG.M α) : (liftM a : Leanux.M α) = liftWG a := rfl
-  simp only [rxPoll, Std.Legacy.Range.forIn_eq_forIn_range', lift]
-  mvcgen [-Std.Do.Spec.forIn_list, -Std.Do.Spec.forIn'_list, -Std.Do.Spec.monadLift_StateT,
-    hgo, hl, hp, hs, skb, ambient, hpeek, hctr, he, hd, hg, hf, hk, hu,
-    getRxSkb, freeRxSkb, branch, invariant, unsupported, liftM]
-  all_goals try exact ((⇓? _ w => ⌜P (cell w)⌝) : PostCond _ (.arg World (.except Stop .pure)))
-  all_goals try dsimp +zetaDelta only [P] at *
-  all_goals try
-    apply SameView.of_wp
-    intro initial
-    have hs := fun (a : SkbM RxPacket) => (packets a).wp (fun v => v = initial)
-    mvcgen [WG.andM, getRxSkb, hs, branch, AmbientM.branch, invariant, AmbientM.invariant]
-  all_goals first | assumption | rfl
-
+  have peek := fun (q : PrevQueue SkbId) => kernel (prevQueuePeek_sameWGStore q)
+  have endpoint := fun src => kernel (endpointFromSkb_sameWGStore src)
+  have gro := fun g pkt => napiGroReceive_cell cb hc g pkt
+  have flush := fun g => napiGroFlushAll_cell cb hc g
+  ring_poll_source [rxPoll] using [gro, flush]
+    with [peek, endpoint, counterValidate_cell, consumeDataDone_cell, keypairPut_frame, peerPut_frame]
 
 theorem napiSoftirq_cell : SameView cell Leanux.Env.napiSoftirq := by
-  apply SameView.of_wp
-  intro s
-  let P := fun t => t = s
-  have hp := fun pid => (rxPoll_cell pid NAPI_POLL_WEIGHT _ stackForM_cell).wp P
-  have ambient {α : Type} (a : AmbientM α) :
-      Hoare (MonadLift.monadLift a : Leanux.M α)
-        (fun w => P (cell w)) (fun _ w => P (cell w)) :=
-    productAmbient_spec a _ (fun _ _ h => h)
-  have dev : SameView nativeCell getDev := by
-    apply SameView.of_wp
-    intro initial
-    mvcgen [getDev, invariant, AmbientM.invariant]
-  have hg := (sameView_liftWG cell nativeCell getDev dev (fun _ _ _ h => h)).wp P
-  unfold Hoare at ambient
-  have hw (body : Leanux.M Unit)
-      (hb : ⦃fun w => ⌜P (cell w)⌝⦄ body ⦃⇓? _ w => ⌜P (cell w)⌝⦄) :
-      ⦃fun w => ⌜P (cell w)⌝⦄ Leanux.Env.runWorker .netRx body
-      ⦃⇓? _ w => ⌜P (cell w)⌝⦄ := by
-    mvcgen [-Std.Do.Spec.monadLift_StateT, Leanux.Env.runWorker, hidden, modifyAmbient, ambient, hb]
-  have hl (α β : Type) := list_view_spec (m := Except Stop) cell (α := α) (β := β) P
-  have hd (α : Type) := discard_view_spec (m := Except Stop) cell (α := α) P
-  mvcgen [-Std.Do.Spec.forIn_list, -Std.Do.Spec.forIn'_list, -Std.Do.Spec.monadLift_StateT,
-    hl, Leanux.Env.napiSoftirq, hp, ambient, hw, hd, hg, getAmbient, peekHiddenSite, invariant, unsupported]
-  all_goals try dsimp +zetaDelta only [P] at *
-  all_goals simp_all [cell]
+  have poll := fun pid => rxPoll_cell pid NAPI_POLL_WEIGHT _ stackForM_cell
+  have worker (body : Leanux.M Unit) (hb : SameView cell body) :
+      SameView cell (Leanux.Env.runWorker .netRx body) := by
+    ring_poll_source [Leanux.Env.runWorker] using [hb] with []
+  ring_poll_source [Leanux.Env.napiSoftirq] using [poll, worker] with []
 
 theorem napiIrqExit_cell : SameView cell Leanux.Env.napiIrqExit := by
   rw [← napiIrqExitSource_eq]
-  apply SameView.of_wp
-  intro s
-  let P := fun t => t = s
-  have hn := napiSoftirq_cell.wp P
-  have ambient {α : Type} (a : AmbientM α) :
-      Hoare (MonadLift.monadLift a : Leanux.M α)
-        (fun w => P (cell w)) (fun _ w => P (cell w)) :=
-    productAmbient_spec a _ (fun _ _ h => h)
-  have dev : SameView nativeCell getDev := by
-    apply SameView.of_wp
-    intro initial
-    mvcgen [getDev, invariant, AmbientM.invariant]
-  have hg := (sameView_liftWG cell nativeCell getDev dev (fun _ _ _ h => h)).wp P
-  have hc : ⦃fun w => ⌜P (cell w)⌝⦄ chooseNapiHere ⦃⇓? _ w => ⌜P (cell w)⌝⦄ := by
-    mvcgen [chooseNapiHere, getEnv, modifyEnv]
-  unfold Hoare at ambient
-  mvcgen [-Std.Do.Spec.monadLift_StateT, napiIrqExitSource,
-    hn, ambient, hc, hg, getAmbient, peekHiddenSite, invariant]
+  have choose : SameView cell chooseNapiHere := by
+    apply (ProjectedAction.iff_run _ _ _).mpr
+    intro w x v hr
+    cases hr
+    rfl
+  ring_poll_source [napiIrqExitSource] using [choose, napiSoftirq_cell] with []
 
 end Leanux.Proofs.WG.Queues.RxRing

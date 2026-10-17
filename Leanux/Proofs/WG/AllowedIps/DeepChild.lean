@@ -86,7 +86,9 @@ theorem add_placed_gap_wp (k : WGWorld) (d : WG.Device) (hd : k.dev = some d)
       ⦃⇓ x w => ⌜x = side ∧ w = kl⌝⦄ := by
     rw [choose_run _ _ (by simp only [gapParent_cidr, gapParent_bitlen]; omega)]
     simp only [gapParent_cidr, gapParent_bitlen, hbit]
-    mvcgen
+    apply Triple.pure
+    intro w
+    exact SPred.pure_mono (fun hw => ⟨rfl, hw⟩)
   have hbitAt := gapParent_bitAt_wp (m := AmbientM) kl (rootWidth v4) base n side sibling hb
   have hleaf : dl.nodes[d.nextNode]? = some leaf := by simp [dl, da, allocated]
   have connecting : ⦃fun w => ⌜w = kl⌝⦄
@@ -100,51 +102,99 @@ theorem add_placed_gap_wp (k : WGWorld) (d : WG.Device) (hd : k.dev = some d)
       subst d'
       have hs := connectNode_child_wp (store dl) n.id side d.nextNode
         (gapParent (rootWidth v4) base n side sibling) leaf hnlisted hleaf hne (by omega)
-      mvcgen [hs]
-      all_goals try dsimp +zetaDelta only at *
-      all_goals simp_all [gapInstalledAt, connectedChild, allocated]
-  clear read rootNative
-  mvcgen [WG.add, branchCmp, AmbientM.branchCmp, branch, AmbientM.branch, hgetRoot, invariant, AmbientM.invariant]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals try simp_all
-  all_goals try omega
-  obtain ⟨hptr, hframe⟩ := (show _ = some trie ∧ _ = k from by assumption)
-  cases hptr
-  cases hframe
-  mvcgen [hplacement, branch, AmbientM.branch, invariant, AmbientM.invariant]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals try simp_all
-  obtain ⟨hplaced, hplacedFrame⟩ := (show _ = (some n.id, false) ∧ _ = k from by assumption)
-  cases hplaced
-  cases hplacedFrame
-  mvcgen [halloc, branch, AmbientM.branch, invariant, AmbientM.invariant]
-  all_goals try dsimp only at *
-  all_goals
-    obtain hcases := (show (_ = none ∧ _ = k) ∨
-      (_ = some d.nextNode ∧ _ = { k with dev := some (allocated d (WG.newNode addr cidr (rootWidth v4) (some pid))) }) from by assumption)
-    rcases hcases with ⟨hresult, hstate⟩ | ⟨hresult, hstate⟩
-    all_goals try cases hresult
-    all_goals try cases hstate
-  all_goals clear hplacement halloc hgetRoot
-  all_goals try simp_all
-  all_goals try
-    have heq := (show some d.nextNode = some _ from by assumption)
-    cases Option.some.inj heq
-  iterate 8
-    all_goals try mvcgen [hlist, getter, choosing, hbitAt, connecting,
-      branch, AmbientM.branch, invariant, AmbientM.invariant]
-    all_goals try dsimp only at *
-    all_goals repeat intro
-    all_goals try
-      obtain ⟨rfl, rfl⟩ := (show _ = gapParent (rootWidth v4) base n side sibling ∧ _ = kl from by assumption)
-    all_goals try
-      obtain ⟨rfl, rfl⟩ := (show _ = side ∧ _ = kl from by assumption)
-    all_goals try
-      obtain ⟨rfl, rfl⟩ := (show _ = none ∧ _ = kl from by assumption)
-    all_goals try simp_all
-    all_goals try (simp_all only [ka, kl, dl, da, leaf])
-  all_goals clear hlist getter choosing hbitAt connecting
-  all_goals simp_all [gapInstalledAt, allocated]
+      apply (total_iff_run_ambient _ _ _).mpr
+      intro entry ambient hi
+      obtain ⟨result, finish, finalAmbient, he, hr, hf⟩ :=
+        (total_iff_run_ambient _ _ _).mp hs entry ambient hi
+      refine ⟨result, finish, finalAmbient, he, ?_⟩
+      subst result
+      subst finish
+      simp [gapInstalledAt, connectedChild, allocated, store, kl, dl, da, leaf]
+
+  have branchRule {β : Type} (decision : Decision) (value : Bool)
+      (P : WGWorld → Prop) (Q : β → WGWorld → Prop) (f : Bool → WG.M β)
+      (hf : Hoare (f value) P Q) :
+      Hoare ((branch decision value : WG.M Bool) >>= f) P Q := by
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient x out ambient' hi hr
+    change ((f value).run w).run _ = .ok ((x, out), ambient') at hr
+    exact (hoare_iff_run_ambient _ _ _).mp hf _ _ _ _ _ hi hr
+  have comparisonRule {β : Type} (decision : Decision) (value : Bool) (a b : Int)
+      (P : WGWorld → Prop) (Q : β → WGWorld → Prop) (f : Bool → WG.M β)
+      (hf : Hoare (f value) P Q) :
+      Hoare ((branchCmp decision value a b : WG.M Bool) >>= f) P Q := by
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient x out ambient' hi hr
+    change ((f value).run w).run _ = .ok ((x, out), ambient') at hr
+    exact (hoare_iff_run_ambient _ _ _).mp hf _ _ _ _ _ hi hr
+  have mayReturn {β : Type} (a : WG.M β) (P : WGWorld → Prop)
+      (Q : β → WGWorld → Prop) (h : ⦃fun w => ⌜P w⌝⦄ a ⦃⇓ x w => ⌜Q x w⌝⦄) :
+      Hoare a P Q := by
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient x out ambient' hi hr
+    obtain ⟨y, v, b, he, hq⟩ := (total_iff_run_ambient _ _ _).mp h w ambient hi
+    rw [hr] at he
+    cases he
+    exact hq
+  have known {α β : Type} (a : WG.M α) (f : α → WG.M β)
+      (entry finish : WGWorld) (value : α) (Q : β → WGWorld → Prop)
+      (h : ⦃fun w => ⌜w = entry⌝⦄ a ⦃⇓ x w => ⌜x = value ∧ w = finish⌝⦄)
+      (hf : Hoare (f value) (fun w => w = finish) Q) :
+      Hoare (a >>= f) (fun w => w = entry) Q := by
+    apply hoare_bind _ _ (mayReturn _ _ _ h)
+    intro x
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient result out ambient' hx hr
+    rcases hx with ⟨hvalue, hstate⟩
+    subst x
+    subst w
+    exact (hoare_iff_run_ambient _ _ _).mp hf _ ambient result out ambient' rfl hr
+  let Post := fun result (w : WGWorld) =>
+    (result = -ENOMEM ∧ w = k) ∨
+      (result = 0 ∧ w = {k with dev := some (gapInstalledAt d v4 base n side sibling addr cidr pid p)})
+  change Hoare (WG.add (rootSlot v4) (rootWidth v4) addr cidr (some pid)) _ Post
+  unfold WG.add
+  apply comparisonRule .addCidrTooLong (decide (cidr > rootWidth v4)) cidr (rootWidth v4)
+  simp only [show decide (cidr > rootWidth v4) = false by simp [Nat.not_lt.mpr hc],
+    Bool.false_eq_true, ↓reduceIte]
+  apply branchRule .addNoPeer false
+  simp only [Bool.false_eq_true, ↓reduceIte]
+  apply known _ _ k k _ _ hgetRoot
+  apply branchRule .addEmptyTrie false
+  simp only [Bool.false_eq_true, ↓reduceIte]
+  apply known _ _ k k _ _ hplacement
+  dsimp only
+  apply branchRule .addExact false
+  simp only [Bool.false_eq_true, ↓reduceIte]
+  apply hoare_bind _ _ halloc
+  intro allocation
+  apply (hoare_iff_run_ambient _ _ _).mpr
+  intro w ambient result out ambient' hi hr
+  rcases hi with ⟨ha, hw⟩ | ⟨ha, hw⟩
+  · subst allocation
+    subst w
+    apply (hoare_iff_run_ambient _ (fun w => w = k) Post).mp ?_ k ambient result out ambient' rfl hr
+    apply branchRule .addNewnodeNoMem true
+    simp only [↓reduceIte]
+    exact hoare_consequence (hoare_pure (-ENOMEM) _)
+      (fun _ h => h) (fun _ _ h => Or.inl h)
+  · subst allocation
+    subst w
+    apply (hoare_iff_run_ambient _ (fun w => w = ka) Post).mp ?_ ka ambient result out ambient' rfl hr
+    apply branchRule .addNewnodeNoMem false
+    simp only [Bool.false_eq_true, ↓reduceIte]
+    apply known _ _ ka kl () _ hlist
+    apply branchRule .addNoParentNode false
+    simp only [Bool.false_eq_true, ↓reduceIte]
+    apply known _ _ kl kl _ _ getter
+    apply known _ _ kl kl _ _ choosing
+    apply known _ _ kl kl _ _ getter
+    apply known _ _ kl kl _ _ hbitAt
+    apply branchRule .addNoDown true
+    simp only [↓reduceIte]
+    apply known _ _ kl _ () _ connecting
+    exact hoare_consequence (hoare_pure (0 : Int) _)
+      (fun _ h => h) (fun _ _ h => Or.inr h)
 
 theorem add_context_gap_wp (k : WGWorld) (d : WG.Device) (hd : k.dev = some d)
     (v4 : Bool) (c : Context) (n : NodeData) (side : Nat) (sibling : Tree)

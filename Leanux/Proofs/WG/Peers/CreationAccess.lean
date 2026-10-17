@@ -379,10 +379,16 @@ theorem creation_set (P : Store PeerId → Prop) (pid : PeerId) (p : Peer) :
 theorem creation_dev (P : Store PeerId → Prop) :
     WGCreationSpec P (liftWGPrefix getDev) (fun _ => P) := by
   apply creation_state_lift
-  apply SameView.of_wp
-  intro initial
-  mvcgen [getDev, invariant, AmbientM.invariant]
-  all_goals simp_all
+  apply (ProjectedAction.iff_run_ambient _ _ _).mpr
+  intro w ambient d v ambient' hr
+  cases hd : w.dev with
+  | none =>
+    simp [getDev, hd, invariant, AmbientM.invariant] at hr
+    cases hr
+  | some dev =>
+    simp [getDev, hd] at hr
+    rcases hr with ⟨⟨rfl, rfl⟩, rfl⟩
+    rfl
 
 theorem creation_require (P : Store PeerId → Prop) (pid : PeerId) (what : String) :
     WGCreationSpec P (requireNotPendingPrefix pid what) (fun _ => P) := by

@@ -10,9 +10,27 @@ set_option pp.structureInstances false
 theorem pubkeyLookup_borrowed_spec (key : Key) (initial : WGStoreView) :
     ⦃fun w => ⌜wgStoreView w = initial⌝⦄ pubkeyLookup key
     ⦃⇓? result w => ⌜PeerBorrow.Borrowed initial result (wgStoreView w)⌝⦄ := by
-  have ha := fun peer => PeerBorrow.acquire_spec peer initial
-  mvcgen [pubkeyLookup, ha, getDev, branch, invariant, AmbientM.branch, AmbientM.invariant]
-  all_goals simp_all
+  have read : Preserves (fun w => wgStoreView w = initial) getDev :=
+    by
+      apply (hoare_iff_run_ambient _ _ _).mpr
+      intro w ambient d v ambient' hi hr
+      cases hd : w.dev with
+      | none => simp [getDev, hd, invariant, AmbientM.invariant] at hr; cases hr
+      | some device =>
+        simp [getDev, hd] at hr
+        rcases hr with ⟨⟨rfl, rfl⟩, rfl⟩
+        exact hi
+  unfold pubkeyLookup
+  apply hoare_bind _ _ read
+  intro d
+  apply hoare_bind _ _ (hoare_liftAmbient
+    (AmbientM.branch .pubkeyLookupMatch
+      ((d.peerHashtable.find? (·.1 == key)).map (·.2)).isSome)
+    (fun w => wgStoreView w = initial))
+  intro _
+  apply hoare_consequence (PeerBorrow.acquire_spec _ initial)
+  · exact fun _ h => h
+  · exact fun _ _ h => h.2
 
 theorem pubkeyLookup_routed (key : Key)
     (hr : ((pubkeyLookup key).run w).run ambient = .ok ((result, v), ambient')) :

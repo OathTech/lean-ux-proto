@@ -502,6 +502,50 @@ failures and one axiom-driver Lean parser failure preceded the corrected passes.
 No limit was raised and no failure was treated as a pass. Root kernel replay
 and a successful complete gate remain pending; all register rows remain lagging.
 
+## Native traversal and ownership warning repairs
+
+Nineteen further modules retain all 191 theorem contracts and their options.
+The seven trie modules preserve represented-tree premises, partial traversal,
+saved roots, node identity and native Ambient continuity. RoutingView,
+RoutingSessionFrames, RoutingAdmissionFrames and RoutingAcquire preserve their
+existing routing observations. The three ring modules and two transmission
+ownership modules retain actual nullable owners, reference-count failures,
+saved cells and complete queue observations. CreationAccess, Acquire and
+MixedFrames replace only their native device/reference proof bodies.
+Their final source checks, explicit named-root axiom checks and independent
+source reviews pass with zero own warnings; this is not a complete-tree claim.
+
+The fifth complete gate failed after 445.15 seconds with 197 warnings.
+Its sole build failure was RxRingEncrypt: a new ring composition macro reserved
+the word used by two existing local binders. The macro now uses an existing
+syntax keyword; its seven unchanged contracts pass the corrected source and
+axiom check. The forbidden-token and import/target checks passed, and terminal
+axiom inspection was skipped because the build failed. The corrected NAPI target passes (210 jobs), followed by the scoped build of
+all nineteen changed modules and RxRingEncrypt (288 jobs, 86.25 seconds). Its
+49 dependency warnings are outside those changed modules. No unchanged gate
+retry is reported.
+
+The thirteen-module initial subset had seventeen ordinary development failures
+before clean final checks. The later trio had two ordinary Acquire failures
+and two MixedFrames failures; CreationAccess passed first time. ClearEndpoint
+had one empty-predicate normalization failure, and RoutingAcquire had one
+tuple-normalization failure. LookupExecution's first successful check emitted
+an unused-argument warning; its cleaned source and axioms pass. No failure
+or warning was accepted as a final pass.
+
+During the next routing cohort, an ephemeral tactic indexed an unrecognized
+goal shape and panicked. All dirty worktrees, including nonignored untracked
+files, were preserved under the recovery-ref prefix
+'refs/snapshots/proof-campaign-socket-tactic-recovery-20261017T053547Z';
+branch tips and working indexes were unchanged. The tactic now checks the
+target shape before indexing. A separate root axiom check for AllowedIpsInsert
+failed because the coordinator launched it while a transitive CreationAccess
+artifact was being replaced. That infrastructure failure is recorded separately;
+its sole infrastructure rerun passes after the complete import closure
+became stable: all 22 named roots use standard axioms only, with no warnings.
+The LookupAccess and AllowedIpsInsert candidates remain outside this committed
+checkpoint pending their next shared artifact window.
+
 ## Runtime witness reconstruction
 
 The existing witness programs compile. Each old recipe below was run once,

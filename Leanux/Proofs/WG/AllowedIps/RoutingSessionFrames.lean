@@ -10,128 +10,77 @@ set_option maxHeartbeats 1000000
 set_option pp.structureInstances false
 
 theorem keypairCreate_routing (pid : Option PeerId) : SameView routingView (keypairCreate pid) := by
-  apply SameView.of_wp
-  intro s
-  have ambient {α : Type} (a : AmbientM α) :
-      Hoare (MonadLift.monadLift a : WG.M α)
-        (fun w => routingView w = s) (fun _ w => routingView w = s) := hoare_liftAmbient a _
-  unfold Hoare at ambient
-  have hs := fun id k => (setKeypair_routing id k).wp (fun t => t = s)
-  mvcgen [-Std.Do.Spec.monadLift_StateT, ambient, keypairCreate, hs, getDev, modifyDev, hiddenAlloc, branch, AmbientM.branch, invariant, AmbientM.invariant]
-  all_goals dsimp +zetaDelta only at *
-  all_goals simp_all [routingView, routingState, Option.map_map, Function.comp_def]
-  all_goals assumption
+  routing_handshake_source [keypairCreate] using [setKeypair_routing, modifyDev_routing]
+  all_goals rfl
 
 theorem addNewKeypair_routing (pid : PeerId) (kp : KeypairId) :
     SameView routingView (addNewKeypair pid kp) := by
-  apply SameView.of_wp
-  intro s
-  have ambient {α : Type} (a : AmbientM α) :
-      Hoare (MonadLift.monadLift a : WG.M α)
-        (fun w => routingView w = s) (fun _ w => routingView w = s) := hoare_liftAmbient a _
-  unfold Hoare at ambient
-  have hg := routing_getPeer (fun t => t = s) pid
-  have hs := fun p => routing_setPeer (fun t => t = s) pid p
-  have hk := (getKeypair_routing kp).wp (fun t => t = s)
-  have hp := fun id => (keypairPut_routing id true).wp (fun t => t = s)
-  unfold addNewKeypair
-  index_unfold _private.Leanux.WG.Keypair.«0».Leanux.WG.modifyPeer
-  mvcgen [-Std.Do.Spec.monadLift_StateT, ambient, hg, hs, hk, hp, branch, AmbientM.branch]
-  all_goals simp_all
+  routing_handshake_source [addNewKeypair,
+    _private.Leanux.WG.Keypair.«0».Leanux.WG.modifyPeer] using [keypairPut_routing]
 
 theorem deriveKeys_routing (kp : KeypairId) (initiator : Bool) (ck : List UInt8) :
     SameView routingView (deriveKeys kp initiator ck) := by
-  apply SameView.of_wp
-  intro s
-  have ambient {α : Type} (a : AmbientM α) :
-      Hoare (MonadLift.monadLift a : WG.M α)
-        (fun w => routingView w = s) (fun _ w => routingView w = s) := hoare_liftAmbient a _
-  unfold Hoare at ambient
-  have hg := (getKeypair_routing kp).wp (fun t => t = s)
-  have hs := fun k => (setKeypair_routing kp k).wp (fun t => t = s)
-  have hk := fun b c ck d => (Framing.kdf_sameWGWorld b c ck d).wp (fun w => routingView w = s)
-  have ho := fun xs i => (Framing.kdfOut_sameWGWorld xs i).wp (fun w => routingView w = s)
-  mvcgen [-Std.Do.Spec.monadLift_StateT, ambient, deriveKeys, hg, hs, hiddenClock64, hk, ho]
+  have kdf := fun b c ck data => show SameView routingView _ from
+    (Framing.kdf_sameWGWorld b c ck data).factor routingView
+  have out := fun xs i => show SameView routingView _ from
+    (Framing.kdfOut_sameWGWorld xs i).factor routingView
+  routing_handshake_source [deriveKeys] using [kdf, out, setKeypair_routing]
 
 theorem beginSession_routing (pid : PeerId) : SameView routingView (beginSession pid) := by
-  apply SameView.of_wp
-  intro s
-  have ambient {α : Type} (a : AmbientM α) :
-      Hoare (MonadLift.monadLift a : WG.M α)
-        (fun w => routingView w = s) (fun _ w => routingView w = s) := hoare_liftAmbient a _
-  unfold Hoare at ambient
-  have hg := (getPeer_routing pid).wp (fun t => t = s)
-  have hk := fun id => (getKeypair_routing id).wp (fun t => t = s)
-  have hs := fun id k => (setKeypair_routing id k).wp (fun t => t = s)
-  have hc := fun word => (keypairCreate_routing word).wp (fun t => t = s)
-  have hd := fun k b ck => (deriveKeys_routing k b ck).wp (fun t => t = s)
-  have hz := (handshakeZero_routing pid).wp (fun t => t = s)
-  have ha := fun k => (addNewKeypair_routing pid k).wp (fun t => t = s)
-  have index_spec {α : Type} (a : IndexM α) :
-      Hoare (MonadLift.monadLift a : WG.M α) (fun w => routingView w = s) (fun _ w => routingView w = s) := by
+  intro initial
+  let P := fun w : WGWorld => routingView w = initial
+  have ambient {α : Type} (a : AmbientM α) : Preserves P (monadLift a : WG.M α) :=
+    hoare_liftAmbient a P
+  have index {α : Type} (a : IndexM α) : Preserves P (monadLift a : WG.M α) := by
     apply hoare_liftIndex a
     intro w d table hi hd
-    simpa only [routingView, hd, Option.map_some, routingState] using hi
-  unfold Hoare at index_spec
-  have hw := fun o => (ownerWord_routing o).wp (fun t => t = s)
-  have hf := fun o => (ownerDeref_routing o).wp (fun t => t = s)
-  mvcgen [-Std.Do.Spec.monadLift_StateT, ambient, index_spec, hw, hf, beginSession, hg, hk, hs, hc, hd, hz, ha, branch, AmbientM.branch, WG.andM, invariant, AmbientM.invariant, unsupported, AmbientM.unsupported]
+    simpa only [P, routingView, hd, Option.map_some, routingState] using hi
+  have peer := fun pid => (getPeer_routing pid).wp (fun view => view = initial)
+  have key := fun kp => (getKeypair_routing kp).wp (fun view => view = initial)
+  have write := fun kp k => (setKeypair_routing kp k).wp (fun view => view = initial)
+  have create := fun word => (keypairCreate_routing word).wp (fun view => view = initial)
+  have derive := fun kp initiator ck => (deriveKeys_routing kp initiator ck).wp (fun view => view = initial)
+  have zero := (handshakeZero_routing pid).wp (fun view => view = initial)
+  have add := fun kp => (addNewKeypair_routing pid kp).wp (fun view => view = initial)
+  have word := fun owner => (ownerWord_routing owner).wp (fun view => view = initial)
+  have owner := fun owner => (ownerDeref_routing owner).wp (fun view => view = initial)
+  change Preserves P _
+  unfold beginSession
+  simp only [branch, WG.andM, invariant, unsupported]
+  repeat' first
+    | (allocation_release_lift_from IndexM; exact index _)
+    | (allocation_release_lift_from AmbientM; exact ambient _)
+    | (rx_retention_head getPeer; exact peer _)
+    | (rx_retention_head getKeypair; exact key _)
+    | (rx_retention_head setKeypair; exact write _ _)
+    | (rx_retention_head keypairCreate; exact create _)
+    | (rx_retention_head deriveKeys; exact derive _ _ _)
+    | (rx_retention_head handshakeZero; exact zero)
+    | (rx_retention_head addNewKeypair; exact add _)
+    | (rx_retention_head IndexOwner.peerWord; exact word _)
+    | (rx_retention_head IndexOwner.peerDeref; exact owner _)
+    | rx_retention_step
 
 theorem createResponse_routing (pid : PeerId) : SameView routingView (createResponse pid) := by
-  apply SameView.of_wp
-  intro s
-  have ambient {α : Type} (a : AmbientM α) :
-      Hoare (MonadLift.monadLift a : WG.M α)
-        (fun w => routingView w = s) (fun _ w => routingView w = s) := hoare_liftAmbient a _
-  unfold Hoare at ambient
-  have hg := routing_getPeer (fun t => t = s) pid
-  have hs := fun p => routing_setPeer (fun t => t = s) pid p
-  have hp := fun k => (generatePublic_sameWGWorld k).wp (fun w => routingView w = s)
-  have he := fun b e ck h => (messageEphemeral_sameWGWorld b e ck h).wp (fun w => routingView w = s)
-  have hd := fun b ck p q => (mixDh_sameWGWorld b ck p q).wp (fun w => routingView w = s)
-  have hk := fun b c ck d => (Framing.kdf_sameWGWorld b c ck d).wp (fun w => routingView w = s)
-  have ho := fun xs i => (Framing.kdfOut_sameWGWorld xs i).wp (fun w => routingView w = s)
-  have index_spec {α : Type} (a : IndexM α) :
-      Hoare (MonadLift.monadLift a : WG.M α) (fun w => routingView w = s) (fun _ w => routingView w = s) := by
-    apply hoare_liftIndex a
-    intro w d table hi hd
-    simpa only [routingView, hd, Option.map_some, routingState] using hi
-  unfold Hoare at index_spec
-  unfold createResponse
-  index_unfold _private.Leanux.WG.Handshake.«0».Leanux.WG.setChain
-  have hw := (ownerDeref_routing (.handshake pid)).wp (fun t => t = s)
-  mvcgen [-Std.Do.Spec.monadLift_StateT, ambient, index_spec, liftM, hidden, hw, hg, hs, hp, he, hd, hk, ho, branch, AmbientM.branch, invariant, AmbientM.invariant]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [routingView]
+  have kdf := fun b c ck data => show SameView routingView _ from
+    (Framing.kdf_sameWGWorld b c ck data).factor routingView
+  have out := fun xs i => show SameView routingView _ from
+    (Framing.kdfOut_sameWGWorld xs i).factor routingView
+  have pub := fun k => show SameView routingView _ from
+    (generatePublic_sameWGWorld k).factor routingView
+  have eph := fun b e ck h => show SameView routingView _ from
+    (messageEphemeral_sameWGWorld b e ck h).factor routingView
+  have dh := fun b ck p q => show SameView routingView _ from
+    (mixDh_sameWGWorld b ck p q).factor routingView
+  routing_handshake_source [createResponse,
+    _private.Leanux.WG.Handshake.«0».Leanux.WG.setChain] using [pub, eph, dh, kdf, out]
 
 theorem timersSessionDerived_routing (pid : PeerId) : SameView routingView (timersSessionDerived pid) := by
-  apply SameView.of_wp
-  intro s
-  have ambient {α : Type} (a : AmbientM α) :
-      Hoare (MonadLift.monadLift a : WG.M α)
-        (fun w => routingView w = s) (fun _ w => routingView w = s) := hoare_liftAmbient a _
-  unfold Hoare at ambient
-  have hm := fun site timer delay => (modPeerTimer_routing site pid timer delay).wp (fun t => t = s)
-  have hd (α : Type) := discard_view_spec (m := AmbientM) routingView (α := α) (fun t => t = s)
-  mvcgen [timersSessionDerived, hm, hd]
+  routing_handshake_source [timersSessionDerived, Functor.discard] using [modPeerTimer_routing]
 
 theorem sendHandshakeResponse_routing (pid : PeerId) : SameView routingView (sendHandshakeResponse pid) := by
-  apply SameView.of_wp
-  intro s
-  have ambient {α : Type} (a : AmbientM α) :
-      Hoare (MonadLift.monadLift a : WG.M α)
-        (fun w => routingView w = s) (fun _ w => routingView w = s) := hoare_liftAmbient a _
-  unfold Hoare at ambient
-  have hg := routing_getPeer (fun t => t = s) pid
-  have hs := fun p => routing_setPeer (fun t => t = s) pid p
-  have hr := (createResponse_routing pid).wp (fun t => t = s)
-  have hm := fun msg => (addMacToPacket_routing pid msg).wp (fun t => t = s)
-  have hb := (beginSession_routing pid).wp (fun t => t = s)
-  have hd := (timersSessionDerived_routing pid).wp (fun t => t = s)
-  have ht := (timersTraversal_routing pid).wp (fun t => t = s)
-  have ha := (timersAnyAuthenticatedPacketSent_routing pid).wp (fun t => t = s)
-  have hsend := fun msg => (sendBufferToPeer_routing pid msg).wp (fun t => t = s)
-  mvcgen [-Std.Do.Spec.monadLift_StateT, ambient, hiddenClock64, sendHandshakeResponse, hg, hs, hr, hm, hb, hd, ht, ha, hsend, branch, AmbientM.branch, invariant, AmbientM.invariant]
-  all_goals simp_all
+  routing_handshake_source [sendHandshakeResponse] using [createResponse_routing,
+    addMacToPacket_routing, beginSession_routing, timersSessionDerived_routing,
+    timersTraversal_routing, timersAnyAuthenticatedPacketSent_routing, sendBufferToPeer_routing]
 
 end Leanux.Proofs.WG.AllowedIps
