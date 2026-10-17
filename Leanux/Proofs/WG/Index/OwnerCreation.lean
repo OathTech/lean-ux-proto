@@ -1,18 +1,18 @@
-import Leanux.Proofs.WG.Index.SessionOwners
-
+import Leanux.Proofs.WG.Index.OwnerFieldFrames
 set_option autoImplicit false
 set_option pp.structureInstances false
 set_option maxHeartbeats 800000
-
 namespace Leanux.Proofs.WG.Index
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise Leanux.Proofs.WG.Config Std.Do
 
 theorem indexInsert_handshake_ownersBounded (pid : PeerId) :
-    ⦃fun w => ⌜OwnersBoundedSafe w⌝⦄ indexInsert (.handshake pid) ⦃⇓? _ w => ⌜OwnersBoundedSafe w⌝⦄ := by
+    ⦃fun w => ⌜OwnersBoundedSafe w⌝⦄ liftIndex (indexInsert (.handshake pid))
+      ⦃⇓? _ w => ⌜OwnersBoundedSafe w⌝⦄ := by
   apply (ensures_iff _ _ _).mp
-  intro w result final pre run
+  intro w ambient result final after pre run
   obtain ⟨d, device, unique, bounded⟩ := pre
-  obtain ⟨hd, fresh⟩ := indexInsert_exact (.handshake pid) d w result final device run
+  obtain ⟨hd, fresh⟩ := indexInsert_exact (.handshake pid) d
+    w ambient result final after device run
   refine ⟨_, hd, insert_owners (.handshake pid) result _ unique, ?_⟩
   intro e member id own
   simp only [List.mem_cons] at member
@@ -23,31 +23,263 @@ theorem indexInsert_handshake_ownersBounded (pid : PeerId) :
 
 theorem createInitiation_owners_spec (pid : PeerId) :
     ⦃fun w => ⌜OwnersBoundedSafe w⌝⦄ createInitiation pid ⦃⇓? _ w => ⌜OwnersBoundedSafe w⌝⦄ := by
-  let P := fun k : Kernel => ∃ d, k.wg = some d ∧ UniqueOwners d.indexTable ∧ KeypairOwnersBounded d
-  have hh := hidden_kernel_spec P
-  have hg := generatePublic_wg_spec P
-  have he := messageEphemeral_wg_spec P
-  have hd := mixDh_wg_spec P
-  have hs := mixPrecomputedDh_wg_spec P
-  have hi := indexInsert_handshake_ownersBounded
-  have hp := setPeer_ownersBounded
-  noise_vcgen [createInitiation, _private.Leanux.WG.Handshake.«0».Leanux.WG.setChain,
-    IndexOwner.peerDeref, IndexOwner.peerWord, unsupported, getPeer, getDev, getK,
-    branch, invariant, hh, hg, he, hd, hs, hi, hp]
+  apply (ensures_iff _ _ _).mp
+  let P : WGWorld → Prop := OwnersBoundedSafe
+  let R : Option (List UInt8) → WGWorld → Prop := fun _ => P
+  change Ensures _ P R
+  have hpure : Ensures (pure none : WG.M (Option (List UInt8))) P R := by
+    intro g ambient x g' ambient' hp hr
+    cases hr
+    exact hp
+  have hstop {α : Type} (what : String) (Q : α → WGWorld → Prop) :
+      Ensures (invariant what : WG.M α) P Q := by
+    intro g ambient x g' ambient' hp hr
+    simp [invariant, AmbientM.invariant] at hr
+    cases hr
+  have hread : Ensures (getPeer pid) P (fun _ => P) := by
+    intro g ambient x g' ambient' hp hr
+    exact ((ensures_iff _ _ _).mpr (getPeer_spec pid P)
+      g ambient x g' ambient' hp hr).1
+  have hbranch (site : Decision) (value : Bool) :
+      Ensures (branch site value : WG.M Bool) P (fun _ => P) :=
+    (ensures_iff _ _ _).mpr (hoare_liftAmbient_variant (AmbientM.branch site value) P)
+  have hhidden (site : HiddenSite) :
+      Ensures (hidden site : WG.M (List UInt8)) P (fun _ => P) :=
+    (ensures_iff _ _ _).mpr (hoare_liftAmbient_variant (AmbientM.hidden site) P)
+  have hwrite (f : Peer → Peer) :
+      Ensures (do setPeer pid (f (← getPeer pid))) P (fun _ => P) := by
+    refine ensures_bind _ _ hread ?_
+    intro p
+    exact (ensures_iff _ _ _).mpr (setPeer_ownersBounded pid (f p))
+  have hchain (ck hash : List UInt8) :
+      Ensures ((noise_const _private.Leanux.WG.Handshake.«0».Leanux.WG.setChain) pid ck hash)
+        P (fun _ => P) :=
+    hwrite (fun p => {p with chainingKey := ck, hash})
+  have hderef : Ensures (IndexOwner.peerDeref (.handshake pid)) P (fun _ => P) := by
+    unfold IndexOwner.peerDeref IndexOwner.peerWord
+    refine ensures_bind (Q := fun _ => P) _ _ ?_ ?_
+    · refine ensures_bind (Q := fun _ => P) _ _ hread ?_
+      intro p g ambient x g' ambient' hp hr
+      cases hr
+      exact hp
+    · intro word
+      cases word with
+      | none =>
+        exact (ensures_iff _ _ _).mpr (hoare_liftAmbient_variant
+          (AmbientM.unsupported "entry->peer is NULL: the C dereferences it") P)
+      | some target =>
+        intro g ambient x g' ambient' hp hr
+        cases hr
+        exact hp
+  have hindex : Ensures (liftIndex (indexInsert (.handshake pid))) P (fun _ => P) :=
+    (ensures_iff _ _ _).mpr (indexInsert_handshake_ownersBounded pid)
+  have hdev : Ensures getDev P (fun _ => P) := by
+    intro g ambient x g' ambient' hp hr
+    cases hd : g.dev with
+    | none =>
+      simp [getDev, hd, invariant, AmbientM.invariant] at hr
+      cases hr
+    | some d =>
+      simp [getDev, hd] at hr
+      rcases hr with ⟨⟨rfl, rfl⟩, rfl⟩
+      exact hp
+  unfold createInitiation
+  refine ensures_bind _ _ hdev ?_
+  intro d
+  refine ensures_bind _ _ (hbranch _ _) ?_
+  intro noIdentity
+  cases noIdentity with
+  | true => exact hpure
+  | false =>
+    refine ensures_bind _ _ hread ?_
+    intro p
+    refine ensures_bind _ _ (hchain _ _) ?_
+    intro _
+    refine ensures_bind _ _ (hhidden _) ?_
+    intro secret
+    rw [← bind_assoc]
+    refine ensures_bind _ _ (hwrite (fun p => {p with ephemeralPrivate := clamp secret})) ?_
+    intro _
+    refine ensures_bind _ _ ((ensures_iff _ _ _).mpr (generatePublic_wg_spec P _)) ?_
+    intro generated
+    rcases generated with ⟨pub, ok⟩
+    refine ensures_bind _ _ (hbranch _ _) ?_
+    intro noEphemeral
+    cases noEphemeral with
+    | true => exact hpure
+    | false =>
+      cases pub with
+      | none => exact hstop _ R
+      | some e =>
+        refine ensures_bind _ _ ((ensures_iff _ _ _).mpr (messageEphemeral_wg_spec P _ _ _ _)) ?_
+        intro ephemeral
+        rcases ephemeral with ⟨ck, hash⟩
+        refine ensures_bind _ _ (hchain _ _) ?_
+        intro _
+        refine ensures_bind _ _ ((ensures_iff _ _ _).mpr (mixDh_wg_spec P _ _ _ _)) ?_
+        intro es
+        refine ensures_bind _ _ (hbranch _ _) ?_
+        intro esFailed
+        cases esFailed with
+        | true => exact hpure
+        | false =>
+          cases es with
+          | none => exact hstop _ R
+          | some es =>
+            rcases es with ⟨ck, key⟩
+            refine ensures_bind _ _ (hchain _ _) ?_
+            intro _
+            refine ensures_bind _ _ ((ensures_iff _ _ _).mpr (mixPrecomputedDh_wg_spec P _ _)) ?_
+            intro ss
+            refine ensures_bind _ _ (hbranch _ _) ?_
+            intro ssFailed
+            cases ssFailed with
+            | true => exact hpure
+            | false =>
+              cases ss with
+              | none => exact hstop _ R
+              | some ss =>
+                rcases ss with ⟨ck, key⟩
+                refine ensures_bind _ _ (hhidden _) ?_
+                intro now
+                refine ensures_bind _ _ (hchain _ _) ?_
+                intro _
+                refine ensures_bind _ _ hderef ?_
+                intro _
+                refine ensures_bind _ _ hindex ?_
+                intro index
+                rw [← bind_assoc]
+                refine ensures_bind _ _ (hwrite
+                  (fun p => {p with handshakeState := HANDSHAKE_CREATED_INITIATION})) ?_
+                intro _ g ambient x g' ambient' hp hr
+                cases hr
+                exact hp
 
 theorem createResponse_owners_spec (pid : PeerId) :
     ⦃fun w => ⌜OwnersBoundedSafe w⌝⦄ createResponse pid ⦃⇓? _ w => ⌜OwnersBoundedSafe w⌝⦄ := by
-  let P := fun k : Kernel => ∃ d, k.wg = some d ∧ UniqueOwners d.indexTable ∧ KeypairOwnersBounded d
-  have hh := hidden_kernel_spec P
-  have hg := generatePublic_wg_spec P
-  have he := messageEphemeral_wg_spec P
-  have hd := mixDh_wg_spec P
-  have hk := kdf_wg_spec P
-  have ho := kdfOut_wg_spec P
-  have hi := indexInsert_handshake_ownersBounded
-  have hp := setPeer_ownersBounded
-  noise_vcgen [createResponse, _private.Leanux.WG.Handshake.«0».Leanux.WG.setChain,
-    IndexOwner.peerDeref, IndexOwner.peerWord, unsupported, getPeer, getDev, getK,
-    branch, invariant, hh, hg, he, hd, hk, ho, hi, hp]
+  apply (ensures_iff _ _ _).mp
+  let P : WGWorld → Prop := OwnersBoundedSafe
+  let R : Option (List UInt8) → WGWorld → Prop := fun _ => P
+  change Ensures _ P R
+  have hpure : Ensures (pure none : WG.M (Option (List UInt8))) P R := by
+    intro g ambient x g' ambient' hp hr
+    cases hr
+    exact hp
+  have hstop {α : Type} (what : String) (Q : α → WGWorld → Prop) :
+      Ensures (invariant what : WG.M α) P Q := by
+    intro g ambient x g' ambient' hp hr
+    simp [invariant, AmbientM.invariant] at hr
+    cases hr
+  have hread : Ensures (getPeer pid) P (fun _ => P) := by
+    intro g ambient x g' ambient' hp hr
+    exact ((ensures_iff _ _ _).mpr (getPeer_spec pid P)
+      g ambient x g' ambient' hp hr).1
+  have hbranch (site : Decision) (value : Bool) :
+      Ensures (branch site value : WG.M Bool) P (fun _ => P) :=
+    (ensures_iff _ _ _).mpr (hoare_liftAmbient_variant (AmbientM.branch site value) P)
+  have hhidden (site : HiddenSite) :
+      Ensures (hidden site : WG.M (List UInt8)) P (fun _ => P) :=
+    (ensures_iff _ _ _).mpr (hoare_liftAmbient_variant (AmbientM.hidden site) P)
+  have hwrite (f : Peer → Peer) :
+      Ensures (do setPeer pid (f (← getPeer pid))) P (fun _ => P) := by
+    refine ensures_bind _ _ hread ?_
+    intro p
+    exact (ensures_iff _ _ _).mpr (setPeer_ownersBounded pid (f p))
+  have hchain (ck hash : List UInt8) :
+      Ensures ((noise_const _private.Leanux.WG.Handshake.«0».Leanux.WG.setChain) pid ck hash)
+        P (fun _ => P) :=
+    hwrite (fun p => {p with chainingKey := ck, hash})
+  have hderef : Ensures (IndexOwner.peerDeref (.handshake pid)) P (fun _ => P) := by
+    unfold IndexOwner.peerDeref IndexOwner.peerWord
+    refine ensures_bind (Q := fun _ => P) _ _ ?_ ?_
+    · refine ensures_bind (Q := fun _ => P) _ _ hread ?_
+      intro p g ambient x g' ambient' hp hr
+      cases hr
+      exact hp
+    · intro word
+      cases word with
+      | none =>
+        exact (ensures_iff _ _ _).mpr (hoare_liftAmbient_variant
+          (AmbientM.unsupported "entry->peer is NULL: the C dereferences it") P)
+      | some target =>
+        intro g ambient x g' ambient' hp hr
+        cases hr
+        exact hp
+  have hindex : Ensures (liftIndex (indexInsert (.handshake pid))) P (fun _ => P) :=
+    (ensures_iff _ _ _).mpr (indexInsert_handshake_ownersBounded pid)
+  unfold createResponse
+  refine ensures_bind _ _ hread ?_
+  intro p
+  refine ensures_bind _ _ (hbranch _ _) ?_
+  intro notConsumed
+  cases notConsumed with
+  | true => exact hpure
+  | false =>
+    refine ensures_bind _ _ (hhidden _) ?_
+    intro secret
+    rw [← bind_assoc]
+    refine ensures_bind _ _ (hwrite (fun p => {p with ephemeralPrivate := clamp secret})) ?_
+    intro _
+    refine ensures_bind _ _ ((ensures_iff _ _ _).mpr (generatePublic_wg_spec P _)) ?_
+    intro generated
+    rcases generated with ⟨pub, ok⟩
+    refine ensures_bind _ _ (hbranch _ _) ?_
+    intro noEphemeral
+    cases noEphemeral with
+    | true => exact hpure
+    | false =>
+      cases pub with
+      | none => exact hstop _ R
+      | some e =>
+        refine ensures_bind _ _ ((ensures_iff _ _ _).mpr (messageEphemeral_wg_spec P _ _ _ _)) ?_
+        intro ephemeral
+        rcases ephemeral with ⟨ck, hash⟩
+        refine ensures_bind _ _ (hchain _ _) ?_
+        intro _
+        refine ensures_bind _ _ ((ensures_iff _ _ _).mpr (mixDh_wg_spec P _ _ _ _)) ?_
+        intro ee
+        refine ensures_bind _ _ (hbranch _ _) ?_
+        intro eeFailed
+        cases eeFailed with
+        | true => exact hpure
+        | false =>
+          cases ee with
+          | none => exact hstop _ R
+          | some ee =>
+            rcases ee with ⟨ck, key⟩
+            refine ensures_bind _ _ (hchain _ _) ?_
+            intro _
+            refine ensures_bind _ _ ((ensures_iff _ _ _).mpr (mixDh_wg_spec P _ _ _ _)) ?_
+            intro se
+            refine ensures_bind _ _ (hbranch _ _) ?_
+            intro seFailed
+            cases seFailed with
+            | true => exact hpure
+            | false =>
+              cases se with
+              | none => exact hstop _ R
+              | some se =>
+                rcases se with ⟨ck, key⟩
+                refine ensures_bind _ _ ((ensures_iff _ _ _).mpr (kdf_wg_spec P _ _ _ _)) ?_
+                intro outs
+                refine ensures_bind _ _ ((ensures_iff _ _ _).mpr (kdfOut_wg_spec P outs 0)) ?_
+                intro ck
+                refine ensures_bind _ _ ((ensures_iff _ _ _).mpr (kdfOut_wg_spec P outs 1)) ?_
+                intro tempHash
+                refine ensures_bind _ _ ((ensures_iff _ _ _).mpr (kdfOut_wg_spec P outs 2)) ?_
+                intro key
+                refine ensures_bind _ _ (hchain _ _) ?_
+                intro _
+                refine ensures_bind _ _ hderef ?_
+                intro _
+                refine ensures_bind _ _ hindex ?_
+                intro index
+                rw [← bind_assoc]
+                refine ensures_bind _ _ (hwrite
+                  (fun p => {p with handshakeState := HANDSHAKE_CREATED_RESPONSE})) ?_
+                intro _ g ambient x g' ambient' hp hr
+                cases hr
+                exact hp
+
 
 end Leanux.Proofs.WG.Index

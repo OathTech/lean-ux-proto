@@ -2,39 +2,53 @@ import Leanux.Proofs.WG.Config.Returns
 import Leanux.Proofs.WG.Config.Port
 
 set_option pp.structureInstances false
-set_option maxHeartbeats 800000
 
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise Std.Do
 
 theorem socketReinit_returns (new4 new6 : Option Nat) (d : Device) :
-    Returns (socketReinit new4 new6) (fun w => w.k.wg = some d)
-      (fun _ w => w.k.wg = some
+    Returns (socketReinit new4 new6) (fun g => g.dev = some d)
+      (fun _ g => g.dev = some
         { d with sock4 := new4, sock6 := new6, incomingPort := new4.getD d.incomingPort }) := by
-  rw [returns_iff]
-  cases new4 <;> simp only [socketReinit, Option.isSome_some, Option.isSome_none,
-    Option.getD_none, Option.getD_some]
-  all_goals mvcgen [sockFree, iputReport, branch,
-    getDev, getK, modifyDev, modifyK, invariant]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals repeat intro
-  all_goals simp_all
-  all_goals grind only
+  intro g ambient device
+  let mark (a : Ambient) (site : Decision) (outcome : Bool) : Ambient :=
+    {a with steps := a.steps.push {decision := site, outcome, netRx := a.netRxSection}}
+  let free (a : Ambient) (sock : Option Nat) : Ambient :=
+    let next := mark a .sockFreeNull sock.isNone
+    if sock.isNone then next else mark (mark next .iputLastReference true) .iputLazytime false
+  let after := free (free (mark ambient .reinitHasNew4 new4.isSome) d.sock4) d.sock6
+  let final := {g with dev := some {d with sock4 := new4, sock6 := new6, incomingPort := new4.getD d.incomingPort}}
+  refine ⟨(), final, after, ?_, rfl⟩
+  cases new4 <;> cases old4 : d.sock4 <;> cases old6 : d.sock6
+  all_goals simp [socketReinit, getDev, device, modifyDev, branch, AmbientM.branch,
+    sockFree, iputReport, AmbientM.iputReport, old4, old6, final, after, free, mark]
+  all_goals rfl
 
 theorem socketInit_nonzero_returns (port : Nat) (nonzero : port ≠ 0)
     (d : Device) (bound : Bool) (net : d.creatingNet = true) :
-    Returns (socketInit port) (fun w => w.k.wg = some d ∧ w.portBound port = bound)
-      (fun ret w => if bound || d.sock4 == some port || d.sock6 == some port
-        then ret = -EADDRINUSE ∧ w.k.wg = some d
-        else ret = 0 ∧ w.k.wg = some
+    Returns (socketInit port) (fun g => g.dev = some d ∧ g.portBound port = bound)
+      (fun ret g => if bound || d.sock4 == some port || d.sock6 == some port
+        then ret = -EADDRINUSE ∧ g.dev = some d
+        else ret = 0 ∧ g.dev = some
           { d with sock4 := some port, sock6 := some port, incomingPort := port }) := by
-  have hs := (returns_iff _ _ _).mp (socketReinit_returns (some port) (some port) d)
-  rw [returns_iff]
-  simp [socketInit, nonzero]
-  mvcgen [getDev, getK, iputReport, branch, invariant, hs]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals repeat intro
-  all_goals simp_all
-  all_goals grind only
+  intro g ambient pre
+  by_cases held : (bound || d.sock4 == some port || d.sock6 == some port) = true
+  · simp only [Bool.or_eq_true, beq_iff_eq] at held
+    let mark (a : Ambient) (site : Decision) (outcome : Bool) : Ambient :=
+      {a with steps := a.steps.push {decision := site, outcome, netRx := a.netRxSection}}
+    let after := mark (mark ambient .iputLastReference true) .iputLazytime false
+    refine ⟨-EADDRINUSE, g, after, ?_, ?_⟩
+    · simp [socketInit, getDev, pre.1, pre.2, net, nonzero, held,
+        iputReport, AmbientM.iputReport, AmbientM.branch, after, mark]
+      rfl
+    · simp [held, pre.1]
+  · simp only [Bool.or_eq_true, beq_iff_eq] at held
+    obtain ⟨result, final, after, run, device⟩ :=
+      socketReinit_returns (some port) (some port) d g ambient pre.1
+    refine ⟨0, final, after, ?_, ?_⟩
+    · simp [socketInit, getDev, pre.1, pre.2, net, nonzero, held]
+      rw [run]
+      rfl
+    · simpa [held] using And.intro (rfl : (0 : Int) = 0) device
 
 end Leanux.Proofs.WG.Config
