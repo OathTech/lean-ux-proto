@@ -24,7 +24,7 @@ and attributed theorem declarations. Campaign 2 owns 427 Lean files,
 | H3 Roaming | 35 | 119 | 13 | Six native endpoint/destination contracts plus three product publication source factors and a generic observation-read frame carried; two Ambient frames deleted; native decryption provenance and five product publication leaves carried; all six enqueue/publication caller contracts, ten poll endpoint source contracts and seven attempt-audit source contracts, three poll support frames, seven endpoint claims and five attempt facts/claims carried; broader caller/authentication closure pending |
 | H4 Configuration | 130 | 554 | 79 | Total-return/branch laws, seven exact source factors, three endpoint-clearing frames, three empty-root insertion contracts, total first placement, validation/identity, partial and total empty-list peer dumps, ordered allowed-list deletion, concrete dump cancellation and four total root-transfer contracts, all five inserted-node readback contracts and singleton root removal with its two pure effects, native port/flag/socket contracts, allowed-IP set/get composition, fourteen structural/leaf removal contracts and seven scalar/set-get contracts, six total scalar/readback contracts, paired transfer/readback, three pure removal facts, fourteen collapse/whole-removal contracts, nineteen pure removal frames, six random-port contracts, four recorded-port contracts, four total malformed-peer configuration contracts and eighteen pure removal/pair/owner effects, six endpoint/identity/precomputation contracts, seven root-replacement contracts and eleven expiry/clock contracts checked; three Ambient frames deleted; remaining effects/readback carry pending |
 | H5 Progress | 59 | 265 | 42 | Twenty-nine pure/control or pure-source theorems, three generalized worker control contracts and one Ambient record frame and seven exact cut-source/projected contracts and six arbitrary-record jitter source/projected contracts and six arbitrary-record index insertion source contracts and both projected outcome claims, thirteen complete poll-bound contracts and three original scheduler-probe source contracts checked; two pointer-ring snapshot contracts and remaining operational carry pending |
-| H6 Timer discipline | 98 | 404 | 50 | Two pure session-liveness relations, map/guard base, two current wheel effects, separated jitter bound/frame and two projected bound claims, six exact jitter-record contracts and four exact exhaustion contracts and four source/product outcome claims, plus a checked stale-statement counterexample and one exact whole-WG wheel-placement support contract; three Ambient frames deleted; seven exact-peer arming claims and wider timer/worker semantics pending |
+| H6 Timer discipline | 98 | 404 | 50 | Two pure session-liveness relations, map/guard base, two current wheel effects, separated jitter bound/frame and two projected bound claims, six exact jitter-record contracts and four exact exhaustion contracts and four source/product outcome claims, plus a checked stale-statement counterexample and one exact whole-WG wheel-placement support contract; three Ambient frames deleted; two projected current wheel corrections checked; five remaining legacy arming/caller claims and wider timer/worker semantics pending |
 
 Retyped, deleted and retained counts will be reported per validated tranche.
 All six results remain lagging, with their previous charter gaps unchanged.
@@ -2331,5 +2331,69 @@ Fresh replay passes for ZeroPort, InitiationReadyClaims, TimerQueueFrames and
 AllowedRemovalConverseLeaves. Reproduce with `scripts/in-bundle lake build`
 on those modules under `Leanux.Proofs.WG`, inspect logical declarations
 with `#print axioms`, and use
+`scripts/in-bundle lake env leanchecker --fresh MODULE`. On this host use
+`capped`, 32 Lean threads and 16 QEMU slots.
+
+## Projected port claims, removal branches and explicit timer corrections
+
+| Tranche | Before | Retyped | Corrected | Deleted | Kept | Added | After |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `Config.PortSourceClaims` | 14 | 14 | 0 | 0 | 0 | 0 | 14 |
+| `Config.AllowedRemovalConverseBranches` | 7 | 7 | 0 | 0 | 0 | 0 | 7 |
+| `TimerDiscipline.ArmingClaims` | 2 | 0 | 2 | 0 | 0 | 0 | 2 |
+| This tranche | 23 | 21 | 2 | 0 | 0 | 0 | 23 |
+| Cumulative processed baseline and checked support | 782 | 574 | 2 | 21 | 185 | 44 | 805 |
+
+The census is 488 campaign-owned files, 1,854 theorems and 265 checked proof
+modules. Of the baseline, 1,049 await whole-module validation. Checked support
+is H1 154, H2 187, H3 72, H4 288, H5 70 and H6 34. All six whole-result
+closures and the full gate remain lagging. The 258 terminal names and order
+remain unchanged.
+
+Fourteen existing source claims now live in `PortSourceClaims`, over the
+campaign projection: nine partial, four total and one exact-stop contract.
+Every original observation remains: selected fixture interface, Device,
+pointwise listed/unlisted peer effects, bound-port functions or single-port
+bounds as appropriate, supplied draw records and arbitrary unused tails.
+Recorded-return wrappers unpack the actual native run. Collision retains the
+exact outside-domain error message and existential source site, rather than
+asserting merely that success is impossible. The fourteen corresponding
+terminal declarations also check in isolation with standard axioms; only the
+collision wrapper's proof body changes to use the projected alias. These
+isolated checks do not enter the checked-module census or validate the
+complete Config Statements module.
+
+Seven more removal-converse branches moved out of the aggregate. They retain
+the original NodePairs, shape, unlink and parent-choice premises. Successive
+node residence, sibling and parent reads remain conclusions of the actual
+execution, with aliases allowed. Local monadic compositions use the actual
+guarded AIP lifts inside WG execution. Eight aggregate contracts remain
+unchanged and pending at this checkpoint.
+
+The two `ArmingClaims` statements explicitly correct stale pre-wheel
+conclusions; they are not type-only carries. A universally quantified entry
+snapshot names the actual starting observation without adding readiness.
+Recorded arming preserves its original recorded-mode/resident-peer
+normal-return domain and signed clock gap, while describing the exact whole
+WG state in same-expiry and changed-expiry cases. Deletion specifies the
+entire final native snapshot, clearing both expiry and wheel and preserving
+Ambient. Three pure view transformations retain every other WG/snapshot
+field. The [legacy deletion counterexample](2026-10-17-proof-campaign-2-timer-carry.md)
+remains valid. Five other legacy arming/caller contracts remain unchanged
+and pending; downstream uses must adopt the corrected effects. No mirror
+or shared-layer change is involved.
+
+The combined scoped build passes 97 jobs without warnings. Axiom inspection
+covers 366 logical roots in 69 proof modules with only the three standard
+axioms. Independent reviews, static checks, whitespace and mirror/shared
+boundaries pass. Port source aliases and projected arming corrections passed
+their first probes; removal branches passed their second after three local
+compositions were explicitly typed as WG.M. No infrastructure retry,
+cap/proof-limit increase or guest run occurred.
+
+Fresh replay passes for PortSourceClaims, AllowedRemovalConverseBranches and
+ArmingClaims. Reproduce with `scripts/in-bundle lake build` on those modules
+under `Leanux.Proofs.WG`, inspect logical declarations with
+`#print axioms`, and replay with
 `scripts/in-bundle lake env leanchecker --fresh MODULE`. On this host use
 `capped`, 32 Lean threads and 16 QEMU slots.

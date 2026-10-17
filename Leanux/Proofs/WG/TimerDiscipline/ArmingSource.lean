@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.TimerDiscipline.ArmingClaims
 import Leanux.Proofs.WG.Noise.CryptoFrames
 import Leanux.Proofs.WG.Noise.Slots
 import Leanux.WG.Timers
@@ -8,31 +9,6 @@ set_option maxHeartbeats 800000
 
 namespace Leanux.Proofs.WG.TimerDiscipline
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise Std.Do
-
-theorem armTimer_recorded (pid : PeerId) (timer : PeerTimer) (delay : Nat)
-    (caller : UInt64) (p : Peer) :
-    Ensures (armTimer pid timer delay (some caller))
-      (fun w => w.armRecords = true ∧ peerAt w pid = some p)
-      (fun _ w => peerAt w pid = some (p.setTimer timer (some (caller + delay.toUInt64))) ∧
-        ∃ now, w.jiffiesLast = some now ∧
-          0 ≤ (now - caller).toInt64 ∧ (now - caller).toInt64 ≤ 1) := by
-  rw [ensures_iff]
-  have hh := hidden_kernel_spec (fun k => (k.wg.bind fun d => d.peers[pid]?) = some p)
-  mvcgen [armTimer, getPeer, getDev, getK, setPeer, modifyDev, modifyK,
-    invariant, unsupported, hh]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals repeat intro
-  all_goals simp_all [peerAt, Option.bind_map, Function.comp_def, Std.TreeMap.getElem?_insert]
-  all_goals grind only
-
-theorem delTimer_exact (pid : PeerId) (timer : PeerTimer) (p : Peer) :
-    Ensures (delTimer pid timer) (fun w => peerAt w pid = some p)
-      (fun _ w => peerAt w pid = some (p.setTimer timer none)) := by
-  rw [ensures_iff]
-  mvcgen [delTimer, getPeer, getDev, getK, setPeer, modifyDev, modifyK, invariant]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals repeat intro
-  all_goals simp_all [peerAt, Option.bind_map, Function.comp_def, Std.TreeMap.getElem?_insert]
 
 theorem modPeerTimer_effect (site : HiddenSite) (pid : PeerId) (timer : PeerTimer)
     (delay : Nat) (d : Device) (p : Peer) (resident : d.peers[pid]? = some p) :

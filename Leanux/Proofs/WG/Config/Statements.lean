@@ -427,11 +427,8 @@ theorem original_zero_socket_collision_stop (d : Device) (a b c e : UInt8)
         (w.wg.portBound (drawnPort a b c e) || d.sock4 == some (drawnPort a b c e) ||
           d.sock6 == some (drawnPort a b c e)) = true)
       (fun _ out => ∃ site, out = .error
-        (.outsideDomain site "the random port draw collides with a bound port")) := by
-  intro w ⟨device, records, collision⟩
-  obtain ⟨site, stop⟩ := SourceClaims.original_zero_socket_collision_stop
-    w d a b c e rest device net records collision
-  exact ⟨site, by simp only [Campaign2.observeResult, stop, Except.map]⟩
+        (.outsideDomain site "the random port draw collides with a bound port")) :=
+  SourceClaims.original_zero_socket_collision_stop d a b c e rest net
 
 /-- Cookie-key precomputation returns normally. It changes only the device
 cookie-encryption and MAC1 keys, to the specified public-key hashes when identity
