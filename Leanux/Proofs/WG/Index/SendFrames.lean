@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Index.TablePeerFrames
 import Leanux.Proofs.WG.Index.NewlinkFrames
 import Leanux.Proofs.WG.TimerDiscipline.SendBufferFrame
 import Leanux.Proofs.WG.TimerDiscipline.JitterFrames
@@ -9,13 +10,6 @@ set_option maxHeartbeats 800000
 namespace Leanux.Proofs.WG.Index
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise Std.Do
 
-theorem tablesSafe_of_cursor (k final : Kernel)
-    (same : final.wg.map TimerDiscipline.tableCursor = k.wg.map TimerDiscipline.tableCursor)
-    (safe : TablesSafeKernel k) : TablesSafeKernel final := by
-  cases before : k.wg <;> cases after : final.wg <;>
-    simp_all [TablesSafeKernel, TimerDiscipline.tableCursor, DeviceTablesSafe, KeypairOwnersBounded]
-  all_goals grind
-
 theorem sendBufferToPeer_tables (pid : PeerId) (bytes : List UInt8) :
     ⦃fun w => ⌜TablesSafeKernel w.k⌝⦄ sendBufferToPeer pid bytes
       ⦃⇓? _ w => ⌜TablesSafeKernel w.k⌝⦄ := by
@@ -26,25 +20,6 @@ theorem sendBufferToPeer_tables (pid : PeerId) (bytes : List UInt8) :
       (TimerDiscipline.sendAt w pid).1 (TimerDiscipline.sendAt w pid).2)
     w result final rfl run
   exact tablesSafe_of_cursor w.k final.k (congrArg Prod.fst h) pre
-
-theorem setPeer_tables (pid : PeerId) (p : Peer) :
-    ⦃fun w => ⌜TablesSafeKernel w.k⌝⦄ setPeer pid p
-      ⦃⇓? _ w => ⌜TablesSafeKernel w.k⌝⦄ := by
-  mvcgen [setPeer, modifyDev, modifyK]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals cases hd : (by assumption : World).k.wg <;> simp_all [TablesSafeKernel, DeviceTablesSafe, KeypairOwnersBounded]
-  all_goals grind
-
-theorem addMacToPacket_tables (pid : PeerId) (msg : List UInt8) :
-    ⦃fun w => ⌜TablesSafeKernel w.k⌝⦄ addMacToPacket pid msg
-      ⦃⇓? _ w => ⌜TablesSafeKernel w.k⌝⦄ := by
-  have hh := hiddenClock64_kernel_spec TablesSafeKernel
-  have hp := setPeer_tables
-  mvcgen [addMacToPacket, WG.andM, branchExpired, birthdateTest, getPeer, getDev, getK,
-    branch, branchCmp, invariant, hh, hp]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all
-  all_goals grind
 
 theorem modPeerTimer_tables (site : HiddenSite) (pid : PeerId) (timer : PeerTimer) (delay : Nat) :
     ⦃fun w => ⌜TablesSafeKernel w.k⌝⦄ modPeerTimer site pid timer delay

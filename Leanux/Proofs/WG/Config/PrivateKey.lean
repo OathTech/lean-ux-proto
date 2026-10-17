@@ -17,25 +17,35 @@ def cookieKeysAfter (d : Device) : Device :=
       else List.replicate 32 0 }
 
 theorem cookiePrecompute_returns (d : Device) :
-    Returns cookiePrecomputeDeviceKeys (fun w => w.k.wg = some d)
-      (fun _ w => w.k.wg = some (cookieKeysAfter d)) := by
-  rw [returns_iff]
-  mvcgen [cookiePrecomputeDeviceKeys, getDev, getK, modifyDev, modifyK, branch, invariant]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals repeat intro
-  all_goals simp_all [cookieKeysAfter]
+    Returns cookiePrecomputeDeviceKeys (fun g => g.dev = some d)
+      (fun _ g => g.dev = some (cookieKeysAfter d)) := by
+  intro g ambient device
+  let after := {ambient with steps := ambient.steps.push {
+    decision := .cookieDeviceHasIdentity, outcome := d.staticIdentity.hasIdentity,
+    netRx := ambient.netRxSection}}
+  refine ⟨(), {g with dev := some (cookieKeysAfter d)}, after, ?_, rfl⟩
+  cases has : d.staticIdentity.hasIdentity
+  all_goals simp [cookiePrecomputeDeviceKeys, getDev, device, modifyDev,
+    branch, AmbientM.branch, has, cookieKeysAfter, after]
+  all_goals rfl
 
 theorem setStaticIdentity_returns (key : Key) (d : Device) :
-    Returns (setStaticIdentityPrivateKey key) (fun w => w.k.wg = some d)
-      (fun _ w => w.k.wg = some { d with staticIdentity := identityAfter key d.staticIdentity }) := by
-  rw [returns_iff]
-  mvcgen [setStaticIdentityPrivateKey, generatePublic, requireNotPending,
-    getDev, getK, modifyDev, modifyK, branch, invariant, unsupported]
-  invariants
-  | inv1 => ((⇓ _ w => ⌜w.k.wg = some d⌝) : PostCond _ (.arg World (.except Stop .pure)))
-  all_goals try dsimp +zetaDelta only at *
-  all_goals repeat intro
-  all_goals simp_all [identityAfter]
+    Returns (setStaticIdentityPrivateKey key) (fun g => g.dev = some d)
+      (fun _ g => g.dev = some { d with staticIdentity := identityAfter key d.staticIdentity }) := by
+  have idle (peers : List PeerId) :
+      List.foldlM (fun (_ : Unit) pid => requireNotPending pid "changing the device identity") () peers = (pure () : WG.M Unit) := by
+    induction peers with
+    | nil => rfl
+    | cons pid peers ih => simpa only [List.foldlM_cons, requireNotPending, pure_bind] using ih
+  intro g ambient device
+  let after := {ambient with steps := ambient.steps.push {
+    decision := .genPublicNullSecret, outcome := key == nullPoint,
+    netRx := ambient.netRxSection}}
+  refine ⟨(), {g with dev := some {d with staticIdentity := identityAfter key d.staticIdentity}}, after, ?_, rfl⟩
+  cases null : key == nullPoint
+  all_goals simp [setStaticIdentityPrivateKey, idle, getDev, device, generatePublic,
+    branch, AmbientM.branch, null, modifyDev, identityAfter, after]
+  all_goals rfl
 
 def privateKeyAttrs (d : Device) (key : Key) : DeviceAttrs :=
   { device := byIndex d, privateKey := some key }
@@ -43,17 +53,67 @@ def privateKeyAttrs (d : Device) (key : Key) : DeviceAttrs :=
 theorem setDevice_private_unchanged (d : Device) (key : Key)
     (same : d.staticIdentity.staticPrivate = key) :
     Returns (wgSetDevice (privateKeyAttrs d key))
-      (fun w => w.k.wg = some d ∧ selectsDevice w d)
-      (fun ret w => ret = 0 ∧ w.k.wg = some { d with deviceUpdateGen := d.deviceUpdateGen + 1 }) := by
-  have hl := lookupInterface_index d
-  rw [← wgSetDevice_source, returns_iff]
-  simp [wgSetDeviceSource, deviceUpdateSource, deviceKeySource, devicePeersSource,
-    privateKeyAttrs, branch, bind_assoc, Leanux.WG.andM, Leanux.WG.orM,
-    WGDEVICE_F_ALL, WGDEVICE_F_REPLACE_PEERS]
-  mvcgen [getDev, getK, modifyDev, modifyK, invariant, hl]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals repeat intro
-  all_goals simp_all [same]
-  all_goals grind only
+      (fun g => g.dev = some d ∧ selectsDevice g d)
+      (fun ret g => ret = 0 ∧ g.dev = some { d with deviceUpdateGen := d.deviceUpdateGen + 1 }) := by
+  let updated := {d with deviceUpdateGen := d.deviceUpdateGen + 1}
+  let mark (site : Decision) (value : Bool) : WG.M Unit :=
+    monadLift (modify fun a : Ambient => {a with steps := a.steps.push {
+      decision := site, outcome := value, netRx := a.netRxSection}} : AmbientM Unit)
+  have branchSource (site : Decision) (value : Bool) :
+      (branch site value : WG.M Bool) = (do mark site value; pure value) := rfl
+  have hm (site : Decision) (value : Bool) (entry : Device) :
+      Returns (mark site value) (fun g => g.dev = some entry)
+        (fun _ g => g.dev = some entry) := by
+    intro g ambient device
+    exact ⟨(), g, {ambient with steps := ambient.steps.push {
+      decision := site, outcome := value, netRx := ambient.netRxSection}}, rfl, device⟩
+  have hu : Returns (modifyDev fun d => {d with deviceUpdateGen := d.deviceUpdateGen + 1})
+      (fun g => g.dev = some d) (fun _ g => g.dev = some updated) := by
+    intro g ambient device
+    refine ⟨(), {g with dev := some updated}, ambient, ?_, rfl⟩
+    simp [modifyDev, device, updated]
+    rfl
+  have keyTail : Returns (deviceKeySource (privateKeyAttrs d key))
+      (fun g => g.dev = some updated)
+      (fun ret g => ret = 0 ∧ g.dev = some updated) := by
+    intro g ambient device
+    let logged (a : Ambient) (site : Decision) (value : Bool) :=
+      {a with steps := a.steps.push {decision := site, outcome := value, netRx := a.netRxSection}}
+    let after := logged (logged (logged (logged (logged ambient
+      .setDevHasPrivateKey true) .setDevPrivateKeyLen true) .setDevKeyUnchanged true)
+      .setDevHasPeers false) .setDevZeroKey true
+    refine ⟨0, g, after, ?_, rfl, device⟩
+    simp [deviceKeySource, devicePeersSource, privateKeyAttrs, WG.andM, getDev,
+      device, updated, same, branch, AmbientM.branch, after, logged]
+    rfl
+  have tail : Returns (do
+      mark .setDevLookupErr false
+      mark .setDevHasFlags false
+      mark .setDevBadFlags false
+      mark .setDevHasPort false
+      mark .setDevHasFwmark false
+      modifyDev fun d => {d with deviceUpdateGen := d.deviceUpdateGen + 1}
+      mark .setDevFwmark false
+      mark .setDevPort false
+      mark .setDevReplacePeers false
+      deviceKeySource (privateKeyAttrs d key))
+      (fun g => g.dev = some d)
+      (fun ret g => ret = 0 ∧ g.dev = some updated) := by
+    refine returns_bind _ _ (hm _ _ d) (fun _ => ?_)
+    refine returns_bind _ _ (hm _ _ d) (fun _ => ?_)
+    refine returns_bind _ _ (hm _ _ d) (fun _ => ?_)
+    refine returns_bind _ _ (hm _ _ d) (fun _ => ?_)
+    refine returns_bind _ _ (hm _ _ d) (fun _ => ?_)
+    refine returns_bind _ _ hu (fun _ => ?_)
+    refine returns_bind _ _ (hm _ _ updated) (fun _ => ?_)
+    refine returns_bind _ _ (hm _ _ updated) (fun _ => ?_)
+    exact returns_bind _ _ (hm _ _ updated) (fun _ => keyTail)
+  rw [← wgSetDevice_source]
+  unfold wgSetDeviceSource
+  refine returns_bind _ _ ((returns_iff _ _ _).mpr (lookupInterface_index d)) ?_
+  intro ret g ambient pre
+  obtain ⟨rfl, device⟩ := pre
+  simpa [privateKeyAttrs, deviceUpdateSource, WG.orM,
+    branchSource, bind_assoc, WGDEVICE_F_ALL, WGDEVICE_F_REPLACE_PEERS] using tail g ambient device
 
 end Leanux.Proofs.WG.Config

@@ -19,10 +19,10 @@ and attributed theorem declarations. Campaign 2 owns 427 Lean files,
 | Result | Files | Before theorems | Before headlines | Retrofit status |
 | --- | ---: | ---: | ---: | --- |
 | Common projection | 2 | 0 | 0 | Native and product observations carried |
-| H1 Noise | 35 | 171 | 22 | Native access, crypto/slot/peer frames, slot/clear/zero operations and all four state-edge contracts and eleven ordered clear/release contracts, ten rotation/confirmation source contracts, projected clear/rotation/confirmation support and four session counter/word frames, both normal consume-tag contracts and four consecutive-confirmation contracts carried; all fourteen normal session source contracts and nineteen recorded totality/projected-ready/read-frame contracts carried; six type-given frames deleted; full caller/reachability closure pending |
-| H2 Index | 68 | 318 | 52 | Table/scans/insertion, full lookup/miss and success/empty-result inversion, exact allocation/release, eight native numeric-index frames, seven native owner frames plus their pure bound and both release/rotation owner invariants, ten projected table claims, all ten record contracts, exact draw exhaustion/corpus pair, five lifecycle contracts and 55 pure theorems checked; native receive factor, retirement frame and exact session-allocation factor, four session owner invariants, five handshake index invariants, three owner-creation invariants, the projected allocation effect, four sequential-allocation contracts and three new-device frames plus five link-lifecycle contracts carried; seven Ambient frames deleted; two stale peer-release totality counterexamples checked; whole terminal closure/callers pending |
+| H1 Noise | 35 | 171 | 22 | Native access, crypto/slot/peer frames, slot/clear/zero operations and all four state-edge contracts and eleven ordered clear/release contracts, ten rotation/confirmation source contracts, projected clear/rotation/confirmation support and four session counter/word frames, both normal consume-tag contracts and four consecutive-confirmation contracts carried; all fourteen normal session source contracts and nineteen recorded totality/projected-ready/read-frame contracts and two exact initiation-input contracts carried; six type-given frames deleted; full caller/reachability closure pending |
+| H2 Index | 68 | 318 | 52 | Table/scans/insertion, full lookup/miss and success/empty-result inversion, exact allocation/release, eight native numeric-index frames, seven native owner frames plus their pure bound and both release/rotation owner invariants, ten projected table claims, all ten record contracts, exact draw exhaustion/corpus pair, five lifecycle contracts and 55 pure theorems checked; native receive factor, retirement frame and exact session-allocation factor, four session owner invariants, five handshake index invariants, three owner-creation invariants, the projected allocation effect, four sequential-allocation contracts and three new-device frames plus five link-lifecycle contracts, four combined table invariants, session coherence and three table/peer frames carried; seven Ambient frames deleted; two stale peer-release totality counterexamples checked; whole terminal closure/callers pending |
 | H3 Roaming | 35 | 119 | 13 | Six native endpoint/destination contracts plus three product publication source factors and a generic observation-read frame carried; two Ambient frames deleted; native decryption provenance and five product publication leaves carried; all six enqueue/publication caller contracts, ten poll endpoint source contracts and seven attempt-audit source contracts, three poll support frames, seven endpoint claims and five attempt facts/claims carried; broader caller/authentication closure pending |
-| H4 Configuration | 130 | 554 | 79 | Total-return/branch laws, seven exact source factors, three endpoint-clearing frames, three empty-root insertion contracts, total first placement, validation/identity, partial and total empty-list peer dumps, ordered allowed-list deletion, concrete dump cancellation and four total root-transfer contracts, all five inserted-node readback contracts and singleton root removal with its two pure effects, native port/flag/socket contracts, allowed-IP set/get composition, fourteen structural/leaf removal contracts and seven scalar/set-get contracts, six total scalar/readback contracts, paired transfer/readback, three pure removal facts, fourteen collapse/whole-removal contracts, nineteen pure removal frames, six random-port contracts, four recorded-port contracts, four total malformed-peer configuration contracts and eighteen pure removal/pair/owner effects checked; three Ambient frames deleted; remaining effects/readback carry pending |
+| H4 Configuration | 130 | 554 | 79 | Total-return/branch laws, seven exact source factors, three endpoint-clearing frames, three empty-root insertion contracts, total first placement, validation/identity, partial and total empty-list peer dumps, ordered allowed-list deletion, concrete dump cancellation and four total root-transfer contracts, all five inserted-node readback contracts and singleton root removal with its two pure effects, native port/flag/socket contracts, allowed-IP set/get composition, fourteen structural/leaf removal contracts and seven scalar/set-get contracts, six total scalar/readback contracts, paired transfer/readback, three pure removal facts, fourteen collapse/whole-removal contracts, nineteen pure removal frames, six random-port contracts, four recorded-port contracts, four total malformed-peer configuration contracts and eighteen pure removal/pair/owner effects, six endpoint/identity/precomputation contracts, seven root-replacement contracts and eleven expiry/clock contracts checked; three Ambient frames deleted; remaining effects/readback carry pending |
 | H5 Progress | 59 | 265 | 42 | Twenty-nine pure/control or pure-source theorems, three generalized worker control contracts and one Ambient record frame and seven exact cut-source/projected contracts and six arbitrary-record jitter source/projected contracts and six arbitrary-record index insertion source contracts and both projected outcome claims, thirteen complete poll-bound contracts and three original scheduler-probe source contracts checked; two pointer-ring snapshot contracts and remaining operational carry pending |
 | H6 Timer discipline | 98 | 404 | 50 | Two pure session-liveness relations, map/guard base, two current wheel effects, separated jitter bound/frame and two projected bound claims, six exact jitter-record contracts and four exact exhaustion contracts and four source/product outcome claims, plus a checked stale-statement counterexample and one exact whole-WG wheel-placement support contract; three Ambient frames deleted; seven exact-peer arming claims and wider timer/worker semantics pending |
 
@@ -1820,3 +1820,101 @@ Reproduce with `scripts/in-bundle lake build` on the six fresh-replay roots
 above under `Leanux.Proofs.WG`; inspect logical roots with `#print axioms`
 and replay each with `scripts/in-bundle lake env leanchecker --fresh MODULE`.
 Use `capped`, 32 Lean threads and 16 QEMU slots on this host.
+
+## Table invariants, identity, expiry and recorded initiation inputs
+
+| Tranche | Before | Retyped | Deleted | Kept | Added | After |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `Index.TablePreservationSource`, `SessionCoherenceSource`, `TablePeerFrames` | 8 | 8 | 0 | 0 | 0 | 8 |
+| `Config.EndpointSources`, `PrivateKey`, `Precomputation` | 6 | 5 | 0 | 1 | 0 | 6 |
+| `Config.AllowedReplacement` | 7 | 5 | 0 | 2 | 0 | 7 |
+| `Config.ExpiryEffects`, `ExpiryReadSource`, `ExpiryClock` | 11 | 9 | 0 | 2 | 0 | 11 |
+| `Noise.InitiationReadyInputFrames`, `InitiationReadyInputSource` | 2 | 2 | 0 | 0 | 0 | 2 |
+| This tranche | 34 | 29 | 0 | 5 | 0 | 34 |
+| Cumulative processed baseline and checked support | 641 | 449 | 21 | 171 | 33 | 653 |
+
+The census is 464 campaign-owned files, 1,843 theorems and 218 checked proof
+modules. Of the baseline, 1,190 theorems still await validation.
+Checked support is H1 124, H2 187, H3 54, H4 191, H5 70 and H6 27.
+All 258 terminal names/order remain, and all six terminal closures and the
+full proof gate remain lagging.
+
+The table source contracts combine numeric-index and owner/allocation
+invariants from the same actual native execution. Their optional-device
+domain remains unchanged; guarded `liftIndex` preserves missing-device
+Stops. Session coherence retains its resident, self-word and rotation-fresh
+premises, with installation conditional on a true result. The three table
+frames remain substantive within WG: peer writes, MAC generation and the
+table/allocation cursor preserve exactly the original invariants.
+The existing declarations moved from `SendSource`, `ResponseSource`
+and `SendFrames`; all their other bodies remain unchanged and pending.
+The unchanged `TimerDiscipline.SendView` supplies the existing cursor,
+without a duplicate observation definition.
+
+Identity/precomputation keep arbitrary peers and devices, both identity and
+null-result arms, and the exact ordered repeated map writes. The unchanged
+private-key request increments the generation once without a new pending
+work or empty-peer-list premise. Endpoint clearing keeps both record modes,
+its exact device/other-peer frame and the actual reset timestamp.
+Root allowed-IP replacement retains every singleton/node/root/refcount/down
+and selector premise: acquisition, list/root removal and retained release
+occur in order, after the outer generation increment.
+
+Expiry retains its resident-only partial domain. A NULL handshake peer word
+or missing keypair still Stops; no readiness assumption was introduced.
+Index removal precedes handshake zeroing, the actual clock read/reset,
+and the ordered next/current invalidations, including aliased keypairs.
+The original prefix declarations and `zeroedHandshake` definition moved
+to `ExpiryReadSource`, allowing the existing head and clock proofs to share
+the same source contract. `expiryAfterClock_exact` still needs no residency
+premise because its input device construction installs the peer. The
+clock-extraction theorem names the actual intermediate WG and Ambient
+states from the same run.
+
+The two initiation input contracts preserve the exact supplied site,
+16/32-byte width, resident device and arbitrary record suffix.
+`InitiationReadyInputFrames.hidden_run` keeps exact full-product execution
+through the actual Ambient lift, including every subsystem and fixture
+field. The total input contract runs native WG over arbitrary Ambient.
+The other 23 initiation-source theorem bodies remain pending and unchanged;
+these are moved original contracts, not added companions.
+
+Scoped builds pass: table source 83 jobs, session coherence 87, table frames
+40 (including the unchanged SendView), endpoint source 49, private key 56,
+precomputation 57, root replacement 61, expiry effects 60, factored expiry
+clock 62, and initiation input 30. No compiler warning remains.
+Axiom audits cover 383 logical roots in the first combined source closure,
+270 in the expiry/replacement/frame closure and 23 in the initiation-input
+closure; every root uses only the three standard axioms. Fresh replay passes
+for SessionCoherenceSource, EndpointSources, Precomputation, ExpiryClock,
+AllowedReplacement, TablePeerFrames and InitiationReadyInputSource.
+Independent reviews found no remaining issue. Static token/import/name
+checks, whitespace and mirror/shared-layer boundaries pass.
+
+Development: table source/session coherence/private key passed first probe;
+table frames passed the second after a missing type annotation/import.
+Endpoint clearing passed the fourth after Boolean/record-lift normalization
+and unused-simp fixes. Precomputation first passed with an unused simp
+argument; removing the wrong occurrence failed, and the corrected third
+probe passed. Root replacement passed the second after two closed mask
+equalities and a warning fix. Expiry effects passed the second after native
+lift typing, bind/conditional factoring and a substitution fix; the
+factored clock candidate passed first time. Initiation input passed the
+second after redundant simp arguments were removed. Full compiler outputs
+were saved before preview; truncated previews were inspected further.
+All package builds passed first time. No infrastructure rerun, cap or proof
+limit increase, or guest run occurred.
+
+The separate `modPeerTimer_sendQueue` draft remains unclosed and uncounted.
+Seven changed agent probes and one changed root probe failed: the initial
+recursive split also reached a deterministic heartbeat limit; the final
+attempts leave two source-suffix equality obligations. No new premise,
+tracked placeholder or semantic discrepancy was accepted. Its scratch
+candidate remains available for further work; this is a failed proof
+attempt, not a scoped validation pass.
+
+Reproduce with `scripts/in-bundle lake build` on the seven fresh-replay
+roots above under `Leanux.Proofs.WG`, audit logical declarations with
+`#print axioms`, and replay each using
+`scripts/in-bundle lake env leanchecker --fresh MODULE`. On this host use
+`capped`, 32 Lean threads and 16 QEMU slots.

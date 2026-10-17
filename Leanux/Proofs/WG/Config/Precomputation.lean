@@ -16,24 +16,28 @@ def precomputeDevice (d : Device) (pid : PeerId) (p : Peer) : Device :=
 
 theorem precomputeStaticStatic_returns (pid : PeerId) (d : Device) (p : Peer)
     (resident : d.peers[pid]? = some p) :
-    Returns (precomputeStaticStatic pid) (fun w => w.k.wg = some d)
-      (fun _ w => w.k.wg = some (precomputeDevice d pid p)) := by
-  rw [returns_iff]
-  mvcgen [precomputeStaticStatic, requireNotPending, getPeer, getDev, getK,
-    setPeer, modifyDev, modifyK, branch, invariant, unsupported]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals repeat intro
-  all_goals simp_all [precomputeDevice, withPeer]
-  all_goals subst_vars
-  all_goals simp_all [precomputeDevice, withPeer]
-  all_goals grind only
+    Returns (precomputeStaticStatic pid) (fun g => g.dev = some d)
+      (fun _ g => g.dev = some (precomputeDevice d pid p)) := by
+  intro g ambient device
+  let mark (a : Ambient) (site : Decision) (value : Bool) :=
+    {a with steps := a.steps.push {decision := site, outcome := value, netRx := a.netRxSection}}
+  let first := mark ambient .precomputeNoIdentity (!d.staticIdentity.hasIdentity)
+  let after := if d.staticIdentity.hasIdentity then
+      mark first .precomputeNullPoint (!(curve25519 d.staticIdentity.staticPrivate p.remoteStatic).2)
+    else first
+  refine ⟨(), {g with dev := some (precomputeDevice d pid p)}, after, ?_, rfl⟩
+  cases has : d.staticIdentity.hasIdentity
+  all_goals cases nonNull : (curve25519 d.staticIdentity.staticPrivate p.remoteStatic).2
+  all_goals simp [precomputeStaticStatic, requireNotPending, getPeer, getDev, device, resident,
+    setPeer, modifyDev, branch, AmbientM.branch, has, nonNull, precomputeDevice, withPeer, after, first, mark]
+  all_goals rfl
 
 theorem precomputeDevice_peer (pid : PeerId) (d : Device) (p : Peer) :
     (precomputeDevice d pid p).peers[pid]? =
       some { p with precomputedStaticStatic := precomputedAfter d.staticIdentity p } := by
   simp only [precomputeDevice, precomputedAfter]
   split <;> simp_all [withPeer]
-  split <;> simp_all [withPeer]
+  split <;> simp_all
 
 
 end Leanux.Proofs.WG.Config

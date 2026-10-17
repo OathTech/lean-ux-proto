@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Noise.InitiationReadyInputSource
 import Leanux.Proofs.WG.Noise.InitiationReadyModel
 import Leanux.Proofs.WG.Noise.SessionReadySource
 import Leanux.Proofs.WG.Index.DrawRecords
@@ -55,28 +56,6 @@ theorem public_returns (secret : List UInt8) (nonnull : secret ≠ nullPoint)
   mvcgen [generatePublic, branch]
   all_goals try dsimp +zetaDelta only at *
   all_goals simp_all
-
-def inputSite (clock : Bool) : HiddenSite := if clock then .tai64nNow else .initEphemeral
-theorem hidden_run (clock : Bool) (bytes : List UInt8) (rest : List HiddenRecord)
-    (width : bytes.length = if clock then 16 else 32) (w : World)
-    (present : w.hidden = some ({site := (inputSite clock).info.id, bytes} :: rest)) :
-    (hidden (inputSite clock)).run w = .ok (bytes, {w with hidden := some rest}) := by
-  have p1 : HiddenSite.passive 1 = false := by decide
-  have p3 : HiddenSite.passive 3 = false := by decide
-  cases clock <;>
-    simp_all [inputSite, hidden, skipAmbient, noteNetRxStart, StateT.run, bind, pure,
-      get, getThe, MonadStateOf.get, set, StateT.bind, StateT.pure, StateT.get, StateT.set,
-      HiddenSite.info, p1, p3, Worker.sectionId, Worker.index, Except.pure, Except.bind,
-      List.drop_eq_nil_of_le, List.take_of_length_le]
-
-theorem hidden_returns (clock : Bool) (bytes : List UInt8) (rest : List HiddenRecord)
-    (width : bytes.length = if clock then 16 else 32) (d : Device) :
-    Returns (hidden (inputSite clock))
-      (fun w => w.k.wg = some d ∧ w.hidden = some ({site := (inputSite clock).info.id, bytes} :: rest))
-      (fun bs w => bs = bytes ∧ w.k.wg = some d ∧ w.hidden = some rest) := by
-  intro w pre
-  exact ⟨bytes, {w with hidden := some rest}, hidden_run clock bytes rest width w pre.2,
-    rfl, pre.1, rfl⟩
 
 def finish (pid : PeerId) (e encStatic encTime : List UInt8) : M (Option (List UInt8)) := do
   _ ← IndexOwner.peerDeref (.handshake pid)

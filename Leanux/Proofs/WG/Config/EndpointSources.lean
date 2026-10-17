@@ -9,20 +9,42 @@ open Leanux Leanux.WG Leanux.Proofs.WG.Noise Std.Do
 
 theorem clearEndpointSource_exact (pid : PeerId) (d : Device) (p : Peer)
     (resident : d.peers[pid]? = some p) :
-    Ensures (clearPeerEndpointSrc pid) (fun w => w.k.wg = some d)
-      (fun _ w => ∃ d' reset, w.k.wg = some d' ∧
+    Ensures (clearPeerEndpointSrc pid) (fun w => w.dev = some d)
+      (fun _ w => ∃ d' reset, w.dev = some d' ∧
         d' = { d with peers := d'.peers } ∧
         d'.peers[pid]? = some (clearedSource p reset) ∧
         ∀ q, q ≠ pid → d'.peers[q]? = d.peers[q]?) := by
-  let p1 : Peer := { p with endpoint := p.endpoint.map fun (e : Endpoint) => { e with src := 0, srcIf := 0 } }
-  let d1 := withPeer d pid p1
-  have hh := Roaming.hiddenJiffies_kernel_spec (fun k => k.wg = some d1)
-  rw [ensures_iff]
-  mvcgen [clearPeerEndpointSrc, dstCacheResetNow, dstCacheReset,
-    getPeer, getDev, getK, setPeer, modifyDev, modifyK, invariant, hh]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals repeat intro
-  all_goals simp_all [clearedSource, d1, p1, withPeer]
-  all_goals grind
+  intro g ambient result final after device run
+  have hiddenLift : (hiddenJiffies .dstCacheResetTs : WG.M UInt64) =
+      StateT.lift (AmbientM.hiddenJiffies .dstCacheResetTs) := rfl
+  cases mode : ambient.armRecords && g.dstCacheRecords with
+  | false =>
+    have disabled : ambient.armRecords = false ∨ g.dstCacheRecords = false := by
+      cases arm : ambient.armRecords with
+      | false => exact Or.inl rfl
+      | true => exact Or.inr (by simpa [arm] using mode)
+    simp [clearPeerEndpointSrc, dstCacheResetNow, dstCacheReset, getPeer, getDev,
+      setPeer, modifyDev, getAmbient, device, resident, disabled] at run
+    rcases run with ⟨rfl, rfl⟩
+    refine ⟨_, p.dstCache.resetTs, rfl, rfl, ?_, ?_⟩
+    · simp [clearedSource]
+    · intro q different
+      simp [Std.TreeMap.getElem?_insert, Ne.symm different]
+  | true =>
+    have modes : ambient.armRecords = true ∧ g.dstCacheRecords = true := by simpa using mode
+    cases draw : (AmbientM.hiddenJiffies .dstCacheResetTs).run ambient with
+    | error stop =>
+      simp [clearPeerEndpointSrc, dstCacheResetNow, dstCacheReset, getPeer, getDev,
+        setPeer, modifyDev, getAmbient, device, resident, modes.1, modes.2, hiddenLift, draw] at run
+      cases run
+    | ok output =>
+      obtain ⟨reset, next⟩ := output
+      simp [clearPeerEndpointSrc, dstCacheResetNow, dstCacheReset, getPeer, getDev,
+        setPeer, modifyDev, getAmbient, device, resident, modes.1, modes.2, hiddenLift, draw] at run
+      rcases run with ⟨rfl, rfl⟩
+      refine ⟨_, reset, rfl, rfl, ?_, ?_⟩
+      · simp [clearedSource]
+      · intro q different
+        simp [Std.TreeMap.getElem?_insert, Ne.symm different]
 
 end Leanux.Proofs.WG.Config
