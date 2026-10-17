@@ -44,7 +44,7 @@ theorem stackReceive6_sameKernel (pkt : List UInt8) :
     apply (ProjectedAction.iff_run _ _ _).mpr
     intro w x w' hr
     obtain ⟨e, he⟩ := h w
-    simp only [StateT.run_bind, he, Except.bind] at hr
+    simp only [StateT.run_bind, he] at hr
     contradiction
   have excluded (row : String) (tail : Unit → Leanux.M Unit) :=
     stopped (Stack.excluded row) (stackExcluded_failure row) tail

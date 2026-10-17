@@ -47,16 +47,15 @@ theorem preserves_pure (a : α) : Preserves P (pure a : StateT σ m α) :=
 
 theorem hoare_get (P : σ → Prop) :
     Hoare (get : StateT σ m σ) P (fun v s => v = s ∧ P s) := by
-  unfold Hoare
-  mvcgen
+  simp only [Hoare, Triple.iff, get, WP.get_StateT]
+  intro s
+  exact SPred.pure_mono (fun hp => ⟨True.intro, hp⟩)
 
 theorem hoare_modify (f : σ → σ) (h : ∀ s, P s → Q () (f s)) :
     Hoare (modify f : StateT σ m Unit) P Q := by
-  unfold Hoare
-  mvcgen
-  apply SPred.pure_intro
-  apply h
-  assumption
+  simp only [Hoare, Triple.iff, modify, modifyGet, WP.modifyGet_StateT]
+  intro s
+  exact SPred.pure_mono (h s)
 
 end Generic
 

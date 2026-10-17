@@ -60,8 +60,9 @@ theorem mapM_view_spec (view : S → σ) (P : σ → Prop) {α β : Type}
       ⦃fun w => ⌜P (view w)⌝⦄ List.mapM.loop f ys acc
       ⦃⇓? _ w => ⌜P (view w)⌝⦄ := by
     induction ys generalizing acc with
-    | nil => mvcgen [List.mapM.loop]
-    | cons y ys ih => mvcgen [List.mapM.loop, hf, ih]
+    | nil => exact preserves_pure _
+    | cons y ys ih =>
+      exact preserves_bind (hf y) (fun value => ih (value :: acc))
   exact loop xs []
 
 end Leanux.Proofs.Framing

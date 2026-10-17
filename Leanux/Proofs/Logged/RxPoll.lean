@@ -154,7 +154,7 @@ theorem rxPollLogged_erases (pid : PeerId) (budget : Nat)
     | with_reducible exact napiGroFlushAllLogged_erases logged original h _
     | with_reducible exact h _
     | intro_forall
-    | (split <;> try simp_all only [Option.some.injEq, reduceCtorEq, forall_eq', not_true_eq_false])
+    | (split <;> try simp_all only [Option.some.injEq, forall_eq'])
   all_goals
     simp_all only [Option.some.injEq]
     exact erases_liftM _

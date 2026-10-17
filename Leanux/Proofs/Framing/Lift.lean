@@ -31,7 +31,7 @@ theorem liftWG_bind (a : WG.M α) (f : α → WG.M β) :
   | error e => rfl
   | ok out =>
     rcases out with ⟨⟨x, g⟩, ambient⟩
-    simp only [Except.map, Except.bind]
+    simp only [Except.map]
     exact (liftWG_run (f x) {w with wg := g, ambient}).symm
 
 
@@ -94,8 +94,7 @@ theorem liftIndex_run (a : WG.IndexM α) (g : WGWorld) (ambient : Ambient) :
     simp [WG.liftIndex, WG.getDev, hd, invariant, AmbientM.invariant]
     rfl
   | some d =>
-    simp only [WG.liftIndex, WG.getDev, hd, StateT.run_bind, StateT.run_pure,
-      StateT.run_lift]
+    simp only [WG.liftIndex, WG.getDev, StateT.run_bind, StateT.run_pure]
     cases ha : (a.run d.indexTable).run ambient <;>
       simp [WG.modifyDev, hd, ha] <;> rfl
 

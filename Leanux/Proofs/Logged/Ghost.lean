@@ -43,8 +43,8 @@ theorem erasesT_ite (p : Prop) [Decidable p]
     (ht : p → ErasesT gt ot) (he : ¬ p → ErasesT ge oe) :
     ErasesT (if p then gt else ge) (if p then ot else oe) := by
   by_cases hp : p
-  · simpa only [if_pos hp] using ht hp
-  · simpa only [if_neg hp] using he hp
+  · simpa only [ite_eq_left hp] using ht hp
+  · simpa only [ite_eq_right hp] using he hp
 
 theorem erasesT_forIn (xs : List α) (b : β)
     (g : α → β → StateT σ m (ForInStep β))

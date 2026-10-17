@@ -135,7 +135,7 @@ private theorem timerDispatchUnit_suffix_erases {α : Type} (w : Worker) (pid : 
   refine Eq.mp ?_ h
   congr 1
   unfold timerDispatchUnit
-  simp only [bind_assoc, pure_bind, stopped]
+  simp only [bind_assoc, stopped]
   apply bind_congr
   intro expected
   by_cases he : (w != expected) = true
@@ -154,13 +154,12 @@ private theorem timerDispatchUnit_suffix_erases {α : Type} (w : Worker) (pid : 
       apply bind_congr
       intro state
       cases hn : state.timerUnits.find? (·.1 == u) with
-      | none => simp only [hn, stopped]
+      | none => simp only [stopped]
       | some named =>
         rcases named with ⟨unused, pid', t'⟩
-        simp only [hn]
         by_cases hd : (pid' != pid || t' != t) = true
         · simp only [hd, ite_true, stopped]
-        · simp only [hd, Bool.false_eq_true, ite_false, bind_assoc]
+        · simp only [hd, Bool.false_eq_true, ite_false]
           cases step <;> simp only [bind_assoc]
           all_goals first
             | (solve | simp only [bind_assoc])
