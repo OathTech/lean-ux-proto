@@ -9,20 +9,20 @@ The branch retains its proof target and gate. All six terminal closures now chec
 | Result | Headlines | Checked support | Split status |
 | --- | ---: | ---: | --- |
 | H1 Noise | 22 | 185 | Full terminal closure current; wider caller/lifetime/clock claims open. |
-| H2 Index | 53 | 335 | Full terminal closure current; reachable whole-driver uniqueness/coherence open. |
+| H2 Index | 59 | 356 | Full terminal closure current; reachable whole-driver uniqueness/coherence open. |
 | H3 Roaming | 13 | 157 | Full terminal closure current; callback authentication provenance and broader caller coverage open. |
 | H4 Configuration | 79 | 582 | Full terminal closure current; global ownership, queued cleanup and general pagination open. |
 | H5 Progress | 42 | 288 | Full terminal closure current with exact bounded outcomes and checked refutations; global progress/coherent-ring adequacy open. |
 | H6 Timers | 50 | 438 | Full terminal closure current; outer scheduler episodes, complete caller coverage and session-relative counts open. |
 
-The checked surface is 1,985 theorems in all 588 campaign-owned modules.
+The checked surface is 2,006 theorems in all 596 campaign-owned modules.
 The completed retrofit accounts for 1,983: 1,321 retyped, 244 explicitly
-corrected, 239 retained and 179 added support/finding declarations. Two
-subsequent H2 declarations add confirmation table preservation. Of the 1,831 baseline theorems, 22 frames
+corrected, 239 retained and 179 added support/finding declarations. Twenty-three
+subsequent H2 declarations add confirmation propagation and local owner coherence. Of the 1,831 baseline theorems, 22 frames
 were deleted because types supply their facts and five false cookie supports
 were separately retired with checked counterexamples. No baseline declaration
 remains awaiting retrofit; all 258 original terminal names/order survive,
-with one new H2 headline (259 total).
+with seven new H2 headlines (265 total).
 
 The [retrofit report](2026-10-16-proof-campaign-2-state-split.md) records
 claim/frame files, corrections, before/after counts and validation.
@@ -70,6 +70,72 @@ capped with 32 threads and 16 QEMU slots.
 No mirror change is requested for this step: existing narrowed operations and
 proof contracts suffice. The next bounded obligations are lookup preservation
 of an explicit hashed-owner coherence predicate and data-ingress table safety.
+
+## H2 continuation: local hashed-owner coherence
+
+A separate pure predicate now relates every hashed owner to a resident,
+positively referenced peer. Handshake owners point to their containing peer;
+keypair owners also name a resident, positively referenced keypair. It does
+not require unique rows, a live isDead flag, an upper reference bound or
+distinct IDs. It is a local entry invariant, not a reachable-state theorem.
+
+Native lookup preserves that invariant on every normal return. Absent or
+disallowed rows leave the device unchanged; NULL/zero-reference empty causes
+contradict the supplied invariant. A successful lookup uses the actual
+peer-reference increment followed by same-word owner storeback, handling aliases
+through pointwise lookups without asserting TreeMap representation equality.
+
+Allocation preserves the joint table-safety and coherence predicates. The
+hashed-owner allocation bound prevents overwriting a hashed keypair; existing
+unhashed objects may be overwritten and the new peer word may be arbitrary or
+NULL. The new object is not yet published. Refusal and absent-device behavior
+are retained under normal-return semantics, without completion or lifetime claims.
+
+Removal and its actual keypair specialization preserve coherence and are total
+for a present device. Insertion preserves it on normal completion when the
+newly published owner is explicitly coherent. Handshake replacement is total
+with an explicitly coherent destination keypair; its exact Boolean/table effect
+allows existing destination rows, so this theorem does not assert owner
+uniqueness. These publication premises are obligations for callers, not inferred
+reachability facts. All claims use the native projection.
+
+Architecture: OwnerCoherenceModel holds the three predicates; OwnerCoherenceFrames
+and OwnerCoherenceAllocationFrames hold preservation facts; TableEffects holds
+the three pure table transformations. Source/Claims files connect them to the
+actual operations; six literal terminal wrappers are appended in Statements.
+The existing own-result liftSkb_tables helper is made public without changing
+its body for the forthcoming ingress proof; no theorem is added by that change.
+Its eleven affected modules are all within Index and covered by the check.
+No existing shared lemma or mirror function is edited.
+
+This tranche adds 21 theorems: lookup seven, allocation three, table primitives
+eleven. H2 has 59 headlines and 356 checked theorems; campaign totals are
+265 headlines and 2,006 theorems. Existing claims are not reshaped. Global
+reachability, complete driver-entry propagation and release ownership remain
+open. No new mirror request is needed; the narrowed types and actual source
+contracts suffice for these local obligations.
+
+Development: lookup probe 1 fails three diagnostics with two unused-simp
+warnings; changed probe 2 passes. Allocation probes 1 and 2 fail three and
+five proof/import/projection diagnostics; changed probe 3 passes. Primitive
+probes 1 and 2 each fail one proof-form diagnostic; probe 3 passes. The first
+terminal packaging build fails four syntax errors because extraction stopped
+at a record-field assignment; corrected extraction fixes them. All final
+new proofs use the default limit, without warning suppression or cap changes.
+Independent review of all three packages finds no correctness/domain issue
+and identifies the need for literal terminal wrappers, which are supplied.
+
+The promoted helper builds in 137 jobs; lookup integration passes 261 jobs.
+The final combined Index.Statements build passes 265 jobs, with only inherited
+Env:865 String.mk. Axiom inspection checks 1,020 logical roots in 201 modules,
+including 666 public theorem roots, using only standard axioms. Fresh replay,
+static checks, original 258-name order and mirror/shared boundaries pass.
+No infrastructure rerun or unchanged failed-source rerun occurs. The inherited
+full-gate failure remains recorded and is not rerun unchanged.
+
+Reproduce with scripts/in-bundle lake build Leanux.Proofs.WG.Index.Statements
+and scripts/in-bundle lake env leanchecker --fresh on that module, under
+capped with 32 Lean threads and 16 QEMU slots.
 
 ## Historical checkpoint before the split
 

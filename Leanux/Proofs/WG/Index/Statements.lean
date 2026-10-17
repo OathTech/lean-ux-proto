@@ -1,3 +1,6 @@
+import Leanux.Proofs.WG.Index.OwnerCoherenceAllocationClaims
+import Leanux.Proofs.WG.Index.OwnerCoherenceTableSource
+import Leanux.Proofs.WG.Index.OwnerCoherenceClaims
 import Leanux.Proofs.WG.Index.ConfirmationClaims
 import Leanux.Proofs.WG.Campaign2.Bridge
 import Leanux.Proofs.WG.Index.TableClaims
@@ -652,5 +655,72 @@ theorem original_received_with_keypair_tables (pid : PeerId) (received : Keypair
     Campaign2.Ensures (receivedWithKeypair pid received) View.TablesSafe
       (fun _ s => View.TablesSafe s) :=
   receivedWithKeypair_tables pid received
+
+
+/-- Normal lookup preserves residency and positive references for every hashed
+owner and its referenced peer, with handshake owners pointing to themselves.
+This assumes the local entry invariant; it does not establish reachability.
+Upper reference bounds, table uniqueness and alias distinctness are not assumed. -/
+theorem original_index_lookup_owner_coherence (kinds : List IndexKind) (index : Nat) :
+    Campaign2.Ensures (indexLookup kinds index) View.OwnerCoherentSafe
+      (fun _ s => View.OwnerCoherentSafe s) :=
+  indexLookup_owner_coherent_safe kinds index
+
+
+/-- Original allocation preserves both table safety and local hashed-owner
+coherence, without requiring the un-hashed new object's peer word to be valid.
+This permits refusal and arbitrary aliases and does not prove publication,
+store freshness, completion or lifetime safety. -/
+theorem original_keypair_create_owner_coherence (peer : Option PeerId) :
+    Campaign2.Ensures (keypairCreate peer)
+      (fun s => View.TablesSafe s ∧ View.OwnerCoherentSafe s)
+      (fun _ s => View.TablesSafe s ∧ View.OwnerCoherentSafe s) :=
+  keypairCreate_coherent_tables peer
+
+/-- Actual guarded index removal is total for a present device. It preserves
+hashed-owner coherence without requiring the removed owner to be resident. -/
+theorem original_index_remove_owner_coherence (owner : IndexOwner) (d : Device)
+    (coherent : HashedOwnersCoherent d) :
+    Campaign2.Returns (liftIndex (indexRemove owner)) (fun s => s.wg.device = some d)
+      (fun _ s =>
+        s.wg.device = some {d with indexTable := removeOwner owner d.indexTable} ∧
+        HashedOwnersCoherent {d with indexTable := removeOwner owner d.indexTable}) :=
+  indexRemove_owner_coherence owner d coherent
+
+/-- The current keypair-removal primitive is the keypair specialization of
+indexRemove. It does not dereference the removed owner's stored peer word. -/
+theorem original_keypair_index_remove_owner_coherence (id : KeypairId) (d : Device)
+    (coherent : HashedOwnersCoherent d) :
+    Campaign2.Returns (liftIndex (indexRemove (.keypair id)))
+      (fun s => s.wg.device = some d)
+      (fun _ s =>
+        s.wg.device = some {d with indexTable := removeOwner (.keypair id) d.indexTable} ∧
+        HashedOwnersCoherent {d with indexTable := removeOwner (.keypair id) d.indexTable}) :=
+  keypairIndexRemove_owner_coherence id d coherent
+
+/-- Every normal insertion retains coherence when the newly published owner
+is coherent initially. The original collision loop and all stopped outcomes
+remain; no record readiness, uniqueness or allocation-freshness premise is added. -/
+theorem original_index_insert_owner_coherence (owner : IndexOwner) (d : Device)
+    (coherent : HashedOwnersCoherent d) (published : OwnerCoherent d owner) :
+    Campaign2.Ensures (liftIndex (indexInsert owner)) (fun s => s.wg.device = some d)
+      (fun index s =>
+        let table := {index, owner} :: removeOwner owner d.indexTable
+        s.wg.device = some {d with indexTable := table} ∧
+        HashedOwnersCoherent {d with indexTable := table}) :=
+  indexInsert_owner_coherence owner d coherent published
+
+/-- Actual replacement retains coherence and its exact Boolean/table effect.
+The destination owner's coherence is supplied, not inferred from the replaced
+handshake. Existing destination rows are allowed; owner uniqueness is not claimed. -/
+theorem original_index_replace_owner_coherence (pid : PeerId) (kp : KeypairId) (d : Device)
+    (coherent : HashedOwnersCoherent d) (published : OwnerCoherent d (.keypair kp)) :
+    Campaign2.Returns (liftIndex (indexReplaceHandshake pid kp))
+      (fun s => s.wg.device = some d)
+      (fun hashed s =>
+        let updated := if hashed then {d with indexTable := replaceOwner pid kp d.indexTable} else d
+        hashed = d.indexTable.any (·.owner == .handshake pid) ∧
+        s.wg.device = some updated ∧ HashedOwnersCoherent updated) :=
+  indexReplace_owner_coherence pid kp d coherent published
 
 end Leanux.Proofs.WG.Index

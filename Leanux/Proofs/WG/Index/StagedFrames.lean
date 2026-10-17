@@ -81,7 +81,7 @@ theorem keypairGet_tables (key : Option KeypairId) :
 
 /-- The actual component adapter still checks for a device and writes back only
 its skb fields. Table safety is not a claim about the unguarded component alone. -/
-private theorem liftSkb_tables {α : Type} (action : SkbM α) :
+theorem liftSkb_tables {α : Type} (action : SkbM α) :
     Ensures (liftSkb action) TablesSafeWG (fun _ => TablesSafeWG) := by
   intro g ambient result final after pre run
   cases device : g.dev with
