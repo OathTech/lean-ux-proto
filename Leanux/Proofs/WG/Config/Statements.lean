@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Config.CursorBodySource
 import Leanux.Proofs.WG.Config.FactoredTailClaims
 import Leanux.Proofs.WG.Config.EndpointSetClaims
 import Leanux.Proofs.WG.Config.MixedWeightedPaginationClaims
