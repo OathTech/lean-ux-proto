@@ -4,30 +4,27 @@
 
 Work on `proofs/campaign` in `.worktrees/proofs-campaign` follows
 [the charter](2026-10-13-charter-proof-campaign.md). The branch contains main
-`b700659` and preserves its own proof tree, nondefault lake target and gate.
-The executable mirror is unchanged.
+`b700659` plus documentation-only `b3f56807` and preserves its own proof tree,
+nondefault lake target and gate. The executable mirror is unchanged.
 
-The state-split retrofit precedes new R3/R4 results. Its source census is
-471 → 452 Lean files and 7,715 → 6,558 named theorems: 3,197 retyped/generalized,
-1,709 deleted, 2,809 retained and 552 added. Independent reconciliation includes
+The state-split retrofit is complete. Its validated checkpoint census is
+471 → 452 Lean files and 7,715 → 6,564 named theorems: 3,197 retyped/generalized,
+1,709 deleted, 2,809 retained and 558 added. Independent reconciliation includes
 the unchanged pure/product contracts and corrects seven duplicated retained
 Enqueue entries. There are 517 terminal declarations, including two definitions.
 
-All seven register rows remain lagging, last fully validated over `cb2348e`.
-Completed layers pass scoped builds, named axiom checks, fresh kernel replay and
-independent reviews. Stable receive and the 131-statement R4 carry pass the
-combined 431-job build, named axiom checks, final fresh replay and review.
+All seven register rows are current over `b3f56807`, executable-identical to
+`b700659`. The complete proof gate passes all 510 build jobs and 517 terminal
+declarations, with only the permitted axioms, in 361.55 seconds. Fresh root kernel
+replay passes in 100.62 seconds after compilation. The sole build warning is the
+existing mirror-side String.mk deprecation; proof warnings are cleared.
+Scoped source/axiom checks and independent reviews cover the repairs.
 The [retrofit report](2026-10-16-proof-state-split.md) records the exact census,
-source/type deletion grounds, failed checks and remaining work. Its
+source/type deletion grounds, failed checks and validation. Its
 [findings](2026-10-16-proof-state-split-findings.md) include the withdrawn
 unrestricted cleanup-totality claims and checked local counterexamples.
-No full-tree pass over the split is claimed.
-
-The first two complete retrofit gates failed at generated matcher import
-collisions; both skipped terminal axiom inspection. Direct source-composition
-repairs preserve the theorem contracts. Scoped checks and reviews pass for
-the completed replacements; further import repair and warning cleanup precede
-the complete gate and fresh root replay.
+Five failed aggregate gates remain reported as failures; each preceded source
+repairs, and none was accepted as a pass. R3/R4 work resumes on the new types.
 
 The pre-split checkpoint validated every baseline result surface over
 `cb2348e`. Initialized R3 packet authorization and R4 receive-pipeline

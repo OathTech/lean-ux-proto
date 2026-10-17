@@ -12,10 +12,10 @@ new worlds; new R3/R4 results follow the retrofit.
 | Census | Lean files | Named theorems |
 | --- | ---: | ---: |
 | Validated baseline `00641c6` | 471 | 7,715 |
-| Current retrofit source | 452 | 6,558 |
+| Validated retrofit checkpoint | 452 | 6,564 |
 
 The complete source census comprises **3,197 retyped/generalized, 1,709 deleted,
-2,809 retained contract shapes and 552 added theorems**. Retyping changes the
+2,809 retained contract shapes and 558 added theorems**. Retyping changes the
 actual carrier or observation, including shorthand contracts whose functions
 move to a native monad. Namespace-only product qualification and equivalent
 projection relocation count as retained. The census includes private and
@@ -29,14 +29,15 @@ seven duplicate retained Enqueue entries: their original carry was counted in
 both `4c8a99b` and `02fa172`. The latter checkpoint's corrected subtotal is
 84 old, forty retyped, three deleted, 41 retained and eleven added, yielding 92.
 Thus the baseline is 3,197 + 2,809 + 1,709 = 7,715; the current source is
-3,197 + 2,809 + 552 = 6,558. No unexplained residual remains.
+3,197 + 2,809 + 558 = 6,564. No unexplained residual remains.
 
 The terminal surface has 517 declarations: 515 theorems and two definitions.
-**All seven register rows remain lagging**, last fully validated over `cb2348e`.
-The complete proof gate and terminal kernel replay have not passed over the
-split. R1/R2/R5/R6 retain their earlier charter dispositions subject to the carry;
+**All seven register rows are current over `b3f56807`**, whose executable mirror
+is identical to split landing `b700659`. The complete proof gate and fresh
+root kernel replay pass. R1/R2/R5/R6 retain their earlier charter dispositions;
 initialized R3 packet authorization and R4 receive-pipeline conservation remain
-open. The [register](proofs.md#results) is authoritative for result scope.
+open. Current marks the carried result surface, not completion of those two
+campaign obligations. The [register](proofs.md#results) is authoritative for scope.
 
 ## Contract preservation
 
@@ -68,12 +69,15 @@ The [findings and reproduction commands](2026-10-16-proof-state-split-findings.m
 preserve the checked counterexamples and distinguish them from Linux claims.
 No mirror change was made to close a proof.
 
-## Validation and remaining work
+## Validation
 
 The unchanged mirror passed its model build (66 jobs), executable build
 (130 jobs) and unit suite (131 tests, one skip). Completed proof checkpoints
 have scoped builds, named-declaration axiom checks, explicit fresh kernel
-replay and independent source reviews. None establishes a full-tree pass.
+replay and independent source reviews. The final aggregate checks below
+establish the full-tree pass. Earlier pending checks and failures in the
+development account describe their checkpoint; the aggregate result supersedes
+the pending statuses without converting any failed invocation into a pass.
 
 The carried LifetimeSafety terminal has 202 declarations: 119 native/mixed
 retypes and 83 retained contracts. CryptokeyRouting retains all 141 names:
@@ -115,8 +119,8 @@ the final R4 replay covers this repair. Three drafts failed on source joins,
 branch selection and the unchanged 200,000-heartbeat limit before the fourth
 passed. No failure was relabeled as a successful check.
 
-Remaining work is compiler-warning cleanup, the full proof gate and terminal
-replay. The first complete gate failed at the root import: independently
+Compiler-warning cleanup and aggregate validation required six gate
+invocations with intervening source repairs. The first complete gate failed at the root import: independently
 compiled Operations and RoutingEnvTimersFrames exported the same generated
 `requireNothingDue` matcher declaration. Its other source checks passed, but
 the invocation remains **FAIL**; it reported 859 warnings and did not inspect
@@ -392,7 +396,7 @@ Three read-only comparison-driver mistakes (a Python index error, an
 overbroad binder-name comparison, and a JavaScript method typo) were failures,
 not Lean results. Dirty worktrees were preserved at 20261017T033106Z,
 20261017T033734Z and 20261017T034000Z before continuing; branch tips remained
-unchanged. The corrected contract census still reports 452 files and 6,558
+unchanged. The corrected contract census still reports 452 files and 6,564
 theorems. These checks did not publish partially validated source.
 An ephemeral lookup-report driver later failed on a Python boolean literal
 after the Lean check had passed. Four dirty worktrees were preserved under
@@ -623,6 +627,65 @@ The sole replayed warning is the existing `String.mk` deprecation in the
 unchanged executable environment; mirror ownership remains with its lane.
 The full gate and fresh aggregate replay are still pending.
 
+## Final receive-routing repair
+
+RoutingCuts retains all 24 original theorem contracts and fourteen data
+declarations. Six private structural lemmas and four literal source factors
+replace its remaining eleven deprecated automation sites. The factors split
+the initial effects, rejection checks, protocol parser and final length checks;
+the original action is proved equal to their composition before applying the
+shape contracts. The native WireGuard and Ambient endpoints, recorded decisions,
+actual RX/TX lookup cuts and all existing premises are unchanged. This brings
+the source census to 6,564 theorems, including 558 additions during the retrofit;
+the terminal surface remains 517 declarations.
+
+The final source check prints exactly 48 distinct logical roots, all using only
+standard axioms, with zero warnings. Independent full-source review passes.
+It caught eleven copied diagnostic print commands, which were removed before
+that final check. Publication caught one extra blank line at EOF; removing it
+changes no source token. The complete build/gate now checks the published file.
+
+The RoutingCuts repair had 21 worker checks: nineteen failures, one intermediate
+exit-zero run containing those diagnostics, and the final clean pass. The
+separate structural alternative had four failures (a diagnostic panic,
+arithmetic normalization, the unchanged heartbeat limit and a namespace error),
+one pass with an unused-simp warning, and a final warning-free pass checking
+its eleven named roots. A separate guard proof passed its first source/axiom
+check in 1.07 seconds. Failed diagnostic checks establish no proof result.
+One driver bookkeeping error followed an already-completed failed Lean check;
+its actual result was recovered and is counted once.
+
+After the alternate diagnostic panic, dirty worktrees were preserved under
+`refs/snapshots/proof-campaign-rxshape-diagnostic-recovery-20261017T062352Z/`
+before repairs resumed; the campaign tree was clean and branch tips were
+unchanged. There was no cap or heartbeat increase and no unchanged retry.
+The finite structural composition replaces the failed speculative traversal.
+
+## Completed retrofit validation
+
+The sixth complete proof gate passes in 361.55 seconds: all 510 build jobs,
+all 517 terminal declarations with only propext, Classical.choice and Quot.sound,
+the forbidden-token scan, and the import/root/default-target checks. The only
+warning is the unchanged mirror's String.mk deprecation at Leanux/Env.lean:865;
+the proof tree has no remaining compiler warnings or deprecated mvcgen calls.
+Fresh kernel replay of Leanux.Proofs then passes in 100.62 seconds, without
+warnings, after the artifact writers stopped. No unchanged gate retry or cap
+increase occurred.
+
+The final source audit confirms all 24 original RoutingCuts theorem contracts,
+the six explicitly added private structural lemmas, unchanged options, the
+452-file/6,564-theorem census, and clean diff formatting. The executable Lean
+mirror remains byte-identical to b700659; the branch also contains b3f56807's
+documentation-only delta. The proof target remains outside the default build,
+and this branch retains its gate. No main integration, push or guest run was
+performed. The retrofit is complete; work resumes on initialized R3 authorization
+and then R4 conservation using the carried native contracts.
+
+A documentation-driver parse error executed no shell or file mutation.
+Before correcting it, dirty worktrees were preserved under
+`refs/snapshots/proof-campaign-retrofit-doc-driver-recovery-20261017T063941Z/`;
+branch tips remained unchanged. The gate and replay results were unaffected.
+
 ## Runtime witness reconstruction
 
 The existing witness programs compile. Each old recipe below was run once,
@@ -668,12 +731,12 @@ cap() { if command -v capped >/dev/null 2>&1; then capped "$@"; else "$@"; fi; }
 export LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16
 cap scripts/in-bundle lake build LeanuxProofs
 cap scripts/in-bundle scripts/proof-gate
-# Recheck a particular completed module:
-cap scripts/in-bundle lake env leanchecker --fresh MODULE
+cap scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs
+# For a scoped replay, replace Leanux.Proofs with the completed module.
 ~~~
 
-The full build/gate commands above describe the remaining claim-point checks,
-not a recorded full pass. For a runtime recipe, substitute CASE and MODULE:
+The aggregate gate and fresh root replay above passed at this retrofit
+checkpoint. For a runtime recipe, substitute CASE and MODULE:
 
 ~~~sh
 cap scripts/in-bundle bash -o pipefail -c \

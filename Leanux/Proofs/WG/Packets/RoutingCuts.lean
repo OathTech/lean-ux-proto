@@ -108,74 +108,267 @@ private theorem protocol_length (bytes : List UInt8) (v4 : Bool)
   all_goals split at h <;> simp_all
   all_goals split at h <;> simp_all
 
+private def rxShapeFinish (pkt : RxPacket) (bytes : List UInt8) (ipLen : Nat) : WG.M (Option RxReady) := do
+  if ← branch .doneLenBeyond (ipLen > pkt.bytes.length) then
+    dishonest .size
+    return none
+  if ← branch .doneTrimFailed false then return none
+  return some ⟨ipTunnelParseProtocol pkt.bytes, bytes, ipLen, pkt.bytes.length⟩
+
+private def rxShapeParser (pkt : RxPacket) : WG.M (Option RxReady) := do
+  if ← branch .doneProtoIp (ipTunnelParseProtocol pkt.bytes == 4) then
+    let ipLen := beAt pkt.bytes 2 2
+    if ← branch .doneV4TooShort (ipLen < 20) then
+      dishonest .size
+      return none
+    let bytes ← inetEcnDecapsulate 4 pkt.ds pkt.bytes
+    rxShapeFinish pkt bytes ipLen
+  else if ← branch .doneProtoIpv6 (ipTunnelParseProtocol pkt.bytes == 6) then
+    let bytes ← inetEcnDecapsulate 6 pkt.ds pkt.bytes
+    rxShapeFinish pkt bytes (beAt pkt.bytes 4 2 + 40)
+  else
+    dishonest .type
+    return none
+
+private theorem rxShapeStep {α β : Type} (a : WG.M α) (f : α → WG.M β)
+    (Q : β → WGWorld → Prop) (h : ∀ x, Hoare (f x) (fun _ => True) Q) :
+    Hoare (a >>= f) (fun _ => True) Q := hoare_bind _ _ (any_spec_ambient a) h
+
+private theorem rxShapeDecision (d : Decision) (b : Bool) (f : Bool → WG.M α)
+    (Q : α → WGWorld → Prop) (h : Hoare (f b) (fun _ => True) Q) :
+    Hoare (branch d b >>= f) (fun _ => True) Q := by
+  apply (hoare_iff_run_ambient _ _ _).mpr
+  intro w ambient result v ambient' hp hr
+  have hb (g : WGWorld) (a : Ambient) :
+      ((branch d b : WG.M Bool).run g).run a = .ok ((b,g), CounterWindow.record a d b) := rfl
+  simp only [StateT.run_bind, hb, except_ok_bind] at hr
+  exact (hoare_iff_run_ambient _ _ _).mp h w _ result v ambient' hp hr
+
+private theorem rxShapeNone (pkt : RxPacket) :
+    Hoare (pure none : WG.M (Option RxReady)) (fun _ => True)
+      (fun out _ => ∀ r, out = some r → RxPrepared pkt r) := by
+  apply (hoare_iff_run_ambient _ _ _).mpr
+  intro w ambient result v ambient' _ hr
+  cases hr
+  simp
+
+private theorem rxShapeFinish_spec (pkt : RxPacket) (v4 : Bool) (bytes : List UInt8) (ipLen : Nat)
+    (hproto : ipTunnelParseProtocol pkt.bytes = (if v4 then 4 else 6))
+    (hmin : (if v4 then 20 else 40) ≤ ipLen)
+    (ha : AddressPreserved v4 pkt.bytes bytes) :
+    Hoare (rxShapeFinish pkt bytes ipLen) (fun _ => True)
+      (fun out _ => ∀ r, out = some r → RxPrepared pkt r) := by
+  unfold rxShapeFinish
+  apply rxShapeStep
+  intro beyond
+  cases beyond with
+  | true =>
+    apply rxShapeStep
+    intro _
+    exact rxShapeNone pkt
+  | false =>
+    apply rxShapeStep
+    intro trim
+    cases trim with
+    | true => exact rxShapeNone pkt
+    | false =>
+      apply (hoare_iff_run_ambient _ _ _).mpr
+      intro w ambient result v ambient' _ hr r he
+      cases hr
+      cases he
+      exact ⟨rfl, rfl, v4, hproto, hmin, ha⟩
+
+private theorem rxShapeParser_spec (pkt : RxPacket) :
+    Hoare (rxShapeParser pkt) (fun _ => True)
+      (fun out _ => ∀ r, out = some r → RxPrepared pkt r) := by
+  unfold rxShapeParser
+  apply rxShapeDecision
+  by_cases h4 : (ipTunnelParseProtocol pkt.bytes == 4) = true
+  · simp only [h4, ↓reduceIte]
+    apply rxShapeDecision
+    by_cases hshort : decide (beAt pkt.bytes 2 2 < 20) = true
+    · simp only [hshort, ↓reduceIte]
+      apply rxShapeStep
+      intro _
+      exact rxShapeNone pkt
+    · simp only [hshort, Bool.false_eq_true, ↓reduceIte]
+      have hproto : ipTunnelParseProtocol pkt.bytes = 4 := by simpa only [beq_iff_eq] using h4
+      have hlen := protocol_length pkt.bytes true hproto
+      refine hoare_bind _ _ (inetEcnDecapsulate_address true pkt.ds pkt.bytes hlen) ?_
+      intro bytes
+      apply (hoare_iff_run_ambient _ _ _).mpr
+      intro w ambient out v ambient' ha hr
+      exact (hoare_iff_run_ambient _ _ _).mp
+        (rxShapeFinish_spec pkt true bytes _ hproto (by simpa using hshort) ha) _ _ _ _ _ trivial hr
+  · simp only [h4, Bool.false_eq_true, ↓reduceIte]
+    apply rxShapeDecision
+    by_cases h6 : (ipTunnelParseProtocol pkt.bytes == 6) = true
+    · simp only [h6, ↓reduceIte]
+      have hproto : ipTunnelParseProtocol pkt.bytes = 6 := by simpa only [beq_iff_eq] using h6
+      have hlen := protocol_length pkt.bytes false hproto
+      refine hoare_bind _ _ (inetEcnDecapsulate_address false pkt.ds pkt.bytes hlen) ?_
+      intro bytes
+      apply (hoare_iff_run_ambient _ _ _).mpr
+      intro w ambient out v ambient' ha hr
+      exact (hoare_iff_run_ambient _ _ _).mp
+        (rxShapeFinish_spec pkt false bytes _ hproto (by simp only [Bool.false_eq_true, ↓reduceIte]; omega) ha) _ _ _ _ _ trivial hr
+    · simp only [h6, Bool.false_eq_true, ↓reduceIte]
+      apply rxShapeStep
+      intro _
+      exact rxShapeNone pkt
+
+private def rxShapeInitial (pid : PeerId) (pkt : RxPacket) (endpoint : Endpoint) : WG.M Unit := do
+  setPeerEndpoint pid endpoint
+  if ← branch .doneReceivedNew (← receivedWithKeypair pid pkt.keypair) then
+    timersHandshakeComplete pid .walltimeLastHandshakeData
+    sendStagedPackets pid
+  keepKeyFreshRx pid
+  timersAnyAuthenticatedPacketReceived pid
+  timersTraversal pid
+
+private def rxShapeBody (pid : PeerId) (pkt : RxPacket) : WG.M (Option RxReady) := do
+  let bytes := pkt.bytes
+  let len := bytes.length   -- skb->len
+  let reject (why : Dishonest) : WG.M (Option RxReady) := do
+    dishonest why   -- then packet_processed: dev_kfree_skb
+    return none
+  -- a packet with length 0 is a keepalive
+  if ← branch .doneRxKeepalive (len == 0) then
+    updateRxStats pid MESSAGE_DATA_LEN_0   -- message_data_len(0)
+    return none
+  timersDataReceived pid
+  -- `skb_network_header(skb) < skb->head`: the decrypted skb's network header is its data
+  if ← branch .doneNetworkBelowHead false then return ← reject .size
+  -- `!(pskb_network_may_pull(skb, sizeof(struct iphdr)) && (version == 4 ||
+  -- (version == 6 && pskb_network_may_pull(skb, sizeof(struct ipv6hdr)))))`
+  let version := (bytes.headD 0).toNat / 16
+  let honest ← WG.andM (branch .doneMayPullV4 (len ≥ 20)) do
+    WG.orM (branch .doneVersion4 (version == 4)) do
+      WG.andM (branch .doneVersion6 (version == 6)) (branch .doneMayPullV6 (len ≥ 40))
+  if !honest then return ← reject .type
+  rxShapeParser pkt
+
+private theorem rxShapeBody_spec (pid : PeerId) (pkt : RxPacket) :
+    Hoare (rxShapeBody pid pkt) (fun _ => True)
+      (fun result _ => ∀ r, result = some r → RxPrepared pkt r) := by
+  unfold rxShapeBody
+  apply rxShapeStep
+  intro keepalive
+  cases keepalive with
+  | true =>
+    apply rxShapeStep
+    intro _
+    exact rxShapeNone pkt
+  | false =>
+    apply rxShapeStep
+    intro _
+    apply rxShapeStep
+    intro below
+    cases below with
+    | true =>
+      apply rxShapeStep
+      intro _
+      exact rxShapeNone pkt
+    | false =>
+      apply rxShapeStep
+      intro honest
+      cases honest with
+      | false =>
+        apply rxShapeStep
+        intro _
+        exact rxShapeNone pkt
+      | true => exact rxShapeParser_spec pkt
+
 theorem rxPrepare_shape (pid : PeerId) (pkt : RxPacket) (endpoint : Endpoint) :
     ⦃fun _ => ⌜True⌝⦄ rxPrepare pid pkt endpoint
     ⦃⇓? result _ => ⌜∀ r, result = some r → RxPrepared pkt r⌝⦄ := by
-  have he4 : ⦃fun _ => ⌜ipTunnelParseProtocol pkt.bytes = 4⌝⦄
-      inetEcnDecapsulate 4 pkt.ds pkt.bytes
-      ⦃⇓? out _ => ⌜AddressPreserved true pkt.bytes out⌝⦄ := by
-    apply (hoare_iff_run_ambient _ _ _).mpr
-    intro w ambient out v ambient' hp hr
-    exact (hoare_iff_run_ambient _ _ _).mp
-      (inetEcnDecapsulate_address true pkt.ds pkt.bytes (protocol_length pkt.bytes true hp)) w ambient out v ambient' True.intro hr
-  have he6 : ⦃fun _ => ⌜ipTunnelParseProtocol pkt.bytes = 6⌝⦄
-      inetEcnDecapsulate 6 pkt.ds pkt.bytes
-      ⦃⇓? out _ => ⌜AddressPreserved false pkt.bytes out⌝⦄ := by
-    apply (hoare_iff_run_ambient _ _ _).mpr
-    intro w ambient out v ambient' hp hr
-    exact (hoare_iff_run_ambient _ _ _).mp
-      (inetEcnDecapsulate_address false pkt.ds pkt.bytes (protocol_length pkt.bytes false hp)) w ambient out v ambient' True.intro hr
-  have hep := any_spec_ambient (setPeerEndpoint pid endpoint)
-  have hk := any_spec_ambient (receivedWithKeypair pid pkt.keypair)
-  have hh := any_spec_ambient (timersHandshakeComplete pid .walltimeLastHandshakeData)
-  have hst := any_spec_ambient (sendStagedPackets pid)
-  have hf := any_spec_ambient (keepKeyFreshRx pid)
-  have ha := any_spec_ambient (timersAnyAuthenticatedPacketReceived pid)
-  have ht := any_spec_ambient (timersTraversal pid)
-  have hd := any_spec_ambient (timersDataReceived pid)
-  have hstats := fun len => any_spec_ambient (updateRxStats pid len)
-  have herr := fun why => any_spec_ambient (dishonest why)
-  mvcgen [rxPrepare, hep, hk, hh, hst, hf, ha, ht, hd, hstats, herr, he4, he6,
-    WG.andM, WG.orM, branch, AmbientM.branch]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [RxPrepared]
-  all_goals first
-    | (refine ⟨true, ?_, ?_, ?_⟩ <;> simp_all)
-    | (refine ⟨false, ?_, ?_, ?_⟩ <;> simp_all)
+  have factor : rxPrepare pid pkt endpoint =
+      (rxShapeInitial pid pkt endpoint >>= fun _ => rxShapeBody pid pkt) := by
+    simp only [rxPrepare, rxShapeInitial, rxShapeBody, rxShapeParser, rxShapeFinish,
+      bind_assoc, bind_if]
+  rw [factor]
+  exact hoare_bind _ _ (any_spec_ambient (rxShapeInitial pid pkt endpoint))
+    (fun _ => rxShapeBody_spec pid pkt)
 
 theorem rxPrepare_routing (pid : PeerId) (pkt : RxPacket) (endpoint : Endpoint) :
     RetainsRoutingCall (rxPrepare pid pkt endpoint) := by
+
   apply Lifetimes.ProjectedAction.of_wp
   intro s
-  let P := RetainsRouting s
-  have hep := (setPeerEndpoint_routing pid endpoint).wp P
-  have hk := (receivedWithKeypair_routing pid pkt.keypair).wp P
-  have hh := (timersHandshakeComplete_routing pid .walltimeLastHandshakeData).wp P
-  have hst := RetainsRoutingCall.wp (sendStagedPackets_routing pid) s
-  have hf := RetainsRoutingCall.wp (keepKeyFreshRx_routing pid) s
-  have ha := (timersAnyAuthenticatedPacketReceived_routing pid).wp P
-  have ht := (timersTraversal_routing pid).wp P
-  have hd := (timersDataReceived_routing pid).wp P
-  have hstats := fun len => (updateRxStats_routing pid len).wp P
-  have herr := fun why => (dishonest_routing why).wp P
-  have hecn := fun protocol outer bytes =>
-    (routing_kernel _ (Lifetimes.inetEcnDecapsulate_sameWGStore protocol outer bytes)).wp P
-  mvcgen [rxPrepare, hep, hk, hh, hst, hf, ha, ht, hd, hstats, herr, hecn,
-    WG.andM, WG.orM, branch, AmbientM.branch]
-  all_goals try dsimp +zetaDelta only [P] at *
-  all_goals try (unfold routingView at *; simp_all)
-  all_goals subst s
-  all_goals exact RetainsRouting.refl _
+  let P := fun w : WGWorld => RetainsRouting s (routingView w)
+  have hep : Preserves P (setPeerEndpoint pid endpoint) :=
+    (setPeerEndpoint_routing pid endpoint).wp (RetainsRouting s)
+  have hk : Preserves P (receivedWithKeypair pid pkt.keypair) :=
+    (receivedWithKeypair_routing pid pkt.keypair).wp (RetainsRouting s)
+  have hh : Preserves P (timersHandshakeComplete pid .walltimeLastHandshakeData) :=
+    (timersHandshakeComplete_routing pid .walltimeLastHandshakeData).wp (RetainsRouting s)
+  have hst : Preserves P (sendStagedPackets pid) := RetainsRoutingCall.wp (sendStagedPackets_routing pid) s
+  have hf : Preserves P (keepKeyFreshRx pid) := RetainsRoutingCall.wp (keepKeyFreshRx_routing pid) s
+  have ha : Preserves P (timersAnyAuthenticatedPacketReceived pid) :=
+    (timersAnyAuthenticatedPacketReceived_routing pid).wp (RetainsRouting s)
+  have ht : Preserves P (timersTraversal pid) := (timersTraversal_routing pid).wp (RetainsRouting s)
+  have hd : Preserves P (timersDataReceived pid) := (timersDataReceived_routing pid).wp (RetainsRouting s)
+  have hstats (len : Nat) : Preserves P (updateRxStats pid len) :=
+    (updateRxStats_routing pid len).wp (RetainsRouting s)
+  have herr (why : Dishonest) : Preserves P (dishonest why) :=
+    (dishonest_routing why).wp (RetainsRouting s)
+  have hecn (protocol outer : Nat) (bytes : List UInt8) : Preserves P (inetEcnDecapsulate protocol outer bytes) :=
+    (routing_kernel _ (Lifetimes.inetEcnDecapsulate_sameWGStore protocol outer bytes)).wp (RetainsRouting s)
+  have ambient {α : Type} (a : AmbientM α) : Preserves P (MonadLift.monadLift a : WG.M α) :=
+    hoare_liftAmbient a P
+  have keep : Preserves P (rxPrepare pid pkt endpoint) := by
+    routing_tx_source [rxPrepare] using [hep, hk, hh, hst, hf, ha, ht, hd, hstats, herr, hecn, ambient]
+    all_goals exact hoare_liftAmbient _ P
+  exact hoare_consequence keep (fun w h => by
+    change RetainsRouting s (routingView w)
+    change routingView w = s at h
+    rw [h]
+    exact RetainsRouting.refl _) (fun _ _ h => h)
 
 theorem rxAfterLookup_guard (pid : PeerId) (r : RxReady) (routed : Option PeerId) :
     ⦃fun _ => ⌜True⌝⦄ rxAfterLookup pid r routed
     ⦃⇓? result _ => ⌜∀ bytes, result = some bytes →
       routed = some pid ∧ bytes = r.bytes.take r.ipLen⌝⦄ := by
-  have hp := any_spec_ambient (peerPut routed)
-  have hd := any_spec_ambient (dishonest .peer)
-  have hs := any_spec_ambient (updateRxStats pid (r.originalLen + MESSAGE_DATA_LEN_0))
-  mvcgen [rxAfterLookup, hp, hd, hs, branch, AmbientM.branch]
-  all_goals simp_all
+  let post := fun (result : Option (List UInt8)) (_ : WGWorld) =>
+    ∀ bytes, result = some bytes → routed = some pid ∧ bytes = r.bytes.take r.ipLen
+  have step {α : Type} (a : WG.M α) (f : α → WG.M (Option (List UInt8)))
+      (hf : ∀ x, Hoare (f x) (fun _ => True) post) :
+      Hoare (a >>= f) (fun _ => True) post :=
+    hoare_bind _ _ (any_spec_ambient a) hf
+  have decision (d : Decision) (b : Bool) (f : Bool → WG.M (Option (List UInt8)))
+      (hf : Hoare (f b) (fun _ => True) post) :
+      Hoare (branch d b >>= f) (fun _ => True) post := by
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient result v ambient' _ hr
+    have hb (d : Decision) (b : Bool) (g : WGWorld) (a : Ambient) :
+        ((branch d b : WG.M Bool).run g).run a = .ok ((b, g), CounterWindow.record a d b) := rfl
+    simp only [StateT.run_bind, hb, except_ok_bind] at hr
+    exact (hoare_iff_run_ambient _ _ _).mp hf _ _ _ _ _ trivial hr
+  have done (result : Option (List UInt8)) (h : ∀ bytes, result = some bytes →
+      routed = some pid ∧ bytes = r.bytes.take r.ipLen) :
+      Hoare (pure result : WG.M _) (fun _ => True) post :=
+    hoare_consequence (hoare_pure result (fun _ : WGWorld => True))
+      (fun _ h => h) (fun x _ hx => hx.1 ▸ h)
+  change Hoare (rxAfterLookup pid r routed) (fun _ => True) post
+  unfold rxAfterLookup
+  apply step
+  intro _
+  apply decision
+  by_cases hroute : routed = some pid
+  · have hb : (routed != some pid) = false := by simp [hroute]
+    simp only [hb, Bool.false_eq_true, ↓reduceIte]
+    apply step
+    intro _
+    apply done
+    intro bytes he
+    exact ⟨hroute, (Option.some.inj he).symm⟩
+  · have hb : (routed != some pid) = true := by simp [hroute]
+    simp only [hb, ↓reduceIte]
+    apply step
+    intro _
+    apply done
+    intro bytes he
+    cases he
 
 /-- The actual caller prefix and guard/statistics tail share both the native
 WireGuard state and the reached Ambient endpoint at every cut. -/
@@ -243,12 +436,21 @@ def txHeaders (family addr : Nat) (pkts : List Packet) : WG.M Unit :=
 theorem txHeaders_spec (family addr : Nat) (pkts : List Packet) :
     ⦃fun _ => ⌜True⌝⦄ txHeaders family addr pkts
     ⦃⇓? _ _ => ⌜∀ p ∈ pkts, destinationField family p.bytes = addr⌝⦄ := by
+
   induction pkts with
-  | nil => simp only [txHeaders, List.forIn_nil]; mvcgen; simp
+  | nil =>
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient result v ambient' _ hr
+    simp
   | cons p ps ih =>
-    simp only [txHeaders, List.forIn_cons] at *
-    mvcgen [-Std.Do.Spec.forIn_list, -Std.Do.Spec.forIn'_list, ih, invariant]
-    all_goals simp_all
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient result v ambient' _ hr
+    by_cases hp : destinationField family p.bytes = addr
+    · simp [txHeaders, List.forIn_cons, hp] at hr
+      have tail := (hoare_iff_run_ambient _ _ _).mp ih w ambient result v ambient' trivial (by simpa [txHeaders] using hr)
+      simpa only [List.mem_cons, forall_eq_or_imp] using And.intro hp tail
+    · simp [txHeaders, List.forIn_cons, hp, invariant, AmbientM.invariant] at hr
+      cases hr
 
 def txWalk (pkts : List Packet) (mtu : Nat) (acc : List Packet) : WG.M (List Packet) :=
   forIn pkts acc fun pkt packets => do
@@ -259,12 +461,21 @@ def txWalk (pkts : List Packet) (mtu : Nat) (acc : List Packet) : WG.M (List Pac
 theorem txWalk_spec (pkts : List Packet) (mtu : Nat) (acc : List Packet) :
     ⦃fun _ => ⌜True⌝⦄ txWalk pkts mtu acc
     ⦃⇓? packets _ => ⌜packets = acc ++ pkts.map (fun pkt => {pkt with mtu})⌝⦄ := by
+
   induction pkts generalizing acc with
-  | nil => simp only [txWalk, List.forIn_nil]; mvcgen; simp
+  | nil =>
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient packets v ambient' _ hr
+    simp [txWalk] at hr
+    simp [hr.1.1]
   | cons p ps ih =>
-    simp only [txWalk, List.forIn_cons] at *
-    mvcgen [-Std.Do.Spec.forIn_list, -Std.Do.Spec.forIn'_list, ih, branch, AmbientM.branch]
-    all_goals simp_all [List.append_assoc]
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient packets v ambient' _ hr
+    simp [txWalk, List.forIn_cons, branch, AmbientM.branch] at hr
+    have tail := (hoare_iff_run_ambient _ _ _).mp
+      (ih (acc ++ [{p with mtu}])) w _ packets v ambient' trivial
+      (by simpa [txWalk, branch, AmbientM.branch] using hr)
+    simpa [List.append_assoc] using tail
 
 def txCheck (family addr : Nat) (pkts : List Packet) (_mtu : Nat) : WG.M Bool := do
   let some first := pkts.head? | invariant "wg_xmit without a packet"
@@ -334,40 +545,66 @@ def txFinish (pid : PeerId) (packets : List Packet) : WG.M Int := do
 theorem txCheck_valid (family addr : Nat) (pkts : List Packet) (mtu : Nat) :
     ⦃fun _ => ⌜True⌝⦄ txCheck family addr pkts mtu
     ⦃⇓? ok _ => ⌜ok = true → pkts ≠ [] ∧ ∀ p ∈ pkts, destinationField family p.bytes = addr⌝⦄ := by
-  have hh := txHeaders_spec family addr pkts
-  have he := any_spec_ambient (modifyDev fun d => {d with txErrors := d.txErrors + 1})
-  mvcgen [txCheck, hh, he, branch, AmbientM.branch, WG.andM, invariant, AmbientM.invariant]
-  all_goals simp_all
-  all_goals try (intro hempty; subst pkts; simp_all)
+
+  cases pkts with
+  | nil =>
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient result v ambient' _ hr
+    simp [txCheck, invariant, AmbientM.invariant] at hr
+    cases hr
+  | cons first rest =>
+    simp only [txCheck, List.head?_cons]
+    refine hoare_bind _ _ (any_spec_ambient _) ?_
+    intro parsed
+    refine hoare_bind _ _ (any_spec_ambient _) ?_
+    intro bad
+    cases bad with
+    | false =>
+      refine hoare_bind _ _ (txHeaders_spec family addr (first :: rest)) ?_
+      intro result
+      apply hoare_consequence (hoare_pure true _) (fun _ h => h)
+      intro ok w h _
+      exact ⟨List.cons_ne_nil _ _, h.2⟩
+    | true =>
+      refine hoare_bind _ _ (any_spec_ambient _) ?_
+      intro result
+      apply hoare_consequence (hoare_pure false _) (fun _ h => h)
+      intro ok w h he
+      simp [h.1] at he
 
 theorem txCheck_routing (family addr : Nat) (pkts : List Packet) (mtu : Nat) :
     SameView routingView (txCheck family addr pkts mtu) := by
+
   apply SameView.of_wp
   intro s
-  let P := fun t => t = s
-  have he := (modifyDev_routing (fun d => {d with txErrors := d.txErrors + 1})
-    (fun _ => rfl)).wp P
-  have hl (α β : Type) := list_view_spec (m := AmbientM) routingView (α := α) (β := β) P
-  mvcgen [-Std.Do.Spec.forIn_list, -Std.Do.Spec.forIn'_list, hl,
-    txCheck, txHeaders, he, branch, AmbientM.branch, WG.andM, invariant, AmbientM.invariant]
-  all_goals try exact ((⇓? _ w => ⌜P (routingView w)⌝) : PostCond _ (.arg WGWorld (.arg Ambient (.except Stop .pure))))
-  all_goals simp_all [P]
+  let P := fun w : WGWorld => routingView w = s
+  have he : Preserves P (modifyDev fun d => {d with txErrors := d.txErrors + 1}) :=
+    (modifyDev_routing (fun d => {d with txErrors := d.txErrors + 1}) (fun _ => rfl)).wp (fun t => t = s)
+  have ambient {α : Type} (a : AmbientM α) : Preserves P (MonadLift.monadLift a : WG.M α) :=
+    hoare_liftAmbient a P
+  change Preserves P (txCheck family addr pkts mtu)
+  routing_tx_source [txCheck, txHeaders] using [he, ambient]
+  all_goals exact hoare_liftAmbient _ P
 
 theorem txError_spec (family : Nat) (first : Packet) (ret : Int) :
     ⦃fun _ => ⌜True⌝⦄ txError family first ret ⦃⇓? result _ => ⌜result = ret⌝⦄ := by
-  have hc := fun sites => any_spec_ambient (skipCutSites sites : WG.M (List Nat))
-  have hl := fun raised => any_spec_ambient (loopbackSend [] raised)
-  have he := any_spec_ambient (modifyDev fun d => {d with txErrors := d.txErrors + 1})
-  have hr := fun src => any_spec_ambient
-    (MonadLift.monadLift (Net.routeOutput4 0 src) : WG.M (Except Int Route))
-  have ht := fun src => any_spec_ambient
-    (MonadLift.monadLift (Net.Fib.inetDevAddrType (some WG0_IFINDEX) src) : WG.M Net.Fib.RouteType)
-  have hn := any_spec_ambient (MonadLift.monadLift (Net.neighbourClassify LO_IFINDEX) : WG.M Unit)
-  have ha {α : Type} (a : AmbientM α) :
-      Hoare (MonadLift.monadLift a : WG.M α) (fun _ => True) (fun _ _ => True) :=
-    hoare_liftAmbient a _
-  unfold Hoare at ha
-  mvcgen [-Std.Do.Spec.monadLift_StateT, ha, txError, hc, hl, he, hr, ht, hn, branch]
+
+  let post := fun result (_ : WGWorld) => result = ret
+  have step {α : Type} (a : WG.M α) (f : α → WG.M Int)
+      (hf : ∀ x, Hoare (f x) (fun _ => True) post) :
+      Hoare (a >>= f) (fun _ => True) post :=
+    hoare_bind _ _ (any_spec_ambient a) hf
+  have done : Hoare (pure ret : WG.M Int) (fun _ => True) post :=
+    hoare_consequence (hoare_pure ret (fun _ : WGWorld => True))
+      (fun _ h => h) (fun _ _ h => h.1)
+  change Hoare (txError family first ret) (fun _ => True) post
+  unfold txError
+  repeat' first
+    | (packet_hoare_head Bind.bind; apply step; intro)
+    | (packet_hoare_head Pure.pure; exact done)
+    | (packet_hoare_head ite; split)
+    | simp only
+    | split
 
 def TxSelected (peer : Option PeerId) (pkts : List Packet) (mtu : Nat)
     (result : Except Int (PeerId × List Packet)) : Prop :=
@@ -378,15 +615,70 @@ def TxSelected (peer : Option PeerId) (pkts : List Packet) (mtu : Nat)
 theorem txSelect_spec (family : Nat) (pkts : List Packet) (mtu : Nat) (peer : Option PeerId) :
     ⦃fun _ => ⌜True⌝⦄ txSelect family pkts mtu peer
     ⦃⇓? result _ => ⌜TxSelected peer pkts mtu result⌝⦄ := by
-  have he := txError_spec family (pkts.head?.getD {bytes := []})
-  have hp := fun peer => any_spec_ambient (peerPut peer)
-  have hg := fun pid => any_spec_ambient (getPeer pid)
-  have ht := fun pid => any_spec_ambient (Lifetimes.xmitTrim pid)
-  have ha := any_spec_ambient (envOk .skbSegment : WG.M Bool)
-  have hw := txWalk_spec pkts mtu []
-  mvcgen [txSelect, he, hp, hg, ht, ha, hw, branch, AmbientM.branch, WG.andM, invariant, AmbientM.invariant]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals simp_all [TxSelected, ENOKEY, EDESTADDRREQ, ENOMEM]
+
+  let post := fun result (_ : WGWorld) => TxSelected peer pkts mtu result
+  have step {α : Type} (a : WG.M α) (f : α → WG.M (Except Int (PeerId × List Packet)))
+      (hf : ∀ x, Hoare (f x) (fun _ => True) post) :
+      Hoare (a >>= f) (fun _ => True) post :=
+    hoare_bind _ _ (any_spec_ambient a) hf
+  have decision (d : Decision) (b : Bool)
+      (f : Bool → WG.M (Except Int (PeerId × List Packet)))
+      (hf : Hoare (f b) (fun _ => True) post) :
+      Hoare (branch d b >>= f) (fun _ => True) post := by
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient result v ambient' _ hr
+    have hb (d : Decision) (b : Bool) (g : WGWorld) (a : Ambient) :
+        ((branch d b : WG.M Bool).run g).run a = .ok ((b, g), CounterWindow.record a d b) := rfl
+    simp only [StateT.run_bind, hb, except_ok_bind] at hr
+    exact (hoare_iff_run_ambient _ _ _).mp hf _ _ _ _ _ trivial hr
+  have error (ret : Int) (hne : ret ≠ 0) :
+      Hoare (do
+        let result ← txError family (pkts.head?.getD {bytes := []}) ret
+        pure (Except.error result : Except Int (PeerId × List Packet)))
+      (fun _ => True) post := by
+    refine hoare_bind _ _ (txError_spec family (pkts.head?.getD {bytes := []}) ret) ?_
+    intro result
+    apply hoare_consequence (hoare_pure (.error result : Except Int (PeerId × List Packet)) _)
+      (fun _ h => h)
+    intro x w h
+    rcases h with ⟨rfl, rfl⟩
+    exact hne
+  have walk (f : List Packet → WG.M (Except Int (PeerId × List Packet)))
+      (hf : Hoare (f (pkts.map (fun pkt => {pkt with mtu}))) (fun _ => True) post) :
+      Hoare (txWalk pkts mtu [] >>= f) (fun _ => True) post := by
+    refine hoare_bind _ _ (txWalk_spec pkts mtu []) ?_
+    intro packets
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w ambient result v ambient' hp hr
+    simp only [List.nil_append] at hp
+    subst packets
+    exact (hoare_iff_run_ambient _ _ _).mp hf _ _ _ _ _ trivial hr
+  have done (result : Except Int (PeerId × List Packet)) (h : TxSelected peer pkts mtu result) :
+      Hoare (pure result : WG.M _) (fun _ => True) post :=
+    hoare_consequence (hoare_pure result (fun _ : WGWorld => True))
+      (fun _ h => h) (fun x _ hx => hx.1 ▸ h)
+  have conditional (p : Prop) [Decidable p] (a b : WG.M (Except Int (PeerId × List Packet)))
+      (ha : p → Hoare a (fun _ => True) post) (hb : ¬p → Hoare b (fun _ => True) post) :
+      Hoare (if p then a else b) (fun _ => True) post := by
+    by_cases hp : p
+    · simpa only [ite_eq_left hp] using ha hp
+    · simpa only [ite_eq_right hp] using hb hp
+  change Hoare (txSelect family pkts mtu peer) (fun _ => True) post
+  cases peer <;> unfold txSelect WG.andM
+  all_goals simp only [Option.isNone_none, Option.isNone_some, bind_assoc, bind_if, pure_bind]
+  all_goals repeat' first
+    | contradiction
+    | (packet_bind_head txError
+       first
+       | exact error (-ENOKEY) (by decide)
+       | exact error (-EDESTADDRREQ) (by decide)
+       | exact error (-ENOMEM) (by decide))
+    | (packet_bind_head txWalk; apply walk)
+    | (packet_bind_head branch; apply decision)
+    | (packet_hoare_head Bind.bind; apply step; intro)
+    | (packet_hoare_head Pure.pure; apply done; simp [TxSelected])
+    | (packet_hoare_head ite; apply conditional; all_goals intro h)
+    | simp only
 
 private theorem bind_option {m : Type → Type} [Monad m]
     (o : Option α) (a : α → m β) (b : m β) (f : β → m γ) :
