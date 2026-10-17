@@ -236,16 +236,20 @@ def readNat (s : MachineState) (a n : Nat) : Except String Nat := do
   let some bytes := s.data.dmem.loadBytes (.ofNat 64 a) n | throw s!"unmapped read at {a}"
   return (bytes.zipIdx.map fun (b, i) => b.toNat * 256^i).sum
 
-def interpret [Labels] (seed : UInt64) (r : Run) (i : Instr) (pc size : Nat) : Except String Run :=
+/-- Optional diagnostic snapshot selection. The instruction sequence and every
+access request are still recorded; this changes only retained full memories. -/
+def interpret [Labels] (seed : UInt64) (r : Run) (i : Instr) (pc size : Nat)
+    (historyPCs : Option (Array Nat) := none) : Except String Run :=
   effects seed r (i.interp r.state.data ⟨.ofNat pc, .ofNat (pc+size)⟩
     (fun d => .done ⟨d, .ofNat (pc+size)⟩) (fun p d => .done ⟨d, p⟩)) >>= fun next =>
-      pure {next with history := r.history.push next.state}
+      pure {next with history := if historyPCs.all (·.contains next.state.pc.toBitVec.toNat)
+        then r.history.push next.state else r.history}
 
 def runUntil (instructions : Array Instruction) (labels : Array (String × Nat))
     (hooks : Array (Nat × String)) (preempt : Nat) (initial : MachineState) (seed : UInt64)
     (actualServices : Bool) (budget entryPreempt : Nat)
     (stops : Array Nat) (prior : Option Run := none)
-    (returnPC : Nat := stopAddr) : Except String Run := do
+    (returnPC : Nat := stopAddr) (historyPCs : Option (Array Nat) := none) : Except String Run := do
   -- Labels is total in Kraken. Check every reference before constructing it;
   -- its default is unreachable for this validated one-instruction input format.
   for i in instructions do
@@ -281,12 +285,12 @@ def runUntil (instructions : Array Instruction) (labels : Array (String × Nat))
       else
         throw s!"unclassified or unreached-path call: {name}"
       if !actualServices then
-        r ← interpret seed r (.regular .W64 .W64 .ret) pc 1
+        r ← interpret seed r (.regular .W64 .W64 .ret) pc 1 historyPCs
         continue
     let some i := instructions.find? (·.pc == pc) | throw s!"PC outside decoded functions: {pc}"
     let [.instr op] ← Kraken.X64.Parser.parse i.asm | throw s!"not one instruction at {pc}: {i.asm}"
     r := {r with pcs := r.pcs.push pc}
-    r ← interpret seed r op pc i.size
+    r ← interpret seed r op pc i.size historyPCs
   throw "instruction budget exhausted"
 
 

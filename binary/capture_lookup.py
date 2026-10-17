@@ -30,6 +30,7 @@ class Remote:
         self.socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self.socket.settimeout(timeout)
         self.socket.connect(str(path))
+        self.buffer, self.position = b'', 0
         features = self.command('qSupported:xmlRegisters=i386;qXfer:features:read+')
         if b'qXfer:features:read+' not in features:
             raise ValueError('QEMU did not advertise register descriptions')
@@ -37,9 +38,12 @@ class Remote:
         self._register_xml('target.xml', 0)
 
     def _byte(self):
-        b = self.socket.recv(1)
-        if not b:
-            raise EOFError('QEMU closed the debugger connection')
+        if self.position == len(self.buffer):
+            self.buffer, self.position = self.socket.recv(8192), 0
+            if not self.buffer:
+                raise EOFError('QEMU closed the debugger connection')
+        b = self.buffer[self.position:self.position+1]
+        self.position += 1
         return b
 
     def command(self, command):
@@ -112,7 +116,7 @@ class Remote:
         return result
 
     def read(self, address, size):
-        data = b''
+        data = bytearray()
         while len(data) < size:
             chunk = min(1024, size - len(data))
             reply = self.command(f'm{address+len(data):x},{chunk:x}')
@@ -121,8 +125,8 @@ class Remote:
             raw = bytes.fromhex(reply.decode('ascii'))
             if len(raw) != chunk:
                 raise ValueError('short capture read')
-            data += raw
-        return data
+            data.extend(raw)
+        return bytes(data)
 
     def word(self, address, size=8):
         return int.from_bytes(self.read(address, size), 'little')

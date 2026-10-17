@@ -139,6 +139,58 @@ The [boundary experiment report](../docs/2026-10-16-plan-executable-binary-corre
 names the semantic contracts, additional assertions, concrete witnesses,
 validation and the limits on interpreting the measured adaptation time.
 
+Allowed-IPs capture uses the same reconstruction, loop assertions and paired
+runner as the constructed-state suite. Given the successful recording used by
+`allowedips_probe.py`, run from the worktree root (select a Python interpreter
+with pyelftools before entering the bundle):
+
+```sh
+capture_python=$(command -v python3)
+LEANUX_QEMU_SLOTS=16 capped scripts/in-bundle "$capture_python" -B binary/capture_allowedips.py \
+  --input .tmp/binary-allowedips/input-5.json --check CHECK_DIRECTORY --out .tmp/captured-trie4
+capped "$capture_python" -B binary/pair_allowedips_capture.py \
+  --capture .tmp/captured-trie4 --check CHECK_DIRECTORY
+```
+
+Use `input-8.json` and a fresh output directory for IPv6. Capture reads both
+device roots, their reachable nodes, the device's peer list, entry registers,
+stack, query and callback state. Public keys and paths from the two roots
+bootstrap the identity map, which stays fixed throughout the call. Headers
+and return are captured independently; the replay compares their registers
+and bytes, and the complete instruction sequence. Source inputs come from
+the completed prefix in that same captured boot. The independent three-way
+baseline runs before replay.
+
+At the loop header only, AF is projected out of the extra register comparison:
+the preceding XOR/TEST gives it an undefined value in Kraken. Other flags
+remain checked; return comparison checks all six. The reconstruction and
+boundary assertion were already independent of flags.
+
+This remains sequential QEMU stepping with interrupts and timers deferred.
+The current callback assertion requires the entire 32 MiB KCOV allocation;
+those bytes are read into an ephemeral `coverage.bin`, not fabricated or
+zero-filled. Retaining a full memory at every instruction exhausted the
+32 GiB job cap, so the trie runner retains full diagnostic states only at
+loop headers while retaining every instruction/access record. The symbolic
+execution history is unchanged. The snapshot JSON and sidecar must stay
+together and are reconstructible temporary outputs.
+
+Both families pass with two undefined-value seeds: IPv4 has 1,592
+instructions and five captured headers; IPv6 has 1,510 and three.
+All five capture corruption controls reject. Packet transport tests run with
+`capped python3 -B -m unittest discover -s binary -p test_capture_remote.py`. Two-seed replay currently
+takes about 3.6–3.8 minutes per family, with roughly 6–7 GiB peak memory.
+The [capture report](../docs/2026-10-16-plan-executable-binary-correspondence.md#captured-allowed-ips-extension-2026-10-17)
+records the failed attempts, observation correction and measured costs.
+
+The loop theorem now permits the actual entry stack rather than a fixture
+address. Its semantic contracts and conclusion are unchanged. The previous
+external acceptance above applies to `a33869e`; export the updated closure
+with the same modules to `../.tmp/binary-pair-capture-boundary.ndjson` for
+the new external gate. Fresh local kernel replay passes; external acceptance
+of this generalization is pending. Full function-entry-to-return adequacy
+remains open.
+
 `capture_lookup.py` separately captures actual entry/return registers and
 memory on a rerun of that recorded workload, using QEMU TCG hardware
 breakpoints and register/memory reads. After the first command above, use

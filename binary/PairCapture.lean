@@ -150,26 +150,29 @@ def callFrame (input : ProbeInput) (snapshot : Snapshot) (layout : Json)
 byte as well as all general registers and the status flags Kraken represents.
 This deliberately starts stronger than the source observation relation: any
 undefined/dead-scratch discrepancy must be diagnosed before relaxing the test. -/
+def compareEndpoint (endpoint : Endpoint) (actual : MachineState) : Except String Nat := do
+  let expected ← endpoint.registers.state (← loadMemory endpoint.blocks)
+  unless actual.pc == expected.pc do throw "captured endpoint PC differs"
+  for reg in [Reg64.rax, .rbx, .rcx, .rdx, .rsi, .rdi, .rsp, .rbp,
+      .r8, .r9, .r10, .r11, .r12, .r13, .r14, .r15] do
+    unless actual.data.regs.get64 reg == expected.data.regs.get64 reg do
+      throw s!"captured endpoint {repr reg}: Kraken={actual.data.regs.get64 reg}, kernel={expected.data.regs.get64 reg}"
+  let mut checked := 0
+  for block in endpoint.blocks do
+    for i in [:block.bytes.size] do
+      let address := BitVec.ofNat 64 (block.address + i)
+      let some byte := actual.data.dmem.get? address | throw s!"captured endpoint byte missing at {address}"
+      unless byte.toNat == block.bytes[i]! do
+        throw s!"captured endpoint memory at {address}: Kraken={byte.toNat}, kernel={block.bytes[i]!}"
+      checked := checked + 1
+  unless actual.data.status == expected.data.status do
+    throw s!"captured endpoint flags after {checked} matching bytes: Kraken={repr actual.data.status}, kernel={repr expected.data.status}"
+  return checked
+
 def compareReturn (snapshot : Snapshot) (actual : Run) : Except String Nat := do
   unless snapshot.executedPCs == actual.pcs do
     throw "captured instruction sequence differs from Kraken execution"
-  let expected ← snapshot.returned.registers.state (← loadMemory snapshot.returned.blocks)
-  unless actual.state.pc == expected.pc do throw "captured return PC differs"
-  for reg in [Reg64.rax, .rbx, .rcx, .rdx, .rsi, .rdi, .rsp, .rbp,
-      .r8, .r9, .r10, .r11, .r12, .r13, .r14, .r15] do
-    unless actual.state.data.regs.get64 reg == expected.data.regs.get64 reg do
-      throw s!"captured return {repr reg}: Kraken={actual.state.data.regs.get64 reg}, kernel={expected.data.regs.get64 reg}"
-  let mut checked := 0
-  for block in snapshot.returned.blocks do
-    for i in [:block.bytes.size] do
-      let address := BitVec.ofNat 64 (block.address + i)
-      let some byte := actual.state.data.dmem.get? address | throw s!"captured return byte missing at {address}"
-      unless byte.toNat == block.bytes[i]! do
-        throw s!"captured return memory at {address}: Kraken={byte.toNat}, kernel={block.bytes[i]!}"
-      checked := checked + 1
-  unless actual.state.data.status == expected.data.status do
-    throw s!"captured return flags after {checked} matching bytes: Kraken={repr actual.state.data.status}, kernel={repr expected.data.status}"
-  return checked
+  compareEndpoint snapshot.returned actual.state
 
 def run (input : ProbeInput) (snapshot : Snapshot) (layout : Json) : Except String Json := do
   unless snapshot.executionMode == "sequential" do

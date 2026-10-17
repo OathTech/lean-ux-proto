@@ -1,8 +1,10 @@
 # Plan: executable reconstruction and paired binary/mirror execution
 
-Status: captured index replay and tested trie assertions are implemented;
-the executable-assertion-to-trie-loop proof bridge is complete, 2026-10-17.
-External kernel gate accepted at `a33869e`; whole-function trie adequacy remains open. Worktree
+Status: captured index and both-family allowed-IPs replay pass; the executable
+assertion-to-trie-loop bridge now permits captured stacks, 2026-10-17.
+The external kernel accepted the boundary baseline at `a33869e`; the stack
+generalization passes local kernel replay and awaits its external gate.
+Whole-function trie adequacy remains open. Worktree
 `.worktrees/binary-pair-runner`, branch `task/binary-pair-runner`, created from
 planning commit `caa6668`. The earlier experiments remain on their original
 branch; the implementation baseline is `cb845fe`.
@@ -842,3 +844,170 @@ The export is ephemeral. The user runs the external gate outside Nono:
 ```sh
 lake check --from-export ../.tmp/binary-pair-boundary.ndjson
 ```
+
+### Captured allowed-IPs extension, 2026-10-17
+
+[AGENT 2026-10-17] Extend capture to both allowed-IPs families before proving
+the remaining function envelope. Keep the tested reconstruction and heap
+assertion, supply the actual physical call context, and retain the same
+named semantic contracts. Do not modify the mirror, original campaign
+Pre/R, or TrustBase to accommodate a captured state.
+
+`capture_allowedips.py` selects the call by family, network-order query and
+the console's completed-operation prefix. It reads the ABI root, discovers
+the owning device through trie peers, reads both device roots and their
+pointer closure, and reads every device peer. The snapshots contain actual
+entry registers/bytes, independently stopped loop headers and the return.
+TCG stepping defers IRQs and timers within the call, as in the index pilot.
+The oracle is unmodified.
+
+`PairAllowedipsCapture` matches peer identities by public keys checked
+against memory and matches node identities by paths from the independently
+read roots. This is entry identity setup, not reconstruction from expected
+field values. The resulting map is fixed through the call. Missing nodes,
+different edges, extra reachable nodes, unresolved peer keys and unreachable
+source nodes fail explicitly. This setup is suitable for these lookup calls;
+allocation identities across structural mutations still need their own
+interpretation, not fresh path matching at each observation.
+
+The constructed and captured cases now call the same `lookupFrom`.
+Stack, return address, query pointer, preempt word and callback context come
+from the capture. Query bytes are checked in network order at entry. The
+existing `locals` assertion reads saved root/query words relative to the
+current stack. `boundary_ready` and `findNode_checked` generalize over the
+entry stack with the same conclusion and semantic assumptions. No new
+physical instruction proof was needed. At each captured header the runner
+also compares QEMU's registers and sampled bytes to Kraken and evaluates
+the shared reconstruction directly on QEMU's bytes. The return comparison
+checks the full instruction sequence, all general registers, all six status
+flags represented by Kraken and every captured return byte. Header comparison
+has the single undefined-flag exception described below.
+
+The capture exercised an expensive existing proof premise: callback
+readiness maps the complete KCOV allocation, 4,194,304 words or 32 MiB,
+although the lookup writes only a short suffix. All those bytes were read
+from QEMU. They remain present in the replay memory and in the executable
+boundary check. A future proof may need a smaller mapped prefix, justified
+by the callback's actual accesses; this checkpoint does not assume it.
+
+Three replay attempts failed with SIGKILL at the 32 GiB job limit; the last
+printed the capped KILLED banner, exit 137. These are failures. Moving bulk
+bytes from JSON into a raw sidecar improved transport but did not cure the
+execution failure. Stage diagnostics isolated retained full instruction
+histories: Kraken's extensional hash map is an array of buckets, and a write
+copies that array when an earlier state retains it. The concrete trie
+runner now retains full states only at its loop headers, while recording
+every PC and read/write request and executing all services and assertions.
+The proof's `Executed.history` is unchanged. Recovery refs preserve the
+dirty states preceding those fixes.
+
+Capture transport had two avoidable costs as well: repeated concatenation
+of a growing byte string and one socket receive per packet byte. A mutable
+byte accumulator and buffered packet reads preserve the checksum/framing
+checks. Three focused tests cover fragmented/coalesced packets, bad
+checksums, truncation and missing/short memory. Original capture times were
+259.065 seconds for IPv4 and 258.930 for IPv6; the byte-accumulator-only IPv4
+capture took 117.003 seconds, and the buffered IPv6 capture 28.516 seconds.
+The final raw-sidecar capture path also completed for IPv4 in 27.625 seconds.
+These are single runs on a shared host, not a benchmark distribution.
+Two earlier launch failures occurred before any guest started (QEMU not on
+PATH, then the bundle's Python lacking pyelftools); selecting the existing
+system interpreter inside the bundle resolved them without installation.
+
+The first runs that stayed within the cap failed the extra header comparison
+under the all-ones undefined-value seed: AF was true in Kraken and false in
+QEMU, with all registers, all 11,072 IPv4 / 11,084 IPv6 sampled header bytes,
+and the other five flags equal. The zero-seed runs had completed. This is
+an overly strong diagnostic observation, not a mirror defect: the last flag
+writer before the first header is XOR and before subsequent headers is TEST,
+both explicitly assigning undefined AF in the pinned Kraken semantics.
+Neither the executable boundary nor its proof imposes a status-flag value.
+`initialBoundary_status` proves that existing flag independence directly.
+[AGENT 2026-10-17] Project out only AF in `compareHeader`, only at the pinned
+loop header, because its value is undefined on both incoming paths.
+The machine passed to execution is untouched; the other five flags remain
+checked, with a ZF-corruption rejection control. Return comparison still
+checks all six flags. No reconstruction, Pre/R clause, semantic contract or
+oracle byte was changed to accommodate the mismatch.
+
+Both captured calls now pass under seeds zero and all ones. Each row below
+is per seed; the identity map contains all ten nodes and all five peers.
+Both restore the actual entry preempt value `0x80000200`.
+
+| Captured operation | Result peer ID | Instructions | Headers | Header bytes compared | Return bytes compared | KCOV words added |
+|---|---:|---:|---:|---:|---:|---:|
+| IPv4, operation 5 | 3 | 1,592 | 5 | 55,360 | 814,480 | 50 |
+| IPv6, operation 8 | 4 | 1,510 | 3 | 33,252 | 819,428 | 47 |
+
+The independently executed `common_bits` values are `[0,15,22,30,32]` for
+IPv4 and `[30,124,124]` for IPv6. Five capture-specific controls per family
+reject changed peer counts, a cleared device root, a changed defined header
+flag (ZF), a changed instruction sequence and a changed return result.
+The independent three-way checks still return peers 3/4 with 34/32 source
+decisions, 50/47 coverage PCs and 21/22 comparisons.
+
+The final two-seed replay takes 224.79 seconds for IPv4 (maximum resident
+memory 7,306,232 KiB, about 6.97 GiB) and 215.61 seconds for IPv6
+(6,252,448 KiB, about 5.96 GiB), excluding capture, build and the preceding
+three-way check. These include loading the entire captured allocation,
+paired execution, endpoint comparisons and controls. Capture is now fast;
+the full-buffer premise and large memory copies remain expensive in replay.
+This is a working baseline, not yet a fast workload-fuzzing loop.
+
+The focused build and both constructed-state suites pass (42 calls, 218
+headers; 16 corruption/caller rejections and one explicit dying-peer refusal
+per family), as does the captured live-index regression under both seeds.
+All seven headline/witness/flag-independence declarations report only
+`propext`, `Classical.choice`, and `Quot.sound`.
+`capped lake env leanchecker --fresh PairBoundaryWitness` and the updated
+export both exit 0. No new module warning, sorry, native-evaluation axiom,
+unsafe proof code or trust declaration was introduced; imported baseline
+warnings remain visible.
+
+From the first timestamp after initial inspection, 03:45:58 UTC, to checked
+completion at 04:07:34 was 21m36s. That interval includes the failed runs,
+transport/history changes and the AF diagnosis, but excludes earlier
+inspection and the gate-record update. It reuses the existing physical
+regions and loop proof; no new-function or campaign throughput follows.
+
+The updated proof export names `PairBoundaryProof` and `PairBoundaryWitness`:
+
+```sh
+cd binary
+capped lake build PairBoundaryWitness binary-pair-allowedips-capture
+capped lake env leanchecker --fresh PairBoundaryWitness
+capped lake env leanexport PairBoundaryProof PairBoundaryWitness > ../.tmp/binary-pair-capture-boundary.ndjson
+# Outside Nono, the external gate is:
+lake check --from-export ../.tmp/binary-pair-capture-boundary.ndjson
+```
+
+The external gate for this generalization is pending; the earlier accepted
+export remains attributed to `a33869e`. This checkpoint supplies no complete
+allowed-IPs function theorem, concurrent-context refinement, legal-access
+proof, callback-body proof or whole-operation transport. The mirror pin is
+still `cb2348e`, lagging main `b3f5680`; Kraken remains pinned at the clean
+`7ebba06a30eaf08c10b26b28ca14bfee1c791576`. The next proof task is the ABI
+entry/loop/peer-get/return envelope; a new mutating segment remains the
+subsequent calibration point for new-function cost.
+
+For that envelope, the next executable assertion should cover the entire
+call's live stack (including the peer helper's two deeper words), the saved
+ABI/return state, and the callback/read-write separation needed after the
+loop. Run it on these captures before proving its consequences. Then:
+
+1. Derive the existing entry-region premises from the assertion and show
+   that the entry establishes the already-proved loop boundary.
+2. Prove a reusable reconstruction update for one peer-count word, with
+   node fields and other counts preserved by disjoint writes; instantiate
+   it with the proved peer-get effect. The dead-peer retry remains the
+   mirror's explicit refusal, as in the current executable tests.
+3. Compose the entry, loop (or empty-root arm), peer acquisition and return
+   with endpoint observations and the restored physical call frame. Supply
+   semantic service contracts by their existing names, never as data
+   asserted by the executable test.
+
+The full-buffer premise is a separate, now-measured obstacle to quick
+iteration. A bounded mapped prefix covering the callbacks' possible writes
+is a candidate refinement of readiness; proving and testing that bound must
+precede replacing the current check. The reconstruction target itself does
+not need to become smaller to address either the memory cost or undefined AF.

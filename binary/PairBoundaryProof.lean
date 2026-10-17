@@ -11,6 +11,14 @@ def loopConfig (names : Names) (w : World) (root : Option NodeId) (bits query : 
   ⟨root,bits,query,interpretation names.nodes,interpretation names.peers,⟨none,none⟩,
     w.steps.toList,w.netRxSection⟩
 
+/-- The executable simulation boundary already abstracts status flags. The
+runtime's extra header comparison must not constrain an undefined AF value. -/
+theorem initialBoundary_status (names : Names) (input : AllowedipsProbe.Input)
+    (coverage : CommonBitsCoverage.Context) (s : MachineState) (w : World)
+    (root : Option NodeId) (bits query stack : Nat) (flags : StatusFlags) :
+    initialBoundary names input coverage {s with data := {s.data with status := flags}} w root bits query stack =
+      initialBoundary names input coverage s w root bits query stack := by rfl
+
 theorem loopWrites_cover {c : CommonBitsCoverage.Context} {s : MachineData} {a : BitVec 64}
     (write : AllowedipsLoop.writes s.regs.rsp c a) : ∃ span ∈ loopWrites c s, span.contains a := by
   rcases write with scratch | coverage
@@ -27,7 +35,8 @@ theorem boundary_ready (fetch : Int64 → Option Decoded)
     (callbacks : CommonBits.Callbacks fetch) (cmp1 : TrustBase.AllowedipsTraceCmp1Contract fetch)
     (names : Names) (input : AllowedipsProbe.Input) (coverage : CommonBitsCoverage.Context)
     (s : MachineState) (w : World) (root : Option NodeId) (bits query : Nat)
-    (checked : initialBoundary names input coverage s w root bits query = .ok ()) :
+    {stack : Nat}
+    (checked : initialBoundary names input coverage s w root bits query stack = .ok ()) :
     ∃ d, w.k.wg = some d ∧
       AllowedipsLoop.Setup fetch s.data coverage (loopConfig names w root bits query) (fun id => d.nodes.get? id) ∧
       Corresponds names input.offsets s.data.dmem d ∧
@@ -74,7 +83,8 @@ theorem findNode_checked (fetch : Int64 → Option Decoded)
     (callbacks : CommonBits.Callbacks fetch) (cmp1 : TrustBase.AllowedipsTraceCmp1Contract fetch)
     (names : Names) (input : AllowedipsProbe.Input) (coverage : CommonBitsCoverage.Context)
     (s : MachineState) (w final : World) (root : Option NodeId) (bits query : Nat) (answer : Option NodeId)
-    (checked : initialBoundary names input coverage s w root bits query = .ok ())
+    {stack : Nat}
+    (checked : initialBoundary names input coverage s w root bits query stack = .ok ())
     (accepted : (WG.findNode root bits query).run w = .ok (answer,final)) :
     Eventually (historyStep fetch) (fun t =>
       t.machine.pc = AllowedipsImage.Lookup.entry+0x101 ∧
@@ -91,4 +101,5 @@ theorem findNode_checked (fetch : Int64 → Option Decoded)
 
 #print axioms boundary_ready
 #print axioms findNode_checked
+#print axioms initialBoundary_status
 end Binary.Pair.Trie
