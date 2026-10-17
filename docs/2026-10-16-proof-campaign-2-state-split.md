@@ -21,13 +21,13 @@ and attributed theorem declarations. Campaign 2 owns 427 Lean files,
 | Common projection | 2 | 0 | 0 | 0 | Actual native WG/Ambient and full Product observations carried; no reconstructed execution states. |
 | H1 Noise | 35 | 171 | 22 | 185 | The full Noise closure is current, including restart support. Six type-given frames are deleted. Wider caller/lifetime/reachability and clock-provenance charter claims remain open. |
 | H2 Index | 68 | 318 | 52 | 224 | Table, lookup, collision records, allocation, owner invariants and lifecycle support carried; seven type-given frames deleted. Exact peer-release outcomes replace stale totality, with checked counterexamples. Terminal closure and whole-driver coherence remain pending. |
-| H3 Roaming | 35 | 119 | 13 | 142 | Endpoint/publication, polling, attempt facts, crypto, lookup and response-caller factors/facts carried with full Product certificates; two type-given frames deleted. Initiation transcript facts are carried with full Product certificates; broader authentication/caller closure remains pending. |
-| H4 Configuration | 130 | 554 | 79 | 371 | Scalar, identity, port, dump, allowed-IP and structural support carried; three type-given frames deleted. Quiet timer cleanup and queued-send observations are corrected; queued-send and removal totality have checked stale-statement counterexamples. Remaining readback/effects and terminal closure remain pending. |
+| H3 Roaming | 35 | 119 | 13 | 157 | Endpoint/publication, polling, attempt facts, crypto, lookup and response-caller factors/facts carried with full Product certificates; two type-given frames deleted. The full terminal closure is current, including initiation/response audits with actual Product outcomes. Wider roaming/provenance charter gaps remain open. |
+| H4 Configuration | 130 | 554 | 79 | 374 | Scalar, identity, port, dump, allowed-IP and structural support carried; three type-given frames deleted. Quiet timer cleanup and queued-send observations are corrected; queued-send and removal totality have checked stale-statement counterexamples. Remaining readback/effects and terminal closure remain pending. |
 | H5 Progress | 59 | 265 | 42 | 177 | Pure/control, cut, jitter, index, poll bounds, dispatch, scheduler turns, stack/probe frames, queue flush contracts, drain selection and Product observation bridge carried; one type-given index frame deleted. The old backlog fixture now has a checked exact runner rejection. Receive-ring activation models, general runner boundaries, drain bounds are carried; terminal closure remains pending. |
-| H6 Timer discipline | 98 | 404 | 50 | 156 | Base/guard/jitter, arming/wheel, recorded clock and initiation-send arming contracts carried; three type-given frames deleted. Exact wheel corrections are explicit; queue/pending and retained-worker frames are carried; broader timer episodes and terminal closure remain pending. |
+| H6 Timer discipline | 98 | 404 | 50 | 171 | Base/guard/jitter, arming/wheel, recorded clock and initiation-send arming contracts carried; three type-given frames deleted. Exact wheel corrections are explicit; queue/pending and retained-worker frames are carried; broader timer episodes and terminal closure remain pending. |
 
 Retyped, deleted and retained counts will be reported per validated tranche.
-H1 now has a checked split terminal closure; H2–H6 remain lagging.
+H1 and H3 now have checked split terminal closures; H2, H4, H5 and H6 remain lagging.
 All six results retain their previous charter gaps.
 The last scoped validation at `04b2f7c` does not validate the split mirror.
 
@@ -3851,5 +3851,74 @@ rerun, infrastructure retry, cap increase or proof-limit change occurred.
 Reproduce with scripts/in-bundle lake build on Noise.RestartFrames,
 Config.DeviceDump, Index.StagedFrames and Roaming.InitiationCallProductClaims
 under Leanux.Proofs.WG, then #print axioms and
+scripts/in-bundle lake env leanchecker --fresh MODULE for each root.
+Use capped, 32 Lean threads and 16 QEMU slots on this host.
+
+
+## Roaming terminal closure and remaining recorded timer sites
+
+| Tranche | Before | Retyped | Corrected | Deleted | Kept | Added | After |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Roaming.HandshakeAuditClaims and Statements | 15 | 15 | 0 | 0 | 0 | 0 | 15 |
+| TimerDiscipline.RemainingSitesSource | 14 | 9 | 5 | 0 | 0 | 1 | 15 |
+| Config.DumpCoalesce | 3 | 1 | 0 | 0 | 2 | 0 | 3 |
+| This tranche | 32 | 25 | 5 | 0 | 2 | 1 | 33 |
+| Cumulative processed baseline and checked support | 1,179 | 903 | 43 | 22 | 211 | 131 | 1,288 |
+
+The census is 532 campaign-owned files, 1,940 theorems and 393 checked proof
+modules; 652 baseline declarations await validation. Counts are H1 185, H2 224,
+H3 157, H4 374, H5 177 and H6 171. H1 and H3 now have current terminal
+closures. H2, H4, H5, H6 and the full gate remain lagging; wider charter gaps
+are unchanged. These are retrofit carries, not new charter results.
+
+All thirteen roaming terminal names and their order are preserved. The five
+WG-local claims use the native projection; the eight callback/cut/audit claims
+use actual full Product observations. Arbitrary softirq, irqExit and toStack
+callbacks remain unrestricted. The initiation audit carries its two original
+contracts into Product scope: it runs the actual prefix, invokes its suffix
+at the concrete successor, retains exact prefix/full-call errors and returns
+at its unchanged inspection entry. Authenticated cuts survive suffix failure.
+Total inspection is not original-call totality or final endpoint preservation.
+The original packet-kind premises remain where full-call factorization needs
+them. No original observation or fixture equality is discarded.
+
+RemainingSitesSource carries four source factors and five total leaf contracts,
+and corrects five timer-wheel conclusions: three recorded-clock effects,
+delKeepalive_returns and giveUpArmPrefix_returns. The separate
+RemainingSitesModel holds the two new pure wheel-aware give-up transformations,
+including ordered peer-store writes and txDropped accounting. Every original
+residence, running/alive, absence, attempt-limit and afterSend premise remains.
+Clock witnesses name actual Product prefixes and caller reads; their complete
+wheel effects distinguish same-expiry retention from enqueue and retain the
+signed clock-gap bound. One private liftWG_bind variant supplies actual Product
+composition while the shared layer remains untouched. This carries recorded
+sites only; it does not replace the pending wheel-dispatcher episode bridge.
+
+DumpCoalesce keeps its two pure attribute facts and carries the original
+single-peer coalescing equality into the narrowed WG action type. Two unused
+simplification arguments are removed. Accounting follows elaborated domains:
+four roaming theorem blocks and four timer source-factor blocks need no text
+change, but their operation/projection types changed and are counted as
+retyped. The retained count here consists of the two pure attribute facts.
+
+Independent reviews found no issue in the H3 and timer-site contracts.
+The H3 scoped build passes 112 jobs; the combined build passes 174, both
+warning-free. Axiom inspection covers 729 logical roots in 143 proof modules,
+including 386 public theorem roots, with standard axioms only. All three fresh
+kernel replays pass. Static checks, all 258 headline names/order and
+mirror/shared boundaries pass.
+
+The H3 candidate passes its first probe. Timer probe 1 failed six hidden lift
+normalizations and a record-layout error; failed elaboration emitted recovery
+placeholder diagnostics, which were not accepted. Probe 2 closed the lifts
+but retained redundant tactics, record layout and two unused simplifications.
+Probe 3 fixes these and passes without warnings. Coalescing probe 1 passed
+with two unused-simplification warnings; probe 2 removes them and passes
+cleanly. No unchanged rerun, infrastructure retry, cap or proof-limit change,
+or guest run occurred in this tranche.
+
+Reproduce with scripts/in-bundle lake build on Roaming.Statements,
+TimerDiscipline.RemainingSitesSource and Config.DumpCoalesce under
+Leanux.Proofs.WG, followed by #print axioms and
 scripts/in-bundle lake env leanchecker --fresh MODULE for each root.
 Use capped, 32 Lean threads and 16 QEMU slots on this host.

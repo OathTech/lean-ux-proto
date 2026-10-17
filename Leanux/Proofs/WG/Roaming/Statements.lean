@@ -3,8 +3,8 @@ import Leanux.Proofs.WG.Roaming.View
 import Leanux.Proofs.WG.Roaming.Authentication
 import Leanux.Proofs.WG.Roaming.PublicationClaims
 import Leanux.Proofs.WG.Roaming.PollEndpointClaims
-import Leanux.Proofs.WG.Roaming.ResponseCallClaims
-import Leanux.Proofs.WG.Roaming.InitiationCallClaims
+import Leanux.Proofs.WG.Roaming.ResponseCallProductClaims
+import Leanux.Proofs.WG.Roaming.InitiationCallProductClaims
 import Leanux.Proofs.WG.Roaming.HandshakeAuditClaims
 import Leanux.Proofs.WG.Roaming.PollAttemptClaims
 
@@ -18,8 +18,8 @@ theorem original_source_endpoint (src : SkbSource) :
       (fun result _ => result = some (sourceEndpoint src) ∧
         (src.family = 4 ∨ src.family = 6)) := by
   have h := (ensures_iff _ _ _).mpr (endpointFromSkb_exact src (fun _ => True))
-  intro w result w' _ hr
-  exact (h w result w' trivial hr).2
+  intro g ambient result final after _ hr
+  exact (h g ambient result final after trivial hr).2
 
 /-- With a supported address family, the endpoint setter establishes the
 requested remote destination, even when endpoint_eq avoids a redundant write. -/
@@ -65,8 +65,8 @@ Both callbacks are arbitrary and execute in the original order; no final
 packet residency, peer/owner equality, endpoint effect or runner coverage is
 claimed. Discarding the observation is exactly the original decryptStep,
 including errors, by observedDecryptStep_erase. -/
-theorem original_decrypt_publication_authentication (softirq irqExit : M Unit) :
-    Campaign2.Ensures (observedDecryptStep softirq irqExit) (fun _ => True)
+theorem original_decrypt_publication_authentication (softirq irqExit : Leanux.M Unit) :
+    Campaign2.Product.Ensures (observedDecryptStep softirq irqExit) (fun _ => True)
       (fun result _ => PublicationObservation result) :=
   observedDecryptStep_authenticated softirq irqExit
 
@@ -79,8 +79,8 @@ immediate destination. Later GRO, release and stack callbacks remain in the
 original execution; no final endpoint preservation is claimed. Discarding the
 observation is exactly rxPoll, including errors, by observedRxPoll_erase. -/
 theorem original_poll_first_endpoint (pid : PeerId) (budget : Nat)
-    (toStack : List (List UInt8) → M Unit) (entry : Campaign2.Snapshot) :
-    Campaign2.Ensures (observedRxPoll pid budget toStack) (fun s => s = entry)
+    (toStack : List (List UInt8) → Leanux.M Unit) (entry : Campaign2.Product.Snapshot) :
+    Campaign2.Product.Ensures (observedRxPoll pid budget toStack) (fun s => s = entry)
       (fun result _ => PollEndpointObservation pid budget entry result) :=
   observedRxPoll_facts pid budget toStack entry
 
@@ -93,9 +93,9 @@ callbacks remain arbitrary. This is a conditional packet-identity join, not
 a queue-store invariant or Env.napiIrqExit coverage theorem; it says nothing
 about inner delivery or the endpoint after later callbacks. The exact original
 operation, including errors, is recovered by observedDecryptPoll_erase. -/
-theorem original_publication_poll_endpoint (softirq : M Unit) (pid : PeerId)
-    (budget : Nat) (toStack : List (List UInt8) → M Unit) :
-    Campaign2.Ensures (observedDecryptPoll softirq pid budget toStack) (fun _ => True)
+theorem original_publication_poll_endpoint (softirq : Leanux.M Unit) (pid : PeerId)
+    (budget : Nat) (toStack : List (List UInt8) → Leanux.M Unit) :
+    Campaign2.Product.Ensures (observedDecryptPoll softirq pid budget toStack) (fun _ => True)
       (fun result _ => PublicationPollObservation pid budget result) :=
   observedDecryptPoll_authenticated softirq pid budget toStack
 
@@ -112,19 +112,19 @@ is asserted. Observation erasure is unconditional, including errors, by
 observedResponseHandshake_erase. -/
 theorem original_response_endpoint_authentication (msg : List UInt8) (src : SkbSource)
     (kind : messageType msg = MESSAGE_HANDSHAKE_RESPONSE) :
-    Campaign2.AgreesOn (fun _ => True) (receiveHandshakePacket msg src)
-      (responseCallPrefix msg src >>= responseCallSuffix msg src) ∧
-    Campaign2.AgreesOn (fun _ => True) (observedResponseHandshake msg src)
-      (responseCallTranscript msg src) ∧
-    Campaign2.Ensures (observedResponseHandshake msg src) (fun _ => True)
-      (fun observed _ => ResponseCallObservation msg observed) := by
+    Campaign2.Product.AgreesOn (fun _ => True) (liftWG (receiveHandshakePacket msg src))
+      (Product.responseCallPrefix msg src >>= Product.responseCallSuffix msg src) ∧
+    Campaign2.Product.AgreesOn (fun _ => True) (Product.observedResponseHandshake msg src)
+      (Product.responseCallTranscript msg src) ∧
+    Campaign2.Product.Ensures (Product.observedResponseHandshake msg src) (fun _ => True)
+      (fun observed _ => Product.ResponseCallObservation msg observed) := by
   constructor
   · intro w pre
-    rw [receiveHandshakePacket_response msg src kind]
+    rw [Product.receiveHandshakePacket_response msg src kind]
   · constructor
     · intro w pre
-      rw [observedResponseHandshake_source msg src kind]
-    · exact observedResponseHandshake_facts msg src kind
+      rw [Product.observedResponseHandshake_source msg src kind]
+    · exact Product.observedResponseHandshake_facts msg src kind
 
 /-- For initiation-kind packets, the complete original caller factors at its
 actual endpoint setter. A missing cut takes a pure suffix; a present cut starts
@@ -141,19 +141,19 @@ the observation is unconditionally the original caller, including errors, by
 observedInitiationHandshake_erase. -/
 theorem original_initiation_endpoint_authentication (msg : List UInt8) (src : SkbSource)
     (kind : messageType msg = MESSAGE_HANDSHAKE_INITIATION) :
-    Campaign2.AgreesOn (fun _ => True) (receiveHandshakePacket msg src)
-      (initiationCallPrefix msg src >>= initiationCallSuffix msg src) ∧
-    Campaign2.AgreesOn (fun _ => True) (observedInitiationHandshake msg src)
-      (initiationCallTranscript msg src) ∧
-    Campaign2.Ensures (observedInitiationHandshake msg src) (fun _ => True)
-      (fun observed _ => InitiationCallObservation msg observed) := by
+    Campaign2.Product.AgreesOn (fun _ => True) (liftWG (receiveHandshakePacket msg src))
+      (Product.initiationCallPrefix msg src >>= Product.initiationCallSuffix msg src) ∧
+    Campaign2.Product.AgreesOn (fun _ => True) (Product.observedInitiationHandshake msg src)
+      (Product.initiationCallTranscript msg src) ∧
+    Campaign2.Product.Ensures (Product.observedInitiationHandshake msg src) (fun _ => True)
+      (fun observed _ => Product.InitiationCallObservation msg observed) := by
   constructor
   · intro w pre
-    rw [receiveHandshakePacket_initiation msg src kind]
+    rw [Product.receiveHandshakePacket_initiation msg src kind]
   · constructor
     · intro w pre
-      rw [observedInitiationHandshake_source msg src kind]
-    · exact observedInitiationHandshake_facts msg src kind
+      rw [Product.observedInitiationHandshake_source msg src kind]
+    · exact Product.observedInitiationHandshake_facts msg src kind
 
 /-- Inspect the original initiation caller, retaining its actual authenticated
 prefix even if the setter or later continuation errors. The two projections
@@ -166,23 +166,23 @@ endpoint mutation, or final endpoint preservation. The exact source factor
 already ties a present cut to immediate original setter invocation. -/
 theorem original_initiation_retained_authentication (msg : List UInt8) (src : SkbSource)
     (kind : messageType msg = MESSAGE_HANDSHAKE_INITIATION) :
-    Campaign2.AgreesOn (fun _ => True)
-      (do let audited ← initiationHandshakeAudit msg src; pure audited.1)
-      (Campaign2.inspect (initiationCallPrefix msg src)) ∧
-    Campaign2.AgreesOn (fun _ => True)
-      (do let audited ← initiationHandshakeAudit msg src; pure audited.2)
-      (Campaign2.inspect (receiveHandshakePacket msg src)) ∧
-    Campaign2.Observes (initiationHandshakeAudit msg src) (fun _ => True)
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (do let audited ← Product.initiationHandshakeAudit msg src; pure audited.1)
+      (Campaign2.Product.inspect (Product.initiationCallPrefix msg src)) ∧
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (do let audited ← Product.initiationHandshakeAudit msg src; pure audited.2)
+      (Campaign2.Product.inspect (liftWG (receiveHandshakePacket msg src))) ∧
+    Campaign2.Product.Observes (Product.initiationHandshakeAudit msg src) (fun _ => True)
       (fun entry observed => ∃ audited, observed = .ok (audited, entry) ∧
         HandshakeAuditFacts
-          (fun cut atCut => cut.beforeSetter = atCut ∧ InitiationCallFacts msg cut) audited) := by
+          (fun cut atCut => cut.beforeSetter = atCut ∧ Product.InitiationCallFacts msg cut) audited) := by
   constructor
   · intro w pre
-    rw [initiationHandshakeAudit, handshakeAudit_prefix]
+    rw [Product.initiationHandshakeAudit, Product.handshakeAudit_prefix]
   · constructor
     · intro w pre
-      rw [initiationHandshakeAudit_original msg src kind]
-    · exact initiationHandshakeAudit_facts msg src
+      rw [Product.initiationHandshakeAudit_original msg src kind]
+    · exact Product.initiationHandshakeAudit_facts msg src
 
 /-- The response caller has the same failure-retaining inspection: exact
 prefix and original-call outcomes, unchanged inspection entry, and the actual
@@ -191,23 +191,23 @@ carry no final state. A cut certifies reaching the setter, not completing its
 write or preserving the endpoint afterwards; no receiver totality is claimed. -/
 theorem original_response_retained_authentication (msg : List UInt8) (src : SkbSource)
     (kind : messageType msg = MESSAGE_HANDSHAKE_RESPONSE) :
-    Campaign2.AgreesOn (fun _ => True)
-      (do let audited ← responseHandshakeAudit msg src; pure audited.1)
-      (Campaign2.inspect (responseCallPrefix msg src)) ∧
-    Campaign2.AgreesOn (fun _ => True)
-      (do let audited ← responseHandshakeAudit msg src; pure audited.2)
-      (Campaign2.inspect (receiveHandshakePacket msg src)) ∧
-    Campaign2.Observes (responseHandshakeAudit msg src) (fun _ => True)
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (do let audited ← Product.responseHandshakeAudit msg src; pure audited.1)
+      (Campaign2.Product.inspect (Product.responseCallPrefix msg src)) ∧
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (do let audited ← Product.responseHandshakeAudit msg src; pure audited.2)
+      (Campaign2.Product.inspect (liftWG (receiveHandshakePacket msg src))) ∧
+    Campaign2.Product.Observes (Product.responseHandshakeAudit msg src) (fun _ => True)
       (fun entry observed => ∃ audited, observed = .ok (audited, entry) ∧
         HandshakeAuditFacts
-          (fun cut atCut => cut.beforeSetter = atCut ∧ ResponseCallFacts msg cut) audited) := by
+          (fun cut atCut => cut.beforeSetter = atCut ∧ Product.ResponseCallFacts msg cut) audited) := by
   constructor
   · intro w pre
-    rw [responseHandshakeAudit, handshakeAudit_prefix]
+    rw [Product.responseHandshakeAudit, Product.handshakeAudit_prefix]
   · constructor
     · intro w pre
-      rw [responseHandshakeAudit_original msg src kind]
-    · exact responseHandshakeAudit_facts msg src
+      rw [Product.responseHandshakeAudit_original msg src kind]
+    · exact Product.responseHandshakeAudit_facts msg src
 
 /-- Inspect every attempted iteration of the original poll, retaining the
 actual per-iteration entry, admission outcome and continuation outcome even
@@ -224,11 +224,11 @@ are not classified. CRYPTED/counter admission is not independent AEAD provenance
 and an attempt asserts neither successful mutation, final endpoint preservation,
 original-call completion nor delivery. -/
 theorem original_poll_all_endpoint_attempts (pid : PeerId) (budget : Nat)
-    (toStack : List (List UInt8) → M Unit) :
-    Campaign2.AgreesOn (fun _ => True)
+    (toStack : List (List UInt8) → Leanux.M Unit) :
+    Campaign2.Product.AgreesOn (fun _ => True)
       (do let audit ← observedPollAttempts pid budget toStack; pure audit.outcome)
-      (Campaign2.inspect (rxPoll pid budget toStack)) ∧
-    Campaign2.Observes (observedPollAttempts pid budget toStack) (fun _ => True)
+      (Campaign2.Product.inspect (rxPoll pid budget toStack)) ∧
+    Campaign2.Product.Observes (observedPollAttempts pid budget toStack) (fun _ => True)
       (fun entry observed => ∃ audit, observed = .ok (audit, entry) ∧
         ∀ iteration ∈ audit.iterations, PollAttemptIterationFacts pid iteration) := by
   constructor

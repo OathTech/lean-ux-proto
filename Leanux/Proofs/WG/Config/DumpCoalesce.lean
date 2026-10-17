@@ -21,7 +21,7 @@ theorem peerFixedAttrs_no_ips (p : Peer) :
 theorem coalesce_single (d : Device) (p : Peer) :
     coalesce ((singlePeerDump d p).skb.messages ++ [.done 2 0]) = pure (.ok (singlePeerJson d p)) := by
   have hn : deviceFixedAttrs d ≠ [] := by simp [deviceFixedAttrs]
-  simp [singlePeerDump, coalesce, hn, List.forIn_cons, List.forIn_nil, bind_assoc,
-    deviceFixedAttrs_nonempty, peerFixedAttrs_no_ips, singlePeerJson]
+  simp [singlePeerDump, coalesce, hn, List.forIn_cons, List.forIn_nil,
+    peerFixedAttrs_no_ips, singlePeerJson]
 
 end Leanux.Proofs.WG.Config
