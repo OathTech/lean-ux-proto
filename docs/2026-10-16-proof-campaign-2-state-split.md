@@ -20,11 +20,11 @@ and attributed theorem declarations. Campaign 2 owns 427 Lean files,
 | --- | ---: | ---: | ---: | ---: | --- |
 | Common projection | 2 | 0 | 0 | 0 | Actual native WG/Ambient and full Product observations carried; no reconstructed execution states. |
 | H1 Noise | 35 | 171 | 22 | 180 | All original Noise obligations carried, including the full terminal closure; six type-given frames deleted. Wider caller/lifetime/reachability and clock-provenance charter claims remain open. |
-| H2 Index | 68 | 318 | 52 | 191 | Table, lookup, collision records, allocation, owner invariants and lifecycle support carried; seven type-given frames deleted. Exact peer-release outcomes replace stale totality, with checked counterexamples. Terminal closure and whole-driver coherence remain pending. |
+| H2 Index | 68 | 318 | 52 | 201 | Table, lookup, collision records, allocation, owner invariants and lifecycle support carried; seven type-given frames deleted. Exact peer-release outcomes replace stale totality, with checked counterexamples. Terminal closure and whole-driver coherence remain pending. |
 | H3 Roaming | 35 | 119 | 13 | 119 | Endpoint/publication, polling, attempt facts, crypto, lookup and response-caller factors/facts carried with full Product certificates; two type-given frames deleted. Initiation transcript facts and broader authentication/caller closure remain pending. |
-| H4 Configuration | 130 | 554 | 79 | 338 | Scalar, identity, port, dump, allowed-IP and structural support carried; three type-given frames deleted. Quiet timer cleanup is corrected; queued-send and removal totality have checked stale-statement counterexamples. Remaining readback/effects and terminal closure remain pending. |
-| H5 Progress | 59 | 265 | 42 | 136 | Pure/control, cut, jitter, index, poll bounds, dispatch, scheduler turns, stack/probe frames and Product observation bridge carried. Receive-ring activation models, historical backlog/runner claims, remaining drain/flush claims and terminal closure remain pending. |
-| H6 Timer discipline | 98 | 404 | 50 | 105 | Base/guard/jitter, arming/wheel, recorded clock and initiation-send arming contracts carried; three type-given frames deleted. Exact wheel corrections are explicit; broader timer episodes, worker composition and terminal closure remain pending. |
+| H4 Configuration | 130 | 554 | 79 | 345 | Scalar, identity, port, dump, allowed-IP and structural support carried; three type-given frames deleted. Quiet timer cleanup and queued-send observations are corrected; queued-send and removal totality have checked stale-statement counterexamples. Remaining readback/effects and terminal closure remain pending. |
+| H5 Progress | 59 | 265 | 42 | 139 | Pure/control, cut, jitter, index, poll bounds, dispatch, scheduler turns, stack/probe frames and Product observation bridge carried. The old backlog fixture now has a checked exact runner rejection. Receive-ring activation models, general runner boundaries, remaining drain/flush claims and terminal closure remain pending. |
+| H6 Timer discipline | 98 | 404 | 50 | 110 | Base/guard/jitter, arming/wheel, recorded clock and initiation-send arming contracts carried; three type-given frames deleted. Exact wheel corrections are explicit; broader timer episodes, worker composition and terminal closure remain pending. |
 
 Retyped, deleted and retained counts will be reported per validated tranche.
 H1 now has a checked split terminal closure; H2–H6 remain lagging.
@@ -3207,3 +3207,106 @@ Config.RemoveFlagSource, Index.PeerReleaseTableFrames and
 TimerDiscipline.SendSocketFrames under Leanux.Proofs.WG, then #print axioms
 for logical declarations and scripts/in-bundle lake env leanchecker --fresh
 MODULE for each root. Use capped, 32 Lean threads and 16 QEMU slots on this host.
+
+
+## Send preservation, queued inspection and the corrected backlog fixture
+
+| Tranche | Before | Retyped | Corrected | Deleted | Kept | Added | After |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| TimerDiscipline.SendBufferFrame | 5 | 5 | 0 | 0 | 0 | 0 | 5 |
+| Index.SendFrames/SendSource | 7 | 7 | 0 | 0 | 0 | 3 | 10 |
+| Config.QueuedHandshake | 5 | 1 | 4 | 0 | 0 | 2 | 7 |
+| Progress.BatchBacklogAcceptance | 1 | 0 | 1 | 0 | 0 | 2 | 3 |
+| This tranche | 18 | 13 | 5 | 0 | 0 | 7 | 25 |
+| Cumulative processed baseline and checked support | 1,022 | 774 | 31 | 21 | 196 | 93 | 1,094 |
+
+The census is 519 campaign-owned files, 1,903 theorems and 344 checked proof
+modules; 809 baseline declarations await validation. Counts by result are H1
+180, H2 201, H3 119, H4 345, H5 139 and H6 110. H1 retains its checked terminal
+closure; H2–H6 and the full gate remain lagging. No new charter result is claimed.
+
+SendBufferFrame retains all five original observations and their arbitrary
+optional device/peer domains. It follows allocation, IPv4/IPv6 socket sending
+and the actual transmit-byte update. Index.SendFrames retains the five
+table-safety contracts; three private supports compose the actual clock,
+guard and arming effects. Residency comes from a successful actual guard.
+Timer wheel changes are projected through the table cursor, not claimed absent.
+Index.SendSource carries initiation and send-worker table safety on their
+original normal-return domains, including actual expiry, cryptographic,
+timer, socket and release operations. There are no new readiness premises.
+Independent review of both frame files found no issue. All frames remain
+substantive within WGWorld; none is deleted.
+
+[AGENT 2026-10-17] The queued-send correction observes the actual queue-record
+inspection and carries that result into the predicted Device. Decorated
+suffix/full-call operations have exact erasure equalities, including failure
+outcomes, so their claims refer to executions of the actual mirror rather
+than a reconstructed state or a different schedule.
+
+QueuedHandshake now carries all five original declarations: the read prefix
+is retyped, while the factor and three effects explicitly correct the old
+source/prediction. Resident-peer scope remains unchanged. Successful peerGet
+supplies the positivity needed for the retained release, rather than a new
+precondition. Two new erasure theorems connect the observations to the actual
+operation; full-call witnesses preserve the actual clock, intermediate states
+and final state. The old pure queuedDevice remains labelled historical for
+unported callers. The existing checked counterexample remains valid.
+Downstream key-install/staged-send contracts and terminal wrappers are pending.
+Independent review found no correctness issue in the queued or backlog carries;
+its stale queued-finding status note was fixed in that report before commit.
+
+BatchBacklogModel contains the unchanged trace fixture. BatchBacklogAcceptance
+checks accepted=false and the exact actual executeTrace error: operation 1
+stops at the WireGuard queueing boundary because pending work would outlive
+the guest wait. This is the landed completion guard addressing the historical
+finding, not a new mirror defect. The exact error is recovered from a
+kernel-checked observable projection, without needing DecidableEq on Json or
+Stop. The legacy hand-initialized runTwo/backlog code remains pending in
+BatchBacklog: it omits the runner's current FIB boot and is not used to prove
+the current rejection. Historical accepted-boundary wrappers are still lagging;
+the previous result remains attributed to its old mirror commit.
+
+Scoped builds pass 87 jobs for SendBufferFrame, 97 for Index.SendFrames,
+69 for QueuedHandshake, 163 for the combined acceptance closure and 134 for
+Index.SendSource. New proof files have no warnings. The acceptance closure
+replays an inherited Env.lean:865 String.mk deprecation warning; the mirror
+is frozen by the charter, so this warning is reported and neither suppressed
+nor repaired in this proof branch. Axiom inspection covers 683 logical roots
+in 136 proof modules, including 411 public theorem roots, using only the
+three standard axioms. Fresh kernel replay passes on Index.SendSource,
+QueuedHandshake and BatchBacklogAcceptance. Static token/import/root/default
+checks pass, all 258 original terminal names/order remain intact, and the
+mirror/shared-layer boundary checks are clear.
+
+Development ledger: SendBufferFrame probe 1 failed six branch/lift inference
+goals and probe 2 passed cleanly. Index.SendFrames and SendSource each passed
+their first probe without warnings. Queued probes 1–6 were: return-witness
+shape failure; record-layout failure; clean two-leaf closure; redundant
+function-extensionality step; incomplete erasure proof; clean leaf/erasure
+closure. Probe 7 lacked the explicit projection-bridge import; probe 8
+closed the corrected suffix; probe 9 referenced names eliminated by equality
+substitution; probe 10 closed all five declarations and both erasures.
+The final queued proofs use the default heartbeat limit.
+
+The backlog discovery evaluated the actual runner, then three changed proof
+probes were checked: probe 1 failed to synthesize equality decidability for
+the whole result, probe 2 failed reflexivity, and probe 3 proved the exact
+error via its observable projection. The accepted=false theorem passed in
+each proof probe; only probe 3 closed the complete candidate. No evaluation
+alone is counted as proof. Complete outputs were saved and inspected.
+No unchanged-source rerun, infrastructure retry, limit increase or guest run
+occurred in this tranche.
+
+Initiation-consume facts remain outside the census. Additional probes 13–18
+failed respectively on a reserved binder, a non-definitional source/bind join,
+conditional-bind normalization plus recursion, helper application plus kernel
+recursion, the same recursion after explicit continuation factoring, and
+kernel recursion after the local precheck equation removed elaboration
+recursion. These are failures; closed elaboration is not kernel acceptance.
+The next attempt names that precheck equation separately. Limits are unchanged.
+
+Reproduce with scripts/in-bundle lake build on Index.SendSource,
+Config.QueuedHandshake and Progress.BatchBacklogAcceptance under
+Leanux.Proofs.WG, then #print axioms for logical declarations and
+scripts/in-bundle lake env leanchecker --fresh MODULE for each root.
+Use capped, 32 Lean threads and 16 QEMU slots on this host.

@@ -36,11 +36,16 @@ computation is the actual imported mirror, not a replacement. No
 reachability from the runner fixture, captured-kernel execution, or kernel
 bug is claimed.
 
-The old factor, Device prediction and dependent contracts remain pending
-without added premises. The independent retained-reference contract
-`peerGet_exact` is carried separately in `QueuedReferenceSource`.
-A future correction must represent the inspected queue-record outcome and
-its actual continuation before rebuilding the staged-send claims.
+The current correction carries all five original queued-send source contracts.
+It retains the resident-peer domain and observes the actual peek result.
+queuedDeviceAfterInspection includes that bit; the decorated suffix and full
+call have exact erasure equalities to the actual source, including failures.
+The clock contract witnesses the actual prefix, clock and suffix runs.
+The old pure queuedDevice remains labelled historical for pending callers;
+downstream staged-send/installation and terminal wrappers remain open.
+The independent retained-reference contract peerGet_exact stays in
+QueuedReferenceSource. The existing counterexample continues to refute the
+old prediction.
 
 Reproduce the checked witness with:
 
