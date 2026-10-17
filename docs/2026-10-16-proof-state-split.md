@@ -11,10 +11,10 @@ new worlds; new R3/R4 results follow the retrofit.
 | Census | Lean files | Named theorems |
 | --- | ---: | ---: |
 | Validated baseline `00641c6` | 471 | 7,715 |
-| Completed retrofit checkpoints | 452 | 6,534 |
+| Completed retrofit checkpoints | 452 | 6,544 |
 
-Completed changes comprise **2,700 retyped/generalized, 1,693 deleted,
-1,847 retained contract shapes and 512 added theorems**. Retyping changes the
+Completed changes comprise **2,738 retyped/generalized, 1,693 deleted,
+1,876 retained contract shapes and 522 added theorems**. Retyping changes the
 actual carrier or observation, including shorthand contracts whose functions
 move to a native monad. Namespace-only product qualification and equivalent
 projection relocation count as retained. The census includes private and
@@ -259,9 +259,29 @@ inherited warnings. Development recorded six failed checks, one isolated
 diagnostic pass and the final full pass, with no infrastructure retry, panic
 or limit change.
 
-Remaining work is the routing/origin terminal carry, stamped
-traffic/environment/runner history, material lifecycle/support callers, RX
-credit/protection layers, warning
+Receive-runner history carries 27→31 theorems: all original product/pure
+contracts and both trace/placeholder domains remain, with four private
+composition helpers. Initialization, prefill, routing setup, copied probe
+worlds and exact JSON/indexed Stops follow the actual runner. Its 390-job
+closure builds with zero own warnings and 1,325 inherited warnings; all
+forty-one named declarations have standard-only axioms and fresh kernel replay
+passes. Five full changed-source checks and one isolated diagnostic failed
+before the passing candidate. No success or trace-shape premise was added.
+
+Transmit/receive protection carries 40→46 theorems: thirty-eight native or
+generalized contracts, two retained product contracts and six helpers/bridges.
+Arbitrary product actions remain available through projected transfer and
+loan/repay contracts. The copied handshake queue continuation now consumes the
+actual pending-work observation, as documented in the existing queue-bookkeeping
+finding. The 318-job closure builds with zero own warnings and 1,338 inherited
+warnings; all sixty named declarations have standard-only axioms and fresh
+kernel replay passes. Complete source/contract reviews pass for both modules.
+Transmit/receive development had six failed checks and six passing prefix/full
+checks, one of the latter with two warnings subsequently corrected. No
+infrastructure retry or proof-limit change occurred.
+
+Remaining work is the routing/origin terminal carry, material environment and
+runner support, RX credit/protection layers, warning
 cleanup, the full proof gate and terminal replay. Deterministic source/proof
 failures are failures; source edits are checked anew, never described as
 infrastructure retries. Recovery admissions printed by failed elaborations
