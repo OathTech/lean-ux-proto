@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Config.TwoPageCoalesceClaims
 import Leanux.Proofs.WG.Config.CursorCallbackClaims
 import Leanux.Proofs.WG.Config.CursorBodySource
 import Leanux.Proofs.WG.Config.FactoredTailClaims
