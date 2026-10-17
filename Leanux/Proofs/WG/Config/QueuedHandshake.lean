@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Config.QueuedReferenceSource
 import Leanux.Proofs.WG.Config.OperationFrames
 import Leanux.Proofs.WG.Config.KeyInstall
 
@@ -6,17 +7,6 @@ set_option maxHeartbeats 800000
 
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise Std.Do
-
-theorem peerGet_exact (pid : PeerId) (d : Device) (p : Peer)
-    (resident : d.peers[pid]? = some p) :
-    ⦃fun w => ⌜w.k.wg = some d⌝⦄ peerGet pid
-    ⦃⇓? _ w => ⌜w.k.wg = some (withPeer d pid { p with refcount := p.refcount + 1 }) ∧ 0 < p.refcount⌝⦄ := by
-  mvcgen [peerGet, requireNotPending, refcountInc, branch, branchCmp,
-    getPeer, getDev, getK, setPeer, modifyDev, modifyK, invariant, unsupported]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals repeat intro
-  all_goals simp_all [withPeer]
-  all_goals omega
 
 def queuedAfterClock (pid : PeerId) (p : Peer) (now : Int64) : M Unit := do
   let lhs := p.lastSentHandshake + REKEY_TIMEOUT.toInt64 * NSEC_PER_SEC64

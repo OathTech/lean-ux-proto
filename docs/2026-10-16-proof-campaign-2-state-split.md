@@ -2082,3 +2082,89 @@ above under `Leanux.Proofs.WG`, inspect logical declarations with
 `#print axioms`, and replay using
 `scripts/in-bundle lake env leanchecker --fresh MODULE`. On this host use
 `capped`, 32 Lean threads and 16 QEMU slots.
+
+## Initiation completion, projected identity and queued-handshake finding
+
+| Tranche | Before | Retyped | Deleted | Kept | Added | After |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `Config.ClearedSources`, `FwmarkEffects` | 12 | 11 | 0 | 1 | 0 | 12 |
+| `Noise.InitiationReadySource` | 6 | 6 | 0 | 0 | 0 | 6 |
+| `Config.QueuedReferenceSource` | 1 | 1 | 0 | 0 | 0 | 1 |
+| `Config.IdentitySourceClaims` | 12 | 9 | 0 | 3 | 0 | 12 |
+| `TimerDiscipline.ArmingSameExpirySource`, `Config.QueuedHandshakeFindings` | 0 | 0 | 0 | 0 | 2 | 2 |
+| This tranche | 31 | 27 | 0 | 4 | 2 | 33 |
+| Cumulative processed baseline and checked support | 718 | 516 | 21 | 181 | 36 | 733 |
+
+The census is 476 campaign-owned files, 1,846 theorems and 240 checked proof
+modules. Of the baseline, 1,113 theorems await validation. Checked support
+is H1 147, H2 187, H3 54, H4 246, H5 70 and H6 29. All 258 terminal names
+and their order remain. Each of H1–H6 remains in retrofit; no whole-result
+closure or full-gate pass is claimed.
+
+The seven clearing contracts and four operational fwmark effects retain
+arbitrary peer lists and accumulated visits, including duplicate and absent
+entries. Record-consuming resets keep their original stopped outcomes.
+The pure double-clear equation is unchanged. The six remaining initiation
+contracts now use native WG execution throughout, retaining the resident,
+identity, non-NULL word, crypto, clock-width and collision/fresh-draw
+premises. The pure effect equation observes WG and Ambient. Its separate
+three mode frames and projected/public wrappers remain pending.
+
+Twelve existing claims moved from `SourceClaims` to
+`IdentitySourceClaims`: four total and four partial projected contracts,
+one native source equation, and three unchanged dump-cancellation aliases.
+They retain device selection, ordered key updates, clock existence and
+the actual snapshotted peer list. The remaining source-claim declarations
+are unchanged. These extracted aliases do not validate the terminal module.
+
+The retained-reference partial contract moved to `QueuedReferenceSource`.
+Zero and overflow reference counts still stop; successful execution itself
+implies positivity and the exact increment. The other five queued-send
+declarations remain unchanged and pending. A checked
+[queued-handshake counterexample](2026-10-17-proof-campaign-2-queued-handshake.md)
+shows that the old pending-peer prediction is stale after `1f0fbeb):
+the actual queue becomes `[0, 0]` and the reference count becomes 3.
+This is a statement artefact predating the state split, without a reachability
+or kernel-bug claim.
+
+The new recorded same-expiry arm support observes the exact current WG
+effect: the jiffies value and a nonzero unit/address registration can change,
+while peer and wheel state stay unchanged. Its normal-execution premise
+implies the recorded signed gap is 0 or 1. It imposes no wheel-consistency
+premise, since the source returns before that check. It complements the
+unrecorded-arm support; neither is counted as one of the seven stale
+legacy arming contracts.
+
+Scoped builds pass: clearing 57 jobs, fwmark effects 58, initiation 44,
+reference/same-expiry 70, queued finding 49 and identity claims 108.
+The identity build reports the inherited mirror `Env.lean:865`
+`String.mk` deprecation; campaign code has no warning and the mirror is
+unchanged. Axiom inspection covers 342 logical roots in 66 proof modules,
+with only the three standard axioms. Fresh replay passes for
+FwmarkEffects, InitiationReadySource, ArmingSameExpirySource,
+QueuedReferenceSource, QueuedHandshakeFindings and IdentitySourceClaims.
+Independent reviews, static checks, whitespace and mirror/shared boundaries pass.
+
+Development: clearing passed its second changed probe after invariant/bind
+normalization; fwmark effects passed its second after replacing a deprecated
+simplification lemma. Initiation, retained-reference and identity claims
+passed first probes. The queued witness passed its second after record
+syntax and result normalization fixes. Same-expiry probes five through seven
+failed at state rewrites or record syntax; eight passed without warnings.
+No failed outcome is counted as validation.
+
+Two further scratch batches remain uncounted. Five changed-expiry probes
+failed at a reserved identifier, source joins, simplifier steps and then a
+nested continuation selected by generic splitting. Six mode-frame probes
+failed at stale helpers, tactic-framework mismatches and explicit native
+reductions; one reached the unchanged heartbeat limit. The independent
+bucket-mode induction elaborates but is not yet packaged. Ambient remains
+accessible to these operations, so mode preservation is substantive and
+cannot be deleted on type grounds. These failures establish no counterexample.
+No infrastructure retry, cap/proof-limit increase or guest run occurred.
+
+Reproduce with `scripts/in-bundle lake build` on the six fresh-replay roots
+above under `Leanux.Proofs.WG`, inspect logical declarations with
+`#print axioms`, and replay using
+`scripts/in-bundle lake env leanchecker --fresh MODULE`. On this host use
+`capped`, 32 Lean threads and 16 QEMU slots.

@@ -7,34 +7,36 @@ set_option maxHeartbeats 800000
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise Std.Do
 
-def sourcesClear (k : Kernel) (pids : List PeerId) : Prop :=
-  ∀ pid ∈ pids, ∃ p, (k.wg.bind fun d => d.peers[pid]?) = some p ∧ sourceClear p
+def sourcesClear (k : WGWorld) (pids : List PeerId) : Prop :=
+  ∀ pid ∈ pids, ∃ p, (k.dev.bind fun d => d.peers[pid]?) = some p ∧ sourceClear p
 
 theorem clearEndpointSource_missing (pid : PeerId) :
     Ensures (clearPeerEndpointSrc pid) (fun w => peerAt w pid = none)
       (fun _ _ => False) := by
-  rw [ensures_iff]
-  have ht := unconstrained_prefix (dstCacheResetNow pid)
-  mvcgen [clearPeerEndpointSrc, getPeer, getDev, getK, setPeer,
-    modifyDev, modifyK, invariant, ht]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals repeat intro
-  all_goals simp_all [peerAt]
+  intro g ambient result final after absent run
+  cases device : g.dev with
+  | none =>
+    simp [clearPeerEndpointSrc, getPeer, getDev, device, invariant, AmbientM.invariant] at run
+    cases run
+  | some d =>
+    have missing : d.peers[pid]? = none := by simpa [peerAt, device] using absent
+    simp [clearPeerEndpointSrc, getPeer, getDev, device, missing, invariant, AmbientM.invariant] at run
+    cases run
 
 theorem clearEndpointSource_accum (pid : PeerId) (seen : List PeerId) :
-    Ensures (clearPeerEndpointSrc pid) (fun w => sourcesClear w.k seen)
-      (fun _ w => sourcesClear w.k (seen ++ [pid])) := by
-  intro w ret v hs hr
-  cases hd : w.k.wg with
+    Ensures (clearPeerEndpointSrc pid) (fun w => sourcesClear w seen)
+      (fun _ w => sourcesClear w (seen ++ [pid])) := by
+  intro w ambient ret v after hs hr
+  cases hd : w.dev with
   | none =>
-    exact False.elim (clearEndpointSource_missing pid w ret v (by simp [peerAt, hd]) hr)
+    exact False.elim (clearEndpointSource_missing pid w ambient ret v after (by simp [peerAt, hd]) hr)
   | some d =>
     cases hp : d.peers[pid]? with
     | none =>
-      exact False.elim (clearEndpointSource_missing pid w ret v (by simp [peerAt, hd, hp]) hr)
+      exact False.elim (clearEndpointSource_missing pid w ambient ret v after (by simp [peerAt, hd, hp]) hr)
     | some p =>
       obtain ⟨d', reset, hv, _, hpid, hother⟩ :=
-        clearEndpointSource_exact pid d p hp w ret v hd hr
+        clearEndpointSource_exact pid d p hp w ambient ret v after hd hr
       intro q hq
       by_cases heq : q = pid
       · subst q
@@ -47,43 +49,46 @@ theorem clearEndpointSource_accum (pid : PeerId) (seen : List PeerId) :
 
 theorem clearEndpointSource_accum_frame (pid : PeerId) (seen : List PeerId)
     (initial : Option Device) :
-    ⦃fun w => ⌜w.k.wg.map withoutPeers = initial ∧ sourcesClear w.k seen⌝⦄ clearPeerEndpointSrc pid
-    ⦃⇓? _ w => ⌜w.k.wg.map withoutPeers = initial ∧ sourcesClear w.k (seen ++ [pid])⌝⦄ := by
+    ⦃fun w => ⌜w.dev.map withoutPeers = initial ∧ sourcesClear w seen⌝⦄ clearPeerEndpointSrc pid
+    ⦃⇓? _ w => ⌜w.dev.map withoutPeers = initial ∧ sourcesClear w (seen ++ [pid])⌝⦄ := by
   rw [← ensures_iff]
-  intro w ret v h hr
-  exact ⟨(ensures_iff _ _ _).mpr (clearEndpointSource_device_frame pid initial) w ret v h.1 hr,
-    clearEndpointSource_accum pid seen w ret v h.2 hr⟩
+  intro w ambient ret v after h hr
+  exact ⟨(ensures_iff _ _ _).mpr (clearEndpointSource_device_frame pid initial) w ambient ret v after h.1 hr,
+    clearEndpointSource_accum pid seen w ambient ret v after h.2 hr⟩
 
-def fwmarkClearLoop (pids : List PeerId) : M Unit := do
+def fwmarkClearLoop (pids : List PeerId) : WG.M Unit := do
   for pid in pids do
     _ ← branch .setDevFwmarkPeerIter true
     clearPeerEndpointSrc pid
 
 theorem fwmarkClearLoop_accum (pids seen : List PeerId) (initial : Option Device) :
     Ensures (fwmarkClearLoop pids)
-      (fun w => w.k.wg.map withoutPeers = initial ∧ sourcesClear w.k seen)
-      (fun _ w => w.k.wg.map withoutPeers = initial ∧ sourcesClear w.k (seen ++ pids)) := by
+      (fun w => w.dev.map withoutPeers = initial ∧ sourcesClear w seen)
+      (fun _ w => w.dev.map withoutPeers = initial ∧ sourcesClear w (seen ++ pids)) := by
   induction pids generalizing seen with
   | nil =>
-    rw [ensures_iff]
-    simp [fwmarkClearLoop]
-    mvcgen
+    intro g ambient result final after pre run
+    cases run
+    simpa using pre
   | cons pid rest ih =>
     have factor : fwmarkClearLoop (pid :: rest) = (do
         _ ← branch .setDevFwmarkPeerIter true
         clearPeerEndpointSrc pid
         fwmarkClearLoop rest) := by
       simp [fwmarkClearLoop, List.forIn_cons, bind_assoc]
-    have hc := clearEndpointSource_accum_frame pid seen initial
-    have ht := (ensures_iff _ _ _).mp (ih (seen ++ [pid]))
-    rw [factor, ensures_iff]
-    mvcgen [branch, hc, ht]
-    all_goals try dsimp +zetaDelta only at *
-    all_goals repeat intro
-    all_goals simp_all [List.append_assoc]
+    rw [factor]
+    refine ensures_bind (Q := fun _ g => g.dev.map withoutPeers = initial ∧ sourcesClear g seen) _ _ ?_ ?_
+    · exact (ensures_iff _ _ _).mpr (hoare_liftAmbient_variant
+        (AmbientM.branch .setDevFwmarkPeerIter true) _)
+    · intro _
+      refine ensures_bind _ _ ((ensures_iff _ _ _).mpr
+        (clearEndpointSource_accum_frame pid seen initial)) ?_
+      intro _ g ambient result final after pre run
+      simpa only [List.append_assoc, List.singleton_append] using
+        ih (seen ++ [pid]) g ambient result final after pre run
 
-def deviceFwmarkUpdateSource (a : DeviceAttrs) (flags : UInt32) : M Int := do
-  let zero (ret : Int) : M Int := do
+def deviceFwmarkUpdateSource (a : DeviceAttrs) (flags : UInt32) : WG.M Int := do
+  let zero (ret : Int) : WG.M Int := do
     _ ← branch .setDevZeroKey a.privateKey.isSome
     return ret
   modifyDev fun d => { d with deviceUpdateGen := d.deviceUpdateGen + 1 }
@@ -99,34 +104,67 @@ def deviceFwmarkUpdateSource (a : DeviceAttrs) (flags : UInt32) : M Int := do
 
 theorem deviceUpdate_loop_factor (a : DeviceAttrs) (flags : UInt32) :
     deviceFwmarkUpdateSource a flags = deviceUpdateSource a flags := by
-  simp [deviceFwmarkUpdateSource, deviceUpdateSource, fwmarkClearLoop, bind_assoc]
+  simp [deviceFwmarkUpdateSource, deviceUpdateSource, fwmarkClearLoop]
 
 theorem fwmarkClearLoop_all (pids : List PeerId) (initial : Option Device) :
-    ⦃fun w => ⌜w.k.wg.map withoutPeers = initial⌝⦄ fwmarkClearLoop pids
-    ⦃⇓? _ w => ⌜w.k.wg.map withoutPeers = initial ∧ sourcesClear w.k pids⌝⦄ := by
+    ⦃fun w => ⌜w.dev.map withoutPeers = initial⌝⦄ fwmarkClearLoop pids
+    ⦃⇓? _ w => ⌜w.dev.map withoutPeers = initial ∧ sourcesClear w pids⌝⦄ := by
   rw [← ensures_iff]
-  intro w ret v hp hr
-  simpa using fwmarkClearLoop_accum pids [] initial w ret v
+  intro w ambient ret v after hp hr
+  simpa using fwmarkClearLoop_accum pids [] initial w ambient ret v after
     ⟨hp, by simp [sourcesClear]⟩ hr
 
 theorem setDevice_fwmark_sources (d : Device) (mark : Nat) (net : d.creatingNet = true) :
     Ensures (wgSetDevice (fwmarkAttrs d mark))
-      (fun w => w.k.wg = some d ∧ selectsDevice w d)
-      (fun ret w => ret = 0 ∧ w.k.wg.map withoutPeers = some
+      (fun w => w.dev = some d ∧ selectsDevice w d)
+      (fun ret w => ret = 0 ∧ w.dev.map withoutPeers = some
         (withoutPeers { d with fwmark := mark, deviceUpdateGen := d.deviceUpdateGen + 1 }) ∧
-        sourcesClear w.k d.peerList) := by
-  let updated := withoutPeers { d with fwmark := mark, deviceUpdateGen := d.deviceUpdateGen + 1 }
-  have hl := lookupInterface_index d
-  have hc := fun pids => fwmarkClearLoop_all pids (some updated)
-  rw [← wgSetDevice_source, ensures_iff]
-  simp only [wgSetDeviceSource, ← deviceUpdate_loop_factor]
-  simp [deviceFwmarkUpdateSource, deviceKeySource, devicePeersSource,
-    fwmarkAttrs, branch, bind_assoc, Leanux.WG.andM, Leanux.WG.orM,
-    WGDEVICE_F_ALL, WGDEVICE_F_REPLACE_PEERS]
-  mvcgen [getDev, getK, modifyDev, modifyK, invariant, hl, hc]
-  all_goals try dsimp +zetaDelta only at *
-  all_goals repeat intro
-  all_goals simp_all [withoutPeers, updated]
-  all_goals grind only
+        sourcesClear w d.peerList) := by
+  let updated := {d with fwmark := mark, deviceUpdateGen := d.deviceUpdateGen + 1}
+  let Q : WGWorld → Prop := fun g => g.dev.map withoutPeers = some (withoutPeers updated) ∧ sourcesClear g d.peerList
+  let tail : WG.M Int := do
+    fwmarkClearLoop d.peerList
+    _ ← branch .setDevFwmarkPeerIter false
+    _ ← branch .setDevPort false
+    _ ← branch .setDevReplacePeers false
+    _ ← branch .setDevHasPrivateKey false
+    _ ← branch .setDevHasPeers false
+    _ ← branch .setDevZeroKey false
+    pure 0
+  have contract : Ensures tail
+      (fun g => g.dev.map withoutPeers = some (withoutPeers updated))
+      (fun ret g => ret = 0 ∧ Q g) := by
+    unfold tail
+    refine ensures_bind _ _ ((ensures_iff _ _ _).mpr (fwmarkClearLoop_all d.peerList _)) ?_
+    intro _ g ambient result final after pre run
+    simp [branch, AmbientM.branch] at run
+    rcases run with ⟨⟨rfl, rfl⟩, rfl⟩
+    exact ⟨rfl, pre⟩
+  intro g ambient result final after pre run
+  obtain ⟨value, middle, next, lookupRun, lookupValue, device⟩ :=
+    (returns_iff _ _ _).mpr (lookupInterface_index d) g ambient pre
+  subst value
+  let logged (a : Ambient) (site : Decision) (value : Bool) :=
+    {a with steps := a.steps.push {decision := site, outcome := value, netRx := a.netRxSection}}
+  let before := logged (logged (logged (logged (logged (logged (logged (logged (logged next
+    .setDevLookupErr false) .setDevHasFlags false) .setDevBadFlags false)
+    .setDevHasPort false) .setDevHasFwmark true) .setDevNoNet false)
+    .setDevNotCapable false) .setDevPermErr false) .setDevFwmark true
+  have source : ((wgSetDevice (fwmarkAttrs d mark)).run g).run ambient =
+      (tail.run {middle with dev := some updated}).run before := by
+    rw [← wgSetDevice_source]
+    simp only [wgSetDeviceSource, ← deviceUpdate_loop_factor]
+    simp [fwmarkAttrs, WG.orM, branch, AmbientM.branch,
+      WGDEVICE_F_ALL]
+    rw [show ((lookupInterface (byIndex d)).run g).run ambient =
+      .ok ((.ok (), middle), next) from lookupRun]
+    dsimp only [bind, Except.bind]
+    simp [deviceFwmarkUpdateSource, deviceKeySource, devicePeersSource,
+      WG.andM, branch, AmbientM.branch, getDev, device, net, modifyDev,
+      WGDEVICE_F_REPLACE_PEERS, tail, fwmarkClearLoop, updated, before, logged,
+      StateT.run, StateT.bind, StateT.lift, StateT.pure, Except.bind, Except.pure,
+      liftM, monadLift, pure, bind, get, modify, modifyGet, MonadLift.monadLift,
+      MonadStateOf.modifyGet, getThe, StateT.modifyGet, MonadStateOf.get, StateT.get, Functor.map, StateT.map]
+  exact contract _ before result final after (by simp) (source.symm.trans run)
 
 end Leanux.Proofs.WG.Config
