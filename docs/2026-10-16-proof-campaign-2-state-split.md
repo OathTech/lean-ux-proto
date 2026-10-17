@@ -22,9 +22,9 @@ and attributed theorem declarations. Campaign 2 owns 427 Lean files,
 | H1 Noise | 35 | 171 | 22 | 180 | All original Noise obligations carried, including the full terminal closure; six type-given frames deleted. Wider caller/lifetime/reachability and clock-provenance charter claims remain open. |
 | H2 Index | 68 | 318 | 52 | 212 | Table, lookup, collision records, allocation, owner invariants and lifecycle support carried; seven type-given frames deleted. Exact peer-release outcomes replace stale totality, with checked counterexamples. Terminal closure and whole-driver coherence remain pending. |
 | H3 Roaming | 35 | 119 | 13 | 119 | Endpoint/publication, polling, attempt facts, crypto, lookup and response-caller factors/facts carried with full Product certificates; two type-given frames deleted. Initiation transcript facts and broader authentication/caller closure remain pending. |
-| H4 Configuration | 130 | 554 | 79 | 353 | Scalar, identity, port, dump, allowed-IP and structural support carried; three type-given frames deleted. Quiet timer cleanup and queued-send observations are corrected; queued-send and removal totality have checked stale-statement counterexamples. Remaining readback/effects and terminal closure remain pending. |
-| H5 Progress | 59 | 265 | 42 | 139 | Pure/control, cut, jitter, index, poll bounds, dispatch, scheduler turns, stack/probe frames and Product observation bridge carried. The old backlog fixture now has a checked exact runner rejection. Receive-ring activation models, general runner boundaries, remaining drain/flush claims and terminal closure remain pending. |
-| H6 Timer discipline | 98 | 404 | 50 | 118 | Base/guard/jitter, arming/wheel, recorded clock and initiation-send arming contracts carried; three type-given frames deleted. Exact wheel corrections are explicit; broader timer episodes, worker composition and terminal closure remain pending. |
+| H4 Configuration | 130 | 554 | 79 | 357 | Scalar, identity, port, dump, allowed-IP and structural support carried; three type-given frames deleted. Quiet timer cleanup and queued-send observations are corrected; queued-send and removal totality have checked stale-statement counterexamples. Remaining readback/effects and terminal closure remain pending. |
+| H5 Progress | 59 | 265 | 42 | 145 | Pure/control, cut, jitter, index, poll bounds, dispatch, scheduler turns, stack/probe frames, base flush frames and Product observation bridge carried; one type-given index frame deleted. The old backlog fixture now has a checked exact runner rejection. Receive-ring activation models, general runner boundaries, remaining drain/flush claims and terminal closure remain pending. |
+| H6 Timer discipline | 98 | 404 | 50 | 122 | Base/guard/jitter, arming/wheel, recorded clock and initiation-send arming contracts carried; three type-given frames deleted. Exact wheel corrections are explicit; broader timer episodes, worker composition and terminal closure remain pending. |
 
 Retyped, deleted and retained counts will be reported per validated tranche.
 H1 now has a checked split terminal closure; H2–H6 remain lagging.
@@ -3458,3 +3458,87 @@ Reproduce with scripts/in-bundle lake build on Index.ResponseSource,
 TimerDiscipline.SendWorkerSource and Config.KeyReferences under Leanux.Proofs.WG,
 then #print axioms and scripts/in-bundle lake env leanchecker --fresh MODULE
 for each root. Use capped, 32 Lean threads and 16 QEMU slots on this host.
+
+
+## Retry observations, staged callers and base flush preservation
+
+| Tranche | Before | Retyped | Corrected | Deleted | Kept | Added | After |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| TimerDiscipline.RetryBaseSource | 3 | 1 | 2 | 0 | 0 | 1 | 4 |
+| Config.StagedFallback | 2 | 0 | 2 | 0 | 0 | 2 | 4 |
+| Progress.FlushBaseFrames and old index-only frame | 5 | 4 | 0 | 1 | 0 | 0 | 4 |
+| Progress.FlushQueueEffects | 2 | 0 | 0 | 0 | 2 | 0 | 2 |
+| This tranche | 12 | 5 | 4 | 1 | 2 | 3 | 14 |
+| Cumulative processed baseline and checked support | 1,060 | 803 | 36 | 22 | 199 | 97 | 1,135 |
+
+The census is 522 campaign-owned files, 1,906 theorems and 359 checked proof
+modules; 771 baseline declarations await validation. Counts are H1 180, H2 212,
+H3 119, H4 357, H5 145 and H6 122. H1's terminal closure remains current;
+H2–H6 and the full gate remain lagging. No new charter result is claimed.
+
+RetryBaseSource retains the total resident-peer read prefix without resetting
+attempts. Its factor and exact effect explicitly correct the old queued suffix:
+the actual clock and optional inspection bit determine the post-state, with
+resident-only partial scope and an unconditional observer-erasure equality,
+including errors. Legacy downstream consumers of queuedDevice remain pending.
+
+StagedFallback carries its absent-key and invalid-key callers over projected
+observations. The absent-key observer erases unconditionally. The invalid-key
+observer performs the actual key read and invalid decision; exact run erasure,
+including every error, is stated on the original resident/invalid-key domain.
+It asserts no equivalence on valid-key states. Both contracts preserve their
+original premises, including the retained-count premise only where previously
+present, and the ordered keypair decrement, packet restoration, attempt reset
+and actual clock/peek effect. The historical fallbackDevice remains for pending
+StagedInvalid/key-peer consumers. No valid-key/nonce proof layer is copied.
+
+FlushBaseFrames separates four carried within-WireGuard frames: peer release,
+handshake clearing, keypair clearing and the queued clear worker. They preserve
+both original work queues on all original normal-return paths, including final
+peer deletion and keypair aliases, with no new readiness premises. The
+clear sequence uses the actual ordered ClearRun; failed release/lookup guards
+remain actual errors. FlushQueueEffects extracts two unchanged pure queue-count
+decrease equalities. The two send-dependent frames remain in FlushQueueFrames.
+
+The deleted indexRemove_flushQueues frame is provided by the narrowed type:
+indexRemove is IndexM Unit, with state List IndexEntry over AmbientM. Neither
+layer can access Device.sendWorkQueue or clearWorkQueue. The generic liftIndex
+adapter retains its real getDev guard and writes back only indexTable; the
+handshake-clear caller explicitly discharges queue stability through the
+already-checked hoare_liftIndex_variant. The peer-release caller uses its exact
+guarded outcome contract. Repository search found no other callers of the
+deleted frame. This deletion is justified by the accessible state fields,
+not by a failed compile. No shared-layer lemma was edited.
+
+Independent reviews of both corrected caller groups and all four flush frames
+found no issues; the flush review also confirmed the deletion and its replaced
+caller obligations. Scoped builds pass 78 jobs for retry/staged callers and
+103 for the flush closure, without warnings. Axiom inspection covers 526
+logical roots in 95 proof modules, including 297 public theorem roots, with
+only the three standard axioms. All four fresh kernel replays pass.
+Static token/import/root/default checks, all 258 terminal names/order, and
+mirror/shared boundaries pass.
+
+Retry probe 1 eliminated the wrong peer variable while unpacking a return
+witness; probe 2 named the equality and substituted the returned value, then
+passed. Staged-caller probe 1 inferred the entry Ambient at the post-branch
+continuation; explicitly reducing the projected Device precondition fixed that
+inference, and probe 2 passed. Flush-base frames passed their first probe, and
+the unchanged pure count equalities passed their first scoped build. Complete
+outputs were saved and inspected. No warning suppression, unchanged rerun,
+infrastructure retry, limit increase or guest run occurred.
+
+Initiation transcript facts remain outside the census. Probe 23 closed
+elaboration without warnings but failed kernel recursion in the new guard
+contract; the original final fact had become a small composition and was no
+longer the reported failure site. Probe 24 passed after targeted bind/run
+rewrites, with the native finish contract and five private support lemmas
+accepted at unchanged limits. Independent review found no native scope or
+behavior issue. The whole-consumer and full Product companions remain pending,
+so the incomplete original carry remains outside this census.
+
+Reproduce with scripts/in-bundle lake build on Config.StagedFallback,
+TimerDiscipline.RetryBaseSource, Progress.FlushBaseFrames and
+Progress.FlushQueueEffects under Leanux.Proofs.WG, then #print axioms and
+scripts/in-bundle lake env leanchecker --fresh MODULE for each root.
+Use capped, 32 Lean threads and 16 QEMU slots on this host.

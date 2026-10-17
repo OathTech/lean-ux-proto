@@ -64,8 +64,8 @@ remain historical and lagging during the retrofit. The
 [retrofit report](2026-10-16-proof-campaign-2-state-split.md) records baseline
 counts, carries, deletions and validation. This branch retains the proof
 target and gate removed from main pending campaign 1's landing.
-The support tranches check 1,121 theorems (798 retyped/generalized, thirty-two corrected statements,
-197 retained, ninety-four support/finding declarations), and delete twenty-one type-given
+The support tranches check 1,135 theorems (803 retyped/generalized, thirty-six corrected statements,
+199 retained, ninety-seven support/finding declarations), and delete twenty-two type-given
 frames. H1’s full terminal module now checks over the split mirror; H2–H6
 terminal closures and the full gate remain lagging. Ten H2 table
 claims have checked projected support; all 258 original audit names remain
@@ -88,9 +88,9 @@ no reachability claim is made.
 The [H4 queued-handshake finding](2026-10-17-proof-campaign-2-queued-handshake.md)
 checks a stale pending-peer prediction after the queue-record change in
 `1f0fbeb`; all five queued-send source contracts now carry the actual inspection
-result, with exact erasure equalities. The first staged-fallback caller also
-carries the actual observation; remaining installation/staged-send contracts
-and terminal wrappers remain pending.
+result, with exact erasure equalities. Retry and absent/invalid-key staged
+callers now carry the actual observation too; remaining installation/staged-send
+contracts and terminal wrappers remain pending.
 The [H5 backlog carry](2026-10-17-proof-campaign-2-backlog-carry.md) proves
 the old accepted fixture now receives the exact pending-work rejection from
 the actual runner. General boundary and legacy backlog wrappers remain pending.
