@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Progress.PlaceholderBoundaryClaims
 import Leanux.Proofs.WG.Progress.RunnerIdleOperationSource
 import Leanux.Proofs.WG.Progress.SendCompletionClaims
 import Leanux.Proofs.WG.Progress.RunnerAdvanceSource
@@ -716,5 +717,25 @@ theorem original_final_idle_wait_receipt (call : Syscall) (waited : HasFinalIdle
       (fun out final => ∀ j, out.2 = some j →
         final.wg.jiffiesLast = some j ∧ NoTimerDue j final) :=
   ⟨observedIdleWaitOperation_erase call waited,observedIdleWaitOperation_checks call⟩
+
+/-- An actual initialized domain-filter execution accepts with a retained
+receive-worker pending identity and the stated empty-queue/count/NAPI tests.
+This is placeholder-mode bookkeeping, not supplied-record evidence of an
+unexecuted unit, nor a general physical-ring coherence claim. -/
+theorem original_placeholder_pending_identity :
+    ∃ audit cut d,
+      executeTraceWithBoundaries CurrentBoundaryWitness.placeholderBoundaryTrace true = .ok audit ∧
+      Runner.executeTrace CurrentBoundaryWitness.placeholderBoundaryTrace true = .ok audit.output ∧
+      audit.boundaries[1]? = some cut ∧
+      cut.index = 1 ∧ cut.result = 1 ∧ cut.after.wg.device = some d ∧
+      cut.after.ambient.pendingWork = [Worker.receiveWorker.index] ∧
+      cut.after.ambient.hidden.isNone = true ∧
+      cut.after.ambient.suspended.isEmpty = true ∧ cut.after.wg.netRxRaised = false ∧
+      d.handshakeQueue.empty = true ∧ d.handshakeQueue.count = 0 ∧
+      d.handshakeQueueLen = 0 ∧ d.decryptQueue.empty = true ∧
+      d.encryptQueue.empty = true ∧ d.txWorkQueue.isEmpty = true ∧
+      d.sendWorkQueue.isEmpty = true ∧ d.clearWorkQueue.isEmpty = true ∧
+      d.peers.toList.any (fun item => item.2.napiScheduled) = false :=
+  CurrentBoundaryWitness.placeholder_accepted_pending
 
 end Leanux.Proofs.WG.Progress

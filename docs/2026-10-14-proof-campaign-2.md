@@ -10,27 +10,27 @@ merged; the executable mirror remains byte-identical to b700659.
 
 | Result | Headlines | Checked support | Split status |
 | --- | ---: | ---: | --- |
-| H1 Noise | 33 | 235 | Full terminal closure, all seven whole-call tag maps, their actual finite mixed histories and session derivation-clock receipt current; direct helper reinstallation refutes unrestricted repeat-confirmation uniqueness; fresh-session uniqueness remains open; broader driver closure is separate from the checked native histories. |
+| H1 Noise | 33 | 245 | Full terminal closure, all seven whole-call tag maps, their actual finite mixed histories and session derivation-clock receipt current; direct helper reinstallation refutes unrestricted repeat-confirmation uniqueness; fresh-session uniqueness remains open; broader driver closure is separate from the checked native histories. |
 | H2 Index | 91 | 491 | Full terminal closure and ingress/expiry/handshake/peer-creation owner coherence and whole-removal lifecycle finding/slot-covered arbitrary-AIP preservation and actual clear-work dispatch and both-mode handshake queueing and new-handshake/zero-key/retransmit callbacks and persistent-callback and successful-session slot-alias invariant counterexamples and positive publication-to-lookup handoff under explicit rotation freshness current; core named-operation H2 coverage checked; whole initialized driver/lifetime closure is a separate stronger scope; aggregate gate inherited-blocked. |
 | H3 Roaming | 19 | 196 | Full terminal closure and invalid-MAC1/rate-limit/admitted-response/initiation rejection and cookie-message and whole data-admission endpoint preservation current; callback authentication provenance and broader caller coverage open. |
 | H4 Configuration | 96 | 717 | Full terminal closure, actual mixed/key setter paginated readback with arbitrary endpoints, whole finite single-peer mixed-width getter and actual mixed/key setter composition with exact DATA/DONE count and arbitrary endpoints and fitting multi-peer scalar and mixed fwmark/scalar set/get current; global ownership, queued cleanup, general mixed setters and multi-peer pagination open. |
-| H5 Progress | 49 | 326 | Full terminal closure, exact bounded outcomes and recorded batch, actual timer completion guards and recorded idle/post-advance wait completion and actual advance-syscall/runner linkage and send-worker completion guard and four final-idle syscall/runner receipts current; global progress/coherent-ring adequacy open. |
+| H5 Progress | 50 | 329 | Full terminal closure, exact bounded outcomes and recorded batch, actual timer completion guards and recorded idle/post-advance wait completion and actual advance-syscall/runner linkage and send-worker completion guard and four final-idle syscall/runner receipts current; global progress/coherent-ring adequacy open. |
 | H6 Timers | 65 | 498 | Full terminal closure, actual retry blocks and allocation-labelled guarded session-arm events with outgoing call-entry origin and initialized give-up runtime witness and all five syntactic traversal call sites covered by six observer branches with all-mode immediate effects; upstream data authentication, broader caller histories and session-relative counts remain open. |
 
-The checked surface is 2,463 theorems in all 845 campaign-owned modules.
+The checked surface is 2,476 theorems in all 852 campaign-owned modules.
 The completed retrofit accounts for 1,983: 1,321 retyped, 244 explicitly
 corrected, 239 retained and 179 added support/finding declarations. One hundred fifty-eight
 subsequent H2 declarations add table preservation and local owner coherence.
-Fifty H1 declarations add whole-operation and finite mixed-history tag ownership and actual derivation-clock provenance and direct-helper reinstallation; one hundred thirty-five H4 declarations
+Sixty H1 declarations add whole-operation and finite mixed-history tag ownership and actual derivation-clock provenance and direct-helper reinstallation; one hundred thirty-five H4 declarations
 add mixed fwmark/scalar, ordered peer-attribute, port-refusal/private-key readback and finite IPv4 getter/setter pagination and actual fitting multi-peer readback and complete finite single-peer mixed-width pagination. Thirty-nine H3 declarations
-add invalid-MAC1, rate-limit and admitted-response/initiation rejection, cookie-message and whole data-admission endpoint preservation. Thirty-eight H5 declarations
+add invalid-MAC1, rate-limit and admitted-response/initiation rejection, cookie-message and whole data-admission endpoint preservation. Forty-one H5 declarations
 establish recorded batch, actual timer completion guards and recorded idle/post-advance wait wheel completion and the actual send-worker completion guard and four final-idle syscall/runner links. Sixty H6 declarations
 connect actual timer-loop receipts, contiguous retry-block counts/bounds, local partial-exchange arming and allocation-labelled session-arm events. Of the 1,831 baseline theorems, 22 frames
 were deleted because types supply their facts and five false cookie supports
 were separately retired with checked counterexamples. No baseline declaration
 remains awaiting retrofit; all 258 original terminal names/order survive,
 with eleven new H1 headlines, thirty-nine new H2 headlines, six new H3 headlines,
-seventeen new H4 headlines, seven new H5 headlines and fifteen new H6 headlines (353 total).
+seventeen new H4 headlines, eight new H5 headlines and fifteen new H6 headlines (354 total).
 
 The [retrofit report](2026-10-16-proof-campaign-2-state-split.md) records
 claim/frame files, corrections, before/after counts and validation.
@@ -3795,3 +3795,81 @@ kernel-proved accepted pending-unit trace. Investigation remains open and may
 find no witness. Independent audits found no theorem defect in the inspected
 coverage. Stale terminal-lag wording in backlog, removal and timer notes is
 corrected; no proof counts change and the inherited aggregate gate remains FAILED.
+
+
+## H1 continuation: exact fresh-installation transport support
+
+Original consumeInitiation and createResponse now preserve the exact pair of
+optional allocation cursor and optional tracked-peer next slot on every normal
+return. The nested option distinguishes an absent peer from a resident peer
+with no next key. Native source transports require no initial bound. Projected
+claims carry the named FreshNextBound from a captured entry; they do not derive
+it from residency or assert successful creation, fresh allocation or reachability.
+
+Actual lookup supplies the extra reference used by rejected consumption.
+The existing exact retained-put contract then proves cleanup cannot delete
+that held peer. Ordinary refusal, missing/NULL inputs, overflow and all original
+Stops remain. Response creation uses the actual index adapter; no general
+deletion-capable release layer is copied.
+
+FreshInstallModel contains the data view and projected bound; FreshInstallFrames
+contains two native predicates and six pure/preservation facts; FreshInstallSource
+contains two whole-operation transports; FreshInstallClaims contains two projected
+contracts. Four named variants correspond to shared modifyPeer, pubkeyLookup,
+consumeInitiation and createResponse contracts. Owned lookup/retained-release,
+crypto, index-adapter and observer-erasure support supplies their substantive
+dependencies. Ten theorems and four definitions in four modules; no new H1
+headline or fresh-history claim. Independent review finds no issue.
+
+Probe 1 checks five frame roots; 2 fails one implicit transformer inference
+without warnings; 3 checks all ten declarations; 4 checks the exact split
+proof bodies/import union and ten standard-only roots; 5 checks Model alone.
+The last changes before installation are docstrings only. All final checks
+are warning-free at unchanged defaults. H1 now has 245 checked theorems and
+33 headlines. The finite fresh-installation history remains the next step.
+
+## H5 continuation: accepted placeholder pending identity
+
+The [placeholder finding](2026-10-17-proof-campaign-2-placeholder-pending.md)
+checks actual initialized runner acceptance with placeholders=true and no
+supplied records. Its final audited boundary retains the receive-worker
+pending identity while satisfying the specified queue-empty/count/NAPI tests,
+with no suspension or raised NET_RX. The theorem extracts the same actual
+audit/cut and uses its exact erasure to the original runner.
+
+This is a mode-specific bookkeeping finding, not evidence of an unexecuted
+unit, general physical-ring coherence or supplied-record progress failure.
+The actual hidden-input implementation clears pending identities on section
+start only in its supplied-record branch; the placeholder branch returns first.
+The constructed supplied-record completion control runtime-accepts with no
+pending identity. No kernel acceptance theorem is claimed for that control.
+
+PlaceholderBoundaryModel has the two concrete traces and Boolean audit predicate;
+Source kernel-checks the predicate; Claims and Statements extract the actual
+acceptance and cut. Three theorems, three definitions and three modules add one
+headline. H5 now has 329 checked theorems and 50 headlines. Independent review
+confirms the mode, same-run extraction and exact test scope.
+
+Seven compiler invocations: 1 fails an invalid diagnostic field; 2 executes a
+rejected candidate with an eight-byte UDP steer; 3 runtime-accepts the corrected
+four-byte placeholder trace; 4 runtime-accepts the supplied-record control;
+5 kernel-checks the Boolean; 6 fails a wrapper matcher rewrite (recovery axioms
+rejected); 7 closes all three roots but emits an unused-simp warning, so is not
+accepted as clean validation. Removing that argument is checked by the root
+installed build. Three distinct trace inputs are tested; no infrastructure
+rerun or changed proof limit/cap occurs.
+
+The first combined installed build closes all support but fails the new literal
+headline on an unqualified Runner.executeTrace, with two diagnostics. Qualifying
+it fixes the packaging error. The corrected build passes 314 jobs, inherited
+Env:865 String.mk only. Axiom inspection checks 1,300 roots in 250 modules,
+including 779 public theorem roots, standard-only and without diagnostics.
+Fresh kernel replay passes both changed roots. Static trust/import,
+original 258-name/order and mirror/shared boundaries pass.
+
+Totals move from 2,463/845/353 to 2,476 theorems/852 modules/354 headlines.
+Other result counts are unchanged. The inherited aggregate gate remains FAILED;
+no unchanged full-gate rerun or new mirror request. Reproduce the scoped build,
+axiom inspection and fresh replay of Leanux.Proofs.WG.Noise.FreshInstallClaims
+and Leanux.Proofs.WG.Progress.Statements under capped/scripts/in-bundle with
+LEAN_NUM_THREADS=32 and LEANUX_QEMU_SLOTS=16.

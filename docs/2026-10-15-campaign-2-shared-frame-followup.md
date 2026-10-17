@@ -104,8 +104,11 @@ the current minimum. InitiationTagSource and CreationTagSource already expose
 the actual whole consume/create source shapes; Index.ConsumeFrames and retained
 release supply cursor support. A bounded transport package can compose these
 owned contracts before the finite-history induction, without implementing a
-parallel six-family layer. This route is not a claim that the next-slot
-transports or history theorem are proved.
+parallel six-family layer. FreshInstallModel/Frames/Source/Claims now check
+that exact optional cursor/next transport and its projected bound. The finite
+history theorem remains open. Four named variants stand for modifyPeer,
+pubkeyLookup, consumeInitiation and createResponse; exact held cleanup reuses
+Config.peerPut_retained without a new general release frame.
 
 C1's lifetime projection still omits peer slots and the Device allocation
 cursor. Extending it and all driver callers is broader and remains a shared
