@@ -3236,9 +3236,12 @@ constructor rather than treating every refusal as outsideDomain: trailing
 records/suspension use hidden and pending NET_RX uses invariant. These are
 fail-closed outcomes, not accepted-backlog counterexamples.
 
-Mathematical termination follows from the current total Lean definitions and
-finite recursion/ranges; no new outcome-existence wrapper is needed. Genuine
-remaining H5 work is derived-fuel adequacy with callback refill and an
+Finite recursion/ranges bound the explicit outer iterations provided their
+bodies terminate, but a total logical
+denotation does not itself prove executable termination of loop-backed helpers.
+The modular-power helper has a checked finite-evaluation bridge; arbitrary
+exact-count allocation needs its own bridge beyond the checked single successful
+keypair-allocation case. Further H5 work includes derived-fuel adequacy with callback refill and an
 initialized queue/pending-work consistency invariant strong enough to lift
 the exact local completion guards to all accepted operations. Fairness,
 erasing physical stale ring slots, disarming future timers and unconditional
@@ -3766,13 +3769,15 @@ under an explicit initial next-ID-below-cursor premise. C1's lifetime projection
 omits slots and the Device cursor; extending it and all callers is a distinct
 larger architecture. This audit takes no fresh-history proof credit.
 
-H5's mathematical termination follows from actual total finite-recursive Lean
-definitions, including terminating Stops. Record-budget adequacy is different.
+H5's outer finite recursion is separate from finite execution of its loop-backed
+helpers. The modular-power bridge is checked; general exact-count allocation
+remains open beyond the single-site successful case. Total logical denotation
+alone is insufficient. Record-budget adequacy is a further separate obligation.
 Existing dispatch/turn/resumption contracts connect the recorded choice to the
 real activation, including detached-state rerun and all failures. Fairness and
 unconditional successful resumption are stronger than relative progress.
 
-The substantive H5 gap is initialized accepted-operation pending-unit consistency.
+Another substantive H5 gap is initialized accepted-operation pending-unit consistency.
 RunnerBoundaryClean checks only consumed records, no suspended activation and
 netRxRaised=false. afterBatch's recorded guard explicitly omits pendingWork and
 relies on an unproved pending-to-queue relation. Later syscall worker/timer tails
@@ -4020,3 +4025,31 @@ architectures: a proved finite-computation bridge or actual per-operation source
 composition. Defaults/caps remain unchanged; no infrastructure rerun occurs.
 H6 remains at 498 theorems/65 headlines and runtime-only initialized give-up
 evidence. No mirror-team request follows from this reduction obstruction.
+
+
+## H5 audit correction: logical totality and executable loops
+
+Independent review finds the blanket termination justification in two earlier
+coverage summaries and the register incorrect; those passages are corrected
+in place. The toolchain's Init/While implementation gives repeatM a logical
+denotation with a private partial implementation and an implemented_by erased
+loop, and Lean.Loop.forIn delegates to it. Function totality alone therefore
+does not establish a finite number of executable iterations.
+
+Progress.PowSource supplies a checked fixed-point unfolding and finite-evaluation
+bridge for the original modular-power loop. Noise.SessionReadySource supplies
+the allocation-loop equation and the exact single successful kzallocKeypair
+record case. It does not establish the general exact-n allocation loop over
+arbitrary returns, errors and records. This is a proof-coverage/reporting
+finding, not an observed nonterminating trace or mirror defect. Stock executable
+overrides remain reported and are not used as proof oracles.
+
+A minimal candidate is equality of the original allocation loop to a structurally
+recursive evaluator with at most n encounters, retaining early false returns and
+the first Stop. The actual encounter helpers must then be connected explicitly;
+arbitrary callbacks cannot be declared terminating merely from their types.
+The scope is WireGuard execution. Generic runner boundary theorems condition on
+acceptance; they do not establish termination for all subsystem operations.
+For example, the separate FS pipe path has its own loop-backed rounding helper.
+Whole-operation fuel adequacy and initialized pending-work consistency remain
+separate. No theorem count changes or full-gate rerun accompany this correction.
