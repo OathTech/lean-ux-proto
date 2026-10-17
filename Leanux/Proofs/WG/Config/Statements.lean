@@ -1,3 +1,7 @@
+import Leanux.Proofs.WG.Config.MixedPageContentSource
+import Leanux.Proofs.WG.Config.MixedPageBoundsClaims
+import Leanux.Proofs.WG.Config.MixedHeldCallbackSource
+import Leanux.Proofs.WG.Config.MixedPageDeviceClaims
 import Leanux.Proofs.WG.Config.MixedPageSelectionClaims
 import Leanux.Proofs.WG.Config.MixedPageReferenceFrames
 import Leanux.Proofs.WG.Config.MixedCallbackSource
