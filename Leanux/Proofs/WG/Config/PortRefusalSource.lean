@@ -9,6 +9,20 @@ set_option pp.structureInstances false
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG Noise Std.Do
 
+/-- The nonzero bind-refusal branch writes no WireGuard state. -/
+theorem socketInit_nonzero_collision_frame (d : Device) (port : Nat) (bound : Nat → Bool)
+    (nonzero : port ≠ 0) (net : d.creatingNet = true)
+    (collision : (bound port || d.sock4 == some port || d.sock6 == some port) = true)
+    (P : WGWorld → Prop) :
+    Ensures (socketInit port) (fun g => g.dev = some d ∧ g.portBound = bound ∧ P g)
+      (fun ret g => ret = -EADDRINUSE ∧ g.dev = some d ∧ P g) := by
+  intro g ambient value final after pre run
+  simp only [Bool.or_eq_true, beq_iff_eq] at collision
+  simp [socketInit, getDev, pre.1, pre.2.1, net, nonzero, collision,
+    iputReport, AmbientM.iputReport, AmbientM.branch] at run
+  rcases run with ⟨⟨rfl, rfl⟩, rfl⟩
+  exact ⟨rfl, pre.1, pre.2.2⟩
+
 /-- Actual source order for a supported mixed request: a port-bind refusal comes
 after both clearing loops, before replacement, identity, and peer attributes.
 Missing peers and reset records remain possible Stops. -/
