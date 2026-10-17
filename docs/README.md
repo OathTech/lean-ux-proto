@@ -118,6 +118,7 @@ Read these before the README's claims are taken at face value:
 | [2026-10-15-design-b4-review.md](2026-10-15-design-b4-review.md) | Independent review of the B4 design: 21 findings; build questions 1 and 3 with changes, redesign the GC |
 | [2026-10-15-design-c-fib-trie.md](2026-10-15-design-c-fib-trie.md) | Design C: the IPv4 FIB trie as a mirror module; the fixture's tables measured from the coverage and comparison streams, the trie's shape, scope, corpus, mutants, frames, estimate |
 | [2026-10-13-review-r5-counterexamples.md](2026-10-13-review-r5-counterexamples.md) | The independent review of the campaign's R5 counterexamples: three statement artefacts, design nuances at most, no tray entry |
+| [2026-10-17-review-campaign-1-landing.md](2026-10-17-review-campaign-1-landing.md) | The independent review of proof campaign 1's landing (`proofs/campaign` at 6a357a90): land with named changes; gate, kernel replay and all eleven witnesses rerun; 13 findings, none blocking |
 
 ## Reviews of the whole
 
