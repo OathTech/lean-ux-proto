@@ -1,3 +1,9 @@
+import Leanux.Proofs.WG.Queues.JointSyscallSet
+import Leanux.Proofs.WG.Origins.OwnerReceive
+import Leanux.Proofs.WG.Origins.OwnerDecrypt
+import Leanux.Proofs.WG.Origins.CurrentDeferred
+import Leanux.Proofs.WG.Origins.OwnerFocus
+import Leanux.Proofs.WG.Queues.JointDevice
 import Leanux.Proofs.WG.Origins.CurrentPollHistory
 import Leanux.Proofs.WG.Origins.OwnerHistory
 import Leanux.Proofs.WG.Packets.PublicationRetained
@@ -3618,5 +3624,126 @@ theorem original_joint_configuration_update (attrs : PeerAttrs) (peer : Option P
         (Logged.liftWGObserver (Lifetimes.peerConfigUpdatePrefix attrs peer flags psk pid))) :=
   ⟨Queues.RoutingJoint.peerConfigUpdate_concrete_routing attrs peer flags psk pid,
     Queues.RoutingJoint.peerConfigUpdate_concrete_product attrs peer flags psk pid⟩
+
+/-- The actual scheduler preserves positional current checks through its
+crypt-ahead, activation, dispatch and saved-trial probe calls. -/
+theorem original_current_schedule :
+    (∀ pid, CurrentChecks.Preserves (Queues.RxHistory.cryptAhead pid)) ∧
+    (∀ a, CurrentChecks.Preserves (Queues.RxHistory.activationIteration a)) ∧
+    (∀ a, CurrentChecks.Preserves (Queues.RxHistory.activationRun a)) ∧
+    (∀ worker, CurrentChecks.Preserves (Queues.RxHistory.dispatch worker)) ∧
+    (∀ stack, CurrentChecks.Preserves (Queues.RxHistory.schedule stack)) ∧
+    (∀ self, CurrentChecks.Preserves (Queues.RxHistory.nestedResched self)) :=
+  ⟨CurrentEnvironment.cryptAhead,CurrentEnvironment.activationIteration,
+    CurrentEnvironment.activationRun,CurrentEnvironment.dispatch,
+    CurrentEnvironment.schedule,CurrentEnvironment.nestedResched⟩
+
+/-- All actual deferred-call cases, including both timer modes and their
+exact end guards, preserve supplied current checks and every stopped prefix. -/
+theorem original_current_deferred :
+    (∀ call, CurrentChecks.Preserves (Queues.RxHistory.deferred call)) ∧
+    (∀ pid timer history, Framing.Preserves (CurrentLifecycle.Inv history)
+      (WG.timerCallback pid timer)) :=
+  ⟨CurrentDeferred.deferred,CurrentDeferred.timerCallback_preserves⟩
+
+/-- One complete peer command carries both unchanged original observation
+streams, without assuming a well-formed attribute set or successful return. -/
+theorem original_joint_peer_command (attrs : PeerAttrs) :
+    Logged.StateProjectsPrefix Queues.RoutingJoint.routingEvent id
+      (Queues.RoutingJoint.setPeerCommand attrs) (Configuration.setPeerCmdObserved attrs) ∧
+    Logged.ProjectsPrefix Queues.RoutingJoint.rxEvent id
+      (Logged.liftWGObserver (Queues.RoutingJoint.setPeerCommand attrs))
+      (Queues.RxHistory.mixed (Logged.liftWGObserver (Lifetimes.setPeerCmdPrefix attrs))) ∧
+    Logged.ErasesStatePrefix (Queues.RoutingJoint.setPeerCommand attrs) (WG.setPeerCmd attrs) :=
+  ⟨Queues.RoutingJoint.setPeerCommand_routing attrs,
+    Queues.RoutingJoint.setPeerCommand_rx_product attrs,
+    Queues.RoutingJoint.setPeerCommand_erases attrs⟩
+
+/-- Whole device configuration retains the actual clears, saved peer loops,
+attribute failures and key-update stages in one native and product execution. -/
+theorem original_joint_device_configuration (attrs : DeviceAttrs) :
+    Logged.StateProjectsPrefix Queues.RoutingJoint.routingEvent id
+      (Queues.RoutingJoint.setDevice attrs) (Configuration.wgSetDeviceObserved attrs) ∧
+    Logged.ProjectsPrefix Queues.RoutingJoint.rxEvent id
+      (Logged.liftWGObserver (Queues.RoutingJoint.setDevice attrs))
+      (Queues.RxHistory.mixed (Logged.liftWGObserver (Lifetimes.wgSetDevicePrefix attrs))) ∧
+    Logged.ErasesStatePrefix (Queues.RoutingJoint.setDevice attrs) (WG.wgSetDevice attrs) :=
+  ⟨Queues.RoutingJoint.setDevice_routing attrs,
+    Queues.RoutingJoint.setDevice_rx_product attrs,
+    Queues.RoutingJoint.setDevice_erases attrs⟩
+
+/-- The empty actual WG fixture establishes the joint current, R2 boundary
+and receiving-owner invariant for both original fixture flags. -/
+theorem original_owner_checked_fixture (net bare : Bool) (w : World)
+    (hw : Framing.wgStoreView w.wg = Framing.wgStoreView (Runner.initialWG net bare)) :
+    OwnerChecks.Inv [] w :=
+  OwnerChecks.initial net bare w hw
+
+/-- A named actual decrypt occurrence uses its strict earlier session prefix
+and captured input carrier; successful publication keeps one current witness.
+This is a safe-journal extraction, not initialized caller closure. -/
+theorem original_owner_checked_publication
+    (h pre post : List Queues.RxHistory.Event) (id : SkbId)
+    (r : Logged.WGRunWitness (RxPacket × Option RxPacket))
+    (out : RxPacket) (pid : PeerId) (v : WGWorld) (ambient : Ambient)
+    (safe : OwnerChecks.Safe h)
+    (position : h = pre ++ .rx (.decrypt id r) :: post)
+    (published : PublicationIdentity.Published id r out pid v ambient) :
+    PublicationIdentity.CurrentCertificate (Origins.HistorySupport.sessions pre) id r out pid v :=
+  OwnerChecks.Safe.published safe position published
+
+/-- Original receive admission, queue installation and cleanup preserve the
+carrier from the input allocation invariant, including ordinary refusal paths. -/
+theorem original_owner_consume (msg : List UInt8) (src : SkbSource) (ds : Nat)
+    (history : List Lifetimes.LifetimeEvent) :
+    Framing.Hoare (WG.consumeData msg src ds)
+      (fun w => Lifetimes.AllocationInv history w ∧ OwnerBounds.Carrier w)
+      (fun _ w => OwnerBounds.Carrier w) :=
+  OwnerConsume.consumeData_spec msg src ds history
+
+/-- The same actual lifetime observer carries current checks, allocation
+safety and owner bounds; the allocation premise is its own input journal. -/
+theorem original_owner_checked_consume (msg : List UInt8) (src : SkbSource) (ds : Nat) :
+    OwnerChecks.Preserves
+      (Queues.RxHistory.mixed (Logged.liftWGObserver (Lifetimes.consumeDataPrefix msg src ds))) :=
+  OwnerChecks.consumeData msg src ds
+
+
+/-- Concrete packet and UDP receive observers carry the joint invariant on
+the same lifetime journal, preserving normal refusals and stopped prefixes. -/
+theorem original_owner_checked_receive (msg : List UInt8) (src : SkbSource) :
+    OwnerChecks.Preserves
+      (Queues.RxHistory.mixed (Logged.liftWGObserver (Lifetimes.packetReceivePrefix msg src))) ∧
+    OwnerChecks.Preserves
+      (Queues.RxHistory.mixed (Logged.liftWGObserver (Lifetimes.wgReceivePrefix msg src))) :=
+  ⟨OwnerReceive.packetReceive_checked msg src,OwnerReceive.wgReceive_checked msg src⟩
+
+/-- Concrete decrypt discharges the native carrier obligation at the actual
+captured entry. Publication and prepare preserve the same carrier before IRQ. -/
+theorem original_owner_decrypt :
+    (∀ id, OwnerChecks.Preserves (Origins.HistoryAdapters.decrypt id)) ∧
+    (∀ id state, Framing.Preserves OwnerBounds.Carrier (Queues.RxWorkers.publishSource id state)) ∧
+    Framing.Preserves OwnerBounds.Carrier Queues.RxWorkers.prepareSource :=
+  ⟨OwnerDecrypt.decrypt,OwnerDecrypt.publishSource_preserves,OwnerDecrypt.prepareSource_preserves⟩
+
+/-- The original product decrypt step retains arbitrary IRQ and softirq
+callbacks under their stated carrier contracts, including actual final repayment. -/
+theorem original_owner_decrypt_worker (softirq irq : Leanux.M Unit)
+    (hs : Framing.Preserves (fun w : World => OwnerBounds.Carrier w.wg) softirq)
+    (hi : Framing.Preserves (fun w : World => OwnerBounds.Carrier w.wg) irq) :
+    Framing.Preserves (fun w : World => OwnerBounds.Carrier w.wg) (WG.decryptStep softirq irq) :=
+  OwnerDecrypt.decryptStep_preserves softirq irq hs hi
+
+
+/-- Full wgSet entry, dispatch and return-to-user waits share one actual
+execution. Both original streams and every stopped prefix project exactly. -/
+theorem original_joint_set_syscall (attrs : DeviceAttrs) :
+    Logged.ProjectsPrefix Queues.RoutingJoint.routingEvent id
+      (Queues.RoutingJoint.syscallSet attrs) (Configuration.syscallObserved (.wgSet attrs)) ∧
+    Logged.ProjectsPrefix Queues.RoutingJoint.rxEvent id
+      (Queues.RoutingJoint.syscallSet attrs) (Queues.RxHistory.syscall (.wgSet attrs)) ∧
+    Logged.ErasesPrefix (Queues.RoutingJoint.syscallSet attrs) (Leanux.syscall (.wgSet attrs)) :=
+  ⟨Queues.RoutingJoint.syscallSet_routing attrs,
+    Queues.RoutingJoint.syscallSet_rx attrs,Queues.RoutingJoint.syscallSet_erases attrs⟩
 
 end Leanux.Proofs.WG.CryptokeyRouting

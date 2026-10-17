@@ -88,6 +88,16 @@ seconds without warnings.
 The [short report](2026-10-17-r3-configuration-cuts.md) records the sole
 infrastructure retry, rejected development checks and remaining initialized joins.
 
+The caller-cuts checkpoint adds thirteen modules and 251 theorems:
+511 files/7,373 theorems, 566 terminal declarations and 190 R3 exports.
+Actual scheduler/deferred journals preserve current checks; receive and decrypt
+carry the joint current/R2/owner invariant. Whole device configuration and wgSet
+syscall project exactly to both original streams, including errors and waits.
+All prior statements remain unchanged. Gate: 569 jobs/566 declarations in
+6.416 seconds; fresh replay passes in 108.149 seconds without warnings.
+The [short report](2026-10-17-r3-caller-cuts.md) records failed development
+checks, the reviewed reuse repair and the remaining initialized joins.
+
 The pre-split checkpoint validated every baseline result surface over
 `cb2348e`. Initialized R3 packet authorization and R4 receive-pipeline
 conservation remain open. Earlier positive results and runtime findings retain
