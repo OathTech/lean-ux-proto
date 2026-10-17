@@ -323,10 +323,22 @@ deleted or changed. The gate passes 951 jobs/all 846 declarations in 6.952 secon
 after one export-name failure and source repair; fresh root replay passes in
 113.512 seconds with no warnings.
 
+The [initialized live-ring checkpoint](2026-10-17-r4-live-frontier.md) adds
+17 modules and 217 theorems: 910 files, 12,249 named theorems, 315 R4 terminals
+and 849 total terminal declarations. Concrete scheduling, traffic, lifecycle,
+configuration and every syscall preserve the logical live encryption-ring
+bound and physical refinement. Original initialization derives it at every
+actual operation entry and the normal endpoint. Earlier theorem bodies remain
+unchanged; independent reviews cover the generic and concrete runner joins.
+The gate passes 968 jobs/all 849 declarations in 7.832 seconds; fresh replay
+passes in 114.850 seconds with no warnings. The same-item W7 refusal-to-disposal
+chain remains open.
+
 
 The pre-split checkpoint validated every baseline result surface over
 `cb2348e`. R3 packet authorization is now closed over the current split tree;
-R4 receive-pipeline conservation remains open. Earlier positive results and runtime findings retain
+R4 normal ingress conservation is closed, with stopped-admission accounting
+and W7 caller transport still open. Earlier positive results and runtime findings retain
 their scope below; the [register](proofs.md#results) gives the authoritative
 pins and status. No main integration, push, differential check or guest run
 was made by this campaign.
@@ -336,7 +348,7 @@ was made by this campaign.
 | R1 | Replay uniqueness proved; inclusive-floor correction witnessed. |
 | R2 | Initialized allocation-identity access safety proved, including failures/trials; affiliation/credits separate. |
 | R3 | Trie history refinement and initialized incoming/outgoing cryptokey routing proved for shaped typed traces, including parsed traces and stopped prefixes. |
-| R4 | Initialized entry/completion uniqueness and packet/receipt linkage; chronology refuted; receive-pipeline conservation open. |
+| R4 | Initialized entry/completion uniqueness, normal ingress dispositions and live-ring bounds; chronology refuted; stopped-admission accounting and W7 transport open. |
 | R5 | Accepted age/post-zero/wire-nonce counterexamples; thirteen positive local contracts. |
 | R6 | Cookie exclusion proved; literal MAX=18 refuted, without a replacement universal bound. |
 
@@ -902,13 +914,15 @@ quiescence. No accepted loss/ duplication witness was found: arbitrary last-peer
 poll's last-put candidate Stops at a later getter. No kernel bug claim.
 
 **Remaining obligations.** The initialized runner derives its actual funded
-residual ledger and completed-poll release certificates. Every selected syscall
-admission now has a named fate or exactly one pending identity. Independent
-source-occurrence coverage and the initialized query join remain open. Finite
-accepted prefixes may retain work; stopped admission and selected/GRO phases
-need separate accounting. W7 now has actual allocator freshness, staged-submit
-mark transport and selected-encryption frames. Full staging, softirq transport
-and live logical ring-item/peer-batch separation remain open.
+residual ledger, complete normal ingress source coverage and completed-poll
+release certificates. Every accepted admission has a named fate or exactly
+one pending identity, including one removed before its syscall returns. Finite
+accepted prefixes may retain work; stopped admissions need separate accounting.
+W7 has actual allocator freshness, complete staging/softirq mark transport,
+the adjacent full encrypt iteration and initialized live-ring bounds. These
+do not yet connect a selected refusal through the later committed drain to
+its actual peer-head disposal. Earlier uncrypted queue items and saved worker
+items must be accounted for; empty work bookkeeping alone is insufficient.
 
 **Effort/process/review.** Earlier ring, receipt and caller ledgers are in `00fafa4`, `57cb46e`,
 `c4ef635`, `ec95fa8`, `3dec2c3`, `79dce53`, `1b76322`, `983f84b` and `65e6a6d`;

@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Queues.TxLiveInitialized
 import Leanux.Proofs.WG.Queues.RunnerCoverage
 import Leanux.Proofs.WG.Queues.IngressCoverage
 import Leanux.Proofs.WG.Queues.TxRxHeadNapi
@@ -3648,5 +3649,30 @@ through timer stopping, queued sends, key clearing and final reference payment. 
 theorem original_peer_retirement_live_ring_bound (pid : PeerId) :
     Framing.Preserves TxDisposition.LiveFrontier.Ready (peerRemoveAfterDead pid) :=
   TxDisposition.LiveFrontier.remove_after_dead pid
+
+/-- Every successful initialized run derives its live logical encryption-ring
+bound and physical refinement, alongside its actual owner journal. No
+per-syscall preservation or output-invariant premise is supplied. -/
+theorem initialized_runner_live_ring_bound (trace : Runner.Trace) (placeholders : Bool)
+    (run : runPrefixOuter (RunnerAccount.observed trace placeholders) []=(.ok (result,w),h)) :
+    TxDisposition.LiveRunner.Inv h w :=
+  TxDisposition.LiveInitialized.normal trace placeholders run
+
+/-- Each actual operation input has the live-ring invariant, with its original
+prefill, boot, ordered prefix and converted-syscall source certificate. -/
+theorem initialized_runner_live_ring_entries (trace : Runner.Trace) (placeholders : Bool)
+    (run : runPrefixOuter (RunnerAccount.observed trace placeholders) []=(.ok (result,w),h)) :
+    ∀index,index<trace.ops.size→TxDisposition.LiveRunner.OperationEntry trace placeholders index :=
+  TxDisposition.LiveInitialized.entries trace placeholders run
+
+/-- Executable acceptance supplies live-ring bounds at the returned World and
+every actual operation entry in either placeholder mode. This is no claim of
+saved-item exclusion or eventual disposal. -/
+theorem accepted_runner_live_ring_bound (trace : Runner.Trace) (placeholders : Bool)
+    (run : Runner.executeTrace trace placeholders=.ok result) :
+    ∃w h,runPrefixOuter (RunnerAccount.observed trace placeholders) []=(.ok (result,w),h) ∧
+      TxDisposition.LiveRunner.Inv h w ∧
+      ∀index,index<trace.ops.size→TxDisposition.LiveRunner.OperationEntry trace placeholders index :=
+  TxDisposition.LiveInitialized.accepted trace placeholders run
 
 end Leanux.Proofs.WG.DeliveryOrder
