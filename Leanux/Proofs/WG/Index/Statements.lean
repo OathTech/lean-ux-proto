@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Index.OwnerCoherencePersistentFindingClaims
 import Leanux.Proofs.WG.Index.OwnerCoherenceRetransmitClaims
 import Leanux.Proofs.WG.Index.OwnerCoherenceCallbackClaims
 import Leanux.Proofs.WG.Index.OwnerCoherenceQueuedClaims
@@ -1019,5 +1020,14 @@ theorem original_retransmit_owner_coherence (pid : PeerId) :
     Campaign2.Ensures (expiredRetransmitHandshake pid) View.OwnerCoherentSafe
       (fun _ => View.OwnerCoherentSafe) :=
   expiredRetransmitHandshake_owner_coherent pid
+
+/-- Local-state finding for the original complete persistent callback. This is
+not a reachable-driver or kernel-defect claim. -/
+theorem original_persistent_keepalive_owner_coherence_counterexample :
+    ∃ d : Device, HashedOwnersCoherent d ∧
+      Campaign2.Observes (expiredSendPersistentKeepalive 0)
+        (fun s => s.wg.device = some d ∧ s.ambient.hidden = some [PersistentOwnerWitness.clock])
+        (fun _ out => ∃ final, out = .ok ((), final) ∧ ¬ View.OwnerCoherentSafe final) :=
+  expiredPersistent_ownerCoherentSafe_counterexample
 
 end Leanux.Proofs.WG.Index

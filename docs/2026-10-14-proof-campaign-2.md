@@ -11,17 +11,17 @@ merged; the executable mirror remains byte-identical to b700659.
 | Result | Headlines | Checked support | Split status |
 | --- | ---: | ---: | --- |
 | H1 Noise | 32 | 231 | Full terminal closure, all seven whole-call tag maps, their actual finite mixed histories and session derivation-clock receipt current; wider caller/lifetime claims open. |
-| H2 Index | 88 | 477 | Full terminal closure and ingress/expiry/handshake/peer-creation owner coherence and whole-removal lifecycle finding/slot-covered arbitrary-AIP preservation and actual clear-work dispatch and both-mode handshake queueing and new-handshake/zero-key/retransmit callbacks current; reachable whole-driver uniqueness/coherence open. |
+| H2 Index | 89 | 481 | Full terminal closure and ingress/expiry/handshake/peer-creation owner coherence and whole-removal lifecycle finding/slot-covered arbitrary-AIP preservation and actual clear-work dispatch and both-mode handshake queueing and new-handshake/zero-key/retransmit callbacks and persistent-callback invariant counterexample current; reachable whole-driver uniqueness/coherence open. |
 | H3 Roaming | 18 | 190 | Full terminal closure and invalid-MAC1/rate-limit/admitted-response/initiation rejection and cookie-message preservation current; callback authentication provenance and broader caller coverage open. |
-| H4 Configuration | 93 | 687 | Full terminal closure, actual mixed/key setter paginated readback with arbitrary endpoints, finite single-peer IPv4 getter, exact mixed-width scan/callback support and fitting multi-peer scalar and mixed fwmark/scalar set/get current; global ownership, queued cleanup, general mixed setters and multi-peer/IPv6 pagination open. |
+| H4 Configuration | 93 | 697 | Full terminal closure, actual mixed/key setter paginated readback with arbitrary endpoints, finite single-peer IPv4 getter, exact mixed-width scans, weighted plans/resumed callbacks and generic coalescing and fitting multi-peer scalar and mixed fwmark/scalar set/get current; global ownership, queued cleanup, general mixed setters and multi-peer/IPv6 pagination open. |
 | H5 Progress | 46 | 307 | Full terminal closure, exact bounded outcomes and recorded batch, actual timer completion guards and recorded idle/post-advance wait wheel completion current; global progress/coherent-ring adequacy open. |
 | H6 Timers | 59 | 483 | Full terminal closure, actual retry blocks and allocation-labelled guarded session-arm events with outgoing call-entry origin and initialized give-up runtime witness current; complete caller coverage, general mixed histories and session-relative counts open. |
 
-The checked surface is 2,375 theorems in all 800 campaign-owned modules.
+The checked surface is 2,389 theorems in all 808 campaign-owned modules.
 The completed retrofit accounts for 1,983: 1,321 retyped, 244 explicitly
-corrected, 239 retained and 179 added support/finding declarations. One hundred forty-four
+corrected, 239 retained and 179 added support/finding declarations. One hundred forty-eight
 subsequent H2 declarations add table preservation and local owner coherence.
-Forty-six H1 declarations add whole-operation and finite mixed-history tag ownership and actual derivation-clock provenance; one hundred five H4 declarations
+Forty-six H1 declarations add whole-operation and finite mixed-history tag ownership and actual derivation-clock provenance; one hundred fifteen H4 declarations
 add mixed fwmark/scalar, ordered peer-attribute, port-refusal/private-key readback and finite IPv4 getter/setter pagination and actual fitting multi-peer readback. Thirty-three H3 declarations
 add invalid-MAC1, rate-limit and admitted-response/initiation rejection and cookie-message preservation. Nineteen H5 declarations
 establish recorded batch, actual timer completion guards and recorded idle/post-advance wait wheel completion. Forty-five H6 declarations
@@ -29,8 +29,8 @@ connect actual timer-loop receipts, contiguous retry-block counts/bounds, local 
 were deleted because types supply their facts and five false cookie supports
 were separately retired with checked counterexamples. No baseline declaration
 remains awaiting retrofit; all 258 original terminal names/order survive,
-with ten new H1 headlines, thirty-six new H2 headlines, five new H3 headlines,
-fourteen new H4 headlines, four new H5 headlines and nine new H6 headlines (336 total).
+with ten new H1 headlines, thirty-seven new H2 headlines, five new H3 headlines,
+fourteen new H4 headlines, four new H5 headlines and nine new H6 headlines (337 total).
 
 The [retrofit report](2026-10-16-proof-campaign-2-state-split.md) records
 claim/frame files, corrections, before/after counts and validation.
@@ -3077,3 +3077,92 @@ Leanux.Proofs.WG.Config.MixedDumpCallbackSource under capped with
 scripts/in-bundle, LEAN_NUM_THREADS=32 and LEANUX_QEMU_SLOTS=16.
 Existing ranked mirror requests are unchanged; neither package requests a
 mirror-team change.
+
+
+## H2 continuation: a persistent-callback invariant counterexample
+
+The proposed sole-OwnerCoherentSafe preservation claim for the whole
+expiredSendPersistentKeepalive callback is false on arbitrary native states.
+A checked coherent entry has caller peer 0's current-key slot name keypair 1,
+whose peer word names peer 1. Actual staged sending acquires peer 1; dead-peer
+data creation then releases caller 0's last reference. The callback returns
+normally with a separately hashed keypair still naming the erased peer 0.
+The explicit real birthdate record keeps the selected key valid.
+
+The [finding](2026-10-17-proof-campaign-2-persistent-owner.md) gives the concrete
+state, actual path and C correspondence. This is a missing slot/caller ownership
+relation in a local arbitrary-state invariant. No accepted initialized trace,
+mirror divergence or kernel defect is established. The separate send-keepalive
+callback subsequently reads the erased caller and Stops on this witness, so
+that callback is not refuted by the same normal-return argument. No premise
+was silently added to force a positive theorem.
+
+The model holds seven witness definitions and entry coherence; Source proves
+the actual complete callback's total return; Claims and Statements refute
+preservation over the projection. Four theorems in three modules bring H2 to
+481 theorems and 89 headlines, with no frame/shared variant. Both broader
+architectures were audited: direct native preservation needs six shared
+send-path families, while existing owned fallback contracts cover absent or
+invalid keys only. This larger overlap is inventoried rather than copied.
+
+Ten changed-source probes were needed. Probes 1–9 fail respectively on map
+lookups (4 errors/2 warnings), optional/total lookup mismatch (4/6), clock
+metadata (1/2), passive-section reduction (1/2), signed expiry (1/2), errno
+constants (1/1), Index adapter reduction (1/1), Ambient modification (1/2),
+and execution witnesses/Except.map (2/2). All warnings are corrected.
+Probe 10 passes with all four standard-only roots, no warnings or proof-limit
+increase. The final split module organization is independently built below.
+Independent source review finds no issue.
+
+## H4 continuation: weighted plans, resumed callbacks and generic coalescing
+
+WeightedPaginationModel greedily consumes exact 28/40-byte costs, proves
+prefix decomposition/fit/first-failure maximality, and defines finite resumed
+pages whose recursive remainder is strictly shorter. With at least 40 bytes
+of node room, every resumed page is nonempty and fits. The first page may
+be empty once. Concatenation preserves order and multiplicity; arbitrary
+stored widths and duplicate IDs remain allowed. Boundary freshness is defined
+against the whole previously emitted prefix and is a later composition
+premise, not a property asserted of every plan.
+
+WeightedPaginationSource derives the original resumed callback from its
+actual cursor selection, fixed prefix and complete/split scans. Header room
+implies at least 124 bytes for nodes. Resident nodes and cursor freshness
+discharge every read and choice; no successful callback is supplied.
+Claims presents its exact return and preserved Device over the projection.
+Five data definitions and eight theorems occupy three modules. Four probes:
+1 fails two local-let goals and one unused-simp warning; 2 passes the pure
+model; 3 fails two 40+4 room normalizations; 4 passes all eight standard-only
+roots without warnings. Independent review finds no issue.
+
+GenericPaginationModel and Claims supply five pure JSON-list constructors
+and two actual coalescer equalities. Any adjacent continuation can be merged
+before the unchanged remainder, including later errors; every finite page
+sequence coalesces to its concatenated entries. Empty/repeated pages and
+arbitrary JSON and endpoints are allowed. This is a coalescer contract,
+not a claim that a getter produced the pages. The first capped default-limit
+probe passes with both standard-only roots and no warnings. Independent
+review finds no issue. No existing IPv4 signature is changed.
+
+These ten H4 declarations bring it to 697 theorems and 93 headlines. The
+weighted actual first complete/empty branches, full callback/socket sequence,
+DONE spill count and final getter composition remain open. The exact receive
+count must include a separate DONE when the final DATA has less than 20 bytes
+left, including a genuinely empty input. The implementation will reuse the
+generic receive-sequence theorem; no resumed IPv4 transport induction or
+shared layer is copied.
+
+Combined scoped build passes 400 jobs, with only inherited Env:865 String.mk.
+The axiom audit checks 1,533 logical roots in 336 modules, including 1,010
+public theorem roots, standard-only and without diagnostics.
+Fresh kernel replay passes for all three changed roots.
+Static trust/import checks, all 258 original headline names/order and mirror/
+shared boundaries pass. No cap/limit changes, suppression or infrastructure
+reruns. Current totals: 2,389 theorems in 808 modules and 337 headlines.
+
+All H1–H6 remain in progress. The inherited full gate remains FAILED in
+CounterWindow/ReplayWindow and is not rerun unchanged. Reproduce the scoped
+build and fresh replay of Leanux.Proofs.WG.Index.Statements,
+Leanux.Proofs.WG.Config.WeightedPaginationClaims and
+Leanux.Proofs.WG.Config.GenericPaginationClaims under capped/scripts/in-bundle
+with LEAN_NUM_THREADS=32 and LEANUX_QEMU_SLOTS=16. No new mirror-team request.

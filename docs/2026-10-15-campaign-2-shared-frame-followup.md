@@ -255,3 +255,30 @@ Existing all-mode arming/deletion contracts are reused; no hidden-input,
 armTimer or wheel-placement layer is duplicated. The remaining keepalive
 callback/send-path overlap is separate and is not authorized by this bounded
 composition.
+
+
+## Persistent keepalive and staged-send ownership
+
+The attempted sole-OwnerCoherentSafe callback preservation exposes a missing
+relation, now refuted by the checked arbitrary-state witness in
+[the persistent-owner finding](2026-10-17-proof-campaign-2-persistent-owner.md).
+Staged sending acquires the selected keypair's embedded peer while createData
+failure releases the caller. Local hashed-owner residency does not equate
+those peers. No initialized reachability or mirror discrepancy is asserted.
+
+Direct preservation would require strengthened counterparts of six
+WGTransitions families: cpumaskChooseOnline, enqueuePerDeviceAndPeer,
+enqueuePerPeerTx, createData, sendStagedPackets and sendKeepalive. The outer
+callback counterparts are WGMore's expiredSendKeepalive and
+expiredSendPersistentKeepalive. This exceeds the bounded local-variant scope.
+An alternative via owned Config.StagedInvalid/StagedFallback covers only
+absent/invalid keys; it cannot establish this valid-key data-creation path.
+Existing acquired-reference and release facts do not supply slot-owner
+agreement. No copy of that layer is added.
+
+The persistent callback's concrete normal-return counterexample is independent
+of those missing contracts. For the send-keepalive callback the same witness
+instead Stops on its later caller read, so that theorem needs a relational
+send effect if pursued. A future strengthened invariant must record its new
+ownership premise openly and link it to initialization; it cannot replace
+the refuted arbitrary-state claim without naming the distinction.
