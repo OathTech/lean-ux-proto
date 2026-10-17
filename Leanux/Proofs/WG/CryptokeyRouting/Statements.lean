@@ -1,3 +1,10 @@
+import Leanux.Proofs.WG.Origins.CurrentReceiveChecks
+import Leanux.Proofs.WG.Origins.CurrentReceiveHistory
+import Leanux.Proofs.WG.Origins.CurrentSensitive
+import Leanux.Proofs.WG.Origins.CurrentRx
+import Leanux.Proofs.WG.Origins.CurrentPoll
+import Leanux.Proofs.WG.Packets.PublicationConsume
+import Leanux.Proofs.WG.Queues.JointConfiguration
 import Leanux.Proofs.WG.Origins.ConfiguredReceiveLeaves
 import Leanux.Proofs.WG.Origins.ConfiguredReceive
 import Leanux.Proofs.WG.Origins.CurrentDevice
@@ -3338,5 +3345,135 @@ theorem original_joint_routing_observers :
   ⟨Queues.RoutingJoint.completedAllowedip_erases,Queues.RoutingJoint.completedRemovePeer_erases,
     Queues.RoutingJoint.completedFree_erases,Queues.RoutingJoint.completedAllowedip_routing,
     Queues.RoutingJoint.completedRemovePeer_routing,Queues.RoutingJoint.completedFree_routing⟩
+
+
+/-- Native traffic and receive paths preserve supplied configured/current
+identity on normal return. Packet admission retains the actual nullable lookup and release arms. -/
+theorem original_current_traffic_and_receive :
+    (∀ pid retry history, Framing.Preserves (CurrentLifecycle.Inv history)
+      (WG.sendQueuedHandshakeInitiation pid retry)) ∧
+    (∀ pid kid history, Framing.Preserves (CurrentLifecycle.Inv history)
+      (WG.receivedWithKeypair pid kid)) ∧
+    (∀ pid history, Framing.Preserves (CurrentLifecycle.Inv history) (WG.keepKeyFreshRx pid)) ∧
+    (∀ pid history, Framing.Preserves (CurrentLifecycle.Inv history) (WG.sendStagedPackets pid)) ∧
+    (∀ pid history, Framing.Preserves (CurrentLifecycle.Inv history) (WG.sendKeepalive pid)) ∧
+    (∀ msg history, Framing.Preserves (CurrentLifecycle.Inv history) (WG.cookieMessageConsume msg)) ∧
+    (∀ id history, Framing.Preserves (CurrentLifecycle.Inv history) (RxOrigin.readDecrypt id)) ∧
+    (∀ pid pkt endpoint history, Framing.Preserves (CurrentLifecycle.Inv history)
+      (WG.consumeDataDone pid pkt endpoint)) ∧
+    (∀ msg src ds history, Framing.Preserves (CurrentLifecycle.Inv history) (WG.consumeData msg src ds)) ∧
+    (∀ msg src history, Framing.Preserves (CurrentLifecycle.Inv history) (WG.packetReceive msg src)) ∧
+    (∀ msg src history, Framing.Preserves (CurrentLifecycle.Inv history) (WG.wgReceive msg src)) :=
+  ⟨CurrentTraffic.sendQueuedHandshakeInitiation_preserves,CurrentTraffic.receivedWithKeypair_preserves,
+    CurrentTraffic.keepKeyFreshRx_preserves,CurrentTraffic.sendStagedPackets_preserves,
+    CurrentTraffic.sendKeepalive_preserves,CurrentTraffic.cookieMessageConsume_preserves,
+    CurrentRx.readDecrypt_preserves,CurrentRx.consumeDataDone_preserves,
+    CurrentRx.consumeData_preserves,CurrentRx.packetReceive_preserves,CurrentRx.wgReceive_preserves⟩
+
+/-- Existing focused receive observers retain current support at the actual
+session cut. No premise certifies an unrelated incoming journal. -/
+theorem original_current_receive_journal :
+    (∀ pid, CurrentHistory.Preserves
+      (Origins.HistoryAdapters.focus (Origins.HistoryAdapters.localResponse pid))) ∧
+    (∀ msg src loaded mac, CurrentHistory.Preserves
+      (Origins.HistoryAdapters.focus (Origins.HistoryAdapters.localAfterMac msg src loaded mac))) ∧
+    (∀ msg src, CurrentHistory.Preserves
+      (Origins.HistoryAdapters.focus (Origins.HistoryAdapters.localReception msg src))) ∧
+    CurrentHistory.Preserves Origins.HistoryAdapters.receiveStep :=
+  ⟨CurrentReceiveHistory.response,CurrentReceiveHistory.afterMac,
+    CurrentReceiveHistory.reception,CurrentReceiveHistory.receiveStep⟩
+
+/-- Concrete session, decrypt and saved-probe observers preserve positional
+current checks together with the existing material/history safety. Stop prefixes
+retain every check already emitted; initialization remains a separate claim. -/
+theorem original_current_sensitive_journal :
+    (∀ pid, CurrentChecks.Preserves (Origins.HistoryAdapters.session pid)) ∧
+    (∀ id, CurrentChecks.Preserves (Origins.HistoryAdapters.decrypt id)) ∧
+    CurrentChecks.Preserves (Queues.RxHistory.audit Lifetimes.consistentFilterAudit) :=
+  ⟨CurrentChecks.session,fun id => CurrentChecks.decrypt id (CurrentRx.readDecrypt_preserves id),
+    CurrentChecks.filter_probe⟩
+
+/-- A specified occurrence uses its strict earlier session prefix. Probe history
+is the actual earlier lifetime projection, including when later work stops. -/
+theorem positional_current_checks (h : List Queues.RxHistory.Event) (safe : CurrentChecks.Safe h) :
+    (∀ pre post id r, h = pre ++ .rx (.decrypt id r) :: post →
+      CurrentLifecycle.Inv (Origins.HistorySupport.sessions pre) r.before) ∧
+    (∀ pre post p, h = pre ++ .audit (.probe p) :: post →
+      p.history = Queues.RxHistory.prior pre ∧ CurrentSessionPrefix.StateInv pre p.world) :=
+  ⟨fun _ _ _ _ position => CurrentChecks.Safe.decrypt safe position,
+    fun _ _ _ position => CurrentChecks.Safe.probe safe position⟩
+
+/-- One actual consume execution emits its exact normal receipt with the same
+anchored publication identity; later cleanup need not retain packet/key residency.
+Transport across earlier interleavings is the explicit Live premise. -/
+theorem original_publication_consume (history : List SessionOrigin.Receipt) (id occurrence : Nat)
+    (r : Logged.WGRunWitness (RxPacket × Option RxPacket)) (out : RxPacket) (pid : PeerId)
+    (published : WGWorld) (ep : Endpoint) (w v : World) (h t : List Queues.RxJoint.Event)
+    (value : Option Queues.RxJoint.Entry)
+    (live : PublicationIdentity.Live history id r out pid published w.wg)
+    (hr : Logged.runPrefix (Queues.RxJoint.consume pid occurrence id (Lifetimes.packetStamp published id)
+      {out with state := .crypted} ep) w h = (.ok (value,v),t)) :
+    ∃ receipt pre suffix,
+      receipt.run.before = w.wg ∧ receipt.run.ambientBefore = w.ambient ∧
+      receipt.run.after = v.wg ∧ receipt.run.ambientAfter = v.ambient ∧
+      PublicationIdentity.ConsumeCertificate history id r out pid published
+        (Lifetimes.packetStamp published id) receipt ∧
+      t = h ++ pre ++ [.consumed occurrence id (Lifetimes.packetStamp published id) receipt] ++ suffix ∧
+      ∀ e, value = some e → e.origin = some receipt ∧ receipt.run.value = some e.tag.bytes :=
+  PublicationIdentity.consume_current history id occurrence r out pid published ep w v h t value live hr
+
+/-- The joint allowed-IP loop has exactly the original completion projection,
+with the same actual history passed to its supplied continuation. -/
+theorem original_joint_allowed_ips_routing (attrs : PeerAttrs) (peer : Option PeerId) (pid : PeerId)
+    (next : Int → Logged.WGPrefix Queues.RoutingJoint.Event Int)
+    (routingNext : Int → Logged.WGPrefix RoutingCompletion Int)
+    (hn : ∀ ret, Logged.StateProjectsPrefix Queues.RoutingJoint.routingEvent id
+      (next ret) (routingNext ret)) :
+    Logged.StateProjectsPrefix Queues.RoutingJoint.routingEvent id
+      (Queues.RoutingJoint.peerAllowedIps attrs peer pid next)
+      (Configuration.peerAllowedIpsObservedWG attrs peer pid routingNext) :=
+  Queues.RoutingJoint.peerAllowedIps_routing attrs peer pid next routingNext hn
+
+/-- The second projection recovers the unchanged product RX observer. Concrete
+configuration leaves establish append behavior; only the supplied lower
+continuation carries an explicit append obligation. -/
+theorem original_joint_allowed_ips_rx (attrs : PeerAttrs) (peer : Option PeerId) (pid : PeerId)
+    (next : Int → Logged.WGPrefix Queues.RoutingJoint.Event Int)
+    (rxNext : Int → Lifetimes.MixedM Int)
+    (ha : ∀ ret, Logged.StateAppends (rxNext ret))
+    (hn : ∀ ret, Logged.StateProjectsPrefix Queues.RoutingJoint.rxEvent id
+      (next ret) (Queues.RoutingJoint.nativeRx (rxNext ret))) :
+    Logged.ProjectsPrefix Queues.RoutingJoint.rxEvent id
+      (Logged.liftWGObserver (Queues.RoutingJoint.peerAllowedIps attrs peer pid next))
+      (Queues.RxHistory.mixed
+        (Logged.liftWGObserver (Lifetimes.peerAllowedIpsPrefix attrs peer pid rxNext))) :=
+  Queues.RoutingJoint.peerAllowedIps_rx_product attrs peer pid next rxNext ha hn
+
+/-- GRO callbacks remain arbitrary product actions with explicit preservation
+contracts. This proves the real poll's normal-state identity transport, including
+all budget and queue guards; it does not assert totality or initialization. -/
+theorem original_current_poll_callbacks (pid : PeerId) (budget : Nat)
+    (callback : List (List UInt8) → Leanux.M Unit)
+    (hc : ∀ xs history, Framing.Preserves
+      (fun w : World => CurrentLifecycle.Inv history w.wg) (callback xs))
+    (history : List SessionOrigin.Receipt) :
+    Framing.Preserves (fun w : World => CurrentLifecycle.Inv history w.wg)
+      (WG.rxPoll pid budget callback) :=
+  CurrentPoll.poll pid budget callback hc history
+
+/-- The same receive response, admission and worker iteration preserve exact
+positional current checks together with material support, on normal returns and
+on every emitted Stop prefix. -/
+theorem original_current_receive_checks :
+    (∀ pid, CurrentChecks.Preserves
+      (Origins.HistoryAdapters.focus (Origins.HistoryAdapters.localResponse pid))) ∧
+    (∀ msg src loaded mac, CurrentChecks.Preserves
+      (Origins.HistoryAdapters.focus (Origins.HistoryAdapters.localAfterMac msg src loaded mac))) ∧
+    (∀ msg src, CurrentChecks.Preserves
+      (Origins.HistoryAdapters.focus (Origins.HistoryAdapters.localReception msg src))) ∧
+    CurrentChecks.Preserves Origins.HistoryAdapters.receiveStep ∧
+    CurrentChecks.Preserves Origins.HistoryAdapters.receiveIteration :=
+  ⟨CurrentReceiveChecks.response,CurrentReceiveChecks.afterMac,CurrentReceiveChecks.reception,
+    CurrentReceiveChecks.receiveStep,CurrentReceiveChecks.receiveIteration⟩
 
 end Leanux.Proofs.WG.CryptokeyRouting

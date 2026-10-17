@@ -8,7 +8,7 @@ namespace Leanux.Proofs.WG.Origins.HistorySupport
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing
 open Lifetimes Queues Retaining Std.Do
 
-private theorem endpoint_material (pid : PeerId) (src : SkbSource) :
+theorem endpoint_material (pid : PeerId) (src : SkbSource) :
     SameView view (setPeerEndpointFromSkb pid src) := by
   intro initial
   unfold setPeerEndpointFromSkb endpointFromSkb
@@ -17,7 +17,7 @@ private theorem endpoint_material (pid : PeerId) (src : SkbSource) :
     | (index_material_head setPeerEndpoint; exact (setPeerEndpoint_material _ _).wp (fun t => t = initial))
     | material_basic (fun t => t = initial)
 
-private theorem reply_material (src : SkbSource) (bytes : List UInt8) :
+theorem reply_material (src : SkbSource) (bytes : List UInt8) :
     SameView view (sendBufferAsReplyToSkb src bytes) := by
   intro initial
   unfold sendBufferAsReplyToSkb endpointFromSkb
@@ -27,7 +27,7 @@ private theorem reply_material (src : SkbSource) (bytes : List UInt8) :
     | (index_material_head send6; exact (send6_material _ _ _ _ _).wp (fun t => t = initial))
     | material_basic (fun t => t = initial)
 
-private theorem cookieSend_material (msg : List UInt8) (src : SkbSource) :
+theorem cookieSend_material (msg : List UInt8) (src : SkbSource) :
     SameView view (sendHandshakeCookie msg src) := by
   intro initial
   unfold sendHandshakeCookie

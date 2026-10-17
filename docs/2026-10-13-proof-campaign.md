@@ -64,6 +64,18 @@ the gate with unchanged replayed objects. Fresh replay passes in 102.68 seconds.
 The [short report](2026-10-17-r3-current-journal.md) records review findings,
 validation and the remaining initialized joins.
 
+The receive-cuts checkpoint adds ten modules and 153 theorems:
+486 files/6,941 theorems, 542 terminal declarations and 166 R3 exports.
+Native receive/traffic and existing receive journals preserve current identity;
+positional checks retain actual decrypt/probe support on Stop prefixes.
+The anchored publication certificate reaches the actual consume receipt under
+explicit earlier transport, and the joint allowed-IP loop retains both original
+observer projections. The real poll retains arbitrary product callback contracts.
+Gate: 544 jobs/542 terminal declarations in 41.80 seconds.
+Fresh kernel replay passes in 104.09 seconds without warnings.
+The [short report](2026-10-17-r3-receive-cuts.md) records the unchanged earlier
+statements, independent reviews and remaining initialized joins.
+
 The pre-split checkpoint validated every baseline result surface over
 `cb2348e`. Initialized R3 packet authorization and R4 receive-pipeline
 conservation remain open. Earlier positive results and runtime findings retain

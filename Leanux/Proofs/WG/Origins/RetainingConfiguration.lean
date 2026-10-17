@@ -116,7 +116,7 @@ theorem peerConfigTail_material (a : PeerAttrs) (peer : Option PeerId) (pid : Pe
     RetainsCall (peerConfigTailSource a peer pid) := by
   rw [peerConfigTailSource_factor]
   configuration_entry initial
-  unfold peerAllowedIpsSource
+  unfold peerAllowedIpsSource peerAllowedIpsWith
   simp (config := {zeta := false}) only [monadLift_self]
   try material_lower
   repeat' first

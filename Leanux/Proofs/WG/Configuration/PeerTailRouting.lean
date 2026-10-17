@@ -21,22 +21,10 @@ def peerConfigOutObserved (a : PeerAttrs) (peer : Option PeerId) (ret : Int) :
 the runner's adapter. The continuation remains in its caller's monad. -/
 def peerAllowedIpsObservedWith {m : Type → Type} [Monad m]
     (lift : {α : Type} → WGPrefix RoutingCompletion α → m α)
-    (a : PeerAttrs) (peer : Option PeerId) (pid : PeerId) (next : Int → m Int) : m Int := do
-  let mut ret : Int := 0
-  if ← lift (liftWGPrefix (branch .peerHasAips a.allowedIps.isSome)) then
-    for entry in a.allowedIps.getD [] do
-      _ ← lift (liftWGPrefix (branch .peerAipsIter true))
-      match entry with
-      | .malformed =>
-        _ ← lift (liftWGPrefix (branch .peerAipParseErr true))
-        return ← lift (peerConfigOutObserved a peer (-EINVAL))
-      | .attrs ip =>
-        _ ← lift (liftWGPrefix (branch .peerAipParseErr false))
-        ret ← lift (completedAllowedip pid ip)
-        if ← lift (liftWGPrefix (branch .peerAipErr (ret < 0))) then
-          return ← lift (peerConfigOutObserved a peer ret)
-    _ ← lift (liftWGPrefix (branch .peerAipsIter false))
-  next ret
+    (a : PeerAttrs) (peer : Option PeerId) (pid : PeerId) (next : Int → m Int) : m Int :=
+  peerAllowedIpsWith (fun d b => lift (liftWGPrefix (branch d b)))
+    (fun ip => lift (completedAllowedip pid ip))
+    (fun ret => lift (peerConfigOutObserved a peer ret)) a next
 
 /-- Arbitrary product continuations retain their original interface. -/
 def peerAllowedIpsObserved (a : PeerAttrs) (peer : Option PeerId) (pid : PeerId)
@@ -60,7 +48,7 @@ theorem peerAllowedIpsObservedWG_erases (a : PeerAttrs) (peer : Option PeerId) (
     (hn : ∀ ret, ErasesStatePrefix (next ret) (source ret)) :
     ErasesStatePrefix (peerAllowedIpsObservedWG a peer pid next)
       (peerAllowedIpsSource a peer pid source) := by
-  unfold peerAllowedIpsObservedWG peerAllowedIpsObservedWith peerAllowedIpsSource peerConfigOutObserved
+  unfold peerAllowedIpsObservedWG peerAllowedIpsObservedWith peerAllowedIpsSource peerAllowedIpsWith peerConfigOutObserved
   simp only [bind_assoc, pure_bind, monadLift_self, liftWGPrefix]
   repeat' first
     | with_reducible exact hn _
@@ -76,7 +64,7 @@ theorem peerAllowedIpsObserved_erases (a : PeerAttrs) (peer : Option PeerId) (pi
     (next : Int → PrefixM RoutingCompletion Int) (source : Int → Leanux.M Int)
     (hn : ∀ ret, ErasesPrefix (next ret) (source ret)) :
     ErasesPrefix (peerAllowedIpsObserved a peer pid next) (peerAllowedIpsSource a peer pid source) := by
-  unfold peerAllowedIpsObserved peerAllowedIpsObservedWith peerAllowedIpsSource peerConfigOutObserved
+  unfold peerAllowedIpsObserved peerAllowedIpsObservedWith peerAllowedIpsSource peerAllowedIpsWith peerConfigOutObserved
   simp only [bind_assoc, pure_bind, liftWGObserver_bind]
   repeat' first
     | exact hn _
@@ -199,7 +187,7 @@ theorem peerAllowedIpsObservedWG_spec (initial : FlatTable × FlatTable)
     exact (hoare_iff_run_ambient _ _ _).mp
       (hoare_liftAmbient (AmbientM.branch d value) (fun w => CompletionTarget initial pid h w))
       w ambient x v ambient' hi hr
-  unfold peerAllowedIpsObservedWG peerAllowedIpsObservedWith
+  unfold peerAllowedIpsObservedWG peerAllowedIpsObservedWith peerAllowedIpsWith
   apply StatePrefixEnsures.bind (branch_spec _ _)
   intro has
   split
@@ -261,7 +249,7 @@ theorem peerAllowedIpsObserved_spec (initial : FlatTable × FlatTable)
         (hoare_liftAmbient (AmbientM.branch d value) (fun w => CompletionTarget initial pid h w))
         w ambient x v ambient' hi hr
     exact hn.liftWGObserver
-  unfold peerAllowedIpsObserved peerAllowedIpsObservedWith
+  unfold peerAllowedIpsObserved peerAllowedIpsObservedWith peerAllowedIpsWith
   apply PrefixEnsures.bind (branch_spec _ _)
   intro has
   split

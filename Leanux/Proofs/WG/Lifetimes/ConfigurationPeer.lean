@@ -1,6 +1,6 @@
 import Leanux.Proofs.WG.Lifetimes.ConfigurationLeaves
 import Leanux.Proofs.WG.Lifetimes.PeerAllocation
-import Leanux.Proofs.WG.Configuration.PeerSource
+import Leanux.Proofs.WG.Configuration.AllowedIpSource
 
 /-! Complete original peer configuration. Ordinary negative returns retain
 earlier mutations and run the source put/zero tail; Stops skip that continuation.
@@ -21,6 +21,25 @@ def configureKeepaliveValuePrefix (pid : PeerId) (running : Bool) (interval : Na
 def configureKeepalivePrefix (pid : PeerId) (running : Bool) (interval : Nat) : MixedM Unit := do
   let send ← configureKeepaliveValuePrefix pid running interval
   if ← liftWGPrefix (branch .peerSendKeepalive send) then sendKeepalivePrefix pid
+
+/-- The observed cleanup uses the same peer put and final zero record. -/
+def peerConfigOutPrefix (a : PeerAttrs) (peer : Option PeerId) (ret : Int) : MixedM Int := do
+  peerPutMixed peer
+  _ ← liftWGPrefix (branch .peerZeroPsk a.presharedKey.isSome)
+  return ret
+
+def peerAllowedIpsPrefix (a : PeerAttrs) (peer : Option PeerId) (pid : PeerId)
+    (next : Int → MixedM Int) : MixedM Int :=
+  peerAllowedIpsWith (fun d b => liftWGPrefix (branch d b))
+    (setAllowedipPrefix pid) (peerConfigOutPrefix a peer) a next
+
+def peerTailFinishPrefix (a : PeerAttrs) (peer : Option PeerId) (pid : PeerId)
+    (ret : Int) : MixedM Int := do
+  let running := (← liftWGPrefix getDev).running
+  if ← liftWGPrefix (branch .peerHasKeepalive a.keepalive.isSome) then
+    configureKeepalivePrefix pid running (a.keepalive.getD 0)
+  if ← liftWGPrefix (branch .peerRunning running) then sendStagedPacketsPrefix pid
+  peerConfigOutPrefix a peer ret
 
 def peerConfigTailPrefix (a : PeerAttrs) (peer : Option PeerId) (pid : PeerId) : MixedM Int := do
   let out (peer : Option PeerId) (ret : Int) : MixedM Int := do
@@ -45,6 +64,12 @@ def peerConfigTailPrefix (a : PeerAttrs) (peer : Option PeerId) (pid : PeerId) :
     configureKeepalivePrefix pid running (a.keepalive.getD 0)
   if ← liftWGPrefix (branch .peerRunning running) then sendStagedPacketsPrefix pid
   out peer ret
+
+/-- Literal equality to the existing lifetime observer, including both early
+cleanup paths and the continuation after normal loop exhaustion. -/
+theorem peerConfigTailPrefix_factor (a : PeerAttrs) (peer : Option PeerId) (pid : PeerId) :
+    peerConfigTailPrefix a peer pid =
+      peerAllowedIpsPrefix a peer pid (peerTailFinishPrefix a peer pid) := rfl
 
 def peerConfigUpdatePrefix (a : PeerAttrs) (peer : Option PeerId) (flags : UInt32) (psk : Option Key) (pid : PeerId) : MixedM Int := do
   let out (peer : Option PeerId) (ret : Int) : MixedM Int := do

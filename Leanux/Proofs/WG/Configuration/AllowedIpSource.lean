@@ -4,27 +4,36 @@ import Leanux.Proofs.WG.Configuration.PeerSource
 stays inside the loop; the continuation is reached only after normal exhaustion. -/
 namespace Leanux.Proofs.WG.Configuration
 open Leanux Leanux.WG
+universe u
 
-def peerAllowedIpsSource [Monad m] [MonadLiftT WG.M m] [MonadLiftT AmbientM m]
-    (a : PeerAttrs) (peer : Option PeerId) (pid : PeerId) (next : Int → m Int) : m Int := do
-  let out (peer : Option PeerId) (ret : Int) : m Int := do
-    peerPut peer
-    _ ← (branch .peerZeroPsk a.presharedKey.isSome)
-    return ret
+/-- The original loop with its recorded decision, mutation, cleanup and final
+continuation supplied by the caller. Early errno returns still run cleanup;
+a Stop from any supplied operation skips the remaining continuation. -/
+def peerAllowedIpsWith {m : Type → Type u} [Monad m]
+    (record : Decision → Bool → m Bool) (allowed : AllowedIpAttrs → m Int)
+    (out : Int → m Int) (a : PeerAttrs) (next : Int → m Int) : m Int := do
   let mut ret : Int := 0
-  if ← (branch .peerHasAips a.allowedIps.isSome) then
+  if ← record .peerHasAips a.allowedIps.isSome then
     for entry in a.allowedIps.getD [] do
-      _ ← (branch .peerAipsIter true)
+      _ ← record .peerAipsIter true
       match entry with
       | .malformed =>
-        _ ← (branch .peerAipParseErr true)
-        return ← out peer (-EINVAL)
+        _ ← record .peerAipParseErr true
+        return ← out (-EINVAL)
       | .attrs ip =>
-        _ ← (branch .peerAipParseErr false)
-        ret ← setAllowedip pid ip
-        if ← (branch .peerAipErr (ret < 0)) then return ← out peer ret
-    _ ← (branch .peerAipsIter false)
+        _ ← record .peerAipParseErr false
+        ret ← allowed ip
+        if ← record .peerAipErr (ret < 0) then return ← out ret
+    _ ← record .peerAipsIter false
   next ret
+
+def peerAllowedIpsSource [Monad m] [MonadLiftT WG.M m] [MonadLiftT AmbientM m]
+    (a : PeerAttrs) (peer : Option PeerId) (pid : PeerId) (next : Int → m Int) : m Int :=
+  peerAllowedIpsWith (fun d b => branch d b) (fun ip => liftM (setAllowedip pid ip))
+    (fun ret => do
+      peerPut peer
+      _ ← branch .peerZeroPsk a.presharedKey.isSome
+      pure ret) a next
 
 def peerTailFinishSource (a : PeerAttrs) (peer : Option PeerId) (pid : PeerId) (ret : Int) : WG.M Int := do
   let out (peer : Option PeerId) (ret : Int) : WG.M Int := do
