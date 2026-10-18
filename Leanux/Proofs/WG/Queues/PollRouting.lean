@@ -154,14 +154,23 @@ private theorem normalOne_routing (xs : FlatTable × FlatTable) (g : Gro) (e : R
 routing retention keeps the same flat tables for every subsequent consume. -/
 theorem receive_routing (xs : FlatTable × FlatTable) (g : Gro) (e : RxJoint.Entry) :
     PrefixPreserves (Inv xs) (Safe xs) (receive g e) := by
+  have safe : ∀ h w, Inv xs h w → Safe xs h := fun _ _ hi => hi.1
+  have stopped {α : Type} (message : String) :
+      PrefixPreserves (Inv xs) (Safe xs) (liftPrefix (unsupported message : Leanux.M α)) := by
+    apply PrefixEnsures.preserves
+    apply PrefixEnsures.lift _ safe
+    intro h w x v hi hr
+    change (Except.error _ : Except Stop _) = _ at hr
+    cases hr
   unfold receive
-  split
-  · exact normalOne_routing xs g e 1
-  · split
-    · apply (ambient xs (AmbientM.unsupported _)).bind
-      intro _
-      exact PrefixPreserves.pure (fun _ _ hi => hi.1) _
-    · exact PrefixPreserves.pure (fun _ _ hi => hi.1) _
+  repeat' first
+    | with_reducible exact normalOne_routing xs _ _ _
+    | with_reducible exact PrefixPreserves.pure safe _
+    | with_reducible exact stopped _
+    | with_reducible apply PrefixPreserves.bind
+    | with_reducible apply PrefixPreserves.ite
+    | (with_reducible intro x; try dsimp only)
+    | (with_reducible split)
 
 private theorem flushAll_routing (xs : FlatTable × FlatTable) (g : Gro) :
     PrefixPreserves (Inv xs) (Safe xs) (flushAll g) := by

@@ -423,17 +423,18 @@ theorem original_poll_completion_buffer (pid : PeerId) (occurrence : Nat) (id : 
 
 /-- The former `original_poll_callback_prefix` (2c7a076) is false after real
 GRO landed in f45bde8; GroSafe retains its chronological meaning. This original
-helper equation identifies the cause: a held packet then a normal packet are
-passed to the actual callback in reverse order. ReplayGro separately checks an
+helper equation identifies the cause: a held packet then a normal packet that
+bypasses the held flow are passed to the actual callback in reverse order.
+Same-flow refusal instead completes the held packet first. ReplayGro checks an
 accepted original runner witness. No universal selected-order or conservation
 replacement is claimed by this equation. -/
 theorem original_gro_held_then_normal (callback : List (List UInt8) → Leanux.M Unit)
-    (held normal : List UInt8) (hh : groTakenAtOnce held = false)
-    (hn : groTakenAtOnce normal = true) :
+    (held normal : List UInt8) (hh : Queues.groTakesAlone held = false)
+    (hn : Queues.groTakesAlone normal = true) (hb : Queues.groBypassesHeld held normal = true) :
     (do let g ← napiGroReceive callback {} held
         let g ← napiGroReceive callback g normal
         napiGroFlushAll callback g) = callback [normal, held] :=
-  Queues.held_then_normal callback held normal hh hn
+  Queues.held_then_normal callback held normal hh hn hb
 
 /-- The actual stack forM visits a prefix of its supplied tagged occurrences;
 a failed call retains its own entry event and leaves the suffix unvisited.
@@ -446,8 +447,8 @@ theorem original_stack_callback_visited_prefix (entries : List Queues.GroEntry)
   Queues.flushGro_prefix entries w h
 
 /-- For one complete original poll's exact observer, callback entries form a
-prefix of normal completion offers followed by held offers, preserving each
-class's order. This holds for every input World, including every Stop and the
+prefix of the order selected by GRO's normal and held transitions, including
+held-first completion on a refused same-flow merge. This holds for every input World, including every Stop and the
 entry of a callback which fails. History starts empty for this poll; the result
 does not assert chronological order, completed delivery or source-tag uniqueness. -/
 theorem original_poll_selected_callback_prefix (pid : PeerId) (budget : Nat) (w : World) :
@@ -456,7 +457,7 @@ theorem original_poll_selected_callback_prefix (pid : PeerId) (budget : Nat) (w 
 
 /-- If the actual original poll with the concrete stack callback returns
 normally, every buffered completion offer has exactly its callback entry in
-the selected normal-then-held order, including multiplicity. The premise is
+the source-selected order, including multiplicity. The premise is
 the original run, not observer success or a caller-supplied history invariant.
 This is per-poll callback-entry conservation, not completed stack delivery,
 receive-queue occurrence provenance or whole-schedule conservation. -/

@@ -1,8 +1,10 @@
 import Leanux.Proofs.Logged.Checkpoints
 import Leanux.Proofs.Logged.Runner
+import Leanux.Proofs.WG.Queues.GroState
 
 /-! Generated explicit GRO scheduling witness, not a Linux capture. -/
 open Lean Leanux Leanux.WG Leanux.Runner Leanux.Proofs.Logged
+open Leanux.Proofs.WG.Queues (groTakesAlone groBypassesHeld)
 
 private def require (p : Bool) (message : String) : IO Unit :=
   unless p do throw (IO.userError message)
@@ -44,8 +46,29 @@ def main : IO UInt32 := do
     acceptances.map (fun e => (e.keypair, e.nonce)) == [(key.internalId, 0), (key.internalId, 1)])
     "original acceptance history is not nonce zero then one under this exact key lifetime"
   require (d.keypairs.size == 1 && key.receivingCounter.counter == 0 &&
-    key.sendingCounter == 1 && !groTakenAtOnce held && groTakenAtOnce normal &&
+    key.sendingCounter == 1 && !groTakesAlone held && groTakesAlone normal &&
+    groBypassesHeld held normal &&
     held.length == 41 && normal.length == 40) "unexpected starting nonce or packet classes"
+  -- A separate direct GRO call demonstrates why the former helper equation
+  -- needs its bypass premise. These bytes are helper inputs, not a capture
+  -- or a second accepted runner trace; the original witness below is unchanged.
+  let sameFlowNormal := normal.take 20 ++ (held.drop 20).take 4 ++ normal.drop 24
+  require (groTakesAlone sameFlowNormal && !groBypassesHeld held sameFlowNormal)
+    "same-flow helper input did not select the corrected path"
+  let sameFlowCallback (packets : List (List UInt8)) : Leanux.M Unit :=
+    if packets == [held, sameFlowNormal] then pure ()
+    else unsupported "unexpected same-flow GRO callback order"
+  let (sameFlowGro, _) ← match
+      ((do let g ← napiGroReceive sameFlowCallback {} held
+           let g ← napiGroReceive sameFlowCallback g sameFlowNormal
+           napiGroFlushAll sameFlowCallback g
+           pure g) : Leanux.M GroState).run before with
+    | .error e => throw (IO.userError s!"same-flow GRO helper: {e.message}")
+    | .ok r => pure r
+  require (sameFlowGro.rxList == [held, sameFlowNormal] && sameFlowGro.held.isEmpty)
+    "same-flow refusal did not complete the held segment before the newcomer"
+  require (!((sameFlowCallback [sameFlowNormal, held]).run before).isOk)
+    "same-flow helper did not distinguish the former normal-then-held claim"
   let expectedH := dataMessage 0x0a0b0c0d 0 key.receiving.key (held ++ List.replicate 7 0)
   let expectedN := dataMessage 0x0a0b0c0d 1 key.receiving.key (normal ++ List.replicate 8 0)
   match trace.ops[4]? with
@@ -81,5 +104,6 @@ def main : IO UInt32 := do
     ("record_origin", toJson "generated explicit inputs; not a Linux capture"),
     ("receive_order", toJson ["held ACK, nonce 0", "normal SYN, nonce 1"]),
     ("reply_order", toJson ["normal SYN RST, nonce 1", "held ACK RST, nonce 2"]),
+    ("same_flow_helper_order", toJson ["held ACK", "same-flow SYN"]),
     ("ciphertexts", toJson [packetHex replyN, packetHex replyH])]).compress
   return 0

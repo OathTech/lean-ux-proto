@@ -201,13 +201,23 @@ private theorem normalOne_rule (g : Gro) (e : Entry) (n : Nat) (history : List R
 
 private theorem receive_rule (g : Gro) (e : Entry) (history : List RxHistory.Event) :
     PrefixPreserves (State history) (Checks history) (receive g e) := by
+  have safe : ∀ h w, State history h w → Checks history h := fun _ _ hi => hi.2
+  have stopped {α : Type} (message : String) :
+      PrefixPreserves (State history) (Checks history) (liftPrefix (unsupported message : Leanux.M α)) := by
+    apply PrefixEnsures.preserves
+    apply PrefixEnsures.lift _ safe
+    intro h w x v hi hr
+    change (Except.error _ : Except Stop _) = _ at hr
+    cases hr
   unfold receive
-  split
-  · exact normalOne_rule _ _ _ history
-  · split
-    · exact (lift_rule _ history (productAmbient_spec (AmbientM.unsupported _) _ (fun _ _ hi => hi))).bind
-        (fun _ => PrefixPreserves.pure (fun _ _ hi => hi.2) _)
-    · exact PrefixPreserves.pure (fun _ _ hi => hi.2) _
+  repeat' first
+    | exact normalOne_rule _ _ _ history
+    | exact stopped _
+    | exact PrefixPreserves.pure safe _
+    | with_reducible apply PrefixPreserves.bind
+    | with_reducible apply PrefixPreserves.ite
+    | (with_reducible intro x; try dsimp only)
+    | (with_reducible split)
 
 private theorem flushAll_rule (g : Gro) (history : List RxHistory.Event) :
     PrefixPreserves (State history) (Checks history) (flushAll g) := by

@@ -53,11 +53,13 @@ theorem normalOne_appends (g : Gro) (e : Entry) (segs : Nat) : Appends (normalOn
 
 theorem receive_appends (g : Gro) (e : Entry) : Appends (receive g e) := by
   unfold receive
-  split
-  · exact normalOne_appends _ _ _
-  · split
-    · exact Appends.bind (Appends.lift _) (fun _ => Appends.pure _)
-    · exact Appends.pure _
+  repeat' first
+    | with_reducible exact normalOne_appends _ _ _
+    | with_reducible exact Appends.pure _
+    | with_reducible exact Appends.lift _
+    | with_reducible apply Appends.bind
+    | (with_reducible intro x; try dsimp only [id])
+    | (with_reducible split <;> try dsimp only [id])
 
 theorem flushAll_appends (g : Gro) : Appends (flushAll g) := by
   unfold flushAll

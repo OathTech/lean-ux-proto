@@ -83,11 +83,27 @@ def normalOne (g : Gro) (e : Entry) (segs : Nat) : Obs Gro := do
   if g.rxCount ≥ GRO_NORMAL_BATCH then normalList g else return g
 
 def receive (g : Gro) (e : Entry) : Obs Gro := do
-  if groTakenAtOnce e.tag.bytes then normalOne g e 1
-  else
-    if !g.held.isEmpty then
-      liftPrefix (unsupported "GRO holds a second TCP segment in one poll (coalescing, or the hash buckets' flush order)")
-    return {g with held := g.held ++ [e]}
+  match groNetwork e.tag.bytes with
+  | none => normalOne g e 1
+  | some (off, lengthFlush) =>
+    match groTcpHeader e.tag.bytes off with
+    | none => normalOne g e 1
+    | some (thlen, len) =>
+      let flags := (e.tag.bytes.getD (off + 13) 0).toNat
+      match g.held with
+      | [held] =>
+        if groSameFlow held.tag.bytes e.tag.bytes off then
+          if !groMergeRefused held.tag.bytes e.tag.bytes off thlen len then
+            liftPrefix (unsupported "GRO coalesces two segments of one flow in one poll (skb_gro_receive)")
+          let g ← normalOne {g with held := []} held 1
+          if lengthFlush || groFinalFlush flags len then normalOne g e 1
+          else return {g with held := [e]}
+        else
+          if lengthFlush || groFinalFlush flags len then normalOne g e 1
+          else liftPrefix (unsupported "GRO holds a second TCP segment in one poll (the hash buckets' flush order)")
+      | _ =>
+        if lengthFlush || groFinalFlush flags len then normalOne g e 1
+        else return {g with held := g.held ++ [e]}
 
 def flushAll (gro : Gro) : Obs Unit := do
   let mut g := gro
@@ -133,17 +149,29 @@ theorem normalOne_gro (g : Gro) (e : Entry) (segs : Nat) :
 
 theorem receive_gro (g : Gro) (e : Entry) :
     ProjectsPrefix groEvent Gro.forget (receive g e) (napiGroReceiveTagged g.forget e.tag) := by
-  unfold receive napiGroReceiveTagged
-  simp only [Gro.forget, List.isEmpty_map]
-  split
-  · exact normalOne_gro g e 1
-  · split
-    · apply projectsPrefix_bind groEvent id Gro.forget (projectsPrefix_lift _ _)
-      intro _
-      simpa [Gro.forget, List.map_append] using
-        projectsPrefix_pure groEvent Gro.forget {g with held := g.held ++ [e]}
-    · simpa [Gro.forget, List.map_append] using
-        projectsPrefix_pure groEvent Gro.forget {g with held := g.held ++ [e]}
+  have pure_eq (g : Gro) (a : TaggedGro) (he : g.forget = a) :
+      ProjectsPrefix groEvent Gro.forget (pure g : Obs Gro) (pure a) := by
+    rw [← he]
+    exact projectsPrefix_pure _ _ _
+  rcases g with ⟨xs, count, held⟩
+  cases held <;> try (rename_i old rest; cases rest)
+  all_goals
+    unfold receive napiGroReceiveTagged
+    simp only [Gro.forget, List.map_cons, List.map_nil]
+    repeat' first
+      | contradiction
+      | with_reducible exact normalOne_gro _ _ _
+      | with_reducible exact projectsPrefix_pure _ _ _
+      | with_reducible exact projectsPrefix_lift _ _
+      | with_reducible apply projectsPrefix_ite
+      | with_reducible apply projectsPrefix_bind groEvent Gro.forget Gro.forget
+      | with_reducible apply projectsPrefix_bind groEvent id Gro.forget
+      | (with_reducible intro x; try dsimp only)
+      | (split <;> simp_all only)
+    all_goals first
+      | exact normalOne_gro _ _ _
+      | (apply pure_eq; simp only [Gro.forget, List.map_append, List.map_cons, List.map_nil])
+      | exact fun _ _ => rfl
 
 theorem flushAll_gro (g : Gro) :
     ProjectsPrefix groEvent id (flushAll g) (napiGroFlushAllTagged g.forget) := by
@@ -207,18 +235,41 @@ theorem normalOne_access (g : Gro) (e : Entry) (segs : Nat) :
 theorem receive_access (g : Gro) (e : Entry) :
     ProjectsUnderTo (fun h w => AllocationInv h w.wg) accessEvent Gro.erase (receive g e)
       (napiGroReceivePrefix stackFlushPrefix g.erase e.tag.bytes) := by
-  unfold receive napiGroReceivePrefix
-  simp only [Gro.erase, Gro.forget, TaggedGro.erase, List.isEmpty_map]
-  split
-  · exact normalOne_access g e 1
-  · split
-    · apply projectsUnderTo_bind accessEvent id Gro.erase (projectsPrefix_lift _ _).underTo
-      · exact Lifetimes.allocation_store World.wg _ (by intro initial; exact productAmbient_spec _ _ (fun _ _ hi => hi))
-      · intro _
-        simpa [Gro.erase, Gro.forget, TaggedGro.erase, List.map_append] using
-          projectsUnderTo_pure accessEvent Gro.erase {g with held := g.held ++ [e]}
-    · simpa [Gro.erase, Gro.forget, TaggedGro.erase, List.map_append] using
-        projectsUnderTo_pure accessEvent Gro.erase {g with held := g.held ++ [e]}
+  have stopped {α : Type} (message : String) :
+      PrefixPreserves (fun h w => AllocationInv h w.wg) LifetimeEvent.Safe
+        (liftPrefix (unsupported message : M α)) := by
+    apply PrefixEnsures.preserves
+    apply PrefixEnsures.lift _ (fun _ _ hi => hi.safe)
+    intro h w x v hi hr
+    change (Except.error _ : Except Stop _) = _ at hr
+    cases hr
+  have pure_eq (g : Gro) (a : GroState) (he : g.erase = a) :
+      ProjectsUnderTo (fun h w => AllocationInv h w.wg) accessEvent Gro.erase
+        (pure g : Obs Gro) (pure a) := by
+    rw [← he]
+    exact projectsUnderTo_pure _ _ _
+  rcases g with ⟨xs, count, held⟩
+  cases held <;> try (rename_i old rest; cases rest)
+  all_goals
+    unfold receive napiGroReceivePrefix
+    simp only [Gro.erase, Gro.forget, TaggedGro.erase, List.map_cons, List.map_nil]
+    repeat' first
+      | contradiction
+      | with_reducible exact normalOne_access _ _ _
+      | with_reducible exact projectsUnderTo_pure _ _ _
+      | with_reducible exact projectsUnderTo_lift _ _
+      | with_reducible exact groNormalOnePrefix_preserves stackFlushPrefix (fun _ _ hi => hi.safe) stackFlush_allocation _ _ _
+      | with_reducible apply projectsUnderTo_ite
+      | with_reducible apply projectsUnderTo_bind (S := LifetimeEvent.Safe) accessEvent Gro.erase Gro.erase
+      | with_reducible apply projectsUnderTo_bind (S := LifetimeEvent.Safe) accessEvent id Gro.erase
+      | (with_reducible intro x; try dsimp only)
+      | (split <;> simp_all only)
+    all_goals first
+      | exact normalOne_access _ _ _
+      | exact groNormalOnePrefix_preserves stackFlushPrefix (fun _ _ hi => hi.safe) stackFlush_allocation _ _ _
+      | (apply pure_eq; simp only [Gro.erase, Gro.forget, TaggedGro.erase, List.map_append, List.map_cons, List.map_nil])
+      | exact fun _ _ _ => rfl
+      | exact stopped _
 
 theorem flushAll_access (gro : Gro) :
     ProjectsUnder (fun h w => AllocationInv h w.wg) accessEvent (flushAll gro)

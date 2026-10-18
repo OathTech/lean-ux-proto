@@ -20,10 +20,28 @@ def groNormalOneLogged (toStack : List (List UInt8) → GhostM Unit) (gro : GroS
 
 def napiGroReceiveLogged (toStack : List (List UInt8) → GhostM Unit) (gro : GroState)
     (pkt : List UInt8) : GhostM GroState := do
-  if groTakenAtOnce pkt then groNormalOneLogged toStack gro pkt 1
-  else
-    if !gro.held.isEmpty then unsupported "GRO holds a second TCP segment in one poll (coalescing, or the hash buckets' flush order)"
-    return { gro with held := gro.held ++ [pkt] }
+  match groNetwork pkt with
+  | none => groNormalOneLogged toStack gro pkt 1
+  | some (off, lengthFlush) =>
+    match groTcpHeader pkt off with
+    | none => groNormalOneLogged toStack gro pkt 1   -- tcp4_gro_receive's `goto flush`
+    | some (thlen, len) =>
+      let flags := (pkt.getD (off + 13) 0).toNat
+      match gro.held with
+      | [held] =>
+        if groSameFlow held pkt off then
+          if !groMergeRefused held pkt off thlen len then
+            unsupported "GRO coalesces two segments of one flow in one poll (skb_gro_receive)"
+          -- `pp = p`: the held segment completed first (gro.c:546-550)
+          let gro ← groNormalOneLogged toStack { gro with held := [] } held 1
+          if lengthFlush || groFinalFlush flags len then groNormalOneLogged toStack gro pkt 1
+          else return { gro with held := [pkt] }
+        else
+          if lengthFlush || groFinalFlush flags len then groNormalOneLogged toStack gro pkt 1
+          else unsupported "GRO holds a second TCP segment in one poll (the hash buckets' flush order)"
+      | _ =>
+        if lengthFlush || groFinalFlush flags len then groNormalOneLogged toStack gro pkt 1
+        else return { gro with held := gro.held ++ [pkt] }
 
 def napiGroFlushAllLogged (toStack : List (List UInt8) → GhostM Unit) (gro : GroState) : GhostM Unit := do
   let mut g := gro
@@ -110,12 +128,22 @@ theorem napiGroReceiveLogged_erases
     (h : ∀ packets, Erases (logged packets) (original packets))
     (gro : GroState) (pkt : List UInt8) :
     Erases (napiGroReceiveLogged logged gro pkt) (napiGroReceive original gro pkt) := by
+  have stopped {α : Type} (message : String) :
+      Erases (unsupported message : GhostM α) (unsupported message : Leanux.M α) := by
+    intro history
+    funext world
+    rfl
   unfold napiGroReceiveLogged napiGroReceive
-  split
-  · exact groNormalOneLogged_erases logged original h _ _ _
-  · split
-    · exact erases_bind (erases_liftM _) (fun _ => erases_pure _)
-    · exact erases_pure _
+  repeat' first
+    | contradiction
+    | with_reducible exact groNormalOneLogged_erases logged original h _ _ _
+    | with_reducible exact stopped _
+    | with_reducible exact erases_pure _
+    | with_reducible exact erases_liftM _
+    | with_reducible apply erases_ite
+    | with_reducible apply erases_bind
+    | (with_reducible intro x; try dsimp only)
+    | (split <;> simp_all only)
 
 theorem napiGroFlushAllLogged_erases
     (logged : List (List UInt8) → GhostM Unit) (original : List (List UInt8) → Leanux.M Unit)

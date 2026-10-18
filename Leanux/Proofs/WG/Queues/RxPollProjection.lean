@@ -85,17 +85,29 @@ theorem napiGroReceive_projects (g : TaggedGro) (e : GroEntry) :
     ProjectsPrefix removedId? TaggedGro.erase (napiGroReceiveTagged g e)
       (napiGroReceivePrefix (fun bytes => liftPrefix (bytes.forM Leanux.Env.deliverInner))
         g.erase e.bytes) := by
-  unfold napiGroReceiveTagged napiGroReceivePrefix
-  simp only [TaggedGro.erase, List.isEmpty_map]
-  split
-  · exact groNormalOne_projects g e 1
-  · split
-    · apply projectsPrefix_bind removedId? id TaggedGro.erase (projectsPrefix_lift _ _)
-      intro _
-      simpa [TaggedGro.erase, List.map_append] using
-        projectsPrefix_pure removedId? TaggedGro.erase {g with held := g.held ++ [e]}
-    · simpa [TaggedGro.erase, List.map_append] using
-        projectsPrefix_pure removedId? TaggedGro.erase {g with held := g.held ++ [e]}
+  have pure_eq (g : TaggedGro) (a : GroState) (he : g.erase = a) :
+      ProjectsPrefix removedId? TaggedGro.erase (pure g : PrefixM GroEvent TaggedGro) (pure a) := by
+    rw [← he]
+    exact projectsPrefix_pure _ _ _
+  rcases g with ⟨xs, count, held⟩
+  cases held <;> try (rename_i old rest; cases rest)
+  all_goals
+    unfold napiGroReceiveTagged napiGroReceivePrefix
+    simp only [TaggedGro.erase, List.map_cons, List.map_nil]
+    repeat' first
+      | contradiction
+      | with_reducible exact groNormalOne_projects _ _ _
+      | with_reducible exact projectsPrefix_pure _ _ _
+      | with_reducible exact projectsPrefix_lift _ _
+      | with_reducible apply projectsPrefix_ite
+      | with_reducible apply projectsPrefix_bind removedId? TaggedGro.erase TaggedGro.erase
+      | with_reducible apply projectsPrefix_bind removedId? id TaggedGro.erase
+      | (with_reducible intro x; try dsimp only)
+      | (split <;> simp_all only)
+    all_goals first
+      | exact groNormalOne_projects _ _ _
+      | (apply pure_eq; simp only [TaggedGro.erase, List.map_append, List.map_cons, List.map_nil])
+      | exact fun _ _ => rfl
 
 theorem napiGroFlushAll_projects (gro : TaggedGro) :
     ProjectsPrefix removedId? id (napiGroFlushAllTagged gro)

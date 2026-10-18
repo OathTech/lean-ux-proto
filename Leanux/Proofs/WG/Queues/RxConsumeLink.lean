@@ -282,26 +282,70 @@ theorem normalOne_link (g : Gro) (e : Entry) (n : Nat) :
 theorem receive_link (g : Gro) (e : Entry) :
     PrefixEnsures (fun h w => Context base g h w ∧ Buffered base h e) (Linked base)
       (receive g e) (Context base) := by
-  unfold receive
-  split
-  · exact normalOne_link _ _ _
-  · have transfer : ∀ h w, Context base g h w ∧ Buffered base h e →
-        Context base {g with held := g.held ++ [e]} h w := by
-      intro h w hi
-      refine ⟨hi.1.1,?_⟩
+  have appendHeld (g : Gro) :
+      PrefixEnsures (fun h w => Context base g h w ∧ Buffered base h e) (Linked base)
+        (pure {g with held := g.held ++ [e]} : Obs Gro) (Context base) := by
+    apply PrefixEnsures.pure (fun _ _ hi => hi.1.1)
+    intro h w hi
+    refine ⟨hi.1.1, ?_⟩
+    intro x hx
+    simp only [List.mem_append, List.mem_singleton] at hx
+    rcases hx with hx | hx | rfl
+    · exact hi.1.2 x (List.mem_append_left _ hx)
+    · exact hi.1.2 x (List.mem_append_right _ hx)
+    · exact hi.2
+  have replaceHeld (g : Gro) :
+      PrefixEnsures (fun h w => Context base g h w ∧ Buffered base h e) (Linked base)
+        (pure {g with held := [e]} : Obs Gro) (Context base) := by
+    apply PrefixEnsures.pure (fun _ _ hi => hi.1.1)
+    intro h w hi
+    refine ⟨hi.1.1, ?_⟩
+    intro x hx
+    simp only [List.mem_append, List.mem_singleton] at hx
+    rcases hx with hx | rfl
+    · exact hi.1.2 x (List.mem_append_left _ hx)
+    · exact hi.2
+  have firstHeld (held : Entry) (member : held ∈ g.held) :
+      PrefixEnsures (fun h w => Context base g h w ∧ Buffered base h e) (Linked base)
+        (normalOne {g with held := []} held 1)
+        (fun out h w => Context base out h w ∧ Buffered base h e) := by
+    apply (remember (normalOne_link {g with held := []} held 1)
+      (F := fun h => Buffered base h e) (fun _ t hi => hi.append t)).consequence
+    · intro h w hi
+      refine ⟨⟨⟨hi.1.1, ?_⟩, hi.1.2 held (List.mem_append_right _ member)⟩, hi.2⟩
       intro x hx
-      simp only [List.mem_append,List.mem_singleton] at hx
-      rcases hx with hx | hx | rfl
-      · exact hi.1.2 x (List.mem_append_left _ hx)
-      · exact hi.1.2 x (List.mem_append_right _ hx)
-      · exact hi.2
+      exact hi.1.2 x (List.mem_append_left _ (by simpa only [List.append_nil] using hx))
+    · intro _ _ _ hi
+      exact hi
+  have stopped {α : Type} (message : String) (Q : α → List RxJoint.Event → World → Prop) :
+      PrefixEnsures (fun h w => Context base g h w ∧ Buffered base h e) (Linked base)
+        (liftPrefix (unsupported message : Leanux.M α)) Q := by
+    apply PrefixEnsures.lift _ (fun _ _ hi => hi.1.1)
+    intro h w x v hi hr
+    change (Except.error _ : Except Stop _) = _ at hr
+    cases hr
+  have finishHeld (held : Entry) (member : held ∈ g.held) (flushNow : Bool) :
+      PrefixEnsures (fun h w => Context base g h w ∧ Buffered base h e) (Linked base)
+        (do
+          let out ← normalOne {g with held := []} held 1
+          if flushNow then normalOne out e 1 else pure {out with held := [e]})
+        (Context base) := by
+    apply PrefixEnsures.bind (firstHeld held member)
+    intro out
     split
-    · apply PrefixEnsures.bind
-        (remember (show PrefixEnsures _ _ (liftPrefix _) (fun _ => Context base g) from keep _ (linked_lift _))
-          (F := fun h => Buffered base h e) (fun _ t hi => hi.append t))
-      intro _
-      exact PrefixEnsures.pure (fun _ _ hi => hi.1.1) transfer
-    · exact PrefixEnsures.pure (fun _ _ hi => hi.1.1) transfer
+    · exact normalOne_link _ _ _
+    · exact replaceHeld _
+  unfold receive
+  repeat' first
+    | with_reducible exact normalOne_link _ _ _
+    | with_reducible exact appendHeld _
+    | with_reducible exact replaceHeld _
+    | with_reducible exact finishHeld _ (by simp_all only [List.mem_singleton]) _
+    | with_reducible exact stopped _ _
+    | with_reducible exact PrefixEnsures.pure (fun _ _ hi => hi.1.1) (fun _ _ hi => hi)
+    | with_reducible apply PrefixEnsures.bind (Q := fun _ h w => Context base g h w ∧ Buffered base h e)
+    | (with_reducible intro x; try dsimp only)
+    | (with_reducible split <;> try dsimp only)
 
 theorem flushAll_link (g : Gro) :
     PrefixEnsures (Context base g) (Linked base) (flushAll g) (fun _ h _ => Linked base h) := by

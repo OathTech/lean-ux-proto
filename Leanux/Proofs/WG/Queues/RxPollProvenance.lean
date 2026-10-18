@@ -9,10 +9,50 @@ is made by these local occurrence statements. -/
 namespace Leanux.Proofs.WG.Queues
 open Leanux Leanux.WG Leanux.Proofs.Logged
 
+theorem selectWith_perm (held entries : List GroEntry) :
+    (selectWith held entries).Perm (held ++ entries) := by
+  induction entries generalizing held with
+  | nil => simp [selectWith]
+  | cons e rest ih =>
+    have normal (held : List GroEntry) :
+        (e :: selectWith held rest).Perm (held ++ e :: rest) :=
+      ((ih held).cons e).trans List.perm_middle.symm
+    cases hn : groNetwork e.bytes with
+    | none => simpa only [selectWith, hn] using normal held
+    | some net =>
+      rcases net with ⟨off, lengthFlush⟩
+      cases ht : groTcpHeader e.bytes off with
+      | none => simpa only [selectWith, hn, ht] using normal held
+      | some tcp =>
+        rcases tcp with ⟨thlen, len⟩
+        cases held with
+        | nil =>
+          simp only [selectWith, hn, ht]
+          split
+          · exact normal []
+          · exact ih [e]
+        | cons old tail =>
+          cases tail with
+          | nil =>
+            simp only [selectWith, hn, ht]
+            split
+            · split
+              · split
+                · simpa only [List.nil_append, List.cons_append] using ((ih []).cons e).cons old
+                · exact (ih [e]).cons old
+              · exact List.Perm.refl _
+            · split
+              · exact normal [old]
+              · exact List.Perm.refl _
+          | cons next tail =>
+            simp only [selectWith, hn, ht]
+            split
+            · exact normal (old :: next :: tail)
+            · simpa only [List.append_assoc, List.singleton_append] using ih ((old :: next :: tail) ++ [e])
+
 theorem selectedEntries_perm (entries : List GroEntry) :
     (selectedEntries entries).Perm entries := by
-  simpa only [selectedEntries, normalEntries, heldEntries] using
-    List.filter_append_perm (fun e => groTakenAtOnce e.bytes) entries
+  simpa only [selectedEntries, List.nil_append] using selectWith_perm [] entries
 
 theorem callback_tag_properties (h : List GroEvent) (hs : SelectedGroSafe h) (ht : TagSafe h) :
     ((enteredEntries h).map GroEntry.occurrence).Nodup ∧
