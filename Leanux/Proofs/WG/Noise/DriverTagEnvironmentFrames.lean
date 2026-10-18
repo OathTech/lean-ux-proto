@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Index.LifecycleCleanupRuleSource
 import Leanux.Proofs.WG.Index.LifecycleRuleSource
 import Leanux.Proofs.WG.Noise.DriverTagSilentFrames
 import Leanux.Proofs.WG.Noise.DriverTagPeerConfigurationFrames
@@ -134,14 +135,9 @@ theorem envUp_native (entry : TagMap) :
     (fun action same => Silent.product_store entry action same)
     (lift_native entry _ up_native)
 theorem cleanup_native (entry : TagMap) :
-    Preserves (fun w : World => Silent.Retained entry w.wg) Env.netnsCleanup := by
-  unfold Env.netnsCleanup
-  repeat' first
-    | (rx_retention_head Env.runWorker
-       apply TimerDiscipline.runWorker_kernel_contract _ _
-         (fun wg _ _ _ => Silent.Retained entry wg)
-         (fun wg _ _ _ => Silent.Retained entry wg)
-       change Preserves (fun w : World => Silent.Retained entry w.wg) _)
-    | driver_lifecycle_env_step entry
+    Preserves (fun w : World => Silent.Retained entry w.wg) Env.netnsCleanup :=
+  Noise.LifecycleSource.cleanup_preserves _
+    (fun action same=>Silent.product_store entry action same)
+    (lift_native entry _ preexit_native)
 
 end Leanux.Proofs.WG.Noise.DriverTags.Environment

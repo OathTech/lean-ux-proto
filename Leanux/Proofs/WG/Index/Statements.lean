@@ -1,3 +1,12 @@
+import Leanux.Proofs.WG.Index.ReachedInitializedClaims
+import Leanux.Proofs.WG.Index.ReceiveIngressCoreClaims
+import Leanux.Proofs.WG.Index.ReachedOrdinaryControlSource
+import Leanux.Proofs.WG.Index.DataIngressClaims
+import Leanux.Proofs.WG.Index.ReachedDeferredClaims
+import Leanux.Proofs.WG.Index.PollCoreClaims
+import Leanux.Proofs.WG.Index.DumpCoreClaims
+import Leanux.Proofs.WG.Index.WorkerCoreClaims
+import Leanux.Proofs.WG.Index.ReachedSchedulerClaims
 import Leanux.Proofs.WG.Index.TransmitCoreClaims
 import Leanux.Proofs.WG.Index.LifecycleCoreClaims
 import Leanux.Proofs.WG.Index.LifecycleEnvironmentSource
@@ -1575,5 +1584,179 @@ theorem original_lifecycle_destruct_index_core :
     Campaign2.Ensures wgDestruct (fun _ => True)
       (fun _ s => s.wg.device=none ∧ View.IndexCore s) :=
   lifecycle_destruct_index
+
+/-- A complete original NAPI poll preserves current slots and index coherence. Its actual completion excludes the deleted-poll-peer branch. -/
+theorem original_poll_index_core (pid : PeerId) (budget : Nat) :
+    Campaign2.Product.Ensures (rxPoll pid budget (fun packets=>packets.forM Env.deliverInner))
+      (fun s=>View.StagedIndexReady s.toSnapshot) (fun _ s=>View.StagedIndexReady s.toSnapshot) :=
+  rxPoll_index pid budget
+
+/-- The actual NAPI softirq scan preserves the supplied slot and index invariant with original inner delivery. -/
+theorem original_softirq_index_core :
+    Campaign2.Product.Ensures Env.napiSoftirq
+      (fun s=>View.StagedIndexReady s.toSnapshot) (fun _ s=>View.StagedIndexReady s.toSnapshot) :=
+  napiSoftirq_index
+
+/-- The original NAPI IRQ-exit path preserves the supplied slot and index invariant. -/
+theorem original_irq_exit_index_core :
+    Campaign2.Product.Ensures Env.napiIrqExit
+      (fun s=>View.StagedIndexReady s.toSnapshot) (fun _ s=>View.StagedIndexReady s.toSnapshot) :=
+  napiIrqExit_index
+
+/-- The original inline NAPI scan preserves the supplied slot and index invariant. -/
+theorem original_inline_poll_index_core :
+    Campaign2.Product.Ensures Env.pollScheduledInline
+      (fun s=>View.StagedIndexReady s.toSnapshot) (fun _ s=>View.StagedIndexReady s.toSnapshot) :=
+  pollScheduledInline_index
+
+/-- The complete original device dump preserves its actual funded cursor account, slots and index coherence. -/
+theorem original_dump_device_index_core (cs : Queues.RxCredits.Ledger) (loans : Queues.RxCredits.Reservations) (ref : DeviceRef) :
+    Campaign2.Ensures (wgGetDevice ref) (View.ConfigurationInput cs loans)
+      (fun _=>View.ConfigurationInput cs loans) :=
+  dump_device_index cs loans ref
+
+/-- The original dump start preserves its actual supplied account and index invariant, including cursor acquisition and replacement. -/
+theorem original_dump_start_index_core (cs : Queues.RxCredits.Ledger) (loans : Queues.RxCredits.Reservations) (fd : Nat) (ref : DeviceRef) :
+    Campaign2.Ensures (netlinkDumpStart fd ref) (View.ConfigurationInput cs loans)
+      (fun _=>View.ConfigurationInput cs loans) :=
+  dump_start_index cs loans fd ref
+
+/-- The original dump receive preserves its actual supplied account and index invariant through cursor continuation and release. -/
+theorem original_dump_receive_index_core (cs : Queues.RxCredits.Ledger) (loans : Queues.RxCredits.Reservations) (fd : Nat) :
+    Campaign2.Ensures (netlinkRecvmsg fd) (View.ConfigurationInput cs loans)
+      (fun _=>View.ConfigurationInput cs loans) :=
+  dump_receive_index cs loans fd
+
+/-- The original encrypt iteration preserves current slots and index coherence through its concrete NAPI callback and publication. -/
+theorem original_encrypt_iteration_index_core  :
+    Campaign2.Product.Ensures (encryptIter Env.checksumHelp Env.napiSoftirq (Env.condResched .encryptWorker))
+      (fun s=>View.StagedIndexReady s.toSnapshot) (fun _ s=>View.StagedIndexReady s.toSnapshot) :=
+  encrypt_iteration_index
+
+/-- The original recorded timer dispatch preserves current slots and index coherence through detachment and its actual callback. -/
+theorem original_timer_dispatch_index_core (worker : Worker) (pid : PeerId) (timer : PeerTimer) (wheel : WheelEntry) (prior : Option UInt64) :
+    Campaign2.Product.Ensures (Leanux.Proofs.Logged.timerDispatchUnit worker pid timer wheel prior)
+      (fun s=>View.StagedIndexReady s.toSnapshot) (fun _ s=>View.StagedIndexReady s.toSnapshot) :=
+  timer_dispatch_index worker pid timer wheel prior
+
+/-- The original placeholder timer pass preserves current slots and index coherence through every executed callback. -/
+theorem original_placeholder_timers_index_core (j : UInt64) :
+    Campaign2.Product.Ensures (Queues.RxHistory.placeholderTimerPassSource j)
+      (fun s=>View.StagedIndexReady s.toSnapshot) (fun _ s=>View.StagedIndexReady s.toSnapshot) :=
+  timer_placeholder_index j
+
+/-- The complete original scheduler preserves index coherence from its supplied projected accounting cut; all worker and NAPI contracts are discharged. -/
+theorem original_scheduler_index_core (initial : Queues.RxCredits.Ledger) (loans : Queues.RxCredits.Reservations)
+    (before history : List Queues.RxHistory.Event) (stack : Option Worker) :
+    Campaign2.Product.Ensures (Env.schedule stack)
+      (fun s=>View.SchedulerInput initial loans before history s.toSnapshot)
+      (fun _ s=>View.IndexCore s.toSnapshot) :=
+  scheduler_index initial loans before history stack
+
+/-- The original nested scheduler preserves index coherence from its supplied projected accounting cut. -/
+theorem original_nested_scheduler_index_core (initial : Queues.RxCredits.Ledger) (loans : Queues.RxCredits.Reservations)
+    (before history : List Queues.RxHistory.Event) (worker : Worker) :
+    Campaign2.Product.Ensures (Env.nestedResched worker)
+      (fun s=>View.SchedulerInput initial loans before history s.toSnapshot)
+      (fun _ s=>View.IndexCore s.toSnapshot) :=
+  nested_scheduler_index initial loans before history worker
+
+/-- The original TX iteration derives its selected queue loan and preserves index coherence through completion and exact disposal. -/
+theorem original_tx_iteration_index_core (initial : Queues.RxCredits.Ledger) (loans : Queues.RxCredits.Reservations)
+    (before history : List Queues.RxHistory.Event) (pid : PeerId) :
+    Campaign2.Product.Ensures (txIter pid (Env.condResched .txWorker))
+      (fun s=>View.SchedulerInput initial loans before history s.toSnapshot)
+      (fun _ s=>View.IndexCore s.toSnapshot) :=
+  tx_iteration_index initial loans before history pid
+
+/-- The original data-ingress call preserves index coherence. Its own lookup
+and acquisition supply the references used by cleanup, without a queue or
+callback hypothesis. -/
+theorem original_data_ingress_index_core (msg : List UInt8) (src : SkbSource) (ds : Nat) :
+    Campaign2.Ensures (consumeData msg src ds) View.IndexCore (fun _=>View.IndexCore) :=
+  consumeData_indexCore msg src ds
+
+/-- The original data-ingress call also preserves supplied current-slot
+compatibility through acquisition, publication and cleanup. -/
+theorem original_data_ingress_slots_index (msg : List UInt8) (src : SkbSource) (ds : Nat) :
+    Campaign2.Ensures (consumeData msg src ds) View.StagedIndexReady
+      (fun _=>View.StagedIndexReady) :=
+  consumeData_index msg src ds
+
+/-- Every original deferred-worker call preserves index coherence from its
+projected accounting cut, with all worker and timer contracts discharged.
+This is a normal-return claim; it does not assert termination. -/
+theorem original_deferred_index_core (initial : Queues.RxCredits.Ledger)
+    (loans : Queues.RxCredits.Reservations) (before history : List Queues.RxHistory.Event)
+    (call : Lifetimes.EnvDeferredCall) :
+    Campaign2.Product.Ensures call.original
+      (fun s=>View.SchedulerInput initial loans before history s.toSnapshot)
+      (fun _ s=>View.IndexCore s.toSnapshot) :=
+  deferred_index initial loans before history call
+
+/-- The original packet-receive path preserves index coherence through its
+actual header checks, handshake queueing and data admission. -/
+theorem original_packet_receive_index_core (msg : List UInt8) (src : SkbSource) :
+    Campaign2.Ensures (packetReceive msg src) View.IndexCore (fun _=>View.IndexCore) :=
+  packetReceive_index msg src
+
+/-- The original WireGuard receive entry preserves index coherence, including
+its actual socket and header rejection paths, with no callback premise. -/
+theorem original_wg_receive_index_core (msg : List UInt8) (src : SkbSource) :
+    Campaign2.Ensures (wgReceive msg src) View.IndexCore (fun _=>View.IndexCore) :=
+  wgReceive_index msg src
+
+/-- The projected initialized index inspection preserves the original JSON and every indexed Stop. -/
+theorem original_initialized_index_erasure (trace : Runner.Trace) (placeholders : Bool) :
+    (ReachedInitialized.inspection trace placeholders).map Prod.fst=Runner.executeTrace trace placeholders :=
+  ReachedInitialized.inspection_json trace placeholders
+
+/-- Every normal initialized runner endpoint has coherent index rows and its actual retained account. All original syscall and worker obligations are discharged; stopped runs supply no final state. -/
+theorem original_initialized_index_facts (trace : Runner.Trace) (placeholders : Bool) :
+    match ReachedInitialized.inspection trace placeholders with
+    | .error _=>True
+    | .ok (json,final)=>View.IndexCore final.toSnapshot ∧ ReachedInitialized.ActualAccount trace placeholders json final :=
+  ReachedInitialized.inspection_facts trace placeholders
+
+/-- Acceptance by the original runner supplies the exact projected final state, index coherence and residual source-selected account, without an invariant or callback premise. -/
+theorem original_initialized_index_accepted (trace : Runner.Trace) (placeholders : Bool) (json : Lean.Json)
+    (run : Runner.executeTrace trace placeholders=.ok json) :
+    ∃ final,ReachedInitialized.inspection trace placeholders=.ok (json,final) ∧
+      View.IndexCore final.toSnapshot ∧ ReachedInitialized.ActualAccount trace placeholders json final :=
+  ReachedInitialized.accepted trace placeholders json run
+
+/-- Every present final device in a normal initialized execution has unique numeric indices and unique indexed owners, with allocated keypair bounds. -/
+theorem original_initialized_index_tables (trace : Runner.Trace) (placeholders : Bool) (json : Lean.Json)
+    (final : Campaign2.Product.Snapshot)
+    (run : ReachedInitialized.inspection trace placeholders=.ok (json,final))
+    (d : Device) (device : final.wg.device=some d) :
+    UniqueIndices d.indexTable ∧ UniqueOwners d.indexTable ∧ KeypairOwnersBounded d :=
+  ReachedInitialized.normal_tables trace placeholders json final run d device
+
+/-- Every hashed row at a normal initialized endpoint names its resident coherent owner and positive references; ownership is derived from the execution. -/
+theorem original_initialized_hashed_owner (trace : Runner.Trace) (placeholders : Bool) (json : Lean.Json)
+    (final : Campaign2.Product.Snapshot)
+    (run : ReachedInitialized.inspection trace placeholders=.ok (json,final))
+    (d : Device) (device : final.wg.device=some d)
+    (entry : IndexEntry) (member : entry∈d.indexTable) :
+    OwnerCoherent d entry.owner :=
+  ReachedInitialized.normal_hashed_owner trace placeholders json final run d device entry member
+
+/-- Normal initialized execution supplies rotation freshness for every resident peer, without a final-state compatibility premise. -/
+theorem original_initialized_session_slots (trace : Runner.Trace) (placeholders : Bool) (json : Lean.Json)
+    (final : Campaign2.Product.Snapshot)
+    (run : ReachedInitialized.inspection trace placeholders=.ok (json,final))
+    (d : Device) (device : final.wg.device=some d)
+    (pid : PeerId) (peer : Peer) (resident : d.peers[pid]?=some peer) :
+    SessionRotationFresh peer d.nextKeypairId :=
+  ReachedInitialized.normal_session_fresh trace placeholders json final run d device pid peer resident
+
+/-- The actual residual account of every normal initialized execution supplies
+resident peer/key allocation bounds and three-slot compatibility. -/
+theorem original_initialized_index_slot_bounds (trace : Runner.Trace) (placeholders : Bool)
+    (json : Lean.Json) (final : Campaign2.Product.Snapshot)
+    (run : ReachedInitialized.inspection trace placeholders = .ok (json,final)) :
+    InitializedBounds.EndpointSafe final.toSnapshot :=
+  ReachedInitialized.normal_bounds trace placeholders json final run
 
 end Leanux.Proofs.WG.Index

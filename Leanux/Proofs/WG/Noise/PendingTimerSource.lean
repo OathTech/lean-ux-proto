@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Index.TimerProductRulesSource
 import Leanux.Proofs.WG.Noise.PendingTimerFrames
 
 set_option autoImplicit false
@@ -59,34 +60,20 @@ section boundaries and the timerPassStep writes remain the actual calls. -/
 theorem dispatch_pending_variant (worker : Worker) (pid : PeerId) (timer : PeerTimer)
     (entry : WheelEntry) (prior : Option UInt64) (seen : List Nat) :
     Preserves (fun w : World => NativeInv w.wg seen)
-      (timerDispatchUnit worker pid timer entry prior) := by
-  unfold timerDispatchUnit
-  simp (config := {zeta := false}) only [peekUnit]
-  repeat' first
-    | (rx_retention_head Env.runTimerSection
-       exact timer_section _ _ seen (native_product _ (callback_pending_variant _ _) seen))
-    | (allocation_release_lift_from WG.M
-       exact native_product _ (del_native _ _) seen)
-    | pending_timer_product_step seen
+      (timerDispatchUnit worker pid timer entry prior) :=
+  Index.TimerProductRules.dispatch _ (fun {_} action same=>PendingScheduler.product_store action same seen)
+    (fun w a h=>timer_section w a seen h)
+    (fun p t=>native_product _ (callback_pending_variant p t) seen)
+    (fun p t=>native_product _ (del_native p t) seen) worker pid timer entry prior
 
 /-- Variant of CurrentSlots.Timer.placeholder for the existing literal
 placeholder pass. The wheel is read again each iteration; no saved-device
 invariant, new loop bound or work-progress conclusion is supplied. -/
 theorem placeholder_pending_variant (j : UInt64) (seen : List Nat) :
-    Preserves (fun w : World => NativeInv w.wg seen) (RxHistory.placeholderTimerPassSource j) := by
-  unfold RxHistory.placeholderTimerPassSource
-  simp (config := {zeta := false}) only [Std.Legacy.Range.forIn_eq_forIn_range']
-  repeat' first
-    | (rx_retention_head Env.runTimerSection
-       exact timer_section _ _ seen (native_product _ (callback_pending_variant _ _) seen))
-    | (allocation_release_lift_from WG.M
-       first
-       | exact PendingScheduler.product_store _ (liftWG_sameProductStore getDev getDev_sameWGStore) seen
-       | exact native_product _ (del_native _ _) seen)
-    | (rx_retention_head ForIn.forIn
-       apply list_view_spec id (fun w : World => NativeInv w.wg seen)
-       intro _ _
-       change Preserves (fun w : World => NativeInv w.wg seen) _)
-    | pending_timer_product_step seen
+    Preserves (fun w : World => NativeInv w.wg seen) (RxHistory.placeholderTimerPassSource j) :=
+  Index.TimerProductRules.placeholder _ (fun {_} action same=>PendingScheduler.product_store action same seen)
+    (fun w a h=>timer_section w a seen h)
+    (fun p t=>native_product _ (callback_pending_variant p t) seen)
+    (fun p t=>native_product _ (del_native p t) seen) j
 
 end Leanux.Proofs.WG.Noise.PendingTimers

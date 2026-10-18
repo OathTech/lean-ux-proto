@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Index.TimerProductRulesSource
 import Leanux.Proofs.WG.Noise.DriverTagProductSource
 import Leanux.Proofs.WG.Noise.PendingTimerFrames
 set_option autoImplicit false
@@ -54,33 +55,18 @@ theorem dispatch (entry : TagMap)
     (callback : ∀ pid timer, Preserves (fun g => TagsRetained entry (tagView g)) (timerCallback pid timer))
     (del : ∀ pid timer, Preserves (fun g => TagsRetained entry (tagView g)) (delTimer pid timer))
     (worker : Worker) (pid : PeerId) (timer : PeerTimer) (wheel : WheelEntry) (prior : Option UInt64) :
-    Preserves (Retained entry) (timerDispatchUnit worker pid timer wheel prior) := by
-  unfold timerDispatchUnit
-  simp (config := {zeta := false}) only [peekUnit]
-  repeat' first
-    | (rx_retention_head Env.runTimerSection
-       exact timerSection entry _ _ (native entry _ (callback _ _)))
-    | (allocation_release_lift_from WG.M; exact native entry _ (del _ _))
-    | driver_timer_product_step entry
+    Preserves (Retained entry) (timerDispatchUnit worker pid timer wheel prior) :=
+  Index.TimerProductRules.dispatch _ (fun {_}=>stored entry) (timerSection entry)
+    (fun p t=>native entry _ (callback p t)) (fun p t=>native entry _ (del p t))
+    worker pid timer wheel prior
 
 theorem placeholder (entry : TagMap)
     (callback : ∀ pid timer, Preserves (fun g => TagsRetained entry (tagView g)) (timerCallback pid timer))
     (del : ∀ pid timer, Preserves (fun g => TagsRetained entry (tagView g)) (delTimer pid timer))
     (j : UInt64) :
-    Preserves (Retained entry) (RxHistory.placeholderTimerPassSource j) := by
-  unfold RxHistory.placeholderTimerPassSource
-  simp (config := {zeta := false}) only [Std.Legacy.Range.forIn_eq_forIn_range']
-  repeat' first
-    | (rx_retention_head Env.runTimerSection
-       exact timerSection entry _ _ (native entry _ (callback _ _)))
-    | (allocation_release_lift_from WG.M
-       first
-       | exact stored entry _ (liftWG_sameProductStore getDev getDev_sameWGStore)
-       | exact native entry _ (del _ _))
-    | (rx_retention_head ForIn.forIn
-       apply list_view_spec id (Retained entry)
-       intro _ _
-       change Preserves (Retained entry) _)
-    | driver_timer_product_step entry
+    Preserves (Retained entry) (RxHistory.placeholderTimerPassSource j) :=
+  Index.TimerProductRules.placeholder _ (fun {_}=>stored entry) (timerSection entry)
+    (fun p t=>native entry _ (callback p t)) (fun p t=>native entry _ (del p t)) j
+
 end Leanux.Proofs.WG.Noise.DriverTags.TimerProduct
 

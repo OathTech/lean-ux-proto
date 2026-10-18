@@ -194,9 +194,10 @@ theorem timers_preserves (safe : ∀ h w, I h w → S h)
     | tag_deferred_hook contracts
     | deferred_raw_steps safe store
 
-theorem placeholder_preserves (safe : ∀ h w, I h w → S h)
-    (store : ∀ h w v, productStoreView v = productStoreView w → I h w → I h v)
-    (old : {α : Type} → RxHistory.Obs α → PrefixM E α) (atoms : QuietAtoms I S old)
+theorem placeholder_preserves_saved (safe : ∀ h w,I h w→S h)
+    (store : ∀ h w v,productStoreView v=productStoreView w→I h w→I h v)
+    (old : {α : Type}→RxHistory.Obs α→PrefixM E α)
+    (saved : PrefixPreserves I S (old (RxHistory.audit getDevSavedAudit)))
     (hooks : Hooks E) (contracts : HookContracts I S hooks)
     (cryptWork sendWork : PrefixM E Unit)
     (hc : PrefixPreserves I S cryptWork) (hs : PrefixPreserves I S sendWork) (j : UInt64) :
@@ -205,9 +206,18 @@ theorem placeholder_preserves (safe : ∀ h w, I h w → S h)
   repeat' first
     | (scheduler_preserve_at cryptWork; exact hc)
     | (scheduler_preserve_at sendWork; exact hs)
-    | tag_deferred_quiet atoms
+    | (scheduler_preserve_at getDevSavedAudit; exact saved)
     | tag_deferred_hook contracts
     | deferred_raw_steps safe store
+
+theorem placeholder_preserves (safe : ∀ h w, I h w → S h)
+    (store : ∀ h w v, productStoreView v = productStoreView w → I h w → I h v)
+    (old : {α : Type} → RxHistory.Obs α → PrefixM E α) (atoms : QuietAtoms I S old)
+    (hooks : Hooks E) (contracts : HookContracts I S hooks)
+    (cryptWork sendWork : PrefixM E Unit)
+    (hc : PrefixPreserves I S cryptWork) (hs : PrefixPreserves I S sendWork) (j : UInt64) :
+    PrefixPreserves I S (placeholderWith old hooks cryptWork sendWork j) :=
+  placeholder_preserves_saved safe store old atoms.saved hooks contracts cryptWork sendWork hc hs j
 
 theorem deferred_preserves
     (old : {α : Type} → RxHistory.Obs α → PrefixM E α) (atoms : QuietAtoms I S old)
@@ -379,9 +389,10 @@ theorem deferred_erases
 
 /-! The remaining callers reuse C1's definitions verbatim. Their proofs need
 only inert old-atom contracts and the explicit committed callbacks. -/
-theorem afterXmit_preserves (safe : ∀ h w, I h w → S h)
-    (store : ∀ h w v, productStoreView v = productStoreView w → I h w → I h v)
-    (old : {α : Type} → RxHistory.Obs α → PrefixM E α) (atoms : QuietAtoms I S old)
+theorem afterXmit_preserves_drained (safe : ∀ h w,I h w→S h)
+    (store : ∀ h w v,productStoreView v=productStoreView w→I h w→I h v)
+    (old : {α : Type}→RxHistory.Obs α→PrefixM E α)
+    (drained : ∀ what queues,PrefixPreserves I S (old (RxHistory.mixed (requireDrainedPrefix what queues))))
     (cryptWork sendWork : PrefixM E Unit)
     (hc : PrefixPreserves I S cryptWork) (hs : PrefixPreserves I S sendWork) :
     PrefixPreserves I S (RxHistory.DeferredSource.afterXmitWith old cryptWork sendWork) := by
@@ -389,7 +400,32 @@ theorem afterXmit_preserves (safe : ∀ h w, I h w → S h)
   repeat' first
     | (scheduler_preserve_at cryptWork; exact hc)
     | (scheduler_preserve_at sendWork; exact hs)
-    | tag_deferred_quiet atoms
+    | (scheduler_preserve_at requireDrainedPrefix; exact drained _ _)
+    | deferred_raw_steps safe store
+
+theorem afterXmit_preserves (safe : ∀ h w, I h w → S h)
+    (store : ∀ h w v, productStoreView v = productStoreView w → I h w → I h v)
+    (old : {α : Type} → RxHistory.Obs α → PrefixM E α) (atoms : QuietAtoms I S old)
+    (cryptWork sendWork : PrefixM E Unit)
+    (hc : PrefixPreserves I S cryptWork) (hs : PrefixPreserves I S sendWork) :
+    PrefixPreserves I S (RxHistory.DeferredSource.afterXmitWith old cryptWork sendWork) :=
+  afterXmit_preserves_drained safe store old atoms.drained cryptWork sendWork hc hs
+
+theorem idle_preserves_nothingDue (safe : ∀ h w,I h w→S h)
+    (store : ∀ h w v,productStoreView v=productStoreView w→I h w→I h v)
+    (old : {α : Type}→RxHistory.Obs α→PrefixM E α)
+    (nothingDue : ∀ j,PrefixPreserves I S (old (RxHistory.audit (requireNothingDueAudit j))))
+    (timers : UInt64→PrefixM E Bool) (placeholder : UInt64→PrefixM E Unit)
+    (ht : ∀ j,PrefixPreserves I S (timers j)) (hp : ∀ j,PrefixPreserves I S (placeholder j)) :
+    PrefixPreserves I S (RxHistory.DeferredSource.idleWith old timers placeholder) := by
+  unfold RxHistory.DeferredSource.idleWith
+  repeat' first
+    | (scheduler_preserve_at Functor.discard
+       change PrefixPreserves I S (timers _ >>= fun _=>pure ())
+       exact PrefixPreserves.bind (ht _) (fun _=>PrefixPreserves.pure safe ()))
+    | (scheduler_preserve_at timers; exact ht _)
+    | (scheduler_preserve_at placeholder; exact hp _)
+    | (scheduler_preserve_at requireNothingDueAudit; exact nothingDue _)
     | deferred_raw_steps safe store
 
 theorem idle_preserves (safe : ∀ h w, I h w → S h)
@@ -397,13 +433,24 @@ theorem idle_preserves (safe : ∀ h w, I h w → S h)
     (old : {α : Type} → RxHistory.Obs α → PrefixM E α) (atoms : QuietAtoms I S old)
     (timers : UInt64 → PrefixM E Bool) (placeholder : UInt64 → PrefixM E Unit)
     (ht : ∀ j, PrefixPreserves I S (timers j)) (hp : ∀ j, PrefixPreserves I S (placeholder j)) :
-    PrefixPreserves I S (RxHistory.DeferredSource.idleWith old timers placeholder) := by
-  unfold RxHistory.DeferredSource.idleWith
-  simp only [discard, map_const, Function.comp_def, map_eq_pure_bind]
+    PrefixPreserves I S (RxHistory.DeferredSource.idleWith old timers placeholder) :=
+  idle_preserves_nothingDue safe store old atoms.nothingDue timers placeholder ht hp
+
+theorem afterAdvance_preserves_nothingDue (safe : ∀ h w,I h w→S h)
+    (store : ∀ h w v,productStoreView v=productStoreView w→I h w→I h v)
+    (old : {α : Type}→RxHistory.Obs α→PrefixM E α)
+    (nothingDue : ∀ j,PrefixPreserves I S (old (RxHistory.audit (requireNothingDueAudit j))))
+    (timers : UInt64→PrefixM E Bool) (placeholder : UInt64→PrefixM E Unit)
+    (ht : ∀ j,PrefixPreserves I S (timers j)) (hp : ∀ j,PrefixPreserves I S (placeholder j)) :
+    PrefixPreserves I S (RxHistory.DeferredSource.afterAdvanceWith old timers placeholder) := by
+  unfold RxHistory.DeferredSource.afterAdvanceWith
   repeat' first
+    | (scheduler_preserve_at Functor.discard
+       change PrefixPreserves I S (timers _ >>= fun _=>pure ())
+       exact PrefixPreserves.bind (ht _) (fun _=>PrefixPreserves.pure safe ()))
     | (scheduler_preserve_at timers; exact ht _)
     | (scheduler_preserve_at placeholder; exact hp _)
-    | tag_deferred_quiet atoms
+    | (scheduler_preserve_at requireNothingDueAudit; exact nothingDue _)
     | deferred_raw_steps safe store
 
 theorem afterAdvance_preserves (safe : ∀ h w, I h w → S h)
@@ -411,15 +458,8 @@ theorem afterAdvance_preserves (safe : ∀ h w, I h w → S h)
     (old : {α : Type} → RxHistory.Obs α → PrefixM E α) (atoms : QuietAtoms I S old)
     (timers : UInt64 → PrefixM E Bool) (placeholder : UInt64 → PrefixM E Unit)
     (ht : ∀ j, PrefixPreserves I S (timers j)) (hp : ∀ j, PrefixPreserves I S (placeholder j)) :
-    PrefixPreserves I S (RxHistory.DeferredSource.afterAdvanceWith old timers placeholder) := by
-  unfold RxHistory.DeferredSource.afterAdvanceWith
-  simp only [discard, map_const, Function.comp_def, map_eq_pure_bind]
-  repeat' first
-    | (scheduler_preserve_at timers; exact ht _)
-    | (scheduler_preserve_at placeholder; exact hp _)
-    | tag_deferred_quiet atoms
-    | deferred_raw_steps safe store
-
+    PrefixPreserves I S (RxHistory.DeferredSource.afterAdvanceWith old timers placeholder) :=
+  afterAdvance_preserves_nothingDue safe store old atoms.nothingDue timers placeholder ht hp
 
 theorem crypt_erases (schedule : PrefixM E Unit)
     (hs : ErasesPrefix schedule (Env.schedule none)) :

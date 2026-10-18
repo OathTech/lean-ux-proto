@@ -63,32 +63,37 @@ theorem coherent_live {g : WGWorld}
   obtain ⟨pid,p,word,peer,positive,key⟩ := coherent d hd e member
   simpa only [owner] using key
 
-theorem core_handoff {g f : WGWorld} {delta : HandoffDelta}
-    (frame : Frame g f) (step : Handoff g f [] [] delta) (core : Reached.Core g) :
+theorem core_survivors {g f : WGWorld}
+    (frame : Frame g f)
+    (present : ∀ final, f.dev=some final → ∃ d,g.dev=some d)
+    (forward : ∀ (d final : Device) (e : IndexEntry) (pid : PeerId) (p : Peer), g.dev=some d → f.dev=some final →
+      e∈final.indexTable → ownerWord d e.owner=some (some pid) → d.peers[pid]?=some p →
+      0<p.refcount → ∃q,final.peers[pid]?=some q ∧ 0<q.refcount)
+    (core : Reached.Core g) :
     Reached.Core f := by
   intro final after
-  have oldPresent : ∃d, g.dev = some d := by
-    have epoch := congrArg Prod.fst step.base
-    cases hd : g.dev with
-    | none => simp [baseView,after,hd] at epoch
-    | some d => exact ⟨d,rfl⟩
-  obtain ⟨d,before⟩ := oldPresent
+  obtain ⟨d,before⟩ := present final after
   have original := core d before
   have subset : ∀ e ∈ final.indexTable, e ∈ d.indexTable := by
     intro e member
     simpa [table,before] using frame.tables e (by simpa [table,after] using member)
   have live : HashedLive f :=
     frame.live (coherent_live (fun d hd => (core d hd).2.2.1))
-  have survives (pid : PeerId) (p : Peer) (stored : d.peers[pid]? = some p) :
-      ∃ q, final.peers[pid]? = some q ∧ PeerCell q = PeerCell p ∧ p.refcount ≤ q.refcount := by
-    obtain ⟨df,q,present,found,_,_,count⟩ := StagingCredit.handoff_peer step d pid p before stored
-    have eq : df = final := Option.some.inj (present.symm.trans after)
-    subst df
-    exact ⟨q,found,peer_fields frame before after stored found,count⟩
+  have survives (e : IndexEntry) (member : e∈final.indexTable)
+      (pid : PeerId) (p : Peer) (stored : d.peers[pid]?=some p)
+      (word : ownerWord d e.owner=some (some pid)) :
+      ∃q,final.peers[pid]?=some q ∧ PeerCell q=PeerCell p ∧ 0<q.refcount := by
+    obtain ⟨own,old,ownerWordEq,resident,positive,_⟩ := original.2.2.1 e (subset e member)
+    have ownEq : own=pid := Option.some.inj (Option.some.inj (ownerWordEq.symm.trans word))
+    subst own
+    have oldEq : old=p := Option.some.inj (resident.symm.trans stored)
+    subst old
+    obtain ⟨q,found,positiveOut⟩ := forward d final e pid p before after member word stored positive
+    exact ⟨q,found,peer_fields frame before after stored found,positiveOut⟩
   refine ⟨frame.legacy.1 (fun d hd => (core d hd).1) final after,?_,?_,?_⟩
   · intro e member kid owner
     obtain ⟨pid,p,key,stored,keyStored,word,slot⟩ := original.2.1 e (subset e member) kid owner
-    obtain ⟨q,found,fields,_⟩ := survives pid p stored
+    obtain ⟨q,found,fields,_⟩ := survives e member pid p stored (by simp [owner,ownerWord,keyStored,word])
     obtain ⟨k,foundKey,_⟩ := live final after e member kid owner
     have keyFields := key_fields frame before after keyStored foundKey
     have keyWord : k.peer = key.peer := congrArg Prod.fst keyFields
@@ -98,8 +103,8 @@ theorem core_handoff {g f : WGWorld} {delta : HandoffDelta}
     exact ⟨pid,q,k,found,foundKey,keyWord.trans word,slots.symm ▸ slot⟩
   · intro e member
     obtain ⟨pid,p,word,stored,pos,ownerFields⟩ := original.2.2.1 e (subset e member)
-    obtain ⟨q,found,fields,count⟩ := survives pid p stored
-    refine ⟨pid,q,?_,found,by omega,?_⟩
+    obtain ⟨q,found,fields,count⟩ := survives e member pid p stored word
+    refine ⟨pid,q,?_,found,count,?_⟩
     · cases owner : e.owner with
       | handshake own =>
         have self : pid = own := by simpa only [owner] using ownerFields
@@ -130,6 +135,21 @@ theorem core_handoff {g f : WGWorld} {delta : HandoffDelta}
       (congrArg (fun c => c.2.2.2.2.2.2) fields).symm.trans dead
     exact (List.not_mem_nil (original.2.2.2 e (subset e member) kid oldKey pid p
       owner keyOld oldWord peerOld oldDead)).elim
+
+theorem core_handoff {g f : WGWorld} {delta : HandoffDelta}
+    (frame : Frame g f) (step : Handoff g f [] [] delta) (core : Reached.Core g) :
+    Reached.Core f := by
+  apply core_survivors frame ?_ ?_ core
+  · intro final after
+    have epoch := congrArg Prod.fst step.base
+    cases hd : g.dev with
+    | none => simp [baseView,after,hd] at epoch
+    | some d => exact ⟨d,rfl⟩
+  · intro d final e pid p before after member word stored positive
+    obtain ⟨df,q,present,found,_,_,count⟩ := StagingCredit.handoff_peer step d pid p before stored
+    have eq : df=final := Option.some.inj (present.symm.trans after)
+    subst df
+    exact ⟨q,found,by omega⟩
 
 end StagingRich
 

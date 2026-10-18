@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.Index.EncryptRuleSource
+import Leanux.Proofs.WG.Noise.DataCompletionRulesSource
 import Leanux.Proofs.WG.Noise.DriverTagFlushCallerSource
 import Leanux.Proofs.WG.Noise.DriverTagControlFrames
 import Leanux.Proofs.WG.Noise.DriverTagConfigurationFrames
@@ -218,23 +220,13 @@ theorem traversal_frame (pid : PeerId) : SameView tagView (timersTraversal pid) 
   exact ResponseSuffix.traversal_tag_frame pid g.dev g ambient result final after rfl run
 
 theorem completion_retained (entry : TagMap) (pid : PeerId) (item : List SkbId) :
-    Preserves (Retained entry) (createDataDone pid item) := by
-  rw [← TimerDiscipline.dataDoneSource_eq]
-  unfold TimerDiscipline.dataDoneSource TimerDiscipline.dataDoneStep TimerDiscipline.dataDoneFinish WG.andM
-  simp (config := {zeta := false}) only [branch]
-  repeat' first
-    | (rx_retention_head timersTraversal; exact of_frame entry _ (traversal_frame _))
-    | (rx_retention_head timersAnyAuthenticatedPacketSent; exact delTimer entry _ .sendKeepalive)
-    | (rx_retention_head sendSkbToPeer; exact sendSkb_retained entry _ _ _)
-    | (rx_retention_head timersDataSent; exact of_frame entry _ (timersDataSent_frame _))
-    | (rx_retention_head keepKeyFresh; exact fresh_retained entry _)
-    | (allocation_release_lift_from SkbM; exact of_frame entry _ (packet_frame _))
-    | (rx_retention_head getTxSkb; exact of_frame entry _ (packet_frame (SkbStore.getTx _)))
-    | (rx_retention_head ForIn.forIn
-       apply list_view_spec id (Retained entry)
-       intro x acc
-       change Preserves (Retained entry) _)
-    | silent_native_step entry
+    Preserves (Retained entry) (createDataDone pid item) :=
+  DataCompletionRules.preserves _ pid item
+    (DriverTags.Silent.of_frame entry _ (DriverTags.Silent.traversal_frame pid))
+    (DriverTags.Silent.delTimer entry pid .sendKeepalive)
+    (DriverTags.Silent.sendSkb_retained entry pid)
+    (DriverTags.Silent.of_frame entry _ (DriverTags.Silent.timersDataSent_frame pid))
+    (DriverTags.Silent.fresh_retained entry pid)
 
 theorem txStep_retained (entry : TagMap) (pid : PeerId) :
     Preserves (Retained entry) (txStep pid) := by
@@ -343,7 +335,7 @@ theorem encryptPacket_retained (entry : TagMap) (key : KeypairId) (packet : Data
     (checksumHelp_sameWorld p).wp P
   have read : Preserves P (monadLift (getKeypair key) : Leanux.M Keypair) :=
     PublicationPoll.native_product (Retained entry) _ (of_frame entry _ (getKeypair_frame key))
-  routing_tx_source [encryptPacket] using [padding,checksum,read,ambient]
+  exact Index.EncryptCore.packet_preserves_source P key packet padding checksum read ambient
 
 theorem encryptTail_retained (entry : TagMap) (item : Option (List SkbId)) :
     Preserves (fun w : World => Retained entry w.wg) (RxWorkers.encryptTailSource item) := by
@@ -360,11 +352,9 @@ theorem encryptTail_retained (entry : TagMap) (item : Option (List SkbId)) :
     PublicationPoll.native_product (Retained entry) _ (enqueue_retained entry xs state)
   have packet (key : KeypairId) (pkt : DataPacket) :
       Preserves P (encryptPacket Env.checksumHelp key pkt) := encryptPacket_retained entry key pkt
-  have step : Preserves P (RxWorkers.encryptStepTailSource item) := by
-    routing_tx_source [RxWorkers.encryptStepTailSource] using [read,write,enqueue,packet,ambient]
   have need : Preserves P (Env.condResched .encryptWorker) :=
     product_store entry _ (condResched_sameKernel _)
-  routing_tx_source [RxWorkers.encryptTailSource,workerIter] using [step,need,ambient]
+  exact Index.EncryptCore.tail_preserves_source P item read write enqueue packet need ambient
 
 theorem txIter_retained (entry : TagMap) (pid : PeerId) (need : Leanux.M Bool)
     (next : Preserves (fun w : World => Retained entry w.wg) need) :
