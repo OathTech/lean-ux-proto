@@ -349,13 +349,19 @@ a `gro_hash` chain (`GRO_HELD`) until `napi_complete_done`, which flushes
 the chains (`napi_gro_flush` → `napi_gro_complete` → `gro_normal_one`,
 dev.c:6385) and then the list (`gro_normal_list`, dev.c:6388). UDP is taken
 at once (`udp_gro_receive` flushes without a GRO socket, udp_offload.c); a
-lone TCP segment is taken at once iff one of URG, PSH, RST, SYN or FIN is
-set (`tcp_gro_receive`'s `out_check_final`: mss 1 for a lone segment, so
-only the flags decide), else held; every other protocol has no
-`gro_receive` and is taken at once (`inet_gro_receive`'s initial `flush =
-1`). A second held segment in one poll would coalesce (same flow,
-`skb_gro_receive`) or flush in hash-bucket order (different flows):
-outside the domain, fail-noisy. The state lives on the NAPI struct but is
+lone TCP segment is taken at once iff its payload is empty (`len < mss`
+with mss 1 for a lone segment, tcp_offload.c:318, :379) or one of URG,
+PSH, RST, SYN or FIN is set (:381-383), else held; every other protocol
+has no holding `gro_receive` and is taken at once (`inet_gro_receive`'s
+initial `flush = 1`). A second segment of the held one's flow is either
+merged (coalescing, outside the domain, fail-noisy) or refused, in which
+case the held one is completed to the normal list before the new one is
+judged on its own (tcp_offload.c:385-386, gro.c:546-556); a second held
+segment of another flow would flush in hash-bucket order: outside the
+domain, fail-noisy. These rules follow the C by reading: on this fixture a
+poll sees one packet (the W5+W6 design's P9), so the differential check
+cannot reach the paths that distinguish them (the traces
+w6_gro_pure_ack_batch and w6_gro_same_flow_flush, 2026-10-17). The state lives on the NAPI struct but is
 empty between polls: `napi_complete_done` flushes all of it, and the
 repoll arm that would carry it over is `unsupported`. None of these files
 is anchored, so this is plain mirror control flow. (The receive
@@ -384,29 +390,165 @@ def groNormalOne [Monad m] [MonadLiftT WG.M m] [MonadLiftT AmbientM m] (toStack 
   let gro := { gro with rxList := gro.rxList ++ [pkt], rxCount := gro.rxCount + segs }
   if gro.rxCount ≥ GRO_NORMAL_BATCH then groNormalList toStack gro else return gro
 
-/-- Whether dev_gro_receive takes the packet to `normal` at once: everything
-    but a lone TCP segment without URG, PSH, RST, SYN or FIN. IPv4 is TCP at
-    offset 20 when the header is a plain `0x45` (inet_gro_receive takes any
-    other first byte at once) with protocol 6; IPv6 when the next header is
-    6 (ipv6_gro_receive, offset 40). -/
-def groTakenAtOnce (pkt : List UInt8) : Bool :=
+/-- The IPv4 header checksum over its 20 bytes (ip_fast_csum, af_inet.c:1506):
+    the ones' complement sum folds to 0xffff when the header is intact. -/
+def ipv4HeaderChecksumOk (pkt : List UInt8) : Bool :=
   let byte (i : Nat) : Nat := (pkt.getD i 0).toNat
-  let version := byte 0 / 16
-  let tcpAt : Option Nat :=
-    if version == 4 && byte 0 == 0x45 && byte 9 == 6 then some 20
-    else if version == 6 && byte 6 == 6 then some 40
-    else none
-  match tcpAt with
-  | none => true
-  | some off => (byte (off + 13) &&& 0x2f) != 0   -- FIN 1, SYN 2, RST 4, PSH 8, URG 32
+  let sum := (List.range 10).foldl (fun acc k => acc + byte (2 * k) * 256 + byte (2 * k + 1)) 0
+  let fold := (sum &&& 0xffff) + (sum >>> 16)
+  let fold := (fold &&& 0xffff) + (fold >>> 16)
+  fold == 0xffff
 
-/-- napi_gro_receive (gro.c): `GRO_NORMAL` at once, or `GRO_HELD`. -/
-def napiGroReceive [Monad m] [MonadLiftT WG.M m] [MonadLiftT AmbientM m] (toStack : List (List UInt8) → m Unit) (gro : GroState) (pkt : List UInt8) : m GroState := do
-  if groTakenAtOnce pkt then groNormalOne toStack gro pkt 1
+/-- The network layer's GRO receive on an inner packet (inet_gro_receive,
+    af_inet.c:1494-1510; ipv6_gro_receive, ip6_offload.c:243-257): `none`
+    when it takes the packet at once (`goto out` with `flush` 1: a protocol
+    without a holding `gro_receive`, UDP's flushing without a GRO socket,
+    udp_offload.c; an IPv4 header that is not a plain `0x45`, :1500; a
+    fragment, :1503; a bad header checksum, :1506; an IPv6 next header that
+    is not TCP, the extension-header pull being beyond the domain), else
+    `some (off, lengthFlush)`: the transport offset tcp_gro_receive runs at,
+    and the layer's own flush bit, the IPv4 total length against the packet
+    (:1510) or the IPv6 payload length against it (ip6_offload.c:243),
+    OR-ed into the packet's flush at :1532 and :297. -/
+def groNetwork (pkt : List UInt8) : Option (Nat × Bool) :=
+  let byte (i : Nat) : Nat := (pkt.getD i 0).toNat
+  let word16 (i : Nat) : Nat := byte i * 256 + byte (i + 1)
+  if byte 0 == 0x45 then
+    if (word16 6 &&& 0x3fff) != 0 then none                 -- :1503 ip_is_fragment
+    else if !ipv4HeaderChecksumOk pkt then none             -- :1506
+    else if byte 9 != 6 then none                           -- :1496-1498, TCP is the holding protocol
+    else some (20, word16 2 != pkt.length)                  -- :1510
+  else if byte 0 / 16 == 6 then
+    if byte 6 != 6 then none                                -- :247-252 (an extension header: beyond the domain)
+    else some (40, word16 4 != pkt.length - 40)             -- :243
+  else none
+
+/-- The TCP header GRO pulls (tcp_gro_pull_header, tcp_offload.c:282-306):
+    `some (thlen, len)`, the header length and the payload length
+    `skb_gro_len` leaves after the pull, or `none` when the header is short
+    (:294-295) or the packet shorter than it (:289-291): tcp4_gro_receive
+    then flushes the packet (`goto flush`), taken at once. -/
+def groTcpHeader (pkt : List UInt8) (off : Nat) : Option (Nat × Nat) :=
+  let byte (i : Nat) : Nat := (pkt.getD i 0).toNat
+  let thlen := (byte (off + 12) / 16) * 4
+  if thlen < 20 || pkt.length < off + thlen then none
+  else some (thlen, pkt.length - off - thlen)
+
+/-- The 32-bit word at `i` (big-endian). -/
+def groWord32 (pkt : List UInt8) (i : Nat) : Nat :=
+  let byte (j : Nat) : Nat := (pkt.getD j 0).toNat
+  ((byte i * 256 + byte (i + 1)) * 256 + byte (i + 2)) * 256 + byte (i + 3)
+
+/-- tcp_gro_receive's final flush for a segment GRO did not merge
+    (`out_check_final`, tcp_offload.c:374-383, with `mss` 1: the lone
+    segment's initial value at :318, or the reset at :362/:368 after a
+    refused merge): `len < mss`, so a zero-payload segment flushes (:379),
+    and any of URG, PSH, RST, SYN or FIN (:381-383: FIN 1, SYN 2, RST 4,
+    PSH 8, URG 32 in the flag byte). -/
+def groFinalFlush (flags : Nat) (len : Nat) : Bool :=
+  len < 1 || (flags &&& 0x2f) != 0
+
+/-- Whether a held segment and a new one are one flow for GRO: every held
+    packet passes gro_list_prepare's tests here (gro.c:362-402: the same
+    device, no VLAN, no MAC header on wg0, the raw hash the outer datagram
+    gave both), so the flow is decided by the network layer (af_inet.c:
+    1524-1528: protocol, source and destination; ip6_offload.c:282-289: the
+    first word less the traffic class, source, destination, next header)
+    and by tcp_gro_lookup's port word (tcp_offload.c:271). -/
+def groSameFlow (held new : List UInt8) (off : Nat) : Bool :=
+  let hb (i : Nat) : Nat := (held.getD i 0).toNat
+  let nb (i : Nat) : Nat := (new.getD i 0).toNat
+  let same (lo hi : Nat) : Bool := (List.range (hi - lo)).all fun k => hb (lo + k) == nb (lo + k)
+  let network :=
+    if off == 20 then hb 9 == nb 9 && same 12 20
+    else (groWord32 held 0 &&& 0xF00FFFFF) == (groWord32 new 0 &&& 0xF00FFFFF) && same 8 40 && hb 6 == nb 6
+  network && same off (off + 4)
+
+/-- gro_receive_network_flush on the two headers (include/net/gro.h:496-508,
+    447-481): IPv4's inet_gro_flush, every field but length and checksum
+    equal (:458: TTL, TOS, DF) and the id rule with the held packet's count 1
+    (:467-470: a fixed id under DF, else an id advancing by one); IPv6's
+    ipv6_gro_flush (:473-481): the traffic class and the hop limit. -/
+def groNetworkFlush (held new : List UInt8) (off : Nat) : Bool :=
+  let hb (i : Nat) : Nat := (held.getD i 0).toNat
+  let nb (i : Nat) : Nat := (new.getD i 0).toNat
+  let w16 (p : List UInt8) (i : Nat) : Nat := (p.getD i 0).toNat * 256 + (p.getD (i + 1) 0).toNat
+  if off == 20 then
+    let df := w16 new 6 &&& 0x4000
+    let df2 := w16 held 6 &&& 0x4000
+    if hb 8 != nb 8 || hb 1 != nb 1 || df != df2 then true
+    else
+      let ipidOffset := (w16 new 4 + 65536 - w16 held 4) % 65536
+      let fixedId := df != 0 && ipidOffset == 0
+      (ipidOffset ^^^ (if fixedId then 0 else 1)) != 0
   else
-    if !gro.held.isEmpty then
-      unsupported "GRO holds a second TCP segment in one poll (coalescing, or the hash buckets' flush order)"
-    return { gro with held := gro.held ++ [pkt] }
+    ((groWord32 held 0 ^^^ groWord32 new 0) &&& 0x0FF00000) != 0 || hb 7 != nb 7
+
+/-- tcp_gro_receive's merge test for a new segment against a held one of
+    its flow (tcp_offload.c:330-352): `true` when the C refuses the merge
+    (`flush`), so the held segment is completed and the new one judged on
+    its own; `false` when skb_gro_receive would coalesce them. CWR set
+    (:330); the flag word differing beyond CWR, FIN and PSH (:331-332, the
+    word at offset 12: data offset, reserved bits, flags and window); the
+    acknowledgement number (:333); the options (:334-336); the network
+    headers (:338); the held segment's `gso_size`, its payload length
+    (gro.c:568), against `len - 1` (:349); the sequence continuity (:351).
+    `skb_cmp_decrypted` (:352) is 0 here. -/
+def groMergeRefused (held new : List UInt8) (off thlen len : Nat) : Bool :=
+  let hb (i : Nat) : Nat := (held.getD i 0).toNat
+  let nb (i : Nat) : Nat := (new.getD i 0).toNat
+  let flagsNew := groWord32 new (off + 12)
+  let flagsHeld := groWord32 held (off + 12)
+  let mask : Nat := 0xffffffff ^^^ ((0x80 ||| 0x01 ||| 0x08) <<< 16)   -- ~(CWR | FIN | PSH) on the big-endian word
+  let heldThlen := (hb (off + 12) / 16) * 4
+  let heldLen := held.length - off - heldThlen
+  let options := (List.range (thlen - 20)).any fun k => nb (off + 20 + k) != hb (off + 20 + k)
+  (nb (off + 13) &&& 0x80) != 0                                   -- :330 CWR
+  || ((flagsNew ^^^ flagsHeld) &&& mask) != 0                      -- :331-332
+  || groWord32 new (off + 8) != groWord32 held (off + 8)           -- :333 ack_seq
+  || options                                                       -- :334-336
+  || groNetworkFlush held new off                                  -- :338
+  || (len == 0 || len - 1 >= heldLen)                              -- :349 (len - 1 unsigned)
+  || (groWord32 held (off + 4) + heldLen) % 4294967296 != groWord32 new (off + 4)   -- :351
+
+/-- napi_gro_receive (gro.c, dev_gro_receive:480-585): the packet goes to
+    `normal` at once, is held, or completes a held segment of its flow
+    first. The network layer takes it at once or hands it to
+    tcp_gro_receive (`groNetwork`); a short TCP header flushes it
+    (`groTcpHeader`). With no held segment of its flow (tcp_gro_lookup,
+    :325-327), the final flush decides (`groFinalFlush`: a zero-payload
+    segment or a flag). With a held segment of its flow: a refused merge
+    (`groMergeRefused`) makes `pp = p` (:385-386, `same_flow` stays 0 since
+    skb_gro_receive did not run), so dev_gro_receive completes the held
+    segment to the normal list first (:546-550, napi_gro_complete →
+    gro_normal_one) and the new segment then goes to `normal` on its own
+    final flush (:555) or is held in its place (:558-570); a merge would
+    coalesce the two (skb_gro_receive), outside the domain, fail-noisy. A
+    second held segment of another flow would be flushed in hash-bucket
+    order at completion: outside the domain, fail-noisy, as before. -/
+def napiGroReceive [Monad m] [MonadLiftT WG.M m] [MonadLiftT AmbientM m] (toStack : List (List UInt8) → m Unit) (gro : GroState) (pkt : List UInt8) : m GroState := do
+  match groNetwork pkt with
+  | none => groNormalOne toStack gro pkt 1
+  | some (off, lengthFlush) =>
+    match groTcpHeader pkt off with
+    | none => groNormalOne toStack gro pkt 1   -- tcp4_gro_receive's `goto flush`
+    | some (thlen, len) =>
+      let flags := (pkt.getD (off + 13) 0).toNat
+      match gro.held with
+      | [held] =>
+        if groSameFlow held pkt off then
+          if !groMergeRefused held pkt off thlen len then
+            unsupported "GRO coalesces two segments of one flow in one poll (skb_gro_receive)"
+          -- `pp = p`: the held segment completed first (gro.c:546-550)
+          let gro ← groNormalOne toStack { gro with held := [] } held 1
+          if lengthFlush || groFinalFlush flags len then groNormalOne toStack gro pkt 1
+          else return { gro with held := [pkt] }
+        else
+          if lengthFlush || groFinalFlush flags len then groNormalOne toStack gro pkt 1
+          else unsupported "GRO holds a second TCP segment in one poll (the hash buckets' flush order)"
+      | _ =>
+        if lengthFlush || groFinalFlush flags len then groNormalOne toStack gro pkt 1
+        else return { gro with held := gro.held ++ [pkt] }
 
 /-- napi_complete_done's flushes (dev.c:6385-6388): the held chains through
     `napi_gro_complete` (`gro_normal_one` with the segment count, 1), then
