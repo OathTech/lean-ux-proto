@@ -17,11 +17,11 @@ from layouts import layouts
 from pin import verify_pin
 
 
-def prepare(check, out):
+def prepare(check, out, name='wg_index_hashtable_remove', operation=4):
     verify_pin(ROOT)
     report = json.loads((check / 'report.json').read_text())
     if report['status'] != 'pass' or report['traces'] != 1:
-        raise ValueError('requires one passing removal-profile recording')
+        raise ValueError('requires one passing mutator-profile recording')
     expected = [s.strip() for s in (ROOT / 'kernel/identity-x86_64-net-choice.txt').read_text().splitlines()
                 if s.strip() and not s.startswith('#')][-1]
     if hashlib.sha256(ORACLE.read_bytes()).hexdigest() != expected:
@@ -32,13 +32,19 @@ def prepare(check, out):
         raise ValueError('wrong removal workload')
     services = {'__sanitizer_cov_trace_pc', '__local_bh_enable_ip'}
     functions = extract(ORACLE, services)
-    [anchor] = [f for f in functions if f['name'] == 'wg_index_hashtable_remove']
-    if anchor['entry'] != 0xffffffff813a0400:
-        raise ValueError('removal entry differs from the pinned Lean definition')
-    stores = [i for i in anchor['instructions'] if i['pc'] - anchor['entry'] in (0x24, 0x28, 0x40)]
-    if [(i['pc'] - anchor['entry'], bytes.fromhex(i['bytes']).hex()) for i in stores] != [
-            (0x24, '4c8b6308'), (0x28, '4c896500'), (0x40, '48c7431000000000')]:
-        raise ValueError('fresh symbolic removal regions differ from image bytes')
+    [anchor] = [f for f in functions if f['name'] == name]
+    if name == 'wg_index_hashtable_remove':
+        if anchor['entry'] != 0xffffffff813a0400:
+            raise ValueError('removal entry differs from the pinned Lean definition')
+        stores = [i for i in anchor['instructions'] if i['pc'] - anchor['entry'] in (0x24, 0x28, 0x40)]
+        if [(i['pc'] - anchor['entry'], bytes.fromhex(i['bytes']).hex()) for i in stores] != [
+                (0x24, '4c8b6308'), (0x28, '4c896500'), (0x40, '48c7431000000000')]:
+            raise ValueError('fresh symbolic removal regions differ from image bytes')
+    elif name == 'wg_index_hashtable_replace':
+        if anchor['entry'] != 0xffffffff813a0350 or len(anchor['instructions']) != 41:
+            raise ValueError('replacement anchor differs from the pinned image')
+    else:
+        raise ValueError('unknown mutator anchor')
     provenance = json.loads((chunk / 'linux/provenance.json').read_text())
     if provenance['binary_coverage_ranges'] != [dict(symbol=anchor['name'], lo=anchor['entry'],
                                                     hi=anchor['entry'] + anchor['size'])]:
@@ -72,7 +78,7 @@ def prepare(check, out):
     out.mkdir(parents=True, exist_ok=True)
     path = out / 'input.json'
     path.write_text(json.dumps(dict(instructions=instructions, labels=list(labels.items()), hooks=hooks,
-                                   offsets=offsets, preempt=preempt, trace=trace, operation=4, query=0)) + '\n')
+                                   offsets=offsets, preempt=preempt, trace=trace, operation=operation, query=0)) + '\n')
     return path, chunk
 
 

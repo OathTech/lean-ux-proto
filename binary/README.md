@@ -436,8 +436,15 @@ adds `PairUnlinkReconstruct` and `PairUnlinkOwnership`. They prove that the
 combined concrete unlink stores restore the same executable reconstruction
 and owner flags, deriving the list shape from successful decoding. Removal's
 runner now checks the immutable storage separation used by these proofs.
-The complete anchored removal theorem is still open; these memory-effect
-lemmas do not establish whole-call instruction coverage.
+`PairRemoveAdequacy.remove_checked` now composes the complete anchored
+removal from the executable entry check, with ABI/callback readiness and a
+physical frame. `PairRemoveEnvironment` exposes the sequential environment
+and permission hypotheses. `PairRemoveWitness` proves linked/unhashed Pre
+witnesses and specializes the execution theorem; `binary-pair-remove-witness`
+executes their concrete states through return and repeated removal. Replacement
+reconstruction and its paired runner are available; complete replacement and
+actual captured mutator replay remain open. See the increment report for
+commands, timing and the external export-based gate status.
 
 For runtime diagnosis, `binary-pair-buffer-cost` uses a **generated variation**
 of an allowed-IPs capture with a smaller KCOV allocation and changed capacity

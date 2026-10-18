@@ -88,6 +88,15 @@ theorem reconstruct_components {n o m state}
 #print axioms reconstruct_normal
 #print axioms reconstruct_components
 
+theorem reconstruct_of_components {n o m state}
+    (validation : n.validate o=.ok ())
+    (buckets : (List.range 8192).mapM (decodeBucket n o m)=.ok state.buckets.toList)
+    (owners : decodeOwners n o m=.ok state.ownerWords)
+    (counts : decodeCounts n o m=.ok state.refcounts) : reconstruct n o m=.ok state := by
+  rw [reconstruct_normal,validation,buckets,owners,counts]
+  cases state
+  rfl
+
 /-- Lift local bucket effects while framing all owner words and counts. -/
 theorem reconstruct_map_buckets (n : Names) (o : Offsets) (before after : DataMem)
     (f : List IndexEntry → List IndexEntry)

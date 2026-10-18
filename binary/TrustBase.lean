@@ -1,5 +1,6 @@
 import FiniteExecution
 import Image
+import IndexMutatorImage
 import AllowedipsImage
 import ServiceImage
 import Memory
@@ -46,6 +47,11 @@ def pinnedFetch (pc : Int64) : Option Decoded :=
     Interpreting those literals as this ELF is the external decoding assumption. -/
 def AnchoredDecoderAgreement (fetch : Int64 → Option Decoded) : Prop :=
   ∀ pc instruction, Image.fetch pc = some instruction → fetch pc = some instruction
+
+/-- Sequential paired removal uses the same pinned ELF interpretation, with
+its separately generated literal instruction range. -/
+def IndexRemoveDecoderAgreement (fetch : Int64 → Option Decoded) : Prop :=
+  ∀ pc instruction, IndexMutatorImage.Remove.fetch pc = some instruction → fetch pc = some instruction
 
 /-- External paging/access permissions, absent from Kraken MachineState. -/
 structure Permissions where
@@ -112,6 +118,15 @@ def Returned (entry final : MachineState) (returnAddress : UInt64) : Prop :=
   final.data.regs.r13 = entry.data.regs.r13 ∧
   final.data.regs.r14 = entry.data.regs.r14 ∧
   final.data.regs.r15 = entry.data.regs.r15
+
+/-- External access safety for actual finite histories completing this ABI
+call, including service interiors. It asserts no run exists, no source
+result, and no reconstruction. The unexecuted caller continuation is omitted.
+This form also covers a function that tail-calls its returning service. -/
+def ReturningCallPermissions (fetch : Int64 → Option Decoded) (permissions : Permissions)
+    (initial : MachineState) (returnAddress : UInt64) : Prop :=
+  ∀ history final, ActualHistory fetch initial history → history.getLast?=some final →
+    Returned initial final returnAddress → RunAccessAllowed fetch permissions history
 
 /-- Service internals emit no anchored observation or cut. The final state
     may return to an anchored address; it is deliberately not excluded. -/

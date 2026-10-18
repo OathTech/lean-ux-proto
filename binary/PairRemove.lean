@@ -1,5 +1,6 @@
 import PairIndex
 import PairIndexStorage
+import PairIndexCallCheck
 
 namespace Binary.Pair.Remove
 open Lean Leanux Leanux.WG
@@ -24,6 +25,15 @@ def assertAt (n : Names) (o : Offsets) (m : DataMem) (w : World) : Except String
   let actual ← (ownership n o m).mapError DecodeError.message
   unless actual == targetOwnership d do throw "remove: owner hashed state differs"
 
+/-- The complete entry assertion is shared by execution and the proof. -/
+def callBoundary (n : Names) (o : Offsets) (c : CommonBitsCoverage.Context)
+    (s : MachineState) (w : World) (owner : IndexOwner) (ra : UInt64) : Except String Unit := do
+  assertAt n o s.data.dmem w
+  let address ← addressOf n owner
+  unless s.pc.toBitVec.toNat==entry && s.data.regs.rsi.toNat==address do
+    throw "remove.call.entry-arguments"
+  Index.callFrameCheck n o c s ra 4
+
 /-- Only constructed fixtures fill the otherwise unmapped unlinked fields.
 The removal itself retains memory, including across repeated invocations. -/
 def fixture (input : ProbeInput) (w : World) : Except String Session := do
@@ -45,9 +55,15 @@ def invoke (input : ProbeInput) (seed : UInt64) (s : Session) (owner : IndexOwne
   let initial : MachineState := ⟨{dmem := memory,regs := {
     rdi := .ofNat s.names.table,rsi := .ofNat a,rsp := .ofNat stackAddr,
     rbx := 17,rbp := 34,r12 := 51,r13 := 68,r14 := 85,r15 := 102}},.ofNat entry⟩
+  let context ← Index.readContext initial.data.dmem
+  if checkOwnership then callBoundary s.names input.offsets context initial s.world owner (.ofNat stopAddr)
+  else Index.callFrameCheck s.names input.offsets context initial (.ofNat stopAddr) 4
   let prior := {s.binary with state := initial,history := #[initial],pcs := #[],reads := #[],writes := #[]}
   let r ← runUntil input.instructions input.labels input.hooks input.preempt initial seed true
     10000 0 #[] (some prior) stopAddr (some #[])
+    (some fun s => match TrustBase.KcovPlan .pc s with
+      | none => .error "remove coverage callback inputs are missing"
+      | some writes => .ok (!writes.isEmpty))
   let (_,world) ← (indexRemove owner).run s.world |>.mapError Stop.message
   if checkOwnership then assertAt s.names input.offsets r.state.data.dmem world
   else assertMemory s.names input.offsets r.state.data.dmem world

@@ -138,4 +138,23 @@ theorem Chain.neighbor_addresses
 #print axioms Chain.back_origin
 #print axioms Chain.forward_to
 #print axioms Chain.back_from
+
+theorem Chain.next_ne_self {n o m b root nodes link previous next entry}
+    (shape : Chain n o m b root nodes) (member : (link,entry) ∈ nodes)
+    (fields : NodeFields n o m b link previous next entry) : next≠link := by
+  induction shape generalizing link previous next entry with
+  | nil => cases member
+  | @cons root first current rest firstFields tail ih =>
+    rcases List.mem_cons.mp member with equal | member
+    · cases equal
+      intro same
+      have atHead : head rest=first := (word_values firstFields.forward fields.forward).trans same
+      cases tail with
+      | nil => exact fields.nonzero atHead.symm
+      | @cons nextRoot second secondEntry remaining secondFields remainingShape =>
+        change second=first at atHead
+        subst second
+        have value := word_values secondFields.forward fields.forward
+        exact ih (by simp) secondFields (value.trans same)
+    · exact ih member fields
 end Binary.Pair.Index

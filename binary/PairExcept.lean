@@ -17,6 +17,14 @@ theorem check_ok (p : Bool) (error : ε) (rest : Except ε α) (value : α)
   | false => cases ok
   | true => exact ⟨rfl,ok⟩
 
+theorem check_of (p : Bool) (error : ε) (rest : Except ε α) (value : α)
+    (checked : p=true) (run : rest=.ok value) :
+    ((do
+      unless p do throw error
+      rest) : Except ε α)=.ok value := by
+  rw [checked]
+  exact run
+
 theorem mapError_ok {x : Except ε α} {f : ε → ε'} {value : α}
     (ok : x.mapError f = .ok value) : x = .ok value := by
   cases x with
