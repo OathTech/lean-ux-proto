@@ -31,4 +31,3 @@ theorem consumption_final_remotes (trace : Runner.Trace) (placeholders : Bool)
 
 
 end Leanux.Proofs.WG.Roaming
-

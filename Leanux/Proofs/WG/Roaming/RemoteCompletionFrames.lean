@@ -91,4 +91,3 @@ theorem afterConfirmation_retained (entry : RemoteMap) (pid : PeerId) (pkt : RxP
 
 
 end Leanux.Proofs.WG.Roaming.RemoteCompletion
-

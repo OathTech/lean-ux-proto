@@ -16,4 +16,3 @@ def ConsumptionFinalRemotes (q : Record) : Prop :=
 
 
 end Leanux.Proofs.WG.Roaming
-

@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Noise.SendSkbRulesSource
 import Leanux.Proofs.WG.Index.TxSelectionFrames
 import Leanux.Proofs.WG.Noise.DataCompletionRulesSource
 
@@ -21,31 +22,16 @@ theorem socket_core {α : Type} (action : WG.M α) (pid : PeerId)
   exact tablesSafe_of_cursor w v (congrArg Prod.fst frame) pre
 
 theorem sendSkb_core (pid : PeerId) (bytes : List UInt8) (ds : Nat) :
-    Preserves Reached.Core (sendSkbToPeer pid bytes ds) := by
-  have count (ret : Bool) : Preserves Reached.Core (do
-      let p ← getPeer pid
-      setPeer pid {p with txBytes:=p.txBytes+bytes.length}
-      pure ret) := by
-    have update := ConfigurationIndex.frame_core (ConfigurationIndex.modifyPeer_fields pid
-      (fun p=>{p with txBytes:=p.txBytes+bytes.length}) (fun _=>rfl))
-    change Preserves Reached.Core (do let p ← getPeer pid; setPeer pid {p with txBytes:=p.txBytes+bytes.length}) at update
-    simpa only [bind_assoc] using preserves_bind update
-      (fun _=>(preserves_pure ret : Preserves Reached.Core (pure ret : WG.M Bool)))
-  have read : Preserves Reached.Core (getPeer pid) := by
-    apply (hoare_iff_run_ambient _ _ _).mpr
-    intro w a p v b pre run
-    exact (getPeer_normal pid w v p a b run).1 ▸ pre
-  unfold sendSkbToPeer
-  simp (config := {zeta:=false}) only [branch]
-  repeat' first
-    | env_operation_fact count
-    | (rx_retention_head getPeer; exact read)
-    | (rx_retention_head send4; exact socket_core _ pid
-        (TimerDiscipline.send4_sendWorkView pid _ _ _ _) (Origins.Retaining.send4_material _ _ _ _ _))
-    | (rx_retention_head send6; exact socket_core _ pid
-        (TimerDiscipline.send6_sendWorkView pid _ _ _ _) (Origins.Retaining.send6_material _ _ _ _ _))
-    | (allocation_release_lift_from AmbientM; exact hoare_liftAmbient _ _)
-    | rx_retention_step
+    Preserves Reached.Core (sendSkbToPeer pid bytes ds) :=
+  DataCompletionRules.sendSkb_preserves _ pid bytes ds
+    (fun e exactRx => socket_core _ pid
+      (TimerDiscipline.send4_sendWorkView pid e bytes ds exactRx)
+      (Origins.Retaining.send4_material e (some pid) bytes ds exactRx))
+    (fun e exactRx => socket_core _ pid
+      (TimerDiscipline.send6_sendWorkView pid e bytes ds exactRx)
+      (Origins.Retaining.send6_material e (some pid) bytes ds exactRx))
+    (ConfigurationIndex.frame_core (ConfigurationIndex.modifyPeer_fields pid
+      (fun p => {p with txBytes:=p.txBytes+bytes.length}) (fun _=>rfl)))
 
 theorem guardedArm_core (pid : PeerId) (timer : PeerTimer) (delay : Nat) (caller : Option UInt64) :
     Preserves Reached.Core (do if ← modPeerTimerGuard pid then armTimer pid timer delay caller) := by

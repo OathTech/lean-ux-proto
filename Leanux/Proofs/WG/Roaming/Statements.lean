@@ -1,3 +1,8 @@
+import Leanux.Proofs.WG.Roaming.ReceiveStepRemoteClaims
+import Leanux.Proofs.WG.Roaming.RemoteBirthClaims
+import Leanux.Proofs.WG.Roaming.RemoteControlClaims
+import Leanux.Proofs.WG.Roaming.RemoteSilentClaims
+import Leanux.Proofs.WG.Roaming.RemoteProvenanceClaims
 import Leanux.Proofs.WG.Roaming.HandshakeRemoteWholeClaims
 import Leanux.Proofs.WG.Roaming.ConsumptionDestinationClaims
 import Leanux.Proofs.WG.Roaming.RemoteMutationFrames
@@ -391,5 +396,99 @@ theorem original_clear_source_preserves_all_destinations (pid : PeerId)
   intro g ambient result final after pre run
   exact ((Lifetimes.ProjectedAction.iff_run_ambient _ _ _).mp
     (RemoteMutation.clear_source_destinations pid) g ambient result final after run).trans pre
+
+
+/-- The actual receive worker derives its selected queue message, complete
+handshake-call observation and final surviving remote destinations.
+Authentication is derived for each selected roaming cause.
+An empty queue returns false with the remote map unchanged. -/
+theorem original_receive_step_remote_coverage (entry : Campaign2.Product.Snapshot) :
+    Campaign2.Product.Ensures (liftWG receiveStep) (fun s => s = entry)
+      (fun value final => ∃ q : ReceiveStepRemote.Observation,
+        q.Valid ∧ q.entry = entry ∧ q.finish = final ∧ q.value = value ∧ q.Facts) :=
+  ReceiveStepRemote.receiveStep_observation entry
+
+/-- Peer creation stamps the allocation and clears exactly its returned store
+location's endpoint. Refusal preserves both maps. No initial freshness or
+identity continuity through a cursor overwrite is assumed. -/
+theorem original_peer_creation_remote_effect (key : Key) (psk : Option Key)
+    (entry : Campaign2.Snapshot) :
+    Campaign2.Ensures (peerCreate key psk) (fun s => s = entry)
+      (fun result after => RemoteBirth.BirthRemoteEffect ⟨key,psk,entry,result,after⟩) :=
+  RemoteBirth.peerCreate_effect key psk entry
+
+/-- Every normal setter has the exact conditional map effect: supported
+families install the requested destination, and other families preserve it. -/
+theorem original_arbitrary_set_endpoint_remote_effect (entry : Campaign2.Snapshot)
+    (pid : PeerId) (endpoint : Endpoint) :
+    Campaign2.Ensures (setPeerEndpoint pid endpoint)
+      (fun s => remoteMap s = remoteMap entry)
+      (fun _ s => remoteMap s = RemoteControl.setterRemotes (remoteMap entry) pid endpoint) :=
+  RemoteControl.setPeerEndpoint_effect entry pid endpoint
+
+/-- A completed native consume retains the setter's exact conditional map
+through its complete suffix for every endpoint family. This is a local source
+contract; initialized authentication comes from the actual poll history. -/
+theorem original_arbitrary_data_remote_coverage (entry : Campaign2.Snapshot)
+    (pid : PeerId) (pkt : RxPacket) (endpoint : Endpoint) :
+    Campaign2.Ensures (consumeDataDone pid pkt endpoint)
+      (fun s => remoteMap s = remoteMap entry)
+      (fun _ s => RemoteRetained
+        (RemoteControl.setterRemotes (remoteMap entry) pid endpoint) (remoteMap s)) :=
+  RemoteControl.consumeDataDone_effect entry pid pkt endpoint
+
+/-- Every timer callback retains each surviving remote destination on normal
+return. Peer deletion and clearing of a cached local address are allowed. -/
+theorem original_timer_callback_remote_retention (entry : Campaign2.Snapshot)
+    (pid : PeerId) (timer : PeerTimer) :
+    Campaign2.Ensures (timerCallback pid timer)
+      (fun s => remoteMap s = remoteMap entry)
+      (fun _ s => RemoteRetained (remoteMap entry) (remoteMap s)) :=
+  timerCallback_retains_remotes entry pid timer
+
+/-- The complete zero-key worker introduces no remote destination, including
+the final peer release that can delete its caller. -/
+theorem original_clear_worker_remote_retention (entry : Campaign2.Snapshot) (pid : PeerId) :
+    Campaign2.Ensures (queuedExpiredZeroKeyMaterial pid)
+      (fun s => remoteMap s = remoteMap entry)
+      (fun _ s => RemoteRetained (remoteMap entry) (remoteMap s)) :=
+  clearWorker_retains_remotes entry pid
+
+/-- The complete outgoing handshake worker retains every surviving remote
+destination through its socket, timer and final release operations. -/
+theorem original_send_worker_remote_retention (entry : Campaign2.Snapshot) (pid : PeerId) :
+    Campaign2.Ensures (handshakeSendWorker pid)
+      (fun s => remoteMap s = remoteMap entry)
+      (fun _ s => RemoteRetained (remoteMap entry) (remoteMap s)) :=
+  sendWorker_retains_remotes entry pid
+
+/-- Actual transmit completion retains all surviving remote destinations,
+including its key-freshness and queued-handshake continuation. -/
+theorem original_tx_completion_remote_retention (entry : Campaign2.Snapshot)
+    (pid : PeerId) (item : List SkbId) :
+    Campaign2.Ensures (createDataDone pid item)
+      (fun s => remoteMap s = remoteMap entry)
+      (fun _ s => RemoteRetained (remoteMap entry) (remoteMap s)) :=
+  dataCompletion_retains_remotes entry pid item
+
+/-- Every present final destination of the original initialized run has an
+actual completed configuration-set, authenticated handshake, or authenticated
+data-consumption origin in that same run. The source address is the selected
+packet's outer source; no cryptographic binding of that outer address or
+physical-write trace for stopped callbacks is asserted. -/
+theorem original_initialized_final_endpoint_origins (trace : Runner.Trace)
+    (placeholders : Bool) (json : Lean.Json) (final : Campaign2.Snapshot)
+    (completed : RemoteProvenance.outcome trace placeholders = .ok (json,final)) :
+    ∀ pid remote, remoteMap final pid = some remote →
+      ∃ origin : RemoteProvenance.Origin,
+        RemoteProvenance.Occurs trace placeholders origin ∧ origin.Facts pid remote :=
+  RemoteProvenance.final_origins trace placeholders json final completed
+
+/-- The final-state projection preserves the original initialized JSON outcome
+and exact indexed Stop for both recorded-input modes. -/
+theorem original_initialized_endpoint_outcome (trace : Runner.Trace) (placeholders : Bool) :
+    (RemoteProvenance.outcome trace placeholders).map Prod.fst =
+      Runner.executeTrace trace placeholders :=
+  RemoteProvenance.outcome_json trace placeholders
 
 end Leanux.Proofs.WG.Roaming

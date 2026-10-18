@@ -37,4 +37,3 @@ theorem initialized_consumptions_authenticated_final (trace : Runner.Trace) (pla
   exact ⟨e,valid,facts,consumption_final_remotes trace placeholders q ((complete q).mp member)⟩
 
 end Leanux.Proofs.WG.Roaming
-

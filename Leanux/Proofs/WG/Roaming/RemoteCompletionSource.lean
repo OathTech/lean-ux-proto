@@ -20,4 +20,3 @@ theorem consumeDataDone_remotes (entry : RemoteMap) (pid : PeerId)
     g a result final b (RemoteRetained.of_eq pre) run
 
 end Leanux.Proofs.WG.Roaming.RemoteCompletion
-

@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.Noise.TransmitRulesSource
+import Leanux.Proofs.WG.Noise.SendSkbRulesSource
 import Leanux.Proofs.WG.Index.EncryptRuleSource
 import Leanux.Proofs.WG.Noise.DataCompletionRulesSource
 import Leanux.Proofs.WG.Noise.DriverTagFlushCallerSource
@@ -164,22 +166,11 @@ theorem send6_frame (pid : PeerId) (e : Endpoint) (bytes : List UInt8) (ds : Nat
     g.dev g ambient result final after rfl run
 
 theorem sendSkb_retained (entry : TagMap) (pid : PeerId) (bytes : List UInt8) (ds : Nat) :
-    Preserves (Retained entry) (sendSkbToPeer pid bytes ds) := by
-  have count (ret : Bool) : Preserves (Retained entry) (do
-      let p ← getPeer pid
-      setPeer pid {p with txBytes := p.txBytes + bytes.length}
-      pure ret) := by
-    simpa only [bind_assoc] using
-      preserves_bind (update entry pid (fun p => {p with txBytes := p.txBytes + bytes.length})
-        (fun _ => rfl))
-        (fun _ => (preserves_pure ret : Preserves (Retained entry) (pure ret : WG.M Bool)))
-  unfold sendSkbToPeer
-  simp (config := {zeta := false}) only [branch]
-  repeat' first
-    | env_operation_fact count
-    | (rx_retention_head send4; exact of_frame entry _ (send4_frame _ _ _ _ _))
-    | (rx_retention_head send6; exact of_frame entry _ (send6_frame _ _ _ _ _))
-    | silent_native_step entry
+    Preserves (Retained entry) (sendSkbToPeer pid bytes ds) :=
+  DataCompletionRules.sendSkb_preserves _ pid bytes ds
+    (fun e exactRx => of_frame entry _ (send4_frame pid e bytes ds exactRx))
+    (fun e exactRx => of_frame entry _ (send6_frame pid e bytes ds exactRx))
+    (update entry pid (fun p => {p with txBytes:=p.txBytes+bytes.length}) (fun _ => rfl))
 
 theorem guardedArm_frame (pid : PeerId) (timer : PeerTimer)
     (delay : Nat) (caller : Option UInt64) :
@@ -230,24 +221,11 @@ theorem completion_retained (entry : TagMap) (pid : PeerId) (item : List SkbId) 
 
 theorem txStep_retained (entry : TagMap) (pid : PeerId) :
     Preserves (Retained entry) (txStep pid) := by
-  rw [← TxDisposition.stepSource_eq]
-  unfold TxDisposition.stepSource TxDisposition.bodySource TxDisposition.disposeSource WG.andM
-  simp (config := {zeta := false}) only [getPeer_twice,branch,invariant]
-  repeat' first
-    | (rx_retention_head createDataDone; exact completion_retained entry _ _)
-    | (rx_retention_head WG.keypairPut; exact keypairPut entry _ _)
-    | (rx_retention_head WG.peerPut; exact peerPut entry _)
-    | (rx_retention_head PrevQueue.peek; exact of_frame entry _ (store_frame (prevQueuePeek_sameWGStore _)))
-    | (allocation_release_lift_from SkbM; exact of_frame entry _ (packet_frame _))
-    | (rx_retention_head getTxSkb; exact of_frame entry _ (packet_frame (SkbStore.getTx _)))
-    | (rx_retention_head freeTxSkb; exact of_frame entry _ (packet_frame (SkbStore.freeTx _)))
-    | (rx_retention_head ForIn.forIn
-       apply list_view_spec id (Retained entry)
-       intro x acc
-       change Preserves (Retained entry) _)
-    | silent_native_step entry
-
-
+  exact TransmitRules.step_preserves _ pid
+    (fun f => update entry pid (fun p=>{p with txQueue:=f p.txQueue}) (fun _=>rfl))
+    (completion_retained entry pid) (keypairPut entry) (peerPut entry (some pid))
+    (fun a => of_frame entry _ (packet_frame a))
+    (fun q => of_frame entry _ (store_frame (prevQueuePeek_sameWGStore q)))
 
 theorem setKeypair_frame (kid : KeypairId) (key : Keypair) :
     SameView tagView (setKeypair kid key) :=

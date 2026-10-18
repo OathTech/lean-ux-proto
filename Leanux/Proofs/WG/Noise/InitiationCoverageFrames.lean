@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Noise.InitiationArmRulesSource
 import Leanux.Proofs.WG.Noise.InitiationCallerClaims
 import Leanux.Proofs.WG.Noise.ResponseSuffixTagFrames
 import Leanux.Proofs.WG.Noise.TagCoverageModel
@@ -31,35 +32,11 @@ theorem armTimer_tags_of_resident (pid : PeerId) (timer : PeerTimer)
     (final : WGWorld) (after : Ambient) (p : Peer)
     (resident : peerAt g pid = some p)
     (run : ((armTimer pid timer delay caller).run g).run ambient = .ok (((),final),after)) :
-    responseTagMap final.dev = responseTagMap g.dev := by
-  cases mode : ambient.armRecords with
-  | false =>
-    rw [armTimer_off_effect pid timer delay caller g p resident ambient after final mode run]
-    exact wheelPlacementState_tags g pid p timer _ _ ambient resident
-  | true =>
-    cases caller with
-    | none =>
-      have ambientRead : ((getAmbient : WG.M Ambient).run g).run ambient = .ok ((ambient,g),ambient) := rfl
-      have hiddenRead : ((hidden .modTimerArm : WG.M (List UInt8)).run g).run ambient =
-          ((AmbientM.hidden .modTimerArm).run ambient >>= fun (bytes,next) => .ok ((bytes,g),next)) := rfl
-      simp only [armTimer,StateT.run_bind,StateT.run_get,pure_bind] at run
-      rw [ambientRead] at run
-      simp only [bind,Except.bind,mode,Bool.not_true,Bool.false_eq_true,ite_false] at run
-      change (((hidden .modTimerArm : WG.M (List UInt8)).run g).run ambient >>= _) = _ at run
-      rw [hiddenRead] at run
-      cases read : (AmbientM.hidden .modTimerArm).run ambient with
-      | error stop => rw [read] at run; cases run
-      | ok out => rw [read] at run; cases out; cases run
-    | some caller =>
-      by_cases same : p.timer timer = some (caller + delay.toUInt64)
-      · obtain ⟨now,unit,_,_,effect⟩ := armTimer_sameExpiry_effect
-          pid timer delay caller g p resident same ambient after final mode run
-        rw [effect]
-        rfl
-      · obtain ⟨now,unit,clk,_,_,effect⟩ := armTimer_changedExpiry_effect
-          pid timer delay caller g p resident same ambient after final mode run
-        rw [effect]
-        exact wheelPlacementState_tags _ pid p timer _ _ ambient resident
+    responseTagMap final.dev = responseTagMap g.dev :=
+  armTimer_deviceView_of_resident responseTagMap pid timer
+    (fun g p expires clk resident =>
+      wheelPlacementState_tags g pid p timer expires clk ambient resident)
+    delay caller g ambient final after p resident run
 
 /-- The actual guard supplies residency and excludes malformed missing-peer
 states before an arm. All three concrete arming effects preserve global tags. -/
@@ -69,33 +46,10 @@ theorem guardedArm_tag_frame (pid : PeerId) (timer : PeerTimer)
       (fun g => responseTagMap g.dev = responseTagMap entry)
       (fun _ g => responseTagMap g.dev = responseTagMap entry) := by
   intro g ambient result final after pre run
-  change (((modPeerTimerGuard pid).run g).run ambient >>= fun ((allowed,current),inputs) =>
-    ((if allowed then armTimer pid timer delay caller else pure () : WG.M Unit).run current).run inputs) = _ at run
-  cases device : g.dev with
-  | none =>
-    simp [modPeerTimerGuard,WG.andM,getDev,device,invariant,AmbientM.invariant] at run
-    cases run
-  | some d =>
-    cases found : d.peers[pid]? with
-    | none =>
-      simp [modPeerTimerGuard,WG.andM,getDev,getPeer,device,found,invariant,AmbientM.invariant] at run
-      cases run
-    | some p =>
-      cases checked : ((modPeerTimerGuard pid).run g).run ambient with
-      | error stop => rw [checked] at run; cases run
-      | ok out =>
-        obtain ⟨⟨allowed,current⟩,inputs⟩ := out
-        have effect := modPeerTimerGuard_input_effect pid d p found
-          g current ambient inputs allowed device checked
-        have same := effect.2.1
-        subst current
-        rw [checked] at run
-        cases allowed with
-        | false => cases run; exact pre
-        | true =>
-          cases result
-          exact (armTimer_tags_of_resident pid timer delay caller g inputs final after p
-            (by simp [peerAt,device,found]) run).trans pre
+  exact guardedArm_deviceView responseTagMap pid timer
+    (fun g p expires clk resident =>
+      wheelPlacementState_tags g pid p timer expires clk ambient resident)
+    delay caller entry g ambient result final after pre run
 
 theorem timersHandshakeInitiated_spec_tagMap_variant (pid : PeerId) (entry : Option Device) :
     Ensures (timersHandshakeInitiated pid)

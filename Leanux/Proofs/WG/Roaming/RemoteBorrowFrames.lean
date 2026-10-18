@@ -18,4 +18,3 @@ theorem lookupRepay_remotes (protocol : Nat) (bytes : List UInt8) :
   intro g
   rfl
 end Leanux.Proofs.WG.Roaming.RemoteCompletion
-

@@ -58,4 +58,3 @@ theorem RemoteRetained.updated_other {before after : RemoteMap}
   simpa only [updateRemote, different, ite_false] using kept other value found
 
 end Leanux.Proofs.WG.Roaming
-
