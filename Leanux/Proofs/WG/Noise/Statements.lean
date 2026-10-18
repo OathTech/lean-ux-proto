@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.Noise.SessionEvaluationClaims
+import Leanux.Proofs.WG.Noise.InitiationCallerClaims
 import Leanux.Proofs.WG.Noise.PeerCreationClaims
 import Leanux.Proofs.WG.Noise.SessionRefusalClaims
 import Leanux.Proofs.WG.Noise.ResponseCallerClaims
@@ -581,5 +583,38 @@ theorem original_peer_creation_tags (publicKey : Key) (psk : Option Key)
         | .error _ => entry.tagAt target
         | .ok pid => if pid = target then some HANDSHAKE_ZEROED else entry.tagAt target) :=
   peerCreate_tag_map publicKey psk entry
+
+/-- The actual initiation sender classifies its rate guard and, when reached,
+records the one original creator with its returned value and initial tag map.
+Refusal may retain other writes; creation does not imply delivery. Every
+original outcome survives discarding observation, including Stops. -/
+theorem original_initiation_caller_receipts (pid : PeerId) (entry : Campaign2.Snapshot) :
+    Campaign2.AgreesOn (fun _ => True)
+      (do let _ ← InitiationCaller.observe pid; pure ()) (sendHandshakeInitiation pid) ∧
+    Campaign2.Ensures (InitiationCaller.observe pid) (fun s => s = entry)
+      (fun call _ => InitiationCaller.RateObserved pid entry call ∧
+        InitiationCaller.CallFacts pid entry call) :=
+  ⟨InitiationCaller.original_initiation_receipts_erases pid,
+    InitiationCaller.original_initiation_receipts pid entry⟩
+
+/-- The original send worker retains the same actual guard and creator receipt
+through its final peer release. Receipt state is the creator cut; the final
+release can remove the peer. Later failures remain Stops without a receipt. -/
+theorem original_initiation_worker_receipts (pid : PeerId) (entry : Campaign2.Snapshot) :
+    Campaign2.AgreesOn (fun _ => True)
+      (do let _ ← InitiationCaller.observeWorker pid; pure ()) (handshakeSendWorker pid) ∧
+    Campaign2.Ensures (InitiationCaller.observeWorker pid) (fun s => s = entry)
+      (fun call _ => InitiationCaller.RateObserved pid entry call ∧
+        InitiationCaller.CallFacts pid entry call) :=
+  ⟨InitiationCaller.original_initiation_worker_receipts_erases pid,
+    InitiationCaller.original_initiation_worker_receipts pid entry⟩
+
+/-- The whole original session agrees on every input with its finite outcome
+evaluator: allocation bypasses or calls one concrete native encounter, then
+uses the fixed native session suffix. Stops remain exact outcomes; this does
+not assert successful completion, a runtime bound or initialized reachability. -/
+theorem original_session_finite_evaluation (pid : PeerId) :
+    Campaign2.AgreesOn (fun _ => True) (beginSession pid) (SessionEvaluation.evaluate pid) :=
+  SessionEvaluation.original_session_finite pid
 
 end Leanux.Proofs.WG.Noise
