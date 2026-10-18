@@ -20,6 +20,8 @@ incoming and outgoing authorization. R4 now covers normal initialized ingress di
 full-ring episode. The six-result campaign has its proved or Rule Zero
 counterexample dispositions; chronological GRO order remains refuted.
 
+Lag [AGENT 2026-10-18]: the GRO correction landed on `main` after this tree (`Leanux/WG/RxData.lean`: `groTakenAtOnce` replaced by the C's layers, a refused merge completing the held same-flow segment before the newcomer; the two witness traces `w6_gro_pure_ack_batch` and `w6_gro_same_flow_flush`); 34 files of this tree name the poll's GRO functions and 10 the deleted one (`Logged/PrefixGro`, `Logged/RxPoll`, `DeliveryOrder/ReplayGro`, `DeliveryOrder/Statements`, `Queues/GroSource`, `Queues/GroState`, `Queues/RxPollGroOrder`, `Queues/RxPollProvenance`, `Queues/SelectedGro`, `Queues/StampedGro`), so every result lags at that commit until the campaign's next carry repairs them; R4's counterexample avoids both corrected paths.
+
 The validated baseline `00641c6` has 471 Lean files and 7,715 named theorems.
 The validated retrofit checkpoint has 452 files and 6,564 theorems: 3,197 retyped/generalized,
 1,709 deleted, 2,809 retained and 558 added. The independent census accounts for
