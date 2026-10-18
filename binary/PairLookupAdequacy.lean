@@ -1,5 +1,6 @@
 import PairLookupOwnership
 import PairLookupReadiness
+import PairIndexKinds
 
 namespace Binary.Pair.IndexLookup
 open Leanux Leanux.WG TrustBase LookupRelation CommonBitsCoverage Index
@@ -23,7 +24,7 @@ def Post (n : Names) (o : Offsets) (coverage : Context) (initial : MachineState)
   (∀ b, (phase coverage b).CoverageAt final.data.dmem) ∧
   load32 final.data.dmem preemptCountAddress=some coverage.preempt ∧
   (LookupPendingRead coverage.preempt → final.data.dmem.loadInt softirqPendingAddress 2=some 0) ∧
-  EqualOutside (Writes n o coverage initial) initial.data.dmem final.data.dmem
+  EqualOutside (Writes n o coverage initial) initial.data.dmem final.data.dmem ∧ KindFrame n o initial.data.dmem final.data.dmem
 
 theorem write_frame {n o coverage s w d query kinds ra after}
     (facts : CallFacts n o coverage s w d query kinds ra)
@@ -70,7 +71,14 @@ theorem lookup_checked (fetch : Int64 → Option Decoded)
   have same : newView=callView c finalDevice := Option.some.inj (newProjected.symm.trans projectedFinal)
   subst newView
   refine ⟨returned,result,⟨finalDevice,deviceFinal,reconstruct_after facts source allowed physical frame,
-    ownership_after facts source frame⟩,coverage_after facts covered frame,preempt,pending,write_frame facts frame⟩
+    ownership_after facts source frame⟩,coverage_after facts covered frame,preempt,pending,write_frame facts frame,?_⟩
+  intro owner base named path
+  have shape := facts.shape_frame frame
+  have member : (base+8,24) ∈ shapeSpans n o :=
+    List.mem_cons_of_mem _ (List.mem_map.mpr ⟨(owner,base),named,rfl⟩)
+  have read := shape.word member 16 4 (by omega) path
+  have layout := (validate_basic (reconstruct_components facts.related).1).1
+  simpa only [layout.kind,Nat.add_assoc] using read.symm
 
 #print axioms lookup_checked
 end Binary.Pair.IndexLookup

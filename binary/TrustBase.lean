@@ -132,6 +132,13 @@ def ReturningCallPermissions (fetch : Int64 → Option Decoded) (permissions : P
   ∀ history final, ActualHistory fetch initial history → history.getLast?=some final →
     Returned initial final returnAddress → RunAccessAllowed fetch permissions history
 
+/-- The same explicit permission premise for a family of caller-prepared
+entries. It grants access on actual returning histories; it neither asserts
+their existence nor supplies any future reconstruction or precondition. -/
+def ReturningDomainPermissions (fetch : Int64 → Option Decoded) (permissions : Permissions)
+    (returnAddress : UInt64) (domain : MachineState → Prop) : Prop :=
+  ∀ initial, domain initial → ReturningCallPermissions fetch permissions initial returnAddress
+
 /-- Service internals emit no anchored observation or cut. The final state
     may return to an anchored address; it is deliberately not excluded. -/
 def NoAnchoredReentry (history : List MachineState) : Prop :=

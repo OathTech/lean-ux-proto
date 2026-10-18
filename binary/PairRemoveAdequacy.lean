@@ -1,5 +1,6 @@
 import PairRemoveBody
 import PairRemoveSource
+import PairIndexKinds
 
 namespace Binary.Pair.Remove
 open Leanux Leanux.WG TrustBase CommonBitsCoverage Index
@@ -28,7 +29,7 @@ def Post (n : Names) (o : Offsets) (c : Context) (initial : MachineState)
     (ra : UInt64) (final : World) (t : MachineState) : Prop :=
   Returned initial t ra ∧ MemoryReady c initial ra 4 (savedWords initial.data) false t.data.dmem ∧
     (∃ d, final.k.wg=some d ∧ Corresponds n o t.data.dmem d ∧ ownership n o t.data.dmem=.ok (targetOwnership d)) ∧
-    EqualOutside (fun a => HeapBytes n o a ∨ External c initial 4 a) initial.data.dmem t.data.dmem
+    EqualOutside (fun a => HeapBytes n o a ∨ External c initial 4 a) initial.data.dmem t.data.dmem ∧ KindFrame n o initial.data.dmem t.data.dmem
 
 /-- Complete sequential removal under Kraken's permission-granting effect
 judgment, from the executable entry check. Services and ELF interpretation
@@ -72,7 +73,7 @@ theorem remove_checked (fetch : Int64 → Option Decoded) (decoder : IndexRemove
     apply eventually_weaken (instructionStep fetch) _ _ _ _ (at_pc atTail tail)
     rintro t ⟨returned,ready,frame⟩
     have heapFrame := external_storage facts.geometry frame
-    refine ⟨returned,ready,⟨d,?_,heapFrame.reconstruct related,?_⟩,?_⟩
+    refine ⟨returned,ready,⟨d,?_,heapFrame.reconstruct related,?_⟩,?_,heapFrame.kinds layout⟩
     · rw [finalEq]
       change some {d with indexTable := d.indexTable.filter (fun e => !(e.owner==owner))}=some d
       rw [updated]
@@ -115,11 +116,15 @@ theorem remove_checked (fetch : Int64 → Option Decoded) (decoder : IndexRemove
     have heapFrame := external_storage facts.geometry frame
     have reconstructed := heapFrame.reconstruct (f.reconstruct related storage)
     have ownership := (heapFrame.ownership layout).symm.trans (f.ownership (reconstruct_components related).1 storage owners)
-    refine ⟨returned,ready,⟨_,?_,reconstructed,ownership⟩,(unlink_heap_frame layout f).trans frame⟩
-    rw [finalEq]
-    change some {d with indexTable := d.indexTable.filter (fun e => !(e.owner==owner))}=
-      some {d with indexTable := d.indexTable.filter (fun e => !(e.owner==f.entry.owner))}
-    rw [focusOwner]
+    refine ⟨returned,ready,⟨_,?_,reconstructed,ownership⟩,(unlink_heap_frame layout f).trans frame,?_⟩
+    · rw [finalEq]
+      change some {d with indexTable := d.indexTable.filter (fun e => !(e.owner==owner))}=
+        some {d with indexTable := d.indexTable.filter (fun e => !(e.owner==f.entry.owner))}
+      rw [focusOwner]
+    · apply KindFrame.trans _ (heapFrame.kinds layout)
+      intro owner base named path
+      rw [layout.kind]
+      exact f.read_data layout storage path (.entry owner base 24 4 named (.inr (.inl rfl)))
 
 #print axioms remove_checked
 end Binary.Pair.Remove

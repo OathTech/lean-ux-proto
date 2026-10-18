@@ -5,8 +5,9 @@ Status: in progress on `task/binary-pair-runner`, implementing the
 The complete sequential removal theorem builds under its named premises.
 Its linked and unhashed concrete entry witnesses now check and execute to
 return. Complete replacement and the lookup bridge now build and pass their paired
-runtime checks. The shared-reconstruction sequence theorem and actual
-mutator capture remain open.
+runtime checks. The general shared-reconstruction sequence theorem now checks and its mixed
+runtime witnesses pass. Actual mutator captures and the final export/report
+remain open.
 
 ## Start and time limits
 
@@ -59,7 +60,7 @@ Runtime-investigation time used: zero at this checkpoint.
 | A: complete removal adequacy and executed witnesses | Complete locally: whole-call `remove_checked`, explicit-environment `remove_simulation`, positive linked/unhashed Pre witnesses and `Witness.executes` check. The witness states execute to return. External acceptance and actual mutator captures remain in E. |
 | B: complete replacement adequacy and measured reuse | Complete locally: all 41 instructions, failure and all positions; explicit environment wrapper, linked/unhashed Pre witnesses, exact witness execution and fresh kernel replay pass. Reuse and marginal cost below. |
 | C: lookup under the common executable relation | Complete theorem and explicit environment wrapper build. Both recorded-prefix suites pass through the new assertion, including dead-then-NULL and collisions. Fresh replay of the environment/headline closure passes. |
-| D: finite call-sequence theorem and retained-heap execution | Open |
+| D: finite call-sequence theorem and retained-heap execution | Complete locally: `Sequence.sequence_checked`, actual histories and explicit environment/access premises. Eight ten-call mixed sequences pass; fresh kernel replay passes. |
 | E: actual mutator captures, trust checks and cost report | Open |
 
 Final theorem statements, named hypotheses, measurements, findings and
@@ -395,3 +396,94 @@ approved s4 build. No external gate acceptance is claimed for this increment.
 Fresh `leanchecker --fresh PairLookupEnvironment` completed successfully at
 approximately 08:57 UTC, covering the headline and its new reconstruction
 closure. This is local replay, not the external export gate.
+
+## Retained-heap finite composition (D)
+
+Composition and its supporting lemmas were developed approximately
+08:55–09:14 UTC. This overlaps builds and replay; it is not additive CPU or
+person time. `PairSequenceAdequacy.sequence_checked` now proves arbitrary
+finite admissible lists of the three actual mirror functions over one Names
+interpretation and one retained heap. It returns the ordered interface
+observations, per-call actual instruction histories with the explicit
+serialized environment and access premise, endpoint reconstruction, reusable
+physical readiness and a frame for the complete sequence. Its proof is list
+induction over the accepted mirror program; no fixed call count or test fuel
+is in the theorem.
+
+`AdmissibleSequence` follows accepted **source** prefixes. Its only additional
+caller conditions are representable lookup queries, named owner arguments,
+and the new keypair being absent when its handshake replacement succeeds.
+It contains no binary state, future Pre or successful binary run. The initial
+executable check establishes all physical resources once; the proof derives
+each next function's executable Pre. The single `install` caller transition
+writes ABI registers and its return slot. It never reconstructs heap memory
+from the source. Its heap/service frame is proved and it is also the runner's
+actual caller setup.
+
+Three useful composition mechanisms emerged:
+
+- `MemoryInvariant.eventually_mapped` proves, directly from all scalar and
+  AVX interpreter cases, that ordinary mapped memory survives successful
+  Kraken execution. It then strengthens any existing whole execution,
+  including the instruction executions promised by named service contracts.
+  MMIO is rejected by this `All` semantics. This introduces no new assumption
+  and avoids revisiting earlier physical regions for scratch mapping.
+- `KindFrame` carries immutable type tags of **unlinked** allocated entries.
+  The common observation does not read them while unlinked, but a later
+  successful replacement does. The three postconditions now export their
+  preservation using existing combined-store/frame lemmas. These are physical
+  frame facts, not extra clauses of R.
+- Completeness lemmas for the existing callback and frame checks turn the
+  maintained physical predicates back into the same executable entry checks.
+  No second independent relation or success premise is introduced.
+
+[AGENT 2026-10-18] The fixed-universe sequence's initial resource check includes
+next/index mappings and owner-kind tags for its allocated entries, maximum
+scratch mapping, and the separate caller output word. It checks the four
+stack sizes used by these anchors (4, 5, 6 and 13 words). The caller return
+slot is also separate from service inputs because caller setup writes it.
+These are upfront resources for arbitrary later calls, not restrictions on
+live/dead membership or peer counts. `ReturningDomainPermissions` names the
+existing per-call permission premise over explicitly caller-prepared entries;
+its domain has no successful-run or reconstruction premise. Callback-image
+proofs and real caller entry realism remain outside this experiment.
+
+Validation and size at this internal checkpoint:
+
+- `sequence_checked` builds with only `propext`, `Classical.choice`,
+  `Quot.sound`. Fresh `leanchecker --fresh PairSequenceAdequacy` passes over
+  the full headline closure, including the strengthened function posts.
+- The three independent function comparisons pass before mixed execution.
+  Eight ten-call sequences pass: two undefined-value seeds, live and dead
+  source peers, actual fixture capacities 1024 and 4. There are 80 calls and
+  21,268 executed instructions, taking 2.872 seconds for the paired sequences.
+- Each sequence includes lookup, successful replacement, old-kind lookup,
+  new-kind lookup, unsuccessful replacement with the new owner already
+  linked, removal, repeated removal, miss, lookup of a surviving colliding
+  entry, and removal of the now-unlinked handshake. Names and heap persist.
+- Capacity 4 is a labelled synthetic saturation case, not a claim of
+  unchanged-capture acceleration. Actual service instructions execute.
+- New sequence/check/frame/invariant Lean modules total 1,101 lines, including
+  the runtime suite and 233 lines for the ISA memory invariant. These counts
+  exclude the small strengthening edits to existing headlines. The finite
+  composition module itself is 86 lines; the resource derivation is most of
+  the work. Builds had ordinary elaboration corrections, no killed process
+  or timeout in this stage.
+
+Reproduce after building `binary-pair-sequence`, `binary-pair-remove` and
+`binary-pair-replace`:
+
+```sh
+LEANUX_QEMU_SLOTS=16 capped python3 -B binary/sequence_probe.py \
+  --lookup-check .artifacts/check/binary-tv-20261016-234706 \
+  --remove-check .artifacts/check/binary-remove-20261018 \
+  --replace-check .artifacts/check/binary-replace-20261018
+(cd binary && capped lake env leanchecker --fresh PairSequenceAdequacy)
+```
+
+Set `LEANUX_KERNEL_DIR` to the approved s4 build. The script runs each
+function's existing independent comparison, checks that decoder inputs agree,
+and then executes the combined image input. These remain synthetic sequences
+built from a recorded-prefix projection, not uninterrupted captured operation
+execution. At 09:14 UTC, main and Kraken pins/lag remain as recorded above;
+Kraken is clean. No external gate acceptance is claimed.

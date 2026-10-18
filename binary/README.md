@@ -450,7 +450,11 @@ positions. `PairReplaceWitness` proves the linked/unhashed entry witnesses;
 now derive the older physical relation from the common executable assertion
 and return the full reconstruction, ownership flags and callback phases.
 `binary-pair-runner` checks that assertion around its existing segment runner.
-Finite-sequence composition and actual captured mutator replay remain open. See the increment report for
+`PairSequenceAdequacy.sequence_checked` proves arbitrary finite admissible
+sequences from one checked initial state, with explicit caller setup and
+retained heap/resources. `binary-pair-sequence` executes mixed sequences;
+`sequence_probe.py` first runs all three independent function comparisons.
+Actual captured mutator replay and the final external gate remain open. See the increment report for
 commands, timing and the external export-based gate status.
 
 For runtime diagnosis, `binary-pair-buffer-cost` uses a **generated variation**

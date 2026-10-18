@@ -1,6 +1,7 @@
 import PairReplaceBody
 import PairReplaceFinish
 import PairReplaceSource
+import PairIndexKinds
 
 namespace Binary.Pair.Replace
 open Leanux Leanux.WG TrustBase CommonBitsCoverage Index
@@ -31,7 +32,7 @@ def Post (n : Names) (o : Offsets) (c : Context) (initial : MachineState)
     MemoryReady c initial ra 5 (savedWords initial.data) false t.data.dmem ∧
     (∃ d, final.k.wg=some d ∧ Corresponds n o t.data.dmem d ∧
       Remove.ownership n o t.data.dmem=.ok (Remove.targetOwnership d)) ∧
-    EqualOutside (fun a => HeapBytes n o a ∨ External c initial 5 a) initial.data.dmem t.data.dmem
+    EqualOutside (fun a => HeapBytes n o a ∨ External c initial 5 a) initial.data.dmem t.data.dmem ∧ KindFrame n o initial.data.dmem t.data.dmem
 
 /-- Complete sequential replacement from the tested entry assertion. The
 new entry's readiness is conditional on old membership, exactly as checked. -/
@@ -74,7 +75,7 @@ theorem replace_checked (fetch : Int64 → Option Decoded) (decoder : IndexRepla
     apply eventually_weaken (instructionStep fetch) _ _ _ _ (at_pc atTail tail)
     rintro t ⟨returned,ready,frame,result⟩
     have heap := external_storage facts.geometry frame
-    refine ⟨returned,?_,ready,⟨d,?_,heap.reconstruct related,?_⟩,?_⟩
+    refine ⟨returned,?_,ready,⟨d,?_,heap.reconstruct related,?_⟩,?_,heap.kinds layout⟩
     · rw [result,result_low,answerEq,hashed,ite_eq_left (zeroIff.mpr zero)]
       rfl
     · rw [finalEq]
@@ -131,7 +132,7 @@ theorem replace_checked (fetch : Int64 → Option Decoded) (decoder : IndexRepla
     have heap := external_storage facts.geometry frame
     have oldPresent : d.indexTable.any (·.owner==f.old.entry.owner)=true := by rw [show f.old.entry.owner=.handshake pid from owner]; exact hashed
     refine ⟨returned,?_,ready,⟨_,?_,heap.reconstruct (f.reconstruct related storage),?_⟩,
-      (replace_heap_frame f layout storage).trans frame⟩
+      (replace_heap_frame f layout storage).trans frame,?_⟩
     · rw [result,result_low,answerEq,hashed,ite_eq_right (fun equal => zero (zeroIff.mp equal))]
       rfl
     · rw [finalEq]
@@ -142,6 +143,7 @@ theorem replace_checked (fetch : Int64 → Option Decoded) (decoder : IndexRepla
       rw [show f.old.entry.owner=.handshake pid from owner]
     · rw [←heap.ownership layout]
       exact f.ownership related storage owned oldPresent
+    · exact KindFrame.trans (fun _ _ named path => f.kind_frame layout storage named path) (heap.kinds layout)
 
 #print axioms replace_checked
 end Binary.Pair.Replace
