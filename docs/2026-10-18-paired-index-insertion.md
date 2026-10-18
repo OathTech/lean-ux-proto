@@ -182,7 +182,7 @@ Fresh symbolic execution now covers the literal prologue, hashed-entry guard,
 unlink predecessor/branch and clear regions. These are components, not the
 whole-function result. Fresh kernel replay passes for `PairInsertIndex`,
 `PairInsertCoverage` and `PairInsertRegions`; the default build passes. The
-remaining ownership closure is being replayed. The input/reconstruction
+ownership closure also passes fresh replay. The input/reconstruction
 checkpoint is commit `26efcbe5`.
 
 Inspection of the native service histories confirms each sampled random call
@@ -193,3 +193,43 @@ capture already executes the complete helper under Kraken would be false.
 The random-service contract/input coupling remains unresolved; its eventual
 statement must not conceal this gap or promise arbitrary outputs from a fixed
 machine state. No new service assumption has been installed yet.
+
+## Nested-enable assertion finding, 2026-10-18 18:27 UTC
+
+Deriving callback readiness exposed a missing conditional read in the insertion
+entry assertion. For initial preempt count `0xfffffe00`, the outer BH-enable
+does not read the pending-softirq word, but the nested enable does: its target
+count wraps to zero. With pending word one, the original assertion accepted
+the state and actual Kraken execution left the decoded function set at
+`0xffffffff81073270`. The same wrapped count with pending word zero executed
+to return. This was a failed readiness candidate, not a mirror discrepancy
+or a completed theorem counterexample.
+
+The tested assertion now checks the nested enable's exact conditional read and
+separates that word from heap writes, scratch stack, coverage-buffer writes and
+the preempt-count word. Wrapped counts remain accepted when these resources are
+valid. The reconstruction relation and mirror are unchanged. The earlier
+`nested_coverage` result remains valid: coverage metadata for the third phase
+is already covered, whereas this additional BH-enable read was not.
+
+The generated suite now passes six cases, two undefined-flag seeds and forty
+calls. It includes positive wrapped-count execution through return and a
+negative control rejected specifically by `insert.call.nested-pending-softirq`.
+Reproduce after building `binary-pair-insert` by running it on the input prepared
+by `binary/insert_probe.py`; the report names the generated wrap case and its
+readiness control. This is generated entry evidence, not a captured kernel
+state or a formal positive Pre witness.
+
+## Walk-region reuse, 2026-10-18 18:30 UTC
+
+Fresh instruction proofs cover the draw/index write and bucket-head load,
+the two pointer-adjustment calls, both null-node guards and link advances,
+all three BH-enable call sites, and the final index load/register restoration.
+Direct repeated simplification of the second walk failed at the default
+heartbeat limit. Factoring its test/jump and load/test/jump sequences into
+parameterized effects, then identifying the literal image regions with those
+sequences before simplification, makes the complete walk-region module check
+in about one second. Failed elaborations' diagnostic axiom prints are not
+validation; the successful module prints only the standard three axioms.
+This is reusable instruction-effect reasoning, not full walk composition.
+The default build passes (713 jobs).

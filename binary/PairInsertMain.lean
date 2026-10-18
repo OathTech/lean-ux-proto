@@ -2,10 +2,12 @@ import PairInsert
 open Lean Leanux Leanux.WG Binary.Pair
 
 def runCase (input : ProbeInput) (label : String) (w : World)
-    (calls : List (IndexOwner × List HiddenRecord)) : Except String Json := do
+    (calls : List (IndexOwner × List HiddenRecord)) (preempt : Nat := 0) : Except String Json := do
   let mut runs := #[]
   for seed in [(0 : UInt64),0xffffffffffffffff] do
     let mut s ← Replace.fixture input w
+    s := {s with binary := {s.binary with state := {s.binary.state with data := {
+      s.binary.state.data with dmem := put s.binary.state.data.dmem input.preempt 4 preempt}}}}
     let mut reports := #[]
     for (owner,records) in calls do
       s := {s with world := {s.world with hidden := some records}}
@@ -38,6 +40,8 @@ def suite (input : ProbeInput) : Except String Json := do
     cases := cases.push (← runCase input s!"synthetic/retries-{collisions}-and-reinsertion" w
       [(firstOwner,[inputRecord 7]),(secondOwner,List.replicate collisions (inputRecord 7)++[inputRecord 8199]),
        (firstOwner,[inputRecord 8199,inputRecord 16391]),(secondOwner,[inputRecord 0])])
+  cases := cases.push (← runCase input "synthetic/wrapped-preempt-nested-pending-read" w
+    [(firstOwner,[inputRecord 7]),(secondOwner,[inputRecord 7,inputRecord 8199])] 0xfffffe00)
   let s ← Replace.fixture input w
   let badCases := [("missing",[]),("wrong-site",[{a with site := 0}]),
     ("short",[{a with bytes := a.bytes.take 4}]),
@@ -50,10 +54,21 @@ def suite (input : ProbeInput) : Except String Json := do
     | .error e =>
       unless e.startsWith "insert.input." do throw s!"insert input control failed elsewhere: {name}: {e}"
       controls := controls.push (Json.mkObj [("case",toJson name),("rejected",toJson e)])
+  let badMemory := put (put s.binary.state.data.dmem input.preempt 4 0xfffffe00)
+    Binary.TrustBase.softirqPendingAddress.toNat 2 1
+  let bad := {s with
+    world := {s.world with hidden := some [inputRecord 7]}
+    binary := {s.binary with state := {s.binary.state with data := {s.binary.state.data with dmem := badMemory}}}}
+  let pendingControl ← match Insert.invoke input 0 bad firstOwner with
+    | .ok _ => throw "nested pending-softirq control unexpectedly passed"
+    | .error e => do
+      unless e=="insert.call.nested-pending-softirq" do throw s!"nested pending control failed elsewhere: {e}"
+      pure (Json.mkObj [("case",toJson "wrapped-count/nonzero-pending"),("rejected",toJson e)])
   return Json.mkObj [("status",toJson "pass"),
     ("entry_origin",toJson "recorded-prefix and labelled generated heaps; not captured snapshots"),
     ("execution_scope",toJson "actual anchor, KCOV and BH instructions; supplied random-service returns"),
-    ("cases",toJson cases),("input_controls",toJson controls)]
+    ("cases",toJson cases),("input_controls",toJson controls),
+    ("readiness_controls",toJson #[pendingControl])]
 
 def main (args : List String) : IO UInt32 := do
   let [path] := args | IO.eprintln "usage: binary-pair-insert INPUT.json"; return 1

@@ -24,6 +24,15 @@ def callBoundary (n : Names) (o : Offsets) (c : CommonBitsCoverage.Context)
   unless Trie.coverageDataCheck ⟨c.coverage,c.preempt+1024⟩ s.data.dmem do
     throw "insert.call.nested-coverage"
   unless (c.preempt+1024) &&& 0x000f0000 == 0 do throw "insert.call.nested-hardirq"
+  if TrustBase.LookupPendingRead (c.preempt+512) then
+    unless s.data.dmem.loadInt TrustBase.softirqPendingAddress 2 == some 0 do
+      throw "insert.call.nested-pending-softirq"
+    -- The nested enable can read this word even when the outer enable cannot
+    -- (for example, when the original count is 0xfffffe00).
+    unless spansApart [(TrustBase.softirqPendingAddress.toNat,2)]
+        (Index.storageSpans n o ++ Index.callStack s 7 false ++ Trie.callBuffers c ++
+          [(TrustBase.preemptCountAddress.toNat,4)]) do
+      throw "insert.call.nested-pending-separation"
   unless w.hidden.isSome do throw "insert.call.recorded-input-required"
 
 /-- A supplied random-service return for generated tests. This transition is
