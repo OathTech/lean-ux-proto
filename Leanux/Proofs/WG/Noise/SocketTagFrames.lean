@@ -21,7 +21,7 @@ theorem tagMap_frame_of_sendWork {α : Type} (action : WG.M α) (pid : PeerId)
     (frame (sendWorkAt g pid).1 (sendWorkAt g pid).2)
     g ambient result final after rfl run
   have projected := congrArg (fun x : SendWorkView =>
-    fun target => x.1.bind fun d => d.2.2 target) same
+    fun target => x.1.bind fun d => (d.2.2 target).map Prod.fst) same
   have tags : responseTagMap final.dev = responseTagMap g.dev := by
     funext target
     have point := congrFun projected target
@@ -29,7 +29,7 @@ theorem tagMap_frame_of_sendWork {α : Type} (action : WG.M α) (pid : PeerId)
     all_goals first
       | rfl
       | simpa [responseTagMap, sendWorkAt, sendWorkKernel, sendWorkDevice,
-          initial, ending] using point
+          initial, ending, Option.map_map, Function.comp_def] using point
   exact tags.trans pre
 
 /-- Variant of the shared send-buffer frame, obtained from the stronger owned

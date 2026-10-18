@@ -1,3 +1,10 @@
+import Leanux.Proofs.WG.Noise.PendingDispatchSource
+import Leanux.Proofs.WG.Noise.PendingPollCompleteSource
+import Leanux.Proofs.WG.Noise.PendingReceptionSource
+import Leanux.Proofs.WG.Noise.PendingConsumeHistorySource
+import Leanux.Proofs.WG.Noise.PendingInvariantFrames
+import Leanux.Proofs.WG.Noise.ConfirmationOrderLabels
+import Leanux.Proofs.WG.Noise.PendingTicketHandshakeFrames
 import Leanux.Proofs.WG.Noise.InitiationCoverageClaims
 import Leanux.Proofs.WG.Noise.ConfirmationLabelSource
 import Leanux.Proofs.WG.Noise.PendingTicketClearFrames
@@ -785,5 +792,30 @@ theorem original_initiation_worker_final_tags (pid : PeerId) (entry : Campaign2.
         InitiationCaller.CallFacts pid entry call ∧
         TagCoverage entry.tagAt call.receipts final.tagAt) :=
   InitiationCaller.original_initiation_worker_tag_coverage pid entry
+
+/-- Every completed initialized consume transports its actual internalId
+confirmation transition through the original caller's final state, including
+normal packet drops. The whole initialized history's distinctness is separate. -/
+theorem original_initialized_complete_confirmation_transition (trace : Leanux.Runner.Trace)
+    (placeholders : Bool) (n id : Nat) (stamp : Lifetimes.PacketStamp)
+    (observation : ConsumeConfirmation.ConfirmationObservation)
+    (occurs : CounterConsume.Occurs trace placeholders n id stamp observation) :
+    observation.Valid ∧ observation.Facts ∧ ∃ allocation,
+      ConsumeConfirmation.projectedStampAt observation.entry observation.packet.keypair =
+        some allocation ∧
+      PendingTickets.Step (PendingTickets.projected observation.entry)
+        (if observation.confirmed then some allocation else none)
+        (PendingTickets.projected observation.finish) :=
+  CounterConsume.initialized_completed_transition trace placeholders n id stamp observation occurs
+
+/-- Direct labels of the actual initialized journal equal the ordered
+extractor's successful internalId list, preserving order and multiplicity.
+Completed prefixes before an outer Stop are included; no uniqueness premise
+or conclusion is added. -/
+theorem original_initialized_confirmation_labels (trace : Leanux.Runner.Trace)
+    (placeholders : Bool) :
+    ConfirmationOrder.confirmationIds trace placeholders =
+      .ok (CounterConsume.confirmationLabels (ConfirmationOrder.history trace placeholders)) :=
+  ConfirmationOrder.initialized_confirmationIds_labels trace placeholders
 
 end Leanux.Proofs.WG.Noise

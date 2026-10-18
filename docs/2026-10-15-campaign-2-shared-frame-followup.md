@@ -14,8 +14,9 @@ pending and does not authorize these additional families.
 
 The existing campaign-owned H6 SendWork view now carries the tag map
 without an H1 copy of the socket/cache proof layer.
-SendWorkDevice now contains every optional handshake tag; SendWorkPeer
-contains the selected tag. The generic setter derives the prior tag from
+SendWorkDevice now contains every optional (handshake tag,next-slot) cell;
+SendWorkPeer contains the selected cell. Tag and pending projections reuse
+the same source proof; allocation stamps come from the separate shared snapshot. The generic setter derives the prior tag from
 its actual selected-peer observation. Existing cache/routing/transmission
 compositions retain that stronger view. H1 SocketTagFrames projects the
 sendBufferToPeer result; the old H6 interfaces remain available.
@@ -29,9 +30,10 @@ keepalive/release tag effects now compose. The owned Index staging layer
 retains surviving tag/next cells and the global allocation counter while
 preserving its old table interfaces; landed ordinary keypair transitions
 supply the separate allocation-stamp retention. Normal initiation/worker,
-response, reception and receive-step final tags are checked. Driver lifecycle
-and configuration composition, plus initialized pending-history invariance,
-remain open; these are source obligations rather than missing socket frames.
+response, reception and receive-step final tags are checked. Native creation/deletion, open/up/stop/down, removal/flushes and actual
+send/clear dispatch now preserve the supplied pending invariant. Actual
+poll/GRO/NAPI with original inner delivery also closes. Full configuration,
+timer/scheduler and initialized runner composition remain open; these are source obligations rather than missing socket frames.
 This is proof support only; there is no mirror-change request.
 
 ## Landed support update, 2026-10-18

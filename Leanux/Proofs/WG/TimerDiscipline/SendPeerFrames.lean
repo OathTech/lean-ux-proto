@@ -184,16 +184,16 @@ theorem setPeer_sendWorkView (pid : PeerId) (q : Option SendWorkDevice) (v : Opt
     have old : d.peers[pid]?.map sendWorkPeer = some (sendWorkPeer p) := by
       simpa [sendWorkAt, sendWorkKernel, device] using
         (congrArg Prod.snd before).trans value.symm
-    have tags : (fun target : PeerId => (d.peers.insert pid p)[target]?.map Peer.handshakeState) =
-        (fun target : PeerId => d.peers[target]?.map Peer.handshakeState) := by
+    have cells : (fun target : PeerId => (d.peers.insert pid p)[target]?.map (fun p => (p.handshakeState,p.keypairNext))) =
+        (fun target : PeerId => d.peers[target]?.map (fun p => (p.handshakeState,p.keypairNext))) := by
       funext target
       by_cases same : pid = target
       · subst target
-        have tag := congrArg (Option.map (fun x : SendWorkPeer => x.2.2)) old
-        simpa [Option.map_map, Function.comp_def, sendWorkPeer] using tag.symm
+        have cell := congrArg (Option.map (fun x : SendWorkPeer => x.2.2)) old
+        simpa [Option.map_map, Function.comp_def, sendWorkPeer] using cell.symm
       · simp [Std.TreeMap.getElem?_insert, same]
     simpa [sendWorkAt, sendWorkKernel, sendWorkDevice, tableCursor, workQueues,
-      device, value, tags]
+      device, value, cells]
       using congrArg Prod.fst before
 
 theorem dstCacheGet_sendWorkView (pid : PeerId) (gen : Nat) (q : Option SendWorkDevice) (v : Option SendWorkPeer) :
@@ -406,8 +406,7 @@ theorem getPeer_initiationView (pid : PeerId) (v : InitiationView) :
       have value : initiationView p = v := by
         simpa [initiationAt, peerAt, device, resident] using pre
       refine ⟨p, g, ambient, ?_, value, pre⟩
-      simp [getPeer, getDev, device, resident]
-      rfl
+      simp [getPeer, getDev, device, resident] <;> rfl
 
 theorem setPeer_initiationView (pid : PeerId) (v : InitiationView) (p : Peer) :
     ⦃fun w => ⌜initiationView p = v ∧ initiationAt w pid = some v⌝⦄ setPeer pid p

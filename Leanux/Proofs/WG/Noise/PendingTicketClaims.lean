@@ -120,4 +120,14 @@ theorem initialized_prefix_distinct [DecidableEq Slot] (frontier : Nat) {events 
   have reverseMember : stamp ∈ events.reverse := List.mem_reverse.mpr member
   exact ⟨result.past stamp reverseMember,result.absent stamp reverseMember⟩
 
+/-- A retained suffix neither allocates nor introduces a second confirmation. -/
+theorem Step.retained_after {Slot : Type} [DecidableEq Slot]
+    {s t u : Store Slot} {event : Option Nat}
+    (step : Step s event t) (tail : Retained t u) : Step s event u := by
+  cases step with
+  | retained effect => exact .retained (effect.trans tail)
+  | allocated i effect => exact .allocated i (effect.trans tail)
+  | unused effect => exact .unused (effect.trans tail)
+  | confirmed i stamp resident effect => exact .confirmed i stamp resident (effect.trans tail)
+
 end Leanux.Proofs.WG.Noise.PendingTickets

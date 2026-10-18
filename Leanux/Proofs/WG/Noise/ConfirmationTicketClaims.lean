@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Noise.PendingTicketConsumeClaims
 import Leanux.Proofs.WG.Noise.CounterConsumeClaims
 import Leanux.Proofs.WG.Noise.PendingTicketCallClaims
 import Leanux.Proofs.WG.Noise.PendingTicketEndpointFrames
@@ -54,5 +55,22 @@ theorem initialized_confirmation_history (trace : Runner.Trace) (placeholders : 
   have next := step.preserves history
   refine ⟨allocation,resident,?_⟩
   cases choice : observation.confirmed <;> simpa [choice,PendingTickets.record] using next
+
+/-- The actual initialized allocation identity is consumed once at this
+completed event and transported through its original suffix, including drops.
+No whole-run distinctness invariant is assumed or established here. -/
+theorem initialized_completed_transition (trace : Runner.Trace) (placeholders : Bool)
+    (n id : Nat) (stamp : PacketStamp) (observation : ConfirmationObservation)
+    (occurs : Occurs trace placeholders n id stamp observation) :
+    observation.Valid ∧ observation.Facts ∧ ∃ allocation,
+      projectedStampAt observation.entry observation.packet.keypair = some allocation ∧
+      PendingTickets.Step (PendingTickets.projected observation.entry)
+        (if observation.confirmed then some allocation else none)
+        (PendingTickets.projected observation.finish) := by
+  obtain ⟨valid,facts,allocation,key,confirmed⟩ :=
+    initialized_confirmation_stamped trace placeholders n id stamp observation occurs
+  have transition := completed_optional_transition observation valid
+  rw [input_label_actual observation valid,key] at transition
+  exact ⟨valid,facts,allocation,key,transition⟩
 
 end Leanux.Proofs.WG.Noise.CounterConsume
