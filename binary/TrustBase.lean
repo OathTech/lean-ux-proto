@@ -10,6 +10,7 @@ import AllowedipsProjection
 import AllowedipsSelection
 import AllowedipsWords
 import RandomState
+import PairInsertInput
 
 /-! Named trust surface for the pinned lookup proof, under construction.
     These are explicit hypotheses, not globally asserted facts. No declaration
@@ -32,7 +33,7 @@ import RandomState
 -/
 namespace Binary.TrustBase
 
-def krakenCommit : String := "05bd93e14ab946330004a57403accc135c7e5542"
+def krakenCommit : String := "cd2ae360bfcf8e1fc719793405811ff49c3e75ce"
 def kernelIdentity : String := "6b2018b9"
 def elfSha256 : String := "16c346209885db6c610d4aa126c6eb30f5d3c02f0498d95e606473945f648774"
 def decoderVersion : String := "GNU objdump (GNU Binutils for Ubuntu) 2.42"
@@ -690,5 +691,28 @@ def RandomReturnContract (fetch : Int64 → Option Decoded) (privateState : Rand
       t.machine.data.system.bits[9]=s.data.system.bits[9] ∧
       (∀ point ∈ t.history.dropLast, IndexInsertImage.Insert.fetch point.pc=none))
       ⟨s,[s]⟩
+
+/-- Safety coupling with an external recorded-input interpretation. The
+interpretation depends only on provider-private bytes, never the WireGuard
+heap. Recording context and return site are fixed parameters: changing either
+can change a steered result without changing private bytes. The current
+readiness and entry frame are premises of the return law, not conclusions.
+Its return law constrains existing actual service histories; it does
+not assert termination, physical readiness, a source insertion result or R.
+In particular `inputAt` is required before a draw can be prescribed. -/
+structure RandomInputCoupling (fetch : Int64 → Option Decoded) (privateState : RandomProvider.Config)
+    (coverage : KcovLayout) (preempt : BitVec 32) (returnAddress : UInt64)
+    (inputAt : DataMem → List Leanux.HiddenRecord → Prop) : Prop where
+  frame : ∀ before after records,
+    (∀ a, RandomProvider.PrivateBytes privateState a → before.get? a=after.get? a) →
+    inputAt before records → inputAt after records
+  returned : ∀ s t history records value rest,
+    s.pc=.ofNat 0xffffffff81375000 → RandomReady privateState coverage preempt s →
+    EntryFrame s returnAddress → inputAt s.data.dmem records →
+    Pair.Insert.draw records=.ok (value,rest) →
+    ActualHistory fetch s history → history.getLast?=some t →
+    Returned s t returnAddress →
+    (∀ point ∈ history.dropLast, IndexInsertImage.Insert.fetch point.pc=none) →
+    (t.data.regs.get (.low .rax .W32)).toNat=value ∧ inputAt t.data.dmem rest
 
 end Binary.TrustBase

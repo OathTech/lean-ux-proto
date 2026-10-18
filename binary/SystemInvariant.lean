@@ -89,6 +89,28 @@ theorem stosRepeat (w : Width) (count : Nat)
     intro t ht
     exact ih _ ht
 
+theorem movsOne (w : Width) {s : MachineData}
+    (hs : F s.system) (next : MachineData → Effects)
+    (hn : ∀ t, F t.system → Keeps F (next t)) : Keeps F (s.movsOne w next) := by
+  unfold MachineData.movsOne
+  apply load hs
+  intro value t ht
+  apply store ht
+  intro t ht
+  exact hn _ ht
+
+theorem movsRepeat (w : Width) (count : Nat)
+    (s : MachineData) (hs : F s.system) (next : MachineData → Effects)
+    (hn : ∀ t, F t.system → Keeps F (next t)) :
+    Keeps F (MachineData.movsRepeat w count s next) := by
+  induction count generalizing s with
+  | zero => exact hn _ hs
+  | succ count ih =>
+    unfold MachineData.movsRepeat
+    apply movsOne w hs
+    intro t ht
+    exact ih _ ht
+
 /-- Follow the interpreter's state updates without simplifying arithmetic.
 All branches and undefined choices are retained. -/
 theorem operation [Labels] [address_size : AddressSize] (stable : IFStable F) {w}
@@ -99,6 +121,7 @@ theorem operation [Labels] [address_size : AddressSize] (stable : IFStable F) {w
     Keeps F (i.interp p s next jmp) := by
   cases i
   case' cmpxchg dst _ => cases dst
+  case' xadd dst _ => cases dst
   all_goals simp only [Operation.interp]
   case cli =>
     split
@@ -122,6 +145,8 @@ theorem operation [Labels] [address_size : AddressSize] (stable : IFStable F) {w
     | apply store (by assumption); intro t ht
     | apply stosOne _ (by assumption); intro t ht
     | apply stosRepeat _ _ _ (by assumption); intro t ht
+    | apply movsRepeat _ _ _ (by assumption); intro t ht
+    | apply movsOne _ (by assumption); intro t ht
     | apply undefined; intro v
     | exact impossible _
     | exact hn _ (by assumption)

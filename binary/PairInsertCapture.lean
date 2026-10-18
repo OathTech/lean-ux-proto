@@ -1,5 +1,6 @@
 import PairInsert
 import PairMutatorCapture
+import PairRandomRun
 
 namespace Binary.Pair.InsertCapture
 open Lean Leanux Leanux.WG
@@ -14,58 +15,41 @@ structure Snapshot extends toMutatorCaptureSnapshot : MutatorCapture.Snapshot wh
   randomServices : Array RandomService
   deriving FromJson
 
-/-- Keep the actual recorded service transition separate from Kraken's
-instruction trace. Entry bytes/registers are compared before applying it;
-only captured changed bytes are installed and their footprint is checked.
-Uncaptured private entropy state is outside this test's physical projection. -/
-def randomReturn (snapshot : Snapshot) (frame : CallFrame) (index : Nat)
-    (r : Run) (value : Nat) : Except String Run := do
+structure PrivateState where
+  blocks : List (Nat × Nat)
+  remoteNodes : List Nat
+  deriving FromJson
+
+def PrivateState.config (s : PrivateState) : RandomProvider.Config := ⟨s.blocks,s.remoteNodes⟩
+
+/-- Run the decoded service body from the actual captured entry heap. The
+native endpoints and instruction sequence are comparisons, never transitions. -/
+def randomReturn (snapshot : Snapshot) (privateState : PrivateState) (seed : UInt64)
+    (frame : CallFrame) (index : Nat) (r : Run) (value : Nat) : Except String Run := do
   let some service := snapshot.randomServices[index]? | throw "capture.random.missing-boundary"
   let _ ← Capture.compareEndpoint service.initial r.state
   unless service.initial.registers.rip==Insert.randomEntry &&
       service.returned.registers.rip==Insert.entry+0x79 &&
-      service.returned.registers.rsp==service.initial.registers.rsp+8 &&
-      service.returned.registers.rax==value do throw "capture.random.interface"
-  unless service.initial.blocks.size==service.returned.blocks.size do throw "capture.random.block-count"
-  let mut memory := r.state.data.dmem
-  for (before,after) in service.initial.blocks.zip service.returned.blocks do
-    unless before.address==after.address && before.bytes.size==after.bytes.size do
-      throw "capture.random.block-layout"
-    for j in [:before.bytes.size] do
-      let old := before.bytes[j]!
-      let byte := after.bytes[j]!
-      unless byte<256 do throw "capture.random.byte-width"
-      if byte != old then
-        let a := after.address+j
-        unless within a 1 (frame.stack-2048) 2048 || within a 1 frame.coverage frame.coverageSize do
-          throw s!"capture.random.write-footprint: {a}"
-        memory := memory.insert (.ofNat 64 a) (.ofNat byte)
-  let state ← service.returned.registers.state memory
-  for reg in [Reg64.rbx,.rbp,.r12,.r13,.r14,.r15] do
-    unless state.data.regs.get64 reg==r.state.data.regs.get64 reg do throw "capture.random.callee-save"
-  let used ← readNat state frame.coverage 8
+      service.returned.registers.rsp==service.initial.registers.rsp+8 do throw "capture.random.interface"
+  let context ← Index.readContext r.state.data.dmem
+  RandomProvider.readyCheck privateState.config context r.state
+  let after ← RandomRun.execute seed snapshot.instructionBudget r.state (.ofNat (Insert.entry+0x79))
+    (some service.executedPCs)
+  RandomRun.physicalPost privateState.config context r.state after (.ofNat (Insert.entry+0x79))
+  unless after.state.data.regs.rax.toNat==value do throw "capture.random.recorded-draw"
+  unless after.pcs==RandomRun.instructionPCs service.executedPCs do throw "capture.random.instructions"
+  let _ ← Capture.compareEndpoint service.returned after.state
+  let used ← readNat after.state frame.coverage 8
   unless used<snapshot.initial.capacity do throw "capture.random.coverage-count"
   let mut coverage := #[]
   for j in [:used] do
-    coverage := coverage.push (← readNat state (frame.coverage+8*(j+1)) 8)
-  return {r with state,coverage}
+    coverage := coverage.push (← readNat after.state (frame.coverage+8*(j+1)) 8)
+  return {r with
+    state := after.state,coverage,pcs := r.pcs++after.pcs,
+    reads := r.reads++after.reads,writes := r.writes++after.writes,
+    undefinedCount := r.undefinedCount+after.undefinedCount}
 
-/-- Remove exactly the explicitly sampled service intervals from the native
-history. Missing, reordered, overlapping or partial service histories fail. -/
-def interpretedPCs (snapshot : Snapshot) : Except String (Array Nat) := do
-  let mut remaining := snapshot.executedPCs.toList
-  let mut out := #[]
-  for service in snapshot.randomServices do
-    let (before,after) := remaining.span (· != Insert.randomEntry)
-    unless !service.executedPCs.isEmpty && service.executedPCs[0]?==some Insert.randomEntry &&
-        after.take service.executedPCs.size==service.executedPCs.toList do
-      throw "capture.random.instruction-interval"
-    out := out++before.toArray
-    remaining := after.drop service.executedPCs.size
-  unless !(remaining.contains Insert.randomEntry) do throw "capture.random.unaccounted-entry"
-  return out++remaining.toArray
-
-def run (input : ProbeInput) (snapshot : Snapshot) (layout : Json) : Except String Json := do
+def run (input : ProbeInput) (snapshot : Snapshot) (privateState : PrivateState) (layout : Json) : Except String Json := do
   unless snapshot.anchor=="insert" && snapshot.executionMode=="sequential" do
     throw "capture.insert.mode"
   unless (← input.trace.getObjValAs? String "id")==snapshot.trace &&
@@ -102,20 +86,25 @@ def run (input : ProbeInput) (snapshot : Snapshot) (layout : Json) : Except Stri
   for i in [:snapshot.initial.coverageUsed] do
     coverage := coverage.push (← readNat initial (frame.coverage+8*(i+1)) 8)
   let session : Session := {names,world,binary := {state := initial,coverage}}
-  let expected ← interpretedPCs snapshot
+  unless spansApart privateState.blocks
+      (Index.storageSpans names input.offsets ++ Index.callStack initial 7 true) do
+    throw "capture.random.private-protected-alias"
+  let expected := RandomRun.instructionPCs snapshot.executedPCs
   let mut runs := #[]
   for seed in [(0 : UInt64),0xffffffffffffffff] do
     let (after,report) ← Insert.invokeFrom input seed session owner initial frame
-      (randomReturn snapshot frame) "actual QEMU service transitions; body not interpreted by Kraken"
+      (randomReturn snapshot privateState seed frame) "actual decoded random body from captured private memory"
+      privateState.blocks
     unless after.binary.pcs==expected do throw "capture.insert.instruction-segments"
     let checked ← Capture.compareEndpoint snapshot.returned after.binary.state
     Remove.assertAt names input.offsets (← Capture.loadMemory snapshot.returned.blocks) after.world
     unless after.world.hidden==some [] do throw "capture.insert.remaining-inputs"
     runs := runs.push (Json.mkObj [("seed",toJson seed.toNat),("call",report),("compared_bytes",toJson checked)])
   return Json.mkObj [("status",toJson "pass"),
-    ("execution_scope",toJson "actual anchor/KCOV/BH instructions under Kraken, sampled native random-service transitions"),
+    ("execution_scope",toJson "actual anchor, KCOV, BH and random-service instructions under Kraken from captured memory"),
     ("input_origin",toJson "actual entry projection, allocation identities from recorded prefix, draws checked against independent recording"),
-    ("native_instructions",toJson snapshot.executedPCs.size),("interpreted_instructions",toJson expected.size),
+    ("native_single_step_stops",toJson snapshot.executedPCs.size),("interpreted_instructions",toJson expected.size),
+    ("REP_validation",toJson "each native repeat-stop multiplicity checked against actual entry RCX"),
     ("random_services",toJson snapshot.randomServices.size),("capacity",toJson snapshot.initial.capacity),
     ("system_flags_control",toJson flagsRejected),
     ("runs",toJson runs)]

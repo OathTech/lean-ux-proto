@@ -18,6 +18,57 @@ from capture_lookup import Remote, slot, capture
 from census import ROOT, ORACLE
 from layouts import layouts
 from pin import verify_pin
+from generate_random_layout import layout_values
+
+
+def random_private(remote, task, layout):
+    """Capture the initialized provider and selected recording graph as-is."""
+    blocks, nodes = {}, []
+
+    def block(address, size):
+        if not 0 < size or not 0 < address or address+size > 2**64:
+            raise ValueError('invalid private capture allocation')
+        blocks[address, size] = remote.read(address, size)
+
+    for name, size in [('readyAddress', 4), ('cacheAddress', 108),
+                       ('cpuAddress', 40), ('baseAddress', 40), ('sequenceAddress', 8)]:
+        block(layout[name], size)
+    ready = remote.word(layout['readyAddress'], 4)
+    if not 0 < ready < 2**31:
+        block(layout['initAddress'], 4)
+    for offset in [layout['taskObject'], layout['taskHandle']]:
+        block(task+offset, 8)
+    obj = remote.word(task+layout['taskObject'])
+    selected, direct = 0, False
+    if obj:
+        block(obj, layout['objectSteer']+8)
+        selected = remote.word(obj+layout['objectSteer'])
+        direct = remote.word(obj+layout['objectRemote'], 1) != 0 or selected != 0
+    if not direct:
+        handle = remote.word(task+layout['taskHandle'])
+        if handle:
+            slot = layout['remoteMapAddress']+8*((handle*0x61c8864680b583eb % 2**64)//2**60)
+            block(slot, 8)
+            link = remote.word(slot)
+            while link:
+                base = link-layout['remoteLink']
+                if base <= 0 or base in nodes or len(nodes) >= 256:
+                    raise ValueError('cyclic or oversized captured remote bucket')
+                nodes.append(base)
+                block(base, layout['remoteLink']+16)
+                if remote.word(base+layout['remoteHandle']) == handle:
+                    obj = remote.word(base+layout['remoteObject'])
+                    block(obj, layout['objectSteer']+8)
+                    selected = remote.word(obj+layout['objectSteer'])
+                    break
+                link = remote.word(base+layout['remoteLink'])
+    if selected:
+        count = remote.word(selected+layout['steerCount'], 4)
+        if count > 64:
+            raise ValueError('oversized captured steering table')
+        block(selected, layout['steerEntries']+count*layout['entrySize'])
+    return dict(blocks=[dict(address=a, bytes=list(data)) for (a, _), data in sorted(blocks.items())],
+                remoteNodes=nodes)
 
 
 def completed_operations(path, trace):
@@ -60,6 +111,7 @@ def main():
     from harness.linux import verify_kernel
     identity, kraken = verify_kernel(ORACLE.parent), verify_pin(ROOT)
     layout = layouts(ORACLE)
+    provider_layout = layout_values() if args.anchor == 'insert' else None
     out.mkdir(parents=True, exist_ok=True)
     if (out / 'snapshot.json').exists() or (out / 'gdb.sock').exists():
         raise ValueError('capture output is already occupied')
@@ -108,6 +160,11 @@ def main():
             print(f'capturing {args.anchor} entry, occurrence {occurrence}, completed {completed}', flush=True)
             initial = capture(remote, regs, probe, layout, args.instruction_budget,
                               root_entries=roots, read_output=False, include_retired=True, full_coverage=True)
+            if provider_layout is not None:
+                private = random_private(remote, initial['task'], provider_layout)
+                initial['randomPrivate'] = dict(blocks=[(b['address'], len(b['bytes'])) for b in private['blocks']],
+                                                remoteNodes=private['remoteNodes'])
+                initial['blocks'] += private['blocks']
             print(f'captured {sum(len(b["bytes"]) for b in initial["blocks"])} entry bytes', flush=True)
             return_pc = remote.word(regs['rsp'])
             remote.breakpoint(entry, False)

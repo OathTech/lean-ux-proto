@@ -508,3 +508,115 @@ random value. It is an explicit unproved hypothesis, not an asserted axiom,
 and no insertion headline uses it yet. Its full entry-domain witness and
 active-recording tests remain due. Recorded-input agreement remains a separate
 open safety premise; there is still no full insertion theorem or export claim.
+
+## Recording-enabled provider and complete capture replay, 2026-10-18 20:35 UTC
+
+The paired capture now executes the random body under Kraken. The capture
+helper reads the initialized provider allocations and selected direct/remote
+steering graph from the stopped kernel; no private bytes come from expected
+mirror values. This selected capture uses direct steering. The standalone
+synthetic suite additionally exercises the remote graph, steering exhaustion,
+ordinary refill and changed-generation refill. All 18 provider cases pass
+the complete executable `readyCheck`, return/ABI, coverage/preempt, private
+readiness, IF and endpoint-footprint checks. Controls reject a missing private
+byte, unprivileged CLI, a missing stack byte, private/stack aliasing, DF set,
+and an endpoint write outside the contract footprint.
+
+Private Kraken commit `cd2ae360bfcf8e1fc719793405811ff49c3e75ce` adds MOVS and
+memory XADD; patch 0007 reproduces it. MOVS follows per-element access order,
+including overlapping copies, all widths and both directions, with 64-bit
+addressing. XADD freezes the effective address before overwriting its source
+register, updates arithmetic flags, and requests both memory permissions.
+Register XADD and LOCK remain unsupported. Instruction tests, fresh kernel
+replay, and consumer memory/system preservation proofs pass. The stable
+default regression after the ISA extension passed 759 jobs.
+
+The first full captured-body replay failed the PC-sequence check. Diagnosis
+found 503 Kraken instructions versus 511 native stops in each random call:
+QEMU single-stepping exposes each REP iteration, whereas one Kraken instruction
+executes the whole repeat. The runtime now validates each native multiplicity
+against actual entry RCX, including zero-count behavior, before comparing
+the instruction sequence. This changes test granularity, not ISA execution
+or the endpoint comparison. A reduced-memory diagnostic also failed its
+endpoint check because its two truncated buffer spans had different lengths;
+that diagnostic was not a passing capture result.
+
+The corrected full replay passes both seeds. All **1,338 interpreted
+instructions** execute under Kraken, including both random calls; the native
+trace has **1,354 single-step stops**. Each seed compares **33,626,364 bytes**,
+all checked endpoint registers/status/system flags, the recorded draws
+`0x0a0b0c0d` and `0x11223344`, the mirror result, decisions and coverage. The
+KCOV capacity remains **4,194,304 words**. No sampled native service transition
+is installed. Reproduction uses the existing independent recording and:
+
+```sh
+LEANUX_QEMU_SLOTS=16 capped scripts/in-bundle /usr/bin/python3 -B \
+  binary/capture_index_mutator.py --anchor insert --call-index 1 \
+  --input .tmp/binary-insert/input.json --check .artifacts/check/binary-insert \
+  --operation 1 --out .tmp/cap-index-insert-private
+capped binary/.lake/build/bin/binary-pair-insert-capture \
+  .tmp/binary-insert/input.json .tmp/cap-index-insert-private/snapshot.json \
+  .tmp/cap-index-insert-private/layouts.json
+```
+
+The full replay took **9m47.70s elapsed**, **583.45s user CPU**, and
+**11,312,384 KiB maximum RSS**. It repeats large mappedness and endpoint
+comparisons; this is a measured remaining runtime cost. No time has been
+spent on the separately budgeted capture optimization experiment. The
+capture remains the sequential/no-IRQ baseline, and the refill executions
+remain synthetic rather than captured refill evidence.
+
+## Physical and input service composition, 2026-10-18 20:35 UTC
+
+[AGENT 2026-10-18] Use a separate input-coupling safety specification instead
+of making the physical return contract prescribe arbitrary draws. The named
+`RandomInputCoupling` takes an external input interpretation of private memory
+and remaining records. It is stable under equality of provider-private bytes.
+At a fixed coverage/preempt context and return address, with current physical
+readiness and the entry frame established, its law constrains an existing
+actual service history: the low 32-bit result equals the next decoded record
+and the interpretation advances. It asserts neither execution existence nor physical
+readiness, a future insertion result, or reconstruction. The interpretation
+and coupling remain explicit environmental hypotheses, not proved facts about
+arbitrary recordings.
+
+`RandomService.return_recorded` composes that safety law with the separately
+named physical `RandomReturnContract`. Its actual histories come from the
+service execution proof. Mappedness, CPL and DF preservation are derived from
+the ISA, rather than added to the contract. `RandomService.Post.ready` restores
+the same physical reservation over the returned heap. `RandomReadyCheck` proves
+that the complete runtime readiness assertion establishes `RandomReady`.
+
+Insertion's `providerCheck` and `ProviderFacts` supply the larger stack
+reservation and separation of private allocations from represented storage,
+caller frame, callback state and conditionally read pending words. Their
+initial-call capture check remains to be wired into the runner; the captured
+random-service entries already pass `readyCheck`. `ProviderState.follow`
+carries private readiness through ordinary regions, using their footprints
+and generic ISA invariants. `Core.random_ready` derives service readiness
+after the actual CALL push. `Core.random_memory` preserves saved words,
+coverage, preempt and both conditional pending resources; `Core.random_call`
+composes the actual CALL, physical return, recorded-value agreement and
+reestablished caller invariant. These targeted builds print only standard
+axioms. Full insertion retry induction, function-level Pre/witness/adequacy,
+retained-heap sequence extension and the increment export remain open.
+
+Draft failures in this stage included Lean record/branch layout, a reserved
+identifier, missing library lemma names and conversion recursion limits.
+Explicitly reducing the two coverage-predicate definitions resolved the
+conversion cases without raising limits. They were failed builds and were
+corrected before the passing checks; no holes or bypasses were retained.
+
+Review of the first coupling draft found its quantification too broad: it had
+not fixed the recording context or caller return site. Those can change a
+steered result while leaving all provider-private bytes unchanged. The
+declaration now fixes both and requires current `RandomReady`/`EntryFrame`
+premises. Executable controls pass: the same provider-private bytes return
+steered value 41 at the selected recording site, but raw value 7 with recording
+disabled or at another return site. A trace missing REP iteration stops is
+also rejected. The subsequent full regression exposed a missing `MirrorLoop`
+import after the input parser was made independent of the mutator library;
+that failed build was repaired. The complete regression passes **769 jobs**,
+and fresh Lean kernel replay of `PairInsertRandomCall` and its dependencies
+passes. These checks establish the service-composition checkpoint; they do
+not establish the still-open complete insertion theorem.

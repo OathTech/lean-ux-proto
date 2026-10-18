@@ -1,4 +1,4 @@
-import PairReplace
+import Leanux.Kernel.Defs
 
 namespace Binary.Pair.Insert
 open Leanux Leanux.WG

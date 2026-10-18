@@ -1,4 +1,5 @@
 import PairInsertInput
+import PairReplace
 import IndexInsertImage
 
 namespace Binary.Pair.Insert
@@ -52,6 +53,7 @@ def invokeFrom (input : ProbeInput) (seed : UInt64) (s : Session) (owner : Index
     (initial : MachineState) (frame : CallFrame)
     (randomReturn : Nat → Run → Nat → Except String Run)
     (serviceDescription : String)
+    (privateSpans : List (Nat × Nat) := [])
     : Except String (Session × Json) := do
   let address ← addressOf s.names owner
   let context ← Index.readContext initial.data.dmem
@@ -95,7 +97,8 @@ def invokeFrom (input : ProbeInput) (seed : UInt64) (s : Session) (owner : Index
     unless within a size (frame.stack-0x800) 0x800 || within a size frame.coverage frame.coverageSize ||
         within a size input.preempt 4 || within a size s.names.table input.offsets.tableSize ||
         s.names.owners.any (fun (_,base) => within a size (base+input.offsets.hash) 16) ||
-        within a size (address+input.offsets.index) 4 do
+        within a size (address+input.offsets.index) 4 ||
+        privateSpans.any (fun (base,width) => within a size base width) do
       throw s!"insert write outside footprint: {a}/{size}"
   return ({s with world,binary := r,call := s.call+1},Json.mkObj [
     ("instructions",toJson r.pcs.size),("draws",toJson draws),("answer",toJson answer),

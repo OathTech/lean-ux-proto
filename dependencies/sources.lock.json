@@ -23,7 +23,7 @@
   {
     "name": "kraken",
     "url": "https://github.com/AeneasVerif/kraken.git",
-    "commit": "05bd93e14ab946330004a57403accc135c7e5542",
+    "commit": "cd2ae360bfcf8e1fc719793405811ff49c3e75ce",
     "kind": "git",
     "consumer": "binary",
     "toolchain": "leanprover/lean4:v4.35.0",
@@ -34,7 +34,8 @@
       "binary/kraken-patches/0003-isolate-unfinished-examples.patch",
       "binary/kraken-patches/0004-bsr-semantics.patch",
       "binary/kraken-patches/0005-system-flags.patch",
-      "binary/kraken-patches/0006-stos-and-greater.patch"
+      "binary/kraken-patches/0006-stos-and-greater.patch",
+      "binary/kraken-patches/0007-movs-and-xadd.patch"
     ]
   }
 ]

@@ -89,6 +89,28 @@ theorem stosRepeat (stable : StoreStable F) (w : Width) (count : Nat)
     intro t ht
     exact ih _ ht
 
+theorem movsOne (stable : StoreStable F) (w : Width) {s : MachineData}
+    (hs : F s.dmem) (next : MachineData → Effects)
+    (hn : ∀ t, F t.dmem → Keeps F (next t)) : Keeps F (s.movsOne w next) := by
+  unfold MachineData.movsOne
+  apply load hs
+  intro value t ht
+  apply store stable ht
+  intro t ht
+  exact hn _ ht
+
+theorem movsRepeat (stable : StoreStable F) (w : Width) (count : Nat)
+    (s : MachineData) (hs : F s.dmem) (next : MachineData → Effects)
+    (hn : ∀ t, F t.dmem → Keeps F (next t)) :
+    Keeps F (MachineData.movsRepeat w count s next) := by
+  induction count generalizing s with
+  | zero => exact hn _ hs
+  | succ count ih =>
+    unfold MachineData.movsRepeat
+    apply movsOne stable w hs
+    intro t ht
+    exact ih _ ht
+
 /-- Follow the interpreter's memory operations, without simplifying the
 arithmetic they compute. All branches and undefined choices are retained. -/
 theorem operation [Labels] [address_size : AddressSize] (stable : StoreStable F) {w}
@@ -97,7 +119,10 @@ theorem operation [Labels] [address_size : AddressSize] (stable : StoreStable F)
     (hn : ∀ t, F t.dmem → Keeps F (next t))
     (hj : ∀ pc t, F t.dmem → Keeps F (jmp pc t)) :
     Keeps F (i.interp p s next jmp) := by
-  cases i <;> simp only [Operation.interp]
+  cases i
+  case' cmpxchg dst _ => cases dst
+  case' xadd dst _ => cases dst
+  all_goals simp only [Operation.interp]
   all_goals first
     | exact hn _ hs
     | exact hj _ _ hs
@@ -112,6 +137,8 @@ theorem operation [Labels] [address_size : AddressSize] (stable : StoreStable F)
     | apply store stable (by assumption); intro t ht
     | apply stosOne stable _ (by assumption); intro t ht
     | apply stosRepeat stable _ _ _ (by assumption); intro t ht
+    | apply movsRepeat stable _ _ _ (by assumption); intro t ht
+    | apply movsOne stable _ (by assumption); intro t ht
     | apply undefined; intro v
     | exact impossible _
     | exact hn _ (by assumption)
