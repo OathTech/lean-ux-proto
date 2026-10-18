@@ -881,6 +881,24 @@ budget was used.
 - External kernel acceptance for this new export before the user's result.
   The accepted previous subsystem export covers its stated earlier commit.
 
+## Cumulative code-extent coverage
+
+Against the pinned census of 12,340 anchored WireGuard instructions, completed
+local function refinements cover 489 instructions (3.96%): index lookup and
+peer-get 138, allowed-IPs lookup core and `common_bits` 176, removal 25,
+replacement 41, and insertion 109. This counts seven compiled symbol bodies
+once each; the public allowed-IPs source/destination wrappers are not included.
+Insertion contributes 0.88 percentage points. The retained-heap index sequence
+composes 313 of these instructions, including peer-get; allowed-IPs remains a
+separate function result.
+
+This is conditional sequential theorem coverage by function extent, not
+unconditional proof of every helper body, all mirrored subsystems, concurrent
+refinement, or a percentage of remaining effort. The tested random-service
+body is excluded. The external acceptance status remains per export/commit.
+The denominator and sized-symbol accounting are in the
+[original census](2026-10-15-binary-tv-scoping.md#2-instruction-and-addressing-coverage).
+
 ## Commit and reproducibility checkpoint
 
 Implementation and the complete reported local checks are committed at
