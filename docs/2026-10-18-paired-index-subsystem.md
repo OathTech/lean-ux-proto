@@ -1,7 +1,7 @@
 # Paired index-table subsystem: execution report
 
 Status: charter A–E complete locally on `task/binary-pair-runner`.
-Export prepared at `fe596fd0`; external acceptance remains pending.
+Export prepared at `fe596fd0`; external acceptance passed on 2026-10-18.
 All three function theorems and arbitrary finite retained-heap composition
 check. Positive witnesses, runtime comparisons, fresh kernel replay and the
 binary trust gate pass. External acceptance remains pending. This is the
@@ -59,7 +59,7 @@ Runtime-investigation time used: zero at this checkpoint.
 | B: complete replacement adequacy and measured reuse | Complete locally: all 41 instructions, failure and all positions; explicit environment wrapper, linked/unhashed Pre witnesses, exact witness execution and fresh kernel replay pass. Reuse and marginal cost below. |
 | C: lookup under the common executable relation | Complete theorem and explicit environment wrapper build. Both recorded-prefix suites pass through the new assertion, including dead-then-NULL and collisions. Fresh replay of the environment/headline closure passes. |
 | D: finite call-sequence theorem and retained-heap execution | Complete locally: `Sequence.sequence_checked`, actual histories and explicit environment/access premises. Eight ten-call mixed sequences pass; fresh kernel replay passes. |
-| E: actual mutator captures, trust checks and cost report | Both actual captures and controls pass; fresh full-closure replay, build and trust gate pass. Complete statements, named premises and cost report are recorded; export prepared at `fe596fd0`. External gate pending. |
+| E: actual mutator captures, trust checks and cost report | Both actual captures and controls pass; fresh full-closure replay, build and trust gate pass. Complete statements, named premises and cost report are recorded; export prepared at `fe596fd0`. External gate passed on 2026-10-18. |
 
 The detailed sections below record intermediate states chronologically; the
 completion table and final validation section give the current result.

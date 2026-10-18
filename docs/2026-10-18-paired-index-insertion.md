@@ -8,7 +8,7 @@ Start: **2026-10-18 17:23:07 UTC**. Reassessment if incomplete:
 focused hours, zero used. No merge, push or changes to mirror/oracle/global state.
 
 Mirror pin `cb2348e` now lags main `783510e850e187549cbb9380e53790e1ed232c77`.
-Private Kraken remains clean at `7ebba06a30eaf08c10b26b28ca14bfee1c791576`,
+Private Kraken is clean at `cd2ae360bfcf8e1fc719793405811ff49c3e75ce`,
 Lean v4.35.0; approved s4 ELF SHA256
 `16c346209885db6c610d4aa126c6eb30f5d3c02f0498d95e606473945f648774`.
 The previous subsystem's external export gate passed on 2026-10-18 at
@@ -620,3 +620,102 @@ that failed build was repaired. The complete regression passes **769 jobs**,
 and fresh Lean kernel replay of `PairInsertRandomCall` and its dependencies
 passes. These checks establish the service-composition checkpoint; they do
 not establish the still-open complete insertion theorem.
+
+## Retry and complete-function composition, 2026-10-18 20:48 UTC
+
+`retry_draw` composes the retry trace callback and random CALL. `draw_attempt`
+then executes the index store, first chain scan, derived locked recheck and
+successful prepend/return suffix, or restores the retry invariant after a
+collision. The same physical/private frames carry the external input
+interpretation through ordinary instructions. `retry_loop` inducts over
+`Source.DrawSearch`, extracted from the actual accepted mirror execution;
+there is no separate fixed binary retry budget.
+
+`insert_checked` now builds and passes fresh kernel replay. It connects the
+entry/unhash proof to that loop, including reinsertion, and exports return
+value/ABI, reconstruction, ownership, callback resources, provider readiness,
+remaining input and write/kind frames. Printed axioms are the standard three.
+The named callback, physical random-return and input-coupling hypotheses
+remain explicit. The serialized/access wrapper also builds; it retains the documented R2
+return-history permission premise. Concrete formal entry witnesses and the
+retained-heap sequence extension are not yet complete.
+
+The capture runner now invokes the exact larger `providerCheck` at insertion
+entry. Its complete-body rerun is in progress. Synthetic linked/unlinked Lean
+witness states also include initialized private provider memory; their actual
+body execution and kernel-checked Pre proofs are in progress. No new Pre is
+being committed without its positive witness. Draft composition failures
+were Boolean simplification and union-footprint composition; both were fixed
+without changing the statements. One witness draft build was deliberately
+interrupted after identifying an unsuitable finite-case tactic; it was a
+failed attempt, not a passing check.
+
+The complete captured-body rerun with `providerCheck` at insertion entry
+passes both undefined-value seeds: 1,338 Kraken instructions against 1,354
+native stops, checking 33,626,364 captured bytes per seed. Elapsed time was
+10 min 52.15 s, CPU 648.17 s and peak RSS 11,315,184 KiB. Synthetic exact Lean
+witness states also pass actual-body execution to return: 409 instructions
+unlinked and 434 linked, each with seeds zero and maximum UInt64. An initial
+fixture failure used the default CPL3; setting the synthetic state to CPL0
+fixed the fixture, without changing Pre.
+
+Formal witness normalization remains a cost finding. Several draft reductions
+were deliberately interrupted after rapid memory growth; one diagnostic hit
+the 32 GiB cap and exited 137 with a KILLED banner. These are failed attempts.
+Abstract byte-list read lemmas avoid expanding the 64 KiB initialized table;
+scalar checks and symbolic stack mapping compile separately. The assembled
+entry witness is still being localized and checked. No failed draft is counted
+as acceptance, and no new Pre is committed without the positive formal witness.
+
+## Function and positive-witness checkpoint, 2026-10-18 21:23 UTC
+
+`PairInsertWitness.check` now proves the exact executable Pre for both the
+unlinked and linked synthetic states. `source_success` proves their actual
+mirror executions return index seven, and `executes` instantiates the general
+binary theorem with these states. The physical provider and recorded-input
+contracts remain explicit; this is not a proof of those contracts.
+
+The witness cost had two separate causes. Bare reflexivity on the argument
+register equality caused explosive reduction even with abstract memory;
+explicit state-projection simplification reduced that check to under a second.
+Direct evaluation of the private snapshot checker also failed to reduce.
+`provider_snapshot` and `provider_image_load` instead use the existing union
+and byte-array lookup lemmas, then check the small scalar/list computations.
+The provider witness builds in about 3.2 seconds, the assembled Pre in about
+0.8 seconds, and the source/execution witness in about 0.8 seconds; the separate
+byte/stack facts module took about 10 seconds. These are module build times,
+not a fresh-function throughput estimate. The completed witness declarations
+print only the standard three axioms. No Pre or reconstruction clause changed
+to avoid a valid path.
+
+`ProviderFacts.checked` also reassembles the runtime provider assertion from
+its present-state fields; it is available for retained-heap caller composition.
+The default regression passes **782 jobs**, and the six binary trust-gate unit
+tests pass. An initial fresh-replay command supplied two modules together;
+`leanchecker --fresh` rejected that invocation. Separate fresh kernel replays
+of `PairInsertWitnessExecution` and `PairInsertEnvironment` both pass. The insertion external export gate is still outstanding.
+
+The witness executable checks the image-derived layout against the declared
+witness layout, evaluates both assertions using the formal witness context,
+and runs those same states through the actual decoded provider and insertion
+bodies. Reproduce from the worktree root:
+
+```sh
+(cd binary && capped lake build binary-pair-insert-witness PairInsertWitnessExecution)
+capped binary/.lake/build/bin/binary-pair-insert-witness .tmp/binary-insert/input.json
+(cd binary && capped lake env leanchecker --fresh PairInsertWitnessExecution)
+(cd binary && capped lake env leanchecker --fresh PairInsertEnvironment)
+```
+
+This reaches the individual-function checkpoint; extended mixed finite
+sequences, their retained-input invariant, final trust-surface refresh and
+exact-commit export remain open. The scientific evidence supports testing the
+same assertions that the proof uses, while this witness episode demonstrates
+that proof-engine reduction costs are a separate expense that testing alone
+does not remove.
+
+At **21:25:33 UTC**, the complete function/witness checkpoint passed, **4 h
+2 min 26 s** after the increment start. The exact-context witness rerun passed
+all four executions (409/434 instructions, both seeds), and the private Kraken
+tree is clean at the pin above. The remaining goal is still active: this is
+not the retained-heap sequence or external-export completion point.

@@ -1,6 +1,7 @@
 import PairInsert
 import PairMutatorCapture
 import PairRandomRun
+import PairInsertProvider
 
 namespace Binary.Pair.InsertCapture
 open Lean Leanux Leanux.WG
@@ -71,6 +72,8 @@ def run (input : ProbeInput) (snapshot : Snapshot) (privateState : PrivateState)
   let view ← (reconstruct names input.offsets initial.data.dmem).mapError DecodeError.message
   let world ← MutatorCapture.sourceWorld template view
   let frame ← Capture.callFrame input snapshot.toSnapshot layout initial
+  Insert.providerCheck names input.offsets (← Index.readContext initial.data.dmem)
+    initial (.ofNat frame.returnPC) privateState.config
   let owner ← (ownerAt names "capture.insert.argument" initial.data.regs.rsi.toNat).mapError DecodeError.message
   let parsed ← Runner.parseTrace input.trace
   let some hidden := parsed.hidden | throw "capture.insert.recorded-input"
