@@ -393,3 +393,27 @@ separation facts discharge all the physical loads at composition.
 
 Targeted builds and fresh kernel replay of `PairInsertNested` pass, with only
 the standard three printed axioms. The default build passes (745 jobs).
+
+## Draw, search and prepend, 2026-10-18 19:39 UTC
+
+`draw_entry` consumes the actual low 32 bits returned in RAX, writes the
+unlinked owner and supplies a reconstructed insertion focus. It makes no
+recorded-value assumption. `search` then composes the complete first walk and,
+on a miss, the nested recheck. The second miss follows from the unchanged
+chain. `InsertFocus.collision` identifies the physical walk's result with the
+mirror table's index-membership test. A collision reaches the retry point;
+a miss reaches the prepend stores with the bucket register and heap relation.
+
+`prepend` executes all three initial stores, the old-head repair when needed,
+and the real intervening callbacks. Its post-state uses the same combined
+`insertMemory` definition tested by the runner and covered by reconstruction
+and ownership lemmas. The new store wrappers share a register-to-memory store
+lemma; the guard reuses the earlier test lemma. Mappedness after stores is
+reused directly rather than reproved by a disjointness argument.
+
+Fresh replay of `PairInsertPrepend` passes, including its imported search and
+draw modules. Printed axioms are the standard three; the full build passes
+(751 jobs), with no warnings in these new modules. One draft generic-store
+adapter timed out; its single literal instruction is now reduced directly.
+Other draft failures were local normalization and rewrite mismatches. The
+return composition and honest random-service boundary are still open.
