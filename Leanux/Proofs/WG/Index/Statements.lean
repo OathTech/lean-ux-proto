@@ -1,3 +1,8 @@
+import Leanux.Proofs.WG.Index.InitializedBoundsClaims
+import Leanux.Proofs.WG.Index.HashSlotLookupClaims
+import Leanux.Proofs.WG.Index.HashSlotClearClaims
+import Leanux.Proofs.WG.Index.HashSlotRotationClaims
+import Leanux.Proofs.WG.Index.HashSlotSessionClaims
 import Leanux.Proofs.WG.Index.SessionInvariantClaims
 import Leanux.Proofs.WG.Index.BulkRemovalClaims
 import Leanux.Proofs.WG.Index.SessionLookupClaims
@@ -1090,5 +1095,71 @@ theorem original_session_calls_index_invariant (pids : List PeerId) :
     Campaign2.Ensures (pids.mapM beginSession) View.SessionIndexSafe
       (fun _ => View.SessionIndexSafe) :=
   sessionCalls_sessionIndexSafe pids
+
+/-- The initialized original runner supplies actual resident-store bounds and
+slot compatibility on every normal endpoint, with exact JSON and indexed Stops.
+Hashed-owner coherence is deliberately not part of this endpoint claim. -/
+theorem original_initialized_store_slot_bounds (trace : Runner.Trace) (placeholders : Bool) :
+    (InitializedBounds.inspection trace placeholders).map Prod.fst =
+      Runner.executeTrace trace placeholders ∧
+    (match InitializedBounds.inspection trace placeholders with
+      | .error _ => True
+      | .ok (_,final) => InitializedBounds.EndpointSafe final) :=
+  ⟨InitializedBounds.inspection_json trace placeholders,
+    InitializedBounds.inspection_bounds trace placeholders⟩
+
+/-- A successful actual keypair lookup selects a resident key in its actual
+owner's slots and acquires a positive peer reference. Entry coherence and
+coverage remain explicit; this is not initialized-driver closure. -/
+theorem original_index_lookup_keypair_slot_held (index : Nat) :
+    Campaign2.Ensures (indexLookup [.keypair] index)
+      (fun s => View.OwnerCoherentSafe s ∧ View.HashSlotsSafe s)
+      (fun result s => View.OwnerCoherentSafe s ∧ View.HashSlotsSafe s ∧
+        ∀ owner pid, result = some (owner,pid) → ∃ kid d p key,
+          owner = .keypair kid ∧ s.wg.device = some d ∧
+          d.peers[pid]? = some p ∧ 1 < p.refcount ∧
+          d.keypairs[kid]? = some key ∧ key.peer = some pid ∧
+          0 < key.refcount ∧ some kid ∈ clearKeys p) :=
+  indexLookup_keypair_slot_held index
+
+/-- Actual clearing preserves coverage and coherence with arbitrary slot
+aliases, empties all three slots, and derives the conditional detachment
+obligation for a last peer release. No queue or reference budget is supplied. -/
+theorem original_keypairs_clear_hash_slots (pid : PeerId) :
+    Campaign2.Ensures (keypairsClear pid)
+      (fun s => View.HashSlotsSafe s ∧ View.OwnerCoherentSafe s)
+      (fun _ s => View.HashSlotsSafe s ∧ View.OwnerCoherentSafe s ∧
+        ∃ final p, s.wg.device = some final ∧ final.peers[pid]? = some p ∧
+          clearKeys p = [none,none,none] ∧ LastOwnerDetached final pid p) :=
+  keypairsClear_hashSlots_detached pid
+
+/-- The actual role-selected rotation preserves hashed-key slot coverage.
+The original execution supplies successful immediate puts; aliases and
+missing-input Stops keep their source meaning. -/
+theorem original_add_new_keypair_hash_slots (pid : PeerId) (newKey : KeypairId)
+    (d : Device) (p : Peer) (key : Keypair)
+    (resident : d.peers[pid]? = some p) (stored : d.keypairs[newKey]? = some key) :
+    Campaign2.Ensures (addNewKeypair pid newKey)
+      (fun s => s.wg.device = some d ∧ View.HashSlotsSafe s)
+      (fun _ s => View.HashSlotsSafe s) :=
+  addNewKeypair_hashSlots pid newKey d p key resident stored
+
+/-- Both results of actual confirmation preserve hashed-key slot coverage.
+Caller residency comes from the first read, with no readiness premise. -/
+theorem original_confirmation_hash_slots (pid : PeerId) (received : KeypairId) :
+    Campaign2.Ensures (receivedWithKeypair pid received) View.HashSlotsSafe
+      (fun _ s => View.HashSlotsSafe s) :=
+  receivedWithKeypair_hashSlots pid received
+
+/-- Actual session start preserves the existing combined session invariant
+and hashed-slot coverage together. The supplied entry invariant derives
+allocation/rotation freshness; this does not assert driver reachability. -/
+theorem original_begin_session_hash_slots (pid : PeerId) :
+    Campaign2.Ensures (beginSession pid)
+      (fun s => View.SessionIndexSafe s ∧ View.HashSlotsSafe s)
+      (fun _ s => View.SessionIndexSafe s ∧ View.HashSlotsSafe s) := by
+  intro g ambient result out after pre run
+  exact ⟨beginSession_sessionIndexSafe pid g ambient result out after pre.1 run,
+    beginSession_sessionHashSlots pid g ambient result out after pre run⟩
 
 end Leanux.Proofs.WG.Index
