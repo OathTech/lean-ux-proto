@@ -431,6 +431,14 @@ same ownership decoder used by the runner and to the source filter's target.
 It does not prove bucket reconstruction through unlink or whole-function
 removal adequacy. See the increment report for the explicit premises and limits.
 
+The [index-subsystem increment](../docs/2026-10-18-paired-index-subsystem.md)
+adds `PairUnlinkReconstruct` and `PairUnlinkOwnership`. They prove that the
+combined concrete unlink stores restore the same executable reconstruction
+and owner flags, deriving the list shape from successful decoding. Removal's
+runner now checks the immutable storage separation used by these proofs.
+The complete anchored removal theorem is still open; these memory-effect
+lemmas do not establish whole-call instruction coverage.
+
 For runtime diagnosis, `binary-pair-buffer-cost` uses a **generated variation**
 of an allowed-IPs capture with a smaller KCOV allocation and changed capacity
 metadata. It checks that the original instruction path is preserved under

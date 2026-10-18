@@ -59,8 +59,16 @@ def suite (input : ProbeInput) : Except String Json := do
     | .error e =>
       unless e=="remove: owner hashed state differs" do throw s!"ownership failed elsewhere: {e}"
       pure e
+  let some (_,peerBase) := s.names.peers.head? | throw "storage control: no registered peer"
+  let aliases := {s.names with owners := s.names.owners ++ [(.keypair 1000,peerBase+input.offsets.peerRefcount)]}
+  let storageRejected ← match Remove.assertAt aliases input.offsets s.binary.state.data.dmem s.world with
+    | .ok _ => throw "storage control accepted a count/entry overlap"
+    | .error e =>
+      unless e=="remove: index storage overlaps or wraps" do throw s!"storage control failed elsewhere: {e}"
+      pure e
   return Json.mkObj [("status",toJson "pass"),("entry_origin",toJson "recorded-prefix materialization and labelled synthetic heaps; not captured memory"),
-    ("cases",toJson cases),("lookup_relation_counterexample",toJson divergence),("ownership_rejection",toJson rejected)]
+    ("cases",toJson cases),("lookup_relation_counterexample",toJson divergence),("ownership_rejection",toJson rejected),
+    ("storage_rejection",toJson storageRejected)]
 
 def main (args : List String) : IO UInt32 := do
   let [path] := args | IO.eprintln "usage: binary-pair-remove INPUT.json"; return 1

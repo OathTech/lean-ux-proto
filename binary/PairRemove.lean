@@ -1,4 +1,5 @@
 import PairIndex
+import PairIndexStorage
 
 namespace Binary.Pair.Remove
 open Lean Leanux Leanux.WG
@@ -17,6 +18,7 @@ def targetOwnership (d : Device) : List (IndexOwner × Bool) :=
       fun owner => (owner,d.indexTable.any (·.owner == owner))
 
 def assertAt (n : Names) (o : Offsets) (m : DataMem) (w : World) : Except String Unit := do
+  unless Index.storageCheck n o do throw "remove: index storage overlaps or wraps"
   assertMemory n o m w
   let some d := w.k.wg | throw "remove: no source device"
   let actual ← (ownership n o m).mapError DecodeError.message
