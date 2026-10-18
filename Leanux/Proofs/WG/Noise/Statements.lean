@@ -8,6 +8,10 @@ import Leanux.Proofs.WG.Noise.InitiationCallerClaims
 import Leanux.Proofs.WG.Noise.PeerCreationClaims
 import Leanux.Proofs.WG.Noise.SessionRefusalClaims
 import Leanux.Proofs.WG.Noise.ResponseCallerClaims
+import Leanux.Proofs.WG.Noise.ResponseCallerFinalClaims
+import Leanux.Proofs.WG.Noise.CookieReplyTagFrames
+import Leanux.Proofs.WG.Noise.PendingTicketFrames
+import Leanux.Proofs.WG.Noise.ConsumeConfirmationClaims
 import Leanux.Proofs.WG.Noise.InitialSlotClaims
 import Leanux.Proofs.WG.Noise.InterleavedFreshClaims
 import Leanux.Proofs.WG.Noise.FreshHistoryClaims
@@ -682,5 +686,18 @@ theorem original_receive_step_dispatch (entry : Campaign2.Snapshot) :
       (fun r _ => r.entry = entry ∧ ReceiveStepCaller.PollShape r.entry r.poll) :=
   ⟨ReceiveStepCaller.original_receiveStep_receipt_erases,
     ReceiveStepCaller.original_receiveStep_receipt entry⟩
+
+/-- The original response call connects its entry, actual helper receipts, and
+final handshake tags, with concrete socket and timer frames. -/
+theorem original_response_final_tags (pid : PeerId) (entry : Campaign2.Snapshot) :
+    Campaign2.Ensures (ResponseCaller.observeProjected pid)
+      (fun s => s.tagAt = entry.tagAt)
+      (fun receipts final => ResponseCaller.ReceiptShape pid receipts ∧
+        ResponseCaller.ReceiptChain entry receipts ∧
+        ResponseCaller.ReceiptRoles pid entry receipts ∧
+        ResponseCaller.ReceiptFinalTags receipts final ∧
+        ∀ receipt ∈ receipts,
+          ResponseCaller.ReceiptValid receipt ∧ TagReceiptEffect receipt) :=
+  ResponseCaller.original_response_receipt_final_tags pid entry
 
 end Leanux.Proofs.WG.Noise
