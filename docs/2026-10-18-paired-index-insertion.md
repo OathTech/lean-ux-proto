@@ -290,3 +290,30 @@ lemmas. Fresh instruction/store composition and the entry adapter are specific
 to insertion's register allocation and saved frame. The default build passes
 (729 jobs), and fresh kernel replay of `PairInsertUnhashEntry` passes with only
 standard printed axioms. This closes a function prefix, not insertion adequacy.
+
+## Sequential flag support and capture regression, 2026-10-18 19:12 UTC
+
+The private Kraken branch `task/binary-pair-insert-isa` now pins
+`4651c92fa728734240de7ff4d5bdff3f05875806`. Its fifth reproducible patch adds
+PUSHF, CLI and STI for 64-bit sequential execution. Non-arithmetic flags and
+CPL are separate from arithmetic status; invalid PUSHF widths and denied
+privilege fail explicitly. The pushed image clears RF/VM and reserved bits.
+Interrupt delivery, the STI shadow and persistent RF remain outside the model.
+The default CPL is unprivileged; captured kernel states explicitly load CPL 0.
+No random-service contract has been added by this ISA extension.
+
+Concrete instruction/parser tests and symbolic CLI/STI effects pass, with only
+the standard three printed axioms. Fresh kernel replay of
+`Kraken.X64.SystemFlagsTests` passes. The full consumer build passes at the new
+pin (730 jobs). Initial test drafts failed because of two incorrect expected
+flag masks and parser/test syntax; these were corrected, not counted as passes.
+
+The captured insertion test now loads and compares the represented system
+flags as well as the earlier six status flags. A negative control flipping IF
+is rejected specifically by that comparison. The unchanged actual capture
+passes for both undefined-value seeds: 33,625,812 compared bytes per run,
+332 interpreted anchor/callback instructions and 1,022 sampled native random
+instructions, 1,354 total. The random body remains a labelled sampled transition
+in this capture test. Repeating the previously documented capture replay command
+took 5:51.51 elapsed, 347.60 user CPU seconds and 10,438,404 KiB maximum RSS.
+The supporting runtime-optimization budget remains unused.

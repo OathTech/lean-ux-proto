@@ -1,0 +1,273 @@
+From 4651c92fa728734240de7ff4d5bdff3f05875806 Mon Sep 17 00:00:00 2001
+From: Mike Dodds <mike@oath.tech>
+Date: Sun, 18 Oct 2026 19:06:01 +0000
+Subject: [PATCH] Model sequential PUSHF and privileged interrupt-flag effects
+
+[AGENT 2026-10-18] Keep non-arithmetic flags separate from arithmetic status. Model the 64-bit-mode flag and stack effects of PUSHF, CLI and STI with explicit unsupported privilege faults. Interrupt delivery and STI shadow remain outside the sequential model. RF, VM and reserved bits are excluded from the pushed image.
+
+Validation: parser and concrete effect tests, symbolic CLI/STI effects with only standard axioms, and fresh leanchecker replay passed under Lean 4.35.0. The 729-job consumer regression passed after adding system state; a narrower rebuild passed after excluding persistent RF from the comparison projection.
+---
+ Kraken/X64/Parser/Basic.lean     |  4 ++
+ Kraken/X64/PrintATT.lean         |  3 ++
+ Kraken/X64/PrintIntel.lean       |  3 ++
+ Kraken/X64/Semantics.lean        | 38 +++++++++++++
+ Kraken/X64/Syntax.lean           |  3 ++
+ Kraken/X64/SystemFlagsTests.lean | 92 ++++++++++++++++++++++++++++++++
+ notes/x64-system-flags.md        | 24 +++++++++
+ 7 files changed, 167 insertions(+)
+ create mode 100644 Kraken/X64/SystemFlagsTests.lean
+ create mode 100644 notes/x64-system-flags.md
+
+diff --git a/Kraken/X64/Parser/Basic.lean b/Kraken/X64/Parser/Basic.lean
+index 38793e9..9e9874b 100644
+--- a/Kraken/X64/Parser/Basic.lean
++++ b/Kraken/X64/Parser/Basic.lean
+@@ -1029,6 +1029,10 @@ def parseInstr : Parser Instr := do
+       pure (toInstr .none (.bswap dst))
+ 
+   -- Stack operations
++  | "pushf" | "pushfq" => pure (toInstr .none (w := .W64) .pushf)
++  | "pushfw" => pure (toInstr .none (w := .W16) .pushf)
++  | "cli" => pure (toInstr .none (w := .W64) .cli)
++  | "sti" => pure (toInstr .none (w := .W64) .sti)
+   | "push" =>
+     let ( addr_w, src ) ← parseOperand
+     -- Without a register to give the width (`push $1`, `push (%rax)`), push is 64-bit.
+diff --git a/Kraken/X64/PrintATT.lean b/Kraken/X64/PrintATT.lean
+index 7622c7e..2183b98 100644
+--- a/Kraken/X64/PrintATT.lean
++++ b/Kraken/X64/PrintATT.lean
+@@ -78,6 +78,9 @@ def operation {w} (aw : Width) (op : Operation w) : String :=
+   | .movsx d x => s!"movsx {rm aw x}, {rm aw d}"
+   | .movzx d x => s!"movzx {rm aw x}, {rm aw d}"
+   | .push x => one "push" (operand aw x)
++  | .pushf => s!"pushf{s}"
++  | .cli => "cli"
++  | .sti => "sti"
+   | .pop d => one "pop" (rm aw d)
+   | .setcc cc d => s!"set{cc} {rm aw d}"
+   | .cmovcc cc d x => s!"cmov{cc} {rm aw x}, {reg d}"
+diff --git a/Kraken/X64/PrintIntel.lean b/Kraken/X64/PrintIntel.lean
+index c22571e..2ef8613 100644
+--- a/Kraken/X64/PrintIntel.lean
++++ b/Kraken/X64/PrintIntel.lean
+@@ -131,6 +131,9 @@ def Operation.toStr {w} (op : Operation w) (addr_w : Width := .W64) : String :=
+     s!"{m} {dst.toStr addr_w}, {src.toStr addr_w}"
+   | .movzx dst src => s!"movzx {dst.toStr addr_w}, {src.toStr addr_w}"
+   | .push src => s!"push {src.toStr addr_w}"
++  | .pushf => if w == .W64 then "pushfq" else if w == .W16 then "pushf" else "invalid-pushf-width"
++  | .cli => "cli"
++  | .sti => "sti"
+   | .pop dst => s!"pop {dst.toStr addr_w}"
+   | .setcc cc dst => s!"set{cc} {dst.toStr addr_w}"
+   | .cmovcc cc dst src => s!"cmov{cc} {dst}, {src.toStr addr_w}"
+diff --git a/Kraken/X64/Semantics.lean b/Kraken/X64/Semantics.lean
+index e2565e8..a48440c 100644
+--- a/Kraken/X64/Semantics.lean
++++ b/Kraken/X64/Semantics.lean
+@@ -232,15 +232,39 @@ structure StatusFlags where
+   of : Bool
+   deriving Repr, BEq, DecidableEq, Hashable, Lean.ToExpr
+ 
++/-- Non-arithmetic RFLAGS and privilege in 64-bit mode. Arithmetic operations
++preserve this component. Reserved bits, RF and VM are absent from the pushed flag image.
++Kraken has no asynchronous interrupt transition: this records IF, not delivery
++or the STI interrupt shadow. Privilege faults remain explicit unsupported effects. -/
++structure SystemFlags where
++  bits : BitVec 64 := 0
++  cpl : BitVec 2 := 3
++  deriving Repr, BEq, DecidableEq, Hashable, Lean.ToExpr
++
++def SystemFlags.iopl (f : SystemFlags) : BitVec 2 := f.bits.extractLsb' 12 2
++
++def SystemFlags.setIF (f : SystemFlags) (enabled : Bool) : SystemFlags :=
++  { f with bits := (f.bits &&& ~~~(512#64)) ||| (if enabled then 512 else 0) }
++
+ abbrev DataMem := Mem 64
+ instance : Repr DataMem where reprPrec _ _ := "<opaque memory>"
+ structure MachineData where -- does not include code or program position
+   regs : Reg64s := {}
+   zmms : RegZmms := {}
+   status : StatusFlags := .mk false false false false false false
++  system : SystemFlags := {}
+   dmem : DataMem := ∅
+   deriving Repr, BEq, DecidableEq
+ 
++/-- PUSHF image in long mode; bit 1 is fixed, RF/VM/reserved bits are zero.
++The six arithmetic bits come only from `status`. RF is not modeled as persistent
++state (its automatic clearing is outside this sequential projection). -/
++def MachineData.pushFlags (s : MachineData) : BitVec 64 :=
++  (s.system.bits &&& 0x3c7700) ||| 2 |||
++    (if s.status.cf then 1 else 0) ||| (if s.status.pf then 4 else 0) |||
++    (if s.status.af then 16 else 0) ||| (if s.status.zf then 64 else 0) |||
++    (if s.status.sf then 128 else 0) ||| (if s.status.of then 2048 else 0)
++
+ -- We only allow nondeterministic choices for a fixed set of types.
+ class inductive NondetSupportingType : Type -> Type
+   | bitvec (w : Width) : NondetSupportingType w.type
+@@ -474,6 +498,20 @@ set_option maxHeartbeats 1000000
+     src.interp s p (fun v s =>
+     let rsp := s.regs.get64 .rsp - w.bytesv
+     { s with regs := s.regs.set64 .rsp rsp }.store rsp v next)
++  | .pushf =>
++    if w == .W64 || w == .W16 then
++      let rsp := s.regs.get64 .rsp - w.bytesv
++      let value := s.pushFlags.setWidth w.bits
++      { s with regs := s.regs.set64 .rsp rsp }.store rsp value next
++    else unimplemented "PUSHF: only 16- and 64-bit operands exist in 64-bit mode"
++  | .cli =>
++    if s.system.cpl ≤ s.system.iopl then
++      next { s with system := s.system.setIF false }
++    else unimplemented "CLI: #GP(0), CPL exceeds IOPL in 64-bit mode"
++  | .sti =>
++    if s.system.cpl ≤ s.system.iopl then
++      next { s with system := s.system.setIF true }
++    else unimplemented "STI: #GP(0), CPL exceeds IOPL in 64-bit mode"
+   | .pop dst =>
+     let rsp := s.regs.get64 .rsp
+     s.load rsp w (fun val s =>
+diff --git a/Kraken/X64/Syntax.lean b/Kraken/X64/Syntax.lean
+index 49d524a..2683805 100644
+--- a/Kraken/X64/Syntax.lean
++++ b/Kraken/X64/Syntax.lean
+@@ -192,6 +192,9 @@ inductive Operation (w : Width)
+   | movsx {w'} (_ : Dst w) (src : RegOrMem w') -- {_ : w'.bits < w.bits ∧ w'.bits < 32}
+   | movzx {w'} (_ : Dst w) (src : RegOrMem w') -- {_ : w'.bits < w.bits ∧ w'.bits < 32}
+   | push (src : Operand w)
++  | pushf
++  | cli
++  | sti
+   | pop  (_ : Dst w)
+   | setcc (_ : CondCode) (_ : Dst w) -- {_ : w = .W8}
+   | cmovcc (_ : CondCode) (_ : Reg w) (src : RegOrMem w)
+diff --git a/Kraken/X64/SystemFlagsTests.lean b/Kraken/X64/SystemFlagsTests.lean
+new file mode 100644
+index 0000000..80597fb
+--- /dev/null
++++ b/Kraken/X64/SystemFlagsTests.lean
+@@ -0,0 +1,92 @@
++module
++
++import Kraken.X64.OmniSemantics
++import Kraken.X64.Parser
++import Kraken.X64.PrintATT
++meta import Kraken.X64.Semantics
++meta import Kraken.Mem
++meta import Kraken.X64.PrintATT
++
++namespace Kraken.X64.SystemFlagsTests
++
++private instance : Labels := ⟨fun _ => 0⟩
++
++private def execute (w : Width) (op : Operation w) (s : MachineData) : Effects :=
++  (Instr.regular .W64 w op).interp s ⟨0, 1⟩
++    (fun d => .done ⟨d, 1⟩) (fun pc d => .done ⟨d, pc⟩)
++
++private def check (post : MachineState → Bool) : Effects → Bool
++  | .done s => post s
++  | .require_exec_access _ next => check post (next ())
++  | .require_read_access _ _ next => check post (next ())
++  | .require_write_access _ _ next => check post (next ())
++  | _ => false
++
++private def initial : MachineData :=
++  { regs := {rsp := 0x1000, rax := 17}
++    status := ⟨true, true, true, true, true, true⟩
++    system := {bits := 0x3700, cpl := 0}
++    dmem := (Int.toBytes 8 0).At 0xff8 }
++
++-- Independent expected flag image: CF/PF/AF/ZF/SF/OF, TF/IF/DF/IOPL and bit 1.
++#guard initial.pushFlags == 0x3fd7
++#guard ({initial with system := {bits := 0xffffffffffffffff, cpl := 0}}).pushFlags == 0x3c7fd7
++#guard check (fun t => t.pc == 1 && t.data.regs.rsp == 0xff8 &&
++    t.data.regs.rax == 17 && t.data.dmem.loadInt 0xff8 8 == some 0x3fd7 &&
++    t.data.status == initial.status && t.data.system == initial.system)
++  (execute .W64 .pushf initial)
++#guard check (fun t => t.data.regs.rsp == 0xffe &&
++    t.data.dmem.loadInt 0xffe 2 == some 0x3fd7 && t.data.system == initial.system)
++  (execute .W16 .pushf initial)
++-- RF/VM/reserved bits are absent from the pushed image.
++#guard check (fun t => t.data.dmem.loadInt 0xff8 8 == some 0x3c7fd7)
++  (execute .W64 .pushf {initial with system := {bits := 0xffffffffffffffff, cpl := 0}})
++#guard !check (fun _ => true) (execute .W32 .pushf initial)
++#guard !check (fun _ => true) (execute .W8 .pushf initial)
++#guard !check (fun _ => true) (execute .W64 .pushf {initial with dmem := {}})
++
++#guard check (fun t => t.data.pushFlags == 0x3dd7 && t.data.regs == initial.regs &&
++    t.data.status == initial.status && t.data.dmem == initial.dmem)
++  (execute .W64 .cli initial)
++#guard check (fun t => t.data.pushFlags == 0x3fd7)
++  (execute .W64 .sti {initial with system := initial.system.setIF false})
++#guard check (fun t => t.data.system.bits == 512)
++  (execute .W64 .sti {system := {cpl := 0}})
++#guard !check (fun _ => true) (execute .W64 .cli {system := {bits := 512, cpl := 3}})
++#guard !check (fun _ => true) (execute .W64 .sti {system := {cpl := 3}})
++#guard check (fun t => t.data.system.bits == 0x3200)
++  (execute .W64 .sti {system := {bits := 0x3000, cpl := 3}})
++#guard check (fun t => t.data.system.bits == 0x3000)
++  (execute .W64 .cli {system := {bits := 0x3200, cpl := 3}})
++
++#guard match Parser.parse "pushf\ncli\nsti\npushfw" with
++  | .ok program => program ==
++    [.instr (.regular .W64 .W64 .pushf), .instr (.regular .W64 .W64 .cli),
++     .instr (.regular .W64 .W64 .sti), .instr (.regular .W64 .W16 .pushf)]
++  | .error _ => false
++#guard match Parser.parse "pushfq" with
++  | .ok program => program == [.instr (.regular .W64 .W64 .pushf)]
++  | .error _ => false
++#guard !(Parser.parse "pushfl").isOk
++#guard !(Parser.parse "pushfb").isOk
++#guard !(Parser.parse "cli %rax").isOk
++#guard !(Parser.parse "lock cli").isOk
++#guard !(Parser.parse "lock sti").isOk
++#guard !(Parser.parse "lock pushfq").isOk
++#guard ATT.operation (w := .W64) .W64 .pushf == "pushfq"
++#guard ATT.operation (w := .W16) .W64 .pushf == "pushfw"
++
++theorem cli_state (s : MachineData) (allowed : s.system.cpl ≤ s.system.iopl) :
++    (execute .W64 .cli s).All (fun t =>
++      t.pc=1 ∧ t.data={s with system := s.system.setIF false}) := by
++  simp [execute, Instr.interp, Operation.interp, Effects.All, allowed]
++
++theorem sti_state (s : MachineData) (allowed : s.system.cpl ≤ s.system.iopl) :
++    (execute .W64 .sti s).All (fun t =>
++      t.pc=1 ∧ t.data={s with system := s.system.setIF true}) := by
++  simp [execute, Instr.interp, Operation.interp, Effects.All, allowed]
++
++#print axioms cli_state
++#print axioms sti_state
++
++end Kraken.X64.SystemFlagsTests
+diff --git a/notes/x64-system-flags.md b/notes/x64-system-flags.md
+new file mode 100644
+index 0000000..edaeaac
+--- /dev/null
++++ b/notes/x64-system-flags.md
+@@ -0,0 +1,24 @@
++# Sequential system flags
++
++The insertion probe reaches PUSHFQ, CLI and STI in Linux's random provider.
++`MachineData.system` adds the non-arithmetic RFLAGS bits and CPL separately
++from the six arithmetic flags. Existing arithmetic operations preserve it.
++PUSHF supports 16/64-bit operands, requests the existing stack write permission,
++and clears RF/VM in the stored image. CLI/STI change IF only when CPL permits;
++the denied case fails explicitly as an unsupported general-protection fault.
++The default CPL is 3; kernel fixtures must supply CPL 0 explicitly.
++
++This is 64-bit sequential execution. Interrupt delivery, the STI interrupt
++shadow, exception handlers, virtualization interception and other execution
++modes are not modeled. In particular this extension cannot justify a concurrent
++interrupt-sensitive contextual equivalence. It does not treat CLI/STI as NOPs.
++
++Reference: Intel SDM, instruction entries CLI in
++[volume 2A](https://www.intel.com/content/dam/www/public/us/en/documents/manuals/64-ia-32-architectures-software-developer-vol-2a-manual.pdf)
++and PUSHF/STI in
++[volume 2B](https://www.intel.com/content/dam/www/public/us/en/documents/manuals/64-ia-32-architectures-software-developer-vol-2b-manual.pdf).
++
++`Kraken.X64.SystemFlagsTests` checks flag packing, stack writes, width and
++privilege rejection, register/memory preservation, parser forms, and symbolic
++CLI/STI effects. Build with the consumer's Lean 4.35.0 toolchain, then replay
++that module with `lake env leanchecker Kraken.X64.SystemFlagsTests`.
+-- 
+2.43.0
+

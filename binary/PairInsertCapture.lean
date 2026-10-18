@@ -73,6 +73,16 @@ def run (input : ProbeInput) (snapshot : Snapshot) (layout : Json) : Except Stri
   let template ← replayRecordedPrefix input.trace input.operation
   let some d := template.k.wg | throw "capture.insert.device"
   let initial ← snapshot.initial.registers.state (← Capture.loadMemory snapshot.initial.blocks)
+  -- A cheap independent endpoint control for the newly represented IF bit.
+  -- Its empty byte list isolates flag comparison; the real run compares all bytes.
+  let flagsControl : Capture.Endpoint := {registers := {snapshot.initial.registers with
+    eflags := snapshot.initial.registers.eflags ^^^ 512},blocks := #[]}
+  let flagsRejected ← match Capture.compareEndpoint flagsControl initial with
+    | .ok _ => throw "capture.insert.control: changed IF accepted"
+    | .error e => do
+      unless e.startsWith "captured endpoint system flags" do
+        throw s!"capture.insert.control: changed IF failed elsewhere: {e}"
+      pure e
   let names ← MutatorCapture.names input snapshot.toMutatorCaptureSnapshot layout initial d
   let view ← (reconstruct names input.offsets initial.data.dmem).mapError DecodeError.message
   let world ← MutatorCapture.sourceWorld template view
@@ -107,6 +117,7 @@ def run (input : ProbeInput) (snapshot : Snapshot) (layout : Json) : Except Stri
     ("input_origin",toJson "actual entry projection, allocation identities from recorded prefix, draws checked against independent recording"),
     ("native_instructions",toJson snapshot.executedPCs.size),("interpreted_instructions",toJson expected.size),
     ("random_services",toJson snapshot.randomServices.size),("capacity",toJson snapshot.initial.capacity),
+    ("system_flags_control",toJson flagsRejected),
     ("runs",toJson runs)]
 
 end Binary.Pair.InsertCapture

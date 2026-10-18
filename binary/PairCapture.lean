@@ -35,7 +35,10 @@ def Registers.state (r : Registers) (m : DataMem) : Except String MachineState :
     r12 := .ofNat r.r12, r13 := .ofNat r.r13, r14 := .ofNat r.r14, r15 := .ofNat r.r15 }
   let status : StatusFlags := ⟨r.eflags.testBit 0, r.eflags.testBit 2, r.eflags.testBit 4,
     r.eflags.testBit 6, r.eflags.testBit 7, r.eflags.testBit 11⟩
-  return ⟨{regs, status, dmem := m}, .ofNat r.rip⟩
+  -- The captured anchor runs at CPL 0. Arithmetic flags remain in `status`;
+  -- `pushFlags` masks those bits out of this separate system component.
+  let system : SystemFlags := {bits := .ofNat 64 r.eflags,cpl := 0}
+  return ⟨{regs, status, system, dmem := m}, .ofNat r.rip⟩
 
 structure Block where
   address : Nat
@@ -167,6 +170,8 @@ def compareEndpoint (endpoint : Endpoint) (actual : MachineState) : Except Strin
       checked := checked + 1
   unless actual.data.status == expected.data.status do
     throw s!"captured endpoint flags after {checked} matching bytes: Kraken={repr actual.data.status}, kernel={repr expected.data.status}"
+  unless actual.data.pushFlags == expected.data.pushFlags && actual.data.system.cpl==0 do
+    throw s!"captured endpoint system flags after {checked} matching bytes: Kraken={actual.data.pushFlags}, kernel={expected.data.pushFlags}"
   return checked
 
 def compareReturn (snapshot : Snapshot) (actual : Run) : Except String Nat := do
