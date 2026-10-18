@@ -372,3 +372,24 @@ replay pass; printed axioms are the standard three. The default build passes
 (741 jobs). Failed draft elaborations were word-normalization and Boolean
 orientation issues, corrected before replay. Insertion adequacy and the
 random-service contract remain open.
+
+## Nested recheck entry, 2026-10-18 19:32 UTC
+
+`nested_entry` now executes the second BH-disable, reloads the resident index,
+computes its bucket and reaches the shared locked walk with the same storage
+relation. The preempt-count transition preserves the saved frame, coverage and
+both conditional pending-word resources. `RetryData.draw` proves that updating
+an unlinked owner's index preserves reconstruction and ownership and leaves
+the resident allocation ready for a later retry.
+
+The fresh seven-instruction symbolic block repeatedly exhausted the default
+200,000-heartbeat limit; a local 1,000,000-heartbeat attempt also failed. These
+are failed builds. Splitting the block into count, load, mask, head-load and
+test effects made the physical module elaborate in about one second, with no
+raised heartbeat limit retained. This is a concrete symbolic-execution cost
+and a useful local remedy; cuts remain proof choices. The existing generic
+test-branch lemma is reused for the final guard. The reconstructed read and
+separation facts discharge all the physical loads at composition.
+
+Targeted builds and fresh kernel replay of `PairInsertNested` pass, with only
+the standard three printed axioms. The default build passes (745 jobs).
