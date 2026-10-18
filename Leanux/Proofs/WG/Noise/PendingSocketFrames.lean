@@ -14,8 +14,8 @@ theorem next_of_sendWork (w v : WGWorld) (pid : PeerId)
     nextSlots v = nextSlots w := by
   funext target
   have projected := congrArg (fun x : SendWorkView =>
-    x.1.bind fun d => (d.2.2 target).bind Prod.snd) same
-  simpa [sendWorkAt,sendWorkKernel,sendWorkDevice,nextSlots,
+    x.1.bind fun d => (d.2.2 target).bind (fun cell => cell.2.1)) same
+  simpa [sendWorkAt,sendWorkKernel,sendWorkDevice,sendWorkCell,nextSlots,
     Option.bind_map,Option.bind_assoc,Function.comp_def] using projected
 
 /-- Exact global next-slot preservation combines with unchanged resident key

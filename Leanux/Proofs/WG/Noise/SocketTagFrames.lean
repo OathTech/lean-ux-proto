@@ -28,7 +28,7 @@ theorem tagMap_frame_of_sendWork {α : Type} (action : WG.M α) (pid : PeerId)
     cases initial : g.dev <;> cases ending : final.dev
     all_goals first
       | rfl
-      | simpa [responseTagMap, sendWorkAt, sendWorkKernel, sendWorkDevice,
+      | simpa [responseTagMap, sendWorkAt, sendWorkKernel, sendWorkDevice, sendWorkCell,
           initial, ending, Option.map_map, Function.comp_def] using point
   exact tags.trans pre
 

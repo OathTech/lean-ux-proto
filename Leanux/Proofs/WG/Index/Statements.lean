@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Index.InitiationIndexSource
 import Leanux.Proofs.WG.Index.CreatorCompatibleClaims
 import Leanux.Proofs.WG.Index.CreatorIndexClaims
 import Leanux.Proofs.WG.Index.RetirementDischargeClaims
@@ -1276,9 +1277,10 @@ theorem original_peer_put_hash_slots_detached
       g ambient result out after ⟨pre.1,pre.2.2.2⟩ run⟩
 
 /-- Actual initiation creation preserves nullable self compatibility of the
-selected caller, hashed-slot coverage and retirement reservations. Positivity
-is supplied only for that caller; publication derives non-NULL from its
-successful dereference, and early refusal keeps its original meaning. -/
+selected caller, hashed-slot coverage and retirement reservations. Additional
+caller positivity is local, alongside the initial hashed-owner coherence.
+Publication derives non-NULL from its successful dereference, and early
+refusal keeps its original meaning. -/
 theorem original_initiation_compatible_hash_slots
     (retired : Queues.RxCredits.Reservations) (pid : PeerId) :
     Campaign2.Ensures (createInitiation pid)
@@ -1326,5 +1328,23 @@ theorem original_begin_session_bounded_hash_slots (pid : PeerId) :
         View.OwnerCoherentSafe s ∧ View.HashSlotsSafe s)
       (fun _ s => View.OwnerCoherentSafe s ∧ View.HashSlotsSafe s) :=
   beginSession_endpoint_hashSlots pid
+
+/-- The whole original initiation sender preserves hashed-slot coverage and
+retirement reservations on every normal return, including rate-limited and
+no-creation paths. No socket-success or callback contract is supplied. -/
+theorem original_send_initiation_hash_slots_retirement
+    (retired : Queues.RxCredits.Reservations) (pid : PeerId) :
+    Campaign2.Ensures (sendHandshakeInitiation pid)
+      (fun s => View.HashSlotsSafe s ∧ View.RetirementSafe retired s)
+      (fun _ s => View.HashSlotsSafe s ∧ View.RetirementSafe retired s) :=
+  sendHandshakeInitiation_hashSlots_retirement retired pid
+
+/-- The complete original initiation sender preserves positive hashed-owner
+coherence and its nullable caller compatibility. Positivity for the selected
+resident is an entry premise; neither residency nor non-NULL is required. -/
+theorem original_send_initiation_owner_compatible (pid : PeerId) :
+    Campaign2.Ensures (sendHandshakeInitiation pid) (View.HandshakeCompatibleSafe pid)
+      (fun _ => View.HandshakeCompatibleSafe pid) :=
+  sendHandshakeInitiation_owner_compatible pid
 
 end Leanux.Proofs.WG.Index

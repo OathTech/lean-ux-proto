@@ -14,10 +14,15 @@ def sendObservation (s : Snapshot) (pid : PeerId) : SendView :=
 
 /-- Socket-local extension: queue and selected pending flag are independent of
 handshake creation's table updates and of the initiation-view interface.
-The global optional tag/next-slot cells and the selected peer cell let H1
-reuse these owned socket proofs while retaining the older projections. -/
+The global optional peer cells retain tags, all key slots and the owner
+metadata needed by H1 and H2, while preserving the older projections. -/
 abbrev WorkQueues := List PeerId × List PeerId
-abbrev SendWorkCell := Nat × Option KeypairId
+abbrev SendWorkCell := Nat × Option KeypairId × Option KeypairId × Option KeypairId ×
+  Nat × Option PeerId × Nat × Bool
+
+def sendWorkCell (p : Peer) : SendWorkCell :=
+  (p.handshakeState,p.keypairNext,p.keypairPrevious,p.keypairCurrent,
+    p.refcount,p.handshakeEntryPeer,p.internalId,p.isDead)
 abbrev SendWorkDevice := TableCursor × WorkQueues × (PeerId → Option SendWorkCell)
 abbrev SendWorkPeer := InitiationView × Bool × SendWorkCell
 abbrev SendWorkView := Option SendWorkDevice × Option SendWorkPeer
@@ -26,9 +31,9 @@ abbrev QueueWorkView := Option WorkQueues × Option Bool
 
 def workQueues (d : Device) : WorkQueues := (d.sendWorkQueue, d.clearWorkQueue)
 def sendWorkDevice (d : Device) : SendWorkDevice :=
-  (tableCursor d, workQueues d, fun pid => d.peers[pid]?.map (fun p => (p.handshakeState,p.keypairNext)))
+  (tableCursor d, workQueues d, fun pid => d.peers[pid]?.map sendWorkCell)
 def sendWorkPeer (p : Peer) : SendWorkPeer :=
-  (initiationView p, p.handshakePending, (p.handshakeState,p.keypairNext))
+  (initiationView p, p.handshakePending, sendWorkCell p)
 def workObservation (s : Snapshot) (pid : PeerId) : WorkView :=
   (s.wg.device.map Device.sendWorkQueue,
     (s.wg.device.bind fun d => d.peers[pid]?).map Peer.handshakePending)

@@ -184,8 +184,8 @@ theorem setPeer_sendWorkView (pid : PeerId) (q : Option SendWorkDevice) (v : Opt
     have old : d.peers[pid]?.map sendWorkPeer = some (sendWorkPeer p) := by
       simpa [sendWorkAt, sendWorkKernel, device] using
         (congrArg Prod.snd before).trans value.symm
-    have cells : (fun target : PeerId => (d.peers.insert pid p)[target]?.map (fun p => (p.handshakeState,p.keypairNext))) =
-        (fun target : PeerId => d.peers[target]?.map (fun p => (p.handshakeState,p.keypairNext))) := by
+    have cells : (fun target : PeerId => (d.peers.insert pid p)[target]?.map sendWorkCell) =
+        (fun target : PeerId => d.peers[target]?.map sendWorkCell) := by
       funext target
       by_cases same : pid = target
       · subst target
