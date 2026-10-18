@@ -22,6 +22,10 @@ The earlier CounterWindow/ReplayWindow build failure is superseded by the
 new inherited GRO failure in Logged/PrefixGro, Logged/RxPoll and Queues/GroState.
 See the [current report](2026-10-14-proof-campaign-2.md) for validation and
 every H1–H6 status.
+Subsequent H4 RoutingReadback files retain this boundary: Model defines the
+actual local composition and pure outcomes, Effects proves changed-store
+invariants, Source connects native execution, and Claims/Statements use the
+campaign projection. No frame deletion or retrofit recount is involved.
 
 ## Baseline and accounting
 

@@ -27,7 +27,10 @@ PeerRemovalCompletion still reaches them. H4's initial-state flag-only replace-p
 ClearEndpoint.free_endpoint. Routing coherence, NodePairs and listed residency
 are supplied initially, then transported through actual free to the captured
 dead-marking pass. This closes the narrow first-pass dependency, while final
-cleanup/emptiness and mixed setters remain separate. The inventories below
+cleanup/emptiness and mixed setters remain separate. Landed InsertionRouting
+and ConfigurationInputs now also support the actual general represented
+setAllowedip/fresh-peer serializer composition. The existing weighted serializer
+plus a three-lemma pure bridge suffice; no shared layer is copied. The inventories below
 describe historical overlap; they do not authorize copying the affected layers.
 
 The incoming shared tree also has blank-at-EOF diff-check warnings in

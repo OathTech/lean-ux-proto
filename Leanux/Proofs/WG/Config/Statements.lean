@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Config.RoutingReadbackClaims
 import Leanux.Proofs.WG.Config.ReplacementInitialClaims
 import Leanux.Proofs.WG.Config.ReplacementMixedGetterClaims
 import Leanux.Proofs.WG.Config.ZeroPortMixedGetterClaims
@@ -2410,5 +2411,25 @@ theorem original_replace_peers_initial (d : Device) (t4 t6 : AllowedIps.Tree)
           DeadPassEffect cut.afterFree d.peerList marked ∧
           ∀ pid ∈ d.peerList, ∃ p, marked.peers[pid]? = some p ∧ p.isDead = true) :=
   observedReplacePeers_initial d t4 t6 hi pairs listed
+
+/-- The original allowed-IP setter followed by fresh single-peer serialization
+on an arbitrary represented trie, including guard and allocation refusals.
+Success derives normalized all-peer list transfer. Actual output lists and
+node widths determine cancellation, splitting and exact serialized content;
+no final representation or successful-allocation assumption is needed. -/
+theorem original_allowedip_routing_readback (d : Device) (t4 t6 : AllowedIps.Tree)
+    (pid : PeerId) (p : Peer) (attrs : AllowedIpAttrs) (ctx : DumpCtx) (skb : NlSkb)
+    (shape : AllowedIps.AddressShape attrs)
+    (routing : AllowedIps.RoutingInvariant d t4 t6)
+    (resident : d.peers[pid]? = some p)
+    (fresh : ctx.nextAllowedip = none) (sequence : ctx.allowedipsSeq = 0) :
+    Campaign2.Ensures (setAllowedipThenGetPeerDump pid attrs ctx skb)
+      (fun s => s.wg.device = some d)
+      (fun result s => ∃ out next, s.wg.device = some out ∧
+        out.peers[pid]? = some next ∧
+        AllowedipRoutingEffect d out t4 t6 pid attrs result.1 ∧
+        (result.1 = 0 → AllowedipMoved d out t4 t6 pid attrs) ∧
+        result.2 = weightedPeerResult out (routingReadNode out) next ctx skb next.allowedipsList) :=
+  allowedip_routing_readback d t4 t6 pid p attrs ctx skb shape routing resident fresh sequence
 
 end Leanux.Proofs.WG.Config
