@@ -2,6 +2,7 @@ import PairAllowedipsCapture
 open Lean Binary.Pair.Trie.Capture
 
 def main (args : List String) : IO UInt32 := do
+  let started ← IO.monoMsNow
   let [inputPath,snapshotPath,layoutPath] := args
     | IO.eprintln "usage: binary-pair-allowedips-capture INPUT.json SNAPSHOT.json LAYOUTS.json"; return 1
   let .ok input := Json.parse (← IO.FS.readFile inputPath) >>= fromJson? (α := AllowedipsProbe.Input)
@@ -19,10 +20,17 @@ def main (args : List String) : IO UInt32 := do
     unless bytes.size == block.size do IO.eprintln "FAIL: bulk capture has the wrong size"; return 1
     bulk := bulk.push (block.address,bytes)
   IO.eprintln "capture replay: loading Kraken memory"
+  let memoryStarted ← IO.monoMsNow
   let memory := do loadBulk (← Binary.Pair.Capture.loadMemory snapshot.initial.blocks) bulk
   let .ok memory := memory | IO.eprintln "FAIL: invalid captured memory"; return 1
+  let runStarted ← IO.monoMsNow
+  IO.eprintln s!"capture replay timing: input_ms={memoryStarted-started}, memory_ms={runStarted-memoryStarted}"
   IO.eprintln "capture replay: checking paired execution"
   let result := run input snapshot layout memory
   match result with
-  | .ok report => IO.println report.compress; return 0
+  | .ok report =>
+    let finished ← IO.monoMsNow
+    IO.eprintln s!"capture replay timing: paired_checks_ms={finished-runStarted}, total_ms={finished-started}"
+    IO.println report.compress
+    return 0
   | .error e => IO.eprintln s!"FAIL: {e}"; return 1

@@ -374,3 +374,29 @@ coverage records count actual stores according to the executable callback
 plan; the service body still executes under Kraken. The earlier diagnostic
 callback tally was wrong for a full buffer. Other probes retain their prior
 callback-tally behavior unless they supply the explicit observer.
+
+
+The complete-call sibling is now `Binary.Pair.Trie.lookup_checked` in
+`PairCallAdequacy.lean`. Successful executable `callBoundary` plus accepted
+actual `WG.lookup` execution imply sequential binary return, the matching peer,
+exact trie/count reconstruction, restored ABI and callback state, and the
+physical write frame. Decoder and callback contracts remain explicit; this
+is neither a concurrency theorem nor a proof of the callback bodies.
+`PairCallWitness` gives concrete checked entry states and source acceptance
+for both address families; `binary-pair-call-witness` executes those same
+states to return. The dying-peer retry remains a checked source refusal.
+
+```sh
+# From binary/, using capped on shared development boxes:
+capped lake build PairCallWitness binary-pair-call-witness
+capped lake env leanchecker --fresh PairCallWitness
+capped lake env leanexport PairCallAdequacy PairCallWitness > ../.tmp/binary-pair-call.ndjson
+# External gate, outside Nono:
+lake check --from-export ../.tmp/binary-pair-call.ndjson
+```
+
+The external gate for this complete-call result is pending. The earlier
+external acceptance remains specific to `a33869e`. See the
+[increment report](../docs/2026-10-18-plan-paired-call-increment.md) for reuse,
+failures and measured costs. Captured replay prints separate input, memory
+loading and paired-check timings to stderr.

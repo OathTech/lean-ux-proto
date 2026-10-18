@@ -99,9 +99,11 @@ theorem reconstruct_fields {names : Names} {o : AllowedipsProbe.Offsets}
     {m : DataMem} {s : State} (ok : reconstruct names o m = .ok s) :
     Reconstructed names o m s := by
   unfold reconstruct at ok
-  obtain ⟨layout,ok⟩ := check_ok _ _ _ _ ok
-  obtain ⟨unique,uniqueOk,ok⟩ := bind_ok ok
-  obtain ⟨ranges,rangesOk,ok⟩ := bind_ok ok
+  obtain ⟨_,validated,ok⟩ := bind_ok ok
+  unfold validate at validated
+  obtain ⟨layout,validated⟩ := check_ok _ _ _ _ validated
+  obtain ⟨unique,uniqueOk,validated⟩ := bind_ok validated
+  obtain ⟨ranges,rangesOk,_⟩ := bind_ok validated
   obtain ⟨nodes,nodesOk,ok⟩ := bind_ok ok
   obtain ⟨peers,peersOk,ok⟩ := bind_ok ok
   have equal : ({nodes,counts := peers} : State) = s := Except.ok.inj ok

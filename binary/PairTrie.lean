@@ -55,7 +55,8 @@ def decodeNode (names : Names) (o : AllowedipsProbe.Offsets) (m : DataMem) (a : 
     pure (hi*2^64+lo)
   return {peer, children, cidr, width, key}
 
-def reconstruct (names : Names) (o : AllowedipsProbe.Offsets) (m : DataMem) : Decode State := do
+/-- Memory-independent interpretation validation, shared by reads and writes. -/
+def validate (names : Names) (o : AllowedipsProbe.Offsets) : Decode Unit := do
   unless o.nodeSize == AllowedipsLayout.nodeSize && o.peer == AllowedipsLayout.peer &&
       o.children == AllowedipsLayout.bit && o.cidr == AllowedipsLayout.cidr &&
       o.bitAtA == AllowedipsLayout.bit_at_a && o.bitAtB == AllowedipsLayout.bit_at_b &&
@@ -71,6 +72,10 @@ def reconstruct (names : Names) (o : AllowedipsProbe.Offsets) (m : DataMem) : De
     unless 0 < a && a + size < 2^64 do throw ⟨"interpretation", a, "NULL/wrapping object"⟩
     for (b, size') in ranges.drop (i+1) do
       unless disjointRanges a size b size' do throw ⟨"interpretation", a, "overlapping objects"⟩
+  return ()
+
+def reconstruct (names : Names) (o : AllowedipsProbe.Offsets) (m : DataMem) : Decode State := do
+  validate names o
   let nodes ← names.nodes.mapM fun (id, a) => do return (id, ← decodeNode names o m a)
   let counts ← names.peers.mapM fun (id, a) => do
     return (id, ← word m s!"peer[{id}].refcount" (a+o.peerRefcount) 4)

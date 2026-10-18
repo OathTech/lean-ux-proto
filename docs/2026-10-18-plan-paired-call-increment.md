@@ -210,7 +210,9 @@ was 273.145 seconds (IPv4) and 263.299 seconds (IPv6), including the extra
 full-buffer scans; the previous checkpoint measured 224.79 and 215.61
 seconds. They ran concurrently on the shared host. This is evidence of an
 iteration cost to investigate, not a controlled attribution of the increase.
-Final replays after the diagnostic coverage fix are tracked separately.
+Final replays after the diagnostic coverage fix also passed: 262.632 seconds
+for IPv4 and 250.530 seconds for IPv6, with both seeds and all captured
+controls. These are shared-host observations, not controlled benchmarks.
 
 `CallWitness.check4` and `check6` prove that exact small initial states pass
 `callBoundary`; `CallWitness.pre` derives their physical preconditions.
@@ -263,3 +265,68 @@ Use the capture/replay commands in `binary/README.md` for independent
 three-way checks and actual captured state replay. Mirror pin remains
 `cb2348e`, lagging main `77c9b55` at this checkpoint. Kraken remains clean
 at `7ebba06a30eaf08c10b26b28ca14bfee1c791576`.
+
+
+### Complete sequential call (2026-10-18)
+
+`Binary.Pair.Trie.lookup_checked` in `PairCallAdequacy.lean` now composes the
+actual entry, root/search loop, selected-node test, peer-get and return tail.
+The headline takes successful `callBoundary`, acceptance of the actual
+`WG.lookup`, and named decoder/callback contracts. It concludes eventual
+return with the corresponding peer, exact executable trie/count reconstruction,
+callee-save/stack restoration, before/during coverage invariants, restored
+preempt count, conditional pending-softirq word, and a byte frame outside
+stack/coverage/preempt/count writes. It covers empty roots, search misses and
+accepted live hits, in both families. The dying-peer retry remains an explicit
+source refusal; no positive-count premise was added to entry or reconstruction.
+
+The helper's mutation now uses three layers: `reconstruct_map_counts` for a
+memory-independent decoder transformation; `reconstruct_peer_frame` deriving
+unchanged node/other-peer reads from the physical write footprint and the
+allocation checks; and `hit_segment` applying those facts to the actual
+peer-get execution. Static name/layout/allocation validation was factored out
+of `reconstruct` so a memory update does not require re-proving validation.
+The byte mapping, pointer contents, source target and accepted layouts are
+unchanged. `lookup_effect` derives the accepted mirror's live-hit arithmetic
+bound internally. Diagnostic histories remain internal to reused lemmas.
+
+`PairCallWitness.accepted` kernel-reduces actual mirror acceptance for both
+exact entry witnesses. Their executable runs still execute 652/787 binary
+instructions under both undefined seeds and return with the changed count.
+Both constructed suites pass (9/10 structural cases, 20 controls per family,
+including the explicit retry refusal). The transport unit tests pass (2).
+`lookup_checked` and all added update/source/segment/witness headlines print
+only `propext`, `Classical.choice`, and `Quot.sound`. Fresh closure replay passed, as did a second replay after the mapping-check
+experiment. External replay is pending.
+
+The complete headline first built at approximately 04:10 UTC, about 33 minutes
+after the 03:37:17 start. This includes planning, assertions, witnesses,
+composition and concurrent replay waits. Instruction-region proofs were all
+reused. The roughly 1,600 lines in the call/update modules include executable
+checks, witnesses and helper lemmas, not only the headline proof. Remaining
+iteration was mostly adapting endpoint facts, address coordinates, finite-map
+updates, and Lean elaboration (including choosing explicit arguments before
+rewriting under a footprint). No new search tactic was needed. This supports
+endpoint summaries as an effective interface for this example; it does not
+measure fresh-function cost or establish campaign affordability.
+
+### Runtime-cost experiment in progress
+
+The replay executable now reports input parsing, memory loading and paired
+execution/checking separately. The first IPv4 split spends 13.656 seconds
+loading the captured 32 MiB allocation. A candidate optimization replaces
+integer construction in mapped-word checks with byte-presence checks;
+`mappedBytesCheck_eq` proves exact equality with Kraken load definedness.
+The full allocation and every existing obligation remain checked. Both runs passed, but the optimization did not help: 256.55 seconds before
+and 261.11 seconds after (paired execution/checking 242.171 versus 245.907
+seconds; loading 13.656 versus 14.535 seconds). The candidate and its extra
+proof were removed. These overlapping shared-host runs do not resolve small
+differences, but provide no evidence of a useful gain. The initial witness rebuild failed because its concrete
+reduction expected the old load expression; rewriting with the equivalence
+lemma repaired it. This was a failed build, not a passing witness.
+
+[AGENT 2026-10-18] Inspect index removal before replacement for the fresh-code
+calibration. Removal exposes predecessor-link writes, optional successor
+backlink repair and unlink state in a smaller body. The main new uncertainty
+is reconstructing a structurally changed heap, rather than scalar arithmetic.
+A complete allowed-IPs call is now available as the composition baseline.
