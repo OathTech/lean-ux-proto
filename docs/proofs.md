@@ -8,21 +8,31 @@ the mirror is never edited to let a proof close. The standing rule and gate
 are in [AGENTS.md](../AGENTS.md); this file maps the tree and registers its
 claims, premises and mirror pins.
 
-## Campaign 3: open outcomes and first finding
+## Campaign 3: open outcomes and dispositioned statement artefact
 
 The [campaign-3 report](2026-10-18-proof-campaign-3.md) tracks work on
-`proofs/campaign-3` over `783510e8` (mirror identical to `77c9b555`). No new
-campaign-3 theorem is claimed. All six outcomes remain open; the inherited
-results below remain current.
+`proofs/campaign-3` over `783510e8` (mirror identical to `77c9b555`). All six outcomes remain open. New local contracts are listed below with their
+remaining coverage obligations; the inherited results remain current.
 
 | Item | Status, assumptions and boundary |
 | --- | --- |
 | T1–T5 | Open: nonce safety, transmit authorization/conservation, authenticated effects/silence, handshake replay resistance and responder confirmation. The report names reusable local results and the initialized-execution obligations still missing. No campaign-2 hypothesis is silently discharged. |
-| T6 / C3-F1 | Reproduced finding: the literal ban on actual encryption after invalidation/expiry conflicts with previously admitted work. R5's generated coherent initialized replays pass on this branch, checking delayed encryption, including after slot/index clearing with a retained packet reference. They are not Linux captures or scheduling-reachability evidence. Historical TX admission safety and conditional final-reference retirement remain the proposed target; no universal T6 result is claimed. |
+| T6 / C3-F1 | Statement artefact dispositioned; campaign resumed. The adopted target is unconditional TX admission/RX attempt safety and conditional reference-aware retirement. R5's generated coherent initialized replays remain the prior record of delayed encryption after invalidation or unpublication. They are not Linux captures or scheduling-reachability evidence. R2 supplies allocation-access discipline; reference ownership needs the holder/credit contracts. No universal T6 result is claimed yet. |
+| T1 local source contracts — `TransmitSecurity/Statements.lean` | Complete native staging preserves non-reuse under explicit `Nonce.Inv`, including failure prefixes; native creation and actual initialization supply local lifecycle steps. Admitted counters have injective AEAD nonce encoding. Allocation-to-AEAD transport and initialized caller closure remain open. Current over mirror `77c9b555`; nine exports. Native encryption receipts preserve success/Stop and the actual entry-resident key/packet nonce expression; source-to-worker provenance remains open. |
+| T3 local cookie contracts — `AuthenticatedEffects/Statements.lean` | Both qualifying invalid-MAC2 handshake kinds take the cookie suffix; successful cookie-only execution preserves R6's Noise projection; at most one construction/socket-call attempt receipt per native invocation. Actual under-load/MAC witness and normal-run premise where stated. A normal qualifying receive now appends at most one actual datagram, bound to the input source and actual cookie bytes. Emitted-prefix count, length and whole-run causality remain open. Current over mirror `77c9b555`; five exports. |
+| T6 local reference contracts — `RetirementSecurity/Statements.lean` | Sixteen exports over actual creation/get/put/clear calls: one-reference payment, nonfinal material/counter retention, final store/index removal, immediate unpublication, surviving nonce retention and cleared slots. Entry count and native completion premises remain visible. An exact allocation-stamped ledger proves native add/pay-one and last-credit removal, with entry-account and slot-vacancy premises explicit; source-local slot clearing and RX/TX disposal pay their actual saved occurrences. A durable-holder projection counts native slots, RX packets and TX batches with an initialized empty base. Whole-run ownership and timer/worker progress remain open. Current over mirror `77c9b555`. |
+| T4 local timestamp contracts — `HandshakeSecurity/Statements.lean` | Full original initiation observer proves every timestamp receipt strictly increases the actual pre-write value, including before Stop. The full native initiation refusal preserves surviving handshake state; exact original receive-worker transport retains strict receipts through Stop. Arbitrary entry worlds; initialized retained-peer history and exchange installation remain open. Current over mirror `77c9b555`; seven exports. |
 
-Checkpoint validation passes: 973 proof-build jobs, 895 gate declarations with
+Inherited checkpoint validation passes: 973 proof-build jobs, 895 gate declarations with
 standard axioms only, all twelve replay recipes, and 131 unit tests with one
-kernel-build-dependent skip. The report records the inherited mirror warning.
+kernel-build-dependent skip. The report records the inherited mirror warning. The first campaign-3 tranche
+passed the 909-declaration gate and twelve recipes; the subsequent complete
+checkpoint passed 1009 build jobs and 922 gate declarations. The current
+source checkpoint passes 1029 build jobs, 932 gate declarations and 131 unit
+tests with one skip; all twelve witness recipes and fresh-root kernel replay
+pass again. Supplemental prefix-mode kernel
+replay hit its memory caps; the corrected fresh-root replay passed at 32 GiB over the 1000-job checkpoint,
+as recorded in the report.
 
 ## Current register
 

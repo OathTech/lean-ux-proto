@@ -14,6 +14,11 @@ import Leanux.Proofs.WG.DeliveryOrder.Statements
 import Leanux.Proofs.WG.KeyLifetime.Statements
 import Leanux.Proofs.WG.FloodResistance.Statements
 
+import Leanux.Proofs.WG.TransmitSecurity.Statements
+import Leanux.Proofs.WG.RetirementSecurity.Statements
+import Leanux.Proofs.WG.AuthenticatedEffects.Statements
+import Leanux.Proofs.WG.HandshakeSecurity.Statements
+
 /-! The proof tree's root: the terminal statements of every result, one import
 per result directory, and the checked counterexamples. `lake build LeanuxProofs`
 builds exactly this closure; `scripts/proof-gate` prints the axioms of every

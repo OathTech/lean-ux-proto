@@ -24,6 +24,12 @@ section 9; its recommended-goals table is the shape the statements now
 take: the campaign commits to the security outcomes and leaves theorem
 decomposition, intermediate models, instrumentation and work order open.
 
+Amendment [USER 2026-10-18]: C3-F1 is a statement artefact, retaining R5's
+prior counterexamples. T6 uses the actual TX admission and RX decryption
+checks and reference-aware retirement. Wording artefacts are corrected and
+work continues; stopping requires a blocker, a substantive finding, the
+campaign's completed deliverable, or an explicit user instruction.
+
 ## 1. What this is, and what it is not
 
 Mirror to property, as before: properties of WireGuard proved over the
@@ -176,8 +182,9 @@ never reaches the AEAD (queue refusal, an allocation failure in
 `encryptPacket`, a batch restored by the rejection arm) is never
 allocated again under that key, so a gap in the encrypted sequence is
 safe and gaps are expected; reaching the rejection limit invalidates the
-key for sending and restores the batch, so no encryption happens under
-that key after the limit and the batch is not a counted drop; and
+key for further sending admission and restores the batch. Previously admitted
+packets may still encrypt with their already allocated, below-limit nonces;
+the restored batch is not a counted drop; and
 `keepKeyFresh` requests an initiation when the counter is past
 `REKEY_AFTER_MESSAGES` or the initiator's key is past `REKEY_AFTER_TIME`,
 where "requests" means the call into `sendQueuedHandshakeInitiation`,
@@ -392,24 +399,33 @@ and `Leanux/Env.lean` (B3's wheel and the dispatch of the clear work),
 `timers.c:203-206` (`wg_timers_session_derived` arms it at
 `REJECT_AFTER_TIME * 3`), `noise.c` (`wg_noise_keypairs_clear`, the puts
 and the RCU release), `send.c:124-139`. Two obligations, kept separate.
-Unconditional safety at the use checks: no transport encryption under a
-sending key that is invalid or older than `REJECT_AFTER_TIME`, and no
-decryption under a receiving key that is invalid, older than
-`REJECT_AFTER_TIME` or past its counter limit, with a failed check
-marking the key invalid; these hold for every accepted run with no
-scheduling assumption. Conditional operational retirement: under stated
+Unconditional safety at the C's check sites: every TX batch submitted to
+the encryption queue passes `sendStagedPackets`' sending-validity and
+`REJECT_AFTER_TIME` checks at admission, and every RX decryption attempt
+passes the receiving-validity, age and stored-counter checks before AEAD.
+Equality at the recorded age deadline is expired. An expiry or counter-limit
+rejection invalidates that key direction; an already invalid key is refused.
+These checks hold without a worker-latency assumption. `keepKeyFresh`
+(`Data.lean:185-197`, C `send.c:124-139`) separately requests rekeying under
+its validity/count/initiator-age guards; it is not another admission check.
+Conditional operational retirement: under stated
 assumptions about the clock reads and the dispatch of queued work (the
 wheel's firing rule and the worker's run, as the records place them), the
 zero-key timer armed at session derivation queues the clear work when it
-fires, the worker clears all three slots, and reference release removes
-each cleared keypair from the mirror's store once its last reference
-drops, so that after retirement no path can obtain the keypair from the
-store; already admitted work and retained references are given an
-explicit disposition (what still holds a reference, and that it cannot
-start a new encryption past the checks above). What removal from the
-abstract store establishes is exactly that: no further lookup or slot
-read yields the keypair; zeroisation of physical memory is beyond the
-mirror and is said so. Consequence of failure: a key retained past its
+fires and the worker clears the slots and index entries. Previously admitted
+packets can retain the keypair in the store and encrypt with it after this
+unpublication. Retirement is complete only when the final reference is
+released and the allocation leaves the store; subsequent access cannot
+resolve that released allocation. Reuse R2's
+`LifetimeSafety.runner_initialized_access_safety` for allocation-lifetime
+discipline, together with the existing holder/credit contracts where reference
+accounting is needed: access safety alone does not establish credit ownership.
+R5's `r5-delayed-encryption` and `r5-coherent-post-clear` are the prior record
+of permitted retained work, as preserved in the
+[campaign-3 report](2026-10-18-proof-campaign-3.md#c3-f1-invalidation-and-clearing-do-not-cancel-previously-admitted-encryption).
+Final removal from the abstract store excludes further lookup of that
+allocation; physical zeroisation remains beyond the mirror.
+Consequence of failure: a key retained past its
 lifetime is one a captured key can still authenticate or decrypt traffic
 with, which is the time-based part of WireGuard's forward-secrecy design
 (whitepaper sections 6.2 and 6.3); the message bound of T1 does not
@@ -494,8 +510,9 @@ charter is a reason to stop except the user's word.
   the worktree with one writer at a time.
 - No hard stops. A blocked result gets its blocker written in the progress
   section and the next result starts; come back later. Stop only when the
-  criterion is met for every result, when a claim refuses to close and is
-  recorded as a finding, or when the user says so. Keep the register row
+  criterion is met for every result, when work is blocked, when a substantive
+  finding is recorded, or when the user says so. Correct statement artefacts
+  and continue; they do not stop the campaign. Keep the register row
   and the report current as you go rather than stopping to report
   between items.
 - One commit per landed result (checkpoint commits per intermediate model
