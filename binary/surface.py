@@ -68,6 +68,8 @@ DEFINITIONS = [
     'Binary.RandomProvider.Config', 'Binary.RandomProvider.snapshot',
     'Binary.RandomProvider.initialized', 'Binary.RandomProvider.recording',
     'Binary.RandomProvider.steer', 'Binary.RandomProvider.remote', 'Binary.RandomProvider.check',
+    'Binary.RandomProvider.roleApart', 'Binary.RandomProvider.writesApart',
+    'Binary.RandomProvider.recordingGeometry',
 ]
 EXPECTED = ROOT / 'binary/TrustSurface.expected.txt'
 

@@ -12,7 +12,16 @@ structure RandomService where
   executedPCs : Array Nat
   deriving FromJson
 
+structure KernelIdentity where
+  checked : Bool
+  expected : String
+  actual : String
+  deriving FromJson
+
 structure Snapshot extends toMutatorCaptureSnapshot : MutatorCapture.Snapshot where
+  kernel : KernelIdentity
+  image_sha256 : String
+  kraken : String
   randomServices : Array RandomService
   deriving FromJson
 
@@ -22,6 +31,15 @@ structure PrivateState where
   deriving FromJson
 
 def PrivateState.config (s : PrivateState) : RandomProvider.Config := ⟨s.blocks,s.remoteNodes⟩
+
+/-- Capture identity is required and checked before replay. These constants
+identify the image and semantics compiled into this executable. The host
+driver additionally verifies the current dependency tree and oracle file. -/
+def checkIdentity (kernel : KernelIdentity) (image kraken : String) : Except String Unit := do
+  unless kernel.checked && kernel.expected==TrustBase.kernelIdentity &&
+      kernel.actual==TrustBase.kernelIdentity do throw "capture.insert.kernel-identity"
+  unless image==TrustBase.elfSha256 do throw "capture.insert.image-sha256"
+  unless kraken==TrustBase.krakenCommit do throw "capture.insert.kraken-pin"
 
 /-- Run the decoded service body from the actual captured entry heap. The
 native endpoints and instruction sequence are comparisons, never transitions. -/
@@ -51,6 +69,7 @@ def randomReturn (snapshot : Snapshot) (privateState : PrivateState) (seed : UIn
     undefinedCount := r.undefinedCount+after.undefinedCount}
 
 def run (input : ProbeInput) (snapshot : Snapshot) (privateState : PrivateState) (layout : Json) : Except String Json := do
+  checkIdentity snapshot.kernel snapshot.image_sha256 snapshot.kraken
   unless snapshot.anchor=="insert" && snapshot.executionMode=="sequential" do
     throw "capture.insert.mode"
   unless (← input.trace.getObjValAs? String "id")==snapshot.trace &&

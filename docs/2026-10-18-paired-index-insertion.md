@@ -1,10 +1,14 @@
 # Paired index insertion: execution report
 
-Status: complete function and arbitrary finite mixed-sequence theorems build
-on `task/binary-pair-runner`, from baseline `41675f86` under the
-[charter](2026-10-18-charter-paired-index-insertion.md). Final fresh replay
-and corrected capture regression pass; the exact-commit export is prepared.
-The insertion increment's external export acceptance is pending.
+Status: the fresh review found two defects, now repaired and undergoing final
+validation before the requested pause. The conditional function and arbitrary
+finite mixed-sequence theorems build on `task/binary-pair-runner`, from baseline
+`41675f86` under the [charter](2026-10-18-charter-paired-index-insertion.md).
+The earlier export from `b3d57f17` does not cover these repairs. Its physical
+random-service domain admitted the counterexample below; the corrected domain
+rejects it. Universal callback/random-service and input-coupling contracts
+remain explicit, unproved hypotheses. Kernel acceptance of the conditional
+proofs does not discharge them.
 
 Start: **2026-10-18 17:23:07 UTC**. Reassessment if incomplete:
 **2026-10-19 17:23:07 UTC**. Supporting runtime optimization allowance: two
@@ -896,6 +900,12 @@ This is conditional sequential theorem coverage by function extent, not
 unconditional proof of every helper body, all mirrored subsystems, concurrent
 refinement, or a percentage of remaining effort. The tested random-service
 body is excluded. The external acceptance status remains per export/commit.
+The fresh review below refuted the original insertion random-service domain.
+The corrected physical assertion rejects that counterexample, while the
+universal service contract remains unproved. The 109 insertion instructions
+are part of this extent of conditional theorems, not a discharged proof of
+their random-service implementation. The preceding 380-instruction extent is
+3.08% of the census and retains its documented assumptions and gate status.
 The denominator and sized-symbol accounting are in the
 [original census](2026-10-15-binary-tv-scoping.md#2-instruction-and-addressing-coverage).
 
@@ -931,6 +941,76 @@ follow-up to the exported source commit.
 The old accepted subsystem export and the two obsolete insertion captures were
 removed after their conclusions and reproduction commands were committed. The
 new export remains ephemeral until the external check is recorded.
+
+## Checkpoint close and pause, 2026-10-18
+
+[USER 2026-10-18] Close this increment with an independent fresh review,
+repair clear review findings, preserve a resumable branch checkpoint, then
+pause before further development.
+
+The checkpoint audit starts from `b22264a4`. All changes since the exported
+proof source `b3d57f17` are documentation only. The clean private Kraken tree
+passes the pin check at `cd2ae360bfcf8e1fc719793405811ff49c3e75ce`; the trust
+declarations reproduced below match `binary/TrustBase.lean` exactly. The
+prepared export remains present at 1,318,582,165 bytes. The completed build,
+binary trust gate, unit tests, runtime suites and fresh kernel replay above
+therefore apply to the unchanged proof source; no repeated heavy validation
+is claimed by this audit.
+
+The [independent review](2026-10-18-review-paired-index-insertion.md) preserves
+both original findings and its follow-up on the repairs. Individual dispositions:
+
+- **R1, high, repaired:** the old physical domain admitted a steering header
+  overlapping the recording-sequence counter. Its entry check passed, but
+  462 actual decoded instructions left `head=1, count=0`, violating the promised
+  postcondition. The parent independently reproduced the failure. The revised
+  `recordingGeometry` separates mutable entropy, sequence, dropped-count and
+  steering regions from one another and from the pointer fields actually
+  read on the selected direct/remote path. This is a stronger physical
+  readiness invariant, shared by runtime assertions and theorem premises;
+  it does not weaken R, observations or the provider postcondition. The exact
+  counterexample is rejected even with nonoverlapping allocation covers.
+  Consistent overlapping byte covers remain accepted. The regression also
+  executes the malformed state without the guard and checks its original bad
+  postcondition, so it cannot pass by silently changing the modeled effect.
+- **R2, medium, repaired:** insertion snapshots now require the kernel
+  identity, ELF hash and Kraken pin. The Lean entry point compares all three
+  against its compiled constants before loading machine memory. The documented
+  Python replay driver additionally verifies the current clean dependency
+  tree and actual oracle file. Missing/mismatched identities and unchecked
+  kernel metadata fail. The previously abbreviated kernel identity constant
+  is expanded to the same approved full identity; the oracle is unchanged.
+
+The reviewer independently confirmed the repaired rejection, the unchanged
+malformed-state execution failure, accepted overlapping covers, and the Lean
+and Python identity controls. The conditional proofs and the source mirror
+are otherwise unchanged. The provider contract is still an unproved
+hypothesis; fixing a concrete counterexample is not a universal proof.
+
+The final default build passes (793 jobs), as does the executable build
+(501 jobs). The binary proof gate and its expanded trust-surface diff pass.
+Seven Python tests pass, including nine missing/mismatched identity subcases.
+The provider suite retains all 18 cached/refill/direct/remote cases, saturation
+and existing controls, and adds both alias-cover variants and the accepted
+overlapping-cover case. All four exact formal-witness runs pass. The mixed
+suite passes 32 sequences, 416 calls and 434,064 instructions in 62.96 seconds.
+Fresh kernel replay of `PairInsertionSurface` and its full closure passes.
+The full identity-verified capture replay is still running at this writing. No killed build or timeout occurred in the
+repair validation. Inherited warnings remain visible; no new warning was
+found in the changed modules.
+
+The insertion export's external acceptance remains pending. The prior accepted
+subsystem export does not cover it. A replacement export for the corrected
+source is required; the old export checks the old conditional statements
+only. Resume with the corrected export's external gate, then agree the next
+increment before continuing development. Captures, logs and build outputs
+are reproducible temporary files.
+
+The proposed next increment is shared callback-image proofs and a first-return
+permission boundary, with measured reuse across the existing headlines.
+That proposal has not been started. The fixed allocation universe, sequential
+environment, explicit random-service/input-coupling hypotheses and mirror lag
+remain as documented above. No merge or push is part of the checkpoint.
 
 ## Named trust base at the composition checkpoint (verbatim)
 
@@ -976,7 +1056,7 @@ import PairInsertInput
 namespace Binary.TrustBase
 
 def krakenCommit : String := "cd2ae360bfcf8e1fc719793405811ff49c3e75ce"
-def kernelIdentity : String := "6b2018b9"
+def kernelIdentity : String := "6b2018b99f086345ce9fa316a89c76d27b40b536d5feb4402510e5fb62a5ae24"
 def elfSha256 : String := "16c346209885db6c610d4aa126c6eb30f5d3c02f0498d95e606473945f648774"
 def decoderVersion : String := "GNU objdump (GNU Binutils for Ubuntu) 2.42"
 

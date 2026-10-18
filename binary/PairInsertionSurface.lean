@@ -30,6 +30,9 @@ Service and environment contracts are hypotheses, not proved image facts. -/
 #print Binary.RandomProvider.Config
 #print Binary.RandomProvider.check
 #print Binary.RandomProvider.recording
+#print Binary.RandomProvider.roleApart
+#print Binary.RandomProvider.writesApart
+#print Binary.RandomProvider.recordingGeometry
 
 #print axioms Binary.Pair.Insert.insert_checked
 #print axioms Binary.Pair.Insert.insert_simulation

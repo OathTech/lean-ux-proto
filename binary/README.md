@@ -538,12 +538,15 @@ capped scripts/in-bundle python3 -B binary/insert_probe.py \
 LEANUX_QEMU_SLOTS=16 capped scripts/in-bundle python3 -B binary/capture_index_mutator.py \
   --anchor insert --call-index 1 --input .tmp/binary-insert/input.json \
   --check .artifacts/check/binary-insert --operation 1 --out .tmp/cap-index-insert
-capped binary/.lake/build/bin/binary-pair-insert-capture \
+capped scripts/in-bundle python3 -B binary/pair_insert_capture.py \
   .tmp/binary-insert/input.json .tmp/cap-index-insert/snapshot.json \
   .tmp/cap-index-insert/layouts.json
 ```
 
 The Python interpreter must have the already documented ELF dependencies.
+The replay driver verifies the current clean Kraken pin, oracle identity and
+ELF hash against the capture before invoking Lean. The Lean entry point also
+requires all three identities and checks them against its compiled pins.
 Current captures include the private random/steering state and the dropped
 record counter. The capture runner interprets the complete random bodies,
 validates native REP multiplicities, and compares every captured endpoint byte
@@ -578,3 +581,19 @@ acceptance is pending. The prepared insertion export is from
 `b3d57f17b3dbc3f47ade3feb3aa1322886461d2d`, root `PairInsertionSurface` and its
 full closure, generated successfully on 2026-10-18. Captures and exports remain
 ephemeral under `.tmp`.
+
+The [fresh insertion review](../docs/2026-10-18-review-paired-index-insertion.md)
+found a private-state alias and missing replay identity checks. Both are repaired
+and independently reviewed. The revised readiness assertion rejects the bad
+alias without requiring disjoint capture blocks. Universal service and input
+coupling contracts remain hypotheses. The old export above does not cover the
+repairs; a replacement export is being prepared as
+`../.tmp/binary-pair-insert-reviewed.ndjson`. Its external command is:
+
+```sh
+capped lake check --from-export ../.tmp/binary-pair-insert-reviewed.ndjson
+```
+
+The [checkpoint disposition](../docs/2026-10-18-paired-index-insertion.md#checkpoint-close-and-pause-2026-10-18)
+records the source commit, final validation and pause status. The original
+service-domain counterexample remains in the review and executable regression.

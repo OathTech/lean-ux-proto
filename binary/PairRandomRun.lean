@@ -233,6 +233,34 @@ def suite : Except String Json := do
   | .ok _ => throw "random.saturation.control: omitted dropped-counter allocation accepted"
   | .error error => unless error=="random.private.region-unmapped" do
       throw s!"random.saturation.control failed elsewhere: {error}"
+  -- Review counterexample: the global sequence increment aliases a steering
+  -- head, invalidating head≤count. Cover-block disjointness alone misses it.
+  let (aliasStart,aliasConfig) := recordingState false
+  let aliasAddress := RandomProvider.Layout.sequenceAddress-4
+  let aliasMemory := put
+    (put aliasStart.data.dmem (0xa00000+RandomProvider.Layout.objectSteer) 8 aliasAddress)
+    aliasAddress 12 0
+  let aliasState := {aliasStart with data := {aliasStart.data with dmem := aliasMemory}}
+  for separateCover in [false,true] do
+    let blocks := if separateCover then
+      aliasConfig.blocks.filter (fun span => span.1 != RandomProvider.Layout.sequenceAddress)
+      else aliasConfig.blocks
+    let config := {aliasConfig with blocks := blocks++[(aliasAddress,12)]}
+    match RandomProvider.readyCheck config (context true) aliasState with
+    | .ok _ => throw "random.role-control: sequence/steering alias accepted"
+    | .error error => unless error=="random.private.role-alias" do
+        throw s!"random.role-control failed elsewhere: {error}"
+    let after ← execute 0 20000 aliasState (.ofNat stopAddr)
+    unless (← readNat after.state aliasAddress 4)==0 &&
+        (← readNat after.state (aliasAddress+4) 4)==1 do
+      throw "random.role-control.counterexample-not-reproduced"
+    match physicalPost config (context true) aliasState after (.ofNat stopAddr) with
+    | .ok _ => throw "random.role-control: invalid post accepted"
+    | .error error => unless error=="random.private.steering-counts" do
+        throw s!"random.role-control post failed elsewhere: {error}"
+  -- Consistent overlapping capture covers remain valid when roles are apart.
+  RandomProvider.readyCheck {aliasConfig with blocks := aliasConfig.blocks++[(0xb00000,192)]}
+    (context true) aliasStart
   -- Changing context/return site can change a draw without changing private
   -- bytes. The coupling specification must therefore fix both parameters.
   let (steerInitial,steerConfig) := recordingState false
@@ -290,6 +318,7 @@ def suite : Except String Json := do
     ("scope",toJson "actual cached/refill random body and recording callbacks, synthetic memory"),
     ("runs",toJson results),("refills",toJson refills),("privilege_control",toJson rejection),
     ("saturation",toJson "actual body increments dropped counter; omitted allocation rejected"),
+    ("internal_alias_control",toJson "sequence/steering alias rejected with overlapping and disjoint covers; actual bad post reproduced"),
     ("steered",toJson steered),("private_state_control",toJson "missing cache byte rejected"),
     ("resource_controls",toJson ["missing stack byte","private alias","DF set","write outside footprint"]),
     ("coupling_controls",toJson ["identical private bytes: steered 41, recording disabled 7, other return site 7",

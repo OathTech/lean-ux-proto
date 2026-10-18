@@ -1347,13 +1347,18 @@ fun c m task => do
   let object ← Binary.RandomProvider.read m (HAdd.hAdd.{0, 0, 0} task Binary.RandomProvider.Layout.taskObject) 8
   have selected : Nat := 0
   have direct : Bool := false
-  have __do_jp : Unit → Nat → Bool → Except.{0, 0} String Unit := fun __r selected direct =>
-    have __do_jp := fun __r selected => do
+  have pointers : List.{0} (Prod.{0, 0} Nat Nat) := List.nil.{0}
+  have __do_jp : Unit → Nat → Bool → List.{0} (Prod.{0, 0} Nat Nat) → Except.{0, 0} String Unit :=
+    fun __r selected direct pointers =>
+    have __do_jp := fun __r selected pointers => do
       Binary.RandomProvider.steer m selected
-      Binary.RandomProvider.mapped m Binary.RandomProvider.Layout.sequenceAddress 8;
+      Binary.RandomProvider.mapped m Binary.RandomProvider.Layout.sequenceAddress 8
+      Binary.RandomProvider.recordingGeometry m task selected pointers;
     ite.{1} (Eq.{1} (!direct) true)
       (do
         let handle ← Binary.RandomProvider.read m (HAdd.hAdd.{0, 0, 0} task Binary.RandomProvider.Layout.taskHandle) 8
+        have pointers : List.{0} (Prod.{0, 0} Nat Nat) :=
+          List.cons.{0} (Prod.mk.{0, 0} (HAdd.hAdd.{0, 0, 0} task Binary.RandomProvider.Layout.taskHandle) 8) pointers
         ite.{1} (Eq.{1} (bne.{0} handle 0) true)
             (have bucket :=
               HDiv.hDiv.{0, 0, 0}
@@ -1366,19 +1371,31 @@ fun c m task => do
             let __x ←
               Binary.RandomProvider.remote c m handle (HAdd.hAdd.{0, 0, 0} (List.length.{0} c.remoteNodes) 1) link
                   List.nil.{0}
-            have selected : Nat := __x
-            __do_jp () selected)
-            (__do_jp () selected))
-      (__do_jp () selected)
+            match __x with
+              | Prod.mk.{0, 0} found remotePointers =>
+                have selected := found;
+                have pointers :=
+                  List.cons.{0}
+                    (Prod.mk.{0, 0}
+                      (HAdd.hAdd.{0, 0, 0} Binary.RandomProvider.Layout.remoteMapAddress (HMul.hMul.{0, 0, 0} 8 bucket))
+                      8)
+                    (HAppend.hAppend.{0, 0, 0} remotePointers pointers);
+                __do_jp () selected pointers)
+            (__do_jp () selected pointers))
+      (__do_jp () selected pointers)
   ite.{1} (Eq.{1} (bne.{0} object 0) true)
       (do
         let isRemote ←
           Binary.RandomProvider.read m (HAdd.hAdd.{0, 0, 0} object Binary.RandomProvider.Layout.objectRemote) 1
         let __x ← Binary.RandomProvider.read m (HAdd.hAdd.{0, 0, 0} object Binary.RandomProvider.Layout.objectSteer) 8
         have selected : Nat := __x
+        have pointers : List.{0} (Prod.{0, 0} Nat Nat) :=
+          List.cons.{0} (Prod.mk.{0, 0} (HAdd.hAdd.{0, 0, 0} object Binary.RandomProvider.Layout.objectRemote) 1)
+            (List.cons.{0} (Prod.mk.{0, 0} (HAdd.hAdd.{0, 0, 0} object Binary.RandomProvider.Layout.objectSteer) 8)
+              List.nil.{0})
         have direct : Bool := bne.{0} isRemote 0 || bne.{0} selected 0
-        __do_jp () selected direct)
-      (__do_jp () selected direct)
+        __do_jp () selected direct pointers)
+      (__do_jp () selected direct pointers)
 def Binary.RandomProvider.steer : DataMem → Nat → Except.{0, 0} String Unit :=
 fun m address =>
   ite.{1} (Eq.{1} (BEq.beq.{0} address 0) true) (pure.{0, 0} ()) do
@@ -1404,9 +1421,10 @@ fun m address =>
         let __r ← throw.{0, 0, 0} "random.private.steering-counts"
         __do_jp __r
 def Binary.RandomProvider.remote : Binary.RandomProvider.Config →
-  DataMem → Nat → Nat → Nat → List.{0} Nat → Except.{0, 0} String Nat :=
+  DataMem → Nat → Nat → Nat → List.{0} Nat → Except.{0, 0} String (Prod.{0, 0} Nat (List.{0} (Prod.{0, 0} Nat Nat))) :=
 fun c m handle x x_1 x_2 =>
-  Nat.brecOn.{1} (motive := fun x => Nat → List.{0} Nat → Except.{0, 0} String Nat) x
+  Nat.brecOn.{1} (motive := fun x =>
+    Nat → List.{0} Nat → Except.{0, 0} String (Prod.{0, 0} Nat (List.{0} (Prod.{0, 0} Nat Nat)))) x
     (Binary.RandomProvider.remote._f c m handle) x_1 x_2
 def Binary.RandomProvider.check : Binary.RandomProvider.Config → Nat → Bool → DataMem → Except.{0, 0} String Unit :=
 fun c task active m =>
@@ -1426,6 +1444,57 @@ fun c task active m =>
     (__do_jp ()) do
     let __r ← throw.{0, 0, 0} "random.private.allocation-range"
     __do_jp __r
+def Binary.RandomProvider.roleApart : Prod.{0, 0} Nat Nat → Prod.{0, 0} Nat Nat → Bool :=
+fun a b =>
+  decide (LE.le.{0} (HAdd.hAdd.{0, 0, 0} (Prod.fst.{0, 0} a) (Prod.snd.{0, 0} a)) (Prod.fst.{0, 0} b)) ||
+    decide (LE.le.{0} (HAdd.hAdd.{0, 0, 0} (Prod.fst.{0, 0} b) (Prod.snd.{0, 0} b)) (Prod.fst.{0, 0} a))
+def Binary.RandomProvider.writesApart : List.{0} (Prod.{0, 0} Nat Nat) → Bool :=
+fun x => List.brecOn.{1, 0} x Binary.RandomProvider.writesApart._f
+def Binary.RandomProvider.recordingGeometry : DataMem →
+  Nat → Nat → List.{0} (Prod.{0, 0} Nat Nat) → Except.{0, 0} String Unit :=
+fun m task selected pointers =>
+  have __do_jp := fun steering =>
+    have writes :=
+      HAppend.hAppend.{0, 0, 0}
+        (List.cons.{0} (Prod.mk.{0, 0} Binary.RandomProvider.Layout.cacheAddress 108)
+          (List.cons.{0} (Prod.mk.{0, 0} Binary.RandomProvider.Layout.cpuAddress 40)
+            (List.cons.{0} (Prod.mk.{0, 0} Binary.RandomProvider.Layout.baseAddress 40)
+              (List.cons.{0} (Prod.mk.{0, 0} Binary.RandomProvider.Layout.sequenceAddress 8)
+                (List.cons.{0} (Prod.mk.{0, 0} (HAdd.hAdd.{0, 0, 0} task Binary.RandomProvider.Layout.taskDropped) 4)
+                  List.nil.{0})))))
+        steering;
+    have stable :=
+      HAppend.hAppend.{0, 0, 0}
+        (List.cons.{0} (Prod.mk.{0, 0} Binary.RandomProvider.Layout.readyAddress 4)
+          (List.cons.{0} (Prod.mk.{0, 0} Binary.RandomProvider.Layout.initAddress 4)
+            (List.cons.{0} (Prod.mk.{0, 0} (HAdd.hAdd.{0, 0, 0} task Binary.RandomProvider.Layout.taskObject) 8)
+              List.nil.{0})))
+        pointers;
+    ite.{1}
+      (Eq.{1}
+        ((List.all.{0} (HAppend.hAppend.{0, 0, 0} writes stable) fun x =>
+              match x with
+              | Prod.mk.{0, 0} base size =>
+                decide (LT.lt.{0} 0 size) &&
+                  decide (LE.le.{0} (HAdd.hAdd.{0, 0, 0} base size) (HPow.hPow.{0, 0, 0} 2 64))) &&
+            Binary.RandomProvider.writesApart writes &&
+          List.all.{0} writes fun write => List.all.{0} stable (Binary.RandomProvider.roleApart write))
+        true)
+      (pure.{0, 0} ()) (throw.{0, 0, 0} "random.private.role-alias");
+  ite.{1} (Eq.{1} (BEq.beq.{0} selected 0) true)
+    (do
+      let steering ← pure.{0, 0} List.nil.{0}
+      __do_jp steering)
+    do
+    let count ← Binary.RandomProvider.read m (HAdd.hAdd.{0, 0, 0} selected Binary.RandomProvider.Layout.steerCount) 4
+    let steering ←
+      pure.{0, 0}
+          (List.cons.{0}
+            (Prod.mk.{0, 0} selected
+              (HAdd.hAdd.{0, 0, 0} Binary.RandomProvider.Layout.steerEntries
+                (HMul.hMul.{0, 0, 0} count Binary.RandomProvider.Layout.entrySize)))
+            List.nil.{0})
+    __do_jp steering
 
 TRUST DECLARATIONS: binary/TrustBase.lean (verbatim)
 import FiniteExecution
@@ -1464,7 +1533,7 @@ import PairInsertInput
 namespace Binary.TrustBase
 
 def krakenCommit : String := "cd2ae360bfcf8e1fc719793405811ff49c3e75ce"
-def kernelIdentity : String := "6b2018b9"
+def kernelIdentity : String := "6b2018b99f086345ce9fa316a89c76d27b40b536d5feb4402510e5fb62a5ae24"
 def elfSha256 : String := "16c346209885db6c610d4aa126c6eb30f5d3c02f0498d95e606473945f648774"
 def decoderVersion : String := "GNU objdump (GNU Binutils for Ubuntu) 2.42"
 

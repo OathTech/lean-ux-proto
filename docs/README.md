@@ -130,4 +130,4 @@ Read these before the README's claims are taken at face value:
 artefacts of the first prototype. They are not current direction and do not
 authorise recreating what they describe.
 
-- [2026-10-18-charter-paired-index-insertion.md](2026-10-18-charter-paired-index-insertion.md): insertion, recorded draws and finite retained-heap composition; [execution report](2026-10-18-paired-index-insertion.md).
+- [2026-10-18-charter-paired-index-insertion.md](2026-10-18-charter-paired-index-insertion.md): insertion, recorded draws and finite retained-heap composition; [execution report](2026-10-18-paired-index-insertion.md), [fresh checkpoint review](2026-10-18-review-paired-index-insertion.md). Both review findings are repaired; final capture and external acceptance remain pending.
