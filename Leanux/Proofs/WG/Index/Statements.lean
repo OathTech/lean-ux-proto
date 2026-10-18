@@ -1,3 +1,6 @@
+import Leanux.Proofs.WG.Index.ConfigurationTailSource
+import Leanux.Proofs.WG.Index.ConfirmationIndexClaims
+import Leanux.Proofs.WG.Index.TimerCoreClaims
 import Leanux.Proofs.WG.Index.StagingIndexClaims
 import Leanux.Proofs.WG.Index.ResponseIndexClaims
 import Leanux.Proofs.WG.Index.LookupCoreSource
@@ -1453,5 +1456,21 @@ theorem original_pubkey_lookup_index_core (key : Key) :
       (fun result s => View.IndexCore s ∧
         ∀ pid, result = some pid → View.IndexCoreHeld pid s) :=
   pubkeyLookup_indexCore_held key
+
+/-- Original confirmation preserves the complete index component on both
+normal outcomes, with no successful-confirmation, slot-distinctness or
+extra reference-budget premise. Existing retirement duties are retained. -/
+theorem original_confirmation_index_core (pid : PeerId) (received : KeypairId) :
+    Campaign2.Ensures (receivedWithKeypair pid received) View.IndexCore
+      (fun _ => View.IndexCore) :=
+  receivedWithKeypair_indexCore pid received
+
+/-- Every original timer callback preserves current slot compatibility and
+the index component. Actual acquisition funds the zero-key callback's
+compensating put; no queue readiness or callback contract is supplied. -/
+theorem original_timer_callback_index_core (pid : PeerId) (timer : PeerTimer) :
+    Campaign2.Ensures (timerCallback pid timer) View.StagedIndexReady
+      (fun _ => View.StagedIndexReady) :=
+  TimerCore.callback_index pid timer
 
 end Leanux.Proofs.WG.Index
