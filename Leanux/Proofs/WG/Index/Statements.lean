@@ -1,3 +1,7 @@
+import Leanux.Proofs.WG.Index.ReachedIndexSource
+import Leanux.Proofs.WG.Index.CreationIndexClaims
+import Leanux.Proofs.WG.Index.RetirementSessionClaims
+import Leanux.Proofs.WG.Index.RetirementSinglePeerSource
 import Leanux.Proofs.WG.Index.InitiationIndexSource
 import Leanux.Proofs.WG.Index.CreatorCompatibleClaims
 import Leanux.Proofs.WG.Index.CreatorIndexClaims
@@ -1346,5 +1350,46 @@ theorem original_send_initiation_owner_compatible (pid : PeerId) :
     Campaign2.Ensures (sendHandshakeInitiation pid) (View.HandshakeCompatibleSafe pid)
       (fun _ => View.HandshakeCompatibleSafe pid) :=
   sendHandshakeInitiation_owner_compatible pid
+
+/-- The actual session retains coverage, positive owner coherence and dead-owner
+reservations under the smaller slot/store bounds. Its successful live-caller
+guard discharges the new key's retirement duty; it is not an entry premise. -/
+theorem original_begin_session_retirement
+    (retired : Queues.RxCredits.Reservations) (pid : PeerId) :
+    Campaign2.Ensures (beginSession pid)
+      (fun s => InitializedBounds.EndpointSafe s ∧ View.OwnerCoherentSafe s ∧
+        View.HashSlotsSafe s ∧ View.RetirementSafe retired s)
+      (fun _ s => View.OwnerCoherentSafe s ∧ View.HashSlotsSafe s ∧
+        View.RetirementSafe retired s) := by
+  intro g ambient result out after pre run
+  have index := beginSession_endpoint_hashSlots pid g ambient result out after
+    ⟨pre.1,pre.2.1,pre.2.2.1⟩ run
+  exact ⟨index.1,index.2,beginSession_endpoint_retirement retired pid
+    g ambient result out after ⟨pre.1,pre.2.1,pre.2.2.2⟩ run⟩
+
+/-- Original peer creation retains coverage, positive owner coherence and
+retirement on every normal errno or successful return. Configured entry bounds
+derive vacancy at the actual allocation cursor; no fresh-target premise is supplied. -/
+theorem original_peer_create_hash_slots_retirement
+    (publicKey : Key) (psk : Option Key) (retired : Queues.RxCredits.Reservations) :
+    Campaign2.Ensures (peerCreate publicKey psk)
+      (fun s => View.ConfiguredSafe s ∧ View.OwnerCoherentSafe s ∧
+        View.HashSlotsSafe s ∧ View.RetirementSafe retired s)
+      (fun _ s => View.OwnerCoherentSafe s ∧ View.HashSlotsSafe s ∧
+        View.RetirementSafe retired s) := by
+  intro g ambient result out after pre run
+  have retained := peerCreate_hashSlots_retirement publicKey psk retired
+    g ambient result out after ⟨pre.1,pre.2.2.1,pre.2.2.2⟩ run
+  exact ⟨(peerCreate_owner_coherent publicKey psk
+    g ambient result out after pre.2.1 run).1,retained⟩
+
+/-- The complete original session retains the combined table, slot-coverage,
+owner-coherence and empty-retirement package. Its slot/store bounds are entry
+facts; this local claim does not assert that a driver history establishes them. -/
+theorem original_begin_session_index_core (pid : PeerId) :
+    Campaign2.Ensures (beginSession pid)
+      (fun s => InitializedBounds.EndpointSafe s ∧ View.IndexCore s)
+      (fun _ s => View.IndexCore s) :=
+  Reached.session_core pid
 
 end Leanux.Proofs.WG.Index
