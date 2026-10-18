@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.Noise.ReceptionCallerClaims
+import Leanux.Proofs.WG.Noise.ClearDispatchClaims
 import Leanux.Proofs.WG.Noise.ClearWorkerClaims
 import Leanux.Proofs.WG.Noise.SessionEvaluationClaims
 import Leanux.Proofs.WG.Noise.InitiationCallerClaims
@@ -630,5 +632,41 @@ theorem original_clear_worker_tags (pid : PeerId) (entry : Campaign2.Snapshot) :
             if p.refcount = 1 then none else some HANDSHAKE_ZEROED
           else entry.tagAt target) :=
   ClearWorker.original_queued_clear_tags pid entry
+
+/-- Normal handshake receipt classifies the actual load/MAC dispatch:
+cookie input, MAC drop, cookie-reply attempt, initiation or response. Consumer
+receipts are nonempty exactly on consumer dispatch and retain actual helper
+runs, result order and local edges. All-outcome erasure retains every Stop;
+receipt cuts need not agree with each other or the whole caller's final tags. -/
+theorem original_reception_caller_dispatch (msg : List UInt8) (src : SkbSource) :
+    Campaign2.AgreesOn (fun _ => True)
+      (do let _ ← ReceptionCaller.observeClassified msg src; pure ())
+      (receiveHandshakePacket msg src) ∧
+    Campaign2.Ensures (ReceptionCaller.observeClassified msg src) (fun _ => True)
+      (fun call _ =>
+        ReceptionCaller.EntryShape msg call ∧
+        ReceptionCaller.GateEntryValid msg src call.gate ∧
+        ReceptionCaller.dispatchKind msg call.gate ≠ .wrongType ∧
+        (call.receipts ≠ [] ↔ ReceptionCaller.dispatchKind msg call.gate = .initiation ∨
+          ReceptionCaller.dispatchKind msg call.gate = .response) ∧
+        ∀ r ∈ call.receipts, ReceptionCaller.ReceiptValid r ∧ TagReceiptEffect r) :=
+  ⟨ReceptionCaller.original_reception_dispatch_erases msg src,
+    ReceptionCaller.original_reception_dispatch msg src⟩
+
+/-- Normal actual clear-work dispatch derives its selected queue member and
+initial peer/refcount, then preserves other tags and deletes that peer exactly
+at its last reference, otherwise retaining zero. Selection and section
+failures remain Stops; no readiness or successful-worker premise is supplied. -/
+theorem original_clear_worker_dispatch_tags (entry : Campaign2.Product.Snapshot) :
+    Campaign2.Product.Ensures Env.runOneClearWorker (fun s => s = entry)
+      (fun _ final => ∃ pid d p,
+        Index.clearWorkerSelected entry = some pid ∧
+        entry.wg.device = some d ∧ pid ∈ d.clearWorkQueue ∧
+        entry.toSnapshot.peerAt pid = some p ∧ 0 < p.refcount ∧
+        ∀ target, final.toSnapshot.tagAt target =
+          if pid = target then
+            if p.refcount = 1 then none else some HANDSHAKE_ZEROED
+          else entry.toSnapshot.tagAt target) :=
+  ClearWorkerDispatch.original_clear_dispatch_tags entry
 
 end Leanux.Proofs.WG.Noise

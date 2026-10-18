@@ -33,7 +33,8 @@ writes. Lifetimes.AmbientContracts cannot supply the remaining conclusion:
 its identity-preserving setPeer interface permits arbitrary tag changes.
 
 This is a proof-support request to campaign 1, with no mirror change.
-H1 session totality and actual response-receipt work continue independently.
+H1 finite session evaluation and actual sender/receiver receipt contracts
+now check independently.
 The generic caller composition is not credited as final tag preservation
 until all concrete helper frames are supplied.
 
@@ -50,8 +51,8 @@ including the PublicationHistory and PublicationChecks.actual_poll closure.
 The combined gate passes. PollAuthorization is not a premise of the earlier
 endpoint-mutation claim; initialized provenance transport remains a separate
 claim. H4's ClearEndpoint and
-InsertionRouting support avoid those broken modules, while initialized
-PeerRemovalCompletion still reaches them. H4's initial-state flag-only replace-peers transport is now checked using
+InsertionRouting support avoided those former failures; initialized
+PeerRemovalCompletion now also builds through the repaired modules. H4's initial-state flag-only replace-peers transport is now checked using
 ClearEndpoint.free_endpoint. Routing coherence, NodePairs and listed residency
 are supplied initially, then transported through actual free to the captured
 dead-marking pass. This closes the narrow first-pass dependency, while final
