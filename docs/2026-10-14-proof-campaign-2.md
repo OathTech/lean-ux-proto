@@ -161,7 +161,9 @@ No resource limit was increased. Independent final review found one
 arbitrary-entry comment omission, corrected before replay without changing
 proof terms. No unchanged infrastructure rerun, KILLED job, guest timeout,
 guest run or cap increase occurred. The inherited Env:865 deprecation remains;
-no owned warning remains.
+no owned warning remains. The commit-time whitespace check reported two
+extra terminal blank lines in the new outer-wrapper files; the next commit
+removes them without changing declarations or proof terms.
 
 H1 is complete at the boundary above; H2–H6 remain current and in progress with
 their whole-run scopes in the current table. Continue with H2 reachable

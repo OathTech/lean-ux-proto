@@ -37,4 +37,3 @@ theorem lift_get (entry : TagMap) : PrefixPreserves (StateInv entry) ValidHistor
     (fun _ hi => hi) (fun _ _ hi => hi.2))
 
 end Leanux.Proofs.WG.Noise.DriverTags.Outer
-

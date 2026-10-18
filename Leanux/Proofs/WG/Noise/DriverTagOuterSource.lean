@@ -102,4 +102,3 @@ theorem rtnetlinkRequest_erases (body : ProductObs Int) (action : Leanux.M Int)
     | (split <;> try contradiction)
 
 end Leanux.Proofs.WG.Noise.DriverTags.Outer
-
