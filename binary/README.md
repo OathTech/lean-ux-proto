@@ -478,8 +478,8 @@ capped lake env leanexport PairSubsystemSurface > ../.tmp/binary-pair-index.ndjs
 Require export exit status zero. The export is ephemeral and contains the
 transitive declaration closure, including all three complete function proofs,
 the sequence theorem, their executable definitions, both mutator witness
-modules, TrustBase and Execution. Its exact commit and validation status are
-recorded in the increment report. The external gate remains **pending**; the
+modules, TrustBase and Execution. The prepared export is from `fe596fd0b1d75a15801bf679657380676f61c0d6`;
+its successful generation and validation status are recorded in the increment report. The external gate remains **pending**; the
 user runs this from `binary/` **outside Nono**:
 
 ```sh

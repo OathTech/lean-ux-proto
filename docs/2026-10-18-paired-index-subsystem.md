@@ -1,7 +1,7 @@
 # Paired index-table subsystem: execution report
 
-Status: A–D and actual mutator captures complete locally on
-`task/binary-pair-runner`; final export preparation is in progress.
+Status: charter A–E complete locally on `task/binary-pair-runner`.
+Export prepared at `fe596fd0`; external acceptance remains pending.
 All three function theorems and arbitrary finite retained-heap composition
 check. Positive witnesses, runtime comparisons, fresh kernel replay and the
 binary trust gate pass. External acceptance remains pending. This is the
@@ -59,7 +59,7 @@ Runtime-investigation time used: zero at this checkpoint.
 | B: complete replacement adequacy and measured reuse | Complete locally: all 41 instructions, failure and all positions; explicit environment wrapper, linked/unhashed Pre witnesses, exact witness execution and fresh kernel replay pass. Reuse and marginal cost below. |
 | C: lookup under the common executable relation | Complete theorem and explicit environment wrapper build. Both recorded-prefix suites pass through the new assertion, including dead-then-NULL and collisions. Fresh replay of the environment/headline closure passes. |
 | D: finite call-sequence theorem and retained-heap execution | Complete locally: `Sequence.sequence_checked`, actual histories and explicit environment/access premises. Eight ten-call mixed sequences pass; fresh kernel replay passes. |
-| E: actual mutator captures, trust checks and cost report | Both actual captures and controls pass; fresh full-closure replay, build and trust gate pass. Cost/report complete; exact-commit export preparation is the final task. External gate pending. |
+| E: actual mutator captures, trust checks and cost report | Both actual captures and controls pass; fresh full-closure replay, build and trust gate pass. Complete statements, named premises and cost report are recorded; export prepared at `fe596fd0`. External gate pending. |
 
 The detailed sections below record intermediate states chronologically; the
 completion table and final validation section give the current result.
@@ -809,8 +809,60 @@ capped scripts/in-bundle python3 -B -m unittest \
 capped scripts/proof-gate --binary
 ```
 
-The final export is prepared from the committed `PairSubsystemSurface` root,
-using the README's `lake check --from-export` form. Its commit, completion
-status and final elapsed time will be recorded immediately after preparation.
-No external acceptance of this increment or the previous complete-call
-increment is implied by the earlier user-accepted boundary export.
+The final export was generated successfully from clean proof/capture commit
+**`fe596fd0b1d75a15801bf679657380676f61c0d6`**, using
+`capped lake env leanexport PairSubsystemSurface`. It took 33.72 seconds,
+peaked at 2,943,528 KiB RSS, and exited zero. The root imports
+`PairRemoveEnvironment`, `PairReplaceEnvironment`, `PairLookupEnvironment`,
+`PairRemoveWitness`, `PairReplaceWitness` and `PairSequenceAdequacy`, with their
+complete transitive closure including TrustBase and Execution. The final
+report-only checkpoint does not change that exported proof surface.
+
+The export remains ephemeral at `.tmp/binary-pair-index.ndjson` for the user
+to check. From `binary/`, **outside Nono**, the external gate is:
+
+```sh
+capped lake check --from-export ../.tmp/binary-pair-index.ndjson
+```
+
+**External acceptance is pending.** The older accepted boundary export does
+not accept this increment or the previous complete-call increment. Retain the
+new export only until its external check; regenerate it from the named commit
+when needed again. The two large capture directories `.tmp/cap-index-remove`
+and `.tmp/cap-index-replace` have been removed after recording their conclusions;
+the reproduction commands above regenerate them.
+
+
+## Completed checkpoint and measured rate
+
+The local checkpoint completed at **2026-10-18 09:28:29 UTC**, after
+**3 h 34 min 13 s** elapsed. The 24-hour
+reassessment was not needed. Work stops at the charter's complete subsystem
+checkpoint; no further runtime experiment or campaign expansion was started.
+The separate two-hour runtime-optimization allowance used **zero** focused
+hours. Capture/replay and witness-normalization work are accounted above as
+validation and proof development, not as a claimed optimization experiment.
+
+The deliberately mechanical observed rate is **18.5 newly completed
+anchored instructions per elapsed hour** (66 instructions in two mutators,
+excluding service bodies), or **17.6 newly proved instruction effects
+per hour** after subtracting the three baseline removal instructions.
+That elapsed interval also includes the reused lookup bridge, arbitrary
+finite composition, actual captures, tests and export preparation. These are
+unweighted counts over a single small sequential subsystem, not a campaign
+forecast or an aggregate-compute measure. No future budget should be obtained
+by simply multiplying this rate by the remaining instruction census.
+
+At `fe596fd0`, the implementation delta from `b630836f` adds **9,267 Lean
+lines and removes 3 across 113 Lean files**, including executable checks,
+runners, image/layout terms, formal witnesses, review printing and proofs.
+The entire delta is 130 files, 11,525 insertions and 23 deletions before this
+final report-only update. This remains a large handwritten implementation.
+The useful result is completed fresh mutation and derived composition with
+specific reused mechanisms; the result does not establish that proof size
+or long-term maintenance cost has become small.
+
+Pins at the final checkpoint are unchanged: mirror `cb2348e`, main
+`77c9b55594787bd5b371575e2eca1a8d77b3c991`, and clean private Kraken
+`7ebba06a30eaf08c10b26b28ca14bfee1c791576`. Mirror/oracle/guest/AGENTS files
+are unchanged by the increment. No merge, push or global change was made.
