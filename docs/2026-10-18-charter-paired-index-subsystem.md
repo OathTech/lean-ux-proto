@@ -1,7 +1,8 @@
 # Charter: a composable binary index-table subsystem
 
-Status: charter recorded; implementation paused pending the user's instruction
-to resume. Worktree `.worktrees/binary-pair-runner`, branch
+Status: implementation resumed; start time and checkpoints are in the
+[increment report](2026-10-18-paired-index-subsystem.md).
+Worktree `.worktrees/binary-pair-runner`, branch
 `task/binary-pair-runner`, implementation baseline `b630836f`.
 
 [USER 2026-10-18] Adopt a larger checkpoint that tests fresh-function proof
@@ -294,8 +295,7 @@ coverage for a function whose full theorem remains open.
 
 ## 8. Pause and resumption
 
-This charter is the current stopping point. No implementation of this
-increment begins during the charter-writing turn. Resume only on the user's
-instruction, using the baseline and work order above; the supporting runtime
-budget starts with resumed work, not while paused. No background build,
-capture or proof job is needed to preserve this checkpoint.
+The charter-writing turn ended at a clean paused checkpoint. The user has
+since resumed the increment; the report records the execution start. The
+supporting runtime budget counts focused runtime investigation during the
+resumed work, not the preceding pause or unrelated proof development.
