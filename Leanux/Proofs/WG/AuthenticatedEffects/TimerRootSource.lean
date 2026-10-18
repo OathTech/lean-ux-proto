@@ -20,13 +20,33 @@ structure Arm where
 
 def Arm.Native (r : Arm) : Prop := r.run.Valid (armTimer r.peer r.timer r.delay r.caller)
 
+structure Queued where
+  origin : Nat
+  kind : HandshakeCausal.Kind
+  peer : PeerId
+  run : WGRunWitness Unit
+
+def Queued.Native (r : Queued) : Prop :=
+  r.run.Valid (modifyDev fun d => {d with sendWorkQueue := d.sendWorkQueue ++ [r.peer]})
+
+structure Submitted where
+  origin : Nat
+  kind : HandshakeCausal.Kind
+  peer : PeerId
+  items : List SkbId
+  run : WGRunWitness Unit
+
+def Submitted.Native (r : Submitted) : Prop := r.run.Valid (createData r.peer r.items)
+
 inductive Event where
   | base (event : HandshakeCausal.Event)
   | armed (receipt : Arm)
+  | queued (receipt : Queued)
+  | submitted (receipt : Submitted)
 
 def base : Event → Option HandshakeCausal.Event
   | .base e => some e
-  | .armed _ => none
+  | .armed _ | .queued _ | .submitted _ => none
 
 def history (h : List Event) := h.filterMap base
 

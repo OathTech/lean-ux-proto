@@ -7,6 +7,7 @@ import Leanux.Proofs.WG.TransmitSecurity.EncryptBinding
 import Leanux.Proofs.WG.TransmitSecurity.PacketAllocation
 import Leanux.Proofs.WG.TransmitSecurity.PacketMaterialFrames
 import Leanux.Proofs.WG.TransmitSecurity.WorkerEncryption
+import Leanux.Proofs.WG.TransmitSecurity.JournalProjection
 import Leanux.Proofs.WG.TransmitSecurity.Rekey
 
 /-! Campaign 3, T1 initialized counter reservations and local AEAD contracts.
@@ -326,5 +327,17 @@ theorem original_encrypt_worker_packet_receipts (item : Option (List SkbId)) (w 
     ErasesPrefix (WorkerEncryption.tail item) (Queues.RxWorkers.encryptStepTailSource item) ∧
     WorkerEncryption.Good (runPrefix (WorkerEncryption.tail item) w []).2 :=
   ⟨WorkerEncryption.tail_erases item,WorkerEncryption.tail_receipts item w⟩
+
+/-- Security: reservations, allocated packet identities, ring selections, native
+AEAD receipts and TX dispositions share one initialized execution chronology.
+Its exact reservation projection is duplicate-free for every typed Runner trace
+and both placeholder settings, including Stop; packet-to-reservation ownership
+and one-time encryption still require the separate inventory transport. -/
+theorem initialized_joint_transmit_reservations (trace : Runner.Trace) (placeholders : Bool) :
+    ErasesOuter (Journal.execute trace placeholders) (Runner.executeTrace trace placeholders) ∧
+    ProjectsOuter Journal.nonce? id (Journal.execute trace placeholders) (Nonce.executeObserved trace placeholders) ∧
+    List.Nodup ((runPrefixOuter (Journal.execute trace placeholders) []).2.filterMap Journal.nonce?) :=
+  ⟨Journal.execute_erases trace placeholders,Journal.execute_projects trace placeholders,
+    Journal.initialized_reservations trace placeholders⟩
 
 end Leanux.Proofs.WG.TransmitSecurity

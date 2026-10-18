@@ -1,0 +1,106 @@
+import Leanux.Proofs.WG.TransmitSecurity.DriverProjectionBase
+
+namespace Leanux.Proofs.WG.TransmitSecurity.Driver
+open Leanux Leanux.WG Leanux.Proofs.Logged Lifetimes Queues
+open Leanux.Proofs.WG.Origins.HandshakeSources
+variable {E F : Type} {ρ : E → Option F} {g : Hooks E} {a : Hooks F}
+
+set_option maxHeartbeats 600000
+set_option pp.structureInstances false
+
+theorem staging_projects (h : HooksProjects ρ g a) (pid : PeerId) :
+    StateProjectsPrefix ρ id (stagingObserved g pid) (stagingObserved a pid) := by
+  unfold stagingObserved
+  repeat' first
+    | (maintenance_head Hooks.reserve; exact h.reserve _)
+    | (maintenance_head Hooks.allocate; exact h.allocate _)
+    | (maintenance_head Hooks.create; exact h.create _ _)
+    | driver_state_step ρ
+
+theorem keepalive_projects (h : HooksProjects ρ g a) (pid : PeerId) :
+    StateProjectsPrefix ρ id (keepaliveObserved g pid) (keepaliveObserved a pid) := by
+  unfold keepaliveObserved
+  repeat' first
+    | (maintenance_head stagingObserved; exact staging_projects h _)
+    | driver_state_step ρ
+
+theorem transmit_projects (h : HooksProjects ρ g a) (family addr : Nat) (packets : List Packet) (mtu : Nat) :
+    StateProjectsPrefix ρ id (transmitObserved g family addr packets mtu) (transmitObserved a family addr packets mtu) := by
+  unfold transmitObserved
+  repeat' first
+    | (maintenance_head Hooks.front; exact h.front _ _ _ _)
+    | (maintenance_head stagingObserved; exact staging_projects h _)
+    | driver_state_step ρ
+
+theorem expired_projects (h : HooksProjects ρ g a) (pid : PeerId) :
+    StateProjectsPrefix ρ id (expiredKeepaliveObserved g pid) (expiredKeepaliveObserved a pid) := by
+  unfold expiredKeepaliveObserved
+  repeat' first
+    | (maintenance_head keepaliveObserved; exact keepalive_projects h _)
+    | driver_state_step ρ
+
+theorem persistent_projects (h : HooksProjects ρ g a) (pid : PeerId) :
+    StateProjectsPrefix ρ id (persistentObserved g pid) (persistentObserved a pid) := by
+  unfold persistentObserved
+  repeat' first
+    | (maintenance_head keepaliveObserved; exact keepalive_projects h _)
+    | driver_state_step ρ
+
+theorem timer_projects (h : HooksProjects ρ g a) (pid : PeerId) (t : PeerTimer) :
+    StateProjectsPrefix ρ id (timerObserved g pid t) (timerObserved a pid t) := by
+  cases t <;> unfold timerObserved
+  all_goals first
+    | exact expired_projects h _
+    | exact persistent_projects h _
+    | exact Projection.state_lift ρ _
+
+theorem response_projects (ρ : E → Option F) (g : Hooks E) (a : Hooks F) (pid : PeerId) :
+    StateProjectsPrefix ρ id (responseWith (handshakeOps g) pid) (responseWith (handshakeOps a) pid) := by
+  unfold responseWith
+  dsimp only [handshakeOps]
+  repeat' first
+    | driver_state_step ρ
+
+theorem afterMac_projects (h : HooksProjects ρ g a) (msg : List UInt8) (src : SkbSource)
+    (loaded : Bool) (mac : MacState) :
+    StateProjectsPrefix ρ id (afterMacWith (handshakeOps g) msg src loaded mac)
+      (afterMacWith (handshakeOps a) msg src loaded mac) := by
+  unfold afterMacWith
+  dsimp only [handshakeOps]
+  repeat' first
+    | (maintenance_head responseWith; exact response_projects ρ g a _)
+    | (maintenance_head keepaliveObserved; exact keepalive_projects h _)
+    | driver_state_step ρ
+
+theorem reception_projects (h : HooksProjects ρ g a) (msg : List UInt8) (src : SkbSource) :
+    StateProjectsPrefix ρ id (receptionWith (handshakeOps g) msg src)
+      (receptionWith (handshakeOps a) msg src) := by
+  unfold receptionWith
+  dsimp only [handshakeOps]
+  repeat' first
+    | (maintenance_head afterMacWith; exact afterMac_projects h _ _ _ _)
+    | driver_state_step ρ
+
+theorem handshake_projects (h : HooksProjects ρ g a) :
+    StateProjectsPrefix ρ id (handshakeObserved g) (handshakeObserved a) := by
+  unfold handshakeObserved stepWith
+  dsimp only [handshakeOps]
+  repeat' first
+    | (maintenance_head receptionWith; exact reception_projects h _ _)
+    | driver_state_step ρ
+
+theorem receiveTail_projects (h : HooksProjects ρ g a) (pid : PeerId) (pkt : RxPacket) (confirmed : Bool) :
+    StateProjectsPrefix ρ id (receiveTailObserved g pid pkt confirmed) (receiveTailObserved a pid pkt confirmed) := by
+  unfold receiveTailObserved
+  repeat' first
+    | (maintenance_head stagingObserved; exact staging_projects h _)
+    | driver_state_step ρ
+
+theorem consume_projects (h : HooksProjects ρ g a) (pid : PeerId) (pkt : RxPacket) (ep : Endpoint) :
+    StateProjectsPrefix ρ id (consumeObserved g pid pkt ep) (consumeObserved a pid pkt ep) := by
+  unfold consumeObserved
+  repeat' first
+    | (maintenance_head receiveTailObserved; exact receiveTail_projects h _ _ _)
+    | driver_state_step ρ
+
+end Leanux.Proofs.WG.TransmitSecurity.Driver

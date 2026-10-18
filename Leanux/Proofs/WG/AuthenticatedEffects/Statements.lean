@@ -1,3 +1,6 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.SendWorkClaims
+import Leanux.Proofs.WG.AuthenticatedEffects.WorkRootClaims
+import Leanux.Proofs.WG.AuthenticatedEffects.TimerSelection
 import Leanux.Proofs.WG.AuthenticatedEffects.TimerRootClaims
 import Leanux.Proofs.WG.AuthenticatedEffects.HandshakeCausalReceiver
 import Leanux.Proofs.WG.AuthenticatedEffects.AdmissionCompletion
@@ -504,5 +507,121 @@ theorem original_handshake_timer_arms_have_authenticated_cause
       pre ++ .armed r :: post) :
     TimerRoot.Authenticated pre r :=
   TimerRoot.arm_authenticated msg src w a pre post r position
+
+/-- Security: a native timer arm carries prior timer causes through every
+ordinary return. A changed target receives this arm's exact occurrence receipt;
+a no-change arm and all other timer slots retain their prior causes. The input
+carrier is explicit and is not yet claimed for the complete initialized driver. -/
+theorem native_timer_arm_transports_occurrence_causes (origin : Nat)
+    (kind : HandshakeCausal.Kind) (pid : PeerId) (timer : PeerTimer)
+    (delay : Nat) (caller : Option UInt64) :
+    Leanux.Proofs.Logged.StatePrefixPreserves (fun h w _ => TimerSlots.Carrier h w) (fun _ => True)
+      (TimerRoot.arm origin kind pid timer delay caller) :=
+  TimerSlots.arm_preserves origin kind pid timer delay caller
+
+/-- Security: deletion retires the selected timer occurrence and preserves
+causes for the remaining live timers. The input carrier is explicit; this
+native store step does not assume that timer callbacks have already run. -/
+theorem native_timer_delete_transports_occurrence_causes (pid : PeerId) (timer : PeerTimer) :
+    Leanux.Proofs.Logged.StatePrefixPreserves (fun h w _ => TimerSlots.Carrier h w) (fun _ => True)
+      (liftWGPrefix (delTimer pid timer) : WGPrefix TimerRoot.Event Unit) :=
+  TimerSlots.delete_preserves pid timer
+
+/-- Security: the actual wheel selector retrieves the stored cause of the
+selected occurrence with exact peer, timer kind, incarnation, expiry and
+queue stamp. This closes the selector's local obligation under the named
+carrier; initialization and transport through all native callers remain open. -/
+theorem native_timer_selection_retains_occurrence_cause (h : List TimerRoot.Event)
+    (w : WGWorld) (d : Device) (device : w.dev = some d) (carrier : TimerSlots.Carrier h w)
+    (j : UInt64) (pid : PeerId) (timer : PeerTimer) (entry : WheelEntry)
+    (selected : TimerWheel.nextDue d j = some (pid,timer,entry)) :
+    ∃ stamp expires, TimerSlots.HasCause h pid timer stamp expires entry :=
+  TimerSlots.nextDue_cause h w d device carrier j pid timer entry selected
+
+/-- Security: observing actual work creation in the complete handshake receiver
+preserves its native result and both state endpoints, including Stops. Receipts
+for completed queue appends and data submissions survive a later Stop. -/
+theorem original_handshake_work_observer (msg : Key) (src : SkbSource)
+    (w : WGWorld) (a : Ambient) (h : List TimerRoot.Event) :
+    (runWGPrefix (WorkRoot.receive msg src) w a h).1 =
+      ((receiveHandshakePacket msg src).run w).run a :=
+  WorkRoot.receive_erases msg src w a h
+
+/-- Security: every observed handshake-work queue append in the complete native
+receiver is its actual append operation and has its own indexed, earlier
+MAC-and-Noise-authenticated callback cause. The claim covers later Stops;
+forwarding the occurrence through deferred execution remains separate. -/
+theorem original_handshake_work_queue_has_authenticated_cause
+    (msg : Key) (src : SkbSource) (w : WGWorld) (a : Ambient)
+    (pre post : List TimerRoot.Event) (r : TimerRoot.Queued)
+    (position : (runWGPrefix (WorkRoot.receive msg src) w a []).2 =
+      pre ++ .queued r :: post) :
+    r.Native ∧ WorkRoot.AuthenticatedAt pre r.origin r.kind r.peer ∧
+      r.run.after.dev = r.run.before.dev.map
+        (fun d => {d with sendWorkQueue := d.sendWorkQueue ++ [r.peer]}) := by
+  obtain ⟨native,cause⟩ := WorkRoot.queued_authenticated msg src w a pre post r position
+  exact ⟨native,cause,WorkRoot.queued_native_append r native⟩
+
+/-- Security: every observed data submission from the complete native handshake
+receiver executes the original createData on exactly the recorded peer and
+packet identifiers, under its own indexed authenticated callback cause. This
+records a submission, which may drop packets; it does not assert successful
+queueing, encryption or transmission of every item. -/
+theorem original_handshake_data_submission_has_authenticated_cause
+    (msg : Key) (src : SkbSource) (w : WGWorld) (a : Ambient)
+    (pre post : List TimerRoot.Event) (r : TimerRoot.Submitted)
+    (position : (runWGPrefix (WorkRoot.receive msg src) w a []).2 =
+      pre ++ .submitted r :: post) :
+    r.Native ∧ WorkRoot.AuthenticatedAt pre r.origin r.kind r.peer :=
+  WorkRoot.submitted_authenticated msg src w a pre post r position
+
+/-- Security: a completed native handshake-work append creates one fresh
+causal ticket for its journal position and preserves every existing occurrence.
+The live-device and input-carrier obligations remain explicit; a native
+modifyDev on an absent device cannot manufacture an actual queued occurrence. -/
+theorem native_handshake_queue_append_transports_occurrence_causes
+    (h : List TimerRoot.Event) (tickets : List SendWorkCauses.Ticket) (r : TimerRoot.Queued)
+    (carrier : SendWorkCauses.Carrier h tickets r.run.before)
+    (native : r.Native) (device : r.run.before.dev.isSome) :
+    SendWorkCauses.Carrier (h ++ [.queued r]) (tickets ++ [⟨h.length,r⟩]) r.run.after :=
+  carrier.enqueue r native device
+
+/-- Security: the dispatch observer records the actual native queued-peer
+selection before dequeue and execution. It preserves the complete original
+runOneSendWorker result, including any later Stop inside the worker. -/
+theorem original_handshake_work_dispatch_observer :
+    ErasesPrefix SendWorkCauses.dispatch Env.runOneSendWorker :=
+  SendWorkCauses.dispatch_erases
+
+/-- Security: a completed native handshake-work dispatch consumes the first
+matching queue occurrence and preserves the ordered, distinct tickets for all
+remaining occurrences, including duplicate peer identifiers. The queue carrier
+is an explicit input, not yet a whole-driver initialized invariant. -/
+theorem original_handshake_work_dispatch_transports_occurrence_causes
+    (h : List TimerRoot.Event) (tickets : List SendWorkCauses.Ticket) (w v : World)
+    (carrier : SendWorkCauses.Carrier h tickets w.wg) (r : RunWitness PeerId)
+    (reached : r ∈ (runPrefix SendWorkCauses.dispatch w []).2)
+    (run : (runPrefix SendWorkCauses.dispatch w []).1 = .ok ((),v)) :
+    ∃ ticket rest, SendWorkCauses.Selected tickets r.value ticket rest ∧ ticket.Valid h ∧
+      SendWorkCauses.Carrier h rest v.wg :=
+  SendWorkCauses.dispatch_completed w v carrier r reached run
+
+/-- Security: the native selected handshake-work occurrence inherits its own
+indexed authenticated receiver callback, even when the later worker Stops.
+This joins the actual receiver and dispatcher source cuts under the explicit
+ordered queue carrier; initialization and intervening driver transport remain
+open and are not replaced by a prior admission for the same peer. -/
+theorem original_handshake_work_dispatch_inherits_occurrence_cause
+    (msg : Key) (src : SkbSource) (before : WGWorld) (ambient : Ambient)
+    (w : World) (tickets : List SendWorkCauses.Ticket)
+    (carrier : SendWorkCauses.Carrier
+      (runWGPrefix (WorkRoot.receive msg src) before ambient []).2 tickets w.wg)
+    (r : RunWitness PeerId) (reached : r ∈ (runPrefix SendWorkCauses.dispatch w []).2) :
+    ∃ ticket rest pre post,
+      SendWorkCauses.Selected tickets r.value ticket rest ∧ ticket.peer = r.value ∧
+      (runWGPrefix (WorkRoot.receive msg src) before ambient []).2 = pre ++ .queued ticket.receipt :: post ∧
+      pre.length = ticket.index ∧
+      WorkRoot.AuthenticatedAt pre ticket.receipt.origin ticket.receipt.kind ticket.peer :=
+  SendWorkCauses.dispatch_authenticated msg src before ambient w tickets carrier r reached
 
 end Leanux.Proofs.WG.AuthenticatedEffects

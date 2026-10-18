@@ -10,7 +10,7 @@ def Projects (g : WGPrefix Event α) (a : WGPrefix HandshakeCausal.Event α) : P
   ∀ w ambient h, runWGPrefix a w ambient (history h) =
     ((runWGPrefix g w ambient h).1,history (runWGPrefix g w ambient h).2)
 
-private theorem projects_bind (g : WGPrefix Event α) (a : WGPrefix HandshakeCausal.Event α)
+theorem projects_bind (g : WGPrefix Event α) (a : WGPrefix HandshakeCausal.Event α)
     (next : α → WGPrefix Event β) (tail : α → WGPrefix HandshakeCausal.Event β)
     (hg : Projects g a) (hn : ∀ x, Projects (next x) (tail x)) :
     Projects (g >>= next) (a >>= tail) := by
@@ -27,9 +27,9 @@ private theorem projects_bind (g : WGPrefix Event α) (a : WGPrefix HandshakeCau
     | error err => rfl
     | ok out => rcases out with ⟨⟨x,v⟩,b⟩; exact hn x v b hist
 
-private theorem projects_pure (x : α) : Projects (pure x) (pure x) := by intro w a h; rfl
-private theorem projects_lift (a : WG.M α) : Projects (liftWGPrefix a) (liftWGPrefix a) := by intro w ambient h; rfl
-private theorem projects_choice (p : Prop) [Decidable p]
+theorem projects_pure (x : α) : Projects (pure x) (pure x) := by intro w a h; rfl
+theorem projects_lift (a : WG.M α) : Projects (liftWGPrefix a) (liftWGPrefix a) := by intro w ambient h; rfl
+theorem projects_choice (p : Prop) [Decidable p]
     (g k : WGPrefix Event α) (a b : WGPrefix HandshakeCausal.Event α)
     (hg : Projects g a) (hk : Projects k b) : Projects (if p then g else k) (if p then a else b) := by
   split <;> assumption
@@ -114,7 +114,7 @@ theorem traversal_frame (origin : Nat) (pid : PeerId) : StateHistoryFrame base (
   · exact StateHistoryFrame.bind (modify_frame _ _ _ _ _ _) (fun _ => pure_frame _)
   · exact pure_frame _
 
-private theorem call_projects (kind : HandshakeCausal.Kind) (pid : PeerId)
+theorem call_projects (kind : HandshakeCausal.Kind) (pid : PeerId)
     (body : Nat → WGPrefix Event α) (native : WG.M α)
     (erases : ∀ origin, ErasesStatePrefix (body origin) native)
     (frame : ∀ origin, StateHistoryFrame base (body origin)) :
@@ -138,24 +138,24 @@ private theorem old_projects (a : WGPrefix HandshakeCausal.Event α) (append : S
   rw [identity,Except.map_id] at hp
   exact hp
 
-private theorem old_call_projects (kind : HandshakeCausal.Kind) (pid : PeerId) (native : WG.M α) :
+theorem old_call_projects (kind : HandshakeCausal.Kind) (pid : PeerId) (native : WG.M α) :
     Projects (old (HandshakeCausal.call kind pid native)) (HandshakeCausal.call kind pid native) := by
   apply old_projects
   apply StateAppends.bind
   · intro w ambient h; exact ⟨[.callback kind pid],rfl⟩
   · intro doneUnit; exact StateAppends.lift native
-private theorem old_initiation_projects (mac : HandshakeMac) :
+theorem old_initiation_projects (mac : HandshakeMac) :
     Projects (old (HandshakeCausal.initiation mac)) (HandshakeCausal.initiation mac) :=
   old_projects _ (StateAppends.focus _ _ _)
-private theorem old_response_projects (mac : HandshakeMac) :
+theorem old_response_projects (mac : HandshakeMac) :
     Projects (old (HandshakeCausal.response mac)) (HandshakeCausal.response mac) :=
   old_projects _ (StateAppends.focus _ _ _)
 
-private theorem derived_projects (pid : PeerId) :
+theorem derived_projects (pid : PeerId) :
     Projects (call .sessionDerived pid (fun origin => derived origin pid))
       (HandshakeCausal.call .sessionDerived pid (timersSessionDerived pid)) :=
   call_projects _ _ _ _ (fun _ => derived_erases _ _) (fun _ => derived_frame _ _)
-private theorem traversal_projects (pid : PeerId) :
+theorem traversal_projects (pid : PeerId) :
     Projects (call .traversal pid (fun origin => traversal origin pid))
       (HandshakeCausal.call .traversal pid (timersTraversal pid)) :=
   call_projects _ _ _ _ (fun _ => traversal_erases _ _) (fun _ => traversal_frame _ _)
@@ -213,7 +213,7 @@ theorem afterMac_projects (mac : HandshakeMac) (msg : Key) (src : SkbSource)
     | simp +failIfUnchanged only [bind_assoc,pure_bind]
   all_goals try simp_all only [Option.some.injEq]
 
-private theorem capture_projects (a : WG.M α) : Projects (captureWGRun a) (captureWGRun a) := by
+theorem capture_projects (a : WG.M α) : Projects (captureWGRun a) (captureWGRun a) := by
   intro w ambient h
   rw [runWGPrefix_captureWGRun,runWGPrefix_captureWGRun]
 

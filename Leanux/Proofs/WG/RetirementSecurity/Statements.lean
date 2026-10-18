@@ -29,6 +29,9 @@ import Leanux.Proofs.WG.RetirementSecurity.RxCleanupHolders
 import Leanux.Proofs.WG.RetirementSecurity.RxConsumeHolders
 import Leanux.Proofs.WG.RetirementSecurity.TxOccurrenceWorker
 import Leanux.Proofs.WG.RetirementSecurity.TxOccurrenceCreate
+import Leanux.Proofs.WG.RetirementSecurity.TxOccurrenceStaging
+import Leanux.Proofs.WG.RetirementSecurity.TxCryptAdmission
+import Leanux.Proofs.WG.RetirementSecurity.TxCryptCompletion
 
 /-! Campaign 3, T6: local original-operation retirement contracts. The
 initialized key-reference ledger, complete caller coverage and conditional
@@ -707,5 +710,61 @@ theorem original_dispatched_key_retirement (w v : World)
     (run : Env.runOneClearWorker.run w = .ok ((),v)) :
     ∃ d pid, w.wg.dev = some d ∧ pid ∈ d.clearWorkQueue ∧
       SlotsCleared pid v.wg ∧ Retains w.wg v.wg := dispatched_retirement w v run
+
+
+/-- Full native staging cannot duplicate an existing physical TX occurrence:
+its nonce loop and refusal paths preserve the incoming inventory, and its
+fresh allocation is either published or freed by the actual createData path.
+The incoming occurrence inventory and packet frontier bound remain explicit;
+whole initialized caller transport and ring-phase authorization are separate. -/
+theorem original_staged_tx_occurrences (inventory : TxInventory locals w)
+    (bounded : Packets.Inv w) (pid : PeerId) (a b : Ambient)
+    (run : ((sendStagedPackets pid).run w).run a = .ok (((),v),b)) :
+    TxInventory locals v := inventory.staged bounded pid a b run
+
+
+/-- Initialized encryption has no live or active packet aliases. The later
+native admission and poll contracts track actual peer-owned batches, with
+UNCRYPTED heads and no duplicate IDs across live and active encryption. -/
+theorem initialized_tx_crypt_occurrences (net bare : Bool) :
+    TxCryptInventory [] (Runner.initialWG net bare) := initial_tx_crypt_inventory net bare
+
+/-- Native admission cannot make a physical packet available to two
+concurrent encryption selections. Only successful ring admission adds an
+alias; ENOSPC retains the local, and EPIPE installs only peer ownership.
+Incoming concrete occurrence and encryption-phase inventories are explicit;
+whole initialized caller transport remains separate. -/
+theorem original_tx_crypt_admission (crypt : TxCryptInventory active w)
+    (owned : TxInventory (⟨.unpublished,pid,items⟩ :: locals) w)
+    (device : w.dev = some d) (a b : Ambient)
+    (run : ((enqueuePerDeviceAndPeer pid items).run w).run a = .ok ((ret,v),b)) :
+    TxCryptInventory active v := crypt.enqueue owned device a b run
+
+/-- Native ring consumption transfers one live alias into the selected
+local and preserves its queued owner, UNCRYPTED head and exclusive packet
+occurrences. Stale occupied slots are excluded. This is a source-cut claim;
+callback and whole initialized driver transport remain explicit work. -/
+theorem original_tx_crypt_selection (crypt : TxCryptInventory active w) (a b : Ambient)
+    (run : ((Queues.TxRing.pollSource).run w).run a = .ok ((out,v),b)) :
+    TxCryptInventory (out.toList ++ active) v := crypt.poll a b run
+
+
+/-- The whole selected native encryption continuation preserves exact
+key-reference funding and physical packet ownership: reading cryptographic
+material and writing ciphertext creates no new owner. Incoming concrete
+holder and occurrence inventories remain explicit, and this cut starts after
+the native ring poll and softirq callback. -/
+theorem original_encryption_holder_account (items : Option (List SkbId)) :
+    Preserves (fun w : World => HolderAccount temporary w.wg ∧ TxInventory locals w.wg)
+      (Queues.RxWorkers.encryptStepTailSource items) := encrypt_tail_accounts items
+
+/-- Completed native encryption consumes only its active encryption alias;
+the peer queue retains its owning occurrence until TX disposal, and every
+other live or active batch keeps its UNCRYPTED head and unique packet IDs.
+The incoming phase invariant is explicit; whole initialized callback and
+driver transport is still required. -/
+theorem original_encryption_phase_completion (crypt : TxCryptInventory (items :: active) w.wg)
+    (run : (Queues.RxWorkers.encryptStepTailSource (some items)).run w = .ok (result,v)) :
+    TxCryptInventory active v.wg := crypt.complete run
 
 end Leanux.Proofs.WG.RetirementSecurity

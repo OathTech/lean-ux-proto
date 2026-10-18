@@ -1,4 +1,5 @@
-import Leanux.Proofs.WG.HandshakeSecurity.ResponderAuditedHistory
+import Leanux.Proofs.WG.HandshakeSecurity.ResponderDeviceFrames
+import Leanux.Proofs.WG.HandshakeSecurity.ResponderDeferred
 import Leanux.Proofs.WG.HandshakeSecurity.ResponderGlobalFrames
 import Leanux.Proofs.WG.HandshakeSecurity.ResponderStackFrames
 import Leanux.Proofs.WG.HandshakeSecurity.ResponderLabels
@@ -452,5 +453,55 @@ theorem original_deferred_units_responder_history (H1 : H1ResponderCurrentEdges)
     Responder.Joint.Preserves (Queues.RxHistory.audit (Queues.RxHistory.placeholderTimerPassAudit j)) :=
   ⟨Responder.Joint.sendOne, Responder.Joint.clearOne H1,
     Responder.Joint.timerDispatch worker pid timer entry step, Responder.Joint.placeholderPass j⟩
+
+/-- The native scheduler and its actual TX worker preserve responder-current
+authorization across all dispatch kinds, nested rescheduling and crypt-ahead.
+Each completed confirmation remains in the same persistent journal, including
+prefixes retained before Stop. H1 is explicit; initialized driver closure and
+each encrypted packet's staging provenance remain separate obligations. -/
+theorem original_scheduler_responder_history
+    (H1 : H1ResponderCurrentEdges) (slots : H1ConfirmationEdges)
+    (worker : Worker) (pid : PeerId) :
+    Responder.Joint.Preserves (Queues.RxHistory.schedule none) ∧
+    Responder.Joint.Preserves (Queues.RxHistory.nestedResched worker) ∧
+    Responder.Joint.Preserves (Queues.RxHistory.mixed
+      (Lifetimes.txIterPrefix pid (liftPrefix (Env.condResched .txWorker)))) :=
+  ⟨Responder.Joint.schedule H1 slots none, Responder.Joint.nestedResched H1 slots worker,
+    Responder.Joint.txIteration pid⟩
+
+/-- All fourteen real deferred-call variants preserve responder-current
+confirmation history, including ordered timer-wheel scans, saved-peer reads,
+crypt/send loops and both timer modes. The source H1 contracts remain explicit;
+this is actor closure, with initialized syscall transport still separate. -/
+theorem original_deferred_responder_history
+    (H1 : H1ResponderCurrentEdges) (slots : H1ConfirmationEdges)
+    (call : Lifetimes.EnvDeferredCall) :
+    Responder.Joint.Preserves (Queues.RxHistory.deferred call) :=
+  Responder.Deferred.deferred H1 slots call
+
+/-- Full native peer/device configuration preserves responder-current
+confirmation history through creation, removal, allowed-IP changes, private-key
+replacement and normal errno returns. The same-run observer retains stopped
+prefixes; no source command is replaced by a desired postcondition. -/
+theorem original_configuration_responder_history (H1 : H1ResponderCurrentEdges)
+    (attrs : DeviceAttrs) :
+    Responder.Joint.Preserves (Queues.RxHistory.mixed
+      (liftWGObserver (Lifetimes.wgSetDevicePrefix attrs))) :=
+  Responder.Joint.wgSetDevice H1 attrs
+
+/-- Native device setup, open, stop, destruction and namespace pre-exit
+cannot leave an unconfirmed responder allocation current, from the stated
+entry invariant and H1 clear contract. Reset devices discharge old obligations
+by removing their peers. Initialized outer transport remains separate. -/
+theorem original_device_lifecycle_responder_authorization
+    (H1 : H1ResponderCurrentEdges) (confirmed : List Nat) :
+    Framing.Preserves (Responder.History.Native confirmed) wgCreate ∧
+    Framing.Preserves (Responder.History.Native confirmed) wgUp ∧
+    Framing.Preserves (Responder.History.Native confirmed) wgDown ∧
+    Framing.Preserves (Responder.History.Native confirmed) wgDestruct ∧
+    Framing.Preserves (Responder.History.Native confirmed) netnsPreExit :=
+  ⟨Responder.create_native confirmed, Responder.up_native confirmed,
+    Responder.down_native H1 confirmed, Responder.destruct_native H1 confirmed,
+    Responder.preExit_native confirmed⟩
 
 end Leanux.Proofs.WG.HandshakeSecurity

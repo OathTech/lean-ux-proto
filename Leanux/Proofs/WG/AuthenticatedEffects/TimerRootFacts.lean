@@ -7,14 +7,14 @@ set_option maxRecDepth 4096
 set_option maxHeartbeats 800000
 
 def arms : Event → Option Arm
-  | .base _ => none
+  | .base _ | .queued _ | .submitted _ => none
   | .armed r => some r
 
 def Seen (origin : Nat) (kind : HandshakeCausal.Kind) (pid : PeerId) (h : List Event) : Prop :=
   (history h)[origin]? = some (.callback kind pid)
 
 def Checked (pre : List Event) : Event → Prop
-  | .base _ => True
+  | .base _ | .queued _ | .submitted _ => True
   | .armed r => Seen r.origin r.kind r.peer pre ∧ r.Native
 
 def Safe (h : List Event) : Prop := ∀ pre e post, h = pre ++ e :: post → Checked pre e
@@ -41,6 +41,8 @@ private theorem append_quiet (safe : Safe h) (quiet : s.filterMap arms = []) : S
   intro pre e post position
   cases e with
   | base e => trivial
+  | queued r => trivial
+  | submitted r => trivial
   | armed r =>
     have member : Event.armed r ∈ s := by rw [position]; simp
     have found : r ∈ s.filterMap arms := List.mem_filterMap.mpr ⟨_,member,rfl⟩
