@@ -19,14 +19,37 @@ HEADLINES = [
     'Binary.LookupHitWitness.live_pre',
     'Binary.AllowedipsWitness.pre4',
     'Binary.AllowedipsWitness.pre6',
+    'Binary.Pair.Remove.remove_checked',
+    'Binary.Pair.Remove.remove_simulation',
+    'Binary.Pair.Replace.replace_checked',
+    'Binary.Pair.Replace.replace_simulation',
+    'Binary.Pair.IndexLookup.lookup_checked',
+    'Binary.Pair.IndexLookup.lookup_simulation',
+    'Binary.Pair.Sequence.sequence_checked',
+    'Binary.Pair.Remove.Witness.check_linked',
+    'Binary.Pair.Remove.Witness.check_unhashed',
+    'Binary.Pair.Remove.Witness.executes',
+    'Binary.Pair.Replace.Witness.check_linked',
+    'Binary.Pair.Replace.Witness.check_unhashed',
+    'Binary.Pair.Replace.Witness.executes',
 ]
-IMPORTS = ['LookupSnapshotTransport', 'LookupWitness', 'LookupHitWitness', 'AllowedipsWitnessPre']
+IMPORTS = ['LookupSnapshotTransport', 'LookupWitness', 'LookupHitWitness', 'AllowedipsWitnessPre',
+           'PairSubsystemSurface']
 # These definitions determine the meaning of the headline and its environment
 # premises outside TrustBase. The expected text is a specification, not a log.
 DEFINITIONS = [
     'Binary.LookupRelation.R', 'Binary.LookupRelation.LookupPost',
     'Binary.EffectSuccessor', 'Binary.InstructionSuccessor', 'Binary.ActualHistory',
     'Binary.NoEarlyReturn', 'Binary.EndsAtReturn',
+    'Binary.Pair.Corresponds', 'Binary.Pair.Remove.ownership', 'Binary.Pair.Remove.targetOwnership',
+    'Binary.Pair.Remove.Pre', 'Binary.Pair.Remove.callBoundary', 'Binary.Pair.Remove.Post',
+    'Binary.Pair.Replace.Pre', 'Binary.Pair.Replace.callBoundary', 'Binary.Pair.Replace.Post',
+    'Binary.Pair.IndexLookup.Pre', 'Binary.Pair.IndexLookup.callBoundary', 'Binary.Pair.IndexLookup.Post',
+    'Binary.Pair.Sequence.initialCheck', 'Binary.Pair.Sequence.Admissible',
+    'Binary.Pair.Sequence.AdmissibleSequence', 'Binary.Pair.Sequence.program',
+    'Binary.Pair.Sequence.install', 'Binary.Pair.Sequence.prepare', 'Binary.Pair.Sequence.Ready',
+    'Binary.Pair.Sequence.Execute', 'Binary.Pair.Sequence.SequencePost',
+    'Binary.Pair.Sequence.EntryDomain', 'Binary.Pair.Sequence.Observed',
 ]
 EXPECTED = ROOT / 'binary/TrustSurface.expected.txt'
 

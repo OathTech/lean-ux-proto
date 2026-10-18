@@ -1,13 +1,11 @@
 # Paired index-table subsystem: execution report
 
-Status: in progress on `task/binary-pair-runner`, implementing the
-[increment charter](2026-10-18-charter-paired-index-subsystem.md).
-The complete sequential removal theorem builds under its named premises.
-Its linked and unhashed concrete entry witnesses now check and execute to
-return. Complete replacement and the lookup bridge now build and pass their paired
-runtime checks. The general shared-reconstruction sequence theorem now checks and its mixed
-runtime witnesses pass. Actual mutator captures and the final export/report
-remain open.
+Status: A–D and actual mutator captures complete locally on
+`task/binary-pair-runner`; final export preparation is in progress.
+All three function theorems and arbitrary finite retained-heap composition
+check. Positive witnesses, runtime comparisons, fresh kernel replay and the
+binary trust gate pass. External acceptance remains pending. This is the
+sequential sibling specified by the [charter](2026-10-18-charter-paired-index-subsystem.md).
 
 ## Start and time limits
 
@@ -61,10 +59,10 @@ Runtime-investigation time used: zero at this checkpoint.
 | B: complete replacement adequacy and measured reuse | Complete locally: all 41 instructions, failure and all positions; explicit environment wrapper, linked/unhashed Pre witnesses, exact witness execution and fresh kernel replay pass. Reuse and marginal cost below. |
 | C: lookup under the common executable relation | Complete theorem and explicit environment wrapper build. Both recorded-prefix suites pass through the new assertion, including dead-then-NULL and collisions. Fresh replay of the environment/headline closure passes. |
 | D: finite call-sequence theorem and retained-heap execution | Complete locally: `Sequence.sequence_checked`, actual histories and explicit environment/access premises. Eight ten-call mixed sequences pass; fresh kernel replay passes. |
-| E: actual mutator captures, trust checks and cost report | Open |
+| E: actual mutator captures, trust checks and cost report | Both actual captures and controls pass; fresh full-closure replay, build and trust gate pass. Cost/report complete; exact-commit export preparation is the final task. External gate pending. |
 
-Final theorem statements, named hypotheses, measurements, findings and
-reproduction commands will replace these open entries as the work proceeds.
+The detailed sections below record intermediate states chronologically; the
+completion table and final validation section give the current result.
 
 ## Reconstruction stage
 
@@ -487,3 +485,332 @@ and then executes the combined image input. These remain synthetic sequences
 built from a recorded-prefix projection, not uninterrupted captured operation
 execution. At 09:14 UTC, main and Kraken pins/lag remain as recorded above;
 Kraken is clean. No external gate acceptance is claimed.
+
+
+## Actual mutator captures (E)
+
+Capture development and validation began at approximately 09:14 UTC, after
+finite composition. The two actual captures passed replay at approximately
+09:21 UTC. Each capture is from a new QEMU run of the existing isolated
+recording, with the pinned kernel, read-only debugger access, and QEMU's
+verified ENABLE|NOIRQ|NOTIMER stepping mode. No heap bytes, pointers or KCOV
+capacity were changed. No compiled caller between selected anchors is proved.
+
+| Actual captured call | Instructions, including services | Return bytes compared, per seed | Entry preempt | Actual KCOV capacity | First replay elapsed / peak RSS |
+| --- | ---: | ---: | ---: | ---: | --- |
+| Linked keypair removal, operation 4 | 100 | 33,625,468 | 2,147,484,160 | 4,194,304 words | 202.66 s / 7,990,892 KiB |
+| Successful handshake-to-keypair replacement, operation 2 | 115 | 33,625,500 | 512 | 4,194,304 words | 207.35 s / 7,990,104 KiB |
+
+Both undefined-value seeds, zero and all ones, pass. Each replay compares
+all captured return bytes, all sixteen general registers, the status flags
+Kraken represents, and the complete captured instruction sequence. The common
+executable reconstruction and owner flags agree with the actual mirror's
+post-state at both the Kraken return and the separately captured kernel
+return. Both callbacks' physical readiness checks also pass. Four coverage
+PCs are added in each call. These are individual calls, not a captured
+uninterrupted sequence.
+
+The removal capture exposed an entry-root requirement: the peer has already
+left the device's peer list when this keypair entry is unlinked. The capture
+must follow the actual argument's allocation as well as device membership.
+It now records those two root sets separately. This is a live allocated
+object reached by the mutator; device-list absence is not proof of retirement
+or an RCU lifetime transition. No new reader between reference-count zero and
+release is established by this observation.
+
+The source input for these tests is explicit: allocation identities are
+matched by public key and keypair internal allocation counter using a recorded
+prefix; the index projection is independently reconstructed from the actual
+captured entry and reified as the mirror's input. Other World/environment
+fields come from that prefix. The removal identity prefix is before operation
+4; replacement uses the completed operation-2 prefix (prefix length 3) to
+name the newly allocated keypair. The captured entry projections differ from
+those prefix projections; that comparison is printed, not silently passed.
+This is expected for a different recording and an interior caller point.
+These tests therefore **do not prove that replaying the recorded mirror prefix
+reaches the captured entry**. They test abstraction and transition agreement
+from actual entry bytes. The post-state is computed by the actual mirror
+function, not reconstructed from the expected return before execution.
+
+Capture controls corrupt allocation identity, linkage validity, executed-PC
+history and an independently captured return byte. The positive run is checked
+before each relevant mutation. The Python tests check that delisted roots are
+accepted only when requested, unknown argument kinds fail, actual capacity is
+preserved, and the original lookup capture retains its bounded-extent and
+membership defaults. Tests and captures remain distinct from proofs.
+
+The initial capture command failed before QEMU because the bundle-selected
+Python lacked pyelftools. One infrastructure rerun selected the already
+installed pyelftools-capable interpreter before entering the bundle and both
+captures succeeded. No package, global interpreter or sandbox setting was
+changed. An ordinary Lean record-syntax error in the added negative controls
+was fixed before their successful build. The runtime optimization allowance
+has not been used: these timings are a baseline, not an acceleration result.
+
+Reproduce from the worktree root after generating the remove/replace inputs
+with their three-way checks. `PYTHON` must name a Python with pyelftools; resolve
+its absolute path before `scripts/in-bundle`, whose PATH may select a different
+interpreter. Use a fresh output directory if regenerating a capture.
+
+```sh
+PYTHON=$(command -v python3)
+LEANUX_QEMU_SLOTS=16 capped scripts/in-bundle "$PYTHON" -B binary/capture_index_mutator.py \
+  --anchor remove --input .tmp/binary-remove/input.json \
+  --check .artifacts/check/binary-remove-20261018 --operation 4 --out .tmp/cap-index-remove
+LEANUX_QEMU_SLOTS=16 capped scripts/in-bundle "$PYTHON" -B binary/capture_index_mutator.py \
+  --anchor replace --input .tmp/binary-replace/input.json \
+  --check .artifacts/check/binary-replace-20261018 --operation 2 --out .tmp/cap-index-replace
+capped binary/.lake/build/bin/binary-pair-mutator-capture \
+  .tmp/binary-remove/input.json .tmp/cap-index-remove/snapshot.json .tmp/cap-index-remove/layouts.json
+capped binary/.lake/build/bin/binary-pair-mutator-capture \
+  .tmp/binary-replace/input.json .tmp/cap-index-replace/snapshot.json .tmp/cap-index-replace/layouts.json
+PYTHONPATH=binary:. capped "$PYTHON" -B -m unittest \
+  binary.test_capture_remote binary.test_allowedips_capture binary.test_mutator_capture
+```
+
+## What the cost experiment establishes
+
+1. **Execution found useful defects, but not all invariants.** The stale
+   non-NULL predecessor flag was found before this increment and motivated
+   the ownership decoder. Executing exact witness states found saturated-KCOV
+   accounting in the runner. Actual capture found the delisted argument-root
+   requirement. Proof development still introduced storage separation,
+   conditional replacement freshness, separate caller output storage, both
+   coverage phases, resident entry-kind frames and scratch mapping. These
+   physical obligations were added to the executable checks and exercised;
+   the common source projection and the original M1 dead-peer domain were
+   retained. Test-first reconstruction did not eliminate invariant invention.
+2. **Removal was a genuinely new complete function.** Its 25 anchored
+   instructions include three previously proved instructions; 22 instruction
+   effects and the complete function/reconstruction proof were new. Unlink
+   reconstruction took about 31 minutes; complete execution followed about
+   32 minutes later. Concrete kernel-checked Pre witnesses took until 07:48,
+   overlapping replacement. The repeated normalization failures were real
+   development cost. Capture and final validation are shared costs, not
+   charged exclusively to removal.
+3. **Replacement demonstrated concrete reuse.** The 41 anchored instruction
+   effects are new. Finite chain inversion, scalar and pointer frames, storage
+   separation, stack saves, callback readiness, decoder normal forms and the
+   source/physical frame bridge carry over. Ordered word-store plans and a
+   shared call-slot lemma generalized repeated patterns. Its whole theorem
+   first built about 64 minutes after the 07:14 runtime checkpoint; that
+   interval overlaps removal witnesses. Replacement remained substantially
+   bespoke, especially concrete stores, neighbour equations and register
+   control flow. This is reuse, not automatic translation validation.
+4. **Postconditions initially did not compose.** Unused coverage phases,
+   mapped scratch memory and unlinked-entry kind tags were missing. The
+   strengthened posts and the generic ISA mapping invariant now derive every
+   next checked Pre from a single initial check. The final finite-list
+   composition proof is only 86 lines; the resource derivation around it is
+   the expensive part. No future binary execution or Pre is assumed.
+5. **The next mechanisms have demonstrated uses.** The strongest reuse is
+   endpoint memory effects, finite pointer-chain decoding, storage frames,
+   callback phase readiness and preservation of mapping through arbitrary
+   successful ISA execution. All are used across functions or call boundaries.
+   Reconstructing a small old relation from the tested projection still cost
+   roughly 1,600 lines for lookup; this is a warning against treating the
+   abstraction function as nearly the whole proof. A large general tactic
+   search framework has not been justified by these examples.
+6. **Iteration is viable on small generated cases, costly on full captures.**
+   The mixed 80-call suite takes 2.872 seconds and individual materialized
+   function suites take roughly one to five seconds. Full unchanged mutator
+   captures take about 3.4 minutes per two-seed replay, dominated by a large
+   actual KCOV allocation and byte-oriented loading/checking. No comparable
+   before/after optimization was attempted, and no speedup is claimed.
+   The previously proposed bounded-mapping/headroom contract remains a
+   concrete next experiment. Campaign-wide throughput, concurrent state,
+   allocation and compiled-caller realism remain uncalibrated.
+
+The two fresh anchors total 66 instructions excluding services, of which 63
+instruction effects were new here. The existing 138-instruction lookup/peer-get
+proof is reused. Completed anchors, proof lines and elapsed time are different
+measures; none gives a defensible campaign-wide linear forecast. Compared with
+M1, this is a smaller observation domain, a sequential environment, substantial
+prior infrastructure and two structurally related mutators. It is evidence
+that retained-heap composition can be affordable in this restricted setting,
+not evidence that the whole kernel campaign is now cheap.
+
+## Review surface and named premises
+
+[AGENT 2026-10-18] Extend the existing trust-surface printer/specification to
+include these new headlines, executable domains and posts. This uses the
+existing build/axiom/source-scan gate; it introduces no additional gate.
+`PairSubsystemSurface` is a single import root for printing, fresh kernel
+replay and export of the full increment and its formal witnesses.
+
+The complete statement of the sequence theorem and the three explicit-
+environment function theorems follows below. The physical `*_checked`
+headlines, Pre/Post definitions, actual caller setup, source admissibility
+and sequence execution are also printed in `binary/TrustSurface.expected.txt`.
+That file includes **all of `binary/TrustBase.lean` verbatim**. It is a
+reviewable specification, not proof that any hypothesis holds of hardware.
+
+| Named unproved premise in TrustBase | Scope in these headlines |
+| --- | --- |
+| `AnchoredDecoderAgreement` | Lookup and peer-get literal instructions agree with the ambient fetch. |
+| `IndexRemoveDecoderAgreement` | Removal literal instructions agree with fetch. |
+| `IndexReplaceDecoderAgreement` | Replacement literal instructions agree with fetch. |
+| `TracePcContract` | The pinned PC-coverage callback has the stated terminating instruction execution and exact planned memory effect. |
+| `TraceCmp4Contract`, `TraceConstCmp4Contract`, `TraceConstCmp1Contract` | The three comparison callbacks used by lookup/peer-get have their stated terminating effects. |
+| `BhEnableContract` | The modeled no-pending-work BH-enable path terminates, restores preempt state and respects its footprint. |
+| `SerializedEnvironment` | One online CPU and no supplied external actions during the call. |
+| `ReturningCallPermissions` | Every actual finite returning history of the individual entry has permitted effects. |
+| `ReturningDomainPermissions` | The same access hypothesis for the sequence's caller-prepared entry domain. This is used by the sequence theorem instead of an assumption of future Pre. |
+
+The three executable checks, the source-only `AdmissibleSequence` and the
+accepted run of the actual mirror are ordinary theorem premises, not globally
+asserted facts. Address/layout/storage checks are executable and proved to
+supply the physical invariants. Service bodies execute in tests, but their
+five universal image contracts remain unproved. No new ordinary helper is
+assumed. The underlying external interpretation still trusts the pinned ELF
+extraction/DWARF and the applicability of Kraken's semantics to this x86 image.
+
+`PairRemoveEnvironment.remove_simulation` (namespace and open declarations are in the linked source):
+
+```lean
+theorem remove_simulation (fetch : Int64 → Option Decoded)
+    (decoder : IndexRemoveDecoderAgreement fetch) (trace : TracePcContract fetch)
+    (bh : BhEnableContract fetch) (permissions : Permissions)
+    (onlineCPUs : Nat) (externalActions : List Nat)
+    {n o c initial w owner ra final} (environment : SerializedEnvironment onlineCPUs externalActions)
+    (access : ReturningCallPermissions fetch permissions initial ra)
+    (checked : Pre n o c initial w owner ra)
+    (accepted : (WG.indexRemove owner).run w=.ok ((),final)) :
+    Eventually (historyStep fetch) (fun t => Post n o c initial ra final t.machine ∧
+      ActualHistory fetch initial t.history ∧ t.history.getLast?=some t.machine ∧
+      RunEnvironment fetch permissions onlineCPUs externalActions t.history) ⟨initial,[initial]⟩
+```
+
+`PairReplaceEnvironment.replace_simulation` (namespace and open declarations are in the linked source):
+
+```lean
+theorem replace_simulation (fetch : Int64 → Option Decoded)
+    (decoder : IndexReplaceDecoderAgreement fetch) (trace : TracePcContract fetch)
+    (bh : BhEnableContract fetch) (permissions : Permissions)
+    (onlineCPUs : Nat) (externalActions : List Nat)
+    {n o c initial w pid kid ra answer final} (environment : SerializedEnvironment onlineCPUs externalActions)
+    (access : ReturningCallPermissions fetch permissions initial ra)
+    (checked : Pre n o c initial w pid kid ra)
+    (accepted : (WG.indexReplaceHandshake pid kid).run w=.ok (answer,final)) :
+    Eventually (historyStep fetch) (fun t => Post n o c initial ra answer final t.machine ∧
+      ActualHistory fetch initial t.history ∧ t.history.getLast?=some t.machine ∧
+      RunEnvironment fetch permissions onlineCPUs externalActions t.history) ⟨initial,[initial]⟩
+```
+
+`PairLookupEnvironment.lookup_simulation` (namespace and open declarations are in the linked source):
+
+```lean
+theorem lookup_simulation (fetch : Int64 → Option Decoded)
+    (decoder : AnchoredDecoderAgreement fetch) (trace : TracePcContract fetch)
+    (cmp : TraceCmp4Contract fetch) (constCmp : TraceConstCmp4Contract fetch)
+    (byte : TraceConstCmp1Contract fetch) (bh : BhEnableContract fetch) (permissions : Permissions)
+    (onlineCPUs : Nat) (externalActions : List Nat)
+    {n o c initial w query kinds ra answer final} (environment : SerializedEnvironment onlineCPUs externalActions)
+    (access : ReturningCallPermissions fetch permissions initial ra)
+    (checked : Pre n o c initial w query kinds ra)
+    (accepted : (WG.indexLookup kinds query).run w=.ok (answer,final)) :
+    Eventually (historyStep fetch) (fun t => Post n o c initial ra answer final t.machine ∧
+      ActualHistory fetch initial t.history ∧ t.history.getLast?=some t.machine ∧
+      RunEnvironment fetch permissions onlineCPUs externalActions t.history) ⟨initial,[initial]⟩
+```
+
+`PairSequenceAdequacy.sequence_checked` (namespace and open declarations are in the linked source):
+
+```lean
+theorem sequence_checked (fetch : Int64 → Option Decoded)
+    (lookupDecoder : AnchoredDecoderAgreement fetch)
+    (removeDecoder : IndexRemoveDecoderAgreement fetch)
+    (replaceDecoder : IndexReplaceDecoderAgreement fetch)
+    (trace : TracePcContract fetch) (cmp : TraceCmp4Contract fetch)
+    (constCmp : TraceConstCmp4Contract fetch) (byte : TraceConstCmp1Contract fetch)
+    (bh : BhEnableContract fetch) (permissions : Permissions) (onlineCPUs : Nat) (externalActions : List Nat)
+    {n o c initial w ra calls answers finalWorld}
+    (environment : SerializedEnvironment onlineCPUs externalActions)
+    (access : ReturningDomainPermissions fetch permissions ra (EntryDomain n initial ra))
+    (checked : initialCheck n o c initial w ra=.ok ())
+    (admissible : AdmissibleSequence n calls w)
+    (accepted : (program calls).run w=.ok (answers,finalWorld)) :
+    Execute fetch n initial ra calls initial
+      (SequencePost fetch permissions onlineCPUs externalActions n o c initial initial ra answers finalWorld)
+```
+
+
+## What this result does not say
+
+- It is not concurrent contextual refinement, a proof under ordinary kernel
+  scheduling, or a proof of interrupts, pending softirq work or RCU transitions.
+  The sequential/no-work environment is explicitly unrealistic as a kernel
+  execution model. Internal correspondence points are proof choices.
+- It does not execute or prove the compiled callers between anchors. Caller
+  setup is an explicit small transition with a proved heap/service frame.
+- It does not cover allocator identity creation, freeing, random-index
+  insertion, arbitrary replacement kinds or allocation-universe changes.
+  Replacement is the chartered handshake-to-existing-keypair operation.
+- Concrete witnesses and actual capture establish non-vacuity and useful
+  realism evidence, not universal entry reachability from boot or a workload.
+  Captured source inputs are reified from their physical projections; the
+  identity prefix is not claimed to be their exact source entry.
+- Runtime execution of service bodies and decoder comparisons do not prove
+  the universal callback contracts, ELF decoding, DWARF accuracy or hardware
+  correctness of Kraken. The named permission hypothesis is not a proved
+  page-table/access-safety theorem.
+- The finite theorem is general in call count, but conditional on successful
+  actual mirror execution and source admissibility. Runtime instruction
+  budgets are test controls; they are not its termination argument.
+- It transports no landed whole-operation/whole-trace property and advances
+  no concurrent campaign coverage count. Original M1 and its dead-peer finding
+  remain unchanged; the two-lookup dead-then-NULL behavior is still tested.
+- The mirror pin lags main. The results do not automatically apply to the
+  current main mirror. A green local build/replay is not external acceptance.
+
+
+## Final local validation and remaining external gate
+
+By 09:26 UTC (about 3 h 32 min from the recorded start), all A–D proofs,
+actual captures, negative controls and local trust validation pass:
+
+- Default `capped lake build`: 691 jobs, exit zero.
+- `capped lake env leanchecker --fresh PairSubsystemSurface`: exit zero,
+  replaying the complete headline and formal witness closure.
+- `capped scripts/proof-gate --binary`: PASS, including the clean private
+  Kraken pin, build, every registered headline/witness axiom report, source
+  escape scan and reviewed trust-surface diff. The diff adds the new surface
+  and named premises; original M1 statements are unchanged.
+- All thirteen new headline/witness axiom reports contain only `propext`,
+  `Classical.choice` and `Quot.sound`. No sorry, native-evaluation axiom,
+  unsafe proof declaration, implemented_by/extern or kernel-check bypass was
+  added. A source scan of the 385-module local headline import closure found
+  none of those mechanisms. The separate Kraken pretty-printer's existing
+  unsafe/implemented_by helper and AArch64 eval elaborator are outside this
+  import closure and are not used to discharge a proof.
+- Seven focused capture/debugger unit tests pass. The broader trust-gate,
+  harness and evaluator regression completes 78 tests successfully, with one
+  test skipped because its default kernel build location is absent. The
+  actual approved image is separately checked by both successful captures.
+- The first broader regression invocation failed twelve source-reading tests
+  because it omitted the bundle's shared Linux-source environment. One
+  infrastructure rerun through `scripts/in-bundle` passed (20.024 seconds).
+  No test expectation or production source was changed. The first surface
+  printing attempt also ran before its dependent default-build modules were
+  available; after the build finished, printing and diffing passed.
+- Both full capture replays with controls pass: removal 206.68 seconds and
+  replacement 184.94 seconds. These repeat the positive work plus the new
+  controls; variation from the first runs is not an optimization result.
+- Existing imported warnings (module-system advice, deprecated mirror string
+  construction, and unused simp arguments including the baseline calibration
+  module) remain visible and unresolved. New modules add no warning or
+  suppression. They are inherited findings, not silently treated as fixed.
+
+Reproduce the broader unit tier with the bundle's shared read-only sources:
+
+```sh
+capped scripts/in-bundle python3 -B -m unittest \
+  binary.test_trust_gate harness.test_linux evaluator.test_evaluation
+capped scripts/proof-gate --binary
+```
+
+The final export is prepared from the committed `PairSubsystemSurface` root,
+using the README's `lake check --from-export` form. Its commit, completion
+status and final elapsed time will be recorded immediately after preparation.
+No external acceptance of this increment or the previous complete-call
+increment is implied by the earlier user-accepted boundary export.

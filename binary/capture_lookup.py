@@ -162,7 +162,8 @@ def slot(shared):
     raise RuntimeError('all shared QEMU slots occupied; capture did not start')
 
 
-def capture(remote, regs, probe, layout, instruction_budget):
+def capture(remote, regs, probe, layout, instruction_budget, *, root_entries=(),
+            read_output=True, include_retired=False, full_coverage=False):
     """Read a pointer closure. Expected mirror field values are not inputs."""
     blocks, entries, peers = {}, [], set()
 
@@ -196,6 +197,19 @@ def capture(remote, regs, probe, layout, instruction_budget):
             elif kind != 2:
                 raise ValueError(f'unknown entry kind {kind}')
             cursor = int.from_bytes(entry[o['hash']+o['next']:o['hash']+o['next']+8], 'little')
+    for address in root_entries:
+        if any(e['address'] == address for e in entries):
+            continue
+        data = block(address, o['entrySize'])
+        peer = int.from_bytes(data[o['peer']:o['peer']+8], 'little')
+        kind = int.from_bytes(data[o['kind']:o['kind']+4], 'little')
+        if kind not in (1, 2):
+            raise ValueError(f'unknown argument entry kind {kind}')
+        entries.append(dict(address=address, kind=kind, peer=peer))
+        if peer:
+            peers.add(peer)
+        if kind == 1:
+            peers.add(address-o['peerHandshake']-o['handshakeEntry'])
     if not peers:
         raise ValueError('pilot cannot discover device membership without a peer root')
     peer_layout = layout['wg_peer']
@@ -218,9 +232,10 @@ def capture(remote, regs, probe, layout, instruction_budget):
             raise ValueError('cyclic or oversized captured peer list')
         members.add(p)
         cursor = remote.word(cursor)
-    if not peers <= members:
+    if not include_retired and not peers <= members:
         raise ValueError('table references peer outside device membership')
-    peers = members
+    retained = peers - members
+    peers |= members
     peer_rows, keypairs = [], set()
     for p in sorted(peers):
         data = block(p, peer_layout['size'])
@@ -237,7 +252,8 @@ def capture(remote, regs, probe, layout, instruction_budget):
     # Include the actual caller frame and enough lower stack for this anchored
     # function plus its decoded services. No bytes are zero-filled.
     block(regs['rsp'] - 2048, 2064)
-    block(regs['rcx'], 8)
+    if read_output:
+        block(regs['rcx'], 8)
     pcpu = probe['preempt'] - layout['pcpu_hot']['members']['preempt_count']
     block(pcpu, layout['pcpu_hot']['size'])
     task = remote.word(pcpu + layout['pcpu_hot']['members']['current_task'])
@@ -256,10 +272,11 @@ def capture(remote, regs, probe, layout, instruction_budget):
     # Capture real bytes for the existing prefix and bounded execution's write
     # headroom. The rest of the large allocation stays unmapped in the snapshot;
     # a replay that accesses it must fail, rather than obtain fabricated zeros.
-    captured_words = min(capacity, used + 1 + instruction_budget)
+    captured_words = capacity if full_coverage else min(capacity, used + 1 + instruction_budget)
     block(area, captured_words*8)
     return dict(registers=regs, peers=peer_rows, keypairs=sorted(keypairs),
-                entries=entries, device=device, task=task, coverage=area, capacity=capacity,
+                entries=entries, device=device, deviceMembers=sorted(members), retainedPeers=sorted(retained),
+                task=task, coverage=area, capacity=capacity,
                 coverageUsed=used, coverageCapturedWords=captured_words,
                 blocks=[dict(address=a, bytes=list(data)) for (a, _), data in sorted(blocks.items())])
 

@@ -454,8 +454,41 @@ and return the full reconstruction, ownership flags and callback phases.
 sequences from one checked initial state, with explicit caller setup and
 retained heap/resources. `binary-pair-sequence` executes mixed sequences;
 `sequence_probe.py` first runs all three independent function comparisons.
-Actual captured mutator replay and the final external gate remain open. See the increment report for
-commands, timing and the external export-based gate status.
+`capture_index_mutator.py` captures actual sequential entry/return memory for
+both mutators, including unlinked argument roots and delisted but retained
+peer allocations. `binary-pair-mutator-capture` runs their actual instructions
+and compares every captured return byte, register, represented flag and PC.
+Both captures pass under two seeds and focused corruption controls. Its source
+input is reified from the captured entry projection; the recorded prefix
+supplies identities and unobserved fields, not a claim of exact entry reachability.
+See the increment report for capture/three-way commands and measured cost.
+
+`PairSubsystemSurface` imports all seven new function/sequence headlines and
+the removal/replacement formal entry witnesses. It prints their types and
+axioms and the named trust premises. The existing `scripts/proof-gate --binary`
+also prints and diffs these definitions and the full TrustBase specification.
+From `binary/`, after a successful build, use:
+
+```sh
+capped lake build PairSubsystemSurface binary-pair-mutator-capture
+capped lake env leanchecker --fresh PairSubsystemSurface
+capped lake env leanexport PairSubsystemSurface > ../.tmp/binary-pair-index.ndjson
+```
+
+Require export exit status zero. The export is ephemeral and contains the
+transitive declaration closure, including all three complete function proofs,
+the sequence theorem, their executable definitions, both mutator witness
+modules, TrustBase and Execution. Its exact commit and validation status are
+recorded in the increment report. The external gate remains **pending**; the
+user runs this from `binary/` **outside Nono**:
+
+```sh
+capped lake check --from-export ../.tmp/binary-pair-index.ndjson
+```
+
+This avoids the sandbox's inability to resolve path dependencies. Fresh local
+replay is not external acceptance. Delete the export after the external check;
+regenerate captures and logs from their documented commands when needed.
 
 For runtime diagnosis, `binary-pair-buffer-cost` uses a **generated variation**
 of an allowed-IPs capture with a smaller KCOV allocation and changed capacity
