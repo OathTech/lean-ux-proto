@@ -150,3 +150,22 @@ comfortably; lower it on a smaller or busier machine. Heavy contention can exhau
 Negative controls and sentinel mutants are separate developer checks described
 in [AGENTS.md](AGENTS.md). They are not part of this first-run sequence.
 For an existing offline bundle, see [offline usage](docs/offline-usage.md).
+
+## 5. Build and check the proofs
+
+The proof tree `Leanux/Proofs/` is its own target, outside the model's default
+build, and needs no guest:
+
+```sh
+scripts/in-bundle lake build LeanuxProofs
+scripts/in-bundle scripts/proof-gate
+```
+
+The gate builds the target, prints the axioms of every statement in each
+result's `Statements.lean` and fails on any axiom beyond `propext`,
+`Classical.choice` and `Quot.sound` (a statement may use fewer), then scans the tree for admissions and
+unsafe constructs and checks that nothing outside the tree imports it. It
+ends with `proof gate: PASS` and exit status 0. The map of the tree, the
+register of results, the mirror commit each holds over and whether it is
+current or lagging at this revision, and the result table (claim, theorem,
+boundary, premises, counterexample) are in [docs/proofs.md](docs/proofs.md).

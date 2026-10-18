@@ -1,5 +1,13 @@
 # Campaign 2: outer-removal frame request
 
+Current disposition (2026-10-18): the narrow peerRemove and peerRemoveAll
+table-safety claims now check. After the split, the landed
+AllowedIps.free_storeView supplies the bulk-removal table/cursor frame
+without trie-shape premises. Index/BulkRemovalFrames projects that contract;
+BulkRemovalClaims composes the original caller. No six-family copy or
+additional authorization is needed. The historical request below is retained
+as the scope record; it is closed for table safety, not whole-driver coherence.
+
 The next H2 increment would prove table/index-cursor safety through original
 `peerRemove` and `peerRemoveAll`, assuming only initial `View.TablesSafe`.
 These are normal-return preservation claims, not termination, trie correctness,

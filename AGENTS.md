@@ -121,6 +121,22 @@ Linux. It rests on three gates, and only these block:
   covered, a schedule not consumed exactly);
 - the kernel identity check, which refuses to boot any other build.
 
+The proof tree makes a separate claim and has its own gate, run at its
+claim points (a merge of the tree) and not on mirror commits:
+`capped -- scripts/in-bundle scripts/proof-gate`, which builds `LeanuxProofs`
+(about sixteen minutes on a contended host), prints the axioms of every
+declaration of every module the root `Leanux/Proofs.lean` imports (the
+results' `Statements.lean` files and the counterexample and findings
+modules) and fails on any beyond `propext`, `Classical.choice` and
+`Quot.sound`, fails on `sorry`, `sorryAx`, `admit`, `axiom`, `native_decide`,
+`decide +native`, `ofReduceBool`, `trustCompiler`, `skipKernelTC`, `unsafe`,
+`implemented_by` or `extern` anywhere in the tree outside comments and
+string literals, and fails if anything outside the tree imports it, if the
+root misses a result's `Statements`, or if `LeanuxProofs` is a default lake
+target. Beside it, a speedbump: `scripts/proof-counterexamples` replays the
+published counterexample and witness recipes through the interpreter, which
+the gate's build does not cover.
+
 Everything else is a speedbump: cheap, run at claim points, never blocking
 intermediate work, built to catch honest drift and not adversarial attack:
 - the negative control suites (`corpus/*-controls`, their scripts);

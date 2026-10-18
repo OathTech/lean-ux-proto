@@ -6,19 +6,12 @@ import Leanux.Runner
 namespace Leanux.Proofs.WG.Keypairs
 open Leanux Leanux.WG Leanux.Proofs.WG.CounterWindow Leanux.Proofs.Logged
 
-@[simp] theorem snapshot_record (w : World) (d : Decision) (b : Bool) :
-    snapshot (record w d b) = snapshot w := rfl
-
-@[simp] theorem snapshot_clearRecords (w : World) (xs : List Nat) :
-    snapshot (clearRecords w xs) = snapshot w := by
-  simp [snapshot, clearRecords_k]
-
-theorem snapshot_lookup (w : World) (d : Device) (i : Nat) (k : Keypair)
-    (hd : w.k.wg = some d) (hk : d.keypairs[i]? = some k) :
+theorem snapshot_lookup (w : WGWorld) (d : Device) (i : Nat) (k : Keypair)
+    (hd : w.dev = some d) (hk : d.keypairs[i]? = some k) :
     (snapshot w).slots i = some (cell k) := by simp [snapshot, hd, hk]
 
-theorem snapshot_store (w : World) (d : Device) (i : Nat) (k : Keypair)
-    (hd : w.k.wg = some d) :
+theorem snapshot_store (w : WGWorld) (d : Device) (i : Nat) (k : Keypair)
+    (hd : w.dev = some d) :
     snapshot (store w i k) = (snapshot w).put i (some (cell k)) := by
   apply Snapshot.ext
   · rfl
@@ -36,23 +29,24 @@ theorem snapshot_store (w : World) (d : Device) (i : Nat) (k : Keypair)
     · simp [hj]
 
 /-- The full receive-state projection, including identities and other slots. -/
-theorem cExecution_snapshot (w : World) (d : Device) (i : Nat) (k : Keypair)
-    (nonce : Nat) (hd : w.k.wg = some d) (hk : d.keypairs[i]? = some k) :
-    snapshot (cExecution i nonce k w).2 = validate (snapshot w) i (cell k) nonce := by
+theorem cExecution_snapshot (w : WGWorld) (ambient : Ambient) (d : Device)
+    (i : Nat) (k : Keypair) (nonce : Nat)
+    (hd : w.dev = some d) (hk : d.keypairs[i]? = some k) :
+    snapshot (cExecution i nonce k w ambient).1.2 = validate (snapshot w) i (cell k) nonce := by
   have hc := snapshot_lookup w d i k hd hk
   by_cases he : eligible k.receivingCounter nonce
   · have h1 : ¬ k.receivingCounter.counter ≥ REJECT_AFTER_MESSAGES + 1 := by have := he.1; omega
     have h2 : ¬ nonce ≥ REJECT_AFTER_MESSAGES := by have := he.2.1; omega
     have h3 : ¬8128 + (nonce + 1) < k.receivingCounter.counter := by have := he.2.2; omega
-    change snapshot (cExecution i nonce k w).2 = (snapshot w).put i (some ⟨k.internalId, (step k.receivingCounter nonce).2⟩)
-    rw [step, if_pos he]
+    change snapshot (cExecution i nonce k w ambient).1.2 = (snapshot w).put i (some ⟨k.internalId, (step k.receivingCounter nonce).2⟩)
+    rw [step, ite_eq_left he]
     by_cases h4 : nonce + 1 > k.receivingCounter.counter
     · simp [cExecution, h1, h2, h3, h4, cell, update, prepared,
         Nat.max_eq_right (by omega : k.receivingCounter.counter ≤ nonce + 1),
-        snapshot_store, record_k, clearRecords_k, hd]
+        snapshot_store, hd]
     · simp [cExecution, h1, h2, h3, h4, cell, update, prepared,
         Nat.max_eq_left (by omega : nonce + 1 ≤ k.receivingCounter.counter),
-        snapshot_store, record_k, hd]
+        snapshot_store, hd]
   · have hv : validate (snapshot w) i (cell k) nonce = snapshot w := by
       simpa [validate, cell, step, he] using put_existing (snapshot w) i (cell k) hc
     rw [hv]
@@ -63,51 +57,61 @@ theorem cExecution_snapshot (w : World) (d : Device) (i : Nat) (k : Keypair)
       · have h3 : 8128 + (nonce + 1) < k.receivingCounter.counter := by unfold eligible at he; omega
         simp [cExecution, h1, h2, h3]
 
-/-- The initial runner fixture has no allocated keypair lifetime. -/
-theorem initial_snapshot (rlimit : Nat) (net bare foreign stepped : Bool) (w : World)
-    (hk : w.k = Runner.initialKernel rlimit net bare foreign stepped) :
-    snapshot w = ⟨0, fun _ => none⟩ := by
+/-- The runner's actual initial WG state has no allocated keypair lifetime.
+Task, file and seccomp fixture choices do not enter this initialization. -/
+theorem initial_snapshot (net bare : Bool) :
+    snapshot (Runner.initialWG net bare) = ⟨0, fun _ => none⟩ := by
   apply Snapshot.ext
-  · simp [snapshot, hk, Runner.initialKernel]
+  · simp [snapshot, Runner.initialWG]
   · funext i
-    simp [snapshot, hk, Runner.initialKernel]
+    simp [snapshot, Runner.initialWG]
 
 /-- Successful original validator calls realize one evolution step and one
 exact history append, including false returns that still update the bitmap. -/
-theorem counterLogged_evolves (i nonce : Nat) (w w' : World)
+theorem counterLogged_evolves (i nonce : Nat) (w w' : WGWorld)
+    (ambient ambient' : Ambient)
     (history history' : History) (ok : Bool)
     (hi : Inv (snapshot w) history)
-    (hr : ((counterLogged i nonce).run history).run w = .ok ((ok, history'), w')) :
+    (hr : (((counterLogged i nonce).run history).run w).run ambient =
+      .ok (((ok, history'), w'), ambient')) :
     Evolution (snapshot w) history (snapshot w') history' := by
-  have hv : (counterValidate i nonce).run w = .ok (ok, w') := by
-    rw [← counterLogged_erases i nonce history w, hr]
-    rfl
-  cases hd : w.k.wg with
-  | none => simp [counterValidate, getKeypair, getDev, getK, hd, invariant] at hv
+  have hv : ((counterValidate i nonce).run w).run ambient = .ok ((ok, w'), ambient') := by
+    have he := erases_runWG (counterLogged_erases i nonce) history w ambient
+    rw [hr] at he
+    exact he.symm
+  cases hd : w.dev with
+  | none =>
+    simp [counterValidate, getKeypair, getDev, hd, invariant, AmbientM.invariant] at hv
+    cases hv
   | some d =>
     cases hk : d.keypairs[i]? with
-    | none => simp [counterValidate, getKeypair, getDev, getK, hd, hk, invariant] at hv
+    | none =>
+      simp [counterValidate, getKeypair, getDev, hd, hk, invariant, AmbientM.invariant] at hv
+      cases hv
     | some k =>
       have hc := snapshot_lookup w d i k hd hk
       have hs := hi.shaped i (cell k) hc
-      have hex := counterValidate_execution w d i k nonce hd hk hs
-      have hp := cExecution_refines_step w d i k nonce hd hk
+      have hex := counterValidate_execution w ambient d i k nonce hd hk hs
+      have hp := cExecution_refines_step w ambient d i k nonce hd hk
       rw [hv] at hex
-      have hw := congrArg Prod.snd (Except.ok.inj hex)
-      have ho := congrArg Prod.fst (Except.ok.inj hex)
-      have hh := counterLogged_run i nonce history w w' d k ok hd hk hv
+      have hw := congrArg (fun out => out.1.2) (Except.ok.inj hex)
+      have ho := congrArg (fun out => out.1.1) (Except.ok.inj hex)
+      have hh := counterLogged_run i nonce history w w' ambient ambient' d k ok hd hk hv
       rw [hr] at hh
-      have hh' := congrArg (fun x => x.1.2) (Except.ok.inj hh)
+      have hh' := congrArg (fun out => out.1.1.2) (Except.ok.inj hh)
       dsimp only at hh' hw ho
-      rw [hh', hw, cExecution_snapshot w d i k nonce hd hk]
+      rw [hh', hw, cExecution_snapshot w ambient d i k nonce hd hk]
       have hok : ok = (step k.receivingCounter nonce).1 := ho.trans hp.1
       rw [hok]
       exact Evolution.validate hc nonce
 
-theorem counterLogged_preserves (i nonce : Nat) (w w' : World)
+theorem counterLogged_preserves (i nonce : Nat) (w w' : WGWorld)
+    (ambient ambient' : Ambient)
     (history history' : History) (ok : Bool)
     (hi : Inv (snapshot w) history)
-    (hr : ((counterLogged i nonce).run history).run w = .ok ((ok, history'), w')) :
-    Inv (snapshot w') history' := (counterLogged_evolves i nonce w w' history history' ok hi hr).preserves hi
+    (hr : (((counterLogged i nonce).run history).run w).run ambient =
+      .ok (((ok, history'), w'), ambient')) :
+    Inv (snapshot w') history' :=
+  (counterLogged_evolves i nonce w w' ambient ambient' history history' ok hi hr).preserves hi
 
 end Leanux.Proofs.WG.Keypairs

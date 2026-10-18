@@ -9,12 +9,17 @@ when all four pass:
    `Leanux/Proofs.lean`, outside the default build), under the box's `capped`
    wrapper when it is installed.
 2. `#print axioms` for every terminal statement: each declaration of every
-   `Statements.lean` under `Leanux/Proofs/` (one per result directory; the
-   map is `docs/proofs.md`). Each printed set must be a subset of {propext,
-   Classical.choice, Quot.sound}; `sorryAx`, any other axiom, a name that does
-   not print, or any output line the parser does not recognise fails the gate.
-3. No `sorry`, `admit`, `axiom`, `native_decide`, `unsafe`, `implemented_by`
-   or `extern` token anywhere in the proof tree outside comments.
+   module the root `Leanux/Proofs.lean` imports directly (the results'
+   `Statements.lean` files, one per result directory, and the counterexample
+   and findings modules; the map is `docs/proofs.md`), run under `capped`.
+   Each printed set must be a subset of {propext, Classical.choice,
+   Quot.sound}; `sorryAx`, any other axiom, a name that does not print, or any
+   output line the parser does not recognise fails the gate.
+3. No `sorry`, `sorryAx`, `admit`, `axiom`, `native_decide`, `decide +native`,
+   `ofReduceBool`, `trustCompiler`, `skipKernelTC`, `unsafe`,
+   `implemented_by` or `extern` token anywhere in the proof tree outside
+   comments and string literals (the scanner is string-aware, so a `--`
+   inside a string does not hide the rest of its line).
 4. Nothing outside `Leanux/Proofs/` imports `Leanux.Proofs`, the root
    `Leanux/Proofs.lean` imports every result's `Statements` module (so a new
    result cannot be left out of the build), and `LeanuxProofs` is not a
@@ -22,6 +27,7 @@ when all four pass:
 """
 import os
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -31,12 +37,12 @@ PROOFS = ROOT / 'Leanux' / 'Proofs'
 PROOFS_ROOT = ROOT / 'Leanux' / 'Proofs.lean'
 TARGET = 'LeanuxProofs'
 PERMITTED = {'propext', 'Classical.choice', 'Quot.sound'}
-FORBIDDEN = re.compile(r'\b(sorry|admit|axiom|native_decide|unsafe|implemented_by|extern)\b')
+FORBIDDEN = re.compile(r'\b(sorry|sorryAx|admit|axiom|native_decide|ofReduceBool|trustCompiler|skipKernelTC'
+                       r'|unsafe|implemented_by|extern)\b|(\+\s*native)\b')
 DECL = re.compile(r'^(?:theorem|lemma|def|abbrev|instance)\s+([A-Za-z_][\w\'.]*)')
 NAMESPACE = re.compile(r'^namespace\s+(\S+)\s*$')
 DEPENDS = re.compile(r"^'([^']+)' depends on axioms: \[([^\]]*)\]$")
 NO_AXIOMS = re.compile(r"^'([^']+)' does not depend on any axioms$")
-CAPPED_DEFAULT = Path('/usr/local/bin/capped')
 
 failures = []
 
@@ -52,19 +58,41 @@ def capped(command):
         if not os.access(named, os.X_OK):
             raise SystemExit(f'LEANUX_CAPPED names no executable: {named}')
         return [named, '--'] + command
-    if os.access(CAPPED_DEFAULT, os.X_OK):
-        return [str(CAPPED_DEFAULT), '--'] + command
-    print(f'note: {CAPPED_DEFAULT} is not installed; building uncapped', file=sys.stderr, flush=True)
+    available = shutil.which('capped')
+    if available:
+        return [available, '--'] + command
+    print('note: capped is not installed; building uncapped', file=sys.stderr, flush=True)
     return command
 
 
 def strip_comments(text):
     """Blank out `--` line comments and (nested) `/- ... -/` block comments,
-    keeping line structure so hits report the right line."""
+    keeping line structure so hits report the right line. String literals are
+    blanked too (their contents are not code, and a `--` inside one must not
+    swallow the rest of the line); the quote character literal `'"'` is
+    skipped so it does not open a string."""
     out = []
     i, depth, n = 0, 0, len(text)
     while i < n:
         two = text[i:i + 2]
+        if depth == 0 and text[i:i + 3] == "'\"'":
+            out.append("'  ")
+            i += 3
+            continue
+        if depth == 0 and text[i] == '"':
+            out.append(' ')
+            i += 1
+            while i < n and text[i] != '"':
+                if text[i] == '\\' and i + 1 < n and text[i + 1] != '\n':
+                    out.append(' ')
+                    i += 1
+                out.append(text[i] if text[i] == '\n' else ' ')
+                i += 1
+            if i >= n:
+                raise SystemExit('unterminated string literal while scanning the proof tree')
+            out.append(' ')
+            i += 1
+            continue
         if depth == 0 and two == '--':
             while i < n and text[i] != '\n':
                 i += 1
@@ -102,10 +130,28 @@ def statement_files():
     return files
 
 
+def root_modules():
+    """Every module the root imports directly: the results' Statements files and
+    the counterexample and findings modules. The axioms of every declaration of
+    each are printed."""
+    if not PROOFS_ROOT.exists():
+        raise SystemExit(f'{PROOFS_ROOT.relative_to(ROOT)} is missing')
+    paths = []
+    for line in PROOFS_ROOT.read_text().splitlines():
+        if line.startswith('import '):
+            path = ROOT / Path(*line.split()[1].split('.')).with_suffix('.lean')
+            if not path.exists():
+                raise SystemExit(f'{PROOFS_ROOT.relative_to(ROOT)} imports {line.split()[1]}, which does not exist')
+            paths.append(path)
+    if not paths:
+        raise SystemExit(f'{PROOFS_ROOT.relative_to(ROOT)} imports nothing')
+    return paths
+
+
 def terminal_statements():
-    """Every declaration of every result's Statements.lean, fully qualified."""
+    """Every declaration of every module the root imports, fully qualified."""
     names = []
-    for path in statement_files():
+    for path in root_modules():
         ns = namespace_of(path)
         found = [f'{ns}.{m.group(1)}' for line in path.read_text().splitlines() if (m := DECL.match(line))]
         if not found:
@@ -122,13 +168,13 @@ def check_build():
 
 
 def check_axioms(names):
-    print(f'[2/4] #print axioms for {len(names)} terminal statements', flush=True)
+    print(f'[2/4] #print axioms for {len(names)} terminal statements over {len(root_modules())} root modules', flush=True)
     artifacts = Path(os.environ.get('LEANUX_ARTIFACTS', ROOT / '.artifacts')) / 'proof-gate'
     artifacts.mkdir(parents=True, exist_ok=True)
     scratch = artifacts / 'axioms.lean'
-    scratch.write_text(''.join(f'import {module_name(path)}\n' for path in statement_files())
+    scratch.write_text(''.join(f'import {module_name(path)}\n' for path in root_modules())
                        + ''.join(f'#print axioms {name}\n' for name in names))
-    result = subprocess.run(['lake', 'env', 'lean', str(scratch)], cwd=ROOT, capture_output=True, text=True)
+    result = subprocess.run(capped(['lake', 'env', 'lean', str(scratch)]), cwd=ROOT, capture_output=True, text=True)
     (artifacts / 'axioms.out').write_text(result.stdout + result.stderr)
     # Lean wraps a long axiom list over continuation lines that start with a
     # space; join them back before parsing.
@@ -175,7 +221,7 @@ def check_tokens():
     for path in files:
         for number, line in enumerate(strip_comments(path.read_text()).splitlines(), 1):
             for m in FORBIDDEN.finditer(line):
-                fail(f'{path.relative_to(ROOT)}:{number}: {m.group(1)}')
+                fail(f'{path.relative_to(ROOT)}:{number}: {m.group(0)}')
 
 
 def check_imports():

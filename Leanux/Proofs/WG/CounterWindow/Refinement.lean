@@ -11,15 +11,22 @@ open Leanux Leanux.WG
 @[simp] theorem except_ok_bind {α β : Type} (a : α) (f : α → Except Stop β) :
     (Except.ok a >>= f) = f a := rfl
 
-/-- The mirror's branch recorder, presented as a pure World update. -/
-def record (w : World) (d : Decision) (outcome : Bool) : World :=
-  { w with steps := w.steps.push { decision := d, outcome, netRx := w.netRxSection } }
+/-- The mirror's branch recorder updates only the actual ambient state. -/
+def record (a : Ambient) (d : Decision) (outcome : Bool) : Ambient :=
+  { a with steps := a.steps.push { decision := d, outcome, netRx := a.netRxSection } }
 
-@[simp] theorem branch_run (w : World) (d : Decision) (outcome : Bool) :
-    (branch d outcome).run w = .ok (outcome, record w d outcome) := rfl
+@[simp] theorem branch_run (a : Ambient) (d : Decision) (outcome : Bool) :
+    (AmbientM.branch d outcome).run a = .ok (outcome, record a d outcome) := rfl
 
-/-- The actual body of the mirror's word-clearing loop. -/
-def clearBody (current : Nat) (i : Nat) (a : Array Nat) : M (ForInStep (Array Nat)) := do
+/-- A comparison record retains the mirror's two concrete operands. -/
+def recordCmp (a : Ambient) (d : Decision) (outcome : Bool) (x y : Int) : Ambient :=
+  { a with steps := a.steps.push { decision := d, outcome, operands := some (x, y), netRx := a.netRxSection } }
+
+@[simp] theorem branchCmp_run (a : Ambient) (d : Decision) (outcome : Bool) (x y : Int) :
+    (AmbientM.branchCmp d outcome x y).run a = .ok (outcome, recordCmp a d outcome x y) := rfl
+
+/-- The word-clearing body uses the ambient recorder and no subsystem state. -/
+def clearBody (current : Nat) (i : Nat) (a : Array Nat) : AmbientM (ForInStep (Array Nat)) := do
   _ ← branch .ctrClearIter true
   let j := (i + current) % 128
   if j ≥ a.size then
@@ -28,110 +35,160 @@ def clearBody (current : Nat) (i : Nat) (a : Array Nat) : M (ForInStep (Array Na
   else return .yield (a.set! j 0)
 
 /-- All bookkeeping effects of the loop, separated from its bitmap effect. -/
-def clearRecords : World → List Nat → World
-  | w, [] => w
-  | w, _ :: xs => clearRecords (record w .ctrClearIter true) xs
-
-@[simp] theorem clearRecords_k (w : World) (xs : List Nat) :
-    (clearRecords w xs).k = w.k := by
-  induction xs generalizing w with
-  | nil => rfl
-  | cons i xs ih => simpa [clearRecords, record] using ih (record w .ctrClearIter true)
+def clearRecords : Ambient → List Nat → Ambient
+  | a, [] => a
+  | a, _ :: xs => clearRecords (record a .ctrClearIter true) xs
 
 /-- The mirror's monadic clear loop performs exactly the pure list of clears.
 It cannot stop when the replay bitmap has the C shape. -/
 theorem clear_loop_run (a : Array Nat) (current : Nat) (xs : List Nat)
-    (w : World) (hsize : a.size = 128) :
-    (forIn xs a (clearBody current)).run w =
-      .ok (clear a current xs, clearRecords w xs) := by
-  induction xs generalizing a w with
+    (ambient : Ambient) (hsize : a.size = 128) :
+    (forIn xs a (clearBody current)).run ambient =
+      .ok (clear a current xs, clearRecords ambient xs) := by
+  induction xs generalizing a ambient with
   | nil => rfl
   | cons i xs ih =>
     have hj : ¬(i + current) % 128 ≥ a.size := by rw [hsize]; omega
-    simp only [List.forIn_cons, clearBody, hj, if_false, bind_pure_comp,
+    simp only [List.forIn_cons, clearBody, hj, ite_false, bind_pure_comp,
       StateT.run_bind]
     change (forIn xs (a.set! ((i + current) % 128) 0) (clearBody current)).run
-      (record w .ctrClearIter true) = _
+      (record ambient .ctrClearIter true) = _
     exact ih _ _ (by simp [hsize])
 
-@[simp] theorem getKeypair_run (w : World) (d : Device) (kp : KeypairId) (k : Keypair)
-    (hd : w.k.wg = some d) (hk : d.keypairs.get? kp = some k) :
-    (getKeypair kp).run w = .ok (k, w) := by
+/-- A state lift commutes with list iteration. This is the transformer law
+used at the actual ambient-only loop, not a per-operation frame. -/
+private theorem forIn_lift {σ α β : Type} {m : Type → Type} [Monad m] [LawfulMonad m]
+    (xs : List α) (b : β) (f : α → β → m (ForInStep β)) :
+    (forIn xs b (fun x y => StateT.lift (f x y)) : StateT σ m β) =
+      StateT.lift (forIn xs b f) := by
+  induction xs generalizing b with
+  | nil =>
+    apply StateT.ext
+    intro s
+    simp [List.forIn_nil]
+  | cons x xs ih =>
+    apply StateT.ext
+    intro s
+    simp only [List.forIn_cons, StateT.run_bind_lift, StateT.run_lift, bind_assoc]
+    apply bind_congr
+    intro step
+    cases step with
+    | done y => simp
+    | yield y => exact congrFun (ih y) s
+
+@[simp] theorem getKeypair_run (w : WGWorld) (ambient : Ambient) (d : Device)
+    (kp : KeypairId) (k : Keypair)
+    (hd : w.dev = some d) (hk : d.keypairs.get? kp = some k) :
+    ((getKeypair kp).run w).run ambient = .ok ((k, w), ambient) := by
   change d.keypairs[kp]? = some k at hk
-  simp [getKeypair, getDev, getK, hd, hk]
+  simp [getKeypair, getDev, hd, hk]
 
-def store (w : World) (kp : KeypairId) (k : Keypair) : World :=
-  { w with k := { w.k with wg := w.k.wg.map fun d =>
-    { d with keypairs := d.keypairs.insert kp k } } }
+def store (w : WGWorld) (kp : KeypairId) (k : Keypair) : WGWorld :=
+  { w with dev := w.dev.map fun d => { d with keypairs := d.keypairs.insert kp k } }
 
-@[simp] theorem setKeypair_run (w : World) (kp : KeypairId) (k : Keypair) :
-    (setKeypair kp k).run w = .ok ((), store w kp k) := rfl
+@[simp] theorem setKeypair_run (w : WGWorld) (ambient : Ambient) (kp : KeypairId) (k : Keypair) :
+    ((setKeypair kp k).run w).run ambient = .ok (((), store w kp k), ambient) := rfl
 
 /-- A direct operational transcription of receive.c after its keypair lookup.
-The result includes the mirror's bookkeeping, to make the refinement exact. -/
-def cExecution (kp : KeypairId) (nonce : Nat) (k : Keypair) (w : World) : Bool × World :=
+The result has the actual nested WG and ambient execution tuple. -/
+def cExecution (kp : KeypairId) (nonce : Nat) (k : Keypair)
+    (w : WGWorld) (ambient : Ambient) : (Bool × WGWorld) × Ambient :=
   let c := k.receivingCounter
-  let w := record w .ctrRejectCounter (c.counter ≥ REJECT_AFTER_MESSAGES + 1)
-  if c.counter ≥ REJECT_AFTER_MESSAGES + 1 then (false, w) else
-  let w := record w .ctrRejectTheirs (nonce ≥ REJECT_AFTER_MESSAGES)
-  if nonce ≥ REJECT_AFTER_MESSAGES then (false, w) else
+  let ambient := recordCmp ambient .ctrRejectCounter (c.counter ≥ REJECT_AFTER_MESSAGES + 1)
+    c.counter (REJECT_AFTER_MESSAGES + 1)
+  if c.counter ≥ REJECT_AFTER_MESSAGES + 1 then ((false, w), ambient) else
+  let ambient := recordCmp ambient .ctrRejectTheirs (nonce ≥ REJECT_AFTER_MESSAGES) nonce REJECT_AFTER_MESSAGES
+  if nonce ≥ REJECT_AFTER_MESSAGES then ((false, w), ambient) else
   let n := nonce + 1
-  let w := record w .ctrTooOld (8128 + n < c.counter)
-  if 8128 + n < c.counter then (false, w) else
-  let w := record w .ctrAdvance (n > c.counter)
-  let (a, high, w) := if n > c.counter then
+  let ambient := record ambient .ctrTooOld (8128 + n < c.counter)
+  if 8128 + n < c.counter then ((false, w), ambient) else
+  let ambient := record ambient .ctrAdvance (n > c.counter)
+  let (a, high, ambient) := if n > c.counter then
       let xs := List.range' 1 (min (n / 64 - c.counter / 64) 128)
       (clear c.backtrack (c.counter / 64) xs, n,
-        record (clearRecords w xs) .ctrClearIter false)
-    else (c.backtrack, c.counter, w)
+        record (clearRecords ambient xs) .ctrClearIter false)
+    else (c.backtrack, c.counter, ambient)
   let word := a[slot n]!
   let c' : ReplayCounter :=
     { counter := high
       backtrack := a.set! (slot n) (word ||| (1 <<< bit n)) }
   let w := store w kp { k with receivingCounter := c' }
-  ((word >>> bit n) % 2 == 0, w)
+  (((word >>> bit n) % 2 == 0, w), ambient)
 
-/-- The word-clearing loop in the unchanged mirror is the C loop. -/
-theorem mirror_clear_loop (a : Array Nat) (current top : Nat) (w : World)
-    (hsize : a.size = 128) :
-    (forIn [1:top + 1] a (clearBody current)).run w =
-      .ok (clear a current (List.range' 1 top), clearRecords w (List.range' 1 top)) := by
-  rw [Std.Legacy.Range.forIn_eq_forIn_range']
-  simpa [Std.Legacy.Range.size] using clear_loop_run a current (List.range' 1 top) w hsize
+/-- The word-clearing loop in the mirror is the C loop lifted from AmbientM. -/
+theorem mirror_clear_loop (a : Array Nat) (current top : Nat)
+    (w : WGWorld) (ambient : Ambient) (hsize : a.size = 128) :
+    (((forIn [1:top + 1] a (fun i a => do
+      _ ← branch .ctrClearIter true
+      let j := (i + current) % 128
+      if j ≥ a.size then
+        let _ : Unit ← invariant s!"backtrack[{j}] beyond the bitmap"
+        return .yield (a.set! j 0)
+      else return .yield (a.set! j 0)) : WG.M _).run w).run ambient) =
+      .ok ((clear a current (List.range' 1 top), w), clearRecords ambient (List.range' 1 top)) := by
+  have hbody : (fun (i : Nat) (a : Array Nat) => (do
+      _ ← branch .ctrClearIter true
+      let j := (i + current) % 128
+      if j ≥ a.size then
+        let _ : Unit ← invariant s!"backtrack[{j}] beyond the bitmap"
+        return .yield (a.set! j 0)
+      else return .yield (a.set! j 0)) : Nat → Array Nat → WG.M (ForInStep (Array Nat))) =
+      (fun i a => StateT.lift (clearBody current i a)) := by
+    funext i a g env
+    by_cases hj : (i + current) % 128 ≥ a.size <;>
+      simp [clearBody, hj, branch, AmbientM.branch, invariant, AmbientM.invariant] <;> rfl
+  rw [hbody, Std.Legacy.Range.forIn_eq_forIn_range']
+  simp only [forIn_lift, StateT.run_lift, StateT.run_bind]
+  have h := clear_loop_run a current (List.range' 1 top) ambient hsize
+  simp [Std.Legacy.Range.size, h]
 
 /-- Exact successful execution equality for the fixed mirror's validator. -/
-theorem counterValidate_execution (w : World) (d : Device) (kp : KeypairId)
-    (k : Keypair) (nonce : Nat) (hd : w.k.wg = some d)
+theorem counterValidate_execution (w : WGWorld) (ambient : Ambient) (d : Device)
+    (kp : KeypairId) (k : Keypair) (nonce : Nat) (hd : w.dev = some d)
     (hk : d.keypairs.get? kp = some k) (hsize : k.receivingCounter.backtrack.size = 128) :
-    (counterValidate kp nonce).run w = .ok (cExecution kp nonce k w) := by
+    ((counterValidate kp nonce).run w).run ambient = .ok (cExecution kp nonce k w ambient) := by
+  change d.keypairs[kp]? = some k at hk
   by_cases h1 : k.receivingCounter.counter ≥ REJECT_AFTER_MESSAGES + 1
-  · simp [counterValidate, getKeypair_run w d kp k hd hk, WG.orM, h1, cExecution]
+  · simp [counterValidate, getKeypair, getDev, hd, hk, WG.orM, h1, cExecution,
+      branchCmp, AmbientM.branchCmp, recordCmp, StateT.run_bind]
+    rfl
   · by_cases h2 : nonce ≥ REJECT_AFTER_MESSAGES
-    · simp [counterValidate, getKeypair_run w d kp k hd hk, WG.orM, h1, h2, cExecution]
+    · simp [counterValidate, getKeypair, getDev, hd, hk, WG.orM, h1, h2, cExecution,
+        branchCmp, AmbientM.branchCmp, recordCmp, StateT.run_bind]
+      rfl
     · by_cases h3 : 8128 + (nonce + 1) < k.receivingCounter.counter
-      · simp [counterValidate, getKeypair_run w d kp k hd hk, WG.orM, h1, h2, h3,
-          cExecution, COUNTER_WINDOW_SIZE]
+      · simp [counterValidate, getKeypair, getDev, hd, hk, WG.orM, h1, h2, h3,
+          cExecution, COUNTER_WINDOW_SIZE, branch, branchCmp, AmbientM.branch,
+          AmbientM.branchCmp, record, recordCmp, StateT.run_bind]
+        rfl
       · by_cases h4 : nonce + 1 > k.receivingCounter.counter
-        · simp only [counterValidate, StateT.run_bind, getKeypair_run w d kp k hd hk,
-            except_ok_bind, WG.orM, branch_run, h1, h2, h3, h4, decide_false, decide_true,
-            Bool.false_eq_true, if_false, if_true, COUNTER_WINDOW_SIZE,
+        · simp only [counterValidate, StateT.run_bind, getKeypair_run w ambient d kp k hd hk,
+            except_ok_bind, WG.orM, h1, h2, h3, h4, decide_false, decide_true,
+            ite_false, ite_true, COUNTER_WINDOW_SIZE,
             COUNTER_BITS_TOTAL, BITS_PER_LONG, cExecution]
           simp only [show 8192 / 64 = 128 from rfl]
           have hloop := mirror_clear_loop _ (k.receivingCounter.counter / 64)
-            (min ((nonce + 1) / 64 - k.receivingCounter.counter / 64) 128)
-            (record (record (record (record w .ctrRejectCounter false) .ctrRejectTheirs false)
+            (min ((nonce + 1) / 64 - k.receivingCounter.counter / 64) 128) w
+            (record (record (recordCmp (recordCmp ambient .ctrRejectCounter false k.receivingCounter.counter
+              (REJECT_AFTER_MESSAGES + 1)) .ctrRejectTheirs false nonce REJECT_AFTER_MESSAGES)
               .ctrTooOld false) .ctrAdvance true) hsize
-          unfold clearBody at hloop
+          simp only [branch, branchCmp, StateT.run_monadLift, monadLift_self, StateT.run_bind,
+            branch_run, branchCmp_run, except_ok_bind, StateT.run_pure, except_pure,
+            Bool.false_eq_true, ite_false, ite_true]
+          simp only [branch] at hloop
           rw [hloop]
           simp only [except_ok_bind]
           rw [Array.getElem?_eq_some_getElem!]
           · rfl
           · simp [hsize, Nat.mod_lt _ (by decide : 0 < 128)]
-        · simp only [counterValidate, StateT.run_bind, getKeypair_run w d kp k hd hk,
-            except_ok_bind, WG.orM, branch_run, h1, h2, h3, h4, decide_false,
-            Bool.false_eq_true, if_false, COUNTER_WINDOW_SIZE,
+        · simp only [counterValidate, StateT.run_bind, getKeypair_run w ambient d kp k hd hk,
+            except_ok_bind, WG.orM, h1, h2, h3, h4, decide_false,
+            ite_false, COUNTER_WINDOW_SIZE,
             COUNTER_BITS_TOTAL, BITS_PER_LONG, cExecution]
           simp only [show 8192 / 64 = 128 from rfl]
+          simp only [branch, branchCmp, StateT.run_monadLift, monadLift_self, StateT.run_bind,
+            branch_run, branchCmp_run, except_ok_bind, StateT.run_pure, except_pure,
+            Bool.false_eq_true, ite_false]
           rw [Array.getElem?_eq_some_getElem!]
           · rfl
           · simp [hsize, Nat.mod_lt _ (by decide : 0 < 128)]
@@ -145,31 +202,20 @@ theorem zero_bit_equiv (word b : Nat) :
   simp
 
 /-- Observable replay state at an allocated keypair identity. -/
-def counterAt (w : World) (kp : KeypairId) : Option ReplayCounter :=
-  (w.k.wg.bind fun d => d.keypairs.get? kp).map (·.receivingCounter)
+def counterAt (w : WGWorld) (kp : KeypairId) : Option ReplayCounter :=
+  (w.dev.bind fun d => d.keypairs.get? kp).map (·.receivingCounter)
 
-@[simp] theorem record_counterAt (w : World) (d : Decision) (b : Bool) (kp : KeypairId) :
-    counterAt (record w d b) kp = counterAt w kp := rfl
-
-@[simp] theorem clearRecords_counterAt (w : World) (xs : List Nat) (kp : KeypairId) :
-    counterAt (clearRecords w xs) kp = counterAt w kp := by
-  unfold counterAt
-  rw [clearRecords_k]
-
-@[simp] theorem counterAt_store (w : World) (d : Device) (kp : KeypairId) (k : Keypair)
-    (hd : w.k.wg = some d) :
+@[simp] theorem counterAt_store (w : WGWorld) (d : Device) (kp : KeypairId) (k : Keypair)
+    (hd : w.dev = some d) :
     counterAt (store w kp k) kp = some k.receivingCounter := by
   simp [counterAt, store, hd]
 
-@[simp] theorem record_k (w : World) (d : Decision) (b : Bool) :
-    (record w d b).k = w.k := rfl
-
 /-- Projection of the exact C execution onto the pure window step. -/
-theorem cExecution_refines_step (w : World) (d : Device) (kp : KeypairId)
-    (k : Keypair) (nonce : Nat) (hd : w.k.wg = some d)
+theorem cExecution_refines_step (w : WGWorld) (ambient : Ambient) (d : Device) (kp : KeypairId)
+    (k : Keypair) (nonce : Nat) (hd : w.dev = some d)
     (hk : d.keypairs.get? kp = some k) :
-    (cExecution kp nonce k w).1 = (step k.receivingCounter nonce).1 ∧
-    counterAt (cExecution kp nonce k w).2 kp = some (step k.receivingCounter nonce).2 := by
+    (cExecution kp nonce k w ambient).1.1 = (step k.receivingCounter nonce).1 ∧
+    counterAt (cExecution kp nonce k w ambient).1.2 kp = some (step k.receivingCounter nonce).2 := by
   have hlookup : counterAt w kp = some k.receivingCounter := by
     change d.keypairs[kp]? = some k at hk
     simp [counterAt, hd, hk]
@@ -177,15 +223,15 @@ theorem cExecution_refines_step (w : World) (d : Device) (kp : KeypairId)
   · have h1 : ¬ k.receivingCounter.counter ≥ REJECT_AFTER_MESSAGES + 1 := by have := he.1; omega
     have h2 : ¬ nonce ≥ REJECT_AFTER_MESSAGES := by have := he.2.1; omega
     have h3 : ¬8128 + (nonce + 1) < k.receivingCounter.counter := by have := he.2.2; omega
-    rw [step, if_pos he]
+    rw [step, ite_eq_left he]
     by_cases h4 : nonce + 1 > k.receivingCounter.counter
     · simp [cExecution, h1, h2, h3, h4, fresh, prepared, update,
         zero_bit_equiv, Nat.max_eq_right (by omega : k.receivingCounter.counter ≤ nonce + 1),
-        counterAt, store, record, clearRecords_k, hd]
+        counterAt, store, record, recordCmp, hd]
     · simp [cExecution, h1, h2, h3, h4, fresh, prepared, update,
         zero_bit_equiv, Nat.max_eq_left (by omega : nonce + 1 ≤ k.receivingCounter.counter),
-        counterAt, store, record, hd]
-  · rw [step, if_neg he]
+        counterAt, store, record, recordCmp, hd]
+  · rw [step, ite_eq_right he]
     by_cases h1 : k.receivingCounter.counter ≥ REJECT_AFTER_MESSAGES + 1
     · simp [cExecution, h1, hlookup]
     · by_cases h2 : nonce ≥ REJECT_AFTER_MESSAGES
@@ -196,58 +242,58 @@ theorem cExecution_refines_step (w : World) (d : Device) (kp : KeypairId)
 /-- S2: the fixed mirror's successful run returns exactly the C-rule result
 and leaves exactly the C-rule replay state. The array-shape premise makes
 explicit the C structure invariant not enforced by the mirror's raw type. -/
-theorem S2 (w : World) (d : Device) (kp : KeypairId) (k : Keypair) (nonce : Nat)
-    (hd : w.k.wg = some d) (hk : d.keypairs.get? kp = some k)
+theorem S2 (w : WGWorld) (ambient : Ambient) (d : Device) (kp : KeypairId) (k : Keypair) (nonce : Nat)
+    (hd : w.dev = some d) (hk : d.keypairs.get? kp = some k)
     (hsize : k.receivingCounter.backtrack.size = 128) :
-    ∃ w', (counterValidate kp nonce).run w = .ok ((step k.receivingCounter nonce).1, w') ∧
+    ∃ w' ambient', ((counterValidate kp nonce).run w).run ambient = .ok (((step k.receivingCounter nonce).1, w'), ambient') ∧
       counterAt w' kp = some (step k.receivingCounter nonce).2 := by
-  have hex := counterValidate_execution w d kp k nonce hd hk hsize
-  have hp := cExecution_refines_step w d kp k nonce hd hk
-  refine ⟨(cExecution kp nonce k w).2, ?_, hp.2⟩
+  have hex := counterValidate_execution w ambient d kp k nonce hd hk hsize
+  have hp := cExecution_refines_step w ambient d kp k nonce hd hk
+  refine ⟨(cExecution kp nonce k w ambient).1.2, (cExecution kp nonce k w ambient).2, ?_, hp.2⟩
   rw [hex, ← hp.1]
 
 theorem step_accepts_iff (c : ReplayCounter) (nonce : Nat) :
     (step c nonce).1 = true ↔ eligible c nonce ∧
       (prepared c (nonce + 1))[slot (nonce + 1)]!.testBit (bit (nonce + 1)) = false := by
   by_cases he : eligible c nonce
-  · rw [step, if_pos he]
+  · rw [step, ite_eq_left he]
     dsimp only [fresh]
     cases hb : (prepared c (nonce + 1))[slot (nonce + 1)]!.testBit (bit (nonce + 1)) with
     | false => exact ⟨fun _ => ⟨he, rfl⟩, fun _ => rfl⟩
     | true => exact ⟨fun h => Bool.noConfusion h, fun h => Bool.noConfusion h.2⟩
-  · rw [step, if_neg he]
+  · rw [step, ite_eq_right he]
     simp [he]
 
 /-- S2's acceptance characterization, stated directly for the mirror.
 The bit is read after the C's advancing clears; the lower edge is inclusive. -/
-theorem S2_acceptance (w : World) (d : Device) (kp : KeypairId) (k : Keypair) (nonce : Nat)
-    (hd : w.k.wg = some d) (hk : d.keypairs.get? kp = some k)
+theorem S2_acceptance (w : WGWorld) (ambient : Ambient) (d : Device) (kp : KeypairId) (k : Keypair) (nonce : Nat)
+    (hd : w.dev = some d) (hk : d.keypairs.get? kp = some k)
     (hsize : k.receivingCounter.backtrack.size = 128) :
-    (∃ w', (counterValidate kp nonce).run w = .ok (true, w')) ↔
+    (∃ w' ambient', ((counterValidate kp nonce).run w).run ambient = .ok ((true, w'), ambient')) ↔
       eligible k.receivingCounter nonce ∧
       (prepared k.receivingCounter (nonce + 1))[slot (nonce + 1)]!.testBit (bit (nonce + 1)) = false := by
-  obtain ⟨w', hrun, _⟩ := S2 w d kp k nonce hd hk hsize
+  obtain ⟨w', ambient', hrun, _⟩ := S2 w ambient d kp k nonce hd hk hsize
   rw [← step_accepts_iff]
   constructor
-  · rintro ⟨other, hother⟩
+  · rintro ⟨other, otherAmbient, hother⟩
     rw [hrun] at hother
-    exact congrArg Prod.fst (Except.ok.inj hother)
+    exact congrArg (fun out => out.1.1) (Except.ok.inj hother)
   · intro h
-    exact ⟨w', by simpa only [h] using hrun⟩
+    exact ⟨w', ambient', by simpa only [h] using hrun⟩
 
 /-- S2's accepted-state update, stated directly for the mirror. -/
-theorem S2_update (w w' : World) (d : Device) (kp : KeypairId) (k : Keypair) (nonce : Nat)
-    (hd : w.k.wg = some d) (hk : d.keypairs.get? kp = some k)
+theorem S2_update (w w' : WGWorld) (ambient ambient' : Ambient) (d : Device) (kp : KeypairId) (k : Keypair) (nonce : Nat)
+    (hd : w.dev = some d) (hk : d.keypairs.get? kp = some k)
     (hsize : k.receivingCounter.backtrack.size = 128)
-    (hrun : (counterValidate kp nonce).run w = .ok (true, w')) :
+    (hrun : ((counterValidate kp nonce).run w).run ambient = .ok ((true, w'), ambient')) :
     counterAt w' kp = some (update k.receivingCounter nonce) := by
-  obtain ⟨other, hother, hcounter⟩ := S2 w d kp k nonce hd hk hsize
+  obtain ⟨other, otherAmbient, hother, hcounter⟩ := S2 w ambient d kp k nonce hd hk hsize
   rw [hrun] at hother
   have hp := Except.ok.inj hother
-  have hw : w' = other := congrArg Prod.snd hp
-  have hb : (step k.receivingCounter nonce).1 = true := (congrArg Prod.fst hp).symm
+  have hw : w' = other := congrArg (fun out => out.1.2) hp
+  have hb : (step k.receivingCounter nonce).1 = true := (congrArg (fun out => out.1.1) hp).symm
   have he := (step_accepts_iff _ _).mp hb |>.1
   rw [hw]
-  simpa only [step, if_pos he] using hcounter
+  simpa only [step, ite_eq_left he] using hcounter
 
 end Leanux.Proofs.WG.CounterWindow

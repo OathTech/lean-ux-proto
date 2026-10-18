@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Index.BulkRemovalClaims
 import Leanux.Proofs.WG.Index.SessionLookupClaims
 import Leanux.Proofs.WG.Index.SessionAliasClaims
 import Leanux.Proofs.WG.Index.OwnerCoherencePersistentFindingClaims
@@ -1062,5 +1063,13 @@ theorem original_session_lookup_handoff (pid : PeerId) (index : Nat) (d : Device
         (result.1 = false → result.2 = none ∧ final = d) ∧
         (result.1 = true → result.2 = some (.keypair d.nextKeypairId,pid))) :=
   session_lookup_handoff pid index d p resident safe coherent handshake fresh
+
+/-- Original bulk peer removal preserves both index uniqueness properties and
+the hashed-keypair allocation bound on normal return. The actual allowed-IP
+free and both saved-peer loops execute; their Stops are retained. No trie
+shape, resident-peer, queue-readiness or completion assumption is added. -/
+theorem original_bulk_peer_removal_table_safety :
+    Campaign2.Ensures peerRemoveAll View.TablesSafe (fun _ => View.TablesSafe) :=
+  peerRemoveAll_tables
 
 end Leanux.Proofs.WG.Index

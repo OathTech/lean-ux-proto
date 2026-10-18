@@ -1,0 +1,70 @@
+#!/usr/bin/python3
+"""The proof tree's counterexample speedbump (AGENTS.md, "Gates and speedbumps").
+
+Run through the bundle at a claim point: `capped -- scripts/in-bundle
+scripts/proof-counterexamples`. It replays the published counterexample and
+witness recipes of the campaign report (`docs/2026-10-13-proof-campaign.md`)
+and the W7 full-ring report (`docs/2026-10-17-r4-full-ring.md`) through
+`lake env lean --run`, exactly as those documents give them, and fails if any
+exits nonzero. These replays run in Lean's interpreter outside the kernel and
+their modules sit outside the gate's build closure, so this is what keeps them
+reproducible; it is a speedbump, never a gate. The gate (`scripts/proof-gate`)
+must have built the tree first.
+"""
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+REPLAY = ROOT / 'docs' / 'proof-campaign-replay.py'
+W7 = ROOT / 'docs' / 'proof-campaign-w7.py'
+# The B3 wheel records (kinds 313 and 314) are supplied by `with_wheel_records`,
+# as the mirror lane's `replay_raw` does; the campaign report's recipe predates B3.
+CRYPT_AHEAD = ('import json; from evaluator.test_model_replay import W7_CRYPT_AHEAD, with_jiffies_end, '
+               'with_timer_caller_jiffies, with_wheel_records; '
+               'print(json.dumps(with_wheel_records(with_timer_caller_jiffies(with_jiffies_end(W7_CRYPT_AHEAD)))))')
+
+# (name, generator command, replay module, extra lean flags)
+RECIPES = [
+    ('r1-inclusive-floor', ['python3', '-B', str(REPLAY), 'r1-inclusive-floor'], 'Leanux/Proofs/Logged/Replay.lean', []),
+    ('r2-stale-dump-cursor', ['python3', '-B', str(REPLAY), 'r2-stale-dump-cursor'], 'Leanux/Proofs/WG/LifetimeSafety/Replay.lean', []),
+    ('r2-stale-dump-cursor-orphan', ['python3', '-B', str(REPLAY), 'r2-stale-dump-cursor-orphan'], 'Leanux/Proofs/WG/LifetimeSafety/ReplayOrphan.lean', []),
+    ('w7-crypt-ahead', ['python3', '-B', '-c', CRYPT_AHEAD], 'Leanux/Proofs/Logged/Replay.lean', []),
+    ('r4-gro-reorder', ['python3', '-B', str(REPLAY), 'r4-gro-reorder'], 'Leanux/Proofs/WG/DeliveryOrder/ReplayGro.lean', []),
+    ('r5-rx-wire-limit', ['python3', '-B', str(REPLAY), 'r5-rx-wire-limit'], 'Leanux/Proofs/WG/KeyLifetime/Replay.lean', []),
+    ('r5-rx-wire-past-limit', ['python3', '-B', str(REPLAY), 'r5-rx-wire-past-limit'], 'Leanux/Proofs/WG/KeyLifetime/Replay.lean', []),
+    ('r5-delayed-encryption', ['python3', '-B', str(REPLAY), 'r5-delayed-encryption'], 'Leanux/Proofs/WG/KeyLifetime/ReplayDelayed.lean', []),
+    ('r5-coherent-post-clear', ['python3', '-B', str(REPLAY), 'r5-coherent-post-clear'], 'Leanux/Proofs/WG/KeyLifetime/ReplayDelayed.lean', []),
+    ('r5-post-clear-transport', ['python3', '-B', str(REPLAY), 'r5-post-clear-transport'], 'Leanux/Proofs/WG/KeyLifetime/ReplayPostClear.lean', []),
+    ('r6-retransmit-limit', ['python3', '-B', str(REPLAY), 'r6-retransmit-limit'], 'Leanux/Proofs/WG/FloodResistance/Replay.lean', []),
+    ('w7-full-ring', ['python3', '-B', str(W7)], 'Leanux/Proofs/WG/DeliveryOrder/ReplayFullRing.lean', ['-j1']),
+]
+
+
+def main():
+    failed = []
+    for name, generator, module, flags in RECIPES:
+        started = time.monotonic()
+        generated = subprocess.run(generator, cwd=ROOT, capture_output=True, text=True)
+        if generated.returncode != 0:
+            print(f'FAIL {name}: the generator exited {generated.returncode}\n{generated.stderr}', flush=True)
+            failed.append(name)
+            continue
+        replay = subprocess.run(['lake', 'env', 'lean'] + flags + ['--run', module], cwd=ROOT,
+                                input=generated.stdout, capture_output=True, text=True)
+        elapsed = time.monotonic() - started
+        if replay.returncode != 0:
+            print(f'FAIL {name}: {module} exited {replay.returncode} ({elapsed:.1f} s)\n{replay.stdout}{replay.stderr}', flush=True)
+            failed.append(name)
+        else:
+            print(f'PASS {name}: {module} ({elapsed:.1f} s)', flush=True)
+    if failed:
+        print(f'proof counterexamples: FAILED ({len(failed)} of {len(RECIPES)}: {", ".join(failed)})', flush=True)
+        return 1
+    print(f'proof counterexamples: PASS ({len(RECIPES)} recipes replayed)', flush=True)
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

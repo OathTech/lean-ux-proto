@@ -1,3 +1,4 @@
+import Leanux.Proofs.Framing.Lift
 import Leanux.Proofs.WG.Index.TablePeerFrames
 import Leanux.Proofs.WG.Config.AllowedRemovalSource
 import Leanux.Proofs.WG.Config.PeerDead
@@ -8,28 +9,13 @@ set_option pp.structureInstances false
 namespace Leanux.Proofs.WG.Index
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise Std.Do
 
-/-- Local variant of C1 Framing.hoare_liftAip. The actual adapter's device
+/-- Compatibility projection of landed C1 Framing.hoare_liftAip. The actual adapter's device
 check and arbitrary Ambient execution are retained. -/
 theorem hoare_liftAip_variant {α : Type} (a : AipM α) (P : WGWorld → Prop)
     (stable : ∀ g d (s : AipStore), P g → g.dev = some d →
       P {g with dev := some {d with nodes := s.nodes, nextNode := s.nextNode, peerAllowedips := s.trie}}) :
-    ⦃fun g => ⌜P g⌝⦄ liftAip a ⦃⇓? _ g => ⌜P g⌝⦄ := by
-  apply (ensures_iff _ _ _).mp
-  intro g ambient x final after pre run
-  cases device : g.dev with
-  | none =>
-    simp [liftAip, getDev, device, invariant, AmbientM.invariant] at run
-    cases run
-  | some d =>
-    cases executed : (a.run {nodes := d.nodes, nextNode := d.nextNode, trie := d.peerAllowedips}).run ambient with
-    | error err =>
-      simp [liftAip, getDev, device, executed] at run
-      cases run
-    | ok pair =>
-      obtain ⟨⟨value, store⟩, inputs⟩ := pair
-      simp [liftAip, getDev, modifyDev, device, executed] at run
-      rcases run with ⟨⟨rfl, rfl⟩, rfl⟩
-      exact stable g d store pre device
+    ⦃fun g => ⌜P g⌝⦄ liftAip a ⦃⇓? _ g => ⌜P g⌝⦄ :=
+  Leanux.Proofs.Framing.hoare_liftAip a P stable
 
 /-- Local table/cursor variant of WGBase.removeByPeer_spec.
 Exact index-table/allocation-cursor frame. No trie shape, peer residency,

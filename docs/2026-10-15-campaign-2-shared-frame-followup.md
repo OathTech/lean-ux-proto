@@ -10,6 +10,27 @@ the shared lemmas they replace. If an increment needs more than a few, report
 the overlap before copying a layer. The original six-family decision remains
 pending and does not authorize these additional families.
 
+## Landed support update, 2026-10-18
+
+Main 77c9b555 supplies the retyped shared layers. The narrow H2 bulk-removal
+request is closed using AllowedIps.free_storeView, with no traversal-layer
+copy and no initial trie-shape premise. Five former local proof bodies now
+directly project landed hoare_liftAip, the three cookie frames, and
+deliverSent_sameKernel; their public compatibility statements remain.
+
+H3's PublicationHistory and PublicationChecks.actual_poll still depend on
+the inherited GRO failures, including Logged/PrefixGro and Queues/GroState.
+This is the current provenance-support dependency; PollAuthorization is not
+a premise of the earlier endpoint-mutation claim. H4's ClearEndpoint and
+InsertionRouting support avoid those broken modules, while initialized
+PeerRemovalCompletion still reaches them. The inventories below describe
+historical overlap; they do not authorize copying the affected layers.
+
+The incoming shared tree also has blank-at-EOF diff-check warnings in
+Lifetimes/ProductAmbient, Origins/CurrentChecks, CurrentHistory,
+CurrentSensitive, CurrentSessionPrefix and Queues/BatchAccount. These files
+remain identical to main, under the shared-layer ownership rule.
+
 ## State-split update, 2026-10-17
 
 The inventory below records the pre-split overlap. With b700659, the skb store

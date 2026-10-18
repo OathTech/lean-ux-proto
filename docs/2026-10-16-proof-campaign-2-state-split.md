@@ -10,6 +10,19 @@ projection boundary. Remove frames only when the new types provide the
 preservation fact. Follow campaign 1's native contracts and adapters where
 the layers coincide; keep remaining local variants separate from claims.
 
+## Campaign 1 landing, 2026-10-18
+
+Main 77c9b555 now supplies the retyped shared tree and gate. Its 916 proof
+files replace the old inherited copies exactly; nine obsolete inherited files
+are removed. The original retrofit census below is historical. The current
+campaign has 1,008 modules, 2,821 theorems and 380 headlines. This merge
+retypes/deletes no owned claim; five temporary adapter bodies now project
+landed proofs, and H2 adds three bulk-removal declarations in two modules.
+The earlier CounterWindow/ReplayWindow build failure is superseded by the
+new inherited GRO failure in Logged/PrefixGro, Logged/RxPoll and Queues/GroState.
+See the [current report](2026-10-14-proof-campaign-2.md) for validation and
+every H1–H6 status.
+
 ## Baseline and accounting
 
 The baseline census strips nested comments and strings and includes private
