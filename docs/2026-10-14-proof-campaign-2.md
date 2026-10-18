@@ -2,16 +2,15 @@
 
 ## Current checkpoint
 
-**Campaign-owned claims are current over main 77c9b555.** The split-world
+**Campaign-owned claims are current over main 783510e8.** The split-world
 projection remains the claim boundary. Campaign 1's validated GRO carry
 8ba82097 is incorporated unchanged, replacing the three inherited failing
 modules. The full combined proof gate passes: 1,973 build jobs and 1,292
 terminal declarations, with standard axioms only. Fresh combined-root replay
 passes after the receive-step and socket-view extension.
-Work stops at a new H1 statement-artefact finding: an accepted initialized
-run confirms raw store ID 0 in two device incarnations, with distinct
-allocation stamps. The runtime counterexample is recorded below; per-allocation
-uniqueness remains open. All six results remain in progress as scoped below.
+Work has resumed with confirmation uniqueness stated over allocation internalId.
+The accepted raw store-ID recreation counterexample remains below. All six
+results remain in progress as scoped below.
 
 | Result | Headlines | Checked support | Split status |
 | --- | ---: | ---: | --- |
@@ -41,7 +40,7 @@ The [retrofit report](2026-10-16-proof-campaign-2-state-split.md) records
 claim/frame files, corrections, before/after counts and validation.
 The original retrofit validation is historical. Current carry validation is
 recorded below. Campaign-1 proof files equal 8ba82097; mirror implementation
-and the gate equal main 77c9b555. The retained local projections are in
+and the gate equal main 783510e8. The retained local projections are in
 campaign-owned files.
 
 None of H1–H6 is a completed charter result. The timer retry-sequence contracts
@@ -62,15 +61,16 @@ remaining six charter scopes, not merely the already green gate.
 
 | Result | Mirror | Status | Remaining whole-run scope |
 | --- | --- | --- | --- |
-| H1 | 77c9b555 | Current, in progress; 48 headlines / 409 theorems | Final sender/receiver tag framing and initialized per-allocation confirmation closure; raw-ID generalization refuted |
-| H2 | 77c9b555 | Current, in progress; 94 / 500 | Reachable store, slot and owner coherence across the driver |
-| H3 | 77c9b555 | Current, in progress; 21 / 219 | General caller coverage and final endpoint preservation |
-| H4 | 77c9b555 | Current, in progress; 116 / 994 | General mixed setters and global ownership/cleanup |
-| H5 | 77c9b555 | Current, in progress; 53 / 349 | Whole-worker record decrease and global termination/progress |
-| H6 | 77c9b555 | Current, in progress; 65 / 502 | Complete caller/scheduler coverage and session-relative counting |
+| H1 | 783510e8 | Current, in progress; 48 headlines / 409 theorems | Final sender/receiver tag framing and initialized per-allocation confirmation closure; raw-ID generalization refuted |
+| H2 | 783510e8 | Current, in progress; 94 / 500 | Reachable store, slot and owner coherence across the driver |
+| H3 | 783510e8 | Current, in progress; 21 / 219 | General caller coverage and final endpoint preservation |
+| H4 | 783510e8 | Current, in progress; 116 / 994 | General mixed setters and global ownership/cleanup |
+| H5 | 783510e8 | Current, in progress; 53 / 349 | Whole-worker record decrease and global termination/progress |
+| H6 | 783510e8 | Current, in progress; 65 / 502 | Complete caller/scheduler coverage and session-relative counting |
 
-Campaign 1 carry 8ba82097 is already incorporated; its eventual same-commit
-main landing needs no further carry. Current mirror main remains 77c9b555.
+Main 783510e8 is incorporated. Campaign 1's GRO carry landed unchanged;
+this merge adds campaign 3's charter and documentation only. The mirror,
+shared proof tree and gate are unchanged from the validated checkpoint.
 The cached-send socket/tag request is now closed by strengthening the existing
 owned H6 view. No new request to the mirror team arises here.
 
@@ -81,6 +81,22 @@ LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake build 
 LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle scripts/proof-gate
 LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs
 ```
+
+## Main carry and allocation-identity resumption, 2026-10-18
+
+[USER 2026-10-18] Resume H1 with successful confirmation uniqueness over the
+global keypair allocation identity, carried as internalId, while preserving
+the raw store-ID counterexample as the explanation for the corrected scope.
+Continue the existing charter order. Campaign 3 reads this campaign's files
+without modifying them.
+
+Main 783510e8 adds the campaign-3 charter and documentation. Its campaign-1
+GRO proof changes were already present here at 8ba82097. The documentation
+index conflict was resolved by retaining both campaigns' entries; no Lean
+source, mirror definition, target or gate changed in this merge. The prior
+1,973-job gate, 1,292 terminal checks and fresh root replay therefore apply
+to exactly the same proof source. Every campaign-2 register row is current
+over 783510e8. No build rerun is needed for this documentation-only carry.
 
 ## H1 initialized recreation finding, 2026-10-18
 

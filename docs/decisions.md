@@ -883,3 +883,24 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   and cutover binaries. The landing needs the user's signoff; the campaigns'
   retrofits then cover campaign 1's own results and the replay-window layers
   it rests on, and campaign 2's additions over them.
+- **2026-10-18 [USER]** Proof campaign 3 is chartered for the properties with high
+  security consequences that the mirror's proofs do not yet cover, everything a
+  good WireGuard proof should cover at the sequential model level: sender nonce
+  discipline, transmit binding and egress conservation, silence, handshake
+  freshness and confirmation discipline, in that order, each stated with the
+  consequence of its failure. The parallel plan's lower-consequence items for
+  this campaign (key lifetime over the wheel, resource bounds including the
+  handshake-ring bound, the routing composition) are deferred to a later charter
+  [AGENT, coordinator: the charter, docs/2026-10-18-charter-proof-campaign-3.md].
+- **2026-10-18 [AGENT, fork of the coordinator]** The charter's revision 2, after
+  Codex#1's independent review (verdict: keep the five themes, correct T1 to T3's
+  contracts, promote key retirement): key retirement joins the high-priority
+  group as T6, split into unconditional safety at the use checks and conditional
+  operational retirement under stated scheduling assumptions; T1 to T3 restated
+  as the review's contracts (allocation versus encryption and the batch restore
+  at the rejection limit; the three selection times and the counterless arms;
+  the three acceptance events, the causal roots and the bounded cookie reply);
+  T4 and T5 over retained-peer and allocation lifetimes; the deferred section
+  separates DoS resource bounds, with the exposure named, from the missing drop
+  statistics; the statements commit to outcomes and leave the decomposition and
+  order open. The seven findings are dispositioned in the charter's section 9.
