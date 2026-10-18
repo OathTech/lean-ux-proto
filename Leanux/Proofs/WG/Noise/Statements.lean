@@ -1,3 +1,6 @@
+import Leanux.Proofs.WG.Noise.DriverTagClaims
+import Leanux.Proofs.WG.Noise.DriverTagControlCompleteSource
+import Leanux.Proofs.WG.Noise.DriverTagAllowedFrames
 import Leanux.Proofs.WG.Noise.ConfirmationUniqueClaims
 import Leanux.Proofs.WG.Noise.PendingDispatchSource
 import Leanux.Proofs.WG.Noise.PendingPollCompleteSource
@@ -827,5 +830,68 @@ theorem original_initialized_confirmation_unique (trace : Leanux.Runner.Trace)
     (placeholders : Bool) :
     ∃ ids, ConfirmationOrder.confirmationIds trace placeholders = .ok ids ∧ ids.Nodup :=
   ConfirmationOrder.initialized_distinct trace placeholders
+
+/-- Actual peer creation records its normal allocation and tag-initialization
+receipt. Inspection reports the original result or Stop; normal outcomes have
+tag coverage, and every emitted receipt has its own original execution witness. -/
+theorem original_peer_creation_driver_tags (key : Key) (psk : Option Key)
+    (entry : Campaign2.Snapshot) :
+    Campaign2.Ensures (DriverTags.inspectObserved (DriverTags.peerCreateObserved key psk))
+      (fun s => s = entry) (fun out final => final = entry ∧ DriverTags.InspectionFacts entry out) ∧
+    Campaign2.AgreesOn (fun _ => True)
+      (do let out ← DriverTags.inspectObserved (DriverTags.peerCreateObserved key psk); pure out.1)
+      (Campaign2.inspect (peerCreate key psk)) :=
+  ⟨DriverTags.peerCreate_inspection key psk entry,
+    DriverTags.inspection_erases _ _ (DriverTags.peerCreateObserved_erases key psk)⟩
+
+/-- The original bounded work drain traces surviving normal final tags through
+actual helper receipts, including work on other peers and the selected-clear early return.
+Its exact original failures are retained; Stop guarantees receipt validity,
+not coverage of writes inside an incomplete worker callback. -/
+theorem original_work_drain_driver_tags (upTo : Option PeerId)
+    (entry : Campaign2.Snapshot) :
+    Campaign2.Ensures (DriverTags.inspectObserved (DriverTags.Flush.drainObserved upTo))
+      (fun s => s = entry) (fun out final => final = entry ∧ DriverTags.InspectionFacts entry out) ∧
+    Campaign2.AgreesOn (fun _ => True)
+      (do let out ← DriverTags.inspectObserved (DriverTags.Flush.drainObserved upTo); pure out.1)
+      (Campaign2.inspect (drainHandshakeSendWq upTo)) :=
+  ⟨DriverTags.inspection_facts _ (fun tags => DriverTags.Flush.drainObserved_preserves tags upTo) entry,
+    DriverTags.inspection_erases _ _ (DriverTags.Flush.drainObserved_erases upTo)⟩
+
+/-- Timer stop includes its actual conditional work drain, rather than treating
+that drain as tag-silent. Normal tag coverage and valid reported receipts hold
+without a readiness premise; inspection retains every original outcome. -/
+theorem original_timer_stop_driver_tags (pid : PeerId) (entry : Campaign2.Snapshot) :
+    Campaign2.Ensures (DriverTags.inspectObserved (DriverTags.Flush.timersStopObserved pid))
+      (fun s => s = entry) (fun out final => final = entry ∧ DriverTags.InspectionFacts entry out) ∧
+    Campaign2.AgreesOn (fun _ => True)
+      (do let out ← DriverTags.inspectObserved (DriverTags.Flush.timersStopObserved pid); pure out.1)
+      (Campaign2.inspect (timersStop pid)) :=
+  ⟨DriverTags.inspection_facts _ (fun tags => DriverTags.Flush.timersStopObserved_preserves tags pid) entry,
+    DriverTags.inspection_erases _ _ (DriverTags.Flush.timersStopObserved_erases pid)⟩
+
+/-- Complete device stop preserves its saved peer order, inline worker drains,
+clearing and final queue/socket checks. Its actual journal covers every
+surviving normal final tag and contains only valid helper/birth receipts. -/
+theorem original_device_stop_driver_tags (entry : Campaign2.Snapshot) :
+    Campaign2.Ensures (DriverTags.inspectObserved DriverTags.Control.stopObserved)
+      (fun s => s = entry) (fun out final => final = entry ∧ DriverTags.InspectionFacts entry out) ∧
+    Campaign2.AgreesOn (fun _ => True)
+      (do let out ← DriverTags.inspectObserved DriverTags.Control.stopObserved; pure out.1)
+      (Campaign2.inspect wgStop) :=
+  ⟨DriverTags.inspection_facts _ DriverTags.Control.stopObserved_preserves entry,
+    DriverTags.inspection_erases _ _ DriverTags.Control.stopObserved_erases⟩
+
+/-- Device down clears running before the complete original stop. Every
+outcome agrees with the original call; normal final tags are accounted for by
+the actual journal, with all callback obligations discharged. -/
+theorem original_device_down_driver_tags (entry : Campaign2.Snapshot) :
+    Campaign2.Ensures (DriverTags.inspectObserved DriverTags.Control.downObserved)
+      (fun s => s = entry) (fun out final => final = entry ∧ DriverTags.InspectionFacts entry out) ∧
+    Campaign2.AgreesOn (fun _ => True)
+      (do let out ← DriverTags.inspectObserved DriverTags.Control.downObserved; pure out.1)
+      (Campaign2.inspect wgDown) :=
+  ⟨DriverTags.inspection_facts _ DriverTags.Control.downObserved_preserves entry,
+    DriverTags.inspection_erases _ _ DriverTags.Control.downObserved_erases⟩
 
 end Leanux.Proofs.WG.Noise

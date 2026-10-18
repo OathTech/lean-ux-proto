@@ -35,9 +35,10 @@ send/clear dispatch now preserve the supplied pending invariant. Actual
 poll/GRO/NAPI with original inner delivery also closes. Full configuration,
 crypt/transmit, timer/scheduler, dump, environment and initialized runner
 composition now closes allocation-stamp confirmation uniqueness. That invariant
-does not carry handshake-tag ownership; its whole-driver composition through
-stop/down, configuration expiry and removal remains open. These are source
-obligations rather than missing socket frames.
+does not carry handshake-tag ownership. Separate actual tag observers now close
+birth, work drains, timer stop and stop/down, with exact original outcomes.
+Configuration expiry, removal/destruction and enclosing driver composition remain
+open. These are source obligations rather than missing socket frames.
 This is proof support only; there is no mirror-change request.
 
 ## Landed support update, 2026-10-18
