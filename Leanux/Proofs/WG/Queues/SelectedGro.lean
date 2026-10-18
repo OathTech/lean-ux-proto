@@ -1,54 +1,53 @@
 import Leanux.Proofs.WG.Queues.RxPollGroOrder
 import Leanux.Proofs.Logged.PrefixLoops
 
-/-! Per-poll order selected by original normal/held GRO batching. The observer
-and chronological predicate remain unchanged. State invariants are derived
-inside a poll beginning with empty history, independently of its input World. -/
+/-! Exact per-poll order follows GRO's held-entry transitions. An entry already
+held may be completed before a refused same-flow offer is processed. -/
 set_option maxHeartbeats 2000000
 set_option pp.structureInstances false
 namespace Leanux.Proofs.WG.Queues
 open Leanux Leanux.WG Leanux.Proofs.Logged
 
-def normalEntries (xs : List GroEntry) : List GroEntry :=
-  xs.filter (fun e => groTakenAtOnce e.bytes)
-
-def heldEntries (xs : List GroEntry) : List GroEntry :=
-  xs.filter (fun e => !groTakenAtOnce e.bytes)
-
-def selectedEntries (xs : List GroEntry) : List GroEntry :=
-  normalEntries xs ++ heldEntries xs
+structure GroAdvance (held : List GroEntry) (tail : List GroEntry → List GroEntry)
+    (g : TaggedGro) (h : List GroEvent) : Prop where
+  count : g.rxCount = g.rxList.length
+  held : g.held = held
+  order : ∀ future, selectedEntries (bufferedEntries h ++ future) =
+    enteredEntries h ++ g.rxList ++ tail future
 
 structure GroReady (g : TaggedGro) (h : List GroEvent) : Prop where
   count : g.rxCount = g.rxList.length
   heldSmall : g.held.length ≤ 1
-  normal : normalEntries (bufferedEntries h) = enteredEntries h ++ g.rxList
-  held : heldEntries (bufferedEntries h) = g.held
+  order : ∀ future, selectedEntries (bufferedEntries h ++ future) =
+    enteredEntries h ++ g.rxList ++ selectWith g.held future
 
 structure GroPending (g : TaggedGro) (out : Option GroEntry) (h : List GroEvent) : Prop where
   count : g.rxCount = g.rxList.length
   heldSmall : g.held.length ≤ 1
-  normal : normalEntries (bufferedEntries h) =
-    enteredEntries h ++ g.rxList ++ normalEntries out.toList
-  held : heldEntries (bufferedEntries h) = g.held ++ heldEntries out.toList
+  order : ∀ future, selectedEntries (bufferedEntries h ++ future) =
+    enteredEntries h ++ g.rxList ++ selectWith g.held (out.toList ++ future)
+
+theorem GroAdvance.safe {held tail g h} (hi : GroAdvance held tail g h) : SelectedGroSafe h := by
+  refine ⟨g.rxList ++ tail [], ?_⟩
+  simpa only [List.append_nil, List.append_assoc] using hi.order []
 
 theorem GroReady.safe {g h} (hi : GroReady g h) : SelectedGroSafe h := by
   refine ⟨g.rxList ++ g.held, ?_⟩
-  change normalEntries _ ++ heldEntries _ = _
-  rw [hi.normal, hi.held, List.append_assoc]
+  simpa only [List.append_nil, selectWith, List.append_assoc] using hi.order []
 
 theorem GroPending.safe {g out h} (hi : GroPending g out h) : SelectedGroSafe h := by
-  refine ⟨g.rxList ++ normalEntries out.toList ++ g.held ++ heldEntries out.toList, ?_⟩
-  change normalEntries _ ++ heldEntries _ = _
-  rw [hi.normal, hi.held]
-  simp only [List.append_assoc]
+  refine ⟨g.rxList ++ selectWith g.held out.toList, ?_⟩
+  simpa only [List.append_nil, List.append_assoc] using hi.order []
 
-theorem GroReady.pending_none {g h} (hi : GroReady g h) : GroPending g none h := by
-  exact ⟨hi.count, hi.heldSmall, by simpa [normalEntries] using hi.normal,
-    by simpa [heldEntries] using hi.held⟩
+theorem GroReady.pending_none {g h} (hi : GroReady g h) : GroPending g none h :=
+  ⟨hi.count, hi.heldSmall, by simpa using hi.order⟩
 
-theorem GroPending.none_ready {g h} (hi : GroPending g none h) : GroReady g h := by
-  exact ⟨hi.count, hi.heldSmall, by simpa [normalEntries] using hi.normal,
-    by simpa [heldEntries] using hi.held⟩
+theorem GroPending.none_ready {g h} (hi : GroPending g none h) : GroReady g h :=
+  ⟨hi.count, hi.heldSmall, by simpa using hi.order⟩
+
+theorem GroAdvance.ready {held g h} (hi : GroAdvance held (selectWith held) g h)
+    (hh : held.length ≤ 1) : GroReady g h := by
+  exact ⟨hi.count, hi.held ▸ hh, by simpa only [hi.held] using hi.order⟩
 
 @[simp] theorem buffered_append_entered (h : List GroEvent) (xs : List GroEntry) :
     bufferedEntries (h ++ xs.map GroEvent.entered) = bufferedEntries h := by
@@ -62,11 +61,9 @@ theorem GroPending.none_ready {g h} (hi : GroPending g none h) : GroReady g h :=
 
 theorem GroReady.buffered {g h} (hi : GroReady g h) (e : GroEntry) :
     GroPending g (some e) (h ++ [.buffered e]) := by
-  refine ⟨hi.count, hi.heldSmall, ?_, ?_⟩
-  · simpa [bufferedEntries, enteredEntries, normalEntries, List.filterMap_append,
-      List.filter_append, List.append_assoc] using congrArg (· ++ normalEntries [e]) hi.normal
-  · simpa [bufferedEntries, heldEntries, List.filterMap_append, List.filter_append] using
-      congrArg (· ++ heldEntries [e]) hi.held
+  refine ⟨hi.count, hi.heldSmall, ?_⟩
+  intro future
+  simpa [bufferedEntries, enteredEntries, List.filterMap_append, List.append_assoc] using hi.order (e :: future)
 
 theorem selected_lift (a : Leanux.M α) (I : List GroEvent → Prop)
     (hs : ∀ h, I h → SelectedGroSafe h) :
@@ -84,9 +81,8 @@ theorem dropGro_ready (pid occurrence id : Nat) (g : TaggedGro) :
     rcases out with ⟨u, v⟩
     cases u
     have hh : GroReady g (h ++ [.removed occurrence id]) := by
-      refine ⟨hi.count, hi.heldSmall, ?_, ?_⟩
-      · simpa [bufferedEntries, enteredEntries, List.filterMap_append] using hi.normal
-      · simpa [bufferedEntries, List.filterMap_append] using hi.held
+      refine ⟨hi.count, hi.heldSmall, ?_⟩
+      simpa [bufferedEntries, enteredEntries, List.filterMap_append] using hi.order
     exact ⟨[.removed occurrence id], rfl, hh.safe, hh⟩
 
 theorem consumeGro_pending (pid occurrence id : Nat) (pkt : RxPacket)
@@ -105,17 +101,18 @@ theorem consumeGro_pending (pid occurrence id : Nat) (pkt : RxPacket)
       have hp := hi.buffered ⟨occurrence, id, bytes⟩
       exact ⟨[.buffered ⟨occurrence, id, bytes⟩], rfl, hp.safe, hp⟩
 
-theorem flushGro_ready (g : TaggedGro) :
-    PrefixEnsures (fun h _ => GroReady g h) SelectedGroSafe (flushGro g.rxList)
-      (fun _ h _ => GroReady {g with rxList := [], rxCount := 0} h) := by
+theorem flushGro_advance (g : TaggedGro) (held : List GroEntry) (tail : List GroEntry → List GroEntry) :
+    PrefixEnsures (fun h _ => GroAdvance held tail g h) SelectedGroSafe (flushGro g.rxList)
+      (fun _ h _ => GroAdvance held tail {g with rxList := [], rxCount := 0} h) := by
   intro w h hi
   obtain ⟨visited, remaining, he, hh, hok⟩ := flushGro_prefix g.rxList w h
   have hs : SelectedGroSafe (runPrefix (flushGro g.rxList) w h).2 := by
-    refine ⟨remaining ++ g.held, ?_⟩
+    refine ⟨remaining ++ tail [], ?_⟩
     rw [hh]
-    change normalEntries _ ++ heldEntries _ = _
-    rw [buffered_append_entered, entered_append_entered, hi.normal, hi.held, he]
-    simp only [List.append_assoc]
+    change selectedEntries _ = _
+    rw [buffered_append_entered, entered_append_entered]
+    have ho := hi.order []
+    simpa only [List.append_nil, he, List.append_assoc] using ho
   refine ⟨visited.map GroEvent.entered, hh, hs, ?_⟩
   cases hr : (runPrefix (flushGro g.rxList) w h).1 with
   | error e => trivial
@@ -123,76 +120,174 @@ theorem flushGro_ready (g : TaggedGro) :
     have hempty := hok out.1 out.2 hr
     have hv : g.rxList = visited := by simpa only [hempty, List.append_nil] using he
     rw [hh]
-    refine ⟨rfl, hi.heldSmall, ?_, ?_⟩
-    · simpa only [buffered_append_entered, entered_append_entered, List.append_nil, hv] using hi.normal
-    · simpa only [buffered_append_entered] using hi.held
+    refine ⟨rfl, hi.held, ?_⟩
+    intro future
+    simpa only [buffered_append_entered, entered_append_entered, List.append_nil, hv] using hi.order future
+
+theorem groNormalList_advance (g : TaggedGro) (held : List GroEntry) (tail : List GroEntry → List GroEntry) :
+    PrefixEnsures (fun h _ => GroAdvance held tail g h) SelectedGroSafe (groNormalListTagged g)
+      (fun g' h _ => GroAdvance held tail g' h) := by
+  unfold groNormalListTagged
+  split
+  · exact PrefixEnsures.pure (fun _ _ hi => hi.safe) (fun _ _ hi => hi)
+  · apply PrefixEnsures.bind (flushGro_advance g held tail)
+    intro u
+    exact PrefixEnsures.pure (fun _ _ hi => hi.safe) (fun _ _ hi => hi)
+
+theorem groNormalOne_advance (g : TaggedGro) (e : GroEntry) (held : List GroEntry)
+    (tail : List GroEntry → List GroEntry) :
+    PrefixEnsures (fun h _ => GroAdvance held (fun future => e :: tail future) g h)
+      SelectedGroSafe (groNormalOneTagged g e 1)
+      (fun g' h _ => GroAdvance held tail g' h) := by
+  have transfer {h} (hi : GroAdvance held (fun future => e :: tail future) g h) :
+      GroAdvance held tail {g with rxList := g.rxList ++ [e], rxCount := g.rxCount + 1} h := by
+    refine ⟨by simp [hi.count], hi.held, ?_⟩
+    intro future
+    simpa only [List.append_assoc, List.singleton_append] using hi.order future
+  unfold groNormalOneTagged
+  dsimp only
+  split
+  · apply (groNormalList_advance _ held tail).consequence
+    · intro h w hi; exact transfer hi
+    · intro x h w hi; exact hi
+  · exact PrefixEnsures.pure (fun _ _ hi => hi.safe) (fun _ _ hi => transfer hi)
+
+theorem flushGro_ready (g : TaggedGro) :
+    PrefixEnsures (fun h _ => GroReady g h) SelectedGroSafe (flushGro g.rxList)
+      (fun _ h _ => GroReady {g with rxList := [], rxCount := 0} h) := by
+  intro w h hi
+  have result := flushGro_advance g g.held (selectWith g.held) w h ⟨hi.count, rfl, hi.order⟩
+  rcases result with ⟨events, append, safe, post⟩
+  refine ⟨events, append, safe, ?_⟩
+  cases hr : (runPrefix (flushGro g.rxList) w h).1 with
+  | error err => trivial
+  | ok out =>
+    have hp : GroAdvance g.held (selectWith g.held) {g with rxList := [], rxCount := 0}
+        (runPrefix (flushGro g.rxList) w h).2 := by simpa only [hr] using post
+    exact hp.ready hi.heldSmall
 
 theorem groNormalList_ready (g : TaggedGro) :
     PrefixEnsures (fun h _ => GroReady g h) SelectedGroSafe (groNormalListTagged g)
       (fun g' h _ => GroReady g' h) := by
-  unfold groNormalListTagged
-  split
-  · exact PrefixEnsures.pure (fun _ _ hi => hi.safe) (fun _ _ hi => hi)
-  · apply PrefixEnsures.bind (flushGro_ready g)
-    intro u
-    exact PrefixEnsures.pure (fun _ _ hi => hi.safe) (fun _ _ hi => hi)
+  intro w h hi
+  have result := groNormalList_advance g g.held (selectWith g.held) w h ⟨hi.count, rfl, hi.order⟩
+  rcases result with ⟨events, append, safe, post⟩
+  refine ⟨events, append, safe, ?_⟩
+  cases hr : (runPrefix (groNormalListTagged g) w h).1 with
+  | error err => trivial
+  | ok out =>
+    have hp : GroAdvance g.held (selectWith g.held) out.1
+        (runPrefix (groNormalListTagged g) w h).2 := by simpa only [hr] using post
+    exact hp.ready hi.heldSmall
 
-theorem GroPending.normal_ready {g h e} (hi : GroPending g (some e) h)
-    (hn : groTakenAtOnce e.bytes = true) :
-    GroReady {g with rxList := g.rxList ++ [e], rxCount := g.rxCount + 1} h := by
-  refine ⟨by simp [hi.count], hi.heldSmall, ?_, ?_⟩
-  · simpa [normalEntries, hn, List.append_assoc] using hi.normal
-  · simpa [heldEntries, hn] using hi.held
+theorem normal_selected (g : TaggedGro) (e : GroEntry)
+    (choose : ∀ future, selectWith g.held (e :: future) = e :: selectWith g.held future) :
+    PrefixEnsures (fun h _ => GroPending g (some e) h) SelectedGroSafe
+      (groNormalOneTagged g e 1) (fun g' h _ => GroReady g' h) := by
+  intro w h hi
+  have ha : GroAdvance g.held (fun future => e :: selectWith g.held future) g h := by
+    refine ⟨hi.count, rfl, ?_⟩
+    intro future
+    simpa only [Option.toList_some, List.singleton_append, choose] using hi.order future
+  have result := groNormalOne_advance g e g.held (selectWith g.held) w h ha
+  rcases result with ⟨events, append, safe, post⟩
+  refine ⟨events, append, safe, ?_⟩
+  cases hr : (runPrefix (groNormalOneTagged g e 1) w h).1 with
+  | error err => trivial
+  | ok out =>
+    have hp : GroAdvance g.held (selectWith g.held) out.1 (runPrefix (groNormalOneTagged g e 1) w h).2 := by simpa only [hr] using post
+    exact hp.ready hi.heldSmall
 
-theorem GroPending.held_ready {g h e} (hi : GroPending g (some e) h)
-    (hn : groTakenAtOnce e.bytes = false) (hempty : g.held = []) :
-    GroReady {g with held := [e]} h := by
-  refine ⟨hi.count, by simp, ?_, ?_⟩
-  · simpa [normalEntries, hn] using hi.normal
-  · simpa [heldEntries, hn, hempty] using hi.held
-
-theorem groNormalOne_ready (g : TaggedGro) (e : GroEntry) (hn : groTakenAtOnce e.bytes = true) :
-    PrefixEnsures (fun h _ => GroPending g (some e) h) SelectedGroSafe (groNormalOneTagged g e 1)
+theorem refused_selected (g : TaggedGro) (old e : GroEntry) (flush : Bool)
+    (choose : ∀ future, selectWith g.held (e :: future) =
+      old :: (if flush then e :: selectWith [] future else selectWith [e] future)) :
+    PrefixEnsures (fun h _ => GroPending g (some e) h) SelectedGroSafe
+      (do let next ← groNormalOneTagged {g with held := []} old 1
+          if flush then groNormalOneTagged next e 1 else pure {next with held := [e]})
       (fun g' h _ => GroReady g' h) := by
-  unfold groNormalOneTagged
-  dsimp only
-  split
-  · apply (groNormalList_ready _).consequence
-    · intro h w hi; exact hi.normal_ready hn
-    · intro x h w hi; exact hi
-  · exact PrefixEnsures.pure (fun _ _ hi => hi.safe) (fun _ _ hi => hi.normal_ready hn)
+  apply PrefixEnsures.bind (Q := fun next h _ => GroAdvance []
+    (fun future => if flush then e :: selectWith [] future else selectWith [e] future) next h)
+  · apply (groNormalOne_advance _ old [] _).consequence
+    · intro h w hi
+      refine ⟨hi.count, rfl, ?_⟩
+      intro future
+      simpa only [Option.toList_some, List.singleton_append, choose] using hi.order future
+    · intro next h w hi; exact hi
+  · intro next
+    cases flush with
+    | false =>
+      exact PrefixEnsures.pure (fun _ _ hi => hi.safe) (fun _ _ hi =>
+        ⟨hi.count, by simp, by simpa using hi.order⟩)
+    | true =>
+      apply (groNormalOne_advance next e [] (selectWith [])).consequence
+      · intro h w hi; exact hi
+      · intro out h w hi; exact hi.ready (by simp)
+
+theorem held_selected (g : TaggedGro) (e : GroEntry) (empty : g.held = [])
+    (choose : ∀ future, selectWith g.held (e :: future) = selectWith [e] future) :
+    PrefixEnsures (fun h _ => GroPending g (some e) h) SelectedGroSafe
+      (pure {g with held := g.held ++ [e]} : PrefixM GroEvent TaggedGro) (fun g' h _ => GroReady g' h) := by
+  exact PrefixEnsures.pure (fun _ _ hi => hi.safe) (fun _ _ hi =>
+    ⟨hi.count, by simp [empty], by
+      intro future
+      have ho := hi.order future
+      simp only [Option.toList_some, List.singleton_append] at ho
+      rw [choose] at ho
+      simpa only [empty, List.nil_append] using ho⟩)
+
+theorem selected_stop (why : String) (g : TaggedGro) (e : GroEntry) :
+    PrefixEnsures (fun h _ => GroPending g (some e) h) SelectedGroSafe
+      (liftPrefix (unsupported why : Leanux.M TaggedGro)) (fun g' h _ => GroReady g' h) := by
+  intro w h hi
+  exact ⟨[], by simp [runPrefix_lift], hi.safe, True.intro⟩
 
 theorem napiGroReceive_ready (g : TaggedGro) (e : GroEntry) :
     PrefixEnsures (fun h _ => GroPending g (some e) h) SelectedGroSafe (napiGroReceiveTagged g e)
       (fun g' h _ => GroReady g' h) := by
-  unfold napiGroReceiveTagged
-  split
-  · exact groNormalOne_ready g e (by assumption)
-  · rename_i hn
-    have hn' : groTakenAtOnce e.bytes = false := by simpa using hn
-    split
-    · intro w h hi
-      refine ⟨[], ?_, ?_, ?_⟩
-      · change h = h ++ []; simp
-      · change SelectedGroSafe h; exact hi.safe
-      · change True; trivial
-    · rename_i he
-      have hempty : g.held = [] := by simpa using he
-      exact PrefixEnsures.pure (fun _ _ hi => hi.safe)
-        (fun _ _ hi => by simpa [hempty] using hi.held_ready hn' hempty)
+  cases hn : groNetwork e.bytes with
+  | none =>
+    simp only [napiGroReceiveTagged, hn]
+    apply normal_selected
+    intro future; simp only [selectWith, hn]
+  | some net =>
+    rcases net with ⟨off, lengthFlush⟩
+    cases ht : groTcpHeader e.bytes off with
+    | none =>
+      simp only [napiGroReceiveTagged, hn, ht]
+      apply normal_selected
+      intro future; simp only [selectWith, hn, ht]
+    | some tcp =>
+      rcases tcp with ⟨thlen, len⟩
+      rcases g with ⟨xs, count, held⟩
+      cases held with
+      | nil =>
+        cases hf : lengthFlush || groFinalFlush (e.bytes.getD (off + 13) 0).toNat len <;>
+          simp only [napiGroReceiveTagged, hn, ht, hf, Bool.false_eq_true, ↓reduceIte]
+        · apply held_selected _ _ rfl
+          intro future; simp only [selectWith, hn, ht, hf, Bool.false_eq_true, ↓reduceIte, List.nil_append]
+        · apply normal_selected
+          intro future; simp only [selectWith, hn, ht, hf, ↓reduceIte]
+      | cons old rest =>
+        cases rest with
+        | nil =>
+          cases hs : groSameFlow old.bytes e.bytes off
+          · cases hf : lengthFlush || groFinalFlush (e.bytes.getD (off + 13) 0).toNat len <;>
+              simp only [napiGroReceiveTagged, hn, ht, hs, hf, Bool.false_eq_true, ↓reduceIte]
+            · exact selected_stop _ _ _
+            · apply normal_selected
+              intro future; simp only [selectWith, hn, ht, hs, hf, Bool.false_eq_true, ↓reduceIte]
+          · cases hm : groMergeRefused old.bytes e.bytes off thlen len
+            · simp only [napiGroReceiveTagged, hn, ht, hs, hm, Bool.not_false, ↓reduceIte]
+              intro w h hi
+              exact ⟨[], by change h = h ++ []; simp, hi.safe, True.intro⟩
+            · simp only [napiGroReceiveTagged, hn, ht, hs, hm, Bool.not_true, Bool.false_eq_true, ↓reduceIte]
+              apply refused_selected
+              intro future; simp only [selectWith, hn, ht, hs, hm, ↓reduceIte]
+        | cons other rest =>
+          intro w h hi
+          have impossible := hi.heldSmall
+          simp at impossible
 
-theorem GroReady.rxList_normal {g h} (hi : GroReady g h) {e : GroEntry}
-    (he : e ∈ g.rxList) : groTakenAtOnce e.bytes = true := by
-  have hm : e ∈ normalEntries (bufferedEntries h) := by
-    rw [hi.normal]
-    exact List.mem_append_right _ he
-  exact (List.mem_filter.mp hm).2
-
-theorem GroReady.held_not_normal {g h} (hi : GroReady g h) {e : GroEntry}
-    (he : e ∈ g.held) : groTakenAtOnce e.bytes = false := by
-  have hm : e ∈ heldEntries (bufferedEntries h) := by rw [hi.held]; exact he
-  have hp := (List.mem_filter.mp hm).2
-  simpa using hp
 
 /-- At most one held offer reaches the terminal flush. Expanding its actual
 nil/singleton loop gives this complete action equality, including failed
@@ -246,7 +341,7 @@ def GroComplete (h : List GroEvent) : Prop :=
   selectedEntries (bufferedEntries h) = enteredEntries h
 
 theorem GroComplete.safe {h} (hi : GroComplete h) : SelectedGroSafe h :=
-  ⟨[], by simpa [GroComplete, selectedEntries, normalEntries, heldEntries] using hi⟩
+  ⟨[], by simpa [GroComplete] using hi⟩
 
 theorem napiGroFlushAll_complete (g : TaggedGro) :
     PrefixEnsures (fun h _ => GroReady g h) SelectedGroSafe (napiGroFlushAllTagged g)
@@ -257,9 +352,7 @@ theorem napiGroFlushAll_complete (g : TaggedGro) :
       (flushGro (g.rxList ++ g.held)) (fun _ h _ => GroComplete h) := by
     apply (flushGro_selected (g.rxList ++ g.held) []).consequence
     · intro h _ hi
-      change normalEntries _ ++ heldEntries _ = _
-      rw [hi.normal, hi.held]
-      simp only [List.append_assoc, List.append_nil]
+      simpa only [List.append_nil, selectWith, List.append_assoc] using hi.order []
     · intro _ _ _ hi
       simpa [GroComplete] using hi
   exact hf w h hi
@@ -325,9 +418,7 @@ theorem selected_invariant_bind (why : String) (f : Unit → PrefixM GroEvent α
   · change True; trivial
 
 theorem GroReady.empty_complete {h} (hi : GroReady {} h) : GroComplete h := by
-  change normalEntries _ ++ heldEntries _ = _
-  rw [hi.normal, hi.held]
-  simp
+  simpa only [GroComplete, List.append_nil, selectWith, List.append_assoc] using hi.order []
 
 /-- One complete poll preserves selected callback-prefix order on all inputs,
 including every Stop. Successful completion enters every buffered offer in
@@ -368,7 +459,7 @@ theorem rxPollGro_selected_spec (pid : PeerId) (budget : Nat) :
         | (with_reducible split)
 
 theorem groReady_initial : GroReady {} [] := by
-  exact ⟨rfl, by simp, rfl, rfl⟩
+  exact ⟨rfl, by simp, fun _ => rfl⟩
 
 theorem rxPollGro_selected_prefix (pid : PeerId) (budget : Nat) (w : World) :
     SelectedGroSafe (runPrefix (rxPollGro pid budget) w []).2 :=

@@ -131,12 +131,14 @@ theorem groNormalOne_tags (g : TaggedGro) (e : GroEntry) (segs n : Nat) :
 theorem napiGroReceive_tags (g : TaggedGro) (e : GroEntry) (n : Nat) :
     PrefixPreserves (fun h _ => TagReady n h) TagSafe (napiGroReceiveTagged g e) := by
   unfold napiGroReceiveTagged
-  split
-  · exact groNormalOne_tags g e 1 n
-  · split
-    · exact PrefixPreserves.bind (tag_lift _ (TagReady n) (fun _ hi => hi.safe)).preserves
-        (fun _ => PrefixPreserves.pure (fun _ _ hi => hi.safe) _)
-    · exact PrefixPreserves.pure (fun _ _ hi => hi.safe) _
+  repeat' first
+    | exact groNormalOne_tags _ _ _ n
+    | exact PrefixPreserves.pure (fun _ _ hi => hi.safe) _
+    | exact (tag_lift _ (TagReady n) (fun _ hi => hi.safe)).preserves
+    | with_reducible apply PrefixPreserves.bind
+    | with_reducible apply PrefixPreserves.ite
+    | (with_reducible intro x; try dsimp only)
+    | (with_reducible split)
 
 theorem napiGroFlushAll_tags (g : TaggedGro) (n : Nat) :
     PrefixPreserves (fun h _ => TagReady n h) TagSafe (napiGroFlushAllTagged g) := by

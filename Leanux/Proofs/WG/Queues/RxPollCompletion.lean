@@ -192,12 +192,37 @@ theorem normalOne_preserves (g : RxJoint.Gro) (e : RxJoint.Entry) (n : Nat) :
 
 theorem receive_preserves (g : RxJoint.Gro) (e : RxJoint.Entry) :
     Preserves jointEvent (RxJoint.receive g e) := by
-  unfold RxJoint.receive
-  split
-  · exact normalOne_preserves _ _ _
-  · split
-    · exact (lift_quiet _).bind (fun _ => PrefixPreserves.pure (fun _ _ hi => hi.prefix) _)
-    · exact PrefixPreserves.pure (fun _ _ hi => hi.prefix) _
+  cases hn : groNetwork e.tag.bytes with
+  | none => simpa only [RxJoint.receive, hn] using normalOne_preserves g e 1
+  | some net =>
+    rcases net with ⟨off, lengthFlush⟩
+    cases ht : groTcpHeader e.tag.bytes off with
+    | none => simpa only [RxJoint.receive, hn, ht] using normalOne_preserves g e 1
+    | some tcp =>
+      rcases tcp with ⟨thlen, len⟩
+      have finish (old : RxJoint.Entry) : Preserves jointEvent
+          (do let next ← RxJoint.normalOne {g with held := []} old 1
+              if lengthFlush || groFinalFlush (e.tag.bytes.getD (off + 13) 0).toNat len then
+                RxJoint.normalOne next e 1
+              else pure {next with held := [e]}) := by
+        apply PrefixPreserves.bind (normalOne_preserves _ old 1)
+        intro next
+        split
+        · exact normalOne_preserves next e 1
+        · exact PrefixPreserves.pure (fun _ _ hi => hi.prefix) _
+      unfold RxJoint.receive
+      simp only [hn, ht]
+      split
+      · split
+        · split
+          · exact (lift_quiet _).bind (fun _ => finish _)
+          · exact finish _
+        · split
+          · exact normalOne_preserves g e 1
+          · exact lift_quiet _
+      · split
+        · exact normalOne_preserves g e 1
+        · exact PrefixPreserves.pure (fun _ _ hi => hi.prefix) _
 
 theorem flushAll_preserves (g : RxJoint.Gro) : Preserves jointEvent (RxJoint.flushAll g) := by
   unfold RxJoint.flushAll

@@ -259,11 +259,13 @@ theorem normalOne_removed (g : Gro) (e : Entry) (segs : Nat) : HistoryFrame remo
 
 theorem receive_removed (g : Gro) (e : Entry) : HistoryFrame removedStamp (receive g e) := by
   unfold receive
-  split
-  · exact normalOne_removed _ _ _
-  · split
-    · exact HistoryFrame.bind (HistoryFrame.lift _ _) (fun _ => HistoryFrame.pure _ _)
-    · exact HistoryFrame.pure _ _
+  repeat' first
+    | with_reducible exact normalOne_removed _ _ _
+    | with_reducible exact HistoryFrame.pure _ _
+    | with_reducible exact HistoryFrame.lift _ _
+    | with_reducible apply HistoryFrame.bind
+    | (with_reducible intro x; try dsimp only)
+    | (with_reducible split <;> try dsimp only)
 
 theorem flushAll_removed (g : Gro) : HistoryFrame removedStamp (flushAll g) := by
   unfold flushAll
@@ -693,14 +695,53 @@ theorem context_receive (g : Gro) (extra : List EntryKey) (e : Entry) :
     · exact hi.held x (List.mem_append_left _ old)
     · exact hi.held x (List.mem_append_right _ held)
     · exact hi.extra x.key (by simp)
+  have replaceHeld (out : Gro) (h : List Event) (hi : Context out (e.key :: extra) h) :
+      Context {out with held := [e]} extra h := by
+    refine ⟨hi.entered, ?_, fun k hk => hi.extra k (by simp [hk])⟩
+    intro x hx
+    simp only [List.mem_append, List.mem_singleton] at hx
+    rcases hx with old | rfl
+    · exact hi.held x (List.mem_append_left _ old)
+    · exact hi.extra x.key (by simp)
+  have completeHeld (old : Entry) (hh : g.held = [old]) :
+      PrefixEnsures (fun h _ => Context g (e.key :: extra) h) Supported
+        (normalOne {g with held := []} old 1)
+        (fun out h _ => Context out (e.key :: extra) h) := by
+    apply (context_normalOne {g with held := []} (e.key :: extra) old 1).consequence
+    · intro h _ hi
+      refine ⟨hi.entered, ?_, ?_⟩
+      · intro x hx
+        exact hi.held x (List.mem_append_left _ (by simpa using hx))
+      · intro k hk
+        rcases List.mem_cons.mp hk with rfl | hk
+        · exact hi.held old (List.mem_append_right _ (by simp [hh]))
+        · exact hi.extra k hk
+    · intro _ _ _ hi; exact hi
+  have stopped (why : String) :
+      PrefixEnsures (fun h _ => Context g (e.key :: extra) h) Supported
+        (liftPrefix (unsupported why : Leanux.M Gro))
+        (fun out h _ => Context out extra h) := by
+    intro w h hi
+    exact ⟨[], by change h = h ++ []; simp, hi.entered, True.intro⟩
+  have stoppedBind (why : String) (f : Unit → Obs Gro) :
+      PrefixEnsures (fun h _ => Context g (e.key :: extra) h) Supported
+        (liftPrefix (unsupported why) >>= f)
+        (fun out h _ => Context out extra h) := by
+    intro w h hi
+    exact ⟨[], by change h = h ++ []; simp, hi.entered, True.intro⟩
   unfold receive
-  split
-  · exact context_normalOne g extra e 1
-  · split
-    · apply context_bind g (e.key :: extra) _ _ (context_lift _ _ _)
-      intro _
-      exact PrefixEnsures.pure (fun _ _ hi => hi.entered) (fun _ _ hi => transfer _ hi)
-    · exact PrefixEnsures.pure (fun _ _ hi => hi.entered) (fun _ _ hi => transfer _ hi)
+  repeat' first
+    | exact context_normalOne g extra e 1
+    | exact stopped _
+    | exact stoppedBind _ _
+    | (apply PrefixEnsures.bind (completeHeld _ (by assumption))
+       intro out
+       split
+       · exact context_normalOne out extra e 1
+       · exact PrefixEnsures.pure (fun _ _ hi => hi.entered)
+           (fun h _ hi => replaceHeld out h hi))
+    | exact PrefixEnsures.pure (fun _ _ hi => hi.entered) (fun _ _ hi => transfer _ hi)
+    | (split <;> try dsimp only)
 
 theorem context_option (g : Gro) (out : Option Entry) :
     PrefixEnsures (fun h _ => Context g (out.toList.map Entry.key) h) Supported

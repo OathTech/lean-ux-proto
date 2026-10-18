@@ -28,13 +28,28 @@ def normalOneWith (encode : Event → E) (stack : List UInt8 → PrefixM E Unit)
   let g := {g with rxList := g.rxList ++ [e], rxCount := g.rxCount + segs}
   if g.rxCount ≥ GRO_NORMAL_BATCH then normalListWith encode stack g else return g
 
-def receiveWith (encode : Event → E) (stack : List UInt8 → PrefixM E Unit)
-    (g : Gro) (e : Entry) : PrefixM E Gro := do
-  if groTakenAtOnce e.tag.bytes then normalOneWith encode stack g e 1
-  else
-    if !g.held.isEmpty then
-      liftPrefix (unsupported "GRO holds a second TCP segment in one poll (coalescing, or the hash buckets' flush order)")
-    return {g with held := g.held ++ [e]}
+def receiveWith (encode : Event → E) (stack : List UInt8 → PrefixM E Unit) (g : Gro) (e : Entry) : PrefixM E Gro := do
+  match groNetwork e.tag.bytes with
+  | none => normalOneWith encode stack g e 1
+  | some (off, lengthFlush) =>
+    match groTcpHeader e.tag.bytes off with
+    | none => normalOneWith encode stack g e 1
+    | some (thlen, len) =>
+      let flags := (e.tag.bytes.getD (off + 13) 0).toNat
+      match g.held with
+      | [held] =>
+        if groSameFlow held.tag.bytes e.tag.bytes off then
+          if !groMergeRefused held.tag.bytes e.tag.bytes off thlen len then
+            liftPrefix (unsupported "GRO coalesces two segments of one flow in one poll (skb_gro_receive)")
+          let g ← normalOneWith encode stack {g with held := []} held 1
+          if lengthFlush || groFinalFlush flags len then normalOneWith encode stack g e 1
+          else return {g with held := [e]}
+        else
+          if lengthFlush || groFinalFlush flags len then normalOneWith encode stack g e 1
+          else liftPrefix (unsupported "GRO holds a second TCP segment in one poll (the hash buckets' flush order)")
+      | _ =>
+        if lengthFlush || groFinalFlush flags len then normalOneWith encode stack g e 1
+        else return {g with held := g.held ++ [e]}
 
 def flushAllWith (encode : Event → E) (stack : List UInt8 → PrefixM E Unit)
     (gro : Gro) : PrefixM E Unit := do
@@ -134,15 +149,14 @@ theorem normalOne_projects (g : Gro) (e : Entry) (segs : Nat) :
 theorem receive_projects (g : Gro) (e : Entry) :
     ProjectsPrefix ρ id (receiveWith encode stack g e) (receiveWith encode' stack' g e) := by
   unfold receiveWith
-  apply projectsPrefix_ite ρ _ id
-  · intro _; exact normalOne_projects ρ encode encode' stack stack' he hs g e 1
-  · intro _
-    dsimp only
-    apply projectsPrefix_ite ρ _ id
-    · intro _
-      exact projectsPrefix_bind ρ id id (projectsPrefix_lift ρ _)
-        (fun _ => projectsPrefix_pure ρ id _)
-    · intro _; exact projectsPrefix_pure ρ id _
+  repeat' first
+    | with_reducible exact normalOne_projects ρ encode encode' stack stack' he hs _ _ _
+    | with_reducible exact projectsPrefix_pure ρ id _
+    | with_reducible exact projectsPrefix_lift ρ _
+    | with_reducible apply projectsPrefix_bind ρ id id
+    | (with_reducible intro x; try dsimp only [id])
+    | (with_reducible split <;> try dsimp only [id])
+  all_goals exact projectsPrefix_pure ρ id _
 
 theorem flushAll_projects (g : Gro) :
     ProjectsPrefix ρ id (flushAllWith encode stack g) (flushAllWith encode' stack' g) := by
@@ -193,12 +207,13 @@ theorem normalOne_appends (ha : ∀ bytes, Appends (stack bytes))
 theorem receive_appends (ha : ∀ bytes, Appends (stack bytes)) (g : Gro) (e : Entry) :
     Appends (receiveWith encode stack g e) := by
   unfold receiveWith
-  split
-  · exact normalOne_appends encode stack ha _ _ _
-  · dsimp only
-    split
-    · exact (Appends.lift _).bind (fun _ => Appends.pure _)
-    · exact Appends.pure _
+  repeat' first
+    | with_reducible exact normalOne_appends encode stack ha _ _ _
+    | with_reducible exact Appends.pure _
+    | with_reducible exact Appends.lift _
+    | with_reducible apply Appends.bind
+    | (with_reducible intro x; try dsimp only [id])
+    | (with_reducible split <;> try dsimp only [id])
 
 theorem flushAll_appends (ha : ∀ bytes, Appends (stack bytes)) (g : Gro) :
     Appends (flushAllWith encode stack g) := by

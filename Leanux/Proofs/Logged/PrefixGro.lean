@@ -19,10 +19,28 @@ def groNormalOnePrefix (toStack : List (List UInt8) → PrefixM Event Unit) (gro
 
 def napiGroReceivePrefix (toStack : List (List UInt8) → PrefixM Event Unit) (gro : GroState)
     (pkt : List UInt8) : PrefixM Event GroState := do
-  if groTakenAtOnce pkt then groNormalOnePrefix toStack gro pkt 1
-  else
-    if !gro.held.isEmpty then liftPrefix (unsupported "GRO holds a second TCP segment in one poll (coalescing, or the hash buckets' flush order)")
-    return { gro with held := gro.held ++ [pkt] }
+  match groNetwork pkt with
+  | none => groNormalOnePrefix toStack gro pkt 1
+  | some (off, lengthFlush) =>
+    match groTcpHeader pkt off with
+    | none => groNormalOnePrefix toStack gro pkt 1   -- tcp4_gro_receive's `goto flush`
+    | some (thlen, len) =>
+      let flags := (pkt.getD (off + 13) 0).toNat
+      match gro.held with
+      | [held] =>
+        if groSameFlow held pkt off then
+          if !groMergeRefused held pkt off thlen len then
+            liftPrefix (unsupported "GRO coalesces two segments of one flow in one poll (skb_gro_receive)")
+          -- `pp = p`: the held segment completed first (gro.c:546-550)
+          let gro ← groNormalOnePrefix toStack { gro with held := [] } held 1
+          if lengthFlush || groFinalFlush flags len then groNormalOnePrefix toStack gro pkt 1
+          else return { gro with held := [pkt] }
+        else
+          if lengthFlush || groFinalFlush flags len then groNormalOnePrefix toStack gro pkt 1
+          else liftPrefix (unsupported "GRO holds a second TCP segment in one poll (the hash buckets' flush order)")
+      | _ =>
+        if lengthFlush || groFinalFlush flags len then groNormalOnePrefix toStack gro pkt 1
+        else return { gro with held := gro.held ++ [pkt] }
 
 def napiGroFlushAllPrefix (toStack : List (List UInt8) → PrefixM Event Unit) (gro : GroState) : PrefixM Event Unit := do
   let mut g := gro
@@ -56,11 +74,15 @@ theorem napiGroReceivePrefix_erases
     (gro : GroState) (pkt : List UInt8) :
     ErasesPrefix (napiGroReceivePrefix logged gro pkt) (napiGroReceive original gro pkt) := by
   unfold napiGroReceivePrefix napiGroReceive
-  split
-  · exact groNormalOnePrefix_erases logged original h _ _ _
-  · split
-    · exact erasesPrefix_bind (erasesPrefix_lift _) (fun _ => erasesPrefix_pure _)
-    · exact erasesPrefix_pure _
+  repeat' first
+    | contradiction
+    | with_reducible exact groNormalOnePrefix_erases logged original h _ _ _
+    | with_reducible exact erasesPrefix_pure _
+    | with_reducible exact erasesPrefix_lift _
+    | with_reducible apply erasesPrefix_ite
+    | with_reducible apply erasesPrefix_bind
+    | (with_reducible intro x; try dsimp only)
+    | (split <;> simp_all only)
 
 theorem napiGroFlushAllPrefix_erases
     (logged : List (List UInt8) → PrefixM Event Unit) (original : List (List UInt8) → M Unit)
@@ -111,22 +133,22 @@ theorem napiGroReceivePrefix_preserves
     (hs : ∀ h w, I h w → S h)
     (hc : ∀ packets, PrefixPreserves I S (callback packets)) (gro : GroState) (pkt : List UInt8) :
     PrefixPreserves I S (napiGroReceivePrefix callback gro pkt) := by
+  have stopped {α : Type} (message : String) :
+      PrefixPreserves I S (liftPrefix (unsupported message : M α)) := by
+    apply PrefixEnsures.preserves
+    apply PrefixEnsures.lift _ hs
+    intro h w x v hi hr
+    change (Except.error _ : Except Stop _) = _ at hr
+    cases hr
   unfold napiGroReceivePrefix
   repeat' first
-    | with_reducible exact groNormalListPrefix_preserves callback hs hc _
     | with_reducible exact groNormalOnePrefix_preserves callback hs hc _ _ _
-    | with_reducible exact hc _
     | with_reducible exact PrefixPreserves.pure hs _
+    | with_reducible exact stopped _
     | with_reducible apply PrefixPreserves.bind
     | with_reducible apply PrefixPreserves.ite
-    | with_reducible apply PrefixPreserves.forIn _ _ _ hs
     | (with_reducible intro x; try dsimp only)
     | (with_reducible split)
-  apply PrefixEnsures.preserves
-  apply PrefixEnsures.lift _ hs
-  intro h w x v hi hr
-  change (Except.error _ : Except Stop _) = _ at hr
-  cases hr
 
 theorem napiGroFlushAllPrefix_preserves
     (callback : List (List UInt8) → PrefixM Event Unit)
