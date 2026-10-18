@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Noise.ResponseCallerClaims
 import Leanux.Proofs.WG.Noise.InitialSlotClaims
 import Leanux.Proofs.WG.Noise.InterleavedFreshClaims
 import Leanux.Proofs.WG.Noise.FreshHistoryClaims
@@ -505,5 +506,21 @@ theorem original_session_initial_slot_credits
         ∃ after, final.peers[pid]? = some after ∧ ClearReady final (clearKeys after)) :=
   beginSession_initial_slots_projected pid d p counter resident accepted alive word hashed
     slots credits allocation clock allocWidth allocSuccess clockWidth rest
+
+/-- The actual response sender records creation alone on refusal, or creation
+then session on a created message. Each projected receipt has an actual native
+helper witness and its allowed local tag edge. Discarding observation preserves
+every original result and Stop. Final tag framing and writes inside a stopped
+helper are separate claims. -/
+theorem original_response_caller_receipts (pid : PeerId) :
+    Campaign2.AgreesOn (fun _ => True)
+      (do let _ ← ResponseCaller.observeProjected pid; pure ())
+      (sendHandshakeResponse pid) ∧
+    Campaign2.Ensures (ResponseCaller.observeProjected pid) (fun _ => True)
+      (fun receipts _ => ResponseCaller.ReceiptShape pid receipts ∧
+        ∀ receipt ∈ receipts,
+          ResponseCaller.ReceiptValid receipt ∧ TagReceiptEffect receipt) :=
+  ⟨ResponseCaller.original_response_receipts_erases pid,
+    ResponseCaller.original_response_receipts pid⟩
 
 end Leanux.Proofs.WG.Noise
