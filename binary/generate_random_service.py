@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Emit the pinned random-provider ranges reached by the insertion capture.
+"""Emit the pinned random-provider ranges used by the body-execution probe.
 
 This is a partial decoder, not a totality or service-contract claim. Missing
-callees and unsupported instructions remain failing fetches. In particular
-these ranges alone do not supply the cache-refill execution path.
+callees and unsupported instructions remain failing fetches. Cached and
+initialized refill paths are included; this is not a total kernel decoder.
 """
 import argparse
 import hashlib
@@ -18,6 +18,8 @@ FUNCTIONS = {
     'check_kcov_mode', 'kcov_choice_write', 'kcov_choice_write_area',
     'kcov_steer_find', '__sanitizer_cov_trace_cmp8',
     '__sanitizer_cov_trace_const_cmp8',
+    '_get_random_bytes', 'crng_make_state', 'crng_fast_key_erasure',
+    'chacha_block_generic', 'chacha_permute', '__memcpy', 'memcpy_orig',
 }
 
 
@@ -42,7 +44,12 @@ def generated():
                 actual = (row['pc'] + len(raw) + int.from_bytes(raw[-width:], 'little', signed=True)) % 2**64
                 if actual != target:
                     raise ValueError(f'branch encoding differs at {row["pc"]:x}')
-            rows.append((row['pc'], len(raw), row['normalized']))
+            assembly = row['normalized']
+            # This three-byte NOP has an encoded memory-shaped operand but
+            # performs no memory access. Kraken already has sized NOPs.
+            if raw == bytes.fromhex('0f1f00') and assembly == 'nopl   (%rax)':
+                assembly = 'nop 3'
+            rows.append((row['pc'], len(raw), assembly))
     text += ['  ' + ',\n  '.join(f'({pc}, {size}, {json.dumps(asm)})' for pc, size, asm in rows) + ']']
     text += ['def fetch (pc : Int64) : Option Decoded := do',
              '  let (_, size, assembly) ← listing.find? (fun row => row.1 == pc.toUInt64.toNat)',

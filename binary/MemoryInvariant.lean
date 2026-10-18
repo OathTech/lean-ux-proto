@@ -69,6 +69,26 @@ theorem undefined {α} [NondetSupportingType α] {k : α → Effects}
 
 theorem impossible (s : String) : Keeps F (.unimplemented s) := False.elim
 
+theorem stosOne (stable : StoreStable F) (w : Width) {s : MachineData}
+    (hs : F s.dmem) (next : MachineData → Effects)
+    (hn : ∀ t, F t.dmem → Keeps F (next t)) : Keeps F (s.stosOne w next) := by
+  unfold MachineData.stosOne
+  apply store stable hs
+  intro t ht
+  exact hn _ ht
+
+theorem stosRepeat (stable : StoreStable F) (w : Width) (count : Nat)
+    (s : MachineData) (hs : F s.dmem) (next : MachineData → Effects)
+    (hn : ∀ t, F t.dmem → Keeps F (next t)) :
+    Keeps F (MachineData.stosRepeat w count s next) := by
+  induction count generalizing s with
+  | zero => exact hn _ hs
+  | succ count ih =>
+    unfold MachineData.stosRepeat
+    apply stosOne stable w hs
+    intro t ht
+    exact ih _ ht
+
 /-- Follow the interpreter's memory operations, without simplifying the
 arithmetic they compute. All branches and undefined choices are retained. -/
 theorem operation [Labels] [address_size : AddressSize] (stable : StoreStable F) {w}
@@ -90,6 +110,8 @@ theorem operation [Labels] [address_size : AddressSize] (stable : StoreStable F)
     | apply load (by assumption); intro v t ht
     | apply set stable (by assumption); intro t ht
     | apply store stable (by assumption); intro t ht
+    | apply stosOne stable _ (by assumption); intro t ht
+    | apply stosRepeat stable _ _ _ (by assumption); intro t ht
     | apply undefined; intro v
     | exact impossible _
     | exact hn _ (by assumption)

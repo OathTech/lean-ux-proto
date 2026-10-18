@@ -418,7 +418,7 @@ adapter timed out; its single literal instruction is now reduced directly.
 Other draft failures were local normalization and rewrite mismatches. The
 return composition and honest random-service boundary are still open.
 
-## Successful suffix to return, 2026-10-18 19:42 UTC
+## Successful suffix to return, 2026-10-18 19:41 UTC
 
 `insert_success` composes prepend, both BH-enable calls and the actual register
 restore/RET. It exports the returned index, restored caller ABI, preempt count,
@@ -427,3 +427,33 @@ ownership. Its entry is the successful-search correspondence point; it is
 not yet the function-level theorem. Fresh `leanchecker PairInsertSuccess`
 replay passes and its axioms are the standard three. The default build passes
 (753 jobs). No new trust assumption was introduced for this suffix.
+
+## Random-provider refill execution, 2026-10-18 19:52 UTC
+
+The decoded random body now includes initialized refill and generation-refresh
+paths. Synthetic private memory, with recording disabled, executes an ordinary
+refill in 5,580 instructions and a changed-generation refill in 8,151; each is
+followed by a retained-cache call of 245 instructions. The earlier eight cached
+runs still pass. The checks cover the return stack, callee-saved registers,
+CPL/IF, cache generation, position and consumed-word clearing. The unprivileged
+CLI control still fails at the expected instruction. These are actual Kraken
+body executions, not supplied returns, and remain distinct from kernel captures.
+
+Execution found REP STOS and JG missing from Kraken, plus a three-byte NOP
+spelling in the generated decoder. Private Kraken commit
+`05bd93e14ab946330004a57403accc135c7e5542`, reproduced by patch 0006, implements
+64-bit-address STOS with all operand widths, DF and per-element permission
+requests, and the signed greater condition. Other STOS address modes explicitly
+fail. Separate instruction tests and fresh kernel replays pass. The consumer's
+generic memory-invariant theorem needed a structural induction for repeated
+stores; its first full build failed on that missing case, which is now fixed.
+No failed build is counted as validation. The default regression build is
+pending at this checkpoint.
+
+`generate_random_service.py` now includes ChaCha and memcpy's literal ELF
+implementation. It translates only the exact `0f1f00` memory-shaped NOP encoding
+to Kraken's existing three-byte NOP. Boot-patched alternative implementations
+of memcpy are not covered by this literal decoder. The body probe is evidence
+for a service domain permitting refills; it is not a general provider theorem,
+an insertion Pre witness, or evidence that captured steering state is covered.
+The new random-service contract and recorded-input agreement remain open.

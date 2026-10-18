@@ -63,6 +63,33 @@ def suite : Except String Json := do
           ("instructions",toJson after.pcs.size),("value",toJson after.state.data.regs.rax.toNat)])
         initial := ⟨{after.state.data with regs := {after.state.data.regs with rsp := .ofNat stackAddr}},
           .ofNat 0xffffffff81375000⟩
+  let mut refills := #[]
+  for generation in [1,2] do
+    let start := cachedState true
+    let mut memory := start.data.dmem
+    for i in [:32] do
+      memory := put memory (0xffffffff81cbbb80+i) 1 i
+      memory := put memory (0xffffffff81fdbac0+i) 1 (31-i)
+    memory := put memory 0xffffffff81cbbba0 8 generation
+    memory := put memory 0xffffffff81cbba68 4 24
+    let mut initial := {start with data := {start.data with dmem := memory}}
+    for ordinal in [:2] do
+      let after ← execute 0 20000 initial (.ofNat stopAddr)
+      unless after.state.data.regs.rsp.toNat==stackAddr+8 &&
+          after.state.data.system.bits[9] && after.state.data.system.cpl==0 do
+        throw "random.refill.stack-system"
+      for reg in [Reg64.rbx,.rbp,.r12,.r13,.r14,.r15] do
+        unless after.state.data.regs.get64 reg==initial.data.regs.get64 reg do
+          throw "random.refill.callee-save"
+      unless (← readNat after.state 0xffffffff81cbba68 4)==ordinal+1 &&
+          (← readNat after.state 0xffffffff81cbba60 8)==1 &&
+          (← readNat after.state (0xffffffff81cbba00+4*ordinal) 4)==0 do
+        throw "random.refill.cache-effect"
+      refills := refills.push (Json.mkObj [("starting_crng_generation",toJson generation),
+        ("ordinal",toJson ordinal),("instructions",toJson after.pcs.size),
+        ("value",toJson after.state.data.regs.rax.toNat)])
+      initial := ⟨{after.state.data with regs := {after.state.data.regs with rsp := .ofNat stackAddr}},
+        .ofNat 0xffffffff81375000⟩
   let initial := cachedState true
   let bad := {initial with data := {initial.data with system := {initial.data.system with cpl := 3}}}
   let rejection ← match execute 0 2000 bad (.ofNat stopAddr) with
@@ -72,7 +99,7 @@ def suite : Except String Json := do
         throw s!"random.body.control failed elsewhere: {error}"
       pure error
   return Json.mkObj [("status",toJson "pass"),
-    ("scope",toJson "actual cached random body and callbacks, synthetic memory, recording disabled; refill not covered"),
-    ("runs",toJson results),("privilege_control",toJson rejection)]
+    ("scope",toJson "actual cached/refill random body and callbacks, synthetic memory, recording disabled"),
+    ("runs",toJson results),("refills",toJson refills),("privilege_control",toJson rejection)]
 
 end Binary.Pair.RandomRun

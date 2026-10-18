@@ -31,7 +31,7 @@ import AllowedipsWords
 -/
 namespace Binary.TrustBase
 
-def krakenCommit : String := "4651c92fa728734240de7ff4d5bdff3f05875806"
+def krakenCommit : String := "05bd93e14ab946330004a57403accc135c7e5542"
 def kernelIdentity : String := "6b2018b9"
 def elfSha256 : String := "16c346209885db6c610d4aa126c6eb30f5d3c02f0498d95e606473945f648774"
 def decoderVersion : String := "GNU objdump (GNU Binutils for Ubuntu) 2.42"

@@ -1,0 +1,331 @@
+From 05bd93e14ab946330004a57403accc135c7e5542 Mon Sep 17 00:00:00 2001
+From: Mike Dodds <mike@oath.tech>
+Date: Sun, 18 Oct 2026 19:51:29 +0000
+Subject: [PATCH] Add sequential STOS and signed greater condition for random
+ refills
+
+---
+ Kraken/X64/GreaterTests.lean | 32 +++++++++++++
+ Kraken/X64/Parser/Basic.lean | 23 +++++++++
+ Kraken/X64/PrintATT.lean     |  1 +
+ Kraken/X64/PrintIntel.lean   |  3 ++
+ Kraken/X64/Semantics.lean    | 19 ++++++++
+ Kraken/X64/StosTests.lean    | 90 ++++++++++++++++++++++++++++++++++++
+ Kraken/X64/Syntax.lean       |  3 +-
+ notes/x64-stos-greater.md    | 23 +++++++++
+ 8 files changed, 193 insertions(+), 1 deletion(-)
+ create mode 100644 Kraken/X64/GreaterTests.lean
+ create mode 100644 Kraken/X64/StosTests.lean
+ create mode 100644 notes/x64-stos-greater.md
+
+diff --git a/Kraken/X64/GreaterTests.lean b/Kraken/X64/GreaterTests.lean
+new file mode 100644
+index 0000000..892ed7c
+--- /dev/null
++++ b/Kraken/X64/GreaterTests.lean
+@@ -0,0 +1,32 @@
++module
++import Kraken.X64.OmniSemantics
++import Kraken.X64.Parser
++import Kraken.X64.PrintATT
++meta import Kraken.X64.Semantics
++
++namespace Kraken.X64.GreaterTests
++private instance : Labels := ⟨fun _ => 64⟩
++
++-- Exhaust all relevant flags, including equal and overflow cases. The
++-- expected condition is the complement of signed less-or-equal.
++#guard [false,true].all fun z => [false,true].all fun s => [false,true].all fun o =>
++  let flags : StatusFlags := {cf := false,pf := false,af := false,zf := z,sf := s,of := o}
++  CondCode.g.interp flags == !(CondCode.le.interp flags)
++
++#guard match Parser.parse "jg target", Parser.parse "jnle target" with
++  | .ok left,.ok right => left==right
++  | _,_ => false
++#guard (Parser.parse "jg target").isOk
++#guard (Parser.parse "setg %al").isOk
++#guard (Parser.parse "cmovg %eax,%ebx").isOk
++
++theorem greater_branch (s : MachineData) (p : Std.Rco Int64) (target : Label) :
++    (Instr.regular .W64 .W64 (.jcc .g target)).interp s p
++      (fun t => .done ⟨t,p.upper⟩) (fun pc t => .done ⟨t,pc⟩) |>.All
++      (fun t => t.data=s ∧ t.pc=if !s.status.zf && (s.status.sf==s.status.of)
++        then Labels.label target else p.upper) := by
++  simp [Instr.interp,Operation.interp,CondCode.interp,Effects.All]
++  split <;> simp_all [Effects.All]
++
++#print axioms greater_branch
++end Kraken.X64.GreaterTests
+diff --git a/Kraken/X64/Parser/Basic.lean b/Kraken/X64/Parser/Basic.lean
+index 9e9874b..39c48de 100644
+--- a/Kraken/X64/Parser/Basic.lean
++++ b/Kraken/X64/Parser/Basic.lean
+@@ -513,6 +513,7 @@ def parseCondCode (suffix : String.Slice) : Parser CondCode :=
+   | "l" | "nge" => .pure .l
+   | "le" | "ng" => .pure .le
+   | "s" => .pure .s
++  | "g" | "nle" => .pure .g
+   | _ => .fail s!"unknown condition code: {suffix}"
+ 
+ -- ============================================================================
+@@ -608,12 +609,34 @@ instance {T} : Coe (Option T) (Parser T) where coe := Option.toParser
+ 
+ /-- Parse an instruction mnemonic and its operands.
+     AT&T syntax: src, dst (reversed from Intel). -/
++def parseStos (mn : String) (repeated : Bool) : Parser Instr := do
++  if mn == "stos" then
++    let ⟨w,source⟩ ← parseRegW
++    unless source == .low .rax w do fail "STOS source must be the accumulator"
++    parseComma
++    let _ ← (attempt (pstring "%es:")) <|> pure ""
++    let _ ← pchar '('
++    let ⟨aw,destination⟩ ← parseRegW
++    unless aw == .W64 && destination == .low .rdi aw do
++      fail "STOS currently requires the 64-bit RDI destination"
++    let _ ← pchar ')'
++    pure (toInstr .none (w := w) (.stos repeated))
++  else if mn == "stosb" || mn == "stosw" || mn == "stosl" || mn == "stosq" then
++    let w ← instrWidth mn
++    pure (toInstr .none (w := w) (.stos repeated))
++  else fail "REP currently supports only STOS"
++
+ def parseInstr : Parser Instr := do
+   skipHWs
+   let mnemonic ← parseName
+   let mn := mnemonic.toLower
+   -- Match on full mnemonic name (no suffix stripping)
+   match mn with
++  | "rep" =>
++    skipHWs
++    let operation ← parseName
++    parseStos operation.toLower true
++  | "stos" | "stosb" | "stosw" | "stosl" | "stosq" => parseStos mn false
+   -- Arithmetic (two-operand: src, dst) - 64-bit
+   | "add" =>
+     commaSeparated .none parseOperand parseRegOrMem .add
+diff --git a/Kraken/X64/PrintATT.lean b/Kraken/X64/PrintATT.lean
+index 2183b98..eb1100d 100644
+--- a/Kraken/X64/PrintATT.lean
++++ b/Kraken/X64/PrintATT.lean
+@@ -81,6 +81,7 @@ def operation {w} (aw : Width) (op : Operation w) : String :=
+   | .pushf => s!"pushf{s}"
+   | .cli => "cli"
+   | .sti => "sti"
++  | .stos repeated => (if repeated then "rep " else "") ++ s!"stos{s}"
+   | .pop d => one "pop" (rm aw d)
+   | .setcc cc d => s!"set{cc} {rm aw d}"
+   | .cmovcc cc d x => s!"cmov{cc} {rm aw x}, {reg d}"
+diff --git a/Kraken/X64/PrintIntel.lean b/Kraken/X64/PrintIntel.lean
+index 2ef8613..31194e3 100644
+--- a/Kraken/X64/PrintIntel.lean
++++ b/Kraken/X64/PrintIntel.lean
+@@ -118,6 +118,7 @@ instance : ToString RelRegOrMem where toString rel := rel.toStr
+ instance : ToString CondCode where toString
+   | .z => "e" | .nz => "ne" | .c => "b" | .nc => "ae" | .a => "a" | .be => "be" | .l => "l" | .le => "le"
+   | .s => "s"
++  | .g => "g"
+ 
+ instance : ToString ShiftCountExpr where toString
+   | .cl => "cl"
+@@ -134,6 +135,8 @@ def Operation.toStr {w} (op : Operation w) (addr_w : Width := .W64) : String :=
+   | .pushf => if w == .W64 then "pushfq" else if w == .W16 then "pushf" else "invalid-pushf-width"
+   | .cli => "cli"
+   | .sti => "sti"
++  | .stos repeated => (if repeated then "rep " else "") ++
++      (match w with | .W8 => "stosb" | .W16 => "stosw" | .W32 => "stosd" | .W64 => "stosq")
+   | .pop dst => s!"pop {dst.toStr addr_w}"
+   | .setcc cc dst => s!"set{cc} {dst.toStr addr_w}"
+   | .cmovcc cc dst src => s!"cmov{cc} {dst}, {src.toStr addr_w}"
+diff --git a/Kraken/X64/Semantics.lean b/Kraken/X64/Semantics.lean
+index a48440c..c541f60 100644
+--- a/Kraken/X64/Semantics.lean
++++ b/Kraken/X64/Semantics.lean
+@@ -356,6 +356,20 @@ def MachineData.store (s : MachineData) (addr : BitVec 64) {w : Width} (v : w.ty
+         ret { s with dmem := Mem.storeInt s.dmem addr w.bytes v.toInt }
+     | .none => nonmem_store s.dmem addr v (fun dmem' => ret { s with dmem := dmem' }))
+ 
++/-- One STOS element in 64-bit address mode. Flags are unchanged; the DF
++bit selects the post-store direction. Access checks use the ordinary store. -/
++def MachineData.stosOne (w : Width) (s : MachineData) (next : MachineData → Effects) : Effects :=
++  s.store s.regs.rdi.toBitVec (s.regs.get (.low .rax w)) (fun t =>
++    next {t with regs := {t.regs with rdi :=
++      if s.system.bits[10] then s.regs.rdi-UInt64.ofNat w.bytes else s.regs.rdi+UInt64.ofNat w.bytes}})
++
++/-- Sequential REP STOS. Each element retains its write-access effect;
++the structural counter is the entry RCX value, not a test execution bound. -/
++def MachineData.stosRepeat (w : Width) : Nat → MachineData → (MachineData → Effects) → Effects
++  | 0,s,next => next s
++  | count+1,s,next => s.stosOne w (fun t =>
++      stosRepeat w count {t with regs := {t.regs with rcx := t.regs.rcx-1}} next)
++
+ def MachineData.storeAvx (s : MachineData) (addr : BitVec 64) {w : AvxWidth} (v : w.type) (ret: MachineData → Effects) (checkAlign : Bool := false) : Effects :=
+   if checkAlign && !(isAligned w.bytes addr) then
+     .gp_unaligned addr w.bytes
+@@ -447,6 +461,7 @@ def CondCode.interp (cc : CondCode) (s : StatusFlags) : Bool := match cc with
+   | .a  => !s.cf && !s.zf | .be => s.cf || s.zf
+   | .l => s.sf != s.of | .le => (s.sf != s.of) || s.zf
+   | .s => s.sf
++  | .g => !s.zf && (s.sf == s.of)
+ 
+ @[kstep] def ShiftCountExpr.interp [Labels] (c : ShiftCountExpr) (s : MachineData) (p : Std.Rco Int64) := match c with
+   | .cl => s.regs.rcx.toBitVec.take 8
+@@ -512,6 +527,10 @@ set_option maxHeartbeats 1000000
+     if s.system.cpl ≤ s.system.iopl then
+       next { s with system := s.system.setIF true }
+     else unimplemented "STI: #GP(0), CPL exceeds IOPL in 64-bit mode"
++  | .stos repeated =>
++    if address_size.address_size != .W64 then
++      unimplemented "STOS: only 64-bit address size is implemented"
++    else if repeated then s.stosRepeat w s.regs.rcx.toNat next else s.stosOne w next
+   | .pop dst =>
+     let rsp := s.regs.get64 .rsp
+     s.load rsp w (fun val s =>
+diff --git a/Kraken/X64/StosTests.lean b/Kraken/X64/StosTests.lean
+new file mode 100644
+index 0000000..0f5cbb2
+--- /dev/null
++++ b/Kraken/X64/StosTests.lean
+@@ -0,0 +1,90 @@
++module
++
++import Kraken.X64.OmniSemantics
++import Kraken.X64.Parser
++import Kraken.X64.PrintATT
++meta import Kraken.X64.Semantics
++meta import Kraken.Mem
++meta import Kraken.X64.PrintATT
++
++namespace Kraken.X64.StosTests
++private instance : Labels := ⟨fun _ => 0⟩
++
++private def execute (aw w : Width) (repeated : Bool) (s : MachineData) : Effects :=
++  (Instr.regular aw w (.stos repeated)).interp s ⟨0,1⟩
++    (fun d => .done ⟨d,1⟩) (fun pc d => .done ⟨d,pc⟩)
++
++private def check (expectedWrites : Nat) (post : MachineState → Bool) : Effects → Bool
++  | .done s => expectedWrites==0 && post s
++  | .require_exec_access _ next => check expectedWrites post (next ())
++  | .require_write_access _ _ next => expectedWrites>0 && check (expectedWrites-1) post (next ())
++  | _ => false
++
++private def initial (backward : Bool) : MachineData :=
++  { regs := {rax := 0x1122334455667788,rdi := 0x1018,rcx := 3,rbx := 37}
++    status := ⟨true,false,true,false,true,false⟩
++    system := {bits := (if backward then 0x600 else 0x200),cpl := 0}
++    dmem := (List.replicate 64 (0 : UInt8)).At 0x1000 }
++
++-- Expected bytes/register motion are computed from the architectural width,
++-- independently of the execution helper. Check both DF directions and all sizes.
++#guard [false,true].all fun backward => [Width.W8,.W16,.W32,.W64].all fun w =>
++  let s := initial backward
++  let step := w.bytes
++  let address (i : Nat) := if backward then 0x1018-i*step else 0x1018+i*step
++  check 3 (fun t => t.pc==1 && t.data.regs.rcx==0 &&
++    t.data.regs.rdi.toNat==address 3 && t.data.regs.rax==s.regs.rax &&
++    t.data.regs.rbx==37 && t.data.status==s.status && t.data.system==s.system &&
++    [0,1,2].all (fun i => t.data.dmem.loadInt (.ofNat 64 (address i)) step ==
++      some (s.regs.rax.toNat%2^w.bits : Int))) (execute .W64 w true s)
++
++#guard check 1 (fun t => t.data.regs.rcx==3 && t.data.regs.rdi==0x1020 &&
++    t.data.dmem.loadInt 0x1018 8==some 0x1122334455667788)
++  (execute .W64 .W64 false (initial false))
++#guard check 0 (fun t => t.data.regs.rdi==0xffffffffffffffff && t.data.regs.rcx==0 &&
++    t.data.dmem=={} && t.data.status==(initial true).status)
++  (execute .W64 .W64 true {initial true with
++    regs := {(initial true).regs with rcx := 0,rdi := 0xffffffffffffffff},dmem := {}})
++#guard !check 3 (fun _ => true) (execute .W64 .W64 true {initial false with dmem := {}})
++#guard !check 3 (fun _ => true) (execute .W32 .W64 true (initial false))
++
++-- Permission requests are emitted for every attempted element. The third
++-- write is unmapped here, after two successful stores; it cannot report return.
++private def missingThird (writes : Nat) : Effects → Bool
++  | .require_exec_access _ next => missingThird writes (next ())
++  | .require_write_access _ _ next => missingThird (writes+1) (next ())
++  | .nonmem_store _ address _ _ => writes==3 && address==0x1010
++  | _ => false
++#guard missingThird 0 (execute .W64 .W64 true {
++  regs := {rax := 7,rdi := 0x1000,rcx := 3}
++  dmem := (List.replicate 16 (0 : UInt8)).At 0x1000})
++
++#guard match Parser.parse "rep stos %rax,%es:(%rdi)\nstosb\nrep stosl" with
++  | .ok p => p==[.instr (.regular .W64 .W64 (.stos true)),
++      .instr (.regular .W64 .W8 (.stos false)),.instr (.regular .W64 .W32 (.stos true))]
++  | .error _ => false
++#guard (Parser.parse "rep stosq").isOk
++#guard (Parser.parse "stos %ax,(%rdi)").isOk
++#guard !(Parser.parse "rep movq").isOk
++#guard !(Parser.parse "repne stosq").isOk
++#guard !(Parser.parse "rep stos %rbx,%es:(%rdi)").isOk
++#guard !(Parser.parse "rep stos %rax,%es:(%edi)").isOk
++#guard !(Parser.parse "rep stos %rax,%fs:(%rdi)").isOk
++#guard !(Parser.parse "lock stosq").isOk
++#guard ATT.operation (w := .W64) .W64 (.stos true)=="rep stosq"
++
++theorem zero_count (s : MachineData) (zero : s.regs.rcx=0) :
++    (execute .W64 .W64 true s).All (fun t => t.pc=1 ∧ t.data=s) := by
++  simp [execute,Instr.interp,Operation.interp,MachineData.stosRepeat,zero,Effects.All,
++    show (Width.W64 != .W64)=false from rfl]
++
++theorem single_word_flags (s : MachineData) (old : Int)
++    (mapped : s.dmem.loadInt s.regs.rdi.toBitVec 8=some old) :
++    (execute .W64 .W64 false s).All (fun t =>
++      t.pc=1 ∧ t.data.status=s.status ∧ t.data.system=s.system ∧ t.data.regs.rcx=s.regs.rcx) := by
++  simp [execute,Instr.interp,Operation.interp,MachineData.stosOne,MachineData.store,mapped,
++    Effects.All,show (Width.W64 != .W64)=false from rfl]
++
++#print axioms zero_count
++#print axioms single_word_flags
++end Kraken.X64.StosTests
+diff --git a/Kraken/X64/Syntax.lean b/Kraken/X64/Syntax.lean
+index 2683805..929b520 100644
+--- a/Kraken/X64/Syntax.lean
++++ b/Kraken/X64/Syntax.lean
+@@ -173,7 +173,7 @@ attribute [coe] AvxOperand.regOrMem
+ abbrev AvxOperand.avx {w} (r : AvxReg w) : AvxOperand w := regOrMem (.avx r)
+ abbrev AvxOperand.mem {w} (m : AddrExpr) : AvxOperand w := regOrMem (.mem m)
+ 
+-inductive CondCode | z | nz | c | nc | a | be | l | le | s
++inductive CondCode | z | nz | c | nc | a | be | l | le | s | g
+   deriving Repr, BEq, DecidableEq, Hashable, Lean.ToExpr
+ abbrev CondCode.e := CondCode.z
+ abbrev CondCode.ne := CondCode.nz
+@@ -195,6 +195,7 @@ inductive Operation (w : Width)
+   | pushf
+   | cli
+   | sti
++  | stos (repeated : Bool)
+   | pop  (_ : Dst w)
+   | setcc (_ : CondCode) (_ : Dst w) -- {_ : w = .W8}
+   | cmovcc (_ : CondCode) (_ : Reg w) (src : RegOrMem w)
+diff --git a/notes/x64-stos-greater.md b/notes/x64-stos-greater.md
+new file mode 100644
+index 0000000..ec03a37
+--- /dev/null
++++ b/notes/x64-stos-greater.md
+@@ -0,0 +1,23 @@
++# Sequential stores and signed greater condition
++
++The initialized random-provider refill reaches REP STOS in its stack cleanup
++and JG in ChaCha's round loop. STOS supports all four operand widths with
++64-bit address size. Each element requests ordinary write permission; DF
++controls the direction, REP consumes RCX, and count zero accesses no memory.
++Arithmetic and system flags are unchanged. Other address sizes fail explicitly.
++As elsewhere in this sequential model, interruptible restart and exception
++delivery are not represented. This extension does not justify those behaviors.
++
++The signed greater condition is ZF clear and SF equal to OF. Both JG/JNLE
++spellings use it, as do the existing generic SETcc and CMOVcc operations.
++
++Reference: Intel SDM, STOS and REP entries in
++[volume 2B](https://www.intel.com/content/dam/www/public/us/en/documents/manuals/64-ia-32-architectures-software-developer-vol-2b-manual.pdf)
++and Jcc in
++[volume 2A](https://www.intel.com/content/dam/www/public/us/en/documents/manuals/64-ia-32-architectures-software-developer-vol-2a-manual.pdf).
++
++`Kraken.X64.StosTests` checks widths, directions, single and repeated stores,
++zero count, unmapped memory, per-element permissions, rejected address modes,
++parsing and symbolic flag preservation. `Kraken.X64.GreaterTests` exhausts
++the three relevant flags, checks aliases and proves the branch effect.
++Build and replay both with the consumer's Lean 4.35.0 toolchain.
+-- 
+2.43.0
+
