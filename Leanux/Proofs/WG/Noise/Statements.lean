@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.Noise.ReceiveStepCallerClaims
+import Leanux.Proofs.WG.Noise.SocketTagFrames
 import Leanux.Proofs.WG.Noise.ReceptionCallerClaims
 import Leanux.Proofs.WG.Noise.ClearDispatchClaims
 import Leanux.Proofs.WG.Noise.ClearWorkerClaims
@@ -668,5 +670,17 @@ theorem original_clear_worker_dispatch_tags (entry : Campaign2.Product.Snapshot)
             if p.refcount = 1 then none else some HANDSHAKE_ZEROED
           else entry.toSnapshot.tagAt target) :=
   ClearWorkerDispatch.original_clear_dispatch_tags entry
+
+/-- The original receive step polls the entry ring. An empty poll returns
+false; a consumed packet returns true with its actual reception dispatch and
+valid helper receipts. Dequeue precedes reception and counter decrement follows
+its success. Discarding receipts preserves every original result and Stop. -/
+theorem original_receive_step_dispatch (entry : Campaign2.Snapshot) :
+    Campaign2.AgreesOn (fun _ => True)
+      (do let r ← ReceiveStepCaller.observeStep; pure r.poll.value) receiveStep ∧
+    Campaign2.Ensures ReceiveStepCaller.observeStep (fun s => s = entry)
+      (fun r _ => r.entry = entry ∧ ReceiveStepCaller.PollShape r.entry r.poll) :=
+  ⟨ReceiveStepCaller.original_receiveStep_receipt_erases,
+    ReceiveStepCaller.original_receiveStep_receipt entry⟩
 
 end Leanux.Proofs.WG.Noise

@@ -10,33 +10,24 @@ the shared lemmas they replace. If an increment needs more than a few, report
 the overlap before copying a layer. The original six-family decision remains
 pending and does not authorize these additional families.
 
-## Whole-response socket support, 2026-10-18
+## Cached-send socket support resolved, 2026-10-18
 
-[AGENT 2026-10-18] Keep the whole-response tag-frame gap explicit rather
-than duplicating the socket/cache support layer in H1.
+The existing campaign-owned H6 SendWork view now carries the tag map
+without an H1 copy of the socket/cache proof layer.
+SendWorkDevice now contains every optional handshake tag; SendWorkPeer
+contains the selected tag. The generic setter derives the prior tag from
+its actual selected-peer observation. Existing cache/routing/transmission
+compositions retain that stronger view. H1 SocketTagFrames projects the
+sendBufferToPeer result; the old H6 interfaces remain available.
 
-H1 needs normal-return preservation of the complete pointwise optional
-handshake-tag map through original send4, send6 and sendBufferToPeer.
-The corresponding shared contracts are Keypairs.WGFrames.send4_spec,
-send6_spec and sendBufferToPeer_spec. Their current observations omit
-Peer.handshakeState. A stronger shared peer projection containing that field,
-or tag-map-specific contracts, would supply the needed instantiation.
-
-The dependency inventory includes four additional WGBase families:
-dstCacheGet_spec, dstCacheReset_spec, dstCacheSet_spec and tunnelXmit_spec.
-Hiding them inside three public proofs would still duplicate that support.
-No such variants have been added. Existing hoare_liftAmbient,
-hoare_liftRouting, getDev_sameWGStore, Queues.loopbackSend_kernel and
-Lifetimes.socketPort_sameStore already supply the broad-store pieces.
-The campaign-owned peer-update contract covers endpoint and accounting
-writes. Lifetimes.AmbientContracts cannot supply the remaining conclusion:
-its identity-preserving setPeer interface permits arbitrary tag changes.
-
-This is a proof-support request to campaign 1, with no mirror change.
-H1 finite session evaluation and actual sender/receiver receipt contracts
-now check independently.
-The generic caller composition is not credited as final tag preservation
-until all concrete helper frames are supplied.
+The earlier inventory of seven shared socket/cache families is therefore
+no longer a blocker for cached sendBufferToPeer. No existing shared lemma
+is edited and no parallel layer is copied. Independent review confirmed
+the full pointwise tag map, optional absence and the unchanged weaker
+projections. The whole response suffix still needs composition of these
+facts with existing exact timer effects. Cookie replies' uncached socket
+path and receiver keepalive/reference effects remain separate obligations.
+This is proof support only; there is no mirror-change request.
 
 ## Landed support update, 2026-10-18
 

@@ -73,7 +73,7 @@ theorem sendBufferToPeer_workView (pid : PeerId) (bytes : List UInt8) (v : WorkV
     (sendBufferToPeer_spec_sendWork_variant pid bytes (sendWorkAt g pid).1 (sendWorkAt g pid).2)
     g ambient result final after rfl run
   have projected := congrArg (fun x : SendWorkView =>
-    (x.1.map (fun q => q.2.1), x.2.map Prod.snd)) h
+    (x.1.map (fun q => q.2.1.1), x.2.map (fun p => p.2.1))) h
   have same : workAt final pid = workAt g pid := by
     simpa [workAt, workKernel, sendWorkAt, sendWorkKernel, sendWorkDevice, workQueues,
       sendWorkPeer, Option.map_map, Function.comp_def] using projected
@@ -88,7 +88,7 @@ theorem sendBufferToPeer_queueWorkView (pid : PeerId) (bytes : List UInt8) (v : 
     (sendBufferToPeer_spec_sendWork_variant pid bytes (sendWorkAt g pid).1 (sendWorkAt g pid).2)
     g ambient result final after rfl run
   have projected := congrArg (fun x : SendWorkView =>
-    (x.1.map Prod.snd, x.2.map Prod.snd)) h
+    (x.1.map (fun q => q.2.1), x.2.map (fun p => p.2.1))) h
   have same : queueWorkAt final pid = queueWorkAt g pid := by
     simpa [queueWorkAt, queueWorkKernel, sendWorkAt, sendWorkKernel, sendWorkDevice,
       sendWorkPeer, Option.map_map, Function.comp_def] using projected

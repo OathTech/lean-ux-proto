@@ -110,7 +110,7 @@ theorem work_frame_of_sendWork {α : Type} (action : Leanux.M α) (pid : PeerId)
   have h := (Product.ensures_iff _ _ _).mpr
     (frame (sendWorkAt w.wg pid).1 (sendWorkAt w.wg pid).2) w result final rfl run
   have projected := congrArg (fun x : SendWorkView =>
-    (x.1.map (fun q => q.2.1), x.2.map Prod.snd)) h
+    (x.1.map (fun q => q.2.1.1), x.2.map (fun p => p.2.1))) h
   have same : workAt final.wg pid = workAt w.wg pid := by
     simpa [workAt, workKernel, sendWorkAt, sendWorkKernel, sendWorkDevice, workQueues,
       sendWorkPeer, Option.map_map, Function.comp_def] using projected
@@ -127,7 +127,7 @@ theorem queueWork_frame_of_sendWork {α : Type} (action : Leanux.M α) (pid : Pe
   have h := (Product.ensures_iff _ _ _).mpr
     (frame (sendWorkAt w.wg pid).1 (sendWorkAt w.wg pid).2) w result final rfl run
   have projected := congrArg (fun x : SendWorkView =>
-    (x.1.map Prod.snd, x.2.map Prod.snd)) h
+    (x.1.map (fun q => q.2.1), x.2.map (fun p => p.2.1))) h
   have same : queueWorkAt final.wg pid = queueWorkAt w.wg pid := by
     simpa [queueWorkAt, queueWorkKernel, sendWorkAt, sendWorkKernel, sendWorkDevice,
       sendWorkPeer, Option.map_map, Function.comp_def] using projected
@@ -181,7 +181,19 @@ theorem setPeer_sendWorkView (pid : PeerId) (q : Option SendWorkDevice) (v : Opt
   cases device : g.dev with
   | none => simpa [sendWorkAt, sendWorkKernel, device] using before
   | some d =>
-    simpa [sendWorkAt, sendWorkKernel, sendWorkDevice, tableCursor, workQueues, device, value]
+    have old : d.peers[pid]?.map sendWorkPeer = some (sendWorkPeer p) := by
+      simpa [sendWorkAt, sendWorkKernel, device] using
+        (congrArg Prod.snd before).trans value.symm
+    have tags : (fun target : PeerId => (d.peers.insert pid p)[target]?.map Peer.handshakeState) =
+        (fun target : PeerId => d.peers[target]?.map Peer.handshakeState) := by
+      funext target
+      by_cases same : pid = target
+      · subst target
+        have tag := congrArg (Option.map (fun x : SendWorkPeer => x.2.2)) old
+        simpa [Option.map_map, Function.comp_def, sendWorkPeer] using tag.symm
+      · simp [Std.TreeMap.getElem?_insert, same]
+    simpa [sendWorkAt, sendWorkKernel, sendWorkDevice, tableCursor, workQueues,
+      device, value, tags]
       using congrArg Prod.fst before
 
 theorem dstCacheGet_sendWorkView (pid : PeerId) (gen : Nat) (q : Option SendWorkDevice) (v : Option SendWorkPeer) :
