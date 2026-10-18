@@ -1,5 +1,6 @@
 import Leanux.Proofs.WG.TransmitSecurity.NonceStagingSafety
-import Leanux.Proofs.WG.TransmitSecurity.NonceDeferredSafety
+import Leanux.Proofs.WG.TransmitSecurity.NonceConfiguration
+import Leanux.Proofs.WG.TransmitSecurity.NonceUp
 import Leanux.Proofs.WG.TransmitSecurity.NonceTimers
 import Leanux.Proofs.WG.TransmitSecurity.NonceHandshakeSafety
 import Leanux.Proofs.WG.TransmitSecurity.WireNonce
@@ -252,5 +253,36 @@ theorem original_timer_pass_nonce_safety (j : UInt64) :
         (Nonce.placeholderTimersObserved j)) :=
   ⟨⟨Nonce.timersObserved_erases j, Nonce.timersObserved_safe j⟩,
     ⟨Nonce.placeholderTimersObserved_erases j, Nonce.placeholderTimersObserved_safe j⟩⟩
+
+/-- Fixture injection preserves the sending nonce journal through the actual
+receive and deferred worker sequence; stopped prefixes cannot reuse a reservation. -/
+theorem original_injection_nonce_safety (family port : Nat) (msg : List UInt8)
+    (tos : Nat) (ll : Bool) (dest : Nat) :
+    ErasesPrefix (Nonce.injectObserved family port msg tos ll dest) (Env.inject family port msg tos ll dest) ∧
+    PrefixPreserves (fun h w => Nonce.Inv (Nonce.view w.wg) h) List.Nodup
+      (Nonce.injectObserved family port msg tos ll dest) :=
+  ⟨Nonce.injectObserved_erases family port msg tos ll dest,
+    Nonce.injectObserved_safe family port msg tos ll dest⟩
+
+/-- Every native fixture batch retains nonce non-reuse through its actual
+transmit, receive, inline poll and deferred callbacks, from the visible entry invariant. -/
+theorem original_batch_nonce_safety (items : List Env.BatchItem) :
+    ErasesPrefix (Nonce.batchObserved items) (Env.batch items) ∧
+    PrefixPreserves (fun h w => Nonce.Inv (Nonce.view w.wg) h) List.Nodup (Nonce.batchObserved items) :=
+  ⟨Nonce.batchObserved_erases items,Nonce.batchObserved_safe items⟩
+
+/-- Device configuration cannot reset a retained sending allocation's nonce
+frontier; keepalive and staging callbacks append their actual reservations before Stop. -/
+theorem original_configuration_nonce_safety (attrs : DeviceAttrs) :
+    ErasesStatePrefix (Nonce.configDevice attrs) (wgSetDevice attrs) ∧
+    StatePrefixPreserves (fun h w _ => Nonce.Inv (Nonce.view w) h) List.Nodup (Nonce.configDevice attrs) :=
+  ⟨Nonce.configDevice_erases attrs,Nonce.configDevice_safe attrs⟩
+
+/-- Bringing up the interface preserves nonce non-reuse through its actual
+queued packets and keepalives; fixture routing never resets the sending frontier. -/
+theorem original_interface_up_nonce_safety :
+    ErasesPrefix Nonce.envUpObserved Env.wgUp ∧
+    PrefixPreserves (fun h w => Nonce.Inv (Nonce.view w.wg) h) List.Nodup Nonce.envUpObserved :=
+  ⟨Nonce.envUpObserved_erases,Nonce.envUpObserved_safe⟩
 
 end Leanux.Proofs.WG.TransmitSecurity

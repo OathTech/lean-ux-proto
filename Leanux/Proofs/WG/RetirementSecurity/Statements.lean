@@ -17,6 +17,13 @@ import Leanux.Proofs.WG.RetirementSecurity.TxDisposeHolders
 import Leanux.Proofs.WG.RetirementSecurity.TxAcquireHolders
 import Leanux.Proofs.WG.RetirementSecurity.TxAllocationHolders
 import Leanux.Proofs.WG.RetirementSecurity.WorkerHolderClosure
+import Leanux.Proofs.WG.RetirementSecurity.TxCreateHolders
+import Leanux.Proofs.WG.RetirementSecurity.TxStagedHolders
+import Leanux.Proofs.WG.RetirementSecurity.TxPeekHolders
+import Leanux.Proofs.WG.RetirementSecurity.KeyHolderFrames
+import Leanux.Proofs.WG.RetirementSecurity.TxStoppedHolders
+import Leanux.Proofs.WG.RetirementSecurity.OwnershipCompletionFrames
+import Leanux.Proofs.WG.RetirementSecurity.TxWorkerHolders
 
 /-! Campaign 3, T6: local original-operation retirement contracts. The
 initialized key-reference ledger, complete caller coverage and conditional
@@ -24,6 +31,81 @@ timer/worker progress remain separate obligations. No complete T6 outcome is
 claimed by these exports. -/
 namespace Leanux.Proofs.WG.RetirementSecurity
 open Leanux Leanux.WG Leanux.Proofs.Framing
+
+/-- The complete original TX worker preserves physical key-reference
+funding: a stopped iteration retains its queued reference; a completed one
+moves the cached batch into its actual source-local credit, retains that
+credit through send/rekey effects, then pays it once. Incoming packet-head
+separation and peer-release funding remain explicit caller obligations. -/
+theorem original_tx_worker_holder_account (account : HolderAccount temporary w)
+    (separated : TxSeparated pid w) (funded : PeerReleaseFunded pid w)
+    (a b : Ambient)
+    (run : ((txStep pid).run w).run a = .ok ((result,v),b)) : HolderAccount temporary v :=
+  account.tx_step separated funded a b run
+
+/-- Native completed-send bookkeeping preserves all physical key holders
+and their exact reference funding, including socket failures and a rekey
+handshake queued afterward. The latter owns a peer work reference and does
+not create a key credit. The incoming account remains an explicit premise. -/
+theorem original_tx_completion_holder_account (account : HolderAccount temporary w)
+    (pid : PeerId) (items : List SkbId) (a b : Ambient)
+    (run : ((createDataDone pid items).run w).run a = .ok (((),v),b)) :
+    HolderAccount temporary v := account.complete_tx pid items a b run
+
+/-- An original TX worker iteration that stops retains every key-reference
+holder. The source may cache its head but cannot enter disposal and return
+false; no assumption about later worker progress or packet separation is
+needed for this branch. The incoming concrete account remains explicit. -/
+theorem original_stopped_tx_holder_account (account : HolderAccount temporary w)
+    (pid : PeerId) (a b : Ambient)
+    (run : ((txStep pid).run w).run a = .ok ((false,v),b)) : HolderAccount temporary v :=
+  account.tx_stopped pid a b run
+
+/-- The actual staged submission suffix transfers or pays its saved key
+reference exactly once. Its peer acquisition derives nonfinal release and
+its allocator derives packet separation before createData. The saved key
+account, campaign 1 packet bound, key-to-peer affiliation and head packet's
+key word remain visible inputs; this is not full sendStagedPackets closure. -/
+theorem original_staged_submission_holder_account
+    (account : HolderAccount (allocation :: temporary) w)
+    (bounded : Packets.Inv w) (compatible : Queues.RxCredits.KeyCompatible pid allocation.slot w)
+    (packet : DataPacket) (packets : List DataPacket) (key : packet.keypair = allocation.slot)
+    (a b : Ambient)
+    (run : ((do
+      Affiliation.sendAcquire allocation.slot
+      let items ← (packet :: packets).mapM newTxSkb
+      createData pid items).run w).run a = .ok (((),v),b)) : HolderAccount temporary v :=
+  account.staged_submit bounded compatible packet packets key a b run
+
+/-- The original TX worker peek keeps all batch references while moving
+its logical head into the queue's cached field. A subsequent worker stop
+at an uncrypted head therefore has not paid that batch's key reference. -/
+theorem original_tx_peek_holder_account (account : HolderAccount temporary w)
+    (pid : PeerId) (a b : Ambient)
+    (run : ((txPeekSource pid).run w).run a = .ok ((first,v),b)) :
+    HolderAccount temporary v ∧ ∃ before after,
+      peerAt w pid = some before ∧ peerAt v pid = some after ∧
+      first = before.txQueue.all.head? ∧ after.txQueue.all = before.txQueue.all ∧
+      after.txQueue.peeked = first := account.peek_tx pid a b run
+
+/-- Actual TX publication changes no key-reference ownership: its temporary
+peer borrow is acquired and repaid without deleting any physical holder.
+No extra key credit is attributed to a device-ring or worker alias. -/
+theorem original_tx_publication_holder_account (account : HolderAccount temporary w)
+    (items : List SkbId) (state : PacketState) (a b : Ambient)
+    (run : ((enqueuePerPeerTx items state).run w).run a = .ok (((),v),b)) :
+    HolderAccount temporary v := account.publish_tx items state a b run
+
+/-- Full original createData either publishes its one saved key reference
+to the peer queue or pays it in rejection cleanup; no reference is lost or
+counted twice. Actual batch alignment, detached packet heads and final-peer
+slot readiness remain explicit incoming caller facts. -/
+theorem original_create_data_holder_account
+    (account : HolderAccount (allocation :: temporary) w)
+    (batch : transmitLoan w pid items = some ⟨.transmit pid items,allocation⟩)
+    (detached : TxDetached items w) (ready : PeerReleaseReady pid w) (a b : Ambient)
+    (run : ((createData pid items).run w).run a = .ok (((),v),b)) :
+    HolderAccount temporary v := account.create_tx batch detached ready a b run
 
 /-- The actual current slot funds staged acquisition: a normal get adds one
 saved reference to that allocation, and a null current slot adds none. The

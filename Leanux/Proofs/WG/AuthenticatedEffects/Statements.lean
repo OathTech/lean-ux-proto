@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.HandshakeAdmissionFacts
+import Leanux.Proofs.WG.AuthenticatedEffects.HandshakeAdmissionSource
 import Leanux.Proofs.WG.AuthenticatedEffects.TransportInitialized
 import Leanux.Proofs.WG.AuthenticatedEffects.TransportWorkers
 import Leanux.Proofs.WG.AuthenticatedEffects.DecryptWorkerFrames
@@ -376,5 +378,50 @@ theorem initialized_transport_replay_has_authenticated_source (trace : Runner.Tr
       pre ++ .checkedCounter occurrence id stamp pkt r :: post) :
     TransportAuthenticatedEntry.Certified pre id stamp pkt r :=
   TransportInitialized.replay_entry trace placeholders pre post occurrence id stamp pkt r position
+
+/-- Security: an original initiation reaches its Noise/freshness/flood acceptance
+cut before any peer protocol write, with at most one native acceptance receipt.
+The receipt survives a later Stop, including the consumption-clock read. This
+source-local claim does not yet establish whole-driver causal inheritance. -/
+theorem initiation_acceptance_has_native_cause (msg : Key) (w : WGWorld) (a : Ambient)
+    (h : List InitiationAcceptance) :
+    (runWGPrefix (acceptedInitiation msg) w a h).1 = ((consumeInitiation msg).run w).run a ∧
+      ∃ suffix, (runWGPrefix (acceptedInitiation msg) w a h).2 = h ++ suffix ∧
+        suffix.length ≤ 1 ∧ ∀ r ∈ suffix, r.input = msg ∧ r.Valid :=
+  ⟨acceptedInitiation_original msg w a h,acceptedInitiation_receipts msg w a h⟩
+
+/-- Security: an original response reaches its Noise/state-recheck acceptance
+cut before its first protocol write, with at most one native acceptance receipt,
+retained through a later Stop. This is a native consumer claim; deferred causal
+inheritance remains a separate obligation. -/
+theorem response_acceptance_has_native_cause (msg : Key) (w : WGWorld) (a : Ambient)
+    (h : List ResponseAcceptance) :
+    (runWGPrefix (acceptedResponse msg) w a h).1 = ((consumeResponse msg).run w).run a ∧
+      ∃ suffix, (runWGPrefix (acceptedResponse msg) w a h).2 = h ++ suffix ∧
+        suffix.length ≤ 1 ∧ ∀ r ∈ suffix, r.input = msg ∧ r.Valid :=
+  ⟨acceptedResponse_original msg w a h,acceptedResponse_receipts msg w a h⟩
+
+/-- Security: the acceptance observer executes the complete original handshake
+receiver, including its actual MAC gate, cookie exception and successful-send
+suffixes, and preserves both native state endpoints or the exact Stop. This
+statement is source equivalence; validity and causal completeness of the combined
+receipt stream are separate obligations. -/
+theorem original_handshake_admission_observer (msg : Key) (src : SkbSource)
+    (w : WGWorld) (a : Ambient) (h : List HandshakeAdmission) :
+    (runWGPrefix (receiveAdmissions msg src) w a h).1 =
+      ((receiveHandshakePacket msg src).run w).run a :=
+  receiveAdmissions_erases msg src w a h
+
+/-- Security: every initiation or response admission recorded by the complete
+original receiver carries its actual successful MAC validation and native Noise
+acceptance check for the same bytes. Receipts precede protocol writes and survive
+later Stop outcomes. This native receive-call claim needs no authentication or
+initialized-state premise; propagation through deferred work remains separate. -/
+theorem original_handshake_admissions_authenticated (msg : Key) (src : SkbSource)
+    (w : WGWorld) (a : Ambient) :
+    ∀ r ∈ (runWGPrefix (receiveAdmissions msg src) w a []).2, r.Valid := by
+  obtain ⟨suffix,history,safe,_⟩ := HandshakeAdmissionFacts.receive msg src w a []
+    (by intro r member; cases member)
+  exact safe
 
 end Leanux.Proofs.WG.AuthenticatedEffects

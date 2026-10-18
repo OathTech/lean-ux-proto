@@ -44,11 +44,11 @@ theorem enqueue_tail_holders (item : List SkbId) (temporary : Credits.Ledger) :
     cases tail
     exact ⟨Or.inl rfl,hg⟩
 
-theorem HolderAccount.enqueue (account : HolderAccount (allocation :: temporary) w)
+theorem HolderAccount.enqueue_detail (account : HolderAccount (allocation :: temporary) w)
     (batch : transmitLoan w pid item = some ⟨.transmit pid item,allocation⟩)
     (a b : Ambient)
     (run : ((enqueuePerDeviceAndPeer pid item).run w).run a = .ok ((ret,v),b)) :
-    (ret = -ENOSPC ∧ HolderAccount (allocation :: temporary) v) ∨
+    (ret = -ENOSPC ∧ HolderAccount (allocation :: temporary) v ∧ holderStore v = holderStore w) ∨
       ((ret = 0 ∨ ret = -EPIPE) ∧ HolderAccount temporary v) := by
   rw [enqueue_factor] at run
   cases head : item.head? with
@@ -68,20 +68,31 @@ theorem HolderAccount.enqueue (account : HolderAccount (allocation :: temporary)
     have found : peerAt u pid = some p := by simp [peerAt,device,stored]
     have he := ((hoare_iff_run_ambient _ _ _).mp
       (branch_predicate_native (fun s => HolderAccount (allocation :: temporary) s ∧
-        peerAt s pid = some p ∧ transmitLoan s pid item = some ⟨.transmit pid item,allocation⟩)
+        peerAt s pid = some p ∧ transmitLoan s pid item = some ⟨.transmit pid item,allocation⟩ ∧
+        holderStore s = holderStore w)
         .enqueuePeerQueueFull (decide (p.txQueue.count ≥ MAX_QUEUED_PACKETS)))
-      u aa full e ae ⟨hu,found,batchU⟩ branchRun).2
+      u aa full e ae ⟨hu,found,batchU,same⟩ branchRun).2
     cases full with
     | true =>
       simp only [ite_true] at tail
       cases tail
-      exact Or.inl ⟨rfl,he.1⟩
+      exact Or.inl ⟨rfl,he.1,he.2.2.2⟩
     | false =>
       simp only [Bool.false_eq_true,ite_false,MaterialOrigin.bind_ok_ambient] at tail
       obtain ⟨result,f,af,installRun,tailRun⟩ := tail
       cases result
-      have hf := he.1.enqueue_tx he.2.1 he.2.2 ae af installRun
+      have hf := he.1.enqueue_tx he.2.1 he.2.2.1 ae af installRun
       exact Or.inr ((hoare_iff_run_ambient _ _ _).mp
         (enqueue_tail_holders item temporary) f af ret v b hf tailRun)
+
+theorem HolderAccount.enqueue (account : HolderAccount (allocation :: temporary) w)
+    (batch : transmitLoan w pid item = some ⟨.transmit pid item,allocation⟩)
+    (a b : Ambient)
+    (run : ((enqueuePerDeviceAndPeer pid item).run w).run a = .ok ((ret,v),b)) :
+    (ret = -ENOSPC ∧ HolderAccount (allocation :: temporary) v) ∨
+      ((ret = 0 ∨ ret = -EPIPE) ∧ HolderAccount temporary v) := by
+  rcases account.enqueue_detail batch a b run with refused | published
+  · exact Or.inl ⟨refused.1,refused.2.1⟩
+  · exact Or.inr published
 
 end Leanux.Proofs.WG.RetirementSecurity

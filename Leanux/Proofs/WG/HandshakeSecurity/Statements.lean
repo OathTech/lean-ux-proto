@@ -1,3 +1,6 @@
+import Leanux.Proofs.WG.HandshakeSecurity.ResponderStackFrames
+import Leanux.Proofs.WG.HandshakeSecurity.ResponderLabels
+import Leanux.Proofs.WG.HandshakeSecurity.ResponderRetention
 import Leanux.Proofs.WG.HandshakeSecurity.Frames
 import Leanux.Proofs.WG.HandshakeSecurity.ReplayClaims
 import Leanux.Proofs.WG.HandshakeSecurity.StopClaims
@@ -358,5 +361,42 @@ theorem original_responder_confirmation_history_step (H1 : H1ResponderCurrentEdg
     (run : ((receivedWithKeypair pid kid).run w).run a = .ok ((result, v), b)) :
     Responder.Authorized (confirmed ++ Responder.confirmedAt w kid result) v :=
   Responder.confirmation_authorized H1 pid kid confirmed w v a b result entry run
+
+/-- Every surviving key in a complete original staged send retains its allocation,
+role and sending key, and the operation preserves responder-current authorization.
+All drop branches and last-reference deletion are included. This is native
+transport from an explicit entry invariant, not initialized chronology. -/
+theorem original_staging_retains_responder_authorization (pid : PeerId)
+    (confirmed : List Nat) (w v : WGWorld) (a b : Ambient)
+    (entry : Responder.Authorized confirmed w)
+    (run : ((sendStagedPackets pid).run w).run a = .ok (((), v), b)) :
+    Responder.Retains (Responder.pool w) (Responder.pool v) ∧
+    Responder.Authorized confirmed v := by
+  exact ⟨(Lifetimes.ProjectedAction.iff_run_ambient _ _ _).mp
+      (Responder.sendStagedPackets_core pid) w a () v b run,
+    (Framing.hoare_iff_run_ambient _ _ _).mp
+      (Responder.sendStagedPackets_authorized pid confirmed) w a () v b entry run⟩
+
+/-- A completed original consumer retains responder-current authorization through
+endpoint updates, confirmation, staged sends, timers and routing. The exact
+existing C1 completed-event label records the promotion, under the visible H1
+source contracts. The incoming history invariant still requires driver transport. -/
+theorem original_completed_consumer_responder_history
+    (H1 : H1ResponderCurrentEdges) (slots : H1ConfirmationEdges)
+    (confirmed : List Nat) (r : Queues.RxDisposition.ConsumeReceipt) (valid : r.Valid)
+    (entry : Responder.Authorized confirmed r.run.before) :
+    Responder.Authorized (confirmed ++ (Confirmation.completedLabel r).toList) r.run.after :=
+  Responder.completed_consumer_history H1 slots confirmed r valid entry
+
+/-- The actual receive poll, including its concrete Stack replies, carries
+responder-current authorization across each completed confirmation and preserves
+every consumer's incoming history through a later Stop. H1 source contracts and
+the poll-entry invariant remain explicit; initialized runner closure is separate. -/
+theorem original_poll_responder_history
+    (H1 : H1ResponderCurrentEdges) (slots : H1ConfirmationEdges)
+    (pid : PeerId) (budget : Nat) (confirmed : List Nat) :
+    PrefixPreserves (Responder.History.State confirmed) (Responder.History.Checks confirmed)
+      (Queues.RxJoint.poll pid budget) :=
+  Responder.History.poll H1 slots Responder.deliverInner_native pid budget confirmed
 
 end Leanux.Proofs.WG.HandshakeSecurity
