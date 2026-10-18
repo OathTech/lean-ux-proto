@@ -37,8 +37,9 @@ crypt/transmit, timer/scheduler, dump, environment and initialized runner
 composition now closes allocation-stamp confirmation uniqueness. That invariant
 does not carry handshake-tag ownership. Separate actual tag observers now close
 birth, work drains, timer stop, stop/down, mixed configuration and removal/destruction,
-with exact original outcomes. Scheduler and enclosing driver composition remain
-open. These are source obligations rather than missing socket frames.
+with exact original outcomes. Actual scheduler/deferred, data consume/transmit,
+Stack/poll/NAPI and dump tag composition now closes too. Traffic/lifecycle and
+enclosing syscall/runner composition remain open. These are source obligations rather than missing socket frames.
 This is proof support only; there is no mirror-change request.
 
 ## Landed support update, 2026-10-18

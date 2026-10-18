@@ -1,4 +1,8 @@
 import Leanux.Proofs.WG.Noise.DriverTagClaims
+import Leanux.Proofs.WG.Noise.DriverTagProductClaims
+import Leanux.Proofs.WG.Noise.DriverTagScheduledSource
+import Leanux.Proofs.WG.Noise.DriverTagDumpSource
+import Leanux.Proofs.WG.Noise.DriverTagConsumeSource
 import Leanux.Proofs.WG.Noise.DriverTagConfigurationSource
 import Leanux.Proofs.WG.Noise.DriverTagProductSource
 import Leanux.Proofs.WG.Noise.DriverTagControlCompleteSource
@@ -896,7 +900,7 @@ theorem original_device_down_driver_tags (entry : Campaign2.Snapshot) :
   ⟨DriverTags.inspection_facts _ DriverTags.Control.downObserved_preserves entry,
     DriverTags.inspection_erases _ _ DriverTags.Control.downObserved_erases⟩
 
-/-- Actual peer removal exposes nested timer and queue drains. Normal surviving tags have actual helper origins; emitted receipts remain valid on Stop. -/
+/-- Actual peer removal exposes nested timer and queue drains. Normal surviving tags trace to entry tags or actual receipts; emitted receipts remain valid on Stop. -/
 theorem original_peer_removal_driver_tags (peer : Option PeerId) (entry : Campaign2.Snapshot) :
     Campaign2.Ensures (DriverTags.inspectObserved (DriverTags.Removal.removeObserved peer))
       (fun s => s = entry) (fun out final => final = entry ∧ DriverTags.InspectionFacts entry out) ∧
@@ -945,5 +949,55 @@ theorem original_device_configuration_driver_tags (attrs : DeviceAttrs) (entry :
       (Campaign2.inspect (wgSetDevice attrs)) :=
   ⟨DriverTags.inspection_facts _ (fun tags => DriverTags.Configuration.observeDevice_preserves tags attrs) entry,
     DriverTags.inspection_erases _ _ (DriverTags.Configuration.observeDevice_erases attrs)⟩
+
+/-- Actual data completion preserves surviving handshake tags through endpoint updates, confirmation rotation, counters, timers and staged sends. It emits no tag-owner receipt. -/
+theorem original_data_completion_driver_tags (pid : PeerId) (packet : RxPacket) (endpoint : Endpoint) (entry : Campaign2.Snapshot) :
+    Campaign2.Ensures (DriverTags.inspectObserved (Leanux.Proofs.Logged.liftWGPrefix (consumeDataDone pid packet endpoint)))
+      (fun s => s = entry) (fun out final => final = entry ∧ DriverTags.InspectionFacts entry out) ∧
+    Campaign2.AgreesOn (fun _ => True)
+      (do let out ← DriverTags.inspectObserved (Leanux.Proofs.Logged.liftWGPrefix (consumeDataDone pid packet endpoint)); pure out.1)
+      (Campaign2.inspect (consumeDataDone pid packet endpoint)) :=
+  ⟨DriverTags.inspection_facts _ (fun tags => DriverTags.Silent.consumeDataDone_preserves tags pid packet endpoint) entry,
+    DriverTags.inspection_erases _ _ (Leanux.Proofs.Logged.erasesStatePrefix_lift _)⟩
+
+/-- Actual inner transmit preserves surviving handshake tags through lookup, queue handling and release. Normal errno outcomes and original Stops remain. -/
+theorem original_transmit_driver_tags (family addr : Nat) (packets : List Packet) (mtu : Nat) (entry : Campaign2.Snapshot) :
+    Campaign2.Ensures (DriverTags.inspectObserved (Leanux.Proofs.Logged.liftWGPrefix (wgXmit family addr packets mtu)))
+      (fun s => s = entry) (fun out final => final = entry ∧ DriverTags.InspectionFacts entry out) ∧
+    Campaign2.AgreesOn (fun _ => True)
+      (do let out ← DriverTags.inspectObserved (Leanux.Proofs.Logged.liftWGPrefix (wgXmit family addr packets mtu)); pure out.1)
+      (Campaign2.inspect (wgXmit family addr packets mtu)) :=
+  ⟨DriverTags.inspection_facts _ (fun tags => DriverTags.Silent.lift_preserves tags _ (fun initial => DriverTags.Transmit.native initial family addr packets mtu)) entry,
+    DriverTags.inspection_erases _ _ (Leanux.Proofs.Logged.erasesStatePrefix_lift _)⟩
+
+/-- All seven original dump calls preserve surviving tags. Existing cursor/serializer behavior and every original outcome are retained. -/
+theorem original_dump_driver_tags (call : Leanux.Proofs.WG.Lifetimes.NetlinkDumpCall) (entry : Campaign2.Snapshot) :
+    DriverTags.ProductEnsures (DriverTags.inspectProduct (DriverTags.Dump.observed call))
+      (fun s => s = entry) (fun out final => final = entry ∧ DriverTags.InspectionFacts entry out) ∧
+    DriverTags.ProductAgreesOn (fun _ => True)
+      (do let out ← DriverTags.inspectProduct (DriverTags.Dump.observed call); pure out.1)
+      (DriverTags.inspectOriginalProduct (Leanux.liftWG call.original)) :=
+  ⟨DriverTags.product_inspection_facts _ (fun tags => DriverTags.Dump.observed_preserves tags call) entry,
+    DriverTags.product_inspection_erases _ _ (DriverTags.Dump.observed_erases call)⟩
+
+/-- The actual complete scheduler uses concrete worker and NAPI callbacks. Normal surviving tags trace to the entry state or actual receipts; copied consistency probes add no committed receipt. -/
+theorem original_scheduler_driver_tags (stack : Option Worker) (entry : Campaign2.Snapshot) :
+    DriverTags.ProductEnsures (DriverTags.inspectProduct (DriverTags.Scheduled.schedule stack))
+      (fun s => s = entry) (fun out final => final = entry ∧ DriverTags.InspectionFacts entry out) ∧
+    DriverTags.ProductAgreesOn (fun _ => True)
+      (do let out ← DriverTags.inspectProduct (DriverTags.Scheduled.schedule stack); pure out.1)
+      (DriverTags.inspectOriginalProduct (Leanux.Env.schedule stack)) :=
+  ⟨DriverTags.product_inspection_facts _ (fun tags => DriverTags.Scheduled.schedule_preserves tags stack) entry,
+    DriverTags.product_inspection_erases _ _ (DriverTags.Scheduled.schedule_erases stack)⟩
+
+/-- The deferred-call family instantiates the complete concrete scheduler, send/clear observers and timer traversal. No callback or successful-completion premise remains. -/
+theorem original_deferred_driver_tags (call : Leanux.Proofs.WG.Lifetimes.EnvDeferredCall) (entry : Campaign2.Snapshot) :
+    DriverTags.ProductEnsures (DriverTags.inspectProduct (DriverTags.Scheduled.deferred call))
+      (fun s => s = entry) (fun out final => final = entry ∧ DriverTags.InspectionFacts entry out) ∧
+    DriverTags.ProductAgreesOn (fun _ => True)
+      (do let out ← DriverTags.inspectProduct (DriverTags.Scheduled.deferred call); pure out.1)
+      (DriverTags.inspectOriginalProduct (call.original)) :=
+  ⟨DriverTags.product_inspection_facts _ (fun tags => DriverTags.Scheduled.deferred_preserves tags call) entry,
+    DriverTags.product_inspection_erases _ _ (DriverTags.Scheduled.deferred_erases call)⟩
 
 end Leanux.Proofs.WG.Noise
