@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Index.TransmitRuleSource
 import Leanux.Proofs.WG.Noise.DriverTagTransmitSource
 import Leanux.Proofs.WG.Noise.DriverTagProductFrames
 import Leanux.Proofs.WG.Noise.PendingStackSource
@@ -13,27 +14,15 @@ retention. No Stack body or projection proof is duplicated. -/
 theorem source_preserves (entry : TagMap) (bytes : List UInt8) :
     PrefixPreserves (fun (_ : List Empty) (w : World) => Silent.Retained entry w.wg)
       (fun _ => True) (PendingStack.stackSource bytes) := by
-  have safe : ∀ (_ : List Empty) (w : World), Silent.Retained entry w.wg → True :=
-    fun _ _ _ => True.intro
-  have store : ∀ (_ : List Empty) (w v : World),
-      productStoreView v = productStoreView w →
-      Silent.Retained entry w.wg → Silent.Retained entry v.wg := by
-    intro _ w v same prior
-    exact (state_product_store entry [] w v same
-      ⟨prior,by intro event member; cases member⟩).1
-  unfold PendingStack.stackSource
-  apply stackReceiveWith_preserves safe store
-  intro packet
-  apply receive4With_preserves safe store
-  intro dst packet
-  apply reply4With_preserves safe store
-  intro family addr packets mtu
-  unfold PendingStack.transmit
-  apply PrefixEnsures.lift (Q := fun _ _ w => Silent.Retained entry w.wg) _ safe
-  intro _ w result v prior run
-  exact prior.trans (native_product_retained _
-    (Transmit.retained family addr packets mtu) w result v run)
-
+  apply Index.TransmitCore.stack_preserves_source
+  · intro w v same prior
+    have tags : tagView v.wg=tagView w.wg :=
+      congrArg (fun s : ProductStore43=>responseTagMap s.2.2.2.dev) same
+    change TagsRetained entry (tagView v.wg)
+    rw [tags]
+    exact prior
+  · intro family addr packets mtu
+    exact PublicationPoll.native_product _ _ (Transmit.native entry family addr packets mtu)
 /-- Complete original Stack callback on normal return, including actual routed
 IPv4 replies through wgXmit. Invalid and excluded paths retain their original
 Stops; no readiness, residency or replacement-callback premise is needed. -/

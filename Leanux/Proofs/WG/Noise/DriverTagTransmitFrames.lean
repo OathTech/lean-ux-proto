@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Index.TransmitRuleSource
 import Leanux.Proofs.WG.Noise.DriverTagSilentFrames
 import Leanux.Proofs.WG.Noise.DriverTagPeerConfigurationFrames
 import Leanux.Proofs.WG.Queues.RxStackFrames
@@ -32,46 +33,11 @@ theorem lookupDst_tag_frame (family addr : Nat) :
 paired with its conditional staged-queue write; no saved arbitrary peer is framed. -/
 theorem xmitTrim_tag_variant (pid : PeerId) :
     SameView tagView (xmitTrim pid) := by
-  have step : SameView tagView (do
-      let p ← getPeer pid
-      if ← branch .xmitStagedTrimIter (p.staged.length > MAX_STAGED_PACKETS) then
-        setPeer pid {p with staged := p.staged.drop 1}
-        modifyDev fun d => {d with txDropped := d.txDropped+1}
-        pure (ForInStep.yield (PUnit.unit : PUnit.{1}))
-      else pure (ForInStep.done (PUnit.unit : PUnit.{1}))) := by
-    apply (ProjectedAction.iff_run_ambient _ _ _).mpr
-    intro g ambient result final after run
-    cases device : g.dev with
-    | none =>
-      simp [getPeer,getDev,device,invariant,AmbientM.invariant] at run
-      cases run
-    | some d =>
-      cases resident : d.peers[pid]? with
-      | none =>
-        simp [getPeer,getDev,device,resident,invariant,AmbientM.invariant] at run
-        cases run
-      | some p =>
-        by_cases trim : p.staged.length > MAX_STAGED_PACKETS
-        · simp [getPeer,getDev,device,resident,branch,AmbientM.branch,trim,
-            setPeer,modifyDev] at run
-          obtain ⟨⟨rfl,rfl⟩,rfl⟩ := run
-          funext target
-          simpa only [tagView,device,responseTagMap,Option.bind_some,List.drop_one] using
-            congrFun (tagMap_write d pid p {p with staged := p.staged.drop 1} resident rfl) target
-        · simp [getPeer,getDev,device,resident,branch,AmbientM.branch,trim] at run
-          obtain ⟨⟨rfl,rfl⟩,rfl⟩ := run
-          rfl
-  intro initial
-  change Preserves (fun g => tagView g = initial) (xmitTrim pid)
-  unfold xmitTrim
-  apply preserves_bind ((getPeer_frame pid).wp (fun s => s = initial))
-  intro p
-  simp only [Std.Legacy.Range.forIn_eq_forIn_range']
-  apply preserves_bind
-    (list_view_spec tagView (fun s => s = initial) _ _ _ (fun _ _ => step.wp (fun s => s = initial)))
-  intro _
-  exact preserves_pure ()
-
+  apply Index.TransmitCore.xmitTrim_view tagView pid
+  intro w d p device resident
+  funext target
+  simpa only [tagView,device,responseTagMap,Option.bind_some] using
+    congrFun (tagMap_write d pid p {p with staged:=p.staged.drop 1} resident rfl) target
 /-- Tag counterpart of CurrentSlots.splice_preserves. The repeated original
 read is reduced using its existing exact read/read source equation. -/
 theorem xmitSplice_tag_variant (pid : PeerId) (packets : List Packet) :

@@ -1,3 +1,8 @@
+import Leanux.Proofs.WG.Index.TransmitCoreClaims
+import Leanux.Proofs.WG.Index.LifecycleCoreClaims
+import Leanux.Proofs.WG.Index.LifecycleEnvironmentSource
+import Leanux.Proofs.WG.Index.CryptCutSource
+import Leanux.Proofs.WG.Index.TxDisposalCoreSource
 import Leanux.Proofs.WG.Index.ConfigurationCoreClaims
 import Leanux.Proofs.WG.Index.ReceiverCoreClaims
 import Leanux.Proofs.WG.Index.ReceiveCoreClaims
@@ -1507,5 +1512,68 @@ theorem original_set_device_index_core (cs : Queues.RxCredits.Ledger)
     Campaign2.Ensures (wgSetDevice attrs) (View.ConfigurationInput cs loans)
       (fun _ => View.ConfigurationInput cs loans) :=
   wgSetDevice_index cs loans attrs
+
+
+/-- The original routed transmit path preserves current slot compatibility
+and the full index component through its actual acquired loan and payment. -/
+theorem original_transmit_index_core (family addr : Nat) (packets : List Packet) (mtu : Nat) :
+    Campaign2.Ensures (wgXmit family addr packets mtu) View.StagedIndexReady
+      (fun _ => View.StagedIndexReady) :=
+  wgXmit_index family addr packets mtu
+
+/-- The original Stack callback, including routed WireGuard replies, retains
+the supplied slot/index package on every normal return. -/
+theorem original_inner_delivery_index_core (bytes : List UInt8) :
+    Campaign2.Product.Ensures (Env.deliverInner bytes)
+      (fun s=>View.StagedIndexReady s.toSnapshot)
+      (fun _ s=>View.StagedIndexReady s.toSnapshot) :=
+  deliverInner_index bytes
+
+/-- Original wgCreate preserves the actual supplied account, configuration,
+slot and index package on normal return; no callback contract is supplied. -/
+theorem original_lifecycle_create_index_core (cs : Queues.RxCredits.Ledger)
+    (loans : Queues.RxCredits.Reservations) :
+    Campaign2.Ensures wgCreate (View.ConfigurationInput cs loans)
+      (fun _ => View.ConfigurationInput cs loans) :=
+  lifecycle_create_index cs loans
+
+/-- Original wgOpen preserves the actual supplied account, configuration,
+slot and index package on normal return; no callback contract is supplied. -/
+theorem original_lifecycle_open_index_core (cs : Queues.RxCredits.Ledger)
+    (loans : Queues.RxCredits.Reservations) :
+    Campaign2.Ensures wgOpen (View.ConfigurationInput cs loans)
+      (fun _ => View.ConfigurationInput cs loans) :=
+  lifecycle_open_index cs loans
+
+/-- Original wgUp preserves the actual supplied account, configuration,
+slot and index package on normal return; no callback contract is supplied. -/
+theorem original_lifecycle_up_index_core (cs : Queues.RxCredits.Ledger)
+    (loans : Queues.RxCredits.Reservations) :
+    Campaign2.Ensures wgUp (View.ConfigurationInput cs loans)
+      (fun _ => View.ConfigurationInput cs loans) :=
+  lifecycle_up_index cs loans
+
+/-- Original wgStop preserves the actual supplied account, configuration,
+slot and index package on normal return; no callback contract is supplied. -/
+theorem original_lifecycle_stop_index_core (cs : Queues.RxCredits.Ledger)
+    (loans : Queues.RxCredits.Reservations) :
+    Campaign2.Ensures wgStop (View.ConfigurationInput cs loans)
+      (fun _ => View.ConfigurationInput cs loans) :=
+  lifecycle_stop_index cs loans
+
+/-- Original wgDown preserves the actual supplied account, configuration,
+slot and index package on normal return; no callback contract is supplied. -/
+theorem original_lifecycle_down_index_core (cs : Queues.RxCredits.Ledger)
+    (loans : Queues.RxCredits.Reservations) :
+    Campaign2.Ensures wgDown (View.ConfigurationInput cs loans)
+      (fun _ => View.ConfigurationInput cs loans) :=
+  lifecycle_down_index cs loans
+
+/-- A normal original destruction has no device or index entries. This
+does not assert completion or account retention on arbitrary initial states. -/
+theorem original_lifecycle_destruct_index_core :
+    Campaign2.Ensures wgDestruct (fun _ => True)
+      (fun _ s => s.wg.device=none ∧ View.IndexCore s) :=
+  lifecycle_destruct_index
 
 end Leanux.Proofs.WG.Index

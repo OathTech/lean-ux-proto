@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Index.LifecycleRuleSource
 import Leanux.Proofs.WG.Noise.DriverTagSilentFrames
 import Leanux.Proofs.WG.Noise.DriverTagPeerConfigurationFrames
 import Leanux.Proofs.WG.Noise.DriverTagProductSource
@@ -27,19 +28,13 @@ macro "driver_lifecycle_wg_step " entry:term : tactic => `(tactic| first
   | rx_retention_step)
 
 theorem open_native (entry : TagMap) :
-    Preserves (Silent.Retained entry) wgOpen := by
-  unfold wgOpen
-  simp (config := {zeta := false}) only [branch]
-  repeat' first
-    | (rx_retention_head socketInit; exact Silent.of_frame entry _ (socket_frame (socketInit_sameSocket _)))
-    | (rx_retention_head sendStagedPackets; exact Configuration.staged_preserves _ entry)
-    | (rx_retention_head sendKeepalive; exact Configuration.keepalive_preserves _ entry)
-    | (rx_retention_head ForIn.forIn
-       apply list_view_spec id (Silent.Retained entry)
-       intro x acc
-       change Preserves (Silent.Retained entry) _)
-    | driver_lifecycle_wg_step entry
-
+    Preserves (Silent.Retained entry) wgOpen :=
+  Noise.LifecycleSource.open_preserves _
+    (Silent.of_frame entry _ (store_frame getDev_sameWGStore))
+    (fun pid => Silent.of_frame entry _ (getPeer_frame pid))
+    (fun port => Silent.of_frame entry _ (socket_frame (socketInit_sameSocket port)))
+    (fun pid => Configuration.staged_preserves pid entry)
+    (fun pid => Configuration.keepalive_preserves pid entry)
 theorem up_native (entry : TagMap) :
     Preserves (Silent.Retained entry) WG.wgUp := by
   unfold WG.wgUp
@@ -48,18 +43,13 @@ theorem up_native (entry : TagMap) :
     | driver_lifecycle_wg_step entry
 
 theorem preexit_native (entry : TagMap) :
-    Preserves (Silent.Retained entry) netnsPreExit := by
-  unfold netnsPreExit
-  simp (config := {zeta := false}) only [branch]
-  repeat' first
-    | (rx_retention_head socketReinit; exact Silent.of_frame entry _ (socket_frame (socketReinit_sameSocket _ _)))
-    | (rx_retention_head clearPeerEndpointSrc; exact Silent.of_frame entry _ (clearPeerEndpointSrc_frame _))
-    | (rx_retention_head ForIn.forIn
-       apply list_view_spec id (Silent.Retained entry)
-       intro x acc
-       change Preserves (Silent.Retained entry) _)
-    | driver_lifecycle_wg_step entry
-
+    Preserves (Silent.Retained entry) netnsPreExit :=
+  Noise.LifecycleSource.preexit_preserves _
+    (Silent.of_frame entry _ read_frame)
+    (Silent.of_frame entry _ (store_frame getDev_sameWGStore))
+    (Silent.of_frame entry _ (modifyDev_frame _ (fun _=>rfl)))
+    (Silent.of_frame entry _ (socket_frame (socketReinit_sameSocket _ _)))
+    (fun pid => Silent.of_frame entry _ (clearPeerEndpointSrc_frame pid))
 theorem link_tags (g : WGWorld) : responseTagMap (linkView g).dev = tagView g := by
   funext pid
   cases device : g.dev <;>
@@ -139,10 +129,10 @@ macro "driver_lifecycle_env_step " entry:term : tactic => `(tactic| first
   | rx_retention_step)
 
 theorem envUp_native (entry : TagMap) :
-    Preserves (fun w : World => Silent.Retained entry w.wg) Env.wgUp := by
-  unfold Env.wgUp
-  repeat' driver_lifecycle_env_step entry
-
+    Preserves (fun w : World => Silent.Retained entry w.wg) Env.wgUp :=
+  Noise.LifecycleSource.envUp_preserves _
+    (fun action same => Silent.product_store entry action same)
+    (lift_native entry _ up_native)
 theorem cleanup_native (entry : TagMap) :
     Preserves (fun w : World => Silent.Retained entry w.wg) Env.netnsCleanup := by
   unfold Env.netnsCleanup
