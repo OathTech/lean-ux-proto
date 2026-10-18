@@ -35,7 +35,9 @@ def completed_operations(path, trace):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--anchor', choices=['remove', 'replace'], required=True)
+    parser.add_argument('--anchor', choices=['remove', 'replace', 'insert'], required=True)
+    parser.add_argument('--call-index', type=int, default=0,
+                        help='zero-based selected call within the operation (insert only)')
     parser.add_argument('--input', type=Path, required=True)
     parser.add_argument('--check', type=Path, required=True)
     parser.add_argument('--operation', type=int, required=True)
@@ -45,6 +47,8 @@ def main():
     args = parser.parse_args()
     if not 0 < args.instruction_budget <= 1000000:
         raise ValueError('invalid instruction budget')
+    if args.call_index < 0 or (args.anchor != 'insert' and args.call_index):
+        raise ValueError('call-index is nonnegative and only supported for insertion')
     probe = json.loads(args.input.read_text())
     check, out = args.check.resolve(), args.out.resolve()
     report = json.loads((check / 'report.json').read_text())
@@ -63,7 +67,8 @@ def main():
     if Path(command[command.index('-kernel')+1]).resolve() != ORACLE.parent / 'arch/x86/boot/bzImage':
         raise ValueError('recorded QEMU command names another kernel')
     entry = probe['instructions'][0]['pc']
-    expected = {'remove': 0xffffffff813a0400, 'replace': 0xffffffff813a0350}[args.anchor]
+    expected = {'remove': 0xffffffff813a0400, 'replace': 0xffffffff813a0350,
+                'insert': 0xffffffff813a01a0}[args.anchor]
     if entry != expected:
         raise ValueError('input anchor mismatch')
     endpoint, boot = out / 'gdb.sock', out / 'boot.log'
@@ -79,6 +84,7 @@ def main():
                 time.sleep(0.02)
             remote = Remote(endpoint, args.timeout)
             remote.breakpoint(entry)
+            selected = 0
             for occurrence in range(256):
                 regs = remote.resume()
                 if regs['rip'] != entry:
@@ -88,8 +94,11 @@ def main():
                     raise ValueError('selected operation passed without the requested linked mutator')
                 if len(completed) == args.operation:
                     previous = remote.word(regs['rsi']+probe['offsets']['hash']+probe['offsets']['pprev'])
-                    if previous:
+                    if args.anchor == 'insert' and selected == args.call_index:
                         break
+                    if args.anchor != 'insert' and previous:
+                        break
+                    selected += 1
                 remote.breakpoint(entry, False)
                 remote.resume(step=True)
                 remote.breakpoint(entry)
@@ -105,25 +114,44 @@ def main():
             if int(remote.command('qqemu.sstep'), 16) != 7:
                 raise ValueError('QEMU stepping must defer IRQs/timers for the sequential experiment')
             executed, returned = [], regs
+            random_services, random_entry = [], None
+            def read_blocks():
+                return [dict(address=b['address'], bytes=list(remote.read(b['address'], len(b['bytes']))))
+                        for b in initial['blocks']]
             for _ in range(args.instruction_budget):
+                if args.anchor == 'insert' and returned['rip'] == 0xffffffff81375000:
+                    if random_entry is not None:
+                        raise ValueError('nested random service')
+                    random_entry = dict(registers=returned, blocks=read_blocks())
+                    random_start = len(executed)
+                    random_return = remote.word(returned['rsp'])
                 executed.append(returned['rip'])
                 returned = remote.resume(step=True)
+                if random_entry is not None and returned['rip'] == random_return:
+                    if random_return != entry+0x79 or returned['rsp'] != random_entry['registers']['rsp']+8:
+                        raise ValueError('random service returned to the wrong boundary')
+                    random_services.append(dict(initial=random_entry,
+                        returned=dict(registers=returned, blocks=read_blocks()),
+                        executedPCs=executed[random_start:]))
+                    random_entry = None
                 if returned['rip'] == return_pc:
                     break
             else:
                 raise ValueError('capture instruction budget exhausted')
             if returned['rsp'] != regs['rsp']+8:
                 raise ValueError('return stack mismatch')
+            if random_entry is not None or (args.anchor == 'insert' and not random_services):
+                raise ValueError('incomplete or missing random service capture')
             for name in ['rbx', 'rbp', 'r12', 'r13', 'r14', 'r15']:
                 if returned[name] != regs[name]:
                     raise ValueError(f'callee-saved register changed: {name}')
-            final_blocks = [dict(address=b['address'], bytes=list(remote.read(b['address'], len(b['bytes']))))
-                            for b in initial['blocks']]
+            final_blocks = read_blocks()
             result = dict(origin='actual stopped QEMU mutator; unmodified bytes and registers', anchor=args.anchor,
                           kernel=identity, image_sha256=hashlib.sha256(ORACLE.read_bytes()).hexdigest(), kraken=kraken,
                           trace=probe['trace']['id'], operation=args.operation, instructionBudget=args.instruction_budget,
                           executionMode='sequential', executedPCs=executed, completedOperations=completed,
-                          occurrence=occurrence, initial=initial, returned=dict(registers=returned, blocks=final_blocks))
+                          occurrence=occurrence, initial=initial, returned=dict(registers=returned, blocks=final_blocks),
+                          randomServices=random_services)
         finally:
             if remote:
                 remote.socket.close()

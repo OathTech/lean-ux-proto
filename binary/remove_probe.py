@@ -17,7 +17,8 @@ from layouts import layouts
 from pin import verify_pin
 
 
-def prepare(check, out, name='wg_index_hashtable_remove', operation=4):
+def prepare(check, out, name='wg_index_hashtable_remove', operation=4,
+            workload='c_remove_after_handshake'):
     verify_pin(ROOT)
     report = json.loads((check / 'report.json').read_text())
     if report['status'] != 'pass' or report['traces'] != 1:
@@ -28,10 +29,13 @@ def prepare(check, out, name='wg_index_hashtable_remove', operation=4):
         raise ValueError('oracle hash differs')
     chunk = check / 'chunk-000'
     [trace] = [json.loads(s) for s in (chunk / 'model/inputs.jsonl').read_text().splitlines()]
-    if trace['id'] != 'c_remove_after_handshake':
-        raise ValueError('wrong removal workload')
+    if trace['id'] != workload:
+        raise ValueError('wrong mutator workload')
     services = {'__sanitizer_cov_trace_pc', '__local_bh_enable_ip'}
-    functions = extract(ORACLE, services)
+    if name == 'wg_index_hashtable_insert':
+        services.add('__sanitizer_cov_trace_cmp4')
+    service_bodies = services | ({'write_comp_data'} if name == 'wg_index_hashtable_insert' else set())
+    functions = extract(ORACLE, service_bodies)
     [anchor] = [f for f in functions if f['name'] == name]
     if name == 'wg_index_hashtable_remove':
         if anchor['entry'] != 0xffffffff813a0400:
@@ -43,6 +47,9 @@ def prepare(check, out, name='wg_index_hashtable_remove', operation=4):
     elif name == 'wg_index_hashtable_replace':
         if anchor['entry'] != 0xffffffff813a0350 or len(anchor['instructions']) != 41:
             raise ValueError('replacement anchor differs from the pinned image')
+    elif name == 'wg_index_hashtable_insert':
+        if anchor['entry'] != 0xffffffff813a01a0 or len(anchor['instructions']) != 109:
+            raise ValueError('insertion anchor differs from the pinned image')
     else:
         raise ValueError('unknown mutator anchor')
     provenance = json.loads((chunk / 'linux/provenance.json').read_text())
@@ -62,7 +69,7 @@ def prepare(check, out, name='wg_index_hashtable_remove', operation=4):
                    peerRefcount=o['wg_peer']['members']['refcount'] +
                      o['kref']['members']['refcount'] + o['refcount_struct']['members']['refs'])
     instructions, labels = [], {}
-    for function in [anchor] + [f for f in functions if f['name'] in services]:
+    for function in [anchor] + [f for f in functions if f['name'] in service_bodies]:
         for insn in function['instructions']:
             raw, pc, asm = bytes.fromhex(insn['bytes']), insn['pc'], insn['normalized']
             instructions.append(dict(pc=pc, size=len(raw), asm=asm))
@@ -73,8 +80,8 @@ def prepare(check, out, name='wg_index_hashtable_remove', operation=4):
                     raise ValueError('relative branch displacement differs')
                 labels['L_' + match[2]] = target
     hooks = [(f['entry'], f['name']) for f in functions if f['name'] in services]
-    [preempt] = [i for i in anchor['instructions'] if '<pcpu_hot+0x8>' in i['asm']]
-    preempt = int(re.search(r'#\s+([0-9a-f]+)', preempt['asm'])[1], 16)
+    [preempt] = {int(re.search(r'#\s+([0-9a-f]+)', i['asm'])[1], 16)
+                 for i in anchor['instructions'] if '<pcpu_hot+0x8>' in i['asm']}
     out.mkdir(parents=True, exist_ok=True)
     path = out / 'input.json'
     path.write_text(json.dumps(dict(instructions=instructions, labels=list(labels.items()), hooks=hooks,

@@ -214,6 +214,8 @@ def binary_profile_ranges(profile):
         return binary_coverage_ranges(symbols=("wg_index_hashtable_remove",))
     if profile == "index-replace":
         return binary_coverage_ranges(symbols=("wg_index_hashtable_replace",))
+    if profile == "index-insert":
+        return binary_coverage_ranges(symbols=("wg_index_hashtable_insert",))
     raise ValueError(f"unknown binary coverage profile: {profile}")
 
 

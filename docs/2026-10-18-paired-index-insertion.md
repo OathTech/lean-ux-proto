@@ -22,7 +22,8 @@ The new service boundary is `get_random_u32`, whose wrapper calls the raw
 entropy provider and `kcov_choice_ip`; input coupling must remain explicit and
 must not assume arbitrary draws from a fixed deterministic machine state.
 
-No new theorem or passing insertion test is claimed at this start checkpoint.
+The start checkpoint had no new theorem or passing insertion test. Current
+progress is recorded below; whole-function insertion adequacy remains open.
 
 ## Independent review disposition
 
@@ -49,3 +50,61 @@ including that untracked file, at recovery ref
 `refs/recovery/binary-pair-runner/20261018T172711Z`; branch HEAD was not changed
 by preservation. No other worktree was modified. The preceding external export
 was then accepted under the user's external command, as recorded above.
+
+
+## Input and execution checkpoint, 2026-10-18 17:43 UTC
+
+The independent `s2_index_collision` recording passes: one trace, four
+operations, 29 operand pairs and 17 distinct operand rows. The new opt-in
+`index-insert` profile names only `wg_index_hashtable_insert`, deriving its
+range from the approved ELF; it changes no guest or kernel behavior. Literal
+image/layout generation checks all 109 anchored instructions and their relative
+branch encodings. The existing removal/replacement generated files are unchanged.
+
+The paired supplied-service test passes the independent kernel-coverage and
+mirror-decision comparisons for the two source-selected insertion calls. Across
+two undefined-value seeds, five cases execute 36 retained-heap calls, 21,936
+interpreted instructions and 128 input draws. Generated cases include 0, 1, 8
+and 32 collision retries, nonempty same-bucket insertion, reinsertion and zero
+as the accepted index. Four controls reject exhausted input, a wrong record
+site, short payload and nonzero padding. The paired run took 3.760 seconds.
+
+These are actual anchored, KCOV and BH instructions under Kraken, with an
+explicit **supplied random-service return**. Neither `get_random_u32` nor its
+entropy/recording callees execute under Kraken in this test. The runner reports
+that boundary and does not count it as interpreted instructions. Its source is
+the actual `WG.indexInsert`, including refusal behavior and exact input cursor.
+All lookup reconstruction and owner-linkage assertions remain unchanged;
+source environment records are separate from physical reconstruction.
+
+A read-only sequential QEMU capture selects the second insertion of operation
+1, after the first peer was inserted. It records 33,625,812 entry bytes at the
+actual KCOV capacity of 4,194,304 words and reaches return after 1,354 native
+instructions. Both random-service invocations return through their actual
+bodies (511 instructions each), including the steered collision and fresh
+value. Within the captured projection, their changes are stack and KCOV bytes.
+Private entropy/recording state is not included in that projection. Segmented
+Kraken replay against these boundary snapshots is running; **no passing
+captured replay is claimed yet**. Applying a captured native service transition
+is explicitly distinct from interpreting its instructions under Kraken.
+
+`PairInsertInputProof.draw_hidden` proves that the tested input decoder consumes
+the same bytes and leaves the same cursor as the actual mirror's `hiddenU64`.
+Fresh kernel replay passes with only the three standard axioms. The first
+pointer-effect components, `PairInsertMemory` and `PairInsertFields`, prove
+exact chronological hlist stores, scalar frames and the newly linked node's
+fields, reusing the old word-plan and storage-separation lemmas. They do not yet
+prove whole-table reconstruction, source retry composition or function adequacy.
+No new semantic hypothesis or axiom has been installed in `TrustBase.lean`.
+The random-service contract and its compatibility with the input tape remain
+an open trust-surface item before function composition.
+
+Validation: default `capped lake build` passes (698 jobs before the last field
+module); the insertion executable and all currently written local proofs build.
+The harness/evaluator unit tier passes 72 tests, with one existing skip.
+Initial development builds failed on syntax/elaboration and the literal fetch's
+recursion limit, then passed after correction. The first runner failed noisily
+because its decoded callback closure omitted `write_comp_data`; adding that
+actual body fixed it. No killed build or timeout has occurred. Supporting
+runtime optimization has still used zero focused hours. No completed fresh
+function rate can be reported at this intermediate point.

@@ -514,3 +514,32 @@ the diagnostic intentionally does not duplicate its independent captured
 header/return comparisons or corruption controls. Do not substitute it for
 that regression. All input/output captures, timing logs and leanexports are
 ephemeral and should be regenerated and removed when no longer needed.
+
+
+## Insertion input-driven increment (in progress)
+
+The [insertion report](../docs/2026-10-18-paired-index-insertion.md) distinguishes
+supplied random-service returns, captured native service transitions, and
+Kraken-interpreted instructions. Whole-function adequacy is still open.
+With the approved oracle selected, reproduce the first comparison from the
+worktree root:
+
+```sh
+LEANUX_QEMU_SLOTS=16 capped scripts/in-bundle python3 -B -m evaluator.check \
+  --suite wireguard --binary-coverage --binary-profile index-insert \
+  --trace s2_index_collision --out .artifacts/check/binary-insert
+(cd binary && capped lake build binary-pair-insert binary-pair-insert-capture)
+capped scripts/in-bundle python3 -B binary/insert_probe.py \
+  --check .artifacts/check/binary-insert
+LEANUX_QEMU_SLOTS=16 capped scripts/in-bundle python3 -B binary/capture_index_mutator.py \
+  --anchor insert --call-index 1 --input .tmp/binary-insert/input.json \
+  --check .artifacts/check/binary-insert --operation 1 --out .tmp/cap-index-insert
+capped binary/.lake/build/bin/binary-pair-insert-capture \
+  .tmp/binary-insert/input.json .tmp/cap-index-insert/snapshot.json \
+  .tmp/cap-index-insert/layouts.json
+```
+
+The Python interpreter must have the already documented ELF dependencies.
+The captured random service is sampled at its real entry and return; its
+private state and instruction semantics are not validated by the segmented
+runner. The captured bytes and export files remain ephemeral under `.tmp`.
