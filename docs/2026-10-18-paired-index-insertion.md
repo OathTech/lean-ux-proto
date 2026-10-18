@@ -154,6 +154,42 @@ proofs retain source refusal behavior and introduce no new trust premise.
 
 The default build passes (706 jobs); the trust-gate unit tests pass. Fresh
 kernel replay of `PairInsertReconstruct` and `PairInsertSource` passes, and the
-new source-input closure is being replayed. All printed local theorem axioms
+new source-input closure also passes fresh replay. All printed local theorem axioms
 are the three standard axioms. The external acceptance above remains scoped
 to the preceding index subsystem, not these new insertion components.
+
+## Retry frames and initial instruction regions, 2026-10-18 18:16 UTC
+
+`PairInsertIndex` proves that every index overwrite on the unlinked resident
+entry preserves whole-table reconstruction and supplies the fields required
+by the eventual insertion. `PairInsertOwnership` proves that these overwrites
+preserve owner linkage flags and that the combined insertion stores mark just
+the inserted owner as linked, retaining all other flags. Both concern the
+existing executable decoders; no reconstruction clause was weakened.
+
+The nested BH-disable initially raised a potential gap in callback framing:
+the old library covered two preempt-count phases and insertion uses three.
+`PairInsertCoverage` proves that the two disabled phases have identical
+instrumentation gates, metadata reads and coverage requirements under the
+existing hardirq guards. Consequently the earlier physical footprint covers
+the third phase too. No additional separation precondition was added. The
+mask proof uses arithmetic lemmas and `omega`, with only standard axioms; no
+native bit-vector axiom is used. Clearing irrelevant arithmetic hypotheses
+and factoring modular division avoided a recursion-depth failure in an early
+attempt, without retaining a raised recursion limit.
+
+Fresh symbolic execution now covers the literal prologue, hashed-entry guard,
+unlink predecessor/branch and clear regions. These are components, not the
+whole-function result. Fresh kernel replay passes for `PairInsertIndex`,
+`PairInsertCoverage` and `PairInsertRegions`; the default build passes. The
+remaining ownership closure is being replayed. The input/reconstruction
+checkpoint is commit `26efcbe5`.
+
+Inspection of the native service histories confirms each sampled random call
+actually executes `pushf`, `cli` and `sti`. These operations are absent from
+the current Kraken model. The captured runner has therefore correctly kept
+those service intervals native and explicitly labelled. A claim that this
+capture already executes the complete helper under Kraken would be false.
+The random-service contract/input coupling remains unresolved; its eventual
+statement must not conceal this gap or promise arbitrary outputs from a fixed
+machine state. No new service assumption has been installed yet.
