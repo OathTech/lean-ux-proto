@@ -18,6 +18,7 @@ def steerCount : Nat := 0
 def steerEntries : Nat := 16
 def steerHead : Nat := 4
 def steerMismatches : Nat := 8
+def taskDropped : Nat := 1800
 def taskHandle : Nat := 1784
 def taskObject : Nat := 1776
 end Binary.RandomProvider.Layout

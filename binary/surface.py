@@ -32,9 +32,16 @@ HEADLINES = [
     'Binary.Pair.Replace.Witness.check_linked',
     'Binary.Pair.Replace.Witness.check_unhashed',
     'Binary.Pair.Replace.Witness.executes',
+    'Binary.Pair.Insert.insert_checked',
+    'Binary.Pair.Insert.insert_simulation',
+    'Binary.Pair.InsertSequence.sequence_checked',
+    'Binary.Pair.Insert.Witness.check',
+    'Binary.Pair.Insert.Witness.source_success',
+    'Binary.Pair.Insert.Witness.executes',
+    'Binary.RandomService.return_recorded',
 ]
 IMPORTS = ['LookupSnapshotTransport', 'LookupWitness', 'LookupHitWitness', 'AllowedipsWitnessPre',
-           'PairSubsystemSurface']
+           'PairInsertionSurface']
 # These definitions determine the meaning of the headline and its environment
 # premises outside TrustBase. The expected text is a specification, not a log.
 DEFINITIONS = [
@@ -50,6 +57,17 @@ DEFINITIONS = [
     'Binary.Pair.Sequence.install', 'Binary.Pair.Sequence.prepare', 'Binary.Pair.Sequence.Ready',
     'Binary.Pair.Sequence.Execute', 'Binary.Pair.Sequence.SequencePost',
     'Binary.Pair.Sequence.EntryDomain', 'Binary.Pair.Sequence.Observed',
+    'Binary.Pair.Insert.Pre', 'Binary.Pair.Insert.callBoundary', 'Binary.Pair.Insert.providerCheck',
+    'Binary.Pair.Insert.Post', 'Binary.Pair.Insert.ProviderState',
+    'Binary.Pair.InsertSequence.initialCheck', 'Binary.Pair.InsertSequence.Admissible',
+    'Binary.Pair.InsertSequence.AdmissibleSequence', 'Binary.Pair.InsertSequence.program',
+    'Binary.Pair.InsertSequence.prepare', 'Binary.Pair.InsertSequence.Ready',
+    'Binary.Pair.InsertSequence.SourceBoundaries', 'Binary.Pair.InsertSequence.Boundary',
+    'Binary.Pair.InsertSequence.Execute', 'Binary.Pair.InsertSequence.SequencePost',
+    'Binary.Pair.InsertSequence.EntryDomain', 'Binary.Pair.InsertSequence.Observed',
+    'Binary.RandomProvider.Config', 'Binary.RandomProvider.snapshot',
+    'Binary.RandomProvider.initialized', 'Binary.RandomProvider.recording',
+    'Binary.RandomProvider.steer', 'Binary.RandomProvider.remote', 'Binary.RandomProvider.check',
 ]
 EXPECTED = ROOT / 'binary/TrustSurface.expected.txt'
 

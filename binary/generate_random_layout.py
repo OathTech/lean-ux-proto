@@ -11,7 +11,8 @@ FIELDS = {
                    'mismatches': 'steerMismatches', 'e': 'steerEntries'},
     'kcov_steer_entry': {'len': 'entryLength'},
     'kcov_remote': {'handle': 'remoteHandle', 'kcov': 'remoteObject', 'hnode': 'remoteLink'},
-    'task_struct': {'kcov': 'taskObject', 'kcov_handle': 'taskHandle'},
+    'task_struct': {'kcov': 'taskObject', 'kcov_handle': 'taskHandle',
+                    'kcov_leanux_dropped': 'taskDropped'},
 }
 SIZES = {'kcov_steer_entry': 'entrySize'}
 SYMBOLS = {'crng_is_ready': 'readyAddress', 'crng_init': 'initAddress',

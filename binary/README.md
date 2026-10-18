@@ -516,11 +516,15 @@ that regression. All input/output captures, timing logs and leanexports are
 ephemeral and should be regenerated and removed when no longer needed.
 
 
-## Insertion input-driven increment (in progress)
+## Insertion input-driven increment
 
 The [insertion report](../docs/2026-10-18-paired-index-insertion.md) distinguishes
 supplied random-service returns, captured native service transitions, and
-Kraken-interpreted instructions. Whole-function adequacy is still open.
+Kraken-interpreted instructions. `Insert.insert_checked` proves full insertion
+including reinsertion and arbitrary accepted collision prefixes.
+`InsertSequence.sequence_checked` composes all four index functions over one
+retained heap, deriving every next Pre and exporting reconstruction and input
+consumption at every return. Both retain explicit service/environment hypotheses.
 With the approved oracle selected, reproduce the first comparison from the
 worktree root:
 
@@ -528,7 +532,7 @@ worktree root:
 LEANUX_QEMU_SLOTS=16 capped scripts/in-bundle python3 -B -m evaluator.check \
   --suite wireguard --binary-coverage --binary-profile index-insert \
   --trace s2_index_collision --out .artifacts/check/binary-insert
-(cd binary && capped lake build binary-pair-insert binary-pair-insert-capture)
+(cd binary && capped lake build binary-pair-insert binary-pair-insert-capture binary-pair-insert-sequence)
 capped scripts/in-bundle python3 -B binary/insert_probe.py \
   --check .artifacts/check/binary-insert
 LEANUX_QEMU_SLOTS=16 capped scripts/in-bundle python3 -B binary/capture_index_mutator.py \
@@ -540,6 +544,34 @@ capped binary/.lake/build/bin/binary-pair-insert-capture \
 ```
 
 The Python interpreter must have the already documented ELF dependencies.
-The captured random service is sampled at its real entry and return; its
-private state and instruction semantics are not validated by the segmented
-runner. The captured bytes and export files remain ephemeral under `.tmp`.
+Current captures include the private random/steering state and the dropped
+record counter. The capture runner interprets the complete random bodies,
+validates native REP multiplicities, and compares every captured endpoint byte
+and represented register/flag under both undefined-value seeds. The old
+segmented mode remains explicitly labelled and is not equivalent evidence.
+
+After the three existing function comparisons and sequence preparation described
+above, extend their input with insertion and run the retained-heap suite:
+
+```sh
+LEANUX_QEMU_SLOTS=16 capped scripts/in-bundle python3 -B binary/insert_sequence_probe.py \
+  --base-input .tmp/binary-sequence/input.json --insert-input .tmp/binary-insert/input.json
+(cd binary && capped lake build binary-pair-random-body binary-pair-insert-witness)
+capped binary/.lake/build/bin/binary-pair-random-body
+capped binary/.lake/build/bin/binary-pair-insert-witness .tmp/binary-insert/input.json
+```
+
+`PairInsertionSurface` extends the previous export root with both insertion
+headlines, the mixed sequence theorem and the linked/unlinked formal witnesses.
+From `binary/`, after committing and successfully building the claimed tree:
+
+```sh
+capped lake env leanchecker --fresh PairInsertionSurface
+capped lake env leanexport PairInsertionSurface > ../.tmp/binary-pair-insert.ndjson
+# External gate, run by the user outside Nono:
+capped lake check --from-export ../.tmp/binary-pair-insert.ndjson
+```
+
+Require export exit status zero and record its exact source commit. The earlier
+index-subsystem acceptance does not cover insertion; this increment's external
+acceptance is pending. Captures and exports remain ephemeral under `.tmp`.

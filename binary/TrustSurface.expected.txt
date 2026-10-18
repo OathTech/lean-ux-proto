@@ -389,6 +389,135 @@ Binary.Pair.Replace.Witness.executes : ∀ (linked : Bool) (fetch : Int64 → Op
             (Binary.Pair.Replace.sourceFinal (Binary.Pair.Replace.Witness.world linked)
               (Binary.Pair.Replace.Witness.device linked) 0 0))
           (Binary.Pair.Replace.Witness.state linked)
+Binary.Pair.Insert.insert_checked : ∀ (fetch : Int64 → Option.{0} Binary.Decoded),
+  Binary.TrustBase.IndexInsertDecoderAgreement fetch →
+    Binary.TrustBase.TracePcContract fetch →
+      Binary.TrustBase.TraceCmp4Contract fetch →
+        Binary.TrustBase.BhEnableContract fetch →
+          ∀ {n : Binary.Pair.Names} {o : Offsets} {c : Binary.CommonBitsCoverage.Context} {initial : MachineState}
+            {ra : UInt64} {config : Binary.RandomProvider.Config}
+            {inputAt : DataMem → List.{0} Leanux.HiddenRecord → Prop} {w : Leanux.World} {owner : Leanux.WG.IndexOwner}
+            {records : List.{0} Leanux.HiddenRecord} {answer : Nat} {final : Leanux.World},
+            Binary.TrustBase.RandomReturnContract fetch config →
+              Binary.TrustBase.RandomInputCoupling fetch config c.coverage (HAdd.hAdd.{0, 0, 0} c.preempt 512)
+                  (HAdd.hAdd.{0, 0, 0} Binary.Pair.Insert.codeEntry 121).toUInt64 inputAt →
+                Binary.Pair.Insert.Pre n o c initial w owner ra config →
+                  Eq.{1} w.hidden (some.{0} records) →
+                    inputAt initial.data.dmem records →
+                      Eq.{1} (StateT.run.{0, 0} (Leanux.WG.indexInsert owner) w)
+                          (Except.ok.{0, 0} (Prod.mk.{0, 0} answer final)) →
+                        Eventually (Binary.instructionStep fetch)
+                          (Binary.Pair.Insert.Post n o c initial ra config inputAt answer final) initial
+Binary.Pair.Insert.insert_simulation : ∀ (fetch : Int64 → Option.{0} Binary.Decoded),
+  Binary.TrustBase.IndexInsertDecoderAgreement fetch →
+    Binary.TrustBase.TracePcContract fetch →
+      Binary.TrustBase.TraceCmp4Contract fetch →
+        Binary.TrustBase.BhEnableContract fetch →
+          ∀ (permissions : Binary.TrustBase.Permissions) (onlineCPUs : Nat) (externalActions : List.{0} Nat)
+            {n : Binary.Pair.Names} {o : Offsets} {c : Binary.CommonBitsCoverage.Context} {initial : MachineState}
+            {ra : UInt64} {config : Binary.RandomProvider.Config}
+            {inputAt : DataMem → List.{0} Leanux.HiddenRecord → Prop} {w : Leanux.World} {owner : Leanux.WG.IndexOwner}
+            {records : List.{0} Leanux.HiddenRecord} {answer : Nat} {final : Leanux.World},
+            Binary.TrustBase.SerializedEnvironment onlineCPUs externalActions →
+              Binary.TrustBase.ReturningCallPermissions fetch permissions initial ra →
+                Binary.TrustBase.RandomReturnContract fetch config →
+                  Binary.TrustBase.RandomInputCoupling fetch config c.coverage (HAdd.hAdd.{0, 0, 0} c.preempt 512)
+                      (HAdd.hAdd.{0, 0, 0} Binary.Pair.Insert.codeEntry 121).toUInt64 inputAt →
+                    Binary.Pair.Insert.Pre n o c initial w owner ra config →
+                      Eq.{1} w.hidden (some.{0} records) →
+                        inputAt initial.data.dmem records →
+                          Eq.{1} (StateT.run.{0, 0} (Leanux.WG.indexInsert owner) w)
+                              (Except.ok.{0, 0} (Prod.mk.{0, 0} answer final)) →
+                            Eventually (Binary.historyStep fetch)
+                              (fun t =>
+                                Binary.Pair.Insert.Post n o c initial ra config inputAt answer final t.machine ∧
+                                  Binary.ActualHistory fetch initial t.history ∧
+                                    Eq.{1} (List.getLast?.{0} t.history) (some.{0} t.machine) ∧
+                                      Binary.TrustBase.RunEnvironment fetch permissions onlineCPUs externalActions
+                                        t.history)
+                              { machine := initial, history := List.cons.{0} initial List.nil.{0} }
+Binary.Pair.InsertSequence.sequence_checked : ∀ (fetch : Int64 → Option.{0} Binary.Decoded),
+  Binary.TrustBase.AnchoredDecoderAgreement fetch →
+    Binary.TrustBase.IndexRemoveDecoderAgreement fetch →
+      Binary.TrustBase.IndexReplaceDecoderAgreement fetch →
+        Binary.TrustBase.IndexInsertDecoderAgreement fetch →
+          Binary.TrustBase.TracePcContract fetch →
+            Binary.TrustBase.TraceCmp4Contract fetch →
+              Binary.TrustBase.TraceConstCmp4Contract fetch →
+                Binary.TrustBase.TraceConstCmp1Contract fetch →
+                  Binary.TrustBase.BhEnableContract fetch →
+                    ∀ (permissions : Binary.TrustBase.Permissions) (onlineCPUs : Nat) (externalActions : List.{0} Nat)
+                      {n : Binary.Pair.Names} {o : Offsets} {c : Binary.CommonBitsCoverage.Context}
+                      {initial : MachineState} {w : Leanux.World} {ra : UInt64}
+                      {calls : List.{0} Binary.Pair.InsertSequence.Call}
+                      {answers : List.{0} Binary.Pair.InsertSequence.Answer} {finalWorld : Leanux.World}
+                      {config : Binary.RandomProvider.Config} {inputAt : DataMem → List.{0} Leanux.HiddenRecord → Prop}
+                      {records : List.{0} Leanux.HiddenRecord},
+                      Binary.TrustBase.SerializedEnvironment onlineCPUs externalActions →
+                        Binary.TrustBase.ReturningDomainPermissions fetch permissions ra
+                            (Binary.Pair.InsertSequence.EntryDomain n o c initial ra config inputAt) →
+                          Binary.TrustBase.RandomReturnContract fetch config →
+                            Binary.TrustBase.RandomInputCoupling fetch config c.coverage
+                                (HAdd.hAdd.{0, 0, 0} c.preempt 512)
+                                (HAdd.hAdd.{0, 0, 0} Binary.Pair.Insert.codeEntry 121).toUInt64 inputAt →
+                              Eq.{1} (Binary.Pair.InsertSequence.initialCheck n o c initial w ra config)
+                                  (Except.ok.{0, 0} ()) →
+                                Eq.{1} w.hidden (some.{0} records) →
+                                  inputAt initial.data.dmem records →
+                                    Binary.Pair.InsertSequence.AdmissibleSequence n calls w →
+                                      Eq.{1} (StateT.run.{0, 0} (Binary.Pair.InsertSequence.program calls) w)
+                                          (Except.ok.{0, 0} (Prod.mk.{0, 0} answers finalWorld)) →
+                                        Binary.Pair.InsertSequence.Execute fetch n initial ra calls initial
+                                          (Binary.Pair.InsertSequence.SequencePost fetch permissions onlineCPUs
+                                            externalActions n o c initial initial ra config inputAt calls w answers
+                                            finalWorld)
+Binary.Pair.Insert.Witness.check : ∀ (linked : Bool),
+  Binary.Pair.Insert.Pre Binary.Pair.Insert.Witness.names Binary.Pair.Insert.Witness.offsets
+    Binary.Pair.Insert.Witness.context (Binary.Pair.Insert.Witness.state linked)
+    (Binary.Pair.Insert.Witness.world linked) (Leanux.WG.IndexOwner.keypair 0) (UInt64.ofNat stopAddr)
+    Binary.Pair.Insert.Witness.config
+Binary.Pair.Insert.Witness.source_success : ∀ (linked : Bool),
+  Exists.{1} fun final =>
+    Eq.{1}
+      (StateT.run.{0, 0} (Leanux.WG.indexInsert (Leanux.WG.IndexOwner.keypair 0))
+        (Binary.Pair.Insert.Witness.world linked))
+      (Except.ok.{0, 0} (Prod.mk.{0, 0} 7 final))
+Binary.Pair.Insert.Witness.executes : ∀ (linked : Bool) (fetch : Int64 → Option.{0} Binary.Decoded),
+  Binary.TrustBase.IndexInsertDecoderAgreement fetch →
+    Binary.TrustBase.TracePcContract fetch →
+      Binary.TrustBase.TraceCmp4Contract fetch →
+        Binary.TrustBase.BhEnableContract fetch →
+          Binary.TrustBase.RandomReturnContract fetch Binary.Pair.Insert.Witness.config →
+            ∀ (inputAt : DataMem → List.{0} Leanux.HiddenRecord → Prop),
+              Binary.TrustBase.RandomInputCoupling fetch Binary.Pair.Insert.Witness.config
+                  Binary.Pair.Insert.Witness.context.coverage
+                  (HAdd.hAdd.{0, 0, 0} Binary.Pair.Insert.Witness.context.preempt 512)
+                  (HAdd.hAdd.{0, 0, 0} Binary.Pair.Insert.codeEntry 121).toUInt64 inputAt →
+                inputAt (Binary.Pair.Insert.Witness.state linked).data.dmem
+                    (List.cons.{0} (Binary.Pair.Insert.record 7) List.nil.{0}) →
+                  Exists.{1} fun final =>
+                    Eq.{1}
+                        (StateT.run.{0, 0} (Leanux.WG.indexInsert (Leanux.WG.IndexOwner.keypair 0))
+                          (Binary.Pair.Insert.Witness.world linked))
+                        (Except.ok.{0, 0} (Prod.mk.{0, 0} 7 final)) ∧
+                      Eventually (Binary.instructionStep fetch)
+                        (Binary.Pair.Insert.Post Binary.Pair.Insert.Witness.names Binary.Pair.Insert.Witness.offsets
+                          Binary.Pair.Insert.Witness.context (Binary.Pair.Insert.Witness.state linked)
+                          (UInt64.ofNat stopAddr) Binary.Pair.Insert.Witness.config inputAt 7 final)
+                        (Binary.Pair.Insert.Witness.state linked)
+Binary.RandomService.return_recorded : ∀ (fetch : Int64 → Option.{0} Binary.Decoded)
+  {config : Binary.RandomProvider.Config} {inputAt : DataMem → List.{0} Leanux.HiddenRecord → Prop}
+  {coverage : Binary.TrustBase.KcovLayout} {preempt : BitVec 32} {ra : UInt64},
+  Binary.TrustBase.RandomReturnContract fetch config →
+    Binary.TrustBase.RandomInputCoupling fetch config coverage preempt ra inputAt →
+      ∀ {s : MachineState} {records : List.{0} Leanux.HiddenRecord} {value : Nat} {rest : List.{0} Leanux.HiddenRecord},
+        Eq.{1} s.pc (Int64.ofNat 18446744071582470144) →
+          Binary.TrustBase.RandomReady config coverage preempt s →
+            Binary.TrustBase.EntryFrame s ra →
+              inputAt s.data.dmem records →
+                Eq.{1} (Binary.Pair.Insert.draw records) (Except.ok.{0, 0} (Prod.mk.{0, 0} value rest)) →
+                  Eventually (Binary.instructionStep fetch)
+                    (Binary.RandomService.Post config coverage preempt inputAt s ra value rest) s
 def Binary.LookupRelation.R : Binary.LookupRelation.Config →
   List.{0} MachineState → List.{0} Binary.LookupObservation.Point → MachineState → Leanux.World → Prop :=
 fun c raw seen s w =>
@@ -746,7 +875,7 @@ fun n base ra pc arg2 arg3 current =>
             rsi := UInt64.ofNat arg2, rdi := UInt64.ofNat n.table, rsp := base.data.regs.rsp, rbp := __src.rbp,
             r8 := __src.r8, r9 := __src.r9, r10 := __src.r10, r11 := __src.r11, r12 := __src.r12, r13 := __src.r13,
             r14 := __src.r14, r15 := __src.r15 },
-        zmms := __src.zmms, status := __src.status,
+        zmms := __src.zmms, status := __src.status, system := __src.system,
         dmem := Mem.storeInt current.data.dmem base.data.regs.rsp.toBitVec 8 ra.toBitVec.toInt },
     pc := pc }
 def Binary.Pair.Sequence.prepare : Binary.Pair.Names →
@@ -839,11 +968,470 @@ fun fetch permissions onlineCPUs externalActions n ra answer record =>
     Binary.ActualHistory fetch (Prod.fst.{0, 0} record) (Prod.snd.{0, 0} record).history ∧
       Eq.{1} (List.getLast?.{0} (Prod.snd.{0, 0} record).history) (some.{0} (Prod.snd.{0, 0} record).machine) ∧
         Binary.TrustBase.RunEnvironment fetch permissions onlineCPUs externalActions (Prod.snd.{0, 0} record).history
+def Binary.Pair.Insert.Pre : Binary.Pair.Names →
+  Offsets →
+    Binary.CommonBitsCoverage.Context →
+      MachineState → Leanux.World → Leanux.WG.IndexOwner → UInt64 → Binary.RandomProvider.Config → Prop :=
+fun n o c s w owner ra config =>
+  Eq.{1} (Binary.Pair.Insert.callBoundary n o c s w owner ra) (Except.ok.{0, 0} ()) ∧
+    Eq.{1} (Binary.Pair.Insert.providerCheck n o c s ra config) (Except.ok.{0, 0} ())
+def Binary.Pair.Insert.callBoundary : Binary.Pair.Names →
+  Offsets →
+    Binary.CommonBitsCoverage.Context →
+      MachineState → Leanux.World → Leanux.WG.IndexOwner → UInt64 → Except.{0, 0} String Unit :=
+fun n o c s w owner ra => do
+  Binary.Pair.Remove.assertAt n o s.data.dmem w
+  let address ← Binary.Pair.addressOf n owner
+  have __do_jp : Unit → Except.{0, 0} String Unit := fun __r => do
+    let kind ←
+      Except.mapError.{0, 0, 0} Binary.Pair.DecodeError.message
+          (Binary.Pair.word s.data.dmem "insert.kind" (HAdd.hAdd.{0, 0, 0} address o.kind) 4)
+    have __do_jp : Unit → Except.{0, 0} String Unit := fun __r => do
+      let _ ←
+        Except.mapError.{0, 0, 0} Binary.Pair.DecodeError.message
+            (Binary.Pair.word s.data.dmem "insert.next"
+              (HAdd.hAdd.{0, 0, 0} (HAdd.hAdd.{0, 0, 0} address o.hash) o.next) 8)
+      let _ ←
+        Except.mapError.{0, 0, 0} Binary.Pair.DecodeError.message
+            (Binary.Pair.word s.data.dmem "insert.index" (HAdd.hAdd.{0, 0, 0} address o.index) 4)
+      Binary.Pair.Index.callFrameCheck n o c s ra 7
+      have __do_jp : Unit → Except.{0, 0} String Unit := fun __r =>
+        have __do_jp := fun __r =>
+          have __do_jp := fun __r =>
+            ite.{1} (Eq.{1} (Option.isSome.{0} w.hidden) true) (pure.{0, 0} ())
+              (throw.{0, 0, 0} "insert.call.recorded-input-required");
+          ite.{1} (Binary.TrustBase.LookupPendingRead (HAdd.hAdd.{0, 0, 0} c.preempt 512))
+            (have __do_jp := fun __r =>
+              ite.{1}
+                (Eq.{1}
+                  (Binary.Pair.spansApart
+                    (List.cons.{0} (Prod.mk.{0, 0} Binary.TrustBase.softirqPendingAddress.toNat 2) List.nil.{0})
+                    (HAppend.hAppend.{0, 0, 0}
+                      (HAppend.hAppend.{0, 0, 0}
+                        (HAppend.hAppend.{0, 0, 0} (Binary.Pair.Index.storageSpans n o)
+                          (Binary.Pair.Index.callStack s 7 false))
+                        (Binary.Pair.Trie.callBuffers c))
+                      (List.cons.{0} (Prod.mk.{0, 0} Binary.TrustBase.preemptCountAddress.toNat 4) List.nil.{0})))
+                  true)
+                (__do_jp ()) do
+                let __r ← throw.{0, 0, 0} "insert.call.nested-pending-separation"
+                __do_jp __r;
+            ite.{1}
+              (Eq.{1} (BEq.beq.{0} (Mem.loadInt s.data.dmem Binary.TrustBase.softirqPendingAddress 2) (some.{0} 0))
+                true)
+              (__do_jp ()) do
+              let __r ← throw.{0, 0, 0} "insert.call.nested-pending-softirq"
+              __do_jp __r)
+            (__do_jp ());
+        ite.{1} (Eq.{1} (BEq.beq.{0} (HAnd.hAnd.{0, 0, 0} (HAdd.hAdd.{0, 0, 0} c.preempt 1024) 983040) 0) true)
+          (__do_jp ()) do
+          let __r ← throw.{0, 0, 0} "insert.call.nested-hardirq"
+          __do_jp __r
+      ite.{1}
+          (Eq.{1}
+            (Binary.Pair.Trie.coverageDataCheck
+              { coverage := c.coverage, preempt := HAdd.hAdd.{0, 0, 0} c.preempt 1024 } s.data.dmem)
+            true)
+          (__do_jp ()) do
+          let __r ← throw.{0, 0, 0} "insert.call.nested-coverage"
+          __do_jp __r
+    ite.{1}
+        (Eq.{1}
+          (BEq.beq.{0} kind
+            (match owner with
+            | Leanux.WG.IndexOwner.handshake peer => 1
+            | Leanux.WG.IndexOwner.keypair keypair => 2))
+          true)
+        (__do_jp ()) do
+        let __r ← throw.{0, 0, 0} "insert.call.kind"
+        __do_jp __r
+  ite.{1}
+      (Eq.{1}
+        (BEq.beq.{0} s.pc.toBitVec.toNat Binary.Pair.Insert.entry && BEq.beq.{0} s.data.regs.rdi.toNat n.table &&
+          BEq.beq.{0} s.data.regs.rsi.toNat address)
+        true)
+      (__do_jp ()) do
+      let __r ← throw.{0, 0, 0} "insert.call.entry-arguments"
+      __do_jp __r
+def Binary.Pair.Insert.providerCheck : Binary.Pair.Names →
+  Offsets →
+    Binary.CommonBitsCoverage.Context →
+      MachineState → UInt64 → Binary.RandomProvider.Config → Except.{0, 0} String Unit :=
+fun n o c s ra config => do
+  Binary.Pair.Index.callFrameCheck n o c s ra 135
+  have __do_jp : Unit → Except.{0, 0} String Unit := fun __r =>
+    have outer := { coverage := c.coverage, preempt := HAdd.hAdd.{0, 0, 0} c.preempt 512 };
+    have __do_jp := fun __r => do
+      Binary.RandomProvider.check config c.coverage.task.toNat
+          (Binary.TrustBase.RandomRecordingActive c.coverage (HAdd.hAdd.{0, 0, 0} c.preempt 512)) s.data.dmem
+      have __do_jp : Unit → Except.{0, 0} String Unit := fun __r =>
+        ite.{1}
+          (Eq.{1}
+            (Binary.Pair.spansApart (Binary.Pair.Index.callStack s 135 false) (Binary.Pair.Insert.providerPending c))
+            true)
+          (pure.{0, 0} ()) (throw.{0, 0, 0} "insert.provider.pending-stack")
+      ite.{1} (Eq.{1} (Binary.Pair.spansApart config.blocks (Binary.Pair.Insert.providerProtected n o c s)) true)
+          (__do_jp ()) do
+          let __r ← throw.{0, 0, 0} "insert.provider.private-alias"
+          __do_jp __r;
+    ite.{1} (Eq.{1} (!decide outer.Needed || decide (GT.gt.{0} c.coverage.capacity.toNat 0)) true) (__do_jp ()) do
+      let __r ← throw.{0, 0, 0} "insert.provider.capacity"
+      __do_jp __r
+  ite.{1}
+      (Eq.{1}
+        (BEq.beq.{0} s.data.system.cpl 0 &&
+          !getElem.{0, 0, 0} s.data.system.bits 10 Binary.Pair.Insert.providerCheck._proof_2)
+        true)
+      (__do_jp ()) do
+      let __r ← throw.{0, 0, 0} "insert.provider.mode"
+      __do_jp __r
+def Binary.Pair.Insert.Post : Binary.Pair.Names →
+  Offsets →
+    Binary.CommonBitsCoverage.Context →
+      MachineState →
+        UInt64 →
+          Binary.RandomProvider.Config →
+            (DataMem → List.{0} Leanux.HiddenRecord → Prop) → Nat → Leanux.World → MachineState → Prop :=
+fun n o c initial ra config inputAt answer final t =>
+  Binary.TrustBase.Returned initial t ra ∧
+    Eq.{1} t.data.regs.rax.toNat answer ∧
+      Binary.Pair.Insert.MemoryReady c initial ra (Binary.Pair.Insert.savedWords initial.data)
+          Binary.Pair.Insert.Phase.enabled t.data.dmem ∧
+        (Exists.{1} fun d =>
+            Eq.{1} final.k.wg (some.{0} d) ∧
+              Binary.Pair.Corresponds n o t.data.dmem d ∧
+                Eq.{1} (Binary.Pair.Remove.ownership n o t.data.dmem)
+                  (Except.ok.{0, 0} (Binary.Pair.Remove.targetOwnership d))) ∧
+          Binary.Pair.Insert.ProviderState config c initial t ∧
+            (Exists.{1} fun rest => Eq.{1} final.hidden (some.{0} rest) ∧ inputAt t.data.dmem rest) ∧
+              Binary.EqualOutside (Binary.Pair.Insert.Writes n o config c initial) initial.data.dmem t.data.dmem ∧
+                Binary.Pair.Index.KindFrame n o initial.data.dmem t.data.dmem
+structure Binary.Pair.Insert.ProviderState (config : Binary.RandomProvider.Config)
+  (c : Binary.CommonBitsCoverage.Context) (initial s : MachineState) : Prop
+number of parameters: 4
+fields:
+  Binary.Pair.Insert.ProviderState.privateCheck : Eq.{1}
+      (Binary.RandomProvider.check config c.coverage.task.toNat
+        (Binary.TrustBase.RandomRecordingActive c.coverage (HAdd.hAdd.{0, 0, 0} c.preempt 512)) s.data.dmem)
+      (Except.ok.{0, 0} ())
+  Binary.Pair.Insert.ProviderState.privilege : Eq.{1} s.data.system.cpl 0
+  Binary.Pair.Insert.ProviderState.direction : Eq.{1} (getElem.{0, 0, 0} s.data.system.bits 10 ⋯) false
+  Binary.Pair.Insert.ProviderState.mapped : ∀ (a : BitVec 64) (n : Nat),
+      Eq.{1} (Option.isSome.{0} (Mem.loadInt initial.data.dmem a n)) true →
+        Eq.{1} (Option.isSome.{0} (Mem.loadInt s.data.dmem a n)) true
+constructor:
+  Binary.Pair.Insert.ProviderState.mk {config : Binary.RandomProvider.Config} {c : Binary.CommonBitsCoverage.Context}
+    {initial s : MachineState}
+    (privateCheck :
+      Eq.{1}
+        (Binary.RandomProvider.check config c.coverage.task.toNat
+          (Binary.TrustBase.RandomRecordingActive c.coverage (HAdd.hAdd.{0, 0, 0} c.preempt 512)) s.data.dmem)
+        (Except.ok.{0, 0} ()))
+    (privilege : Eq.{1} s.data.system.cpl 0) (direction : Eq.{1} (getElem.{0, 0, 0} s.data.system.bits 10 ⋯) false)
+    (mapped :
+      ∀ (a : BitVec 64) (n : Nat),
+        Eq.{1} (Option.isSome.{0} (Mem.loadInt initial.data.dmem a n)) true →
+          Eq.{1} (Option.isSome.{0} (Mem.loadInt s.data.dmem a n)) true) :
+    Binary.Pair.Insert.ProviderState config c initial s
+def Binary.Pair.InsertSequence.initialCheck : Binary.Pair.Names →
+  Offsets →
+    Binary.CommonBitsCoverage.Context →
+      MachineState → Leanux.World → UInt64 → Binary.RandomProvider.Config → Except.{0, 0} String Unit :=
+fun n o c base w ra config => do
+  Binary.Pair.Sequence.initialCheck n o c base w ra
+  Binary.Pair.Index.callFrameCheck n o c base ra 7
+  Binary.Pair.Insert.providerCheck n o c base ra config
+  have __do_jp : Unit → Except.{0, 0} String Unit := fun __r =>
+    have __do_jp := fun __r =>
+      have __do_jp := fun __r =>
+        have __do_jp := fun __r =>
+          ite.{1} (Eq.{1} (Option.isSome.{0} w.hidden) true) (pure.{0, 0} ())
+            (throw.{0, 0, 0} "insert-sequence.recorded-input-required");
+        ite.{1} (Eq.{1} (Binary.Pair.spansApart config.blocks (Binary.Pair.IndexLookup.outputSpan base)) true)
+          (__do_jp ()) do
+          let __r ← throw.{0, 0, 0} "insert-sequence.private-output-separation"
+          __do_jp __r;
+      ite.{1} (Binary.TrustBase.LookupPendingRead (HAdd.hAdd.{0, 0, 0} c.preempt 512))
+        (have __do_jp := fun __r =>
+          ite.{1}
+            (Eq.{1}
+              (Binary.Pair.spansApart
+                (List.cons.{0} (Prod.mk.{0, 0} Binary.TrustBase.softirqPendingAddress.toNat 2) List.nil.{0})
+                (Binary.Pair.InsertSequence.pendingProtected n o c base config))
+              true)
+            (__do_jp ()) do
+            let __r ← throw.{0, 0, 0} "insert-sequence.pending-separation"
+            __do_jp __r;
+        ite.{1}
+          (Eq.{1} (BEq.beq.{0} (Mem.loadInt base.data.dmem Binary.TrustBase.softirqPendingAddress 2) (some.{0} 0)) true)
+          (__do_jp ()) do
+          let __r ← throw.{0, 0, 0} "insert-sequence.nested-pending"
+          __do_jp __r)
+        (__do_jp ());
+    ite.{1} (Eq.{1} (BEq.beq.{0} (HAnd.hAnd.{0, 0, 0} (HAdd.hAdd.{0, 0, 0} c.preempt 1024) 983040) 0) true) (__do_jp ())
+      do
+      let __r ← throw.{0, 0, 0} "insert-sequence.nested-hardirq"
+      __do_jp __r
+  ite.{1}
+      (Eq.{1}
+        (Binary.Pair.Trie.coverageDataCheck { coverage := c.coverage, preempt := HAdd.hAdd.{0, 0, 0} c.preempt 1024 }
+          base.data.dmem)
+        true)
+      (__do_jp ()) do
+      let __r ← throw.{0, 0, 0} "insert-sequence.nested-coverage"
+      __do_jp __r
+def Binary.Pair.InsertSequence.Admissible : Binary.Pair.Names → Binary.Pair.InsertSequence.Call → Leanux.World → Prop :=
+fun n call w =>
+  match call with
+  | Binary.Pair.InsertSequence.Call.existing call => Binary.Pair.Sequence.Admissible n call w
+  | Binary.Pair.InsertSequence.Call.insert owner =>
+    Exists.{1} fun a => Eq.{1} (Binary.Pair.addressOf n owner) (Except.ok.{0, 0} a)
+def Binary.Pair.InsertSequence.AdmissibleSequence : Binary.Pair.Names →
+  List.{0} Binary.Pair.InsertSequence.Call → Leanux.World → Prop :=
+fun n x x_1 =>
+  List.brecOn.{1, 0} (motive := fun x => Leanux.World → Prop) x (Binary.Pair.InsertSequence.AdmissibleSequence._f n) x_1
+def Binary.Pair.InsertSequence.program : List.{0} Binary.Pair.InsertSequence.Call →
+  Leanux.M (List.{0} Binary.Pair.InsertSequence.Answer) :=
+fun x => List.brecOn.{1, 0} x Binary.Pair.InsertSequence.program._f
+def Binary.Pair.InsertSequence.prepare : Binary.Pair.Names →
+  MachineState → UInt64 → Binary.Pair.InsertSequence.Call → MachineState → Except.{0, 0} String MachineState :=
+fun n base ra call current =>
+  match call with
+  | Binary.Pair.InsertSequence.Call.existing call => Binary.Pair.Sequence.prepare n base ra call current
+  | Binary.Pair.InsertSequence.Call.insert owner => do
+    let __do_lift ← Binary.Pair.addressOf n owner
+    pure.{0, 0} (Binary.Pair.Sequence.install n base ra (Int64.ofNat Binary.Pair.Insert.entry) __do_lift 0 current)
+structure Binary.Pair.InsertSequence.Ready (n : Binary.Pair.Names) (o : Offsets) (c : Binary.CommonBitsCoverage.Context)
+  (base current : MachineState) (w : Leanux.World) (config : Binary.RandomProvider.Config)
+  (inputAt : DataMem → List.{0} Leanux.HiddenRecord → Prop) : Prop
+number of parameters: 8
+fields:
+  Binary.Pair.InsertSequence.Ready.previous : Binary.Pair.Sequence.Ready n o c base current.data.dmem w
+  Binary.Pair.InsertSequence.Ready.provider : Binary.Pair.Insert.ProviderState config c base current
+  Binary.Pair.InsertSequence.Ready.nestedPending : Binary.TrustBase.LookupPendingRead
+        (HAdd.hAdd.{0, 0, 0} c.preempt 512) →
+      Eq.{1} (Mem.loadInt current.data.dmem Binary.TrustBase.softirqPendingAddress 2) (some.{0} 0)
+  Binary.Pair.InsertSequence.Ready.input : Exists.{1} fun records =>
+      Eq.{1} w.hidden (some.{0} records) ∧ inputAt current.data.dmem records
+constructor:
+  Binary.Pair.InsertSequence.Ready.mk {n : Binary.Pair.Names} {o : Offsets} {c : Binary.CommonBitsCoverage.Context}
+    {base current : MachineState} {w : Leanux.World} {config : Binary.RandomProvider.Config}
+    {inputAt : DataMem → List.{0} Leanux.HiddenRecord → Prop}
+    (previous : Binary.Pair.Sequence.Ready n o c base current.data.dmem w)
+    (provider : Binary.Pair.Insert.ProviderState config c base current)
+    (nestedPending :
+      Binary.TrustBase.LookupPendingRead (HAdd.hAdd.{0, 0, 0} c.preempt 512) →
+        Eq.{1} (Mem.loadInt current.data.dmem Binary.TrustBase.softirqPendingAddress 2) (some.{0} 0))
+    (input : Exists.{1} fun records => Eq.{1} w.hidden (some.{0} records) ∧ inputAt current.data.dmem records) :
+    Binary.Pair.InsertSequence.Ready n o c base current w config inputAt
+inductive Binary.Pair.InsertSequence.SourceBoundaries : List.{0} Binary.Pair.InsertSequence.Call →
+  Leanux.World → List.{0} (Prod.{0, 0} Binary.Pair.InsertSequence.Answer Leanux.World) → Leanux.World → Prop
+number of parameters: 0
+constructors:
+Binary.Pair.InsertSequence.SourceBoundaries.nil : ∀ (w : Leanux.World),
+  Binary.Pair.InsertSequence.SourceBoundaries List.nil.{0} w List.nil.{0} w
+Binary.Pair.InsertSequence.SourceBoundaries.cons : ∀ {call : Binary.Pair.InsertSequence.Call}
+  {calls : List.{0} Binary.Pair.InsertSequence.Call} {w : Leanux.World} {answer : Binary.Pair.InsertSequence.Answer}
+  {next : Leanux.World} {boundaries : List.{0} (Prod.{0, 0} Binary.Pair.InsertSequence.Answer Leanux.World)}
+  {final : Leanux.World},
+  Eq.{1} (StateT.run.{0, 0} (Binary.Pair.InsertSequence.source call) w)
+      (Except.ok.{0, 0} (Prod.mk.{0, 0} answer next)) →
+    Binary.Pair.InsertSequence.SourceBoundaries calls next boundaries final →
+      Binary.Pair.InsertSequence.SourceBoundaries (List.cons.{0} call calls) w
+        (List.cons.{0} (Prod.mk.{0, 0} answer next) boundaries) final
+def Binary.Pair.InsertSequence.Boundary : (Int64 → Option.{0} Binary.Decoded) →
+  Binary.TrustBase.Permissions →
+    Nat →
+      List.{0} Nat →
+        Binary.Pair.Names →
+          Offsets →
+            Binary.CommonBitsCoverage.Context →
+              MachineState →
+                UInt64 →
+                  Binary.RandomProvider.Config →
+                    (DataMem → List.{0} Leanux.HiddenRecord → Prop) →
+                      Prod.{0, 0} Binary.Pair.InsertSequence.Answer Leanux.World →
+                        Binary.Pair.InsertSequence.CallRecord → Prop :=
+fun fetch permissions onlineCPUs externalActions n o c base ra config inputAt source record =>
+  Binary.Pair.InsertSequence.Observed fetch permissions onlineCPUs externalActions n ra (Prod.fst.{0, 0} source)
+      record ∧
+    Binary.Pair.InsertSequence.Ready n o c base (Prod.snd.{0, 0} record).machine (Prod.snd.{0, 0} source) config inputAt
+def Binary.Pair.InsertSequence.Execute : (Int64 → Option.{0} Binary.Decoded) →
+  Binary.Pair.Names →
+    MachineState →
+      UInt64 →
+        List.{0} Binary.Pair.InsertSequence.Call →
+          MachineState → (List.{0} Binary.Pair.InsertSequence.CallRecord → MachineState → Prop) → Prop :=
+fun fetch n base ra x x_1 x_2 =>
+  List.brecOn.{1, 0} (motive := fun x =>
+    MachineState → (List.{0} Binary.Pair.InsertSequence.CallRecord → MachineState → Prop) → Prop) x
+    (Binary.Pair.InsertSequence.Execute._f fetch n base ra) x_1 x_2
+def Binary.Pair.InsertSequence.SequencePost : (Int64 → Option.{0} Binary.Decoded) →
+  Binary.TrustBase.Permissions →
+    Nat →
+      List.{0} Nat →
+        Binary.Pair.Names →
+          Offsets →
+            Binary.CommonBitsCoverage.Context →
+              MachineState →
+                MachineState →
+                  UInt64 →
+                    Binary.RandomProvider.Config →
+                      (DataMem → List.{0} Leanux.HiddenRecord → Prop) →
+                        List.{0} Binary.Pair.InsertSequence.Call →
+                          Leanux.World →
+                            List.{0} Binary.Pair.InsertSequence.Answer →
+                              Leanux.World → List.{0} Binary.Pair.InsertSequence.CallRecord → MachineState → Prop :=
+fun fetch permissions onlineCPUs externalActions n o c base current ra config inputAt calls w answers finalWorld records
+    final =>
+  Binary.Pair.InsertSequence.Ready n o c base final finalWorld config inputAt ∧
+    (Exists.{1} fun boundaries =>
+        Binary.Pair.InsertSequence.SourceBoundaries calls w boundaries finalWorld ∧
+          Eq.{1} (List.map.{0, 0} Prod.fst.{0, 0} boundaries) answers ∧
+            Binary.Pair.Mapped.{0, 0}
+              (Binary.Pair.InsertSequence.Boundary fetch permissions onlineCPUs externalActions n o c base ra config
+                inputAt)
+              boundaries records) ∧
+      Binary.EqualOutside (Binary.Pair.InsertSequence.Writes n o c base config) current.data.dmem final.data.dmem
+def Binary.Pair.InsertSequence.EntryDomain : Binary.Pair.Names →
+  Offsets →
+    Binary.CommonBitsCoverage.Context →
+      MachineState →
+        UInt64 → Binary.RandomProvider.Config → (DataMem → List.{0} Leanux.HiddenRecord → Prop) → MachineState → Prop :=
+fun n o c base ra config inputAt entry =>
+  Exists.{1} fun call =>
+    Exists.{1} fun current =>
+      Exists.{1} fun w =>
+        Binary.Pair.InsertSequence.Ready n o c base current w config inputAt ∧
+          Binary.Pair.InsertSequence.Admissible n call w ∧
+            Eq.{1} (Binary.Pair.InsertSequence.prepare n base ra call current) (Except.ok.{0, 0} entry)
+def Binary.Pair.InsertSequence.Observed : (Int64 → Option.{0} Binary.Decoded) →
+  Binary.TrustBase.Permissions →
+    Nat →
+      List.{0} Nat →
+        Binary.Pair.Names → UInt64 → Binary.Pair.InsertSequence.Answer → Binary.Pair.InsertSequence.CallRecord → Prop :=
+fun fetch permissions onlineCPUs externalActions n ra answer record =>
+  Binary.Pair.InsertSequence.Interface n ra (Prod.fst.{0, 0} record) (Prod.snd.{0, 0} record).machine answer ∧
+    Binary.ActualHistory fetch (Prod.fst.{0, 0} record) (Prod.snd.{0, 0} record).history ∧
+      Eq.{1} (List.getLast?.{0} (Prod.snd.{0, 0} record).history) (some.{0} (Prod.snd.{0, 0} record).machine) ∧
+        Binary.TrustBase.RunEnvironment fetch permissions onlineCPUs externalActions (Prod.snd.{0, 0} record).history
+structure Binary.RandomProvider.Config : Type
+number of parameters: 0
+fields:
+  Binary.RandomProvider.Config.blocks : List.{0} (Prod.{0, 0} Nat Nat)
+  Binary.RandomProvider.Config.remoteNodes : List.{0} Nat :=
+    List.nil.{0}
+constructor:
+  Binary.RandomProvider.Config.mk (blocks : List.{0} (Prod.{0, 0} Nat Nat)) (remoteNodes : List.{0} Nat) :
+    Binary.RandomProvider.Config
+def Binary.RandomProvider.snapshot : List.{0} (Prod.{0, 0} Nat Nat) → DataMem → Option.{0} DataMem :=
+fun x x_1 =>
+  List.brecOn.{1, 0} (motive := fun x => DataMem → Option.{0} DataMem) x Binary.RandomProvider.snapshot._f x_1
+def Binary.RandomProvider.initialized : DataMem → Except.{0, 0} String Unit :=
+fun m => do
+  let ready ← Binary.RandomProvider.read m Binary.RandomProvider.Layout.readyAddress 4
+  have __do_jp : Unit → Except.{0, 0} String Unit := fun __r => do
+    Binary.RandomProvider.mapped m Binary.RandomProvider.Layout.cacheAddress 108
+    Binary.RandomProvider.mapped m Binary.RandomProvider.Layout.cpuAddress 40
+    Binary.RandomProvider.mapped m Binary.RandomProvider.Layout.baseAddress 40
+  ite.{1} (Eq.{1} (BEq.beq.{0} ready 0 || decide (GE.ge.{0} ready (HPow.hPow.{0, 0, 0} 2 31))) true)
+      (do
+        let __do_lift ← Binary.RandomProvider.read m Binary.RandomProvider.Layout.initAddress 4
+        ite.{1} (GT.gt.{0} __do_lift 1) (__do_jp ()) do
+            let __r ← throw.{0, 0, 0} "random.private.not-initialized"
+            __do_jp __r)
+      (__do_jp ())
+def Binary.RandomProvider.recording : Binary.RandomProvider.Config → DataMem → Nat → Except.{0, 0} String Unit :=
+fun c m task => do
+  Binary.RandomProvider.mapped m (HAdd.hAdd.{0, 0, 0} task Binary.RandomProvider.Layout.taskDropped) 4
+  let object ← Binary.RandomProvider.read m (HAdd.hAdd.{0, 0, 0} task Binary.RandomProvider.Layout.taskObject) 8
+  have selected : Nat := 0
+  have direct : Bool := false
+  have __do_jp : Unit → Nat → Bool → Except.{0, 0} String Unit := fun __r selected direct =>
+    have __do_jp := fun __r selected => do
+      Binary.RandomProvider.steer m selected
+      Binary.RandomProvider.mapped m Binary.RandomProvider.Layout.sequenceAddress 8;
+    ite.{1} (Eq.{1} (!direct) true)
+      (do
+        let handle ← Binary.RandomProvider.read m (HAdd.hAdd.{0, 0, 0} task Binary.RandomProvider.Layout.taskHandle) 8
+        ite.{1} (Eq.{1} (bne.{0} handle 0) true)
+            (have bucket :=
+              HDiv.hDiv.{0, 0, 0}
+                (HMod.hMod.{0, 0, 0} (HMul.hMul.{0, 0, 0} handle 7046029254386353131) (HPow.hPow.{0, 0, 0} 2 64))
+                (HPow.hPow.{0, 0, 0} 2 60);
+            do
+            let link ←
+              Binary.RandomProvider.read m
+                  (HAdd.hAdd.{0, 0, 0} Binary.RandomProvider.Layout.remoteMapAddress (HMul.hMul.{0, 0, 0} 8 bucket)) 8
+            let __x ←
+              Binary.RandomProvider.remote c m handle (HAdd.hAdd.{0, 0, 0} (List.length.{0} c.remoteNodes) 1) link
+                  List.nil.{0}
+            have selected : Nat := __x
+            __do_jp () selected)
+            (__do_jp () selected))
+      (__do_jp () selected)
+  ite.{1} (Eq.{1} (bne.{0} object 0) true)
+      (do
+        let isRemote ←
+          Binary.RandomProvider.read m (HAdd.hAdd.{0, 0, 0} object Binary.RandomProvider.Layout.objectRemote) 1
+        let __x ← Binary.RandomProvider.read m (HAdd.hAdd.{0, 0, 0} object Binary.RandomProvider.Layout.objectSteer) 8
+        have selected : Nat := __x
+        have direct : Bool := bne.{0} isRemote 0 || bne.{0} selected 0
+        __do_jp () selected direct)
+      (__do_jp () selected direct)
+def Binary.RandomProvider.steer : DataMem → Nat → Except.{0, 0} String Unit :=
+fun m address =>
+  ite.{1} (Eq.{1} (BEq.beq.{0} address 0) true) (pure.{0, 0} ()) do
+    let count ← Binary.RandomProvider.read m (HAdd.hAdd.{0, 0, 0} address Binary.RandomProvider.Layout.steerCount) 4
+    let head ← Binary.RandomProvider.read m (HAdd.hAdd.{0, 0, 0} address Binary.RandomProvider.Layout.steerHead) 4
+    have __do_jp : Unit → Except.{0, 0} String Unit := fun __r => do
+      let _ ← Binary.RandomProvider.read m (HAdd.hAdd.{0, 0, 0} address Binary.RandomProvider.Layout.steerMismatches) 4
+      Binary.RandomProvider.mapped m (HAdd.hAdd.{0, 0, 0} address Binary.RandomProvider.Layout.steerEntries)
+          (HMul.hMul.{0, 0, 0} count Binary.RandomProvider.Layout.entrySize)
+      forIn.{0, 0, 0, 0} [:count] PUnit.unit.{1} fun i __s => do
+          let __do_lift ←
+            Binary.RandomProvider.read m
+                (HAdd.hAdd.{0, 0, 0}
+                  (HAdd.hAdd.{0, 0, 0} (HAdd.hAdd.{0, 0, 0} address Binary.RandomProvider.Layout.steerEntries)
+                    (HMul.hMul.{0, 0, 0} i Binary.RandomProvider.Layout.entrySize))
+                  Binary.RandomProvider.Layout.entryLength)
+                4
+          ite.{1} (LE.le.{0} __do_lift 40) (pure.{0, 0} (ForInStep.yield.{0} PUnit.unit.{1})) do
+              throw.{0, 0, 0} "random.private.steering-payload"
+              pure.{0, 0} (ForInStep.yield.{0} PUnit.unit.{1})
+      pure.{0, 0} ()
+    ite.{1} (Eq.{1} (decide (LE.le.{0} count 64) && decide (LE.le.{0} head count)) true) (__do_jp ()) do
+        let __r ← throw.{0, 0, 0} "random.private.steering-counts"
+        __do_jp __r
+def Binary.RandomProvider.remote : Binary.RandomProvider.Config →
+  DataMem → Nat → Nat → Nat → List.{0} Nat → Except.{0, 0} String Nat :=
+fun c m handle x x_1 x_2 =>
+  Nat.brecOn.{1} (motive := fun x => Nat → List.{0} Nat → Except.{0, 0} String Nat) x
+    (Binary.RandomProvider.remote._f c m handle) x_1 x_2
+def Binary.RandomProvider.check : Binary.RandomProvider.Config → Nat → Bool → DataMem → Except.{0, 0} String Unit :=
+fun c task active m =>
+  have __do_jp := fun __r =>
+    match Binary.RandomProvider.snapshot c.blocks m with
+    | some.{0} privateMemory => do
+      Binary.RandomProvider.initialized privateMemory
+      ite.{1} (Eq.{1} active true) (Binary.RandomProvider.recording c privateMemory task) (pure.{0, 0} ())
+    | x => throw.{0, 0, 0} "random.private.allocation-unmapped";
+  ite.{1}
+    (Eq.{1}
+      (List.all.{0} c.blocks fun x =>
+        match x with
+        | Prod.mk.{0, 0} base size =>
+          decide (LT.lt.{0} 0 size) && decide (LE.le.{0} (HAdd.hAdd.{0, 0, 0} base size) (HPow.hPow.{0, 0, 0} 2 64)))
+      true)
+    (__do_jp ()) do
+    let __r ← throw.{0, 0, 0} "random.private.allocation-range"
+    __do_jp __r
 
 TRUST DECLARATIONS: binary/TrustBase.lean (verbatim)
 import FiniteExecution
 import Image
 import IndexMutatorImage
+import IndexInsertImage
 import AllowedipsImage
 import ServiceImage
 import Memory
@@ -851,6 +1439,8 @@ import LookupProjection
 import AllowedipsProjection
 import AllowedipsSelection
 import AllowedipsWords
+import RandomState
+import PairInsertInput
 
 /-! Named trust surface for the pinned lookup proof, under construction.
     These are explicit hypotheses, not globally asserted facts. No declaration
@@ -873,7 +1463,7 @@ import AllowedipsWords
 -/
 namespace Binary.TrustBase
 
-def krakenCommit : String := "7ebba06a30eaf08c10b26b28ca14bfee1c791576"
+def krakenCommit : String := "cd2ae360bfcf8e1fc719793405811ff49c3e75ce"
 def kernelIdentity : String := "6b2018b9"
 def elfSha256 : String := "16c346209885db6c610d4aa126c6eb30f5d3c02f0498d95e606473945f648774"
 def decoderVersion : String := "GNU objdump (GNU Binutils for Ubuntu) 2.42"
@@ -1457,5 +2047,102 @@ structure AllowedipsEntry (c : AllowedipsRelation.Config) (coverage : KcovLayout
 def Pre_allowedips (c : AllowedipsRelation.Config) (coverage : KcovLayout)
     (preempt : BitVec 32) (returnAddress : UInt64) (s : MachineState) (world : Leanux.World) : Prop :=
   ∃ v, AllowedipsEntry c coverage preempt returnAddress s world v
+
+/-- Literal instruction agreement for the anchored insertion image. Callback
+behavior and agreement with supplied random draws are separate obligations. -/
+def IndexInsertDecoderAgreement (fetch : Int64 → Option Decoded) : Prop :=
+  ∀ pc instruction, IndexInsertImage.Insert.fetch pc=some instruction → fetch pc=some instruction
+
+/-- Read locations of instrumentation in the random call's unchanged BH
+phase. Pending-work words and the insertion heap do not belong here. -/
+def RandomMetadata (coverage : KcovLayout) (preempt : BitVec 32) (a : BitVec 64) : Prop :=
+  InRange currentTaskAddress 8 a ∨ InRange preemptCountAddress 4 a ∨
+  (LookupSoftRead preempt ∧ InRange (coverage.task+0x704) 4 a) ∨
+  (LookupModeRead coverage preempt ∧ InRange (coverage.task+0x6e0) 4 a) ∨
+  (AllowedipsCoverageNeeded coverage preempt ∧
+    (InRange (coverage.task+0x6e4) 4 a ∨ InRange (coverage.task+0x6e8) 8 a))
+
+def RandomBuffer (coverage : KcovLayout) (preempt : BitVec 32) (a : BitVec 64) : Prop :=
+  AllowedipsCoverageNeeded coverage preempt ∧ KcovStorageBytes coverage a
+
+def RandomRecordingActive (coverage : KcovLayout) (preempt : BitVec 32) : Bool :=
+  @decide (AllowedipsCoverageNeeded coverage preempt) (by
+    unfold AllowedipsCoverageNeeded LookupModeRead
+    infer_instance)
+
+/-- A bounded physical stack reservation, not an instruction/draw budget.
+The live range also protects the service return word. -/
+def RandomStack (s : MachineState) : BitVec 64 → Prop :=
+  InRange (s.data.regs.rsp.toBitVec-1024) 1024
+def RandomLiveStack (s : MachineState) : BitVec 64 → Prop :=
+  InRange (s.data.regs.rsp.toBitVec-1024) 1032
+
+/-- Current initialized provider state, recording graph and physical call
+resources. This contains no World, source result or future execution premise.
+The entry theorem must additionally separate these private writes from its
+own represented objects and saved caller frame. -/
+structure RandomReady (privateState : RandomProvider.Config) (coverage : KcovLayout)
+    (preempt : BitVec 32) (s : MachineState) : Prop where
+  coverageState : AllowedipsCoverageAt coverage preempt s.data.dmem
+  preemptState : load32 s.data.dmem preemptCountAddress=some preempt
+  capacity : AllowedipsCoverageNeeded coverage preempt → 0<coverage.capacity.toNat
+  privateCheck : RandomProvider.check privateState coverage.task.toNat
+    (RandomRecordingActive coverage preempt) s.data.dmem=.ok ()
+  kernelMode : s.data.system.cpl=0
+  forward : s.data.system.bits[10]=false
+  stackMapped : ∀ i<1024, (s.data.dmem.get? (s.data.regs.rsp.toBitVec-1024+.ofNat 64 i)).isSome=true
+  privateApart : ∀ a, RandomProvider.PrivateBytes privateState a →
+    ¬(RandomLiveStack s a ∨ RandomMetadata coverage preempt a ∨ RandomBuffer coverage preempt a)
+  stackApart : ∀ a, RandomLiveStack s a →
+    ¬(RandomMetadata coverage preempt a ∨ RandomBuffer coverage preempt a)
+  bufferApart : ∀ a, RandomBuffer coverage preempt a → ¬RandomMetadata coverage preempt a
+
+def RandomWrites (privateState : RandomProvider.Config) (coverage : KcovLayout)
+    (preempt : BitVec 32) (s : MachineState) (a : BitVec 64) : Prop :=
+  RandomProvider.PrivateBytes privateState a ∨ RandomStack s a ∨
+    (AllowedipsCoverageNeeded coverage preempt ∧ KcovBufferBytes coverage a)
+
+/-- Unproved physical get_random_u32 service specification for the initialized
+provider, including its recording hook. It executes the same fetched ISA as
+the caller and preserves physical private readiness, coverage and BH state.
+It promises no particular random value. Agreement with a recorded input tape
+is a separate safety hypothesis; this declaration cannot produce arbitrary
+requested draws from one fixed machine state. -/
+def RandomReturnContract (fetch : Int64 → Option Decoded) (privateState : RandomProvider.Config) : Prop :=
+  ∀ coverage preempt s returnAddress, s.pc=.ofNat 0xffffffff81375000 →
+    RandomReady privateState coverage preempt s → EntryFrame s returnAddress →
+    Eventually (historyStep fetch) (fun t =>
+      Returned s t.machine returnAddress ∧
+      EqualOutside (RandomWrites privateState coverage preempt s) s.data.dmem t.machine.data.dmem ∧
+      AllowedipsCoverageAt coverage preempt t.machine.data.dmem ∧
+      load32 t.machine.data.dmem preemptCountAddress=some preempt ∧
+      RandomProvider.check privateState coverage.task.toNat
+        (RandomRecordingActive coverage preempt) t.machine.data.dmem=.ok () ∧
+      t.machine.data.system.bits[9]=s.data.system.bits[9] ∧
+      (∀ point ∈ t.history.dropLast, IndexInsertImage.Insert.fetch point.pc=none))
+      ⟨s,[s]⟩
+
+/-- Safety coupling with an external recorded-input interpretation. The
+interpretation depends only on provider-private bytes, never the WireGuard
+heap. Recording context and return site are fixed parameters: changing either
+can change a steered result without changing private bytes. The current
+readiness and entry frame are premises of the return law, not conclusions.
+Its return law constrains existing actual service histories; it does
+not assert termination, physical readiness, a source insertion result or R.
+In particular `inputAt` is required before a draw can be prescribed. -/
+structure RandomInputCoupling (fetch : Int64 → Option Decoded) (privateState : RandomProvider.Config)
+    (coverage : KcovLayout) (preempt : BitVec 32) (returnAddress : UInt64)
+    (inputAt : DataMem → List Leanux.HiddenRecord → Prop) : Prop where
+  frame : ∀ before after records,
+    (∀ a, RandomProvider.PrivateBytes privateState a → before.get? a=after.get? a) →
+    inputAt before records → inputAt after records
+  returned : ∀ s t history records value rest,
+    s.pc=.ofNat 0xffffffff81375000 → RandomReady privateState coverage preempt s →
+    EntryFrame s returnAddress → inputAt s.data.dmem records →
+    Pair.Insert.draw records=.ok (value,rest) →
+    ActualHistory fetch s history → history.getLast?=some t →
+    Returned s t returnAddress →
+    (∀ point ∈ history.dropLast, IndexInsertImage.Insert.fetch point.pc=none) →
+    (t.data.regs.get (.low .rax .W32)).toNat=value ∧ inputAt t.data.dmem rest
 
 end Binary.TrustBase

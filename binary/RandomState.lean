@@ -75,6 +75,8 @@ def remote (c : Config) (m : DataMem) (handle : Nat) : Nat → Nat → List Nat 
     remote c m handle fuel (← read m (base+remoteLink) 8) (base::seen)
 
 def recording (c : Config) (m : DataMem) (task : Nat) : Except String Unit := do
+  -- Saturated choice recording increments this word, even with no payload write.
+  mapped m (task+taskDropped) 4
   let object ← read m (task+taskObject) 8
   let mut selected := 0
   let mut direct := false

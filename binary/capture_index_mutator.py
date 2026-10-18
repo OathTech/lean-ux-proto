@@ -38,6 +38,7 @@ def random_private(remote, task, layout):
         block(layout['initAddress'], 4)
     for offset in [layout['taskObject'], layout['taskHandle']]:
         block(task+offset, 8)
+    block(task+layout['taskDropped'], 4)
     obj = remote.word(task+layout['taskObject'])
     selected, direct = 0, False
     if obj:

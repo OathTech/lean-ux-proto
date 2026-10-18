@@ -107,7 +107,7 @@ def cachedState (interrupts : Bool) : MachineState := Id.run do
 
 def recordingState (remote : Bool) : MachineState × RandomProvider.Config := Id.run do
   let initial := cachedState true
-  let extra := [(0x8006f0,16),(0xa00000,56),(0xb00000,192),
+  let extra := [(0x8006f0,16),(0x800000+RandomProvider.Layout.taskDropped,4),(0xa00000,56),(0xb00000,192),
     (RandomProvider.Layout.sequenceAddress,8)] ++
     (if remote then [(0xc00000,32),(RandomProvider.Layout.remoteMapAddress,128)] else [])
   let mut m := initial.data.dmem
@@ -213,6 +213,26 @@ def suite : Except String Json := do
         ("instructions",toJson after.pcs.size),("value",toJson expected)])
       initial := ⟨{after.state.data with regs := {after.state.data.regs with rsp := .ofNat stackAddr}},
         .ofNat 0xffffffff81375000⟩
+  -- A saturated choice record updates the per-task dropped counter. This
+  -- resource was discovered by the retained-heap mixed-call tests.
+  let (saturationStart,saturationConfig) := recordingState false
+  let saturationState := {saturationStart with data := {saturationStart.data with
+    dmem := put saturationStart.data.dmem 0x8006e4 4 4}}
+  let saturationContext : CommonBitsCoverage.Context :=
+    {(context true) with coverage := {(context true).coverage with capacity := 4}}
+  RandomProvider.readyCheck saturationConfig saturationContext saturationState
+  let saturation ← execute 0 20000 saturationState (.ofNat stopAddr)
+  physicalPost saturationConfig saturationContext saturationState saturation (.ofNat stopAddr)
+  unless saturation.state.data.regs.rax==41 &&
+      (← readNat saturation.state (0x800000+RandomProvider.Layout.taskDropped) 4)==1 do
+    throw "random.saturation.counter"
+  let omitted := {saturationConfig with
+    blocks := saturationConfig.blocks.filter
+      (fun span => span.1 != 0x800000+RandomProvider.Layout.taskDropped)}
+  match RandomProvider.readyCheck omitted saturationContext saturationState with
+  | .ok _ => throw "random.saturation.control: omitted dropped-counter allocation accepted"
+  | .error error => unless error=="random.private.region-unmapped" do
+      throw s!"random.saturation.control failed elsewhere: {error}"
   -- Changing context/return site can change a draw without changing private
   -- bytes. The coupling specification must therefore fix both parameters.
   let (steerInitial,steerConfig) := recordingState false
@@ -269,6 +289,7 @@ def suite : Except String Json := do
   return Json.mkObj [("status",toJson "pass"),
     ("scope",toJson "actual cached/refill random body and recording callbacks, synthetic memory"),
     ("runs",toJson results),("refills",toJson refills),("privilege_control",toJson rejection),
+    ("saturation",toJson "actual body increments dropped counter; omitted allocation rejected"),
     ("steered",toJson steered),("private_state_control",toJson "missing cache byte rejected"),
     ("resource_controls",toJson ["missing stack byte","private alias","DF set","write outside footprint"]),
     ("coupling_controls",toJson ["identical private bytes: steered 41, recording disabled 7, other return site 7",
