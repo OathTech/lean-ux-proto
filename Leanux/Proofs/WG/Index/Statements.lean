@@ -1,3 +1,8 @@
+import Leanux.Proofs.WG.Index.RetirementPaymentSource
+import Leanux.Proofs.WG.Index.HashSlotClearWorkerClaims
+import Leanux.Proofs.WG.Index.RetirementClearWorkerClaims
+import Leanux.Proofs.WG.Index.RetirementReleaseClaims
+import Leanux.Proofs.WG.Index.RetirementBulkSource
 import Leanux.Proofs.WG.Index.HashSlotReleaseClaims
 import Leanux.Proofs.WG.Index.SelectedDrainClaims
 import Leanux.Proofs.WG.Index.InitializedFundingClaims
@@ -1218,5 +1223,51 @@ theorem original_initialized_live_peer_credit (trace : Runner.Trace) (placeholde
     | .error _ => True
     | .ok (_,final) => InitializedFunding.LivePeerCredit final :=
   InitializedFunding.inspection_live trace placeholders
+
+/-- The complete queued clear worker preserves coverage, owner coherence and
+the supplied retirement reservations together. Actual execution provides
+caller residency and payment positivity; no readiness budget is supplied. -/
+theorem original_queued_clear_hash_slots
+    (retired : Queues.RxCredits.Reservations) (pid : PeerId) :
+    Campaign2.Ensures (queuedExpiredZeroKeyMaterial pid)
+      (fun s => View.HashSlotsSafe s ∧ View.OwnerCoherentSafe s ∧ View.RetirementSafe retired s)
+      (fun _ s => View.HashSlotsSafe s ∧ View.OwnerCoherentSafe s ∧ View.RetirementSafe retired s) := by
+  intro g ambient result out after pre run
+  have slots := queuedExpiredZeroKeyMaterial_hashSlots_coherent pid
+    g ambient result out after ⟨pre.1,pre.2.1⟩ run
+  exact ⟨slots.1,slots.2,queuedExpiredZeroKeyMaterial_retirement retired pid
+    g ambient result out after pre.2.2 run⟩
+
+/-- The actual flushed-clear wrapper includes dequeue and records around the
+same complete worker. All three supplied invariants survive its normal return. -/
+theorem original_flushed_clear_hash_slots
+    (retired : Queues.RxCredits.Reservations) (pid : PeerId) :
+    Campaign2.Ensures (runFlushedClearWork pid)
+      (fun s => View.HashSlotsSafe s ∧ View.OwnerCoherentSafe s ∧ View.RetirementSafe retired s)
+      (fun _ s => View.HashSlotsSafe s ∧ View.OwnerCoherentSafe s ∧ View.RetirementSafe retired s) := by
+  intro g ambient result out after pre run
+  have slots := runFlushedClearWork_hashSlots_coherent pid
+    g ambient result out after ⟨pre.1,pre.2.1⟩ run
+  exact ⟨slots.1,slots.2,runFlushedClearWork_retirement retired pid
+    g ambient result out after pre.2.2 run⟩
+
+/-- A positive resident's actual release preserves all three invariants when
+no hashed owner other than its own handshake still names it at its final reference. Unhashed residual slots
+need not be empty; the detachment obligation remains explicit. -/
+theorem original_peer_put_hash_slots_detached
+    (retired : Queues.RxCredits.Reservations) (pid : PeerId) (d : Device) (p : Peer)
+    (resident : d.peers[pid]? = some p) (live : 0 < p.refcount)
+    (detached : LastOwnerDetached d pid p) :
+    Campaign2.Ensures (peerPut (some pid))
+      (fun s => s.wg.device = some d ∧ View.HashSlotsSafe s ∧
+        View.OwnerCoherentSafe s ∧ View.RetirementSafe retired s)
+      (fun _ s => View.HashSlotsSafe s ∧ View.OwnerCoherentSafe s ∧ View.RetirementSafe retired s) := by
+  intro g ambient result out after pre run
+  exact ⟨peerPut_hashSlots_detached pid d p resident live detached
+      g ambient result out after ⟨pre.1,pre.2.1⟩ run,
+    peerPut_owner_coherent pid d p resident live detached
+      g ambient result out after ⟨pre.1,pre.2.2.1⟩ run,
+    peerPut_retirement retired pid d p resident live
+      g ambient result out after ⟨pre.1,pre.2.2.2⟩ run⟩
 
 end Leanux.Proofs.WG.Index
