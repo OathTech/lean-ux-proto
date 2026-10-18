@@ -6,7 +6,7 @@
 the [revised charter](2026-10-18-charter-proof-campaign-3.md). The inherited
 proof tree includes campaign 1's GRO carry. No mirror definition or landed
 proof has been changed. The source contracts now cover staged nonce allocation, encryption receipts,
-normal cookie egress, native handshake refusal and reference payments. No
+cookie egress, native handshake histories and session reference payments. No
 complete campaign outcome is claimed.
 
 **C3-F1 is dispositioned as a statement artefact.** The original T6 wording
@@ -15,8 +15,7 @@ Both reproduce on this branch. [USER 2026-10-18] Resume with the actual TX
 admission/RX decryption checks and reference-aware retirement, retaining the
 counterexamples. Further wording artefacts are corrected while work continues;
 only a blocker, substantive finding, completed campaign or user instruction
-stops the work. The inherited validation below describes checkpoint `333f3818`; current
-tranche checks are recorded separately as they finish.
+stops the work. Validation for the current source-contract checkpoint is recorded below.
 
 | Outcome | Status and remaining obligation |
 | --- | --- |
@@ -160,68 +159,61 @@ the earlier audits; the campaign's source inspection used the pinned pristine C.
 
 ## Current proof tranche
 
-[AGENT 2026-10-18] Add source contracts before composing initialized execution
-coverage. The sending projection uses the native global allocation stamp and
-sending counter. `Nonce.reserveObserved_safe` preserves non-reuse under an
-explicit entry invariant and records the increment before bound rejection;
-`Nonce.stagingObserved_erases` covers the complete original staging control flow.
-`Nonce.stagingObserved_safe` preserves the invariant through that whole path,
-including refusal and Stop prefixes; `Nonce.create_preserves` supplies the fresh
-allocation step. Separate frames cover peer/index/queue bookkeeping and key
-reference operations. `WireNonce` proves the actual admitted Nat counters have
-injective 64-bit wire and AEAD encodings. These facts do not yet prove initialized
-staging coverage or single-use packet transport to AEAD. The encryption
-observer now records at most one real result per native call, with actual
-preparation/key-read witnesses and exact erasure. A separate preparation frame
-connects the AEAD key to the entry-resident allocation; the emitted byte
-expression uses the packet nonce in both the header and AEAD. This is local
-encryption binding, not staging-to-worker provenance.
+[AGENT 2026-10-18] Source contracts precede initialized execution closure.
+Every claim keeps its native run and entry invariant visible. The register in
+[proofs.md](proofs.md) lists the four statement modules and outstanding boundaries.
 
-`RetirementSecurity/Statements.lean` initially exposed six native contracts: exact payment
-of one reference, unchanged material/counter on nonfinal payment, final store
-and index removal, immediate unpublication, surviving nonce retention, and
-clear's empty slots with surviving-key retention. Actual normal-call premises
-and entry counts remain explicit. These are not a credit-ownership proof or a
-progress guarantee. The stable implementation originated at child commits
-`6254ed0e` and `b6a285af`; only their new proof files were copied into this
-branch. The second tranche adds an exact allocation-stamped reference ledger,
-creation/get/put accounting, last-credit removal and finite native payment
-composition. Tranche `8ef2ac86` connects clearing to the actual three slot
-occurrences, including alias multiplicity, and connects RX cleanup and TX batch
-disposal to their saved single references. The concrete durable-holder projection
-counts slots, RX packets and TX batches and has its actual initialized empty
-base case. Whole-run holder preservation and scheduling progress remain open.
+- T1/T2: the actual global allocation stamp and sending counter support
+  non-reuse through complete staging, `wgXmit`, keepalive sending, key creation,
+  session establishment, rotation, all five timer callbacks, the full handshake receive worker and reference release. AEAD counter encoding
+  is injective below the actual admission limit. Encryption receipts preserve
+  success/Stop and bind the entry-resident key, original packet nonce and
+  actual ciphertext expression. Rekey receipts capture the guarded call to
+  the handshake-queue helper after count or recorded-age expiry; the helper's
+  own timeout/dead/pending guards still apply. Initialized caller closure,
+  allocation-to-encryption transport and TX dispositions remain open.
+- T6: the exact allocation-stamped reference ledger covers native creation,
+  acquisition, release, slot clearing, rotation, confirmation, RX cleanup,
+  saved TX batch disposal and complete session establishment. Session funding
+  derives the new reference from the actual allocation; entry slot funding
+  is now extracted from actual holders; R2 allocation vacancy remains explicit. The concrete holder projection
+  counts each slot, RX packet and TX batch reference and has an initialized
+  empty base. Native create/get/put transport that physical projection; an
+  outstanding durable holder prevents final removal. Whole-run holder transport and conditional wheel/worker progress
+  remain open. Stable child implementations through `543c8dce` were copied
+  by owned path, without a branch merge.
+- T3: qualifying invalid-MAC2 initiation/response receives produce at most one
+  source-bound 64-byte cookie datagram on normal completion and preserve the
+  Noise/session projection. Exact append observers retain emissions before a
+  later Stop. Invalid MAC1 leaves WGWorld unchanged except under-load
+  bookkeeping. The actual MAC/load witness remains explicit. Full Noise refusals follow exact native exits with no egress or authenticated
+  suffix, and pre-lookup initiation refusals preserve WGWorld. Post-lookup
+  initiation refusal now restores complete peer records, including refcounts
+  and timers, from the actual acquisition/repayment chain. Response owner-word
+  consistency and initialized delayed-effect causality remain open. Stable child
+  implementation through `1a2dfa60` was copied by owned path.
+- T4: full original initiation receipts strictly increase the actual pre-write
+  timestamp, including before Stop; refusal preserves surviving handshake
+  state. Native consumer sequences compose timestamp histories. Response and
+  session sequences, including mixed sequences, consume at most once under
+  named visible `H1ResponseEdges` and `H1SessionEffects`, projections of
+  campaign 2's unlanded H1 results. Independent native allocation receipts
+  establish at most one creation per session call and exactly one on true
+  completion. Full driver/exchange closure remains open. Stable child
+  implementation through `7acc69e2` was copied by owned path.
+- T5: original receive-consumer and poll observers record the native
+  confirmation return immediately, before the timer/staged-send/routing suffix
+  can Stop. Authentication and uniqueness are not inferred from arbitrary
+  consumer input. H1's completed-consumer uniqueness premise must not replace
+  the stronger receipt-before-later-Stop obligation. Authenticated transport
+  and the prohibition on earlier responder encryption remain open.
 
-`AuthenticatedEffects/Statements.lean` exposes qualifying invalid-MAC2 dispatch
-for both initiation and response, the normal Noise/session frame, and bounded
-construction and socket-call attempt receipts retained through a later Stop.
-The input/source bindings are exact. Tranche `44c2d981` now proves a normal
-qualifying original receive appends at most one actual datagram, whose address
-and port are the input source and whose bytes come from the actual cookie
-construction. Byte length, emitted prefixes through Stop and initialized causal
-closure remain open. Stable implementations originated at child commits
-`e2c12a6b` and `44c2d981`; only owned proof files were copied here.
-
-`HandshakeSecurity/Statements.lean` now records actual strict timestamp
-increases from the full original initiation consumer, without an entry
-freshness/coherence hypothesis. It also proves the stale comparison suffix
-returns no peer and preserves surviving handshake projections, and that a
-receipt survives a subsequent consumption-clock Stop. The compared value is
-connected to the actual pre-write timestamp. Initialized lifetime history and
-exchange-linked installation remain open. Implementation commits `dcad7f81`,
-`3e765ac0`, `d957fa01` and `62423b54` were copied by owned path. The last
-tranche also proves full native initiation refusal preserves surviving peers
-and transports strict timestamp receipts through the original receive worker.
-The child continues toward retained-peer history.
-
-The first 14 new terminal exports passed the full proof gate (990 build jobs,
-909 declarations over 12 root modules, standard axioms only). All twelve
-counterexample recipes passed again. The extended source tranche builds with
-1000 jobs. The next complete checkpoint passed 1009 build jobs and the
-922-declaration gate over 13 root modules. The current checkpoint passes 1029 build jobs and 932 declarations over
-13 root modules with only standard axioms. Its unit run passes 131 tests
-with one kernel-build-dependent skip. All twelve counterexample recipes and
-fresh-root kernel replay pass again for this checkpoint, at the default cap.
+The current source-contract checkpoint passes all 1080 proof-build jobs and the
+970-declaration gate across thirteen root modules, with only standard axioms.
+All twelve witness recipes and fresh-root kernel replay pass at the default
+cap. The unchanged model and unit suite retain the prior checkpoint's 130-job
+build and 131 passing tests with one kernel-build-dependent skip. All six
+outcomes remain open.
 
 A supplemental kernel replay invoked without `--fresh` failed at the 32 GiB
 cap and again at 64 GiB (exit 137); neither is a pass. Inspection of the shipped

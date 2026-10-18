@@ -1,7 +1,9 @@
 import Leanux.Proofs.WG.TransmitSecurity.NonceStagingSafety
-import Leanux.Proofs.WG.TransmitSecurity.NonceCreation
+import Leanux.Proofs.WG.TransmitSecurity.NonceTimers
+import Leanux.Proofs.WG.TransmitSecurity.NonceHandshakeSafety
 import Leanux.Proofs.WG.TransmitSecurity.WireNonce
 import Leanux.Proofs.WG.TransmitSecurity.EncryptBinding
+import Leanux.Proofs.WG.TransmitSecurity.Rekey
 
 /-! Campaign 3, T1 local allocation contracts. Initialized caller coverage and
 transport from allocation through every AEAD invocation remain open. -/
@@ -90,5 +92,93 @@ theorem original_ciphertext_key_binding (slot : KeypairId) (pkt : DataPacket)
       bytes = dataMessage k.remoteIndex pkt.nonce k.sending.key
         (p.inner.bytes ++ List.replicate p.padding 0) :=
   Encryption.original_ciphertext_binding slot pkt w v bytes success
+
+/-- Security: the rekey observer records only the actual guarded request to
+the native handshake-queue helper, retaining that request through a later Stop.
+A request does not promise that the helper's timeout/dead/pending guards queue
+or transmit a handshake. -/
+theorem original_rekey_requests (pid : PeerId) (w : WGWorld) (a : Ambient)
+    (h : List Rekey.Request) :
+    ErasesStatePrefix (Rekey.observe pid) (keepKeyFresh pid) ∧
+    ∃ suffix, (runWGPrefix (Rekey.observe pid) w a h).2 = h ++ suffix ∧
+      suffix.length ≤ 1 ∧ ∀ r ∈ suffix, r.peer = pid ∧ r.Valid :=
+  ⟨Rekey.observe_erases pid,Rekey.observe_receipts pid w a h⟩
+
+/-- Security: a valid current sending key above the rekey count causes the
+original freshness check to call the native handshake-queue helper. The exact
+helper result or Stop is preserved; source-state lookup premises are explicit. -/
+theorem original_rekey_count_request (pid : PeerId) (slot : KeypairId) (p : Peer) (k : Keypair)
+    (w : WGWorld) (d : Device) (a : Ambient)
+    (device : w.dev = some d) (peer : d.peers[pid]? = some p)
+    (current : p.keypairCurrent = some slot) (key : d.keypairs[slot]? = some k)
+    (valid : k.sending.isValid = true) (past : REKEY_AFTER_MESSAGES < k.sendingCounter) :
+    ((keepKeyFresh pid).run w).run a =
+      ((sendQueuedHandshakeInitiation pid false).run w).run (Rekey.countChecked a k) := by
+  exact (Rekey.observe_erases pid w a []).symm.trans
+    (congrArg Prod.fst (Rekey.count_request pid slot p k w d a [] device peer current key valid past))
+
+/-- Security: when the count arm does not trigger, a valid current initiator
+key whose actual recorded age test expires requests native handshake work.
+The source clock-test run is explicit, so no unrecorded wall-clock or latency
+assumption replaces the C's age check. -/
+theorem original_rekey_age_request (pid : PeerId) (slot : KeypairId) (p : Peer) (k : Keypair)
+    (w : WGWorld) (d : Device) (a b : Ambient)
+    (device : w.dev = some d) (peer : d.peers[pid]? = some p)
+    (current : p.keypairCurrent = some slot) (key : d.keypairs[slot]? = some k)
+    (valid : k.sending.isValid = true) (count : k.sendingCounter ≤ REKEY_AFTER_MESSAGES)
+    (initiator : k.iAmTheInitiator = true)
+    (expired : ((branchExpired .freshExpired k.sending.birthdate REKEY_AFTER_TIME).run w).run
+      (Rekey.ageEntry a k) = .ok ((true,w),b)) :
+    ((keepKeyFresh pid).run w).run a =
+      ((sendQueuedHandshakeInitiation pid false).run w).run (CounterWindow.record b .freshSend true) := by
+  exact (Rekey.observe_erases pid w a []).symm.trans
+    (congrArg Prod.fst (Rekey.age_request pid slot p k w d a b [] device peer current key valid count initiator expired))
+
+/-- Security: original session establishment preserves all prior sending
+nonce allocations while assigning a new global identity to its new key. Key
+rotation and reference release cannot reset a surviving allocation's counter. -/
+theorem original_session_nonce_safety (pid : PeerId) (history : List Nonce.Allocation) :
+    Framing.Preserves (fun w => Nonce.Inv (Nonce.view w) history) (beginSession pid) :=
+  Nonce.Frames.begin_session pid history
+
+/-- Security: native keepalive sending records every staging allocation and
+preserves nonce non-reuse from the explicit entry invariant, including allocation
+failure and later Stop. The observer changes no native result or state. -/
+theorem original_keepalive_nonce_safety (pid : PeerId) :
+    ErasesStatePrefix (Nonce.keepaliveObserved pid) (sendKeepalive pid) ∧
+    StatePrefixPreserves (fun h w _ => Nonce.Inv (Nonce.view w) h) List.Nodup
+      (Nonce.keepaliveObserved pid) :=
+  ⟨Nonce.keepaliveObserved_erases pid,Nonce.keepaliveObserved_safe pid⟩
+
+/-- Security: the original transmit entry retains non-reuse across routing,
+staging and final peer release, including refusal and Stop. Its entry invariant
+is explicit; this caller contract is not initialized driver closure or a claim
+that admitted packets have already reached AEAD. -/
+theorem original_transmit_nonce_safety (family addr : Nat) (packets : List Packet) (mtu : Nat) :
+    ErasesStatePrefix (Nonce.transmitObserved family addr packets mtu) (wgXmit family addr packets mtu) ∧
+    StatePrefixPreserves (fun h w _ => Nonce.Inv (Nonce.view w) h) List.Nodup
+      (Nonce.transmitObserved family addr packets mtu) :=
+  ⟨Nonce.transmitObserved_erases family addr packets mtu,
+    Nonce.transmitObserved_safe family addr packets mtu⟩
+
+/-- Security: every original timer callback preserves sending nonce non-reuse
+from the explicit entry invariant and records its actual keepalive allocations,
+including before Stop. This callback claim does not assume a timer was due;
+wheel selection and driver transport are separate obligations. -/
+theorem original_timer_nonce_safety (pid : PeerId) (timer : PeerTimer) :
+    ErasesStatePrefix (Nonce.timerObserved pid timer) (timerCallback pid timer) ∧
+    StatePrefixPreserves (fun h w _ => Nonce.Inv (Nonce.view w) h) List.Nodup
+      (Nonce.timerObserved pid timer) :=
+  ⟨Nonce.timerObserved_erases pid timer,Nonce.timerObserved_safe pid timer⟩
+
+/-- Security: the complete original handshake receive worker preserves sending
+nonce non-reuse through actual session creation and keepalive staging, with
+allocations retained before later Stop. The source observer is exact; the
+entry invariant and remaining initialized driver coverage stay explicit. -/
+theorem original_handshake_worker_nonce_safety :
+    ErasesStatePrefix Nonce.Handshake.observed receiveStep ∧
+    StatePrefixPreserves (fun h w _ => Nonce.Inv (Nonce.view w) h) List.Nodup
+      Nonce.Handshake.observed :=
+  ⟨Nonce.Handshake.erases,Nonce.Handshake.safe⟩
 
 end Leanux.Proofs.WG.TransmitSecurity

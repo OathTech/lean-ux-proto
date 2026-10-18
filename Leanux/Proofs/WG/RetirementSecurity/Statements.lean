@@ -3,6 +3,12 @@ import Leanux.Proofs.WG.RetirementSecurity.Clear
 import Leanux.Proofs.WG.RetirementSecurity.Payments
 import Leanux.Proofs.WG.RetirementSecurity.PacketPayments
 import Leanux.Proofs.WG.RetirementSecurity.Holders
+import Leanux.Proofs.WG.RetirementSecurity.Confirmation
+import Leanux.Proofs.WG.RetirementSecurity.Rotation
+import Leanux.Proofs.WG.RetirementSecurity.SessionFunding
+import Leanux.Proofs.WG.RetirementSecurity.Session
+import Leanux.Proofs.WG.RetirementSecurity.HolderCreation
+import Leanux.Proofs.WG.RetirementSecurity.HolderSession
 
 /-! Campaign 3, T6: local original-operation retirement contracts. The
 initialized key-reference ledger, complete caller coverage and conditional
@@ -188,5 +194,188 @@ RX queues and TX batches project to an empty funded ledger. This establishes
 only the initialized base case; whole-run preservation is not claimed. -/
 theorem initialized_key_holders (net bare : Bool) :
     HolderAccount [] (Runner.initialWG net bare) := initial_holder_account net bare
+
+/-- Native confirmation transfers existing next/current references and pays
+only the displaced previous reference, preserving funding for packet holders.
+The actual next slot selects this branch. Authentication of the caller and
+initialized account preservation remain separate obligations. -/
+theorem original_confirmation_credit_transfer (pid : PeerId) (p : Peer)
+    (loans : SlotLoans) (remaining : Credits.Ledger) (received : KeypairId)
+    (aligned : loans.Aligned p) (next : p.keypairNext = some received)
+    (account : PeerAccount pid p (loans.credits ++ remaining) w) (a b : Ambient)
+    (run : ((receivedWithKeypair pid received).run w).run a = .ok ((result,v),b)) :
+    result = true ∧ loans.confirm.Aligned (confirmedPeer p received) ∧
+      PeerAccount pid (confirmedPeer p received) (loans.confirm.credits ++ remaining) v := by
+  have effect := (hoare_iff_run_ambient _ _ _).mp
+    (confirmation_account pid p loans remaining received aligned next) w a result v b account run
+  exact ⟨effect.1,SlotLoans.confirm_aligned aligned next,effect.2⟩
+
+/-- A native confirmation attempt for a non-next key spends no reference
+and changes no slot. This local refusal cannot accidentally retire another
+session's material; the supplied account is not an initialized closure claim. -/
+theorem original_confirmation_credit_refusal (pid : PeerId) (p : Peer)
+    (credits : Credits.Ledger) (received : KeypairId)
+    (different : p.keypairNext ≠ some received) (account : PeerAccount pid p credits w)
+    (a b : Ambient)
+    (run : ((receivedWithKeypair pid received).run w).run a = .ok ((result,v),b)) :
+    result = false ∧ PeerAccount pid p credits v :=
+  (hoare_iff_run_ambient _ _ _).mp
+    (confirmation_refused_account pid p credits received different) w a result v b account run
+
+/-- Original key insertion transfers the caller's one new-key occurrence
+into the initiator/current or responder/next slot and pays exactly the native
+displaced occurrences. Aliases are counted separately; source acquisition of
+the incoming loan and whole-run account preservation are explicit boundaries. -/
+theorem original_new_key_credit_transfer (pid : PeerId) (p : Peer) (loans : SlotLoans)
+    (newKey : Credits.Allocation) (remaining : Credits.Ledger) (k : Keypair)
+    (aligned : loans.Aligned p)
+    (account : PeerAccount pid p (newKey :: loans.credits ++ remaining) w)
+    (resident : keyAt w newKey.slot = some k) (a b : Ambient)
+    (run : ((addNewKeypair pid newKey.slot).run w).run a = .ok (((),v),b)) :
+    (loans.rotate newKey k.iAmTheInitiator p.keypairNext.isSome).Aligned
+        (rotatedPeer p newKey.slot k.iAmTheInitiator) ∧
+      PeerAccount pid (rotatedPeer p newKey.slot k.iAmTheInitiator)
+        ((loans.rotate newKey k.iAmTheInitiator p.keypairNext.isSome).credits ++ remaining) v :=
+  ⟨SlotLoans.rotate_aligned aligned newKey k.iAmTheInitiator,
+    rotation_account pid p loans newKey remaining k aligned account resident a b run⟩
+
+/-- Native key expiry changes validity without resetting a sending nonce or
+spending a key reference. Retained packet references therefore keep their
+funding and allocation identity; admission and timer progress are separate. -/
+theorem original_expiry_reference_nonce_frame (pid : PeerId) (w v : WGWorld) (a b : Ambient)
+    (run : ((expireCurrentPeerKeypairs pid).run w).run a = .ok (((),v),b)) :
+    referenceNonceView v = referenceNonceView w :=
+  (Lifetimes.ProjectedAction.iff_run_ambient _ _ _).mp (expire_referenceNonce pid) w a () v b run
+
+/-- Native derivation installs material without resetting the allocated
+sending nonce or changing key-reference funding. This excludes a bookkeeping
+reset at derivation; the cipher and KDF security remain outside the claim. -/
+theorem original_derivation_reference_nonce_frame (id : KeypairId) (initiator : Bool)
+    (ck : List UInt8) (w v : WGWorld) (a b : Ambient)
+    (run : ((deriveKeys id initiator ck).run w).run a = .ok (((),v),b)) :
+    referenceNonceView v = referenceNonceView w :=
+  (Lifetimes.ProjectedAction.iff_run_ambient _ _ _).mp
+    (deriveKeys_referenceNonce id initiator ck) w a () v b run
+
+/-- A successful original session front funds exactly one new allocation
+occurrence through creation, initialization and derivation, preventing a new
+session from being justified by a fabricated caller loan. Existing R2 supplies
+vacancy; initialized incoming funding and later holder transport remain open. -/
+theorem original_session_front_credit_creation (pid : PeerId) (p : Peer)
+    (ctx : SessionOrigin.Context) (w v : WGWorld) (a b : Ambient)
+    (account : PeerAccount pid p credits w) (allocation : Lifetimes.AllocationInv history w)
+    (run : ((SessionOrigin.front pid).run w).run a = .ok ((some ctx,v),b)) :
+    PeerAccount pid p (⟨ctx.slot,w.keypairCounter + 1⟩ :: credits) v :=
+  Credits.front_peer_account pid p ctx w v a b account allocation run
+
+/-- A complete successful native session funds its new key from the actual
+allocation, then transfers that occurrence into the actual slot rotation and
+pays the displaced references. No caller-owned new-key loan is assumed. The
+incoming slot account and R2 allocation invariant remain explicit premises;
+initialized global holder preservation and Noise security are separate. -/
+theorem original_session_credit_transfer (pid : PeerId) (p : Peer) (loans : SlotLoans)
+    (remaining : Credits.Ledger) (w v : WGWorld) (a b : Ambient)
+    (aligned : loans.Aligned p) (account : PeerAccount pid p (loans.credits ++ remaining) w)
+    (allocation : Lifetimes.AllocationInv history w)
+    (run : ((beginSession pid).run w).run a = .ok ((true,v),b)) :
+    ∃ ctx middle middleAmbient k,
+      ((SessionOrigin.front pid).run w).run a = .ok ((some ctx,middle),middleAmbient) ∧
+      keyAt middle ctx.slot = some k ∧ k.internalId = w.keypairCounter + 1 ∧
+      PeerAccount pid (rotatedPeer (zeroedPeer p) ctx.slot k.iAmTheInitiator)
+        ((loans.rotate ⟨ctx.slot,w.keypairCounter + 1⟩ k.iAmTheInitiator p.keypairNext.isSome).credits ++ remaining) v :=
+  session_account pid p loans remaining w v a b aligned account allocation run
+
+/-- A normal native session refusal leaves the world and key-reference
+account unchanged; a false result cannot conceal consumed slot references.
+The source proof retains its explicit incoming account and R2 premises. -/
+theorem original_session_credit_refusal (pid : PeerId) (p : Peer) (loans : SlotLoans)
+    (remaining : Credits.Ledger) (w v : WGWorld) (a b : Ambient)
+    (aligned : loans.Aligned p) (account : PeerAccount pid p (loans.credits ++ remaining) w)
+    (allocation : Lifetimes.AllocationInv history w)
+    (run : ((beginSession pid).run w).run a = .ok ((false,v),b)) :
+    v = w ∧ PeerAccount pid p (loans.credits ++ remaining) v :=
+  session_refused_account pid p loans remaining w v a b aligned account allocation run
+
+/-- Native creation contributes one temporary reference while preserving the
+exact funding of actual slots, RX entries and TX batches. R2 vacancy and the
+incoming concrete-holder account remain visible; complete initialized caller
+coverage is not assumed proved. -/
+theorem original_holder_creation (account : HolderAccount temporary w)
+    (allocation : Lifetimes.AllocationInv history w) (word : Option PeerId)
+    (id : KeypairId) (a b : Ambient)
+    (run : ((keypairCreate word).run w).run a = .ok ((some id,v),b)) :
+    HolderAccount (⟨id,w.keypairCounter + 1⟩ :: temporary) v :=
+  account.create allocation word id a b run
+
+/-- Native acquisition adds one temporary reference to the same allocation
+without changing actual durable holders or relying on unaccounted count slack.
+The concrete-holder account is an explicit incoming invariant. -/
+theorem original_holder_acquisition (account : HolderAccount temporary w)
+    (id : KeypairId) (k : Keypair) (found : keyAt w id = some k) (a b : Ambient)
+    (run : ((keypairGet (some id)).run w).run a = .ok ((some id,v),b)) :
+    HolderAccount (⟨id,k.internalId⟩ :: temporary) v :=
+  account.get id k found a b run
+
+/-- Native payment of a temporary reference leaves every actual slot, RX
+entry and TX batch exactly funded. Retained holder residency is derived from
+the remaining occurrences, including when the selected put is final. The
+incoming concrete-holder account still needs whole-execution closure. -/
+theorem original_holder_payment (account : HolderAccount (paid :: temporary) w)
+    (now : Bool) (a b : Ambient)
+    (run : ((keypairPut (some paid.slot) now).run w).run a = .ok (((),v),b)) :
+    HolderAccount temporary v :=
+  account.put now a b run
+
+/-- A real durable holder prevents another temporary reference's release
+from deleting its allocation or resetting its sending state. The holder is
+read from the native slot/queue projection, with the incoming account explicit. -/
+theorem original_durable_holder_retention (account : HolderAccount (paid :: temporary) w)
+    (projected : durableLoans w = some loans) (loan : KeyLoan) (member : loan ∈ loans)
+    (same : loan.allocation = paid) (now : Bool) (a b : Ambient)
+    (run : ((keypairPut (some paid.slot) now).run w).run a = .ok (((),v),b)) :
+    ∃ k, keyAt w paid.slot = some k ∧ k.internalId = paid.stamp ∧
+      keyAt v paid.slot = some {k with refcount := k.refcount - 1} :=
+  account.put_durable projected loan member same now a b run
+
+/-- When no actual durable holder and no other temporary occurrence owns an
+allocation, the native successful final payment removes its store cell and
+index publication. Complete source-holder accounting is an explicit premise. -/
+theorem original_holder_final_retirement (account : HolderAccount (paid :: temporary) w)
+    (last : ∀ loans, durableLoans w = some loans →
+      paid ∉ loans.map (·.allocation) ++ temporary)
+    (now : Bool) (a b : Ambient)
+    (run : ((keypairPut (some paid.slot) now).run w).run a = .ok (((),v),b)) :
+    HolderAccount temporary v ∧ keyAt v paid.slot = none ∧ Unpublished paid.slot v :=
+  account.put_last last now a b run
+
+/-- Actual slots supply the entry references for native clear, including
+aliased slot occurrences; clearing cannot spend an unrelated arbitrary loan.
+This derives the post-payment reference equation from a concrete incoming
+holder account, with post-state projection reassembly still outstanding. -/
+theorem original_holder_clear_funding (account : HolderAccount temporary w)
+    (found : peerAt w pid = some p) (a b : Ambient)
+    (run : ((keypairsClear pid).run w).run a = .ok (((),v),b)) :
+    ∃ slots : SlotLoans, ∃ remaining : Credits.Ledger,
+      slots.Aligned p ∧ PeerAccount pid p (slots.credits ++ remaining) w ∧
+      PeerAccount pid {p with keypairNext := none, keypairPrevious := none, keypairCurrent := none} remaining v :=
+  account.clear_funded found a b run
+
+/-- The whole native session obtains its old-slot funding from actual
+holders and its new reference from actual creation, so rotation cannot invent
+or silently discard references. R2 allocation safety and the incoming holder
+account remain explicit; complete initialized projection transport is separate. -/
+theorem original_holder_session_funding (account : HolderAccount temporary w)
+    (found : peerAt w pid = some p) (allocation : Lifetimes.AllocationInv history w)
+    (a b : Ambient)
+    (run : ((beginSession pid).run w).run a = .ok ((true,v),b)) :
+    ∃ slots : SlotLoans, ∃ remaining : Credits.Ledger,
+      slots.Aligned p ∧ PeerAccount pid p (slots.credits ++ remaining) w ∧
+      ∃ ctx middle middleAmbient k,
+        ((SessionOrigin.front pid).run w).run a = .ok ((some ctx,middle),middleAmbient) ∧
+        keyAt middle ctx.slot = some k ∧ k.internalId = w.keypairCounter + 1 ∧
+        PeerAccount pid (rotatedPeer (zeroedPeer p) ctx.slot k.iAmTheInitiator)
+          ((slots.rotate ⟨ctx.slot,w.keypairCounter + 1⟩ k.iAmTheInitiator
+            p.keypairNext.isSome).credits ++ remaining) v :=
+  account.session_funded found allocation a b run
 
 end Leanux.Proofs.WG.RetirementSecurity
