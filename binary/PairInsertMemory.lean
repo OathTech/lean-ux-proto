@@ -74,6 +74,7 @@ structure InsertFocus (n : Names) (o : Offsets) (m : DataMem) where
   nodes : Nodes
   shape : Chain n o m (index%8192) (tableHead n o (index%8192)) nodes
   headRead : word m "bucket.head" (tableHead n o (index%8192)) 8=.ok (head nodes)
+  distinct : (nodes.map Prod.fst).Nodup
 
 namespace InsertFocus
 def root {n o m} (f : InsertFocus n o m) : Nat := tableHead n o (f.index%8192)

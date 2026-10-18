@@ -108,3 +108,52 @@ because its decoded callback closure omitted `write_comp_data`; adding that
 actual body fixed it. No killed build or timeout has occurred. Supporting
 runtime optimization has still used zero focused hours. No completed fresh
 function rate can be reported at this intermediate point.
+
+## Reconstruction and capture checkpoint, 2026-10-18 18:05 UTC
+
+The captured segmented replay now **passes**, for both undefined-value seeds.
+Each run interprets 332 instructions and applies the two sampled native random
+service transitions (1,022 native instructions, explicitly not interpreted).
+Together these account for the capture's 1,354 instructions. It compares all
+33,625,812 captured final bytes, 16 general registers and the represented flags,
+and compares the captured service-entry memory/registers before each transition.
+The result is 287454020, matching the mirror after one collision. At unchanged
+KCOV capacity the replay took **5:53.82**, 350.26 CPU seconds and 10,438,732 KiB
+maximum RSS. No runtime optimization was attempted. Reproduce with
+`capped binary/.lake/build/bin/binary-pair-insert-capture
+.tmp/binary-insert/input.json .tmp/cap-index-insert/snapshot.json
+.tmp/cap-index-insert/layouts.json` after the capture command described by
+`binary/capture_index_mutator.py --help`.
+
+`PairInsertReconstruct.InsertFocus.reconstruct` now proves the combined
+hlist-add stores restore the same executable relation at every bucket, while
+retaining every owner peer word and peer count. The local chain and fuel bounds
+are derived from the existing decoder and allocation-name validation. The source
+bucket walk is connected to the landed mirror by a checked definitional equality;
+its first-walk miss entails the second-walk miss under sequential execution.
+Neither fact assumes the desired second walk or a future reconstructed state.
+Whole-function instruction composition and the random-service contract remain
+open; this checkpoint is not insertion adequacy.
+
+A proof-cost issue was isolated: direct reduction of an unchanged field of
+`target` evaluated the 8,192-bucket array before projecting the owner/count field.
+Three slow development builds were stopped by their individually inspected owned
+PIDs; a low-heartbeat diagnostic then failed in kernel checking. Those are failed
+attempts, not successful validation. An explicit record-normalization lemma lets
+projection rewriting avoid that reduction. With it, the entire reconstruction
+module checks in 0.64 seconds under a diagnostic 3,000-heartbeat limit; its normal
+build is under a second. The executable target and relation are unchanged. This
+is proof-normalization reuse, not a measured improvement to captured replay.
+
+`PairInsertSourceLoop.source_path` now extracts the finite retry path from every
+accepted actual mirror insertion. `PairInsertSourceInput.source_input_effect`
+derives the ordered collision/fresh-draw protocol, exact remaining input cursor
+and updated index table. `hidden_draw` proves the runtime decoder's converse,
+so accepted supplied mirror draws cannot escape its site/shape checks. These
+proofs retain source refusal behavior and introduce no new trust premise.
+
+The default build passes (706 jobs); the trust-gate unit tests pass. Fresh
+kernel replay of `PairInsertReconstruct` and `PairInsertSource` passes, and the
+new source-input closure is being replayed. All printed local theorem axioms
+are the three standard axioms. The external acceptance above remains scoped
+to the preceding index subsystem, not these new insertion components.

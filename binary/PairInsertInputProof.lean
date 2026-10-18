@@ -31,4 +31,44 @@ theorem draw_hidden {records : List HiddenRecord} {value : Nat} {rest : List Hid
     rfl
 
 #print axioms draw_hidden
+
+/-- Conversely, every accepted supplied draw has the runtime decoder's
+shape and exact remaining cursor. Placeholder runs are not supplied inputs. -/
+theorem hidden_draw {records : List HiddenRecord} {value : Nat} {w final : World}
+    (supplied : w.hidden=some records)
+    (accepted : (hiddenU64 .indexDraw).run w=.ok (value,final)) :
+    ∃ rest, draw records=.ok (value,rest) ∧ final={w with hidden := some rest} := by
+  cases skipped : records.dropWhile (fun r => HiddenSite.passive r.site) with
+  | nil =>
+    simp [hiddenU64,hidden,skipAmbient,noteNetRxStart,HiddenSite.info,Worker.sectionId,Worker.index,
+      StateT.run_bind,supplied,skipped] at accepted
+    cases accepted
+  | cons r rs =>
+    by_cases site : r.site=4
+    · by_cases length : r.bytes.length=8
+      · by_cases padding : (r.bytes.drop 4).all (· == 0)=true
+        · have decoded : draw records=.ok ((r.bytes.take 4).foldr (fun b acc => acc*256+b.toNat) 0,rs) := by
+            simp [draw,skipped,HiddenSite.info,site,length,padding]
+            rfl
+          have actual := draw_hidden decoded w supplied
+          rw [actual] at accepted
+          have equal := Except.ok.inj accepted
+          cases equal
+          exact ⟨rs,decoded,rfl⟩
+        · have bad : (r.bytes.drop 4).any (· != 0)=true := by
+            change ((r.bytes.drop 4).any (fun b => !(b == 0)))=true
+            rw [←List.not_all_eq_any_not]
+            cases yes : (r.bytes.drop 4).all (· == 0) <;> simp_all
+          have badExists : ∃ b ∈ r.bytes.drop 4, b≠0 := by simpa only [List.any_eq_true,bne_iff_ne] using bad
+          simp [hiddenU64,hidden,skipAmbient,noteNetRxStart,HiddenSite.info,Worker.sectionId,Worker.index,
+            StateT.run_bind,supplied,skipped,site,length,badExists] at accepted
+          cases accepted
+      · simp [hiddenU64,hidden,skipAmbient,noteNetRxStart,HiddenSite.info,Worker.sectionId,Worker.index,
+          StateT.run_bind,supplied,skipped,site,length] at accepted
+        cases accepted
+    · simp [hiddenU64,hidden,skipAmbient,noteNetRxStart,HiddenSite.info,Worker.sectionId,Worker.index,
+        StateT.run_bind,supplied,skipped,site] at accepted
+      cases accepted
+
+#print axioms hidden_draw
 end Binary.Pair.Insert
