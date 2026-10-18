@@ -343,7 +343,7 @@ and `callBoundary`, under both undefined-value seeds, and checks that every
 executed PC matches the original capture. This is explicitly a generated
 variation, **not an optimization or replay of the unchanged snapshot**.
 
-| Run | Capacity | Paired work, two seeds | Process elapsed | Peak resident memory |
+| Run | Capacity | Reported inner interval | Process elapsed | Peak resident memory |
 |---|---:|---:|---:|---:|
 | Unchanged IPv4 capture | 32 MiB | 242.171 s | 256.55 s | 7,305,052 KiB |
 | Generated IPv4 variation | 4,522 words | 0.212 s | 0.35 s | 178,372 KiB |
@@ -353,7 +353,9 @@ The variation executes the same 1,592/1,510 instructions per seed and visits
 the same five/three trie headers, returning peers 3/4. It still checks call
 readiness and reconstruction. It omits the independent captured header/return
 comparisons and corruption controls, so the timings are not a controlled
-whole-run speedup comparison. It provides strong evidence that the large
+whole-run speedup comparison. Its inner interval includes memory loading and
+setup; the unchanged capture's inner interval excludes memory loading. Each
+includes both seeds. It provides strong evidence that the large
 coverage allocation is a major runtime cost, while the attempted per-read
 optimization provides no useful gain. The measurements do not separate
 large-memory update/copy costs from repeated scans precisely.
@@ -483,9 +485,10 @@ been repaired by this increment. No KILLED banner or timeout occurred.
 The mirror pin remains `cb2348e` and lags main `77c9b55`; Kraken is unchanged
 at clean `7ebba06a30eaf08c10b26b28ca14bfee1c791576`.
 
-The complete-call implementation is committed at `abb9ce01`. Its export of
-`PairCallAdequacy` and `PairCallWitness` is prepared, and will be regenerated
-with `PairRemoveOwnership` for the final calibration commit. External acceptance
+The complete-call implementation is committed at `abb9ce01`; the mutation and
+cost calibration is committed at `d2dac16b`. Export generation at `d2dac16b`
+completed with exit zero for `PairCallAdequacy`, `PairCallWitness` and
+`PairRemoveOwnership`, writing `.tmp/binary-pair-call.ndjson`. External acceptance
 of this increment is **pending**. The earlier accepted external gate at
 `a33869e` covers only its earlier boundary modules. Reproduction commands,
 including the export-based gate, are in `binary/README.md`.
