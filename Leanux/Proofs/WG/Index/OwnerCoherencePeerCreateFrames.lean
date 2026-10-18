@@ -8,11 +8,13 @@ namespace Leanux.Proofs.WG.Index
 open Leanux Leanux.WG Noise Std.Do
 
 /-- Internal initialization state. In particular `word = none` does not
-assert coherence of an overwritten handshake owner during initialization. -/
+assert coherence of an overwritten handshake owner during initialization.
+The zero tag comes from newborn insertion and survives the initialization tail. -/
 def PeerCreateAt (before : Device) (pid : PeerId) (word : Option PeerId)
     (g : WGWorld) : Prop :=
   ∃ current p, g.dev = some current ∧ PeerCreateFootprint before current pid ∧
-    current.peers[pid]? = some p ∧ p.refcount = 1 ∧ p.handshakeEntryPeer = word
+    current.peers[pid]? = some p ∧ p.refcount = 1 ∧
+    p.handshakeEntryPeer = word ∧ p.handshakeState = HANDSHAKE_ZEROED
 
 /-- Replacing a possibly aliased peer by a positive self-owner restores every
 hashed owner's coherence. Counts and ownership of references are not equated. -/
@@ -51,15 +53,16 @@ reference count, while explicitly allowing the initialization of its word. -/
 theorem modifyPeer_createAt (before : Device) (pid : PeerId)
     (oldWord newWord : Option PeerId) (f : Peer → Peer)
     (word : ∀p, p.handshakeEntryPeer = oldWord → (f p).handshakeEntryPeer = newWord)
-    (count : ∀p, (f p).refcount = p.refcount) :
+    (count : ∀p, (f p).refcount = p.refcount)
+    (tag : ∀p, (f p).handshakeState = p.handshakeState) :
     Ensures (modifyPeer pid f) (PeerCreateAt before pid oldWord)
       (fun _ => PeerCreateAt before pid newWord) := by
   intro g ambient result final after pre run
-  obtain ⟨current,p,device,footprint,resident,unit,old⟩ := pre
+  obtain ⟨current,p,device,footprint,resident,unit,old,zero⟩ := pre
   change (((do let q ← getPeer pid; setPeer pid (f q)) : WG.M Unit).run g).run ambient = _ at run
   simp [getPeer, getDev, device, resident, setPeer, modifyDev] at run
   rcases run with ⟨⟨rfl,rfl⟩,rfl⟩
-  refine ⟨{current with peers := current.peers.insert pid (f p)},f p,rfl,?_,by simp,?_,word p old⟩
+  refine ⟨{current with peers := current.peers.insert pid (f p)},f p,rfl,?_,by simp,?_,word p old,(tag p).trans zero⟩
   · refine ⟨footprint.1,footprint.2.1,?_⟩
     intro other different
     simpa [Std.TreeMap.getElem?_insert, Ne.symm different] using footprint.2.2 other different
@@ -69,14 +72,14 @@ theorem precompute_createAt (before : Device) (pid : PeerId) (word : Option Peer
     Ensures (precomputeStaticStatic pid) (PeerCreateAt before pid word)
       (fun _ => PeerCreateAt before pid word) := by
   intro g ambient result final after pre run
-  obtain ⟨current,p,device,footprint,resident,unit,old⟩ := pre
+  obtain ⟨current,p,device,footprint,resident,unit,old,zero⟩ := pre
   obtain ⟨value,out,tail,execution,effect⟩ :=
     Config.precomputeStaticStatic_returns pid current p resident g ambient device
   rw [run] at execution
   cases execution
   refine ⟨Config.precomputeDevice current pid p,
     {p with precomputedStaticStatic := Config.precomputedAfter current.staticIdentity p},
-    effect,?_,Config.precomputeDevice_peer pid current p,unit,old⟩
+    effect,?_,Config.precomputeDevice_peer pid current p,unit,old,zero⟩
   unfold Config.precomputeDevice
   split
   · dsimp only

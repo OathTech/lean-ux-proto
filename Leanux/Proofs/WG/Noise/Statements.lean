@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Noise.PeerCreationClaims
 import Leanux.Proofs.WG.Noise.SessionRefusalClaims
 import Leanux.Proofs.WG.Noise.ResponseCallerClaims
 import Leanux.Proofs.WG.Noise.InitialSlotClaims
@@ -554,7 +555,7 @@ theorem original_session_allocation_refusal (pid : PeerId) (d : Device) (p : Pee
   beginSession_allocation_refused_projected pid d p counter resident accepted
     bytes rest width refused
 
-/-- The response caller's initial tags reach its creation receipt unchanged,
+/-- On normal completion the response caller's initial tags reach its creation receipt unchanged,
 and creation's tags reach the session receipt unchanged. With two receipts the
 initial tag is consumed initiation and session entry is created response, even
 when session returns false. This links actual helper cuts and leaves the final
@@ -569,5 +570,16 @@ theorem original_response_caller_tag_provenance
         ∀ receipt ∈ receipts,
           ResponseCaller.ReceiptValid receipt ∧ TagReceiptEffect receipt) :=
   ResponseCaller.original_response_receipt_chain pid entry
+
+/-- Normal peer creation sets exactly its returned location to the zero tag;
+numeric refusal preserves all optional tags. Cursor overwrite is included,
+so this is a lifetime initialization effect, not a handshake protocol edge. -/
+theorem original_peer_creation_tags (publicKey : Key) (psk : Option Key)
+    (entry : Campaign2.Snapshot) :
+    Campaign2.Ensures (peerCreate publicKey psk) (fun s => s.tagAt = entry.tagAt)
+      (fun result after => ∀ target, after.tagAt target = match result with
+        | .error _ => entry.tagAt target
+        | .ok pid => if pid = target then some HANDSHAKE_ZEROED else entry.tagAt target) :=
+  peerCreate_tag_map publicKey psk entry
 
 end Leanux.Proofs.WG.Noise

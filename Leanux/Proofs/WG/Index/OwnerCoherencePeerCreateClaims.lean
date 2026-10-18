@@ -31,7 +31,7 @@ theorem peerCreate_owner_coherent (publicKey : Key) (psk : Option Key) :
       subst current
       exact pre d device
     | ok pid =>
-      obtain ⟨current,p,present,footprint,resident,unit,self⟩ := effect
+      obtain ⟨current,p,present,footprint,resident,unit,self,_⟩ := effect
       refine ⟨?_,?_⟩
       · intro actual actualDevice
         have same : actual = current := Option.some.inj (actualDevice.symm.trans present)
