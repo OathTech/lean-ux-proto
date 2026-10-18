@@ -1,4 +1,4 @@
-import Leanux.Proofs.WG.HandshakeSecurity.ResponderJointHistory
+import Leanux.Proofs.WG.HandshakeSecurity.ResponderAuditedHistory
 import Leanux.Proofs.WG.HandshakeSecurity.ResponderGlobalFrames
 import Leanux.Proofs.WG.HandshakeSecurity.ResponderStackFrames
 import Leanux.Proofs.WG.HandshakeSecurity.ResponderLabels
@@ -428,5 +428,29 @@ the same execution. A fresh responder session cannot newly become current. -/
 theorem original_session_responder_history (H1 : H1ResponderCurrentEdges) (pid : PeerId) :
     Responder.Joint.Preserves (Origins.HistoryAdapters.session pid) :=
   Responder.Joint.session H1 pid
+
+/-- The real handshake receive worker retains responder-current authorization
+through Noise consumers, session installation, timers, cookie replies and
+keepalive staging. Its configured/slot entry facts come from C1's same-run
+journal; H1's slot/material edge contract remains visible. Other driver actors
+and packet-to-encryption chronology remain separate obligations. -/
+theorem original_handshake_worker_responder_history (H1 : H1ResponderCurrentEdges) :
+    Responder.Joint.Preserves Origins.HistoryAdapters.receiveStep ∧
+    Responder.Joint.Preserves Origins.HistoryAdapters.receiveIteration :=
+  ⟨Responder.Joint.receiveStep H1, Responder.Joint.receiveIteration H1⟩
+
+/-- The actual queued handshake/clear workers and recorded timer dispatch
+preserve responder-current authorization and the existing confirmation prefix.
+All five callbacks, detachment, section guards and native failures are included;
+the outer scheduler and initialized driver transport remain separate. -/
+theorem original_deferred_units_responder_history (H1 : H1ResponderCurrentEdges)
+    (worker : Worker) (pid : PeerId) (timer : PeerTimer) (entry : WheelEntry)
+    (step : Option UInt64) (j : UInt64) :
+    Responder.Joint.Preserves (Queues.RxHistory.audit Lifetimes.runOneSendWorkerAudit) ∧
+    Responder.Joint.Preserves (Queues.RxHistory.audit Lifetimes.runOneClearWorkerAudit) ∧
+    Responder.Joint.Preserves (Queues.RxHistory.audit (Lifetimes.timerDispatchAudit worker pid timer entry step)) ∧
+    Responder.Joint.Preserves (Queues.RxHistory.audit (Queues.RxHistory.placeholderTimerPassAudit j)) :=
+  ⟨Responder.Joint.sendOne, Responder.Joint.clearOne H1,
+    Responder.Joint.timerDispatch worker pid timer entry step, Responder.Joint.placeholderPass j⟩
 
 end Leanux.Proofs.WG.HandshakeSecurity

@@ -27,6 +27,8 @@ import Leanux.Proofs.WG.RetirementSecurity.TxWorkerHolders
 import Leanux.Proofs.WG.RetirementSecurity.RxPublishHolders
 import Leanux.Proofs.WG.RetirementSecurity.RxCleanupHolders
 import Leanux.Proofs.WG.RetirementSecurity.RxConsumeHolders
+import Leanux.Proofs.WG.RetirementSecurity.TxOccurrenceWorker
+import Leanux.Proofs.WG.RetirementSecurity.TxOccurrenceCreate
 
 /-! Campaign 3, T6: local original-operation retirement contracts. The
 initialized key-reference ledger, complete caller coverage and conditional
@@ -34,6 +36,52 @@ timer/worker progress remain separate obligations. No complete T6 outcome is
 claimed by these exports. -/
 namespace Leanux.Proofs.WG.RetirementSecurity
 open Leanux Leanux.WG Leanux.Proofs.Framing
+
+/-- The full native createData caller consumes its unpublished physical
+batch: normal/EPIPE admission queues it, while dead-peer/ENOSPC rejection
+frees it. It preserves uniqueness and residency of all remaining owned
+occurrences, without a separate batch-disjointness or peer-funding premise. -/
+theorem original_tx_creation_occurrences
+    (inventory : TxInventory (⟨.unpublished,pid,items⟩ :: locals) w)
+    (a b : Ambient)
+    (run : ((createData pid items).run w).run a = .ok (((),v),b)) :
+    TxInventory locals v := inventory.create a b run
+
+/-- The normal fixture begins with no TX packet occurrences. This is the
+physical separation base case; whole Runner transport and completeness of
+resident packet representation remain separate obligations. -/
+theorem initialized_tx_occurrence_inventory (net bare : Bool) :
+    TxInventory [] (Runner.initialWG net bare) := initial_tx_inventory net bare
+
+/-- Native TX allocation creates a fresh unpublished occurrence for every
+packet in its batch. Actual queued and caller-held packets stay resident and
+pairwise distinct, using the campaign 1 packet frontier at allocation. -/
+theorem original_tx_allocation_occurrences (inventory : TxInventory locals w)
+    (bounded : Packets.Inv w) (device : w.dev = some d) (pid : PeerId)
+    (packets : List DataPacket) (a b : Ambient)
+    (run : ((packets.mapM newTxSkb).run w).run a = .ok ((items,v),b)) :
+    TxInventory (⟨.unpublished,pid,items⟩ :: locals) v :=
+  inventory.allocate bounded device pid packets a b run
+
+/-- Native enqueue transfers the unpublished batch into its actual peer
+queue once, including EPIPE; ENOSPC retains the batch for caller cleanup.
+Device-ring aliases add no authoritative packet or key-reference occurrence. -/
+theorem original_tx_enqueue_occurrences
+    (inventory : TxInventory (⟨.unpublished,pid,items⟩ :: locals) w)
+    (a b : Ambient)
+    (run : ((enqueuePerDeviceAndPeer pid items).run w).run a = .ok ((ret,v),b)) :
+    (ret = -Leanux.ENOSPC ∧ TxInventory (⟨.unpublished,pid,items⟩ :: locals) v) ∨
+      ((ret = 0 ∨ ret = -Leanux.EPIPE) ∧ TxInventory locals v) := inventory.enqueue_native a b run
+
+/-- The complete native TX worker preserves packet occurrence uniqueness
+and key-reference funding. Its actual cached queue selection derives the
+separation needed for disposal; peer-release funding remains explicit.
+This does not yet assert orphan completeness or unique ring encryption. -/
+theorem original_tx_worker_occurrence_account (account : HolderAccount temporary w)
+    (inventory : TxInventory locals w) (funded : PeerReleaseFunded pid w)
+    (a b : Ambient)
+    (run : ((txStep pid).run w).run a = .ok ((result,v),b)) :
+    HolderAccount temporary v ∧ TxInventory locals v := account.tx_step_inventory inventory funded a b run
 
 /-- Native data receive transfers one actual key acquisition into its RX
 queue or pays it on rejection, preserving all other physical key holders.

@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.TimerRootClaims
 import Leanux.Proofs.WG.AuthenticatedEffects.HandshakeCausalReceiver
 import Leanux.Proofs.WG.AuthenticatedEffects.AdmissionCompletion
 import Leanux.Proofs.WG.AuthenticatedEffects.HandshakeAdmissionFacts
@@ -479,5 +480,29 @@ theorem original_handshake_callbacks_have_authenticated_cause
       pre ++ .callback kind pid :: post) :
     ∃ r ∈ HandshakeCausal.roots pre, r.Valid ∧ r.ForPeer pid :=
   HandshakeCausal.callback_cause msg src w a pre post kind pid position
+
+/-- Security: observing the receiver's native timer arms preserves the complete
+original result and both native state endpoints, or the exact Stop. Each arm
+receipt is emitted after its actual arm operation and survives a later Stop;
+no successful arm is fabricated when that operation itself fails. -/
+theorem original_handshake_timer_arm_observer (msg : Key) (src : SkbSource)
+    (w : WGWorld) (a : Ambient) (h : List TimerRoot.Event) :
+    (runWGPrefix (TimerRoot.receive msg src) w a h).1 =
+      ((receiveHandshakePacket msg src).run w).run a :=
+  TimerRoot.receive_erases msg src w a h
+
+/-- Security: every completed session-derived or traversal timer-arm occurrence
+in the original handshake receiver has an exact native execution witness and
+names its own earlier callback entry by index. That entry has a strictly earlier
+MAC-and-Noise-authenticated admission for the same peer. This closes the actual
+handshake-to-arm edge, including later Stops; carrying the token across timer
+storage and future dispatch remains a separate obligation. -/
+theorem original_handshake_timer_arms_have_authenticated_cause
+    (msg : Key) (src : SkbSource) (w : WGWorld) (a : Ambient)
+    (pre post : List TimerRoot.Event) (r : TimerRoot.Arm)
+    (position : (runWGPrefix (TimerRoot.receive msg src) w a []).2 =
+      pre ++ .armed r :: post) :
+    TimerRoot.Authenticated pre r :=
+  TimerRoot.arm_authenticated msg src w a pre post r position
 
 end Leanux.Proofs.WG.AuthenticatedEffects

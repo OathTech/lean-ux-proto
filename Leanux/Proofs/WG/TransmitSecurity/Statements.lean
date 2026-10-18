@@ -4,6 +4,9 @@ import Leanux.Proofs.WG.TransmitSecurity.NonceTimers
 import Leanux.Proofs.WG.TransmitSecurity.NonceHandshakeSafety
 import Leanux.Proofs.WG.TransmitSecurity.WireNonce
 import Leanux.Proofs.WG.TransmitSecurity.EncryptBinding
+import Leanux.Proofs.WG.TransmitSecurity.PacketAllocation
+import Leanux.Proofs.WG.TransmitSecurity.PacketMaterialFrames
+import Leanux.Proofs.WG.TransmitSecurity.WorkerEncryption
 import Leanux.Proofs.WG.TransmitSecurity.Rekey
 
 /-! Campaign 3, T1 initialized counter reservations and local AEAD contracts.
@@ -293,5 +296,35 @@ theorem initialized_nonce_reservations (trace : Runner.Trace) (placeholders : Bo
     ErasesOuter (Nonce.executeObserved trace placeholders) (Runner.executeTrace trace placeholders) ∧
     List.Nodup (runPrefixOuter (Nonce.executeObserved trace placeholders) []).2 :=
   ⟨Nonce.executeObserved_erases trace placeholders,Nonce.initialized_safe trace placeholders⟩
+
+/-- Security: native batch allocation binds each returned packet ID to the
+corresponding original full packet value, including peer, key slot and nonce.
+The actual normal allocator run and present device are the only premises;
+queue provenance and initialized occurrence conservation remain separate. -/
+theorem original_tx_allocation_packet_binding (packets : List DataPacket)
+    {w v : WGWorld} {d : Device} {a b : Ambient} {item : List SkbId}
+    (device : w.dev = some d)
+    (run : ((packets.mapM newTxSkb).run w).run a = .ok ((item,v),b)) :
+    ∀ (n : Nat) packet, packets[n]? = some packet →
+      ∃ id, item[n]? = some id ∧ Queues.TxDisposition.txPackets v id = some packet :=
+  PacketAllocation.records packets device run
+
+/-- Security: actual encryption and DEAD/CRYPTED publication cannot substitute
+packet peer, key slot, nonce or original plaintext. The whole native batch tail
+preserves those fields on normal return, including partial encryption failure;
+this frame does not assert that a ring item was authorized or consumed once. -/
+theorem original_encrypt_batch_material (item : Option (List SkbId)) :
+    Leanux.Proofs.Framing.SameView (fun w : World => PacketMaterial.view w.wg)
+      (Queues.RxWorkers.encryptStepTailSource item) :=
+  PacketMaterial.encrypt_tail item
+
+/-- Security: every recorded native worker AEAD is bound to the actual batch
+head's selected key word and its own packet read, with valid native preparation
+and key-read evidence. Exact erasure includes partial failure and Stop. This
+source contract keeps queue provenance and one-time selection as separate obligations. -/
+theorem original_encrypt_worker_packet_receipts (item : Option (List SkbId)) (w : World) :
+    ErasesPrefix (WorkerEncryption.tail item) (Queues.RxWorkers.encryptStepTailSource item) ∧
+    WorkerEncryption.Good (runPrefix (WorkerEncryption.tail item) w []).2 :=
+  ⟨WorkerEncryption.tail_erases item,WorkerEncryption.tail_receipts item w⟩
 
 end Leanux.Proofs.WG.TransmitSecurity
