@@ -2,19 +2,16 @@
 
 ## Current checkpoint
 
-**Campaign-owned claims are carried to main 77c9b555.** The split-world
-projection remains the claim boundary. Campaign 1's landed tree and gate replace
-the inherited prototype copies exactly; the GRO-corrected mirror is unchanged.
-The full gate fails in three inherited GRO modules. Scoped campaign builds
-and standard-axiom audits pass. All six terminal closures passed fresh replay
-at the merge; both subsequent H4 extensions pass build, axioms and fresh replay.
-The H2 combined session-invariant extension passes build and axioms, with
-independent review closed; fresh replay passes.
+**Campaign-owned claims are current over main 77c9b555.** The split-world
+projection remains the claim boundary. Campaign 1's validated GRO carry
+8ba82097 is incorporated unchanged, replacing the three inherited failing
+modules. The full combined proof gate passes: 1,949 build jobs and 1,279
+terminal declarations, with standard axioms only. Fresh combined-root kernel replay passes. All six results remain in progress as scoped below.
 
 | Result | Headlines | Checked support | Split status |
 | --- | ---: | ---: | --- |
 | H1 Noise | 35 | 274 | Full terminal closure, all seven whole-call tag maps, their actual finite mixed histories and session derivation-clock receipt current; direct helper reinstallation refutes unrestricted repeat-confirmation uniqueness; successful confirmation IDs for the tracked peer are distinct across actual finite histories of all four handshake create/consume calls, session installation/confirmation, clearing and expiry, including arbitrary-peer interleavings, under an explicit initial next/cursor bound; broader driver/lifetime closure remains separate. |
-| H2 Index | 94 | 500 | Full terminal closure and ingress/expiry/handshake/peer-creation owner coherence and whole-removal lifecycle finding/slot-covered arbitrary-AIP preservation and actual clear-work dispatch and both-mode handshake queueing and new-handshake/zero-key/retransmit callbacks and persistent-callback and successful-session slot-alias invariant counterexamples and positive publication-to-lookup handoff under explicit rotation freshness current; core named-operation H2 coverage, original bulk-removal table safety and combined session-invariant preservation through arbitrary finite consecutive calls checked; whole initialized driver/lifetime closure is a separate stronger scope; aggregate gate inherited-blocked. |
+| H2 Index | 94 | 500 | Full terminal closure and ingress/expiry/handshake/peer-creation owner coherence and whole-removal lifecycle finding/slot-covered arbitrary-AIP preservation and actual clear-work dispatch and both-mode handshake queueing and new-handshake/zero-key/retransmit callbacks and persistent-callback and successful-session slot-alias invariant counterexamples and positive publication-to-lookup handoff under explicit rotation freshness current; core named-operation H2 coverage, original bulk-removal table safety and combined session-invariant preservation through arbitrary finite consecutive calls checked; whole initialized driver/lifetime closure is a separate stronger scope; aggregate gate passes. |
 | H3 Roaming | 21 | 219 | Full terminal closure and invalid-MAC1/rate-limit/admitted-response/initiation rejection and cookie-message and whole data-admission/ingress endpoint preservation and actual first pre-put NAPI owner/packet authentication under the publication owner-head condition current; later polls, persistent queue provenance and broader caller coverage open. |
 | H4 Configuration | 116 | 994 | Full terminal closure, actual mixed/key setter paginated readback with arbitrary endpoints, whole finite single-peer mixed-width getter and actual finite empty-IP peer getter and exact arbitrary-room empty-IP serializer/whole normal cursor callback and actual mixed/key setter composition with exact DATA/DONE count and arbitrary endpoints and arbitrary finite empty-IP multi-peer scalar, mixed fwmark/scalar and established-identity private-key set/get and actual endpoint set/weighted readback and local mixed-page serializer/cursor/coalescer support plus finite mixed-page planning, native callback, computed selection/reference support, finite receive budget, exact page content and complete finite mixed peer/allowed-IP getter and scalar, endpoint, fwmark/scalar and established-identity key set/get plus mixed port-refusal and all nonzero and zero port-only set/get outcomes and actual empty allowed-IP replacement/full mixed readback and initial-state flag-only replace-peers free/first-pass observations and general represented insertion/fresh-peer readback current; global ownership, queued cleanup and general mixed setters remain open. |
 | H5 Progress | 53 | 349 | Full terminal closure, exact bounded outcomes and recorded batch, actual timer completion guards and recorded idle/post-advance wait completion and actual advance-syscall/runner linkage and send-worker completion guard and four final-idle syscall/runner receipts and exact all-mode finite allocation and successful modular-power evaluation bridges and actual activation-exit inspection current; global progress/coherent-ring adequacy open. |
@@ -38,16 +35,44 @@ thirty-seven new H4 headlines, eleven new H5 headlines and fifteen new H6 headli
 The [retrofit report](2026-10-16-proof-campaign-2-state-split.md) records
 claim/frame files, corrections, before/after counts and validation.
 The original retrofit validation is historical. Current carry validation is
-recorded below. No campaign-1 proof file or mirror implementation differs from
-main; the retained local projections are in campaign-owned files.
+recorded below. Campaign-1 proof files equal 8ba82097; mirror implementation
+and the gate equal main 77c9b555. The retained local projections are in
+campaign-owned files.
 
 None of H1–H6 is a completed charter result. The timer retry-sequence contracts
 concern supplied wheel units and their actual inspection. The first-turn and whole-episode
 contracts now connect actual outer selection and every executed turn to their
 unchanged continuation/finish. A contiguous qualifying same-peer block now has an
 actual-history retry bound at its last send exit; arbitrary mixed histories and
-session-relative counting remain open. No new
-mirror-team request arises from these statement-domain findings.
+session-relative counting remain open. The [shared-frame request](2026-10-15-campaign-2-shared-frame-followup.md)
+now inventories the H1 whole-response socket/tag dependency. It requests
+proof support, with no mirror change.
+
+## Campaign-1 GRO carry, 2026-10-18
+
+[USER 2026-10-18] Incorporate campaign 1's validated 8ba82097 carry directly
+on the campaign branch and treat its later identical main landing as already
+incorporated. Continue whole-run claims in charter order, beginning with H1.
+
+The incoming proof changes use actual successive GRO selections. All shared
+proof files remain byte-identical to that commit; the gate and executable
+mirror remain byte-identical to main 77c9b555. The sole merge conflict was the
+register introduction. No campaign-owned proof changed, so before and after
+counts are identical: 2,838 theorems, 384 headlines and 1,018 owned modules;
+zero retyped, zero deleted, all retained. The per-result table above records
+the remaining scope, which a green combined gate does not close.
+
+Validation: the full capped proof-gate passes all four stages, with 1,949
+build jobs and 1,279 terminal declarations restricted to propext,
+Classical.choice and Quot.sound. The inherited Env.lean:865 String.mk
+deprecation is reported and left to its mirror owner; no proof warning was
+introduced. Fresh combined-root kernel replay passes. No guest, mirror or
+shared-lemma edit was needed, and no infrastructure retry occurred.
+
+The H1 socket inventory requests stronger shared observations for three
+composite socket contracts and four cache/transmit leaf families. Those
+families have not been copied locally. Session-credit and actual caller
+receipt work proceed independently.
 
 ## Main landing and H2 bulk removal, 2026-10-18
 

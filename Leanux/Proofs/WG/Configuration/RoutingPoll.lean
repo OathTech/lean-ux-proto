@@ -158,12 +158,23 @@ private theorem normalOne_rule (g : Gro) (e : RxJoint.Entry) (n : Nat) (xs : Fla
 
 private theorem receive_rule (g : Gro) (e : RxJoint.Entry) (xs : FlatTable × FlatTable) :
     PrefixPreserves (State xs) (Checks xs) (receive g e) := by
+  have safe : ∀ h w, State xs h w → Checks xs h := fun _ _ hi => hi.2
+  have stopped {α : Type} (message : String) :
+      PrefixPreserves (State xs) (Checks xs) (liftPrefix (unsupported message : Leanux.M α)) := by
+    apply PrefixEnsures.preserves
+    apply PrefixEnsures.lift _ safe
+    intro h w x v hi hr
+    change (Except.error _ : Except Stop _) = _ at hr
+    cases hr
   unfold receive
-  split
-  · exact normalOne_rule _ _ _ xs
-  · split
-    · exact (ambient_rule (AmbientM.unsupported _) xs).bind (fun _ => PrefixPreserves.pure (fun _ _ hi => hi.2) _)
-    · exact PrefixPreserves.pure (fun _ _ hi => hi.2) _
+  repeat' first
+    | exact normalOne_rule _ _ _ xs
+    | exact stopped _
+    | exact PrefixPreserves.pure safe _
+    | with_reducible apply PrefixPreserves.bind
+    | with_reducible apply PrefixPreserves.ite
+    | (with_reducible intro x; try dsimp only)
+    | (with_reducible split)
 
 private theorem flushAll_rule (g : Gro) (xs : FlatTable × FlatTable) :
     PrefixPreserves (State xs) (Checks xs) (flushAll g) := by

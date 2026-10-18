@@ -72,14 +72,22 @@ theorem normalOne_preserves (g : Gro) (e : Entry) (segs : Nat) :
 
 theorem receive_preserves (g : Gro) (e : Entry) :
     PrefixPreserves I S (receiveWith encode stack g e) := by
+  have stopped {α : Type} (message : String) :
+      PrefixPreserves I S (liftPrefix (unsupported message : M α)) := by
+    apply PrefixEnsures.preserves
+    apply PrefixEnsures.lift _ safe
+    intro h w x v hi hr
+    change (Except.error _ : Except Stop _) = _ at hr
+    cases hr
   unfold receiveWith
-  split
-  · exact normalOne_preserves encode stack safe entered callback completed _ _ _
-  · split
-    · apply PrefixPreserves.lift_failure_bind safe
-      intro w
-      exact ⟨_,rfl⟩
-    · exact PrefixPreserves.pure safe _
+  repeat' first
+    | with_reducible exact normalOne_preserves encode stack safe entered callback completed _ _ _
+    | with_reducible exact PrefixPreserves.pure safe _
+    | with_reducible exact stopped _
+    | with_reducible apply PrefixPreserves.bind
+    | with_reducible apply PrefixPreserves.ite
+    | (with_reducible intro x; try dsimp only [id])
+    | (with_reducible split <;> try dsimp only [id])
 
 theorem flushAll_preserves (g : Gro) :
     PrefixPreserves I S (flushAllWith encode stack g) := by

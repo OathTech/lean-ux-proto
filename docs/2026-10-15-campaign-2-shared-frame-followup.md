@@ -10,6 +10,33 @@ the shared lemmas they replace. If an increment needs more than a few, report
 the overlap before copying a layer. The original six-family decision remains
 pending and does not authorize these additional families.
 
+## Whole-response socket support, 2026-10-18
+
+[AGENT 2026-10-18] Keep the whole-response tag-frame gap explicit rather
+than duplicating the socket/cache support layer in H1.
+
+H1 needs normal-return preservation of the complete pointwise optional
+handshake-tag map through original send4, send6 and sendBufferToPeer.
+The corresponding shared contracts are Keypairs.WGFrames.send4_spec,
+send6_spec and sendBufferToPeer_spec. Their current observations omit
+Peer.handshakeState. A stronger shared peer projection containing that field,
+or tag-map-specific contracts, would supply the needed instantiation.
+
+The dependency inventory includes four additional WGBase families:
+dstCacheGet_spec, dstCacheReset_spec, dstCacheSet_spec and tunnelXmit_spec.
+Hiding them inside three public proofs would still duplicate that support.
+No such variants have been added. Existing hoare_liftAmbient,
+hoare_liftRouting, getDev_sameWGStore, Queues.loopbackSend_kernel and
+Lifetimes.socketPort_sameStore already supply the broad-store pieces.
+The campaign-owned peer-update contract covers endpoint and accounting
+writes. Lifetimes.AmbientContracts cannot supply the remaining conclusion:
+its identity-preserving setPeer interface permits arbitrary tag changes.
+
+This is a proof-support request to campaign 1, with no mirror change.
+H1 session totality and actual response-receipt work continue independently.
+The generic caller composition is not credited as final tag preservation
+until all concrete helper frames are supplied.
+
 ## Landed support update, 2026-10-18
 
 Main 77c9b555 supplies the retyped shared layers. The narrow H2 bulk-removal
@@ -18,10 +45,11 @@ copy and no initial trie-shape premise. Five former local proof bodies now
 directly project landed hoare_liftAip, the three cookie frames, and
 deliverSent_sameKernel; their public compatibility statements remain.
 
-H3's PublicationHistory and PublicationChecks.actual_poll still depend on
-the inherited GRO failures, including Logged/PrefixGro and Queues/GroState.
-This is the current provenance-support dependency; PollAuthorization is not
-a premise of the earlier endpoint-mutation claim. H4's ClearEndpoint and
+Campaign 1's GRO carry 8ba82097 now clears the inherited build failures,
+including the PublicationHistory and PublicationChecks.actual_poll closure.
+The combined gate passes. PollAuthorization is not a premise of the earlier
+endpoint-mutation claim; initialized provenance transport remains a separate
+claim. H4's ClearEndpoint and
 InsertionRouting support avoid those broken modules, while initialized
 PeerRemovalCompletion still reaches them. H4's initial-state flag-only replace-peers transport is now checked using
 ClearEndpoint.free_endpoint. Routing coherence, NodePairs and listed residency
@@ -36,10 +64,9 @@ describe historical overlap; they do not authorize copying the affected layers.
 H2 now reuses Keypairs.Affiliation.beginSession_affiliation with existing
 campaign table/owner contracts to preserve a combined invariant over finite
 consecutive session calls. The pure bridge adds no shared copy. The alternative
-initialized CurrentSlots/RunnerAccount/HolderAuxiliary route still reaches
-Logged/PrefixGro through OwnerCreation and RetainingLifecycle; even repaired,
-those APIs do not supply the full affiliation/hashed-owner/table conjunction.
-That missing invariant transport remains separate from the compile dependency.
+initialized CurrentSlots/RunnerAccount/HolderAuxiliary route now builds
+through OwnerCreation and RetainingLifecycle. Those APIs still do not supply the full affiliation/hashed-owner/table conjunction.
+That missing invariant transport remains open after the compile repair.
 
 The incoming shared tree also has blank-at-EOF diff-check warnings in
 Lifetimes/ProductAmbient, Origins/CurrentChecks, CurrentHistory,

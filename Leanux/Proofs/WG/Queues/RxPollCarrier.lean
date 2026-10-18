@@ -403,15 +403,41 @@ theorem groNormalOne_stack (initial : WGWorld) (g : GroState) (bytes : List UInt
 theorem groReceive_stack (initial : WGWorld) (g : GroState) (bytes : List UInt8) :
     ⦃fun w : World => ⌜StackState initial w.wg⌝⦄ napiGroReceive (fun xs=>xs.forM Leanux.Env.deliverInner) g bytes
     ⦃⇓? _ w => ⌜StackState initial w.wg⌝⦄ := by
+  let P : World → Prop := fun w => StackState initial w.wg
+  change Preserves P _
+  have stopped {α : Type} (message : String) :
+      Preserves P (unsupported message : Leanux.M α) := by
+    apply (hoare_iff_run _ _ _).mpr
+    intro w x v hi hr
+    change (Except.error _ : Except Stop _) = _ at hr
+    cases hr
+  have finishHeld (held : List UInt8) (flushNow : Bool) :
+      Preserves P (do
+        let out ← groNormalOne (fun xs => xs.forM Leanux.Env.deliverInner) {g with held := []} held 1
+        if flushNow then groNormalOne (fun xs => xs.forM Leanux.Env.deliverInner) out bytes 1
+        else pure {out with held := [bytes]}) := by
+    apply preserves_bind (groNormalOne_stack initial _ _ _)
+    intro out
+    split
+    · exact groNormalOne_stack initial _ _ _
+    · exact preserves_pure _
   unfold napiGroReceive
   split
   · exact groNormalOne_stack initial _ _ _
   · split
-    · apply preserves_bind (productAmbient_spec (AmbientM.unsupported _)
-        (fun w => StackState initial w.wg) (fun _ _ h => h))
-      intro _
-      exact preserves_pure _
-    · exact preserves_pure _
+    · exact groNormalOne_stack initial _ _ _
+    · dsimp only
+      split
+      · split
+        · split
+          · exact preserves_bind (stopped _) (fun _ => finishHeld _ _)
+          · exact finishHeld _ _
+        · split
+          · exact groNormalOne_stack initial _ _ _
+          · exact stopped _
+      · split
+        · exact groNormalOne_stack initial _ _ _
+        · exact preserves_pure _
 
 theorem groFlush_stack (initial : WGWorld) (g : GroState) :
     ⦃fun w : World => ⌜StackState initial w.wg⌝⦄ napiGroFlushAll (fun xs=>xs.forM Leanux.Env.deliverInner) g

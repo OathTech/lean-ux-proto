@@ -117,13 +117,34 @@ theorem gro_flush_bind (gro : List GroEntry) (f : Unit → PrefixM GroEvent α)
     PrefixEnsures (GroInv gro) GroSafe (flushGro gro >>= f) Q :=
   PrefixEnsures.bind (flushGro_spec gro) hf
 
-/-- The distinct selected order for the complete current poll.
-Normal offers precede held offers, preserving each class's internal order.
-`SelectedGro` establishes this predicate without changing `GroSafe`. -/
+/-- Source-selected order. A refused same-flow merge completes the old held
+entry before processing the new entry. Unsupported branches retain every
+unvisited offer as a permutation suffix; no callback is invented there. -/
+def selectWith (held : List GroEntry) : List GroEntry → List GroEntry
+  | [] => held
+  | e :: rest =>
+    match groNetwork e.bytes with
+    | none => e :: selectWith held rest
+    | some (off, lengthFlush) =>
+      match groTcpHeader e.bytes off with
+      | none => e :: selectWith held rest
+      | some (thlen, len) =>
+        let flush := lengthFlush || groFinalFlush (e.bytes.getD (off + 13) 0).toNat len
+        match held with
+        | [old] =>
+          if groSameFlow old.bytes e.bytes off then
+            if groMergeRefused old.bytes e.bytes off thlen len then
+              old :: (if flush then e :: selectWith [] rest else selectWith [e] rest)
+            else held ++ e :: rest
+          else if flush then e :: selectWith held rest else held ++ e :: rest
+        | _ =>
+          if flush then e :: selectWith held rest else selectWith (held ++ [e]) rest
+
+def selectedEntries (entries : List GroEntry) : List GroEntry := selectWith [] entries
+
+/-- Every entered callback is an exact prefix of the order chosen by the
+actual GRO decisions, including completion of an earlier held offer. -/
 def SelectedGroSafe (h : List GroEvent) : Prop :=
-  ∃ remaining,
-    ((bufferedEntries h).filter (fun e => groTakenAtOnce e.bytes) ++
-      (bufferedEntries h).filter (fun e => !groTakenAtOnce e.bytes)) =
-    enteredEntries h ++ remaining
+  ∃ remaining, selectedEntries (bufferedEntries h) = enteredEntries h ++ remaining
 
 end Leanux.Proofs.WG.Queues

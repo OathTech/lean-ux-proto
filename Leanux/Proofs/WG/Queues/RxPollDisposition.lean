@@ -290,24 +290,84 @@ theorem normalOne_valid (g : Gro) (e : Entry) (n : Nat) (he : ConsumePayloadVali
   · exact (normalList_valid _).consequence transfer (fun _ _ _ hi => hi)
   · exact PrefixEnsures.pure (fun _ _ hi => hi.1) transfer
 
+theorem context_append_held (g : Gro) (e : Entry) (he : ConsumePayloadValid e) :
+    ∀ h w, Context g h w → Context {g with held := g.held ++ [e]} h w := by
+  intro h w hi
+  refine ⟨hi.1, ?_⟩
+  intro x hx
+  simp only [List.mem_append, List.mem_singleton] at hx
+  rcases hx with hx | hx | rfl
+  · exact hi.2 x (List.mem_append_left _ hx)
+  · exact hi.2 x (List.mem_append_right _ hx)
+  · exact he
+
+theorem context_replace_held (g : Gro) (e : Entry) (he : ConsumePayloadValid e) :
+    ∀ h w, Context g h w → Context {g with held := [e]} h w := by
+  intro h w hi
+  refine ⟨hi.1, ?_⟩
+  intro x hx
+  simp only [List.mem_append, List.mem_singleton] at hx
+  rcases hx with hx | rfl
+  · exact hi.2 x (List.mem_append_left _ hx)
+  · exact he
+
+theorem receive_refused_valid (g : Gro) (old e : Entry) (he : ConsumePayloadValid e)
+    (held : g.held = [old]) (flush : Bool) :
+    PrefixEnsures (Context g) Valid
+      (do let next ← normalOne {g with held := []} old 1
+          if flush then normalOne next e 1 else pure {next with held := [e]}) Context := by
+  intro w h hi
+  have ho : ConsumePayloadValid old := hi.2 old (List.mem_append_right _ (by simp [held]))
+  have hc : Context {g with held := []} h w :=
+    ⟨hi.1, fun x hx => hi.2 x (List.mem_append_left _ (by simpa using hx))⟩
+  have whole : PrefixEnsures (Context {g with held := []}) Valid
+      (do let next ← normalOne {g with held := []} old 1
+          if flush then normalOne next e 1 else pure {next with held := [e]}) Context := by
+    apply PrefixEnsures.bind (normalOne_valid _ old 1 ho)
+    intro next
+    split
+    · exact normalOne_valid next e 1 he
+    · exact PrefixEnsures.pure (fun _ _ hnext => hnext.1) (context_replace_held next e he)
+  exact whole w h hc
+
 theorem receive_valid (g : Gro) (e : Entry) (he : ConsumePayloadValid e) :
     PrefixEnsures (Context g) Valid (receive g e) Context := by
-  unfold receive
-  split
-  · exact normalOne_valid _ _ _ he
-  · have transfer : ∀ h w, Context g h w → Context {g with held := g.held ++ [e]} h w := by
-      intro h w hi
-      refine ⟨hi.1, ?_⟩
-      intro x hx
-      simp only [List.mem_append, List.mem_singleton] at hx
-      rcases hx with hx | hx | rfl
-      · exact hi.2 x (List.mem_append_left _ hx)
-      · exact hi.2 x (List.mem_append_right _ hx)
-      · exact he
-    split
-    · exact PrefixEnsures.bind (keep g _ (valid_lift _))
-        (fun _ => PrefixEnsures.pure (fun _ _ hi => hi.1) transfer)
-    · exact PrefixEnsures.pure (fun _ _ hi => hi.1) transfer
+  cases hn : groNetwork e.tag.bytes with
+  | none => simpa only [receive, hn] using normalOne_valid g e 1 he
+  | some net =>
+    rcases net with ⟨off, lengthFlush⟩
+    cases ht : groTcpHeader e.tag.bytes off with
+    | none => simpa only [receive, hn, ht] using normalOne_valid g e 1 he
+    | some tcp =>
+      rcases tcp with ⟨thlen, len⟩
+      rcases g with ⟨xs, count, held⟩
+      cases held with
+      | nil =>
+        simp only [receive, hn, ht]
+        split
+        · exact normalOne_valid _ _ _ he
+        · exact PrefixEnsures.pure (fun _ _ hi => hi.1) (context_append_held _ e he)
+      | cons old rest =>
+        cases rest with
+        | nil =>
+          cases hs : groSameFlow old.tag.bytes e.tag.bytes off
+          · simp only [receive, hn, ht, hs, Bool.false_eq_true, ↓reduceIte]
+            split
+            · exact normalOne_valid _ _ _ he
+            · intro w h hi
+              exact ⟨[], by change h = h ++ []; simp, hi.1, True.intro⟩
+          · cases hm : groMergeRefused old.tag.bytes e.tag.bytes off thlen len
+            · simp only [receive, hn, ht, hs, hm, Bool.not_false, ↓reduceIte]
+              intro w h hi
+              exact ⟨[], by change h = h ++ []; simp, hi.1, True.intro⟩
+            · simpa only [receive, hn, ht, hs, hm, Bool.not_true, Bool.false_eq_true, ↓reduceIte] using
+                receive_refused_valid ⟨xs, count, [old]⟩ old e he rfl
+                  (lengthFlush || groFinalFlush (e.tag.bytes.getD (off + 13) 0).toNat len)
+        | cons other rest =>
+          simp only [receive, hn, ht]
+          split
+          · exact normalOne_valid _ _ _ he
+          · exact PrefixEnsures.pure (fun _ _ hi => hi.1) (context_append_held _ e he)
 
 theorem valid_forIn (xs : List Entry) (g : Gro)
     (f : Entry → Gro → Obs (ForInStep Gro))
@@ -595,11 +655,13 @@ theorem settled_normalOne (g : Gro) (e : Entry) (n : Nat) : HistoryFrame settled
 
 theorem settled_receive (g : Gro) (e : Entry) : HistoryFrame settledKey (receive g e) := by
   unfold receive
-  split
-  · exact settled_normalOne _ _ _
-  · split
-    · exact (HistoryFrame.lift _ _).bind (fun _ => HistoryFrame.pure _ _)
-    · exact HistoryFrame.pure _ _
+  repeat' first
+    | exact settled_normalOne _ _ _
+    | exact HistoryFrame.pure _ _
+    | exact HistoryFrame.lift _ _
+    | with_reducible apply HistoryFrame.bind
+    | (keypairs_intro_forall; try dsimp only)
+    | (with_reducible split <;> try dsimp only)
 
 theorem settled_flushAll (g : Gro) : HistoryFrame settledKey (flushAll g) := by
   unfold flushAll

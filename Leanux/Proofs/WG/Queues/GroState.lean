@@ -23,11 +23,27 @@ def groNormalOneTagged (g : TaggedGro) (entry : GroEntry) (segs : Nat) : PrefixM
   if g.rxCount ≥ GRO_NORMAL_BATCH then groNormalListTagged g else return g
 
 def napiGroReceiveTagged (g : TaggedGro) (entry : GroEntry) : PrefixM GroEvent TaggedGro := do
-  if groTakenAtOnce entry.bytes then groNormalOneTagged g entry 1
-  else
-    if !g.held.isEmpty then
-      liftPrefix (unsupported "GRO holds a second TCP segment in one poll (coalescing, or the hash buckets' flush order)")
-    return {g with held := g.held ++ [entry]}
+  match groNetwork entry.bytes with
+  | none => groNormalOneTagged g entry 1
+  | some (off, lengthFlush) =>
+    match groTcpHeader entry.bytes off with
+    | none => groNormalOneTagged g entry 1
+    | some (thlen, len) =>
+      let flags := (entry.bytes.getD (off + 13) 0).toNat
+      match g.held with
+      | [held] =>
+        if groSameFlow held.bytes entry.bytes off then
+          if !groMergeRefused held.bytes entry.bytes off thlen len then
+            liftPrefix (unsupported "GRO coalesces two segments of one flow in one poll (skb_gro_receive)")
+          let g ← groNormalOneTagged {g with held := []} held 1
+          if lengthFlush || groFinalFlush flags len then groNormalOneTagged g entry 1
+          else return {g with held := [entry]}
+        else
+          if lengthFlush || groFinalFlush flags len then groNormalOneTagged g entry 1
+          else liftPrefix (unsupported "GRO holds a second TCP segment in one poll (the hash buckets' flush order)")
+      | _ =>
+        if lengthFlush || groFinalFlush flags len then groNormalOneTagged g entry 1
+        else return {g with held := g.held ++ [entry]}
 
 def napiGroFlushAllTagged (gro : TaggedGro) : PrefixM GroEvent Unit := do
   let mut g := gro
@@ -60,17 +76,29 @@ theorem groNormalOneTagged_erases (g : TaggedGro) (e : GroEntry) (segs : Nat) :
 theorem napiGroReceiveTagged_erases (g : TaggedGro) (e : GroEntry) :
     ErasesTo TaggedGro.erase (napiGroReceiveTagged g e)
       (napiGroReceive (fun bytes => bytes.forM Leanux.Env.deliverInner) g.erase e.bytes) := by
-  unfold napiGroReceiveTagged napiGroReceive
-  simp only [TaggedGro.erase, List.isEmpty_map]
-  split
-  · exact groNormalOneTagged_erases g e 1
-  · split
-    · apply erasesTo_bind id TaggedGro.erase (ErasesPrefix.to_projected (erasesPrefix_lift _))
-      intro _
-      simpa [TaggedGro.erase, List.map_append] using
-        erasesTo_pure TaggedGro.erase {g with held := g.held ++ [e]}
-    · simpa [TaggedGro.erase, List.map_append] using
-        erasesTo_pure TaggedGro.erase {g with held := g.held ++ [e]}
+  have pure_eq (g : TaggedGro) (a : GroState) (he : g.erase = a) :
+      ErasesTo TaggedGro.erase (pure g : PrefixM GroEvent TaggedGro) (pure a) := by
+    rw [← he]
+    exact erasesTo_pure TaggedGro.erase g
+  rcases g with ⟨xs, count, held⟩
+  cases held <;> try (rename_i old rest; cases rest)
+  all_goals
+    unfold napiGroReceiveTagged napiGroReceive
+    simp only [TaggedGro.erase, List.map_cons, List.map_nil]
+    repeat' first
+      | contradiction
+      | with_reducible exact groNormalOneTagged_erases _ _ _
+      | (with_reducible exact erasesTo_pure TaggedGro.erase _)
+      | with_reducible exact ErasesPrefix.to_projected (erasesPrefix_lift _)
+      | with_reducible apply erasesTo_ite
+      | with_reducible apply erasesTo_bind TaggedGro.erase TaggedGro.erase
+      | with_reducible apply erasesTo_bind id TaggedGro.erase
+      | (with_reducible intro x; try dsimp only)
+      | (split <;> simp_all only)
+    all_goals first
+      | exact groNormalOneTagged_erases _ _ _
+      | (apply pure_eq; simp only [TaggedGro.erase, List.map_append, List.map_cons, List.map_nil])
+      | exact fun _ _ => rfl
 
 theorem napiGroFlushAllTagged_erases (gro : TaggedGro) :
     ErasesPrefix (napiGroFlushAllTagged gro)
@@ -87,14 +115,60 @@ theorem napiGroFlushAllTagged_erases (gro : TaggedGro) :
     intro _
     exact erasesTo_pure id ()
 
-/-- A held packet followed by a normal packet is handed to the callback in
-normal-then-held order. This is a helper equation, not a scheduler witness. -/
-theorem held_then_normal (callback : List (List UInt8) → M Unit) (held normal : List UInt8)
-    (hh : groTakenAtOnce held = false) (hn : groTakenAtOnce normal = true) :
+/-- Whether a lone packet passes immediately to GRO's normal list. This reads
+the mirror's network/header/final-flush tests, including zero payload. -/
+def groTakesAlone (pkt : List UInt8) : Bool :=
+  match groNetwork pkt with
+  | none => true
+  | some (off, lengthFlush) =>
+    match groTcpHeader pkt off with
+    | none => true
+    | some (_, len) => lengthFlush || groFinalFlush (pkt.getD (off + 13) 0).toNat len
+
+/-- A packet bypasses a held segment when it exits before TCP flow lookup,
+or the lookup finds a different flow. Same-flow refusal does not bypass it. -/
+def groBypassesHeld (held pkt : List UInt8) : Bool :=
+  match groNetwork pkt with
+  | none => true
+  | some (off, _) =>
+    match groTcpHeader pkt off with
+    | none => true
+    | some _ => !groSameFlow held pkt off
+
+/-- A held packet followed by an independently flushing packet that bypasses
+it reaches the callback in reverse order. The bypass premise is essential:
+same-flow refusal completes the held segment first. -/
+theorem held_then_normal (callback : List (List UInt8) → Leanux.M Unit)
+    (held normal : List UInt8) (hh : groTakesAlone held = false)
+    (hn : groTakesAlone normal = true) (hb : groBypassesHeld held normal = true) :
     (do let g ← napiGroReceive callback {} held
         let g ← napiGroReceive callback g normal
         napiGroFlushAll callback g) = callback [normal, held] := by
-  simp [napiGroReceive, hh, hn, groNormalOne, groNormalList, napiGroFlushAll,
-    GRO_NORMAL_BATCH]
+  cases hnet : groNetwork held with
+  | none => simp [groTakesAlone, hnet] at hh
+  | some net =>
+    rcases net with ⟨off, lengthFlush⟩
+    cases htcp : groTcpHeader held off with
+    | none => simp [groTakesAlone, hnet, htcp] at hh
+    | some tcp =>
+      rcases tcp with ⟨thlen, len⟩
+      simp only [groTakesAlone, hnet, htcp] at hh
+      have first : napiGroReceive callback {} held = pure { held := [held] } := by
+        simp_all [napiGroReceive]
+      rw [first]
+      simp only [pure_bind]
+      cases nnet : groNetwork normal with
+      | none =>
+        simp [napiGroReceive, nnet, groNormalOne, groNormalList, napiGroFlushAll, GRO_NORMAL_BATCH]
+      | some net =>
+        rcases net with ⟨noff, nflush⟩
+        cases ntcp : groTcpHeader normal noff with
+        | none =>
+          simp [napiGroReceive, nnet, ntcp, groNormalOne, groNormalList, napiGroFlushAll, GRO_NORMAL_BATCH]
+        | some tcp =>
+          rcases tcp with ⟨nthlen, nlen⟩
+          simp only [groTakesAlone, nnet, ntcp] at hn
+          simp only [groBypassesHeld, nnet, ntcp] at hb
+          simp_all [napiGroReceive, groNormalOne, groNormalList, napiGroFlushAll, GRO_NORMAL_BATCH]
 
 end Leanux.Proofs.WG.Queues
