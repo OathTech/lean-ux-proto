@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Noise.ConfirmationUniqueClaims
 import Leanux.Proofs.WG.Noise.PendingDispatchSource
 import Leanux.Proofs.WG.Noise.PendingPollCompleteSource
 import Leanux.Proofs.WG.Noise.PendingReceptionSource
@@ -817,5 +818,14 @@ theorem original_initialized_confirmation_labels (trace : Leanux.Runner.Trace)
     ConfirmationOrder.confirmationIds trace placeholders =
       .ok (CounterConsume.confirmationLabels (ConfirmationOrder.history trace placeholders)) :=
   ConfirmationOrder.initialized_confirmationIds_labels trace placeholders
+
+/-- The original initialized runner's successful completed confirmations have
+distinct internalId values. This includes device recreation, either placeholder
+mode and committed receipts before a later outer Stop. No supplied invariant,
+successful termination or callback-preservation premise remains. -/
+theorem original_initialized_confirmation_unique (trace : Leanux.Runner.Trace)
+    (placeholders : Bool) :
+    ∃ ids, ConfirmationOrder.confirmationIds trace placeholders = .ok ids ∧ ids.Nodup :=
+  ConfirmationOrder.initialized_distinct trace placeholders
 
 end Leanux.Proofs.WG.Noise
