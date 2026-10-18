@@ -1,3 +1,11 @@
+import Leanux.Proofs.WG.RetirementSecurity.OccurrencePeerCreation
+import Leanux.Proofs.WG.RetirementSecurity.OccurrencePeerRemoval
+import Leanux.Proofs.WG.RetirementSecurity.OccurrenceRemovalCore
+import Leanux.Proofs.WG.RetirementSecurity.OccurrenceTimerFrames
+import Leanux.Proofs.WG.RetirementSecurity.OccurrenceDeferred
+import Leanux.Proofs.WG.RetirementSecurity.OccurrenceScheduler
+import Leanux.Proofs.WG.RetirementSecurity.OccurrenceHandshakeWorkers
+import Leanux.Proofs.WG.RetirementSecurity.OccurrenceHandshake
 import Leanux.Proofs.WG.RetirementSecurity.OccurrenceWorkers
 import Leanux.Proofs.WG.RetirementSecurity.RxPollOccurrences
 import Leanux.Proofs.WG.RetirementSecurity.ReceiveEntryOwnership
@@ -1095,5 +1103,177 @@ theorem shared_driver_encrypt_iteration_tx_ownership {E : Type}
     (run : (Leanux.Proofs.Logged.runPrefix
       (TransmitSecurity.Driver.encryptIterObserved hooks) w h).1 = .ok (result,v)) :
     OccurrenceStack.Ready locals active v.wg := OccurrenceWorkers.encrypt projects before h run
+
+/-- Native Noise construction/consumption and MAC computation preserve
+exclusive physical TX ownership and pending cipher aliases. Rejected
+handshakes may release an empty peer; the proof retains every nonempty
+owning queue and the complete TX packet store. Initialized driver transport
+remains a separate obligation. -/
+theorem original_noise_helpers_tx_ownership (call : Lifetimes.HandshakeCall) {result : call.Result}
+    (before : OccurrenceStack.Ready locals active w) (a b : Ambient)
+    (run : ((call.original.run w).run a) = .ok ((result,v),b)) :
+    OccurrenceStack.Ready locals active v :=
+  (hoare_iff_run_ambient _ _ _).mp (OccurrenceHandshake.call call) w a result v b before run
+
+/-- Session creation, key derivation and rotation do not mutate queued TX
+packet records or cipher aliases. This full packet frame supports historical
+material tracking; it does not itself guarantee that a referenced key
+allocation survives, which requires the separate reference ledger. -/
+theorem original_session_tx_packets (pid : PeerId) (a b : Ambient)
+    (run : ((beginSession pid).run w).run a = .ok ((result,v),b)) :
+    Queues.TxDisposition.txPackets v = Queues.TxDisposition.txPackets w :=
+  congrArg Prod.snd ((Lifetimes.ProjectedAction.iff_run_ambient _ _ _).mp
+    (OccurrenceKeys.session_wire pid) w a result v b run)
+
+/-- A normally completed native peer release preserves every ordered TX
+queue after treating an absent peer as an empty queue. The native final
+reference checks justify deletion; no ownership or separation premise is
+assumed to make a nonempty queue disappear. -/
+theorem original_peer_release_queue_contents (pid : Option PeerId) (a b : Ambient)
+    (run : ((peerPut pid).run w).run a = .ok (((),v),b)) :
+    txQueueContents v = txQueueContents w :=
+  (Lifetimes.ProjectedAction.iff_run_ambient _ _ _).mp (queueContents_peer_put pid) w a () v b run
+
+/-- The full native handshake receive path preserves exclusive TX packet
+ownership and pending encryption aliases, including successful response
+keepalive staging, cookie replies and final peer release. This is concrete
+caller closure; the initialized scheduler/configuration transport remains open. -/
+theorem original_handshake_receive_tx_ownership
+    (before : OccurrenceStack.Ready locals active w) (msg : List UInt8) (src : SkbSource)
+    (a b : Ambient) (run : ((receiveHandshakePacket msg src).run w).run a = .ok (((),v),b)) :
+    OccurrenceStack.Ready locals active v :=
+  (hoare_iff_run_ambient _ _ _).mp (OccurrenceHandshake.receive msg src) w a () v b before run
+
+/-- The original handshake-send worker changes neither complete TX packet
+records nor ordered owning queues, including its final reference payment.
+It therefore cannot replay or manufacture queued ciphertext work. Key
+material survival remains governed by the separate actual reference ledger. -/
+theorem original_handshake_send_tx_ownership
+    (before : OccurrenceStack.Ready locals active w) (pid : PeerId) (a b : Ambient)
+    (run : ((handshakeSendWorker pid).run w).run a = .ok (((),v),b)) :
+    OccurrenceStack.Ready locals active v :=
+  (hoare_iff_run_ambient _ _ _).mp (OccurrenceHandshake.send_call (.worker pid)) w a () v b before run
+
+/-- The shared driver's complete handshake iteration preserves physical TX
+ownership through its checked native specialization, including actual
+keepalive allocation. It uses the same driver as the nonce journal; event
+chronology and initialized whole-driver ownership are separate obligations. -/
+theorem shared_driver_handshake_iteration_tx_ownership {E : Type}
+    {ρ : E → Option TransmitSecurity.Nonce.Allocation} {hooks : TransmitSecurity.Driver.Hooks E}
+    (projects : TransmitSecurity.Driver.HooksProjects ρ hooks TransmitSecurity.Driver.nonceHooks)
+    (before : OccurrenceStack.Ready locals active w.wg) (h : List E)
+    (run : (Leanux.Proofs.Logged.runPrefix
+      (TransmitSecurity.Driver.receiveIterObserved hooks) w h).1 = .ok (result,v)) :
+    OccurrenceStack.Ready locals active v.wg := OccurrenceHandshake.shared projects before h run
+
+/-- The actual scheduler preserves physical TX ownership and pending
+cipher aliases across every normal draining activation, including recorded
+resumptions, crypt-ahead completion and NAPI. The existing source scheduler
+factor supplies the loop; timer/configuration and initialized outer-Runner
+coverage remain distinct obligations. -/
+theorem original_scheduler_tx_ownership
+    (before : OccurrenceStack.Ready locals active w.wg) (stack : Option Worker)
+    (run : (Env.schedule stack).run w = .ok ((),v)) :
+    OccurrenceStack.Ready locals active v.wg :=
+  (hoare_iff_run _ _ _).mp (OccurrenceScheduler.schedule stack) w () v before run
+
+/-- The shared campaign driver's real scheduler preserves the concrete
+TX ownership/phase invariant. The source-projection premise identifies the
+same native scheduling run; it adds no queue-uniqueness or reference-credit
+hypothesis. Initial configuration and retirement accounting remain open. -/
+theorem shared_driver_scheduler_tx_ownership {E : Type}
+    {ρ : E → Option TransmitSecurity.Nonce.Allocation} {hooks : TransmitSecurity.Driver.Hooks E}
+    (projects : TransmitSecurity.Driver.HooksProjects ρ hooks TransmitSecurity.Driver.nonceHooks)
+    (before : OccurrenceStack.Ready locals active w.wg) (stack : Option Worker) (h : List E)
+    (run : (Leanux.Proofs.Logged.runPrefix
+      (TransmitSecurity.Driver.scheduleObserved hooks stack) w h).1 = .ok ((),v)) :
+    OccurrenceStack.Ready locals active v.wg := OccurrenceScheduler.shared projects before stack h run
+
+/-- Every normal native deferred-worker or timer call preserves exclusive
+TX packet ownership and pending encryption aliases, including wheel-selected
+callbacks, placeholder timers, crypt/send draining and queued key clearing.
+Initialized configuration transport and the complete key-credit ledger remain
+separate obligations; this theorem assumes only its displayed entry invariant. -/
+theorem original_deferred_tx_ownership (call : Lifetimes.EnvDeferredCall)
+    {result : call.Result} (before : OccurrenceStack.Ready locals active w.wg)
+    (run : call.original.run w = .ok (result,v)) :
+    OccurrenceStack.Ready locals active v.wg :=
+  (hoare_iff_run _ _ _).mp (OccurrenceDeferred.original call) w result v before run
+
+/-- Actual queued handshake-send dispatch preserves complete TX packet
+records and the encryption ring. This exact native frame supports packet
+provenance across control traffic without assuming numeric key-slot survival. -/
+theorem original_send_dispatch_tx_wire
+    (run : Env.runOneSendWorker.run w = .ok ((),v)) :
+    txCryptWire v.wg = txCryptWire w.wg :=
+  (Lifetimes.ProjectedAction.iff_run _ _ _).mp OccurrenceDeferred.send_one_wire w () v run
+
+/-- Actual queued zero-key dispatch preserves complete TX packet records
+and the encryption ring, despite removing published keys. Key-material
+survival must be derived separately from live reference credits. -/
+theorem original_clear_dispatch_tx_wire
+    (run : Env.runOneClearWorker.run w = .ok ((),v)) :
+    txCryptWire v.wg = txCryptWire w.wg :=
+  (Lifetimes.ProjectedAction.iff_run _ _ _).mp OccurrenceDeferred.clear_one_wire w () v run
+
+/-- Native retransmit, new-handshake and zero-material timer callbacks
+preserve every TX packet record and encryption-ring entry. Their control
+traffic cannot substitute data packets; the two keepalive timers use the
+separate concrete staging contract instead of this exact frame. -/
+theorem original_nonstaging_timer_tx_wire (pid : PeerId) (timer : PeerTimer)
+    (notKeepalive : timer ≠ .sendKeepalive) (notPersistent : timer ≠ .persistentKeepalive)
+    (a b : Ambient) (run : ((timerCallback pid timer).run w).run a = .ok (((),v),b)) :
+    txCryptWire v = txCryptWire w :=
+  (Lifetimes.ProjectedAction.iff_run_ambient _ _ _).mp
+    (OccurrenceTimers.callback_wire pid timer notKeepalive notPersistent) w a () v b run
+
+/-- The native post-dead peer-removal tail preserves physical TX ownership
+through both workqueue flushes, key clearing and final peer release. Native
+pending-crypt guards remain in the source; this is conditional on normal
+completion and supplies no termination or whole-Runner hypothesis. -/
+theorem original_peer_removal_tail_tx_ownership
+    (before : OccurrenceStack.Ready locals active w) (pid : PeerId) (a b : Ambient)
+    (run : ((peerRemoveAfterDead pid).run w).run a = .ok (((),v),b)) :
+    OccurrenceStack.Ready locals active v :=
+  (hoare_iff_run_ambient _ _ _).mp (OccurrenceRemoval.after_dead pid) w a () v b before run
+
+/-- The real bounded handshake-workqueue flush preserves complete TX packet
+records and the pending encryption ring, including recorded worker selection
+and queued zero-material execution. This exact packet frame assumes no key
+residency or unpublication restriction. -/
+theorem original_handshake_flush_tx_wire (upTo : Option PeerId) (a b : Ambient)
+    (run : ((drainHandshakeSendWq upTo).run w).run a = .ok (((),v),b)) :
+    txCryptWire v = txCryptWire w :=
+  (Lifetimes.ProjectedAction.iff_run_ambient _ _ _).mp
+    (OccurrenceRemoval.drain_wire upTo) w a () v b run
+
+/-- Complete native removal of every peer preserves exclusive TX ownership
+and pending encryption aliases, through actual allowed-IP teardown, marking
+peers dead, workqueue flushes and final releases. Successful removal never
+silently drops an owned packet; native queued-work guards remain required. -/
+theorem original_remove_all_tx_ownership
+    (before : OccurrenceStack.Ready locals active w) (a b : Ambient)
+    (run : (peerRemoveAll.run w).run a = .ok (((),v),b)) :
+    OccurrenceStack.Ready locals active v :=
+  (hoare_iff_run_ambient _ _ _).mp OccurrenceRemoval.remove_all w a () v b before run
+
+/-- Complete native peer removal preserves the full TX packet store and
+pending encryption ring, including route-list cleanup and final peer release.
+This packet provenance frame supplies no key-material lifetime assumption. -/
+theorem original_peer_remove_tx_wire (peer : Option PeerId) (a b : Ambient)
+    (run : ((peerRemove peer).run w).run a = .ok (((),v),b)) :
+    txCryptWire v = txCryptWire w :=
+  (Lifetimes.ProjectedAction.iff_run_ambient _ _ _).mp
+    (OccurrenceRemoval.remove_wire peer) w a () v b run
+
+/-- Native peer creation preserves exclusive TX ownership and pending
+encryption aliases. The actual next-peer slot is proved empty from the
+allocation bound already carried by the entry invariant; the theorem adds
+no vacant-slot assumption and includes allocation refusal and errno returns. -/
+theorem original_peer_creation_tx_ownership
+    (before : OccurrenceStack.Ready locals active w) (key : Key) (psk : Option Key)
+    (a b : Ambient) (run : ((peerCreate key psk).run w).run a = .ok ((result,v),b)) :
+    OccurrenceStack.Ready locals active v :=
+  (hoare_iff_run_ambient _ _ _).mp (OccurrenceCreation.create key psk) w a result v b before run
 
 end Leanux.Proofs.WG.RetirementSecurity

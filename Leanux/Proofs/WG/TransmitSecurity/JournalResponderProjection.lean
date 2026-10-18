@@ -68,8 +68,8 @@ theorem hooks : Driver.HooksProjects responder? Journal.hooks DriverCuts.hooks w
   handshake := AuthenticatedEffects.HandshakeWorker.observed_projects Event.handshake handshake? responder?
     (fun _ => rfl)
   sendWorker := projectsPrefix_lift responder? _
-  prepare := projectsPrefix_lift responder? _
-  counterCheck := fun _ _ => (Driver.Projection.state_lift responder? _).liftWGObserver responder? id
+  prepare := AuthenticatedEffects.TransportDriver.prepare_projects_other Event.rxOrigin origin? responder? (fun _ => rfl)
+  counterCheck := AuthenticatedEffects.TransportDriver.counter_projects_other Event.replay responder? (fun _ => rfl)
   timerSelected := fun d j pid t we =>
     AuthenticatedEffects.TimerDispatch.scope_projects Event.timerSelected d j pid t we responder?
       (fun _ => rfl) id (projectsPrefix_pure responder? id ())

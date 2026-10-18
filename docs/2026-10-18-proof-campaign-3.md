@@ -175,48 +175,72 @@ and authentication invariants remain separate obligations.
   receipt describes the actual packet/peer reads and socket call; cached
   IPv4/IPv6 calls in both loopback modes append at most one datagram bound to
   the observed endpoint, bytes and DS. Receipts survive later Stop. The
-  packet carrier from reservation through encryption and emission, global
-  encryption non-reuse, complete egress coverage and TX conservation
-  remain open.
+  resident packet-origin carrier now transports through allocation, staging,
+  native disposal, indexed receive polls, stack replies, NAPI, all workers,
+  scheduling and timer/deferred dispatch.
+  A worker receipt carries an allocation in the strict earlier journal prefix,
+  under the explicit incoming carrier. Initialized transport of that carrier,
+  reservation/routing linkage, global encryption non-reuse, complete egress
+  coverage and TX conservation remain open.
 - T3: native MAC/Noise refusal and cookie-response contracts retain their
   exact state/egress boundaries. Acceptance receipts precede protocol writes.
   Initialized C1 replay entries have earlier matching AEAD evidence. Native
   RX preparation now transports its packet/stamp publication carrier without
   ownership assumptions. Timer arms and ordered queued-work tickets preserve
   their own earlier callback causes through the local receivers/workers.
-  Full-driver carrier transport and complete silence remain open. Owned
-  implementations through `322d94ec` are copied without a branch merge.
+  Indexed replay receipts now join the selected crypted packet to a strictly
+  earlier native publication; the actual poll supplies confirmation-entry
+  provenance. UDP ingress, staging and receive-tail carrier frames are proved.
+  Shared Stack/NAPI/worker/scheduler, deferred timer and traffic composition exposes the actual-hook
+  contracts still needed. Full-driver carrier transport and complete silence
+  remain open. Owned
+  implementations through `9f97bf46` are copied without a branch merge.
 - T4/T5: timestamp and response/session replay contracts remain explicit;
   H1 projections are named dependencies, not silently discharged. Native
   confirmation cuts precede later Stop. Shared responder authorization now
   transports through staging, Stack/GRO polls, NAPI, workers, scheduling,
-  timer/deferred work, configuration, traffic and lifecycle, under its
-  current-slot/configured-identity invariants and `H1ResponderCurrentEdges`.
-  Initialized shared-driver closure, complete exchange identity and the
-  prohibition on premature encryption remain open. Owned implementations
-  through `bec098a0` are copied.
+  timer/deferred work, configuration, traffic and lifecycle. Its initialized
+  specialization derives the entry carrier and retains only the named
+  `H1ResponderCurrentEdges` dependency. Every responder selection has a prior
+  native confirmation. Local strict timestamp increases are transported
+  through the initialized driver; allocation-aware retained-peer histories
+  still need their own full-driver carrier. Confirmation/counter order has a
+  same-occurrence actual-poll contract, not yet initialized closure. The
+  retained-peer archive covers the complete native initiation consumer,
+  including failed authentication, cleanup and later Stop, and survives native
+  handshake actors and peer creation. Complete
+  exchange identity and the prohibition on premature encryption remain open.
+  Owned implementations through `63d33bb0` are copied.
 - T6: allocation-stamped credits distinguish slot unpublication from final
   store removal. Native creation, acquisition, clearing, rotation, session
   installation and disposal retain exact reference payments. Actual
   wgXmit/receive entry and completion derive internal loans and release
   funding where proved. Physical and crypt occurrence inventories derive
   selected uniqueness/residency/disjointness; native polls with Stack/GRO
-  replies and encrypt/decrypt/TX iterations transport them with independent
-  C1 allocation freshness. Current/key compatibility and slot affiliation
+  replies, all four draining workers, scheduling and all fourteen native
+  deferred calls transport them with independent C1 allocation freshness.
+  Separate wire frames cover non-staging timer and deferred-worker actions.
+  Native peer creation and complete peer removal preserve physical ownership;
+  removal includes the actual allowed-IP teardown and final payments.
+  Current/key compatibility and slot affiliation
   remain visible where needed. Initialized holder/phase transport, historical
   selection uniqueness, orphan completeness and conditional retirement
-  progress remain open. Owned implementations through `3e11d9e7` are copied.
+  progress remain open. Owned implementations through `f1532ea3` are copied.
 
 The register names each module's assumptions and boundaries. All six campaign
 outcomes remain open; these are compositional results toward those outcomes.
 
-The tenth source checkpoint passes all 1414 proof-build jobs and the
-1131-declaration gate across thirteen root modules, with only standard axioms.
+The eleventh source checkpoint passes all 1490 proof-build jobs and the
+1166-declaration gate across thirteen root modules, with only standard axioms.
 All twelve witness recipes and fresh-root kernel replay pass at the default
-cap. The unchanged model and unit suite retain the prior checkpoint's 130-job
-build and 131 passing tests with one kernel-build-dependent skip. All six
-outcomes remain open; packet-to-AEAD and end-to-end effect transport
-remain work in progress. The checkpoint includes initialized combined handshake causes and valid socket receipts, cached IPv4/IPv6 emission binding, and native ownership/worker transport. The full build, gate, twelve recipes and fresh-root kernel replay pass. An unused simplifier argument in campaign-owned code was removed before the final build, gate and kernel replay.
+cap. The model build passes 130 jobs, and the unit suite completes 131 tests
+with one kernel-build-dependent skip. An unused binder in campaign-owned code
+was removed before the final build, gate and replay. A non-progressing tactic
+branch caused a development elaboration timeout; fixing the tactic reduced
+the scheduler proof's build to about one second without changing its claim.
+All six outcomes remain open. This checkpoint adds strict-prefix packet-origin
+transport through native worker and deferred callbacks, actual poll confirmation
+ordering, allocation-indexed timestamp contracts and physical ownership frames.
 
 A supplemental kernel replay invoked without `--fresh` failed at the 32 GiB
 cap and again at 64 GiB (exit 137); neither is a pass. Inspection of the shipped
@@ -235,7 +259,7 @@ equal, lifetime 1 and nonce 1 retained, expected ciphertext emitted, and the
 post-clear variant's final reference released. These are interpreter checks,
 not kernel-proved universal statements.
 
-The model build passes all 130 jobs. The unit suite passes 131 tests with one
+The model build passes all 130 jobs. The unit suite completes 131 tests with one
 skip: computing the selected kernel build's identity when no such build is
 configured. These checks used:
 

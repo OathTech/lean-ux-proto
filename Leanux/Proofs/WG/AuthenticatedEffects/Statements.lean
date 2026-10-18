@@ -1,3 +1,8 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.TransportCarrierTraffic
+import Leanux.Proofs.WG.AuthenticatedEffects.TransportCarrierScheduler
+import Leanux.Proofs.WG.AuthenticatedEffects.TransportCarrierReceive
+import Leanux.Proofs.WG.AuthenticatedEffects.TransportConfirmationEntry
+import Leanux.Proofs.WG.AuthenticatedEffects.TransportReplayPoll
 import Leanux.Proofs.WG.AuthenticatedEffects.HandshakeWorkerSafety
 import Leanux.Proofs.WG.AuthenticatedEffects.TransportPublicationCarrier
 import Leanux.Proofs.WG.AuthenticatedEffects.TimerDispatchScope
@@ -780,5 +785,127 @@ theorem shared_handshake_callbacks_authenticated
     (hk : ∀ pid, HandshakeCausal.Preserves (keepalive pid)) :
     HandshakeCausal.Preserves (HandshakeWorker.observed id some session keepalive) :=
   HandshakeWorker.HistorySafety.observed_preserves session keepalive hs hk
+
+/-- Security: each indexed native replay receipt in this actual poll is tied
+to the selected crypted packet's earlier successful AEAD publication, including
+receipts retained before a later Stop. The entry publication carrier and the
+consumer/GRO carrier contracts are explicit local obligations; initialized
+shared-driver transport is not claimed by this theorem. -/
+theorem shared_poll_replay_receipts_authenticated
+    (origin : E → Option TransportDriver.OriginEvent)
+    (replay : E → Option TransportDriver.Replay) (record : TransportDriver.Replay → E)
+    (inverse : ∀ r, replay (record r) = some r) (quiet : ∀ r, origin (record r) = none)
+    (consume : PeerId → RxPacket → Endpoint → PrefixM E (Option (List UInt8)))
+    (receive : GroState → List UInt8 → PrefixM E GroState) (flush : GroState → PrefixM E Unit)
+    (hc : ∀ pid pkt ep, TransportReplay.Preserves (origin := origin) (replay := replay) (consume pid pkt ep))
+    (hr : ∀ gro bytes, TransportReplay.Preserves (origin := origin) (replay := replay) (receive gro bytes))
+    (hf : ∀ gro, TransportReplay.Preserves (origin := origin) (replay := replay) (flush gro))
+    (pid : PeerId) (budget : Nat) :
+    TransportReplay.Preserves (origin := origin) (replay := replay)
+      (IndexedPoll.sourceWith (fun a => liftPrefix (liftWG a)) (TransportDriver.counter record)
+        consume receive flush pid budget) :=
+  TransportReplay.poll_checked origin replay record inverse quiet consume receive flush hc hr hf pid budget
+
+/-- Security: a certified native replay receipt has its own strictly earlier
+authentication publication in the same journal, rather than an unrelated
+completed consumer. Safety of that journal is the visible local premise. -/
+theorem shared_replay_has_prior_authentication
+    (origin : E → Option TransportDriver.OriginEvent)
+    (replay : E → Option TransportDriver.Replay) (history pre post : List E) (event : E)
+    (r : TransportDriver.Replay) (safe : TransportReplay.Safe origin replay history)
+    (position : history = pre ++ event :: post) (recorded : replay event = some r) :
+    TransportReplay.Certified (pre.filterMap origin) r :=
+  TransportReplay.replay_authenticated safe position recorded
+
+/-- Security: the actual shared poll supplies confirmation only with its own
+immediately preceding successful replay receipt and prior AEAD publication for
+the same peer and keypair. The concrete confirmation/tail/GRO contracts and
+entry carrier remain explicit; initialized driver transport is still open. -/
+theorem shared_poll_supplies_authenticated_confirmation
+    (origin : E → Option TransportDriver.OriginEvent)
+    (replay : E → Option TransportDriver.Replay) (record : TransportDriver.Replay → E)
+    (hooks : TransmitSecurity.Driver.Hooks E)
+    (inverse : ∀ r, replay (record r) = some r) (quiet : ∀ r, origin (record r) = none)
+    (counter : hooks.counterCheck = TransportDriver.counter record)
+    (hc : ∀ pid kid, PrefixEnsures (TransportReplay.ConfirmationInput origin replay record pid kid)
+      (TransportReplay.Safe origin replay) (liftWGObserver (hooks.confirmation pid kid))
+        (fun _ => TransportReplay.Inv origin replay))
+    (ht : ∀ pid pkt value, TransportReplay.Preserves (origin := origin) (replay := replay)
+      (liftWGObserver (TransmitSecurity.Driver.receiveTailObserved hooks pid pkt value)))
+    (toStack : List (List UInt8) → PrefixM E Unit)
+    (hr : ∀ gro bytes, TransportReplay.Preserves (origin := origin) (replay := replay)
+      (napiGroReceivePrefix toStack gro bytes))
+    (hf : ∀ gro, TransportReplay.Preserves (origin := origin) (replay := replay)
+      (napiGroFlushAllPrefix toStack gro))
+    (pid : PeerId) (budget : Nat) :
+    TransportReplay.Preserves (origin := origin) (replay := replay)
+      (TransmitSecurity.Driver.pollObserved hooks pid budget toStack) :=
+  TransportReplay.shared_poll_authorized hooks inverse quiet counter hc ht toStack hr hf pid budget
+
+/-- Security: at that concrete confirmation-entry cut, the journal's last
+receipt is a successful native replay check on this peer and keypair, certified
+against an earlier successful AEAD publication. This extracts the explicit
+caller premise; it does not manufacture initialized provenance. -/
+theorem shared_confirmation_entry_has_current_authentication
+    (origin : E → Option TransportDriver.OriginEvent)
+    (replay : E → Option TransportDriver.Replay) (record : TransportDriver.Replay → E)
+    (input : TransportReplay.ConfirmationInput origin replay record pid kid history w) :
+    ∃ pre r, history = pre ++ [record r] ∧ r.packet.peer = pid ∧ r.packet.keypair = kid ∧
+      r.run.value = true ∧ TransportReplay.Certified (pre.filterMap origin) r :=
+  TransportReplay.confirmation_input_authenticated input
+
+/-- Security: actual UDP admission cannot manufacture a crypted packet's
+prior-authentication certificate. Fresh and overwritten ingress slots are
+uncrypted or dead; each surviving crypted packet retains its exact publication
+anchor and allocation stamp. The entry packet carrier is explicit. -/
+theorem original_ingress_retains_packet_authentication (msg : List UInt8) (src : SkbSource)
+    (history : List TransportDriver.OriginEvent) :
+    Leanux.Proofs.Framing.Preserves (TransportPublication.Inv history) (WG.wgReceive msg src) :=
+  TransportPublication.wgReceive_preserves msg src history
+
+/-- Security: the shared staging path retains the RX authentication carrier
+and an additional event-order property through its concrete native actions.
+Selection, reservation, allocation and creation callback contracts remain
+visible; this source composition does not claim initialized driver closure. -/
+theorem shared_staging_retains_packet_authentication (extra : List E → Prop)
+    (origin : E → Option TransportDriver.OriginEvent)
+    (replay : E → Option TransportDriver.Replay) (hooks : TransmitSecurity.Driver.Hooks E)
+    (callbacks : TransportCarrier.StagingSafe extra origin replay hooks) (pid : PeerId) :
+    TransportCarrier.StateSafe extra origin replay (TransmitSecurity.Driver.stagingObserved hooks pid) :=
+  TransportCarrier.staging callbacks pid
+
+/-- Security: all five actual timer callback paths retain packet-authentication
+anchors and the supplied event-order property; they cannot turn an unrelated
+RX packet into authenticated material. This local statement retains the shared
+staging callback contracts and entry carrier. -/
+theorem shared_timers_retain_packet_authentication (extra : List E → Prop)
+    (origin : E → Option TransportDriver.OriginEvent)
+    (replay : E → Option TransportDriver.Replay) (hooks : TransmitSecurity.Driver.Hooks E)
+    (callbacks : TransportCarrier.StagingSafe extra origin replay hooks) (pid : PeerId) (timer : PeerTimer) :
+    TransportCarrier.StateSafe extra origin replay (TransmitSecurity.Driver.timerObserved hooks pid timer) :=
+  TransportCarrier.timer callbacks pid timer
+
+/-- Security: real draining workers, copied scheduler trials and NAPI dispatch
+retain the same packet-authentication carrier and additional event-order
+property. The actual worker callback contracts remain visible; no final-state
+or unrelated observer history supplies the missing initialized closure. -/
+theorem shared_scheduler_retains_packet_authentication (extra : List E → Prop)
+    (origin : E → Option TransportDriver.OriginEvent)
+    (replay : E → Option TransportDriver.Replay) (hooks : TransmitSecurity.Driver.Hooks E)
+    (callbacks : TransportCarrier.WorkerSafe extra origin replay hooks) (stack : Option Worker) :
+    TransportCarrier.ProductSafe extra origin replay (TransmitSecurity.Driver.scheduleObserved hooks stack) :=
+  TransportCarrier.schedule callbacks stack
+
+/-- Security: both actual timer-pass modes preserve authenticated RX packet
+origins and the supplied same-history ordering property through callbacks,
+queued key clearing and interleaved send/crypt workers. Callback contracts are
+explicit; this does not yet assert initialized whole-run causal closure. -/
+theorem shared_timer_passes_retain_packet_authentication (extra : List E → Prop)
+    (origin : E → Option TransportDriver.OriginEvent)
+    (replay : E → Option TransportDriver.Replay) (hooks : TransmitSecurity.Driver.Hooks E)
+    (callbacks : TransportCarrier.DeferredSafe extra origin replay hooks) (j : UInt64) :
+    TransportCarrier.ProductSafe extra origin replay (TransmitSecurity.Driver.timersObserved hooks j) ∧
+    TransportCarrier.ProductSafe extra origin replay (TransmitSecurity.Driver.placeholderTimersObserved hooks j) :=
+  ⟨TransportCarrier.timers callbacks j,TransportCarrier.placeholderTimers callbacks j⟩
 
 end Leanux.Proofs.WG.AuthenticatedEffects

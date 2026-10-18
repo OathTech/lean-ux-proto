@@ -1,5 +1,6 @@
 import Leanux.Proofs.WG.HandshakeSecurity.ResponderPriorConfirmation
-import Leanux.Proofs.WG.HandshakeSecurity.ResponderDriverControlFrames
+import Leanux.Proofs.WG.HandshakeSecurity.ResponderDriverInitialized
+import Leanux.Proofs.WG.HandshakeSecurity.TimestampDriverProjection
 import Leanux.Proofs.WG.HandshakeSecurity.ResponderDeviceFrames
 import Leanux.Proofs.WG.HandshakeSecurity.ResponderDeferred
 import Leanux.Proofs.WG.HandshakeSecurity.ResponderGlobalFrames
@@ -24,6 +25,8 @@ import Leanux.Proofs.WG.HandshakeSecurity.StagingSelectionClaims
 import Leanux.Proofs.WG.HandshakeSecurity.StagingSelectionFrames
 import Leanux.Proofs.WG.HandshakeSecurity.ResponderStagingFrames
 import Leanux.Proofs.WG.HandshakeSecurity.ResponderNativeClaims
+import Leanux.Proofs.WG.HandshakeSecurity.TimestampArchiveAllocation
+import Leanux.Proofs.WG.HandshakeSecurity.ConfirmationOrderPoll
 
 /-! Native T4 replay and T5 confirmation boundaries. Initialized history,
 authentication linkage and responder-send exclusion remain separate obligations;
@@ -642,5 +645,71 @@ theorem original_configuration_responder_cut_history (H1 : H1ResponderCurrentEdg
     Responder.DriverCuts.Preserves
       (TransmitSecurity.Driver.configDevice Responder.DriverCuts.hooks attrs) :=
   Responder.DriverCuts.config_device H1 attrs
+
+/-- Every responder current-key selection on the initialized shared driver
+has a strictly earlier successful native confirmation for its actual key
+allocation. No incoming state/history invariant is assumed, and later Stops
+retain the evidence. H1's slot edges remain explicit. Authenticated receive
+provenance and the deferred packet-to-AEAD link are separate obligations. -/
+theorem initialized_selection_has_prior_native_confirmation
+    (H1 : H1ResponderCurrentEdges) (trace : Runner.Trace) (placeholders : Bool)
+    (pre post : List Responder.DriverCuts.Event) (pid : PeerId)
+    (r : WGRunWitness (Option (Peer × Option KeypairId)))
+    (position : (runPrefixOuter (Responder.DriverCuts.execute trace placeholders) []).2 =
+      pre ++ .selected pid r :: post)
+    (p : Peer) (kid : KeypairId) (selected : r.value = some (p,some kid))
+    (core : Responder.KeyCore) (material : Responder.pool r.after kid = some core)
+    (responder : core.initiator = false) :
+    Responder.DriverCuts.PriorNativeConfirmation pre core.allocation :=
+  Responder.DriverCuts.initialized_selected_prior_confirmation H1 trace placeholders
+    pre post pid r position p kid selected core material responder
+
+/-- Every timestamp write committed during any initialized native runner
+execution is strictly greater than the retained peer's timestamp at that
+write. The exact JSON or indexed Stop is unchanged, and a later Stop retains
+the write receipt. Linking successive writes across peer creation and all
+intervening native actors remains a separate history obligation. -/
+theorem initialized_timestamp_writes_increase (trace : Runner.Trace) (placeholders : Bool) :
+    ErasesOuter (TimestampDriver.execute trace placeholders) (Runner.executeTrace trace placeholders) ∧
+    IncreasingReceipts (runPrefixOuter (TimestampDriver.execute trace placeholders) []).2 :=
+  ⟨TimestampDriver.execute_erases trace placeholders, TimestampDriver.initialized_increasing trace placeholders⟩
+
+open AuthenticatedEffects ConfirmationTransportOrder in
+/-- A native confirmation receipt is authorized by the immediately preceding
+successful replay check for the same peer and key. Joining the two safety
+properties of this one journal gives the actual earlier authenticated packet;
+initialized transport of the ordering property remains explicit here. -/
+theorem native_confirmation_authenticated_in_same_history {E : Type}
+    (origin : E → Option TransportDriver.OriginEvent)
+    (replay : E → Option TransportDriver.Replay) (record : TransportDriver.Replay → E)
+    (decode : E → Option ResponderEvent) (inverse : ∀ r, replay (record r) = some r)
+    (history pre post : List E) (event : E) (pid : PeerId) (kid : KeypairId) (r : WGRunWitness Bool)
+    (ordered : Safe record decode history) (accepted : TransportReplay.Safe origin replay history)
+    (position : history = pre ++ event :: post)
+    (recorded : decode event = some (.confirmed pid kid r)) :
+    r.Valid (receivedWithKeypair pid kid) ∧
+    ∃ earlier counter, pre = earlier ++ [record counter] ∧
+      counter.packet.peer = pid ∧ counter.packet.keypair = kid ∧ counter.run.value = true ∧
+      TransportReplay.Certified (earlier.filterMap origin) counter :=
+  ConfirmationTransportOrder.authenticated origin replay record decode inverse
+    history pre post event pid kid r ordered accepted position recorded
+
+/-- The full native initiation consumer carries a strictly advancing timestamp
+archive indexed by peer allocation, so deleting cleanup and future slot reuse
+cannot conflate two peers. Writes preceding a later Stop remain in the history.
+The actual entry archive invariant is explicit until full driver transport. -/
+theorem original_initiation_allocation_timestamp_archive (msg : List UInt8) :
+    StatePrefixPreserves (fun h w _ => TimestampArchive.StateInv h w)
+      TimestampArchive.History (consumeObserved msg) :=
+  TimestampArchive.consume_history msg
+
+/-- Native peer construction creates a fresh timestamp incarnation and retains
+the histories of earlier allocations, even if it reuses a numeric peer slot.
+The complete constructor discharges its actual allocation core and saved writes;
+only the incoming archive carrier remains explicit. -/
+theorem original_peer_creation_timestamp_archive (key : Key) (psk : Option Key)
+    (history : List TimestampReceipt) :
+    Framing.Preserves (TimestampArchive.StateInv history) (peerCreate key psk) :=
+  TimestampArchive.peer_create key psk history
 
 end Leanux.Proofs.WG.HandshakeSecurity

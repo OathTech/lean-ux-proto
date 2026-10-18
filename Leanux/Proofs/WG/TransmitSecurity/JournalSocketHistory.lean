@@ -118,8 +118,9 @@ private theorem timer (d : Device) (j : UInt64) (pid : PeerId) (t : PeerTimer) (
 theorem hooks_safe : HooksHistorySafe Safe Journal.hooks where
   handshake := handshake
   sendWorker := History.product_lift _
-  prepare := History.product_lift _
-  counterCheck := fun _ _ => History.product_state (History.state_lift _)
+  prepare := product_focus _ _ (fun _ => rfl) _
+  counterCheck := fun _ _ => product_quiet (Appends.lift _).receiptObserved
+    (HistoryFrame.receiptObserved (HistoryFrame.lift _ _) (fun _ => rfl))
   timerSelected := timer
   selection := selection
   confirmation := confirmation

@@ -7,6 +7,7 @@ import Leanux.Proofs.WG.TransmitSecurity.WorkerEncryption
 import Leanux.Proofs.WG.TransmitSecurity.CompletionReceipts
 import Leanux.Proofs.WG.Queues.TxDisposition
 import Leanux.Proofs.Logged.NativeCapture
+import Leanux.Proofs.WG.AuthenticatedEffects.TransportDriverSource
 
 /-! One retained journal for native reservation, packet allocation, encryption
 ring selection, actual AEAD, queue publication and TX disposal. Hooks are placed
@@ -17,6 +18,8 @@ open Leanux Leanux.WG Leanux.Proofs.Logged Lifetimes Queues Packets
 abbrev ResponderEvent := HandshakeSecurity.Responder.DriverCuts.Event
 
 inductive Event where
+  | rxOrigin (value : AuthenticatedEffects.TransportDriver.OriginEvent)
+  | replay (value : AuthenticatedEffects.TransportDriver.Replay)
   | handshake (value : AuthenticatedEffects.HandshakeCausal.Event)
   | timerSelected (value : AuthenticatedEffects.TimerDispatch.Selection)
   | responder (value : ResponderEvent)
@@ -30,6 +33,14 @@ inductive Event where
   | encryptionReturn (item : Option (List SkbId)) (run : RunWitness Bool)
   | disposition (value : TxDisposition.Event)
   | socket (value : Completion.SocketReceipt)
+
+def origin? : Event → Option AuthenticatedEffects.TransportDriver.OriginEvent
+  | .rxOrigin value => some value
+  | _ => none
+
+def replay? : Event → Option AuthenticatedEffects.TransportDriver.Replay
+  | .replay value => some value
+  | _ => none
 
 def handshake? : Event → Option AuthenticatedEffects.HandshakeCausal.Event
   | .handshake value => some value
@@ -88,6 +99,8 @@ def transmit (pid : PeerId) : PrefixM Event Bool :=
   focusPrefix completionEvent completion? (Completion.step pid)
 
 def hooks : Driver.Hooks Event where
+  prepare := AuthenticatedEffects.TransportDriver.prepare Event.rxOrigin origin?
+  counterCheck := AuthenticatedEffects.TransportDriver.counter Event.replay
   handshake := AuthenticatedEffects.HandshakeWorker.observed Event.handshake handshake?
   timerSelected := fun d j pid t we => AuthenticatedEffects.TimerDispatch.scope Event.timerSelected d j pid t we (pure ())
   selection := selection

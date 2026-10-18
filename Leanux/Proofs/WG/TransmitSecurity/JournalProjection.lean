@@ -95,8 +95,8 @@ theorem hooks_projects : Driver.HooksProjects nonce? hooks Driver.nonceHooks whe
   handshake := AuthenticatedEffects.HandshakeWorker.observed_projects Event.handshake handshake? nonce?
     (fun _ => rfl)
   sendWorker := projectsPrefix_lift nonce? _
-  prepare := projectsPrefix_lift nonce? _
-  counterCheck := fun _ _ => (Driver.Projection.state_lift nonce? _).liftWGObserver nonce? id
+  prepare := AuthenticatedEffects.TransportDriver.prepare_projects_other Event.rxOrigin origin? nonce? (fun _ => rfl)
+  counterCheck := AuthenticatedEffects.TransportDriver.counter_projects_other Event.replay nonce? (fun _ => rfl)
   timerSelected := fun d j pid t we =>
     AuthenticatedEffects.TimerDispatch.scope_projects Event.timerSelected d j pid t we nonce?
       (fun _ => rfl) id (projectsPrefix_pure nonce? id ())

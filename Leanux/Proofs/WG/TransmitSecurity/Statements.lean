@@ -14,6 +14,7 @@ import Leanux.Proofs.WG.TransmitSecurity.JournalHandshakeProjection
 import Leanux.Proofs.WG.TransmitSecurity.JournalSocketHistory
 import Leanux.Proofs.WG.TransmitSecurity.CompletionEmission
 import Leanux.Proofs.WG.TransmitSecurity.Rekey
+import Leanux.Proofs.WG.TransmitSecurity.PacketOriginDriverDeferred
 
 /-! Campaign 3, T1 initialized counter reservations and local AEAD contracts.
 Transport from reservation through every actual AEAD invocation remains open. -/
@@ -406,5 +407,36 @@ theorem initialized_joint_socket_binding (trace : Runner.Trace) (placeholders : 
       r.socket.before.wg.sent r.socket.after.wg.sent := by
   have valid := Journal.SocketHistory.initialized trace placeholders r member
   exact ⟨valid,Completion.SocketReceipt.Valid.emission valid⟩
+
+/-- Security: every surviving TX packet keeps an actual allocation certificate
+when a batch is allocated. The certificate records the native input material,
+returned packet ID and device epoch. The incoming resident carrier is explicit;
+this does not yet bind the packet to a nonce reservation or routing decision. -/
+theorem original_joint_allocation_origins (packets : List DataPacket) :
+    PacketOrigins.StateSafe (Journal.allocate packets) :=
+  PacketOrigins.allocate packets
+
+/-- Security: each actual AEAD receipt produced by the worker has a matching
+native allocation in the strict preceding journal prefix, even on later Stop.
+The incoming packet-origin carrier remains explicit; no global nonce or
+authorization claim is inferred from this local source contract. -/
+theorem original_joint_encrypt_allocation_origins (item : Option (List SkbId)) :
+    PacketOrigins.ProductSafe (Journal.encrypt item) :=
+  PacketOrigins.encrypt item
+
+/-- Security: native worker scheduling preserves strict earlier allocation
+evidence for AEAD receipts, including NAPI-triggered replies and handshake
+keepalives. The incoming resident-origin carrier is explicit; initialized
+configuration and lifecycle transport remain a separate obligation. -/
+theorem original_joint_scheduler_allocation_origins (stack : Option Worker) :
+    PacketOrigins.ProductSafe (Driver.scheduleObserved Journal.hooks stack) :=
+  PacketOrigins.schedule stack
+
+/-- Security: actual timer dispatch and its delayed worker callbacks preserve
+the same packet-origin evidence through later Stop. This establishes origin
+transport under its incoming carrier, not timer-cause authentication. -/
+theorem original_joint_timer_allocation_origins (bound : UInt64) :
+    PacketOrigins.ProductSafe (Driver.timersObserved Journal.hooks bound) :=
+  PacketOrigins.timers bound
 
 end Leanux.Proofs.WG.TransmitSecurity
