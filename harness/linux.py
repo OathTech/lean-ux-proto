@@ -210,6 +210,8 @@ def binary_profile_ranges(profile):
     if profile == "allowedips":
         return binary_coverage_ranges(symbols=("lookup", "common_bits", "wg_peer_get_maybe_zero"),
                                       sources={"lookup": "drivers/net/wireguard/allowedips.c"})
+    if profile == "index-remove":
+        return binary_coverage_ranges(symbols=("wg_index_hashtable_remove",))
     raise ValueError(f"unknown binary coverage profile: {profile}")
 
 

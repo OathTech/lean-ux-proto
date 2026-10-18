@@ -359,7 +359,7 @@ The [increment plan and report](../docs/2026-10-18-plan-paired-call-increment.md
 tracks executable call-entry readiness, its proof bridge, complete-call
 composition and cost measurements. `callBoundary_pre` in `PairCallEntry.lean` derives
 physical entry premises from the runner's `callBoundary`; `search_segment`
-composes the root and trie search. The full call theorem remains in progress.
+composes the root and trie search. The complete call theorem is described below.
 `PairCallWitness` supplies kernel-checked entry states. Run those exact
 states to return using decoded instructions from a prepared allowed-IPs input:
 
@@ -390,7 +390,7 @@ states to return. The dying-peer retry remains a checked source refusal.
 # From binary/, using capped on shared development boxes:
 capped lake build PairCallWitness binary-pair-call-witness
 capped lake env leanchecker --fresh PairCallWitness
-capped lake env leanexport PairCallAdequacy PairCallWitness > ../.tmp/binary-pair-call.ndjson
+capped lake env leanexport PairCallAdequacy PairCallWitness PairRemoveOwnership > ../.tmp/binary-pair-call.ndjson
 # External gate, outside Nono:
 lake check --from-export ../.tmp/binary-pair-call.ndjson
 ```
@@ -400,3 +400,52 @@ external acceptance remains specific to `a33869e`. See the
 [increment report](../docs/2026-10-18-plan-paired-call-increment.md) for reuse,
 failures and measured costs. Captured replay prints separate input, memory
 loading and paired-check timings to stderr.
+
+## Fresh removal calibration and runtime costs
+
+From the worktree root, with `LEANUX_KERNEL_DIR` set to the approved oracle
+as above, prepare an independent removal-only recording and run the paired
+calibration:
+
+```sh
+LEANUX_QEMU_SLOTS=16 capped scripts/in-bundle python3 -B -m evaluator.check \
+  --suite wireguard --binary-coverage --binary-profile index-remove \
+  --trace c_remove_after_handshake --out .artifacts/check/binary-remove
+(cd binary && capped lake build binary-pair-remove PairRemoveOwnership)
+capped python3 -B binary/remove_probe.py --check .artifacts/check/binary-remove
+(cd binary && capped lake env leanchecker --fresh PairRemoveOwnership)
+```
+
+The first case materializes the recorded mirror prefix and executes the
+source-selected index-removal calls: keypair, keypair, handshake. It compares
+kernel coverage and mirror decisions. Arguments are source-derived, not captured,
+and intervening caller operations are not executed. Additional generated heaps
+exercise collision chains and repeated removals. A stale predecessor pointer
+provides a concrete counterexample to reusing the lookup-only abstraction;
+the new owner-hashed decoder rejects it. These tests use the actual service
+bodies and retain memory between calls.
+
+`PairRemoveRegion` proves three instructions in two fresh physical regions.
+`PairRemoveOwnership.clear_ownership` connects the final NULL store to the
+same ownership decoder used by the runner and to the source filter's target.
+It does not prove bucket reconstruction through unlink or whole-function
+removal adequacy. See the increment report for the explicit premises and limits.
+
+For runtime diagnosis, `binary-pair-buffer-cost` uses a **generated variation**
+of an allowed-IPs capture with a smaller KCOV allocation and changed capacity
+metadata. It checks that the original instruction path is preserved under
+both seeds and runs the same complete-call assertion. It is not unchanged
+capture replay or a performance optimization of that replay. Given the capture
+files prepared by the earlier capture recipe, run from the worktree root:
+
+```sh
+(cd binary && capped lake build binary-pair-buffer-cost)
+capped binary/.lake/build/bin/binary-pair-buffer-cost \
+  .tmp/cap-trie4/replay-input.json .tmp/cap-trie4/snapshot.json .tmp/cap-trie4/layouts.json
+```
+
+The original capture executable remains the unchanged-capture regression;
+the diagnostic intentionally does not duplicate its independent captured
+header/return comparisons or corruption controls. Do not substitute it for
+that regression. All input/output captures, timing logs and leanexports are
+ephemeral and should be regenerated and removed when no longer needed.

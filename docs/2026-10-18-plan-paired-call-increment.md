@@ -1,7 +1,9 @@
 # Paired execution: complete-call and cost calibration increment
 
-Status: implementation in progress on `task/binary-pair-runner`, starting
-from `2edbc26`. This continues the
+Status: complete-call theorem implemented and locally replayed; cost and fresh
+mutation calibration reported below. Full removal adequacy and an unchanged-
+capture runtime optimization remain open. Work is on `task/binary-pair-runner`,
+starting from `2edbc26`. This continues the
 [executable correspondence experiment](2026-10-16-plan-executable-binary-correspondence.md).
 
 ## Purpose and decisions
@@ -30,7 +32,8 @@ The existing `findNode_checked` theorem derives setup from the executable
 `initialBoundary` and proves the nonempty trie loop, with a reconstructed
 heap and a physical frame. Actual sequential IPv4 and IPv6 captures pass
 the same checks. The existing physical entry, helper and tail proofs are
-available for reuse. No complete allowed-IPs call theorem is claimed yet.
+available for reuse. At the start of this increment there was no complete
+allowed-IPs call theorem; the execution record below reports its completion.
 
 The complete-call target is conditional on:
 
@@ -310,7 +313,7 @@ rewriting under a footprint). No new search tactic was needed. This supports
 endpoint summaries as an effective interface for this example; it does not
 measure fresh-function cost or establish campaign affordability.
 
-### Runtime-cost experiment in progress
+### Runtime-cost experiments
 
 The replay executable now reports input parsing, memory loading and paired
 execution/checking separately. The first IPv4 split spends 13.656 seconds
@@ -330,3 +333,164 @@ calibration. Removal exposes predecessor-link writes, optional successor
 backlink repair and unlink state in a smaller body. The main new uncertainty
 is reconstructing a structurally changed heap, rather than scalar arithmetic.
 A complete allowed-IPs call is now available as the composition baseline.
+
+#### Generated smaller-buffer diagnostic
+
+`binary-pair-buffer-cost` retains the captured entry's ordinary memory and
+coverage prefix, but changes its KCOV capacity metadata to the initial used
+words plus 4096 and maps only that allocation. It runs the same `lookupFrom`
+and `callBoundary`, under both undefined-value seeds, and checks that every
+executed PC matches the original capture. This is explicitly a generated
+variation, **not an optimization or replay of the unchanged snapshot**.
+
+| Run | Capacity | Paired work, two seeds | Process elapsed | Peak resident memory |
+|---|---:|---:|---:|---:|
+| Unchanged IPv4 capture | 32 MiB | 242.171 s | 256.55 s | 7,305,052 KiB |
+| Generated IPv4 variation | 4,522 words | 0.212 s | 0.35 s | 178,372 KiB |
+| Generated IPv6 variation | 5,139 words | 0.250 s | 0.37 s | 181,000 KiB |
+
+The variation executes the same 1,592/1,510 instructions per seed and visits
+the same five/three trie headers, returning peers 3/4. It still checks call
+readiness and reconstruction. It omits the independent captured header/return
+comparisons and corruption controls, so the timings are not a controlled
+whole-run speedup comparison. It provides strong evidence that the large
+coverage allocation is a major runtime cost, while the attempted per-read
+optimization provides no useful gain. The measurements do not separate
+large-memory update/copy costs from repeated scans precisely.
+
+The next runtime mechanism should preserve the actual capacity word and prove
+a bounded mapped-prefix/headroom contract, accounting for each possible
+callback write and saturation. Another option is a proved refinement of the
+memory representation. Merely reducing captured capacity is not an acceptable
+implementation of either. No speedup for unchanged captured replay is claimed.
+
+### Fresh mutation calibration: index removal
+
+The independent `index-remove` coverage profile records only the ELF-derived
+range of `wg_index_hashtable_remove`; it changes no oracle behavior or image.
+The differential check of `c_remove_after_handshake` passes: one trace, six
+operations, 29 comparison-operand pairs at 23 distinct sites. The recording
+ran from 04:15:27 to 04:17:36 UTC. The ordinary Python tests pass (72 tests,
+one skip). The recorded operation's removal decisions are true, false, false.
+
+`PairRemove` executes the entire 25-instruction anchored function, including
+actual coverage and BH-enable service bodies. It retains the heap between
+calls and compares reconstruction after each return with actual `WG.indexRemove`.
+It checks ABI restoration, preempt/pending state, coverage records and writes.
+The recorded-prefix case selects the keypair twice and then the handshake,
+following `keypairsClear`/keypair release/peer release. The prefix's one-peer,
+one-keypair slot order and release count are checked. These arguments are
+source-derived, not captured argument snapshots; intervening caller operations
+are not executed. Kernel coverage and the full mirror operation's decision
+stream agree with those selected calls. An early version repeated the keypair
+three times; its branch-only agreement was insufficient to identify the calls,
+so it was corrected before recording the result as a selected-call comparison.
+
+Three labelled synthetic collision heaps exercise head-first, middle-first
+and tail-first removal, followed by repeated removal of every owner. Together
+with the selected recorded-prefix calls, this is 54 calls under two seeds,
+4,550 executed instructions, with individual calls taking 61, 102 or 121
+instructions. Paired execution takes about 1.7 seconds. These are materialized
+prefixes and synthetic heaps, **not captured kernel entry memory**.
+
+#### Counterexample and assertion repair
+
+The old lookup reconstruction accepts an unhashed owner with a non-NULL
+predecessor pointer, because bucket traversal never visits that owner. Give
+that absent owner the bucket head's address as its predecessor and a NULL
+successor. Binary removal then empties the bucket; mirror removal of the
+absent owner leaves the existing keypair in it. The paired run rejects the
+endpoint with the concrete bucket mismatch. This is an abstraction gap for
+the newly anchored removal function, not a kernel bug or mirror defect.
+
+The new `ownership` decoder reads each registered owner's `pprev` and computes
+its hashed flag. `targetOwnership` independently enumerates the source peers
+and keypairs and computes table membership. Their equality rejects the stale
+pointer before execution, while all valid deletion orders pass. Unhashed
+successor words stay unconstrained: the C deliberately retains them. The clause
+is justified by removal's actual read, and changes neither the M1 lookup
+precondition nor its dead-peer scope. Allocation lifetimes and caller releases
+are not established by these selected-call tests.
+
+#### Fresh proof and its limits
+
+`PairRemoveRegion` proves two fresh regions from their instruction semantics:
+the successor load/predecessor store at offsets `0x24`/`0x28`, and the `pprev`
+clear at `0x40`. The preparation script checks those exact bytes against the
+pinned image. `predecessor_effect` concludes the changed word and byte frame;
+`clear_effect` concludes the NULL store and frame. These are fragment-fetch
+theorems, not a whole-image function theorem.
+
+`PairRemoveOwnership.clear_ownership` composes that clear with the **same
+executable `ownership` decoder used by the tests**, proving its equality with
+the mirror's filtered-table ownership projection. It derives the mapped read
+from successful reconstruction, takes explicit address/layout/uniqueness and
+separation premises, and derives unchanged other-owner reads from the physical
+frame. `targetOwnership_remove` proves the source projection's filter update.
+`ownership_update` reuses the mapped-decoder transformation and word-frame
+mechanisms from the allowed-IPs proof. No new tactic or ISA extension was needed.
+
+This establishes three fresh instructions and one tested projection update.
+It does **not** establish the full bucket unlink, the successor backlink
+repair, or a complete removal simulation. In particular the predecessor store
+changes the structure traversed by `bucket`; its reconstruction update still
+needs an inductive splice argument. The full removal assertion has not been
+proved sufficient for complete function execution. The failed proof builds
+during this slice were ordinary elaboration failures: deriving lawful owner
+equality, reducing `Except` maps and reconciling word-address expressions.
+They were repaired; they were not treated as accepted results.
+
+### Checkpoint and cost conclusion
+
+Checkpoints A–C are complete. D identifies a large runtime mechanism but has
+not delivered a speedup for unchanged captures. E supplies executed whole
+removals, a discovered invariant, and two fresh physical regions with a proved
+ownership update; complete structural-mutation adequacy remains open.
+
+[AGENT 2026-10-18] End this calibration at the complete allowed-IPs call and
+the fresh ownership-update slice. The next two substantial tasks are a bounded
+KCOV contract and the index-bucket splice proof. Neither is a speculative
+general-purpose tactic project: the measurements and counterexample identify
+the obligations directly. Do not count the unproved whole removal as function
+coverage or extrapolate a campaign rate from three new instructions.
+
+The complete-call theorem first built about 33 minutes after work began. The
+fresh removal slice and runtime investigation occupied the following period,
+overlapping captures, tests and fresh kernel replay. This is elapsed agent-session
+time, not a person-hour estimate or CPU accounting. The initial two-instruction
+region took roughly four minutes of local proof iteration. The ownership
+projection/update and clear region had built by 04:34 UTC; their active proof
+time was not measured with a separate stopwatch.
+All instruction regions for the complete allowed-IPs call were reused. There
+is no defensible campaign-wide new-function throughput measurement yet.
+
+The evidence supports two mechanisms already used more than once: finite
+footprint covers turn executable separation checks into region premises, and
+decoder-update lemmas separate changed words from framed reads. The latter
+now applies to peer counts and owner flags. Endpoint summaries made the
+complete-call join manageable. The next expensive semantic obligation is
+structural heap traversal after mutation; the existing word-update mechanism
+does not solve it. Test-first reconstruction did find a missing invariant
+before attempting that proof, which is the intended feedback loop.
+
+All new headline axiom reports contain only `propext`, `Classical.choice` and
+`Quot.sound`; fresh replay of the complete-call witness closure passed.
+`leanchecker --fresh PairRemoveOwnership` also completed with exit zero.
+No `sorry`, unsafe proof code, native reduction axiom, suppression or trust
+declaration was added. Existing imported module/deprecation/unused-simp
+warnings remain visible, as already reported for this branch; these have not
+been repaired by this increment. No KILLED banner or timeout occurred.
+The mirror pin remains `cb2348e` and lags main `77c9b55`; Kraken is unchanged
+at clean `7ebba06a30eaf08c10b26b28ca14bfee1c791576`.
+
+The complete-call implementation is committed at `abb9ce01`. Its export of
+`PairCallAdequacy` and `PairCallWitness` is prepared, and will be regenerated
+with `PairRemoveOwnership` for the final calibration commit. External acceptance
+of this increment is **pending**. The earlier accepted external gate at
+`a33869e` covers only its earlier boundary modules. Reproduction commands,
+including the export-based gate, are in `binary/README.md`.
+
+At 04:35:50 UTC, 58 minutes 33 seconds after baseline inspection began, both
+fresh kernel replays and the corrected selected-call comparison had completed.
+The final removal run took 1.701 seconds, with all 54 calls passing. The
+following export/commit work is validation overhead, not new proof development.
