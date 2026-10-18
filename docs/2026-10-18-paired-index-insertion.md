@@ -3,7 +3,7 @@
 Status: complete function and arbitrary finite mixed-sequence theorems build
 on `task/binary-pair-runner`, from baseline `41675f86` under the
 [charter](2026-10-18-charter-paired-index-insertion.md). Final fresh replay
-and corrected capture regression pass; exact-commit export is being prepared.
+and corrected capture regression pass; the exact-commit export is prepared.
 The insertion increment's external export acceptance is pending.
 
 Start: **2026-10-18 17:23:07 UTC**. Reassessment if incomplete:
@@ -880,6 +880,39 @@ budget was used.
   R2's broader returning-history premise remains explicitly assumed.
 - External kernel acceptance for this new export before the user's result.
   The accepted previous subsystem export covers its stated earlier commit.
+
+## Commit and reproducibility checkpoint
+
+Implementation and the complete reported local checks are committed at
+**`b3d57f17b3dbc3f47ade3feb3aa1322886461d2d`**. The final trust gate was rerun
+after the wrapped-count controls and passed. The new export is generated from
+that clean source commit, root **`PairInsertionSurface`** and its transitive
+closure: the preceding `PairSubsystemSurface`, insertion function/environment
+headlines, mixed-sequence theorem, formal linked/unlinked entry and execution
+witnesses, executable reconstruction/readiness, `TrustBase` and `Execution`.
+
+From `binary/`, the preparation command is:
+
+```sh
+capped lake env leanexport PairInsertionSurface > ../.tmp/binary-pair-insert.ndjson
+```
+
+The external command, run by the user outside Nono from the same directory, is:
+
+```sh
+capped lake check --from-export ../.tmp/binary-pair-insert.ndjson
+```
+
+Export generation passed at **21:51:57 UTC**, **4h28m50s** after the increment
+started, with exit zero: **1,318,582,165 bytes**, 40.73 seconds elapsed,
+39.10 seconds user CPU and 3,095,624 KiB maximum RSS. This is the local
+completion checkpoint. The **external verdict is pending**; the earlier
+subsystem acceptance is not substituted for it. This section is a docs-only
+follow-up to the exported source commit.
+
+The old accepted subsystem export and the two obsolete insertion captures were
+removed after their conclusions and reproduction commands were committed. The
+new export remains ephemeral until the external check is recorded.
 
 ## Named trust base at the composition checkpoint (verbatim)
 

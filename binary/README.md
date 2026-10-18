@@ -574,4 +574,7 @@ capped lake check --from-export ../.tmp/binary-pair-insert.ndjson
 
 Require export exit status zero and record its exact source commit. The earlier
 index-subsystem acceptance does not cover insertion; this increment's external
-acceptance is pending. Captures and exports remain ephemeral under `.tmp`.
+acceptance is pending. The prepared insertion export is from
+`b3d57f17b3dbc3f47ade3feb3aa1322886461d2d`, root `PairInsertionSurface` and its
+full closure, generated successfully on 2026-10-18. Captures and exports remain
+ephemeral under `.tmp`.
