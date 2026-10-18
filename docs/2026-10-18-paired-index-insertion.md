@@ -349,3 +349,26 @@ insertion Pre witness. The refill path contains REP STOS, still unsupported;
 the arbitrary accepted-retry theorem must not be narrowed to the cache size.
 No random-service assumption has been installed while its physical domain and
 recorded-input coupling are unresolved.
+
+## Shared bucket-loop composition, 2026-10-18 19:24 UTC
+
+`walk_chain` composes both actual compiled bucket walks using one induction on
+the finite chain extracted by reconstruction. It returns the exact collision
+or miss endpoint, preserving the storage relation, coverage/stack resources
+and the live query registers. The second walk additionally preserves the
+bucket-number register. There is no bucket-length or execution-fuel bound in
+this theorem. Existing executable names validation supplies the non-NULL,
+non-wrapping owner facts; no new entry restriction was introduced.
+
+The shared node step handles the pointer adjustment, guard, instrumentation,
+comparison and advance. These are actual decoder-agreed instruction histories,
+not an abstract replacement for execution. The two sites differ by a code
+offset and compared-value register. The complete walk module is 72 lines; its
+new data, site, branch and node support is 354 lines. This is reuse within this
+increment, not a measurement of campaign-wide throughput.
+
+The targeted build and fresh `capped lake env leanchecker PairInsertWalk`
+replay pass; printed axioms are the standard three. The default build passes
+(741 jobs). Failed draft elaborations were word-normalization and Boolean
+orientation issues, corrected before replay. Insertion adequacy and the
+random-service contract remain open.
