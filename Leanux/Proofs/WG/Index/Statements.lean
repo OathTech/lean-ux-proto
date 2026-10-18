@@ -1,3 +1,8 @@
+import Leanux.Proofs.WG.Index.CreatorCompatibleClaims
+import Leanux.Proofs.WG.Index.CreatorIndexClaims
+import Leanux.Proofs.WG.Index.RetirementDischargeClaims
+import Leanux.Proofs.WG.Index.RetirementFirstPassSource
+import Leanux.Proofs.WG.Index.BoundedSessionClaims
 import Leanux.Proofs.WG.Index.RetirementPaymentSource
 import Leanux.Proofs.WG.Index.HashSlotClearWorkerClaims
 import Leanux.Proofs.WG.Index.RetirementClearWorkerClaims
@@ -1269,5 +1274,57 @@ theorem original_peer_put_hash_slots_detached
       g ambient result out after ⟨pre.1,pre.2.2.1⟩ run,
     peerPut_retirement retired pid d p resident live
       g ambient result out after ⟨pre.1,pre.2.2.2⟩ run⟩
+
+/-- Actual initiation creation preserves nullable self compatibility of the
+selected caller, hashed-slot coverage and retirement reservations. Positivity
+is supplied only for that caller; publication derives non-NULL from its
+successful dereference, and early refusal keeps its original meaning. -/
+theorem original_initiation_compatible_hash_slots
+    (retired : Queues.RxCredits.Reservations) (pid : PeerId) :
+    Campaign2.Ensures (createInitiation pid)
+      (fun s => View.HandshakeCompatibleSafe pid s ∧
+        View.HashSlotsSafe s ∧ View.RetirementSafe retired s)
+      (fun _ s => View.HandshakeCompatibleSafe pid s ∧
+        View.HashSlotsSafe s ∧ View.RetirementSafe retired s) := by
+  intro w a result v b pre run
+  exact ⟨createInitiation_owner_compatible pid w a result v b pre.1 run,
+    createInitiation_hashSlots_retirement retired pid w a result v b pre.2 run⟩
+
+/-- Actual response creation has the same nullable caller and index
+preservation contract, including its role refusal and recorded failures.
+This is a normal-return claim, with no successful-creation premise. -/
+theorem original_response_compatible_hash_slots
+    (retired : Queues.RxCredits.Reservations) (pid : PeerId) :
+    Campaign2.Ensures (createResponse pid)
+      (fun s => View.HandshakeCompatibleSafe pid s ∧
+        View.HashSlotsSafe s ∧ View.RetirementSafe retired s)
+      (fun _ s => View.HandshakeCompatibleSafe pid s ∧
+        View.HashSlotsSafe s ∧ View.RetirementSafe retired s) := by
+  intro w a result v b pre run
+  exact ⟨createResponse_owner_compatible pid w a result v b pre.1 run,
+    createResponse_hashSlots_retirement retired pid w a result v b pre.2 run⟩
+
+/-- Actual key clearing discharges the paid owner's retirement obligation.
+Coverage excludes a surviving hashed key owned by that now-empty slot;
+coherence and every remaining retirement obligation survive the same call. -/
+theorem original_keypairs_clear_retirement_discharge
+    (paid : Queues.RxCredits.Owner) (retired : Queues.RxCredits.Reservations) :
+    Campaign2.Ensures (keypairsClear paid.slot)
+      (fun s => View.HashSlotsSafe s ∧ View.OwnerCoherentSafe s ∧
+        View.RetirementSafe (paid :: retired) s)
+      (fun _ s => View.HashSlotsSafe s ∧ View.OwnerCoherentSafe s ∧
+        View.RetirementSafe retired s) :=
+  keypairsClear_retirement_discharge paid retired
+
+/-- Slot compatibility and resident-store bounds are enough for the actual
+session step's coverage and owner coherence. Full affiliation is unnecessary;
+the smaller bounds remain explicit entry facts, not an initialized history
+claim or a retirement-publication guarantee. -/
+theorem original_begin_session_bounded_hash_slots (pid : PeerId) :
+    Campaign2.Ensures (beginSession pid)
+      (fun s => InitializedBounds.EndpointSafe s ∧
+        View.OwnerCoherentSafe s ∧ View.HashSlotsSafe s)
+      (fun _ s => View.OwnerCoherentSafe s ∧ View.HashSlotsSafe s) :=
+  beginSession_endpoint_hashSlots pid
 
 end Leanux.Proofs.WG.Index
