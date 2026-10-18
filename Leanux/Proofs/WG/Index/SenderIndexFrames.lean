@@ -45,7 +45,7 @@ theorem sender_fields_of_sendWork_material {α : Type} (action : WG.M α) (pid :
     have projected := congrArg
       (Option.map (fun x : TimerDiscipline.SendWorkCell =>
         ([x.2.1,x.2.2.1,x.2.2.2.1],x.2.2.2.2.1,x.2.2.2.2.2.1,
-          x.2.2.2.2.2.2.1,x.2.2.2.2.2.2.2))) (congrFun cells target)
+          x.2.2.2.2.2.2.1,x.2.2.2.2.2.2.2.1))) (congrFun cells target)
     simp only [TimerDiscipline.sendWorkDevice,TimerDiscipline.sendWorkCell,
       Option.map_map,Function.comp_def] at projected
     change e.peers[target]?.map senderPeerCell=d.peers[target]?.map senderPeerCell at projected

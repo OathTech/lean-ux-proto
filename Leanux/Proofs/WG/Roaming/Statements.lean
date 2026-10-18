@@ -1,3 +1,6 @@
+import Leanux.Proofs.WG.Roaming.HandshakeRemoteWholeClaims
+import Leanux.Proofs.WG.Roaming.ConsumptionDestinationClaims
+import Leanux.Proofs.WG.Roaming.RemoteMutationFrames
 import Leanux.Proofs.WG.Roaming.ReceiveIngressClaims
 import Leanux.Proofs.WG.Roaming.NapiPublicationClaims
 import Leanux.Proofs.WG.Roaming.ConsumeEndpointClaims
@@ -330,5 +333,63 @@ theorem original_receive_ingress_endpoints (msg : List UInt8) (src : SkbSource)
         ∀ pid, remoteAt final pid = remoteAt entry pid) :=
   wgReceive_preserves_endpoints msg src entry
 
+
+
+/-- Every message kind follows the complete original handshake caller.
+Erasing its observation preserves the exact original outcome, including Stops.
+Normal initiation/response returns retain their actual authentication receipt
+and the selected packet-source update through the full suffix; no-cut, cookie
+and other normal returns preserve the whole remote map. Surviving destinations
+are covered, without a peer-survival or stopped-internal-write claim. -/
+theorem original_whole_handshake_remote_coverage (msg : List UInt8) (src : SkbSource)
+    (entry : Campaign2.Product.Snapshot) :
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (do let _ ← Product.observedHandshakeRemotes msg src; pure ())
+      (liftWG (receiveHandshakePacket msg src)) ∧
+    Campaign2.Product.Ensures (Product.observedHandshakeRemotes msg src) (fun s => s = entry)
+      (fun receipt final => Product.HandshakeFinalRemotes msg src entry receipt final) := by
+  constructor
+  · intro w pre
+    rw [Product.observedHandshakeRemotes_erase]
+  · exact Product.observedHandshakeRemotes_facts msg src entry
+
+/-- All completed initialized data consumptions, in exact history order, have
+strictly earlier AEAD provenance and the packet-source destination retained
+through their own full calls. Nondelivery and completed calls before a later
+outer Stop are included. Failed consume prefixes, peer survival, persistence
+beyond the consume and AEAD authentication of the outer source are not asserted. -/
+theorem original_initialized_data_consumptions_authenticated_final
+    (trace : Runner.Trace) (placeholders : Bool) :
+    ∃ qs,
+      Noise.ConfirmationOrder.observations trace placeholders = .ok qs ∧
+      qs.Pairwise (fun a b => a.position < b.position) ∧
+      qs.length = Noise.ConfirmationOrder.consumedCount
+        (Noise.ConfirmationOrder.history trace placeholders) ∧
+      (∀ q, q ∈ qs ↔ Noise.ConfirmationOrder.OccursAt trace placeholders q) ∧
+      ∀ q ∈ qs, ∃ e : ConsumptionAuthentication,
+        e.Valid trace placeholders q ∧ e.Facts q ∧ ConsumptionFinalRemotes q :=
+  initialized_consumptions_authenticated_final trace placeholders
+
+/-- A raw native consume with a supported endpoint retains the selected
+destination update through the complete original continuation. This local
+contract supplies no upstream authentication or peer-survival guarantee. -/
+theorem original_completed_data_remote_coverage (entry : Campaign2.Snapshot)
+    (pid : PeerId) (pkt : RxPacket) (endpoint : Endpoint)
+    (valid : endpoint.family = AF_INET ∨ endpoint.family = AF_INET6) :
+    Campaign2.Ensures (consumeDataDone pid pkt endpoint)
+      (fun s => remoteMap s = remoteMap entry)
+      (fun _ s => RemoteRetained (updateRemote (remoteMap entry) pid (destination endpoint))
+        (remoteMap s)) :=
+  consumeDataDone_final_remotes entry pid pkt endpoint valid
+
+/-- Clearing one peer's cached local addresses preserves all remote
+destinations on normal return, including every other peer. -/
+theorem original_clear_source_preserves_all_destinations (pid : PeerId)
+    (entry : Campaign2.Snapshot) :
+    Campaign2.Ensures (clearPeerEndpointSrc pid) (fun s => remoteMap s = remoteMap entry)
+      (fun _ s => remoteMap s = remoteMap entry) := by
+  intro g ambient result final after pre run
+  exact ((Lifetimes.ProjectedAction.iff_run_ambient _ _ _).mp
+    (RemoteMutation.clear_source_destinations pid) g ambient result final after run).trans pre
 
 end Leanux.Proofs.WG.Roaming

@@ -132,7 +132,7 @@ theorem core_survivors {g f : WGWorld}
     subst own
     have fields := peer_fields frame before after peerOld stored
     have oldDead : p.isDead = true :=
-      (congrArg (fun c => c.2.2.2.2.2.2) fields).symm.trans dead
+      (congrArg (fun c => c.2.2.2.2.2.2.1) fields).symm.trans dead
     exact (List.not_mem_nil (original.2.2.2 e (subset e member) kid oldKey pid p
       owner keyOld oldWord peerOld oldDead)).elim
 

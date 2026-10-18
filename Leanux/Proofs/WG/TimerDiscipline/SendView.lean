@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Roaming.Model
 import Leanux.Proofs.WG.TimerDiscipline.View
 
 /-! Pure observations preserved by socket sending, not by handshake creation. -/
@@ -15,14 +16,14 @@ def sendObservation (s : Snapshot) (pid : PeerId) : SendView :=
 /-- Socket-local extension: queue and selected pending flag are independent of
 handshake creation's table updates and of the initiation-view interface.
 The global optional peer cells retain tags, all key slots and the owner
-metadata needed by H1 and H2, while preserving the older projections. -/
+metadata needed by H1/H2 and remote destinations for H3, preserving the older projections. -/
 abbrev WorkQueues := List PeerId × List PeerId
 abbrev SendWorkCell := Nat × Option KeypairId × Option KeypairId × Option KeypairId ×
-  Nat × Option PeerId × Nat × Bool
+  Nat × Option PeerId × Nat × Bool × Option (Nat × Nat × Nat × Nat)
 
 def sendWorkCell (p : Peer) : SendWorkCell :=
   (p.handshakeState,p.keypairNext,p.keypairPrevious,p.keypairCurrent,
-    p.refcount,p.handshakeEntryPeer,p.internalId,p.isDead)
+    p.refcount,p.handshakeEntryPeer,p.internalId,p.isDead,p.endpoint.map Roaming.destination)
 abbrev SendWorkDevice := TableCursor × WorkQueues × (PeerId → Option SendWorkCell)
 abbrev SendWorkPeer := InitiationView × Bool × SendWorkCell
 abbrev SendWorkView := Option SendWorkDevice × Option SendWorkPeer

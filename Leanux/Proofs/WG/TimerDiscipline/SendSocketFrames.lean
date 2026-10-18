@@ -70,7 +70,14 @@ theorem send4_sendWorkView (pid : PeerId) (e : Endpoint) (bytes : List UInt8)
       setPeer pid {p with endpoint := p.endpoint.map fun x => {x with src := 0, srcIf := 0}}) P (fun _ => P) := by
     refine ensures_bind _ _ ((ensures_iff _ _ _).mpr (getPeer_sendWorkView pid q v)) ?_
     intro p
-    exact (ensures_iff _ _ _).mpr (setPeer_sendWorkView pid q v _)
+    have same : sendWorkPeer
+        {p with endpoint := p.endpoint.map fun x => {x with src := 0, srcIf := 0}} = sendWorkPeer p := by
+      simp only [sendWorkPeer, sendWorkCell, initiationView, Option.map_map,
+        Function.comp_def, Roaming.destination]
+      rfl
+    simpa only [same] using
+      (ensures_iff _ _ _).mpr (setPeer_sendWorkView pid q v
+        {p with endpoint := p.endpoint.map fun x => {x with src := 0, srcIf := 0}})
   have clearBind {α : Type} (next : WG.M α)
       (rest : Ensures next P (fun _ => P)) :
       Ensures (do
@@ -197,7 +204,14 @@ theorem send6_sendWorkView (pid : PeerId) (e : Endpoint) (bytes : List UInt8)
       setPeer pid {p with endpoint := p.endpoint.map fun x => {x with src := 0}}) P (fun _ => P) := by
     refine ensures_bind _ _ ((ensures_iff _ _ _).mpr (getPeer_sendWorkView pid q v)) ?_
     intro p
-    exact (ensures_iff _ _ _).mpr (setPeer_sendWorkView pid q v _)
+    have same : sendWorkPeer
+        {p with endpoint := p.endpoint.map fun x => {x with src := 0}} = sendWorkPeer p := by
+      simp only [sendWorkPeer, sendWorkCell, initiationView, Option.map_map,
+        Function.comp_def, Roaming.destination]
+      rfl
+    simpa only [same] using
+      (ensures_iff _ _ _).mpr (setPeer_sendWorkView pid q v
+        {p with endpoint := p.endpoint.map fun x => {x with src := 0}})
   have clearBind {α : Type} (next : WG.M α)
       (rest : Ensures next P (fun _ => P)) :
       Ensures (do
