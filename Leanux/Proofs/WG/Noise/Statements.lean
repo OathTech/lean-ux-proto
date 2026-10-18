@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Noise.SessionRefusalClaims
 import Leanux.Proofs.WG.Noise.ResponseCallerClaims
 import Leanux.Proofs.WG.Noise.InitialSlotClaims
 import Leanux.Proofs.WG.Noise.InterleavedFreshClaims
@@ -522,5 +523,35 @@ theorem original_response_caller_receipts (pid : PeerId) :
           ResponseCaller.ReceiptValid receipt ∧ TagReceiptEffect receipt) :=
   ⟨ResponseCaller.original_response_receipts_erases pid,
     ResponseCaller.original_response_receipts pid⟩
+
+/-- A resident caller outside the two response states returns false without
+allocation, clock or credit assumptions. The device and key counter are unchanged;
+Ambient branch observations are retained. -/
+theorem original_session_role_refusal (pid : PeerId) (d : Device) (p : Peer)
+    (counter : Nat) (resident : d.peers[pid]? = some p)
+    (notCreated : p.handshakeState ≠ HANDSHAKE_CREATED_RESPONSE)
+    (notConsumed : p.handshakeState ≠ HANDSHAKE_CONSUMED_RESPONSE) :
+    Campaign2.Returns (beginSession pid)
+      (fun s => s.wg.device = some d ∧ s.wg.keypairCounter = counter)
+      (fun ok s => ok = false ∧ s.wg.device = some d ∧ s.wg.keypairCounter = counter) :=
+  beginSession_rejected_projected pid d p counter resident notCreated notConsumed
+
+/-- A well-formed armed allocation refusal returns false, consumes exactly its
+record and preserves the device and key counter. The suffix is arbitrary and
+no liveness, owner-word, slot, hash or clock premise is needed. -/
+theorem original_session_allocation_refusal (pid : PeerId) (d : Device) (p : Peer)
+    (counter : Nat) (resident : d.peers[pid]? = some p)
+    (accepted : p.handshakeState = HANDSHAKE_CREATED_RESPONSE ∨
+      p.handshakeState = HANDSHAKE_CONSUMED_RESPONSE)
+    (bytes : List UInt8) (rest : List HiddenRecord)
+    (width : bytes.length = 40) (refused : bytes.headD 2 = 0) :
+    Campaign2.Returns (beginSession pid)
+      (fun s => s.wg.device = some d ∧ s.wg.keypairCounter = counter ∧
+        s.ambient.hidden = some ({site := (HiddenSite.alloc .kzallocKeypair).info.id, bytes := bytes} :: rest) ∧
+        s.ambient.allocArmed.contains "kzallocKeypair" = true)
+      (fun ok s => ok = false ∧ s.wg.device = some d ∧
+        s.wg.keypairCounter = counter ∧ s.ambient.hidden = some rest) :=
+  beginSession_allocation_refused_projected pid d p counter resident accepted
+    bytes rest width refused
 
 end Leanux.Proofs.WG.Noise
