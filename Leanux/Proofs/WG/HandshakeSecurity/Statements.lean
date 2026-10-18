@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.HandshakeSecurity.ResponderPriorConfirmation
+import Leanux.Proofs.WG.HandshakeSecurity.ResponderDriverReceive
 import Leanux.Proofs.WG.HandshakeSecurity.ResponderDeviceFrames
 import Leanux.Proofs.WG.HandshakeSecurity.ResponderDeferred
 import Leanux.Proofs.WG.HandshakeSecurity.ResponderGlobalFrames
@@ -503,5 +505,99 @@ theorem original_device_lifecycle_responder_authorization
   ⟨Responder.create_native confirmed, Responder.up_native confirmed,
     Responder.down_native H1 confirmed, Responder.destruct_native H1 confirmed,
     Responder.preExit_native confirmed⟩
+
+/-- On every actual initialized trace, each completed consumer entry carries
+responder-current authorization from its strictly earlier confirmation prefix.
+All syscall actors and both placeholder modes are covered, including prior
+completed events before an indexed Stop. Only named H1 source contracts remain;
+no entry invariant, trace validity or successful-run premise is supplied. -/
+theorem initialized_responder_history (H1 : H1ResponderCurrentEdges)
+    (slots : H1ConfirmationEdges) (trace : Runner.Trace) (placeholders : Bool) :
+    Responder.Joint.Safe
+      (runPrefixOuter (Queues.RxHistory.executeTraceHistory trace placeholders) []).2 :=
+  Responder.Initialized.executeTrace H1 slots trace placeholders
+
+/-- A responder allocation current at a captured initialized consumer entry
+has a strictly earlier native authenticated receive whose confirmation returned
+true for that allocation. This is initialized slot chronology, with the separate
+staged-packet-to-encryption bridge still required for no-prior-encryption. -/
+theorem initialized_current_responder_previously_confirmed
+    (H1 : H1ResponderCurrentEdges) (slots : H1ConfirmationEdges)
+    (trace : Runner.Trace) (placeholders : Bool)
+    (pre post : List Queues.RxHistory.Event) (occurrence : Nat) (id : SkbId)
+    (stamp : Lifetimes.PacketStamp) (r : Queues.RxDisposition.ConsumeReceipt)
+    (position : (runPrefixOuter (Queues.RxHistory.executeTraceHistory trace placeholders) []).2 =
+      pre ++ .consumed occurrence id stamp r :: post)
+    (pid : PeerId) (core : Responder.KeyCore)
+    (resident : Responder.current r.run.before pid = some core)
+    (responder : core.initiator = false) :
+    Responder.Initialized.PriorConfirmation pre core.allocation :=
+  Responder.Initialized.current_has_earlier_authenticated_confirmation H1 slots trace placeholders
+    pre post occurrence id stamp r position pid core resident responder
+
+/-- The actual initialized completed receive combines earlier native AEAD,
+prior responder authorization and allocation-labelled confirmation uniqueness.
+The named H1 uniqueness boundary is visible beside its source edge contracts;
+inside-consumer stopped prefixes and encrypted-packet transport retain their
+separate scope. -/
+theorem initialized_authenticated_responder_history
+    (H1 : H1ResponderCurrentEdges) (slots : H1ConfirmationEdges)
+    (unique : H1InitializedCompletedConfirmation) (trace : Runner.Trace) (placeholders : Bool)
+    (pre post : List Queues.RxHistory.Event) (occurrence : Nat) (id : SkbId)
+    (stamp : Lifetimes.PacketStamp) (r : Queues.RxDisposition.ConsumeReceipt)
+    (position : (runPrefixOuter (Queues.RxHistory.executeTraceHistory trace placeholders) []).2 =
+      pre ++ .consumed occurrence id stamp r :: post) :
+    Responder.History.Native (Confirmation.completedLabels pre) r.run.before ∧
+    Confirmation.AuthenticatedUnique pre post id r ∧
+    Responder.Authorized (Confirmation.completedLabels pre ++
+      (Confirmation.completedLabel r).toList) r.run.after :=
+  Responder.Initialized.authenticated_history H1 slots unique trace placeholders
+    pre post occurrence id stamp r position
+
+/-- A native staging borrow selects the actual peers current allocation and
+sending material. A responder allocation therefore has an earlier confirmation
+in the same cut history when that cut carries authorization. Initialized TX
+transport remains a separate obligation rather than an assumed trace fact. -/
+theorem original_staging_selected_responder_confirmation
+    (pid : PeerId) (r : WGRunWitness (Option (Peer × Option KeypairId)))
+    (valid : r.Valid (Responder.selectionPrefix pid)) (p : Peer) (kid : KeypairId)
+    (selected : r.value = some (p, some kid)) (core : Responder.KeyCore)
+    (material : Responder.pool r.before kid = some core) (confirmed : List Nat)
+    (entry : Responder.Authorized confirmed r.before) (responder : core.initiator = false) :
+    core.allocation ∈ confirmed :=
+  Responder.DriverCuts.selected_responder_confirmed pid r valid p kid selected core material
+    confirmed entry responder
+
+/-- A native promotion receipt remains in its actual shared journal before any
+later stopped staging or clock continuation. Confirmation is therefore observed
+at the source cut, without requiring a normally completed consumer. -/
+theorem original_confirmation_journal_retains
+    (pid : PeerId) (kid : KeypairId) (w v : WGWorld) (a b : Ambient)
+    (h : List Responder.DriverCuts.Event) (value : Bool)
+    (run : ((receivedWithKeypair pid kid).run w).run a = .ok ((value, v), b))
+    (next : Bool → WGPrefix Responder.DriverCuts.Event α)
+    (appends : ∀ value, StateAppends (next value)) :
+    ∃ suffix, (runWGPrefix (Responder.DriverCuts.confirmation pid kid >>= next) w a h).2 =
+      h ++ [.confirmed pid kid ⟨value, w, v, a, b⟩] ++ suffix :=
+  Responder.DriverCuts.confirmation_retained pid kid w v a b h value run next appends
+
+/-- The actual shared-driver staging path carries checked responder selection
+through every nonce, allocation and refusal branch. A later Stop retains the
+source receipt. The configured/current entry carrier remains explicit until
+initialized driver transport closes; this is not yet an AEAD claim. -/
+theorem original_staging_responder_cut_history (pid : PeerId) :
+    Responder.DriverCuts.Preserves
+      (TransmitSecurity.Driver.stagingObserved Responder.DriverCuts.hooks pid) :=
+  Responder.DriverCuts.staging pid
+
+/-- Native receive confirmation advances the shared responder history before
+receive-triggered staging. Receipts remain checked through a later consumer
+Stop; the configured/current entry carrier and H1 slot-edge contract are
+explicit while initialized shared-driver transport is being discharged. -/
+theorem original_consumer_responder_cut_history (H1 : H1ResponderCurrentEdges)
+    (pid : PeerId) (pkt : RxPacket) (ep : Endpoint) :
+    Responder.DriverCuts.Preserves
+      (TransmitSecurity.Driver.consumeObserved Responder.DriverCuts.hooks pid pkt ep) :=
+  Responder.DriverCuts.consume H1 pid pkt ep
 
 end Leanux.Proofs.WG.HandshakeSecurity

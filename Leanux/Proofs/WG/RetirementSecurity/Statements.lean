@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.RetirementSecurity.RxCompletionHolders
 import Leanux.Proofs.WG.RetirementSecurity.Consequences
 import Leanux.Proofs.WG.RetirementSecurity.Clear
 import Leanux.Proofs.WG.RetirementSecurity.Payments
@@ -32,6 +33,11 @@ import Leanux.Proofs.WG.RetirementSecurity.TxOccurrenceCreate
 import Leanux.Proofs.WG.RetirementSecurity.TxOccurrenceStaging
 import Leanux.Proofs.WG.RetirementSecurity.TxCryptAdmission
 import Leanux.Proofs.WG.RetirementSecurity.TxCryptCompletion
+import Leanux.Proofs.WG.RetirementSecurity.TxCryptCreate
+import Leanux.Proofs.WG.RetirementSecurity.TxCryptAllocation
+import Leanux.Proofs.WG.RetirementSecurity.TxCryptWorker
+import Leanux.Proofs.WG.RetirementSecurity.TxCryptStaging
+import Leanux.Proofs.WG.RetirementSecurity.TxStagingFunding
 
 /-! Campaign 3, T6: local original-operation retirement contracts. The
 initialized key-reference ledger, complete caller coverage and conditional
@@ -766,5 +772,94 @@ driver transport is still required. -/
 theorem original_encryption_phase_completion (crypt : TxCryptInventory (items :: active) w.wg)
     (run : (Queues.RxWorkers.encryptStepTailSource (some items)).run w = .ok (result,v)) :
     TxCryptInventory active v.wg := crypt.complete run
+
+
+/-- A normal original peer put cannot delete an owning TX queue: the
+native final-reference guard rejects release while a packet batch remains.
+This forward ownership fact needs no reference-funding assumption; it does
+not assert that an unfunded execution avoids a Stop. -/
+theorem original_peer_put_keeps_tx_owner (owned : TxQueuedBatch w items)
+    (target : Option PeerId) (a b : Ambient)
+    (run : ((peerPut target).run w).run a = .ok (((),v),b)) : TxQueuedBatch v items :=
+  owned.peer_put target a b run
+
+/-- Full native creation preserves exclusive live/active encryption aliases
+through success, peer refusal, ring refusal and final cleanup. Rejection can
+free only the unpublished local batch, never a pending encryption packet.
+Incoming physical occurrence and encryption-phase inventories remain explicit;
+initialized staging and callback transport remains separate. -/
+theorem original_tx_creation_crypt_occurrences (crypt : TxCryptInventory active w)
+    (owned : TxInventory (⟨.unpublished,pid,items⟩ :: locals) w) (a b : Ambient)
+    (run : ((createData pid items).run w).run a = .ok (((),v),b)) :
+    TxCryptInventory active v := crypt.create owned a b run
+
+/-- Original batch allocation followed by creation cannot duplicate a
+physical packet or make it available to two encryption selections. Fresh IDs
+preserve existing aliases; publication installs the new ownership and rejection
+disposes only its local batch. The incoming concrete inventories and campaign 1
+packet frontier remain explicit until whole initialized caller transport. -/
+theorem original_tx_allocate_create_occurrences (inventory : TxInventory locals w)
+    (crypt : TxCryptInventory active w) (bounded : Packets.Inv w)
+    (device : w.dev = some d) (pid : PeerId) (packets : List DataPacket) (a b : Ambient)
+    (run : ((do let items ← packets.mapM newTxSkb; createData pid items).run w).run a =
+      .ok (((),v),b)) : TxInventory locals v ∧ TxCryptInventory active v :=
+  allocate_create_occurrences inventory crypt bounded device pid packets a b run
+
+/-- The original TX worker cannot dispose a packet still pending encryption
+or duplicate a surviving physical occurrence. Its actual readiness guard and
+queue uniqueness discharge disposal separation; socket/timer completion and
+final reference payments retain every other pending encryption owner. Incoming
+inventories remain explicit until their whole initialized driver transport. -/
+theorem original_tx_worker_crypt_occurrences (inventory : TxInventory locals w)
+    (crypt : TxCryptInventory active w) (pid : PeerId) (a b : Ambient)
+    (run : ((txStep pid).run w).run a = .ok ((result,v),b)) :
+    TxInventory locals v ∧ TxCryptInventory active v :=
+  ⟨inventory.step pid a b run,crypt.step inventory pid a b run⟩
+
+/-- With its actual key-holder account and peer-release funding, the original
+TX worker also preserves exact remaining key-reference credit while removing
+only its selected batch. Peer funding is a distinct visible premise; it is
+never substituted for a key credit. Whole initialized funding remains open. -/
+theorem original_tx_worker_joint_account (account : HolderAccount temporary w)
+    (inventory : TxInventory locals w) (crypt : TxCryptInventory active w)
+    (funded : PeerReleaseFunded pid w) (a b : Ambient)
+    (run : ((txStep pid).run w).run a = .ok ((result,v),b)) :
+    HolderAccount temporary v ∧ TxInventory locals v ∧ TxCryptInventory active v :=
+  ⟨account.tx_step (inventory.separated pid) funded a b run,
+   inventory.step pid a b run,crypt.step inventory pid a b run⟩
+
+/-- Full original staged send preserves exclusive physical occurrences and
+pending/active encryption aliases through the nonce loop, key refusal,
+restaging, allocation and native publication. Fresh allocation supplies
+separation; no packet-disjointness premise is added. Incoming inventories and
+the campaign 1 frontier are explicit until initialized driver closure. -/
+theorem original_staged_tx_crypt_occurrences (inventory : TxInventory locals w)
+    (crypt : TxCryptInventory active w) (bounded : Packets.Inv w) (pid : PeerId) (a b : Ambient)
+    (run : ((sendStagedPackets pid).run w).run a = .ok (((),v),b)) :
+    TxInventory locals v ∧ TxCryptInventory active v :=
+  CryptStaging.staged ⟨⟨bounded,inventory⟩,crypt⟩ pid a b run
+
+/-- Full original staged send cannot leak or fabricate a key reference:
+the real current-slot acquisition funds its temporary occurrence, which is
+repaid on rejection or transferred to the actual submitted batch. The nonce
+loop's generated packets carry that same key slot. Current-key affiliation
+and the packet frontier are independent visible inputs; whole initialized
+transport of the incoming holder account is still a separate obligation. -/
+theorem original_staged_key_holder_account (account : HolderAccount temporary w)
+    (bounded : Packets.Inv w) (compatible : Queues.RxCredits.CurrentCompatible pid w)
+    (a b : Ambient)
+    (run : ((sendStagedPackets pid).run w).run a = .ok (((),v),b)) :
+    HolderAccount temporary v := account.staged bounded compatible a b run
+
+/-- Original receive completion preserves exact key-reference ownership:
+authenticated confirmation transfers existing slots, and its conditional
+staged send pays or publishes its current-key acquisition. Packet boundedness
+and incoming key affiliation remain explicit, as does the incoming account;
+this local source result does not assert initialized driver closure. -/
+theorem original_receive_completion_key_holder_account (account : HolderAccount temporary w)
+    (bounded : Packets.Inv w) (compatible : Queues.RxCredits.KeyCompatible pid pkt.keypair w)
+    (endpoint : Endpoint) (a b : Ambient)
+    (run : ((consumeDataDone pid pkt endpoint).run w).run a = .ok ((result,v),b)) :
+    HolderAccount temporary v := account.receive_done bounded compatible endpoint a b run
 
 end Leanux.Proofs.WG.RetirementSecurity

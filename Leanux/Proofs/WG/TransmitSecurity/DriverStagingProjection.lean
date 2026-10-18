@@ -12,9 +12,12 @@ theorem staging_projects (h : HooksProjects ρ g a) (pid : PeerId) :
     StateProjectsPrefix ρ id (stagingObserved g pid) (stagingObserved a pid) := by
   unfold stagingObserved
   repeat' first
+    | (maintenance_head Hooks.selection; exact h.selection _)
     | (maintenance_head Hooks.reserve; exact h.reserve _)
     | (maintenance_head Hooks.allocate; exact h.allocate _)
     | (maintenance_head Hooks.create; exact h.create _ _)
+    | (maintenance_head Hooks.session; exact h.session _)
+    | (maintenance_head Hooks.confirmation; exact h.confirmation _ _)
     | driver_state_step ρ
 
 theorem keepalive_projects (h : HooksProjects ρ g a) (pid : PeerId) :
@@ -22,6 +25,8 @@ theorem keepalive_projects (h : HooksProjects ρ g a) (pid : PeerId) :
   unfold keepaliveObserved
   repeat' first
     | (maintenance_head stagingObserved; exact staging_projects h _)
+    | (maintenance_head Hooks.session; exact h.session _)
+    | (maintenance_head Hooks.confirmation; exact h.confirmation _ _)
     | driver_state_step ρ
 
 theorem transmit_projects (h : HooksProjects ρ g a) (family addr : Nat) (packets : List Packet) (mtu : Nat) :
@@ -30,6 +35,8 @@ theorem transmit_projects (h : HooksProjects ρ g a) (family addr : Nat) (packet
   repeat' first
     | (maintenance_head Hooks.front; exact h.front _ _ _ _)
     | (maintenance_head stagingObserved; exact staging_projects h _)
+    | (maintenance_head Hooks.session; exact h.session _)
+    | (maintenance_head Hooks.confirmation; exact h.confirmation _ _)
     | driver_state_step ρ
 
 theorem expired_projects (h : HooksProjects ρ g a) (pid : PeerId) :
@@ -37,6 +44,8 @@ theorem expired_projects (h : HooksProjects ρ g a) (pid : PeerId) :
   unfold expiredKeepaliveObserved
   repeat' first
     | (maintenance_head keepaliveObserved; exact keepalive_projects h _)
+    | (maintenance_head Hooks.session; exact h.session _)
+    | (maintenance_head Hooks.confirmation; exact h.confirmation _ _)
     | driver_state_step ρ
 
 theorem persistent_projects (h : HooksProjects ρ g a) (pid : PeerId) :
@@ -44,6 +53,8 @@ theorem persistent_projects (h : HooksProjects ρ g a) (pid : PeerId) :
   unfold persistentObserved
   repeat' first
     | (maintenance_head keepaliveObserved; exact keepalive_projects h _)
+    | (maintenance_head Hooks.session; exact h.session _)
+    | (maintenance_head Hooks.confirmation; exact h.confirmation _ _)
     | driver_state_step ρ
 
 theorem timer_projects (h : HooksProjects ρ g a) (pid : PeerId) (t : PeerTimer) :
@@ -54,11 +65,13 @@ theorem timer_projects (h : HooksProjects ρ g a) (pid : PeerId) (t : PeerTimer)
     | exact persistent_projects h _
     | exact Projection.state_lift ρ _
 
-theorem response_projects (ρ : E → Option F) (g : Hooks E) (a : Hooks F) (pid : PeerId) :
+theorem response_projects (h : HooksProjects ρ g a) (pid : PeerId) :
     StateProjectsPrefix ρ id (responseWith (handshakeOps g) pid) (responseWith (handshakeOps a) pid) := by
   unfold responseWith
   dsimp only [handshakeOps]
   repeat' first
+    | (maintenance_head Hooks.session; exact h.session _)
+    | (maintenance_head Hooks.confirmation; exact h.confirmation _ _)
     | driver_state_step ρ
 
 theorem afterMac_projects (h : HooksProjects ρ g a) (msg : List UInt8) (src : SkbSource)
@@ -68,8 +81,10 @@ theorem afterMac_projects (h : HooksProjects ρ g a) (msg : List UInt8) (src : S
   unfold afterMacWith
   dsimp only [handshakeOps]
   repeat' first
-    | (maintenance_head responseWith; exact response_projects ρ g a _)
+    | (maintenance_head responseWith; exact response_projects h _)
     | (maintenance_head keepaliveObserved; exact keepalive_projects h _)
+    | (maintenance_head Hooks.session; exact h.session _)
+    | (maintenance_head Hooks.confirmation; exact h.confirmation _ _)
     | driver_state_step ρ
 
 theorem reception_projects (h : HooksProjects ρ g a) (msg : List UInt8) (src : SkbSource) :
@@ -79,6 +94,8 @@ theorem reception_projects (h : HooksProjects ρ g a) (msg : List UInt8) (src : 
   dsimp only [handshakeOps]
   repeat' first
     | (maintenance_head afterMacWith; exact afterMac_projects h _ _ _ _)
+    | (maintenance_head Hooks.session; exact h.session _)
+    | (maintenance_head Hooks.confirmation; exact h.confirmation _ _)
     | driver_state_step ρ
 
 theorem handshake_projects (h : HooksProjects ρ g a) :
@@ -87,6 +104,8 @@ theorem handshake_projects (h : HooksProjects ρ g a) :
   dsimp only [handshakeOps]
   repeat' first
     | (maintenance_head receptionWith; exact reception_projects h _ _)
+    | (maintenance_head Hooks.session; exact h.session _)
+    | (maintenance_head Hooks.confirmation; exact h.confirmation _ _)
     | driver_state_step ρ
 
 theorem receiveTail_projects (h : HooksProjects ρ g a) (pid : PeerId) (pkt : RxPacket) (confirmed : Bool) :
@@ -94,6 +113,8 @@ theorem receiveTail_projects (h : HooksProjects ρ g a) (pid : PeerId) (pkt : Rx
   unfold receiveTailObserved
   repeat' first
     | (maintenance_head stagingObserved; exact staging_projects h _)
+    | (maintenance_head Hooks.session; exact h.session _)
+    | (maintenance_head Hooks.confirmation; exact h.confirmation _ _)
     | driver_state_step ρ
 
 theorem consume_projects (h : HooksProjects ρ g a) (pid : PeerId) (pkt : RxPacket) (ep : Endpoint) :
@@ -101,6 +122,8 @@ theorem consume_projects (h : HooksProjects ρ g a) (pid : PeerId) (pkt : RxPack
   unfold consumeObserved
   repeat' first
     | (maintenance_head receiveTailObserved; exact receiveTail_projects h _ _ _)
+    | (maintenance_head Hooks.session; exact h.session _)
+    | (maintenance_head Hooks.confirmation; exact h.confirmation _ _)
     | driver_state_step ρ
 
 end Leanux.Proofs.WG.TransmitSecurity.Driver

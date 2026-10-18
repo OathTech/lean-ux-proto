@@ -44,6 +44,7 @@ theorem timers_projects (h : HooksProjects ρ g a) (j : UInt64) :
     | (maintenance_head timerSectionObserved
        apply timerSection_projects ρ
        exact (timer_projects h _ _).liftWGObserver ρ id)
+    | (maintenance_head Hooks.timerSelected; exact h.timerSelected _ _ _ _ _)
     | driver_product_step ρ
 
 theorem placeholder_projects (h : HooksProjects ρ g a) (j : UInt64) :
@@ -55,6 +56,7 @@ theorem placeholder_projects (h : HooksProjects ρ g a) (j : UInt64) :
     | (maintenance_head timerSectionObserved
        apply timerSection_projects ρ
        exact (timer_projects h _ _).liftWGObserver ρ id)
+    | (maintenance_head Hooks.timerSelected; exact h.timerSelected _ _ _ _ _)
     | driver_product_step ρ
 
 theorem idleTimers_projects (h : HooksProjects ρ g a) :

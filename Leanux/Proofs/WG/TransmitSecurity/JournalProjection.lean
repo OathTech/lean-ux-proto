@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.TransmitSecurity.JournalSource
+import Leanux.Proofs.WG.TransmitSecurity.DriverSpecialization
 
 /-! Exact reservation projection of the combined execution. This equality
 links internal occurrence order; it is stronger than native result erasure. -/
@@ -6,7 +7,7 @@ namespace Leanux.Proofs.WG.TransmitSecurity.Journal
 open Leanux Leanux.WG Leanux.Proofs.Logged Lifetimes Queues Packets
 set_option pp.structureInstances false
 
-private theorem state_receipt_projects {E F α : Type} (ρ : E → Option F)
+theorem state_receipt_projects {E F α : Type} (ρ : E → Option F)
     (g : WGPrefix E α) (a : WGPrefix F α) (receipt : WGRunWitness α → E)
     (hr : ∀ r, ρ (receipt r) = none) (hp : StateProjectsPrefix ρ id g a) :
     StateProjectsPrefix ρ id (receiptWGObserved g receipt) a := by
@@ -73,7 +74,29 @@ theorem transmit_projects (pid : PeerId) :
     ProjectsPrefix nonce? id (transmit pid) (liftPrefix (liftWG (txStep pid))) :=
   projectsPrefix_focus_other Event.disposition disposition? nonce? (fun _ => rfl) (TxDisposition.step_erases pid)
 
+theorem selection_projects (pid : PeerId) :
+    StateProjectsPrefix nonce? id (selection pid)
+      (liftWGPrefix (HandshakeSecurity.Responder.selectionPrefix pid)) :=
+  fun wg => projectsPrefix_focus_other Event.responder responder? nonce? (fun _ => rfl)
+    (HandshakeSecurity.Responder.DriverCuts.selection_erases pid wg)
+
+theorem confirmation_projects (pid : PeerId) (kid : KeypairId) :
+    StateProjectsPrefix nonce? id (confirmation pid kid) (liftWGPrefix (receivedWithKeypair pid kid)) :=
+  fun wg => projectsPrefix_focus_other Event.responder responder? nonce? (fun _ => rfl)
+    (HandshakeSecurity.Responder.DriverCuts.confirmation_erases pid kid wg)
+
+theorem session_projects (pid : PeerId) :
+    StateProjectsPrefix nonce? id (session pid) (liftWGPrefix (beginSession pid)) :=
+  fun wg => projectsPrefix_focus_other Event.responder responder? nonce? (fun _ => rfl)
+    (HandshakeSecurity.Responder.DriverCuts.session_erases pid wg)
+
 theorem hooks_projects : Driver.HooksProjects nonce? hooks Driver.nonceHooks where
+  timerSelected := fun d j pid t we =>
+    AuthenticatedEffects.TimerDispatch.scope_projects Event.timerSelected d j pid t we nonce?
+      (fun _ => rfl) id (projectsPrefix_pure nonce? id ())
+  selection := selection_projects
+  confirmation := confirmation_projects
+  session := session_projects
   reserve := reserve_projects
   allocate := allocate_projects
   create := create_projects

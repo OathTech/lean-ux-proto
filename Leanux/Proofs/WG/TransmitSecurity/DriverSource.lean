@@ -1,8 +1,10 @@
 import Leanux.Proofs.WG.TransmitSecurity.NonceInitialized
+import Leanux.Proofs.WG.HandshakeSecurity.ResponderStagingSource
 
 /-! The nonce source driver parameterized at native TX boundaries. Its nonce
-specialization is definitionally the already initialized observer, so packet,
-ring and encryption events can share that exact callback wiring. -/
+specialization is proved equal to the initialized observer in the companion
+specialization module. Packet, ring, confirmation and encryption events share
+that exact callback wiring. -/
 set_option maxHeartbeats 600000
 namespace Leanux.Proofs.WG.TransmitSecurity.Driver
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing Lifetimes Queues Configuration Packets
@@ -10,6 +12,10 @@ open Leanux.Proofs.WG.Origins.HandshakeSources
 open HandshakeSecurity.Confirmation.Poll
 
 structure Hooks (E : Type) where
+  timerSelected : Device → UInt64 → PeerId → PeerTimer → WheelEntry → PrefixM E Unit
+  selection : PeerId → WGPrefix E (Option (Peer × Option KeypairId))
+  confirmation : PeerId → KeypairId → WGPrefix E Bool
+  session : PeerId → WGPrefix E Bool
   reserve : KeypairId → WGPrefix E Nat
   allocate : List DataPacket → WGPrefix E (List SkbId)
   create : PeerId → List SkbId → WGPrefix E Unit
@@ -19,11 +25,8 @@ structure Hooks (E : Type) where
   transmit : PeerId → PrefixM E Bool
 
 def stagingObserved (hooks : Hooks E) (pid : PeerId) : WGPrefix E Unit := do
-  let p ← liftWGPrefix (getPeer pid)
-  if ← liftWGPrefix (branch .stagedEmpty p.staged.isEmpty) then return
+  let some (p,keypair) ← hooks.selection pid | return
   let packets := p.staged
-  liftWGPrefix (setPeer pid { p with staged := [] })
-  let keypair ← liftWGPrefix (keypairGet p.keypairCurrent)
   let outNokey (invalid : Bool) := liftWGPrefix (Lifetimes.stagedOutNokey pid packets keypair invalid)
   if ← liftWGPrefix (branch .stagedNoKeypair keypair.isNone) then return ← outNokey false
   let some id := keypair | liftWGPrefix (invariant "unreachable")
@@ -78,7 +81,7 @@ def timerObserved (hooks : Hooks E) (pid : PeerId) : PeerTimer → WGPrefix E Un
 
 def handshakeOps (hooks : Hooks E) : Ops (WGPrefix E) where
   step := liftWGPrefix
-  session := fun pid => liftWGPrefix (beginSession pid)
+  session := hooks.session
   modifyPeer := fun pid f => liftWGPrefix (do setPeer pid (f (← getPeer pid)))
   create := fun pid => liftWGPrefix (createResponse pid)
   mac := fun pid msg => liftWGPrefix (addMacToPacket pid msg)
@@ -111,7 +114,7 @@ def receiveTailObserved (hooks : Hooks E) (pid : PeerId) (pkt : RxPacket) (confi
 def consumeObserved (hooks : Hooks E) (pid : PeerId) (pkt : RxPacket) (ep : Endpoint) :
     WGPrefix E (Option (List UInt8)) := do
   liftWGPrefix (setPeerEndpoint pid ep)
-  let confirmed ← liftWGPrefix (receivedWithKeypair pid pkt.keypair)
+  let confirmed ← hooks.confirmation pid pkt.keypair
   (receiveTailObserved hooks) pid pkt confirmed
 
 def pollObserved (hooks : Hooks E) (pid : PeerId) (budget : Nat)
@@ -252,6 +255,7 @@ def timersObserved (hooks : Hooks E) (jPass : UInt64) : PrefixM E Bool := do
       else
         let some (pid, t, we) := TimerWheel.nextDue d jPass
           | liftPrefix (throw (.hidden s!"a section of {w.symbol}, but no modeled timer's bucket is due by jiffies {jPass}"))
+        hooks.timerSelected d jPass pid t we
         let expected ← liftPrefix (Env.timerWorker t)
         if w != expected then
           liftPrefix (throw (.hidden s!"the wheel runs peer {pid}'s {repr t} timer next ({expected.symbol}, bucket expiry {we.bucketExpiry}); the records show a section of {w.symbol}"))
@@ -291,7 +295,9 @@ def placeholderTimersObserved (hooks : Hooks E) (jHi : UInt64) : PrefixM E Unit 
   if (← liftPrefix getWG).dev.isNone then return
   let pending := (← liftPrefix (liftWG getDev)).peers.size * PeerTimer.all.length
   for _ in [0:pending + 1] do
-    let some (pid, t, _) := TimerWheel.nextDue (← liftPrefix (liftWG getDev)) jHi | break
+    let d ← liftPrefix (liftWG getDev)
+    let some (pid, t, we) := TimerWheel.nextDue d jHi | break
+    hooks.timerSelected d jHi pid t we
     liftPrefix (liftWG (delTimer pid t))
     timerSectionObserved (← liftPrefix (Env.timerWorker t)) (liftWGObserver ((timerObserved hooks) pid t))
   (cryptObserved hooks)
@@ -482,6 +488,10 @@ def executeObserved (hooks : Hooks E) (trace : Runner.Trace) (placeholders : Boo
   RxHistory.executeTraceWith (syscallObserved hooks) trace placeholders
 
 def nonceHooks : Hooks Nonce.Allocation where
+  timerSelected := fun _ _ _ _ _ => pure ()
+  selection := fun pid => liftWGPrefix (HandshakeSecurity.Responder.selectionPrefix pid)
+  confirmation := fun pid kid => liftWGPrefix (receivedWithKeypair pid kid)
+  session := fun pid => liftWGPrefix (beginSession pid)
   reserve := Nonce.reserveObserved
   allocate := fun packets => liftWGPrefix (packets.mapM newTxSkb)
   create := fun pid item => liftWGPrefix (createData pid item)
@@ -489,11 +499,5 @@ def nonceHooks : Hooks Nonce.Allocation where
   poll := liftPrefix (liftWG TxRing.pollSource)
   encrypt := fun item => liftPrefix (RxWorkers.encryptStepTailSource item)
   transmit := fun pid => liftPrefix (liftWG (txStep pid))
-
-/-- No second execution semantics: selecting the reservation hooks gives the
-existing nonce observer by definitional equality, including its saved trials. -/
-theorem nonce_specialization (trace : Runner.Trace) (placeholders : Bool) :
-    executeObserved nonceHooks trace placeholders = Nonce.executeObserved trace placeholders := by
-  rfl
 
 end Leanux.Proofs.WG.TransmitSecurity.Driver

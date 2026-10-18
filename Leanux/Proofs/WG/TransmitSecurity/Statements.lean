@@ -7,7 +7,8 @@ import Leanux.Proofs.WG.TransmitSecurity.EncryptBinding
 import Leanux.Proofs.WG.TransmitSecurity.PacketAllocation
 import Leanux.Proofs.WG.TransmitSecurity.PacketMaterialFrames
 import Leanux.Proofs.WG.TransmitSecurity.WorkerEncryption
-import Leanux.Proofs.WG.TransmitSecurity.JournalProjection
+import Leanux.Proofs.WG.TransmitSecurity.WorkerOccurrences
+import Leanux.Proofs.WG.TransmitSecurity.JournalResponderProjection
 import Leanux.Proofs.WG.TransmitSecurity.Rekey
 
 /-! Campaign 3, T1 initialized counter reservations and local AEAD contracts.
@@ -339,5 +340,23 @@ theorem initialized_joint_transmit_reservations (trace : Runner.Trace) (placehol
     List.Nodup ((runPrefixOuter (Journal.execute trace placeholders) []).2.filterMap Journal.nonce?) :=
   ⟨Journal.execute_erases trace placeholders,Journal.execute_projects trace placeholders,
     Journal.initialized_reservations trace placeholders⟩
+
+/-- Security: one selected batch cannot encrypt one packet twice when its IDs
+are distinct; receipts follow a sublist of the selected packet order even on
+Stop. Initialized selection uniqueness remains a separate phase invariant. -/
+theorem original_encrypt_worker_occurrences (item : Option (List SkbId)) (w : World)
+    (unique : (item.getD []).Nodup) :
+    ((runPrefix (WorkerEncryption.tail item) w []).2.map WorkerEncryption.Receipt.id).Nodup ∧
+      ((runPrefix (WorkerEncryption.tail item) w []).2.map WorkerEncryption.Receipt.id).Sublist (item.getD []) :=
+  WorkerEncryption.tail_occurrences item w unique
+
+/-- Security: the current-key selection, session creation and immediate
+confirmation receipts belong to the same initialized execution as transport
+reservations and AEAD receipts, including stopped prefixes. This exact internal
+projection is the linkage needed by the separate responder-authorization proof. -/
+theorem initialized_joint_responder_projection (trace : Runner.Trace) (placeholders : Bool) :
+    ProjectsOuter Journal.responder? id (Journal.execute trace placeholders)
+      (HandshakeSecurity.Responder.DriverCuts.execute trace placeholders) :=
+  Journal.ResponderProjection.execute trace placeholders
 
 end Leanux.Proofs.WG.TransmitSecurity

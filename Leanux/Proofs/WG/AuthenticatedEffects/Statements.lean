@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.TimerDispatchScope
+import Leanux.Proofs.WG.AuthenticatedEffects.SendQueueCausality
 import Leanux.Proofs.WG.AuthenticatedEffects.SendWorkClaims
 import Leanux.Proofs.WG.AuthenticatedEffects.WorkRootClaims
 import Leanux.Proofs.WG.AuthenticatedEffects.TimerSelection
@@ -623,5 +625,84 @@ theorem original_handshake_work_dispatch_inherits_occurrence_cause
       pre.length = ticket.index ∧
       WorkRoot.AuthenticatedAt pre ticket.receipt.origin ticket.receipt.kind ticket.peer :=
   SendWorkCauses.dispatch_authenticated msg src before ambient w tickets carrier r reached
+
+/-- Security: the exact native handshake queueing source preserves the ordered
+causal inventory, creating tickets only for its actual queue append. Freshness,
+dead-peer and already-pending exits keep their native behavior and existing
+queue causes. The input inventory is explicit. -/
+theorem original_handshake_queueing_transports_inventory (origin : Nat)
+    (kind : HandshakeCausal.Kind) (pid : PeerId) (retry : Bool) :
+    SendWorkCauses.Preserves (WorkRoot.queued origin kind pid retry) :=
+  SendWorkCauses.queued_preserves origin kind pid retry
+
+/-- Security: the exact native staging path preserves handshake-work causes
+through key checks, nonce reservation, allocation, submission and drops. Each
+new handshake-work occurrence receives its own receipt ticket; crypt/TX queues
+are outside this specifically named handshake-work inventory. -/
+theorem original_staging_transports_handshake_work_inventory (origin : Nat)
+    (kind : HandshakeCausal.Kind) (pid : PeerId) :
+    SendWorkCauses.Preserves (WorkRoot.staging origin kind pid) :=
+  SendWorkCauses.staging_preserves origin kind pid
+
+/-- Security: the original keepalive source transports the ordered handshake
+work inventory through its real allocation and staging branches. Together with
+the receiver's callback proof this discharges its concrete work-creation edge;
+whole-driver initialization and crypt-work provenance remain separate. -/
+theorem original_keepalive_transports_handshake_work_inventory (origin : Nat) (pid : PeerId) :
+    SendWorkCauses.Preserves (WorkRoot.keepalive origin pid) :=
+  SendWorkCauses.keepalive_preserves origin pid
+
+/-- Security: the complete original handshake receiver transports every
+ordered handshake-work occurrence and its journal ticket through actual native
+callbacks, including reference releases. The input inventory is explicit;
+no ownership hypothesis is needed for this queue projection. -/
+theorem original_receiver_transports_handshake_work_inventory (msg : Key) (src : SkbSource) :
+    SendWorkCauses.Preserves (WorkRoot.receive msg src) :=
+  SendWorkCauses.receive_preserves msg src
+
+/-- Security: starting with an empty handshake-work queue, every occurrence
+remaining after the original receiver completes has a distinct native append
+receipt in that same receiver's journal. This derives the output inventory
+from the native receive execution rather than assuming it. -/
+theorem original_receiver_initializes_handshake_work_inventory
+    (msg : Key) (src : SkbSource) (w v : WGWorld) (a b : Ambient)
+    (empty : SendWorkCauses.queue w = [])
+    (run : ((receiveHandshakePacket msg src).run w).run a = .ok (((),v),b)) :
+    ∃ tickets, SendWorkCauses.Carrier (runWGPrefix (WorkRoot.receive msg src) w a []).2 tickets v :=
+  SendWorkCauses.receive_from_empty msg src w v a b empty run
+
+/-- Security: a native handshake-work dispatch immediately following a completed
+native receive from an empty queue inherits its selected occurrence's own earlier
+authenticated callback. The dispatch receipt precedes worker execution, retaining
+this cause through an internal Stop. This concrete two-operation claim assumes
+no output carrier; transport through intervening driver actions remains separate. -/
+theorem original_receiver_then_worker_inherits_authenticated_occurrence
+    (msg : Key) (src : SkbSource) (before : WGWorld) (ambient : Ambient) (w : World)
+    (empty : SendWorkCauses.queue before = [])
+    (received : ((receiveHandshakePacket msg src).run before).run ambient = .ok (((),w.wg),w.ambient))
+    (r : RunWitness PeerId) (reached : r ∈ (runPrefix SendWorkCauses.dispatch w []).2) :
+    ∃ tickets ticket rest pre post,
+      SendWorkCauses.Carrier (runWGPrefix (WorkRoot.receive msg src) before ambient []).2 tickets w.wg ∧
+      SendWorkCauses.Selected tickets r.value ticket rest ∧ ticket.peer = r.value ∧
+      (runWGPrefix (WorkRoot.receive msg src) before ambient []).2 = pre ++ .queued ticket.receipt :: post ∧
+      pre.length = ticket.index ∧
+      WorkRoot.AuthenticatedAt pre ticket.receipt.origin ticket.receipt.kind ticket.peer :=
+  SendWorkCauses.receiver_then_dispatch_authenticated msg src before ambient w empty received r reached
+
+/-- Security: a timer scope retains its selected live wheel occurrence's
+cause before validation, deletion and callback, even if that suffix Stops.
+The caller's actual saved-device equality, successful nextDue selection and
+input timer carrier are explicit; shared-driver initialization remains open. -/
+theorem selected_timer_scope_retains_occurrence_cause
+    (record : TimerDispatch.Selection → E) (d : Device) (j : UInt64) (pid : PeerId)
+    (timer : PeerTimer) (entry : WheelEntry) {body : PrefixM E α} (appends : Appends body)
+    (w : World) (h : List E) (roots : List TimerRoot.Event)
+    (saved : w.wg.dev = some d) (selected : TimerWheel.nextDue d j = some (pid,timer,entry))
+    (carrier : TimerSlots.Carrier roots w.wg) :
+    ∃ suffix, (runPrefix (TimerDispatch.scope record d j pid timer entry body) w h).2 =
+      h ++ record ⟨d,j,pid,timer,entry,w⟩ :: suffix ∧
+      TimerDispatch.Selection.Valid ⟨d,j,pid,timer,entry,w⟩ ∧
+      TimerDispatch.Selection.Cause roots ⟨d,j,pid,timer,entry,w⟩ :=
+  TimerDispatch.scope_entry_cause record d j pid timer entry appends w h roots saved selected carrier
 
 end Leanux.Proofs.WG.AuthenticatedEffects

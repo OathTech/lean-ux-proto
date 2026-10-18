@@ -1,4 +1,6 @@
 import Leanux.Proofs.WG.TransmitSecurity.DriverOuterProjection
+import Leanux.Proofs.WG.HandshakeSecurity.ResponderDriverCuts
+import Leanux.Proofs.WG.AuthenticatedEffects.TimerDispatchScope
 import Leanux.Proofs.WG.TransmitSecurity.NativeAdapter
 import Leanux.Proofs.WG.TransmitSecurity.WorkerEncryption
 import Leanux.Proofs.WG.Queues.TxDisposition
@@ -10,7 +12,11 @@ in the shared initialized driver, so their order is an execution order. -/
 namespace Leanux.Proofs.WG.TransmitSecurity.Journal
 open Leanux Leanux.WG Leanux.Proofs.Logged Lifetimes Queues Packets
 
+abbrev ResponderEvent := HandshakeSecurity.Responder.DriverCuts.Event
+
 inductive Event where
+  | timerSelected (value : AuthenticatedEffects.TimerDispatch.Selection)
+  | responder (value : ResponderEvent)
   | nonce (value : Nonce.Allocation)
   | reserved (slot : KeypairId) (run : WGRunWitness Nat)
   | allocated (packets : List DataPacket) (run : WGRunWitness (List SkbId))
@@ -20,6 +26,8 @@ inductive Event where
   | encrypted (value : WorkerEncryption.Receipt)
   | encryptionReturn (item : Option (List SkbId)) (run : RunWitness Bool)
   | disposition (value : TxDisposition.Event)
+
+def responder? : Event → Option ResponderEvent | .responder value => some value | _ => none
 
 def nonce? : Event → Option Nonce.Allocation | .nonce value => some value | _ => none
 
@@ -31,6 +39,15 @@ def ring? : Event → Option TxRing.Event
   | .ring value => some value
   | .disposition (.ring value) => some value
   | _ => none
+
+def selection (pid : PeerId) : WGPrefix Event (Option (Peer × Option KeypairId)) :=
+  focusStatePrefix Event.responder responder? (HandshakeSecurity.Responder.DriverCuts.selection pid)
+
+def confirmation (pid : PeerId) (kid : KeypairId) : WGPrefix Event Bool :=
+  focusStatePrefix Event.responder responder? (HandshakeSecurity.Responder.DriverCuts.confirmation pid kid)
+
+def session (pid : PeerId) : WGPrefix Event Bool :=
+  focusStatePrefix Event.responder responder? (HandshakeSecurity.Responder.DriverCuts.session pid)
 
 def reserve (slot : KeypairId) : WGPrefix Event Nat :=
   receiptWGObserved (focusStatePrefix Event.nonce nonce? (Nonce.reserveObserved slot)) (.reserved slot)
@@ -54,6 +71,10 @@ def transmit (pid : PeerId) : PrefixM Event Bool :=
   focusPrefix Event.disposition disposition? (TxDisposition.step pid)
 
 def hooks : Driver.Hooks Event where
+  timerSelected := fun d j pid t we => AuthenticatedEffects.TimerDispatch.scope Event.timerSelected d j pid t we (pure ())
+  selection := selection
+  confirmation := confirmation
+  session := session
   reserve := reserve
   allocate := allocate
   create := create

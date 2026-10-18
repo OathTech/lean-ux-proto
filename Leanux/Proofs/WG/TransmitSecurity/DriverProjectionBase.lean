@@ -7,6 +7,11 @@ namespace Leanux.Proofs.WG.TransmitSecurity.Driver
 open Leanux Leanux.WG Leanux.Proofs.Logged Lifetimes Queues
 
 structure HooksProjects (ρ : E → Option F) (g : Hooks E) (a : Hooks F) : Prop where
+  timerSelected : ∀ d j pid t we,
+    ProjectsPrefix ρ id (g.timerSelected d j pid t we) (a.timerSelected d j pid t we)
+  selection : ∀ pid, StateProjectsPrefix ρ id (g.selection pid) (a.selection pid)
+  confirmation : ∀ pid kid, StateProjectsPrefix ρ id (g.confirmation pid kid) (a.confirmation pid kid)
+  session : ∀ pid, StateProjectsPrefix ρ id (g.session pid) (a.session pid)
   reserve : ∀ slot, StateProjectsPrefix ρ id (g.reserve slot) (a.reserve slot)
   allocate : ∀ packets, StateProjectsPrefix ρ id (g.allocate packets) (a.allocate packets)
   create : ∀ pid item, StateProjectsPrefix ρ id (g.create pid item) (a.create pid item)
