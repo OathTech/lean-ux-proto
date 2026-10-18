@@ -8,6 +8,22 @@ the mirror is never edited to let a proof close. The standing rule and gate
 are in [AGENTS.md](../AGENTS.md); this file maps the tree and registers its
 claims, premises and mirror pins.
 
+## Campaign 3: open outcomes and first finding
+
+The [campaign-3 report](2026-10-18-proof-campaign-3.md) tracks work on
+`proofs/campaign-3` over `783510e8` (mirror identical to `77c9b555`). No new
+campaign-3 theorem is claimed. All six outcomes remain open; the inherited
+results below remain current.
+
+| Item | Status, assumptions and boundary |
+| --- | --- |
+| T1–T5 | Open: nonce safety, transmit authorization/conservation, authenticated effects/silence, handshake replay resistance and responder confirmation. The report names reusable local results and the initialized-execution obligations still missing. No campaign-2 hypothesis is silently discharged. |
+| T6 / C3-F1 | Reproduced finding: the literal ban on actual encryption after invalidation/expiry conflicts with previously admitted work. R5's generated coherent initialized replays pass on this branch, checking delayed encryption, including after slot/index clearing with a retained packet reference. They are not Linux captures or scheduling-reachability evidence. Historical TX admission safety and conditional final-reference retirement remain the proposed target; no universal T6 result is claimed. |
+
+Checkpoint validation passes: 973 proof-build jobs, 895 gate declarations with
+standard axioms only, all twelve replay recipes, and 131 unit tests with one
+kernel-build-dependent skip. The report records the inherited mirror warning.
+
 ## Current register
 
 The proof tree is current over the namespace-pin landing `218d3ffd`: after
