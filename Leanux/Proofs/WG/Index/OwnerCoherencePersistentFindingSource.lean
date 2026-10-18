@@ -44,10 +44,6 @@ theorem persistentOwnerWitness_returns :
     hd, hh, REJECT_AFTER_TIME, REJECT_AFTER_MESSAGES, COUNTER_WINDOW_SIZE,
     NSEC_PER_SEC64, EINVAL, WG.EPIPE, ETH_P_8021Q, ETH_P_8021AD, ETH_P_IP, ETH_P_IPV6,
     Campaign2.snapshot, Campaign2.core, bind_assoc, Std.TreeMap.getElem_insert]
-  refine ⟨(), _, ⟨_, rfl⟩, _, rfl, ?_, ?_, ?_⟩
-  · simp
-  · simp [Std.TreeMap.getElem_insert]
-  · simp
 
 
 end Leanux.Proofs.WG.Index

@@ -1,3 +1,7 @@
+import Leanux.Proofs.WG.Noise.InitiationCoverageClaims
+import Leanux.Proofs.WG.Noise.ConfirmationLabelSource
+import Leanux.Proofs.WG.Noise.PendingTicketClearFrames
+import Leanux.Proofs.WG.Noise.PendingTicketTimerFrames
 import Leanux.Proofs.WG.Noise.ReceiveStepCallerClaims
 import Leanux.Proofs.WG.Noise.SocketTagFrames
 import Leanux.Proofs.WG.Noise.ReceptionCallerClaims
@@ -12,6 +16,11 @@ import Leanux.Proofs.WG.Noise.ResponseCallerFinalClaims
 import Leanux.Proofs.WG.Noise.CookieReplyTagFrames
 import Leanux.Proofs.WG.Noise.PendingTicketFrames
 import Leanux.Proofs.WG.Noise.ConsumeConfirmationClaims
+import Leanux.Proofs.WG.Noise.ConfirmationTicketClaims
+import Leanux.Proofs.WG.Noise.ReceptionTagFrames
+import Leanux.Proofs.WG.Noise.ReceiveStepCoverageClaims
+import Leanux.Proofs.WG.Noise.ConfirmationOrderClaims
+import Leanux.Proofs.WG.Noise.PendingTicketStagingFrames
 import Leanux.Proofs.WG.Noise.InitialSlotClaims
 import Leanux.Proofs.WG.Noise.InterleavedFreshClaims
 import Leanux.Proofs.WG.Noise.FreshHistoryClaims
@@ -699,5 +708,82 @@ theorem original_response_final_tags (pid : PeerId) (entry : Campaign2.Snapshot)
         ∀ receipt ∈ receipts,
           ResponseCaller.ReceiptValid receipt ∧ TagReceiptEffect receipt) :=
   ResponseCaller.original_response_receipt_final_tags pid entry
+
+/-- Every projected initialized consume occurrence carries its actual resident
+allocation identity and the original pending-ticket confirmation transition.
+This does not assume the whole-run pending-history invariant. -/
+theorem original_initialized_confirmation_allocation (trace : Leanux.Runner.Trace)
+    (placeholders : Bool) (n id : Nat) (stamp : Lifetimes.PacketStamp)
+    (observation : ConsumeConfirmation.ConfirmationObservation)
+    (occurs : CounterConsume.Occurs trace placeholders n id stamp observation) :
+    observation.Valid ∧ observation.Facts ∧ ∃ allocation,
+      ConsumeConfirmation.projectedStampAt observation.entry observation.packet.keypair =
+        some allocation ∧
+      PendingTickets.Step (PendingTickets.projected observation.entry)
+        (if observation.confirmed then some allocation else none)
+        (PendingTickets.projected observation.after) := by
+  have facts := CounterConsume.initialized_confirmation_stamped
+    trace placeholders n id stamp observation occurs
+  exact ⟨facts.1,facts.2.1,CounterConsume.initialized_confirmation_transition
+    trace placeholders n id stamp observation occurs⟩
+
+/-- Every surviving final tag of the original normal reception call is traced
+through its actual checked consumer receipts. MAC dispatch and receipt validity
+remain part of the conclusion; helper frames are discharged, not assumed. -/
+theorem original_reception_final_tags (msg : List UInt8) (src : SkbSource)
+    (entry : Campaign2.Snapshot) :
+    Campaign2.Ensures (ReceptionCaller.observeClassified msg src) (fun s => s = entry)
+      (fun call final => ReceiveStepCaller.ReceptionShape msg src call ∧
+        TagCoverage entry.tagAt call.receipts final.tagAt) :=
+  ReceptionCaller.original_reception_tag_coverage msg src entry
+
+/-- The actual receive step links every surviving final tag to its entry and
+ordered reception receipts, including empty polls and peer deletion. This is
+a normal-return contract; the separate erasure preserves every original Stop. -/
+theorem original_receive_step_final_tags (entry : Campaign2.Snapshot) :
+    Campaign2.Ensures ReceiveStepCaller.observeStep (fun s => s = entry)
+      (fun r final => r.entry = entry ∧ ReceiveStepCaller.PollShape r.entry r.poll ∧
+        TagCoverage entry.tagAt r.poll.receipts final.tagAt) :=
+  ReceiveStepCaller.original_receiveStep_tag_coverage entry
+
+/-- Every completed consume receipt in the initialized runner has exactly one
+ordered projected observation with its actual allocation identity. The list
+includes false confirmations and committed receipts before a later Stop.
+The successful identity list is exact; its distinctness remains a separate
+lifetime obligation. -/
+theorem original_initialized_confirmation_order (trace : Leanux.Runner.Trace)
+    (placeholders : Bool) :
+    ∃ qs,
+      ConfirmationOrder.observations trace placeholders = .ok qs ∧
+      ConfirmationOrder.confirmationIds trace placeholders =
+        .ok (ConfirmationOrder.successful qs) ∧
+      qs.Pairwise (fun a b => a.position < b.position) ∧
+      qs.length = ConfirmationOrder.consumedCount (ConfirmationOrder.history trace placeholders) ∧
+      (∀ q, q ∈ qs ↔ ConfirmationOrder.OccursAt trace placeholders q) ∧
+      (∀ q ∈ qs,
+        q.observation.Valid ∧ q.observation.Facts ∧
+        ConsumeConfirmation.projectedStampAt q.observation.entry q.observation.packet.keypair =
+          some q.internalId ∧
+        (q.observation.confirmed = true → q.observation.ConfirmedStamp q.internalId)) :=
+  ConfirmationOrder.initialized_complete trace placeholders
+
+/-- The normal original initiation sender connects entry and final tags through
+its actual creator receipt, retaining the rate guard and receipt validity. -/
+theorem original_initiation_final_tags (pid : PeerId) (entry : Campaign2.Snapshot) :
+    Campaign2.Ensures (InitiationCaller.observe pid) (fun s => s = entry)
+      (fun call final => InitiationCaller.RateObserved pid entry call ∧
+        InitiationCaller.CallFacts pid entry call ∧
+        TagCoverage entry.tagAt call.receipts final.tagAt) :=
+  InitiationCaller.original_initiation_tag_coverage pid entry
+
+/-- The original send worker retains the same entry-to-final tag coverage
+through final peer release, including actual peer deletion without an initial
+reference-readiness premise. Successful creation does not imply delivery. -/
+theorem original_initiation_worker_final_tags (pid : PeerId) (entry : Campaign2.Snapshot) :
+    Campaign2.Ensures (InitiationCaller.observeWorker pid) (fun s => s = entry)
+      (fun call final => InitiationCaller.RateObserved pid entry call ∧
+        InitiationCaller.CallFacts pid entry call ∧
+        TagCoverage entry.tagAt call.receipts final.tagAt) :=
+  InitiationCaller.original_initiation_worker_tag_coverage pid entry
 
 end Leanux.Proofs.WG.Noise

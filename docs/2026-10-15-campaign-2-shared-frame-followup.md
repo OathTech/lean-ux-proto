@@ -24,9 +24,14 @@ The earlier inventory of seven shared socket/cache families is therefore
 no longer a blocker for cached sendBufferToPeer. No existing shared lemma
 is edited and no parallel layer is copied. Independent review confirmed
 the full pointwise tag map, optional absence and the unchanged weaker
-projections. The whole response suffix still needs composition of these
-facts with existing exact timer effects. Cookie replies' uncached socket
-path and receiver keepalive/reference effects remain separate obligations.
+projections. The whole response suffix, uncached cookie reply paths, and receiver
+keepalive/release tag effects now compose. The owned Index staging layer
+retains surviving tag/next cells and the global allocation counter while
+preserving its old table interfaces; landed ordinary keypair transitions
+supply the separate allocation-stamp retention. Normal initiation/worker,
+response, reception and receive-step final tags are checked. Driver lifecycle
+and configuration composition, plus initialized pending-history invariance,
+remain open; these are source obligations rather than missing socket frames.
 This is proof support only; there is no mirror-change request.
 
 ## Landed support update, 2026-10-18

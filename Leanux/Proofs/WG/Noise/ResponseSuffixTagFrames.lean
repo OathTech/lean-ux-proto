@@ -38,13 +38,13 @@ theorem peerTimerArmEffect_tags (entry : Campaign2.Snapshot) (d : Device)
 
 /-- The original guard reads the peer while preparing its arguments, so a
 missing peer cannot yield a normal timer-hook result. -/
-theorem modPeerTimer_missing_tags (site : HiddenSite) (pid : PeerId)
+theorem modPeerTimer_missing_false (site : HiddenSite) (pid : PeerId)
     (timer : PeerTimer) (delay : Nat) (g final : WGWorld)
     (ambient after : Ambient) (value : Bool)
     (missing : peerAt g pid = none)
     (run : ((modPeerTimer site pid timer delay).run g).run ambient =
       .ok ((value, final), after)) :
-    responseTagMap final.dev = responseTagMap g.dev := by
+    False := by
   change (((callerJiffies site).run g).run ambient >>= fun ((caller, current), inputs) =>
     ((do
       if ← modPeerTimerGuard pid then
@@ -68,6 +68,15 @@ theorem modPeerTimer_missing_tags (site : HiddenSite) (pid : PeerId)
       simp [modPeerTimerGuard, WG.andM, getDev, getPeer, device, absent,
         invariant, AmbientM.invariant] at run
       cases run
+
+theorem modPeerTimer_missing_tags (site : HiddenSite) (pid : PeerId)
+    (timer : PeerTimer) (delay : Nat) (g final : WGWorld)
+    (ambient after : Ambient) (value : Bool)
+    (missing : peerAt g pid = none)
+    (run : ((modPeerTimer site pid timer delay).run g).run ambient =
+      .ok ((value, final), after)) :
+    responseTagMap final.dev = responseTagMap g.dev :=
+  False.elim (modPeerTimer_missing_false site pid timer delay g final ambient after value missing run)
 
 theorem modPeerTimer_tag_frame (site : HiddenSite) (pid : PeerId)
     (timer : PeerTimer) (delay : Nat) (entry : Option Device) :

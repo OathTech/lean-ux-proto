@@ -31,7 +31,7 @@ theorem consumeData_endpoints (msg : List UInt8) (src : SkbSource) (ds : Nat)
     | none => simp [liftSkb,getDev,device,invariant,AmbientM.invariant] at run; cases run
     | some d =>
       cases executed : (action.run {txSkbs := d.txSkbs,rxSkbs := d.rxSkbs,nextSkb := d.nextSkb}).run a with
-      | error stop => simp [liftSkb,getDev,device,executed] at run; cases run
+      | error stop => simp [liftSkb,getDev,device,executed] at run
       | ok pair =>
         obtain ⟨⟨value,store⟩,inputs⟩ := pair
         simp [liftSkb,getDev,modifyDev,device,executed] at run

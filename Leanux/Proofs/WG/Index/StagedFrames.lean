@@ -1,141 +1,124 @@
-import Leanux.Proofs.WG.Index.ConsumeFrames
-import Leanux.Proofs.WG.Config.StagedSource
-import Leanux.Proofs.WG.Config.KeyReferences
+import Leanux.Proofs.WG.Index.StagedObservation
 
 set_option autoImplicit false
 set_option pp.structureInstances false
-set_option maxHeartbeats 800000
-set_option maxRecDepth 4096
 namespace Leanux.Proofs.WG.Index
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise Std.Do
 
-theorem setKeypair_tables (id : KeypairId) (k : Keypair) :
-    ⦃fun g => ⌜TablesSafeWG g⌝⦄ setKeypair id k
-      ⦃⇓? _ g => ⌜TablesSafeWG g⌝⦄ := by
-  apply (ensures_iff _ _ _).mp
-  intro g ambient result final after pre run
-  cases run
-  intro final present
-  cases device : g.dev with
-  | none => simp [device] at present
-  | some d =>
-    simp only [device, Option.map_some, Option.some.injEq] at present
-    subst final
-    exact pre d device
+theorem setKeypair_staging (id : KeypairId) (k : Keypair) (entry : WGWorld) :
+    Ensures (setKeypair id k) (StagingFrame entry) (fun _ => StagingFrame entry) := by
+  exact staging_modifyDev entry _ (fun _ => rfl) (fun _ => rfl)
 
-theorem peerGet_tables (pid : PeerId) :
-    ⦃fun g => ⌜TablesSafeWG g⌝⦄ peerGet pid ⦃⇓? _ g => ⌜TablesSafeWG g⌝⦄ := by
-  apply (ensures_iff _ _ _).mp
+theorem peerGet_staging (pid : PeerId) (entry : WGWorld) :
+    Ensures (peerGet pid) (StagingFrame entry) (fun _ => StagingFrame entry) := by
   intro g ambient result final after pre run
+  have counter := staging_counter_snapshot _ (Keypairs.WGFrames.peerGet_sameSnapshot pid)
+    g final ambient after result run
   cases device : g.dev with
   | none =>
-    simp [peerGet, requireNotPending, getPeer, getDev, device, invariant, AmbientM.invariant] at run
+    simp [peerGet,requireNotPending,getPeer,getDev,device,invariant,AmbientM.invariant] at run
     cases run
   | some d =>
     cases resident : d.peers[pid]? with
     | none =>
-      simp [peerGet, requireNotPending, getPeer, getDev, device, resident, invariant, AmbientM.invariant] at run
+      simp [peerGet,requireNotPending,getPeer,getDev,device,resident,invariant,AmbientM.invariant] at run
       cases run
     | some p =>
       have effect := ((ensures_iff _ _ _).mpr (Config.peerGet_exact pid d p resident)
         g ambient result final after device run).1
-      intro next present
-      have same : next = Config.withPeer d pid {p with refcount := p.refcount + 1} :=
-        Option.some.inj (present.symm.trans effect)
-      subst next
-      exact pre d device
+      apply stagingFrame_of_views entry g final ?_ ?_ counter pre
+      · simp [effect,device,Config.withPeer,TimerDiscipline.tableCursor]
+      · rw [effect,device]
+        exact stagingPeerMap_write d pid p _ resident rfl
 
-theorem keypairGet_tables (key : Option KeypairId) :
-    ⦃fun g => ⌜TablesSafeWG g⌝⦄ keypairGet key ⦃⇓? _ g => ⌜TablesSafeWG g⌝⦄ := by
-  apply (ensures_iff _ _ _).mp
+theorem keypairGet_staging (key : Option KeypairId) (entry : WGWorld) :
+    Ensures (keypairGet key) (StagingFrame entry) (fun _ => StagingFrame entry) := by
   intro g ambient result final after pre run
+  have counter := staging_counter_snapshot _ (Keypairs.keypairGet_sameSnapshot key)
+    g final ambient after result run
   cases key with
   | none =>
-    simp [keypairGet, branch, AmbientM.branch] at run
-    rcases run with ⟨⟨rfl, rfl⟩, rfl⟩
+    simp [keypairGet,branch,AmbientM.branch] at run
+    obtain ⟨⟨rfl,rfl⟩,rfl⟩ := run
     exact pre
   | some id =>
     cases device : g.dev with
     | none =>
-      simp [keypairGet, branch, AmbientM.branch, getKeypair, getDev, device, invariant, AmbientM.invariant] at run
+      simp [keypairGet,branch,AmbientM.branch,getKeypair,getDev,device,invariant,AmbientM.invariant] at run
       cases run
     | some d =>
-      cases found : d.keypairs[id]? with
+      cases resident : d.keypairs[id]? with
       | none =>
-        simp [keypairGet, branch, AmbientM.branch, getKeypair, getDev, device, found, invariant, AmbientM.invariant] at run
+        simp [keypairGet,branch,AmbientM.branch,getKeypair,getDev,device,resident,invariant,AmbientM.invariant] at run
         cases run
       | some k =>
-        have effect := Config.keypairGet_present id d k found g ambient result final after device run
+        have effect := Config.keypairGet_present id d k resident
+          g ambient result final after device run
         by_cases zero : k.refcount = 0
-        · simp only [zero, ite_true] at effect
-          intro next present
-          have same : next = d := Option.some.inj (present.symm.trans effect.2)
-          subst next
-          exact pre d device
-        · simp only [zero, ite_false] at effect
-          intro next present
-          have same : next = Config.withKeypair d id {k with refcount := k.refcount + 1} :=
-            Option.some.inj (present.symm.trans effect.2)
-          subst next
-          exact pre d device
+        · simp only [zero,ite_true] at effect
+          apply stagingFrame_of_views entry g final ?_ ?_ counter pre
+          · rw [effect.2,device]
+          · rw [effect.2,device]
+        · simp only [zero,ite_false] at effect
+          apply stagingFrame_of_views entry g final ?_ ?_ counter pre
+          · rw [effect.2,device]; rfl
+          · rw [effect.2,device]; rfl
 
-/-- The actual component adapter still checks for a device and writes back only
-its skb fields. Table safety is not a claim about the unguarded component alone. -/
-theorem liftSkb_tables {α : Type} (action : SkbM α) :
-    Ensures (liftSkb action) TablesSafeWG (fun _ => TablesSafeWG) := by
+theorem liftSkb_staging {α : Type} (action : SkbM α) (entry : WGWorld) :
+    Ensures (liftSkb action) (StagingFrame entry) (fun _ => StagingFrame entry) := by
   intro g ambient result final after pre run
   cases device : g.dev with
   | none =>
-    simp [liftSkb, getDev, device, invariant, AmbientM.invariant] at run
+    simp [liftSkb,getDev,device,invariant,AmbientM.invariant] at run
     cases run
   | some d =>
-    cases executed : (action.run {txSkbs := d.txSkbs, rxSkbs := d.rxSkbs, nextSkb := d.nextSkb}).run ambient with
-    | error err =>
-      simp [liftSkb, getDev, device, executed] at run
-      cases run
+    cases executed : (action.run {txSkbs := d.txSkbs,rxSkbs := d.rxSkbs,nextSkb := d.nextSkb}).run ambient with
+    | error stop =>
+      simp [liftSkb,getDev,device,executed] at run
     | ok pair =>
-      obtain ⟨⟨value, store⟩, inputs⟩ := pair
-      simp [liftSkb, getDev, modifyDev, device, executed] at run
-      rcases run with ⟨⟨rfl, rfl⟩, rfl⟩
-      intro next present
-      cases present
-      exact pre d device
+      obtain ⟨⟨value,store⟩,inputs⟩ := pair
+      simp [liftSkb,getDev,modifyDev,device,executed] at run
+      obtain ⟨⟨rfl,rfl⟩,rfl⟩ := run
+      apply stagingFrame_of_views entry g _ ?_ ?_ ?_ pre
+      · rw [device]; rfl
+      · rw [device]; rfl
+      · rfl
 
-theorem newTxSkb_tables (packet : DataPacket) :
-    ⦃fun g => ⌜TablesSafeWG g⌝⦄ newTxSkb packet ⦃⇓? _ g => ⌜TablesSafeWG g⌝⦄ :=
-  (ensures_iff _ _ _).mp (liftSkb_tables (SkbStore.newTx packet))
+theorem newTxSkb_staging (packet : DataPacket) (entry : WGWorld) :
+    Ensures (newTxSkb packet) (StagingFrame entry) (fun _ => StagingFrame entry) :=
+  liftSkb_staging (SkbStore.newTx packet) entry
 
-theorem setTxSkb_tables (id : SkbId) (f : DataPacket → DataPacket) :
-    ⦃fun g => ⌜TablesSafeWG g⌝⦄ setTxSkb id f ⦃⇓? _ g => ⌜TablesSafeWG g⌝⦄ :=
-  (ensures_iff _ _ _).mp (liftSkb_tables (SkbStore.setTx id f))
+theorem setTxSkb_staging (id : SkbId) (f : DataPacket → DataPacket) (entry : WGWorld) :
+    Ensures (setTxSkb id f) (StagingFrame entry) (fun _ => StagingFrame entry) :=
+  liftSkb_staging (SkbStore.setTx id f) entry
 
-theorem freeTxSkb_tables (id : SkbId) :
-    ⦃fun g => ⌜TablesSafeWG g⌝⦄ freeTxSkb id ⦃⇓? _ g => ⌜TablesSafeWG g⌝⦄ :=
-  (ensures_iff _ _ _).mp (liftSkb_tables (SkbStore.freeTx id))
+theorem freeTxSkb_staging (id : SkbId) (entry : WGWorld) :
+    Ensures (freeTxSkb id) (StagingFrame entry) (fun _ => StagingFrame entry) :=
+  liftSkb_staging (SkbStore.freeTx id) entry
 
-theorem cpumaskChooseOnline_tables (pid : PeerId) :
-    ⦃fun g => ⌜TablesSafeWG g⌝⦄ cpumaskChooseOnline pid ⦃⇓? _ g => ⌜TablesSafeWG g⌝⦄ := by
-  apply (ensures_iff _ _ _).mp
+theorem cpumaskChooseOnline_staging (pid : PeerId) (entry : WGWorld) :
+    Ensures (cpumaskChooseOnline pid) (StagingFrame entry) (fun _ => StagingFrame entry) := by
   intro g ambient result final after pre run
   cases device : g.dev with
   | none =>
-    simp [cpumaskChooseOnline, getPeer, getDev, device, invariant, AmbientM.invariant] at run
+    simp [cpumaskChooseOnline,getPeer,getDev,device,invariant,AmbientM.invariant] at run
     cases run
   | some d =>
     cases resident : d.peers[pid]? with
     | none =>
-      simp [cpumaskChooseOnline, getPeer, getDev, device, resident, invariant, AmbientM.invariant] at run
+      simp [cpumaskChooseOnline,getPeer,getDev,device,resident,invariant,AmbientM.invariant] at run
       cases run
     | some p =>
       by_cases invalid : 1 ≤ p.serialWorkCpu.getD 1
       all_goals
-        simp [cpumaskChooseOnline, getPeer, getDev, device, resident, invalid, branch, AmbientM.branch,
-          Nat.mod_one, setPeer, modifyDev] at run
-        rcases run with ⟨⟨rfl, rfl⟩, rfl⟩
-        intro next present
-        simp only [device, Option.some.injEq] at present
-        subst next
-        exact pre d device
+        simp [cpumaskChooseOnline,getPeer,getDev,device,resident,invalid,branch,AmbientM.branch,
+          Nat.mod_one,setPeer,modifyDev] at run
+        obtain ⟨⟨rfl,rfl⟩,rfl⟩ := run
+      · apply stagingFrame_of_views entry g _ ?_ ?_ ?_ pre
+        · rw [device]; rfl
+        · rw [device]; exact stagingPeerMap_write d pid p _ resident rfl
+        · rfl
+      · exact pre
 
 theorem ipTunnelEcnEncap_wg_variant (P : WGWorld → Prop) (pkt : Packet) :
     ⦃fun g => ⌜P g⌝⦄ ipTunnelEcnEncap pkt ⦃⇓? _ g => ⌜P g⌝⦄ := by
@@ -177,76 +160,107 @@ theorem ipTunnelEcnEncap_kernel_variant (P : WGWorld → FSWorld → TaskWorld �
       w.wg w.ambient _ current inputs pre native
 end Product
 
-theorem newTxSkbs_tables (packets : List DataPacket) :
-    ⦃fun g => ⌜TablesSafeWG g⌝⦄ packets.mapM newTxSkb ⦃⇓? _ g => ⌜TablesSafeWG g⌝⦄ := by
-  apply (ensures_iff _ _ _).mp
+
+theorem newTxSkbs_staging (packets : List DataPacket) (entry : WGWorld) :
+    Ensures (packets.mapM newTxSkb) (StagingFrame entry) (fun _ => StagingFrame entry) := by
   have loop (xs : List DataPacket) (acc : List SkbId) :
-      Ensures (List.mapM.loop newTxSkb xs acc) TablesSafeWG (fun _ => TablesSafeWG) := by
+      Ensures (List.mapM.loop newTxSkb xs acc) (StagingFrame entry) (fun _ => StagingFrame entry) := by
     induction xs generalizing acc with
-    | nil => intro g ambient result final after pre run; cases run; exact pre
+    | nil => intro _ _ _ _ _ pre run; cases run; exact pre
     | cons x xs ih =>
       unfold List.mapM.loop
-      exact ensures_bind _ _ ((ensures_iff _ _ _).mpr (newTxSkb_tables x)) (fun id => ih (id :: acc))
+      exact ensures_bind _ _ (newTxSkb_staging x entry) (fun id => ih (id::acc))
   exact loop packets []
 
-theorem enqueuePerDeviceAndPeer_tables (pid : PeerId) (item : List SkbId) :
-    ⦃fun g => ⌜TablesSafeWG g⌝⦄ enqueuePerDeviceAndPeer pid item ⦃⇓? _ g => ⌜TablesSafeWG g⌝⦄ := by
-  have hpure {α : Type} (value : α) : Ensures (pure value : WG.M α) TablesSafeWG (fun _ => TablesSafeWG) := by
-    intro g ambient result final after pre run; cases run; exact pre
-  have hbranch (site : Decision) (value : Bool) : Ensures (branch site value : WG.M Bool) TablesSafeWG (fun _ => TablesSafeWG) :=
-    (ensures_iff _ _ _).mpr (hoare_liftAmbient_variant (AmbientM.branch site value) TablesSafeWG)
-  have hpeer : Ensures (getPeer pid) TablesSafeWG (fun _ => TablesSafeWG) := by
+theorem enqueuePerDeviceAndPeer_staging (pid : PeerId) (item : List SkbId) (entry : WGWorld) :
+    Ensures (enqueuePerDeviceAndPeer pid item) (StagingFrame entry) (fun _ => StagingFrame entry) := by
+  let P := StagingFrame entry
+  have hpure {α : Type} (value : α) : Ensures (pure value : WG.M α) P (fun _ => P) := by
+    intro _ _ _ _ _ pre run; cases run; exact pre
+  have hbranch (site : Decision) (value : Bool) :
+      Ensures (branch site value : WG.M Bool) P (fun _ => P) :=
+    (ensures_iff _ _ _).mpr (hoare_liftAmbient_variant (AmbientM.branch site value) P)
+  have hdev : Ensures getDev P (fun _ => P) := by
     intro g ambient result final after pre run
-    exact ((ensures_iff _ _ _).mpr (getPeer_spec pid TablesSafeWG) g ambient result final after pre run).1
-  have hdev : Ensures getDev TablesSafeWG (fun _ => TablesSafeWG) := by
-    intro g ambient result final after pre run
-    cases hd : g.dev with
-    | none => simp [getDev, hd, invariant, AmbientM.invariant] at run; cases run
-    | some d =>
-      simp [getDev, hd] at run
-      rcases run with ⟨⟨rfl, rfl⟩, rfl⟩
-      exact pre
-  have hmodify (f : Device → Device) (same : ∀ d, TimerDiscipline.tableCursor (f d) = TimerDiscipline.tableCursor d) :
-      Ensures (modifyDev f) TablesSafeWG (fun _ => TablesSafeWG) := by
-    intro g ambient result final after pre run
-    cases run
-    exact tablesSafe_of_cursor g _ (by simp [Option.map_map, Function.comp_def, same]) pre
-  have hcpu (last : Int) : Ensures (cpumaskNextOnlineFrom last) TablesSafeWG (fun _ => TablesSafeWG) := by
+    cases device : g.dev with
+    | none => simp [getDev,device,invariant,AmbientM.invariant] at run; cases run
+    | some d => simp [getDev,device] at run; obtain ⟨⟨rfl,rfl⟩,rfl⟩ := run; exact pre
+  have hcpu (last : Int) : Ensures (cpumaskNextOnlineFrom last) P (fun _ => P) := by
     unfold cpumaskNextOnlineFrom
-    refine ensures_bind (Q := fun _ => TablesSafeWG) _ _ (hbranch _ _) ?_
+    refine ensures_bind _ _ (hbranch _ _) ?_
     intro wrap
     cases wrap <;> exact hpure _
-  have hqueue : Ensures (queueDeviceWork .encryptWorker : WG.M Unit) TablesSafeWG (fun _ => TablesSafeWG) :=
-    (ensures_iff _ _ _).mpr (hoare_liftAmbient_variant (AmbientM.queueDeviceWork .encryptWorker) TablesSafeWG)
-  apply (ensures_iff _ _ _).mp
+  have hqueue : Ensures (queueDeviceWork .encryptWorker : WG.M Unit) P (fun _ => P) :=
+    (ensures_iff _ _ _).mpr (hoare_liftAmbient_variant (AmbientM.queueDeviceWork .encryptWorker) P)
   unfold enqueuePerDeviceAndPeer
   cases first : item.head? with
-  | none => intro g ambient result final after pre run; cases run
+  | none => intro _ _ _ _ _ _ run; cases run
   | some id =>
-    refine ensures_bind (Q := fun _ => TablesSafeWG) _ _ ((ensures_iff _ _ _).mpr (setTxSkb_tables id _)) ?_
+    refine ensures_bind _ _ (setTxSkb_staging id _ entry) ?_
     intro _
-    refine ensures_bind (Q := fun _ => TablesSafeWG) _ _ hpeer ?_
-    intro peer
-    refine ensures_bind (Q := fun _ => TablesSafeWG) _ _ (hbranch _ _) ?_
+    refine staging_read_bind entry pid _ _ ?_
+    intro peer tag
+    refine ensures_bind _ _ (hbranch _ _) ?_
     intro full
     cases full with
     | true => exact hpure _
     | false =>
-      refine ensures_bind (Q := fun _ => TablesSafeWG) _ _ ((ensures_iff _ _ _).mpr (setPeer_tables pid _)) ?_
+      refine ensures_bind _ _ (staging_setPeer entry pid _ tag) ?_
       intro _
-      refine ensures_bind (Q := fun _ => TablesSafeWG) _ _ hdev ?_
+      refine ensures_bind _ _ hdev ?_
       intro device
-      refine ensures_bind (Q := fun _ => TablesSafeWG) _ _ (hcpu _) ?_
+      refine ensures_bind _ _ (hcpu _) ?_
       intro cpu
-      refine ensures_bind (Q := fun _ => TablesSafeWG) _ _ (hmodify _ (fun _ => rfl)) ?_
+      refine ensures_bind _ _ (staging_modifyDev entry _ (fun _ => rfl) (fun _ => rfl)) ?_
       intro _
-      refine ensures_bind (Q := fun _ => TablesSafeWG) _ _ (hbranch _ _) ?_
+      refine ensures_bind _ _ (hbranch _ _) ?_
       intro full
       cases full with
       | true => exact hpure _
       | false =>
-        refine ensures_bind (Q := fun _ => TablesSafeWG) _ _ hqueue ?_
+        refine ensures_bind _ _ hqueue ?_
         intro _
-        exact ensures_bind _ _ (hmodify _ (fun _ => rfl)) (fun _ => hpure _)
+        exact ensures_bind _ _ (staging_modifyDev entry _ (fun _ => rfl) (fun _ => rfl))
+          (fun _ => hpure _)
+
+theorem setKeypair_tables (id : KeypairId) (k : Keypair) :
+    ⦃fun g => ⌜TablesSafeWG g⌝⦄ setKeypair id k ⦃⇓? _ g => ⌜TablesSafeWG g⌝⦄ :=
+  (ensures_iff _ _ _).mp (staging_tables _ (setKeypair_staging id k))
+
+theorem peerGet_tables (pid : PeerId) :
+    ⦃fun g => ⌜TablesSafeWG g⌝⦄ peerGet pid ⦃⇓? _ g => ⌜TablesSafeWG g⌝⦄ :=
+  (ensures_iff _ _ _).mp (staging_tables _ (peerGet_staging pid))
+
+theorem keypairGet_tables (key : Option KeypairId) :
+    ⦃fun g => ⌜TablesSafeWG g⌝⦄ keypairGet key ⦃⇓? _ g => ⌜TablesSafeWG g⌝⦄ :=
+  (ensures_iff _ _ _).mp (staging_tables _ (keypairGet_staging key))
+
+theorem liftSkb_tables {α : Type} (action : SkbM α) :
+    Ensures (liftSkb action) TablesSafeWG (fun _ => TablesSafeWG) :=
+  staging_tables _ (liftSkb_staging action)
+
+theorem newTxSkb_tables (packet : DataPacket) :
+    ⦃fun g => ⌜TablesSafeWG g⌝⦄ newTxSkb packet ⦃⇓? _ g => ⌜TablesSafeWG g⌝⦄ :=
+  (ensures_iff _ _ _).mp (staging_tables _ (newTxSkb_staging packet))
+
+theorem setTxSkb_tables (id : SkbId) (f : DataPacket → DataPacket) :
+    ⦃fun g => ⌜TablesSafeWG g⌝⦄ setTxSkb id f ⦃⇓? _ g => ⌜TablesSafeWG g⌝⦄ :=
+  (ensures_iff _ _ _).mp (staging_tables _ (setTxSkb_staging id f))
+
+theorem freeTxSkb_tables (id : SkbId) :
+    ⦃fun g => ⌜TablesSafeWG g⌝⦄ freeTxSkb id ⦃⇓? _ g => ⌜TablesSafeWG g⌝⦄ :=
+  (ensures_iff _ _ _).mp (staging_tables _ (freeTxSkb_staging id))
+
+theorem cpumaskChooseOnline_tables (pid : PeerId) :
+    ⦃fun g => ⌜TablesSafeWG g⌝⦄ cpumaskChooseOnline pid ⦃⇓? _ g => ⌜TablesSafeWG g⌝⦄ :=
+  (ensures_iff _ _ _).mp (staging_tables _ (cpumaskChooseOnline_staging pid))
+
+theorem newTxSkbs_tables (packets : List DataPacket) :
+    ⦃fun g => ⌜TablesSafeWG g⌝⦄ packets.mapM newTxSkb ⦃⇓? _ g => ⌜TablesSafeWG g⌝⦄ :=
+  (ensures_iff _ _ _).mp (staging_tables _ (newTxSkbs_staging packets))
+
+theorem enqueuePerDeviceAndPeer_tables (pid : PeerId) (item : List SkbId) :
+    ⦃fun g => ⌜TablesSafeWG g⌝⦄ enqueuePerDeviceAndPeer pid item ⦃⇓? _ g => ⌜TablesSafeWG g⌝⦄ :=
+  (ensures_iff _ _ _).mp (staging_tables _ (enqueuePerDeviceAndPeer_staging pid item))
 
 end Leanux.Proofs.WG.Index

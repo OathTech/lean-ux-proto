@@ -27,7 +27,7 @@ theorem hoare_liftSkb_references_variant {α : Type} (action : SkbM α) (d : Dev
   | none => simp [liftSkb, getDev, device, invariant, AmbientM.invariant] at run; cases run
   | some old =>
     cases executed : (action.run {txSkbs := old.txSkbs, rxSkbs := old.rxSkbs, nextSkb := old.nextSkb}).run ambient with
-    | error err => simp [liftSkb, getDev, device, executed] at run; cases run
+    | error err => simp [liftSkb, getDev, device, executed] at run
     | ok pair =>
       obtain ⟨⟨value, store⟩, inputs⟩ := pair
       simp [liftSkb, getDev, modifyDev, device, executed] at run
@@ -190,7 +190,7 @@ theorem enqueuePerPeerRx_pure_spec_references_variant (id : SkbId) (state : Pack
       | some current =>
         cases executed : ((SkbStore.setRx id fun pkt => {pkt with state}).run
             {txSkbs := current.txSkbs, rxSkbs := current.rxSkbs, nextSkb := current.nextSkb}).run ambient with
-        | error err => simp [setRxSkb, liftSkb, getDev, device, executed] at run; cases run
+        | error err => simp [setRxSkb, liftSkb, getDev, device, executed] at run
         | ok pair =>
           obtain ⟨⟨value, store⟩, inputs⟩ := pair
           simp [setRxSkb, liftSkb, getDev, modifyDev, device, executed] at run
