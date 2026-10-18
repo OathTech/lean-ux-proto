@@ -883,3 +883,14 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   and cutover binaries. The landing needs the user's signoff; the campaigns'
   retrofits then cover campaign 1's own results and the replay-window layers
   it rests on, and campaign 2's additions over them.
+- **2026-10-18 [USER]** Proof campaign 3 is chartered for the properties with high
+  security consequences that the mirror's proofs do not yet cover, everything a
+  good WireGuard proof should cover at the sequential model level: sender nonce
+  discipline, transmit binding and egress conservation, silence, handshake
+  freshness and confirmation discipline, in that order, each stated with the
+  consequence of its failure. The parallel plan's lower-consequence items for
+  this campaign (key lifetime over the wheel, resource bounds including the
+  handshake-ring bound, the routing composition) are deferred to a later charter,
+  the uncounted-drop finding of tray entries 01 and 02 judged an observability
+  defect rather than a security consequence [AGENT, coordinator: the charter,
+  docs/2026-10-18-charter-proof-campaign-3.md].
