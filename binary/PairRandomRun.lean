@@ -2,10 +2,15 @@ import RandomImage
 import ServiceImage
 import ProbeSupport
 import TrustBase
+import RandomState
 
 namespace Binary.Pair.RandomRun
 open Lean
 local instance : Labels := Image.linkedLabels
+
+def privateConfig : RandomProvider.Config := {
+  blocks := [(RandomProvider.Layout.readyAddress,4),(RandomProvider.Layout.cacheAddress,108),
+    (RandomProvider.Layout.cpuAddress,40),(RandomProvider.Layout.baseAddress,40)] }
 
 /-- Concrete decoded-body execution; no supplied service return. The decoder
 is deliberately partial, and any departure reports its exact PC. -/
@@ -35,6 +40,10 @@ def cachedState (interrupts : Bool) : MachineState := Id.run do
        (0xffffffff81cbba60,8,1),(0xffffffff81cbba68,4,0)] do
     m := put m address width value
   for i in [:24] do m := put m (0xffffffff81cbba00+4*i) 4 (7+8192*i)
+  for i in [:32] do
+    m := put m (0xffffffff81cbbb80+i) 1 i
+    m := put m (0xffffffff81fdbac0+i) 1 (31-i)
+  m := put m 0xffffffff81cbbba0 8 1
   return ⟨{
     dmem := m
     system := {bits := (if interrupts then 512 else 0),cpl := 0}
@@ -47,7 +56,9 @@ def suite : Except String Json := do
     for seed in [(0 : UInt64),0xffffffffffffffff] do
       let mut initial := cachedState interrupts
       for ordinal in [:2] do
+        RandomProvider.check privateConfig 0x800000 false initial.data.dmem
         let after ← execute seed 2000 initial (.ofNat stopAddr)
+        RandomProvider.check privateConfig 0x800000 false after.state.data.dmem
         unless after.state.data.regs.rax.toNat==7+8192*ordinal &&
             after.state.data.regs.rsp.toNat==stackAddr+8 do throw "random.body.result-stack"
         for reg in [Reg64.rbx,.rbp,.r12,.r13,.r14,.r15] do
@@ -74,7 +85,9 @@ def suite : Except String Json := do
     memory := put memory 0xffffffff81cbba68 4 24
     let mut initial := {start with data := {start.data with dmem := memory}}
     for ordinal in [:2] do
+      RandomProvider.check privateConfig 0x800000 false initial.data.dmem
       let after ← execute 0 20000 initial (.ofNat stopAddr)
+      RandomProvider.check privateConfig 0x800000 false after.state.data.dmem
       unless after.state.data.regs.rsp.toNat==stackAddr+8 &&
           after.state.data.system.bits[9] && after.state.data.system.cpl==0 do
         throw "random.refill.stack-system"
@@ -91,6 +104,11 @@ def suite : Except String Json := do
       initial := ⟨{after.state.data with regs := {after.state.data.regs with rsp := .ofNat stackAddr}},
         .ofNat 0xffffffff81375000⟩
   let initial := cachedState true
+  let missingCache := initial.data.dmem.erase (.ofNat 64 RandomProvider.Layout.cacheAddress)
+  match RandomProvider.check privateConfig 0x800000 false missingCache with
+  | .ok _ => throw "random.private.control: missing cache byte accepted"
+  | .error error => unless error=="random.private.allocation-unmapped" do
+      throw s!"random.private.control failed elsewhere: {error}"
   let bad := {initial with data := {initial.data with system := {initial.data.system with cpl := 3}}}
   let rejection ← match execute 0 2000 bad (.ofNat stopAddr) with
     | .ok _ => throw "random.body.control: unprivileged CLI accepted"
@@ -100,6 +118,7 @@ def suite : Except String Json := do
       pure error
   return Json.mkObj [("status",toJson "pass"),
     ("scope",toJson "actual cached/refill random body and callbacks, synthetic memory, recording disabled"),
-    ("runs",toJson results),("refills",toJson refills),("privilege_control",toJson rejection)]
+    ("runs",toJson results),("refills",toJson refills),("privilege_control",toJson rejection),
+    ("private_state_control",toJson "missing cache byte rejected")]
 
 end Binary.Pair.RandomRun

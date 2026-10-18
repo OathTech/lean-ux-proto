@@ -458,7 +458,7 @@ for a service domain permitting refills; it is not a general provider theorem,
 an insertion Pre witness, or evidence that captured steering state is covered.
 The new random-service contract and recorded-input agreement remain open.
 
-## Physical frames and system state, 2026-10-18 20:00 UTC
+## Physical frames and system state, 2026-10-18 19:59 UTC
 
 [AGENT 2026-10-18] Carry the ordinary-region write footprint separately from
 reconstruction. Provider readiness must survive intervening bucket walks and
@@ -483,3 +483,28 @@ validation was rerun after the tree stabilized. The first generic system-state
 proof exhausted 200,000 heartbeats. Handling CLI/STI and the memory/register
 CMPXCHG cases explicitly reduced elaboration to about five seconds without a
 raised heartbeat limit. Routine draft namespace errors were also corrected.
+
+## Executable provider domain, 2026-10-18 20:04 UTC
+
+`RandomProvider.check` now checks initialized entropy/cache allocations and,
+when recording is active, the selected steering graph. It first reads a
+declared finite private allocation cover; a proved frame lemma therefore
+preserves the whole executable check when those bytes are unchanged. The
+cover's separation from WireGuard storage remains a physical entry obligation.
+Remote-node traversal is bounded by a finite allocation interpretation, with
+cycle rejection; that bound does not constrain collision retries or draws.
+
+`generate_random_layout.py` derives KCOV structure offsets/sizes and provider
+symbols from the pinned ELF. The private check passes before and after all
+eight cached runs and four refill/retained-cache runs. Removing a cache byte
+is rejected as unmapped. `RandomStateFrame` passes fresh kernel replay, using
+only standard axioms. Active recording/steering execution is still outstanding;
+its actual copy branch reaches REP MOVSB, the next private ISA extension.
+
+The draft `RandomReturnContract` is now named in `TrustBase.lean`, together with
+its physical `RandomReady` and write footprint. It promises an actual service
+return, preserved physical provider/coverage/BH resources and IF, but no selected
+random value. It is an explicit unproved hypothesis, not an asserted axiom,
+and no insertion headline uses it yet. Its full entry-domain witness and
+active-recording tests remain due. Recorded-input agreement remains a separate
+open safety premise; there is still no full insertion theorem or export claim.

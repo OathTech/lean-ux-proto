@@ -9,6 +9,7 @@ import LookupProjection
 import AllowedipsProjection
 import AllowedipsSelection
 import AllowedipsWords
+import RandomState
 
 /-! Named trust surface for the pinned lookup proof, under construction.
     These are explicit hypotheses, not globally asserted facts. No declaration
@@ -620,5 +621,74 @@ def Pre_allowedips (c : AllowedipsRelation.Config) (coverage : KcovLayout)
 behavior and agreement with supplied random draws are separate obligations. -/
 def IndexInsertDecoderAgreement (fetch : Int64 → Option Decoded) : Prop :=
   ∀ pc instruction, IndexInsertImage.Insert.fetch pc=some instruction → fetch pc=some instruction
+
+/-- Read locations of instrumentation in the random call's unchanged BH
+phase. Pending-work words and the insertion heap do not belong here. -/
+def RandomMetadata (coverage : KcovLayout) (preempt : BitVec 32) (a : BitVec 64) : Prop :=
+  InRange currentTaskAddress 8 a ∨ InRange preemptCountAddress 4 a ∨
+  (LookupSoftRead preempt ∧ InRange (coverage.task+0x704) 4 a) ∨
+  (LookupModeRead coverage preempt ∧ InRange (coverage.task+0x6e0) 4 a) ∨
+  (AllowedipsCoverageNeeded coverage preempt ∧
+    (InRange (coverage.task+0x6e4) 4 a ∨ InRange (coverage.task+0x6e8) 8 a))
+
+def RandomBuffer (coverage : KcovLayout) (preempt : BitVec 32) (a : BitVec 64) : Prop :=
+  AllowedipsCoverageNeeded coverage preempt ∧ KcovStorageBytes coverage a
+
+def RandomRecordingActive (coverage : KcovLayout) (preempt : BitVec 32) : Bool :=
+  @decide (AllowedipsCoverageNeeded coverage preempt) (by
+    unfold AllowedipsCoverageNeeded LookupModeRead
+    infer_instance)
+
+/-- A bounded physical stack reservation, not an instruction/draw budget.
+The live range also protects the service return word. -/
+def RandomStack (s : MachineState) : BitVec 64 → Prop :=
+  InRange (s.data.regs.rsp.toBitVec-1024) 1024
+def RandomLiveStack (s : MachineState) : BitVec 64 → Prop :=
+  InRange (s.data.regs.rsp.toBitVec-1024) 1032
+
+/-- Current initialized provider state, recording graph and physical call
+resources. This contains no World, source result or future execution premise.
+The entry theorem must additionally separate these private writes from its
+own represented objects and saved caller frame. -/
+structure RandomReady (privateState : RandomProvider.Config) (coverage : KcovLayout)
+    (preempt : BitVec 32) (s : MachineState) : Prop where
+  coverageState : AllowedipsCoverageAt coverage preempt s.data.dmem
+  preemptState : load32 s.data.dmem preemptCountAddress=some preempt
+  capacity : AllowedipsCoverageNeeded coverage preempt → 0<coverage.capacity.toNat
+  privateCheck : RandomProvider.check privateState coverage.task.toNat
+    (RandomRecordingActive coverage preempt) s.data.dmem=.ok ()
+  kernelMode : s.data.system.cpl=0
+  forward : s.data.system.bits[10]=false
+  stackMapped : ∀ i<1024, (s.data.dmem.get? (s.data.regs.rsp.toBitVec-1024+.ofNat 64 i)).isSome=true
+  privateApart : ∀ a, RandomProvider.PrivateBytes privateState a →
+    ¬(RandomLiveStack s a ∨ RandomMetadata coverage preempt a ∨ RandomBuffer coverage preempt a)
+  stackApart : ∀ a, RandomLiveStack s a →
+    ¬(RandomMetadata coverage preempt a ∨ RandomBuffer coverage preempt a)
+  bufferApart : ∀ a, RandomBuffer coverage preempt a → ¬RandomMetadata coverage preempt a
+
+def RandomWrites (privateState : RandomProvider.Config) (coverage : KcovLayout)
+    (preempt : BitVec 32) (s : MachineState) (a : BitVec 64) : Prop :=
+  RandomProvider.PrivateBytes privateState a ∨ RandomStack s a ∨
+    (AllowedipsCoverageNeeded coverage preempt ∧ KcovBufferBytes coverage a)
+
+/-- Unproved physical get_random_u32 service specification for the initialized
+provider, including its recording hook. It executes the same fetched ISA as
+the caller and preserves physical private readiness, coverage and BH state.
+It promises no particular random value. Agreement with a recorded input tape
+is a separate safety hypothesis; this declaration cannot produce arbitrary
+requested draws from one fixed machine state. -/
+def RandomReturnContract (fetch : Int64 → Option Decoded) (privateState : RandomProvider.Config) : Prop :=
+  ∀ coverage preempt s returnAddress, s.pc=.ofNat 0xffffffff81375000 →
+    RandomReady privateState coverage preempt s → EntryFrame s returnAddress →
+    Eventually (historyStep fetch) (fun t =>
+      Returned s t.machine returnAddress ∧
+      EqualOutside (RandomWrites privateState coverage preempt s) s.data.dmem t.machine.data.dmem ∧
+      AllowedipsCoverageAt coverage preempt t.machine.data.dmem ∧
+      load32 t.machine.data.dmem preemptCountAddress=some preempt ∧
+      RandomProvider.check privateState coverage.task.toNat
+        (RandomRecordingActive coverage preempt) t.machine.data.dmem=.ok () ∧
+      t.machine.data.system.bits[9]=s.data.system.bits[9] ∧
+      (∀ point ∈ t.history.dropLast, IndexInsertImage.Insert.fetch point.pc=none))
+      ⟨s,[s]⟩
 
 end Binary.TrustBase
