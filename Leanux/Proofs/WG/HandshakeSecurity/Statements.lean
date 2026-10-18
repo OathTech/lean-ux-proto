@@ -1,5 +1,5 @@
 import Leanux.Proofs.WG.HandshakeSecurity.ResponderPriorConfirmation
-import Leanux.Proofs.WG.HandshakeSecurity.ResponderDriverReceive
+import Leanux.Proofs.WG.HandshakeSecurity.ResponderDriverControlFrames
 import Leanux.Proofs.WG.HandshakeSecurity.ResponderDeviceFrames
 import Leanux.Proofs.WG.HandshakeSecurity.ResponderDeferred
 import Leanux.Proofs.WG.HandshakeSecurity.ResponderGlobalFrames
@@ -599,5 +599,48 @@ theorem original_consumer_responder_cut_history (H1 : H1ResponderCurrentEdges)
     Responder.DriverCuts.Preserves
       (TransmitSecurity.Driver.consumeObserved Responder.DriverCuts.hooks pid pkt ep) :=
   Responder.DriverCuts.consume H1 pid pkt ep
+
+/-- The actual shared poll carries responder confirmation through its native
+stack callback, including reply-triggered transmissions. All receipts before a
+later Stop stay checked. The explicit incoming carrier is the remaining
+initialized-runner transport obligation; native AEAD provenance is separate. -/
+theorem original_poll_responder_cut_history (H1 : H1ResponderCurrentEdges)
+    (pid : PeerId) (budget : Nat) :
+    Responder.DriverCuts.ProductPreserves
+      (TransmitSecurity.Driver.nativePollObserved Responder.DriverCuts.hooks pid budget) :=
+  Responder.DriverCuts.native_poll H1 pid budget
+
+/-- The committed native scheduler carries responder authorization through
+handshake, encrypt, decrypt and transmit workers and their NAPI callbacks in
+one shared journal, including receipts before Stop. Copied consistency trials
+add no committed receipts. Initialization and native authentication linkage
+remain separate obligations; the carrier and named H1 edge contract are visible. -/
+theorem original_scheduler_responder_cut_history (H1 : H1ResponderCurrentEdges)
+    (stack : Option Worker) :
+    Responder.DriverCuts.ProductPreserves
+      (TransmitSecurity.Driver.scheduleObserved Responder.DriverCuts.hooks stack) :=
+  Responder.DriverCuts.schedule H1 stack
+
+/-- Actual timer passes carry responder authorization through keepalive staging,
+send and clear work, and the shared native scheduler. Both concrete and
+placeholder timing modes preserve checked receipts before Stop. The incoming
+carrier remains explicit until initialized outer-driver transport closes. -/
+theorem original_timer_pass_responder_cut_history (H1 : H1ResponderCurrentEdges)
+    (j : UInt64) :
+    Responder.DriverCuts.ProductPreserves
+      (TransmitSecurity.Driver.timersObserved Responder.DriverCuts.hooks j) ∧
+    Responder.DriverCuts.ProductPreserves
+      (TransmitSecurity.Driver.placeholderTimersObserved Responder.DriverCuts.hooks j) :=
+  ⟨Responder.DriverCuts.timers H1 j, Responder.DriverCuts.placeholder_timers H1 j⟩
+
+/-- Native device configuration carries responder authorization through peer
+creation, deleting releases and configuration-triggered staging in the same
+journal. Saved peer writes use their actual reads. The configured/current
+incoming carrier remains explicit pending outer initialized-driver closure. -/
+theorem original_configuration_responder_cut_history (H1 : H1ResponderCurrentEdges)
+    (attrs : DeviceAttrs) :
+    Responder.DriverCuts.Preserves
+      (TransmitSecurity.Driver.configDevice Responder.DriverCuts.hooks attrs) :=
+  Responder.DriverCuts.config_device H1 attrs
 
 end Leanux.Proofs.WG.HandshakeSecurity

@@ -1,0 +1,121 @@
+import Leanux.Proofs.WG.TransmitSecurity.DriverHistoryBase
+
+namespace Leanux.Proofs.WG.TransmitSecurity.Driver
+open Leanux Leanux.WG Leanux.Proofs.Logged Lifetimes Queues
+open Leanux.Proofs.WG.Origins.HandshakeSources
+variable {E : Type} {Safe : List E → Prop} {g : Hooks E}
+
+set_option maxHeartbeats 600000
+set_option pp.structureInstances false
+
+theorem staging_history (h : HooksHistorySafe Safe g) (pid : PeerId) :
+    StateHistorySafe Safe (stagingObserved g pid) := by
+  unfold stagingObserved
+  repeat' first
+    | (driver_history_head Hooks.selection; exact h.selection _)
+    | (driver_history_head Hooks.reserve; exact h.reserve _)
+    | (driver_history_head Hooks.allocate; exact h.allocate _)
+    | (driver_history_head Hooks.create; exact h.create _ _)
+    | (driver_history_head Hooks.session; exact h.session _)
+    | (driver_history_head Hooks.confirmation; exact h.confirmation _ _)
+    | driver_state_history_step
+
+theorem keepalive_history (h : HooksHistorySafe Safe g) (pid : PeerId) :
+    StateHistorySafe Safe (keepaliveObserved g pid) := by
+  unfold keepaliveObserved
+  repeat' first
+    | (driver_history_head stagingObserved; exact staging_history h _)
+    | (driver_history_head Hooks.session; exact h.session _)
+    | (driver_history_head Hooks.confirmation; exact h.confirmation _ _)
+    | driver_state_history_step
+
+theorem transmit_history (h : HooksHistorySafe Safe g) (family addr : Nat) (packets : List Packet) (mtu : Nat) :
+    StateHistorySafe Safe (transmitObserved g family addr packets mtu) := by
+  unfold transmitObserved
+  repeat' first
+    | (driver_history_head Hooks.front; exact h.front _ _ _ _)
+    | (driver_history_head stagingObserved; exact staging_history h _)
+    | (driver_history_head Hooks.session; exact h.session _)
+    | (driver_history_head Hooks.confirmation; exact h.confirmation _ _)
+    | driver_state_history_step
+
+theorem expired_history (h : HooksHistorySafe Safe g) (pid : PeerId) :
+    StateHistorySafe Safe (expiredKeepaliveObserved g pid) := by
+  unfold expiredKeepaliveObserved
+  repeat' first
+    | (driver_history_head keepaliveObserved; exact keepalive_history h _)
+    | (driver_history_head Hooks.session; exact h.session _)
+    | (driver_history_head Hooks.confirmation; exact h.confirmation _ _)
+    | driver_state_history_step
+
+theorem persistent_history (h : HooksHistorySafe Safe g) (pid : PeerId) :
+    StateHistorySafe Safe (persistentObserved g pid) := by
+  unfold persistentObserved
+  repeat' first
+    | (driver_history_head keepaliveObserved; exact keepalive_history h _)
+    | (driver_history_head Hooks.session; exact h.session _)
+    | (driver_history_head Hooks.confirmation; exact h.confirmation _ _)
+    | driver_state_history_step
+
+theorem timer_history (h : HooksHistorySafe Safe g) (pid : PeerId) (t : PeerTimer) :
+    StateHistorySafe Safe (timerObserved g pid t) := by
+  cases t <;> unfold timerObserved
+  all_goals first
+    | exact expired_history h _
+    | exact persistent_history h _
+    | exact History.state_lift _
+
+theorem response_history (h : HooksHistorySafe Safe g) (pid : PeerId) :
+    StateHistorySafe Safe (responseWith (handshakeOps g) pid) := by
+  unfold responseWith
+  dsimp only [handshakeOps]
+  repeat' first
+    | (driver_history_head Hooks.session; exact h.session _)
+    | (driver_history_head Hooks.confirmation; exact h.confirmation _ _)
+    | driver_state_history_step
+
+theorem afterMac_history (h : HooksHistorySafe Safe g) (msg : List UInt8) (src : SkbSource)
+    (loaded : Bool) (mac : MacState) :
+    StateHistorySafe Safe (afterMacWith (handshakeOps g) msg src loaded mac) := by
+  unfold afterMacWith
+  dsimp only [handshakeOps]
+  repeat' first
+    | (driver_history_head responseWith; exact response_history h _)
+    | (driver_history_head keepaliveObserved; exact keepalive_history h _)
+    | (driver_history_head Hooks.session; exact h.session _)
+    | (driver_history_head Hooks.confirmation; exact h.confirmation _ _)
+    | driver_state_history_step
+
+theorem reception_history (h : HooksHistorySafe Safe g) (msg : List UInt8) (src : SkbSource) :
+    StateHistorySafe Safe (receptionWith (handshakeOps g) msg src) := by
+  unfold receptionWith
+  dsimp only [handshakeOps]
+  repeat' first
+    | (driver_history_head afterMacWith; exact afterMac_history h _ _ _ _)
+    | (driver_history_head Hooks.session; exact h.session _)
+    | (driver_history_head Hooks.confirmation; exact h.confirmation _ _)
+    | driver_state_history_step
+
+theorem handshake_history (h : HooksHistorySafe Safe g) :
+    StateHistorySafe Safe (handshakeObserved g) := by
+  exact h.handshake _ _ h.session (keepalive_history h)
+
+theorem receiveTail_history (h : HooksHistorySafe Safe g) (pid : PeerId) (pkt : RxPacket) (confirmed : Bool) :
+    StateHistorySafe Safe (receiveTailObserved g pid pkt confirmed) := by
+  unfold receiveTailObserved
+  repeat' first
+    | (driver_history_head stagingObserved; exact staging_history h _)
+    | (driver_history_head Hooks.session; exact h.session _)
+    | (driver_history_head Hooks.confirmation; exact h.confirmation _ _)
+    | driver_state_history_step
+
+theorem consume_history (h : HooksHistorySafe Safe g) (pid : PeerId) (pkt : RxPacket) (ep : Endpoint) :
+    StateHistorySafe Safe (consumeObserved g pid pkt ep) := by
+  unfold consumeObserved
+  repeat' first
+    | (driver_history_head receiveTailObserved; exact receiveTail_history h _ _ _)
+    | (driver_history_head Hooks.session; exact h.session _)
+    | (driver_history_head Hooks.confirmation; exact h.confirmation _ _)
+    | driver_state_history_step
+
+end Leanux.Proofs.WG.TransmitSecurity.Driver

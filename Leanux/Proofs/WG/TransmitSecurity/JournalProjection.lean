@@ -72,7 +72,8 @@ theorem encrypt_projects (item : Option (List SkbId)) :
 
 theorem transmit_projects (pid : PeerId) :
     ProjectsPrefix nonce? id (transmit pid) (liftPrefix (liftWG (txStep pid))) :=
-  projectsPrefix_focus_other Event.disposition disposition? nonce? (fun _ => rfl) (TxDisposition.step_erases pid)
+  projectsPrefix_focus_other completionEvent completion? nonce?
+    (fun e => by cases e <;> rfl) (Completion.step_erases pid)
 
 theorem selection_projects (pid : PeerId) :
     StateProjectsPrefix nonce? id (selection pid)
@@ -91,6 +92,11 @@ theorem session_projects (pid : PeerId) :
     (HandshakeSecurity.Responder.DriverCuts.session_erases pid wg)
 
 theorem hooks_projects : Driver.HooksProjects nonce? hooks Driver.nonceHooks where
+  handshake := AuthenticatedEffects.HandshakeWorker.observed_projects Event.handshake handshake? nonce?
+    (fun _ => rfl)
+  sendWorker := projectsPrefix_lift nonce? _
+  prepare := projectsPrefix_lift nonce? _
+  counterCheck := fun _ _ => (Driver.Projection.state_lift nonce? _).liftWGObserver nonce? id
   timerSelected := fun d j pid t we =>
     AuthenticatedEffects.TimerDispatch.scope_projects Event.timerSelected d j pid t we nonce?
       (fun _ => rfl) id (projectsPrefix_pure nonce? id ())

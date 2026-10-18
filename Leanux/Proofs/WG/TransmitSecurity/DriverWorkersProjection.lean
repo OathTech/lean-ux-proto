@@ -15,6 +15,8 @@ theorem encryptTail_projects (h : HooksProjects ρ g a) (item : Option (List Skb
     ProjectsPrefix ρ id (encryptTailObserved g item) (encryptTailObserved a item) := by
   unfold encryptTailObserved workerIterPrefix
   repeat' first
+    | (maintenance_head Hooks.prepare; exact h.prepare)
+    | (maintenance_head Hooks.sendWorker; exact h.sendWorker)
     | (maintenance_head Hooks.encrypt; exact h.encrypt _)
     | (maintenance_head reschedObserved; exact resched_projects ρ _ _)
     | driver_product_step ρ
@@ -23,6 +25,8 @@ theorem encryptIter_projects (h : HooksProjects ρ g a) :
     ProjectsPrefix ρ id (encryptIterObserved g) (encryptIterObserved a) := by
   unfold encryptIterObserved
   repeat' first
+    | (maintenance_head Hooks.prepare; exact h.prepare)
+    | (maintenance_head Hooks.sendWorker; exact h.sendWorker)
     | (maintenance_head Hooks.poll; exact h.poll)
     | (maintenance_head softirqObserved; exact softirq_projects h)
     | (maintenance_head encryptTailObserved; exact encryptTail_projects h _)
@@ -32,6 +36,8 @@ theorem txIter_projects (h : HooksProjects ρ g a) (pid : PeerId) :
     ProjectsPrefix ρ id (txIterObserved g pid) (txIterObserved a pid) := by
   unfold txIterObserved workerIterPrefix
   repeat' first
+    | (maintenance_head Hooks.prepare; exact h.prepare)
+    | (maintenance_head Hooks.sendWorker; exact h.sendWorker)
     | (maintenance_head Hooks.transmit; exact h.transmit _)
     | (maintenance_head reschedObserved; exact resched_projects ρ _ _)
     | driver_product_step ρ
@@ -40,6 +46,8 @@ theorem decryptStep_projects (h : HooksProjects ρ g a) :
     ProjectsPrefix ρ id (decryptStepObserved g) (decryptStepObserved a) := by
   unfold decryptStepObserved RxWorkers.decryptWith
   repeat' first
+    | (maintenance_head Hooks.prepare; exact h.prepare)
+    | (maintenance_head Hooks.sendWorker; exact h.sendWorker)
     | (maintenance_head softirqObserved; exact softirq_projects h)
     | (maintenance_head irqExitObserved; exact irqExit_projects h)
     | driver_product_step ρ
@@ -48,6 +56,8 @@ theorem decryptIter_projects (h : HooksProjects ρ g a) :
     ProjectsPrefix ρ id (decryptIterObserved g) (decryptIterObserved a) := by
   unfold decryptIterObserved workerIterPrefix
   repeat' first
+    | (maintenance_head Hooks.prepare; exact h.prepare)
+    | (maintenance_head Hooks.sendWorker; exact h.sendWorker)
     | (maintenance_head decryptStepObserved; exact decryptStep_projects h)
     | (maintenance_head reschedObserved; exact resched_projects ρ _ _)
     | driver_product_step ρ
@@ -56,6 +66,8 @@ theorem receiveIter_projects (h : HooksProjects ρ g a) :
     ProjectsPrefix ρ id (receiveIterObserved g) (receiveIterObserved a) := by
   unfold receiveIterObserved workerIterPrefix
   repeat' first
+    | (maintenance_head Hooks.prepare; exact h.prepare)
+    | (maintenance_head Hooks.sendWorker; exact h.sendWorker)
     | (maintenance_head handshakeObserved; exact (handshake_projects h).liftWGObserver ρ id)
     | driver_product_step ρ
 
@@ -63,6 +75,8 @@ theorem cryptAhead_projects (h : HooksProjects ρ g a) (pid : PeerId) :
     ProjectsPrefix ρ id (cryptAheadObserved g pid) (cryptAheadObserved a pid) := by
   unfold cryptAheadObserved
   repeat' first
+    | (maintenance_head Hooks.prepare; exact h.prepare)
+    | (maintenance_head Hooks.sendWorker; exact h.sendWorker)
     | (maintenance_head encryptIterObserved; exact encryptIter_projects h)
     | driver_product_step ρ
 
@@ -70,6 +84,8 @@ theorem iteration_projects (h : HooksProjects ρ g a) (act : Activation) :
     ProjectsPrefix ρ id (iterationObserved g act) (iterationObserved a act) := by
   unfold iterationObserved
   repeat' first
+    | (maintenance_head Hooks.prepare; exact h.prepare)
+    | (maintenance_head Hooks.sendWorker; exact h.sendWorker)
     | (maintenance_head encryptIterObserved; exact encryptIter_projects h)
     | (maintenance_head decryptIterObserved; exact decryptIter_projects h)
     | (maintenance_head receiveIterObserved; exact receiveIter_projects h)
@@ -82,6 +98,8 @@ private theorem schedulerRun (h : HooksProjects ρ g a) (act : Activation) :
       (SourceScheduler.run (iterationObserved a) act) := by
   unfold SourceScheduler.run
   repeat' first
+    | (maintenance_head Hooks.prepare; exact h.prepare)
+    | (maintenance_head Hooks.sendWorker; exact h.sendWorker)
     | (maintenance_head iterationObserved; exact iteration_projects h _)
     | driver_product_step ρ
 
@@ -90,6 +108,8 @@ private theorem schedulerDispatch (h : HooksProjects ρ g a) (worker : Worker) :
       (SourceScheduler.dispatch (iterationObserved a) worker) := by
   unfold SourceScheduler.dispatch
   repeat' first
+    | (maintenance_head Hooks.prepare; exact h.prepare)
+    | (maintenance_head Hooks.sendWorker; exact h.sendWorker)
     | (maintenance_head SourceScheduler.run; exact schedulerRun h _)
     | driver_product_step ρ
 
@@ -97,6 +117,8 @@ theorem schedule_projects (h : HooksProjects ρ g a) (stack : Option Worker) :
     ProjectsPrefix ρ id (scheduleObserved g stack) (scheduleObserved a stack) := by
   unfold scheduleObserved SourceScheduler.schedule
   repeat' first
+    | (maintenance_head Hooks.prepare; exact h.prepare)
+    | (maintenance_head Hooks.sendWorker; exact h.sendWorker)
     | (maintenance_head SourceScheduler.run; exact schedulerRun h _)
     | (maintenance_head SourceScheduler.dispatch; exact schedulerDispatch h _)
     | (maintenance_head softirqObserved; exact softirq_projects h)

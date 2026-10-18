@@ -61,9 +61,15 @@ theorem encrypt (item : Option (List SkbId)) :
 
 theorem transmit (pid : PeerId) :
     ProjectsPrefix responder? id (Journal.transmit pid) (liftPrefix (liftWG (txStep pid))) :=
-  projectsPrefix_focus_other Event.disposition disposition? responder? (fun _ => rfl) (TxDisposition.step_erases pid)
+  projectsPrefix_focus_other completionEvent completion? responder?
+    (fun e => by cases e <;> rfl) (Completion.step_erases pid)
 
 theorem hooks : Driver.HooksProjects responder? Journal.hooks DriverCuts.hooks where
+  handshake := AuthenticatedEffects.HandshakeWorker.observed_projects Event.handshake handshake? responder?
+    (fun _ => rfl)
+  sendWorker := projectsPrefix_lift responder? _
+  prepare := projectsPrefix_lift responder? _
+  counterCheck := fun _ _ => (Driver.Projection.state_lift responder? _).liftWGObserver responder? id
   timerSelected := fun d j pid t we =>
     AuthenticatedEffects.TimerDispatch.scope_projects Event.timerSelected d j pid t we responder?
       (fun _ => rfl) id (projectsPrefix_pure responder? id ())

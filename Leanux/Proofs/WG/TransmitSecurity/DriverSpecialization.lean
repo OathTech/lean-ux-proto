@@ -68,7 +68,8 @@ theorem nonce_handshakeOps_eq : handshakeOps nonceHooks = Nonce.Handshake.ops :=
   all_goals rfl
 
 theorem nonce_handshakeObserved_eq : handshakeObserved nonceHooks = Nonce.Handshake.observed := by
-  unfold handshakeObserved Nonce.Handshake.observed
+  change Origins.HandshakeSources.stepWith (handshakeOps nonceHooks) = Nonce.Handshake.observed
+  unfold Nonce.Handshake.observed
   simp only [nonce_handshakeOps_eq]
   all_goals rfl
 

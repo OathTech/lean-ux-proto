@@ -16,7 +16,7 @@ theorem inject_projects (h : HooksProjects ρ g a) (family port : Nat)
 theorem afterBatch_projects (h : HooksProjects ρ g a) :
     ProjectsPrefix ρ id (afterBatchObserved g) (afterBatchObserved a) :=
   TrafficSource.afterBatch_projects ρ _ _ _ _ _ _ _ _ _ _ (crypt_projects h)
-    (sendWorkers_projects h) (projectsPrefix_lift ρ _) (schedule_projects h)
+    (sendWorkers_projects h) h.sendWorker (schedule_projects h)
     (fun _ _ => projectsPrefix_lift ρ _)
 
 theorem flood_projects (h : HooksProjects ρ g a) (count port family : Nat)

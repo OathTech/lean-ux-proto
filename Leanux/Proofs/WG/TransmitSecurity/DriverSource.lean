@@ -1,5 +1,7 @@
 import Leanux.Proofs.WG.TransmitSecurity.NonceInitialized
 import Leanux.Proofs.WG.HandshakeSecurity.ResponderStagingSource
+import Leanux.Proofs.WG.AuthenticatedEffects.HandshakeWorkerSource
+import Leanux.Proofs.WG.AuthenticatedEffects.IndexedPollSource
 
 /-! The nonce source driver parameterized at native TX boundaries. Its nonce
 specialization is proved equal to the initialized observer in the companion
@@ -12,6 +14,12 @@ open Leanux.Proofs.WG.Origins.HandshakeSources
 open HandshakeSecurity.Confirmation.Poll
 
 structure Hooks (E : Type) where
+  handshake : (PeerId → WGPrefix E Bool) → (PeerId → WGPrefix E Unit) → WGPrefix E Bool :=
+    AuthenticatedEffects.HandshakeWorker.source
+  sendWorker : PrefixM E Unit := liftPrefix Env.runOneSendWorker
+  prepare : PrefixM E (Option PeerId) := liftPrefix (liftWG RxWorkers.prepareSource)
+  counterCheck : SkbId → RxPacket → PrefixM E Bool :=
+    fun _ pkt => liftWGObserver (liftWGPrefix (counterValidate pkt.keypair pkt.nonce))
   timerSelected : Device → UInt64 → PeerId → PeerTimer → WheelEntry → PrefixM E Unit
   selection : PeerId → WGPrefix E (Option (Peer × Option KeypairId))
   confirmation : PeerId → KeypairId → WGPrefix E Bool
@@ -99,7 +107,8 @@ def handshakeOps (hooks : Hooks E) : Ops (WGPrefix E) where
   put := fun peer => liftWGPrefix (peerPut peer)
   cookieConsume := fun msg => liftWGPrefix (cookieMessageConsume msg)
 
-def handshakeObserved (hooks : Hooks E) : WGPrefix E Bool := stepWith (handshakeOps hooks)
+def handshakeObserved (hooks : Hooks E) : WGPrefix E Bool :=
+  hooks.handshake hooks.session (keepaliveObserved hooks)
 
 
 def receiveTailObserved (hooks : Hooks E) (pid : PeerId) (pkt : RxPacket) (confirmed : Bool) :
@@ -119,8 +128,8 @@ def consumeObserved (hooks : Hooks E) (pid : PeerId) (pkt : RxPacket) (ep : Endp
 
 def pollObserved (hooks : Hooks E) (pid : PeerId) (budget : Nat)
     (toStack : List (List UInt8) → PrefixM E Unit) : PrefixM E Nat :=
-  sourceWith (fun a => liftWGObserver (liftWGPrefix a))
-    (fun pkt => liftWGObserver (liftWGPrefix (counterValidate pkt.keypair pkt.nonce)))
+  AuthenticatedEffects.IndexedPoll.sourceWith (fun a => liftWGObserver (liftWGPrefix a))
+    hooks.counterCheck
     (fun peer pkt ep => liftWGObserver ((consumeObserved hooks) peer pkt ep))
     (napiGroReceivePrefix toStack) (napiGroFlushAllPrefix toStack) pid budget
 
@@ -161,7 +170,7 @@ def txIterObserved (hooks : Hooks E) (pid : PeerId) : PrefixM E IterResult :=
     (reschedObserved .txWorker .txNeedResched)
 
 def decryptStepObserved (hooks : Hooks E) : PrefixM E Bool :=
-  RxWorkers.decryptWith (liftPrefix (liftWG RxWorkers.prepareSource))
+  RxWorkers.decryptWith hooks.prepare
     (fun pid => liftPrefix (liftWG (peerPut (some pid)))) (softirqObserved hooks) (irqExitObserved hooks)
 
 def decryptIterObserved (hooks : Hooks E) : PrefixM E IterResult :=
@@ -215,7 +224,7 @@ def sendWorkersObserved (hooks : Hooks E) : PrefixM E Unit := do
   liftPrefix (modifyWG fun w => {w with queuedThisCall := []})
   for _ in [0:(← liftPrefix recordBudget)] do
     if (← liftPrefix (liftWG getDev)).sendWorkQueue.isEmpty then liftPrefix Env.deliverSent; return
-    liftPrefix Env.runOneSendWorker
+    hooks.sendWorker
     (scheduleObserved hooks) none
   liftPrefix (budgetExhausted "the send work queue")
 
@@ -278,7 +287,7 @@ def timersObserved (hooks : Hooks E) (jPass : UInt64) : PrefixM E Bool := do
         liftPrefix (Env.requireStepComplete b)
         step := none
       if !fired then break
-      else if site == startOf .sendWorker && !d.sendWorkQueue.isEmpty then liftPrefix Env.runOneSendWorker
+      else if site == startOf .sendWorker && !d.sendWorkQueue.isEmpty then hooks.sendWorker
       else
         (cryptObserved hooks)
         if (← liftPrefix Env.peekNextSite) == some site then break
@@ -352,7 +361,7 @@ def injectObserved (hooks : Hooks E) (family port : Nat) (msg : List UInt8) (tos
 
 def afterBatchObserved (hooks : Hooks E) : PrefixM E Unit :=
   TrafficSource.afterBatchWith (cryptObserved hooks) (sendWorkersObserved hooks)
-    (liftPrefix Env.runOneSendWorker) (fun stack => (scheduleObserved hooks) stack) drainObserved
+    (hooks.sendWorker) (fun stack => (scheduleObserved hooks) stack) drainObserved
 
 def floodObserved (hooks : Hooks E) (count port family : Nat) (messages : List (List UInt8)) : PrefixM E Int :=
   TrafficSource.floodWith receiveEntryObserved (inlinePollObserved hooks) (afterBatchObserved hooks) drainObserved count port family messages

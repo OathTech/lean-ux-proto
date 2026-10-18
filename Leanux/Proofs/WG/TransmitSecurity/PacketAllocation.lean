@@ -34,7 +34,7 @@ theorem records (packets : List DataPacket) {w v : WGWorld} {d : Device}
       subst found
       refine ⟨d.nextSkb,rfl,?_⟩
       rw [kept d.nextSkb (Nat.lt_succ_self d.nextSkb)]
-      simp [txPackets,Packets.update,device,Std.TreeMap.getElem?_insert]
+      simp [txPackets,Packets.update,device]
     | succ n =>
       obtain ⟨id,atItem,resident⟩ := ih hd rest n found (by simpa using atIndex)
       exact ⟨id,by simpa using atItem,resident⟩

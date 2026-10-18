@@ -100,13 +100,7 @@ theorem reception_projects (h : HooksProjects ρ g a) (msg : List UInt8) (src : 
 
 theorem handshake_projects (h : HooksProjects ρ g a) :
     StateProjectsPrefix ρ id (handshakeObserved g) (handshakeObserved a) := by
-  unfold handshakeObserved stepWith
-  dsimp only [handshakeOps]
-  repeat' first
-    | (maintenance_head receptionWith; exact reception_projects h _ _)
-    | (maintenance_head Hooks.session; exact h.session _)
-    | (maintenance_head Hooks.confirmation; exact h.confirmation _ _)
-    | driver_state_step ρ
+  exact h.handshake _ _ _ _ h.session (keepalive_projects h)
 
 theorem receiveTail_projects (h : HooksProjects ρ g a) (pid : PeerId) (pkt : RxPacket) (confirmed : Bool) :
     StateProjectsPrefix ρ id (receiveTailObserved g pid pkt confirmed) (receiveTailObserved a pid pkt confirmed) := by

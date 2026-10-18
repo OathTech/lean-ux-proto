@@ -1,8 +1,10 @@
 import Leanux.Proofs.WG.TransmitSecurity.DriverOuterProjection
 import Leanux.Proofs.WG.HandshakeSecurity.ResponderDriverCuts
 import Leanux.Proofs.WG.AuthenticatedEffects.TimerDispatchScope
+import Leanux.Proofs.WG.AuthenticatedEffects.HandshakeWorkerObserved
 import Leanux.Proofs.WG.TransmitSecurity.NativeAdapter
 import Leanux.Proofs.WG.TransmitSecurity.WorkerEncryption
+import Leanux.Proofs.WG.TransmitSecurity.CompletionReceipts
 import Leanux.Proofs.WG.Queues.TxDisposition
 import Leanux.Proofs.Logged.NativeCapture
 
@@ -15,6 +17,7 @@ open Leanux Leanux.WG Leanux.Proofs.Logged Lifetimes Queues Packets
 abbrev ResponderEvent := HandshakeSecurity.Responder.DriverCuts.Event
 
 inductive Event where
+  | handshake (value : AuthenticatedEffects.HandshakeCausal.Event)
   | timerSelected (value : AuthenticatedEffects.TimerDispatch.Selection)
   | responder (value : ResponderEvent)
   | nonce (value : Nonce.Allocation)
@@ -26,6 +29,11 @@ inductive Event where
   | encrypted (value : WorkerEncryption.Receipt)
   | encryptionReturn (item : Option (List SkbId)) (run : RunWitness Bool)
   | disposition (value : TxDisposition.Event)
+  | socket (value : Completion.SocketReceipt)
+
+def handshake? : Event → Option AuthenticatedEffects.HandshakeCausal.Event
+  | .handshake value => some value
+  | _ => none
 
 def responder? : Event → Option ResponderEvent | .responder value => some value | _ => none
 
@@ -34,6 +42,15 @@ def nonce? : Event → Option Nonce.Allocation | .nonce value => some value | _ 
 def encryption? : Event → Option WorkerEncryption.Receipt | .encrypted value => some value | _ => none
 
 def disposition? : Event → Option TxDisposition.Event | .disposition value => some value | _ => none
+
+def completion? : Event → Option Completion.Event
+  | .disposition value => some (.disposition value)
+  | .socket value => some (.socket value)
+  | _ => none
+
+def completionEvent : Completion.Event → Event
+  | .disposition value => .disposition value
+  | .socket value => .socket value
 
 def ring? : Event → Option TxRing.Event
   | .ring value => some value
@@ -68,9 +85,10 @@ def encrypt (item : Option (List SkbId)) : PrefixM Event Bool :=
   receiptObserved (focusPrefix Event.encrypted encryption? (WorkerEncryption.tail item)) (.encryptionReturn item)
 
 def transmit (pid : PeerId) : PrefixM Event Bool :=
-  focusPrefix Event.disposition disposition? (TxDisposition.step pid)
+  focusPrefix completionEvent completion? (Completion.step pid)
 
 def hooks : Driver.Hooks Event where
+  handshake := AuthenticatedEffects.HandshakeWorker.observed Event.handshake handshake?
   timerSelected := fun d j pid t we => AuthenticatedEffects.TimerDispatch.scope Event.timerSelected d j pid t we (pure ())
   selection := selection
   confirmation := confirmation

@@ -1,4 +1,10 @@
-import Leanux.Proofs.WG.RetirementSecurity.RxCompletionHolders
+import Leanux.Proofs.WG.RetirementSecurity.OccurrenceWorkers
+import Leanux.Proofs.WG.RetirementSecurity.RxPollOccurrences
+import Leanux.Proofs.WG.RetirementSecurity.ReceiveEntryOwnership
+import Leanux.Proofs.WG.RetirementSecurity.RxPeerFunding
+import Leanux.Proofs.WG.RetirementSecurity.StackOwnership
+import Leanux.Proofs.WG.RetirementSecurity.RemovalPeerFunding
+import Leanux.Proofs.WG.RetirementSecurity.DriverOwnership
 import Leanux.Proofs.WG.RetirementSecurity.Consequences
 import Leanux.Proofs.WG.RetirementSecurity.Clear
 import Leanux.Proofs.WG.RetirementSecurity.Payments
@@ -861,5 +867,233 @@ theorem original_receive_completion_key_holder_account (account : HolderAccount 
     (endpoint : Endpoint) (a b : Ambient)
     (run : ((consumeDataDone pid pkt endpoint).run w).run a = .ok ((result,v),b)) :
     HolderAccount temporary v := account.receive_done bounded compatible endpoint a b run
+
+/-- The shared campaign driver's actual staged-send cut preserves key
+reference accounting and exclusive physical/encryption occurrences. Exact
+projection recovers the native run; it is not used to infer an event order.
+The named incoming inventories, frontier and affiliation remain visible
+until whole initialized driver transport is proved. -/
+theorem shared_driver_staging_ownership {E : Type}
+    {ρ : E → Option TransmitSecurity.Nonce.Allocation}
+    {hooks : TransmitSecurity.Driver.Hooks E}
+    (projects : TransmitSecurity.Driver.HooksProjects ρ hooks TransmitSecurity.Driver.nonceHooks)
+    (before : DriverOwnership.Boundary temporary locals active w)
+    (bounded : Packets.Inv w) (compatible : Queues.RxCredits.CurrentCompatible pid w)
+    (a b : Ambient) (h : List E)
+    (run : (Leanux.Proofs.Logged.runWGPrefix
+      (TransmitSecurity.Driver.stagingObserved hooks pid) w a h).1 = .ok (((),v),b)) :
+    DriverOwnership.Boundary temporary locals active v :=
+  DriverOwnership.staging projects before bounded compatible a b h run
+
+/-- Original receive completion cannot duplicate a TX packet or discard
+pending encryption ownership. Confirmation's conditional staged send adds
+only freshly allocated occurrences; endpoint, timer and lookup bookkeeping
+retain all existing occurrences. The packet frontier and incoming physical
+inventories are explicit until initialized driver transport is complete. -/
+theorem original_receive_completion_tx_occurrences (before : TxOccurrences locals active w)
+    (bounded : Packets.Inv w) (pid : PeerId) (pkt : RxPacket) (ep : Endpoint) (a b : Ambient)
+    (run : ((consumeDataDone pid pkt ep).run w).run a = .ok ((result,v),b)) :
+    TxOccurrences locals active v := receive_done_occurrences before bounded pid pkt ep a b run
+
+/-- The actual TX worker cannot destroy a peer with published key slots
+while paying its queued-batch peer reference: the real durable-holder ledger
+funds that batch separately from its base/caller protection. This discharges
+the previous release-funding premise on completed iterations; idle iterations
+require no release premise. Initialized transport of the named concrete
+accounts and slot protection remains open. -/
+theorem original_tx_worker_peer_funded_key_account (account : HolderAccount temporary w)
+    (inventory : TxInventory locals w)
+    (funded : holders.Funded carriers loans w) (stable : Queues.RxCredits.StableRx carriers w)
+    (anchors : SlotPeerReferences holders loans w) (pid : PeerId) (a b : Ambient)
+    (run : ((txStep pid).run w).run a = .ok ((result,v),b)) : HolderAccount temporary v :=
+  account.tx_step_holders inventory funded stable anchors pid a b run
+
+/-- Native peer unpublication retains the actual key holders and moves its
+base peer reference to the caller's detached loans. Published slots remain
+protected through that source cut; unpublication cannot be mistaken for final
+key destruction. All incoming concrete accounts remain visible. -/
+theorem original_peer_unpublication_accounts (keys : HolderAccount temporary w)
+    (peers : holders.Funded carriers loans w) (stable : Queues.RxCredits.StableRx carriers w)
+    (anchors : SlotPeerReferences holders loans w) (pid : PeerId) (a b : Ambient)
+    (run : ((peerMakeDead pid).run w).run a = .ok (((),v),b)) :
+    HolderAccount temporary v ∧
+      (holders.withoutBase (Queues.RxCredits.BaseRemoval.live holders.base pid)).Funded carriers
+        (Queues.RxCredits.BaseRemoval.detached holders.base pid ++ loans) v ∧
+      Queues.RxCredits.StableRx carriers v ∧
+      SlotPeerReferences (holders.withoutBase (Queues.RxCredits.BaseRemoval.live holders.base pid))
+        (Queues.RxCredits.BaseRemoval.detached holders.base pid ++ loans) v :=
+  make_dead_accounts keys peers stable anchors pid a b run
+
+/-- Every native transmit-entry outcome retains exact key references and
+exclusive physical/encryption occurrences. Destination lookup supplies its
+real temporary peer reference, which selection or the final payment repays;
+staging adds only fresh packet occurrences. Current-key affiliation and the
+packet frontier remain explicit until initialized caller transport. -/
+theorem original_transmit_entry_ownership (keys : HolderAccount temporary w)
+    (inventory : TxInventory locals w) (crypt : TxCryptInventory active w)
+    (bounded : Packets.Inv w) (compatible : Queues.RxCredits.CurrentsCompatible w)
+    (family addr : Nat) (packets : List WG.Packet) (mtu : Nat) (a b : Ambient)
+    (run : ((wgXmit family addr packets mtu).run w).run a = .ok ((result,v),b)) :
+    HolderAccount temporary v ∧ TxInventory locals v ∧ TxCryptInventory active v :=
+  ⟨keys.transmit bounded compatible family addr packets mtu a b run,
+    TransmitOccurrences.transmit ⟨bounded,inventory,crypt⟩ family addr packets mtu a b run⟩
+
+/-- The shared driver's native transmit entry retains its concrete key,
+physical-packet and pending-encryption ownership accounts on every normal
+result. The checked projection supplies the original execution; the native
+lookup supplies payment funding. This is a caller contract, not a claim of
+whole initialized Runner transport. -/
+theorem shared_driver_transmit_entry_ownership {E : Type}
+    {ρ : E → Option TransmitSecurity.Nonce.Allocation}
+    {hooks : TransmitSecurity.Driver.Hooks E}
+    (projects : TransmitSecurity.Driver.HooksProjects ρ hooks TransmitSecurity.Driver.nonceHooks)
+    (before : DriverOwnership.Boundary temporary locals active w)
+    (bounded : Packets.Inv w) (compatible : Queues.RxCredits.CurrentsCompatible w)
+    (family addr : Nat) (packets : List WG.Packet) (mtu : Nat) (a b : Ambient) (h : List E)
+    (run : (Leanux.Proofs.Logged.runWGPrefix
+      (TransmitSecurity.Driver.transmitObserved hooks family addr packets mtu) w a h).1 =
+      .ok ((result,v),b)) : DriverOwnership.Boundary temporary locals active v :=
+  DriverOwnership.transmit_entry projects before bounded compatible family addr packets mtu a b h run
+
+/-- Actual native Stack replies preserve key references and exclusive TX
+packet/encryption ownership, including nested transmit errors and repeated
+callback batches. Campaign 1's allocation witness supplies the packet frontier;
+current-key affiliation is transported by its native lookup/staging contracts.
+These concrete incoming invariants are initialized separately; full Runner
+transport is still required. -/
+theorem original_stack_batch_ownership
+    (before : StackOwnership.Ready temporary locals active w.wg)
+    (packets : List (List UInt8))
+    (run : (packets.forM Env.deliverInner).run w = .ok ((),v)) :
+    StackOwnership.Ready temporary locals active v.wg :=
+  (hoare_iff_run _ _ _).mp (StackOwnership.stackForM_stack packets) w () v before run
+
+/-- The normally empty fixture supplies the actual key, physical-packet,
+pending-encryption and allocation accounts required by native Stack transport.
+This establishes its base case without an assumed ownership invariant. -/
+theorem initialized_stack_ownership (net bare : Bool) :
+    StackOwnership.Ready [] [] [] (Runner.initialWG net bare) := StackOwnership.initial net bare
+
+/-- Original RX dequeue moves exactly the selected packet's queued key
+reference into the poll local. Actual carrier uniqueness and queue counts
+establish that it is detached; no assumed packet-disjointness premise is used.
+Initialized transport of the incoming concrete accounts remains separate. -/
+theorem original_rx_dequeue_accounts {id : SkbId} (keys : HolderAccount temporary w)
+    (carriers : Queues.RxCredits.CarrierState entries loans w)
+    (device : w.dev = some d) (peer : d.peers[pid]? = some p)
+    (peeked : p.rxQueue.peeked = some id) (a b : Ambient)
+    (run : ((Queues.dropRxQueue pid).run w).run a = .ok (((),v),b)) :
+    ∃ allocation, receiveLoan w pid id = some ⟨.receive pid id,allocation⟩ ∧
+      HolderAccount (allocation :: temporary) v ∧
+      Queues.RxCredits.CarrierState
+        (⟨⟨d.ifindex,id⟩,⟨d.ifindex,pid,p.internalId⟩,.selected⟩ ::
+          Queues.RxCredits.remaining entries [⟨d.ifindex,id⟩]) loans v ∧ RxDetached id v :=
+  keys.drop_rx_carrier carriers device peer peeked a b run
+
+/-- Native RX cleanup pays the selected key credit once and frees its actual
+packet. The carrier ledger supplies detachment and the selected peer credit;
+base/caller protection prevents final peer destruction with published key
+slots. These remain distinct visible accounts until initialized transport. -/
+theorem original_rx_carrier_cleanup_account {selected : Queues.RxCredits.Carrier}
+    {holders : Queues.RxCredits.DurableHolders}
+    (keys : HolderAccount (allocation :: temporary) w)
+    (carriers : Queues.RxCredits.CarrierState (selected :: rest) (holders.owners ++ loans) w)
+    (anchors : SlotPeerReferences holders loans w) (phase : selected.phase = .selected)
+    (packet : Queues.RxCredits.packetAt w selected.packet = some pkt)
+    (key : pkt.keypair = allocation.slot) (flag : Bool) (a b : Ambient)
+    (run : ((Queues.RxCredits.cleanup selected.packet.slot pkt flag).run w).run a = .ok (((),v),b)) :
+    HolderAccount temporary v := keys.cleanup_rx_carrier carriers anchors phase packet key flag a b run
+
+/-- Full native UDP receive retains exact key references and exclusive TX
+packet/encryption ownership through header refusal, handshake queuing, data
+admission and original cleanup. The packet allocation witness is supplied by
+campaign 1; this claim assumes neither authentication nor successful delivery.
+Whole initialized Runner transport remains a separate obligation. -/
+theorem original_receive_entry_ownership
+    (before : ReceiveEntry.Joint temporary locals active w)
+    (msg : List UInt8) (src : SkbSource) (a b : Ambient)
+    (run : ((wgReceive msg src).run w).run a = .ok (((),v),b)) :
+    ReceiveEntry.Joint temporary locals active v := ReceiveEntry.joint before msg src a b run
+
+/-- The shared driver's actual receive-entry leaf preserves the concrete
+key and TX occurrence accounts, with campaign 1 allocation freshness. Native
+RX allocation and decrypt aliases cannot duplicate a TX occurrence. The
+incoming accounts remain visible until their complete initialized transport. -/
+theorem shared_driver_receive_entry_ownership {E : Type}
+    (before : ReceiveEntry.Joint temporary locals active w.wg)
+    (msg : List UInt8) (src : SkbSource) (h : List E)
+    (run : (Leanux.Proofs.Logged.runPrefix
+      (TransmitSecurity.Driver.receiveEntryObserved msg src) w h).1 = .ok ((),v)) :
+    ReceiveEntry.Joint temporary locals active v.wg := ReceiveEntry.shared before msg src h run
+
+/-- Native RX polling preserves exclusive TX packet occurrences and pending
+cipher-work aliases, including authenticated staging and GRO stack replies.
+No key-holder or current-key-affiliation hypothesis is needed. Allocation
+freshness is the independent campaign-1 invariant; full initialized driver
+transport remains separate. -/
+theorem original_rx_poll_tx_ownership
+    (before : OccurrenceStack.Ready locals active w.wg) (pid : PeerId) (budget : Nat)
+    (run : (rxPoll pid budget (fun packets => packets.forM Env.deliverInner)).run w = .ok (result,v)) :
+    OccurrenceStack.Ready locals active v.wg :=
+  (hoare_iff_run _ _ _).mp (RxPollOccurrences.stack pid budget) w result v before run
+
+/-- The shared driver's actual RX-poll cut preserves the physical TX
+ownership and encryption-phase invariant through its checked native source
+projection. Its state contract does not infer event chronology from erasure;
+whole initialized driver transport is still required. -/
+theorem shared_driver_rx_poll_tx_ownership {E : Type}
+    {ρ : E → Option TransmitSecurity.Nonce.Allocation}
+    {hooks : TransmitSecurity.Driver.Hooks E}
+    (projects : TransmitSecurity.Driver.HooksProjects ρ hooks TransmitSecurity.Driver.nonceHooks)
+    (before : OccurrenceStack.Ready locals active w.wg) (pid : PeerId) (budget : Nat) (h : List E)
+    (run : (Leanux.Proofs.Logged.runPrefix
+      (TransmitSecurity.Driver.nativePollObserved hooks pid budget) w h).1 = .ok (result,v)) :
+    OccurrenceStack.Ready locals active v.wg := RxPollOccurrences.shared projects before pid budget h run
+
+/-- A complete native encryption iteration preserves exclusive TX
+ownership: the consumed ring batch remains an explicit active alias during
+softirq, then is removed after its one selected continuation. The actual RX
+callbacks may stage new packets; independent allocation freshness prevents
+collisions. Whole initialized driver transport is still required. -/
+theorem original_encrypt_iteration_tx_ownership
+    (before : OccurrenceStack.Ready locals active w.wg)
+    (run : (encryptIter Env.checksumHelp Env.napiSoftirq
+      (Env.condResched .encryptWorker)).run w = .ok (result,v)) :
+    OccurrenceStack.Ready locals active v.wg :=
+  (hoare_iff_run _ _ _).mp OccurrenceEncrypt.iteration w result v before run
+
+/-- A complete native decrypt iteration preserves TX physical ownership
+and pending cipher-work aliases across preparation, publication, IRQ exit,
+NAPI and scheduler callbacks. This does not assume key-holder accounting;
+normal source completion and the incoming packet inventory stay explicit. -/
+theorem original_decrypt_iteration_tx_ownership
+    (before : OccurrenceStack.Ready locals active w.wg)
+    (run : (decryptIter Env.napiSoftirq Env.napiIrqExit
+      (Env.condResched .decryptWorker)).run w = .ok (result,v)) :
+    OccurrenceStack.Ready locals active v.wg :=
+  (hoare_iff_run _ _ _).mp OccurrenceDecrypt.iteration w result v before run
+
+/-- Native TX disposal preserves physical and cipher-work exclusivity
+using its actual readiness guard and derived queue separation. This packet
+claim needs no extra key/peer-credit assumption; initialized whole-driver
+transport and key-reference accounting remain distinct obligations. -/
+theorem original_tx_iteration_occurrences
+    (before : OccurrenceStack.Ready locals active w.wg) (pid : PeerId)
+    (run : (txIter pid (Env.condResched .txWorker)).run w = .ok (result,v)) :
+    OccurrenceStack.Ready locals active v.wg :=
+  (hoare_iff_run _ _ _).mp (OccurrenceTx.iteration pid) w result v before run
+
+/-- The shared campaign driver transports the concrete occurrence
+invariant through its complete native encryption iteration. The exact native
+projection links this source cut without a second scheduler or journal. This
+is a caller closure, not the still-open initialized Runner invariant. -/
+theorem shared_driver_encrypt_iteration_tx_ownership {E : Type}
+    {ρ : E → Option TransmitSecurity.Nonce.Allocation}
+    {hooks : TransmitSecurity.Driver.Hooks E}
+    (projects : TransmitSecurity.Driver.HooksProjects ρ hooks TransmitSecurity.Driver.nonceHooks)
+    (before : OccurrenceStack.Ready locals active w.wg) (h : List E)
+    (run : (Leanux.Proofs.Logged.runPrefix
+      (TransmitSecurity.Driver.encryptIterObserved hooks) w h).1 = .ok (result,v)) :
+    OccurrenceStack.Ready locals active v.wg := OccurrenceWorkers.encrypt projects before h run
 
 end Leanux.Proofs.WG.RetirementSecurity

@@ -46,9 +46,10 @@ theorem poll_projects (h : HooksProjects ρ g a) (pid : PeerId) (budget : Nat)
     (cb : List (List UInt8) → PrefixM E Unit) (ca : List (List UInt8) → PrefixM F Unit)
     (hc : ∀ ps, ProjectsPrefix ρ id (cb ps) (ca ps)) :
     ProjectsPrefix ρ id (pollObserved g pid budget cb) (pollObserved a pid budget ca) := by
-  unfold pollObserved sourceWith
+  unfold pollObserved AuthenticatedEffects.IndexedPoll.sourceWith
   simp only [Std.Legacy.Range.forIn_eq_forIn_range']
   repeat' first
+    | (maintenance_head Hooks.counterCheck; exact h.counterCheck _ _)
     | (maintenance_head consumeObserved; exact (consume_projects h _ _ _).liftWGObserver ρ id)
     | (maintenance_head liftWGPrefix; exact (Projection.state_lift ρ _).liftWGObserver ρ id)
     | (maintenance_head napiGroReceivePrefix; exact groReceive cb ca hc _ _)

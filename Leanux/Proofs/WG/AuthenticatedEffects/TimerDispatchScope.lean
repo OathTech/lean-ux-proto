@@ -38,6 +38,15 @@ theorem scope_run (record : Selection → E) (d : Device) (j : UInt64) (pid : Pe
   change runPrefix (do emitPrefix (record ⟨d,j,pid,t,entry,w⟩); body) w h = _
   simp only [runPrefix_bind,runPrefix_emit]
 
+/-- The driver may keep its imperative suffix unchanged and invoke only the
+entry marker; sequencing is exactly the same scope, not merely an erasure. -/
+theorem scope_entry_then_body (record : Selection → E) (d : Device) (j : UInt64) (pid : PeerId)
+    (t : PeerTimer) (entry : WheelEntry) (body : PrefixM E α) :
+    scope record d j pid t entry body =
+      (scope record d j pid t entry (pure ()) >>= fun _ => body) := by
+  funext w
+  rfl
+
 theorem scope_erases (record : Selection → E) (d : Device) (j : UInt64) (pid : PeerId)
     (t : PeerTimer) (entry : WheelEntry) {body : PrefixM E α} {native : Leanux.M α}
     (erases : ErasesPrefix body native) : ErasesPrefix (scope record d j pid t entry body) native := by

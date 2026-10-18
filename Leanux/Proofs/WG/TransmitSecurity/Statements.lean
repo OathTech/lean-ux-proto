@@ -9,6 +9,10 @@ import Leanux.Proofs.WG.TransmitSecurity.PacketMaterialFrames
 import Leanux.Proofs.WG.TransmitSecurity.WorkerEncryption
 import Leanux.Proofs.WG.TransmitSecurity.WorkerOccurrences
 import Leanux.Proofs.WG.TransmitSecurity.JournalResponderProjection
+import Leanux.Proofs.WG.TransmitSecurity.JournalCompletionProjection
+import Leanux.Proofs.WG.TransmitSecurity.JournalHandshakeProjection
+import Leanux.Proofs.WG.TransmitSecurity.JournalSocketHistory
+import Leanux.Proofs.WG.TransmitSecurity.CompletionEmission
 import Leanux.Proofs.WG.TransmitSecurity.Rekey
 
 /-! Campaign 3, T1 initialized counter reservations and local AEAD contracts.
@@ -358,5 +362,49 @@ theorem initialized_joint_responder_projection (trace : Runner.Trace) (placehold
     ProjectsOuter Journal.responder? id (Journal.execute trace placeholders)
       (HandshakeSecurity.Responder.DriverCuts.execute trace placeholders) :=
   Journal.ResponderProjection.execute trace placeholders
+
+/-- Security: each TX worker socket receipt records the actual packet read,
+peer endpoint read and native IPv4/IPv6 socket call, even if later accounting
+stops. This exact source observer does not establish prior AEAD ownership or
+claim that a failed socket call emits a datagram. -/
+theorem original_transmit_socket_receipts (pid : PeerId) (w : World) :
+    ErasesPrefix (Completion.step pid) (liftWG (txStep pid)) ∧
+    Completion.Good (runPrefix (Completion.step pid) w []).2 :=
+  ⟨Completion.step_erases pid,Completion.step_receipts pid w⟩
+
+/-- Security: the combined TX callback retains the same socket and disposition
+receipts, in order and through Stop; native endpoint equality alone would not
+justify this internal projection. Incoming socket validity remains explicit. -/
+theorem original_joint_transmit_socket_projection (pid : PeerId) (w : World)
+    (h : List Journal.Event) (incoming : Completion.Good (h.filterMap Journal.completion?)) :
+    ProjectsPrefix Journal.completion? id (Journal.transmit pid) (Completion.step pid) ∧
+    Completion.Good ((runPrefix (Journal.transmit pid) w h).2.filterMap Journal.completion?) :=
+  ⟨Journal.transmit_completion_projection pid,Journal.transmit_socket_receipts pid w h incoming⟩
+
+/-- Security: each handshake callback in every initialized combined execution
+has a strictly earlier valid native authentication admission for its peer.
+This covers the observed handshake callback sites; transport and delayed timer
+or work causes require their separate carrier arguments. -/
+theorem initialized_joint_handshake_causes (trace : Runner.Trace) (placeholders : Bool)
+    (pre post : List AuthenticatedEffects.HandshakeCausal.Event)
+    (kind : AuthenticatedEffects.HandshakeCausal.Kind) (pid : PeerId)
+    (position : (runPrefixOuter (Journal.execute trace placeholders) []).2.filterMap Journal.handshake? =
+      pre ++ .callback kind pid :: post) :
+    ∃ r ∈ AuthenticatedEffects.HandshakeCausal.roots pre, r.Valid ∧ r.ForPeer pid :=
+  Journal.HandshakeProjection.callback_cause trace placeholders pre post kind pid position
+
+/-- Security: in every initialized combined execution, each retained transport
+socket receipt describes actual packet and peer reads and a native socket call.
+That call appends at most one datagram, bound to its observed endpoint, bytes
+and traffic class. Later Stop preserves the receipt. Prior AEAD authorization
+and complete coverage of all egress still require the packet carrier argument. -/
+theorem initialized_joint_socket_binding (trace : Runner.Trace) (placeholders : Bool)
+    (r : Completion.SocketReceipt)
+    (member : r ∈ (runPrefixOuter (Journal.execute trace placeholders) []).2.filterMap
+      Journal.SocketHistory.socket?) :
+    r.Valid ∧ AuthenticatedEffects.SocketEmission r.endpoint r.packet.value.bytes r.packet.value.ds
+      r.socket.before.wg.sent r.socket.after.wg.sent := by
+  have valid := Journal.SocketHistory.initialized trace placeholders r member
+  exact ⟨valid,Completion.SocketReceipt.Valid.emission valid⟩
 
 end Leanux.Proofs.WG.TransmitSecurity

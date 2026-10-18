@@ -1,4 +1,7 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.HandshakeWorkerSafety
+import Leanux.Proofs.WG.AuthenticatedEffects.TransportPublicationCarrier
 import Leanux.Proofs.WG.AuthenticatedEffects.TimerDispatchScope
+import Leanux.Proofs.WG.AuthenticatedEffects.TimerReceiverCausality
 import Leanux.Proofs.WG.AuthenticatedEffects.SendQueueCausality
 import Leanux.Proofs.WG.AuthenticatedEffects.SendWorkClaims
 import Leanux.Proofs.WG.AuthenticatedEffects.WorkRootClaims
@@ -704,5 +707,78 @@ theorem selected_timer_scope_retains_occurrence_cause
       TimerDispatch.Selection.Valid ⟨d,j,pid,timer,entry,w⟩ ∧
       TimerDispatch.Selection.Cause roots ⟨d,j,pid,timer,entry,w⟩ :=
   TimerDispatch.scope_entry_cause record d j pid timer entry appends w h roots saved selected carrier
+
+/-- Security: the complete native handshake receiver preserves the provenance
+of every live timer occurrence. Actual arms record their cause, deletion retires
+the occurrence, and all other callbacks retain its incarnation, expiry and full
+wheel entry. The incoming carrier is explicit; driver initialization is separate. -/
+theorem original_receiver_transports_timer_inventory (msg : Key) (src : SkbSource) :
+    TimerInventory.Preserves (WorkRoot.receive msg src) :=
+  TimerInventory.receive_preserves msg src
+
+/-- Security: every timer arm in the combined native receiver journal names
+its own earlier authenticated callback, including arms preceding an internal
+Stop. This is the actual arm occurrence, not an older admission for the peer. -/
+theorem original_combined_receiver_timer_arms_have_authenticated_cause
+    (msg : Key) (src : SkbSource) (w : WGWorld) (a : Ambient)
+    (pre post : List TimerRoot.Event) (r : TimerRoot.Arm)
+    (position : (runWGPrefix (WorkRoot.receive msg src) w a []).2 = pre ++ .armed r :: post) :
+    r.Native ∧ WorkRoot.AuthenticatedAt pre r.origin r.kind r.peer :=
+  WorkTimer.armed_authenticated msg src w a pre post r position
+
+/-- Security: a timer selected immediately after a completed native receiver
+from an empty wheel inherits the exact occurrence's own authenticated arm.
+No output carrier is assumed. Transport across intervening driver actions and
+fixture-rooted preexisting timers remains a separate initialized obligation. -/
+theorem original_receiver_then_timer_inherits_authenticated_occurrence
+    (msg : Key) (src : SkbSource) (before : WGWorld) (ambient : Ambient)
+    (r : TimerDispatch.Selection) (empty : TimerInventory.NoPending before)
+    (received : ((receiveHandshakePacket msg src).run before).run ambient =
+      .ok (((),r.before.wg),r.before.ambient)) (selected : r.Valid) :
+    ∃ stamp expires arm pre post,
+      TimerSlots.Pending r.before.wg r.peer r.timer stamp expires r.entry ∧
+      (runWGPrefix (WorkRoot.receive msg src) before ambient []).2 = pre ++ .armed arm :: post ∧
+      arm.Native ∧ TimerSlots.Changed arm ∧ arm.peer = r.peer ∧ arm.timer = r.timer ∧
+      TimerSlots.Pending arm.run.after r.peer r.timer stamp expires r.entry ∧
+      WorkRoot.AuthenticatedAt pre arm.origin arm.kind arm.peer :=
+  TimerInventory.receiver_then_selection_authenticated msg src before ambient r empty received selected
+
+/-- Security: the shared driver's actual decrypt preparation preserves the
+packet/stamp carrier tying each crypted packet to an earlier successful AEAD
+publication. This local contract assumes that carrier on entry; preservation
+through the remaining common-driver actions is a separate obligation. -/
+theorem shared_prepare_retains_publication (record : TransportDriver.OriginEvent → E)
+    (decode : E → Option TransportDriver.OriginEvent)
+    (inverse : ∀ event, decode (record event) = some event) :
+    PrefixPreserves (fun h w => TransportPublication.Inv (h.filterMap decode) w.wg)
+      (fun _ => True) (TransportDriver.prepare record decode) :=
+  TransportPublication.prepare_preserves record decode inverse
+
+/-- Security: a packet carried by an actual successful decrypt/publication has
+native AEAD evidence for its exact bytes, key slot and nonce, before any later
+consume effects. The publication carrier is explicit; this does not assume or
+claim that the enclosing shared driver already preserves it. -/
+theorem shared_publication_authenticated {id : SkbId}
+    (anchor : TransportPublication.Anchor history id pkt w) :
+    ∃ pre post, ∃ (r : WGRunWitness (RxPacket × Option RxPacket)), ∃ out pid published ambient,
+      history = pre ++ .receipt (.decrypt id r) :: post ∧
+      PublicationIdentity.Published id r out pid published ambient ∧ pkt = {out with state := .crypted} ∧
+      ∃ d k, r.before.dev = some d ∧ d.rxSkbs[id]? = some r.value.1 ∧
+        d.keypairs[r.value.1.keypair]? = some k ∧ k.receiving.isValid = true ∧
+        pkt.keypair = r.value.1.keypair ∧ pkt.nonce = u64le r.value.1.bytes 8 ∧
+        aeadDecrypt k.receiving.key (counterNonce pkt.nonce) (r.value.1.bytes.drop 16) [] = some pkt.bytes :=
+  anchor.authenticated
+
+/-- Security: the shared native handshake worker preserves actual earlier
+handshake authentication for every observed peer callback, including retained
+prefixes before a Stop. Its supplied session and keepalive observers preserve
+that same history; no hypothesis grants an authentication root to this worker. -/
+theorem shared_handshake_callbacks_authenticated
+    (session : PeerId → WGPrefix HandshakeCausal.Event Bool)
+    (keepalive : PeerId → WGPrefix HandshakeCausal.Event Unit)
+    (hs : ∀ pid, HandshakeCausal.Preserves (session pid))
+    (hk : ∀ pid, HandshakeCausal.Preserves (keepalive pid)) :
+    HandshakeCausal.Preserves (HandshakeWorker.observed id some session keepalive) :=
+  HandshakeWorker.HistorySafety.observed_preserves session keepalive hs hk
 
 end Leanux.Proofs.WG.AuthenticatedEffects

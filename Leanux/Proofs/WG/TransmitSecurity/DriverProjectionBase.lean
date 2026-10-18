@@ -7,6 +7,14 @@ namespace Leanux.Proofs.WG.TransmitSecurity.Driver
 open Leanux Leanux.WG Leanux.Proofs.Logged Lifetimes Queues
 
 structure HooksProjects (ρ : E → Option F) (g : Hooks E) (a : Hooks F) : Prop where
+  handshake : ∀ (sg : PeerId → WGPrefix E Bool) (sa : PeerId → WGPrefix F Bool)
+    (kg : PeerId → WGPrefix E Unit) (ka : PeerId → WGPrefix F Unit),
+    (∀ pid, StateProjectsPrefix ρ id (sg pid) (sa pid)) →
+    (∀ pid, StateProjectsPrefix ρ id (kg pid) (ka pid)) →
+    StateProjectsPrefix ρ id (g.handshake sg kg) (a.handshake sa ka)
+  sendWorker : ProjectsPrefix ρ id g.sendWorker a.sendWorker
+  prepare : ProjectsPrefix ρ id g.prepare a.prepare
+  counterCheck : ∀ skb pkt, ProjectsPrefix ρ id (g.counterCheck skb pkt) (a.counterCheck skb pkt)
   timerSelected : ∀ d j pid t we,
     ProjectsPrefix ρ id (g.timerSelected d j pid t we) (a.timerSelected d j pid t we)
   selection : ∀ pid, StateProjectsPrefix ρ id (g.selection pid) (a.selection pid)

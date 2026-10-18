@@ -19,7 +19,7 @@ stops the work. Validation for the current source-contract checkpoint is recorde
 
 | Outcome | Status and remaining obligation |
 | --- | --- |
-| T1 nonce safety | Open. Existing staging certificates give bounded assigned nonces, but not initialized allocation uniqueness, non-reuse after failure, or the connection to every actual encryption. The complete native staging observer preserves a supplied non-reuse invariant through queue refusal and Stop; native creation preserves it, and admitted counters have injective AEAD encoding. Initialized allocation history and packet transport remain open. |
+| T1 nonce safety | Open. Initialized native counter reservations are unique through Stop, and admitted counters have injective encoding. Connecting those reservations to every actual encryption, encryption nonce linkage and packet ownership remains open. |
 | T2 transmit authorization and conservation | Open. R3 supplies initialized selection-time authorization; packet/material transport to actual encryption and socket emission, and complete TX dispositions, remain to prove. |
 | T3 authenticated effects and silence | Open. R6 supplies the cookie gate's local contracts, not causal closure of all delayed effects. |
 | T4 handshake replay resistance | Open. Source inventory and H1 interfaces identified; retained-peer timestamp histories and exchange-linked installation still need initialized execution closure. |
@@ -159,66 +159,64 @@ the earlier audits; the campaign's source inspection used the pinned pristine C.
 
 ## Current proof tranche
 
-[AGENT 2026-10-18] Source contracts precede initialized execution closure.
-The combined TX journal uses a shared parameterized driver with a checked native-prefix
-factorization and nonce specialization and exact internal event projection; output equality alone
-is insufficient to connect separate observers’ occurrence histories.
-Every claim keeps its native run and entry invariant visible. The register in
-[proofs.md](proofs.md) lists the four statement modules and outstanding boundaries.
+[AGENT 2026-10-18] The shared parameterized driver retains actual source cuts
+and checked internal event projections; equal native endpoints alone do not
+establish chronology. Its history-only theorem now composes through every
+native callback, configuration/traffic/lifecycle wrapper and the initialized
+Runner, including both timer modes and indexed Stops. State-dependent ownership
+and authentication invariants remain separate obligations.
 
-- T1/T2: the actual global allocation stamp and sending counter support
-  non-reuse through complete staging, `wgXmit`, keepalive sending, key creation,
-  session establishment, rotation, all five timer callbacks, the full handshake receive worker, receive consumption, the complete poll with actual stack replies, both NAPI entry points, all draining workers, the native scheduler, both wheel passes, fixture injection/flood/batch, direct transmit, full device configuration, interface-up and reference release. Copied-state consistency trials emit no nonce events. AEAD counter encoding
-  is injective below the actual admission limit. Encryption receipts preserve
-  success/Stop and bind the entry-resident key, original packet nonce and
-  actual ciphertext expression. Rekey receipts capture the guarded call to
-  the handshake-queue helper after count or recorded-age expiry; the helper's
-  own timeout/dead/pending guards still apply. The complete native syscall observers now compose from actual fixture initialization for every typed trace and both placeholder modes: reservation journals are duplicate-free, including failed prefixes, and erasure returns the original JSON or indexed Stop. No entry invariant or valid-trace premise remains. Native batch allocation now binds each returned ID to its original full packet value, and complete encryption/publication preserves peer, key slot, nonce and plaintext. Native worker receipts now bind every recorded AEAD to the actual head-key word and per-packet read, including later Stop. The shared parameterized driver now records allocation/routing, ring selections, actual AEAD receipts and TX dispositions in one chronology. Exact projection to the original reservation observer holds through all callbacks, scheduling, lifecycle and initialized Runner execution, including stopped prefixes. It retains duplicate-free reservations without an entry invariant. Distinct selected batch IDs imply no repeated AEAD for a packet within that worker, including Stop. The shared journal now also observes native current-key selection, immediate confirmation and session creation, with exact projection to the responder specialization. The actual selected timer entry is recorded before validation/deletion. Packet ownership from reservation to encryption and TX conservation remain open.
-- T6: the exact allocation-stamped reference ledger covers native creation,
-  acquisition, release, slot clearing, rotation, confirmation, RX cleanup,
-  saved TX batch disposal and complete session establishment. Session funding
-  derives the new reference from the actual allocation; entry slot funding
-  is now extracted from actual holders; R2 allocation vacancy remains explicit. The concrete holder projection
-  counts each slot, RX packet and TX batch reference and has an initialized
-  empty base. Native create/get/put, clearing, rotation, confirmation and complete sessions transport that physical projection; an
-  outstanding durable holder prevents final removal. The actual clear-worker dispatcher clears its selected queued peer on normal completion, with no incoming holder invariant. Native TX enqueue/disposal now transport the account; current-slot acquisition derives its credit, and native packet allocation derives detachment from C1 packet ownership. Final peer release keeps its slot-readiness premise visible. The clear dispatcher transports the account and derives its own slot readiness. Complete staged allocation/publication now derives packet detachment and peer-release readiness. Native TX completion and the whole TX worker preserve the account under explicit batch separation and final-peer funding. Complete native receive admission derives the index loan, key acquisition, fresh packet detachment, publication and refusal cleanup from the incoming holder account and C1 packet ownership. No post-cut ledger premise remains. The physical TX occurrence inventory derives batch separation for the native TX worker from actual owned queues and selected/unpublished locals; allocator, enqueue, cached selection and disposal preserve it. Whole native createData and its allocation/create suffix now transport the same occurrence inventory through enqueue/refusal cleanup. Full staging now preserves TX occurrence inventory. A separate crypt phase links logical live ring items and active encryption locals to owned UNCRYPTED peer-queue batches, derives uniqueness/residency/disjointness, and transports native admission, poll and encryption completion. Encryption also preserves the holder account and TX inventory. Native createData, allocation/create, complete staging and TX disposal now preserve the crypt phase. TX disposal derives its separation from the actual ready versus UNCRYPTED head states. Whole staging transports the holder account from the incoming account, C1 packet ownership and CurrentCompatible, deriving borrow/loop/refusal/publication credits internally. Native completed receive transports the holder account through confirmation, conditional staging, bookkeeping and repayment, from the incoming account, C1 packet ownership and KeyCompatible. Orphan completeness and initialized phase transport remain open. Whole-run holder transport and conditional clock/dispatch progress
-  remain open. Stable child implementations through `3368e1cd` were copied
-  by owned path, without a branch merge.
-- T3: qualifying invalid-MAC2 initiation/response receives produce at most one
-  source-bound 64-byte cookie datagram on normal completion and preserve the
-  Noise/session projection. Exact append observers retain emissions before a
-  later Stop. Invalid MAC1 leaves WGWorld unchanged except under-load
-  bookkeeping. The actual MAC/load witness remains explicit. Full Noise refusals follow exact native exits with no egress or authenticated
-  suffix, and pre-lookup initiation refusals preserve WGWorld. Post-lookup
-  initiation refusal now restores complete peer records, including refcounts
-  and timers, from the actual acquisition/repayment chain. Response/cookie refusals now preserve every peer field except the explicitly allowed refcount and index-owner bookkeeping, without an initialized-reference premise. Cookie acceptance receipts precede the first cookie write and survive Stop. Native decryption changes WG state only at the explicit receiving-key invalidation arm; other decrypt outcomes retain the entire WG world. Initialized replay-entry receipts now carry a strictly earlier actual AEAD/publication certificate with matching selected packet bytes, slot and nonce, surviving later internal Stop. This root theorem covers arbitrary typed traces and either placeholder mode without an incoming publication invariant. Native initiation/response acceptance is now observed before the first protocol write; exact full receiver receipts have accepted MAC and Noise evidence for the same bytes and survive Stop. Every native handshake callback now has its own strictly earlier MAC-and-Noise admission for the same peer in that call; callback entries survive internal Stop. Actual session/traversal timer-arm receipts now identify their own enclosing callback by journal index and derive its earlier authenticated admission. Native timer arm/delete and due selection carry their exact occurrence cause under a visible carrier. Response keepalive/staging work append and createData submission receipts carry their own authenticated callback root. Ordered send-work tickets distinguish duplicate peer occurrences; native selection/dequeue preserves order and retains the selected receipt through worker Stop. The full native receiver now derives its output queue carrier from an initially empty queue, and the following native worker inherits its selected occurrence’s own authenticated callback even if it later Stops. Arbitrary intervening driver transport remains open. Full reference restoration and initialized delayed-effect carrier transport remain open. Stable child
-  implementation through `14d7de81` was copied by owned path.
-- T4: full original initiation receipts strictly increase the actual pre-write
-  timestamp, including before Stop; refusal preserves surviving handshake
-  state. Native consumer sequences compose timestamp histories. Response and
-  session sequences, including mixed sequences, consume at most once under
-  named visible `H1ResponseEdges` and `H1SessionEffects`, projections of
-  campaign 2's unlanded H1 results. Independent native allocation receipts
-  establish at most one creation per session call and exactly one on true
-  completion. Full driver/exchange closure remains open. Stable child
-  implementation through `e140e15c` was copied by owned path.
-- T5: original receive-consumer and poll observers record the native
-  confirmation return immediately, before the timer/staged-send/routing suffix
-  can Stop; poll receipts carry the actual successful replay check. Every
-  initialized completed-consumer occurrence has an earlier successful native
-  AEAD with matching bytes, slot and nonce, using campaign 1's receive journal.
-  Completed-confirmation uniqueness uses visible `H1InitializedCompletedConfirmation`,
-  an explicit projection of named unlanded H1 results. Staging receipts bind
-  the actual initial peer/current-key read and key borrow to bounded packet
-  admissions. The responder-current projection now has an empty base and exact material continuity through the native staging borrow/read prefix. Local installation/promotion/clear transitions keep H1ResponderCurrentEdges visible. Whole staging, completed consumers and native polls now transport responder authorization, including concrete Stack replies, under visible current-slot/history invariants and named H1 contracts. Both NAPI sites and crypt workers transport the history, while session transport joins C1 configured identity. The complete native handshake receive worker now carries the responder history through actual session, timer and keepalive callbacks. All five timer callbacks, flushed work and both timer dispatcher modes now transport the same authorization. Actual TX workers, scheduling and every deferred variant now transport the same history, as do full peer/device configuration and lifecycle. Initialized responder chronology now reaches every typed Runner trace and both placeholder modes at captured completed-consumer entries; responder current material there has strictly earlier authenticated confirmation under the named H1 hypothesis. The new shared-driver specialization carries checked selection/confirmation/session cuts through actual staging, keepalive and receive, including stopped consumers. Initialized shared-driver closure and the prohibition on earlier responder encryption remain open.
+- T1/T2: every initialized execution has duplicate-free actual counter
+  reservations, with no entry-invariant or successful-run premise. Local
+  allocation/encryption contracts bind packet IDs, material, key reads and
+  ciphertext. The combined journal preserves exact nonce and responder
+  projections. Its initialized handshake callbacks have strictly earlier
+  valid native authentication admissions. Every retained transport socket
+  receipt describes the actual packet/peer reads and socket call; cached
+  IPv4/IPv6 calls in both loopback modes append at most one datagram bound to
+  the observed endpoint, bytes and DS. Receipts survive later Stop. The
+  packet carrier from reservation through encryption and emission, global
+  encryption non-reuse, complete egress coverage and TX conservation
+  remain open.
+- T3: native MAC/Noise refusal and cookie-response contracts retain their
+  exact state/egress boundaries. Acceptance receipts precede protocol writes.
+  Initialized C1 replay entries have earlier matching AEAD evidence. Native
+  RX preparation now transports its packet/stamp publication carrier without
+  ownership assumptions. Timer arms and ordered queued-work tickets preserve
+  their own earlier callback causes through the local receivers/workers.
+  Full-driver carrier transport and complete silence remain open. Owned
+  implementations through `322d94ec` are copied without a branch merge.
+- T4/T5: timestamp and response/session replay contracts remain explicit;
+  H1 projections are named dependencies, not silently discharged. Native
+  confirmation cuts precede later Stop. Shared responder authorization now
+  transports through staging, Stack/GRO polls, NAPI, workers, scheduling,
+  timer/deferred work, configuration, traffic and lifecycle, under its
+  current-slot/configured-identity invariants and `H1ResponderCurrentEdges`.
+  Initialized shared-driver closure, complete exchange identity and the
+  prohibition on premature encryption remain open. Owned implementations
+  through `bec098a0` are copied.
+- T6: allocation-stamped credits distinguish slot unpublication from final
+  store removal. Native creation, acquisition, clearing, rotation, session
+  installation and disposal retain exact reference payments. Actual
+  wgXmit/receive entry and completion derive internal loans and release
+  funding where proved. Physical and crypt occurrence inventories derive
+  selected uniqueness/residency/disjointness; native polls with Stack/GRO
+  replies and encrypt/decrypt/TX iterations transport them with independent
+  C1 allocation freshness. Current/key compatibility and slot affiliation
+  remain visible where needed. Initialized holder/phase transport, historical
+  selection uniqueness, orphan completeness and conditional retirement
+  progress remain open. Owned implementations through `3e11d9e7` are copied.
 
-The ninth source checkpoint passes all 1332 proof-build jobs and the
-1099-declaration gate across thirteen root modules, with only standard axioms.
+The register names each module's assumptions and boundaries. All six campaign
+outcomes remain open; these are compositional results toward those outcomes.
+
+The tenth source checkpoint passes all 1414 proof-build jobs and the
+1131-declaration gate across thirteen root modules, with only standard axioms.
 All twelve witness recipes and fresh-root kernel replay pass at the default
 cap. The unchanged model and unit suite retain the prior checkpoint's 130-job
 build and 131 passing tests with one kernel-build-dependent skip. All six
 outcomes remain open; packet-to-AEAD and end-to-end effect transport
-remain work in progress. The checkpoint includes internal responder/timer chronology and occurrence/holder transport.
+remain work in progress. The checkpoint includes initialized combined handshake causes and valid socket receipts, cached IPv4/IPv6 emission binding, and native ownership/worker transport. The full build, gate, twelve recipes and fresh-root kernel replay pass. An unused simplifier argument in campaign-owned code was removed before the final build, gate and kernel replay.
 
 A supplemental kernel replay invoked without `--fresh` failed at the 32 GiB
 cap and again at 64 GiB (exit 137); neither is a pass. Inspection of the shipped
