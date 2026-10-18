@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.HandshakeSecurity.ResponderJointHistory
+import Leanux.Proofs.WG.HandshakeSecurity.ResponderGlobalFrames
 import Leanux.Proofs.WG.HandshakeSecurity.ResponderStackFrames
 import Leanux.Proofs.WG.HandshakeSecurity.ResponderLabels
 import Leanux.Proofs.WG.HandshakeSecurity.ResponderRetention
@@ -398,5 +400,33 @@ theorem original_poll_responder_history
     PrefixPreserves (Responder.History.State confirmed) (Responder.History.Checks confirmed)
       (Queues.RxJoint.poll pid budget) :=
   Responder.History.poll H1 slots Responder.deliverInner_native pid budget confirmed
+
+/-- The persistent receive journal carries responder authorization through both
+actual NAPI delivery paths, preserving each completed consumer's exact incoming
+confirmation prefix even if later work Stops. The real fixture satisfies the
+empty-history invariant; other runner actors still require transport. -/
+theorem original_napi_responder_history
+    (H1 : H1ResponderCurrentEdges) (slots : H1ConfirmationEdges) :
+    Responder.Global.Preserves Queues.RxHistory.napiSoftirq ∧
+    Responder.Global.Preserves Queues.RxHistory.pollScheduledInline ∧
+    Responder.Global.Preserves Queues.RxHistory.napiIrqExit :=
+  ⟨Responder.Global.napiSoftirq H1 slots, Responder.Global.pollScheduledInline H1 slots,
+    Responder.Global.napiIrqExit H1 slots⟩
+
+/-- Both actual crypt workers preserve responder-current authorization with
+all nested NAPI confirmations in the same journal. Encryption is framed here;
+this theorem does not yet authorize each packet encrypted by the worker. -/
+theorem original_crypt_workers_responder_history
+    (H1 : H1ResponderCurrentEdges) (slots : H1ConfirmationEdges) :
+    Responder.Global.Preserves Queues.RxHistory.decryptIteration ∧
+    Responder.Global.Preserves Queues.RxHistory.encryptIteration :=
+  ⟨Responder.Global.decryptIteration H1 slots, Responder.Global.encryptIteration H1 slots⟩
+
+/-- The original session observer preserves responder-current authorization
+using H1's slot/material contract and C1's configured self-word invariant in
+the same execution. A fresh responder session cannot newly become current. -/
+theorem original_session_responder_history (H1 : H1ResponderCurrentEdges) (pid : PeerId) :
+    Responder.Joint.Preserves (Origins.HistoryAdapters.session pid) :=
+  Responder.Joint.session H1 pid
 
 end Leanux.Proofs.WG.HandshakeSecurity

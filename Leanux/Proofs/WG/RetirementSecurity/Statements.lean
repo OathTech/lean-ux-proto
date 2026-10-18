@@ -24,6 +24,9 @@ import Leanux.Proofs.WG.RetirementSecurity.KeyHolderFrames
 import Leanux.Proofs.WG.RetirementSecurity.TxStoppedHolders
 import Leanux.Proofs.WG.RetirementSecurity.OwnershipCompletionFrames
 import Leanux.Proofs.WG.RetirementSecurity.TxWorkerHolders
+import Leanux.Proofs.WG.RetirementSecurity.RxPublishHolders
+import Leanux.Proofs.WG.RetirementSecurity.RxCleanupHolders
+import Leanux.Proofs.WG.RetirementSecurity.RxConsumeHolders
 
 /-! Campaign 3, T6: local original-operation retirement contracts. The
 initialized key-reference ledger, complete caller coverage and conditional
@@ -31,6 +34,63 @@ timer/worker progress remain separate obligations. No complete T6 outcome is
 claimed by these exports. -/
 namespace Leanux.Proofs.WG.RetirementSecurity
 open Leanux Leanux.WG Leanux.Proofs.Framing
+
+/-- Native data receive transfers one actual key acquisition into its RX
+queue or pays it on rejection, preserving all other physical key holders.
+Lookup borrowing, fresh packet detachment and cleanup funding are derived
+from the original caller. The incoming holder account and campaign 1 packet
+frontier are explicit; initialized Runner coverage is a separate obligation. -/
+theorem original_consume_data_holder_account (account : HolderAccount temporary w)
+    (bounded : Packets.Inv w) (msg : List UInt8) (src : SkbSource) (ds : Nat)
+    (a b : Ambient)
+    (run : ((consumeData msg src ds).run w).run a = .ok (((),v),b)) :
+    HolderAccount temporary v := account.consume_data bounded msg src ds a b run
+
+/-- Native RX allocation creates no extra key credit and cannot replace
+a queued holder's cell. Its detached status follows from the concrete holder
+account and campaign 1 packet frontier, independently of future enqueue. -/
+theorem original_rx_allocation_holder_account {id : SkbId}
+    (account : HolderAccount temporary w) (bounded : Packets.Inv w)
+    (packet : RxPacket) (a b : Ambient)
+    (run : ((newRxSkb packet).run w).run a = .ok ((id,v),b)) :
+    HolderAccount temporary v ∧ RxDetached id v ∧
+      (v.dev.bind fun d => d.rxSkbs[id]?) = some packet :=
+  account.allocate_rx bounded packet a b run
+
+/-- Original RX enqueue transfers one saved key reference into its actual
+peer queue on admission, including decrypt-ring EPIPE; peer-queue ENOSPC
+retains that reference for cleanup. The saved allocation, actual packet and
+peer lookup are explicit incoming source facts. -/
+theorem original_rx_enqueue_holder_account {id : SkbId}
+    (account : HolderAccount (allocation :: temporary) w)
+    (device : w.dev = some d) (packet : d.rxSkbs[id]? = some pkt)
+    (peer : d.peers[pkt.peer]? = some p)
+    (loan : receiveLoan w pkt.peer id = some ⟨.receive pkt.peer id,allocation⟩)
+    (a b : Ambient)
+    (run : ((enqueuePerDeviceAndPeerRx id).run w).run a = .ok ((ret,v),b)) :
+    (ret = -WG.ENOSPC ∧ HolderAccount (allocation :: temporary) v ∧ holderStore v = holderStore w) ∨
+      ((ret = 0 ∨ ret = -WG.EPIPE) ∧ HolderAccount temporary v) :=
+  account.enqueue_rx_native device packet peer loan a b run
+
+/-- Original RX publication with the native empty IRQ callback preserves
+all key holders while changing packet readiness and NAPI state. Its own peer
+borrow prevents the final put from deleting a holder group. -/
+theorem original_rx_publication_holder_account (account : HolderAccount temporary w)
+    (id : SkbId) (state : PacketState) (a b : Ambient)
+    (run : ((enqueuePerPeerRx (pure () : WG.M Unit) id state).run w).run a = .ok (((),v),b)) :
+    HolderAccount temporary v := account.publish_rx id state a b run
+
+/-- Native RX cleanup pays the saved packet's key reference once before
+freeing its detached cell. Key alignment, concrete queue detachment and
+peer-release readiness remain explicit; full initialized poll closure is
+separate from this original cleanup cut. -/
+theorem original_rx_cleanup_holder_account {id : SkbId}
+    (account : HolderAccount (allocation :: temporary) w)
+    (pkt : RxPacket) (key : pkt.keypair = allocation.slot) (flag : Bool)
+    (detached : RxDetached id w) (ready : PeerReleaseReady pkt.peer w)
+    (a b : Ambient)
+    (run : ((Queues.RxCredits.cleanup id pkt flag).run w).run a = .ok (((),v),b)) :
+    HolderAccount temporary v := account.cleanup_rx pkt key flag detached ready a b run
 
 /-- The complete original TX worker preserves physical key-reference
 funding: a stopped iteration retains its queued reference; a completed one

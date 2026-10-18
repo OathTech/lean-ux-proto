@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.HandshakeCausalReceiver
+import Leanux.Proofs.WG.AuthenticatedEffects.AdmissionCompletion
 import Leanux.Proofs.WG.AuthenticatedEffects.HandshakeAdmissionFacts
 import Leanux.Proofs.WG.AuthenticatedEffects.HandshakeAdmissionSource
 import Leanux.Proofs.WG.AuthenticatedEffects.TransportInitialized
@@ -423,5 +425,59 @@ theorem original_handshake_admissions_authenticated (msg : Key) (src : SkbSource
   obtain ⟨suffix,history,safe,_⟩ := HandshakeAdmissionFacts.receive msg src w a []
     (by intro r member; cases member)
   exact safe
+
+/-- Security: a successful native initiation consumer returns exactly the peer
+named in its own pre-write acceptance receipt. The receipt is appended after
+this call's incoming history, so an older unrelated admission cannot supply it.
+The native check and finish executions remain visible as separate witnesses. -/
+theorem initiation_success_has_own_admission (mac : HandshakeMac)
+    (w v : WGWorld) (a b : Ambient) (h : List HandshakeAdmission) (pid : PeerId)
+    (success : ((consumeInitiation mac.input).run w).run a = .ok ((some pid,v),b)) :
+    ∃ accepted u c,
+      (runWGPrefix (admitInitiation mac) w a h).2 =
+        h ++ [.initiation mac ⟨some accepted,w,u,a,c⟩] ∧ accepted.peer = pid ∧
+      ((initiationAcceptedCheck mac.input).run w).run a = .ok ((some accepted,u),c) ∧
+      ((initiationAcceptedFinish mac.input accepted).run u).run c = .ok ((some pid,v),b) := by
+  apply admitInitiation_success mac w v a b h _ pid
+  exact Prod.ext ((admitInitiation_erases mac w a h).trans success) rfl
+
+/-- Security: a successful native response consumer returns exactly the peer
+named in its own pre-write acceptance receipt. The receipt is appended after
+this call's incoming history, so an older unrelated admission cannot supply it.
+The native check and finish executions remain visible as separate witnesses. -/
+theorem response_success_has_own_admission (mac : HandshakeMac)
+    (w v : WGWorld) (a b : Ambient) (h : List HandshakeAdmission) (pid : PeerId)
+    (success : ((consumeResponse mac.input).run w).run a = .ok ((some pid,v),b)) :
+    ∃ accepted u c,
+      (runWGPrefix (admitResponse mac) w a h).2 =
+        h ++ [.response mac ⟨some accepted,w,u,a,c⟩] ∧ accepted.peer = pid ∧
+      ((responseAcceptedCheck mac.input).run w).run a = .ok ((some accepted,u),c) ∧
+      ((responseAcceptedFinish mac.input accepted).run u).run c = .ok ((some pid,v),b) := by
+  apply admitResponse_success mac w v a b h _ pid
+  exact Prod.ext ((admitResponse_erases mac w a h).trans success) rfl
+
+/-- Security: the callback observer executes the complete original handshake
+receiver with exactly its native outcome, including Stops. Each callback entry
+is recorded before the operation can produce effects. Cookie handling and loan
+cleanup follow their separate native paths and are not callback admissions. -/
+theorem original_handshake_callback_observer (msg : Key) (src : SkbSource)
+    (w : WGWorld) (a : Ambient) (h : List HandshakeCausal.Event) :
+    (runWGPrefix (HandshakeCausal.receive msg src) w a h).1 =
+      ((receiveHandshakePacket msg src).run w).run a :=
+  HandshakeCausal.receive_erases msg src w a h
+
+/-- Security: every protocol callback reached by the original handshake receiver
+has a strictly earlier, MAC-and-Noise-authenticated admission for the same peer
+in this call. This covers response transmission, session creation, endpoint
+changes, keepalive and timer callbacks even if their native operation later
+Stops. No authentication or initialization premise is assumed. Propagation
+through later deferred work remains a separate T3 obligation. -/
+theorem original_handshake_callbacks_have_authenticated_cause
+    (msg : Key) (src : SkbSource) (w : WGWorld) (a : Ambient)
+    (pre post : List HandshakeCausal.Event) (kind : HandshakeCausal.Kind) (pid : PeerId)
+    (position : (runWGPrefix (HandshakeCausal.receive msg src) w a []).2 =
+      pre ++ .callback kind pid :: post) :
+    ∃ r ∈ HandshakeCausal.roots pre, r.Valid ∧ r.ForPeer pid :=
+  HandshakeCausal.callback_cause msg src w a pre post kind pid position
 
 end Leanux.Proofs.WG.AuthenticatedEffects

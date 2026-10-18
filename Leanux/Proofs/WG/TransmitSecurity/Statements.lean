@@ -1,14 +1,13 @@
 import Leanux.Proofs.WG.TransmitSecurity.NonceStagingSafety
-import Leanux.Proofs.WG.TransmitSecurity.NonceConfiguration
-import Leanux.Proofs.WG.TransmitSecurity.NonceUp
+import Leanux.Proofs.WG.TransmitSecurity.NonceInitialized
 import Leanux.Proofs.WG.TransmitSecurity.NonceTimers
 import Leanux.Proofs.WG.TransmitSecurity.NonceHandshakeSafety
 import Leanux.Proofs.WG.TransmitSecurity.WireNonce
 import Leanux.Proofs.WG.TransmitSecurity.EncryptBinding
 import Leanux.Proofs.WG.TransmitSecurity.Rekey
 
-/-! Campaign 3, T1 local allocation contracts. Initialized caller coverage and
-transport from allocation through every AEAD invocation remain open. -/
+/-! Campaign 3, T1 initialized counter reservations and local AEAD contracts.
+Transport from reservation through every actual AEAD invocation remains open. -/
 namespace Leanux.Proofs.WG.TransmitSecurity
 open Leanux Leanux.WG Leanux.Proofs.Logged
 
@@ -284,5 +283,15 @@ theorem original_interface_up_nonce_safety :
     ErasesPrefix Nonce.envUpObserved Env.wgUp ∧
     PrefixPreserves (fun h w => Nonce.Inv (Nonce.view w.wg) h) List.Nodup Nonce.envUpObserved :=
   ⟨Nonce.envUpObserved_erases,Nonce.envUpObserved_safe⟩
+
+/-- Security: every typed initialized Runner trace reserves each pair of key
+allocation stamp and sending nonce at most once, including reservations in a
+failed prefix. Actual fixture initialization discharges the entry invariant;
+exact source erasure retains JSON and indexed Stop for either placeholder mode.
+Connecting queued packet occurrences and AEAD invocations remains separate. -/
+theorem initialized_nonce_reservations (trace : Runner.Trace) (placeholders : Bool) :
+    ErasesOuter (Nonce.executeObserved trace placeholders) (Runner.executeTrace trace placeholders) ∧
+    List.Nodup (runPrefixOuter (Nonce.executeObserved trace placeholders) []).2 :=
+  ⟨Nonce.executeObserved_erases trace placeholders,Nonce.initialized_safe trace placeholders⟩
 
 end Leanux.Proofs.WG.TransmitSecurity

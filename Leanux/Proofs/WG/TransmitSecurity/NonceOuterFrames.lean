@@ -1,0 +1,156 @@
+import Leanux.Proofs.WG.TransmitSecurity.NonceUp
+import Leanux.Proofs.WG.TransmitSecurity.NonceConfiguration
+import Leanux.Proofs.WG.Lifetimes.DispatchSource
+import Leanux.Proofs.WG.Origins.RetainingDump
+import Leanux.Proofs.Framing.Syscalls
+
+/-! Syscall wrappers change descriptor and fixture state while retaining the
+sending nonce projection. Native dump operations retain all key cells. -/
+namespace Leanux.Proofs.WG.TransmitSecurity.Nonce.Frames
+open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing Lifetimes Queues Configuration
+
+private theorem product_stable (a : Leanux.M α) (frame : SameProductStore a) (h : List Allocation) :
+    Preserves (fun w : World => Inv (view w.wg) h) a := by
+  apply (hoare_iff_run _ _ _).mpr
+  intro w x v hi hr
+  exact product_store h w v ((ProjectedAction.iff_run _ _ _).mp frame w x v hr) hi
+
+theorem fs (a : FS.M α) (h : List Allocation) :
+    Preserves (fun w : World => Inv (view w.wg) h) (liftFS a) :=
+  productFS_spec a _ (fun _ _ _ _ hi => hi)
+
+theorem task (a : TaskM α) (h : List Allocation) :
+    Preserves (fun w : World => Inv (view w.wg) h) (liftTask a) :=
+  productTask_spec a _ (fun _ _ _ hi => hi)
+
+theorem seccomp (a : Seccomp.M α) (h : List Allocation) :
+    Preserves (fun w : World => Inv (view w.wg) h) (liftSeccomp a) :=
+  productSeccomp_spec a _ (fun _ _ _ _ hi => hi)
+
+theorem outer_get (h : List Allocation) :
+    Preserves (fun w : World => Inv (view w.wg) h) (get : Leanux.M World) :=
+  hoare_consequence (hoare_get _) (fun _ hi => hi) (fun _ _ hi => hi.2)
+
+theorem outer_edit (f : World → World) (same : ∀ w, wgStoreView (f w).wg = wgStoreView w.wg)
+    (h : List Allocation) : Preserves (fun w : World => Inv (view w.wg) h) (modify f : Leanux.M Unit) :=
+  hoare_modify _ (fun w hi => wg_store h w (f w) (same w) hi)
+
+private theorem outer_ambient (a : AmbientM α) (h : List Allocation) :
+    Preserves (fun w : World => Inv (view w.wg) h) (monadLift a : Leanux.M α) :=
+  productAmbient_spec a _ (fun _ _ hi => hi)
+
+private theorem outer_route (a : Net.M α) (h : List Allocation) :
+    Preserves (fun w : World => Inv (view w.wg) h) (monadLift a : Leanux.M α) :=
+  product_stable _ (fun s => productRouting_spec a (fun t => t = s)) h
+
+theorem native_socket (fd : Nat) (body : Leanux.M Int) (h : List Allocation)
+    (hb : Preserves (fun w : World => Inv (view w.wg) h) body) :
+    Preserves (fun w : World => Inv (view w.wg) h) (Leanux.socketCallOn fd body) := by
+  have files {α : Type} (a : FS.M α) : Preserves (fun w : World => Inv (view w.wg) h) (monadLift a : Leanux.M α) := fs a h
+  routing_tx_source [Leanux.socketCallOn] using [hb,files]
+
+theorem native_netlink (body : Leanux.M Int) (h : List Allocation)
+    (hb : Preserves (fun w : World => Inv (view w.wg) h) body) :
+    Preserves (fun w : World => Inv (view w.wg) h) (Leanux.netlinkRequest body) := by
+  have files {α : Type} (a : FS.M α) : Preserves (fun w : World => Inv (view w.wg) h) (monadLift a : Leanux.M α) := fs a h
+  have ambient {α : Type} (a : AmbientM α) := outer_ambient a h
+  routing_tx_source [Leanux.netlinkRequest,Leanux.socketCall,Leanux.socketCallOn,skipCut] using [hb,files,ambient]
+
+theorem native_rtnetlink (body : Leanux.M Int) (h : List Allocation)
+    (hb : Preserves (fun w : World => Inv (view w.wg) h) body) :
+    Preserves (fun w : World => Inv (view w.wg) h) (Leanux.rtnetlinkRequest body) := by
+  have files {α : Type} (a : FS.M α) : Preserves (fun w : World => Inv (view w.wg) h) (monadLift a : Leanux.M α) := fs a h
+  have tasks {α : Type} (a : TaskM α) : Preserves (fun w : World => Inv (view w.wg) h) (monadLift a : Leanux.M α) := fs (monadLift a : FS.M α) h
+  have ambient {α : Type} (a : AmbientM α) := outer_ambient a h
+  have read := outer_get h
+  have edit (f : World → World) (same : ∀ w, wgStoreView (f w).wg = wgStoreView w.wg) := outer_edit f same h
+  routing_tx_source [Leanux.rtnetlinkRequest,Leanux.socketCallOn,skipCut,unsupported] using [hb,files,tasks,ambient,read]
+  all_goals exact edit _ (fun _ => rfl)
+
+theorem dump_device (ref : DeviceRef) : SameView view (wgGetDevice ref) :=
+  full (Origins.Retaining.wgGetDevice_material ref) (Keypairs.WGMore.wgGetDevice_sameSnapshot ref)
+
+theorem dump_start (fd : Nat) (ref : DeviceRef) : SameView view (netlinkDumpStart fd ref) :=
+  full (Origins.Retaining.netlinkDumpStart_material fd ref) (Keypairs.WGMore.netlinkDumpStart_sameSnapshot fd ref)
+
+theorem dump_recv (fd : Nat) : SameView view (netlinkRecvmsg fd) :=
+  full (Origins.Retaining.netlinkRecvmsg_material fd) (Keypairs.WGMore.netlinkRecvmsg_sameSnapshot fd)
+
+theorem add_route (dst plen oif typeCode metric mtu nlflags : Nat) (h : List Allocation) :
+    Preserves (fun w : World => Inv (view w.wg) h) (Env.wgAddroute dst plen oif typeCode metric mtu nlflags) := by
+  have routes {α : Type} (a : Net.M α) := outer_route a h
+  have ambient {α : Type} (a : AmbientM α) := outer_ambient a h
+  routing_tx_source [Env.wgAddroute,invariant] using [routes,ambient]
+
+theorem add_addr (addr plen : Nat) (h : List Allocation) :
+    Preserves (fun w : World => Inv (view w.wg) h) (Env.wgAddaddr addr plen) := by
+  have read : Preserves (fun w : World => Inv (view w.wg) h) (getWG : Leanux.M WGWorld) :=
+    product_stable _ (fun s => productGetWG_spec (fun t => t = s)) h
+  have routes {α : Type} (a : Net.M α) := outer_route a h
+  have ambient {α : Type} (a : AmbientM α) := outer_ambient a h
+  routing_tx_source [Env.wgAddaddr,getRouting,modifyRouting,unsupported] using [read,routes,ambient]
+
+theorem del_route (family : Nat) (named : Bool) (dst plen oif typeCode metric : Nat) (h : List Allocation) :
+    Preserves (fun w : World => Inv (view w.wg) h) (Env.wgDelroute family named dst plen oif typeCode metric) := by
+  have read : Preserves (fun w : World => Inv (view w.wg) h) (getWG : Leanux.M WGWorld) :=
+    product_stable _ (fun s => productGetWG_spec (fun t => t = s)) h
+  have routes {α : Type} (a : Net.M α) := outer_route a h
+  have ambient {α : Type} (a : AmbientM α) := outer_ambient a h
+  routing_tx_source [Env.wgDelroute,getRouting,modifyRouting,unsupported] using [read,routes,ambient]
+
+theorem dump_socket (fd : Nat) (sock : NlSock) : SameView view (setNlSock fd sock) := by
+  intro initial
+  change Preserves (fun w => view w = initial) _
+  unfold setNlSock
+  split <;> apply hoare_modify <;> exact fun _ hi => hi
+
+set_option maxHeartbeats 600000 in
+theorem quiet_dispatch (call : Syscall) (h : List Allocation)
+    (retained : DispatchRetained call) (notUp : call ≠ .wgUp) :
+    Preserves (fun w : World => Inv (view w.wg) h) (Leanux.dispatch call) := by
+  have native {α : Type} (a : WG.M α) (safe : Preserves (fun w => Inv (view w) h) a) :
+      Preserves (fun w : World => Inv (view w.wg) h) (monadLift a : Leanux.M α) :=
+    PublicationPoll.native_product _ _ safe
+  have files {α : Type} (a : FS.M α) : Preserves (fun w : World => Inv (view w.wg) h) (monadLift a : Leanux.M α) := fs a h
+  have ambient {α : Type} (a : AmbientM α) := outer_ambient a h
+  have gd (ref : DeviceRef) := native _ (native_frame h (dump_device ref))
+  have gs (fd : Nat) := native _ (native_frame h ((getNlSock_sameWGWorld fd).factor view))
+  have ss (fd : Nat) (sock : NlSock) := native _ (native_frame h (dump_socket fd sock))
+  have ds (fd : Nat) (ref : DeviceRef) := native _ (native_frame h (dump_start fd ref))
+  have dr (fd : Nat) := native _ (native_frame h (dump_recv fd))
+  have advance (ticks : Nat) := product_stable _ (advance_sameKernel ticks) h
+  cases call <;> simp only [DispatchRetained] at retained
+  all_goals try contradiction
+  case wgSetMtu n => exact native_socket _ _ h (env_mtu n h)
+  case wgDown => exact native_socket _ _ h (env_down h)
+  case wgDeladdr family => exact native_rtnetlink _ h (product_stable _ (wgDeladdr_sameKernel family) h)
+  case wgDelroute family named dst plen oif typeCode metric =>
+    exact native_rtnetlink _ h (del_route family named dst plen oif typeCode metric h)
+  case wgAddroute dst plen oif typeCode metric mtu nlflags =>
+    exact native_rtnetlink _ h (add_route dst plen oif typeCode metric mtu nlflags h)
+  case wgAddaddr addr plen => exact native_rtnetlink _ h (add_addr addr plen h)
+  case wgNetnsClose =>
+    exact (SyscallFrames.netnsClose_sameWGStore.of_factor
+      (fun s => nonceStore s) (fun w : World => view w.wg) (fun _ => rfl)).wp (fun v => Inv v h)
+  case wgGet ref =>
+    apply native_netlink _ h
+    routing_tx_source [modifyAmbient] using [gd,ambient]
+    all_goals exact outer_edit _ (fun _ => rfl) h
+  case wgGetStart ref =>
+    apply native_socket _ _ h
+    routing_tx_source [skipCut,skipCutExactly] using [gs,ss,ds,ambient]
+  case wgGetRecv =>
+    apply native_socket _ _ h
+    routing_tx_source [skipCut,unsupported,modifyAmbient] using [dr,ambient]
+    all_goals exact outer_edit _ (fun _ => rfl) h
+  case wgAdvance ticks =>
+    dsimp only [Leanux.dispatch]
+    routing_tx_source [unsupported] using [files,advance,ambient]
+  case seccompProbe nr args target strict => cases target <;> exact seccomp _ h
+  case seccompInstall => exact seccomp _ h
+  case seccompPrctl => exact seccomp _ h
+  case seccompCapdrop => exact seccomp _ h
+  case seccompQuery => exact seccomp _ h
+  all_goals exact fs _ h
+
+end Leanux.Proofs.WG.TransmitSecurity.Nonce.Frames
