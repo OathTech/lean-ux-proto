@@ -20,7 +20,7 @@ theorem first_arguments (s : MachineData) (index : UInt32) (old : Int)
     Reg64s.set,Reg64s.set64,BitVec.drop,BitVec.take,
     RelRegOrMem.interp,ConstExpr.interp,BitVec.toAddressSize,BitVec.signed,
     BitVec.ofInt_add,BitVec.ofInt_toInt,BitVec.ofInt_ofNat,
-    Effects.All,Width.bytesv,read,mapped,codeEntry,IndexInsertImage.Insert.entry]
+    Effects.All,Width.bytesv,codeEntry,IndexInsertImage.Insert.entry]
   simp_all [Effects.All]
   refine ⟨⟨?_,?_⟩,?_⟩
   · apply UInt64.toBitVec_inj.mp
@@ -48,7 +48,7 @@ theorem second_arguments (s : MachineData) (index : UInt32) (old : Int)
     Reg64s.set,Reg64s.set64,BitVec.drop,BitVec.take,
     RelRegOrMem.interp,ConstExpr.interp,BitVec.toAddressSize,BitVec.signed,
     BitVec.ofInt_add,BitVec.ofInt_toInt,BitVec.ofInt_ofNat,
-    Effects.All,Width.bytesv,read,mapped,codeEntry,IndexInsertImage.Insert.entry]
+    Effects.All,Width.bytesv,codeEntry,IndexInsertImage.Insert.entry]
   simp_all [Effects.All]
   refine ⟨⟨?_,?_⟩,?_⟩
   · apply UInt64.toBitVec_inj.mp

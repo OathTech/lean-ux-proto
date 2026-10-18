@@ -317,3 +317,35 @@ instructions, 1,354 total. The random body remains a labelled sampled transition
 in this capture test. Repeating the previously documented capture replay command
 took 5:51.51 elapsed, 347.60 user CPU seconds and 10,438,404 KiB maximum RSS.
 The supporting runtime-optimization budget remains unused.
+
+## First retry boundary and cached-provider execution, 2026-10-18 19:14 UTC
+
+`Core.enable_region` is shared by all three BH-enable sites. Its nested case
+uses the conditional pending-word resource established by the tested assertion.
+`retry_entry` composes the complete unlink prefix, its final callback, initial
+BH-enable and new BH-disable to insertion offset `0x6f`. Reconstruction,
+ownership and the resident unlinked entry are restored there for both initial
+linkage cases. `RetryData.frame` carries these data facts through service-only
+segments. Fresh replay of `PairInsertEnable` and `PairInsertPrefix` passes;
+the printed theorems use only the standard three axioms. The full build passes
+(736 jobs). Development errors were local elaboration/normalization issues;
+new unused simplification arguments were removed rather than suppressed.
+
+The separate `binary-pair-random-body` executable now runs the actual decoded
+cached random-provider body and its callbacks, with recording disabled and
+explicitly synthetic private memory. Eight runs pass: two retained-cache calls,
+two initial IF values and two undefined-value seeds. They return 7 and 8199,
+clear the consumed words, advance the position and restore the caller's IF and
+callee-saved registers. Each call executes 233 instructions with IF initially
+clear or 245 with IF set. A CPL-3 control fails at the actual CLI instruction.
+Reproduce with `capped lake build binary-pair-random-body` in `binary/`, then
+`capped binary/.lake/build/bin/binary-pair-random-body` from the worktree root.
+
+`generate_random_service.py` reproduces the partial random/recording decoder
+from the pinned ELF and checks direct-branch encodings. Unsupported instructions
+and absent callees remain failing fetches. This is positive execution evidence
+for the cached path, not a general random-provider theorem or the formal
+insertion Pre witness. The refill path contains REP STOS, still unsupported;
+the arbitrary accepted-retry theorem must not be narrowed to the cache size.
+No random-service assumption has been installed while its physical domain and
+recorded-input coupling are unresolved.
