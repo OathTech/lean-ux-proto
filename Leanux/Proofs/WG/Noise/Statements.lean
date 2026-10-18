@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Noise.ClearWorkerClaims
 import Leanux.Proofs.WG.Noise.SessionEvaluationClaims
 import Leanux.Proofs.WG.Noise.InitiationCallerClaims
 import Leanux.Proofs.WG.Noise.PeerCreationClaims
@@ -616,5 +617,18 @@ not assert successful completion, a runtime bound or initialized reachability. -
 theorem original_session_finite_evaluation (pid : PeerId) :
     Campaign2.AgreesOn (fun _ => True) (beginSession pid) (SessionEvaluation.evaluate pid) :=
   SessionEvaluation.original_session_finite pid
+
+/-- A normally completed zero-key worker preserves all other optional tags.
+Its own tag is absent exactly at the entry peer's last reference, and zero
+otherwise. The actual execution supplies initial residency and positivity;
+no slot, clock, owner-word or queue readiness premise is assumed. -/
+theorem original_clear_worker_tags (pid : PeerId) (entry : Campaign2.Snapshot) :
+    Campaign2.Ensures (queuedExpiredZeroKeyMaterial pid) (fun s => s = entry)
+      (fun _ final => ∃ p, entry.peerAt pid = some p ∧ 0 < p.refcount ∧
+        ∀ target, final.tagAt target =
+          if pid = target then
+            if p.refcount = 1 then none else some HANDSHAKE_ZEROED
+          else entry.tagAt target) :=
+  ClearWorker.original_queued_clear_tags pid entry
 
 end Leanux.Proofs.WG.Noise
