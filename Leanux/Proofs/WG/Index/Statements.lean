@@ -1,3 +1,6 @@
+import Leanux.Proofs.WG.Index.StagingIndexClaims
+import Leanux.Proofs.WG.Index.ResponseIndexClaims
+import Leanux.Proofs.WG.Index.LookupCoreSource
 import Leanux.Proofs.WG.Index.IncomingIndexClaims
 import Leanux.Proofs.WG.Index.ExpiryIndexClaims
 import Leanux.Proofs.WG.Index.ReachedRunnerSource
@@ -1416,5 +1419,39 @@ theorem original_expiry_index_core (pid : PeerId) :
     Campaign2.Ensures (expireCurrentPeerKeypairs pid) View.IndexCore
       (fun _ => View.IndexCore) :=
   expireCurrentPeerKeypairs_indexCore pid
+
+/-- Original staged sending preserves the complete index component under the
+current slot compatibility invariant. No successful allocation, queue readiness
+or extra caller-reference premise is supplied. -/
+theorem original_send_staged_index_core (pid : PeerId) :
+    Campaign2.Ensures (sendStagedPackets pid) View.StagedIndexReady
+      (fun _ => View.IndexCore) :=
+  StagingRich.sendStaged_index pid
+
+/-- Original keepalive sending has the same index guarantee, including its
+normal allocation-refusal path and the actual staged-send continuation. -/
+theorem original_send_keepalive_index_core (pid : PeerId) :
+    Campaign2.Ensures (sendKeepalive pid) View.StagedIndexReady
+      (fun _ => View.IndexCore) :=
+  StagingRich.sendKeepalive_index pid
+
+/-- The complete original response sender preserves the index component from
+current slot/store bounds and nullable caller compatibility. Its reached source
+adapter obtains that compatibility from the actual charged stamped loan. -/
+theorem original_send_response_index_core (pid : PeerId) :
+    Campaign2.Ensures (sendHandshakeResponse pid)
+      (fun s => InitializedBounds.EndpointSafe s ∧ View.IndexCore s ∧
+        View.HandshakeCompatibleSafe pid s)
+      (fun _ => View.IndexCore) :=
+  sendHandshakeResponse_indexCore pid
+
+/-- Original public-key lookup retains the index component, and every returned
+peer has the actual extra reference required for immediate rejection cleanup.
+No successful acquisition or later preservation of that budget is assumed. -/
+theorem original_pubkey_lookup_index_core (key : Key) :
+    Campaign2.Ensures (pubkeyLookup key) View.IndexCore
+      (fun result s => View.IndexCore s ∧
+        ∀ pid, result = some pid → View.IndexCoreHeld pid s) :=
+  pubkeyLookup_indexCore_held key
 
 end Leanux.Proofs.WG.Index
