@@ -23,8 +23,12 @@ the inherited GRO failures, including Logged/PrefixGro and Queues/GroState.
 This is the current provenance-support dependency; PollAuthorization is not
 a premise of the earlier endpoint-mutation claim. H4's ClearEndpoint and
 InsertionRouting support avoid those broken modules, while initialized
-PeerRemovalCompletion still reaches them. The inventories below describe
-historical overlap; they do not authorize copying the affected layers.
+PeerRemovalCompletion still reaches them. H4's initial-state flag-only replace-peers transport is now checked using
+ClearEndpoint.free_endpoint. Routing coherence, NodePairs and listed residency
+are supplied initially, then transported through actual free to the captured
+dead-marking pass. This closes the narrow first-pass dependency, while final
+cleanup/emptiness and mixed setters remain separate. The inventories below
+describe historical overlap; they do not authorize copying the affected layers.
 
 The incoming shared tree also has blank-at-EOF diff-check warnings in
 Lifetimes/ProductAmbient, Origins/CurrentChecks, CurrentHistory,

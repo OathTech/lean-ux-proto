@@ -14,8 +14,8 @@ the layers coincide; keep remaining local variants separate from claims.
 
 Main 77c9b555 now supplies the retyped shared tree and gate. Its 916 proof
 files replace the old inherited copies exactly; nine obsolete inherited files
-are removed. The original retrofit census below is historical. The current
-campaign has 1,008 modules, 2,821 theorems and 380 headlines. This merge
+are removed. The original retrofit census below is historical. At merge checkpoint bb152db8 the
+campaign had 1,008 modules, 2,821 theorems and 380 headlines. This merge
 retypes/deletes no owned claim; five temporary adapter bodies now project
 landed proofs, and H2 adds three bulk-removal declarations in two modules.
 The earlier CounterWindow/ReplayWindow build failure is superseded by the

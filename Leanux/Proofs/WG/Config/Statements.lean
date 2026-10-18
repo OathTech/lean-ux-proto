@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Config.ReplacementInitialClaims
 import Leanux.Proofs.WG.Config.ReplacementMixedGetterClaims
 import Leanux.Proofs.WG.Config.ZeroPortMixedGetterClaims
 import Leanux.Proofs.WG.Config.NonzeroPortMixedGetterClaims
@@ -858,7 +859,6 @@ theorem original_peer_remove_after_dead_live (pid : PeerId) (d : Device) (p : Pe
   have read : ((getDev.run clearedState).run clearAmbient) =
       .ok ((cleared, clearedState), clearAmbient) := by
     simp [getDev, clearedDevice]
-    rfl
   have bindRun {α β : Type} (action : WG.M α) (next : α → WG.M β)
       (state : WGWorld) (input : Ambient) :
       (((action >>= next).run state).run input) =
@@ -900,7 +900,6 @@ theorem original_peer_remove_live (pid : PeerId) (d removed : Device) (p : Peer)
   have read : ((getDev.run clearedState).run clearAmbient) =
       .ok ((cleared, clearedState), clearAmbient) := by
     simp [getDev, clearedDevice]
-    rfl
   have bindRun {α β : Type} (action : WG.M α) (next : α → WG.M β)
       (state : WGWorld) (input : Ambient) :
       (((action >>= next).run state).run input) =
@@ -2393,5 +2392,23 @@ theorem original_replacement_mixed_get_after_set (d : Device) (peers : PeerId �
           CursorHeld current (mixedPagesDevice current pages) none) :=
   replacement_mixed_get_after_set d peers nodes key pid sock found resident pairs live bounded down
     residents readable owned idle emptyQueue
+
+/-- On normal return of the actual flag-only REPLACE_PEERS request, initial
+routing coherence, node shape and listed residency justify the actual post-free
+and first-pass observations. Both original removal passes and all Stops remain;
+no final-state emptiness or successful completion is asserted.
+Erasure is unconditional by observedReplacePeers_erase. -/
+theorem original_replace_peers_initial (d : Device) (t4 t6 : AllowedIps.Tree)
+    (hi : AllowedIps.RoutingInvariant d t4 t6) (pairs : NodePairs d)
+    (listed : ListedResidents d d.peerList) :
+    Campaign2.Product.Ensures (observedReplacePeers (byIndex d))
+      (fun s => s.wg.device = some d ∧ ClaimView.selectsDevice s.toSnapshot d)
+      (fun result _ => ∃ cut, result = (some cut, 0) ∧
+        AllowedIps.Cleared (requestGeneration d) cut.afterFree ∧
+        cut.afterFree.peerList = d.peerList ∧
+        ∃ marked, cut.afterMark.wg.device = some marked ∧
+          DeadPassEffect cut.afterFree d.peerList marked ∧
+          ∀ pid ∈ d.peerList, ∃ p, marked.peers[pid]? = some p ∧ p.isDead = true) :=
+  observedReplacePeers_initial d t4 t6 hi pairs listed
 
 end Leanux.Proofs.WG.Config
