@@ -479,12 +479,18 @@ Require export exit status zero. The export is ephemeral and contains the
 transitive declaration closure, including all three complete function proofs,
 the sequence theorem, their executable definitions, both mutator witness
 modules, TrustBase and Execution. The prepared export is from `fe596fd0b1d75a15801bf679657380676f61c0d6`;
-its successful generation and validation status are recorded in the increment report. The external gate remains **pending**; the
+its successful generation and validation status are recorded in the increment report. The external gate passed on 2026-10-18 for this commit; the
 user runs this from `binary/` **outside Nono**:
 
 ```sh
 capped lake check --from-export ../.tmp/binary-pair-index.ndjson
 ```
+
+On 2026-10-18 the user reported acceptance by the Lean default kernel, using
+only `propext`, `Quot.sound` and `Classical.choice`. This result is specific
+to the named commit and complete `PairSubsystemSurface` closure above; it
+does not cover later insertion work.
+
 
 This avoids the sandbox's inability to resolve path dependencies. Fresh local
 replay is not external acceptance. Delete the export after the external check;

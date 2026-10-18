@@ -818,17 +818,19 @@ peaked at 2,943,528 KiB RSS, and exited zero. The root imports
 complete transitive closure including TrustBase and Execution. The final
 report-only checkpoint does not change that exported proof surface.
 
-The export remains ephemeral at `.tmp/binary-pair-index.ndjson` for the user
-to check. From `binary/`, **outside Nono**, the external gate is:
+The ephemeral export was `.tmp/binary-pair-index.ndjson`. From `binary/`,
+**outside Nono**, the external gate is:
 
 ```sh
 capped lake check --from-export ../.tmp/binary-pair-index.ndjson
 ```
 
-**External acceptance is pending.** The older accepted boundary export does
-not accept this increment or the previous complete-call increment. Retain the
-new export only until its external check; regenerate it from the named commit
-when needed again. The two large capture directories `.tmp/cap-index-remove`
+**External gate passed on 2026-10-18.** The user ran the command above and
+reported that the Lean default kernel accepted the solution with only
+`propext`, `Quot.sound` and `Classical.choice`. This acceptance applies to
+`fe596fd0b1d75a15801bf679657380676f61c0d6`, root `PairSubsystemSurface` and the
+module closure listed above. It does not cover subsequent insertion changes.
+Regenerate the ephemeral export from the named commit when needed again. The two large capture directories `.tmp/cap-index-remove`
 and `.tmp/cap-index-replace` have been removed after recording their conclusions;
 the reproduction commands above regenerate them.
 

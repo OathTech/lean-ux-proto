@@ -11,8 +11,10 @@ Mirror pin `cb2348e` now lags main `783510e850e187549cbb9380e53790e1ed232c77`.
 Private Kraken remains clean at `7ebba06a30eaf08c10b26b28ca14bfee1c791576`,
 Lean v4.35.0; approved s4 ELF SHA256
 `16c346209885db6c610d4aa126c6eb30f5d3c02f0498d95e606473945f648774`.
-The previous subsystem's external export gate is pending; its user command has
-been requested. A separate read-only trust-surface review is in progress.
+The previous subsystem's external export gate passed on 2026-10-18 at
+`fe596fd0b1d75a15801bf679657380676f61c0d6`: `PairSubsystemSurface` and its full
+closure were accepted with only `propext`, `Quot.sound` and `Classical.choice`.
+The independent trust-surface review is completed and dispositioned below.
 
 Initial inspection confirms 109 insertion instructions. The common unlink
 segment, finite bucket decoder and storage frames are reuse candidates.
@@ -46,4 +48,4 @@ The interruption left only the review document uncommitted. It was preserved,
 including that untracked file, at recovery ref
 `refs/recovery/binary-pair-runner/20261018T172711Z`; branch HEAD was not changed
 by preservation. No other worktree was modified. The preceding external export
-was observed running under the user's command; acceptance awaits its result.
+was then accepted under the user's external command, as recorded above.
