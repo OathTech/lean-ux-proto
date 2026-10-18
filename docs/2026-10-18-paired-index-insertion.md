@@ -21,3 +21,29 @@ entropy provider and `kcov_choice_ip`; input coupling must remain explicit and
 must not assume arbitrary draws from a fixed deterministic machine state.
 
 No new theorem or passing insertion test is claimed at this start checkpoint.
+
+## Independent review disposition
+
+The [surface review](2026-10-18-review-paired-index-subsystem.md) permits the
+insertion extension on the existing conditional sequential foundation. It
+found no circular future-Pre/execution premise. Each finding is retained:
+
+- **R1, medium:** the old sequence permission domain covers arbitrary prepared
+  heaps. The insertion extension will restrict the *permission quantifier* to
+  a readiness domain derived by composition. This weakens the environment
+  hypothesis, not the source domain or R. The prior exported theorem is unchanged.
+- **R2, medium:** the old returning-history premise also covers histories that
+  returned earlier and later reached the same boundary again. This is a stronger
+  assumption, not a first-return safety result. It remains explicitly open while
+  the insertion execution/history boundary is designed. Do not describe the
+  current premise as excluding all executed caller continuations. A repair must
+  derive a first-boundary property rather than assume future R or termination.
+- Intermediate Ready is established and used by old composition, but absent
+  from its exported per-call Observed relation. The extended theorem should
+  expose the paired boundary states if its claimed observations require them.
+
+The interruption left only the review document uncommitted. It was preserved,
+including that untracked file, at recovery ref
+`refs/recovery/binary-pair-runner/20261018T172711Z`; branch HEAD was not changed
+by preservation. No other worktree was modified. The preceding external export
+was observed running under the user's command; acceptance awaits its result.
