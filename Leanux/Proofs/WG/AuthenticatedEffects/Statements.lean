@@ -1,3 +1,8 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.TransportInitialized
+import Leanux.Proofs.WG.AuthenticatedEffects.TransportWorkers
+import Leanux.Proofs.WG.AuthenticatedEffects.DecryptWorkerFrames
+import Leanux.Proofs.WG.AuthenticatedEffects.MacRefusal
+import Leanux.Proofs.WG.AuthenticatedEffects.TransportEntryChecks
 import Leanux.Proofs.WG.AuthenticatedEffects.Frames
 import Leanux.Proofs.WG.AuthenticatedEffects.ReplyBinding
 import Leanux.Proofs.WG.AuthenticatedEffects.Emission
@@ -289,5 +294,87 @@ theorem refused_response_preserves_protocol_and_silence (msg : Key) (src : SkbSo
       .ok (((),v),CounterWindow.record d .hsRespNoPeer true) ∧
       peerProtocolView v = peerProtocolView w ∧ v.sent = w.sent :=
   receive_response_refused_protocol msg src loaded w u q v a b c d kind load mac refused
+
+/-- Security: a native data decrypt cannot transmit or alter any peer field.
+Its only possible WG-world mutation is the named pre-authentication receiving-key
+policy invalidation, which returns no plaintext. All other normal outcomes,
+including ciphertext authentication refusal, preserve the full WG world. -/
+theorem data_decrypt_effect_is_only_policy_retirement (pkt : RxPacket) (result : Option RxPacket)
+    (w v : WGWorld) (a b : Ambient)
+    (run : ((decryptPacket pkt).run w).run a = .ok ((result,v),b)) :
+    (v = w ∨ result = none ∧ ∃ d k c,
+      w.dev = some d ∧ d.keypairs[pkt.keypair]? = some k ∧
+      ((KeyTimes.receiveReject k).run w).run (CounterWindow.record a .decNoKeypair false) =
+        .ok ((true,w),c) ∧
+      v = CounterWindow.store w pkt.keypair {k with receiving := {k.receiving with isValid := false}}) ∧
+      Leanux.Proofs.Framing.PeerBorrow.resident (Leanux.Proofs.Framing.wgStoreView v) =
+        Leanux.Proofs.Framing.PeerBorrow.resident (Leanux.Proofs.Framing.wgStoreView w) ∧ v.sent = w.sent :=
+  ⟨decryptPacket_effect pkt result w v a b run,decryptPacket_peer_and_sent pkt result w v a b run⟩
+
+/-- Security: the original decrypt worker itself cannot emit. This local
+composition leaves its actual IRQ and softirq callbacks visible; whole-driver
+causality must account for packets processed by those callbacks. -/
+theorem data_decrypt_worker_is_silent_when_callbacks_are (softirq irq : Leanux.M Unit)
+    (softirqFrame : Leanux.Proofs.Framing.SameView (fun w : World => w.wg.sent) softirq)
+    (irqFrame : Leanux.Proofs.Framing.SameView (fun w : World => w.wg.sent) irq) :
+    Leanux.Proofs.Framing.SameView (fun w : World => w.wg.sent) (decryptStep softirq irq) :=
+  decryptStep_sent_of_callbacks softirq irq softirqFrame irqFrame
+
+/-- Security: every actual native replay-check receipt in a poll passed the
+crypted-state guard and has the publication invariant at its real input, before
+any consumer effects and even before a later Stop. The publication invariant is
+a visible poll-entry premise; selected-cell and initialized-driver composition
+remain separate obligations, so this does not claim whole-run authentication. -/
+theorem data_replay_entry_keeps_publication (pid : PeerId) (budget : Nat) (w : World)
+    (prior : List Lifetimes.LifetimeEvent) (history : List Queues.RxHistory.Event)
+    (hi : PublicationHistory.Inv history w.wg)
+    (occurrence id : Nat) (stamp : Lifetimes.PacketStamp) (pkt : RxPacket)
+    (r : Leanux.Proofs.Logged.RunWitness Bool)
+    (member : Queues.RxJoint.Event.checkedCounter occurrence id stamp pkt r ∈
+      (Leanux.Proofs.Logged.runPrefix (Queues.RxJoint.poll pid budget) w
+        (Queues.RxJoint.seed prior)).2) :
+    PublicationHistory.Inv history r.before.wg ∧ pkt.state = .crypted ∧
+      r.Valid (liftWG (counterValidate pkt.keypair pkt.nonce)) :=
+  TransportEntryChecks.poll_counter_entry pid budget w prior history hi occurrence id stamp pkt r member
+
+/-- Security: the actual packet reaching the replay check comes from a
+strictly earlier successful authenticated publication in the supplied poll-entry
+history. The receipt retains exact selected bytes, nonce and key-slot linkage
+before any endpoint/consumer effect, including when that consumer later Stops.
+The initialized theorem below establishes this entry history from the fixture. -/
+theorem data_poll_preconsume_authentication (pid : PeerId) (budget : Nat) (w : World)
+    (prior : List Lifetimes.LifetimeEvent) (history : List Queues.RxHistory.Event)
+    (hi : PublicationHistory.Inv history w.wg)
+    (occurrence id : Nat) (stamp : Lifetimes.PacketStamp) (pkt : RxPacket)
+    (r : Leanux.Proofs.Logged.RunWitness Bool)
+    (member : Queues.RxJoint.Event.checkedCounter occurrence id stamp pkt r ∈
+      (Leanux.Proofs.Logged.runPrefix (Queues.RxJoint.poll pid budget) w
+        (Queues.RxJoint.seed prior)).2) :
+    TransportAuthenticatedEntry.Certified history id stamp pkt r :=
+  TransportAuthenticatedEntry.poll pid budget w prior history hi occurrence id stamp pkt r member
+
+/-- Security: the original decrypt worker, including its actual IRQ and softirq
+polls, retains pre-consume authentication certificates on every reached prefix.
+The input owner/publication invariant is visible in `TransportChecks.Inv`; the
+initialized theorem below establishes it through the outer scheduler and runner. -/
+theorem decrypt_worker_retains_preconsume_authentication :
+    Leanux.Proofs.Logged.PrefixPreserves TransportChecks.Inv TransportChecks.Safe
+      Queues.RxHistory.decryptStep := TransportChecks.decryptStep
+
+/-- Security: any packet reaching the actual transport replay check was
+published after an earlier successful native AEAD authentication in this same
+initialized run, with exact plaintext, nonce and key-slot binding. This receipt
+precedes endpoint and consumer effects and survives an internally stopped
+consumer. Every typed trace and both placeholder modes are covered; no caller
+invariant, trace-validity or completed-consumer assumption is required. This
+closes transport authentication provenance, not all T3 send-root causality. -/
+theorem initialized_transport_replay_has_authenticated_source (trace : Runner.Trace)
+    (placeholders : Bool) (pre post : List Queues.RxHistory.Event) (occurrence id : Nat)
+    (stamp : Lifetimes.PacketStamp) (pkt : RxPacket) (r : Leanux.Proofs.Logged.RunWitness Bool)
+    (position : (Leanux.Proofs.Logged.runPrefixOuter
+      (Queues.RxHistory.executeTraceHistory trace placeholders) []).2 =
+      pre ++ .checkedCounter occurrence id stamp pkt r :: post) :
+    TransportAuthenticatedEntry.Certified pre id stamp pkt r :=
+  TransportInitialized.replay_entry trace placeholders pre post occurrence id stamp pkt r position
 
 end Leanux.Proofs.WG.AuthenticatedEffects

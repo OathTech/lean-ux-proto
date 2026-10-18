@@ -1,5 +1,5 @@
 import Leanux.Proofs.WG.TransmitSecurity.NonceStagingSafety
-import Leanux.Proofs.WG.TransmitSecurity.NonceNapi
+import Leanux.Proofs.WG.TransmitSecurity.NonceDeferredSafety
 import Leanux.Proofs.WG.TransmitSecurity.NonceTimers
 import Leanux.Proofs.WG.TransmitSecurity.NonceHandshakeSafety
 import Leanux.Proofs.WG.TransmitSecurity.WireNonce
@@ -226,5 +226,31 @@ theorem original_irq_exit_nonce_safety :
     ErasesPrefix Nonce.irqExitObserved Env.napiIrqExit ∧
     PrefixPreserves (fun h w => Nonce.Inv (Nonce.view w.wg) h) List.Nodup Nonce.irqExitObserved :=
   ⟨Nonce.irqExitObserved_erases,Nonce.irqExitObserved_safe⟩
+
+/-- Security: every committed iteration of the native crypt/receive scheduler
+preserves sending nonce non-reuse, including the encryption-before-TX path,
+NAPI callbacks and allocations before Stop. Consistency trials on copied states
+emit no allocations. The incoming invariant and whole-run initialization remain
+explicit; packet transport to AEAD is a separate obligation. -/
+theorem original_scheduler_nonce_safety (stack : Option Worker) :
+    ErasesPrefix (Nonce.scheduleObserved stack) (Env.schedule stack) ∧
+    PrefixPreserves (fun h w => Nonce.Inv (Nonce.view w.wg) h) List.Nodup
+      (Nonce.scheduleObserved stack) :=
+  ⟨Nonce.scheduleObserved_erases stack, Nonce.scheduleObserved_safe stack⟩
+
+/-- Security: both actual wheel passes preserve the nonce allocation history
+through selected timer callbacks, send/clear workers and crypt scheduling,
+including allocations before Stop. Native bucket/order guards remain present;
+this is preservation from the explicit incoming invariant, not eventual timer
+progress or initialized packet-to-AEAD transport. -/
+theorem original_timer_pass_nonce_safety (j : UInt64) :
+    (ErasesPrefix (Nonce.timersObserved j) (Env.runTimers j) ∧
+      PrefixPreserves (fun h w => Nonce.Inv (Nonce.view w.wg) h) List.Nodup
+        (Nonce.timersObserved j)) ∧
+    (ErasesPrefix (Nonce.placeholderTimersObserved j) (Env.runTimersPlaceholder j) ∧
+      PrefixPreserves (fun h w => Nonce.Inv (Nonce.view w.wg) h) List.Nodup
+        (Nonce.placeholderTimersObserved j)) :=
+  ⟨⟨Nonce.timersObserved_erases j, Nonce.timersObserved_safe j⟩,
+    ⟨Nonce.placeholderTimersObserved_erases j, Nonce.placeholderTimersObserved_safe j⟩⟩
 
 end Leanux.Proofs.WG.TransmitSecurity

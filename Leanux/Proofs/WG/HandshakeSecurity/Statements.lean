@@ -14,6 +14,8 @@ import Leanux.Proofs.WG.HandshakeSecurity.ConfirmationInitialized
 import Leanux.Proofs.WG.HandshakeSecurity.ConfirmationUnique
 import Leanux.Proofs.WG.HandshakeSecurity.StagingSelectionClaims
 import Leanux.Proofs.WG.HandshakeSecurity.StagingSelectionFrames
+import Leanux.Proofs.WG.HandshakeSecurity.ResponderStagingFrames
+import Leanux.Proofs.WG.HandshakeSecurity.ResponderNativeClaims
 
 /-! Native T4 replay and T5 confirmation boundaries. Initialized history,
 authentication linkage and responder-send exclusion remain separate obligations;
@@ -330,5 +332,31 @@ theorem original_staging_selected_current (pid : PeerId) (w : WGWorld) (a : Ambi
   intro p member
   obtain ⟨samePeer, slot, nonce⟩ := valid.2.2.2.2.2.2.2.1 p member
   exact ⟨samePeer, by rw [slot, selected], nonce⟩
+
+/-- The original staging prefix through current-key borrowing preserves the
+current allocation identity, initiator/responder role and sending key. It
+cannot itself make an unconfirmed responder allocation current. The actual
+fixture starts with no such current allocation; whole-driver preservation of
+the confirmation-history invariant is still a separate obligation. -/
+theorem original_staging_selection_current_material (pid : PeerId) :
+    sendStagedPackets pid = Responder.selectionPrefix pid >>= Responder.selectionTail pid ∧
+    (∀ w a result v b, ((Responder.selectionPrefix pid).run w).run a = .ok ((result, v), b) →
+      Responder.current v = Responder.current w) ∧
+    (∀ net bare, Responder.Authorized [] (Runner.initialWG net bare)) := by
+  refine ⟨Responder.selection_factor pid, ?_, Responder.initial⟩
+  intro w a result v b run
+  exact (Framing.hoare_iff_run_ambient _ _ _).mp
+    (Responder.selectionPrefix_current pid (Responder.current w)) w a result v b rfl run
+
+/-- Under the visible H1 slot/material source contract, native confirmation
+preserves responder-current authorization while recording the received key's
+actual entry allocation. This is the local chronology transition: authentication
+of its caller and transport from the initialized driver remain separate. -/
+theorem original_responder_confirmation_history_step (H1 : H1ResponderCurrentEdges)
+    (pid : PeerId) (kid : KeypairId) (confirmed : List Nat) (w v : WGWorld)
+    (a b : Ambient) (result : Bool) (entry : Responder.Authorized confirmed w)
+    (run : ((receivedWithKeypair pid kid).run w).run a = .ok ((result, v), b)) :
+    Responder.Authorized (confirmed ++ Responder.confirmedAt w kid result) v :=
+  Responder.confirmation_authorized H1 pid kid confirmed w v a b result entry run
 
 end Leanux.Proofs.WG.HandshakeSecurity

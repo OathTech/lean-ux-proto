@@ -23,7 +23,7 @@ stops the work. Validation for the current source-contract checkpoint is recorde
 | T2 transmit authorization and conservation | Open. R3 supplies initialized selection-time authorization; packet/material transport to actual encryption and socket emission, and complete TX dispositions, remain to prove. |
 | T3 authenticated effects and silence | Open. R6 supplies the cookie gate's local contracts, not causal closure of all delayed effects. |
 | T4 handshake replay resistance | Open. Source inventory and H1 interfaces identified; retained-peer timestamp histories and exchange-linked installation still need initialized execution closure. |
-| T5 responder confirmation | Open. H1 now includes initialized confirmation uniqueness; accepted-RX linkage and the prohibition on earlier responder encryption remain to prove. |
+| T5 responder confirmation | Open. Initialized completed consumers and replay entries have earlier native AEAD evidence; responder chronology and the prohibition on earlier encryption remain to prove. |
 | T6 key retirement | C3-F1 concerns the literal actual-encryption clause. R5 supplies the admission/attempt checks. New native put/clear contracts prove exact reference payment, retention and final removal; initialized holder accounting and conditional cleanup remain open. |
 
 ## C3-F1: invalidation and clearing do not cancel previously admitted encryption
@@ -165,7 +165,7 @@ Every claim keeps its native run and entry invariant visible. The register in
 
 - T1/T2: the actual global allocation stamp and sending counter support
   non-reuse through complete staging, `wgXmit`, keepalive sending, key creation,
-  session establishment, rotation, all five timer callbacks, the full handshake receive worker, receive consumption, the complete poll with actual stack replies, both NAPI entry points and reference release. AEAD counter encoding
+  session establishment, rotation, all five timer callbacks, the full handshake receive worker, receive consumption, the complete poll with actual stack replies, both NAPI entry points, all draining workers, the native scheduler, both wheel passes and reference release. Copied-state consistency trials emit no nonce events. AEAD counter encoding
   is injective below the actual admission limit. Encryption receipts preserve
   success/Stop and bind the entry-resident key, original packet nonce and
   actual ciphertext expression. Rekey receipts capture the guarded call to
@@ -179,8 +179,8 @@ Every claim keeps its native run and entry invariant visible. The register in
   is now extracted from actual holders; R2 allocation vacancy remains explicit. The concrete holder projection
   counts each slot, RX packet and TX batch reference and has an initialized
   empty base. Native create/get/put, clearing, rotation, confirmation and complete sessions transport that physical projection; an
-  outstanding durable holder prevents final removal. The actual clear-worker dispatcher clears its selected queued peer on normal completion, with no incoming holder invariant. Whole-run holder transport and conditional clock/dispatch progress
-  remain open. Stable child implementations through `6d9b08b6` were copied
+  outstanding durable holder prevents final removal. The actual clear-worker dispatcher clears its selected queued peer on normal completion, with no incoming holder invariant. Native TX enqueue/disposal now transport the account; current-slot acquisition derives its credit, and native packet allocation derives detachment from C1 packet ownership. Final peer release keeps its slot-readiness premise visible. The clear dispatcher transports the account and derives its own slot readiness. Whole-run holder transport and conditional clock/dispatch progress
+  remain open. Stable child implementations through `af030205` were copied
   by owned path, without a branch merge.
 - T3: qualifying invalid-MAC2 initiation/response receives produce at most one
   source-bound 64-byte cookie datagram on normal completion and preserve the
@@ -189,8 +189,8 @@ Every claim keeps its native run and entry invariant visible. The register in
   bookkeeping. The actual MAC/load witness remains explicit. Full Noise refusals follow exact native exits with no egress or authenticated
   suffix, and pre-lookup initiation refusals preserve WGWorld. Post-lookup
   initiation refusal now restores complete peer records, including refcounts
-  and timers, from the actual acquisition/repayment chain. Response/cookie refusals now preserve every peer field except the explicitly allowed refcount and index-owner bookkeeping, without an initialized-reference premise. Cookie acceptance receipts precede the first cookie write and survive Stop. Full reference restoration and initialized delayed-effect causality remain open. Stable child
-  implementation through `30764e1f` was copied by owned path.
+  and timers, from the actual acquisition/repayment chain. Response/cookie refusals now preserve every peer field except the explicitly allowed refcount and index-owner bookkeeping, without an initialized-reference premise. Cookie acceptance receipts precede the first cookie write and survive Stop. Native decryption changes WG state only at the explicit receiving-key invalidation arm; other decrypt outcomes retain the entire WG world. Initialized replay-entry receipts now carry a strictly earlier actual AEAD/publication certificate with matching selected packet bytes, slot and nonce, surviving later internal Stop. This root theorem covers arbitrary typed traces and either placeholder mode without an incoming publication invariant. Full reference restoration and initialized delayed-effect causality remain open. Stable child
+  implementation through `8ca7c613` was copied by owned path.
 - T4: full original initiation receipts strictly increase the actual pre-write
   timestamp, including before Stop; refusal preserves surviving handshake
   state. Native consumer sequences compose timestamp histories. Response and
@@ -199,7 +199,7 @@ Every claim keeps its native run and entry invariant visible. The register in
   campaign 2's unlanded H1 results. Independent native allocation receipts
   establish at most one creation per session call and exactly one on true
   completion. Full driver/exchange closure remains open. Stable child
-  implementation through `85923a8f` was copied by owned path.
+  implementation through `520b99d6` was copied by owned path.
 - T5: original receive-consumer and poll observers record the native
   confirmation return immediately, before the timer/staged-send/routing suffix
   can Stop; poll receipts carry the actual successful replay check. Every
@@ -208,15 +208,15 @@ Every claim keeps its native run and entry invariant visible. The register in
   Completed-confirmation uniqueness uses visible `H1InitializedCompletedConfirmation`,
   an explicit projection of named unlanded H1 results. Staging receipts bind
   the actual initial peer/current-key read and key borrow to bounded packet
-  admissions. These do not close internally stopped consumers, allocation
-  identity transport, or the prohibition on earlier responder encryption.
+  admissions. The responder-current projection now has an empty base and exact material continuity through the native staging borrow/read prefix. Local installation/promotion/clear transitions keep H1ResponderCurrentEdges visible. Full allocation identity and current-slot chronology transport, and the prohibition on earlier responder encryption, remain open.
 
-The current source-contract checkpoint passes all 1115 proof-build jobs and the
-994-declaration gate across thirteen root modules, with only standard axioms.
+The current source-contract checkpoint passes all 1151 proof-build jobs and the
+1011-declaration gate across thirteen root modules, with only standard axioms.
 All twelve witness recipes and fresh-root kernel replay pass at the default
 cap. The unchanged model and unit suite retain the prior checkpoint's 130-job
 build and 131 passing tests with one kernel-build-dependent skip. All six
-outcomes remain open.
+outcomes remain open; the initialized driver and end-to-end effect transport
+remain work in progress.
 
 A supplemental kernel replay invoked without `--fresh` failed at the 32 GiB
 cap and again at 64 GiB (exit 137); neither is a pass. Inspection of the shipped

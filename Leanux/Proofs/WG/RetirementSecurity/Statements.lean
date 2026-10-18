@@ -12,6 +12,11 @@ import Leanux.Proofs.WG.RetirementSecurity.HolderSession
 import Leanux.Proofs.WG.RetirementSecurity.HolderClear
 import Leanux.Proofs.WG.RetirementSecurity.SessionHolders
 import Leanux.Proofs.WG.RetirementSecurity.WorkerRetirement
+import Leanux.Proofs.WG.RetirementSecurity.TxEnqueueHolders
+import Leanux.Proofs.WG.RetirementSecurity.TxDisposeHolders
+import Leanux.Proofs.WG.RetirementSecurity.TxAcquireHolders
+import Leanux.Proofs.WG.RetirementSecurity.TxAllocationHolders
+import Leanux.Proofs.WG.RetirementSecurity.WorkerHolderClosure
 
 /-! Campaign 3, T6: local original-operation retirement contracts. The
 initialized key-reference ledger, complete caller coverage and conditional
@@ -19,6 +24,85 @@ timer/worker progress remain separate obligations. No complete T6 outcome is
 claimed by these exports. -/
 namespace Leanux.Proofs.WG.RetirementSecurity
 open Leanux Leanux.WG Leanux.Proofs.Framing
+
+/-- The actual current slot funds staged acquisition: a normal get adds one
+saved reference to that allocation, and a null current slot adds none. The
+positive count is derived from the concrete holder account, not assumed as
+reference-count slack. Saturation remains the source's explicit failure. -/
+theorem original_current_key_acquisition (account : HolderAccount temporary w)
+    (found : peerAt w pid = some p) (a b : Ambient)
+    (run : ((keypairGet p.keypairCurrent).run w).run a = .ok ((result,v),b)) :
+    ∃ saved : Option Credits.Allocation,
+      result = p.keypairCurrent ∧ saved.map (·.slot) = result ∧
+      HolderAccount (saved.toList ++ temporary) v := account.current_get found a b run
+
+/-- Original staged TX allocation cannot overwrite any existing batch
+holder, and its new packet IDs are separate from every queued batch head.
+This source theorem derives separation using campaign 1's packet bound;
+the incoming concrete key-holder account remains visible. -/
+theorem original_tx_allocation_holder_account (account : HolderAccount temporary w)
+    (bounded : Packets.Inv w) (packets : List DataPacket) (a b : Ambient)
+    (run : ((packets.mapM newTxSkb).run w).run a = .ok ((items,v),b)) :
+    HolderAccount temporary v ∧ TxDetached items v := account.allocate_tx bounded packets a b run
+
+/-- A normally completed actual clear-worker dispatch pays the selected
+peer's slot references, preserves queued/transient references, and leaves
+the slots empty. Native clearing itself discharges final-peer slot readiness.
+The incoming holder account is explicit; this does not assert elapsed-time
+progress or complete initialized Runner transport. -/
+theorem original_dispatched_retirement_holder_account
+    (account : HolderAccount temporary w.wg)
+    (run : Env.runOneClearWorker.run w = .ok ((),v)) :
+    HolderAccount temporary v.wg ∧ ∃ d pid,
+      w.wg.dev = some d ∧ pid ∈ d.clearWorkQueue ∧
+      SlotsCleared pid v.wg ∧ Retains w.wg v.wg := account.dispatched_zero run
+
+/-- Original TX disposal pays exactly its saved batch reference while
+preserving every remaining concrete key holder. Its visible entry premises
+require that freed packet IDs are not other queued batch heads and that any
+final peer release has already cleared that peer's key slots. Initialized
+transport of those caller facts is a separate obligation. -/
+theorem original_tx_disposal_holder_account
+    (account : HolderAccount (allocation :: temporary) w)
+    (detached : TxDetached items w) (ready : PeerReleaseReady pid w) (a b : Ambient)
+    (run : ((Queues.TxDisposition.disposeSource pid items allocation.slot).run w).run a =
+      .ok ((result,v),b)) : result = true ∧ HolderAccount temporary v :=
+  account.dispose_tx detached ready a b run
+
+/-- A native peer put cannot discard key-reference holders when its final
+release has cleared all key slots; the source's own normal path checks empty
+packet queues. Peer credit and key credit remain distinct, and the final-slot
+condition is an explicit caller premise. -/
+theorem original_peer_put_holder_account (account : HolderAccount temporary w)
+    (ready : PeerReleaseReady pid w) (a b : Ambient)
+    (run : ((peerPut (some pid)).run w).run a = .ok (((),v),b)) :
+    HolderAccount temporary v := account.peer_put ready a b run
+
+/-- Native TX enqueue transfers exactly one saved key reference into its
+peer queue, including the device-ring-full path; this prevents either losing
+that reference or charging packet aliases as additional references. The
+concrete input holder account and saved batch loan remain explicit. -/
+theorem original_tx_enqueue_holder_account
+    (account : HolderAccount (allocation :: temporary) w)
+    (batch : transmitLoan w pid item = some ⟨.transmit pid item,allocation⟩)
+    (a b : Ambient)
+    (run : ((enqueuePerDeviceAndPeer pid item).run w).run a = .ok ((ret,v),b)) :
+    (ret = -ENOSPC ∧ HolderAccount (allocation :: temporary) v) ∨
+      ((ret = 0 ∨ ret = -EPIPE) ∧ HolderAccount temporary v) :=
+  account.enqueue batch a b run
+
+/-- Dropping the actual cached TX batch moves its one key reference to the
+worker's saved local, so subsequent retirement cannot pay a still-queued
+reference. This claim is the original reached setter cut, with the native
+peer record and cached batch visible as premises. -/
+theorem original_tx_drop_holder_account (account : HolderAccount temporary w)
+    (found : peerAt w pid = some p) (peeked : p.txQueue.peeked = some item)
+    (a b : Ambient)
+    (run : ((setPeer pid {p with txQueue := p.txQueue.dropPeeked}).run w).run a =
+      .ok (((),v),b)) :
+    ∃ allocation, transmitLoan w pid item = some ⟨.transmit pid item,allocation⟩ ∧
+      HolderAccount (allocation :: temporary) v :=
+  account.drop_tx found peeked a b run
 
 /-- A successful original keypair put pays exactly one reference, so local
 retirement cannot silently consume additional packet-held references. Zero
