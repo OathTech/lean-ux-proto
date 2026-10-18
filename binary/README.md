@@ -566,34 +566,29 @@ capped binary/.lake/build/bin/binary-pair-insert-witness .tmp/binary-insert/inpu
 
 `PairInsertionSurface` extends the previous export root with both insertion
 headlines, the mixed sequence theorem and the linked/unlinked formal witnesses.
-From `binary/`, after committing and successfully building the claimed tree:
+The reviewed source is `5433d7781d9d809b82ea4c19faa13d40af9a4957`. From
+`binary/`, after successfully building that source, reproduce the export with:
 
 ```sh
 capped lake env leanchecker --fresh PairInsertionSurface
-capped lake env leanexport PairInsertionSurface > ../.tmp/binary-pair-insert.ndjson
+capped lake env leanexport PairInsertionSurface > ../.tmp/binary-pair-insert-reviewed.ndjson
 # External gate, run by the user outside Nono:
-capped lake check --from-export ../.tmp/binary-pair-insert.ndjson
+capped lake check --from-export ../.tmp/binary-pair-insert-reviewed.ndjson
 ```
 
-Require export exit status zero and record its exact source commit. The earlier
-index-subsystem acceptance does not cover insertion; this increment's external
-acceptance is pending. The prepared insertion export is from
-`b3d57f17b3dbc3f47ade3feb3aa1322886461d2d`, root `PairInsertionSurface` and its
-full closure, generated successfully on 2026-10-18. Captures and exports remain
-ephemeral under `.tmp`.
+Require export exit status zero and record its exact source commit. The new
+export was generated successfully on 2026-10-18 from the commit above, root
+`PairInsertionSurface` and its full transitive closure. External acceptance
+is pending. The previous `b3d57f17` insertion export is superseded and its
+reconstructible file removed; earlier subsystem acceptance does not cover
+the reviewed insertion source.
 
 The [fresh insertion review](../docs/2026-10-18-review-paired-index-insertion.md)
 found a private-state alias and missing replay identity checks. Both are repaired
 and independently reviewed. The revised readiness assertion rejects the bad
 alias without requiring disjoint capture blocks. Universal service and input
-coupling contracts remain hypotheses. The old export above does not cover the
-repairs; a replacement export is being prepared as
-`../.tmp/binary-pair-insert-reviewed.ndjson`. Its external command is:
-
-```sh
-capped lake check --from-export ../.tmp/binary-pair-insert-reviewed.ndjson
-```
-
-The [checkpoint disposition](../docs/2026-10-18-paired-index-insertion.md#checkpoint-close-and-pause-2026-10-18)
-records the source commit, final validation and pause status. The original
-service-domain counterexample remains in the review and executable regression.
+coupling contracts remain hypotheses. The
+[checkpoint disposition](../docs/2026-10-18-paired-index-insertion.md#checkpoint-close-and-pause-2026-10-18)
+records final validation and pause status. The original service-domain
+counterexample remains in the review and executable regression. Captures,
+exports and logs are ephemeral; regenerate them using the commands above.

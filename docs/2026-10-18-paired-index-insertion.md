@@ -1,7 +1,8 @@
 # Paired index insertion: execution report
 
-Status: the fresh review found two defects, now repaired and undergoing final
-validation before the requested pause. The conditional function and arbitrary
+Status: **paused after both fresh-review findings were repaired and final
+local validation passed**. The corrected export is ready; external acceptance
+remains pending. The conditional function and arbitrary
 finite mixed-sequence theorems build on `task/binary-pair-runner`, from baseline
 `41675f86` under the [charter](2026-10-18-charter-paired-index-insertion.md).
 The earlier export from `b3d57f17` does not cover these repairs. Its physical
@@ -983,8 +984,8 @@ both original findings and its follow-up on the repairs. Individual dispositions
 
 The reviewer independently confirmed the repaired rejection, the unchanged
 malformed-state execution failure, accepted overlapping covers, and the Lean
-and Python identity controls. The conditional proofs and the source mirror
-are otherwise unchanged. The provider contract is still an unproved
+and Python identity controls. The existing proof scripts compose against the strengthened physical
+assertion without edits; the source mirror and R are unchanged. The provider contract is still an unproved
 hypothesis; fixing a concrete counterexample is not a universal proof.
 
 The final default build passes (793 jobs), as does the executable build
@@ -995,16 +996,43 @@ and existing controls, and adds both alias-cover variants and the accepted
 overlapping-cover case. All four exact formal-witness runs pass. The mixed
 suite passes 32 sequences, 416 calls and 434,064 instructions in 62.96 seconds.
 Fresh kernel replay of `PairInsertionSurface` and its full closure passes.
-The full identity-verified capture replay is still running at this writing. No killed build or timeout occurred in the
+The full identity-verified capture replay passes under both seeds, comparing
+all **33,626,368 captured bytes** per run, **1,338 interpreted instructions**
+and both actual random-service calls, with **1,354 native stops** and exact
+REP multiplicities. Capacity remains **4,194,304 words**. It took **10m23.32s**
+elapsed, **618.19s** user CPU and **5.06s** system CPU, maximum RSS
+**11,316,204 KiB**, exit zero. This reuses the actual capture at unchanged
+capacity; the source assertion and replay guard are the reviewed versions. No killed build or timeout occurred in the
 repair validation. Inherited warnings remain visible; no new warning was
 found in the changed modules.
 
-The insertion export's external acceptance remains pending. The prior accepted
-subsystem export does not cover it. A replacement export for the corrected
-source is required; the old export checks the old conditional statements
-only. Resume with the corrected export's external gate, then agree the next
-increment before continuing development. Captures, logs and build outputs
-are reproducible temporary files.
+The reviewed source is **`5433d7781d9d809b82ea4c19faa13d40af9a4957`**.
+The replacement export, **`.tmp/binary-pair-insert-reviewed.ndjson`**, was
+successfully generated from that clean commit: root `PairInsertionSurface`
+and its full transitive closure, including the revised executable assertions,
+function/sequence headlines, witnesses, `TrustBase` and `Execution`.
+It contains **1,318,612,334 bytes**; generation took **44.82 seconds**, user CPU
+**43.18 seconds**, maximum RSS **3,096,612 KiB**, exit zero. The old
+`.tmp/binary-pair-insert.ndjson` is superseded and removed; it can be regenerated
+from the original commit if needed.
+
+External acceptance remains pending. The earlier subsystem acceptance does
+not cover this source. From `binary/`, outside Nono, the remaining gate is:
+
+```sh
+capped lake check --from-export ../.tmp/binary-pair-insert-reviewed.ndjson
+```
+
+Resume by recording that result, then agree the next increment before further
+development. The requested pause does not mark the external gate complete.
+Captures, logs and build outputs remain reproducible temporary files.
+
+The review/repair checkpoint ran approximately **23:23–23:46 UTC** on
+2026-10-18. This additional cost is outside the original 4h28m50s local
+completion measurement. All owned build/check/replay/export jobs have finished;
+the independent reviewer has finished. The final documentation commit is the
+recovery/pause checkpoint; the proof and export source remains `5433d778`.
+No next-increment work has started, and there was no merge or push.
 
 The proposed next increment is shared callback-image proofs and a first-return
 permission boundary, with measured reuse across the existing headlines.
