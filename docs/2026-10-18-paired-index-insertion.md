@@ -233,3 +233,44 @@ in about one second. Failed elaborations' diagnostic axiom prints are not
 validation; the successful module prints only the standard three axioms.
 This is reusable instruction-effect reasoning, not full walk composition.
 The default build passes (713 jobs).
+
+## Three-phase callback resources, 2026-10-18 18:40 UTC
+
+`boundary_frame` derives every physical callback-resource clause from the
+tested entry assertion. `MemoryReady` carries the six saved registers, caller
+return word, scratch mapping, coverage-buffer invariant, current preempt count
+and both conditional pending-word reads. Its heap-write, callback, count-change
+and CALL-slot preservation lemmas check. The existing two-phase coverage
+machinery is reused through proved phase equalities; the extra pending read
+has its own conditional separation proof.
+
+The entry prologue and first coverage callback now compose into this invariant,
+and the initial BH-disable/hashed-entry guard preserves it. Both walk comparison
+branches also have checked effects. `IndexInsertDecoderAgreement` is the new
+named declaration in `TrustBase.lean`: literal fetch agreement for the anchored
+insertion instructions only. It asserts no callback behavior or input result.
+The random-service assumptions remain open and are not silently installed.
+
+The default build passes (720 jobs), and fresh kernel replay of
+`PairInsertState`, including the resource-preservation closure, passes. Fresh
+replay of the earlier walk-region module also passed. All new printed theorems
+use only the standard three axioms. Full unlink/walk/retry/return composition,
+formal positive Pre witnesses and the input-driven sequence theorem remain open.
+
+[AGENT 2026-10-18] The insertion's internal shadow frame now compares only the
+WireGuard storage cover, with saved-stack and callback resources carried
+separately. Copying the earlier mutators' whole-memory equality outside their
+small write footprint would incorrectly force the random provider's private
+memory to remain unchanged. This is a proof-invariant adjustment; the executable
+reconstruction and observation are unchanged. The shared storage-frame library
+now supplies transitivity and protected-word reads. The initial composition and
+unhash guard check against this frame. Fresh replay of their revised closure,
+rooted at `PairInsertGuard`, passes. The default build passes with the two
+additional callback/argument modules (722 jobs).
+
+Equal protected stores now preserve the restricted shadow frame for both
+32-bit index and 64-bit link writes. The resulting default build passes
+(723 jobs). One development attempt at the 32-bit wrapper failed at the
+heartbeat limit because its anonymous constructor's type was underconstrained;
+an explicit `BitVec` type removed that elaboration search. No limit increase
+or proof bypass was retained.

@@ -1,6 +1,7 @@
 import FiniteExecution
 import Image
 import IndexMutatorImage
+import IndexInsertImage
 import AllowedipsImage
 import ServiceImage
 import Memory
@@ -614,5 +615,10 @@ structure AllowedipsEntry (c : AllowedipsRelation.Config) (coverage : KcovLayout
 def Pre_allowedips (c : AllowedipsRelation.Config) (coverage : KcovLayout)
     (preempt : BitVec 32) (returnAddress : UInt64) (s : MachineState) (world : Leanux.World) : Prop :=
   ∃ v, AllowedipsEntry c coverage preempt returnAddress s world v
+
+/-- Literal instruction agreement for the anchored insertion image. Callback
+behavior and agreement with supplied random draws are separate obligations. -/
+def IndexInsertDecoderAgreement (fetch : Int64 → Option Decoded) : Prop :=
+  ∀ pc instruction, IndexInsertImage.Insert.fetch pc=some instruction → fetch pc=some instruction
 
 end Binary.TrustBase

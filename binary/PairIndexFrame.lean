@@ -9,6 +9,25 @@ write footprint. This is a physical frame, not an additional observation. -/
 def StorageFrame (n : Names) (o : Offsets) (before after : DataMem) : Prop :=
   ∀ span ∈ storageSpans n o, ∀ address, span.contains address → before.get? address=after.get? address
 
+theorem StorageFrame.trans {n o first second third}
+    (left : StorageFrame n o first second) (right : StorageFrame n o second third) :
+    StorageFrame n o first third := fun span member a inside =>
+  (left span member a inside).trans (right span member a inside)
+
+theorem StorageFrame.loadInt {n o before after} (frame : StorageFrame n o before after)
+    (base : BitVec 64) (width : Nat)
+    (inside : ∀ a, InRange base width a → ∃ span ∈ storageSpans n o, span.contains a) :
+    before.loadInt base width=after.loadInt base width := by
+  have bytes : before.loadBytes base width=after.loadBytes base width := by
+    unfold Mem.loadBytes
+    congr 1
+    apply List.map_congr_left
+    intro i member
+    obtain ⟨span,listed,read⟩ := inside (base+.ofNat 64 i) ⟨i,List.mem_range.mp member,rfl⟩
+    exact frame span listed _ read
+  rw [Mem.loadInt,bytes]
+  rfl
+
 theorem span_slice {base size offset width : Nat} {address : BitVec 64}
     (within : offset+width≤size) (inside : InRange (.ofNat 64 (base+offset)) width address) :
     InRange (.ofNat 64 base) size address := by
