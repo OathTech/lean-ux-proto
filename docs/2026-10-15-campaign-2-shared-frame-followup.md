@@ -33,6 +33,14 @@ setAllowedip/fresh-peer serializer composition. The existing weighted serializer
 plus a three-lemma pure bridge suffice; no shared layer is copied. The inventories below
 describe historical overlap; they do not authorize copying the affected layers.
 
+H2 now reuses Keypairs.Affiliation.beginSession_affiliation with existing
+campaign table/owner contracts to preserve a combined invariant over finite
+consecutive session calls. The pure bridge adds no shared copy. The alternative
+initialized CurrentSlots/RunnerAccount/HolderAuxiliary route still reaches
+Logged/PrefixGro through OwnerCreation and RetainingLifecycle; even repaired,
+those APIs do not supply the full affiliation/hashed-owner/table conjunction.
+That missing invariant transport remains separate from the compile dependency.
+
 The incoming shared tree also has blank-at-EOF diff-check warnings in
 Lifetimes/ProductAmbient, Origins/CurrentChecks, CurrentHistory,
 CurrentSensitive, CurrentSessionPrefix and Queues/BatchAccount. These files

@@ -26,6 +26,9 @@ Subsequent H4 RoutingReadback files retain this boundary: Model defines the
 actual local composition and pure outcomes, Effects proves changed-store
 invariants, Source connects native execution, and Claims/Statements use the
 campaign projection. No frame deletion or retrofit recount is involved.
+H2 SessionInvariantModel/Effects/Claims follows the same split: the pure
+landed affiliation projection supplies identity bounds, and claims compose
+actual calls. No native frame or shared-layer variant is added.
 
 ## Baseline and accounting
 

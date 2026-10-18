@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Index.SessionInvariantClaims
 import Leanux.Proofs.WG.Index.BulkRemovalClaims
 import Leanux.Proofs.WG.Index.SessionLookupClaims
 import Leanux.Proofs.WG.Index.SessionAliasClaims
@@ -1071,5 +1072,23 @@ shape, resident-peer, queue-readiness or completion assumption is added. -/
 theorem original_bulk_peer_removal_table_safety :
     Campaign2.Ensures peerRemoveAll View.TablesSafe (fun _ => View.TablesSafe) :=
   peerRemoveAll_tables
+
+/-- The original session call preserves compatible bounded references, unique
+numeric indices and owners, and resident positive hashed owners together.
+Rotation freshness and the hashed-key allocation bound follow from the entry
+invariant; caller residency follows from the actual first read. -/
+theorem original_session_index_invariant (pid : PeerId) :
+    Campaign2.Ensures (beginSession pid) View.SessionIndexSafe
+      (fun _ => View.SessionIndexSafe) :=
+  beginSession_sessionIndexSafe pid
+
+/-- Any finite list of consecutive original session calls preserves the same
+initial invariant on normal return, without new assumptions at each cut.
+This is not an initialized-driver or completion theorem; all original Stops
+remain in the computation. -/
+theorem original_session_calls_index_invariant (pids : List PeerId) :
+    Campaign2.Ensures (pids.mapM beginSession) View.SessionIndexSafe
+      (fun _ => View.SessionIndexSafe) :=
+  sessionCalls_sessionIndexSafe pids
 
 end Leanux.Proofs.WG.Index
