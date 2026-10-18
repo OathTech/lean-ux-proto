@@ -8,6 +8,8 @@ import Leanux.Proofs.WG.AuthenticatedEffects.RefusalEmission
 import Leanux.Proofs.WG.AuthenticatedEffects.InitiationFront
 import Leanux.Proofs.WG.AuthenticatedEffects.BorrowedRefusal
 import Leanux.Proofs.WG.AuthenticatedEffects.HandshakeQuietFrames
+import Leanux.Proofs.WG.AuthenticatedEffects.CookieAcceptance
+import Leanux.Proofs.WG.AuthenticatedEffects.CookieProtocol
 
 /-! T3 local cookie exception tranche. These claims establish the original
 cookie-only dispatch, bounded construction/reply attempts and session frame.
@@ -16,8 +18,11 @@ and exact length 64. An erasing suffix observer retains actual append receipts
 through a later Stop. Invalid MAC1 rejects with only under-load bookkeeping effects.
 Native Noise refusals cannot emit or reach the receive timer/session suffix;
 pre-lookup initiation refusals preserve the entire WG world, and all normal
-initiation refusals restore complete peer records pointwise. Whole-run causal
-closure and response peer/timer restoration remain open. -/
+initiation refusals restore complete peer records pointwise. Cookie acceptance
+is observed before its first state write and through a later Stop. Native response
+and cookie refusals preserve complete peer protocol records, masking just the two
+reference-accounting fields and deriving safe repayment from the original lookup.
+Full reference restoration remains conditional; whole-run causal closure is open. -/
 namespace Leanux.Proofs.WG.AuthenticatedEffects
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.WG.Cookies
 
@@ -201,5 +206,88 @@ theorem refused_initiation_preserves_state_and_silence (msg : List UInt8) (src :
       .ok (((),v),CounterWindow.record d .hsInitNoPeer true) ∧
       handshakeQuietView v = handshakeQuietView w ∧ v.sent = w.sent :=
   receive_initiation_refused_quiet msg src loaded w u q v a b c d kind load mac refused
+
+/-- Security: an incoming cookie control message cannot elicit a transmission,
+whether or not its own authentication succeeds. This is the complete original
+handshake receive call on normal return, without a reference-count premise. -/
+theorem received_cookie_is_silent (msg : Key) (src : SkbSource) (w v : WGWorld) (a b : Ambient)
+    (kind : messageType msg = MESSAGE_HANDSHAKE_COOKIE)
+    (run : ((receiveHandshakePacket msg src).run w).run a = .ok (((),v),b)) :
+    v.sent = w.sent := receive_cookie_sent msg src w v a b kind run
+
+/-- Security: cookie acceptance is an actual successful authentication event
+before the original cookie-state write, with at most one event per native
+consumer invocation. Erasure preserves the original result and Stop; receipt
+validity contains the original check, including the saved-MAC1 guard. -/
+theorem cookie_acceptance_has_native_cause (msg : Key) (w : WGWorld) (a : Ambient)
+    (h : List CookieAcceptance) :
+    (runWGPrefix (acceptedCookie msg) w a h).1 = ((cookieMessageConsume msg).run w).run a ∧
+      ∃ suffix, (runWGPrefix (acceptedCookie msg) w a h).2 = h ++ suffix ∧
+        suffix.length ≤ 1 ∧ ∀ r ∈ suffix, r.input = msg ∧ r.Valid :=
+  ⟨acceptedCookie_erases msg w a h,acceptedCookie_receipts msg w a h⟩
+
+/-- Security: a recorded cookie acceptance carries successful original XChaCha
+authentication under the selected peer's cookie-decryption key and saved MAC1.
+This is an execution property of the modeled primitive, not cryptographic
+unforgeability. Its receipt is emitted before cookie state can be changed. -/
+theorem accepted_cookie_was_authenticated (r : CookieAcceptance) (valid : r.Valid) :
+    ∃ cookie d p, r.checked.value = some cookie ∧ r.checked.before.dev = some d ∧
+      d.peers[r.peer]? = some p ∧ p.haveSentMac1 = true ∧
+      xchachaDecrypt p.cookieDecryptionKey ((r.input.drop 8).take 24)
+        ((r.input.drop 32).take 32) p.lastMac1Sent = some cookie :=
+  r.authenticated valid
+
+/-- Security: a refused response restores all peer records and their timer and
+session fields when its actual successful index lookup supplies the stated
+`Borrowed` loan. Discharging that concrete index-lookup premise, including its
+owner-word writeback, remains an initialized-caller obligation. -/
+theorem response_refusal_preserves_borrowed_state (msg : Key) (w u v : WGWorld) (d : Device)
+    (owner pid : PeerId) (a b c : Ambient)
+    (device : w.dev = some d) (identity : d.staticIdentity.hasIdentity = true)
+    (lookup : ((indexLookup [.handshake] (u32le msg 8)).run w).run
+      (CounterWindow.record a .crespNoIdentity false) = .ok ((some (.handshake owner,pid),u),b))
+    (borrowed : Leanux.Proofs.Framing.PeerBorrow.Borrowed
+      (Leanux.Proofs.Framing.wgStoreView w) (some pid) (Leanux.Proofs.Framing.wgStoreView u))
+    (refused : ((consumeResponse msg).run w).run a = .ok ((none,v),c)) :
+    Leanux.Proofs.Framing.PeerBorrow.view v = Leanux.Proofs.Framing.PeerBorrow.view w :=
+  response_refusal_after_lookup msg w u v d owner pid a b c device identity lookup borrowed refused
+
+/-- Security: every normally refused original response preserves every peer's
+session, endpoint, queue and timer fields. The projection excludes only the
+reference count and nullable handshake-owner word; actual index acquisition
+supplies safe repayment, so no initialized-reference hypothesis is needed. -/
+theorem refused_response_preserves_peer_protocol (msg : Key) (w v : WGWorld) (a b : Ambient)
+    (run : ((consumeResponse msg).run w).run a = .ok ((none,v),b)) :
+    peerProtocolView v = peerProtocolView w := response_refusal_protocol msg w v a b run
+
+/-- Security: an incoming unaccepted cookie message emits no datagram and
+preserves all peer protocol fields, including endpoints, sessions and timers.
+Unaccepted means the erasing original-source observer recorded no successful
+cookie authentication; only reference count and nullable handshake-owner word
+are outside this peer projection. The native lookup supplies its own loan. -/
+theorem unaccepted_cookie_preserves_peer_protocol (msg : Key) (src : SkbSource)
+    (w v : WGWorld) (a b : Ambient)
+    (kind : messageType msg = MESSAGE_HANDSHAKE_COOKIE)
+    (unaccepted : (runWGPrefix (acceptedCookie msg) w (CounterWindow.record a .hsCookie true) []).2 = [])
+    (run : ((receiveHandshakePacket msg src).run w).run a = .ok (((),v),b)) :
+    peerProtocolView v = peerProtocolView w ∧ v.sent = w.sent :=
+  receive_unaccepted_cookie_protocol msg src w v a b kind unaccepted run
+
+/-- Security: a complete original response receive refused by Noise cannot
+emit or change any peer's session, endpoint or timer fields. Its actual load,
+MAC and Noise runs are continuous; the peer projection masks only reference
+count and nullable handshake-owner word, allowing the named lookup bookkeeping. -/
+theorem refused_response_preserves_protocol_and_silence (msg : Key) (src : SkbSource) (loaded : Bool)
+    (w u q v : WGWorld) (a b c d : Ambient)
+    (kind : messageType msg = MESSAGE_HANDSHAKE_RESPONSE)
+    (load : (loadPhase.run w).run (CounterWindow.record a .hsCookie false) = .ok ((loaded,u),b))
+    (mac : ((cookieValidatePacket msg src loaded).run u).run b =
+      .ok ((authenticatedMac loaded,q),c))
+    (refused : ((consumeResponse msg).run q).run (responseConsumerEntry loaded c) =
+      .ok ((none,v),d)) :
+    ((receiveHandshakePacket msg src).run w).run a =
+      .ok (((),v),CounterWindow.record d .hsRespNoPeer true) ∧
+      peerProtocolView v = peerProtocolView w ∧ v.sent = w.sent :=
+  receive_response_refused_protocol msg src loaded w u q v a b c d kind load mac refused
 
 end Leanux.Proofs.WG.AuthenticatedEffects

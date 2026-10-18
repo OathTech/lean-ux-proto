@@ -165,7 +165,7 @@ Every claim keeps its native run and entry invariant visible. The register in
 
 - T1/T2: the actual global allocation stamp and sending counter support
   non-reuse through complete staging, `wgXmit`, keepalive sending, key creation,
-  session establishment, rotation, all five timer callbacks, the full handshake receive worker and reference release. AEAD counter encoding
+  session establishment, rotation, all five timer callbacks, the full handshake receive worker, receive consumption, the complete poll with actual stack replies, both NAPI entry points and reference release. AEAD counter encoding
   is injective below the actual admission limit. Encryption receipts preserve
   success/Stop and bind the entry-resident key, original packet nonce and
   actual ciphertext expression. Rekey receipts capture the guarded call to
@@ -178,9 +178,9 @@ Every claim keeps its native run and entry invariant visible. The register in
   derives the new reference from the actual allocation; entry slot funding
   is now extracted from actual holders; R2 allocation vacancy remains explicit. The concrete holder projection
   counts each slot, RX packet and TX batch reference and has an initialized
-  empty base. Native create/get/put transport that physical projection; an
-  outstanding durable holder prevents final removal. Whole-run holder transport and conditional wheel/worker progress
-  remain open. Stable child implementations through `543c8dce` were copied
+  empty base. Native create/get/put, clearing, rotation, confirmation and complete sessions transport that physical projection; an
+  outstanding durable holder prevents final removal. The actual clear-worker dispatcher clears its selected queued peer on normal completion, with no incoming holder invariant. Whole-run holder transport and conditional clock/dispatch progress
+  remain open. Stable child implementations through `6d9b08b6` were copied
   by owned path, without a branch merge.
 - T3: qualifying invalid-MAC2 initiation/response receives produce at most one
   source-bound 64-byte cookie datagram on normal completion and preserve the
@@ -189,9 +189,8 @@ Every claim keeps its native run and entry invariant visible. The register in
   bookkeeping. The actual MAC/load witness remains explicit. Full Noise refusals follow exact native exits with no egress or authenticated
   suffix, and pre-lookup initiation refusals preserve WGWorld. Post-lookup
   initiation refusal now restores complete peer records, including refcounts
-  and timers, from the actual acquisition/repayment chain. Response owner-word
-  consistency and initialized delayed-effect causality remain open. Stable child
-  implementation through `1a2dfa60` was copied by owned path.
+  and timers, from the actual acquisition/repayment chain. Response/cookie refusals now preserve every peer field except the explicitly allowed refcount and index-owner bookkeeping, without an initialized-reference premise. Cookie acceptance receipts precede the first cookie write and survive Stop. Full reference restoration and initialized delayed-effect causality remain open. Stable child
+  implementation through `30764e1f` was copied by owned path.
 - T4: full original initiation receipts strictly increase the actual pre-write
   timestamp, including before Stop; refusal preserves surviving handshake
   state. Native consumer sequences compose timestamp histories. Response and
@@ -200,16 +199,20 @@ Every claim keeps its native run and entry invariant visible. The register in
   campaign 2's unlanded H1 results. Independent native allocation receipts
   establish at most one creation per session call and exactly one on true
   completion. Full driver/exchange closure remains open. Stable child
-  implementation through `7acc69e2` was copied by owned path.
+  implementation through `85923a8f` was copied by owned path.
 - T5: original receive-consumer and poll observers record the native
   confirmation return immediately, before the timer/staged-send/routing suffix
-  can Stop. Authentication and uniqueness are not inferred from arbitrary
-  consumer input. H1's completed-consumer uniqueness premise must not replace
-  the stronger receipt-before-later-Stop obligation. Authenticated transport
-  and the prohibition on earlier responder encryption remain open.
+  can Stop; poll receipts carry the actual successful replay check. Every
+  initialized completed-consumer occurrence has an earlier successful native
+  AEAD with matching bytes, slot and nonce, using campaign 1's receive journal.
+  Completed-confirmation uniqueness uses visible `H1InitializedCompletedConfirmation`,
+  an explicit projection of named unlanded H1 results. Staging receipts bind
+  the actual initial peer/current-key read and key borrow to bounded packet
+  admissions. These do not close internally stopped consumers, allocation
+  identity transport, or the prohibition on earlier responder encryption.
 
-The current source-contract checkpoint passes all 1080 proof-build jobs and the
-970-declaration gate across thirteen root modules, with only standard axioms.
+The current source-contract checkpoint passes all 1115 proof-build jobs and the
+994-declaration gate across thirteen root modules, with only standard axioms.
 All twelve witness recipes and fresh-root kernel replay pass at the default
 cap. The unchanged model and unit suite retain the prior checkpoint's 130-job
 build and 131 passing tests with one kernel-build-dependent skip. All six

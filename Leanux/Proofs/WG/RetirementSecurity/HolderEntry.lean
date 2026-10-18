@@ -100,4 +100,18 @@ theorem HolderAccount.peer_funding (account : HolderAccount temporary w)
         List.count_append,slotMap]
       omega
 
+theorem HolderAccount.peer_loans (account : HolderAccount temporary w)
+    (found : peerAt w pid = some p) : ∃ loans, peerLoans w pid p = some loans := by
+  obtain ⟨loans,projected,_⟩ := account
+  cases device : w.dev with
+  | none => simp [peerAt,device] at found
+  | some d =>
+    have peer : d.peers[pid]? = some p := by simpa [peerAt,device] using found
+    cases mapped : d.peers.toList.mapM (fun (id,peer) => peerLoans w id peer) with
+    | none => simp [durableLoans,device,mapped] at projected
+    | some groups =>
+      obtain ⟨group,groupRun,_⟩ := mapM_member _ _ _ mapped
+        (Std.TreeMap.mem_toList_iff_getElem?_eq_some.mpr peer)
+      exact ⟨group,groupRun⟩
+
 end Leanux.Proofs.WG.RetirementSecurity

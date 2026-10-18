@@ -9,6 +9,11 @@ import Leanux.Proofs.WG.HandshakeSecurity.ResponseReplay
 import Leanux.Proofs.WG.HandshakeSecurity.AllocationClaims
 import Leanux.Proofs.WG.HandshakeSecurity.SessionReplay
 import Leanux.Proofs.WG.HandshakeSecurity.ConfirmationPollClaims
+import Leanux.Proofs.WG.HandshakeSecurity.ConfirmationH1
+import Leanux.Proofs.WG.HandshakeSecurity.ConfirmationInitialized
+import Leanux.Proofs.WG.HandshakeSecurity.ConfirmationUnique
+import Leanux.Proofs.WG.HandshakeSecurity.StagingSelectionClaims
+import Leanux.Proofs.WG.HandshakeSecurity.StagingSelectionFrames
 
 /-! Native T4 replay and T5 confirmation boundaries. Initialized history,
 authentication linkage and responder-send exclusion remain separate obligations;
@@ -224,5 +229,106 @@ theorem original_poll_confirmation_receipts (pid : PeerId) (budget : Nat)
   obtain ⟨_, _, safe, _⟩ := Confirmation.Poll.valid_preserves pid budget toStack w a []
     (by intro r member; cases member)
   exact safe
+
+/-- Each confirmation receipt from the original poll's consume site has a
+crypted packet and an actual successful replay-window check for that packet's key and nonce.
+These inner receipts survive later Stop and erase to the full original poll.
+Crypted-state provenance from successful AEAD, initialized uniqueness, and
+prior encryption exclusion remain explicit separate transport obligations. -/
+theorem original_poll_confirmation_replay_checked (pid : PeerId) (budget : Nat)
+    (toStack : List (List UInt8) → WG.M Unit) (w : WGWorld) (a : Ambient) :
+    (runWGPrefix (Confirmation.Authorization.Poll.observed pid budget toStack) w a []).1 =
+      ((rxPoll pid budget toStack).run w).run a ∧
+    Confirmation.Authorization.Valid
+      (runWGPrefix (Confirmation.Authorization.Poll.observed pid budget toStack) w a []).2 := by
+  refine ⟨Confirmation.Authorization.Poll.erases pid budget toStack w a [], ?_⟩
+  obtain ⟨_, _, safe, _⟩ := Confirmation.Authorization.Poll.valid_preserves
+    pid budget toStack w a [] (by intro r member; cases member)
+  exact safe
+
+/-- Under H1's visible native confirmation contract, a replay-accepted poll
+receipt promotes exactly its received pending slot, keeps the peer allocation
+identity, and clears pending state. No repeated-promotion or initialized
+key-identity conclusion is inferred from this single native effect. -/
+theorem original_poll_confirmation_slot_effect (H1 : H1ConfirmationEdges)
+    (pid : PeerId) (budget : Nat) (toStack : List (List UInt8) → WG.M Unit)
+    (w : WGWorld) (a : Ambient) (r : Confirmation.Authorization.Receipt)
+    (occurs : r ∈ (runWGPrefix (Confirmation.Authorization.Poll.observed pid budget toStack) w a []).2) :
+    ∃ before after,
+      Confirmation.slotsAt r.confirmation.execution.before r.confirmation.peer = some before ∧
+      Confirmation.slotsAt r.confirmation.execution.after r.confirmation.peer = some after ∧
+      (r.confirmation.execution.value = true ↔ before.next = some r.confirmation.packet.keypair) ∧
+      after.identity = before.identity ∧
+      (r.confirmation.execution.value = true →
+        after.current = some r.confirmation.packet.keypair ∧ after.next = none ∧
+        after.previous = before.current) ∧
+      (r.confirmation.execution.value = false → after = before) :=
+  Confirmation.Authorization.receipt_slots H1 r
+    ((original_poll_confirmation_replay_checked pid budget toStack w a).2 r occurs)
+
+/-- Every completed consume occurrence in the actual initialized fixture is
+linked to a strictly earlier successful native AEAD decrypt for its packet,
+key slot and nonce, and to its actual native confirmation call. This includes
+normal nondelivery and completed occurrences before a later Stop. The inherited
+journal omits a consumer that itself Stops after confirmation; its inner-journal
+runner transport and cross-call key-allocation identity remain separate. -/
+theorem original_initialized_completed_confirmation_authenticated
+    (trace : Runner.Trace) (placeholders : Bool)
+    (pre post : List Queues.RxHistory.Event) (occurrence : Nat) (id : SkbId)
+    (stamp : Lifetimes.PacketStamp) (r : Queues.RxDisposition.ConsumeReceipt)
+    (position : (runPrefixOuter (Queues.RxHistory.executeTraceHistory trace placeholders) []).2 =
+      pre ++ .consumed occurrence id stamp r :: post) :
+    Confirmation.AuthenticatedSource pre id r :=
+  Confirmation.initialized_authenticated trace placeholders pre post occurrence id stamp r position
+
+/-- An actual initialized completed consume has an earlier successful native
+AEAD decrypt and its actual confirmation cut; if that cut promotes, its key
+allocation identity occurs in no other completed confirmation before or after
+it. H1's initialized completed-label uniqueness and completeness are the named
+visible premise. Consumers that themselves Stop after confirmation remain in
+the separate inner-journal result, and prior-send exclusion is not inferred. -/
+theorem original_initialized_completed_confirmation_authenticated_unique
+    (H1 : H1InitializedCompletedConfirmation) (trace : Runner.Trace) (placeholders : Bool)
+    (pre post : List Queues.RxHistory.Event) (occurrence : Nat) (id : SkbId)
+    (stamp : Lifetimes.PacketStamp) (r : Queues.RxDisposition.ConsumeReceipt)
+    (position : Confirmation.initializedHistory trace placeholders =
+      pre ++ .consumed occurrence id stamp r :: post) :
+    Confirmation.AuthenticatedUnique pre post id r :=
+  Confirmation.initialized_authenticated_unique H1 trace placeholders pre post occurrence id stamp r position
+
+/-- Native staged sends retain the actual initial peer read and successful
+current-key borrow beside every admitted packet batch, with the real key read,
+clock guard and packet allocation. Receipts precede submission and survive its
+later Stop. This all-input source claim does not assume initialized chronology. -/
+theorem original_staging_selection_receipts (pid : PeerId) (w : WGWorld) (a : Ambient) :
+    (runWGPrefix (StagingSelection.observed pid) w a []).1 =
+      ((sendStagedPackets pid).run w).run a ∧
+    StagingSelection.Good (runWGPrefix (StagingSelection.observed pid) w a []).2 := by
+  refine ⟨StagingSelection.erases pid w a [], ?_⟩
+  obtain ⟨_, _, good, _⟩ := StagingSelection.safe pid w a []
+    ⟨(by intro r member; cases member), trivial⟩
+  exact good
+
+/-- Every admitted native staged batch uses the current slot returned by its
+actual initial peer read and an actual resident key at its key read. This is
+the local selection link needed for responder confirmation ordering; promotion
+history and packet transit to a later encryption remain separate obligations. -/
+theorem original_staging_selected_current (pid : PeerId) (w : WGWorld) (a : Ambient)
+    (r : StagingSelection.Receipt)
+    (occurs : r ∈ (runWGPrefix (StagingSelection.observed pid) w a []).2) :
+    r.peerRead.value.keypairCurrent = some r.admission.slot ∧
+    (∃ d, r.peerRead.before.dev = some d ∧
+      d.peers[r.admission.peer]? = some r.peerRead.value) ∧
+    (∃ d, r.admission.keyRead.before.dev = some d ∧
+      d.keypairs[r.admission.slot]? = some r.admission.keyRead.value) ∧
+    (∀ p ∈ r.admission.packets, p.peer = r.admission.peer ∧
+      some p.keypair = r.peerRead.value.keypairCurrent ∧ p.nonce < REJECT_AFTER_MESSAGES) := by
+  have valid := (original_staging_selection_receipts pid w a).2 r occurs
+  have selected := StagingSelection.receipt_selected r valid
+  obtain ⟨peer, key⟩ := StagingSelection.receipt_resident r valid
+  refine ⟨selected, peer, key, ?_⟩
+  intro p member
+  obtain ⟨samePeer, slot, nonce⟩ := valid.2.2.2.2.2.2.2.1 p member
+  exact ⟨samePeer, by rw [slot, selected], nonce⟩
 
 end Leanux.Proofs.WG.HandshakeSecurity

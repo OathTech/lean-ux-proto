@@ -63,14 +63,14 @@ theorem peerLoans_eq (w : WGWorld) (pid : PeerId) (p : Peer) :
       let rx ← p.rxQueue.all.mapM (receiveLoan w pid)
       return next ++ previous ++ current ++ tx ++ rx) := rfl
 
-theorem peerLoans_transport (pid : PeerId) (p : Peer) (loans : List KeyLoan)
-    (shape : carrierShape v = carrierShape w)
+theorem peerLoans_packets (pid : PeerId) (p : Peer) (loans : List KeyLoan)
+    (shape : (carrierShape v).2 = (carrierShape w).2)
     (before : peerLoans w pid p = some loans)
     (resident : ∀ loan ∈ loans, ∃ k,
       keyAt v loan.allocation.slot = some k ∧ k.internalId = loan.allocation.stamp) :
     peerLoans v pid p = some loans := by
-  have txShape := congrArg (fun shape => shape.2.1) shape
-  have rxShape := congrArg (fun shape => shape.2.2) shape
+  have txShape := congrArg (fun shape => shape.1) shape
+  have rxShape := congrArg (fun shape => shape.2) shape
   cases hn : p.keypairNext.toList.mapM (nameLoan w (.peerSlot pid .next)) with
   | none => simp [peerLoans_eq,hn] at before
   | some next =>
@@ -127,6 +127,14 @@ theorem peerLoans_transport (pid : PeerId) (p : Peer) (loans : List KeyLoan)
                 have moved := nameLoan_transport named (resident loan (by simp [member]))
                 simpa [newPacket] using moved)
             simp [peerLoans_eq,nextRun,previousRun,currentRun,txRun,rxRun]
+
+theorem peerLoans_transport (pid : PeerId) (p : Peer) (loans : List KeyLoan)
+    (shape : carrierShape v = carrierShape w)
+    (before : peerLoans w pid p = some loans)
+    (resident : ∀ loan ∈ loans, ∃ k,
+      keyAt v loan.allocation.slot = some k ∧ k.internalId = loan.allocation.stamp) :
+    peerLoans v pid p = some loans :=
+  peerLoans_packets pid p loans (congrArg (fun shape => shape.2) shape) before resident
 
 theorem durableLoans_transport (loans : List KeyLoan)
     (shape : carrierShape v = carrierShape w)

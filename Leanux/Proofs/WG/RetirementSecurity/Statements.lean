@@ -9,6 +9,9 @@ import Leanux.Proofs.WG.RetirementSecurity.SessionFunding
 import Leanux.Proofs.WG.RetirementSecurity.Session
 import Leanux.Proofs.WG.RetirementSecurity.HolderCreation
 import Leanux.Proofs.WG.RetirementSecurity.HolderSession
+import Leanux.Proofs.WG.RetirementSecurity.HolderClear
+import Leanux.Proofs.WG.RetirementSecurity.SessionHolders
+import Leanux.Proofs.WG.RetirementSecurity.WorkerRetirement
 
 /-! Campaign 3, T6: local original-operation retirement contracts. The
 initialized key-reference ledger, complete caller coverage and conditional
@@ -377,5 +380,58 @@ theorem original_holder_session_funding (account : HolderAccount temporary w)
           ((slots.rotate ⟨ctx.slot,w.keypairCounter + 1⟩ k.iAmTheInitiator
             p.keypairNext.isSome).credits ++ remaining) v :=
   account.session_funded found allocation a b run
+
+/-- Native clearing removes and pays each actual peer-slot reference while
+preserving exact funding of the actual post-state RX/TX holders and temporary
+locals. Slot multiplicity is retained, and no final-store emptiness or worker
+progress is asserted. Whole initialized caller closure remains separate. -/
+theorem original_clear_holder_account (pid : PeerId) (temporary : Credits.Ledger) :
+    Preserves (HolderAccount temporary) (keypairsClear pid) :=
+  clear_holders pid temporary
+
+/-- Native responder confirmation preserves exact funding of the actual
+post-state holders while moving next/current ownership and paying displaced
+previous ownership. Intermediate pointer copies add no references. The
+incoming holder account is explicit, and authentication belongs to T5. -/
+theorem original_confirmation_holder_account (account : HolderAccount temporary w)
+    (pid : PeerId) (key : KeypairId) (a b : Ambient)
+    (run : ((receivedWithKeypair pid key).run w).run a = .ok ((result,v),b)) :
+    HolderAccount temporary v := account.confirm pid key a b run
+
+/-- Native key insertion consumes its caller's one temporary reference and
+reconstructs exact funding of the actual rotated slots and retained queues.
+This is the original source group, including displaced-key payments, without
+assuming that intermediate pointer copies are new references. -/
+theorem original_rotation_holder_account (account : HolderAccount (newKey :: temporary) w)
+    (pid : PeerId) (a b : Ambient)
+    (run : ((addNewKeypair pid newKey.slot).run w).run a = .ok (((),v),b)) :
+    HolderAccount temporary v := account.rotate pid a b run
+
+/-- The complete native session preserves exact key-reference funding of
+actual slots and queued packets, deriving its new reference from creation and
+accounting for rotation and retirement. The incoming concrete holder account
+and named R2 allocation invariant remain explicit; whole initialized caller
+coverage is still required. -/
+theorem original_session_holder_account (account : HolderAccount temporary w)
+    (allocation : Lifetimes.AllocationInv history w) (pid : PeerId) (a b : Ambient)
+    (run : ((beginSession pid).run w).run a = .ok ((result,v),b)) :
+    HolderAccount temporary v := account.session allocation pid a b run
+
+/-- Completion of the actual zero-material worker clears all three peer key
+slots and cannot reset surviving sending material or nonce counters. Packet
+references may retain allocations; this conclusion needs no incoming ledger
+or initialization invariant and makes no elapsed-time progress claim. -/
+theorem original_zero_worker_retirement (pid : PeerId) (w v : WGWorld) (a b : Ambient)
+    (run : ((queuedExpiredZeroKeyMaterial pid).run w).run a = .ok (((),v),b)) :
+    SlotsCleared pid v ∧ Retains w v := zero_worker_retirement pid w v a b run
+
+/-- A normally completed actual clear-worker dispatch retires the slots of
+a peer selected from its real work queue, including record-selected dispatch,
+without changing any surviving allocation's material or nonce counter. The
+native completion premise is explicit; a timer deadline alone is insufficient. -/
+theorem original_dispatched_key_retirement (w v : World)
+    (run : Env.runOneClearWorker.run w = .ok ((),v)) :
+    ∃ d pid, w.wg.dev = some d ∧ pid ∈ d.clearWorkQueue ∧
+      SlotsCleared pid v.wg ∧ Retains w.wg v.wg := dispatched_retirement w v run
 
 end Leanux.Proofs.WG.RetirementSecurity
