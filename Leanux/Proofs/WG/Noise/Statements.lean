@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Noise.DriverTagInitializedClaims
 import Leanux.Proofs.WG.Noise.DriverTagClaims
 import Leanux.Proofs.WG.Noise.DriverTagProductClaims
 import Leanux.Proofs.WG.Noise.DriverTagScheduledSource
@@ -61,11 +62,10 @@ import Leanux.Proofs.WG.Noise.SessionSource
 import Leanux.Proofs.WG.Noise.SessionReadyClaims
 import Leanux.Proofs.WG.Noise.ConfirmationSequenceSource
 
-/-! H1's whole-operation contracts and finite mixed native tag histories.
-Direct helper reinstallation admits repeated confirmation of one resident key;
-the nine-operation confirmation history proves distinct successful IDs under
-its explicit initial next/cursor bound. Closure over every driver caller
-remains outside this native operation language. -/
+/-! H1's source contracts, initialized allocation-identity confirmation
+uniqueness and complete normal-run tag coverage. The raw store-ID recreation
+counterexample remains distinct from allocation identity. Stopped journals
+cover emitted completed callbacks, not every internal write before Stop. -/
 namespace Leanux.Proofs.WG.Noise
 open Leanux Leanux.WG
 
@@ -999,5 +999,38 @@ theorem original_deferred_driver_tags (call : Leanux.Proofs.WG.Lifetimes.EnvDefe
       (DriverTags.inspectOriginalProduct (call.original)) :=
   ⟨DriverTags.product_inspection_facts _ (fun tags => DriverTags.Scheduled.deferred_preserves tags call) entry,
     DriverTags.product_inspection_erases _ _ (DriverTags.Scheduled.deferred_erases call)⟩
+
+/-- Every concrete syscall uses the actual tag observers and original outer
+guards. Normal surviving tags are retained from entry or covered by named
+helper/birth receipts;
+all outcomes, including Stops, agree with the original call. -/
+theorem original_syscall_driver_tags (call : Leanux.Syscall) (entry : Campaign2.Snapshot) :
+    DriverTags.ProductEnsures (DriverTags.inspectProduct (DriverTags.Syscalls.syscall call))
+      (fun s => s = entry) (fun out final => final = entry ∧ DriverTags.InspectionFacts entry out) ∧
+    DriverTags.ProductAgreesOn (fun _ => True)
+      (do let out ← DriverTags.inspectProduct (DriverTags.Syscalls.syscall call); pure out.1)
+      (DriverTags.inspectOriginalProduct (Leanux.syscall call)) :=
+  ⟨DriverTags.product_inspection_facts _ (fun tags => DriverTags.Syscalls.syscall_preserves tags call) entry,
+    DriverTags.product_inspection_erases _ _ (DriverTags.Syscalls.syscall_erases call)⟩
+
+/-- The original initialized runner has normal whole-run tag coverage for every
+typed trace and either placeholder mode, with no supplied invariant or callback.
+Every surviving tag is one of the five named states and has an actual helper or
+birth receipt. The exact JSON or indexed Stop is retained. On Stop only emitted
+completed-callback receipts are covered; this is not an intermediate-write trace. -/
+theorem original_initialized_driver_tags (trace : Leanux.Runner.Trace) (placeholders : Bool) :
+    DriverTags.Initialized.Facts (DriverTags.WholeDriver.inspection trace placeholders) ∧
+    (DriverTags.WholeDriver.inspection trace placeholders).1.map Prod.fst =
+      Leanux.Runner.executeTrace trace placeholders ∧
+    ∀ json final,
+      (DriverTags.WholeDriver.inspection trace placeholders).1 = .ok (json,final) →
+      HandshakeTags final.tagAt ∧
+        ∀ pid tag, final.tagAt pid = some tag →
+          ∃ event ∈ (DriverTags.WholeDriver.inspection trace placeholders).2,
+            DriverTags.EventValid event ∧ event.Effect ∧ event.after.tagAt pid = some tag :=
+  ⟨DriverTags.WholeDriver.facts trace placeholders,
+    DriverTags.WholeDriver.erases trace placeholders,
+    DriverTags.WholeDriver.normal trace placeholders⟩
+
 
 end Leanux.Proofs.WG.Noise

@@ -39,7 +39,11 @@ does not carry handshake-tag ownership. Separate actual tag observers now close
 birth, work drains, timer stop, stop/down, mixed configuration and removal/destruction,
 with exact original outcomes. Actual scheduler/deferred, data consume/transmit,
 Stack/poll/NAPI and dump tag composition now closes too. Traffic/lifecycle and
-enclosing syscall/runner composition remain open. These are source obligations rather than missing socket frames.
+enclosing concrete syscall/initialized runner composition now close normal
+whole-driver tag coverage, without supplied callback or initial-invariant
+premises. H1 retains the documented completed-callback observation boundary
+on Stop; it does not assert an internal-write trace. These former source
+obligations no longer need additional socket frames.
 This is proof support only; there is no mirror-change request.
 
 ## Landed support update, 2026-10-18
