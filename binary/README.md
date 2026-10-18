@@ -441,9 +441,13 @@ removal from the executable entry check, with ABI/callback readiness and a
 physical frame. `PairRemoveEnvironment` exposes the sequential environment
 and permission hypotheses. `PairRemoveWitness` proves linked/unhashed Pre
 witnesses and specializes the execution theorem; `binary-pair-remove-witness`
-executes their concrete states through return and repeated removal. Replacement
-reconstruction and its paired runner are available; complete replacement and
-actual captured mutator replay remain open. See the increment report for
+executes their concrete states through return and repeated removal.
+`PairReplaceAdequacy.replace_checked` and `PairReplaceEnvironment.replace_simulation`
+likewise cover the complete replacement, including failure and all list
+positions. `PairReplaceWitness` proves the linked/unhashed entry witnesses;
+`binary-pair-replace-witness` executes their exact states and repeat calls.
+Lookup integration, finite-sequence composition and actual captured mutator
+replay remain open. See the increment report for
 commands, timing and the external export-based gate status.
 
 For runtime diagnosis, `binary-pair-buffer-cost` uses a **generated variation**

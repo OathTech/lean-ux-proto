@@ -53,6 +53,10 @@ its separately generated literal instruction range. -/
 def IndexRemoveDecoderAgreement (fetch : Int64 → Option Decoded) : Prop :=
   ∀ pc instruction, IndexMutatorImage.Remove.fetch pc = some instruction → fetch pc = some instruction
 
+/-- The separately generated replacement range of the same pinned ELF. -/
+def IndexReplaceDecoderAgreement (fetch : Int64 → Option Decoded) : Prop :=
+  ∀ pc instruction, IndexMutatorImage.Replace.fetch pc = some instruction → fetch pc = some instruction
+
 /-- External paging/access permissions, absent from Kraken MachineState. -/
 structure Permissions where
   read : BitVec 64 → Width → Prop

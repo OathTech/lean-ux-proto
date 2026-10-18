@@ -12,6 +12,27 @@ def replacementStores (o : Offsets) (old new previous next : Nat) : List (Nat×N
 def replaceMemory (m : DataMem) (o : Offsets) (old new previous next index : Nat) : DataMem :=
   write64s (write32 m (new-o.hash+o.index) index) (replacementStores o old new previous next)
 
+def replacePrefixMemory (m : DataMem) (o : Offsets) (new previous next index : Nat) : DataMem :=
+  write64 (write64 (write64 (write32 m (new-o.hash+o.index) index)
+    (new+o.next) next) (new+o.pprev) previous) previous new
+
+theorem replaceMemory_split (m : DataMem) (o : Offsets) (old new previous next index : Nat) :
+    replaceMemory m o old new previous next index =
+      let first := replacePrefixMemory m o new previous next index
+      let repaired := if next=0 then first else write64 first (next+o.pprev) (new+o.next)
+      write64 (write64 (write64 repaired (old+o.next) 0) (old+o.pprev) 0xdead000000000122) (old+o.pprev) 0 := by
+  by_cases zero : next=0 <;>
+    simp [replaceMemory,replacementStores,replacePrefixMemory,write64s,zero]
+
+theorem word_after_index {n o address owner base} (m : DataMem) (value : Nat)
+    (layout : Layout o) (storage : storageCheck n o=true) (named : (owner,base) ∈ n.owners)
+    (slot : LinkSlot n o address) (path : String) :
+    word (write32 m (base+28) value) path address 8=word m path address 8 := by
+  have scalar : DataSlot n o (base+28) 4 := .entry owner base 28 4 named (.inr (.inr rfl))
+  exact word_write32_frame _ _ _ _ _ _ (by
+    intro a link index
+    exact scalar.disjoint_link slot layout storage a index link)
+
 theorem replacement_effect (o : Offsets) (old new previous next address : Nat) (before : Decode Nat) :
     wordEffect address before (replacementStores o old new previous next)=
       if address=old+o.pprev then .ok 0 else

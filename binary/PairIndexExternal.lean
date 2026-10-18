@@ -39,6 +39,16 @@ theorem external_read {n o c initial words before after base width}
     (heap : ∀ a, InRange base width a → HeapBytes n o a) : before.loadInt base width=after.loadInt base width :=
   frame.loadInt base width (fun i hi => g.heap_external _ (heap _ ⟨i,hi,rfl⟩))
 
+theorem DataSlot.heap {n o address size} (slot : DataSlot n o address size) (layout : Layout o)
+    (a : BitVec 64) (inside : InRange (.ofNat 64 address) size a) : HeapBytes n o a := by
+  cases slot with
+  | entry owner base offset size named field =>
+    refine ⟨(base,o.entrySize),entry_storage named,?_⟩
+    apply span_slice _ inside
+    rw [layout.entrySize]
+    rcases field with h | h | h <;> obtain ⟨rfl,rfl⟩ := Prod.mk.inj h <;> omega
+  | count id base named => exact ⟨(base+o.peerRefcount,4),count_storage named,inside⟩
+
 theorem external_trans {c initial words first second third}
     (left : EqualOutside (External c initial words) first second)
     (right : EqualOutside (External c initial words) second third) :

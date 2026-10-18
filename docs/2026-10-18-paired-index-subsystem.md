@@ -255,8 +255,54 @@ changes and frames the independent owner words and peer counts. Storage,
 slot separation, pointer bounds, neighbor identities and decoder-normal-form
 lemmas are reused from removal. Replacement's concrete store order and local
 neighbor equations remain bespoke. `PairReplaceOwnership` now proves the matching hashed-flag transfer, including
-successor rewiring and independent unlinked owners. Raw call composition is
-still open, so this is not yet a second completed function.
+successor rewiring and independent unlinked owners. The following stage closes
+the complete call.
+
+## Complete replacement (08:18–08:24 UTC)
+
+`PairReplaceAdequacy.replace_checked` composes all 41 anchored instructions
+and the named services through return, for failure and success at every list
+position. Its postcondition exports the matching low-byte Boolean result,
+restored ABI, both coverage phases, preempt and pending state, reconstruction,
+owner flags and a physical frame. `PairReplaceEnvironment.replace_simulation`
+adds the explicit serialized-environment and access hypotheses. The new named
+trust premise is `IndexReplaceDecoderAgreement`; the existing PC-coverage and
+BH-enable contracts remain unproved hypotheses. No ordinary helper is assumed.
+
+`PairReplaceWitness.check_linked`, `check_unhashed` and `executes` prove the
+positive entry states and specialize the full execution theorem. The module
+builds in 2.5 seconds with only the standard three axioms. Its exact concrete
+states execute eight calls and 614 instructions across two undefined-value
+seeds, including repeated replacement and saturation of the actual four-word
+coverage allocation. A corrupted hardirq state is rejected. The new owner has
+an independent NULL peer word. A nonzero high part of the saved result register
+checks that the Boolean contract uses the ABI low byte rather than assuming
+the entire return register is zero or one.
+
+The complete theorem first built at approximately 08:18 UTC, about 64 elapsed
+minutes after the 07:14 runtime checkpoint. That interval overlaps the removal
+witness work and cannot be added to it as independent effort. Replacement
+reuses storage separation, finite chains, executable decoder normal forms,
+stack saving, callback readiness and the source/physical frame mechanisms.
+`PairCallSlot` isolates the repeated instrumentation-call-slot update. Concrete
+instruction effects, their register wiring and segment composition remain
+bespoke. A failed broad simplification of the store segment was replaced by
+explicit load/store and integer-width rewrites; no semantics or assertion was
+weakened to close it. Whole-subsystem composition, lookup integration and actual
+mutator captures remain open. Runtime-optimization time used remains zero.
+Fresh local kernel replay of `PairReplaceWitness` and
+`PairReplaceEnvironment`, including their imported closures, passed at
+08:26 UTC. External acceptance is pending. The pinned mirror and Kraken
+commits and the reported lag against main remain unchanged; Kraken is clean.
+
+Reproduce the replacement witnesses:
+
+```sh
+(cd binary && capped lake build PairReplaceWitness PairReplaceEnvironment binary-pair-replace-witness)
+capped binary/.lake/build/bin/binary-pair-replace-witness .tmp/binary-replace/input.json
+(cd binary && capped lake env leanchecker --fresh PairReplaceWitness)
+(cd binary && capped lake env leanchecker --fresh PairReplaceEnvironment)
+```
 
 Reproduce the added tests from the worktree root:
 
