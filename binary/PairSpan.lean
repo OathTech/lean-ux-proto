@@ -29,4 +29,34 @@ theorem spansApart_sound {left right : List Span} (ok : spansApart left right = 
   have := Span.location parts.1.2 rightAt
   rcases parts.2 with h | h <;> omega
 
+/-- Relate a physical footprint to its executable finite cover once; each
+separation check can then discharge all byte-wise non-aliasing premises. -/
+def Covers (spans : List Span) (footprint : BitVec 64 → Prop) : Prop :=
+  ∀ a, footprint a → ∃ span ∈ spans, span.contains a
+
+theorem spansApart_disjoint {left right : List Span} {P Q : BitVec 64 → Prop}
+    (checked : spansApart left right = true) (l : Covers left P) (r : Covers right Q) :
+    ∀ a, P a → ¬Q a := by
+  intro a hp hq
+  obtain ⟨ls,hl,lp⟩ := l a hp
+  obtain ⟨rs,hr,rp⟩ := r a hq
+  exact spansApart_sound checked hl hr lp rp
+
+theorem Covers.append_left {left right : List Span} {P : BitVec 64 → Prop}
+    (cover : Covers left P) : Covers (left ++ right) P := by
+  intro a hp
+  obtain ⟨s,hs,inside⟩ := cover a hp
+  exact ⟨s,List.mem_append_left _ hs,inside⟩
+
+theorem Covers.append_right {left right : List Span} {P : BitVec 64 → Prop}
+    (cover : Covers right P) : Covers (left ++ right) P := by
+  intro a hp
+  obtain ⟨s,hs,inside⟩ := cover a hp
+  exact ⟨s,List.mem_append_right _ hs,inside⟩
+
+theorem Covers.range (base : BitVec 64) (size : Nat) :
+    Covers [(base.toNat,size)] (InRange base size) := by
+  intro a inside
+  exact ⟨(base.toNat,size),by simp,by simpa [Span.contains] using inside⟩
+
 end Binary.Pair

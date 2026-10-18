@@ -4,19 +4,19 @@ import PairTrieFrame
 namespace Binary.Pair.Trie
 open Leanux Leanux.WG AllowedipsRelation
 
-theorem trieReads_decoded {n : Names} {o : AllowedipsProbe.Offsets} {m : DataMem} {d : Device}
+theorem trieReads_nodeDecoded {n : Names} {o : AllowedipsProbe.Offsets} {m : DataMem} {d : Device}
     {root : Option NodeId} {bits query : Nat} (related : Corresponds n o m d)
     {address : BitVec 64}
     (read : TrieReads (interpretation n.nodes) (fun id => d.nodes.get? id) root bits query address) :
-    ReadBytes n o address := by
+    NodeReadBytes n o address := by
   obtain ⟨id,node,_,present,read⟩ := read
   have reconstructed := reconstruct_fields related
   obtain ⟨base,member,_⟩ := reconstructed.node present
   have atAddress := interpretation_of_mem reconstructed.nodeIds member
   obtain ⟨_,peerOffset,childOffset,cidrOffset,byteOffset,bitOffset,_,keyOffset,_⟩ := reconstructed.layout
   have field (offset size : Nat) (span : (offset,size) ∈ nodeSpans o)
-      (inside : InRange (.ofNat 64 base + .ofNat 64 offset) size address) : ReadBytes n o address :=
-    .inl ⟨id,base,member,offset,size,span,by simpa only [BitVec.ofNat_add] using inside⟩
+      (inside : InRange (.ofNat 64 base + .ofNat 64 offset) size address) : NodeReadBytes n o address :=
+    ⟨id,base,member,offset,size,span,by simpa only [BitVec.ofNat_add] using inside⟩
   simp only [NodeReads,atAddress] at read
   rcases read with key | cidr | ⟨_,peer | ⟨_,byte | bit | child⟩⟩
   · unfold KeyReads at key
@@ -46,6 +46,12 @@ theorem trieReads_decoded {n : Names} {o : AllowedipsProbe.Offsets} {m : DataMem
       simpa only [childOffset,index,Nat.mul_zero,Nat.add_zero] using child
     · apply field (o.children+8) 8 (by simp [nodeSpans])
       simpa only [childOffset,index,Nat.mul_one] using child
+
+theorem trieReads_decoded {n : Names} {o : AllowedipsProbe.Offsets} {m : DataMem} {d : Device}
+    {root : Option NodeId} {bits query : Nat} (related : Corresponds n o m d)
+    {address : BitVec 64}
+    (read : TrieReads (interpretation n.nodes) (fun id => d.nodes.get? id) root bits query address) :
+    ReadBytes n o address := .inl (trieReads_nodeDecoded related read)
 
 #print axioms trieReads_decoded
 end Binary.Pair.Trie

@@ -3,6 +3,7 @@ import PairIndex
 import AllowedipsSource
 import PairLoopCheck
 import PairTrieFrame
+import PairCallCheck
 
 namespace Binary.Pair.Trie
 open Lean Leanux Leanux.WG
@@ -15,6 +16,9 @@ def advance (input : AllowedipsProbe.Input) (seed : UInt64) (r : Run)
     (stops : Array Nat) (returnPC : Nat := stopAddr) : Except String Run :=
   runUntil input.instructions input.labels input.hooks input.preempt r.state seed true
     input.budget input.entryPreempt stops (some r) returnPC (some #[input.entry+0xd5])
+    (some fun s => match TrustBase.KcovPlan .pc s with
+      | none => .error "coverage callback inputs are missing"
+      | some writes => .ok (!writes.isEmpty))
 
 /-- Concrete caller check for the decoder-frame proof's separation premise.
 This fixture has a 48-byte loop scratch area below its 80-byte caller frame.
@@ -103,13 +107,26 @@ def footprint (names : Names) (input : AllowedipsProbe.Input) (width : Nat) (r :
         within a bytes (frame.task+0x6e8) 8 || within a bytes (frame.task+0x704) 4 do
       throw s!"read footprint: {bytes} at {a}"
 
+/-- The shared function-entry assertion, exercised on both materialized and
+captured memory. Its physical premises are proved from these exact checks. -/
+def callBoundary (names : Names) (input : AllowedipsProbe.Input)
+    (coverage : CommonBitsCoverage.Context) (initial : MachineState) (w : World)
+    (root : Option NodeId) (width key : Nat) (ra : UInt64) : Except String Unit := do
+  assertAt names input.offsets initial.data.dmem w
+  callInput names input.offsets initial.data.dmem root width key
+  unless initial.pc == AllowedipsImage.Lookup.entry &&
+      initial.data.regs.rdi.toNat == (← address names.nodes root) &&
+      initial.data.regs.rsi.toNat == width do throw "call.abi-input"
+  callFrameCheck names input.offsets coverage initial ra width key
+
 /-- Shared call runner: fixture and capture supply the ABI and physical call
 context; all paired assertions and the independent loop evolution are shared. -/
 def lookupFrom (names : Names) (input : AllowedipsProbe.Input) (seed : UInt64)
     (initial : MachineState) (frame : CallFrame) (coverageContext : CommonBitsCoverage.Context)
     (priorCoverage : Array Nat) (w : World)
     (root : Option NodeId) (width key : Nat) : Except String (World × Run × Json) := do
-  assertAt names input.offsets initial.data.dmem w
+  callBoundary names input ⟨coverageContext.coverage, .ofNat 32 input.entryPreempt⟩
+    initial w root width key (.ofNat frame.returnPC)
   loopSeparation names input.offsets frame
   callInput names input.offsets initial.data.dmem root width key
   unless initial.pc.toBitVec.toNat == input.entry && initial.data.regs.rsp.toNat == frame.stack &&

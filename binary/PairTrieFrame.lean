@@ -10,9 +10,12 @@ def nodeSpans (o : AllowedipsProbe.Offsets) : List (Nat × Nat) :=
   [(o.peer,8), (o.children,8), (o.children+8,8), (o.cidr,1),
    (o.bitlen,1), (o.bitAtA,1), (o.bitAtB,1), (o.bits,4), (o.bits,8), (o.bits+8,8)]
 
+def NodeReadBytes (n : Names) (o : AllowedipsProbe.Offsets) (a : BitVec 64) : Prop :=
+  ∃ id base, (id,base) ∈ n.nodes ∧ ∃ offset size, (offset,size) ∈ nodeSpans o ∧
+    InRange (.ofNat 64 (base+offset)) size a
+
 def ReadBytes (n : Names) (o : AllowedipsProbe.Offsets) (a : BitVec 64) : Prop :=
-  (∃ id base, (id,base) ∈ n.nodes ∧ ∃ offset size, (offset,size) ∈ nodeSpans o ∧
-    InRange (.ofNat 64 (base+offset)) size a) ∨
+  NodeReadBytes n o a ∨
   (∃ id base, (id,base) ∈ n.peers ∧ InRange (.ofNat 64 (base+o.peerRefcount)) 4 a)
 
 def decoderSpans (n : Names) (o : AllowedipsProbe.Offsets) : List Span :=

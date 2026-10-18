@@ -103,6 +103,17 @@ def suite (input : AllowedipsProbe.Input) : Except String Json := do
     ((runCase input "cycle" cycle (some 0) width key).map (fun _ => ())))
   let sm ← AllowedipsProbe.materialize fd input.offsets key width input.preempt input.entryPreempt
   let regs : Reg64s := {rdi := .ofNat a, rsi := .ofNat width, rdx := .ofNat AllowedipsProbe.keyAddr, rsp := .ofNat stackAddr}
+  let entryState : MachineState := ⟨{regs,dmem := sm},.ofNat input.entry⟩
+  let callContext : Binary.CommonBitsCoverage.Context :=
+    ⟨(fixtureLoopContext input).coverage,.ofNat 32 input.entryPreempt⟩
+  let checkCall := fun state => callBoundary names input callContext state fullWorld (some 0) width key (.ofNat stopAddr)
+  checkCall entryState
+  controls := controls.push (← expectReject "peer-get-deep-stack" "call.stack-mapping"
+    (checkCall {entryState with data := {entryState.data with dmem := sm.erase (.ofNat 64 (stackAddr-144))}}))
+  controls := controls.push (← expectReject "entry-return-word" "call.abi-return"
+    (checkCall {entryState with data := {entryState.data with dmem := put sm stackAddr 8 1}}))
+  controls := controls.push (← expectReject "entry-network-query" "call.network-query"
+    (callBoundary names input callContext entryState fullWorld (some 0) width (key ^^^ 1) (.ofNat stopAddr)))
   let atHeader ← advance input 0 {state := ⟨{regs, dmem := sm}, .ofNat input.entry⟩} #[input.entry+0xd5]
   let checkHeader := fun r => assertHeader names input r fullWorld (some 0) width key (none,some 0,none)
   checkHeader atHeader

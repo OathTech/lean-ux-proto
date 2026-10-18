@@ -352,3 +352,25 @@ projection, not a captured kernel entry and not a reachability proof.
 Pointer structures and proofs are hand-finished. `attic/` is outside the
 proof path. Generated traces, dumps and build outputs are disposable;
 `.tmp` and `.artifacts/check` are not evidence bundles to commit.
+
+## Complete-call increment
+
+The [increment plan and report](../docs/2026-10-18-plan-paired-call-increment.md)
+tracks executable call-entry readiness, its proof bridge, complete-call
+composition and cost measurements. `callBoundary_pre` in `PairCallEntry.lean` derives
+physical entry premises from the runner's `callBoundary`; `search_segment`
+composes the root and trie search. The full call theorem remains in progress.
+`PairCallWitness` supplies kernel-checked entry states. Run those exact
+states to return using decoded instructions from a prepared allowed-IPs input:
+
+```sh
+capped lake build PairCallWitness binary-pair-call-witness
+capped .lake/build/bin/binary-pair-call-witness ../.tmp/binary-allowedips/input-5.json
+capped lake env leanchecker --fresh PairCallWitness
+```
+
+The witness's small buffer intentionally exercises saturation. Paired PC
+coverage records count actual stores according to the executable callback
+plan; the service body still executes under Kraken. The earlier diagnostic
+callback tally was wrong for a full buffer. Other probes retain their prior
+callback-tally behavior unless they supply the explicit observer.

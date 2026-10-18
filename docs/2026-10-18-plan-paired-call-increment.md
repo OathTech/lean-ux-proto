@@ -176,3 +176,90 @@ ephemeral; commit implementation, conclusions and reproduction commands.
 
 - 2026-10-18 03:37:17 UTC: baseline inspection began at clean `2edbc26`.
   Current cost category: contract inventory and executable entry assertions.
+
+### Entry and search checkpoint (2026-10-18)
+
+The first implementation connects `callBoundary` to the existing physical
+`AllowedipsEntry` through `callBoundary_pre`, and executes the prologue,
+endian conversion and BH-disable through `callEntry_checked`. The checked
+facts use one interpretation from Names. The selected peer is computed
+from the source trie; no positive-count premise is added. `search_segment`
+then handles the empty-root edge or composes the root segment with the
+previously proved trie loop. These are intermediate results; peer-update
+reconstruction and the complete function join remain open at this point.
+
+The reusable mechanism introduced here is `Covers`/`spansApart_disjoint`:
+prove a finite cover of a byte footprint once, then turn its executable
+range check into the byte-wise separation premises of existing regions.
+It is used for decoder, stack, input, callback, count and preempt footprints.
+The old entry relation is derived from reconstruction, including the
+selected count. It is not accepted as a second independent assumption.
+
+The executable entry check accounts for 18 stack words (144 bytes), both
+callback phases, the actual ABI/query/return word, conditional pending
+softirq state and the required separations. The metadata check was split
+from the current preempt-word check so both phases can be checked on the
+same initial memory. This preserves the loop's coverage contract. Proof
+inversion exposed one additional header-separation case: KCOV's header is
+read even when its capacity is zero, so separation cannot be derived from
+membership in its data-write range alone.
+
+Both captured calls passed the first version of the complete-call assertion
+and returned with matching observations under both seeds. Measured replay
+was 273.145 seconds (IPv4) and 263.299 seconds (IPv6), including the extra
+full-buffer scans; the previous checkpoint measured 224.79 and 215.61
+seconds. They ran concurrently on the shared host. This is evidence of an
+iteration cost to investigate, not a controlled attribution of the increase.
+Final replays after the diagnostic coverage fix are tracked separately.
+
+`CallWitness.check4` and `check6` prove that exact small initial states pass
+`callBoundary`; `CallWitness.pre` derives their physical preconditions.
+The `binary-pair-call-witness` executable runs those same definitions through
+Kraken to return: IPv4 takes 652 instructions, IPv6 787, with both undefined
+seeds. Each has one trie header and returns peer 0, incrementing its count.
+These are synthetic witnesses, distinct from the captured calls.
+
+That execution found a runner defect: the four-word witness buffer fills,
+but the diagnostic coverage list previously counted every callback as a
+stored record. The binary correctly stops recording at capacity. The paired
+runner now uses the existing executable `KcovPlan` at callback entry to
+record only callbacks that store a PC. Actual service instructions continue
+to execute. The first exact-witness run failed at the return count check;
+after this change all four witness runs pass. The existing constructed
+suites still pass, including explicit dying-peer refusal. Three new controls
+per family reject a missing deep peer-get stack byte, a changed return word,
+and a wrong network-order input. Transport unit tests pass (2 tests).
+
+The entry and search proof builds print only the three standard axioms for
+their new headlines. A fresh replay of the entry/witness closure succeeded;
+the combined search/witness fresh replay also passed at 03:55:46 UTC. One attempted multi-module
+`leanchecker --fresh` command was rejected by its CLI: that flag accepts
+one root module. `PairCallWitness` now imports the search proof to replay
+both through one root. No external acceptance of this increment is claimed.
+The accepted external export remains the one at `a33869e`.
+
+The work began at 03:37:17 UTC. By 03:52:30 the entry checks, positive
+witnesses, root/search composition and diagnostic fix built and the exact
+witnesses had executed. This approximately 15-minute interval includes plan
+writing, contract inspection, proof adaptation, failed elaborations and
+concurrent builds/replays. It excludes final validation and reuses all
+instruction-region proofs. It is not a new-function proof rate. A notable
+portion of the proof iteration so far was conversion between register
+views, stack coordinates and existing relation types; the range-cover
+lemma reduces separation boilerplate but does not remove those conversions.
+
+Reproduce from this worktree:
+
+```sh
+(cd binary && capped lake build PairCallWitness binary-pair-call-witness binary-pair-allowedips)
+capped binary/.lake/build/bin/binary-pair-call-witness .tmp/binary-allowedips/input-5.json
+capped binary/.lake/build/bin/binary-pair-allowedips .tmp/binary-allowedips/input-5.json
+capped binary/.lake/build/bin/binary-pair-allowedips .tmp/binary-allowedips/input-8.json
+(cd binary && capped lake env leanchecker --fresh PairCallWitness)
+capped python3 -B -m unittest binary.test_allowedips_capture
+```
+
+Use the capture/replay commands in `binary/README.md` for independent
+three-way checks and actual captured state replay. Mirror pin remains
+`cb2348e`, lagging main `77c9b55` at this checkpoint. Kraken remains clean
+at `7ebba06a30eaf08c10b26b28ca14bfee1c791576`.

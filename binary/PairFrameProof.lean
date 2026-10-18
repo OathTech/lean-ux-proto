@@ -27,10 +27,11 @@ theorem readSpans_cover {c : Context} {a : BitVec 64} (read : c.bytes a) :
   · obtain ⟨span,member,inside⟩ := writeSpans_cover ⟨needed,buffer⟩
     exact ⟨span,by simp [readSpans,needed,member],inside⟩
 
-theorem coverageCheck_sound {c : Context} {m : DataMem} (ok : coverageCheck c m = true) : c.At m := by
-  simp only [coverageCheck,Bool.and_eq_true,beq_iff_eq] at ok
-  obtain ⟨⟨⟨⟨task,preempt⟩,soft⟩,mode⟩,buffer⟩ := ok
-  refine ⟨⟨task,?_,?_,?_⟩,preempt⟩
+theorem coverageDataCheck_sound {c : Context} {m : DataMem}
+    (ok : coverageDataCheck c m = true) : c.CoverageAt m := by
+  simp only [coverageDataCheck,Bool.and_eq_true,beq_iff_eq] at ok
+  obtain ⟨⟨⟨task,soft⟩,mode⟩,buffer⟩ := ok
+  refine ⟨task,?_,?_,?_⟩
   · intro read
     simpa only [read,↓reduceIte,beq_iff_eq] using soft
   · intro read
@@ -47,6 +48,10 @@ theorem coverageCheck_sound {c : Context} {m : DataMem} (ok : coverageCheck c m 
         refine ⟨count.toNat,?_,?_⟩
         · simpa only [read,decide_eq_true_eq] using header
         · simp
+
+theorem coverageCheck_sound {c : Context} {m : DataMem} (ok : coverageCheck c m = true) : c.At m := by
+  simp only [coverageCheck,Bool.and_eq_true,beq_iff_eq] at ok
+  exact ⟨coverageDataCheck_sound ok.1,ok.2⟩
 
 /-- The tested service-data assertion establishes all physical frame
 premises. Callback behavior remains a separately named semantic contract. -/

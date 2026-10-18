@@ -30,9 +30,8 @@ def readSpans (c : Context) : List Span := metadataSpans c ++ [(preemptCountAddr
 
 /-- Inspect callback inputs and the buffer's mapped words, including its
 current header. The check follows the callback's conditional read footprint. -/
-def coverageCheck (c : Context) (m : DataMem) : Bool :=
+def coverageDataCheck (c : Context) (m : DataMem) : Bool :=
   (load64 m currentTaskAddress == some c.coverage.task) &&
-  (load32 m preemptCountAddress == some c.preempt) &&
   (if LookupSoftRead c.preempt then load32 m (c.coverage.task+0x704) == some c.coverage.softirqEnabled else true) &&
   (if LookupModeRead c.coverage c.preempt then load32 m (c.coverage.task+0x6e0) == some c.coverage.mode else true) &&
   (if c.Needed then
@@ -44,6 +43,9 @@ def coverageCheck (c : Context) (m : DataMem) : Bool :=
       | none => false
       | some count => count.toNat ≤ c.coverage.capacity.toNat)
    else true)
+
+def coverageCheck (c : Context) (m : DataMem) : Bool :=
+  coverageDataCheck c m && load32 m preemptCountAddress == some c.preempt
 
 /-- The extra initial-header assertion exposed by the proof: the runner had
 checked final coverage contents but had not checked callback readiness. -/

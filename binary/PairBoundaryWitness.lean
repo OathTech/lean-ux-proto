@@ -50,7 +50,7 @@ def cellMemory (bytes : List (BitVec 64 × UInt8)) : DataMem :=
 
 def memory (bits : Nat) : DataMem := cellMemory (cells bits)
 
-private theorem cellMemory_read (bytes : List (BitVec 64 × UInt8)) (a : BitVec 64) :
+theorem cellMemory_read (bytes : List (BitVec 64 × UInt8)) (a : BitVec 64) :
     (cellMemory bytes)[a]? = ((bytes.find? (·.1 == a)).map Prod.snd) := by
   induction bytes with
   | nil => simp [cellMemory]
@@ -74,11 +74,11 @@ private instance (x : Except String Unit) : Decidable (x = .ok ()) :=
   | .ok () => .isTrue rfl
 
 theorem check4 : initialBoundary names input coverage (state 32) (world 32) (some 0) 32 1 = .ok () := by
-  simp only [initialBoundary,assertAt,callInput,locals,frameCheck,coverageCheck,
+  simp only [initialBoundary,assertAt,callInput,locals,frameCheck,coverageCheck,coverageDataCheck,
     reconstruct,decodeNode,word,readNat,load64,load32,Mem.loadInt,state,memory_load]
   decide +kernel
 theorem check6 : initialBoundary names input coverage (state 128) (world 128) (some 0) 128 1 = .ok () := by
-  simp only [initialBoundary,assertAt,callInput,locals,frameCheck,coverageCheck,
+  simp only [initialBoundary,assertAt,callInput,locals,frameCheck,coverageCheck,coverageDataCheck,
     reconstruct,decodeNode,word,readNat,load64,load32,Mem.loadInt,state,memory_load]
   decide +kernel
 

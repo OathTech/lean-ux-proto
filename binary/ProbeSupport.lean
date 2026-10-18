@@ -249,7 +249,8 @@ def runUntil (instructions : Array Instruction) (labels : Array (String × Nat))
     (hooks : Array (Nat × String)) (preempt : Nat) (initial : MachineState) (seed : UInt64)
     (actualServices : Bool) (budget entryPreempt : Nat)
     (stops : Array Nat) (prior : Option Run := none)
-    (returnPC : Nat := stopAddr) (historyPCs : Option (Array Nat) := none) : Except String Run := do
+    (returnPC : Nat := stopAddr) (historyPCs : Option (Array Nat) := none)
+    (pcStored : Option (MachineState → Except String Bool) := none) : Except String Run := do
   -- Labels is total in Kraken. Check every reference before constructing it;
   -- its default is unreachable for this validated one-instruction input format.
   for i in instructions do
@@ -268,7 +269,10 @@ def runUntil (instructions : Array Instruction) (labels : Array (String × Nat))
     if let some (_, name) := hooks.find? (·.1 == pc) then
       let ra ← readNat r.state r.state.data.regs.rsp.toNat 8
       if name == "__sanitizer_cov_trace_pc" then
-        r := {r with coverage := r.coverage.push ra}
+        let stored ← match pcStored with
+          | none => pure true
+          | some observe => observe r.state
+        if stored then r := {r with coverage := r.coverage.push ra}
       else if name == "__sanitizer_cov_trace_cmp4" || name == "__sanitizer_cov_trace_const_cmp4" ||
           name == "__sanitizer_cov_trace_const_cmp1" || name == "__sanitizer_cov_trace_cmp1" ||
           name == "__sanitizer_cov_trace_cmp8" then
