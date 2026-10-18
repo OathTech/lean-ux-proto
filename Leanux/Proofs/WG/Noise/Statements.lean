@@ -554,4 +554,20 @@ theorem original_session_allocation_refusal (pid : PeerId) (d : Device) (p : Pee
   beginSession_allocation_refused_projected pid d p counter resident accepted
     bytes rest width refused
 
+/-- The response caller's initial tags reach its creation receipt unchanged,
+and creation's tags reach the session receipt unchanged. With two receipts the
+initial tag is consumed initiation and session entry is created response, even
+when session returns false. This links actual helper cuts and leaves the final
+caller tag map and stopped-helper writes to their separate claims. -/
+theorem original_response_caller_tag_provenance
+    (pid : PeerId) (entry : Campaign2.Snapshot) :
+    Campaign2.Ensures (ResponseCaller.observeProjected pid)
+      (fun s => s.tagAt = entry.tagAt)
+      (fun receipts _ => ResponseCaller.ReceiptShape pid receipts ∧
+        ResponseCaller.ReceiptChain entry receipts ∧
+        ResponseCaller.ReceiptRoles pid entry receipts ∧
+        ∀ receipt ∈ receipts,
+          ResponseCaller.ReceiptValid receipt ∧ TagReceiptEffect receipt) :=
+  ResponseCaller.original_response_receipt_chain pid entry
+
 end Leanux.Proofs.WG.Noise

@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Noise.ResponseMacFrames
 import Leanux.Proofs.WG.Origins.HandshakeSources
 import Leanux.Proofs.Logged.NativeCapture
 import Leanux.Proofs.WG.Noise.CreationTagClaims
@@ -458,5 +459,201 @@ theorem observeProjected_discard (pid : PeerId) :
     (do let _ ← observeProjected pid; pure ()) = sendHandshakeResponse pid := by
   simp only [observeProjected, bind_assoc, pure_bind]
   exact observeNative_erases pid
+
+/-- Initial tags reach the creator cut, and the creator's resulting tags reach
+the session cut. No fact about the caller suffix after the session is asserted. -/
+def NativeChain (entry : Tags) (history : List Event) : Prop :=
+  (∃ pid created, history = [.created pid created] ∧ tags created.before = entry) ∨
+  (∃ pid created session,
+    history = [.created pid created, .session pid session] ∧
+    tags created.before = entry ∧ tags session.before = tags created.after)
+
+private theorem lift_frame {α : Type} (a : WG.M α) (initialHistory : List Event)
+    (entry : Tags)
+    (frame : ∀ g ambient x final after,
+      ((a.run g).run ambient) = .ok ((x, final), after) → tags final = tags g) :
+    StatePrefixEnsures (fun h g _ => h = initialHistory ∧ tags g = entry)
+      (fun _ => True) (liftWGPrefix a)
+      (fun _ h g _ => h = initialHistory ∧ tags g = entry) := by
+  apply StatePrefixEnsures.lift
+  · intro h g ambient prior
+    trivial
+  · intro h g ambient x final after prior run
+    exact ⟨prior.1, (frame g ambient x final after run).trans prior.2⟩
+
+private theorem receipt_cut {α : Type} (a : WG.M α) (event : WGRunWitness α → Event)
+    (initialHistory : List Event) (entry : Tags) :
+    StatePrefixEnsures (fun h g _ => h = initialHistory ∧ tags g = entry)
+      (fun _ => True) (receiptWGObserved (liftWGPrefix a) event)
+      (fun value h g _ => ∃ r, r.value = value ∧ tags r.before = entry ∧
+        h = initialHistory ++ [event r] ∧ tags g = tags r.after) := by
+  unfold receiptWGObserved
+  have captured : StatePrefixEnsures
+      (fun h g _ => h = initialHistory ∧ tags g = entry) (fun _ => True)
+      (captureWGRun a)
+      (fun r h g _ => tags r.before = entry ∧
+        h = initialHistory ∧ tags g = tags r.after) := by
+    apply StatePrefixEnsures.captureWGRun a
+    · intro h g ambient prior
+      trivial
+    · intro h g ambient value final after prior run
+      exact ⟨prior.2, prior.1, rfl⟩
+  apply StatePrefixEnsures.bind captured
+  intro r
+  apply StatePrefixEnsures.bind
+    (Q := fun _ h g _ => tags r.before = entry ∧
+      h = initialHistory ++ [event r] ∧ tags g = tags r.after)
+  · apply StatePrefixEnsures.emit (event r)
+    · intro h g ambient prior
+      trivial
+    · intro h g ambient prior
+      exact ⟨prior.1, congrArg (· ++ [event r]) prior.2.1, prior.2.2⟩
+  · intro u
+    exact StatePrefixEnsures.pure r.value (fun _ _ _ _ => True.intro)
+      (fun _ _ _ prior => ⟨r, rfl, prior⟩)
+
+private theorem branch_link {α : Type} (site : Decision) (value : Bool)
+    (P : List Event → WGWorld → Ambient → Prop) (next : Bool → Obs α)
+    (Q : α → List Event → WGWorld → Ambient → Prop)
+    (stable : ∀ h g ambient after, P h g ambient → P h g after)
+    (rest : StatePrefixEnsures P (fun _ => True) (next value) Q) :
+    StatePrefixEnsures P (fun _ => True)
+      (liftWGPrefix (branch site value : WG.M Bool) >>= next) Q := by
+  have observed : StatePrefixEnsures P (fun _ => True)
+      (liftWGPrefix (branch site value : WG.M Bool))
+      (fun result h g ambient => result = value ∧ P h g ambient) := by
+    apply StatePrefixEnsures.lift
+    · intro h g ambient prior
+      trivial
+    · intro h g ambient result final after prior run
+      change Except.ok ((value, g), _) = _ at run
+      cases run
+      exact ⟨rfl, stable h g ambient _ prior⟩
+  apply StatePrefixEnsures.bind observed
+  intro result
+  apply pure_pre (result = value)
+  intro equal
+  subst result
+  exact rest
+
+theorem observe_chain (pid : PeerId) (entry : Tags) :
+    StatePrefixEnsures (fun h g _ => h = [] ∧ tags g = entry)
+      (fun _ => True) (observe pid) (fun _ h _ _ => NativeChain entry h) := by
+  let Finished := NativeChain entry
+  have lifted {α : Type} (a : WG.M α) :
+      StatePrefixPreserves (fun h _ _ => Finished h) (fun _ => True) (liftWGPrefix a) :=
+    StatePrefixEnsures.lift a (fun _ _ _ _ => True.intro)
+      (fun _ _ _ _ _ _ prior _ => prior)
+  have pureFinished {α : Type} (x : α) :
+      StatePrefixPreserves (fun h _ _ => Finished h) (fun _ => True) (pure x : Obs α) :=
+    StatePrefixEnsures.pure x (fun _ _ _ _ => True.intro)
+      (fun _ _ _ prior => prior)
+  unfold observe HandshakeSources.responseWith
+  simp only [ops]
+  apply StatePrefixEnsures.bind (lift_frame _ [] entry (clock_tag_frame _))
+  intro now
+  apply StatePrefixEnsures.bind (lift_frame _ [] entry (lastSent_tag_frame pid now))
+  intro u
+  apply StatePrefixEnsures.bind (receipt_cut _ (.created pid) [] entry)
+  intro createdValue
+  apply exists_pre
+  intro created
+  apply pure_pre (created.value = createdValue)
+  intro valueEq
+  subst createdValue
+  apply pure_pre (tags created.before = entry)
+  intro createdBefore
+  cases value : created.value with
+  | none =>
+    simp only [Option.isSome_none]
+    apply branch_link
+    · intro h g ambient after prior
+      exact prior
+    simp only [Bool.false_eq_true, ite_false]
+    apply StatePrefixEnsures.pure ()
+    · intro h g ambient prior
+      trivial
+    · intro h g ambient prior
+      exact Or.inl ⟨pid, created, prior.1, createdBefore⟩
+  | some msg =>
+    simp only [Option.isSome_some]
+    apply branch_link
+    · intro h g ambient after prior
+      exact prior
+    simp only [ite_true]
+    have macFrame : ∀ g ambient x final after,
+        (((addMacToPacket pid msg).run g).run ambient) = .ok ((x, final), after) →
+          tags final = tags g := by
+      intro g ambient x final after run
+      exact addMacToPacket_spec_tagMap_variant pid msg g.dev
+        g ambient x final after rfl run
+    apply StatePrefixEnsures.bind
+      (lift_frame (addMacToPacket pid msg) ([] ++ [Event.created pid created]) (tags created.after) macFrame)
+    intro msg'
+    apply StatePrefixEnsures.bind
+      (receipt_cut (beginSession pid) (Event.session pid)
+        ([] ++ [Event.created pid created]) (tags created.after))
+    intro sessionValue
+    apply exists_pre
+    intro session
+    apply pure_pre (session.value = sessionValue)
+    intro valueEq
+    subst sessionValue
+    apply pure_pre (tags session.before = tags created.after)
+    intro sessionBefore
+    apply StatePrefixEnsures.consequence
+      (P := fun h _ _ => Finished h)
+    · change StatePrefixEnsures (fun h _ _ => Finished h) (fun _ => True) _
+        (fun _ h _ _ => Finished h)
+      repeat' first
+        | (maintenance_head liftWGPrefix; exact lifted _)
+        | (maintenance_head Pure.pure; exact pureFinished _)
+        | (maintenance_head Bind.bind
+           apply StatePrefixEnsures.bind (Q := fun _ h _ _ => Finished h))
+        | maintenance_intro
+        | (maintenance_head ite; split)
+        | (maintenance_head dite; split)
+        | maintenance_reduce
+        | maintenance_reduce_match
+        | maintenance_match
+        | contradiction
+    · intro h g ambient prior
+      exact Or.inr ⟨pid, created, session, prior.1, createdBefore, sessionBefore⟩
+    · intro result h g ambient prior
+      exact prior
+
+end Leanux.Proofs.WG.Noise.ResponseCaller
+
+namespace Leanux.Proofs.WG.Noise.ResponseCaller
+open Leanux Leanux.WG Leanux.Proofs.Logged
+
+theorem observe_normal_chain (pid : PeerId) (g final : WGWorld)
+    (ambient after : Ambient) (history : List Event)
+    (run : runWGPrefix (observe pid) g ambient [] =
+      (.ok (((), final), after), history)) : NativeChain (tags g) history := by
+  have linked := observe_chain pid (tags g) g ambient [] ⟨rfl, rfl⟩
+  obtain ⟨suffix, appended, safe, normal⟩ := linked
+  have raw := run
+  simp only [runWGPrefix, runStatePrefix] at raw
+  simpa only [raw] using normal
+
+theorem observeNative_chain (pid : PeerId) (entry : Tags) :
+    Campaign2.Ensures (observeNative pid) (fun s => s.tagAt = entry)
+      (fun history _ => NativeChain entry history) := by
+  intro g ambient history final after pre run
+  cases observed : runWGPrefix (observe pid) g ambient [] with
+  | mk result events =>
+    cases result with
+    | error stop =>
+      simp only [StateT.run, observeNative, observed, Except.map] at run
+      cases run
+    | ok result =>
+      obtain ⟨⟨u, current⟩, inputs⟩ := result
+      cases u
+      simp only [StateT.run, observeNative, observed, Except.map, Except.ok.injEq, Prod.mk.injEq] at run
+      obtain ⟨⟨rfl, rfl⟩, rfl⟩ := run
+      have linked := observe_normal_chain pid g current ambient inputs events observed
+      change tags g = entry at pre
+      rwa [pre] at linked
 
 end Leanux.Proofs.WG.Noise.ResponseCaller
