@@ -5,23 +5,24 @@
 **Campaign-owned claims are current over main 77c9b555.** The split-world
 projection remains the claim boundary. Campaign 1's validated GRO carry
 8ba82097 is incorporated unchanged, replacing the three inherited failing
-modules. The full combined proof gate passes: 1,949 build jobs and 1,279
-terminal declarations, with standard axioms only. Fresh combined-root kernel replay passes. All six results remain in progress as scoped below.
+modules. The full combined proof gate passes: 1,951 build jobs and 1,280
+terminal declarations, with standard axioms only. Fresh combined-root replay
+passed at the GRO merge; fresh replay of the new H1 closure passes. All six results remain in progress as scoped below.
 
 | Result | Headlines | Checked support | Split status |
 | --- | ---: | ---: | --- |
-| H1 Noise | 35 | 274 | Full terminal closure, all seven whole-call tag maps, their actual finite mixed histories and session derivation-clock receipt current; direct helper reinstallation refutes unrestricted repeat-confirmation uniqueness; successful confirmation IDs for the tracked peer are distinct across actual finite histories of all four handshake create/consume calls, session installation/confirmation, clearing and expiry, including arbitrary-peer interleavings, under an explicit initial next/cursor bound; broader driver/lifetime closure remains separate. |
+| H1 Noise | 36 | 283 | Full terminal closure, all seven whole-call tag maps, their actual finite mixed histories and session derivation-clock receipt current; direct helper reinstallation refutes unrestricted repeat-confirmation uniqueness; successful confirmation IDs for the tracked peer are distinct across actual finite histories of all four handshake create/consume calls, session installation/confirmation, clearing and expiry, including arbitrary-peer interleavings, under an explicit initial next/cursor bound; initial slot credits now imply recorded session success and fund the selected peer's final slots, with old-slot aliases allowed; broader driver/lifetime closure remains separate. |
 | H2 Index | 94 | 500 | Full terminal closure and ingress/expiry/handshake/peer-creation owner coherence and whole-removal lifecycle finding/slot-covered arbitrary-AIP preservation and actual clear-work dispatch and both-mode handshake queueing and new-handshake/zero-key/retransmit callbacks and persistent-callback and successful-session slot-alias invariant counterexamples and positive publication-to-lookup handoff under explicit rotation freshness current; core named-operation H2 coverage, original bulk-removal table safety and combined session-invariant preservation through arbitrary finite consecutive calls checked; whole initialized driver/lifetime closure is a separate stronger scope; aggregate gate passes. |
 | H3 Roaming | 21 | 219 | Full terminal closure and invalid-MAC1/rate-limit/admitted-response/initiation rejection and cookie-message and whole data-admission/ingress endpoint preservation and actual first pre-put NAPI owner/packet authentication under the publication owner-head condition current; later polls, persistent queue provenance and broader caller coverage open. |
 | H4 Configuration | 116 | 994 | Full terminal closure, actual mixed/key setter paginated readback with arbitrary endpoints, whole finite single-peer mixed-width getter and actual finite empty-IP peer getter and exact arbitrary-room empty-IP serializer/whole normal cursor callback and actual mixed/key setter composition with exact DATA/DONE count and arbitrary endpoints and arbitrary finite empty-IP multi-peer scalar, mixed fwmark/scalar and established-identity private-key set/get and actual endpoint set/weighted readback and local mixed-page serializer/cursor/coalescer support plus finite mixed-page planning, native callback, computed selection/reference support, finite receive budget, exact page content and complete finite mixed peer/allowed-IP getter and scalar, endpoint, fwmark/scalar and established-identity key set/get plus mixed port-refusal and all nonzero and zero port-only set/get outcomes and actual empty allowed-IP replacement/full mixed readback and initial-state flag-only replace-peers free/first-pass observations and general represented insertion/fresh-peer readback current; global ownership, queued cleanup and general mixed setters remain open. |
 | H5 Progress | 53 | 349 | Full terminal closure, exact bounded outcomes and recorded batch, actual timer completion guards and recorded idle/post-advance wait completion and actual advance-syscall/runner linkage and send-worker completion guard and four final-idle syscall/runner receipts and exact all-mode finite allocation and successful modular-power evaluation bridges and actual activation-exit inspection current; global progress/coherent-ring adequacy open. |
 | H6 Timers | 65 | 502 | Full terminal closure, actual retry blocks and allocation-labelled guarded session-arm events with outgoing call-entry origin and initialized give-up runtime witness with checked concrete curve outputs and all five syntactic traversal call sites covered by six observer branches with all-mode immediate effects; upstream data authentication, broader caller histories and session-relative counts remain open. |
 
-The checked surface is 2,838 theorems in all 1,018 campaign-owned modules.
+The checked surface is 2,847 theorems in all 1,020 campaign-owned modules.
 The completed retrofit accounts for 1,983: 1,321 retyped, 244 explicitly
 corrected, 239 retained and 179 added support/finding declarations. One hundred sixty-seven
 subsequent H2 declarations add table preservation and local owner coherence.
-Eighty-nine H1 declarations add whole-operation and finite mixed-history tag ownership, actual derivation-clock provenance, direct-helper reinstallation and bounded fresh-installation confirmation history; four hundred twelve H4 declarations
+Ninety-eight H1 declarations add whole-operation and finite mixed-history tag ownership, actual derivation-clock provenance, direct-helper reinstallation and bounded fresh-installation confirmation history; four hundred twelve H4 declarations
 add mixed fwmark/scalar, ordered peer-attribute, port-refusal/private-key readback and finite IPv4 getter/setter pagination and actual fitting multi-peer readback and complete finite single-peer mixed-width pagination plus actual finite empty-IP peer pagination with ordered cursor handoffs and complete receive/coalescer composition, now extended to arbitrary finite mixed peer/allowed-IP lists. Sixty-two H3 declarations
 add invalid-MAC1, rate-limit and admitted-response/initiation rejection, cookie-message and whole data-admission endpoint preservation, plus actual first pre-put NAPI owner selection and conditional packet authentication. Sixty-one H5 declarations
 establish recorded batch, actual timer completion guards and recorded idle/post-advance wait wheel completion and the actual send-worker completion guard and four final-idle syscall/runner links, exact finite evaluation and actual bounded activation exits. Sixty-four H6 declarations
@@ -29,8 +30,8 @@ connect actual timer-loop receipts, contiguous retry-block counts/bounds, local 
 were deleted because types supply their facts and five false cookie supports
 were separately retired with checked counterexamples. No baseline declaration
 remains awaiting retrofit; all 258 original terminal names/order survive,
-with thirteen new H1 headlines, forty-two new H2 headlines, eight new H3 headlines,
-thirty-seven new H4 headlines, eleven new H5 headlines and fifteen new H6 headlines (384 total).
+with fourteen new H1 headlines, forty-two new H2 headlines, eight new H3 headlines,
+thirty-seven new H4 headlines, eleven new H5 headlines and fifteen new H6 headlines (385 total).
 
 The [retrofit report](2026-10-16-proof-campaign-2-state-split.md) records
 claim/frame files, corrections, before/after counts and validation.
@@ -47,6 +48,44 @@ actual-history retry bound at its last send exit; arbitrary mixed histories and
 session-relative counting remain open. The [shared-frame request](2026-10-15-campaign-2-shared-frame-followup.md)
 now inventories the H1 whole-response socket/tag dependency. It requests
 proof support, with no mirror change.
+
+## H1 initial slot credits, 2026-10-18
+
+[AGENT 2026-10-18] Express session release readiness using credits in the
+original three slots and count those credits through the actual rotation.
+
+Previously the total session theorem required SessionReady, a release budget
+over the already allocated intermediate device. The new theorem derives that
+budget from initial ClearReady for all three caller slots and the landed C1
+CurrentSlots.SlotInv. It executes the original beginSession using the supplied
+successful allocation and clock records, returns true with the same run's
+ordered SessionEffect, and preserves enough per-occurrence credits for the
+selected peer's final slots. The pure accounting identity says released
+occurrences plus retained slots equal the original slots plus one new key.
+
+Old slots may alias each other; their multiplicity is counted. The slot bound
+excludes an old slot naming the fresh allocation ID. Final credits mean
+resident keys, non-null peer words and sufficient reference counts for this
+peer's slots. They do not establish final owner coherence, final SlotInv,
+other peers' or packets' funding, or initialized-driver preservation.
+Accepted role, live peer, non-null handshake word, hashed handshake and the
+successful supplied records remain explicit initial conditions.
+
+InitialSlotCredits contains seven pure relation/accounting lemmas;
+InitialSlotClaims contains the projected total-return claim. Statements adds
+one headline wrapper. There are no new frames, native state parameters in
+the claim, shared edits, mirror changes or type-given deletions. Counts:
+H1 274 to 283 theorems and 35 to 36 headlines; campaign 2,838 to 2,847
+theorems, 384 to 385 headlines and 1,018 to 1,020 modules.
+
+Validation: 630-job scoped build and complete 1,951-job proof gate pass,
+with 1,280 terminal declarations using only the standard axioms. Fresh H1
+replay passes. Independent source review found no semantic defect and
+confirmed the alias, caller-only funding and reachability limits above.
+Exploratory stdin drafts had unused simp arguments; the checked files have
+no warnings. The inherited mirror deprecation remains reported. No
+infrastructure failure or rerun occurred. No mirror change is requested;
+the separate socket-tag proof-support inventory remains open.
 
 ## Campaign-1 GRO carry, 2026-10-18
 

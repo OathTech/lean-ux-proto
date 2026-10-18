@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Noise.InitialSlotClaims
 import Leanux.Proofs.WG.Noise.InterleavedFreshClaims
 import Leanux.Proofs.WG.Noise.FreshHistoryClaims
 import Leanux.Proofs.WG.Noise.ConfirmationReinstallClaims
@@ -478,5 +479,31 @@ theorem original_interleaved_confirmation_history (tracked : PeerId)
   rw [observedInterleavedFreshSequence_erase]
   intro g ambient _
   rfl
+
+/-- Initial per-occurrence slot credits and the shared slot bound ensure
+recorded successful session installation. The same run retains enough credits
+for the selected peer's final slots. Old-slot aliases are allowed; the cursor
+bound excludes an old slot naming the fresh allocation ID. -/
+theorem original_session_initial_slot_credits
+    (pid : PeerId) (d : Device) (p : Peer) (counter : Nat)
+    (resident : d.peers[pid]? = some p)
+    (accepted : p.handshakeState = HANDSHAKE_CREATED_RESPONSE ∨
+      p.handshakeState = HANDSHAKE_CONSUMED_RESPONSE)
+    (alive : p.isDead = false) (word : p.handshakeEntryPeer ≠ none)
+    (hashed : d.indexTable.any (·.owner == .handshake pid) = true)
+    (slots : CurrentSlots.SlotInv (Affiliation.state d))
+    (credits : ClearReady d (clearKeys p))
+    (allocation clock : List UInt8)
+    (allocWidth : allocation.length = 40) (allocSuccess : allocation.headD 2 = 1)
+    (clockWidth : clock.length = 8) (rest : List HiddenRecord) :
+    Campaign2.Returns (beginSession pid)
+      (fun s => (s.wg.device = some d ∧ s.wg.keypairCounter = counter) ∧
+        s.ambient.hidden = some (sessionReadyRecords allocation clock rest) ∧
+        s.ambient.allocArmed.contains "kzallocKeypair" = true)
+      (fun ok s => ok = true ∧ ∃ final, s.wg.device = some final ∧
+        SessionEffect pid d p counter ok final s.wg.keypairCounter ∧
+        ∃ after, final.peers[pid]? = some after ∧ ClearReady final (clearKeys after)) :=
+  beginSession_initial_slots_projected pid d p counter resident accepted alive word hashed
+    slots credits allocation clock allocWidth allocSuccess clockWidth rest
 
 end Leanux.Proofs.WG.Noise
