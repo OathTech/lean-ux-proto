@@ -36,8 +36,8 @@ poll/GRO/NAPI with original inner delivery also closes. Full configuration,
 crypt/transmit, timer/scheduler, dump, environment and initialized runner
 composition now closes allocation-stamp confirmation uniqueness. That invariant
 does not carry handshake-tag ownership. Separate actual tag observers now close
-birth, work drains, timer stop and stop/down, with exact original outcomes.
-Configuration expiry, removal/destruction and enclosing driver composition remain
+birth, work drains, timer stop, stop/down, mixed configuration and removal/destruction,
+with exact original outcomes. Scheduler and enclosing driver composition remain
 open. These are source obligations rather than missing socket frames.
 This is proof support only; there is no mirror-change request.
 

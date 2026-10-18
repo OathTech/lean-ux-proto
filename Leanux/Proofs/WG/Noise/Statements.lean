@@ -1,4 +1,6 @@
 import Leanux.Proofs.WG.Noise.DriverTagClaims
+import Leanux.Proofs.WG.Noise.DriverTagConfigurationSource
+import Leanux.Proofs.WG.Noise.DriverTagProductSource
 import Leanux.Proofs.WG.Noise.DriverTagControlCompleteSource
 import Leanux.Proofs.WG.Noise.DriverTagAllowedFrames
 import Leanux.Proofs.WG.Noise.ConfirmationUniqueClaims
@@ -893,5 +895,55 @@ theorem original_device_down_driver_tags (entry : Campaign2.Snapshot) :
       (Campaign2.inspect wgDown) :=
   ⟨DriverTags.inspection_facts _ DriverTags.Control.downObserved_preserves entry,
     DriverTags.inspection_erases _ _ DriverTags.Control.downObserved_erases⟩
+
+/-- Actual peer removal exposes nested timer and queue drains. Normal surviving tags have actual helper origins; emitted receipts remain valid on Stop. -/
+theorem original_peer_removal_driver_tags (peer : Option PeerId) (entry : Campaign2.Snapshot) :
+    Campaign2.Ensures (DriverTags.inspectObserved (DriverTags.Removal.removeObserved peer))
+      (fun s => s = entry) (fun out final => final = entry ∧ DriverTags.InspectionFacts entry out) ∧
+    Campaign2.AgreesOn (fun _ => True)
+      (do let out ← DriverTags.inspectObserved (DriverTags.Removal.removeObserved peer); pure out.1)
+      (Campaign2.inspect (peerRemove peer)) :=
+  ⟨DriverTags.inspection_facts _ (fun tags => DriverTags.Removal.removeObserved_preserves tags peer) entry,
+    DriverTags.inspection_erases _ _ (DriverTags.Removal.removeObserved_erases peer)⟩
+
+/-- Bulk removal follows its saved peer list and every original after-dead drain. Original errors are preserved, including unfinished callback failures. -/
+theorem original_all_peer_removal_driver_tags  (entry : Campaign2.Snapshot) :
+    Campaign2.Ensures (DriverTags.inspectObserved (DriverTags.Removal.removeAllObserved))
+      (fun s => s = entry) (fun out final => final = entry ∧ DriverTags.InspectionFacts entry out) ∧
+    Campaign2.AgreesOn (fun _ => True)
+      (do let out ← DriverTags.inspectObserved (DriverTags.Removal.removeAllObserved); pure out.1)
+      (Campaign2.inspect (peerRemoveAll)) :=
+  ⟨DriverTags.inspection_facts _ (DriverTags.Removal.removeAllObserved_preserves) entry,
+    DriverTags.inspection_erases _ _ (DriverTags.Removal.removeAllObserved_erases)⟩
+
+/-- Device destruction keeps actual removal receipts before deleting the device. Final absence alone is not used to hide nested helper executions. -/
+theorem original_device_destruction_driver_tags  (entry : Campaign2.Snapshot) :
+    Campaign2.Ensures (DriverTags.inspectObserved (DriverTags.Removal.destructObserved))
+      (fun s => s = entry) (fun out final => final = entry ∧ DriverTags.InspectionFacts entry out) ∧
+    Campaign2.AgreesOn (fun _ => True)
+      (do let out ← DriverTags.inspectObserved (DriverTags.Removal.destructObserved); pure out.1)
+      (Campaign2.inspect (wgDestruct)) :=
+  ⟨DriverTags.inspection_facts _ (DriverTags.Removal.destructObserved_preserves) entry,
+    DriverTags.inspection_erases _ _ (DriverTags.Removal.destructObserved_erases)⟩
+
+/-- Actual peer configuration records births and receipt-bearing removals while retaining tag-silent field updates. No attribute-shape or readiness premise. -/
+theorem original_peer_configuration_driver_tags (attrs : PeerAttrs) (entry : Campaign2.Snapshot) :
+    Campaign2.Ensures (DriverTags.inspectObserved (DriverTags.Configuration.observePeer attrs))
+      (fun s => s = entry) (fun out final => final = entry ∧ DriverTags.InspectionFacts entry out) ∧
+    Campaign2.AgreesOn (fun _ => True)
+      (do let out ← DriverTags.inspectObserved (DriverTags.Configuration.observePeer attrs); pure out.1)
+      (Campaign2.inspect (setPeerCmd attrs)) :=
+  ⟨DriverTags.inspection_facts _ (fun tags => DriverTags.Configuration.observePeer_preserves tags attrs) entry,
+    DriverTags.inspection_erases _ _ (DriverTags.Configuration.observePeer_erases attrs)⟩
+
+/-- Mixed device configuration exposes private-key expiry, births, and both removal paths. Inspection retains every original outcome. -/
+theorem original_device_configuration_driver_tags (attrs : DeviceAttrs) (entry : Campaign2.Snapshot) :
+    Campaign2.Ensures (DriverTags.inspectObserved (DriverTags.Configuration.observeDevice attrs))
+      (fun s => s = entry) (fun out final => final = entry ∧ DriverTags.InspectionFacts entry out) ∧
+    Campaign2.AgreesOn (fun _ => True)
+      (do let out ← DriverTags.inspectObserved (DriverTags.Configuration.observeDevice attrs); pure out.1)
+      (Campaign2.inspect (wgSetDevice attrs)) :=
+  ⟨DriverTags.inspection_facts _ (fun tags => DriverTags.Configuration.observeDevice_preserves tags attrs) entry,
+    DriverTags.inspection_erases _ _ (DriverTags.Configuration.observeDevice_erases attrs)⟩
 
 end Leanux.Proofs.WG.Noise
