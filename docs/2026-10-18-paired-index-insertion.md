@@ -274,3 +274,19 @@ Equal protected stores now preserve the restricted shadow frame for both
 heartbeat limit because its anonymous constructor's type was underconstrained;
 an explicit `BitVec` type removed that elaboration search. No limit increase
 or proof bypass was retained.
+
+## Complete unhash prefix, 2026-10-18 18:54 UTC
+
+`unhash_entry` now composes the actual prologue, initial callback, BH-disable,
+both initial linkage branches and every nonempty unlink store/callback. Its
+postcondition at insertion offset `0x4f` restores whole-table reconstruction,
+owner linkage flags and the resident entry's fields, and proves its backlink
+is zero. It rebases the internal shadow to the actual machine memory at this
+correspondence point. It uses the existing named trace-PC and insertion-fetch
+hypotheses; it assumes no later binary run or retry outcome.
+
+This reuses the prior removal's chain/focus and combined-store reconstruction
+lemmas. Fresh instruction/store composition and the entry adapter are specific
+to insertion's register allocation and saved frame. The default build passes
+(729 jobs), and fresh kernel replay of `PairInsertUnhashEntry` passes with only
+standard printed axioms. This closes a function prefix, not insertion adequacy.
