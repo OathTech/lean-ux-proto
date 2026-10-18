@@ -417,3 +417,13 @@ draw modules. Printed axioms are the standard three; the full build passes
 adapter timed out; its single literal instruction is now reduced directly.
 Other draft failures were local normalization and rewrite mismatches. The
 return composition and honest random-service boundary are still open.
+
+## Successful suffix to return, 2026-10-18 19:42 UTC
+
+`insert_success` composes prepend, both BH-enable calls and the actual register
+restore/RET. It exports the returned index, restored caller ABI, preempt count,
+coverage and pending-word resources, reconstruction of the inserted table and
+ownership. Its entry is the successful-search correspondence point; it is
+not yet the function-level theorem. Fresh `leanchecker PairInsertSuccess`
+replay passes and its axioms are the standard three. The default build passes
+(753 jobs). No new trust assumption was introduced for this suffix.
