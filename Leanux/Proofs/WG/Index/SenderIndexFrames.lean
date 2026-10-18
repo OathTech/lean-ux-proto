@@ -11,16 +11,17 @@ open Queues.RxCredits
 
 def senderFields (g : WGWorld) := g.dev.map senderDeviceCell
 
-theorem sender_fields_socket (pid : PeerId) (msg : List UInt8) :
-    SameView senderFields (sendBufferToPeer pid msg) := by
+theorem sender_fields_of_sendWork_material {α : Type} (action : WG.M α) (pid : PeerId)
+    (work : ∀ q v,⦃fun w => ⌜TimerDiscipline.sendWorkAt w pid=(q,v)⌝⦄ action
+      ⦃⇓? _ w => ⌜TimerDiscipline.sendWorkAt w pid=(q,v)⌝⦄)
+    (materialFrame : SameView Origins.view action) : SameView senderFields action := by
   apply (Lifetimes.ProjectedAction.iff_run_ambient _ _ _).mpr
   intro g a result out b run
   have socket := (ensures_iff _ _ _).mpr
-    (TimerDiscipline.sendBufferToPeer_spec_sendWork_variant pid msg
-      (TimerDiscipline.sendWorkAt g pid).1 (TimerDiscipline.sendWorkAt g pid).2)
+    (work (TimerDiscipline.sendWorkAt g pid).1 (TimerDiscipline.sendWorkAt g pid).2)
     g a result out b rfl run
   have material := (Lifetimes.ProjectedAction.iff_run_ambient _ _ _).mp
-    (Origins.Retaining.sendBufferToPeer_material pid msg) g a result out b run
+    materialFrame g a result out b run
   cases before : g.dev <;> cases after : out.dev
   all_goals simp only [TimerDiscipline.sendWorkAt,TimerDiscipline.sendWorkKernel,
     before,after,Option.map_none,Option.map_some,Option.bind_none,Option.bind_some] at socket
@@ -50,7 +51,11 @@ theorem sender_fields_socket (pid : PeerId) (msg : List UInt8) :
     change e.peers[target]?.map senderPeerCell=d.peers[target]?.map senderPeerCell at projected
     exact projected
 
-
+theorem sender_fields_socket (pid : PeerId) (msg : List UInt8) :
+    SameView senderFields (sendBufferToPeer pid msg) :=
+  sender_fields_of_sendWork_material _ pid
+    (TimerDiscipline.sendBufferToPeer_spec_sendWork_variant pid msg)
+    (Origins.Retaining.sendBufferToPeer_material pid msg)
 
 theorem senderFields_write_state (g : WGWorld) (pid : PeerId) (p q : Peer)
     (resident : peerAt g pid = some p) (same : senderPeerCell q = senderPeerCell p) :

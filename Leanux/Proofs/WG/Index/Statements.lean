@@ -1,3 +1,6 @@
+import Leanux.Proofs.WG.Index.ConfigurationCoreClaims
+import Leanux.Proofs.WG.Index.ReceiverCoreClaims
+import Leanux.Proofs.WG.Index.ReceiveCoreClaims
 import Leanux.Proofs.WG.Index.ConfigurationTailSource
 import Leanux.Proofs.WG.Index.ConfirmationIndexClaims
 import Leanux.Proofs.WG.Index.TimerCoreClaims
@@ -1472,5 +1475,37 @@ theorem original_timer_callback_index_core (pid : PeerId) (timer : PeerTimer) :
     Campaign2.Ensures (timerCallback pid timer) View.StagedIndexReady
       (fun _ => View.StagedIndexReady) :=
   TimerCore.callback_index pid timer
+
+/-- Every normal original handshake-ring step retains its current supplied
+allocation/account/slot cut and index component, including cookie and both
+handshake arms. Initialized driver reachability remains a separate claim. -/
+theorem original_receive_step_index_core (cs : Queues.RxCredits.Ledger)
+    (loans : Queues.RxCredits.Reservations) :
+    Campaign2.Ensures receiveStep (View.ReceiveInput cs loans)
+      (fun _ => View.ReceiveInput cs loans) :=
+  receiveStep_index cs loans
+
+/-- Original data completion preserves slot compatibility and the full index
+component through confirmation, staged sending and source validation. -/
+theorem original_data_completion_index_core (pid : PeerId) (pkt : RxPacket) (endpoint : Endpoint) :
+    Campaign2.Ensures (consumeDataDone pid pkt endpoint) View.StagedIndexReady
+      (fun _ => View.StagedIndexReady) :=
+  consumeDataDone_index pid pkt endpoint
+
+/-- The original clear-work dispatcher derives its own selected entry; every
+normal return preserves the supplied index component without a readiness premise. -/
+theorem original_clear_worker_index_core :
+    Campaign2.Product.Ensures Env.runOneClearWorker
+      (fun s => View.IndexCore s.toSnapshot) (fun _ s => View.IndexCore s.toSnapshot) :=
+  clearWorker_index
+
+/-- The whole original mixed device setter preserves the supplied current
+account/configuration/slot/index package, including normal errno results and
+their actual preceding updates and cleanup. No continuation contract is supplied. -/
+theorem original_set_device_index_core (cs : Queues.RxCredits.Ledger)
+    (loans : Queues.RxCredits.Reservations) (attrs : DeviceAttrs) :
+    Campaign2.Ensures (wgSetDevice attrs) (View.ConfigurationInput cs loans)
+      (fun _ => View.ConfigurationInput cs loans) :=
+  wgSetDevice_index cs loans attrs
 
 end Leanux.Proofs.WG.Index

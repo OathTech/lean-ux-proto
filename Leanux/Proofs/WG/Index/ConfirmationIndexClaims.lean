@@ -49,4 +49,3 @@ theorem receivedWithKeypair_indexCore (pid : PeerId) (received : KeypairId) :
   exact fun d device => ⟨tables d device,slots d device,coherent d device,retired d device⟩
 
 end Leanux.Proofs.WG.Index
-

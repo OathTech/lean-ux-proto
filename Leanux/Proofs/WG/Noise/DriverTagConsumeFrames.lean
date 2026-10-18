@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Index.ReceiveCompletionSource
 import Leanux.Proofs.WG.Noise.DriverTagSilentFrames
 import Leanux.Proofs.WG.Noise.ConsumeConfirmationSource
 import Leanux.Proofs.WG.Noise.RotationEffects
@@ -49,28 +50,9 @@ theorem receivedWithKeypair_frame (pid : PeerId) (received : KeypairId) :
         rw [effect.2]
 
 theorem keepKeyFreshRx_retained (entry : TagMap) (pid : PeerId) :
-    Preserves (Retained entry) (keepKeyFreshRx pid) := by
-  have source : keepKeyFreshRx pid = (do
-      if ← branch .rxFreshSentLastminute (← getPeer pid).sentLastminuteHandshake then return
-      let current := (← getPeer pid).keypairCurrent
-      let send ← WG.andM (branch .rxFreshKeypair current.isSome) do
-        let some id := current | invariant "unreachable"
-        let k ← getKeypair id
-        WG.andM (branch .rxFreshValid k.sending.isValid) do
-          WG.andM (branch .rxFreshInitiator k.iAmTheInitiator) do
-            branchExpired .rxFreshExpired k.sending.birthdate
-              (REJECT_AFTER_TIME - KEEPALIVE_TIMEOUT - REKEY_TIMEOUT)
-      if ← branch .rxFreshSend send then
-        modifyPeer pid (fun p => {p with sentLastminuteHandshake := true})
-        sendQueuedHandshakeInitiation pid false) := by
-    simp only [keepKeyFreshRx,RxCredits.modifyPeer_source,bind_assoc] <;> rfl
-  rw [source]
-  simp (config := {zeta := false}) only [WG.andM,branch,invariant]
-  repeat' first
-    | (rx_retention_head modifyPeer; exact update entry _ _ (fun _ => rfl))
-    | (rx_retention_head sendQueuedHandshakeInitiation; exact queued entry _ _)
-    | (rx_retention_head branchExpired; exact (branchExpired_sameWGWorld _ _ _).wp (Retained entry))
-    | silent_native_step entry
+    Preserves (Retained entry) (keepKeyFreshRx pid) :=
+  Index.ReceiveCompletion.keepKeyFreshRx_preserves_source (Retained entry) pid
+    (update entry _ _ (fun _ => rfl)) (queued entry _ _)
 
 theorem handshakeComplete_frame (pid : PeerId) (site : HiddenSite) :
     SameView tagView (timersHandshakeComplete pid site) := by
@@ -80,12 +62,9 @@ theorem handshakeComplete_frame (pid : PeerId) (site : HiddenSite) :
     g ambient result final after rfl run
 
 theorem timersDataReceived_retained (entry : TagMap) (pid : PeerId) :
-    Preserves (Retained entry) (timersDataReceived pid) := by
-  unfold timersDataReceived
-  simp (config := {zeta := false}) only [branch,discard,map_const,Function.comp_def,map_eq_pure_bind]
-  repeat' first
-    | (rx_retention_head modPeerTimer; exact modTimer entry _ _ _ _)
-    | silent_native_step entry
+    Preserves (Retained entry) (timersDataReceived pid) :=
+  Index.ReceiveCompletion.dataReceived_preserves_source (Retained entry) pid
+    (modTimer entry _ _ _ _) (update entry _ _ (fun _=>rfl))
 
 theorem updateRxStats_frame (pid : PeerId) (len : Nat) :
     SameView tagView (updateRxStats pid len) := by
@@ -108,68 +87,30 @@ theorem lookupRepay_frame (protocol : Nat) (bytes : List UInt8) :
   rfl
 
 theorem prepareRest_retained (entry : TagMap) (pid : PeerId) (pkt : RxPacket) :
-    Preserves (Retained entry) (RxCredits.prepareRest pid pkt) := by
-  unfold RxCredits.prepareRest WG.andM WG.orM
-  material_lower
-  repeat' first
-    | unfold Preserves
-    | (index_material_head keepKeyFreshRx; exact keepKeyFreshRx_retained entry _)
-    | (index_material_head timersAnyAuthenticatedPacketReceived; exact delTimer entry _ .newHandshake)
-    | (index_material_head timersTraversal; exact of_frame entry _ (traversal_frame _))
-    | (index_material_head timersDataReceived; exact timersDataReceived_retained entry _)
-    | (index_material_head updateRxStats; exact of_frame entry _ (updateRxStats_frame _ _))
-    | (index_material_head dishonest; exact of_frame entry _ (dishonest_frame _))
-    | (index_material_head inetEcnDecapsulate; exact of_frame entry _
-        (store_frame (inetEcnDecapsulate_sameWGStore _ _ _)))
-    | (index_material_head Pure.pure; exact preserves_pure _)
-    | (index_material_head Bind.bind; apply preserves_bind)
-    | material_component
-    | material_join
-    | material_join_use
-    | material_intro
-    | (index_material_head ite; split)
-    | material_reduce
-    | material_match
+    Preserves (Retained entry) (RxCredits.prepareRest pid pkt) :=
+  Index.ReceiveCompletion.prepareRest_preserves_source (Retained entry) pid pkt
+    (keepKeyFreshRx_retained entry pid) (delTimer entry pid .newHandshake)
+    (of_frame entry _ (traversal_frame pid)) (timersDataReceived_retained entry pid)
+    (fun len => of_frame entry _ (updateRxStats_frame pid len))
+    (fun why => of_frame entry _ (dishonest_frame why))
+    (fun protocol ds bytes => of_frame entry _
+      (store_frame (inetEcnDecapsulate_sameWGStore protocol ds bytes)))
 
 theorem rxFinish_frame (pid : PeerId) (ready : Packets.RxReady) :
     SameView tagView (Packets.rxFinish pid ready) := by
-  rw [← RxCredits.rxFinishSource_eq]
   intro initial
-  change Preserves (fun w => tagView w = initial) _
-  unfold RxCredits.rxFinishSource
-  material_lower
-  repeat' first
-    | unfold Preserves
-    | (index_material_head RxBorrow.source; exact (lookupRepay_frame _ _).wp (fun s => s = initial))
-    | (index_material_head dishonest; exact (dishonest_frame _).wp (fun s => s = initial))
-    | (index_material_head updateRxStats; exact (updateRxStats_frame _ _).wp (fun s => s = initial))
-    | (index_material_head Pure.pure; exact preserves_pure _)
-    | (index_material_head Bind.bind; apply preserves_bind)
-    | material_component
-    | material_intro
-    | (index_material_head ite; split)
-    | material_reduce
-    | material_match
+  exact Index.ReceiveCompletion.rxFinish_preserves_source (fun w => tagView w = initial)
+    pid ready ((lookupRepay_frame _ _).wp (fun s => s = initial))
+    ((dishonest_frame _).wp (fun s => s = initial))
+    ((updateRxStats_frame _ _).wp (fun s => s = initial))
 
 theorem afterConfirmation_retained (entry : TagMap) (pid : PeerId) (pkt : RxPacket) (confirmed : Bool) :
-    Preserves (Retained entry) (ConsumeConfirmation.afterConfirmation pid pkt confirmed) := by
-  unfold ConsumeConfirmation.afterConfirmation
-  material_lower
-  repeat' first
-    | unfold Preserves
-    | material_join
-    | material_join_use
-    | (index_material_head timersHandshakeComplete; exact of_frame entry _ (handshakeComplete_frame _ _))
-    | (index_material_head sendStagedPackets; exact of_retained entry _ (Index.sendStagedPackets_tags_retained _))
-    | (index_material_head RxCredits.prepareRest; exact prepareRest_retained entry _ _)
-    | (index_material_head Packets.rxFinish; exact of_frame entry _ (rxFinish_frame _ _))
-    | (index_material_head Pure.pure; exact preserves_pure _)
-    | (index_material_head Bind.bind; apply preserves_bind)
-    | material_component
-    | material_intro
-    | (index_material_head ite; split)
-    | material_reduce
-    | material_match
+    Preserves (Retained entry) (ConsumeConfirmation.afterConfirmation pid pkt confirmed) :=
+  Index.ReceiveCompletion.afterConfirmation_preserves_source (Retained entry) pid pkt confirmed
+    (of_frame entry _ (handshakeComplete_frame _ _))
+    (of_retained entry _ (Index.sendStagedPackets_tags_retained pid))
+    (prepareRest_retained entry pid pkt)
+    (fun ready => of_frame entry _ (rxFinish_frame pid ready))
 
 theorem consumeDataDone_retained (entry : TagMap) (pid : PeerId) (pkt : RxPacket) (endpoint : Endpoint) :
     Preserves (Retained entry) (consumeDataDone pid pkt endpoint) := by

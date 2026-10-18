@@ -81,4 +81,13 @@ theorem read_entry (cs : Ledger) (loans : Reservations) :
   · obtain ⟨⟨rfl,rfl⟩,rfl⟩ := run
     exact pre
 
+theorem modifyDev_fields (f : Device → Device)
+    (same : ∀d, deviceFields (f d)=deviceFields d) :
+    SameView fields (modifyDev f) := by
+  apply (ProjectedAction.iff_run_ambient _ _ _).mpr
+  intro w a result v b run
+  cases run
+  simp only [fields,Option.map_map,Function.comp_def,same]
+
+
 end Leanux.Proofs.WG.Index.ConfigurationIndex

@@ -18,4 +18,3 @@ theorem confirmationEffect_deadHashedReserved (retired : Reservations)
     simpa only [effect.2] using reserved
 
 end Leanux.Proofs.WG.Index
-
