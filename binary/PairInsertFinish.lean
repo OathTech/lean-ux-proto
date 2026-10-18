@@ -12,7 +12,8 @@ theorem restore (fetch : Int64 → Option Decoded) (decoder : IndexInsertDecoder
     (indexRead : word shadow "insert.index" (base+o.index) 4=.ok index) :
     Eventually (instructionStep fetch) (fun t => Returned initial t ra ∧
       MemoryReady c initial ra (savedWords initial.data) .enabled t.data.dmem ∧
-      StorageFrame n o shadow t.data.dmem ∧ t.data.regs.rax.toNat=index) ⟨s,codeEntry+0x181⟩ := by
+      StorageFrame n o shadow t.data.dmem ∧ t.data.regs.rax.toNat=index ∧
+      EqualOutside (External c initial 7) shadow t.data.dmem) ⟨s,codeEntry+0x181⟩ := by
   have slot (i : Nat) (bound : i≤6) :
       s.regs.rsp.toBitVec+BitVec.ofNat 64 (8*i)=Stack.slot initial.data.regs.rsp.toBitVec (6-i) := by
     rw [core.stack,UInt64.toBitVec_sub]
@@ -73,7 +74,7 @@ theorem restore (fetch : Int64 → Option Decoded) (decoder : IndexInsertDecoder
   apply eventually_weaken (instructionStep fetch) _ _ _ _ region
   rintro t ⟨registers,memory,pc⟩
   refine ⟨⟨pc,?_,by rw [registers],by rw [registers],by rw [registers],by rw [registers],
-    by rw [registers],by rw [registers]⟩,memory ▸ core.memory,memory ▸ core.frame,?_⟩
+    by rw [registers],by rw [registers]⟩,memory ▸ core.memory,memory ▸ core.frame,?_,memory ▸ core.outside⟩
   · rw [registers,core.stack]
     apply UInt64.toBitVec_inj.mp
     change (initial.data.regs.rsp.toBitVec-48)+56=initial.data.regs.rsp.toBitVec+8
@@ -89,7 +90,8 @@ theorem finish (fetch : Int64 → Option Decoded) (decoder : IndexInsertDecoderA
     (indexRead : word shadow "insert.index" (base+o.index) 4=.ok index) :
     Eventually (instructionStep fetch) (fun t => Returned initial t ra ∧
       MemoryReady c initial ra (savedWords initial.data) .enabled t.data.dmem ∧
-      StorageFrame n o shadow t.data.dmem ∧ t.data.regs.rax.toNat=index) ⟨s,codeEntry+0x160⟩ := by
+      StorageFrame n o shadow t.data.dmem ∧ t.data.regs.rax.toNat=index ∧
+      EqualOutside (External c initial 7) shadow t.data.dmem) ⟨s,codeEntry+0x160⟩ := by
   have inner := enable_nested fetch decoder bh facts core
   apply eventually_trans (instructionStep fetch) _ _ _ inner
   rintro enabled ⟨pc,core,_⟩

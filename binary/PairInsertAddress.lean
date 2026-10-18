@@ -58,11 +58,11 @@ theorem Core.nested_memory {n o c initial ra shadow s} (facts : FrameFacts n o c
     change some (c.preempt+512+512)=some (c.preempt+1024)
     rw [BitVec.add_assoc]
     rfl
-  refine ⟨core.stack,core.table,core.owner,core.memory.preempt_transition facts frame next,?_⟩
-  apply core.frame.trans
-  apply external_storage facts.toCallFacts.geometry
-  intro a outside
-  exact frame a (fun inside => outside (.inr (.inr inside)))
+  have effect : EqualOutside (External c initial 7) s.dmem
+      (Remove.preemptMemory s (c.preempt+512)) :=
+    fun a outside => frame a (fun inside => outside (.inr (.inr inside)))
+  exact ⟨core.stack,core.table,core.owner,core.memory.preempt_transition facts frame next,
+    core.frame.trans (external_storage facts.toCallFacts.geometry effect),external_trans core.outside effect⟩
 
 #print axioms Core.nested_memory
 end Binary.Pair.Insert

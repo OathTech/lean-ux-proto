@@ -42,7 +42,7 @@ theorem walk_advance (fetch : Int64 → Option Decoded) (decoder : IndexInsertDe
   apply eventually_weaken (instructionStep fetch) _ _ _ _ region
   rintro t ⟨regs,heap,pc⟩
   have template : Core n o c initial ra p shadow {s with regs := {s.regs with rbx := .ofBitVec next}} :=
-    ⟨core.stack,core.table,core.owner,core.memory,core.frame⟩
+    ⟨core.stack,core.table,core.owner,core.memory,core.frame,core.outside⟩
   exact ⟨pc,template.same regs heap,regs⟩
 
 #print axioms walk_compare

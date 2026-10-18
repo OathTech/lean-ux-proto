@@ -16,6 +16,8 @@ theorem disable_unhash (fetch : Int64 → Option Decoded) (agree : IndexInsertDe
       ⟨s,codeEntry+21⟩ := by
   have frame := storeInt_frame s.dmem preemptCountAddress 4 (BitVec.ofInt 32 (512+c.preempt.toNat)).toInt
   have memory := core.memory.preempt_transition (q := .outer) facts frame (Remove.preempt_read s c.preempt)
+  have externalFrame : EqualOutside (External c initial 7) shadow (Remove.preemptMemory s c.preempt) :=
+    external_trans core.outside (fun a outside => frame a (fun h => outside (.inr (.inr h))))
   have shadowFrame : StorageFrame n o shadow (Remove.preemptMemory s c.preempt) := by
     apply core.frame.trans
     apply external_storage facts.toCallFacts.geometry
@@ -40,7 +42,7 @@ theorem disable_unhash (fetch : Int64 → Option Decoded) (agree : IndexInsertDe
   exact ⟨pc,⟨by simpa only [registers] using core.stack,by simpa only [registers] using core.table,
     by simpa only [registers] using core.owner,
     by simpa [mem,Remove.preemptMemory,Int.natCast_add] using memory,
-    by simpa only [mem] using shadowFrame⟩,by simp only [registers]⟩
+    by simpa only [mem] using shadowFrame,by simpa only [mem] using externalFrame⟩,by simp only [registers]⟩
 
 #print axioms disable_unhash
 end Binary.Pair.Insert

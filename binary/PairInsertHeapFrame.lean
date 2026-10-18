@@ -24,14 +24,14 @@ theorem Core.store64 {n o c initial ra p shadow s address}
     (facts : FrameFacts n o c initial ra) (core : Core n o c initial ra p shadow s)
     (layout : Layout o) (slot : LinkSlot n o address) (value : Nat) :
     Core n o c initial ra p (write64 shadow address value) {s with dmem := write64 s.dmem address value} := by
-  refine ⟨core.stack,core.table,core.owner,?_,core.frame.storeInt _ _ _⟩
+  refine ⟨core.stack,core.table,core.owner,?_,core.frame.storeInt _ _ _,core.outside.storeInt _ _ _⟩
   exact core.memory.frame facts (write64_frame _ _ _) (slot.heap layout)
 
 theorem Core.store32 {n o c initial ra p shadow s address}
     (facts : FrameFacts n o c initial ra) (core : Core n o c initial ra p shadow s)
     (layout : Layout o) (slot : DataSlot n o address 4) (value : Nat) :
     Core n o c initial ra p (write32 shadow address value) {s with dmem := write32 s.dmem address value} := by
-  refine ⟨core.stack,core.table,core.owner,?_,core.frame.storeInt _ _ _⟩
+  refine ⟨core.stack,core.table,core.owner,?_,core.frame.storeInt _ _ _,core.outside.storeInt _ _ _⟩
   exact core.memory.frame facts (storeInt_frame _ (.ofNat 64 address) 4 (BitVec.ofNat 32 value).toInt) (slot.heap layout)
 
 #print axioms Core.store64

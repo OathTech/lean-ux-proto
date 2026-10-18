@@ -38,14 +38,14 @@ theorem nested_entry (fetch : Int64 → Option Decoded) (decoder : IndexInsertDe
   rintro indexed ⟨indexedRegs,indexedHeap,pc⟩
   have core : Core n o c initial ra .inner shadow indexed.data :=
     ⟨by rw [indexedRegs]; exact core.stack,by rw [indexedRegs]; exact core.table,
-      by rw [indexedRegs]; exact core.owner,indexedHeap ▸ core.memory,indexedHeap ▸ core.frame⟩
+      by rw [indexedRegs]; exact core.owner,indexedHeap ▸ core.memory,indexedHeap ▸ core.frame,indexedHeap ▸ core.outside⟩
   have mask := region_eventually (nested_mask_layout.agreement decoder) indexed.data _
     (nested_mask_region indexed.data (.ofNat 32 focus.index) (by rw [indexedRegs]))
   apply eventually_trans (instructionStep fetch) _ _ _ (at_pc pc mask)
   rintro masked ⟨maskedRegs,maskedHeap,pc⟩
   have core : Core n o c initial ra .inner shadow masked.data :=
     ⟨by rw [maskedRegs]; exact core.stack,by rw [maskedRegs]; exact core.table,
-      by rw [maskedRegs]; exact core.owner,maskedHeap ▸ core.memory,maskedHeap ▸ core.frame⟩
+      by rw [maskedRegs]; exact core.owner,maskedHeap ▸ core.memory,maskedHeap ▸ core.frame,maskedHeap ▸ core.outside⟩
   have headBound : Index.head focus.nodes<2^64 := word_bound focus.headRead
   have headValue : (UInt64.ofNat (Index.head focus.nodes)).toNat=Index.head focus.nodes := by
     change Index.head focus.nodes%2^64=Index.head focus.nodes
@@ -68,7 +68,7 @@ theorem nested_entry (fetch : Int64 → Option Decoded) (decoder : IndexInsertDe
   have regs := regs.trans loadedRegs
   have heap := heap.trans loadedHeap
   refine ⟨?_,⟨by rw [regs]; exact core.stack,by rw [regs]; exact core.table,
-    by rw [regs]; exact core.owner,heap ▸ core.memory,heap ▸ core.frame⟩,?_,?_⟩
+    by rw [regs]; exact core.owner,heap ▸ core.memory,heap ▸ core.frame,heap ▸ core.outside⟩,?_,?_⟩
   · rw [loadedRegs] at pc
     exact pc
   · constructor

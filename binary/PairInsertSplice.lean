@@ -43,12 +43,13 @@ theorem unlink_predecessor (fetch : Int64 → Option Decoded) (agree : IndexInse
       simpa [BitVec.toNat_ofNat,Nat.mod_eq_of_lt nextBound] using natEq
     · intro equal
       simp [equal]
-  refine ⟨by simpa only [zero] using pc,⟨?_,?_,?_,?_,?_⟩,?_,?_⟩
+  refine ⟨by simpa only [zero] using pc,⟨?_,?_,?_,?_,?_,?_⟩,?_,?_⟩
   · simpa only [registers] using core.stack
   · simpa only [registers] using core.table
   · simpa only [registers] using core.owner
   · simpa only [mem] using stored.memory
   · simpa only [mem] using stored.frame
+  · simpa only [mem] using stored.outside
   · simp only [registers]
   · simp only [registers]
     rfl
@@ -78,7 +79,7 @@ theorem unlink_successor_endpoint (fetch : Int64 → Option Decoded) (agree : In
     simpa only [addr,previous,write64] using memory
   exact ⟨pc,⟨by simpa only [registers] using core.stack,by simpa only [registers] using core.table,
     by simpa only [registers] using core.owner,by simpa only [mem] using stored.memory,
-    by simpa only [mem] using stored.frame⟩,registers⟩
+    by simpa only [mem] using stored.frame,by simpa only [mem] using stored.outside⟩,registers⟩
 
 theorem unlink_clear_endpoint (fetch : Int64 → Option Decoded) (agree : IndexInsertDecoderAgreement fetch)
     {n o c initial ra shadow original s} (facts : FrameFacts n o c initial ra)
@@ -101,7 +102,7 @@ theorem unlink_clear_endpoint (fetch : Int64 → Option Decoded) (agree : IndexI
     rfl
   exact ⟨pc,⟨by simpa only [registers] using core.stack,by simpa only [registers] using core.table,
     by simpa only [registers] using core.owner,by simpa only [mem] using stored.memory,
-    by simpa only [mem] using stored.frame⟩⟩
+    by simpa only [mem] using stored.frame,by simpa only [mem] using stored.outside⟩⟩
 
 #print axioms unlink_predecessor
 #print axioms unlink_successor_endpoint

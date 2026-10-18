@@ -15,6 +15,7 @@ structure Core (n : Names) (o : Offsets) (c : Context) (initial : MachineState) 
   owner : s.regs.rbp=initial.data.regs.rsi
   memory : MemoryReady c initial ra (savedWords initial.data) p s.dmem
   frame : Index.StorageFrame n o shadow s.dmem
+  outside : EqualOutside (Index.External c initial 7) shadow s.dmem
 
 theorem Core.call_slot {n o c initial ra p shadow s} (core : Core n o c initial ra p shadow s) :
     s.regs.rsp.toBitVec-8=Stack.slot initial.data.regs.rsp.toBitVec 7 := by
@@ -47,15 +48,17 @@ theorem Core.callback (fetch : Int64 → Option Decoded) (pc : Int64) (target : 
   have mapped : (t.data.dmem.loadInt (Stack.slot initial.data.regs.rsp.toBitVec 7) 8).isSome=true := by
     simpa only [sp,core.call_slot] using calls.mapped
   refine ⟨atPc,⟨sp.trans core.stack,r12.trans core.table,bp.trans core.owner,
-    core.memory.callback facts calls.state mapped frame',?_⟩,bx,r13,r14,r15⟩
-  apply core.frame.trans
-  apply Index.external_storage facts.toCallFacts.geometry
-  intro a outside
-  apply frame' a
-  rintro (stack | buffer)
-  · exact outside (.inl (Stack.scratch _ 7 7 (by decide) (by decide) a stack))
-  · rw [p.writes facts] at buffer
-    exact outside (.inr (.inl (Index.phase_writes c p.disabled a buffer)))
+    core.memory.callback facts calls.state mapped frame',?_,?_⟩,bx,r13,r14,r15⟩
+  all_goals
+    have effect : EqualOutside (Index.External c initial 7) s.dmem t.data.dmem := by
+      intro a outside
+      apply frame' a
+      rintro (stack | buffer)
+      · exact outside (.inl (Stack.scratch _ 7 7 (by decide) (by decide) a stack))
+      · rw [p.writes facts] at buffer
+        exact outside (.inr (.inl (Index.phase_writes c p.disabled a buffer)))
+  · exact core.frame.trans (Index.external_storage facts.toCallFacts.geometry effect)
+  · exact Index.external_trans core.outside effect
 
 theorem start (fetch : Int64 → Option Decoded) (agree : IndexInsertDecoderAgreement fetch)
     (trace : TracePcContract fetch) {n o c initial ra}
@@ -105,14 +108,15 @@ theorem start (fetch : Int64 → Option Decoded) (agree : IndexInsertDecoderAgre
       (Phase.enabled.context c).writes a) entered.data.dmem t.machine.data.dmem := by
     intro a outside
     exact frame a (fun h => outside (.inr h))
-  refine ⟨returned.1,⟨?_,?_,?_,mem.callback facts state mapped frame',?_⟩⟩
+  refine ⟨returned.1,⟨?_,?_,?_,mem.callback facts state mapped frame',?_,?_⟩⟩
   · rw [returned.2.1,registers]
     apply UInt64.toBitVec_inj.mp
     change (initial.data.regs.rsp.toBitVec-56)+8=initial.data.regs.rsp.toBitVec-48
     rw [show (56 : BitVec 64)=48+8 from rfl,←BitVec.sub_sub,BitVec.sub_add_cancel]
   · simpa only [registers] using returned.2.2.2.2.1
   · simpa only [registers] using returned.2.2.2.1
-  · apply Index.external_storage facts.toCallFacts.geometry
+  all_goals
+    first | apply Index.external_storage facts.toCallFacts.geometry | skip
     have saves := Stack.frame initial.data.dmem initial.data.regs.rsp.toBitVec (savedWords initial.data) 7 7 (by decide)
     change EqualOutside _ initial.data.dmem (saveMemory initial.data 7) at saves
     rw [←memory] at saves

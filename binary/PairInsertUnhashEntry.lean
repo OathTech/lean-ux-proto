@@ -1,6 +1,7 @@
 import PairInsertUnhashBody
 import PairInsertGuard
 import PairInsertResident
+import PairRemoveAdequacy
 
 namespace Binary.Pair.Insert
 open Leanux Leanux.WG TrustBase CommonBitsCoverage Index
@@ -11,7 +12,7 @@ local instance : LawfulBEq IndexOwner where
 
 theorem Core.rebase {n o c initial ra p shadow s} (core : Core n o c initial ra p shadow s) :
     Core n o c initial ra p s.dmem s :=
-  ⟨core.stack,core.table,core.owner,core.memory,fun _ _ _ _ => rfl⟩
+  ⟨core.stack,core.table,core.owner,core.memory,fun _ _ _ _ => rfl,fun _ _ => rfl⟩
 
 def UnhashPost (n : Names) (o : Offsets) (c : Context) (initial : MachineState)
     (ra : UInt64) (d : Device) (owner : IndexOwner) (base : Nat) (t : MachineState) : Prop :=
@@ -19,7 +20,9 @@ def UnhashPost (n : Names) (o : Offsets) (c : Context) (initial : MachineState)
   t.pc=codeEntry+0x4f ∧ Core n o c initial ra .outer t.data.dmem t.data ∧
     Corresponds n o t.data.dmem unlinked ∧
     Remove.ownership n o t.data.dmem=.ok (Remove.targetOwnership unlinked) ∧
-    Resident n o t.data.dmem owner base ∧ word t.data.dmem "owner.pprev" (base+o.hash+o.pprev) 8=.ok 0
+    Resident n o t.data.dmem owner base ∧ word t.data.dmem "owner.pprev" (base+o.hash+o.pprev) 8=.ok 0 ∧
+    EqualOutside (fun a => HeapBytes n o a ∨ External c initial 7 a) initial.data.dmem t.data.dmem ∧
+    KindFrame n o initial.data.dmem t.data.dmem
 
 /-- Both initial linkage branches establish the same actual-memory boundary.
 No future retry result or later precondition is an entry assumption. -/
@@ -55,7 +58,8 @@ theorem unhash_entry (fetch : Int64 → Option Decoded) (decoder : IndexInsertDe
     apply Eventually.done
     dsimp only [UnhashPost]
     rw [updated]
-    refine ⟨by simpa [zero] using pc,core.rebase,core.frame.reconstruct related,?_,resident.frame layout core.frame,?_⟩
+    refine ⟨by simpa [zero] using pc,core.rebase,core.frame.reconstruct related,?_,resident.frame layout core.frame,?_,
+      (fun a outside => core.outside a (fun h => outside (.inr h))),core.frame.kinds layout⟩
     · rw [←core.frame.ownership layout]
       exact owners
     · have same := core.frame.word (entry_storage resident.named) (o.hash+o.pprev) 8
@@ -95,7 +99,13 @@ theorem unhash_entry (fetch : Int64 → Option Decoded) (decoder : IndexInsertDe
     have reconstructed := core.frame.reconstruct (f.reconstruct related storage)
     have owned := (core.frame.ownership layout).symm.trans (f.ownership (reconstruct_components related).1 storage owners)
     rw [focusOwner] at reconstructed owned
-    refine ⟨pc,core.rebase,reconstructed,owned,(resident.unhash layout storage f).frame layout core.frame,?_⟩
+    refine ⟨pc,core.rebase,reconstructed,owned,(resident.unhash layout storage f).frame layout core.frame,?_,
+      (Remove.unlink_heap_frame layout f).trans core.outside,
+      KindFrame.trans ?_ (core.frame.kinds layout)⟩
+    rotate_left
+    · intro owner base named path
+      rw [layout.kind]
+      exact f.read_data layout storage path (.entry owner base 24 4 named (.inr (.inl rfl)))
     have cleared : word (unlinkMemory initial.data.dmem o f.removed f.previous f.next)
         "owner.pprev" (base+o.hash+o.pprev) 8=.ok 0 := by
       have slot : LinkSlot n o (base+o.hash+o.pprev) := by

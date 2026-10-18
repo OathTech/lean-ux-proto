@@ -28,15 +28,17 @@ theorem Core.region_callback (fetch : Int64 → Option Decoded) (address returnP
   have mapped : (t.data.dmem.loadInt (Stack.slot initial.data.regs.rsp.toBitVec 7) 8).isSome=true := by
     simpa only [sp,core.call_slot] using calls.mapped
   refine ⟨atPc,⟨sp.trans core.stack,(r12.trans table).trans core.table,(bp.trans owner).trans core.owner,
-    core.memory.callback facts calls.state mapped frame',?_⟩,bx,r13,r14,r15⟩
-  apply core.frame.trans
-  apply Index.external_storage facts.toCallFacts.geometry
-  intro a outside
-  apply frame' a
-  rintro (stack | buffer)
-  · exact outside (.inl (Stack.scratch _ 7 7 (by decide) (by decide) a stack))
-  · rw [p.writes facts] at buffer
-    exact outside (.inr (.inl (Index.phase_writes c p.disabled a buffer)))
+    core.memory.callback facts calls.state mapped frame',?_,?_⟩,bx,r13,r14,r15⟩
+  all_goals
+    have effect : EqualOutside (Index.External c initial 7) s.dmem t.data.dmem := by
+      intro a outside
+      apply frame' a
+      rintro (stack | buffer)
+      · exact outside (.inl (Stack.scratch _ 7 7 (by decide) (by decide) a stack))
+      · rw [p.writes facts] at buffer
+        exact outside (.inr (.inl (Index.phase_writes c p.disabled a buffer)))
+  · exact core.frame.trans (Index.external_storage facts.toCallFacts.geometry effect)
+  · exact Index.external_trans core.outside effect
 
 #print axioms Core.region_callback
 end Binary.Pair.Insert

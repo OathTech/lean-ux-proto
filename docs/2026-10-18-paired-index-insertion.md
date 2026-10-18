@@ -457,3 +457,29 @@ of memcpy are not covered by this literal decoder. The body probe is evidence
 for a service domain permitting refills; it is not a general provider theorem,
 an insertion Pre witness, or evidence that captured steering state is covered.
 The new random-service contract and recorded-input agreement remain open.
+
+## Physical frames and system state, 2026-10-18 20:00 UTC
+
+[AGENT 2026-10-18] Carry the ordinary-region write footprint separately from
+reconstruction. Provider readiness must survive intervening bucket walks and
+unlink stores; equality on represented WireGuard storage alone cannot establish
+that. `Core.outside` relates the shadow heap and actual heap outside stack,
+coverage and preempt-count writes. Shadow stores still follow the combined
+pointer effects. This is a physical frame, not a stronger observable relation.
+The random-service step may rebase the shadow to its returned private state.
+
+The entry/unhash prefix and successful insertion suffix now export their
+write footprints and immutable owner-tag frames. Fresh kernel replays of
+`PairInsertPrefix` and `PairInsertSuccess` pass. `SystemInvariant.eventually_mode`
+separately proves CPL and DF preservation from every implemented instruction,
+including REP STOS; service executions inherit it without another contract
+premise. Its fresh replay passes and all printed axioms are standard.
+The stable-tree default build passes (754 jobs), completing the regression
+check for the refill ISA extension as well as the frame changes.
+
+One regression run failed with missing `.olean` files because overlapping
+builds coincided with a dependency edit. That run is a failure, not evidence;
+validation was rerun after the tree stabilized. The first generic system-state
+proof exhausted 200,000 heartbeats. Handling CLI/STI and the memory/register
+CMPXCHG cases explicitly reduced elaboration to about five seconds without a
+raised heartbeat limit. Routine draft namespace errors were also corrected.

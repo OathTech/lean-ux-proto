@@ -16,11 +16,13 @@ theorem retry_entry (fetch : Int64 → Option Decoded) (decoder : IndexInsertDec
     (resident : Resident n o initial.data.dmem owner base)
     (argument : initial.data.regs.rsi.toNat=base) (entryPc : initial.pc=codeEntry) :
     Eventually (instructionStep fetch)
-      (RetryPost n o c initial ra {d with indexTable := d.indexTable.filter (fun e => !(e.owner==owner))} owner base)
+      (fun t => RetryPost n o c initial ra {d with indexTable := d.indexTable.filter (fun e => !(e.owner==owner))} owner base t ∧
+        EqualOutside (fun a => HeapBytes n o a ∨ External c initial 7 a) initial.data.dmem t.data.dmem ∧
+        KindFrame n o initial.data.dmem t.data.dmem)
       initial := by
   have entry := unhash_entry fetch decoder trace facts related storage owners resident argument entryPc
   apply eventually_trans (instructionStep fetch) _ _ _ entry
-  rintro unlinked ⟨pc,core,related,owned,resident,clear⟩
+  rintro unlinked ⟨pc,core,related,owned,resident,clear,frame,kinds⟩
   have data : RetryData n o unlinked.data.dmem
       {d with indexTable := d.indexTable.filter (fun e => !(e.owner==owner))} owner base :=
     ⟨related,owned,resident,clear⟩
@@ -34,7 +36,9 @@ theorem retry_entry (fetch : Int64 → Option Decoded) (decoder : IndexInsertDec
   have disable := disable_retry fetch decoder facts core
   apply eventually_weaken (instructionStep fetch) _ _ _ _ (at_pc pc disable)
   rintro t ⟨pc,core⟩
-  exact ⟨pc,core.rebase,data.frame core.frame⟩
+  refine ⟨⟨pc,core.rebase,data.frame core.frame⟩,?_,kinds.trans (core.frame.kinds ?_)⟩
+  · exact fun a outside => (frame a outside).trans (core.outside a (fun h => outside (.inr h)))
+  · exact (validate_basic (reconstruct_components related).1).1
 
 #print axioms retry_entry
 end Binary.Pair.Insert

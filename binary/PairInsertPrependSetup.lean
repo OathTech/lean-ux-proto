@@ -39,7 +39,7 @@ theorem prepend_setup_endpoint (fetch : Int64 → Option Decoded) (decoder : Ind
   apply eventually_weaken (instructionStep fetch) _ _ _ _ run
   rintro t ⟨regs,heap,pc⟩
   refine ⟨pc,⟨by rw [regs]; exact core.stack,by rw [regs]; exact core.table,
-    by rw [regs]; exact core.owner,heap ▸ core.memory,heap ▸ core.frame⟩,?_,?_,?_⟩
+    by rw [regs]; exact core.owner,heap ▸ core.memory,heap ▸ core.frame,heap ▸ core.outside⟩,?_,?_,?_⟩
   · rw [regs]
     exact root
   · rw [regs,UInt64.toBitVec_add,core.owner_address owner]

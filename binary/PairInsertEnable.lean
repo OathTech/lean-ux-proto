@@ -91,15 +91,7 @@ theorem Core.enable_region (fetch : Int64 → Option Decoded) (bh : BhEnableCont
       some (((Index.phase c nested).preempt+512-512).toNat : Int) at read
     rw [BitVec.add_sub_cancel] at read
     simp only [load32,read,Option.map_some,BitVec.ofInt_natCast,BitVec.ofNat_toNat,BitVec.setWidth_eq,enabled_count]
-  refine ⟨returned.1,⟨?_,?_,?_,mem.preempt_transition facts frame restored,?_⟩,?_,?_,?_,?_⟩
-  · rw [returned.2.1,regs,UInt64.sub_add_cancel]
-    exact core.stack
-  · rw [returned.2.2.2.2.1,regs,table]
-    exact core.table
-  · rw [returned.2.2.2.1,regs,owner]
-    exact core.owner
-  · apply core.frame.trans
-    apply Index.external_storage facts.toCallFacts.geometry
+  have effect : EqualOutside (External c initial 7) s.dmem t.machine.data.dmem := by
     intro a outside
     have first := storeInt_frame s.dmem (s.regs.rsp.toBitVec-8) 8 returnPC.toBitVec.toInt a (by
       rw [core.call_slot]
@@ -107,6 +99,15 @@ theorem Core.enable_region (fetch : Int64 → Option Decoded) (bh : BhEnableCont
       exact outside (.inl (Stack.scratch _ 7 7 (by decide) (by decide) a inside)))
     rw [←heap] at first
     exact first.trans (frame a (fun inside => outside (.inr (.inr inside))))
+  refine ⟨returned.1,⟨?_,?_,?_,mem.preempt_transition facts frame restored,
+    core.frame.trans (external_storage facts.toCallFacts.geometry effect),
+    external_trans core.outside effect⟩,?_,?_,?_,?_⟩
+  · rw [returned.2.1,regs,UInt64.sub_add_cancel]
+    exact core.stack
+  · rw [returned.2.2.2.2.1,regs,table]
+    exact core.table
+  · rw [returned.2.2.2.1,regs,owner]
+    exact core.owner
   · simpa only [regs] using returned.2.2.1
   · simpa only [regs] using returned.2.2.2.2.2.1
   · simpa only [regs] using returned.2.2.2.2.2.2.1

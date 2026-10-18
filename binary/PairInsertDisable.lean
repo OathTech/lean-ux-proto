@@ -33,12 +33,13 @@ theorem disable_retry (fetch : Int64 → Option Decoded) (decoder : IndexInsertD
   rintro t ⟨registers,heap,pc⟩
   refine ⟨pc,⟨by simpa only [registers] using core.stack,
     by simpa only [registers] using core.table,by simpa only [registers] using core.owner,
-    by simpa [heap,Remove.preemptMemory,Int.natCast_add] using memory,?_⟩⟩
-  rw [heap]
-  apply core.frame.trans
-  apply external_storage facts.toCallFacts.geometry
-  intro a outside
-  exact frame a (fun inside => outside (.inr (.inr inside)))
+    by simpa [heap,Remove.preemptMemory,Int.natCast_add] using memory,?_,?_⟩⟩
+  all_goals
+    have effect : EqualOutside (External c initial 7) s.dmem t.data.dmem := by
+      rw [heap]
+      exact fun a outside => frame a (fun inside => outside (.inr (.inr inside)))
+  · exact core.frame.trans (external_storage facts.toCallFacts.geometry effect)
+  · exact external_trans core.outside effect
 
 #print axioms disable_retry_region
 #print axioms disable_retry

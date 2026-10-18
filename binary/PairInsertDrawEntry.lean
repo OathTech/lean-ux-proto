@@ -61,7 +61,7 @@ theorem draw_entry (fetch : Int64 → Option Decoded) (decoder : IndexInsertDeco
   apply eventually_weaken (instructionStep fetch) _ _ _ _ run
   rintro t ⟨regs,heap,pc⟩
   refine ⟨?_,⟨by rw [regs]; exact core.stack,by rw [regs]; exact core.table,
-    by rw [regs]; exact core.owner,heap ▸ stored.memory,heap ▸ stored.frame⟩,?_,?_⟩
+    by rw [regs]; exact core.owner,heap ▸ stored.memory,heap ▸ stored.frame,heap ▸ stored.outside⟩,?_,?_⟩
   · have zero : UInt64.ofNat (Index.head focus.nodes)=0 ↔ BitVec.ofNat 64 (Index.head focus.nodes)=0 :=
       UInt64.toBitVec_inj.symm
     simpa only [zero,walkStart,walkPC,Bool.false_eq_true,↓reduceIte,Int64.add_zero,

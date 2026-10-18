@@ -24,7 +24,7 @@ theorem Core.same {n o c initial ra p shadow s t}
     (core : Core n o c initial ra p shadow s)
     (regs : t.regs=s.regs) (heap : t.dmem=s.dmem) : Core n o c initial ra p shadow t :=
   ⟨by rw [regs]; exact core.stack,by rw [regs]; exact core.table,
-   by rw [regs]; exact core.owner,heap ▸ core.memory,heap ▸ core.frame⟩
+   by rw [regs]; exact core.owner,heap ▸ core.memory,heap ▸ core.frame,heap ▸ core.outside⟩
 
 theorem walk_cursor (fetch : Int64 → Option Decoded) (decoder : IndexInsertDecoderAgreement fetch)
     (trace : TracePcContract fetch) {n o c initial ra p shadow s}
