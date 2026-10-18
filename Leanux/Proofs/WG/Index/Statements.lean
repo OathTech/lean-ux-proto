@@ -1,3 +1,6 @@
+import Leanux.Proofs.WG.Index.IncomingIndexClaims
+import Leanux.Proofs.WG.Index.ExpiryIndexClaims
+import Leanux.Proofs.WG.Index.ReachedRunnerSource
 import Leanux.Proofs.WG.Index.ReachedIndexSource
 import Leanux.Proofs.WG.Index.CreationIndexClaims
 import Leanux.Proofs.WG.Index.RetirementSessionClaims
@@ -1391,5 +1394,27 @@ theorem original_begin_session_index_core (pid : PeerId) :
       (fun s => InitializedBounds.EndpointSafe s ∧ View.IndexCore s)
       (fun _ s => View.IndexCore s) :=
   Reached.session_core pid
+
+/-- Original initiation consumption retains the full local index package on
+every normal return. Failed authentication releases its actual acquired loan;
+no successful lookup, record readiness or extra reference budget is assumed. -/
+theorem original_consume_initiation_index_core (msg : List UInt8) :
+    Campaign2.Ensures (consumeInitiation msg) View.IndexCore
+      (fun _ => View.IndexCore) :=
+  consumeInitiation_indexCore msg
+
+/-- Original response consumption retains the same combined index facts,
+including normal owner-word-clear lookup failures and rejection cleanup. -/
+theorem original_consume_response_index_core (msg : List UInt8) :
+    Campaign2.Ensures (consumeResponse msg) View.IndexCore
+      (fun _ => View.IndexCore) :=
+  consumeResponse_indexCore msg
+
+/-- Original expiry retains table, slot and owner coherence and empty
+retirement, allowing absent or aliased optional key slots and original Stops. -/
+theorem original_expiry_index_core (pid : PeerId) :
+    Campaign2.Ensures (expireCurrentPeerKeypairs pid) View.IndexCore
+      (fun _ => View.IndexCore) :=
+  expireCurrentPeerKeypairs_indexCore pid
 
 end Leanux.Proofs.WG.Index

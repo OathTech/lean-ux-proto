@@ -5,9 +5,9 @@
 **Campaign-owned claims are current over main 783510e8.** The split-world
 projection remains the claim boundary. Campaign 1's validated GRO carry
 8ba82097 is incorporated unchanged, replacing the three inherited failing
-modules. The full combined proof gate passes: 2,216 build jobs and 1,341
+modules. The full combined proof gate passes: 2,229 build jobs and 1,344
 terminal declarations, with standard axioms only. Fresh combined-root replay
-passes for the session/creation and reached-account extension.
+passes for the incoming-consumer/expiry extension.
 Work has resumed with confirmation uniqueness stated over allocation internalId.
 The accepted raw store-ID recreation counterexample remains below. H1 is
 complete over normal accepted executions and the documented completed-call
@@ -16,15 +16,15 @@ observations; H2–H6 remain in progress as scoped below.
 | Result | Headlines | Checked support | Split status |
 | --- | ---: | ---: | --- |
 | H1 Noise | 75 | 1574 | Full terminal closure, all seven whole-call tag maps, their actual finite mixed histories and session derivation-clock receipt current; direct helper reinstallation refutes unrestricted repeat-confirmation uniqueness; successful confirmation IDs for the tracked peer are distinct across actual finite histories of all four handshake create/consume calls, session installation/confirmation, clearing and expiry, including arbitrary-peer interleavings, under an explicit initial next/cursor bound; initial slot credits now imply recorded session success and fund the selected peer's final slots, with old-slot aliases allowed; the actual whole response sender now has exact creation/session receipt order, local edges and all-outcome erasure; role rejection and immediate recorded allocation refusal now have total false-return contracts; normal response receipts now derive initial consumed-initiation and actual created-response session-entry tags through timestamp and MAC framing; normal peer creation now initializes exactly the returned location to zero and preserves all other tags, including cursor overwrite; outgoing initiation and its worker now classify the actual initial rate guard and retain actual creator receipts with initial tag provenance; whole session finite evaluation covers every allocation mode and exact Stop; the whole zero-key worker now has exact final optional tags, deleting its caller exactly at entry refcount one and otherwise retaining its zero tag; actual clear dispatch now derives queue selection and carries that final effect; complete normal handshake reception now classifies the actual load/MAC dispatch and its ordered helper receipts; actual receiveStep now derives ring selection and preserves the full original result/Stop; the owned socket view now preserves every optional tag; initialized device recreation now demonstrates repeat raw store IDs with distinct allocation stamps (runtime finding); the response caller now links its last actual receipt to the final tag map using concrete timer/socket frames; uncached cookie replies also preserve every tag; actual consume observations retain the confirmation cut and allocation stamp, while the pending-ticket automaton proves distinctness conditional on its source transitions; normal initiation/worker and reception/receive-step final tag coverage is now complete; initialized consume occurrences derive actual internalId and ordered same-call confirmation observations; timer, staging, creation, clearing and release calls preserve pending tickets, and session/confirmation calls have explicit pending transitions; complete consume tails, session/handshake callers, actual poll/GRO/NAPI with original inner delivery, device controls, removal/flushes and send/clear dispatch now transport the supplied pending invariant; complete actual configuration, crypt/transmit, scheduler/deferred, traffic, dump and lifecycle/syscall composition now establishes distinct successful completed confirmation internalIds in the initialized runner, including recreation and prefixes before outer Stops; the actual birth, work-drain, timer-stop and stop/down observers now have normal tag coverage with all callback obligations discharged and exact original outcome agreement; actual mixed peer/device configuration, removal and destruction now have the same unconditional source coverage and exact outcome agreement; actual native data consume/transmit, all dumps, complete scheduler and every deferred constructor now have projected tag coverage with concrete poll/NAPI/Stack and worker callbacks; actual traffic/lifecycle, every concrete syscall and the initialized paired runner now close normal whole-driver tag coverage and the five-state tag invariant without supplied callback/invariant premises; H1 complete for normal accepted executions and documented completed-call observations, with internal-write/stopped-cut completeness explicitly outside this result. |
-| H2 Index | 116 | 775 | Full terminal closure and ingress/expiry/handshake/peer-creation owner coherence and whole-removal lifecycle finding/slot-covered arbitrary-AIP preservation and actual clear-work dispatch and both-mode handshake queueing and new-handshake/zero-key/retransmit callbacks and persistent-callback and successful-session slot-alias invariant counterexamples and positive publication-to-lookup handoff under explicit rotation freshness current; core named-operation H2 coverage, original bulk-removal table safety and combined session-invariant preservation through arbitrary finite consecutive calls checked; owned flush and removal compositions are now predicate-parametric with their original table interfaces preserved; actual lookup, clearing, rotation and session publication now preserve hashed-slot coverage; initialized normal endpoints supply slot compatibility, resident-store bounds and live-peer base membership/positive references; both key-put modes and conditional final peer release preserve coverage/coherence, and actual drains derive queue selection for projected callback composition; complete clear workers now retain coverage/coherence and retirement reservations; actual make-dead and the saved first pass transfer exact stamped obligations, and same-run peer payment retains its remaining funded account under an explicitly discharged paid obligation; both creators now preserve nullable caller compatibility, coverage and retirement through one source traversal apiece; actual key clearing discharges the paid retirement obligation, bulk removal supplies its real saved first-pass cut, and smaller initialized endpoint bounds suffice to preserve supplied session coherence/coverage; the complete initiation sender now retains coverage/retirement and nullable positive caller compatibility; funded selected sends, both removal drains, and the full saved bulk cleanup now preserve the actual account and all supplied index obligations without callback premises; session retirement now follows the actual live-caller guard, configured creation derives cursor vacancy, and complete single-peer removal consumes its selected base occurrence; a reached-account bridge supplies current-cut bounds and exact ledger rebasing, with its first complete session observer client checked; whole initialized driver/lifetime coherence remains open; aggregate gate passes. |
+| H2 Index | 119 | 809 | Full terminal closure and ingress/expiry/handshake/peer-creation owner coherence and whole-removal lifecycle finding/slot-covered arbitrary-AIP preservation and actual clear-work dispatch and both-mode handshake queueing and new-handshake/zero-key/retransmit callbacks and persistent-callback and successful-session slot-alias invariant counterexamples and positive publication-to-lookup handoff under explicit rotation freshness current; core named-operation H2 coverage, original bulk-removal table safety and combined session-invariant preservation through arbitrary finite consecutive calls checked; owned flush and removal compositions are now predicate-parametric with their original table interfaces preserved; actual lookup, clearing, rotation and session publication now preserve hashed-slot coverage; initialized normal endpoints supply slot compatibility, resident-store bounds and live-peer base membership/positive references; both key-put modes and conditional final peer release preserve coverage/coherence, and actual drains derive queue selection for projected callback composition; complete clear workers now retain coverage/coherence and retirement reservations; actual make-dead and the saved first pass transfer exact stamped obligations, and same-run peer payment retains its remaining funded account under an explicitly discharged paid obligation; both creators now preserve nullable caller compatibility, coverage and retirement through one source traversal apiece; actual key clearing discharges the paid retirement obligation, bulk removal supplies its real saved first-pass cut, and smaller initialized endpoint bounds suffice to preserve supplied session coherence/coverage; the complete initiation sender now retains coverage/retirement and nullable positive caller compatibility; funded selected sends, both removal drains, and the full saved bulk cleanup now preserve the actual account and all supplied index obligations without callback premises; session retirement now follows the actual live-caller guard, configured creation derives cursor vacancy, and complete single-peer removal consumes its selected base occurrence; a reached-account bridge supplies current-cut bounds and exact ledger rebasing, with its first complete session observer client checked; both actual incoming consumers and expiry now retain the combined index component, and outer initialization/runner composition reuses the original source-selected account with concrete syscall preservation still explicit; whole initialized driver/lifetime coherence remains open; aggregate gate passes. |
 | H3 Roaming | 21 | 219 | Full terminal closure and invalid-MAC1/rate-limit/admitted-response/initiation rejection and cookie-message and whole data-admission/ingress endpoint preservation and actual first pre-put NAPI owner/packet authentication under the publication owner-head condition current; later polls, persistent queue provenance and broader caller coverage open. |
 | H4 Configuration | 116 | 1006 | Full terminal closure, actual mixed/key setter paginated readback with arbitrary endpoints, whole finite single-peer mixed-width getter and actual finite empty-IP peer getter and exact arbitrary-room empty-IP serializer/whole normal cursor callback and actual mixed/key setter composition with exact DATA/DONE count and arbitrary endpoints and arbitrary finite empty-IP multi-peer scalar, mixed fwmark/scalar and established-identity private-key set/get and actual endpoint set/weighted readback and local mixed-page serializer/cursor/coalescer support plus finite mixed-page planning, native callback, computed selection/reference support, finite receive budget, exact page content and complete finite mixed peer/allowed-IP getter and scalar, endpoint, fwmark/scalar and established-identity key set/get plus mixed port-refusal and all nonzero and zero port-only set/get outcomes and actual empty allowed-IP replacement/full mixed readback and initial-state flag-only replace-peers free/first-pass observations and general represented insertion/fresh-peer readback current; global ownership, queued cleanup and general mixed setters remain open. |
 | H5 Progress | 53 | 349 | Full terminal closure, exact bounded outcomes and recorded batch, actual timer completion guards and recorded idle/post-advance wait completion and actual advance-syscall/runner linkage and send-worker completion guard and four final-idle syscall/runner receipts and exact all-mode finite allocation and successful modular-power evaluation bridges and actual activation-exit inspection current; global progress/coherent-ring adequacy open. |
 | H6 Timers | 65 | 502 | Full terminal closure, actual retry blocks and allocation-labelled guarded session-arm events with outgoing call-entry origin and initialized give-up runtime witness with checked concrete curve outputs and all five syntactic traversal call sites covered by six observer branches with all-mode immediate effects; upstream data authentication, broader caller histories and session-relative counts remain open. |
 
-The checked surface is 4,425 theorems in all 1,286 campaign-owned modules.
+The checked surface is 4,459 theorems in all 1,299 campaign-owned modules.
 The completed retrofit accounts for 1,983: 1,321 retyped, 244 explicitly
-corrected, 239 retained and 179 added support/finding declarations. Four hundred forty-two
+corrected, 239 retained and 179 added support/finding declarations. Four hundred seventy-six
 subsequent H2 declarations add table preservation and local owner coherence.
 1,389 H1 declarations add whole-operation and finite mixed-history tag ownership, actual derivation-clock provenance, direct-helper reinstallation and bounded fresh-installation confirmation history; four hundred twenty-four H4 declarations
 add mixed fwmark/scalar, ordered peer-attribute, port-refusal/private-key readback and finite IPv4 getter/setter pagination and actual fitting multi-peer readback and complete finite single-peer mixed-width pagination plus actual finite empty-IP peer pagination with ordered cursor handoffs and complete receive/coalescer composition, now extended to arbitrary finite mixed peer/allowed-IP lists. Sixty-two H3 declarations
@@ -34,8 +34,8 @@ connect actual timer-loop receipts, contiguous retry-block counts/bounds, local 
 were deleted because types supply their facts and five false cookie supports
 were separately retired with checked counterexamples. No baseline declaration
 remains awaiting retrofit; all 258 original terminal names/order survive,
-with fifty-three new H1 headlines, sixty-four new H2 headlines, eight new H3 headlines,
-thirty-seven new H4 headlines, eleven new H5 headlines and fifteen new H6 headlines (446 total).
+with fifty-three new H1 headlines, sixty-seven new H2 headlines, eight new H3 headlines,
+thirty-seven new H4 headlines, eleven new H5 headlines and fifteen new H6 headlines (449 total).
 
 The [retrofit report](2026-10-16-proof-campaign-2-state-split.md) records
 claim/frame files, corrections, before/after counts and validation.
@@ -64,7 +64,7 @@ remaining five charter scopes, not merely the already green gate.
 | Result | Mirror | Status | Remaining whole-run scope |
 | --- | --- | --- | --- |
 | H1 | 783510e8 | Current, complete; 75 headlines / 1574 theorems | Normal initialized whole-driver tag ownership and allocation-stamp confirmation uniqueness closed; internal-write traces and completed inner cuts of later-stopped callbacks are a separate stronger observer scope |
-| H2 | 783510e8 | Current, in progress; 116 / 775 | Reachable store, slot and owner coherence across the driver |
+| H2 | 783510e8 | Current, in progress; 119 / 809 | Reachable store, slot and owner coherence across the driver |
 | H3 | 783510e8 | Current, in progress; 21 / 219 | General caller coverage and final endpoint preservation |
 | H4 | 783510e8 | Current, in progress; 116 / 1006 | General mixed setters and global ownership/cleanup |
 | H5 | 783510e8 | Current, in progress; 53 / 349 | Whole-worker record decrease and global termination/progress |
@@ -83,6 +83,78 @@ LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake build 
 LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle scripts/proof-gate
 LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs
 ```
+
+## H2 incoming consumption, expiry and outer composition, 2026-10-18
+
+Three projected headlines retain the combined index component through both
+original incoming handshake consumers and original key expiry. Consumer
+lookup success supplies the extra reference used by rejection cleanup.
+The handshake-only response lookup's failed owner-word stores preserve key
+coverage and retirement even without owner coherence. Both new underlying
+coverage/retirement contracts require neither funding, readiness, successful
+authentication nor extra reference budget. The combined headlines join
+existing table and owner contracts on the same actual run.
+
+The prior owner-coherence family's two crypto traversals and public-key
+lookup traversal are extracted into generic source rules. Their three legacy
+theorem type texts are byte-for-byte unchanged; their bodies now instantiate
+those rules. New slot/retirement contracts instantiate the same rules.
+No shared source or second new crypto interpreter is added. Successful
+consumption retains its acquired reference, leaving final caller payment a
+separate obligation; rejection pays only that actual acquired reference.
+
+Expiry uses the existing exact Config effect. Handshake unhashing, zeroing,
+timestamp reset and validity-only key writes retain the index component.
+Optional next/current aliases are allowed. Actual normal execution supplies
+the peer and clock cut; missing-peer/key, NULL handshake-owner and record
+Stops remain. Absent optional key slots skip. No new
+expiry source traversal or ready-record condition is introduced.
+
+The outer proof support establishes the literal initial index component and
+pairs it with C1's initialized account. A syscall adapter uses the original
+source-selected ledger and safe journal on the same execution. The existing
+paired runner then transports this existential entry, conditional on concrete
+syscall index-preservation contracts. Those contracts remain explicit.
+This closes the outer composition mechanism, not initialized H2: incoming
+caller tails, staged/data paths and configuration/scheduler leaf composition
+still need to discharge its premise. No new observer or accounting walk is
+defined.
+
+[AGENT 2026-10-18] Generalize the owned owner-coherence source traversals and
+retain their interfaces as instances. Reuse the existing paired runner and
+source-selected accounts for outer composition rather than a separate ledger
+or execution model.
+
+IncomingIndexClaims and ExpiryIndexClaims hold projected claims, with three
+new Statements declarations. IncomingIndexModel contains the local transport
+predicates, and IncomingIndexEffects and ExpiryIndexEffects contain pure
+effects. Physical frames are IncomingIndexFrames, ExpiryIndexFrames and
+ReachedRunnerFrames. IncomingConsumeSource and IncomingIndexSource connect
+the original consumers. ReachedInitialSource, ReachedRunnerBridge and
+ReachedRunnerSource contain initialization and conditional outer composition.
+No shared layer or mirror changes, and no frame is deleted.
+
+All 4,425 prior theorem statements are kept; none is retyped or deleted.
+This adds 34 theorems, including three headlines, in 13 modules. H2 is
+809/119; the campaign is 4,459 theorems, 449 headlines and 1,299 owned modules.
+All prior headline names and order remain. Independent review finds no
+semantic mismatch in the consumer source, exact legacy interfaces, expiry
+or conditional outer composition. No new finding or mirror-team request arises.
+
+Validation: final scoped builds pass 739, 668 and 1,389 jobs. Two split builds
+failed on an extraneous namespace opening and a missing owned-frame import;
+both are corrected without changing claims. Twelve capped stdin probes
+produce eight clean passes and four corrected proof-form/import failures.
+Recovery axiom diagnostics in a failed draft are discarded; final named
+support audits and terminal checks use only the standard axioms. New modules
+use default heartbeat limits and the unchanged memory cap. No infrastructure
+rerun, KILLED outcome or guest run occurs. The sole warning remains inherited
+Env.lean String.mk deprecation.
+
+The combined gate passes 2,229 build jobs and 1,344 terminal checks with
+standard axioms only; fresh combined-root replay passes with exit zero.
+The reproduction commands above apply. H1 remains complete at its stated
+boundary; H2–H6 remain in progress, with the landing estimate unchanged.
 
 ## H2 session, creation and reached-account composition, 2026-10-18
 
@@ -158,6 +230,7 @@ The combined gate passes 2,216 build jobs and 1,341 terminal checks with
 standard axioms only; fresh combined-root replay passes with exit zero.
 The reproduction commands above apply. H1 remains complete at its stated
 boundary; H2–H6 remain in progress, with the landing estimate unchanged.
+
 ## H2 complete initiation sending and funded removal, 2026-10-18
 
 Two projected headlines cover the complete original initiation sender. It
