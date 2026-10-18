@@ -1,3 +1,6 @@
+import Leanux.Proofs.WG.Index.HashSlotReleaseClaims
+import Leanux.Proofs.WG.Index.SelectedDrainClaims
+import Leanux.Proofs.WG.Index.InitializedFundingClaims
 import Leanux.Proofs.WG.Index.InitializedBoundsClaims
 import Leanux.Proofs.WG.Index.HashSlotLookupClaims
 import Leanux.Proofs.WG.Index.HashSlotClearClaims
@@ -1161,5 +1164,59 @@ theorem original_begin_session_hash_slots (pid : PeerId) :
   intro g ambient result out after pre run
   exact ⟨beginSession_sessionIndexSafe pid g ambient result out after pre.1 run,
     beginSession_sessionHashSlots pid g ambient result out after pre run⟩
+
+/-- Both modes of the original keypair put preserve coverage and positive
+hashed-owner coherence together. No readiness, residency or refcount budget
+is assumed; failures remain outside the normal-return postcondition. -/
+theorem original_keypair_put_hash_slots (key : Option KeypairId) (now : Bool) :
+    Campaign2.Ensures (keypairPut key now)
+      (fun s => View.OwnerCoherentSafe s ∧ View.HashSlotsSafe s)
+      (fun _ s => View.OwnerCoherentSafe s ∧ View.HashSlotsSafe s) := by
+  intro g ambient result out after pre run
+  exact ⟨keypairPut_owner_coherent key now g ambient result out after pre.1 run,
+    keypairPut_hashSlots key now g ambient result out after pre.2 run⟩
+
+/-- Original peer release preserves coverage and coherence when the last
+reference has empty slots. Coverage derives detachment at that branch;
+the original queue/timer refusals and supplied positive entry remain explicit. -/
+theorem original_peer_put_hash_slots (pid : PeerId) (d : Device) (p : Peer)
+    (resident : d.peers[pid]? = some p) (live : 0 < p.refcount)
+    (empty : p.refcount = 1 → clearKeys p = [none,none,none]) :
+    Campaign2.Ensures (peerPut (some pid))
+      (fun s => s.wg.device = some d ∧ View.OwnerCoherentSafe s ∧ View.HashSlotsSafe s)
+      (fun _ s => View.OwnerCoherentSafe s ∧ View.HashSlotsSafe s) := by
+  intro g ambient result out after pre run
+  have detached : LastOwnerDetached d pid p := by
+    intro last
+    exact emptyPeer_hashSlot_detached d pid p resident
+      (pre.2.1 d pre.1) (pre.2.2 d pre.1) (empty last) last
+  exact ⟨peerPut_owner_coherent pid d p resident live detached
+      g ambient result out after ⟨pre.1,pre.2.1⟩ run,
+    peerPut_hashSlots pid d p resident live empty
+      g ambient result out after ⟨pre.1,pre.2.2⟩ run⟩
+
+/-- Every original normal drain derives selection from its actual queue
+before applying the supplied callback contract. This is composition over a
+WireGuard projection, not a promise of completion or global coherence. -/
+theorem original_queue_selected_handshake_drain (P : Campaign2.State → Prop)
+    (send : ∀ pid, Campaign2.Ensures (runFlushedSendWork pid)
+      (fun s => P s.wg ∧ ∃ d, s.wg.device = some d ∧ pid ∈ d.sendWorkQueue)
+      (fun _ s => P s.wg))
+    (clear : ∀ pid, Campaign2.Ensures (runFlushedClearWork pid)
+      (fun s => P s.wg ∧ ∃ d, s.wg.device = some d ∧ pid ∈ d.clearWorkQueue)
+      (fun _ s => P s.wg))
+    (upTo : Option PeerId) :
+    Campaign2.Ensures (drainHandshakeSendWq upTo) (fun s => P s.wg)
+      (fun _ s => P s.wg) :=
+  drainHandshakeSendWq_selected P send clear upTo
+
+/-- At every actual initialized normal endpoint, each nondead resident peer
+has its real base-list occurrence and a positive reference. Dead-peer
+retirement and hashed-key coherence are separate obligations. -/
+theorem original_initialized_live_peer_credit (trace : Runner.Trace) (placeholders : Bool) :
+    match InitializedBounds.inspection trace placeholders with
+    | .error _ => True
+    | .ok (_,final) => InitializedFunding.LivePeerCredit final :=
+  InitializedFunding.inspection_live trace placeholders
 
 end Leanux.Proofs.WG.Index
