@@ -1,4 +1,4 @@
-import PairIndex
+import PairIndexChecked
 
 open Lean Leanux Leanux.WG Binary.Pair
 
@@ -9,7 +9,7 @@ def runCase (input : ProbeInput) (label : String) (w : World)
     let mut session ← startSession input w
     let mut calls := #[]
     for (query, kinds) in queries do
-      let (next, report) ← (lookup input seed session query kinds).mapError
+      let (next, report) ← (IndexLookup.invoke input seed session query kinds).mapError
         (fun e => s!"{label}, seed {seed}: {e}")
       session := next
       calls := calls.push report
@@ -92,6 +92,12 @@ def suite (input : ProbeInput) : Except String Json := do
     rdi := .ofNat tableAddr, rsi := 1, rdx := .ofNat query,
     rcx := .ofNat outputAddr, rsp := .ofNat stackAddr}
   let initial : MachineState := ⟨{base.binary.state.data with regs}, Binary.Image.Lookup.entry⟩
+  let coverage ← Index.readContext m
+  let boundary (s : MachineState) := IndexLookup.callBoundary base.names input.offsets coverage s w query [.handshake] (.ofNat stopAddr)
+  controls := controls.push (← expectReject "output-aliases-owner" "output-separation"
+    (boundary {initial with data := {initial.data with regs := {initial.data.regs with rcx := .ofNat a}}}))
+  controls := controls.push (← expectReject "output-unmapped" "output-mapping"
+    (boundary {initial with data := {initial.data with regs := {initial.data.regs with rcx := 0x123456}}}))
   let atHeader ← advance input 0 {state := initial} #[header]
   let paired := {base with binary := atHeader}
   assertHeader input paired query [.handshake] [e]

@@ -446,8 +446,11 @@ executes their concrete states through return and repeated removal.
 likewise cover the complete replacement, including failure and all list
 positions. `PairReplaceWitness` proves the linked/unhashed entry witnesses;
 `binary-pair-replace-witness` executes their exact states and repeat calls.
-Lookup integration, finite-sequence composition and actual captured mutator
-replay remain open. See the increment report for
+`PairLookupAdequacy.lookup_checked` and its explicit-environment wrapper
+now derive the older physical relation from the common executable assertion
+and return the full reconstruction, ownership flags and callback phases.
+`binary-pair-runner` checks that assertion around its existing segment runner.
+Finite-sequence composition and actual captured mutator replay remain open. See the increment report for
 commands, timing and the external export-based gate status.
 
 For runtime diagnosis, `binary-pair-buffer-cost` uses a **generated variation**

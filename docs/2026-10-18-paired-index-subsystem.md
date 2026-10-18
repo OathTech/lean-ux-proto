@@ -4,8 +4,9 @@ Status: in progress on `task/binary-pair-runner`, implementing the
 [increment charter](2026-10-18-charter-paired-index-subsystem.md).
 The complete sequential removal theorem builds under its named premises.
 Its linked and unhashed concrete entry witnesses now check and execute to
-return. Replacement reconstruction checks; its full call, the lookup bridge
-and the shared-reconstruction sequence theorem remain open.
+return. Complete replacement and the lookup bridge now build and pass their paired
+runtime checks. The shared-reconstruction sequence theorem and actual
+mutator capture remain open.
 
 ## Start and time limits
 
@@ -46,7 +47,6 @@ be attributed to the acceptance of the earlier boundary modules.
 | 2026-10-18 06:25:21 | Reconstruction stage: the concrete predecessor/successor/clear memory effect preserves the executable index reconstruction and ownership flags. Focus and finite list shape are derived from successful decoding. Full machine-call composition is still open. |
 | 2026-10-18 06:57 | All 25 removal instructions composed through entry, both linkage paths, services and return; `remove_checked` builds. |
 | 2026-10-18 07:01 | Explicit-environment removal wrapper builds. Concrete linked/unhashed witness execution exposed saturation accounting in the runner; fixed using the existing executable coverage write plan. |
-
 | 2026-10-18 07:14 | Replacement runner passes the recorded-prefix three-way check and 24 calls across two seeds; whole-call proof still open. |
 | 2026-10-18 07:48 | Formal linked/unhashed removal Pre witnesses and their execution theorem check; exact witness execution passes again. Replacement bucket reconstruction checks. |
 
@@ -57,8 +57,8 @@ Runtime-investigation time used: zero at this checkpoint.
 | Charter criterion | State |
 | --- | --- |
 | A: complete removal adequacy and executed witnesses | Complete locally: whole-call `remove_checked`, explicit-environment `remove_simulation`, positive linked/unhashed Pre witnesses and `Witness.executes` check. The witness states execute to return. External acceptance and actual mutator captures remain in E. |
-| B: complete replacement adequacy and measured reuse | 24 paired calls pass; combined store effect restores all decoded buckets, owner peer words and counts. Owner linkage flags also check; complete 41-instruction execution composition remains open. |
-| C: lookup under the common executable relation | Open; older complete lookup theorem available for adaptation |
+| B: complete replacement adequacy and measured reuse | Complete locally: all 41 instructions, failure and all positions; explicit environment wrapper, linked/unhashed Pre witnesses, exact witness execution and fresh kernel replay pass. Reuse and marginal cost below. |
+| C: lookup under the common executable relation | Complete theorem and explicit environment wrapper build. Both recorded-prefix suites pass through the new assertion, including dead-then-NULL and collisions. Fresh replay of the environment/headline closure passes. |
 | D: finite call-sequence theorem and retained-heap execution | Open |
 | E: actual mutator captures, trust checks and cost report | Open |
 
@@ -325,3 +325,73 @@ unused simplification arguments in `PairRemoveRegion`, remain visible; new
 modules add no suppression. Fresh local kernel replay passes for `PairRemoveWitness`,
 `PairRemoveEnvironment` and `PairReplaceReconstruct`, covering their imported
 closures. This is not external gate acceptance.
+
+## Lookup through the common reconstruction (C)
+
+The lookup bridge was developed approximately 08:27–08:53 UTC, overlapping
+builds. `PairLookupAdequacy.lookup_checked` derives every original physical
+entry premise from the executable `IndexLookup.callBoundary`; the old
+focused relation is not an independent hypothesis. It uses the existing
+complete sequential lookup execution, then proves that its actual writes
+and accepted source updates reestablish the full executable reconstruction
+and every owner linkage flag. `PairLookupEnvironment.lookup_simulation`
+exposes serialized-environment and actual-history permission hypotheses.
+The five callback contracts and anchored decoder premise remain named in
+`TrustBase.lean`; no new callback or reconstruction assumption was added.
+
+[AGENT 2026-10-18] For the retained-heap subsystem, a live lookup's peer output
+word belongs to the caller and is separate from the index heap, stack and
+service metadata. Linux's relevant callers use a local peer variable
+(`receive.c:509–519`, `noise.c:747–750`). The executable check enforces this
+allocation discipline only when the accepted path writes the output. This
+is an explicit subsystem caller condition; the original M1 statement and
+its alias-permitting domain remain unchanged. No dead-peer or NULL state
+is excluded. Address interpretation compatibility is also checked: embedded
+owner addresses must agree with the existing physical theorem's offsets.
+These immutable checks are physical readiness, not extra source observations.
+
+The proof splits source changes into bucket/identity preservation and the
+selected owner/count updates. A generic keyed-list decoder lemma reconstructs
+all owners and counts. Byte frames preserve the buckets, remaining scalar
+fields and linkage flags. This avoids adding whole-World clauses or requiring
+relation equality at intermediate pointer stores.
+
+Composition work exposed an omitted export: M1 supplies coverage-buffer
+readiness for the phases its selected path uses. A later call can use another
+phase. `PairLookupReadiness.coverage_after` now carries both phases, using the
+actual write frame for the unused phase and leaving capacity metadata intact.
+The new postcondition also exports restored preempt state, pending-softirq
+state, exact interface results and the physical frame. General preservation
+of scratch mapping is being developed for D, rather than assumed of future
+entries.
+
+Validation:
+
+- `PairLookupAdequacy` and `PairLookupEnvironment` build; printed axioms are
+  only `propext`, `Classical.choice`, `Quot.sound`.
+- The first test attempt mistakenly selected the other trace's recording;
+  the trace-identity check failed noisily. After correcting the selection,
+  `d1_second_response` passed the independent three-way check and 48 paired
+  calls, 22,404 instructions, 94 loop headers, 15 controls, in 5.267 seconds.
+- `d1_wrong_receiver_index_same_bucket` passed its independent three-way check
+  and 48 paired calls, 21,774 instructions, 94 headers, in 5.274 seconds.
+  All 17 controls pass, including new unmapped-output and output-alias checks.
+- These are recorded-prefix materializations plus labelled synthetic cases,
+  not captured kernel heaps. The suite runs both undefined-value seeds,
+  repeated live/dead/NULL lookups and collision depths 1, 3 and 8.
+
+Reproduce from the worktree root, selecting the matching saved recording:
+
+```sh
+LEANUX_QEMU_SLOTS=16 capped python3 -B binary/pair_run.py \
+  --trace d1_second_response --check .artifacts/check/binary-tv-20261016-234706
+LEANUX_QEMU_SLOTS=16 capped python3 -B binary/pair_run.py \
+  --trace d1_wrong_receiver_index_same_bucket --check .artifacts/check/binary-tv-20261016-235330
+```
+
+Omit `--check` to regenerate a recording; set `LEANUX_KERNEL_DIR` to the
+approved s4 build. No external gate acceptance is claimed for this increment.
+
+Fresh `leanchecker --fresh PairLookupEnvironment` completed successfully at
+approximately 08:57 UTC, covering the headline and its new reconstruction
+closure. This is local replay, not the external export gate.
