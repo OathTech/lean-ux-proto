@@ -890,7 +890,17 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   freshness and confirmation discipline, in that order, each stated with the
   consequence of its failure. The parallel plan's lower-consequence items for
   this campaign (key lifetime over the wheel, resource bounds including the
-  handshake-ring bound, the routing composition) are deferred to a later charter,
-  the uncounted-drop finding of tray entries 01 and 02 judged an observability
-  defect rather than a security consequence [AGENT, coordinator: the charter,
-  docs/2026-10-18-charter-proof-campaign-3.md].
+  handshake-ring bound, the routing composition) are deferred to a later charter
+  [AGENT, coordinator: the charter, docs/2026-10-18-charter-proof-campaign-3.md].
+- **2026-10-18 [AGENT, fork of the coordinator]** The charter's revision 2, after
+  Codex#1's independent review (verdict: keep the five themes, correct T1 to T3's
+  contracts, promote key retirement): key retirement joins the high-priority
+  group as T6, split into unconditional safety at the use checks and conditional
+  operational retirement under stated scheduling assumptions; T1 to T3 restated
+  as the review's contracts (allocation versus encryption and the batch restore
+  at the rejection limit; the three selection times and the counterless arms;
+  the three acceptance events, the causal roots and the bounded cookie reply);
+  T4 and T5 over retained-peer and allocation lifetimes; the deferred section
+  separates DoS resource bounds, with the exposure named, from the missing drop
+  statistics; the statements commit to outcomes and leave the decomposition and
+  order open. The seven findings are dispositioned in the charter's section 9.
