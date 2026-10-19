@@ -5,7 +5,12 @@ import Leanux.Proofs.WG.RetirementSecurity.TxActorNativeScheduler
 import Leanux.Proofs.WG.RetirementSecurity.TxActorDeferredWorkers
 import Leanux.Proofs.WG.RetirementSecurity.TxActorDeferred
 import Leanux.Proofs.WG.RetirementSecurity.TxRunnerSuspended
+import Leanux.Proofs.WG.RetirementSecurity.TxRunnerInitialSuspension
 import Leanux.Proofs.WG.RetirementSecurity.TxWorkLifecycle
+import Leanux.Proofs.WG.RetirementSecurity.TxWorkDeviceLifetime
+import Leanux.Proofs.WG.RetirementSecurity.TxWorkDescriptorCalls
+import Leanux.Proofs.WG.RetirementSecurity.TxWorkRouteControls
+import Leanux.Proofs.WG.RetirementSecurity.TxSuspensionConfiguration
 import Leanux.Proofs.WG.RetirementSecurity.TxWorkPoll
 import Leanux.Proofs.WG.RetirementSecurity.TxWorkPublicationCoverage
 import Leanux.Proofs.WG.RetirementSecurity.TxWorkTransfers
@@ -2930,5 +2935,69 @@ theorem original_destructor_no_residual_tx
       ((do _root_.modify fun g:WGWorld=>{g with dev:=none}; retireDeviceUnits : WG.M Unit).run u).run c=
         .ok (((),v.wg),v.ambient) :=
   TxWork.destruct_no_residual before idle run
+
+/-- Original device configuration preserves allocated-TX service and actual
+suspended actors across fresh peer creation, saved-peer writes, allowed-IP
+updates, key-conflict removal and staged/keepalive sends. Fresh slot vacancy
+comes from the carried allocation frontier. This native contract retains its
+incoming carrier explicitly until initialized outer composition is discharged. -/
+theorem original_configuration_tx_service
+    (before : TxWork.At (TxWork.Covered locals crypt) crypt active w)
+    (run : (liftWG (wgSetDevice attrs)).run w=.ok (result,v)) :
+    TxWork.At (TxWork.Covered locals crypt) crypt active v :=
+  (Leanux.Proofs.Framing.hoare_iff_run _ _ _).mp (TxWork.set_device_actor attrs) w result v before run
+
+/-- Native device creation preserves allocated-TX service, either retaining
+its existing device state or creating an empty peer store. Actual record and
+allocation consumers retain suspended workers. This local endpoint transport
+is not a disposal classification or a stopped-prefix conservation claim. -/
+theorem original_creation_tx_service
+    (before : TxWork.At (TxWork.Covered [] []) [] active w)
+    (run : (liftWG wgCreate).run w=.ok (result,v)) :
+    TxWork.At (TxWork.Covered [] []) [] active v :=
+  (Leanux.Proofs.Framing.hoare_iff_run _ _ _).mp TxWork.create_actor w result v before run
+
+/-- The actual fixture, prefill and IPv4 namespace boot leave no suspended
+worker before operation zero. This supplies the source initialization fact
+needed by strict no-residual-reset reasoning; it assumes no fairness and makes
+no terminal-accounting claim for a stopped syscall. -/
+theorem original_prefill_boot_no_suspended {E : Type} (trace : Runner.Trace) (placeholders : Bool)
+    {u v : World} {h : List E}
+    (prefill : Leanux.Proofs.Logged.runPrefixOuter
+      (Queues.RxCredits.ConservationRunner.prefillWith trace.seccompPrefill
+        (Queues.RxCredits.ConservationRunner.fixture trace placeholders)
+        (pure : World→Leanux.Proofs.Logged.PrefixOuter E World)) h=(.ok u,h))
+    (boot : Leanux.Proofs.Logged.runPrefixOuter
+      (Queues.RxCredits.ConservationRunner.bootWith trace.net trace.foreign u
+        (pure : World→Leanux.Proofs.Logged.PrefixOuter E World)) h=(.ok v,h)) :
+    v.ambient.suspended=[] := TxWork.RunnerBoundary.initial_idle trace placeholders prefill boot
+
+/-- Native environment lifecycle controls preserve allocated-TX service and
+actual suspended actors through routing notifiers, socket teardown and namespace
+cleanup. These local contracts keep their incoming carrier explicit; device
+reset is still justified separately at its no-residual cut. -/
+theorem original_environment_lifecycle_tx_service :
+    Leanux.Proofs.Framing.Preserves (TxWork.At (TxWork.Covered [] []) [] active) Env.wgUp ∧
+    Leanux.Proofs.Framing.Preserves (TxWork.At (TxWork.Covered [] []) [] active) Env.wgDown ∧
+    Leanux.Proofs.Framing.Preserves (TxWork.At (TxWork.Covered [] []) [] active) Env.wgDelete ∧
+    Leanux.Proofs.Framing.Preserves (TxWork.At (TxWork.Covered [] []) [] active) Env.netnsCleanup ∧
+    Leanux.Proofs.Framing.Preserves (TxWork.At (TxWork.Covered [] []) [] active) Env.routeIntoWg0 :=
+  ⟨TxWork.env_up_actor,TxWork.env_down_actor,TxWork.env_delete_actor,
+    TxWork.cleanup_actor,TxWork.route_into_actor⟩
+
+/-- Actual socket and netlink descriptor wrappers retain allocated-TX service
+and suspended worker obligations when the native handler does. The file/task
+state stack is crossed by source-specific frames; arbitrary file or ambient
+computations are not assumed to preserve this carrier. -/
+theorem original_socket_wrapper_tx_service (fd : Nat) (body : Leanux.M Int)
+    (keeps : Leanux.Proofs.Framing.Preserves
+      (TxWork.At (TxWork.Covered locals crypt) crypt active) body) :
+    Leanux.Proofs.Framing.Preserves (TxWork.At (TxWork.Covered locals crypt) crypt active)
+      (socketCallOn fd body) ∧
+    Leanux.Proofs.Framing.Preserves (TxWork.At (TxWork.Covered locals crypt) crypt active)
+      (netlinkRequest body) ∧
+    Leanux.Proofs.Framing.Preserves (TxWork.At (TxWork.Covered locals crypt) crypt active)
+      (rtnetlinkRequest body) :=
+  ⟨TxWork.socket_actor fd body keeps,TxWork.netlink_actor body keeps,TxWork.rtnetlink_actor body keeps⟩
 
 end Leanux.Proofs.WG.RetirementSecurity

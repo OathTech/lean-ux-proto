@@ -30,7 +30,7 @@ theorem Safe.at (safe : Safe h) (found : h[index]? = some (.reserved slot r)) :
 theorem selected_of_binding (safe : Safe h) (bank : StagingMaterial.Safe h)
     (bound : ResidentMaterial.BoundReceipt h r) :
     Earlier h r.read.value.keypair (keyCore r.cipher.keyRead.value) := by
-  obtain ⟨generation,_,packets,allocation,n,input,member,_,_,atInput,_,material,resident⟩ := bound
+  obtain ⟨generation,_,packets,allocation,n,input,member,_,_,atInput,_,material,resident,_⟩ := bound
   obtain ⟨before,after,position⟩ := List.mem_iff_append.mp member
   have found : h[before.length]? = some (.allocated packets allocation) := by rw [position]; simp
   have mapped := (StagingMaterial.bank_spec bank found).1

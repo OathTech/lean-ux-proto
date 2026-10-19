@@ -1,8 +1,9 @@
-import Leanux.Proofs.WG.HandshakeSecurity.ResidentMaterialState
+import Leanux.Proofs.WG.HandshakeSecurity.StagingOwnerState
 import Leanux.Proofs.WG.TransmitSecurity.DriverEffectsNeutral
 
 /-! The native staged-send callback derives allocation inputs from its actual
-selected current slot and resident key read. The loop distinguishes early
+selected current slot, resident key read and successful owner dereference.
+The loop distinguishes early
 refusal from continued accumulation, since refusal may release the last key. -/
 namespace Leanux.Proofs.WG.HandshakeSecurity.ResidentMaterial
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing Lifetimes Queues
@@ -41,26 +42,55 @@ private theorem pure_result (value : α) :
     StatePrefixEnsures (With P) Safe (pure value) (fun _ h w _ => JournalInv h w) :=
   StatePrefixEnsures.pure _ (fun _ _ _ hi => hi.1.2) (fun _ _ _ hi => hi.1)
 
-def Accumulating (kid : KeypairId) (packets : List DataPacket) (w : WGWorld) : Prop :=
-  Pick kid w ∧ ∀ packet ∈ packets, packet.keypair = kid
+def Accumulating (pid : PeerId) (kid : KeypairId) (packets : List DataPacket) (w : WGWorld) : Prop :=
+  OwnerPick pid kid w ∧ ∀ packet ∈ packets, packet.keypair = kid ∧ packet.peer = pid
 
-def Accumulated (kid : KeypairId) (acc : Option Unit × List DataPacket)
+def Accumulated (pid : PeerId) (kid : KeypairId) (acc : Option Unit × List DataPacket)
     (h : List Journal.Event) (w : WGWorld) (_ : Ambient) : Prop :=
-  JournalInv h w ∧ (acc.1 = none → Accumulating kid acc.2 w)
+  JournalInv h w ∧ (acc.1 = none → Accumulating pid kid acc.2 w)
 
-private theorem accumulating_frame {action : WG.M α} (frame : Preserves (Pick kid) action) :
-    Preserves (Accumulating kid packets) action := by
+private theorem accumulating_frame {action : WG.M α} (frame : Preserves (OwnerPick pid kid) action) :
+    Preserves (Accumulating pid kid packets) action := by
   apply (hoare_iff_run_ambient _ _ _).mpr
   intro w a x v b hi run
   exact ⟨(hoare_iff_run_ambient _ _ _).mp frame w a x v b hi.1 run,hi.2⟩
 
-private theorem read_key (kid : KeypairId) :
-    StatePrefixEnsures (With (Lower (kid + 1))) Safe (liftWGPrefix (getKeypair kid))
-      (fun _ => With (Pick kid)) :=
-  state_extra _ (fun _ => NativeFrames.read_key kid) (key_pick kid)
+private theorem read_key (pid : PeerId) (kid : KeypairId) :
+    StatePrefixEnsures (With (fun w => Lower (kid + 1) w ∧ RxCredits.KeyCompatible pid kid w)) Safe (liftWGPrefix (getKeypair kid))
+      (fun _ => With (OwnerPick pid kid)) :=
+  state_extra _ (fun _ => NativeFrames.read_key kid) (owner_pick_read pid kid)
+
+private theorem dereference (pid kid : Nat) (packets : List DataPacket) :
+    Hoare (IndexOwner.peerDeref (.keypair kid)) (Accumulating pid kid packets)
+      (fun _ w => Accumulating pid kid packets w ∧
+        RxCredits.keyWords w kid = some (some pid)) := by
+  apply (hoare_iff_run_ambient _ _ _).mpr
+  intro w a owner v b before run
+  exact ⟨(hoare_iff_run_ambient _ _ _).mp
+      (indexOwner_peerDeref_preserves _ _) w a owner v b before run,
+    ((hoare_iff_run_ambient _ _ _).mp (dereference_owner pid kid)
+      w a owner v b before.1.2 run).2⟩
+
+private theorem acquired (pid kid owner : Nat) (packets : List DataPacket) :
+    Preserves (fun w => Accumulating pid kid packets w ∧
+      RxCredits.keyWords w kid = some (some pid)) (peerGet owner) := by
+  have pick : Preserves (Pick kid) (peerGet owner) :=
+    pick_frame (pool_of_material (Origins.Retaining.peerGet_material owner))
+      (lower_metadata (peerGet_metadata owner))
+  apply (hoare_iff_run_ambient _ _ _).mpr
+  intro w a result v b before run
+  have words := (ProjectedAction.iff_run_ambient _ _ _).mp
+    (RxCredits.peerGet_words owner) w a result v b run
+  refine ⟨⟨⟨?_,?_⟩,before.1.2⟩,?_⟩
+  · exact (hoare_iff_run_ambient _ _ _).mp pick w a result v b before.1.1.1 run
+  · exact (hoare_iff_run_ambient _ _ _).mp
+      (RxCredits.keyWords_keep (RxCredits.peerGet_words owner) pid kid)
+      w a result v b before.1.1.2 run
+  · rw [words]
+    exact before.2
 
 private theorem accepted (pid kid : Nat) (peer : Peer) :
-    StatePrefixEnsures (With (Pick kid)) Safe
+    StatePrefixEnsures (With (OwnerPick pid kid)) Safe
       (do
         let mut packetsCb : List DataPacket := []
         for pkt in peer.staged do
@@ -76,18 +106,18 @@ private theorem accepted (pid kid : Nat) (peer : Peer) :
         Journal.create pid item)
       (fun _ h w _ => JournalInv h w) := by
   apply StatePrefixEnsures.consequence
-    (P := With (Accumulating kid [])) (Q := fun _ h w _ => JournalInv h w)
-  · apply StatePrefixEnsures.bind (Q := Accumulated kid)
+    (P := With (Accumulating pid kid [])) (Q := fun _ h w _ => JournalInv h w)
+  · apply StatePrefixEnsures.bind (Q := Accumulated pid kid)
     · apply forIn_exit peer.staged (none,[]) _
-        (fun acc => With (Accumulating kid acc.2)) (Accumulated kid)
+        (fun acc => With (Accumulating pid kid acc.2)) (Accumulated pid kid)
         (fun _ _ _ _ hi => hi.1.2) (fun _ _ _ _ hi => ⟨hi.1,fun _ => hi.2⟩)
       intro pkt acc
       apply StatePrefixEnsures.bind (ambient _)
       intro _
       apply StatePrefixEnsures.bind (state_extra _ (fun _ => (ipTunnelEcnEncap_sameWGWorld pkt).wp (Inv _))
-        (accumulating_frame ((ipTunnelEcnEncap_sameWGWorld pkt).wp (Pick kid))))
+        (accumulating_frame ((ipTunnelEcnEncap_sameWGWorld pkt).wp (OwnerPick pid kid))))
       intro ds
-      apply StatePrefixEnsures.bind (reservation_extra kid (accumulating_frame (pick_reservation kid)))
+      apply StatePrefixEnsures.bind (reservation_extra kid (accumulating_frame (owner_pick_reservation pid kid)))
       intro nonce
       apply StatePrefixEnsures.bind (ambient _)
       intro rejected
@@ -103,24 +133,23 @@ private theorem accepted (pid kid : Nat) (peer : Peer) :
         · exact hi.2.2 packet old
         · have same := List.mem_singleton.mp fresh
           subst packet
-          rfl
+          exact ⟨rfl,rfl⟩
     · intro acc
       obtain ⟨done,packets⟩ := acc
       cases done with
       | some out => exact StatePrefixEnsures.pure _ (fun _ _ _ hi => hi.1.2) (fun _ _ _ hi => hi.1)
       | none =>
-        apply StatePrefixEnsures.consequence (P := With (Accumulating kid packets))
+        apply StatePrefixEnsures.consequence (P := With (Accumulating pid kid packets))
         · apply StatePrefixEnsures.bind (ambient _)
           intro _
           apply StatePrefixEnsures.bind (state_extra _ (fun _ => indexOwner_peerDeref_preserves _ _)
-            (indexOwner_peerDeref_preserves _ _))
+            (dereference pid kid packets))
           intro owner
           apply StatePrefixEnsures.bind (state_extra _ (fun _ => NativeFrames.peer_get owner)
-            (accumulating_frame (pick_frame (pool_of_material (Origins.Retaining.peerGet_material owner))
-              (lower_metadata (peerGet_metadata owner)))))
+            (acquired pid kid owner packets))
           intro _
           apply StatePrefixEnsures.bind ((allocate packets).consequence
-            (fun _ _ _ hi => ⟨hi.1,hi.2.1.inputs hi.2.2⟩) (fun _ _ _ _ hi => hi))
+            (fun _ _ _ hi => ⟨hi.1,hi.2.1.1.1.inputs hi.2.2 hi.2.1.2⟩) (fun _ _ _ _ hi => hi))
           intro items
           exact creation pid items
         · exact fun _ _ _ hi => ⟨hi.1,hi.2 rfl⟩
@@ -137,7 +166,7 @@ theorem staging (pid : PeerId) :
   unfold Driver.stagingObserved
   simp only [Driver.noKey_lift Journal.hooks rfl]
   dsimp only [Journal.hooks]
-  apply StatePrefixEnsures.bind (selection pid)
+  apply StatePrefixEnsures.bind (owner_selection pid)
   intro chosen
   cases chosen with
   | none => exact pure_result _
@@ -151,7 +180,7 @@ theorem staging (pid : PeerId) :
     · cases kp with
       | none => exact forget (state_lift _ (fun _ => hoare_liftAmbient (AmbientM.invariant _) _))
       | some kid =>
-        apply StatePrefixEnsures.bind ((read_key kid).consequence
+        apply StatePrefixEnsures.bind ((read_key pid kid).consequence
           (fun _ _ _ hi => ⟨hi.1,hi.2 peer kid rfl⟩) (fun _ _ _ _ hi => hi))
         intro key
         apply StatePrefixEnsures.bind (ambient _)
@@ -159,7 +188,7 @@ theorem staging (pid : PeerId) :
         split
         · exact out _ false
         · apply StatePrefixEnsures.bind (state_extra _ (fun _ => (branchExpired_sameWGWorld _ _ _ _).wp (Inv _))
-            ((branchExpired_sameWGWorld _ _ _ _).wp (Pick kid)))
+            ((branchExpired_sameWGWorld _ _ _ _).wp (OwnerPick pid kid)))
           intro expired
           split
           · exact out _ true

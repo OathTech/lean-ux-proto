@@ -3,7 +3,8 @@ import Leanux.Proofs.WG.TransmitSecurity.PacketOriginFrames
 import Leanux.Proofs.WG.RetirementSecurity.OccurrenceKeyFrames
 
 /-! Conditional resident TX-key bindings. A certificate names the actual
-packet allocation and its entry key core. Disposal may remove either object;
+packet allocation, its entry key core and the nonnull packet-peer owner at
+that historical cut. Disposal may remove either object or clear an owner;
 only surviving packet/key pairs create an obligation. Allocation arguments
 and initialized shared-driver transport are proved separately. -/
 namespace Leanux.Proofs.WG.HandshakeSecurity.ResidentMaterial
@@ -17,7 +18,8 @@ def Certificate (h : List Journal.Event) (generation id : Nat)
     Journal.Event.allocated packets run ∈ h ∧ run.Valid (packets.mapM newTxSkb) ∧
     PacketOrigins.epoch run.after = some generation ∧ packets[index]? = some input ∧
     run.value[index]? = some id ∧ PacketMaterial.material input = packet ∧
-    pool run.before input.keypair = some core
+    pool run.before input.keypair = some core ∧
+    RxCredits.keyWords run.before input.keypair = some (some input.peer)
 
 def Inv (h : List Journal.Event) (w : WGWorld) : Prop :=
   ∀ d, w.dev = some d → ∀ id packet, d.txSkbs[id]? = some packet →

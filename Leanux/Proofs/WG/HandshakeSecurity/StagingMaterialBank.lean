@@ -49,7 +49,7 @@ reservation allocation stamp, without assuming a surviving key credit. -/
 theorem assigned_of_binding (safe : Safe h) (bound : ResidentMaterial.BoundReceipt h r) :
     ∃ token, Bank.Assigned (bank h) h r token ∧
       token.stamp = r.cipher.keyRead.value.internalId ∧ token.nonce = r.read.value.nonce := by
-  obtain ⟨generation,epoch,packets,allocation,n,input,member,_,allocationEpoch,atInput,atId,material,resident⟩ := bound
+  obtain ⟨generation,epoch,packets,allocation,n,input,member,_,allocationEpoch,atInput,atId,material,resident,_⟩ := bound
   obtain ⟨before,after,position⟩ := List.mem_iff_append.mp member
   have found : h[before.length]? = some (.allocated packets allocation) := by
     rw [position]

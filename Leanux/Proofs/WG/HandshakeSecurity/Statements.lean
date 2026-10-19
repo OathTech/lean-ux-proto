@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.HandshakeSecurity.EmissionLifecycle
 import Leanux.Proofs.WG.HandshakeSecurity.PeerReferenceCookieInitialized
 import Leanux.Proofs.WG.HandshakeSecurity.PeerReferenceResponseKeys
 import Leanux.Proofs.WG.HandshakeSecurity.PeerReferenceInitiationRefusal
@@ -7,6 +8,7 @@ import Leanux.Proofs.WG.HandshakeSecurity.PeerReferenceWorker
 import Leanux.Proofs.WG.HandshakeSecurity.PeerReferenceNapi
 import Leanux.Proofs.WG.HandshakeSecurity.PeerReferenceHandshakeFrames
 import Leanux.Proofs.WG.HandshakeSecurity.AllocationSelectionBinding
+import Leanux.Proofs.WG.HandshakeSecurity.AllocationOwnerBinding
 import Leanux.Proofs.WG.HandshakeSecurity.PendingPromotionFinal
 import Leanux.Proofs.WG.HandshakeSecurity.PendingPromotionDeferred
 import Leanux.Proofs.WG.HandshakeSecurity.PendingPromotionNapi
@@ -1953,5 +1955,22 @@ theorem initialized_refused_cookie_preserves_complete_peer_and_keypair_records
       AuthenticatedEffects.ResponseLoan.residentKeys receipt.run.before :=
   ⟨PeerReference.final_cookie_refusal trace placeholders pre post receipt position unaccepted,
     PeerReference.final_cookie_refusal_keys trace placeholders pre post receipt position unaccepted⟩
+
+/-- Security: actual AEAD material comes from the same packet peer's current
+key selection and an earlier packet-allocation key whose owner is that peer.
+The allocation stamp and sending material agree with the actual cipher read;
+later retirement may clear the owner word. Initialized native source transport
+and the exact final-journal projection discharge all entry assumptions, also
+for receipts retained before a later Stop. -/
+theorem initialized_encryption_has_historical_key_owner
+    (trace : Runner.Trace) (placeholders : Bool)
+    (pre post : List TransmitSecurity.Journal.Event)
+    (r : TransmitSecurity.WorkerEncryption.Receipt)
+    (position : ((runPrefixOuter (AuthenticatedEffects.CausalJournal.execute trace placeholders) []).2.filterMap
+      AuthenticatedEffects.CausalJournal.old?) = pre ++ .encrypted r :: post) :
+    r.Valid ∧ AllocationOwner.Historical pre r ∧
+      AllocationSelection.Earlier pre r.read.value.peer r.read.value.keypair
+        (Responder.keyCore r.cipher.keyRead.value) :=
+  AllocationOwner.final_encryption trace placeholders pre post r position
 
 end Leanux.Proofs.WG.HandshakeSecurity

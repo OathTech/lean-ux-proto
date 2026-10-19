@@ -4,6 +4,13 @@ import Leanux.Proofs.WG.AuthenticatedEffects.CausalRootsSockets
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalEmissionCookie
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalEmissionSend
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalEmissionCompletion
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalEmissionStaging
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalEmissionDelivery
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalEmissionCarrier
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalEmissionNativeProduct
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalEmissionTimers
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalEmissionPoll
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalEmissionCarrierReceive
 import Leanux.Proofs.WG.AuthenticatedEffects.ResponseLookupLoan
 import Leanux.Proofs.WG.AuthenticatedEffects.RefusalPositivePeers
 import Leanux.Proofs.WG.AuthenticatedEffects.ProtocolSocketReceipts
@@ -1553,5 +1560,29 @@ theorem initialized_cookie_consumption_is_native
     (position : (runPrefixOuter (CausalJournal.execute trace placeholders) []).2 =
       before ++ .cookieConsumed receipt :: after) : receipt.Valid :=
   CausalJournal.Receipts.initialized_cookie_consumed trace placeholders before after receipt position
+
+/-- Security: actual staging, keepalive and handshake reception preserve the
+ordered socket-append accounting with their concrete native callbacks. These
+local contracts still require the incoming carrier; driver initialization and
+pre-delivery coverage are separate obligations. -/
+theorem concrete_send_triggers_preserve_emission_occurrences (pid : PeerId) :
+    CausalJournal.Emissions.StateSafe
+      (TransmitSecurity.Driver.stagingObserved CausalJournal.hooks pid) ∧
+    CausalJournal.Emissions.StateSafe
+      (TransmitSecurity.Driver.keepaliveObserved CausalJournal.hooks pid) ∧
+    CausalJournal.Emissions.StateSafe
+      (TransmitSecurity.Driver.handshakeObserved CausalJournal.hooks) :=
+  ⟨CausalJournal.Emissions.staging pid,CausalJournal.Emissions.keepalive pid,
+    CausalJournal.Emissions.handshake_worker⟩
+
+/-- Security: delivery saves the exact ordered native sent occurrences before
+clearing or Stop, so equal datagram values retain distinct append ordinals.
+This local contract requires live accounting at entry; it does not derive
+coverage from an empty terminal sent list. -/
+theorem delivery_preserves_preclear_occurrence_certificate :
+    PrefixPreserves
+      (fun h w => CausalJournal.Emissions.Deliveries.Carrier h w.wg)
+      CausalJournal.Emissions.Deliveries.Safe CausalJournal.hooks.deliver :=
+  CausalJournal.Emissions.Deliveries.deliver
 
 end Leanux.Proofs.WG.AuthenticatedEffects

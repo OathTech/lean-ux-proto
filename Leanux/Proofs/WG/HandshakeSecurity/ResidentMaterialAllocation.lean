@@ -28,7 +28,8 @@ theorem allocation_view (packets : List DataPacket) :
 
 def Inputs (packets : List DataPacket) (w : WGWorld) : Prop :=
   ∀ d, w.dev = some d → ∀ packet ∈ packets,
-    packet.keypair < d.nextKeypairId ∧ ∃ core, pool w packet.keypair = some core
+    packet.keypair < d.nextKeypairId ∧ ∃ core, pool w packet.keypair = some core ∧
+      RxCredits.keyWords w packet.keypair = some (some packet.peer)
 
 /-- The actual native allocator installs each admitted packet with a
 certificate tied to its entry key core. Older surviving cells retain their
@@ -66,10 +67,10 @@ theorem allocated (packets : List DataPacket) (r : WGRunWitness (List SkbId))
       · intro current atKey
         exact conditional current (by simpa only [cores] using atKey)
     · obtain ⟨index,atPacket,atId⟩ := fresh
-      obtain ⟨bound,core,atKey⟩ := inputs d device packet (List.mem_of_getElem? atPacket)
+      obtain ⟨bound,core,atKey,owner⟩ := inputs d device packet (List.mem_of_getElem? atPacket)
       refine ⟨by simpa only [front] using bound,core,?_,?_⟩
       · exact ⟨packets,⟨item,w,v,a,b⟩,index,packet,by simp,valid,
-          by simp [PacketOrigins.epoch,after],atPacket,atId,rfl,atKey⟩
+          by simp [PacketOrigins.epoch,after],atPacket,atId,rfl,atKey,owner⟩
       · intro current resident
         exact Option.some.inj ((by simpa only [cores] using resident : pool w packet.keypair = some current).symm.trans atKey)
 

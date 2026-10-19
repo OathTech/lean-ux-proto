@@ -122,8 +122,13 @@ Reviewed content identifiers (SHA-256):
 ## Disposition
 
 [AGENT 2026-10-19] All three findings are accepted as missing connections
-for the full T2 outcome. The checkpoint exports explicitly retain their
-boundaries and T2 remains open. Historical key-owner evidence is being added
-at the native admission dereference. Cross-allocation conservation and the
-converse emission carrier remain active campaign obligations; neither is
-discharged by the present provenance theorems. No mirror change is proposed.
+for the full T2 outcome. Finding 1 is repaired in the current tranche:
+`AllocationOwner.final_encryption` records the actual nonnull owner at the
+same allocation entry as the key core, and `StagedSocketFinal` joins it to
+the socket peer. The owner may later be cleared; the historical evidence
+and immutable core are retained. The 1970-job scoped statement build passes;
+aggregate validation is pending for this strengthening.
+
+Findings 2 and 3 remain open campaign obligations. Cross-allocation
+conservation and converse emission coverage are not discharged by the present
+provenance theorems. T2 remains open. No mirror change is proposed.

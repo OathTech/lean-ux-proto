@@ -17,7 +17,7 @@ theorem Safe.prefix (safe : Safe (h ++ suffix)) : Safe h := by
 
 theorem selected_of_binding (safe : Safe h) (bound : ResidentMaterial.BoundReceipt h r) :
     Earlier h r.read.value.peer r.read.value.keypair (keyCore r.cipher.keyRead.value) := by
-  obtain ⟨generation,_,packets,allocation,n,input,member,_,_,atInput,_,material,resident⟩ := bound
+  obtain ⟨generation,_,packets,allocation,n,input,member,_,_,atInput,_,material,resident,_⟩ := bound
   obtain ⟨before,after,position⟩ := List.mem_iff_append.mp member
   have selected := (safe before (.allocated packets allocation) after position).2 input
     (List.mem_of_getElem? atInput) _ resident

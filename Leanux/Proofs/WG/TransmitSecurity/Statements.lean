@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.TransmitSecurity.StagedAvailabilityBank
+import Leanux.Proofs.WG.TransmitSecurity.EmissionDispatchFrames
 import Leanux.Proofs.WG.TransmitSecurity.EmissionCleanupFrames
 import Leanux.Proofs.WG.TransmitSecurity.StagedSocketFinal
 import Leanux.Proofs.WG.TransmitSecurity.StagedConfiguration
@@ -1073,8 +1075,9 @@ theorem initialized_encrypted_plaintext_origin (trace : Runner.Trace) (placehold
 /-- Security: every initialized transport socket receipt binds the actual
 endpoint and emitted bytes to an earlier AEAD and its own earlier staged
 plaintext origin. The selected current-slot allocation and sending core are
-bound historically. Historical key-owner equality, converse coverage of all
-emissions and exactly-once conservation remain separate obligations. -/
+bound historically. The actual key at allocation is owned by the socket peer,
+and its sending core matches the AEAD key even after owner clearing. Converse
+coverage of all emissions and exactly-once conservation remain separate. -/
 theorem initialized_socket_route_key_core_and_endpoint (trace : Runner.Trace) (placeholders : Bool)
     (pre post : List CausalJournal.Event) (r : Completion.SocketReceipt)
     (position : (runPrefixOuter (CausalJournal.execute trace placeholders) []).2 =
@@ -1084,10 +1087,54 @@ theorem initialized_socket_route_key_core_and_endpoint (trace : Runner.Trace) (p
         r.socket.before.wg.sent r.socket.after.wg.sent ∧
       ∃ cipher : WorkerEncryption.Receipt,
         CausalJournal.Event.old (.encrypted cipher) ∈ pre ∧ cipher.Valid ∧
+        cipher.read.value.peer = r.pid ∧
         r.packet.value.bytes = cipher.cipher.ciphertext ∧
+        AllocationOwner.Historical (pre.filterMap CausalJournal.old?) cipher ∧
         AllocationSelection.Earlier (pre.filterMap CausalJournal.old?) r.pid r.packet.value.keypair
           (Responder.keyCore cipher.cipher.keyRead.value) ∧
         ∃ generation stamp ticket, Born pre generation r.pid stamp ticket r.packet.value.plaintext :=
   Staged.Origins.initialized_socket trace placeholders pre post r position
+
+/-- Security: a native birth ticket cannot identify two different peers,
+peer allocations, device epochs or plaintexts. The actual journal position
+and packet ordinal identify the occurrence; equal payloads do not. Preventing
+repeat consumption of the same ticket remains a separate obligation. -/
+theorem staged_birth_ticket_identity
+    (first : Staged.Origins.Born history generation pid stamp ticket packet)
+    (second : Staged.Origins.Born history otherGeneration otherPid otherStamp ticket otherPacket) :
+    generation = otherGeneration ∧ pid = otherPid ∧ stamp = otherStamp ∧ packet = otherPacket :=
+  first.unique second
+
+/-- Security: one staged birth ticket cannot fund two allocation positions
+in a bank carrying the unconsumed-credit invariant. BankValid is an explicit
+premise here; its native initialized derivation and complete terminal
+accounting remain open, so this is a conditional conservation result. -/
+theorem staged_available_ticket_unique
+    {history : List CausalJournal.Event} {bank : Staged.Availability.Bank}
+    {firstIndex secondIndex leftIndex rightIndex : Nat} {ticket : Staged.Origins.Ticket}
+    {firstPackets secondPackets : List DataPacket}
+    {firstRun secondRun : WGRunWitness (List SkbId)}
+    (valid : Staged.Availability.BankValid history bank)
+    (first : history[firstIndex]? = some (.old (.allocated firstPackets firstRun)))
+    (second : history[secondIndex]? = some (.old (.allocated secondPackets secondRun)))
+    (left : (bank firstIndex)[leftIndex]? = some ticket)
+    (right : (bank secondIndex)[rightIndex]? = some ticket) :
+    firstIndex = secondIndex ∧ leftIndex = rightIndex :=
+  Staged.Availability.bank_ticket_injective valid first second left right
+
+/-- Security: quiet native syscalls cannot emit an unrecorded datagram or
+silently remove a pending one. This preserves the actual send buffer; active
+traffic, up/down and worker callbacks use their separate observed paths. -/
+theorem native_quiet_dispatch_preserves_sent_buffer (call : Syscall)
+    (retained : Lifetimes.DispatchRetained call) (notUp : call ≠ .wgUp) (notDown : call ≠ .wgDown) :
+    Framing.SameView EmissionOuter.Sent (Leanux.dispatch call) :=
+  EmissionDispatch.quiet call retained notUp notDown
+
+/-- Security: namespace cleanup cannot emit an unrecorded datagram or lose
+an already pending send-buffer occurrence while changing sockets and routes.
+Any active send callback is accounted for separately at its native source. -/
+theorem native_namespace_cleanup_preserves_sent_buffer :
+    Framing.SameView EmissionOuter.Sent Env.netnsCleanup :=
+  EmissionCleanup.env_cleanup
 
 end Leanux.Proofs.WG.TransmitSecurity

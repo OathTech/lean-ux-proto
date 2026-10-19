@@ -47,11 +47,14 @@ theorem key_pick (kid : KeypairId) :
   exact ⟨lower,keyCore key,by simp only [pool,device,Option.bind_some,resident,Option.map_some]⟩
 
 theorem Pick.inputs (selected : Pick kid w)
-    (homogeneous : ∀ packet ∈ packets, packet.keypair = kid) : Inputs packets w := by
+    (owner : RxCredits.keyWords w kid = some (some pid))
+    (homogeneous : ∀ packet ∈ packets, packet.keypair = kid ∧ packet.peer = pid) : Inputs packets w := by
   intro d device packet member
   have bound := selected.1 d.nextKeypairId (by simp only [cursor,device,Option.map_some])
-  rw [homogeneous packet member]
-  exact ⟨bound,selected.2⟩
+  obtain ⟨slot,peer⟩ := homogeneous packet member
+  rw [slot,peer]
+  obtain ⟨core,resident⟩ := selected.2
+  exact ⟨bound,core,resident,owner⟩
 
 theorem pick_frame {action : WG.M α} (cores : SameView pool action)
     (lower : Preserves (Lower (kid + 1)) action) : Preserves (Pick kid) action := by
