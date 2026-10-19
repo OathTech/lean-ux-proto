@@ -1,3 +1,19 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedCallbackEntry
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedDrainInitialized
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedEncryptInitialized
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedEncryptionEntryAheadPath
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedEncryptionEntryAheadSource
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedEncryptionEntryCases
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedEncryptionEntryPath
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedEncryptionEntrySource
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedScheduleCaller
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedScheduleTxEntry
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedSendDrainCases
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedSendDrainCuts
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedSendDrainFrames
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedSendDrainPaths
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedSendDrainSource
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedSendInitialized
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedAfterXmitContext
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedIterationInitialized
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedScheduledInitialized
@@ -1924,6 +1940,44 @@ entry invariant or assumed callback contract is required. -/
 theorem initialized_tx_worker_entry_accounted
     (entry : AuthenticatedEffects.StagedEntry.Reached.ScheduledRun.TxEntry
       trace placeholders operationIndex pid world history) :
+    ∃ ledger, AuthenticatedEffects.StagedEntry.CompleteConsequences.Cut
+      history ledger [] [] world.wg := entry.accounted
+
+/-- Security: the original send drain retains complete packet accounting at
+its actual send-worker entry, whether reached by a selected return callback
+or the post-transmit send suffix. Its bounded source prefix supplies the
+native state; there is no incoming account assumption. -/
+theorem initialized_send_drain_worker_accounted
+    (entry : AuthenticatedEffects.StagedEntry.Reached.SendRun.WorkerEntry
+      trace placeholders operationIndex world history) :
+    ∃ ledger, AuthenticatedEffects.StagedEntry.CompleteConsequences.Cut
+      history ledger [] [] world.wg := entry.accounted
+
+/-- Security: both the post-transmit scheduler and the scheduler inside an
+actual send drain retain complete accounting at their selected activation
+entry, through the original bounded run prefix and runner continuation. -/
+theorem initialized_send_scheduler_activation_accounted
+    (cut : AuthenticatedEffects.StagedEntry.Reached.ScheduledSource.Iteration
+      trace placeholders operationIndex active world history) :
+    ∃ ledger, AuthenticatedEffects.StagedEntry.CompleteConsequences.Cut
+      history ledger [] [] world.wg := cut.accounted
+
+/-- Security: a scheduled TX worker retains complete accounting at the
+actual transmit callback entry after crypt-ahead. The initialized path
+covers the post-transmit scheduler and schedulers within send drains. -/
+theorem initialized_send_scheduler_tx_accounted
+    (entry : AuthenticatedEffects.StagedEntry.Reached.ScheduledSource.TxEntry
+      trace placeholders operationIndex pid world history) :
+    ∃ ledger, AuthenticatedEffects.StagedEntry.CompleteConsequences.Cut
+      history ledger [] [] world.wg := entry.accounted
+
+/-- Security: encryption starts with complete packet accounting at its
+actual initialized callback entry, for a direct encrypt activation or the
+nested TX crypt-ahead path. The selected item comes from the original poll,
+with intervening softirq effects and the exact continuation retained. -/
+theorem initialized_encryption_callback_accounted
+    (entry : AuthenticatedEffects.StagedEntry.Reached.EncryptionRun.Entry
+      trace placeholders operationIndex item world history) :
     ∃ ledger, AuthenticatedEffects.StagedEntry.CompleteConsequences.Cut
       history ledger [] [] world.wg := entry.accounted
 
