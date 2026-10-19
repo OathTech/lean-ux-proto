@@ -69,6 +69,8 @@ Source-49 local joins derive pending-ticket evidence at the actual allocator and
 
 Source-50 local joins cover actual TX selection and DEAD repayment, all send-result arms and nested completion release, receive finishing and timer callbacks, and native key creation, confirmation and clearing. Idle selection derives its pending batch from empty cleanup debts. Retirement algebra proves that empty native staged/TX ownership leaves no pending ticket; the lifecycle caller must still establish that quiescence before reset. The combined root build passes 3344 jobs and fourteen focused queries use only standard axioms. Whole initialized conservation and the converse historical terminal relation remain open. These local joins pass the source-50 aggregate checks below; they do not close initialized T2 conservation.
 
+Source-51 joins the complete native TX worker up to its explicit crypted-completion contract. Indexed send/free loops retain each settlement and restore empty cleanup debt; disposal retains the actual peer-release successor. All five timer callbacks, native handshake checking paths, configuration metadata and routing edits now have full-entry contracts. Peer creation preserves the exact old staged queues under the visible native peer-slot bound. The combined root passes 3367 jobs and fifteen focused standard-axiom queries. Whole initialized transport and historical terminal completeness remain open; source-50 `78cbb619` remains the last aggregate gate/replay checkpoint.
+
 ## Current register
 
 The proof tree is current over the namespace-pin landing `218d3ffd`: after
