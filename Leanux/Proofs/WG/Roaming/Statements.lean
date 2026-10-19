@@ -1,4 +1,7 @@
 import Leanux.Proofs.WG.Roaming.ReceiveStepRemoteClaims
+import Leanux.Proofs.WG.Roaming.ReceiveStepSetterClaims
+import Leanux.Proofs.WG.Roaming.HandshakeAttemptClaims
+import Leanux.Proofs.WG.Roaming.PollAuthenticationCertificateSource
 import Leanux.Proofs.WG.Roaming.RemoteBirthClaims
 import Leanux.Proofs.WG.Roaming.RemoteControlClaims
 import Leanux.Proofs.WG.Roaming.RemoteSilentClaims
@@ -490,5 +493,42 @@ theorem original_initialized_endpoint_outcome (trace : Runner.Trace) (placeholde
     (RemoteProvenance.outcome trace placeholders).map Prod.fst =
       Runner.executeTrace trace placeholders :=
   RemoteProvenance.outcome_json trace placeholders
+
+
+/-- A completed receive worker selects at most one authenticated handshake
+setter. The selected setter remains explicit when the remote value was
+already equal; each surviving final destination has its exact map effect. -/
+theorem original_receive_step_single_setter (entry : Campaign2.Product.Snapshot) :
+    Campaign2.Product.Ensures (liftWG receiveStep) (fun s => s = entry)
+      (fun value final => ∃ q : ReceiveStepRemote.Observation,
+        q.Valid ∧ q.entry = entry ∧ q.finish = final ∧ q.value = value ∧ q.Facts ∧
+        RemoteRetained (ReceiveStepRemote.setterMap (remoteMap entry.toSnapshot) q.setter)
+          (remoteMap final.toSnapshot) ∧
+        ∀ pid remote, q.setter = some (pid,remote) → q.Cause pid remote) :=
+  ReceiveStepRemote.receiveStep_setter entry
+
+/-- The exact initiation caller records authenticated source-derived setter
+attempts before invoking the setter, retaining them if the setter or later
+suffix stops. The inspection preserves the original success or failure. -/
+theorem original_initiation_setter_attempts (msg : List UInt8) (src : SkbSource)
+    (kind : messageType msg = MESSAGE_HANDSHAKE_INITIATION) :
+    (do let audited ← HandshakeAttempts.observeInitiation msg src; pure audited.outcome) =
+      Campaign2.inspect (receiveHandshakePacket msg src) ∧
+    Campaign2.Observes (HandshakeAttempts.observeInitiation msg src) (fun _ => True)
+      (fun entry result => ∃ audit, result = .ok (audit,entry) ∧
+        ∀ attempt ∈ audit.attempts, HandshakeAttempts.InitiationFacts msg src attempt) :=
+  ⟨HandshakeAttempts.initiation_original msg src kind,HandshakeAttempts.initiation_facts msg src⟩
+
+/-- The exact response caller records authenticated source-derived setter
+attempts before invoking the setter, including attempts whose later
+continuation stops, while preserving the original outcome. -/
+theorem original_response_setter_attempts (msg : List UInt8) (src : SkbSource)
+    (kind : messageType msg = MESSAGE_HANDSHAKE_RESPONSE) :
+    (do let audited ← HandshakeAttempts.observeResponse msg src; pure audited.outcome) =
+      Campaign2.inspect (receiveHandshakePacket msg src) ∧
+    Campaign2.Observes (HandshakeAttempts.observeResponse msg src) (fun _ => True)
+      (fun entry result => ∃ audit, result = .ok (audit,entry) ∧
+        ∀ attempt ∈ audit.attempts, HandshakeAttempts.ResponseFacts msg src attempt) :=
+  ⟨HandshakeAttempts.response_original msg src kind,HandshakeAttempts.response_facts msg src⟩
 
 end Leanux.Proofs.WG.Roaming

@@ -169,30 +169,139 @@ theorem checks_bind (a : Obs α) (f : α → Obs β)
     (hf : ∀ x, PrefixPreserves (fun h _ => Checks h) Checks (f x)) :
     PrefixPreserves (fun h _ => Checks h) Checks (a >>= f) := ha.bind hf
 
-theorem poll_checks (pid : PeerId) (budget : Nat) :
-    PrefixPreserves (fun h _ => Checks h) Checks (RxJoint.poll pid budget) := by
+/-- The existing owned poll factor now carries its actual capture until the
+CRYPTED branch. No new observer or account traversal is introduced. -/
+theorem poll_preserves_selected
+    (I : List Event → World → Prop) (S : List Event → Prop)
+    (Selected : SkbId → PacketStamp → RxPacket → List Event → World → Prop)
+    (safe : ∀ h w, I h w → S h)
+    (forget : ∀ id stamp pkt h w, Selected id stamp pkt h w → I h w)
+    (peek : ∀ pid, PrefixPreserves I S (access (liftWGObserver (peekAccess pid))))
+    (ready : ∀ first, PrefixPreserves I S (access (liftWGObserver (readyAccess first))))
+    (captured : ∀ id, PrefixEnsures I S (capture id)
+      (fun out => Selected id out.2 out.1))
+    (dropped : ∀ pid n id stamp pkt,
+      PrefixPreserves (Selected id stamp pkt) S (drop pid n id stamp))
+    (state : ∀ n id stamp pkt,
+      PrefixEnsures (Selected id stamp pkt) S
+        (receiptObserved (liftPrefix (branch .rxPollNotCrypted (pkt.state != .crypted)))
+          (Event.checkedState n id stamp pkt))
+        (fun b h w => Selected id stamp pkt h w ∧ b = (pkt.state != .crypted)))
+    (block : ∀ pid n id stamp pkt, pkt.state = .crypted →
+      PrefixEnsures (Selected id stamp pkt) S (counterBlock pid n id stamp pkt)
+        (fun _ => I))
+    (keypair : ∀ id, PrefixPreserves I S
+      (access (liftWGObserver (keypairPutPrefix (some id) false))))
+    (peer : ∀ pid, PrefixPreserves I S
+      (access (liftWGObserver (peerPutMixed (some pid)))))
+    (free : ∀ id, PrefixPreserves I S (access (liftWGObserver (freeRxSkbPrefix id))))
+    (complete : ∀ pid, PrefixPreserves I S (access (liftWGObserver (completeAccess pid))))
+    (ambient : ∀ site value, PrefixPreserves I S (liftPrefix (branch site value)))
+    (received : ∀ g e, PrefixPreserves I S (receive g e))
+    (flushed : ∀ g, PrefixPreserves I S (flushAll g))
+    (pid : PeerId) (budget : Nat) :
+    PrefixPreserves I S (RxJoint.poll pid budget) := by
+  have keepBind {α β : Type} (a : Obs α) (f : α → Obs β)
+      (ha : PrefixPreserves I S a)
+      (hf : ∀ x, PrefixEnsures I S (f x) (fun _ => I)) :
+      PrefixEnsures I S (a >>= f) (fun _ => I) := PrefixEnsures.bind ha hf
+  have selectedBind {α β : Type} {id : SkbId} {stamp : PacketStamp} {pkt : RxPacket}
+      (a : Obs α) (f : α → Obs β)
+      (ha : PrefixPreserves (Selected id stamp pkt) S a)
+      (hf : ∀ x, PrefixEnsures (Selected id stamp pkt) S (f x) (fun _ => I)) :
+      PrefixEnsures (Selected id stamp pkt) S (a >>= f) (fun _ => I) := PrefixEnsures.bind ha hf
+  have forgetBind {α β : Type} {id : SkbId} {stamp : PacketStamp} {pkt : RxPacket}
+      (a : Obs α) (f : α → Obs β)
+      (ha : PrefixPreserves I S a)
+      (hf : ∀ x, PrefixEnsures I S (f x) (fun _ => I)) :
+      PrefixEnsures (Selected id stamp pkt) S (a >>= f) (fun _ => I) :=
+    PrefixEnsures.consequence (PrefixEnsures.bind ha hf) (forget id stamp pkt) (fun _ _ _ hi => hi)
+  have stateBind {β : Type} (n id : Nat) (stamp : PacketStamp) (pkt : RxPacket)
+      (f : Bool → Obs β)
+      (hf : ∀ b, b = (pkt.state != .crypted) →
+        PrefixEnsures (Selected id stamp pkt) S (f b) (fun _ => I)) :
+      PrefixEnsures (Selected id stamp pkt) S
+        (receiptObserved (liftPrefix (branch .rxPollNotCrypted (pkt.state != .crypted)))
+          (Event.checkedState n id stamp pkt) >>= f) (fun _ => I) := by
+    apply PrefixEnsures.bind (state n id stamp pkt)
+    intro b w h hi
+    exact hf b hi.2 w h hi.1
+  have stopped {α β : Type} {P : List Event → World → Prop}
+      (why : String) (f : α → Obs β) (hs : ∀h w,P h w→S h) :
+      PrefixEnsures P S (liftPrefix (invariant why) >>= f) (fun _=>I) := by
+    intro w h hi
+    exact ⟨[],by change h = h ++ []; simp,hs h w hi,True.intro⟩
+  have crypted {pkt : RxPacket} (eq : false = (pkt.state != .crypted)) :
+      pkt.state = .crypted := by
+    generalize pkt.state = s at eq ⊢
+    cases s <;> first | rfl | cases eq
   rw [poll_factor]
   unfold pollWithBlock
+  apply PrefixEnsures.preserves
   repeat' first
-    | assumption
     | rx_phase_reduce
-    | (rx_phase_head plain Pure.pure; exact PrefixPreserves.pure (I := fun h (_ : World) => Checks h) (fun _ _ hi => hi) _)
-    | (rx_phase_head plain counterBlock; apply checks_bind _ _ (counterBlock_checked _ _ _ _ _))
-    | (rx_phase_head plain capture; apply checks_bind _ _ (capture_checks _))
-    | (rx_phase_head plain drop; apply checks_bind _ _ (drop_checks _ _ _ _))
-    | (rx_phase_head plain receive; apply checks_bind _ _ (receive_checks _ _))
-    | (rx_phase_head plain flushAll; apply checks_bind _ _ (flushAll_checks _))
-    | (rx_phase_head receipt branch; apply checks_bind _ _ (state_checks _ _ _ _))
-    | (rx_phase_head plain access; apply checks_bind _ _ (access_checks _))
-    | (rx_phase_head plain liftPrefix; apply checks_bind _ _ (lift_checks _))
-    | (rx_phase_head plain ForIn.forIn; apply checks_bind _ _; first
-        | apply PrefixPreserves.range
-        | apply PrefixPreserves.forIn)
-    | (rx_phase_head plain ite; apply PrefixPreserves.ite)
-    | (exact fun _ _ hi => hi)
+    | (rx_phase_head plain Pure.pure
+       first
+       | exact PrefixEnsures.pure safe (fun _ _ hi=>hi)
+       | exact PrefixEnsures.pure (fun h w hi=>safe h w (forget _ _ _ h w hi))
+           (forget _ _ _))
+    | (rx_phase_head plain counterBlock
+       apply PrefixEnsures.bind (block _ _ _ _ _ (crypted (by assumption))))
+    | (rx_phase_head plain capture; apply PrefixEnsures.bind (captured _))
+    | (rx_phase_head plain drop; apply selectedBind _ _ (dropped _ _ _ _ _))
+    | (rx_phase_head receipt branch
+       apply stateBind
+       intro b eq
+       cases b <;> simp only [Bool.not_true,Bool.not_false,Bool.false_eq_true,ite_true,ite_false])
+    | (rx_phase_head plain invariant
+       apply stopped
+       first
+       | exact safe
+       | exact fun h w hi=>safe h w (forget _ _ _ h w hi))
+    | (rx_phase_head plain unsupported
+       intro w h hi
+       exact ⟨[],by change h = h ++ []; simp,safe h w hi,True.intro⟩)
+    | (rx_phase_head plain peekAccess; apply keepBind _ _ (peek _))
+    | (rx_phase_head plain readyAccess; apply keepBind _ _ (ready _))
+    | (rx_phase_head plain keypairPutPrefix; first
+       | apply keepBind _ _ (keypair _)
+       | apply forgetBind _ _ (keypair _))
+    | (rx_phase_head plain peerPutMixed; apply keepBind _ _ (peer _))
+    | (rx_phase_head plain freeRxSkbPrefix; apply keepBind _ _ (free _))
+    | (rx_phase_head plain completeAccess; apply keepBind _ _ (complete _))
+    | (rx_phase_head plain receive; apply keepBind _ _ (received _ _))
+    | (rx_phase_head plain flushAll; apply keepBind _ _ (flushed _))
+    | (rx_phase_head plain branch; apply keepBind _ _ (ambient _ _))
+    | (rx_phase_head plain ForIn.forIn; apply keepBind _ _; first
+       | apply PrefixPreserves.range
+       | apply PrefixPreserves.forIn)
+    | (rx_phase_head plain ite; apply PrefixEnsures.ite)
+    | exact safe
     | rx_phase_intro
     | rx_phase_match
 
+theorem poll_checks (pid : PeerId) (budget : Nat) :
+    PrefixPreserves (fun h _ => Checks h) Checks (RxJoint.poll pid budget) := by
+  apply poll_preserves_selected (fun h _=>Checks h) Checks
+    (fun _ _ _ h _=>Checks h) (fun _ _ hi=>hi) (fun _ _ _ _ _ hi=>hi)
+  · intro p; exact access_checks _
+  · intro first; exact access_checks _
+  · exact capture_checks
+  · intro p n id stamp pkt; exact drop_checks p n id stamp
+  · intro n id stamp pkt w h hi
+    have checked := state_checks n id stamp pkt w h hi
+    rcases checked with ⟨suffix,append,safe,normal⟩
+    refine ⟨suffix,append,safe,?_⟩
+    change Checks _ ∧ (pkt.state != .crypted) = (pkt.state != .crypted)
+    exact ⟨normal,rfl⟩
+  · intro p n id stamp pkt _; exact counterBlock_checked p n id stamp pkt
+  · intro id; exact access_checks _
+  · intro p; exact access_checks _
+  · intro id; exact access_checks _
+  · intro p; exact access_checks _
+  · intro site b; exact lift_checks _
+  · exact receive_checks
+  · exact flushAll_checks
 
 theorem checks_append {h t : List Event} (left : Checks h) (right : Checks t) :
     Checks (h ++ t) := by
