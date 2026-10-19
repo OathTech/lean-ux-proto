@@ -1,4 +1,7 @@
 import Leanux.Proofs.WG.RetirementSecurity.ReadySocketJournalFinal
+import Leanux.Proofs.WG.RetirementSecurity.Outcome
+import Leanux.Proofs.WG.RetirementSecurity.TxDispositionCoverage
+import Leanux.Proofs.WG.RetirementSecurity.AdmissionOwner
 import Leanux.Proofs.WG.RetirementSecurity.TimerRetirementOrigin
 import Leanux.Proofs.WG.RetirementSecurity.ConditionalRetirementRx
 import Leanux.Proofs.WG.RetirementSecurity.UnpublicationWorker
@@ -2340,5 +2343,85 @@ theorem initialized_conditional_rx_retirement (trace : Runner.Trace) (placeholde
   ConditionalRetirement.final_dead_rx trace placeholders initialized device bound pid entry due published
     kind prior fired p found a cleared allocation old projected last receiver id pkt owner key dead
     b c d e f g peek test read drop stateCheck dispose
+
+/-- Reference-aware key retirement follows the original validity, age and
+counter check sites, rejection invalidation, timer arm/dispatch, slot/index
+unpublication and final release. Progress is conditional on the actual wheel,
+worker and source calls stated in Outcome, with no bounded latency. Initialized
+credit/access facts and universal local contracts retain their stated domains;
+retained packet work may finish before its final release. This does not claim
+physical memory zeroization. -/
+theorem reference_aware_retirement_outcome : Outcome := outcome
+
+/-- Authenticated receive cleanup pays the same final key reference as DEAD
+or rejected cleanup. At the literal native release suffix, a count of one
+removes the allocation for either free flag; prior authentication does not
+exempt it. The final-reference count is explicit at this source cut. -/
+theorem original_receive_final_reference (pid id : Nat) (pkt : RxPacket) (flag : Bool)
+    (owner : pkt.peer=pid) (found : keyAt w pkt.keypair=some k) (last : k.refcount=1)
+    (a b : Ambient)
+    (run : ((do
+      keypairPut (some pkt.keypair) false
+      peerPut (some pid)
+      _←branch .rxPollFree flag
+      freeRxSkb id : WG.M Unit).run w).run a=.ok (((),v),b)) :
+    keyAt v pkt.keypair=none :=
+  AllRxDisposal.poll_suffix pid id pkt flag owner found last a b run
+
+/-- A normal native TX iteration either waits without changing any packet or
+logical queue, or removes exactly the selected ready batch and frees all of
+its distinct packet cells. Every outside packet cell and every other logical
+queue is retained. No ownership invariant is an input; this local disposition
+does not classify socket success or replace the history from wgXmit admission. -/
+theorem original_tx_step_exact_disposition (pid : PeerId) (a b : Ambient)
+    (run : ((txStep pid).run w).run a=.ok ((result,v),b)) :
+    (result=false ∧ Queues.TxDisposition.txPackets v=Queues.TxDisposition.txPackets w ∧
+      txQueueContents v=txQueueContents w) ∨
+    ∃p items id head, peerAt w pid=some p ∧ p.txQueue.all.head?=some items ∧
+      items.head?=some id ∧ Queues.TxDisposition.txPackets w id=some head ∧ head.state≠.uncrypted ∧
+      result=true ∧ items.Nodup ∧ TxDispositionCoverage.Erased items w v ∧
+      txQueueContents v=fun owner=>if owner=pid then (txQueueContents w pid).tail else txQueueContents w owner :=
+  TxDispositionCoverage.step pid a b run
+
+/-- Native TX disposal retains the device epoch, so the selected packet slots
+keep their actual lifetime allocation identity through completion and free.
+Freeing a cell cannot disguise itself as replacement by a new allocation in
+this source call. This is a local source contract, with actual run endpoints. -/
+theorem original_tx_step_preserves_allocation_stamp (pid : PeerId) (id : SkbId) (a b : Ambient)
+    (run : ((txStep pid).run w).run a=.ok ((result,v),b)) :
+    Lifetimes.packetStamp v id=Lifetimes.packetStamp w id :=
+  TxDispositionCoverage.step_stamp pid id a b run
+
+/-- Native TX admission acquires the selected current key's actual peer.
+Successful acquisition supplies a non-NULL owner; local slot compatibility
+identifies that owner with the selected peer, while retaining the full key
+record and incrementing that peer's reference. CurrentSlots.Inv is explicit
+at this source cut; this does not assert later owner-word immutability. -/
+theorem original_current_tx_admission_owner (slots : CurrentSlots.Inv w)
+    (device : w.dev=some d) (selected : d.peers[pid]?=some p)
+    (slot : p.keypairCurrent=some kid) (a b : Ambient)
+    (run : ((Affiliation.sendAcquire kid).run w).run a=.ok (((),v),b)) :
+    AdmissionOwner.Certificate pid kid w v :=
+  AdmissionOwner.current slots device selected slot a b run
+
+/-- The original TX submission suffix retains the acquisition-time owner's
+full key allocation through packet allocation, before createData can release
+it. The exact acquisition, allocator and createData calls are exposed; nullable
+key-to-peer compatibility is a visible local premise, not an assumed session
+identity or an initialized internal-history theorem. -/
+theorem original_tx_submission_owner
+    (compatible : Queues.RxCredits.KeyCompatible pid kid w)
+    (packets : List DataPacket) (a b : Ambient)
+    (run : ((do
+      Affiliation.sendAcquire kid
+      let items ← packets.mapM newTxSkb
+      createData pid items).run w).run a=.ok (((),v),b)) :
+    ∃u c items t e k,
+      ((Affiliation.sendAcquire kid).run w).run a=.ok (((),u),c) ∧
+      AdmissionOwner.Certificate pid kid w u ∧
+      ((packets.mapM newTxSkb).run u).run c=.ok ((items,t),e) ∧
+      ((createData pid items).run t).run e=.ok (((),v),b) ∧
+      keyAt w kid=some k ∧ k.peer=some pid ∧ keyAt t kid=some k :=
+  AdmissionOwner.submit compatible packets a b run
 
 end Leanux.Proofs.WG.RetirementSecurity

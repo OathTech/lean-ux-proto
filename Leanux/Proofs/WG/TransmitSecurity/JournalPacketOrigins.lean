@@ -1,4 +1,4 @@
-import Leanux.Proofs.WG.TransmitSecurity.PacketOriginWorker
+import Leanux.Proofs.WG.TransmitSecurity.CompletionOriginHistory
 import Leanux.Proofs.WG.HandshakeSecurity.ResponderDriverHistory
 
 /-! Allocation and AEAD events in the same journal. An encryption certificate
@@ -9,8 +9,14 @@ open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing Lifetimes Queue
 set_option maxHeartbeats 600000
 variable {id : SkbId}
 
+def watched? : Journal.Event → Option Unit
+  | .encrypted _ => some ()
+  | .disposition (.completion _ _) => some ()
+  | _ => none
+
 def Checked (pre : List Journal.Event) : Journal.Event → Prop
   | .encrypted r => r.Valid ∧ ReadOrigin pre r.id r.read
+  | .disposition (.completion _ items) => CompletionOrigin.Certificate pre items
   | _ => True
 
 def Safe (h : List Journal.Event) : Prop :=
@@ -27,14 +33,19 @@ theorem Safe.append (old : Safe h)
   (pinned_const _private.Leanux.Proofs.WG.Origins.HistorySupport.«0».Leanux.Proofs.WG.Origins.HistorySupport.positions_append)
     Checked h s old new
 
-theorem Safe.quiet (old : Safe h) (quiet : ∀ r, event ≠ .encrypted r) : Safe (h ++ [event]) := by
+theorem checked_quiet (quiet : watched? event = none) : Checked pre event := by
+  cases event <;> try exact True.intro
+  case encrypted => cases quiet
+  case disposition value =>
+    cases value <;> first | exact True.intro | cases quiet
+
+theorem Safe.quiet (old : Safe h) (quiet : watched? event = none) : Safe (h ++ [event]) := by
   apply old.append
   intro pre e post position
   have member : e ∈ [event] := by rw [position]; simp
   have same := List.mem_singleton.mp member
   subst e
-  cases event <;> simp only [Checked]
-  exact (quiet _ rfl).elim
+  exact checked_quiet quiet
 
 theorem Safe.worker (old : Safe h) : Good h (h.filterMap Journal.encryption?) := by
   intro r member
@@ -74,7 +85,7 @@ theorem allocate (packets : List DataPacket) :
   | ok out =>
     obtain ⟨⟨item,v⟩,b⟩ := out
     let r : WGRunWitness (List SkbId) := ⟨item,w,v,a,b⟩
-    have safe := hi.2.quiet (event := .allocated packets r) (fun _ h => by cases h)
+    have safe := hi.2.quiet (event := .allocated packets r) rfl
     exact ⟨[.allocated packets r],rfl,safe,allocated packets r run hi.1,safe⟩
 
 theorem encrypt_focus (item : Option (List SkbId)) :
@@ -101,7 +112,7 @@ theorem encrypt_focus (item : Option (List SkbId)) :
 private theorem emit_return (item : Option (List SkbId)) (r : RunWitness Bool) :
     PrefixPreserves (fun h (w : World) => JournalInv h w.wg) Safe (emitPrefix (.encryptionReturn item r)) := by
   intro w h hi
-  have safe := hi.2.quiet (event := .encryptionReturn item r) (fun _ eq => by cases eq)
+  have safe := hi.2.quiet (event := .encryptionReturn item r) rfl
   exact ⟨[.encryptionReturn item r],rfl,safe,
     hi.1.mono (fun _ member => List.mem_append_left _ member),safe⟩
 

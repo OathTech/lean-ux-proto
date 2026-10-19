@@ -56,7 +56,7 @@ theorem core : Driver.ActorCoreHistorySafe Safe hooks where
   staging := Driver.staging_history (g := neutral) ordinary
   fixtureEnter := ordinary.fixtureEnter
   fixtureLeave := ordinary.fixtureLeave
-  handshake := ordinary.handshake
+  handshake := ordinary.core.handshake
   sendWorker := ordinary.sendWorker
   flushedSend := ordinary.flushedSend
   armTimer := ordinary.armTimer

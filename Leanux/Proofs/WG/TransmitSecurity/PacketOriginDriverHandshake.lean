@@ -9,7 +9,7 @@ open AuthenticatedEffects Origins.HandshakeSources RetirementSecurity
 set_option maxHeartbeats 600000
 set_option pp.structureInstances false
 
-theorem state_emit (e : Journal.Event) (quiet : Journal.encryption? e = none) :
+theorem state_emit (e : Journal.Event) (quiet : watched? e = none) :
     StateSafe (emitStatePrefix e) := by
   have keep (h : List Journal.Event) (w : WGWorld) (_ : Ambient) (hi : JournalInv h w) :
       JournalInv (h ++ [e]) w :=

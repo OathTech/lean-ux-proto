@@ -23,16 +23,16 @@ theorem product_loop {α β : Type} (xs : List α) (b : β)
   PrefixEnsures.forInInvariant xs b g (fun _ h w => ProductInv h w) Safe (fun _ _ _ hi => hi.2) safe
 
 theorem product_quiet {g : PrefixM Journal.Event α} {action : Leanux.M α}
-    (app : Appends g) (quiet : HistoryFrame Journal.encryption? g)
+    (app : Appends g) (quiet : HistoryFrame watched? g)
     (erase : ErasesPrefix g action)
     (native : ∀ h, Preserves (fun w : World => Inv h w.wg) action) : ProductSafe g := by
   intro w h hi
   obtain ⟨suffix,eq⟩ := app w h
-  have noCipher : suffix.filterMap Journal.encryption? = [] := by
+  have noCipher : suffix.filterMap watched? = [] := by
     have same := quiet w h
     rw [eq,List.filterMap_append] at same
     have lengths := congrArg List.length same
-    cases found : suffix.filterMap Journal.encryption? with
+    cases found : suffix.filterMap watched? with
     | nil => rfl
     | cons e es =>
       simp only [List.length_append,found,List.length_cons] at lengths

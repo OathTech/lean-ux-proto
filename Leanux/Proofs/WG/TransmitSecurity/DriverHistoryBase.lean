@@ -52,10 +52,7 @@ structure ActorCoreHistorySafe (Safe : List E → Prop) (hooks : Hooks E) : Prop
   staging : ∀ pid, StateHistorySafe Safe (stagingObserved hooks pid)
   fixtureEnter : ∀ trigger, StateHistorySafe Safe (hooks.fixtureEnter trigger)
   fixtureLeave : ∀ token, StateHistorySafe Safe (hooks.fixtureLeave token)
-  handshake : ∀ (session : PeerId → WGPrefix E Bool) (keepalive : PeerId → WGPrefix E Unit),
-    (∀ pid, StateHistorySafe Safe (session pid)) →
-    (∀ pid, StateHistorySafe Safe (keepalive pid)) →
-    StateHistorySafe Safe (hooks.handshake session keepalive)
+  handshake : StateHistorySafe Safe (handshakeObserved hooks)
   sendWorker : ProductHistorySafe Safe (sendWorkerObserved hooks)
   flushedSend : ∀ pid, StateHistorySafe Safe (hooks.flushedSend pid)
   armTimer : ∀ pid timer delay caller, StateHistorySafe Safe (hooks.armTimer pid timer delay caller)

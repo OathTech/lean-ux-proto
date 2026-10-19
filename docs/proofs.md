@@ -12,29 +12,28 @@ claims, premises and mirror pins.
 
 The [campaign-3 report](2026-10-18-proof-campaign-3.md) tracks
 `proofs/campaign-3` over `783510e8`, with mirror `77c9b555` unchanged.
-T1 is complete and validated. T2–T6
-remain open. Existing campaign-1 results remain current. Campaign-2 source
+T1 and amended T6 are complete and validated; T2–T5 remain open. Existing campaign-1 results remain current. Campaign-2 source
 facts are named hypotheses, not silently discharged dependencies.
 
 | Outcome | Result, assumptions and remaining boundary |
 | --- | --- |
 | T1 nonce safety | Complete. `TransmitSecurity.initialized_nonce_safety` joins initialized native reservation uniqueness, actual key-allocation/AEAD nonce uniqueness, bounded counters and exact header/wire encoding, including stopped prefixes. No incoming invariant or H1 premise remains. `HandshakeSecurity.native_nonce_rejection_invalidates_and_restores` and the rejection observer expose the actual invalidation/restoration and unchanged drop count; `TransmitSecurity.original_rekey_count_request` and `original_rekey_age_request` expose the guarded native helper call. |
 | T2 transmit authorization and conservation | Open. `TransmitSecurity.initialized_staged_plaintext_batches` proves exact ordered plaintext preservation from the current-key staging selection to allocation. `initialized_socket_encryption_binding` joins actual packet/peer and endpoint reads to a strictly earlier AEAD for the same packet allocation, without the former empty-payload premise. These initialized claims retain Stop prefixes and have no incoming carrier assumptions. C1 R3 supplies outgoing trie authorization. Historical routing/keepalive lineage, session-peer ownership and exactly-once packet dispositions remain open; alias queues are not separate logical obligations. |
-| T3 authenticated effects and silence | Open. `AuthenticatedEffects.initialized_stack_input_has_own_authenticated_receive` connects each buffered GRO occurrence to its own successful replay and earlier AEAD publication in the same final journal. Initialized timer selections identify their exact earlier arm; send-work selections identify the first matching enqueue. Receipt integrity, scope metadata and source projections are established. Root authorization, protected-effect scope coverage and completion ancestry remain open. Cookie bounds are local source contracts, not a reply-rate bound. |
+| T3 authenticated effects and silence | Open. `AuthenticatedEffects.initialized_stack_input_has_own_authenticated_receive` connects each buffered GRO occurrence to its own successful replay and earlier AEAD publication in the same final journal. Initialized timer selections identify their exact earlier arm; send-work selections identify the first matching enqueue. Active handshake contexts have their own latest valid native admission. Initialized completion entries have a strict earlier head allocation; attachment to causal contexts remains open. Receipt integrity, scope metadata and source projections are established. Root authorization and protected-effect scope coverage remain open. Cookie bounds are local source contracts, not a reply-rate bound. |
 | T4 handshake replay resistance | Open. `HandshakeSecurity` derives initialized retained-peer timestamp and exchange histories, one allocation per successful session, handshake clearing and refusal-state preservation. The final session entry supplies role-slot residency. Direct stale-initiation refusal/no-response remains to join. Visible assumptions include `H1ResponseEdges`, `H1SessionEffects` and operational C2 tag/frame packages at read-only `5177bd9c`; no C2 file is edited. |
 | T5 responder confirmation | Open. Actual initialized responder AEAD follows an earlier successful confirmation of the same sending allocation, immediately preceded by an accepted replay and earlier AEAD publication. `H1ResponderCurrentEdges` and the named completed-confirmation uniqueness dependency remain visible. Receiving-allocation continuity from authenticated decryption to confirmation remains open; equal numeric slots alone do not establish it. |
-| T6 retirement / C3-F1 | Open. C3-F1 is a statement artefact, with both R5 witnesses retained. R5 establishes unconditional TX admission/RX attempt checks; R2 supplies allocation access discipline. `RetirementSecurity` derives initialized exact holder accounting and universal native clear/final-release contracts. Concrete conditional timer→clear→last-TX/DEAD-RX release chains retain actual clock/worker runs and a sole-holder census. Authenticated RX and full amended-outcome coverage are under assessment. Store removal is distinct from unpublication; admitted references may outlive it. |
+| T6 retirement / C3-F1 | Complete. `RetirementSecurity.reference_aware_retirement_outcome` composes unconditional TX/RX check-site safety and invalidation, initialized R2 access/holder accounting, session-derived zero-arm and selected-arm provenance, actual timer/worker unpublication, retained material and final release. Native final RX cleanup covers authenticated packets too. Clock/worker runs and residual-reference conditions remain explicit; no bounded latency or physical zeroization is claimed. Both R5 witnesses remain permitted retained work. |
 
 The current tranche also separates the generic per-actor history contracts
 from the complete native-poll contract. This permits actual GRO provenance
 without requiring an arbitrary packet argument to be authenticated.
 
-The current checkpoint passes 2251 proof jobs, 1354 terminal declarations
+The current checkpoint passes 2284 proof jobs, 1365 terminal declarations
 across thirteen roots, all twelve witnesses, fresh kernel replay, the 130-job
-model build and 131 unit tests (one configured-kernel skip, 23.281 seconds).
-All 2195 frozen proof-source hashes match; all 916 existing main proof files,
-the mirror and main are unchanged. The inherited mirror warning and previous
-failed checker attempts are recorded in the report.
+model build and 131 unit tests (one configured-kernel skip, 22.542 seconds).
+All 2228 frozen proof-source hashes match; all 916 existing main proof files,
+the mirror and main are unchanged. The inherited mirror warning and failed
+development checks are recorded in the report.
 
 ## Current register
 

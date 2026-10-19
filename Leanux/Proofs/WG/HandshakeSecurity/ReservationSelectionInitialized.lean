@@ -61,7 +61,7 @@ theorem hooks_core : ActorCoreHistorySafe Safe Journal.hooks where
   staging := staging
   fixtureEnter := fun _ => History.state_pure _
   fixtureLeave := fun _ => History.state_pure _
-  handshake := handshake
+  handshake := handshake _ _ session (keepalive_staging_history staging)
   sendWorker := by
     rw [Driver.sendWorker_lift _ rfl]
     exact History.product_lift _

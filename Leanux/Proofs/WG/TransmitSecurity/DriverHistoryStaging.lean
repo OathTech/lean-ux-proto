@@ -21,11 +21,20 @@ theorem staging_history (h : HooksHistorySafe Safe g) (pid : PeerId) :
     | (driver_history_head Hooks.confirmation; exact h.confirmation _ _)
     | driver_state_history_step
 
+/-- Keepalive has only one proof-side callback: the complete staging source. -/
+theorem keepalive_staging_history
+    (staging : ∀ pid, StateHistorySafe Safe (stagingObserved g pid)) (pid : PeerId) :
+    StateHistorySafe Safe (keepaliveObserved g pid) := by
+  unfold keepaliveObserved
+  repeat' first
+    | (driver_history_head stagingObserved; exact staging _)
+    | driver_state_history_step
+
 theorem HooksHistorySafe.core (h : HooksHistorySafe Safe g) : ActorCoreHistorySafe Safe g where
   staging := staging_history h
   fixtureEnter := h.fixtureEnter
   fixtureLeave := h.fixtureLeave
-  handshake := h.handshake
+  handshake := h.handshake _ _ h.session (keepalive_staging_history (staging_history h))
   sendWorker := h.sendWorker
   flushedSend := h.flushedSend
   armTimer := h.armTimer
@@ -44,13 +53,8 @@ theorem HooksHistorySafe.core (h : HooksHistorySafe Safe g) : ActorCoreHistorySa
   transmit := h.transmit
 
 theorem keepalive_actor_history (h : ActorCoreHistorySafe Safe g) (pid : PeerId) :
-    StateHistorySafe Safe (keepaliveObserved g pid) := by
-  unfold keepaliveObserved
-  repeat' first
-    | (driver_history_head stagingObserved; exact h.staging _)
-    | (driver_history_head Hooks.session; exact h.session _)
-    | (driver_history_head Hooks.confirmation; exact h.confirmation _ _)
-    | driver_state_history_step
+    StateHistorySafe Safe (keepaliveObserved g pid) :=
+  keepalive_staging_history h.staging pid
 
 theorem keepalive_history (h : HooksHistorySafe Safe g) (pid : PeerId) :
     StateHistorySafe Safe (keepaliveObserved g pid) :=
@@ -116,7 +120,7 @@ theorem reception_history (h : ActorCoreHistorySafe Safe g) (msg : List UInt8) (
 
 theorem handshake_history (h : ActorCoreHistorySafe Safe g) :
     StateHistorySafe Safe (handshakeObserved g) := by
-  exact h.handshake _ _ h.session (keepalive_actor_history h)
+  exact h.handshake
 
 theorem receiveTail_actor_history (h : ActorCoreHistorySafe Safe g) (pid : PeerId) (pkt : RxPacket) (confirmed : Bool) :
     StateHistorySafe Safe (receiveTailObserved g pid pkt confirmed) := by

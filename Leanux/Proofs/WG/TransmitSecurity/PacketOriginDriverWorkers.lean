@@ -1,5 +1,6 @@
 import Leanux.Proofs.WG.TransmitSecurity.PacketOriginDriverNapi
 import Leanux.Proofs.WG.TransmitSecurity.PacketOriginWorkerFrames
+import Leanux.Proofs.WG.TransmitSecurity.CompletionOriginJournal
 
 /-! Actual worker callbacks retain both the resident allocation carrier and
 the strict-prefix allocation evidence of every completed AEAD receipt. -/
@@ -43,10 +44,7 @@ theorem encrypt_iteration : ProductSafe (Driver.encryptIterObserved Journal.hook
     PrefixPreserves.bind softirq (fun _ => encrypt_tail_observed _))
 
 theorem tx_step (pid : PeerId) : ProductSafe (Journal.transmit pid) :=
-  product_quiet (Appends.focus _ _ _)
-    (focusPrefix_other _ _ _ (fun e => by cases e <;> rfl) _)
-    (focusPrefix_erases _ _ (Completion.step_erases pid))
-    (fun _ => PublicationPoll.native_product _ _ (NativeFrames.transmit pid))
+  transmit_completion pid
 
 theorem tx_iteration (pid : PeerId) : ProductSafe (Driver.txIterObserved Journal.hooks pid) :=
   workerIterPrefix_preserves _ _ (fun _ _ hi => hi.2) (tx_step pid) (resched _ _)

@@ -1,5 +1,5 @@
 import Leanux.Proofs.WG.TransmitSecurity.DriverEffectsNeutral
-import Leanux.Proofs.WG.TransmitSecurity.JournalPacketOrigins
+import Leanux.Proofs.WG.TransmitSecurity.PacketOriginEventFrames
 import Leanux.Proofs.WG.TransmitSecurity.PacketOriginStagingFrames
 import Leanux.Proofs.WG.TransmitSecurity.DriverHistoryBase
 
@@ -14,27 +14,29 @@ set_option pp.structureInstances false
 abbrev StateSafe (g : WGPrefix Journal.Event α) :=
   StatePrefixPreserves (fun h w _ => JournalInv h w) Safe g
 
-theorem Safe.quiet_suffix (old : Safe h) (quiet : suffix.filterMap Journal.encryption? = []) :
+theorem Safe.quiet_suffix (old : Safe h) (quiet : suffix.filterMap watched? = []) :
     Safe (h ++ suffix) := by
   apply old.append
   intro pre e post position
   have member : e ∈ suffix := by rw [position]; simp
-  cases e <;> simp only [Checked]
-  rename_i r
-  have found : r ∈ suffix.filterMap Journal.encryption? := List.mem_filterMap.mpr ⟨.encrypted r,member,rfl⟩
-  rw [quiet] at found
-  cases found
+  apply checked_quiet
+  cases found : watched? e with
+  | none => rfl
+  | some value =>
+    have present : value ∈ suffix.filterMap watched? := List.mem_filterMap.mpr ⟨e,member,found⟩
+    rw [quiet] at present
+    cases present
 
 theorem state_quiet {g : WGPrefix Journal.Event α} {action : WG.M α}
-    (app : StateAppends g) (quiet : StateHistoryFrame Journal.encryption? g)
+    (app : StateAppends g) (quiet : StateHistoryFrame watched? g)
     (erase : ErasesStatePrefix g action) (native : ∀ h, Preserves (Inv h) action) : StateSafe g := by
   intro w a h hi
   obtain ⟨suffix,eq⟩ := app w a h
-  have noCipher : suffix.filterMap Journal.encryption? = [] := by
+  have noCipher : suffix.filterMap watched? = [] := by
     have same := quiet w a h
     rw [eq,List.filterMap_append] at same
     have lengths := congrArg List.length same
-    cases found : suffix.filterMap Journal.encryption? with
+    cases found : suffix.filterMap watched? with
     | nil => rfl
     | cons e es =>
       simp only [List.length_append,found,List.length_cons] at lengths
@@ -66,7 +68,7 @@ theorem selection (pid : PeerId) : StateSafe (Journal.selection pid) :=
 theorem reservation (kid : KeypairId) : StateSafe (Journal.reserve kid) :=
   state_quiet ((StateAppends.focus _ _ _).receiptWGObserved _)
     (StateHistoryFrame.receiptWGObserved
-      (fun w => focusPrefix_other Journal.Event.nonce Journal.nonce? Journal.encryption? (fun _ => rfl)
+      (fun w => focusPrefix_other Journal.Event.nonce Journal.nonce? watched? (fun _ => rfl)
         ((Nonce.reserveObserved kid).run w)) _ (fun _ => rfl))
     (receiptWGObserved_erases (focusStatePrefix_erases _ _ (Nonce.reserveObserved_erases kid)) _)
     (fun _ => NativeFrames.reservation kid)
@@ -77,8 +79,7 @@ theorem creation (pid : PeerId) (item : List SkbId) : StateSafe (Journal.create 
     exact Appends.focus Journal.Event.disposition Journal.disposition? (TxDisposition.create pid item)
       (NativeAdapter.world w a) h
   · intro w a h
-    exact focusPrefix_other Journal.Event.disposition Journal.disposition? Journal.encryption?
-      (fun _ => rfl) (TxDisposition.create pid item) (NativeAdapter.world w a) h
+    exact creation_watched pid item (NativeAdapter.world w a) h
   · exact NativeAdapter.lower_erases
       (focusPrefix_erases _ _ (TxDisposition.create_erases pid item))
   · exact fun _ => NativeFrames.create pid item

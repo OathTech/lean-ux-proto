@@ -71,7 +71,7 @@ theorem timer_selected (d : Device) (j : UInt64) (pid : PeerId) (t : PeerTimer) 
   rw [show Journal.hooks.timerSelected d j pid t we =
     AuthenticatedEffects.TimerDispatch.scope Journal.Event.timerSelected d j pid t we (pure 0) from rfl,
     AuthenticatedEffects.TimerDispatch.scope_run,runPrefix_pure]
-  have good := hi.2.quiet (event := .timerSelected ⟨d,j,pid,t,we,w⟩) (fun _ eq => by cases eq)
+  have good := hi.2.quiet (event := .timerSelected ⟨d,j,pid,t,we,w⟩) rfl
   exact ⟨[.timerSelected ⟨d,j,pid,t,we,w⟩],rfl,good,
     hi.1.mono (fun _ member => List.mem_append_left _ member),good⟩
 

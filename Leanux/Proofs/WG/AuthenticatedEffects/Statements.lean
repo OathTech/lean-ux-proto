@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.HandshakeFreshInitialized
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalDelayedParents
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalStackInitialized
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalJournalOldProjection
@@ -73,6 +74,7 @@ import Leanux.Proofs.WG.AuthenticatedEffects.BorrowedRefusal
 import Leanux.Proofs.WG.AuthenticatedEffects.HandshakeQuietFrames
 import Leanux.Proofs.WG.AuthenticatedEffects.CookieAcceptance
 import Leanux.Proofs.WG.AuthenticatedEffects.CookieProtocol
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalHandshakePairInitialized
 
 /-! T3 local cookie exception tranche. These claims establish the original
 cookie-only dispatch, bounded construction/reply attempts and session frame.
@@ -1242,5 +1244,35 @@ theorem initialized_stack_input_has_own_authenticated_receive
         ((start ++ [CausalJournal.StackOrigins.candidate entry.scope entry.skb entry.packet]).filterMap
           CausalJournal.StackOrigins.origin?) receipt :=
   CausalJournal.StackOrigins.initialized_authenticated trace placeholders pre post index entry position
+
+/-- Security: every actual initialized handshake callback uses the latest
+successful native consumer admission in that same execution. No other admission
+intervenes; MAC/Noise witnesses and the admitted peer remain attached to that
+receipt, including when a later native operation stops. -/
+theorem initialized_handshake_callback_has_latest_admission
+    (trace : Runner.Trace) (placeholders : Bool)
+    (pre post : List CausalJournal.Event) (kind : HandshakeCausal.Kind) (pid : PeerId)
+    (position : (runPrefixOuter (CausalJournal.execute trace placeholders) []).2 =
+      pre ++ .old (.handshake (.callback kind pid)) :: post) :
+    HandshakeFresh.Available (pre.filterMap CausalJournal.handshake?) pid :=
+  HandshakeFresh.callback_latest trace placeholders pre post kind pid position
+
+/-- Security: an initialized effect whose current context is a handshake scope
+inherits that exact scope's immediately following callback and newest native
+consumer admission. An older same-peer callback cannot supply the cause.
+The existence of a well-formed context and the other cause cases remain separate
+obligations; a scope marker alone is not treated as authentication. -/
+theorem initialized_handshake_context_has_own_admission
+    (trace : Runner.Trace) (placeholders : Bool)
+    (pre post : List CausalJournal.Event) (effect : CausalJournal.Event)
+    (index : Nat) (kind : HandshakeCausal.Kind) (pid : PeerId)
+    (position : (runPrefixOuter (CausalJournal.execute trace placeholders) []).2 = pre ++ effect :: post)
+    (different : effect ≠ .old (.handshake (.callback kind pid)))
+    (current : CausalScope.current CausalJournal.scope? pre = .ok (some ⟨index,.handshake kind pid⟩)) :
+    ∃ before rest, pre = before ++
+      [.scope (.entered ⟨index,.handshake kind pid⟩),.old (.handshake (.callback kind pid))] ++ rest ∧
+      HandshakeFresh.Available (before.filterMap CausalJournal.handshake?) pid :=
+  CausalJournal.HandshakePairs.current_authenticated trace placeholders pre post effect index kind pid
+    position different current
 
 end Leanux.Proofs.WG.AuthenticatedEffects

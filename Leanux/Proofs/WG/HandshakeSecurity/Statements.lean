@@ -12,6 +12,7 @@ import Leanux.Proofs.WG.HandshakeSecurity.InitializedEncryptionMaterial
 import Leanux.Proofs.WG.HandshakeSecurity.EncryptionNonceEncoding
 import Leanux.Proofs.WG.HandshakeSecurity.NonceRejectionClaims
 import Leanux.Proofs.WG.HandshakeSecurity.ReceiveMaterialCarrier
+import Leanux.Proofs.WG.HandshakeSecurity.ReceiveMaterialConfirmationEntry
 import Leanux.Proofs.WG.HandshakeSecurity.ResponderEncryptionInitialized
 import Leanux.Proofs.WG.HandshakeSecurity.StagingMaterialBank
 import Leanux.Proofs.WG.HandshakeSecurity.ExchangeDriverProjection
@@ -1458,5 +1459,37 @@ This is a native local frame, not initialized receive provenance. -/
 theorem native_session_retains_authenticated_rx_allocation
     (pid : PeerId) (h : List AuthenticatedEffects.TransportDriver.OriginEvent) :
     Framing.Preserves (ReceiveMaterial.Inv h) (beginSession pid) := ReceiveMaterial.session pid
+
+/-- Security: the actual indexed replay call records the allocation certificate
+of its selected crypted packet before confirmation. The local carrier premise
+is explicit; this theorem does not assume that a numeric slot names an allocation. -/
+theorem native_rx_replay_records_authenticating_allocation
+    {E : Type} (origin : E → Option AuthenticatedEffects.TransportDriver.OriginEvent)
+    (replay : E → Option AuthenticatedEffects.TransportDriver.Replay)
+    (record : AuthenticatedEffects.TransportDriver.Replay → E)
+    (inverse : ∀ r, replay (record r) = some r) (quiet : ∀ r, origin (record r) = none)
+    (skb : SkbId) (pkt : RxPacket) (crypted : pkt.state = .crypted) :
+    PrefixEnsures (ReceiveMaterial.Replay.Picked origin replay skb pkt)
+      (ReceiveMaterial.Replay.Safe origin replay)
+      (AuthenticatedEffects.TransportDriver.counter record skb pkt)
+      (ReceiveMaterial.Replay.AtCounter origin replay record pkt) :=
+  ReceiveMaterial.Replay.counter_returned origin replay record inverse quiet skb pkt crypted
+
+/-- Security: at the native confirmation entry, the resident key allocation
+is exactly the allocation that authenticated this accepted packet. Its own
+successful replay receipt immediately precedes the call. The incoming carrier
+is still a local obligation until initialized driver transport is completed. -/
+theorem native_rx_confirmation_entry_allocation
+    {E : Type} {origin : E → Option AuthenticatedEffects.TransportDriver.OriginEvent}
+    {replay : E → Option AuthenticatedEffects.TransportDriver.Replay}
+    {record : AuthenticatedEffects.TransportDriver.Replay → E}
+    {pid : PeerId} {kid : KeypairId} {h : List E} {w : World} {core : Responder.KeyCore}
+    (input : ReceiveMaterial.Replay.ConfirmationInput origin replay record pid kid h w)
+    (quiet : ∀ r, origin (record r) = none)
+    (resident : Responder.pool w.wg kid = some core) :
+    ∃ pre r, h = pre ++ [record r] ∧ r.packet.peer = pid ∧ r.packet.keypair = kid ∧
+      r.run.value = true ∧ ReceiveMaterial.Replay.Certified (pre.filterMap origin) r ∧
+      ReceiveMaterial.Certificate (pre.filterMap origin) r.skb r.packet w.wg core :=
+  ReceiveMaterial.Replay.confirmation_input_material input quiet resident
 
 end Leanux.Proofs.WG.HandshakeSecurity

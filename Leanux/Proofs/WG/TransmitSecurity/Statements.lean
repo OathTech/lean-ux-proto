@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.TransmitSecurity.SocketCiphertextBinding
+import Leanux.Proofs.WG.TransmitSecurity.CompletionOriginFinal
 import Leanux.Proofs.WG.HandshakeSecurity.EncryptionNonceEncoding
 import Leanux.Proofs.WG.TransmitSecurity.BatchPayloadFinal
 import Leanux.Proofs.WG.TransmitSecurity.RoutingFinal
@@ -46,6 +47,17 @@ Actual key-allocation identity, reservation, packet and wire nonce are joined.
 Full transmit authorization and occurrence conservation remain separate. -/
 namespace Leanux.Proofs.WG.TransmitSecurity
 open Leanux Leanux.WG Leanux.Proofs.Logged
+
+/-- Security: every actual TX completion entry has a selected head allocated
+in its strict preceding final journal. Delayed completion effects therefore
+retain an actual packet-allocation ancestor, including stopped prefixes.
+This does not authenticate that ancestor or infer every member from the head. -/
+theorem initialized_completion_allocation_origin (trace : Runner.Trace) (placeholders : Bool)
+    (pre post : List AuthenticatedEffects.CausalJournal.Event) (pid : PeerId) (items : List SkbId)
+    (position : (runPrefixOuter (AuthenticatedEffects.CausalJournal.execute trace placeholders) []).2 =
+      pre ++ AuthenticatedEffects.CausalJournal.Event.old (.disposition (.completion pid items)) :: post) :
+    CompletionOrigin.Certificate (pre.filterMap AuthenticatedEffects.CausalJournal.old?) items :=
+  PacketOrigins.final_completion trace placeholders pre post pid items position
 
 /-- Security: recording every native staging increment preserves the original
 success or Stop exactly; rejected batches cannot be hidden by an observer that
