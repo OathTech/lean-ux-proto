@@ -1,4 +1,4 @@
-import Image
+import LiteralDecode
 namespace Binary.ServiceImage
 -- Generated from the same pinned ELF; a parser rejection is a missing PC, never a no-op.
 def listing : List (Nat × Nat × String) := [
@@ -90,9 +90,106 @@ def listing : List (Nat × Nat × String) := [
   (18446744071579844358, 2, "mov    %edi,%esi"),
   (18446744071579844360, 5, "mov    $0x5,%edi"),
   (18446744071579844365, 5, "jmp L_ffffffff810f3db0")]
-def fetch (pc : Int64) : Option Decoded := do
+/-- Runtime parser retained for an executable comparison with the literal terms. -/
+def runtimeFetch (pc : Int64) : Option Decoded := do
   let (_, size, assembly) ← listing.find? (fun row => row.1 == pc.toUInt64.toNat)
   match Kraken.X64.Parser.parse assembly with
   | .ok [.instr instruction] => some ⟨instruction, size⟩
+  | _ => none
+/-- Parsing happens at elaboration, as for the anchored images. The proof
+kernel receives literal instructions; it does not execute the text parser. -/
+def decoded : List (Nat × Nat × Option Instr) := [
+  (18446744071579316928, 10, literalInstruction("testl  $0xf0000,0xc552fe(%rip)")),
+  (18446744071579316938, 2, literalInstruction("jne L_ffffffff810732ea")),
+  (18446744071579316940, 3, literalInstruction("sub    $0x1,%esi")),
+  (18446744071579316943, 2, literalInstruction("neg    %esi")),
+  (18446744071579316945, 6, literalInstruction("add    %esi,0xc552f1(%rip)")),
+  (18446744071579316951, 10, literalInstruction("testl  $0xffff00,0xc552e7(%rip)")),
+  (18446744071579316961, 2, literalInstruction("je L_ffffffff810732ee")),
+  (18446744071579316963, 6, literalInstruction("decl   0xc552df(%rip)")),
+  (18446744071579316969, 1, literalInstruction("ret")),
+  (18446744071579316970, 2, literalInstruction("ud2")),
+  (18446744071579316972, 2, literalInstruction("jmp L_ffffffff810732cc")),
+  (18446744071579316974, 8, literalInstruction("cmpw   $0x0,0xc552ea(%rip)")),
+  (18446744071579316982, 2, literalInstruction("je L_ffffffff810732e3")),
+  (18446744071579316984, 5, literalInstruction("call L_ffffffff81073270")),
+  (18446744071579316989, 2, literalInstruction("jmp L_ffffffff810732e3")),
+  (18446744071579840768, 6, literalInstruction("mov    0xbd54c2(%rip),%eax")),
+  (18446744071579840774, 4, literalInstruction("mov    (%rsp),%rsi")),
+  (18446744071579840778, 7, literalInstruction("mov    0xbd54af(%rip),%rdx")),
+  (18446744071579840785, 5, literalInstruction("test   $0xff0100,%eax")),
+  (18446744071579840790, 2, literalInstruction("je L_ffffffff810f312f")),
+  (18446744071579840792, 3, literalInstruction("test   $0x1,%ah")),
+  (18446744071579840795, 2, literalInstruction("je L_ffffffff810f3124")),
+  (18446744071579840797, 5, literalInstruction("test   $0xff0000,%eax")),
+  (18446744071579840802, 2, literalInstruction("je L_ffffffff810f3125")),
+  (18446744071579840804, 1, literalInstruction("ret")),
+  (18446744071579840805, 6, literalInstruction("mov    0x704(%rdx),%eax")),
+  (18446744071579840811, 2, literalInstruction("test   %eax,%eax")),
+  (18446744071579840813, 2, literalInstruction("je L_ffffffff810f3124")),
+  (18446744071579840815, 6, literalInstruction("mov    0x6e0(%rdx),%eax")),
+  (18446744071579840821, 3, literalInstruction("cmp    $0x2,%eax")),
+  (18446744071579840824, 2, literalInstruction("jne L_ffffffff810f3124")),
+  (18446744071579840826, 7, literalInstruction("mov    0x6e8(%rdx),%rcx")),
+  (18446744071579840833, 6, literalInstruction("mov    0x6e4(%rdx),%edx")),
+  (18446744071579840839, 3, literalInstruction("mov    (%rcx),%rax")),
+  (18446744071579840842, 4, literalInstruction("add    $0x1,%rax")),
+  (18446744071579840846, 3, literalInstruction("cmp    %rdx,%rax")),
+  (18446744071579840849, 2, literalInstruction("jae L_ffffffff810f3124")),
+  (18446744071579840851, 3, literalInstruction("mov    %rax,(%rcx)")),
+  (18446744071579840854, 4, literalInstruction("mov    %rsi,(%rcx,%rax,8)")),
+  (18446744071579840858, 1, literalInstruction("ret")),
+  (18446744071579844016, 6, literalInstruction("mov    0xbd4812(%rip),%eax")),
+  (18446744071579844022, 3, literalInstruction("mov    %rdx,%r10")),
+  (18446744071579844025, 3, literalInstruction("mov    %rdi,%r8")),
+  (18446744071579844028, 3, literalInstruction("mov    %rsi,%r9")),
+  (18446744071579844031, 7, literalInstruction("mov    0xbd47fa(%rip),%rdx")),
+  (18446744071579844038, 5, literalInstruction("test   $0xff0100,%eax")),
+  (18446744071579844043, 2, literalInstruction("je L_ffffffff810f3de4")),
+  (18446744071579844045, 3, literalInstruction("test   $0x1,%ah")),
+  (18446744071579844048, 2, literalInstruction("je L_ffffffff810f3dd9")),
+  (18446744071579844050, 5, literalInstruction("test   $0xff0000,%eax")),
+  (18446744071579844055, 2, literalInstruction("je L_ffffffff810f3dda")),
+  (18446744071579844057, 1, literalInstruction("ret")),
+  (18446744071579844058, 6, literalInstruction("mov    0x704(%rdx),%eax")),
+  (18446744071579844064, 2, literalInstruction("test   %eax,%eax")),
+  (18446744071579844066, 2, literalInstruction("je L_ffffffff810f3dd9")),
+  (18446744071579844068, 6, literalInstruction("mov    0x6e0(%rdx),%eax")),
+  (18446744071579844074, 3, literalInstruction("cmp    $0x3,%eax")),
+  (18446744071579844077, 2, literalInstruction("jne L_ffffffff810f3dd9")),
+  (18446744071579844079, 7, literalInstruction("mov    0x6e8(%rdx),%rax")),
+  (18446744071579844086, 6, literalInstruction("mov    0x6e4(%rdx),%edx")),
+  (18446744071579844092, 3, literalInstruction("mov    (%rax),%rdi")),
+  (18446744071579844095, 4, literalInstruction("shl    $0x3,%rdx")),
+  (18446744071579844099, 8, literalInstruction("lea    0x0(,%rdi,4),%r11")),
+  (18446744071579844107, 8, literalInstruction("lea    0x28(,%r11,8),%rsi")),
+  (18446744071579844115, 3, literalInstruction("cmp    %rsi,%rdx")),
+  (18446744071579844118, 2, literalInstruction("jb L_ffffffff810f3dd9")),
+  (18446744071579844120, 4, literalInstruction("add    $0x1,%rdi")),
+  (18446744071579844124, 3, literalInstruction("mov    %rdi,(%rax)")),
+  (18446744071579844127, 5, literalInstruction("mov    %r8,-0x20(%rax,%rsi,1)")),
+  (18446744071579844132, 5, literalInstruction("mov    %r9,-0x18(%rax,%rsi,1)")),
+  (18446744071579844137, 5, literalInstruction("mov    %r10,-0x10(%rax,%rsi,1)")),
+  (18446744071579844142, 5, literalInstruction("mov    %rcx,0x20(%rax,%r11,8)")),
+  (18446744071579844147, 1, literalInstruction("ret")),
+  (18446744071579844224, 4, literalInstruction("mov    (%rsp),%rcx")),
+  (18446744071579844228, 2, literalInstruction("mov    %esi,%edx")),
+  (18446744071579844230, 2, literalInstruction("mov    %edi,%esi")),
+  (18446744071579844232, 5, literalInstruction("mov    $0x4,%edi")),
+  (18446744071579844237, 5, literalInstruction("jmp L_ffffffff810f3db0")),
+  (18446744071579844288, 4, literalInstruction("mov    (%rsp),%rcx")),
+  (18446744071579844292, 4, literalInstruction("movzbl %sil,%edx")),
+  (18446744071579844296, 4, literalInstruction("movzbl %dil,%esi")),
+  (18446744071579844300, 5, literalInstruction("mov    $0x1,%edi")),
+  (18446744071579844305, 5, literalInstruction("jmp L_ffffffff810f3db0")),
+  (18446744071579844352, 4, literalInstruction("mov    (%rsp),%rcx")),
+  (18446744071579844356, 2, literalInstruction("mov    %esi,%edx")),
+  (18446744071579844358, 2, literalInstruction("mov    %edi,%esi")),
+  (18446744071579844360, 5, literalInstruction("mov    $0x5,%edi")),
+  (18446744071579844365, 5, literalInstruction("jmp L_ffffffff810f3db0"))]
+def fetch (pc : Int64) : Option Decoded := do
+  let (_, size, code) ← decoded.find? (fun row => row.1 == pc.toUInt64.toNat)
+  match code with
+  | some instruction => some ⟨instruction, size⟩
   | _ => none
 end Binary.ServiceImage

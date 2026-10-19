@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Emit this image's region terms and DWARF record predicates, not a checker."""
 import hashlib
+import argparse
 import json
 import re
 from pathlib import Path
@@ -14,6 +15,9 @@ from device_layouts import generate_device_scalars
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--services-only', action='store_true')
+    args = parser.parse_args()
     expected = '16c346209885db6c610d4aa126c6eb30f5d3c02f0498d95e606473945f648774'
     if hashlib.sha256(ORACLE.read_bytes()).hexdigest() != expected:
         raise ValueError('wrong ELF')
@@ -29,20 +33,32 @@ def main():
                      '__sanitizer_cov_trace_const_cmp4', '__sanitizer_cov_trace_const_cmp1',
                      '__local_bh_enable_ip', 'write_comp_data'}
     functions = extract(ORACLE, service_names)
-    service_text = ['import Image', 'namespace Binary.ServiceImage',
+    service_text = ['import LiteralDecode', 'namespace Binary.ServiceImage',
                     '-- Generated from the same pinned ELF; a parser rejection is a missing PC, never a no-op.',
                     'def listing : List (Nat × Nat × String) := [']
     service_rows = [i for f in functions if f['name'] in service_names for i in f['instructions']]
     service_text += ['  ' + ',\n  '.join(f'({i["pc"]}, {len(bytes.fromhex(i["bytes"]))}, {json.dumps(i["normalized"])})'
                                      for i in service_rows) + ']']
     service_text += [
-        'def fetch (pc : Int64) : Option Decoded := do',
+        '/-- Runtime parser retained for an executable comparison with the literal terms. -/',
+        'def runtimeFetch (pc : Int64) : Option Decoded := do',
         '  let (_, size, assembly) ← listing.find? (fun row => row.1 == pc.toUInt64.toNat)',
         '  match Kraken.X64.Parser.parse assembly with',
         '  | .ok [.instr instruction] => some ⟨instruction, size⟩',
         '  | _ => none',
-        'end Binary.ServiceImage', '']
+        '/-- Parsing happens at elaboration, as for the anchored images. The proof',
+        'kernel receives literal instructions; it does not execute the text parser. -/',
+        'def decoded : List (Nat × Nat × Option Instr) := [',
+        '  ' + ',\n  '.join(f'({i["pc"]}, {len(bytes.fromhex(i["bytes"]))}, literalInstruction({json.dumps(i["normalized"])}))'
+                          for i in service_rows) + ']',
+        'def fetch (pc : Int64) : Option Decoded := do',
+        '  let (_, size, code) ← decoded.find? (fun row => row.1 == pc.toUInt64.toNat)',
+        '  match code with',
+        '  | some instruction => some ⟨instruction, size⟩',
+        '  | _ => none', 'end Binary.ServiceImage', '']
     (ROOT / 'binary/ServiceImage.lean').write_text('\n'.join(service_text))
+    if args.services_only:
+        return
     for f in functions:
         if f['name'] not in names:
             continue
