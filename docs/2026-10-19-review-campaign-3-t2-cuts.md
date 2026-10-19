@@ -197,5 +197,11 @@ source finding.
    entry after crypt-ahead. The gate, fresh root replay and twelve recipes
    pass. Other caller roots and native interiors remain open; finding 2
    is not closed by these supporting connections.
+   Source-68 `f11eadfe` also connects original callback/send-drain scheduler
+   paths and direct or nested crypt-ahead encryption entries, retaining the
+   actual poll item and original continuation. Aggregate gate, fresh root
+   replay and twelve recipes pass. This extends the initialized entry
+   coverage; successful interior coverage and other native caller roots
+   remain open, so finding 2 remains open.
 
 No mirror change or narrower T2 outcome is adopted.
