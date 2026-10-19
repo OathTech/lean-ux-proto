@@ -20,52 +20,126 @@ def afterAdvance : PrefixM Receipt Unit := afterAdvanceWith (fun {_} a=>old a) t
 def deferred (call : EnvDeferredCall) : PrefixM Receipt call.Result :=
   deferredWith (fun {_} a=>old a) crypt send afterXmit timers placeholder idle afterAdvance call
 
-theorem atoms : AtomContracts (fun h _=>ValidHistory h) ValidHistory (fun {_} a=>old a) := by
+namespace History
+
+theorem atoms (S : List Receipt → Prop) : AtomContracts (fun h _=>S h) S (fun {_} a=>old a) := by
   constructor
-  all_goals intros; exact lift_preserves _
+  all_goals intros; exact (Leanux.Proofs.WG.Progress.CommittedRuns.History.lift_preserves S) _
+
+end History
+
+theorem atoms : AtomContracts (fun h _=>ValidHistory h) ValidHistory (fun {_} a=>old a) :=
+  History.atoms ValidHistory
+
+namespace History
+
+theorem crypt_preserves (S : List Receipt → Prop)
+    (runs : ∀ origin activation, PrefixPreserves (fun h _=>S h) S (run origin activation)) : PrefixPreserves (fun h _=>S h) S crypt :=
+  RxHistory.DeferredSource.crypt_preserves
+    (I := fun h _=>S h) (S := S) (fun _ _ h=>h) (fun _ _ _ _ h=>h)
+    _ ((Leanux.Proofs.WG.Progress.CommittedRuns.History.schedule_preserves S runs) none)
+
+end History
 
 theorem crypt_preserves : PrefixPreserves (fun h _=>ValidHistory h) ValidHistory crypt :=
-  RxHistory.DeferredSource.crypt_preserves
-    (I := fun h _=>ValidHistory h) (S := ValidHistory) (fun _ _ h=>h) (fun _ _ _ _ h=>h)
-    _ (CommittedRuns.schedule_preserves none)
+  History.crypt_preserves ValidHistory CommittedRuns.run_preserves
+
+namespace History
+
+theorem send_preserves (S : List Receipt → Prop)
+    (runs : ∀ origin activation, PrefixPreserves (fun h _=>S h) S (run origin activation)) : PrefixPreserves (fun h _=>S h) S send :=
+  RxHistory.DeferredSource.send_preserves
+    (I := fun h _=>S h) (S := S) (fun _ _ h=>h) (fun _ _ _ _ h=>h)
+    _ (Leanux.Proofs.WG.Progress.CommittedRuns.Deferred.History.atoms S) _ ((Leanux.Proofs.WG.Progress.CommittedRuns.History.schedule_preserves S runs) none)
+
+end History
 
 theorem send_preserves : PrefixPreserves (fun h _=>ValidHistory h) ValidHistory send :=
-  RxHistory.DeferredSource.send_preserves
-    (I := fun h _=>ValidHistory h) (S := ValidHistory) (fun _ _ h=>h) (fun _ _ _ _ h=>h)
-    _ atoms _ (CommittedRuns.schedule_preserves none)
+  History.send_preserves ValidHistory CommittedRuns.run_preserves
+
+namespace History
+
+theorem afterXmit_preserves (S : List Receipt → Prop)
+    (runs : ∀ origin activation, PrefixPreserves (fun h _=>S h) S (run origin activation)) : PrefixPreserves (fun h _=>S h) S afterXmit :=
+  RxHistory.DeferredSource.afterXmit_preserves
+    (I := fun h _=>S h) (S := S) (fun _ _ h=>h) (fun _ _ _ _ h=>h)
+    _ (Leanux.Proofs.WG.Progress.CommittedRuns.Deferred.History.atoms S) _ (Leanux.Proofs.WG.Progress.CommittedRuns.Deferred.History.crypt_preserves S runs) _ (Leanux.Proofs.WG.Progress.CommittedRuns.Deferred.History.send_preserves S runs)
+
+end History
 
 theorem afterXmit_preserves : PrefixPreserves (fun h _=>ValidHistory h) ValidHistory afterXmit :=
-  RxHistory.DeferredSource.afterXmit_preserves
-    (I := fun h _=>ValidHistory h) (S := ValidHistory) (fun _ _ h=>h) (fun _ _ _ _ h=>h)
-    _ atoms _ crypt_preserves _ send_preserves
+  History.afterXmit_preserves ValidHistory CommittedRuns.run_preserves
+
+namespace History
+
+theorem timers_preserves (S : List Receipt → Prop)
+    (runs : ∀ origin activation, PrefixPreserves (fun h _=>S h) S (run origin activation)) (j : UInt64) :
+    PrefixPreserves (fun h _=>S h) S (timers j) :=
+  RxHistory.DeferredSource.timers_preserves
+    (I := fun h _=>S h) (S := S) (fun _ _ h=>h) (fun _ _ _ _ h=>h)
+    _ (Leanux.Proofs.WG.Progress.CommittedRuns.Deferred.History.atoms S) _ (Leanux.Proofs.WG.Progress.CommittedRuns.Deferred.History.crypt_preserves S runs) j
+
+end History
 
 theorem timers_preserves (j : UInt64) :
     PrefixPreserves (fun h _=>ValidHistory h) ValidHistory (timers j) :=
-  RxHistory.DeferredSource.timers_preserves
-    (I := fun h _=>ValidHistory h) (S := ValidHistory) (fun _ _ h=>h) (fun _ _ _ _ h=>h)
-    _ atoms _ crypt_preserves j
+  History.timers_preserves ValidHistory CommittedRuns.run_preserves j
+
+namespace History
+
+theorem placeholder_preserves (S : List Receipt → Prop)
+    (runs : ∀ origin activation, PrefixPreserves (fun h _=>S h) S (run origin activation)) (j : UInt64) :
+    PrefixPreserves (fun h _=>S h) S (placeholder j) :=
+  RxHistory.DeferredSource.placeholder_preserves
+    (I := fun h _=>S h) (S := S) (fun _ _ h=>h) (fun _ _ _ _ h=>h)
+    _ (Leanux.Proofs.WG.Progress.CommittedRuns.Deferred.History.atoms S) _ (Leanux.Proofs.WG.Progress.CommittedRuns.Deferred.History.crypt_preserves S runs) _ (Leanux.Proofs.WG.Progress.CommittedRuns.Deferred.History.send_preserves S runs) j
+
+end History
 
 theorem placeholder_preserves (j : UInt64) :
     PrefixPreserves (fun h _=>ValidHistory h) ValidHistory (placeholder j) :=
-  RxHistory.DeferredSource.placeholder_preserves
-    (I := fun h _=>ValidHistory h) (S := ValidHistory) (fun _ _ h=>h) (fun _ _ _ _ h=>h)
-    _ atoms _ crypt_preserves _ send_preserves j
+  History.placeholder_preserves ValidHistory CommittedRuns.run_preserves j
+
+namespace History
+
+theorem idle_preserves (S : List Receipt → Prop)
+    (runs : ∀ origin activation, PrefixPreserves (fun h _=>S h) S (run origin activation)) : PrefixPreserves (fun h _=>S h) S idle :=
+  RxHistory.DeferredSource.idle_preserves
+    (I := fun h _=>S h) (S := S) (fun _ _ h=>h) (fun _ _ _ _ h=>h)
+    _ (Leanux.Proofs.WG.Progress.CommittedRuns.Deferred.History.atoms S) _ (Leanux.Proofs.WG.Progress.CommittedRuns.Deferred.History.timers_preserves S runs) _ (Leanux.Proofs.WG.Progress.CommittedRuns.Deferred.History.placeholder_preserves S runs)
+
+end History
 
 theorem idle_preserves : PrefixPreserves (fun h _=>ValidHistory h) ValidHistory idle :=
-  RxHistory.DeferredSource.idle_preserves
-    (I := fun h _=>ValidHistory h) (S := ValidHistory) (fun _ _ h=>h) (fun _ _ _ _ h=>h)
-    _ atoms _ timers_preserves _ placeholder_preserves
+  History.idle_preserves ValidHistory CommittedRuns.run_preserves
+
+namespace History
+
+theorem afterAdvance_preserves (S : List Receipt → Prop)
+    (runs : ∀ origin activation, PrefixPreserves (fun h _=>S h) S (run origin activation)) : PrefixPreserves (fun h _=>S h) S afterAdvance :=
+  RxHistory.DeferredSource.afterAdvance_preserves
+    (I := fun h _=>S h) (S := S) (fun _ _ h=>h) (fun _ _ _ _ h=>h)
+    _ (Leanux.Proofs.WG.Progress.CommittedRuns.Deferred.History.atoms S) _ (Leanux.Proofs.WG.Progress.CommittedRuns.Deferred.History.timers_preserves S runs) _ (Leanux.Proofs.WG.Progress.CommittedRuns.Deferred.History.placeholder_preserves S runs)
+
+end History
 
 theorem afterAdvance_preserves : PrefixPreserves (fun h _=>ValidHistory h) ValidHistory afterAdvance :=
-  RxHistory.DeferredSource.afterAdvance_preserves
-    (I := fun h _=>ValidHistory h) (S := ValidHistory) (fun _ _ h=>h) (fun _ _ _ _ h=>h)
-    _ atoms _ timers_preserves _ placeholder_preserves
+  History.afterAdvance_preserves ValidHistory CommittedRuns.run_preserves
+
+namespace History
+
+theorem deferred_preserves (S : List Receipt → Prop)
+    (runs : ∀ origin activation, PrefixPreserves (fun h _=>S h) S (run origin activation)) (call : EnvDeferredCall) :
+    PrefixPreserves (fun h _=>S h) S (deferred call) :=
+  RxHistory.DeferredSource.deferred_preserves _ (Leanux.Proofs.WG.Progress.CommittedRuns.Deferred.History.atoms S) _ _ _ _ _ _ _
+    (Leanux.Proofs.WG.Progress.CommittedRuns.Deferred.History.crypt_preserves S runs) (Leanux.Proofs.WG.Progress.CommittedRuns.Deferred.History.send_preserves S runs) (Leanux.Proofs.WG.Progress.CommittedRuns.Deferred.History.afterXmit_preserves S runs) (Leanux.Proofs.WG.Progress.CommittedRuns.Deferred.History.timers_preserves S runs) (Leanux.Proofs.WG.Progress.CommittedRuns.Deferred.History.placeholder_preserves S runs)
+    (Leanux.Proofs.WG.Progress.CommittedRuns.Deferred.History.idle_preserves S runs) (Leanux.Proofs.WG.Progress.CommittedRuns.Deferred.History.afterAdvance_preserves S runs) call
+
+end History
 
 theorem deferred_preserves (call : EnvDeferredCall) :
     PrefixPreserves (fun h _=>ValidHistory h) ValidHistory (deferred call) :=
-  RxHistory.DeferredSource.deferred_preserves _ atoms _ _ _ _ _ _ _
-    crypt_preserves send_preserves afterXmit_preserves timers_preserves placeholder_preserves
-    idle_preserves afterAdvance_preserves call
+  History.deferred_preserves ValidHistory CommittedRuns.run_preserves call
 
 theorem old_erases {E α : Type} (observed : PrefixM E α) (native : Leanux.M α)
     (erase : ErasesPrefix observed native) : ErasesPrefix (old observed) native := by

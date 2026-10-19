@@ -1,3 +1,11 @@
+import Leanux.Proofs.WG.Progress.ReceiveCompletionSuffixSource
+import Leanux.Proofs.WG.Progress.PipeFreeClaims
+import Leanux.Proofs.WG.Progress.CommittedInitializedReceiptClaims
+import Leanux.Proofs.WG.Progress.CommittedSyscallClaims
+import Leanux.Proofs.WG.Progress.CommittedInitializedClaims
+import Leanux.Proofs.WG.Progress.ReleaseSuffixClaims
+import Leanux.Proofs.WG.Progress.DecryptStepSuffixSource
+import Leanux.Proofs.WG.Progress.CutJitterSuffixClaims
 import Leanux.Proofs.WG.Progress.DecryptSuffixClaims
 import Leanux.Proofs.WG.Progress.CommittedTrafficClaims
 import Leanux.Proofs.WG.Progress.PipeRoundupClaims
@@ -964,5 +972,90 @@ theorem original_pipe_roundup_finite_evaluation (target : Nat) :
     PipeRoundup.finite target = some (roundupPowOfTwoUL target) ∧
       target ≤ roundupPowOfTwoUL target :=
   original_pipe_roundup_finite target
+
+
+/-- Every actual syscall retains its committed scheduler-run receipt prefix,
+including on failure, while preserving the exact original outcome. -/
+theorem original_syscall_committed_runs (call : Syscall) :
+    (do let out ← CommittedRuns.Traffic.observed (CommittedRuns.Syscalls.syscall call);
+        pure out.1) = Campaign2.Product.inspect (Leanux.syscall call) ∧
+    Campaign2.Product.Returns
+      (CommittedRuns.Traffic.observed (CommittedRuns.Syscalls.syscall call)) (fun _ => True)
+      (fun out _ => CommittedRuns.ValidHistory out.2) :=
+  CommittedRuns.Syscalls.original_syscall_journal call
+
+/-- Initialized execution retains exact JSON/indexed Stops and the committed
+scheduler activation receipts. The result assumes no initial invariant or
+callback law; receipt validity alone is not arbitrary-history provenance. -/
+theorem original_initialized_committed_runs (trace : Runner.Trace) (placeholders : Bool) :
+    (CommittedRuns.Initialized.inspection trace placeholders).1.map Prod.fst =
+      Runner.executeTrace trace placeholders ∧
+    ∀ receipt ∈ (CommittedRuns.Initialized.inspection trace placeholders).2,
+      ActivationExitFacts receipt.activation receipt.exit :=
+  CommittedRuns.Initialized.original_initialized_journal trace placeholders
+
+/-- Actual peer release preserves recorded suffixes through every normal
+reference/null branch, retaining queued-release and missing-owner Stops. -/
+theorem original_peer_release_record_suffix (records : List HiddenRecord)
+    (peer : Option PeerId) :
+    Campaign2.Ensures (peerPut peer) (fun s => s.ambient.hidden = some records)
+      (fun _ s => RecordSuffix.Tail records s.ambient.hidden) :=
+  RecordSuffix.peerPut_record_suffix records peer
+
+/-- Actual key release preserves recorded suffixes in either release mode. -/
+theorem original_key_release_record_suffix (records : List HiddenRecord)
+    (key : Option KeypairId) (now : Bool) :
+    Campaign2.Ensures (keypairPut key now) (fun s => s.ambient.hidden = some records)
+      (fun _ s => RecordSuffix.Tail records s.ambient.hidden) :=
+  RecordSuffix.keypairPut_record_suffix records key now
+
+/-- Actual responder confirmation and its release tail preserve suffixes. -/
+theorem original_confirmation_record_suffix (records : List HiddenRecord)
+    (peer : PeerId) (key : KeypairId) :
+    Campaign2.Ensures (receivedWithKeypair peer key)
+      (fun s => s.ambient.hidden = some records)
+      (fun _ s => RecordSuffix.Tail records s.ambient.hidden) :=
+  RecordSuffix.confirmation_record_suffix records peer key
+
+/-- Actual replay validation preserves the record suffix on normal return;
+malformed counters retain their original failures. -/
+theorem original_counter_validation_record_suffix (records : List HiddenRecord)
+    (key : KeypairId) (nonce : Nat) :
+    Campaign2.Ensures (counterValidate key nonce)
+      (fun s => s.ambient.hidden = some records)
+      (fun _ s => RecordSuffix.Tail records s.ambient.hidden) :=
+  RecordSuffix.counterValidate_record_suffix records key nonce
+
+/-- Actual selected cut consumption retains a recorded suffix. -/
+theorem original_cut_sites_record_suffix (sites : List HiddenSite)
+    (records : List HiddenRecord) :
+    Campaign2.Ensures (skipCutSites sites : WG.M (List Nat))
+      (fun s => s.ambient.hidden = some records)
+      (fun _ s => RecordSuffix.Tail records s.ambient.hidden) :=
+  RecordSuffix.cutSites_record_suffix sites records
+
+/-- Either original timer jitter loop consumes a strict suffix on normal return. -/
+theorem original_jitter_record_decrease (site : TimerDiscipline.JitterSite)
+    (records : List HiddenRecord) :
+    Campaign2.Ensures (jitterBelowRekeyTimeout site.hiddenSite)
+      (fun s => s.ambient.hidden = some records)
+      (fun _ s => RecordSuffix.StrictTail records s.ambient.hidden) :=
+  RecordSuffix.jitter_record_decrease site records
+
+/-- The original pipe teardown has an exact finite evaluation, including
+all original failures and actual buffer-release calls. -/
+theorem original_pipe_free_finite_evaluation (pipe : PipeId) :
+    Leanux.freePipeInfo pipe = PipeFree.finite pipe :=
+  original_free_pipe_info_finite pipe
+
+/-- Every receipt in the initialized journal has an actual native call entry
+and exit, together with its activation-specific exit facts. -/
+theorem original_initialized_run_sources (trace : Runner.Trace) (placeholders : Bool) :
+    (CommittedRuns.Initialized.inspection trace placeholders).1.map Prod.fst =
+      Runner.executeTrace trace placeholders ∧
+    ∀ receipt ∈ (CommittedRuns.Initialized.inspection trace placeholders).2,
+      CommittedRuns.SourceReceipt receipt ∧
+        ActivationExitFacts receipt.activation receipt.exit :=
+  CommittedRuns.Initialized.original_initialized_source_receipts trace placeholders
 
 end Leanux.Proofs.WG.Progress

@@ -36,42 +36,95 @@ def observe : PrefixM Receipt (Int × Lean.Json) := do
   Deferred.idle
   liftPrefix Environment.observeTail
 
+namespace History
+
+theorem inject_preserves (S : List Receipt → Prop)
+    (runs : ∀ origin activation, PrefixPreserves (fun h _=>S h) S (run origin activation)) (family port : Nat) (msg : List UInt8) (tos : Nat) (ll : Bool) (dest : Nat) :
+    PrefixPreserves (fun h _=>S h) S (inject family port msg tos ll dest) :=
+  TrafficSource.inject_preserves (I := fun h _=>S h) (S := S)
+    (fun _ _ h=>h) (fun _ _ _ _ h=>h) _ _ _
+    (fun _ _=>(Leanux.Proofs.WG.Progress.CommittedRuns.History.lift_preserves S) _) (Leanux.Proofs.WG.Progress.CommittedRuns.Deferred.History.crypt_preserves S runs) (fun _ _=>(Leanux.Proofs.WG.Progress.CommittedRuns.History.lift_preserves S) _)
+    family port msg tos ll dest
+
+end History
+
 theorem inject_preserves (family port : Nat) (msg : List UInt8) (tos : Nat) (ll : Bool) (dest : Nat) :
     PrefixPreserves (fun h _=>ValidHistory h) ValidHistory (inject family port msg tos ll dest) :=
-  TrafficSource.inject_preserves (I := fun h _=>ValidHistory h) (S := ValidHistory)
-    (fun _ _ h=>h) (fun _ _ _ _ h=>h) _ _ _
-    (fun _ _=>lift_preserves _) Deferred.crypt_preserves (fun _ _=>lift_preserves _)
-    family port msg tos ll dest
+  History.inject_preserves ValidHistory CommittedRuns.run_preserves family port msg tos ll dest
+
+namespace History
+
+theorem afterBatch_preserves (S : List Receipt → Prop)
+    (runs : ∀ origin activation, PrefixPreserves (fun h _=>S h) S (run origin activation)) :
+    PrefixPreserves (fun h _=>S h) S afterBatch :=
+  TrafficSource.afterBatch_preserves (I := fun h _=>S h) (S := S)
+    (fun _ _ h=>h) (fun _ _ _ _ h=>h) _ _ _ _ _
+    (Leanux.Proofs.WG.Progress.CommittedRuns.Deferred.History.crypt_preserves S runs) (Leanux.Proofs.WG.Progress.CommittedRuns.Deferred.History.send_preserves S runs) ((Leanux.Proofs.WG.Progress.CommittedRuns.Deferred.History.deferred_preserves S runs) .sendOne)
+    (Leanux.Proofs.WG.Progress.CommittedRuns.History.schedule_preserves S runs) (fun _ _=>(Leanux.Proofs.WG.Progress.CommittedRuns.History.lift_preserves S) _)
+
+end History
 
 theorem afterBatch_preserves :
     PrefixPreserves (fun h _=>ValidHistory h) ValidHistory afterBatch :=
-  TrafficSource.afterBatch_preserves (I := fun h _=>ValidHistory h) (S := ValidHistory)
-    (fun _ _ h=>h) (fun _ _ _ _ h=>h) _ _ _ _ _
-    Deferred.crypt_preserves Deferred.send_preserves (Deferred.deferred_preserves .sendOne)
-    CommittedRuns.schedule_preserves (fun _ _=>lift_preserves _)
+  History.afterBatch_preserves ValidHistory CommittedRuns.run_preserves
+
+namespace History
+
+theorem flood_preserves (S : List Receipt → Prop)
+    (runs : ∀ origin activation, PrefixPreserves (fun h _=>S h) S (run origin activation)) (count port family : Nat) (messages : List (List UInt8)) :
+    PrefixPreserves (fun h _=>S h) S (flood count port family messages) :=
+  TrafficSource.flood_preserves (I := fun h _=>S h) (S := S)
+    (fun _ _ h=>h) (fun _ _ _ _ h=>h) _ _ _ _
+    (fun _ _=>(Leanux.Proofs.WG.Progress.CommittedRuns.History.lift_preserves S) _) ((Leanux.Proofs.WG.Progress.CommittedRuns.History.lift_preserves S) _) (Leanux.Proofs.WG.Progress.CommittedRuns.Traffic.History.afterBatch_preserves S runs)
+    (fun _ _=>(Leanux.Proofs.WG.Progress.CommittedRuns.History.lift_preserves S) _) count port family messages
+
+end History
 
 theorem flood_preserves (count port family : Nat) (messages : List (List UInt8)) :
     PrefixPreserves (fun h _=>ValidHistory h) ValidHistory (flood count port family messages) :=
-  TrafficSource.flood_preserves (I := fun h _=>ValidHistory h) (S := ValidHistory)
+  History.flood_preserves ValidHistory CommittedRuns.run_preserves count port family messages
+
+namespace History
+
+theorem batchItem_preserves (S : List Receipt → Prop) (device : Device) (cqes : List Int) (item : Env.BatchItem) :
+    PrefixPreserves (fun h _=>S h) S (batchItem device cqes item) :=
+  batchItemWith_preserves (I := fun h _=>S h) (S := S)
     (fun _ _ h=>h) (fun _ _ _ _ h=>h) _ _ _ _
-    (fun _ _=>lift_preserves _) (lift_preserves _) afterBatch_preserves
-    (fun _ _=>lift_preserves _) count port family messages
+    (fun _ _=>(Leanux.Proofs.WG.Progress.CommittedRuns.History.lift_preserves S) _) ((Leanux.Proofs.WG.Progress.CommittedRuns.History.lift_preserves S) _) (fun _ _=>(Leanux.Proofs.WG.Progress.CommittedRuns.History.lift_preserves S) _)
+    (fun _ _ _ _=>(Leanux.Proofs.WG.Progress.CommittedRuns.History.lift_preserves S) _) device cqes item
+
+end History
 
 theorem batchItem_preserves (device : Device) (cqes : List Int) (item : Env.BatchItem) :
     PrefixPreserves (fun h _=>ValidHistory h) ValidHistory (batchItem device cqes item) :=
-  batchItemWith_preserves (I := fun h _=>ValidHistory h) (S := ValidHistory)
-    (fun _ _ h=>h) (fun _ _ _ _ h=>h) _ _ _ _
-    (fun _ _=>lift_preserves _) (lift_preserves _) (fun _ _=>lift_preserves _)
-    (fun _ _ _ _=>lift_preserves _) device cqes item
+  History.batchItem_preserves ValidHistory device cqes item
+
+namespace History
+
+theorem batch_preserves (S : List Receipt → Prop)
+    (runs : ∀ origin activation, PrefixPreserves (fun h _=>S h) S (run origin activation)) (items : List Env.BatchItem) :
+    PrefixPreserves (fun h _=>S h) S (batch items) :=
+  TrafficSource.batch_preserves (I := fun h _=>S h) (S := S)
+    (fun _ _ h=>h) (fun _ _ _ _ h=>h) _ _ (Leanux.Proofs.WG.Progress.CommittedRuns.Traffic.History.batchItem_preserves S) (Leanux.Proofs.WG.Progress.CommittedRuns.Traffic.History.afterBatch_preserves S runs) items
+
+end History
 
 theorem batch_preserves (items : List Env.BatchItem) :
     PrefixPreserves (fun h _=>ValidHistory h) ValidHistory (batch items) :=
-  TrafficSource.batch_preserves (I := fun h _=>ValidHistory h) (S := ValidHistory)
-    (fun _ _ h=>h) (fun _ _ _ _ h=>h) _ _ batchItem_preserves afterBatch_preserves items
+  History.batch_preserves ValidHistory CommittedRuns.run_preserves items
+
+namespace History
+
+theorem observe_preserves (S : List Receipt → Prop)
+    (runs : ∀ origin activation, PrefixPreserves (fun h _=>S h) S (run origin activation)) :
+    PrefixPreserves (fun h _=>S h) S observe :=
+  PrefixPreserves.bind (Leanux.Proofs.WG.Progress.CommittedRuns.Deferred.History.idle_preserves S runs) (fun _=>(Leanux.Proofs.WG.Progress.CommittedRuns.History.lift_preserves S) _)
+
+end History
 
 theorem observe_preserves :
     PrefixPreserves (fun h _=>ValidHistory h) ValidHistory observe :=
-  PrefixPreserves.bind Deferred.idle_preserves (fun _=>lift_preserves _)
+  History.observe_preserves ValidHistory CommittedRuns.run_preserves
 
 theorem inject_erases (family port : Nat) (msg : List UInt8) (tos : Nat) (ll : Bool) (dest : Nat) :
     ErasesPrefix (inject family port msg tos ll dest) (Env.inject family port msg tos ll dest) :=

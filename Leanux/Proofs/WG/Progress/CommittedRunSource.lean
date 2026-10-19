@@ -28,26 +28,38 @@ theorem run_erases (origin : Origin) (a : Activation) :
   intro entry history
   exact congrArg Prod.fst (run_exact origin a entry history)
 
-theorem run_preserves (origin : Origin) (a : Activation) :
-    PrefixPreserves (fun history _ => ValidHistory history) ValidHistory (run origin a) := by
+namespace History
+
+theorem run_preserves (P : Receipt → Prop)
+    (fresh : ∀ origin activation entry, P ⟨origin,activation,Campaign2.Product.snapshot entry,
+      (activationExitRun activation entry).map Campaign2.Product.snapshot⟩)
+    (origin : Origin) (a : Activation) :
+    PrefixPreserves (fun history _ => ∀ receipt ∈ history, P receipt)
+      (fun history => ∀ receipt ∈ history, P receipt) (run origin a) := by
   intro entry history prior
   let receipt : Receipt := ⟨origin,a,Campaign2.Product.snapshot entry,
     (activationExitRun a entry).map Campaign2.Product.snapshot⟩
-  have valid : ValidHistory (history ++ [receipt]) := by
+  have valid : ∀ r ∈ history ++ [receipt], P r := by
     intro r member
-    rcases List.mem_append.mp member with old | fresh
+    rcases List.mem_append.mp member with old | added
     · exact prior r old
-    · simp only [List.mem_singleton] at fresh
+    · simp only [List.mem_singleton] at added
       subst r
-      exact activationExitRun_facts a entry
-  refine ⟨[receipt], rfl, valid, ?_⟩
-  rw [run_exact]
-  cases (Env.Activation.run a).run entry with
-  | error error => trivial
-  | ok pair => obtain ⟨value,final⟩:=pair; exact valid
+      exact fresh origin a entry
+  refine ⟨[receipt], ?_, ?_, ?_⟩
+  · rw [run_exact]
+  · rw [run_exact]
+    exact valid
+  · rw [run_exact]
+    cases (Env.Activation.run a).run entry with
+    | error error => trivial
+    | ok pair => obtain ⟨value,final⟩:=pair; exact valid
 
-/-- Discard only the old observer's private event stream; retain its exact
-operation and Stop. Its copied consistency probes never enter this journal. -/
+end History
+
+theorem run_preserves (origin : Origin) (a : Activation) :
+    PrefixPreserves (fun history _ => ValidHistory history) ValidHistory (run origin a) :=
+  History.run_preserves Valid (fun _ activation entry => activationExitRun_facts activation entry) origin a
 def old {E α : Type} (observer : PrefixM E α) : PrefixM Receipt α :=
   liftPrefix (fun entry => (runPrefix observer entry []).1)
 
@@ -57,15 +69,31 @@ theorem old_eq {E α : Type} (observer : PrefixM E α) (action : Leanux.M α)
   funext entry
   exact erases entry []
 
-theorem lift_preserves {α : Type} (action : Leanux.M α) :
-    PrefixPreserves (fun history _ => ValidHistory history) ValidHistory (liftPrefix action) :=
+namespace History
+
+theorem lift_preserves (S : List Receipt → Prop) {α : Type} (action : Leanux.M α) :
+    PrefixPreserves (fun history _ => S history) S (liftPrefix action) :=
   PrefixEnsures.preserves (PrefixEnsures.lift action (fun _ _ prior => prior)
     (fun _ _ _ _ prior _ => prior))
 
-theorem atoms : AtomContracts (fun history _ => ValidHistory history) ValidHistory
+end History
+
+theorem lift_preserves {α : Type} (action : Leanux.M α) :
+    PrefixPreserves (fun history _ => ValidHistory history) ValidHistory (liftPrefix action) :=
+  History.lift_preserves ValidHistory action
+
+namespace History
+
+theorem atoms (S : List Receipt → Prop) : AtomContracts (fun history _ => S history) S
     (fun {_} a => old a) := by
   constructor
-  all_goals intros; exact lift_preserves _
+  all_goals intros; exact (Leanux.Proofs.WG.Progress.CommittedRuns.History.lift_preserves S) _
+
+end History
+
+theorem atoms : AtomContracts (fun history _ => ValidHistory history) ValidHistory
+    (fun {_} a => old a) :=
+  History.atoms ValidHistory
 
 def dispatch (worker : Worker) : PrefixM Receipt Bool :=
   dispatchWith (fun {_} a => old a) (run .dispatch) worker
@@ -74,18 +102,36 @@ def schedule (stack : Option Worker := none) : PrefixM Receipt Unit :=
   scheduleWith (fun {_} a => old a) dispatch (run .resume)
     (liftPrefix Env.napiSoftirq) stack
 
+namespace History
+
+theorem dispatch_preserves (S : List Receipt → Prop)
+    (runs : ∀ origin activation, PrefixPreserves (fun h _=>S h) S (run origin activation)) (worker : Worker) :
+    PrefixPreserves (fun history _ => S history) S (dispatch worker) :=
+  RxHistory.SchedulerSource.dispatch_preserves
+    (I := fun history _ => S history) (S := S) (fun _ _ prior => prior)
+    (fun _ _ _ _ prior => prior) _ (Leanux.Proofs.WG.Progress.CommittedRuns.History.atoms S) _ (runs .dispatch) worker
+
+end History
+
 theorem dispatch_preserves (worker : Worker) :
     PrefixPreserves (fun history _ => ValidHistory history) ValidHistory (dispatch worker) :=
-  RxHistory.SchedulerSource.dispatch_preserves
-    (I := fun history _ => ValidHistory history) (S := ValidHistory) (fun _ _ prior => prior)
-    (fun _ _ _ _ prior => prior) _ atoms _ (run_preserves .dispatch) worker
+  History.dispatch_preserves ValidHistory CommittedRuns.run_preserves worker
+
+namespace History
+
+theorem schedule_preserves (S : List Receipt → Prop)
+    (runs : ∀ origin activation, PrefixPreserves (fun h _=>S h) S (run origin activation)) (stack : Option Worker) :
+    PrefixPreserves (fun history _ => S history) S (schedule stack) :=
+  RxHistory.SchedulerSource.schedule_preserves
+    (I := fun history _ => S history) (S := S) (fun _ _ prior => prior)
+    (fun _ _ _ _ prior => prior) _ (Leanux.Proofs.WG.Progress.CommittedRuns.History.atoms S) _ _ _ (Leanux.Proofs.WG.Progress.CommittedRuns.History.dispatch_preserves S runs)
+      (runs .resume) ((Leanux.Proofs.WG.Progress.CommittedRuns.History.lift_preserves S) _) stack
+
+end History
 
 theorem schedule_preserves (stack : Option Worker) :
     PrefixPreserves (fun history _ => ValidHistory history) ValidHistory (schedule stack) :=
-  RxHistory.SchedulerSource.schedule_preserves
-    (I := fun history _ => ValidHistory history) (S := ValidHistory) (fun _ _ prior => prior)
-    (fun _ _ _ _ prior => prior) _ atoms _ _ _ dispatch_preserves
-      (run_preserves .resume) (lift_preserves _) stack
+  History.schedule_preserves ValidHistory CommittedRuns.run_preserves stack
 
 theorem old_native {α : Type} (a : WG.M α) :
     old (RxHistory.mixed (liftWGObserver (liftWGPrefix a))) = liftPrefix (liftWG a) :=
