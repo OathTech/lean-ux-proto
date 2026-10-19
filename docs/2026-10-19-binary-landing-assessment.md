@@ -576,3 +576,9 @@ rather than carry a build-policy change as part of this experiment. The root
 `lakefile.toml` now matches main `3308c49a` exactly; the binary package's own
 settings are unchanged. The coordinator's rerun will validate this restored
 setting on the final head.
+
+The three unfinished files `AllowedipsAdequacyLog.lean.draft`,
+`AllowedipsLoopFound.lean.draft`, and `AllowedipsSourceContinuation.lean.draft`
+are removed from `binary/drafts/` on the landing branch. They remain tracked
+on the unchanged `task/binary-pair-runner` experiment branch. These drafts were
+outside the package's build and theorem closure; no compiled proof is removed.
