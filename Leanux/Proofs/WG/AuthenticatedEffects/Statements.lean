@@ -1,5 +1,8 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalJournalOldProjection
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalReceiptInitialized
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalDelayedTimerCallbacks
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalDelayedPackets
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalDelayedLifetime
 import Leanux.Proofs.WG.AuthenticatedEffects.SendCallerContracts
 import Leanux.Proofs.WG.AuthenticatedEffects.QueuedSourceContracts
 import Leanux.Proofs.WG.AuthenticatedEffects.TimerOccurrences

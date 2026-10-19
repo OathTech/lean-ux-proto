@@ -28,6 +28,7 @@ import Leanux.Proofs.WG.TransmitSecurity.EncryptionPastDeviceConfiguration
 import Leanux.Proofs.WG.TransmitSecurity.EncryptionPastTx
 import Leanux.Proofs.WG.TransmitSecurity.EncryptionHistoryFinal
 import Leanux.Proofs.WG.TransmitSecurity.ReservationAssignmentEncryption
+import Leanux.Proofs.WG.TransmitSecurity.BatchWorker
 
 /-! Campaign 3, T1 initialized counter reservations and local AEAD contracts.
 Exclusive reservation tokens now reach every initialized AEAD occurrence;
@@ -633,5 +634,25 @@ theorem initialized_exclusive_encryption_reservations (trace : Runner.Trace) (pl
         AuthenticatedEffects.CausalJournal.old?) :=
   ⟨ReservationAssignments.initialized_exclusive trace placeholders,
     ReservationAssignments.final_exclusive trace placeholders⟩
+
+/-- Security: every initialized native TX allocation batch has one peer and
+one selected key slot throughout its packet arguments. This follows the actual
+staging loop, including allocations before later Stop. Transport to the head
+and per-packet reads of a selected encryption batch remains separate. -/
+theorem initialized_batch_peer_key_alignment (trace : Runner.Trace) (placeholders : Bool) :
+    BatchHistory.Safe (runPrefixOuter (Journal.execute trace placeholders) []).2 :=
+  BatchHistory.initialized trace placeholders
+
+/-- Security: the native encryption worker's saved head key is the key slot
+of every packet it encrypts, and head/packet peers agree, including receipts
+before later Stop. Physical selection and resident-batch homogeneity are
+explicit inputs; initialized transport of homogeneity remains to prove. -/
+theorem original_selected_batch_key_alignment
+    (before : BatchCoherence.Inv w.wg)
+    (physical : RetirementSecurity.OccurrenceStack.Ready locals (items :: active) w.wg) :
+    ∀ r ∈ (runPrefix (WorkerEncryption.tail (some items)) w []).2,
+      r.head.value.keypair = r.read.value.keypair ∧ r.head.value.peer = r.read.value.peer ∧
+      r.cipher.slot = r.read.value.keypair :=
+  BatchWorker.selected before physical
 
 end Leanux.Proofs.WG.TransmitSecurity

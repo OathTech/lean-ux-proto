@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.HandshakeSecurity.ExchangeCausalInitialized
+import Leanux.Proofs.WG.HandshakeSecurity.ExchangeCausalSessionInitialized
 import Leanux.Proofs.WG.HandshakeSecurity.ExchangeDriverProjection
 import Leanux.Proofs.WG.HandshakeSecurity.ExchangeSend
 import Leanux.Proofs.WG.HandshakeSecurity.ExchangeReceive
@@ -1166,5 +1167,28 @@ theorem initialized_final_journal_exchange_history
           AuthenticatedEffects.CausalJournal.exchange?)) :=
   ⟨ExchangeCausal.execute_projects trace placeholders,
     ExchangeCausal.initialized facts config traffic trace placeholders⟩
+
+/-- Security: a successful initialized session leaves its actual new key
+allocation resident, in the role-selected caller slot, with its handshake
+cleared and all other peers' handshake tags unchanged. The exact final-journal
+receipt supplies the entry invariants; named native C2 contracts remain visible.
+The claim also covers a completed session before a later caller Stop. -/
+theorem initialized_final_session_placement
+    (facts : H1DriverSourceFacts) (config : H1ConfigurationTagFrames)
+    (traffic : H1TrafficTagFrames) (edges : H1ResponderCurrentEdges)
+    (rotation : H1SessionPlacement) (trace : Runner.Trace) (placeholders : Bool)
+    (pre post : List AuthenticatedEffects.CausalJournal.Event)
+    (pid : PeerId) (r : WGRunWitness Bool)
+    (position : (runPrefixOuter (AuthenticatedEffects.CausalJournal.execute trace placeholders) []).2 =
+      pre ++ AuthenticatedEffects.CausalJournal.Event.exchange (.session pid r) :: post)
+    (success : r.value = true) :
+    Exchange.SessionPlaced pid r ∧ Exchange.SessionMaterialCut pid r ∧
+    handshakeTagAt r.after pid = some HANDSHAKE_ZEROED ∧
+    (∀ other, other ≠ pid → handshakeTagAt r.after other = handshakeTagAt r.before other) ∧
+    r.after.keypairCounter = r.before.keypairCounter + 1 :=
+  ⟨ExchangeCausalSession.initialized_session_placed edges rotation trace placeholders
+      pre post pid r position success,
+    ExchangeCausal.session_created_and_cleared facts config traffic trace placeholders
+      pre post pid r position success⟩
 
 end Leanux.Proofs.WG.HandshakeSecurity

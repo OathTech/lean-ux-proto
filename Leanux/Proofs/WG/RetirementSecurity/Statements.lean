@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.RetirementSecurity.HolderScheduler
+import Leanux.Proofs.WG.RetirementSecurity.HolderScheduledRx
 import Leanux.Proofs.WG.RetirementSecurity.HolderPoll
 import Leanux.Proofs.WG.RetirementSecurity.HolderReplayFrames
 import Leanux.Proofs.WG.RetirementSecurity.HolderDeviceConfiguration
@@ -1824,5 +1826,33 @@ theorem original_rx_poll_joint_key_account (pid budget : Nat)
     (run : (rxPoll pid budget (fun packets=>packets.forM Env.deliverInner)).run w=.ok (result,v)) :
     HolderAccount temporary v.wg ∧ HolderPoll.Support sessions locals active v.wg :=
   HolderPoll.normal pid budget funded keys support run
+
+/-- Actual decrypt-worker and NAPI iterations conserve exact key credit
+through every original poll placement. The publication peer loan remains
+separately funded across IRQ callbacks; live-slot protection derives its
+safe final payment. This joins the existing scheduler account and history,
+with initialized global key accounting still a separate obligation. -/
+theorem original_decrypt_napi_joint_key_accounts :
+    Leanux.Proofs.Logged.PrefixPreserves
+      (HolderScheduled.Inv initial loans before temporary locals active)
+      OwnerChecks.Safe Queues.RxHistory.decryptIteration ∧
+    Leanux.Proofs.Logged.PrefixPreserves
+      (HolderScheduled.Inv initial loans before temporary locals active)
+      OwnerChecks.Safe Queues.RxHistory.napiSoftirq :=
+  ⟨HolderScheduled.decrypt,HolderScheduled.softirq⟩
+
+/-- The original complete scheduler conserves exact key credit across every
+actual worker kind, NAPI callback, copied trial and rescheduling path. Its
+worker contracts are discharged from source, including the detached active
+TX batch and selected RX loan; no universal scheduler-coverage premise is
+assumed. Deriving the incoming account from initialization remains separate. -/
+theorem original_scheduler_joint_key_account (stack : Option Worker) (worker : Worker) :
+    Leanux.Proofs.Logged.PrefixPreserves
+      (HolderScheduled.Inv initial loans before temporary locals active)
+      OwnerChecks.Safe (Queues.RxHistory.schedule stack) ∧
+    Leanux.Proofs.Logged.PrefixPreserves
+      (HolderScheduled.Inv initial loans before temporary locals active)
+      OwnerChecks.Safe (Queues.RxHistory.nestedResched worker) :=
+  ⟨HolderScheduled.schedule stack,HolderScheduled.nested worker⟩
 
 end Leanux.Proofs.WG.RetirementSecurity

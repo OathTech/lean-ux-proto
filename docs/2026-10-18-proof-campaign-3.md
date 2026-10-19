@@ -22,7 +22,7 @@ stops the work. Validation for the current source-contract checkpoint is recorde
 | T1 nonce safety | Open. Initialized native counter reservations are unique through Stop, and admitted counters have injective encoding. Every actual initialized AEAD now has a below-limit nonce and strict earlier reservation evidence. Initialized global packet-identity non-reuse now closes through the same driver and exact causal-journal projection. Each initialized AEAD now has an exclusive allocation-stamped reservation token matching its packet nonce, with no two AEAD occurrences sharing an assigned token. Historical key-material continuity remains open. |
 | T2 transmit authorization and conservation | Open. R3 supplies initialized selection-time authorization; packet/material transport to actual encryption and socket emission, and complete TX dispositions, remain to prove. |
 | T3 authenticated effects and silence | Open. R6 supplies the cookie gate's local contracts, not causal closure of all delayed effects. |
-| T4 handshake replay resistance | Open. Initialized retained-peer timestamps and exchange epochs are derived. Successful sessions have one actual allocation and clear their handshake; refused sessions preserve the whole WireGuard state. Direct initialized stale-refusal/no-response and final role-slot residency exports remain. Named C2 source assumptions stay visible. |
+| T4 handshake replay resistance | Open. Initialized retained-peer timestamps and exchange epochs are derived. Successful sessions have one actual allocation and clear their handshake; refused sessions preserve the whole WireGuard state. Final role-slot residency now follows the actual final-journal session entry. Direct initialized stale-refusal/no-response remains. Named C2 source assumptions stay visible. |
 | T5 responder confirmation | Open. Initialized responder selections have earlier successful confirmations, each immediately preceded by a certified replay and earlier AEAD publication in the same journal. Key-allocation continuity and the actual encryption prohibition remain open. |
 | T6 key retirement | C3-F1 concerns the literal actual-encryption clause. R5 supplies the admission/attempt checks. New native put/clear contracts prove exact reference payment, retention and final removal; initialized holder accounting and conditional cleanup remain open. |
 
@@ -431,6 +431,28 @@ further edits, all twelve registered worktrees were audited and all seven
 dirty trees snapshotted, including untracked nonignored files; branches and
 normal indexes were preserved. The corrected scoped proof passes. This
 development failure is not a mirror finding. All six outcomes remain open.
+
+Checkpoint twenty-one passes complete validation. Every initialized allocation batch
+now has one peer and one selected numeric key slot across its packet arguments.
+The actual encryption worker preserves head/per-packet peer/key agreement
+under explicit physical selection and resident-batch homogeneity. Initialized
+transport of that separate resident-batch projection remains open; key-allocation material continuity remains independent.
+The actual final-journal session entry now discharges the configured-identity
+and current-slot guards for role-selected key residency, under named C2
+contracts. Native decrypt and NAPI iterations now carry the joint holder
+account through publication, IRQ callbacks and final peer payment. Adopted
+owned pins are T4 `a6f7dead`, T6 `16990d1c` and T3 `fd3cf708`.
+The native scheduler now transports the joint holder account through all nine
+atoms and nested rescheduling without a worker-coverage premise. Native timer,
+packet-maintenance and lifetime-observed completion callbacks retain the
+delayed-occurrence carrier; its initialized authorization remains open.
+The gate passes 1896 jobs and 1282 terminal declarations across thirteen root
+modules, with only the three permitted axioms. All twelve witness recipes and
+fresh-root kernel replay pass. The model build passes 130 jobs; the unit suite
+completes 131 tests with one configured-kernel skip (23.610 seconds). All 1840
+proof-source hashes stayed unchanged through validation. Main, the mirror and
+existing main proof files remain unchanged.
+All six outcomes remain open.
 
 ## Validation
 
