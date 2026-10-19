@@ -85,6 +85,8 @@ Source-57 closes the whole paired TX worker, including DEAD disposal and the ori
 
 Source-58 closes actual UDP ingress, scheduled TX/send/clear workers, dump cursor callbacks and every retained administrative arm. The concrete scheduler, deferred work and traffic wrappers compose without callback premises. The exact outer syscall composition leaves only the destruction contract explicit; this is not initialized T2 conservation. Native RX acquisition/allocation/selection/payment/free and TX selection/disposal now carry both peer-reference bounds on the same holders, with temporary RX phases separated from stable queued carriers. The combined root passes 3553 jobs and thirty-three focused queries use only standard axioms. Initialized upper-account transport, reset discharge and the final T2 claim remain open. Source-58 `57598814` passes the aggregate gate, fresh root replay and all twelve counterexample recipes.
 
+Source-59 extends the exact peer-reference account through native dump cursors, send/clear drains, single and bulk removal, full handshake workers, TX completion, RX enqueue outcomes and all timer callbacks. Peer configuration now retains the same account through actual lookup/creation, early cleanup, routing edits and removal. The combined root passes 3593 jobs; thirty-eight focused queries use only standard axioms. Whole RX polling/admission, scheduler transport, lifecycle reset discharge and initialized T2 conservation remain open. The latest aggregate gate and fresh replay checkpoint remains source-58 `57598814`.
+
 ## Current register
 
 The proof tree is current over the namespace-pin landing `218d3ffd`: after
