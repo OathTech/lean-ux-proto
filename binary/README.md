@@ -125,15 +125,14 @@ sibling is claimed.
 
 ## Executable reconstruction experiment
 
-The sibling worktree `.worktrees/binary-pair-runner`, branch
-`task/binary-pair-runner`, implements the first part of the
+The executable reconstruction runners implement the
 [paired-execution plan](../docs/2026-10-16-plan-executable-binary-correspondence.md#first-runnable-slice).
-It preserves the existing M1 theorem and trust declarations. From that
-worktree's root, regenerate and run either recorded workload:
+They preserve the existing M1 theorem and named hypotheses. From the current
+checkout root, regenerate and run either recorded workload:
 
 ```sh
-LEANUX_QEMU_SLOTS=16 capped -- /usr/bin/python3 -B binary/pair_run.py --trace d1_second_response
-LEANUX_QEMU_SLOTS=16 capped -- /usr/bin/python3 -B binary/pair_run.py --trace d1_wrong_receiver_index_same_bucket
+LEANUX_QEMU_SLOTS=16 cap python3 -B binary/pair_run.py --trace d1_second_response
+LEANUX_QEMU_SLOTS=16 cap python3 -B binary/pair_run.py --trace d1_wrong_receiver_index_same_bucket
 ```
 
 Use a Python interpreter with pyelftools installed (`python3` on ordinary
@@ -250,9 +249,9 @@ The loop theorem now permits the actual entry stack rather than a fixture
 address. Its semantic contracts and conclusion are unchanged. The previous
 external acceptance above applies to `a33869e`; export the updated closure
 with the same modules to `../.tmp/binary-pair-capture-boundary.ndjson` for
-the new external gate. Fresh local kernel replay passes; external acceptance
-of this generalization is pending. Full function-entry-to-return adequacy
-remains open.
+the new external gate. Fresh local kernel replay passes; the landing's combined
+export also includes this generalization. The earlier boundary theorem does
+not establish the later complete-call theorem described below.
 
 `capture_lookup.py` separately captures actual entry/return registers and
 memory on a rerun of that recorded workload, using QEMU TCG hardware

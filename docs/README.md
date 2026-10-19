@@ -101,9 +101,10 @@ Read these before the README's claims are taken at face value:
 
 ## Proofs
 
-The [binary landing assessment](2026-10-19-binary-landing-assessment.md) records
-the prospective integration of the paired experiment with the pending mirror
-fixes, including the failed proof build and required state/image migration.
+The [binary landing report](2026-10-19-binary-landing-assessment.md) records
+the paired experiment's carry to the split mirror and pinned s5 image, its
+separate build/gate and runtime validation, and the open milestone-1 review
+obligations. Current setup commands are in [binary/README.md](../binary/README.md).
 
 | Document | Contents |
 | --- | --- |

@@ -1,10 +1,12 @@
 # Binary experiment: landing preparation and validation
 
-Status: landing preparation on main `3f3879e0`, using the split mirror and an
-explicit s5 image pin. The full binary build and standalone proof gate pass.
-The earlier assessment and s4 checkpoint below are historical; current s5
-validation is at the end. Runtime validation and the external export gate
-are being completed separately.
+Status: **locally ready for landing**, rebased onto main `3f3879e0`, using
+the actual split mirror and an explicit s5 image pin. Full build, standalone
+binary gate, unit tests, selected differential recordings, exact witnesses,
+paired suites and all six actual-capture replays pass. **The user's external
+export gate remains pending**, and no merge to main or push is authorized or
+performed. Earlier assessment/checkpoint sections below retain their failed
+attempts and historical pins; the current results are at the end.
 
 ## Scope and inputs
 
@@ -295,7 +297,7 @@ must not be described as closing the original campaign.
 
 | Finding | Landing disposition and remaining obligation |
 | --- | --- |
-| F1, hit-path non-vacuity | Dead and live hit witnesses exist in the tree and their proof modules compile against the split mirror. Their concrete return executions are part of landing validation. NULL-owner execution is covered by concrete tests; a separate M1 `Pre_lookup` theorem witness for that path remains open, as does the suggested wrong-kind/KCOV-mode-3 theorem witness. |
+| F1, hit-path non-vacuity | Dead and live hit witnesses compile against the split mirror and their exact states execute to return on s5 under both seeds; the live projection is compared with its recorded prefix. NULL-owner execution is covered by concrete tests; a separate M1 `Pre_lookup` theorem witness for that path remains open, as does the suggested wrong-kind/KCOV-mode-3 theorem witness. |
 | F2, callback contracts | The later sibling proves all five index-family callbacks from the pinned image and uses them in its sequential headlines. The original M1 headline still takes callback contracts as hypotheses; those are not silently removed. Discharging the contracts in every original transport and broader subsystem theorem remains open. |
 | F3, honest hypotheses | The tree prunes unused trust declarations and explicitly takes serialization/permission hypotheses. They describe an intentionally unrealistic environment, not established kernel-context facts. |
 | F4, reusable post-state | The M1 post exports restored preempt count, the KCOV-buffer invariant and the softirq word. This does not establish arbitrary caller/environment composition. |
@@ -304,7 +306,7 @@ must not be described as closing the original campaign.
 | F7, entry realism | **Open and deferred:** general kernel-entry reachability, pending softirqs at BH-enable, user-modified KCOV counts, and allocator membership are not proved. Captured selected entries are tests, not a general realism theorem. Realistic concurrent contexts are outside this increment. |
 | F8, trusted inputs | The separate binary gate checks the clean pinned Kraken tree, axioms and printed statements/trust declarations. ELF/table comparison is a claim-point check. A new external replay is required for the landed port; old accepted exports do not cover it. |
 | F9, scaling | **Open:** subsystem-wide proof cost and coverage are unestablished. Historical region throughput and sibling adaptation costs are not a campaign forecast. |
-| F10, branch hygiene | Binary coverage is opt-in and ranges are supplied rather than hard-coded in the guest. The landing does not alter AGENTS.md. The unfinished Kraken example is isolated outside the dependency's library/proof import path. |
+| F10, branch hygiene | Binary coverage is opt-in and ranges are supplied rather than hard-coded in the guest. The landing does not alter AGENTS.md. All three unfinished Kraken example proofs are isolated outside the dependency's library/proof import path; the original F10 report explains that the reverted AGENTS paragraph was intended to advertise the charter gate. Its commands now live in `binary/README.md`. |
 | F11, claim limits | The explicit limits below remain part of the claim. Historical F1/F3/F4 defects are distinguished from the implemented corrections, rather than repeated as current facts. |
 
 The M1 lookup has no hidden-input hook, so its theorem alone exercises no
@@ -419,7 +421,7 @@ executable targets build without warnings (1,263 jobs)**. The printed
 trust-surface diff contains only the image identities and relocated service
 or random-provider addresses; no hypothesis was added, removed or weakened.
 The reviewed baseline was updated explicitly. **The separate binary gate
-passes**, including all printed headline axioms and clean private Kraken pin.
+passes**, including all 48 printed headline axiom checks and the clean private Kraken pin.
 The 15 Python tests also pass at the s5 carry.
 
 All six fresh s5 differential recordings pass: the two index lookup traces,
@@ -464,7 +466,7 @@ The combined leanexport finished with exit zero at code commit `73649245`,
 root modules `LookupSnapshotTransport`, `LookupWitness`, `LookupHitWitness`,
 `AllowedipsWitnessPre`, `PairCallbackSurface`, and `PairCallWitness`, including
 their complete declaration closure. It is the disposable
-`.tmp/binary-pair-landing.ndjson` (about 1.6 GiB), not a committed evidence file.
+`.tmp/binary-pair-landing.ndjson` (1,649,492,180 bytes), not a committed evidence file.
 The external command is the README's `lake check --from-export` form, run by
 the user outside Nono. **External acceptance of this export remains pending**;
 none of the historical accepted exports is evidence for this port.
@@ -490,3 +492,53 @@ main's future oracle identity. The existing identity tests pass (15 Python
 tests total), and the new preflight accepts the freshly captured s5 input.
 This wrapper-only repair does not alter the Lean closure exported at
 `73649245`.
+
+Actual lookup and both-family allowed-IPs captures and replays pass under two
+undefined-value seeds. Lookup compares 870,372 captured return bytes over
+506 instructions. The trie captures independently record 5 / 3 loop headers,
+execute 1,592 / 1,510 instructions, and compare 814,496 / 819,428 captured
+return bytes, plus the header bytes; all five corruption controls per family
+reject. Both load the complete 32 MiB callback allocation at entry. That full
+entry allocation is distinct from the smaller captured return ranges.
+Replay elapsed times were about 4 seconds (lookup) and 302 / 289 seconds
+(IPv4 / IPv6), with all work capped and concurrent. These remain deliberately
+serialized captures with interrupts and timers deferred within each call.
+
+### Final local disposition
+
+All six actual-capture replays finish with exit zero. In addition to lookup
+and both trie families above, removal compares 33,625,468 captured bytes over
+100 instructions and replacement compares 33,625,500 bytes over 115
+instructions, each under both seeds and with their corruption controls.
+Insertion compares all 33,626,368 captured endpoint bytes under both seeds,
+interprets 1,338 instructions including both actual random-service calls,
+and matches 1,354 native stops with exact REP multiplicities. Its full-buffer
+replay took approximately 11.4 minutes; it was never truncated, retried,
+or reported as passing before completion. No KILLED banner or host timeout
+occurred in the final s5 validation. The earlier explicit instruction-budget
+failure remains recorded above.
+
+The local acceptance set is complete: warning-free full binary build,
+standalone gate (48 headline statements, only the three standard axioms,
+clean locked Kraken and reviewed statement/trust diff), five image-generation
+comparisons, 136 mirror/harness unit tests (one skip), 15 binary Python tests,
+six fresh differential recordings, paired and retained-heap suites, exact
+formal-witness executions, four fresh kernel replays, and the six actual
+capture replays. The named M1 obligations in the table remain open as stated;
+this carry adds no whole-WireGuard or concurrent-context claim.
+
+The final handoff must remind the user to run, **outside Nono**, from the
+repository root:
+
+```sh
+cd .worktrees/binary-pair-landing/binary
+capped lake check --from-export ../.tmp/binary-pair-landing.ndjson
+```
+
+That completed export is the Lean closure at `73649245`; subsequent changes
+are the Python identity preflight and documentation, with no Lean statement
+or implementation changes. Record the external result before treating the
+landing as fully gated. The original experiment remains intact, and the
+landing branch is preserved for the user's integration decision. Disposable
+capture/recording outputs are removed after their conclusions are recorded;
+the export is retained only for the pending external check.
