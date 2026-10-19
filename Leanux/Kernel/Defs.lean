@@ -2064,6 +2064,14 @@ def noteNetRxStart (site : Nat) : AmbientM Unit := do
 def hidden (s : HiddenSite) : AmbientM (List UInt8) := do
   skipAmbient
   noteNetRxStart s.info.id
+  -- dispatch order: `process_one_work` clears the unit's PENDING bit
+  -- (`set_work_pool_and_clear_pending`, kernel/workqueue.c:3230) before it
+  -- calls the function (:3264), which is where its section starts; with
+  -- placeholders as with records (campaign 2's request 4, 2026-10-19: the
+  -- clearing sat in the record branch only, so a placeholder run kept every
+  -- bit it ever set)
+  if let .sectionStart ws := s then
+    modify fun st => { st with pendingWork := st.pendingWork.filter (· != ws.index) }
   let w ← get
   let i := s.info
   match w.hidden with
@@ -2097,10 +2105,6 @@ def hidden (s : HiddenSite) : AmbientM (List UInt8) := do
     if r.bytes.length != 8 * words || (r.bytes.drop i.len).any (· != 0) then
       throw (.hidden s!"{i.label}: {r.bytes.length} bytes, expected {i.len} padded to {8 * words}")
     set { w with hidden := some rest }
-    -- dispatch order: `process_one_work` clears the unit's PENDING bit before
-    -- it calls the function, which is where its section starts
-    if let .sectionStart ws := s then
-      modify fun st => { st with pendingWork := st.pendingWork.filter (· != ws.index) }
     return r.bytes.take i.len
 
 /-- A record's bytes as a little-endian natural (the 8-byte `jiffies`
@@ -2122,6 +2126,18 @@ def peekHiddenSite : AmbientM (Option Nat) := do
     records). The measure of the record-driven loops (review item 7). -/
 def recordsLeft : AmbientM Nat := do
   return ((← get).hidden.map (·.length)).getD 0
+
+/-- Dispatch order: the device-level work units whose PENDING bit is set
+    (`pendingWork`), as workers. A pending unit is one `queue_work_on` queued
+    (`queueDeviceWork`) and `process_one_work` has not yet taken: the kernel
+    runs its function once more, in a dispatch of its own with its own
+    section, even when the function then finds its ring empty (a requeue
+    during the unit's own run: `queue_work_on`'s `test_and_set_bit` passes
+    because `process_one_work` cleared the bit before the call, and
+    `__queue_work` places the item on the executing worker's list,
+    kernel/workqueue.c:2322-2325, 2374; campaign 2's request 4). -/
+def pendingDeviceUnits : AmbientM (List Worker) := do
+  return (← get).pendingWork.filterMap fun i => Worker.all.find? (·.index == i)
 
 /-- The value of the first record of site `s` among the operation's remaining
     records, without consuming it (`none` if there is none, or without
@@ -2413,6 +2429,7 @@ subsystem monads), inlined so each call site resolves its lift statically. -/
 @[inline] def hiddenU64 [Monad m] [MonadLiftT AmbientM m] (s : HiddenSite) : m Nat := monadLift (AmbientM.hiddenU64 s)
 @[inline] def peekHiddenSite [Monad m] [MonadLiftT AmbientM m] : m (Option Nat) := monadLift (AmbientM.peekHiddenSite )
 @[inline] def recordsLeft [Monad m] [MonadLiftT AmbientM m] : m Nat := monadLift (AmbientM.recordsLeft )
+@[inline] def pendingDeviceUnits [Monad m] [MonadLiftT AmbientM m] : m (List Worker) := monadLift (AmbientM.pendingDeviceUnits )
 @[inline] def peekSiteU64 [Monad m] [MonadLiftT AmbientM m] (s : HiddenSite) : m (Option UInt64) := monadLift (AmbientM.peekSiteU64 s)
 @[inline] def recordBudget [Monad m] [MonadLiftT AmbientM m] : m Nat := monadLift (AmbientM.recordBudget )
 @[inline] def budgetExhausted [Monad m] [MonadLiftT AmbientM m] (name : String) : m α := monadLift (AmbientM.budgetExhausted name : AmbientM α)

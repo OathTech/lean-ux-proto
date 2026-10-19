@@ -1188,6 +1188,16 @@ def executeTrace (trace : Trace) (placeholders : Bool := false) : Except (Nat ×
       throw (index, .hidden s!"a record of site {r.site} was not consumed")
     if let a :: _ := w.ambient.suspended then
       throw (index, .hidden s!"{a.worker.symbol} is still suspended at the end of the operation (its stop has no record)")
+    -- dispatch order: a device-level unit whose PENDING bit is set at the end
+    -- of an operation is a dispatch the kernel runs inside the guest's wait
+    -- (`Env.pendingDevice`), so its section belongs to this operation's
+    -- records; with records, its absence is a hidden mismatch (campaign 2's
+    -- request 4, 2026-10-19). Without records every unit runs in the fixed
+    -- order, pending ones included (`Env.schedule`).
+    if w.ambient.hidden.isSome then
+      if let i :: _ := w.ambient.pendingWork then
+        let name := ((Worker.all.find? (·.index == i)).map (·.symbol)).getD s!"unit {i}"
+        throw (index, .hidden s!"{name} is pending at the end of the operation (the dispatch its requeue causes has no section in the records)")
     if w.wg.netRxRaised then
       throw (index, .invariant "a NET_RX softirq raised by a loopback transmission was left pending")
     world := w
