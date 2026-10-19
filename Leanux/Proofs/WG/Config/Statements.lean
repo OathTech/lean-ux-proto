@@ -1,3 +1,6 @@
+import Leanux.Proofs.WG.Config.RequestWgChainClaims
+import Leanux.Proofs.WG.Config.ScalarCommandClaims
+import Leanux.Proofs.WG.Config.RequestCommandClaims
 import Leanux.Proofs.WG.Config.ConfiguredReadbackClaims
 import Leanux.Proofs.WG.Config.RequestFinalHeaderClaims
 import Leanux.Proofs.WG.Config.ScalarTailClaims
@@ -3408,5 +3411,116 @@ theorem original_coherent_mixed_key_readback (cs : Queues.RxCredits.Ledger)
         final.wg.nlSock7=socketReadbackFinal initial.wg.nlSock7 d ∧
         CursorHeld d (mixedPagesDevice d pages) none :=
   RequestOrder.FinalHeader.certificate_coherent_mixed_readback cs loans attrs shape initial inspected certificate pre ret middle normal r member kind before first selected key given d present ready headerFits cursorData idle emptyQueue within outcome matched
+
+open RequestOrder Configuration AllowedIps in
+/-- Every completed peer receipt in the original mixed request has its own same-run nested routing inspection and exact outer input position; original Stops remain unchanged. -/
+theorem original_request_nested_routing (attrs : DeviceAttrs) :
+    Campaign2.Observes (wgSetDevice attrs) (fun _=>True)
+      (fun entry outcome=>∃result:Inspection,result.outcome=outcome ∧
+        Certificate attrs entry result ∧ NestedCommands attrs result) :=
+  RequestOrder.original_request_nested_commands attrs
+
+
+open RequestOrder Configuration AllowedIps in
+/-- A negative completed allowed-IP call determines the enclosing peer return and makes that peer the final completed peer command of the same request. -/
+theorem original_request_nested_negative_cutoff (attrs : DeviceAttrs) (entry : Campaign2.Snapshot)
+    (result : Inspection) (facts : Certificate attrs entry result)
+    (i : Nat) (r : Receipt) (p : PeerAttrs)
+    (selected : (peerReceipts result.receipts)[i]?=some r)
+    (nested : AllowedOrder.Inspection) (point : PeerCommandFacts r p nested)
+    (e : RoutingCompletion) (member : e∈AllowedOrder.allowedEvents nested.completions)
+    (pid : PeerId) (ip : AllowedIpAttrs) (ret : Int)
+    (call : e.call=.allowedIp pid ip ret) (negative : ret<0) :
+    r.result=ret ∧ ∃before,peerReceipts result.receipts=before++[r] :=
+  RequestOrder.certificate_nested_negative_peer_last attrs entry result facts i r p selected nested point e member pid ip ret call negative
+
+
+open ScalarCommand PeerScalarRetention Queues.RxCredits Configuration in
+/-- An existing selected peer has the exact stamped scalar result of the original public command; initial ownership supplies the reference funding and negative allowed-IP exits retain the prior interval. -/
+theorem original_existing_peer_command_scalars (cs : Ledger) (loans : Reservations)
+    (attrs : PeerAttrs) (key : Key) (pid : PeerId) (before : Device)
+    (pubkey : attrs.publicKey=some key)
+    (valid : attrs.flags.getD 0 &&& ~~~WGPEER_F_ALL=0)
+    (protocol : attrs.protocolVersion=none ∨ attrs.protocolVersion=some 1)
+    (keep : attrs.flags.getD 0 &&& WGPEER_F_REMOVE_ME=0)
+    (found : before.peerHashtable.find? (·.1 == key)=some (key,pid)) :
+    Campaign2.Ensures (setPeerCmd attrs)
+      (fun s=>OwnerConfiguration.ProjectedEntry cs loans s ∧ s.wg.device=some before)
+      (fun ret s=>Index.View.ConfigurationInput cs loans s ∧
+        ∃ p,before.peers[pid]?=some p ∧
+          observation s pid=some (ScalarTail.tailCell attrs ret
+            (ScalarTail.prefixCell p attrs.presharedKey attrs.endpoint))) :=
+  ScalarCommand.original_existing_command cs loans attrs key pid before pubkey valid protocol keep found
+
+
+open RequestOrder RequestOrder.WgLinks in
+/-- Completed key and peer receipts of the original request form an actual WireGuard-state chain; only a normal outcome identifies its endpoint with the final state. -/
+theorem original_request_wireguard_receipt_links (attrs : DeviceAttrs) :
+    Campaign2.Observes (wgSetDevice attrs) (fun _=>True)
+      (fun initial outcome=>∃result:Inspection,result.outcome=outcome ∧
+        Certificate attrs initial result ∧ Facts result) :=
+  RequestOrder.WgLinks.original_request_wg_links attrs
+
+
+open RequestOrder RequestOrder.WgLinks in
+/-- The normal final WireGuard state is reached by the completed peer-receipt chain beginning at this request's completed key stage. -/
+theorem original_request_final_peer_chain (attrs : DeviceAttrs) (initial : Campaign2.Snapshot)
+    (result : Inspection) (certificate : Certificate attrs initial result)
+    (ret : Int) (final : Campaign2.Snapshot) (normal : result.outcome=.ok (ret,final))
+    (key : Receipt) (member : key∈result.receipts) (kind : key.kind=.keyStage) :
+    Chain key.after.wg (peerReceipts result.receipts) final.wg :=
+  RequestOrder.WgLinks.certificate_final_chain attrs initial result certificate ret final normal key member kind
+
+
+open RequestOrder RequestOrder.FinalHeader in
+/-- Arbitrary optional private-key attributes yield the original-entry retained or guarded-clamped private bytes, together with exact final header and port effects. -/
+theorem original_request_optional_private_effect (cs : Queues.RxCredits.Ledger)
+    (loans : Queues.RxCredits.Reservations) (attrs : DeviceAttrs)
+    (initial : Campaign2.Snapshot) (result : Inspection)
+    (certificate : Certificate attrs initial result)
+    (pre : OwnerConfiguration.ProjectedEntry cs loans initial)
+    (ret : Int) (final : Campaign2.Snapshot) (normal : result.outcome=.ok (ret,final))
+    (r : Receipt) (member : r∈result.receipts) (kind : r.kind=.keyStage)
+    (before : Device) (first : initial.wg.device=some before)
+    (current : Device) (present : final.wg.device=some current) :
+    Fields attrs before current ∧ PortSelected attrs before current.incomingPort ∧
+      current.staticIdentity.staticPrivate=requestedPrivate attrs before :=
+  RequestOrder.FinalHeader.certificate_requested_private cs loans attrs initial result certificate pre ret final normal r member kind before first current present
+
+
+open RequestOrder RequestOrder.FinalHeader Configuration in
+/-- The original mixed setter/getter pair with any optional private key returns exact requested header/key fields and serialized final data under explicit static pagination and socket bounds; readability is derived. -/
+theorem original_coherent_mixed_request_readback (cs : Queues.RxCredits.Ledger)
+    (loans : Queues.RxCredits.Reservations) (attrs : DeviceAttrs)
+    (shape : DeviceAddressShape attrs)
+    (initial : Campaign2.Snapshot) (inspected : Inspection)
+    (certificate : Certificate attrs initial inspected)
+    (pre : OwnerConfiguration.ProjectedEntry cs loans initial)
+    (ret : Int) (middle : Campaign2.Snapshot) (normal : inspected.outcome=.ok (ret,middle))
+    (r : Receipt) (member : r∈inspected.receipts) (kind : r.kind=.keyStage)
+    (before : Device) (first : initial.wg.device=some before)
+    (selected : ClaimView.selectsDevice initial before)
+    (d : Device) (present : middle.wg.device=some d)
+    (ready : MixedPageReady d (routingReadPeer d) (routingReadNode d)
+      (mixedInitialRows d (routingReadPeer d)) {hasWg:=true})
+    (headerFits : devicePrefixSpace d ≤ NLMSG_GOODSIZE)
+    (cursorData : MixedPlanCursorData d
+      (mixedPages d (routingReadPeer d) (routingReadNode d)
+        (mixedInitialRows d (routingReadPeer d)) {hasWg:=true} ready))
+    (idle : initial.wg.nlSock7.cbRunning=false) (emptyQueue : initial.wg.nlSock7.queue=[])
+    (within : mixedPageReceiveCount
+      (mixedPages d (routingReadPeer d) (routingReadNode d)
+        (mixedInitialRows d (routingReadPeer d)) {hasWg:=true} ready) ≤ 4096)
+    (outcome : Campaign2.Outcome (Int × Except Int Lean.Json))
+    (matched : ReadbackMatches attrs d initial inspected outcome) :
+    let pages := mixedPages d (routingReadPeer d) (routingReadNode d)
+      (mixedInitialRows d (routingReadPeer d)) {hasWg:=true} ready
+    Fields attrs before d ∧ PortSelected attrs before d.incomingPort ∧
+      d.staticIdentity.staticPrivate=requestedPrivate attrs before ∧
+      ∃ final,outcome=.ok ((ret,.ok (mixedGetterJson d (routingReadPeer d) (routingReadNode d))),final) ∧
+        final.wg.device=some (mixedPagesDevice d pages) ∧
+        final.wg.nlSock7=socketReadbackFinal initial.wg.nlSock7 d ∧
+        CursorHeld d (mixedPagesDevice d pages) none :=
+  RequestOrder.FinalHeader.certificate_requested_mixed_readback cs loans attrs shape initial inspected certificate pre ret middle normal r member kind before first selected d present ready headerFits cursorData idle emptyQueue within outcome matched
 
 end Leanux.Proofs.WG.Config

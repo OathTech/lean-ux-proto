@@ -92,4 +92,51 @@ theorem certificate_coherent_mixed_readback (cs : Queues.RxCredits.Ledger)
   exact certificate_mixed_readback cs loans attrs initial inspected certificate pre
     ret middle normal r member kind before first selected key given d present data
     ready headerFits cursorData idle emptyQueue within outcome matched
+theorem certificate_requested_mixed_readback (cs : Queues.RxCredits.Ledger)
+    (loans : Queues.RxCredits.Reservations) (attrs : DeviceAttrs)
+    (shape : DeviceAddressShape attrs)
+    (initial : Campaign2.Snapshot) (inspected : Inspection)
+    (certificate : Certificate attrs initial inspected)
+    (pre : OwnerConfiguration.ProjectedEntry cs loans initial)
+    (ret : Int) (middle : Campaign2.Snapshot) (normal : inspected.outcome=.ok (ret,middle))
+    (r : Receipt) (member : r∈inspected.receipts) (kind : r.kind=.keyStage)
+    (before : Device) (first : initial.wg.device=some before)
+    (selected : ClaimView.selectsDevice initial before)
+    (d : Device) (present : middle.wg.device=some d)
+    (ready : MixedPageReady d (routingReadPeer d) (routingReadNode d)
+      (mixedInitialRows d (routingReadPeer d)) {hasWg:=true})
+    (headerFits : devicePrefixSpace d ≤ NLMSG_GOODSIZE)
+    (cursorData : MixedPlanCursorData d
+      (mixedPages d (routingReadPeer d) (routingReadNode d)
+        (mixedInitialRows d (routingReadPeer d)) {hasWg:=true} ready))
+    (idle : initial.wg.nlSock7.cbRunning=false) (emptyQueue : initial.wg.nlSock7.queue=[])
+    (within : mixedPageReceiveCount
+      (mixedPages d (routingReadPeer d) (routingReadNode d)
+        (mixedInitialRows d (routingReadPeer d)) {hasWg:=true} ready) ≤ 4096)
+    (outcome : Campaign2.Outcome (Int × Except Int Lean.Json))
+    (matched : ReadbackMatches attrs d initial inspected outcome) :
+    let pages := mixedPages d (routingReadPeer d) (routingReadNode d)
+      (mixedInitialRows d (routingReadPeer d)) {hasWg:=true} ready
+    Fields attrs before d ∧ PortSelected attrs before d.incomingPort ∧
+      d.staticIdentity.staticPrivate=requestedPrivate attrs before ∧
+      ∃ final,outcome=.ok ((ret,.ok (mixedGetterJson d (routingReadPeer d) (routingReadNode d))),final) ∧
+        final.wg.device=some (mixedPagesDevice d pages) ∧
+        final.wg.nlSock7=socketReadbackFinal initial.wg.nlSock7 d ∧
+        CursorHeld d (mixedPagesDevice d pages) none := by
+  dsimp only
+  obtain ⟨fields,port,value⟩:=certificate_requested_private cs loans attrs initial inspected
+    certificate pre ret middle normal r member kind before first d present
+  have data:=OwnerConfiguration.certificate_dump_readable cs loans attrs shape
+    initial inspected certificate pre ret middle normal d present
+  have context:=certificate_context attrs initial inspected certificate ret middle normal before d first present
+  have selector:=certificate_selector attrs initial inspected certificate ret middle normal
+    before d first present fields selected
+  obtain ⟨_,_,_,last,equal,device,socket,held⟩:=certificate_key_mixed_readback
+    cs loans attrs initial inspected certificate pre ret middle normal r member kind
+    d present data selector ready headerFits cursorData
+    (by simpa only [context.1] using idle) (by simpa only [context.1] using emptyQueue)
+    within outcome matched
+  exact ⟨fields,port,value,last,equal,device,by simpa only [context.1] using socket,held⟩
+
+
 end Leanux.Proofs.WG.Config.RequestOrder.FinalHeader

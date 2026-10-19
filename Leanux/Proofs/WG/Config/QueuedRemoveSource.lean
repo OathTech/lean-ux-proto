@@ -136,6 +136,28 @@ theorem lookup_target (cs : Ledger) (loans : Reservations) (key : Key)
 
 /-- The original validating header leads to this same-call lookup/acquired
 suffix, with the existing source factory and an unchanged WG state. -/
+theorem command_lookup_default_cut (attrs : PeerAttrs) (key : Key)
+    (pubkey : attrs.publicKey=some key)
+    (valid : attrs.flags.getD 0 &&& ~~~WGPEER_F_ALL=0)
+    (protocol : attrs.protocolVersion=none ∨ attrs.protocolVersion=some 1)
+    (g v : WGWorld) (a b : Ambient) (result : Int)
+    (run : ((setPeerCmd attrs).run g).run a=.ok ((result,v),b)) :
+    ∃ first,
+      ((do let peer ← pubkeyLookup key
+           peerCommandAcquiredWith (fun {_} action=>action) peerCreate peerGet
+             (fun ret=>do peerPut none; _ ← branch .peerZeroPsk attrs.presharedKey.isSome; pure ret)
+             (Configuration.peerConfigUpdateSource attrs) key attrs.presharedKey (attrs.flags.getD 0) peer).run g).run first
+        =.ok ((result,v),b) := by
+  rw [←Configuration.setPeerCmd_source,Configuration.setPeerCmdSource_factor] at run
+  rcases protocol with protocol | protocol
+  all_goals cases psk : attrs.presharedKey
+  all_goals cases flags : attrs.flags
+  all_goals simp only [flags,Option.getD_none,Option.getD_some] at valid
+  all_goals simp [setPeerCmdWith,pubkey,flags,valid,protocol,psk,
+    WG.andM,branch,AmbientM.branch] at run
+  all_goals exact ⟨_,by simpa [psk,flags,branch,AmbientM.branch] using run⟩
+
+/-- The original explicit-flags cut is retained as an exact-type adapter. -/
 theorem command_lookup_cut (attrs : PeerAttrs) (key : Key) (flags : UInt32)
     (pubkey : attrs.publicKey=some key) (flagattr : attrs.flags=some flags)
     (valid : flags &&& ~~~WGPEER_F_ALL=0)
@@ -148,12 +170,9 @@ theorem command_lookup_cut (attrs : PeerAttrs) (key : Key) (flags : UInt32)
              (fun ret=>do peerPut none; _ ← branch .peerZeroPsk attrs.presharedKey.isSome; pure ret)
              (Configuration.peerConfigUpdateSource attrs) key attrs.presharedKey flags peer).run g).run first
         =.ok ((result,v),b) := by
-  rw [←Configuration.setPeerCmd_source,Configuration.setPeerCmdSource_factor] at run
-  rcases protocol with protocol | protocol
-  all_goals cases psk : attrs.presharedKey
-  all_goals simp [setPeerCmdWith,pubkey,flagattr,valid,protocol,psk,
-    WG.andM,branch,AmbientM.branch] at run
-  all_goals exact ⟨_,by simpa [psk,branch,AmbientM.branch] using run⟩
+  have cut := command_lookup_default_cut attrs key pubkey
+    (by simpa only [flagattr,Option.getD_some] using valid) protocol g v a b result run
+  simpa only [flagattr,Option.getD_some] using cut
 
 /-- The complete original command derives its selected caller from the
 initial table and funded base. Every later peer attribute is bypassed. -/

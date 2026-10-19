@@ -20,4 +20,10 @@ def PortSelected (attrs : DeviceAttrs) (before : Device) (actual : Nat) : Prop :
   | none => actual=before.incomingPort
   | some port => if port=0 then ZeroPortRequestChoice before actual else actual=port
 
+def requestedPrivate (attrs : DeviceAttrs) (before : Device) : Key :=
+  match attrs.privateKey with
+  | none=>before.staticIdentity.staticPrivate
+  | some key=>if before.staticIdentity.staticPrivate=key then key else clamp key
+
+
 end Leanux.Proofs.WG.Config.RequestOrder.FinalHeader

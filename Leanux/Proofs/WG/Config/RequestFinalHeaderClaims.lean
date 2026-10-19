@@ -141,4 +141,32 @@ theorem certificate_selector (attrs : DeviceAttrs) (initial : Campaign2.Snapshot
   have same:=certificate_context attrs initial result certificate ret final normal before after first last
   simpa only [ClaimView.selectsDevice,same.2,fields.1,fields.2.1] using selected
 
+theorem certificate_requested_private (cs : Queues.RxCredits.Ledger)
+    (loans : Queues.RxCredits.Reservations) (attrs : DeviceAttrs)
+    (initial : Campaign2.Snapshot) (result : Inspection)
+    (certificate : Certificate attrs initial result)
+    (pre : OwnerConfiguration.ProjectedEntry cs loans initial)
+    (ret : Int) (final : Campaign2.Snapshot) (normal : result.outcome=.ok (ret,final))
+    (r : Receipt) (member : r∈result.receipts) (kind : r.kind=.keyStage)
+    (before : Device) (first : initial.wg.device=some before)
+    (current : Device) (present : final.wg.device=some current) :
+    Fields attrs before current ∧ PortSelected attrs before current.incomingPort ∧
+      current.staticIdentity.staticPrivate=requestedPrivate attrs before := by
+  cases given : attrs.privateKey with
+  | none =>
+    obtain ⟨out,found,fields,port,identity⟩:=certificate_final_unchanged_identity
+      cs loans attrs initial result certificate pre ret final normal r member kind
+      before first (Or.inl given)
+    have equal : out=current:=Option.some.inj (found.symm.trans present)
+    subst out
+    exact ⟨fields,port,by simp only [requestedPrivate,given,identity]⟩
+  | some key =>
+    obtain ⟨out,found,fields,port,value⟩:=certificate_final_private
+      cs loans attrs initial result certificate pre ret final normal r member kind
+      before first key given
+    have equal : out=current:=Option.some.inj (found.symm.trans present)
+    subst out
+    exact ⟨fields,port,by simpa only [requestedPrivate,given] using value⟩
+
+
 end Leanux.Proofs.WG.Config.RequestOrder.FinalHeader

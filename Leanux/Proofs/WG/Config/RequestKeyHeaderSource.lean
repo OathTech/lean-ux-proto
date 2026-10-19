@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Config.RequestRecordSource
 import Leanux.Proofs.WG.Config.RequestKeyHeaderFrames
 import Leanux.Proofs.WG.Config.RequestInputClaims
 
@@ -15,18 +16,7 @@ theorem record_rule (attrs : DeviceAttrs) (initial : Campaign2.State) (kind : Ki
       let r:=receipt kind ⟨ret,g,v,a,b⟩
       History attrs initial (h++[r]) ∧ Q ret (h++[r]) v b) :
     StatePrefixEnsures P (History attrs initial) (record attrs kind) Q := by
-  intro g a h pre
-  have source:=runWGPrefix_receiptWGObserved
-    (liftWGPrefix (action attrs kind)) (receipt kind) g a h
-  rw [runWGPrefix_lift] at source
-  simp only [runWGPrefix,runStatePrefix] at source
-  unfold record
-  rw [source]
-  cases run : ((action attrs kind).run g).run a with
-  | error stop => exact ⟨[],by simp,safe h g a pre,trivial⟩
-  | ok out =>
-    rcases out with ⟨⟨ret,v⟩,b⟩
-    exact ⟨[receipt kind ⟨ret,g,v,a,b⟩],rfl,normal h g a ret v b pre run⟩
+  exact RequestOrder.record_state_rule attrs kind safe normal
 
 theorem history_frame {α : Type} (attrs : DeviceAttrs) (initial : Campaign2.State)
     (P : List Receipt→WGWorld→Prop) (action : WG.M α)
