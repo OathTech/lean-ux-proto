@@ -1,3 +1,7 @@
+import Leanux.Proofs.WG.Config.ConfiguredBoundaryClaims
+import Leanux.Proofs.WG.Config.ConfiguredTailClaims
+import Leanux.Proofs.WG.Config.ConfiguredRepresentationEffects
+import Leanux.Proofs.WG.Config.EmptyMetadataGetterClaims
 import Leanux.Proofs.WG.Config.ReplacementCompletionClaims
 import Leanux.Proofs.WG.Config.GetterMetadataFrames
 import Leanux.Proofs.WG.Config.ConfiguredRemovalClaims
@@ -2517,6 +2521,48 @@ theorem original_peer_remove_all_completion (cs : Queues.RxCredits.Ledger)
     Campaign2.Ensures peerRemoveAll (ReplaceCompletion.View.Input cs loans tables)
       (fun _ s => ReplaceCompletion.View.Empty s) :=
   ReplaceCompletion.removal_completion cs loans tables
+
+
+/-- Normal peer creation preserves represented configured owners, including
+allocation refusal. Success publishes the actual selected slot in the configured
+list; neither a successor representation nor allocation success is assumed. -/
+theorem original_peer_create_configured_owners (key : Key) (psk : Option Key) :
+    Campaign2.Ensures (peerCreate key psk) OwnerConfiguration.ProjectedReady
+      (fun result s => OwnerConfiguration.ProjectedReady s ∧
+        ∀ pid, result = .ok pid → ∃ d, s.wg.device = some d ∧ pid ∈ d.peerList) :=
+  OwnerConfiguration.original_create key psk
+
+/-- Original allowed-IP removal retains configured route ownership, deriving
+its resident target from the actual normal run. -/
+theorem original_remove_allowedips_configured_owners (pid : PeerId) :
+    Campaign2.Ensures (removeByPeer pid) OwnerConfiguration.ProjectedReady
+      (fun _ => OwnerConfiguration.ProjectedReady) :=
+  OwnerConfiguration.original_removeByPeer pid
+
+/-- The actual mixed allowed-IP, keepalive and staged-send tail preserves
+configured route ownership and pays its selected caller reference on every
+normal return, including malformed attributes and negative insertion results. -/
+theorem original_peer_tail_configured_owners (cs : Queues.RxCredits.Ledger)
+    (loans : Queues.RxCredits.Reservations) (paid : Queues.RxCredits.Owner)
+    (attrs : PeerAttrs) (shape : Configuration.PeerAddressShape attrs) :
+    Campaign2.Ensures (Configuration.peerConfigTailSource attrs (some paid.slot) paid.slot)
+      (OwnerConfiguration.ProjectedSelected cs (paid :: loans) paid.slot)
+      (fun _ => OwnerConfiguration.ProjectedEntry cs loans) :=
+  OwnerConfiguration.original_tail cs loans paid attrs shape
+
+
+/-- A configuration endpoint with its actual reference account has resident
+configured route owners and exact owner-list membership for both families.
+The representation may be supplied by another same-endpoint routing proof:
+structural uniqueness identifies it with the ownership witness. -/
+theorem original_configuration_boundary_owners (cs : Queues.RxCredits.Ledger)
+    (loans : Queues.RxCredits.Reservations) (s : Campaign2.Snapshot)
+    (d : Device) (t4 t6 : AllowedIps.Tree)
+    (entry : OwnerConfiguration.ProjectedEntry cs loans s)
+    (device : s.wg.device = some d)
+    (routing : AllowedIps.RoutingInvariant d t4 t6) :
+    ConfiguredOwners d t4 t6 ∧ ResidentOwnerLists d t4 t6 :=
+  OwnerConfiguration.projected_entry_resident cs loans s d t4 t6 entry device routing
 
 
 end Leanux.Proofs.WG.Config
