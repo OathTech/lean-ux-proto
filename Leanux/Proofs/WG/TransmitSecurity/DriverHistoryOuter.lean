@@ -35,17 +35,17 @@ theorem rtnetlink (body : PrefixM E Int) (hb : ProductHistorySafe Safe body) :
 
 end History
 
-theorem retained_history (h : HooksHistorySafe Safe g) (call : Syscall) :
+theorem retained_history (h : ActorHistorySafe Safe g) (call : Syscall) :
     ProductHistorySafe Safe (retainedObserved g call) := by
   cases call <;> unfold retainedObserved
   case wgUp => exact History.socketCall _ _ (envUp_history h)
   all_goals exact History.product_lift _
 
-theorem observe_history (h : HooksHistorySafe Safe g) :
+theorem observe_history (h : ActorHistorySafe Safe g) :
     ProductHistorySafe Safe (observeObserved g) :=
   History.product_bind (idleTimers_history h) (fun _ => History.product_lift _)
 
-theorem dispatchObserve_history (h : HooksHistorySafe Safe g) :
+theorem dispatchObserve_history (h : ActorHistorySafe Safe g) :
     ProductHistorySafe Safe (dispatchObserveObserved g) := by
   unfold dispatchObserveObserved
   apply History.product_bind (observe_history h)
@@ -55,7 +55,7 @@ theorem dispatchObserve_history (h : HooksHistorySafe Safe g) :
   intro _
   exact History.socketCall _ _ (History.product_pure ret)
 
-theorem dispatchSet_history (h : HooksHistorySafe Safe g) (attrs : DeviceAttrs) :
+theorem dispatchSet_history (h : ActorHistorySafe Safe g) (attrs : DeviceAttrs) :
     ProductHistorySafe Safe (dispatchSetObserved g attrs) :=
   History.netlink _ ((configDevice_history h attrs).liftWGObserver)
 
@@ -65,7 +65,7 @@ theorem dispatchCreate_history : ProductHistorySafe Safe dispatchCreateObserved 
 theorem dispatchDelete_history : ProductHistorySafe Safe dispatchDeleteObserved :=
   History.rtnetlink _ (History.product_lift _)
 
-theorem dispatch_history (h : HooksHistorySafe Safe g) (call : Syscall) :
+theorem dispatch_history (h : ActorHistorySafe Safe g) (call : Syscall) :
     ProductHistorySafe Safe (dispatchObserved g call) := by
   apply dispatchWith_preserves
   · exact fun call _ => retained_history h call
@@ -79,7 +79,7 @@ theorem dispatch_history (h : HooksHistorySafe Safe g) (call : Syscall) :
   · exact batch_history h
   · exact dispatchObserve_history h
 
-theorem syscall_history (h : HooksHistorySafe Safe g) (call : Syscall) :
+theorem syscall_history (h : ActorHistorySafe Safe g) (call : Syscall) :
     ProductHistorySafe Safe (syscallObserved g call) :=
   SyscallSource.preserves (I := fun h _ => Safe h) (S := Safe)
     (fun _ _ hi => hi) (fun _ _ _ _ hi => hi) call _ _ _ _ _ _ _
@@ -88,11 +88,16 @@ theorem syscall_history (h : HooksHistorySafe Safe g) (call : Syscall) :
 
 /-- Safe hook histories remain safe through every typed original runner trace,
 including its indexed Stop, both timer modes, and the original initialization. -/
-theorem initialized_history (h : HooksHistorySafe Safe g) (empty : Safe [])
+theorem initialized_actor_history (h : ActorHistorySafe Safe g) (empty : Safe [])
     (trace : Runner.Trace) (placeholders : Bool) :
     Safe (runPrefixOuter (executeObserved g trace placeholders) []).2 :=
   RunnerInvariant.executeTraceWith (fun h _ => Safe h) Safe
     (fun _ _ hi => hi) (fun _ _ _ _ hi => hi) (syscallObserved g)
     (syscall_history h) trace placeholders (fun _ _ => empty)
+
+theorem initialized_history (h : HooksHistorySafe Safe g) (empty : Safe [])
+    (trace : Runner.Trace) (placeholders : Bool) :
+    Safe (runPrefixOuter (executeObserved g trace placeholders) []).2 :=
+  initialized_actor_history h.actors empty trace placeholders
 
 end Leanux.Proofs.WG.TransmitSecurity.Driver

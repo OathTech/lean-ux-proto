@@ -137,6 +137,6 @@ theorem hooks_safe : HooksHistorySafe Safe Journal.hooks where
 actual packet, peer and socket action. Later Stop retains the receipt. -/
 theorem initialized (trace : Runner.Trace) (placeholders : Bool) :
     Safe (runPrefixOuter (Journal.execute trace placeholders) []).2 :=
-  Driver.initialized_history hooks_safe (by intro r member; cases member) trace placeholders
+  Driver.initialized_actor_history hooks_safe.actors (by intro r member; cases member) trace placeholders
 
 end Leanux.Proofs.WG.TransmitSecurity.Journal.SocketHistory

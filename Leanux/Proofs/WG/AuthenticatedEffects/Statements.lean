@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.TransportJournalInitialized
 import Leanux.Proofs.WG.AuthenticatedEffects.TransportCarrierOuter
 import Leanux.Proofs.WG.AuthenticatedEffects.TransportCarrierTraffic
 import Leanux.Proofs.WG.AuthenticatedEffects.TransportCarrierScheduler
@@ -924,5 +925,32 @@ theorem shared_initialized_authentication_carrier (extra : List E → Prop)
       (runPrefixOuter (TransmitSecurity.Driver.executeObserved hooks trace placeholders) []).2 ∧
     extra (runPrefixOuter (TransmitSecurity.Driver.executeObserved hooks trace placeholders) []).2 :=
   TransportCarrier.initialized callbacks front empty trace placeholders
+
+/-- Security: every replay-check receipt in an initialized combined journal
+belongs to its actual selected CRYPTED packet and carries a strictly earlier
+successful native AEAD publication. Failed outer runs retain the same fact;
+there is no callback, packet-validity or initialized-state premise. -/
+theorem initialized_replay_has_authenticated_packet (trace : Runner.Trace) (placeholders : Bool)
+    (pre post : List TransmitSecurity.Journal.Event) (r : TransportDriver.Replay)
+    (position : (runPrefixOuter (TransmitSecurity.Journal.execute trace placeholders) []).2 =
+      pre ++ TransmitSecurity.Journal.Event.replay r :: post) :
+    TransportReplay.Certified (pre.filterMap TransmitSecurity.Journal.origin?) r :=
+  TransportReplay.replay_authenticated (TransportJournal.initialized trace placeholders) position rfl
+
+/-- Security: every native responder-confirmation call observed in the
+initialized combined journal follows the immediately preceding successful
+replay check for that peer and key, certified by an earlier native AEAD
+publication. The result includes receipts before later consumer Stop and
+requires no assumed authentication or callback-order contract. -/
+theorem initialized_confirmation_has_authenticated_replay (trace : Runner.Trace) (placeholders : Bool)
+    (pre post : List TransmitSecurity.Journal.Event) (event : TransmitSecurity.Journal.Event)
+    (pid : PeerId) (kid : KeypairId) (r : WGRunWitness Bool)
+    (position : (runPrefixOuter (TransmitSecurity.Journal.execute trace placeholders) []).2 = pre ++ event :: post)
+    (recorded : TransmitSecurity.Journal.responder? event = some (.confirmed pid kid r)) :
+    r.Valid (receivedWithKeypair pid kid) ∧
+    ∃ earlier counter, pre = earlier ++ [TransmitSecurity.Journal.Event.replay counter] ∧
+      counter.packet.peer = pid ∧ counter.packet.keypair = kid ∧ counter.run.value = true ∧
+      TransportReplay.Certified (earlier.filterMap TransmitSecurity.Journal.origin?) counter :=
+  TransportJournal.confirmation_authenticated trace placeholders pre post event pid kid r position recorded
 
 end Leanux.Proofs.WG.AuthenticatedEffects

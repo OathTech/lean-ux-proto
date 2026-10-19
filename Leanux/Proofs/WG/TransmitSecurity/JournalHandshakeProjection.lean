@@ -91,7 +91,7 @@ observed handshake callback, even when a later operation stops. -/
 theorem initialized (trace : Runner.Trace) (placeholders : Bool) :
     HandshakeCausal.Safe ((runPrefixOuter (Journal.execute trace placeholders) []).2.filterMap handshake?) := by
   have projected := execute trace placeholders []
-  have safe := Driver.initialized_history HandshakeDriver.hooks_safe HandshakeCausal.empty_safe trace placeholders
+  have safe := Driver.initialized_actor_history HandshakeDriver.hooks_safe.actors HandshakeCausal.empty_safe trace placeholders
   rw [List.filterMap_nil] at projected
   rw [projected] at safe
   exact safe

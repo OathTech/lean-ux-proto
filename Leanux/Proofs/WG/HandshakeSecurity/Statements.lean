@@ -1,5 +1,6 @@
 import Leanux.Proofs.WG.HandshakeSecurity.ResponderPriorConfirmation
 import Leanux.Proofs.WG.HandshakeSecurity.ResponderDriverInitialized
+import Leanux.Proofs.WG.HandshakeSecurity.ResponderJournalConfirmation
 import Leanux.Proofs.WG.HandshakeSecurity.TimestampDriverProjection
 import Leanux.Proofs.WG.HandshakeSecurity.ResponderDeviceFrames
 import Leanux.Proofs.WG.HandshakeSecurity.ResponderDeferred
@@ -26,6 +27,12 @@ import Leanux.Proofs.WG.HandshakeSecurity.StagingSelectionFrames
 import Leanux.Proofs.WG.HandshakeSecurity.ResponderStagingFrames
 import Leanux.Proofs.WG.HandshakeSecurity.ResponderNativeClaims
 import Leanux.Proofs.WG.HandshakeSecurity.TimestampArchiveKeepalive
+import Leanux.Proofs.WG.HandshakeSecurity.TimestampArchiveTimerCalls
+import Leanux.Proofs.WG.HandshakeSecurity.TimestampArchivePoll
+import Leanux.Proofs.WG.HandshakeSecurity.TimestampArchiveStack
+import Leanux.Proofs.WG.HandshakeSecurity.TimestampArchiveWorker
+import Leanux.Proofs.WG.HandshakeSecurity.TimestampArchiveScheduler
+import Leanux.Proofs.WG.HandshakeSecurity.TimestampArchiveTimers
 import Leanux.Proofs.WG.HandshakeSecurity.ConfirmationOrderDriver
 
 /-! Native T4 replay and T5 confirmation boundaries. Initialized history,
@@ -738,5 +745,72 @@ theorem original_poll_preserves_confirmation_order {E : Type}
     (confirmed : hooks.confirmation = confirmation responder decode) (pid : PeerId) (budget : Nat) :
     ProductHistorySafe (Safe record decode) (nativePollObserved hooks pid budget) :=
   quiet_nativePoll record responder decode inverse quiet h counter confirmed pid budget
+
+/-- Native timer arming and deletion retain the replay archive for each peer
+allocation. The saved peer write keeps its actual read witness, so a stale
+timer copy cannot silently reset a retained timestamp in this contract. -/
+theorem original_timer_maintenance_timestamp_archive (pid : PeerId) (timer : PeerTimer)
+    (delay : Nat) (jc : Option UInt64) (history : List TimestampReceipt) :
+    Framing.Preserves (TimestampArchive.StateInv history) (armTimer pid timer delay jc) ∧
+    Framing.Preserves (TimestampArchive.StateInv history) (delTimer pid timer) :=
+  ⟨TimestampArchive.arm_timer pid timer delay jc history,
+    TimestampArchive.del_timer pid timer history⟩
+
+/-- The native receive poll cannot reset the timestamp history of a retained
+peer allocation, including confirmation, staging, routing cleanup and stopped
+prefixes. The actual stack callback's archive contract remains explicit. -/
+theorem original_receive_poll_timestamp_archive (pid : PeerId) (budget : Nat)
+    (callback : List (List UInt8) → PrefixM TimestampReceipt Unit)
+    (callbacks : ∀ packets, TimestampArchive.ProductPreserves (callback packets)) :
+    TimestampArchive.ProductPreserves
+      (TransmitSecurity.Driver.pollObserved TimestampDriver.hooks pid budget callback) :=
+  TimestampArchive.poll pid budget callback callbacks
+
+/-- Native handshake work carries each peer allocation's advancing timestamp
+archive through refusal, committed initiation writes, key installation and
+keepalive sends. The native receive poll also retains it through actual stack
+replies, so no callback preservation premise remains at these actor cuts. -/
+theorem original_handshake_and_receive_timestamp_archive (pid : PeerId) (budget : Nat) :
+    TimestampArchive.Preserves
+      (TransmitSecurity.Driver.handshakeObserved TimestampDriver.hooks) ∧
+    TimestampArchive.ProductPreserves
+      (TransmitSecurity.Driver.nativePollObserved TimestampDriver.hooks pid budget) :=
+  ⟨TimestampArchive.handshake_worker,TimestampArchive.native_poll pid budget⟩
+
+/-- Committed native worker scheduling retains the timestamp archive across
+handshake reception, encryption, decryption, transmit disposal and either NAPI
+mode. Failed copied scheduling trials add no committed receipts. The incoming
+archive carrier remains explicit until initialized runner transport closes. -/
+theorem original_scheduler_timestamp_archive (stack : Option Worker) :
+    TimestampArchive.ProductPreserves
+      (TransmitSecurity.Driver.scheduleObserved TimestampDriver.hooks stack) :=
+  TimestampArchive.schedule stack
+
+/-- Every native peer-timer callback retains the timestamp archive across
+retry accounting, queue purge, key retirement and actual keepalive staging.
+The archive's initialized outer transport is a separate obligation. -/
+theorem original_timer_callbacks_timestamp_archive (pid : PeerId) (timer : PeerTimer) :
+    TimestampArchive.Preserves
+      (TransmitSecurity.Driver.timerObserved TimestampDriver.hooks pid timer) :=
+  TimestampArchive.timer pid timer
+
+open TransmitSecurity in
+/-- A responder allocation selected by native staging has already undergone
+a successful confirmation triggered by the exact authenticated, replay-accepted
+packet in this initialized execution. H1's source slot rules remain explicit.
+Lifetime continuity from the earlier AEAD key to the confirmation allocation,
+and from staging to a later encryption, remain separate claims. -/
+theorem initialized_responder_selection_authenticated
+    (H1 : H1ResponderCurrentEdges) (trace : Runner.Trace) (placeholders : Bool)
+    (pre post : List Journal.Event) (event : Journal.Event) (pid : PeerId)
+    (r : WGRunWitness (Option (Peer × Option KeypairId)))
+    (position : (runPrefixOuter (Journal.execute trace placeholders) []).2 = pre ++ event :: post)
+    (recorded : Journal.responder? event = some (.selected pid r))
+    (p : Peer) (kid : KeypairId) (selected : r.value = some (p,some kid))
+    (core : Responder.KeyCore) (material : Responder.pool r.after kid = some core)
+    (responder : core.initiator = false) :
+    Responder.PriorAuthenticatedConfirmation pre core.allocation :=
+  Responder.journal_selected_authenticated_confirmation H1 trace placeholders
+    pre post event pid r position recorded p kid selected core material responder
 
 end Leanux.Proofs.WG.HandshakeSecurity

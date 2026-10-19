@@ -53,6 +53,10 @@ theorem quiet_staging (h : QuietHooksSafe Good hooks) (pid : PeerId) :
     StateHistorySafe Good (Driver.stagingObserved hooks pid) :=
   Driver.staging_history (quiet_hooks h) pid
 
+theorem quiet_keepalive (h : QuietHooksSafe Good hooks) (pid : PeerId) :
+    StateHistorySafe Good (Driver.keepaliveObserved hooks pid) :=
+  Driver.keepalive_actor_history (quiet_hooks h).actors pid
+
 theorem quiet_receiveTail (h : QuietHooksSafe Good hooks) (pid : PeerId)
     (pkt : RxPacket) (confirmed : Bool) :
     StateHistorySafe Good (Driver.receiveTailObserved hooks pid pkt confirmed) :=

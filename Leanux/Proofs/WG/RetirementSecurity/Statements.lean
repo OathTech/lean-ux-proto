@@ -1,3 +1,8 @@
+import Leanux.Proofs.WG.RetirementSecurity.HolderConsumeInitiation
+import Leanux.Proofs.WG.RetirementSecurity.SessionPeerFunding
+import Leanux.Proofs.WG.RetirementSecurity.HolderResponseSession
+import Leanux.Proofs.WG.RetirementSecurity.HandshakeSendDispatch
+import Leanux.Proofs.WG.RetirementSecurity.OccurrenceDriverCuts
 import Leanux.Proofs.WG.RetirementSecurity.OccurrenceInitialized
 import Leanux.Proofs.WG.RetirementSecurity.OccurrenceDumpFrames
 import Leanux.Proofs.WG.RetirementSecurity.OccurrenceLifecycle
@@ -1343,5 +1348,72 @@ theorem original_device_dump_tx_wire (ref : DeviceRef) (a b : Ambient)
     txCryptWire v = txCryptWire w :=
   (Lifetimes.ProjectedAction.iff_run_ambient _ _ _).mp
     (OccurrenceDump.dump_device_wire ref) w a result v b run
+
+/-- The shared driver's actual ring poll and intervening softirq derive a
+resident, unique selected encryption batch with an uncrypted head, disjoint from all
+other pending aliases, at the exact tail entry. The complete remaining run
+uses that same world and journal, even when the encryption tail Stops. The
+entry inventory is explicit; historical AEAD uniqueness is a separate claim. -/
+theorem shared_encryption_selection_cut {E : Type}
+    {w u v : World} {h j k : List E} {items : List SkbId}
+    {ρ : E → Option TransmitSecurity.Nonce.Allocation}
+    {hooks : TransmitSecurity.Driver.Hooks E}
+    (projects : TransmitSecurity.Driver.HooksProjects ρ hooks TransmitSecurity.Driver.nonceHooks)
+    (before : OccurrenceStack.Ready locals active w.wg)
+    (polled : Leanux.Proofs.Logged.runPrefix hooks.poll w h = (.ok (some items,u),j))
+    (callback : Leanux.Proofs.Logged.runPrefix
+      (TransmitSecurity.Driver.softirqObserved hooks) u j = (.ok ((),v),k)) :
+    OccurrenceStack.Ready locals (items :: active) v.wg ∧
+    OccurrenceDriverCuts.Selected active items v.wg ∧
+    Leanux.Proofs.Logged.runPrefix (TransmitSecurity.Driver.encryptIterObserved hooks) w h =
+      Leanux.Proofs.Logged.runPrefix (TransmitSecurity.Driver.encryptTailObserved hooks (some items)) v k :=
+  OccurrenceDriverCuts.entry projects before polled callback
+
+/-- Actual deferred handshake-send dispatch retains the exact key-reference
+ledger while paying the selected peer work reference. Source-funded peer
+holders and independent base/caller protection of published key slots are
+explicit inputs; peer funding is not a substitute for the key ledger, whose
+initialized whole-run transport remains open. -/
+theorem original_queued_handshake_key_account
+    (account : HolderAccount temporary w.wg)
+    (funded : holders.Funded carriers loans w.wg)
+    (stable : Queues.RxCredits.StableRx carriers w.wg)
+    (anchors : SlotPeerReferences holders loans w.wg)
+    (run : Env.runOneSendWorker.run w = .ok ((),v)) : HolderAccount temporary v.wg :=
+  account.dispatched_send funded stable anchors run
+
+/-- Native handshake-response production preserves the exact key-reference
+ledger through allocation, derivation, slot rotation and the socket/timer suffix,
+including normal refusal. The incoming allocation witness and key account stay
+explicit until the initialized key-credit invariant is closed. -/
+theorem original_handshake_response_key_account
+    (before : ReceiveEntry.Ready temporary w) (pid : PeerId) (a b : Ambient)
+    (run : ((sendHandshakeResponse pid).run w).run a = .ok (((),v),b)) :
+    ReceiveEntry.Ready temporary v :=
+  (hoare_iff_run_ambient _ _ _).mp (HolderResponse.response pid) w a () v b before run
+
+/-- Native session publication preserves the independent peer reference that
+protects its key slots. The selected real base occurrence and the exact incoming
+key account remain visible; the temporary handshake loan cannot fund both
+obligations. Whole initialized key-credit transport is a separate obligation. -/
+theorem original_session_reference_accounts
+    (before : ReceiveEntry.Ready temporary w)
+    (anchors : SlotPeerReferences holders loans w)
+    (funded : holders.Funded carriers loans w)
+    (selected : pid ∈ holders.base.map Queues.RxCredits.Owner.slot) (a b : Ambient)
+    (run : ((beginSession pid).run w).run a = .ok ((result,v),b)) :
+    ReceiveEntry.Ready temporary v ∧ SlotPeerReferences holders loans v :=
+  ⟨(hoare_iff_run_ambient _ _ _).mp (HolderResponse.session pid) w a result v b before run,
+    anchors.session_from_base funded selected a b run⟩
+
+/-- Original initiation and response consumption preserve exact key-reference
+accounting on authentication success and rejection. Each failed authentication
+pays its own actual nonzero peer acquisition, which cannot be a final peer
+release; no independent peer-credit premise is required. Initialized transport
+of the incoming key account remains a separate campaign obligation. -/
+theorem original_handshake_consumption_key_accounts (msg : List UInt8) :
+    Preserves (HolderAccount temporary) (consumeInitiation msg) ∧
+    Preserves (HolderAccount temporary) (consumeResponse msg) :=
+  ⟨HolderConsume.initiation msg,HolderConsume.response msg⟩
 
 end Leanux.Proofs.WG.RetirementSecurity

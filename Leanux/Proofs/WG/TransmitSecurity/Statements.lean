@@ -15,6 +15,8 @@ import Leanux.Proofs.WG.TransmitSecurity.JournalSocketHistory
 import Leanux.Proofs.WG.TransmitSecurity.CompletionEmission
 import Leanux.Proofs.WG.TransmitSecurity.Rekey
 import Leanux.Proofs.WG.TransmitSecurity.PacketOriginDriverOuter
+import Leanux.Proofs.WG.TransmitSecurity.ReservationEncryption
+import Leanux.Proofs.WG.TransmitSecurity.EncryptionCompletion
 
 /-! Campaign 3, T1 initialized counter reservations and local AEAD contracts.
 Transport from reservation through every actual AEAD invocation remains open. -/
@@ -451,5 +453,29 @@ theorem initialized_joint_encryption_allocation_origin (trace : Runner.Trace)
       pre ++ .encrypted r :: post) :
     r.Valid ∧ PacketOrigins.ReadOrigin pre r.id r.read :=
   PacketOrigins.initialized trace placeholders pre (.encrypted r) post position
+
+/-- Security: every actual AEAD in the initialized shared execution uses a
+below-limit packet nonce backed by a strictly earlier native reservation and
+its allocation-stamped nonce event in this same journal, including later Stop.
+No caller invariant is assumed. Key-material continuity and single consumption
+of reservations at encryption remain separate obligations. -/
+theorem initialized_joint_encryption_reservation (trace : Runner.Trace)
+    (placeholders : Bool) (pre post : List Journal.Event) (r : WorkerEncryption.Receipt)
+    (position : (runPrefixOuter (Journal.execute trace placeholders) []).2 =
+      pre ++ .encrypted r :: post) :
+    r.Valid ∧ r.cipher.packet.nonce < REJECT_AFTER_MESSAGES ∧
+      ReservationHistory.Reserved pre r.read.value.keypair r.read.value.nonce := by
+  obtain ⟨valid,bound,reserved⟩ := ReservationHistory.initialized_encryption trace placeholders pre post r position
+  exact ⟨valid,by simpa only [valid.2.2.2.1] using bound,reserved⟩
+
+/-- Security: normal completion of the native selected encryption tail marks
+its batch head crypted or dead, so it is no longer an uncrypted candidate.
+The source head equality is explicit. Global pending-alias exclusion and
+historical encryption uniqueness remain separate obligations. -/
+theorem original_encryption_tail_terminal (items : List SkbId) (first : SkbId)
+    (head : items.head? = some first) :
+    Framing.Hoare (Queues.RxWorkers.encryptStepTailSource (some items)) (fun _ => True)
+      (fun _ w => EncryptionCompletion.Terminal first w.wg) :=
+  EncryptionCompletion.native_tail items first head
 
 end Leanux.Proofs.WG.TransmitSecurity

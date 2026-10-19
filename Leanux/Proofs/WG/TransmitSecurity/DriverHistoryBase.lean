@@ -32,6 +32,27 @@ structure HooksHistorySafe (Safe : List E → Prop) (hooks : Hooks E) : Prop whe
   encrypt : ∀ item, ProductHistorySafe Safe (hooks.encrypt item)
   transmit : ∀ pid, ProductHistorySafe Safe (hooks.transmit pid)
 
+/-- Complete staging is the boundary for properties relating reservations to
+allocated packets. Requiring arbitrary allocation arguments to preserve such a
+property would discard that source relationship. Other callback contracts stay
+explicit and the original native driver remains unchanged. -/
+structure ActorHistorySafe (Safe : List E → Prop) (hooks : Hooks E) : Prop where
+  staging : ∀ pid, StateHistorySafe Safe (stagingObserved hooks pid)
+  handshake : ∀ (session : PeerId → WGPrefix E Bool) (keepalive : PeerId → WGPrefix E Unit),
+    (∀ pid, StateHistorySafe Safe (session pid)) →
+    (∀ pid, StateHistorySafe Safe (keepalive pid)) →
+    StateHistorySafe Safe (hooks.handshake session keepalive)
+  sendWorker : ProductHistorySafe Safe hooks.sendWorker
+  prepare : ProductHistorySafe Safe hooks.prepare
+  counterCheck : ∀ skb pkt, ProductHistorySafe Safe (hooks.counterCheck skb pkt)
+  timerSelected : ∀ d j pid t we, ProductHistorySafe Safe (hooks.timerSelected d j pid t we)
+  confirmation : ∀ pid kid, StateHistorySafe Safe (hooks.confirmation pid kid)
+  session : ∀ pid, StateHistorySafe Safe (hooks.session pid)
+  front : ∀ family addr packets mtu, StateHistorySafe Safe (hooks.front family addr packets mtu)
+  poll : ProductHistorySafe Safe hooks.poll
+  encrypt : ∀ item, ProductHistorySafe Safe (hooks.encrypt item)
+  transmit : ∀ pid, ProductHistorySafe Safe (hooks.transmit pid)
+
 namespace History
 variable {Safe : List E → Prop}
 

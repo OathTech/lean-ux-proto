@@ -11,7 +11,7 @@ theorem resched_history (worker : Worker) (site : Decision) :
   unfold reschedObserved
   repeat' driver_product_history_step
 
-theorem encryptTail_history (h : HooksHistorySafe Safe g) (item : Option (List SkbId)) :
+theorem encryptTail_history (h : ActorHistorySafe Safe g) (item : Option (List SkbId)) :
     ProductHistorySafe Safe (encryptTailObserved g item) := by
   unfold encryptTailObserved workerIterPrefix
   repeat' first
@@ -21,7 +21,7 @@ theorem encryptTail_history (h : HooksHistorySafe Safe g) (item : Option (List S
     | (driver_history_head reschedObserved; exact resched_history _ _)
     | driver_product_history_step
 
-theorem encryptIter_history (h : HooksHistorySafe Safe g) :
+theorem encryptIter_history (h : ActorHistorySafe Safe g) :
     ProductHistorySafe Safe (encryptIterObserved g) := by
   unfold encryptIterObserved
   repeat' first
@@ -32,7 +32,7 @@ theorem encryptIter_history (h : HooksHistorySafe Safe g) :
     | (driver_history_head encryptTailObserved; exact encryptTail_history h _)
     | driver_product_history_step
 
-theorem txIter_history (h : HooksHistorySafe Safe g) (pid : PeerId) :
+theorem txIter_history (h : ActorHistorySafe Safe g) (pid : PeerId) :
     ProductHistorySafe Safe (txIterObserved g pid) := by
   unfold txIterObserved workerIterPrefix
   repeat' first
@@ -42,7 +42,7 @@ theorem txIter_history (h : HooksHistorySafe Safe g) (pid : PeerId) :
     | (driver_history_head reschedObserved; exact resched_history _ _)
     | driver_product_history_step
 
-theorem decryptStep_history (h : HooksHistorySafe Safe g) :
+theorem decryptStep_history (h : ActorHistorySafe Safe g) :
     ProductHistorySafe Safe (decryptStepObserved g) := by
   unfold decryptStepObserved RxWorkers.decryptWith
   repeat' first
@@ -52,7 +52,7 @@ theorem decryptStep_history (h : HooksHistorySafe Safe g) :
     | (driver_history_head irqExitObserved; exact irqExit_history h)
     | driver_product_history_step
 
-theorem decryptIter_history (h : HooksHistorySafe Safe g) :
+theorem decryptIter_history (h : ActorHistorySafe Safe g) :
     ProductHistorySafe Safe (decryptIterObserved g) := by
   unfold decryptIterObserved workerIterPrefix
   repeat' first
@@ -62,7 +62,7 @@ theorem decryptIter_history (h : HooksHistorySafe Safe g) :
     | (driver_history_head reschedObserved; exact resched_history _ _)
     | driver_product_history_step
 
-theorem receiveIter_history (h : HooksHistorySafe Safe g) :
+theorem receiveIter_history (h : ActorHistorySafe Safe g) :
     ProductHistorySafe Safe (receiveIterObserved g) := by
   unfold receiveIterObserved workerIterPrefix
   repeat' first
@@ -71,7 +71,7 @@ theorem receiveIter_history (h : HooksHistorySafe Safe g) :
     | (driver_history_head handshakeObserved; exact (handshake_history h).liftWGObserver)
     | driver_product_history_step
 
-theorem cryptAhead_history (h : HooksHistorySafe Safe g) (pid : PeerId) :
+theorem cryptAhead_history (h : ActorHistorySafe Safe g) (pid : PeerId) :
     ProductHistorySafe Safe (cryptAheadObserved g pid) := by
   unfold cryptAheadObserved
   repeat' first
@@ -80,7 +80,7 @@ theorem cryptAhead_history (h : HooksHistorySafe Safe g) (pid : PeerId) :
     | (driver_history_head encryptIterObserved; exact encryptIter_history h)
     | driver_product_history_step
 
-theorem iteration_history (h : HooksHistorySafe Safe g) (act : Activation) :
+theorem iteration_history (h : ActorHistorySafe Safe g) (act : Activation) :
     ProductHistorySafe Safe (iterationObserved g act) := by
   unfold iterationObserved
   repeat' first
@@ -93,7 +93,7 @@ theorem iteration_history (h : HooksHistorySafe Safe g) (act : Activation) :
     | (driver_history_head cryptAheadObserved; exact cryptAhead_history h _)
     | driver_product_history_step
 
-private theorem schedulerRun (h : HooksHistorySafe Safe g) (act : Activation) :
+private theorem schedulerRun (h : ActorHistorySafe Safe g) (act : Activation) :
     ProductHistorySafe Safe (SourceScheduler.run (iterationObserved g) act) := by
   unfold SourceScheduler.run
   repeat' first
@@ -102,7 +102,7 @@ private theorem schedulerRun (h : HooksHistorySafe Safe g) (act : Activation) :
     | (driver_history_head iterationObserved; exact iteration_history h _)
     | driver_product_history_step
 
-private theorem schedulerDispatch (h : HooksHistorySafe Safe g) (worker : Worker) :
+private theorem schedulerDispatch (h : ActorHistorySafe Safe g) (worker : Worker) :
     ProductHistorySafe Safe (SourceScheduler.dispatch (iterationObserved g) worker) := by
   unfold SourceScheduler.dispatch
   repeat' first
@@ -111,7 +111,7 @@ private theorem schedulerDispatch (h : HooksHistorySafe Safe g) (worker : Worker
     | (driver_history_head SourceScheduler.run; exact schedulerRun h _)
     | driver_product_history_step
 
-theorem schedule_history (h : HooksHistorySafe Safe g) (stack : Option Worker) :
+theorem schedule_history (h : ActorHistorySafe Safe g) (stack : Option Worker) :
     ProductHistorySafe Safe (scheduleObserved g stack) := by
   unfold scheduleObserved SourceScheduler.schedule
   repeat' first

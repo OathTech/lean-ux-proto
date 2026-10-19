@@ -190,4 +190,20 @@ theorem write_saved (pid : PeerId) (p : Peer) (f : Peer → Peer)
     exact ⟨p,w,a,getter,run⟩
   exact (hoare_iff_run_ambient _ _ _).mp (update_peer pid f same history) _ _ _ _ _ hi.1 whole
 
+theorem write_cell (pid : PeerId) (p q : Peer)
+    (same : (q.internalId,q.latestTimestamp) = (p.internalId,p.latestTimestamp))
+    (history : List TimestampReceipt) :
+    Hoare (setPeer pid q) (fun w => StateInv history w ∧ Responder.SavedNativePeer pid p w)
+      (fun _ => StateInv history) := by
+  apply (hoare_iff_run_ambient _ _ _).mpr
+  intro w a result v b hi run
+  obtain ⟨d,device,peer⟩ := hi.2
+  have equal : freshnessAt v = freshnessAt w :=
+    (hoare_iff_run_ambient _ _ _).mp
+      (Freshness.write_saved (fun value => value = freshnessAt w) pid q) _ _ _ _ _
+      ⟨rfl,by simp [freshnessAt,device,peer,same]⟩ run
+  apply state_retained hi.1 (fun pid stamp found => by rw [← equal]; exact found)
+  cases run
+  exact Nat.le_refl _
+
 end Leanux.Proofs.WG.HandshakeSecurity.TimestampArchive

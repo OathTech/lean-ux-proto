@@ -6,7 +6,7 @@ variable {E : Type} {Safe : List E → Prop} {g : Hooks E}
 set_option maxHeartbeats 600000
 set_option pp.structureInstances false
 
-theorem crypt_history (h : HooksHistorySafe Safe g) :
+theorem crypt_history (h : ActorHistorySafe Safe g) :
     ProductHistorySafe Safe (cryptObserved g) := by
   unfold cryptObserved
   repeat' first
@@ -15,7 +15,7 @@ theorem crypt_history (h : HooksHistorySafe Safe g) :
     | (driver_history_head scheduleObserved; exact schedule_history h _)
     | driver_product_history_step
 
-theorem sendWorkers_history (h : HooksHistorySafe Safe g) :
+theorem sendWorkers_history (h : ActorHistorySafe Safe g) :
     ProductHistorySafe Safe (sendWorkersObserved g) := by
   unfold sendWorkersObserved
   repeat' first
@@ -24,7 +24,7 @@ theorem sendWorkers_history (h : HooksHistorySafe Safe g) :
     | (driver_history_head scheduleObserved; exact schedule_history h _)
     | driver_product_history_step
 
-theorem afterXmit_history (h : HooksHistorySafe Safe g) :
+theorem afterXmit_history (h : ActorHistorySafe Safe g) :
     ProductHistorySafe Safe (afterXmitObserved g) := by
   unfold afterXmitObserved
   repeat' first
@@ -42,7 +42,7 @@ theorem timerSection_history (worker : Worker)
     | exact hb
     | driver_product_history_step
 
-theorem timers_history (h : HooksHistorySafe Safe g) (j : UInt64) :
+theorem timers_history (h : ActorHistorySafe Safe g) (j : UInt64) :
     ProductHistorySafe Safe (timersObserved g j) := by
   unfold timersObserved
   repeat' first
@@ -55,7 +55,7 @@ theorem timers_history (h : HooksHistorySafe Safe g) (j : UInt64) :
     | (driver_history_head Hooks.timerSelected; exact h.timerSelected _ _ _ _ _)
     | driver_product_history_step
 
-theorem placeholder_history (h : HooksHistorySafe Safe g) (j : UInt64) :
+theorem placeholder_history (h : ActorHistorySafe Safe g) (j : UInt64) :
     ProductHistorySafe Safe (placeholderTimersObserved g j) := by
   unfold placeholderTimersObserved
   repeat' first
@@ -69,7 +69,7 @@ theorem placeholder_history (h : HooksHistorySafe Safe g) (j : UInt64) :
     | (driver_history_head Hooks.timerSelected; exact h.timerSelected _ _ _ _ _)
     | driver_product_history_step
 
-theorem idleTimers_history (h : HooksHistorySafe Safe g) :
+theorem idleTimers_history (h : ActorHistorySafe Safe g) :
     ProductHistorySafe Safe (idleTimersObserved g) := by
   unfold idleTimersObserved
   simp only [Functor.discard,map_const,Function.comp_apply,Function.const,map_eq_pure_bind]
@@ -80,7 +80,7 @@ theorem idleTimers_history (h : HooksHistorySafe Safe g) :
     | (driver_history_head placeholderTimersObserved; exact placeholder_history h _)
     | driver_product_history_step
 
-theorem afterAdvance_history (h : HooksHistorySafe Safe g) :
+theorem afterAdvance_history (h : ActorHistorySafe Safe g) :
     ProductHistorySafe Safe (afterAdvanceObserved g) := by
   unfold afterAdvanceObserved
   simp only [Functor.discard,map_const,Function.comp_apply,Function.const,map_eq_pure_bind]
