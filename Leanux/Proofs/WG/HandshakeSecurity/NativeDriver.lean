@@ -39,6 +39,8 @@ theorem state_erasure {g : WGPrefix E α} {a : WG.M α}
 theorem nonce_projection : Driver.HooksProjects erase Driver.nonceHooks hooks where
   handshake := fun sg sa kg ka hs hk =>
     AuthenticatedEffects.HandshakeWorker.projects erase sg sa kg ka hs hk
+  armTimer := fun _ _ _ _ => Driver.Projection.state_lift erase _
+  queueSend := fun _ => Driver.Projection.state_lift erase _
   flushedSend := fun _ => Driver.Projection.state_lift erase _
   candidate := ⟨id,fun _ _ => projectsPrefix_pure erase id 0,
     fun _ => projectsPrefix_pure erase id ()⟩

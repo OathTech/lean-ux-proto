@@ -1,3 +1,7 @@
+import Leanux.Proofs.WG.RetirementSecurity.SlotAnchorConsumers
+import Leanux.Proofs.WG.RetirementSecurity.HolderPeerCreationSlots
+import Leanux.Proofs.WG.RetirementSecurity.HolderShutdown
+import Leanux.Proofs.WG.RetirementSecurity.ConfiguredSessionFunding
 import Leanux.Proofs.WG.RetirementSecurity.HolderBulkRemoval
 import Leanux.Proofs.WG.RetirementSecurity.HolderRemovalConfiguration
 import Leanux.Proofs.WG.RetirementSecurity.HolderRemoval
@@ -1582,5 +1586,57 @@ theorem original_bulk_removal_key_accounts
     (run : (peerRemoveAll.run w).run a = .ok (((),v),b)) :
     HolderDrain.Ready (holders.withoutBase []) carriers loans temporary v :=
   HolderRemoval.all_peers keys peers stable anchors a b run
+
+/-- Normal native session publication derives the selected peer's independent
+base reference from the configured registry and actual funded base list. The
+caller need not assume selected-slot membership; global initialization of the
+stated registry and ledgers remains a separate obligation. -/
+theorem original_session_configured_slot_protection
+    (anchors : SlotPeerReferences holders loans w)
+    (peers : holders.Funded carriers loans w)
+    (coherent : Queues.RxCredits.BaseCoherence.Inv w) (configured : ConfiguredIdentity.Inv w)
+    (pid : PeerId) (a b : Ambient)
+    (run : ((beginSession pid).run w).run a = .ok ((result,v),b)) :
+    SlotPeerReferences holders loans v :=
+  anchors.session_configured peers coherent configured pid a b run
+
+/-- Native device-down clears publication slots and pays actual queued work
+without losing key credit held by pending RX/TX packets. A normal return retains
+both exact ledgers and independent slot protection; it does not assert immediate
+key destruction or complete initialization of the supplied accounts. -/
+theorem original_device_down_key_accounts
+    (before : HolderDrain.Ready original carriers loans temporary w) (a b : Ambient)
+    (run : (wgDown.run w).run a = .ok (((),v),b)) :
+    HolderDrain.Ready original carriers loans temporary v :=
+  (hoare_iff_run_ambient _ _ _).mp HolderShutdown.down w a () v b before run
+
+/-- Native peer creation retains exact key credit and independently accounts
+for its actual new peer reference. Freshness follows from the configured
+registry; allocation refusal preserves the old holders. This is a native caller
+cut, with initialized transport of its incoming ledgers still explicit. -/
+theorem original_peer_creation_key_accounts (key : Key) (psk : Option Key)
+    (keys : HolderAccount temporary w) (peers : holders.Funded carriers loans w)
+    (stable : Queues.RxCredits.StableRx carriers w) (anchors : SlotPeerReferences holders loans w)
+    (configured : ConfiguredIdentity.Inv w) (a b : Ambient)
+    (run : ((peerCreate key psk).run w).run a = .ok ((result,v),b)) :
+    match result with
+    | .error _ => HolderDrain.Ready holders carriers loans temporary v
+    | .ok pid => ∃ d,w.dev=some d ∧ pid=d.nextPeer ∧
+        HolderDrain.Ready (Queues.RxCredits.HolderCreation.addBase holders
+          (Queues.RxCredits.BaseCreation.owner w d)) carriers loans temporary v :=
+  HolderPeerCreation.accounts key psk keys peers stable anchors configured a b run
+
+/-- Native handshake consumers preserve the independent stamped protection of
+every surviving peer with a published key slot, including failed authentication
+and replay rejection. This is slot protection, not cryptographic authentication
+or initialized key-credit accounting. -/
+theorem original_handshake_consumers_slot_protection
+    (anchors : SlotPeerReferences holders loans w) (msg : List UInt8) (response : Bool)
+    (a b : Ambient)
+    (run : (((if response then consumeResponse msg else consumeInitiation msg) : WG.M (Option PeerId)).run w).run a =
+      .ok ((result,v),b)) : SlotPeerReferences holders loans v := by
+  cases response with
+  | false => exact (hoare_iff_run_ambient _ _ _).mp (SlotAnchors.consume_initiation msg) w a result v b anchors run
+  | true => exact (hoare_iff_run_ambient _ _ _).mp (SlotAnchors.consume_response msg) w a result v b anchors run
 
 end Leanux.Proofs.WG.RetirementSecurity

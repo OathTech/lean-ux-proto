@@ -64,6 +64,8 @@ theorem transmit (pid : PeerId) :
 theorem hooks : Driver.HooksProjects handshake? Journal.hooks HandshakeDriver.hooks where
   handshake := HandshakeWorker.observed_matching Event.handshake handshake? (fun _ => rfl)
   flushedSend := fun _ => Driver.Projection.state_lift handshake? _
+  armTimer := fun _ _ _ _ => Driver.Projection.state_lift handshake? _
+  queueSend := fun _ => Driver.Projection.state_lift handshake? _
   candidate := ⟨id, (fun _ _ => projectsPrefix_pure handshake? id 0),
     (fun _ => projectsPrefix_pure handshake? id ())⟩
   prepare := AuthenticatedEffects.TransportDriver.prepare_projects_other Event.rxOrigin origin? handshake? (fun _ => rfl)

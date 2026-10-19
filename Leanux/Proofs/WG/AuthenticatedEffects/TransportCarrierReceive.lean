@@ -37,9 +37,9 @@ theorem timer_rx (pid : PeerId) (timer : PeerTimer) :
 theorem timer (h : StagingSafe extra origin replay hooks) (pid : PeerId) (t : PeerTimer) :
     StateSafe extra origin replay (timerObserved hooks pid t) := by
   cases t <;> unfold timerObserved
-  · exact state_rx _ (timer_rx pid .retransmitHandshake)
+  · exact effects_retransmit h.toEffectsSafe pid
   · exact expired h pid
-  · exact state_rx _ (timer_rx pid .newHandshake)
+  · exact effects_expiredNew h.toEffectsSafe pid
   · exact state_rx _ (timer_rx pid .zeroKeyMaterial)
   · exact persistent h pid
 
@@ -48,6 +48,7 @@ theorem receiveTail (h : StagingSafe extra origin replay hooks) (pid : PeerId) (
   unfold receiveTailObserved
   repeat' first
     | (transport_carrier_head stagingObserved; exact staging h _)
+    | (transport_carrier_head PacketEffects.prepareWith; exact effects_prepare h.toEffectsSafe _ _)
     | (transport_carrier_head liftWGPrefix; first
        | solve | transport_carrier_native RxCredits.prepareRest; exact state_rx _ (prepareRest_rx _ _)
        | solve | transport_carrier_native Packets.rxFinish; exact state_rx _ (finish_rx _ _)

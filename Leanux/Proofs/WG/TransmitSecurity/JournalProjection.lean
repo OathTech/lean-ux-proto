@@ -95,6 +95,8 @@ theorem hooks_projects : Driver.HooksProjects nonce? hooks Driver.nonceHooks whe
   handshake := AuthenticatedEffects.HandshakeWorker.observed_projects Event.handshake handshake? nonce?
     (fun _ => rfl)
   flushedSend := fun _ => Driver.Projection.state_lift nonce? _
+  armTimer := fun _ _ _ _ => Driver.Projection.state_lift nonce? _
+  queueSend := fun _ => Driver.Projection.state_lift nonce? _
   candidate := ⟨id, (fun _ _ => projectsPrefix_pure nonce? id 0),
     (fun _ => projectsPrefix_pure nonce? id ())⟩
   prepare := AuthenticatedEffects.TransportDriver.prepare_projects_other Event.rxOrigin origin? nonce? (fun _ => rfl)

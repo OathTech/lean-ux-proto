@@ -19,6 +19,8 @@ structure HooksHistorySafe (Safe : List E → Prop) (hooks : Hooks E) : Prop whe
     StateHistorySafe Safe (hooks.handshake session keepalive)
   sendWorker : ProductHistorySafe Safe (sendWorkerObserved hooks)
   flushedSend : ∀ pid, StateHistorySafe Safe (hooks.flushedSend pid)
+  armTimer : ∀ pid timer delay caller, StateHistorySafe Safe (hooks.armTimer pid timer delay caller)
+  queueSend : ∀ pid, StateHistorySafe Safe (hooks.queueSend pid)
   candidateEnter : ∀ skb pkt, ProductHistorySafe Safe (hooks.candidateEnter skb pkt)
   candidateLeave : ∀ token, ProductHistorySafe Safe (hooks.candidateLeave token)
   prepare : ProductHistorySafe Safe hooks.prepare
@@ -47,6 +49,8 @@ structure ActorHistorySafe (Safe : List E → Prop) (hooks : Hooks E) : Prop whe
     StateHistorySafe Safe (hooks.handshake session keepalive)
   sendWorker : ProductHistorySafe Safe (sendWorkerObserved hooks)
   flushedSend : ∀ pid, StateHistorySafe Safe (hooks.flushedSend pid)
+  armTimer : ∀ pid timer delay caller, StateHistorySafe Safe (hooks.armTimer pid timer delay caller)
+  queueSend : ∀ pid, StateHistorySafe Safe (hooks.queueSend pid)
   candidateEnter : ∀ skb pkt, ProductHistorySafe Safe (hooks.candidateEnter skb pkt)
   candidateLeave : ∀ token, ProductHistorySafe Safe (hooks.candidateLeave token)
   prepare : ProductHistorySafe Safe hooks.prepare

@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.CompletionEffectsProjection
+import Leanux.Proofs.WG.AuthenticatedEffects.LifetimeEffectsFocus
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalEffectsFrames
 import Leanux.Proofs.WG.AuthenticatedEffects.HandshakeWorkerParametric
 import Leanux.Proofs.WG.AuthenticatedEffects.PacketEffectsErasure
@@ -1085,5 +1087,28 @@ theorem packet_effects_retain_current_scope
     StateHistoryFrame decode
       (PacketEffects.prepareWith (CausalEffects.ops decode recordArm recordQueue) pid pkt) :=
   PacketEffects.prepare_frame decode (CausalEffects.ops_frames decode recordArm recordQueue decode ha hq) pid pkt
+
+/-- Security: the effect-parametric TX completion source retains the original
+packet reads, socket receipts, lifetime accesses and error paths. This exact
+source factor enables causal instrumentation; it does not assert authorization. -/
+theorem completion_effect_source_keeps_existing_worker (pid : PeerId) :
+    CompletionEffects.stepWith CompletionEffects.native pid = TransmitSecurity.Completion.step pid :=
+  CompletionEffects.step_factor pid
+
+/-- Security: causal timer/work receipts preserve the complete original lifetime
+journal, including accesses before a Stop. Every other callback and the silent
+receipt projection remain explicit; causal authorization is a separate claim. -/
+theorem lifetime_effect_receipts_keep_original_accesses
+    (ρ : E → Option F) (base : LifetimeEffects.Ops (WGPrefix E))
+    (target : LifetimeEffects.Ops (WGPrefix F)) (h : LifetimeEffects.Ops.Projects ρ base target)
+    (decode : E → Option (CausalScope.Event Cause))
+    (recordArm : TimerEffects.Arm (CausalEffects.Context Cause) → E)
+    (recordQueue : TimerEffects.Queued (CausalEffects.Context Cause) → E)
+    (ha : ∀ r, ρ (recordArm r) = none) (hq : ∀ r, ρ (recordQueue r) = none) (pid : PeerId) :
+    StateProjectsPrefix ρ id
+      (LifetimeEffects.freshWith (LifetimeEffects.decorate base decode recordArm recordQueue) pid)
+      (LifetimeEffects.freshWith target pid) :=
+  LifetimeEffects.fresh_projects ρ
+    (LifetimeEffects.decorate_projects ρ base target h decode recordArm recordQueue ha hq) pid
 
 end Leanux.Proofs.WG.AuthenticatedEffects

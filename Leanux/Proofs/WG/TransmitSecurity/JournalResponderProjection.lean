@@ -68,6 +68,8 @@ theorem hooks : Driver.HooksProjects responder? Journal.hooks DriverCuts.hooks w
   handshake := AuthenticatedEffects.HandshakeWorker.observed_projects Event.handshake handshake? responder?
     (fun _ => rfl)
   flushedSend := fun _ => Driver.Projection.state_lift responder? _
+  armTimer := fun _ _ _ _ => Driver.Projection.state_lift responder? _
+  queueSend := fun _ => Driver.Projection.state_lift responder? _
   candidate := ⟨id, (fun _ _ => projectsPrefix_pure responder? id 0),
     (fun _ => projectsPrefix_pure responder? id ())⟩
   prepare := AuthenticatedEffects.TransportDriver.prepare_projects_other Event.rxOrigin origin? responder? (fun _ => rfl)

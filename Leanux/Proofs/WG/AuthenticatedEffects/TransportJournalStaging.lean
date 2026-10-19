@@ -68,7 +68,16 @@ theorem front (family addr : Nat) (packets : List Packet) (mtu : Nat) :
     (state_erases handshake? (Journal.HandshakeProjection.front family addr packets mtu))
     (TransportHookFrames.front family addr packets mtu)
 
+theorem armTimer (pid : PeerId) (timer : PeerTimer) (delay : Nat) (caller : Option UInt64) :
+    StateSafe (Journal.hooks.armTimer pid timer delay caller) :=
+  state_rx _ (effect_arm_rx pid timer delay caller)
+
+theorem queueSend (pid : PeerId) : StateSafe (Journal.hooks.queueSend pid) :=
+  state_rx _ (modifyDev_rx _ (fun _ => rfl) (fun _ => rfl))
+
 theorem staging : StagingSafe (fun _ => True) origin? replay? Journal.hooks where
+  armTimer := armTimer
+  queueSend := queueSend
   selection := selection
   reserve := reserve
   allocate := allocate

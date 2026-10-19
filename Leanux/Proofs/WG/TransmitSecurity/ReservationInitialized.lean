@@ -98,6 +98,8 @@ theorem hooks_safe : ActorHistorySafe Safe Journal.hooks where
     rw [Driver.sendWorker_lift _ rfl]
     exact History.product_lift _
   flushedSend := fun _ => History.state_lift _
+  armTimer := fun _ _ _ _ => History.state_lift _
+  queueSend := fun _ => History.state_lift _
   candidateEnter := fun _ _ => History.product_pure _
   candidateLeave := fun _ => History.product_pure _
   prepare := product_focus _ _ (fun _ => rfl) _

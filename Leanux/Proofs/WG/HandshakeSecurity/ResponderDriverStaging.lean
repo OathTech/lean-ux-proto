@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.TransmitSecurity.DriverEffectsNeutral
 import Leanux.Proofs.WG.HandshakeSecurity.ResponderDriverTxFrames
 
 /-! Actual staged-send source transport for the common driver responder
@@ -27,6 +28,7 @@ carrier through all normal paths, and later Stops retain prior checks. -/
 theorem staging (pid : PeerId) : Preserves (Driver.stagingObserved hooks pid) := by
   change StatePrefixPreserves (fun h w _ => Inv h w) Safe _
   unfold Driver.stagingObserved
+  simp only [Driver.noKey_lift hooks rfl]
   dsimp only [hooks]
   apply StatePrefixEnsures.bind (selection_preserves pid)
   intro selected

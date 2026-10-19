@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.TransmitSecurity.DriverEffectsNeutral
 import Leanux.Proofs.WG.HandshakeSecurity.TimestampArchiveTrafficFrames
 
 /-! The common driver's actual staging source preserves the allocation-indexed
@@ -49,6 +50,7 @@ nonce allocation and packet queue decisions, including internally stopped runs. 
 theorem staging (pid : PeerId) : Preserves (Driver.stagingObserved TimestampDriver.hooks pid) := by
   change StatePrefixPreserves (fun h w _ => StateInv h w) History _
   unfold Driver.stagingObserved
+  simp only [Driver.noKey_lift TimestampDriver.hooks rfl]
   dsimp only [TimestampDriver.hooks]
   apply StatePrefixEnsures.bind (lift _ (selection pid))
   intro selected

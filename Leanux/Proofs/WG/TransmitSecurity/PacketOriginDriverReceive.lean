@@ -66,6 +66,7 @@ theorem receive_tail (pid : PeerId) (pkt : RxPacket) (confirmed : Bool) :
     StateSafe (Driver.receiveTailObserved Journal.hooks pid pkt confirmed) := by
   change StatePrefixPreserves (fun h w _ => JournalInv h w) Safe _
   unfold Driver.receiveTailObserved
+  simp only [Driver.prepare_lift Journal.hooks rfl]
   repeat' first
     | (nonce_source_head Driver.stagingObserved; exact staging _)
     | (nonce_source_head timersHandshakeComplete; exact state_lift _ (fun _ => frame (snapshot_wire (handshakeComplete_cryptWire _ _))))
@@ -100,8 +101,14 @@ theorem poll (pid : PeerId) (budget : Nat) (callback : List (List UInt8) → Pre
     ProductSafe (Driver.pollObserved Journal.hooks pid budget callback) := by
   change PrefixPreserves ProductInv Safe _
   unfold Driver.pollObserved
-  dsimp only [Journal.hooks]
-  rw [AuthenticatedEffects.CandidatePoll.neutral]
+  rw [show Journal.hooks.candidateEnter = (fun _ _ => pure 0) from rfl,
+    show Journal.hooks.candidateLeave = (fun _ => pure ()) from rfl,
+    AuthenticatedEffects.CandidatePoll.neutral]
+  change PrefixPreserves ProductInv Safe
+    (AuthenticatedEffects.IndexedPoll.sourceWith _
+      (AuthenticatedEffects.TransportDriver.counter Journal.Event.replay)
+      (fun peer pkt ep => liftWGObserver (Driver.consumeObserved Journal.hooks peer pkt ep))
+      (napiGroReceivePrefix callback) (napiGroFlushAllPrefix callback) pid budget)
   unfold AuthenticatedEffects.IndexedPoll.sourceWith
   simp only [Std.Legacy.Range.forIn_eq_forIn_range']
   repeat' first

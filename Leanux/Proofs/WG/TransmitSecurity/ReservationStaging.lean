@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.TransmitSecurity.DriverEffectsNeutral
 import Leanux.Proofs.WG.TransmitSecurity.ReservationSource
 
 /-! The actual staging loop attaches its own preceding native reservations to
@@ -44,6 +45,7 @@ private theorem creation (pid : PeerId) (items : List SkbId) :
 
 theorem staging (pid : PeerId) : Driver.StateHistorySafe Safe (Driver.stagingObserved Journal.hooks pid) := by
   unfold Driver.stagingObserved
+  simp only [Driver.noKey_lift Journal.hooks rfl]
   dsimp only [Journal.hooks]
   apply StatePrefixEnsures.bind (selection pid)
   intro chosen

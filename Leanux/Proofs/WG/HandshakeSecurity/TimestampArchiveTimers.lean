@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.TransmitSecurity.DriverEffectsNeutral
 import Leanux.Proofs.WG.HandshakeSecurity.TimestampArchiveTimerActors
 
 /-! Timer callbacks retain the same committed timestamp history, including
@@ -8,7 +9,7 @@ open Lifetimes Queues TransmitSecurity
 
 theorem expired_keepalive (pid : PeerId) :
     Preserves (Driver.expiredKeepaliveObserved TimestampDriver.hooks pid) := by
-  unfold Driver.expiredKeepaliveObserved
+  rw [Driver.expiredKeepalive_lift TimestampDriver.hooks rfl]
   apply StatePrefixEnsures.bind (keepalive pid)
   intro _
   apply StatePrefixEnsures.bind (lift _ (read_peer pid))
@@ -27,7 +28,7 @@ theorem expired_keepalive (pid : PeerId) :
   · exact pure ()
 
 theorem persistent (pid : PeerId) : Preserves (Driver.persistentObserved TimestampDriver.hooks pid) := by
-  unfold Driver.persistentObserved
+  rw [Driver.persistent_lift TimestampDriver.hooks]
   apply StatePrefixEnsures.bind (lift _ (read_peer pid))
   intro p
   apply StatePrefixEnsures.bind (ambient _)
@@ -39,9 +40,13 @@ theorem persistent (pid : PeerId) : Preserves (Driver.persistentObserved Timesta
 theorem timer (pid : PeerId) (t : PeerTimer) :
     Preserves (Driver.timerObserved TimestampDriver.hooks pid t) := by
   cases t with
-  | retransmitHandshake => exact lift _ (retransmit pid)
+  | retransmitHandshake =>
+    rw [Driver.timer_retransmit_lift TimestampDriver.hooks rfl]
+    exact lift _ (retransmit pid)
   | sendKeepalive => exact expired_keepalive pid
-  | newHandshake => exact lift _ (new_handshake pid)
+  | newHandshake =>
+    rw [Driver.timer_new_lift TimestampDriver.hooks rfl]
+    exact lift _ (new_handshake pid)
   | zeroKeyMaterial => exact lift _ (zero_material pid)
   | persistentKeepalive => exact persistent pid
 

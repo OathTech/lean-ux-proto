@@ -80,6 +80,8 @@ private theorem timer (d : Device) (j : UInt64) (pid : PeerId) (t : PeerTimer) (
   exact ⟨[event],rfl,safe,safe⟩
 
 theorem quiet : QuietHooksSafe Good Journal.hooks where
+  armTimer := fun _ _ _ _ => Driver.History.state_lift _
+  queueSend := fun _ => Driver.History.state_lift _
   handshake := handshake
   sendWorker := by
     rw [Driver.sendWorker_lift Journal.hooks rfl]

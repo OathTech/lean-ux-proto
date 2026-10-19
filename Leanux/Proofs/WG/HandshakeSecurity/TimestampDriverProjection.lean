@@ -84,6 +84,8 @@ theorem worker_projects
 
 theorem native_projection : Driver.HooksProjects NativeDriver.erase hooks NativeDriver.hooks where
   handshake := worker_projects
+  armTimer := fun _ _ _ _ => Driver.Projection.state_lift NativeDriver.erase _
+  queueSend := fun _ => Driver.Projection.state_lift NativeDriver.erase _
   flushedSend := fun _ => Driver.Projection.state_lift NativeDriver.erase _
   candidate := ⟨id,fun _ _ => projectsPrefix_pure NativeDriver.erase id 0,
     fun _ => projectsPrefix_pure NativeDriver.erase id ()⟩

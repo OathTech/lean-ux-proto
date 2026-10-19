@@ -12,6 +12,7 @@ theorem staging_projects (h : HooksProjects ρ g a) (pid : PeerId) :
     StateProjectsPrefix ρ id (stagingObserved g pid) (stagingObserved a pid) := by
   unfold stagingObserved
   repeat' first
+    | (maintenance_head AuthenticatedEffects.PacketEffects.noKeyWith; exact AuthenticatedEffects.PacketEffects.noKey_projects ρ (effectOps_projects h) _ _ _ _)
     | (maintenance_head Hooks.selection; exact h.selection _)
     | (maintenance_head Hooks.reserve; exact h.reserve _)
     | (maintenance_head Hooks.allocate; exact h.allocate _)
@@ -41,29 +42,22 @@ theorem transmit_projects (h : HooksProjects ρ g a) (family addr : Nat) (packet
 
 theorem expired_projects (h : HooksProjects ρ g a) (pid : PeerId) :
     StateProjectsPrefix ρ id (expiredKeepaliveObserved g pid) (expiredKeepaliveObserved a pid) := by
-  unfold expiredKeepaliveObserved
-  repeat' first
-    | (maintenance_head keepaliveObserved; exact keepalive_projects h _)
-    | (maintenance_head Hooks.session; exact h.session _)
-    | (maintenance_head Hooks.confirmation; exact h.confirmation _ _)
-    | driver_state_step ρ
+  exact AuthenticatedEffects.TimerEffects.expiredKeepalive_projects ρ (effectOps_projects h)
+    _ _ (keepalive_projects h) pid
 
 theorem persistent_projects (h : HooksProjects ρ g a) (pid : PeerId) :
     StateProjectsPrefix ρ id (persistentObserved g pid) (persistentObserved a pid) := by
-  unfold persistentObserved
-  repeat' first
-    | (maintenance_head keepaliveObserved; exact keepalive_projects h _)
-    | (maintenance_head Hooks.session; exact h.session _)
-    | (maintenance_head Hooks.confirmation; exact h.confirmation _ _)
-    | driver_state_step ρ
+  exact AuthenticatedEffects.TimerEffects.persistent_projects ρ (effectOps_projects h)
+    _ _ (keepalive_projects h) pid
 
 theorem timer_projects (h : HooksProjects ρ g a) (pid : PeerId) (t : PeerTimer) :
     StateProjectsPrefix ρ id (timerObserved g pid t) (timerObserved a pid t) := by
-  cases t <;> unfold timerObserved
-  all_goals first
-    | exact expired_projects h _
-    | exact persistent_projects h _
-    | exact Projection.state_lift ρ _
+  cases t with
+  | retransmitHandshake => exact AuthenticatedEffects.TimerEffects.retransmit_projects ρ (effectOps_projects h) _
+  | sendKeepalive => exact expired_projects h _
+  | newHandshake => exact AuthenticatedEffects.TimerEffects.expiredNew_projects ρ (effectOps_projects h) _
+  | zeroKeyMaterial => exact Projection.state_lift ρ _
+  | persistentKeepalive => exact persistent_projects h _
 
 theorem response_projects (h : HooksProjects ρ g a) (pid : PeerId) :
     StateProjectsPrefix ρ id (responseWith (handshakeOps g) pid) (responseWith (handshakeOps a) pid) := by
@@ -106,6 +100,7 @@ theorem receiveTail_projects (h : HooksProjects ρ g a) (pid : PeerId) (pkt : Rx
     StateProjectsPrefix ρ id (receiveTailObserved g pid pkt confirmed) (receiveTailObserved a pid pkt confirmed) := by
   unfold receiveTailObserved
   repeat' first
+    | (maintenance_head AuthenticatedEffects.PacketEffects.prepareWith; exact AuthenticatedEffects.PacketEffects.prepare_projects ρ (effectOps_projects h) _ _)
     | (maintenance_head stagingObserved; exact staging_projects h _)
     | (maintenance_head Hooks.session; exact h.session _)
     | (maintenance_head Hooks.confirmation; exact h.confirmation _ _)

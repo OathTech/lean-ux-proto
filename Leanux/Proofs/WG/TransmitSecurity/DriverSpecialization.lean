@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.TransmitSecurity.DriverNeutralCalls
+import Leanux.Proofs.WG.TransmitSecurity.DriverEffectsNeutral
 
 /-! The selection receipt factors an original source prefix. The resulting
 driver still executes exactly the existing reservation observer. -/
@@ -29,6 +30,7 @@ private theorem lift_ite (p : Prop) [Decidable p] (a b : WG.M α) :
 theorem nonce_staging_specialization (pid : PeerId) :
     stagingObserved nonceHooks pid = Nonce.stagingObserved pid := by
   unfold stagingObserved Nonce.stagingObserved
+  simp only [noKey_lift nonceHooks rfl]
   dsimp only [nonceHooks]
   unfold HandshakeSecurity.Responder.selectionPrefix
   simp only [lift_bind,lift_pure,lift_ite,bind_assoc,Queues.RxCredits.bind_if_source,pure_bind]
@@ -48,7 +50,9 @@ theorem nonce_transmitObserved_eq : transmitObserved nonceHooks = Nonce.transmit
   all_goals rfl
 
 theorem nonce_expiredKeepaliveObserved_eq : expiredKeepaliveObserved nonceHooks = Nonce.expiredKeepaliveObserved := by
-  unfold expiredKeepaliveObserved Nonce.expiredKeepaliveObserved
+  funext pid
+  rw [expiredKeepalive_lift nonceHooks rfl]
+  unfold Nonce.expiredKeepaliveObserved
   simp only [nonce_keepaliveObserved_eq]
   all_goals rfl
 
@@ -58,9 +62,13 @@ theorem nonce_persistentObserved_eq : persistentObserved nonceHooks = Nonce.pers
   all_goals rfl
 
 theorem nonce_timerObserved_eq : timerObserved nonceHooks = Nonce.timerObserved := by
-  unfold timerObserved Nonce.timerObserved
-  simp only [nonce_expiredKeepaliveObserved_eq, nonce_persistentObserved_eq]
-  all_goals rfl
+  funext pid t
+  cases t with
+  | retransmitHandshake => exact timer_retransmit_lift nonceHooks rfl pid
+  | sendKeepalive => exact congrFun nonce_expiredKeepaliveObserved_eq pid
+  | newHandshake => exact timer_new_lift nonceHooks rfl pid
+  | zeroKeyMaterial => rfl
+  | persistentKeepalive => exact congrFun nonce_persistentObserved_eq pid
 
 theorem nonce_handshakeOps_eq : handshakeOps nonceHooks = Nonce.Handshake.ops := by
   unfold handshakeOps Nonce.Handshake.ops
@@ -75,7 +83,7 @@ theorem nonce_handshakeObserved_eq : handshakeObserved nonceHooks = Nonce.Handsh
 
 theorem nonce_receiveTailObserved_eq : receiveTailObserved nonceHooks = Nonce.receiveTailObserved := by
   unfold receiveTailObserved Nonce.receiveTailObserved
-  simp only [nonce_staging_function]
+  simp only [nonce_staging_function,prepare_lift nonceHooks rfl]
   all_goals rfl
 
 theorem nonce_consumeObserved_eq : consumeObserved nonceHooks = Nonce.consumeObserved := by

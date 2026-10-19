@@ -1,3 +1,6 @@
+import Leanux.Proofs.WG.HandshakeSecurity.ExchangeDriverProjection
+import Leanux.Proofs.WG.HandshakeSecurity.ExchangeSend
+import Leanux.Proofs.WG.HandshakeSecurity.ExchangeReceive
 import Leanux.Proofs.WG.HandshakeSecurity.ExchangeNativeFrames
 import Leanux.Proofs.WG.HandshakeSecurity.ExchangeOrigins
 import Leanux.Proofs.WG.HandshakeSecurity.ExchangeObservation
@@ -914,5 +917,33 @@ theorem exchange_installation_count (H1 : H1SessionEffects)
   obtain ⟨epoch,binding⟩ := carrier.install_epoch pre post pid r position success
   exact ⟨Exchange.installation_count H1 carrier pre post pid r position success,
     epoch,binding,carrier.install_origin pre post pid r position epoch binding⟩
+
+/-- Exchange replay claims use the actual native execution: the shared driver
+with completed exchange receipts returns the original runner's JSON or indexed
+Stop. The initialized exchange-history invariant remains a separate obligation. -/
+theorem initialized_exchange_driver_erasure (trace : Runner.Trace) (placeholders : Bool) :
+    ErasesOuter (ExchangeDriver.execute trace placeholders) (Runner.executeTrace trace placeholders) :=
+  ExchangeDriver.execute_erases trace placeholders
+
+/-- A queued initiation send advances the native exchange ledger only through
+its completed creator receipt. Native dequeue, timestamp, timer and send
+suffixes preserve that ledger, including receipts retained before a later Stop.
+The C2 H1 edge and source-frame facts are explicit operational assumptions;
+initialized whole-driver exchange transport is a separate obligation. -/
+theorem queued_send_exchange_history (H1 : H1ExchangeEdges) (frames : H1HandshakeTagFrames)
+    (pid : PeerId) : Exchange.Preserves (ExchangeDriver.flushed pid) :=
+  Exchange.flushed_checked H1 frames pid
+
+/-- Actual handshake receive consumes each exchange through the native
+receipt cuts before response creation or installation. Later suffix failures
+retain that ledger. Session and keepalive callback transport remains explicit;
+this is the receive-worker source contract, not initialized driver closure. -/
+theorem receive_worker_exchange_history (H1 : H1ExchangeEdges) (frames : H1HandshakeTagFrames)
+    (session : PeerId → WGPrefix Exchange.Event Bool)
+    (keepalive : PeerId → WGPrefix Exchange.Event Unit)
+    (sessions : ∀ pid, Exchange.Preserves (session pid))
+    (keepalives : ∀ pid, Exchange.Preserves (keepalive pid)) :
+    Exchange.Preserves (ExchangeDriver.worker session keepalive) :=
+  Exchange.receive_worker_checked H1 frames session keepalive sessions keepalives
 
 end Leanux.Proofs.WG.HandshakeSecurity

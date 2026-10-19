@@ -19,6 +19,9 @@ import Leanux.Proofs.WG.TransmitSecurity.ReservationEncryption
 import Leanux.Proofs.WG.TransmitSecurity.EncryptionCompletion
 import Leanux.Proofs.WG.TransmitSecurity.EncryptionPastPoll
 import Leanux.Proofs.WG.TransmitSecurity.EncryptionPastStaging
+import Leanux.Proofs.WG.TransmitSecurity.EncryptionPastReceive
+import Leanux.Proofs.WG.TransmitSecurity.EncryptionPastTransmit
+import Leanux.Proofs.WG.TransmitSecurity.EncryptionPastRxPoll
 
 /-! Campaign 3, T1 initialized counter reservations and local AEAD contracts.
 Transport from reservation through every actual AEAD invocation remains open. -/
@@ -536,5 +539,21 @@ continuity are separate obligations. -/
 theorem original_staged_send_history_exclusion (pid : PeerId) :
     Framing.Preserves (EncryptionPast.Ready past active) (sendStagedPackets pid) :=
   EncryptionPast.send pid
+
+/-- Security: outgoing transmission, keepalive staging, every native timer
+callback and RX polls with actual Stack/GRO replies cannot restore an already
+encrypted identity to pending
+work. These full-source preservation results keep the incoming physical/live
+bound and historical exclusion explicit; initialized global non-reuse remains
+an additional obligation. -/
+theorem original_traffic_timer_history_exclusion :
+    (∀ pid timer, Framing.Preserves (EncryptionPast.Ready past active) (timerCallback pid timer)) ∧
+    (∀ pid pkt endpoint, Framing.Preserves (EncryptionPast.Ready past active)
+      (WG.consumeDataDone pid pkt endpoint)) ∧
+    (∀ family addr packets mtu, Framing.Preserves (EncryptionPast.Ready past active)
+      (wgXmit family addr packets mtu)) ∧
+    (∀ pid budget, Framing.Preserves (fun w : World => EncryptionPast.Ready past active w.wg)
+      (rxPoll pid budget (fun packets => packets.forM Env.deliverInner))) :=
+  ⟨EncryptionPast.timer,EncryptionPast.receive,EncryptionPast.transmit,EncryptionPast.stack_poll⟩
 
 end Leanux.Proofs.WG.TransmitSecurity

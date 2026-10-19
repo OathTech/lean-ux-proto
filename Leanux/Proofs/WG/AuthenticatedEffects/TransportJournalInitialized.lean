@@ -32,6 +32,8 @@ private theorem keepalive_order (pid : PeerId) :
     | driver_state_history_step
 
 theorem ordered_callbacks : DeferredSafe Order.Good origin? replay? Journal.hooks where
+  armTimer := fun pid timer delay caller => state_join (armTimer pid timer delay caller) (Order.quiet.armTimer pid timer delay caller)
+  queueSend := fun pid => state_join (queueSend pid) (Order.quiet.queueSend pid)
   selection := fun pid => state_join (selection pid) (Order.quiet.selection pid)
   reserve := fun kid => state_join (reserve kid) (Order.quiet.reserve kid)
   allocate := fun packets => state_join (allocate packets) (Order.quiet.allocate packets)

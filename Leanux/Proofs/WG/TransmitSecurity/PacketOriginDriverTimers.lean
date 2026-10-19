@@ -10,7 +10,7 @@ set_option maxHeartbeats 600000
 
 theorem expired_keepalive (pid : PeerId) : StateSafe (Driver.expiredKeepaliveObserved Journal.hooks pid) := by
   change StatePrefixPreserves (fun h w _ => JournalInv h w) Safe _
-  unfold Driver.expiredKeepaliveObserved
+  rw [Driver.expiredKeepalive_lift Journal.hooks rfl]
   simp only [Functor.discard,map_const,Function.comp_apply,Function.const,map_eq_pure_bind]
   repeat' first
     | (nonce_source_head Driver.keepaliveObserved; exact keepalive _)
@@ -23,16 +23,20 @@ theorem expired_keepalive (pid : PeerId) : StateSafe (Driver.expiredKeepaliveObs
 
 theorem persistent (pid : PeerId) : StateSafe (Driver.persistentObserved Journal.hooks pid) := by
   change StatePrefixPreserves (fun h w _ => JournalInv h w) Safe _
-  unfold Driver.persistentObserved
+  rw [Driver.persistent_lift Journal.hooks]
   repeat' first
     | (nonce_source_head Driver.keepaliveObserved; exact keepalive _)
     | origin_driver_step
 
 theorem timer (pid : PeerId) (t : PeerTimer) : StateSafe (Driver.timerObserved Journal.hooks pid t) := by
   cases t with
-  | retransmitHandshake => exact state_lift _ (fun _ => frame (snapshot_wire (OccurrenceTimers.retransmit_wire pid)))
+  | retransmitHandshake =>
+    rw [Driver.timer_retransmit_lift Journal.hooks rfl]
+    exact state_lift _ (fun _ => frame (snapshot_wire (OccurrenceTimers.retransmit_wire pid)))
   | sendKeepalive => exact expired_keepalive pid
-  | newHandshake => exact state_lift _ (fun _ => frame (snapshot_wire (OccurrenceTimers.new_handshake_wire pid)))
+  | newHandshake =>
+    rw [Driver.timer_new_lift Journal.hooks rfl]
+    exact state_lift _ (fun _ => frame (snapshot_wire (OccurrenceTimers.new_handshake_wire pid)))
   | zeroKeyMaterial => exact state_lift _ (fun _ => frame (snapshot_wire (OccurrenceTimers.expired_zero_wire pid)))
   | persistentKeepalive => exact persistent pid
 

@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.TransmitSecurity.DriverEffectsNeutral
 import Leanux.Proofs.WG.HandshakeSecurity.TimestampArchiveReceiveFrames
 
 /-! The common native consumer retains timestamp history through endpoint
@@ -9,6 +10,7 @@ theorem receive_tail (pid : PeerId) (pkt : RxPacket) (confirmed : Bool) :
     Preserves (Driver.receiveTailObserved TimestampDriver.hooks pid pkt confirmed) := by
   change StatePrefixPreserves (fun h w _ => StateInv h w) History _
   unfold Driver.receiveTailObserved
+  simp only [Driver.prepare_lift TimestampDriver.hooks rfl]
   repeat' first
     | (nonce_source_head Driver.stagingObserved; exact staging _)
     | (nonce_source_head timersHandshakeComplete; exact lift _ (complete _ _))

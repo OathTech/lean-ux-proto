@@ -3,6 +3,7 @@ import Leanux.Proofs.WG.HandshakeSecurity.ResponderStagingSource
 import Leanux.Proofs.WG.AuthenticatedEffects.HandshakeWorkerSource
 import Leanux.Proofs.WG.AuthenticatedEffects.CandidatePollSource
 import Leanux.Proofs.WG.HandshakeSecurity.SendExchangeLifecycleSource
+import Leanux.Proofs.WG.AuthenticatedEffects.PacketEffectsSource
 
 /-! The nonce source driver parameterized at native TX boundaries. Its nonce
 specialization is proved equal to the initialized observer in the companion
@@ -18,6 +19,10 @@ structure Hooks (E : Type) where
   handshake : (PeerId → WGPrefix E Bool) → (PeerId → WGPrefix E Unit) → WGPrefix E Bool :=
     AuthenticatedEffects.HandshakeWorker.source
   flushedSend : PeerId → WGPrefix E Unit := fun pid => liftWGPrefix (runFlushedSendWork pid)
+  armTimer : PeerId → PeerTimer → Nat → Option UInt64 → WGPrefix E Unit :=
+    fun pid timer delay caller => liftWGPrefix (WG.armTimer pid timer delay caller)
+  queueSend : PeerId → WGPrefix E Unit :=
+    fun pid => liftWGPrefix (modifyDev fun d => {d with sendWorkQueue := d.sendWorkQueue ++ [pid]})
   candidateEnter : SkbId → RxPacket → PrefixM E Nat := fun _ _ => pure 0
   candidateLeave : Nat → PrefixM E Unit := fun _ => pure ()
   prepare : PrefixM E (Option PeerId) := liftPrefix (liftWG RxWorkers.prepareSource)
@@ -35,6 +40,10 @@ structure Hooks (E : Type) where
   encrypt : Option (List SkbId) → PrefixM E Bool
   transmit : PeerId → PrefixM E Bool
 
+/-- Only timer arms and send-work appends are callbacks; native guard steps remain fixed. -/
+def effectOps (hooks : Hooks E) : AuthenticatedEffects.TimerEffects.Ops (WGPrefix E) :=
+  AuthenticatedEffects.TimerEffects.observed hooks.armTimer hooks.queueSend
+
 /-- Scheduled and directly flushed sends share the same native callback. -/
 def sendWorkerObserved (hooks : Hooks E) : PrefixM E Unit :=
   HandshakeSecurity.SendExchange.oneWith liftPrefix (fun pid => liftWGObserver (hooks.flushedSend pid))
@@ -42,7 +51,7 @@ def sendWorkerObserved (hooks : Hooks E) : PrefixM E Unit :=
 def stagingObserved (hooks : Hooks E) (pid : PeerId) : WGPrefix E Unit := do
   let some (p,keypair) ← hooks.selection pid | return
   let packets := p.staged
-  let outNokey (invalid : Bool) := liftWGPrefix (Lifetimes.stagedOutNokey pid packets keypair invalid)
+  let outNokey (invalid : Bool) := AuthenticatedEffects.PacketEffects.noKeyWith (effectOps hooks) pid packets keypair invalid
   if ← liftWGPrefix (branch .stagedNoKeypair keypair.isNone) then return ← outNokey false
   let some id := keypair | liftWGPrefix (invariant "unreachable")
   let k ← liftWGPrefix (getKeypair id)
@@ -77,20 +86,16 @@ def transmitObserved (hooks : Hooks E) (family addr : Nat) (packets : List Packe
     liftWGPrefix (peerPut (some pid))
     pure 0
 
-def expiredKeepaliveObserved (hooks : Hooks E) (pid : PeerId) : WGPrefix E Unit := do
-  (keepaliveObserved hooks) pid
-  if ← liftWGPrefix (branch .keepaliveNeedAnother (← liftWGPrefix (getPeer pid)).timerNeedAnotherKeepalive) then
-    liftWGPrefix (setPeer pid { (← liftWGPrefix (getPeer pid)) with timerNeedAnotherKeepalive := false })
-    liftWGPrefix (discard <| modPeerTimer .timerJiffiesExpiredKeepalive pid .sendKeepalive KEEPALIVE_TIMEOUT_TICKS)
+def expiredKeepaliveObserved (hooks : Hooks E) (pid : PeerId) : WGPrefix E Unit :=
+  AuthenticatedEffects.TimerEffects.expiredKeepaliveWith (effectOps hooks) (keepaliveObserved hooks) pid
 
-def persistentObserved (hooks : Hooks E) (pid : PeerId) : WGPrefix E Unit := do
-  if ← liftWGPrefix (branch .persistentKeepaliveInterval ((← liftWGPrefix (getPeer pid)).persistentKeepaliveInterval != 0)) then
-    (keepaliveObserved hooks) pid
+def persistentObserved (hooks : Hooks E) (pid : PeerId) : WGPrefix E Unit :=
+  AuthenticatedEffects.TimerEffects.persistentWith (effectOps hooks) (keepaliveObserved hooks) pid
 
 def timerObserved (hooks : Hooks E) (pid : PeerId) : PeerTimer → WGPrefix E Unit
-  | .retransmitHandshake => liftWGPrefix (expiredRetransmitHandshake pid)
+  | .retransmitHandshake => AuthenticatedEffects.TimerEffects.retransmitWith (effectOps hooks) pid
   | .sendKeepalive => (expiredKeepaliveObserved hooks) pid
-  | .newHandshake => liftWGPrefix (expiredNewHandshake pid)
+  | .newHandshake => AuthenticatedEffects.TimerEffects.expiredNewWith (effectOps hooks) pid
   | .zeroKeyMaterial => liftWGPrefix (expiredZeroKeyMaterial pid)
   | .persistentKeepalive => (persistentObserved hooks) pid
 
@@ -123,7 +128,7 @@ def receiveTailObserved (hooks : Hooks E) (pid : PeerId) (pkt : RxPacket) (confi
   if ← liftWGPrefix (branch .doneReceivedNew confirmed) then
     liftWGPrefix (timersHandshakeComplete pid .walltimeLastHandshakeData)
     (stagingObserved hooks) pid
-  match ← liftWGPrefix (RxCredits.prepareRest pid pkt) with
+  match ← AuthenticatedEffects.PacketEffects.prepareWith (effectOps hooks) pid pkt with
   | none => pure none
   | some ready => liftWGPrefix (Packets.rxFinish pid ready)
 

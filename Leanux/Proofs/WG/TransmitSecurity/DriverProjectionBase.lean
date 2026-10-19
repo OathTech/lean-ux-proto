@@ -1,6 +1,7 @@
 import Leanux.Proofs.WG.TransmitSecurity.DriverSource
 import Leanux.Proofs.Logged.ProjectsOuter
 import Leanux.Proofs.WG.HandshakeSecurity.SendExchangeRemovalProjection
+import Leanux.Proofs.WG.AuthenticatedEffects.PacketEffectsProjection
 
 /-! Exact event projection through the shared TX source driver. These laws
 preserve the native result and both states, as well as every failed prefix. -/
@@ -14,6 +15,9 @@ structure HooksProjects (ρ : E → Option F) (g : Hooks E) (a : Hooks F) : Prop
     (∀ pid, StateProjectsPrefix ρ id (kg pid) (ka pid)) →
     StateProjectsPrefix ρ id (g.handshake sg kg) (a.handshake sa ka)
   flushedSend : ∀ pid, StateProjectsPrefix ρ id (g.flushedSend pid) (a.flushedSend pid)
+  armTimer : ∀ pid timer delay caller,
+    StateProjectsPrefix ρ id (g.armTimer pid timer delay caller) (a.armTimer pid timer delay caller)
+  queueSend : ∀ pid, StateProjectsPrefix ρ id (g.queueSend pid) (a.queueSend pid)
   candidate : ∃ scopeMap : Nat → Nat,
     (∀ skb pkt, ProjectsPrefix ρ scopeMap (g.candidateEnter skb pkt) (a.candidateEnter skb pkt)) ∧
     (∀ token, ProjectsPrefix ρ id (g.candidateLeave token) (a.candidateLeave (scopeMap token)))
@@ -103,6 +107,13 @@ theorem prefix_range (r : Std.Legacy.Range) (b : β)
   exact prefix_forIn ρ _ b g a ha
 
 end Projection
+
+theorem effectOps_projects {ρ : E → Option F} {g : Hooks E} {a : Hooks F}
+    (h : HooksProjects ρ g a) :
+    AuthenticatedEffects.TimerEffects.Ops.Projects ρ (effectOps g) (effectOps a) where
+  step := fun _ => Projection.state_lift ρ _
+  arm := h.armTimer
+  append := h.queueSend
 
 theorem sendWorker_projects {ρ : E → Option F} {g : Hooks E} {a : Hooks F}
     (h : HooksProjects ρ g a) : ProjectsPrefix ρ id (sendWorkerObserved g) (sendWorkerObserved a) :=

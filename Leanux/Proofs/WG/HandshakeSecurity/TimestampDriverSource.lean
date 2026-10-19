@@ -106,6 +106,8 @@ theorem hooks_safe : Driver.HooksHistorySafe IncreasingReceipts hooks where
   sendWorker := by
     rw [Driver.sendWorker_lift hooks rfl]
     exact Driver.History.product_lift _
+  armTimer := fun _ _ _ _ => Driver.History.state_lift _
+  queueSend := fun _ => Driver.History.state_lift _
   flushedSend := fun _ => Driver.History.state_lift _
   candidateEnter := fun _ _ => Driver.History.product_pure _
   candidateLeave := fun _ => Driver.History.product_pure _
