@@ -28,7 +28,7 @@ theorem lift_kept {α : Type} (entry : TagMap) (a : Leanux.M α)
 operation, or copied consistency probe. No worker is hidden in this family. -/
 theorem atoms (entry : TagMap) :
     AtomContracts (StateInv entry) ValidHistory (fun {_} a => DriverTags.discard a) := by
-  refine ⟨?_,?_,?_,?_,?_,?_,?_,?_,?_⟩
+  refine ⟨?_,?_,?_,?_,?_,?_,?_,?_,?_,?_⟩
   · intro α a
     exact discard_store entry _ _ (RxHistory.mixed_erases (erasesPrefix_lift _))
       (fun _ => productAmbient_spec a _ (fun _ _ hi => hi))
@@ -48,6 +48,8 @@ theorem atoms (entry : TagMap) :
   · intro a
     exact discard_store entry _ _ (RxHistory.mixed_erases (activationOccupancyPrefix_erases a))
       (activationOccupancy_sameKernel a)
+  · exact discard_store entry _ _ (RxHistory.mixed_erases activationRefillsPrefix_erases)
+      activationRefills_sameKernel
   · intro next
     exact discard_store entry _ _ (RxHistory.mixed_erases (pendingNapiPrefix_erases next))
       (SourceScheduler.pendingNapi_kernel next)
@@ -258,7 +260,8 @@ theorem iteration_erases (softirq irq : ProductObs Unit)
 theorem run_source (softirq irq : ProductObs Unit) (a : Activation) :
     run softirq irq a = SourceScheduler.run (iteration softirq irq) a := by
   unfold run runWith SourceScheduler.run
-  simp only [discard_eq _ _ (RxHistory.mixed_erases (activationOccupancyPrefix_erases a))]
+  simp only [discard_eq _ _ (RxHistory.mixed_erases (activationOccupancyPrefix_erases a)),
+    discard_eq _ _ (RxHistory.mixed_erases activationRefillsPrefix_erases)]
   rfl
 
 theorem dispatch_source (softirq irq : ProductObs Unit) (worker : Worker) :

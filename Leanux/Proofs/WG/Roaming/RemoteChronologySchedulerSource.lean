@@ -10,7 +10,7 @@ open RxHistory.SchedulerSource
 
 theorem atoms (entry : RemoteMap) :
     AtomContracts (Driver.Inv entry) RemoteDriver.Safe (fun {_} a => RemoteDriver.focus a) := by
-  refine ⟨?_,?_,?_,?_,?_,?_,?_,?_,?_⟩
+  refine ⟨?_,?_,?_,?_,?_,?_,?_,?_,?_,?_⟩
   · intro α a
     exact Driver.mixed_store entry _ _ (erasesPrefix_lift _)
       (fun _ => productAmbient_spec a _ (fun _ _ prior => prior))
@@ -29,6 +29,7 @@ theorem atoms (entry : RemoteMap) :
   · intro a
     exact Driver.mixed_store entry _ _ (activationOccupancyPrefix_erases a)
       (activationOccupancy_sameKernel a)
+  · exact Driver.mixed_store entry _ _ activationRefillsPrefix_erases activationRefills_sameKernel
   · intro next
     exact Driver.mixed_store entry _ _ (pendingNapiPrefix_erases next)
       (SourceScheduler.pendingNapi_kernel next)

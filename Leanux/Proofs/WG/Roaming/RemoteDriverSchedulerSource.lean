@@ -28,7 +28,7 @@ open Leanux Leanux.WG Noise Queues Lifetimes Leanux.Proofs.Logged Leanux.Proofs.
 
 theorem atoms (entry : RemoteMap) :
     RxHistory.SchedulerSource.AtomContracts (Inv entry) Safe (fun {_} a => focus a) := by
-  refine ⟨?_,?_,?_,?_,?_,?_,?_,?_,?_⟩
+  refine ⟨?_,?_,?_,?_,?_,?_,?_,?_,?_,?_⟩
   · intro α a
     exact focus_store entry _ _ (Appends.focus _ _ _)
       (RxHistory.mixed_erases (erasesPrefix_lift _))
@@ -53,6 +53,8 @@ theorem atoms (entry : RemoteMap) :
     exact focus_store entry _ _ (Appends.focus _ _ _)
       (RxHistory.mixed_erases (activationOccupancyPrefix_erases a))
       (activationOccupancy_sameKernel a)
+  · exact focus_store entry _ _ (Appends.focus _ _ _)
+      (RxHistory.mixed_erases activationRefillsPrefix_erases) activationRefills_sameKernel
   · intro next
     exact focus_store entry _ _ (Appends.focus _ _ _)
       (RxHistory.mixed_erases (pendingNapiPrefix_erases next))

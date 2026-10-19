@@ -10,7 +10,7 @@ variable {α : Type}
 
 theorem scheduler_atoms :
     RxHistory.SchedulerSource.AtomContracts Reached PublicSafe (fun {_} action => action) := by
-  refine ⟨?_,?_,?_,?_,?_,?_,?_,?_,?_⟩
+  refine ⟨?_,?_,?_,?_,?_,?_,?_,?_,?_,?_⟩
   · intro α action
     apply mixed
     exact (pinned_const _private.Leanux.Proofs.WG.Packets.PublicationEnvironment.«0».Leanux.Proofs.WG.PublicationJoint.mixed_lift)
@@ -31,6 +31,8 @@ theorem scheduler_atoms :
   · intro a
     exact mixed _
       ((pinned_const _private.Leanux.Proofs.WG.Packets.PublicationEnvironment.«0».Leanux.Proofs.WG.PublicationJoint.occupancy) a)
+  · exact mixed _
+      (pinned_const _private.Leanux.Proofs.WG.Packets.PublicationEnvironment.«0».Leanux.Proofs.WG.PublicationJoint.refills)
   · intro next
     exact mixed _
       ((pinned_const _private.Leanux.Proofs.WG.Packets.PublicationEnvironment.«0».Leanux.Proofs.WG.PublicationJoint.pendingNapi) next)

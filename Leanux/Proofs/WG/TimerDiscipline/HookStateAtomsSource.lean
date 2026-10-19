@@ -44,6 +44,7 @@ theorem scheduler_atoms (safe : ∀ h w, I h w → S h) (transport : StoreTransp
     exact work f
   · intro a
     exact stored _ _ (activationOccupancyPrefix_erases a) (activationOccupancy_sameKernel a)
+  · exact stored _ _ activationRefillsPrefix_erases activationRefills_sameKernel
   · intro next
     exact stored _ _ (pendingNapiPrefix_erases next) (SourceScheduler.pendingNapi_kernel next)
   · intro a

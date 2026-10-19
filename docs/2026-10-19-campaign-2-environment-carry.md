@@ -1,5 +1,25 @@
 # Campaign 2 carry over the environment fixes
 
+## Current status
+
+The request is fulfilled by main 3308c49a, merged into campaign 2 at
+a9845661. The five inherited source failures are repaired. Campaign 2 has
+removed its two temporary deletion variants and carried its dependents.
+The corrected full gate passes 3,119 jobs and 1,761 terminal statements
+with standard axioms only; fresh whole-tree kernel replay exits zero, and
+all 12 counterexample recipes pass. The report records the two failed
+owned-carry builds that preceded the corrected pass. All six register rows
+are current for their checked claims over 3308c49a.
+H5 now has a separate [Prefill blocker](2026-10-19-proof-campaign-2-prefill-blocker.md):
+the exact closed specialization exceeds kernel maxRecDepth 512 after the
+merge. It is not a further mirror or shared-layer request.
+
+The remainder of this document records the earlier failed carry attempts
+and the scoped work completed while the shared repair was pending.
+
+## Historical request and carry
+
+
 Main `3f3879e0` is merged into `proofs/campaign-2`. The preceding checkpoint
 `46b6089c` passed 3,054 build jobs, all 1,690 terminal axiom checks and fresh
 whole-tree kernel replay over `783510e8`. These results do not establish a

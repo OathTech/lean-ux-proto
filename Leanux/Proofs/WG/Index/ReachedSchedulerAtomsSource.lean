@@ -20,7 +20,7 @@ theorem atoms (initial : Ledger) (loans : Reservations) (before : List RxHistory
     RxHistory.SchedulerSource.AtomContracts
       (Reached.Aux initial loans before) OwnerChecks.Safe (fun {_} g=>g) := by
   have account := HolderAuxScheduler.atoms initial loans before
-  refine ⟨?_,?_,?_,?_,?_,?_,?_,?_,?_⟩
+  refine ⟨?_,?_,?_,?_,?_,?_,?_,?_,?_,?_⟩
   · intro α a
     exact observed_store initial loans before _ _ (account.ambient a)
       (RxHistory.mixed_erases (erasesPrefix_lift _))
@@ -54,6 +54,8 @@ theorem atoms (initial : Ledger) (loans : Reservations) (before : List RxHistory
   · intro a
     exact observed_store initial loans before _ _ (account.occupancy a)
       (RxHistory.mixed_erases (activationOccupancyPrefix_erases a)) (activationOccupancy_sameKernel a)
+  · exact observed_store initial loans before _ _ account.refills
+      (RxHistory.mixed_erases activationRefillsPrefix_erases) activationRefills_sameKernel
   · intro next
     exact observed_store initial loans before _ _ (account.pending next)
       (RxHistory.mixed_erases (pendingNapiPrefix_erases next)) (SourceScheduler.pendingNapi_kernel next)

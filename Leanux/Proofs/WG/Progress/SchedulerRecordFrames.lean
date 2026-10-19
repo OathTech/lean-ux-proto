@@ -6,6 +6,13 @@ set_option autoImplicit false
 namespace Leanux.Proofs.WG.Progress.RecordSuffix
 open Leanux Leanux.WG Leanux.Env Leanux.Proofs.Framing
 
+theorem pendingDevice_retains (records : List HiddenRecord) (worker : Worker) (queued : Bool) :
+    Preserves (fun w : World=>Tail records w.ambient.hidden) (Env.pendingDevice worker queued) := by
+  apply (hoare_iff_run _ _ _).mpr
+  intro before value after pre run
+  cases run
+  exact pre
+
 theorem hasWork_retains (records : List HiddenRecord) (a : Activation) :
     Preserves (fun w : World=>Tail records w.ambient.hidden) (Activation.hasWork a) := by
   apply (hoare_iff_run _ _ _).mpr

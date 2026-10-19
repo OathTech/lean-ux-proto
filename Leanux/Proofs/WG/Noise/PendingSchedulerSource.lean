@@ -22,7 +22,7 @@ theorem audit_store {α : Type} (g : AuditM α) (a : Leanux.M α)
 its focused audit cannot add committed confirmation labels. -/
 theorem atoms :
     RxHistory.SchedulerSource.AtomContracts StateInv HistorySafe (fun {_} a => a) := by
-  refine ⟨?_,?_,?_,?_,?_,?_,?_,?_,?_⟩
+  refine ⟨?_,?_,?_,?_,?_,?_,?_,?_,?_,?_⟩
   · intro α a
     exact mixed_store _ _ (erasesPrefix_lift _)
       (fun _ => productAmbient_spec a _ (fun _ _ hi => hi))
@@ -44,6 +44,7 @@ theorem atoms :
       (fun _ => rfl) (fun _ => rfl) (fun _ => rfl) (fun _ => rfl) seen
   · intro a
     exact mixed_store _ _ (activationOccupancyPrefix_erases a) (activationOccupancy_sameKernel a)
+  · exact mixed_store _ _ activationRefillsPrefix_erases activationRefills_sameKernel
   · intro next
     exact mixed_store _ _ (pendingNapiPrefix_erases next) (SourceScheduler.pendingNapi_kernel next)
   · intro a

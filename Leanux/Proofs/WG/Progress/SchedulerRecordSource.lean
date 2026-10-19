@@ -1,5 +1,6 @@
 import Leanux.Proofs.WG.Progress.DispatchRecordSource
 import Leanux.Proofs.WG.Progress.RecordedTurn
+import Leanux.Proofs.WG.Roaming.HandshakeOverlayStepSource
 
 /-! Normal record effects through the unchanged scheduler turn and original schedule factor. Continuing recorded turns strictly decrease the remaining list; copied trials retain the actual World. This is not a successful-evaluation or global-completion claim. -/
 set_option autoImplicit false

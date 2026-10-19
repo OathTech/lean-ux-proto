@@ -20,6 +20,7 @@ theorem dispatchPrefix_retains (records : List HiddenRecord) (worker : Worker) :
   repeat' first
     | with_reducible exact dev
     | with_reducible exact work _
+    | with_reducible exact pendingDevice_retains records _ _
     | with_reducible exact peekUnit_retains records _
     | with_reducible exact resolveUnit_retains records _ _ _
     | with_reducible exact preserves_pure _
@@ -43,7 +44,7 @@ theorem dispatch_record_effect_of_activation
     intro value final post
     exact ⟨post.2,by intro yes; rw [post.1] at yes; contradiction⟩
   | some pid =>
-    unfold dispatchAfterPrefix
+    unfold dispatchAfterPrefix dispatchAfterPrefixWith
     apply hoare_bind _ _ (hidden_after_product_tail (.sectionStart worker) records)
     intro _
     apply hoare_bind _ _ (retain_strict (Activation.run {worker,pid}) (activation _) records)

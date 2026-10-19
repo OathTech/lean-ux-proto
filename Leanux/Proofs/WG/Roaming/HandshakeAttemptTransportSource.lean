@@ -87,6 +87,7 @@ theorem atoms (valid : List Attempt → Prop) :
   ⟨fun _=>old_preserves valid _,fun _=>old_preserves valid _,
     fun _=>old_preserves valid _,fun _=>old_preserves valid _,
     fun _=>old_preserves valid _,fun _=>old_preserves valid _,
+    old_preserves valid _,
     fun _=>old_preserves valid _,fun _=>old_preserves valid _,old_preserves valid _⟩
 
 def encrypt : PrefixM (Event Attempt) IterResult := old RxHistory.encryptIteration

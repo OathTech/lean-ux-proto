@@ -20,26 +20,8 @@ theorem product_store {α : Type} (a : Leanux.M α) (frame : SameProductStore a)
 
 /- Native guard frames: these read the product store but never mutate it. -/
 theorem requireDrained_store (what : String) (queues : List Bool) :
-    SameProductStore (Env.requireDrained what queues) := by
-  intro initial
-  have finish : Preserves (fun w : World => productStoreView w = initial)
-      (do
-        let d ← liftWG getDev
-        if d.peers.toList.any (·.2.napiScheduled) then
-          invariant "a NAPI poll pending after the decrypt worker (its ring poll runs the softirq)"
-        : Leanux.M Unit) := by
-    apply preserves_bind (productGetDev_spec (fun s => s = initial))
-    intro d
-    split
-    · exact productAmbient_spec _ _ (fun _ _ hi => hi)
-    · exact preserves_pure _
-  unfold Env.requireDrained
-  dsimp only
-  split
-  · apply preserves_bind (productAmbient_spec _ _ (fun _ _ hi => hi))
-    intro _
-    exact finish
-  · exact finish
+    SameProductStore (Env.requireDrained what queues) :=
+  requireDrained_sameKernel what queues
 
 theorem requireIdleDevice_store : SameProductStore Env.requireIdleDevice := by
   intro initial
