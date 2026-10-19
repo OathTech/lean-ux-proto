@@ -1,3 +1,6 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedDrainPointInitialized
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedEncryptLoopInitialized
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedTransmitResidualInitialized
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedSendingPoints
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedSendingScopedPoints
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedTransmitDecisionInitialized
@@ -1987,5 +1990,80 @@ theorem initialized_encryption_callback_accounted
       trace placeholders operationIndex item world history) :
     ∃ ledger, AuthenticatedEffects.StagedEntry.CompleteConsequences.Cut
       history ledger [] [] world.wg := entry.accounted
+
+section
+open AuthenticatedEffects.StagedEntry AuthenticatedEffects.StagedEntry.Reached
+
+/-- Security: every fixed native point of an initialized send drain meets
+the supplied packet account/interval contract, conditional on the three
+named delivery, send-worker and scheduler source contracts. Successful and
+stopped drains use the same points. The entry account is derived, but child
+coverage is still an assumption; this is not the final T2 conservation claim. -/
+theorem initialized_send_drain_points_conditional
+    {native inside : SendDrain.Points.ChildPoints}
+    {Good : List AuthenticatedEffects.CausalJournal.Event → World → Prop}
+    (entry : SendRun.Entry trace placeholders operationIndex world history)
+    (carrierGood : ∀ h w, CompleteProduct.Carrier h w → Good h w)
+    (children : SendDrain.Points.ChildContracts native inside Good) :
+    SendDrain.Points.Covered native Good world history :=
+  entry.points carrierGood children
+
+/-- Security: each actual yielded encryption prefix keeps complete packet
+accounting at its initialized native state. Its original head, packet order
+and remaining batch are retained; no incoming account is assumed. This is
+loop-boundary coverage, with packet and publication interiors separate. -/
+theorem initialized_encryption_packet_prefix_accounted {packetState : PacketState}
+    (entry : EncryptionRun.Entry trace placeholders operationIndex (some items) world history)
+    (captured : runPrefix (EncryptionPacket.headPrefix items) world history=(.ok ((headId,head),u),middle))
+    (shape : items=done++rest)
+    (walk : EncryptionPacket.Walk headId head done .crypted u middle packetState v after) :
+    runPrefix (EncryptionRun.packetPrefix items done.length) world history=
+      (.ok ((headId,head,packetState),v),after) ∧
+      ∃ ledger, CompleteConsequences.Cut after ledger [] [] v.wg :=
+  entry.packet_prefix_accounted captured shape walk
+
+/-- Security: the actual initialized encryption loop reaches publication
+with complete accounting for the same original batch, including its DEAD
+arm. This account is before publication; it does not predate an inner write
+or replace the enclosing encryption-return receipt. -/
+theorem initialized_encryption_publication_entry_accounted {packetState : PacketState}
+    (entry : EncryptionRun.Entry trace placeholders operationIndex (some items) world history)
+    (captured : runPrefix (EncryptionPacket.headPrefix items) world history=(.ok ((headId,head),u),middle))
+    (walked : runPrefix (EncryptionPacket.loop headId head items .crypted) u middle=
+      (.ok (packetState,g),after)) :
+    ∃ ledger v,
+      runPrefix (EncryptionPacket.callbackPublicationPrefix items) world history=
+        (.ok ((headId,head,packetState),v),after) ∧
+      CompleteConsequences.Cut after ledger [] [] v.wg :=
+  entry.publication_accounted captured walked
+
+/-- Security: the initialized routed overflow retains its original ticket
+cohort at every actual yielded trim prefix, including the silent interval
+before the counted receipt. The entry account is derived from the selected
+front; post-removal accounting is represented by the explicit TrimCut. -/
+theorem initialized_routed_overflow_prefix {packets : List WG.Packet}
+    (caller : RoutedTransmit.Caller trace placeholders operationIndex world history)
+    (selected : Transmit.Front.Selected caller.input (Transmit.inputHistory caller.input caller.events)
+      caller.entered.wg caller.entered.ambient (.splice pid packets) u c)
+    (read : ∃ d p, u.dev=some d ∧ d.peers[pid]?=some p)
+    (walk : Transmit.Front.Residual.Yields pid u c count v b) :
+    ∃ ledger, Transmit.Front.Residual.TrimCut (Transmit.inputHistory caller.input caller.events)
+      ledger [] [] pid u c count v b :=
+  caller.trim_cut selected read walk
+
+/-- Security: the actual overflow receipt settles the removed staged
+positions and restores complete accounting at that initialized native cut.
+The selected front and completed trim are from the same routed call. -/
+theorem initialized_routed_overflow_receipt_accounted {packets : List WG.Packet}
+    (caller : RoutedTransmit.Caller trace placeholders operationIndex world history)
+    (selected : Transmit.Front.Selected caller.input (Transmit.inputHistory caller.input caller.events)
+      caller.entered.wg caller.entered.ambient (.splice pid packets) u c)
+    (trim : ((Lifetimes.xmitTrim pid).run u).run c=.ok (((),v),b)) :
+    ∃ ledger, CompleteConsequences.Cut
+      (Transmit.Front.Residual.overflowHistory pid u v c b (Transmit.inputHistory caller.input caller.events))
+      ledger [] [] (caller.updated v b).wg :=
+  caller.overflow_accounted selected trim
+
+end
 
 end Leanux.Proofs.WG.TransmitSecurity
