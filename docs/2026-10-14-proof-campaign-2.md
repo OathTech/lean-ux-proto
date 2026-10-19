@@ -5,28 +5,31 @@
 **Campaign-owned claims are current over main 783510e8.** The split-world
 projection remains the claim boundary. Campaign 1's validated GRO carry
 8ba82097 is incorporated unchanged, replacing the three inherited failing
-modules. The full combined proof gate passes: 2,500 build jobs and 1,404
+modules. The full combined proof gate passes: 2,548 build jobs and 1,409
 terminal declarations, with standard axioms only. Fresh combined-root replay
-passes for the reached-setter checkpoint with actual exit zero.
+passes for the initialized data and chronological endpoint checkpoint with
+actual exit zero.
 Work has resumed with confirmation uniqueness stated over allocation internalId.
 The accepted raw store-ID recreation counterexample remains below. H1 is
 complete over normal accepted executions and the documented completed-call
-observations. H2 is complete at normal initialized runner endpoints. H3's normal final
-provenance is closed; transition-level coverage remains in progress with H4–H6.
+observations. H2 is complete at normal initialized runner endpoints. H3 now
+has initialized data-check authentication and normal latest-setter provenance
+closed; initialized handshake-attempt transport remains open. H4–H6 remain
+in progress.
 
 | Result | Headlines | Checked support | Split status |
 | --- | ---: | ---: | --- |
 | H1 Noise | 75 | 1587 | Full terminal closure, all seven whole-call tag maps, their actual finite mixed histories and session derivation-clock receipt current; direct helper reinstallation refutes unrestricted repeat-confirmation uniqueness; successful confirmation IDs for the tracked peer are distinct across actual finite histories of all four handshake create/consume calls, session installation/confirmation, clearing and expiry, including arbitrary-peer interleavings, under an explicit initial next/cursor bound; initial slot credits now imply recorded session success and fund the selected peer's final slots, with old-slot aliases allowed; the actual whole response sender now has exact creation/session receipt order, local edges and all-outcome erasure; role rejection and immediate recorded allocation refusal now have total false-return contracts; normal response receipts now derive initial consumed-initiation and actual created-response session-entry tags through timestamp and MAC framing; normal peer creation now initializes exactly the returned location to zero and preserves all other tags, including cursor overwrite; outgoing initiation and its worker now classify the actual initial rate guard and retain actual creator receipts with initial tag provenance; whole session finite evaluation covers every allocation mode and exact Stop; the whole zero-key worker now has exact final optional tags, deleting its caller exactly at entry refcount one and otherwise retaining its zero tag; actual clear dispatch now derives queue selection and carries that final effect; complete normal handshake reception now classifies the actual load/MAC dispatch and its ordered helper receipts; actual receiveStep now derives ring selection and preserves the full original result/Stop; the owned socket view now preserves every optional tag; initialized device recreation now demonstrates repeat raw store IDs with distinct allocation stamps (runtime finding); the response caller now links its last actual receipt to the final tag map using concrete timer/socket frames; uncached cookie replies also preserve every tag; actual consume observations retain the confirmation cut and allocation stamp, while the pending-ticket automaton proves distinctness conditional on its source transitions; normal initiation/worker and reception/receive-step final tag coverage is now complete; initialized consume occurrences derive actual internalId and ordered same-call confirmation observations; timer, staging, creation, clearing and release calls preserve pending tickets, and session/confirmation calls have explicit pending transitions; complete consume tails, session/handshake callers, actual poll/GRO/NAPI with original inner delivery, device controls, removal/flushes and send/clear dispatch now transport the supplied pending invariant; complete actual configuration, crypt/transmit, scheduler/deferred, traffic, dump and lifecycle/syscall composition now establishes distinct successful completed confirmation internalIds in the initialized runner, including recreation and prefixes before outer Stops; the actual birth, work-drain, timer-stop and stop/down observers now have normal tag coverage with all callback obligations discharged and exact original outcome agreement; actual mixed peer/device configuration, removal and destruction now have the same unconditional source coverage and exact outcome agreement; actual native data consume/transmit, all dumps, complete scheduler and every deferred constructor now have projected tag coverage with concrete poll/NAPI/Stack and worker callbacks; actual traffic/lifecycle, every concrete syscall and the initialized paired runner now close normal whole-driver tag coverage and the five-state tag invariant without supplied callback/invariant premises; H1 complete for normal accepted executions and documented completed-call observations, with internal-write/stopped-cut completeness explicitly outside this result. |
 | H2 Index | 162 | 1461 | Complete at normal initialized runner endpoints. Original index operations, collision retry and lookup contracts compose with reachable numeric/owner uniqueness, hashed-slot coverage, resident positive owners, store bounds and current-slot compatibility. Concrete ingress, poll/NAPI, crypt/TX, dump, configuration, lifecycle, scheduler/deferred, traffic and every syscall retain the same execution and its changing ledger. The projected initialized inspection preserves exact JSON/indexed Stops and derives Core plus its actual residual account without an invariant or callback premise. Earlier arbitrary-state counterexamples remain recorded; no initialized discrepancy is asserted. Final state on Stop and global termination are outside this H2 claim. Combined gate and fresh replay pass. |
-| H3 Roaming | 38 | 844 | In progress. Normal initialized final-value provenance is closed with actual same-run configuration, authenticated handshake or authenticated data-consume origins and exact original JSON/indexed Stops. Local initiation/response setter attempts now retain authentication through later Stops; reached original data-poll receipts have publication certificates. The ordered effect model and concrete configuration/birth/receive contracts close locally. Initialized attempt transport and whole-driver chronology remain open; no physical-write trace, stopped final state or peer-survival claim is made. |
+| H3 Roaming | 43 | 1184 | In progress. Normal initialized latest-setter provenance now excludes every later setter/reset and pins nested data certificates to that exact occurrence. Every reached original initialized data check has strictly earlier decrypt/configured-session authentication, including before later Stops, with exact check coverage and original outcome. All-kind concrete handshake receive-step and committed scheduler inspections retain authenticated setter attempts across later Stops and preserve exact original outcomes. Initialized handshake-attempt transport remains open; no physical-write trace, stopped final state or peer-survival claim is made. |
 | H4 Configuration | 116 | 1006 | Full terminal closure, actual mixed/key setter paginated readback with arbitrary endpoints, whole finite single-peer mixed-width getter and actual finite empty-IP peer getter and exact arbitrary-room empty-IP serializer/whole normal cursor callback and actual mixed/key setter composition with exact DATA/DONE count and arbitrary endpoints and arbitrary finite empty-IP multi-peer scalar, mixed fwmark/scalar and established-identity private-key set/get and actual endpoint set/weighted readback and local mixed-page serializer/cursor/coalescer support plus finite mixed-page planning, native callback, computed selection/reference support, finite receive budget, exact page content and complete finite mixed peer/allowed-IP getter and scalar, endpoint, fwmark/scalar and established-identity key set/get plus mixed port-refusal and all nonzero and zero port-only set/get outcomes and actual empty allowed-IP replacement/full mixed readback and initial-state flag-only replace-peers free/first-pass observations and general represented insertion/fresh-peer readback current; global ownership, queued cleanup and general mixed setters remain open. |
 | H5 Progress | 53 | 349 | Full terminal closure, exact bounded outcomes and recorded batch, actual timer completion guards and recorded idle/post-advance wait completion and actual advance-syscall/runner linkage and send-worker completion guard and four final-idle syscall/runner receipts and exact all-mode finite allocation and successful modular-power evaluation bridges and actual activation-exit inspection current; global progress/coherent-ring adequacy open. |
 | H6 Timers | 65 | 502 | Full terminal closure, actual retry blocks and allocation-labelled guarded session-arm events with outgoing call-entry origin and initialized give-up runtime witness with checked concrete curve outputs and all five syntactic traversal call sites covered by six observer branches with all-mode immediate effects; upstream data authentication, broader caller histories and session-relative counts remain open. |
 
-The checked surface is 5,749 theorems and 509 headlines in 1,570
+The checked surface is 6,089 theorems and 514 headlines in 1,618
 campaign-owned modules. The completed retrofit accounts for 1,983:
 1,321 retyped, 244 explicitly corrected, 239 retained and 179 added
-support/finding declarations. Subsequent closed extensions add 3,766
+support/finding declarations. Subsequent closed extensions add 4,106
 theorems. Twenty-two baseline frames were deleted because types supply
 their facts; five false historical cookie supports were separately retired
 with checked refutations. All 258 original terminal names and order survive.
@@ -49,7 +52,7 @@ session-relative counting remain open. The [shared-frame request](2026-10-15-cam
 records the closed sender/receiver frame dependencies and remaining driver scope.
 The owned H6 socket view supplies the needed tags without a shared-layer copy.
 
-## Landing estimate and remaining scope, 2026-10-18
+## Landing estimate and remaining scope, 2026-10-19
 
 Estimate to the campaign's own reviewable landing: another 4–8 focused
 working days, with substantial uncertainty in initialized stopped-prefix authentication,
@@ -60,7 +63,7 @@ completion of four remaining charter scopes, beyond the current green gate.
 | --- | --- | --- | --- |
 | H1 | 783510e8 | Current, complete; 75 headlines / 1587 theorems | Normal initialized whole-driver tag ownership and allocation-stamp confirmation uniqueness closed; internal-write traces and completed inner cuts of later-stopped callbacks are a separate stronger observer scope |
 | H2 | 783510e8 | Current, complete; 162 / 1461 | Normal initialized endpoint store, slot and owner coherence closed; original lookup/collision contracts retained; no internal failed-state or termination claim |
-| H3 | 783510e8 | Current, in progress; 38 / 844 | Local handshake attempts and reached data-poll certificates closed; carry them through initialized callers and complete whole-driver chronology |
+| H3 | 783510e8 | Current, in progress; 43 / 1184 | Initialized data-check authentication and normal latest-setter chronology closed; concrete handshake attempts carried through scheduler; finish initialized outer handshake transport |
 | H4 | 783510e8 | Current, in progress; 116 / 1006 | General mixed setters and global ownership/cleanup |
 | H5 | 783510e8 | Current, in progress; 53 / 349 | Whole-worker record decrease and global termination/progress |
 | H6 | 783510e8 | Current, in progress; 65 / 502 | Complete caller/scheduler coverage and session-relative counting |
@@ -79,6 +82,74 @@ LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle scripts/pro
 LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs
 ```
 
+
+## H3 initialized checks, latest origins and handshake scheduler attempts, 2026-10-19
+
+Five new projected headlines establish initialized data-check authentication
+and occurrence coverage, normal final latest-setter provenance, and actual
+handshake receive-step and committed-scheduler attempt authentication. H3
+remains open only for initialized outer transport of handshake attempts.
+The original JSON/indexed Stop and local exact outcomes are preserved.
+
+The data certificate comes from the original checkedEndpoint journal entry,
+including when its enclosing consume or later runner stops. Its decrypt is at
+a strict earlier position and carries the original configured session material.
+Current peer identity is conditional on residency; historical authentication
+does not imply survival. The outer packet source is copied, not AEAD-bound.
+
+Chronology now composes through the actual poll/GRO/NAPI, workers, scheduler,
+deferred work, configuration, traffic, dispatch and initialized runner. Focus
+maps only the freshly appended RX suffix; it retains earlier configuration and
+birth events. Equal-value setter calls remain explicit, successful birth resets
+the returned store location, and deletion remains permitted. The latest-origin
+certificate excludes a later setter or reset and fixes both its outer position
+and the nested data record's filtered RX position. This covers surviving remote
+destinations on normal completion, not cached source/flowinfo fields or stopped
+final states.
+
+The concrete handshake overlay reuses the original callback factories. It
+records after source conversion and before setPeerEndpoint, even when the setter
+or cache-reset suffix stops. Authentication is tied to the actual setter-entry
+device. Exact projection recovers the unchanged local and full RX histories;
+the pure queue peek is removed by equality, including missing-device Stop.
+The instantiated receive callback transports attempts through complete actual
+activation, dispatch, scheduling and resumption. Copied consistency probes
+remain unchanged in the RX projection; their discarded trial bodies do not
+contribute to the committed-attempt journal. Generic projection alone is not
+an occurrence-completeness theorem: the concrete emitter and receiver supply
+that correspondence. No new Rule Zero discrepancy or mirror-team request arose.
+
+**Files and reuse.** Public claims are RemoteChronologyClaims,
+PollAuthenticationCheckClaims and HandshakeOverlayClaims, exposed by Statements.
+Their projected models and native bridges remain separate. Physical retention
+facts are in PollAuthenticationFrames, RemoteChronologyWorkerFrames and
+RemoteChronologyRunnerFrames. Generic configuration and socket/netlink source
+rules replace owned duplicated proof bodies; contextual handshake factories
+reuse the existing native cuts. Two old packet proof-limit overrides were
+removed. No existing shared definition or lemma changed, and no frame was
+deleted on the basis of a failed compile. Forty-eight new owned Roaming modules
+add 340 theorems, including five headlines: campaign totals 6,089/514/1,618;
+H3 totals 1,184/43/256. Other result counts are unchanged.
+
+**Validation and review.** Thirteen capped scoped builds comprised five passes
+and eight corrected integration failures; the final scoped build passes 1,676
+jobs. Ninety-five capped stdin invocations comprised 49 observed successes,
+45 corrected proof-draft failures and one output-parser failure whose Lean
+result was not counted. That parser failure received the single recorded
+infrastructure rerun; the corrected wrapper reported exit zero and all 64
+local-overlay axiom checks. Earlier warning drafts were corrected, and new
+proofs use stock limits with the unchanged memory cap. The full gate passes
+2,548 jobs and 1,409 terminals, standard axioms only. Fresh combined-root replay
+passes with actual exit zero. No KILLED result, guest run, cap increase or shared/mirror edit.
+The inherited Env.lean String.mk deprecation remains outside this lane.
+
+Independent review closed one certificate-precision gap by requiring the
+nested data occurrence index to equal the selected prefix's RX length. It found
+no further defect in the whole chronology, concrete handshake overlay,
+instantiated scheduler inspection or projected data certificates. Twelve
+directly compared old interfaces retain their statements. Independent review
+also checked all 29 headers in eight modified source files; the refactored
+old helpers are thin instances.
 
 ## H3 reached setters and chronological caller support, 2026-10-19
 

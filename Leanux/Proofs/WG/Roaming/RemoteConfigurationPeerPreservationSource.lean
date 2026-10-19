@@ -10,32 +10,19 @@ open RemoteDriver
 theorem update_covered (entry : RemoteMap) (attrs : PeerAttrs) (peer : Option PeerId)
     (flags : UInt32) (psk : Option Key) (pid : PeerId) :
     StatePrefixPreserves (fun h g _=>RemoteDriver.NativeInv entry h g) RemoteDriver.Safe
-      (update RemoteDriver.Event.rx rxEvent RemoteDriver.Event.endpoint attrs peer flags psk pid) := by
-  unfold update peerConfigUpdateWith StatePrefixPreserves
-  dsimp (config := {zeta:=false}) only []
-  repeat' first
-    | (maintenance_head endpointObserved; exact RemoteDriver.endpoint_covered entry _ _)
-    | configuration_remote_step entry
+      (update RemoteDriver.Event.rx rxEvent RemoteDriver.Event.endpoint attrs peer flags psk pid) :=
+  Invariant.update_preserves (invariant_contracts entry) attrs peer flags psk pid
 
 theorem acquired_covered (entry : RemoteMap) (attrs : PeerAttrs) (key : Key) (psk : Option Key)
     (flags : UInt32) (peer : Option PeerId) :
     StatePrefixPreserves (fun h g _=>RemoteDriver.NativeInv entry h g) RemoteDriver.Safe
       (acquired RemoteDriver.Event.rx rxEvent RemoteDriver.Event.birth RemoteDriver.Event.endpoint
-        attrs key psk flags peer) := by
-  unfold acquired peerCommandAcquiredWith StatePrefixPreserves
-  dsimp (config := {zeta:=false}) only []
-  repeat' first
-    | (maintenance_head birthObserved; exact RemoteDriver.birth_covered entry _ _)
-    | (maintenance_head update; exact update_covered entry _ _ _ _ _)
-    | configuration_remote_step entry
+        attrs key psk flags peer) :=
+  Invariant.acquired_preserves (invariant_contracts entry) attrs key psk flags peer
 
 theorem command_covered (entry : RemoteMap) (attrs : PeerAttrs) :
     StatePrefixPreserves (fun h g _=>RemoteDriver.NativeInv entry h g) RemoteDriver.Safe
-      (command RemoteDriver.Event.rx rxEvent RemoteDriver.Event.birth RemoteDriver.Event.endpoint attrs) := by
-  unfold command setPeerCmdWith StatePrefixPreserves
-  dsimp (config := {zeta:=false}) only []
-  repeat' first
-    | (maintenance_head acquired; exact acquired_covered entry _ _ _ _ _)
-    | configuration_remote_step entry
+      (command RemoteDriver.Event.rx rxEvent RemoteDriver.Event.birth RemoteDriver.Event.endpoint attrs) :=
+  Invariant.command_preserves (invariant_contracts entry) attrs
 
 end Leanux.Proofs.WG.Roaming.RemoteConfiguration

@@ -1,11 +1,12 @@
+import Leanux.Proofs.WG.Roaming.HandshakeEndpointSource
 import Leanux.Proofs.WG.Roaming.InitiationConsumeSource
 import Leanux.Proofs.WG.Roaming.ResponseCallSource
 
 set_option autoImplicit false
 set_option pp.structureInstances false
-set_option maxHeartbeats 800000
 namespace Leanux.Proofs.WG.Roaming
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise Std.Do
+open Origins HandshakeEndpoint
 
 def initiationPacketPrefix (msg : List UInt8) (src : SkbSource) (underLoad : Bool) :
     WG.M (Option InitiationCallCut) := do
@@ -53,46 +54,88 @@ def initiationCallPrefix (msg : List UInt8) (src : SkbSource) : WG.M (Option Ini
   let underLoad ← responseLoad
   initiationPacketPrefix msg src underLoad
 
-theorem initiationPacket_source (msg : List UInt8) (src : SkbSource) (underLoad : Bool)
+section EndpointContext
+open Leanux.Proofs.Logged Origins HandshakeEndpoint
+variable {m : Type → Type} [Monad m] (L : HandshakeEndpoint.Lift m)
+
+def initiationSuffixWith (endpoint : PeerId → SkbSource → m Unit)
+    (msg : List UInt8) (src : SkbSource) : Option InitiationCallCut → m Unit
+  | none => pure ()
+  | some cut => do
+    endpoint cut.consumed.pid src
+    L.action (initiationAfterSetter msg cut.consumed.pid)
+
+theorem initiationPacket_context [LawfulMonad m] (endpoint : PeerId → SkbSource → m Unit)
+    (msg : List UInt8) (src : SkbSource) (underLoad : Bool)
     (kind : messageType msg = MESSAGE_HANDSHAKE_INITIATION) :
-    (initiationPacketPrefix msg src underLoad >>= initiationCallSuffix msg src) =
-      Index.receivePacketBody msg src underLoad := by
-  have branch_native (decision : Decision) (value : Bool) :
-      (branch decision value : WG.M Bool) = (do
-        (monadLift (modify fun a : Ambient => {a with steps := a.steps.push {
-          decision, outcome := value, netRx := a.netRxSection}} : AmbientM Unit) : WG.M Unit)
-        pure value) := rfl
-
-  have bind_if {α β : Type} (condition : Prop) [Decidable condition]
-      (yes no : WG.M α) (next : α → WG.M β) :
-      ((if condition then yes else no) >>= next) =
-        if condition then yes >>= next else no >>= next := by split <;> rfl
-  have invariant_bind {α β : Type} (message : String) (next : α → WG.M β) :
-      ((invariant message : WG.M α) >>= next) = (invariant message : WG.M β) := rfl
-
-  simp only [initiationPacketPrefix, Index.receivePacketBody, kind,
+    (L.action (initiationPacketPrefix msg src underLoad) >>=
+      initiationSuffixWith L endpoint msg src) =
+    (do let mac ← L.action (cookieValidatePacket msg src underLoad)
+        HandshakeSources.afterMacWith (ops L endpoint) msg src underLoad mac) := by
+  simp only [HandshakeSources.afterMacWith]
+  simp only [response_source]
+  simp only [initiationPacketPrefix, kind,
     MESSAGE_HANDSHAKE_INITIATION, Nat.reduceBEq,
-    ← initiationConsume_erase msg, initiationPeer, initiationCallSuffix,
-    bind_assoc, pure_bind, bind_if, invariant_bind]
-  simp only [branch_native, bind_assoc, pure_bind, Bool.false_eq_true, ite_false, ite_true,
-    Option.isNone_map]
-  congr 1
-  funext mac
-  congr 1
-  funext proceed
+    ops_step, ops_initiation, ops_response, ops_endpoint, ops_cookie, ops_session, ops_derived, ops_complete, ops_keepalive, ops_modifyPeer, ops_received, ops_traversal, ops_put, ← initiationConsume_erase msg, initiationPeer,
+    lift_bind, lift_pure, initiationSuffixWith, bind_assoc, pure_bind, bind_if, abort_bind, apply_ite]
+  simp only [branch_native, lift_bind, lift_pure, bind_assoc, pure_bind,
+    Bool.false_eq_true, ite_false, ite_true, Option.isNone_map]
+  apply bind_congr_right
+  intro mac
+  apply bind_congr_right
+  intro proceed
   cases proceed <;> simp only [Bool.false_eq_true, ite_false, ite_true]
-  congr 1
-  funext ignored
-  congr 1
-  funext unit2
-  congr 1
-  funext consumed
+  apply bind_congr_right
+  intro ignored
+  apply bind_congr_right
+  intro unit2
+  apply bind_congr_right
+  intro consumed
   cases consumed with
   | none => simp
   | some cut =>
     simp only [Option.isNone_some, Bool.false_eq_true, ite_false, Option.map_some,
-      bind_assoc, pure_bind, initiationCallSuffix, initiationAfterSetter]
+      lift_bind, lift_pure, bind_assoc, pure_bind, initiationSuffixWith, initiationAfterSetter,
+      read_ignore, branch_native]
     congr 1
+
+theorem initiation_context [LawfulMonad m] (endpoint : PeerId → SkbSource → m Unit)
+    (msg : List UInt8) (src : SkbSource)
+    (kind : messageType msg = MESSAGE_HANDSHAKE_INITIATION) :
+    (L.action (initiationCallPrefix msg src) >>= initiationSuffixWith L endpoint msg src) =
+      HandshakeSources.receptionWith (ops L endpoint) msg src := by
+  simp only [initiationCallPrefix, HandshakeSources.receptionWith, kind,
+    MESSAGE_HANDSHAKE_INITIATION, MESSAGE_HANDSHAKE_COOKIE, Nat.reduceBEq,
+    ops_step, branch_native, lift_bind, lift_pure, bind_assoc, pure_bind,
+    Bool.false_eq_true, ite_false]
+  rw [responseLoad_context_source]
+  apply bind_congr_right
+  intro ignored
+  apply bind_congr_right
+  intro loaded
+  exact initiationPacket_context L endpoint msg src loaded kind
+
+theorem initiation_prefix_context {E : Type}
+    (endpoint : PeerId → SkbSource → WGPrefix E Unit)
+    (msg : List UInt8) (src : SkbSource)
+    (kind : messageType msg = MESSAGE_HANDSHAKE_INITIATION) :
+    (liftWGPrefix (initiationCallPrefix msg src) >>= initiationSuffixWith prefixLift endpoint msg src) =
+      HandshakeSources.receptionWith (ops prefixLift endpoint) msg src :=
+  initiation_context prefixLift endpoint msg src kind
+
+end EndpointContext
+
+theorem initiationPacket_source (msg : List UInt8) (src : SkbSource) (underLoad : Bool)
+    (kind : messageType msg = MESSAGE_HANDSHAKE_INITIATION) :
+    (initiationPacketPrefix msg src underLoad >>= initiationCallSuffix msg src) =
+      Index.receivePacketBody msg src underLoad := by
+  have context := initiationPacket_context native setPeerEndpointFromSkb msg src underLoad kind
+  change (initiationPacketPrefix msg src underLoad >>= initiationCallSuffix msg src) =
+    (cookieValidatePacket msg src underLoad >>= fun mac =>
+      HandshakeSources.afterMacWith HandshakeSources.original msg src underLoad mac) at context
+  rw [packet_original]
+  simpa only [HandshakeSources.afterMac_original] using context
+
 
 /-- Every original initiation setter path follows this successful consumer
 cut; the no-cut suffix is pure. All original errors are retained. -/

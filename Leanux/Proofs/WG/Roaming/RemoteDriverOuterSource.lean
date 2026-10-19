@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Roaming.RemoteOuterRulesSource
 import Leanux.Proofs.WG.Roaming.RemoteDriverTrafficSource
 import Leanux.Proofs.WG.Roaming.RemoteConfigurationDevicePreservationSource
 import Leanux.Proofs.WG.Roaming.RemoteLifecycleSource
@@ -24,24 +25,13 @@ theorem lift_ambient (entry : RemoteMap) {α : Type} (action : AmbientM α) :
 
 theorem socket (entry : RemoteMap) (fd : Nat) (body : PrefixM Event Int)
     (hb : PrefixPreserves (Inv entry) Safe body) :
-    PrefixPreserves (Inv entry) Safe (socketCallOnWith (fun {_} a=>liftPrefix a) fd body) := by
-  unfold socketCallOnWith
-  apply PrefixPreserves.bind (lift_fs entry (fdget fd))
-  intro f
-  apply PrefixPreserves.ite
-  · intro _; exact PrefixPreserves.pure (safe entry) _
-  · intro _
-    exact hb.bind (fun ret=>(lift_fs entry (fdput f)).bind (fun _=>PrefixPreserves.pure (safe entry) ret))
+    PrefixPreserves (Inv entry) Safe (socketCallOnWith (fun {_} a=>liftPrefix a) fd body) :=
+  RemoteOuterRules.socket _ _ (safe entry) (fun {_} => lift_fs entry) fd body hb
 
 theorem netlink (entry : RemoteMap) (body : PrefixM Event Int)
     (hb : PrefixPreserves (Inv entry) Safe body) :
-    PrefixPreserves (Inv entry) Safe (netlinkRequestWith (fun {_} a=>liftPrefix a) body) := by
-  unfold netlinkRequestWith
-  apply PrefixPreserves.bind (socket entry _ _ ((lift_ambient entry (AmbientM.skipCut allocCuts)).bind
-    (fun _=>hb.bind (fun ret=>(lift_ambient entry (AmbientM.skipCut allocCuts)).bind
-      (fun _=>PrefixPreserves.pure (safe entry) ret)))))
-  intro ret
-  exact (socket entry _ _ (PrefixPreserves.pure (safe entry) 0)).bind
-    (fun _=>PrefixPreserves.pure (safe entry) ret)
+    PrefixPreserves (Inv entry) Safe (netlinkRequestWith (fun {_} a=>liftPrefix a) body) :=
+  RemoteOuterRules.netlink _ _ (safe entry) (fun {_} => lift_fs entry)
+    (fun {_} => lift_ambient entry) body hb
 
 end Leanux.Proofs.WG.Roaming.RemoteDriver.Outer

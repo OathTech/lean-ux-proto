@@ -1,3 +1,6 @@
+import Leanux.Proofs.WG.Roaming.RemoteChronologyClaims
+import Leanux.Proofs.WG.Roaming.HandshakeOverlayClaims
+import Leanux.Proofs.WG.Roaming.PollAuthenticationCheckClaims
 import Leanux.Proofs.WG.Roaming.ReceiveStepRemoteClaims
 import Leanux.Proofs.WG.Roaming.ReceiveStepSetterClaims
 import Leanux.Proofs.WG.Roaming.HandshakeAttemptClaims
@@ -530,5 +533,62 @@ theorem original_response_setter_attempts (msg : List UInt8) (src : SkbSource)
       (fun entry result => ∃ audit, result = .ok (audit,entry) ∧
         ∀ attempt ∈ audit.attempts, HandshakeAttempts.ResponseFacts msg src attempt) :=
   ⟨HandshakeAttempts.response_original msg src kind,HandshakeAttempts.response_facts msg src⟩
+
+
+/-- Every surviving final destination is supplied by its actual latest
+configuration, authenticated handshake or authenticated data setter in the
+initialized driver journal. No later setter or allocation reset affects that
+store location. Deletion remains allowed; stopped runs have no final state. -/
+theorem original_initialized_latest_endpoint_origins (trace : Runner.Trace)
+    (placeholders : Bool) (json : Lean.Json) (final : Campaign2.Snapshot)
+    (completed : RemoteProvenance.outcome trace placeholders = .ok (json,final)) :
+    ∀ pid remote, remoteMap final pid = some remote →
+      ∃ q : RemoteChronology.LatestOrigin,
+        q.Valid trace placeholders pid remote ∧ q.origin.Facts pid remote :=
+  RemoteChronology.final_latest_origins trace placeholders json final completed
+
+/-- Every reached data endpoint check in the original initialized execution
+has an earlier successful decrypt and configured session certificate, even
+when its consumption or enclosing runner later stops. -/
+theorem original_initialized_data_check_authentication (trace : Runner.Trace)
+    (placeholders : Bool) :
+    ∀ q ∈ (PollAuthentication.inspection trace placeholders).checks,
+      ∃ e : PollAuthentication.Authentication,
+        e.Valid trace placeholders q ∧ e.Facts q :=
+  PollAuthentication.inspection_authenticated trace placeholders
+
+/-- The projected data inspection preserves the original JSON or indexed
+Stop and includes exactly the checks reached at their original positions. -/
+theorem original_initialized_data_check_coverage (trace : Runner.Trace)
+    (placeholders : Bool) :
+    (PollAuthentication.inspection trace placeholders).outcome =
+      Runner.executeTrace trace placeholders ∧
+    ∀ q, q ∈ (PollAuthentication.inspection trace placeholders).checks ↔
+      q.Occurs trace placeholders :=
+  ⟨PollAuthentication.inspection_outcome trace placeholders,
+    PollAuthentication.inspection_complete trace placeholders⟩
+
+/-- The actual ring-selected handshake receive step retains authenticated
+source-derived setter attempts through any later Stop. Its inspection keeps
+the exact original outcome; no completed setter or physical write is assumed. -/
+theorem original_receive_step_attempt_authentication :
+    (do let audit ← HandshakeOverlay.observeStep; pure audit.outcome) =
+      Campaign2.Product.inspect (liftWG receiveStep) ∧
+    Campaign2.Product.Observes HandshakeOverlay.observeStep (fun _ => True)
+      (fun entry result => ∃ audit, result = .ok (audit,entry) ∧
+        ∀ attempt ∈ audit.attempts, HandshakeOverlay.Authenticated attempt) :=
+  ⟨HandshakeOverlay.step_original,HandshakeOverlay.step_facts⟩
+
+/-- Every handshake setter attempt recorded by the original committed
+scheduler callbacks has authentication tied to its actual setter peer state,
+including prefixes before later Stops. Copied consistency probes remain in
+the original RX projection and do not contribute attempt records here. -/
+theorem original_scheduler_attempt_authentication (stack : Option Worker) :
+    (do let audit ← HandshakeOverlay.observeSchedule stack; pure audit.outcome) =
+      Campaign2.Product.inspect (Env.schedule stack) ∧
+    Campaign2.Product.Observes (HandshakeOverlay.observeSchedule stack) (fun _ => True)
+      (fun entry result => ∃ audit, result = .ok (audit,entry) ∧
+        ∀ attempt ∈ audit.attempts, HandshakeOverlay.Authenticated attempt) :=
+  ⟨HandshakeOverlay.schedule_original stack,HandshakeOverlay.schedule_facts stack⟩
 
 end Leanux.Proofs.WG.Roaming

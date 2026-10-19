@@ -1,11 +1,12 @@
+import Leanux.Proofs.WG.Roaming.HandshakeEndpointSource
 import Leanux.Proofs.WG.Roaming.ResponseLookupSource
 import Leanux.Proofs.WG.Index.ReceiveOperations
 
 set_option autoImplicit false
 set_option pp.structureInstances false
-set_option maxHeartbeats 800000
 namespace Leanux.Proofs.WG.Roaming
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise Std.Do
+open Origins HandshakeEndpoint
 
 def responseLoad : WG.M Bool := do
   -- `under_load = handshake_queue_len >= MAX_QUEUED_INCOMING_HANDSHAKES / 8`
@@ -144,50 +145,94 @@ theorem observedResponseHandshake_erase (msg : List UInt8) (src : SkbSource) :
   | error e => rfl
   | ok pair => rcases pair with ⟨⟨value, final⟩, after⟩; cases value; rfl
 
+section EndpointContext
+open Leanux.Proofs.Logged Origins HandshakeEndpoint
+variable {m : Type → Type} [Monad m] (L : HandshakeEndpoint.Lift m)
+
+theorem responseLoad_context_source : responseLoad = Cookies.loadPhase := rfl
+
+def responseSuffixWith (endpoint : PeerId → SkbSource → m Unit)
+    (msg : List UInt8) (src : SkbSource) : Option ResponseCallCut → m Unit
+  | none => pure ()
+  | some cut => do
+    endpoint cut.consumed.input.pid src
+    L.action (responseAfterSetter msg cut.consumed.input.pid)
+
+theorem responsePacket_context [LawfulMonad m] (endpoint : PeerId → SkbSource → m Unit)
+    (msg : List UInt8) (src : SkbSource) (underLoad : Bool)
+    (kind : messageType msg = MESSAGE_HANDSHAKE_RESPONSE) :
+    (L.action (responsePacketPrefix msg src underLoad) >>=
+      responseSuffixWith L endpoint msg src) =
+    (do let mac ← L.action (cookieValidatePacket msg src underLoad)
+        HandshakeSources.afterMacWith (ops L endpoint) msg src underLoad mac) := by
+  simp only [HandshakeSources.afterMacWith]
+  simp only [response_source]
+  simp only [responsePacketPrefix, kind,
+    MESSAGE_HANDSHAKE_RESPONSE, MESSAGE_HANDSHAKE_INITIATION, Nat.reduceBEq,
+    ops_step, ops_initiation, ops_response, ops_endpoint, ops_cookie, ops_session, ops_derived, ops_complete, ops_keepalive, ops_modifyPeer, ops_received, ops_traversal, ops_put, ← responseWithLookup_erase msg,
+    lift_bind, lift_pure, responseSuffixWith, bind_assoc, pure_bind, bind_if, abort_bind, apply_ite]
+  simp only [branch_native, lift_bind, lift_pure, bind_assoc, pure_bind,
+    Bool.false_eq_true, ite_false, ite_true, Option.isNone_map]
+  apply bind_congr_right
+  intro mac
+  apply bind_congr_right
+  intro proceed
+  cases proceed <;> simp only [Bool.false_eq_true, ite_false, ite_true]
+  apply bind_congr_right
+  intro ignored
+  apply bind_congr_right
+  intro ignored
+  apply bind_congr_right
+  intro unit2
+  apply bind_congr_right
+  intro consumed
+  cases consumed with
+  | none => simp
+  | some pair =>
+    simp only [Option.isNone_some, Bool.false_eq_true, ite_false, Option.map_some,
+      lift_bind, lift_pure, bind_assoc, pure_bind, responseSuffixWith, responseAfterSetter,
+      read_ignore, branch_native, apply_ite]
+    congr 1
+
+theorem response_context [LawfulMonad m] (endpoint : PeerId → SkbSource → m Unit)
+    (msg : List UInt8) (src : SkbSource)
+    (kind : messageType msg = MESSAGE_HANDSHAKE_RESPONSE) :
+    (L.action (responseCallPrefix msg src) >>= responseSuffixWith L endpoint msg src) =
+      HandshakeSources.receptionWith (ops L endpoint) msg src := by
+  simp only [responseCallPrefix, HandshakeSources.receptionWith, kind,
+    MESSAGE_HANDSHAKE_RESPONSE, MESSAGE_HANDSHAKE_COOKIE, Nat.reduceBEq,
+    ops_step, branch_native, lift_bind, lift_pure, bind_assoc, pure_bind,
+    Bool.false_eq_true, ite_false]
+  rw [responseLoad_context_source]
+  apply bind_congr_right
+  intro ignored
+  apply bind_congr_right
+  intro loaded
+  exact responsePacket_context L endpoint msg src loaded kind
+
+
+theorem response_prefix_context {E : Type}
+    (endpoint : PeerId → SkbSource → WGPrefix E Unit)
+    (msg : List UInt8) (src : SkbSource)
+    (kind : messageType msg = MESSAGE_HANDSHAKE_RESPONSE) :
+    (liftWGPrefix (responseCallPrefix msg src) >>= responseSuffixWith prefixLift endpoint msg src) =
+      HandshakeSources.receptionWith (ops prefixLift endpoint) msg src :=
+  response_context prefixLift endpoint msg src kind
+end EndpointContext
+
 /-- Exact original response-body factor. A none cut performs no setter; every
 setter path passes the successful consumer cut and starts the unchanged suffix. -/
 theorem responsePacket_source (msg : List UInt8) (src : SkbSource) (underLoad : Bool)
     (kind : messageType msg = MESSAGE_HANDSHAKE_RESPONSE) :
     (responsePacketPrefix msg src underLoad >>= responseCallSuffix msg src) =
       Index.receivePacketBody msg src underLoad := by
-  have branch_native (decision : Decision) (value : Bool) :
-      (branch decision value : WG.M Bool) = (do
-        (monadLift (modify fun a : Ambient => {a with steps := a.steps.push {
-          decision, outcome := value, netRx := a.netRxSection}} : AmbientM Unit) : WG.M Unit)
-        pure value) := rfl
+  have context := responsePacket_context native setPeerEndpointFromSkb msg src underLoad kind
+  change (responsePacketPrefix msg src underLoad >>= responseCallSuffix msg src) =
+    (cookieValidatePacket msg src underLoad >>= fun mac =>
+      HandshakeSources.afterMacWith HandshakeSources.original msg src underLoad mac) at context
+  rw [packet_original]
+  simpa only [HandshakeSources.afterMac_original] using context
 
-  have bind_if {α β : Type} (condition : Prop) [Decidable condition]
-      (yes no : WG.M α) (next : α → WG.M β) :
-      ((if condition then yes else no) >>= next) =
-        if condition then yes >>= next else no >>= next := by split <;> rfl
-  have invariant_bind {α β : Type} (message : String) (next : α → WG.M β) :
-      ((invariant message : WG.M α) >>= next) = (invariant message : WG.M β) := rfl
-
-  simp only [responsePacketPrefix, Index.receivePacketBody, kind,
-    MESSAGE_HANDSHAKE_RESPONSE, MESSAGE_HANDSHAKE_INITIATION, Nat.reduceBEq,
-    ← responseWithLookup_erase msg, responseCallSuffix,
-    bind_assoc, pure_bind, bind_if, invariant_bind]
-  simp only [branch_native, bind_assoc, pure_bind, Bool.false_eq_true, ite_false, ite_true,
-    Option.isNone_map]
-  congr 1
-  funext mac
-  congr 1
-  funext proceed
-  cases proceed <;> simp only [Bool.false_eq_true, ite_false, ite_true]
-  congr 1
-  funext ignored
-  congr 1
-  funext ignored
-  congr 1
-  funext ignored
-  congr 1
-  funext consumed
-  cases consumed with
-  | none => simp
-  | some pair =>
-    simp only [Option.isNone_some, Bool.false_eq_true, ite_false, Option.map_some,
-      bind_assoc, pure_bind, responseCallSuffix, responseAfterSetter]
-    congr 1
 
 /-- Exact response-kind correspondence, including errors. The no-cut suffix
 is pure; the some-cut suffix begins with precisely the original endpoint setter. -/
