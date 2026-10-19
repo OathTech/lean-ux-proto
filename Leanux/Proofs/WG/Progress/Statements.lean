@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Progress.ClearWorkerRecordClaims
 import Leanux.Proofs.WG.Progress.PipeReadClaims
 import Leanux.Proofs.WG.Progress.PipeWriteOuterClaims
 import Leanux.Proofs.WG.Progress.StagingSuffixClaims
@@ -1116,5 +1117,19 @@ theorem original_keepalive_record_suffix (records : List HiddenRecord) (peer : P
       (fun s=>s.ambient.hidden=some records)
       (fun _ s=>RecordSuffix.Tail records s.ambient.hidden) :=
   RecordSuffix.keepalive_record_suffix records peer
+
+open RecordSuffix in
+theorem original_clear_callback_record_suffix (records : List HiddenRecord) (pid : PeerId) :
+    Campaign2.Ensures (queuedExpiredZeroKeyMaterial pid)
+      (fun s=>s.ambient.hidden=some records)
+      (fun _ s=>Tail records s.ambient.hidden) :=
+  RecordSuffix.original_clear_callback_record_suffix records pid
+
+open RecordSuffix in
+theorem original_clear_worker_record_decrease (records : List HiddenRecord) :
+    Campaign2.Product.Ensures Env.runOneClearWorker
+      (fun s=>s.ambient.hidden=some records)
+      (fun _ s=>StrictTail records s.ambient.hidden) :=
+  RecordSuffix.original_clear_worker_record_decrease records
 
 end Leanux.Proofs.WG.Progress

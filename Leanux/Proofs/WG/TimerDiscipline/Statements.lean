@@ -1,3 +1,9 @@
+import Leanux.Proofs.WG.TimerDiscipline.HookTransmitWorkerClaims
+import Leanux.Proofs.WG.TimerDiscipline.JitterHookClaims
+import Leanux.Proofs.WG.TimerDiscipline.HookInitiationClaims
+import Leanux.Proofs.WG.TimerDiscipline.HookSendEnvironmentClaims
+import Leanux.Proofs.WG.TimerDiscipline.ReceiveHookClaims
+import Leanux.Proofs.WG.TimerDiscipline.HandshakeJournalClaims
 import Leanux.Proofs.WG.TimerDiscipline.HookTransmitClaims
 import Leanux.Proofs.WG.TimerDiscipline.HookJournalClaims
 import Leanux.Proofs.WG.TimerDiscipline.EpisodeJournalClaims
@@ -969,5 +975,96 @@ theorem original_transmit_hook_journal (peer : PeerId) (items : List SkbId) :
     Campaign2.Returns (HookJournal.Transmit.inspection peer items) (fun _=>True)
       (fun result _=>∀r∈result.2,r.Valid) :=
   HookJournal.Transmit.original peer items
+
+open HookJournal in
+theorem original_initiation_hook_receipt_effect {r : Receipt} (valid : r.Valid)
+    (kind : r.hook = .handshakeInitiated) (d : Device) (p : Peer)
+    (device : r.before.wg.device = some d) (resident : d.peers[r.pid]? = some p)
+    {after : Campaign2.Snapshot} (normal : r.outcome = .ok ((),after)) :
+    ∃ jitter, jitter < HZ / 3 ∧
+      if d.running && !p.isDead then
+        peerTimerArmEffect r.before r.pid p .retransmitHandshake (REKEY_TIMEOUT_TICKS+jitter) after.wg
+      else after.wg=r.before.wg :=
+  valid.handshakeInitiated kind d p device resident normal
+
+open HookJournal in
+theorem original_data_sent_hook_receipt_effect {r : Receipt} (valid : r.Valid)
+    (kind : r.hook = .dataSent) (d : Device) (p : Peer)
+    (device : r.before.wg.device = some d) (resident : d.peers[r.pid]? = some p)
+    {after : Campaign2.Snapshot} (normal : r.outcome = .ok ((),after)) :
+    if p.timerPending .newHandshake then after.wg=r.before.wg
+    else ∃jitter,jitter < HZ/3 ∧
+      if d.running && !p.isDead then
+        peerTimerArmEffect r.before r.pid p .newHandshake
+          (KEEPALIVE_TIMEOUT_TICKS+REKEY_TIMEOUT_TICKS+jitter) after.wg
+      else after.wg=r.before.wg :=
+  valid.dataSent kind d p device resident normal
+
+open HookJournal HookJournal.Initiation in
+theorem original_initiation_hook_journal (pid : PeerId) :
+    (do let result←inspection pid; pure result.1) =
+      Campaign2.inspect (sendHandshakeInitiation pid) ∧
+    Campaign2.Returns (inspection pid) (fun _=>True)
+      (fun result _=>∀r∈result.2,r.Valid) :=
+  HookJournal.Initiation.original pid
+
+open HookJournal HookJournal.Initiation in
+theorem original_initiation_worker_hook_journal (pid : PeerId) :
+    (do let result←workerInspection pid; pure result.1) =
+      Campaign2.inspect (handshakeSendWorker pid) ∧
+    Campaign2.Returns (workerInspection pid) (fun _=>True)
+      (fun result _=>∀r∈result.2,r.Valid) :=
+  HookJournal.Initiation.original_worker pid
+
+open HookJournal HookJournal.SendEnvironment in
+theorem original_selected_send_worker_hook_journal :
+    (do let result←inspection; pure result.1) =
+      Campaign2.Product.inspect Env.runOneSendWorker ∧
+    Campaign2.Product.Returns inspection (fun _=>True)
+      (fun result _=>∀r∈result.2,r.Valid) :=
+  HookJournal.SendEnvironment.original
+
+open ReceiveHookJournal in
+theorem original_receive_hook_journal (pid : PeerId) (pkt : RxPacket) (ep : Endpoint) :
+    Campaign2.Observes (consumeDataDone pid pkt ep) (fun _=>True)
+      (fun before outcome=>∃ result : Inspection,
+        result.outcome = outcome ∧ result.Valid pid pkt ep before ∧ result.Facts pid) :=
+  ReceiveHookJournal.original_consume_hooks pid pkt ep
+
+open HandshakeJournal in
+theorem original_response_session_hook_journal (pid : PeerId) :
+    (do let result←inspect (response pid);pure result.1)=Campaign2.inspect (sendHandshakeResponse pid) ∧
+    Campaign2.Returns (inspect (response pid)) (fun _=>True)
+      (fun result _=>ValidHistory result.2 ∧ Paired result.2 ∧
+        ∀serial,result.2.countP (fun e=>e.sessionId==some serial)=
+          result.2.countP (fun e=>e.derivedId==some serial)) :=
+  HandshakeJournal.original_response pid
+
+open HandshakeJournal in
+theorem original_reception_session_hook_journal (msg : List UInt8) (src : SkbSource) :
+    (do let result←inspect (reception msg src);pure result.1)=Campaign2.inspect (receiveHandshakePacket msg src) ∧
+    Campaign2.Returns (inspect (reception msg src)) (fun _=>True)
+      (fun result _=>ValidHistory result.2 ∧ Paired result.2 ∧
+        ∀serial,result.2.countP (fun e=>e.sessionId==some serial)=
+          result.2.countP (fun e=>e.derivedId==some serial)) :=
+  HandshakeJournal.original_reception msg src
+
+open HandshakeJournal in
+theorem original_receive_step_session_hook_journal :
+    (do let result←inspect step;pure result.1)=Campaign2.inspect receiveStep ∧
+    Campaign2.Returns (inspect step) (fun _=>True)
+      (fun result _=>ValidHistory result.2 ∧ Paired result.2 ∧
+        ∀serial,result.2.countP (fun e=>e.sessionId==some serial)=
+          result.2.countP (fun e=>e.derivedId==some serial)) :=
+  HandshakeJournal.original_step
+
+/-- The complete original transmit iteration retains reached hook receipts
+through its disposal, reference payments and reschedule observation. -/
+theorem original_transmit_iteration_hook_journal (pid : PeerId) :
+    (do let result←HookJournal.TransmitWorker.inspection pid; pure result.1) =
+      Campaign2.Product.inspect (txIter pid (Env.condResched .txWorker)) ∧
+    Campaign2.Product.Returns (HookJournal.TransmitWorker.inspection pid) (fun _=>True)
+      (fun result _=>∀r∈result.2,r.Valid) :=
+  HookJournal.TransmitWorker.original pid
 
 end Leanux.Proofs.WG.TimerDiscipline
