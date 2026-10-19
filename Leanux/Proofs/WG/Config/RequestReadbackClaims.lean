@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Config.RequestReadbackReturnSource
 import Leanux.Proofs.WG.Config.MixedGetterFieldClaims
 import Leanux.Proofs.WG.Config.RequestReadbackBridge
 import Leanux.Proofs.WG.Config.RequestInputClaims
@@ -165,29 +166,12 @@ theorem original_refusal_mixed_readback (attrs : DeviceAttrs) (d : Device)
     ret middle normal pre.1 pre.2.1 pre.2.2 r member port kind nonzero refused
     residents readable ready headerFits fresh cursorData within idle emptyQueue
   refine ⟨code,?_⟩
-  have original := (inspection_outcome attrs w ambient).symm.trans normal
-  cases setRun : ((wgSetDevice attrs).run w).run ambient with
-  | error stop =>
-    simp only [Campaign2.observeResult,setRun,Except.map] at original
-    cases original
-  | ok result =>
-    obtain ⟨⟨value,post⟩,next⟩ := result
-    simp only [Campaign2.observeResult,setRun,Except.map] at original
-    cases original
-    obtain ⟨dump,final,after,getRun,effects⟩ := getter post next rfl
-    refine ⟨Campaign2.snapshot final after,?_,?_⟩
-    · change Campaign2.observeResult
-        ((((wgSetDevice attrs).run w).run ambient >>= fun ((ret,middle),next) =>
-          ((wgGetDevice (byIndex d)).run middle).run next >>= fun ((dump,out),rest) =>
-            Except.ok (((ret,dump),out),rest))) = _
-      rw [setRun]
-      change Campaign2.observeResult
-        ((((wgGetDevice (byIndex d)).run post).run next >>= fun ((dump,out),rest) =>
-          Except.ok (((ret,dump),out),rest))) = _
-      rw [getRun]
-      exact congrArg (fun result => Except.ok ((ret,result),Campaign2.snapshot final after)) effects.1
-    · rw [← effects.1]
-      exact effects
+  obtain ⟨dump,final,run,effects⟩ := readback_matches_returns attrs d
+    (Campaign2.snapshot w ambient) (inspection attrs w ambient) _
+    ⟨w,ambient,rfl,rfl,rfl⟩ ret middle normal _ getter
+  refine ⟨final,?_,?_⟩
+  · simpa only [effects.1] using run
+  · simpa only [effects.1] using effects
 
 end RequestOrder
 

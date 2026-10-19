@@ -1,3 +1,6 @@
+import Leanux.Proofs.WG.Config.KeyIdentityReadbackClaims
+import Leanux.Proofs.WG.Config.PeerScalarRetentionClaims
+import Leanux.Proofs.WG.Config.ScalarPrefixClaims
 import Leanux.Proofs.WG.Config.UpdateOnlyClaims
 import Leanux.Proofs.WG.Config.KeyIdentityClaims
 import Leanux.Proofs.WG.Config.GetterContextClaims
@@ -3073,5 +3076,61 @@ theorem original_peer_validation_refusal (attrs : PeerAttrs) (code : Int)
     Campaign2.Returns (setPeerCmd attrs) (fun s=>s.wg=initial)
       (fun ret s=>ret=code ∧ s.wg=initial) :=
   UpdateOnly.original_validation attrs code refused initial
+
+
+/-- The original acquired-peer update has an exact completed PSK/endpoint cut before replacement, allowed-IP and send/payment work. Later Stops retain that cut; REMOVE_ME is excluded by the explicit branch premise. -/
+theorem original_acquired_peer_scalar_prefix (attrs : PeerAttrs) (peer : Option PeerId) (flags : UInt32)
+    (psk : Option Key) (pid : PeerId) (keep : flags &&& WGPEER_F_REMOVE_ME = 0)
+    (d : Device) (p : Peer) (resident : d.peers[pid]? = some p) :
+    Campaign2.Observes (peerConfigUpdateSource attrs peer flags psk pid)
+      (fun s=>s.wg.device=some d)
+      (fun initial outcome=>∃result,ScalarPrefix.Matches attrs peer flags psk pid initial result ∧
+        result.outcome=outcome ∧ ScalarPrefix.Facts attrs psk pid d p initial result) :=
+  ScalarPrefix.original_update_outcome attrs peer flags psk pid keep d p resident
+
+/-- Actual staged sending retains the incarnation, PSK, keepalive interval and full endpoint of every surviving peer; survival is not assumed or asserted. -/
+theorem original_staged_peer_scalar_retention (pid : PeerId) (initial : PeerScalarRetention.Map) :
+    Campaign2.Ensures (sendStagedPackets pid)
+      (fun s=>PeerScalarRetention.observation s=initial)
+      (fun _ s=>PeerScalarRetention.Retained initial (PeerScalarRetention.observation s)) :=
+  PeerScalarRetention.staged pid initial
+
+/-- Actual keepalive preparation retains the incarnation, PSK, keepalive interval and full endpoint of every surviving peer. -/
+theorem original_keepalive_peer_scalar_retention (pid : PeerId) (initial : PeerScalarRetention.Map) :
+    Campaign2.Ensures (sendKeepalive pid)
+      (fun s=>PeerScalarRetention.observation s=initial)
+      (fun _ s=>PeerScalarRetention.Retained initial (PeerScalarRetention.observation s)) :=
+  PeerScalarRetention.keepalive pid initial
+
+/-- An actual mixed setter/getter pair reads the final key-stage identity and exact mixed JSON/cursor effects under explicit coherent-data and static getter bounds; the actual key-stage entry and collision baseline remain explicit. -/
+theorem original_mixed_device_key_readback (cs : Queues.RxCredits.Ledger)
+    (loans : Queues.RxCredits.Reservations) (attrs : DeviceAttrs)
+    (initial : Campaign2.Snapshot) (inspected : RequestOrder.Inspection)
+    (certificate : RequestOrder.Certificate attrs initial inspected)
+    (pre : OwnerConfiguration.ProjectedEntry cs loans initial)
+    (ret : Int) (middle : Campaign2.Snapshot) (normal : inspected.outcome=.ok (ret,middle))
+    (r : RequestOrder.Receipt) (member : r∈inspected.receipts) (kind : r.kind=.keyStage)
+    (d : Device) (present : middle.wg.device=some d) (data : DeviceDumpReadable d)
+    (selected : ClaimView.selectsDevice middle d)
+    (ready : MixedPageReady d (routingReadPeer d) (routingReadNode d)
+      (mixedInitialRows d (routingReadPeer d)) {hasWg:=true})
+    (headerFits : devicePrefixSpace d ≤ NLMSG_GOODSIZE)
+    (cursorData : MixedPlanCursorData d
+      (mixedPages d (routingReadPeer d) (routingReadNode d)
+        (mixedInitialRows d (routingReadPeer d)) {hasWg:=true} ready))
+    (idle : middle.wg.nlSock7.cbRunning=false) (emptyQueue : middle.wg.nlSock7.queue=[])
+    (within : mixedPageReceiveCount
+      (mixedPages d (routingReadPeer d) (routingReadNode d)
+        (mixedInitialRows d (routingReadPeer d)) {hasWg:=true} ready) ≤ 4096)
+    (outcome : Campaign2.Outcome (Int × Except Int Lean.Json))
+    (matched : RequestOrder.ReadbackMatches attrs d initial inspected outcome) :
+    let pages := mixedPages d (routingReadPeer d) (routingReadNode d)
+      (mixedInitialRows d (routingReadPeer d)) {hasWg:=true} ready
+    ∃ before, r.before.wg.device=some before ∧ KeyStage.IdentityEffect attrs before d.staticIdentity ∧
+      ∃ final,outcome=.ok ((ret,.ok (mixedGetterJson d (routingReadPeer d) (routingReadNode d))),final) ∧
+        final.wg.device=some (mixedPagesDevice d pages) ∧
+        final.wg.nlSock7=socketReadbackFinal middle.wg.nlSock7 d ∧
+        CursorHeld d (mixedPagesDevice d pages) none :=
+  certificate_key_mixed_readback cs loans attrs initial inspected certificate pre ret middle normal r member kind d present data selected ready headerFits cursorData idle emptyQueue within outcome matched
 
 end Leanux.Proofs.WG.Config

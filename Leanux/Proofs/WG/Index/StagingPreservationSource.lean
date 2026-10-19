@@ -6,7 +6,7 @@ set_option autoImplicit false
 namespace Leanux.Proofs.WG.Index.StagingPreservation
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise Std.Do
 abbrev PeerImage := Nat × Option KeypairId × Option KeypairId × Option KeypairId ×
-  Option PeerId × Nat × Bool × Option (Nat × Nat × Nat × Nat)
+  Option PeerId × Nat × Bool × Option (Nat × Nat × Nat × Nat) × Key × Nat × Option Endpoint
 /-- Primitive contracts for the one owned staging source proof. Cached peer/key
 observations are supplied by reads and consumed by the original saved writes. -/
 structure Contracts (P : WGWorld → Prop) where

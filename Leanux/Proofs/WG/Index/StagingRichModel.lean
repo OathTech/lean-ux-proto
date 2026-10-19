@@ -7,7 +7,7 @@ open Leanux Leanux.WG Leanux.Proofs.WG.Noise Std.Do
 
 abbrev PeerCell (p : Peer) :=
   (p.handshakeState,p.keypairNext,p.keypairPrevious,p.keypairCurrent,
-   p.handshakeEntryPeer,p.internalId,p.isDead,p.endpoint.map Roaming.destination)
+   p.handshakeEntryPeer,p.internalId,p.isDead,p.endpoint.map Roaming.destination,p.presharedKey,p.persistentKeepaliveInterval,p.endpoint)
 abbrev KeyCell (k : Keypair) := (k.peer,decide (0 < k.refcount))
 
 def peerMap (w : WGWorld) (pid : PeerId) :=

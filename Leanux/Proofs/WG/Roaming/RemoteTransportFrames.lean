@@ -52,7 +52,7 @@ theorem stagingFrame_remotes {entry final : WGWorld} (frame : Index.StagingRich.
     RemoteRetained (destinationAt entry) (destinationAt final) := by
   have project (g : WGWorld) (pid : PeerId) :
       destinationAt g pid = (Index.StagingRich.peerMap g pid).bind
-        (fun c => c.2.2.2.2.2.2.2) := by
+        (fun c => c.2.2.2.2.2.2.2.1) := by
     cases device : g.dev with
     | none => simp [destinationAt,peerAt,Index.StagingRich.peerMap,device]
     | some d =>
