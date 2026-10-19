@@ -35,6 +35,7 @@ import Leanux.Proofs.WG.TransmitSecurity.BatchNativeTx
 import Leanux.Proofs.WG.TransmitSecurity.BatchNativeInitialized
 import Leanux.Proofs.WG.TransmitSecurity.BatchJournalFinal
 import Leanux.Proofs.WG.TransmitSecurity.SocketJournalFinal
+import Leanux.Proofs.WG.TransmitSecurity.CiphertextOriginFinal
 
 /-! Campaign 3, T1 initialized counter reservations and local AEAD contracts.
 Exclusive reservation tokens now reach every initialized AEAD occurrence;
@@ -745,5 +746,18 @@ theorem initialized_socket_packet_peer_binding (trace : Runner.Trace) (placehold
         AuthenticatedEffects.CausalJournal.old?) :=
   ⟨SocketJournal.Scheduler.initialized trace placeholders,
     SocketJournal.final_initialized trace placeholders⟩
+
+/-- Every nonempty socket payload in the initialized shared journal equals an
+actual earlier AEAD result for the same packet identity and retained material.
+This prevents substituting unrelated bytes after encryption; exclusion of empty
+members in a CRYPTED batch is a separate native readiness obligation. The result
+retains strict-prefix evidence through Stop and the exact final causal projection. -/
+theorem initialized_socket_ciphertext_provenance (trace : Runner.Trace) (placeholders : Bool) :
+    CiphertextOrigins.Safe (runPrefixOuter (Journal.execute trace placeholders) []).2 ∧
+    CiphertextOrigins.Safe
+      ((runPrefixOuter (AuthenticatedEffects.CausalJournal.execute trace placeholders) []).2.filterMap
+        AuthenticatedEffects.CausalJournal.old?) :=
+  ⟨CiphertextOrigins.initialized trace placeholders,
+    CiphertextOrigins.final_initialized trace placeholders⟩
 
 end Leanux.Proofs.WG.TransmitSecurity

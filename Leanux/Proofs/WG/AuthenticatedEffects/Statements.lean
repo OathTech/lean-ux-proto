@@ -6,6 +6,9 @@ import Leanux.Proofs.WG.AuthenticatedEffects.CausalDelayedLifetime
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalDelayedSend
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalDelayedCompletion
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalSelectionTimer
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalSelectionDeferred
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalSelectionRemoval
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalSelectionInitialized
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalDelayedReceive
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalDelayedWorkers
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalDelayedDeferred
@@ -1183,13 +1186,39 @@ theorem initialized_timer_receipt_matches_current_context (trace : Runner.Trace)
 
 /-- Security: each handshake-work append receipt in an initialized final-journal
 execution is the actual native append under its exact current lexical context,
-including a stopped prefix. A live queue-occurrence carrier must still authorize
-the later selected worker; missing or malformed contexts remain explicit. -/
+including a stopped prefix. Authorization of that context remains separate;
+missing or malformed contexts remain explicit. -/
 theorem initialized_queue_receipt_matches_current_context (trace : Runner.Trace) (placeholders : Bool)
     (pre post : List CausalJournal.Event) (receipt : TimerEffects.Queued CausalJournal.Context)
     (position : (runPrefixOuter (CausalJournal.execute trace placeholders) []).2 =
       pre ++ CausalJournal.Event.queued receipt :: post) :
     receipt.Valid ∧ receipt.cause = CausalScope.current CausalJournal.scope? pre :=
   CausalJournal.Receipts.initialized_queue trace placeholders pre post receipt position
+
+/-- Security: every timer selected in an initialized final-journal execution
+is the actual next due pending occurrence, with an earlier native arm of that
+same peer incarnation, expiry and wheel entry. The evidence survives a later
+Stop. This establishes occurrence provenance; the earlier arm's own causal
+authorization remains separate. -/
+theorem initialized_timer_selection_has_earlier_native_arm
+    (trace : Runner.Trace) (placeholders : Bool)
+    (pre post : List CausalJournal.Event) (receipt : TimerDispatch.Selection)
+    (position : (runPrefixOuter (CausalJournal.execute trace placeholders) []).2 =
+      pre ++ CausalJournal.Event.old (.timerSelected receipt) :: post) :
+    CausalJournal.Selections.TimerOrigin pre receipt :=
+  CausalJournal.Selections.initialized_timer trace placeholders pre post receipt position
+
+/-- Security: each initialized handshake-send worker scope selects the first
+matching live queue occurrence backed by a strictly earlier native enqueue
+receipt, including direct removal drains and stopped prefixes. Duplicate queue
+entries retain distinct positions. Authorization of the enqueue's own context
+remains a separate causal-root obligation. -/
+theorem initialized_send_selection_has_earlier_native_enqueue
+    (trace : Runner.Trace) (placeholders : Bool)
+    (pre post : List CausalJournal.Event) (index : Nat) (pid : PeerId) (entry : CausalSources.SendEntry)
+    (position : (runPrefixOuter (CausalJournal.execute trace placeholders) []).2 =
+      pre ++ CausalJournal.Event.scope (.entered ⟨index,.sendWork pid entry⟩) :: post) :
+    CausalJournal.Selections.WorkOrigin pre pid entry :=
+  CausalJournal.Selections.initialized_work trace placeholders pre post index pid entry position
 
 end Leanux.Proofs.WG.AuthenticatedEffects

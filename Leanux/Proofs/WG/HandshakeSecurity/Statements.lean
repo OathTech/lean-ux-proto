@@ -7,7 +7,7 @@ import Leanux.Proofs.WG.HandshakeSecurity.ResidentMaterialBounds
 import Leanux.Proofs.WG.HandshakeSecurity.ResidentMaterialCarrierCallbacks
 import Leanux.Proofs.WG.HandshakeSecurity.ResidentMaterialStack
 import Leanux.Proofs.WG.HandshakeSecurity.ResidentMaterialWorkers
-import Leanux.Proofs.WG.HandshakeSecurity.ResidentMaterialScheduler
+import Leanux.Proofs.WG.HandshakeSecurity.ResidentMaterialFinal
 import Leanux.Proofs.WG.HandshakeSecurity.StagingMaterialBank
 import Leanux.Proofs.WG.HandshakeSecurity.ExchangeDriverProjection
 import Leanux.Proofs.WG.HandshakeSecurity.ExchangeSend
@@ -1324,5 +1324,25 @@ theorem native_scheduler_retains_tx_key_material (stack : Option Worker) :
     ResidentMaterial.ProductSafe
       (TransmitSecurity.Driver.scheduleObserved TransmitSecurity.Journal.hooks stack) :=
   ResidentMaterial.schedule_carrier stack
+
+/-- Security: both native timer modes and the actual delayed send and clear
+workers retain allocation-stamped TX material through disposal and key clearing.
+All delayed callback obligations are discharged; the incoming carrier remains
+explicit pending initialized Runner composition, with no H1 assumption. -/
+theorem native_deferred_dispatch_retains_tx_key_material :
+    ResidentMaterial.ProductSafe
+      (TransmitSecurity.Driver.afterAdvanceObserved TransmitSecurity.Journal.hooks) :=
+  ResidentMaterial.after_advance_carrier
+
+/-- Security: every actual AEAD receipt in the initialized shared driver keeps
+allocation-time key material in its strict preceding journal prefix, including
+receipts before Stop. Configuration, lifecycle and native callbacks are fully
+closed from initialization; no incoming carrier, H1 or funding premise remains.
+The local batch-slot implication is discharged separately by batch alignment. -/
+theorem initialized_tx_key_material_history (trace : Runner.Trace) (placeholders : Bool) :
+    ResidentMaterial.Safe (runPrefixOuter (TransmitSecurity.Journal.execute trace placeholders) []).2 ∧
+    ResidentMaterial.Safe ((runPrefixOuter (AuthenticatedEffects.CausalJournal.execute trace placeholders) []).2.filterMap
+      AuthenticatedEffects.CausalJournal.old?) :=
+  ⟨ResidentMaterial.initialized trace placeholders,ResidentMaterial.final_initialized trace placeholders⟩
 
 end Leanux.Proofs.WG.HandshakeSecurity

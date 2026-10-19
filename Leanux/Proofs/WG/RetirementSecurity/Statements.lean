@@ -1,3 +1,6 @@
+import Leanux.Proofs.WG.RetirementSecurity.TimerRetirementOrigin
+import Leanux.Proofs.WG.RetirementSecurity.ConditionalRetirement
+import Leanux.Proofs.WG.RetirementSecurity.UnpublicationWorker
 import Leanux.Proofs.WG.RetirementSecurity.FinalRxSelection
 import Leanux.Proofs.WG.RetirementSecurity.ZeroTimerDispatch
 import Leanux.Proofs.WG.RetirementSecurity.ZeroTimerQueued
@@ -2126,5 +2129,103 @@ theorem initialized_final_dead_rx_reference_removes_key (trace : Runner.Trace) (
     skip=true ∧ keyAt final allocation.slot=none :=
   FinalRxSelection.initialized_dead trace placeholders initialized allocation projected last
     pid id pkt owner key dead b c d e f g peek test read drop stateCheck dispose
+
+/-- Native clearing empties all three peer slots and removes every original
+slot's index entries, even when slots alias or packet references retain the
+allocation. Unpublication is proved from the actual three puts and does not
+claim that outstanding packet references have already drained. -/
+theorem original_clear_slots_and_index (pid : PeerId) (p : Peer)
+    (found : peerAt w pid=some p) (a b : Ambient)
+    (run : ((keypairsClear pid).run w).run a=.ok (((),v),b)) :
+    SlotsCleared pid v ∧ ∀id∈Unpublication.SlotEntries p,Unpublished id v := by
+  have cleared := Unpublication.clear pid p found a b run
+  exact ⟨cleared.1,cleared.2.2⟩
+
+/-- An actual initialized queued-clear dispatch clears the selected peer's
+slots and their old key indices through the final peer payment. Every retained
+key reference remains exactly accounted for by native holders; dispatch is
+required explicitly, and retained allocations are paid by later source releases. -/
+theorem initialized_clear_dispatch_slots_and_index (trace : Runner.Trace) (placeholders : Bool)
+    (initialized : Leanux.Proofs.Logged.runPrefixOuter (Queues.RxCredits.RunnerAccount.observed trace placeholders) []=
+      (.ok (result,w),h)) (run : Env.runOneClearWorker.run w=.ok ((),v)) :
+    HolderAccount [] v.wg ∧ ∃d pid,w.wg.dev=some d ∧ pid∈d.clearWorkQueue ∧ SlotsCleared pid v.wg ∧
+      ∀p,d.peers[pid]?=some p→∀id∈Unpublication.SlotEntries p,Unpublished id v.wg :=
+  ⟨(InitializedRetirement.clear_worker trace placeholders initialized run).1,Unpublication.dispatched run⟩
+
+/-- Session derivation arms only the native zero-key timer at the configured
+retirement delay, after its own caller-clock read and accepted running/alive
+guard. Guard refusal is explicit and does not promise eventual dispatch. -/
+theorem original_session_retirement_arm (pid : PeerId) (a b : Ambient)
+    (run : ((timersSessionDerived pid).run w).run a=.ok (((),v),b)) :
+    ∃caller u c,
+      ((callerJiffies .timerJiffiesSessionDerived).run w).run a=.ok ((caller,u),c) ∧
+      (((modPeerTimerGuard pid).run u).run c=.ok ((false,v),b) ∨
+        ∃t e,((modPeerTimerGuard pid).run u).run c=.ok ((true,t),e) ∧
+          ((armTimer pid .zeroKeyMaterial ZERO_KEY_MATERIAL_TICKS caller).run t).run e=.ok (((),v),b)) :=
+  DerivedZeroTimer.native pid a b run
+
+/-- In the native session-derived observer, every appended arm receipt has
+the exact zero-key timer, retirement delay and causal token, including in a
+prefix that later Stops. This is a local source classification; the final
+driver's timer-occurrence carrier supplies the later selection-to-arm join. -/
+theorem original_session_retirement_receipts
+    (recordArm : AuthenticatedEffects.TimerEffects.Arm Cause→E)
+    (recordQueue : AuthenticatedEffects.TimerEffects.Queued Cause→E)
+    (cause : Cause) (pid : PeerId) (w : WGWorld) (a : Ambient) (h : List E) :
+    ∃suffix,
+      (Leanux.Proofs.Logged.runWGPrefix
+        (AuthenticatedEffects.TimerEffects.derivedWith
+          (AuthenticatedEffects.TimerEffects.receipts recordArm recordQueue cause) pid) w a h).2=h++suffix ∧
+      ∀event∈suffix,∃r : AuthenticatedEffects.TimerEffects.Arm Cause,
+        event=recordArm r ∧ r.Valid ∧ r.cause=cause ∧ r.peer=pid ∧
+          r.timer=.zeroKeyMaterial ∧ r.delay=ZERO_KEY_MATERIAL_TICKS :=
+  DerivedZeroTimer.receipts recordArm recordQueue cause pid w a h
+
+/-- Conditional key retirement follows the actual wheel selection, recorded
+zero-timer dispatch, clear worker and final native TX release. Initialization
+derives exact holder funding; the post-clear sole-holder census and successful
+worker run are explicit progress conditions. Old slot/index publication is
+removed before the retained allocation leaves the store. -/
+theorem initialized_conditional_tx_retirement (trace : Runner.Trace) (placeholders : Bool)
+    (initialized : Leanux.Proofs.Logged.runPrefixOuter (Queues.RxCredits.RunnerAccount.observed trace placeholders) []=
+      (.ok (result,w),h))
+    (d : Device) (device : w.wg.dev=some d) (bound : UInt64) (pid : PeerId)
+    (entry : WheelEntry) (due : TimerWheel.nextDue d bound=some (pid,.zeroKeyMaterial,entry))
+    (published : ∀p,d.peers[pid]?=some p→HasKeySlot p)
+    (kind : Worker) (prior : Option UInt64)
+    (fired : (Leanux.Proofs.Logged.timerDispatchUnit kind pid .zeroKeyMaterial entry prior).run w=.ok ((),u))
+    (p : Peer) (found : peerAt u.wg pid=some p) (b c : Ambient)
+    (cleared : ((runFlushedClearWork pid).run u.wg).run u.ambient=.ok (((),v),b))
+    (allocation : Credits.Allocation) (old : allocation.slot∈Unpublication.SlotEntries p)
+    (projected : durableLoans v=some loans) (last : (loans.map (·.allocation)).count allocation=1)
+    (sender : PeerId) (q : Peer) (items : List SkbId) (headId : SkbId) (head : DataPacket)
+    (peer : peerAt v sender=some q) (queued : q.txQueue.all.head?=some items)
+    (first : items.head?=some headId) (packet : Queues.TxDisposition.txPackets v headId=some head)
+    (key : head.keypair=allocation.slot)
+    (released : ((txStep sender).run v).run b=.ok ((true,final),c)) :
+    HolderAccount [] v ∧ SlotsCleared pid v ∧ Unpublished allocation.slot v ∧
+      keyAt final allocation.slot=none :=
+  ConditionalRetirement.final_tx trace placeholders initialized d device bound pid entry due published
+    kind prior fired p found b c cleared allocation old projected last sender q items headId head
+    peer queued first packet key released
+
+/-- Every actual initialized zero-key timer selection comes from an earlier
+native arm of that same peer incarnation, expiry and wheel entry. The claim
+survives later Stops and assumes no caller-supplied timer carrier. It proves
+provenance; conditional clearing and final reference release remain the
+separate native progress contracts. -/
+theorem initialized_zero_timer_arm_origin (trace : Runner.Trace) (placeholders : Bool)
+    (pre post : List AuthenticatedEffects.CausalJournal.Event)
+    (receipt : AuthenticatedEffects.TimerDispatch.Selection)
+    (position : (Leanux.Proofs.Logged.runPrefixOuter
+      (AuthenticatedEffects.CausalJournal.execute trace placeholders) []).2=
+        pre++AuthenticatedEffects.CausalJournal.Event.old (.timerSelected receipt)::post)
+    (zero : receipt.timer=.zeroKeyMaterial) :
+    receipt.Valid ∧ ∃before after arm stamp expires,
+      pre=before++AuthenticatedEffects.CausalJournal.Event.armed arm::after ∧ arm.Valid ∧
+      AuthenticatedEffects.TimerOccurrences.Changed arm ∧ arm.peer=receipt.peer ∧ arm.timer=.zeroKeyMaterial ∧
+      AuthenticatedEffects.TimerSlots.Pending arm.run.after receipt.peer .zeroKeyMaterial stamp expires receipt.entry ∧
+      AuthenticatedEffects.TimerSlots.Pending receipt.before.wg receipt.peer .zeroKeyMaterial stamp expires receipt.entry :=
+  TimerRetirementOrigin.initialized trace placeholders pre post receipt position zero
 
 end Leanux.Proofs.WG.RetirementSecurity

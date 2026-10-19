@@ -19,12 +19,12 @@ stops the work. Validation for the current source-contract checkpoint is recorde
 
 | Outcome | Status and remaining obligation |
 | --- | --- |
-| T1 nonce safety | Open. Initialized native counter reservations are unique through Stop, and admitted counters have injective encoding. Every actual initialized AEAD now has a below-limit nonce and strict earlier reservation evidence. Initialized global packet-identity non-reuse now closes through the same driver and exact causal-journal projection. Each initialized AEAD now has an exclusive allocation-stamped reservation token matching its packet nonce, with no two AEAD occurrences sharing an assigned token. Initialized encryption receipts now bind the head, packet and AEAD key slot. Historical key-material continuity remains open. |
-| T2 transmit authorization and conservation | Open. R3 supplies initialized selection-time authorization; initialized encryption head/packet key agreement and socket/packet peer agreement are proved. Ciphertext provenance, historical routing linkage and complete TX dispositions remain to prove. |
-| T3 authenticated effects and silence | Open. R6 supplies the cookie gate's local contracts, not causal closure of all delayed effects. |
+| T1 nonce safety | Open. Initialized native counter reservations are unique through Stop, and admitted counters have injective encoding. Every actual initialized AEAD now has a below-limit nonce and strict earlier reservation evidence. Initialized global packet-identity non-reuse now closes through the same driver and exact causal-journal projection. Each initialized AEAD now has an exclusive allocation-stamped reservation token matching its packet nonce, with no two AEAD occurrences sharing an assigned token. Initialized encryption receipts now bind the head, packet and AEAD key slot. Initialized historical key-material transport is now proved; joining it to the canonical reservation bank for the final actual-key nonce claim is in progress. |
+| T2 transmit authorization and conservation | Open. R3 supplies initialized selection-time authorization; initialized encryption head/packet key agreement and socket/packet peer agreement are proved. Nonempty socket-payload provenance is being validated; ready-batch nonemptiness, historical routing linkage and complete TX dispositions remain to prove. |
+| T3 authenticated effects and silence | Open. R6 supplies the cookie gate's local contracts. Initialized exact timer-arm and queued-work occurrence provenance is proved; authentication/fixture roots, including held GRO packet attribution, remain open. |
 | T4 handshake replay resistance | Open. Initialized retained-peer timestamps and exchange epochs are derived. Successful sessions have one actual allocation and clear their handshake; refused sessions preserve the whole WireGuard state. Final role-slot residency now follows the actual final-journal session entry. Direct initialized stale-refusal/no-response remains. Named C2 source assumptions stay visible. |
-| T5 responder confirmation | Open. Initialized responder selections have earlier successful confirmations, each immediately preceded by a certified replay and earlier AEAD publication in the same journal. Key-allocation continuity and the actual encryption prohibition remain open. |
-| T6 key retirement | C3-F1 concerns the literal actual-encryption clause. R5 supplies the admission/attempt checks. New native put/clear contracts prove exact reference payment, retention and final removal; initialized exact holder accounting is proved. Concrete clear-work and final-TX-release retirement are proved under their explicit source/progress conditions; timer-wheel and initialized RX-cleanup linkage remain open. |
+| T5 responder confirmation | Open. Initialized responder selections have earlier successful confirmations, each immediately preceded by a certified replay and earlier AEAD publication in the same journal. Initialized key-material continuity is proved; its join to the actual encryption prohibition remains open. |
+| T6 key retirement | C3-F1 concerns the literal actual-encryption clause. R5 supplies the admission/attempt checks. New native put/clear contracts prove exact reference payment, retention and final removal; initialized exact holder accounting is proved. Concrete clear-work and final-TX-release retirement are proved under their explicit source/progress conditions; initialized timer-arm provenance and DEAD-RX selection/cleanup are proved. The native conditional retirement chain retains its explicit recorded-run and residual-holder conditions; universal internal-event and authenticated RX final-disposal joins remain open. |
 
 ## C3-F1: invalidation and clearing do not cancel previously admitted encryption
 
@@ -577,6 +577,28 @@ The gate passes 2062 jobs and 1320 terminal declarations across thirteen roots,
 using only permitted axioms. All twelve witnesses, fresh-root kernel replay
 and the 130-job model build pass. The unit suite completes 131 tests with one
 configured-kernel skip (23.178 seconds). All 2006 frozen proof hashes and
+916 existing main proof files remain unchanged; main and the mirror are
+unchanged. All six full outcomes remain open.
+
+Checkpoint twenty-seven passes complete validation. Native encryption now certifies its
+actual returned bytes, and the worker consumes that certificate at each byte
+write. Payload frames preserve encrypted bytes through publication and native
+non-encryption paths. Actual completion transfers resident certificates to
+socket receipts in their strict earlier encryption history; initialized outer
+transport and the exact final causal-journal projection now compile. Fresh allocation arguments are proved to have empty
+wire buffers directly from the native staged-send loop. Excluding empty members
+of a CRYPTED batch remains a separate readiness obligation.
+Initialized positional timer/work selection and resident key-material histories
+now close without incoming carrier assumptions. Retirement adds whole-clear
+index unpublication, actual session-arm shape, an initialized zero-selection to
+earlier-arm certificate, and a conditional native timer/clear/final-TX-release
+chain. Its residual-holder and recorded-successful-run premises remain explicit;
+it does not assert all internal causal-event release chains.
+Adopted owned pins are T3 `eddb5827`, T4 `627e9bbd`, and T6 `113e0044`.
+The gate passes 2128 jobs and 1331 terminal declarations across thirteen roots,
+using only permitted axioms. All twelve witnesses, fresh-root kernel replay
+and the 130-job model build pass. The unit suite completes 131 tests with one
+configured-kernel skip (23.074 seconds). All 2072 frozen proof hashes and
 916 existing main proof files remain unchanged; main and the mirror are
 unchanged. All six full outcomes remain open.
 
