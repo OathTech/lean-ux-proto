@@ -2,6 +2,7 @@ import Leanux.Proofs.WG.HandshakeSecurity.ExchangeCausalInitialized
 import Leanux.Proofs.WG.HandshakeSecurity.ExchangeCausalSessionInitialized
 import Leanux.Proofs.WG.HandshakeSecurity.ResidentMaterialWorkerEntry
 import Leanux.Proofs.WG.HandshakeSecurity.ResidentMaterialWorker
+import Leanux.Proofs.WG.HandshakeSecurity.StagingMaterialBank
 import Leanux.Proofs.WG.HandshakeSecurity.ExchangeDriverProjection
 import Leanux.Proofs.WG.HandshakeSecurity.ExchangeSend
 import Leanux.Proofs.WG.HandshakeSecurity.ExchangeReceive
@@ -1224,5 +1225,31 @@ theorem native_encryption_worker_retains_key_material
     PrefixPreserves (ResidentMaterial.WorkerInv history) (ResidentMaterial.Good history)
       (TransmitSecurity.WorkerEncryption.tail item) :=
   ResidentMaterial.tail_safe item
+
+/-- Security: initialized staging gives every allocated packet one coherent
+ordered bank of actual reservation receipts, with allocation-entry material
+binding and exclusive nonce tokens across AEAD occurrences. This is the same
+final journal; no incoming safety or reachability premise is assumed. The
+remaining allocation-to-AEAD resident-material transport is separate. -/
+theorem initialized_final_reservation_material_bank (trace : Runner.Trace) (placeholders : Bool) :
+    let history := (runPrefixOuter (AuthenticatedEffects.CausalJournal.execute trace placeholders) []).2.filterMap
+      AuthenticatedEffects.CausalJournal.old?
+    StagingMaterial.Safe history ∧
+      TransmitSecurity.ReservationAssignments.BankValid history (StagingMaterial.bank history) ∧
+      TransmitSecurity.ReservationAssignments.Bank.Exclusive (StagingMaterial.bank history) history :=
+  ⟨StagingMaterial.final_safe trace placeholders,
+    StagingMaterial.bank_valid (StagingMaterial.final_safe trace placeholders),
+    StagingMaterial.final_exclusive trace placeholders⟩
+
+/-- Security: the actual worker's allocation-time key binding identifies its
+exclusive reservation token with the key allocation read at AEAD. Both facts
+use the same canonical material bank; initialized resident-packet transport
+is the explicit remaining premise at this composition boundary. -/
+theorem native_worker_reservation_key_binding (history : List TransmitSecurity.Journal.Event)
+    (receipt : TransmitSecurity.WorkerEncryption.Receipt)
+    (safe : StagingMaterial.Safe history) (bound : ResidentMaterial.BoundReceipt history receipt) :
+    ∃ token, TransmitSecurity.ReservationAssignments.Bank.Assigned (StagingMaterial.bank history) history receipt token ∧
+      token.stamp = receipt.cipher.keyRead.value.internalId ∧ token.nonce = receipt.read.value.nonce :=
+  StagingMaterial.assigned_of_binding safe bound
 
 end Leanux.Proofs.WG.HandshakeSecurity

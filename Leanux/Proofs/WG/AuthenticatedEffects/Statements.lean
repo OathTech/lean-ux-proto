@@ -5,6 +5,8 @@ import Leanux.Proofs.WG.AuthenticatedEffects.CausalDelayedPackets
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalDelayedLifetime
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalDelayedSend
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalDelayedCompletion
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalSelectionTimer
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalDelayedReceive
 import Leanux.Proofs.WG.AuthenticatedEffects.SendCallerContracts
 import Leanux.Proofs.WG.AuthenticatedEffects.QueuedSourceContracts
 import Leanux.Proofs.WG.AuthenticatedEffects.TimerOccurrences

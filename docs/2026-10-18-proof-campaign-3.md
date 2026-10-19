@@ -482,6 +482,31 @@ asserted; all six outcomes remain open.
 actual allocation. Independent existential witness choices do not identify the
 same reservation across the exclusivity and key-material claims.
 
+
+Checkpoint twenty-three passes complete validation. Native batch alignment now survives
+all five timer callbacks, complete handshake receive/send paths, transmit and
+receive admission, authenticated receive completion, Stack/GRO replies, RX
+polling, NAPI callbacks, decryption, encryption and TX disposal. These native
+contracts retain explicit physical/alignment entry premises; configuration,
+lifecycle and initialized driver transport remain open.
+The initialized staging-material history supplies one canonical certified
+reservation bank. Conditional allocation-entry material retention links a
+bound encryption receipt to that same bank with the actual AEAD key stamp and
+packet nonce. Initialized resident-material transport remains open.
+Delayed-effect transport now covers actual session, staging, keepalive, timer
+and handshake/data receive callers; selection receipts expose native queued
+membership and timer selection, without claiming initialized causal authority.
+Native lifecycle/controls and full or stepped dump syscalls preserve joint key
+credit, including cursor aliasing and final reference payment. Adopted owned
+pins are T3 `9e77544d`, T4 `4cfce567`, and T6 `b8e1514a`.
+The gate passes 1966 proof-build jobs and 1298 terminal declarations across
+thirteen root modules, with only the three permitted axioms. All twelve witness
+recipes and fresh-root kernel replay pass. The model build passes 130 jobs;
+the unit suite completes 131 tests with one configured-kernel skip (23.104
+seconds). All 1910 frozen proof-source hashes and all 916 existing main proof
+files remain unchanged. Main and the mirror remain unchanged. No mirror
+finding is asserted; all six outcomes remain open.
+
 ## Validation
 
 Both explicit coherent replays pass: original runner accepted, observer JSON

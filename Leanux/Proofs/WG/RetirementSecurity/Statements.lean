@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.RetirementSecurity.HolderDumpDispatch
+import Leanux.Proofs.WG.RetirementSecurity.HolderOuterControls
 import Leanux.Proofs.WG.RetirementSecurity.HolderOuterTraffic
 import Leanux.Proofs.WG.RetirementSecurity.HolderScheduledTimers
 import Leanux.Proofs.WG.RetirementSecurity.HolderScheduler
@@ -1915,5 +1917,45 @@ theorem original_batch_joint_key_account (entries : List Env.BatchItem)
     (run : Leanux.Proofs.Logged.runPrefix (Queues.RxHistory.batch entries) w h=(.ok (result,v),k)) :
     ∃next,Queues.RxCredits.BatchAccount.Outcome carriers next entries w v h k result ∧
       HolderOuter.Inv next loans temporary locals active k v := HolderOuter.batch_normal entries entry run
+
+/-- Actual device configuration and shutdown conserve allocation-stamped key
+credit, including slot unpublication with retained packet references. The
+native calls supply their own peer/slot transport; the incoming outer account
+remains explicit until the complete initialized syscall composition. -/
+theorem original_configuration_lifecycle_key_accounts (attrs : DeviceAttrs) :
+    Leanux.Proofs.Logged.PrefixPreserves (HolderOuter.Inv carriers loans temporary [] [])
+      OwnerChecks.Safe (Queues.RxHistory.mixed (Leanux.Proofs.Logged.liftWGObserver (Lifetimes.wgSetDevicePrefix attrs))) ∧
+    Leanux.Proofs.Logged.PrefixPreserves (HolderOuter.Inv carriers loans temporary [] [])
+      OwnerChecks.Safe (Queues.RxHistory.audit Lifetimes.envWgUpAudit) ∧
+    Leanux.Proofs.Logged.PrefixPreserves (HolderOuter.Inv carriers loans temporary [] [])
+      OwnerChecks.Safe (Queues.RxHistory.audit Lifetimes.envWgDownAudit) ∧
+    Leanux.Proofs.Logged.PrefixPreserves (HolderOuter.Inv carriers loans temporary [] [])
+      OwnerChecks.Safe (Queues.RxHistory.audit Lifetimes.envNetnsCleanupAudit) :=
+  ⟨HolderOuter.configure attrs,HolderOuter.up,HolderOuter.down,HolderOuter.cleanup⟩
+
+/-- Guarded device deletion reaches an absent device with no remaining
+receive ledger and no key allocations. This exact source endpoint requires
+empty caller-local key and packet ledgers; it does not promise that arbitrary
+outstanding references survive device destruction. -/
+theorem original_device_delete_key_account
+    (entry : HolderOuter.Inv carriers [] [] [] [] h w)
+    (run : Leanux.Proofs.Logged.runPrefix (Queues.RxHistory.audit Lifetimes.envWgDeleteAudit) w h=
+      (.ok (result,v),k)) :
+    carriers=[] ∧ v.wg.dev=none ∧ HolderOuter.Inv carriers [] [] [] [] k v :=
+  HolderOuter.delete_normal entry run
+
+/-- Full and stepped native dump syscalls preserve exact key credit while
+exchanging their actual peer cursor loans. A cursor payment cannot erase a
+peer with published key slots because the actual funded base/caller anchor
+is independent of that cursor occurrence. Initial cursor emptiness and dump
+completion are unnecessary; outer initialization remains a separate join. -/
+theorem original_dump_joint_key_accounts (ref : DeviceRef) :
+    Leanux.Proofs.Logged.PrefixPreserves (HolderOuter.Inv carriers loans temporary [] [])
+      OwnerChecks.Safe (Queues.RxHistory.syscallDispatch (.wgGet ref)) ∧
+    Leanux.Proofs.Logged.PrefixPreserves (HolderOuter.Inv carriers loans temporary [] [])
+      OwnerChecks.Safe (Queues.RxHistory.syscallDispatch (.wgGetStart ref)) ∧
+    Leanux.Proofs.Logged.PrefixPreserves (HolderOuter.Inv carriers loans temporary [] [])
+      OwnerChecks.Safe (Queues.RxHistory.syscallDispatch .wgGetRecv) :=
+  ⟨HolderOuter.dump_get ref,HolderOuter.dump_start ref,HolderOuter.dump_receive⟩
 
 end Leanux.Proofs.WG.RetirementSecurity

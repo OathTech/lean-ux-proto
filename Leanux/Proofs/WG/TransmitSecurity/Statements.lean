@@ -31,6 +31,7 @@ import Leanux.Proofs.WG.TransmitSecurity.ReservationAssignmentEncryption
 import Leanux.Proofs.WG.TransmitSecurity.BatchWorker
 import Leanux.Proofs.WG.TransmitSecurity.BatchNativeStaging
 import Leanux.Proofs.WG.TransmitSecurity.ReservationBankEncryption
+import Leanux.Proofs.WG.TransmitSecurity.BatchNativeTx
 
 /-! Campaign 3, T1 initialized counter reservations and local AEAD contracts.
 Exclusive reservation tokens now reach every initialized AEAD occurrence;
@@ -679,5 +680,26 @@ theorem initialized_certified_reservation_bank (trace : Runner.Trace) (placehold
     (Journal.initialized_reservations trace placeholders)
     (PacketOrigins.initialized trace placeholders)
     (EncryptionHistory.Scheduler.initialized trace placeholders)
+
+/-- A mixed-key batch could encrypt a packet under its neighbour's key.
+The actual encrypt iteration preserves resident batch alignment across its
+polled alias, NAPI callbacks, byte writes and publication. Physical ownership
+and alignment are explicit entry premises; initialized transport is separate. -/
+theorem original_encrypt_iteration_batch_alignment :
+    Framing.Preserves (fun w : World => BatchCoherence.Native.Coherent locals active w.wg)
+      (encryptIter Env.checksumHelp Env.napiSoftirq (Env.condResched .encryptWorker)) :=
+  BatchCoherence.Encrypt.iteration
+
+/-- Cross-peer or cross-key packet handling would violate transmit binding.
+Actual native ingress, egress and TX disposal preserve the queued-batch
+peer/key projection under the same explicit physical/alignment entry carrier.
+This does not yet establish initialized routing or egress authorization. -/
+theorem original_traffic_batch_alignment (family addr : Nat) (packets : List WG.Packet)
+    (mtu : Nat) (msg : List UInt8) (src : SkbSource) (pid : PeerId) :
+    Framing.Preserves (BatchCoherence.Native.Coherent locals active) (wgXmit family addr packets mtu) ∧
+    Framing.Preserves (BatchCoherence.Native.Coherent locals active) (wgReceive msg src) ∧
+    Framing.Preserves (BatchCoherence.Native.Coherent locals active) (txStep pid) :=
+  ⟨BatchCoherence.Transmit.transmit family addr packets mtu,
+    BatchCoherence.Receive.coherent msg src,BatchCoherence.Tx.step pid⟩
 
 end Leanux.Proofs.WG.TransmitSecurity
