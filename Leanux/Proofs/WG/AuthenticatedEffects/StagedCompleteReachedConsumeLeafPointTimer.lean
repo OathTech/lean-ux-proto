@@ -1,0 +1,27 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedConsumeLeafPointLookup
+
+/-! Receive timer helpers retain each metadata write and hidden clock read. -/
+namespace Leanux.Proofs.WG.AuthenticatedEffects.StagedEntry.Reached.Consume.Leaf
+open Leanux Leanux.WG Leanux.Proofs.Logged Lifetimes Queues TransmitSecurity CausalJournal
+
+
+noncomputable def deleteShape (pid : PeerId) (timer : PeerTimer) : Shape (wg (delTimer pid timer)) := by
+  unfold delTimer
+  exact .native (.base (.update pid (fun p => (p.setTimer timer none).setWheel timer none)
+    (by intro p; cases timer <;> exact ⟨rfl,rfl,rfl⟩)))
+
+noncomputable def handshakeTimerShape (pid : PeerId) :
+    Shape (wg (timersHandshakeComplete pid .walltimeLastHandshakeData)) := by
+  apply Shape.marked (.handshakeTimer pid)
+  unfold timersHandshakeComplete
+  repeat' first
+    | consume_leaf_update
+    | consume_leaf_update_then
+    | (consume_leaf_wg_head delTimer; exact deleteShape _ _)
+    | consume_leaf_shape
+
+noncomputable def authenticatedShape (pid : PeerId) : Shape (wg (timersAnyAuthenticatedPacketReceived pid)) := by
+  apply Shape.marked (.authenticated pid)
+  exact deleteShape pid .newHandshake
+
+end Leanux.Proofs.WG.AuthenticatedEffects.StagedEntry.Reached.Consume.Leaf

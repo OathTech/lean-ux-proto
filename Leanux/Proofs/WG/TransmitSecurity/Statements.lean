@@ -1,3 +1,6 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedCreatePhaseMutation
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedDrainPointServiceComposition
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedWheelPointPeerComposition
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedCreatePointContract
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedConsumePointNapi
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedDispatchPointComposition
@@ -2546,6 +2549,65 @@ theorem initialized_runner_dispatch_source_points_conditional
     Reached.Runner.Points.Covered (runnerPoints native nativeOther) Good
       (Reached.Runner.Points.executeShape trace placeholders) [] :=
   Dispatch.Composition.initialized trace placeholders carrierGood children other
+
+end
+
+section
+open AuthenticatedEffects AuthenticatedEffects.StagedEntry AuthenticatedEffects.StagedEntry.Reached
+open CreatePhase HandshakeSecurity.StagedDisposal
+
+/-- Security: every canonical creation point retains the original packet
+obligations on a successor of the same entry ledger, with unpublished, queued
+and cleanup phases distinguished. The exact remaining source is retained;
+initialization and finer primitive interiors are separate obligations. -/
+theorem create_every_source_point_accounted
+    (pending : AllocatedObligation.CreateDisposal.PendingBatch h ledger items)
+    (before : CompleteCarrier.Accounted h ledger debts (⟨.unpublished,pid,items⟩::locals) w.wg)
+    (point : CreatePoints.Point (CreatePoints.createShape pid items) w h leaf u middle remaining) :
+    Evidence ledger debts locals pid items middle u ∧
+      runPrefix (CreatePoints.body pid items) w h = runPrefix remaining u middle :=
+  CreatePhase.every_point pending before point
+
+end
+
+section
+open AuthenticatedEffects AuthenticatedEffects.StagedEntry AuthenticatedEffects.StagedEntry.Reached
+open Service.Points
+
+/-- Security: every actual delivery point preserves packet conservation
+without a deeper service assumption, including prefixes before later Stop.
+The delivery source's exact remaining computation stays attached. -/
+theorem delivery_source_points_accounted
+    (before : CompleteProduct.Carrier h w)
+    (point : RootPoints inside .delivery w h u middle) :
+    CompleteProduct.Carrier middle u ∧
+      runPrefix CausalJournal.hooks.deliver w h =
+        runPrefix (deliveryRemainder w h u middle point) u middle :=
+  ⟨delivery_carrier before point,deliveryRemainder_run point⟩
+
+end
+
+section
+open AuthenticatedEffects AuthenticatedEffects.StagedEntry AuthenticatedEffects.StagedEntry.Reached
+open Service.RunnerComposition
+
+/-- Security: the initialized runner now shares the original timer-service,
+idle, advance and delivery source trees with dispatch. Twelve dispatch bodies,
+seven service families and two runner children remain explicit obligations;
+this theorem does not assert completed native conservation coverage. -/
+theorem initialized_runner_service_source_points_conditional
+    (trace : Leanux.Runner.Trace) (placeholders : Bool)
+    {native inside : Service.Points.ChildPoints}
+    {nativeDispatch insideDispatch : Dispatch.Points.ChildPoints}
+    {nativeOther insideOther : Reached.Runner.Points.ChildPoints}
+    {Good : Service.RunnerComposition.History → World → Prop}
+    (carrierGood : ∀h w,CompleteProduct.Carrier h w → Good h w)
+    (service : Service.Points.ChildContracts native inside Good)
+    (dispatch : Service.Composition.DispatchOther native inside nativeDispatch insideDispatch Good)
+    (other : OtherChildren native inside nativeDispatch insideDispatch nativeOther insideOther Good) :
+    Reached.Runner.Points.Covered (runnerPoints native nativeDispatch nativeOther) Good
+      (Reached.Runner.Points.executeShape trace placeholders) [] :=
+  Service.RunnerComposition.initialized trace placeholders carrierGood service dispatch other
 
 end
 
