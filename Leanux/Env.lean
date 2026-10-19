@@ -238,6 +238,14 @@ def runCryptWorkers : M Unit := do
 def requireDrained (what : String) (queues : List Bool) : M Unit := do
   if queues.any id then
     unsupported s!"work {what} outlived the guest's wait (its records would be missing)"
+  -- a device-level unit still pending (`pendingDeviceUnits`) is a dispatch
+  -- the kernel runs after the run that requeued it, with a section of its
+  -- own (`Env.pendingDevice`); its absence from the records is the same
+  -- domain exit as a queue left undrained (campaign 2's request 4,
+  -- 2026-10-19: a constructed stream whose requeued encrypt unit never
+  -- redispatched was accepted with its identity dangling)
+  if let w :: _ ← pendingDeviceUnits then
+    unsupported s!"{w.symbol} is pending at the end of the wait (the dispatch its requeue causes has no section in the records)"
   if (← getDev).peers.toList.any (·.2.napiScheduled) then
     invariant "a NAPI poll pending after the decrypt worker (its ring poll runs the softirq)"
 
@@ -984,15 +992,14 @@ def afterBatch : M Unit := do
     else break
   let d ← getDev
   -- the completion guard: every queue a dispatched unit drains, as the
-  -- injection path's (`inject`). The handshake receive queue and its counter
-  -- were omitted until 2026-10-15 (campaign 2's request 1: a constructed
-  -- stream that queues the receive worker and never dispatches it was
-  -- accepted). The pending-worker identity (`World.pendingWork`) is not
-  -- checked here: it is the environment's dispatch bookkeeping, set only at
-  -- a produce, so a pending receive worker always has a non-empty queue in
-  -- the mirror's own transitions; the queue and the counter are the C's
-  -- data, and a pending bit with an empty queue would be an invariant
-  -- violation, not a completion fact.
+  -- injection path's (`inject`), and every device-level unit's PENDING bit
+  -- (`requireDrained`). The handshake receive queue and its counter were
+  -- omitted until 2026-10-15 (campaign 2's request 1: a constructed stream
+  -- that queues the receive worker and never dispatches it was accepted).
+  -- The pending bits were left unchecked then on the premise that a pending
+  -- unit always has a non-empty queue in the mirror's transitions; campaign
+  -- 2's request 4 (2026-10-19) refuted it with a requeue during the unit's
+  -- own run, whose redispatch the kernel runs with an empty ring.
   requireDrained "the batch queued"
     [!d.decryptQueue.empty, !d.encryptQueue.empty, !d.txWorkQueue.isEmpty, !d.sendWorkQueue.isEmpty,
      !d.handshakeQueue.empty, d.handshakeQueueLen != 0]

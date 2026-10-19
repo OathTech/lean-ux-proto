@@ -275,18 +275,36 @@ def Activation.consistent (a : Activation) : M Bool := do
   | .error (.hidden _) => return false
   | .error e => throw e
 
+/-- Whether a device-level unit (`queueDeviceWork`: the encrypt, decrypt
+    and handshake receive workers) is queued for a dispatch the kernel will
+    run: its ring holds an item, or its PENDING bit is set with an empty
+    ring. The second is a requeue during the unit's own run: `queue_work_on`
+    queued it again while its function ran (the bit was cleared at the
+    dispatch, kernel/workqueue.c:3230, so `test_and_set_bit` passes at
+    :2423 and `__queue_work` puts it on the executing worker's list,
+    :2322-2325), the run drained the item itself (the ring is re-read every
+    iteration, send.c:293), and the workqueue then runs the function once
+    more after it returns: a dispatch of its own, whose section the records
+    carry and whose ring poll finds nothing (campaign 2's request 4,
+    2026-10-19; `Progress/RecordedPending.lean`'s refused control was that
+    very section). -/
+def pendingDevice (w : Worker) (queued : Bool) : M Bool := do
+  return queued || (← getAmbient).pendingWork.contains w.index
+
 /-- The unit of worker `w` whose section the next record starts, when it has
-    work: a new activation, dispatched (`process_one_work`; the tx worker the
-    record names leaves the work queue, docs/2026-10-11-dispatch-order.md)
-    and run. `false` when the unit has no work: the record is not this
-    dispatch, and mismatches in the consumer that meets it. -/
+    work or is pending (`pendingDevice`): a new activation, dispatched
+    (`process_one_work`; the tx worker the record names leaves the work
+    queue, docs/2026-10-11-dispatch-order.md) and run; a pending unit with
+    an empty ring runs its one empty poll and ends. `false` when the unit
+    has no work and is not pending: the record is not this dispatch, and
+    mismatches in the consumer that meets it. -/
 def dispatch (w : Worker) : M Bool := do
   let d ← getDev
   let mut pid : Option Nat := none
   match w with
-  | .encryptWorker => if d.encryptQueue.empty then return false
-  | .decryptWorker => if d.decryptQueue.empty then return false
-  | .receiveWorker => if d.handshakeQueue.empty then return false
+  | .encryptWorker => if !(← pendingDevice w !d.encryptQueue.empty) then return false
+  | .decryptWorker => if !(← pendingDevice w !d.decryptQueue.empty) then return false
+  | .receiveWorker => if !(← pendingDevice w !d.handshakeQueue.empty) then return false
   | .txWorker =>
     let some headPid := d.txWorkQueue.head? | return false
     let p ← match ← peekUnit .txWorker with
@@ -327,11 +345,12 @@ def schedule (stack : Option Worker := none) : M Unit := do
   for _ in [0:(← recordBudget)] do
     if (← getAmbient).hidden.isNone then
       let d ← getDev
+      let pending := (← getAmbient).pendingWork
       let next := [Worker.receiveWorker, .decryptWorker, .encryptWorker, .txWorker].find? fun w =>
         match w with
-        | .receiveWorker => !d.handshakeQueue.empty
-        | .decryptWorker => !d.decryptQueue.empty
-        | .encryptWorker => !d.encryptQueue.empty
+        | .receiveWorker => !d.handshakeQueue.empty || pending.contains w.index
+        | .decryptWorker => !d.decryptQueue.empty || pending.contains w.index
+        | .encryptWorker => !d.encryptQueue.empty || pending.contains w.index
         | _ => !d.txWorkQueue.isEmpty
       let some w := next | return
       if !(← dispatch w) then invariant s!"{w.symbol} has work but was not dispatched"

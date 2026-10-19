@@ -503,6 +503,11 @@ class EncryptRequeue(unittest.TestCase):
         self.assertNotIn('consumed more items than its queue held', out)
         self.assertIn("work the batch queued outlived the guest's wait", out)
 
+    def test_a_requeued_unit_without_its_redispatch_is_refused(self):
+        self.assertIn('wg_packet_encrypt_worker is pending at the end of the wait', replay_raw(RECORDED_PENDING) or '')
+
+    def test_the_redispatch_with_an_empty_ring_is_the_schedule(self):
+        self.assertIsNone(replay_raw(EMPTY_REDISPATCH))
 
 
 def _replay_prepared(trace):
