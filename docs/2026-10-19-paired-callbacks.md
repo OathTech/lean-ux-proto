@@ -118,7 +118,7 @@ New-module lints were repaired, including a deprecated theorem alias. External
 export acceptance is still pending and no campaign coverage percentage changes
 as a result of these shared-service proofs.
 
-### First-return mechanism and mutators, 18:34 UTC
+### First-return mechanism and mutators, 18:32 UTC
 
 Removal and replacement now export their unchanged physical/reconstruction
 postcondition, the actual instruction history, `BeforeOuterReturn`, and
@@ -142,7 +142,7 @@ real maintenance cost, not counted as new physical proof discovery.
 The local build of `PairRemoveFirstEnvironment` and
 `PairReplaceFirstEnvironment` passed (254 jobs), and both headlines print
 only the three standard axioms. Approximate elapsed development since the
-18:09 integration checkpoint is 25 minutes; a material portion diagnosed
+18:09 integration checkpoint is 23 minutes; a material portion diagnosed
 stack automation. Nested machine subtraction expanded into expensive modular
 integer cases under `omega`. Direct bit-vector cancellation replaced it and
 checks wraparound without an extra range hypothesis. The region tactic also
