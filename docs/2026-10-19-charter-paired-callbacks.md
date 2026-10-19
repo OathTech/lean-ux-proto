@@ -1,12 +1,26 @@
 # Shared callback proofs and first-return permissions
 
-Status: proposed for independent review. Worktree `binary-pair-runner`, branch
+Status: independently reviewed; callback work ready, insertion first-return
+scope pending user clarification. Worktree `binary-pair-runner`, branch
 `task/binary-pair-runner`; starting checkpoint `d61a8027`.
 
 [USER 2026-10-19] Develop the agreed shared-callback increment: write and
 independently review its charter, resolve findings, then execute the ready plan
 to its closing checkpoint. Keep the existing sequential scope and measure
 whether testing candidate contracts followed by reusable proofs reduces cost.
+
+## Initial review disposition
+
+[AGENT 2026-10-19] The independent [charter review](2026-10-19-review-paired-callback-charter.md)
+found one high-severity dependency, R1: the retained random-service contracts
+do not constrain their interior enough to derive insertion's first-return
+boundary. Accepted. The five callbacks and their existing-client instantiations
+can proceed independently; no insertion first-return implementation or complete
+charter claim proceeds until its scope is settled. The user has been asked to
+choose between a bounded increment retaining the broader insertion permission
+premise and an added image-derived random-service safety proof. The original
+success criterion below remains visibly unresolved until that choice is recorded.
+Do not strengthen the random assumptions to bypass the missing proof.
 
 ## Objective and claim
 
