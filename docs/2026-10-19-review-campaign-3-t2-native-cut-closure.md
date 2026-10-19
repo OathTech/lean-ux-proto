@@ -302,3 +302,12 @@ release-finish guard and two writes retain the original remainder. Local
 take, restore and keepalive cases include normal and stopped paths. The gate,
 fresh replay and twelve recipes pass. Other callers, concrete child instances
 and stopped socket-front interiors remain open; findings 2–4 remain open.
+
+Source-73 `33251831` supplies the canonical worker iteration source and its
+initialized scheduler adapter. The iteration leaf is now structural; poll,
+softirq, IRQ exit, encryption, transmit, prepare, release and handshake
+interiors remain explicit children, alongside external NAPI. Native queue
+cases and initialized dequeue preserve the actual cached cohort, selected
+local, ledger and continuation through the silent setter and existing
+write/removal observations. Aggregate gate, fresh replay and twelve recipes
+pass. These additions do not close findings 2–4 or the remaining caller graph.

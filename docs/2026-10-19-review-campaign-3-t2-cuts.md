@@ -230,4 +230,11 @@ source finding.
    replay and twelve recipes pass; finding 2 remains open for other callers,
    concrete child contracts and stopped socket-front interiors.
 
+   Source-73 `33251831` derives the initialized native dequeue account and
+   original continuation across its pending write/removal observations. The
+   canonical worker source structurally fills the scheduler iteration leaf,
+   but retains eight deeper contracts and external NAPI. Gate, fresh replay
+   and twelve recipes pass; finding 2 remains open for the remaining caller
+   graph and native intervals.
+
 No mirror change or narrower T2 outcome is adopted.
