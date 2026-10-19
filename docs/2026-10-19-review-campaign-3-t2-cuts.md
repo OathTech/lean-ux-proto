@@ -186,5 +186,11 @@ source finding.
    derives its own allocation preconditions; send-loop and ordered DEAD
    cleanup boundaries retain exact local cuts. These additional connections
    still do not close finding 2.
+   Source-66 `da445410` also connects initialized routed-send and first crypt
+   scheduler entry, plus the exact selected-worker prefix for stopped crypted
+   completion. Native DEAD erasure retains a pending receipt with its fixed
+   total suffix, rather than an invalid claim that the erased cell remains
+   resident. These bridges pass the aggregate gate, fresh root replay and
+   twelve recipes; complete initialized internal-cut coverage remains open.
 
 No mirror change or narrower T2 outcome is adopted.
