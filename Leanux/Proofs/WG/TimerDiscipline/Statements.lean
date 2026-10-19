@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.TimerDiscipline.HookSchedulerClaims
+import Leanux.Proofs.WG.TimerDiscipline.SessionWheelClaims
 import Leanux.Proofs.WG.TimerDiscipline.HookTransmitWorkerClaims
 import Leanux.Proofs.WG.TimerDiscipline.JitterHookClaims
 import Leanux.Proofs.WG.TimerDiscipline.HookInitiationClaims
@@ -1066,5 +1068,67 @@ theorem original_transmit_iteration_hook_journal (pid : PeerId) :
     Campaign2.Product.Returns (HookJournal.TransmitWorker.inspection pid) (fun _=>True)
       (fun result _=>∀r∈result.2,r.Valid) :=
   HookJournal.TransmitWorker.original pid
+
+open HookCommon Lifetimes in
+theorem original_poll_hook_session_journal (pid : PeerId) (budget : Nat) :
+    (do let result←inspect (poll pid budget); pure result.1)=Campaign2.Product.inspect (rxPoll pid budget (fun packets=>packets.forM Env.deliverInner)) ∧
+    Campaign2.Product.Returns (inspect (poll pid budget)) (fun _=>True)
+      (fun result _=>Facts result.2) :=
+  HookCommon.original_poll pid budget
+
+open HookCommon Lifetimes in
+theorem original_softirq_hook_session_journal :
+    (do let result←inspect (softirq); pure result.1)=Campaign2.Product.inspect Env.napiSoftirq ∧
+    Campaign2.Product.Returns (inspect (softirq)) (fun _=>True)
+      (fun result _=>Facts result.2) :=
+  HookCommon.original_softirq
+
+open HookCommon Lifetimes in
+theorem original_inline_hook_session_journal :
+    (do let result←inspect (inline); pure result.1)=Campaign2.Product.inspect Env.pollScheduledInline ∧
+    Campaign2.Product.Returns (inspect (inline)) (fun _=>True)
+      (fun result _=>Facts result.2) :=
+  HookCommon.original_inline
+
+open HookCommon Lifetimes in
+theorem original_irq_exit_hook_session_journal :
+    (do let result←inspect (irqExit); pure result.1)=Campaign2.Product.inspect Env.napiIrqExit ∧
+    Campaign2.Product.Returns (inspect (irqExit)) (fun _=>True)
+      (fun result _=>Facts result.2) :=
+  HookCommon.original_irqExit
+
+open HookCommon Lifetimes in
+theorem original_schedule_hook_session_journal (worker : Option Worker) :
+    (do let result←inspect (schedule worker); pure result.1)=Campaign2.Product.inspect (Env.schedule worker) ∧
+    Campaign2.Product.Returns (inspect (schedule worker)) (fun _=>True)
+      (fun result _=>Facts result.2) :=
+  HookCommon.original_schedule worker
+
+open HookCommon Lifetimes in
+theorem original_all_deferred_hook_session_journal (call : EnvDeferredCall) :
+    (do let result←inspect (deferred call); pure result.1)=Campaign2.Product.inspect call.original ∧
+    Campaign2.Product.Returns (inspect (deferred call)) (fun _=>True)
+      (fun result _=>Facts result.2) :=
+  HookCommon.original_deferred call
+
+open HandshakeJournal Lifetimes in
+theorem original_response_session_wheel_effects (pid : PeerId) :
+    (do let result←inspect (response pid);pure result.1)=Campaign2.inspect (sendHandshakeResponse pid) ∧
+    Campaign2.Returns (inspect (response pid)) (fun _=>True)
+      (fun result _=>WheelHistoryFacts result.2) :=
+  HandshakeJournal.original_response_wheel pid
+
+open HandshakeJournal Lifetimes in
+theorem original_reception_session_wheel_effects (msg : List UInt8) (src : SkbSource) :
+    (do let result←inspect (reception msg src);pure result.1)=Campaign2.inspect (receiveHandshakePacket msg src) ∧
+    Campaign2.Returns (inspect (reception msg src)) (fun _=>True)
+      (fun result _=>WheelHistoryFacts result.2) :=
+  HandshakeJournal.original_reception_wheel msg src
+
+open HandshakeJournal Lifetimes in
+theorem original_receive_step_session_wheel_effects :
+    (do let result←inspect step;pure result.1)=Campaign2.inspect receiveStep ∧
+    Campaign2.Returns (inspect step) (fun _=>True) (fun result _=>WheelHistoryFacts result.2) :=
+  HandshakeJournal.original_step_wheel
 
 end Leanux.Proofs.WG.TimerDiscipline

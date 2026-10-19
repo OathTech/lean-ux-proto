@@ -47,27 +47,7 @@ theorem pollStep_attempt_source (pid : PeerId) (budget : Nat)
     (toStack : List (List UInt8) → Leanux.M Unit) (turn : Nat) (state : PollState) :
     pollStep pid budget toStack turn state =
       (pollAttemptPrefix pid >>= pollAttemptSuffix pid budget toStack state) := by
-  -- Local forms of campaign 1's Framing.liftWG_run and liftWG_bind.
-  have liftWG_run_variant {α : Type} (a : WG.M α) (w) :
-      (liftWG a).run w = ((a.run w.wg).run w.ambient).map
-        (fun ((x, g), ambient) => (x, {w with wg := g, ambient})) := by
-    unfold liftWG StateT.run
-    cases a w.wg w.ambient <;> rfl
-  have liftWG_bind_variant {α β : Type} (a : WG.M α) (f : α → WG.M β) :
-      (monadLift (a >>= f) : Leanux.M β) =
-        (do let x ← (monadLift a : Leanux.M α); monadLift (f x)) := by
-    funext w
-    change (liftWG (a >>= f)).run w = (liftWG a >>= fun x => liftWG (f x)).run w
-    rw [liftWG_run_variant]
-    simp only [StateT.run_bind]
-    rw [liftWG_run_variant]
-    cases hr : (a.run w.wg).run w.ambient with
-    | error e => rfl
-    | ok out =>
-      rcases out with ⟨⟨x, g⟩, ambient⟩
-      simp only [Except.map]
-      exact (liftWG_run_variant (f x) {w with wg := g, ambient}).symm
-  simp only [pollStep, pollAttemptPrefix, pollAttemptSuffix,
+  simp only [pollStep, PollHookRules.stepWith, pollAttemptPrefix, pollAttemptSuffix,
     consumeDataDone_source, bind_assoc, pure_bind, bind_if, invariant_bind]
   congr 1
   funext peer
@@ -120,6 +100,6 @@ theorem pollStep_attempt_source (pid : PeerId) (budget : Nat)
   cases failed <;> simp only [Bool.not_true, Bool.not_false, Bool.false_eq_true, ite_false, ite_true]
   all_goals try rfl
   cases endpoint <;> simp only [bind_assoc, pure_bind, invariant_bind, pollAttemptSuffix, pollPacketCleanup, read_ignore]
-  all_goals first | rfl | simp only [liftWG_bind_variant, bind_assoc]
+  all_goals first | rfl | (simp only [Leanux.Proofs.Framing.liftWG_bind, bind_assoc]; try rfl)
 
 end Leanux.Proofs.WG.Roaming

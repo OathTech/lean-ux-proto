@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Roaming.PollCallbackSource
 import Leanux.Proofs.WG.Roaming.PollEndpointModel
 import Leanux.Proofs.WG.Roaming.PublicationClaims
 
@@ -9,55 +10,14 @@ open Leanux Leanux.WG Leanux.Proofs.WG.Noise Std.Do
 
 /-- One unchanged iteration of the current original poll, including GRO and cleanup. -/
 def pollStep (pid : PeerId) (budget : Nat) (toStack : List (List UInt8) → Leanux.M Unit)
-    (_ : Nat) (state : PollState) : Leanux.M (ForInStep PollState) := do
-  let mut workDone := state.1
-  let mut gro := state.2.1
-  let drained := state.2.2
-  let (first, q) ← (← getPeer pid).rxQueue.peek
-  setPeer pid { (← getPeer pid) with rxQueue := q }
-  -- `&& (state = atomic_read_acquire(&PACKET_CB(skb)->state)) != PACKET_STATE_UNCRYPTED`
-  let go ← WG.andM (branch .rxPollPacket first.isSome) do
-    let some f := first | invariant "unreachable"
-    branch .rxPollNotUncrypted ((← getRxSkb f).state != .uncrypted)
-  if !go then
-    return .done (workDone, gro, true)
-  let some id := first | invariant "unreachable"
-  let pkt ← getRxSkb id
-  if pkt.peer != pid then invariant "a packet on another peer's rx_queue"
-  -- wg_prev_queue_drop_peeked
-  setPeer pid { (← getPeer pid) with rxQueue := (← getPeer pid).rxQueue.dropPeeked }
-  let mut free := true
-  if !(← branch .rxPollNotCrypted (pkt.state != .crypted)) then
-    if !(← branch .rxPollCounterInvalid !(← counterValidate pkt.keypair pkt.nonce)) then
-      let endpoint ← endpointFromSkb pkt.source
-      if !(← branch .rxPollEndpointFailed endpoint.isNone) then
-        let some e := endpoint | invariant "unreachable"
-        -- wg_reset_packet(skb, false) (a cut point)
-        for inner in (← consumeDataDone pid pkt e).toList do
-          gro ← napiGroReceive toStack gro inner   -- napi_gro_receive(&peer->napi, skb)
-        free := false
-  -- next:
-  keypairPut (some pkt.keypair) false
-  peerPut (some pid)
-  _ ← branch .rxPollFree free   -- dev_kfree_skb
-  freeRxSkb id   -- freed, or napi_gro_receive's (review 4.2)
-  workDone := workDone + 1
-  if ← branch .rxPollBudgetDone (workDone ≥ budget) then return .done (workDone, gro, drained)
-  return .yield (workDone, gro, drained)
+    (_ : Nat) (state : PollState) : Leanux.M (ForInStep PollState) :=
+  PollHookRules.stepWith (fun {_} action=>action)
+    (fun p pkt ep=>liftWG (consumeDataDone p pkt ep)) (napiGroReceive toStack)
+    pid budget 0 state
 
 def pollFinish (pid : PeerId) (budget : Nat) (toStack : List (List UInt8) → Leanux.M Unit)
-    (state : PollState) : Leanux.M Nat := do
-  let workDone := state.1
-  let gro := state.2.1
-  let drained := state.2.2
-  if !drained && workDone < budget then invariant "the rx_queue did not drain"
-  if ← branch .rxPollComplete (workDone < budget) then
-    -- napi_complete_done: NAPI_STATE_SCHED cleared, GRO flushed
-    setPeer pid { (← getPeer pid) with napiScheduled := false }
-    napiGroFlushAll toStack gro
-  else unsupported "a NAPI poll that used its whole budget (a repoll)"
-  return workDone
-
+    (state : PollState) : Leanux.M Nat :=
+  PollHookRules.finishWith (fun {_} action=>action) (napiGroFlushAll toStack) pid budget state
 
 /-- Exact current-source factorization, retaining every callback and error. -/
 theorem rxPoll_source (pid : PeerId) (budget : Nat) (toStack : List (List UInt8) → Leanux.M Unit) :
@@ -66,6 +26,8 @@ theorem rxPoll_source (pid : PeerId) (budget : Nat) (toStack : List (List UInt8)
       let state ← forIn ([:MAX_QUEUED_PACKETS + 1] : Std.Legacy.Range)
         ((0, {}, false) : PollState) (pollStep pid budget toStack)
       pollFinish pid budget toStack state) := by
+  unfold pollStep pollFinish PollHookRules.stepWith PollHookRules.finishWith rxPoll
+  simp only [bind_assoc]
   rfl
 
 /-- The exact remainder after consumeDataDone's first endpoint setter. -/
@@ -199,27 +161,7 @@ theorem pollStep_endpoint_source (pid : PeerId) (budget : Nat)
     (toStack : List (List UInt8) → Leanux.M Unit) (turn : Nat) (state : PollState) :
     pollStep pid budget toStack turn state =
       (pollEndpointPrefix pid >>= pollEndpointSuffix pid budget toStack state) := by
-  -- Local forms of campaign 1's Framing.liftWG_run and liftWG_bind.
-  have liftWG_run_variant {α : Type} (a : WG.M α) (w) :
-      (liftWG a).run w = ((a.run w.wg).run w.ambient).map
-        (fun ((x, g), ambient) => (x, {w with wg := g, ambient})) := by
-    unfold liftWG StateT.run
-    cases a w.wg w.ambient <;> rfl
-  have liftWG_bind_variant {α β : Type} (a : WG.M α) (f : α → WG.M β) :
-      (monadLift (a >>= f) : Leanux.M β) =
-        (do let x ← (monadLift a : Leanux.M α); monadLift (f x)) := by
-    funext w
-    change (liftWG (a >>= f)).run w = (liftWG a >>= fun x => liftWG (f x)).run w
-    rw [liftWG_run_variant]
-    simp only [StateT.run_bind]
-    rw [liftWG_run_variant]
-    cases hr : (a.run w.wg).run w.ambient with
-    | error e => rfl
-    | ok out =>
-      rcases out with ⟨⟨x, g⟩, ambient⟩
-      simp only [Except.map]
-      exact (liftWG_run_variant (f x) {w with wg := g, ambient}).symm
-  simp only [pollStep, pollEndpointPrefix, pollEndpointSuffix,
+  simp only [pollStep, PollHookRules.stepWith, pollEndpointPrefix, pollEndpointSuffix,
     consumeDataDone_source, bind_assoc, pure_bind, bind_if, invariant_bind]
   congr 1
   funext peer
@@ -272,7 +214,7 @@ theorem pollStep_endpoint_source (pid : PeerId) (budget : Nat)
   cases failed <;> simp only [Bool.not_true, Bool.not_false, Bool.false_eq_true, ite_false, ite_true]
   all_goals try rfl
   cases endpoint <;> simp only [bind_assoc, pure_bind, invariant_bind, pollEndpointSuffix, pollPacketCleanup, read_ignore]
-  all_goals first | rfl | simp only [liftWG_bind_variant, bind_assoc]
+  all_goals first | rfl | (simp only [Leanux.Proofs.Framing.liftWG_bind, bind_assoc]; try rfl)
 
 /-- Includes the original no-budget decision before touching the first queue item. -/
 def pollInitialPrefix (pid : PeerId) (budget : Nat) : Leanux.M (Option PollPrepared) := do

@@ -21,7 +21,7 @@ theorem PrevQueue_peek_head (q : PrevQueue SkbId) :
     | nil =>
       simp [PrevQueue.peek, PrevQueue.dequeue, peeked, stub, items,
         branch, AmbientM.branch, invariant, AmbientM.invariant] at run
-      all_goals cases run
+      all_goals rcases run with ⟨⟨rfl, rfl⟩, rfl⟩
       all_goals simp [PrevQueue.all, peeked, items]
     | cons id rest =>
       cases rest <;>

@@ -76,8 +76,10 @@ theorem hook_valid (kind : HookJournal.Hook) (pid : PeerId) :
   | ok out =>
     obtain ⟨⟨value,next⟩,inputs⟩:=out
     simpa only [run] using valid
-theorem SessionReceipt.Valid.counter {r : SessionReceipt} (valid : r.Valid) :
-    r.after.wg.keypairCounter = r.before.wg.keypairCounter + (if r.begun then 1 else 0) := by
+theorem SessionReceipt.Valid.effect {r : SessionReceipt} (valid : r.Valid) :
+    ∃ d p final, r.before.wg.device=some d ∧ d.peers[r.pid]?=some p ∧
+      r.after.wg.device=some final ∧
+      Noise.SessionEffect r.pid d p r.before.wg.keypairCounter r.begun final r.after.wg.keypairCounter := by
   obtain ⟨g,a,next,inputs,before,after,run⟩:=valid
   have resident : ∃d p,g.dev=some d ∧ d.peers[r.pid]?=some p := by
     cases device : g.dev with
@@ -91,12 +93,18 @@ theorem SessionReceipt.Valid.counter {r : SessionReceipt} (valid : r.Valid) :
         cases run
       | some p => exact ⟨d,p,rfl,peer⟩
   obtain ⟨d,p,device,resident⟩:=resident
-  obtain ⟨final,_,effect⟩:=Noise.beginSession_effect r.pid d p g.keypairCounter resident
+  obtain ⟨final,present,effect⟩:=Noise.beginSession_effect r.pid d p g.keypairCounter resident
     g a r.begun next inputs ⟨device,rfl⟩ run
   rw [before,after]
+  exact ⟨d,p,final,device,resident,present,effect⟩
+
+theorem SessionReceipt.Valid.counter {r : SessionReceipt} (valid : r.Valid) :
+    r.after.wg.keypairCounter = r.before.wg.keypairCounter + (if r.begun then 1 else 0) := by
+  obtain ⟨_,_,_,_,_,_,effect⟩:=valid.effect
   cases begun : r.begun <;> simp only [Noise.SessionEffect,begun,Bool.false_eq_true,ite_false,
     ite_true] at effect ⊢
   · exact effect.2
   · exact effect.2.2.2.1
+
 
 end Leanux.Proofs.WG.TimerDiscipline.HandshakeJournal

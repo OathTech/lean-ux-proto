@@ -72,7 +72,7 @@ theorem pollFinish_normal_count (pid : PeerId) (budget : Nat)
       Noise.Product.Ensures a (fun _ => True) (fun _ _ => True) := by
     intro w x out pre run
     trivial
-  unfold pollFinish
+  unfold pollFinish PollHookRules.finishWith
   dsimp only
   split
   · intro w result out pre run
@@ -101,7 +101,7 @@ theorem pollFinish_normal_count (pid : PeerId) (budget : Nat)
           intro entry value final pre normal
           cases normal
           exact ⟨rfl, below⟩
-        exact finish w result out trivial run
+        exact finish w result out trivial (by simpa only [bind_assoc] using run)
       · simp only [below, decide_false, Bool.false_eq_true, ite_false] at run
         cases run
 

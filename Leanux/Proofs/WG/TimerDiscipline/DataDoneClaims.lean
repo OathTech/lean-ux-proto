@@ -32,7 +32,7 @@ theorem dataDoneObservedStep_facts (pid : PeerId) (id : SkbId) (before : Bool) :
     cases sent <;> cases keepalive : packet.bytes.length == MESSAGE_DATA_LEN_0 <;>
       cases before <;>
       simp [WG.andM, branch, AmbientM.branch, keepalive] at run <;>
-      cases run <;> simp_all
+      rcases run with ⟨⟨rfl, rfl⟩, rfl⟩ <;> simp_all
   intro entry result final pre run
   change (((dataDoneObservedStep pid id before).run entry.wg).run entry.ambient >>= _) = _ at run
   cases step : ((dataDoneObservedStep pid id before).run entry.wg).run entry.ambient with
