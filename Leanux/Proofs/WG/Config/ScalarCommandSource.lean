@@ -8,7 +8,7 @@ namespace Leanux.Proofs.WG.Config.ScalarCommand
 open Leanux Leanux.WG Noise AllowedIps Queues Queues.RxCredits
 open Leanux.Proofs.Framing Lifetimes Std.Do Leanux.Proofs.WG.Configuration
 open PeerScalarRetention
-theorem existing_command (cs : Ledger) (loans : Reservations)
+theorem existing_command_index (cs : Ledger) (loans : Reservations)
     (attrs : PeerAttrs) (key : Key) (pid : PeerId) (before : Device)
     (pubkey : attrs.publicKey=some key)
     (valid : attrs.flags.getD 0 &&& ~~~WGPEER_F_ALL=0)
@@ -16,13 +16,13 @@ theorem existing_command (cs : Ledger) (loans : Reservations)
     (keep : attrs.flags.getD 0 &&& WGPEER_F_REMOVE_ME=0)
     (found : before.peerHashtable.find? (·.1 == key)=some (key,pid)) :
     Ensures (setPeerCmd attrs)
-      (fun g=>OwnerConfiguration.Entry cs loans g ∧ g.dev=some before)
+      (fun g=>Index.ConfigurationIndex.Entry cs loans g ∧ g.dev=some before)
       (fun ret g=>Index.ConfigurationIndex.Entry cs loans g ∧
         ∃ p,before.peers[pid]?=some p ∧
           view g pid=some (ScalarTail.tailCell attrs ret
             (ScalarTail.prefixCell p attrs.presharedKey attrs.endpoint))) := by
   intro g a result v b pre run
-  obtain ⟨p,resident,positive⟩ := QueuedRemove.lookup_target cs loans key pid before g pre.1 pre.2 found
+  obtain ⟨p,resident,positive⟩ := QueuedRemove.lookup_target_index cs loans key pid before g pre.1 pre.2 found
   obtain ⟨first,cut⟩ := QueuedRemove.command_lookup_default_cut attrs key pubkey valid protocol
     g v a b result run
   rw [MaterialOrigin.bind_ok_ambient] at cut
@@ -30,8 +30,8 @@ theorem existing_command (cs : Ledger) (loans : Reservations)
   have selected := ((ensures_iff _ _ _).mpr
     (pubkeyLookup_present key pid before p found resident positive)) g first peer u c pre.2 looked
   obtain ⟨rfl,device⟩ := selected
-  have acquired := OwnerConfiguration.lookup_acquired cs loans key g first (some pid) u c pre.1 looked
-  obtain ⟨⟨paid,slot,entry,member⟩,_⟩ := acquired
+  have acquired := Index.ConfigurationIndex.lookup cs loans key g first (some pid) u c pre.1 looked
+  obtain ⟨paid,slot,entry,member⟩ := acquired
   subst pid
   change ((Configuration.peerConfigUpdateSource attrs (some paid.slot) (attrs.flags.getD 0)
     attrs.presharedKey paid.slot).run u).run
@@ -46,4 +46,20 @@ theorem existing_command (cs : Ledger) (loans : Reservations)
     u _ result v b ⟨entry,device⟩ tail
   exact ⟨done.1,p,resident,by simpa only [prefixCell_acquire] using done.2⟩
 
+theorem existing_command (cs : Ledger) (loans : Reservations)
+    (attrs : PeerAttrs) (key : Key) (pid : PeerId) (before : Device)
+    (pubkey : attrs.publicKey=some key)
+    (valid : attrs.flags.getD 0 &&& ~~~WGPEER_F_ALL=0)
+    (protocol : attrs.protocolVersion=none ∨ attrs.protocolVersion=some 1)
+    (keep : attrs.flags.getD 0 &&& WGPEER_F_REMOVE_ME=0)
+    (found : before.peerHashtable.find? (·.1 == key)=some (key,pid)) :
+    Ensures (setPeerCmd attrs)
+      (fun g=>OwnerConfiguration.Entry cs loans g ∧ g.dev=some before)
+      (fun ret g=>Index.ConfigurationIndex.Entry cs loans g ∧
+        ∃ p,before.peers[pid]?=some p ∧
+          view g pid=some (ScalarTail.tailCell attrs ret
+            (ScalarTail.prefixCell p attrs.presharedKey attrs.endpoint))) := by
+  intro g a result v b pre run
+  exact existing_command_index cs loans attrs key pid before pubkey valid protocol keep found
+    g a result v b ⟨pre.1.1,pre.2⟩ run
 end Leanux.Proofs.WG.Config.ScalarCommand

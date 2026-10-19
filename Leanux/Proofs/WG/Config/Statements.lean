@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.Config.GetterScalarOtherClaims
+import Leanux.Proofs.WG.Config.RequestKeyScalarClaims
 import Leanux.Proofs.WG.Config.KeyScalarClaims
 import Leanux.Proofs.WG.Config.CreationScalarClaims
 import Leanux.Proofs.WG.Config.RequestFundedCommandsClaims
@@ -3630,5 +3632,24 @@ open GetterScalar in
 theorem original_private_key_stage_getter_scalars (entry : Campaign2.Snapshot) (attrs : DeviceAttrs) :
     Campaign2.Ensures (RequestOrder.keyStage attrs) (Keeps entry) (fun _=>Keeps entry) :=
   GetterScalar.key_stage_keeps entry attrs
+
+open GetterScalar RequestOrder in
+/-- Every completed private-key stage retains each surviving getter scalar cell from the actual whole-request entry, including receipts before later Stops. -/
+theorem original_request_key_scalar_retention (attrs : DeviceAttrs) :
+    Campaign2.Observes (wgSetDevice attrs) (fun _=>True)
+      (fun initial outcome=>∃result : Inspection,result.outcome=outcome ∧
+        Certificate attrs initial result ∧
+        ∀r∈result.receipts,r.kind=.keyStage → Keeps initial r.before ∧ Keeps initial r.after) :=
+  GetterScalar.original_key_scalars attrs
+
+
+open GetterScalar.Other Queues.RxCredits in
+/-- The original arbitrary peer command classifies normal scalar effects from validation and actual table selection, retaining every surviving nonselected cell from the initial index account. -/
+theorem original_peer_command_scalar_classification (cs : Ledger) (loans : Reservations)
+    (attrs : PeerAttrs) (before : Device) :
+    Campaign2.Ensures (setPeerCmd attrs)
+      (fun s=>Index.View.ConfigurationInput cs loans s ∧ s.wg.device=some before)
+      (fun _ s=>CommandEffect attrs before (GetterScalar.observation s)) :=
+  GetterScalar.Other.original_command cs loans attrs before
 
 end Leanux.Proofs.WG.Config

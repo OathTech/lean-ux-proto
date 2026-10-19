@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Noise.PortControlSource
 import Leanux.Proofs.WG.Noise.DriverTagLeafFrames
 import Leanux.Proofs.WG.Noise.PendingConfigurationFrames
 import Leanux.Proofs.WG.Noise.ReceptionTagFrames
@@ -44,30 +45,10 @@ theorem clearPeerEndpointSrc_frame (pid : PeerId) : SameView tagView (clearPeerE
     (fun _ => rfl)).bind (fun _ => dstCacheResetNow_frame pid)
 
 theorem setPort_frame (port : Nat) : SameView tagView (setPort port) := by
-  unfold setPort
-  apply (store_frame getDev_sameWGStore).bind
-  intro d
-  apply (ambient_frame (AmbientM.branch .setPortSame (d.incomingPort == port))).bind
-  intro same
-  cases same with
-  | true => exact SameView.pure tagView 0
-  | false =>
-    apply (DumpComposition.forIn_sameView d.peerList ()
-      (fun pid _ => do
-        _ ← branch .setPortPeerIter true
-        clearPeerEndpointSrc pid
-        pure (.yield ()))
-      (fun pid _ => (ambient_frame (AmbientM.branch .setPortPeerIter true)).bind (fun _ =>
-        (clearPeerEndpointSrc_frame pid).bind (fun _ => SameView.pure tagView (ForInStep.yield ()))))).bind
-    intro u
-    apply (ambient_frame (AmbientM.branch .setPortPeerIter false)).bind
-    intro u
-    apply (ambient_frame (AmbientM.branch .setPortNotRunning !d.running)).bind
-    intro down
-    cases down with
-    | true => exact (modifyDev_frame (fun d => {d with incomingPort := port})
-        (fun _ => rfl)).bind (fun _ => SameView.pure tagView 0)
-    | false => exact socket_frame (socketInit_sameSocket port)
+  exact setPort_frame_source tagView port (store_frame getDev_sameWGStore)
+    clearPeerEndpointSrc_frame
+    (modifyDev_frame (fun d=>{d with incomingPort:=port}) (fun _=>rfl))
+    (socket_frame (socketInit_sameSocket port))
 
 theorem endpointWrite_frame (pid : PeerId) (endpoint : Endpoint) :
     SameView tagView (do

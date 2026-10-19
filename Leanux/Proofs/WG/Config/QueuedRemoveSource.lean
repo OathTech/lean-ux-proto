@@ -106,17 +106,17 @@ theorem update (cs : Ledger) (loans : Reservations) (paid : Owner)
 
 /-- A configured lookup target's actual base occurrence supplies residency
 and a positive reference; no numeric slack is assumed. -/
-theorem lookup_target (cs : Ledger) (loans : Reservations) (key : Key)
+theorem lookup_target_index (cs : Ledger) (loans : Reservations) (key : Key)
     (pid : PeerId) (d : Device) (g : WGWorld)
-    (entry : Entry cs loans g) (device : g.dev=some d)
+    (entry : Index.ConfigurationIndex.Entry cs loans g) (device : g.dev=some d)
     (found : d.peerHashtable.find? (·.1 == key)=some (key,pid)) :
     ∃ p,d.peers[pid]?=some p ∧ 0<p.refcount := by
   have row : (key,pid)∈d.peerHashtable := List.mem_of_find?_eq_some found
   have member : pid∈d.peerList := by
-    have h := entry.1.1.2.1.2 (key,pid)
+    have h := entry.1.2.1.2 (key,pid)
       (by simpa only [BaseCoherence.rows,device,Option.map_some,Option.getD_some] using row)
     simpa only [BaseCoherence.slots,device,Option.map_some,Option.getD_some] using h
-  obtain ⟨holders,funded,_⟩ := entry.1.1.1
+  obtain ⟨holders,funded,_⟩ := entry.1.1
   have mapped : pid∈holders.base.map Owner.slot := by
     rw [funded.aligned.base]
     simpa only [device,Option.map_some,Option.getD_some] using member
@@ -134,6 +134,12 @@ theorem lookup_target (cs : Ledger) (loans : Reservations) (key : Key)
   cases current
   exact ⟨p,by simpa only [slot] using resident,by omega⟩
 
+theorem lookup_target (cs : Ledger) (loans : Reservations) (key : Key)
+    (pid : PeerId) (d : Device) (g : WGWorld)
+    (entry : Entry cs loans g) (device : g.dev=some d)
+    (found : d.peerHashtable.find? (·.1 == key)=some (key,pid)) :
+    ∃ p,d.peers[pid]?=some p ∧ 0<p.refcount :=
+  lookup_target_index cs loans key pid d g entry.1 device found
 /-- The original validating header leads to this same-call lookup/acquired
 suffix, with the existing source factory and an unchanged WG state. -/
 theorem command_lookup_default_cut (attrs : PeerAttrs) (key : Key)
