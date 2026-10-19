@@ -316,6 +316,8 @@ Source-55 pairs terminal completeness with forward accounting through actual fro
 
 Source-56 closes paired whole staging, keepalive and routed transmit, the crypted completion callback, and concrete configuration. Full receive polling, tagged GRO/stack replies, all five timers and both NAPI paths retain the identical ledger and terminal completeness. The paired product-state carrier and native scheduler composition retain explicit worker contracts; stopped prefixes preserve their actual selected or intermediate-cleanup cut. The combined root passes 3495 jobs and twenty-four focused standard-axiom queries. Initialized conservation, the remaining worker/runner joins and reference-aware reset quiescence remain open. This checkpoint, `5a802513`, also passes the aggregate gate, fresh replay and all twelve counterexample recipes.
 
+Source-57 closes the whole paired TX worker, including DEAD disposal and the original stopped settlement chain. Concrete encryption, ring polling and decryption preparation now join native allocation safety; full NAPI, timer dispatch, deferred and traffic wrappers compose the exact callbacks. Guarded device creation retains the old ledger, and namespace cleanup is a frame. Destruction retains the same ledger after a checked quiescent cut; its reference-accounting premises remain explicit. A new upper bound shares C1's actual holders with the lower funding bound through creation, payment, detachment and receive/stack transfers. The root passes 3532 jobs and thirty focused standard-axiom queries. UDP ingress, remaining administrative/worker joins, initialized reference-account transport and final T2 conservation remain open. Source-56 `5a802513` remains the last aggregate gate and fresh replay checkpoint.
+
 ## Validation
 
 Source-56 checkpoint `5a802513` passes the 3495-job aggregate build and 1523-declaration gate across thirteen roots, with only `propext`, `Classical.choice` and `Quot.sound`. Twenty-four focused source queries also use only those axioms. All twelve counterexample recipes and fresh root kernel replay pass. The default model build passes 66 jobs; the unit suite passes 131 tests (one configured-kernel skip). All 3448 frozen proof-source hashes match; all 916 inherited proof modules, main at `783510e8` and mirror `77c9b555` are unchanged. The preceding fully validated checkpoint is `51c7344a`.
@@ -348,7 +350,7 @@ statement binders shadowed by the new canonical `births` definition; explicit
 local binders repair that failure without changing either statement. Source-47
 first failed when two completion modules exported the same theorem name; the
 release-specific export is renamed and the combined import check passes. New source
-files have no warnings.
+files have no warnings. Source-57 initially failed when a new device-creation frame reused an existing campaign-3 packet-creation filename. The previous module was restored byte-for-byte, the new modules renamed, and the combined root rebuilt successfully. No inherited lemma changed.
 
 The earlier unchecked tactic-array panic and later SIGBUS were preserved in
 snapshot refs before repair. The SIGBUS followed replacement of a dependency
