@@ -7,20 +7,23 @@ set_option autoImplicit false
 
 namespace Leanux.Proofs.WG.Noise
 open Leanux Leanux.WG Lifetimes Leanux.Proofs.Framing Std.Do
+theorem handshakeInit_source (pid : PeerId) (psk : Option Key) :
+    handshakeInit pid psk = (do
+      modifyPeer pid (fun p=>{p with handshakeEntryPeer:=some pid})
+      if ←branch .handshakeInitHasPsk psk.isSome then
+        modifyPeer pid (fun p=>{p with presharedKey:=psk.getD p.presharedKey})
+      precomputeStaticStatic pid) := by
+  have modify_eq (f : Peer → Peer) : Noise.modifyPeer pid f =
+      (do let p ← getPeer pid; setPeer pid (f p)) := rfl
+  simp only [handshakeInit,IndexOwner.setPeerWord,modify_eq,bind_assoc]
+
 theorem handshakeInit_frame_source {V : Type} (view : WGWorld → V)
     (pid : PeerId) (psk : Option Key)
     (word : SameView view (modifyPeer pid (fun p=>{p with handshakeEntryPeer:=some pid})))
     (writePsk : SameView view (modifyPeer pid (fun p=>{p with presharedKey:=psk.getD p.presharedKey})))
     (precompute : SameView view (precomputeStaticStatic pid)) :
     SameView view (handshakeInit pid psk) := by
-  have modify_eq (f : Peer → Peer) : Noise.modifyPeer pid f = (do let p ← getPeer pid; setPeer pid (f p)) := rfl
-  have factor : handshakeInit pid psk = (do
-      modifyPeer pid (fun p => {p with handshakeEntryPeer := some pid})
-      if ← branch .handshakeInitHasPsk psk.isSome then
-        modifyPeer pid (fun p => {p with presharedKey := psk.getD p.presharedKey})
-      precomputeStaticStatic pid) := by
-    simp only [handshakeInit,IndexOwner.setPeerWord,modify_eq,bind_assoc]
-  rw [factor]
+  rw [handshakeInit_source]
   apply word.bind
   intro _
   apply (show SameView view (branch .handshakeInitHasPsk psk.isSome) from

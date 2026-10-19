@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Config.KeyStagePreservationSource
 import Leanux.Proofs.WG.Config.RequestFinalHeaderFrames
 import Leanux.Proofs.WG.Config.RequestOrderInspectionSource
 
@@ -20,34 +21,12 @@ theorem contracts (initial : Option Header) :
 
 theorem collision (key : Key) : SameView native (keyCollisionSource key) := by
   intro initial
-  change Preserves (fun g=>native g=initial) _
-  unfold keyCollisionSource
-  apply preserves_bind ((generatePublic_sameWGWorld key).wp (fun g=>native g=initial))
-  rintro ⟨pub,ok⟩
-  apply preserves_bind (hoare_liftAmbient (AmbientM.branch .setDevGenPublic ok) _)
-  intro generated
-  cases generated with
-  | false => exact (SameView.pure native ()).wp (fun v=>v=initial)
-  | true =>
-    cases pub with
-    | none => exact hoare_liftAmbient (AmbientM.invariant _) _
-    | some pub => exact (contracts initial).conflict pub
+  exact KeyStage.collision_preserves _ (contracts initial) key
 
 theorem stage (attrs : DeviceAttrs) : SameView native (keyStage attrs) := by
   intro initial
-  change Preserves (fun g=>native g=initial) _
-  rw [KeyStage.stage_factor]
-  unfold WG.andM
-  repeat' first
-    | (rx_retention_head getDev; exact (contracts initial).read)
-    | (rx_retention_head keyCollisionSource; exact (collision _).wp (fun v=>v=initial))
-    | (rx_retention_head keyInstallSource
-       rw [KeyStage.install_factor]
-       exact Index.ConfigurationKeyRules.keyFinish _ (contracts initial) _)
-    | (allocation_release_lift_from AmbientM; exact hoare_liftAmbient _ _)
-    | (rx_retention_head branch; exact hoare_liftAmbient (AmbientM.branch _ _) _)
-    | (rx_retention_head invariant; exact hoare_liftAmbient (AmbientM.invariant _) _)
-    | rx_retention_step
+  exact KeyStage.stage_preserves _ (contracts initial) attrs
+
 
 theorem matches_normal_ensures (attrs : DeviceAttrs) (initial : Campaign2.Snapshot)
     (result : Inspection) (matched : Matches attrs initial result)

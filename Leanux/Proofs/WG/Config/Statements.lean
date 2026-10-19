@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.Config.KeyScalarClaims
+import Leanux.Proofs.WG.Config.CreationScalarClaims
 import Leanux.Proofs.WG.Config.RequestFundedCommandsClaims
 import Leanux.Proofs.WG.Config.GetterScalarClaims
 import Leanux.Proofs.WG.Config.RequestWgChainClaims
@@ -3594,5 +3596,39 @@ theorem original_request_funds_nested_routing (cs : Ledger) (loans : Reservation
         Certificate attrs initial result ∧ Entries cs loans result.receipts ∧
         RoutedCommands cs loans attrs result) :=
   RequestOrder.FundedCommands.original_request_funded_routing cs loans attrs shape
+
+open CreationScalar PeerScalarRetention in
+/-- The actual peer allocator either returns ENOMEM with unchanged WireGuard state or initializes the actual allocation cursor with entry counter plus one, requested/default PSK, zero keepalive and no endpoint. -/
+theorem original_peer_creation_scalar_initialization (key : Key) (psk : Option Key)
+    (initial : Campaign2.State) (d : Device) (present : initial.device=some d) :
+    Campaign2.Ensures (peerCreate key psk) (fun s=>s.wg=initial)
+      (fun result s=>match result with
+      | .error code=>code=-ENOMEM ∧ s.wg=initial
+      | .ok pid=>pid=d.nextPeer ∧ observation s pid=
+        some (initCell psk (newbornCell (initial.peerCounter+1)))) :=
+  CreationScalar.original_create key psk initial d present
+
+
+open CreationScalar PeerScalarRetention Queues.RxCredits in
+/-- The original valid-header missing-target command retains its quiet/refusal outcomes or derives the actual new allocation stamp and exact final scalar update from its initial funded account. -/
+theorem original_missing_peer_command_scalars (cs : Ledger) (loans : Reservations)
+    (attrs : PeerAttrs) (key : Key) (initial : Campaign2.State) (before : Device)
+    (present : initial.device=some before)
+    (pubkey : attrs.publicKey=some key)
+    (valid : attrs.flags.getD 0 &&& ~~~WGPEER_F_ALL=0)
+    (protocol : attrs.protocolVersion=none ∨ attrs.protocolVersion=some 1)
+    (keep : attrs.flags.getD 0 &&& WGPEER_F_REMOVE_ME=0)
+    (missing : before.peerHashtable.find? (·.1 == key)=none) :
+    Campaign2.Ensures (setPeerCmd attrs)
+      (fun s=>Index.View.ConfigurationInput cs loans s ∧ s.wg=initial)
+      (fun ret s=>Index.View.ConfigurationInput cs loans s ∧ CommandEffect attrs key initial ret s) :=
+  CreationScalar.original_missing_command cs loans attrs key initial before present pubkey valid protocol keep missing
+
+
+open GetterScalar in
+/-- The actual private-key stage, including queued collision cleanup and precomputation/expiry/staging, retains tracked getter scalars for every surviving peer incarnation. -/
+theorem original_private_key_stage_getter_scalars (entry : Campaign2.Snapshot) (attrs : DeviceAttrs) :
+    Campaign2.Ensures (RequestOrder.keyStage attrs) (Keeps entry) (fun _=>Keeps entry) :=
+  GetterScalar.key_stage_keeps entry attrs
 
 end Leanux.Proofs.WG.Config
