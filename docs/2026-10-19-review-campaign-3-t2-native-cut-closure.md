@@ -285,3 +285,12 @@ of the open native-cut obligation; no narrower outcome is adopted.
    `14a5f051`, with exact normal/stopped decomposition and its three child
    source obligations visible. Its initialized composition and aggregate
    checks pass; it is not itself T2 completion.
+
+Source-71 `8526e3e4` implements the next scheduler source instance with a
+Type-valued canonical witness and source-constructed remainders. Its committed
+iteration and NAPI contracts remain explicit. Ordinary cleanup, encryption
+packet/publication and peer-release native cuts now have initialized source
+connections; the counted erasure intervals retain the original ticket cohort.
+The aggregate gate, fresh replay and twelve recipes pass. These are progress
+on findings 2–4, not their closure: all remaining caller families and concrete
+child contracts still require the closed final instance.

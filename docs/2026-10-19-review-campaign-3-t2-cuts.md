@@ -216,4 +216,11 @@ source finding.
    Combined aggregate gate, fresh replay and twelve recipes pass; finding 2
    remains open until concrete child instances and all caller roots close.
 
+   Source-71 `8526e3e4` adds initialized ordinary cleanup interiors, normal
+   and stopped encryption-loop decomposition, publication and native release
+   continuations, and canonical scheduler points. Fixed scheduler coverage
+   still names the iteration and NAPI child contracts. Gate, fresh replay and
+   twelve recipes pass; finding 2 remains open across the remaining callers
+   and intervals.
+
 No mirror change or narrower T2 outcome is adopted.
