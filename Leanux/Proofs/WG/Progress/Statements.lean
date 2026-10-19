@@ -1,3 +1,11 @@
+import Leanux.Proofs.WG.Progress.TimerTurnRecordClaims
+import Leanux.Proofs.WG.Progress.SchedulerBudgetClaims
+import Leanux.Proofs.WG.Progress.CommittedRecordClaims
+import Leanux.Proofs.WG.Progress.TimerLoopRecordClaims
+import Leanux.Proofs.WG.Progress.TimerUnitRecordClaims
+import Leanux.Proofs.WG.Progress.SchedulerRecordClaims
+import Leanux.Proofs.WG.Progress.DeliverySuffixClaims
+import Leanux.Proofs.WG.Progress.TimerCallbackSuffixClaims
 import Leanux.Proofs.WG.Progress.TransmitRecordClaims
 import Leanux.Proofs.WG.Progress.NapiSuffixClaims
 import Leanux.Proofs.WG.Progress.HandshakeSuffixClaims
@@ -1417,5 +1425,123 @@ theorem original_tx_activation_record_decrease (a : Activation) (worker : a.work
       (fun s=>s.ambient.hidden=some records)
       (fun _ s=>RecordSuffix.StrictTail records s.ambient.hidden) :=
   RecordSuffix.txActivation_record_strict a worker records
+
+
+/-- All five original timer callbacks retain supplied-record suffixes. -/
+theorem original_timer_callback_record_suffix (records : List HiddenRecord)
+    (pid : PeerId) (timer : PeerTimer) :
+    Campaign2.Ensures (timerCallback pid timer)
+      (fun s=>s.ambient.hidden=some records)
+      (fun _ s=>RecordSuffix.Tail records s.ambient.hidden) :=
+  RecordSuffix.timerCallback_record_suffix records pid timer
+
+/-- The actual timer section wrapper strictly consumes records on normal
+return. Wheel-selected worker/timer matching belongs to the enclosing caller. -/
+theorem original_timer_section_record_decrease (records : List HiddenRecord)
+    (worker : Worker) (pid : PeerId) (timer : PeerTimer) :
+    Campaign2.Product.Ensures (Env.runTimerSection worker (liftWG (timerCallback pid timer)))
+      (fun s=>s.ambient.hidden=some records)
+      (fun _ s=>RecordSuffix.StrictTail records s.ambient.hidden) :=
+  RecordSuffix.timerSection_record_decrease records worker pid timer
+
+/-- A dispatch that reports work strictly consumes the actual supplied records. -/
+theorem original_dispatch_record_effect (worker : Worker) (records : List HiddenRecord) :
+    Campaign2.Product.Ensures (Env.dispatch worker)
+      (fun s=>s.ambient.hidden=some records)
+      (fun result s=>RecordSuffix.Tail records s.ambient.hidden ∧
+        (result=true→RecordSuffix.StrictTail records s.ambient.hidden)) :=
+  RecordSuffix.dispatch_record_suffix worker records
+
+/-- Every normally continuing original scheduler turn consumes records. -/
+theorem original_scheduler_turn_record_decrease (stack : Option Worker) (records : List HiddenRecord) :
+    Campaign2.Product.Ensures (scheduleTurn stack)
+      (fun s=>s.ambient.hidden=some records)
+      (fun result s=>RecordSuffix.Tail records s.ambient.hidden ∧
+        (result=turnContinue→RecordSuffix.StrictTail records s.ambient.hidden)) :=
+  RecordSuffix.scheduleTurn_record_suffix stack records
+
+/-- Whole scheduling preserves a supplied-record suffix on normal return. -/
+theorem original_schedule_record_suffix (stack : Option Worker) (records : List HiddenRecord) :
+    Campaign2.Product.Ensures (Env.schedule stack)
+      (fun s=>s.ambient.hidden=some records)
+      (fun _ s=>RecordSuffix.Tail records s.ambient.hidden) :=
+  RecordSuffix.schedule_record_suffix stack records
+
+/-- Original fixture delivery retains the actual remaining records. -/
+theorem original_delivery_record_suffix (records : List HiddenRecord) :
+    Campaign2.Product.Ensures Env.deliverSent
+      (fun s=>s.ambient.hidden=some records)
+      (fun _ s=>RecordSuffix.Tail records s.ambient.hidden) :=
+  RecordSuffix.deliverSent_record_suffix records
+
+/-- The actual scheduler followed by delivery retains supplied-record suffixes. -/
+theorem original_crypt_workers_record_suffix (records : List HiddenRecord) :
+    Campaign2.Product.Ensures Env.runCryptWorkers
+      (fun s=>s.ambient.hidden=some records)
+      (fun _ s=>RecordSuffix.Tail records s.ambient.hidden) :=
+  RecordSuffix.runCryptWorkers_record_suffix records
+
+
+/-- The original timer-unit factor strictly consumes its supplied records. -/
+theorem original_timer_unit_record_decrease (records : List HiddenRecord) (worker : Worker)
+    (pid : PeerId) (timer : PeerTimer) (entry : WheelEntry) (step : Option UInt64) :
+    Campaign2.Product.Ensures
+      (TimerDiscipline.timerDispatchUnit_variant worker pid timer entry step)
+      (fun s=>s.ambient.hidden=some records)
+      (fun _ s=>RecordSuffix.StrictTail records s.ambient.hidden) :=
+  RecordSuffix.timerDispatchUnit_record_strict records worker pid timer entry step
+
+/-- All branches of the whole actual timer loop retain supplied-record suffixes. -/
+theorem original_timer_loop_record_suffix (records : List HiddenRecord) (bound : UInt64) :
+    Campaign2.Product.Ensures (Env.runTimers bound)
+      (fun s=>s.ambient.hidden=some records)
+      (fun _ s=>RecordSuffix.Tail records s.ambient.hidden) :=
+  RecordSuffix.runTimers_record_suffix records bound
+
+/-- Each normal committed activation in the initialized journal strictly
+consumes its own supplied records, including before a later enclosing Stop. -/
+theorem initialized_committed_activation_record_decrease
+    (trace : Runner.Trace) (placeholders : Bool) :
+    (CommittedRuns.Initialized.inspection trace placeholders).1.map Prod.fst =
+      Runner.executeTrace trace placeholders ∧
+    ∀ receipt ∈ (CommittedRuns.Initialized.inspection trace placeholders).2,
+      ∀ records final, receipt.before.ambient.hidden=some records →
+        receipt.exit.erase=.ok ((),final) →
+          RecordSuffix.StrictTail records final.ambient.hidden :=
+  CommittedRuns.Initialized.original_initialized_record_decrease trace placeholders
+
+
+/-- The actual record-derived scheduler budget cannot end normally with
+the exhaustion marker. Callback Stops remain possible. -/
+theorem original_scheduler_record_budget_adequate (stack : Option Worker)
+    (records : List HiddenRecord) :
+    Campaign2.Product.Ensures
+      (forIn (List.range' 0 (records.length+1)) ((none,()) : Option Unit × Unit)
+        (fun _ _=>scheduleTurn stack))
+      (fun s=>s.ambient.hidden=some records) (fun result _=>result=(some (),())) :=
+  RecordSuffix.scheduler_loop_budget_adequate stack records
+
+/-- Removing only the scheduler's unreachable outer exhaustion continuation
+retains every original callback result and Stop. -/
+theorem original_scheduler_record_budget_source (stack : Option Worker)
+    (records : List HiddenRecord) :
+    Campaign2.Product.AgreesOn (fun s=>s.ambient.hidden=some records)
+      (Env.schedule stack)
+      (do
+        let _ ← forIn (List.range' 0 (records.length+1)) ((none,()) : Option Unit × Unit)
+          (fun _ _=>scheduleTurn stack)
+        pure ()) :=
+  RecordSuffix.scheduler_record_budget_source stack records
+
+
+/-- A normally continuing original timer-loop turn strictly consumes records,
+including its actual send, clear, timer and crypt-scheduling alternatives. -/
+theorem original_timer_turn_record_decrease (bound : UInt64) (iteration : Nat)
+    (control : Bool × Option UInt64) (records : List HiddenRecord) :
+    Campaign2.Product.Ensures (TimerDiscipline.timerOuterTurn bound iteration control)
+      (fun s=>s.ambient.hidden=some records)
+      (fun result s=>RecordSuffix.Tail records s.ambient.hidden ∧
+        ∀ next, result=ForInStep.yield next → RecordSuffix.StrictTail records s.ambient.hidden) :=
+  RecordSuffix.timerOuterTurn_record_strict bound iteration control records
 
 end Leanux.Proofs.WG.Progress
