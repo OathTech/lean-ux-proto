@@ -28,7 +28,7 @@ theorem transmit (family addr : Nat) (packets : List WG.Packet) (mtu : Nat) :
   apply checked_state_history
   · exact (show Driver.transmitObserved nonpollHooks family addr packets mtu =
         Driver.transmitObserved Journal.hooks family addr packets mtu from rfl) ▸
-      Driver.transmit_history hooks_safe.actors family addr packets mtu
+      Driver.transmit_history hooks_safe.core family addr packets mtu
   · intro w a h result v b before run
     have projected := Driver.transmit_projects Journal.hooks_projects family addr packets mtu
     rw [Driver.nonce_transmitObserved_eq] at projected

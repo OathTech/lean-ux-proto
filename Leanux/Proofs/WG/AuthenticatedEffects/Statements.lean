@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalDelayedParents
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalStackInitialized
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalJournalOldProjection
 import Leanux.Proofs.WG.AuthenticatedEffects.GroOccurrenceDriver
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalReceiptInitialized
@@ -1221,5 +1223,24 @@ theorem initialized_send_selection_has_earlier_native_enqueue
       pre ++ CausalJournal.Event.scope (.entered ⟨index,.sendWork pid entry⟩) :: post) :
     CausalJournal.Selections.WorkOrigin pre pid entry :=
   CausalJournal.Selections.initialized_work trace placeholders pre post index pid entry position
+
+/-- Security: every initialized stack-input scope inherits its own authenticated
+receive, including a packet held by GRO while another packet is processed.
+The original candidate position, successful replay and earlier AEAD publication
+are joined in the same final execution; no fixture cause is assigned to a reply. -/
+theorem initialized_stack_input_has_own_authenticated_receive
+    (trace : Runner.Trace) (placeholders : Bool)
+    (pre post : List CausalJournal.Event) (index : Nat) (entry : GroOccurrence.Entry)
+    (position : (runPrefixOuter (CausalJournal.execute trace placeholders) []).2 =
+      pre ++ CausalJournal.Event.scope (.entered ⟨index,.stackInput entry⟩) :: post) :
+    ∃ start receipt rest,
+      pre = start ++ [CausalJournal.StackOrigins.candidate entry.scope entry.skb entry.packet,
+        CausalJournal.StackOrigins.replay receipt] ++ rest ∧
+      entry.scope = start.length ∧ receipt.skb = entry.skb ∧ receipt.packet = entry.packet ∧
+      receipt.run.value = true ∧
+      TransportReplay.Certified
+        ((start ++ [CausalJournal.StackOrigins.candidate entry.scope entry.skb entry.packet]).filterMap
+          CausalJournal.StackOrigins.origin?) receipt :=
+  CausalJournal.StackOrigins.initialized_authenticated trace placeholders pre post index entry position
 
 end Leanux.Proofs.WG.AuthenticatedEffects

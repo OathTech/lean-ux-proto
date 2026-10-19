@@ -9,6 +9,9 @@ import Leanux.Proofs.WG.HandshakeSecurity.ResidentMaterialStack
 import Leanux.Proofs.WG.HandshakeSecurity.ResidentMaterialWorkers
 import Leanux.Proofs.WG.HandshakeSecurity.ResidentMaterialFinal
 import Leanux.Proofs.WG.HandshakeSecurity.InitializedEncryptionMaterial
+import Leanux.Proofs.WG.HandshakeSecurity.EncryptionNonceEncoding
+import Leanux.Proofs.WG.HandshakeSecurity.NonceRejectionClaims
+import Leanux.Proofs.WG.HandshakeSecurity.ReceiveMaterialCarrier
 import Leanux.Proofs.WG.HandshakeSecurity.ResponderEncryptionInitialized
 import Leanux.Proofs.WG.HandshakeSecurity.StagingMaterialBank
 import Leanux.Proofs.WG.HandshakeSecurity.ExchangeDriverProjection
@@ -1374,5 +1377,86 @@ theorem initialized_responder_encryption_follows_confirmation
     (responder : r.cipher.keyRead.value.iAmTheInitiator = false) :
     r.Valid ∧ Responder.PriorAuthenticatedConfirmation pre r.cipher.keyRead.value.internalId :=
   Responder.final_encryption_confirmation H1 trace placeholders pre post r position responder
+
+/-- Security: consumed reservations are never reallocated, including abandoned
+work, and actual AEAD calls serialize that same assigned counter in both the
+data header and cipher nonce. Wire nonces remain unique per key allocation on
+the initialized final journal, including Stop, without an incoming invariant. -/
+theorem initialized_nonce_reservation_and_wire_agreement (trace : Runner.Trace) (placeholders : Bool) :
+    let h := (runPrefixOuter (AuthenticatedEffects.CausalJournal.execute trace placeholders) []).2.filterMap
+      AuthenticatedEffects.CausalJournal.old?
+    (h.filterMap TransmitSecurity.Journal.nonce?).Nodup ∧
+      ((h.filterMap TransmitSecurity.Journal.encryption?).map EncryptionMaterial.wireToken).Nodup ∧
+      ∀ r ∈ h.filterMap TransmitSecurity.Journal.encryption?, EncryptionMaterial.Encoding r :=
+  EncryptionMaterial.final_encoding trace placeholders
+
+/-- Security: the native nonce-rejection arm invalidates the sending key before
+releasing its reference, then restores the entire detached batch before the
+rekey queue helper. Its exact observer retains committed write receipts even
+if that later helper stops; this source contract is local to the rejected arm. -/
+theorem native_nonce_rejection_write_receipts (pid : PeerId) (packets : List Packet)
+    (kid : KeypairId) (w : WGWorld) (a : Ambient) :
+    ErasesStatePrefix (NonceRejection.observe pid packets kid)
+      (Lifetimes.stagedOutNokey pid packets (some kid) true) ∧
+    NonceRejection.Sound (runWGPrefix (NonceRejection.observe pid packets kid) w a []).2 :=
+  ⟨NonceRejection.erases pid packets kid,NonceRejection.actual_receipts pid packets kid w a⟩
+
+/-- Security: nonce-limit rejection restores the batch rather than charging a
+packet drop. The whole native arm, including its guarded rekey queue helper,
+leaves txDropped unchanged on normal completion; safe reference repayment is
+derived from the helper's actual get, with no lifetime premise. -/
+theorem native_nonce_rejection_does_not_count_drop (pid : PeerId) (packets : List Packet)
+    (kid : KeypairId) : Framing.SameView NonceRejection.dropped
+      (Lifetimes.stagedOutNokey pid packets (some kid) true) :=
+  NonceRejection.rejected_dropped pid packets kid
+
+/-- Security: a completed native rejection has actual ordered witnesses for
+sending-key invalidation and restoration of the entire detached batch. The
+rekey helper starts after restoration, and the full arm counts no packet drop.
+These are source postconditions; initialized reservation safety is separate. -/
+theorem native_nonce_rejection_invalidates_and_restores
+    (pid : PeerId) (packets : List Packet) (kid : KeypairId)
+    (w v : WGWorld) (a b : Ambient)
+    (run : ((Lifetimes.stagedOutNokey pid packets (some kid) true).run w).run a = .ok (((),v),b)) :
+    NonceRejection.dropped v = NonceRejection.dropped w ∧ ∃ first second : WGRunWitness Unit,
+      first.before = w ∧ NonceRejection.Invalidated kid first.before first.after ∧
+      ((NonceRejection.release kid packets).run first.after).run first.ambientAfter =
+        .ok (((),second.before),second.ambientBefore) ∧
+      NonceRejection.Restored pid packets second.before second.after ∧
+      ((sendQueuedHandshakeInitiation pid false).run second.after).run second.ambientAfter = .ok (((),v),b) ∧
+      (runWGPrefix (NonceRejection.observe pid packets kid) w a []).2 =
+        [.invalidated kid first,.restored pid packets second] :=
+  NonceRejection.normal_effects pid packets kid w v a b run
+
+/-- Security: successful native RX publication retains the actual AEAD key's
+allocation core and numeric slot frontier. This is the exact decrypt/publication
+source cut, before any IRQ, with no surviving-key or ownership premise. -/
+theorem native_rx_publication_keeps_authenticating_key
+    (id : SkbId) (r : WGRunWitness (RxPacket × Option RxPacket))
+    (out : RxPacket) (pid : PeerId) (v : WGWorld) (ambient : Ambient)
+    (published : PublicationIdentity.Published id r out pid v ambient) :
+    Responder.pool v = Responder.pool r.before ∧
+      ResidentMaterial.cursor v = ResidentMaterial.cursor r.before :=
+  ReceiveMaterial.published_core id r out pid v ambient published
+
+/-- Security: actual receive preparation gives each crypted packet the allocation
+core that authenticated it and preserves existing conditional bindings. The
+native ring cut supplies the exact decrypt-entry bound from resident-key bounds;
+the incoming carrier and bounds remain local obligations until initialized
+shared-driver transport is proved. -/
+theorem native_rx_prepare_retains_authenticated_allocation
+    (w v : WGWorld) (a b : Ambient)
+    (h t : List AuthenticatedEffects.TransportDriver.OriginEvent) (value : Option PeerId)
+    (hi : ReceiveMaterial.Inv h w) (bounded : ReceiveMaterial.KeyBounds w)
+    (run : runWGPrefix RxOrigin.prepare w a h = (.ok ((value,v),b),t)) : ReceiveMaterial.Inv t v :=
+  ReceiveMaterial.prepare_normal w v a b h t value hi bounded run
+
+/-- Security: session creation cannot change the authenticating allocation of
+an older surviving crypted packet. The packet's carried numeric-frontier bound
+excludes the newly allocated slot; no H1 or reference-funding premise is used.
+This is a native local frame, not initialized receive provenance. -/
+theorem native_session_retains_authenticated_rx_allocation
+    (pid : PeerId) (h : List AuthenticatedEffects.TransportDriver.OriginEvent) :
+    Framing.Preserves (ReceiveMaterial.Inv h) (beginSession pid) := ReceiveMaterial.session pid
 
 end Leanux.Proofs.WG.HandshakeSecurity

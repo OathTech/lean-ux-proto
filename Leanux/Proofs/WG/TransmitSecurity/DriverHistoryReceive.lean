@@ -38,7 +38,7 @@ private theorem groFlush (cb : List (List UInt8) → PrefixM E Unit)
     | (driver_history_head groNormalListPrefix; exact normalList cb hc _)
     | driver_product_history_step
 
-theorem poll_history (h : ActorHistorySafe Safe g) (pid : PeerId) (budget : Nat)
+theorem poll_history (h : ActorCoreHistorySafe Safe g) (pid : PeerId) (budget : Nat)
     (cb : List (List UInt8) → PrefixM E Unit)
     (hc : ∀ ps, ProductHistorySafe Safe (cb ps)) :
     ProductHistorySafe Safe (pollObserved g pid budget cb) := by
@@ -54,7 +54,7 @@ theorem poll_history (h : ActorHistorySafe Safe g) (pid : PeerId) (budget : Nat)
     | (driver_history_head napiGroFlushAllPrefix; exact groFlush cb hc _)
     | driver_product_history_step
 
-private theorem reply_history (h : ActorHistorySafe Safe g) (dst : Nat) (bytes : List UInt8) :
+private theorem reply_history (h : ActorCoreHistorySafe Safe g) (dst : Nat) (bytes : List UInt8) :
     ProductHistorySafe Safe (reply4With (fun family addr packets mtu => liftWGObserver (transmitObserved g family addr packets mtu)) dst bytes) := by
   unfold reply4With
   simp only [Functor.discard,map_const,Function.comp_apply,Function.const,map_eq_pure_bind]
@@ -62,18 +62,18 @@ private theorem reply_history (h : ActorHistorySafe Safe g) (dst : Nat) (bytes :
     | (driver_history_head transmitObserved; exact (transmit_history h _ _ _ _).liftWGObserver)
     | driver_product_history_step
 
-private theorem receive4_history (h : ActorHistorySafe Safe g) (bytes : List UInt8) :
+private theorem receive4_history (h : ActorCoreHistorySafe Safe g) (bytes : List UInt8) :
     ProductHistorySafe Safe (receive4With (reply4With (fun family addr packets mtu => liftWGObserver (transmitObserved g family addr packets mtu))) bytes) :=
   receive4With_preserves (I := fun h _ => Safe h) (S := Safe) (fun _ _ hi => hi) (fun _ _ _ _ hi => hi) _ (reply_history h) bytes
 
-theorem stack_history (h : ActorHistorySafe Safe g) (bytes : List UInt8) :
+theorem stack_history (h : ActorCoreHistorySafe Safe g) (bytes : List UInt8) :
     ProductHistorySafe Safe (stackObserved g bytes) := by
   unfold stackObserved stackReceiveWith
   repeat' first
     | (driver_history_head receive4With; exact receive4_history h _)
     | driver_product_history_step
 
-theorem flush_actor_history (h : ActorHistorySafe Safe g) (ps : List (List UInt8)) :
+theorem flush_actor_history (h : ActorCoreHistorySafe Safe g) (ps : List (List UInt8)) :
     ProductHistorySafe Safe (stackFlushObserved g ps) := by
   induction ps with
   | nil => exact History.product_pure _
@@ -81,14 +81,28 @@ theorem flush_actor_history (h : ActorHistorySafe Safe g) (ps : List (List UInt8
     simp only [stackFlushObserved,List.forM_eq_forM,List.forM_cons] at ih ⊢
     exact History.product_bind (stack_history h p) (fun _ => ih)
 
-theorem nativePoll_history (h : ActorHistorySafe Safe g) (pid : PeerId) (budget : Nat) :
+theorem nativePoll_core_history (h : ActorCoreHistorySafe Safe g)
+    (scope : ∀ entry body, ProductHistorySafe Safe body →
+      ProductHistorySafe Safe (g.stackInput entry body)) (pid : PeerId) (budget : Nat) :
     ProductHistorySafe Safe (nativePollObserved g pid budget) :=
   AuthenticatedEffects.GroOccurrencePoll.observed_preserves (fun history _ => Safe history) Safe
     (fun _ _ hi => hi) _ _ _ _ _ _ _
     (fun _ => (History.state_lift _).liftWGObserver)
     h.candidateEnter h.candidateLeave h.counterCheck
     (fun peer pkt ep => (consume_history h peer pkt ep).liftWGObserver)
-    (stack_history h) h.stackInput pid budget
+    (stack_history h) scope pid budget
+
+theorem ActorCoreHistorySafe.withPoll (h : ActorCoreHistorySafe Safe g)
+    (scope : ∀ entry body, ProductHistorySafe Safe body →
+      ProductHistorySafe Safe (g.stackInput entry body)) : ActorHistorySafe Safe g where
+  toActorCoreHistorySafe := h
+  nativePoll := nativePoll_core_history h scope
+
+theorem HooksHistorySafe.actors (h : HooksHistorySafe Safe g) : ActorHistorySafe Safe g :=
+  h.core.withPoll h.stackInput
+
+theorem nativePoll_history (h : ActorHistorySafe Safe g) (pid : PeerId) (budget : Nat) :
+    ProductHistorySafe Safe (nativePollObserved g pid budget) := h.nativePoll pid budget
 
 theorem softirq_history (h : ActorHistorySafe Safe g) :
     ProductHistorySafe Safe (softirqObserved g) := by
@@ -117,6 +131,6 @@ theorem irqExit_history (h : ActorHistorySafe Safe g) :
     | driver_product_history_step
 
 theorem flush_history (h : HooksHistorySafe Safe g) (ps : List (List UInt8)) :
-    ProductHistorySafe Safe (stackFlushObserved g ps) := flush_actor_history h.actors ps
+    ProductHistorySafe Safe (stackFlushObserved g ps) := flush_actor_history h.core ps
 
 end Leanux.Proofs.WG.TransmitSecurity.Driver

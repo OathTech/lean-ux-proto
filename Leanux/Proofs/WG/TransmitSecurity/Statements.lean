@@ -1,3 +1,6 @@
+import Leanux.Proofs.WG.TransmitSecurity.SocketCiphertextBinding
+import Leanux.Proofs.WG.HandshakeSecurity.EncryptionNonceEncoding
+import Leanux.Proofs.WG.TransmitSecurity.BatchPayloadFinal
 import Leanux.Proofs.WG.TransmitSecurity.RoutingFinal
 import Leanux.Proofs.WG.TransmitSecurity.NonceStagingSafety
 import Leanux.Proofs.WG.TransmitSecurity.NonceInitialized
@@ -38,9 +41,9 @@ import Leanux.Proofs.WG.TransmitSecurity.BatchJournalFinal
 import Leanux.Proofs.WG.TransmitSecurity.SocketJournalFinal
 import Leanux.Proofs.WG.TransmitSecurity.CiphertextOriginFinal
 
-/-! Campaign 3, T1 initialized counter reservations and local AEAD contracts.
-Exclusive reservation tokens now reach every initialized AEAD occurrence;
-continuity from those allocation stamps to the resident AEAD key remains open. -/
+/-! Campaign 3: initialized nonce safety and transmit source contracts.
+Actual key-allocation identity, reservation, packet and wire nonce are joined.
+Full transmit authorization and occurrence conservation remain separate. -/
 namespace Leanux.Proofs.WG.TransmitSecurity
 open Leanux Leanux.WG Leanux.Proofs.Logged
 
@@ -781,5 +784,48 @@ theorem recorded_admission_destination (receipt : Journal.RoutingHistory.Receipt
       receipt.run.before receipt.run.after receipt.run.ambientBefore receipt.run.ambientAfter pid ∧
     ∀ packet ∈ receipt.packets, Packets.destinationField receipt.family packet.bytes = receipt.addr :=
   receipt.selection valid pid selected
+
+
+/-- Nonce reuse would break transport confidentiality and integrity. Every
+initialized execution, including a stopped prefix, retains unique reservations,
+unique actual key-allocation/AEAD nonce pairs, and unique serialized wire nonces.
+Every ciphertext uses its packet's assigned header and AEAD counter below the
+native rejection bound. No incoming carrier or campaign-2 hypothesis remains. -/
+theorem initialized_nonce_safety (trace : Runner.Trace) (placeholders : Bool) :
+    let h := (runPrefixOuter (AuthenticatedEffects.CausalJournal.execute trace placeholders) []).2.filterMap
+      AuthenticatedEffects.CausalJournal.old?
+    (h.filterMap Journal.nonce?).Nodup ∧
+      ((h.filterMap Journal.encryption?).map HandshakeSecurity.EncryptionMaterial.token).Nodup ∧
+      ((h.filterMap Journal.encryption?).map HandshakeSecurity.EncryptionMaterial.wireToken).Nodup ∧
+      ∀ r ∈ h.filterMap Journal.encryption?, r.Valid ∧
+        r.cipher.packet.nonce < REJECT_AFTER_MESSAGES ∧ HandshakeSecurity.EncryptionMaterial.Encoding r := by
+  have material := HandshakeSecurity.EncryptionMaterial.final_initialized trace placeholders
+  have encoding := HandshakeSecurity.EncryptionMaterial.final_encoding trace placeholders
+  exact ⟨encoding.1,material.2.1,encoding.2.1,fun r member =>
+    ⟨(material.1 r member).1,material.2.2 r member,encoding.2.2 r member⟩⟩
+
+/-- Substitution or duplication during staging would detach ciphertext from
+its intended packet. Each initialized allocation batch contains exactly the
+plaintext sequence from its earlier native current-key selection, in order and
+with duplicate occurrences retained, including before later Stop. This is the
+staging-to-allocation link; routing origins and terminal conservation are separate. -/
+theorem initialized_staged_plaintext_batches (trace : Runner.Trace) (placeholders : Bool) :
+    BatchPayload.Safe (runPrefixOuter (Journal.execute trace placeholders) []).2 ∧
+      BatchPayload.Safe ((runPrefixOuter (AuthenticatedEffects.CausalJournal.execute trace placeholders) []).2.filterMap
+        AuthenticatedEffects.CausalJournal.old?) :=
+  ⟨BatchPayload.initialized trace placeholders,BatchPayload.final_initialized trace placeholders⟩
+
+
+/-- An emitted payload without an earlier matching encryption could leak or
+substitute data. Every actual initialized socket receipt is bound to its stored
+packet peer and endpoint read, and its complete payload has a strictly earlier
+AEAD certificate for the same packet allocation. Ready-batch initialization
+removes the empty-cell exception, including before later Stop. Historical route
+selection and exactly-once terminal disposition remain separate obligations. -/
+theorem initialized_socket_encryption_binding (trace : Runner.Trace) (placeholders : Bool) :
+    SocketCiphertext.Safe (runPrefixOuter (Journal.execute trace placeholders) []).2 ∧
+      SocketCiphertext.Safe ((runPrefixOuter (AuthenticatedEffects.CausalJournal.execute trace placeholders) []).2.filterMap
+        AuthenticatedEffects.CausalJournal.old?) :=
+  ⟨SocketCiphertext.initialized trace placeholders,SocketCiphertext.final_initialized trace placeholders⟩
 
 end Leanux.Proofs.WG.TransmitSecurity

@@ -6,8 +6,8 @@
 the [revised charter](2026-10-18-charter-proof-campaign-3.md). The inherited
 proof tree includes campaign 1's GRO carry. No mirror definition or landed
 proof has been changed. The source contracts now cover staged nonce allocation, encryption receipts,
-cookie egress, native handshake histories and session reference payments. No
-complete campaign outcome is claimed.
+cookie egress, native handshake histories and session reference payments. T1 is complete and validated;
+the other five outcomes remain open.
 
 **C3-F1 is dispositioned as a statement artefact.** The original T6 wording
 excluded behavior already represented by R5's coherent initialized replays.
@@ -19,9 +19,9 @@ stops the work. Validation for the current source-contract checkpoint is recorde
 
 | Outcome | Status and remaining obligation |
 | --- | --- |
-| T1 nonce safety | Open. Initialized native counter reservations are unique through Stop, and admitted counters have injective encoding. Every actual initialized AEAD now has a below-limit nonce and strict earlier reservation evidence. Initialized global packet-identity non-reuse now closes through the same driver and exact causal-journal projection. Each initialized AEAD now has an exclusive allocation-stamped reservation token matching its packet nonce, with no two AEAD occurrences sharing an assigned token. Initialized encryption receipts now bind the head, packet and AEAD key slot. The initialized material/reservation join now proves actual allocation-stamp/nonce uniqueness and the AEAD bound. The message-limit rejection arm still needs its explicit invalidation/restoration contract before T1 closes. |
-| T2 transmit authorization and conservation | Open. R3 supplies initialized selection-time authorization; initialized encryption head/packet key agreement and socket/packet peer agreement are proved. Initialized nonempty socket-payload provenance is proved. Ready-batch nonemptiness now survives the native initialized Runner; its internal socket-position join, historical routing linkage and complete TX dispositions remain to prove. |
-| T3 authenticated effects and silence | Open. R6 supplies the cookie gate's local contracts. Initialized exact timer-arm and queued-work occurrence provenance is proved; authentication/fixture roots, including held GRO packet attribution, remain open. |
+| T1 nonce safety | Complete and validated. `initialized_nonce_safety` joins unique native reservations, actual key-allocation/nonce pairs, bounded serialized AEAD nonces and exact packet/header encoding, including stopped prefixes. Universal native rejection contracts prove invalidation, whole-batch restoration and unchanged drop count; the native rekey contracts expose the guarded helper request. No incoming invariant or campaign-2 premise remains. |
+| T2 transmit authorization and conservation | Open. R3 supplies initialized selection-time authorization; initialized encryption head/packet key agreement and socket/packet peer agreement are proved. Initialized nonempty socket-payload provenance is proved. Initialized socket readiness now discharges nonemptiness at every actual socket receipt, including Stop, and joins to the prior AEAD certificate. Exact ordered staged plaintexts reach allocation. Historical routing/keepalive linkage, session-peer ownership and complete TX dispositions remain to prove. |
+| T3 authenticated effects and silence | Open. R6 supplies the cookie gate's local contracts. Initialized exact timer-arm and queued-work occurrence provenance is proved; each held GRO packet now has its own earlier authenticated replay/AEAD occurrence. Authentication/fixture roots for all protected effects remain open. |
 | T4 handshake replay resistance | Open. Initialized retained-peer timestamps and exchange epochs are derived. Successful sessions have one actual allocation and clear their handshake; refused sessions preserve the whole WireGuard state. Final role-slot residency now follows the actual final-journal session entry. Direct initialized stale-refusal/no-response remains. Named C2 source assumptions stay visible. |
 | T5 responder confirmation | Open. Initialized responder selections have earlier successful confirmations, each immediately preceded by a certified replay and earlier AEAD publication in the same journal. Actual responder AEAD now follows a successful confirmation of the same sending allocation, under named H1 current-slot edges. Receiving allocation continuity from the authenticated packet to that confirmation remains open. |
 | T6 key retirement | C3-F1 concerns the literal actual-encryption clause. R5 supplies the admission/attempt checks. New native put/clear contracts prove exact reference payment, retention and final removal; initialized exact holder accounting is proved. Concrete clear-work and final-TX-release retirement are proved under their explicit source/progress conditions; initialized timer-arm provenance and DEAD-RX selection/cleanup are proved. The native conditional retirement chain retains its explicit recorded-run and residual-holder conditions; universal internal-event and authenticated RX final-disposal joins remain open. |
@@ -79,7 +79,7 @@ python3 -B docs/proof-campaign-replay.py r5-coherent-post-clear |
 statement mismatch, not a newly discovered Linux security defect. It does
 not establish a nonce collision, a bound violation in an encrypted nonce,
 or a use after the allocation's final release. No upstream-tray entry is
-warranted. The six security outcomes remain unfinished.
+warranted. This disposition does not itself establish a security outcome.
 
 The supported contract records validity and age **at the original TX
 admission**, retains that historical certificate with the queued packet,
@@ -626,6 +626,46 @@ build pass. The unit suite completes 131 tests with one configured-kernel
 skip (22.987 seconds). All 2139 frozen proof-source hashes and 916 existing
 main proof files stayed unchanged; main and the mirror are unchanged. No full
 campaign outcome is newly claimed.
+
+### Current outcome joins
+
+[AGENT 2026-10-19] T1 is expressed by initialized nonce safety plus universal
+contracts at the actual rejection and freshness-helper sites. Another full
+rejection observer is unnecessary: the existing staging factor reaches exactly
+that native arm, and the local contracts quantify every source invocation.
+This retains the distinction between a request and a transmitted handshake.
+
+T4 `a0832dcd` supplies wire encoding and rejection contracts. Parent proofs
+retain the exact selected plaintext sequence through the native loop and
+allocation, including duplicate packet values. T6 `874fba81` supplies initialized
+socket nonemptiness; joining it with the existing strict-prefix AEAD certificate
+removes that premise from the socket ciphertext claim. Historical routing and
+terminal conservation remain open.
+
+T3 `be35f3b4` places a stack-input scope around the actual tagged GRO callback
+and proves its own replay/AEAD origin. The shared history interface now accepts
+a complete native-poll contract. Generic callback preservation still derives
+that contract when applicable; the stronger provenance proof supplies it from
+the actual poll instead of assuming authentication of arbitrary entries.
+The final old-journal and exchange projections retain outcomes, state and Stops.
+
+Development builds exposed ordinary adapter inference obligations and one
+loop-accumulator proof mismatch; those were repaired. A build also reached
+newly added imports before their dependencies had been scheduled; the following
+scoped build includes the complete dependency graph. These are build failures,
+not security findings.
+
+Checkpoint 29 passes the 2251-job proof gate with 1354 terminal declarations
+over thirteen roots and only the three standard axioms, all twelve witness
+recipes, fresh root kernel replay, the 130-job model build and 131 unit tests
+(one configured-kernel skip, 23.281 seconds). All 2195 frozen proof-source
+hashes match. Main remains `783510e8`, all 916 inherited proof files are
+byte-identical, and the mirror remains unchanged at `77c9b555`.
+The final adopted child pins are T3 `933b8449`, T4 `b1e8297f` and T6
+`921b76e6`: these also add strict earlier timer/work parents, native RX
+allocation continuity contracts, and the explicit conditional DEAD-RX
+retirement chain. T2–T6 remain open; those local contracts retain their
+stated source and progress conditions.
 
 ## Validation
 

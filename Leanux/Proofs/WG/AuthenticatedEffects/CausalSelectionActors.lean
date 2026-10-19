@@ -28,7 +28,7 @@ private theorem quiet_hooks : Driver.HooksHistorySafe Safe quietHooks where
   queueSend := effects_safe.append
   candidateEnter := fun skb packet => product_enter (.candidate skb packet) (fun _ => True.intro)
   candidateLeave := product_leave
-  stackInput := fun _ _ preserves => preserves
+  stackInput := fun entry _ preserves => product_scope (.stackInput entry) (fun _ => True.intro) _ (fun _ => preserves)
   prepare := prepare
   counterCheck := counter
   timerSelected := fun _ _ _ _ _ => Driver.History.product_pure _
@@ -55,11 +55,11 @@ theorem handshake_history : Driver.StateHistorySafe Safe (Driver.handshakeObserv
 
 theorem timer_history (pid : PeerId) (timer : PeerTimer) :
     Driver.StateHistorySafe Safe (Driver.timerObserved hooks pid timer) :=
-  Driver.timer_history (g := quietHooks) quiet_hooks.actors pid timer
+  Driver.timer_history (g := quietHooks) quiet_hooks.core pid timer
 
 theorem transmit_history (family addr : Nat) (packets : List Packet) (mtu : Nat) :
     Driver.StateHistorySafe Safe (Driver.transmitObserved hooks family addr packets mtu) :=
-  Driver.transmit_history (g := quietHooks) quiet_hooks.actors family addr packets mtu
+  Driver.transmit_history (g := quietHooks) quiet_hooks.core family addr packets mtu
 
 theorem softirq_history : Driver.ProductHistorySafe Safe (Driver.softirqObserved hooks) :=
   Driver.softirq_history (g := quietHooks) quiet_hooks.actors

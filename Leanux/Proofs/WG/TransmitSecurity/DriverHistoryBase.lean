@@ -48,7 +48,7 @@ structure HooksHistorySafe (Safe : List E → Prop) (hooks : Hooks E) : Prop whe
 allocated packets. Requiring arbitrary allocation arguments to preserve such a
 property would discard that source relationship. Other callback contracts stay
 explicit and the original native driver remains unchanged. -/
-structure ActorHistorySafe (Safe : List E → Prop) (hooks : Hooks E) : Prop where
+structure ActorCoreHistorySafe (Safe : List E → Prop) (hooks : Hooks E) : Prop where
   staging : ∀ pid, StateHistorySafe Safe (stagingObserved hooks pid)
   fixtureEnter : ∀ trigger, StateHistorySafe Safe (hooks.fixtureEnter trigger)
   fixtureLeave : ∀ token, StateHistorySafe Safe (hooks.fixtureLeave token)
@@ -62,8 +62,6 @@ structure ActorHistorySafe (Safe : List E → Prop) (hooks : Hooks E) : Prop whe
   queueSend : ∀ pid, StateHistorySafe Safe (hooks.queueSend pid)
   candidateEnter : ∀ skb pkt, ProductHistorySafe Safe (hooks.candidateEnter skb pkt)
   candidateLeave : ∀ token, ProductHistorySafe Safe (hooks.candidateLeave token)
-  stackInput : ∀ entry body, ProductHistorySafe Safe body →
-    ProductHistorySafe Safe (hooks.stackInput entry body)
   prepare : ProductHistorySafe Safe hooks.prepare
   counterCheck : ∀ skb pkt, ProductHistorySafe Safe (hooks.counterCheck skb pkt)
   timerSelected : ∀ d j pid t we, ProductHistorySafe Safe (hooks.timerSelected d j pid t we)
@@ -74,6 +72,15 @@ structure ActorHistorySafe (Safe : List E → Prop) (hooks : Hooks E) : Prop whe
   poll : ProductHistorySafe Safe hooks.poll
   encrypt : ∀ item, ProductHistorySafe Safe (hooks.encrypt item)
   transmit : ∀ pid, ProductHistorySafe Safe (hooks.transmit pid)
+
+/-- The complete native poll carries its own contract: an authenticated GRO
+entry cannot be replaced by an arbitrary callback argument. -/
+structure ActorHistorySafe (Safe : List E → Prop) (hooks : Hooks E) : Prop
+    extends ActorCoreHistorySafe Safe hooks where
+  nativePoll : ∀ pid budget, ProductHistorySafe Safe (nativePollObserved hooks pid budget)
+
+instance : Coe (ActorHistorySafe Safe hooks) (ActorCoreHistorySafe Safe hooks) :=
+  ⟨ActorHistorySafe.toActorCoreHistorySafe⟩
 
 namespace History
 variable {Safe : List E → Prop}
@@ -256,7 +263,7 @@ macro "driver_product_history_step" : tactic => `(tactic| first
   | (split; all_goals try simp_all only []; all_goals try subst_vars))
 
 theorem fixture_history {E α : Type} {Safe : List E → Prop} {hooks : Hooks E}
-    (h : ActorHistorySafe Safe hooks)
+    (h : ActorCoreHistorySafe Safe hooks)
     (trigger : AuthenticatedEffects.FixtureEffects.Trigger) (body : WGPrefix E α)
     (history : StateHistorySafe Safe body) : StateHistorySafe Safe
       (AuthenticatedEffects.FixtureEffects.runWith (fixtureOps hooks) trigger body) :=

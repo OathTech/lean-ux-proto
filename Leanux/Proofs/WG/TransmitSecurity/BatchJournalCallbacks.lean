@@ -24,7 +24,7 @@ theorem keepalive (pid : PeerId) : StateSafe (Driver.keepaliveObserved Journal.h
   apply state_checked
   · intro past
     exact (show Driver.keepaliveObserved Quiet.nonencryptHooks pid = Driver.keepaliveObserved Journal.hooks pid from rfl) ▸
-      Driver.keepalive_actor_history Quiet.hooks_safe.actors pid
+      Driver.keepalive_actor_history Quiet.hooks_safe.core pid
   · intro w a h result v b before run
     have projected := Driver.keepalive_projects Journal.hooks_projects pid
     rw [Driver.nonce_keepaliveObserved_eq] at projected
@@ -35,7 +35,7 @@ theorem timer_callback (pid : PeerId) (timer : PeerTimer) : StateSafe (Driver.ti
   apply state_checked
   · intro past
     exact (show Driver.timerObserved Quiet.nonencryptHooks pid timer = Driver.timerObserved Journal.hooks pid timer from rfl) ▸
-      Driver.timer_history Quiet.hooks_safe.actors pid timer
+      Driver.timer_history Quiet.hooks_safe.core pid timer
   · intro w a h result v b before run
     have projected := Driver.timer_projects Journal.hooks_projects pid timer
     rw [Driver.nonce_timerObserved_eq] at projected

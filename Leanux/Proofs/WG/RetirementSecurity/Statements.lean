@@ -1,6 +1,6 @@
-import Leanux.Proofs.WG.RetirementSecurity.ReadyCiphertextNativeInitialized
+import Leanux.Proofs.WG.RetirementSecurity.ReadySocketJournalFinal
 import Leanux.Proofs.WG.RetirementSecurity.TimerRetirementOrigin
-import Leanux.Proofs.WG.RetirementSecurity.ConditionalRetirement
+import Leanux.Proofs.WG.RetirementSecurity.ConditionalRetirementRx
 import Leanux.Proofs.WG.RetirementSecurity.UnpublicationWorker
 import Leanux.Proofs.WG.RetirementSecurity.FinalRxSelection
 import Leanux.Proofs.WG.RetirementSecurity.ZeroTimerDispatch
@@ -2282,5 +2282,63 @@ theorem initialized_ready_ciphertext (trace : Leanux.Runner.Trace) (placeholders
       (Queues.RxCredits.RunnerAccount.observed trace placeholders) []=(.ok (result,w),h)) :
     ReadyCiphertext.Inv w.wg :=
   (ReadyCiphertext.Initialized.normal trace placeholders run).2.2
+
+
+/-- Every socket receipt from the actual next TX step has nonempty bytes at
+its packet read, even if the step later Stops. The native cached peek and
+CRYPTED branch derive batch readiness from the explicit incoming queued
+invariant. Whole initialized shared-journal transport is a separate claim. -/
+theorem original_ready_tx_socket_nonempty (pid : PeerId) (w : World)
+    (before : ReadyCiphertext.Inv w.wg) :
+    ReadySocket.Good (Leanux.Proofs.Logged.runPrefix
+      (TransmitSecurity.Completion.step pid) w []).2 := by
+  obtain ⟨_,_,good,_⟩:=ReadySocket.step pid w [] ⟨before,by intro r member; cases member⟩
+  exact good
+
+/-- Every actual socket receipt in the initialized final causal journal reads
+nonempty packet bytes. The native queue selection, CRYPTED guard and complete
+encryption walk discharge readiness; no physical or byte invariant is an input.
+Receipts before a later Stop retain the same guarantee. -/
+theorem initialized_socket_nonempty (trace : Leanux.Runner.Trace) (placeholders : Bool) :
+    ReadySocketJournal.Safe
+      ((Leanux.Proofs.Logged.runPrefixOuter
+        (AuthenticatedEffects.CausalJournal.execute trace placeholders) []).2.filterMap
+          AuthenticatedEffects.CausalJournal.old?) :=
+  ReadySocketJournal.final_initialized trace placeholders
+
+/-- Conditional key retirement also covers a retained DEAD receive packet.
+Actual wheel dispatch, clear work, queue selection and cleanup form one native
+source chain from initialized state. The concrete post-clear sole-holder count
+and these completed source calls are visible progress conditions; no new
+initialization or assumed key account is introduced at receive disposal. -/
+theorem initialized_conditional_rx_retirement (trace : Runner.Trace) (placeholders : Bool)
+    (initialized : Leanux.Proofs.Logged.runPrefixOuter (Queues.RxCredits.RunnerAccount.observed trace placeholders) []=(.ok (result,w),h))
+    (device : w.wg.dev=some deviceState) (bound : UInt64) (pid : PeerId)
+    (entry : WheelEntry) (due : TimerWheel.nextDue deviceState bound=some (pid,.zeroKeyMaterial,entry))
+    (published : ∀p,deviceState.peers[pid]?=some p→HasKeySlot p)
+    (kind : Worker) (prior : Option UInt64)
+    (fired : (Leanux.Proofs.Logged.timerDispatchUnit kind pid .zeroKeyMaterial entry prior).run w=.ok ((),u))
+    (p : Peer) (found : peerAt u.wg pid=some p) (a : Ambient)
+    (cleared : ((runFlushedClearWork pid).run u.wg).run u.ambient=.ok (((),clearedWorld),a))
+    (allocation : Credits.Allocation) (old : allocation.slot∈Unpublication.SlotEntries p)
+    (projected : durableLoans clearedWorld=some loans) (last : (loans.map (·.allocation)).count allocation=1)
+    (receiver id : Nat) (pkt : RxPacket) (owner : pkt.peer=receiver) (key : pkt.keypair=allocation.slot)
+    (dead : pkt.state=.dead) (b c d e f g : Ambient)
+    (peek : ((Queues.peekRxQueue receiver).run clearedWorld).run a=.ok ((some id,peekedWorld),b))
+    (test : ((NativeRxSelection.ready (some id)).run peekedWorld).run b=.ok ((true,testedWorld),c))
+    (read : ((getRxSkb id).run testedWorld).run c=.ok ((pkt,readWorld),d))
+    (drop : ((Queues.dropRxQueue receiver).run readWorld).run d=.ok (((),droppedWorld),e))
+    (stateCheck : ((branch .rxPollNotCrypted (pkt.state != .crypted) : WG.M Bool).run droppedWorld).run e=
+      .ok ((skip,checkedWorld),f))
+    (dispose : ((do
+      keypairPut (some pkt.keypair) false
+      peerPut (some receiver)
+      _←branch .rxPollFree true
+      freeRxSkb id : WG.M Unit).run checkedWorld).run f=.ok (((),final),g)) :
+    HolderAccount [] clearedWorld ∧ SlotsCleared pid clearedWorld ∧ Unpublished allocation.slot clearedWorld ∧
+      skip=true ∧ keyAt final allocation.slot=none :=
+  ConditionalRetirement.final_dead_rx trace placeholders initialized device bound pid entry due published
+    kind prior fired p found a cleared allocation old projected last receiver id pkt owner key dead
+    b c d e f g peek test read drop stateCheck dispose
 
 end Leanux.Proofs.WG.RetirementSecurity

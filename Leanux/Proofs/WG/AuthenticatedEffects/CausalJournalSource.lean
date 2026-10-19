@@ -84,6 +84,7 @@ def hooks : Driver.Hooks Event where
   queueSend := effects.append
   candidateEnter := CausalSources.candidateEnter Event.scope
   candidateLeave := CausalScope.leavePrefix Event.scope
+  stackInput := fun entry body => CausalScope.prefixScope Event.scope (.stackInput entry) (fun _ => body)
   timerSelected := CausalSources.timerEnter Event.scope (Event.old ∘ Journal.Event.timerSelected)
   timerFinished := CausalScope.leavePrefix Event.scope
   prepare := product Journal.hooks.prepare

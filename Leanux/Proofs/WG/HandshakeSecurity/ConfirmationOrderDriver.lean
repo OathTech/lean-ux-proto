@@ -76,7 +76,7 @@ theorem quiet_staging (h : QuietHooksSafe Good hooks) (pid : PeerId) :
 
 theorem quiet_keepalive (h : QuietHooksSafe Good hooks) (pid : PeerId) :
     StateHistorySafe Good (Driver.keepaliveObserved hooks pid) :=
-  Driver.keepalive_actor_history (quiet_hooks h).actors pid
+  Driver.keepalive_actor_history (g := neutralConfirmation hooks) (quiet_hooks h).core pid
 
 theorem quiet_receiveTail (h : QuietHooksSafe Good hooks) (pid : PeerId)
     (pkt : RxPacket) (confirmed : Bool) :
@@ -118,11 +118,11 @@ theorem quiet_nativePoll (record : AuthenticatedEffects.TransportDriver.Replay â
       (fun _ _ hi => hi) _
       (AuthenticatedEffects.GroOccurrence.stack_preserves (Base record decode) (Safe record decode)
         (fun _ _ hi => hi) hooks.stackInput (Driver.stackObserved hooks)
-        (fun bytes => by exact Driver.stack_history (g := neutralConfirmation hooks) (quiet_hooks h).actors bytes) h.stackInput)
+        (fun bytes => by exact Driver.stack_history (g := neutralConfirmation hooks) (quiet_hooks h).core bytes) h.stackInput)
   Â· exact AuthenticatedEffects.GroOccurrence.flushAll_preserves (Base record decode) (Safe record decode)
       (fun _ _ hi => hi) _
       (AuthenticatedEffects.GroOccurrence.stack_preserves (Base record decode) (Safe record decode)
         (fun _ _ hi => hi) hooks.stackInput (Driver.stackObserved hooks)
-        (fun bytes => by exact Driver.stack_history (g := neutralConfirmation hooks) (quiet_hooks h).actors bytes) h.stackInput)
+        (fun bytes => by exact Driver.stack_history (g := neutralConfirmation hooks) (quiet_hooks h).core bytes) h.stackInput)
 
 end Leanux.Proofs.WG.HandshakeSecurity.ConfirmationTransportOrder

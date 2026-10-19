@@ -115,7 +115,7 @@ theorem HooksHistorySafe.effects {hooks : Hooks E} (h : HooksHistorySafe Safe ho
   arm := h.armTimer
   append := h.queueSend
 
-theorem ActorHistorySafe.effects {hooks : Hooks E} (h : ActorHistorySafe Safe hooks) :
+theorem ActorCoreHistorySafe.effects {hooks : Hooks E} (h : ActorCoreHistorySafe Safe hooks) :
     EffectsHistory Safe (effectOps hooks) where
   step := History.state_lift
   arm := h.armTimer

@@ -1,4 +1,4 @@
-import Leanux.Proofs.WG.TransmitSecurity.DriverGroNeutral
+import Leanux.Proofs.WG.AuthenticatedEffects.GroOccurrenceFrames
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalDelayedEncryption
 
 /-! Actual RX poll and buffered stack callbacks retain the live delayed-effect
@@ -76,8 +76,22 @@ theorem receive_poll (pid : PeerId) (budget : Nat)
     | causal_delayed_product_step
 
 theorem native_poll (pid : PeerId) (budget : Nat) : ProductSafe (Driver.nativePollObserved hooks pid budget) := by
-  rw [Driver.nativePoll_neutral _ rfl]
-  exact receive_poll pid budget _ stack_flush
+  have callback := GroOccurrence.stack_preserves (fun h w => Inv h w.wg) (fun _ => True)
+    (fun _ _ _ => True.intro) hooks.stackInput (Driver.stackObserved hooks) stack
+    (fun entry _ safe => product_scope (.stackInput entry) _ (fun _ => safe))
+  unfold Driver.nativePollObserved GroOccurrencePoll.observed GroOccurrencePoll.sourceWith
+  simp only [Std.Legacy.Range.forIn_eq_forIn_range']
+  repeat' first
+    | (causal_delayed_head Driver.Hooks.candidateEnter; exact candidate_enter _ _)
+    | (causal_delayed_head Driver.Hooks.candidateLeave; exact candidate_leave _)
+    | (causal_delayed_head Driver.Hooks.counterCheck; exact counter _ _)
+    | (causal_delayed_head Driver.consumeObserved; exact product_state (consume _ _ _))
+    | (causal_delayed_head GroOccurrence.receiveWith; exact GroOccurrence.receive_preserves
+        (fun h w => Inv h w.wg) (fun _ => True) (fun _ _ _ => True.intro) _ callback _ _)
+    | (causal_delayed_head GroOccurrence.flushAllWith; exact GroOccurrence.flushAll_preserves
+        (fun h w => Inv h w.wg) (fun _ => True) (fun _ _ _ => True.intro) _ callback _)
+    | (causal_delayed_head liftWGPrefix; solve | causal_delayed_poll_native)
+    | causal_delayed_product_step
 
 private theorem pending : ProductSafe (liftWGObserver (liftWGPrefix RxNapi.pendingSource)) := by
   apply product_state

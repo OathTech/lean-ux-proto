@@ -89,7 +89,8 @@ theorem hooks_projects : Driver.HooksProjects cut? hooks Responder.DriverCuts.ho
   candidate := ⟨(fun _ => 0),
     (fun skb packet => CausalScope.enter_projects Event.scope (.candidate skb packet) cut? (fun _ => rfl)),
     (fun token => CausalScope.leave_projects Event.scope token cut? (fun _ => rfl)),
-    (fun _ _ _ projected => projected)⟩
+    (fun entry _ _ projected => CausalScope.prefix_projects Event.scope (.stackInput entry) cut?
+      (fun _ => rfl) _ _ (fun _ => projected))⟩
   timer := ⟨(fun _ => 0),timer_projects,
     (fun token => CausalScope.leave_projects Event.scope token cut? (fun _ => rfl))⟩
   prepare := product_native _ _ (Appends.focus _ _ _) Journal.ResponderProjection.hooks.prepare

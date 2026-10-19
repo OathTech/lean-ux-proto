@@ -89,7 +89,8 @@ theorem hooks_projects : Driver.HooksProjects old? hooks Journal.hooks where
   candidate := ⟨(fun _ => 0),
     (fun skb packet => CausalScope.enter_projects Event.scope (.candidate skb packet) old? (fun _ => rfl)),
     (fun token => CausalScope.leave_projects Event.scope token old? (fun _ => rfl)),
-    (fun _ _ _ projected => projected)⟩
+    (fun entry _ _ projected => CausalScope.prefix_projects Event.scope (.stackInput entry) old?
+      (fun _ => rfl) _ _ (fun _ => projected))⟩
   timer := ⟨(fun _ => 0),timer_projects,
     (fun token => CausalScope.leave_projects Event.scope token old? (fun _ => rfl))⟩
   prepare := product_projects _ (Appends.focus _ _ _)

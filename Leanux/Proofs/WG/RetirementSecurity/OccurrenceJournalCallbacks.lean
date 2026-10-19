@@ -43,7 +43,7 @@ theorem staging (pid : PeerId) : StateSafe (Driver.stagingObserved Journal.hooks
 theorem keepalive (pid : PeerId) : StateSafe (Driver.keepaliveObserved Journal.hooks pid) := by
   apply checked_state_history
   · exact (show Driver.keepaliveObserved nonpollHooks pid = Driver.keepaliveObserved Journal.hooks pid from rfl) ▸
-      Driver.keepalive_actor_history hooks_safe.actors pid
+      Driver.keepalive_actor_history hooks_safe.core pid
   · intro w a h result v b before run
     have projected := Driver.keepalive_projects Journal.hooks_projects pid
     rw [Driver.nonce_keepaliveObserved_eq] at projected
@@ -53,7 +53,7 @@ theorem keepalive (pid : PeerId) : StateSafe (Driver.keepaliveObserved Journal.h
 theorem timer_callback (pid : PeerId) (timer : PeerTimer) : StateSafe (Driver.timerObserved Journal.hooks pid timer) := by
   apply checked_state_history
   · exact (show Driver.timerObserved nonpollHooks pid timer = Driver.timerObserved Journal.hooks pid timer from rfl) ▸
-      Driver.timer_history hooks_safe.actors pid timer
+      Driver.timer_history hooks_safe.core pid timer
   · intro w a h result v b before run
     have projected := Driver.timer_projects Journal.hooks_projects pid timer
     rw [Driver.nonce_timerObserved_eq] at projected

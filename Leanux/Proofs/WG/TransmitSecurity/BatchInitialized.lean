@@ -91,7 +91,7 @@ private theorem timer (d : Device) (j : UInt64) (pid : PeerId) (t : PeerTimer) (
   rw [TimerDispatch.scope_run,runPrefix_pure]
   simp only [List.filterMap_append,List.filterMap_cons,List.filterMap_nil,ReservationHistory.allocation?,List.append_nil]
 
-theorem hooks_safe : ActorHistorySafe Safe Journal.hooks where
+theorem hooks_core : ActorCoreHistorySafe Safe Journal.hooks where
   staging := staging
   fixtureEnter := fun _ => History.state_pure _
   fixtureLeave := fun _ => History.state_pure _
@@ -104,7 +104,6 @@ theorem hooks_safe : ActorHistorySafe Safe Journal.hooks where
   queueSend := fun _ => History.state_lift _
   candidateEnter := fun _ _ => History.product_pure _
   candidateLeave := fun _ => History.product_pure _
-  stackInput := fun _ _ preserves => preserves
   prepare := product_focus _ _ (fun _ => rfl) _
   counterCheck := fun _ _ => product_quiet (Appends.lift _).receiptObserved
     (HistoryFrame.receiptObserved (HistoryFrame.lift _ _) (fun _ => rfl))
@@ -116,6 +115,10 @@ theorem hooks_safe : ActorHistorySafe Safe Journal.hooks where
   poll := poll
   encrypt := encrypt
   transmit := transmit
+
+theorem hooks_safe : ActorHistorySafe Safe Journal.hooks :=
+  hooks_core.withPoll (fun _ _ preserves => preserves)
+
 
 /-- Every initialized native allocation has one peer and one selected key
 slot throughout its argument list, including allocations before later Stop. -/

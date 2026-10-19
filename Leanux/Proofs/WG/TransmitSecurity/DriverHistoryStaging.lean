@@ -21,7 +21,7 @@ theorem staging_history (h : HooksHistorySafe Safe g) (pid : PeerId) :
     | (driver_history_head Hooks.confirmation; exact h.confirmation _ _)
     | driver_state_history_step
 
-theorem HooksHistorySafe.actors (h : HooksHistorySafe Safe g) : ActorHistorySafe Safe g where
+theorem HooksHistorySafe.core (h : HooksHistorySafe Safe g) : ActorCoreHistorySafe Safe g where
   staging := staging_history h
   fixtureEnter := h.fixtureEnter
   fixtureLeave := h.fixtureLeave
@@ -32,7 +32,6 @@ theorem HooksHistorySafe.actors (h : HooksHistorySafe Safe g) : ActorHistorySafe
   queueSend := h.queueSend
   candidateEnter := h.candidateEnter
   candidateLeave := h.candidateLeave
-  stackInput := h.stackInput
   prepare := h.prepare
   counterCheck := h.counterCheck
   timerSelected := h.timerSelected
@@ -44,7 +43,7 @@ theorem HooksHistorySafe.actors (h : HooksHistorySafe Safe g) : ActorHistorySafe
   encrypt := h.encrypt
   transmit := h.transmit
 
-theorem keepalive_actor_history (h : ActorHistorySafe Safe g) (pid : PeerId) :
+theorem keepalive_actor_history (h : ActorCoreHistorySafe Safe g) (pid : PeerId) :
     StateHistorySafe Safe (keepaliveObserved g pid) := by
   unfold keepaliveObserved
   repeat' first
@@ -55,9 +54,9 @@ theorem keepalive_actor_history (h : ActorHistorySafe Safe g) (pid : PeerId) :
 
 theorem keepalive_history (h : HooksHistorySafe Safe g) (pid : PeerId) :
     StateHistorySafe Safe (keepaliveObserved g pid) :=
-  keepalive_actor_history h.actors pid
+  keepalive_actor_history h.core pid
 
-theorem transmit_history (h : ActorHistorySafe Safe g) (family addr : Nat) (packets : List Packet) (mtu : Nat) :
+theorem transmit_history (h : ActorCoreHistorySafe Safe g) (family addr : Nat) (packets : List Packet) (mtu : Nat) :
     StateHistorySafe Safe (transmitObserved g family addr packets mtu) := by
   unfold transmitObserved
   repeat' first
@@ -67,15 +66,15 @@ theorem transmit_history (h : ActorHistorySafe Safe g) (family addr : Nat) (pack
     | (driver_history_head Hooks.confirmation; exact h.confirmation _ _)
     | driver_state_history_step
 
-theorem expired_history (h : ActorHistorySafe Safe g) (pid : PeerId) :
+theorem expired_history (h : ActorCoreHistorySafe Safe g) (pid : PeerId) :
     StateHistorySafe Safe (expiredKeepaliveObserved g pid) := by
   exact effects_expiredKeepalive_history h.effects _ (keepalive_actor_history h) pid
 
-theorem persistent_history (h : ActorHistorySafe Safe g) (pid : PeerId) :
+theorem persistent_history (h : ActorCoreHistorySafe Safe g) (pid : PeerId) :
     StateHistorySafe Safe (persistentObserved g pid) := by
   exact effects_persistent_history h.effects _ (keepalive_actor_history h) pid
 
-theorem timer_history (h : ActorHistorySafe Safe g) (pid : PeerId) (t : PeerTimer) :
+theorem timer_history (h : ActorCoreHistorySafe Safe g) (pid : PeerId) (t : PeerTimer) :
     StateHistorySafe Safe (timerObserved g pid t) := by
   cases t with
   | retransmitHandshake => exact effects_retransmit_history h.effects _
@@ -84,7 +83,7 @@ theorem timer_history (h : ActorHistorySafe Safe g) (pid : PeerId) (t : PeerTime
   | zeroKeyMaterial => exact History.state_lift _
   | persistentKeepalive => exact persistent_history h _
 
-theorem response_history (h : ActorHistorySafe Safe g) (pid : PeerId) :
+theorem response_history (h : ActorCoreHistorySafe Safe g) (pid : PeerId) :
     StateHistorySafe Safe (responseWith (handshakeOps g) pid) := by
   unfold responseWith
   dsimp only [handshakeOps]
@@ -93,7 +92,7 @@ theorem response_history (h : ActorHistorySafe Safe g) (pid : PeerId) :
     | (driver_history_head Hooks.confirmation; exact h.confirmation _ _)
     | driver_state_history_step
 
-theorem afterMac_history (h : ActorHistorySafe Safe g) (msg : List UInt8) (src : SkbSource)
+theorem afterMac_history (h : ActorCoreHistorySafe Safe g) (msg : List UInt8) (src : SkbSource)
     (loaded : Bool) (mac : MacState) :
     StateHistorySafe Safe (afterMacWith (handshakeOps g) msg src loaded mac) := by
   unfold afterMacWith
@@ -105,7 +104,7 @@ theorem afterMac_history (h : ActorHistorySafe Safe g) (msg : List UInt8) (src :
     | (driver_history_head Hooks.confirmation; exact h.confirmation _ _)
     | driver_state_history_step
 
-theorem reception_history (h : ActorHistorySafe Safe g) (msg : List UInt8) (src : SkbSource) :
+theorem reception_history (h : ActorCoreHistorySafe Safe g) (msg : List UInt8) (src : SkbSource) :
     StateHistorySafe Safe (receptionWith (handshakeOps g) msg src) := by
   unfold receptionWith
   dsimp only [handshakeOps]
@@ -115,11 +114,11 @@ theorem reception_history (h : ActorHistorySafe Safe g) (msg : List UInt8) (src 
     | (driver_history_head Hooks.confirmation; exact h.confirmation _ _)
     | driver_state_history_step
 
-theorem handshake_history (h : ActorHistorySafe Safe g) :
+theorem handshake_history (h : ActorCoreHistorySafe Safe g) :
     StateHistorySafe Safe (handshakeObserved g) := by
   exact h.handshake _ _ h.session (keepalive_actor_history h)
 
-theorem receiveTail_actor_history (h : ActorHistorySafe Safe g) (pid : PeerId) (pkt : RxPacket) (confirmed : Bool) :
+theorem receiveTail_actor_history (h : ActorCoreHistorySafe Safe g) (pid : PeerId) (pkt : RxPacket) (confirmed : Bool) :
     StateHistorySafe Safe (receiveTailObserved g pid pkt confirmed) := by
   unfold receiveTailObserved
   repeat' first
@@ -129,7 +128,7 @@ theorem receiveTail_actor_history (h : ActorHistorySafe Safe g) (pid : PeerId) (
     | (driver_history_head Hooks.confirmation; exact h.confirmation _ _)
     | driver_state_history_step
 
-theorem consume_history (h : ActorHistorySafe Safe g) (pid : PeerId) (pkt : RxPacket) (ep : Endpoint) :
+theorem consume_history (h : ActorCoreHistorySafe Safe g) (pid : PeerId) (pkt : RxPacket) (ep : Endpoint) :
     StateHistorySafe Safe (consumeObserved g pid pkt ep) := by
   unfold consumeObserved
   repeat' first
@@ -140,6 +139,6 @@ theorem consume_history (h : ActorHistorySafe Safe g) (pid : PeerId) (pkt : RxPa
 
 theorem receiveTail_history (h : HooksHistorySafe Safe g) (pid : PeerId) (pkt : RxPacket) (confirmed : Bool) :
     StateHistorySafe Safe (receiveTailObserved g pid pkt confirmed) :=
-  receiveTail_actor_history h.actors pid pkt confirmed
+  receiveTail_actor_history h.core pid pkt confirmed
 
 end Leanux.Proofs.WG.TransmitSecurity.Driver

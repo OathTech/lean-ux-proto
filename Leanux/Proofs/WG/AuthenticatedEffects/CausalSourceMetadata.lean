@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.GroOccurrenceSource
 import Leanux.Proofs.WG.AuthenticatedEffects.FixtureEffectsScope
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalScopeProduct
 import Leanux.Proofs.WG.AuthenticatedEffects.HandshakeScopePrefix
@@ -25,6 +26,7 @@ inductive Cause where
   | fixture (trigger : FixtureEffects.Trigger)
   | handshake (kind : HandshakeCausal.Kind) (peer : PeerId)
   | candidate (id : SkbId) (packet : RxPacket)
+  | stackInput (entry : GroOccurrence.Entry)
   | timer (bound : UInt64) (peer : PeerId) (timer : PeerTimer) (entry : WheelEntry)
   | completion (peer : PeerId) (item : List SkbId)
   | sendWork (peer : PeerId) (entry : SendEntry)

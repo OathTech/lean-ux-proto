@@ -163,7 +163,7 @@ theorem timer_lift (pid : PeerId) (timer : PeerTimer) :
   · apply state_history_frame
     intro initial
     change Driver.StateHistorySafe (fun h => h = initial) (Driver.timerObserved quietHooks pid timer)
-    exact Driver.timer_history (quietHooks_history _).actors pid timer
+    exact Driver.timer_history (quietHooks_history _).core pid timer
 
 theorem product_native_via_nonce {g : PrefixM Exchange.Event α} {n : PrefixM Nonce.Allocation α}
     {empty : PrefixM Empty α} {action : Leanux.M α}
