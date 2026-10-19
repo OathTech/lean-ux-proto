@@ -22,10 +22,11 @@ theorem Fresh.append (fresh : Fresh h packets slot nonce) (packet : DataPacket)
   · intro e member
     simp only [List.mem_cons,List.not_mem_nil,or_false] at member
     rcases member with rfl | rfl <;> rfl
-  · refine ⟨?_,?_,?_⟩
+  · refine ⟨?_,?_,?_,?_⟩
     · simp [u]
     · simpa only [u,key] using same
     · simpa only [u,counter] using value
+    · simp [u,key]
   · rfl
 
 theorem reserve (slot : KeypairId) (packets : List DataPacket) :

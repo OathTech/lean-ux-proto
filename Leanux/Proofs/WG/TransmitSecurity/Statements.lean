@@ -29,6 +29,8 @@ import Leanux.Proofs.WG.TransmitSecurity.EncryptionPastTx
 import Leanux.Proofs.WG.TransmitSecurity.EncryptionHistoryFinal
 import Leanux.Proofs.WG.TransmitSecurity.ReservationAssignmentEncryption
 import Leanux.Proofs.WG.TransmitSecurity.BatchWorker
+import Leanux.Proofs.WG.TransmitSecurity.BatchNativeStaging
+import Leanux.Proofs.WG.TransmitSecurity.ReservationBankEncryption
 
 /-! Campaign 3, T1 initialized counter reservations and local AEAD contracts.
 Exclusive reservation tokens now reach every initialized AEAD occurrence;
@@ -654,5 +656,28 @@ theorem original_selected_batch_key_alignment
       r.head.value.keypair = r.read.value.keypair ∧ r.head.value.peer = r.read.value.peer ∧
       r.cipher.slot = r.read.value.keypair :=
   BatchWorker.selected before physical
+
+
+/-- Mixed peer/key fields in an admitted batch could encrypt a packet under
+its neighbour's key. Native staging preserves queued-batch alignment from
+explicit physical ownership and prior alignment, across all refusal arms. -/
+theorem original_staged_send_batch_alignment (pid : PeerId) :
+    Framing.Preserves (BatchCoherence.Native.Coherent locals active) (sendStagedPackets pid) :=
+  BatchCoherence.Native.send_coherent pid
+
+/-- Reusing an allocation-stamped nonce reservation across actual AEAD calls
+would break nonce safety. Any one certified assignment bank inherits exclusive
+reservation use from initialized packet origins and encryption identity; bank
+certification remains an explicit premise for a stronger material choice. -/
+theorem initialized_certified_reservation_bank (trace : Runner.Trace) (placeholders : Bool)
+    (bank : ReservationAssignments.Bank)
+    (certified : ReservationAssignments.BankValid
+      (runPrefixOuter (Journal.execute trace placeholders) []).2 bank) :
+    ReservationAssignments.Bank.Exclusive bank
+      (runPrefixOuter (Journal.execute trace placeholders) []).2 :=
+  ReservationAssignments.Bank.exclusive certified
+    (Journal.initialized_reservations trace placeholders)
+    (PacketOrigins.initialized trace placeholders)
+    (EncryptionHistory.Scheduler.initialized trace placeholders)
 
 end Leanux.Proofs.WG.TransmitSecurity

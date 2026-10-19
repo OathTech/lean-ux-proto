@@ -16,7 +16,8 @@ variable {u : Use} {h suffix : List Journal.Event}
 def Use.Valid (h : List Journal.Event) (u : Use) : Prop :=
   h[u.position]? = some (.nonce u.token) ∧
   ReservationReceipts.Token u.packet.keypair u.reservation u.token ∧
-  u.reservation.value = u.packet.nonce
+  u.reservation.value = u.packet.nonce ∧
+  h[u.position + 1]? = some (.reserved u.packet.keypair u.reservation)
 
 def Available (h : List Journal.Event) (position : Nat) : Prop :=
   ∀ index packets r, h[index]? = some (.allocated packets r) → index < position
@@ -37,7 +38,8 @@ theorem Use.Valid.bound (valid : u.Valid h) : u.position < h.length :=
   (List.getElem?_eq_some_iff.mp valid.1).choose
 
 theorem Use.Valid.append (valid : u.Valid h) : u.Valid (h ++ suffix) :=
-  ⟨(List.getElem?_append_left valid.bound).trans valid.1,valid.2⟩
+  ⟨(List.getElem?_append_left valid.bound).trans valid.1,valid.2.1,valid.2.2.1,
+    (List.getElem?_append_left (List.getElem?_eq_some_iff.mp valid.2.2.2).choose).trans valid.2.2.2⟩
 
 theorem Available.append (before : Available h position)
     (quiet : ∀ event ∈ suffix, ReservationHistory.allocation? event = none) :

@@ -29,10 +29,17 @@ theorem credit_valid (safe : Safe h) (found : h[index]? = some (.allocated packe
     (used : (credits h index)[packetIndex]? = some u) : u.Valid h := by
   have valid := ((credits_spec safe found).2.2 u (List.mem_of_getElem? used)).1
   have bound := credit_before safe found used
-  refine ⟨?_,valid.2⟩
-  have atPosition := valid.1
-  rw [List.getElem?_take_of_lt bound] at atPosition
-  exact atPosition
+  refine ⟨?_,valid.2.1,valid.2.2.1,?_⟩
+  · have atPosition := valid.1
+    rw [List.getElem?_take_of_lt bound] at atPosition
+    exact atPosition
+  · have atReceipt := valid.2.2.2
+    have receiptBound := (List.getElem?_eq_some_iff.mp atReceipt).choose
+    have beforeAllocation : u.position + 1 < index := by
+      simp only [List.length_take] at receiptBound
+      omega
+    rw [List.getElem?_take_of_lt beforeAllocation] at atReceipt
+    exact atReceipt
 
 theorem credit_token_injective (safe : Safe h) (nonces : (h.filterMap Journal.nonce?).Nodup)
     (first : h[firstIndex]? = some (.allocated firstPackets firstRun))
@@ -46,6 +53,6 @@ theorem credit_token_injective (safe : Safe h) (nonces : (h.filterMap Journal.no
 
 theorem credit_nonce (valid : u.Valid h) : u.token.nonce = u.packet.nonce := by
   obtain ⟨_,_,_,_,_,value⟩ := valid.2.1.2
-  exact value.trans valid.2.2
+  exact value.trans valid.2.2.1
 
 end Leanux.Proofs.WG.TransmitSecurity.ReservationAssignments

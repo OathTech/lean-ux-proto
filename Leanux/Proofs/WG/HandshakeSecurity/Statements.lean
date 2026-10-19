@@ -1,5 +1,7 @@
 import Leanux.Proofs.WG.HandshakeSecurity.ExchangeCausalInitialized
 import Leanux.Proofs.WG.HandshakeSecurity.ExchangeCausalSessionInitialized
+import Leanux.Proofs.WG.HandshakeSecurity.ResidentMaterialWorkerEntry
+import Leanux.Proofs.WG.HandshakeSecurity.ResidentMaterialWorker
 import Leanux.Proofs.WG.HandshakeSecurity.ExchangeDriverProjection
 import Leanux.Proofs.WG.HandshakeSecurity.ExchangeSend
 import Leanux.Proofs.WG.HandshakeSecurity.ExchangeReceive
@@ -1190,5 +1192,37 @@ theorem initialized_final_session_placement
       pre post pid r position success,
     ExchangeCausal.session_created_and_cleared facts config traffic trace placeholders
       pre post pid r position success⟩
+
+/-- Security: native session creation cannot replace the immutable key of an
+older packet reference below its entry allocation frontier. The conditional
+packet/key carrier survives the actual session, permitting either object to
+be deleted. This is a local preservation result; initialized carrier transport
+and the reservation-to-allocation connection remain separate obligations. -/
+theorem native_session_retains_packet_key_material (pid : PeerId) (history : List TransmitSecurity.Journal.Event) :
+    Leanux.Proofs.Framing.Preserves (ResidentMaterial.Inv history) (beginSession pid) :=
+  ResidentMaterial.session pid
+
+/-- Security: an actual worker AEAD uses the packet allocation's immutable key
+core when the source-selected batch head names that packet's key slot. Native
+key lookup supplies residency; the local entry carrier and batch homogeneity
+are explicit until their initialized source transport is composed. -/
+theorem native_worker_packet_key_binding (history : List TransmitSecurity.Journal.Event)
+    (headId : SkbId) (head : RunWitness DataPacket) (id : SkbId)
+    (read : RunWitness DataPacket) (world : World)
+    (before : ResidentMaterial.Inv history read.before.wg)
+    (readValid : read.Valid (liftWG (getTxSkb id))) (entered : read.after = world) :
+    ∀ r ∈ (runPrefix (TransmitSecurity.WorkerEncryption.crypt headId head id read) world []).2,
+      r.cipher.slot = r.read.value.keypair → ResidentMaterial.BoundReceipt history r :=
+  ResidentMaterial.crypt_bindings headId head id read world before readValid entered
+
+/-- Security: the complete native encryption worker retains allocation-time
+key-material evidence for every emitted AEAD receipt, even when a later step
+stops. Publication and ciphertext writes preserve the resident-packet carrier;
+the entry carrier and per-packet batch key equality remain explicit here. -/
+theorem native_encryption_worker_retains_key_material
+    (history : List TransmitSecurity.Journal.Event) (item : Option (List SkbId)) :
+    PrefixPreserves (ResidentMaterial.WorkerInv history) (ResidentMaterial.Good history)
+      (TransmitSecurity.WorkerEncryption.tail item) :=
+  ResidentMaterial.tail_safe item
 
 end Leanux.Proofs.WG.HandshakeSecurity

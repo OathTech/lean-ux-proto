@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.RetirementSecurity.HolderOuterTraffic
+import Leanux.Proofs.WG.RetirementSecurity.HolderScheduledTimers
 import Leanux.Proofs.WG.RetirementSecurity.HolderScheduler
 import Leanux.Proofs.WG.RetirementSecurity.HolderScheduledRx
 import Leanux.Proofs.WG.RetirementSecurity.HolderPoll
@@ -1854,5 +1856,64 @@ theorem original_scheduler_joint_key_account (stack : Option Worker) (worker : W
       (HolderScheduled.Inv initial loans before temporary locals active)
       OwnerChecks.Safe (Queues.RxHistory.nestedResched worker) :=
   ⟨HolderScheduled.schedule stack,HolderScheduled.nested worker⟩
+
+/-- Original deferred send and timer waits conserve exact key credit through
+recorded wheel selection, all five callbacks, actual queued work payments
+and nested crypt/RX drains. Refused clear work repays only its own peer loan;
+slot clearing is not conflated with final key deallocation. The incoming
+account remains explicit until the initialized outer-source join. -/
+theorem original_deferred_joint_key_accounts (j : UInt64) :
+    Leanux.Proofs.Logged.PrefixPreserves
+      (HolderScheduled.Inv initial loans before temporary locals active)
+      OwnerChecks.Safe Queues.RxHistory.runSendWorkers ∧
+    Leanux.Proofs.Logged.PrefixPreserves
+      (HolderScheduled.Inv initial loans before temporary locals active)
+      OwnerChecks.Safe (Queues.RxHistory.runTimers j) ∧
+    Leanux.Proofs.Logged.PrefixPreserves
+      (HolderScheduled.Inv initial loans before temporary locals active)
+      OwnerChecks.Safe (Queues.RxHistory.runTimersPlaceholder j) ∧
+    Leanux.Proofs.Logged.PrefixPreserves
+      (HolderScheduled.Inv initial loans before temporary locals active)
+      OwnerChecks.Safe Queues.RxHistory.afterXmit ∧
+    Leanux.Proofs.Logged.PrefixPreserves
+      (HolderScheduled.Inv initial loans before temporary locals active)
+      OwnerChecks.Safe Queues.RxHistory.idleTimers ∧
+    Leanux.Proofs.Logged.PrefixPreserves
+      (HolderScheduled.Inv initial loans before temporary locals active)
+      OwnerChecks.Safe Queues.RxHistory.afterAdvance :=
+  ⟨HolderScheduled.send_all,HolderScheduled.runTimers initial loans before j,
+    HolderScheduled.runTimersPlaceholder initial loans before j,HolderScheduled.after_xmit,
+    HolderScheduled.idleTimers initial loans before,HolderScheduled.afterAdvance initial loans before⟩
+
+/-- Native fixture injection preserves exact key credit through actual
+admission, NET_RX entry and the complete crypt drain. The same final guard
+establishes the empty receive ledger; key credit is derived independently of
+that emptiness. The input account is explicit pending outer initialization. -/
+theorem original_inject_joint_key_account
+    (entry : HolderOuter.Inv carriers loans temporary locals active h w)
+    (run : Leanux.Proofs.Logged.runPrefix (Queues.RxHistory.inject family port msg tos ll dest) w h=
+      (.ok (result,v),k)) : HolderOuter.Inv [] loans temporary locals active k v :=
+  HolderOuter.inject_normal entry run
+
+/-- Native flood processing conserves exact key credit for every ordered
+packet occurrence and its inline poll, including partial placeholder drains.
+The source outcome chooses the remaining receive ledger; no output funding
+or drain-completeness premise is substituted for the actual execution. -/
+theorem original_flood_joint_key_account
+    (entry : HolderOuter.Inv carriers loans temporary locals active h w)
+    (run : Leanux.Proofs.Logged.runPrefix (Queues.RxHistory.flood count port family messages) w h=
+      (.ok (result,v),k)) :
+    ∃next,Queues.RxCredits.FloodAccount.Outcome carriers next count port family messages w v h k result ∧
+      HolderOuter.Inv next loans temporary locals active k v := HolderOuter.flood_normal entry run
+
+/-- Original mixed TX/RX batches conserve exact key credit across actual
+packetization, admission, inline polling and deferred work. The native source
+certificate identifies the final receive ledger and preserves repeated equal
+packets as distinct occurrences. Initialized outer closure remains separate. -/
+theorem original_batch_joint_key_account (entries : List Env.BatchItem)
+    (entry : HolderOuter.Inv carriers loans temporary locals active h w)
+    (run : Leanux.Proofs.Logged.runPrefix (Queues.RxHistory.batch entries) w h=(.ok (result,v),k)) :
+    ∃next,Queues.RxCredits.BatchAccount.Outcome carriers next entries w v h k result ∧
+      HolderOuter.Inv next loans temporary locals active k v := HolderOuter.batch_normal entries entry run
 
 end Leanux.Proofs.WG.RetirementSecurity

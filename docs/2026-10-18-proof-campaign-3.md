@@ -454,6 +454,34 @@ proof-source hashes stayed unchanged through validation. Main, the mirror and
 existing main proof files remain unchanged.
 All six outcomes remain open.
 
+Checkpoint twenty-two passes complete validation. The same actual nonce position now names
+its adjacent native reservation receipt. Every native staged-send path preserves
+resident-batch peer/key alignment under the explicit physical/alignment entry
+carrier. Actual allocation preserves old queued cells and constructs the new
+aligned batch; admission and create-data cleanup retain the invariant through
+EPIPE, ENOSPC and dead-peer refusal. Initialized transport remains open.
+A fixed assignment bank generalizes the positional/token exclusivity theorem
+so a stronger material certificate can choose its witnesses consistently. Its
+certification remains explicit; the earlier weaker exclusive-assignment result
+does not establish reservation-to-AEAD material continuity by itself.
+Native existing-key material frames, actual allocation and the full encryption
+tail retain conditional material certificates through Stop. Delayed-occurrence
+transport now includes the actual handshake/send actors and final TX completion.
+Native send/clear work, timer scans and inject/flood/mixed-batch traffic now join
+key credits to the exact source-selected peer ledger; outer initialization is
+still open. Adopted owned pins are T3 `b6df1e98`, T4 `1914a691`, and T6 `7f5e5c60`.
+The proof gate passes 1929 jobs and 1291 terminal declarations across thirteen
+root modules, with only the three permitted axioms. All twelve witness recipes
+and fresh-root kernel replay pass; the model build passes 130 jobs. The unit
+suite completes 131 tests with one configured-kernel skip (22.823 seconds).
+All 1873 proof-source hashes stayed unchanged through validation. Main, the
+mirror and existing main proof files remain unchanged. No mirror finding is
+asserted; all six outcomes remain open.
+
+[AGENT 2026-10-19] Material binding uses one certified assignment bank for each
+actual allocation. Independent existential witness choices do not identify the
+same reservation across the exclusivity and key-material claims.
+
 ## Validation
 
 Both explicit coherent replays pass: original runner accepted, observer JSON

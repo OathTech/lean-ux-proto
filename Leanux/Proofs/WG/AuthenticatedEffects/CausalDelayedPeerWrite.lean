@@ -71,12 +71,12 @@ elab "causal_delayed_read_write_head" : tactic => withMainContext do
   unless action.isAppOf ``Bind.bind do throwError "not a read continuation"
   let args := action.getAppArgs
   let read := args[args.size - 2]!.consumeMData.headBeta
-  unless read.isAppOf ``TimerEffects.Ops.step do throwError "not a source read"
+  unless read.isAppOf ``TimerEffects.Ops.step || read.isAppOf ``liftWGPrefix do throwError "not a source read"
   unless read.getAppArgs.back!.isAppOf ``getPeer do throwError "not a peer read"
   let .lam _ _ body _ := args.back!.consumeMData | throwError "not a continuation lambda"
   let body := body.consumeMData.headBeta
   let write := if body.isAppOf ``Bind.bind then body.getAppArgs[body.getAppArgs.size - 2]! else body
-  unless write.isAppOf ``TimerEffects.Ops.step do throwError "not an immediate source write"
+  unless write.isAppOf ``TimerEffects.Ops.step || write.isAppOf ``liftWGPrefix do throwError "not an immediate source write"
   unless write.getAppArgs.back!.isAppOf ``setPeer do throwError "not a peer write"
 
 end Leanux.Proofs.WG.AuthenticatedEffects.CausalJournal.Delayed
