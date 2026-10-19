@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.Index.TransmitAmbientRulesSource
+import Leanux.Proofs.WG.Index.StackAmbientRulesSource
 import Leanux.Proofs.WG.Index.StagingIndexSource
 import Leanux.Proofs.WG.Index.TimerCoreSource
 import Leanux.Proofs.WG.Noise.PendingStackSource
@@ -61,37 +63,61 @@ theorem wgXmit_preserves_source (P : WGWorld→Prop) (family addr : Nat)
     (pay : ∀peer,Preserves P (peerPut peer))
     (errors : Preserves P (modifyDev fun d=>{d with txErrors:=d.txErrors+1})) :
     Preserves P (wgXmit family addr packets mtu) := by
-  have getPeerRule (pid : PeerId) : Preserves P (getPeer pid) :=
-    hoare_consequence (getPeer_spec pid P) (fun _ h=>h) (fun _ _ h=>h.1)
-  have loopback (sites : List HiddenSite) (raised : Bool) :
-      Preserves P (loopbackSend sites raised) := store _ (loopbackSend_kernel sites raised)
-  have ambient {α : Type} (a : AmbientM α) : Preserves P (monadLift a : WG.M α) :=
-    hoare_liftAmbient a P
-  have routing {α : Type} (a : Net.M α) : Preserves P (monadLift a : WG.M α) :=
-    store _ (liftRouting_sameWGStore a)
-  have loop {α β : Type} (xs : List α) (init : β) (f : α→β→WG.M (ForInStep β))
-      (hf : ∀x b,Preserves P (f x b)) : Preserves P (forIn xs init f) :=
-    list_view_spec id P xs init f hf
-  rw [wgXmitSource_eq]
-  rxstack_preserves_source [wgXmitSource,WG.andM,branch,invariant,skipCutSites,envOk]
-    using [getPeerRule,lookup,trim,splice,stage,pay,loopback,ambient,routing,errors,loop]
+  apply ReceiveCompletion.Rules.to_native
+  apply TransmitAmbientRules.wgXmit_rule
+  · intro site value
+    exact ReceiveCompletion.Rules.of_native (hoare_liftAmbient (AmbientM.branch site value) P)
+  · exact ReceiveCompletion.Rules.of_native lookup
+  · intro pid; exact ReceiveCompletion.Rules.of_native (trim pid)
+  · intro pid xs; exact ReceiveCompletion.Rules.of_native (splice pid xs)
+  · intro pid; exact ReceiveCompletion.Rules.of_native (stage pid)
+  · intro peer; exact ReceiveCompletion.Rules.of_native (pay peer)
+  · intro sites raised; exact ReceiveCompletion.Rules.of_native
+      (store _ (loopbackSend_kernel sites raised))
+  · intro src dst; exact ReceiveCompletion.Rules.of_native
+      (store _ (liftRouting_sameWGStore (Net.routeOutput4 src dst)))
+  · intro dev addr; exact ReceiveCompletion.Rules.of_native
+      (store _ (liftRouting_sameWGStore (Net.Fib.inetDevAddrType dev addr)))
+  · intro dev; exact ReceiveCompletion.Rules.of_native
+      (store _ (liftRouting_sameWGStore (Net.neighbourClassify dev)))
+  · intro sites; exact ReceiveCompletion.Rules.of_native
+      (hoare_liftAmbient (AmbientM.skipCutSites sites) P)
+  · intro site; exact ReceiveCompletion.Rules.of_native
+      (hoare_liftAmbient (AmbientM.envOk site) P)
+  · exact ReceiveCompletion.Rules.of_native errors
+
 
 theorem stack_preserves_source (P : World→Prop) (bytes : List UInt8)
     (store : ∀w v,productStoreView v=productStoreView w→P w→P v)
     (send : ∀family addr packets mtu,Preserves P (liftWG (wgXmit family addr packets mtu))) :
     PrefixPreserves (fun (_ : List Empty)=>P) (fun _=>True)
       (PendingStack.stackSource bytes) := by
-  have safe : ∀(_ : List Empty) w,P w→True := fun _ _ _=>True.intro
-  unfold PendingStack.stackSource
-  apply stackReceiveWith_preserves safe (fun _=>store)
-  intro packet
-  apply receive4With_preserves safe (fun _=>store)
-  intro dst packet
-  apply reply4With_preserves safe (fun _=>store)
-  intro family addr packets mtu
-  unfold PendingStack.transmit
-  apply PrefixEnsures.lift (Q:=fun _ _=>P) _ safe
-  intro _ w result v pre run
-  exact (hoare_iff_run _ _ _).mp (send family addr packets mtu) w result v pre run
+  have frame {α : Type} (action : Leanux.M α) (same : SameProductStore action) :
+      Preserves P action := by
+    apply (hoare_iff_run _ _ _).mpr
+    intro w value after pre run
+    exact store w after ((ProjectedAction.iff_run _ _ _).mp same w value after run) pre
+  have routing {α : Type} (action : Net.M α) :
+      Preserves P (liftWG (liftRouting action)) :=
+    frame _ (liftWG_sameProductStore _ (liftRouting_sameWGStore action))
+  have ambient {α : Type} (action : AmbientM α) :
+      Preserves P (liftAmbient action) :=
+    frame _ (fun state=>productAmbient_spec action
+      (fun w=>productStoreView w=state) (fun _ _ hi=>hi))
+  apply StackAmbientRules.stack_rule P bytes send
+  · intro sites; exact ambient (AmbientM.skipCut sites)
+  · intro src dst; exact routing _
+  · exact frame _ (fun state=>productGetDev_spec (fun s=>s=state))
+  · intro dev; exact routing _
+  · intro src dst; exact routing _
+  · exact frame _ (fun state=>productGetWG_spec (fun s=>s=state))
+  · intro f
+    apply frame
+    apply (ProjectedAction.iff_run _ _ _).mpr
+    intro w value after run
+    cases run
+    rfl
+  · intro pkt; exact frame _ (stackReceive6_sameKernel pkt)
+
 
 end Leanux.Proofs.WG.Index.TransmitCore

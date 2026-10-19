@@ -1,3 +1,11 @@
+import Leanux.Proofs.WG.Progress.TransmitRecordClaims
+import Leanux.Proofs.WG.Progress.NapiSuffixClaims
+import Leanux.Proofs.WG.Progress.HandshakeSuffixClaims
+import Leanux.Proofs.WG.Progress.StackSuffixClaims
+import Leanux.Proofs.WG.Progress.SocketSuffixClaims
+import Leanux.Proofs.WG.Progress.EncryptSuffixClaims
+import Leanux.Proofs.WG.Progress.RoutingIPv4SuffixClaims
+import Leanux.Proofs.WG.Progress.StackLeafSuffixClaims
 import Leanux.Proofs.WG.Progress.ConsumeSuffixClaims
 import Leanux.Proofs.WG.Progress.ReceiveTerminalClaims
 import Leanux.Proofs.WG.Progress.ClearWorkerRecordClaims
@@ -1188,5 +1196,226 @@ theorem original_product_consume_data_done_record_suffix (records : List HiddenR
       (fun s=>s.ambient.hidden=some records)
       (fun _ s=>RecordSuffix.Tail records s.ambient.hidden) :=
   RecordSuffix.consumeDataDone_product_record_suffix records pid pkt ep
+
+
+/-- The complete original call preserves a supplied-record suffix on normal return. -/
+theorem original_create_initiation_record_suffix (records : List HiddenRecord) (pid : PeerId) :
+    Campaign2.Ensures (createInitiation pid)
+      (fun s=>s.ambient.hidden=some records)
+      (fun _ s=>RecordSuffix.Tail records s.ambient.hidden) :=
+  RecordSuffix.createInitiation_record_suffix records pid
+
+/-- The complete original call preserves a supplied-record suffix on normal return. -/
+theorem original_create_response_record_suffix (records : List HiddenRecord) (pid : PeerId) :
+    Campaign2.Ensures (createResponse pid)
+      (fun s=>s.ambient.hidden=some records)
+      (fun _ s=>RecordSuffix.Tail records s.ambient.hidden) :=
+  RecordSuffix.createResponse_record_suffix records pid
+
+/-- The complete original call preserves a supplied-record suffix on normal return. -/
+theorem original_session_record_suffix (records : List HiddenRecord) (pid : PeerId) :
+    Campaign2.Ensures (beginSession pid)
+      (fun s=>s.ambient.hidden=some records)
+      (fun _ s=>RecordSuffix.Tail records s.ambient.hidden) :=
+  RecordSuffix.beginSession_record_suffix records pid
+
+/-- The complete original call preserves a supplied-record suffix on normal return. -/
+theorem original_consume_initiation_record_suffix (records : List HiddenRecord) (message : List UInt8) :
+    Campaign2.Ensures (consumeInitiation message)
+      (fun s=>s.ambient.hidden=some records)
+      (fun _ s=>RecordSuffix.Tail records s.ambient.hidden) :=
+  RecordSuffix.consumeInitiation_record_suffix records message
+
+/-- The complete original call preserves a supplied-record suffix on normal return. -/
+theorem original_consume_response_record_suffix (records : List HiddenRecord) (message : List UInt8) :
+    Campaign2.Ensures (consumeResponse message)
+      (fun s=>s.ambient.hidden=some records)
+      (fun _ s=>RecordSuffix.Tail records s.ambient.hidden) :=
+  RecordSuffix.consumeResponse_record_suffix records message
+
+/-- The complete original call preserves a supplied-record suffix on normal return. -/
+theorem original_cookie_consume_record_suffix (records : List HiddenRecord) (message : List UInt8) :
+    Campaign2.Ensures (cookieMessageConsume message)
+      (fun s=>s.ambient.hidden=some records)
+      (fun _ s=>RecordSuffix.Tail records s.ambient.hidden) :=
+  RecordSuffix.cookieMessageConsume_record_suffix records message
+
+/-- The complete original call preserves a supplied-record suffix on normal return. -/
+theorem original_handshake_response_record_suffix (records : List HiddenRecord) (pid : PeerId) :
+    Campaign2.Ensures (sendHandshakeResponse pid)
+      (fun s=>s.ambient.hidden=some records)
+      (fun _ s=>RecordSuffix.Tail records s.ambient.hidden) :=
+  RecordSuffix.sendHandshakeResponse_record_suffix records pid
+
+/-- The complete original call preserves a supplied-record suffix on normal return. -/
+theorem original_handshake_initiation_record_suffix (records : List HiddenRecord) (pid : PeerId) :
+    Campaign2.Ensures (sendHandshakeInitiation pid)
+      (fun s=>s.ambient.hidden=some records)
+      (fun _ s=>RecordSuffix.Tail records s.ambient.hidden) :=
+  RecordSuffix.sendHandshakeInitiation_record_suffix records pid
+
+/-- The complete original call preserves a supplied-record suffix on normal return. -/
+theorem original_handshake_receive_record_suffix (records : List HiddenRecord) (message : List UInt8) (src : SkbSource) :
+    Campaign2.Ensures (receiveHandshakePacket message src)
+      (fun s=>s.ambient.hidden=some records)
+      (fun _ s=>RecordSuffix.Tail records s.ambient.hidden) :=
+  RecordSuffix.receiveHandshakePacket_record_suffix records message src
+
+/-- The complete original call preserves a supplied-record suffix on normal return. -/
+theorem original_receive_step_record_suffix (records : List HiddenRecord)  :
+    Campaign2.Ensures (receiveStep )
+      (fun s=>s.ambient.hidden=some records)
+      (fun _ s=>RecordSuffix.Tail records s.ambient.hidden) :=
+  RecordSuffix.receiveStep_record_suffix records
+
+/-- Every normally returning original receive activation strictly consumes supplied records,
+including activations that start with queued packets. -/
+theorem original_receive_activation_record_decrease (a : Activation)
+    (worker : a.worker=.receiveWorker) (records : List HiddenRecord) :
+    Campaign2.Product.Ensures (Activation.run a)
+      (fun s=>s.ambient.hidden=some records)
+      (fun _ s=>RecordSuffix.StrictTail records s.ambient.hidden) :=
+  RecordSuffix.receive_activation_record_decrease a worker records
+
+/-- The selected original handshake send dispatch strictly consumes records on normal return. -/
+theorem original_send_worker_record_decrease (records : List HiddenRecord) :
+    Campaign2.Product.Ensures Env.runOneSendWorker
+      (fun s=>s.ambient.hidden=some records)
+      (fun _ s=>RecordSuffix.StrictTail records s.ambient.hidden) :=
+  RecordSuffix.send_worker_record_decrease records
+
+/-- Original inner delivery has concrete routing, loopback and WG transmit dependencies. -/
+theorem original_inner_delivery_record_suffix (records : List HiddenRecord) (bytes : List UInt8) :
+    Campaign2.Product.Ensures (Env.deliverInner bytes)
+      (fun s=>s.ambient.hidden=some records)
+      (fun _ s=>RecordSuffix.Tail records s.ambient.hidden) :=
+  RecordSuffix.deliverInner_record_suffix records bytes
+
+/-- Original WG transmission preserves supplied-record suffixes through every normal arm. -/
+theorem original_xmit_record_suffix (records : List HiddenRecord) (family addr : Nat)
+    (packets : List Packet) (mtu : Nat) :
+    Campaign2.Ensures (wgXmit family addr packets mtu)
+      (fun s=>s.ambient.hidden=some records)
+      (fun _ s=>RecordSuffix.Tail records s.ambient.hidden) :=
+  RecordSuffix.wgXmit_record_suffix records family addr packets mtu
+
+/-- The actual packet encryption has its concrete checksum dependency discharged. -/
+theorem original_encrypt_packet_record_suffix (records : List HiddenRecord)
+    (key : KeypairId) (packet : DataPacket) :
+    Campaign2.Product.Ensures (encryptPacket Env.checksumHelp key packet)
+      (fun s=>s.ambient.hidden=some records)
+      (fun _ s=>RecordSuffix.Tail records s.ambient.hidden) :=
+  RecordSuffix.encryptPacket_record_suffix records key packet
+
+/-- The actual socket caller has concrete IPv4 and IPv6 routing and loopback contracts. -/
+theorem original_socket_packet_record_suffix (records : List HiddenRecord) (pid : PeerId) (bytes : List UInt8) (ds : Nat) :
+    Campaign2.Ensures (sendSkbToPeer pid bytes ds)
+      (fun s=>s.ambient.hidden=some records)
+      (fun _ s=>RecordSuffix.Tail records s.ambient.hidden) :=
+  RecordSuffix.sendSkbToPeer_record_suffix records pid bytes ds
+
+/-- The actual socket caller has concrete IPv4 and IPv6 routing and loopback contracts. -/
+theorem original_socket_buffer_record_suffix (records : List HiddenRecord) (pid : PeerId) (bytes : List UInt8) :
+    Campaign2.Ensures (sendBufferToPeer pid bytes)
+      (fun s=>s.ambient.hidden=some records)
+      (fun _ s=>RecordSuffix.Tail records s.ambient.hidden) :=
+  RecordSuffix.sendBufferToPeer_record_suffix records pid bytes
+
+/-- The actual socket caller has concrete IPv4 and IPv6 routing and loopback contracts. -/
+theorem original_socket_reply_record_suffix (records : List HiddenRecord) (src : SkbSource) (bytes : List UInt8) :
+    Campaign2.Ensures (sendBufferAsReplyToSkb src bytes)
+      (fun s=>s.ambient.hidden=some records)
+      (fun _ s=>RecordSuffix.Tail records s.ambient.hidden) :=
+  RecordSuffix.sendBufferAsReplyToSkb_record_suffix records src bytes
+
+/-- The original poll uses concrete consume/GRO/inner-delivery suffix contracts. -/
+theorem original_poll_record_suffix (records : List HiddenRecord) (pid : PeerId) (budget : Nat) :
+    Campaign2.Product.Ensures (rxPoll pid budget (fun packets=>packets.forM Env.deliverInner))
+      (fun s=>s.ambient.hidden=some records)
+      (fun _ s=>RecordSuffix.Tail records s.ambient.hidden) :=
+  RecordSuffix.rxPoll_record_suffix records pid budget
+
+/-- The original NAPI caller preserves supplied-record suffixes on normal return. -/
+theorem original_napi_softirq_record_suffix (records : List HiddenRecord) :
+    Campaign2.Product.Ensures Env.napiSoftirq
+      (fun s=>s.ambient.hidden=some records)
+      (fun _ s=>RecordSuffix.Tail records s.ambient.hidden) :=
+  RecordSuffix.softirq_record_suffix records
+
+/-- The original NAPI caller preserves supplied-record suffixes on normal return. -/
+theorem original_napi_inline_record_suffix (records : List HiddenRecord) :
+    Campaign2.Product.Ensures Env.pollScheduledInline
+      (fun s=>s.ambient.hidden=some records)
+      (fun _ s=>RecordSuffix.Tail records s.ambient.hidden) :=
+  RecordSuffix.inline_record_suffix records
+
+/-- The original NAPI caller preserves supplied-record suffixes on normal return. -/
+theorem original_napi_irq_exit_record_suffix (records : List HiddenRecord) :
+    Campaign2.Product.Ensures Env.napiIrqExit
+      (fun s=>s.ambient.hidden=some records)
+      (fun _ s=>RecordSuffix.Tail records s.ambient.hidden) :=
+  RecordSuffix.irqExit_record_suffix records
+
+/-- Every normally returning original encrypt activation strictly consumes
+supplied records, with the actual NAPI callbacks discharged. -/
+theorem original_encrypt_activation_record_decrease (a : Activation)
+    (worker : a.worker=.encryptWorker) (records : List HiddenRecord) :
+    Campaign2.Product.Ensures (Activation.run a)
+      (fun s=>s.ambient.hidden=some records)
+      (fun _ s=>RecordSuffix.StrictTail records s.ambient.hidden) :=
+  RecordSuffix.encryptActivation_record_strict a worker records
+
+/-- Every normally returning original decrypt activation strictly consumes
+supplied records, with the actual NAPI callbacks discharged. -/
+theorem original_decrypt_activation_record_decrease (a : Activation)
+    (worker : a.worker=.decryptWorker) (records : List HiddenRecord) :
+    Campaign2.Product.Ensures (Activation.run a)
+      (fun s=>s.ambient.hidden=some records)
+      (fun _ s=>RecordSuffix.StrictTail records s.ambient.hidden) :=
+  RecordSuffix.decryptActivation_record_strict a worker records
+
+
+/-- Original transmit completion retains supplied-record suffixes through
+its concrete socket, timer, key freshness and release calls. -/
+theorem original_data_done_record_suffix (records : List HiddenRecord)
+    (pid : PeerId) (item : List SkbId) :
+    Campaign2.Ensures (createDataDone pid item)
+      (fun s=>s.ambient.hidden=some records)
+      (fun _ s=>RecordSuffix.Tail records s.ambient.hidden) :=
+  RecordSuffix.createDataDone_record_suffix records pid item
+
+/-- The complete original transmit step retains a supplied-record suffix. -/
+theorem original_tx_step_record_suffix (records : List HiddenRecord) (pid : PeerId) :
+    Campaign2.Ensures (txStep pid)
+      (fun s=>s.ambient.hidden=some records)
+      (fun _ s=>RecordSuffix.Tail records s.ambient.hidden) :=
+  RecordSuffix.txStep_record_suffix records pid
+
+/-- The actual preceding encrypt iteration and NAPI callbacks preserve the
+record suffix used by the subsequent transmit iteration. -/
+theorem original_crypt_ahead_record_suffix (records : List HiddenRecord) (pid : PeerId) :
+    Campaign2.Product.Ensures (Env.cryptAhead pid)
+      (fun s=>s.ambient.hidden=some records)
+      (fun _ s=>RecordSuffix.Tail records s.ambient.hidden) :=
+  RecordSuffix.cryptAhead_record_suffix records pid
+
+/-- The original transmit activation iteration retains records, and a yielded
+return strictly consumes them, including its actual crypt-ahead prelude. -/
+theorem original_tx_iteration_record_effect (a : Activation) (worker : a.worker=.txWorker)
+    (records : List HiddenRecord) :
+    Campaign2.Product.Ensures (Activation.iter a)
+      (fun s=>s.ambient.hidden=some records)
+      (fun result s=>RecordSuffix.Tail records s.ambient.hidden ∧
+        (result=.yielded→RecordSuffix.StrictTail records s.ambient.hidden)) :=
+  RecordSuffix.txActivation_record_effect a worker records
+
+/-- Every normally returning original transmit activation strictly consumes
+supplied records with all actual encrypt/NAPI callbacks discharged. -/
+theorem original_tx_activation_record_decrease (a : Activation) (worker : a.worker=.txWorker)
+    (records : List HiddenRecord) :
+    Campaign2.Product.Ensures (Activation.run a)
+      (fun s=>s.ambient.hidden=some records)
+      (fun _ s=>RecordSuffix.StrictTail records s.ambient.hidden) :=
+  RecordSuffix.txActivation_record_strict a worker records
 
 end Leanux.Proofs.WG.Progress
