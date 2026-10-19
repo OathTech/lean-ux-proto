@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.Config.RequestCompleteClaims
+import Leanux.Proofs.WG.Config.RequestEmptyReadbackClaims
 import Leanux.Proofs.WG.Config.RequestScalarReadbackClaims
 import Leanux.Proofs.WG.Config.ScalarCommandExpectationClaims
 import Leanux.Proofs.WG.Config.GetterScalarOtherClaims
@@ -3729,5 +3731,49 @@ theorem original_mixed_scalar_getter (cs : Queues.RxCredits.Ledger)
         final.wg.nlSock7=socketReadbackFinal initial.wg.nlSock7 d ∧
         CursorHeld d (mixedPagesDevice d pages) none) :=
   GetterScalar.Expectation.certificate_mixed_scalar_readback cs loans attrs shape initial inspected certificate pre ret middle normal r member kind before first selected d present ready headerFits cursorData idle emptyQueue within outcome matched
+
+open RequestOrder in
+/-- An actual request rejected before any update leaves WireGuard state unchanged and its actual following getter returns the initial mixed JSON and exact socket/cursor effects under explicit static getter bounds. -/
+theorem original_rejected_update_mixed_readback (attrs : DeviceAttrs) (d : Device) (sock : NlSock)
+    (data : DeviceDumpReadable d)
+    (ready : MixedPageReady d (routingReadPeer d) (routingReadNode d)
+      (mixedInitialRows d (routingReadPeer d)) {hasWg := true})
+    (headerFits : devicePrefixSpace d ≤ NLMSG_GOODSIZE)
+    (cursorData : MixedPlanCursorData d
+      (mixedPages d (routingReadPeer d) (routingReadNode d)
+        (mixedInitialRows d (routingReadPeer d)) {hasWg := true} ready))
+    (idle : sock.cbRunning = false) (emptyQueue : sock.queue = [])
+    (within : mixedPageReceiveCount
+      (mixedPages d (routingReadPeer d) (routingReadNode d)
+        (mixedInitialRows d (routingReadPeer d)) {hasWg := true} ready) ≤ 4096) :
+    let pages := mixedPages d (routingReadPeer d) (routingReadNode d)
+      (mixedInitialRows d (routingReadPeer d)) {hasWg := true} ready
+    Campaign2.Observes (do
+      let ret ← wgSetDevice attrs
+      let dump ← wgGetDevice (byIndex d)
+      pure (ret,dump))
+      (fun s => s.wg.device = some d ∧ ClaimView.selectsDevice s d ∧ s.wg.nlSock7 = sock)
+      (fun initial outcome => ∃ inspected : Inspection,
+        Certificate attrs initial inspected ∧ ReadbackMatches attrs d initial inspected outcome ∧
+        ∀ ret middle, inspected.outcome = .ok (ret,middle) → inspected.receipts = [] →
+          middle.wg = initial.wg ∧
+          ∃ final, outcome = .ok ((ret,.ok (mixedGetterJson d
+            (routingReadPeer d) (routingReadNode d))),final) ∧
+            final.wg.device = some (mixedPagesDevice d pages) ∧
+            final.wg.nlSock7 = socketReadbackFinal sock d ∧
+            CursorHeld d (mixedPagesDevice d pages) none) :=
+  RequestOrder.original_empty_mixed_readback attrs d sock data ready headerFits cursorData idle emptyQueue within
+
+
+open RequestOrder Queues.RxCredits in
+/-- Every normal mixed request is classified as unchanged rejection, exact nonzero-port refusal, or a completed key-stage path with original-entry header/private fields and ordered surviving scalar effects. -/
+theorem original_complete_mixed_request_scalars (cs : Ledger) (loans : Reservations)
+    (attrs : DeviceAttrs) (before : Device) :
+    Campaign2.Observes (wgSetDevice attrs)
+      (fun initial=>OwnerConfiguration.ProjectedEntry cs loans initial ∧ initial.wg.device=some before)
+      (fun initial outcome=>∃result:Inspection,result.outcome=outcome ∧
+        Certificate attrs initial result ∧ ∀ret final,result.outcome=.ok (ret,final)→
+          NormalScalarResult attrs before initial result ret final) :=
+  RequestOrder.original_request_complete_scalars cs loans attrs before
 
 end Leanux.Proofs.WG.Config
