@@ -156,13 +156,16 @@ source finding.
 
 1. The separate `StagedCompletePrefix` contracts retain all logical journal
    prefixes and require explicit new-cut certificates from active sources.
-   Quiet-emitter adapters are proved; whole initialized transport is not yet
-   claimed. `CompleteRunner.reached` explicitly covers the returned journal.
+   Quiet-emitter adapters and active admission, selection, allocation and
+   disposal cuts are proved. Product and scheduler composition retain prior
+   certificates; whole initialized transport remains open. `CompleteRunner.reached` explicitly covers the returned journal.
 2. Selected stops retain the recorded take and native ownership. The accounted
    branch still needs its source-cut relationship preserved through completion
    and outer composition. Comments that described its existential snapshot as
    connected to an execution have been corrected. This documentation repair
-   does not close the proof obligation. Native intervals between receipts are
-   part of the same outstanding work.
+   does not close the proof obligation. `CompleteRunner.normal_cut` now
+   establishes the actual initialized normal endpoint, while source-matched
+   completion projections retain branch-specific frontiers. General stopped
+   provenance and native intervals between receipts remain open.
 
 No mirror change or narrower T2 outcome is adopted.
