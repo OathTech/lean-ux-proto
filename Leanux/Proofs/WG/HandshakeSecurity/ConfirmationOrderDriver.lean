@@ -24,6 +24,7 @@ structure QuietHooksSafe (Good : List E → Prop) (hooks : Driver.Hooks E) : Pro
   prepare : ProductHistorySafe Good hooks.prepare
   counterCheck : ∀ skb pkt, ProductHistorySafe Good (hooks.counterCheck skb pkt)
   timerSelected : ∀ d j pid t we, ProductHistorySafe Good (hooks.timerSelected d j pid t we)
+  timerFinished : ∀ token, ProductHistorySafe Good (hooks.timerFinished token)
   selection : ∀ pid, StateHistorySafe Good (hooks.selection pid)
   session : ∀ pid, StateHistorySafe Good (hooks.session pid)
   reserve : ∀ kid, StateHistorySafe Good (hooks.reserve kid)
@@ -49,6 +50,7 @@ private theorem quiet_hooks (h : QuietHooksSafe Good hooks) :
   prepare := h.prepare
   counterCheck := h.counterCheck
   timerSelected := h.timerSelected
+  timerFinished := h.timerFinished
   selection := h.selection
   confirmation := fun _ _ => Driver.History.state_lift _
   session := h.session

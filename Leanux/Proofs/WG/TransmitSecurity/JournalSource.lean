@@ -102,7 +102,7 @@ def hooks : Driver.Hooks Event where
   prepare := AuthenticatedEffects.TransportDriver.prepare Event.rxOrigin origin?
   counterCheck := AuthenticatedEffects.TransportDriver.counter Event.replay
   handshake := AuthenticatedEffects.HandshakeWorker.observed Event.handshake handshake?
-  timerSelected := fun d j pid t we => AuthenticatedEffects.TimerDispatch.scope Event.timerSelected d j pid t we (pure ())
+  timerSelected := fun d j pid t we => AuthenticatedEffects.TimerDispatch.scope Event.timerSelected d j pid t we (pure 0)
   selection := selection
   confirmation := confirmation
   session := session

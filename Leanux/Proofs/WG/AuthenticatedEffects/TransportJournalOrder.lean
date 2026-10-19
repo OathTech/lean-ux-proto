@@ -92,6 +92,7 @@ theorem quiet : QuietHooksSafe Good Journal.hooks where
   prepare := focus_product _ _ (fun _ => rfl) _
   counterCheck := fun _ _ => receipt_product _ _ (fun _ => rfl) (Driver.History.product_lift _)
   timerSelected := timer
+  timerFinished := fun _ => Driver.History.product_pure _
   selection := ConfirmationTransportOrder.selection Event.replay Event.responder responder? (fun _ => rfl)
   session := ConfirmationTransportOrder.session Event.replay Event.responder responder? (fun _ => rfl)
   reserve := fun _ => receipt_state _ _ (fun _ => rfl) (focus_state _ _ (fun _ => rfl) _)

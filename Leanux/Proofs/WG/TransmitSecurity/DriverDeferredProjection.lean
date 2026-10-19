@@ -46,6 +46,7 @@ theorem timerSection_projects (ρ : E → Option F) (worker : Worker)
 
 theorem timers_projects (h : HooksProjects ρ g a) (j : UInt64) :
     ProjectsPrefix ρ id (timersObserved g j) (timersObserved a j) := by
+  obtain ⟨scopeMap, enter, leave⟩ := h.timer
   unfold timersObserved
   repeat' first
     | (maintenance_head Hooks.prepare; exact h.prepare)
@@ -54,11 +55,13 @@ theorem timers_projects (h : HooksProjects ρ g a) (j : UInt64) :
     | (maintenance_head timerSectionObserved
        apply timerSection_projects ρ
        exact (timer_projects h _ _).liftWGObserver ρ id)
-    | (maintenance_head Hooks.timerSelected; exact h.timerSelected _ _ _ _ _)
+    | (apply projectsPrefix_bind ρ scopeMap id (enter _ _ _ _ _); intro token)
+    | (maintenance_head Hooks.timerFinished; exact leave _)
     | driver_product_step ρ
 
 theorem placeholder_projects (h : HooksProjects ρ g a) (j : UInt64) :
     ProjectsPrefix ρ id (placeholderTimersObserved g j) (placeholderTimersObserved a j) := by
+  obtain ⟨scopeMap, enter, leave⟩ := h.timer
   unfold placeholderTimersObserved
   repeat' first
     | (maintenance_head Hooks.prepare; exact h.prepare)
@@ -68,7 +71,8 @@ theorem placeholder_projects (h : HooksProjects ρ g a) (j : UInt64) :
     | (maintenance_head timerSectionObserved
        apply timerSection_projects ρ
        exact (timer_projects h _ _).liftWGObserver ρ id)
-    | (maintenance_head Hooks.timerSelected; exact h.timerSelected _ _ _ _ _)
+    | (apply projectsPrefix_bind ρ scopeMap id (enter _ _ _ _ _); intro token)
+    | (maintenance_head Hooks.timerFinished; exact leave _)
     | driver_product_step ρ
 
 theorem idleTimers_projects (h : HooksProjects ρ g a) :

@@ -39,12 +39,16 @@ theorem timer_selected (d : Device) (j : UInt64) (pid : PeerId) (t : PeerTimer) 
     ProductSafe (Journal.hooks.timerSelected d j pid t we) := by
   apply join_history (hooks_safe.timerSelected d j pid t we)
   intro w h result v before run
-  change (runPrefix (AuthenticatedEffects.TimerDispatch.scope Journal.Event.timerSelected d j pid t we (pure ())) w h).1 = _ at run
+  change (runPrefix (AuthenticatedEffects.TimerDispatch.scope Journal.Event.timerSelected d j pid t we (pure 0)) w h).1 = _ at run
   simp only [AuthenticatedEffects.TimerDispatch.scope_run,runPrefix_pure] at run
   cases run
   exact before
 
+theorem timer_finished (token : Nat) : ProductSafe (Journal.hooks.timerFinished token) :=
+  PrefixPreserves.pure (fun _ _ hi => hi.2) ()
+
 macro "occurrence_journal_deferred_step" : tactic => `(tactic| first
+  | (nonce_product_head Driver.Hooks.timerFinished; exact timer_finished _)
   | (scheduler_preserve_at getWG; exact wg_read)
   | (scheduler_preserve_at getEnv; exact env_read)
   | (scheduler_preserve_at modifyWG; apply wg_bookkeeping; intro w; rfl)

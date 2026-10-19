@@ -85,7 +85,7 @@ private theorem transmit (pid : PeerId) : ProductHistorySafe Safe (Journal.trans
   product_focus completionEvent completion? (fun e => by cases e <;> rfl) (Completion.step pid)
 
 private theorem timer (d : Device) (j : UInt64) (pid : PeerId) (t : PeerTimer) (entry : WheelEntry) :
-    ProductHistorySafe Safe (TimerDispatch.scope Event.timerSelected d j pid t entry (Pure.pure ())) := by
+    ProductHistorySafe Safe (TimerDispatch.scope Event.timerSelected d j pid t entry (Pure.pure 0)) := by
   apply product_quiet (TimerDispatch.scope_appends _ _ _ _ _ _ (Appends.pure _))
   intro w h
   rw [TimerDispatch.scope_run,runPrefix_pure]
@@ -106,6 +106,7 @@ theorem hooks_safe : ActorHistorySafe Safe Journal.hooks where
   counterCheck := fun _ _ => product_quiet (Appends.lift _).receiptObserved
     (HistoryFrame.receiptObserved (HistoryFrame.lift _ _) (fun _ => rfl))
   timerSelected := timer
+  timerFinished := fun _ => History.product_pure _
   confirmation := confirmation
   session := session
   front := front

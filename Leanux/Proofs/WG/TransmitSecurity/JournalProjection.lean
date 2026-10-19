@@ -101,9 +101,10 @@ theorem hooks_projects : Driver.HooksProjects nonce? hooks Driver.nonceHooks whe
     (fun _ => projectsPrefix_pure nonce? id ())⟩
   prepare := AuthenticatedEffects.TransportDriver.prepare_projects_other Event.rxOrigin origin? nonce? (fun _ => rfl)
   counterCheck := AuthenticatedEffects.TransportDriver.counter_projects_other Event.replay nonce? (fun _ => rfl)
-  timerSelected := fun d j pid t we =>
+  timer := ⟨id, (fun d j pid t we =>
     AuthenticatedEffects.TimerDispatch.scope_projects Event.timerSelected d j pid t we nonce?
-      (fun _ => rfl) id (projectsPrefix_pure nonce? id ())
+      (fun _ => rfl) id (projectsPrefix_pure nonce? id 0)),
+    (fun _ => projectsPrefix_pure nonce? id ())⟩
   selection := selection_projects
   confirmation := confirmation_projects
   session := session_projects

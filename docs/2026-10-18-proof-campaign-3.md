@@ -191,7 +191,9 @@ and authentication invariants remain separate obligations.
   from that history; complete native staged send preserves the exclusion through
   admission, every refusal and cleanup arm. Full outgoing transmission, timers,
   receive completion and RX polls with actual Stack/GRO replies retain the same
-  supplied historical exclusion.
+  supplied historical exclusion. Full native ingress, decryption with actual NAPI
+  placements, handshake receive, queued send/clear drains and timer shutdown now
+  preserve it as well.
   These cuts retain their incoming carrier until the whole-driver transport
   is proved. Historical key-material continuity, routing linkage, global
   encryption non-reuse, complete egress
@@ -217,8 +219,11 @@ and authentication invariants remain separate obligations.
   need their own causal occurrence carrier. The new arm/send-queue callback
   carrier is checked through the outer driver, and concrete Journal instances
   retain earlier initialized claims. Completion effect decoration preserves
-  the original lifetime journal. Owned implementations through
-  `d7430fea` are copied without a branch merge.
+  the original lifetime journal. Actual timer scopes close after normal callback
+  completion; handshake scope/effect wrappers preserve both matching and unrelated
+  journals with visible effect contracts. Causal arm/queue wrappers retain the RX
+  carrier under their stated event quietness/history conditions. Owned implementations through
+  `915eeea0` are copied without a branch merge.
 - T4/T5: timestamp and response/session replay contracts remain explicit;
   H1 projections are named dependencies, not silently discharged. Native
   confirmation cuts precede later Stop. Shared responder authorization now
@@ -241,11 +246,13 @@ and authentication invariants remain separate obligations.
   and one allocation per completed session. Their history carrier and H1 edges
   stay visible until initialized exchange transport closes. Actual queued-send
   and complete handshake-receive workers now preserve that carrier under named
-  operational C2 tag frames and explicit session/keepalive contracts.
+  operational C2 tag frames; native session and keepalive callbacks are now
+  discharged. Actual data/NAPI, all four workers and scheduling transport the
+  same supplied exchange carrier with named native C2 frame dependencies.
   `H1HandshakeTagFrames` cites eleven native declarations at read-only C2 pin
   `5177bd9cbcaffb16dcf8290d88c0e5e0544a0939`; it does not assume initialized
   exchange history, reachability or a security conclusion. Complete exchange identity and prohibition on premature encryption
-  remain open. Owned implementations through `168a1173` are copied.
+  remain open. Owned implementations through `f273c120` are copied.
 - T6: allocation-stamped credits distinguish slot unpublication from final
   store removal. Native creation, acquisition, clearing, rotation, session
   installation and disposal retain exact reference payments. Actual
@@ -277,9 +284,11 @@ and authentication invariants remain separate obligations.
   the acquired caller credit and base selection. Configured identity supplies
   successful session base funding; native shutdown and peer creation preserve
   holder accounting. Actual lookup and handshake consumption preserve stamped
-  slot anchors. Initialized key-holder accounting, historical selection uniqueness,
+  slot anchors. The full native peer command now composes lookup or creation,
+  both update/removal branches, early cleanup and final caller payment under
+  its explicit incoming holder/slot/configured carriers. Initialized key-holder accounting, historical selection uniqueness,
   orphan completeness and conditional retirement progress remain open. Owned
-  implementations through `cd2a4ef6` are copied.
+  implementations through `4be9a116` are copied.
 
 [AGENT 2026-10-19] Historical encryption identities pair a device epoch with
 a packet ID. Pending-alias exclusion and allocation-frontier bounds transport
@@ -290,16 +299,16 @@ continuity and is not yet initialized over the whole driver.
 The register names each module's assumptions and boundaries. All six campaign
 outcomes remain open; these are compositional results toward those outcomes.
 
-The sixteenth source checkpoint passes all 1704 proof-build jobs and the
-1235-declaration gate across thirteen root modules, with only standard axioms.
+The seventeenth source checkpoint passes all 1734 proof-build jobs and the
+1242-declaration gate across thirteen root modules, with only standard axioms.
 All twelve witness recipes and fresh-root kernel replay pass at the default
 cap. The model executable build passes 130 jobs, and the unit suite
 completes 131 tests with one kernel-build-dependent skip. This checkpoint
-exposes native timer-arm/send-queue effect callbacks and preserves the existing
-initialized claims through exact neutral equalities. Historical encryption
-exclusion now covers full transmission, timers, receive completion and RX polls
-with actual Stack replies. Native exchange workers and holder shutdown, creation
-and slot-anchor contracts are also checked. All six outcomes remain open.
+closes timer scopes on normal return and preserves the existing initialized
+claims. Historical encryption exclusion now covers native ingress, decryption
+with NAPI, full handshake receive and queued drains. Causal handshake wrappers,
+exchange worker/scheduler transport and complete peer-command holder accounting
+are also checked. All six outcomes remain open.
 No differential guest run is needed for this proof-only checkpoint: the mirror
 and its pin are unchanged. The inherited Env deprecation warning remains outside
 the permitted edit scope; campaign-owned code has no compiler warning.
@@ -336,6 +345,16 @@ history contracts and the exact neutral nonce specialization pass. Concrete
 carrier adaptation and complete checkpoint validation pass. The owned tranches
 add lifetime-preserving effect decoration, shared exchange-driver erasure,
 configured-session funding, native shutdown and peer-creation holder contracts.
+All six outcomes remain open.
+
+[AGENT 2026-10-19] Close the selected timer scope on normal callback return,
+before deferred workers. Preserve an unfinished scope on Stop. This prevents
+a prior timer from authorizing unrelated later effects; delayed work must carry
+its own queue or wheel cause. Generic projection/history and neutral specialization
+pass, with no added premise in the existing initialized claims. Checkpoint
+seventeen passes complete validation of this API and the new native
+ingress/handshake exclusion, causal handshake, exchange-worker and complete
+peer-command holder contracts.
 All six outcomes remain open.
 
 ## Validation

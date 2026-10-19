@@ -22,6 +22,8 @@ import Leanux.Proofs.WG.TransmitSecurity.EncryptionPastStaging
 import Leanux.Proofs.WG.TransmitSecurity.EncryptionPastReceive
 import Leanux.Proofs.WG.TransmitSecurity.EncryptionPastTransmit
 import Leanux.Proofs.WG.TransmitSecurity.EncryptionPastRxPoll
+import Leanux.Proofs.WG.TransmitSecurity.EncryptionPastDecrypt
+import Leanux.Proofs.WG.TransmitSecurity.EncryptionPastHandshake
 
 /-! Campaign 3, T1 initialized counter reservations and local AEAD contracts.
 Transport from reservation through every actual AEAD invocation remains open. -/
@@ -555,5 +557,21 @@ theorem original_traffic_timer_history_exclusion :
     (∀ pid budget, Framing.Preserves (fun w : World => EncryptionPast.Ready past active w.wg)
       (rxPoll pid budget (fun packets => packets.forM Env.deliverInner))) :=
   ⟨EncryptionPast.timer,EncryptionPast.receive,EncryptionPast.transmit,EncryptionPast.stack_poll⟩
+
+/-- Security: native ingress, decryption with real NAPI placements, full
+handshake reception and queued handshake drains cannot reintroduce historical
+encryption identities into pending TX work. The physical/live bound and incoming
+historical carrier remain explicit; the initialized carrier and key-material
+continuity are not assumed discharged by these normal-return contracts. -/
+theorem original_ingress_handshake_history_exclusion :
+    (∀ msg src, Framing.Preserves (EncryptionPast.Ready past active) (wgReceive msg src)) ∧
+    Framing.Preserves (fun w : World => EncryptionPast.Ready past active w.wg)
+      (decryptIter Env.napiSoftirq Env.napiIrqExit (Env.condResched .decryptWorker)) ∧
+    (∀ msg src, Framing.Preserves (EncryptionPast.Ready past active) (receiveHandshakePacket msg src)) ∧
+    (∀ target, Framing.Preserves (EncryptionPast.Ready past active) (drainHandshakeSendWq target)) ∧
+    (∀ pid, Framing.Preserves (EncryptionPast.Ready past active) (timersStop pid)) :=
+  ⟨EncryptionPast.Ingress.receive,EncryptionPast.Decrypt.iteration,
+    EncryptionPast.Handshake.receive,EncryptionPast.Maintenance.drain_send,
+    EncryptionPast.Maintenance.timers_stop⟩
 
 end Leanux.Proofs.WG.TransmitSecurity

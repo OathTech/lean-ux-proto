@@ -34,7 +34,7 @@ def flushed (pid : PeerId) : WGPrefix Exchange.Event Unit :=
   SendExchange.flushedWith liftWGPrefix (SendExchange.workerWith sendOps) pid
 
 def hooks : Driver.Hooks Exchange.Event where
-  timerSelected := fun _ _ _ _ _ => pure ()
+  timerSelected := fun _ _ _ _ _ => pure 0
   handshake := worker
   flushedSend := flushed
   selection := fun pid => liftWGPrefix (Responder.selectionPrefix pid)

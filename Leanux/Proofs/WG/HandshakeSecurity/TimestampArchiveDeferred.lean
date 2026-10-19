@@ -53,7 +53,8 @@ theorem send_workers :
   unfold Driver.sendWorkersObserved
   repeat' first
     | (nonce_product_head Driver.scheduleObserved; exact schedule _)
-    | (nonce_product_head Driver.Hooks.timerSelected; exact product_pure ())
+    | (nonce_product_head Driver.Hooks.timerSelected; exact product_pure 0)
+    | (nonce_product_head Driver.Hooks.timerFinished; exact product_pure ())
     | archive_driver_deferred_step
 
 theorem after_xmit :
@@ -62,7 +63,8 @@ theorem after_xmit :
   repeat' first
     | (nonce_product_head Driver.cryptObserved; exact crypt)
     | (nonce_product_head Driver.sendWorkersObserved; exact send_workers)
-    | (nonce_product_head Driver.Hooks.timerSelected; exact product_pure ())
+    | (nonce_product_head Driver.Hooks.timerSelected; exact product_pure 0)
+    | (nonce_product_head Driver.Hooks.timerFinished; exact product_pure ())
     | archive_driver_deferred_step
 
 theorem timer_section (worker : Worker) {body : PrefixM TimestampReceipt Unit}
@@ -84,7 +86,8 @@ theorem timers (jPass : UInt64) :
     | (nonce_product_head Driver.cryptObserved; exact crypt)
     | (nonce_product_head Driver.timerSectionObserved
        exact timer_section _ (product_safe (timer _ _)))
-    | (nonce_product_head Driver.Hooks.timerSelected; exact product_pure ())
+    | (nonce_product_head Driver.Hooks.timerSelected; exact product_pure 0)
+    | (nonce_product_head Driver.Hooks.timerFinished; exact product_pure ())
     | archive_driver_deferred_step
 
 theorem placeholder_timers (jHi : UInt64) :
@@ -95,7 +98,8 @@ theorem placeholder_timers (jHi : UInt64) :
     | (nonce_product_head Driver.sendWorkersObserved; exact send_workers)
     | (nonce_product_head Driver.timerSectionObserved
        exact timer_section _ (product_safe (timer _ _)))
-    | (nonce_product_head Driver.Hooks.timerSelected; exact product_pure ())
+    | (nonce_product_head Driver.Hooks.timerSelected; exact product_pure 0)
+    | (nonce_product_head Driver.Hooks.timerFinished; exact product_pure ())
     | archive_driver_deferred_step
 
 theorem idle_timers :
@@ -105,7 +109,8 @@ theorem idle_timers :
   repeat' first
     | (nonce_product_head Driver.timersObserved; exact timers _)
     | (nonce_product_head Driver.placeholderTimersObserved; exact placeholder_timers _)
-    | (nonce_product_head Driver.Hooks.timerSelected; exact product_pure ())
+    | (nonce_product_head Driver.Hooks.timerSelected; exact product_pure 0)
+    | (nonce_product_head Driver.Hooks.timerFinished; exact product_pure ())
     | archive_driver_deferred_step
 
 theorem after_advance :
@@ -115,7 +120,8 @@ theorem after_advance :
   repeat' first
     | (nonce_product_head Driver.timersObserved; exact timers _)
     | (nonce_product_head Driver.placeholderTimersObserved; exact placeholder_timers _)
-    | (nonce_product_head Driver.Hooks.timerSelected; exact product_pure ())
+    | (nonce_product_head Driver.Hooks.timerSelected; exact product_pure 0)
+    | (nonce_product_head Driver.Hooks.timerFinished; exact product_pure ())
     | archive_driver_deferred_step
 
 end Leanux.Proofs.WG.HandshakeSecurity.TimestampArchive

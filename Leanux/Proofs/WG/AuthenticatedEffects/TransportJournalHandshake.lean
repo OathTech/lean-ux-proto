@@ -155,6 +155,7 @@ theorem callbacks : DeferredSafe (fun _ => True) origin? replay? Journal.hooks w
   sendWorker := sendWorker
   flushedSend := flushedSend
   selected := timer
+  finished := timerFinished
 
 /-- Every actual replay-check receipt from an initialized shared execution
 retains its earlier authenticated native publication, including stopped runs. -/

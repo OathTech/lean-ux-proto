@@ -18,6 +18,7 @@ structure DeferredSafe (extra : List E → Prop) (origin : E → Option Transpor
   sendWorker : ProductSafe extra origin replay (sendWorkerObserved hooks)
   flushedSend : ∀ pid, StateSafe extra origin replay (hooks.flushedSend pid)
   selected : ∀ d j pid t we, ProductSafe extra origin replay (hooks.timerSelected d j pid t we)
+  finished : ∀ token, ProductSafe extra origin replay (hooks.timerFinished token)
 
 macro "transport_deferred_native" : tactic => `(tactic| first
   | (transport_product_native getWG; exact wg_read)
@@ -84,6 +85,7 @@ theorem timers (h : DeferredSafe extra origin replay hooks) (j : UInt64) :
   repeat' first
     | (transport_carrier_head sendWorkerObserved; exact h.sendWorker)
     | (transport_carrier_head Hooks.timerSelected; exact h.selected _ _ _ _ _)
+    | (transport_carrier_head Hooks.timerFinished; exact h.finished _)
     | (transport_carrier_head cryptObserved; exact crypt h)
     | (transport_carrier_head timerSectionObserved
        apply timerSection
@@ -95,6 +97,7 @@ theorem placeholderTimers (h : DeferredSafe extra origin replay hooks) (j : UInt
   unfold placeholderTimersObserved
   repeat' first
     | (transport_carrier_head Hooks.timerSelected; exact h.selected _ _ _ _ _)
+    | (transport_carrier_head Hooks.timerFinished; exact h.finished _)
     | (transport_carrier_head cryptObserved; exact crypt h)
     | (transport_carrier_head sendWorkersObserved; exact sendWorkers h)
     | (transport_carrier_head timerSectionObserved

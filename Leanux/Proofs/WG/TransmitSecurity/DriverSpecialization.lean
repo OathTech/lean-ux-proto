@@ -201,16 +201,19 @@ theorem nonce_timerSectionObserved_eq : (@timerSectionObserved Nonce.Allocation)
 
 private theorem timer_selected_neutral (d : Device) (j : UInt64) (pid : PeerId)
     (t : PeerTimer) (we : WheelEntry) :
-    nonceHooks.timerSelected d j pid t we = pure () := rfl
+    nonceHooks.timerSelected d j pid t we = pure 0 := rfl
+
+private theorem timer_finished_neutral (token : Nat) :
+    nonceHooks.timerFinished token = pure () := rfl
 
 theorem nonce_timersObserved_eq : timersObserved nonceHooks = Nonce.timersObserved := by
   unfold timersObserved Nonce.timersObserved
-  simp only [nonce_timerObserved_eq, nonce_cryptObserved_eq, nonce_timerSectionObserved_eq,timer_selected_neutral,pure_bind,sendWorker_lift nonceHooks rfl]
+  simp only [nonce_timerObserved_eq, nonce_cryptObserved_eq, nonce_timerSectionObserved_eq,timer_selected_neutral,timer_finished_neutral,pure_bind,sendWorker_lift nonceHooks rfl]
   all_goals rfl
 
 theorem nonce_placeholderTimersObserved_eq : placeholderTimersObserved nonceHooks = Nonce.placeholderTimersObserved := by
   unfold placeholderTimersObserved Nonce.placeholderTimersObserved
-  simp only [nonce_timerObserved_eq, nonce_cryptObserved_eq, nonce_sendWorkersObserved_eq, nonce_timerSectionObserved_eq,timer_selected_neutral,pure_bind]
+  simp only [nonce_timerObserved_eq, nonce_cryptObserved_eq, nonce_sendWorkersObserved_eq, nonce_timerSectionObserved_eq,timer_selected_neutral,timer_finished_neutral,pure_bind]
   all_goals rfl
 
 theorem nonce_idleTimersObserved_eq : idleTimersObserved nonceHooks = Nonce.idleTimersObserved := by

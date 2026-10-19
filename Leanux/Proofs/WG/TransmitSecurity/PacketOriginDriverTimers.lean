@@ -69,10 +69,13 @@ theorem timer_selected (d : Device) (j : UInt64) (pid : PeerId) (t : PeerTimer) 
     ProductSafe (Journal.hooks.timerSelected d j pid t we) := by
   intro w h hi
   rw [show Journal.hooks.timerSelected d j pid t we =
-    AuthenticatedEffects.TimerDispatch.scope Journal.Event.timerSelected d j pid t we (pure ()) from rfl,
+    AuthenticatedEffects.TimerDispatch.scope Journal.Event.timerSelected d j pid t we (pure 0) from rfl,
     AuthenticatedEffects.TimerDispatch.scope_run,runPrefix_pure]
   have good := hi.2.quiet (event := .timerSelected ⟨d,j,pid,t,we,w⟩) (fun _ eq => by cases eq)
   exact ⟨[.timerSelected ⟨d,j,pid,t,we,w⟩],rfl,good,
     hi.1.mono (fun _ member => List.mem_append_left _ member),good⟩
+
+theorem timer_finished (token : Nat) : ProductSafe (Journal.hooks.timerFinished token) :=
+  product_pure _
 
 end Leanux.Proofs.WG.TransmitSecurity.PacketOrigins

@@ -70,9 +70,10 @@ theorem hooks : Driver.HooksProjects handshake? Journal.hooks HandshakeDriver.ho
     (fun _ => projectsPrefix_pure handshake? id ())⟩
   prepare := AuthenticatedEffects.TransportDriver.prepare_projects_other Event.rxOrigin origin? handshake? (fun _ => rfl)
   counterCheck := AuthenticatedEffects.TransportDriver.counter_projects_other Event.replay handshake? (fun _ => rfl)
-  timerSelected := fun d j pid t we =>
+  timer := ⟨id, (fun d j pid t we =>
     AuthenticatedEffects.TimerDispatch.scope_projects Event.timerSelected d j pid t we handshake?
-      (fun _ => rfl) id (projectsPrefix_pure handshake? id ())
+      (fun _ => rfl) id (projectsPrefix_pure handshake? id 0)),
+    (fun _ => projectsPrefix_pure handshake? id ())⟩
   selection := selection
   confirmation := confirmation
   session := session

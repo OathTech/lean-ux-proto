@@ -1,4 +1,6 @@
 import Leanux.Proofs.WG.RetirementSecurity.SlotAnchorConsumers
+import Leanux.Proofs.WG.RetirementSecurity.HolderConfigurationUpdate
+import Leanux.Proofs.WG.RetirementSecurity.HolderConfigurationCommand
 import Leanux.Proofs.WG.RetirementSecurity.HolderPeerCreationSlots
 import Leanux.Proofs.WG.RetirementSecurity.HolderShutdown
 import Leanux.Proofs.WG.RetirementSecurity.ConfiguredSessionFunding
@@ -1638,5 +1640,30 @@ theorem original_handshake_consumers_slot_protection
   cases response with
   | false => exact (hoare_iff_run_ambient _ _ _).mp (SlotAnchors.consume_initiation msg) w a result v b anchors run
   | true => exact (hoare_iff_run_ambient _ _ _).mp (SlotAnchors.consume_response msg) w a result v b anchors run
+
+/-- Actual peer lookup followed by native configuration preserves exact key
+credit on both ordinary and removal arms. Keepalive staging, allowed-IP error
+cleanup, slot clearing, work drains and caller payment are included. The
+independent initialized holder and allocation premises remain visible. -/
+theorem original_lookup_configuration_key_accounts
+    (key : Key) (attrs : PeerAttrs) (flags : UInt32) (psk : Option Key)
+    (before : HolderKeepalive.Ready temporary w) (peers : holders.Funded carriers loans w)
+    (stable : Queues.RxCredits.StableRx carriers w) (anchors : SlotPeerReferences holders loans w)
+    (coherent : Queues.RxCredits.BaseCoherence.Inv w) (configured : ConfiguredIdentity.Inv w)
+    (a middle b : Ambient)
+    (lookup : ((pubkeyLookup key).run w).run a=.ok ((some pid,u),middle))
+    (run : ((Configuration.peerConfigUpdateSource attrs (some pid) flags psk pid).run u).run middle=
+      .ok ((result,v),b)) : HolderAccount temporary v :=
+  HolderConfiguration.lookup_update key attrs flags psk before peers stable anchors coherent configured
+    a middle b lookup run
+
+/-- The complete native peer command retains exact key credit through actual
+creation, lookup, strict acquisition, both update arms and early cleanup. No
+intermediate caller-funding assumption is supplied; initialized transport of
+the stated entry boundary remains to be established. -/
+theorem original_peer_command_key_accounts (attrs : PeerAttrs)
+    (before : HolderConfiguration.Entry temporary carriers loans w) (a b : Ambient)
+    (run : ((WG.setPeerCmd attrs).run w).run a=.ok ((result,v),b)) : HolderAccount temporary v :=
+  (hoare_iff_run_ambient _ _ _).mp (HolderConfiguration.command attrs) w a result v b before run
 
 end Leanux.Proofs.WG.RetirementSecurity

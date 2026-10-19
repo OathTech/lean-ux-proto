@@ -1,3 +1,6 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.HandshakeEffectsOther
+import Leanux.Proofs.WG.AuthenticatedEffects.HandshakeScopePrefix
+import Leanux.Proofs.WG.AuthenticatedEffects.TransportEffectReceipts
 import Leanux.Proofs.WG.AuthenticatedEffects.CompletionEffectsProjection
 import Leanux.Proofs.WG.AuthenticatedEffects.LifetimeEffectsFocus
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalEffectsFrames
@@ -1110,5 +1113,31 @@ theorem lifetime_effect_receipts_keep_original_accesses
       (LifetimeEffects.freshWith target pid) :=
   LifetimeEffects.fresh_projects ρ
     (LifetimeEffects.decorate_projects ρ base target h decode recordArm recordQueue ha hq) pid
+
+/-- Security: a causal scope wraps the exact native handshake callback occurrence,
+whose existing authenticated-callback marker precedes its body even when it
+Stops. The token does not choose an older same-peer callback as a replacement;
+this source-local statement does not itself authorize delayed effects. -/
+theorem handshake_scope_identifies_actual_callback
+    (scopeRecord : CausalScope.Event Cause → E) (cause : Cause)
+    (record : HandshakeCausal.Event → E) (kind : HandshakeCausal.Kind) (pid : PeerId)
+    (body : WGPrefix E α) (appends : StateAppends body)
+    (w : WGWorld) (a : Ambient) (h : List E) :
+    ∃ suffix, (runWGPrefix (CausalScope.scope scopeRecord cause
+      (HandshakeWorker.callback record kind pid body)) w a h).2 =
+      h ++ scopeRecord (.entered ⟨h.length,cause⟩) :: record (.callback kind pid) :: suffix :=
+  HandshakeEffects.callback_scope_entry scopeRecord cause record kind pid body appends w a h
+
+/-- Security: a normally completed callback restores its caller's causal context,
+so its token cannot silently authorize later work. The visible body frame requires
+the callback to preserve the projected scope-event history. -/
+theorem completed_scope_restores_caller
+    (record : CausalScope.Event Cause → E) (decode : E → Option (CausalScope.Event Cause))
+    (inverse : ∀ event, decode (record event) = some event)
+    (cause : Cause) (body : WGPrefix E α) (frame : StateHistoryFrame decode body)
+    (w v : WGWorld) (a b : Ambient) (h history : List E) (value : α)
+    (normal : runWGPrefix (CausalScope.scope record cause body) w a h = (.ok ((value,v),b),history)) :
+    CausalScope.current decode history = CausalScope.current decode h :=
+  CausalScope.scope_normal_current record decode inverse cause body frame w v a b h history value normal
 
 end Leanux.Proofs.WG.AuthenticatedEffects

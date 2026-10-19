@@ -74,9 +74,10 @@ theorem hooks : Driver.HooksProjects responder? Journal.hooks DriverCuts.hooks w
     (fun _ => projectsPrefix_pure responder? id ())⟩
   prepare := AuthenticatedEffects.TransportDriver.prepare_projects_other Event.rxOrigin origin? responder? (fun _ => rfl)
   counterCheck := AuthenticatedEffects.TransportDriver.counter_projects_other Event.replay responder? (fun _ => rfl)
-  timerSelected := fun d j pid t we =>
+  timer := ⟨id, (fun d j pid t we =>
     AuthenticatedEffects.TimerDispatch.scope_projects Event.timerSelected d j pid t we responder?
-      (fun _ => rfl) id (projectsPrefix_pure responder? id ())
+      (fun _ => rfl) id (projectsPrefix_pure responder? id 0)),
+    (fun _ => projectsPrefix_pure responder? id ())⟩
   selection := selection
   confirmation := confirmation
   session := session

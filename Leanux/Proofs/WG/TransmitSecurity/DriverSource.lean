@@ -28,7 +28,8 @@ structure Hooks (E : Type) where
   prepare : PrefixM E (Option PeerId) := liftPrefix (liftWG RxWorkers.prepareSource)
   counterCheck : SkbId → RxPacket → PrefixM E Bool :=
     fun _ pkt => liftWGObserver (liftWGPrefix (counterValidate pkt.keypair pkt.nonce))
-  timerSelected : Device → UInt64 → PeerId → PeerTimer → WheelEntry → PrefixM E Unit
+  timerSelected : Device → UInt64 → PeerId → PeerTimer → WheelEntry → PrefixM E Nat
+  timerFinished : Nat → PrefixM E Unit := fun _ => pure ()
   selection : PeerId → WGPrefix E (Option (Peer × Option KeypairId))
   confirmation : PeerId → KeypairId → WGPrefix E Bool
   session : PeerId → WGPrefix E Bool
@@ -276,7 +277,7 @@ def timersObserved (hooks : Hooks E) (jPass : UInt64) : PrefixM E Bool := do
       else
         let some (pid, t, we) := TimerWheel.nextDue d jPass
           | liftPrefix (throw (.hidden s!"a section of {w.symbol}, but no modeled timer's bucket is due by jiffies {jPass}"))
-        hooks.timerSelected d jPass pid t we
+        let timerToken ← hooks.timerSelected d jPass pid t we
         let expected ← liftPrefix (Env.timerWorker t)
         if w != expected then
           liftPrefix (throw (.hidden s!"the wheel runs peer {pid}'s {repr t} timer next ({expected.symbol}, bucket expiry {we.bucketExpiry}); the records show a section of {w.symbol}"))
@@ -292,6 +293,7 @@ def timersObserved (hooks : Hooks E) (jPass : UInt64) : PrefixM E Bool := do
         liftPrefix (modifyWG fun s => {s with timerPassStep := some we.bucketExpiry})
         timerSectionObserved w (liftWGObserver ((timerObserved hooks) pid t))
         liftPrefix (modifyWG fun s => {s with timerPassStep := none})
+        hooks.timerFinished timerToken
         step := some we.bucketExpiry
         fired := true
     else
@@ -318,9 +320,10 @@ def placeholderTimersObserved (hooks : Hooks E) (jHi : UInt64) : PrefixM E Unit 
   for _ in [0:pending + 1] do
     let d ← liftPrefix (liftWG getDev)
     let some (pid, t, we) := TimerWheel.nextDue d jHi | break
-    hooks.timerSelected d jHi pid t we
+    let timerToken ← hooks.timerSelected d jHi pid t we
     liftPrefix (liftWG (delTimer pid t))
     timerSectionObserved (← liftPrefix (Env.timerWorker t)) (liftWGObserver ((timerObserved hooks) pid t))
+    hooks.timerFinished timerToken
   (cryptObserved hooks)
   (sendWorkersObserved hooks)
   for _ in [0:(← liftPrefix (liftWG getDev)).clearWorkQueue.length + 1] do
@@ -533,7 +536,7 @@ def executeObserved (hooks : Hooks E) (trace : Runner.Trace) (placeholders : Boo
   RxHistory.executeTraceWith (syscallObserved hooks) trace placeholders
 
 def nonceHooks : Hooks Nonce.Allocation where
-  timerSelected := fun _ _ _ _ _ => pure ()
+  timerSelected := fun _ _ _ _ _ => pure 0
   selection := fun pid => liftWGPrefix (HandshakeSecurity.Responder.selectionPrefix pid)
   confirmation := fun pid kid => liftWGPrefix (receivedWithKeypair pid kid)
   session := fun pid => liftWGPrefix (beginSession pid)

@@ -26,4 +26,10 @@ theorem native_of_source {E α : Type} (g : PrefixM E α) (action : Leanux.M α)
   rw [run] at erased
   simpa only [erased] using out
 
+theorem product_store {action : Leanux.M α} (frame : SameProductStore action) :
+    Preserves (fun w : World => Ready past active w.wg) action := by
+  apply (hoare_iff_run _ _ _).mpr
+  intro w result v before run
+  exact product_transport ((ProjectedAction.iff_run _ _ _).mp frame w result v run) before
+
 end Leanux.Proofs.WG.TransmitSecurity.EncryptionPast

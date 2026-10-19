@@ -33,6 +33,7 @@ theorem HooksHistorySafe.actors (h : HooksHistorySafe Safe g) : ActorHistorySafe
   prepare := h.prepare
   counterCheck := h.counterCheck
   timerSelected := h.timerSelected
+  timerFinished := h.timerFinished
   confirmation := h.confirmation
   session := h.session
   front := h.front

@@ -53,6 +53,7 @@ theorem timers_history (h : ActorHistorySafe Safe g) (j : UInt64) :
        apply timerSection_history
        exact (timer_history h _ _).liftWGObserver)
     | (driver_history_head Hooks.timerSelected; exact h.timerSelected _ _ _ _ _)
+    | (driver_history_head Hooks.timerFinished; exact h.timerFinished _)
     | driver_product_history_step
 
 theorem placeholder_history (h : ActorHistorySafe Safe g) (j : UInt64) :
@@ -67,6 +68,7 @@ theorem placeholder_history (h : ActorHistorySafe Safe g) (j : UInt64) :
        apply timerSection_history
        exact (timer_history h _ _).liftWGObserver)
     | (driver_history_head Hooks.timerSelected; exact h.timerSelected _ _ _ _ _)
+    | (driver_history_head Hooks.timerFinished; exact h.timerFinished _)
     | driver_product_history_step
 
 theorem idleTimers_history (h : ActorHistorySafe Safe g) :

@@ -53,7 +53,8 @@ theorem send_workers (H1 : H1ResponderCurrentEdges) :
   unfold Driver.sendWorkersObserved
   repeat' first
     | (nonce_product_head Driver.scheduleObserved; exact schedule H1 _)
-    | (nonce_product_head Driver.Hooks.timerSelected; exact product_pure ())
+    | (nonce_product_head Driver.Hooks.timerSelected; exact product_pure 0)
+    | (nonce_product_head Driver.Hooks.timerFinished; exact product_pure ())
     | responder_driver_deferred_step H1
 
 theorem after_xmit (H1 : H1ResponderCurrentEdges) :
@@ -62,7 +63,8 @@ theorem after_xmit (H1 : H1ResponderCurrentEdges) :
   repeat' first
     | (nonce_product_head Driver.cryptObserved; exact crypt H1)
     | (nonce_product_head Driver.sendWorkersObserved; exact send_workers H1)
-    | (nonce_product_head Driver.Hooks.timerSelected; exact product_pure ())
+    | (nonce_product_head Driver.Hooks.timerSelected; exact product_pure 0)
+    | (nonce_product_head Driver.Hooks.timerFinished; exact product_pure ())
     | responder_driver_deferred_step H1
 
 theorem timer_section (worker : Worker) {body : PrefixM Event Unit}
@@ -84,7 +86,8 @@ theorem timers (H1 : H1ResponderCurrentEdges) (jPass : UInt64) :
     | (nonce_product_head Driver.cryptObserved; exact crypt H1)
     | (nonce_product_head Driver.timerSectionObserved
        exact timer_section _ (product_safe (timer _ _)))
-    | (nonce_product_head Driver.Hooks.timerSelected; exact product_pure ())
+    | (nonce_product_head Driver.Hooks.timerSelected; exact product_pure 0)
+    | (nonce_product_head Driver.Hooks.timerFinished; exact product_pure ())
     | responder_driver_deferred_step H1
 
 theorem placeholder_timers (H1 : H1ResponderCurrentEdges) (jHi : UInt64) :
@@ -95,7 +98,8 @@ theorem placeholder_timers (H1 : H1ResponderCurrentEdges) (jHi : UInt64) :
     | (nonce_product_head Driver.sendWorkersObserved; exact send_workers H1)
     | (nonce_product_head Driver.timerSectionObserved
        exact timer_section _ (product_safe (timer _ _)))
-    | (nonce_product_head Driver.Hooks.timerSelected; exact product_pure ())
+    | (nonce_product_head Driver.Hooks.timerSelected; exact product_pure 0)
+    | (nonce_product_head Driver.Hooks.timerFinished; exact product_pure ())
     | responder_driver_deferred_step H1
 
 theorem idle_timers (H1 : H1ResponderCurrentEdges) :
@@ -105,7 +109,8 @@ theorem idle_timers (H1 : H1ResponderCurrentEdges) :
   repeat' first
     | (nonce_product_head Driver.timersObserved; exact timers H1 _)
     | (nonce_product_head Driver.placeholderTimersObserved; exact placeholder_timers H1 _)
-    | (nonce_product_head Driver.Hooks.timerSelected; exact product_pure ())
+    | (nonce_product_head Driver.Hooks.timerSelected; exact product_pure 0)
+    | (nonce_product_head Driver.Hooks.timerFinished; exact product_pure ())
     | responder_driver_deferred_step H1
 
 theorem after_advance (H1 : H1ResponderCurrentEdges) :
@@ -115,7 +120,8 @@ theorem after_advance (H1 : H1ResponderCurrentEdges) :
   repeat' first
     | (nonce_product_head Driver.timersObserved; exact timers H1 _)
     | (nonce_product_head Driver.placeholderTimersObserved; exact placeholder_timers H1 _)
-    | (nonce_product_head Driver.Hooks.timerSelected; exact product_pure ())
+    | (nonce_product_head Driver.Hooks.timerSelected; exact product_pure 0)
+    | (nonce_product_head Driver.Hooks.timerFinished; exact product_pure ())
     | responder_driver_deferred_step H1
 
 end Leanux.Proofs.WG.HandshakeSecurity.Responder.DriverCuts

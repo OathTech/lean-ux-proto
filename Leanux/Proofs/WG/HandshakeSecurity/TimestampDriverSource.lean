@@ -20,7 +20,7 @@ def worker (session : PeerId → WGPrefix TimestampReceipt Bool)
 
 def hooks : Driver.Hooks TimestampReceipt where
   handshake := worker
-  timerSelected := fun _ _ _ _ _ => pure ()
+  timerSelected := fun _ _ _ _ _ => pure 0
   selection := fun pid => liftWGPrefix (Responder.selectionPrefix pid)
   confirmation := fun pid kid => liftWGPrefix (receivedWithKeypair pid kid)
   session := fun pid => liftWGPrefix (beginSession pid)
@@ -114,6 +114,7 @@ theorem hooks_safe : Driver.HooksHistorySafe IncreasingReceipts hooks where
   prepare := Driver.History.product_lift _
   counterCheck := fun _ _ => Driver.History.product_state (Driver.History.state_lift _)
   timerSelected := fun _ _ _ _ _ => Driver.History.product_pure _
+  timerFinished := fun _ => Driver.History.product_pure _
   selection := fun _ => Driver.History.state_lift _
   confirmation := fun _ _ => Driver.History.state_lift _
   session := fun _ => Driver.History.state_lift _

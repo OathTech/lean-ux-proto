@@ -1,6 +1,8 @@
 import Leanux.Proofs.WG.HandshakeSecurity.ExchangeDriverProjection
 import Leanux.Proofs.WG.HandshakeSecurity.ExchangeSend
 import Leanux.Proofs.WG.HandshakeSecurity.ExchangeReceive
+import Leanux.Proofs.WG.HandshakeSecurity.ExchangeData
+import Leanux.Proofs.WG.HandshakeSecurity.ExchangeScheduler
 import Leanux.Proofs.WG.HandshakeSecurity.ExchangeNativeFrames
 import Leanux.Proofs.WG.HandshakeSecurity.ExchangeOrigins
 import Leanux.Proofs.WG.HandshakeSecurity.ExchangeObservation
@@ -945,5 +947,24 @@ theorem receive_worker_exchange_history (H1 : H1ExchangeEdges) (frames : H1Hands
     (keepalives : ∀ pid, Exchange.Preserves (keepalive pid)) :
     Exchange.Preserves (ExchangeDriver.worker session keepalive) :=
   Exchange.receive_worker_checked H1 frames session keepalive sessions keepalives
+
+/-- The shared driver's actual handshake worker preserves the exchange ledger
+through native response consumption, installation and keepalive staging.
+Callback-safety premises are discharged; only the named C2 operational edge and
+tag-frame packages remain. Initialized outer-driver transport is still separate. -/
+theorem actual_handshake_exchange_history (H1 : H1ExchangeEdges)
+    (handshake : H1HandshakeTagFrames) (data : H1DataTagFrames) :
+    Exchange.Preserves (TransmitSecurity.Driver.handshakeObserved ExchangeDriver.hooks) :=
+  Exchange.handshake_checked H1 handshake data
+
+/-- Every committed worker activation preserves the exchange ledger through
+the actual scheduler, including data delivery and handshake installation.
+Named C2 native edge/frame packages remain visible. Initialization and outer
+configuration, lifecycle and traffic transport remain separate obligations. -/
+theorem scheduled_exchange_history (H1 : H1ExchangeEdges)
+    (handshake : H1HandshakeTagFrames) (data : H1DataTagFrames)
+    (workers : H1WorkerTagFrames) (stack : Option Worker) :
+    Exchange.ProductPreserves (TransmitSecurity.Driver.scheduleObserved ExchangeDriver.hooks stack) :=
+  Exchange.schedule_checked H1 handshake data workers stack
 
 end Leanux.Proofs.WG.HandshakeSecurity

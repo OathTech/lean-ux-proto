@@ -45,8 +45,11 @@ theorem timer (d : Device) (j : UInt64) (pid : PeerId) (t : PeerTimer) (entry : 
   · intro w h
     rw [TimerDispatch.scope_run,runPrefix_pure]
     simp only [List.filterMap_append,List.filterMap_cons,List.filterMap_nil,replay?,List.append_nil]
-  · exact TimerDispatch.scope_erases _ _ _ _ _ _ (erasesPrefix_pure ())
+  · exact TimerDispatch.scope_erases _ _ _ _ _ _ (erasesPrefix_pure 0)
   · exact SameView.pure _ _
+
+theorem timerFinished (token : Nat) : ProductSafe (Journal.hooks.timerFinished token) :=
+  product_pure ()
 
 theorem base {g : PrefixM Journal.Event α} (safe : ProductSafe g) :
     TransportReplay.Preserves (origin := origin?) (replay := replay?) g := by

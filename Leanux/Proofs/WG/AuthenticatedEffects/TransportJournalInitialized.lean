@@ -49,6 +49,7 @@ theorem ordered_callbacks : DeferredSafe Order.Good origin? replay? Journal.hook
   sendWorker := product_join sendWorker Order.quiet.sendWorker
   flushedSend := fun pid => state_join (flushedSend pid) (Order.quiet.flushedSend pid)
   selected := fun d j pid t entry => product_join (timer d j pid t entry) (Order.quiet.timerSelected d j pid t entry)
+  finished := fun token => product_join (timerFinished token) (Order.quiet.timerFinished token)
 
 /-- Both independent positional claims hold on the actual initialized full
 journal. No assumed native packet, callback authorization or receipt order

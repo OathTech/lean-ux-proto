@@ -23,8 +23,9 @@ structure HooksProjects (ρ : E → Option F) (g : Hooks E) (a : Hooks F) : Prop
     (∀ token, ProjectsPrefix ρ id (g.candidateLeave token) (a.candidateLeave (scopeMap token)))
   prepare : ProjectsPrefix ρ id g.prepare a.prepare
   counterCheck : ∀ skb pkt, ProjectsPrefix ρ id (g.counterCheck skb pkt) (a.counterCheck skb pkt)
-  timerSelected : ∀ d j pid t we,
-    ProjectsPrefix ρ id (g.timerSelected d j pid t we) (a.timerSelected d j pid t we)
+  timer : ∃ scopeMap : Nat → Nat,
+    (∀ d j pid t we, ProjectsPrefix ρ scopeMap (g.timerSelected d j pid t we) (a.timerSelected d j pid t we)) ∧
+    (∀ token, ProjectsPrefix ρ id (g.timerFinished token) (a.timerFinished (scopeMap token)))
   selection : ∀ pid, StateProjectsPrefix ρ id (g.selection pid) (a.selection pid)
   confirmation : ∀ pid kid, StateProjectsPrefix ρ id (g.confirmation pid kid) (a.confirmation pid kid)
   session : ∀ pid, StateProjectsPrefix ρ id (g.session pid) (a.session pid)

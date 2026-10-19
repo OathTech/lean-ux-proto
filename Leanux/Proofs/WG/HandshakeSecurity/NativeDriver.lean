@@ -8,7 +8,7 @@ namespace Leanux.Proofs.WG.HandshakeSecurity.NativeDriver
 open Leanux Leanux.WG Leanux.Proofs.Logged Lifetimes Queues Packets TransmitSecurity
 
 def hooks : Driver.Hooks Empty where
-  timerSelected := fun _ _ _ _ _ => pure ()
+  timerSelected := fun _ _ _ _ _ => pure 0
   selection := fun pid => liftWGPrefix (Responder.selectionPrefix pid)
   confirmation := fun pid kid => liftWGPrefix (receivedWithKeypair pid kid)
   session := fun pid => liftWGPrefix (beginSession pid)
@@ -46,7 +46,8 @@ theorem nonce_projection : Driver.HooksProjects erase Driver.nonceHooks hooks wh
     fun _ => projectsPrefix_pure erase id ()⟩
   prepare := projectsPrefix_lift erase _
   counterCheck := fun _ _ => (Driver.Projection.state_lift erase _).liftWGObserver erase id
-  timerSelected := fun _ _ _ _ _ => projectsPrefix_pure erase id ()
+  timer := ⟨id,fun _ _ _ _ _ => projectsPrefix_pure erase id 0,
+    fun _ => projectsPrefix_pure erase id ()⟩
   selection := fun _ => Driver.Projection.state_lift erase _
   confirmation := fun _ _ => Driver.Projection.state_lift erase _
   session := fun _ => Driver.Projection.state_lift erase _

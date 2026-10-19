@@ -10,7 +10,7 @@ open TransmitSecurity
 
 def hooks : Driver.Hooks HandshakeCausal.Event where
   handshake := HandshakeWorker.observed id some
-  timerSelected := fun _ _ _ _ _ => pure ()
+  timerSelected := fun _ _ _ _ _ => pure 0
   selection := fun pid => liftWGPrefix (HandshakeSecurity.Responder.selectionPrefix pid)
   confirmation := fun pid kid => liftWGPrefix (receivedWithKeypair pid kid)
   session := fun pid => liftWGPrefix (beginSession pid)

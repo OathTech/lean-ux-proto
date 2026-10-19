@@ -55,6 +55,7 @@ theorem send_workers :
   repeat' first
     | (nonce_product_head Driver.scheduleObserved; exact schedule _)
     | (nonce_product_head Driver.Hooks.timerSelected; exact timer_selected _ _ _ _ _)
+    | (nonce_product_head Driver.Hooks.timerFinished; exact timer_finished _)
     | origin_driver_deferred_step
 
 theorem after_xmit :
@@ -64,6 +65,7 @@ theorem after_xmit :
     | (nonce_product_head Driver.cryptObserved; exact crypt)
     | (nonce_product_head Driver.sendWorkersObserved; exact send_workers)
     | (nonce_product_head Driver.Hooks.timerSelected; exact timer_selected _ _ _ _ _)
+    | (nonce_product_head Driver.Hooks.timerFinished; exact timer_finished _)
     | origin_driver_deferred_step
 
 theorem timer_section (worker : Worker) {body : PrefixM Journal.Event Unit}
@@ -86,6 +88,7 @@ theorem timers (jPass : UInt64) :
     | (nonce_product_head Driver.timerSectionObserved
        exact timer_section _ (product_state (timer _ _)))
     | (nonce_product_head Driver.Hooks.timerSelected; exact timer_selected _ _ _ _ _)
+    | (nonce_product_head Driver.Hooks.timerFinished; exact timer_finished _)
     | origin_driver_deferred_step
 
 theorem placeholder_timers (jHi : UInt64) :
@@ -97,6 +100,7 @@ theorem placeholder_timers (jHi : UInt64) :
     | (nonce_product_head Driver.timerSectionObserved
        exact timer_section _ (product_state (timer _ _)))
     | (nonce_product_head Driver.Hooks.timerSelected; exact timer_selected _ _ _ _ _)
+    | (nonce_product_head Driver.Hooks.timerFinished; exact timer_finished _)
     | origin_driver_deferred_step
 
 theorem idle_timers :
@@ -107,6 +111,7 @@ theorem idle_timers :
     | (nonce_product_head Driver.timersObserved; exact timers _)
     | (nonce_product_head Driver.placeholderTimersObserved; exact placeholder_timers _)
     | (nonce_product_head Driver.Hooks.timerSelected; exact timer_selected _ _ _ _ _)
+    | (nonce_product_head Driver.Hooks.timerFinished; exact timer_finished _)
     | origin_driver_deferred_step
 
 theorem after_advance :
@@ -117,6 +122,7 @@ theorem after_advance :
     | (nonce_product_head Driver.timersObserved; exact timers _)
     | (nonce_product_head Driver.placeholderTimersObserved; exact placeholder_timers _)
     | (nonce_product_head Driver.Hooks.timerSelected; exact timer_selected _ _ _ _ _)
+    | (nonce_product_head Driver.Hooks.timerFinished; exact timer_finished _)
     | origin_driver_deferred_step
 
 end Leanux.Proofs.WG.TransmitSecurity.PacketOrigins

@@ -8,7 +8,7 @@ open Leanux Leanux.WG Leanux.Proofs.Logged Lifetimes Queues Packets
 open TransmitSecurity
 
 def hooks : Driver.Hooks Event where
-  timerSelected := fun _ _ _ _ _ => pure ()
+  timerSelected := fun _ _ _ _ _ => pure 0
   selection := selection
   confirmation := confirmation
   session := session

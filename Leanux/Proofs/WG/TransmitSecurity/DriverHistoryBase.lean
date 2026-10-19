@@ -26,6 +26,7 @@ structure HooksHistorySafe (Safe : List E → Prop) (hooks : Hooks E) : Prop whe
   prepare : ProductHistorySafe Safe hooks.prepare
   counterCheck : ∀ skb pkt, ProductHistorySafe Safe (hooks.counterCheck skb pkt)
   timerSelected : ∀ d j pid t we, ProductHistorySafe Safe (hooks.timerSelected d j pid t we)
+  timerFinished : ∀ token, ProductHistorySafe Safe (hooks.timerFinished token)
   selection : ∀ pid, StateHistorySafe Safe (hooks.selection pid)
   confirmation : ∀ pid kid, StateHistorySafe Safe (hooks.confirmation pid kid)
   session : ∀ pid, StateHistorySafe Safe (hooks.session pid)
@@ -56,6 +57,7 @@ structure ActorHistorySafe (Safe : List E → Prop) (hooks : Hooks E) : Prop whe
   prepare : ProductHistorySafe Safe hooks.prepare
   counterCheck : ∀ skb pkt, ProductHistorySafe Safe (hooks.counterCheck skb pkt)
   timerSelected : ∀ d j pid t we, ProductHistorySafe Safe (hooks.timerSelected d j pid t we)
+  timerFinished : ∀ token, ProductHistorySafe Safe (hooks.timerFinished token)
   confirmation : ∀ pid kid, StateHistorySafe Safe (hooks.confirmation pid kid)
   session : ∀ pid, StateHistorySafe Safe (hooks.session pid)
   front : ∀ family addr packets mtu, StateHistorySafe Safe (hooks.front family addr packets mtu)
