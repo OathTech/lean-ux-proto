@@ -108,15 +108,16 @@ theorem cookieLoop_run (turns : List Nat) (a : Activation) (w : World) (d : Devi
     (activationLoopSource turns a).run w = cookieHybridLoop turns.length a w :=
   cookieHybridLoop_eq turns a w receive
 
-/-- The entry occupancy is captured once. Exhausting its budget retains the
-original invariant outcome instead of manufacturing an empty-queue completion. -/
+/-- The supplied entry occupancy is followed by the actual refill-budget read.
+The combined budget retains the original read and exhaustion outcomes. -/
 def cookieHybridRun (a : Activation) (occupancy : Nat) (w : World) : Except Stop (Unit × World) := do
-  let (state, after) ← cookieHybridLoop (occupancy + 1) a w
-  (activationFinishSource a occupancy state).run after
+  let (refills, ready) ← Activation.refills.run w
+  let (state, after) ← cookieHybridLoop (occupancy + refills + 1) a ready
+  (activationFinishSource a occupancy refills state).run after
 
 /-- Correction of the former count-resolver correspondence. This exact full
 Product outcome includes ordinary completion, yield, receive/record failures,
-and the captured-occupancy exhaustion invariant. -/
+and the captured occupancy-plus-refills exhaustion invariant. -/
 theorem cookieActivation_run (a : Activation) (w : World) (d : Device)
     (records : List HiddenRecord) (receive : a.worker = .receiveWorker)
     (device : w.wg.dev = some d) (_table : d.indexTable = []) (_cookies : CookieOnly d)
@@ -127,14 +128,19 @@ theorem cookieActivation_run (a : Activation) (w : World) (d : Device)
     have read : (liftM getDev : Leanux.M Device).run w = .ok (d, w) := by
       change (((getDev.run w.wg).run w.ambient) >>= _) = _
       simp [getDev, device]
-      rfl
     rw [read]
     simp [receive]
     rfl
   rw [activation_run_source, StateT.run_bind, occupancy]
-  change ((activationLoopSource (List.range' 0 (d.handshakeQueue.count + 1)) a).run w >>= _) = _
-  rw [cookieHybridLoop_eq _ a w receive]
-  simp only [List.length_range', cookieHybridRun]
-  rfl
+  change (Activation.refills.run w >>= _) = _
+  unfold cookieHybridRun
+  cases read : Activation.refills.run w with
+  | error stop => rfl
+  | ok pair =>
+    obtain ⟨refills, ready⟩ := pair
+    change ((activationLoopSource (List.range' 0 (d.handshakeQueue.count + refills + 1)) a).run ready >>= _) = _
+    rw [cookieHybridLoop_eq _ a ready receive]
+    simp only [List.length_range']
+    rfl
 
 end Leanux.Proofs.WG.Progress

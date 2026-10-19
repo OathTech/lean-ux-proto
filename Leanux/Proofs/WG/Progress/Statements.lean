@@ -102,8 +102,9 @@ theorem original_pending_batch_state : backlog = none :=
 
 
 /-- Every accepted original trace supplies exactly its ordered operation
-boundaries after ambient stripping and the original three completion guards.
-These guards say nothing about pending workers or scheduled NAPI. -/
+boundaries after ambient stripping and the original four completion checks.
+Supplied-mode cuts have no pending identities; scheduled NAPI is not constrained
+by these Runner checks alone. -/
 theorem original_accepted_operation_boundaries (trace : Runner.Trace)
     (placeholders : Bool) (output : Lean.Json)
     (acceptedRun : Runner.executeTrace trace placeholders = .ok output) :
@@ -200,13 +201,14 @@ theorem original_dispatch_runs_activation (worker : Worker) :
   intro w _
   exact ⟨_, w, rfl, dispatch_observation_exact worker w, traced_success_iff worker w⟩
 
-/-- Dispatch-specific no-work returns false and preserves every retained field,
+/-- Dispatch-specific no-work, including device pending identities, returns false and preserves every retained field,
 including records. The concrete whole-state frame remains in the source proof. -/
 theorem original_dispatch_no_work (worker : Worker) (d : Device) (entry : Snapshot)
-    (empty : NoDispatchWork worker d) :
+    (empty : NoDispatchWork worker d entry.ambient.pendingWork) :
     Returns (Env.dispatch worker) (fun s => s = entry ∧ s.wg.device = some d)
       (fun result final => result = false ∧ final = entry) := by
   intro w pre
+  rw [← pre.1] at empty
   exact ⟨false, w, dispatch_no_work worker d w pre.2 empty, rfl, pre.1⟩
 
 /-- False is equivalent to the original selection prefix finding no activation,
@@ -451,24 +453,28 @@ theorem original_turn_napi (stack : Option Worker) (d : Device) :
     tracedNapi_erase, StateT.run_bind]
   exact observe_map napiResult (tracedNapi.run after)
 
-/-- Recordless local no-work returns and preserves the entire retained snapshot.
+/-- Recordless local no-work, including device pending identities, returns and preserves the entire retained snapshot.
 Suspended activations, timers and NAPI are not part of this branch's tests. -/
 theorem original_recordless_turn_empty (stack : Option Worker) (d : Device) (entry : Snapshot)
-    (empty : d.handshakeQueue.empty = true ∧ d.decryptQueue.empty = true ∧
-      d.encryptQueue.empty = true ∧ d.txWorkQueue.isEmpty = true) :
+    (empty : d.handshakeQueue.empty = true ∧ entry.ambient.pendingWork.contains Worker.receiveWorker.index = false ∧
+      d.decryptQueue.empty = true ∧ entry.ambient.pendingWork.contains Worker.decryptWorker.index = false ∧
+      d.encryptQueue.empty = true ∧ entry.ambient.pendingWork.contains Worker.encryptWorker.index = false ∧
+      d.txWorkQueue.isEmpty = true) :
     Returns (scheduleTurn stack)
       (fun s => s = entry ∧ s.ambient.hidden = none ∧ s.wg.device = some d)
       (fun result final => result = turnReturn ∧ final = entry) := by
   intro w pre
+  rw [← pre.1] at empty
   exact ⟨turnReturn, w, turn_placeholder_empty stack w d pre.2.1 pre.2.2 empty, rfl, pre.1⟩
 
 /-- Original recordless priority selects a worker; continuation is equivalent
 to its actual decorated prefix/start/activation execution at that same entry.
 Recordless mode alone promises neither placeholders nor execution success. -/
 theorem original_recordless_turn_runs (stack : Option Worker) (worker : Worker)
-    (d : Device) (selected : placeholderSelection d = some worker) :
+    (d : Device) :
     Returns (recordlessObservation stack worker)
-      (fun s => s.ambient.hidden = none ∧ s.wg.device = some d)
+      (fun s => s.ambient.hidden = none ∧ s.wg.device = some d ∧
+        placeholderSelection d s.ambient.pendingWork = some worker)
       (fun observation _ => ∀ final,
         observation.1 = .ok (turnContinue, final) ↔
           ∃ trace, observation.2.traced = .ok (some trace, final)) := by
@@ -479,7 +485,7 @@ theorem original_recordless_turn_runs (stack : Option Worker) (worker : Worker)
       (scheduleTurn stack).run w = .ok (turnContinue, final) ↔
         (Env.dispatch worker).run w = .ok (true, final) := by
     intro final
-    rw [SourceClaims.original_recordless_turn_runs stack worker w final d pre.1 pre.2 selected,
+    rw [SourceClaims.original_recordless_turn_runs stack worker w final d pre.1 pre.2.1 pre.2.2,
       dispatch_success_iff]
   exact (observe_success_iff _ _ turnContinue true final concrete).trans
     (traced_success_iff worker w final)
@@ -487,14 +493,15 @@ theorem original_recordless_turn_runs (stack : Option Worker) (worker : Worker)
 /-- Recordless selected dispatch failures retain the original exact stop,
 including the hidden reader's rejection when placeholders are not enabled. -/
 theorem original_recordless_turn_error (stack : Option Worker) (worker : Worker)
-    (d : Device) (err : Stop) (selected : placeholderSelection d = some worker) :
+    (d : Device) (err : Stop) :
     Returns (recordlessObservation stack worker)
-      (fun s => s.ambient.hidden = none ∧ s.wg.device = some d)
+      (fun s => s.ambient.hidden = none ∧ s.wg.device = some d ∧
+        placeholderSelection d s.ambient.pendingWork = some worker)
       (fun observation _ => observation.2.actual = .error err → observation.1 = .error err) := by
   intro w pre
   refine ⟨_, w, rfl, ?_⟩
   intro failed
-  have same := SourceClaims.original_recordless_turn_error stack worker w d err pre.1 pre.2 selected
+  have same := SourceClaims.original_recordless_turn_error stack worker w d err pre.1 pre.2.1 pre.2.2
     ((observe_error_iff _ err).mp failed)
   change observeResult ((scheduleTurn stack).run w) = .error err
   rw [same]
@@ -783,17 +790,16 @@ theorem original_final_idle_wait_receipt (call : Syscall) (waited : HasFinalIdle
         final.wg.jiffiesLast = some j ∧ NoTimerDue j final) :=
   ⟨observedIdleWaitOperation_erase call waited,observedIdleWaitOperation_checks call⟩
 
-/-- An actual initialized domain-filter execution accepts with a retained
-receive-worker pending identity and the stated empty-queue/count/NAPI tests.
-This is placeholder-mode bookkeeping, not supplied-record evidence of an
-unexecuted unit, nor a general physical-ring coherence claim. -/
-theorem original_placeholder_pending_identity :
+/-- The actual initialized placeholder regression accepts with cleared pending
+identities and the stated empty-queue/count/NAPI tests. This is a concrete
+regression over the corrected mirror, not a universal placeholder-mode claim. -/
+theorem original_placeholder_pending_cleared :
     ∃ audit cut d,
       executeTraceWithBoundaries CurrentBoundaryWitness.placeholderBoundaryTrace true = .ok audit ∧
       Runner.executeTrace CurrentBoundaryWitness.placeholderBoundaryTrace true = .ok audit.output ∧
       audit.boundaries[1]? = some cut ∧
       cut.index = 1 ∧ cut.result = 1 ∧ cut.after.wg.device = some d ∧
-      cut.after.ambient.pendingWork = [Worker.receiveWorker.index] ∧
+      cut.after.ambient.pendingWork = [] ∧
       cut.after.ambient.hidden.isNone = true ∧
       cut.after.ambient.suspended.isEmpty = true ∧ cut.after.wg.netRxRaised = false ∧
       d.handshakeQueue.empty = true ∧ d.handshakeQueue.count = 0 ∧
@@ -801,7 +807,7 @@ theorem original_placeholder_pending_identity :
       d.encryptQueue.empty = true ∧ d.txWorkQueue.isEmpty = true ∧
       d.sendWorkQueue.isEmpty = true ∧ d.clearWorkQueue.isEmpty = true ∧
       d.peers.toList.any (fun item => item.2.napiScheduled) = false :=
-  CurrentBoundaryWitness.placeholder_accepted_pending
+  CurrentBoundaryWitness.placeholder_accepted_drained
 
 
 /-- The original allocation consumer agrees on every projected entry with a
@@ -823,7 +829,8 @@ theorem original_pow_mod_of_evaluation (b e modulus fuel : Nat) (final : PowStat
   powMod_of_evaluation b e modulus fuel final evaluated
 
 /-- Every actual activation is inspected with its first Stop unchanged.
-The outer loop makes at most its captured occupancy plus one iteration calls.
+The outer loop makes at most its captured occupancy plus refills plus one
+iteration calls; both bound reads are observed in native order.
 The projected facts give the counter, suspension append and exhaustion result;
 native last-iteration and section-stop provenance is proved separately by
 activationExitRun_source_facts. Callback termination, adequate fuel and global

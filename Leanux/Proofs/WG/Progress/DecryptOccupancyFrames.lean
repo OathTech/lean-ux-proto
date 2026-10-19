@@ -1,5 +1,5 @@
 import Leanux.Proofs.WG.Progress.DecryptOccupancyModel
-import Leanux.Proofs.WG.Queues.RxRingScheduler
+import Leanux.Proofs.WG.Queues.RxRingNapi
 
 /-! Physical decrypt-cell retention through the actual RX publication tail,
 and its exact campaign projection. Peer/key deletion remains permitted. -/

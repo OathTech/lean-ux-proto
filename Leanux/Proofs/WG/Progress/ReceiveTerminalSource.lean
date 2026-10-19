@@ -26,7 +26,6 @@ theorem receiveStep_false_cut (g v : WGWorld) (a b : Ambient)
   | some d =>
     have read : ((getDev.run g).run a) = .ok ((d,g),a) := by
       simp [getDev,device]
-      rfl
     rw [read] at run
     simp only [bind,Except.bind] at run
     cases empty : d.handshakeQueue.peek with
@@ -114,7 +113,8 @@ theorem receive_activation_terminal (active : Activation)
   have facts := activationExitRun_facts active initial
   cases audit : activationExitRun active initial with
   | occupancyError e => trivial
-  | ran occupancy entry result =>
+  | refillsError occupancy afterOccupancy e => trivial
+  | ran occupancy refills entry result =>
     cases result with
     | iterationError count current before e => trivial
     | yielded count current before middle final => trivial

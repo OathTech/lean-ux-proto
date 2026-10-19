@@ -51,7 +51,7 @@ theorem original_dispatch_runs_activation (worker : Worker) (initial final : Wor
 preserves the entire World, including records. Non-draining worker kinds are
 also in this dispatch-specific no-work case. -/
 theorem original_dispatch_no_work (worker : Worker) (d : WG.Device) (initial : World)
-    (device : initial.wg.dev = some d) (empty : NoDispatchWork worker d) :
+    (device : initial.wg.dev = some d) (empty : NoDispatchWork worker d initial.ambient.pendingWork) :
     (Env.dispatch worker).run initial = .ok (false, initial) :=
   dispatch_no_work worker d initial device empty
 
@@ -235,12 +235,14 @@ theorem original_turn_napi (stack : Option Worker) (initial afterPeek final : Wo
 
 /-- In recordless mode with a resident device, the original scheduler returns
 unchanged when the receive, decrypt, encrypt and transmit readiness tests are
-all empty. It does not inspect suspended activations, NAPI, timers or send work
+all empty, including the three device pending identities. It does not inspect suspended activations, NAPI, timers or send work
 on this branch, so this is not global work emptiness. -/
 theorem original_recordless_turn_empty (stack : Option Worker) (initial : World) (d : WG.Device)
     (records : initial.ambient.hidden = none) (device : initial.wg.dev = some d)
-    (empty : d.handshakeQueue.empty = true ∧ d.decryptQueue.empty = true ∧
-      d.encryptQueue.empty = true ∧ d.txWorkQueue.isEmpty = true) :
+    (empty : d.handshakeQueue.empty = true ∧ initial.ambient.pendingWork.contains Worker.receiveWorker.index = false ∧
+      d.decryptQueue.empty = true ∧ initial.ambient.pendingWork.contains Worker.decryptWorker.index = false ∧
+      d.encryptQueue.empty = true ∧ initial.ambient.pendingWork.contains Worker.encryptWorker.index = false ∧
+      d.txWorkQueue.isEmpty = true) :
     (scheduleTurn stack).run initial = .ok (turnReturn, initial) :=
   turn_placeholder_empty stack initial d records device empty
 
@@ -250,7 +252,7 @@ activation. Recordless mode alone does not enable placeholders or promise a
 successful hidden-input read; this is not a fairness or termination claim. -/
 theorem original_recordless_turn_runs (stack : Option Worker) (worker : Worker)
     (initial final : World) (d : WG.Device) (records : initial.ambient.hidden = none)
-    (device : initial.wg.dev = some d) (selected : placeholderSelection d = some worker) :
+    (device : initial.wg.dev = some d) (selected : placeholderSelection d initial.ambient.pendingWork = some worker) :
     (scheduleTurn stack).run initial = .ok (turnContinue, final) ↔ DispatchRun worker initial final := by
   rw [turn_placeholder_dispatch stack worker initial d records device selected]
   exact placeholderDispatch_success_iff worker initial final
@@ -260,7 +262,7 @@ the original scheduler turn. In particular, absent records do not authorize
 placeholder execution when the original hidden reader rejects it. -/
 theorem original_recordless_turn_error (stack : Option Worker) (worker : Worker)
     (initial : World) (d : WG.Device) (err : Stop) (records : initial.ambient.hidden = none)
-    (device : initial.wg.dev = some d) (selected : placeholderSelection d = some worker)
+    (device : initial.wg.dev = some d) (selected : placeholderSelection d initial.ambient.pendingWork = some worker)
     (failed : (Leanux.Env.dispatch worker).run initial = .error err) :
     (scheduleTurn stack).run initial = .error err := by
   rw [turn_placeholder_dispatch stack worker initial d records device selected]

@@ -9,7 +9,7 @@ namespace Leanux.Proofs.WG.Progress.CookieFull
 open Leanux Leanux.Env
 
 -- turn_stop is refuted by the bad-tail activation invariant and the checked
--- schedule_cookieBadTail_counterexample (CookieScheduleFindings).
+-- schedule_cookieBadTail_completes (CookieScheduleFindings).
 -- turn_yield is refuted by turn_cookieHole_counterexample
 -- (CookieScheduleSupportFindings): nonempty logical items do not force a live
 -- physical head. cookieScheduler_run retains the actual turn and its errors.

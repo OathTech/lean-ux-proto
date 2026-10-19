@@ -16,9 +16,9 @@ def Rep (deviceIndex capacity batch : Nat) (live : List SkbId)
     cell s = some (deviceIndex,Ring.ringOf capacity batch tail stale live)
 
 def NoExhaustion : ActivationExitAudit Campaign2.Product.Snapshot → Prop
-  | .occupancyError _ => False
-  | .ran _ _ (.exhausted ..) => False
-  | .ran _ _ _ => True
+  | .occupancyError _ | .refillsError .. => False
+  | .ran _ _ _ (.exhausted ..) => False
+  | .ran _ _ _ _ => True
 
 
 end Leanux.Proofs.WG.Progress.DecryptOccupancy

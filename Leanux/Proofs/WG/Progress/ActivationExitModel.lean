@@ -39,21 +39,27 @@ def map {σ τ : Type} (project : σ → τ) : ActivationExitResult σ → Activ
 
 end ActivationExitResult
 
-/-- Occupancy is read once from the actual entry. A failed occupancy read
-precedes every iteration. -/
+/-- Occupancy and the refill bound are read in native order before iteration.
+A refill-read failure retains its actual intermediate cut; a run captures both
+values and the actual state after both reads. -/
 inductive ActivationExitAudit (σ : Type) where
   | occupancyError (error : Stop)
-  | ran (occupancy : Nat) (entry : σ) (result : ActivationExitResult σ)
+  | refillsError (occupancy : Nat) (afterOccupancy : σ) (error : Stop)
+  | ran (occupancy refills : Nat) (entry : σ) (result : ActivationExitResult σ)
 
 namespace ActivationExitAudit
 
 def erase {σ : Type} : ActivationExitAudit σ → Except Stop (Unit × σ)
   | .occupancyError error => .error error
-  | .ran _ _ result => result.erase
+  | .refillsError _ _ error => .error error
+  | .ran _ _ _ result => result.erase
 
 def map {σ τ : Type} (project : σ → τ) : ActivationExitAudit σ → ActivationExitAudit τ
   | .occupancyError error => .occupancyError error
-  | .ran occupancy entry result => .ran occupancy (project entry) (result.map project)
+  | .refillsError occupancy afterOccupancy error =>
+      .refillsError occupancy (project afterOccupancy) error
+  | .ran occupancy refills entry result =>
+      .ran occupancy refills (project entry) (result.map project)
 
 end ActivationExitAudit
 
@@ -61,16 +67,16 @@ end ActivationExitAudit
 about callback termination, sufficient fuel or global emptiness is made. -/
 def ActivationExitFacts (original : Activation) :
     ActivationExitAudit Campaign2.Product.Snapshot → Prop
-  | .occupancyError _ => True
-  | .ran occupancy _ result =>
-      result.attempts ≤ occupancy + 1 ∧
+  | .occupancyError _ | .refillsError .. => True
+  | .ran occupancy refills _ result =>
+      result.attempts ≤ occupancy + refills + 1 ∧
       result.active = {original with iterations := original.iterations + result.continued} ∧
       match result with
       | .yielded _ active _ middle final =>
         final = {middle with ambient := {middle.ambient with suspended :=
           middle.ambient.suspended ++ [{active with iterations := active.iterations + 1}]}}
-      | .exhausted n _ _ error => n = occupancy + 1 ∧ error = .invariant
-          s!"{original.worker.symbol} consumed more items than its queue held ({occupancy}) in one run"
+      | .exhausted n _ _ error => n = occupancy + refills + 1 ∧ error = .invariant
+          s!"{original.worker.symbol} consumed more items than its queue held ({occupancy}) plus the refills its run could take ({refills})"
       | _ => True
 
 end Leanux.Proofs.WG.Progress

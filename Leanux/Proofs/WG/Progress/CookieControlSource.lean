@@ -79,10 +79,10 @@ def activationStepSource (_ : Nat) (state : Option Unit × Activation) :
     modifyAmbient fun s => {s with suspended := s.suspended ++ [{act with iterations := act.iterations + 1}]}
     pure (.done (some (), act))
 
-def activationFinishSource (a : Activation) (occupancy : Nat) (state : Option Unit × Activation) : M Unit :=
+def activationFinishSource (a : Activation) (occupancy refills : Nat) (state : Option Unit × Activation) : M Unit :=
   match state.1 with
   | some u => pure u
-  | none => invariant s!"{a.worker.symbol} consumed more items than its queue held ({occupancy}) in one run"
+  | none => invariant s!"{a.worker.symbol} consumed more items than its queue held ({occupancy}) plus the refills its run could take ({refills})"
 
 def activationLoopSource (turns : List Nat) (a : Activation) : M (Option Unit × Activation) :=
   forIn turns (none, a) activationStepSource
@@ -90,12 +90,15 @@ def activationLoopSource (turns : List Nat) (a : Activation) : M (Option Unit ×
 theorem activation_run_source (a : Activation) :
     Activation.run a = (do
       let occupancy ← Activation.occupancy a
-      let state ← activationLoopSource (List.range' 0 (occupancy + 1)) a
-      activationFinishSource a occupancy state) := by
+      let refills ← Activation.refills
+      let state ← activationLoopSource (List.range' 0 (occupancy + refills + 1)) a
+      activationFinishSource a occupancy refills state) := by
   unfold activationLoopSource activationStepSource activationFinishSource
   simp [Activation.run, Std.Legacy.Range.forIn_eq_forIn_range']
   congr 1
   funext occupancy
+  congr 1
+  funext refills
   congr 1
   funext state
   rcases state with ⟨result, act⟩

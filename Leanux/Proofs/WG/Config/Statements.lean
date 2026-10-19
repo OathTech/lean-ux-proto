@@ -720,16 +720,17 @@ theorem empty_dump_trace_accepted : DumpCancellation.accepted = true :=
   SourceClaims.empty_dump_trace_accepted
 
 /-- The original empty-device dump callback completes with one message,
-a cleared cursor and 3720 bytes of tailroom. This retains the cancelled nest's
-four bytes; the source correspondence discrepancy is recorded in request 3. -/
-theorem original_empty_dump_room : DumpCancellation.callbackResult = some (0, 3720, true, 1) :=
+a cleared cursor and 3724 bytes of tailroom. The corrected source restores
+the cancelled peer-nest header's four bytes; request 3 remains historical. -/
+theorem original_empty_dump_room : DumpCancellation.callbackResult = some (0, 3724, true, 1) :=
   SourceClaims.original_empty_dump_room
 
 /-- The C-derived accounting of the retained header and attributes leaves
-3724 bytes, exactly one cancelled nest header more than the mirror witness.
-This is arithmetic supporting the source review, not a formal C simulation. -/
+3724 bytes, now exactly matching the actual callback result. The equality
+checks the mirror regression and is not a formal C simulation. -/
 theorem empty_dump_cancellation_accounting :
-    DumpCancellation.cancelledNestRoom = 3724 ∧ 3720 + nlaTotal 0 = DumpCancellation.cancelledNestRoom :=
+    DumpCancellation.cancelledNestRoom = 3724 ∧
+      DumpCancellation.callbackResult = some (0, DumpCancellation.cancelledNestRoom, true, 1) :=
   SourceClaims.empty_dump_cancellation_accounting
 
 /-- On the original changed-key/no-collision domain, normal completion returns

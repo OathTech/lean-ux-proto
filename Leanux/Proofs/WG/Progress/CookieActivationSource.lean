@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.Progress.CookieControlSource
+import Leanux.Proofs.WG.Progress.ActivationRefillFrames
 import Leanux.Proofs.WG.Progress.CookieRingSource
 
 set_option autoImplicit false
@@ -50,7 +51,6 @@ theorem cookieEmptyStep_run (w : World) (d : Device)
       steps := w.ambient.steps.push {decision := .workerConsumed, outcome := false, netRx := w.ambient.netRxSection}}}) := by
   change (((receiveStep.run w.wg).run w.ambient) >>= _) = _
   simp [receiveStep, getDev, PtrRing.consume, device, empty, branch, AmbientM.branch]
-  rfl
 
 theorem cookieEmptyIter_run (a : Activation) (receive : a.worker = .receiveWorker)
     (w : World) (d : Device) (device : w.wg.dev = some d) (empty : d.handshakeQueue.peek = none) :
@@ -75,13 +75,24 @@ theorem cookieEmptyActivation_run (a : Activation) (receive : a.worker = .receiv
     have read : (liftM getDev : Leanux.M Device).run w = .ok (d, w) := by
       change (((getDev.run w.wg).run w.ambient) >>= _) = _
       simp [getDev, device]
-      rfl
     rw [read]
     simp [receive]
     rfl
+  have refill := RecordSuffix.activationRefills_run w d device
+  rw [present] at refill
+  simp only [Option.map_some, Option.getD_some] at refill
   rw [activation_run_source, StateT.run_bind, occupancy]
-  change ((do let state ← activationLoopSource (List.range' 0 (d.handshakeQueue.count + 1)) a
-              activationFinishSource a d.handshakeQueue.count state).run w) = _
+  change ((do
+    let refills ← Activation.refills
+    let state ← activationLoopSource (List.range' 0 (d.handshakeQueue.count + refills + 1)) a
+    activationFinishSource a d.handshakeQueue.count refills state).run w) = _
+  rw [StateT.run_bind, refill]
+  change ((do let state ← activationLoopSource (List.range' 0
+                (d.handshakeQueue.count + (records.length +
+                  d.peers.toList.countP (fun pair : PeerId × Peer => pair.2.napiScheduled) * NAPI_POLL_WEIGHT) + 1)) a
+              activationFinishSource a d.handshakeQueue.count
+                (records.length + d.peers.toList.countP (fun pair : PeerId × Peer => pair.2.napiScheduled) * NAPI_POLL_WEIGHT)
+                state).run w) = _
   simp only [activationLoopSource, List.range'_succ, List.forIn_cons, activationStepSource, StateT.run_bind]
   rw [cookieEmptyIter_run a receive w d device empty]
   simp only [Bind.bind, Except.bind]

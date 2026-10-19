@@ -66,30 +66,33 @@ theorem hidden_metadata (metadata : Bool → List String → Prop) (site : Hidde
   dsimp only [Bind.bind, Except.bind, StateT.run] at run
   change AmbientM.noteNetRxStart site.info.id skipped = .ok ((), noted) at hnote
   rw [hnote] at run
-  dsimp only [StateT.run, Bind.bind, Pure.pure, get, getThe, MonadStateOf.get, set,
-    StateT.bind, StateT.pure, StateT.get, StateT.set, modify, modifyGet,
-    MonadStateOf.modifyGet, StateT.modifyGet, Except.pure, Except.bind] at run
-  cases recordState : noted.hidden with
-  | none =>
-    simp only [recordState] at run
-    cases placeholders : noted.hiddenPlaceholders <;>
-      simp [placeholders] at run
-    all_goals
-      repeat' first
-        | (solve | cases run; exact noteMode)
-        | (solve | contradiction)
-        | (split at run)
-  | some rs =>
-    cases rs with
-    | nil =>
+  dsimp only [Bind.bind, Except.bind] at run
+  split at run
+  all_goals
+    dsimp only [StateT.run, Bind.bind, Pure.pure, get, getThe, MonadStateOf.get, set,
+      StateT.bind, StateT.pure, StateT.get, StateT.set, modify, modifyGet,
+      MonadStateOf.modifyGet, StateT.modifyGet, Except.pure, Except.bind] at run
+    cases recordState : noted.hidden with
+    | none =>
       simp only [recordState] at run
-      cases run
-    | cons record rest =>
-      simp only [recordState] at run
-      repeat' first
-        | (solve | cases run; exact noteMode)
-        | (solve | contradiction)
-        | split at run
+      cases placeholders : noted.hiddenPlaceholders <;>
+        simp [placeholders] at run
+      all_goals
+        repeat' first
+          | (solve | cases run; exact noteMode)
+          | (solve | contradiction)
+          | (split at run)
+    | some rs =>
+      cases rs with
+      | nil =>
+        simp only [recordState] at run
+        cases run
+      | cons record rest =>
+        simp only [recordState] at run
+        repeat' first
+          | (solve | cases run; exact noteMode)
+          | (solve | contradiction)
+          | split at run
 
 
 private theorem metadata_bind {σ α β : Type} (metadata : Bool → List String → Prop)

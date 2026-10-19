@@ -10,6 +10,20 @@ open Leanux Leanux.WG Leanux.Env
 def cookieBadTailStopRecords : List HiddenRecord :=
   [{site := (HiddenSite.sectionStop .receiveWorker).info.id, bytes := List.replicate 8 0}]
 
+/-- Current physical endpoint after the two productive polls and the empty poll
+of this fixed malformed ring. The supplied section-stop record is consumed. -/
+def cookieBadTailFinal (w : World) (d : Device) : World :=
+  let d1 := cookieRingTailDevice d
+  let w1 := {cookieMissStepView w d d.handshakeQueue.consume.2 with
+    ambient := {(cookieMissStepView w d d.handshakeQueue.consume.2).ambient with
+      hidden := some cookieBadTailStopRecords}}
+  let w2 := {cookieMissStepView w1 d1 d1.handshakeQueue.consume.2 with
+    ambient := {(cookieMissStepView w1 d1 d1.handshakeQueue.consume.2).ambient with
+      hidden := some cookieBadTailStopRecords}}
+  {w2 with ambient := {w2.ambient with
+    hidden := some []
+    steps := w2.ambient.steps.push {decision := .workerConsumed, outcome := false, netRx := w2.ambient.netRxSection}}}
+
 /-- The count-only resolver predicts a completed one-packet activation, but the
 malformed ring needs two productive polls before it first becomes empty. -/
 theorem cookieBadTail_resolver_contrast (msg : List UInt8) (src : SkbSource) :
@@ -25,15 +39,14 @@ theorem cookieBadTail_resolver_contrast (msg : List UInt8) (src : SkbSource) :
     HiddenSite.info, HiddenSite.passive, Worker.sectionId, Worker.index]
   rfl
 
-/-- An actual activation exhausts its occupancy-derived fuel. The ring's
-consumer tail is malformed; no reachable-state or kernel-bug claim is made. -/
+/-- The current refill-aware budget completes this historical malformed-tail
+witness. This is an arbitrary-state regression, not a reachability claim. -/
 theorem cookieBadTail_activation_run (a : Activation) (w : World) (d : Device)
     (msg : List UInt8) (src : SkbSource) (receive : a.worker = .receiveWorker)
     (device : w.wg.dev = some d) (queue : d.handshakeQueue = cookieBadTailRing msg src)
     (table : d.indexTable = []) (cookie : messageType msg = MESSAGE_HANDSHAKE_COOKIE)
     (present : w.ambient.hidden = some cookieBadTailStopRecords) :
-    (Activation.run a).run w = .error (.invariant
-      "wg_packet_handshake_receive_worker consumed more items than its queue held (1) in one run") := by
+    (Activation.run a).run w = .ok ((), cookieBadTailFinal w d) := by
   have resched : cookieReschedResult cookieBadTailStopRecords =
       .ok (false, cookieBadTailStopRecords) := by rfl
   have first : d.handshakeQueue.consume.1 = some (msg, src) := by
@@ -64,20 +77,46 @@ theorem cookieBadTail_activation_run (a : Activation) (w : World) (d : Device)
     have read : (liftM getDev : Leanux.M Device).run w = .ok (d, w) := by
       change (((getDev.run w.wg).run w.ambient) >>= _) = _
       simp [getDev, device]
-      rfl
     rw [read]
     simp [receive, queue, cookieBadTailRing, PtrRing.count, PtrRing.peek]
     rfl
+  let extra := d.peers.toList.countP (fun pair : PeerId × Peer => pair.2.napiScheduled) * NAPI_POLL_WEIGHT
+  have refill : Activation.refills.run w = .ok (1 + extra, w) := by
+    have read := RecordSuffix.activationRefills_run w d device
+    rw [present] at read
+    exact read
+  let d2 := cookieRingTailDevice d1
+  let a2 := {a1 with iterations := a1.iterations + 1}
+  have empty : d2.handshakeQueue.peek = none := by
+    simp [d2, d1, cookieRingTailDevice, queue, cookieBadTailRing, PtrRing.consume,
+      PtrRing.peek, PtrRing.discardOne, PtrRing.discardOne.clear]
+  let w3 := {w2 with ambient := {w2.ambient with
+    steps := w2.ambient.steps.push {decision := .workerConsumed, outcome := false, netRx := w2.ambient.netRxSection}}}
+  have iter3 : (Activation.iter a2).run w2 = .ok (.ended, w3) :=
+    cookieEmptyIter_run a2 receive w2 d2 rfl empty
+  have stopped : (hidden (.sectionStop a2.worker) : Leanux.M (List UInt8)).run w3 =
+      .ok (List.replicate 8 0, cookieBadTailFinal w d) := by
+    have read := hidden_cookie_control false w3 cookieBadTailStopRecords rfl
+    change (hidden (.sectionStop .receiveWorker) : Leanux.M (List UInt8)).run w3 =
+      .ok (List.replicate 8 0, cookieBadTailFinal w d) at read
+    simpa only [a2, a1, receive] using read
   rw [activation_run_source, StateT.run_bind, occupancy]
-  change ((do let state ← activationLoopSource [0, 1] a
-              activationFinishSource a 1 state).run w) = _
-  simp only [activationLoopSource, List.forIn_cons, activationStepSource, StateT.run_bind]
+  change (Activation.refills.run w >>= _) = _
+  rw [refill]
+  change ((do let state ← activationLoopSource (List.range' 0 (1 + (1 + extra) + 1)) a
+              activationFinishSource a 1 (1 + extra) state).run w) = _
+  rw [show 1 + (1 + extra) + 1 = extra + 3 by omega]
+  simp only [activationLoopSource, List.range'_succ, List.forIn_cons,
+    activationStepSource, StateT.run_bind]
+  dsimp only [StateT.run, StateT.bind, StateT.pure, Except.pure, Bind.bind, Pure.pure,
+    Except.bind] at iter1 iter2 iter3 stopped ⊢
   rw [iter1]
-  change ((do let state ← activationLoopSource [1] a1
-              activationFinishSource a 1 state).run w1) = _
-  simp only [activationLoopSource, List.forIn_cons, activationStepSource, StateT.run_bind]
+  dsimp only [StateT.run, StateT.bind, StateT.pure, Except.pure, Bind.bind, Pure.pure, Except.bind]
   rw [iter2]
-  simp only [Bind.bind, Except.bind, List.forIn_nil, activationFinishSource, receive]
+  dsimp only [StateT.run, StateT.bind, StateT.pure, Except.pure, Bind.bind, Pure.pure, Except.bind]
+  rw [iter3]
+  dsimp only [StateT.run, StateT.bind, StateT.pure, Except.pure, Bind.bind, Pure.pure, Except.bind]
+  rw [stopped]
   rfl
 
 end Leanux.Proofs.WG.Progress

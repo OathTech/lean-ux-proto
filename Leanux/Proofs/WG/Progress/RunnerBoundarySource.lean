@@ -3,7 +3,6 @@ import Leanux.Proofs.WG.Campaign2.Bridge
 
 set_option autoImplicit false
 set_option pp.structureInstances false
-set_option maxHeartbeats 800000
 namespace Leanux.Proofs.WG.Progress
 open Lean Leanux Leanux.Runner Campaign2
 
@@ -67,6 +66,10 @@ def runnerStep (trace : Trace) (op : Operation) (state : RunnerAccumulator) :
     throw (index, .hidden s!"a record of site {r.site} was not consumed")
   if let a :: _ := w.ambient.suspended then
     throw (index, .hidden s!"{a.worker.symbol} is still suspended at the end of the operation (its stop has no record)")
+  if w.ambient.hidden.isSome then
+    if let i :: _ := w.ambient.pendingWork then
+      let name := ((Worker.all.find? (·.index == i)).map (·.symbol)).getD s!"unit {i}"
+      throw (index, .hidden s!"{name} is pending at the end of the operation (the dispatch its requeue causes has no section in the records)")
   if w.wg.netRxRaised then
     throw (index, .invariant "a NET_RX softirq raised by a loopback transmission was left pending")
   world := w
@@ -105,8 +108,9 @@ def runnerStep (trace : Trace) (op : Operation) (state : RunnerAccumulator) :
     fired := fired.push (Json.mkObj [("index", toJson index), ("symbol", toJson symbol)])
   return .yield (world, results, ends, observations, branches, fired)
 
-/-- The actual syscall and ambient strip, followed by the three original
-operation-completion checks. A negative syscall return still passes here. -/
+/-- The actual syscall and ambient strip, followed by the four original
+operation-completion checks, including supplied-mode pending work. A negative
+syscall return still passes when these checks succeed. -/
 def runnerOperation (trace : Trace) (op : Operation) (state : RunnerAccumulator) :
     Except (Nat × Stop) (Int × World) := do
   let world := state.1
@@ -125,6 +129,10 @@ def runnerOperation (trace : Trace) (op : Operation) (state : RunnerAccumulator)
     throw (index, .hidden s!"a record of site {r.site} was not consumed")
   if let a :: _ := w.ambient.suspended then
     throw (index, .hidden s!"{a.worker.symbol} is still suspended at the end of the operation (its stop has no record)")
+  if w.ambient.hidden.isSome then
+    if let i :: _ := w.ambient.pendingWork then
+      let name := ((Worker.all.find? (·.index == i)).map (·.symbol)).getD s!"unit {i}"
+      throw (index, .hidden s!"{name} is pending at the end of the operation (the dispatch its requeue causes has no section in the records)")
   if w.wg.netRxRaised then
     throw (index, .invariant "a NET_RX softirq raised by a loopback transmission was left pending")
   return (ret, w)
@@ -191,7 +199,8 @@ theorem runnerStep_operation_source (trace : Trace) (op : Operation) (state : Ru
   | none => cases hs : after.ambient.suspended <;> cases hb : after.wg.netRxRaised <;> rfl
   | some records =>
     cases records with
-    | nil => cases hs : after.ambient.suspended <;> cases hb : after.wg.netRxRaised <;> rfl
+    | nil => cases hs : after.ambient.suspended <;>
+      cases hp : after.ambient.pendingWork <;> cases hb : after.wg.netRxRaised <;> rfl
     | cons record rest => rfl
 
 def runnerFinish (trace : Trace) (state : RunnerAccumulator) : Except (Nat × Stop) Lean.Json := do

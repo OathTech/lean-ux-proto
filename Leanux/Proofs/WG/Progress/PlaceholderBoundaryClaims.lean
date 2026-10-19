@@ -3,17 +3,16 @@ import Leanux.Proofs.WG.Progress.PlaceholderBoundarySource
 set_option autoImplicit false
 namespace Leanux.Proofs.WG.Progress.CurrentBoundaryWitness
 open Leanux Leanux.Runner
-/-- The real initialized placeholder-mode runner accepts.  Its actual audited
-last cut has a retained receive-worker pending marker with the specified
-empty-queue, count and NAPI tests.
-This proves neither supplied-record acceptance nor an unexecuted callback. -/
-theorem placeholder_accepted_pending :
+/-- The real initialized placeholder-mode runner accepts this trace. Its actual
+audited last cut has no pending identity and satisfies the specified empty-queue,
+count and NAPI tests. This is a concrete regression, not an all-mode theorem. -/
+theorem placeholder_accepted_drained :
     ∃ audit cut d,
       executeTraceWithBoundaries placeholderBoundaryTrace true = .ok audit ∧
       executeTrace placeholderBoundaryTrace true = .ok audit.output ∧
       audit.boundaries[1]? = some cut ∧
       cut.index = 1 ∧ cut.result = 1 ∧ cut.after.wg.device = some d ∧
-      cut.after.ambient.pendingWork = [Worker.receiveWorker.index] ∧
+      cut.after.ambient.pendingWork = [] ∧
       cut.after.ambient.hidden.isNone = true ∧
       cut.after.ambient.suspended.isEmpty = true ∧ cut.after.wg.netRxRaised = false ∧
       d.handshakeQueue.empty = true ∧ d.handshakeQueue.count = 0 ∧
@@ -21,8 +20,8 @@ theorem placeholder_accepted_pending :
       d.encryptQueue.empty = true ∧ d.txWorkQueue.isEmpty = true ∧
       d.sendWorkQueue.isEmpty = true ∧ d.clearWorkQueue.isEmpty = true ∧
       d.peers.toList.any (fun item => item.2.napiScheduled) = false := by
-  have checked := placeholder_boundary_check
-  unfold placeholderBoundaryCheck at checked
+  have checked := placeholder_boundary_drained_check
+  unfold placeholderBoundaryDrainedCheck at checked
   cases audited : executeTraceWithBoundaries placeholderBoundaryTrace true with
   | error err => simp only [audited, Bool.false_eq_true] at checked
   | ok audit =>

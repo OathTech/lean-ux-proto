@@ -8,10 +8,10 @@ open Leanux Leanux.WG Leanux.Env
 
 /-- Invoke only the original iteration and final section read. The raw states
 are actual successors; none is reconstructed from an observation. -/
-def activationExitLoop (original : Activation) (occupancy : Nat) :
+def activationExitLoop (original : Activation) (occupancy refills : Nat) :
     Nat → Nat → Activation → World → ActivationExitResult World
   | 0, count, active, before => .exhausted count active before (.invariant
-      s!"{original.worker.symbol} consumed more items than its queue held ({occupancy}) in one run")
+      s!"{original.worker.symbol} consumed more items than its queue held ({occupancy}) plus the refills its run could take ({refills})")
   | fuel + 1, count, active, before =>
     match (Activation.iter active).run before with
     | .error error => .iterationError count active before error
@@ -20,14 +20,17 @@ def activationExitLoop (original : Activation) (occupancy : Nat) :
     | .ok (.yielded, after) => .yielded count active before after
         {after with ambient := {after.ambient with suspended := after.ambient.suspended ++
           [{active with iterations := active.iterations + 1}]}}
-    | .ok (.continued, after) => activationExitLoop original occupancy fuel (count + 1)
+    | .ok (.continued, after) => activationExitLoop original occupancy refills fuel (count + 1)
         {active with iterations := active.iterations + 1} after
 
 def activationExitRun (a : Activation) (initial : World) : ActivationExitAudit World :=
   match (Activation.occupancy a).run initial with
   | .error error => .occupancyError error
-  | .ok (occupancy, entry) => .ran occupancy entry
-      (activationExitLoop a occupancy (occupancy + 1) 0 a entry)
+  | .ok (occupancy, afterOccupancy) =>
+    match Activation.refills.run afterOccupancy with
+    | .error error => .refillsError occupancy afterOccupancy error
+    | .ok (refills, entry) => .ran occupancy refills entry
+        (activationExitLoop a occupancy refills (occupancy + refills + 1) 0 a entry)
 
 /-- Inspect the complete actual run. The external state remains at entry;
 the operation's actual final state, or its first Stop, is in the datum. -/
@@ -47,9 +50,9 @@ def ActivationExitSourceFacts : ActivationExitResult World → Prop
         middle.ambient.suspended ++ [{active with iterations := active.iterations + 1}]}}
   | .exhausted .. => True
 
-theorem activationExitLoop_source_facts (original : Activation) (occupancy fuel count : Nat)
+theorem activationExitLoop_source_facts (original : Activation) (occupancy refills fuel count : Nat)
     (active : Activation) (entry : World) :
-    ActivationExitSourceFacts (activationExitLoop original occupancy fuel count active entry) := by
+    ActivationExitSourceFacts (activationExitLoop original occupancy refills fuel count active entry) := by
   induction fuel generalizing count active entry with
   | zero => trivial
   | succ fuel ih =>
@@ -63,26 +66,37 @@ theorem activationExitLoop_source_facts (original : Activation) (occupancy fuel 
       | yielded => exact ⟨run, rfl⟩
       | continued => exact ih (count + 1) _ after
 
-/-- The occupancy value and last-phase facts belong to this same actual entry
-run, including a failed initial occupancy read. -/
+/-- Both captured values and each failed read refer to the same native run.
+The last-phase facts start at the real state after the second read. -/
 theorem activationExitRun_source_facts (a : Activation) (initial : World) :
     match activationExitRun a initial with
     | .occupancyError error => (Activation.occupancy a).run initial = .error error
-    | .ran occupancy entry result =>
-        (Activation.occupancy a).run initial = .ok (occupancy, entry) ∧
+    | .refillsError occupancy afterOccupancy error =>
+        (Activation.occupancy a).run initial = .ok (occupancy, afterOccupancy) ∧
+        Activation.refills.run afterOccupancy = .error error
+    | .ran occupancy refills entry result =>
+        (∃ afterOccupancy,
+          (Activation.occupancy a).run initial = .ok (occupancy, afterOccupancy) ∧
+          Activation.refills.run afterOccupancy = .ok (refills, entry)) ∧
         ActivationExitSourceFacts result := by
   unfold activationExitRun
   cases read : (Activation.occupancy a).run initial with
   | error error => rfl
   | ok pair =>
-    obtain ⟨occupancy, entry⟩ := pair
-    exact ⟨rfl, activationExitLoop_source_facts a occupancy (occupancy + 1) 0 a entry⟩
+    obtain ⟨occupancy, afterOccupancy⟩ := pair
+    dsimp only
+    cases refillRead : Activation.refills.run afterOccupancy with
+    | error error => exact ⟨rfl, refillRead⟩
+    | ok pair =>
+      obtain ⟨refills, entry⟩ := pair
+      exact ⟨⟨afterOccupancy, rfl, refillRead⟩,
+        activationExitLoop_source_facts a occupancy refills (occupancy + refills + 1) 0 a entry⟩
 
-theorem activationExitLoop_erases (original : Activation) (occupancy fuel start count : Nat)
+theorem activationExitLoop_erases (original : Activation) (occupancy refills fuel start count : Nat)
     (active : Activation) (entry : World) :
-    (activationExitLoop original occupancy fuel count active entry).erase =
+    (activationExitLoop original occupancy refills fuel count active entry).erase =
       ((do let state ← activationLoopSource (List.range' start fuel) active
-           activationFinishSource original occupancy state).run entry) := by
+           activationFinishSource original occupancy refills state).run entry) := by
   induction fuel generalizing start count active entry with
   | zero => rfl
   | succ fuel ih =>
@@ -108,15 +122,26 @@ theorem activationExitRun_erases (a : Activation) (entry : World) :
   cases read : (Activation.occupancy a).run entry with
   | error error => rfl
   | ok pair =>
-    obtain ⟨occupancy, after⟩ := pair
-    exact activationExitLoop_erases a occupancy (occupancy + 1) 0 0 a after
+    obtain ⟨occupancy, afterOccupancy⟩ := pair
+    change (match Activation.refills.run afterOccupancy with
+      | .error error => ActivationExitAudit.refillsError occupancy afterOccupancy error
+      | .ok (refills, after) => ActivationExitAudit.ran occupancy refills after
+          (activationExitLoop a occupancy refills (occupancy + refills + 1) 0 a after)).erase =
+      (Activation.refills.run afterOccupancy >>= fun (refills, after) =>
+        (do let state ← activationLoopSource (List.range' 0 (occupancy + refills + 1)) a
+            activationFinishSource a occupancy refills state).run after)
+    cases refillRead : Activation.refills.run afterOccupancy with
+    | error error => rfl
+    | ok pair =>
+      obtain ⟨refills, after⟩ := pair
+      exact activationExitLoop_erases a occupancy refills (occupancy + refills + 1) 0 0 a after
 
-theorem activationExitLoop_facts (original : Activation) (occupancy fuel count : Nat)
+theorem activationExitLoop_facts (original : Activation) (occupancy refills fuel count : Nat)
     (active : Activation) (entry : World)
-    (budget : count + fuel = occupancy + 1)
+    (budget : count + fuel = occupancy + refills + 1)
     (counter : active = {original with iterations := original.iterations + count}) :
-    ActivationExitFacts original (.ran occupancy (Campaign2.Product.snapshot entry)
-      ((activationExitLoop original occupancy fuel count active entry).map Campaign2.Product.snapshot)) := by
+    ActivationExitFacts original (.ran occupancy refills (Campaign2.Product.snapshot entry)
+      ((activationExitLoop original occupancy refills fuel count active entry).map Campaign2.Product.snapshot)) := by
   induction fuel generalizing count active entry with
   | zero =>
     simp only [activationExitLoop, ActivationExitResult.map, ActivationExitFacts,
@@ -149,11 +174,16 @@ theorem activationExitRun_facts (a : Activation) (entry : World) :
   cases read : (Activation.occupancy a).run entry with
   | error error => trivial
   | ok pair =>
-    obtain ⟨occupancy, after⟩ := pair
-    exact activationExitLoop_facts a occupancy (occupancy + 1) 0 a after (by omega)
-      (by simp only [Nat.add_zero])
+    obtain ⟨occupancy, afterOccupancy⟩ := pair
+    dsimp only
+    cases refillRead : Activation.refills.run afterOccupancy with
+    | error error => trivial
+    | ok pair =>
+      obtain ⟨refills, after⟩ := pair
+      exact activationExitLoop_facts a occupancy refills (occupancy + refills + 1) 0 a after (by omega)
+        (by simp only [Nat.add_zero])
 
-/-- Inspection erases to the exact original operation, including occupancy,
+/-- Inspection erases to the exact original operation, including both bound reads,
 iteration, section-stop and budget errors in their original order. -/
 theorem observedActivationExit_source (a : Activation) :
     (do let audit ← observedActivationExit a; pure audit.erase) =
@@ -163,7 +193,8 @@ theorem observedActivationExit_source (a : Activation) :
       (out.map Campaign2.Product.snapshot).erase = Campaign2.Product.observeResult out.erase := by
     cases out with
     | occupancyError error => rfl
-    | ran occupancy initial result =>
+    | refillsError occupancy afterOccupancy error => rfl
+    | ran occupancy refills initial result =>
       cases result with
       | iterationError n active before error => rfl
       | exhausted n active before error => rfl

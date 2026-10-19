@@ -21,10 +21,10 @@ def recordedBoundaryControl : Trace := { pendingTrace with
      recAt (.sectionStop .receiveWorker) (word 1),
      recAt .jiffiesEnd (word 101)]] }
 
-/-- Runtime-discovered domain-filter witness.  This checks the actual initialized
-runner audit, not a reconstructed entry or successor.  Pending bookkeeping is
-reported alongside only the explicit queue, count and NAPI tests. -/
-def placeholderBoundaryCheck : Bool :=
+/-- Current placeholder completion regression over the actual initialized runner
+audit. The receive pending identity is cleared, and the explicit queue, count
+and NAPI tests are retained. This does not quantify over other traces. -/
+def placeholderBoundaryDrainedCheck : Bool :=
   match executeTraceWithBoundaries placeholderBoundaryTrace true with
   | .error _ => false
   | .ok audit =>
@@ -35,7 +35,7 @@ def placeholderBoundaryCheck : Bool :=
       | none => false
       | some d =>
         cut.index == 1 && cut.result == 1 &&
-        cut.after.ambient.pendingWork == [Worker.receiveWorker.index] &&
+        cut.after.ambient.pendingWork == [] &&
         cut.after.ambient.hidden.isNone && cut.after.ambient.suspended.isEmpty &&
         !cut.after.wg.netRxRaised && d.handshakeQueue.empty &&
         d.handshakeQueue.count == 0 && d.handshakeQueueLen == 0 &&

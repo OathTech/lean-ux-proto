@@ -1,6 +1,7 @@
 import Leanux.Proofs.WG.Progress.BatchBacklog
 /-! A constructed initialized execution prefix whose nested receive callback
-refills the encrypt queue. It stops at the occupancy budget, not by divergence.
+refills the encrypt queue. On the corrected mirror it reaches the undrained-work
+refusal, rather than the historical occupancy-only budget failure.
 The operation's completion suffix is deliberately not claimed here. -/
 namespace Leanux.Proofs.WG.Progress.QueueRefill
 open Leanux Leanux.Runner Leanux.Proofs.WG.Progress
@@ -47,18 +48,19 @@ def concreteTrace : Trace :=
         .xmit 4 0x0a000001 [1] {}] 100],
     dstCacheRecords := false, hidden := some rows }
 
-def rejectedAtOccupancyBound : Bool :=
+def rejectedForUndrainedWork : Bool :=
   match executeTrace concreteTrace with
-  | .error (op, .invariant msg) => op == 4 && msg ==
-      "wg_packet_encrypt_worker consumed more items than its queue held (1) in one run"
+  | .error (op, .outsideDomain site msg) =>
+      op == 4 && site == "drivers/net/wireguard/send.c:293" && msg ==
+        "work the batch queued outlived the guest's wait (its records would be missing)"
   | _ => false
 
 /-- Executable reproduction; the full initialized prefix is not claimed as
 a kernel-reduction theorem. Failure to reproduce is an explicit error. -/
 def reproduce : IO Unit :=
-  if rejectedAtOccupancyBound then
-    IO.println "Reproduced operation 4 encrypt occupancy-budget invariant"
-  else throw (IO.userError "encrypt refill finding did not reproduce")
+  if rejectedForUndrainedWork then
+    IO.println "Refill regression passed: operation 4 reaches the undrained-work refusal"
+  else throw (IO.userError "encrypt refill regression did not reproduce")
 
 #eval reproduce
 

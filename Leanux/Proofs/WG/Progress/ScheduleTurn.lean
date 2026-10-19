@@ -31,11 +31,12 @@ def scheduleTurnWith (run : Activation → M Unit) (dispatch : Worker → M Bool
   let netRx := (HiddenSite.sectionStart .netRx).info.id
   if (← getAmbient).hidden.isNone then
     let d ← getDev
+    let pending := (← getAmbient).pendingWork
     let next := [Worker.receiveWorker, .decryptWorker, .encryptWorker, .txWorker].find? fun w =>
       match w with
-      | .receiveWorker => !d.handshakeQueue.empty
-      | .decryptWorker => !d.decryptQueue.empty
-      | .encryptWorker => !d.encryptQueue.empty
+      | .receiveWorker => !d.handshakeQueue.empty || pending.contains w.index
+      | .decryptWorker => !d.decryptQueue.empty || pending.contains w.index
+      | .encryptWorker => !d.encryptQueue.empty || pending.contains w.index
       | _ => !d.txWorkQueue.isEmpty
     let some w := next | return turnReturn
     if !(← dispatch w) then invariant s!"{w.symbol} has work but was not dispatched"

@@ -61,6 +61,20 @@ theorem afterBatchDrainSuffix_drained :
         rw [flag] at run
         change Except.error _ = Except.ok _ at run
         cases run
+    let pending := entry.ambient.pendingWork.filterMap fun i => Worker.all.find? (·.index == i)
+    have pendingRead : (Leanux.pendingDeviceUnits : Leanux.M (List Worker)).run entry =
+        .ok (pending, entry) := rfl
+    have pendingEmpty : pending = [] := by
+      cases hp : pending with
+      | nil => rfl
+      | cons worker rest =>
+        change (do requireDrained "the batch queued" checks; deliverSent : Leanux.M Unit).run entry = _ at run
+        unfold requireDrained at run
+        rw [flags] at run
+        simp only [Bool.false_eq_true, ite_false, bind_assoc] at run
+        simp only [StateT.run_bind, pendingRead, hp] at run
+        change Except.error _ = Except.ok _ at run
+        cases run
     have napi : d.peers.toList.any (·.2.napiScheduled) = false := by
       cases scheduled : d.peers.toList.any (·.2.napiScheduled) with
       | false => rfl
@@ -69,7 +83,12 @@ theorem afterBatchDrainSuffix_drained :
         unfold requireDrained at run
         rw [flags] at run
         simp only [Bool.false_eq_true, ite_false, bind_assoc] at run
-        change ((liftWG getDev).run entry >>= _) = _ at run
+        simp only [StateT.run_bind, pendingRead, pendingEmpty] at run
+        dsimp only [Bind.bind, Except.bind] at run
+        change (((liftWG getDev).run entry >>= fun (dv, current) =>
+          ((if dv.peers.toList.any (·.2.napiScheduled) then
+            invariant "a NAPI poll pending after the decrypt worker (its ring poll runs the softirq)"
+            else pure ()) : Leanux.M Unit).run current) >>= fun out => deliverSent.run out.2) = _ at run
         rw [read] at run
         change ((if d.peers.toList.any (·.2.napiScheduled) then
           invariant "a NAPI poll pending after the decrypt worker (its ring poll runs the softirq)"
@@ -82,7 +101,12 @@ theorem afterBatchDrainSuffix_drained :
       unfold requireDrained at run
       rw [flags] at run
       simp only [Bool.false_eq_true, ite_false, bind_assoc] at run
-      change ((liftWG getDev).run entry >>= _) = _ at run
+      simp only [StateT.run_bind, pendingRead, pendingEmpty] at run
+      dsimp only [Bind.bind, Except.bind] at run
+      change (((liftWG getDev).run entry >>= fun (dv, current) =>
+        ((if dv.peers.toList.any (·.2.napiScheduled) then
+          invariant "a NAPI poll pending after the decrypt worker (its ring poll runs the softirq)"
+          else pure ()) : Leanux.M Unit).run current) >>= fun out => deliverSent.run out.2) = _ at run
       rw [read] at run
       change ((if d.peers.toList.any (·.2.napiScheduled) then
         invariant "a NAPI poll pending after the decrypt worker (its ring poll runs the softirq)"

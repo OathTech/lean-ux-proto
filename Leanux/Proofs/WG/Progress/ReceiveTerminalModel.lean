@@ -11,7 +11,7 @@ open Leanux
 
 def ReceiveTerminal (audit : ActivationExitAudit Campaign2.Product.Snapshot) : Prop :=
   match audit with
-  | .ran _ _ (.ended _ _ before middle stop) =>
+  | .ran _ _ _ (.ended _ _ before middle stop) =>
       (∃ d, before.wg.device = some d ∧ d.handshakeQueue.peek = none) ∧
       middle.wg = before.wg ∧ middle.ambient.hidden = before.ambient.hidden ∧
       ∀ records, before.ambient.hidden = some records →

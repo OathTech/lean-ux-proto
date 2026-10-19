@@ -4,8 +4,10 @@ set_option autoImplicit false
 namespace Leanux.Proofs.WG.Progress
 open Leanux Leanux.Runner Campaign2
 
-/-- Actual acceptance supplies the successful audit of the full Product state.
-The output remains the runner's complete JSON result. -/
+/-- Actual acceptance supplies the successful audit of the full Product state,
+including pending-work emptiness at supplied-record cuts. The output remains
+the runner's complete JSON result. Placeholder pending work is not excluded
+by this general boundary theorem. -/
 theorem runnerAudit_of_accepted (trace : Trace) (placeholders : Bool)
     (output : Lean.Json) (acceptedRun : executeTrace trace placeholders = .ok output) :
     ∃ audit, executeTraceWithBoundaries trace placeholders = .ok audit ∧

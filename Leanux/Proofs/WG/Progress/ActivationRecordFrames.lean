@@ -1,6 +1,5 @@
 import Leanux.Proofs.WG.Progress.RecordSuffixSource
 import Leanux.Proofs.WG.Progress.ActivationExitSource
-import Leanux.Proofs.WG.Roaming.HandshakeOverlayStepSource
 import Leanux.Proofs.Framing.Batch
 set_option autoImplicit false
 namespace Leanux.Proofs.WG.Progress.RecordSuffix
@@ -12,9 +11,14 @@ theorem activationOccupancy_sameKernel_hidden (a : Activation) :
   have dev : SameView (fun w : World => w.ambient.hidden) (liftWG getDev) := by
     apply (Leanux.Proofs.WG.Lifetimes.ProjectedAction.iff_run _ _ _).mpr
     intro before value after run
-    rw [Roaming.HandshakeOverlay.getDev_run] at run
-    cases hd : before.wg.dev <;> simp only [hd] at run <;> cases run
-    rfl
+    rw [liftWG_run] at run
+    cases hd : before.wg.dev with
+    | none =>
+      simp [getDev,hd,Except.map] at run
+      cases run
+    | some d =>
+      simp [getDev,hd,Except.map] at run
+      exact congrArg (fun w : World => w.ambient.hidden) run.2.symm
   have peer (pid : PeerId) :
       SameView (fun w : World => w.ambient.hidden) (liftWG (getPeer pid)) := by
     apply (Leanux.Proofs.WG.Lifetimes.ProjectedAction.iff_run _ _ _).mpr

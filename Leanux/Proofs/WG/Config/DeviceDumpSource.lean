@@ -2,7 +2,6 @@ import Leanux.Proofs.WG.Config.DumpReturns
 
 set_option pp.structureInstances false
 set_option autoImplicit false
-set_option maxHeartbeats 1000000
 
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise Lean Std.Do
@@ -39,9 +38,9 @@ def deviceDumpSource (d : Device) (ctx0 : DumpCtx) (prevSeq0 : Nat) (skb0 : NlSk
       device := device ++ [("private_key", toJson (hexKey identity.staticPrivate)),
         ("public_key", toJson (hexKey identity.staticPublic))]
   -- peers_nest = nla_nest_start(skb, WGDEVICE_A_PEERS)
+  let nestStart := skb
   let (fail, s) := skb.put (nlaTotal 0); skb := s
   if ← branch .dumpNoPeersNest fail then unsupported "the peers nest does not fit a fresh chunk (unreachable)"
-  let nestStart := skb
   let ret : Int := 0
   let mut done := true
   let mut peers : Option (Array PeerDumpAttrs) := some #[]

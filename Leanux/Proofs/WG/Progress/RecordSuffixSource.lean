@@ -35,26 +35,30 @@ theorem hidden_suffix (site : HiddenSite) (records : List HiddenRecord) :
   simp only [AmbientM.hidden,StateT.run_bind,skipAmbient_run before records present] at run
   change ((AmbientM.noteNetRxStart site.info.id).run skipped >>= _) = _ at run
   rw [markRun] at run
-  simp only [StateT.run_get,pure_bind] at run
   dsimp only [Bind.bind,Except.bind,Pure.pure,Except.pure] at run
-  rw [markedHidden] at run
-  have suffix := List.dropWhile_suffix (l := records) (fun r => HiddenSite.passive r.site)
-  change stripped.IsSuffix records at suffix
-  cases shape : stripped with
-  | nil => simp only [shape] at run; cases run
-  | cons record rest =>
-    rw [shape] at suffix
-    simp only [shape] at run
-    split at run
-    · cases run
-    · split at run
+  split at run
+  all_goals
+    dsimp only [StateT.run, Bind.bind, Pure.pure, get, getThe, MonadStateOf.get, set,
+      StateT.bind, StateT.pure, StateT.get, StateT.set, modify, modifyGet,
+      MonadStateOf.modifyGet, StateT.modifyGet, Except.pure, Except.bind] at run
+    rw [markedHidden] at run
+    have suffix := List.dropWhile_suffix (l := records) (fun r => HiddenSite.passive r.site)
+    change stripped.IsSuffix records at suffix
+    cases shape : stripped with
+    | nil => simp only [shape] at run; cases run
+    | cons record rest =>
+      rw [shape] at suffix
+      simp only [shape] at run
+      split at run
       · cases run
-      · cases site <;> cases run
-        all_goals
-          refine ⟨rest,rfl,(List.suffix_cons record rest).trans suffix,?_⟩
-          have length := suffix.length_le
-          simp only [List.length_cons] at length
-          omega
+      · split at run
+        · cases run
+        · cases run
+          all_goals
+            refine ⟨rest,rfl,(List.suffix_cons record rest).trans suffix,?_⟩
+            have length := suffix.length_le
+            simp only [List.length_cons] at length
+            omega
 
 theorem retain_tail {σ α : Type} (read : σ → Option (List HiddenRecord))
     (action : StateT σ (Except Stop) α)

@@ -13,9 +13,9 @@ def dispatchPrefix (w : Worker) : M (Option (Option Nat)) := do
   let d ← getDev
   let mut pid : Option Nat := none
   match w with
-  | .encryptWorker => if d.encryptQueue.empty then return none
-  | .decryptWorker => if d.decryptQueue.empty then return none
-  | .receiveWorker => if d.handshakeQueue.empty then return none
+  | .encryptWorker => if !(← pendingDevice w !d.encryptQueue.empty) then return none
+  | .decryptWorker => if !(← pendingDevice w !d.decryptQueue.empty) then return none
+  | .receiveWorker => if !(← pendingDevice w !d.handshakeQueue.empty) then return none
   | .txWorker =>
     let some headPid := d.txWorkQueue.head? | return none
     let p ← match ← peekUnit .txWorker with
@@ -38,10 +38,13 @@ theorem dispatch_source (w : Worker) :
   cases w <;> simp only [dispatch, dispatchPrefix, dispatchAfterPrefix, bind_assoc, pure_bind]
   all_goals congr 1
   all_goals funext d
-  all_goals split <;> simp_all only [bind_assoc, pure_bind]
-  all_goals congr 1
-  all_goals funext completed
-  all_goals cases completed <;> simp only [bind_assoc, pure_bind]
+  all_goals first
+    | rfl
+    | (congr 1; funext ready; cases ready <;> rfl)
+    | (split <;> simp_all only [bind_assoc, pure_bind]
+       congr 1
+       funext completed
+       cases completed <;> simp only [bind_assoc, pure_bind])
 
 /-- The selected activation really executes after the original start read. -/
 def DispatchRun (w : Worker) (initial final : World) : Prop :=
@@ -96,7 +99,7 @@ theorem dispatch_success_iff (w : Worker) (initial final : World) :
             exact (congrArg Prod.snd (Except.ok.inj ran))
 
 theorem dispatch_no_work (worker : Worker) (d : Device) (initial : World)
-    (device : initial.wg.dev = some d) (empty : NoDispatchWork worker d) :
+    (device : initial.wg.dev = some d) (empty : NoDispatchWork worker d initial.ambient.pendingWork) :
     (dispatch worker).run initial = .ok (false, initial) := by
   have hd : (monadLift getDev : Leanux.M Device).run initial = .ok (d, initial) := by
     have native : ((getDev.run initial.wg).run initial.ambient) = .ok ((d, initial.wg), initial.ambient) := by
@@ -109,9 +112,16 @@ theorem dispatch_no_work (worker : Worker) (d : Device) (initial : World)
   have hok {α β : Type} (x : α) (f : α → Except Stop β) :
       (Except.ok x >>= f) = f x := rfl
   have hpure {α : Type} (x : α) (v : World) : (pure x : M α).run v = .ok (x, v) := rfl
+  have pendingRead (w : Worker) (queued : Bool) :
+      (pendingDevice w queued).run initial =
+        .ok (queued || initial.ambient.pendingWork.contains w.index, initial) := rfl
   cases worker <;> simp only [NoDispatchWork] at empty
   all_goals simp only [dispatch, StateT.run_bind, hd, hok]
-  all_goals simp [empty, hpure]
+  all_goals first
+    | (rcases empty with ⟨queues, pending⟩
+       simp only [pendingRead, queues, pending, Bool.not_true, Bool.false_or, hok]
+       rfl)
+    | simp [empty, hpure]
 
 theorem dispatch_false_iff (worker : Worker) (initial final : World) :
     (dispatch worker).run initial = .ok (false, final) ↔

@@ -1,5 +1,6 @@
 import Leanux.Proofs.WG.Progress.DecryptOccupancyFrames
 import Leanux.Proofs.WG.Progress.ActivationExitSource
+import Leanux.Proofs.WG.Progress.ActivationRefillFrames
 
 /-! Actual decrypt step and iteration effects, followed by a decreasing
 live-FIFO proof for the existing activation inspector. Earlier callback and
@@ -117,12 +118,12 @@ theorem iteration_rep (a : Activation) (worker : a.worker = .decryptWorker)
   refine ⟨?_,tail',stale',bounds',effect.2⟩
   simpa using effect.1
 
-theorem loop_no_exhaustion (original : Activation) (occupancy fuel count : Nat)
+theorem loop_no_exhaustion (original : Activation) (occupancy refills fuel count : Nat)
     (active : Activation) (entry : World) (worker : active.worker = .decryptWorker)
     (deviceIndex capacity batch : Nat) (live : List SkbId)
     (pre : Rep deviceIndex capacity batch live (Campaign2.Product.snapshot entry))
     (enough : live.length < fuel) :
-    match activationExitLoop original occupancy fuel count active entry with
+    match activationExitLoop original occupancy refills fuel count active entry with
     | .exhausted .. => False
     | _ => True := by
   induction fuel generalizing count active entry live with
@@ -163,11 +164,17 @@ theorem activation_no_exhaustion (a : Activation) (worker : a.worker = .decryptW
     rw [read]
     change Except.ok (d.decryptQueue.count,entry) = _
     rw [fields.2,Ring.count bounds]
+  let refills := (entry.ambient.hidden.map List.length).getD 0 +
+    d.peers.toList.countP (·.2.napiScheduled) * WG.NAPI_POLL_WEIGHT
+  have refill := RecordSuffix.activationRefills_run entry d device
+  change Activation.refills.run entry = .ok (refills,entry) at refill
   unfold activationExitRun
   rw [occupancy]
-  have h := loop_no_exhaustion a live.length (live.length+1) 0 a entry worker
+  dsimp only
+  rw [refill]
+  have h := loop_no_exhaustion a live.length refills (live.length+refills+1) 0 a entry worker
     deviceIndex capacity batch live ⟨tail,stale,bounds,present⟩ (by omega)
-  cases result : activationExitLoop a live.length (live.length+1) 0 a entry <;>
+  cases result : activationExitLoop a live.length refills (live.length+refills+1) 0 a entry <;>
     simp [ActivationExitAudit.map,ActivationExitResult.map,NoExhaustion,result] at h ⊢
 
 

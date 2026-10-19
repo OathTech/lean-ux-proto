@@ -2,7 +2,6 @@ import Leanux.Proofs.WG.Progress.RunnerBoundarySource
 
 set_option autoImplicit false
 set_option pp.structureInstances false
-set_option maxHeartbeats 800000
 namespace Leanux.Proofs.WG.Progress
 open Lean Leanux Leanux.Runner Campaign2
 
@@ -45,10 +44,13 @@ theorem runnerOperation_facts (trace : Trace) (op : Operation) (state : RunnerAc
         cases records with
         | cons record rest => simp [hh, pure, Except.pure] at run
         | nil =>
-          cases hsusp : final.ambient.suspended <;> cases hn : final.wg.netRxRaised
-          all_goals simp [hh, hsusp, hn, pure, Except.pure] at run
+          cases hsusp : final.ambient.suspended <;>
+            cases hpending : final.ambient.pendingWork <;> cases hn : final.wg.netRxRaised
+          all_goals simp [hh, hsusp, hpending, hn, pure, Except.pure] at run
           all_goals obtain ⟨rfl, rfl⟩ := run
-          all_goals exact ⟨⟨middle, rfl, ha⟩, by simp [RunnerBoundaryClean, Campaign2.Product.snapshot, Campaign2.snapshot, hh, hsusp, hn]⟩
+          all_goals exact ⟨⟨middle, rfl, ha⟩, by
+            simp [RunnerBoundaryClean, Campaign2.Product.snapshot, Campaign2.snapshot,
+              hh, hsusp, hpending, hn]⟩
 
 theorem runnerPresent_facts (op : Operation) (state : RunnerAccumulator) (ret : Int)
     (after : World) (step : ForInStep RunnerAccumulator)

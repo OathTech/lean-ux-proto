@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.Progress.ActivationRecordFrames
+import Leanux.Proofs.WG.Progress.ActivationRefillFrames
 
 set_option autoImplicit false
 namespace Leanux.Proofs.WG.Progress.RecordSuffix
@@ -10,10 +11,10 @@ theorem activationLoop_strict_of_iterations (worker : Worker)
       Hoare (Activation.iter a) (fun w => w.ambient.hidden = some records)
         (fun result w => Tail records w.ambient.hidden ∧
           (result = .yielded → StrictTail records w.ambient.hidden)))
-    (original : Activation) (occupancy fuel count : Nat) (active : Activation)
+    (original : Activation) (occupancy refills fuel count : Nat) (active : Activation)
     (same : active.worker = worker) (entry after : World) (records : List HiddenRecord)
     (present : entry.ambient.hidden = some records)
-    (run : (activationExitLoop original occupancy fuel count active entry).erase =
+    (run : (activationExitLoop original occupancy refills fuel count active entry).erase =
       .ok ((),after)) : StrictTail records after.ambient.hidden := by
   induction fuel generalizing count active entry after records with
   | zero => cases run
@@ -49,7 +50,7 @@ theorem activationLoop_strict_of_iterations (worker : Worker)
         exact strict_extend prior (ih (count+1)
           {active with iterations := active.iterations+1} same middle after rest stored run)
 
-/-- Occupancy only reads state. Every normally returning actual run consumes a
+/-- Occupancy and the actual refill bound only read state. Every normally returning actual run consumes a
 record if its concrete iteration contracts preserve suffixes and consume on yield. -/
 theorem activation_strict_of_iterations (worker : Worker)
     (iteration : ∀ a : Activation, a.worker = worker → ∀ records,
@@ -71,6 +72,16 @@ theorem activation_strict_of_iterations (worker : Worker)
     rw [read] at run
     have unchanged := (Leanux.Proofs.WG.Lifetimes.ProjectedAction.iff_run _ _ _).mp
       (activationOccupancy_sameKernel_hidden a) entry occupancy start read
-    exact activationLoop_strict_of_iterations worker iteration a occupancy
-      (occupancy+1) 0 a same start after records (unchanged.trans present) run
+    dsimp only at run
+    cases refillRead : Activation.refills.run start with
+    | error error => rw [refillRead] at run; cases run
+    | ok pair =>
+      obtain ⟨refills,loopEntry⟩ := pair
+      rw [refillRead] at run
+      have stateEq := (Leanux.Proofs.WG.Lifetimes.ProjectedAction.iff_run _ _ _).mp
+        activationRefills_sameState start refills loopEntry refillRead
+      exact activationLoop_strict_of_iterations worker iteration a occupancy refills
+        (occupancy+refills+1) 0 a same loopEntry after records
+        ((congrArg (fun w : World => w.ambient.hidden) stateEq).trans
+          (unchanged.trans present)) run
 end Leanux.Proofs.WG.Progress.RecordSuffix

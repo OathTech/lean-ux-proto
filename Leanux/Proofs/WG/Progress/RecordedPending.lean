@@ -1,11 +1,12 @@
 import Leanux.Proofs.WG.Progress.QueueRefill
 import Leanux.Proofs.WG.Progress.RunnerBoundaryAuditSource
-import Leanux.Proofs.WG.Progress.CommittedInitializedClaims
 
-/-! Initialized supplied-record pending-identity counterexample.
-This is a fail-noisy interpreter reproduction, not a kernel-reduction theorem.
-Useful packet queues drain; the requeued encrypt identity remains pending.
-The records use the supported legacy mode with armRecords=false. -/
+/-! Current initialized supplied-record pending-dispatch regression.
+The stream missing the empty redispatch is refused; supplying that section
+is accepted with cleared pending work and empty queues at the audited cut.
+These are fail-noisy interpreter checks, not kernel-reduction theorems.
+The records use the supported legacy mode with armRecords=false. The former
+committed-receipt comparator is deferred until its shared observer is carried. -/
 set_option autoImplicit false
 namespace Leanux.Proofs.WG.Progress.RecordedPending
 open Leanux Leanux.Runner Leanux.Proofs.WG Leanux.Proofs.WG.Progress
@@ -30,8 +31,8 @@ def trace : Trace :=
   { QueueRefill.concreteTrace with
     id := "campaign2-recorded-encrypt-requeue", hidden := some records }
 
-/-- Supply the otherwise missing empty dispatch after useful work drains.
-The current dispatcher refuses to consume its section start. -/
+/-- Supply the required empty dispatch after useful work drains. The current
+dispatcher consumes this section and clears the requeued encrypt identity. -/
 def emptyRedispatchTrace : Trace :=
   { trace with
     hidden := some (records.set! 4
@@ -39,8 +40,23 @@ def emptyRedispatchTrace : Trace :=
         [QueueRefill.start .encryptWorker, QueueRefill.stop .encryptWorker,
          QueueRefill.j 4])) }
 
-def boundaryCheck : Bool :=
+/-- Both the native runner and its exact owned audit refuse the stream whose
+requeued encrypt dispatch has no section. -/
+def missingRedispatchCheck : Bool :=
   match executeTrace trace, executeTraceWithBoundaries trace false with
+  | .error (op, .outsideDomain site message),
+      .error (observedOp, .outsideDomain observedSite observedMessage) =>
+    op == 4 && observedOp == 4 &&
+      site == "drivers/net/wireguard/send.c:269" && observedSite == site &&
+      message == "wg_packet_encrypt_worker is pending at the end of the wait (the dispatch its requeue causes has no section in the records)" &&
+      observedMessage == message
+  | _, _ => false
+
+/-- The completed supplied stream is accepted by both actual runner and exact
+audit. Its actual last cut has no pending work and the stated empty queues. -/
+def drainedBoundaryCheck : Bool :=
+  match executeTrace emptyRedispatchTrace,
+      executeTraceWithBoundaries emptyRedispatchTrace false with
   | .ok _, .ok audit =>
     match audit.boundaries[4]? with
     | none => false
@@ -49,7 +65,7 @@ def boundaryCheck : Bool :=
       | none => false
       | some d =>
         audit.boundaries.length == 5 && cut.index == 4 && cut.result == 2 &&
-        cut.after.ambient.pendingWork == [Worker.encryptWorker.index] &&
+        cut.after.ambient.pendingWork == [] &&
         cut.after.ambient.hidden == some [] &&
         cut.after.ambient.suspended.isEmpty && !cut.after.wg.netRxRaised &&
         d.handshakeQueue.empty && d.handshakeQueue.count == 0 &&
@@ -62,47 +78,12 @@ def boundaryCheck : Bool :=
           entry.2.txQueue.all.isEmpty)
   | _, _ => false
 
-abbrev ReceiptRow := Nat × Nat × Nat × Nat × List Nat × List Nat × Option Nat
-
-def receiptRow (r : CommittedRuns.Receipt) : Option ReceiptRow := do
-  let .ran occupancy _ result := r.exit | none
-  let .ok (_, final) := result.erase | none
-  some (if r.origin = CommittedRuns.Origin.dispatch then 0 else 1,
-    r.activation.worker.index, occupancy, result.attempts,
-    r.before.ambient.pendingWork, final.ambient.pendingWork,
-    final.wg.device.map (fun d => d.encryptQueue.count))
-
-def receiptCheck : Bool :=
-  let result := CommittedRuns.Initialized.inspection trace false
-  let enc := Worker.encryptWorker.index
-  let dec := Worker.decryptWorker.index
-  let rx := Worker.receiveWorker.index
-  let tx := Worker.txWorker.index
-  result.1.isOk && result.2.length == 8 &&
-    result.2.filterMap receiptRow ==
-      [(0,rx,1,2,[],[enc],some 1),
-       (0,enc,1,2,[],[],some 0),
-       (0,tx,1,2,[],[],some 0),
-       (0,dec,1,1,[enc],[enc],some 1),
-       (0,enc,1,1,[],[enc],some 1),
-       (1,enc,1,2,[enc],[enc],some 0),
-       (1,dec,0,1,[enc],[enc],some 0),
-       (0,tx,2,3,[enc],[enc],some 0)]
-
-def emptyRedispatchCheck : Bool :=
-  match executeTrace emptyRedispatchTrace with
-  | .error (op, .hidden message) =>
-    op == 4 && message == "expected jiffies_end (site 128), the record is site 44"
-  | _ => false
-
 def reproduce : IO Unit := do
-  unless boundaryCheck do
-    throw (IO.userError "recorded pending identity: accepted boundary check failed")
-  unless receiptCheck do
-    throw (IO.userError "recorded pending identity: committed receipt sequence changed")
-  unless emptyRedispatchCheck do
-    throw (IO.userError "recorded pending identity: empty redispatch control changed")
-  IO.println "Reproduced supplied-record acceptance with pending encrypt identity, empty packet queues, eight committed receipts, and refused empty redispatch"
+  unless missingRedispatchCheck do
+    throw (IO.userError "recorded pending regression: missing-dispatch refusal changed")
+  unless drainedBoundaryCheck do
+    throw (IO.userError "recorded pending regression: accepted drained boundary changed")
+  IO.println "Supplied-record regression passed: missing empty dispatch refused; supplied empty dispatch accepted with cleared pending work and empty queues"
 
 #eval reproduce
 
