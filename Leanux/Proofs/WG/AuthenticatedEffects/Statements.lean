@@ -1,5 +1,6 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalRootsSockets
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalEmissionCookie
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalEmissionSend
 import Leanux.Proofs.WG.AuthenticatedEffects.ResponseLookupLoan
 import Leanux.Proofs.WG.AuthenticatedEffects.RefusalPositivePeers
 import Leanux.Proofs.WG.AuthenticatedEffects.ProtocolSocketReceipts
@@ -1501,5 +1502,14 @@ theorem cookie_refusal_from_positive_residents
     ResponseLoan.residents v = ResponseLoan.residents w ∧ v.sent = w.sent :=
   ⟨ResponseLoan.cookie_refusal msg w v a b positive unaccepted run,
     (Lifetimes.ProjectedAction.iff_run_ambient _ _ _).mp (cookieMessageConsume_sent msg) w a () v b run⟩
+
+/-- Security: actual selected handshake-send work preserves ordered native
+emission occurrences and their append receipts, including duplicate datagram
+values. This local contract requires the incoming occurrence carrier; full
+driver initialization and delivery-boundary coverage are separate obligations. -/
+theorem handshake_send_worker_preserves_emission_occurrences :
+    CausalJournal.Emissions.ProductSafe
+      (TransmitSecurity.Driver.sendWorkerObserved CausalJournal.hooks) :=
+  CausalJournal.Emissions.send_worker
 
 end Leanux.Proofs.WG.AuthenticatedEffects

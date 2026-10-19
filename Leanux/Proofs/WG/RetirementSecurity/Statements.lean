@@ -1,5 +1,5 @@
 import Leanux.Proofs.WG.RetirementSecurity.TxActorScheduler
-import Leanux.Proofs.WG.RetirementSecurity.TxActorCryptAhead
+import Leanux.Proofs.WG.RetirementSecurity.TxActorDecrypt
 import Leanux.Proofs.WG.RetirementSecurity.TxWorkPoll
 import Leanux.Proofs.WG.RetirementSecurity.TxWorkPublicationCoverage
 import Leanux.Proofs.WG.RetirementSecurity.TxWorkTransfers
@@ -2755,5 +2755,59 @@ theorem original_crypt_ahead_tx_service
     TxWork.At (TxWork.Covered locals crypt) crypt [pid] v :=
   (Leanux.Proofs.Framing.hoare_iff_run _ _ _).mp
     (TxWork.crypt_ahead_service callback pid) w () v before run
+
+/-- Original staged send preserves service for every existing TX owner and
+establishes service for newly admitted batches through native ring insertion or
+DEAD publication. Actual refusal disposes of the unpublished batch. Active and
+suspended TX actors survive all nonce checks and allocation operations; the
+incoming physical/coverage carrier is explicit until initialized caller closure.
+This normal-return contract does not infer terminal accounting for Stop prefixes. -/
+theorem original_staged_send_tx_service
+    (before : TxWork.At (TxWork.Covered locals crypt) crypt active w)
+    (run : (liftWG (sendStagedPackets pid)).run w=.ok ((),v)) :
+    TxWork.At (TxWork.Covered locals crypt) crypt active v :=
+  (Leanux.Proofs.Framing.hoare_iff_run _ _ _).mp (TxWork.staged_actor pid) w () v before run
+
+/-- A native NAPI callback preserves physical TX coverage and service across
+actual authenticated receive completion, GRO delivery and routed stack replies.
+New replies obtain service at original staged allocation. The external TX actor
+list is fixed in this local claim; suspended-record transport and initialized
+whole-driver coverage remain separate and are not inferred from erasure. -/
+theorem original_napi_tx_service
+    (before : TxWork.Serving locals crypt tx w.wg)
+    (run : Env.napiSoftirq.run w=.ok ((),v)) : TxWork.Serving locals crypt tx v.wg :=
+  (Leanux.Proofs.Framing.hoare_iff_run _ _ _).mp (TxWorkNapi.softirq locals) w () v before run
+
+/-- Original encrypt iteration retains every queued TX service obligation,
+including the selected ring alias during actual NAPI delivery and routed replies.
+The callback and suspended-record contracts are proved from native source, not
+assumed. The incoming local carrier remains explicit until initialized scheduler
+closure; this normal endpoint theorem does not erase stopped-prefix obligations. -/
+theorem original_encrypt_iteration_closed_tx_service
+    (before : TxWork.At (TxWork.Covered locals crypt) crypt tx w)
+    (run : (encryptIter Env.checksumHelp Env.napiSoftirq (Env.condResched .encryptWorker)).run w=
+      .ok (result,v)) : TxWork.At (TxWork.Covered locals crypt) crypt tx v :=
+  TxWork.encrypt_iteration before run
+
+/-- Original crypt-ahead retains the active peer's TX service while temporarily
+requeueing it and running encryption with actual NAPI callbacks. Existing suspended
+actors survive the source record update. No callback-service hypothesis remains;
+initialized scheduler coverage and conditional draining are separate claims. -/
+theorem original_crypt_ahead_closed_tx_service
+    (before : TxWork.At (TxWork.Covered locals crypt) crypt [pid] w)
+    (run : (Env.cryptAhead pid).run w=.ok ((),v)) :
+    TxWork.At (TxWork.Covered locals crypt) crypt [pid] v :=
+  (Leanux.Proofs.Framing.hoare_iff_run _ _ _).mp (TxWork.crypt_ahead pid) w () v before run
+
+/-- Original decrypt iteration preserves every outstanding TX owner and
+service obligation through RX publication, both actual NAPI placements and
+rescheduling. The native callbacks and suspended-record frames are discharged;
+only the incoming local carrier remains explicit pending initialized caller
+closure. No decryption success or scheduling progress is assumed. -/
+theorem original_decrypt_iteration_tx_service
+    (before : TxWork.At (TxWork.Covered locals crypt) crypt active w)
+    (run : (decryptIter Env.napiSoftirq Env.napiIrqExit (Env.condResched .decryptWorker)).run w=
+      .ok (result,v)) : TxWork.At (TxWork.Covered locals crypt) crypt active v :=
+  (Leanux.Proofs.Framing.hoare_iff_run _ _ _).mp TxWork.decrypt_iteration w result v before run
 
 end Leanux.Proofs.WG.RetirementSecurity

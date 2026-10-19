@@ -1,3 +1,7 @@
+import Leanux.Proofs.WG.HandshakeSecurity.PeerReferenceDeviceConfig
+import Leanux.Proofs.WG.HandshakeSecurity.PeerReferenceRemovalObserved
+import Leanux.Proofs.WG.HandshakeSecurity.PeerReferenceWorker
+import Leanux.Proofs.WG.HandshakeSecurity.PeerReferenceNapi
 import Leanux.Proofs.WG.HandshakeSecurity.PeerReferenceHandshakeFrames
 import Leanux.Proofs.WG.HandshakeSecurity.AllocationSelectionBinding
 import Leanux.Proofs.WG.HandshakeSecurity.PendingPromotionFinal
@@ -1798,5 +1802,45 @@ theorem native_handshake_preserves_positive_peer_references
     Framing.Preserves PeerReference.Inv (consumeInitiation msg) ∧
     Framing.Preserves PeerReference.Inv (consumeResponse msg) :=
   ⟨PeerReference.lookup kinds index,PeerReference.initiation msg,PeerReference.response msg⟩
+
+/-- Security: the exact shared handshake worker records positive-reference
+entry worlds for every completed exchange and preserves resident positivity.
+A later Stop retains these certified entries. The incoming carrier is explicit;
+runner initialization and cookie-refusal composition are separate obligations. -/
+theorem native_handshake_worker_positive_entries :
+    PeerReference.Observed (TransmitSecurity.Driver.handshakeObserved ExchangeDriver.hooks) :=
+  PeerReference.handshake_worker
+
+/-- Security: both native NAPI modes preserve the positive-reference carrier
+through actual replay checks, confirmation, GRO stack replies and peer-release
+cleanup. This is a local source contract, not an initialized liveness premise. -/
+theorem native_napi_preserves_positive_peer_entries :
+    PeerReference.ProductPreserves (TransmitSecurity.Driver.softirqObserved ExchangeDriver.hooks) ∧
+    PeerReference.ProductPreserves (TransmitSecurity.Driver.inlinePollObserved ExchangeDriver.hooks) :=
+  ⟨PeerReference.softirq,PeerReference.inline_poll⟩
+
+/-- Security: the native scheduler and both timer modes preserve positive peer
+references at subsequent handshake-entry cuts; stopped prefixes retain the
+entries already certified. Initialization remains a separate obligation. -/
+theorem native_scheduled_positive_peer_entries (stack : Option Worker) (clock : UInt64) :
+    PeerReference.ProductPreserves (TransmitSecurity.Driver.scheduleObserved ExchangeDriver.hooks stack) ∧
+    PeerReference.ProductPreserves (TransmitSecurity.Driver.timersObserved ExchangeDriver.hooks clock) ∧
+    PeerReference.ProductPreserves (TransmitSecurity.Driver.placeholderTimersObserved ExchangeDriver.hooks clock) :=
+  ⟨PeerReference.schedule stack,PeerReference.timers clock,PeerReference.placeholder_timers clock⟩
+
+/-- Security: peer removal checks positive-reference entries for the same actual
+exchange-producing sends in every direct and nested work drain. No queued send
+is omitted from this local source contract. -/
+theorem native_removal_positive_peer_entries (peer : Option PeerId) :
+    PeerReference.Observed (TransmitSecurity.Driver.removeObserved ExchangeDriver.hooks peer) ∧
+    PeerReference.Observed (TransmitSecurity.Driver.removeAllObserved ExchangeDriver.hooks) :=
+  ⟨PeerReference.remove_observed peer,PeerReference.remove_all_observed⟩
+
+/-- Security: configuration preserves positive references at actual exchange
+entries, including sends executed by peer replacement and removal drains.
+This local caller contract introduces no H1 or lifetime assumption. -/
+theorem native_configuration_positive_peer_entries (attrs : DeviceAttrs) :
+    PeerReference.Observed (TransmitSecurity.Driver.configDevice ExchangeDriver.hooks attrs) :=
+  PeerReference.config_device attrs
 
 end Leanux.Proofs.WG.HandshakeSecurity

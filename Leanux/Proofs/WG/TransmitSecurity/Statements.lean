@@ -1,3 +1,9 @@
+import Leanux.Proofs.WG.TransmitSecurity.StagedScheduler
+import Leanux.Proofs.WG.TransmitSecurity.StagedPoll
+import Leanux.Proofs.WG.TransmitSecurity.StagedFocusedProduct
+import Leanux.Proofs.WG.TransmitSecurity.StagedWorkerFrames
+import Leanux.Proofs.WG.TransmitSecurity.StagedStack
+import Leanux.Proofs.WG.TransmitSecurity.StagedCounter
 import Leanux.Proofs.WG.TransmitSecurity.StagedProduct
 import Leanux.Proofs.WG.TransmitSecurity.StagedTimerTransport
 import Leanux.Proofs.WG.TransmitSecurity.StagedNativeSupportFrames
@@ -998,5 +1004,20 @@ theorem native_timers_preserve_staged_origins (pid : PeerId) (timer : PeerTimer)
       AuthenticatedEffects.CausalJournal.effects
       (Driver.keepaliveObserved AuthenticatedEffects.CausalJournal.hooks) pid timer) :=
   Staged.Origins.timer _ Staged.Origins.keepalive_observed_source pid timer
+
+/-- Native NAPI polling retains each selected packet's earlier staged origin,
+including stopped histories. The incoming positional carrier is explicit;
+this local contract does not assume that packet values identify occurrences. -/
+theorem native_napi_preserves_staged_origins (pid : PeerId) (budget : Nat) :
+    Staged.Origins.ProductSafe
+      (Driver.nativePollObserved AuthenticatedEffects.CausalJournal.hooks pid budget) :=
+  Staged.Origins.native_poll pid budget
+
+/-- Every actual scheduled packet worker retains the selected packets' staged
+origins, through encryption, authenticated receive and TX completion. This
+source contract retains its incoming carrier until initialized outer closure. -/
+theorem native_scheduler_preserves_staged_origins (stack : Option Worker) :
+    Staged.Origins.ProductSafe (Driver.scheduleObserved AuthenticatedEffects.CausalJournal.hooks stack) :=
+  Staged.Origins.schedule stack
 
 end Leanux.Proofs.WG.TransmitSecurity

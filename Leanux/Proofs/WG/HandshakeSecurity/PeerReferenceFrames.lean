@@ -132,4 +132,33 @@ theorem maybe_peer (peer : Option PeerId) : Preserves Inv (peerGetMaybeZero peer
           obtain ⟨⟨rfl,rfl⟩,rfl⟩ := run
           simpa [device] using replace before pid {p with refcount := p.refcount + 1} (by simp)
 
+theorem world {action : WG.M α} (same : SameView id action) : Preserves Inv action :=
+  same.wp Inv
+
+theorem read_saved (pid : PeerId) :
+    Hoare (getPeer pid) Inv (fun p w => Inv w ∧ 0 < p.refcount) := by
+  apply (hoare_iff_run_ambient _ _ _).mpr
+  intro w a p v b before run
+  obtain ⟨rfl,rfl,d,device,found⟩ := getPeer_normal pid w v p a b run
+  exact ⟨before,resident before device found⟩
+
+theorem write_positive (pid : PeerId) (p : Peer) (positive : 0 < p.refcount) :
+    Preserves Inv (setPeer pid p) := by
+  apply (hoare_iff_run_ambient _ _ _).mpr
+  intro w a result v b before run
+  cases run
+  exact replace before pid p positive
+
+theorem write_cell (pid : PeerId) (p q : Peer) (same : q.refcount = p.refcount) :
+    Hoare (setPeer pid q) (fun w => Inv w ∧ 0 < p.refcount) (fun _ => Inv) := by
+  apply (hoare_iff_run_ambient _ _ _).mpr
+  intro w a result v b before run
+  exact (hoare_iff_run_ambient _ _ _).mp (write_positive pid q (same ▸ before.2))
+    w a result v b before.1 run
+
+theorem write_saved (pid : PeerId) (p : Peer) (f : Peer → Peer)
+    (same : ∀ p, (f p).refcount = p.refcount) :
+    Hoare (setPeer pid (f p)) (fun w => Inv w ∧ 0 < p.refcount) (fun _ => Inv) :=
+  write_cell pid p (f p) (same p)
+
 end Leanux.Proofs.WG.HandshakeSecurity.PeerReference
