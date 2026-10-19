@@ -12,7 +12,7 @@ def workerIterLogged (w : Worker) (pid : Option Nat) (step : GhostM Bool) (after
   return if ← afterItem then .yielded else .continued
 
 theorem workerIterLogged_erases (w : Worker) (pid : Option Nat)
-    (gs ga : GhostM Bool) (os oa : M Bool) (hs : Erases gs os) (ha : Erases ga oa) :
+    (gs ga : GhostM Bool) (os oa : Leanux.M Bool) (hs : Erases gs os) (ha : Erases ga oa) :
     Erases (workerIterLogged w pid gs ga) (workerIter w pid os oa) := by
   unfold workerIterLogged workerIter
   repeat' ghost_step
@@ -24,7 +24,7 @@ def workerLoopLogged (w : Worker) (pid : Option Nat) (step : GhostM Bool) (after
   invariant drained
 
 theorem workerLoopLogged_erases (w : Worker) (pid : Option Nat)
-    (gs : GhostM Bool) (ga : GhostM Unit) (os : M Bool) (oa : M Unit)
+    (gs : GhostM Bool) (ga : GhostM Unit) (os : Leanux.M Bool) (oa : Leanux.M Unit)
     (bound : Nat) (drained : String) (hs : Erases gs os) (ha : Erases ga oa) :
     Erases (workerLoopLogged w pid gs ga bound drained) (workerLoop w pid os oa bound drained) := by
   unfold workerLoopLogged workerLoop
@@ -33,30 +33,25 @@ theorem workerLoopLogged_erases (w : Worker) (pid : Option Nat)
 def runWorkerLogged (w : Worker) (body : GhostM Unit) : GhostM Unit := do
   _ ← hidden (.sectionStart w)
   -- W7 stream H (13.2 (ii)): a NET_RX section's steps carry its ordinal in
-  -- the operation; a softirq never nests in a softirq, so the ordinal is
-  -- cleared at its end
+  -- the operation, after hidden has advanced its count; a softirq never
+  -- nests in a softirq, so the ordinal is cleared at its end
   if w == .netRx then
-    modifyWorld fun s => { s with netRxSections := s.netRxSections + 1, netRxSection := s.netRxSections + 1 }
+    modifyAmbient fun s => { s with netRxSection := s.netRxSections }
   body
-  if w == .netRx then modifyWorld fun s => { s with netRxSection := 0 }
+  if w == .netRx then modifyAmbient fun s => { s with netRxSection := 0 }
   _ ← hidden (.sectionStop w)
 
-theorem runWorkerLogged_erases (w : Worker) (g : GhostM Unit) (o : M Unit)
+theorem runWorkerLogged_erases (w : Worker) (g : GhostM Unit) (o : Leanux.M Unit)
     (h : Erases g o) : Erases (runWorkerLogged w g) (Env.runWorker w o) := by
   unfold runWorkerLogged Env.runWorker
   repeat' ghost_step
 
-def encryptStepLogged (checksumHelp : Packet → M Packet) (softirq : GhostM Unit) : GhostM Bool := do
-  -- ptr_ring_consume_bh: its spin_unlock_bh runs a pending softirq; the
-  -- head's slot, discarded by the batch rule
-  softirq
-  match (← getDev).encryptQueue.consume with
-  | (none, _) =>
-    _ ← branch .encWorkerConsumed false
-    return false
-  | (some first, ring) =>
-    _ ← branch .encWorkerConsumed true
-    modifyDev fun d => { d with encryptQueue := ring }
+def encryptStepLogged (checksumHelp : Packet → Leanux.M Packet) (softirq : GhostM Unit) : GhostM Bool := do
+  -- The actual ring poll consumes and writes back the ring before its
+  -- softirq callback, then records whether it obtained an item.
+  match ← WG.encryptRingPoll softirq with
+  | none => return false
+  | some first =>
     let some headId := first.head? | invariant "an empty ring item"
     let head ← getTxSkb headId
     -- skb_list_walk_safe(first, skb, next): each skb encrypted in place
@@ -64,7 +59,7 @@ def encryptStepLogged (checksumHelp : Packet → M Packet) (softirq : GhostM Uni
     let mut state := PacketState.crypted
     for id in first do
       _ ← branch .encWorkerSkbIterate true
-      let encrypted ← encryptPacket checksumHelp head.keypair (← getTxSkb id)
+      let encrypted ← liftM (encryptPacket checksumHelp head.keypair (← getTxSkb id))
       if ← branch .encWorkerEncrypted encrypted.isSome then
         -- wg_reset_packet(skb, true) (a cut point)
         setTxSkb id fun p => { p with bytes := encrypted.getD [] }
@@ -75,17 +70,17 @@ def encryptStepLogged (checksumHelp : Packet → M Packet) (softirq : GhostM Uni
     enqueuePerPeerTx first state
     return true
 
-theorem encryptStepLogged_erases (checksum : Packet → M Packet) (gs : GhostM Unit) (os : M Unit)
+theorem encryptStepLogged_erases (checksum : Packet → Leanux.M Packet) (gs : GhostM Unit) (os : Leanux.M Unit)
     (hs : Erases gs os) : Erases (encryptStepLogged checksum gs) (WG.encryptStep checksum os) := by
-  unfold encryptStepLogged WG.encryptStep
+  unfold encryptStepLogged WG.encryptStep WG.encryptRingPoll
   repeat' ghost_step
 
-def encryptIterLogged (checksumHelp : Packet → M Packet) (softirq : GhostM Unit) (needResched : GhostM Bool) : GhostM IterResult :=
+def encryptIterLogged (checksumHelp : Packet → Leanux.M Packet) (softirq : GhostM Unit) (needResched : GhostM Bool) : GhostM IterResult :=
   workerIterLogged .encryptWorker none (encryptStepLogged checksumHelp softirq)
     (do branch .encWorkerNeedResched (← needResched))
 
-theorem encryptIterLogged_erases (checksum : Packet → M Packet)
-    (gs : GhostM Unit) (gr : GhostM Bool) (os : M Unit) (orr : M Bool)
+theorem encryptIterLogged_erases (checksum : Packet → Leanux.M Packet)
+    (gs : GhostM Unit) (gr : GhostM Bool) (os : Leanux.M Unit) (orr : Leanux.M Bool)
     (hs : Erases gs os) (hr : Erases gr orr) :
     Erases (encryptIterLogged checksum gs gr) (WG.encryptIter checksum os orr) := by
   unfold encryptIterLogged WG.encryptIter
@@ -97,7 +92,7 @@ def txIterLogged (pid : PeerId) (needResched : GhostM Bool) : GhostM IterResult 
   workerIterLogged .txWorker (some pid) (liftM (WG.txStep pid))
     (do branch .txNeedResched (← needResched))
 
-theorem txIterLogged_erases (pid : PeerId) (g : GhostM Bool) (o : M Bool) (h : Erases g o) :
+theorem txIterLogged_erases (pid : PeerId) (g : GhostM Bool) (o : Leanux.M Bool) (h : Erases g o) :
     Erases (txIterLogged pid g) (WG.txIter pid o) := by
   unfold txIterLogged WG.txIter
   apply workerIterLogged_erases
@@ -106,15 +101,15 @@ theorem txIterLogged_erases (pid : PeerId) (g : GhostM Bool) (o : M Bool) (h : E
 
 def handshakeReceiveWorkerLogged (condResched : GhostM Unit) : GhostM Unit :=
   workerLoopLogged .receiveWorker none (liftM receiveStep) condResched
-    MAX_QUEUED_INCOMING_HANDSHAKES "the handshake queue did not drain"
+    (MAX_QUEUED_INCOMING_HANDSHAKES + 1) "the handshake queue did not drain"
 
-theorem handshakeReceiveWorkerLogged_erases (g : GhostM Unit) (o : M Unit) (h : Erases g o) :
+theorem handshakeReceiveWorkerLogged_erases (g : GhostM Unit) (o : Leanux.M Unit) (h : Erases g o) :
     Erases (handshakeReceiveWorkerLogged g) (WG.handshakeReceiveWorker o) := by
   unfold handshakeReceiveWorkerLogged WG.handshakeReceiveWorker
   exact workerLoopLogged_erases _ _ _ _ _ _ _ _ (erases_liftM _) h
 
 def enqueuePerPeerRxLogged (irqExit : GhostM Unit) (id : SkbId) (state : PacketState) : GhostM Unit := do
-  let pid := (← getKeypair (← getRxSkb id).keypair).peer   -- PACKET_PEER(skb)
+  let pid ← IndexOwner.peerDeref (.keypair (← getRxSkb id).keypair)   -- PACKET_PEER(skb)
   peerGet pid
   let p ← getPeer pid
   -- atomic_set_release(&PACKET_CB(skb)->state, state): the one skb the
@@ -127,7 +122,7 @@ def enqueuePerPeerRxLogged (irqExit : GhostM Unit) (id : SkbId) (state : PacketS
   irqExit
   peerPut (some pid)
 
-theorem enqueuePerPeerRxLogged_erases (g : GhostM Unit) (o : M Unit) (id : SkbId)
+theorem enqueuePerPeerRxLogged_erases (g : GhostM Unit) (o : Leanux.M Unit) (id : SkbId)
     (state : PacketState) (h : Erases g o) :
     Erases (enqueuePerPeerRxLogged g id state) (WG.enqueuePerPeerRx o id state) := by
   unfold enqueuePerPeerRxLogged WG.enqueuePerPeerRx
@@ -155,7 +150,7 @@ def decryptStepLogged (softirq irqExit : GhostM Unit) : GhostM Bool := do
     softirq
     return true
 
-theorem decryptStepLogged_erases (gs gi : GhostM Unit) (os oi : M Unit)
+theorem decryptStepLogged_erases (gs gi : GhostM Unit) (os oi : Leanux.M Unit)
     (hs : Erases gs os) (hi : Erases gi oi) :
     Erases (decryptStepLogged gs gi) (WG.decryptStep os oi) := by
   unfold decryptStepLogged WG.decryptStep
@@ -165,7 +160,7 @@ def decryptIterLogged (softirq irqExit : GhostM Unit) (needResched : GhostM Bool
   workerIterLogged .decryptWorker none (decryptStepLogged softirq irqExit)
     (do branch .decWorkerNeedResched (← needResched))
 
-theorem decryptIterLogged_erases (gs gi : GhostM Unit) (os oi : M Unit) (gr : GhostM Bool) (orr : M Bool)
+theorem decryptIterLogged_erases (gs gi : GhostM Unit) (os oi : Leanux.M Unit) (gr : GhostM Bool) (orr : Leanux.M Bool)
     (hs : Erases gs os) (hi : Erases gi oi) (hr : Erases gr orr) :
     Erases (decryptIterLogged gs gi gr) (WG.decryptIter os oi orr) := by
   unfold decryptIterLogged WG.decryptIter

@@ -11,7 +11,7 @@ when the room is short (lib/nlattr.c:1094), a nest start is a 4-byte put
 whose cancel restores the room, and the netlink core runs one dump call per
 chunk (`netlink_dump`: inside the `sendmsg` that starts the dump, then inside
 every `recvmsg` while `cb_running`). The per-socket state is
-`Leanux.WG.NlSock` (`Kernel.nlSock7`, `Kernel.nlSock8`).
+`Leanux.WG.NlSock` (`WGWorld.nlSock7`, `WGWorld.nlSock8`).
 -/
 
 namespace Leanux.WG
@@ -217,10 +217,18 @@ def wgGetDeviceDump (ctx0 : DumpCtx) (prevSeq0 : Nat) (skb0 : NlSkb) : M DumpCal
       if ← branch .dumpPutPublic fail then unsupported "the device part does not fit a fresh chunk (unreachable)"
       device := device ++ [("private_key", toJson (hexKey identity.staticPrivate)),
         ("public_key", toJson (hexKey identity.staticPublic))]
-  -- peers_nest = nla_nest_start(skb, WGDEVICE_A_PEERS)
+  -- peers_nest = nla_nest_start(skb, WGDEVICE_A_PEERS): `nla_nest_start`
+  -- saves the tail pointer before it puts the nest header
+  -- (include/net/netlink.h:1925-1934), and `nla_nest_cancel` trims back to
+  -- that saved tail (:1975-1978), header included; so the snapshot the
+  -- cancel arm restores is taken before the reservation. Until 2026-10-19 it
+  -- was taken after it, and a cancelled dump kept a four-byte debit
+  -- (campaign 2's request 3, with its arithmetic witness: 3720 of 3776 where
+  -- the C leaves 3724; unobservable on this fixture, since nothing is put
+  -- into the chunk after the cancel, netlink.c:264-268 → `out`)
+  let nestStart := skb
   let (fail, s) := skb.put (nlaTotal 0); skb := s
   if ← branch .dumpNoPeersNest fail then unsupported "the peers nest does not fit a fresh chunk (unreachable)"
-  let nestStart := skb
   let ret : Int := 0
   let mut done := true
   let mut peers : Option (Array PeerDumpAttrs) := some #[]
@@ -283,11 +291,11 @@ def wgGetDeviceDump (ctx0 : DumpCtx) (prevSeq0 : Nat) (skb0 : NlSkb) : M DumpCal
 def INT_MAX : Int := 2147483647
 
 def getNlSock (fd : Nat) : M NlSock := do
-  let k ← getK
+  let k ← get
   return if fd == 8 then k.nlSock8 else k.nlSock7
 
 def setNlSock (fd : Nat) (s : NlSock) : M Unit :=
-  modifyK fun k => if fd == 8 then { k with nlSock8 := s } else { k with nlSock7 := s }
+  modify fun k => if fd == 8 then { k with nlSock8 := s } else { k with nlSock7 := s }
 
 /-- `netlink_dump` (af_netlink.c:2255-2383): a fresh chunk, the dump
     callback while `dump_done_errno > 0`, then either the chunk queued

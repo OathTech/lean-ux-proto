@@ -171,7 +171,7 @@ def xmitPackets (family addr : Nat) (payload : List UInt8) (opts : XmitOpts) :
   let dev ← getDev
   -- the fixture's route to the destination, if `net_fixture.routes` names
   -- one (its `RTAX_MTU` is `dst_mtu`; ip.h:490-492), else the device's MTU
-  let routeMtu := opts.routeMtu <|> ((← get).routes.find? fun (f, a, _) => f == family && a == addr).map (·.2.2)
+  let routeMtu := opts.routeMtu <|> ((← getEnv).routes.find? fun (f, a, _) => f == family && a == addr).map (·.2.2)
   if family == 4 then
     let mtu := routeMtu.getD dev.mtu
     let fragsize := if opts.probe then dev.mtu else mtu

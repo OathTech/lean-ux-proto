@@ -1,4 +1,4 @@
-import Leanux.Kernel.Defs
+import Leanux.FS.Stores
 
 /-!
 # fs/inode.c, fs/libfs.c, include/linux/time64.h — pipefs inode timestamps
@@ -92,13 +92,13 @@ def I_DIRTY_TIME : Nat := 1 <<< 11
     stamps yet; `i_ino` from the mirror-local `Kernel.lastIno` (`last_ino`
     has an unknown boot baseline and `i_ino` is unobserved). `get_pipe_inode`
     then sets `i_pipe`, `i_mode` and `i_state` itself. -/
-def newInodePseudo : M (Option PipefsInodeId) := do
+def newInodePseudo : FS.M (Option PipefsInodeId) := do
   if !(← envOk .allocInode) then return none
-  let k ← getK
+  let k ← get
   let id := k.nextInode
   let ino := k.lastIno + 1
   setInode id { iIno := ino, iMode := 0, iFlags := 0, iState := 0, iCount := 1 }
-  modifyK fun k => { k with nextInode := id + 1, lastIno := ino }
+  modify fun k => { k with nextInode := id + 1, lastIno := ino }
   return some id
 
 /-- `iput(inode)` of a pipefs inode (fs/inode.c:1889-1904), a cut. Contract:
@@ -108,7 +108,7 @@ def newInodePseudo : M (Option PipefsInodeId) := do
     `destroy_inode` → `free_inode_nonrcu` frees it (no RCU deferral:
     fs/pipe.c:1425). `i_pipe` is not consulted: `put_pipe_info` cleared it,
     or on the `-ENOPKG` arm `create_pipe_files` freed the pipe first. -/
-def iputPipefs (id : PipefsInodeId) : M Unit := do
+def iputPipefs (id : PipefsInodeId) : FS.M Unit := do
   let ino ← getInode id
   if ino.iCount == 0 then invariant s!"iput of pipefs inode {id} with i_count 0"
   -- `atomic_dec_and_lock(&inode->i_count, &inode->i_lock)` (:1895): the last
@@ -118,7 +118,7 @@ def iputPipefs (id : PipefsInodeId) : M Unit := do
     -- `inode->i_nlink && (inode->i_state & I_DIRTY_TIME)` (:1896; pseudo
     -- inodes keep i_nlink = 1)
     if ← branch .iputLazytime (ino.iState &&& I_DIRTY_TIME != 0) then unsupported "iput: lazytime dirty inode"
-    modifyK fun k => { k with inodes := k.inodes.erase id }
+    modify fun k => { k with inodes := k.inodes.erase id }
   else
     setInode id { ino with iCount := ino.iCount - 1 }
 
@@ -126,7 +126,7 @@ def iputPipefs (id : PipefsInodeId) : M Unit := do
     apart from the count: `d_lockref.count` drops; the last reference kills
     the dentry (`DCACHE_NORCU` from `d_alloc_pseudo`, fs/dcache.c:1770) and
     `dentry_unlink_inode` puts its inode. -/
-def dputPipefs (id : PipefsInodeId) : M Unit := do
+def dputPipefs (id : PipefsInodeId) : FS.M Unit := do
   let ino ← getInode id
   if ino.dCount == 0 then invariant s!"dput of the pipefs dentry of inode {id} with count 0"
   setInode id { ino with dCount := ino.dCount - 1 }
@@ -135,7 +135,7 @@ def dputPipefs (id : PipefsInodeId) : M Unit := do
 /-! ## The clock -/
 
 /-- `timestamp_truncate(t, inode)` (fs/inode.c:2612-2631) for pipefs. -/
-def timestampTruncate (t : Timespec64) : M Timespec64 := do
+def timestampTruncate (t : Timespec64) : FS.M Timespec64 := do
   let mut t := t
   -- `t.tv_sec = clamp(t.tv_sec, sb->s_time_min, sb->s_time_max)`
   -- (__clamp, include/linux/minmax.h:181-182: `>= hi`, then `<= lo`)
@@ -155,26 +155,26 @@ def timestampTruncate (t : Timespec64) : M Timespec64 := do
   return t
 
 /-- `current_time(inode)` (fs/inode.c:2644-2650): one clock record. -/
-def currentTime : M Timespec64 := do
+def currentTime : FS.M Timespec64 := do
   let now ← hiddenTimespec .currentTime   -- ktime_get_coarse_real_ts64(&now)
   timestampTruncate now
 
 /-- `timespec64_equal(a, b)` (include/linux/time64.h:46-50). -/
-def timespec64Equal (a b : Timespec64) : M Bool := do
+def timespec64Equal (a b : Timespec64) : FS.M Bool := do
   if ← branchCmp .tsEqualSec (a.tvSec == b.tvSec) a.tvSec b.tvSec then
     branchCmp .tsEqualNsec (a.tvNsec == b.tvNsec) a.tvNsec b.tvNsec
   else
     return false
 
 /-- `inode_set_ctime_current(inode)` (fs/inode.c:2660-2666). -/
-def inodeSetCtimeCurrent (id : PipefsInodeId) : M Timespec64 := do
+def inodeSetCtimeCurrent (id : PipefsInodeId) : FS.M Timespec64 := do
   let now ← currentTime
   setInode id { (← getInode id) with iCtime := now }   -- inode_set_ctime_to_ts
   return now
 
 /-- `simple_inode_init_ts(inode)` (fs/libfs.c:2101-2108): one clock read;
     atime, mtime and ctime all set to it. Returns the stamp. -/
-def simpleInodeInitTs (id : PipefsInodeId) : M Timespec64 := do
+def simpleInodeInitTs (id : PipefsInodeId) : FS.M Timespec64 := do
   let ts ← inodeSetCtimeCurrent id
   setInode id { (← getInode id) with iAtime := ts, iMtime := ts }
   return ts
@@ -186,13 +186,13 @@ def simpleInodeInitTs (id : PipefsInodeId) : M Timespec64 := do
     `get_pipe_inode` set `i_state = I_DIRTY`, so for the `I_DIRTY_SYNC` (or
     empty) flags of these paths `(inode->i_state & flags) == flags` returns
     at 2580-2581 with no state change. Anything else leaves the domain. -/
-def markInodeDirty (id : PipefsInodeId) (flags : Nat) : M Unit := do
+def markInodeDirty (id : PipefsInodeId) (flags : Nat) : FS.M Unit := do
   let ino ← getInode id
   if flags &&& I_DIRTY_TIME != 0 || ino.iState &&& flags != flags then
     unsupported s!"__mark_inode_dirty: flags {flags} change i_state {ino.iState}"
 
 /-- `inode_update_timestamps(inode, flags)` (fs/inode.c:1988-2019). -/
-def inodeUpdateTimestamps (id : PipefsInodeId) (flags : Nat) : M Nat := do
+def inodeUpdateTimestamps (id : PipefsInodeId) (flags : Nat) : FS.M Nat := do
   let mut updated := 0
   let mask := S_MTIME ||| S_CTIME ||| S_VERSION
   let now ← do
@@ -219,7 +219,7 @@ def inodeUpdateTimestamps (id : PipefsInodeId) (flags : Nat) : M Nat := do
   return updated
 
 /-- `generic_update_time(inode, flags)` (fs/inode.c:2034-2045). -/
-def genericUpdateTime (id : PipefsInodeId) (flags : Nat) : M Nat := do
+def genericUpdateTime (id : PipefsInodeId) (flags : Nat) : FS.M Nat := do
   let updated ← inodeUpdateTimestamps id flags
   let mut dirtyFlags := 0
   let mask := S_ATIME ||| S_MTIME ||| S_CTIME
@@ -233,7 +233,7 @@ def genericUpdateTime (id : PipefsInodeId) (flags : Nat) : M Nat := do
   return updated
 
 /-- `inode_update_time(inode, flags)` (fs/inode.c:2052-2058). -/
-def inodeUpdateTime (id : PipefsInodeId) (flags : Nat) : M Int := do
+def inodeUpdateTime (id : PipefsInodeId) (flags : Nat) : FS.M Int := do
   -- `inode->i_op->update_time`: `empty_iops` has none
   if ← branch .inodeUpdateTimeHasOp false then
     unsupported "i_op->update_time"
@@ -241,13 +241,13 @@ def inodeUpdateTime (id : PipefsInodeId) (flags : Nat) : M Int := do
   return 0
 
 /-- `relatime_need_update(mnt, inode, now)` (fs/inode.c:1939-1970). -/
-def relatimeNeedUpdate (_now : Timespec64) : M Bool := do
+def relatimeNeedUpdate (_now : Timespec64) : FS.M Bool := do
   if ← branchCmp .relatimeNotSet (pipeMntFlags &&& MNT_RELATIME == 0) (pipeMntFlags &&& MNT_RELATIME) 0 then
     return true
   unsupported "relatime_need_update with MNT_RELATIME"   -- pipe_mnt has MNT_INTERNAL only
 
 /-- `atime_needs_update(path, inode)` (fs/inode.c:2070-2104). -/
-def atimeNeedsUpdate (id : PipefsInodeId) : M Bool := do
+def atimeNeedsUpdate (id : PipefsInodeId) : FS.M Bool := do
   let ino ← getInode id
   if ← branchCmp .atimeSNoatime (ino.iFlags &&& S_NOATIME != 0) (ino.iFlags &&& S_NOATIME) 0 then
     return false
@@ -275,7 +275,7 @@ def atimeNeedsUpdate (id : PipefsInodeId) : M Bool := do
   return true
 
 /-- `touch_atime(&file->f_path)` (fs/inode.c:2106-2132). -/
-def touchAtime (id : PipefsInodeId) : M Unit := do
+def touchAtime (id : PipefsInodeId) : FS.M Unit := do
   let needs ← atimeNeedsUpdate id
   if ← branchCmp .touchAtimeNoUpdate (!needs) (if needs then 1 else 0) 0 then
     return
@@ -289,7 +289,7 @@ def touchAtime (id : PipefsInodeId) : M Unit := do
   -- mnt_put_write_access(mnt); sb_end_write(inode->i_sb): cuts
 
 /-- The pipefs inode a file's `f_inode` points to. -/
-private def pipefsInodeOf (f : File) (what : String) : M PipefsInodeId :=
+private def pipefsInodeOf (f : File) (what : String) : FS.M PipefsInodeId :=
   match f.fInode with
   | some (.pipefs id) => return id
   | some .anon => unsupported s!"{what} on the anonymous inode"
@@ -298,12 +298,12 @@ private def pipefsInodeOf (f : File) (what : String) : M PipefsInodeId :=
 
 /-- `file_accessed(file)` (include/linux/fs.h:2576-2580) and `touch_atime`:
     one or two clock reads, none with `O_NOATIME`. -/
-def fileAccessed (f : File) : M Unit := do
+def fileAccessed (f : File) : FS.M Unit := do
   if ← branchCmp .fileAccessedNotNoatime (!hasFlag f.fFlags O_NOATIME) (f.fFlags &&& O_NOATIME).toNat 0 then
     touchAtime (← pipefsInodeOf f "touch_atime")
 
 /-- `inode_needs_update_time(inode)` (fs/inode.c:2214-2236). -/
-def inodeNeedsUpdateTime (id : PipefsInodeId) : M Nat := do
+def inodeNeedsUpdateTime (id : PipefsInodeId) : FS.M Nat := do
   let mut syncIt := 0
   let now ← currentTime
   let ino ← getInode id
@@ -319,7 +319,7 @@ def inodeNeedsUpdateTime (id : PipefsInodeId) : M Nat := do
 
 /-- `file_update_time(file)` (fs/inode.c:2266-2276) with `__file_update_time`
     (2238-2250) inlined: one or two clock reads; the C's return value. -/
-def fileUpdateTime (f : File) : M Int := do
+def fileUpdateTime (f : File) : FS.M Int := do
   let id ← pipefsInodeOf f "file_update_time"
   let ret : Int := (← inodeNeedsUpdateTime id)
   if ← branchCmp .fileUpdateNothing (ret ≤ 0) ret 0 then
@@ -335,7 +335,7 @@ def fileUpdateTime (f : File) : M Int := do
 /-! ## `i_readcount` (include/linux/fs.h:3125-3133, real with CONFIG_FILE_LOCKING=y) -/
 
 /-- `i_readcount_inc(inode)`: `atomic_inc`, no decision. -/
-def inodeReadcountInc : Option InodeId → M Unit
+def inodeReadcountInc : Option InodeId → FS.M Unit
   | some (.pipefs id) => do
     let ino ← getInode id
     setInode id { ino with iReadcount := ino.iReadcount + 1 }
@@ -346,7 +346,7 @@ def inodeReadcountInc : Option InodeId → M Unit
   | none => invariant "i_readcount_inc: file->f_inode is NULL"
 
 /-- `i_readcount_dec(inode)`: `BUG_ON(atomic_dec_return(&inode->i_readcount) < 0)`. -/
-def inodeReadcountDec : Option InodeId → M Unit
+def inodeReadcountDec : Option InodeId → FS.M Unit
   | some (.pipefs id) => do
     let ino ← getInode id
     let new : Int := (ino.iReadcount : Int) - 1

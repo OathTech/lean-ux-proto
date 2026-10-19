@@ -263,20 +263,13 @@ def traces():
     e6 = json.loads((ROOT / "corpus/wireguard/e_underload_ratelimit6.json").read_text())
     out["l_delete_ratelimited6"] = ({"net_fixture": e6["net_fixture"]}, e6["ops"][:5] + [DELETE, GET], e6["steer"],
                                     e6["expect"] + ["wg_ratelimiter_gc_entries.v6_entry_iterate=1"])
-    # Each device gets one flood with one initiation (an insert, then its
-    # response) and no observe: two floods' comparison dumps and two observes
-    # exceed the guest's 4.5 s rekey bound (measured 2026-10-15); the
-    # witness is the record stream (site 133 twice, never 132), not a reply.
-    def one6(sec):
-        f = dict(e6["ops"][3])
-        f["messages"] = [eb.rl_initiation6(d1.PEER_EPHEMERAL, sec, d1.PEER_INDEX).hex()]
-        return f
-    out["l_recreate_ratelimited6"] = (
-        {"net_fixture": e6["net_fixture"]},
-        e6["ops"][:3] + [one6(1), DELETE, CREATE, e6["ops"][1], UP, one6(3), GET],
-        e6["steer"] + e6["steer"],
-        ["wg_receive_handshake_packet.initiation=1", "wg_ratelimiter_allow.inet6=1",
-         "wg_ratelimiter_allow.over_max_entries=0", "wg_ratelimiter_gc_entries.v6_entry_iterate=1"])
+    # l_recreate_ratelimited6 (B4: a delete and recreate with IPv6 rate-limited
+    # entries, the recreate's eight-entry allocation schedule) was dropped at
+    # the landing of 2026-10-15 [USER 2026-10-15]: its comparison child
+    # sits at the guest's 4.5 s bound on both oracles (4.28 s alone on s4;
+    # 55,538 comparison records, 56 % in the two creates), a fixture property
+    # no reshape changes; l_delete_ratelimited6 stays as the two-table uninit
+    # witness (2x margin). The B4 note records the measurement.
     # With D3 (section 7) [AGENT, int-dl follow-up 2].
     retransmit_steer = d2_initiator_steer()
     zk_ops, _, zk_steer = d3.session()

@@ -5,15 +5,16 @@ import Leanux.Env
 namespace Leanux.Proofs.Logged
 open Leanux Leanux.WG Leanux.Env
 
-abbrev getWorld : GhostM World := StateT.lift (get : M World)
+abbrev getWorld : GhostM World := StateT.lift (get : Leanux.M World)
 abbrev setWorld (w : World) : GhostM Unit := StateT.lift (set w)
 abbrev modifyWorld (f : World → World) : GhostM Unit := StateT.lift (modify f)
 
-theorem erases_throw (e : Stop) : Erases (throw e : GhostM α) (throw e : M α) := by
-  intro history world
+theorem erases_throw (e : Stop) : Erases (throw e : GhostM α) (throw e : Leanux.M α) := by
+  intro history
+  funext world
   rfl
 
-theorem erases_discard {g : GhostM α} {o : M α} (h : Erases g o) :
+theorem erases_discard {g : GhostM α} {o : Leanux.M α} (h : Erases g o) :
     Erases (discard g) (discard o) := by
   unfold Functor.discard
   exact erases_map _ h
@@ -24,8 +25,8 @@ macro "ghost_step" : tactic => `(tactic|
     | with_reducible assumption
     | with_reducible exact erases_pure _
     | with_reducible exact erases_throw _
-    | with_reducible exact erases_liftM _
-    | with_reducible exact erases_lift _
+    | exact erases_liftM _
+    | exact erases_lift _
     | with_reducible apply erases_ite
     | with_reducible apply erases_bind
     | with_reducible apply erases_discard

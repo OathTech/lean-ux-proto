@@ -4,90 +4,17 @@ import Leanux.Proofs.WG.Keypairs.Frames.WGMore
 compiler-generated continuations. All tactic output is checked by Lean. -/
 
 namespace Leanux.Proofs.WG.Keypairs.WGConfig
-open Leanux Leanux.WG Std.Do Leanux.Proofs.WG.Keypairs Leanux.Proofs.WG.Keypairs.KernelFrames Leanux.Proofs.WG.Keypairs.WGFrames Leanux.Proofs.WG.Keypairs.WGTransitions Leanux.Proofs.WG.Keypairs.WGMore
+open Leanux Leanux.WG Std.Do Leanux.Proofs.WG.Keypairs Leanux.Proofs.Framing Leanux.Proofs.WG.Keypairs.WGFrames Leanux.Proofs.WG.Keypairs.WGTransitions Leanux.Proofs.WG.Keypairs.WGMore
 
 set_option maxHeartbeats 200000
 set_option pp.structureInstances false
 
 open Lean Meta Elab Tactic
 
-private def ordinaryHeadBZ : Nat → Expr → Expr
-  | 0, e => e
-  | n+1, e =>
-    let e := e.consumeMData
-    match e with
-    | .letE _ _ v b _ => ordinaryHeadBZ n (b.instantiate1 v)
-    | _ =>
-      match e.getAppFn.consumeMData with
-      | .letE _ _ v b _ => ordinaryHeadBZ n (mkAppN (b.instantiate1 v) e.getAppArgs)
-      | .lam .. =>
-        let e' := e.headBeta
-        if Expr.equal e e' then e else ordinaryHeadBZ n e'
-      | _ => e
-
-elab "ordinary_head_reduce" : tactic => withMainContext do
-  let g ← getMainGoal
-  let t := (← instantiateMVars (← g.getType)).consumeMData
-  unless t.isAppOf ``OrdinaryAction do throwError "not OrdinaryAction"
-  let .app f a := t | throwError "missing action"
-  let a' := ordinaryHeadBZ 64 a
-  if Expr.equal a a' then throwError "head unchanged"
-  replaceMainGoal [← g.replaceTargetDefEq (.app f a')]
-
-elab "ordinary_head_match" : tactic => withMainContext do
-  let g ← getMainGoal
-  let t := (← instantiateMVars (← g.getType)).consumeMData
-  unless t.isAppOf ``OrdinaryAction do throwError "not OrdinaryAction"
-  let a := t.getAppArgs.back! |>.consumeMData
-  let some _ ← Lean.Meta.matchMatcherApp? a | throwError "not a top matcher"
-  replaceMainGoal (← Lean.Meta.Split.splitMatch g a)
-
-
-/-- Prove each compiler-generated continuation once, then use its contract. -/
-elab "ordinary_join_let" : tactic => withMainContext do
-  let goal ← getMainGoal
-  let target := (← instantiateMVars (← goal.getType)).consumeMData
-  unless target.isAppOf ``OrdinaryAction do throwError "not OrdinaryAction"
-  let action := target.getAppArgs.back! |>.consumeMData
-  let .letE name ty value body _ := action | throwError "not a let"
-  unless name.toString.startsWith "__do_jp" do throwError "not a join continuation"
-  let property ← forallTelescope ty fun args _ => do
-    let result ← mkAppM ``OrdinaryAction #[mkAppN value args]
-    mkForallFVars args result
-  let valueProof ← mkFreshExprSyntheticOpaqueMVar property
-  let (continuation, next) ← withLocalDeclD name ty fun f => do
-    let contract ← forallTelescope ty fun args _ => do
-      let result ← mkAppM ``OrdinaryAction #[mkAppN f args]
-      mkForallFVars args result
-    withLocalDeclD `ordinary_join contract fun hf => do
-      let bodyProp ← mkAppM ``OrdinaryAction #[body.instantiate1 f]
-      let next ← mkFreshExprSyntheticOpaqueMVar bodyProp
-      let proof ← mkLambdaFVars #[f, hf] next
-      pure (proof, next.mvarId!)
-  goal.assign (mkApp2 continuation value valueProof)
-  replaceMainGoal [valueProof.mvarId!, next]
-
-elab "ordinary_join_use" : tactic => withMainContext do
-  let goal ← getMainGoal
-  let target := (← instantiateMVars (← goal.getType)).consumeMData
-  unless target.isAppOf ``OrdinaryAction do throwError "not OrdinaryAction"
-  let action := target.getAppArgs.back! |>.consumeMData |>.headBeta
-  unless action.getAppFn.isFVar do throwError "not a local continuation"
-  for decl in ← getLCtx do
-    if decl.userName == `ordinary_join then
-      let proof := mkAppN decl.toExpr action.getAppArgs
-      try
-        if ← withReducible (isDefEq (← inferType proof) target) then
-          goal.assign proof
-          replaceMainGoal []
-          return
-      catch _ => pure ()
-  throwError "no continuation contract"
-
 macro "ordinary_strict_step" : tactic => `(tactic|
   first
     | contradiction
-    | intro_forall
+    | keypairs_intro_forall
     | with_reducible assumption
     | ordinary_join_let
     | ordinary_join_use
@@ -116,21 +43,21 @@ theorem setPeerCmd_ordinary (a : PeerAttrs) : OrdinaryAction (Leanux.WG.setPeerC
     | (ordinary_head Leanux.WG.peerRemove; with_reducible exact @peerRemove_ordinary _)
     | (ordinary_head Leanux.WG.sendKeepalive; with_reducible exact @sendKeepalive_ordinary _)
     | (ordinary_head Leanux.WG.sendStagedPackets; with_reducible exact @sendStagedPackets_ordinary _)
-    | (ordinary_head Leanux.WG.getDev; refine SameSnapshot.ordinary ?_; with_reducible exact @getDev_sameSnapshot)
-    | (ordinary_head Leanux.WG.getPeer; refine SameSnapshot.ordinary ?_; with_reducible exact @getPeer_sameSnapshot _)
-    | (ordinary_head Leanux.WG.peerCreate; refine SameSnapshot.ordinary ?_; with_reducible exact @peerCreate_sameSnapshot _ _)
-    | (ordinary_head Leanux.WG.peerGet; refine SameSnapshot.ordinary ?_; with_reducible exact @peerGet_sameSnapshot _)
-    | (ordinary_head Leanux.WG.peerPut; refine SameSnapshot.ordinary ?_; with_reducible exact @peerPut_sameSnapshot _)
-    | (ordinary_head Leanux.WG.pubkeyLookup; refine SameSnapshot.ordinary ?_; with_reducible exact @pubkeyLookup_sameSnapshot _)
-    | (ordinary_head Leanux.WG.removeByPeer; refine SameSnapshot.ordinary ?_; with_reducible exact @removeByPeer_sameSnapshot _)
-    | (ordinary_head Leanux.WG.setAllowedip; refine SameSnapshot.ordinary ?_; with_reducible exact @setAllowedip_sameSnapshot _ _)
-    | (ordinary_head Leanux.WG.setPeerEndpoint; refine SameSnapshot.ordinary ?_; with_reducible exact @setPeerEndpoint_sameSnapshot _ _)
-    | (ordinary_head Leanux.WG.setPeer; refine SameSnapshot.ordinary ?_; with_reducible exact @setPeer_sameSnapshot _ _)
-    | (ordinary_head Leanux.branch; refine SameSnapshot.ordinary ?_; with_reducible exact @branch_sameSnapshot _ _)
-    | (ordinary_head Leanux.branchCmp; refine SameSnapshot.ordinary ?_; with_reducible exact @branchCmp_sameSnapshot _ _ _ _)
-    | (ordinary_head Leanux.branchCmpExcluded; refine SameSnapshot.ordinary ?_; with_reducible exact @branchCmpExcluded_sameSnapshot _ _ _)
-    | (ordinary_head Leanux.invariant; refine SameSnapshot.ordinary ?_; with_reducible exact @invariant_sameSnapshot _ _)
-    | (ordinary_head Leanux.unsupported; refine SameSnapshot.ordinary ?_; with_reducible exact @unsupported_sameSnapshot _ _)
+    | (ordinary_head Leanux.WG.getDev; refine SameView.ordinary ?_; with_reducible exact @getDev_sameSnapshot)
+    | (ordinary_head Leanux.WG.getPeer; refine SameView.ordinary ?_; with_reducible exact @getPeer_sameSnapshot _)
+    | (ordinary_head Leanux.WG.peerCreate; refine SameView.ordinary ?_; with_reducible exact @peerCreate_sameSnapshot _ _)
+    | (ordinary_head Leanux.WG.peerGet; refine SameView.ordinary ?_; with_reducible exact @peerGet_sameSnapshot _)
+    | (ordinary_head Leanux.WG.peerPut; refine SameView.ordinary ?_; with_reducible exact @peerPut_sameSnapshot _)
+    | (ordinary_head Leanux.WG.pubkeyLookup; refine SameView.ordinary ?_; with_reducible exact @pubkeyLookup_sameSnapshot _)
+    | (ordinary_head Leanux.WG.removeByPeer; refine SameView.ordinary ?_; with_reducible exact @removeByPeer_sameSnapshot _)
+    | (ordinary_head Leanux.WG.setAllowedip; refine SameView.ordinary ?_; with_reducible exact @setAllowedip_sameSnapshot _ _)
+    | (ordinary_head Leanux.WG.setPeerEndpoint; refine SameView.ordinary ?_; with_reducible exact @setPeerEndpoint_sameSnapshot _ _)
+    | (ordinary_head Leanux.WG.setPeer; refine SameView.ordinary ?_; with_reducible exact @setPeer_sameSnapshot _ _)
+    | (ordinary_head Leanux.branch; apply SameView.ordinary; intro initial; exact hoare_liftAmbient (AmbientM.branch _ _) (fun s => snapshot s = initial))
+    | (ordinary_head Leanux.branchCmp; apply SameView.ordinary; intro initial; exact hoare_liftAmbient (AmbientM.branchCmp _ _ _ _) (fun s => snapshot s = initial))
+    | (ordinary_head Leanux.branchCmpExcluded; apply SameView.ordinary; intro initial; exact hoare_liftAmbient (AmbientM.branchCmpExcluded _ _ _) (fun s => snapshot s = initial))
+    | (ordinary_head Leanux.invariant; apply SameView.ordinary; intro initial; exact hoare_liftAmbient (AmbientM.invariant _) (fun s => snapshot s = initial))
+    | (ordinary_head Leanux.unsupported; apply SameView.ordinary; intro initial; exact hoare_liftAmbient (AmbientM.unsupported _) (fun s => snapshot s = initial))
     | ordinary_strict_step
 
 theorem setPeerCmd_spec (P : Snapshot → Prop) (hp : Stable P) (a : PeerAttrs) :
@@ -144,22 +71,22 @@ theorem wgSetDevice_ordinary (a : DeviceAttrs) : OrdinaryAction (Leanux.WG.wgSet
     | (ordinary_head Leanux.WG.peerRemove; with_reducible exact @peerRemove_ordinary _)
     | (ordinary_head Leanux.WG.sendStagedPackets; with_reducible exact @sendStagedPackets_ordinary _)
     | (ordinary_head Leanux.WG.setPeerCmd; with_reducible exact @setPeerCmd_ordinary _)
-    | (ordinary_head Leanux.WG.clearPeerEndpointSrc; refine SameSnapshot.ordinary ?_; with_reducible exact @clearPeerEndpointSrc_sameSnapshot _)
-    | (ordinary_head Leanux.WG.cookiePrecomputeDeviceKeys; refine SameSnapshot.ordinary ?_; with_reducible exact @cookiePrecomputeDeviceKeys_sameSnapshot)
-    | (ordinary_head Leanux.WG.expireCurrentPeerKeypairs; refine SameSnapshot.ordinary ?_; with_reducible exact @expireCurrentPeerKeypairs_sameSnapshot _)
-    | (ordinary_head Leanux.WG.generatePublic; refine SameSnapshot.ordinary ?_; with_reducible exact @generatePublic_sameSnapshot _)
-    | (ordinary_head Leanux.WG.getDev; refine SameSnapshot.ordinary ?_; with_reducible exact @getDev_sameSnapshot)
-    | (ordinary_head Leanux.WG.lookupInterface; refine SameSnapshot.ordinary ?_; with_reducible exact @lookupInterface_sameSnapshot _)
-    | (ordinary_head Leanux.WG.peerPut; refine SameSnapshot.ordinary ?_; with_reducible exact @peerPut_sameSnapshot _)
-    | (ordinary_head Leanux.WG.precomputeStaticStatic; refine SameSnapshot.ordinary ?_; with_reducible exact @precomputeStaticStatic_sameSnapshot _)
-    | (ordinary_head Leanux.WG.pubkeyLookup; refine SameSnapshot.ordinary ?_; with_reducible exact @pubkeyLookup_sameSnapshot _)
-    | (ordinary_head Leanux.WG.setPort; refine SameSnapshot.ordinary ?_; with_reducible exact @setPort_sameSnapshot _)
-    | (ordinary_head Leanux.WG.setStaticIdentityPrivateKey; refine SameSnapshot.ordinary ?_; with_reducible exact @setStaticIdentityPrivateKey_sameSnapshot _)
-    | (ordinary_head Leanux.branch; refine SameSnapshot.ordinary ?_; with_reducible exact @branch_sameSnapshot _ _)
-    | (ordinary_head Leanux.branchCmp; refine SameSnapshot.ordinary ?_; with_reducible exact @branchCmp_sameSnapshot _ _ _ _)
-    | (ordinary_head Leanux.branchCmpExcluded; refine SameSnapshot.ordinary ?_; with_reducible exact @branchCmpExcluded_sameSnapshot _ _ _)
-    | (ordinary_head Leanux.invariant; refine SameSnapshot.ordinary ?_; with_reducible exact @invariant_sameSnapshot _ _)
-    | (ordinary_head Leanux.unsupported; refine SameSnapshot.ordinary ?_; with_reducible exact @unsupported_sameSnapshot _ _)
+    | (ordinary_head Leanux.WG.clearPeerEndpointSrc; refine SameView.ordinary ?_; with_reducible exact @clearPeerEndpointSrc_sameSnapshot _)
+    | (ordinary_head Leanux.WG.cookiePrecomputeDeviceKeys; refine SameView.ordinary ?_; with_reducible exact @cookiePrecomputeDeviceKeys_sameSnapshot)
+    | (ordinary_head Leanux.WG.expireCurrentPeerKeypairs; refine SameView.ordinary ?_; with_reducible exact @expireCurrentPeerKeypairs_sameSnapshot _)
+    | (ordinary_head Leanux.WG.generatePublic; refine SameView.ordinary ?_; with_reducible exact @generatePublic_sameSnapshot _)
+    | (ordinary_head Leanux.WG.getDev; refine SameView.ordinary ?_; with_reducible exact @getDev_sameSnapshot)
+    | (ordinary_head Leanux.WG.lookupInterface; refine SameView.ordinary ?_; with_reducible exact @lookupInterface_sameSnapshot _)
+    | (ordinary_head Leanux.WG.peerPut; refine SameView.ordinary ?_; with_reducible exact @peerPut_sameSnapshot _)
+    | (ordinary_head Leanux.WG.precomputeStaticStatic; refine SameView.ordinary ?_; with_reducible exact @precomputeStaticStatic_sameSnapshot _)
+    | (ordinary_head Leanux.WG.pubkeyLookup; refine SameView.ordinary ?_; with_reducible exact @pubkeyLookup_sameSnapshot _)
+    | (ordinary_head Leanux.WG.setPort; refine SameView.ordinary ?_; with_reducible exact @setPort_sameSnapshot _)
+    | (ordinary_head Leanux.WG.setStaticIdentityPrivateKey; refine SameView.ordinary ?_; with_reducible exact @setStaticIdentityPrivateKey_sameSnapshot _)
+    | (ordinary_head Leanux.branch; apply SameView.ordinary; intro initial; exact hoare_liftAmbient (AmbientM.branch _ _) (fun s => snapshot s = initial))
+    | (ordinary_head Leanux.branchCmp; apply SameView.ordinary; intro initial; exact hoare_liftAmbient (AmbientM.branchCmp _ _ _ _) (fun s => snapshot s = initial))
+    | (ordinary_head Leanux.branchCmpExcluded; apply SameView.ordinary; intro initial; exact hoare_liftAmbient (AmbientM.branchCmpExcluded _ _ _) (fun s => snapshot s = initial))
+    | (ordinary_head Leanux.invariant; apply SameView.ordinary; intro initial; exact hoare_liftAmbient (AmbientM.invariant _) (fun s => snapshot s = initial))
+    | (ordinary_head Leanux.unsupported; apply SameView.ordinary; intro initial; exact hoare_liftAmbient (AmbientM.unsupported _) (fun s => snapshot s = initial))
     | ordinary_strict_step
 
 theorem wgSetDevice_spec (P : Snapshot → Prop) (hp : Stable P) (a : DeviceAttrs) :

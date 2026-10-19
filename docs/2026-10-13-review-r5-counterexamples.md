@@ -9,10 +9,10 @@ mirror at that commit, and the C in `.deps/linux` 6.12.110
 `messages.h`). Nothing in Codex's worktree was edited; the proof target was
 rebuilt in a detached copy.
 
-Prior carried explicitly [USER 2026-10-13]: "Given that this is very heavily
-audited code, it's most likely that this is a false positive (i.e. a proof /
-statement artifact)." For each counterexample the first hypothesis tested is
-that the charter's statement is stronger than what the implementation claims.
+Prior carried explicitly [USER 2026-10-13]: the code is very heavily audited,
+so a counterexample is most likely a false positive, a proof or statement
+artefact. For each counterexample the first hypothesis tested is that the
+charter's statement is stronger than what the implementation claims.
 
 ## Verdict
 

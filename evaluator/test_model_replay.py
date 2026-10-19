@@ -90,7 +90,7 @@ def run_raw(trace):
     """`run` without `widen`, for a capture made on the current kernel (its
     section starts and arms already carry their identity words; `widen` would
     mis-pad them)."""
-    result = subprocess.run([MODEL], input=json.dumps(with_timer_caller_jiffies(with_jiffies_end(trace))).encode(), capture_output=True,
+    result = subprocess.run([MODEL], input=json.dumps(with_wheel_records(with_timer_caller_jiffies(with_jiffies_end(trace)))).encode(), capture_output=True,
                             timeout=120)
     return result.returncode, result.stdout.decode(), result.stderr.decode()
 
@@ -131,6 +131,10 @@ def with_timer_caller_jiffies(trace):
     trace = copy.deepcopy(trace)
     if 'hidden' not in trace:
         return trace
+    # a capture made on a kernel with the instrument (s3 and later) carries the
+    # reads itself, before the jitter draws on the jittered arms, and is left alone
+    if any(site in TIMER_CALLER_SITE_IDS for records in trace['hidden'] for site, _ in records):
+        return trace
     keepalive = max((peer.get('keepalive', 0) for op in trace['ops'] if op.get('op') == 'wg_set'
                      for peer in op.get('config', {}).get('peers', [])), default=0)
     for records in trace['hidden']:
@@ -169,6 +173,79 @@ def with_timer_caller_jiffies(trace):
     return trace
 
 
+# B3 (docs/2026-10-15-design-b3-timer-wheel.md, section 3.2; Leanux/WG/State.lean
+# `armTimer`): the mirror consumes, after every arm record that locks the base
+# (a pending timer re-armed with the same expires does not), the base-clock
+# record (kind 313, site 428, {clk, timer}) and, when the C enqueues (a fresh
+# arm or a slot change; not a same-slot re-arm), the enqueue record (kind 314,
+# site 429, {idx, bucket_expiry, timer}). The captures above predate both, so
+# the replays insert them with the values the capture determines: the clock
+# as mod_timer's own read (the no-lag case, which the s4 measurement found
+# for every arm of the corpus) and the slot and bucket expiry by the C's
+# arithmetic (timer.c:567-620) on that clock, tracking each timer's slot and
+# expiry across the trace. A fixture of the replay, not a mirror rule; a
+# capture made on the s5 pair or later carries the records and is left alone.
+TIMER_CLK_SITE, TIMER_ENQUEUE_SITE = 428, 429
+TIMER_SECTION_START_SITES = {102, 104, 106, 108, 112}   # the five callbacks (Worker.sectionId: indices 6-9, 11)
+LVL_START = [None] + [63 << (3 * (n - 1)) for n in range(1, 10)]
+
+
+def wheel_index(expires, clk):
+    """`calc_wheel_index` (timer.c:584-620) at HZ 250 (LVL_DEPTH 9): (slot, bucket expiry)."""
+    delta = (expires - clk) & MASK64
+    for lvl in range(0, 8):
+        if delta < LVL_START[lvl + 1]:
+            break
+    else:
+        if delta >> 63:
+            return clk & 63, clk
+        lvl = 8
+        if delta >= LVL_START[9]:
+            expires = (clk + LVL_START[9] - (1 << 24)) & MASK64
+    e = ((expires >> (3 * lvl)) + 1) & MASK64
+    return 64 * lvl + (e & 63), (e << (3 * lvl)) & MASK64
+
+
+def with_wheel_records(trace):
+    trace = copy.deepcopy(trace)
+    if 'hidden' not in trace:
+        return trace
+    if any(site in (TIMER_CLK_SITE, TIMER_ENQUEUE_SITE) for records in trace['hidden'] for site, _ in records):
+        return trace
+    timers = {}   # timer address -> (expires, slot); cleared by a firing (its section names the timer)
+    for op, records in zip(trace['ops'], trace['hidden']):
+        if op['op'] in ('wg_down', 'wg_delete', 'wg_netns_close'):
+            timers.clear()   # wg_timers_stop (device.c:124, peer.c:106)
+        out, caller = [], None
+        for site, value in records:
+            out.append([site, value])
+            if site in TIMER_CALLER_SITE_IDS:
+                caller = site
+            if site == TIMER_ARM_SITE:
+                jm = int.from_bytes(bytes.fromhex(value[:16]), 'little')
+                e = int.from_bytes(bytes.fromhex(value[16:32]), 'little')
+                addr = int.from_bytes(bytes.fromhex(value[32:48]), 'little') if len(value) >= 48 else 0
+                # the sites whose timer is not pending at the arm, by the C's guard
+                # (timers.c:147, :157) or the callback's detach (:60, :84): a fresh
+                # enqueue, whatever the capture showed before (a deletion the records
+                # do not carry, timers.c:170 and :178, lies between)
+                old = None if caller in (420, 421, 422, 423) else timers.get(addr)
+                if old is not None and old[0] == e:
+                    continue   # __mod_timer :1085-1088: no lock, no records
+                out.append([TIMER_CLK_SITE, jm.to_bytes(8, 'little').hex() + addr.to_bytes(8, 'little').hex()])
+                slot, bexp = wheel_index(e, jm)
+                if old is not None and old[1] == slot:
+                    timers[addr] = (e, slot)   # :1123-1130: the slot kept, no enqueue record
+                    continue
+                timers[addr] = (e, slot)
+                out.append([TIMER_ENQUEUE_SITE, slot.to_bytes(8, 'little').hex() + bexp.to_bytes(8, 'little').hex()
+                            + addr.to_bytes(8, 'little').hex()])
+            elif site in TIMER_SECTION_START_SITES and len(value) >= 32:
+                timers.pop(int.from_bytes(bytes.fromhex(value[16:32]), 'little'), None)
+        records[:] = out
+    return trace
+
+
 def with_jiffies_end(trace):
     trace = copy.deepcopy(trace)
     if 'hidden' not in trace:
@@ -187,7 +264,7 @@ def with_jiffies_end(trace):
 def replay(trace):
     if not MODEL.is_file():
         raise AssertionError(f'{MODEL} is missing: run `lake build leanux-model` first')
-    result = subprocess.run([MODEL], input=json.dumps(with_timer_caller_jiffies(with_jiffies_end(widen(trace)))).encode(), capture_output=True,
+    result = subprocess.run([MODEL], input=json.dumps(with_wheel_records(with_timer_caller_jiffies(with_jiffies_end(widen(trace))))).encode(), capture_output=True,
                             timeout=120)
     out = (result.stdout + result.stderr).decode()
     return None if result.returncode == 0 and out.startswith('{') and not result.stderr else out.strip()
@@ -196,7 +273,7 @@ def replay_raw(trace):
     """`replay` without `widen`: a capture made on the current kernel (the identity words, the kind-306 records)."""
     if not MODEL.is_file():
         raise AssertionError(f'{MODEL} is missing: run `lake build leanux-model` first')
-    result = subprocess.run([MODEL], input=json.dumps(with_timer_caller_jiffies(with_jiffies_end(trace))).encode(), capture_output=True, timeout=120)
+    result = subprocess.run([MODEL], input=json.dumps(with_wheel_records(with_timer_caller_jiffies(with_jiffies_end(trace)))).encode(), capture_output=True, timeout=120)
     out = (result.stdout + result.stderr).decode()
     return None if result.returncode == 0 and out.startswith('{') and not result.stderr else out.strip()
 
@@ -348,11 +425,96 @@ class BatchBacklog(unittest.TestCase):
         self.assertIn("work the batch queued outlived the guest's wait", replay_raw(BATCH_BACKLOG) or '')
 
 
+# Campaign 2's requests 2 and 4 (.worktrees/proofs-campaign-2/docs/
+# 2026-10-14-campaign-2-mirror-requests.md, sections 2 and 4; the typed forms
+# in its Progress/QueueRefill.lean and Progress/RecordedPending.lean): the
+# corpus trace w6_rst_syn's first four operations (the peer configured, wg_up,
+# an observe, the handshake response injected), then a wg_batch of the
+# corpus's authenticated SYN and one transmit, with constructed records in
+# the legacy mode (no arm records, no dst-cache records), not a capture.
+# Operation 4: the decrypt worker's dispatch yields after one iteration; the
+# encrypt worker's dispatch runs its ring poll, whose NET_RX section delivers
+# the SYN and the stack's reply transmits into the encrypt ring it is
+# draining (a requeue during the unit's own run, send.c:293, queueing.h:174).
+# - QUEUE_REFILL ends its records at the encrypt worker's stop. Until
+#   2026-10-19 the activation's bound (the ring's occupancy at the start plus
+#   one) stopped the run as an invariant, "consumed more items than its queue
+#   held (1)", where the C's loop re-reads the ring and drains the refill; the
+#   bound now counts the refills a run can take, and the trace ends outside
+#   the domain where its records end (the tx worker's work undrained).
+# - RECORDED_PENDING yields the encrypt worker after its first item, resumes
+#   it to drain the refill, and completes the operation. The requeue set the
+#   encrypt unit's PENDING bit again, so the kernel runs the function once
+#   more after the run returns (kernel/workqueue.c:2322-2325, 2374, 3230), a
+#   dispatch with its own section whose ring poll finds nothing; the stream
+#   omits it and was accepted with the identity dangling (request 4). Refused
+#   since 2026-10-19 by the batch's completion guard.
+# - EMPTY_REDISPATCH is that stream with the redispatch's section present:
+#   the empty-ring dispatch guard refused it before ("expected jiffies_end
+#   (site 128), the record is site 44"); it is the C's schedule and is
+#   accepted since 2026-10-19.
+def _c(n):
+    return _word(n * 1000000000)
+
+
+def _j(n):
+    return [128, _word(100000 + n)]
+
+
+_SEC = dict(sendWorker=(40, 41), receiveWorker=(42, 43), encryptWorker=(44, 45), txWorker=(46, 47), netRx=(48, 49), decryptWorker=(50, 51))
+
+
+def _start(w):
+    return [_SEC[w][0], _word(0) + _word(0)]
+
+
+def _stop(w):
+    return [_SEC[w][1], _word(0)]
+
+
+_RST_SYN = json.loads((Path(__file__).resolve().parents[1] / 'corpus/wireguard/w6_rst_syn.json').read_text())
+_REFILL_ROWS = [
+    [[5, _c(100)], _j(0)],
+    [[6, _c(101)], _start('sendWorker'), [6, _c(101)], [7, _c(101)], [1, bytes(129 + n for n in range(32)).hex()],
+     [3, bytes([128, 59, 177, 106, 0, 0, 0, 0, 177, 104, 222, 58, 0, 0, 0, 0]).hex()],
+     [4, bytes([13, 12, 11, 10, 0, 0, 0, 0]).hex()], [8, _c(101)],
+     _start('netRx'), _stop('netRx'), [14, bytes([200, 0, 0, 0, 0, 0, 0, 0]).hex()], _stop('sendWorker'), _j(1)],
+    [_j(2)],
+    [_start('netRx'), _stop('netRx'), _start('receiveWorker'), [13, _c(102)], [15, _word(102) + _word(0)], [6, _c(102)],
+     _stop('receiveWorker'), _start('encryptWorker'), _stop('encryptWorker'), _start('txWorker'),
+     _start('netRx'), _stop('netRx'), [6, _c(102)], _stop('txWorker'), _j(3)],
+    [_start('netRx'), _stop('netRx'), [6, _c(103)], _start('decryptWorker'), [6, _c(103)], [63, _word(0)],
+     _start('encryptWorker'), _start('netRx'), [6, _c(103)], [6, _c(103)], _stop('netRx'), _stop('encryptWorker')]]
+_REFILL_OPS = _RST_SYN['ops'][:4] + [{"op": "wg_batch", "wait_ms": 100, "items": [
+    {"kind": "inject", "family": 4, "port": 51820, "message": _RST_SYN['ops'][4]['message']},
+    {"kind": "xmit", "packet": {"family": 4, "dst": "0a000001", "payload": "01"}}]}]
+QUEUE_REFILL = {"version": 1, "id": "campaign2-encrypt-refill", "ops": _REFILL_OPS, "hidden": _REFILL_ROWS, "dst_cache_records": False}
+_PENDING_ROW = _REFILL_ROWS[4][:11] + [[61, _word(0)], _stop('encryptWorker'), _stop('decryptWorker'), _start('txWorker'),
+                                       _start('netRx'), _stop('netRx'), [16, _word(1)], [6, _c(103)],
+                                       _start('netRx'), _stop('netRx'), [6, _c(103)], _stop('txWorker'), _j(4)]
+RECORDED_PENDING = dict(QUEUE_REFILL, id="campaign2-recorded-encrypt-requeue", hidden=_REFILL_ROWS[:4] + [_PENDING_ROW])
+EMPTY_REDISPATCH = dict(RECORDED_PENDING, id="campaign2-empty-redispatch",
+                        hidden=_REFILL_ROWS[:4] + [_PENDING_ROW[:-1] + [_start('encryptWorker'), _stop('encryptWorker'), _j(4)]])
+
+
+class EncryptRequeue(unittest.TestCase):
+    def test_a_refill_during_the_run_is_drained_by_the_run(self):
+        out = replay_raw(QUEUE_REFILL) or ''
+        self.assertNotIn('consumed more items than its queue held', out)
+        self.assertIn("work the batch queued outlived the guest's wait", out)
+
+    def test_a_requeued_unit_without_its_redispatch_is_refused(self):
+        self.assertIn('wg_packet_encrypt_worker is pending at the end of the wait', replay_raw(RECORDED_PENDING) or '')
+
+    def test_the_redispatch_with_an_empty_ring_is_the_schedule(self):
+        self.assertIsNone(replay_raw(EMPTY_REDISPATCH))
+
+
 def _replay_prepared(trace):
     """Run the model on a trace whose caller reads are already in place (no second synthesis)."""
     if not MODEL.is_file():
         raise AssertionError(f'{MODEL} is missing: run `lake build leanux-model` first')
-    result = subprocess.run([MODEL], input=json.dumps(with_jiffies_end(trace)).encode(), capture_output=True, timeout=120)
+    result = subprocess.run([MODEL], input=json.dumps(with_wheel_records(with_jiffies_end(trace))).encode(), capture_output=True, timeout=120)
     out = (result.stdout + result.stderr).decode()
     return None if result.returncode == 0 and out.startswith('{') and not result.stderr else out.strip()
 
@@ -515,3 +677,50 @@ class EncryptWorkerRingPoll(unittest.TestCase):
         op = t['hidden'][4]
         t['hidden'][4] = op[:17] + op[12:17] + op[17:]   # the poll's section a second time: nothing is pending
         self.assertIn('hidden-input records disagree', replay_raw(t))
+
+
+# B3 (docs/2026-10-15-design-b3-timer-wheel.md, sections 3.4 and 9): a capture
+# from the s5 oracle (the kind-313 and kind-314 records in place, sites 428 and
+# 429): d3_retransmit, whose advance (operation 4) fires the retransmit timer
+# (site 102) and whose send worker re-arms it. The controls of E1's must-fire
+# direction and E2's lookahead (mutant B3-M4: `requireNothingDue` a no-op
+# passes both altered captures, so this is its evaluator control).
+D3_RETRANSMIT_S5 = json.loads(r'''{"arm_records":true,"expect":["fired:wg_expired_retransmit_handshake","wg_packet_send_staged_packets.no_keypair=1","wg_packet_send_queued_handshake_initiation.not_retry=0","wg_expired_retransmit_handshake.give_up=0"],"hidden":[[[150,"799c030001000000"],[5,"2d6b575022010000"],[150,"799c030001000000"],[128,"929c030001000000"]],[[128,"b99c030001000000"]],[[6,"35b15e6422010000"],[300,"3002e7068088ffffe0ae3981ffffffff"],[40,"e0ae3981ffffffff3002e7068088ffff"],[6,"35b15e6422010000"],[7,"35b15e6422010000"],[1,"8182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0"],[3,"803bb16a00000000b168de3a00000000"],[4,"0d0c0b0a00000000"],[8,"35b15e6422010000"],[151,"cd9c030001000000"],[21,"41b1978a567734d9b0148c37798e38ae"],[20,"e0c9020000000000"],[48,"10044081ffffffff0000000000000000"],[49,"0000000000000000"],[424,"cd9c030001000000"],[14,"a900000000000000"],[100,"cd9c030001000000e5a10300010000004003e7068088ffff"],[428,"cd9c0300010000004003e7068088ffff"],[429,"880000000000000000a20300010000004003e7068088ffff"],[41,"0000000000000000"],[128,"e69c030001000000"]],[[128,"609d030001000000"]],[[101,"639d0300010000000da3030001000000"],[102,"709c3981ffffffff4003e7068088ffff"],[150,"0ea3030001000000"],[6,"af151ae223010000"],[300,"3002e7068088ffffe0ae3981ffffffff"],[103,"0000000000000000"],[40,"e0ae3981ffffffff3002e7068088ffff"],[6,"af151ae223010000"],[7,"af151ae223010000"],[1,"3994534fa7d1a028726cae767b2d59a14aea8ddd263dfd0cc2d7e5273dddc87c"],[3,"8043d06a00000000da86821c00000000"],[4,"3901019f00000000"],[8,"af151ae223010000"],[151,"0ea3030001000000"],[20,"0d01000000000000"],[48,"10044081ffffffff0000000000000000"],[49,"0000000000000000"],[424,"0ea3030001000000"],[14,"5800000000000000"],[100,"0ea30300010000000ca80300010000004003e7068088ffff"],[428,"0ea30300010000004003e7068088ffff"],[429,"a10000000000000040a80300010000004003e7068088ffff"],[41,"0000000000000000"],[128,"26a3030001000000"]],[[128,"95a3030001000000"]],[]],"id":"d3_retransmit","ops":[{"config":{"listen_port":51820,"peers":[{"allowed_ips":[{"addr":"0a000000","cidr":8,"family":4},{"addr":"20010db8000000000000000000000000","cidr":32,"family":6}],"endpoint":{"addr":"7f000001","family":4,"port":51999},"public_key":"0faa684ed28867b97f4a6a2dee5df8ce974e76b7018e3f22a1c4cf2678570f20"}],"private_key":"1111111111111111111111111111111111111111111111111111111111111111"},"op":"wg_set"},{"op":"wg_up"},{"op":"wg_xmit","packet":{"dst":"0a000001","family":4,"payload":"20272e353c434a51585f666d747b828990"}},{"op":"wg_observe"},{"op":"wg_advance","ticks":1450},{"op":"wg_observe"},{"op":"wg_get"}],"steer":[["init_ephemeral","8182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0"],["tai64n_now","803bb16a00000000b168de3a00000000"],["index_draw","0d0c0b0a"],["init_ephemeral","draw"],["tai64n_now","draw"],["index_draw","draw"]],"version":1}''')
+
+
+class TimerWheelFiring(unittest.TestCase):
+    def test_s5_capture_replays(self):
+        self.assertIsNone(replay_raw(D3_RETRANSMIT_S5))
+
+    def test_a_due_timer_whose_section_never_appears_is_a_mismatch(self):
+        t = copy.deepcopy(D3_RETRANSMIT_S5)
+        op = t['hidden'][4]
+        # keep the advance (site 101) and the end-of-wait read (128): the firing and the work it queued are gone
+        t['hidden'][4] = [r for r in op if r[0] in (101, 128)]
+        out = replay_raw(t)
+        self.assertIsNotNone(out, 'a due timer without its section was accepted (E1 item 3)')
+        self.assertIn('hidden-input records disagree', out)
+        self.assertIn('did not fire', out)
+
+    def test_a_due_timer_whose_section_appears_later_is_the_deferral(self):
+        t = copy.deepcopy(D3_RETRANSMIT_S5)
+        op = t['hidden'][4]
+        block = [r for r in op if r[0] not in (101, 128)]
+        t['hidden'][4] = [r for r in op if r[0] in (101, 128)]
+        t['hidden'][5] = block + t['hidden'][5]   # the pass ran after the read, in the next operation's wait
+        out = replay_raw(t)
+        self.assertIsNotNone(out, 'a deferred timer softirq was accepted (E2)')
+        self.assertIn('unsupported', out)
+        self.assertIn('deferred past the end-of-wait read', out)
+
+class FibBoot(unittest.TestCase):
+    """Lane C: the mirror's boot trie (built by the C's own inserts at `lo` up)
+    is the shape the guest reads back from /proc/net/fib_trie at every
+    trace's start (harness/linux.py EXPECTED_FIB_TRIE_BOOT)."""
+
+    def test_boot_shape_matches_the_fixture_fact(self):
+        from harness.linux import EXPECTED_FIB_TRIE_BOOT
+        result = subprocess.run([MODEL, '--fib-boot'], capture_output=True, timeout=60)
+        self.assertEqual(result.returncode, 0, result.stderr.decode())
+        self.assertEqual(json.loads(result.stdout.decode()), EXPECTED_FIB_TRIE_BOOT)
+

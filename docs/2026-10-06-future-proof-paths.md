@@ -2,8 +2,8 @@
 
 Status: **proposed** [AGENT], for the user's decisions in section 5.
 
-[USER 2026-10-06] "This isn't work we will do, it's identifying cheap moves we
-can make to keep these paths open for later agents or avoid blocking them."
+[USER 2026-10-06] This is not work to be done now; it identifies cheap moves
+that keep these paths open for later agents or avoid blocking them.
 `AGENTS.md` forbids theorems and proof infrastructure; nothing here builds
 any. The note (a) says what could reasonably be stated about WireGuard at the
 mirror interface later, and (b) names cheap moves, mostly conventions, that

@@ -165,9 +165,9 @@ theorem accepted_remembered (c : ReplayCounter) (nonce : Nat)
     (hsize : c.backtrack.size = 128) (h : (step c nonce).1 = true) :
     Remembers (step c nonce).2 nonce := by
   by_cases he : eligible c nonce
-  · rw [step, if_pos he]
+  · rw [step, ite_eq_left he]
     exact update_remembers_self c nonce hsize
-  · rw [step, if_neg he] at h
+  · rw [step, ite_eq_right he] at h
     contradiction
 
 /-- Each call preserves the remembered history. -/

@@ -1,5 +1,6 @@
 import Leanux.Kernel.Decision
 import Leanux.WG.Types
+import Leanux.Net.Fib.Types
 import Std.Data.TreeMap
 import Std.Data.TreeSet
 import Std.Data.HashSet
@@ -64,6 +65,7 @@ def FMODE_NOACCOUNT : UInt32 := (1 : UInt32) <<< 29
 def EBADF : Int := 9
 def EAGAIN : Int := 11
 def ENOMEM : Int := 12
+def ENOBUFS : Int := 105
 def EFAULT : Int := 14
 def EBUSY : Int := 16
 def EPIPE : Int := 32
@@ -571,6 +573,32 @@ structure Task where
   sigpending : Bool := false
   deriving BEq
 
+/-- The task store, shared by the file layer, seccomp and the signal module
+    (the state split, docs/2026-10-15-design-state-split.md, section 2): one
+    mandatory parent, one optional child (the seccomp probe's), and the task
+    the runner is executing. The subsystems reach it through `TaskM`; the
+    runner holds it in `World.tasks`. -/
+structure TaskWorld where
+  task : Task
+  child : Option Task := none
+  current : TaskRef := .task
+  deriving BEq
+
+/-- seccomp's own store (the state split, section 2): the filter objects and
+    their counter, the kind-309 length the bridge reads ahead, and the keys of
+    the repeatable decisions already emitted in this operation. -/
+structure SeccompWorld where
+  filters : TreeMap FilterId SeccompFilter := {}
+  nextFilter : FilterId := 0
+  /-- seccomp: the kind-309 length record, read before the instructions
+      (stream W's order) and answered to the translation after them. -/
+  translatedLen : Option Nat := none
+  /-- seccomp (design 4.2, 4.5): the repeatable decisions of the checker,
+      the translation, the cache's emulation and the entry path are emitted
+      once per operation as a set of (decision, outcome, operands); the keys
+      emitted so far in this operation (`Seccomp.Bridge`). -/
+  emitted : Std.HashSet String := {}
+
 /-- `wg_ratelimiter`'s statics (drivers/net/wireguard/ratelimiter.c:12-18):
     `init_refcnt` and the hsiphash `key` (zeros while unknown: drawn before
     the trace for the fixture's wg0). The tables hold no entries on the
@@ -590,38 +618,23 @@ structure Ratelimiter where
   table6 : List (Nat × Int × Int) := []
   deriving Repr, BEq
 
-/-- Whole-kernel mirror state. `nrFiles`/`maxFiles` mirror the system-wide
-    `nr_files` percpu counter and `files_stat.max_files`, and
-    `anonInodeInodeErr` whether the boot-time `anon_inode_inode` is an error
-    pointer; the runner supplies these environment facts. -/
-structure Kernel where
-  task : Task
-  files : TreeMap FileId File
-  nextFile : FileId
-  ctxs : TreeMap CtxId EventfdCtx
-  nextCtx : CtxId
+/-- The file layer's object stores and accounting (the state split,
+    docs/2026-10-15-design-state-split.md, section 2): the 31 file-layer
+    fields of the former `Kernel` and the two user-memory outputs of
+    `World`. `nrFiles`/`maxFiles` mirror the system-wide `nr_files` percpu
+    counter and `files_stat.max_files`, and `anonInodeInodeErr` whether the
+    boot-time `anon_inode_inode` is an error pointer; the runner supplies
+    these environment facts (`Runner.initialFS`). -/
+structure FSWorld where
+  files : TreeMap FileId File := {}
+  nextFile : FileId := 0
+  ctxs : TreeMap CtxId EventfdCtx := {}
+  nextCtx : CtxId := 0
   /-- `eventfd_ida`: the allocated ids. -/
-  idaUsed : TreeSet Nat
-  nrFiles : Nat
-  maxFiles : Nat
-  anonInodeInodeErr : Bool
-  /-- The fixture's WireGuard device, in traces that use the network fixture. -/
-  wg : Option WG.Device := none
-  /-- W2 (docs/2026-10-06-w1-w2-netlink.md, 4.3): the dump state of the
-      fixture's generic-netlink socket (fd 7, `wg_get`) and of the stepped
-      dump socket (fd 8, `wg_get_start`/`wg_get_recv`). -/
-  nlSock7 : WG.NlSock := {}
-  nlSock8 : WG.NlSock := {}
-  /-- `peer_counter` (drivers/net/wireguard/peer.c), a global atomic. -/
-  peerCounter : Nat := 0
-  /-- `keypair_counter` (drivers/net/wireguard/noise.c), a global atomic. -/
-  keypairCounter : Nat := 0
-  /-- L: the network namespace's ifindex cursor (`net->ifindex`, the
-      `xa_alloc_cyclic` cursor of `dev_by_index`, never reset): the next
-      device registered gets this index. -/
-  netIfindexNext : Nat := 4
-  /-- L: the ratelimiter's global singleton (ratelimiter.c:12-18). -/
-  ratelimiter : Ratelimiter := {}
+  idaUsed : TreeSet Nat := {}
+  nrFiles : Nat := 0
+  maxFiles : Nat := 0
+  anonInodeInodeErr : Bool := false
   /-- Pipes (P): the pipefs inodes, the `pipe_inode_info`s and their data
       pages, each an owned store with its next identity. -/
   inodes : TreeMap PipefsInodeId Inode := {}
@@ -639,16 +652,6 @@ structure Kernel where
   pipeMaxSize : Nat := 1048576
   pipeUserPagesSoft : Nat := 16384
   pipeUserPagesHard : Nat := 0
-  /-- seccomp (design 4.1): every filter any task holds, by allocation
-      identity (the chain runs through `prev`); the sandboxed child of a
-      child probe, created from `task` by `copy_seccomp`'s effects and
-      dropped at the parent's `wait4`; and `current`, the task the runner
-      is executing (the child only while a child probe's steps run). -/
-  seccompFilters : TreeMap FilterId SeccompFilter := {}
-  child : Option Task := none
-  current : TaskRef := .task
-  /-- The next filter's allocation identity (stream V): monotone, never reused. -/
-  nextFilter : FilterId := 0
   /-- epoll (design 4.1): the `struct eventpoll`, `epitem` and `eppoll_entry`
       stores, each with its next identity (lifetime identities: never
       reused). -/
@@ -673,7 +676,14 @@ structure Kernel where
       (:1833, :1865): `ep_ptable_queue_proc` reads it and clears it when its
       `pwq` allocation fails (:1551-1553), which `ep_insert` tests (:1877). -/
   epqEpi : Option EpiId := none
+  /-- The caller's buffer (user memory), as written by `copy_to_iter` (an
+      eventfd read's 8 bytes) or `copy_page_to_iter` (a pipe read). -/
+  userOut : Option ByteArray := none
+  /-- The descriptor pair `do_pipe2` copied to the caller (`fd[0]`, `fd[1]`,
+      fs/pipe.c:1026): the `fds` observation field. -/
+  userFds : Option (Nat × Nat) := none
   deriving BEq
+
 
 /-! ## Allocation outcomes (docs/2026-10-05-a-alloc.md, section 6)
 
@@ -704,6 +714,12 @@ inductive EnvSite where
   -- and get_next_ino, no decisions (audit M3)
   | allocInode | kcallocResizeBufs
   | copyPageToIter | copyPageFromIter | sigqueueAlloc
+  -- lane C (docs/2026-10-15-design-c-fib-trie.md, section 5): the FIB trie's
+  -- GFP_KERNEL allocations in task context, constant successes on the fixture
+  -- until their record-only sites are armed: leaf_new (fib_trie.c:359),
+  -- tnode_alloc (:333), the aliases (:1281, :1344), fib_create_info
+  -- (fib_semantics.c:1489), ip_fib_metrics_init (metrics.c:76)
+  | fibLeafAlloc | fibTnodeAlloc | fibAliasAlloc | fibInfoAlloc | fibMetricsAlloc
   -- W4: skb_gso_segment's allocations inside skb_segment (device.c:179), an
   -- assumed-success site as the sites above (A's domain)
   | skbSegment
@@ -1046,6 +1062,15 @@ inductive HiddenSite where
       `{jiffies before, jiffies after}` of the `wg_advance` operation, in
       the trace process's task stream. -/
   | modTimerArm | timeAdvance | jiffiesEnd
+  /-- B3 (docs/2026-10-15-design-b3-timer-wheel.md, sections 3.2, 4 and 7):
+      the timer wheel's two records at an arm, written by `__mod_timer` for a
+      timer of the armed set and resolved at the arming line like the arm
+      record: kind 313 `{base->clk, timer}` right after `forward_timer_base`
+      on both paths (the hidden input the slot depends on), and kind 314
+      `{idx, bucket_expiry, timer}` at the enqueue (the slot and bucket
+      expiry the C stored; absent on the same-slot path, so the mirror's own
+      same-slot decision is checked by the record's presence). -/
+  | timerClk | timerEnqueue
   /-- Pre-release review, finding 2 (docs/2026-10-14-pre-release-review.md,
       section 2): the caller's `jiffies` read that computes a peer timer's
       expiry, recorded as kind 311 `{jiffies}` on the caller's own line in
@@ -1276,6 +1301,11 @@ def HiddenSite.info : HiddenSite → HiddenSiteInfo
   -- `Env.afterAdvance` as the firing window's exact end. Id 128: the first
   -- free id after L's block (120-127).
   | .jiffiesEnd => ⟨128, "jiffies_end", "jiffies", "fs/ioctl.c", 51, 8, .mirror⟩
+  -- B3: the wheel's records at mod_peer_timer's line (the caller's return
+  -- address passed through __mod_timer), kind classes `clk` and `wheel`;
+  -- ids 428 and 429 continue the review's 420-427.
+  | .timerClk => ⟨428, "timer_clk", "clk", "drivers/net/wireguard/timers.c", 37, 16, .mirror⟩
+  | .timerEnqueue => ⟨429, "timer_enqueue", "wheel", "drivers/net/wireguard/timers.c", 37, 24, .mirror⟩
   -- Pre-release review finding 2: the caller's jiffies read before each
   -- mod_peer_timer, kind 311, 8 bytes, at the caller's line (the `_THIS_IP_`
   -- of the `kcov_timer_jiffies(jiffies, _THIS_IP_)` expression); ids 420-426.
@@ -1355,7 +1385,7 @@ def HiddenSite.all : List HiddenSite :=
   ++ Worker.all.flatMap (fun w => [.sectionStart w, .sectionStop w])
   ++ [.reschedReceive, .reschedEncrypt, .reschedTx, .reschedDecrypt, .newHandshakeJitter, .walltimeLastHandshakeData,
       .cookieBirthdate]
-  ++ [.modTimerArm, .timeAdvance, .jiffiesEnd]
+  ++ [.modTimerArm, .timeAdvance, .jiffiesEnd, .timerClk, .timerEnqueue]
   ++ [.timerJiffiesRetransmitZeroKey, .timerJiffiesExpiredKeepalive, .timerJiffiesDataSent, .timerJiffiesDataReceived,
       .timerJiffiesHandshakeInitiated, .timerJiffiesSessionDerived, .timerJiffiesTraversal]
   ++ (Worker.all.filter fun w => w.timer?.isNone && w != .netRx).map .queued
@@ -1456,40 +1486,22 @@ structure InboxDatagram where
   dst : Nat := 0
   deriving Repr, BEq
 
-structure World where
-  k : Kernel
+/-- The ambient part of the state every module has (the state split,
+    docs/2026-10-15-design-state-split.md, section 2): the record stream and
+    its placeholders, the decision log and the NET_RX stamp, the dispatch
+    bookkeeping, the steering and allocation arming, the environment oracle
+    and its call counts, the timing, and the shared output accumulator. Every
+    subsystem monad is a `StateT` over `AmbientM`; the primitives below are
+    the only writers of the record stream and the decision log. -/
+structure Ambient where
   /-- The pipe sites' environment oracle (`EnvSite`). -/
   env : EnvSite → Nat → Bool
   timing : Timing
   envCalls : List (EnvSite × Nat) := []
   steps : Array Step := #[]
-  /-- seccomp (design 4.2, 4.5): the repeatable decisions of the checker,
-      the translation, the cache's emulation and the entry path are emitted
-      once per operation as a set of (decision, outcome, operands); the keys
-      emitted so far in this operation (`Seccomp.Bridge`). -/
-  emitted : Std.HashSet String := {}
-  /-- seccomp: the kind-309 length record, read before the instructions
-      (stream W's order) and answered to the translation after them. -/
-  translatedLen : Option Nat := none
-  /-- The caller's buffer (user memory), as written by `copy_to_iter` (an
-      eventfd read's 8 bytes) or `copy_page_to_iter` (a pipe read). -/
-  userOut : Option ByteArray := none
-  /-- The descriptor pair `do_pipe2` copied to the caller (`fd[0]`, `fd[1]`,
-      fs/pipe.c:1026): the `fds` observation field. -/
-  userFds : Option (Nat × Nat) := none
   /-- Observation fields beyond the return value: a dump's `device`, or what
       `wg_observe` saw (`datagrams`, `stats`). -/
   extraOut : List (String × Lean.Json) := []
-  /-- Fixture state, not kernel state: the datagrams waiting at the network
-      fixture's UDP listeners (each with the outer TOS / traffic class the
-      listener's cmsg reports, W5) and at its sender, which `wg_observe`
-      drains. -/
-  listenerV4 : List (Nat × List UInt8) := []
-  listenerV6 : List (Nat × List UInt8) := []
-  senderInbox : List InboxDatagram := []
-  /-- Datagrams wg0's sockets sent, oldest first, not yet delivered. The
-      environment decides which fixture socket receives them. -/
-  sent : List SentDatagram := []
   /-- The current operation's hidden-input records not yet consumed, in
       order (task stream, then remote). `none`: no records were supplied. -/
   hidden : Option (List HiddenRecord) := none
@@ -1519,26 +1531,7 @@ structure World where
       reused by a new object with a new record, and a fresh device's peer
       ids restart (the simulation-target review, 2026-10-12, section 4.3). -/
   unitPeers : List (Nat × Nat × Nat) := []
-  timerUnits : List (Nat × Nat × WG.PeerTimer) := []
   pendingWork : List Nat := []
-  /-- W8 (docs/2026-10-06-w8-w9-netns-routing.md, 3.1): the foreign-creator
-      fixture, where wg0's creating namespace C is held by the fixture's
-      listeners, injector and pin (`netnsCHolders`: descriptors 9, 8, 5, 4)
-      until the trace's `wg_netns_close` drops them. -/
-  foreignCreator : Bool := false
-  netnsCHolders : List Nat := []
-  /-- A NET_RX softirq raised by a loopback transmission (`netif_rx` from
-      `send4`/`send6` or an ICMP error), whose section has not been consumed
-      yet: see `WG.loopbackSoftirq`. An operation ends with none pending
-      (`Runner.executeTrace`). -/
-  netRxRaised : Bool := false
-  /-- The placements of the decrypt worker's NAPI poll that its records do
-      not determine (`Env.napiIrqExit`): for each such poll in turn, whether
-      it ran at the interrupt exit inside `wg_queue_enqueue_per_peer_rx`
-      (`true`) or after it; the check enumerates them. Missing entries are
-      `false`. `napiAmbiguous` counts the polls met. -/
-  napiBeforePut : List Bool := []
-  napiAmbiguous : Nat := 0
   /-- W7 stream H: the NET_RX section starts consumed so far in the
       operation (`noteNetRxStart`: run or skipped, every one the records
       carry) and the one open now (0: none), stamped on every step
@@ -1549,30 +1542,59 @@ structure World where
       placeholders follow: the domain filter's verdict is then exact for the
       steered sites. -/
   steerValues : List (String × Option (List UInt8)) := []
-  /-- Peers whose handshake work this system call queued, while the call has
-      not slept. The kernel is `CONFIG_PREEMPT_NONE` on one CPU, so their
-      worker cannot have run yet. -/
-  queuedThisCall : List Nat := []
-  /-- D3, fixture knowledge (docs/2026-10-05-d3-timers.md, section 5.4): the
-      last `jiffies` a record told (kinds 303 and 304), the C's `unsigned
-      long` (64-bit on x86_64, review item 8); `none` before the first. -/
-  jiffiesLast : Option UInt64 := none
   /-- D3: whether this run's records include the kind-303 arm records (the
       wire's `A` line, `harness/linux.py` `ARM_RECORDS`; the check passes
       the same value as the input's `arm_records`). Without them the mirror
       consumes none and a timer's `expires` is nominal. -/
   armRecords : Bool := false
-  /-- W9: whether this run's records include the kind-306 dst-cache jiffies
-      (every live run: the kernel writes them with the arm records; the
-      check never clears it). False only for the replay tests' captures made
-      before the record existed (`evaluator/test_model_replay.py`
-      `widen`), under which the mirror keeps the pre-W9 rule: the cache
-      always misses and no record is consumed. -/
-  dstCacheRecords : Bool := true
   /-- D3: the timer sections the environment ran in this operation, by
       callback symbol, for the trace's `fired:<symbol>` expectations
       (`Env.runTimerSection`). -/
   fired : Array String := #[]
+  /-- The allocation sites whose records this run carries: the sites inside
+      the ranges the evaluator armed (harness/steer.py `alloc_armed_labels`).
+      Every other site answers ok without a record — the transitional
+      unarmed answer of docs/2026-10-05-a-alloc.md section 6.6, declared,
+      and never applied to a site the run armed. -/
+  allocArmed : List String := []
+  /-- In the domain filter: the allocation sites the steering schedule
+      names. Their every encounter needs an entry (design section 5.1). -/
+  allocSteered : List String := []
+
+/-! ## The per-subsystem worlds (the state split,
+    docs/2026-10-15-design-state-split.md, sections 2 and 3): WireGuard's
+    state, with lane C's routing component inside it, and the fixture's
+    mutable transport and control state at the product level. -/
+
+/-- The facts of wg0 the routing module reads through the C's
+    `dev_get_by_index` and `__in_dev_get_rcu` (`deviceUp`, `deviceHasInet`,
+    the `oif` check of a route insertion): supplied by `liftRouting` from
+    the device at every entry into the routing component, never stored in
+    the routing state (the adapter rule of section 4: no owner word in two
+    stores). `none`: no device. -/
+structure Net.DevFacts where
+  running : Bool
+  inet4Dev : Bool
+  deriving BEq, Repr
+
+/-- Lane C's routing component (the state split, sections 2 and 4): the
+    namespace's IPv4 tables, the fixture namespace's addresses and IPv6
+    routes (W9), the neighbours, the namespace selector, and the
+    foreign-creator fixture mode the table selection reads (W8). WireGuard
+    is its only user today, so it lives in `WGWorld.routing`; it moves to
+    its own world when a second user appears. -/
+structure Net.Routing where
+  /-- Lane C: the namespace's one IPv4 FIB table (the local table aliases
+      the main, docs/2026-10-15-design-c-fib-trie.md 1.1), its
+      `rt_genid` (`rt_cache_flush`, route.c:406-409) and `dev_addr_genid`
+      (the address events, fib_frontend.c:1458/1463/1505; a random start the
+      mirror counts from 0 with the comparison's operands excluded,
+      section 5(a)). -/
+  fib4 : Net.Fib.Table := {}
+  /-- W8's creating namespace C in the foreign-creator mode, where
+      WireGuard's UDP sockets bind and `send4` routes (the W8 design, 3.1):
+      its own table (`lo` only), torn down at `wg_netns_close`. -/
+  fib4C : Net.Fib.Table := {}
   /-- W9 (docs/2026-10-06-w8-w9-netns-routing.md, sections 2.6 and 4.2),
       the fixture namespace's tables, replacing L's single `routesViaWg0`:
       wg0's addresses (added by `route_into_wg0` after a successful
@@ -1585,22 +1607,105 @@ structure World where
       check reads (`rt_genid`; the IPv6 fib sernum), bumped by every table
       change. The loopback prefixes are constants (`World.route4/6`). -/
   addrs4 : List Nat := []
+  /-- Lane C: the prefix length of a wg0 address added by `wg_addaddr`; an
+      address absent here is a `/32` (the fixture's). -/
+  addrPlens4 : List (Nat × Nat) := []
   addrs6 : List Nat := []
-  defaultRoute4 : Bool := false
   defaultRoute6 : Bool := false
-  defaultRoute4Accessed : Bool := false
-  ipv4Gen : Nat := 0
   ipv6Gen : Nat := 0
-  /-- W9 (design 14.3b): a successful flag-changing `wg_up` gets its
-      addresses and routes after the operation's wait (the guest's
-      `route_into_wg0` follows the wait), so the table changes apply after
-      the send workers and the idle timers of that operation
-      (`Env.routeIntoWg0`). -/
-  routesPending : Bool := false
-  /-- W4, fixture state: the routes `net_fixture.routes` adds into wg0 at
-      every `wg_up` (family, destination, the route's MTU): `dst_mtu` of a
-      datagram to that destination (`Env.xmitPackets`). -/
-  routes : List (Nat × Nat × Nat) := []
+  /-- Lane C: the IPv4 neighbour entries the stack created at a device's
+      first output (`ip_finish_output2` → `__neigh_create` → `arp_constructor`):
+      on a loopback or point-to-point device (every device of this fixture)
+      the key is `INADDR_ANY`, one entry per device, classified at address 0
+      (arp.c:233-242; the zeronet early return of `__inet_dev_addr_type`), as
+      (in the creating namespace, ifindex, type); never collected on this
+      fixture (`neigh_periodic_work` returns below `gc_thresh1`,
+      neighbour.c:980) and removed by `arp_ifdown` at the device's down and
+      unregister. -/
+  neighbours : List (Bool × Nat × Nat) := []
+  /-- Lane C: which namespace's table the trie functions address: the
+      device namespace D (`Kernel.fib4`), or the creating namespace C
+      (`Kernel.fib4C`) while `send4`/`send6` and C's teardown run in the
+      foreign-creator mode. -/
+  fibCreatorNs : Bool := false
+  /-- W8 (docs/2026-10-06-w8-w9-netns-routing.md, 3.1): the foreign-creator
+      fixture, where wg0's creating namespace C is held by the fixture's
+      listeners, injector and pin (`netnsCHolders`: descriptors 9, 8, 5, 4)
+      until the trace's `wg_netns_close` drops them. -/
+  foreignCreator : Bool := false
+  deriving BEq
+
+/-- The routing component's running state: the stored routing state plus
+    the device facts of the current entry (`liftRouting`). -/
+structure Net.State extends Net.Routing where
+  wg0 : Option Net.DevFacts := none
+
+/-- WireGuard's world (the state split, section 2): the device, the netlink
+    sockets, the counters that outlive a device, the rate limiter, the timer
+    wheel's base and the environment's timer bookkeeping, the transmit
+    state, the fixture facts WireGuard reads, and the routing component.
+    Lifetimes are the C's: removing the device resets none of the counters,
+    the rate limiter's refcount or `lastUnderLoad`. Flat, not sub-records:
+    revision 2 narrows over the owners that already exist (`Device`,
+    `Peer`), not over groups of this structure. -/
+structure WGWorld where
+  /-- The fixture's WireGuard device, in traces that use the network fixture. -/
+  dev : Option WG.Device := none
+  /-- W2 (docs/2026-10-06-w1-w2-netlink.md, 4.3): the dump state of the
+      fixture's generic-netlink socket (fd 7, `wg_get`) and of the stepped
+      dump socket (fd 8, `wg_get_start`/`wg_get_recv`). -/
+  nlSock7 : WG.NlSock := {}
+  nlSock8 : WG.NlSock := {}
+  /-- `peer_counter` (drivers/net/wireguard/peer.c), a global atomic. -/
+  peerCounter : Nat := 0
+  /-- `keypair_counter` (drivers/net/wireguard/noise.c), a global atomic. -/
+  keypairCounter : Nat := 0
+  /-- L: the network namespace's ifindex cursor (`net->ifindex`, the
+      `xa_alloc_cyclic` cursor of `dev_by_index`, never reset): the next
+      device registered gets this index. -/
+  netIfindexNext : Nat := 4
+  /-- L: the ratelimiter's global singleton (ratelimiter.c:12-18). -/
+  ratelimiter : Ratelimiter := {}
+  /-- B3 (docs/2026-10-15-design-b3-timer-wheel.md, section 3.1): the timer
+      base's clock (`timer_bases[0].clk`, kernel/time/timer.c:251-266) as
+      last recorded at an arm (kind 313), kept for the check that the base
+      never rewinds (`__forward_timer_base`, :994-1016); `none` before the
+      first arm. -/
+  timerClk : Option UInt64 := none
+  /-- B3: the enqueue stamp counter (`enqueue_timer`, timer.c:655-680): each
+      enqueue takes the next stamp, which orders a slot's list (newest first,
+      `hlist_add_head`, :659). -/
+  timerEnqueues : Nat := 0
+  /-- Datagrams wg0's sockets sent, oldest first, not yet delivered. The
+      environment decides which fixture socket receives them. -/
+  sent : List SentDatagram := []
+  timerUnits : List (Nat × Nat × WG.PeerTimer) := []
+  /-- B3 (docs/2026-10-15-design-b3-timer-wheel.md, section 3.3): the bucket
+      expiry of the step a timer pass is at while one of its callbacks runs
+      (`Env.runTimers`), for the check that an arm inside the pass sees a
+      base clock past that step (`base->clk++`, timer.c:2416); `none`
+      outside a callback. -/
+  timerPassStep : Option UInt64 := none
+  /-- A NET_RX softirq raised by a loopback transmission (`netif_rx` from
+      `send4`/`send6` or an ICMP error), whose section has not been consumed
+      yet: see `WG.loopbackSoftirq`. An operation ends with none pending
+      (`Runner.executeTrace`). -/
+  netRxRaised : Bool := false
+  /-- Peers whose handshake work this system call queued, while the call has
+      not slept. The kernel is `CONFIG_PREEMPT_NONE` on one CPU, so their
+      worker cannot have run yet. -/
+  queuedThisCall : List Nat := []
+  /-- D3, fixture knowledge (docs/2026-10-05-d3-timers.md, section 5.4): the
+      last `jiffies` a record told (kinds 303 and 304), the C's `unsigned
+      long` (64-bit on x86_64, review item 8); `none` before the first. -/
+  jiffiesLast : Option UInt64 := none
+  /-- W9: whether this run's records include the kind-306 dst-cache jiffies
+      (every live run: the kernel writes them with the arm records; the
+      check never clears it). False only for the replay tests' captures made
+      before the record existed (`evaluator/test_model_replay.py`
+      `widen`), under which the mirror keeps the pre-W9 rule: the cache
+      always misses and no record is consumed. -/
+  dstCacheRecords : Bool := true
   /-- L, environment: whether a fixture socket holds UDP port `p` so that a
       wildcard bind there conflicts (`Env.portBound`; the runner supplies
       it, as it supplies `env`). -/
@@ -1611,15 +1716,6 @@ structure World where
       runner supplies it (`Env.fixtureNetDevices`); wg0's row comes from
       `Kernel.wg`. -/
   fixtureNetDevices : List (String × Nat × Option String) := []
-  /-- The allocation sites whose records this run carries: the sites inside
-      the ranges the evaluator armed (harness/steer.py `alloc_armed_labels`).
-      Every other site answers ok without a record — the transitional
-      unarmed answer of docs/2026-10-05-a-alloc.md section 6.6, declared,
-      and never applied to a site the run armed. -/
-  allocArmed : List String := []
-  /-- In the domain filter: the allocation sites the steering schedule
-      names. Their every encounter needs an entry (design section 5.1). -/
-  allocSteered : List String := []
   /-- The function-static `last_under_load` of `wg_receive_handshake_packet`
       (receive.c:100): the coarse boot time of the last under-load handshake,
       or `none` for the C's 0 (never under load, or reset by the decay at
@@ -1629,6 +1725,57 @@ structure World where
       control-flow mismatch. Every flood packet the receive worker handles
       sets or decays it as the C does (B4: the flood runs exactly). -/
   lastUnderLoad : Option Int64 := none
+  /-- Lane C's routing component (section 4). -/
+  routing : Net.Routing := {}
+
+/-- The fixture's mutable transport and control state, product-level (the
+    state split, section 2): the delivery queues, W8's namespace holders,
+    W7's placement vector, the fixture's extra routes, B3's advance bound
+    and the runner's look-ahead. -/
+structure EnvWorld where
+  /-- Fixture state, not kernel state: the datagrams waiting at the network
+      fixture's UDP listeners (each with the outer TOS / traffic class the
+      listener's cmsg reports, W5) and at its sender, which `wg_observe`
+      drains. -/
+  listenerV4 : List (Nat × List UInt8) := []
+  listenerV6 : List (Nat × List UInt8) := []
+  senderInbox : List InboxDatagram := []
+  /-- B3 (section 3.4): the last `wg_advance`'s `{before, after}`, for the
+      pass bound after the advance (`J_pass = before` when the end-of-wait
+      read equals `after`: no tick has followed the jump). -/
+  lastAdvance : Option (UInt64 × UInt64) := none
+  /-- B3 (section 3.4, E2): the later operations' records, for the lookahead
+      that tells a deferred timer softirq (its section appears later) from a
+      due timer that never fires; `none` without records. -/
+  hiddenAhead : Option (List (List HiddenRecord)) := none
+  netnsCHolders : List Nat := []
+  /-- The placements of the decrypt worker's NAPI poll that its records do
+      not determine (`Env.napiIrqExit`): for each such poll in turn, whether
+      it ran at the interrupt exit inside `wg_queue_enqueue_per_peer_rx`
+      (`true`) or after it; the check enumerates them. Missing entries are
+      `false`. `napiAmbiguous` counts the polls met. -/
+  napiBeforePut : List Bool := []
+  napiAmbiguous : Nat := 0
+  /-- W9 (design 14.3b): a successful flag-changing `wg_up` gets its
+      addresses and routes after the operation's wait (the guest's
+      `route_into_wg0` follows the wait), so the table changes apply after
+      the send workers and the idle timers of that operation
+      (`Env.routeIntoWg0`). -/
+  routesPending : Bool := false
+  /-- W4, fixture state: the routes `net_fixture.routes` adds into wg0 at
+      every `wg_up` (family, destination, the route's MTU): `dst_mtu` of a
+      datagram to that destination (`Env.xmitPackets`). -/
+  routes : List (Nat × Nat × Nat) := []
+
+structure World where
+  ambient : Ambient
+  tasks : TaskWorld
+  seccomp : SeccompWorld := {}
+  /-- The file layer's stores and its user-memory outputs (the state split,
+      phase 2). -/
+  fs : FSWorld
+  wg : WGWorld := {}
+  fixture : EnvWorld := {}
 
 /-- Why a mirror execution stopped without an observation. -/
 inductive Stop where
@@ -1648,8 +1795,114 @@ def Stop.message : Stop → String
   | .invariant what => s!"mirror invariant violated: {what}"
   | .hidden what => s!"hidden-input records disagree: {what}"
 
+/-- The ambient monad: the record stream, the decision log, the dispatch
+    bookkeeping and the stop. Every subsystem monad is a `StateT` over it;
+    the runner's `M` lifts it through `World.ambient`. -/
+abbrev AmbientM := StateT Ambient (Except Stop)
+
 /-- The mirror monad; `Stop` ends the execution fail-noisily. -/
 abbrev M := StateT World (Except Stop)
+
+/-- The runner's lift of an ambient computation: run it on `World.ambient`
+    and write that part back. -/
+@[inline] def liftAmbient (x : AmbientM α) : M α := fun w => do
+  let (a, ambient) ← x.run w.ambient
+  return (a, { w with ambient })
+
+instance (priority := high) : MonadLift AmbientM M := ⟨liftAmbient⟩
+
+/-- The task monad: the shared task store over the ambient monad. The file
+    layer's and seccomp's monads stack on it, so a pipe's SIGPIPE, a trap's
+    signal and the task-work test run at the C's own call sites (the state
+    split, section 3; [USER 2026-10-16]: composition points where Linux has
+    them). -/
+abbrev TaskM := StateT TaskWorld AmbientM
+
+/-- The runner's lift of a task computation: run it on `World.tasks` and
+    `World.ambient` and write both back. -/
+@[inline] def liftTask (x : TaskM α) : M α := fun w => do
+  let ((a, tasks), ambient) ← (x.run w.tasks).run w.ambient
+  return (a, { w with tasks, ambient })
+
+instance : MonadLift TaskM M := ⟨liftTask⟩
+
+/-- seccomp's monad: its own store over the task store (the state split,
+    section 3): the filter paths reach the task's seccomp and signal state
+    through `TaskM`, and nothing else. Inside `namespace Leanux.Seccomp` the
+    name `M` resolves to this. -/
+abbrev Seccomp.M := StateT SeccompWorld TaskM
+
+/-- The runner's lift of a seccomp computation: its store, the task store
+    and the ambient part run and written back once. -/
+@[inline] def liftSeccomp (x : Seccomp.M α) : M α := fun w => do
+  let (((a, seccomp), tasks), ambient) ← ((x.run w.seccomp).run w.tasks).run w.ambient
+  return (a, { w with seccomp, tasks, ambient })
+
+instance : MonadLift Seccomp.M M := ⟨liftSeccomp⟩
+
+/-- The file layer's monad: its stores over the task store (the state split,
+    section 3): a pipe's SIGPIPE, `fput`'s task-work test and the descriptor
+    table reach the task through `TaskM`, and nothing else. The file layer's
+    definitions name it explicitly (`FS.M`): the module lives in
+    `namespace Leanux`, so the bare `M` there is the product. -/
+abbrev FS.M := StateT FSWorld TaskM
+
+/-- The runner's lift of a file-layer computation: its stores, the task store
+    and the ambient part run and written back once. -/
+@[inline] def liftFS (x : FS.M α) : M α := fun w => do
+  let (((a, fs), tasks), ambient) ← ((x.run w.fs).run w.tasks).run w.ambient
+  return (a, { w with fs, tasks, ambient })
+
+instance : MonadLift FS.M M := ⟨liftFS⟩
+
+/-- WireGuard's monad (the state split, section 3): its own world over the
+    ambient monad, and nothing else: the type excludes the task store, the
+    file layer, seccomp and the fixture's queues. Inside `namespace
+    Leanux.WG` the name `M` resolves to this. -/
+abbrev WG.M := StateT WGWorld AmbientM
+
+/-- The runner's lift of a WireGuard computation: its world and the ambient
+    part run and written back once. -/
+@[inline] def liftWG (x : WG.M α) : M α := fun w => do
+  let ((a, wg), ambient) ← (x.run w.wg).run w.ambient
+  return (a, { w with wg, ambient })
+
+instance : MonadLift WG.M M := ⟨liftWG⟩
+
+/-- WireGuard's world, read and written at any monad that lifts `WG.M`
+    (the environment model over the product reaches the transmit state,
+    the timer bookkeeping and the fixture facts this way). -/
+@[inline] def getWG [Monad m] [MonadLiftT WG.M m] : m WGWorld := monadLift (get : WG.M WGWorld)
+@[inline] def modifyWG [Monad m] [MonadLiftT WG.M m] (f : WGWorld → WGWorld) : m Unit := monadLift (modify f : WG.M Unit)
+
+/-- The routing component's monad (lane C's module; the state split,
+    section 4): the stored routing state with the device facts of the entry,
+    over the ambient monad. Inside `namespace Leanux.Net` and its children
+    the name `M` resolves to this. -/
+abbrev Net.M := StateT Net.State AmbientM
+
+/-- The adapter of the routing component (section 4): extraction at entry
+    (the stored routing state, and the device's `running` and `inet4Dev`
+    as the facts the C reads through `dev_get_by_index`), write-back of the
+    routing state only. -/
+@[inline] def liftRouting (x : Net.M α) : WG.M α := fun g => do
+  let wg0 : Option Net.DevFacts := g.dev.map fun d => { running := d.running, inet4Dev := d.inet4Dev }
+  let (a, s) ← x.run { toRouting := g.routing, wg0 }
+  return (a, { g with routing := s.toRouting })
+
+/-- Low priority: the component's lift must not be the route by which an
+    ambient primitive reaches `WG.M` (the transitive `MonadLiftT` search
+    would otherwise prefer the most recent instance and run every `branch`
+    through the adapter). -/
+instance (priority := low) : MonadLift Net.M WG.M := ⟨liftRouting⟩
+
+/-- The routing state, read and written at any monad that lifts `Net.M`
+    (WireGuard's sockets and the environment's address and route
+    operations). -/
+@[inline] def getRouting [Monad m] [MonadLiftT Net.M m] : m Net.Routing :=
+  monadLift ((fun (s : Net.State) => s.toRouting) <$> (get : Net.M Net.State))
+@[inline] def modifyRouting [Monad m] [MonadLiftT Net.M m] (f : Net.Routing → Net.Routing) : m Unit :=
+  monadLift (modify (fun (s : Net.State) => { toRouting := f s.toRouting, wg0 := s.wg0 }) : Net.M Unit)
 
 /-! ## W9: the fixture namespace's routing (docs/2026-10-06-w8-w9-netns-routing.md, 2.6, 4.2) -/
 
@@ -1659,6 +1912,9 @@ abbrev M := StateT World (Except Stop)
 structure Route where
   dev : Nat
   src : Nat
+  /-- Lane C: the route's `RTAX_MTU` metric (`dst_mtu`, ip.h:490-492), 0 for
+      none (the device's MTU applies). -/
+  mtu : Nat := 0
   deriving Repr, BEq
 
 def LO_IFINDEX : Nat := 1
@@ -1671,27 +1927,10 @@ def LOOPBACK4 : Nat := 0x7f000001
     `from: "ll"` injection. -/
 def LO_LINK_LOCAL : Nat := 0xfe8000000000000000000000ffff0001
 
-/-- `ip_route_output_flow` on the fixture's tables (route.c): a set source
-    must be local (`127/8` or a wg0 address), else `-ENETUNREACH`
-    (route.c:2751-2754; the `-EINVAL` class of :2706-2712 needs a multicast
-    or zeronet source the fixture never configures); a `127/8` destination
-    or a wg0 address takes the local route over `lo` with `prefsrc`
-    (`127.0.0.1` for `127/8`, the address itself otherwise; :2833-2838);
-    anything else the default route via wg0 while it exists, with the
-    device's address as source, else `-ENETUNREACH` (:2714). -/
-def World.route4 (w : World) (saddr daddr : Nat) : Except Int Route :=
-  let isLocal (a : Nat) := a / 2 ^ 24 == 127 || w.addrs4.contains a
-  if saddr != 0 && !isLocal saddr then .error (-101)   -- -ENETUNREACH
-  else if isLocal daddr then
-    .ok { dev := LO_IFINDEX, src := if saddr != 0 then saddr else if daddr / 2 ^ 24 == 127 then LOOPBACK4 else daddr }
-  else match w.defaultRoute4, w.addrs4.head? with
-    | true, some a => .ok { dev := WG0_IFINDEX, src := if saddr != 0 then saddr else a }
-    | _, _ => .error (-101)
-
 /-- `ipv6_dst_lookup_flow` on the fixture's tables: `::1` and wg0's address
     are local over `lo`; else the default route via wg0 (source: the
     device's address) or `ip6_null_entry`'s `-ENETUNREACH`. -/
-def World.route6 (w : World) (saddr daddr : Nat) : Except Int Route :=
+def Net.Routing.route6 (w : Net.Routing) (saddr daddr : Nat) : Except Int Route :=
   let isLocal (a : Nat) := a == 1 || a == LO_LINK_LOCAL || w.addrs6.contains a   -- W5: the link-local address on lo
   if saddr != 0 && !isLocal saddr then .error (-101)
   else if isLocal daddr then .ok { dev := LO_IFINDEX, src := if saddr != 0 then saddr else daddr }
@@ -1699,72 +1938,17 @@ def World.route6 (w : World) (saddr daddr : Nat) : Except Int Route :=
     | true, some a => .ok { dev := WG0_IFINDEX, src := if saddr != 0 then saddr else a }
     | _, _ => .error (-101)
 
-/-- A lookup, noting a resolution through the IPv4 default route
-    (`fib_alias_accessed`, the `FA_S_ACCESSED` flag `wg_delroute`'s
-    generation bump depends on). -/
-def routeLookup (family saddr daddr : Nat) : M (Except Int Route) := do
-  let w ← get
-  if family == 4 then
-    let r := w.route4 saddr daddr
-    if let .ok { dev := d, .. } := r then
-      if d == WG0_IFINDEX then set { w with defaultRoute4Accessed := true }
-    return r
-  else return w.route6 saddr daddr
-
 /-- W9: whether a fixture socket receives at `addr:port` for `family`: the
     dual-stack sender is bound to the wildcard address at `SENDER_PORT`, so
     it receives at every local address (`127/8`, `::1`, wg0's addresses). -/
-def World.wildcardLocal (w : World) (family addr : Nat) : Bool :=
+def Net.Routing.wildcardLocal (w : Net.Routing) (family addr : Nat) : Bool :=
   (family == 2 && (addr / 2 ^ 24 == 127 || w.addrs4.contains addr))
   || (family == 10 && (addr == 1 || addr == LO_LINK_LOCAL || w.addrs6.contains addr))   -- W5: the link-local address on lo
 
-/-- The C leaves the modeled domain here. The site is the last decision the
-    mirror recorded, which is the C condition that led here. -/
-def unsupported (what : String) : M α := do
-  let site := match (← get).steps.back? with
-    | some s => s!"{s.decision.info.file}:{s.decision.info.line}"
-    | none => "syscall entry"
-  throw (.outsideDomain site what)
+/-! ## The ambient primitives (the state split, docs/2026-10-15-design-state-split.md,
+    section 2): the record stream, the decision log, the dispatch bookkeeping
+    and the stop, over `AmbientM`. -/
 
-/-- A mirror defect: the state is inconsistent with the C's invariants. -/
-def invariant (what : String) : M α := throw (.invariant what)
-
-def getK : M Kernel := return (← get).k
-def modifyK (f : Kernel → Kernel) : M Unit := modify fun w => { w with k := f w.k }
-
-/-- The task `t` names (design 4.1). Reading the child while none exists
-    is a runner invariant: no path reaches a child outside its probe. -/
-def getTask (t : TaskRef) : M Task := do
-  let k ← getK
-  match t with
-  | .task => return k.task
-  | .child =>
-    match k.child with
-    | some c => return c
-    | none => invariant "a kernel path targets the child, and there is no child"
-
-/-- Update the task `t` names; the missing child is the same invariant. -/
-def modifyTask (t : TaskRef) (f : Task → Task) : M Unit := do
-  let k ← getK
-  match t with
-  | .task => modifyK fun k => { k with task := f k.task }
-  | .child =>
-    match k.child with
-    | some c => modifyK fun k => { k with child := some (f c) }
-    | none => invariant "a kernel path targets the child, and there is no child"
-
-/-- The task the runner is executing: `Kernel.current` resolved. -/
-def getCurrent : M Task := do getTask (← getK).current
-def getFiles : M FilesStruct := return (← getK).task.files
-def modifyFiles (f : FilesStruct → FilesStruct) : M Unit :=
-  modifyK fun k => { k with task := { k.task with files := f k.task.files } }
-def modifyFdt (f : Fdtable → Fdtable) : M Unit :=
-  modifyFiles fun fs => { fs with fdt := f fs.fdt }
-
-/-- Record a C decision point with its outcome and return the outcome. -/
-def branch (d : Decision) (outcome : Bool) : M Bool := do
-  modify fun w => { w with steps := w.steps.push { decision := d, outcome, netRx := w.netRxSection } }
-  return outcome
 
 /-- What one iteration of a draining worker's loop did (W7 phase 2): the
     poll found nothing and the loop ended; an item was processed and the loop
@@ -1773,55 +1957,6 @@ def branch (d : Decision) (outcome : Bool) : M Bool := do
 inductive IterResult where
   | ended | continued | yielded
   deriving Repr, BEq, DecidableEq
-
-/-- One iteration of a draining worker's loop (`wg_packet_encrypt_worker`,
-    `wg_packet_tx_worker`, `wg_packet_decrypt_worker`,
-    `wg_packet_handshake_receive_worker`): `step`, one ring or queue poll
-    and its item, then `afterItem`, the `cond_resched` and its decision
-    (whether the kernel switched away), when an item was processed. The loop
-    body between two yields is the C's, direct sequential code; the iteration
-    is the unit an activation resumes at (W7 phase 2, design 17.15). `w` and
-    `pid` name the activation. -/
-def workerIter (w : Worker) (pid : Option Nat) (step : M Bool) (afterItem : M Bool) : M IterResult := do
-  let _ := (w, pid)
-  if !(← step) then return .ended
-  return if ← afterItem then .yielded else .continued
-
-/-- A worker's whole loop on the mirror's own stack (the flood's receive
-    worker, `Env.flood`, whose yields `Env.nestedResched` serves in place):
-    `workerIter` until the queue drains, under the C's bound. -/
-def workerLoop (w : Worker) (pid : Option Nat) (step : M Bool) (afterItem : M Unit) (bound : Nat)
-    (drained : String) : M Unit := do
-  for _ in [0:bound] do
-    if (← workerIter w pid step (do afterItem; pure false)) == .ended then return
-  invariant drained
-
-/-- `iput(inode)` (fs/inode.c:1889-1904) where the mirror holds no inode of
-    its own: the last-reference test (`atomic_dec_and_lock`, :1895) and, on
-    the last reference, the lazytime test (:1896), false for every such
-    inode. The shared anonymous inode of eventfd and epoll keeps its pinned
-    reference (`last` false); a socket's or a namespace pin's inode holds its
-    only reference (`last` true). A pipefs inode's own count decides it in
-    `iputPipefs` (Leanux/FS/Inode.lean). The mutation campaign's finding 1
-    (2026-10-14): a leaked inode was invisible without the declaration. -/
-def iputReport (last : Bool) : M Unit := do
-  if ← branch .iputLastReference last then
-    _ ← branch .iputLazytime false
-
-/-- Record a C value comparison: its outcome and the two values the C
-    compares at the condition. The check matches them against
-    `KCOV_TRACE_CMP` records at the condition line. -/
-def branchCmp (d : Decision) (outcome : Bool) (a b : Int) : M Bool := do
-  modify fun w => { w with steps := w.steps.push { decision := d, outcome, operands := some (a, b), netRx := w.netRxSection } }
-  return outcome
-
-/-- Record a C value comparison at a declared operand exclusion (a call site
-    whose operand is a guest-wide value the mirror does not model; see
-    `OperandExclusion`): the outcome, which the contract fixes, without the
-    operands. The check requires Linux's comparison at the declared call site. -/
-def branchCmpExcluded (d : Decision) (outcome : Bool) (x : OperandExclusion) : M Bool := do
-  modify fun w => { w with steps := w.steps.push { decision := d, outcome, excluded := some x, netRx := w.netRxSection } }
-  return outcome
 
 /-- The kernel's `jiffies` comparisons (include/linux/jiffies.h:127-150,
     review item 8): `time_after(a, b)` is `(long)((b) - (a)) < 0` on
@@ -1836,13 +1971,6 @@ def timeAfterEq (a b : UInt64) : Bool := (a - b).toInt64 ≥ 0
 /-- `time_before_eq(a, b)` is `time_after_eq(b, a)` (jiffies.h:151). -/
 def timeBeforeEq (a b : UInt64) : Bool := timeAfterEq b a
 
-/-- Ask the environment oracle; the site's call count is part of the query. -/
-def envOk (site : EnvSite) : M Bool := do
-  let w ← get
-  let n := (w.envCalls.find? (·.1 == site)).map (·.2) |>.getD 0
-  set { w with envCalls := (site, n + 1) :: w.envCalls.filter (·.1 != site) }
-  return w.env site n
-
 /-- Word `k` of a record's bytes (little-endian). -/
 def recordWordOf (bs : List UInt8) (k : Nat) : Nat :=
   ((bs.drop (8 * k)).take 8).foldr (fun b acc => acc * 256 + b.toNat) 0
@@ -1852,8 +1980,70 @@ def recordWordOf (bs : List UInt8) (k : Nat) : Nat :=
 def HiddenSite.passive (site : Nat) : Bool :=
   HiddenSite.all.any fun s => s.info.id == site && s.info.role == .ambient
 
+/-- The domain filter's own turn bound for the loops that the records drive
+    when there are records (review item 7): without records (the filter runs
+    before Linux) a loop has no measure but the filter's patience, and its
+    exhaustion is the filter's `unsupported`, never an `invariant`. -/
+def DOMAIN_FILTER_TURNS : Nat := 4096
+
+/-- The below-cut allocation consumers, as cut sites, for `skipCut`. -/
+def allocCuts : List HiddenSite := AllocSite.cuts.map .alloc
+
+namespace AmbientM
+
+
+/-- The C leaves the modeled domain here. The site is the last decision the
+    mirror recorded, which is the C condition that led here. -/
+def unsupported (what : String) : AmbientM α := do
+  let site := match (← get).steps.back? with
+    | some s => s!"{s.decision.info.file}:{s.decision.info.line}"
+    | none => "syscall entry"
+  throw (.outsideDomain site what)
+
+/-- A mirror defect: the state is inconsistent with the C's invariants. -/
+def invariant (what : String) : AmbientM α := throw (.invariant what)
+
+/-- Record a C decision point with its outcome and return the outcome. -/
+def branch (d : Decision) (outcome : Bool) : AmbientM Bool := do
+  modify fun w => { w with steps := w.steps.push { decision := d, outcome, netRx := w.netRxSection } }
+  return outcome
+
+/-- `iput(inode)` (fs/inode.c:1889-1904) where the mirror holds no inode of
+    its own: the last-reference test (`atomic_dec_and_lock`, :1895) and, on
+    the last reference, the lazytime test (:1896), false for every such
+    inode. The shared anonymous inode of eventfd and epoll keeps its pinned
+    reference (`last` false); a socket's or a namespace pin's inode holds its
+    only reference (`last` true). A pipefs inode's own count decides it in
+    `iputPipefs` (Leanux/FS/Inode.lean). The mutation campaign's finding 1
+    (2026-10-14): a leaked inode was invisible without the declaration. -/
+def iputReport (last : Bool) : AmbientM Unit := do
+  if ← branch .iputLastReference last then
+    _ ← branch .iputLazytime false
+
+/-- Record a C value comparison: its outcome and the two values the C
+    compares at the condition. The check matches them against
+    `KCOV_TRACE_CMP` records at the condition line. -/
+def branchCmp (d : Decision) (outcome : Bool) (a b : Int) : AmbientM Bool := do
+  modify fun w => { w with steps := w.steps.push { decision := d, outcome, operands := some (a, b), netRx := w.netRxSection } }
+  return outcome
+
+/-- Record a C value comparison at a declared operand exclusion (a call site
+    whose operand is a guest-wide value the mirror does not model; see
+    `OperandExclusion`): the outcome, which the contract fixes, without the
+    operands. The check requires Linux's comparison at the declared call site. -/
+def branchCmpExcluded (d : Decision) (outcome : Bool) (x : OperandExclusion) : AmbientM Bool := do
+  modify fun w => { w with steps := w.steps.push { decision := d, outcome, excluded := some x, netRx := w.netRxSection } }
+  return outcome
+
+/-- Ask the environment oracle; the site's call count is part of the query. -/
+def envOk (site : EnvSite) : AmbientM Bool := do
+  let w ← get
+  let n := (w.envCalls.find? (·.1 == site)).map (·.2) |>.getD 0
+  set { w with envCalls := (site, n + 1) :: w.envCalls.filter (·.1 != site) }
+  return w.env site n
+
 /-- Drop ambient records at the head of the current operation's records. -/
-def skipAmbient : M Unit := do
+def skipAmbient : AmbientM Unit := do
   let w ← get
   if let some rs := w.hidden then
     set { w with hidden := some (rs.dropWhile fun r => HiddenSite.passive r.site) }
@@ -1866,14 +2056,22 @@ def skipAmbient : M Unit := do
     section the environment only skips (a loopback transmission's, a flood
     producer's) counts like one it runs [AGENT, 2026-10-14: the mutation
     campaign's finding 4]. -/
-def noteNetRxStart (site : Nat) : M Unit := do
+def noteNetRxStart (site : Nat) : AmbientM Unit := do
   if site == (HiddenSite.sectionStart .netRx).info.id then
     modify fun w => { w with netRxSections := w.netRxSections + 1 }
 
 /-- Consume the next choice record, which must come from `s`. -/
-def hidden (s : HiddenSite) : M (List UInt8) := do
+def hidden (s : HiddenSite) : AmbientM (List UInt8) := do
   skipAmbient
   noteNetRxStart s.info.id
+  -- dispatch order: `process_one_work` clears the unit's PENDING bit
+  -- (`set_work_pool_and_clear_pending`, kernel/workqueue.c:3230) before it
+  -- calls the function (:3264), which is where its section starts; with
+  -- placeholders as with records (campaign 2's request 4, 2026-10-19: the
+  -- clearing sat in the record branch only, so a placeholder run kept every
+  -- bit it ever set)
+  if let .sectionStart ws := s then
+    modify fun st => { st with pendingWork := st.pendingWork.filter (· != ws.index) }
   let w ← get
   let i := s.info
   match w.hidden with
@@ -1907,22 +2105,18 @@ def hidden (s : HiddenSite) : M (List UInt8) := do
     if r.bytes.length != 8 * words || (r.bytes.drop i.len).any (· != 0) then
       throw (.hidden s!"{i.label}: {r.bytes.length} bytes, expected {i.len} padded to {8 * words}")
     set { w with hidden := some rest }
-    -- dispatch order: `process_one_work` clears the unit's PENDING bit before
-    -- it calls the function, which is where its section starts
-    if let .sectionStart ws := s then
-      modify fun st => { st with pendingWork := st.pendingWork.filter (· != ws.index) }
     return r.bytes.take i.len
 
 /-- A record's bytes as a little-endian natural (the 8-byte `jiffies`
     records of kind 306, W9). -/
-def hiddenU64 (s : HiddenSite) : M Nat := do
+def hiddenU64 (s : HiddenSite) : AmbientM Nat := do
   let bs ← hidden s
   return bs.foldr (fun b acc => acc * 256 + b.toNat) 0
 
 /-- The site of the next record to consume (after ambient ones), without
     consuming it: how the environment's scheduler reads a recorded
     scheduling choice. `none` without records (the domain filter). -/
-def peekHiddenSite : M (Option Nat) := do
+def peekHiddenSite : AmbientM (Option Nat) := do
   skipAmbient
   return match (← get).hidden with
     | some (r :: _) => some r.site
@@ -1930,14 +2124,26 @@ def peekHiddenSite : M (Option Nat) := do
 
 /-- The records of the current operation not yet consumed (0 without
     records). The measure of the record-driven loops (review item 7). -/
-def recordsLeft : M Nat := do
+def recordsLeft : AmbientM Nat := do
   return ((← get).hidden.map (·.length)).getD 0
+
+/-- Dispatch order: the device-level work units whose PENDING bit is set
+    (`pendingWork`), as workers. A pending unit is one `queue_work_on` queued
+    (`queueDeviceWork`) and `process_one_work` has not yet taken: the kernel
+    runs its function once more, in a dispatch of its own with its own
+    section, even when the function then finds its ring empty (a requeue
+    during the unit's own run: `queue_work_on`'s `test_and_set_bit` passes
+    because `process_one_work` cleared the bit before the call, and
+    `__queue_work` places the item on the executing worker's list,
+    kernel/workqueue.c:2322-2325, 2374; campaign 2's request 4). -/
+def pendingDeviceUnits : AmbientM (List Worker) := do
+  return (← get).pendingWork.filterMap fun i => Worker.all.find? (·.index == i)
 
 /-- The value of the first record of site `s` among the operation's remaining
     records, without consuming it (`none` if there is none, or without
     records): how `Env.idleTimers` learns the end of a wait before it
     consumes the timer sections that precede the read. -/
-def peekSiteU64 (s : HiddenSite) : M (Option UInt64) := do
+def peekSiteU64 (s : HiddenSite) : AmbientM (Option UInt64) := do
   let i := s.info
   return match (← get).hidden with
     | some rs =>
@@ -1945,16 +2151,10 @@ def peekSiteU64 (s : HiddenSite) : M (Option UInt64) := do
         ((r.bytes.take i.len).foldr (fun (b : UInt8) (acc : Nat) => acc * 256 + b.toNat) 0).toUInt64
     | none => none
 
-/-- The domain filter's own turn bound for the loops that the records drive
-    when there are records (review item 7): without records (the filter runs
-    before Linux) a loop has no measure but the filter's patience, and its
-    exhaustion is the filter's `unsupported`, never an `invariant`. -/
-def DOMAIN_FILTER_TURNS : Nat := 4096
-
 /-- The fuel of a record-driven loop: with records, one turn per remaining
     record plus the turn that finds none (every productive turn consumes at
     least one record); without records, the filter's bound. -/
-def recordBudget : M Nat := do
+def recordBudget : AmbientM Nat := do
   let w ← get
   return match w.hidden with
     | some rs => rs.length + 1
@@ -1963,7 +2163,7 @@ def recordBudget : M Nat := do
 /-- A record-driven loop ran out of fuel: with records that is a turn that
     consumed nothing, a genuine non-progress (`invariant`); without records
     the filter's bound (`unsupported "runner budget: ..."`). -/
-def budgetExhausted (name : String) : M α := do
+def budgetExhausted (name : String) : AmbientM α := do
   if (← get).hidden.isSome then invariant s!"{name}: a turn consumed no record"
   else unsupported s!"runner budget: {name} (domain filter)"
 
@@ -1973,7 +2173,7 @@ def budgetExhausted (name : String) : M α := do
     another site (the consumer then mismatches), and for a record without
     the word or with a zero word (a softirq; a capture made before the
     identity existed, where the legacy queue-order rule applies). -/
-def peekUnit (w : Worker) : M (Option Nat) := do
+def peekUnit (w : Worker) : AmbientM (Option Nat) := do
   skipAmbient
   match (← get).hidden with
   | some (r :: _) =>
@@ -1989,7 +2189,7 @@ def peekUnit (w : Worker) : M (Option Nat) := do
     unit's address never changes while its owner lives, so a re-queue with
     another address is a hidden mismatch. Without records (the domain
     filter) the placeholder is not kept. -/
-def recordQueued (w : Worker) (pid : Nat) : M Unit := do
+def recordQueued (w : Worker) (pid : Nat) : AmbientM Unit := do
   -- the kernel writes the queue record iff the dispatch set was armed with
   -- KCOV_DISPATCH_ARM_RECORDS (`harness/linux.py` ARM_RECORDS), like the arm
   -- record: without it (captures made before the records) nothing to consume
@@ -2013,7 +2213,7 @@ def recordQueued (w : Worker) (pid : Nat) : M Unit := do
     test's outcome, and the mirror follows it (w7_multi_tx_2 under eight
     guests, 2026-10-13). `false` without records, for a record of another
     site, or for a unit whose address no record gave yet. -/
-def peekQueuedUnit (w : Worker) (pid : Nat) : M Bool := do
+def peekQueuedUnit (w : Worker) (pid : Nat) : AmbientM Bool := do
   if !(← get).armRecords then return false
   skipAmbient
   let st ← get
@@ -2032,7 +2232,7 @@ def peekQueuedUnit (w : Worker) (pid : Nat) : M Bool := do
     queueing after the kernel's dequeue and before the section
     (`peekQueuedUnit`) would need a second instance of the device-level
     unit, which the mirror does not hold: fail-noisy. -/
-def queueDeviceWork (w : Worker) : M Unit := do
+def queueDeviceWork (w : Worker) : AmbientM Unit := do
   if (← get).pendingWork.contains w.index then
     if ← peekQueuedUnit w 0 then
       unsupported s!"{w.symbol} queued again after its dequeue, before its section (a second instance of a device-level unit)"
@@ -2044,37 +2244,15 @@ def queueDeviceWork (w : Worker) : M Unit := do
     address `unit`, among `queue` (the mirror's queued peers of that kind).
     Fail-noisy: an address no queue record gave, or a unit whose peer is not
     queued, is a hidden mismatch. -/
-def resolveUnit (w : Worker) (unit : Nat) (queue : List Nat) : M Nat := do
+def resolveUnit (w : Worker) (unit : Nat) (queue : List Nat) : AmbientM Nat := do
   match (← get).unitPeers.find? fun (e : Nat × Nat × Nat) => e.1 == unit && e.2.1 == w.index with
   | some (_, _, pid) =>
     if !queue.contains pid then throw (.hidden s!"{w.symbol}: the dispatched unit is peer {pid}'s, which is not queued")
     return pid
   | none => throw (.hidden s!"{w.symbol}: the dispatched unit {unit} was never queued")
 
-/-- The release of peer `pid` (`kref_release`, peer.c:200-221, then the
-    `call_rcu` free): the work structs and timers embedded in the peer go
-    with it, so their dispatch identities are retired. A later record at
-    one of those addresses belongs to whatever object the allocator put
-    there, which starts its own association. -/
-def retirePeerUnits (pid : Nat) : M Unit :=
-  modify fun st => { st with
-    unitPeers := st.unitPeers.filter fun (e : Nat × Nat × Nat) =>
-      !((Worker.all.find? (·.index == e.2.1)).any Worker.perPeer && e.2.2 == pid),
-    timerUnits := st.timerUnits.filter (·.2.1 != pid) }
-
-/-- `free_netdev` (wg_destruct's end): the device's work structs, and every
-    peer's (all released by then), die with it; their pending bits and
-    identities are retired, and the next device starts its own. The net
-    namespace's `cleanup_net` unit outlives the device. -/
-def retireDeviceUnits : M Unit :=
-  modify fun st => { st with
-    unitPeers := st.unitPeers.filter fun (e : Nat × Nat × Nat) =>
-      !((Worker.all.find? (·.index == e.2.1)).any Worker.deviceOwned),
-    pendingWork := st.pendingWork.filter fun i => !((Worker.all.find? (·.index == i)).any Worker.deviceOwned),
-    timerUnits := [] }
-
 /-- A recorded clock read: the value, a signed 64-bit count of nanoseconds. -/
-def hiddenClock (s : HiddenSite) : M Int := do
+def hiddenClock (s : HiddenSite) : AmbientM Int := do
   let bs ← hidden s
   let u : Nat := bs.foldr (fun b acc => acc * 256 + b.toNat) 0
   return if u ≥ 2 ^ 63 then (u : Int) - (2 ^ 64 : Int) else (u : Int)
@@ -2084,21 +2262,21 @@ def hiddenClock (s : HiddenSite) : M Int := do
     little-endian 64-bit word, reinterpreted signed. The age tests
     (`wg_birthdate_has_expired`, timers.h:25-29) compute and compare in this
     type, wrapping as the C's `s64` does. -/
-def hiddenClock64 (s : HiddenSite) : M Int64 := do
+def hiddenClock64 (s : HiddenSite) : AmbientM Int64 := do
   let bs ← hidden s
   let u : Nat := bs.foldr (fun b acc => acc * 256 + b.toNat) 0
   return u.toUInt64.toInt64
 
 /-- A recorded `jiffies` (kinds 303, 304, 306) as the C's `unsigned long`:
     an 8-byte little-endian word, 64 bits on x86_64 (review item 8). -/
-def hiddenJiffies (s : HiddenSite) : M UInt64 := do
+def hiddenJiffies (s : HiddenSite) : AmbientM UInt64 := do
   let bs ← hidden s
   let u : Nat := bs.foldr (fun b acc => acc * 256 + b.toNat) 0
   return u.toUInt64
 
 /-- A recorded `struct timespec64` (16 bytes: `tv_sec`, then `tv_nsec`,
     little-endian signed 64-bit words). -/
-def hiddenTimespec (s : HiddenSite) : M Timespec64 := do
+def hiddenTimespec (s : HiddenSite) : AmbientM Timespec64 := do
   let bs ← hidden s
   if bs.length != 16 then throw (.hidden s!"{s.info.label}: a timespec64 needs 16 bytes")
   let word (b : List UInt8) : Int :=
@@ -2115,7 +2293,7 @@ def hiddenTimespec (s : HiddenSite) : M Timespec64 := do
     cut site's records are consumed the same way, but a failed one is
     outside the domain: the cut's code would take an error path the mirror
     does not follow. -/
-def skipCutSites (sites : List HiddenSite) : M (List Nat) := do
+def skipCutSites (sites : List HiddenSite) : AmbientM (List Nat) := do
   let ids := sites.map (·.info.id)
   let allocIds := AllocSite.cuts.map fun s => (HiddenSite.alloc s).info
   let mut taken := []
@@ -2134,37 +2312,11 @@ def skipCutSites (sites : List HiddenSite) : M (List Nat) := do
     | _ => return taken
   budgetExhausted "a cut point's records"
 
-def skipCut (sites : List HiddenSite) : M Unit := discard <| skipCutSites sites
-
-/-- A cut point whose consumer draws a fixed number of times on the modeled
-    path (`.neighReachTime`: one draw per `neigh_parms_alloc`): with records,
-    exactly `n` head records (after ambient ones, and after records of the
-    `between` cut sites, which may precede each draw: an armed run's
-    below-cut allocations between the draws) come from `site`, and are
-    dropped; without records (the domain filter), nothing. -/
-def skipCutExactly (site : HiddenSite) (n : Nat) (between : List HiddenSite := []) : M Unit := do
-  for _ in [0:n] do
-    skipCut between
-    skipAmbient
-    let w ← get
-    match w.hidden with
-    | none => return
-    | some (r :: rest) =>
-      if r.site != site.info.id then
-        throw (.hidden s!"expected {site.info.label} (cut, {n} records), the record is site {r.site}")
-      set { w with hidden := some rest }
-      noteNetRxStart r.site
-    | some [] => throw (.hidden s!"expected {site.info.label} (cut, {n} records), no record left")
-  skipCut between
-  skipAmbient
-  if let some (r :: _) := (← get).hidden then
-    if r.site == site.info.id then throw (.hidden s!"more than {n} records of {site.info.label}")
-/-- The below-cut allocation consumers, as cut sites, for `skipCut`. -/
-def allocCuts : List HiddenSite := AllocSite.cuts.map .alloc
+def skipCut (sites : List HiddenSite) : AmbientM Unit := discard <| skipCutSites sites
 
 /-- One allocation encounter's outcome at an armed site: the record's
     outcome byte (1 ok, 0 NULL; anything else is not a kind-305 outcome). -/
-private def allocRecord (s : AllocSite) : M Bool := do
+private def allocRecord (s : AllocSite) : AmbientM Bool := do
   let bs ← hidden (.alloc s)
   match bs.headD 2 with
   | 1 => return true
@@ -2174,7 +2326,7 @@ private def allocRecord (s : AllocSite) : M Bool := do
 /-- One allocation encounter's outcome in the domain filter (placeholders):
     ok, unless the steering schedule names the site, in which case its next
     entry decides (a draw is ok; the only value is the fail word). -/
-private def allocPlaceholder (s : AllocSite) : M Bool := do
+private def allocPlaceholder (s : AllocSite) : AmbientM Bool := do
   let w ← get
   match w.steerValues.findIdx? (·.1 == s.info.label) with
   | none =>
@@ -2203,7 +2355,7 @@ private def allocPlaceholder (s : AllocSite) : M Bool := do
     - A site the run did not arm answers ok: the transitional unarmed
       answer (section 6.6), declared in `World.allocArmed`.
     In the domain filter the steering schedule decides (`allocPlaceholder`). -/
-def hiddenAlloc (s : AllocSite) : M Bool := do
+def hiddenAlloc (s : AllocSite) : AmbientM Bool := do
   let i := s.info
   match i.count with
   | .laxZero => return true
@@ -2213,7 +2365,7 @@ def hiddenAlloc (s : AllocSite) : M Bool := do
     let w ← get
     let placeholders := w.hidden.isNone && w.hiddenPlaceholders
     if !placeholders && !w.allocArmed.contains i.label then return true   -- unarmed (section 6.6)
-    let encounter : M Bool := if placeholders then allocPlaceholder s else allocRecord s
+    let encounter : AmbientM Bool := if placeholders then allocPlaceholder s else allocRecord s
     let mut k := 0
     while k < n do
       if !(← encounter) then return false
@@ -2222,7 +2374,7 @@ def hiddenAlloc (s : AllocSite) : M Bool := do
 
 /-- Drop the next choice record (after ambient ones) and return its site;
     `none` when none remain (the domain filter, or an exhausted stream). -/
-def dropHiddenRecord : M (Option Nat) := do
+def dropHiddenRecord : AmbientM (Option Nat) := do
   skipAmbient
   match (← get).hidden with
   | some (r :: rest) =>
@@ -2231,115 +2383,164 @@ def dropHiddenRecord : M (Option Nat) := do
     return some r.site
   | _ => return none
 
-def getFile (id : FileId) : M File := do
-  match (← getK).files.get? id with
-  | some f => return f
-  | none => invariant s!"dangling file identity {id}"
+/-- A cut point whose consumer draws a fixed number of times on the modeled
+    path (`.neighReachTime`: one draw per `neigh_parms_alloc`): with records,
+    exactly `n` head records (after ambient ones, and after records of the
+    `between` cut sites, which may precede each draw: an armed run's
+    below-cut allocations between the draws) come from `site`, and are
+    dropped; without records (the domain filter), nothing. -/
+def skipCutExactly (site : HiddenSite) (n : Nat) (between : List HiddenSite := []) : AmbientM Unit := do
+  for _ in [0:n] do
+    skipCut between
+    skipAmbient
+    let w ← get
+    match w.hidden with
+    | none => return
+    | some (r :: rest) =>
+      if r.site != site.info.id then
+        throw (.hidden s!"expected {site.info.label} (cut, {n} records), the record is site {r.site}")
+      set { w with hidden := some rest }
+      noteNetRxStart r.site
+    | some [] => throw (.hidden s!"expected {site.info.label} (cut, {n} records), no record left")
+  skipCut between
+  skipAmbient
+  if let some (r :: _) := (← get).hidden then
+    if r.site == site.info.id then throw (.hidden s!"more than {n} records of {site.info.label}")
 
-def setFile (id : FileId) (f : File) : M Unit :=
-  modifyK fun k => { k with files := k.files.insert id f }
+end AmbientM
 
-def freeFile (id : FileId) : M Unit :=
-  modifyK fun k => { k with files := k.files.erase id }
 
-def getCtx (id : CtxId) : M EventfdCtx := do
-  match (← getK).ctxs.get? id with
-  | some c => return c
-  | none => invariant s!"dangling eventfd context {id}"
+/-! ## The ambient primitives at every subsystem monad (the state split)
 
-def setCtx (id : CtxId) (c : EventfdCtx) : M Unit :=
-  modifyK fun k => { k with ctxs := k.ctxs.insert id c }
+The core definitions above are over `AmbientM`; these are the names the
+modules use, at any monad that lifts `AmbientM` (`M`, `TaskM`, the
+subsystem monads), inlined so each call site resolves its lift statically. -/
 
-def freeCtx (id : CtxId) : M Unit :=
-  modifyK fun k => { k with ctxs := k.ctxs.erase id }
+@[inline] def unsupported [Monad m] [MonadLiftT AmbientM m] (what : String) : m α := monadLift (AmbientM.unsupported what : AmbientM α)
+@[inline] def invariant [Monad m] [MonadLiftT AmbientM m] (what : String) : m α := monadLift (AmbientM.invariant what : AmbientM α)
+@[inline] def branch [Monad m] [MonadLiftT AmbientM m] (d : Decision) (outcome : Bool) : m Bool := monadLift (AmbientM.branch d outcome)
+@[inline] def iputReport [Monad m] [MonadLiftT AmbientM m] (last : Bool) : m Unit := monadLift (AmbientM.iputReport last)
+@[inline] def branchCmp [Monad m] [MonadLiftT AmbientM m] (d : Decision) (outcome : Bool) (a b : Int) : m Bool := monadLift (AmbientM.branchCmp d outcome a b)
+@[inline] def branchCmpExcluded [Monad m] [MonadLiftT AmbientM m] (d : Decision) (outcome : Bool) (x : OperandExclusion) : m Bool := monadLift (AmbientM.branchCmpExcluded d outcome x)
+@[inline] def envOk [Monad m] [MonadLiftT AmbientM m] (site : EnvSite) : m Bool := monadLift (AmbientM.envOk site)
+@[inline] def skipAmbient [Monad m] [MonadLiftT AmbientM m] : m Unit := monadLift (AmbientM.skipAmbient )
+@[inline] def noteNetRxStart [Monad m] [MonadLiftT AmbientM m] (site : Nat) : m Unit := monadLift (AmbientM.noteNetRxStart site)
+@[inline] def hidden [Monad m] [MonadLiftT AmbientM m] (s : HiddenSite) : m (List UInt8) := monadLift (AmbientM.hidden s)
+@[inline] def hiddenU64 [Monad m] [MonadLiftT AmbientM m] (s : HiddenSite) : m Nat := monadLift (AmbientM.hiddenU64 s)
+@[inline] def peekHiddenSite [Monad m] [MonadLiftT AmbientM m] : m (Option Nat) := monadLift (AmbientM.peekHiddenSite )
+@[inline] def recordsLeft [Monad m] [MonadLiftT AmbientM m] : m Nat := monadLift (AmbientM.recordsLeft )
+@[inline] def pendingDeviceUnits [Monad m] [MonadLiftT AmbientM m] : m (List Worker) := monadLift (AmbientM.pendingDeviceUnits )
+@[inline] def peekSiteU64 [Monad m] [MonadLiftT AmbientM m] (s : HiddenSite) : m (Option UInt64) := monadLift (AmbientM.peekSiteU64 s)
+@[inline] def recordBudget [Monad m] [MonadLiftT AmbientM m] : m Nat := monadLift (AmbientM.recordBudget )
+@[inline] def budgetExhausted [Monad m] [MonadLiftT AmbientM m] (name : String) : m α := monadLift (AmbientM.budgetExhausted name : AmbientM α)
+@[inline] def peekUnit [Monad m] [MonadLiftT AmbientM m] (w : Worker) : m (Option Nat) := monadLift (AmbientM.peekUnit w)
+@[inline] def recordQueued [Monad m] [MonadLiftT AmbientM m] (w : Worker) (pid : Nat) : m Unit := monadLift (AmbientM.recordQueued w pid)
+@[inline] def peekQueuedUnit [Monad m] [MonadLiftT AmbientM m] (w : Worker) (pid : Nat) : m Bool := monadLift (AmbientM.peekQueuedUnit w pid)
+@[inline] def queueDeviceWork [Monad m] [MonadLiftT AmbientM m] (w : Worker) : m Unit := monadLift (AmbientM.queueDeviceWork w)
+@[inline] def resolveUnit [Monad m] [MonadLiftT AmbientM m] (w : Worker) (unit : Nat) (queue : List Nat) : m Nat := monadLift (AmbientM.resolveUnit w unit queue)
+@[inline] def hiddenClock [Monad m] [MonadLiftT AmbientM m] (s : HiddenSite) : m Int := monadLift (AmbientM.hiddenClock s)
+@[inline] def hiddenClock64 [Monad m] [MonadLiftT AmbientM m] (s : HiddenSite) : m Int64 := monadLift (AmbientM.hiddenClock64 s)
+@[inline] def hiddenJiffies [Monad m] [MonadLiftT AmbientM m] (s : HiddenSite) : m UInt64 := monadLift (AmbientM.hiddenJiffies s)
+@[inline] def hiddenTimespec [Monad m] [MonadLiftT AmbientM m] (s : HiddenSite) : m Timespec64 := monadLift (AmbientM.hiddenTimespec s)
+@[inline] def skipCutSites [Monad m] [MonadLiftT AmbientM m] (sites : List HiddenSite) : m (List Nat) := monadLift (AmbientM.skipCutSites sites)
+@[inline] def skipCut [Monad m] [MonadLiftT AmbientM m] (sites : List HiddenSite) : m Unit := monadLift (AmbientM.skipCut sites)
+@[inline] def skipCutExactly [Monad m] [MonadLiftT AmbientM m] (site : HiddenSite) (n : Nat) (between : List HiddenSite := []) : m Unit := monadLift (AmbientM.skipCutExactly site n between)
+@[inline] def hiddenAlloc [Monad m] [MonadLiftT AmbientM m] (s : AllocSite) : m Bool := monadLift (AmbientM.hiddenAlloc s)
+@[inline] def dropHiddenRecord [Monad m] [MonadLiftT AmbientM m] : m (Option Nat) := monadLift (AmbientM.dropHiddenRecord )
 
-def getInode (id : PipefsInodeId) : M Inode := do
-  match (← getK).inodes.get? id with
-  | some i => return i
-  | none => invariant s!"dangling pipefs inode identity {id}"
+/-- The ambient state, read at any subsystem monad (the record flags, the stamps). -/
+@[inline] def getAmbient [Monad m] [MonadLiftT AmbientM m] : m Ambient := monadLift (get : AmbientM Ambient)
+@[inline] def modifyAmbient [Monad m] [MonadLiftT AmbientM m] (f : Ambient → Ambient) : m Unit := monadLift (modify f : AmbientM Unit)
 
-def setInode (id : PipefsInodeId) (i : Inode) : M Unit :=
-  modifyK fun k => { k with inodes := k.inodes.insert id i }
+/-- The fixture's mutable state at the product level (`World.fixture`),
+    for the environment model and the runner. -/
+def getEnv : M EnvWorld := return (← get).fixture
+def modifyEnv (f : EnvWorld → EnvWorld) : M Unit := modify fun w => { w with fixture := f w.fixture }
 
-def getPipe (id : PipeId) : M PipeInodeInfo := do
-  match (← getK).pipes.get? id with
-  | some p => return p
-  | none => invariant s!"dangling pipe identity {id}"
+/-! ## The shared task store (the state split, section 3) -/
 
-def setPipe (id : PipeId) (p : PipeInodeInfo) : M Unit :=
-  modifyK fun k => { k with pipes := k.pipes.insert id p }
+namespace TaskM
 
-def getPage (id : PageId) : M Page := do
-  match (← getK).pages.get? id with
-  | some p => return p
-  | none => invariant s!"dangling page identity {id}"
+/-- The task `t` names (design 4.1). Reading the child while none exists
+    is a runner invariant: no path reaches a child outside its probe. -/
+def getTask (t : TaskRef) : TaskM Task := do
+  let s ← get
+  match t with
+  | .task => return s.task
+  | .child =>
+    match s.child with
+    | some c => return c
+    | none => invariant "a kernel path targets the child, and there is no child"
 
-def setPage (id : PageId) (p : Page) : M Unit :=
-  modifyK fun k => { k with pages := k.pages.insert id p }
+/-- Update the task `t` names; the missing child is the same invariant. -/
+def modifyTask (t : TaskRef) (f : Task → Task) : TaskM Unit := do
+  let s ← get
+  match t with
+  | .task => set { s with task := f s.task }
+  | .child =>
+    match s.child with
+    | some c => set { s with child := some (f c) }
+    | none => invariant "a kernel path targets the child, and there is no child"
 
-/-! ## epoll stores (lifetime identities) -/
+/-- The task the runner is executing: `TaskWorld.current` resolved. -/
+def getCurrent : TaskM Task := do getTask (← get).current
 
-def getEp (id : EpId) : M Eventpoll := do
-  match (← getK).eps.get? id with
-  | some e => return e
-  | none => invariant s!"dangling eventpoll identity {id}"
+end TaskM
 
-def setEp (id : EpId) (e : Eventpoll) : M Unit :=
-  modifyK fun k => { k with eps := k.eps.insert id e }
+@[inline] def getTasks [Monad m] [MonadLiftT TaskM m] : m TaskWorld := monadLift (get : TaskM TaskWorld)
+@[inline] def modifyTasks [Monad m] [MonadLiftT TaskM m] (f : TaskWorld → TaskWorld) : m Unit := monadLift (modify f : TaskM Unit)
+@[inline] def getTask [Monad m] [MonadLiftT TaskM m] (t : TaskRef) : m Task := monadLift (TaskM.getTask t)
+@[inline] def modifyTask [Monad m] [MonadLiftT TaskM m] (t : TaskRef) (f : Task → Task) : m Unit := monadLift (TaskM.modifyTask t f)
+@[inline] def getCurrent [Monad m] [MonadLiftT TaskM m] : m Task := monadLift TaskM.getCurrent
+/-- The trace process's file table (`Kernel/Defs.lean`'s addressing rule:
+    `.task`, not `current`; no modelled child path touches a file). -/
+@[inline] def getFiles [Monad m] [MonadLiftT TaskM m] : m FilesStruct := do return (← getTask .task).files
+@[inline] def modifyFiles [Monad m] [MonadLiftT TaskM m] (f : FilesStruct → FilesStruct) : m Unit :=
+  modifyTask .task fun t => { t with files := f t.files }
+@[inline] def modifyFdt [Monad m] [MonadLiftT TaskM m] (f : Fdtable → Fdtable) : m Unit :=
+  modifyFiles fun fs => { fs with fdt := f fs.fdt }
 
-def freeEp (id : EpId) : M Unit :=
-  modifyK fun k => { k with eps := k.eps.erase id }
+/-- One iteration of a draining worker's loop (`wg_packet_encrypt_worker`,
+    `wg_packet_tx_worker`, `wg_packet_decrypt_worker`,
+    `wg_packet_handshake_receive_worker`): `step`, one ring or queue poll
+    and its item, then `afterItem`, the `cond_resched` and its decision
+    (whether the kernel switched away), when an item was processed. The loop
+    body between two yields is the C's, direct sequential code; the iteration
+    is the unit an activation resumes at (W7 phase 2, design 17.15). `w` and
+    `pid` name the activation. -/
+def workerIter [Monad m] [MonadLiftT WG.M m] [MonadLiftT AmbientM m] (w : Worker) (pid : Option Nat) (step : m Bool) (afterItem : m Bool) : m IterResult := do
+  let _ := (w, pid)
+  if !(← step) then return .ended
+  return if ← afterItem then .yielded else .continued
 
-def getEpi (id : EpiId) : M Epitem := do
-  match (← getK).epis.get? id with
-  | some e => return e
-  | none => invariant s!"dangling epitem identity {id}"
+/-- A worker's whole loop on the mirror's own stack (the flood's receive
+    worker, `Env.flood`, whose yields `Env.nestedResched` serves in place):
+    `workerIter` until the queue drains, under the C's bound. -/
+def workerLoop [Monad m] [MonadLiftT WG.M m] [MonadLiftT AmbientM m] (w : Worker) (pid : Option Nat) (step : m Bool) (afterItem : m Unit) (bound : Nat)
+    (drained : String) : m Unit := do
+  for _ in [0:bound] do
+    if (← workerIter w pid step (do afterItem; pure false)) == .ended then return
+  invariant drained
 
-def setEpi (id : EpiId) (e : Epitem) : M Unit :=
-  modifyK fun k => { k with epis := k.epis.insert id e }
+/-- The release of peer `pid` (`kref_release`, peer.c:200-221, then the
+    `call_rcu` free): the work structs and timers embedded in the peer go
+    with it, so their dispatch identities are retired. A later record at
+    one of those addresses belongs to whatever object the allocator put
+    there, which starts its own association. -/
+def retirePeerUnits (pid : Nat) : WG.M Unit := do
+  modifyAmbient fun a => { a with unitPeers := a.unitPeers.filter fun (e : Nat × Nat × Nat) =>
+    !((Worker.all.find? (·.index == e.2.1)).any Worker.perPeer && e.2.2 == pid) }
+  modify fun g => { g with timerUnits := g.timerUnits.filter (·.2.1 != pid) }
 
-def freeEpi (id : EpiId) : M Unit :=
-  modifyK fun k => { k with epis := k.epis.erase id }
-
-def getPwq (id : PwqId) : M EppollEntry := do
-  match (← getK).pwqs.get? id with
-  | some p => return p
-  | none => invariant s!"dangling eppoll_entry identity {id}"
-
-def setPwq (id : PwqId) (p : EppollEntry) : M Unit :=
-  modifyK fun k => { k with pwqs := k.pwqs.insert id p }
-
-def freePwq (id : PwqId) : M Unit :=
-  modifyK fun k => { k with pwqs := k.pwqs.erase id }
-
-/-! ## Bounds-checked descriptor-table access -/
-
-private def at? (a : Array α) (n : Nat) (what : String) : M α :=
-  match a[n]? with
-  | some x => return x
-  | none => invariant s!"{what}[{n}] beyond max_fds"
-
-/-- `fdt->fd[n]`. -/
-def fdtSlot (fdt : Fdtable) (n : Nat) : M (Option FileId) := at? fdt.fd n "fdt->fd"
-/-- `test_bit(n, fdt->open_fds)`. -/
-def fdtOpen (fdt : Fdtable) (n : Nat) : M Bool := at? fdt.openFds n "fdt->open_fds"
-/-- `test_bit(n, fdt->close_on_exec)`. -/
-def fdtCloexec (fdt : Fdtable) (n : Nat) : M Bool := at? fdt.closeOnExec n "fdt->close_on_exec"
-
-private def setAt (a : Array α) (n : Nat) (x : α) (what : String) : M (Array α) :=
-  if n < a.size then return a.set! n x else invariant s!"{what}[{n}] beyond max_fds"
-
-def setFdtSlot (n : Nat) (v : Option FileId) : M Unit := do
-  let t := (← getFiles).fdt
-  let fd ← setAt t.fd n v "fdt->fd"
-  modifyFdt fun t => { t with fd }
-def setFdtOpen (n : Nat) (b : Bool) : M Unit := do
-  let t := (← getFiles).fdt
-  let openFds ← setAt t.openFds n b "fdt->open_fds"
-  modifyFdt fun t => { t with openFds }
-def setFdtCloexec (n : Nat) (b : Bool) : M Unit := do
-  let t := (← getFiles).fdt
-  let closeOnExec ← setAt t.closeOnExec n b "fdt->close_on_exec"
-  modifyFdt fun t => { t with closeOnExec }
+/-- `free_netdev` (wg_destruct's end): the device's work structs, and every
+    peer's (all released by then), die with it; their pending bits and
+    identities are retired, and the next device starts its own. The net
+    namespace's `cleanup_net` unit outlives the device. -/
+def retireDeviceUnits : WG.M Unit := do
+  modifyAmbient fun a => { a with
+    unitPeers := a.unitPeers.filter fun (e : Nat × Nat × Nat) =>
+      !((Worker.all.find? (·.index == e.2.1)).any Worker.deviceOwned),
+    pendingWork := a.pendingWork.filter fun i => !((Worker.all.find? (·.index == i)).any Worker.deviceOwned) }
+  modify fun g => { g with timerUnits := [] }
 
 end Leanux

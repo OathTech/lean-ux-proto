@@ -269,6 +269,16 @@ structure DstCache where
   slot : Option DstSlot := none
   deriving Repr, BEq
 
+/-- B3: a pending timer's place in the wheel (`kernel/time/timer.c`): its
+    slot (`flags`' index, 0-575), its bucket expiry (the step at which the
+    slot is next collected, `calc_index`) and its enqueue stamp (the order
+    within the slot's list, `hlist_add_head`: a larger stamp runs first). -/
+structure WheelEntry where
+  slot : Nat
+  bucketExpiry : UInt64
+  enqueued : Nat
+  deriving Repr, BEq, Inhabited
+
 /-- `struct wg_peer` with the parts of its `noise_handshake` on this path. -/
 structure Peer where
   remoteStatic : Key
@@ -346,6 +356,19 @@ structure Peer where
   timerNewHandshake : Option UInt64 := none
   timerZeroKeyMaterial : Option UInt64 := none
   timerPersistentKeepalive : Option UInt64 := none
+  /-- B3 (docs/2026-10-15-design-b3-timer-wheel.md, section 3.1): the
+      wheel's per-timer data beside `expires`: the slot the C stores in
+      `timer->flags` (`timer_set_idx`, timer.c:557-560), the bucket expiry the
+      enqueue computed (`calc_index`, :567-582: the slot's next visit, kept on
+      a same-slot re-arm) and the enqueue stamp (the list position within the
+      slot: `hlist_add_head`, :659, newest first). `some` iff the timer is
+      pending, which `WG.armTimer` and `WG.delTimer` keep as a run-time
+      invariant. -/
+  wheelRetransmitHandshake : Option WheelEntry := none
+  wheelSendKeepalive : Option WheelEntry := none
+  wheelNewHandshake : Option WheelEntry := none
+  wheelZeroKeyMaterial : Option WheelEntry := none
+  wheelPersistentKeepalive : Option WheelEntry := none
   /-- `timer_handshake_attempts` (peer.h:56). -/
   timerHandshakeAttempts : Nat := 0
   /-- `timer_need_another_keepalive` and `sent_lastminute_handshake`
@@ -401,6 +424,22 @@ def Peer.setTimer (p : Peer) (t : PeerTimer) (v : Option UInt64) : Peer :=
   | .newHandshake => { p with timerNewHandshake := v }
   | .zeroKeyMaterial => { p with timerZeroKeyMaterial := v }
   | .persistentKeepalive => { p with timerPersistentKeepalive := v }
+
+/-- B3: the timer's wheel entry while pending (`none` otherwise). -/
+def Peer.wheel (p : Peer) : PeerTimer → Option WheelEntry
+  | .retransmitHandshake => p.wheelRetransmitHandshake
+  | .sendKeepalive => p.wheelSendKeepalive
+  | .newHandshake => p.wheelNewHandshake
+  | .zeroKeyMaterial => p.wheelZeroKeyMaterial
+  | .persistentKeepalive => p.wheelPersistentKeepalive
+
+def Peer.setWheel (p : Peer) (t : PeerTimer) (v : Option WheelEntry) : Peer :=
+  match t with
+  | .retransmitHandshake => { p with wheelRetransmitHandshake := v }
+  | .sendKeepalive => { p with wheelSendKeepalive := v }
+  | .newHandshake => { p with wheelNewHandshake := v }
+  | .zeroKeyMaterial => { p with wheelZeroKeyMaterial := v }
+  | .persistentKeepalive => { p with wheelPersistentKeepalive := v }
 
 /-- `struct noise_static_identity`. -/
 structure StaticIdentity where

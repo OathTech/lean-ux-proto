@@ -12,7 +12,7 @@ Some Linux paths depend on values that are not in the trace:
 - later, scheduling.
 
 [USER 2026-10-03] The mirror is a deterministic function of the trace plus
-every hidden input the C consumed. Linux is "in the lab", so the target is
+every hidden input the C consumed. Linux is in the lab, so the target is
 instrumented to **record each hidden input at its source**: the value, plus
 the identity of the call site. The mirror consumes the record, in order, at
 the corresponding point. That read is part of the data and control

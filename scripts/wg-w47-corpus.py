@@ -163,6 +163,49 @@ def traces():
                                      SESSION + d2.DATA + [DEQUEUE_MORE, "wg_timers_data_received.not_pending=1",
                                                           "wg_packet_create_data_done.data_sent=1",
                                                           "encrypt_packet.checksum_partial=0"])
+    # GRO, two inner TCP segments in one batch (the campaign-1 landing
+    # review's F2, 2026-10-17). (a) A zero-payload segment without URG, PSH,
+    # RST, SYN or FIN: tcp_gro_receive's out_check_final has mss 1 for a lone
+    # segment, so `flush = len < mss` (tcp_offload.c:318, :379) is true and
+    # the segment is taken at once (GRO_NORMAL), where the mirror's
+    # groTakenAtOnce ignored the length and held it; a SYN on another flow
+    # follows, taken at once in both. (b) A one-byte segment is held, then a
+    # second on the same flow with PSH: tcp_gro_lookup finds the held one,
+    # the PSH flushes, `pp = p` (tcp_offload.c:385-386) and dev_gro_receive
+    # completes the held segment before the new one goes to normal
+    # (gro.c:546-556), so the stack sees them in order; the mirror sent the
+    # flushing segment to normal first. Both segments reach a closed port,
+    # so the stack's RST replies carry the order out through wg0. Run on s5
+    # (2026-10-17): both agree, and the kernel's own compare records show
+    # why: every poll saw one packet (`__napi_poll` work 1 of 64,
+    # `gro_normal_one` rx_count 1 at both packets), so the zero-payload
+    # segment went to normal (`len < mss` with 0 and 1 at tcp_offload.c:379)
+    # and the held one-byte segment was flushed by napi_complete_done before
+    # the second arrived; neither `pp = p` nor dev_gro_receive's completion
+    # (gro.c:546-549) was reached, the design's P9 exclusion (one packet per
+    # poll). The mirror was then corrected to the C's rules by reading
+    # (RxData.lean: groNetwork, groFinalFlush, groSameFlow, groMergeRefused,
+    # napiGroReceive), unconfirmed by the differential check on this
+    # fixture, which cannot reach the paths; both traces agree before and
+    # after, and stay as the regression witnesses should a poll ever hold
+    # two packets.
+    ops, sess, steer = d3.session(keepalive=5)
+    wg0 = noise.WG0_ADDR4
+    def tcp_item(counter, segment):
+        return {"kind": "inject", "family": 4, "port": d1.PORT, "message": sess.to_wg0(counter, segment).hex()}
+    pure_ack = noise.ipv4_tcp(d2.SRC4, wg0, 40011, 80, 0x10001000, 0x20002000, 16)
+    syn2 = noise.ipv4_tcp(d2.SRC4, wg0, 40012, 80, 0x30003000, 0, 2)
+    out["w6_gro_pure_ack_batch"] = (ops + [batch([tcp_item(0, pure_ack), tcp_item(1, syn2)], 200), OBSERVE, GET], steer,
+                                    SESSION + d2.DATA + [DEQUEUE_MORE, "wg_timers_data_received.not_pending=1",
+                                                         "wg_packet_create_data_done.data_sent=1",
+                                                         "encrypt_packet.checksum_partial=0"])
+    ops, sess, steer = d3.session(keepalive=5)
+    held1 = noise.ipv4_tcp(d2.SRC4, wg0, 40021, 80, 0x10001000, 0x20002000, 16, b"a")
+    push2 = noise.ipv4_tcp(d2.SRC4, wg0, 40021, 80, 0x10001001, 0x20002000, 16 | 8, b"b")
+    out["w6_gro_same_flow_flush"] = (ops + [batch([tcp_item(0, held1), tcp_item(1, push2)], 200), OBSERVE, GET], steer,
+                                     SESSION + d2.DATA + [DEQUEUE_MORE, "wg_timers_data_received.not_pending=1",
+                                                          "wg_packet_create_data_done.data_sent=1",
+                                                          "encrypt_packet.checksum_partial=0"])
     return out
 
 

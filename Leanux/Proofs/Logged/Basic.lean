@@ -1,8 +1,9 @@
+import Leanux.Proofs.Logged.Ghost
 import Leanux.Proofs.WG.CounterWindow.Refinement
 
-/-! Acceptance observations over the unchanged state and exception monad.
-The additional state is proof-side history; erasing it preserves the complete
-mirror state, result, and failure, rather than only a counter projection. -/
+/-! Acceptance observations over the mirror's actual monads. The additional
+state is proof-side history; erasing it preserves the complete execution,
+including both native WG and Ambient endpoints or the exact Stop. -/
 namespace Leanux.Proofs.Logged
 open Leanux Leanux.WG Leanux.Proofs.WG.CounterWindow
 
@@ -13,101 +14,107 @@ structure AcceptedEvent where
   deriving Repr, DecidableEq
 
 abbrev History := List AcceptedEvent
-abbrev GhostM := StateT History M
+abbrev GhostT (m : Type → Type) := StateT History m
+abbrev GhostM := GhostT Leanux.M
+abbrev WGGhostM := GhostT WG.M
 
 @[simp] theorem except_error_bind {α β : Type} (e : Stop) (f : α → Except Stop β) :
     (Except.error e >>= f) = .error e := rfl
 
 @[simp] theorem mirror_throw_run (e : Stop) (w : World) :
-    (throw e : M α).run w = .error e := rfl
+    (throw e : Leanux.M α).run w = .error e := rfl
 
-@[simp] theorem liftM_eq_lift (a : M α) : (liftM a : GhostM α) = StateT.lift a := rfl
+@[simp] theorem liftM_eq_lift {m : Type → Type} [Monad m] (a : m α) :
+    (liftM a : GhostT m α) = StateT.lift a := rfl
 
 def eraseResult {α : Type} : Except Stop ((α × History) × World) → Except Stop (α × World)
   | .error e => .error e
   | .ok ((a, _), w) => .ok (a, w)
 
 /-- Equality after forgetting only the additional history. -/
-def Erases (logged : GhostM α) (original : M α) : Prop :=
-  ∀ history world, eraseResult ((logged.run history).run world) = original.run world
+abbrev Erases {m : Type → Type} [Functor m]
+    (logged : GhostT m α) (original : m α) : Prop :=
+  ErasesT logged original
 
-theorem erases_pure (a : α) : Erases (pure a) (pure a) := by
-  intro history world
-  rfl
+/-- Read generic erasure at the actual product-world execution boundary. -/
+theorem erases_run {g : GhostM α} {o : Leanux.M α} (h : Erases g o)
+    (history : History) (world : World) :
+    eraseResult ((g.run history).run world) = o.run world := by
+  have he := congrFun (h history) world
+  change ((g.run history).run world).map (fun ((a, _), w) => (a, w)) = o.run world at he
+  cases hr : (g.run history).run world <;> simpa only [hr, eraseResult, Except.map] using he
 
-theorem erases_lift (a : M α) : Erases (StateT.lift a) a := by
-  intro history world
-  simp only [StateT.run_lift, StateT.run_bind, StateT.run_pure, except_pure]
-  cases a.run world <;> rfl
+/-- Native erasure retains both actual WG and Ambient endpoints. -/
+theorem erases_runWG {g : WGGhostM α} {o : WG.M α} (h : Erases g o)
+    (history : History) (wg : WGWorld) (ambient : Ambient) :
+    (((g.run history).run wg).run ambient).map
+        (fun (((a, _), wg'), ambient') => ((a, wg'), ambient')) =
+      (o.run wg).run ambient := by
+  exact congrFun (congrFun (h history) wg) ambient
 
-theorem erases_liftM (a : M α) : Erases (liftM a) a := erases_lift a
+section Generic
+variable {m : Type → Type} [Monad m] [LawfulMonad m]
 
+theorem erases_pure (a : α) : Erases (pure a : GhostT m α) (pure a) :=
+  erasesT_pure a
+
+theorem erases_lift (a : m α) : Erases (StateT.lift a : GhostT m α) a :=
+  erasesT_lift a
+
+theorem erases_liftM (a : m α) : Erases (liftM a : GhostT m α) a :=
+  erasesT_liftM a
+
+omit [LawfulMonad m] in
 theorem erases_ite (p : Prop) [Decidable p]
-    {gt ge : GhostM α} {ot oe : M α}
+    {gt ge : GhostT m α} {ot oe : m α}
     (ht : p → Erases gt ot) (he : ¬ p → Erases ge oe) :
-    Erases (if p then gt else ge) (if p then ot else oe) := by
-  by_cases hp : p
-  · simpa only [if_pos hp] using ht hp
-  · simpa only [if_neg hp] using he hp
+    Erases (if p then gt else ge) (if p then ot else oe) :=
+  erasesT_ite p ht he
 
-theorem erases_bind {logged : GhostM α} {original : M α}
-    {lg : α → GhostM β} {og : α → M β}
+theorem erases_bind {logged : GhostT m α} {original : m α}
+    {lg : α → GhostT m β} {og : α → m β}
     (ha : Erases logged original) (hb : ∀ a, Erases (lg a) (og a)) :
-    Erases (logged >>= lg) (original >>= og) := by
-  intro history world
-  simp only [StateT.run_bind]
-  have hm := ha history world
-  cases he : (logged.run history).run world with
-  | error e =>
-    simp only [he, eraseResult] at hm
-    simp [← hm, eraseResult]
-  | ok out =>
-    rcases out with ⟨⟨a, h⟩, w⟩
-    simp only [he, eraseResult] at hm
-    simpa [← hm, eraseResult, except_ok_bind] using hb a h w
+    Erases (logged >>= lg) (original >>= og) :=
+  erasesT_bind ha hb
 
-theorem erases_bind_return {logged : GhostM α} {original : M α}
-    {lg : α → GhostM α} (ha : Erases logged original)
+theorem erases_bind_return {logged : GhostT m α} {original : m α}
+    {lg : α → GhostT m α} (ha : Erases logged original)
     (hb : ∀ a, Erases (lg a) (pure a)) : Erases (logged >>= lg) original := by
   simpa only [bind_pure] using erases_bind ha hb
 
-theorem erases_map {logged : GhostM α} {original : M α}
+theorem erases_map {logged : GhostT m α} {original : m α}
     (f : α → β) (h : Erases logged original) :
-    Erases (f <$> logged) (f <$> original) := by
-  simpa only [map_eq_pure_bind] using erases_bind h (fun a => erases_pure (f a))
+    Erases (f <$> logged) (f <$> original) :=
+  erasesT_map f h
 
 theorem erases_forIn (xs : List α) (b : β)
-    (logged : α → β → GhostM (ForInStep β))
-    (original : α → β → M (ForInStep β))
+    (logged : α → β → GhostT m (ForInStep β))
+    (original : α → β → m (ForInStep β))
     (h : ∀ a b, Erases (logged a b) (original a b)) :
-    Erases (forIn xs b logged) (forIn xs b original) := by
-  induction xs generalizing b with
-  | nil => simpa only [List.forIn_nil] using erases_pure b
-  | cons a xs ih =>
-    rw [List.forIn_cons, List.forIn_cons]
-    apply erases_bind (h a b)
-    intro s
-    cases s with
-    | done b => exact erases_pure b
-    | yield b => exact ih b
+    Erases (forIn xs b logged) (forIn xs b original) :=
+  erasesT_forIn xs b logged original h
 
 theorem erases_range (r : Std.Legacy.Range) (b : β)
-    (logged : Nat → β → GhostM (ForInStep β))
-    (original : Nat → β → M (ForInStep β))
+    (logged : Nat → β → GhostT m (ForInStep β))
+    (original : Nat → β → m (ForInStep β))
     (h : ∀ a b, Erases (logged a b) (original a b)) :
     Erases (forIn r b logged) (forIn r b original) := by
   rw [Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.forIn_eq_forIn_range']
   exact erases_forIn _ b logged original h
 
-def emit (e : AcceptedEvent) : GhostM Unit :=
+end Generic
+
+def emit {m : Type → Type} [Monad m] (e : AcceptedEvent) : GhostT m Unit :=
   modifyThe History (· ++ [e])
 
-theorem erases_emit (e : AcceptedEvent) : Erases (emit e) (pure ()) := by
-  intro history world
-  rfl
+theorem erases_emit {m : Type → Type} [Monad m] [LawfulMonad m] (e : AcceptedEvent) :
+    Erases (emit e : GhostT m Unit) (pure ()) := by
+  intro history
+  change Prod.fst <$> (pure ((), history ++ [e]) : m (Unit × History)) = pure ()
+  simp only [map_pure]
 
 /-- Execute the actual validator once and record exactly its true results. -/
-def counterLogged (kp : KeypairId) (nonce : Nat) : GhostM Bool := do
+def counterLogged (kp : KeypairId) (nonce : Nat) : WGGhostM Bool := do
   let k ← StateT.lift (getKeypair kp)
   let ok ← StateT.lift (counterValidate kp nonce)
   if ok then emit ⟨k.internalId, nonce⟩
@@ -116,16 +123,16 @@ def counterLogged (kp : KeypairId) (nonce : Nat) : GhostM Bool := do
 /-- A getter before this getter-led function is redundant, including errors. -/
 theorem getKeypair_before_validate (kp : KeypairId) (nonce : Nat) :
     (do let _ ← getKeypair kp; counterValidate kp nonce) = counterValidate kp nonce := by
-  funext w
-  change (do let _ ← getKeypair kp; counterValidate kp nonce).run w =
-    (counterValidate kp nonce).run w
-  cases hd : w.k.wg with
-  | none => simp [getKeypair, getDev, getK, hd, counterValidate, invariant, StateT.run_bind, StateT.run_get]
+  funext wg ambient
+  change ((do let _ ← getKeypair kp; counterValidate kp nonce).run wg).run ambient =
+    ((counterValidate kp nonce).run wg).run ambient
+  cases hd : wg.dev with
+  | none => simp [getKeypair, getDev, hd, counterValidate, invariant, AmbientM.invariant, StateT.run_bind, StateT.run_get] <;> rfl
   | some d =>
     cases hk : d.keypairs[kp]? with
-    | none => simp [getKeypair, getDev, getK, hd, hk, counterValidate, invariant, StateT.run_bind, StateT.run_get]
+    | none => simp [getKeypair, getDev, hd, hk, counterValidate, invariant, AmbientM.invariant, StateT.run_bind, StateT.run_get] <;> rfl
     | some k =>
-      have hg := getKeypair_run w d kp k hd hk
+      have hg := getKeypair_run wg ambient d kp k hd hk
       simp only [StateT.run_bind, hg, except_ok_bind]
 
 /-- The logged validator erases to the unchanged executable validator. -/
@@ -145,14 +152,39 @@ theorem counterLogged_erases (kp : KeypairId) (nonce : Nat) :
 /-- The event's data and multiplicity are tied to one actual successful call.
 This is stronger than erasure alone, which would also allow an empty log. -/
 theorem counterLogged_run (kp : KeypairId) (nonce : Nat) (history : History)
-    (w w' : World) (d : Device) (k : Keypair) (ok : Bool)
-    (hd : w.k.wg = some d) (hk : d.keypairs.get? kp = some k)
-    (hr : (counterValidate kp nonce).run w = .ok (ok, w')) :
-    ((counterLogged kp nonce).run history).run w =
-      .ok ((ok, if ok then history ++ [⟨k.internalId, nonce⟩] else history), w') := by
-  have hg := getKeypair_run w d kp k hd hk
+    (wg wg' : WGWorld) (ambient ambient' : Ambient) (d : Device) (k : Keypair) (ok : Bool)
+    (hd : wg.dev = some d) (hk : d.keypairs.get? kp = some k)
+    (hr : ((counterValidate kp nonce).run wg).run ambient = .ok ((ok, wg'), ambient')) :
+    (((counterLogged kp nonce).run history).run wg).run ambient =
+      .ok (((ok, if ok then history ++ [⟨k.internalId, nonce⟩] else history), wg'), ambient') := by
+  have hg := getKeypair_run wg ambient d kp k hd hk
   simp only [counterLogged, StateT.run_bind, StateT.run_lift, hg, hr,
     except_ok_bind, StateT.run_pure, except_pure]
   cases ok <;> rfl
+
+/-- Lift the native observation through the mirror's actual product adapter.
+The observer history is carried as the native action's return value. -/
+def liftWGGhost (g : WGGhostM α) : GhostM α :=
+  fun history => liftWG (g.run history)
+
+/-- The lift retains the complete native outcome, including the exact Stop. -/
+theorem liftWGGhost_run (g : WGGhostM α) (history : History) (world : World) :
+    ((liftWGGhost g).run history).run world =
+      (((g.run history).run world.wg).run world.ambient).map
+        (fun (((a, history'), wg), ambient) => ((a, history'), { world with wg, ambient })) := by
+  rfl
+
+/-- Forgetting native observer history commutes with the actual product lift. -/
+theorem erases_liftWGGhost {g : WGGhostM α} {o : WG.M α} (h : Erases g o) :
+    Erases (liftWGGhost g) (liftWG o) := by
+  intro history
+  funext world
+  have he := erases_runWG h history world.wg world.ambient
+  change (((liftWGGhost g).run history).run world).map
+      (fun ((a, _), w) => (a, w)) =
+    ((o.run world.wg).run world.ambient).map
+      (fun ((a, wg), ambient) => (a, { world with wg, ambient }))
+  rw [liftWGGhost_run, ← he]
+  cases (((g.run history).run world.wg).run world.ambient) <;> rfl
 
 end Leanux.Proofs.Logged

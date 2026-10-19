@@ -46,14 +46,14 @@ channel for the models beside the differential check, under Rule Zero:
 (1) the mirror might be wrong; (2) the kernel might contain bugs; (3) the
 former is much more likely than the latter [USER 2026-10-14]. A discrepancy
 is read in that order and a statement is never bent to accommodate one. The mirror
-(`Leanux/FS`, `Leanux/WG`, `Leanux/Kernel`, `Leanux/Env`,
+(`Leanux/FS`, `Leanux/WG`, `Leanux/Net`, `Leanux/Kernel`, `Leanux/Env`,
 `Leanux/Runner.lean`) carries no theorem, no proof-shaped restructuring, and
 no change made to let a proof close: a proof that cannot close is a report
 against the mirror, settled by the differential check, never by editing the
 mirror to fit the statement. Proofs about the mirror and about models
 layered on it are in scope; a simulation proof against the C is not, until
-the user opens it. No proof-audit infrastructure beyond the axiom check
-below, and no theorem is an acceptance gate for mirror work.
+the user opens it. No proof-audit infrastructure beyond the axiom check,
+and no theorem is an acceptance gate for mirror work.
 
 The register names, per result, the mirror commit it holds over and whether
 it is current or lagging. A mirror change may land while a result lags; its
@@ -77,6 +77,7 @@ it is a box matter, not a project requirement.
 ```sh
 capped -- scripts/in-bundle python3 -B -m unittest evaluator.test_evaluation evaluator.test_model_replay harness.test_trace harness.test_wg harness.test_linux
 capped -- scripts/in-bundle python3 -m evaluator.check --suite wireguard   # about 3 minutes
+capped -- scripts/in-bundle python3 -m evaluator.check --suite routing     # the IPv4 FIB trie's corpus, about 3 minutes
 capped -- scripts/in-bundle python3 -m evaluator.check                     # everything: about an hour
 LEANUX_KERNEL_PROFILE=net-choice capped -m 64G -- scripts/in-bundle scripts/build-kernel
 ```
@@ -123,13 +124,18 @@ Linux. It rests on three gates, and only these block:
 The proof tree makes a separate claim and has its own gate, run at its
 claim points (a merge of the tree) and not on mirror commits:
 `capped -- scripts/in-bundle scripts/proof-gate`, which builds `LeanuxProofs`
-(about three minutes), prints the axioms of every declaration of every
-`Statements.lean` under `Leanux/Proofs/` and fails on any beyond `propext`,
-`Classical.choice` and `Quot.sound`, fails on `sorry`, `admit`, `axiom`,
-`native_decide`, `unsafe`, `implemented_by` or `extern` anywhere in the
-tree, and fails if anything outside the tree imports it, if the root
-`Leanux/Proofs.lean` misses a result's `Statements`, or if `LeanuxProofs` is
-a default lake target.
+(about sixteen minutes on a contended host), prints the axioms of every
+declaration of every module the root `Leanux/Proofs.lean` imports (the
+results' `Statements.lean` files and the counterexample and findings
+modules) and fails on any beyond `propext`, `Classical.choice` and
+`Quot.sound`, fails on `sorry`, `sorryAx`, `admit`, `axiom`, `native_decide`,
+`decide +native`, `ofReduceBool`, `trustCompiler`, `skipKernelTC`, `unsafe`,
+`implemented_by` or `extern` anywhere in the tree outside comments and
+string literals, and fails if anything outside the tree imports it, if the
+root misses a result's `Statements`, or if `LeanuxProofs` is a default lake
+target. Beside it, a speedbump: `scripts/proof-counterexamples` replays the
+published counterexample and witness recipes through the interpreter, which
+the gate's build does not cover.
 
 Everything else is a speedbump: cheap, run at claim points, never blocking
 intermediate work, built to catch honest drift and not adversarial attack:
@@ -145,7 +151,7 @@ commit, then deleted unless it replaces a sentinel. No evidence bundles,
 integration records or run narratives: a merge commit's message carries the
 run's counts and the user's signoff.
 
-The mirror (`Leanux/FS`, `Leanux/WG`, `Leanux/Kernel`) contains only the C's
+The mirror (`Leanux/FS`, `Leanux/WG`, `Leanux/Net`, `Leanux/Kernel`) contains only the C's
 data and control flow. Fixture, scheduling and timing assumptions live in
 the environment model (`Leanux/Env.lean`) or the runner.
 
@@ -185,8 +191,8 @@ including the coordinator.
 - Prepare the complete change and relevant validation in worktrees first.
   Present its branch/commit and reviewable diff, then obtain user signoff as the
   final step before updating `main`. The merge commit's message carries the
-  run's counts and the user's words. Additional unapproved changes require
-  new signoff.
+  run's counts and the fact of the user's signoff. Additional unapproved
+  changes require new signoff.
 - While awaiting signoff, preserve the branch, keep `main` unchanged, and
   follow the registered worktree cleanup policy.
 
@@ -199,7 +205,9 @@ remains mandatory.
 
 A decision is logged where it is made, with its provenance (user or agent):
 in the commit message, in the design doc it belongs to, and in
-[docs/decisions.md](docs/decisions.md) when it is a standing one. This file
+[docs/decisions.md](docs/decisions.md) when it is a standing one. Decisions
+are recorded as paraphrase with their provenance, never as quotations of the
+user, in the log, the documents and commit messages alike. This file
 carries no decision history and no session state.
 
 ## Kernel findings

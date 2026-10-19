@@ -36,9 +36,9 @@ def runWorker (w : Worker) (body : M Unit) : M Unit := do
   -- the operation, the count of section starts consumed so far
   -- (`noteNetRxStart`, advanced by the `hidden` above); a softirq never
   -- nests in a softirq, so the ordinal is cleared at its end
-  if w == .netRx then modify fun s => { s with netRxSection := s.netRxSections }
+  if w == .netRx then modifyAmbient fun s => { s with netRxSection := s.netRxSections }
   body
-  if w == .netRx then modify fun s => { s with netRxSection := 0 }
+  if w == .netRx then modifyAmbient fun s => { s with netRxSection := 0 }
   _ ← hidden (.sectionStop w)
 
 /-- An item of `wg_batch` (W7, section 5.5): a datagram the fixture's sender
@@ -105,7 +105,7 @@ def napiSoftirq : M Unit := do
   let d ← getDev
   let pending := d.peers.toList.filterMap fun (pid, p) => if p.napiScheduled then some pid else none
   if pending.isEmpty then return
-  if (← get).hidden.isSome && (← peekHiddenSite) != some (HiddenSite.sectionStart .netRx).info.id then return
+  if (← getAmbient).hidden.isSome && (← peekHiddenSite) != some (HiddenSite.sectionStart .netRx).info.id then return
   if pending.length > 1 then unsupported "NAPI polls of several peers in one softirq"
   -- net_rx_action → napi_poll(n, &repoll) → n->poll(n, n->weight)
   runWorker .netRx do
@@ -127,12 +127,11 @@ def napiSoftirq : M Unit := do
     the comparison child's operands must agree with one of them. Without
     records (the domain filter) the poll is placed by `napiSoftirq`. -/
 def napiIrqExit : M Unit := do
-  if (← get).hidden.isNone then return
+  if (← getAmbient).hidden.isNone then return
   if !(← getDev).peers.toList.any (·.2.napiScheduled) then return
   if (← peekHiddenSite) != some (HiddenSite.sectionStart .netRx).info.id then return
-  let w ← get
-  let here := w.napiBeforePut.headD false
-  set { w with napiBeforePut := w.napiBeforePut.drop 1, napiAmbiguous := w.napiAmbiguous + 1 }
+  let here := (← getEnv).napiBeforePut.headD false
+  modifyEnv fun e => { e with napiBeforePut := e.napiBeforePut.drop 1, napiAmbiguous := e.napiAmbiguous + 1 }
   if here then napiSoftirq
 
 /-- Whether the activation's loop condition holds: its ring or queue has an
@@ -174,14 +173,13 @@ def Activation.hasWork (a : Activation) : M Bool := do
     encryption would consume a record (another peer's first enqueue) stays
     a mismatch at that record. -/
 def cryptAhead (pid : PeerId) : M Unit := do
-  if (← get).hidden.isNone then return
+  if (← getAmbient).hidden.isNone then return
   let some item := (← getPeer pid).txQueue.all.head? | return
   let some id := item.head? | invariant "an empty ring item"
   if (← getTxSkb id).state != .uncrypted then return
   let next ← peekHiddenSite
   unless next == some HiddenSite.modTimerArm.info.id || next == some HiddenSite.timerJiffiesTraversal.info.id do return
-  let w ← get
-  let some enc := w.suspended.find? (·.worker == .encryptWorker)
+  let some enc := (← getAmbient).suspended.find? (·.worker == .encryptWorker)
     | throw (.hidden "the tx worker's head is uncrypted and no encrypt activation is suspended, but the next record is the traversal timer's caller read or arm (site 426 or 100)")
   -- the item was crypted before the tx worker's dispatch, while its work was
   -- still pending (queued at the first enqueue): the enqueue's `queue_work`
@@ -191,7 +189,7 @@ def cryptAhead (pid : PeerId) : M Unit := do
   modifyDev fun d => { d with txWorkQueue := d.txWorkQueue.erase pid }
   match r with
   | .continued =>
-    modify fun s => { s with suspended := s.suspended.map fun x =>
+    modifyAmbient fun s => { s with suspended := s.suspended.map fun x =>
       if x == enc then { x with iterations := x.iterations + 1 } else x }
   | .ended => throw (.hidden "the encrypt activation's queue is empty, but the next record is the traversal timer's caller read or arm (site 426 or 100)")
   | .yielded => invariant "the encrypt activation yielded on a record that is not a resched"
@@ -209,12 +207,19 @@ def Activation.iter (a : Activation) : M IterResult := do
   | .receiveWorker => workerIter .receiveWorker none WG.receiveStep (condResched .receiveWorker)
   | w => invariant s!"{w.symbol} is not a draining worker"
 
-/-- The items the activation's loop can consume before it finds its queue
-    empty: the queue's occupancy now (review item 7). The C loop runs while
-    the ring or queue yields an item; on the modelled paths nothing refills a
-    worker's own queue inside its run (refills happen while it is suspended,
-    and each resumption is a new run), so a run makes at most one iteration
-    per item present at its start, plus the poll that finds none. -/
+/-- The items in the activation's queue now (review item 7): the C loop
+    runs while the ring or queue yields an item, so a run makes one
+    iteration per item present at its start, plus the poll that finds none,
+    plus one per item queued into it during the run (`Activation.refills`):
+    the encrypt worker's ring poll runs the pending NET_RX softirq at its
+    `spin_unlock_bh` (ptr_ring.h:365-369, `napiSoftirq`), and the poll's
+    delivery can transmit into the ring it is draining (a reply the stack
+    sends, `Stack.receive4` → `wgXmit` → send.c:388 → queueing.h:174), which
+    the same run's next `ptr_ring_consume_bh` (send.c:293) takes. The old
+    premise that nothing refills a worker's own queue inside its run was
+    campaign 2's request 2 (2026-10-14; the typed prefix in its
+    `Progress/QueueRefill.lean`): the refill made the run consume one item
+    more than its start held and the bound reported an invariant. -/
 def Activation.occupancy (a : Activation) : M Nat := do
   let d ← getDev
   match a.worker with
@@ -226,22 +231,38 @@ def Activation.occupancy (a : Activation) : M Nat := do
     return (← getPeer pid).txQueue.all.length
   | w => invariant s!"{w.symbol} is not a draining worker"
 
+/-- The items a run can still queue into its own ring after it started: a
+    bound derived from what can produce them. Every production inside a run
+    comes through a NET_RX poll (`napiSoftirq`, `napiIrqExit`), which with
+    records consumes a NET_RX section start, and without records runs once
+    per pending poll at the first hook (the poll clears `napiScheduled`);
+    a poll delivers at most `NAPI_POLL_WEIGHT` packets per pending peer, and
+    a delivered packet transmits at most one reply. So the refills are
+    bounded by the records left plus the pending polls' weight, and the
+    bound is the state's and the records', not a constant. -/
+def Activation.refills : M Nat := do
+  let polls := (← getDev).peers.toList.countP (·.2.napiScheduled)
+  return (← recordsLeft) + polls * WG.NAPI_POLL_WEIGHT
+
 /-- Run the activation from its loop position until its loop ends (its
     section stop, consumed where the records have it) or it yields
     (suspended, `World.suspended`). The fuel is derived from the state the
-    loop drains (`Activation.occupancy`), so its exhaustion is a genuine
-    invariant: more items consumed than were ever queued. -/
+    loop drains (`Activation.occupancy`) and from what can refill it during
+    the run (`Activation.refills`), so its exhaustion is a genuine invariant:
+    more items consumed than were queued at the start or could have been
+    queued meanwhile. -/
 def Activation.run (a : Activation) : M Unit := do
   let occupancy ← Activation.occupancy a
+  let refills ← Activation.refills
   let mut act := a
-  for _ in [0:occupancy + 1] do
+  for _ in [0:occupancy + refills + 1] do
     match ← Activation.iter act with
     | .ended => _ ← hidden (.sectionStop act.worker); return
     | .continued => act := { act with iterations := act.iterations + 1 }
     | .yielded =>
-      modify fun s => { s with suspended := s.suspended ++ [{ act with iterations := act.iterations + 1 }] }
+      modifyAmbient fun s => { s with suspended := s.suspended ++ [{ act with iterations := act.iterations + 1 }] }
       return
-  invariant s!"{a.worker.symbol} consumed more items than its queue held ({occupancy}) in one run"
+  invariant s!"{a.worker.symbol} consumed more items than its queue held ({occupancy}) plus the refills its run could take ({refills})"
 
 /-- Whether the records are consistent with the activation resuming now: its
     run from here, to its yield or its stop, on a copy of the world, reads
@@ -254,18 +275,36 @@ def Activation.consistent (a : Activation) : M Bool := do
   | .error (.hidden _) => return false
   | .error e => throw e
 
+/-- Whether a device-level unit (`queueDeviceWork`: the encrypt, decrypt
+    and handshake receive workers) is queued for a dispatch the kernel will
+    run: its ring holds an item, or its PENDING bit is set with an empty
+    ring. The second is a requeue during the unit's own run: `queue_work_on`
+    queued it again while its function ran (the bit was cleared at the
+    dispatch, kernel/workqueue.c:3230, so `test_and_set_bit` passes at
+    :2423 and `__queue_work` puts it on the executing worker's list,
+    :2322-2325), the run drained the item itself (the ring is re-read every
+    iteration, send.c:293), and the workqueue then runs the function once
+    more after it returns: a dispatch of its own, whose section the records
+    carry and whose ring poll finds nothing (campaign 2's request 4,
+    2026-10-19; `Progress/RecordedPending.lean`'s refused control was that
+    very section). -/
+def pendingDevice (w : Worker) (queued : Bool) : M Bool := do
+  return queued || (← getAmbient).pendingWork.contains w.index
+
 /-- The unit of worker `w` whose section the next record starts, when it has
-    work: a new activation, dispatched (`process_one_work`; the tx worker the
-    record names leaves the work queue, docs/2026-10-11-dispatch-order.md)
-    and run. `false` when the unit has no work: the record is not this
-    dispatch, and mismatches in the consumer that meets it. -/
+    work or is pending (`pendingDevice`): a new activation, dispatched
+    (`process_one_work`; the tx worker the record names leaves the work
+    queue, docs/2026-10-11-dispatch-order.md) and run; a pending unit with
+    an empty ring runs its one empty poll and ends. `false` when the unit
+    has no work and is not pending: the record is not this dispatch, and
+    mismatches in the consumer that meets it. -/
 def dispatch (w : Worker) : M Bool := do
   let d ← getDev
   let mut pid : Option Nat := none
   match w with
-  | .encryptWorker => if d.encryptQueue.empty then return false
-  | .decryptWorker => if d.decryptQueue.empty then return false
-  | .receiveWorker => if d.handshakeQueue.empty then return false
+  | .encryptWorker => if !(← pendingDevice w !d.encryptQueue.empty) then return false
+  | .decryptWorker => if !(← pendingDevice w !d.decryptQueue.empty) then return false
+  | .receiveWorker => if !(← pendingDevice w !d.handshakeQueue.empty) then return false
   | .txWorker =>
     let some headPid := d.txWorkQueue.head? | return false
     let p ← match ← peekUnit .txWorker with
@@ -304,13 +343,14 @@ def schedule (stack : Option Worker := none) : M Unit := do
   -- start, a NET_RX section, a resumption's records) or returns; without
   -- records the filter's bound
   for _ in [0:(← recordBudget)] do
-    if (← get).hidden.isNone then
+    if (← getAmbient).hidden.isNone then
       let d ← getDev
+      let pending := (← getAmbient).pendingWork
       let next := [Worker.receiveWorker, .decryptWorker, .encryptWorker, .txWorker].find? fun w =>
         match w with
-        | .receiveWorker => !d.handshakeQueue.empty
-        | .decryptWorker => !d.decryptQueue.empty
-        | .encryptWorker => !d.encryptQueue.empty
+        | .receiveWorker => !d.handshakeQueue.empty || pending.contains w.index
+        | .decryptWorker => !d.decryptQueue.empty || pending.contains w.index
+        | .encryptWorker => !d.encryptQueue.empty || pending.contains w.index
         | _ => !d.txWorkQueue.isEmpty
       let some w := next | return
       if !(← dispatch w) then invariant s!"{w.symbol} has work but was not dispatched"
@@ -322,13 +362,13 @@ def schedule (stack : Option Worker := none) : M Unit := do
       napiSoftirq
       if (← peekHiddenSite) == some netRx then return   -- left to the caller
       continue
-    match ← (← get).suspended.filterM Activation.consistent with
+    match ← (← getAmbient).suspended.filterM Activation.consistent with
     | [] => return
     | [a] =>
       if let some w := stack then
         if ← Activation.hasWork { worker := w } then
           unsupported "the records do not determine which suspended worker resumed"
-      modify fun s => { s with suspended := s.suspended.filter (· != a) }
+      modifyAmbient fun s => { s with suspended := s.suspended.filter (· != a) }
       Activation.run a
     | _ => unsupported "the records do not determine which suspended worker resumed"
   budgetExhausted "the scheduler loop"

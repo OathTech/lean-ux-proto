@@ -876,3 +876,52 @@ size and a harness artefact of the change: the area is now sized per
 trace (above), the seccomp probes' output returns to its former size, and
 the flood twins keep theirs. Nothing dropped silently before: every
 seccomp row's count was far below the old limit of 1,048,575.
+
+### 16.2 The W7 tier red at the batch's claim point: not the capture [AGENT, 2026-10-15]
+
+On the batch head 9318355 the `w7-tier` group failed `w7_ring_rx_1025`
+(a 1025-item receive batch) with `control_flow_mismatch`, "operands differ
+from Linux" at `__refcount_sub_and_test` (refcount.h:269), the mirror's
+peer put reading 860 in NET_RX section 1191 and 193 in section 1858 where
+Linux's peer put in those blocks read 859 and 192 (Linux's keypair put in
+the same blocks read 860 and 193, as the mirror's did), plus "the
+before-put run failed: napi_irq_before_put: more than 8 entries"
+(`Leanux/Runner.lean:812`, the mirror's bound on the NAPI placement
+vector the checker enumerates). The suspicion was the per-trace area rule
+of 16.1, under which this trace gets the 4 M-word area main uses.
+
+Measured, the capture is not what differs. The batch operation's
+comparison rows, on three trees, Linux only or inside the check:
+
+| tree | task row: records / distinct / bytes | remote row: records / distinct / bytes |
+| --- | --- | --- |
+| main de62c9d | 353,081 / 8,619 / 411,117 | 322,886 / 28,114 / 1,375,416 |
+| 5fcac3f (8 M words for every trace), inside the check: agreement | 353,113 / 8,651 / 412,452 | 322,888 / 28,110 / 1,375,302 |
+| 8788476 (the per-trace rule), inside the check, twice: agreement, agreement | 353,081 / 8,619 / 411,121 | 322,888 / 28,110 / 1,375,242; 322,900 / 28,114 / 1,375,626 |
+| 9318355, the failing claim-point run | 353,081 / 8,619 / 411,121 | 322,898 / 28,118 / 1,375,704 |
+
+The task rows of main, of the branch and of the failing run are the same
+to the byte (the +32 on 5fcac3f are the larger mapping's page-table
+copies at the one fork); the remote rows differ by a dozen pfn-dependent
+records from boot to boot in every tree; no area is near full (the limits
+are 1,048,575 per stream), the block table is written for the remote area
+as before, and the merged count (676 K) is far below the host's bound. In
+the failing run Linux's rows at the put sites are complete (1,025 distinct
+keypair-put and 1,025 peer-put values, one per NET_RX block, 2,049 NET_RX
+blocks and the worker's), and the row the mirror expected for the keypair
+put is in the block it expected; what differs is Linux's **peer** refcount
+at two NET_RX sections, one lower than the mirror's, that is, a worker put
+Linux had already made when the mirror had not, together with more than
+eight NAPI polls whose placement the records leave open. That is the
+interleaving of the decrypt worker with the NET_RX softirq inside the
+batch, which the records do not order and the environment model places by
+rule (`Env.napiIrqExit`, the before-put placement; [the contended-host
+note](2026-10-06-contended-host.md)); the failing run came at 04:44 under
+the batch's own groups C and D (1,575 traces at sixteen slots), and the
+same trace agrees on the same tree twice at 05:30 and again in the
+`w7-tier` suite (6 of 6) run at 05:45 beside the `seccomp` (67 of 67) and
+`wireguard` (263 of 263) suites at sixteen slots. By the standing rule a
+failure that
+depends on scheduling order is a modeling gap in the environment model,
+to be closed with an exact rule there, not a capture matter: reported,
+not changed here (no mirror edits on this lane).

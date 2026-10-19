@@ -305,22 +305,17 @@ def ratelimit6_traces():
     }
 
 
-def busy_traces():
-    """The producer's busy test (receive.c:554, `handshake_queue_len >
-    MAX_QUEUED_INCOMING_HANDSHAKES / 2` = 2048): the k-th send of the batch
-    sees k - 1 queued, so a flood of 2,100 takes the trylock arm from its
-    2,050th packet. On this configuration the trylock always succeeds
-    (include/linux/spinlock_up.h:56: no CONFIG_SMP, no CONFIG_DEBUG_SPINLOCK)
-    and the packet is produced under it (B4, section 2.5). The mirror runs
-    the producer per packet only with the exact flood (B4's part 2); until
-    then the arm's coverage is the kernel's alone."""
-    return {"e_underload_busy": base_ops() + [flood(count=2100), OBSERVE, GET]}
+# e_underload_busy (the producer's busy test at receive.c:554, a 2,100-send
+# flood) was dropped at the landing of 2026-10-15 [USER 2026-10-15]: its
+# comparison child sits at 4.40 s of the guest's 4.5 s bound under load, and
+# on this configuration the trylock it reaches is a compile-time constant
+# (include/linux/spinlock_up.h:56), declared constant in the mirror; the
+# threshold compare it witnessed is the only thing lost.
 
 
 def main():
     write_suite("wireguard", traces())
     write_suite("wireguard", boundary_traces())
-    write_suite("wireguard", busy_traces())
     write_steered("wireguard", ratelimit_traces())
     write_steered("wireguard", ratelimit6_traces())
     write_suite("underload-controls", controls())

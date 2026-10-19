@@ -3,20 +3,19 @@
 Status: **decided, revision v3** (2026-10-07). Revision v2 (2026-10-06)
 answered a critical audit (section 15); revision v3 applies the user's
 decisions of 2026-10-07 (section 13, with provenance) and the **WireGuard
-boundary rule** — [USER 2026-10-07] "we should stop at the boundary of
-wireguard (unless this breaks important things)": the IP stack is modeled
-only where it drives WireGuard code paths or is needed to predict
-WireGuard's observable behaviour. Section 16 gives, per class, the
-WireGuard line, decision or outcome it alone reaches, the kept minimal set,
-and what is excluded as beyond the boundary (fail-noisy `unsupported`).
-The body below is corrected in place; sections marked *record only* keep
-verified kernel facts for classes no longer built. The census
-([2026-10-06-wireguard-census.md](2026-10-06-wireguard-census.md)) lists W4
-(transmit shapes, M) and W7 (bulk and multi-item queues, L) as in-reach
-workstreams toward the user's goal of 2026-10-06, 100% of reasonable
-single-CPU WireGuard. P5 (concurrency recheck arms) stays excluded. P9
-(NAPI budget exhaustion) is **reachable on one CPU** and is built in the
-stretch tier (section 10; decision 13.5(a)).
+boundary rule** — [USER 2026-10-07] stop at the boundary of WireGuard unless
+that breaks important things: the IP stack is modeled only where it drives
+WireGuard code paths or is needed to predict WireGuard's observable behaviour.
+Section 16 gives, per class, the WireGuard line, decision or outcome it alone
+reaches, the kept minimal set, and what is excluded as beyond the boundary
+(fail-noisy `unsupported`). The body below is corrected in place; sections
+marked *record only* keep verified kernel facts for classes no longer built.
+The census ([2026-10-06-wireguard-census.md](2026-10-06-wireguard-census.md))
+lists W4 (transmit shapes, M) and W7 (bulk and multi-item queues, L) as
+in-reach workstreams toward the user's goal of 2026-10-06, 100% of reasonable
+single-CPU WireGuard. P5 (concurrency recheck arms) stays excluded. P9 (NAPI
+budget exhaustion) is **reachable on one CPU** and is built in the stretch
+tier (section 10; decision 13.5(a)).
 
 Line numbers are in the unpatched `.deps/linux` (6.12.110) unless a file is
 named as patched. The kernel is `kernel/config-x86_64-net-choice`: one CPU,
@@ -600,11 +599,10 @@ them):**
   any placement the argument does not cover.
 - **K3** (v2, C2 option iii). Record the (c') placement itself: a choice
   record in `wg_queue_enqueue_per_peer_rx` after `wg_peer_put`
-  (queueing.h:201), so a nested NET_RX section's position relative to it
-  tells before-put from after-put. A new hook against the user's
-  "generic capture points, zero new hooks" preference. **Moot**: option
-  (ii) of 13.2 was approved [USER 2026-10-07] and keeps the check without
-  it.
+  (queueing.h:201), so a nested NET_RX section's position relative to it tells
+  before-put from after-put. A new hook against the user's preference for
+  generic capture points and no new hooks. **Moot**: option (ii) of 13.2 was
+  approved [USER 2026-10-07] and keeps the check without it.
 - The census's `handshake_queue_len` capture (P12) is not needed here.
 
 ## 4. W4 in the mirror and the environment
@@ -1316,10 +1314,10 @@ integration.
 
 **Decided, 2026-10-07** (v3). Provenance per item; the v2 texts below are
 kept as the record of the options and reasoning.
-- Scope — [USER 2026-10-07]: "we should stop at the boundary of wireguard
-  (unless this breaks important things)". The IP stack is modeled only
-  where it drives WireGuard code paths or is needed to predict WireGuard's
-  observable behaviour. Applied in section 16.
+- Scope — [USER 2026-10-07]: stop at the boundary of WireGuard unless that
+  breaks important things. The IP stack is modeled only where it drives
+  WireGuard code paths or is needed to predict WireGuard's observable
+  behaviour. Applied in section 16.
 - 13.1 — [AGENT 2026-10-07, under delegated authority]: the connected
   sender was the recommendation, but **no K1 and no connected sender**:
   fragmentation is beyond the boundary (16.1), so neither is built. K1
@@ -1690,18 +1688,17 @@ opcodes as placeholders until the coordinator allocates them.
 
 ## 16. Revision v3 — WireGuard boundary and decisions
 
-**The rule** [USER 2026-10-07]: "we should stop at the boundary of
-wireguard (unless this breaks important things)". Applied as: a class is
-kept iff it reaches a WireGuard line, decision or outcome (in
-`drivers/net/wireguard/`, as the mirror's A2 decisions name them) that no
-other kept class reaches, or it is needed so that the observations of kept
-traces stay predictable; the IP stack is modeled only as far as the kept
-classes' bytes and records need. Everything else is marked **excluded:
-beyond the WireGuard boundary**, as a fail-noisy `unsupported` in the
-mirror (section 9) and a `validate_trace` refusal in the harness, with
-three domain-control traces (section 8) showing the `unsupported` fires.
-The verified kernel facts of the dropped classes stay in sections 2.1,
-2.3-2.5 as record.
+**The rule** [USER 2026-10-07]: stop at the boundary of WireGuard unless that
+breaks important things. Applied as: a class is kept iff it reaches a
+WireGuard line, decision or outcome (in `drivers/net/wireguard/`, as the
+mirror's A2 decisions name them) that no other kept class reaches, or it is
+needed so that the observations of kept traces stay predictable; the IP stack
+is modeled only as far as the kept classes' bytes and records need. Everything
+else is marked **excluded: beyond the WireGuard boundary**, as a fail-noisy
+`unsupported` in the mirror (section 9) and a `validate_trace` refusal in the
+harness, with three domain-control traces (section 8) showing the
+`unsupported` fires. The verified kernel facts of the dropped classes stay in
+sections 2.1, 2.3-2.5 as record.
 
 ### 16.1 W4, class by class
 
@@ -2090,6 +2087,40 @@ Branch `task/w47` continued on the merge of `task/dispatch-order`
   all true). `NAPI_PLACEMENTS_MAX` and `napi_placements` are gone; the
   report's `napi_irq_placements` is now `napi_before_put_sections`, the
   NET_RX ordinals taken from the before-put run, per trace.
+- **The ceiling, as the load corrected it [AGENT 2026-10-15].** The
+  mirror's parser bounded `napi_irq_before_put` at 8 entries, a budget
+  from when open placements were one to three per trace; the protocol's
+  ceiling on `napi_irq_ambiguous` had been raised to the trace's
+  injected-message count on 2026-10-13 (the receive twin of the W7 tier
+  opens about a thousand), but the mirror's bound was not, and the
+  selection at that scale was never exercised, because the twin's all-after
+  run agreed outright on every quiet box. On a loaded box the kernel takes
+  the (c') placement at a few of its polls (two of 2,049 sections at the
+  claim points of 2026-10-15: the worker's put reading 859 and 192 where
+  the all-after run read 860 and 193) and nearly every poll follows its
+  enqueue directly (1,018 open placements), so the before-put run was
+  refused by the parser and the trace failed. The ceiling is now the
+  records': `Env.napiIrqExit` opens a poll only where the next record is a
+  NET_RX section start, so the vector may name no more polls than the
+  records hold section starts, none without records (`Leanux/Runner.lean`,
+  exact and fail-closed); `section_agreement` buckets the operation's
+  records by section and by condition site in one pass so the per-poll
+  agreement costs the section's records, not a scan per poll. The rule is
+  unchanged: no record tells (c') from after-the-put, the kernel's own
+  comparison rows do, and the selection is replayed once as the evidence.
+  Evidence, since a quiet box never takes (c') on this trace and a loaded
+  one does so by chance: the failing claim-point chunk's recorded Linux
+  outputs (75148cd, claim-E chunk 004) replayed through the fixed tree
+  with `scripts/probes/replay-chunk.py` agree, the selection choosing the
+  before-put placement at NET_RX section 1677 of 2,049 (1,018 open polls;
+  the three mirror runs and the selection in seven minutes); the one-off
+  mutant W7-PLACEMENT-M1 (`Env.napiIrqExit` applying each placement one
+  poll off, `getD 1` for `headD`) replayed on the same chunk is rejected,
+  "the placement runs differ in 1017 NET_RX sections and 1017 other runs
+  of branches for 1018 open polls: the placements are not independent"
+  (`control_flow_mismatch`); reverted. The tier suite on s5 agrees 6 of 6
+  both quiet and beside the `wireguard` suite at sixteen slots, where the
+  twin opened 1,016 placements and the all-after run agreed outright.
 - **The rule, as the data corrected it.** The design said the (c')
   placement changes only the operands inside the poll's section. The first
   replay of `rx_roam_v6` (one open poll) showed it also changes the

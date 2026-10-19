@@ -746,21 +746,21 @@ interface between the two projects.
   rejects the combination and the interface document's table records the
   exclusivity (the coordinator's, 12).
 - `actions_logged` is the kernel default, checked by the fixture row.
-- The prefill fixture [USER 2026-10-12: "Yes, let's queue it"]: a trace
-  declaring `"seccomp_prefill": N` (1-8; never with a network fixture or a
-  steering schedule) starts with no-new-privs set and `N` copies of a fixed
+- The prefill fixture [USER 2026-10-12: queued]: a trace declaring
+  `"seccomp_prefill": N` (1-8; never with a network fixture or a steering
+  schedule) starts with no-new-privs set and `N` copies of a fixed
   3990-instruction program on its chain, installed by the guest before the
   window (`harness/guest.c` `SECCOMP_PREFILL_*`): `nr` loaded, a `JA` chain
-  only for a dummy number outside the probe set and the cached range,
-  `ALLOW` otherwise, so every probe is a cache hit through the chain. The
-  mirror's initial task state carries the chain, reconstructed by its own
-  translation of the same program under the record-free local instance and
-  the decision-free cache emulation (`Leanux/Seccomp/Prefill.lean`,
+  only for a dummy number outside the probe set and the cached range, `ALLOW`
+  otherwise, so every probe is a cache hit through the chain. The mirror's
+  initial task state carries the chain, reconstructed by its own translation
+  of the same program under the record-free local instance and the
+  decision-free cache emulation (`Leanux/Seccomp/Prefill.lean`,
   `Env.seccompPrefill`): a fixture assumption like the descriptors, outside
   every window; the kernel's `total_insns` at the first recorded install is
   the evidence that the reconstruction's lengths are the kernel's. Each copy
-  is 3995 eBPF instructions, 3999 with the walk's penalty: eight leave 776
-  of `MAX_INSNS_PER_PATH` for the recorded installs (7).
+  is 3995 eBPF instructions, 3999 with the walk's penalty: eight leave 776 of
+  `MAX_INSNS_PER_PATH` for the recorded installs (7).
 - The child's exit effect (2.8): one `users` and one `refs` decrement on the
   head filter the parent holds; the child's task object is dropped at the
   parent's `wait4`. The `TRAP` delivery effect (2.2): `SIGSYS` removed
@@ -966,23 +966,22 @@ Hand-written (about 45 traces), one per arm:
   (the translation's guard: result 0, `KILL_THREAD`, `SIGSYS`), and with
   `X` non-zero (`MOD|X` and `MOD|K` never run: `seccomp_check_filter`
   lists `DIV` and not `MOD`, 2.5, so they are checker arms, measured by W);
-- chains: two filters where the older kills and the newer allows (the
-  cache's `bitmap_copy` arm, the most-restrictive rule); the reverse; two
-  with equal actions and different data (the tie rule); a third filter;
-  four 768-instruction filters (the budget's walk over the chain, a probe
-  through four programs); and the budget itself through the prefill
-  fixture (5) [USER 2026-10-12: "Yes, let's queue it"]: recorded installs
-  alone cannot reach it (32768 installed eBPF instructions are at least 42
-  installs of 768, at about 0.48 MB of console each in the cheapest shape;
-  X measured 5.78 MB for 12 and the 16 MB limit at 43), so eight prefilled
-  copies (31992 with the walk's penalty) leave 776, and `s_budget_enomem`'s
-  772-instruction install (779 eBPF: the arch test's negative constant costs
-  the conversion one more, `filter.c:755-760`) is `-ENOMEM` at 32771, while
-  `s_budget_edge`'s 768 (775) fits at 32767 and the next is refused at
-  33546; the kernel's records at `seccomp.c:925` read (0x8000, 0x8003),
-  (0x8000, 0x7fff) and (0x8000, 0x830a) (X, on sc2). The compare's operand,
-  Linux's `total_insns` against the mirror's, is the fixture's acceptance
-  evidence;
+- chains: two filters where the older kills and the newer allows (the cache's
+  `bitmap_copy` arm, the most-restrictive rule); the reverse; two with equal
+  actions and different data (the tie rule); a third filter; four
+  768-instruction filters (the budget's walk over the chain, a probe through
+  four programs); and the budget itself through the prefill fixture (5) [USER
+  2026-10-12: queued]: recorded installs alone cannot reach it (32768
+  installed eBPF instructions are at least 42 installs of 768, at about 0.48
+  MB of console each in the cheapest shape; X measured 5.78 MB for 12 and the
+  16 MB limit at 43), so eight prefilled copies (31992 with the walk's
+  penalty) leave 776, and `s_budget_enomem`'s 772-instruction install (779
+  eBPF: the arch test's negative constant costs the conversion one more,
+  `filter.c:755-760`) is `-ENOMEM` at 32771, while `s_budget_edge`'s 768 (775)
+  fits at 32767 and the next is refused at 33546; the kernel's records at
+  `seccomp.c:925` read (0x8000, 0x8003), (0x8000, 0x7fff) and (0x8000, 0x830a)
+  (X, on sc2). The compare's operand, Linux's `total_insns` against the
+  mirror's, is the fixture's acceptance evidence;
 - modes and privilege: strict in a child then an allowed call (`exit`),
   then a killed one (`SIGKILL`); strict after filter (`-EINVAL`, the
   child's `strict_ret`); not filter after strict: the `seccomp` call
@@ -1603,10 +1602,9 @@ adjusted below).
 
 ## 16. The user's case
 
-**Approved** [USER 2026-10-13: "Agree, sounds good - approved"]: both
-rulings below, recorded in `docs/decisions.md`. The oracle is rebuilt with
-`CONFIG_SECCOMP=y` at phase 2b of stream X; the P9 widening is stream V's
-signal extension (4.5).
+**Approved** [USER 2026-10-13]: both rulings below, recorded in
+`docs/decisions.md`. The oracle is rebuilt with `CONFIG_SECCOMP=y` at phase 2b
+of stream X; the P9 widening is stream V's signal extension (4.5).
 
 For the user [the paste]:
 

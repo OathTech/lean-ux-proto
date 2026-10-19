@@ -43,7 +43,7 @@ def F_SETPIPE_SZ : Nat := 1031
 def F_GETPIPE_SZ : Nat := 1032
 
 /-- `filp->private_data` of a pipe file. -/
-def pipeOf (f : File) : M PipeId :=
+def pipeOf (f : File) : FS.M PipeId :=
   match f.privateData with
   | some (.pipe id) => return id
   | some (.eventfdCtx _) => invariant "pipe operation on an eventfd file"
@@ -58,17 +58,17 @@ def pipeFull (head tail : UInt32) (limit : Nat) : Bool := pipeOccupancy head tai
 
 /-- `slot & (pipe->ring_size - 1)`, bounds-checked: the C never indexes past
     `ring_size`, so an out-of-range index is a mirror invariant failure. -/
-def pipeBufIdx (p : PipeInodeInfo) (slot : UInt32) : M Nat := do
+def pipeBufIdx (p : PipeInodeInfo) (slot : UInt32) : FS.M Nat := do
   if p.ringSize == 0 || p.bufs.size != p.ringSize then
     invariant s!"pipe ring of size {p.ringSize} with {p.bufs.size} buffers"
   return (slot &&& (p.ringSize - 1).toUInt32).toNat
 
-def getPipeBuf (pid : PipeId) (i : Nat) : M PipeBuffer := do
+def getPipeBuf (pid : PipeId) (i : Nat) : FS.M PipeBuffer := do
   match (← getPipe pid).bufs[i]? with
   | some b => return b
   | none => invariant s!"pipe->bufs[{i}] beyond ring_size"
 
-def setPipeBuf (pid : PipeId) (i : Nat) (b : PipeBuffer) : M Unit := do
+def setPipeBuf (pid : PipeId) (i : Nat) (b : PipeBuffer) : FS.M Unit := do
   let p ← getPipe pid
   if i < p.bufs.size then setPipe pid { p with bufs := p.bufs.set! i b }
   else invariant s!"pipe->bufs[{i}] beyond ring_size"
@@ -78,18 +78,18 @@ def setPipeBuf (pid : PipeId) (i : Nat) (b : PipeBuffer) : M Unit := do
 /-- `alloc_page(GFP_HIGHUSER | __GFP_ACCOUNT)` after the environment said yes:
     a new page with `page_count == 1`. Its initial bytes are never read (only
     copied-in bytes are), so they are zero. -/
-def newPipePage : M PageId := do
-  let id := (← getK).nextPage
+def newPipePage : FS.M PageId := do
+  let id := (← get).nextPage
   setPage id { pageCount := 1, bytes := ByteArray.mk (Array.replicate PAGE_SIZE 0) }
-  modifyK fun k => { k with nextPage := id + 1 }
+  modify fun k => { k with nextPage := id + 1 }
   return id
 
 /-- `put_page(page)` (include/linux/mm.h): drop one reference; the last frees
     the page. `__free_page` of a page with one reference is the same. -/
-def putPipePage (id : PageId) : M Unit := do
+def putPipePage (id : PageId) : FS.M Unit := do
   let pg ← getPage id
   if pg.pageCount == 0 then invariant s!"put_page on page {id} with no reference"
-  if pg.pageCount == 1 then modifyK fun k => { k with pages := k.pages.erase id }
+  if pg.pageCount == 1 then modify fun k => { k with pages := k.pages.erase id }
   else setPage id { pg with pageCount := pg.pageCount - 1 }
 
 /-- `copy_page_to_iter(page, offset, bytes, to)` (lib/iov_iter.c:349-376), a
@@ -97,7 +97,7 @@ def putPipePage (id : PageId) : M Unit := do
     the caller's buffer (appended to `World.userOut`; `cap` is the buffer's
     length) and returns the count; a fault (the environment says no) copies
     nothing. -/
-def copyPageToIter (page : PageId) (offset bytes cap : Nat) : M Nat := do
+def copyPageToIter (page : PageId) (offset bytes cap : Nat) : FS.M Nat := do
   if !(← envOk .copyPageToIter) then return 0
   let out := (← get).userOut.getD ByteArray.empty
   let n := min bytes (cap - out.size)
@@ -110,7 +110,7 @@ def copyPageToIter (page : PageId) (offset bytes cap : Nat) : M Nat := do
     the inverse: copies `min(bytes, iov_iter_count(from))` bytes from the
     caller's buffer into the page and advances the iterator; a fault copies
     nothing. -/
-def copyPageFromIter (page : PageId) (offset bytes : Nat) (src : IovIter) : M (Nat × IovIter) := do
+def copyPageFromIter (page : PageId) (offset bytes : Nat) (src : IovIter) : FS.M (Nat × IovIter) := do
   if !(← envOk .copyPageFromIter) then return (0, src)
   let n := min bytes src.count
   let pg ← getPage page
@@ -122,13 +122,13 @@ def copyPageFromIter (page : PageId) (offset bytes : Nat) (src : IovIter) : M (N
 
 /-- kill_fasync (fs/fcntl.c:1146-1157): `if (*fp)`; the lists are empty
     (`F_SETFL FASYNC` on a pipe is outside the stage). -/
-def killFasync (hasList : Bool) : M Unit := do
+def killFasync (hasList : Bool) : FS.M Unit := do
   if ← branch .killFasyncList hasList then
     unsupported "kill_fasync with a fasync list (SIGIO)"
 
 /-- anon_pipe_buf_release (fs/pipe.c:115-129): keep a page nobody else uses as
     the one-deep `tmp_page` cache, else drop the reference. -/
-def anonPipeBufRelease (pid : PipeId) (buf : PipeBuffer) : M Unit := do
+def anonPipeBufRelease (pid : PipeId) (buf : PipeBuffer) : FS.M Unit := do
   let some page := buf.page | invariant "anon_pipe_buf_release of a buffer with a NULL page"
   let pg ← getPage page
   -- `page_count(page) == 1 && !pipe->tmp_page`
@@ -141,7 +141,7 @@ def anonPipeBufRelease (pid : PipeId) (buf : PipeBuffer) : M Unit := do
 
 /-- pipe_buf_release (pipe_fs_i.h:211-220): `buf->ops = NULL`, then
     `ops->release`, which is `anon_pipe_buf_release` (the only ops). -/
-def pipeBufRelease (pid : PipeId) (i : Nat) : M Unit := do
+def pipeBufRelease (pid : PipeId) (i : Nat) : FS.M Unit := do
   let buf ← getPipeBuf pid i
   if !buf.ops then invariant "pipe_buf_release of a buffer with NULL ops"
   setPipeBuf pid i { buf with ops := false }
@@ -149,14 +149,14 @@ def pipeBufRelease (pid : PipeId) (i : Nat) : M Unit := do
 
 /-- pipe_buf_confirm (pipe_fs_i.h:227-233): `anon_pipe_buf_ops` has no
     `confirm`. -/
-def pipeBufConfirm (buf : PipeBuffer) : M Int := do
+def pipeBufConfirm (buf : PipeBuffer) : FS.M Int := do
   if !buf.ops then invariant "pipe_buf_confirm of a buffer with NULL ops"
   if ← branch .pipeBufConfirmNoConfirm true then return 0
   unsupported "pipe_buf_confirm: ops->confirm"
 
 /-- pipe_update_tail (fs/pipe.c:220-247): release the buffer at slot `i` and
     advance `pipe->tail` to `tail + 1`. -/
-def pipeUpdateTail (pid : PipeId) (i : Nat) (tail : UInt32) : M UInt32 := do
+def pipeUpdateTail (pid : PipeId) (i : Nat) (tail : UInt32) : FS.M UInt32 := do
   pipeBufRelease pid i
   -- pipe_has_watch_queue(pipe) is the constant false (231)
   setPipe pid { (← getPipe pid) with tail := tail + 1 }
@@ -166,29 +166,29 @@ def pipeUpdateTail (pid : PipeId) (i : Nat) (tail : UInt32) : M UInt32 := do
 
 /-- account_pipe_buffers (fs/pipe.c:765-769):
     `atomic_long_add_return(new - old, &user->pipe_bufs)`. -/
-def accountPipeBuffers (old new : Nat) : M Nat := do
-  let v : Int := (← getK).user.pipeBufs + new - old
+def accountPipeBuffers (old new : Nat) : FS.M Nat := do
+  let v : Int := (← get).user.pipeBufs + new - old
   if v < 0 then invariant "user->pipe_bufs below zero"
-  modifyK fun k => { k with user := { k.user with pipeBufs := v.toNat } }
+  modify fun k => { k with user := { k.user with pipeBufs := v.toNat } }
   return v.toNat
 
 /-- too_many_pipe_buffers_soft (fs/pipe.c:771-776). -/
-def tooManyPipeBuffersSoft (userBufs : Nat) : M Bool := do
-  let soft := (← getK).pipeUserPagesSoft
+def tooManyPipeBuffersSoft (userBufs : Nat) : FS.M Bool := do
+  let soft := (← get).pipeUserPagesSoft
   if ← branchCmp .tooManySoftLimit (soft != 0) soft 0 then
     branchCmp .tooManySoftOver (userBufs > soft) userBufs soft
   else return false
 
 /-- too_many_pipe_buffers_hard (fs/pipe.c:778-783). -/
-def tooManyPipeBuffersHard (userBufs : Nat) : M Bool := do
-  let hard := (← getK).pipeUserPagesHard
+def tooManyPipeBuffersHard (userBufs : Nat) : FS.M Bool := do
+  let hard := (← get).pipeUserPagesHard
   if ← branchCmp .tooManyHardLimit (hard != 0) hard 0 then
     branchCmp .tooManyHardOver (userBufs > hard) userBufs hard
   else return false
 
 /-- pipe_is_unprivileged_user (fs/pipe.c:785-788). `capable()` is a cut point:
     the guest runs as root, so both are true (design section 5). -/
-def pipeIsUnprivilegedUser : M Bool := do
+def pipeIsUnprivilegedUser : FS.M Bool := do
   let capable := true
   if ← branch .unprivNoResource !capable then
     branch .unprivNoAdmin !capable
@@ -205,7 +205,7 @@ def pipeIsUnprivilegedUser : M Bool := do
     `operand_exclusions`, `correspondence/README.md`; the precedent of
     `alloc_empty_file.nr_files_at_max`). The outcomes are the contract's
     (a live `root_user`) and are reported and A2-checked. -/
-def getCurrentUser : M UserId := do
+def getCurrentUser : FS.M UserId := do
   refcountIncGuestWide .rootUserCount
   return .root
 
@@ -213,10 +213,10 @@ def getCurrentUser : M UserId := do
 
 /-- alloc_pipe_info (fs/pipe.c:790-837). `get_current_user`/`free_uid`: see
     `getCurrentUser`. -/
-def allocPipeInfo : M (Option PipeId) := do
+def allocPipeInfo : FS.M (Option PipeId) := do
   let mut pipeBufs := PIPE_DEF_BUFFERS
   let user ← getCurrentUser
-  let maxSize := (← getK).pipeMaxSize
+  let maxSize := (← get).pipeMaxSize
   -- pipe = kzalloc(sizeof(struct pipe_inode_info), GFP_KERNEL_ACCOUNT)
   if ← branch .allocPipeInfoNoMem !(← hiddenAlloc .kzallocPipeInfo) then
     return none  -- out_free_uid: free_uid(user)
@@ -238,10 +238,10 @@ def allocPipeInfo : M (Option PipeId) := do
     if ← branch .allocPipeInfoBufs (← hiddenAlloc .kcallocPipeBufs) then
       -- init_waitqueue_head (x2), r_counter = w_counter = 1, max_usage =
       -- ring_size = nr_accounted = pipe_bufs, user, mutex_init
-      let pid := (← getK).nextPipe
+      let pid := (← get).nextPipe
       setPipe pid { maxUsage := pipeBufs, ringSize := pipeBufs, nrAccounted := pipeBufs,
                     rCounter := 1, wCounter := 1, bufs := Array.replicate pipeBufs {}, user }
-      modifyK fun k => { k with nextPipe := pid + 1 }
+      modify fun k => { k with nextPipe := pid + 1 }
       return some pid
   -- out_revert_acct:
   _ ← accountPipeBuffers pipeBufs 0
@@ -250,7 +250,7 @@ def allocPipeInfo : M (Option PipeId) := do
 
 /-- free_pipe_info (fs/pipe.c:839-863). `free_uid` is a cut (see
     `getCurrentUser`). -/
-def freePipeInfo (pid : PipeId) : M Unit := do
+def freePipeInfo (pid : PipeId) : FS.M Unit := do
   _ ← accountPipeBuffers (← getPipe pid).nrAccounted 0
   -- free_uid(pipe->user)
   let mut i := 0
@@ -266,13 +266,13 @@ def freePipeInfo (pid : PipeId) : M Unit := do
   else
     _ ← branch .freePipeInfoTmpPage false
   -- kfree(pipe->bufs); kfree(pipe)
-  modifyK fun k => { k with pipes := k.pipes.erase pid }
+  modify fun k => { k with pipes := k.pipes.erase pid }
 
 /-- pipe_poll (fs/pipe.c:656-705), the `poll` operation: registers on the
     heads the file's mode allows, then reads the ring without the mutex.
     `poll_usage` (664) is what makes `pipe_write`'s wake unconditional
     (`.pipeWritePollUsage`). -/
-def pipePoll (fid : FileId) (wait : PollTable) : M UInt32 := do
+def pipePoll (fid : FileId) (wait : PollTable) : FS.M UInt32 := do
   let filp ← getFile fid
   let pid ← pipeOf filp
   -- WRITE_ONCE(pipe->poll_usage, true): epoll's historical semantics
@@ -303,7 +303,7 @@ def pipePoll (fid : FileId) (wait : PollTable) : M UInt32 := do
   return mask
 
 /-- put_pipe_info (fs/pipe.c:707-720), under `inode->i_lock`. -/
-def putPipeInfo (ino : PipefsInodeId) (pid : PipeId) : M Unit := do
+def putPipeInfo (ino : PipefsInodeId) (pid : PipeId) : FS.M Unit := do
   let p ← getPipe pid
   if p.files == 0 then invariant "put_pipe_info with pipe->files == 0"
   let files := p.files - 1
@@ -317,7 +317,7 @@ def putPipeInfo (ino : PipefsInodeId) (pid : PipeId) : M Unit := do
 
 /-- pipe_release (fs/pipe.c:722-744), the `release` operation:
     `f_op->release(inode, file)` from `__fput`. -/
-def pipeRelease (ino : PipefsInodeId) (fid : FileId) : M Int := do
+def pipeRelease (ino : PipefsInodeId) (fid : FileId) : FS.M Int := do
   let f ← getFile fid
   let pid ← pipeOf f
   -- mutex_lock(&pipe->mutex)
@@ -344,7 +344,7 @@ def pipeRelease (ino : PipefsInodeId) (fid : FileId) : M Int := do
 
 /-- pipe_read (fs/pipe.c:249-409), the `read_iter` operation. `count` is
     `iov_iter_count(to)`; the bytes go to `World.userOut`. -/
-def pipeRead (iocb : Kiocb) (count : Nat) : M Int := do
+def pipeRead (iocb : Kiocb) (count : Nat) : FS.M Int := do
   let mut totalLen := count
   let filp ← getFile iocb.filp
   let pid ← pipeOf filp
@@ -418,7 +418,7 @@ def pipeRead (iocb : Kiocb) (count : Nat) : M Int := do
 
 /-- pipe_write (fs/pipe.c:452-583) from the null-write test to `out:`. Every
     `goto out` is a `return`; the result is `ret` and `was_empty`. -/
-def pipeWriteToOut (iocb : Kiocb) (filp : File) (pid : PipeId) (src : IovIter) : M (Int × Bool) := do
+def pipeWriteToOut (iocb : Kiocb) (filp : File) (pid : PipeId) (src : IovIter) : FS.M (Int × Bool) := do
   let totalLen := src.count
   let mut src := src
   -- mutex_lock(&pipe->mutex)
@@ -510,7 +510,7 @@ def pipeWriteToOut (iocb : Kiocb) (filp : File) (pid : PipeId) (src : IovIter) :
 
 /-- pipe_write (fs/pipe.c:426-613), the `write_iter` operation; `src` is the
     caller's buffer (`from`). -/
-def pipeWrite (iocb : Kiocb) (src : IovIter) : M Int := do
+def pipeWrite (iocb : Kiocb) (src : IovIter) : FS.M Int := do
   let filp ← getFile iocb.filp
   let pid ← pipeOf filp
   -- pipe_has_watch_queue(pipe) is the constant false (448)
@@ -555,7 +555,7 @@ def roundupPowOfTwoUL (n : Nat) : Nat := Id.run do
 #guard pipeOccupancy 3 0xFFFFFFFE == 5 && pipeFull 16 0 16 && !pipeFull 15 0 16 && pipeFull 0 0xFFFFFFFF 1
 
 /-- round_pipe_size (fs/pipe.c:1247-1257); `size` is an `unsigned int`. -/
-def roundPipeSize (size : Nat) : M Nat := do
+def roundPipeSize (size : Nat) : FS.M Nat := do
   if ← branchCmp .roundPipeSizeTooBig (size > 2 ^ 31) size (2 ^ 31) then return 0
   -- Minimum pipe size, as required by POSIX
   if ← branchCmp .roundPipeSizeSmall (size < PAGE_SIZE) size PAGE_SIZE then return PAGE_SIZE
@@ -563,13 +563,13 @@ def roundPipeSize (size : Nat) : M Nat := do
 
 /-- Copy `len` buffers from `src[srcOff..]` to `dst[dstOff..]` (a `memcpy` of
     `struct pipe_buffer`s), bounds-checked. -/
-def copyPipeBufs (dst src : Array PipeBuffer) (dstOff srcOff len : Nat) : M (Array PipeBuffer) := do
+def copyPipeBufs (dst src : Array PipeBuffer) (dstOff srcOff len : Nat) : FS.M (Array PipeBuffer) := do
   if dstOff + len > dst.size || srcOff + len > src.size then
     invariant "pipe_resize_ring: memcpy beyond a ring"
   return (List.range len).foldl (fun a k => a.set! (dstOff + k) src[srcOff + k]!) dst
 
 /-- pipe_resize_ring (fs/pipe.c:1266-1329). -/
-def pipeResizeRing (pid : PipeId) (nrSlots : Nat) : M Int := do
+def pipeResizeRing (pid : PipeId) (nrSlots : Nat) : FS.M Int := do
   -- bufs = kcalloc(nr_slots, sizeof(*bufs), GFP_KERNEL_ACCOUNT | __GFP_NOWARN)
   if ← branch .resizeRingNoMem !(← envOk .kcallocResizeBufs) then return -ENOMEM
   -- spin_lock_irq(&pipe->rd_wait.lock)
@@ -603,14 +603,14 @@ def pipeResizeRing (pid : PipeId) (nrSlots : Nat) : M Int := do
   return 0
 
 /-- pipe_set_size (fs/pipe.c:1335-1380), with `pipe->mutex` held. -/
-def pipeSetSize (pid : PipeId) (arg : Nat) : M Int := do
+def pipeSetSize (pid : PipeId) (arg : Nat) : FS.M Int := do
   -- pipe_has_watch_queue(pipe) is the constant false (1341)
   let size ← roundPipeSize arg
   let nrSlots := size >>> 12  -- size >> PAGE_SHIFT
   if ← branchCmp .pipeSetSizeZero (nrSlots == 0) nrSlots 0 then return -EINVAL
   -- `nr_slots > pipe->max_usage && size > pipe_max_size && !capable(CAP_SYS_RESOURCE)`
   let p ← getPipe pid
-  let maxSize := (← getK).pipeMaxSize
+  let maxSize := (← get).pipeMaxSize
   let eperm ← do
     if ← branchCmp .pipeSetSizeGrowMax (nrSlots > p.maxUsage) nrSlots p.maxUsage then
       if ← branchCmp .pipeSetSizeOverMax (size > maxSize) size maxSize then
@@ -631,7 +631,7 @@ def pipeSetSize (pid : PipeId) (arg : Nat) : M Int := do
   -- out_revert_acct (1377-1378) on both error paths; the success path returns
   -- `pipe->max_usage * PAGE_SIZE` from inside the happy path (1373), with the
   -- accounting kept
-  let outRevertAcct : M Unit := do
+  let outRevertAcct : FS.M Unit := do
     _ ← accountPipeBuffers nrSlots (← getPipe pid).nrAccounted
   if limited then
     outRevertAcct
@@ -644,7 +644,7 @@ def pipeSetSize (pid : PipeId) (arg : Nat) : M Int := do
 
 /-- get_pipe_info (fs/pipe.c:1386-1395) with `for_splice` false (its test
     folds away with `pipe_has_watch_queue`). -/
-def getPipeInfo (f : File) : M (Option PipeId) := do
+def getPipeInfo (f : File) : FS.M (Option PipeId) := do
   -- `file->f_op != &pipefifo_fops || !pipe`, pipe = file->private_data
   if ← branch .getPipeInfoNotPipe (f.fOp != some .pipefifo) then return none
   let pipe? ← match f.privateData with
@@ -657,7 +657,7 @@ def getPipeInfo (f : File) : M (Option PipeId) := do
 
 /-- pipe_fcntl (fs/pipe.c:1397-1422). `cmd` is the command number: do_fcntl
     routes only F_SETPIPE_SZ and F_GETPIPE_SZ here. -/
-def pipeFcntl (fid : FileId) (cmd : Nat) (arg : Nat) : M Int := do
+def pipeFcntl (fid : FileId) (cmd : Nat) (arg : Nat) : FS.M Int := do
   let pipe? ← getPipeInfo (← getFile fid)
   if ← branch .pipeFcntlNoPipe pipe?.isNone then return -EBADF
   let some pid := pipe? | invariant "unreachable"
