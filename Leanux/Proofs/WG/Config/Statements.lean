@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.Config.RequestFundedCommandsClaims
+import Leanux.Proofs.WG.Config.GetterScalarClaims
 import Leanux.Proofs.WG.Config.RequestWgChainClaims
 import Leanux.Proofs.WG.Config.ScalarCommandClaims
 import Leanux.Proofs.WG.Config.RequestCommandClaims
@@ -3522,5 +3524,75 @@ theorem original_coherent_mixed_request_readback (cs : Queues.RxCredits.Ledger)
         final.wg.nlSock7=socketReadbackFinal initial.wg.nlSock7 d ∧
         CursorHeld d (mixedPagesDevice d pages) none :=
   RequestOrder.FinalHeader.certificate_requested_mixed_readback cs loans attrs shape initial inspected certificate pre ret middle normal r member kind before first selected d present ready headerFits cursorData idle emptyQueue within outcome matched
+
+open GetterScalar in
+/-- A completed handshake send worker retains each surviving peer's allocation stamp, PSK, keepalive interval and serialized endpoint fields; final release may remove peers. -/
+theorem original_send_worker_getter_scalars (entry : Campaign2.Snapshot) (pid : PeerId) :
+    Campaign2.Ensures (handshakeSendWorker pid) (Keeps entry) (fun _=>Keeps entry) :=
+  GetterScalar.sender_keeps entry pid
+
+
+open GetterScalar in
+/-- A completed queued key-clear worker retains the serialized configuration scalars of every surviving incarnation. -/
+theorem original_clear_worker_getter_scalars (entry : Campaign2.Snapshot) (pid : PeerId) :
+    Campaign2.Ensures (queuedExpiredZeroKeyMaterial pid) (Keeps entry) (fun _=>Keeps entry) :=
+  GetterScalar.clear_keeps entry pid
+
+
+open GetterScalar in
+/-- The original bounded handshake-work drain retains serialized configuration scalars of every surviving incarnation through both worker kinds and actual releases. -/
+theorem original_handshake_drain_getter_scalars (entry : Campaign2.Snapshot) (upTo : Option PeerId) :
+    Campaign2.Ensures (drainHandshakeSendWq upTo) (Keeps entry) (fun _=>Keeps entry) :=
+  GetterScalar.drain_keeps entry upTo
+
+
+open GetterScalar in
+/-- Actual timer stop and its queued work retain serialized configuration scalars for every surviving incarnation. -/
+theorem original_timer_stop_getter_scalars (entry : Campaign2.Snapshot) (pid : PeerId) :
+    Campaign2.Ensures (timersStop pid) (Keeps entry) (fun _=>Keeps entry) :=
+  GetterScalar.timers_keeps entry pid
+
+
+open GetterScalar in
+/-- The original peer-removal path retains serialized configuration scalars of every surviving incarnation, including peers visited by queued work. -/
+theorem original_peer_remove_getter_scalars (entry : Campaign2.Snapshot) (peer : Option PeerId) :
+    Campaign2.Ensures (peerRemove peer) (Keeps entry) (fun _=>Keeps entry) :=
+  GetterScalar.remove_keeps entry peer
+
+
+open GetterScalar in
+/-- Whole peer removal retains serialized configuration scalars for surviving physical peer entries; it does not assert their configured membership or survival. -/
+theorem original_remove_all_getter_scalars (entry : Campaign2.Snapshot) :
+    Campaign2.Ensures peerRemoveAll (Keeps entry) (fun _=>Keeps entry) :=
+  GetterScalar.remove_all_keeps entry
+
+
+open ScalarCommand Queues.RxCredits in
+/-- The original existing-target command yields the exact stamped scalar value used for serialization, retaining endpoint flowinfo and scope while erasing only cached source fields. -/
+theorem original_existing_command_serialized_scalars (cs : Ledger) (loans : Reservations)
+    (attrs : PeerAttrs) (key : Key) (pid : PeerId) (before : Device)
+    (pubkey : attrs.publicKey=some key)
+    (valid : attrs.flags.getD 0 &&& ~~~WGPEER_F_ALL=0)
+    (protocol : attrs.protocolVersion=none ∨ attrs.protocolVersion=some 1)
+    (keep : attrs.flags.getD 0 &&& WGPEER_F_REMOVE_ME=0)
+    (found : before.peerHashtable.find? (·.1 == key)=some (key,pid)) :
+    Campaign2.Ensures (setPeerCmd attrs)
+      (fun s=>OwnerConfiguration.ProjectedEntry cs loans s ∧ s.wg.device=some before)
+      (fun ret s=>Index.View.ConfigurationInput cs loans s ∧
+        ∃ p,before.peers[pid]?=some p ∧
+          GetterScalar.observation s pid=some (GetterScalar.fromFull (ScalarTail.tailCell attrs ret
+            (ScalarTail.prefixCell p attrs.presharedKey attrs.endpoint)))) :=
+  ScalarCommand.original_existing_getter_scalars cs loans attrs key pid before pubkey valid protocol keep found
+
+
+open RequestOrder RequestOrder.FundedCommands _root_.Leanux.Proofs.WG.Config.OwnerConfiguration Queues.RxCredits Configuration in
+/-- Every completed peer in an arbitrary original mixed request receives actual entry/exit ownership and nested routing effects from the original funded, well-shaped request; original outcomes and Stops remain. -/
+theorem original_request_funds_nested_routing (cs : Ledger) (loans : Reservations)
+    (attrs : DeviceAttrs) (shape : DeviceAddressShape attrs) :
+    Campaign2.Observes (wgSetDevice attrs) (ProjectedEntry cs loans)
+      (fun initial outcome=>∃result:Inspection,result.outcome=outcome ∧
+        Certificate attrs initial result ∧ Entries cs loans result.receipts ∧
+        RoutedCommands cs loans attrs result) :=
+  RequestOrder.FundedCommands.original_request_funded_routing cs loans attrs shape
 
 end Leanux.Proofs.WG.Config

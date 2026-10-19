@@ -73,7 +73,7 @@ theorem send4_sendWorkView (pid : PeerId) (e : Endpoint) (bytes : List UInt8)
     have same : sendWorkPeer
         {p with endpoint := p.endpoint.map fun x => {x with src := 0, srcIf := 0}} = sendWorkPeer p := by
       simp only [sendWorkPeer, sendWorkCell, initiationView, Option.map_map,
-        Function.comp_def, Roaming.destination]
+        Function.comp_def, Roaming.destination, socketEndpoint]
       rfl
     simpa only [same] using
       (ensures_iff _ _ _).mpr (setPeer_sendWorkView pid q v
@@ -207,7 +207,7 @@ theorem send6_sendWorkView (pid : PeerId) (e : Endpoint) (bytes : List UInt8)
     have same : sendWorkPeer
         {p with endpoint := p.endpoint.map fun x => {x with src := 0}} = sendWorkPeer p := by
       simp only [sendWorkPeer, sendWorkCell, initiationView, Option.map_map,
-        Function.comp_def, Roaming.destination]
+        Function.comp_def, Roaming.destination, socketEndpoint]
       rfl
     simpa only [same] using
       (ensures_iff _ _ _).mpr (setPeer_sendWorkView pid q v

@@ -19,12 +19,15 @@ The global optional peer cells retain tags, all key slots and the owner
 metadata needed by H1/H2 and remote destinations for H3. The configuration
 header, netlink socket and selector table supply H4 readback frames. -/
 abbrev WorkQueues := List PeerId × List PeerId
+def socketEndpoint (e : Endpoint) : Endpoint := {e with src := 0, srcIf := 0}
+
 abbrev SendWorkCell := Nat × Option KeypairId × Option KeypairId × Option KeypairId ×
-  Nat × Option PeerId × Nat × Bool × Option (Nat × Nat × Nat × Nat)
+  Nat × Option PeerId × Nat × Bool × Option (Nat × Nat × Nat × Nat) × Key × Nat × Option Endpoint
 
 def sendWorkCell (p : Peer) : SendWorkCell :=
   (p.handshakeState,p.keypairNext,p.keypairPrevious,p.keypairCurrent,
-    p.refcount,p.handshakeEntryPeer,p.internalId,p.isDead,p.endpoint.map Roaming.destination)
+    p.refcount,p.handshakeEntryPeer,p.internalId,p.isDead,p.endpoint.map Roaming.destination,
+    p.presharedKey,p.persistentKeepaliveInterval,p.endpoint.map socketEndpoint)
 /-- Device configuration fields unchanged by socket transmission. -/
 abbrev SendConfiguration := String × Nat × Nat × Nat × StaticIdentity × Nat
 def sendConfiguration (d : Device) : SendConfiguration :=
