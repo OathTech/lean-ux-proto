@@ -25,8 +25,8 @@ import Leanux.Proofs.WG.HandshakeSecurity.StagingSelectionClaims
 import Leanux.Proofs.WG.HandshakeSecurity.StagingSelectionFrames
 import Leanux.Proofs.WG.HandshakeSecurity.ResponderStagingFrames
 import Leanux.Proofs.WG.HandshakeSecurity.ResponderNativeClaims
-import Leanux.Proofs.WG.HandshakeSecurity.TimestampArchiveAllocation
-import Leanux.Proofs.WG.HandshakeSecurity.ConfirmationOrderPoll
+import Leanux.Proofs.WG.HandshakeSecurity.TimestampArchiveKeepalive
+import Leanux.Proofs.WG.HandshakeSecurity.ConfirmationOrderDriver
 
 /-! Native T4 replay and T5 confirmation boundaries. Initialized history,
 authentication linkage and responder-send exclusion remain separate obligations;
@@ -711,5 +711,32 @@ theorem original_peer_creation_timestamp_archive (key : Key) (psk : Option Key)
     (history : List TimestampReceipt) :
     Framing.Preserves (TimestampArchive.StateInv history) (peerCreate key psk) :=
   TimestampArchive.peer_create key psk history
+
+/-- Staging and keepalive transmission on the common native driver preserve
+the allocation-indexed timestamp archive through nonce limits, packet allocation
+and queue refusal, including prefixes before Stop. The entry carrier remains
+explicit while the initialized outer driver transport is being discharged. -/
+theorem original_staging_timestamp_archive (pid : PeerId) :
+    TimestampArchive.Preserves
+      (TransmitSecurity.Driver.stagingObserved TimestampDriver.hooks pid) ∧
+    TimestampArchive.Preserves
+      (TransmitSecurity.Driver.keepaliveObserved TimestampDriver.hooks pid) :=
+  ⟨TimestampArchive.staging pid,TimestampArchive.keepalive pid⟩
+
+open ConfirmationTransportOrder AuthenticatedEffects TransmitSecurity.Driver in
+/-- Every confirmation reached by the native receive poll follows its exact
+successful replay check for the same peer and key. The source derives that
+precondition before calling confirmation; other hooks must preserve history.
+Initialized authentication and packet-to-encryption transport remain separate. -/
+theorem original_poll_preserves_confirmation_order {E : Type}
+    (record : TransportDriver.Replay → E) (responder : ResponderEvent → E)
+    (decode : E → Option ResponderEvent)
+    (inverse : ∀ event, decode (responder event) = some event)
+    (quiet : ∀ r, Unconfirmed decode (record r)) (hooks : Hooks E)
+    (h : QuietHooksSafe (Safe record decode) hooks)
+    (counter : hooks.counterCheck = TransportDriver.counter record)
+    (confirmed : hooks.confirmation = confirmation responder decode) (pid : PeerId) (budget : Nat) :
+    ProductHistorySafe (Safe record decode) (nativePollObserved hooks pid budget) :=
+  quiet_nativePoll record responder decode inverse quiet h counter confirmed pid budget
 
 end Leanux.Proofs.WG.HandshakeSecurity

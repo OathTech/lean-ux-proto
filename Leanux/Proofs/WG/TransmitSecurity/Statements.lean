@@ -14,7 +14,7 @@ import Leanux.Proofs.WG.TransmitSecurity.JournalHandshakeProjection
 import Leanux.Proofs.WG.TransmitSecurity.JournalSocketHistory
 import Leanux.Proofs.WG.TransmitSecurity.CompletionEmission
 import Leanux.Proofs.WG.TransmitSecurity.Rekey
-import Leanux.Proofs.WG.TransmitSecurity.PacketOriginDriverDeferred
+import Leanux.Proofs.WG.TransmitSecurity.PacketOriginDriverOuter
 
 /-! Campaign 3, T1 initialized counter reservations and local AEAD contracts.
 Transport from reservation through every actual AEAD invocation remains open. -/
@@ -438,5 +438,18 @@ transport under its incoming carrier, not timer-cause authentication. -/
 theorem original_joint_timer_allocation_origins (bound : UInt64) :
     PacketOrigins.ProductSafe (Driver.timersObserved Journal.hooks bound) :=
   PacketOrigins.timers bound
+
+/-- Security: each native worker AEAD in every initialized shared execution
+has a valid receipt and a strictly earlier native packet allocation matching
+its device epoch, packet ID and original material. The initial carrier and
+all configuration/lifecycle transport are discharged, including later Stop.
+Reservation linkage, route authorization and encryption non-reuse remain
+separate obligations. -/
+theorem initialized_joint_encryption_allocation_origin (trace : Runner.Trace)
+    (placeholders : Bool) (pre post : List Journal.Event) (r : WorkerEncryption.Receipt)
+    (position : (runPrefixOuter (Journal.execute trace placeholders) []).2 =
+      pre ++ .encrypted r :: post) :
+    r.Valid ∧ PacketOrigins.ReadOrigin pre r.id r.read :=
+  PacketOrigins.initialized trace placeholders pre (.encrypted r) post position
 
 end Leanux.Proofs.WG.TransmitSecurity

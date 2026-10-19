@@ -6,6 +6,17 @@ namespace Leanux.Proofs.WG.TransmitSecurity.PacketOrigins
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing Lifetimes Queues
 open RetirementSecurity
 
+theorem product_wg_store_inv (h : List Journal.Event) (w v : World)
+    (same : wgStoreView v.wg = wgStoreView w.wg) (hi : Inv h w.wg) : Inv h v.wg := by
+  have device : v.wg.dev = w.wg.dev := congrArg WGStoreView.dev same
+  apply hi.retains
+  apply Retains.of_snapshot
+  change (epoch v.wg,PacketMaterial.view v.wg) = (epoch w.wg,PacketMaterial.view w.wg)
+  apply Prod.ext
+  · simp only [epoch,device]
+  · funext id
+    simp only [PacketMaterial.view,TxDisposition.txPackets,device]
+
 theorem product_store_inv (h : List Journal.Event) (w v : World)
     (same : productStoreView v = productStoreView w) (hi : Inv h w.wg) : Inv h v.wg := by
   have device : v.wg.dev = w.wg.dev := congrArg (fun s : ProductStore43 => s.2.2.2.dev) same

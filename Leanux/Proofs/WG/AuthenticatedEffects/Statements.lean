@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.TransportCarrierOuter
 import Leanux.Proofs.WG.AuthenticatedEffects.TransportCarrierTraffic
 import Leanux.Proofs.WG.AuthenticatedEffects.TransportCarrierScheduler
 import Leanux.Proofs.WG.AuthenticatedEffects.TransportCarrierReceive
@@ -907,5 +908,21 @@ theorem shared_timer_passes_retain_packet_authentication (extra : List E → Pro
     TransportCarrier.ProductSafe extra origin replay (TransmitSecurity.Driver.timersObserved hooks j) ∧
     TransportCarrier.ProductSafe extra origin replay (TransmitSecurity.Driver.placeholderTimersObserved hooks j) :=
   ⟨TransportCarrier.timers callbacks j,TransportCarrier.placeholderTimers callbacks j⟩
+
+/-- Security: an initialized shared-driver run retains certified native replay
+receipts and the supplied event-order property through every syscall, worker,
+timer mode and indexed Stop. This generic composition exposes all concrete
+callback obligations; the Journal specialization remains a separate claim. -/
+theorem shared_initialized_authentication_carrier (extra : List E → Prop)
+    (origin : E → Option TransportDriver.OriginEvent)
+    (replay : E → Option TransportDriver.Replay) (hooks : TransmitSecurity.Driver.Hooks E)
+    (callbacks : TransportCarrier.DeferredSafe extra origin replay hooks)
+    (front : ∀ family addr packets mtu, TransportCarrier.StateSafe extra origin replay
+      (hooks.front family addr packets mtu))
+    (empty : extra []) (trace : Runner.Trace) (placeholders : Bool) :
+    TransportReplay.Safe origin replay
+      (runPrefixOuter (TransmitSecurity.Driver.executeObserved hooks trace placeholders) []).2 ∧
+    extra (runPrefixOuter (TransmitSecurity.Driver.executeObserved hooks trace placeholders) []).2 :=
+  TransportCarrier.initialized callbacks front empty trace placeholders
 
 end Leanux.Proofs.WG.AuthenticatedEffects

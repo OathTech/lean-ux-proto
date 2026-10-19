@@ -1,3 +1,7 @@
+import Leanux.Proofs.WG.RetirementSecurity.OccurrenceInitialized
+import Leanux.Proofs.WG.RetirementSecurity.OccurrenceDumpFrames
+import Leanux.Proofs.WG.RetirementSecurity.OccurrenceLifecycle
+import Leanux.Proofs.WG.RetirementSecurity.OccurrenceDeviceConfiguration
 import Leanux.Proofs.WG.RetirementSecurity.OccurrencePeerCreation
 import Leanux.Proofs.WG.RetirementSecurity.OccurrencePeerRemoval
 import Leanux.Proofs.WG.RetirementSecurity.OccurrenceRemovalCore
@@ -1275,5 +1279,69 @@ theorem original_peer_creation_tx_ownership
     (a b : Ambient) (run : ((peerCreate key psk).run w).run a = .ok ((result,v),b)) :
     OccurrenceStack.Ready locals active v :=
   (hoare_iff_run_ambient _ _ _).mp (OccurrenceCreation.create key psk) w a result v b before run
+
+/-- Complete native device configuration preserves exclusive TX ownership
+and pending encryption aliases, through allowed-IP changes, fresh peer creation,
+removal, key replacement and actual staged/keepalive sends. No queue-separation,
+vacant-slot or frozen-configuration premise is added beyond the entry invariant.
+Initialized outer execution, historical phase uniqueness and key credits remain
+separate claims. -/
+theorem original_device_configuration_tx_ownership
+    (before : OccurrenceStack.Ready locals active w) (attrs : DeviceAttrs) (a b : Ambient)
+    (run : ((wgSetDevice attrs).run w).run a = .ok ((result,v),b)) :
+    OccurrenceStack.Ready locals active v :=
+  (hoare_iff_run_ambient _ _ _).mp (OccurrenceConfiguration.set_device attrs) w a result v b before run
+
+/-- Native device creation preserves physical TX ownership at an empty
+local-packet boundary, establishing an empty physical encryption ring on the
+new allocation and retaining existing-device/refusal outcomes. Numeric slots
+may restart in the new device epoch; no cross-epoch packet identity is assumed. -/
+theorem original_device_creation_tx_ownership
+    (before : OccurrenceStack.Ready [] [] w) (a b : Ambient)
+    (run : (wgCreate.run w).run a = .ok ((result,v),b)) : OccurrenceStack.Ready [] [] v :=
+  (hoare_iff_run_ambient _ _ _).mp OccurrenceLifecycle.create w a result v b before run
+
+/-- Native destruction preserves physical TX ownership at an empty local
+boundary through actual peer releases and final device removal. Source guards
+still reject queued work; no fairness, progress or complete key-ledger result
+is inferred from this normal-return contract. -/
+theorem original_device_destruction_tx_ownership
+    (before : OccurrenceStack.Ready [] [] w) (a b : Ambient)
+    (run : (wgDestruct.run w).run a = .ok (((),v),b)) : OccurrenceStack.Ready [] [] v :=
+  (hoare_iff_run_ambient _ _ _).mp OccurrenceLifecycle.destruct w a () v b before run
+
+/-- Every normally returning original syscall and its deferred suffix preserves
+exclusive physical TX owners, resident queued packets and uncrypted live-ring
+aliases. This is an empty-local caller contract; it does not assert historical
+one-encryption-per-allocation or complete reference-credit accounting. -/
+theorem original_syscall_tx_ownership (call : Syscall)
+    (before : OccurrenceStack.Ready [] [] w.wg)
+    (run : (Leanux.syscall call).run w = .ok (result,v)) :
+    OccurrenceStack.Ready [] [] v.wg :=
+  (hoare_iff_run _ _ _).mp (OccurrenceSyscall.syscall_native call) w result v before run
+
+/-- Executable acceptance of the original initialized Runner derives exclusive
+physical TX ownership, residency and pending encryption-alias discipline at the
+returned world and every actual syscall entry. No input inventory or per-call
+preservation premise is assumed. This does not yet assert historical AEAD
+uniqueness, allocation-to-key coherence or the initialized key-credit ledger. -/
+theorem initialized_runner_tx_ownership (trace : Runner.Trace) (placeholders : Bool)
+    (run : Runner.executeTrace trace placeholders = .ok result) :
+    ∃ w h,
+      Leanux.Proofs.Logged.runPrefixOuter
+        (Queues.RxCredits.RunnerAccount.observed trace placeholders) [] = (.ok (result,w),h) ∧
+      OccurrenceStack.Ready [] [] w.wg ∧
+      ∀ index, index < trace.ops.size → OccurrenceRunner.OperationEntry trace placeholders index := by
+  obtain ⟨w,h,source,ready,entries⟩ := OccurrenceInitialized.accepted trace placeholders run
+  exact ⟨w,h,source,ready.2,entries⟩
+
+/-- Native dump cursors retain every TX packet record and pending encryption
+ring through peer borrowing and release, so observation cannot replace a staged
+packet's selected material. This is a state frame, not an egress claim. -/
+theorem original_device_dump_tx_wire (ref : DeviceRef) (a b : Ambient)
+    (run : ((wgGetDevice ref).run w).run a = .ok ((result,v),b)) :
+    txCryptWire v = txCryptWire w :=
+  (Lifetimes.ProjectedAction.iff_run_ambient _ _ _).mp
+    (OccurrenceDump.dump_device_wire ref) w a result v b run
 
 end Leanux.Proofs.WG.RetirementSecurity

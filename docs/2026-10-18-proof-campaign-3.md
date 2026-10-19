@@ -177,10 +177,11 @@ and authentication invariants remain separate obligations.
   the observed endpoint, bytes and DS. Receipts survive later Stop. The
   resident packet-origin carrier now transports through allocation, staging,
   native disposal, indexed receive polls, stack replies, NAPI, all workers,
-  scheduling and timer/deferred dispatch.
-  A worker receipt carries an allocation in the strict earlier journal prefix,
-  under the explicit incoming carrier. Initialized transport of that carrier,
-  reservation/routing linkage, global encryption non-reuse, complete egress
+  scheduling, timer/deferred dispatch, all configuration/traffic/lifecycle
+  callers and the initialized Runner. Every native worker AEAD receipt has a
+  matching allocation in its strict preceding journal prefix, with no incoming
+  carrier premise, including later Stop. Reservation/routing linkage, global
+  encryption non-reuse, complete egress
   coverage and TX conservation remain open.
 - T3: native MAC/Noise refusal and cookie-response contracts retain their
   exact state/egress boundaries. Acceptance receipts precede protocol writes.
@@ -191,10 +192,10 @@ and authentication invariants remain separate obligations.
   Indexed replay receipts now join the selected crypted packet to a strictly
   earlier native publication; the actual poll supplies confirmation-entry
   provenance. UDP ingress, staging and receive-tail carrier frames are proved.
-  Shared Stack/NAPI/worker/scheduler, deferred timer and traffic composition exposes the actual-hook
-  contracts still needed. Full-driver carrier transport and complete silence
-  remain open. Owned
-  implementations through `9f97bf46` are copied without a branch merge.
+  Shared Stack/NAPI/worker/scheduler, deferred timer, traffic, configuration,
+  lifecycle and initialized Runner composition exposes the actual-hook
+  contracts still needed. Concrete Journal specialization and complete silence
+  remain open. Owned implementations through `b131a671` are copied without a branch merge.
 - T4/T5: timestamp and response/session replay contracts remain explicit;
   H1 projections are named dependencies, not silently discharged. Native
   confirmation cuts precede later Stop. Shared responder authorization now
@@ -208,9 +209,10 @@ and authentication invariants remain separate obligations.
   same-occurrence actual-poll contract, not yet initialized closure. The
   retained-peer archive covers the complete native initiation consumer,
   including failed authentication, cleanup and later Stop, and survives native
-  handshake actors and peer creation. Complete
+  handshake actors, peer creation and shared staging/keepalive. Generic quiet-hook
+  contracts join actual native poll ordering to the RX carrier on one journal. Complete
   exchange identity and the prohibition on premature encryption remain open.
-  Owned implementations through `63d33bb0` are copied.
+  Owned implementations through `d6643964` are copied.
 - T6: allocation-stamped credits distinguish slot unpublication from final
   store removal. Native creation, acquisition, clearing, rotation, session
   installation and disposal retain exact reference payments. Actual
@@ -222,25 +224,28 @@ and authentication invariants remain separate obligations.
   Separate wire frames cover non-staging timer and deferred-worker actions.
   Native peer creation and complete peer removal preserve physical ownership;
   removal includes the actual allowed-IP teardown and final payments.
-  Current/key compatibility and slot affiliation
-  remain visible where needed. Initialized holder/phase transport, historical
-  selection uniqueness, orphan completeness and conditional retirement
-  progress remain open. Owned implementations through `f1532ea3` are copied.
+  Configuration, traffic, all syscalls and device lifecycle now transport
+  physical ownership; initialized Runner acceptance derives it at each syscall
+  entry and the returned world without incoming inventory or per-call premises.
+  Current/key compatibility and slot affiliation remain visible where needed.
+  Initialized key-holder accounting and internal shared-driver phase cuts,
+  historical selection uniqueness, orphan completeness and conditional retirement
+  progress remain open. Owned implementations through `cb9672ab` are copied.
 
 The register names each module's assumptions and boundaries. All six campaign
 outcomes remain open; these are compositional results toward those outcomes.
 
-The eleventh source checkpoint passes all 1490 proof-build jobs and the
-1166-declaration gate across thirteen root modules, with only standard axioms.
+The twelfth source checkpoint passes all 1524 proof-build jobs and the
+1176-declaration gate across thirteen root modules, with only standard axioms.
 All twelve witness recipes and fresh-root kernel replay pass at the default
-cap. The model build passes 130 jobs, and the unit suite completes 131 tests
-with one kernel-build-dependent skip. An unused binder in campaign-owned code
-was removed before the final build, gate and replay. A non-progressing tactic
-branch caused a development elaboration timeout; fixing the tactic reduced
-the scheduler proof's build to about one second without changing its claim.
-All six outcomes remain open. This checkpoint adds strict-prefix packet-origin
-transport through native worker and deferred callbacks, actual poll confirmation
-ordering, allocation-indexed timestamp contracts and physical ownership frames.
+cap. The model executable build passes 130 jobs, and the unit suite completes
+131 tests with one kernel-build-dependent skip. The checkpoint closes initialized
+TX allocation-origin transport and physical ownership at every native syscall
+entry and returned state. It also extends generic initialized RX carrier and
+same-journal confirmation-order composition. All six outcomes remain open.
+No differential guest run is needed for this proof-only checkpoint: the mirror
+and its pin are unchanged. The inherited Env deprecation warning remains outside
+the permitted edit scope; campaign-owned code has no compiler warning.
 
 A supplemental kernel replay invoked without `--fresh` failed at the 32 GiB
 cap and again at 64 GiB (exit 137); neither is a pass. Inspection of the shipped
