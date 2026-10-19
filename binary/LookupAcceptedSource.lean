@@ -48,7 +48,7 @@ theorem called_accepted {action : Logged α} {symbol : String}
     (accepted : ((called symbol action).run history).run world = .ok ((answer, points), final)) :
     ∃ middle,
       (action.run (history ++ [⟨.call symbol, world⟩])).run world = .ok ((answer, middle), final) := by
-  obtain ⟨unit, h, w, marked, rest⟩ := bind_accepted accepted
+  obtain ⟨unitValue, h, w, marked, rest⟩ := bind_accepted accepted
   rw [mark_run] at marked
   obtain ⟨⟨rfl, rfl⟩, rfl⟩ := Prod.mk.inj (Except.ok.inj marked.symm)
   obtain ⟨value, middle, intermediate, run, rest⟩ := bind_accepted rest
@@ -135,11 +135,11 @@ theorem afterHelper_accepted (owner : IndexOwner) (peer : Option PeerId)
       answer = peer.map (fun pid => (owner, pid)) ∧
       final = LookupMirror.record setWorld .idxPeerAlive peer.isSome ∧
       points = history ++ [⟨.decision .idxPeerAlive, final⟩] := by
-  obtain ⟨unit, middle, setWorld, setRun, resultRun⟩ := MirrorHistory.bind_accepted accepted
+  obtain ⟨unitValue, middle, setWorld, setRun, resultRun⟩ := MirrorHistory.bind_accepted accepted
   have erased := MirrorHistory.erases_lift (Source.setPeerWord owner peer) history world
   rw [setRun] at erased
-  have actual : (Source.setPeerWord owner peer).run world = .ok (unit, setWorld) := erased.symm
-  cases unit
+  have actual : (Source.setPeerWord owner peer).run world = .ok (unitValue, setWorld) := erased.symm
+  cases unitValue
   simp only [StateT.run_lift, StateT.run_bind, StateT.run_pure, actual] at setRun
   change Except.ok (((), history), setWorld) = Except.ok (((), middle), setWorld) at setRun
   have equal : history = middle := congrArg (fun p => p.1.2) (Except.ok.inj setRun)

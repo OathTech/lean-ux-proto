@@ -48,9 +48,9 @@ private theorem push0 (fetch : Int64 → Option Decoded)
   simp [Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
     MachineData.store, Reg64s.get, Reg64s.get64, Reg64s.set64,
     Reg.base, Reg.offset, BitVec.drop, BitVec.take, Effects.All,
-    Width.bytesv, pushedData, BitVec.sub_sub, u64_sub_sub,
+    Width.bytesv, pushedData,
     saveMemory, savedWords] at loaded ⊢
-  simp_all [Effects.All, BitVec.sub_sub]
+  simp_all [Effects.All]
   try rfl
 
 private theorem push1 (fetch : Int64 → Option Decoded)
@@ -66,9 +66,9 @@ private theorem push1 (fetch : Int64 → Option Decoded)
   simp [Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
     MachineData.store, Reg64s.get, Reg64s.get64, Reg64s.set64,
     Reg.base, Reg.offset, BitVec.drop, BitVec.take, Effects.All,
-    Width.bytesv, pushedData, BitVec.sub_sub, u64_sub_sub,
+    Width.bytesv, pushedData, BitVec.sub_sub,
     saveMemory, savedWords] at loaded ⊢
-  simp_all [Effects.All, BitVec.sub_sub]
+  simp_all [Effects.All]
   try rfl
 
 private theorem push2 (fetch : Int64 → Option Decoded)
@@ -84,9 +84,9 @@ private theorem push2 (fetch : Int64 → Option Decoded)
   simp [Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
     MachineData.store, Reg64s.get, Reg64s.get64, Reg64s.set64,
     Reg.base, Reg.offset, BitVec.drop, BitVec.take, Effects.All,
-    Width.bytesv, pushedData, BitVec.sub_sub, u64_sub_sub,
+    Width.bytesv, pushedData, BitVec.sub_sub,
     saveMemory, savedWords] at loaded ⊢
-  simp_all [Effects.All, BitVec.sub_sub]
+  simp_all [Effects.All]
   try rfl
 
 private theorem push3 (fetch : Int64 → Option Decoded)
@@ -102,9 +102,9 @@ private theorem push3 (fetch : Int64 → Option Decoded)
   simp [Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
     MachineData.store, Reg64s.get, Reg64s.get64, Reg64s.set64,
     Reg.base, Reg.offset, BitVec.drop, BitVec.take, Effects.All,
-    Width.bytesv, pushedData, BitVec.sub_sub, u64_sub_sub,
+    Width.bytesv, pushedData, BitVec.sub_sub,
     saveMemory, savedWords] at loaded ⊢
-  simp_all [Effects.All, BitVec.sub_sub]
+  simp_all [Effects.All]
   try rfl
 
 private theorem push4 (fetch : Int64 → Option Decoded)
@@ -120,9 +120,9 @@ private theorem push4 (fetch : Int64 → Option Decoded)
   simp [Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
     MachineData.store, Reg64s.get, Reg64s.get64, Reg64s.set64,
     Reg.base, Reg.offset, BitVec.drop, BitVec.take, Effects.All,
-    Width.bytesv, pushedData, BitVec.sub_sub, u64_sub_sub,
+    Width.bytesv, pushedData, BitVec.sub_sub,
     saveMemory, savedWords] at loaded ⊢
-  simp_all [Effects.All, BitVec.sub_sub]
+  simp_all [Effects.All]
   try rfl
 
 private theorem push5 (fetch : Int64 → Option Decoded)
@@ -138,9 +138,9 @@ private theorem push5 (fetch : Int64 → Option Decoded)
   simp [Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
     MachineData.store, Reg64s.get, Reg64s.get64, Reg64s.set64,
     Reg.base, Reg.offset, BitVec.drop, BitVec.take, Effects.All,
-    Width.bytesv, pushedData, BitVec.sub_sub, u64_sub_sub,
+    Width.bytesv, pushedData, BitVec.sub_sub,
     saveMemory, savedWords] at loaded ⊢
-  simp_all [Effects.All, BitVec.sub_sub]
+  simp_all [Effects.All]
   try rfl
 
 private theorem copy_argument (fetch : Int64 → Option Decoded)

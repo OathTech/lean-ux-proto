@@ -78,7 +78,7 @@ theorem pathInvalid_history (fetch : Int64 → Option Decoded)
   have answer : (t.regs.get (.low .rbp .W8)).toNat = i.result := by
     change i.family ≠ 32#8 at not32
     change i.family ≠ 128#8 at not128
-    simp only [Input.result, if_neg not32, if_neg not128]
+    simp only [Input.result, ]
     simp [Reg64s.get, Reg64s.get64, Reg.base, Reg.offset, BitVec.take, BitVec.drop, tbp, bp, not32, not128]
   simpa [answer, AllowedipsImage.CommonBits.entry] using simple_return_history fetch agree 0x43 (by decide) i c t ht rxSection returnTarget
 
@@ -99,10 +99,10 @@ theorem pathHigh_history (fetch : Int64 → Option Decoded)
   intro u hu ubx ubp
   have answer : ((0xffffff80#32-u.regs.get (.low .rbx .W32)).setWidth 8).toNat = i.result := by
     have not32 : i.family ≠ 32 := by rw [family]; decide
-    rw [Input.result, if_neg not32, if_pos family, if_neg different]
+    rw [Input.result, ite_eq_right not32, ite_eq_left family, ite_eq_right different]
     simp only [Reg64s.get, Reg64s.get64, Reg.base, Reg.offset, BitVec.take, BitVec.drop]
     rw [ubx, bx, bp, stored, query]
-    simp only [UInt64.toBitVec_ofBitVec, Width.bits, Nat.sub_zero, BitVec.extractLsb'_eq_self, low32, BitVec.toNat_xor]
+    simp only [ Width.bits, Nat.sub_zero, BitVec.extractLsb'_eq_self, low32]
     simpa only [BitVec.toNat_xor, UInt64.toNat_toBitVec] using ipv6_high_result (i.storedHigh.toBitVec ^^^ i.queryHigh.toBitVec)
   simpa only [answer] using finish128_history fetch agree contracts i c apart u hu rxSection returnTarget
 
@@ -122,10 +122,10 @@ theorem pathLow_history (fetch : Int64 → Option Decoded)
   intro u hu ubx ubp
   have answer : ((0xffffff80#32-u.regs.get (.low .rbx .W32)).setWidth 8).toNat = i.result := by
     have not32 : i.family ≠ 32 := by rw [family]; decide
-    rw [Input.result, if_neg not32, if_pos family, if_pos equal]
+    rw [Input.result, ite_eq_right not32, ite_eq_left family, ite_eq_left equal]
     simp only [Reg64s.get, Reg64s.get64, Reg.base, Reg.offset, BitVec.take, BitVec.drop]
     rw [ubx]
-    simp only [UInt64.toBitVec_ofBitVec, Width.bits, Nat.sub_zero, BitVec.extractLsb'_eq_self, low32, BitVec.toNat_xor]
+    simp only [ Width.bits, Nat.sub_zero, BitVec.extractLsb'_eq_self, low32]
     simpa only [BitVec.toNat_xor, UInt64.toNat_toBitVec] using ipv6_low_result (i.storedLow.toBitVec ^^^ i.queryLow.toBitVec)
   simpa only [answer] using finish128_history fetch agree contracts i c apart u hu rxSection returnTarget
 
@@ -161,8 +161,8 @@ theorem path128_history (fetch : Int64 → Option Decoded)
     (guardHigh_step_history fetch agree i c u hu rxSection ubx ubp)
   intro v hv vbx vbp
   by_cases equal : i.storedHigh = i.queryHigh
-  · simpa only [if_pos equal] using pathLow_history fetch agree contracts i c apart v hv rxSection returnTarget family equal
-  · simpa only [if_neg equal] using pathHigh_history fetch agree contracts i c apart v hv rxSection returnTarget family equal
+  · simpa only [ite_eq_left equal] using pathLow_history fetch agree contracts i c apart v hv rxSection returnTarget family equal
+  · simpa only [ite_eq_right equal] using pathHigh_history fetch agree contracts i c apart v hv rxSection returnTarget family equal
       (vbx.trans ubx) (vbp.trans ubp)
 
 theorem pathOther_history (fetch : Int64 → Option Decoded)
@@ -188,8 +188,8 @@ theorem pathOther_history (fetch : Int64 → Option Decoded)
     (guard128_step_history fetch agree i c u hu rxSection byte)
   intro v hv vbx vbp
   by_cases family : i.family = 128
-  · simpa only [if_pos family] using path128_history fetch agree contracts i c apart v hv rxSection returnTarget family
-  · simpa only [if_neg family] using pathInvalid_history fetch agree contracts i c apart v hv rxSection returnTarget not32 family
+  · simpa only [ite_eq_left family] using path128_history fetch agree contracts i c apart v hv rxSection returnTarget family
+  · simpa only [ite_eq_right family] using pathInvalid_history fetch agree contracts i c apart v hv rxSection returnTarget not32 family
       (vbp.trans ubp)
 
 /-- The complete common_bits body executes all paths with its actual observed
@@ -217,9 +217,9 @@ theorem body_history (fetch : Int64 → Option Decoded)
   by_cases family : i.family = 32
   · have bpByte' : u.regs.get (.low .rbp .W8) = 32 := by
       simpa only [Reg64s.get, Reg64s.get64, Reg.base, Reg.offset, ubp, bp, family] using bpByte
-    simpa only [if_pos family] using path32_history fetch agree contracts i c apart u hu rxSection returnTarget family bpByte'
+    simpa only [ite_eq_left family] using path32_history fetch agree contracts i c apart u hu rxSection returnTarget family bpByte'
   · have bxByte' : u.regs.get (.low .rbx .W8) = i.family := by
       simpa only [Reg64s.get, Reg64s.get64, Reg.base, Reg.offset, ubx, bx] using bxByte
-    simpa only [if_neg family] using pathOther_history fetch agree contracts i c apart u hu rxSection returnTarget family bxByte'
+    simpa only [ite_eq_right family] using pathOther_history fetch agree contracts i c apart u hu rxSection returnTarget family bxByte'
 
 end Binary.CommonBits

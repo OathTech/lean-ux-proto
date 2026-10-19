@@ -3,7 +3,6 @@ import AllowedipsOuter
 
 namespace Binary.Allowedips
 local instance : Labels := Image.linkedLabels
-set_option linter.unusedSimpArgs false
 
 theorem epiloguePrefix (s : MachineData) (result bx bp r12 r13 r14 r15 : UInt64)
     (value : s.dmem.loadInt s.regs.rsp.toBitVec 8 = some result.toNat)
@@ -25,11 +24,11 @@ theorem epiloguePrefix (s : MachineData) (result bx bp r12 r13 r14 r15 : UInt64)
     MachineData.load, MachineData.set, MachineData.setReg, AddrExpr.interp,
     ConstExpr.interp, Reg64s.get, Reg64s.get64, Reg64s.set, Reg64s.set64,
     Reg.base, Reg.offset, BitVec.take, BitVec.drop,
-    BitVec.toAddressSize, BitVec.signed, BitVec.ofInt_toInt, BitVec.ofInt_add,
-    BitVec.ofInt_ofNat, Effects.All, AllowedipsImage.Lookup.entry,
+    BitVec.toAddressSize, BitVec.signed, BitVec.ofInt_toInt,
+     Effects.All, AllowedipsImage.Lookup.entry,
     UInt64.toBitVec_add, UInt64.ofBitVec_add, BitVec.add_assoc,
-    UInt64.add_assoc, add32, add32u, value, h0, h1, h2, h3, h4, h5]
-  simp_all [Effects.All, BitVec.ofInt_ofNat, UInt64.ofBitVec_add, BitVec.add_assoc]
+      add32u, value,     ]
+  simp_all [Effects.All,  ]
   decide
 
 
@@ -45,9 +44,9 @@ theorem ret_instruction (fetch : Int64 → Option Decoded)
   have here := agree _ _ (show AllowedipsImage.fetch (AllowedipsImage.Lookup.entry+0x14e) = some _ from rfl)
   simp only [instructionStep,here]
   refine ⟨by decide, ?_⟩
-  simp [Instr.interp,Operation.interp,MachineData.load,Reg64s.get,Reg64s.get64,
-    Reg.base,Reg.offset,BitVec.drop,BitVec.take,Effects.All,MachineData.set,
-    MachineData.setReg,Reg64s.set,Reg64s.set64,BitVec.ofInt_ofNat,loaded,returnedData]
+  simp [Instr.interp,Operation.interp,MachineData.load,Reg64s.get64,
+    Effects.All,
+    Reg64s.set64,loaded,returnedData]
 
 theorem ret_trace (fetch : Int64 → Option Decoded)
     (agree : TrustBase.AllowedipsDecoderAgreement fetch) (s : MachineData) (ra : UInt64)
@@ -69,8 +68,7 @@ theorem ret_trace (fetch : Int64 → Option Decoded)
     unfold observeHistory
     have edge : AllowedipsObservation.edge rxSection ⟨s,AllowedipsImage.Lookup.entry+0x14e⟩ t.machine =
         .ok [LookupObservation.returned "lookup" t.machine] := by
-      simp [AllowedipsObservation.edge,AllowedipsImage.Lookup.entry,AllowedipsImage.CommonBits.entry,
-        Image.PeerGet.entry]
+      simp [AllowedipsObservation.edge,AllowedipsImage.Lookup.entry,AllowedipsImage.CommonBits.entry]
       rfl
     rw [edge]
     rfl

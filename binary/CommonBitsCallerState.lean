@@ -157,7 +157,7 @@ theorem CallerAt.returnTarget {i c s} (caller : CallerAt i c s) :
   rw [caller.returnAddress]
   rfl
 
-theorem CallerAt.entryWrites_subset {i c s} (caller : CallerAt i c s) :
+theorem CallerAt.entryWrites_subset {i c s} (_caller : CallerAt i c s) :
     ∀ a, EntryWrites c (helperEntry s).data a → CallerScratch s a ∨ c.writes a := by
   intro a written
   rcases written with scratch | coverage

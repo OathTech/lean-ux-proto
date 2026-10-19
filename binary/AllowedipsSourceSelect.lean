@@ -57,7 +57,7 @@ theorem iteration_select (bits key : Nat) (acc : Acc) (history : List Point) (w 
   | some id =>
     cases device : w.wg.dev with
     | none =>
-      simp [LookupMirror.record, iteration, selectStep, nodeView, MirrorHistory.branch_run, StateT.run_lift, StateT.run_bind, StateT.run_pure,
+      simp [LookupMirror.record, iteration, selectStep, nodeView, MirrorHistory.branch_run, StateT.run_lift, StateT.run_bind,
         Source.getNode_eq, Source.getDev_eq, device, invariant, Except.toOption]
       rfl
     | some dev =>
@@ -80,8 +80,8 @@ theorem iteration_select (bits key : Nat) (acc : Acc) (history : List Point) (w 
             Source.getNode_eq, Source.getDev_eq, LookupMirror.record, device, present,
             prefixMatches_run, selectStep, nodeView, Except.toOption,
             MirrorHistory.branch_run, StateT.run_lift, StateT.run_bind, StateT.run_pure, choose, AipNode.bitAt, invariant,
-            records_steps, except_ok_bind, except_pure, except_map, throw_run,
-            except_error_bind, mismatch, hasPeer, full, invalid, child]
+            records_steps,
+             mismatch, hasPeer, full, invalid, child]
         all_goals rfl
 
 #print axioms iteration_select

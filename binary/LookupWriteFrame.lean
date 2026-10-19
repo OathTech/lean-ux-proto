@@ -13,7 +13,7 @@ def LookupWrites (c : Config) (coverage : KcovLayout) (preempt : BitVec 32)
 
 theorem bucket_write_frame (c : Config) (coverage : KcovLayout) (preempt : BitVec 32)
     (ra : UInt64) (s : MachineData) (world : World) (v : View)
-    (entry : LookupEntry c coverage preempt ra ⟨s, Image.Lookup.entry⟩ world v)
+    (_entry : LookupEntry c coverage preempt ra ⟨s, Image.Lookup.entry⟩ world v)
     (bucket : Executed) (after : AfterBucket c world s coverage preempt v bucket) :
     EqualOutside (LookupWrites c coverage preempt s v) s.dmem bucket.machine.data.dmem := by
   obtain ⟨head, atHead, _, _, frame, _⟩ := after

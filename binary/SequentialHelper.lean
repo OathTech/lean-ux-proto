@@ -8,7 +8,7 @@ open Leanux Leanux.WG TrustBase LookupRelation LookupHistory LookupObservation
 local instance : Labels := Image.linkedLabels
 
 def AfterHelper (c : Config) (coverage : KcovLayout) (preempt : BitVec 32)
-    (s : MachineData) (world : World) (v : View) (current : Executed)
+    (s : MachineData) (_world : World) (v : View) (current : Executed)
     (answer : Option PeerId) (worldFinal : World) (final : Executed) : Prop :=
       Returned current.machine final.machine (Image.Lookup.entry+0xba).toUInt64 ∧
       (answer.isSome = true → PeerGet.ScratchMapped current.machine.data final.machine.data.dmem) ∧

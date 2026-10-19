@@ -50,8 +50,8 @@ theorem accepted_peer_bound (pid : PeerId) (w w' : World) (answer : Option PeerI
   have nonzero : peer.refcount ≠ 0 := by omega
   have peerRead : device.peers[pid]? = some peer := hasPeer
   have wraps' : 2147483647 ≤ peer.refcount := by omega
-  simp [Except.pure, Except.bind, StateT.run, liftWG, bind, StateT.bind, StateT.lift, pure, StateT.pure, get, getThe, MonadStateOf.get, StateT.get, modify, modifyGet, MonadStateOf.modifyGet, StateT.modifyGet, WG.peerGetMaybeZero, WG.requireNotPending, WG.getPeer, WG.getDev, WG.setPeer, WG.modifyDev, Source.peerGetMaybeZero, branch, AmbientM.branch, AmbientM.branchCmp, monadLift, MonadLift.monadLift, liftAmbient, Source.requireNotPending, Source.getPeer, Source.getDev, Source.getWG,
-    hasDevice, peerRead, refcountIncNotZero, branchCmp, unsupported, nonzero, wraps', throw_run]
+  simp [Except.pure, Except.bind, StateT.run, liftWG, bind, StateT.bind, StateT.lift, pure, StateT.pure, get, getThe, MonadStateOf.get, StateT.get, modify, modifyGet, MonadStateOf.modifyGet, StateT.modifyGet, WG.peerGetMaybeZero, WG.requireNotPending, WG.getPeer, WG.getDev, WG.setPeer, WG.modifyDev, Source.peerGetMaybeZero, branch, AmbientM.branch, AmbientM.branchCmp, monadLift, MonadLift.monadLift,
+    hasDevice, peerRead, refcountIncNotZero, branchCmp, unsupported, nonzero, wraps']
     at accepted
   cases accepted
 
@@ -78,9 +78,9 @@ theorem peer_run (pid : PeerId) (w : World) (device : Device) (peer : Peer)
   all_goals have boolZero : (peer.refcount == 0) = decide (peer.refcount = 0) := rfl
   all_goals simp only [zero, decide_true, decide_false] at boolZero
   all_goals
-    simp [Except.pure, Except.bind, StateT.run, liftWG, bind, StateT.bind, StateT.lift, pure, StateT.pure, get, getThe, MonadStateOf.get, StateT.get, modify, modifyGet, MonadStateOf.modifyGet, StateT.modifyGet, WG.peerGetMaybeZero, WG.requireNotPending, WG.getPeer, WG.getDev, WG.setPeer, WG.modifyDev, Source.peerGetMaybeZero, branch, AmbientM.branch, AmbientM.branchCmp, monadLift, MonadLift.monadLift, liftAmbient, Source.requireNotPending, Source.getPeer, Source.getDev, Source.getWG,
+    simp [Except.pure, Except.bind, StateT.run, liftWG, bind, StateT.bind, StateT.lift, pure, StateT.pure, get, getThe, MonadStateOf.get, StateT.get, modify, modifyGet, MonadStateOf.modifyGet, StateT.modifyGet, WG.peerGetMaybeZero, WG.requireNotPending, WG.getPeer, WG.getDev, WG.setPeer, WG.modifyDev, Source.peerGetMaybeZero, branch, AmbientM.branch, AmbientM.branchCmp, monadLift, MonadLift.monadLift,
       hasDevice, peerRead, refcountIncNotZero, branchCmp, zero, noWrap,
-      Source.setPeer, Source.modifyDev, Source.modifyWG, peerFinal, countRecords, recordCmp, record, bne, boolZero] <;> rfl
+         peerFinal, countRecords, recordCmp, record, bne, boolZero] <;> rfl
 
 theorem accepted_peer_result (pid : PeerId) (w w' : World) (answer : Option PeerId)
     (device : Device) (peer : Peer)

@@ -3,7 +3,6 @@ import LookupCallHistory
 import AllowedipsServices
 import AllowedipsLoopObservation
 import ScanFrame
-set_option linter.unusedSimpArgs false
 
 namespace Binary.AllowedipsBh
 open TrustBase
@@ -42,8 +41,8 @@ theorem return_argument (fetch : Int64 → Option Decoded)
   simp only [instructionStep, here]
   refine ⟨by decide, ?_⟩
   simp [Instr.interp, Operation.interp, AddrExpr.interp, ConstExpr.interp,
-    Effects.All, returnArgument, AllowedipsImage.Lookup.entry, BitVec.toAddressSize,
-    BitVec.signed, BitVec.ofInt_toInt, BitVec.take]
+    Effects.All, returnArgument, AllowedipsImage.Lookup.entry,
+     ]
 
 def argumentStates (s : MachineData) : List MachineState :=
   [⟨countArgument s, AllowedipsImage.Lookup.entry+0x130⟩,

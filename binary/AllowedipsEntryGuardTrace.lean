@@ -36,8 +36,8 @@ theorem family32_trace (fetch : Int64 → Option Decoded)
           (AllowedipsImage.Lookup.entry+0x47)
         pure [decision rxSection .swapEndian32 choice t.machine]) = _
       rw [pc]
-      cases h : (s.regs.get (.low .rbx .W8) == 32) <;> simp [h, LookupObservation.choice, AllowedipsImage.Lookup.entry] <;> rfl
-    simp only [List.singleton_append,observeHistory,first,second,List.nil_append,List.append_nil]
+      cases h : (s.regs.get (.low .rbx .W8) == 32) <;> simp [ LookupObservation.choice, AllowedipsImage.Lookup.entry] <;> rfl
+    simp only [List.singleton_append,observeHistory,first,second,]
     rfl
   · rw [memory]; intro _ _; rfl
   · intro q member cut
@@ -85,8 +85,8 @@ theorem family128_trace (fetch : Int64 → Option Decoded)
           (AllowedipsImage.Lookup.entry+0x61)
         pure [decision rxSection .swapEndian128 choice t.machine]) = _
       rw [pc]
-      cases h : (s.regs.get (.low .rbx .W8) == 128) <;> simp [h, LookupObservation.choice, AllowedipsImage.Lookup.entry] <;> rfl
-    simp only [List.singleton_append,observeHistory,first,second,List.nil_append,List.append_nil]
+      cases h : (s.regs.get (.low .rbx .W8) == 128) <;> simp [ LookupObservation.choice, AllowedipsImage.Lookup.entry] <;> rfl
+    simp only [List.singleton_append,observeHistory,first,second,]
     rfl
   · rw [memory]; intro _ _; rfl
   · intro q member cut

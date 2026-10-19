@@ -45,8 +45,8 @@ theorem trace_call (offset : Nat) (s : MachineData) (stackWord : Int)
   simp [run, Image.PeerGet.r1b, Directives.interp, Directive.interp,
     Instr.interp, Operation.interp, MachineData.store,
     Reg64s.get64, Reg64s.set64, RelRegOrMem.interp, ConstExpr.interp,
-    Effects.All, Width.bytesv, stack, callMemory]
-  simp_all [Effects.All, Int64.ofNat_add, Int64.add_assoc]
+    Effects.All, Width.bytesv,  callMemory]
+  simp_all [Effects.All,  Int64.add_assoc]
   constructor
   · simp [Int.add_assoc]
   · have cancel (a b : Int64) : a + (b - a) = b := by
@@ -75,11 +75,11 @@ theorem refcount_load (s : MachineData) (count : UInt32)
   simp [run, Image.PeerGet.r20, Directives.interp, Directive.interp,
     Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
     MachineData.load, MachineData.set, MachineData.setReg,
-    AddrExpr.interp, Reg64s.get, Reg64s.get64, Reg.base, Reg.offset,
-    Reg64s.set, Reg64s.set64, BitVec.drop, BitVec.take,
+    AddrExpr.interp,  Reg64s.get64,
+    Reg64s.set, Reg64s.set64,  BitVec.take,
     ConstExpr.interp, BitVec.toAddressSize, BitVec.signed,
     BitVec.ofInt_add, BitVec.ofInt_toInt, BitVec.ofInt_ofNat,
-    Effects.All, field, Image.PeerGet.entry]
+    Effects.All,  Image.PeerGet.entry]
   simp_all [Effects.All]
 
 def incrementMemory (s : MachineData) : DataMem :=
@@ -117,8 +117,7 @@ theorem increment (s : MachineData) (stackWord : Int)
     BitVec.ofInt_add, BitVec.ofInt_toInt, BitVec.ofInt_ofNat,
     Effects.All, CondCode.interp, StatusFlags.from_result, Width.bytesv,
     incrementMemory, incrementRegisters, Image.PeerGet.entry] at count stack ⊢
-  simp_all [Effects.All, low32, truncate_extend, lea_low32, mod32_64,
-    Int.emod_bmod]
+  simp_all [Effects.All, low32, truncate_extend, lea_low32, mod32_64]
   rfl
 
 theorem null_guard (s : MachineData) :
@@ -199,7 +198,7 @@ theorem compare_old (s : MachineData) (stackWord : Int)
     MachineData.store, MachineData.set, MachineData.setReg,
     Reg64s.get, Reg64s.get64, Reg.base, Reg.offset, Reg64s.set, Reg64s.set64,
     BitVec.drop, BitVec.take, RelRegOrMem.interp, ConstExpr.interp,
-    Effects.All, Width.bytesv, stack, callMemory, Image.PeerGet.entry]
+    Effects.All, Width.bytesv,  callMemory, Image.PeerGet.entry]
   simp_all [Effects.All]
   rfl
 
@@ -215,7 +214,7 @@ theorem compare_negative (s : MachineData) (stackWord : Int)
     MachineData.store, MachineData.set, MachineData.setReg,
     Reg64s.get, Reg64s.get64, Reg.base, Reg.offset, Reg64s.set, Reg64s.set64,
     BitVec.drop, BitVec.take, RelRegOrMem.interp, ConstExpr.interp,
-    Effects.All, Width.bytesv, stack, callMemory, Image.PeerGet.entry]
+    Effects.All, Width.bytesv,  callMemory, Image.PeerGet.entry]
   simp_all [Effects.All]
   rfl
 
@@ -231,7 +230,7 @@ theorem compare_increment (s : MachineData) (stackWord : Int)
     MachineData.store, MachineData.set, MachineData.setReg,
     Reg64s.get, Reg64s.get64, Reg.base, Reg.offset, Reg64s.set, Reg64s.set64,
     BitVec.drop, BitVec.take, RelRegOrMem.interp, ConstExpr.interp,
-    Effects.All, Width.bytesv, stack, callMemory, Image.PeerGet.entry]
+    Effects.All, Width.bytesv,  callMemory, Image.PeerGet.entry]
   simp_all [Effects.All]
   rfl
 
@@ -247,7 +246,7 @@ theorem compare_result (s : MachineData) (stackWord : Int)
     MachineData.store, MachineData.set, MachineData.setReg,
     Reg64s.get, Reg64s.get64, Reg.base, Reg.offset, Reg64s.set, Reg64s.set64,
     BitVec.drop, BitVec.take, RelRegOrMem.interp, ConstExpr.interp,
-    Effects.All, Width.bytesv, stack, callMemory, Image.PeerGet.entry]
+    Effects.All, Width.bytesv,  callMemory, Image.PeerGet.entry]
   simp_all [Effects.All]
   rfl
 
@@ -263,7 +262,7 @@ theorem compare_zero (s : MachineData) (stackWord : Int)
     MachineData.store, MachineData.set, MachineData.setReg,
     Reg64s.get, Reg64s.get64, Reg.base, Reg.offset, Reg64s.set, Reg64s.set64,
     BitVec.drop, BitVec.take, RelRegOrMem.interp, ConstExpr.interp,
-    Effects.All, Width.bytesv, stack, callMemory, Image.PeerGet.entry]
+    Effects.All, Width.bytesv,  callMemory, Image.PeerGet.entry]
   simp_all [Effects.All]
   rfl
 
@@ -279,7 +278,7 @@ theorem compare_dead (s : MachineData) (stackWord : Int)
     MachineData.store, MachineData.set, MachineData.setReg,
     Reg64s.get, Reg64s.get64, Reg.base, Reg.offset, Reg64s.set, Reg64s.set64,
     BitVec.drop, BitVec.take, RelRegOrMem.interp, ConstExpr.interp,
-    Effects.All, Width.bytesv, stack, callMemory, Image.PeerGet.entry]
+    Effects.All, Width.bytesv,  callMemory, Image.PeerGet.entry]
   simp_all [Effects.All]
   rfl
 
@@ -295,7 +294,7 @@ theorem compare_one (s : MachineData) (stackWord : Int)
     MachineData.store, MachineData.set, MachineData.setReg,
     Reg64s.get, Reg64s.get64, Reg.base, Reg.offset, Reg64s.set, Reg64s.set64,
     BitVec.drop, BitVec.take, RelRegOrMem.interp, ConstExpr.interp,
-    Effects.All, Width.bytesv, stack, callMemory, Image.PeerGet.entry]
+    Effects.All, Width.bytesv,  callMemory, Image.PeerGet.entry]
   simp_all [Effects.All]
   rfl
 
@@ -311,7 +310,7 @@ theorem warn_arguments (s : MachineData) (stackWord : Int)
     MachineData.store, MachineData.set, MachineData.setReg,
     Reg64s.get, Reg64s.get64, Reg.base, Reg.offset, Reg64s.set, Reg64s.set64,
     BitVec.drop, BitVec.take, RelRegOrMem.interp, ConstExpr.interp,
-    Effects.All, Width.bytesv, stack, callMemory, Image.PeerGet.entry]
+    Effects.All, Width.bytesv,  callMemory, Image.PeerGet.entry]
   simp_all [Effects.All]
   rfl
 
@@ -333,10 +332,10 @@ theorem epilogue (s : MachineData) (bx bp r12 r13 r14 r15 ra : UInt64)
     Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
     MachineData.load, Reg64s.get, Reg64s.get64, Reg.base, Reg.offset,
     BitVec.drop, BitVec.take, Effects.All, MachineData.set, MachineData.setReg,
-    Reg64s.set, Reg64s.set64, BitVec.ofInt_ofNat,
+    Reg64s.set, Reg64s.set64,
     UInt64.toBitVec_add, UInt64.ofBitVec_add, BitVec.add_assoc,
-    UInt64.add_assoc, h0, h1, h2, h3, h4, h5, h6]
-  simp_all [Effects.All, BitVec.ofInt_ofNat, UInt64.ofBitVec_add, BitVec.add_assoc]
+     h0,     ]
+  simp_all [Effects.All,  ]
   apply Int64.toBitVec_inj.mp
   simp
 

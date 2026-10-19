@@ -106,7 +106,7 @@ theorem bucket_loop (fetch : Int64 → Option Decoded) (agree : AnchoredDecoderA
   | none =>
     apply Eventually.done
     obtain ⟨before, recorded, cuts⟩ := trace.extension
-    refine ⟨?_, ?_, trace.last, ⟨delta, ?_, tags, trace.observed⟩, trace.stable, before, [], ?_, cuts, ?_, by simp only [found]⟩
+    refine ⟨?_, ?_, trace.last, ⟨delta, ?_, tags, trace.observed⟩, trace.stable, before, [], ?_, cuts, ?_, by simp only⟩
     · simpa only [BucketStop, ScanStop, found] using stop
     · simpa only [bucketExitBase, found] using trace.frame
     · simpa only [bucketSteps_split, found, List.append_nil] using records
@@ -140,7 +140,7 @@ theorem bucket_loop (fetch : Int64 → Option Decoded) (agree : AnchoredDecoderA
     · rw [recorded, scanRecorded]
       simp only [List.append_assoc]
     · simpa only [bucketExitBase, found] using afterCuts
-    · simp only [found]
+    · simp only
       refine ⟨boundary, ?_, boundaryPC, boundaryFrame⟩
       rw [scanRecorded, List.append_assoc] at boundaryLast
       exact boundaryLast

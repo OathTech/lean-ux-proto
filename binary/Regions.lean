@@ -32,8 +32,8 @@ theorem trace_call (offset : Nat) (s : MachineData) (stackWord : Int)
   simp [run, Image.Lookup.r34, Directives.interp, Directive.interp,
     Instr.interp, Operation.interp, MachineData.store,
     Reg64s.get64, Reg64s.set64, RelRegOrMem.interp, ConstExpr.interp,
-    Effects.All, Width.bytesv, stack, callMemory]
-  simp_all [Effects.All, Int64.ofNat_add, Int64.add_assoc]
+    Effects.All, Width.bytesv,  callMemory]
+  simp_all [Effects.All,  Int64.add_assoc]
   constructor
   · simp [Int.add_assoc]
   · have cancel (a b : Int64) : a + (b - a) = b := by
@@ -65,7 +65,7 @@ theorem container_entry (s : MachineData) (stackWord : Int)
     MachineData.store, MachineData.set, MachineData.setReg,
     Reg64s.get, Reg64s.get64, Reg.base, Reg.offset, Reg64s.set, Reg64s.set64,
     BitVec.drop, BitVec.take, RelRegOrMem.interp, ConstExpr.interp,
-    Effects.All, Width.bytesv, stack, callMemory, Image.Lookup.entry]
+    Effects.All, Width.bytesv,  callMemory, Image.Lookup.entry]
   simp_all [Effects.All]
   rfl
 
@@ -84,7 +84,7 @@ theorem index_load (s : MachineData) (index : UInt32) (stackWord : Int)
     Reg64s.set, Reg64s.set64, BitVec.drop, BitVec.take,
     RelRegOrMem.interp, ConstExpr.interp, BitVec.toAddressSize, BitVec.signed,
     BitVec.ofInt_add, BitVec.ofInt_toInt, BitVec.ofInt_ofNat,
-    Effects.All, Width.bytesv, field, stack, callMemory, Image.Lookup.entry]
+    Effects.All, Width.bytesv,   callMemory, Image.Lookup.entry]
   simp_all [Effects.All]
   refine ⟨⟨?_, ?_⟩, by rfl⟩
   all_goals apply UInt64.toBitVec_inj.mp
@@ -100,11 +100,11 @@ theorem peer_argument (s : MachineData) (peer : UInt64) (stackWord : Int)
   simp [run, Image.Lookup.rb2, Directives.interp, Directive.interp,
     Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
     MachineData.load, MachineData.store, MachineData.set, MachineData.setReg,
-    AddrExpr.interp, Reg64s.get, Reg64s.get64, Reg.base, Reg.offset,
-    Reg64s.set, Reg64s.set64, BitVec.drop, BitVec.take,
+    AddrExpr.interp,  Reg64s.get64,
+    Reg64s.set, Reg64s.set64,  BitVec.take,
     RelRegOrMem.interp, ConstExpr.interp, BitVec.toAddressSize, BitVec.signed,
-    BitVec.ofInt_add, BitVec.ofInt_toInt, BitVec.ofInt_ofNat,
-    Effects.All, Width.bytesv, field, stack, callMemory, Image.Lookup.entry]
+     BitVec.ofInt_toInt,
+    Effects.All, Width.bytesv, field,  callMemory, Image.Lookup.entry]
   simp_all [Effects.All]
   rfl
 
@@ -124,7 +124,7 @@ theorem type_mask (s : MachineData) (kind : UInt32) (stackWord : Int)
     Reg64s.set, Reg64s.set64, BitVec.drop, BitVec.take,
     RelRegOrMem.interp, ConstExpr.interp, BitVec.toAddressSize, BitVec.signed,
     BitVec.ofInt_add, BitVec.ofInt_toInt, BitVec.ofInt_ofNat,
-    Effects.All, Width.bytesv, field, stack, callMemory, Image.Lookup.entry]
+    Effects.All, Width.bytesv,   callMemory, Image.Lookup.entry]
   simp_all [Effects.All]
   refine ⟨⟨?_, ?_⟩, by rfl⟩
   all_goals apply UInt64.toBitVec_inj.mp
@@ -143,13 +143,13 @@ theorem bh_arguments (s : MachineData) (stackWord : Int)
         rdi := (Image.Lookup.entry + 0x84).toUInt64, rsi := 512, rsp := s.regs.rsp - 8} ∧
       t.data.dmem = callMemory s 0x89 ∧ t.pc = .ofNat 0xffffffff810732c0) := by
   simp [run, Image.Lookup.r78, Directives.interp, Directive.interp,
-    Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
+    Instr.interp, Operation.interp,  Operand.interp,
     MachineData.store, MachineData.set, MachineData.setReg,
-    AddrExpr.interp, Reg64s.get, Reg64s.get64, Reg.base, Reg.offset,
-    Reg64s.set, Reg64s.set64, BitVec.drop, BitVec.take,
-    RelRegOrMem.interp, ConstExpr.interp, BitVec.toAddressSize, BitVec.signed,
-    BitVec.ofInt_add, BitVec.ofInt_toInt, BitVec.ofInt_ofNat,
-    Effects.All, Width.bytesv, stack, callMemory, Image.Lookup.entry]
+    AddrExpr.interp,  Reg64s.get64,
+    Reg64s.set, Reg64s.set64,
+    RelRegOrMem.interp, ConstExpr.interp,
+
+    Effects.All, Width.bytesv,  callMemory, Image.Lookup.entry]
   simp_all [Effects.All]
   exact ⟨by decide, by rfl⟩
 
@@ -175,7 +175,7 @@ theorem entry_guard (s : MachineData) :
     Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
     Effects.All, StatusFlags.from_result, CondCode.interp]
   by_cases h : s.regs.get (.low .rbx .W64) = 0#64
-  all_goals simp_all [Effects.All, Image.Lookup.entry, u64_zero]
+  all_goals simp_all [Effects.All, Image.Lookup.entry]
   rfl
 
 /-- The compiler's type-mask decision. Nonzero represents membership. -/
@@ -188,7 +188,7 @@ theorem type_guard (s : MachineData) :
     Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
     Effects.All, StatusFlags.from_result, CondCode.interp]
   by_cases h : s.regs.get (.low .r14 .W32) = 0#32
-  all_goals simp_all [Effects.All, Image.Lookup.entry, u64_zero]
+  all_goals simp_all [Effects.All, Image.Lookup.entry]
   rfl
 
 /-- The shared miss exit sets the return-entry register to NULL. -/
@@ -214,7 +214,7 @@ theorem next_entry (s : MachineData) (next : UInt64)
     Reg64s.get, Reg64s.get64, Reg.base, Reg.offset, BitVec.drop, BitVec.take,
     Effects.All, StatusFlags.from_result, CondCode.interp,
     MachineData.set, MachineData.setReg, Reg64s.set, Reg64s.set64, BitVec.toAddressSize, BitVec.signed, BitVec.ofInt_add,
-    BitVec.ofInt_toInt, BitVec.ofInt_ofNat, h]
+    BitVec.ofInt_toInt, BitVec.ofInt_ofNat]
   by_cases hz : next = 0
   all_goals simp_all [Effects.All, Image.Lookup.entry, u64_zero]
   rfl
@@ -236,8 +236,8 @@ theorem peer_write (s : MachineData) (old : List UInt8) (frame : DataMem → Pro
     Reg64s.get, Reg64s.get64, Reg.base, Reg.offset, BitVec.drop, BitVec.take,
     Effects.All, StatusFlags.from_result, CondCode.interp,
     MachineData.set, MachineData.setReg, Reg64s.set, Reg64s.set64,
-    BitVec.toAddressSize, BitVec.signed, BitVec.ofInt_add, BitVec.ofInt_toInt,
-    BitVec.ofInt_ofNat, load]
+    BitVec.toAddressSize, BitVec.signed,  BitVec.ofInt_toInt,
+     load]
   by_cases hz : s.regs.rax = 0
   all_goals simp_all [Effects.All, Image.Lookup.entry, u64_zero]
   rfl
@@ -256,7 +256,7 @@ theorem output_write (s : MachineData) (old : List UInt8) (frame : DataMem → P
     Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
     MachineData.store, AddrExpr.interp, ConstExpr.interp, RelRegOrMem.interp,
     Reg64s.get, Reg64s.get64, Reg.base, Reg.offset, BitVec.drop, BitVec.take,
-    Effects.All, MachineData.set, MachineData.setReg, Reg64s.set, Reg64s.set64,
+    Effects.All, MachineData.set,
     BitVec.toAddressSize, BitVec.signed, BitVec.ofInt_toInt, load, store]
   rfl
 
@@ -294,10 +294,10 @@ theorem epilogue (s : MachineData) (bx bp r12 r13 r14 ra : UInt64)
     Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
     MachineData.load, Reg64s.get, Reg64s.get64, Reg.base, Reg.offset,
     BitVec.drop, BitVec.take, Effects.All, MachineData.set, MachineData.setReg,
-    Reg64s.set, Reg64s.set64, BitVec.ofInt_ofNat,
+    Reg64s.set, Reg64s.set64,
     UInt64.toBitVec_add, UInt64.ofBitVec_add, BitVec.add_assoc,
-    UInt64.add_assoc, h0, h1, h2, h3, h4, h5]
-  simp_all [Effects.All, BitVec.ofInt_ofNat, UInt64.ofBitVec_add, BitVec.add_assoc]
+     h0,    ]
+  simp_all [Effects.All,  ]
   apply Int64.toBitVec_inj.mp
   simp
 

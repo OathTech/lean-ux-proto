@@ -50,7 +50,7 @@ theorem matched_restrict {R rxSection front tail seen actual source events}
     · simp only [List.length_append, List.length_singleton]
       simp only [List.length_cons] at bound
       omega
-    · simp only [List.length_append, List.length_singleton, List.length_cons, List.length_nil] at bound ⊢
+    · simp only [List.length_append,  List.length_cons, List.length_nil] at bound ⊢
       omega
 
 /-- Full point matching restricts to each actual observed raw prefix.

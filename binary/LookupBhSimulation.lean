@@ -61,7 +61,7 @@ theorem bh_simulation (fetch : Int64 → Option Decoded)
       rcases args with rfl | rfl | rfl
       · intro a _; rfl
       · intro a _; rfl
-      · exact False.elim (by simpa [LookupBh.called, Instrumentation.calledState, Image.cutPoints] using cut)
+      · simp [LookupBh.called, Instrumentation.calledState, Image.cutPoints] at cut
     · have member : q ∈ LookupBh.called s :: tail := List.mem_cons_of_mem _ service
       rw [← history_restore localLast] at member
       rcases List.mem_append.mp member with interior | lastState

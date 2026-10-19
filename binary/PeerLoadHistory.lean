@@ -27,7 +27,7 @@ theorem refcount_word_history (fetch : Int64 → Option Decoded)
     BitVec.ofInt_add, BitVec.ofInt_toInt, BitVec.ofInt_ofNat,
     Effects.All, LookupHistory.indexLoaded, BitVec.take, Image.PeerGet.entry] at field ⊢
   rw [field]
-  simp [Effects.All, BitVec.ofInt_ofNat]
+  simp [Effects.All]
 
 
 /-- LEA computes the refcount address without touching memory or flags. -/
@@ -46,7 +46,7 @@ theorem refcount_address_history (fetch : Int64 → Option Decoded)
   simp only [instructionStep, here]
   refine ⟨by decide, ?_⟩
   simp [Instr.interp, Operation.interp, MachineData.setReg, AddrExpr.interp,
-    Reg64s.get64, BitVec.take, Reg64s.set, Reg64s.set64, Reg.base, Reg.offset,
+    Reg64s.get64, BitVec.take, Reg64s.set, Reg64s.set64,
     ConstExpr.interp, BitVec.toAddressSize, BitVec.signed, BitVec.ofInt_add,
     BitVec.ofInt_toInt, BitVec.ofInt_ofNat, Effects.All, Image.PeerGet.entry]
 

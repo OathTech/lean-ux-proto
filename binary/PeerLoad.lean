@@ -25,7 +25,7 @@ theorem load_prefix (fetch : Int64 → Option Decoded)
   apply eventually_trans (instructionStep fetch) _ _ _ guard
   rintro guarded ⟨guardRegs, guardMemory, guardPC⟩
   have atCall : guarded = ⟨guarded.data, Image.PeerGet.entry+0x1b⟩ := by
-    have pc : guarded.pc = Image.PeerGet.entry+0x1b := by simpa only [if_neg nonnull] using guardPC
+    have pc : guarded.pc = Image.PeerGet.entry+0x1b := by simpa only [ite_eq_right nonnull] using guardPC
     cases guarded with
     | mk data _ => exact congrArg (fun pc => (⟨data, pc⟩ : MachineState)) pc
   rw [atCall]

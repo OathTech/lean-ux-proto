@@ -30,7 +30,7 @@ theorem count_run_logged (old : Nat) (h : List Point) (w : World)
       .ok ((old != 0, h ++ countPoints w old), countRecords w old) := by
   have noWrap : ¬old + 1 ≥ 2^31 := by omega
   by_cases zero : old = 0 <;>
-    simp [Except.pure, Except.bind, StateT.run, bind, StateT.bind, StateT.lift, pure, StateT.pure, get, getThe, MonadStateOf.get, StateT.get, modify, modifyGet, MonadStateOf.modifyGet, StateT.modifyGet, monadLift, MonadLift.monadLift, liftAmbient, AmbientM.branch, AmbientM.branchCmp, AmbientM.unsupported, count, branchCmpLogged, branchLogged, mark,
+    simp [Except.pure, Except.bind, StateT.run, bind, StateT.bind, StateT.lift, pure, StateT.pure, get, getThe, MonadStateOf.get, StateT.get, modify, modifyGet, MonadStateOf.modifyGet, StateT.modifyGet, monadLift, MonadLift.monadLift, liftAmbient, AmbientM.branch, AmbientM.branchCmp,  count, branchCmpLogged, branchLogged, mark,
       branchCmp, branch, countPoints, countRecords,
       recordCmp, record, zero, noWrap, List.append_assoc] <;> rfl
 
@@ -54,9 +54,9 @@ theorem peer_run_logged (pid : PeerId) (h : List Point) (w : World)
   all_goals have boolZero : (peer.refcount == 0) = decide (peer.refcount = 0) := rfl
   all_goals simp only [zero, decide_true, decide_false] at boolZero
   all_goals
-    simp [Except.pure, Except.bind, StateT.run, bind, StateT.bind, StateT.lift, pure, StateT.pure, get, getThe, MonadStateOf.get, StateT.get, modify, modifyGet, MonadStateOf.modifyGet, StateT.modifyGet, monadLift, MonadLift.monadLift, liftAmbient, AmbientM.branch, AmbientM.branchCmp, AmbientM.unsupported, liftWG, WG.requireNotPending, WG.getPeer, WG.getDev, WG.setPeer, WG.getKeypair, WG.setKeypair, WG.modifyDev, peerGet, count, branchLogged, branchCmpLogged, mark,
-      branch, branchCmp, Source.requireNotPending, Source.getPeer, Source.getDev, Source.getWG,
-      hasDevice, peerRead, zero, noWrap, Source.setPeer, Source.modifyDev, Source.modifyWG,
+    simp [Except.pure, Except.bind, StateT.run, bind, StateT.bind, StateT.lift, pure, StateT.pure, get, getThe, MonadStateOf.get, StateT.get, modify, modifyGet, MonadStateOf.modifyGet, StateT.modifyGet, monadLift, MonadLift.monadLift, liftAmbient, AmbientM.branch, AmbientM.branchCmp,  liftWG, WG.requireNotPending, WG.getPeer, WG.getDev, WG.setPeer,   WG.modifyDev, peerGet, count, branchLogged, branchCmpLogged, mark,
+      branch, branchCmp, Source.requireNotPending, Source.getPeer,
+      hasDevice, peerRead, zero, noWrap, Source.setPeer,
       peerPoints, countPoints, peerFinal, countRecords,
       recordCmp, record, bne, boolZero, List.append_assoc] <;> rfl
 

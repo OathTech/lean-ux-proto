@@ -55,7 +55,7 @@ theorem Ready.entry {c s} (ready : Ready c s) (peer : BitVec 64) :
     rw [scratch_base] at inside
     exact ready.separate a (.inr (.inr ⟨written.1,.inr written.2⟩)) inside
 
-theorem Ready.count {c s} (ready : Ready c s) (peer : BitVec 64) (count : UInt32)
+theorem Ready.count {c s} (_ready : Ready c s) (peer : BitVec 64) (count : UInt32)
     (field : s.dmem.loadInt (peer+0x420) 4 = some count.toNat)
     (apart : ∀ a, InRange (peer+0x420) 4 a → ¬Scratch s a) :
     (peerCalled s peer).data.dmem.loadInt

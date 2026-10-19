@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Regenerate M2 literal regions and record offsets from the pinned ELF."""
+import argparse
 import hashlib
 import json
 import re
@@ -8,6 +9,16 @@ from layouts import layouts
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--check', action='store_true')
+    args = parser.parse_args()
+    def write(path, text):
+        if args.check:
+            if path.read_text() != text:
+                raise ValueError(f'{path.name} differs from the pinned image generation')
+            print(f'{path.name}: checked')
+        else:
+            path.write_text(text)
     if hashlib.sha256(ORACLE.read_bytes()).hexdigest() != "16c346209885db6c610d4aa126c6eb30f5d3c02f0498d95e606473945f648774":
         raise ValueError("wrong oracle image")
     functions = extract(ORACLE)
@@ -61,7 +72,7 @@ def main():
              '  (Image.fetchIn Lookup.entry Lookup.code pc).orElse',
              '    (fun _ => Image.fetchIn CommonBits.entry CommonBits.code pc)',
              'end Binary.AllowedipsImage', '']
-    (ROOT/'binary/AllowedipsImage.lean').write_text('\n'.join(text))
+    write(ROOT/'binary/AllowedipsImage.lean', '\n'.join(text))
     node = layouts(ORACLE)['allowedips_node']
     expected = dict(peer=8, bit=16, cidr=1, bit_at_a=1, bit_at_b=1, bitlen=1, bits=16)
     for field, size in expected.items():
@@ -77,7 +88,7 @@ def main():
              '  m.loadInt (a + .ofNat 64 bit_at_a) 1 = some byteSelector ∧',
              '  m.loadInt (a + .ofNat 64 bit_at_b) 1 = some bitSelector',
              'end Binary.AllowedipsLayout', '']
-    (ROOT/'binary/AllowedipsLayout.lean').write_text('\n'.join(text))
+    write(ROOT/'binary/AllowedipsLayout.lean', '\n'.join(text))
 
 
 if __name__ == '__main__':

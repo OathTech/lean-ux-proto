@@ -24,7 +24,7 @@ theorem owner_value_count_update (device : Device) (pid : PeerId) (peer : Peer) 
     have present : device.peers[pid]? = some peer := present
     by_cases same : pid = id
     · subst id
-      simp [OwnerWord.value, Std.TreeMap.getElem?_insert, present]
+      simp [OwnerWord.value,  present]
     · simp [OwnerWord.value, Std.TreeMap.getElem?_insert, same]
 
 /-- The exact returned source projection. Zero is a present dead peer;
@@ -49,7 +49,7 @@ theorem project_peerFinal (c : Config) (world : World) (device : Device)
     exact owner_value_count_update device pid peer (peer.refcount+1) hasPeer owner
   by_cases zero : peer.refcount = 0 <;>
     simp [PeerMirror.peerFinal, project, PeerMirror.countRecords, PeerMirror.recordCmp,
-      LookupMirror.record, hasDevice, focused, hasPeer', zero, words, Std.TreeMap.getElem?_insert]
+      LookupMirror.record, hasDevice, focused, hasPeer', zero, words]
 
 #print axioms project_peerPoint
 #print axioms owner_value_count_update

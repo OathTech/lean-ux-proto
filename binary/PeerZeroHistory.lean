@@ -90,7 +90,7 @@ theorem zero_suffix_history (fetch : Int64 → Option Decoded)
   apply eventually_weaken (historyStep fetch) _ _ _ _ finish
   rintro final ⟨returned, result, state, endFrame, last, returning, negative, wrap, dead,
     negativeFrame, wrapFrame, deadFrame, seen, tail, recorded, cuts⟩
-  simp only [data, tested, scanWrites] at endFrame negativeFrame wrapFrame deadFrame cuts
+  simp only [data, tested] at endFrame negativeFrame wrapFrame deadFrame cuts
   obtain ⟨earlier, earlierRecorded, earlierCuts⟩ := trace.extension
   refine ⟨returned, result, state, endFrame, last, trace.stable.returning returning, af, negative, wrap, dead,
     negativeFrame, wrapFrame, deadFrame, ?_, earlier ++ tail, ?_, ?_⟩

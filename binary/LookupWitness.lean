@@ -6,7 +6,6 @@ namespace Binary.LookupWitness
 open Leanux TrustBase
 set_option maxRecDepth 8192
 set_option maxHeartbeats 800000
-set_option linter.unusedSimpArgs false
 
 theorem load_away (m : Mem 64) (base a : BitVec 64) (width size : Nat) (value : Int)
     (apart : ∀ i < width, ¬InRange base size (a + .ofNat 64 i)) :
@@ -78,7 +77,7 @@ theorem task_read : memory.loadInt currentTaskAddress 8 = some 0x800000 := by
   repeat rw [load_away _ _ _ _ _ _ (by
     rintro i hi ⟨j, hj, equal⟩
     have nums := congrArg BitVec.toNat equal
-    simp [preemptCountAddress, currentTaskAddress, softirqPendingAddress,
+    simp [ currentTaskAddress, softirqPendingAddress,
       BitVec.toNat_add] at nums
     omega)]
   exact load64_store _ _ (0x800000#64)
@@ -88,7 +87,7 @@ theorem mode_read : memory.loadInt 0x8006e0 4 = some 2 := by
   repeat rw [load_away _ _ _ _ _ _ (by
     rintro i hi ⟨j, hj, equal⟩
     have nums := congrArg BitVec.toNat equal
-    simp [preemptCountAddress, currentTaskAddress, softirqPendingAddress,
+    simp [
       BitVec.toNat_add] at nums
     omega)]
   exact load32_store _ _ (2#32)
@@ -98,7 +97,7 @@ theorem capacity_read : memory.loadInt 0x8006e4 4 = some 1024 := by
   repeat rw [load_away _ _ _ _ _ _ (by
     rintro i hi ⟨j, hj, equal⟩
     have nums := congrArg BitVec.toNat equal
-    simp [preemptCountAddress, currentTaskAddress, softirqPendingAddress,
+    simp [
       BitVec.toNat_add] at nums
     omega)]
   exact load32_store _ _ (1024#32)
@@ -108,7 +107,7 @@ theorem area_read : memory.loadInt 0x8006e8 8 = some 0x900000 := by
   repeat rw [load_away _ _ _ _ _ _ (by
     rintro i hi ⟨j, hj, equal⟩
     have nums := congrArg BitVec.toNat equal
-    simp [preemptCountAddress, currentTaskAddress, softirqPendingAddress,
+    simp [
       BitVec.toNat_add] at nums
     omega)]
   exact load64_store _ _ (0x900000#64)
@@ -118,7 +117,7 @@ theorem softirq_read : memory.loadInt 0x800704 4 = some 0 := by
   repeat rw [load_away _ _ _ _ _ _ (by
     rintro i hi ⟨j, hj, equal⟩
     have nums := congrArg BitVec.toNat equal
-    simp [preemptCountAddress, currentTaskAddress, softirqPendingAddress,
+    simp [
       BitVec.toNat_add] at nums
     omega)]
   exact load32_store _ _ (0#32)
@@ -135,7 +134,7 @@ theorem pending_read : memory.loadInt softirqPendingAddress 2 = some 0 := by
   repeat rw [load_away _ _ _ _ _ _ (by
     rintro i hi ⟨j, hj, equal⟩
     have nums := congrArg BitVec.toNat equal
-    simp [preemptCountAddress, currentTaskAddress, softirqPendingAddress,
+    simp [  softirqPendingAddress,
       BitVec.toNat_add] at nums
     omega)]
   exact load16_zero _ _
@@ -151,7 +150,7 @@ private theorem zero_load (m : Mem 64) (base : BitVec 64) (size offset width : N
     rw [List.getElem?_replicate, ite_eq_left (by omega)] at atByte
     simp only [Mem.storeBytes, Std.ExtHashMap.get?_eq_getElem?,
       Std.ExtHashMap.union_eq, Std.ExtHashMap.getElem?_union,
-      ← BitVec.add_assoc, ← BitVec.ofNat_add] at atByte ⊢
+      ] at atByte ⊢
     have address : (base + .ofNat 64 offset) + .ofNat 64 i =
         base + .ofNat 64 (offset+i) := by simp [BitVec.ofNat_add, BitVec.add_assoc]
     rw [address, atByte]
@@ -217,7 +216,7 @@ private theorem zero_at_mapped (base : BitVec 64) (size offset width : Nat)
   have atByte := get?_At_idx (List.replicate size (0 : UInt8)) base (offset+i)
     (by omega) (by simpa using bound)
   have rhs : (List.replicate size (0 : UInt8))[offset+i]? = some 0 := by
-    simp [List.getElem?_replicate, show offset+i < size by omega]
+    simp [ show offset+i < size by omega]
   have address : (base + .ofNat 64 offset) + .ofNat 64 i =
       base + .ofNat 64 (offset+i) := by simp [BitVec.ofNat_add, BitVec.add_assoc]
   have read := (congrArg (fun a => ((List.replicate size (0 : UInt8)).At base).get? a)

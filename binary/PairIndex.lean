@@ -172,7 +172,7 @@ def lookupFrom (input : ProbeInput) (seed : UInt64) (s : Session) (query : Nat)
   assertMemory paired.names input.offsets result.state.data.dmem after
   assertReturn input paired.names initial result answer frame
   -- An extra adapter regression, not the runtime relation: source presentation
-  -- and the actual exported function have equal results, kernel states and logs.
+  -- and the actual exported function have equal results, device projections and logs.
   -- Full source equality is supplied by LookupMirror.indexLookup_eq.
   let (directAnswer, directAfter) ← (Source.indexLookup kinds query).run s.world |>.mapError Stop.message
   unless answer == directAnswer && after.wg.dev == directAfter.wg.dev && after.steps == directAfter.steps do throw "source adapter differs from Source.indexLookup"

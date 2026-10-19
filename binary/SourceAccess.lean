@@ -24,9 +24,9 @@ theorem hiddenU64_eq (site : HiddenSite) : (hiddenU64 site : Leanux.M Nat) = (do
 theorem budgetExhausted_ne_ok (name : String) (w : World) (out : α × World) :
     (budgetExhausted name : Leanux.M α).run w ≠ .ok out := by
   cases h : w.ambient.hidden.isSome <;>
-    simp [budgetExhausted, AmbientM.budgetExhausted, unsupported, AmbientM.unsupported,
-      invariant, AmbientM.invariant, liftAmbient, StateT.run, bind, StateT.bind,
-      pure, StateT.pure, get, getThe, MonadStateOf.get, StateT.get,
+    simp [budgetExhausted, AmbientM.budgetExhausted,  AmbientM.unsupported,
+       AmbientM.invariant, liftAmbient, StateT.run, bind, StateT.bind,
+      pure,  get, getThe, MonadStateOf.get, StateT.get,
       monadLift, MonadLift.monadLift, Except.pure, Except.bind, h] <;> intro bad <;> cases bad
 
 theorem getDev_eq : Source.getDev = (do
@@ -61,7 +61,7 @@ theorem ownerWord_eq (owner : IndexOwner) : Source.peerWord owner =
     (match owner with
      | .handshake pid => do return (← Source.getPeer pid).handshakeEntryPeer
      | .keypair kid => do return (← Source.getKeypair kid).peer) := by
-  cases owner <;> simp [Source.peerWord, IndexOwner.peerWord, liftWG_bind, liftWG_pure]
+  cases owner <;> simp [Source.peerWord, IndexOwner.peerWord, ]
 
 theorem indexBucket_eq (index : Nat) : Source.indexBucket index = (do
     return (← Source.getDev).indexTable.filter (fun e => e.index % 8192 == index % 8192)) := by

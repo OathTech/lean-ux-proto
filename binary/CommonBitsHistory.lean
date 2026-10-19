@@ -79,7 +79,7 @@ theorem high_equal_history (fetch : Int64 → Option Decoded)
   simp only [historySteps, historyStep]
   rw [instructionStep, first]
   refine ⟨by decide, ?_⟩
-  simp [Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp, ConstExpr.interp,
+  simp [Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
     Effects.All, StatusFlags.from_result]
   simp only [instructionStep]
   have nextPC : AllowedipsImage.CommonBits.entry + 0x8e + 3 =

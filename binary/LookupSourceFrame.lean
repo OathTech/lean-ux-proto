@@ -165,14 +165,14 @@ theorem preserves_ownerStore (owner : IndexOwner) (word : Option PeerId) :
   intro w x w' run
   cases hd : w.wg.dev with
   | none =>
-    cases owner <;> simp [Except.pure, Except.bind, StateT.run, bind, StateT.bind, StateT.lift, pure, StateT.pure, get, getThe, MonadStateOf.get, StateT.get, modify, modifyGet, MonadStateOf.modifyGet, StateT.modifyGet, liftM, monadLift, MonadLift.monadLift, liftWG, liftAmbient, WG.getDev, WG.getPeer, WG.getKeypair, Source.setPeerWord, IndexOwner.setPeerWord, Source.getPeer, Source.getKeypair, Source.getDev, Source.getWG, hd, invariant] at run <;> cases run
+    cases owner <;> simp [Except.pure, Except.bind, StateT.run, bind, StateT.bind, StateT.lift, pure, StateT.pure, get, getThe, MonadStateOf.get, StateT.get,      monadLift, MonadLift.monadLift, liftWG,  WG.getDev, WG.getPeer, WG.getKeypair, Source.setPeerWord, IndexOwner.setPeerWord,     hd, invariant] at run <;> cases run
   | some d =>
     cases owner with
     | handshake id =>
       cases hp : d.peers.get? id with
       | none =>
         have missing : d.peers[id]? = none := hp
-        simp [Except.pure, Except.bind, StateT.run, bind, StateT.bind, StateT.lift, pure, StateT.pure, get, getThe, MonadStateOf.get, StateT.get, modify, modifyGet, MonadStateOf.modifyGet, StateT.modifyGet, liftM, monadLift, MonadLift.monadLift, liftWG, liftAmbient, WG.getDev, WG.getPeer, WG.getKeypair, Source.setPeerWord, IndexOwner.setPeerWord, Source.getPeer, Source.getDev, Source.getWG, hd, missing, invariant] at run
+        simp [Except.pure, Except.bind, StateT.run, bind, StateT.bind, StateT.lift, pure, StateT.pure, get, getThe, MonadStateOf.get, StateT.get,      monadLift, MonadLift.monadLift, liftWG,  WG.getDev, WG.getPeer,  Source.setPeerWord, IndexOwner.setPeerWord,    hd, missing, invariant] at run
         cases run
       | some p =>
         rw [OwnerWord.set_handshake_run w d id p word hd hp] at run
@@ -182,7 +182,7 @@ theorem preserves_ownerStore (owner : IndexOwner) (word : Option PeerId) :
       cases hk : d.keypairs.get? id with
       | none =>
         have missing : d.keypairs[id]? = none := hk
-        simp [Except.pure, Except.bind, StateT.run, bind, StateT.bind, StateT.lift, pure, StateT.pure, get, getThe, MonadStateOf.get, StateT.get, modify, modifyGet, MonadStateOf.modifyGet, StateT.modifyGet, liftM, monadLift, MonadLift.monadLift, liftWG, liftAmbient, WG.getDev, WG.getPeer, WG.getKeypair, Source.setPeerWord, IndexOwner.setPeerWord, Source.getKeypair, Source.getDev, Source.getWG, hd, missing, invariant] at run
+        simp [Except.pure, Except.bind, StateT.run, bind, StateT.bind, StateT.lift, pure, StateT.pure, get, getThe, MonadStateOf.get, StateT.get,      monadLift, MonadLift.monadLift, liftWG,  WG.getDev,  WG.getKeypair, Source.setPeerWord, IndexOwner.setPeerWord,    hd, missing, invariant] at run
         cases run
       | some kp =>
         rw [OwnerWord.set_keypair_run w d id kp word hd hk] at run
@@ -270,7 +270,7 @@ theorem frames_body (kinds : List IndexKind) (index : Nat)
 
 theorem frames_finish (a : LookupMirror.Acc) : Frames receivingSnapshot (finish a) := by
   unfold finish
-  cases stop : a.2 <;> simp only [stop, Bool.not_false, Bool.not_true, Bool.false_eq_true, ↓reduceIte]
+  cases stop : a.2 <;> simp only [ Bool.not_false, Bool.not_true, Bool.false_eq_true, ↓reduceIte]
   all_goals try (apply frames_bind (frames_branch .idxWalk false); intro _)
   all_goals
     apply frames_bind (frames_branch _ _)

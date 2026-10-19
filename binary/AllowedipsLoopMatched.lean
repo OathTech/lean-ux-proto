@@ -52,7 +52,7 @@ theorem matched_to_full (fetch : Int64 → Option Decoded) (agree : AllowedipsDe
       (if node.peer.isSome then s.regs.rbx else s.regs.rbp) := by
     rw [bp1,bx1]
     cases has : node.peer.isSome <;> cases zero : pointer peers node.peer == 0 <;>
-      simp_all only [bne,zero,Bool.not_true,Bool.not_false,Bool.false_eq_true,Bool.true_eq_false,ite_true,ite_false]
+      simp_all only [bne,Bool.not_true,Bool.not_false,Bool.false_eq_true,Bool.true_eq_false,ite_true,ite_false]
   have second := historySteps_eventually fetch 3 _ _
     (has_peer fetch agree base t1.machine.data coverage (pointer peers node.peer) loaded trace1.frame rxSection
       t1.history events trace1.observed (by rw [←pc1]; exact trace1.last))

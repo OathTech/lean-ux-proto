@@ -23,8 +23,8 @@ private theorem hidden_count (old : Nat) : Preserves World.hidden (refcountIncNo
 private theorem hidden_peer (peer : Option PeerId) : Preserves World.hidden (Source.peerGetMaybeZero peer) := by
   unfold Source.peerGetMaybeZero WG.peerGetMaybeZero
   simp only [Binary.Source.liftWG_bind, Binary.Source.liftWG_branch,
-    Binary.Source.liftWG_pure, Binary.Source.liftWG_refcountIncNotZero, apply_ite,
-    Binary.Source.liftWG_option_some, Binary.Source.liftWG_invariant]
+    Binary.Source.liftWG_pure,  apply_ite,
+    ]
   apply preserves_bind (hidden_branch _ _)
   intro null
   cases null with

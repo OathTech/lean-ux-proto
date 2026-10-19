@@ -36,7 +36,7 @@ theorem Ready.call_slot {initial coverage old ra s} (r : Ready initial coverage 
 theorem saved_apart (initial : MachineState) (i : Nat) (hi : i<6) (n : Nat) (hn : n=10 ∨ n=11)
     (a : BitVec 64) (read : InRange (Allowedips.entrySlot initial.data i) 8 a) :
     ¬InRange (slot initial n) 8 a := by
-  rw [saved_slot initial i (by omega),if_pos hi] at read
+  rw [saved_slot initial i (by omega),ite_eq_left hi] at read
   exact slot_apart initial (i+1) n (by omega) (by rcases hn with rfl | rfl <;> decide)
     (by rcases hn with rfl | rfl <;> omega) a read
 

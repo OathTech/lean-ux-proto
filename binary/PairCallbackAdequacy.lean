@@ -16,7 +16,7 @@ only decoding, the original entry domain and any explicitly listed environment
 or random-service premises remain. -/
 theorem lookup_from_image (fetch : Int64 → Option Decoded)
     (decoder : AnchoredDecoderAgreement fetch) (services : ServiceDecoderAgreement fetch)
-     
+
     {n o coverage initial w query kinds ra answer finalWorld}
     (checked : Pre n o coverage initial w query kinds ra)
     (accepted : (Source.indexLookup kinds query).run w=.ok (answer,finalWorld)) :
@@ -36,7 +36,7 @@ local instance : Labels := Image.linkedLabels
 only decoding, the original entry domain and any explicitly listed environment
 or random-service premises remain. -/
 theorem remove_from_image (fetch : Int64 → Option Decoded) (decoder : IndexRemoveDecoderAgreement fetch)
-    (services : ServiceDecoderAgreement fetch) 
+    (services : ServiceDecoderAgreement fetch)
     {n o c initial w owner ra final} (checked : Pre n o c initial w owner ra)
     (accepted : (Source.indexRemove owner).run w=.ok ((),final)) :
     Eventually (instructionStep fetch) (Post n o c initial ra final) initial := by
@@ -55,7 +55,7 @@ local instance : Labels := Image.linkedLabels
 only decoding, the original entry domain and any explicitly listed environment
 or random-service premises remain. -/
 theorem replace_from_image (fetch : Int64 → Option Decoded) (decoder : IndexReplaceDecoderAgreement fetch)
-    (services : ServiceDecoderAgreement fetch) 
+    (services : ServiceDecoderAgreement fetch)
     {n o c initial w pid kid ra answer final} (checked : Pre n o c initial w pid kid ra)
     (accepted : (Source.indexReplaceHandshake pid kid).run w=.ok (answer,final)) :
     Eventually (instructionStep fetch) (Post n o c initial ra answer final) initial := by
@@ -74,7 +74,7 @@ local instance : Labels := Image.linkedLabels
 only decoding, the original entry domain and any explicitly listed environment
 or random-service premises remain. -/
 theorem insert_from_image (fetch : Int64 → Option Decoded) (decoder : IndexInsertDecoderAgreement fetch)
-    (services : ServiceDecoderAgreement fetch)  
+    (services : ServiceDecoderAgreement fetch)
     {n o c initial ra config inputAt w owner records answer final}
     (physical : RandomReturnContract fetch config)
     (coupling : RandomInputCoupling fetch config c.coverage (c.preempt+512) (codeEntry+0x79).toUInt64 inputAt)
@@ -124,7 +124,7 @@ theorem sequence_from_image (fetch : Int64 → Option Decoded)
     (lookupDecoder : AnchoredDecoderAgreement fetch)
     (removeDecoder : IndexRemoveDecoderAgreement fetch)
     (replaceDecoder : IndexReplaceDecoderAgreement fetch)
-    (services : ServiceDecoderAgreement fetch) 
+    (services : ServiceDecoderAgreement fetch)
      (permissions : Permissions) (onlineCPUs : Nat) (externalActions : List Nat)
     {n o c initial w ra calls answers finalWorld}
     (environment : SerializedEnvironment onlineCPUs externalActions)
@@ -153,7 +153,7 @@ theorem sequence_from_image (fetch : Int64 → Option Decoded)
     (removeDecoder : IndexRemoveDecoderAgreement fetch)
     (replaceDecoder : IndexReplaceDecoderAgreement fetch)
     (insertDecoder : IndexInsertDecoderAgreement fetch)
-    (services : ServiceDecoderAgreement fetch) 
+    (services : ServiceDecoderAgreement fetch)
      (permissions : Permissions) (onlineCPUs : Nat) (externalActions : List Nat)
     {n o c initial w ra calls answers finalWorld config inputAt records}
     (environment : SerializedEnvironment onlineCPUs externalActions)

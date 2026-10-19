@@ -8,6 +8,10 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 HEADLINES = [
+    'Binary.Pair.Trie.findNode_checked',
+    'Binary.Pair.Trie.lookup_checked',
+    'Binary.Pair.Trie.CallWitness.pre',
+    'Binary.Pair.Trie.CallWitness.accepted',
     'Binary.Callback.pc_contract',
     'Binary.Callback.cmp4_contract',
     'Binary.Callback.const_cmp4_contract',
@@ -55,10 +59,17 @@ HEADLINES = [
     'Binary.RandomService.return_recorded',
 ]
 IMPORTS = ['LookupSnapshotTransport', 'LookupWitness', 'LookupHitWitness', 'AllowedipsWitnessPre',
-           'PairCallbackSurface']
+           'PairCallbackSurface', 'PairCallWitness']
 # These definitions determine the meaning of the headline and its environment
 # premises outside TrustBase. The expected text is a specification, not a log.
 DEFINITIONS = [
+    'Binary.M',
+    'Binary.Source.indexLookup', 'Binary.Source.indexRemove',
+    'Binary.Source.indexReplaceHandshake', 'Binary.Source.indexInsert',
+    'Binary.Source.lookup', 'Binary.Source.findNode', 'Binary.Source.peerGetMaybeZero',
+    'Leanux.liftWG',
+    'Binary.Pair.Trie.callBoundary', 'Binary.Pair.Trie.initialBoundary',
+    'Binary.Pair.Trie.Corresponds',
     'Binary.Pair.Sequence.First.SequencePost',
     'Binary.LookupRelation.R', 'Binary.LookupRelation.LookupPost',
     'Binary.EffectSuccessor', 'Binary.InstructionSuccessor', 'Binary.ActualHistory',

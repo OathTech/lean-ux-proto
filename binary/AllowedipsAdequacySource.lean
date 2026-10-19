@@ -61,7 +61,7 @@ theorem suffix_live (id : NodeId) (history points : List Point)
     cases hp : device.peers.get? pid with
     | none =>
       have absent : device.peers[pid]? = none := hp
-      simp [Except.pure, Except.bind, StateT.run, liftWG, bind, StateT.bind, StateT.lift, pure, StateT.pure, get, getThe, MonadStateOf.get, StateT.get, modify, modifyGet, MonadStateOf.modifyGet, StateT.modifyGet, WG.peerGetMaybeZero, WG.requireNotPending, WG.getPeer, WG.getDev, AmbientM.branch, monadLift, MonadLift.monadLift, liftAmbient, Source.peerGetMaybeZero,branch,Source.requireNotPending,Source.getPeer,Source.getDev,Source.getWG,hd,absent,invariant] at actual
+      simp [Except.pure, Except.bind, StateT.run, liftWG, bind, StateT.bind, StateT.lift, pure, StateT.pure, get, getThe, MonadStateOf.get, StateT.get, modify, modifyGet, MonadStateOf.modifyGet, StateT.modifyGet, WG.peerGetMaybeZero, WG.requireNotPending, WG.getPeer, WG.getDev, AmbientM.branch, monadLift, MonadLift.monadLift,  Source.peerGetMaybeZero,branch,hd,absent,invariant] at actual
       cases actual
     | some peer =>
       have bound := PeerMirror.accepted_peer_bound pid world helperWorld peerAnswer device peer hd hp actual

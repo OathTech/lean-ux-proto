@@ -86,7 +86,7 @@ theorem result_simulation (fetch : Int64 → Option Decoded)
   obtain ⟨old, _, oldField⟩ := ownerField
   have ordinary : ownerPending seen ⟨s, Image.Lookup.entry+0xba⟩ = none := by
     simp only [ownerPending]
-    rw [if_neg (by decide)]
+    rw [ite_eq_right (by decide)]
   simp only [OwnerFieldAt, ordinary] at oldField
   have field : OwnerWord.Field c.peers s.dmem s.regs.rbx.toBitVec old := by simpa only [location] using oldField
   apply historySteps_mono fetch 4 _ _ _ _ (result_history fetch agree c.peers s old field history)
@@ -101,21 +101,21 @@ theorem result_simulation (fetch : Int64 → Option Decoded)
   let h4 := h3 ++ [p4]
   have obs1 : observe c.rxSection h1 = .ok seen := by
     have h := observe_snoc c.rxSection history ⟨s, Image.Lookup.entry+0xba⟩ p1 seen [] related.1 observed (by
-      simp [p1, LookupObservation.edge, Image.Lookup.entry, Image.PeerGet.entry]; rfl)
+      simp [ LookupObservation.edge, Image.Lookup.entry, Image.PeerGet.entry]; rfl)
     simpa only [List.append_nil] using h
   have obs2 : observe c.rxSection h2 = .ok seen := by
     have h := observe_snoc c.rxSection h1 p1 p2 seen [] (by simp [h1]) obs1 (by
-      simp [p1, p2, LookupObservation.edge, Image.Lookup.entry, Image.PeerGet.entry]; rfl)
+      simp [p1,  LookupObservation.edge, Image.Lookup.entry, Image.PeerGet.entry]; rfl)
     simpa only [List.append_nil] using h
   have obs3 : observe c.rxSection h3 = .ok seen := by
     have h := observe_snoc c.rxSection h2 p2 p3 seen [] (by simp [h2]) obs2 (by
-      simp [p2, p3, LookupObservation.edge, Image.Lookup.entry, Image.PeerGet.entry]; rfl)
+      simp [p2,  LookupObservation.edge, Image.Lookup.entry, Image.PeerGet.entry]; rfl)
     simpa only [List.append_nil] using h
   have obs4 : observe c.rxSection h4 = .ok (seen ++ [decision c.rxSection .idxPeerAlive (decide (s.regs.rax ≠ 0)) p4]) :=
     observe_snoc c.rxSection h3 p3 p4 seen _ (by simp [h3]) obs3 (by
       by_cases zero : s.regs.rax = 0 <;>
         simp [p3, p4, resultExit, resultSaved, OwnerWord.stored, tested, LookupObservation.edge,
-          LookupObservation.choice, Image.Lookup.entry, Image.PeerGet.entry, zero] <;> rfl)
+          LookupObservation.choice, Image.Lookup.entry,  zero] <;> rfl)
   have r1 := related.result_pending c world s history h1 seen returned owner focused location bucketApart countApart af p1
     (by simp [p1, resultStates]) (by exact .inl rfl) (by simp [h1])
   have r2 := related.result_pending c world s history h2 seen returned owner focused location bucketApart countApart af p2

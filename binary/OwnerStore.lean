@@ -16,7 +16,7 @@ theorem set_handshake_run (w : World) (device : Device) (id : PeerId) (peer : Pe
     (Source.setPeerWord (.handshake id) word).run w =
       .ok ((), {w with wg := {w.wg with dev := some {device with peers := device.peers.insert id {peer with handshakeEntryPeer := word}}}}) := by
   have peerRead : device.peers[id]? = some peer := hasPeer
-  simp [Except.pure, Except.bind, StateT.run, bind, StateT.bind, StateT.lift, pure, StateT.pure, get, getThe, MonadStateOf.get, StateT.get, modify, modifyGet, MonadStateOf.modifyGet, StateT.modifyGet, monadLift, MonadLift.monadLift, liftAmbient, AmbientM.branch, AmbientM.branchCmp, AmbientM.unsupported, liftWG, WG.requireNotPending, WG.getPeer, WG.getDev, WG.setPeer, WG.getKeypair, WG.setKeypair, WG.modifyDev, Source.setPeerWord, IndexOwner.setPeerWord, Source.getPeer, Source.getDev, Source.getWG, Source.setPeer, Source.modifyDev, Source.modifyWG,
+  simp [Except.pure, Except.bind, StateT.run, bind, StateT.bind,  pure, StateT.pure, get, getThe, MonadStateOf.get, StateT.get, modify, modifyGet, MonadStateOf.modifyGet, StateT.modifyGet,       liftWG,  WG.getPeer, WG.getDev, WG.setPeer,   WG.modifyDev, Source.setPeerWord, IndexOwner.setPeerWord,
     hasDevice, peerRead]
 
 theorem set_keypair_run (w : World) (device : Device) (id : KeypairId) (kp : Keypair)
@@ -25,7 +25,7 @@ theorem set_keypair_run (w : World) (device : Device) (id : KeypairId) (kp : Key
     (Source.setPeerWord (.keypair id) word).run w =
       .ok ((), {w with wg := {w.wg with dev := some {device with keypairs := device.keypairs.insert id {kp with peer := word}}}}) := by
   have keyRead : device.keypairs[id]? = some kp := hasKeypair
-  simp [Except.pure, Except.bind, StateT.run, bind, StateT.bind, StateT.lift, pure, StateT.pure, get, getThe, MonadStateOf.get, StateT.get, modify, modifyGet, MonadStateOf.modifyGet, StateT.modifyGet, monadLift, MonadLift.monadLift, liftAmbient, AmbientM.branch, AmbientM.branchCmp, AmbientM.unsupported, liftWG, WG.requireNotPending, WG.getPeer, WG.getDev, WG.setPeer, WG.getKeypair, WG.setKeypair, WG.modifyDev, Source.setPeerWord, IndexOwner.setPeerWord, Source.getKeypair, Source.getDev, Source.getWG, Source.setKeypair, Source.modifyDev, Source.modifyWG,
+  simp [Except.pure, Except.bind, StateT.run, bind, StateT.bind,  pure, StateT.pure, get, getThe, MonadStateOf.get, StateT.get, modify, modifyGet, MonadStateOf.modifyGet, StateT.modifyGet,       liftWG,   WG.getDev,  WG.getKeypair, WG.setKeypair, WG.modifyDev, Source.setPeerWord, IndexOwner.setPeerWord,
     hasDevice, keyRead]
 
 def stored (s : MachineData) : MachineData :=
@@ -48,7 +48,7 @@ theorem store_history (fetch : Int64 → Option Decoded)
   simp [Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
     MachineData.store, MachineData.set, AddrExpr.interp, ConstExpr.interp,
     Reg64s.get, Reg64s.get64, Reg.base, Reg.offset, BitVec.drop, BitVec.take,
-    Effects.All, BitVec.toAddressSize, BitVec.signed, BitVec.ofInt_add, BitVec.ofInt_toInt,
+    Effects.All, BitVec.toAddressSize, BitVec.signed,  BitVec.ofInt_toInt,
     stored, Field] at represented ⊢
   rw [represented]
   simp [Effects.All]

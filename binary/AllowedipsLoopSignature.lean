@@ -22,8 +22,7 @@ theorem input_signature (s : MachineData) (bits query rxSection : Nat) (node : A
       exact not_congr (highEq.trans (xor_zero_iff _ _).symm)
     simp only [CommonBits.Input.signature,CommonBits.Input.signatureOther,CommonBits.Input.signature128,
       show (input s 128 node.bits query).family = 128#8 from rfl]
-    simp only [show (128#8 == 32#8)=false from rfl,show ¬(128#8=32#8) by decide,
-      show (128#8 == 128#8)=true from rfl,↓reduceIte,choices]
+    simp only [choices]
     rfl
 
 #print axioms input_signature

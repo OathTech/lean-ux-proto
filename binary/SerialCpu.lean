@@ -19,7 +19,7 @@ theorem decodeSerialCpu_getD (raw : BitVec 32) :
     (decodeSerialCpu raw).getD 1 = raw.toNat := by
   by_cases h : raw = 1
   · subst raw; rfl
-  · simp only [decodeSerialCpu, if_neg h, Option.getD_some]
+  · simp only [decodeSerialCpu, ite_eq_right h, Option.getD_some]
 
 theorem SerialCpuField.of_word {memory peer} (raw : BitVec 32)
     (loaded : memory.loadInt (peer + .ofNat 64 Layouts.peer_serial_work_cpu) 4 = some (raw.toNat : Int)) :

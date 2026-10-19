@@ -108,7 +108,7 @@ theorem helper_from_call (fetch : Int64 → Option Decoded)
     intro n
     cases n <;> simp [scan])
   have active : helperActive seen = true := helperActive_call _ _
-  have noReturn : lastHelperReturn seen = none := by simp only [seen, lastHelperReturn, List.getLast?_append, List.getLast?_singleton, Option.some_or, Option.bind_some, call]; rfl
+  have noReturn : lastHelperReturn seen = none := by simp only [seen, lastHelperReturn, List.getLast?_append, List.getLast?_singleton, Option.some_or,  call]; rfl
   have latest : (helperSource c world v).getLast?.map (·.world) = some (helperWorld c world v) := by
     simp only [helperSource, List.getLast?_append, List.getLast?_singleton, Option.some_or, Option.map_some]
   have projected : project c (helperWorld c world v) = some v := by

@@ -36,7 +36,7 @@ theorem prefix_guard (fetch : Int64 → Option Decoded) (agree : AllowedipsDecod
     simp only [observeHistory,first]
     by_cases branch : (s.regs.get (.low .r15 .W8)).toNat ≤ (s.regs.get (.low .r14 .W8)).toNat
     all_goals simp [AllowedipsObservation.edge,midPC,pc,branch,choice,
-      AllowedipsImage.Lookup.entry,AllowedipsImage.CommonBits.entry,Image.PeerGet.entry]
+      AllowedipsImage.Lookup.entry,AllowedipsImage.CommonBits.entry]
     all_goals rfl
   have traced := Trace.of_path observed last _ rfl pathEq (by simp) nextFrame _ localObserved
     (by
@@ -92,7 +92,7 @@ theorem full_guard (fetch : Int64 → Option Decoded) (agree : AllowedipsDecoder
     simp only [observeHistory,first]
     cases branch : s.regs.get (.low .r12 .W8) == s.regs.get (.low .r15 .W8)
     all_goals simp [AllowedipsObservation.edge,midPC,pc,branch,choice,
-      AllowedipsImage.Lookup.entry,AllowedipsImage.CommonBits.entry,Image.PeerGet.entry]
+      AllowedipsImage.Lookup.entry,AllowedipsImage.CommonBits.entry]
     all_goals rfl
   have traced := Trace.of_path observed last _ rfl pathEq (by simp) nextFrame _ localObserved
     (by
@@ -149,8 +149,8 @@ theorem next_guard (fetch : Int64 → Option Decoded) (agree : AllowedipsDecoder
     simp only [observeHistory,first]
     rw [machine]
     cases zero : s.regs.get (.low .rbx .W64) == 0
-    all_goals simp [AllowedipsObservation.edge,mid,zero,choice,
-      AllowedipsImage.Lookup.entry,AllowedipsImage.CommonBits.entry]
+    all_goals simp [AllowedipsObservation.edge,mid,choice,
+      AllowedipsImage.Lookup.entry]
     all_goals rfl
   have trace := Trace.of_path observed last _ rfl pathEq (by simp) nextFrame _ localObserved
     (by

@@ -2,7 +2,6 @@ import AllowedipsMoves
 
 namespace Binary.Allowedips
 local instance : Labels := Image.linkedLabels
-set_option linter.unusedSimpArgs false
 
 def zeroHigh (s : MachineData) : Mem 64 :=
   s.dmem.storeInt (s.regs.rsp.toBitVec+16) 8 0
@@ -56,11 +55,11 @@ theorem enableArguments (s : MachineData) :
       t.data.regs = {s.regs with rsi := 512, rdi := (AllowedipsImage.Lookup.entry+0x137).toUInt64} ∧
       t.data.dmem = s.dmem ∧ t.pc = AllowedipsImage.Lookup.entry+0x137) := by
   simp [run, AllowedipsImage.Lookup.r12b, Directives.interp, Directive.interp,
-    Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
+    Instr.interp, Operation.interp,  Operand.interp,
     MachineData.set, MachineData.setReg, AddrExpr.interp, ConstExpr.interp,
-    Reg64s.get, Reg64s.get64, Reg64s.set, Reg64s.set64, Reg.base, Reg.offset,
-    BitVec.take, BitVec.drop, BitVec.toAddressSize, BitVec.signed,
-    BitVec.ofInt_toInt, BitVec.ofInt_add, BitVec.ofInt_ofNat,
+      Reg64s.set, Reg64s.set64,
+
+
     Effects.All, AllowedipsImage.Lookup.entry]
   decide
 

@@ -89,7 +89,7 @@ theorem Ready.of_middle_frame {c coverage old ra initial world v entry current}
     have same := frame.loadInt (Allowedips.entrySlot initial.data i) 8 (by
       intro j hj
       apply upper_separate pre (i+1) (by omega)
-      rw [saved_slot initial i (by omega),if_pos hi]
+      rw [saved_slot initial i (by omega),ite_eq_left hi]
       exact ⟨j,hj,rfl⟩)
     exact same.symm.trans (entryPost.saved i (by omega))
   · have same := frame.loadInt initial.data.regs.rsp.toBitVec 8 (by

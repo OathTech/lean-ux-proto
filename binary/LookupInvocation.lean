@@ -44,12 +44,12 @@ theorem raw_return_bound (rx : Nat) (history : List MachineState) (points : List
           by_cases ret : s.pc = Image.Lookup.entry+0x94
           · have emitted : delta = [returned "wg_index_hashtable_lookup" t] := by
               have e : edge rx s t = .ok [returned "wg_index_hashtable_lookup" t] := by
-                simp [edge, ret, Image.Lookup.entry, Image.PeerGet.entry]
+                simp [edge, ret, Image.Lookup.entry]
                 rfl
               exact Except.ok.inj (first.symm.trans e)
             simp only [List.dropLast_cons_cons, rawReturns, List.countP_cons,
               observedReturns, List.countP_append] at bound ⊢
-            simp [ret, emitted, returned, isOuter, observedReturns] at bound ⊢
+            simp [ret, emitted, returned, isOuter] at bound ⊢
             omega
           · simp only [List.dropLast_cons_cons, rawReturns, List.countP_cons,
               observedReturns, List.countP_append] at bound ⊢

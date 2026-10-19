@@ -25,8 +25,8 @@ theorem next_load (fetch : Int64 → Option Decoded)
   refine ⟨by decide, ?_⟩
   simp [Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
     MachineData.load, MachineData.set, MachineData.setReg,
-    AddrExpr.interp, Reg64s.get, Reg64s.get64, Reg.base, Reg.offset,
-    Reg64s.set, Reg64s.set64, BitVec.drop, BitVec.take,
+    AddrExpr.interp,  Reg64s.get64,
+    Reg64s.set, Reg64s.set64,  BitVec.take,
     ConstExpr.interp, BitVec.toAddressSize, BitVec.signed,
     BitVec.ofInt_add, BitVec.ofInt_toInt, BitVec.ofInt_ofNat,
     Effects.All, loaded, nextData, Image.Lookup.entry] at loaded ⊢

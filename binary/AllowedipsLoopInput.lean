@@ -44,7 +44,7 @@ theorem input_result (s : MachineData) (bits stored query : Nat)
       Nat.mod_eq_of_lt storedBound,Nat.mod_eq_of_lt queryBound]
   · have highEq := input_high_eq s stored query storedBound queryBound
     simp only [CommonBits.Input.result,show (input s 128 stored query).family = 128 from rfl,
-      show ¬(128#8 = 32#8) by decide,↓reduceIte]
+      ↓reduceIte]
     simp only [highEq]
     simp only [input,UInt64.toNat_ofNat',Nat.mod_eq_of_lt (high_bound stored storedBound),
       Nat.mod_eq_of_lt (high_bound query queryBound),Nat.mod_mod,

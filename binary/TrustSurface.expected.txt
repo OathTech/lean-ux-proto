@@ -1,4 +1,71 @@
 HEADLINE STATEMENTS AND INTERPRETATION DEFINITIONS
+Binary.Pair.Trie.findNode_checked : ∀ (fetch : Int64 → Option.{0} Binary.Decoded),
+  Binary.TrustBase.AllowedipsDecoderAgreement fetch →
+    Binary.CommonBits.Callbacks fetch →
+      Binary.TrustBase.AllowedipsTraceCmp1Contract fetch →
+        ∀ (names : Binary.Pair.Trie.Names) (input : AllowedipsProbe.Input)
+          (coverage : Binary.CommonBitsCoverage.Context) (s : MachineState) (w final : Leanux.World)
+          (root : Option.{0} Leanux.WG.NodeId) (bits query : Nat) (answer : Option.{0} Leanux.WG.NodeId) {stack : Nat},
+          Eq.{1} (Binary.Pair.Trie.initialBoundary names input coverage s w root bits query stack)
+              (Except.ok.{0, 0} ()) →
+            Eq.{1} (StateT.run.{0, 0} (Binary.Source.findNode root bits query) w)
+                (Except.ok.{0, 0} (Prod.mk.{0, 0} answer final)) →
+              Eventually (Binary.historyStep fetch)
+                (fun t =>
+                  Eq.{1} t.machine.pc (HAdd.hAdd.{0, 0, 0} Binary.AllowedipsImage.Lookup.entry 257) ∧
+                    Eq.{1} t.machine.data.regs.rbp.toBitVec
+                        (Binary.AllowedipsRelation.pointer (Binary.Pair.Trie.interpretation names.nodes) answer) ∧
+                      (Exists.{1} fun d =>
+                          Eq.{1} final.wg.dev (some.{0} d) ∧
+                            Eq.{1} (Binary.Pair.Trie.reconstruct names input.offsets t.machine.data.dmem)
+                              (Except.ok.{0, 0} (Binary.Pair.Trie.target d))) ∧
+                        Binary.AllowedipsLoop.Frame s.data coverage t.machine.data)
+                { machine := s, history := List.cons.{0} s List.nil.{0} }
+Binary.Pair.Trie.lookup_checked : ∀ (fetch : Int64 → Option.{0} Binary.Decoded),
+  Binary.TrustBase.AllowedipsDecoderAgreement fetch →
+    Binary.TrustBase.AnchoredDecoderAgreement fetch →
+      Binary.CommonBits.Callbacks fetch →
+        Binary.TrustBase.AllowedipsTraceCmp1Contract fetch →
+          Binary.TrustBase.AllowedipsTraceConstCmp4Contract fetch →
+            Binary.TrustBase.AllowedipsTraceConstCmp1Contract fetch →
+              Binary.TrustBase.AllowedipsBhEnableContract fetch →
+                ∀ {names : Binary.Pair.Trie.Names} {input : AllowedipsProbe.Input}
+                  {coverage : Binary.CommonBitsCoverage.Context} {initial : MachineState} {w : Leanux.World}
+                  {root : Option.{0} Leanux.WG.NodeId} {bits key : Nat} {ra : UInt64}
+                  {answer : Option.{0} Leanux.WG.PeerId} {final : Leanux.World},
+                  Eq.{1} (Binary.Pair.Trie.callBoundary names input coverage initial w root bits key ra)
+                      (Except.ok.{0, 0} ()) →
+                    Eq.{1} (StateT.run.{0, 0} (Binary.Source.lookup root bits key) w)
+                        (Except.ok.{0, 0} (Prod.mk.{0, 0} answer final)) →
+                      Eventually (Binary.instructionStep fetch)
+                        (fun t =>
+                          Binary.AllowedipsTail.Post initial coverage.coverage coverage.preempt ra
+                              {
+                                toBitVec :=
+                                  Binary.AllowedipsRelation.pointer (Binary.Pair.Trie.interpretation names.peers)
+                                    answer }
+                              t ∧
+                            (Exists.{1} fun d =>
+                                Eq.{1} final.wg.dev (some.{0} d) ∧
+                                  Binary.Pair.Trie.Corresponds names input.offsets t.data.dmem d) ∧
+                              Binary.EqualOutside
+                                (fun a =>
+                                  Binary.AllowedipsEntry.TotalWrites initial coverage.coverage coverage.preempt a ∨
+                                    Binary.Pair.Trie.CountBytes names input.offsets a)
+                                initial.data.dmem t.data.dmem)
+                        initial
+Binary.Pair.Trie.CallWitness.pre : ∀ (bits : Nat),
+  Eq.{1} bits 32 ∨ Eq.{1} bits 128 →
+    Binary.TrustBase.Pre_allowedips
+      (Binary.Pair.Trie.callConfig Binary.Pair.Trie.Witness.names (Binary.Pair.Trie.Witness.world bits)
+        (Binary.Pair.Trie.Witness.device bits) (some.{0} 0) bits 1)
+      Binary.Pair.Trie.CallWitness.coverage.coverage 0 (UInt64.ofNat stopAddr) (Binary.Pair.Trie.CallWitness.state bits)
+      (Binary.Pair.Trie.Witness.world bits)
+Binary.Pair.Trie.CallWitness.accepted : ∀ (bits : Nat),
+  Eq.{1} bits 32 ∨ Eq.{1} bits 128 →
+    Exists.{1} fun final =>
+      Eq.{1} (StateT.run.{0, 0} (Binary.Source.lookup (some.{0} 0) bits 1) (Binary.Pair.Trie.Witness.world bits))
+        (Except.ok.{0, 0} (Prod.mk.{0, 0} (some.{0} 0) final))
 Binary.Callback.pc_contract : ∀ (fetch : Int64 → Option.{0} Binary.Decoded),
   Binary.TrustBase.ServiceDecoderAgreement fetch → Binary.TrustBase.TracePcContract fetch
 Binary.Callback.cmp4_contract : ∀ (fetch : Int64 → Option.{0} Binary.Decoded),
@@ -19,7 +86,7 @@ Binary.Pair.IndexLookup.lookup_first_return : ∀ (fetch : Int64 → Option.{0} 
         Binary.TrustBase.SerializedEnvironment onlineCPUs externalActions →
           Binary.TrustBase.FirstReturnCallPermissions fetch permissions initial ra →
             Binary.Pair.IndexLookup.Pre n o c initial w query kinds ra →
-              Eq.{1} (StateT.run.{0, 0} (Leanux.WG.indexLookup kinds query) w)
+              Eq.{1} (StateT.run.{0, 0} (Binary.Source.indexLookup kinds query) w)
                   (Except.ok.{0, 0} (Prod.mk.{0, 0} answer final)) →
                 Eventually (Binary.historyStep fetch)
                   (fun t =>
@@ -38,7 +105,8 @@ Binary.Pair.Remove.remove_first_return : ∀ (fetch : Int64 → Option.{0} Binar
         Binary.TrustBase.SerializedEnvironment onlineCPUs externalActions →
           Binary.TrustBase.FirstReturnCallPermissions fetch permissions initial ra →
             Binary.Pair.Remove.Pre n o c initial w owner ra →
-              Eq.{1} (StateT.run.{0, 0} (Leanux.WG.indexRemove owner) w) (Except.ok.{0, 0} (Prod.mk.{0, 0} () final)) →
+              Eq.{1} (StateT.run.{0, 0} (Binary.Source.indexRemove owner) w)
+                  (Except.ok.{0, 0} (Prod.mk.{0, 0} () final)) →
                 Eventually (Binary.historyStep fetch)
                   (fun t =>
                     Binary.Pair.Remove.Post n o c initial ra final t.machine ∧
@@ -57,7 +125,7 @@ Binary.Pair.Replace.replace_first_return : ∀ (fetch : Int64 → Option.{0} Bin
         Binary.TrustBase.SerializedEnvironment onlineCPUs externalActions →
           Binary.TrustBase.FirstReturnCallPermissions fetch permissions initial ra →
             Binary.Pair.Replace.Pre n o c initial w pid kid ra →
-              Eq.{1} (StateT.run.{0, 0} (Leanux.WG.indexReplaceHandshake pid kid) w)
+              Eq.{1} (StateT.run.{0, 0} (Binary.Source.indexReplaceHandshake pid kid) w)
                   (Except.ok.{0, 0} (Prod.mk.{0, 0} answer final)) →
                 Eventually (Binary.historyStep fetch)
                   (fun t =>
@@ -99,7 +167,7 @@ Binary.Pair.Insert.insert_from_image : ∀ (fetch : Int64 → Option.{0} Binary.
             Binary.Pair.Insert.Pre n o c initial w owner ra config →
               Eq.{1} w.hidden (some.{0} records) →
                 inputAt initial.data.dmem records →
-                  Eq.{1} (StateT.run.{0, 0} (Leanux.WG.indexInsert owner) w)
+                  Eq.{1} (StateT.run.{0, 0} (Binary.Source.indexInsert owner) w)
                       (Except.ok.{0, 0} (Prod.mk.{0, 0} answer final)) →
                     Eventually (Binary.instructionStep fetch)
                       (Binary.Pair.Insert.Post n o c initial ra config inputAt answer final) initial
@@ -119,7 +187,7 @@ Binary.Pair.Insert.insert_simulation_from_image : ∀ (fetch : Int64 → Option.
                 Binary.Pair.Insert.Pre n o c initial w owner ra config →
                   Eq.{1} w.hidden (some.{0} records) →
                     inputAt initial.data.dmem records →
-                      Eq.{1} (StateT.run.{0, 0} (Leanux.WG.indexInsert owner) w)
+                      Eq.{1} (StateT.run.{0, 0} (Binary.Source.indexInsert owner) w)
                           (Except.ok.{0, 0} (Prod.mk.{0, 0} answer final)) →
                         Eventually (Binary.historyStep fetch)
                           (fun t =>
@@ -172,7 +240,7 @@ Binary.LookupRelation.lookup_simulation : ∀ (fetch : Int64 → Option.{0} Bina
                     Binary.TrustBase.Pre_lookup c coverage preempt returnAddress initial world →
                       ∀ (answer : Option.{0} (Prod.{0, 0} Leanux.WG.IndexOwner Leanux.WG.PeerId))
                         (finalWorld : Leanux.World),
-                        Eq.{1} (StateT.run.{0, 0} (Leanux.WG.indexLookup c.kinds c.query) world)
+                        Eq.{1} (StateT.run.{0, 0} (Binary.Source.indexLookup c.kinds c.query) world)
                             (Except.ok.{0, 0} (Prod.mk.{0, 0} answer finalWorld)) →
                           Eventually (Binary.historyStep fetch)
                             (fun final =>
@@ -197,7 +265,7 @@ Binary.LookupRelation.lookup_transport : ∀ (fetch : Int64 → Option.{0} Binar
                     Binary.TrustBase.Pre_lookup c coverage preempt returnAddress initial world →
                       ∀ (answer : Option.{0} (Prod.{0, 0} Leanux.WG.IndexOwner Leanux.WG.PeerId))
                         (finalWorld : Leanux.World),
-                        Eq.{1} (StateT.run.{0, 0} (Leanux.WG.indexLookup c.kinds c.query) world)
+                        Eq.{1} (StateT.run.{0, 0} (Binary.Source.indexLookup c.kinds c.query) world)
                             (Except.ok.{0, 0} (Prod.mk.{0, 0} answer finalWorld)) →
                           ∀
                             (P :
@@ -269,7 +337,7 @@ Binary.LookupRelation.LookupPost.frame_cuts : ∀ (c : Binary.LookupRelation.Con
                     Binary.TrustBase.Pre_lookup c coverage preempt returnAddress initial world →
                       ∀ (answer : Option.{0} (Prod.{0, 0} Leanux.WG.IndexOwner Leanux.WG.PeerId))
                         (finalWorld : Leanux.World),
-                        Eq.{1} (StateT.run.{0, 0} (Leanux.WG.indexLookup c.kinds c.query) world)
+                        Eq.{1} (StateT.run.{0, 0} (Binary.Source.indexLookup c.kinds c.query) world)
                             (Except.ok.{0, 0} (Prod.mk.{0, 0} answer finalWorld)) →
                           ∀
                             (P :
@@ -332,7 +400,7 @@ Binary.LookupRelation.lookup_snapshot_transport : ∀ (fetch : Int64 → Option.
                     Binary.TrustBase.Pre_lookup c coverage preempt returnAddress initial world →
                       ∀ (answer : Option.{0} (Prod.{0, 0} Leanux.WG.IndexOwner Leanux.WG.PeerId))
                         (finalWorld : Leanux.World),
-                        Eq.{1} (StateT.run.{0, 0} (Leanux.WG.indexLookup c.kinds c.query) world)
+                        Eq.{1} (StateT.run.{0, 0} (Binary.Source.indexLookup c.kinds c.query) world)
                             (Except.ok.{0, 0} (Prod.mk.{0, 0} answer finalWorld)) →
                           ∀
                             (P :
@@ -397,7 +465,8 @@ Binary.Pair.Remove.remove_checked : ∀ (fetch : Int64 → Option.{0} Binary.Dec
         ∀ {n : Binary.Pair.Names} {o : Offsets} {c : Binary.CommonBitsCoverage.Context} {initial : MachineState}
           {w : Leanux.World} {owner : Leanux.WG.IndexOwner} {ra : UInt64} {final : Leanux.World},
           Binary.Pair.Remove.Pre n o c initial w owner ra →
-            Eq.{1} (StateT.run.{0, 0} (Leanux.WG.indexRemove owner) w) (Except.ok.{0, 0} (Prod.mk.{0, 0} () final)) →
+            Eq.{1} (StateT.run.{0, 0} (Binary.Source.indexRemove owner) w)
+                (Except.ok.{0, 0} (Prod.mk.{0, 0} () final)) →
               Eventually (Binary.instructionStep fetch) (Binary.Pair.Remove.Post n o c initial ra final) initial
 Binary.Pair.Remove.remove_simulation : ∀ (fetch : Int64 → Option.{0} Binary.Decoded),
   Binary.TrustBase.IndexRemoveDecoderAgreement fetch →
@@ -409,7 +478,7 @@ Binary.Pair.Remove.remove_simulation : ∀ (fetch : Int64 → Option.{0} Binary.
           Binary.TrustBase.SerializedEnvironment onlineCPUs externalActions →
             Binary.TrustBase.ReturningCallPermissions fetch permissions initial ra →
               Binary.Pair.Remove.Pre n o c initial w owner ra →
-                Eq.{1} (StateT.run.{0, 0} (Leanux.WG.indexRemove owner) w)
+                Eq.{1} (StateT.run.{0, 0} (Binary.Source.indexRemove owner) w)
                     (Except.ok.{0, 0} (Prod.mk.{0, 0} () final)) →
                   Eventually (Binary.historyStep fetch)
                     (fun t =>
@@ -426,7 +495,7 @@ Binary.Pair.Replace.replace_checked : ∀ (fetch : Int64 → Option.{0} Binary.D
           {w : Leanux.World} {pid : Leanux.WG.PeerId} {kid : Leanux.WG.KeypairId} {ra : UInt64} {answer : Bool}
           {final : Leanux.World},
           Binary.Pair.Replace.Pre n o c initial w pid kid ra →
-            Eq.{1} (StateT.run.{0, 0} (Leanux.WG.indexReplaceHandshake pid kid) w)
+            Eq.{1} (StateT.run.{0, 0} (Binary.Source.indexReplaceHandshake pid kid) w)
                 (Except.ok.{0, 0} (Prod.mk.{0, 0} answer final)) →
               Eventually (Binary.instructionStep fetch) (Binary.Pair.Replace.Post n o c initial ra answer final) initial
 Binary.Pair.Replace.replace_simulation : ∀ (fetch : Int64 → Option.{0} Binary.Decoded),
@@ -440,7 +509,7 @@ Binary.Pair.Replace.replace_simulation : ∀ (fetch : Int64 → Option.{0} Binar
           Binary.TrustBase.SerializedEnvironment onlineCPUs externalActions →
             Binary.TrustBase.ReturningCallPermissions fetch permissions initial ra →
               Binary.Pair.Replace.Pre n o c initial w pid kid ra →
-                Eq.{1} (StateT.run.{0, 0} (Leanux.WG.indexReplaceHandshake pid kid) w)
+                Eq.{1} (StateT.run.{0, 0} (Binary.Source.indexReplaceHandshake pid kid) w)
                     (Except.ok.{0, 0} (Prod.mk.{0, 0} answer final)) →
                   Eventually (Binary.historyStep fetch)
                     (fun t =>
@@ -461,7 +530,7 @@ Binary.Pair.IndexLookup.lookup_checked : ∀ (fetch : Int64 → Option.{0} Binar
                 {ra : UInt64} {answer : Option.{0} (Prod.{0, 0} Leanux.WG.IndexOwner Leanux.WG.PeerId)}
                 {finalWorld : Leanux.World},
                 Binary.Pair.IndexLookup.Pre n o coverage initial w query kinds ra →
-                  Eq.{1} (StateT.run.{0, 0} (Leanux.WG.indexLookup kinds query) w)
+                  Eq.{1} (StateT.run.{0, 0} (Binary.Source.indexLookup kinds query) w)
                       (Except.ok.{0, 0} (Prod.mk.{0, 0} answer finalWorld)) →
                     Eventually (Binary.instructionStep fetch)
                       (Binary.Pair.IndexLookup.Post n o coverage initial ra answer finalWorld) initial
@@ -479,7 +548,7 @@ Binary.Pair.IndexLookup.lookup_simulation : ∀ (fetch : Int64 → Option.{0} Bi
                 Binary.TrustBase.SerializedEnvironment onlineCPUs externalActions →
                   Binary.TrustBase.ReturningCallPermissions fetch permissions initial ra →
                     Binary.Pair.IndexLookup.Pre n o c initial w query kinds ra →
-                      Eq.{1} (StateT.run.{0, 0} (Leanux.WG.indexLookup kinds query) w)
+                      Eq.{1} (StateT.run.{0, 0} (Binary.Source.indexLookup kinds query) w)
                           (Except.ok.{0, 0} (Prod.mk.{0, 0} answer final)) →
                         Eventually (Binary.historyStep fetch)
                           (fun t =>
@@ -561,7 +630,7 @@ Binary.Pair.Insert.insert_checked : ∀ (fetch : Int64 → Option.{0} Binary.Dec
                 Binary.Pair.Insert.Pre n o c initial w owner ra config →
                   Eq.{1} w.hidden (some.{0} records) →
                     inputAt initial.data.dmem records →
-                      Eq.{1} (StateT.run.{0, 0} (Leanux.WG.indexInsert owner) w)
+                      Eq.{1} (StateT.run.{0, 0} (Binary.Source.indexInsert owner) w)
                           (Except.ok.{0, 0} (Prod.mk.{0, 0} answer final)) →
                         Eventually (Binary.instructionStep fetch)
                           (Binary.Pair.Insert.Post n o c initial ra config inputAt answer final) initial
@@ -583,7 +652,7 @@ Binary.Pair.Insert.insert_simulation : ∀ (fetch : Int64 → Option.{0} Binary.
                     Binary.Pair.Insert.Pre n o c initial w owner ra config →
                       Eq.{1} w.hidden (some.{0} records) →
                         inputAt initial.data.dmem records →
-                          Eq.{1} (StateT.run.{0, 0} (Leanux.WG.indexInsert owner) w)
+                          Eq.{1} (StateT.run.{0, 0} (Binary.Source.indexInsert owner) w)
                               (Except.ok.{0, 0} (Prod.mk.{0, 0} answer final)) →
                             Eventually (Binary.historyStep fetch)
                               (fun t =>
@@ -636,7 +705,7 @@ Binary.Pair.Insert.Witness.check : ∀ (linked : Bool),
 Binary.Pair.Insert.Witness.source_success : ∀ (linked : Bool),
   Exists.{1} fun final =>
     Eq.{1}
-      (StateT.run.{0, 0} (Leanux.WG.indexInsert (Leanux.WG.IndexOwner.keypair 0))
+      (StateT.run.{0, 0} (Binary.Source.indexInsert (Leanux.WG.IndexOwner.keypair 0))
         (Binary.Pair.Insert.Witness.world linked))
       (Except.ok.{0, 0} (Prod.mk.{0, 0} 7 final))
 Binary.Pair.Insert.Witness.executes : ∀ (linked : Bool) (fetch : Int64 → Option.{0} Binary.Decoded),
@@ -654,7 +723,7 @@ Binary.Pair.Insert.Witness.executes : ∀ (linked : Bool) (fetch : Int64 → Opt
                     (List.cons.{0} (Binary.Pair.Insert.record 7) List.nil.{0}) →
                   Exists.{1} fun final =>
                     Eq.{1}
-                        (StateT.run.{0, 0} (Leanux.WG.indexInsert (Leanux.WG.IndexOwner.keypair 0))
+                        (StateT.run.{0, 0} (Binary.Source.indexInsert (Leanux.WG.IndexOwner.keypair 0))
                           (Binary.Pair.Insert.Witness.world linked))
                         (Except.ok.{0, 0} (Prod.mk.{0, 0} 7 final)) ∧
                       Eventually (Binary.instructionStep fetch)
@@ -675,6 +744,95 @@ Binary.RandomService.return_recorded : ∀ (fetch : Int64 → Option.{0} Binary.
                 Eq.{1} (Binary.Pair.Insert.draw records) (Except.ok.{0, 0} (Prod.mk.{0, 0} value rest)) →
                   Eventually (Binary.instructionStep fetch)
                     (Binary.RandomService.Post config coverage preempt inputAt s ra value rest) s
+@[reducible] def Binary.M : Type → Type :=
+Leanux.M
+@[reducible] def Binary.Source.indexLookup : List.{0} Leanux.WG.IndexKind →
+  Nat → Leanux.M (Option.{0} (Prod.{0, 0} Leanux.WG.IndexOwner Leanux.WG.PeerId)) :=
+fun kinds index => Leanux.liftWG (Leanux.WG.indexLookup kinds index)
+@[reducible] def Binary.Source.indexRemove : Leanux.WG.IndexOwner → Leanux.M Unit :=
+fun owner => Leanux.liftWG (Leanux.WG.liftIndex (Leanux.WG.indexRemove owner))
+@[reducible] def Binary.Source.indexReplaceHandshake : Leanux.WG.PeerId → Leanux.WG.KeypairId → Leanux.M Bool :=
+fun pid kid => Leanux.liftWG (Leanux.WG.liftIndex (Leanux.WG.indexReplaceHandshake pid kid))
+@[reducible] def Binary.Source.indexInsert : Leanux.WG.IndexOwner → Leanux.M Nat :=
+fun owner => Leanux.liftWG (Leanux.WG.liftIndex (Leanux.WG.indexInsert owner))
+@[reducible] def Binary.Source.lookup : Option.{0} Leanux.WG.NodeId →
+  Nat → Nat → Leanux.M (Option.{0} Leanux.WG.PeerId) :=
+fun root bits key => Leanux.liftWG (Leanux.WG.lookup root bits key)
+@[reducible] def Binary.Source.findNode : Option.{0} Leanux.WG.NodeId →
+  Nat → Nat → Leanux.M (Option.{0} Leanux.WG.NodeId) :=
+fun root bits key => Leanux.liftWG (Leanux.WG.liftAip (Leanux.WG.findNode root bits key))
+@[reducible] def Binary.Source.peerGetMaybeZero : Option.{0} Leanux.WG.PeerId →
+  Leanux.M (Option.{0} Leanux.WG.PeerId) :=
+fun peer => Leanux.liftWG (Leanux.WG.peerGetMaybeZero peer)
+def Leanux.liftWG : {α : Type} → Leanux.WG.M α → Leanux.M α :=
+fun {α} x w => do
+  let __x ← StateT.run.{0, 0} (StateT.run.{0, 0} x w.wg) w.ambient
+  match __x with
+    | Prod.mk.{0, 0} (Prod.mk.{0, 0} a wg) ambient =>
+      pure.{0, 0}
+        (Prod.mk.{0, 0} a
+          { ambient := ambient, tasks := w.tasks, seccomp := w.seccomp, fs := w.fs, wg := wg, fixture := w.fixture })
+def Binary.Pair.Trie.callBoundary : Binary.Pair.Trie.Names →
+  AllowedipsProbe.Input →
+    Binary.CommonBitsCoverage.Context →
+      MachineState → Leanux.World → Option.{0} Leanux.WG.NodeId → Nat → Nat → UInt64 → Except.{0, 0} String Unit :=
+fun names input coverage initial w root width key ra => do
+  Binary.Pair.Trie.assertAt names input.offsets initial.data.dmem w
+  Binary.Pair.Trie.callInput names input.offsets initial.data.dmem root width key
+  let __do_lift ← Binary.Pair.Trie.address names.nodes root
+  have __do_jp : Unit → Except.{0, 0} String Unit := fun __r =>
+    Binary.Pair.Trie.callFrameCheck names input.offsets coverage initial ra width key
+  ite.{1}
+      (Eq.{1}
+        (BEq.beq.{0} initial.pc Binary.AllowedipsImage.Lookup.entry &&
+            BEq.beq.{0} initial.data.regs.rdi.toNat __do_lift &&
+          BEq.beq.{0} initial.data.regs.rsi.toNat width)
+        true)
+      (__do_jp ()) do
+      let __r ← throw.{0, 0, 0} "call.abi-input"
+      __do_jp __r
+def Binary.Pair.Trie.initialBoundary : Binary.Pair.Trie.Names →
+  AllowedipsProbe.Input →
+    Binary.CommonBitsCoverage.Context →
+      MachineState →
+        Leanux.World →
+          Option.{0} Leanux.WG.NodeId → Nat → Nat → optParam.{1} Nat stackAddr → Except.{0, 0} String Unit :=
+fun names input c s w root width key stack => do
+  Binary.Pair.Trie.assertAt names input.offsets s.data.dmem w
+  Binary.Pair.Trie.callInput names input.offsets s.data.dmem root width key
+  Binary.Pair.Trie.locals names input s root width key root none.{0} stack
+  have __do_jp : Unit → Except.{0, 0} String Unit := fun __r =>
+    have __do_jp := fun __r =>
+      have __do_jp := fun __r =>
+        ite.{1}
+          (Eq.{1}
+            (Binary.Pair.spansApart
+              (List.cons.{0}
+                (Prod.mk.{0, 0} (HAdd.hAdd.{0, 0, 0} s.data.regs.rsp.toBitVec 16).toNat (HDiv.hDiv.{0, 0, 0} width 8))
+                List.nil.{0})
+              (Binary.Pair.Trie.loopWrites c s.data))
+            true)
+          (pure.{0, 0} ()) (throw.{0, 0, 0} "boundary.query-separation");
+      ite.{1}
+        (Eq.{1}
+          (Binary.Pair.spansApart (Binary.Pair.Trie.decoderSpans names input.offsets)
+            (Binary.Pair.Trie.loopWrites c s.data))
+          true)
+        (__do_jp ()) do
+        let __r ← throw.{0, 0, 0} "boundary.decoder-separation"
+        __do_jp __r;
+    ite.{1} (Eq.{1} (Binary.Pair.Trie.frameCheck c s.data) true) (__do_jp ()) do
+      let __r ← throw.{0, 0, 0} "boundary.callback-frame"
+      __do_jp __r
+  ite.{1}
+      (Eq.{1} (BEq.beq.{0} s.pc (HAdd.hAdd.{0, 0, 0} Binary.AllowedipsImage.Lookup.entry 213) && Option.isSome.{0} root)
+        true)
+      (__do_jp ()) do
+      let __r ← throw.{0, 0, 0} "boundary.header"
+      __do_jp __r
+def Binary.Pair.Trie.Corresponds : Binary.Pair.Trie.Names →
+  AllowedipsProbe.Offsets → DataMem → Leanux.WG.Device → Prop :=
+fun names o m d => Eq.{1} (Binary.Pair.Trie.reconstruct names o m) (Except.ok.{0, 0} (Binary.Pair.Trie.target d))
 def Binary.Pair.Sequence.First.SequencePost : (Int64 → Option.{0} Binary.Decoded) →
   Binary.TrustBase.Permissions →
     Nat →
@@ -815,7 +973,7 @@ fun n o c initial ra final t =>
   Binary.TrustBase.Returned initial t ra ∧
     Binary.Pair.Index.MemoryReady c initial ra 4 (Binary.Pair.Remove.savedWords initial.data) false t.data.dmem ∧
       (Exists.{1} fun d =>
-          Eq.{1} final.k.wg (some.{0} d) ∧
+          Eq.{1} final.wg.dev (some.{0} d) ∧
             Binary.Pair.Corresponds n o t.data.dmem d ∧
               Eq.{1} (Binary.Pair.Remove.ownership n o t.data.dmem)
                 (Except.ok.{0, 0} (Binary.Pair.Remove.targetOwnership d))) ∧
@@ -836,7 +994,7 @@ fun n o c s w pid kid ra => do
   let old ← Binary.Pair.addressOf n (Leanux.WG.IndexOwner.handshake pid)
   let new ← Binary.Pair.addressOf n (Leanux.WG.IndexOwner.keypair kid)
   have __do_jp : Unit → Except.{0, 0} String Unit := fun __r =>
-    match w.k.wg with
+    match w.wg.dev with
     | some.{0} d =>
       have __do_jp := fun __r => Binary.Pair.Index.callFrameCheck n o c s ra 5;
       ite.{1}
@@ -880,7 +1038,7 @@ fun n o c initial ra answer final t =>
     Eq.{1} (BitVec.setWidth 8 t.data.regs.rax.toBitVec) (ite.{1} (Eq.{1} answer true) 1 0) ∧
       Binary.Pair.Index.MemoryReady c initial ra 5 (Binary.Pair.Replace.savedWords initial.data) false t.data.dmem ∧
         (Exists.{1} fun d =>
-            Eq.{1} final.k.wg (some.{0} d) ∧
+            Eq.{1} final.wg.dev (some.{0} d) ∧
               Binary.Pair.Corresponds n o t.data.dmem d ∧
                 Eq.{1} (Binary.Pair.Remove.ownership n o t.data.dmem)
                   (Except.ok.{0, 0} (Binary.Pair.Remove.targetOwnership d))) ∧
@@ -900,7 +1058,7 @@ def Binary.Pair.IndexLookup.callBoundary : Binary.Pair.Names →
 fun n o coverage s w query kinds ra => do
   Binary.Pair.Remove.assertAt n o s.data.dmem w
   have __do_jp : Unit → Except.{0, 0} String Unit := fun __r =>
-    match w.k.wg with
+    match w.wg.dev with
     | some.{0} d =>
       have c := Binary.Pair.IndexLookup.callConfig n w d query kinds;
       have v := Binary.Pair.IndexLookup.callView c d;
@@ -960,7 +1118,7 @@ fun n o coverage initial ra answer finalWorld final =>
   Binary.TrustBase.Returned initial final ra ∧
     Binary.Pair.IndexLookup.Result n initial final answer ∧
       (Exists.{1} fun d =>
-          Eq.{1} finalWorld.k.wg (some.{0} d) ∧
+          Eq.{1} finalWorld.wg.dev (some.{0} d) ∧
             Binary.Pair.Corresponds n o final.data.dmem d ∧
               Eq.{1} (Binary.Pair.Remove.ownership n o final.data.dmem)
                 (Except.ok.{0, 0} (Binary.Pair.Remove.targetOwnership d))) ∧
@@ -1027,7 +1185,7 @@ fun n call w =>
     (Exists.{1} fun a => Eq.{1} (Binary.Pair.addressOf n (Leanux.WG.IndexOwner.handshake pid)) (Except.ok.{0, 0} a)) ∧
       (Exists.{1} fun a => Eq.{1} (Binary.Pair.addressOf n (Leanux.WG.IndexOwner.keypair kid)) (Except.ok.{0, 0} a)) ∧
         ∀ (d : Leanux.WG.Device),
-          Eq.{1} w.k.wg (some.{0} d) →
+          Eq.{1} w.wg.dev (some.{0} d) →
             Eq.{1} (List.any.{0} d.indexTable fun x => BEq.beq.{0} x.owner (Leanux.WG.IndexOwner.handshake pid)) true →
               Eq.{1} (List.any.{0} d.indexTable fun x => BEq.beq.{0} x.owner (Leanux.WG.IndexOwner.keypair kid)) false
 def Binary.Pair.Sequence.AdmissibleSequence : Binary.Pair.Names →
@@ -1035,7 +1193,7 @@ def Binary.Pair.Sequence.AdmissibleSequence : Binary.Pair.Names →
 fun n x x_1 =>
   List.brecOn.{1, 0} (motive := fun x => Leanux.World → Prop) x (Binary.Pair.Sequence.AdmissibleSequence._f n) x_1
 def Binary.Pair.Sequence.program : List.{0} Binary.Pair.Sequence.Call →
-  Leanux.M (List.{0} Binary.Pair.Sequence.Answer) :=
+  Binary.M (List.{0} Binary.Pair.Sequence.Answer) :=
 fun x => List.brecOn.{1, 0} x Binary.Pair.Sequence.program._f
 def Binary.Pair.Sequence.install : Binary.Pair.Names →
   MachineState → UInt64 → Int64 → Nat → Nat → MachineState → MachineState :=
@@ -1072,7 +1230,7 @@ structure Binary.Pair.Sequence.Ready (n : Binary.Pair.Names) (o : Offsets) (c : 
 number of parameters: 6
 fields:
   Binary.Pair.Sequence.Ready.state : Exists.{1} fun d =>
-      Eq.{1} w.k.wg (some.{0} d) ∧
+      Eq.{1} w.wg.dev (some.{0} d) ∧
         Binary.Pair.Corresponds n o m d ∧
           Eq.{1} (Binary.Pair.Remove.ownership n o m) (Except.ok.{0, 0} (Binary.Pair.Remove.targetOwnership d))
   Binary.Pair.Sequence.Ready.coverage : ∀ (b : Bool), (Binary.Pair.Index.phase c b).CoverageAt m
@@ -1089,7 +1247,7 @@ constructor:
     {base : MachineState} {m : DataMem} {w : Leanux.World}
     (state :
       Exists.{1} fun d =>
-        Eq.{1} w.k.wg (some.{0} d) ∧
+        Eq.{1} w.wg.dev (some.{0} d) ∧
           Binary.Pair.Corresponds n o m d ∧
             Eq.{1} (Binary.Pair.Remove.ownership n o m) (Except.ok.{0, 0} (Binary.Pair.Remove.targetOwnership d)))
     (coverage : ∀ (b : Bool), (Binary.Pair.Index.phase c b).CoverageAt m)
@@ -1273,7 +1431,7 @@ fun n o c initial ra config inputAt answer final t =>
       Binary.Pair.Insert.MemoryReady c initial ra (Binary.Pair.Insert.savedWords initial.data)
           Binary.Pair.Insert.Phase.enabled t.data.dmem ∧
         (Exists.{1} fun d =>
-            Eq.{1} final.k.wg (some.{0} d) ∧
+            Eq.{1} final.wg.dev (some.{0} d) ∧
               Binary.Pair.Corresponds n o t.data.dmem d ∧
                 Eq.{1} (Binary.Pair.Remove.ownership n o t.data.dmem)
                   (Except.ok.{0, 0} (Binary.Pair.Remove.targetOwnership d))) ∧
@@ -1366,7 +1524,7 @@ def Binary.Pair.InsertSequence.AdmissibleSequence : Binary.Pair.Names →
 fun n x x_1 =>
   List.brecOn.{1, 0} (motive := fun x => Leanux.World → Prop) x (Binary.Pair.InsertSequence.AdmissibleSequence._f n) x_1
 def Binary.Pair.InsertSequence.program : List.{0} Binary.Pair.InsertSequence.Call →
-  Leanux.M (List.{0} Binary.Pair.InsertSequence.Answer) :=
+  Binary.M (List.{0} Binary.Pair.InsertSequence.Answer) :=
 fun x => List.brecOn.{1, 0} x Binary.Pair.InsertSequence.program._f
 def Binary.Pair.InsertSequence.prepare : Binary.Pair.Names →
   MachineState → UInt64 → Binary.Pair.InsertSequence.Call → MachineState → Except.{0, 0} String MachineState :=
@@ -1707,7 +1865,7 @@ import PairInsertInput
 -/
 namespace Binary.TrustBase
 
-def krakenCommit : String := "cd2ae360bfcf8e1fc719793405811ff49c3e75ce"
+def krakenCommit : String := "dc3824fd5ca36c28b11321b8e7f7e2389b6f6ec4"
 def kernelIdentity : String := "6b2018b99f086345ce9fa316a89c76d27b40b536d5feb4402510e5fb62a5ae24"
 def elfSha256 : String := "16c346209885db6c610d4aa126c6eb30f5d3c02f0498d95e606473945f648774"
 def decoderVersion : String := "GNU objdump (GNU Binutils for Ubuntu) 2.42"

@@ -3,7 +3,6 @@ import TrustBase
 
 namespace Binary.Allowedips
 local instance : Labels := Image.linkedLabels
-set_option linter.unusedSimpArgs false
 
 /-- Only the preempt word and byte-sized bit-length copy change here. -/
 theorem disableBottomHalves (s : MachineData) (old : BitVec 32)
@@ -14,15 +13,15 @@ theorem disableBottomHalves (s : MachineData) (old : BitVec 32)
       t.pc = AllowedipsImage.Lookup.entry+0x74) := by
   simp [run, AllowedipsImage.Lookup.r66, Directives.interp, Directive.interp,
     Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
-    RelRegOrMem.interp, MachineData.load, MachineData.store, MachineData.set, MachineData.setReg,
+     MachineData.load, MachineData.store, MachineData.set, MachineData.setReg,
     AddrExpr.interp, ConstExpr.interp, Reg64s.get, Reg64s.get64, Reg64s.set, Reg64s.set64,
     Reg.base, Reg.offset, BitVec.take, BitVec.drop,
-    BitVec.toAddressSize, BitVec.signed, BitVec.ofInt_toInt, BitVec.ofInt_add,
-    BitVec.ofInt_ofNat, Effects.All, AllowedipsImage.Lookup.entry,
+     BitVec.signed,
+     Effects.All, AllowedipsImage.Lookup.entry,
     TrustBase.preemptCountAddress] at field ⊢
   rw [field]
-  simp [Effects.All, BitVec.ofInt_natCast, BitVec.ofNat_toNat]
-  simp [BitVec.toInt_eq_toNat_bmod, Int.add_comm, Int.bmod_add_bmod]
+  simp [Effects.All, ]
+  simp [BitVec.toInt_eq_toNat_bmod, Int.add_comm]
 
 /-- The helper result is saved across instrumentation and BH-enable. -/
 theorem saveResult (s : MachineData) (old : Int)
@@ -35,7 +34,7 @@ theorem saveResult (s : MachineData) (old : Int)
     Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
     MachineData.store, MachineData.set, AddrExpr.interp, ConstExpr.interp,
     Reg64s.get, Reg64s.get64, Reg.base, Reg.offset, BitVec.take, BitVec.drop,
-    BitVec.toAddressSize, BitVec.signed, BitVec.ofInt_toInt, BitVec.ofInt_add,
+    BitVec.toAddressSize, BitVec.signed, BitVec.ofInt_toInt,
     Effects.All, AllowedipsImage.Lookup.entry, mapped]
 
 /-- The ABI return reads the saved result and restores all six callee-saved
@@ -60,11 +59,11 @@ theorem epilogue (s : MachineData) (result bx bp r12 r13 r14 r15 ra : UInt64)
     MachineData.load, MachineData.set, MachineData.setReg, AddrExpr.interp,
     ConstExpr.interp, Reg64s.get, Reg64s.get64, Reg64s.set, Reg64s.set64,
     Reg.base, Reg.offset, BitVec.take, BitVec.drop,
-    BitVec.toAddressSize, BitVec.signed, BitVec.ofInt_toInt, BitVec.ofInt_add,
-    BitVec.ofInt_ofNat, Effects.All, AllowedipsImage.Lookup.entry,
+    BitVec.toAddressSize, BitVec.signed, BitVec.ofInt_toInt,
+     Effects.All, AllowedipsImage.Lookup.entry,
     UInt64.toBitVec_add, UInt64.ofBitVec_add, BitVec.add_assoc,
-    UInt64.add_assoc, add32, add32u, value, h0, h1, h2, h3, h4, h5, h6]
-  simp_all [Effects.All, BitVec.ofInt_ofNat, UInt64.ofBitVec_add, BitVec.add_assoc]
+      add32u, value,      ]
+  simp_all [Effects.All,  ]
   apply Int64.toBitVec_inj.mp
   simp
 

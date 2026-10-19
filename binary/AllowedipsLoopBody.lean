@@ -54,9 +54,9 @@ theorem node_body (fetch : Int64 → Option Decoded) (base s : MachineData)
         [decision c.rxSection .findNodePrefixMatches true t1.machine,
          decision c.rxSection .findNodeHasPeer node.peer.isSome peerPoint,
          decision c.rxSection .findNodeFullLength true t2.machine],present,?_,?_,?_,?_⟩
-      · simp [AllowedipsSource.selectStep,present,sourceMatch,sourceMatchFull,full,selectedNode,step]
+      · simp [AllowedipsSource.selectStep,present,sourceMatchFull,full,selectedNode,step]
       · exact ⟨pc2,by rw [bp2]; exact chosen⟩
-      · simp [List.map_append,commonSig,stepSignature,matching,matchedFull,step,full,
+      · simp [List.map_append,commonSig,stepSignature,matchedFull,step,full,
           CommonBits.pointView,CommonBits.decisionView,decision,List.append_assoc]
       · simpa only [List.append_assoc,List.cons_append,List.nil_append] using trace1.trans trace2
     · have short : node.cidr < c.bits := by
@@ -87,7 +87,7 @@ theorem node_body (fetch : Int64 → Option Decoded) (base s : MachineData)
       · simpa only [List.append_assoc,List.cons_append,List.nil_append] using trace1.trans trace2
   · have sourceMismatch : AllowedipsSource.commonValue node c.key c.bits < node.cidr := by
       rw [common_value]; omega
-    simp only [matching,decide_false,ite_false] at pc1 trace1
+    simp only [matching,decide_false] at pc1 trace1
     let step : ForInStep AllowedipsSource.Acc := .done (some previous,some id,previous)
     apply Eventually.done
     refine ⟨node,step,commonDelta ++ [decision c.rxSection .findNodePrefixMatches false t1.machine],present,?_,?_,?_,?_⟩

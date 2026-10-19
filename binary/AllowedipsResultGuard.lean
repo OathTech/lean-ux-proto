@@ -34,7 +34,7 @@ theorem result_guard (fetch : Int64 → Option Decoded) (agree : AllowedipsDecod
       simp only [observeHistory,first]
       rw [machine]
       cases zero : s.regs.get (.low .rax .W64) == 0
-      all_goals simp [AllowedipsObservation.edge,mid,zero,choice,
+      all_goals simp [AllowedipsObservation.edge,mid,choice,
         AllowedipsImage.Lookup.entry,AllowedipsImage.CommonBits.entry]
       all_goals rfl
     · rfl

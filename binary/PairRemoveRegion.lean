@@ -65,9 +65,9 @@ theorem clear_region (s : MachineData) (old : Int)
       (fun t => t.pc=clearPC+8 ∧ t.data.regs=s.regs ∧
         t.data.dmem=s.dmem.storeInt (s.regs.rbx.toBitVec+16) 8 0) := by
   simp [clearCode,Directives.interp,Directive.interp,Instr.interp,Operation.interp,
-    RegOrMem.interp,Operand.interp,MachineData.store,MachineData.set,
-    AddrExpr.interp,ConstExpr.interp,Reg64s.get,Reg64s.get64,
-    Reg.base,Reg.offset,BitVec.take,BitVec.drop,BitVec.toAddressSize,BitVec.signed,
+    Operand.interp,MachineData.store,MachineData.set,
+    AddrExpr.interp,ConstExpr.interp,Reg64s.get64,
+    BitVec.take,BitVec.toAddressSize,BitVec.signed,
     BitVec.ofInt_toInt,BitVec.ofInt_add,BitVec.ofInt_ofNat,Effects.All] at mapped ⊢
   simp [mapped,Effects.All,clearPC,entry]
 

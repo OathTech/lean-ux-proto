@@ -46,7 +46,7 @@ theorem R.result_pending (c : Config) (world : World) (s : MachineData)
   obtain ⟨old, value, field⟩ := ownerAt
   have ordinary : ownerPending seen ⟨s, Image.Lookup.entry+0xba⟩ = none := by
     simp only [ownerPending]
-    rw [if_neg (by decide)]
+    rw [ite_eq_right (by decide)]
   simp only [OwnerFieldAt, ordinary] at field
   have ownerAt := owner_pending_result c seen s owner old returned location field af q member pending
   have framed := physical.frame_owner c raw raw' seen seen _ q v owner focused old

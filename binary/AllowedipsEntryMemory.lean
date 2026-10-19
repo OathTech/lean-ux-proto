@@ -104,7 +104,7 @@ theorem memory_callback {c coverage old ra initial world v}
     rw [←saved_slot initial i hi]
     exact mem.saved i hi
   · have eq := retain 0 (by decide) (by decide)
-    simp only [slot, Nat.zero_mul, BitVec.ofNat_eq_ofNat, BitVec.sub_zero] at eq
+    simp only [slot, Nat.zero_mul,  BitVec.sub_zero] at eq
     exact eq.symm.trans mem.returnWord
   · intro i hi
     by_cases equal : i+1=11
@@ -148,7 +148,7 @@ theorem memory_query_store {c coverage old ra initial world v}
     rw [←retain _ (by split <;> omega) different,←saved_slot initial i hi]
     exact mem.saved i hi
   · have eq := retain 0 (by decide) (by omega)
-    simp only [slot, Nat.zero_mul, BitVec.ofNat_eq_ofNat, BitVec.sub_zero] at eq
+    simp only [slot, Nat.zero_mul,  BitVec.sub_zero] at eq
     exact eq.symm.trans mem.returnWord
   · intro i hi
     exact storeInt_defined memory (slot initial (i+1)) (slot initial n) 8 width value (mem.mapped i hi)

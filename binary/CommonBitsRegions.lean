@@ -21,7 +21,7 @@ theorem family32 (s : MachineData) :
       t.pc = if s.regs.get (.low .rbx .W8) == 32 then
         AllowedipsImage.CommonBits.entry + 0x4c else AllowedipsImage.CommonBits.entry + 0x26) := by
   simp [run, AllowedipsImage.CommonBits.r21, Directives.interp, Directive.interp,
-    Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp, RelRegOrMem.interp, ConstExpr.interp,
+    Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,  ConstExpr.interp,
     Effects.All, StatusFlags.from_result, CondCode.interp, compare_eq]
   split <;> simp_all [Effects.All, AllowedipsImage.CommonBits.entry] <;> rfl
 
@@ -32,7 +32,7 @@ theorem family128 (s : MachineData) :
       t.pc = if s.regs.get (.low .rbx .W8) == 128 then
         AllowedipsImage.CommonBits.entry + 0x75 else AllowedipsImage.CommonBits.entry + 0x3e) := by
   simp [run, AllowedipsImage.CommonBits.r39, Directives.interp, Directive.interp,
-    Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp, RelRegOrMem.interp, ConstExpr.interp,
+    Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,  ConstExpr.interp,
     Effects.All, StatusFlags.from_result, CondCode.interp, compare_eq]
   split <;> simp_all [Effects.All, AllowedipsImage.CommonBits.entry] <;> rfl
 
@@ -43,7 +43,7 @@ theorem high_equal (s : MachineData) :
       t.pc = if s.regs.get (.low .rbx .W64) == s.regs.get (.low .rbp .W64) then
         AllowedipsImage.CommonBits.entry + 0xc4 else AllowedipsImage.CommonBits.entry + 0x93) := by
   simp [run, AllowedipsImage.CommonBits.r8e, Directives.interp, Directive.interp,
-    Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp, RelRegOrMem.interp, ConstExpr.interp,
+    Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
     Effects.All, StatusFlags.from_result, CondCode.interp, compare_eq]
   split <;> simp_all [Effects.All, AllowedipsImage.CommonBits.entry] <;> rfl
 
@@ -61,7 +61,7 @@ theorem high_scan (s : MachineData) :
   have width8 : (Width.W64 == Width.W8) = false := rfl
   have width32 : (Width.W64 == Width.W32) = false := rfl
   simp [run, AllowedipsImage.CommonBits.r98, Directives.interp, Directive.interp,
-    Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp, RelRegOrMem.interp, ConstExpr.interp,
+    Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,  ConstExpr.interp,
     MachineData.set, MachineData.setReg, Reg64s.get, Reg64s.get64,
     Reg64s.set, Reg64s.set64, Reg.base, Reg.offset, BitVec.take, BitVec.drop,
     Effects.All, width8, width32, AllowedipsImage.CommonBits.entry]
@@ -90,7 +90,7 @@ theorem low_scan (s : MachineData) (stored query : BitVec 64)
     Reg64s.set, Reg64s.set64, Reg.base, Reg.offset, BitVec.take, BitVec.drop,
     Effects.All, width8, width32, target, AllowedipsImage.CommonBits.entry,
     storedField, queryField] at storedField queryField ⊢
-  simp_all only [storedField, queryField, Effects.All, BitVec.ofInt_natCast, BitVec.ofNat_toNat]
+  simp_all only [   ]
   split <;> simp_all [Effects.All, scan64]
   rw [← BitVec.setWidth_eq_extractLsb' (by decide)]
   simp [BitVec.add_comm]
@@ -108,8 +108,8 @@ theorem trace_call (offset : Nat) (s : MachineData) (stackWord : Int)
   simp [run, AllowedipsImage.CommonBits.r26, Directives.interp, Directive.interp,
     Instr.interp, Operation.interp, MachineData.store,
     Reg64s.get64, Reg64s.set64, RelRegOrMem.interp, ConstExpr.interp,
-    Effects.All, Width.bytesv, stack, callMemory]
-  simp_all [Effects.All, Int64.ofNat_add, Int64.add_assoc]
+    Effects.All, Width.bytesv,  callMemory]
+  simp_all [Effects.All,  Int64.add_assoc]
   constructor
   · simp [Int.add_assoc]
   · have cancel (a b : Int64) : a + (b - a) = b := by
@@ -145,7 +145,7 @@ theorem family32_arguments (s : MachineData) (stackWord : Int)
     RelRegOrMem.interp, ConstExpr.interp, MachineData.store, MachineData.set,
     MachineData.setReg, Reg64s.get, Reg64s.get64, Reg.base, Reg.offset,
     Reg64s.set, Reg64s.set64, BitVec.take, BitVec.drop, Effects.All,
-    Width.bytesv, stack, callMemory, AllowedipsImage.CommonBits.entry]
+    Width.bytesv,  callMemory, AllowedipsImage.CommonBits.entry]
   simp_all [Effects.All]
   rfl
 
@@ -162,7 +162,7 @@ theorem family128_arguments (s : MachineData) (stackWord : Int)
     RelRegOrMem.interp, ConstExpr.interp, MachineData.store, MachineData.set,
     MachineData.setReg, Reg64s.get, Reg64s.get64, Reg.base, Reg.offset,
     Reg64s.set, Reg64s.set64, BitVec.take, BitVec.drop, Effects.All,
-    Width.bytesv, stack, callMemory, AllowedipsImage.CommonBits.entry]
+    Width.bytesv,  callMemory, AllowedipsImage.CommonBits.entry]
   simp_all [Effects.All]
   rfl
 
@@ -173,11 +173,11 @@ theorem ipv6_result_seed (s : MachineData) (stackWord : Int)
       t.data.regs = {s.regs with rbp := 0xffffff80, rsp := s.regs.rsp - 8} ∧
       t.data.dmem = callMemory s 0xb9 ∧ t.pc = .ofNat 0xffffffff810f3100) := by
   simp [run, AllowedipsImage.CommonBits.raf, Directives.interp, Directive.interp,
-    Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
+    Instr.interp, Operation.interp,  Operand.interp,
     RelRegOrMem.interp, ConstExpr.interp, MachineData.store, MachineData.set,
-    MachineData.setReg, Reg64s.get, Reg64s.get64, Reg.base, Reg.offset,
-    Reg64s.set, Reg64s.set64, BitVec.take, BitVec.drop, Effects.All,
-    Width.bytesv, stack, callMemory, AllowedipsImage.CommonBits.entry]
+    MachineData.setReg,  Reg64s.get64,
+    Reg64s.set, Reg64s.set64,   Effects.All,
+    Width.bytesv,  callMemory, AllowedipsImage.CommonBits.entry]
   simp_all [Effects.All]
   rfl
 
@@ -197,7 +197,7 @@ theorem high_arguments (s : MachineData) (stored query : UInt64) (stackWord : In
     BitVec.ofInt_add, BitVec.ofInt_toInt, BitVec.ofInt_ofNat,
     MachineData.set, MachineData.setReg, Reg64s.get, Reg64s.get64, Reg.base, Reg.offset,
     Reg64s.set, Reg64s.set64, BitVec.take, BitVec.drop, Effects.All,
-    Width.bytesv, stack, storedField, queryField, callMemory, AllowedipsImage.CommonBits.entry]
+    Width.bytesv,   queryField, callMemory, AllowedipsImage.CommonBits.entry]
   simp_all [Effects.All]
   rfl
 
@@ -236,10 +236,10 @@ theorem ipv4_scan (s : MachineData) (stored query : UInt32) (stackWord : Int)
     BitVec.ofInt_add, BitVec.ofInt_toInt, BitVec.ofInt_ofNat,
     MachineData.set, MachineData.setReg, Reg64s.get, Reg64s.get64, Reg.base, Reg.offset,
     Reg64s.set, Reg64s.set64, BitVec.take, BitVec.drop, Effects.All,
-    Width.bytesv, width8, width32, stack, storedField, queryField,
+    Width.bytesv, width8, width32,   queryField,
     callMemory, target, AllowedipsImage.CommonBits.entry]
   simp_all [Effects.All, low_extend32, low_xor64]
-  split <;> simp_all [Effects.All, scan32, low_extend32, low_xor64, BitVec.add_comm]
+  split <;> simp_all [Effects.All, scan32,   BitVec.add_comm]
   · rename_i same
     have eq := UInt32.toBitVec_inj.mp same
     simp [eq]
@@ -270,10 +270,10 @@ theorem epilogue (offset : Nat) (s : MachineData) (bx bp r12 r13 ra : UInt64)
     Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
     MachineData.load, Reg64s.get, Reg64s.get64, Reg.base, Reg.offset,
     BitVec.drop, BitVec.take, Effects.All, MachineData.set, MachineData.setReg,
-    Reg64s.set, Reg64s.set64, BitVec.ofInt_ofNat,
+    Reg64s.set, Reg64s.set64,
     UInt64.toBitVec_add, UInt64.ofBitVec_add, BitVec.add_assoc,
-    UInt64.add_assoc, h0, h1, h2, h3, h4]
-  simp_all [Effects.All, BitVec.ofInt_ofNat, UInt64.ofBitVec_add, BitVec.add_assoc]
+     h0,   ]
+  simp_all [Effects.All,  ]
   apply Int64.toBitVec_inj.mp
   simp
 
@@ -296,10 +296,10 @@ theorem ipv6_epilogue (s : MachineData) (bx bp r12 r13 ra : UInt64)
     Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
     MachineData.load, Reg64s.get, Reg64s.get64, Reg.base, Reg.offset,
     BitVec.drop, BitVec.take, Effects.All, MachineData.set, MachineData.setReg,
-    Reg64s.set, Reg64s.set64, BitVec.ofInt_ofNat,
+    Reg64s.set, Reg64s.set64,
     UInt64.toBitVec_add, UInt64.ofBitVec_add, BitVec.add_assoc,
-    UInt64.add_assoc, h0, h1, h2, h3, h4]
-  simp_all [Effects.All, BitVec.ofInt_ofNat, UInt64.ofBitVec_add, BitVec.add_assoc]
+     h0,   ]
+  simp_all [Effects.All,  ]
   constructor
   · rw [BitVec.extractLsb'_setWidth_of_le (by decide)]
     simp
@@ -353,9 +353,9 @@ theorem prologue (s : MachineData)
     MachineData.store, MachineData.set, MachineData.setReg,
     Reg64s.get, Reg64s.get64, Reg.base, Reg.offset, Reg64s.set, Reg64s.set64,
     BitVec.drop, BitVec.take, RelRegOrMem.interp, ConstExpr.interp,
-    Effects.All, Width.bytesv, callMemory, AllowedipsImage.CommonBits.entry,
+    Effects.All, Width.bytesv,  AllowedipsImage.CommonBits.entry,
     saveMemory, savedWords, BitVec.sub_sub] at h0 h1 h2 h3 h4 ⊢
-  simp_all [Effects.All, BitVec.sub_sub]
+  simp_all [Effects.All]
   rfl
 
 

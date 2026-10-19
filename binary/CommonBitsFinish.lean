@@ -70,7 +70,7 @@ theorem simple_return (fetch : Int64 → Option Decoded)
   apply eventually_weaken (instructionStep fetch) _ _ _ _ run
   rintro t ⟨regs, memory, pc⟩
   refine ⟨pc, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
-  · simpa only [regs, state.stack]
+  · simp only [regs, state.stack]
   · simp only [regs]
   · simp only [regs]
   · simp only [regs]
@@ -98,7 +98,7 @@ theorem ipv6_return (fetch : Int64 → Option Decoded)
   apply eventually_weaken (instructionStep fetch) _ _ _ _ run
   rintro t ⟨regs, memory, pc⟩
   refine ⟨pc, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
-  · simpa only [regs, state.stack]
+  · simp only [regs, state.stack]
   · simp only [regs]
   · simp only [regs]
   · simp only [regs]

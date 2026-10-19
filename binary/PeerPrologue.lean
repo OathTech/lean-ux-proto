@@ -50,9 +50,9 @@ theorem prologue (s : MachineData)
     MachineData.store, MachineData.set, MachineData.setReg,
     Reg64s.get, Reg64s.get64, Reg.base, Reg.offset, Reg64s.set, Reg64s.set64,
     BitVec.drop, BitVec.take, RelRegOrMem.interp, ConstExpr.interp,
-    Effects.All, Width.bytesv, callMemory, Image.PeerGet.entry,
+    Effects.All, Width.bytesv,  Image.PeerGet.entry,
     saveMemory, savedWords, BitVec.sub_sub] at h0 h1 h2 h3 h4 h5 h6 ⊢
-  simp_all [Effects.All, BitVec.sub_sub]
+  simp_all [Effects.All]
   rfl
 
 #print axioms prologue

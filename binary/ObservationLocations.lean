@@ -466,7 +466,7 @@ theorem edge_helper_cuts (rxSection : Nat) (before after : MachineState)
       have equal := Except.ok.inj observed
       subst delta
 
-      cases value <;> simp_all [decision, HelperTag, Image.cutPoints, Image.Lookup.entry, Image.PeerGet.entry]
+      cases value <;> simp_all [decision, HelperTag, Image.cutPoints, Image.Lookup.entry]
   · rw [ite_eq_right h0] at observed
     by_cases h1 : before.pc = Image.Lookup.entry + 0x5c
     · rw [ite_eq_left h1] at observed
@@ -481,7 +481,7 @@ theorem edge_helper_cuts (rxSection : Nat) (before after : MachineState)
         have equal := Except.ok.inj observed
         subst delta
 
-        cases value <;> simp_all [decision, HelperTag, Image.cutPoints, Image.Lookup.entry, Image.PeerGet.entry]
+        cases value <;> simp_all [decision, HelperTag, Image.cutPoints, Image.Lookup.entry]
     · rw [ite_eq_right h1] at observed
       by_cases h2 : before.pc = Image.Lookup.entry + 0xab
       · rw [ite_eq_left h2] at observed
@@ -496,7 +496,7 @@ theorem edge_helper_cuts (rxSection : Nat) (before after : MachineState)
           have equal := Except.ok.inj observed
           subst delta
 
-          cases value <;> simp_all [decision, HelperTag, Image.cutPoints, Image.Lookup.entry, Image.PeerGet.entry]
+          cases value <;> simp_all [decision, HelperTag, Image.cutPoints, Image.Lookup.entry]
       · rw [ite_eq_right h2] at observed
         by_cases h3 : before.pc = Image.Lookup.entry + 0xb5
         · rw [ite_eq_left h3] at observed
@@ -521,7 +521,7 @@ theorem edge_helper_cuts (rxSection : Nat) (before after : MachineState)
               change Except.ok _ = Except.ok delta at observed
               have equal := Except.ok.inj observed
               subst delta
-              cases value <;> simp_all [decision, HelperTag, Image.cutPoints, Image.Lookup.entry, Image.PeerGet.entry]
+              cases value <;> simp_all [decision, HelperTag, Image.cutPoints, Image.Lookup.entry]
           · rw [ite_eq_right h4] at observed
             by_cases h5 : before.pc = Image.Lookup.entry + 0x94
             · rw [ite_eq_left h5] at observed

@@ -46,7 +46,7 @@ theorem index_word (fetch : Int64 → Option Decoded)
     BitVec.ofInt_add, BitVec.ofInt_toInt, BitVec.ofInt_ofNat,
     Effects.All, indexLoaded, BitVec.take, Image.Lookup.entry] at field ⊢
   rw [field]
-  simp [Effects.All, BitVec.ofInt_ofNat]
+  simp [Effects.All]
 
 /-- Exact states at all three MOV successors, including the comparison-call
     correspondence point at +0x54. -/

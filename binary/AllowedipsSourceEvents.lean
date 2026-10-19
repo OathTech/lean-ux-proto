@@ -58,13 +58,13 @@ theorem nodeBody_run (bits key id : Nat) (previous : Option NodeId) (node : AipN
     all_goals
       simp [nodeBody,StateT.run_lift,StateT.run_bind,StateT.run_pure,Source.getNode_eq,Source.getDev_eq,
         device,nodeAt,prefixMatches_run,MirrorHistory.branch_run,choose,AipNode.bitAt,invariant,
-        bodyPoints,bodyWorld,bodyChoices,records,choicePoints,LookupMirror.record,
-        records_steps,except_ok_bind,except_pure,except_map,throw_run,except_error_bind,
-        mismatch,hasPeer,full,invalid,child,List.append_assoc,←Nat.not_lt]
+        bodyPoints,bodyWorld,bodyChoices,choicePoints,LookupMirror.record,
+        records_steps,
+        mismatch,hasPeer,full,List.append_assoc,←Nat.not_lt]
     all_goals
       have short : node.cidr < node.bitlen := by omega
-      simp [short,StateT.run_pure,except_pure,except_ok_bind,except_map,
-        AipNode.bitAt,child,full]
+      simp [short,StateT.run_pure,except_map,
+        child]
     all_goals rfl
 
 theorem records_rx (w : World) (choices : Choices) : (records w choices).netRxSection = w.netRxSection := by

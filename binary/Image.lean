@@ -273,7 +273,7 @@ def canonicalAddress (name : String) : Option Int64 := do
       else none
     return n * 16 + d) 0
   return .ofNat n
-def linkedLabels : Labels := ⟨fun name => match name with
+@[instance_reducible] def linkedLabels : Labels := ⟨fun name => match name with
   | "L_ffffffff810732c0" => .ofNat 18446744071579316928
   | "L_ffffffff810f3100" => .ofNat 18446744071579840768
   | "L_ffffffff810f3e80" => .ofNat 18446744071579844224

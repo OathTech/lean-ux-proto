@@ -63,7 +63,7 @@ theorem get_corr : Corresponds (get : IndexM (List IndexEntry))
 theorem modify_corr (f : List IndexEntry → List IndexEntry) :
     Corresponds (modify f) (Source.modifyDev fun d => {d with indexTable := f d.indexTable}) := by
   intro w d hd
-  simp [Source.modifyDev, liftWG, WG.modifyDev, StateT.run, bind, StateT.bind,
+  simp [Source.modifyDev, liftWG, WG.modifyDev, StateT.run, bind,
     pure, StateT.pure, modify, modifyGet, MonadStateOf.modifyGet, StateT.modifyGet,
     Except.pure, Except.bind, hd, install]
 

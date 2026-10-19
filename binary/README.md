@@ -1,9 +1,48 @@
 # Binary adequacy and concrete probe
 
-Work in `.worktrees/binary-tv` on `task/binary-tv`. The standalone package
-uses Lean v4.35.0, the mirror by path, and the private Kraken checkout at
-`.deps/kraken`. The oracle `.artifacts/kernel-net-choice-s4/vmlinux` is
-read-only. No dependency download or global configuration change is needed.
+This is a standalone refinement experiment against the pinned **s4** Linux
+image under explicitly unrealistic sequential/environment assumptions. It now
+uses the split mirror through its actual adapters. The landing branch is
+`task/binary-pair-landing`, rebased onto main `3f3879e0`; the original experiment
+branch is preserved. See the [landing report](../docs/2026-10-19-binary-landing-assessment.md)
+for current validation and the still-open milestone-1 review obligations.
+Historical results below retain their original commits and gate scope.
+
+The package uses Lean v4.35.0, the mirror by path, and a private patched Kraken
+checkout at `.deps/kraken`. Install the repository's Python dependencies
+(including pyelftools) and the named Lean toolchain. From the checkout root:
+
+```sh
+cap() { if command -v capped >/dev/null 2>&1; then capped "$@"; else "$@"; fi; }
+cap python3 -B binary/run.py --bootstrap-only
+cap lake -d binary build
+scripts/binary-proof-gate
+```
+
+Bootstrap uses a staged shared upstream clone when available, otherwise the
+locked upstream URL, and applies the committed patches with their exact Git
+identities. It never repairs a dirty or differently pinned existing checkout.
+A network fetch, if needed inside Nono, must be run outside Nono. Neither setup
+nor the gate modifies machine-global configuration or requires the oracle ELF
+for Lean compilation. The separate binary gate does not build `LeanuxProofs`.
+
+Concrete tests and image comparison require the read-only s4 build. Set
+`LEANUX_BINARY_KERNEL_DIR` to its directory; the default is
+`.artifacts/kernel-net-choice-s4` in the common checkout. `binary/target.py`
+verifies the exact ELF hash and selects `binary/kernel-identity-s4.txt` for
+boots/captures. Main's s5 identity is not used by these binary experiments.
+The target has not been retargeted to s5.
+
+The current split mirror's recorded-prefix tests against s4 fail because s4
+lacks the timer-wheel records the mirror now consumes. See the landing report;
+the build and proof gate do not resolve that runtime compatibility failure.
+Exact image generation is checked separately from the proof gate:
+
+```sh
+cap python3 -B binary/generate.py --check
+cap python3 -B binary/generate_allowedips.py --check
+cap python3 -B binary/generate_index_mutators.py --check
+```
 
 `LookupAdequacy.lookup_simulation` proves entry-to-original-return execution
 of `wg_index_hashtable_lookup`, including the complete bucket loop and the
@@ -243,6 +282,15 @@ the external gate below. An export for that gate can name `PairNextProof`;
 the original M1 export does not cover the new executable definitions.
 
 ## Build and trust checks
+
+Compatibility exception: `BinaryProofs.allowNonModules = true` deliberately
+permits the legacy mirror modules and Kraken's new modules in this library.
+Lean 4.35 rejects a new-style module importing the legacy mirror, while the
+symbolic instruction proofs need Kraken definition bodies that its public API
+does not expose. Migrating the mirror or changing Kraken's public API is outside
+this experiment. This exception suppresses only Lake's import-style warning;
+it does not suppress Lean proof, axiom, kernel-replay or simplifier diagnostics.
+No file-wide Lean linter suppression is used.
 
 All heavy commands run through `capped`; a KILLED banner or timeout fails.
 The charter-authorized binary gate builds the default package, prints the

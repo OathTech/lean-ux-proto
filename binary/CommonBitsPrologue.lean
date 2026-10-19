@@ -53,29 +53,29 @@ private theorem instruction0 (fetch : Int64 → Option Decoded)
   simp only [instructionStep, here]
   refine ⟨by decide, ?_⟩
   simp [Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
-    MachineData.store, MachineData.set, MachineData.setReg,
-    Reg64s.get, Reg64s.get64, Reg64s.set, Reg64s.set64,
+    MachineData.store,
+    Reg64s.get, Reg64s.get64,  Reg64s.set64,
     Reg.base, Reg.offset, BitVec.drop, BitVec.take, Effects.All,
-    RelRegOrMem.interp, ConstExpr.interp,
-    Width.bytesv, prologueData, savedCount, BitVec.sub_sub, u64_sub_sub,
+
+    Width.bytesv, prologueData, savedCount,
     saveMemory, savedWords, AllowedipsImage.CommonBits.entry] at loaded ⊢
-  simp_all [Effects.All, BitVec.sub_sub]
+  simp_all [Effects.All]
   try rfl
 
 private theorem instruction1 (fetch : Int64 → Option Decoded)
     (agree : ∀ p i, AllowedipsImage.fetch p = some i → fetch p = some i) (s : MachineData)
-    (mapped : ∀ n < 5, (s.dmem.loadInt (s.regs.rsp.toBitVec - .ofNat 64 ((n+1)*8)) 8).isSome = true) :
+    (_mapped : ∀ n < 5, (s.dmem.loadInt (s.regs.rsp.toBitVec - .ofNat 64 ((n+1)*8)) 8).isSome = true) :
     instructionStep fetch ⟨prologueData s 1, AllowedipsImage.CommonBits.entry+2⟩
       (fun t => t = ⟨prologueData s 2, AllowedipsImage.CommonBits.entry+5⟩) := by
   have here := agree _ _ (show AllowedipsImage.fetch (AllowedipsImage.CommonBits.entry+2) = some _ from rfl)
   simp only [instructionStep, here]
   refine ⟨by decide, ?_⟩
   simp [Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
-    MachineData.store, MachineData.set, MachineData.setReg,
+     MachineData.set, MachineData.setReg,
     Reg64s.get, Reg64s.get64, Reg64s.set, Reg64s.set64,
     Reg.base, Reg.offset, BitVec.drop, BitVec.take, Effects.All,
-    RelRegOrMem.interp, ConstExpr.interp,
-    Width.bytesv, prologueData, savedCount, BitVec.sub_sub, u64_sub_sub,
+
+     prologueData, savedCount,
     saveMemory, savedWords, AllowedipsImage.CommonBits.entry]
   try rfl
 
@@ -90,29 +90,29 @@ private theorem instruction2 (fetch : Int64 → Option Decoded)
   simp only [instructionStep, here]
   refine ⟨by decide, ?_⟩
   simp [Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
-    MachineData.store, MachineData.set, MachineData.setReg,
-    Reg64s.get, Reg64s.get64, Reg64s.set, Reg64s.set64,
+    MachineData.store,
+    Reg64s.get, Reg64s.get64,  Reg64s.set64,
     Reg.base, Reg.offset, BitVec.drop, BitVec.take, Effects.All,
-    RelRegOrMem.interp, ConstExpr.interp,
-    Width.bytesv, prologueData, savedCount, BitVec.sub_sub, u64_sub_sub,
+
+    Width.bytesv, prologueData, savedCount, BitVec.sub_sub,
     saveMemory, savedWords, AllowedipsImage.CommonBits.entry] at loaded ⊢
-  simp_all [Effects.All, BitVec.sub_sub]
+  simp_all [Effects.All]
   try rfl
 
 private theorem instruction3 (fetch : Int64 → Option Decoded)
     (agree : ∀ p i, AllowedipsImage.fetch p = some i → fetch p = some i) (s : MachineData)
-    (mapped : ∀ n < 5, (s.dmem.loadInt (s.regs.rsp.toBitVec - .ofNat 64 ((n+1)*8)) 8).isSome = true) :
+    (_mapped : ∀ n < 5, (s.dmem.loadInt (s.regs.rsp.toBitVec - .ofNat 64 ((n+1)*8)) 8).isSome = true) :
     instructionStep fetch ⟨prologueData s 3, AllowedipsImage.CommonBits.entry+7⟩
       (fun t => t = ⟨prologueData s 4, AllowedipsImage.CommonBits.entry+10⟩) := by
   have here := agree _ _ (show AllowedipsImage.fetch (AllowedipsImage.CommonBits.entry+7) = some _ from rfl)
   simp only [instructionStep, here]
   refine ⟨by decide, ?_⟩
   simp [Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
-    MachineData.store, MachineData.set, MachineData.setReg,
+     MachineData.set, MachineData.setReg,
     Reg64s.get, Reg64s.get64, Reg64s.set, Reg64s.set64,
     Reg.base, Reg.offset, BitVec.drop, BitVec.take, Effects.All,
-    RelRegOrMem.interp, ConstExpr.interp,
-    Width.bytesv, prologueData, savedCount, BitVec.sub_sub, u64_sub_sub,
+
+     prologueData, savedCount,
     saveMemory, savedWords, AllowedipsImage.CommonBits.entry]
   try rfl
 
@@ -127,29 +127,29 @@ private theorem instruction4 (fetch : Int64 → Option Decoded)
   simp only [instructionStep, here]
   refine ⟨by decide, ?_⟩
   simp [Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
-    MachineData.store, MachineData.set, MachineData.setReg,
-    Reg64s.get, Reg64s.get64, Reg64s.set, Reg64s.set64,
+    MachineData.store,
+    Reg64s.get, Reg64s.get64,  Reg64s.set64,
     Reg.base, Reg.offset, BitVec.drop, BitVec.take, Effects.All,
-    RelRegOrMem.interp, ConstExpr.interp,
-    Width.bytesv, prologueData, savedCount, BitVec.sub_sub, u64_sub_sub,
+
+    Width.bytesv, prologueData, savedCount, BitVec.sub_sub,
     saveMemory, savedWords, AllowedipsImage.CommonBits.entry] at loaded ⊢
-  simp_all [Effects.All, BitVec.sub_sub]
+  simp_all [Effects.All]
   try rfl
 
 private theorem instruction5 (fetch : Int64 → Option Decoded)
     (agree : ∀ p i, AllowedipsImage.fetch p = some i → fetch p = some i) (s : MachineData)
-    (mapped : ∀ n < 5, (s.dmem.loadInt (s.regs.rsp.toBitVec - .ofNat 64 ((n+1)*8)) 8).isSome = true) :
+    (_mapped : ∀ n < 5, (s.dmem.loadInt (s.regs.rsp.toBitVec - .ofNat 64 ((n+1)*8)) 8).isSome = true) :
     instructionStep fetch ⟨prologueData s 5, AllowedipsImage.CommonBits.entry+11⟩
       (fun t => t = ⟨prologueData s 6, AllowedipsImage.CommonBits.entry+13⟩) := by
   have here := agree _ _ (show AllowedipsImage.fetch (AllowedipsImage.CommonBits.entry+11) = some _ from rfl)
   simp only [instructionStep, here]
   refine ⟨by decide, ?_⟩
   simp [Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
-    MachineData.store, MachineData.set, MachineData.setReg,
+     MachineData.set, MachineData.setReg,
     Reg64s.get, Reg64s.get64, Reg64s.set, Reg64s.set64,
     Reg.base, Reg.offset, BitVec.drop, BitVec.take, Effects.All,
-    RelRegOrMem.interp, ConstExpr.interp,
-    Width.bytesv, prologueData, savedCount, BitVec.sub_sub, u64_sub_sub,
+
+     prologueData, savedCount,
     saveMemory, savedWords, AllowedipsImage.CommonBits.entry]
   try rfl
 
@@ -164,29 +164,29 @@ private theorem instruction6 (fetch : Int64 → Option Decoded)
   simp only [instructionStep, here]
   refine ⟨by decide, ?_⟩
   simp [Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
-    MachineData.store, MachineData.set, MachineData.setReg,
-    Reg64s.get, Reg64s.get64, Reg64s.set, Reg64s.set64,
+    MachineData.store,
+    Reg64s.get, Reg64s.get64,  Reg64s.set64,
     Reg.base, Reg.offset, BitVec.drop, BitVec.take, Effects.All,
-    RelRegOrMem.interp, ConstExpr.interp,
-    Width.bytesv, prologueData, savedCount, BitVec.sub_sub, u64_sub_sub,
+
+    Width.bytesv, prologueData, savedCount, BitVec.sub_sub,
     saveMemory, savedWords, AllowedipsImage.CommonBits.entry] at loaded ⊢
-  simp_all [Effects.All, BitVec.sub_sub]
+  simp_all [Effects.All]
   try rfl
 
 private theorem instruction7 (fetch : Int64 → Option Decoded)
     (agree : ∀ p i, AllowedipsImage.fetch p = some i → fetch p = some i) (s : MachineData)
-    (mapped : ∀ n < 5, (s.dmem.loadInt (s.regs.rsp.toBitVec - .ofNat 64 ((n+1)*8)) 8).isSome = true) :
+    (_mapped : ∀ n < 5, (s.dmem.loadInt (s.regs.rsp.toBitVec - .ofNat 64 ((n+1)*8)) 8).isSome = true) :
     instructionStep fetch ⟨prologueData s 7, AllowedipsImage.CommonBits.entry+14⟩
       (fun t => t = ⟨prologueData s 8, AllowedipsImage.CommonBits.entry+16⟩) := by
   have here := agree _ _ (show AllowedipsImage.fetch (AllowedipsImage.CommonBits.entry+14) = some _ from rfl)
   simp only [instructionStep, here]
   refine ⟨by decide, ?_⟩
   simp [Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
-    MachineData.store, MachineData.set, MachineData.setReg,
+     MachineData.set, MachineData.setReg,
     Reg64s.get, Reg64s.get64, Reg64s.set, Reg64s.set64,
     Reg.base, Reg.offset, BitVec.drop, BitVec.take, Effects.All,
-    RelRegOrMem.interp, ConstExpr.interp,
-    Width.bytesv, prologueData, savedCount, BitVec.sub_sub, u64_sub_sub,
+
+     prologueData, savedCount,
     saveMemory, savedWords, AllowedipsImage.CommonBits.entry]
   try rfl
 
@@ -200,14 +200,14 @@ private theorem instruction8 (fetch : Int64 → Option Decoded)
   obtain ⟨word, loaded⟩ := Option.isSome_iff_exists.mp defined
   simp only [instructionStep, here]
   refine ⟨by decide, ?_⟩
-  simp [Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
-    MachineData.store, MachineData.set, MachineData.setReg,
-    Reg64s.get, Reg64s.get64, Reg64s.set, Reg64s.set64,
+  simp [Instr.interp, Operation.interp,
+    MachineData.store,
+    Reg64s.get, Reg64s.get64,  Reg64s.set64,
     Reg.base, Reg.offset, BitVec.drop, BitVec.take, Effects.All,
     RelRegOrMem.interp, ConstExpr.interp,
-    Width.bytesv, prologueData, savedCount, BitVec.sub_sub, u64_sub_sub,
+    Width.bytesv, prologueData, savedCount, BitVec.sub_sub,
     saveMemory, savedWords, AllowedipsImage.CommonBits.entry] at loaded ⊢
-  simp_all [Effects.All, BitVec.sub_sub]
+  simp_all [Effects.All]
   try rfl
 
 /-- All nine real successors, through the first callback's actual CALL. -/

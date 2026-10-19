@@ -2,7 +2,6 @@ import AllowedipsImage
 import Memory
 import Kraken.X64.OmniSemantics
 namespace Binary.Allowedips
-set_option linter.unusedSimpArgs false
 local instance : Labels := Image.linkedLabels
 
 def run (code : List (Kraken.Sized Directive)) (offset : Nat) (s : MachineData) : Effects :=
@@ -21,7 +20,7 @@ theorem family32 (s : MachineData) :
         AllowedipsImage.Lookup.entry + 0x171 else AllowedipsImage.Lookup.entry + 0x47) := by
   simp [run, AllowedipsImage.Lookup.r3e, Directives.interp, Directive.interp,
     Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
-    RelRegOrMem.interp, ConstExpr.interp, Effects.All, StatusFlags.from_result,
+     ConstExpr.interp, Effects.All, StatusFlags.from_result,
     CondCode.interp, compare_eq]
   split <;> simp_all [Effects.All, AllowedipsImage.Lookup.entry] <;> rfl
 
@@ -32,7 +31,7 @@ theorem family128 (s : MachineData) :
         AllowedipsImage.Lookup.entry + 0x14f else AllowedipsImage.Lookup.entry + 0x61) := by
   simp [run, AllowedipsImage.Lookup.r58, Directives.interp, Directive.interp,
     Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
-    RelRegOrMem.interp, ConstExpr.interp, Effects.All, StatusFlags.from_result,
+     ConstExpr.interp, Effects.All, StatusFlags.from_result,
     CondCode.interp, compare_eq]
   split <;> simp_all [Effects.All, AllowedipsImage.Lookup.entry] <;> rfl
 
@@ -43,7 +42,7 @@ theorem fullLength (s : MachineData) :
         AllowedipsImage.Lookup.entry + 0x101 else AllowedipsImage.Lookup.entry + 0xb4) := by
   simp [run, AllowedipsImage.Lookup.raf, Directives.interp, Directive.interp,
     Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
-    RelRegOrMem.interp, ConstExpr.interp, Effects.All, StatusFlags.from_result,
+      Effects.All, StatusFlags.from_result,
     CondCode.interp, compare_eq]
   split <;> simp_all [Effects.All, AllowedipsImage.Lookup.entry] <;> rfl
 
@@ -52,8 +51,8 @@ theorem rootGuard (s : MachineData) :
       t.data.regs = s.regs ∧ t.data.dmem = s.dmem ∧
       t.pc = if s.regs.rbx.toBitVec == 0 then
         AllowedipsImage.Lookup.entry + 0x184 else AllowedipsImage.Lookup.entry + 0x87) := by
-  simp [run, AllowedipsImage.Lookup.r79, AllowedipsImage.Lookup.rb9,
-    AllowedipsImage.Lookup.r106, AllowedipsImage.Lookup.r119,
+  simp [run, AllowedipsImage.Lookup.r79,
+
     Directives.interp, Directive.interp, Instr.interp, Operation.interp,
     RegOrMem.interp, Operand.interp, Effects.All, StatusFlags.from_result,
     CondCode.interp, BitVec.and_self, Reg64s.get, Reg64s.get64, Reg.base,
@@ -66,8 +65,8 @@ theorem nextGuard (s : MachineData) :
       t.data.regs = s.regs ∧ t.data.dmem = s.dmem ∧
       t.pc = if s.regs.rbx.toBitVec == 0 then
         AllowedipsImage.Lookup.entry + 0x101 else AllowedipsImage.Lookup.entry + 0xd5) := by
-  simp [run, AllowedipsImage.Lookup.r79, AllowedipsImage.Lookup.rb9,
-    AllowedipsImage.Lookup.r106, AllowedipsImage.Lookup.r119,
+  simp [run,  AllowedipsImage.Lookup.rb9,
+
     Directives.interp, Directive.interp, Instr.interp, Operation.interp,
     RegOrMem.interp, Operand.interp, Effects.All, StatusFlags.from_result,
     CondCode.interp, BitVec.and_self, Reg64s.get, Reg64s.get64, Reg.base,
@@ -80,8 +79,8 @@ theorem foundGuard (s : MachineData) :
       t.data.regs = s.regs ∧ t.data.dmem = s.dmem ∧
       t.pc = if s.regs.rbp.toBitVec == 0 then
         AllowedipsImage.Lookup.entry + 0x184 else AllowedipsImage.Lookup.entry + 0x10b) := by
-  simp [run, AllowedipsImage.Lookup.r79, AllowedipsImage.Lookup.rb9,
-    AllowedipsImage.Lookup.r106, AllowedipsImage.Lookup.r119,
+  simp [run,
+    AllowedipsImage.Lookup.r106,
     Directives.interp, Directive.interp, Instr.interp, Operation.interp,
     RegOrMem.interp, Operand.interp, Effects.All, StatusFlags.from_result,
     CondCode.interp, BitVec.and_self, Reg64s.get, Reg64s.get64, Reg.base,
@@ -94,8 +93,8 @@ theorem peerGuard (s : MachineData) :
       t.data.regs = s.regs ∧ t.data.dmem = s.dmem ∧
       t.pc = if s.regs.rax.toBitVec == 0 then
         AllowedipsImage.Lookup.entry + 0x74 else AllowedipsImage.Lookup.entry + 0x122) := by
-  simp [run, AllowedipsImage.Lookup.r79, AllowedipsImage.Lookup.rb9,
-    AllowedipsImage.Lookup.r106, AllowedipsImage.Lookup.r119,
+  simp [run,
+     AllowedipsImage.Lookup.r119,
     Directives.interp, Directive.interp, Instr.interp, Operation.interp,
     RegOrMem.interp, Operand.interp, Effects.All, StatusFlags.from_result,
     CondCode.interp, BitVec.and_self, Reg64s.get, Reg64s.get64, Reg.base,
@@ -127,7 +126,7 @@ theorem prefixGuard (s : MachineData) :
         AllowedipsImage.Lookup.entry + 0x90 else AllowedipsImage.Lookup.entry + 0x101) := by
   simp [run, AllowedipsImage.Lookup.rfc, Directives.interp, Directive.interp,
     Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
-    RelRegOrMem.interp, ConstExpr.interp, Effects.All, StatusFlags.from_result,
+      Effects.All, StatusFlags.from_result,
     CondCode.interp, carry8]
   split <;> simp_all [Effects.All, AllowedipsImage.Lookup.entry] <;> rfl
 
@@ -143,7 +142,7 @@ theorem hasPeer (s : MachineData) (peer : BitVec 64)
     MachineData.load, MachineData.set, MachineData.setReg, AddrExpr.interp,
     ConstExpr.interp, Reg64s.get, Reg64s.get64, Reg64s.set, Reg64s.set64,
     Reg.base, Reg.offset, BitVec.take, BitVec.drop,
-    BitVec.toAddressSize, BitVec.signed, BitVec.ofInt_toInt, BitVec.ofInt_ofNat,
+    BitVec.toAddressSize, BitVec.signed, BitVec.ofInt_toInt,
     Effects.All, StatusFlags.from_result, CondCode.interp, BitVec.and_self,
     AllowedipsImage.Lookup.entry] at field ⊢
   rw [field]

@@ -18,14 +18,14 @@ theorem source_run (w : World) (d : Device) (pid : PeerId) (kid : KeypairId)
   by_cases empty : ∀ x ∈ d.indexTable, (x.owner==.handshake pid)=false
   · have hashed : d.indexTable.any (·.owner==.handshake pid)=false :=
       List.any_eq_false.mpr (by simpa using empty)
-    simp [Except.pure, Except.bind, StateT.run, bind, StateT.bind, StateT.lift, pure, StateT.pure, get, getThe, MonadStateOf.get, StateT.get, modify, modifyGet, MonadStateOf.modifyGet, StateT.modifyGet, liftM, monadLift, MonadLift.monadLift, liftWG, liftAmbient, AmbientM.branch, WG.getDev, WG.modifyDev, liftIndex, WG.indexReplaceHandshake, WG.indexHashed, Source.indexReplaceHandshake,Source.indexHashed,Source.getDev,Source.modifyDev,Source.getWG,Source.modifyWG,branch,
-      StateT.run_bind,StateT.run_pure,device,sourceAnswer,sourceFinal,hashed,unchanged]
+    simp [Except.pure, Except.bind, StateT.run, bind, StateT.bind, StateT.lift, pure, StateT.pure, get, getThe, MonadStateOf.get, StateT.get, modify, modifyGet, MonadStateOf.modifyGet, StateT.modifyGet, liftM, monadLift, MonadLift.monadLift, liftWG,  AmbientM.branch, WG.getDev, WG.modifyDev, liftIndex, WG.indexReplaceHandshake, WG.indexHashed, Source.indexReplaceHandshake,branch,
+      device,sourceAnswer,sourceFinal,hashed,unchanged]
   · have hashed : d.indexTable.any (·.owner==.handshake pid)=true := by
       cases h : d.indexTable.any (·.owner==.handshake pid)
       · exact False.elim (empty (by simpa using List.any_eq_false.mp h))
       · rfl
-    simp [Except.pure, Except.bind, StateT.run, bind, StateT.bind, StateT.lift, pure, StateT.pure, get, getThe, MonadStateOf.get, StateT.get, modify, modifyGet, MonadStateOf.modifyGet, StateT.modifyGet, liftM, monadLift, MonadLift.monadLift, liftWG, liftAmbient, AmbientM.branch, WG.getDev, WG.modifyDev, liftIndex, WG.indexReplaceHandshake, WG.indexHashed, Source.indexReplaceHandshake,Source.indexHashed,Source.getDev,Source.modifyDev,Source.getWG,Source.modifyWG,branch,
-      StateT.run_bind,StateT.run_pure,device,sourceAnswer,sourceFinal,hashed,empty]
+    simp [Except.pure, Except.bind, StateT.run, bind, StateT.bind, StateT.lift, pure, StateT.pure, get, getThe, MonadStateOf.get, StateT.get, modify, modifyGet, MonadStateOf.modifyGet, StateT.modifyGet, liftM, monadLift, MonadLift.monadLift, liftWG,  AmbientM.branch, WG.getDev, WG.modifyDev, liftIndex, WG.indexReplaceHandshake, WG.indexHashed, Source.indexReplaceHandshake,branch,
+      device,sourceAnswer,sourceFinal,hashed]
     intro a _
     rfl
 

@@ -1,0 +1,25 @@
+From dc3824fd5ca36c28b11321b8e7f7e2389b6f6ec4 Mon Sep 17 00:00:00 2001
+From: Mike Dodds <mike@oath.tech>
+Date: Mon, 19 Oct 2026 20:45:35 +0000
+Subject: [PATCH] Use the current dependent-if rewrite name on Lean 4.35
+
+---
+ Kraken/SeparationMem.lean | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Kraken/SeparationMem.lean b/Kraken/SeparationMem.lean
+index 69b609d..a41a3ed 100644
+--- a/Kraken/SeparationMem.lean
++++ b/Kraken/SeparationMem.lean
+@@ -83,7 +83,7 @@ theorem loadBytes_sep {w : Nat} (bs : List UInt8) (a : BitVec w) (n : Nat) (R :
+   rw [Mem.loadBytes]
+   rw [show (List.range n).map (fun i => ((bs.At a).union m2).get? (a + BitVec.ofNat w i)) =
+            (List.range n).map (fun i => if h : i < n then some (bs.get ⟨i, Hl ▸ h⟩) else none) by
+-    apply List.map_congr_left; intro i hi; rw [List.mem_range] at hi; rw [dif_pos hi]; exact h_get i hi]
++    apply List.map_congr_left; intro i hi; rw [List.mem_range] at hi; rw [dite_eq_left hi]; exact h_get i hi]
+   cases Hl
+   rw [List.range_get_eq_map_some]
+   rw [List.allSome_map_some]
+-- 
+2.43.0
+

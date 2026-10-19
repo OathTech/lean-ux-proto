@@ -39,8 +39,7 @@ theorem load_bytes_zero (m : Mem 64) (base : BitVec 64) (bytes : List UInt8) (wi
   have h := MemoryBytes.loadBytes_store_slice m base bytes bound 0 width (by omega)
   have address : base + .ofNat 64 0 = base := by simp
   rw [address] at h
-  simpa only [Mem.loadInt, h, List.drop_zero, Option.map_some] using
-    congrArg (Option.map Int.ofBytes) h
+  simp only [Mem.loadInt, h, List.drop_zero, Option.map_some]
 
 theorem load_bytes_eight (m : Mem 64) (base : BitVec 64) (bytes : List UInt8) (width : Nat)
     (bound : bytes.length ≤ 2^64) (inside : 8+width ≤ bytes.length) :

@@ -125,7 +125,7 @@ theorem keeps_body (kinds : List IndexKind) (index : Nat)
 
 theorem keeps_finish (a : LookupMirror.Acc) : Keeps (finish a) := by
   unfold finish
-  cases stop : a.2 <;> simp only [stop, Bool.not_false, Bool.not_true, Bool.false_eq_true, ↓reduceIte]
+  cases stop : a.2 <;> simp only [ Bool.not_false, Bool.not_true, Bool.false_eq_true, ↓reduceIte]
   all_goals try (apply keeps_bind (keeps_branch .idxWalk false); intro _)
   all_goals
     apply keeps_bind (keeps_branch _ _)

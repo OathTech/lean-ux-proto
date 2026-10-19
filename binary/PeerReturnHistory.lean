@@ -39,14 +39,14 @@ private theorem history_cons (fetch : Int64 → Option Decoded) (s next : Machin
 
 private theorem return_instruction0 (fetch : Int64 → Option Decoded)
     (agree : TrustBase.AnchoredDecoderAgreement fetch)
-    (s : MachineData) (history : List MachineState) (bx bp r12 r13 r14 r15 ra : UInt64)
-    (h0 : s.dmem.loadInt s.regs.rsp.toBitVec 8 = some (bx.toNat : Int))
-    (h1 : s.dmem.loadInt (s.regs.rsp.toBitVec+8#64) 8 = some (bp.toNat : Int))
-    (h2 : s.dmem.loadInt (s.regs.rsp.toBitVec+16#64) 8 = some (r12.toNat : Int))
-    (h3 : s.dmem.loadInt (s.regs.rsp.toBitVec+24#64) 8 = some (r13.toNat : Int))
-    (h4 : s.dmem.loadInt (s.regs.rsp.toBitVec+32#64) 8 = some (r14.toNat : Int))
-    (h5 : s.dmem.loadInt (s.regs.rsp.toBitVec+40#64) 8 = some (r15.toNat : Int))
-    (h6 : s.dmem.loadInt (s.regs.rsp.toBitVec+48#64) 8 = some (ra.toNat : Int)) :
+    (s : MachineData) (_history : List MachineState) (bx bp r12 r13 r14 r15 ra : UInt64)
+    (_h0 : s.dmem.loadInt s.regs.rsp.toBitVec 8 = some (bx.toNat : Int))
+    (_h1 : s.dmem.loadInt (s.regs.rsp.toBitVec+8#64) 8 = some (bp.toNat : Int))
+    (_h2 : s.dmem.loadInt (s.regs.rsp.toBitVec+16#64) 8 = some (r12.toNat : Int))
+    (_h3 : s.dmem.loadInt (s.regs.rsp.toBitVec+24#64) 8 = some (r13.toNat : Int))
+    (_h4 : s.dmem.loadInt (s.regs.rsp.toBitVec+32#64) 8 = some (r14.toNat : Int))
+    (_h5 : s.dmem.loadInt (s.regs.rsp.toBitVec+40#64) 8 = some (r15.toNat : Int))
+    (_h6 : s.dmem.loadInt (s.regs.rsp.toBitVec+48#64) 8 = some (ra.toNat : Int)) :
     instructionStep fetch ⟨s, Image.PeerGet.entry+0xa2⟩
       (fun t => t = ⟨restoreData s bx bp r12 r13 r14 r15 0, Image.PeerGet.entry+0xa5⟩) := by
   have f0 := agree _ _ (show Image.fetch (Image.PeerGet.entry+0xa2) = some _ from rfl)
@@ -54,169 +54,169 @@ private theorem return_instruction0 (fetch : Int64 → Option Decoded)
   refine ⟨by decide, ?_⟩
   simp [
     Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
-    MachineData.load, Reg64s.get, Reg64s.get64, Reg.base, Reg.offset,
+     Reg64s.get, Reg64s.get64, Reg.base, Reg.offset,
     BitVec.drop, BitVec.take, Effects.All, MachineData.set, MachineData.setReg,
-    Reg64s.set, Reg64s.set64, BitVec.ofInt_ofNat,
-    UInt64.toBitVec_add, UInt64.ofBitVec_add, BitVec.add_assoc,
-    UInt64.add_assoc, h0, h1, h2, h3, h4, h5, h6, restoreData] <;> try rfl
+    Reg64s.set, Reg64s.set64,
+
+            restoreData] <;> try rfl
 
 private theorem return_instruction1 (fetch : Int64 → Option Decoded)
     (agree : TrustBase.AnchoredDecoderAgreement fetch)
-    (s : MachineData) (history : List MachineState) (bx bp r12 r13 r14 r15 ra : UInt64)
+    (s : MachineData) (_history : List MachineState) (bx bp r12 r13 r14 r15 ra : UInt64)
     (h0 : s.dmem.loadInt s.regs.rsp.toBitVec 8 = some (bx.toNat : Int))
-    (h1 : s.dmem.loadInt (s.regs.rsp.toBitVec+8#64) 8 = some (bp.toNat : Int))
-    (h2 : s.dmem.loadInt (s.regs.rsp.toBitVec+16#64) 8 = some (r12.toNat : Int))
-    (h3 : s.dmem.loadInt (s.regs.rsp.toBitVec+24#64) 8 = some (r13.toNat : Int))
-    (h4 : s.dmem.loadInt (s.regs.rsp.toBitVec+32#64) 8 = some (r14.toNat : Int))
-    (h5 : s.dmem.loadInt (s.regs.rsp.toBitVec+40#64) 8 = some (r15.toNat : Int))
-    (h6 : s.dmem.loadInt (s.regs.rsp.toBitVec+48#64) 8 = some (ra.toNat : Int)) :
+    (_h1 : s.dmem.loadInt (s.regs.rsp.toBitVec+8#64) 8 = some (bp.toNat : Int))
+    (_h2 : s.dmem.loadInt (s.regs.rsp.toBitVec+16#64) 8 = some (r12.toNat : Int))
+    (_h3 : s.dmem.loadInt (s.regs.rsp.toBitVec+24#64) 8 = some (r13.toNat : Int))
+    (_h4 : s.dmem.loadInt (s.regs.rsp.toBitVec+32#64) 8 = some (r14.toNat : Int))
+    (_h5 : s.dmem.loadInt (s.regs.rsp.toBitVec+40#64) 8 = some (r15.toNat : Int))
+    (_h6 : s.dmem.loadInt (s.regs.rsp.toBitVec+48#64) 8 = some (ra.toNat : Int)) :
     instructionStep fetch ⟨restoreData s bx bp r12 r13 r14 r15 0, Image.PeerGet.entry+0xa5⟩
       (fun t => t = ⟨restoreData s bx bp r12 r13 r14 r15 1, Image.PeerGet.entry+0xa6⟩) := by
   have f1 := agree _ _ (show Image.fetch (Image.PeerGet.entry+0xa5) = some _ from rfl)
   simp only [instructionStep, f1]
   refine ⟨by decide, ?_⟩
   simp [
-    Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
-    MachineData.load, Reg64s.get, Reg64s.get64, Reg.base, Reg.offset,
-    BitVec.drop, BitVec.take, Effects.All, MachineData.set, MachineData.setReg,
-    Reg64s.set, Reg64s.set64, BitVec.ofInt_ofNat,
-    UInt64.toBitVec_add, UInt64.ofBitVec_add, BitVec.add_assoc,
-    UInt64.add_assoc, h0, h1, h2, h3, h4, h5, h6, restoreData] <;> try rfl
+    Instr.interp, Operation.interp,
+    MachineData.load,  Reg64s.get64,
+      Effects.All, MachineData.set, MachineData.setReg,
+    Reg64s.set, Reg64s.set64,
+     UInt64.ofBitVec_add,
+     h0,       restoreData] <;> try rfl
 
 private theorem return_instruction2 (fetch : Int64 → Option Decoded)
     (agree : TrustBase.AnchoredDecoderAgreement fetch)
-    (s : MachineData) (history : List MachineState) (bx bp r12 r13 r14 r15 ra : UInt64)
-    (h0 : s.dmem.loadInt s.regs.rsp.toBitVec 8 = some (bx.toNat : Int))
+    (s : MachineData) (_history : List MachineState) (bx bp r12 r13 r14 r15 ra : UInt64)
+    (_h0 : s.dmem.loadInt s.regs.rsp.toBitVec 8 = some (bx.toNat : Int))
     (h1 : s.dmem.loadInt (s.regs.rsp.toBitVec+8#64) 8 = some (bp.toNat : Int))
-    (h2 : s.dmem.loadInt (s.regs.rsp.toBitVec+16#64) 8 = some (r12.toNat : Int))
-    (h3 : s.dmem.loadInt (s.regs.rsp.toBitVec+24#64) 8 = some (r13.toNat : Int))
-    (h4 : s.dmem.loadInt (s.regs.rsp.toBitVec+32#64) 8 = some (r14.toNat : Int))
-    (h5 : s.dmem.loadInt (s.regs.rsp.toBitVec+40#64) 8 = some (r15.toNat : Int))
-    (h6 : s.dmem.loadInt (s.regs.rsp.toBitVec+48#64) 8 = some (ra.toNat : Int)) :
+    (_h2 : s.dmem.loadInt (s.regs.rsp.toBitVec+16#64) 8 = some (r12.toNat : Int))
+    (_h3 : s.dmem.loadInt (s.regs.rsp.toBitVec+24#64) 8 = some (r13.toNat : Int))
+    (_h4 : s.dmem.loadInt (s.regs.rsp.toBitVec+32#64) 8 = some (r14.toNat : Int))
+    (_h5 : s.dmem.loadInt (s.regs.rsp.toBitVec+40#64) 8 = some (r15.toNat : Int))
+    (_h6 : s.dmem.loadInt (s.regs.rsp.toBitVec+48#64) 8 = some (ra.toNat : Int)) :
     instructionStep fetch ⟨restoreData s bx bp r12 r13 r14 r15 1, Image.PeerGet.entry+0xa6⟩
       (fun t => t = ⟨restoreData s bx bp r12 r13 r14 r15 2, Image.PeerGet.entry+0xa7⟩) := by
   have f2 := agree _ _ (show Image.fetch (Image.PeerGet.entry+0xa6) = some _ from rfl)
   simp only [instructionStep, f2]
   refine ⟨by decide, ?_⟩
   simp [
-    Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
-    MachineData.load, Reg64s.get, Reg64s.get64, Reg.base, Reg.offset,
-    BitVec.drop, BitVec.take, Effects.All, MachineData.set, MachineData.setReg,
-    Reg64s.set, Reg64s.set64, BitVec.ofInt_ofNat,
+    Instr.interp, Operation.interp,
+    MachineData.load,  Reg64s.get64,
+      Effects.All, MachineData.set, MachineData.setReg,
+    Reg64s.set, Reg64s.set64,
     UInt64.toBitVec_add, UInt64.ofBitVec_add, BitVec.add_assoc,
-    UInt64.add_assoc, h0, h1, h2, h3, h4, h5, h6, restoreData] <;> try rfl
+      h1,      restoreData] <;> try rfl
   try rw [h1]
   all_goals first | rfl | exact ⟨rfl, rfl⟩ | simp [Effects.All, BitVec.ofInt_ofNat, UInt64.ofBitVec_add, BitVec.add_assoc]
 
 private theorem return_instruction3 (fetch : Int64 → Option Decoded)
     (agree : TrustBase.AnchoredDecoderAgreement fetch)
-    (s : MachineData) (history : List MachineState) (bx bp r12 r13 r14 r15 ra : UInt64)
-    (h0 : s.dmem.loadInt s.regs.rsp.toBitVec 8 = some (bx.toNat : Int))
-    (h1 : s.dmem.loadInt (s.regs.rsp.toBitVec+8#64) 8 = some (bp.toNat : Int))
+    (s : MachineData) (_history : List MachineState) (bx bp r12 r13 r14 r15 ra : UInt64)
+    (_h0 : s.dmem.loadInt s.regs.rsp.toBitVec 8 = some (bx.toNat : Int))
+    (_h1 : s.dmem.loadInt (s.regs.rsp.toBitVec+8#64) 8 = some (bp.toNat : Int))
     (h2 : s.dmem.loadInt (s.regs.rsp.toBitVec+16#64) 8 = some (r12.toNat : Int))
-    (h3 : s.dmem.loadInt (s.regs.rsp.toBitVec+24#64) 8 = some (r13.toNat : Int))
-    (h4 : s.dmem.loadInt (s.regs.rsp.toBitVec+32#64) 8 = some (r14.toNat : Int))
-    (h5 : s.dmem.loadInt (s.regs.rsp.toBitVec+40#64) 8 = some (r15.toNat : Int))
-    (h6 : s.dmem.loadInt (s.regs.rsp.toBitVec+48#64) 8 = some (ra.toNat : Int)) :
+    (_h3 : s.dmem.loadInt (s.regs.rsp.toBitVec+24#64) 8 = some (r13.toNat : Int))
+    (_h4 : s.dmem.loadInt (s.regs.rsp.toBitVec+32#64) 8 = some (r14.toNat : Int))
+    (_h5 : s.dmem.loadInt (s.regs.rsp.toBitVec+40#64) 8 = some (r15.toNat : Int))
+    (_h6 : s.dmem.loadInt (s.regs.rsp.toBitVec+48#64) 8 = some (ra.toNat : Int)) :
     instructionStep fetch ⟨restoreData s bx bp r12 r13 r14 r15 2, Image.PeerGet.entry+0xa7⟩
       (fun t => t = ⟨restoreData s bx bp r12 r13 r14 r15 3, Image.PeerGet.entry+0xa9⟩) := by
   have f3 := agree _ _ (show Image.fetch (Image.PeerGet.entry+0xa7) = some _ from rfl)
   simp only [instructionStep, f3]
   refine ⟨by decide, ?_⟩
   simp [
-    Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
-    MachineData.load, Reg64s.get, Reg64s.get64, Reg.base, Reg.offset,
-    BitVec.drop, BitVec.take, Effects.All, MachineData.set, MachineData.setReg,
-    Reg64s.set, Reg64s.set64, BitVec.ofInt_ofNat,
+    Instr.interp, Operation.interp,
+    MachineData.load,  Reg64s.get64,
+      Effects.All, MachineData.set, MachineData.setReg,
+    Reg64s.set, Reg64s.set64,
     UInt64.toBitVec_add, UInt64.ofBitVec_add, BitVec.add_assoc,
-    UInt64.add_assoc, h0, h1, h2, h3, h4, h5, h6, restoreData] <;> try rfl
+       h2,     restoreData] <;> try rfl
   try rw [h2]
   all_goals first | rfl | exact ⟨rfl, rfl⟩ | simp [Effects.All, BitVec.ofInt_ofNat, UInt64.ofBitVec_add, BitVec.add_assoc]
 
 private theorem return_instruction4 (fetch : Int64 → Option Decoded)
     (agree : TrustBase.AnchoredDecoderAgreement fetch)
-    (s : MachineData) (history : List MachineState) (bx bp r12 r13 r14 r15 ra : UInt64)
-    (h0 : s.dmem.loadInt s.regs.rsp.toBitVec 8 = some (bx.toNat : Int))
-    (h1 : s.dmem.loadInt (s.regs.rsp.toBitVec+8#64) 8 = some (bp.toNat : Int))
-    (h2 : s.dmem.loadInt (s.regs.rsp.toBitVec+16#64) 8 = some (r12.toNat : Int))
+    (s : MachineData) (_history : List MachineState) (bx bp r12 r13 r14 r15 ra : UInt64)
+    (_h0 : s.dmem.loadInt s.regs.rsp.toBitVec 8 = some (bx.toNat : Int))
+    (_h1 : s.dmem.loadInt (s.regs.rsp.toBitVec+8#64) 8 = some (bp.toNat : Int))
+    (_h2 : s.dmem.loadInt (s.regs.rsp.toBitVec+16#64) 8 = some (r12.toNat : Int))
     (h3 : s.dmem.loadInt (s.regs.rsp.toBitVec+24#64) 8 = some (r13.toNat : Int))
-    (h4 : s.dmem.loadInt (s.regs.rsp.toBitVec+32#64) 8 = some (r14.toNat : Int))
-    (h5 : s.dmem.loadInt (s.regs.rsp.toBitVec+40#64) 8 = some (r15.toNat : Int))
-    (h6 : s.dmem.loadInt (s.regs.rsp.toBitVec+48#64) 8 = some (ra.toNat : Int)) :
+    (_h4 : s.dmem.loadInt (s.regs.rsp.toBitVec+32#64) 8 = some (r14.toNat : Int))
+    (_h5 : s.dmem.loadInt (s.regs.rsp.toBitVec+40#64) 8 = some (r15.toNat : Int))
+    (_h6 : s.dmem.loadInt (s.regs.rsp.toBitVec+48#64) 8 = some (ra.toNat : Int)) :
     instructionStep fetch ⟨restoreData s bx bp r12 r13 r14 r15 3, Image.PeerGet.entry+0xa9⟩
       (fun t => t = ⟨restoreData s bx bp r12 r13 r14 r15 4, Image.PeerGet.entry+0xab⟩) := by
   have f4 := agree _ _ (show Image.fetch (Image.PeerGet.entry+0xa9) = some _ from rfl)
   simp only [instructionStep, f4]
   refine ⟨by decide, ?_⟩
   simp [
-    Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
-    MachineData.load, Reg64s.get, Reg64s.get64, Reg.base, Reg.offset,
-    BitVec.drop, BitVec.take, Effects.All, MachineData.set, MachineData.setReg,
-    Reg64s.set, Reg64s.set64, BitVec.ofInt_ofNat,
+    Instr.interp, Operation.interp,
+    MachineData.load,  Reg64s.get64,
+      Effects.All, MachineData.set, MachineData.setReg,
+    Reg64s.set, Reg64s.set64,
     UInt64.toBitVec_add, UInt64.ofBitVec_add, BitVec.add_assoc,
-    UInt64.add_assoc, h0, h1, h2, h3, h4, h5, h6, restoreData] <;> try rfl
+        h3,    restoreData] <;> try rfl
   try rw [h3]
   all_goals first | rfl | exact ⟨rfl, rfl⟩ | simp [Effects.All, BitVec.ofInt_ofNat, UInt64.ofBitVec_add, BitVec.add_assoc]
 
 private theorem return_instruction5 (fetch : Int64 → Option Decoded)
     (agree : TrustBase.AnchoredDecoderAgreement fetch)
-    (s : MachineData) (history : List MachineState) (bx bp r12 r13 r14 r15 ra : UInt64)
-    (h0 : s.dmem.loadInt s.regs.rsp.toBitVec 8 = some (bx.toNat : Int))
-    (h1 : s.dmem.loadInt (s.regs.rsp.toBitVec+8#64) 8 = some (bp.toNat : Int))
-    (h2 : s.dmem.loadInt (s.regs.rsp.toBitVec+16#64) 8 = some (r12.toNat : Int))
-    (h3 : s.dmem.loadInt (s.regs.rsp.toBitVec+24#64) 8 = some (r13.toNat : Int))
+    (s : MachineData) (_history : List MachineState) (bx bp r12 r13 r14 r15 ra : UInt64)
+    (_h0 : s.dmem.loadInt s.regs.rsp.toBitVec 8 = some (bx.toNat : Int))
+    (_h1 : s.dmem.loadInt (s.regs.rsp.toBitVec+8#64) 8 = some (bp.toNat : Int))
+    (_h2 : s.dmem.loadInt (s.regs.rsp.toBitVec+16#64) 8 = some (r12.toNat : Int))
+    (_h3 : s.dmem.loadInt (s.regs.rsp.toBitVec+24#64) 8 = some (r13.toNat : Int))
     (h4 : s.dmem.loadInt (s.regs.rsp.toBitVec+32#64) 8 = some (r14.toNat : Int))
-    (h5 : s.dmem.loadInt (s.regs.rsp.toBitVec+40#64) 8 = some (r15.toNat : Int))
-    (h6 : s.dmem.loadInt (s.regs.rsp.toBitVec+48#64) 8 = some (ra.toNat : Int)) :
+    (_h5 : s.dmem.loadInt (s.regs.rsp.toBitVec+40#64) 8 = some (r15.toNat : Int))
+    (_h6 : s.dmem.loadInt (s.regs.rsp.toBitVec+48#64) 8 = some (ra.toNat : Int)) :
     instructionStep fetch ⟨restoreData s bx bp r12 r13 r14 r15 4, Image.PeerGet.entry+0xab⟩
       (fun t => t = ⟨restoreData s bx bp r12 r13 r14 r15 5, Image.PeerGet.entry+0xad⟩) := by
   have f5 := agree _ _ (show Image.fetch (Image.PeerGet.entry+0xab) = some _ from rfl)
   simp only [instructionStep, f5]
   refine ⟨by decide, ?_⟩
   simp [
-    Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
-    MachineData.load, Reg64s.get, Reg64s.get64, Reg.base, Reg.offset,
-    BitVec.drop, BitVec.take, Effects.All, MachineData.set, MachineData.setReg,
-    Reg64s.set, Reg64s.set64, BitVec.ofInt_ofNat,
+    Instr.interp, Operation.interp,
+    MachineData.load,  Reg64s.get64,
+      Effects.All, MachineData.set, MachineData.setReg,
+    Reg64s.set, Reg64s.set64,
     UInt64.toBitVec_add, UInt64.ofBitVec_add, BitVec.add_assoc,
-    UInt64.add_assoc, h0, h1, h2, h3, h4, h5, h6, restoreData] <;> try rfl
+         h4,   restoreData] <;> try rfl
   try rw [h4]
   all_goals first | rfl | exact ⟨rfl, rfl⟩ | simp [Effects.All, BitVec.ofInt_ofNat, UInt64.ofBitVec_add, BitVec.add_assoc]
 
 private theorem return_instruction6 (fetch : Int64 → Option Decoded)
     (agree : TrustBase.AnchoredDecoderAgreement fetch)
-    (s : MachineData) (history : List MachineState) (bx bp r12 r13 r14 r15 ra : UInt64)
-    (h0 : s.dmem.loadInt s.regs.rsp.toBitVec 8 = some (bx.toNat : Int))
-    (h1 : s.dmem.loadInt (s.regs.rsp.toBitVec+8#64) 8 = some (bp.toNat : Int))
-    (h2 : s.dmem.loadInt (s.regs.rsp.toBitVec+16#64) 8 = some (r12.toNat : Int))
-    (h3 : s.dmem.loadInt (s.regs.rsp.toBitVec+24#64) 8 = some (r13.toNat : Int))
-    (h4 : s.dmem.loadInt (s.regs.rsp.toBitVec+32#64) 8 = some (r14.toNat : Int))
+    (s : MachineData) (_history : List MachineState) (bx bp r12 r13 r14 r15 ra : UInt64)
+    (_h0 : s.dmem.loadInt s.regs.rsp.toBitVec 8 = some (bx.toNat : Int))
+    (_h1 : s.dmem.loadInt (s.regs.rsp.toBitVec+8#64) 8 = some (bp.toNat : Int))
+    (_h2 : s.dmem.loadInt (s.regs.rsp.toBitVec+16#64) 8 = some (r12.toNat : Int))
+    (_h3 : s.dmem.loadInt (s.regs.rsp.toBitVec+24#64) 8 = some (r13.toNat : Int))
+    (_h4 : s.dmem.loadInt (s.regs.rsp.toBitVec+32#64) 8 = some (r14.toNat : Int))
     (h5 : s.dmem.loadInt (s.regs.rsp.toBitVec+40#64) 8 = some (r15.toNat : Int))
-    (h6 : s.dmem.loadInt (s.regs.rsp.toBitVec+48#64) 8 = some (ra.toNat : Int)) :
+    (_h6 : s.dmem.loadInt (s.regs.rsp.toBitVec+48#64) 8 = some (ra.toNat : Int)) :
     instructionStep fetch ⟨restoreData s bx bp r12 r13 r14 r15 5, Image.PeerGet.entry+0xad⟩
       (fun t => t = ⟨restoreData s bx bp r12 r13 r14 r15 6, Image.PeerGet.entry+0xaf⟩) := by
   have f6 := agree _ _ (show Image.fetch (Image.PeerGet.entry+0xad) = some _ from rfl)
   simp only [instructionStep, f6]
   refine ⟨by decide, ?_⟩
   simp [
-    Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
-    MachineData.load, Reg64s.get, Reg64s.get64, Reg.base, Reg.offset,
-    BitVec.drop, BitVec.take, Effects.All, MachineData.set, MachineData.setReg,
-    Reg64s.set, Reg64s.set64, BitVec.ofInt_ofNat,
+    Instr.interp, Operation.interp,
+    MachineData.load,  Reg64s.get64,
+      Effects.All, MachineData.set, MachineData.setReg,
+    Reg64s.set, Reg64s.set64,
     UInt64.toBitVec_add, UInt64.ofBitVec_add, BitVec.add_assoc,
-    UInt64.add_assoc, h0, h1, h2, h3, h4, h5, h6, restoreData] <;> try rfl
+          h5,  restoreData] <;> try rfl
   try rw [h5]
   all_goals first | rfl | exact ⟨rfl, rfl⟩ | simp [Effects.All, BitVec.ofInt_ofNat, UInt64.ofBitVec_add, BitVec.add_assoc]
 
 private theorem return_instruction7 (fetch : Int64 → Option Decoded)
     (agree : TrustBase.AnchoredDecoderAgreement fetch)
-    (s : MachineData) (history : List MachineState) (bx bp r12 r13 r14 r15 ra : UInt64)
-    (h0 : s.dmem.loadInt s.regs.rsp.toBitVec 8 = some (bx.toNat : Int))
-    (h1 : s.dmem.loadInt (s.regs.rsp.toBitVec+8#64) 8 = some (bp.toNat : Int))
-    (h2 : s.dmem.loadInt (s.regs.rsp.toBitVec+16#64) 8 = some (r12.toNat : Int))
-    (h3 : s.dmem.loadInt (s.regs.rsp.toBitVec+24#64) 8 = some (r13.toNat : Int))
-    (h4 : s.dmem.loadInt (s.regs.rsp.toBitVec+32#64) 8 = some (r14.toNat : Int))
-    (h5 : s.dmem.loadInt (s.regs.rsp.toBitVec+40#64) 8 = some (r15.toNat : Int))
+    (s : MachineData) (_history : List MachineState) (bx bp r12 r13 r14 r15 ra : UInt64)
+    (_h0 : s.dmem.loadInt s.regs.rsp.toBitVec 8 = some (bx.toNat : Int))
+    (_h1 : s.dmem.loadInt (s.regs.rsp.toBitVec+8#64) 8 = some (bp.toNat : Int))
+    (_h2 : s.dmem.loadInt (s.regs.rsp.toBitVec+16#64) 8 = some (r12.toNat : Int))
+    (_h3 : s.dmem.loadInt (s.regs.rsp.toBitVec+24#64) 8 = some (r13.toNat : Int))
+    (_h4 : s.dmem.loadInt (s.regs.rsp.toBitVec+32#64) 8 = some (r14.toNat : Int))
+    (_h5 : s.dmem.loadInt (s.regs.rsp.toBitVec+40#64) 8 = some (r15.toNat : Int))
     (h6 : s.dmem.loadInt (s.regs.rsp.toBitVec+48#64) 8 = some (ra.toNat : Int)) :
     instructionStep fetch ⟨restoreData s bx bp r12 r13 r14 r15 6, Image.PeerGet.entry+0xaf⟩
       (fun t => t = ⟨restoreData s bx bp r12 r13 r14 r15 7, .ofBitVec ra.toBitVec⟩) := by
@@ -224,12 +224,12 @@ private theorem return_instruction7 (fetch : Int64 → Option Decoded)
   simp only [instructionStep, f7]
   refine ⟨by decide, ?_⟩
   simp [
-    Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
-    MachineData.load, Reg64s.get, Reg64s.get64, Reg.base, Reg.offset,
-    BitVec.drop, BitVec.take, Effects.All, MachineData.set, MachineData.setReg,
-    Reg64s.set, Reg64s.set64, BitVec.ofInt_ofNat,
+    Instr.interp, Operation.interp,
+    MachineData.load,  Reg64s.get64,
+      Effects.All,
+     Reg64s.set64,
     UInt64.toBitVec_add, UInt64.ofBitVec_add, BitVec.add_assoc,
-    UInt64.add_assoc, h0, h1, h2, h3, h4, h5, h6, restoreData] <;> try rfl
+           h6, restoreData] <;> try rfl
   try rw [h6]
   all_goals first | rfl | exact ⟨rfl, rfl⟩ | simp [Effects.All, BitVec.ofInt_ofNat, UInt64.ofBitVec_add, BitVec.add_assoc]
   all_goals apply Int64.toBitVec_inj.mp

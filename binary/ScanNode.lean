@@ -163,7 +163,7 @@ theorem node_to_compare (fetch : Int64 → Option Decoded) (agree : AnchoredDeco
   have fields := bucket_cons_fields currentBucket
   let index := UInt32.ofNat e.index
   have indexNat : index.toNat = e.index := by
-    simp only [index, UInt32.toNat_ofNat]
+    simp only [index]
     exact Nat.mod_eq_of_lt fields.2.2.1
   have loaded : t₅.machine.data.dmem.loadInt (t₅.machine.data.regs.rbx.toBitVec+28) 4 = some index.toNat := by
     rw [bx₅, bx₄, indexNat]

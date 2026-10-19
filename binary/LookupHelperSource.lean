@@ -19,11 +19,11 @@ theorem project_peer_present (c : Config) (world : World) (v : View)
     rw [count] at countEq
     cases hasPeer : device.peers.get? pid with
     | none =>
-      simp only [hasPeer, Option.map_none, count] at countEq
+      simp only [hasPeer, Option.map_none] at countEq
       cases countEq
     | some peer =>
       refine ⟨device, peer, rfl, hasPeer, ?_⟩
-      simp only [hasPeer, Option.map_some, count, Option.some.injEq] at countEq
+      simp only [hasPeer, Option.map_some,  Option.some.injEq] at countEq
       exact countEq
 
 theorem R.peer_entry_data (c : Config) (world : World) (s : MachineState)

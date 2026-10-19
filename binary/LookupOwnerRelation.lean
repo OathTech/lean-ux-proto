@@ -47,7 +47,7 @@ theorem owner_pending_result (c : Config) (seen : List Point) (s : MachineData)
     OwnerFieldAt c seen q owner word := by
   have phase : ownerPending seen q = some ⟨s, Image.Lookup.entry+0xba⟩ := by
     simp only [ownerPending, OwnerWord.PendingPC] at pending ⊢
-    rw [if_pos pending, returned]
+    rw [ite_eq_left pending, returned]
   simp only [OwnerFieldAt, phase]
   refine ⟨True.intro, location, field, ?_⟩
   rw [← location, LookupHistory.resultStates_memory s af q member]
@@ -63,7 +63,7 @@ theorem owner_committed_result (c : Config) (seen : List Point) (s : MachineData
     OwnerFieldAt c seen (LookupHistory.resultExit s af) owner word := by
   have phase : ownerPending seen (LookupHistory.resultExit s af) = none := by
     simp [ownerPending, LookupHistory.resultExit, Image.Lookup.entry]
-    split <;> rw [if_neg (by decide)]
+    split <;> rw [ite_eq_right (by decide)]
   simp only [OwnerFieldAt, phase]
   change OwnerWord.Field c.peers (OwnerWord.stored s).dmem (ownerAddress c owner) word
   rw [← location]

@@ -4,7 +4,6 @@ import StackFrame
 namespace Binary.Kcov
 open TrustBase
 set_option maxHeartbeats 800000
-set_option linter.unusedSimpArgs false
 
 def enabled (kind : KcovKind) (layout : KcovLayout) (preempt : BitVec 32) : Bool :=
   (!(preempt &&& 0xff0100 != 0) ||
@@ -96,15 +95,14 @@ theorem plan_normal_form_of_reads (kind : KcovKind) (layout : KcovLayout)
   all_goals by_cases h1 : preempt &&& 0x100#32 = 0#32
   all_goals by_cases h2 : preempt &&& 0xff0000#32 = 0#32
   all_goals by_cases h3 : layout.softirqEnabled = 0#32
-  all_goals simp only [LookupSoftRead, LookupModeRead, h0, h1, h2, h3,
-    not_true_eq_false, not_false_eq_true, false_or, or_false, true_or,
-    false_and, true_and, and_false, ite_true, ite_false, false_implies,
-    true_implies] at softirq mode
-  all_goals simp [KcovPlan, preemptRead, returnRead, task, mode, capacity, area, softirq,
-    h0, h1, h2, h3, pcKind, countRead, nextNat, endGuard, a32, a24, a16, a8]
+  all_goals simp only [LookupSoftRead, LookupModeRead,    h3,
+
+         ] at softirq mode
+  all_goals simp [KcovPlan, preemptRead, returnRead, task,
+    h0, h1, h2,  pcKind,      ]
   all_goals
-    simp [enabled, bufferPlan, argument, pcKind, nextBV, BitVec.ofNat_mul,
-      Nat.not_lt, ite_not, ← BitVec.ofNat_add]
+    simp [enabled, bufferPlan, argument, pcKind,  BitVec.ofNat_mul,
+      Nat.not_lt, ]
   all_goals by_cases h0 : preempt &&& 0xff0100#32 = 0#32 <;> simp_all
   all_goals by_cases h1 : preempt &&& 0x100#32 = 0#32 <;> simp_all
   all_goals by_cases h2 : preempt &&& 0xff0000#32 = 0#32 <;> simp_all
@@ -151,7 +149,7 @@ theorem bufferPlan_shape (kind : KcovKind) (layout : KcovLayout) (count : Nat)
   · right
     refine ⟨_, rfl, by omega, ?_⟩
     intro write member
-    simp only [List.mem_cons, List.mem_singleton, List.not_mem_nil, or_false] at member
+    simp only [List.mem_cons,  List.not_mem_nil, or_false] at member
     rcases member with rfl | rfl | rfl | rfl
     · exact ⟨4*count+1, by omega, by omega, rfl⟩
     · exact ⟨4*count+2, by omega, by omega, rfl⟩
@@ -352,7 +350,7 @@ theorem inactive_plan (kind : KcovKind) (layout : KcovLayout)
     (inactive : layout.mode ≠ (if kind = .pc then 2 else 3)) :
     KcovPlan kind s = some [] := by
   obtain ⟨task, mode, capacity, area, softirq⟩ := metadata
-  simp [KcovPlan, preemptRead, returnRead, task, mode, softirq, inactive]
+  simp [KcovPlan, preemptRead, returnRead, task,  ]
   all_goals by_cases h0 : preempt &&& 0xff0100#32 = 0#32 <;> simp_all
   all_goals by_cases h1 : preempt &&& 0x100#32 = 0#32 <;> simp_all
   all_goals by_cases h2 : preempt &&& 0xff0000#32 = 0#32 <;> simp_all

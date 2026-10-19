@@ -37,7 +37,7 @@ theorem type_and (fetch : Int64 → Option Decoded)
     BitVec.ofInt_add, BitVec.ofInt_toInt, BitVec.ofInt_ofNat, Effects.All,
     typeMasked, typeBits, Image.Lookup.entry] at field ⊢
   rw [field]
-  simp [Effects.All, BitVec.ofInt_ofNat]
+  simp [Effects.All]
 
 theorem zero_argument (fetch : Int64 → Option Decoded)
     (agree : ∀ p i, Image.fetch p = some i → fetch p = some i)

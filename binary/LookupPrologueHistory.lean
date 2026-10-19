@@ -57,27 +57,27 @@ private theorem instruction0 (fetch : Int64 → Option Decoded)
   simp only [instructionStep, here]
   refine ⟨by decide, ?_⟩
   simp [Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
-    MachineData.store, MachineData.set, MachineData.setReg,
-    Reg64s.get, Reg64s.get64, Reg64s.set, Reg64s.set64,
+    MachineData.store,
+    Reg64s.get, Reg64s.get64,  Reg64s.set64,
     Reg.base, Reg.offset, BitVec.drop, BitVec.take, Effects.All,
-    Width.bytesv, prologueData, savedCount, BitVec.sub_sub, u64_sub_sub,
+    Width.bytesv, prologueData, savedCount,
     saveMemory, savedWords] at loaded ⊢
-  simp_all [Effects.All, BitVec.sub_sub]
+  simp_all [Effects.All]
   try rfl
 
 private theorem instruction1 (fetch : Int64 → Option Decoded)
     (agree : TrustBase.AnchoredDecoderAgreement fetch) (s : MachineData)
-    (mapped : ∀ n < 5, (s.dmem.loadInt (s.regs.rsp.toBitVec - .ofNat 64 ((n+1)*8)) 8).isSome = true) :
+    (_mapped : ∀ n < 5, (s.dmem.loadInt (s.regs.rsp.toBitVec - .ofNat 64 ((n+1)*8)) 8).isSome = true) :
     instructionStep fetch ⟨prologueData s 1, Image.Lookup.entry+2⟩
       (fun t => t = ⟨prologueData s 2, Image.Lookup.entry+5⟩) := by
   have here := agree _ _ (show Image.fetch (Image.Lookup.entry+2) = some _ from rfl)
   simp only [instructionStep, here]
   refine ⟨by decide, ?_⟩
   simp [Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
-    MachineData.store, MachineData.set, MachineData.setReg,
+     MachineData.set, MachineData.setReg,
     Reg64s.get, Reg64s.get64, Reg64s.set, Reg64s.set64,
     Reg.base, Reg.offset, BitVec.drop, BitVec.take, Effects.All,
-    Width.bytesv, prologueData, savedCount, BitVec.sub_sub, u64_sub_sub,
+     prologueData, savedCount,
     saveMemory, savedWords]
   refine ⟨?_, rfl⟩
   apply UInt64.toBitVec_inj.mp
@@ -95,27 +95,27 @@ private theorem instruction2 (fetch : Int64 → Option Decoded)
   simp only [instructionStep, here]
   refine ⟨by decide, ?_⟩
   simp [Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
-    MachineData.store, MachineData.set, MachineData.setReg,
-    Reg64s.get, Reg64s.get64, Reg64s.set, Reg64s.set64,
+    MachineData.store,
+    Reg64s.get, Reg64s.get64,  Reg64s.set64,
     Reg.base, Reg.offset, BitVec.drop, BitVec.take, Effects.All,
-    Width.bytesv, prologueData, savedCount, BitVec.sub_sub, u64_sub_sub,
+    Width.bytesv, prologueData, savedCount, BitVec.sub_sub,
     saveMemory, savedWords] at loaded ⊢
-  simp_all [Effects.All, BitVec.sub_sub]
+  simp_all [Effects.All]
   try rfl
 
 private theorem instruction3 (fetch : Int64 → Option Decoded)
     (agree : TrustBase.AnchoredDecoderAgreement fetch) (s : MachineData)
-    (mapped : ∀ n < 5, (s.dmem.loadInt (s.regs.rsp.toBitVec - .ofNat 64 ((n+1)*8)) 8).isSome = true) :
+    (_mapped : ∀ n < 5, (s.dmem.loadInt (s.regs.rsp.toBitVec - .ofNat 64 ((n+1)*8)) 8).isSome = true) :
     instructionStep fetch ⟨prologueData s 3, Image.Lookup.entry+7⟩
       (fun t => t = ⟨prologueData s 4, Image.Lookup.entry+10⟩) := by
   have here := agree _ _ (show Image.fetch (Image.Lookup.entry+7) = some _ from rfl)
   simp only [instructionStep, here]
   refine ⟨by decide, ?_⟩
   simp [Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
-    MachineData.store, MachineData.set, MachineData.setReg,
+     MachineData.set, MachineData.setReg,
     Reg64s.get, Reg64s.get64, Reg64s.set, Reg64s.set64,
     Reg.base, Reg.offset, BitVec.drop, BitVec.take, Effects.All,
-    Width.bytesv, prologueData, savedCount, BitVec.sub_sub, u64_sub_sub,
+     prologueData, savedCount,
     saveMemory, savedWords]
   try rfl
 
@@ -130,27 +130,27 @@ private theorem instruction4 (fetch : Int64 → Option Decoded)
   simp only [instructionStep, here]
   refine ⟨by decide, ?_⟩
   simp [Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
-    MachineData.store, MachineData.set, MachineData.setReg,
-    Reg64s.get, Reg64s.get64, Reg64s.set, Reg64s.set64,
+    MachineData.store,
+    Reg64s.get, Reg64s.get64,  Reg64s.set64,
     Reg.base, Reg.offset, BitVec.drop, BitVec.take, Effects.All,
-    Width.bytesv, prologueData, savedCount, BitVec.sub_sub, u64_sub_sub,
+    Width.bytesv, prologueData, savedCount, BitVec.sub_sub,
     saveMemory, savedWords] at loaded ⊢
-  simp_all [Effects.All, BitVec.sub_sub]
+  simp_all [Effects.All]
   try rfl
 
 private theorem instruction5 (fetch : Int64 → Option Decoded)
     (agree : TrustBase.AnchoredDecoderAgreement fetch) (s : MachineData)
-    (mapped : ∀ n < 5, (s.dmem.loadInt (s.regs.rsp.toBitVec - .ofNat 64 ((n+1)*8)) 8).isSome = true) :
+    (_mapped : ∀ n < 5, (s.dmem.loadInt (s.regs.rsp.toBitVec - .ofNat 64 ((n+1)*8)) 8).isSome = true) :
     instructionStep fetch ⟨prologueData s 5, Image.Lookup.entry+12⟩
       (fun t => t = ⟨prologueData s 6, Image.Lookup.entry+15⟩) := by
   have here := agree _ _ (show Image.fetch (Image.Lookup.entry+12) = some _ from rfl)
   simp only [instructionStep, here]
   refine ⟨by decide, ?_⟩
   simp [Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
-    MachineData.store, MachineData.set, MachineData.setReg,
+     MachineData.set, MachineData.setReg,
     Reg64s.get, Reg64s.get64, Reg64s.set, Reg64s.set64,
     Reg.base, Reg.offset, BitVec.drop, BitVec.take, Effects.All,
-    Width.bytesv, prologueData, savedCount, BitVec.sub_sub, u64_sub_sub,
+     prologueData, savedCount,
     saveMemory, savedWords]
   refine ⟨?_, rfl⟩
   apply UInt64.toBitVec_inj.mp
@@ -168,12 +168,12 @@ private theorem instruction6 (fetch : Int64 → Option Decoded)
   simp only [instructionStep, here]
   refine ⟨by decide, ?_⟩
   simp [Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
-    MachineData.store, MachineData.set, MachineData.setReg,
-    Reg64s.get, Reg64s.get64, Reg64s.set, Reg64s.set64,
+    MachineData.store,
+    Reg64s.get, Reg64s.get64,  Reg64s.set64,
     Reg.base, Reg.offset, BitVec.drop, BitVec.take, Effects.All,
-    Width.bytesv, prologueData, savedCount, BitVec.sub_sub, u64_sub_sub,
+    Width.bytesv, prologueData, savedCount, BitVec.sub_sub,
     saveMemory, savedWords] at loaded ⊢
-  simp_all [Effects.All, BitVec.sub_sub]
+  simp_all [Effects.All]
   try rfl
 
 private theorem instruction7 (fetch : Int64 → Option Decoded)
@@ -187,27 +187,27 @@ private theorem instruction7 (fetch : Int64 → Option Decoded)
   simp only [instructionStep, here]
   refine ⟨by decide, ?_⟩
   simp [Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
-    MachineData.store, MachineData.set, MachineData.setReg,
-    Reg64s.get, Reg64s.get64, Reg64s.set, Reg64s.set64,
+    MachineData.store,
+    Reg64s.get, Reg64s.get64,  Reg64s.set64,
     Reg.base, Reg.offset, BitVec.drop, BitVec.take, Effects.All,
-    Width.bytesv, prologueData, savedCount, BitVec.sub_sub, u64_sub_sub,
+    Width.bytesv, prologueData, savedCount, BitVec.sub_sub,
     saveMemory, savedWords] at loaded ⊢
-  simp_all [Effects.All, BitVec.sub_sub]
+  simp_all [Effects.All]
   try rfl
 
 private theorem instruction8 (fetch : Int64 → Option Decoded)
     (agree : TrustBase.AnchoredDecoderAgreement fetch) (s : MachineData)
-    (mapped : ∀ n < 5, (s.dmem.loadInt (s.regs.rsp.toBitVec - .ofNat 64 ((n+1)*8)) 8).isSome = true) :
+    (_mapped : ∀ n < 5, (s.dmem.loadInt (s.regs.rsp.toBitVec - .ofNat 64 ((n+1)*8)) 8).isSome = true) :
     instructionStep fetch ⟨prologueData s 8, Image.Lookup.entry+17⟩
       (fun t => t = ⟨prologueData s 9, Image.Lookup.entry+20⟩) := by
   have here := agree _ _ (show Image.fetch (Image.Lookup.entry+17) = some _ from rfl)
   simp only [instructionStep, here]
   refine ⟨by decide, ?_⟩
   simp [Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
-    MachineData.store, MachineData.set, MachineData.setReg,
+     MachineData.set, MachineData.setReg,
     Reg64s.get, Reg64s.get64, Reg64s.set, Reg64s.set64,
     Reg.base, Reg.offset, BitVec.drop, BitVec.take, Effects.All,
-    Width.bytesv, prologueData, savedCount, BitVec.sub_sub, u64_sub_sub,
+     prologueData, savedCount,
     saveMemory, savedWords]
   try rfl
 

@@ -7,8 +7,8 @@ local instance : Labels := Image.linkedLabels
 
 /-- Both sides have committed the owner update at this proof-only point. -/
 def AfterResult (c : Config) (coverage : KcovLayout) (preempt : BitVec 32)
-    (s : MachineData) (world : World) (v : View) (owner : IndexOwner) (current : Executed)
-    (answer : Option PeerId) (helperFinal setWorld : World) (final : Executed) : Prop := ∃ af,
+    (s : MachineData) (_world : World) (v : View) (owner : IndexOwner) (current : Executed)
+    (answer : Option PeerId) (_helperFinal setWorld : World) (final : Executed) : Prop := ∃ af,
       (∃ finalView, project c (LookupMirror.record setWorld .idxPeerAlive answer.isSome) = some finalView ∧ finalView.bucket = v.bucket) ∧
       (answer.isSome = true → LookupOutputNeeded v) ∧
       final.machine = resultExit current.machine.data af ∧

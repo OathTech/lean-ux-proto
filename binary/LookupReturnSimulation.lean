@@ -109,49 +109,49 @@ theorem return_simulation (fetch : Int64 → Option Decoded)
   let raw7 := raw6 ++ [p7]
   have obs1 : observe c.rxSection raw1 = .ok seen := by
     have h := observe_snoc c.rxSection history ⟨s, Image.Lookup.entry+0x89⟩ p1 seen [] related.1 observed (by
-      simp [p1, LookupObservation.edge, Image.Lookup.entry, Image.PeerGet.entry]; rfl)
+      simp [ LookupObservation.edge, Image.Lookup.entry, Image.PeerGet.entry]; rfl)
     simpa only [List.append_nil] using h
   have r1 := related.frame_inactive_world c world history raw1 seen seen _ p1 (by simp [raw1]) inactive inactive
     noReturn noReturn rfl (fun _ => False) (by intro a _; rfl) (by intro v projected a read; simp)
   have cuts1 := silent_snoc c history seen source world p1 obs1 matched aligned latest r1
   have obs2 : observe c.rxSection raw2 = .ok seen := by
     have h := observe_snoc c.rxSection raw1 p1 p2 seen [] (by simp [raw1]) obs1 (by
-      simp [p1, p2, LookupObservation.edge, Image.Lookup.entry, Image.PeerGet.entry]; rfl)
+      simp [p1,  LookupObservation.edge, Image.Lookup.entry, Image.PeerGet.entry]; rfl)
     simpa only [List.append_nil] using h
   have r2 := related.frame_inactive_world c world history raw2 seen seen _ p2 (by simp [raw2]) inactive inactive
     noReturn noReturn rfl (fun _ => False) (by intro a _; rfl) (by intro v projected a read; simp)
   have cuts2 := silent_snoc c raw1 seen source world p2 obs2 cuts1.1 cuts1.2 latest r2
   have obs3 : observe c.rxSection raw3 = .ok seen := by
     have h := observe_snoc c.rxSection raw2 p2 p3 seen [] (by simp [raw2]) obs2 (by
-      simp [p2, p3, LookupObservation.edge, Image.Lookup.entry, Image.PeerGet.entry]; rfl)
+      simp [p2,  LookupObservation.edge, Image.Lookup.entry, Image.PeerGet.entry]; rfl)
     simpa only [List.append_nil] using h
   have r3 := related.frame_inactive_world c world history raw3 seen seen _ p3 (by simp [raw3]) inactive inactive
     noReturn noReturn rfl (fun _ => False) (by intro a _; rfl) (by intro v projected a read; simp)
   have cuts3 := silent_snoc c raw2 seen source world p3 obs3 cuts2.1 cuts2.2 latest r3
   have obs4 : observe c.rxSection raw4 = .ok seen := by
     have h := observe_snoc c.rxSection raw3 p3 p4 seen [] (by simp [raw3]) obs3 (by
-      simp [p3, p4, LookupObservation.edge, Image.Lookup.entry, Image.PeerGet.entry]; rfl)
+      simp [p3,  LookupObservation.edge, Image.Lookup.entry, Image.PeerGet.entry]; rfl)
     simpa only [List.append_nil] using h
   have r4 := related.frame_inactive_world c world history raw4 seen seen _ p4 (by simp [raw4]) inactive inactive
     noReturn noReturn rfl (fun _ => False) (by intro a _; rfl) (by intro v projected a read; simp)
   have cuts4 := silent_snoc c raw3 seen source world p4 obs4 cuts3.1 cuts3.2 latest r4
   have obs5 : observe c.rxSection raw5 = .ok seen := by
     have h := observe_snoc c.rxSection raw4 p4 p5 seen [] (by simp [raw4]) obs4 (by
-      simp [p4, p5, LookupObservation.edge, Image.Lookup.entry, Image.PeerGet.entry]; rfl)
+      simp [p4,  LookupObservation.edge, Image.Lookup.entry, Image.PeerGet.entry]; rfl)
     simpa only [List.append_nil] using h
   have r5 := related.frame_inactive_world c world history raw5 seen seen _ p5 (by simp [raw5]) inactive inactive
     noReturn noReturn rfl (fun _ => False) (by intro a _; rfl) (by intro v projected a read; simp)
   have cuts5 := silent_snoc c raw4 seen source world p5 obs5 cuts4.1 cuts4.2 latest r5
   have obs6 : observe c.rxSection raw6 = .ok seen := by
     have h := observe_snoc c.rxSection raw5 p5 p6 seen [] (by simp [raw5]) obs5 (by
-      simp [p5, p6, LookupObservation.edge, Image.Lookup.entry, Image.PeerGet.entry]; rfl)
+      simp [p5,  LookupObservation.edge, Image.Lookup.entry, Image.PeerGet.entry]; rfl)
     simpa only [List.append_nil] using h
   have r6 := related.frame_inactive_world c world history raw6 seen seen _ p6 (by simp [raw6]) inactive inactive
     noReturn noReturn rfl (fun _ => False) (by intro a _; rfl) (by intro v projected a read; simp)
   have cuts6 := silent_snoc c raw5 seen source world p6 obs6 cuts5.1 cuts5.2 latest r6
   have obs7 : observe c.rxSection raw7 = .ok (seen ++ [returned "wg_index_hashtable_lookup" p7]) :=
     observe_snoc c.rxSection raw6 p6 p7 seen _ (by simp [raw6]) obs6 (by
-      simp [p6, p7, LookupObservation.edge, Image.Lookup.entry, Image.PeerGet.entry]; rfl)
+      simp [p6, p7, LookupObservation.edge, Image.Lookup.entry]; rfl)
   have inactive' : helperActive (seen ++ [returned "wg_index_hashtable_lookup" p7]) = false := by
     simpa [helperActive, helperTag, returned] using inactive
   have r7 := related.frame_inactive_world c world history raw7 seen (seen ++ [returned "wg_index_hashtable_lookup" p7]) _ p7

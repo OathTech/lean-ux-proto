@@ -12,7 +12,7 @@ theorem source_run (w : World) (d : Device) (owner : IndexOwner) (device : w.wg.
   change (liftWG (liftIndex (do
     _ ← branch .idxRemoveHashed ((← get).any (·.owner==owner))
     modify fun entries => entries.filter (fun e => !(e.owner==owner))))).run w=_
-  simp [Except.pure, Except.bind, StateT.run, bind, StateT.bind, StateT.lift, pure, StateT.pure, get, getThe, MonadStateOf.get, StateT.get, modify, modifyGet, MonadStateOf.modifyGet, StateT.modifyGet, liftM, monadLift, MonadLift.monadLift, liftWG, liftAmbient, AmbientM.branch, WG.getDev, WG.modifyDev, liftIndex, branch, sourceFinal, device]
+  simp [Except.pure, Except.bind, StateT.run, bind, StateT.bind, StateT.lift, pure, StateT.pure, get, getThe, MonadStateOf.get, StateT.get, modify, modifyGet, MonadStateOf.modifyGet, StateT.modifyGet, liftM, monadLift, MonadLift.monadLift, liftWG,  AmbientM.branch, WG.getDev, WG.modifyDev, liftIndex, branch, sourceFinal, device]
 
 
 theorem source_effect {w final : World} {d : Device} {owner : IndexOwner}

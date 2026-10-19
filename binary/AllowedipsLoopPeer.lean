@@ -5,7 +5,6 @@ import AllowedipsHistory
 namespace Binary.AllowedipsLoop
 open TrustBase LookupObservation
 local instance : Labels := Image.linkedLabels
-set_option linter.unusedSimpArgs false
 
 def peerLoaded (s : MachineData) (peer : BitVec 64) : MachineData :=
   {s with regs := {s.regs with rax := .ofBitVec peer}}
@@ -31,8 +30,8 @@ theorem peer_load_history (fetch : Int64 → Option Decoded) (agree : Allowedips
   refine ⟨by decide,?_⟩
   simp [Instr.interp,Operation.interp,RegOrMem.interp,Operand.interp,
     MachineData.load,MachineData.set,MachineData.setReg,AddrExpr.interp,
-    ConstExpr.interp,Reg64s.get,Reg64s.get64,Reg64s.set,Reg64s.set64,Reg.base,Reg.offset,
-    BitVec.take,BitVec.drop,BitVec.toAddressSize,BitVec.signed,BitVec.ofInt_toInt,BitVec.ofInt_ofNat,
+    ConstExpr.interp,Reg64s.get64,Reg64s.set,Reg64s.set64,
+    BitVec.take,BitVec.toAddressSize,BitVec.signed,BitVec.ofInt_toInt,
     Effects.All,field,peerLoaded,AllowedipsImage.Lookup.entry]
 
 theorem peer_test_history (fetch : Int64 → Option Decoded) (agree : AllowedipsDecoderAgreement fetch)
@@ -59,11 +58,11 @@ theorem peer_select_history (fetch : Int64 → Option Decoded) (agree : Allowedi
     (fun t => t = ⟨peerSelected s peer af,AllowedipsImage.Lookup.entry+0x9f⟩) ?_
   simp only [instructionStep,here]
   refine ⟨by decide,?_⟩
-  simp [Instr.interp,Operation.interp,RegOrMem.interp,Operand.interp,
-    MachineData.load,MachineData.set,MachineData.setReg,AddrExpr.interp,
-    ConstExpr.interp,Reg64s.get,Reg64s.get64,Reg64s.set,Reg64s.set64,Reg.base,Reg.offset,
-    BitVec.take,BitVec.drop,BitVec.toAddressSize,BitVec.signed,BitVec.ofInt_toInt,BitVec.ofInt_ofNat,
-    Effects.All,StatusFlags.from_result,CondCode.interp,BitVec.and_self,
+  simp [Instr.interp,Operation.interp,RegOrMem.interp,
+    MachineData.setReg,
+    Reg64s.get,Reg64s.get64,Reg64s.set,Reg64s.set64,Reg.base,Reg.offset,
+    BitVec.take,BitVec.drop,
+    Effects.All,StatusFlags.from_result,CondCode.interp,
     peerLoaded,peerTested,peerSelected,LookupHistory.tested,AllowedipsImage.Lookup.entry]
   split <;> simp_all
 

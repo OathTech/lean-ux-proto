@@ -73,7 +73,7 @@ theorem accepted_nonnull_to_return (fetch : Int64 → Option Decoded)
   · have answerSome : answer = some pid := by simpa only [ite_eq_right zero] using result
     let count := UInt32.ofNat peer.refcount
     have countNat : count.toNat = peer.refcount := by
-      simp only [count, UInt32.toNat_ofNat]
+      simp only [count]
       exact Nat.mod_eq_of_lt (by omega)
     have countNonzero : count ≠ 0 := by
       intro h

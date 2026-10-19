@@ -154,7 +154,7 @@ theorem edge_targets (rxSection : Nat) (before after : MachineState)
                               change Except.ok _ = Except.ok delta at observed
                               have equal := Except.ok.inj observed
                               subst delta
-                              simp [call,returned]
+                              simp [call]
                           · rw [ite_eq_right h12] at observed
                             by_cases h13 : before.pc = AllowedipsImage.CommonBits.entry+0x4b ∨ before.pc = AllowedipsImage.CommonBits.entry+0x74 ∨ before.pc = AllowedipsImage.CommonBits.entry+0xc3
                             · rw [ite_eq_left h13] at observed
@@ -165,7 +165,7 @@ theorem edge_targets (rxSection : Nat) (before after : MachineState)
                                 change Except.ok _ = Except.ok delta at observed
                                 have equal := Except.ok.inj observed
                                 subst delta
-                                simp [call,returned]
+                                simp [returned]
                             · rw [ite_eq_right h13] at observed
                               by_cases h14 : before.pc = AllowedipsImage.Lookup.entry+0x114
                               · rw [ite_eq_left h14] at observed
@@ -176,7 +176,7 @@ theorem edge_targets (rxSection : Nat) (before after : MachineState)
                                   change Except.ok _ = Except.ok delta at observed
                                   have equal := Except.ok.inj observed
                                   subst delta
-                                  simp [call,returned]
+                                  simp [call]
                               · rw [ite_eq_right h14] at observed
                                 by_cases h15 : before.pc = AllowedipsImage.Lookup.entry+0x14e
                                 · rw [ite_eq_left h15] at observed
@@ -194,7 +194,7 @@ theorem edge_targets (rxSection : Nat) (before after : MachineState)
                                       change Except.ok _ = Except.ok delta at observed
                                       have equal := Except.ok.inj observed
                                       subst delta
-                                      simp [call,returned]
+                                      simp [returned]
                                   · rw [ite_eq_right h16] at observed
                                     by_cases h17 : (Image.fetchIn Image.PeerGet.entry Image.PeerGet.code before.pc).isSome = true
                                     · rw [ite_eq_left h17] at observed

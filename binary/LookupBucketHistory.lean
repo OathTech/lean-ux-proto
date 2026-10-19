@@ -31,7 +31,7 @@ theorem bh_disable_history (fetch : Int64 → Option Decoded)
   refine ⟨by decide, ?_⟩
   simp [Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
     MachineData.load, MachineData.store, MachineData.set, AddrExpr.interp, ConstExpr.interp,
-    Reg64s.get64, BitVec.toAddressSize, BitVec.signed, BitVec.ofInt_add, BitVec.ofInt_toInt,
+      BitVec.signed,
     BitVec.take, Effects.All, bhDisabled, TrustBase.preemptCountAddress,
     Image.Lookup.entry] at field ⊢
   rw [field]

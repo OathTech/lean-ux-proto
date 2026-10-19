@@ -17,7 +17,15 @@ from device_layouts import generate_device_scalars
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--services-only', action='store_true')
+    parser.add_argument('--check', action='store_true')
     args = parser.parse_args()
+    def write(path, text):
+        if args.check:
+            if path.read_text() != text:
+                raise ValueError(f'{path.name} differs from the pinned image generation')
+            print(f'{path.name}: checked')
+        else:
+            path.write_text(text)
     expected = '16c346209885db6c610d4aa126c6eb30f5d3c02f0498d95e606473945f648774'
     if hashlib.sha256(ORACLE.read_bytes()).hexdigest() != expected:
         raise ValueError('wrong ELF')
@@ -56,7 +64,7 @@ def main():
         '  match code with',
         '  | some instruction => some ⟨instruction, size⟩',
         '  | _ => none', 'end Binary.ServiceImage', '']
-    (ROOT / 'binary/ServiceImage.lean').write_text('\n'.join(service_text))
+    write(ROOT / 'binary/ServiceImage.lean', '\n'.join(service_text))
     if args.services_only:
         return
     for f in functions:
@@ -123,7 +131,7 @@ def main():
         '      else none',
         '    return n * 16 + d) 0',
         '  return .ofNat n',
-        'def linkedLabels : Labels := ⟨fun name => match name with']
+        '@[instance_reducible] def linkedLabels : Labels := ⟨fun name => match name with']
     text += [f'  | "{name}" => .ofNat {pc}' for name, pc in sorted(labels.items())]
     # Unlisted labels must never occur in these terms. This is checked below
     # by the generated names and by strict PC dispatch at execution.
@@ -142,7 +150,7 @@ def main():
              '  (fetchIn Lookup.entry Lookup.code pc).orElse',
              '    (fun _ => fetchIn PeerGet.entry PeerGet.code pc)',
              'end Binary.Image', '']
-    (ROOT / 'binary/Image.lean').write_text('\n'.join(text))
+    write(ROOT / 'binary/Image.lean', '\n'.join(text))
     proof = ['import Image', 'import LayoutTactic',
              'set_option maxRecDepth 4096', 'set_option maxHeartbeats 2000000',
              'namespace Binary.Image', 'local instance : Labels := linkedLabels']
@@ -151,7 +159,7 @@ def main():
                   f'    LaidOut fetch ({ns}.entry + .ofNat {offset}) {ns}.r{offset:02x} := by',
                   '  binary_layout']
     proof += ['end Binary.Image', '']
-    (ROOT / 'binary/ImageLayout.lean').write_text('\n'.join(proof))
+    write(ROOT / 'binary/ImageLayout.lean', '\n'.join(proof))
     o = layouts(ORACLE)
     e, node, head = [o[n] for n in ('index_hashtable_entry', 'hlist_node', 'hlist_head')]
     text = ['import Kraken.Mem', 'import Leanux.WG.Types', 'namespace Binary.Layouts',
@@ -298,7 +306,7 @@ def main():
         '  m.loadInt (a + .ofNat 64 keypair_refcount) 4 = some (k.refcount : Int) ∧',
         '  m.loadInt (a + .ofNat 64 (keypair_entry + entry_peer)) 8 = some peerWord.toNat',
         'end Binary.Layouts', '']
-    (ROOT / 'binary/Layouts.lean').write_text('\n'.join(text))
+    write(ROOT / 'binary/Layouts.lean', '\n'.join(text))
     generate_peer_scalars(ROOT, o)
     generate_device_scalars(ROOT, o)
 

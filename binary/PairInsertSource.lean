@@ -77,7 +77,7 @@ private theorem unhash_corr (owner : IndexOwner) :
     WG.getDev, WG.modifyDev, StateT.run, bind, StateT.bind, StateT.lift,
     pure, StateT.pure, get, getThe, MonadStateOf.get, StateT.get,
     modify, modifyGet, MonadStateOf.modifyGet, StateT.modifyGet,
-    liftM, monadLift, MonadLift.monadLift, liftAmbient, branch, AmbientM.branch,
+     monadLift, MonadLift.monadLift, liftAmbient, branch, AmbientM.branch,
     Except.pure, Except.bind, hd, Binary.Source.Index.install]
 
 
@@ -131,8 +131,8 @@ def unlinkedWorld (w : World) (d : Device) (owner : IndexOwner) : World :=
 
 theorem unhash_run (w : World) (d : Device) (owner : IndexOwner) (device : w.wg.dev=some d) :
     (unhash owner).run w=.ok ((),unlinkedWorld w d owner) := by
-  simp [Except.pure, Except.bind, StateT.run, bind, StateT.bind, StateT.lift, pure, StateT.pure, get, getThe, MonadStateOf.get, StateT.get, modify, modifyGet, MonadStateOf.modifyGet, StateT.modifyGet, monadLift, MonadLift.monadLift, liftWG, liftAmbient, AmbientM.branch, WG.getDev, WG.modifyDev, unhash,Source.getDev,Source.modifyDev,Source.getWG,Source.modifyWG,branch,unlinkedWorld,
-    StateT.run_bind,StateT.run_pure,device]
+  simp [Except.pure, Except.bind, StateT.run, bind, StateT.bind,  pure, StateT.pure, get, getThe, MonadStateOf.get, StateT.get, modify, modifyGet, MonadStateOf.modifyGet, StateT.modifyGet, monadLift, MonadLift.monadLift, liftWG, liftAmbient, AmbientM.branch, WG.getDev, WG.modifyDev, unhash,Source.getDev,Source.modifyDev,branch,unlinkedWorld,
+    device]
 
 #print axioms indexInsert_eq
 #print axioms unhash_run

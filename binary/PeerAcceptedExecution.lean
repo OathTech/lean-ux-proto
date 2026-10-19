@@ -114,7 +114,7 @@ theorem accepted_nonnull_helper_execution (c : Config) (world : World) (device :
       exact frames q member cut a (fun written => outside (.inr written))
   · let count := UInt32.ofNat peer.refcount
     have countNat : count.toNat = peer.refcount := by
-      simp only [count, UInt32.toNat_ofNat]
+      simp only [count]
       exact Nat.mod_eq_of_lt (by omega)
     have countNonzero : count ≠ 0 := by
       intro equal

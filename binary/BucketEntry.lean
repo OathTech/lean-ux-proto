@@ -49,11 +49,11 @@ theorem bucket_entry (s : MachineData) (count : UInt32) (head : UInt64)
     MachineData.load, MachineData.store, MachineData.set, MachineData.setReg,
     AddrExpr.interp, Reg64s.get, Reg64s.get64, Reg.base, Reg.offset,
     Reg64s.set, Reg64s.set64, BitVec.drop, BitVec.take,
-    RelRegOrMem.interp, ConstExpr.interp, BitVec.toAddressSize, BitVec.signed,
+     ConstExpr.interp, BitVec.toAddressSize, BitVec.signed,
     BitVec.ofInt_add, BitVec.ofInt_mul, BitVec.ofInt_toInt, BitVec.ofInt_ofNat,
     Effects.All, StatusFlags.from_result, CondCode.interp,
     bucketWord, bucketAddress, bhDisabledMemory, preemptAddress, Image.Lookup.entry] at preempt first ⊢
-  simp_all [Effects.All, of_bmod, of_mask, of_low32, truncate_extend,
+  simp_all [Effects.All, of_bmod,  of_low32, truncate_extend,
     BitVec.toInt_eq_toNat_bmod]
   by_cases hz : head = 0
   all_goals simp_all [Effects.All, u64_zero]

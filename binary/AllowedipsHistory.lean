@@ -4,7 +4,6 @@ import AllowedipsObservation
 
 namespace Binary.Allowedips
 open LookupHistory
-set_option linter.unusedSimpArgs false
 local instance : Labels := Image.linkedLabels
 
 theorem root_guard_history (fetch : Int64 → Option Decoded)
@@ -86,7 +85,7 @@ theorem family32_history (fetch : Int64 → Option Decoded)
   have nextPC : AllowedipsImage.Lookup.entry+0x3e+3 = AllowedipsImage.Lookup.entry+0x41 := rfl
   simp only [nextPC, second]
   refine ⟨by decide, ?_⟩
-  simp [Instr.interp, Operation.interp, Effects.All, CondCode.interp, compare_byte]
+  simp [Instr.interp, Operation.interp, Effects.All, CondCode.interp]
   split <;> simp_all [Effects.All, AllowedipsImage.Lookup.entry, BitVec.sub_eq_iff_eq_add]
   all_goals rfl
 
@@ -114,7 +113,7 @@ theorem family128_history (fetch : Int64 → Option Decoded)
   have nextPC : AllowedipsImage.Lookup.entry+0x58+3 = AllowedipsImage.Lookup.entry+0x5b := rfl
   simp only [nextPC, second]
   refine ⟨by decide, ?_⟩
-  simp [Instr.interp, Operation.interp, Effects.All, CondCode.interp, compare_byte]
+  simp [Instr.interp, Operation.interp, Effects.All, CondCode.interp]
   split <;> simp_all [Effects.All, AllowedipsImage.Lookup.entry, BitVec.sub_eq_iff_eq_add]
   all_goals rfl
 
@@ -136,13 +135,13 @@ theorem fullLength_history (fetch : Int64 → Option Decoded)
   simp only [historySteps, historyStep]
   rw [instructionStep, first]
   refine ⟨by decide, ?_⟩
-  simp [Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp, ConstExpr.interp,
+  simp [Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
     Effects.All, StatusFlags.from_result]
   simp only [instructionStep]
   have nextPC : AllowedipsImage.Lookup.entry+0xaf+3 = AllowedipsImage.Lookup.entry+0xb2 := rfl
   simp only [nextPC, second]
   refine ⟨by decide, ?_⟩
-  simp [Instr.interp, Operation.interp, Effects.All, CondCode.interp, compare_byte]
+  simp [Instr.interp, Operation.interp, Effects.All, CondCode.interp]
   split <;> simp_all [Effects.All, AllowedipsImage.Lookup.entry, BitVec.sub_eq_iff_eq_add]
   all_goals rfl
 
@@ -164,14 +163,14 @@ theorem prefix_history (fetch : Int64 → Option Decoded)
   simp only [historySteps, historyStep]
   rw [instructionStep, first]
   refine ⟨by decide, ?_⟩
-  simp [Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp, ConstExpr.interp,
+  simp [Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
     Effects.All, StatusFlags.from_result]
   simp only [instructionStep]
   have nextPC : AllowedipsImage.Lookup.entry+0xfc+3 = AllowedipsImage.Lookup.entry+0xff := rfl
   simp only [nextPC, second]
   refine ⟨by decide, ?_⟩
-  simp [Instr.interp, Operation.interp, Effects.All, CondCode.interp, compare_byte, carry8]
-  split <;> simp_all [Effects.All, AllowedipsImage.Lookup.entry, BitVec.sub_eq_iff_eq_add]
+  simp [Instr.interp, Operation.interp, Effects.All, CondCode.interp,  carry8]
+  split <;> simp_all [Effects.All, AllowedipsImage.Lookup.entry]
   all_goals rfl
 
 #print axioms prefix_history

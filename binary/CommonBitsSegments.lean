@@ -31,10 +31,10 @@ theorem family32_arguments_prefix (s : MachineData) :
       t.data.dmem = s.dmem ∧ t.pc = AllowedipsImage.CommonBits.entry+0x1c) := by
   simp [run, AllowedipsImage.CommonBits.r15, Directives.interp, Directive.interp,
     Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
-    RelRegOrMem.interp, ConstExpr.interp, MachineData.store, MachineData.set,
+     ConstExpr.interp,  MachineData.set,
     MachineData.setReg, Reg64s.get, Reg64s.get64, Reg.base, Reg.offset,
     Reg64s.set, Reg64s.set64, BitVec.take, BitVec.drop, Effects.All,
-    List.take, Width.bytesv, callMemory, AllowedipsImage.CommonBits.entry]
+    List.take,   AllowedipsImage.CommonBits.entry]
 
 theorem family128_arguments_prefix (s : MachineData) :
     (run (AllowedipsImage.CommonBits.r2b.take 3) 0x2b s).All (fun t =>
@@ -44,21 +44,21 @@ theorem family128_arguments_prefix (s : MachineData) :
       t.data.dmem = s.dmem ∧ t.pc = AllowedipsImage.CommonBits.entry+0x34) := by
   simp [run, AllowedipsImage.CommonBits.r2b, Directives.interp, Directive.interp,
     Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
-    RelRegOrMem.interp, ConstExpr.interp, MachineData.store, MachineData.set,
+     ConstExpr.interp,  MachineData.set,
     MachineData.setReg, Reg64s.get, Reg64s.get64, Reg.base, Reg.offset,
     Reg64s.set, Reg64s.set64, BitVec.take, BitVec.drop, Effects.All,
-    List.take, Width.bytesv, callMemory, AllowedipsImage.CommonBits.entry]
+    List.take,   AllowedipsImage.CommonBits.entry]
 
 theorem ipv6_result_seed_prefix (s : MachineData) :
     (run (AllowedipsImage.CommonBits.raf.take 1) 0xaf s).All (fun t =>
       t.data.regs = {s.regs with rbp := 0xffffff80} ∧
       t.data.dmem = s.dmem ∧ t.pc = AllowedipsImage.CommonBits.entry+0xb4) := by
   simp [run, AllowedipsImage.CommonBits.raf, Directives.interp, Directive.interp,
-    Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
-    RelRegOrMem.interp, ConstExpr.interp, MachineData.store, MachineData.set,
-    MachineData.setReg, Reg64s.get, Reg64s.get64, Reg.base, Reg.offset,
-    Reg64s.set, Reg64s.set64, BitVec.take, BitVec.drop, Effects.All,
-    List.take, Width.bytesv, callMemory, AllowedipsImage.CommonBits.entry]
+    Instr.interp, Operation.interp,  Operand.interp,
+     ConstExpr.interp,  MachineData.set,
+    MachineData.setReg,
+    Reg64s.set, Reg64s.set64,   Effects.All,
+    List.take,   AllowedipsImage.CommonBits.entry]
 
 theorem high_arguments_prefix (s : MachineData) (stored query : UInt64)
     (storedField : s.dmem.loadInt (s.regs.r12.toBitVec + 32) 8 = some stored.toNat)
@@ -69,12 +69,12 @@ theorem high_arguments_prefix (s : MachineData) (stored query : UInt64)
       t.data.dmem = s.dmem ∧ t.pc = AllowedipsImage.CommonBits.entry+0x89) := by
   simp [run, AllowedipsImage.CommonBits.r7a, Directives.interp, Directive.interp,
     Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
-    RelRegOrMem.interp, ConstExpr.interp, MachineData.store, MachineData.load,
+     ConstExpr.interp,  MachineData.load,
     AddrExpr.interp, BitVec.toAddressSize, BitVec.signed,
     BitVec.ofInt_add, BitVec.ofInt_toInt, BitVec.ofInt_ofNat,
     MachineData.set, MachineData.setReg, Reg64s.get, Reg64s.get64, Reg.base, Reg.offset,
     Reg64s.set, Reg64s.set64, BitVec.take, BitVec.drop, Effects.All,
-    List.take, Width.bytesv, storedField, queryField, callMemory, AllowedipsImage.CommonBits.entry]
+    List.take,   queryField,  AllowedipsImage.CommonBits.entry]
   simp_all [Effects.All]
 
 theorem ipv4_scan_prefix (s : MachineData) (stored query : UInt32)
@@ -92,15 +92,15 @@ theorem ipv4_scan_prefix (s : MachineData) (stored query : UInt32)
   have target : label "L_ffffffff810f3100" = (-2129710848 : Int64) := by decide
   simp [run, AllowedipsImage.CommonBits.r51, Directives.interp, Directive.interp,
     Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
-    RelRegOrMem.interp, ConstExpr.interp, MachineData.store, MachineData.load,
+     ConstExpr.interp,  MachineData.load,
     AddrExpr.interp, BitVec.toAddressSize, BitVec.signed,
     BitVec.ofInt_add, BitVec.ofInt_toInt, BitVec.ofInt_ofNat,
     MachineData.set, MachineData.setReg, Reg64s.get, Reg64s.get64, Reg.base, Reg.offset,
     Reg64s.set, Reg64s.set64, BitVec.take, BitVec.drop, Effects.All,
-    List.take, Width.bytesv, width8, width32, storedField, queryField,
-    callMemory, target, AllowedipsImage.CommonBits.entry]
+    List.take,  width8, width32,  queryField,
+      AllowedipsImage.CommonBits.entry]
   simp_all [Effects.All, low_extend32, low_xor64]
-  split <;> simp_all [Effects.All, scan32, low_extend32, low_xor64, BitVec.add_comm]
+  split <;> simp_all [Effects.All, scan32,   BitVec.add_comm]
   · rename_i same
     have eq := UInt32.toBitVec_inj.mp same
     simp [eq]
@@ -128,10 +128,10 @@ theorem epilogue_prefix (offset : Nat) (s : MachineData) (bx bp r12 r13 : UInt64
     Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
     MachineData.load, Reg64s.get, Reg64s.get64, Reg.base, Reg.offset,
     BitVec.drop, BitVec.take, Effects.All, MachineData.set, MachineData.setReg,
-    Reg64s.set, Reg64s.set64, BitVec.ofInt_ofNat,
+    Reg64s.set, Reg64s.set64,
     UInt64.toBitVec_add, UInt64.ofBitVec_add, BitVec.add_assoc,
-    UInt64.add_assoc, h0, h1, h2, h3]
-  simp_all [Effects.All, BitVec.ofInt_ofNat, UInt64.ofBitVec_add, BitVec.add_assoc]
+     h0,  ]
+  simp_all [Effects.All,  ]
   constructor
   · rfl
   · simp only [Int64.add_assoc]
@@ -152,10 +152,10 @@ theorem ipv6_epilogue_prefix (s : MachineData) (bx bp r12 r13 : UInt64)
     Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
     MachineData.load, Reg64s.get, Reg64s.get64, Reg.base, Reg.offset,
     BitVec.drop, BitVec.take, Effects.All, MachineData.set, MachineData.setReg,
-    Reg64s.set, Reg64s.set64, BitVec.ofInt_ofNat,
+    Reg64s.set, Reg64s.set64,
     UInt64.toBitVec_add, UInt64.ofBitVec_add, BitVec.add_assoc,
-    UInt64.add_assoc, h0, h1, h2, h3]
-  simp_all [Effects.All, BitVec.ofInt_ofNat, UInt64.ofBitVec_add, BitVec.add_assoc]
+     h0,  ]
+  simp_all [Effects.All,  ]
   rw [BitVec.extractLsb'_setWidth_of_le (by decide)]
   simp
   exact ⟨rfl, rfl⟩

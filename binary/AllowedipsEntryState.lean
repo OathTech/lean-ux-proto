@@ -83,7 +83,7 @@ theorem input_frame {c coverage old ra initial world v memory}
     · exact (same _ 8 (by
         rintro a ⟨i,hi,eq⟩
         change InRange _ (if c.bits=32 then 4 else 16) a
-        rw [if_neg family]
+        rw [ite_eq_right family]
         exact ⟨8+i,by omega,by simpa only [BitVec.ofNat_add,BitVec.add_assoc,BitVec.ofNat_eq_ofNat] using eq⟩)).symm.trans readLow
 
 theorem At.family {c coverage old ra initial world v s}

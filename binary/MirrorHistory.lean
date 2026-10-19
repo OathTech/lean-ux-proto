@@ -237,7 +237,7 @@ def finish (a : LookupMirror.Acc) : Logged (Option (IndexOwner × PeerId)) := do
 theorem finish_erases (a : LookupMirror.Acc) :
     Erases (finish a) (LookupMirror.finish a) := by
   unfold finish LookupMirror.finish
-  cases stop : a.2 <;> simp only [stop, Bool.not_false, Bool.not_true, Bool.false_eq_true, ↓reduceIte]
+  cases stop : a.2 <;> simp only [ Bool.not_false, Bool.not_true, Bool.false_eq_true, ↓reduceIte]
   all_goals try (apply erases_bind (branch_erases .idxWalk false); intro _)
   all_goals
     apply erases_bind (branch_erases _ _)

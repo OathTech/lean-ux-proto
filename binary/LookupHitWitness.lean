@@ -7,7 +7,6 @@ open Leanux Leanux.WG TrustBase
 open LookupWitness (coverage load_away range_nat)
 set_option maxRecDepth 8192
 set_option maxHeartbeats 800000
-set_option linter.unusedSimpArgs false
 
 private theorem unchanged (live : Bool) (address : BitVec 64) (width : Nat)
     (separate : ∀ i < width, ¬(InRange (0x300000 : BitVec 64) 8 (address + .ofNat 64 i) ∨
@@ -23,91 +22,91 @@ theorem head_read (live : Bool) : (memory live).loadInt 0x106068 8 = some 0x6000
   rw [unchanged live _ _ (by
     rintro i hi (h | h | h) <;> obtain ⟨j, hj, equal⟩ := h <;>
       have nums := congrArg BitVec.toNat equal <;>
-      simp [preemptCountAddress, currentTaskAddress, softirqPendingAddress, BitVec.toNat_add] at nums <;> omega)]
+      simp [   BitVec.toNat_add] at nums <;> omega)]
   exact LookupWitness.head_read
 
 theorem next_read (live : Bool) : (memory live).loadInt 0x6000e8 8 = some 0 := by
   rw [unchanged live _ _ (by
     rintro i hi (h | h | h) <;> obtain ⟨j, hj, equal⟩ := h <;>
       have nums := congrArg BitVec.toNat equal <;>
-      simp [preemptCountAddress, currentTaskAddress, softirqPendingAddress, BitVec.toNat_add] at nums <;> omega)]
+      simp [   BitVec.toNat_add] at nums <;> omega)]
   exact LookupWitness.next_read
 
 theorem kind_read (live : Bool) : (memory live).loadInt 0x6000f8 4 = some 1 := by
   rw [unchanged live _ _ (by
     rintro i hi (h | h | h) <;> obtain ⟨j, hj, equal⟩ := h <;>
       have nums := congrArg BitVec.toNat equal <;>
-      simp [preemptCountAddress, currentTaskAddress, softirqPendingAddress, BitVec.toNat_add] at nums <;> omega)]
+      simp [   BitVec.toNat_add] at nums <;> omega)]
   exact LookupWitness.kind_read
 
 theorem index_read (live : Bool) : (memory live).loadInt 0x6000fc 4 = some 0x0a0b0c0d := by
   rw [unchanged live _ _ (by
     rintro i hi (h | h | h) <;> obtain ⟨j, hj, equal⟩ := h <;>
       have nums := congrArg BitVec.toNat equal <;>
-      simp [preemptCountAddress, currentTaskAddress, softirqPendingAddress, BitVec.toNat_add] at nums <;> omega)]
+      simp [   BitVec.toNat_add] at nums <;> omega)]
   exact LookupWitness.index_read
 
 theorem return_read (live : Bool) : (memory live).loadInt 0x400800 8 = some 0x500000 := by
   rw [unchanged live _ _ (by
     rintro i hi (h | h | h) <;> obtain ⟨j, hj, equal⟩ := h <;>
       have nums := congrArg BitVec.toNat equal <;>
-      simp [preemptCountAddress, currentTaskAddress, softirqPendingAddress, BitVec.toNat_add] at nums <;> omega)]
+      simp [   BitVec.toNat_add] at nums <;> omega)]
   exact LookupWitness.return_read
 
 theorem preempt_read (live : Bool) : (memory live).loadInt preemptCountAddress 4 = some 0 := by
   rw [unchanged live _ _ (by
     rintro i hi (h | h | h) <;> obtain ⟨j, hj, equal⟩ := h <;>
       have nums := congrArg BitVec.toNat equal <;>
-      simp [preemptCountAddress, currentTaskAddress, softirqPendingAddress, BitVec.toNat_add] at nums <;> omega)]
+      simp [preemptCountAddress,   BitVec.toNat_add] at nums <;> omega)]
   exact LookupWitness.preempt_read
 
 theorem pending_read (live : Bool) : (memory live).loadInt softirqPendingAddress 2 = some 0 := by
   rw [unchanged live _ _ (by
     rintro i hi (h | h | h) <;> obtain ⟨j, hj, equal⟩ := h <;>
       have nums := congrArg BitVec.toNat equal <;>
-      simp [preemptCountAddress, currentTaskAddress, softirqPendingAddress, BitVec.toNat_add] at nums <;> omega)]
+      simp [  softirqPendingAddress, BitVec.toNat_add] at nums <;> omega)]
   exact LookupWitness.pending_read
 
 theorem task_read (live : Bool) : (memory live).loadInt currentTaskAddress 8 = some 0x800000 := by
   rw [unchanged live _ _ (by
     rintro i hi (h | h | h) <;> obtain ⟨j, hj, equal⟩ := h <;>
       have nums := congrArg BitVec.toNat equal <;>
-      simp [preemptCountAddress, currentTaskAddress, softirqPendingAddress, BitVec.toNat_add] at nums <;> omega)]
+      simp [ currentTaskAddress,  BitVec.toNat_add] at nums <;> omega)]
   exact LookupWitness.task_read
 
 theorem mode_read (live : Bool) : (memory live).loadInt 0x8006e0 4 = some 2 := by
   rw [unchanged live _ _ (by
     rintro i hi (h | h | h) <;> obtain ⟨j, hj, equal⟩ := h <;>
       have nums := congrArg BitVec.toNat equal <;>
-      simp [preemptCountAddress, currentTaskAddress, softirqPendingAddress, BitVec.toNat_add] at nums <;> omega)]
+      simp [   BitVec.toNat_add] at nums <;> omega)]
   exact LookupWitness.mode_read
 
 theorem capacity_read (live : Bool) : (memory live).loadInt 0x8006e4 4 = some 1024 := by
   rw [unchanged live _ _ (by
     rintro i hi (h | h | h) <;> obtain ⟨j, hj, equal⟩ := h <;>
       have nums := congrArg BitVec.toNat equal <;>
-      simp [preemptCountAddress, currentTaskAddress, softirqPendingAddress, BitVec.toNat_add] at nums <;> omega)]
+      simp [   BitVec.toNat_add] at nums <;> omega)]
   exact LookupWitness.capacity_read
 
 theorem area_read (live : Bool) : (memory live).loadInt 0x8006e8 8 = some 0x900000 := by
   rw [unchanged live _ _ (by
     rintro i hi (h | h | h) <;> obtain ⟨j, hj, equal⟩ := h <;>
       have nums := congrArg BitVec.toNat equal <;>
-      simp [preemptCountAddress, currentTaskAddress, softirqPendingAddress, BitVec.toNat_add] at nums <;> omega)]
+      simp [   BitVec.toNat_add] at nums <;> omega)]
   exact LookupWitness.area_read
 
 theorem softirq_read (live : Bool) : (memory live).loadInt 0x800704 4 = some 0 := by
   rw [unchanged live _ _ (by
     rintro i hi (h | h | h) <;> obtain ⟨j, hj, equal⟩ := h <;>
       have nums := congrArg BitVec.toNat equal <;>
-      simp [preemptCountAddress, currentTaskAddress, softirqPendingAddress, BitVec.toNat_add] at nums <;> omega)]
+      simp [   BitVec.toNat_add] at nums <;> omega)]
   exact LookupWitness.softirq_read
 
 theorem coverage_count_read (live : Bool) : (memory live).loadInt 0x900000 8 = some 0 := by
   rw [unchanged live _ _ (by
     rintro i hi (h | h | h) <;> obtain ⟨j, hj, equal⟩ := h <;>
       have nums := congrArg BitVec.toNat equal <;>
-      simp [preemptCountAddress, currentTaskAddress, softirqPendingAddress, BitVec.toNat_add] at nums <;> omega)]
+      simp [   BitVec.toNat_add] at nums <;> omega)]
   exact LookupWitness.coverage_count_read
 
 theorem owner_read (live : Bool) : (memory live).loadInt 0x6000e0 8 = some 0x600000 := by

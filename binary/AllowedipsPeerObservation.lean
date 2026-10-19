@@ -165,7 +165,7 @@ theorem global_edge (rxSection : Nat) (before after : MachineState) (points : Li
           simp only [LookupObservation.edge, p15, p3d, p63, p79, p8d, p94, pb5, pc3, pd4, l32, l6a, l5c, lab, lb5, lc3, l94, ret, false_or, ite_false]
           rfl
         have he : points = [] := Except.ok.inj (old.symm.trans empty)
-        simp only [mapped, he, Bool.false_eq_true, ite_false]
+        simp only [ he, Bool.false_eq_true, ite_false]
         rfl
   · simpa only [edge, inside, ite_false] using observed
 

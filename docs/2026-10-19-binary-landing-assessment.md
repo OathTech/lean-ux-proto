@@ -284,3 +284,105 @@ new `scripts/binary-proof-gate` is independent of `scripts/proof-gate`, which
 retains main's mirror-proof behavior. Expected theorem text will be updated
 only after inspection of the port's printed statements. Historical external
 gate acceptances do not validate this port.
+
+## Outstanding review obligations at landing
+
+The independent milestone-1 review is historical and is not superseded by this
+port. Its findings have the following narrower dispositions; this experiment
+must not be described as closing the original campaign.
+
+| Finding | Landing disposition and remaining obligation |
+| --- | --- |
+| F1, hit-path non-vacuity | Dead and live hit witnesses exist in the tree and their proof modules compile against the split mirror. Their concrete return executions are part of landing validation. NULL-owner execution is covered by concrete tests; a separate M1 `Pre_lookup` theorem witness for that path remains open, as does the suggested wrong-kind/KCOV-mode-3 theorem witness. |
+| F2, callback contracts | The later sibling proves all five index-family callbacks from the pinned image and uses them in its sequential headlines. The original M1 headline still takes callback contracts as hypotheses; those are not silently removed. Discharging the contracts in every original transport and broader subsystem theorem remains open. |
+| F3, honest hypotheses | The tree prunes unused trust declarations and explicitly takes serialization/permission hypotheses. They describe an intentionally unrealistic environment, not established kernel-context facts. |
+| F4, reusable post-state | The M1 post exports restored preempt count, the KCOV-buffer invariant and the softirq word. This does not establish arbitrary caller/environment composition. |
+| F5, composition method | The unused `compose_regions` was retired. Composition remains bespoke; no generic generated composition mechanism is claimed. |
+| F6, transport premises | **Open:** initial representation and heap-separation premises for snapshot transport remain assumptions. No unconditional transport of the mirror campaign's whole WireGuard properties is claimed. Minimal R and separate frame theorems are the settled scope. |
+| F7, entry realism | **Open and deferred:** general kernel-entry reachability, pending softirqs at BH-enable, user-modified KCOV counts, and allocator membership are not proved. Captured selected entries are tests, not a general realism theorem. Realistic concurrent contexts are outside this increment. |
+| F8, trusted inputs | The separate binary gate checks the clean pinned Kraken tree, axioms and printed statements/trust declarations. ELF/table comparison is a claim-point check. A new external replay is required for the landed port; old accepted exports do not cover it. |
+| F9, scaling | **Open:** subsystem-wide proof cost and coverage are unestablished. Historical region throughput and sibling adaptation costs are not a campaign forecast. |
+| F10, branch hygiene | Binary coverage is opt-in and ranges are supplied rather than hard-coded in the guest. The landing does not alter AGENTS.md. The unfinished Kraken example is isolated outside the dependency's library/proof import path. |
+| F11, claim limits | The explicit limits below remain part of the claim. Historical F1/F3/F4 defects are distinguished from the implemented corrections, rather than repeated as current facts. |
+
+The M1 lookup has no hidden-input hook, so its theorem alone exercises no
+record-stream consumption. Later insertion results exercise the supplied random
+tape under explicit provider assumptions; they do not establish all kernel
+inputs or whole-trace behavior. M1 interpretations are per-call. The sequential
+retained-heap results share their address interpretation across their specified
+calls, but do not establish a global allocator or arbitrary allocation/release
+lifetimes. KCOV contents are confined to the proved footprint; their complete
+returned sequence is not a WireGuard theorem observable.
+
+Insertion still uses the broader execution-permission premise: first-return
+control flow through the random provider is not proved. The bounded callback
+increment deliberately leaves that approximately 1,267-instruction obligation
+open. Allowed-IPs coverage, index-family coverage and callback proofs do not
+constitute coverage of the whole mirrored WireGuard subsystem. No realistic
+interrupt, RCU, concurrent-caller, whole-operation or whole-trace contextual
+refinement follows from this landing.
+
+## Rebase and validation status
+
+The landing branch now contains main `3f3879e0`, including the three environment
+fixes and the register's lag notices. The original experiment remains at
+`272104798c4c0cd0acd34212e1ec4712d52d0d66`. Before rebase, the complete default
+binary build passed (902 jobs). Rebase conflicts were resolved with the already
+reviewable combined harness/documentation versions; the final source tree
+differs from the port checkpoint only by main's register updates and removal of
+the superseded README trial notice. Final post-rebase validation is pending.
+
+The port's printed headline diff replaces old `Leanux.WG.* : World → ...`
+uses with `Binary.Source.*` abbreviations of the actual split adapters, and
+changes `World.k.wg` projections to `World.wg.dev`. Existing headline premises
+are unchanged. The gate now also prints these abbreviations and `liftWG`, so
+the adapter's connection to the operational mirror is visible in the reviewed
+surface. It includes the allowed-IPs loop and complete-call sibling headlines
+and their two-family witnesses, previously absent from the combined gate.
+
+The private Kraken pin advances to
+`dc3824fd5ca36c28b11321b8e7f7e2389b6f6ec4` only to replace the deprecated
+`dif_pos` proof rewrite with `dite_eq_left`. Patch 0008 preserves the exact
+commit during bootstrap. No instruction semantics change. The mirror has one
+compatibility spelling change, `String.mk` to `String.ofList`, for the same
+Lean 4.35 deprecation; its packet formatting behavior is unchanged.
+
+Post-rebase build: **PASS**, all 1,263 jobs for `BinaryProofs` and every declared
+binary executable, with no warnings. Mirror/harness unit suite: **PASS**,
+136 tests, one skipped. Binary Python suite: **PASS**, 15 tests including fresh
+reconstruction at the new Kraken pin. The callback runtime suite passes
+3,032 KCOV cases and 50 BH cases (51,935 instructions), its conditional-access
+controls, and return-overlap rejection.
+
+Exact generation comparisons pass for `Image`, `ServiceImage`, `ImageLayout`,
+`Layouts`, `AllowedipsImage`, `AllowedipsLayout`, `IndexMutatorImage`,
+`IndexMutatorLayout`, `IndexInsertImage`, and `IndexInsertLayout` against the
+pinned s4 ELF. Reproduce with the three `binary/generate*.py --check` commands
+listed in the README.
+
+One infrastructure attempt failed before execution: simultaneous lookup
+recordings collided in a second-resolution output directory. The launcher now
+includes the trace identity and microseconds; that failed recording was
+restarted once. No simulation failure is being reclassified as infrastructure.
+
+Fresh workload validation at this checkpoint is **FAIL**: both index traces
+(`d1_second_response` and `d1_wrong_receiver_index_same_bucket`) stop at
+operation 1 expecting `timer_clk` site 428 but receiving site 8; the allowed-IPs
+trace (`b1_trie_routing`) stops at operation 2 expecting site 428 but receiving
+site 41. The current mirror requires the B3 timer-wheel records introduced in
+s5. The pinned s4 image does not emit them. These are genuine compatibility
+failures, not infrastructure outcomes, and no paired-runtime pass is claimed.
+
+The four independent `leanchecker` replays for `PairCallbackSurface`,
+`LookupSnapshotTransport`, `PairCallWitness`, and `LookupHitWitness` pass.
+They establish kernel acceptance of their built closures, not that the failed
+workload preparations succeeded or that the external export gate has passed.
+
+[AGENT 2026-10-19] Assess a bounded s5 port, within the user's authorized
+low-cost alternative, because inventing missing timer records or bypassing the
+independent differential check would invalidate workload provenance. Read-only
+comparison finds identical instruction counts and byte extents for the seven
+anchored bodies and the shared callbacks; their changed instructions so far
+are relocated branches and RIP-relative loads. The random-provider bodies
+also retain their byte extents. Regenerate literal terms, recheck the existing
+proofs and run fresh workloads before claiming this alternative works.

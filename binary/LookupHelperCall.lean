@@ -83,7 +83,7 @@ theorem peer_call_simulation (fetch : Int64 → Option Decoded)
     simpa only [history_restore related.1] using grouped
   have firstObs : observe c.rxSection (history ++ [moved]) = .ok seen := by
     have h := observe_snoc c.rxSection history ⟨s, Image.Lookup.entry+0xb2⟩ moved seen [] related.1 observed (by
-      simp [moved, LookupObservation.edge, Image.Lookup.entry, Image.PeerGet.entry]; rfl)
+      simp [ LookupObservation.edge, Image.Lookup.entry, Image.PeerGet.entry]; rfl)
     simpa only [List.append_nil] using h
   have allObs : observe c.rxSection ((history ++ [moved]) ++ [called]) =
       .ok (seen ++ [call "wg_peer_get_maybe_zero" called]) :=

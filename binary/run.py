@@ -42,10 +42,9 @@ def bootstrap(root=ROOT):
         text=True).strip())
     shared = common.parent / '.deps/kraken'
     if not dest.exists():
-        if shared == dest or not shared.is_dir():
-            raise ValueError('missing local Kraken source; stage the locked upstream checkout in .deps/kraken first')
+        source = str(shared) if shared != dest and shared.is_dir() else lock['url']
         dest.parent.mkdir(parents=True, exist_ok=True)
-        subprocess.run(['git', 'clone', '--no-hardlinks', '--no-checkout', str(shared), str(dest)], check=True)
+        subprocess.run(['git', 'clone', '--no-hardlinks', '--no-checkout', source, str(dest)], check=True)
         subprocess.run(['git', '-C', str(dest), 'switch', '-c', 'task/binary-adequacy', lock['upstream_commit']], check=True)
         for patch in lock['patches']:
             path = root / patch
@@ -217,18 +216,21 @@ def compare(path, functions, chunk):
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument('--bootstrap-only', action='store_true', help='prepare the locked private Kraken checkout and local manifests, then stop')
     p.add_argument('--check', type=Path, help='reuse a completed check; default makes a fresh recorded run')
     p.add_argument('--trace', choices=[TRACE, 'd1_second_response'], default=TRACE)
     p.add_argument('--out', type=Path, default=ROOT / '.tmp/binary-tv',
                    help='Private directory for decoded input and result')
     args = p.parse_args()
     bootstrap()
+    if args.bootstrap_only:
+        return
     checked_command([str(TOOLCHAIN / 'lake'), 'build', 'binary-probe'], ROOT / 'binary')
     if args.check:
         check = args.check.resolve()
     else:
-        stamp = datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')
-        check = ROOT / '.artifacts/check' / ('binary-tv-' + stamp)
+        stamp = datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S-%f')
+        check = ROOT / '.artifacts/check' / ('binary-tv-' + args.trace + '-' + stamp)
         # The bundle fixes tools and guest libraries. Prepend this package's
         # Lean afterwards, so the check's freshness test uses the same version.
         env = kernel_environment()

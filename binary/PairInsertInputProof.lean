@@ -27,8 +27,8 @@ theorem draw_hidden {records : List HiddenRecord} {value : Nat} {rest : List Hid
       exact different (by simpa using all b member)
     have answer := Except.ok.inj accepted
     cases answer
-    simp [Except.pure, Except.bind, StateT.run, bind, StateT.bind, StateT.lift, pure, StateT.pure, get, getThe, MonadStateOf.get, StateT.get, set, MonadStateOf.set, StateT.set, modify, modifyGet, MonadStateOf.modifyGet, StateT.modifyGet, monadLift, MonadLift.monadLift, liftAmbient, AmbientM.branch, AmbientM.branchCmp, AmbientM.unsupported, hiddenU64,hidden,skipAmbient,noteNetRxStart, AmbientM.hiddenU64, AmbientM.hidden, AmbientM.skipAmbient, AmbientM.noteNetRxStart,HiddenSite.info,Worker.sectionId,Worker.index,
-      StateT.run_bind,supplied,skipped,siteEq,length,padding]
+    simp [Except.pure, Except.bind, StateT.run, bind, StateT.bind,  pure, StateT.pure, get, getThe, MonadStateOf.get, StateT.get, set, MonadStateOf.set, StateT.set,     monadLift, MonadLift.monadLift, liftAmbient,    hiddenU64, AmbientM.hiddenU64, AmbientM.hidden, AmbientM.skipAmbient, AmbientM.noteNetRxStart,HiddenSite.info,Worker.sectionId,Worker.index,
+      supplied,skipped,siteEq,length,padding]
 
 #print axioms draw_hidden
 
@@ -40,8 +40,8 @@ theorem hidden_draw {records : List HiddenRecord} {value : Nat} {w final : World
     ∃ rest, draw records=.ok (value,rest) ∧ final={w with ambient := {w.ambient with hidden := some rest}} := by
   cases skipped : records.dropWhile (fun r => HiddenSite.passive r.site) with
   | nil =>
-    simp [Except.pure, Except.bind, StateT.run, bind, StateT.bind, StateT.lift, pure, StateT.pure, get, getThe, MonadStateOf.get, StateT.get, set, MonadStateOf.set, StateT.set, modify, modifyGet, MonadStateOf.modifyGet, StateT.modifyGet, monadLift, MonadLift.monadLift, liftAmbient, AmbientM.branch, AmbientM.branchCmp, AmbientM.unsupported, hiddenU64,hidden,skipAmbient,noteNetRxStart, AmbientM.hiddenU64, AmbientM.hidden, AmbientM.skipAmbient, AmbientM.noteNetRxStart,HiddenSite.info,Worker.sectionId,Worker.index,
-      StateT.run_bind,supplied,skipped] at accepted
+    simp [Except.pure, Except.bind, StateT.run, bind, StateT.bind,  pure, StateT.pure, get, getThe, MonadStateOf.get, StateT.get, set, MonadStateOf.set, StateT.set,     monadLift, MonadLift.monadLift, liftAmbient,    hiddenU64, AmbientM.hiddenU64, AmbientM.hidden, AmbientM.skipAmbient, AmbientM.noteNetRxStart,HiddenSite.info,Worker.sectionId,Worker.index,
+      supplied,skipped] at accepted
     cases accepted
   | cons r rs =>
     by_cases site : r.site=4
@@ -60,14 +60,14 @@ theorem hidden_draw {records : List HiddenRecord} {value : Nat} {w final : World
             rw [←List.not_all_eq_any_not]
             cases yes : (r.bytes.drop 4).all (· == 0) <;> simp_all
           have badExists : ∃ b ∈ r.bytes.drop 4, b≠0 := by simpa only [List.any_eq_true,bne_iff_ne] using bad
-          simp [Except.pure, Except.bind, StateT.run, bind, StateT.bind, StateT.lift, pure, StateT.pure, get, getThe, MonadStateOf.get, StateT.get, set, MonadStateOf.set, StateT.set, modify, modifyGet, MonadStateOf.modifyGet, StateT.modifyGet, monadLift, MonadLift.monadLift, liftAmbient, AmbientM.branch, AmbientM.branchCmp, AmbientM.unsupported, hiddenU64,hidden,skipAmbient,noteNetRxStart, AmbientM.hiddenU64, AmbientM.hidden, AmbientM.skipAmbient, AmbientM.noteNetRxStart,HiddenSite.info,Worker.sectionId,Worker.index,
-            StateT.run_bind,supplied,skipped,site,length,badExists] at accepted
+          simp [Except.pure, Except.bind, StateT.run, bind, StateT.bind,  pure, StateT.pure, get, getThe, MonadStateOf.get, StateT.get, set, MonadStateOf.set, StateT.set,     monadLift, MonadLift.monadLift, liftAmbient,    hiddenU64, AmbientM.hiddenU64, AmbientM.hidden, AmbientM.skipAmbient, AmbientM.noteNetRxStart,HiddenSite.info,Worker.sectionId,Worker.index,
+            supplied,skipped,site,length,badExists] at accepted
           cases accepted
-      · simp [Except.pure, Except.bind, StateT.run, bind, StateT.bind, StateT.lift, pure, StateT.pure, get, getThe, MonadStateOf.get, StateT.get, set, MonadStateOf.set, StateT.set, modify, modifyGet, MonadStateOf.modifyGet, StateT.modifyGet, monadLift, MonadLift.monadLift, liftAmbient, AmbientM.branch, AmbientM.branchCmp, AmbientM.unsupported, hiddenU64,hidden,skipAmbient,noteNetRxStart, AmbientM.hiddenU64, AmbientM.hidden, AmbientM.skipAmbient, AmbientM.noteNetRxStart,HiddenSite.info,Worker.sectionId,Worker.index,
-          StateT.run_bind,supplied,skipped,site,length] at accepted
+      · simp [Except.pure, Except.bind, StateT.run, bind, StateT.bind,  pure, StateT.pure, get, getThe, MonadStateOf.get, StateT.get, set, MonadStateOf.set, StateT.set,     monadLift, MonadLift.monadLift, liftAmbient,    hiddenU64, AmbientM.hiddenU64, AmbientM.hidden, AmbientM.skipAmbient, AmbientM.noteNetRxStart,HiddenSite.info,Worker.sectionId,Worker.index,
+          supplied,skipped,site,length] at accepted
         cases accepted
-    · simp [Except.pure, Except.bind, StateT.run, bind, StateT.bind, StateT.lift, pure, StateT.pure, get, getThe, MonadStateOf.get, StateT.get, set, MonadStateOf.set, StateT.set, modify, modifyGet, MonadStateOf.modifyGet, StateT.modifyGet, monadLift, MonadLift.monadLift, liftAmbient, AmbientM.branch, AmbientM.branchCmp, AmbientM.unsupported, hiddenU64,hidden,skipAmbient,noteNetRxStart, AmbientM.hiddenU64, AmbientM.hidden, AmbientM.skipAmbient, AmbientM.noteNetRxStart,HiddenSite.info,Worker.sectionId,Worker.index,
-        StateT.run_bind,supplied,skipped,site] at accepted
+    · simp [Except.pure, Except.bind, StateT.run, bind, StateT.bind,  pure, StateT.pure, get, getThe, MonadStateOf.get, StateT.get, set, MonadStateOf.set, StateT.set,     monadLift, MonadLift.monadLift, liftAmbient,    hiddenU64, AmbientM.hiddenU64, AmbientM.hidden, AmbientM.skipAmbient, AmbientM.noteNetRxStart,HiddenSite.info,Worker.sectionId,Worker.index,
+        supplied,skipped,site] at accepted
       cases accepted
 
 #print axioms hidden_draw

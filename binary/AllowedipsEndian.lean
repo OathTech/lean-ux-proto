@@ -5,7 +5,6 @@ import StackFrame
 
 namespace Binary.Allowedips
 local instance : Labels := Image.linkedLabels
-set_option linter.unusedSimpArgs false
 
 /-- The input is loaded in network order; the stack receives the host-order
     word through the binary's actual BSWAP, not a substituted conversion. -/
@@ -27,8 +26,8 @@ theorem endian32 (s : MachineData) (network : BitVec 32) (old : Int)
   rw [input]
   simp only [Effects.All, BitVec.ofInt_natCast, BitVec.ofNat_toNat]
   rw [BitVec.extractLsb'_setWidth_of_le (by decide)]
-  simp only [mapped, Option.isSome_some, ↓reduceIte, Effects.All]
-  simp only [swap32, BitVec.take, BitVec.drop]
+  simp only [mapped,   Effects.All]
+  simp only [swap32, ]
   simp only [BitVec.extractLsb'_setWidth_of_le (by decide : 8+8 ≤ 64),
     BitVec.extractLsb'_setWidth_of_le (by decide : 16+8 ≤ 64),
     BitVec.extractLsb'_setWidth_of_le (by decide : 24+8 ≤ 64)]
@@ -65,18 +64,18 @@ theorem endian128 (s : MachineData) (high low : BitVec 64) (oldHigh oldLow : Int
     BitVec.ofInt_ofNat, Effects.All, AllowedipsImage.Lookup.entry, target] at inputHigh mappedHigh ⊢
   rw [inputHigh]
   simp only [Effects.All, BitVec.ofInt_natCast, BitVec.ofNat_toNat,
-    BitVec.setWidth_eq, BitVec.extractLsb'_eq_self, mappedHigh, Option.isSome_some, ↓reduceIte]
+    BitVec.setWidth_eq,  mappedHigh, ]
   change Effects.All _ (match (highStored s high).loadInt (s.regs.rbp.toBitVec+8) 8 with
     | some i => _
     | none => _)
   rw [inputLow]
   simp [Effects.All, BitVec.ofInt_natCast, BitVec.ofNat_toNat,
-    mappedLow, swap64, BitVec.take, BitVec.drop]
+     swap64, ]
   change Effects.All _ (match (highStored s high).loadInt (s.regs.rsp.toBitVec+24) 8 with
     | some _ => _
     | none => _)
   rw [mappedLow]
-  simp [Effects.All, highStored, swap64, BitVec.take, BitVec.drop]
+  simp [Effects.All, highStored, swap64, ]
 
 #print axioms endian128
 end Binary.Allowedips

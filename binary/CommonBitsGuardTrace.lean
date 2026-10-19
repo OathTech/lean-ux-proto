@@ -38,8 +38,8 @@ theorem family32_trace (fetch : Int64 → Option Decoded)
           (AllowedipsImage.CommonBits.entry+0x26)
         pure [decision rxSection .commonBits32 choice t.machine]) = _
       rw [pc]
-      cases h : (s.regs.get (.low .rbx .W8) == 32) <;> simp [h, LookupObservation.choice, AllowedipsImage.CommonBits.entry] <;> rfl
-    simp only [List.singleton_append,observeHistory,first,second,List.nil_append,List.append_nil]
+      cases h : (s.regs.get (.low .rbx .W8) == 32) <;> simp [ LookupObservation.choice, AllowedipsImage.CommonBits.entry] <;> rfl
+    simp only [List.singleton_append,observeHistory,first,second,]
     rfl
   · rw [memory]; intro _ _; rfl
   · intro q member cut
@@ -87,8 +87,8 @@ theorem family128_trace (fetch : Int64 → Option Decoded)
           (AllowedipsImage.CommonBits.entry+0x3e)
         pure [decision rxSection .commonBits128 choice t.machine]) = _
       rw [pc]
-      cases h : (s.regs.get (.low .rbx .W8) == 128) <;> simp [h, LookupObservation.choice, AllowedipsImage.CommonBits.entry] <;> rfl
-    simp only [List.singleton_append,observeHistory,first,second,List.nil_append,List.append_nil]
+      cases h : (s.regs.get (.low .rbx .W8) == 128) <;> simp [ LookupObservation.choice, AllowedipsImage.CommonBits.entry] <;> rfl
+    simp only [List.singleton_append,observeHistory,first,second,]
     rfl
   · rw [memory]; intro _ _; rfl
   · intro q member cut
@@ -136,8 +136,8 @@ theorem high_equal_trace (fetch : Int64 → Option Decoded)
           (AllowedipsImage.CommonBits.entry+0xc4)
         pure [decision rxSection .fls128High choice t.machine]) = _
       rw [pc]
-      cases h : (s.regs.get (.low .rbx .W64) == s.regs.get (.low .rbp .W64)) <;> simp [h, LookupObservation.choice, AllowedipsImage.CommonBits.entry] <;> rfl
-    simp only [List.singleton_append,observeHistory,first,second,List.nil_append,List.append_nil]
+      cases h : (s.regs.get (.low .rbx .W64) == s.regs.get (.low .rbp .W64)) <;> simp [ LookupObservation.choice, AllowedipsImage.CommonBits.entry] <;> rfl
+    simp only [List.singleton_append,observeHistory,first,second,]
     rfl
   · rw [memory]; intro _ _; rfl
   · intro q member cut

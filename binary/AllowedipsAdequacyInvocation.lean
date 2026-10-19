@@ -44,12 +44,12 @@ theorem raw_return_bound (rx : Nat) (history : List MachineState) (points : List
           by_cases ret : s.pc = AllowedipsImage.Lookup.entry+0x14e
           · have emitted : delta = [returned "lookup" t] := by
               have e : AllowedipsObservation.edge rx s t = .ok [returned "lookup" t] := by
-                simp [AllowedipsObservation.edge, ret, AllowedipsImage.Lookup.entry, AllowedipsImage.CommonBits.entry, Image.PeerGet.entry]
+                simp [AllowedipsObservation.edge, ret, AllowedipsImage.Lookup.entry, AllowedipsImage.CommonBits.entry]
                 rfl
               exact Except.ok.inj (first.symm.trans e)
             simp only [List.dropLast_cons_cons, rawReturns, List.countP_cons,
               observedReturns, List.countP_append] at bound ⊢
-            simp [ret, emitted, returned, isOuter, observedReturns] at bound ⊢
+            simp [ret, emitted, returned, isOuter] at bound ⊢
             omega
           · simp only [List.dropLast_cons_cons, rawReturns, List.countP_cons,
               observedReturns, List.countP_append] at bound ⊢

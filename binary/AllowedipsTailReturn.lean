@@ -18,7 +18,7 @@ theorem restore_address {initial coverage old ra result s}
     s.regs.rsp.toBitVec+.ofNat 64 (32+i*8)=Allowedips.entrySlot initial.data (5-i) := by
   rw [enabled.stack,UInt64.toBitVec_sub]
   unfold Allowedips.entrySlot
-  rw [if_pos (show 5-i<6 by omega)]
+  rw [ite_eq_left (show 5-i<6 by omega)]
   have number : 80=(5-i+1)*8+(32+i*8) := by omega
   have word : (80 : BitVec 64)=.ofNat 64 ((5-i+1)*8)+.ofNat 64 (32+i*8) := by
     rw [←BitVec.ofNat_add,←number]; rfl

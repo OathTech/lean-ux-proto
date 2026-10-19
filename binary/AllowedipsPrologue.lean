@@ -3,7 +3,6 @@ import StackFrame
 
 namespace Binary.Allowedips
 local instance : Labels := Image.linkedLabels
-set_option linter.unusedSimpArgs false
 
 def entrySlot (s : MachineData) (i : Nat) : BitVec 64 :=
   s.regs.rsp.toBitVec - .ofNat 64 (if i<6 then (i+1)*8 else if i=6 then 72 else 88)
@@ -57,10 +56,10 @@ theorem prologue (s : MachineData)
     MachineData.store, MachineData.set, MachineData.setReg,
     Reg64s.get, Reg64s.get64, Reg.base, Reg.offset, Reg64s.set, Reg64s.set64,
     BitVec.drop, BitVec.take, RelRegOrMem.interp, ConstExpr.interp,
-    AddrExpr.interp, BitVec.toAddressSize, BitVec.signed, BitVec.ofInt_add, BitVec.ofInt_toInt,
+    AddrExpr.interp, BitVec.toAddressSize, BitVec.signed, BitVec.ofInt_add,
     Effects.All, Width.bytesv, AllowedipsImage.Lookup.entry,
     entryMemory, entryWords, entrySlot, BitVec.sub_sub] at h0 h1 h2 h3 h4 h5 h6 h7 ⊢
-  simp_all [Effects.All, BitVec.sub_sub]
+  simp_all [Effects.All]
   have addressCast (a : BitVec 64) : BitVec.ofInt 64 ((a.toInt-80).bmod 18446744073709551616) = a-80 := by
     have value := BitVec.toInt_sub (x:=a) (y:=80#64)
     change (a-80).toInt = (a.toInt-80).bmod 18446744073709551616 at value
@@ -103,11 +102,11 @@ theorem prologuePrefix (s : MachineData)
     Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
     MachineData.store, MachineData.set, MachineData.setReg,
     Reg64s.get, Reg64s.get64, Reg.base, Reg.offset, Reg64s.set, Reg64s.set64,
-    BitVec.drop, BitVec.take, RelRegOrMem.interp, ConstExpr.interp,
-    AddrExpr.interp, BitVec.toAddressSize, BitVec.signed, BitVec.ofInt_add, BitVec.ofInt_toInt,
+    BitVec.drop, BitVec.take,  ConstExpr.interp,
+    AddrExpr.interp, BitVec.toAddressSize, BitVec.signed, BitVec.ofInt_add,
     Effects.All, Width.bytesv, AllowedipsImage.Lookup.entry,
     entryMemory, entryWords, entrySlot, BitVec.sub_sub] at h0 h1 h2 h3 h4 h5 h6 ⊢
-  simp_all [Effects.All, BitVec.sub_sub]
+  simp_all [Effects.All]
   have addressCast (a : BitVec 64) : BitVec.ofInt 64 ((a.toInt-80).bmod 18446744073709551616) = a-80 := by
     have value := BitVec.toInt_sub (x:=a) (y:=80#64)
     change (a-80).toInt = (a.toInt-80).bmod 18446744073709551616 at value

@@ -26,7 +26,7 @@ theorem null_guard_history (fetch : Int64 → Option Decoded)
   rintro t ⟨af, machine, recorded⟩
   have isZero : body.regs.get (.low .rbx .W64) = 0#64 := by
     simp [Reg64s.get, Reg64s.get64, Reg.base, Reg.offset, BitVec.drop, BitVec.take, null]
-  simp only [isZero, BEq.rfl, ite_true] at machine recorded
+  simp only [isZero, ] at machine recorded
   have nextFrame : ScanFrame base coverage preempt (tested (.low .rbx .W64) body af) :=
     frame.congr rfl rfl rfl rfl rfl rfl
   refine ⟨af, machine, StableTrace.of_observed_suffix observed last _ recorded ?_ ?_ _ ?_ ?_⟩

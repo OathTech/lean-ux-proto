@@ -38,8 +38,8 @@ theorem root_guard (fetch : Int64 → Option Decoded) (agree : AllowedipsDecoder
     simp only [observeHistory,first]
     rw [machine]
     cases zero : s.regs.get (.low .rbx .W64) == 0
-    all_goals simp [AllowedipsObservation.edge,mid,zero,choice,rootPoints,
-      AllowedipsImage.Lookup.entry,AllowedipsImage.CommonBits.entry]
+    all_goals simp [AllowedipsObservation.edge,mid,choice,rootPoints,
+      AllowedipsImage.Lookup.entry]
     all_goals rfl
   have trace := Trace.of_path observed last _ rfl pathEq (by simp) nextFrame _ localObserved
     (by
@@ -94,7 +94,7 @@ theorem found_guard (fetch : Int64 → Option Decoded) (agree : AllowedipsDecode
     simp only [observeHistory,first]
     rw [machine]
     cases zero : s.regs.get (.low .rbp .W64) == 0
-    all_goals simp [AllowedipsObservation.edge,mid,zero,choice,
+    all_goals simp [AllowedipsObservation.edge,mid,choice,
       AllowedipsImage.Lookup.entry,AllowedipsImage.CommonBits.entry]
     all_goals rfl
   have trace := Trace.of_path observed last _ rfl pathEq (by simp) nextFrame _ localObserved
@@ -150,7 +150,7 @@ theorem peer_guard (fetch : Int64 → Option Decoded) (agree : AllowedipsDecoder
     simp only [observeHistory,first]
     rw [machine]
     cases zero : s.regs.get (.low .rax .W64) == 0
-    all_goals simp [AllowedipsObservation.edge,mid,zero,choice,
+    all_goals simp [AllowedipsObservation.edge,mid,choice,
       AllowedipsImage.Lookup.entry,AllowedipsImage.CommonBits.entry]
     all_goals rfl
   have trace := Trace.of_path observed last _ rfl pathEq (by simp) nextFrame _ localObserved

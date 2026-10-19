@@ -1,7 +1,6 @@
 import AllowedipsRegions
 namespace Binary.Allowedips
 local instance : Labels := Image.linkedLabels
-set_option linter.unusedSimpArgs false
 
 theorem commonArguments (s : MachineData) :
     (run (AllowedipsImage.Lookup.rda.take 3) 0xda s).All (fun t =>
@@ -12,7 +11,7 @@ theorem commonArguments (s : MachineData) :
       t.data.dmem = s.dmem ∧ t.pc = AllowedipsImage.Lookup.entry+0xe5) := by
   simp [run, AllowedipsImage.Lookup.rda, Directives.interp, Directive.interp,
     Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
-    MachineData.load, MachineData.set, MachineData.setReg, AddrExpr.interp,
+     MachineData.set, MachineData.setReg, AddrExpr.interp,
     ConstExpr.interp, Reg64s.get, Reg64s.get64, Reg64s.set, Reg64s.set64,
     Reg.base, Reg.offset, BitVec.take, BitVec.drop,
     BitVec.toAddressSize, BitVec.signed, BitVec.ofInt_toInt, BitVec.ofInt_add,
@@ -26,8 +25,8 @@ theorem rootLoad (s : MachineData) (value : BitVec 64)
   simp [run, AllowedipsImage.Lookup.r79, Directives.interp, Directive.interp,
     Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
     MachineData.load, MachineData.set, MachineData.setReg, AddrExpr.interp,
-    ConstExpr.interp, Reg64s.get, Reg64s.get64, Reg64s.set, Reg64s.set64,
-    Reg.base, Reg.offset, BitVec.take, BitVec.drop,
+    ConstExpr.interp,  Reg64s.get64, Reg64s.set, Reg64s.set64,
+      BitVec.take,
     BitVec.toAddressSize, BitVec.signed, BitVec.ofInt_toInt, BitVec.ofInt_add,
     BitVec.ofInt_ofNat, Effects.All, AllowedipsImage.Lookup.entry] at *
   rw [field]
@@ -41,10 +40,10 @@ theorem selectedPeer (s : MachineData) (value : BitVec 64)
   simp [run, AllowedipsImage.Lookup.r110, Directives.interp, Directive.interp,
     Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
     MachineData.load, MachineData.set, MachineData.setReg, AddrExpr.interp,
-    ConstExpr.interp, Reg64s.get, Reg64s.get64, Reg64s.set, Reg64s.set64,
-    Reg.base, Reg.offset, BitVec.take, BitVec.drop,
-    BitVec.toAddressSize, BitVec.signed, BitVec.ofInt_toInt, BitVec.ofInt_add,
-    BitVec.ofInt_ofNat, Effects.All, AllowedipsImage.Lookup.entry] at *
+    ConstExpr.interp,  Reg64s.get64, Reg64s.set, Reg64s.set64,
+      BitVec.take,
+    BitVec.toAddressSize, BitVec.signed, BitVec.ofInt_toInt,
+     Effects.All, AllowedipsImage.Lookup.entry] at *
   rw [field]
   simp [Effects.All, BitVec.ofInt_natCast, BitVec.ofNat_toNat]
 
@@ -80,11 +79,11 @@ theorem fullLengthArguments (s : MachineData) :
       t.data.dmem = s.dmem ∧ t.pc = AllowedipsImage.Lookup.entry+0xaa) := by
   simp [run, AllowedipsImage.Lookup.ra4, Directives.interp, Directive.interp,
     Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
-    MachineData.load, MachineData.set, MachineData.setReg, AddrExpr.interp,
-    ConstExpr.interp, Reg64s.get, Reg64s.get64, Reg64s.set, Reg64s.set64,
+     MachineData.set, MachineData.setReg,
+     Reg64s.get, Reg64s.get64, Reg64s.set, Reg64s.set64,
     Reg.base, Reg.offset, BitVec.take, BitVec.drop,
-    BitVec.toAddressSize, BitVec.signed, BitVec.ofInt_toInt, BitVec.ofInt_add,
-    BitVec.ofInt_ofNat, Effects.All, AllowedipsImage.Lookup.entry] at *
+
+     Effects.All, AllowedipsImage.Lookup.entry] at *
 
 #print axioms commonArguments
 #print axioms rootLoad

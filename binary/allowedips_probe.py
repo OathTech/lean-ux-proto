@@ -148,7 +148,7 @@ def main():
     if args.check:
         check = args.check.resolve()
     else:
-        stamp = datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')
+        stamp = datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S-%f')
         check = ROOT / '.artifacts/check' / ('binary-allowedips-' + stamp)
         env = kernel_environment()
         shell = f'export PATH={shlex.quote(str(TOOLCHAIN))}:"$PATH"; exec python3 -m evaluator.check --suite wireguard --binary-coverage --binary-profile allowedips --trace {TRACE} --out "$1"'

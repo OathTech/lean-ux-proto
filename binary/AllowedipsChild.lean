@@ -6,7 +6,6 @@ import Kraken.X64.OmniSemantics
 namespace Binary.AllowedipsChild
 open AllowedipsRelation
 local instance : Labels := Image.linkedLabels
-set_option linter.unusedSimpArgs false
 
 def run (s : MachineData) : Effects :=
   Directives.interp (AllowedipsImage.Lookup.rb9.take 6) s
@@ -99,11 +98,11 @@ theorem execute (s : MachineData) (byteIndex shift byte : Nat) (next : BitVec 64
     MachineData.load, MachineData.set, MachineData.setReg,
     Reg64s.get, Reg64s.get64, Reg64s.set, Reg64s.set64,
     Reg.base, Reg.offset, BitVec.drop, BitVec.take, Effects.All,
-    RelRegOrMem.interp, ConstExpr.interp, Width.bytesv, AddrExpr.interp, BitVec.toAddressSize, BitVec.signed,
+     ConstExpr.interp,  AddrExpr.interp, BitVec.toAddressSize, BitVec.signed,
     BitVec.ofInt_add, BitVec.ofInt_mul, BitVec.ofInt_toInt,
-    ix, sh, by8, extract32, low32, BitVec.ofInt_natCast, shiftMask, shifted,
+    ix, sh, by8, extract32, low32, BitVec.ofInt_natCast, shiftMask,
     byteAddr,
-    indexRead, shiftRead, byteRead, childRead,
+    indexRead, shiftRead, byteRead,
     ShiftCountExpr.interpMasked, ShiftCountExpr.interp]
   have byteMod : (byte : Int) % 256 = byte := Int.emod_eq_of_lt (by omega) (by omega)
   have selBound : selected byte shift < 2^32 := by unfold selected; omega
@@ -117,13 +116,13 @@ theorem execute (s : MachineData) (byteIndex shift byte : Nat) (next : BitVec 64
   simp at childAddr
   by_cases zero : shift = 0
   all_goals simp [zero] at childRead childAddr shifted selExt
-  all_goals simp [-UInt64.ofBitVec_and, Effects.All, low32, extract32, ofInt_bmod64, byteMod, Int.max_eq_left (by omega : (0 : Int) ≤ byte),
-    BitVec.ofInt_natCast, shift_mod byte shift byteBound, uint_mask, extend_mask,
-    shifted, selExt, childAddr, byteRead, childRead, zero, by8, byteAddr]
-  all_goals simp only [castmod64, shift_mod byte shift byteBound, extend_mask, shifted, selExt]
+  all_goals simp [-UInt64.ofBitVec_and, Effects.All,   ofInt_bmod64,
+      uint_mask, extend_mask,
+    shifted, selExt,    zero, ]
+  all_goals simp only [castmod64, shift_mod byte shift byteBound,  ]
   · have eq0 : byte % 2 = selected byte 0 := by simp [selected]
     simp only [eq0, childAddr, childRead]
-    simp [Effects.All, AllowedipsImage.Lookup.entry, zero]
+    simp [Effects.All, AllowedipsImage.Lookup.entry]
     exact ⟨rfl, by subst shift; rfl⟩
   · simp only [childAddr, childRead]
     split <;> simp [Effects.All, AllowedipsImage.Lookup.entry] <;> exact ⟨rfl, rfl⟩

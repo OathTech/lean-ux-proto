@@ -99,7 +99,7 @@ theorem KeyFields.frame {before after : Mem 64} {writes : Address → Prop}
   obtain ⟨storedBound, queryBound, loaded⟩ := fields
   refine ⟨storedBound, queryBound, ?_⟩
   by_cases family : bits = 32
-  · simp only [KeyReads, KeyFields, family, ↓reduceIte] at apart loaded ⊢
+  · simp only [KeyReads,  family, ↓reduceIte] at apart loaded ⊢
     exact (same.loadInt base 4 (fun i hi => apart _ ⟨i, hi, rfl⟩)).symm.trans loaded
   · simp only [KeyReads, family, ↓reduceIte] at apart loaded ⊢
     refine ⟨(same.loadInt base 8 (fun i hi => apart _ (.inl ⟨i, hi, rfl⟩))).symm.trans loaded.1, ?_⟩

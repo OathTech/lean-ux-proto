@@ -67,15 +67,15 @@ theorem inc_cmpxchg_history (fetch : Int64 → Option Decoded)
     (fun t => t = ⟨incCompare s, Image.PeerGet.entry+0x4f⟩) ?_
   simp only [instructionStep, here]
   refine ⟨by decide, ?_⟩
-  simp [Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
-    MachineData.load, MachineData.store, MachineData.set, MachineData.setReg,
+  simp [Instr.interp, Operation.interp,
+    MachineData.load, MachineData.store,  MachineData.setReg,
     AddrExpr.interp, Reg64s.get, Reg64s.get64, Reg.base, Reg.offset,
     Reg64s.set, Reg64s.set64, BitVec.drop, BitVec.take,
     ConstExpr.interp, BitVec.toAddressSize, BitVec.signed,
-    BitVec.ofInt_add, BitVec.ofInt_toInt, BitVec.ofInt_ofNat,
-    Effects.All, StatusFlags.from_result, Width.bytesv,
+     BitVec.ofInt_toInt,
+    Effects.All, StatusFlags.from_result,
     incLea, incMove, incCompare, incrementMemory, Image.PeerGet.entry] at count ⊢
-  simp_all [Effects.All, low32, truncate_extend, mod32_64, Int.emod_bmod]
+  simp_all [Effects.All, low32, truncate_extend, mod32_64]
   rw [BitVec.extractLsb'_setWidth_of_le (by decide), BitVec.extractLsb'_extractLsb'_of_le (by decide)]
   simp [BitVec.unsigned]
 
@@ -89,7 +89,7 @@ theorem inc_set_history (fetch : Int64 → Option Decoded)
     (fun t => t = ⟨incSet s, Image.PeerGet.entry+0x53⟩) ?_
   simp only [instructionStep, here]
   refine ⟨by decide, ?_⟩
-  simp [Instr.interp, Operation.interp, RegOrMem.interp, MachineData.set,
+  simp [Instr.interp, Operation.interp,  MachineData.set,
     CondCode.interp, incCompare, incSet, Effects.All, StatusFlags.from_result, Image.PeerGet.entry]
 
 
@@ -107,7 +107,7 @@ theorem increment_first_history (fetch : Int64 → Option Decoded)
   rintro t ⟨machine, recorded⟩
   have machine0 : t.machine = (⟨incLea s, Image.PeerGet.entry+0x48⟩ : MachineState) := machine
   have cursor : t = ⟨(⟨incLea s, Image.PeerGet.entry+0x48⟩ : MachineState), history ++ [(⟨incLea s, Image.PeerGet.entry+0x48⟩ : MachineState)]⟩ := by
-    cases t; simp_all [List.append_assoc]
+    cases t; simp_all []
   rw [cursor]
   rw [show 3 = 1+2 from rfl, historySteps_add]
   have step1 := mov32_history fetch (Image.PeerGet.entry+0x48) (.low .rax .W32) (.low .rbp .W32) 2 (by decide) (agree _ _ (by rfl)) (incLea s) (history ++ [(⟨incLea s, Image.PeerGet.entry+0x48⟩ : MachineState)])

@@ -49,7 +49,7 @@ private theorem zero_at_mapped (base : BitVec 64) (size offset width : Nat)
   have atByte := get?_At_idx (List.replicate size (0 : UInt8)) base (offset+i)
     (by omega) (by simpa using bound)
   have rhs : (List.replicate size (0 : UInt8))[offset+i]? = some 0 := by
-    simp [List.getElem?_replicate, show offset+i < size by omega]
+    simp [ show offset+i < size by omega]
   have address : (base + .ofNat 64 offset) + .ofNat 64 i =
       base + .ofNat 64 (offset+i) := by simp [BitVec.ofNat_add, BitVec.add_assoc]
   have read := (congrArg (fun a => ((List.replicate size (0 : UInt8)).At base).get? a)

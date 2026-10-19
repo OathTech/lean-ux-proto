@@ -3,7 +3,6 @@ import KcovInvariant
 namespace Binary.LookupCoverage
 open TrustBase Kcov
 set_option maxHeartbeats 1200000
-set_option linter.unusedSimpArgs false
 
 /-- Fixed lookup context: the entry bucket and preempt count determine the
     union of callback reads. The current count changes at BH-disable. -/
@@ -79,7 +78,7 @@ theorem inactive_plan (kind : KcovKind) (layout : KcovLayout)
   all_goals simp [h0, h1, h2, h3] at softirq mode
   all_goals simp [Kcov.enabled, h0, h1, h2, h3] at inactive
   all_goals simp [KcovPlan, preemptRead, returnRead, task, mode, softirq,
-    h0, h1, h2, h3, inactive]
+    h0, h1, h2,  inactive]
 
 theorem active_plan (c : Context) (kind : KcovKind) (current : BitVec 32)
     (s : MachineState) (returnPC : BitVec 64)

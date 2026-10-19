@@ -100,7 +100,7 @@ theorem live_return_related (c : Config) (world : World) (device : Device)
   obtain ⟨_, ⟨v, projected, physical⟩, steps⟩ := related
   let delta := peerDecisions c.rxSection peer.refcount nullPoint zeroPoint retry negative wrap dead
   have finalProjection := project_peerFinal c world device pid peer v hasDevice hasPeer focused projected
-  rw [if_neg nonzero] at finalProjection
+  rw [ite_eq_right nonzero] at finalProjection
   refine ⟨last, ⟨{v with count := some (peer.refcount+1)}, finalProjection, ?_⟩, ?_⟩
   · refine physical.frame_count_updated c history finalHistory seen _ s current v pid focused (peer.refcount+1)
       (ownerPending_none _ _ noReturn) ?_ writes framed (bucketApart v projected) ownerApart ?_
