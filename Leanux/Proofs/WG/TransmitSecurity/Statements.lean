@@ -1,3 +1,26 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedAfterXmitFrames
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedAfterXmitPath
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedAfterXmitSource
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedDeadIntervalCuts
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedDeadIntervalPath
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedDeadIntervalSource
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedDeadIntervalStep
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedDeadIntervalWorker
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedReturnEntry
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedReturnFrames
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedReturnPath
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedReturnSource
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedSendingCases
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedSendingIteration
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedSendingIterationSource
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedSendingLoop
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedSendingScoped
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedStagingAllocation
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedStagingCaller
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedStagingCarrier
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedStagingFrames
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedStagingSelection
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedStagingSource
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedAllocationCarrier
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedAllocationFrames
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedAllocationReceipt
@@ -1798,6 +1821,17 @@ separate source-composition obligation. -/
 theorem initialized_dispatch_entry_accounted
     (path : AuthenticatedEffects.StagedEntry.Reached.RunnerSource.DispatchPath
       trace placeholders count op state world history) :
+    ∃ ledger, AuthenticatedEffects.StagedEntry.CompleteConsequences.Cut
+      history ledger [] [] world.wg :=
+  path.cut
+
+/-- Security: each fixed return-to-user callback prefix carries complete
+packet accounting at its actual initialized native world. The path retains
+the original operation, dispatch return and ordered callback prefix; no
+incoming carrier is assumed. Callback-internal composition remains separate. -/
+theorem initialized_return_callback_accounted
+    (path : AuthenticatedEffects.StagedEntry.Reached.RunnerSource.CallbackPath
+      trace placeholders operationIndex callbackIndex world history) :
     ∃ ledger, AuthenticatedEffects.StagedEntry.CompleteConsequences.Cut
       history ledger [] [] world.wg :=
   path.cut
