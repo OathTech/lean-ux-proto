@@ -1276,7 +1276,13 @@ The isolated landing carry is `task/binary-pair-landing`, rebased onto main
 there is no legacy operational mirror copy. Its s5 relocation and current
 validation are tracked in the [landing report](2026-10-19-binary-landing-assessment.md).
 The rows above describe their original checkpoints, rather than claiming
-that their old external gates accept the landing carry. The standalone gate
+that their old external gates accept the landing carry. On 2026-10-19 the user
+ran the external `lake check --from-export` gate outside Nono on the new export
+at code commit `736492453c292ba9caafa78b353ae19f4ce9671b`, rooted at
+`LookupSnapshotTransport`, `LookupWitness`, `LookupHitWitness`,
+`AllowedipsWitnessPre`, `PairCallbackSurface`, and `PairCallWitness`, including
+their complete declaration closure. The Lean default kernel accepted it using
+only `propext`, `Quot.sound`, and `Classical.choice`. The standalone gate
 is `scripts/binary-proof-gate`; outstanding M1 obligations (including realism,
 initial frame representation, and witnesses for the NULL-owner and mode-3
 wrong-kind cases) remain open. No concurrent or whole-WireGuard result is added.

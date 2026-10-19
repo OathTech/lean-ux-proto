@@ -68,6 +68,14 @@ The exported closure avoids the checker's sandboxed build of parent path
 dependencies. Fresh `leanchecker --fresh MODULE` replays and inside-Nono
 checks are reported separately; neither replaces this external gate.
 
+On 2026-10-19 the user ran this external gate outside Nono on the combined
+export at code commit `736492453c292ba9caafa78b353ae19f4ce9671b`, covering
+the six roots above and their complete declaration closure. The Lean default
+kernel accepted it with only `propext`, `Quot.sound`, and `Classical.choice`.
+The disposable export was removed after recording acceptance. Later changes
+before this record affect only the Python identity preflight and documentation.
+The theorem hypotheses and the landing report's open M1 obligations remain.
+
 `LookupAdequacy.lookup_simulation` proves entry-to-original-return execution
 of `wg_index_hashtable_lookup`, including the complete bucket loop and the
 NULL, zero-count and accepted live peer-get paths. Its premises are the
@@ -466,7 +474,8 @@ capped lake env leanexport PairCallAdequacy PairCallWitness PairRemoveOwnership 
 lake check --from-export ../.tmp/binary-pair-call.ndjson
 ```
 
-The external gate for this complete-call result is pending. The earlier
+At this checkpoint the complete-call external gate was pending; the current
+s5 carry is covered by the combined landing export accepted above. The earlier
 external acceptance remains specific to `a33869e`. See the
 [increment report](../docs/2026-10-18-plan-paired-call-increment.md) for reuse,
 failures and measured costs. Captured replay prints separate input, memory
@@ -650,8 +659,9 @@ capped lake check --from-export ../.tmp/binary-pair-insert-reviewed.ndjson
 Require export exit status zero and record its exact source commit. The new
 export was generated successfully on 2026-10-18 from the commit above, root
 `PairInsertionSurface` and its full transitive closure. External acceptance
-is pending. The previous `b3d57f17` insertion export is superseded and its
-reconstructible file removed; earlier subsystem acceptance does not cover
+was pending at that checkpoint; the current s5 carry is covered by the combined
+landing export accepted above. The previous `b3d57f17` insertion export is
+superseded and its reconstructible file removed; earlier subsystem acceptance does not cover
 the reviewed insertion source.
 
 The [fresh insertion review](../docs/2026-10-18-review-paired-index-insertion.md)
@@ -692,8 +702,9 @@ capped lake check --from-export ../.tmp/binary-pair-callbacks.ndjson
 The export contains the full imported declaration closure, including the older
 index/insertion surfaces and witnesses. The prepared export is from code commit
 `86ea5488e288998ea4aa0b26335c64428ffeaf04` and exited zero (1,331,952,229 bytes).
-External acceptance is pending; local check status is recorded in the increment
-report. `scripts/proof-gate
+External acceptance was pending at that checkpoint; the current s5 carry is
+covered by the combined landing export accepted above. Local check status is
+recorded in the increment report. `scripts/proof-gate
 --binary` prints and diffs the new statements and postcondition with the full
 TrustBase specification and requires the pinned clean Kraken tree. The service
 runner distinguishes generated cases from the recorded-prefix and captured
