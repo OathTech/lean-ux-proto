@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalDelayedDisposalFrames
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalDelayedPoll
 
 /-! Source composition through every actual packet/handshake worker iteration.
@@ -42,8 +43,7 @@ theorem decrypt_step : ProductSafe (Driver.decryptStepObserved hooks) := by
     apply product_bind irq_exit
     intro _
     apply product_bind
-    · apply product_state
-      causal_delayed_native
+    · exact product_state (peer_release _)
     · intro _
       exact product_bind softirq (fun _ => product_pure _)
 

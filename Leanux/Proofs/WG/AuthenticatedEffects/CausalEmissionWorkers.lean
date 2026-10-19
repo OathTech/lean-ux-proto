@@ -40,7 +40,7 @@ theorem decrypt_step : ProductSafe (Driver.decryptStepObserved hooks) := by
   | some pid =>
     apply product_bind irq_exit
     intro _
-    apply product_bind (product_wg _ (state_native _ (peerPut_sent (some pid))))
+    apply product_bind (product_state (peer_release (some pid)))
     intro _
     exact product_bind softirq (fun _ => product_pure _)
 

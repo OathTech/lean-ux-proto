@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalEmissionDisposal
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalEmissionEffects
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalEmissionCookie
 import Leanux.Proofs.WG.AuthenticatedEffects.EmissionHandshakeFrames
@@ -100,12 +101,13 @@ private theorem after_mac
       (HandshakeEffects.scopeOps Event.scope CausalSources.Cause.handshake
         (ExchangeJoint.receiveOps Event.exchange
           (HandshakeEffects.withEffects
-            (ProtocolSender.receiveOps (Event.old ∘ TransmitSecurity.Journal.Event.handshake)
-              handshake? session keepalive mac Event.protocolSocket scope? Event.cookieSocket)
+            (StagedDisposal.Decoration.receive Event.stagedDisposal stagedDisposal?
+              (ProtocolSender.receiveOps (Event.old ∘ TransmitSecurity.Journal.Event.handshake)
+              handshake? session keepalive mac Event.protocolSocket scope? Event.cookieSocket))
             (Event.old ∘ TransmitSecurity.Journal.Event.handshake) effects))) msg src loaded state) := by
   unfold afterMacWith responseWith
   simp only [HandshakeEffects.scopeOps,ExchangeJoint.receiveOps,HandshakeEffects.withEffects,
-    ProtocolSender.receiveOps,HandshakeWorker.observedOps]
+    StagedDisposal.Decoration.receive,ProtocolSender.receiveOps,HandshakeWorker.observedOps]
   repeat' first
     | (emission_head CausalScope.scope; apply state_scope)
     | (emission_head receiptWGObserved; refine state_receipt _ ?_ _ (fun _ => rfl))
@@ -117,6 +119,7 @@ private theorem after_mac
     | (emission_head TimerEffects.traversalWith; exact traversal _)
     | (emission_function session; exact hs _)
     | (emission_function keepalive; exact hk _)
+    | (emission_head StagedDisposal.Decoration.release; exact peer_release _)
     | emission_handshake_native
     | emission_step
 
@@ -127,14 +130,16 @@ private theorem receive
       (fun mac => HandshakeEffects.scopeOps Event.scope CausalSources.Cause.handshake
         (ExchangeJoint.receiveOps Event.exchange
           (HandshakeEffects.withEffects
-            (ProtocolSender.receiveOps (Event.old ∘ TransmitSecurity.Journal.Event.handshake)
-              handshake? session keepalive mac Event.protocolSocket scope? Event.cookieSocket)
+            (StagedDisposal.Decoration.receive Event.stagedDisposal stagedDisposal?
+              (ProtocolSender.receiveOps (Event.old ∘ TransmitSecurity.Journal.Event.handshake)
+              handshake? session keepalive mac Event.protocolSocket scope? Event.cookieSocket))
             (Event.old ∘ TransmitSecurity.Journal.Event.handshake) effects))) msg src) := by
   unfold CookieConsumption.receiveWith CookieConsumption.observed
   repeat' first
     | (emission_head receiptWGObserved; refine state_receipt _ ?_ _ (fun _ => rfl))
     | (emission_head afterMacWith; exact after_mac session keepalive hs hk _ _ _ _ _)
     | (emission_head captureWGRun; exact (state_native _ (cookieValidatePacket_sent _ _ _)).captureWGObserved)
+    | (emission_head StagedDisposal.Decoration.release; exact peer_release _)
     | emission_handshake_native
     | emission_step
 
@@ -145,6 +150,7 @@ theorem handshake
   unfold CausalJournal.handshake CookieConsumption.workerWith HandshakeWorker.workerWith
   repeat' first
     | (emission_head CookieConsumption.receiveWith; exact receive session keepalive hs hk _ _)
+    | (emission_head StagedDisposal.Decoration.release; exact peer_release _)
     | emission_handshake_native
     | emission_step
 

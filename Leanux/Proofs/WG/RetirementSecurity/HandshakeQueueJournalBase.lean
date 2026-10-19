@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.RetirementSecurity.HandshakeQueueProjection
 import Leanux.Proofs.WG.RetirementSecurity.HandshakeQueueWorker
 import Leanux.Proofs.WG.RetirementSecurity.HandshakeQueueCallbacks
 import Leanux.Proofs.WG.RetirementSecurity.DriverOwnership
@@ -23,9 +24,9 @@ def quietHooks (hooks : Driver.Hooks E) : Driver.Hooks E :=
   {hooks with handshake := fun _ _=>pure false}
 
 structure Contracts (Valid : List UInt8 → Prop) (Safe : List E → Prop)
-    (hooks : Driver.Hooks E) (ρ : E → Option Nonce.Allocation) : Prop where
+    (hooks : Driver.Hooks E) (ρ : E → Option TransmitSecurity.Journal.Event) : Prop where
   quiet : Driver.ActorHistorySafe Safe (quietHooks hooks)
-  projects : Driver.HooksProjects ρ hooks Driver.nonceHooks
+  projects : Driver.HooksProjects ρ hooks TransmitSecurity.Journal.hooks
   handshake : StateSafe Valid Safe (Driver.handshakeObserved hooks)
 
 theorem checked_state {P : WGWorld → Prop} {Safe : List E → Prop} {g : WGPrefix E α}

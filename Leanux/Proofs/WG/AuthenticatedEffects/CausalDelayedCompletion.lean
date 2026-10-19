@@ -10,8 +10,9 @@ open TransmitSecurity Queues TimerSlots
 set_option maxHeartbeats 800000
 set_option maxRecDepth 4096
 
-private abbrev observed := CompletionEffects.observed
-  (Event.old ∘ Journal.completionEvent) completion? scope? Event.armed Event.queued
+private abbrev observed := HandshakeSecurity.StagedConservation.SendResult.decorate Event.sendResult
+  (CompletionEffects.observed
+    (Event.old ∘ Journal.completionEvent) completion? scope? Event.armed Event.queued)
 
 private theorem old (body : PrefixM Completion.Event α) (native : WG.M α)
     (erases : ErasesPrefix body (liftWG native)) (safe : StateSafe (liftWGPrefix native)) :
@@ -82,7 +83,14 @@ elab "causal_delayed_completion_head " wanted:ident : tactic => withMainContext 
   let expected := wanted.getId.eraseMacroScopes.toString
   unless actual.toString == expected || actual.toString.endsWith ("." ++ expected) do throwError "different callback"
 
+private theorem result_receipt (body : PrefixM Event α) (safe : ProductSafe body)
+    (record : RunWitness α → Event) : ProductSafe (receiptObserved body record) := by
+  unfold receiptObserved
+  exact product_bind (product_capture body safe) (fun r =>
+    product_bind (product_emit (record r)) (fun _ => product_pure r.value))
+
 macro "causal_delayed_completion_step" : tactic => `(tactic| first
+  | (causal_delayed_head receiptObserved; apply result_receipt)
   | (causal_delayed_completion_head getPeerMixed; exact peer _)
   | (causal_delayed_completion_head getTxSkbPrefix; exact packet _)
   | (causal_delayed_completion_head modifyPeerKeysPrefix; apply modify_peer; intro p timer; rfl)
@@ -104,7 +112,7 @@ macro "causal_delayed_completion_step" : tactic => `(tactic| first
 private theorem complete (pid : PeerId) (item : List SkbId) :
     ProductSafe (CompletionEffects.completeWith observed pid item) := by
   unfold CompletionEffects.completeWith TxDisposition.andObs
-  simp only [observed,CompletionEffects.observed,CompletionEffects.focused,CompletionEffects.native]
+  simp only [observed,HandshakeSecurity.StagedConservation.SendResult.decorate,HandshakeSecurity.StagedConservation.SendResult.observed,CompletionEffects.observed,CompletionEffects.focused,CompletionEffects.native]
   repeat' causal_delayed_completion_step
 
 private theorem complete_scope (pid : PeerId) (item : List SkbId) : ProductSafe
@@ -115,14 +123,14 @@ private theorem body (pid : PeerId) (first : Option (List SkbId)) : ProductSafe
     (CompletionEffects.bodySourceWith observed
       (CompletionEffects.completeScoped Event.scope CausalSources.Cause.completion observed) pid first) := by
   unfold CompletionEffects.bodySourceWith TxDisposition.andObs
-  simp only [observed,CompletionEffects.observed,CompletionEffects.focused,CompletionEffects.native]
+  simp only [observed,HandshakeSecurity.StagedConservation.SendResult.decorate,HandshakeSecurity.StagedConservation.SendResult.observed,CompletionEffects.observed,CompletionEffects.focused,CompletionEffects.native]
   repeat' first
     | (causal_delayed_head CompletionEffects.completeScoped; exact complete_scope _ _)
     | causal_delayed_completion_step
 
 theorem transmit (pid : PeerId) : ProductSafe (CausalJournal.transmit pid) := by
-  unfold CausalJournal.transmit CompletionEffects.observedStep CompletionEffects.stepScoped CompletionEffects.stepSourceWith
-  simp only [CompletionEffects.observed,CompletionEffects.focused,CompletionEffects.native]
+  unfold CausalJournal.transmit CompletionEffects.stepScoped CompletionEffects.stepSourceWith
+  simp only [HandshakeSecurity.StagedConservation.SendResult.decorate,HandshakeSecurity.StagedConservation.SendResult.observed,CompletionEffects.observed,CompletionEffects.focused,CompletionEffects.native]
   repeat' first
     | (causal_delayed_head CompletionEffects.bodySourceWith; exact body _ _)
     | causal_delayed_completion_step

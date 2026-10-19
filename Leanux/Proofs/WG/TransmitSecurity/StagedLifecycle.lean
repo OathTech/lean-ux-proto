@@ -11,9 +11,7 @@ set_option maxRecDepth 4096
 
 theorem down : StateSafe (downObserved hooks) := by
   unfold downObserved
-  rw [show hooks.stagedPurge = (fun pid => liftWGPrefix (purgeStagedPackets pid)) from rfl,
-    Leanux.Proofs.WG.HandshakeSecurity.StagedDisposal.Lifecycle.down_neutral]
-  unfold SendExchange.downWith SendExchange.stopWith requireNotPending
+  unfold StagedDisposal.Lifecycle.downWith StagedDisposal.Lifecycle.stopWith requireNotPending
   repeat' first
     | (staged_origin_head SendExchange.timersStopWith; exact timers_stop _)
     | staged_configuration_step

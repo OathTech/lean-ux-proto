@@ -62,14 +62,21 @@ theorem handshake_projects (sg : PeerId → WGPrefix Event Bool)
   have protocol := ProtocolSender.receive_other entry?
     (Event.old ∘ Journal.Event.handshake) handshake? (fun _ => rfl)
     sg st kg kt hs hk mac Event.protocolSocket scope? Event.cookieSocket (fun _ => rfl) (fun _ => rfl)
-  exact {base with send := protocol.send, cookie := protocol.cookie}
+  exact {base with
+    send := protocol.send
+    cookie := protocol.cookie
+    put := StagedDisposal.Decoration.release_projects Event.stagedDisposal stagedDisposal?
+      entry? (fun _ => rfl)}
 
 theorem flushed_projects (pid : PeerId) :
     StateProjectsPrefix entry? id (flushedSend pid) (EntrySource.flushed pid) := by
   have project := SendEffects.flushed_projects entry? Event.scope (fun _ => rfl)
     (ExchangeJoint.send_projects entry? Event.exchange EntryEvent.exchange (fun _ => rfl)
-      (ProtocolSender.sendOps Event.protocolSocket scope?) SendEffects.native
-      (ProtocolSender.send_projects entry? Event.protocolSocket scope? (fun _ => rfl))) effects_projects pid
+      (StagedDisposal.Decoration.send Event.stagedDisposal stagedDisposal?
+        (ProtocolSender.sendOps Event.protocolSocket scope?)) SendEffects.native
+      (StagedDisposal.Decoration.send_projects Event.stagedDisposal stagedDisposal? entry?
+        (fun _ => rfl)
+        (ProtocolSender.send_projects entry? Event.protocolSocket scope? (fun _ => rfl)) (fun _ => rfl))) effects_projects pid
   have neutral : SendEffects.withEffects
       (ExchangeJoint.sendOps EntryEvent.exchange (SendEffects.native : SendExchange.Ops (WGPrefix EntryEvent)))
       TimerEffects.lifted = EntrySource.sendOps := by
@@ -87,7 +94,7 @@ theorem transmit_projects (pid : PeerId) :
     ProjectsPrefix entry? id (transmit pid) (liftPrefix (liftWG (txStep pid))) := by
   apply HistoryFrame.project
   · exact ExchangeCausal.transmit_history_of_quiet entry? (fun e => by cases e <;> rfl)
-      (fun _ => rfl) (fun _ => rfl) (fun _ => rfl) pid
+      (fun _ => rfl) (fun _ => rfl) (fun _ => rfl) (fun _ => rfl) pid
   · intro w h
     have old := congrArg Prod.fst (CausalJournal.transmit_projects pid w h)
     have native := native_result Journal.nonce? (Journal.transmit pid) _ (Journal.transmit_projects pid)
@@ -113,8 +120,9 @@ theorem timer_projects (d : Device) (bound : UInt64) (pid : PeerId) (timer : Pee
   simp only [List.filterMap_append,List.filterMap_cons,List.filterMap_nil,entry?,List.append_nil]
 
 theorem hooks_projects : Driver.HooksProjects entry? hooks EntrySource.hooks where
-  stagedPurge := fun _ => Leanux.Proofs.WG.TransmitSecurity.Driver.Projection.state_lift entry? _
-  peerRelease := fun _ => Leanux.Proofs.WG.TransmitSecurity.Driver.Projection.state_lift entry? _
+  stagedPurge := ExchangeCausal.stagedPurge_projects_of_quiet entry? (fun _ => rfl)
+  peerRelease := StagedDisposal.Decoration.release_projects Event.stagedDisposal stagedDisposal?
+    entry? (fun _ => rfl)
   deliver := DeliverySource.observed_projects entry? Event.delivery (fun _ => rfl)
   keepalivePrepare := fun _ => Journal.state_receipt_projects entry? _ _ _
     (fun _ => rfl) (Driver.Projection.state_lift entry? _)
@@ -142,8 +150,8 @@ theorem hooks_projects : Driver.HooksProjects entry? hooks EntrySource.hooks whe
   reserve := fun slot => state_native _ _ (state_result Journal.responder? _ _ (Journal.ResponderProjection.reserve slot))
   allocate := fun packets => state_native _ _ (state_result Journal.responder? _ _ (Journal.ResponderProjection.allocate packets))
   create := fun pid item => state_native _ _ (state_result Journal.responder? _ _ (Journal.ResponderProjection.create pid item))
-  front := fun family addr packets mtu => state_native _ _ (state_result Journal.responder? _ _
-    (Journal.ResponderProjection.front family addr packets mtu))
+  front := ExchangeCausal.front_projects_of_quiet entry? (fun _ => rfl) (fun _ => rfl)
+    (fun _ _ => rfl)
   poll := product_native _ _ (native_result Journal.responder? _ _ Journal.ResponderProjection.poll)
   encrypt := fun item => product_native _ _ (native_result Journal.responder? _ _ (Journal.ResponderProjection.encrypt item))
   transmit := transmit_projects

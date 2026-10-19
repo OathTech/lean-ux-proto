@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalDisposalHistoryFrames
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalReceiptSend
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalReceiptHandshake
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalReceiptCompletion
@@ -43,8 +44,8 @@ private theorem keepalive_prepare (pid : PeerId) :
     exact ⟨[.keepalivePrepared pid ⟨value,w,v,a,b⟩],rfl,safe,safe⟩
 
 theorem hooks_safe : Driver.HooksHistorySafe Safe hooks where
-  stagedPurge := fun _ => Leanux.Proofs.WG.TransmitSecurity.Driver.History.state_lift _
-  peerRelease := fun _ => Leanux.Proofs.WG.TransmitSecurity.Driver.History.state_lift _
+  stagedPurge := fun _ => quiet_state Event.stagedDisposal stagedDisposal? (fun _ => True.intro) _
+  peerRelease := fun _ => quiet_state Event.stagedDisposal stagedDisposal? (fun _ => True.intro) _
   deliver := by
     unfold hooks DeliverySource.observed
     exact Driver.History.product_bind (Driver.History.product_lift _) (fun w =>
@@ -71,7 +72,7 @@ theorem hooks_safe : Driver.HooksHistorySafe Safe hooks where
   reserve := fun _ => old_state _
   allocate := fun _ => old_state _
   create := fun _ _ => old_state _
-  front := fun _ _ _ _ => old_state _
+  front := disposal_front
   poll := old_product _
   encrypt := fun _ => old_product _
   transmit := transmit

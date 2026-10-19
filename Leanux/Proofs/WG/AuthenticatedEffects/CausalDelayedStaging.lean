@@ -56,9 +56,9 @@ theorem handshake_worker : StateSafe (Driver.handshakeObserved hooks) :=
 theorem timer_callback (pid : PeerId) (kind : PeerTimer) :
     StateSafe (Driver.timerObserved hooks pid kind) := by
   cases kind
-  · exact retransmit pid
+  · exact retransmit_disposal pid
   · exact expired_keepalive _ keepalive pid
-  · exact expired_new pid
+  · exact new_disposal pid
   · exact expired_zero pid
   · exact persistent _ keepalive pid
 

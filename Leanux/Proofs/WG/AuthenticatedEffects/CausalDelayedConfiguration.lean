@@ -71,7 +71,7 @@ theorem fixture (trigger : FixtureEffects.Trigger) (body : WGPrefix Event α) (s
     exact state_bind safe (fun value => state_bind (state_emit _) (fun _ => state_pure value))
 
 macro "causal_delayed_config_step" : tactic => `(tactic| first
-  | (causal_delayed_head Hooks.peerRelease; change StateSafe (liftWGPrefix _); causal_delayed_native)
+  | (causal_delayed_head Hooks.peerRelease; exact peer_release _)
   | (causal_delayed_read_write_head; first
       | (apply state_read_modify; intro p t; rfl)
       | (apply state_read_write; · intro p t; rfl))

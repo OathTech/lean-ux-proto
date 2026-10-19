@@ -26,12 +26,13 @@ private theorem after_mac
       (HandshakeEffects.scopeOps Event.scope CausalSources.Cause.handshake
         (ExchangeJoint.receiveOps Event.exchange
           (HandshakeEffects.withEffects
-            (ProtocolSender.receiveOps (Event.old ∘ Journal.Event.handshake) handshake? session keepalive mac Event.protocolSocket scope? Event.cookieSocket)
+            (StagedDisposal.Decoration.receive Event.stagedDisposal stagedDisposal? (ProtocolSender.receiveOps (Event.old ∘ Journal.Event.handshake) handshake? session keepalive mac Event.protocolSocket scope? Event.cookieSocket))
             (Event.old ∘ Journal.Event.handshake) effects))) msg src loaded state) := by
   unfold afterMacWith responseWith
   simp only [HandshakeEffects.scopeOps,ExchangeJoint.receiveOps,HandshakeEffects.withEffects,
-    ProtocolSender.receiveOps,HandshakeWorker.observedOps]
+    StagedDisposal.Decoration.receive,ProtocolSender.receiveOps,HandshakeWorker.observedOps]
   repeat' first
+    | (scope_balance_head StagedDisposal.Decoration.release; exact state_focus Event.stagedDisposal stagedDisposal? (fun _ => rfl) _)
     | (scope_balance_head ProtocolSocket.observed; exact protocol_send _ _)
     | (scope_balance_head CookieSocket.observed; exact cookie_send _ _ _)
     | (scope_balance_head CausalScope.scope; apply state_scope)
@@ -53,11 +54,12 @@ private theorem receive
       (fun mac => HandshakeEffects.scopeOps Event.scope CausalSources.Cause.handshake
         (ExchangeJoint.receiveOps Event.exchange
           (HandshakeEffects.withEffects
-            (ProtocolSender.receiveOps (Event.old ∘ Journal.Event.handshake) handshake? session keepalive mac Event.protocolSocket scope? Event.cookieSocket)
+            (StagedDisposal.Decoration.receive Event.stagedDisposal stagedDisposal? (ProtocolSender.receiveOps (Event.old ∘ Journal.Event.handshake) handshake? session keepalive mac Event.protocolSocket scope? Event.cookieSocket))
             (Event.old ∘ Journal.Event.handshake) effects))) msg src) := by
   unfold CookieConsumption.receiveWith CookieConsumption.observed
   repeat' first
     | (scope_balance_head receiptWGObserved; refine state_receipt _ ?_ _ (fun _ => rfl))
+    | (scope_balance_head StagedDisposal.Decoration.release; exact state_focus Event.stagedDisposal stagedDisposal? (fun _ => rfl) _)
     | (scope_balance_head ProtocolSocket.observed; exact protocol_send _ _)
     | (scope_balance_head CookieSocket.observed; exact cookie_send _ _ _)
     | (scope_balance_head afterMacWith; exact after_mac session keepalive hs hk _ _ _ _ _)
@@ -71,6 +73,7 @@ theorem handshake
     StateSafe (CausalJournal.handshake session keepalive) := by
   unfold CausalJournal.handshake CookieConsumption.workerWith HandshakeWorker.workerWith
   repeat' first
+    | (scope_balance_head StagedDisposal.Decoration.release; exact state_focus Event.stagedDisposal stagedDisposal? (fun _ => rfl) _)
     | (scope_balance_head ProtocolSocket.observed; exact protocol_send _ _)
     | (scope_balance_head CookieSocket.observed; exact cookie_send _ _ _)
     | (scope_balance_head CookieConsumption.receiveWith; exact receive session keepalive hs hk _ _)

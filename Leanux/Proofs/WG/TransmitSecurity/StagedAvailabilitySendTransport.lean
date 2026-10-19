@@ -39,10 +39,11 @@ theorem initiated_history (pid : PeerId) : Driver.StateHistorySafe Safe (TimerEf
 
 private theorem send_body (pid : PeerId) : Driver.StateHistorySafe Safe
     (SendExchange.workerWith (SendEffects.withEffects
-      (ExchangeJoint.sendOps Event.exchange (ProtocolSender.sendOps Event.protocolSocket scope?)) effects) pid) := by
+      (ExchangeJoint.sendOps Event.exchange (StagedDisposal.Decoration.send Event.stagedDisposal stagedDisposal? (ProtocolSender.sendOps Event.protocolSocket scope?))) effects) pid) := by
   unfold SendExchange.workerWith SendExchange.sendWith
-  simp only [SendEffects.withEffects,ExchangeJoint.sendOps,ProtocolSender.sendOps,SendEffects.native]
+  simp only [SendEffects.withEffects,ExchangeJoint.sendOps,StagedDisposal.Decoration.send,ProtocolSender.sendOps,SendEffects.native]
   repeat' first
+    | (driver_history_head StagedDisposal.Decoration.release; exact disposal_history _)
     | (driver_history_head ProtocolSocket.observed; exact protocol_send_history _ _)
     | (driver_history_head receiptWGObserved; exact history_receipt _ (Driver.History.state_lift _) _ (fun _ => rfl))
     | (driver_history_head TimerEffects.traversalWith; exact Driver.effects_traversal_history effects_history _)
@@ -51,7 +52,7 @@ private theorem send_body (pid : PeerId) : Driver.StateHistorySafe Safe
 
 private theorem flushed_body (pid : PeerId) : Driver.StateHistorySafe Safe
     (SendExchange.flushedWith liftWGPrefix (SendExchange.workerWith
-      (SendEffects.withEffects (ExchangeJoint.sendOps Event.exchange (ProtocolSender.sendOps Event.protocolSocket scope?)) effects)) pid) := by
+      (SendEffects.withEffects (ExchangeJoint.sendOps Event.exchange (StagedDisposal.Decoration.send Event.stagedDisposal stagedDisposal? (ProtocolSender.sendOps Event.protocolSocket scope?))) effects)) pid) := by
   unfold SendExchange.flushedWith SendExchange.afterTakeWith
   repeat' first
     | (driver_history_head SendExchange.workerWith; exact send_body _)

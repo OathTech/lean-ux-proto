@@ -1,5 +1,5 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalEmissionStaging
-import Leanux.Proofs.WG.AuthenticatedEffects.EmissionRoutingFrames
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalEmissionFront
 
 /-! Actual routing handoff, authenticated receive completion and decrypt
 publication retain ordered socket accounting. Packet authentication and
@@ -9,15 +9,8 @@ open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing TransmitSecurit
 set_option maxHeartbeats 800000
 set_option maxRecDepth 4096
 
-private theorem native_appends (action : WG.M α) : StateAppends (liftWGPrefix action : WGPrefix Journal.Event α) :=
-  fun _ _ _ => ⟨[],by simp only [List.append_nil]; rfl⟩
-
 theorem front (family addr : Nat) (packets : List Packet) (mtu : Nat) :
-    StateSafe (hooks.front family addr packets mtu) :=
-  old_state _ _ (receiptWGObserved_erases (erasesStatePrefix_lift _) _)
-    ((native_appends _).receiptWGObserved _)
-    (StateHistoryFrame.receiptWGObserved (fun _ _ _ => rfl) _ (fun _ => rfl))
-    (EmissionFrames.front family addr packets mtu)
+    StateSafe (hooks.front family addr packets mtu) := front_observed family addr packets mtu
 
 theorem device_transmit (family addr : Nat) (packets : List Packet) (mtu : Nat) :
     StateSafe (Driver.transmitObserved hooks family addr packets mtu) := by
@@ -27,7 +20,7 @@ theorem device_transmit (family addr : Nat) (packets : List Packet) (mtu : Nat) 
   cases result with
   | error err => exact state_pure err
   | ok pid => exact state_bind (staging pid) (fun _ => state_bind
-      (state_native _ (peerPut_sent (some pid))) (fun _ => state_pure _))
+      (peer_release (some pid)) (fun _ => state_pure _))
 
 theorem fresh_receive (pid : PeerId) : StateSafe (PacketEffects.freshReceiveWith effects pid) := by
   unfold PacketEffects.freshReceiveWith

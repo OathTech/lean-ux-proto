@@ -6,8 +6,9 @@ open Leanux Leanux.WG Leanux.Proofs.Logged TransmitSecurity Queues
 set_option maxHeartbeats 600000
 set_option maxRecDepth 4096
 
-private abbrev observed := CompletionEffects.observed
-  (Event.old ∘ Journal.completionEvent) completion? scope? Event.armed Event.queued
+private abbrev observed := HandshakeSecurity.StagedConservation.SendResult.decorate Event.sendResult
+  (CompletionEffects.observed
+    (Event.old ∘ Journal.completionEvent) completion? scope? Event.armed Event.queued)
 
 private theorem old_completion (body : PrefixM Completion.Event α) : Driver.ProductHistorySafe Safe
     (focusPrefix (Event.old ∘ Journal.completionEvent) completion? body) :=
@@ -16,7 +17,21 @@ private theorem old_completion (body : PrefixM Completion.Event α) : Driver.Pro
 private theorem product_capture (body : PrefixM Event α) (preserves : Driver.ProductHistorySafe Safe body) :
     Driver.ProductHistorySafe Safe (captureObserved body) := preserves.captureObserved
 
+private theorem result_receipt (body : PrefixM Event α)
+    (safe : Driver.ProductHistorySafe Safe body) (record : RunWitness α → Event)
+    (quiet : ∀ r, Quiet (record r)) :
+    Driver.ProductHistorySafe Safe (receiptObserved body record) := by
+  unfold receiptObserved
+  apply Driver.History.product_bind safe.captureObserved
+  intro r
+  have emitted : Driver.ProductHistorySafe Safe (emitPrefix (record r)) := by
+    intro w h hi
+    have good := hi.emit (record r) (quiet r)
+    exact ⟨[record r],rfl,good,good⟩
+  exact Driver.History.product_bind emitted (fun _ => Driver.History.product_pure r.value)
+
 macro "stack_origin_completion_step" : tactic => `(tactic| first
+  | (driver_history_head receiptObserved; refine result_receipt _ ?_ _ (fun _ => rfl))
   | (driver_history_head focusPrefix; exact old_completion _)
   | (driver_history_head LifetimeEffects.traversalWith; exact Driver.History.product_state (lifetime_traversal _))
   | (driver_history_head LifetimeEffects.dataSentWith; exact Driver.History.product_state (lifetime_data_sent _))
@@ -27,7 +42,7 @@ macro "stack_origin_completion_step" : tactic => `(tactic| first
 private theorem complete (pid : PeerId) (item : List SkbId) :
     Driver.ProductHistorySafe Safe (CompletionEffects.completeWith observed pid item) := by
   unfold CompletionEffects.completeWith TxDisposition.andObs
-  simp only [observed,CompletionEffects.observed,CompletionEffects.focused]
+  simp only [observed,HandshakeSecurity.StagedConservation.SendResult.decorate,HandshakeSecurity.StagedConservation.SendResult.observed,CompletionEffects.observed,CompletionEffects.focused]
   repeat' stack_origin_completion_step
 
 private theorem complete_scope (pid : PeerId) (item : List SkbId) :
@@ -39,14 +54,14 @@ private theorem body (pid : PeerId) (first : Option (List SkbId)) :
     Driver.ProductHistorySafe Safe (CompletionEffects.bodySourceWith observed
       (CompletionEffects.completeScoped Event.scope CausalSources.Cause.completion observed) pid first) := by
   unfold CompletionEffects.bodySourceWith TxDisposition.andObs
-  simp only [observed,CompletionEffects.observed,CompletionEffects.focused]
+  simp only [observed,HandshakeSecurity.StagedConservation.SendResult.decorate,HandshakeSecurity.StagedConservation.SendResult.observed,CompletionEffects.observed,CompletionEffects.focused]
   repeat' first
     | (driver_history_head CompletionEffects.completeScoped; exact complete_scope _ _)
     | stack_origin_completion_step
 
 theorem transmit (pid : PeerId) : Driver.ProductHistorySafe Safe (CausalJournal.transmit pid) := by
-  unfold CausalJournal.transmit CompletionEffects.observedStep CompletionEffects.stepScoped CompletionEffects.stepSourceWith
-  simp only [CompletionEffects.observed,CompletionEffects.focused]
+  unfold CausalJournal.transmit CompletionEffects.stepScoped CompletionEffects.stepSourceWith
+  simp only [HandshakeSecurity.StagedConservation.SendResult.decorate,HandshakeSecurity.StagedConservation.SendResult.observed,CompletionEffects.observed,CompletionEffects.focused]
   repeat' first
     | (driver_history_head CompletionEffects.bodySourceWith; exact body _ _)
     | stack_origin_completion_step

@@ -58,14 +58,21 @@ theorem handshake_projects (sg : PeerId → WGPrefix Event Bool)
   have protocol := ProtocolSender.receive_other exchange?
     (Event.old ∘ Journal.Event.handshake) handshake? (fun _ => rfl)
     sg st kg kt hs hk mac Event.protocolSocket scope? Event.cookieSocket (fun _ => rfl) (fun _ => rfl)
-  exact {base with send := protocol.send, cookie := protocol.cookie}
+  exact {base with
+    send := protocol.send
+    cookie := protocol.cookie
+    put := StagedDisposal.Decoration.release_projects Event.stagedDisposal stagedDisposal?
+      exchange? (fun _ => rfl)}
 
 theorem flushed_projects (pid : PeerId) :
     StateProjectsPrefix exchange? id (flushedSend pid) (ExchangeDriver.flushed pid) := by
   have project := SendEffects.flushed_projects exchange? Event.scope (fun _ => rfl)
     (ExchangeJoint.send_projects exchange? Event.exchange id (fun _ => rfl)
-      (ProtocolSender.sendOps Event.protocolSocket scope?) SendEffects.native
-      (ProtocolSender.send_projects exchange? Event.protocolSocket scope? (fun _ => rfl))) effects_projects pid
+      (StagedDisposal.Decoration.send Event.stagedDisposal stagedDisposal?
+        (ProtocolSender.sendOps Event.protocolSocket scope?)) SendEffects.native
+      (StagedDisposal.Decoration.send_projects Event.stagedDisposal stagedDisposal? exchange?
+        (fun _ => rfl)
+        (ProtocolSender.send_projects exchange? Event.protocolSocket scope? (fun _ => rfl)) (fun _ => rfl))) effects_projects pid
   have neutral : SendEffects.withEffects
       (ExchangeJoint.sendOps id (SendEffects.native : SendExchange.Ops (WGPrefix Exchange.Event)))
       TimerEffects.lifted = ExchangeDriver.sendOps := by
@@ -106,9 +113,46 @@ theorem timer_projects (d : Device) (bound : UInt64) (pid : PeerId) (timer : Pee
           .timer bound pid timer entry⟩)]).filterMap exchange?)
   simp only [List.filterMap_append,List.filterMap_cons,List.filterMap_nil,exchange?,List.append_nil]
 
+theorem stagedPurge_projects_of_quiet (rho : Event → Option F)
+    (quiet : ∀ e, rho (Event.stagedDisposal e) = none) (pid : PeerId) :
+    StateProjectsPrefix rho id (stagedPurge pid) (liftWGPrefix (purgeStagedPackets pid)) :=
+  Exchange.quiet_native_projection rho _ _
+    (focusStatePrefix_erases _ _ (StagedDisposal.purge_erases pid))
+    (fun w => focusPrefix_other Event.stagedDisposal stagedDisposal? rho quiet
+      ((StagedDisposal.purgeObserved pid).run w))
+
+theorem front_projects_of_quiet (rho : Event → Option F)
+    (entryQuiet : ∀ input, rho (Event.transmitInput input) = none)
+    (disposalQuiet : ∀ e, rho (Event.stagedDisposal e) = none)
+    (routedQuiet : ∀ (input : StagedConservation.Front.Input) r,
+      rho (.old (.routed input.family input.address input.packets input.mtu r)) = none)
+    (family addr : Nat) (packets : List Packet) (mtu : Nat) :
+    StateProjectsPrefix rho id (front family addr packets mtu)
+      (liftWGPrefix (txFront family addr packets mtu)) := by
+  let input : StagedConservation.Front.Input := ⟨family,addr,packets,mtu⟩
+  have entryProjection : StateProjectsPrefix rho id
+      (emitStatePrefix (Event.transmitInput input) : WGPrefix Event Unit) (pure ()) := by
+    intro w a h
+    change (Except.ok (((),w),a),h.filterMap rho) =
+      (Except.ok (((),w),a),(h ++ [Event.transmitInput input]).filterMap rho)
+    simp only [List.filterMap_append,List.filterMap_cons,entryQuiet,List.filterMap_nil,List.append_nil]
+  have body := Exchange.receipt_ignored rho _ _
+    (fun r => Event.old (.routed family addr packets mtu r))
+    (StagedConservation.Front.observed_front_projects Event.stagedDisposal stagedDisposal?
+      rho disposalQuiet input) (routedQuiet input)
+  simpa only [front,StagedConservation.Front.observed,pure_bind,input] using
+    (StateProjectsPrefix.bind
+      (f := fun (_ : Unit) => receiptWGObserved
+        (StagedConservation.Front.frontWith
+          (StagedConservation.Front.observedOps Event.stagedDisposal stagedDisposal?)
+          family addr packets mtu) (fun r => Event.old (.routed family addr packets mtu r)))
+      (b := fun (_ : Unit) => liftWGPrefix (txFront family addr packets mtu))
+      rho id id entryProjection (fun _ => body))
+
 theorem hooks_projects : Driver.HooksProjects exchange? hooks ExchangeDriver.hooks where
-  stagedPurge := fun _ => Leanux.Proofs.WG.TransmitSecurity.Driver.Projection.state_lift exchange? _
-  peerRelease := fun _ => Leanux.Proofs.WG.TransmitSecurity.Driver.Projection.state_lift exchange? _
+  stagedPurge := ExchangeCausal.stagedPurge_projects_of_quiet exchange? (fun _ => rfl)
+  peerRelease := StagedDisposal.Decoration.release_projects Event.stagedDisposal stagedDisposal?
+    exchange? (fun _ => rfl)
   deliver := DeliverySource.observed_projects exchange? Event.delivery (fun _ => rfl)
   keepalivePrepare := fun _ => Journal.state_receipt_projects exchange? _ _ _
     (fun _ => rfl) (Driver.Projection.state_lift exchange? _)
@@ -136,8 +180,8 @@ theorem hooks_projects : Driver.HooksProjects exchange? hooks ExchangeDriver.hoo
   reserve := fun slot => state_native _ _ (state_result Journal.responder? _ _ (Journal.ResponderProjection.reserve slot))
   allocate := fun packets => state_native _ _ (state_result Journal.responder? _ _ (Journal.ResponderProjection.allocate packets))
   create := fun pid item => state_native _ _ (state_result Journal.responder? _ _ (Journal.ResponderProjection.create pid item))
-  front := fun family addr packets mtu => state_native _ _ (state_result Journal.responder? _ _
-    (Journal.ResponderProjection.front family addr packets mtu))
+  front := ExchangeCausal.front_projects_of_quiet exchange? (fun _ => rfl) (fun _ => rfl)
+    (fun _ _ => rfl)
   poll := product_native _ _ (native_result Journal.responder? _ _ Journal.ResponderProjection.poll)
   encrypt := fun item => product_native _ _ (native_result Journal.responder? _ _ (Journal.ResponderProjection.encrypt item))
   transmit := transmit_projects

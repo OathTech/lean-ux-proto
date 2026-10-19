@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalDisposalCoverageFrames
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalCoveragePoll
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalCoverageHandshake
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalCoverageCompletion
@@ -38,7 +39,7 @@ theorem tx_iter (pid : PeerId) : ProductAt frames (Driver.txIterObserved hooks p
 theorem decrypt_step : ProductAt frames (Driver.decryptStepObserved hooks) := by
   unfold Driver.decryptStepObserved RxWorkers.decryptWith
   repeat' first
-    | (coverage_head Driver.Hooks.peerRelease; exact product_state _ (state_lift _))
+    | (coverage_head Driver.Hooks.peerRelease; exact product_state _ (peer_release _))
     | (coverage_head Driver.Hooks.prepare; exact prepare)
     | (coverage_head Driver.softirqObserved; exact softirq)
     | (coverage_head Driver.irqExitObserved; exact irq_exit)

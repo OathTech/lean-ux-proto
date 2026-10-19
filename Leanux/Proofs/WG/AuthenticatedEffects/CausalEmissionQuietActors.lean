@@ -2,6 +2,7 @@ import Leanux.Proofs.WG.AuthenticatedEffects.CausalEmissionQuietHandshake
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalEmissionQuietSend
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalEmissionQuietCompletion
 import Leanux.Proofs.WG.TransmitSecurity.DriverHistoryReceive
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalEmissionFront
 
 /-! Independent history contracts for ordinary actors which never call the
 delivery hook. The surrogate changes only that hook; actual delivery uses the
@@ -28,8 +29,8 @@ private theorem selected (d : Device) (j : UInt64) (pid : PeerId) (timer : PeerT
 def quietHooks : Driver.Hooks Event := {hooks with deliver := liftPrefix Env.deliverSent}
 
 theorem quiet_hooks : Driver.HooksHistorySafe Safe quietHooks where
-  stagedPurge := fun _ => Leanux.Proofs.WG.TransmitSecurity.Driver.History.state_lift _
-  peerRelease := fun _ => Leanux.Proofs.WG.TransmitSecurity.Driver.History.state_lift _
+  stagedPurge := staged_purge
+  peerRelease := peer_release
   deliver := Driver.History.product_lift _
   keepalivePrepare := fun _ => receipt_quiet _ (Driver.History.state_lift _) _ (fun _ => rfl)
   fixtureEnter := fun trigger => state_enter (.fixture trigger) (fun _ => rfl)
@@ -52,7 +53,7 @@ theorem quiet_hooks : Driver.HooksHistorySafe Safe quietHooks where
   reserve := fun _ => old_state _
   allocate := fun _ => old_state _
   create := fun _ _ => old_state _
-  front := fun _ _ _ _ => old_state _
+  front := front_observed
   poll := old_product _
   encrypt := fun _ => old_product _
   transmit := transmit

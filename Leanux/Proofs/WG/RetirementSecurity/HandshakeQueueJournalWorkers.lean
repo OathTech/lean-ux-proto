@@ -7,7 +7,7 @@ namespace Leanux.Proofs.WG.RetirementSecurity.HandshakeLengths.Journal
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing Lifetimes Queues
 open TransmitSecurity
 variable {E : Type} {Valid : List UInt8 → Prop} {Safe : List E → Prop}
-  {hooks : Driver.Hooks E} {ρ : E → Option Nonce.Allocation}
+  {hooks : Driver.Hooks E} {ρ : E → Option TransmitSecurity.Journal.Event}
 
 theorem condResched_frame (worker : Worker) :
     SameView HandshakeLengths.productView (Env.condResched worker) :=
@@ -20,7 +20,7 @@ theorem encryption_iteration (c : Contracts Valid Safe hooks ρ) :
   have history : Driver.ProductHistorySafe Safe (Driver.encryptIterObserved hooks) :=
     (show Driver.encryptIterObserved (quietHooks hooks)=Driver.encryptIterObserved hooks from rfl) ▸
       Driver.encryptIter_history c.quiet
-  have projected:=Driver.encryptIter_projects c.projects
+  have projected:=Projection.product (Driver.encryptIter_projects c.projects) (Driver.encryptIter_projects TransmitSecurity.Journal.hooks_projects)
   rw [Driver.nonce_encryptIterObserved_eq] at projected
   exact product_native history projected Nonce.encryptIterObserved_erases (product_frame actualEncryptIter_cell)
 
@@ -29,7 +29,7 @@ theorem tx_iteration (c : Contracts Valid Safe hooks ρ) (pid : PeerId) :
   have history : Driver.ProductHistorySafe Safe (Driver.txIterObserved hooks pid) :=
     (show Driver.txIterObserved (quietHooks hooks) pid=Driver.txIterObserved hooks pid from rfl) ▸
       Driver.txIter_history c.quiet pid
-  have projected:=Driver.txIter_projects c.projects pid
+  have projected:=Projection.product (Driver.txIter_projects c.projects pid) (Driver.txIter_projects TransmitSecurity.Journal.hooks_projects pid)
   rw [Driver.nonce_txIterObserved_eq] at projected
   exact product_native history projected (Nonce.txIterObserved_erases pid)
     (product_frame (txIter_cell pid _ (condResched_frame .txWorker)))
@@ -39,7 +39,7 @@ theorem decrypt_iteration (c : Contracts Valid Safe hooks ρ) :
   have history : Driver.ProductHistorySafe Safe (Driver.decryptIterObserved hooks) :=
     (show Driver.decryptIterObserved (quietHooks hooks)=Driver.decryptIterObserved hooks from rfl) ▸
       Driver.decryptIter_history c.quiet
-  have projected:=Driver.decryptIter_projects c.projects
+  have projected:=Projection.product (Driver.decryptIter_projects c.projects) (Driver.decryptIter_projects TransmitSecurity.Journal.hooks_projects)
   rw [Driver.nonce_decryptIterObserved_eq] at projected
   exact product_native history projected Nonce.decryptIterObserved_erases
     (product_frame (decryptIter_cell _ _ _ napiSoftirq_cell napiIrqExit_cell (condResched_frame .decryptWorker)))

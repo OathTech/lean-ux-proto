@@ -26,12 +26,13 @@ private theorem after_mac
       (HandshakeEffects.scopeOps Event.scope CausalSources.Cause.handshake
         (ExchangeJoint.receiveOps Event.exchange
           (HandshakeEffects.withEffects
-            (ProtocolSender.receiveOps (Event.old ∘ Journal.Event.handshake) handshake? session keepalive mac Event.protocolSocket scope? Event.cookieSocket)
+            (StagedDisposal.Decoration.receive Event.stagedDisposal stagedDisposal? (ProtocolSender.receiveOps (Event.old ∘ Journal.Event.handshake) handshake? session keepalive mac Event.protocolSocket scope? Event.cookieSocket))
             (Event.old ∘ Journal.Event.handshake) effects))) msg src loaded state) := by
   unfold afterMacWith responseWith
   simp only [HandshakeEffects.scopeOps,ExchangeJoint.receiveOps,HandshakeEffects.withEffects,
-    ProtocolSender.receiveOps,HandshakeWorker.observedOps,HandshakeEffects.old_call,receipt_callback]
+    StagedDisposal.Decoration.receive,ProtocolSender.receiveOps,HandshakeWorker.observedOps,HandshakeEffects.old_call,receipt_callback]
   repeat' first
+    | (driver_history_head StagedDisposal.Decoration.release; exact quiet_state Event.stagedDisposal stagedDisposal? (fun _ => rfl) _)
     | (driver_history_head ProtocolSocket.observed; exact protocol_send _ _)
     | (driver_history_head CookieSocket.observed; exact cookie_send _ _ _)
     | (driver_history_head CausalScope.scope; apply scoped_callback)
@@ -53,11 +54,12 @@ private theorem receive
       (fun mac => HandshakeEffects.scopeOps Event.scope CausalSources.Cause.handshake
         (ExchangeJoint.receiveOps Event.exchange
           (HandshakeEffects.withEffects
-            (ProtocolSender.receiveOps (Event.old ∘ Journal.Event.handshake) handshake? session keepalive mac Event.protocolSocket scope? Event.cookieSocket)
+            (StagedDisposal.Decoration.receive Event.stagedDisposal stagedDisposal? (ProtocolSender.receiveOps (Event.old ∘ Journal.Event.handshake) handshake? session keepalive mac Event.protocolSocket scope? Event.cookieSocket))
             (Event.old ∘ Journal.Event.handshake) effects))) msg src) := by
   unfold CookieConsumption.receiveWith CookieConsumption.observed
   repeat' first
     | (driver_history_head receiptWGObserved; refine receipt_quiet _ ?_ _ (fun _ => rfl))
+    | (driver_history_head StagedDisposal.Decoration.release; exact quiet_state Event.stagedDisposal stagedDisposal? (fun _ => rfl) _)
     | (driver_history_head ProtocolSocket.observed; exact protocol_send _ _)
     | (driver_history_head CookieSocket.observed; exact cookie_send _ _ _)
     | (driver_history_head afterMacWith; exact after_mac session keepalive hs hk _ _ _ _ _)
@@ -71,6 +73,7 @@ theorem handshake
     Driver.StateHistorySafe Safe (CausalJournal.handshake session keepalive) := by
   unfold CausalJournal.handshake CookieConsumption.workerWith HandshakeWorker.workerWith
   repeat' first
+    | (driver_history_head StagedDisposal.Decoration.release; exact quiet_state Event.stagedDisposal stagedDisposal? (fun _ => rfl) _)
     | (driver_history_head ProtocolSocket.observed; exact protocol_send _ _)
     | (driver_history_head CookieSocket.observed; exact cookie_send _ _ _)
     | (driver_history_head CookieConsumption.receiveWith; exact receive session keepalive hs hk _ _)

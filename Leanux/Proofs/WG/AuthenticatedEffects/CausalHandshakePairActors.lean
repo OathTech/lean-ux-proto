@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalDisposalHistoryFrames
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalHandshakePairWorker
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalHandshakePairSend
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalHandshakePairCompletion
@@ -24,8 +25,8 @@ private theorem selected (d : Device) (j : UInt64) (pid : PeerId) (timer : PeerT
     (fun _ => product_enter (.timer j pid timer entry) (fun _ => rfl)) w h hi
 
 theorem hooks_safe : Driver.HooksHistorySafe Safe hooks where
-  stagedPurge := fun _ => Leanux.Proofs.WG.TransmitSecurity.Driver.History.state_lift _
-  peerRelease := fun _ => Leanux.Proofs.WG.TransmitSecurity.Driver.History.state_lift _
+  stagedPurge := fun _ => quiet_state Event.stagedDisposal stagedDisposal? (fun _ => rfl) _
+  peerRelease := fun _ => quiet_state Event.stagedDisposal stagedDisposal? (fun _ => rfl) _
   deliver := by
     change Driver.ProductHistorySafe Safe (DeliverySource.observed Event.delivery)
     unfold DeliverySource.observed
@@ -54,7 +55,7 @@ theorem hooks_safe : Driver.HooksHistorySafe Safe hooks where
   reserve := fun _ => old_state _
   allocate := fun _ => old_state _
   create := fun _ _ => old_state _
-  front := fun _ _ _ _ => old_state _
+  front := disposal_front
   poll := old_product _
   encrypt := fun _ => old_product _
   transmit := transmit

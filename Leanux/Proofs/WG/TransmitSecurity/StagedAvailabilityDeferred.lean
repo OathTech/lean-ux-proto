@@ -89,7 +89,7 @@ theorem timers (j : UInt64) :
     | (available_origin_product_head cryptObserved; exact crypt)
     | (available_origin_product_head timerSectionObserved
        apply timerSection
-       exact product_state (timer _ keepalive_observed_source _ _))
+       exact product_state (timer _ _))
     | available_deferred_step
 
 theorem placeholderTimers (j : UInt64) :
@@ -102,7 +102,7 @@ theorem placeholderTimers (j : UInt64) :
     | (available_origin_product_head sendWorkersObserved; exact sendWorkers)
     | (available_origin_product_head timerSectionObserved
        apply timerSection
-       exact product_state (timer _ keepalive_observed_source _ _))
+       exact product_state (timer _ _))
     | available_deferred_step
 
 theorem idleTimers :

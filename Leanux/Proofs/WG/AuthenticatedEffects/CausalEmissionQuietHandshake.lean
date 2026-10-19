@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalEmissionDisposal
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalEmissionQuiet
 
 /-! The actual callback retains earlier delivery certificates; its emitted
@@ -27,11 +28,12 @@ private theorem after_mac
       (HandshakeEffects.scopeOps Event.scope CausalSources.Cause.handshake
         (ExchangeJoint.receiveOps Event.exchange
           (HandshakeEffects.withEffects
-            (ProtocolSender.receiveOps (Event.old ∘ Journal.Event.handshake) handshake? session keepalive mac Event.protocolSocket scope? Event.cookieSocket)
+            (StagedDisposal.Decoration.receive Event.stagedDisposal stagedDisposal?
+              (ProtocolSender.receiveOps (Event.old ∘ Journal.Event.handshake) handshake? session keepalive mac Event.protocolSocket scope? Event.cookieSocket))
             (Event.old ∘ Journal.Event.handshake) effects))) msg src loaded state) := by
   unfold afterMacWith responseWith
   simp only [HandshakeEffects.scopeOps,ExchangeJoint.receiveOps,HandshakeEffects.withEffects,
-    ProtocolSender.receiveOps,HandshakeWorker.observedOps]
+    StagedDisposal.Decoration.receive,ProtocolSender.receiveOps,HandshakeWorker.observedOps]
   repeat' first
     | (driver_history_head ProtocolSocket.observed; exact protocol_send _ _)
     | (driver_history_head CookieSocket.observed; exact cookie_send _ _ _)
@@ -44,6 +46,7 @@ private theorem after_mac
     | exact hs _
     | exact hk _
     | trivial
+    | (driver_history_head StagedDisposal.Decoration.release; exact peer_release _)
     | driver_state_history_step
 
 private theorem receive
@@ -54,7 +57,8 @@ private theorem receive
       (fun mac => HandshakeEffects.scopeOps Event.scope CausalSources.Cause.handshake
         (ExchangeJoint.receiveOps Event.exchange
           (HandshakeEffects.withEffects
-            (ProtocolSender.receiveOps (Event.old ∘ Journal.Event.handshake) handshake? session keepalive mac Event.protocolSocket scope? Event.cookieSocket)
+            (StagedDisposal.Decoration.receive Event.stagedDisposal stagedDisposal?
+              (ProtocolSender.receiveOps (Event.old ∘ Journal.Event.handshake) handshake? session keepalive mac Event.protocolSocket scope? Event.cookieSocket))
             (Event.old ∘ Journal.Event.handshake) effects))) msg src) := by
   unfold CookieConsumption.receiveWith CookieConsumption.observed
   repeat' first
@@ -63,6 +67,7 @@ private theorem receive
     | (driver_history_head CookieSocket.observed; exact cookie_send _ _ _)
     | (driver_history_head afterMacWith; exact after_mac session keepalive hs hk _ _ _ _ _)
     | (driver_history_head captureWGRun; exact (Driver.History.state_lift _).captureWGObserved)
+    | (driver_history_head StagedDisposal.Decoration.release; exact peer_release _)
     | driver_state_history_step
 
 theorem handshake
@@ -75,6 +80,7 @@ theorem handshake
     | (driver_history_head ProtocolSocket.observed; exact protocol_send _ _)
     | (driver_history_head CookieSocket.observed; exact cookie_send _ _ _)
     | (driver_history_head CookieConsumption.receiveWith; exact receive session keepalive hs hk _ _)
+    | (driver_history_head StagedDisposal.Decoration.release; exact peer_release _)
     | driver_state_history_step
 
 end Leanux.Proofs.WG.AuthenticatedEffects.CausalJournal.Emissions.Deliveries

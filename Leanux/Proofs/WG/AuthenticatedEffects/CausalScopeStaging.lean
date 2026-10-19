@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalScopeEffects
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalDisposalScopeFrames
 
 /-! Staging and keepalive restore their incoming lexical stack. They may emit
 native effects under that stack; root authorization is a separate invariant. -/
@@ -44,8 +45,8 @@ theorem transmit_front (family addr : Nat) (packets : List Packet) (mtu : Nat) :
     StateSafe (Driver.transmitObserved hooks family addr packets mtu) := by
   unfold Driver.transmitObserved
   repeat' first
-    | (scope_balance_head Driver.Hooks.peerRelease; exact state_lift _)
-    | (scope_balance_head Driver.Hooks.front; exact old_state _)
+    | (scope_balance_head Driver.Hooks.peerRelease; exact peer_release _)
+    | (scope_balance_head Driver.Hooks.front; exact input_front _ _ _ _)
     | (scope_balance_head Driver.stagingObserved; exact staging _)
     | scope_state_step
 

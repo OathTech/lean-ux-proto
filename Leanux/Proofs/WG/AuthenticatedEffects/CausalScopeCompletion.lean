@@ -7,14 +7,26 @@ open Leanux Leanux.WG Leanux.Proofs.Logged TransmitSecurity Queues
 set_option maxHeartbeats 600000
 set_option maxRecDepth 4096
 
-private abbrev observed := CompletionEffects.observed
-  (Event.old ∘ Journal.completionEvent) completion? scope? Event.armed Event.queued
+private abbrev observed := HandshakeSecurity.StagedConservation.SendResult.decorate Event.sendResult
+  (CompletionEffects.observed
+    (Event.old ∘ Journal.completionEvent) completion? scope? Event.armed Event.queued)
 
 private theorem old_completion (body : PrefixM Completion.Event α) : ProductSafe
     (focusPrefix (Event.old ∘ Journal.completionEvent) completion? body) :=
   product_focus (Event.old ∘ Journal.completionEvent) completion? (fun event => by cases event <;> rfl) body
 
+private theorem result_receipt (body : PrefixM Event α) (safe : ProductSafe body)
+    (record : RunWitness α → Event) (quiet : ∀ r, scope? (record r) = none) :
+    ProductSafe (receiptObserved body record) := by
+  unfold receiptObserved
+  apply product_bind (product_capture body safe)
+  intro r
+  have emitted : ProductSafe (emitPrefix (record r)) :=
+    product_state (emitStatePrefix (record r)) (state_emit (record r) (quiet r))
+  exact product_bind emitted (fun _ => product_pure r.value)
+
 macro "scope_balanced_completion_step" : tactic => `(tactic| first
+  | (scope_balance_head receiptObserved; refine result_receipt _ ?_ _ (fun _ => rfl))
   | (scope_balance_head focusPrefix; exact old_completion _)
   | (scope_balance_head LifetimeEffects.traversalWith; exact product_state _ (lifetime_traversal _))
   | (scope_balance_head LifetimeEffects.dataSentWith; exact product_state _ (lifetime_data_sent _))
@@ -25,7 +37,7 @@ macro "scope_balanced_completion_step" : tactic => `(tactic| first
 private theorem complete (pid : PeerId) (item : List SkbId) :
     ProductSafe (CompletionEffects.completeWith observed pid item) := by
   unfold CompletionEffects.completeWith TxDisposition.andObs
-  simp only [observed,CompletionEffects.observed,CompletionEffects.focused]
+  simp only [observed,HandshakeSecurity.StagedConservation.SendResult.decorate,HandshakeSecurity.StagedConservation.SendResult.observed,CompletionEffects.observed,CompletionEffects.focused]
   repeat' scope_balanced_completion_step
 
 private theorem complete_scope (pid : PeerId) (item : List SkbId) :
@@ -37,14 +49,14 @@ private theorem body (pid : PeerId) (first : Option (List SkbId)) :
     ProductSafe (CompletionEffects.bodySourceWith observed
       (CompletionEffects.completeScoped Event.scope CausalSources.Cause.completion observed) pid first) := by
   unfold CompletionEffects.bodySourceWith TxDisposition.andObs
-  simp only [observed,CompletionEffects.observed,CompletionEffects.focused]
+  simp only [observed,HandshakeSecurity.StagedConservation.SendResult.decorate,HandshakeSecurity.StagedConservation.SendResult.observed,CompletionEffects.observed,CompletionEffects.focused]
   repeat' first
     | (scope_balance_head CompletionEffects.completeScoped; exact complete_scope _ _)
     | scope_balanced_completion_step
 
 theorem transmit (pid : PeerId) : ProductSafe (CausalJournal.transmit pid) := by
-  unfold CausalJournal.transmit CompletionEffects.observedStep CompletionEffects.stepScoped CompletionEffects.stepSourceWith
-  simp only [CompletionEffects.observed,CompletionEffects.focused]
+  unfold CausalJournal.transmit CompletionEffects.stepScoped CompletionEffects.stepSourceWith
+  simp only [HandshakeSecurity.StagedConservation.SendResult.decorate,HandshakeSecurity.StagedConservation.SendResult.observed,CompletionEffects.observed,CompletionEffects.focused]
   repeat' first
     | (scope_balance_head CompletionEffects.bodySourceWith; exact body _ _)
     | scope_balanced_completion_step

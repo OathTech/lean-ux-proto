@@ -52,6 +52,7 @@ theorem destruct_finish : StateSafe (liftWGPrefix
     | rx_retention_step
 
 macro "causal_delayed_lifecycle_step" : tactic => `(tactic| first
+  | (causal_delayed_head Hooks.stagedPurge; exact staged_purge _)
   | (causal_delayed_native_head requireNotPending; unfold requireNotPending; exact state_pure _)
   | (causal_delayed_native_head purgeStagedPackets; exact purge_staged _)
   | (causal_delayed_native_head handshakeClear; exact clear_handshake _)
@@ -61,9 +62,7 @@ macro "causal_delayed_lifecycle_step" : tactic => `(tactic| first
 
 theorem down : StateSafe (downObserved hooks) := by
   unfold downObserved
-  rw [show hooks.stagedPurge = (fun pid => liftWGPrefix (purgeStagedPackets pid)) from rfl,
-    Leanux.Proofs.WG.HandshakeSecurity.StagedDisposal.Lifecycle.down_neutral]
-  unfold downWith stopWith timersStopWith
+  unfold HandshakeSecurity.StagedDisposal.Lifecycle.downWith HandshakeSecurity.StagedDisposal.Lifecycle.stopWith timersStopWith
   repeat' first
     | (causal_delayed_head sendDrainObserved; exact sendDrain _)
     | causal_delayed_lifecycle_step

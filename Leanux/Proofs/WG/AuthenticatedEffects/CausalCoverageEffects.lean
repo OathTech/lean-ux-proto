@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalCoverageScopes
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalDisposalCoverageFrames
 
 /-! Native timer/work effects require the caller's existing lexical context.
 The requirement is explicit at staging and receive entry and is discharged only
@@ -95,8 +96,8 @@ theorem transmit_front (family addr : Nat) (packets : List Packet) (mtu : Nat)
     (live : frames ≠ []) : StateAt frames (Driver.transmitObserved hooks family addr packets mtu) := by
   unfold Driver.transmitObserved
   repeat' first
-    | (coverage_head Driver.Hooks.peerRelease; exact state_lift _)
-    | (coverage_head Driver.Hooks.front; exact old_state _ live)
+    | (coverage_head Driver.Hooks.peerRelease; exact peer_release _)
+    | (coverage_head Driver.Hooks.front; exact input_front _ _ _ _)
     | (coverage_head Driver.stagingObserved; exact staging _ live)
     | coverage_state_step
 

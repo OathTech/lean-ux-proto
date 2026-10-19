@@ -29,9 +29,9 @@ theorem irq_exit : ProductSafe (Driver.irqExitObserved hooks) :=
 theorem timer (pid : PeerId) (kind : PeerTimer) : StateSafe (Driver.timerObserved hooks pid kind) := by
   apply state_combine _ _ (Driver.timer_history (g := quietHooks) quiet_hooks.core pid kind)
   cases kind
-  · exact Emissions.retransmit pid
+  · exact Emissions.retransmit_observed pid
   · exact Emissions.expired_keepalive _ Emissions.keepalive pid
-  · exact Emissions.expired_new pid
+  · exact Emissions.expired_new_observed pid
   · exact Emissions.expired_zero pid
   · exact Emissions.persistent _ Emissions.keepalive pid
 

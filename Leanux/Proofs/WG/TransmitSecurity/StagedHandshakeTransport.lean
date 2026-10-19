@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.TransmitSecurity.StagedHandshakeAdapters
+import Leanux.Proofs.WG.TransmitSecurity.StagedRichSourceOrigins
 
 /-! The complete native handshake driver transports staged origins through its
 actual session and keepalive callbacks, preserving stopped history prefixes. -/
@@ -22,6 +23,7 @@ theorem cookie_consumed_observed (msg : Key) :
   state_receipt (state_lift _ (fun _ => Native.cookie_consume msg)) _ (fun _ => True.intro)
 
 macro "staged_handshake_observation" : tactic => `(tactic| first
+  | (staged_origin_head StagedDisposal.Decoration.release; exact disposal_release_observed _)
   | (staged_origin_head CookieConsumption.observed; exact cookie_consumed_observed _)
   | (staged_origin_head ProtocolSocket.observed; exact protocol_send_observed _ _)
   | (staged_origin_head CookieSocket.observed; exact cookie_send_observed _ _ _)
@@ -36,12 +38,13 @@ private theorem after_mac
       (HandshakeEffects.scopeOps Event.scope CausalSources.Cause.handshake
         (ExchangeJoint.receiveOps Event.exchange
           (HandshakeEffects.withEffects
-            (ProtocolSender.receiveOps (Event.old ∘ TransmitSecurity.Journal.Event.handshake)
-              handshake? session keepalive mac Event.protocolSocket scope? Event.cookieSocket)
+            (StagedDisposal.Decoration.receive Event.stagedDisposal stagedDisposal?
+              (ProtocolSender.receiveOps (Event.old ∘ TransmitSecurity.Journal.Event.handshake)
+              handshake? session keepalive mac Event.protocolSocket scope? Event.cookieSocket))
             (Event.old ∘ TransmitSecurity.Journal.Event.handshake) effects))) msg src loaded state) := by
   unfold afterMacWith responseWith
   simp only [HandshakeEffects.scopeOps,ExchangeJoint.receiveOps,HandshakeEffects.withEffects,
-    ProtocolSender.receiveOps,HandshakeWorker.observedOps]
+    StagedDisposal.Decoration.receive,ProtocolSender.receiveOps,HandshakeWorker.observedOps]
   repeat' first
     | (staged_origin_head CausalScope.scope; apply state_scope)
     | (staged_origin_head receiptWGObserved; apply state_receipt; try (intro r; trivial))
@@ -64,8 +67,9 @@ private theorem receive
       (fun mac => HandshakeEffects.scopeOps Event.scope CausalSources.Cause.handshake
         (ExchangeJoint.receiveOps Event.exchange
           (HandshakeEffects.withEffects
-            (ProtocolSender.receiveOps (Event.old ∘ TransmitSecurity.Journal.Event.handshake)
-              handshake? session keepalive mac Event.protocolSocket scope? Event.cookieSocket)
+            (StagedDisposal.Decoration.receive Event.stagedDisposal stagedDisposal?
+              (ProtocolSender.receiveOps (Event.old ∘ TransmitSecurity.Journal.Event.handshake)
+              handshake? session keepalive mac Event.protocolSocket scope? Event.cookieSocket))
             (Event.old ∘ TransmitSecurity.Journal.Event.handshake) effects))) msg src) := by
   unfold CookieConsumption.receiveWith
   repeat' first

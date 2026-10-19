@@ -35,23 +35,56 @@ theorem handshake_projects (sg : PeerId → WGPrefix Event Bool)
   have base := ProtocolSender.receive_projects old? (Event.old ∘ Journal.Event.handshake) handshake?
     Journal.Event.handshake Journal.handshake? (fun _ => rfl) (fun _ => rfl)
     sg st kg kt hs hk mac Event.protocolSocket scope? Event.cookieSocket (fun _ => rfl) (fun _ => rfl)
+  have repayment := HandshakeSecurity.StagedDisposal.Decoration.receive_projects Event.stagedDisposal
+    stagedDisposal? old? (fun _ => rfl) base (fun _ => rfl)
   have projected := HandshakeEffects.withEffects_projects old? (Event.old ∘ Journal.Event.handshake)
-    Journal.Event.handshake (fun _ => rfl) _ _ effects TimerEffects.lifted base effects_projects
+    Journal.Event.handshake (fun _ => rfl) _ _ effects TimerEffects.lifted repayment effects_projects
   rwa [HandshakeEffects.withEffects_neutral] at projected
 
 theorem flushed_projects (pid : PeerId) :
     StateProjectsPrefix old? id (flushedSend pid) (Journal.hooks.flushedSend pid) :=
   SendEffects.flushed_native_projects old? Event.scope (fun _ => rfl)
     (HandshakeSecurity.ExchangeJoint.send_ignored old? Event.exchange (fun _ => rfl) _ _
-      (ProtocolSender.send_projects old? Event.protocolSocket scope? (fun _ => rfl))) effects_projects pid
+      (HandshakeSecurity.StagedDisposal.Decoration.send_projects Event.stagedDisposal stagedDisposal?
+        old? (fun _ => rfl)
+        (ProtocolSender.send_projects old? Event.protocolSocket scope? (fun _ => rfl))
+        (fun _ => rfl))) effects_projects pid
 
 theorem transmit_projects (pid : PeerId) :
-    ProjectsPrefix old? id (transmit pid) (Journal.transmit pid) :=
-  CompletionEffects.observedStep_matching old?
+    ProjectsPrefix old? id (transmit pid) (Journal.transmit pid) := by
+  have original := CompletionEffects.observed_matching old?
     (Event.old ∘ Journal.completionEvent) completion? Journal.completionEvent Journal.completion?
     (fun _ => rfl) (fun _ => rfl) (fun event => by cases event <;> rfl)
-    Event.scope scope? CausalSources.Cause.completion Event.armed Event.queued
-    (fun _ => rfl) (fun _ => rfl) (fun _ => rfl) pid
+    scope? Event.armed Event.queued (fun _ => rfl) (fun _ => rfl)
+  change ProjectsPrefix old? id (transmit pid)
+    (focusPrefix Journal.completionEvent Journal.completion? (Completion.step pid))
+  rw [← CompletionEffects.step_focus Journal.completionEvent Journal.completion? (fun event => by cases event <;> rfl)]
+  exact CompletionEffects.stepScoped_projects old? Event.scope CausalSources.Cause.completion
+    (fun _ => rfl)
+    (HandshakeSecurity.StagedConservation.SendResult.decorate_projects Event.sendResult old?
+      (fun _ => rfl) original) pid
+
+theorem front_projects (family addr : Nat) (packets : List Packet) (mtu : Nat) :
+    StateProjectsPrefix old? id (front family addr packets mtu) (Journal.front family addr packets mtu) := by
+  have projected := HandshakeSecurity.StagedConservation.Front.observed_projects
+    (E := Event) (F := Journal.Event) Event.transmitInput Event.stagedDisposal
+    stagedDisposal?
+    (fun input run => .old (.routed input.family input.address input.packets input.mtu run))
+    (fun input run => .routed input.family input.address input.packets input.mtu run)
+    old? (fun _ => rfl) (fun _ => rfl) (fun _ _ => rfl) ⟨family,addr,packets,mtu⟩
+  exact projected
+
+theorem stagedPurge_projects (pid : PeerId) :
+    StateProjectsPrefix old? id (stagedPurge pid) (Journal.hooks.stagedPurge pid) :=
+  HandshakeSecurity.Exchange.quiet_native_projection old? _ _
+    (focusStatePrefix_erases _ _ (HandshakeSecurity.StagedDisposal.purge_erases pid))
+    (fun w => focusPrefix_other Event.stagedDisposal stagedDisposal? old? (fun _ => rfl)
+      ((HandshakeSecurity.StagedDisposal.purgeObserved pid).run w))
+
+theorem peerRelease_projects (peer : Option PeerId) :
+    StateProjectsPrefix old? id (peerRelease peer) (Journal.hooks.peerRelease peer) :=
+  HandshakeSecurity.StagedDisposal.Decoration.release_projects Event.stagedDisposal stagedDisposal?
+    old? (fun _ => rfl) peer
 
 theorem timer_projects (d : Device) (bound : UInt64) (pid : PeerId) (timer : PeerTimer) (entry : WheelEntry) :
     ProjectsPrefix old? (fun _ => 0) (hooks.timerSelected d bound pid timer entry)
@@ -82,12 +115,9 @@ private theorem create_appends (pid : PeerId) (item : List SkbId) : StateAppends
   exact Appends.focus Journal.Event.disposition Journal.disposition? (Queues.TxDisposition.create pid item)
     (NativeAdapter.world w a) h
 
-private theorem front_appends (family addr : Nat) (packets : List Packet) (mtu : Nat) :
-    StateAppends (Journal.front family addr packets mtu) := (StateAppends.lift _).receiptWGObserved _
-
 theorem hooks_projects : Driver.HooksProjects old? hooks Journal.hooks where
-  stagedPurge := fun _ => Leanux.Proofs.WG.TransmitSecurity.Driver.Projection.state_lift old? _
-  peerRelease := fun _ => Leanux.Proofs.WG.TransmitSecurity.Driver.Projection.state_lift old? _
+  stagedPurge := stagedPurge_projects
+  peerRelease := peerRelease_projects
   deliver := DeliverySource.observed_projects old? Event.delivery (fun _ => rfl)
   keepalivePrepare := fun _ => Journal.state_receipt_projects old? _ _ _
     (fun _ => rfl) (Driver.Projection.state_lift old? _)
@@ -114,7 +144,7 @@ theorem hooks_projects : Driver.HooksProjects old? hooks Journal.hooks where
   reserve := fun slot => state_projects _ (reserve_appends slot)
   allocate := fun packets => state_projects _ (allocate_appends packets)
   create := fun pid item => state_projects _ (create_appends pid item)
-  front := fun family addr packets mtu => state_projects _ (front_appends family addr packets mtu)
+  front := front_projects
   poll := product_projects _ ((Appends.focus _ _ _).receiptObserved)
   encrypt := fun _ => product_projects _ ((Appends.focus _ _ _).receiptObserved)
   transmit := transmit_projects

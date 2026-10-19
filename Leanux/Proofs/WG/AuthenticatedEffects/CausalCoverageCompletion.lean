@@ -7,8 +7,9 @@ open Leanux Leanux.WG Leanux.Proofs.Logged TransmitSecurity Queues Lifetimes
 set_option maxHeartbeats 600000
 set_option maxRecDepth 4096
 
-private abbrev observed := CompletionEffects.observed
-  (Event.old ∘ Journal.completionEvent) completion? scope? Event.armed Event.queued
+private abbrev observed := HandshakeSecurity.StagedConservation.SendResult.decorate Event.sendResult
+  (CompletionEffects.observed
+    (Event.old ∘ Journal.completionEvent) completion? scope? Event.armed Event.queued)
 
 private theorem old_completion (body : PrefixM Completion.Event α) (live : frames ≠ []) : ProductAt frames
     (focusPrefix (Event.old ∘ Journal.completionEvent) completion? body) :=
@@ -16,11 +17,23 @@ private theorem old_completion (body : PrefixM Completion.Event α) (live : fram
     (fun event => by cases event <;> rfl)
     (fun _ _ => live) body
 
+private theorem result_receipt (body : PrefixM Event α) (safe : ProductAt frames body)
+    (record : RunWitness α → Event) (quiet : ∀ r, scope? (record r) = none)
+    (unprotected : ∀ r, Protected (record r) → frames ≠ []) :
+    ProductAt frames (receiptObserved body record) := by
+  unfold receiptObserved
+  exact product_bind (product_capture _ safe) (fun r =>
+    product_bind (by
+      intro w h ready
+      have good := ready.emit (quiet r) (unprotected r)
+      exact ⟨[record r],rfl,good.1,good⟩) (fun _ => product_pure r.value))
+
 private theorem complete (pid : PeerId) (item : List SkbId) (live : frames ≠ []) :
     ProductAt frames (CompletionEffects.completeWith observed pid item) := by
   unfold CompletionEffects.completeWith TxDisposition.andObs
-  simp only [observed,CompletionEffects.observed,CompletionEffects.focused,CompletionEffects.native]
+  simp only [observed,HandshakeSecurity.StagedConservation.SendResult.decorate,HandshakeSecurity.StagedConservation.SendResult.observed,CompletionEffects.observed,CompletionEffects.focused,CompletionEffects.native]
   repeat' first
+    | (coverage_head receiptObserved; refine result_receipt _ ?_ _ (fun _ => rfl) (fun _ h => h.elim))
     | (coverage_head focusPrefix; exact old_completion _ live)
     | (coverage_head LifetimeEffects.traversalWith; exact product_state _ (lifetime_traversal _ live))
     | (coverage_head LifetimeEffects.dataSentWith; exact product_state _ (lifetime_data_sent _ live))
@@ -93,8 +106,9 @@ private theorem body (pid : PeerId) (first : Option (List SkbId)) : ProductAt fr
     (CompletionEffects.bodySourceWith observed
       (CompletionEffects.completeScoped Event.scope CausalSources.Cause.completion observed) pid first) := by
   unfold CompletionEffects.bodySourceWith TxDisposition.andObs
-  simp only [observed,CompletionEffects.observed,CompletionEffects.focused,CompletionEffects.native]
+  simp only [observed,HandshakeSecurity.StagedConservation.SendResult.decorate,HandshakeSecurity.StagedConservation.SendResult.observed,CompletionEffects.observed,CompletionEffects.focused,CompletionEffects.native]
   repeat' first
+    | (coverage_head receiptObserved; refine result_receipt _ ?_ _ (fun _ => rfl) (fun _ h => h.elim))
     | (coverage_head CompletionEffects.completeScoped; exact complete_scope _ _)
     | (coverage_completion_body liftPrefix; exact old_step _)
     | (coverage_completion_body Completion.access; exact old_access _)
@@ -103,9 +117,10 @@ private theorem body (pid : PeerId) (first : Option (List SkbId)) : ProductAt fr
     | coverage_product_step
 
 theorem transmit (pid : PeerId) : ProductAt frames (CausalJournal.transmit pid) := by
-  unfold CausalJournal.transmit CompletionEffects.observedStep CompletionEffects.stepScoped CompletionEffects.stepSourceWith
-  simp only [CompletionEffects.observed,CompletionEffects.focused,CompletionEffects.native]
+  unfold CausalJournal.transmit CompletionEffects.stepScoped CompletionEffects.stepSourceWith
+  simp only [HandshakeSecurity.StagedConservation.SendResult.decorate,HandshakeSecurity.StagedConservation.SendResult.observed,CompletionEffects.observed,CompletionEffects.focused,CompletionEffects.native]
   repeat' first
+    | (coverage_head receiptObserved; refine result_receipt _ ?_ _ (fun _ => rfl) (fun _ h => h.elim))
     | (coverage_head CompletionEffects.bodySourceWith; exact body _ _)
     | (coverage_completion_body liftPrefix; exact old_step _)
     | (coverage_completion_body Completion.access; exact old_access _)

@@ -111,8 +111,9 @@ private theorem fresh_history (rho : Event → Option F)
     | (exchange_frame_head LifetimeEffects.queuedWith; exact queue_history rho oldQuiet queueQuiet _ _)
     | exchange_lifetime_frame rho oldQuiet armQuiet queueQuiet
 
-private def completionOps := CompletionEffects.observed
-  (Event.old ∘ Journal.completionEvent) completion? scope? Event.armed Event.queued
+private def completionOps := StagedConservation.SendResult.decorate Event.sendResult
+  (CompletionEffects.observed
+    (Event.old ∘ Journal.completionEvent) completion? scope? Event.armed Event.queued)
 
 private theorem capture_history (rho : Event → Option F) (g : PrefixM Event α) (h : HistoryFrame rho g) :
     HistoryFrame rho (captureObserved g) := by
@@ -127,7 +128,14 @@ private theorem old_history (rho : Event → Option F)
       (focusPrefix (Event.old ∘ Journal.completionEvent) completion? g) :=
   focusPrefix_other _ _ rho oldQuiet g
 
-macro "exchange_completion_frame " rho:ident oldQuiet:ident armQuiet:ident queueQuiet:ident : tactic => `(tactic| first
+private theorem send_history (rho : Event → Option F)
+    (oldQuiet : ∀ e, rho (Event.old (Journal.completionEvent e)) = none)
+    (sendQuiet : ∀ e, rho (Event.sendResult e) = none)
+    (pid : PeerId) (skb : SkbId) (packet : RunWitness DataPacket) :
+    HistoryFrame rho (completionOps.send pid skb packet) :=
+  (old_history rho oldQuiet _).receiptObserved (fun _ => sendQuiet _)
+
+macro "exchange_completion_frame " rho:ident oldQuiet:ident armQuiet:ident queueQuiet:ident sendQuiet:ident : tactic => `(tactic| first
   | (exchange_frame_head CompletionEffects.Ops.traversal; exact lifted_history $rho _ (traversal_history $rho $oldQuiet $armQuiet _))
   | (exchange_frame_head CompletionEffects.Ops.dataSent; exact lifted_history $rho _ (data_history $rho $oldQuiet $armQuiet _))
   | (exchange_frame_head CompletionEffects.Ops.fresh; exact lifted_history $rho _ (fresh_history $rho $oldQuiet $queueQuiet _))
@@ -136,7 +144,7 @@ macro "exchange_completion_frame " rho:ident oldQuiet:ident armQuiet:ident queue
   | (exchange_frame_head CompletionEffects.Ops.modifyPeer; exact old_history $rho $oldQuiet _)
   | (exchange_frame_head CompletionEffects.Ops.packet; exact old_history $rho $oldQuiet _)
   | (exchange_frame_head CompletionEffects.Ops.completion; exact old_history $rho $oldQuiet _)
-  | (exchange_frame_head CompletionEffects.Ops.send; exact old_history $rho $oldQuiet _)
+  | (exchange_frame_head CompletionEffects.Ops.send; exact send_history $rho $oldQuiet $sendQuiet _ _ _)
   | (exchange_frame_head CompletionEffects.Ops.drop; exact old_history $rho $oldQuiet _)
   | (exchange_frame_head CompletionEffects.Ops.dispose; exact old_history $rho $oldQuiet _)
   | (exchange_frame_head CompletionEffects.Ops.sent; exact old_history $rho $oldQuiet _)
@@ -151,10 +159,11 @@ macro "exchange_completion_frame " rho:ident oldQuiet:ident armQuiet:ident queue
 private theorem complete_history (rho : Event → Option F)
     (oldQuiet : ∀ e, rho (Event.old (Journal.completionEvent e)) = none)
     (armQuiet : ∀ e, rho (Event.armed e) = none)
-    (queueQuiet : ∀ e, rho (Event.queued e) = none) (pid : PeerId) (item : List SkbId) :
+    (queueQuiet : ∀ e, rho (Event.queued e) = none)
+    (sendQuiet : ∀ e, rho (Event.sendResult e) = none) (pid : PeerId) (item : List SkbId) :
     HistoryFrame rho (CompletionEffects.completeWith completionOps pid item) := by
   unfold CompletionEffects.completeWith TxDisposition.andObs
-  repeat' exchange_completion_frame rho oldQuiet armQuiet queueQuiet
+  repeat' exchange_completion_frame rho oldQuiet armQuiet queueQuiet sendQuiet
 
 private theorem scope_history (rho : Event → Option F)
     (scopeQuiet : ∀ e, rho (Event.scope e) = none) (cause : Cause) (g : PrefixM Event α)
@@ -173,27 +182,29 @@ private theorem body_history (rho : Event → Option F)
     (oldQuiet : ∀ e, rho (Event.old (Journal.completionEvent e)) = none)
     (armQuiet : ∀ e, rho (Event.armed e) = none)
     (queueQuiet : ∀ e, rho (Event.queued e) = none)
-    (scopeQuiet : ∀ e, rho (Event.scope e) = none) (pid : PeerId) (first : Option (List SkbId)) :
+    (scopeQuiet : ∀ e, rho (Event.scope e) = none)
+    (sendQuiet : ∀ e, rho (Event.sendResult e) = none) (pid : PeerId) (first : Option (List SkbId)) :
     HistoryFrame rho (CompletionEffects.bodySourceWith completionOps
       (CompletionEffects.completeScoped Event.scope CausalSources.Cause.completion completionOps) pid first) := by
   unfold CompletionEffects.bodySourceWith TxDisposition.andObs
   repeat' first
-    | (exchange_frame_head CompletionEffects.completeScoped; exact scope_history rho scopeQuiet _ _ (complete_history rho oldQuiet armQuiet queueQuiet _ _))
-    | exchange_completion_frame rho oldQuiet armQuiet queueQuiet
+    | (exchange_frame_head CompletionEffects.completeScoped; exact scope_history rho scopeQuiet _ _ (complete_history rho oldQuiet armQuiet queueQuiet sendQuiet _ _))
+    | exchange_completion_frame rho oldQuiet armQuiet queueQuiet sendQuiet
 
 theorem transmit_history_of_quiet (rho : Event → Option F)
     (oldQuiet : ∀ e, rho (Event.old (Journal.completionEvent e)) = none)
     (armQuiet : ∀ e, rho (Event.armed e) = none)
     (queueQuiet : ∀ e, rho (Event.queued e) = none)
-    (scopeQuiet : ∀ e, rho (Event.scope e) = none) (pid : PeerId) : HistoryFrame rho (transmit pid) := by
+    (scopeQuiet : ∀ e, rho (Event.scope e) = none)
+    (sendQuiet : ∀ e, rho (Event.sendResult e) = none) (pid : PeerId) : HistoryFrame rho (transmit pid) := by
   change HistoryFrame rho (CompletionEffects.stepSourceWith completionOps
     (CompletionEffects.completeScoped Event.scope CausalSources.Cause.completion completionOps) pid)
   unfold CompletionEffects.stepSourceWith
   repeat' first
-    | (exchange_frame_head CompletionEffects.bodySourceWith; exact body_history rho oldQuiet armQuiet queueQuiet scopeQuiet _ _)
-    | exchange_completion_frame rho oldQuiet armQuiet queueQuiet
+    | (exchange_frame_head CompletionEffects.bodySourceWith; exact body_history rho oldQuiet armQuiet queueQuiet scopeQuiet sendQuiet _ _)
+    | exchange_completion_frame rho oldQuiet armQuiet queueQuiet sendQuiet
 
 theorem transmit_history (pid : PeerId) : HistoryFrame exchange? (transmit pid) :=
-  transmit_history_of_quiet exchange? (fun _ => rfl) (fun _ => rfl) (fun _ => rfl) (fun _ => rfl) pid
+  transmit_history_of_quiet exchange? (fun _ => rfl) (fun _ => rfl) (fun _ => rfl) (fun _ => rfl) (fun _ => rfl) pid
 
 end Leanux.Proofs.WG.HandshakeSecurity.ExchangeCausal

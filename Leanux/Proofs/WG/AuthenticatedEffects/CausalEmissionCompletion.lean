@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalEmissionDisposal
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalEmissionCompletionSend
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalEmissionProductSource
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalEmissionLifetime
@@ -12,8 +13,8 @@ open TransmitSecurity Queues
 set_option maxHeartbeats 800000
 set_option maxRecDepth 4096
 
-private abbrev observed := CompletionEffects.observed
-  (Event.old ∘ Journal.completionEvent) completion? scope? Event.armed Event.queued
+private abbrev observed := HandshakeSecurity.StagedConservation.SendResult.decorate Event.sendResult
+  (CompletionEffects.observed (Event.old ∘ Journal.completionEvent) completion? scope? Event.armed Event.queued)
 
 private theorem peer (pid : PeerId) : ProductSafe
     (focusPrefix (Event.old ∘ Journal.completionEvent) completion? (Completion.access (getPeerMixed pid))) :=
@@ -84,6 +85,7 @@ elab "emission_completion_head " wanted:ident : tactic => withMainContext do
   unless actual.toString == expected || actual.toString.endsWith ("." ++ expected) do throwError "different callback"
 
 macro "emission_completion_step" : tactic => `(tactic| first
+  | (emission_head HandshakeSecurity.StagedConservation.SendResult.observed; unfold HandshakeSecurity.StagedConservation.SendResult.observed; refine product_receipt _ ?_ _ (fun _ => rfl))
   | (emission_completion_head getPeerMixed; exact peer _)
   | (emission_completion_head getTxSkbPrefix; exact packet _)
   | (emission_completion_head modifyPeerKeysPrefix; exact modify_peer _ _)
@@ -105,7 +107,7 @@ macro "emission_completion_step" : tactic => `(tactic| first
 private theorem complete (pid : PeerId) (item : List SkbId) :
     ProductSafe (CompletionEffects.completeWith observed pid item) := by
   unfold CompletionEffects.completeWith TxDisposition.andObs
-  simp only [observed,CompletionEffects.observed,CompletionEffects.focused,CompletionEffects.native]
+  simp only [observed,HandshakeSecurity.StagedConservation.SendResult.decorate,CompletionEffects.observed,CompletionEffects.focused,CompletionEffects.native]
   repeat' emission_completion_step
 
 private theorem complete_scope (pid : PeerId) (item : List SkbId) : ProductSafe
@@ -116,14 +118,14 @@ private theorem body (pid : PeerId) (first : Option (List SkbId)) : ProductSafe
     (CompletionEffects.bodySourceWith observed
       (CompletionEffects.completeScoped Event.scope CausalSources.Cause.completion observed) pid first) := by
   unfold CompletionEffects.bodySourceWith TxDisposition.andObs
-  simp only [observed,CompletionEffects.observed,CompletionEffects.focused,CompletionEffects.native]
+  simp only [observed,HandshakeSecurity.StagedConservation.SendResult.decorate,CompletionEffects.observed,CompletionEffects.focused,CompletionEffects.native]
   repeat' first
     | (emission_head CompletionEffects.completeScoped; exact complete_scope _ _)
     | emission_completion_step
 
 theorem transmit (pid : PeerId) : ProductSafe (CausalJournal.transmit pid) := by
-  unfold CausalJournal.transmit CompletionEffects.observedStep CompletionEffects.stepScoped CompletionEffects.stepSourceWith
-  simp only [CompletionEffects.observed,CompletionEffects.focused,CompletionEffects.native]
+  unfold CausalJournal.transmit CompletionEffects.stepScoped CompletionEffects.stepSourceWith
+  simp only [HandshakeSecurity.StagedConservation.SendResult.decorate,CompletionEffects.observed,CompletionEffects.focused,CompletionEffects.native]
   repeat' first
     | (emission_head CompletionEffects.bodySourceWith; exact body _ _)
     | emission_completion_step

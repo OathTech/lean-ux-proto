@@ -17,8 +17,8 @@ private def quietHooks : Driver.Hooks Event :=
                timerSelected := fun _ _ _ _ _ => pure 0 }
 
 private theorem quiet_hooks : Driver.HooksHistorySafe Safe quietHooks where
-  stagedPurge := fun _ => Leanux.Proofs.WG.TransmitSecurity.Driver.History.state_lift _
-  peerRelease := fun _ => Leanux.Proofs.WG.TransmitSecurity.Driver.History.state_lift _
+  stagedPurge := fun _ => disposal_history _
+  peerRelease := fun _ => disposal_history _
   deliver := by
     change Driver.ProductHistorySafe Safe (DeliverySource.observed Event.delivery)
     unfold DeliverySource.observed

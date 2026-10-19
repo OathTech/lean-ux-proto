@@ -1,4 +1,4 @@
-import Leanux.Proofs.WG.TransmitSecurity.StagedAllocationOrigins
+import Leanux.Proofs.WG.TransmitSecurity.StagedRichSourceOrigins
 import Leanux.Proofs.WG.TransmitSecurity.StagingProcessed
 
 /-! The complete shared staging source preserves occurrence origins. Early
@@ -103,13 +103,13 @@ theorem keepalive_observed_source (pid : PeerId) : StateSafe (Driver.keepaliveOb
 theorem transmit_observed (family addr : Nat) (packets : List Packet) (mtu : Nat) :
     StateSafe (Driver.transmitObserved hooks family addr packets mtu) := by
   unfold Driver.transmitObserved
-  apply StatePrefixEnsures.bind (routing_observed family addr packets mtu)
+  apply StatePrefixEnsures.bind (rich_routing_observed family addr packets mtu)
   intro selected
   cases selected with
   | error err => exact state_pure err
   | ok pid =>
     apply StatePrefixEnsures.bind (staging_observed pid)
     intro _
-    exact StatePrefixEnsures.bind (state_lift _ (fun _ => Native.peer_put (some pid))) (fun _ => state_pure 0)
+    exact StatePrefixEnsures.bind (disposal_release_observed (some pid)) (fun _ => state_pure 0)
 
 end Leanux.Proofs.WG.TransmitSecurity.Staged.Origins

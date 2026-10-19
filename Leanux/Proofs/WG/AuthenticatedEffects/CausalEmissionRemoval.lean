@@ -32,30 +32,27 @@ theorem send_drain (upTo : Option PeerId) : StateSafe (sendDrainObserved hooks u
     intro w a value v b hi run
     cases run
 
-theorem remove_after (pid : PeerId) : StateSafe (afterDeadWith liftWGPrefix (sendDrainObserved hooks) pid) := by
-  unfold afterDeadWith timersStopWith
+theorem remove_after (pid : PeerId) : StateSafe (StagedDisposal.Lifecycle.afterDeadWith liftWGPrefix (sendDrainObserved hooks) hooks.peerRelease pid) := by
+  unfold StagedDisposal.Lifecycle.afterDeadWith timersStopWith
   repeat' first
     | (emission_head sendDrainObserved; exact send_drain _)
+    | (emission_head Hooks.peerRelease; exact peer_release _)
     | emission_removal_step
 
 theorem remove (peer : Option PeerId) : StateSafe (removeObserved hooks peer) := by
   unfold removeObserved
-  rw [show hooks.peerRelease = (fun peer => liftWGPrefix (peerPut peer)) from rfl,
-    Leanux.Proofs.WG.HandshakeSecurity.StagedDisposal.Lifecycle.remove_neutral]
-  unfold removeWith peerRemoveWith
+  unfold StagedDisposal.Lifecycle.removeWith peerRemoveWith
   repeat' first
-    | (emission_head afterDeadWith; exact remove_after _)
+    | (emission_head StagedDisposal.Lifecycle.afterDeadWith; exact remove_after _)
     | emission_removal_step
   all_goals simp_all only [Option.some.injEq]
   all_goals first | exact remove_after _ | contradiction
 
 theorem remove_all : StateSafe (removeAllObserved hooks) := by
   unfold removeAllObserved
-  rw [show hooks.peerRelease = (fun peer => liftWGPrefix (peerPut peer)) from rfl,
-    Leanux.Proofs.WG.HandshakeSecurity.StagedDisposal.Lifecycle.removeAll_neutral]
-  unfold removeAllWith peerRemoveAllWith
+  unfold StagedDisposal.Lifecycle.removeAllWith peerRemoveAllWith
   repeat' first
-    | (emission_head afterDeadWith; exact remove_after _)
+    | (emission_head StagedDisposal.Lifecycle.afterDeadWith; exact remove_after _)
     | emission_removal_step
   all_goals exact state_native _ EmissionAllowedIps.free
 

@@ -7,6 +7,9 @@ import Leanux.Proofs.WG.HandshakeSecurity.ExchangeJointWorker
 import Leanux.Proofs.WG.AuthenticatedEffects.ProtocolSenderOps
 import Leanux.Proofs.WG.AuthenticatedEffects.CookieConsumptionSource
 import Leanux.Proofs.WG.AuthenticatedEffects.DeliverySource
+import Leanux.Proofs.WG.HandshakeSecurity.StagedConservationFrontObserved
+import Leanux.Proofs.WG.HandshakeSecurity.StagedConservationSendResult
+import Leanux.Proofs.WG.HandshakeSecurity.StagedDisposalDecorations
 
 /-! One final extension of the existing combined journal on the same native
 Driver spine. The old event type is embedded intact. Causal scope metadata is
@@ -18,6 +21,9 @@ abbrev Cause := CausalSources.Cause
 abbrev Context := CausalEffects.Context Cause
 
 inductive Event where
+  | transmitInput (input : HandshakeSecurity.StagedConservation.Front.Input)
+  | stagedDisposal (event : HandshakeSecurity.StagedDisposal.Event)
+  | sendResult (receipt : HandshakeSecurity.StagedConservation.SendResult.Receipt)
   | delivery (sent : List SentDatagram)
   | cookieConsumed (receipt : CookieConsumption.Receipt)
   | keepalivePrepared (pid : PeerId) (run : WGRunWitness Bool)
@@ -55,6 +61,10 @@ def handshake? (event : Event) : Option HandshakeCausal.Event :=
 def completion? (event : Event) : Option Completion.Event :=
   (old? event).bind Journal.completion?
 
+def stagedDisposal? : Event → Option HandshakeSecurity.StagedDisposal.Event
+  | .stagedDisposal value => some value
+  | _ => none
+
 def effects : TimerEffects.Ops (WGPrefix Event) := CausalEffects.ops scope? Event.armed Event.queued
 
 def state (body : WGPrefix Journal.Event α) : WGPrefix Event α :=
@@ -72,24 +82,41 @@ def handshake (session : PeerId → WGPrefix Event Bool)
     HandshakeEffects.scopeOps Event.scope CausalSources.Cause.handshake
       (HandshakeSecurity.ExchangeJoint.receiveOps Event.exchange
         (HandshakeEffects.withEffects
-          (ProtocolSender.receiveOps (Event.old ∘ Journal.Event.handshake) handshake? session keepalive mac
-            Event.protocolSocket scope? Event.cookieSocket)
+          (HandshakeSecurity.StagedDisposal.Decoration.receive Event.stagedDisposal stagedDisposal?
+            (ProtocolSender.receiveOps (Event.old ∘ Journal.Event.handshake) handshake? session keepalive mac
+              Event.protocolSocket scope? Event.cookieSocket))
           (Event.old ∘ Journal.Event.handshake) effects))
 
 def flushedSend (pid : PeerId) : WGPrefix Event Unit :=
   SendEffects.flushed Event.scope
     (HandshakeSecurity.ExchangeJoint.sendOps Event.exchange
-      (ProtocolSender.sendOps Event.protocolSocket scope?)) effects pid
+      (HandshakeSecurity.StagedDisposal.Decoration.send Event.stagedDisposal stagedDisposal?
+        (ProtocolSender.sendOps Event.protocolSocket scope?))) effects pid
 
 def transmit (pid : PeerId) : PrefixM Event Bool :=
-  CompletionEffects.observedStep (Event.old ∘ Journal.completionEvent) completion?
-    Event.scope scope? CausalSources.Cause.completion Event.armed Event.queued pid
+  CompletionEffects.stepScoped Event.scope CausalSources.Cause.completion
+    (HandshakeSecurity.StagedConservation.SendResult.decorate Event.sendResult
+      (CompletionEffects.observed (Event.old ∘ Journal.completionEvent) completion?
+        scope? Event.armed Event.queued)) pid
+
+def front (family addr : Nat) (packets : List Packet) (mtu : Nat) : WGPrefix Event (Except Int PeerId) :=
+  HandshakeSecurity.StagedConservation.Front.observed Event.transmitInput Event.stagedDisposal stagedDisposal?
+    (fun input run => .old (.routed input.family input.address input.packets input.mtu run))
+    ⟨family,addr,packets,mtu⟩
+
+def stagedPurge (pid : PeerId) : WGPrefix Event Unit :=
+  focusStatePrefix Event.stagedDisposal stagedDisposal? (HandshakeSecurity.StagedDisposal.purgeObserved pid)
+
+def peerRelease (peer : Option PeerId) : WGPrefix Event Unit :=
+  HandshakeSecurity.StagedDisposal.Decoration.release Event.stagedDisposal stagedDisposal? peer
 
 def keepalivePrepare (pid : PeerId) : WGPrefix Event Bool :=
   receiptWGObserved (liftWGPrefix (RetirementSecurity.OccurrenceHandshake.keepalivePrepare pid))
     (.keepalivePrepared pid)
 
 def hooks : Driver.Hooks Event where
+  stagedPurge := stagedPurge
+  peerRelease := peerRelease
   deliver := DeliverySource.observed Event.delivery
   keepalivePrepare := keepalivePrepare
   fixtureEnter := (CausalSources.fixtureHooks Event.scope).enter
@@ -111,7 +138,7 @@ def hooks : Driver.Hooks Event where
   reserve := fun slot => state (Journal.reserve slot)
   allocate := fun packets => state (Journal.allocate packets)
   create := fun pid item => state (Journal.create pid item)
-  front := fun family addr packets mtu => state (Journal.front family addr packets mtu)
+  front := front
   poll := product Journal.poll
   encrypt := fun item => product (Journal.encrypt item)
   transmit := transmit

@@ -14,7 +14,8 @@ theorem Native.flushed_send (pid : PeerId) : Preserves (Inv h) (runFlushedSendWo
 theorem flushed_noallocation (pid : PeerId) : StateHistoryFrame allocation? (flushedSend pid) := by
   have projected := SendEffects.flushed_native_projects allocation? Event.scope (fun _ => rfl)
     (ExchangeJoint.send_ignored allocation? Event.exchange (fun _ => rfl) _ _
-      (ProtocolSender.send_projects allocation? Event.protocolSocket scope? (fun _ => rfl)))
+      (StagedDisposal.Decoration.send_projects Event.stagedDisposal stagedDisposal? allocation? (fun _ => rfl)
+        (ProtocolSender.send_projects allocation? Event.protocolSocket scope? (fun _ => rfl)) (fun _ => rfl)))
     (CausalEffects.ops_projects scope? Event.armed Event.queued allocation? (fun _ => rfl) (fun _ => rfl)) pid
   intro w a history
   exact (congrArg Prod.snd (projected w a history)).symm

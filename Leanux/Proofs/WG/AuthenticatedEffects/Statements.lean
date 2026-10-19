@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.RawAppendAuthorization
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalCookieAmplification
 import Leanux.Proofs.WG.AuthenticatedEffects.ReplayEntryFinal
 import Leanux.Proofs.WG.AuthenticatedEffects.DeliveryContracts
 import Leanux.Proofs.WG.AuthenticatedEffects.CookieConsumptionSource
@@ -1668,5 +1670,34 @@ theorem initialized_refused_replay_preserves_complete_protocol_state
       before ++ .old (.replay receipt) :: after) (refused : receipt.run.value = false) :
     ReplayRefusal.view receipt.run.after.wg = ReplayRefusal.view receipt.run.before.wg :=
   ReplayEntry.final_refusal trace placeholders before after receipt position refused
+
+/-- Security: each cookie reply in the initialized final journal is qualified
+by the actual under-load MAC decision and has strictly fewer WireGuard bytes
+than its own header-validated input. The native source and destination binding
+remain in receipt.Valid, including an append before a later Stop. -/
+theorem initialized_cookie_reply_is_smaller_than_input
+    (trace : Runner.Trace) (placeholders : Bool)
+    (before after : List CausalJournal.Event) (receipt : CookieSocket.Receipt)
+    (position : (runPrefixOuter (CausalJournal.execute trace placeholders) []).2 =
+      before ++ .cookieSocket receipt :: after) :
+    receipt.Valid ∧ receipt.Qualifying ∧ receipt.datagram.bytes.length < receipt.input.length :=
+  CausalJournal.Receipts.initialized_cookie_size trace placeholders before after receipt position
+
+/-- Security: every original native socket append in the initialized Driver
+has its own authenticated or fixture-rooted causal explanation, with only the
+qualified cookie exception. The exact preceding raw history fixes this append's
+ordinal; delivery clears, identical datagrams and later Stops cannot substitute
+another occurrence. No initialization or normal-termination premise is assumed. -/
+theorem initialized_original_append_has_its_own_authorized_cause
+    (trace : Runner.Trace) (placeholders : Bool)
+    (before after : List RawAppend.Event) (append : RawAppend.Event)
+    (position : (runPrefixOuter (RawAppend.execute trace placeholders) []).2 = before ++ append :: after) :
+    ∃ pre event post,
+      (runPrefixOuter (CausalJournal.execute trace placeholders) []).2 = pre ++ event :: post ∧
+      pre.filterMap RawAppend.Final.raw? = before ∧ RawAppend.Final.raw? event = some append ∧
+      post.filterMap RawAppend.Final.raw? = after ∧
+      CausalJournal.Emissions.added event = [append.datagram] ∧
+      CausalJournal.Emissions.AuthorizedAppend pre event :=
+  RawAppend.Final.initialized_authorized trace placeholders before after append position
 
 end Leanux.Proofs.WG.AuthenticatedEffects

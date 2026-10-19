@@ -1,4 +1,4 @@
-import Leanux.Proofs.WG.AuthenticatedEffects.CausalSelectionQuiet
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalSelectionFrontFrames
 
 /-! The embedded journal's ordinary hooks cannot add timer selections. This
 uses the appended history of the actual callback, including its failed prefix. -/
@@ -74,8 +74,7 @@ theorem allocate (packets : List DataPacket) : Driver.StateHistorySafe Safe (hoo
 
 theorem front (family addr : Nat) (packets : List Packet) (mtu : Nat) :
     Driver.StateHistorySafe Safe (hooks.front family addr packets mtu) :=
-  old_state _ (StateAppends.receiptWGObserved (native_appends _) _)
-    (StateHistoryFrame.receiptWGObserved (fun _ _ _ => rfl) _ (fun _ => rfl))
+  disposal_front family addr packets mtu
 
 theorem create (pid : PeerId) (items : List SkbId) : Driver.StateHistorySafe Safe (hooks.create pid items) := by
   apply old_state

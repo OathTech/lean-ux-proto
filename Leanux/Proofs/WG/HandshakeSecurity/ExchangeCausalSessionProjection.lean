@@ -38,12 +38,19 @@ theorem handshake_projects (sg : PeerId → WGPrefix Event Bool)
   have protocol := ProtocolSender.receive_other cut?
     (Event.old ∘ Journal.Event.handshake) handshake? (fun _ => rfl)
     sg st kg kt hs hk mac Event.protocolSocket scope? Event.cookieSocket (fun _ => rfl) (fun _ => rfl)
-  exact {base with send := protocol.send, cookie := protocol.cookie}
+  exact {base with
+    send := protocol.send
+    cookie := protocol.cookie
+    put := StagedDisposal.Decoration.release_projects Event.stagedDisposal stagedDisposal?
+      cut? (fun _ => rfl)}
 
 theorem flushed_projects (pid : PeerId) :
     StateProjectsPrefix cut? id (flushedSend pid) (Responder.DriverCuts.hooks.flushedSend pid) := by
   apply SendEffects.flushed_native_projects cut? Event.scope (fun _ => rfl) ?_ effects_projects pid
-  refine {ProtocolSender.send_projects cut? Event.protocolSocket scope? (fun _ => rfl) with create := ?_}
+  have base := StagedDisposal.Decoration.send_projects Event.stagedDisposal stagedDisposal? cut?
+    (fun _ => rfl) (ProtocolSender.send_projects cut? Event.protocolSocket scope? (fun _ => rfl))
+    (fun _ => rfl)
+  refine {base with create := ?_}
   intro actor
   exact Exchange.receipt_ignored cut? _ _ _ (Driver.Projection.state_lift cut? _) (fun _ => rfl)
 
@@ -51,7 +58,7 @@ theorem transmit_projects (pid : PeerId) :
     ProjectsPrefix cut? id (transmit pid) (liftPrefix (liftWG (txStep pid))) := by
   apply HistoryFrame.project
   · exact ExchangeCausal.transmit_history_of_quiet cut? (fun e => by cases e <;> rfl)
-      (fun _ => rfl) (fun _ => rfl) (fun _ => rfl) pid
+      (fun _ => rfl) (fun _ => rfl) (fun _ => rfl) (fun _ => rfl) pid
   · intro w h
     have old := congrArg Prod.fst (CausalJournal.transmit_projects pid w h)
     have native := congrArg Prod.fst (Journal.ResponderProjection.transmit pid w (h.filterMap old?))
@@ -85,8 +92,9 @@ private theorem create_appends (pid : PeerId) (item : List SkbId) : StateAppends
     (NativeAdapter.world w a) h
 
 theorem hooks_projects : Driver.HooksProjects cut? hooks Responder.DriverCuts.hooks where
-  stagedPurge := fun _ => Leanux.Proofs.WG.TransmitSecurity.Driver.Projection.state_lift cut? _
-  peerRelease := fun _ => Leanux.Proofs.WG.TransmitSecurity.Driver.Projection.state_lift cut? _
+  stagedPurge := ExchangeCausal.stagedPurge_projects_of_quiet cut? (fun _ => rfl)
+  peerRelease := StagedDisposal.Decoration.release_projects Event.stagedDisposal stagedDisposal?
+    cut? (fun _ => rfl)
   deliver := DeliverySource.observed_projects cut? Event.delivery (fun _ => rfl)
   keepalivePrepare := fun _ => Journal.state_receipt_projects cut? _ _ _
     (fun _ => rfl) (Driver.Projection.state_lift cut? _)
@@ -121,8 +129,8 @@ theorem hooks_projects : Driver.HooksProjects cut? hooks Responder.DriverCuts.ho
   allocate := fun packets => state_native _ _ ((StateAppends.lift _).receiptWGObserved _)
     (Journal.ResponderProjection.allocate packets)
   create := fun pid item => state_native _ _ (create_appends pid item) (Journal.ResponderProjection.create pid item)
-  front := fun family addr packets mtu => state_native _ _ ((StateAppends.lift _).receiptWGObserved _)
-    (Journal.ResponderProjection.front family addr packets mtu)
+  front := ExchangeCausal.front_projects_of_quiet cut? (fun _ => rfl) (fun _ => rfl)
+    (fun _ _ => rfl)
   poll := product_native _ _ ((Appends.focus _ _ _).receiptObserved) Journal.ResponderProjection.poll
   encrypt := fun item => product_native _ _ ((Appends.focus _ _ _).receiptObserved) (Journal.ResponderProjection.encrypt item)
   transmit := transmit_projects

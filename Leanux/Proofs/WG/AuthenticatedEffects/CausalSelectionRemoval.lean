@@ -1,4 +1,4 @@
-import Leanux.Proofs.WG.AuthenticatedEffects.CausalSelectionCarrier
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalSelectionCarrierDisposalFrames
 
 /-! Actual removal drains use the final journal's observed send callback.
 Native clearing and peer deletion can retire occurrences but cannot create them. -/
@@ -8,6 +8,7 @@ open Lifetimes Queues Configuration TransmitSecurity.Driver HandshakeSecurity.Se
 set_option maxRecDepth 4096
 set_option maxHeartbeats 600000
 macro "selection_removal_step" : tactic => `(tactic| first
+  | (selection_carrier_head Hooks.peerRelease; exact peer_release _)
   | (selection_carrier_head liftWGPrefix; apply state_native; solve | causal_delayed_removal_step)
   | (selection_carrier_head ForIn.forIn; rw [Std.Legacy.Range.forIn_eq_forIn_range']; apply state_forIn)
   | selection_state_step)
@@ -17,19 +18,17 @@ theorem sendDrain (upTo : Option PeerId) : StateSafe (sendDrainObserved hooks up
     (fun pid => state_native _ (Delayed.flushed_clear pid)) upTo
 
 theorem removeAfter (pid : PeerId) : StateSafe
-      (afterDeadWith liftWGPrefix (sendDrainObserved hooks) pid) := by
-  unfold afterDeadWith timersStopWith
+      (HandshakeSecurity.StagedDisposal.Lifecycle.afterDeadWith liftWGPrefix (sendDrainObserved hooks) hooks.peerRelease pid) := by
+  unfold HandshakeSecurity.StagedDisposal.Lifecycle.afterDeadWith timersStopWith
   repeat' first
     | (selection_carrier_head sendDrainObserved; exact sendDrain _)
     | selection_removal_step
 
 theorem remove (peer : Option PeerId) : StateSafe (removeObserved hooks peer) := by
   unfold removeObserved
-  rw [show hooks.peerRelease = (fun peer => liftWGPrefix (peerPut peer)) from rfl,
-    Leanux.Proofs.WG.HandshakeSecurity.StagedDisposal.Lifecycle.remove_neutral]
-  unfold removeWith peerRemoveWith
+  unfold HandshakeSecurity.StagedDisposal.Lifecycle.removeWith peerRemoveWith
   repeat' first
-    | (selection_carrier_head afterDeadWith; exact removeAfter _)
+    | (selection_carrier_head HandshakeSecurity.StagedDisposal.Lifecycle.afterDeadWith; exact removeAfter _)
     | selection_removal_step
   all_goals simp_all only [Option.some.injEq]
   all_goals first | exact removeAfter _ | contradiction
@@ -37,11 +36,9 @@ theorem remove (peer : Option PeerId) : StateSafe (removeObserved hooks peer) :=
 theorem removeAll :
     StateSafe (removeAllObserved hooks) := by
   unfold removeAllObserved
-  rw [show hooks.peerRelease = (fun peer => liftWGPrefix (peerPut peer)) from rfl,
-    Leanux.Proofs.WG.HandshakeSecurity.StagedDisposal.Lifecycle.removeAll_neutral]
-  unfold removeAllWith peerRemoveAllWith
+  unfold HandshakeSecurity.StagedDisposal.Lifecycle.removeAllWith peerRemoveAllWith
   repeat' first
-    | (selection_carrier_head afterDeadWith; exact removeAfter _)
+    | (selection_carrier_head HandshakeSecurity.StagedDisposal.Lifecycle.afterDeadWith; exact removeAfter _)
     | selection_removal_step
   all_goals exact state_native _ Delayed.free_allowed
 

@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalDelayedDisposalFrames
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalDelayedEffects
 import Leanux.Proofs.WG.Queues.HolderTimers
 
@@ -60,6 +61,30 @@ theorem retransmit (pid : PeerId) : StateSafe (TimerEffects.retransmitWith effec
     | (causal_delayed_head TimerEffects.modifyWith; exact modify_timer _ _ _ _)
     | (causal_delayed_head TimerEffects.queuedWith; exact queued _ _)
     | causal_delayed_effect_step
+
+private theorem queued_disposal (pid : PeerId) (retry : Bool) : StateSafe
+    (HandshakeSecurity.StagedDisposal.Effects.queuedWith effects hooks.peerRelease pid retry) := by
+  unfold HandshakeSecurity.StagedDisposal.Effects.queuedWith
+  repeat' first
+    | (causal_delayed_head TransmitSecurity.Driver.Hooks.peerRelease; exact peer_release _)
+    | causal_delayed_effect_step
+
+theorem retransmit_disposal (pid : PeerId) : StateSafe
+    (HandshakeSecurity.StagedDisposal.Effects.retransmitWith effects hooks.peerRelease hooks.stagedPurge pid) := by
+  unfold HandshakeSecurity.StagedDisposal.Effects.retransmitWith
+  simp only [Functor.discard,map_const,Function.comp_apply,Function.const,map_eq_pure_bind]
+  repeat' first
+    | (causal_delayed_head TransmitSecurity.Driver.Hooks.stagedPurge; exact staged_purge _)
+    | (causal_delayed_native_head delTimer; exact delete _ _)
+    | (causal_delayed_native_head clearPeerEndpointSrc; exact endpoint _)
+    | (causal_delayed_head TimerEffects.modifyWith; exact modify_timer _ _ _ _)
+    | (causal_delayed_head HandshakeSecurity.StagedDisposal.Effects.queuedWith; exact queued_disposal _ _)
+    | causal_delayed_effect_step
+
+theorem new_disposal (pid : PeerId) : StateSafe
+    (HandshakeSecurity.StagedDisposal.Effects.newHandshakeWith effects hooks.peerRelease pid) := by
+  unfold HandshakeSecurity.StagedDisposal.Effects.newHandshakeWith
+  exact state_bind (endpoint pid) (fun _=>queued_disposal _ _)
 
 theorem expired_keepalive (keepalive : PeerId → WGPrefix Event Unit)
     (hk : ∀ pid, StateSafe (keepalive pid)) (pid : PeerId) :

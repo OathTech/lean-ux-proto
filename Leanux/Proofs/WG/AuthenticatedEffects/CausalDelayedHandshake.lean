@@ -67,6 +67,9 @@ elab "causal_delayed_function " wanted:term : tactic => withMainContext do
   unless action.getAppFn == expected do throwError "different supplied callback"
 
 macro "causal_delayed_handshake_native" : tactic => `(tactic| first
+  | (causal_delayed_head StagedDisposal.Decoration.release;
+     apply observed_native _ _ (focusStatePrefix_erases _ _ (StagedDisposal.release_erases _)) (StateAppends.focus _ _ _)
+     causal_delayed_native)
   | (causal_delayed_head ProtocolSocket.observed; exact protocol_send _ _)
   | (causal_delayed_head CookieSocket.observed; exact cookie_send _ _ _)
   | (causal_delayed_native_head createResponse; exact state_framed _ (createResponse_retained _) (SendWorkCauses.response_create_frame _))
@@ -90,12 +93,12 @@ private theorem after_mac
       (HandshakeEffects.scopeOps Event.scope CausalSources.Cause.handshake
         (ExchangeJoint.receiveOps Event.exchange
           (HandshakeEffects.withEffects
-            (ProtocolSender.receiveOps (Event.old ∘ TransmitSecurity.Journal.Event.handshake)
-              handshake? session keepalive mac Event.protocolSocket scope? Event.cookieSocket)
+            (StagedDisposal.Decoration.receive Event.stagedDisposal stagedDisposal? (ProtocolSender.receiveOps (Event.old ∘ TransmitSecurity.Journal.Event.handshake)
+              handshake? session keepalive mac Event.protocolSocket scope? Event.cookieSocket))
             (Event.old ∘ TransmitSecurity.Journal.Event.handshake) effects))) msg src loaded state) := by
   unfold afterMacWith responseWith
   simp only [HandshakeEffects.scopeOps,ExchangeJoint.receiveOps,HandshakeEffects.withEffects,
-    ProtocolSender.receiveOps,HandshakeWorker.observedOps]
+    StagedDisposal.Decoration.receive,ProtocolSender.receiveOps,HandshakeWorker.observedOps]
   repeat' first
     | (causal_delayed_head CausalScope.scope; apply state_scope)
     | (causal_delayed_head receiptWGObserved; apply state_receipt)
@@ -117,8 +120,8 @@ private theorem receive
       (fun mac => HandshakeEffects.scopeOps Event.scope CausalSources.Cause.handshake
         (ExchangeJoint.receiveOps Event.exchange
           (HandshakeEffects.withEffects
-            (ProtocolSender.receiveOps (Event.old ∘ TransmitSecurity.Journal.Event.handshake)
-              handshake? session keepalive mac Event.protocolSocket scope? Event.cookieSocket)
+            (StagedDisposal.Decoration.receive Event.stagedDisposal stagedDisposal? (ProtocolSender.receiveOps (Event.old ∘ TransmitSecurity.Journal.Event.handshake)
+              handshake? session keepalive mac Event.protocolSocket scope? Event.cookieSocket))
             (Event.old ∘ TransmitSecurity.Journal.Event.handshake) effects))) msg src) := by
   unfold CookieConsumption.receiveWith CookieConsumption.observed
   repeat' first

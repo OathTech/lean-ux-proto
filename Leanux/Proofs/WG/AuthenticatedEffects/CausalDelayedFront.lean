@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalDelayedDisposalFrames
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalDelayedReceive
 
 /-! Original routing/errno/staged-splice front transport. Borrowed lookup
@@ -110,9 +111,19 @@ theorem front_native (family addr : Nat) (packets : List Packet) (mtu : Nat) :
     using [getter,pay,look,trimming,splicing,loopback,ambient,routing,errors,loop]
 
 theorem front (family addr : Nat) (packets : List Packet) (mtu : Nat) :
-    StateSafe (hooks.front family addr packets mtu) :=
-  old_state _ _ (projected_erases _ _ Journal.nonce? (Journal.front_projects family addr packets mtu))
-    (front_native family addr packets mtu)
+    StateSafe (hooks.front family addr packets mtu) := by
+  change StateSafe (CausalJournal.front family addr packets mtu)
+  unfold CausalJournal.front
+  apply observed_native _ (txFront family addr packets mtu)
+    (HandshakeSecurity.StagedConservation.Front.observed_erases Event.transmitInput Event.stagedDisposal stagedDisposal?
+      (fun input run=>.old (.routed input.family input.address input.packets input.mtu run)) ⟨family,addr,packets,mtu⟩)
+  · unfold HandshakeSecurity.StagedConservation.Front.observed
+    apply StateAppends.bind
+    · exact fun _ _ _=>⟨[_],rfl⟩
+    intro _
+    exact (HandshakeSecurity.StagedConservation.Front.front_appends
+        (HandshakeSecurity.StagedConservation.Front.observedOps_appends _ _) _ _ _ _).receiptWGObserved _
+  · exact front_native family addr packets mtu
 
 theorem device_transmit (family addr : Nat) (packets : List Packet) (mtu : Nat) :
     StateSafe (Driver.transmitObserved hooks family addr packets mtu) := by
@@ -125,7 +136,7 @@ theorem device_transmit (family addr : Nat) (packets : List Packet) (mtu : Nat) 
     apply state_bind (staging pid)
     intro _
     apply state_bind
-    · causal_delayed_native
+    · exact peer_release _
     · intro _; exact state_pure _
 
 end Leanux.Proofs.WG.AuthenticatedEffects.CausalJournal.Delayed

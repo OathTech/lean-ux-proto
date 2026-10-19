@@ -53,14 +53,17 @@ private theorem other
       (HandshakeEffects.scopeOps Event.scope CausalSources.Cause.handshake
         (ExchangeJoint.receiveOps Event.exchange
           (HandshakeEffects.withEffects
-            (ProtocolSender.receiveOps (Event.old ∘ Journal.Event.handshake) handshake? session keepalive mac Event.protocolSocket scope? Event.cookieSocket)
+            (StagedDisposal.Decoration.receive Event.stagedDisposal stagedDisposal?
+              (ProtocolSender.receiveOps (Event.old ∘ Journal.Event.handshake) handshake? session keepalive mac Event.protocolSocket scope? Event.cookieSocket))
             (Event.old ∘ Journal.Event.handshake) effects))) := by
   constructor
   · intro α action; rfl
   all_goals intros
   all_goals simp only [HandshakeEffects.scopeOps,ExchangeJoint.receiveOps,HandshakeEffects.withEffects,
-    ProtocolSender.receiveOps,HandshakeWorker.observedOps]
+    StagedDisposal.Decoration.receive,ProtocolSender.receiveOps,HandshakeWorker.observedOps]
   all_goals repeat' first
+    | (driver_history_head StagedDisposal.Decoration.release;
+       exact quiet_state Event.stagedDisposal stagedDisposal? (fun _ => True.intro) _)
     | (driver_history_head ProtocolSocket.observed; exact protocol_send _ _)
     | (driver_history_head CausalScope.scope; apply state_scope)
     | (driver_history_head receiptWGObserved; apply receipt_quiet)
@@ -117,7 +120,8 @@ theorem receive
       (fun mac => HandshakeEffects.scopeOps Event.scope CausalSources.Cause.handshake
         (ExchangeJoint.receiveOps Event.exchange
           (HandshakeEffects.withEffects
-            (ProtocolSender.receiveOps (Event.old ∘ Journal.Event.handshake) handshake? session keepalive mac Event.protocolSocket scope? Event.cookieSocket)
+            (StagedDisposal.Decoration.receive Event.stagedDisposal stagedDisposal?
+              (ProtocolSender.receiveOps (Event.old ∘ Journal.Event.handshake) handshake? session keepalive mac Event.protocolSocket scope? Event.cookieSocket))
             (Event.old ∘ Journal.Event.handshake) effects))) msg src) := by
   apply receive_valid_history
   · intro packet

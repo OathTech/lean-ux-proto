@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.HandshakeSecurity.StagedConservationXmitErrors
 import Leanux.Proofs.WG.TransmitSecurity.HeaderLength
 import Leanux.Proofs.WG.TransmitSecurity.CompletionAppendCut
 import Leanux.Proofs.WG.TransmitSecurity.StagedAvailabilityInitialized
@@ -1211,5 +1212,20 @@ theorem transport_append_cannot_lose_receipt (pid : PeerId) (id : SkbId)
     ∃ middle suffix, (runPrefix (Completion.socket pid id packet peer ipv4 >>= next) w history).2 =
       (history ++ middle) ++ .socket ⟨pid,id,packet,peer,ipv4,⟨0,w,v⟩⟩ :: suffix :=
     Completion.socket_append_retained pid id packet peer ipv4 w u b history datagram front next appends
+
+/-- Security: each refused original transmit invocation returns one named
+errno and charges the device error counter exactly once, independently of the
+number of supplied GSO segments. The refusal is the same native front cut;
+a successful splice or a stopped send tail is not classified as refusal. -/
+theorem original_transmit_refusal_charged_once (family addr : Nat) (packets : List Packet) (mtu : Nat)
+    (r : WGRunWitness Int) (run : r.Valid (wgXmit family addr packets mtu))
+    (refused : r.value ≠ 0) :
+    (r.value = -EPROTONOSUPPORT ∨ r.value = -ENOKEY ∨
+      r.value = -EDESTADDRREQ ∨ r.value = -ENOMEM) ∧
+    HandshakeSecurity.StagedConservation.Front.errors r.after =
+      (HandshakeSecurity.StagedConservation.Front.errors r.before).map (· + 1) ∧
+    ((Packets.txFront family addr packets mtu).run r.before).run r.ambientBefore =
+      .ok ((.error r.value,r.after),r.ambientAfter) :=
+  HandshakeSecurity.StagedConservation.Front.xmit_refusal family addr packets mtu r run refused
 
 end Leanux.Proofs.WG.TransmitSecurity

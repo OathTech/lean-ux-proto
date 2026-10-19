@@ -9,14 +9,13 @@ set_option maxRecDepth 4096
 set_option maxHeartbeats 600000
 
 macro "selection_lifecycle_step" : tactic => `(tactic| first
+  | (selection_carrier_head Hooks.stagedPurge; exact staged_purge _)
   | (selection_carrier_head liftWGPrefix; apply state_native; solve | causal_delayed_lifecycle_step)
   | selection_removal_step)
 
 theorem down : StateSafe (downObserved hooks) := by
   unfold downObserved
-  rw [show hooks.stagedPurge = (fun pid => liftWGPrefix (purgeStagedPackets pid)) from rfl,
-    Leanux.Proofs.WG.HandshakeSecurity.StagedDisposal.Lifecycle.down_neutral]
-  unfold downWith stopWith timersStopWith
+  unfold HandshakeSecurity.StagedDisposal.Lifecycle.downWith HandshakeSecurity.StagedDisposal.Lifecycle.stopWith timersStopWith
   repeat' first
     | (selection_carrier_head sendDrainObserved; exact sendDrain _)
     | selection_lifecycle_step

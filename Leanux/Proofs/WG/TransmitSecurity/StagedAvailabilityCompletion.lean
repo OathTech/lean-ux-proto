@@ -11,8 +11,9 @@ open AuthenticatedEffects AuthenticatedEffects.CausalJournal Queues
 set_option maxHeartbeats 800000
 set_option maxRecDepth 4096
 
-private abbrev observed := CompletionEffects.observed
-  (Event.old ∘ Journal.completionEvent) completion? scope? Event.armed Event.queued
+private abbrev observed := HandshakeSecurity.StagedConservation.SendResult.decorate Event.sendResult
+  (CompletionEffects.observed
+    (Event.old ∘ Journal.completionEvent) completion? scope? Event.armed Event.queued)
 
 private theorem old (body : PrefixM Completion.Event α) (native : WG.M α)
     (erases : ErasesPrefix body (liftWG native)) (safe : ∀ h, Preserves (Inv h) native) :
@@ -79,6 +80,13 @@ private theorem emitted (event : Completion.Event) : ProductSafe
       subst e
       exact quiet))) safe
 
+private theorem result_receipt (body : PrefixM Event α) (safe : ProductSafe body)
+    (record : RunWitness α → Event) (quiet : ∀ r, allocation? (record r) = none) :
+    ProductSafe (receiptObserved body record) := by
+  unfold receiptObserved
+  exact product_bind (product_capture _ safe) (fun r =>
+    product_bind (product_emit (record r) (quiet r)) (fun _ => product_pure r.value))
+
 open Lean Meta Elab Tactic in
 elab "available_completion_head " wanted:ident : tactic => withMainContext do
   let target := (← instantiateMVars (← getMainTarget)).consumeMData
@@ -98,6 +106,7 @@ elab "available_completion_head " wanted:ident : tactic => withMainContext do
   unless actual.toString == expected || actual.toString.endsWith ("." ++ expected) do throwError "different callback"
 
 macro "available_completion_step" : tactic => `(tactic| first
+  | (available_origin_product_head receiptObserved; refine result_receipt _ ?_ _ (fun _ => rfl))
   | (available_completion_head getPeerMixed; exact peer _)
   | (available_completion_head getTxSkbPrefix; exact packet _)
   | (available_completion_head modifyPeerKeysPrefix; apply modify_peer; intro p; exact ⟨rfl,rfl⟩)
@@ -127,7 +136,7 @@ macro "available_completion_step" : tactic => `(tactic| first
 private theorem complete (pid : PeerId) (item : List SkbId) :
     ProductSafe (CompletionEffects.completeWith observed pid item) := by
   unfold CompletionEffects.completeWith TxDisposition.andObs
-  simp only [observed,CompletionEffects.observed,CompletionEffects.focused,CompletionEffects.native]
+  simp only [observed,HandshakeSecurity.StagedConservation.SendResult.decorate,HandshakeSecurity.StagedConservation.SendResult.observed,CompletionEffects.observed,CompletionEffects.focused,CompletionEffects.native]
   repeat' available_completion_step
 
 private theorem complete_scope (pid : PeerId) (item : List SkbId) : ProductSafe
@@ -138,14 +147,14 @@ private theorem body (pid : PeerId) (first : Option (List SkbId)) : ProductSafe
     (CompletionEffects.bodySourceWith observed
       (CompletionEffects.completeScoped Event.scope CausalSources.Cause.completion observed) pid first) := by
   unfold CompletionEffects.bodySourceWith TxDisposition.andObs
-  simp only [observed,CompletionEffects.observed,CompletionEffects.focused,CompletionEffects.native]
+  simp only [observed,HandshakeSecurity.StagedConservation.SendResult.decorate,HandshakeSecurity.StagedConservation.SendResult.observed,CompletionEffects.observed,CompletionEffects.focused,CompletionEffects.native]
   repeat' first
     | (available_origin_product_head CompletionEffects.completeScoped; exact complete_scope _ _)
     | available_completion_step
 
 theorem transmit (pid : PeerId) : ProductSafe (CausalJournal.transmit pid) := by
-  unfold CausalJournal.transmit CompletionEffects.observedStep CompletionEffects.stepScoped CompletionEffects.stepSourceWith
-  simp only [CompletionEffects.observed,CompletionEffects.focused,CompletionEffects.native]
+  unfold CausalJournal.transmit CompletionEffects.stepScoped CompletionEffects.stepSourceWith
+  simp only [HandshakeSecurity.StagedConservation.SendResult.decorate,HandshakeSecurity.StagedConservation.SendResult.observed,CompletionEffects.observed,CompletionEffects.focused,CompletionEffects.native]
   repeat' first
     | (available_origin_product_head CompletionEffects.bodySourceWith; exact body _ _)
     | available_completion_step

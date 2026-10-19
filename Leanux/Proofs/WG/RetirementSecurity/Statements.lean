@@ -1,3 +1,6 @@
+import Leanux.Proofs.WG.RetirementSecurity.HandshakeQueueJournalConfiguration
+import Leanux.Proofs.WG.RetirementSecurity.HandshakeQueueJournalOuter
+import Leanux.Proofs.WG.RetirementSecurity.HandshakeQueueCookieReceive
 import Leanux.Proofs.WG.RetirementSecurity.HandshakeQueueJournalWorkers
 import Leanux.Proofs.WG.RetirementSecurity.HandshakeQueueIngress
 import Leanux.Proofs.WG.RetirementSecurity.HandshakeQueueSession
@@ -3103,5 +3106,18 @@ theorem original_udp_handshake_size_preserved (msg : List UInt8) (src : SkbSourc
     (run : ((wgReceive msg src).run w).run a=.ok ((result,v),b)) :
     HandshakeLengths.QueueValid v :=
   (hoare_iff_run_ambient _ _ _).mp (HandshakeLengths.receive msg src) w a result v b before run
+
+/-- Every actual cookie reply in the initialized final journal has a
+header-validated input, including replies before a later Stop. Its input size
+comes from the native UDP check and actual worker ring pop, without an incoming
+shape, queue, funding or normal-termination assumption. -/
+theorem initialized_cookie_input_header_valid (trace : Runner.Trace) (placeholders : Bool)
+    (pre post : List AuthenticatedEffects.CausalJournal.Event)
+    (receipt : AuthenticatedEffects.CookieSocket.Receipt)
+    (position : (Leanux.Proofs.Logged.runPrefixOuter
+      (AuthenticatedEffects.CausalJournal.execute trace placeholders) []).2=
+        pre++AuthenticatedEffects.CausalJournal.Event.cookieSocket receipt::post) :
+    TransmitSecurity.HeaderLength.Valid receipt.input :=
+  HandshakeLengths.Cookie.initialized_cookie trace placeholders pre post receipt position
 
 end Leanux.Proofs.WG.RetirementSecurity

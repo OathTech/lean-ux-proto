@@ -78,7 +78,7 @@ theorem fixture (trigger : FixtureEffects.Trigger) (body : WGPrefix Event α) (s
       (state_combine _ (Delayed.state_emit _) (Selections.state_leave token)) (fun _ => state_pure value))
 
 macro "selection_config_step" : tactic => `(tactic| first
-  | (selection_carrier_head Hooks.peerRelease; change StateSafe (liftWGPrefix _); apply state_native; causal_delayed_native)
+  | (selection_carrier_head Hooks.peerRelease; exact peer_release _)
   | (selection_peer_bind; first
       | (apply read_modify; intro p t; rfl)
       | (apply read_write; · intro p t; rfl))
