@@ -25,7 +25,25 @@ private theorem selected (d : Device) (j : UInt64) (pid : PeerId) (timer : PeerT
     (product_emit (.old (.timerSelected ⟨d,j,pid,timer,entry,w⟩)) True.intro)
     (fun _ => product_enter (.timer j pid timer entry)) w h hi
 
+private theorem keepalive_prepare (pid : PeerId) :
+    Driver.StateHistorySafe Safe (CausalJournal.keepalivePrepare pid) := by
+  intro w a h hi
+  have observed := runWGPrefix_receiptWGObserved
+    (liftWGPrefix (RetirementSecurity.OccurrenceHandshake.keepalivePrepare pid))
+    (Event.keepalivePrepared pid) w a h
+  rw [runWGPrefix_lift] at observed
+  simp only [runWGPrefix,runStatePrefix] at observed
+  unfold CausalJournal.keepalivePrepare
+  rw [observed]
+  cases run : ((RetirementSecurity.OccurrenceHandshake.keepalivePrepare pid).run w).run a with
+  | error stop => exact ⟨[],by simp,hi,True.intro⟩
+  | ok out =>
+    obtain ⟨⟨value,v⟩,b⟩ := out
+    have safe : Safe (h ++ [.keepalivePrepared pid ⟨value,w,v,a,b⟩]) := hi.emit run
+    exact ⟨[.keepalivePrepared pid ⟨value,w,v,a,b⟩],rfl,safe,safe⟩
+
 theorem hooks_safe : Driver.HooksHistorySafe Safe hooks where
+  keepalivePrepare := keepalive_prepare
   fixtureEnter := fun trigger => state_enter (.fixture trigger)
   fixtureLeave := state_leave
   handshake := handshake
@@ -54,6 +72,13 @@ theorem hooks_safe : Driver.HooksHistorySafe Safe hooks where
 theorem initialized (trace : Runner.Trace) (placeholders : Bool) :
     Safe (runPrefixOuter (execute trace placeholders) []).2 :=
   Driver.initialized_history hooks_safe Safe.empty trace placeholders
+
+theorem initialized_keepalive (trace : Runner.Trace) (placeholders : Bool)
+    (pre post : List Event) (pid : PeerId) (receipt : WGRunWitness Bool)
+    (position : (runPrefixOuter (execute trace placeholders) []).2 =
+      pre ++ Event.keepalivePrepared pid receipt :: post) :
+    receipt.Valid (RetirementSecurity.OccurrenceHandshake.keepalivePrepare pid) :=
+  initialized trace placeholders pre (.keepalivePrepared pid receipt) post position
 
 theorem initialized_arm (trace : Runner.Trace) (placeholders : Bool)
     (pre post : List Event) (receipt : TimerEffects.Arm Context)

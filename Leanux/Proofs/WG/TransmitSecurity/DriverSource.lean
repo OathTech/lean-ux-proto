@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.TransmitSecurity.KeepalivePreparation
 import Leanux.Proofs.WG.AuthenticatedEffects.GroOccurrenceObserved
 import Leanux.Proofs.WG.TransmitSecurity.NonceInitialized
 import Leanux.Proofs.WG.HandshakeSecurity.ResponderStagingSource
@@ -18,6 +19,8 @@ open Leanux.Proofs.WG.Origins.HandshakeSources
 open HandshakeSecurity.Confirmation.Poll
 
 structure Hooks (E : Type) where
+  keepalivePrepare : PeerId → WGPrefix E Bool :=
+    fun pid => liftWGPrefix (RetirementSecurity.OccurrenceHandshake.keepalivePrepare pid)
   fixtureEnter : AuthenticatedEffects.FixtureEffects.Trigger → WGPrefix E Nat := fun _ => pure 0
   fixtureLeave : Nat → WGPrefix E Unit := fun _ => pure ()
   handshake : (PeerId → WGPrefix E Bool) → (PeerId → WGPrefix E Unit) → WGPrefix E Bool :=
@@ -83,11 +86,52 @@ def stagingObserved (hooks : Hooks E) (pid : PeerId) : WGPrefix E Unit := do
   hooks.create pid item
 
 def keepaliveObserved (hooks : Hooks E) (pid : PeerId) : WGPrefix E Unit := do
+  let ready ← hooks.keepalivePrepare pid
+  if ready then stagingObserved hooks pid
+
+/-- The original inline source is retained only as a factoring lemma's target. -/
+def keepaliveInline (hooks : Hooks E) (pid : PeerId) : WGPrefix E Unit := do
   let p ← liftWGPrefix (getPeer pid)
   if ← liftWGPrefix (branch .keepaliveStagedEmpty p.staged.isEmpty) then
     if ← liftWGPrefix (branch .keepaliveNoMem !(← liftWGPrefix (hiddenAlloc .keepaliveSkb))) then return
     liftWGPrefix (setPeer pid { p with staged := p.staged ++ [{ mtu := (← liftWGPrefix getDev).mtu }] })
   (stagingObserved hooks) pid
+
+private theorem keepalive_lift_bind (a : WG.M α) (f : α → WG.M β) :
+    (liftWGPrefix (a >>= f) : WGPrefix E β) =
+      (liftWGPrefix a >>= fun x => liftWGPrefix (f x)) := by
+  funext w ambient h
+  change runWGPrefix (liftWGPrefix (_ >>= _)) w ambient h =
+    runWGPrefix (liftWGPrefix _ >>= _) w ambient h
+  simp only [runWGPrefix,runStatePrefix_bind,liftWGPrefix,runStatePrefix_lift,StateT.run_bind]
+  cases run : (a.run w).run ambient with
+  | error _ => rfl
+  | ok value => rcases value with ⟨⟨value,v⟩,b⟩; rfl
+
+/-- A native preparation hook executes the previous inline keepalive body exactly. -/
+theorem keepalive_native (hooks : Hooks E)
+    (native : hooks.keepalivePrepare = fun pid =>
+      liftWGPrefix (RetirementSecurity.OccurrenceHandshake.keepalivePrepare pid))
+    (pid : PeerId) : keepaliveObserved hooks pid = keepaliveInline hooks pid := by
+  unfold keepaliveObserved
+  rw [native]
+  unfold RetirementSecurity.OccurrenceHandshake.keepalivePrepare keepaliveInline
+  simp only [keepalive_lift_bind,bind_assoc]
+  congr 1
+  funext p
+  congr 1
+  funext empty
+  split
+  · simp only [keepalive_lift_bind,bind_assoc]
+    congr 1
+    funext allocation
+    congr 1
+    funext refused
+    split
+    · rfl
+    · simp only [keepalive_lift_bind,bind_assoc]
+      congr 1
+  · rfl
 
 def transmitObserved (hooks : Hooks E) (family addr : Nat) (packets : List Packet) (mtu : Nat) :
     WGPrefix E Int := do

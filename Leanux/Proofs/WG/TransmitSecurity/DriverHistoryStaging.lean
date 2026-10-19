@@ -21,20 +21,23 @@ theorem staging_history (h : HooksHistorySafe Safe g) (pid : PeerId) :
     | (driver_history_head Hooks.confirmation; exact h.confirmation _ _)
     | driver_state_history_step
 
-/-- Keepalive has only one proof-side callback: the complete staging source. -/
+/-- Preparation and complete staging preserve the supplied history predicate. -/
 theorem keepalive_staging_history
+    (prepare : ∀ pid, StateHistorySafe Safe (g.keepalivePrepare pid))
     (staging : ∀ pid, StateHistorySafe Safe (stagingObserved g pid)) (pid : PeerId) :
     StateHistorySafe Safe (keepaliveObserved g pid) := by
   unfold keepaliveObserved
   repeat' first
+    | (driver_history_head Hooks.keepalivePrepare; exact prepare _)
     | (driver_history_head stagingObserved; exact staging _)
     | driver_state_history_step
 
 theorem HooksHistorySafe.core (h : HooksHistorySafe Safe g) : ActorCoreHistorySafe Safe g where
+  keepalivePrepare := h.keepalivePrepare
   staging := staging_history h
   fixtureEnter := h.fixtureEnter
   fixtureLeave := h.fixtureLeave
-  handshake := h.handshake _ _ h.session (keepalive_staging_history (staging_history h))
+  handshake := h.handshake _ _ h.session (keepalive_staging_history h.keepalivePrepare (staging_history h))
   sendWorker := h.sendWorker
   flushedSend := h.flushedSend
   armTimer := h.armTimer
@@ -54,7 +57,7 @@ theorem HooksHistorySafe.core (h : HooksHistorySafe Safe g) : ActorCoreHistorySa
 
 theorem keepalive_actor_history (h : ActorCoreHistorySafe Safe g) (pid : PeerId) :
     StateHistorySafe Safe (keepaliveObserved g pid) :=
-  keepalive_staging_history h.staging pid
+  keepalive_staging_history h.keepalivePrepare h.staging pid
 
 theorem keepalive_history (h : HooksHistorySafe Safe g) (pid : PeerId) :
     StateHistorySafe Safe (keepaliveObserved g pid) :=

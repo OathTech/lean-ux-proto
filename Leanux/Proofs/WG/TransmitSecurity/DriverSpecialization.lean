@@ -41,7 +41,9 @@ theorem nonce_staging_function : stagingObserved nonceHooks = Nonce.stagingObser
   funext nonce_staging_specialization
 
 theorem nonce_keepaliveObserved_eq : keepaliveObserved nonceHooks = Nonce.keepaliveObserved := by
-  unfold keepaliveObserved Nonce.keepaliveObserved
+  funext pid
+  rw [keepalive_native nonceHooks rfl]
+  unfold keepaliveInline Nonce.keepaliveObserved
   simp only [nonce_staging_function]
   all_goals rfl
 

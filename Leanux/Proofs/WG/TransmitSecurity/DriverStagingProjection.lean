@@ -25,6 +25,7 @@ theorem keepalive_projects (h : HooksProjects ρ g a) (pid : PeerId) :
     StateProjectsPrefix ρ id (keepaliveObserved g pid) (keepaliveObserved a pid) := by
   unfold keepaliveObserved
   repeat' first
+    | (maintenance_head Hooks.keepalivePrepare; exact h.keepalivePrepare _)
     | (maintenance_head stagingObserved; exact staging_projects h _)
     | (maintenance_head Hooks.session; exact h.session _)
     | (maintenance_head Hooks.confirmation; exact h.confirmation _ _)

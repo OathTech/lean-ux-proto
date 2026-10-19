@@ -79,6 +79,8 @@ private theorem create_appends (pid : PeerId) (item : List SkbId) : StateAppends
     (NativeAdapter.world w a) h
 
 theorem hooks_projects : Driver.HooksProjects cut? hooks Responder.DriverCuts.hooks where
+  keepalivePrepare := fun _ => Journal.state_receipt_projects cut? _ _ _
+    (fun _ => rfl) (Driver.Projection.state_lift cut? _)
   fixture := ⟨(fun _ => 0),
     (fun trigger => CausalScope.enterState_projects Event.scope (.fixture trigger) cut? (fun _ => rfl)),
     (fun token => CausalScope.leaveState_projects Event.scope token cut? (fun _ => rfl))⟩

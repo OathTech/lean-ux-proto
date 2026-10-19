@@ -26,6 +26,7 @@ theorem certificate_parent (history : List Event) (items : List SkbId)
     | armed value => cases decoded
     | queued value => cases decoded
     | exchange value => cases decoded
+    | keepalivePrepared pid run => cases decoded
   rw [same] at inHistory
   obtain ⟨before,after,position⟩ := List.mem_iff_append.mp inHistory
   refine ⟨before,after,packets,run,id,rest,generation,packet,position,?_,shape,valid,epoch,

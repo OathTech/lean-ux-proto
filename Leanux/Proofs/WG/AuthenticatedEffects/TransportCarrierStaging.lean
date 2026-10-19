@@ -13,6 +13,7 @@ variable {E : Type} {extra : List E → Prop} {origin : E → Option TransportDr
 
 structure StagingSafe (extra : List E → Prop) (origin : E → Option TransportDriver.OriginEvent)
     (replay : E → Option TransportDriver.Replay) (hooks : Hooks E) : Prop extends EffectsSafe extra origin replay hooks where
+  keepalivePrepare : ∀ pid, StateSafe extra origin replay (hooks.keepalivePrepare pid)
   fixtureEnter : ∀ trigger, StateSafe extra origin replay (hooks.fixtureEnter trigger)
   fixtureLeave : ∀ token, StateSafe extra origin replay (hooks.fixtureLeave token)
   selection : ∀ pid, StateSafe extra origin replay (hooks.selection pid)
@@ -45,6 +46,7 @@ theorem keepalive (h : StagingSafe extra origin replay hooks) (pid : PeerId) :
     StateSafe extra origin replay (keepaliveObserved hooks pid) := by
   unfold keepaliveObserved
   repeat' first
+    | (transport_carrier_head Hooks.keepalivePrepare; exact h.keepalivePrepare _)
     | (transport_carrier_head stagingObserved; exact staging h _)
     | transport_staging_step
 

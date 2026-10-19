@@ -7,7 +7,8 @@ open Lifetimes Queues TransmitSecurity
 /-- Keepalive staging is reached with the same native carrier even when its
 saved peer is written only after allocation and MTU reads. -/
 theorem keepalive (pid : PeerId) : Preserves (Driver.keepaliveObserved TimestampDriver.hooks pid) := by
-  unfold Driver.keepaliveObserved
+  rw [Driver.keepalive_native _ rfl]
+  unfold Driver.keepaliveInline
   apply StatePrefixEnsures.bind (Saved.read_saved pid)
   intro p
   apply StatePrefixEnsures.bind (Saved.saved_ambient pid p _)

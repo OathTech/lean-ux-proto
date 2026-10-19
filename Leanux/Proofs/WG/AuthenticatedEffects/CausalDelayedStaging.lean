@@ -28,39 +28,6 @@ theorem staging (pid : PeerId) : StateSafe (Driver.stagingObserved hooks pid) :=
     | (causal_delayed_head liftWGPrefix; solve | causal_delayed_native)
     | causal_delayed_step
 
-private theorem native_bind (body : WG.M α) (tail : α → WG.M β) :
-    (liftWGPrefix (body >>= tail) : WGPrefix Event β) =
-      (liftWGPrefix body >>= fun value => liftWGPrefix (tail value)) := by
-  funext w a h
-  change runWGPrefix (liftWGPrefix (body >>= tail)) w a h =
-    runWGPrefix (liftWGPrefix body >>= fun value => liftWGPrefix (tail value)) w a h
-  simp only [runWGPrefix,runStatePrefix_bind,liftWGPrefix,runStatePrefix_lift]
-  simp only [StateT.run_bind]
-  cases run : (body.run w).run a with
-  | error _ => rfl
-  | ok value => rcases value with ⟨⟨value,v⟩,b⟩; rfl
-
-private theorem keepalive_factor (pid : PeerId) : Driver.keepaliveObserved hooks pid = (do
-    let ready ← liftWGPrefix (RetirementSecurity.OccurrenceHandshake.keepalivePrepare pid)
-    if ready then Driver.stagingObserved hooks pid) := by
-  unfold Driver.keepaliveObserved RetirementSecurity.OccurrenceHandshake.keepalivePrepare
-  simp only [native_bind,bind_assoc]
-  congr 1
-  funext p
-  congr 1
-  funext empty
-  split
-  · simp only [native_bind,bind_assoc]
-    congr 1
-    funext allocation
-    congr 1
-    funext refused
-    split
-    · rfl
-    · simp only [native_bind,bind_assoc]
-      congr 1
-  · rfl
-
 private theorem keepalive_prepare (pid : PeerId) :
     StateSafe (liftWGPrefix (RetirementSecurity.OccurrenceHandshake.keepalivePrepare pid)) := by
   apply state_framed
@@ -76,8 +43,8 @@ private theorem keepalive_prepare (pid : PeerId) :
     repeat' queue_callback_step initial
 
 theorem keepalive (pid : PeerId) : StateSafe (Driver.keepaliveObserved hooks pid) := by
-  rw [keepalive_factor]
-  apply state_bind (keepalive_prepare pid)
+  unfold Driver.keepaliveObserved
+  apply state_bind (state_receipt _ (keepalive_prepare pid) _)
   intro ready
   cases ready
   · exact state_pure _

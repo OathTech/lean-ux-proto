@@ -116,6 +116,7 @@ private theorem timer (d : Device) (j : UInt64) (pid : PeerId) (t : PeerTimer) (
   simp only [List.filterMap_append,List.filterMap_cons,List.filterMap_nil,socket?,List.append_nil]
 
 theorem hooks_safe : HooksHistorySafe Safe Journal.hooks where
+  keepalivePrepare := fun _ => TransmitSecurity.Driver.History.state_lift _
   fixtureEnter := fun _ => History.state_pure _
   fixtureLeave := fun _ => History.state_pure _
   handshake := handshake

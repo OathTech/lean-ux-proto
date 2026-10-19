@@ -15,6 +15,7 @@ abbrev Cause := CausalSources.Cause
 abbrev Context := CausalEffects.Context Cause
 
 inductive Event where
+  | keepalivePrepared (pid : PeerId) (run : WGRunWitness Bool)
   | old (value : Journal.Event)
   | scope (value : CausalScope.Event Cause)
   | armed (value : TimerEffects.Arm Context)
@@ -75,7 +76,12 @@ def transmit (pid : PeerId) : PrefixM Event Bool :=
   CompletionEffects.observedStep (Event.old ∘ Journal.completionEvent) completion?
     Event.scope scope? CausalSources.Cause.completion Event.armed Event.queued pid
 
+def keepalivePrepare (pid : PeerId) : WGPrefix Event Bool :=
+  receiptWGObserved (liftWGPrefix (RetirementSecurity.OccurrenceHandshake.keepalivePrepare pid))
+    (.keepalivePrepared pid)
+
 def hooks : Driver.Hooks Event where
+  keepalivePrepare := keepalivePrepare
   fixtureEnter := (CausalSources.fixtureHooks Event.scope).enter
   fixtureLeave := (CausalSources.fixtureHooks Event.scope).leave
   handshake := handshake

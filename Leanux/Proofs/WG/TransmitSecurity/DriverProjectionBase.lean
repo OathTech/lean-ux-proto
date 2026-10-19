@@ -10,6 +10,7 @@ namespace Leanux.Proofs.WG.TransmitSecurity.Driver
 open Leanux Leanux.WG Leanux.Proofs.Logged Lifetimes Queues
 
 structure HooksProjects (ρ : E → Option F) (g : Hooks E) (a : Hooks F) : Prop where
+  keepalivePrepare : ∀ pid, StateProjectsPrefix ρ id (g.keepalivePrepare pid) (a.keepalivePrepare pid)
   fixture : ∃ scopeMap : Nat → Nat,
     (∀ trigger, StateProjectsPrefix ρ scopeMap (g.fixtureEnter trigger) (a.fixtureEnter trigger)) ∧
     (∀ token, StateProjectsPrefix ρ id (g.fixtureLeave token) (a.fixtureLeave (scopeMap token)))

@@ -24,6 +24,7 @@ private theorem selected (d : Device) (j : UInt64) (pid : PeerId) (timer : PeerT
     (fun _ => product_enter (.timer j pid timer entry) (fun _ => rfl)) w h hi
 
 theorem hooks_safe : Driver.HooksHistorySafe Safe hooks where
+  keepalivePrepare := fun _ => receipt_quiet _ (Driver.History.state_lift _) _ (fun _ => rfl)
   fixtureEnter := fun trigger => state_enter (.fixture trigger) (fun _ => rfl)
   fixtureLeave := state_leave
   handshake := handshake

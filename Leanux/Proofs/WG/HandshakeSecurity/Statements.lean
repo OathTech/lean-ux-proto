@@ -15,6 +15,8 @@ import Leanux.Proofs.WG.HandshakeSecurity.ReceiveMaterialCarrier
 import Leanux.Proofs.WG.HandshakeSecurity.ReceiveMaterialConfirmationEntry
 import Leanux.Proofs.WG.HandshakeSecurity.ReceiveMaterialExecutionConsumer
 import Leanux.Proofs.WG.HandshakeSecurity.ReceiveMaterialQuiet
+import Leanux.Proofs.WG.HandshakeSecurity.ReceiveMaterialHandshake
+import Leanux.Proofs.WG.HandshakeSecurity.ReceiveMaterialFinal
 import Leanux.Proofs.WG.HandshakeSecurity.ResponderEncryptionInitialized
 import Leanux.Proofs.WG.HandshakeSecurity.StagingMaterialBank
 import Leanux.Proofs.WG.HandshakeSecurity.ExchangeDriverProjection
@@ -1511,5 +1513,49 @@ no H1, authorization, reference-funding or independent history hypothesis. -/
 theorem native_rx_preparation_carries_confirmation_material :
     ReceiveMaterial.Execution.ProductSafe TransmitSecurity.Journal.hooks.prepare :=
   ReceiveMaterial.Execution.prepare
+
+
+/-- Security: the actual shared native poll records the received key allocation
+at confirmation before any later Stop, then retains the certificate through
+staging and stack replies. Initialization of this carrier is a separate outer
+transport obligation; its local state premise is explicit. -/
+theorem native_rx_poll_carries_confirmation_material (pid : PeerId) (budget : Nat) :
+    ReceiveMaterial.Execution.ProductSafe
+      (TransmitSecurity.Driver.nativePollObserved TransmitSecurity.Journal.hooks pid budget) :=
+  ReceiveMaterial.Execution.native_poll_closed pid budget
+
+/-- Security: native handshake processing preserves received-packet key
+allocation certificates and recorded confirmations. Its source frame permits
+fresh session creation, cookie effects and arbitrary stopped prefixes without
+requiring H1 or reference-funding assumptions. -/
+theorem native_handshake_carries_rx_confirmation_material :
+    ReceiveMaterial.Execution.StateSafe
+      (TransmitSecurity.Driver.handshakeObserved TransmitSecurity.Journal.hooks) :=
+  ReceiveMaterial.Execution.handshake
+
+
+/-- Security: every actual confirmation in the initialized final observer has
+its own immediately preceding successful replay receipt and the earlier native
+AEAD allocation certificate. This includes internally stopped receives and has
+no incoming reachability, lifetime, funding, or H1 premise. -/
+theorem initialized_confirmation_same_allocation (trace : Runner.Trace) (placeholders : Bool)
+    (pre post : List TransmitSecurity.Journal.Event) (event : TransmitSecurity.Journal.Event)
+    (position : ((runPrefixOuter (AuthenticatedEffects.CausalJournal.execute trace placeholders) []).2.filterMap
+      AuthenticatedEffects.CausalJournal.old?) = pre ++ event :: post) :
+    ReceiveMaterial.Confirmation.Checked pre event :=
+  ReceiveMaterial.final_confirmation trace placeholders pre post event position
+
+/-- Security: the responder cannot encrypt under a key allocation before a
+packet authenticated under that same allocation has caused successful native
+confirmation. The final observer covers all initialized executions and stopped
+prefixes; only the named local C2 H1 rotation/placement contract remains visible. -/
+theorem initialized_responder_encryption_requires_confirmation (H1 : H1ResponderCurrentEdges)
+    (trace : Runner.Trace) (placeholders : Bool)
+    (pre post : List TransmitSecurity.Journal.Event) (r : TransmitSecurity.WorkerEncryption.Receipt)
+    (position : ((runPrefixOuter (AuthenticatedEffects.CausalJournal.execute trace placeholders) []).2.filterMap
+      AuthenticatedEffects.CausalJournal.old?) = pre ++ .encrypted r :: post)
+    (responder : r.cipher.keyRead.value.iAmTheInitiator = false) :
+    r.Valid ∧ ReceiveMaterial.PriorAllocationConfirmation pre r.cipher.keyRead.value.internalId :=
+  ReceiveMaterial.final_encryption H1 trace placeholders pre post r position responder
 
 end Leanux.Proofs.WG.HandshakeSecurity

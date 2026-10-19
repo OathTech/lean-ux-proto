@@ -187,7 +187,8 @@ theorem staging (pid : PeerId) : StateSafe (Driver.stagingObserved Journal.hooks
 
 theorem keepalive (pid : PeerId) : StateSafe (Driver.keepaliveObserved Journal.hooks pid) := by
   change StatePrefixPreserves (fun h w _ => JournalInv h w) Safe _
-  unfold Driver.keepaliveObserved
+  rw [Driver.keepalive_native _ rfl]
+  unfold Driver.keepaliveInline
   repeat' first
     | (nonce_source_head Driver.stagingObserved; exact staging _)
     | ciphertext_driver_step

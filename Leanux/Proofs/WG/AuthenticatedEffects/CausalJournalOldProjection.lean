@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.TransmitSecurity.JournalProjection
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalJournalSource
 
 /-! Exact old-journal projection for the same final Driver execution. Both
@@ -79,6 +80,8 @@ private theorem front_appends (family addr : Nat) (packets : List Packet) (mtu :
     StateAppends (Journal.front family addr packets mtu) := (StateAppends.lift _).receiptWGObserved _
 
 theorem hooks_projects : Driver.HooksProjects old? hooks Journal.hooks where
+  keepalivePrepare := fun _ => Journal.state_receipt_projects old? _ _ _
+    (fun _ => rfl) (Driver.Projection.state_lift old? _)
   fixture := ⟨(fun _ => 0),
     (fun trigger => CausalScope.enterState_projects Event.scope (.fixture trigger) old? (fun _ => rfl)),
     (fun token => CausalScope.leaveState_projects Event.scope token old? (fun _ => rfl))⟩

@@ -1,3 +1,6 @@
+import Leanux.Proofs.WG.RetirementSecurity.TxReleasePrefix
+import Leanux.Proofs.WG.RetirementSecurity.CreateRefusalArms
+import Leanux.Proofs.WG.RetirementSecurity.TxCoverageInitialized
 import Leanux.Proofs.WG.RetirementSecurity.TxCoverageDeferred
 import Leanux.Proofs.WG.RetirementSecurity.ReadySocketJournalFinal
 import Leanux.Proofs.WG.RetirementSecurity.Outcome
@@ -2483,5 +2486,74 @@ theorem original_tx_coverage_scheduler (locals : List TxLocalBatch) :
     (∀stack,Preserves (fun w : World=>TxCoverage locals w.wg) (Env.schedule stack)) ∧
     (∀call : Lifetimes.EnvDeferredCall,Preserves (fun w : World=>TxCoverage locals w.wg) call.original) :=
   ⟨TxCoverageScheduler.schedule,TxCoverageDeferred.original⟩
+
+/-- A normally initialized execution leaves every resident TX allocation in
+exactly one peer's authoritative queue, at one position in that queue. Ring
+aliases add no owners. No incoming coverage, vacancy, or callback premise is
+assumed. This is a successful-endpoint claim; socket/drop history and stopped
+internal continuations remain separate conservation obligations. -/
+theorem initialized_tx_resident_ownership (trace : Runner.Trace) (placeholders : Bool)
+    (run : Leanux.Proofs.Logged.runPrefixOuter (Queues.RxCredits.RunnerAccount.observed trace placeholders) []=
+      (.ok (result,w),h)) (id : SkbId)
+    (resident : Queues.TxDisposition.txPackets w.wg id=some packet) :
+    ∃pid p,peerAt w.wg pid=some p ∧ id∈txPeerItems p ∧ (txPeerItems p).Nodup ∧
+      ∀other q,peerAt w.wg other=some q→id∈txPeerItems q→other=pid :=
+  TxCovered.Initialized.returned_unique trace placeholders run resident
+
+/-- Native acceptance derives TX coverage and unique physical ownership at
+all original syscall entries and the returned world, using the actual prefill,
+boot and ordered operation loop. Per-call native coverage is discharged; this
+claim does not classify prior terminal socket or disposal events. -/
+theorem accepted_tx_resident_coverage (trace : Runner.Trace) (placeholders : Bool)
+    (run : Runner.executeTrace trace placeholders=.ok result) :
+    ∃w h,Leanux.Proofs.Logged.runPrefixOuter (Queues.RxCredits.RunnerAccount.observed trace placeholders) []=
+      (.ok (result,w),h) ∧ TxCovered.Runner.Inv h w ∧
+      ∀index,index<trace.ops.size→TxCovered.Runner.OperationEntry trace placeholders index :=
+  TxCovered.Initialized.accepted trace placeholders run
+
+/-- Named native createData refusal markers preserve the full existing access
+and release history, state, return value, and stopped prefix. Adding the cause
+receipt therefore cannot turn a stopped cleanup into a completed disposal. -/
+theorem original_tx_refusal_projection (pid : PeerId) (items : List SkbId) :
+    Leanux.Proofs.Logged.StateProjectsPrefix CreateRefusal.legacy? id
+      (CreateRefusal.native pid items)
+      (Leanux.Proofs.WG.TransmitSecurity.NativeAdapter.lower
+        (Queues.TxDisposition.create pid items)) :=
+  CreateRefusal.native_projects pid items
+
+/-- Every reached native createData refusal names the actual dead-peer or
+full-peer-queue guard and its source reads. Device-ring EPIPE is not classified
+as a refusal. The result covers stopped cleanup prefixes; release completion
+and historical whole-run conservation remain separate obligations. -/
+theorem original_tx_refusal_arms (pid : PeerId) (items : List SkbId)
+    (w : WGWorld) (a : Ambient) :
+    ∀r∈(Leanux.Proofs.Logged.runStatePrefix (CreateRefusal.native pid items) w a []).2.filterMap
+      CreateRefusal.refusal?,r.Valid ∧ CreateRefusal.Arm r :=
+  CreateRefusal.native_receipts pid items w a
+
+/-- Every actual TX free-loop prefix accounts for exactly the original
+successful free calls, with their allocation stamps. A Stop keeps a residual
+caller-local suffix beginning at the failed getter; no later member is silently
+credited as released. This local source contract is not initialized whole-run
+socket/drop conservation. -/
+theorem original_tx_release_prefix (items : List SkbId) (w : World)
+    (h : List Queues.TxDisposition.Event) :
+    TxReleasePrefix.Account w items h
+      (Leanux.Proofs.Logged.runPrefix (TxReleasePrefix.observed items) w h).1
+      (Leanux.Proofs.Logged.runPrefix (TxReleasePrefix.observed items) w h).2 :=
+  TxReleasePrefix.account items w h
+
+/-- Freeing a distinct resident TX batch completes and removes every member;
+this discharges the free-loop progress obligation once its actual entry is
+reached. Prior key/peer payments and initialized entry coverage are separate
+source obligations, not implied by this local theorem. -/
+theorem original_tx_release_total (items : List SkbId) (unique : items.Nodup)
+    (resident : ∀id∈items,∃packet,Queues.TxDisposition.txPackets w id=some packet)
+    (a : Ambient) :
+    ∃v,((Queues.TxDisposition.freeList items).run w).run a=.ok (((),v),a) ∧
+      ∀id∈items,Queues.TxDisposition.txPackets v id=none := by
+  obtain ⟨v,run⟩:=TxReleasePrefix.total items unique resident a
+  exact ⟨v,run,(hoare_iff_run_ambient _ _ _).mp
+    (Queues.TxDisposition.freeList_absent items) w a () v a True.intro run⟩
 
 end Leanux.Proofs.WG.RetirementSecurity

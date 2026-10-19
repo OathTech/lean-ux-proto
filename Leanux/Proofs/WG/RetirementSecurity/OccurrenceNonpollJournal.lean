@@ -102,6 +102,7 @@ interface. The actual softirq expression is definitionally unchanged. -/
 def nonpollHooks : Driver.Hooks Journal.Event := {Journal.hooks with poll := pure none}
 
 theorem hooks_safe : HooksHistorySafe Safe nonpollHooks where
+  keepalivePrepare := fun _ => TransmitSecurity.Driver.History.state_lift _
   handshake := handshake
   sendWorker := by
     rw [Driver.sendWorker_lift nonpollHooks rfl]

@@ -75,7 +75,15 @@ theorem armTimer (pid : PeerId) (timer : PeerTimer) (delay : Nat) (caller : Opti
 theorem queueSend (pid : PeerId) : StateSafe (Journal.hooks.queueSend pid) :=
   state_rx _ (modifyDev_rx _ (fun _ => rfl) (fun _ => rfl))
 
+theorem keepalive_prepare (pid : PeerId) : StateSafe (Journal.hooks.keepalivePrepare pid) := by
+  apply state_rx
+  unfold RetirementSecurity.OccurrenceHandshake.keepalivePrepare
+  transport_native_rx
+  all_goals (split <;> transport_native_rx)
+  all_goals (split <;> transport_native_rx)
+
 theorem staging : StagingSafe (fun _ => True) origin? replay? Journal.hooks where
+  keepalivePrepare := keepalive_prepare
   fixtureEnter := fun _ => state_pure _
   fixtureLeave := fun _ => state_pure _
   armTimer := armTimer

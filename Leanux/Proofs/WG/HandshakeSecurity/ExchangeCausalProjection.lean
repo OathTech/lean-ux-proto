@@ -98,6 +98,8 @@ theorem timer_projects (d : Device) (bound : UInt64) (pid : PeerId) (timer : Pee
   simp only [List.filterMap_append,List.filterMap_cons,List.filterMap_nil,exchange?,List.append_nil]
 
 theorem hooks_projects : Driver.HooksProjects exchange? hooks ExchangeDriver.hooks where
+  keepalivePrepare := fun _ => Journal.state_receipt_projects exchange? _ _ _
+    (fun _ => rfl) (Driver.Projection.state_lift exchange? _)
   fixture := ⟨(fun _ => 0),
     (fun trigger => CausalScope.enterState_projects Event.scope (.fixture trigger) exchange? (fun _ => rfl)),
     (fun token => CausalScope.leaveState_projects Event.scope token exchange? (fun _ => rfl))⟩

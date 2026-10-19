@@ -26,12 +26,14 @@ private theorem product_join {g : PrefixM Event α} (carrier : ProductSafe g)
 
 private theorem keepalive_order (pid : PeerId) :
     Driver.StateHistorySafe Order.Good (Driver.keepaliveObserved Journal.hooks pid) := by
-  unfold Driver.keepaliveObserved
+  rw [Driver.keepalive_native _ rfl]
+  unfold Driver.keepaliveInline
   repeat' first
     | (driver_history_head Driver.stagingObserved; exact ConfirmationTransportOrder.quiet_staging Order.quiet _)
     | driver_state_history_step
 
 theorem ordered_callbacks : DeferredSafe Order.Good origin? replay? Journal.hooks where
+  keepalivePrepare := fun pid => state_join (keepalive_prepare pid) (Order.quiet.keepalivePrepare pid)
   fixtureEnter := fun _ => state_pure _
   fixtureLeave := fun _ => state_pure _
   armTimer := fun pid timer delay caller => state_join (armTimer pid timer delay caller) (Order.quiet.armTimer pid timer delay caller)

@@ -66,7 +66,8 @@ theorem transmit_lift (family addr : Nat) (packets : List Packet) (mtu : Nat) :
     repeat' exchange_quiet_step rho
 
 theorem keepalive_quiet (pid : PeerId) : StateHistoryFrame some (Driver.keepaliveObserved hooks pid) := by
-  unfold Driver.keepaliveObserved
+  rw [Driver.keepalive_native _ rfl]
+  unfold Driver.keepaliveInline
   rw [staging_lift]
   let rho : Exchange.Event → Option Exchange.Event := some
   change StateHistoryFrame rho _
@@ -116,6 +117,7 @@ private def quietHooks : Driver.Hooks Exchange.Event :=
 
 private theorem quietHooks_history (good : List Exchange.Event → Prop) :
     Driver.HooksHistorySafe good quietHooks where
+  keepalivePrepare := fun _ => TransmitSecurity.Driver.History.state_lift _
   handshake := fun _ _ _ _ => Driver.History.state_lift _
   fixtureEnter := fun _ => Driver.History.state_pure _
   fixtureLeave := fun _ => Driver.History.state_pure _

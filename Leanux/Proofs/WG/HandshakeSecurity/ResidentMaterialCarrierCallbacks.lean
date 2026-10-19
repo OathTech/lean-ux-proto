@@ -72,7 +72,8 @@ theorem forget_saved (pid : PeerId) (peer : Peer) {g : WGPrefix Journal.Event α
   safe.consequence (fun _ _ _ hi => hi.1) (fun _ _ _ _ hi => hi)
 
 theorem keepalive_carrier (pid : PeerId) : CarrierSafe (Driver.keepaliveObserved Journal.hooks pid) := by
-  unfold Driver.keepaliveObserved
+  rw [Driver.keepalive_native _ rfl]
+  unfold Driver.keepaliveInline
   apply StatePrefixEnsures.bind (read_saved pid)
   intro peer
   apply StatePrefixEnsures.bind (saved_ambient pid peer _)

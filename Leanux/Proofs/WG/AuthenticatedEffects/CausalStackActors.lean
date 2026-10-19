@@ -27,6 +27,7 @@ private theorem selected (d : Device) (j : UInt64) (pid : PeerId) (timer : PeerT
 private def neutral : Driver.Hooks Event := {hooks with stackInput := fun _ body => body}
 
 private theorem ordinary : Driver.HooksHistorySafe Safe neutral where
+  keepalivePrepare := fun _ => receipt_quiet _ (Driver.History.state_lift _) _ (fun _ => rfl)
   fixtureEnter := fun trigger => state_enter (.fixture trigger) (fun _ => rfl)
   fixtureLeave := state_leave
   handshake := handshake
@@ -53,6 +54,7 @@ private theorem ordinary : Driver.HooksHistorySafe Safe neutral where
   transmit := transmit
 
 theorem core : Driver.ActorCoreHistorySafe Safe hooks where
+  keepalivePrepare := fun _ => receipt_quiet _ (Driver.History.state_lift _) _ (fun _ => rfl)
   staging := Driver.staging_history (g := neutral) ordinary
   fixtureEnter := ordinary.fixtureEnter
   fixtureLeave := ordinary.fixtureLeave

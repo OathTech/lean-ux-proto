@@ -43,6 +43,7 @@ theorem handshake_complete : Preserves (Driver.handshakeObserved HandshakeDriver
 
 
 theorem core : Driver.ActorCoreHistorySafe Safe HandshakeDriver.hooks where
+  keepalivePrepare := fun _ => TransmitSecurity.Driver.History.state_lift _
   staging := Driver.staging_history (g := quietHooks) (quiet Safe)
   fixtureEnter := (quiet Safe).fixtureEnter
   fixtureLeave := (quiet Safe).fixtureLeave

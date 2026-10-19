@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.TransmitSecurity.KeepalivePreparation
 import Leanux.Proofs.WG.RetirementSecurity.OccurrenceHandshakeSendFrames
 
 /-! Native keepalive preparation may stage one plaintext; only the original
@@ -6,12 +7,6 @@ namespace Leanux.Proofs.WG.RetirementSecurity.OccurrenceHandshake
 open Leanux Leanux.WG Leanux.Proofs.Framing Lifetimes Queues
 open Queues.RxCredits
 
-def keepalivePrepare (pid : PeerId) : WG.M Bool := do
-  let p ← getPeer pid
-  if ← branch .keepaliveStagedEmpty p.staged.isEmpty then
-    if ← branch .keepaliveNoMem !(← hiddenAlloc .keepaliveSkb) then return false
-    setPeer pid { p with staged := p.staged ++ [{ mtu := (← getDev).mtu }] }
-  pure true
 
 theorem keepalive_factor (pid : PeerId) : sendKeepalive pid = (do
     let ready ← keepalivePrepare pid

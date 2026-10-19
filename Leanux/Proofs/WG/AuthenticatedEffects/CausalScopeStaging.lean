@@ -36,6 +36,7 @@ theorem staging (pid : PeerId) : StateSafe (Driver.stagingObserved hooks pid) :=
 theorem keepalive (pid : PeerId) : StateSafe (Driver.keepaliveObserved hooks pid) := by
   unfold Driver.keepaliveObserved
   repeat' first
+    | (scope_balance_head Driver.Hooks.keepalivePrepare; exact state_receipt _ (state_lift _) _ (fun _ => rfl))
     | (scope_balance_head Driver.stagingObserved; exact staging _)
     | scope_state_step
 

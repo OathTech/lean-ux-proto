@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalCoverageInitialized
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalScopeInitialized
 import Leanux.Proofs.WG.AuthenticatedEffects.HandshakeFreshInitialized
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalDelayedParents
@@ -1312,5 +1313,16 @@ theorem initialized_causal_scopes_are_well_formed
     (position : (runPrefixOuter (CausalJournal.execute trace placeholders) []).2 = before ++ after) :
     CausalScope.WellFormed CausalJournal.scope? before :=
   CausalJournal.ScopeBalance.initialized_prefix trace placeholders before after position
+
+/-- Security: every native timer arm, handshake-work append and TX allocation
+in the initialized final journal has a nonempty current lexical context at its
+own position, including before a later Stop. Actual poll, timer, fixture,
+handshake, completion and work scopes discharge the source caller obligations;
+an arbitrary native invocation is not granted a context. Authentication and the
+backward causal-root proof for that context remain separate obligations. -/
+theorem initialized_delayed_effects_and_allocations_have_context
+    (trace : Runner.Trace) (placeholders : Bool) :
+    CausalJournal.Coverage.Safe (runPrefixOuter (CausalJournal.execute trace placeholders) []).2 :=
+  CausalJournal.Coverage.initialized trace placeholders
 
 end Leanux.Proofs.WG.AuthenticatedEffects

@@ -15,6 +15,7 @@ abbrev ProductHistorySafe (Safe : List E → Prop) (g : PrefixM E α) : Prop :=
   PrefixPreserves (fun h _ => Safe h) Safe g
 
 structure HooksHistorySafe (Safe : List E → Prop) (hooks : Hooks E) : Prop where
+  keepalivePrepare : ∀ pid, StateHistorySafe Safe (hooks.keepalivePrepare pid)
   fixtureEnter : ∀ trigger, StateHistorySafe Safe (hooks.fixtureEnter trigger)
   fixtureLeave : ∀ token, StateHistorySafe Safe (hooks.fixtureLeave token)
   handshake : ∀ (session : PeerId → WGPrefix E Bool) (keepalive : PeerId → WGPrefix E Unit),
@@ -49,6 +50,7 @@ allocated packets. Requiring arbitrary allocation arguments to preserve such a
 property would discard that source relationship. Other callback contracts stay
 explicit and the original native driver remains unchanged. -/
 structure ActorCoreHistorySafe (Safe : List E → Prop) (hooks : Hooks E) : Prop where
+  keepalivePrepare : ∀ pid, StateHistorySafe Safe (hooks.keepalivePrepare pid)
   staging : ∀ pid, StateHistorySafe Safe (stagingObserved hooks pid)
   fixtureEnter : ∀ trigger, StateHistorySafe Safe (hooks.fixtureEnter trigger)
   fixtureLeave : ∀ token, StateHistorySafe Safe (hooks.fixtureLeave token)

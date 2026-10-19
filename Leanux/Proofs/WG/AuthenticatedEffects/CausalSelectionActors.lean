@@ -17,6 +17,7 @@ private def quietHooks : Driver.Hooks Event :=
                timerSelected := fun _ _ _ _ _ => pure 0 }
 
 private theorem quiet_hooks : Driver.HooksHistorySafe Safe quietHooks where
+  keepalivePrepare := fun _ => receipt_quiet _ (Driver.History.state_lift _) _ (fun _ => True.intro)
   fixtureEnter := fun trigger => state_enter (.fixture trigger) (fun _ => True.intro)
   fixtureLeave := state_leave
   handshake := handshake

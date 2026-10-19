@@ -1,6 +1,7 @@
+import Leanux.Proofs.WG.TransmitSecurity.StagedOriginFrames
 import Leanux.Proofs.WG.TransmitSecurity.StagedAdmission
 import Leanux.Proofs.WG.TransmitSecurity.StagedTrim
-import Leanux.Proofs.WG.TransmitSecurity.StagedKeepalive
+import Leanux.Proofs.WG.TransmitSecurity.StagedKeepaliveFinal
 import Leanux.Proofs.WG.TransmitSecurity.StagedHandshakeFrames
 import Leanux.Proofs.WG.TransmitSecurity.SocketCiphertextBinding
 import Leanux.Proofs.WG.TransmitSecurity.CompletionOriginFinal
@@ -887,5 +888,22 @@ theorem native_keepalive_preparation (pid : PeerId) (r : WGRunWitness Bool)
         (Staged.stagedAt r.after pid = some (stamp,packets) ∨
           (packets = [] ∧ r.value = true ∧ Staged.stagedAt r.after pid = some (stamp,[{mtu}]))) :=
   Staged.keepalive_projection pid r valid
+
+/-- Security: every keepalive preparation recorded by the initialized execution
+is an actual native call and can introduce only its caller's canonical empty
+packet at the actual MTU. Other staged queues and drop accounting are unchanged.
+A later Stop retains the receipt; causal authorization is a separate obligation. -/
+theorem initialized_keepalive_preparation (trace : Runner.Trace) (placeholders : Bool)
+    (pre post : List AuthenticatedEffects.CausalJournal.Event) (pid : PeerId) (r : WGRunWitness Bool)
+    (position : (runPrefixOuter (AuthenticatedEffects.CausalJournal.execute trace placeholders) []).2 =
+      pre ++ AuthenticatedEffects.CausalJournal.Event.keepalivePrepared pid r :: post) :
+    Staged.dropped r.after = Staged.dropped r.before ∧
+      (∀ q, pid ≠ q → Staged.stagedAt r.after q = Staged.stagedAt r.before q) ∧
+      ∃ stamp packets mtu,
+        Staged.stagedAt r.before pid = some (stamp,packets) ∧
+        r.before.dev.map Device.mtu = some mtu ∧
+        (Staged.stagedAt r.after pid = some (stamp,packets) ∨
+          (packets = [] ∧ r.value = true ∧ Staged.stagedAt r.after pid = some (stamp,[{mtu}]))) :=
+  Staged.initialized_keepalive_preparation trace placeholders pre post pid r position
 
 end Leanux.Proofs.WG.TransmitSecurity

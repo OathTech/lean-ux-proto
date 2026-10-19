@@ -82,6 +82,25 @@ theorem history_lower (action : PrefixM Journal.Event α)
   | error err => trivial
   | ok out => exact kept
 
+theorem history_focused_receipt (encode : F → Journal.Event) (decode : Journal.Event → Option F)
+    (action : WG.M α) (make : WGRunWitness α → F) (quiet : ∀ r, Quiet (encode (make r))) :
+    Driver.StateHistorySafe Safe
+      (focusStatePrefix encode decode (receiptWGObserved (liftWGPrefix action) make)) := by
+  have equal : focusStatePrefix encode decode (receiptWGObserved (liftWGPrefix action) make) =
+      receiptWGObserved (liftWGPrefix action) (fun r => encode (make r)) := by
+    funext w a h
+    change runWGPrefix (focusStatePrefix encode decode _) w a h =
+      runWGPrefix (receiptWGObserved (liftWGPrefix action) (fun r => encode (make r))) w a h
+    change ((runWGPrefix (receiptWGObserved (liftWGPrefix action) make) w a (h.filterMap decode)).1,
+      h ++ ((runWGPrefix (receiptWGObserved (liftWGPrefix action) make) w a
+        (h.filterMap decode)).2.drop (h.filterMap decode).length).map encode) = _
+    rw [runWGPrefix_receiptWGObserved,runWGPrefix_receiptWGObserved,runWGPrefix_lift,runWGPrefix_lift]
+    cases (action.run w).run a with
+    | error err => simp
+    | ok out => obtain ⟨⟨_,_⟩,_⟩ := out; simp
+  rw [equal]
+  exact history_receipt_state _ _ quiet (Driver.History.state_lift _)
+
 theorem prepare : ProductSafe (Journal.hooks.prepare) := by
   have observed : PrefixPreserves (fun h w => Bounded (h.filterMap Journal.origin?) w.wg)
       (fun _ => True) Journal.hooks.prepare :=
