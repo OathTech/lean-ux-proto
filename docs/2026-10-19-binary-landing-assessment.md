@@ -1,4 +1,4 @@
-# Binary experiment: prospective landing assessment
+# Binary experiment: landing preparation and validation
 
 Status: landing preparation on main `3f3879e0`, using the split mirror and an
 explicit s5 image pin. The full binary build and standalone proof gate pass.
@@ -438,3 +438,55 @@ the input is regenerated with that documented budget. No theorem precondition,
 execution bound in a theorem, or machine behavior changes for this correction.
 Fresh exact witnesses, retained-heap tests, capture replays and external
 kernel acceptance are reported below when complete.
+
+### Completed runtime checks and gate input
+
+The following runs completed on the s5 carry at code commit `73649245`:
+
+| Check | Result |
+| --- | --- |
+| Paired allowed-IPs, IPv4 | PASS: 9 cases, 20 calls, 32,918 instructions, 20 controls |
+| Paired allowed-IPs, IPv6 (documented budget 100,000) | PASS: 10 cases, 22 calls, 43,514 instructions, 20 controls |
+| Original M1 exact miss witness | PASS: 191 instructions, two undefined-value seeds |
+| Original M1 exact dead/live hit witnesses | PASS: 441 / 506 instructions, two seeds, owner/count/output and decisions checked |
+| Both-family paired call witnesses | PASS: four executions of the exact formal entry states |
+| Removal and replacement paired suites | PASS: 54 / 24 calls, 4,550 / 2,174 instructions |
+| Insertion paired suite | PASS: 40 calls, 23,450 instructions, supplied random-service returns |
+| Non-inserting retained-heap sequences | PASS: 8 sequences, 80 calls, 21,268 instructions |
+| Inserting retained-heap sequences | PASS: 32 sequences, 416 calls, 434,064 instructions, actual provider bodies |
+| Exact removal/replacement/insertion formal witnesses | PASS: four runs each |
+
+The constructed and mutated cases remain labelled as such. Kernel entry
+realism does not follow from a materialized prefix or a positive Pre witness.
+Selected actual captures are a separate test channel, reported below.
+
+The combined leanexport finished with exit zero at code commit `73649245`,
+root modules `LookupSnapshotTransport`, `LookupWitness`, `LookupHitWitness`,
+`AllowedipsWitnessPre`, `PairCallbackSurface`, and `PairCallWitness`, including
+their complete declaration closure. It is the disposable
+`.tmp/binary-pair-landing.ndjson` (about 1.6 GiB), not a committed evidence file.
+The external command is the README's `lake check --from-export` form, run by
+the user outside Nono. **External acceptance of this export remains pending**;
+none of the historical accepted exports is evidence for this port.
+
+Fresh `leanchecker --fresh` replays also pass for `LookupSnapshotTransport`,
+`LookupHitWitness`, `PairCallWitness`, and `PairCallbackSurface`, each including
+its imported closure. These local replays do not replace external export
+acceptance. The external command is deferred to the final handoff at the
+user's request; the export is complete and preserved for that check.
+
+Landing hygiene: main remains `3f3879e0` and the experiment branch remains
+`272104798c4c0cd0acd34212e1ec4712d52d0d66`. `AGENTS.md` and the mirror campaign's
+`scripts/proof-gate` match main. The separate binary gate is executable and
+self-contained. The historical removal of the mirror package's `-j1` option
+is retained, consistent with the authorized parallel builds; the library and
+executable targets remain separate from the default mirror build. No shared
+Kraken checkout, oracle image, machine-global configuration, main ref or remote
+was changed.
+
+The insertion capture replay's Python preflight now explicitly uses the
+binary identity and ELF pin, as the capture commands do. It no longer inherits
+main's future oracle identity. The existing identity tests pass (15 Python
+tests total), and the new preflight accepts the freshly captured s5 input.
+This wrapper-only repair does not alter the Lean closure exported at
+`73649245`.

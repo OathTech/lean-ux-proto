@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Replay insertion only after checking the capture against current pins."""
 import argparse
-import hashlib
 import json
 from pathlib import Path
 import subprocess
@@ -11,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from binary.census import ORACLE
 from binary.pin import verify_pin
+from binary.target import pins, verify_image
 from harness.linux import verify_kernel
 
 
@@ -31,9 +31,8 @@ def main():
     parser.add_argument('layouts', type=Path)
     args = parser.parse_args()
     kraken = verify_pin(ROOT)
-    kernel = verify_kernel(ORACLE.parent)
-    with ORACLE.open('rb') as stream:
-        image = hashlib.file_digest(stream, 'sha256').hexdigest()
+    kernel = verify_kernel(ORACLE.parent, expected=pins()[0])
+    image = verify_image()
     with args.snapshot.open() as stream:
         snapshot = json.load(stream)
     validate_identity(snapshot, kernel, image, kraken)
