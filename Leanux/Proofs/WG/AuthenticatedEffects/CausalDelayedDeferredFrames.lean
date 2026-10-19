@@ -36,7 +36,7 @@ theorem env_read : ProductSafe (liftPrefix getEnv) := by
   cases run
   rfl
 
-private theorem clear_keys (pid : PeerId) : StateSafe (liftWGPrefix (keypairsClear pid)) := by
+theorem clear_keys (pid : PeerId) : StateSafe (liftWGPrefix (keypairsClear pid)) := by
   apply state_framed
   · intro initial
     unfold keypairsClear
@@ -49,7 +49,7 @@ private theorem clear_keys (pid : PeerId) : StateSafe (liftWGPrefix (keypairsCle
     index_unfold _private.Leanux.WG.Keypair.«0».Leanux.WG.modifyPeer
     repeat' send_work_frame_step initial
 
-private theorem clear_handshake (pid : PeerId) : StateSafe (liftWGPrefix (handshakeClear pid)) := by
+theorem clear_handshake (pid : PeerId) : StateSafe (liftWGPrefix (handshakeClear pid)) := by
   apply state_framed
   · intro initial
     unfold handshakeClear handshakeZero

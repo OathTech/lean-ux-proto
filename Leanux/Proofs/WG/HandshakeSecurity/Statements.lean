@@ -5,6 +5,9 @@ import Leanux.Proofs.WG.HandshakeSecurity.ResidentMaterialWorker
 import Leanux.Proofs.WG.HandshakeSecurity.ResidentMaterialJournal
 import Leanux.Proofs.WG.HandshakeSecurity.ResidentMaterialBounds
 import Leanux.Proofs.WG.HandshakeSecurity.ResidentMaterialCarrierCallbacks
+import Leanux.Proofs.WG.HandshakeSecurity.ResidentMaterialStack
+import Leanux.Proofs.WG.HandshakeSecurity.ResidentMaterialWorkers
+import Leanux.Proofs.WG.HandshakeSecurity.ResidentMaterialScheduler
 import Leanux.Proofs.WG.HandshakeSecurity.StagingMaterialBank
 import Leanux.Proofs.WG.HandshakeSecurity.ExchangeDriverProjection
 import Leanux.Proofs.WG.HandshakeSecurity.ExchangeSend
@@ -1291,5 +1294,35 @@ theorem native_encryption_retains_material_carrier (item : Option (List SkbId)) 
     PrefixPreserves (fun h w => ResidentMaterial.Carrier h w.wg) ResidentMaterial.Safe
       (TransmitSecurity.Journal.encrypt item) :=
   ResidentMaterial.encrypt_carrier item
+
+/-- Security: native indexed receive polling preserves TX allocation-time key
+material through replay checks, confirmation, cleanup and actual IPv4 stack
+replies. The full callback chain is discharged on the same journal, including
+Stop; only the local entry carrier remains until initialized transport closes. -/
+theorem native_indexed_poll_retains_tx_key_material (pid : PeerId) (budget : Nat) :
+    ResidentMaterial.ProductSafe
+      (TransmitSecurity.Driver.nativePollObserved TransmitSecurity.Journal.hooks pid budget) :=
+  ResidentMaterial.native_poll_carrier pid budget
+
+/-- Security: actual encryption, decryption and transmit worker iterations
+preserve allocation-stamped TX key-material evidence through both NAPI modes,
+rescheduling and disposal. Stopped prefixes retain emitted AEAD certificates;
+the local carrier is explicit pending the initialized outer composition. -/
+theorem native_workers_retain_tx_key_material (pid : PeerId) :
+    ResidentMaterial.ProductSafe (TransmitSecurity.Driver.encryptIterObserved TransmitSecurity.Journal.hooks) ∧
+    ResidentMaterial.ProductSafe (TransmitSecurity.Driver.decryptIterObserved TransmitSecurity.Journal.hooks) ∧
+    ResidentMaterial.ProductSafe (TransmitSecurity.Driver.txIterObserved TransmitSecurity.Journal.hooks pid) :=
+  ⟨ResidentMaterial.encrypt_iteration_carrier,ResidentMaterial.decrypt_iteration_carrier,
+    ResidentMaterial.tx_iteration_carrier pid⟩
+
+/-- Security: the actual shared scheduler preserves TX allocation-time key
+material across all committed worker callbacks, including handshake consumption,
+fresh session installation and response-triggered staging. Native C1 bounds
+exclude a fresh key slot from older packet references; no H1 package is needed.
+The incoming material carrier remains explicit until Runner transport closes. -/
+theorem native_scheduler_retains_tx_key_material (stack : Option Worker) :
+    ResidentMaterial.ProductSafe
+      (TransmitSecurity.Driver.scheduleObserved TransmitSecurity.Journal.hooks stack) :=
+  ResidentMaterial.schedule_carrier stack
 
 end Leanux.Proofs.WG.HandshakeSecurity

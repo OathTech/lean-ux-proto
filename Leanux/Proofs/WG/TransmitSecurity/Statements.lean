@@ -34,6 +34,7 @@ import Leanux.Proofs.WG.TransmitSecurity.ReservationBankEncryption
 import Leanux.Proofs.WG.TransmitSecurity.BatchNativeTx
 import Leanux.Proofs.WG.TransmitSecurity.BatchNativeInitialized
 import Leanux.Proofs.WG.TransmitSecurity.BatchJournalFinal
+import Leanux.Proofs.WG.TransmitSecurity.SocketJournalFinal
 
 /-! Campaign 3, T1 initialized counter reservations and local AEAD contracts.
 Exclusive reservation tokens now reach every initialized AEAD occurrence;
@@ -730,5 +731,19 @@ theorem initialized_encryption_batch_binding (trace : Runner.Trace) (placeholder
         AuthenticatedEffects.CausalJournal.old?) :=
   ⟨BatchJournal.Scheduler.initialized trace placeholders,
     BatchJournal.final_initialized trace placeholders⟩
+
+/-- A socket handoff for a different peer would violate transmit binding.
+Every initialized transport socket receipt reads a packet whose stored peer is
+the peer selected for that socket call. Actual cached queue selection supplies
+the batch alignment; the result includes stopped prefixes and the exact final
+causal journal, with no incoming alignment assumption. Ciphertext provenance,
+historical routing linkage and complete conservation remain separate. -/
+theorem initialized_socket_packet_peer_binding (trace : Runner.Trace) (placeholders : Bool) :
+    SocketJournal.Safe (runPrefixOuter (Journal.execute trace placeholders) []).2 ∧
+    SocketJournal.Safe
+      ((runPrefixOuter (AuthenticatedEffects.CausalJournal.execute trace placeholders) []).2.filterMap
+        AuthenticatedEffects.CausalJournal.old?) :=
+  ⟨SocketJournal.Scheduler.initialized trace placeholders,
+    SocketJournal.final_initialized trace placeholders⟩
 
 end Leanux.Proofs.WG.TransmitSecurity

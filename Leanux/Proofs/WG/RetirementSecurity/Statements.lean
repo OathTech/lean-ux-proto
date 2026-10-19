@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.RetirementSecurity.FinalRxSelection
+import Leanux.Proofs.WG.RetirementSecurity.ZeroTimerDispatch
 import Leanux.Proofs.WG.RetirementSecurity.ZeroTimerQueued
 import Leanux.Proofs.WG.RetirementSecurity.InitializedRetirement
 import Leanux.Proofs.WG.RetirementSecurity.HolderInitialized
@@ -2055,5 +2057,74 @@ theorem initialized_timer_worker_clears_slots (trace : Runner.Trace) (placeholde
     (dispatched : ((runFlushedClearWork pid).run u).run b=.ok (((),v),c)) :
     (∃d,u.dev=some d ∧ pid∈d.clearWorkQueue) ∧ HolderAccount [] v ∧ SlotsCleared pid v ∧ Retains u v :=
   ZeroTimerQueued.initialized_callback_then_worker trace placeholders initialized pid p alive found b c fired dispatched
+
+/-- The actual recorded wheel dispatch queues a live peer's zero-key clear
+work through all worker, address and bucket guards. Initialization and the
+peer's published slot derive liveness and exact reference funding; normal
+dispatch is the explicit clock/record progress premise. -/
+theorem initialized_recorded_zero_dispatch (trace : Runner.Trace) (placeholders : Bool)
+    (initialized : Leanux.Proofs.Logged.runPrefixOuter (Queues.RxCredits.RunnerAccount.observed trace placeholders) []=
+      (.ok (result,w),h)) (kind : Worker) (pid : PeerId) (entry : WheelEntry) (prior : Option UInt64)
+    (p : Peer) (found : peerAt w.wg pid=some p) (published : HasKeySlot p)
+    (run : (Leanux.Proofs.Logged.timerDispatchUnit kind pid .zeroKeyMaterial entry prior).run w=.ok ((),v)) :
+    HolderAccount [] v.wg ∧ ZeroTimerDispatch.Queued pid v.wg :=
+  ZeroTimerDispatch.initialized_dispatch trace placeholders initialized kind pid entry prior p found published run
+
+/-- After the actual recorded zero-key timer dispatch and that peer's native
+flushed clear work, its publication slots are empty and remaining packet
+references stay exactly funded. Both concrete executions are required: queue
+membership or elapsed wall-clock time alone supplies no worker-progress claim. -/
+theorem initialized_recorded_timer_worker_retirement (trace : Runner.Trace) (placeholders : Bool)
+    (initialized : Leanux.Proofs.Logged.runPrefixOuter (Queues.RxCredits.RunnerAccount.observed trace placeholders) []=
+      (.ok (result,w),h)) (kind : Worker) (pid : PeerId) (entry : WheelEntry) (prior : Option UInt64)
+    (p : Peer) (found : peerAt w.wg pid=some p) (published : HasKeySlot p)
+    (fired : (Leanux.Proofs.Logged.timerDispatchUnit kind pid .zeroKeyMaterial entry prior).run w=.ok ((),u))
+    (b : Ambient) (worker : ((runFlushedClearWork pid).run u.wg).run u.ambient=.ok (((),v),b)) :
+    ZeroTimerDispatch.Queued pid u.wg ∧ HolderAccount [] v ∧ SlotsCleared pid v ∧ Retains u.wg v := by
+  obtain ⟨account,queued⟩ := ZeroTimerDispatch.initialized_dispatch trace placeholders initialized
+    kind pid entry prior p found published fired
+  exact ⟨queued,(hoare_iff_run_ambient _ _ _).mp (flushed_holders pid []) u.wg u.ambient () v b account worker,
+    flushed_retirement pid u.wg v u.ambient b worker⟩
+
+/-- Successive original RX peek, readiness, read and dequeue calls move the
+selected packet's actual key occurrence into one detached local credit.
+Initialization derives both physical uniqueness and exact key funding; these
+four native runs expose the concrete poll-selection progress condition. -/
+theorem initialized_rx_selection_key_credit (trace : Runner.Trace) (placeholders : Bool)
+    (initialized : Leanux.Proofs.Logged.runPrefixOuter (Queues.RxCredits.RunnerAccount.observed trace placeholders) []=
+      (.ok (result,w),h)) (pid id : Nat) (pkt : RxPacket) (b c d e : Ambient)
+    (peek : ((Queues.peekRxQueue pid).run w.wg).run w.ambient=.ok ((some id,u),b))
+    (test : ((NativeRxSelection.ready (some id)).run u).run b=.ok ((true,t),c))
+    (read : ((getRxSkb id).run t).run c=.ok ((pkt,s),d))
+    (drop : ((Queues.dropRxQueue pid).run s).run d=.ok (((),v),e)) :
+    ∃allocation,pkt.keypair=allocation.slot ∧ HolderAccount [allocation] v ∧
+      RxDetached id v ∧ pkt.state≠.uncrypted ∧ NativeRxSelection.wire v=NativeRxSelection.wire w.wg :=
+  NativeRxSelection.initialized_selected trace placeholders initialized pid id pkt b c d e peek test read drop
+
+/-- An initialized queued DEAD RX packet holding the sole key reference
+retires its allocation after the actual poll selection, recorded DEAD-state
+comparison and literal cleanup. All native runs share their intermediate
+states; progress and the sole-holder count are explicit, with no incoming
+cleanup-cut invariant. This is the DEAD path, not a whole-poll fairness claim. -/
+theorem initialized_final_dead_rx_reference_removes_key (trace : Runner.Trace) (placeholders : Bool)
+    (initialized : Leanux.Proofs.Logged.runPrefixOuter (Queues.RxCredits.RunnerAccount.observed trace placeholders) []=
+      (.ok (result,w),h)) (allocation : Credits.Allocation) (projected : durableLoans w.wg=some loans)
+    (last : (loans.map (·.allocation)).count allocation=1)
+    (pid id : Nat) (pkt : RxPacket) (owner : pkt.peer=pid) (key : pkt.keypair=allocation.slot)
+    (dead : pkt.state=.dead) (b c d e f g : Ambient)
+    (peek : ((Queues.peekRxQueue pid).run w.wg).run w.ambient=.ok ((some id,u),b))
+    (test : ((NativeRxSelection.ready (some id)).run u).run b=.ok ((true,t),c))
+    (read : ((getRxSkb id).run t).run c=.ok ((pkt,s),d))
+    (drop : ((Queues.dropRxQueue pid).run s).run d=.ok (((),v),e))
+    (stateCheck : ((branch .rxPollNotCrypted (pkt.state != .crypted) : WG.M Bool).run v).run e=
+      .ok ((skip,z),f))
+    (dispose : ((do
+      keypairPut (some pkt.keypair) false
+      peerPut (some pid)
+      _←branch .rxPollFree true
+      freeRxSkb id : WG.M Unit).run z).run f=.ok (((),final),g)) :
+    skip=true ∧ keyAt final allocation.slot=none :=
+  FinalRxSelection.initialized_dead trace placeholders initialized allocation projected last
+    pid id pkt owner key dead b c d e f g peek test read drop stateCheck dispose
 
 end Leanux.Proofs.WG.RetirementSecurity

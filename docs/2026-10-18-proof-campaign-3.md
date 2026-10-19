@@ -20,7 +20,7 @@ stops the work. Validation for the current source-contract checkpoint is recorde
 | Outcome | Status and remaining obligation |
 | --- | --- |
 | T1 nonce safety | Open. Initialized native counter reservations are unique through Stop, and admitted counters have injective encoding. Every actual initialized AEAD now has a below-limit nonce and strict earlier reservation evidence. Initialized global packet-identity non-reuse now closes through the same driver and exact causal-journal projection. Each initialized AEAD now has an exclusive allocation-stamped reservation token matching its packet nonce, with no two AEAD occurrences sharing an assigned token. Initialized encryption receipts now bind the head, packet and AEAD key slot. Historical key-material continuity remains open. |
-| T2 transmit authorization and conservation | Open. R3 supplies initialized selection-time authorization; packet/material transport to actual encryption and socket emission, and complete TX dispositions, remain to prove. |
+| T2 transmit authorization and conservation | Open. R3 supplies initialized selection-time authorization; initialized encryption head/packet key agreement and socket/packet peer agreement are proved. Ciphertext provenance, historical routing linkage and complete TX dispositions remain to prove. |
 | T3 authenticated effects and silence | Open. R6 supplies the cookie gate's local contracts, not causal closure of all delayed effects. |
 | T4 handshake replay resistance | Open. Initialized retained-peer timestamps and exchange epochs are derived. Successful sessions have one actual allocation and clear their handshake; refused sessions preserve the whole WireGuard state. Final role-slot residency now follows the actual final-journal session entry. Direct initialized stale-refusal/no-response remains. Named C2 source assumptions stay visible. |
 | T5 responder confirmation | Open. Initialized responder selections have earlier successful confirmations, each immediately preceded by a certified replay and earlier AEAD publication in the same journal. Key-allocation continuity and the actual encryption prohibition remain open. |
@@ -554,6 +554,31 @@ completes 131 tests with one configured-kernel skip (23.266 seconds). All 1967
 frozen proof hashes and 916 existing main proof files remain unchanged; the
 root retains the campaign imports. Main and the mirror remain unchanged.
 All six full outcomes remain open.
+
+Checkpoint twenty-six passes complete validation. The actual cached TX peek supplies
+selected-batch peer agreement; native completion, socket calls, queue removal
+and disposal preserve it. The initialized shared journal and exact final
+causal-journal projection now bind every socket packet to its socket-call peer,
+including stopped prefixes, without an incoming alignment premise.
+The base delayed-effect carrier covers native configuration, removal drains,
+lifecycle, ingress, traffic, dumps and the full syscall spine, with actual
+fixture initialization. Positional selection and causal authorization remain
+separate. Resident key-material transport now includes indexed RX polling,
+Stack replies, replay/confirmation/cleanup, NAPI and all packet workers.
+Actual recorded timer dispatch reaches zero-callback queue publication;
+initialized native RX selection derives detachment and temporary key credit,
+and the final DEAD cleanup removes a sole-held allocation. The remaining T6
+joins concern session-arm provenance, whole-clear index unpublication and
+final authenticated RX disposal, under the stated recorded-progress conditions.
+The shared handshake receiver and scheduler also retain the material carrier
+through consumer failures, cookies, fresh sessions and response keepalives.
+Adopted owned pins are T3 `a3091874`, T4 `586024b7`, and T6 `45c31beb`.
+The gate passes 2062 jobs and 1320 terminal declarations across thirteen roots,
+using only permitted axioms. All twelve witnesses, fresh-root kernel replay
+and the 130-job model build pass. The unit suite completes 131 tests with one
+configured-kernel skip (23.178 seconds). All 2006 frozen proof hashes and
+916 existing main proof files remain unchanged; main and the mirror are
+unchanged. All six full outcomes remain open.
 
 ## Validation
 
