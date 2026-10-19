@@ -87,3 +87,33 @@ same generated suite passed again. New modules have no lint warnings. The
 ordinary intermediate elaboration failures primarily concerned numeric
 normalization, instruction-state unification and conditional-branch arithmetic;
 no counterexample or new readiness restriction was introduced.
+
+### Five callbacks and consumer integration
+
+All five image contracts were complete by 18:06 UTC. The shared comparison
+body takes 380 lines; its three wrappers share `wrapper_plan` and
+`wrapper_body`, with roughly 24 execution-proof lines per wrapper and a short
+contract corollary. This added about six minutes after the PC checkpoint.
+The comparison body covers capacity arithmetic and shifts modulo 64 bits,
+including wrap and aliased store destinations. No readiness predicate changed.
+
+`CallbackContracts` supplies each contract under only
+`ServiceDecoderAgreement`. Fresh replay with
+`capped lake env leanchecker --fresh CallbackContracts` exited zero.
+`capped lake build PairCallbackAdequacy` passed, printing only standard axioms
+for the four single-call and two finite-sequence corollaries. All six reuse
+the existing accepted mirror run, reconstruction and physical postconditions;
+the five behavioral callback hypotheses have been removed. Insertion and
+mixed insertion still explicitly require their random-service and input
+coupling contracts. The sequence corollaries retain their broader permission
+premises at this intermediate checkpoint. First-return work remains open.
+
+Consumer integration required 151 lines of explicit theorem statements and
+applications, with no new physical invariant. The dependency rebuild checked
+477 jobs. The generated service suite passed again with unchanged counts.
+A temporary simplifier loop in shift normalization failed at the recursion
+limit and was replaced by a specific shift-by-three equality; this was an
+ordinary proof-development failure, not a changed ISA or hidden assumption.
+New-module lints were repaired, including a deprecated theorem alias. External
+export acceptance is still pending and no campaign coverage percentage changes
+as a result of these shared-service proofs.
