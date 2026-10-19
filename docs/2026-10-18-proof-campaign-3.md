@@ -298,16 +298,18 @@ and queued-initiation callbacks remain explicit pending their source discharge. 
 entry's exact ledger and cleanup debts; its send/free/timer joins remain open.
 These local results pass the aggregate checks below; initialized T2 conservation remains open.
 
+Source-48 local joins retain full Entry through native queue admission, both peer-release observers, queued initiation and refusal frees. The actual transmit/keepalive composition now leaves only its creation callback open; completion uses indexed settlement and cleanup. Exact normal refusal-debt restoration, enclosing source transport and historical terminal completeness remain open. These local joins pass the source-48 aggregate checks below; they do not establish initialized conservation.
+
 ## Validation
 
-Source-47 checkpoint passes the 3261-job aggregate build and 1523-declaration gate across
+Source-48 checkpoint passes the 3295-job aggregate build and 1523-declaration gate across
 thirteen roots, with only `propext`, `Classical.choice` and `Quot.sound`.
-Sixteen focused source queries also use only those axioms. All twelve
+Thirteen focused source queries also use only those axioms. All twelve
 counterexample recipes and fresh root kernel replay pass. The default model
 build passes 66 jobs; the unit suite passes 131 tests (one configured-kernel
-skip, 23.153 seconds). All 3214 frozen proof-source hashes match; all 916
+skip, 22.556 seconds). All 3248 frozen proof-source hashes match; all 916
 inherited proof modules, main at `783510e8` and mirror `77c9b555` are unchanged.
-The preceding validated checkpoint is `f1a2f19c`.
+The preceding validated checkpoint is `d90624cc`.
 
 Reproduce the proof and model checks from the campaign worktree:
 

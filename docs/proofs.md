@@ -32,13 +32,13 @@ locals and the complete pending/terminal partition remain open. Original early
 transmit refusals now have their exact invocation-level error charge; a GSO
 packet list does not multiply that charge.
 
-Source-47 checkpoint passes the 3261-job aggregate build and 1523-declaration axiom gate
-across thirteen roots, using only the three standard axioms; sixteen focused source
+Source-48 checkpoint passes the 3295-job aggregate build and 1523-declaration axiom gate
+across thirteen roots, using only the three standard axioms; thirteen focused source
 queries also pass. Fresh root kernel replay, all twelve counterexample recipes,
 the 66-job default model build and 131 unit tests pass (one configured-kernel
-skip, 23.153 seconds). All 3214 frozen proof-source hashes match; all 916 inherited
+skip, 22.556 seconds). All 3248 frozen proof-source hashes match; all 916 inherited
 proof modules, mirror `77c9b555` and main `783510e8` are unchanged. The preceding
-validated checkpoint is `f1a2f19c`. The inherited warning and repaired
+validated checkpoint is `d90624cc`. The inherited warning and repaired
 development failures are recorded in the report.
 
 The final Driver now exposes actual take, restore, terminal disposal and nested
@@ -69,6 +69,8 @@ preconditions. Canonical completion now uses the same explicit ledger/debts for
 its cursor and Entry. Enclosing create, queued-initiation, completion callbacks
 and complete initialized transport remain open; local source contracts do not
 discharge those remaining commitments.
+
+Source-48 local joins retain full Entry through native queue admission, both peer-release observers, queued initiation and refusal frees. The actual transmit/keepalive composition now leaves only its creation callback open; completion uses indexed settlement and cleanup. Exact normal refusal-debt restoration, enclosing source transport and historical terminal completeness remain open. These local joins pass the source-48 aggregate checks below; they do not establish initialized conservation.
 
 ## Current register
 
