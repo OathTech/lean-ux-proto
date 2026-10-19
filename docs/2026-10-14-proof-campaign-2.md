@@ -2,30 +2,22 @@
 
 ## Current checkpoint
 
-**Campaign-owned claims are current over main 783510e8.** The split-world
-projection remains the claim boundary. Campaign 1's validated GRO carry
-8ba82097 is incorporated unchanged, replacing the three inherited failing
-modules. The combined gate passes 2,831 jobs and 1,542 terminals with standard
-axioms. The source-selected scalar fold, same-state mixed getter join,
-exhaustive normal-outcome partition and rejected-update getter are included.
-The strengthened refused-port arm exposes its exact initial-derived effects;
-fresh Progress.Statements and Noise.Statements kernel replay pass for the subsequent H5 tranche.
-Work has resumed with confirmation uniqueness stated over allocation internalId.
-The accepted raw store-ID recreation counterexample remains below. H1 is
-complete over normal accepted executions and the documented completed-call
-observations. H2 is complete at normal initialized runner endpoints. H3 now
-has initialized handshake/data-attempt authentication and normal
-latest-setter provenance closed, with fresh replay and independent scope review passing.
-H4 is complete within its documented normal-outcome and bounded-getter scope.
-The first H5 tranche closes concrete decrypt occupancy adequacy, committed
-scheduler receipts and primitive record-suffix effects; its scoped build, full
-gate and fresh kernel replay pass. The next tranche adds deferred/traffic
-coverage, native suffix contracts, conditional activation composition and
-unconditional finite curve/pipe-rounding evaluations; scoped builds, the
-combined gate and both fresh kernel replays pass. The next tranche extends
-the journal through every syscall and the initialized runner, derives native
-receipt provenance, and closes pipe teardown plus further actual receive/suffix
-contracts. Its combined gate and fresh Progress/Index replays pass. H5–H6 remain in progress.
+**Stopped at a new H5 finding; closed claims are current over main 783510e8.**
+The [supplied-record witness](2026-10-19-proof-campaign-2-supplied-pending.md)
+is accepted with an encrypt pending identity after the checked queues drain;
+an added empty dispatch is rejected. This is runtime evidence against literal
+pending-identity emptiness, not a nontermination or unfinished-packet theorem.
+The mirror-team request is recorded, and no mirror file is changed.
+
+The combined gate passes 2,839 jobs and 1,545 terminals with standard axioms.
+Fresh Progress kernel replay passes. The preceding tranche also passed
+fresh Progress/Index replay. H1–H4 are complete within their documented scopes;
+H1 uses allocation internalId, retaining the earlier raw-store counterexample.
+H5's closed proofs now include initialized committed-run provenance, finite
+curve/pipe-rounding/teardown/write helpers and actual record-suffix contracts.
+Whole-worker decrease, remaining executable composition and global termination
+remain open. H6's complete histories remain open. Claims retain the split-world
+projection, and shared campaign-1 layers and the gate are unchanged.
 
 | Result | Headlines | Checked support | Split status |
 | --- | ---: | ---: | --- |
@@ -33,13 +25,13 @@ contracts. Its combined gate and fresh Progress/Index replays pass. H5–H6 rema
 | H2 Index | 162 | 1516 | Complete at normal initialized runner endpoints. Original index operations, collision retry and lookup contracts compose with reachable numeric/owner uniqueness, hashed-slot coverage, resident positive owners, store bounds and current-slot compatibility. Concrete ingress, poll/NAPI, crypt/TX, dump, configuration, lifecycle, scheduler/deferred, traffic and every syscall retain the same execution and its changing ledger. The projected initialized inspection preserves exact JSON/indexed Stops and derives Core plus its actual residual account without an invariant or callback premise. Earlier arbitrary-state counterexamples remain recorded; no initialized discrepancy is asserted. Final state on Stop and global termination are outside this H2 claim. Combined gate and fresh replay pass. |
 | H3 Roaming | 45 | 1290 | Complete within the documented committed-attempt and normal-final-destination scope. Initialized committed handshake setter attempts and every reached original data check carry actual prior authentication, including before indexed Stops. Both inspections preserve original outcomes and exact occurrence coverage. Normal initialized final remote destinations have their actual latest configuration or authenticated packet setter, excluding later setters/resets. No callback/invariant/success premise remains; cached local source/flowinfo, discarded consistency trials and stopped final states remain outside these claims. |
 | H4 Configuration | 217 | 2084 | Validated configuration contracts, actual mixed/key setter paginated readback with arbitrary endpoints, whole finite single-peer mixed-width getter and actual finite empty-IP peer getter and exact arbitrary-room empty-IP serializer/whole normal cursor callback and actual mixed/key setter composition with exact DATA/DONE count and arbitrary endpoints and arbitrary finite empty-IP multi-peer scalar, mixed fwmark/scalar and established-identity private-key set/get and actual endpoint set/weighted readback and local mixed-page serializer/cursor/coalescer support plus finite mixed-page planning, native callback, computed selection/reference support, finite receive budget, exact page content and complete finite mixed peer/allowed-IP getter and scalar, endpoint, fwmark/scalar and established-identity key set/get plus mixed port-refusal and all nonzero and zero port-only set/get outcomes and actual empty allowed-IP replacement/full mixed readback and initial-state flag-only replace-peers free/first-pass observations and general represented insertion/fresh-peer readback current; initialized routing, index and residual-account facts now share the same actual endpoint; allowed-IP insertion preserves configured and resident owners from initial ownership and listed residency. Actual complete peer removal preserves configured ownership through queued cleanup, and flag-only replacement derives an empty configured peer/public-key list and represented routes at normal completion from initial funding and coherence. The selected mixed allowed-IP/keepalive/staged-send tail now preserves configured ownership with the real account and pays its caller reference through normal early-error paths; exact representation uniqueness joins funding to resident owner/list coherence. Complete peer/device commands now preserve ownership with their actual account; queued flag-only replacement derives getter eligibility and exact empty-peer readback. Actual arbitrary-request certificates now retain completed-stage order, generation linkage and peer/error positions; whole queued REMOVE_ME derives configured list/table filtering and route-owner exclusion. Initialized parsed executions now derive configured/resident routing ownership from the same actual account; same-request refusal receipts fix exact normal final WG states and expose concrete port/source effects. Initial-to-port fields and normal refusal endpoints now derive from the original entry; all-branch key-stage effects, arbitrary peer-command metadata and initialized getter readability/freshness are checked. Outer key-stage funding, completed key/peer-to-final metadata, initialized native getter completion under static bounds, and arbitrary mixed refused-port setter/getter composition now check. Final identity after later peer attributes, original-entry getter context and whole-command UPDATE_ONLY/validation behavior now check. The actual acquired update now retains its completed PSK/endpoint cut before later errors; actual staging/keepalive retain full endpoint/PSK/interval for surviving peers, and same-run key getter composition checks. Original-to-key header/port continuity, arbitrary acquired-update allowed-IP order and same-account final finish scalar effects now check. Whole peer-command routing order, exact acquired-update scalar errno/success effects, original-entry final-header/key fields and mixed readback with derived readability now check. Whole existing-target scalars, nested routing positions/negative cutoff, actual WG receipt adjacency and arbitrary optional-key readback now check. Original request funding now derives every completed nested peer/routing account. Actual queued work/removal retains stamped PSK, interval and normalized serialized endpoint fields. Actual missing-target creation/acquisition/update and private-key-stage surviving scalar retention now check. Request-entry to key-stage retention and arbitrary-command nonselected retention now check without routing-shape premises. The source-classified scalar fold now derives surviving final cells from the original entry and joins exact mixed getter output. Empty-history readback and the exhaustive normal-outcome partition close the remaining statement scope. H4 is complete at the documented normal-outcome and statically bounded getter boundary; terminal build, full gate and fresh replay pass. |
-| H5 Progress | 83 | 638 | Full terminal closure, exact bounded outcomes and recorded batch, actual timer completion guards and recorded idle/post-advance wait completion and actual advance-syscall/runner linkage and send-worker completion guard and four final-idle syscall/runner receipts and exact all-mode finite allocation and successful modular-power evaluation bridges and actual activation-exit inspection current; concrete coherent decrypt-ring occupancy adequacy, committed dispatch/resume exit journals and arbitrary-site recorded-read/reschedule suffix effects now check; global progress and whole-worker record decrease remain open. |
+| H5 Progress | 86 | 684 | Closed proofs current: exact runner/activation/scheduler observations, original completion guards, coherent decrypt occupancy, initialized committed receipts with native source evidence, recorded suffix effects, and finite arithmetic/allocation/pipe helpers. New accepted supplied-record pending-identity counterexample stops the campaign; runtime evidence only. Whole-worker decrease, pipe-read and caller composition, initialized useful-work progress and global termination remain open. |
 | H6 Timers | 65 | 502 | Full terminal closure, actual retry blocks and allocation-labelled guarded session-arm events with outgoing call-entry origin and initialized give-up runtime witness with checked concrete curve outputs and all five syntactic traversal call sites covered by six observer branches with all-mode immediate effects; upstream data authentication, broader caller histories and session-relative counts remain open. |
 
-The current surface is 7,623 theorems and 647 headlines in 1,901
+The current surface is 7,669 theorems and 650 headlines in 1,908
 campaign-owned modules. The completed retrofit accounts for 1,983:
 1,321 retyped, 244 explicitly corrected, 239 retained and 179 added
-support/finding declarations. Subsequent extensions add 5,640
+support/finding declarations. Subsequent extensions add 5,686
 theorems. Twenty-two baseline frames were deleted because types supply
 their facts; five false historical cookie supports were separately retired
 with checked refutations. All 258 original terminal names and order survive.
@@ -54,7 +46,8 @@ campaign-owned files.
 
 H1 is complete at the explicit normal-execution/completed-call boundary recorded below.
 H2 is complete at normal initialized runner endpoints. H3 is complete within its
-documented scope. H4 is complete at its normal-outcome and bounded-getter boundary; H5–H6 remain in progress. The timer retry-sequence contracts
+documented scope. H4 is complete at its normal-outcome and bounded-getter boundary. H5 has a new
+recorded finding and remaining termination obligations; H6 remains in progress. The timer retry-sequence contracts
 concern supplied wheel units and their actual inspection. The first-turn and whole-episode
 contracts now connect actual outer selection and every executed turn to their
 unchanged continuation/finish. A contiguous qualifying same-peer block now has an
@@ -67,7 +60,9 @@ The owned H6 socket view supplies the needed tags without a shared-layer copy.
 
 Estimate to the campaign's own reviewable landing: another 3–7 focused
 working days, with substantial uncertainty in global scheduler progress and
-timer histories. Two charter scopes remain after validated H4 closure.
+timer histories, after disposition of the new supplied-record pending-identity
+finding. Two charter scopes remain after validated H4 closure; no landing
+date is claimed while this finding awaits disposition.
 
 | Result | Mirror | Status | Remaining whole-run scope |
 | --- | --- | --- | --- |
@@ -75,26 +70,95 @@ timer histories. Two charter scopes remain after validated H4 closure.
 | H2 | 783510e8 | Current, complete; 162 / 1516 | Normal initialized endpoint store, slot and owner coherence closed; original lookup/collision contracts retained; no internal failed-state or termination claim |
 | H3 | 783510e8 | Current, complete; 45 / 1290 | Initialized committed handshake/data attempt coverage and normal final latest-setter provenance closed |
 | H4 | 783510e8 | Current, complete; 217 / 2084 | Actual mixed request order, effective scalars, ownership and conditioned exact getter composition closed; no total setter or stopped-final-state claim |
-| H5 | 783510e8 | Current, in progress; 83 / 638 | Coherent decrypt occupancy, initialized committed-run provenance, native suffix contracts and finite curve/pipe-rounding/teardown bridges check; whole-worker decrease, remaining callback evaluation and global termination/progress remain |
+| H5 | 783510e8 | Current closed proofs; stopped at new finding; 86 / 684 | Initialized supplied-record execution accepts with a retained encrypt identity after the checked queues drain; empty redispatch is rejected. Exact witness is runtime evidence. Finite pipe-write and concrete timer suffixes close; whole-worker decrease, pipe-read/caller evaluation and global termination remain |
 | H6 | 783510e8 | Current, in progress; 65 / 502 | Complete caller/scheduler coverage and session-relative counting |
 
 Main 783510e8 is incorporated. Campaign 1's GRO carry landed unchanged;
 this merge adds campaign 3's charter and documentation only. The mirror,
 shared proof tree and gate are unchanged from the validated checkpoint.
 The cached-send socket/tag request is now closed by strengthening the existing
-owned H6 view. No new request to the mirror team arises here.
+owned H6 view. The new [supplied-record finding](2026-10-19-proof-campaign-2-supplied-pending.md)
+and request 4 in the mirror-team document now require disposition before
+continuing. Main and the mirror remain unchanged.
 
 Latest validation is reproduced with:
 
 ```sh
-LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake build Leanux.Proofs.WG.Progress.Statements Leanux.Proofs.WG.Index.Statements
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake build Leanux.Proofs.WG.Progress.Statements
 LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle scripts/proof-gate
 LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Progress.Statements
-LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Index.Statements
 ```
 
 
 
+
+## H5 finding checkpoint and remaining closed contracts, 2026-10-19
+
+The [new supplied-record witness](2026-10-19-proof-campaign-2-supplied-pending.md)
+is accepted by the actual initialized runner and leaves pendingWork equal
+to the encrypt identity after the enumerated queues drain. Its complete
+committed journal explains nested requeue followed by resumption, and an
+extra empty encrypt dispatch is rejected. This refutes literal pending-identity
+emptiness in supplied-record mode. It is not a nontermination result, an
+unexecuted-packet theorem, or a Linux capture. Statement artefact is considered
+first: pending identities and useful work are different propositions. The
+charter is not silently narrowed. The campaign stops at this new finding;
+request 4 in the mirror-team document records the follow-up.
+
+Already closed work is retained at this checkpoint. The actual complete
+pipeWriteToOut equals its finite evaluator for arbitrary inputs and every
+FS/Task/Ambient realization. Every yielded iteration strictly decreases the
+remaining copy count; the unchanged full-buffer arm returns or preserves its
+original blocking Stop. The sole allocation loop is replaced using the exact
+concrete hiddenAllocFinite equality. The merge prefix, short-copy, SIGPIPE,
+allocation refusal, page/slot failures and saved-head check remain exact.
+This is finite helper evaluation, not universal successful writes or the
+outer pipeWrite wakeup/caller composition. Independent review found no
+semantic defect in this result.
+
+Concrete arming/wheel placement, caller jiffies, deletion and all eight timer
+hooks now preserve recorded suffixes on normal return. These discharge the
+receive-completion timer premise without a callback oracle. Clock/unit/wheel
+and all other Stops remain exact. Typed source decomposition proves shared
+continuations once, avoiding proof-search expansion at default limits. These
+are H5 suffix dependencies, not new H6 complete-history or timer-discipline
+claims. The attempted queued-work extension failed and is not installed.
+
+Claims: PipeWriteClaims and TimerSuffixClaims, with Source files supplying
+original-source factors and exact native execution. PipeWriteFrames contains
+the environment-read execution equation, following the existing PipeFreeFrames
+convention. RecordedPending is a fail-noisy executable diagnostic; it adds
+zero theorems. Seven modules add 43 support theorems and three terminal claims.
+H5 is 684 / 86 headlines / 171 modules; the campaign is 7669 / 650 / 1908.
+H1 is complete (75 / 1593), H2 complete (162 / 1516), H3 complete (45 / 1290),
+H4 complete (217 / 2084), all within their documented scopes over 783510e8.
+H5 stops at this finding with global termination/decrease and pipe-read/caller
+composition still open; H6 remains 65 / 502 with whole histories open.
+
+Validation: scoped build passes 1348 jobs, including the exact accepted
+counterexample and rejected control. The combined gate passes 2839 jobs/1545 terminals with only standard
+axioms; fresh Progress kernel replay passes. The preceding initialized-provenance tranche passed
+2831 jobs/1542 terminals and fresh Progress plus Index replay. Mirror/shared
+layers and gate remain byte-identical to main; all seven new modules are
+reachable from the proof root. No theorem/frame deletion is introduced.
+
+Pipe-write used sixteen capped probes (nine passes, seven corrected failures),
+with two final clean audits of 23 supports. Its early unused-binder warning
+and broad-simplification heartbeat failure were corrected. Timer source used
+six probes (three passes, three failures); the final 18-theorem audit is clean,
+and the failed queued-work draft was discarded when the finding stop condition
+was reached. The root's earlier timer draft failed at default heartbeats with
+truncated display; it is separate from those six probes. The uninstalled
+pipe-read measure had two probes: one missing-lemma/normalization failure and
+one clean UInt32 modular-decrease proof. It is not counted as a result and
+requires future whole-loop composition. The finding construction used twelve
+probes (four candidate record failures, three elaboration failures, five
+successful diagnostics). Independent review corrected the report's initial
+all-packet-work wording to the exact tested queue fields; Peer.staged and
+arbitrary packet-store emptiness are not asserted. No unchanged retries,
+resource raises, infrastructure reruns or KILLED outcomes occurred. The only
+build warning is the inherited Env.lean String.mk deprecation; the mirror is
+unchanged and no new proof warning is left.
 
 ## H5 initialized receipts, source provenance and finite teardown, 2026-10-19
 
@@ -5750,7 +5814,7 @@ the other H5 clauses and corrected-main carry remain open.
 | H2 Index | 52 | Exact index operations, all normal lookup outcomes, caller table safety, session coherence/allocation sequence | Reachable hashed uniqueness and owner/peer residency through all driver entries |
 | H3 Roaming | 13 | Authenticated handshake cuts, decrypt/first-poll join, complete poll setter-attempt audit | Queue/callback authentication invariant, broader caller coverage, final endpoint |
 | H4 Configuration | 79 | Leaves/flags, effective bounded readback, removal/replacement phase effects, root insertion/transfer, actual two-chunk getter and scalar set/get composition | Global ownership, queued cleanup/completion, mixed attributes, general getter pagination |
-| H5 Progress | 42 | Accepted operation boundaries, actual final-boundary backlog, scheduling inspections, cut/pow/drain/poll bounds, arbitrary supplied-record index/jitter-loop adequacy, cookie activation, scheduled resumption and full bounded receive schedule | Whole-worker record decrease, global progress, corrected-main carry |
+| H5 Progress | 86 | 684 | Closed proofs current: exact runner/activation/scheduler observations, original completion guards, coherent decrypt occupancy, initialized committed receipts with native source evidence, recorded suffix effects, and finite arithmetic/allocation/pipe helpers. New accepted supplied-record pending-identity counterexample stops the campaign; runtime evidence only. Whole-worker decrease, pipe-read and caller composition, initialized useful-work progress and global termination remain open. |
 | H6 Timers | 50 | Seven local arm sites, recorded delays, caller hook compositions, retry bound, pending/absent-zero-key give-up, total recorded retransmit hook, initiation send, retry timer dispatch and named send worker | Complete caller coverage, scheduler episodes, session-relative counting |
 
 **258 headlines**; latest increment: total original named send-worker dispatch

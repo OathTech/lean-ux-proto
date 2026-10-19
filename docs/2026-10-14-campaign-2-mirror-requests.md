@@ -187,3 +187,27 @@ is asserted here. Mirror-team validation remains separate from the proof tree.
 [AGENT 2026-10-15] Report the four-byte correspondence error with its accepted
 fixture and exact callback equation, retaining the internal-only observability
 limit instead of claiming an output or kernel defect.
+
+## 4. Reconcile supplied-record pending identities after nested requeue
+
+Status: new accepted initialized runtime counterexample over main 783510e8;
+[full report and reproducer](2026-10-19-proof-campaign-2-supplied-pending.md).
+The fifth operation accepts with the encrypt pending identity still present,
+although the enumerated worker queues, RX/TX lists, NAPI scheduling, suspended
+activations and supplied records are empty. A nested native NAPI callback
+requeues encrypt work; resuming the original activation drains the new item
+without a new section start. An added empty encrypt dispatch is refused by
+the empty-ring guard. This is a distinct supplied-record execution, beyond
+the older placeholder-only witness and the rejected occupancy-bound prefix.
+
+Request: reconcile device pending-work identities, resumed activations and
+empty-ring dispatch, then determine the correct complete-stream acceptance
+rule. Preserve the distinction between an existing activation's resumption
+and a newly queued work unit. This evidence does not justify simply clearing
+a bit, does not prove unfinished packet work or nontermination, and does not
+claim correspondence with an actual Linux capture. It uses supported legacy
+arm-record mode with supplied records and placeholders disabled. No mirror
+change is made by the proof campaign; differential validation belongs to the
+mirror follow-up. The counterexample is executable evidence, not a new
+kernel-reduction theorem. H5's literal pending-identity emptiness remains
+refuted pending disposition; the global termination obligation stays open.

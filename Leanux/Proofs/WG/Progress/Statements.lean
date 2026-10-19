@@ -1,3 +1,6 @@
+import Leanux.Proofs.WG.Progress.TimerSuffixClaims
+import Leanux.Proofs.WG.Progress.RecordedPending
+import Leanux.Proofs.WG.Progress.PipeWriteClaims
 import Leanux.Proofs.WG.Progress.ReceiveCompletionSuffixSource
 import Leanux.Proofs.WG.Progress.PipeFreeClaims
 import Leanux.Proofs.WG.Progress.CommittedInitializedReceiptClaims
@@ -1057,5 +1060,29 @@ theorem original_initialized_run_sources (trace : Runner.Trace) (placeholders : 
       CommittedRuns.SourceReceipt receipt ∧
         ActivationExitFacts receipt.activation receipt.exit :=
   CommittedRuns.Initialized.original_initialized_source_receipts trace placeholders
+
+/-- The actual write-to-out helper has an exact finite evaluation including
+allocation and original failures, with no successful-write premise. -/
+theorem original_pipe_write_finite_evaluation (iocb : Kiocb) (filp : File)
+    (pipe : PipeId) (src : IovIter) :
+    pipeWriteToOut iocb filp pipe src = PipeWrite.finite iocb filp pipe src :=
+  original_pipe_write_to_out_finite iocb filp pipe src
+
+/-- Actual timer arming preserves a recorded suffix through its complete
+wheel placement and original failures. -/
+theorem original_timer_arm_record_suffix (records : List HiddenRecord)
+    (peer : PeerId) (timer : PeerTimer) (delay : Nat) (caller : Option UInt64) :
+    Campaign2.Ensures (armTimer peer timer delay caller)
+      (fun s=>s.ambient.hidden=some records)
+      (fun _ s=>RecordSuffix.Tail records s.ambient.hidden) :=
+  RecordSuffix.armTimer_record_suffix records peer timer delay caller
+
+/-- Actual receive timer handling now has its concrete arming dependency
+discharged; normal return retains a recorded suffix. -/
+theorem original_receive_timer_record_suffix (records : List HiddenRecord) (peer : PeerId) :
+    Campaign2.Ensures (timersDataReceived peer)
+      (fun s=>s.ambient.hidden=some records)
+      (fun _ s=>RecordSuffix.Tail records s.ambient.hidden) :=
+  RecordSuffix.timersDataReceived_record_suffix records peer
 
 end Leanux.Proofs.WG.Progress
