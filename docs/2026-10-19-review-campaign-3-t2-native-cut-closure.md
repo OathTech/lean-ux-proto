@@ -311,3 +311,5 @@ cases and initialized dequeue preserve the actual cached cohort, selected
 local, ledger and continuation through the silent setter and existing
 write/removal observations. Aggregate gate, fresh replay and twelve recipes
 pass. These additions do not close findings 2–4 or the remaining caller graph.
+
+Source-74 `e3028f49` connects initialized native peek, routed staging selection and runner boundaries to their original continuations. Canonical NAPI now supplies scheduler NAPI and iteration softirq/IRQ-exit contracts; staging and runner source trees retain exact normal/Stop cases and explicit deeper child obligations. The runner boundary account does not claim all native interiors. T2 and the remaining caller/interval worklist stay open. Intermediate validation passes 4037 build jobs, the 1554-declaration gate and 110 standard-or-empty public theorem queries across 34 new modules; all 3990 frozen hashes match. Main, mirror and the 916 inherited proof files are unchanged. Fresh root replay and all twelve recipes last passed at source-73 `33251831`; they were not repeated for this helper checkpoint.
