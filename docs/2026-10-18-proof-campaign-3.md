@@ -22,7 +22,7 @@ stops the work. Validation for the current source-contract checkpoint is recorde
 | T1 nonce safety | Open. Initialized native counter reservations are unique through Stop, and admitted counters have injective encoding. Every actual initialized AEAD now has a below-limit nonce and strict earlier reservation evidence. Historical key-material continuity and global single consumption remain open. |
 | T2 transmit authorization and conservation | Open. R3 supplies initialized selection-time authorization; packet/material transport to actual encryption and socket emission, and complete TX dispositions, remain to prove. |
 | T3 authenticated effects and silence | Open. R6 supplies the cookie gate's local contracts, not causal closure of all delayed effects. |
-| T4 handshake replay resistance | Open. Source inventory and H1 interfaces identified; retained-peer timestamp histories and exchange-linked installation still need initialized execution closure. |
+| T4 handshake replay resistance | Open. The allocation-aware retained-peer timestamp archive now closes over initialized executions; exchange-linked installation still needs full execution closure. |
 | T5 responder confirmation | Open. Initialized responder selections have earlier successful confirmations, each immediately preceded by a certified replay and earlier AEAD publication in the same journal. Key-allocation continuity and the actual encryption prohibition remain open. |
 | T6 key retirement | C3-F1 concerns the literal actual-encryption clause. R5 supplies the admission/attempt checks. New native put/clear contracts prove exact reference payment, retention and final removal; initialized holder accounting and conditional cleanup remain open. |
 
@@ -184,8 +184,14 @@ and authentication invariants remain separate obligations.
   message limit and has a strict earlier native reservation with its matching
   allocation-stamped nonce event. The full staging boundary preserves this
   relationship through packet construction and allocation. Normal native
-  encryption completion marks the selected head crypted or dead. Historical
-  key-material continuity, routing linkage, global encryption non-reuse, complete egress
+  encryption completion marks the selected head crypted or dead. A historical
+  exclusion carrier now proves local worker non-repetition through Stop and
+  keeps every old/new encrypted identity out of pending aliases on normal return.
+  Native poll transfers an alias; native batch allocation returns IDs separate
+  from that history; admission preserves the exclusion on all queue outcomes.
+  These cuts retain their incoming carrier until the whole-driver transport
+  is proved. Historical key-material continuity, routing linkage, global
+  encryption non-reuse, complete egress
   coverage and TX conservation remain open.
 - T3: native MAC/Noise refusal and cookie-response contracts retain their
   exact state/egress boundaries. Acceptance receipts precede protocol writes.
@@ -202,8 +208,11 @@ and authentication invariants remain separate obligations.
   closes initialized replay-to-AEAD provenance and immediate successful replay
   attribution for every confirmation, including later Stop, without callback or
   reachability premises. Receiving-key allocation continuity and delayed
-  timer/work cause inheritance remain open. Owned implementations through
-  `7094f0e5` are copied without a branch merge.
+  timer/work cause inheritance remain open. Exact callback-parametric timer
+  sources and candidate scopes now preserve native returns and Stops; a
+  candidate label alone does not authorize its effects. Buffered GRO packets
+  need their own causal occurrence carrier. Owned implementations through
+  `c5911e3f` are copied without a branch merge.
 - T4/T5: timestamp and response/session replay contracts remain explicit;
   H1 projections are named dependencies, not silently discharged. Native
   confirmation cuts precede later Stop. Shared responder authorization now
@@ -217,9 +226,12 @@ and authentication invariants remain separate obligations.
   strengthened to historical allocation identity. Local strict timestamp
   increases are transported through the initialized driver. The allocation-aware
   retained-peer archive now covers receive/poll/Stack/NAPI, handshake/encryption/
-  decryption/TX workers, scheduling and timer actors. Its full outer transport,
-  complete exchange identity and prohibition on premature encryption remain open.
-  Owned implementations through `8e5446bd` are copied.
+  decryption/TX workers, scheduling, timer actors, configuration, lifecycle and
+  the initialized outer Runner, including stopped histories. No entry/archive
+  premise remains for retained-peer timestamp advancement. Native handshake
+  send/drain callback factors cover scheduled work and direct configuration
+  drains. Complete exchange identity and prohibition on premature encryption
+  remain open. Owned implementations through `7bb30e70` are copied.
 - T6: allocation-stamped credits distinguish slot unpublication from final
   store removal. Native creation, acquisition, clearing, rotation, session
   installation and disposal retain exact reference payments. Actual
@@ -240,22 +252,36 @@ and authentication invariants remain separate obligations.
   response/session work now preserve the key-holder accounts under stated C1
   funding and slot-affiliation inputs. Both native handshake consumers derive
   the acquired peer credit used by failure cleanup; session publication derives
-  slot funding from the actual selected base reference.
-  Initialized key-holder accounting and internal shared-driver entry coverage,
-  historical selection uniqueness, orphan completeness and conditional retirement
-  progress remain open. Owned implementations through `9b2f1186` are copied.
+  slot funding from the actual selected base reference. Actual initialized
+  shared-journal poll receipts now carry physical ownership of both their
+  native input and transferred active batch, including receipts before Stop.
+  Successful handshake consumers retain the actual acquired peer credit through
+  staging/keepalive, supplying the final put without an independent funding
+  premise. Initialized key-holder accounting, historical selection uniqueness,
+  orphan completeness and conditional retirement progress remain open. Owned
+  implementations through `c26609c8` are copied.
+
+[AGENT 2026-10-19] Historical encryption identities pair a device epoch with
+a packet ID. Pending-alias exclusion and allocation-frontier bounds transport
+this history through allocation and device recreation; numeric IDs alone would
+conflate different device lifetimes. This carrier is separate from key-material
+continuity and is not yet initialized over the whole driver.
 
 The register names each module's assumptions and boundaries. All six campaign
 outcomes remain open; these are compositional results toward those outcomes.
 
-The thirteenth source checkpoint passes all 1567 proof-build jobs and the
-1191-declaration gate across thirteen root modules, with only standard axioms.
+The fourteenth source checkpoint passes all 1626 proof-build jobs and the
+1211-declaration gate across thirteen root modules, with only standard axioms.
 All twelve witness recipes and fresh-root kernel replay pass at the default
-cap. The model executable build passes 130 jobs, and the unit suite completes
-131 tests with one kernel-build-dependent skip. The checkpoint closes initialized
-AEAD nonce bounds and reservation provenance, plus same-Journal transport replay
-and responder-confirmation attribution. It extends retained-peer timestamp and
-native reference-account transport. All six outcomes remain open.
+cap. The model executable build passes 130 jobs, and the unit suite
+completes 131 tests with one kernel-build-dependent skip. This checkpoint closes
+the initialized retained-peer timestamp archive and physical ownership at each
+actual shared-journal encryption poll. It adds local historical-encryption
+exclusion cuts, exact send/drain and scoped receive source factors, and stronger
+handshake peer-reference transport. All six outcomes remain open.
+The first token scan rejected a helper identifier matching a forbidden tactic;
+renaming that fully proved helper resolved the scan, and the complete gate was
+rerun successfully.
 No differential guest run is needed for this proof-only checkpoint: the mirror
 and its pin are unchanged. The inherited Env deprecation warning remains outside
 the permitted edit scope; campaign-owned code has no compiler warning.

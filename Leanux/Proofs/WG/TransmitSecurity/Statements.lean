@@ -17,6 +17,8 @@ import Leanux.Proofs.WG.TransmitSecurity.Rekey
 import Leanux.Proofs.WG.TransmitSecurity.PacketOriginDriverOuter
 import Leanux.Proofs.WG.TransmitSecurity.ReservationEncryption
 import Leanux.Proofs.WG.TransmitSecurity.EncryptionCompletion
+import Leanux.Proofs.WG.TransmitSecurity.EncryptionPastPoll
+import Leanux.Proofs.WG.TransmitSecurity.EncryptionPastAdmission
 
 /-! Campaign 3, T1 initialized counter reservations and local AEAD contracts.
 Transport from reservation through every actual AEAD invocation remains open. -/
@@ -477,5 +479,53 @@ theorem original_encryption_tail_terminal (items : List SkbId) (first : SkbId)
     Framing.Hoare (Queues.RxWorkers.encryptStepTailSource (some items)) (fun _ => True)
       (fun _ w => EncryptionCompletion.Terminal first w.wg) :=
   EncryptionCompletion.native_tail items first head
+
+/-- Security: the actual encryption worker cannot repeat an old packet
+identity or one in its selected batch, including before later Stop. On normal
+return all old and new encryption identities stay excluded from pending work.
+Physical selection ownership and historical exclusion are explicit entry
+premises; initialized global non-reuse is a separate obligation. -/
+theorem original_encryption_history_exclusion
+    (physical : RetirementSecurity.OccurrenceStack.Ready [] (items :: active) w.wg)
+    (past : EncryptionPast.Inv (h.map WorkerEpochs.identity) (items :: active) (EncryptionPast.view w.wg)) :
+    let execution := runPrefix (WorkerEncryption.tail (some items)) w h
+    (execution.2.map WorkerEpochs.identity).Nodup ∧
+      ∀ result v, execution.1 = .ok (result,v) →
+        EncryptionPast.Inv (execution.2.map WorkerEpochs.identity) active (EncryptionPast.view v.wg) :=
+  EncryptionPast.worker physical past
+
+/-- Security: native ring selection transfers the selected live alias rather
+than duplicating it. Exclusion of previously encrypted identities is retained
+under the incoming physical ring and historical carrier. -/
+theorem original_poll_history_exclusion
+    (physical : Queues.TxDisposition.LiveFrontier.Physical w)
+    (before : EncryptionPast.Inv past active (EncryptionPast.view w)) (a b : Ambient)
+    (run : (Queues.TxRing.pollSource.run w).run a = .ok ((out,v),b)) :
+    EncryptionPast.Inv past (out.toList ++ active) (EncryptionPast.view v) :=
+  EncryptionPast.poll physical before a b run
+
+/-- Security: actual packet allocation returns identities separate from all
+prior encryptions represented by the incoming carrier. Abandoned work does
+not reset the packet frontier; this is a native allocation cut, not initialized
+nonce/key continuity or a global consumption theorem. -/
+theorem original_allocation_history_exclusion (packets : List DataPacket)
+    (before : EncryptionPast.Inv past active (EncryptionPast.view w)) (a b : Ambient)
+    (run : ((packets.mapM newTxSkb).run w).run a = .ok ((items,v),b)) :
+    EncryptionPast.Inv past active (EncryptionPast.view v) ∧
+      EncryptionPast.Admissible past items (EncryptionPast.view v) :=
+  EncryptionPast.allocate packets before a b run
+
+/-- Security: native queue admission can only add a batch already separated
+from historical encryptions, while each refusal preserves exclusion. The
+physical ring and the batch's separation are explicit premises supplied by
+separate native allocation and initialized ownership arguments. -/
+theorem original_admission_history_exclusion (pid : PeerId) (items : List SkbId)
+    (physical : Queues.TxDisposition.LiveFrontier.Physical w)
+    (before : EncryptionPast.Inv past active (EncryptionPast.view w))
+    (fresh : EncryptionPast.Admissible past items (EncryptionPast.view w)) (a b : Ambient)
+    (run : ((enqueuePerDeviceAndPeer pid items).run w).run a = .ok ((result,v),b)) :
+    EncryptionPast.Inv past active (EncryptionPast.view v) ∧
+      EncryptionPast.Admissible past items (EncryptionPast.view v) :=
+  EncryptionPast.enqueue pid items physical before fresh a b run
 
 end Leanux.Proofs.WG.TransmitSecurity

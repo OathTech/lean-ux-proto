@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.HandshakeSecurity.SendExchangeRemovalProjection
+import Leanux.Proofs.WG.HandshakeSecurity.SendExchangeRemovalErasure
 import Leanux.Proofs.WG.HandshakeSecurity.ResponderPriorConfirmation
 import Leanux.Proofs.WG.HandshakeSecurity.ResponderDriverInitialized
 import Leanux.Proofs.WG.HandshakeSecurity.ResponderJournalConfirmation
@@ -33,6 +35,9 @@ import Leanux.Proofs.WG.HandshakeSecurity.TimestampArchiveStack
 import Leanux.Proofs.WG.HandshakeSecurity.TimestampArchiveWorker
 import Leanux.Proofs.WG.HandshakeSecurity.TimestampArchiveScheduler
 import Leanux.Proofs.WG.HandshakeSecurity.TimestampArchiveTimers
+import Leanux.Proofs.WG.HandshakeSecurity.TimestampArchiveTraffic
+import Leanux.Proofs.WG.HandshakeSecurity.TimestampArchiveDeviceConfig
+import Leanux.Proofs.WG.HandshakeSecurity.TimestampArchiveInitialized
 import Leanux.Proofs.WG.HandshakeSecurity.ConfirmationOrderDriver
 
 /-! Native T4 replay and T5 confirmation boundaries. Initialized history,
@@ -812,5 +817,70 @@ theorem initialized_responder_selection_authenticated
     Responder.PriorAuthenticatedConfirmation pre core.allocation :=
   Responder.journal_selected_authenticated_confirmation H1 trace placeholders
     pre post event pid r position recorded p kid selected core material responder
+
+/-- Native traffic batches and timer passes retain the peer-allocation
+timestamp archive across actual worker dispatch, receive admission, transmit
+staging and deleting releases, including stopped prefixes. Initialization and
+configuration transport remain separate obligations. -/
+theorem original_traffic_and_timers_timestamp_archive (items : List Env.BatchItem) :
+    TimestampArchive.ProductPreserves
+      (TransmitSecurity.Driver.batchObserved TimestampDriver.hooks items) ∧
+    TimestampArchive.ProductPreserves
+      (TransmitSecurity.Driver.afterAdvanceObserved TimestampDriver.hooks) :=
+  ⟨TimestampArchive.batch items,TimestampArchive.after_advance⟩
+
+/-- Native device configuration preserves each peer allocation's timestamp
+history through creation, removal, route-list updates, key changes and sends
+caused by keepalive configuration. The saved peer writes use their source read;
+the initialized outer runner transport remains a separate obligation. -/
+theorem original_device_configuration_timestamp_archive (attrs : DeviceAttrs) :
+    TimestampArchive.Preserves
+      (TransmitSecurity.Driver.configDevice TimestampDriver.hooks attrs) :=
+  TimestampArchive.config_device attrs
+
+/-- In every initialized native execution, each committed initiation timestamp
+is linked to the earlier history of the same peer allocation and strictly
+exceeds its previous value. Deletion and numeric-slot reuse do not erase that
+history. The observer exactly retains the native result and stopped prefix;
+no incoming invariant or completed-consumer premise is required. -/
+theorem initialized_timestamp_archive (trace : Runner.Trace) (placeholders : Bool) :
+    ErasesOuter (TimestampDriver.execute trace placeholders) (Runner.executeTrace trace placeholders) ∧
+    TimestampArchive.History (runPrefixOuter (TimestampDriver.execute trace placeholders) []).2 :=
+  ⟨TimestampDriver.execute_erases trace placeholders,TimestampArchive.initialized trace placeholders⟩
+
+/-- An actual initiation write for a peer allocation strictly exceeds its
+last archived timestamp in this same initialized execution. The archive input
+is the real execution prefix, so a reset through another actor cannot justify
+accepting an old timestamp. -/
+theorem initialized_timestamp_exceeds_archive (trace : Runner.Trace) (placeholders : Bool)
+    (pre post : List TimestampReceipt) (r : TimestampReceipt)
+    (position : (runPrefixOuter (TimestampDriver.execute trace placeholders) []).2 = pre ++ r :: post)
+    (identity : Nat) (old : List UInt8)
+    (allocation : (freshnessAt r.execution.before r.peer).map Prod.fst = some identity)
+    (archived : TimestampArchive.replay pre identity = some old) : memcmp r.received old = .gt :=
+  TimestampArchive.initialized_advances_archive trace placeholders pre post r position identity old allocation archived
+
+/-- Observing initiation creation and its send suffix through the shared
+callbacks preserves the exact native worker, including failures. This source
+boundary prevents a later send failure from forcing the exchange observer to
+wait for whole-worker completion; initialized exchange uniqueness is separate. -/
+theorem native_send_exchange_erasure {E : Type} (ops : SendExchange.Ops (WGPrefix E))
+    (callbacks : ops.Erases) (pid : PeerId) :
+    ErasesStatePrefix (SendExchange.workerWith ops pid) (handshakeSendWorker pid) :=
+  SendExchange.worker_erases callbacks pid
+
+/-- Direct configuration removal can observe the same queued-send callbacks
+as scheduled workers without skipping any native drain, guard or Stop. This
+local erasure contract exposes the removal path needed by exchange coverage. -/
+theorem native_removal_exchange_erasure {E : Type}
+    (step : {α : Type} → WG.M α → WGPrefix E α)
+    (nativeStep : ∀ {α} (a : WG.M α), ErasesStatePrefix (step a) a)
+    (drain : Option PeerId → WGPrefix E Unit)
+    (nativeDrain : ∀ peer, ErasesStatePrefix (drain peer) (drainHandshakeSendWq peer))
+    (peer : Option PeerId) :
+    ErasesStatePrefix (SendExchange.removeWith step drain peer) (peerRemove peer) ∧
+    ErasesStatePrefix (SendExchange.removeAllWith step drain) peerRemoveAll :=
+  ⟨SendExchange.remove_erases step nativeStep drain nativeDrain peer,
+    SendExchange.removeAll_erases step nativeStep drain nativeDrain⟩
 
 end Leanux.Proofs.WG.HandshakeSecurity

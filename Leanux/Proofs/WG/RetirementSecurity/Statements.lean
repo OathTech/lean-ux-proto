@@ -1,3 +1,7 @@
+import Leanux.Proofs.WG.RetirementSecurity.OccurrenceJournalOuter
+import Leanux.Proofs.WG.RetirementSecurity.OccurrenceJournalDeferred
+import Leanux.Proofs.WG.RetirementSecurity.OccurrenceJournalWorkers
+import Leanux.Proofs.WG.RetirementSecurity.OccurrenceEncryptionJournal
 import Leanux.Proofs.WG.RetirementSecurity.HolderConsumeInitiation
 import Leanux.Proofs.WG.RetirementSecurity.SessionPeerFunding
 import Leanux.Proofs.WG.RetirementSecurity.HolderResponseSession
@@ -61,6 +65,7 @@ import Leanux.Proofs.WG.RetirementSecurity.TxCryptAllocation
 import Leanux.Proofs.WG.RetirementSecurity.TxCryptWorker
 import Leanux.Proofs.WG.RetirementSecurity.TxCryptStaging
 import Leanux.Proofs.WG.RetirementSecurity.TxStagingFunding
+import Leanux.Proofs.WG.RetirementSecurity.HolderHandshakePeerFrames
 
 /-! Campaign 3, T6: local original-operation retirement contracts. The
 initialized key-reference ledger, complete caller coverage and conditional
@@ -1415,5 +1420,72 @@ theorem original_handshake_consumption_key_accounts (msg : List UInt8) :
     Preserves (HolderAccount temporary) (consumeInitiation msg) ∧
     Preserves (HolderAccount temporary) (consumeResponse msg) :=
   ⟨HolderConsume.initiation msg,HolderConsume.response msg⟩
+
+/-- A shared-journal encryption iteration records only actual polls from
+physically owned input states, preserves the detached batch through softirq,
+and consumes it in the native encryption tail. Already emitted certificates
+survive Stop. The incoming physical boundary remains explicit until shared
+scheduler and initialized-driver coverage is joined to this source contract. -/
+theorem shared_encryption_poll_certificates :
+    Leanux.Proofs.Logged.PrefixPreserves (OccurrencePollJournal.Inv [])
+      OccurrencePollJournal.Safe
+      (TransmitSecurity.Driver.encryptIterObserved TransmitSecurity.Journal.hooks) :=
+  OccurrencePollJournal.encryption_iteration
+
+/-- Every actual encryption poll performed by the shared scheduler has a
+physically owned input and a native execution certificate, including polls
+triggered from TX crypt-ahead. The scheduler derives each iteration's input
+from its preceding source steps; only its incoming boundary remains explicit
+until outer initialized-driver composition is complete. -/
+theorem shared_scheduler_poll_certificates (stack : Option Worker) :
+    Leanux.Proofs.Logged.PrefixPreserves (OccurrencePollJournal.Inv [])
+      OccurrencePollJournal.Safe
+      (TransmitSecurity.Driver.scheduleObserved TransmitSecurity.Journal.hooks stack) :=
+  OccurrencePollJournal.schedule stack
+
+/-- Native shared-driver deferred work retains encryption poll certificates
+with physically owned inputs through actual timer-wheel dispatch, send-worker callbacks
+and draining. Each scheduler input is derived from its preceding source path;
+the outer initialized-driver boundary remains to be composed. -/
+theorem shared_deferred_poll_certificates (j : UInt64) :
+    OccurrencePollJournal.ProductSafe (TransmitSecurity.Driver.sendWorkersObserved TransmitSecurity.Journal.hooks) ∧
+    OccurrencePollJournal.ProductSafe (TransmitSecurity.Driver.afterXmitObserved TransmitSecurity.Journal.hooks) ∧
+    OccurrencePollJournal.ProductSafe (TransmitSecurity.Driver.timersObserved TransmitSecurity.Journal.hooks j) ∧
+    OccurrencePollJournal.ProductSafe (TransmitSecurity.Driver.afterAdvanceObserved TransmitSecurity.Journal.hooks) :=
+  ⟨OccurrencePollJournal.send_workers,OccurrencePollJournal.after_xmit,
+    OccurrencePollJournal.timers j,OccurrencePollJournal.after_advance⟩
+
+/-- Every actual encryption poll recorded by the initialized shared runner
+starts with unique, resident, owned pending TX occurrences and transfers its
+selected batch into the corresponding explicit local inventory. Its receipt
+describes the original native poll; later Stop retains the certificate. No
+incoming ownership invariant or per-call safety premise is assumed. This
+physical result remains separate from initialized exact key-reference credit. -/
+theorem initialized_shared_poll_ownership (trace : Runner.Trace) (placeholders : Bool)
+    (receipt : Leanux.Proofs.Logged.RunWitness (Option (List SkbId)))
+    (member : TransmitSecurity.Journal.Event.polled receipt ∈
+      (Leanux.Proofs.Logged.runPrefixOuter
+        (TransmitSecurity.Journal.execute trace placeholders) []).2) :
+    OccurrencePollJournal.Certificate receipt := by
+  apply OccurrencePollJournal.initialized trace placeholders receipt
+  exact List.mem_filterMap.mpr ⟨.polled receipt,member,rfl⟩
+
+
+/-- Actual successful initiation or response consumption retains more than
+one reference to the selected peer, alongside the exact key-holder account.
+This spare reference is derived from the native nonzero acquisition and
+preserved by the authentication path; it is not assumed as caller funding. -/
+theorem original_handshake_consumers_acquired (msg : List UInt8) :
+    Hoare (consumeInitiation msg) (HolderAccount temporary) (HolderConsume.Acquired temporary) ∧
+    Hoare (consumeResponse msg) (HolderAccount temporary) (HolderConsume.Acquired temporary) :=
+  ⟨HolderConsume.initiation_acquired msg,HolderConsume.response_acquired msg⟩
+
+/-- Native keepalive staging preserves exact key credit and a selected
+handshake peer's nonfinal reference count. Actual admission and rejection
+are included through the source handoff count equation; incoming allocation
+and three-slot compatibility remain separately named local prerequisites. -/
+theorem original_keepalive_acquired_peer (pid selected : PeerId) :
+    Preserves (HolderKeepalive.Selected temporary selected) (sendKeepalive pid) :=
+  HolderKeepalive.keepalive_selected pid
 
 end Leanux.Proofs.WG.RetirementSecurity

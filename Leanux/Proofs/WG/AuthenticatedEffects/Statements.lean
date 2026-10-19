@@ -1,3 +1,6 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.CandidateCarrier
+import Leanux.Proofs.WG.AuthenticatedEffects.CandidatePollSource
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalEffects
 import Leanux.Proofs.WG.AuthenticatedEffects.TransportJournalInitialized
 import Leanux.Proofs.WG.AuthenticatedEffects.TransportCarrierOuter
 import Leanux.Proofs.WG.AuthenticatedEffects.TransportCarrierTraffic
@@ -952,5 +955,86 @@ theorem initialized_confirmation_has_authenticated_replay (trace : Runner.Trace)
       counter.packet.peer = pid ∧ counter.packet.keypair = kid ∧ counter.run.value = true ∧
       TransportReplay.Certified (earlier.filterMap TransmitSecurity.Journal.origin?) counter :=
   TransportJournal.confirmation_authenticated trace placeholders pre post event pid kid r position recorded
+
+/-- Security: observing the current causal scope at every timer arm and
+handshake queue append preserves the original timer callback's exact result and
+Stop. This source bridge does not assume that a missing scope is authorized;
+initialized root validity remains a separate obligation. -/
+theorem scoped_timer_effects_keep_native_behavior
+    (decode : E → Option (CausalScope.Event Cause))
+    (recordArm : TimerEffects.Arm (CausalEffects.Context Cause) → E)
+    (recordQueue : TimerEffects.Queued (CausalEffects.Context Cause) → E)
+    (keepalive : PeerId → WGPrefix E Unit)
+    (hk : ∀ pid, ErasesStatePrefix (keepalive pid) (sendKeepalive pid))
+    (pid : PeerId) (timer : PeerTimer) :
+    ErasesStatePrefix
+      (TimerEffects.timerWith (CausalEffects.ops decode recordArm recordQueue) keepalive pid timer)
+      (timerCallback pid timer) :=
+  TimerEffects.timer_erases (CausalEffects.ops_erases decode recordArm recordQueue) keepalive hk pid timer
+
+/-- Security: a causal scope is recorded at its actual full-journal position
+before every event of its body, including effects preceding an internal Stop.
+This positional source claim does not declare the scope's label authenticated. -/
+theorem causal_scope_precedes_internal_effects (record : CausalScope.Event Cause → E)
+    (cause : Cause) (body : CausalScope.Token Cause → PrefixM E α)
+    (appends : ∀ token, Appends (body token)) (w : World) (h : List E) :
+    ∃ suffix, (runPrefix (CausalScope.prefixScope record cause body) w h).2 =
+      h ++ record (.entered ⟨h.length,cause⟩) :: suffix :=
+  CausalScope.prefix_entry record cause body appends w h
+
+/-- Security: the candidate scope brackets the actual replay check and its
+conditional consumer without altering any native branch. Candidate entry is
+metadata; only the subsequent successful certified replay authorizes effects. -/
+theorem candidate_scope_preserves_original_poll {m : Type → Type} [Monad m] [LawfulMonad m]
+    (step : {α : Type} → WG.M α → m α)
+    (counter : SkbId → RxPacket → m Bool)
+    (consume : PeerId → RxPacket → Endpoint → m (Option (List UInt8)))
+    (receive : GroState → List UInt8 → m GroState) (flush : GroState → m Unit)
+    (pid : PeerId) (budget : Nat) :
+    CandidatePoll.sourceWith step (fun _ _ => pure 0) (fun _ => pure ()) counter consume receive flush pid budget =
+      IndexedPoll.sourceWith step counter consume receive flush pid budget :=
+  CandidatePoll.neutral step counter consume receive flush pid budget
+
+/-- Security: the same scoped native poll preserves selected-packet AEAD
+provenance and immediate successful-replay attribution for confirmation, including
+retained Stop prefixes. The marker adds no authentication assumption; the
+existing consumer, tail and GRO callback frames remain explicit local premises. -/
+theorem scoped_candidate_retains_authenticated_confirmation
+    (origin : E → Option TransportDriver.OriginEvent) (replay : E → Option TransportDriver.Replay)
+    (record : TransportDriver.Replay → E)
+    (replayInverse : ∀ r, replay (record r) = some r) (replayOrigin : ∀ r, origin (record r) = none)
+    (responder : HandshakeSecurity.Responder.DriverCuts.Event → E)
+    (decode : E → Option HandshakeSecurity.Responder.DriverCuts.Event)
+    (inverse : ∀ event, decode (responder event) = some event)
+    (quiet : ∀ r, HandshakeSecurity.ConfirmationTransportOrder.Unconfirmed decode (record r))
+    (scopeRecord : CausalScope.Event Cause → E) (candidate : SkbId → RxPacket → Cause)
+    (scopeOrigin : ∀ event, origin (scopeRecord event) = none)
+    (scopeReplay : ∀ event, replay (scopeRecord event) = none)
+    (scopeQuiet : ∀ event, HandshakeSecurity.ConfirmationTransportOrder.Unconfirmed decode (scopeRecord event))
+    (hooks : TransmitSecurity.Driver.Hooks E)
+    (confirmed : hooks.confirmation = HandshakeSecurity.ConfirmationTransportOrder.confirmation responder decode)
+    (toStack : List (List UInt8) → PrefixM E Unit)
+    (consumeCarrier : ∀ pid pkt ep, TransportReplay.Preserves (origin := origin) (replay := replay)
+      (liftWGObserver (TransmitSecurity.Driver.consumeObserved hooks pid pkt ep)))
+    (receiveCarrier : ∀ gro bytes, TransportReplay.Preserves (origin := origin) (replay := replay)
+      (napiGroReceivePrefix toStack gro bytes))
+    (flushCarrier : ∀ gro, TransportReplay.Preserves (origin := origin) (replay := replay)
+      (napiGroFlushAllPrefix toStack gro))
+    (tailOrder : ∀ pid pkt value, PrefixPreserves (HandshakeSecurity.ConfirmationTransportOrder.Base record decode) (HandshakeSecurity.ConfirmationTransportOrder.Safe record decode)
+      (liftWGObserver (TransmitSecurity.Driver.receiveTailObserved hooks pid pkt value)))
+    (receiveOrder : ∀ gro bytes, PrefixPreserves (HandshakeSecurity.ConfirmationTransportOrder.Base record decode) (HandshakeSecurity.ConfirmationTransportOrder.Safe record decode)
+      (napiGroReceivePrefix toStack gro bytes))
+    (flushOrder : ∀ gro, PrefixPreserves (HandshakeSecurity.ConfirmationTransportOrder.Base record decode) (HandshakeSecurity.ConfirmationTransportOrder.Safe record decode)
+      (napiGroFlushAllPrefix toStack gro)) (pid : PeerId) (budget : Nat) :
+    TransportCarrier.ProductSafe (HandshakeSecurity.ConfirmationTransportOrder.Safe record decode) origin replay
+      (CandidatePoll.sourceWith (fun a => liftPrefix (liftWG a))
+        (fun skb pkt => CausalScope.enterPrefix scopeRecord (candidate skb pkt))
+        (CausalScope.leavePrefix scopeRecord) (TransportDriver.counter record)
+        (fun pid pkt ep => liftWGObserver (TransmitSecurity.Driver.consumeObserved hooks pid pkt ep))
+        (napiGroReceivePrefix toStack) (napiGroFlushAllPrefix toStack) pid budget) :=
+  CandidateCarrier.scoped_shared_poll origin replay record replayInverse replayOrigin
+    responder decode inverse quiet scopeRecord candidate scopeOrigin scopeReplay scopeQuiet
+    hooks confirmed toStack consumeCarrier receiveCarrier flushCarrier
+    tailOrder receiveOrder flushOrder pid budget
 
 end Leanux.Proofs.WG.AuthenticatedEffects
