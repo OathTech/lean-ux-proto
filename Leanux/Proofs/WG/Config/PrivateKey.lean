@@ -16,36 +16,47 @@ def cookieKeysAfter (d : Device) : Device :=
       blake2s 32 [] ("mac1----".toUTF8.toList ++ d.staticIdentity.staticPublic)
       else List.replicate 32 0 }
 
+theorem cookiePrecompute_run (d : Device) (g : WGWorld) (ambient : Ambient)
+    (device : g.dev=some d) :
+    ((cookiePrecomputeDeviceKeys).run g).run ambient =
+      .ok (((),{g with dev:=some (cookieKeysAfter d)}),
+        {ambient with steps:=ambient.steps.push {
+          decision:=.cookieDeviceHasIdentity,outcome:=d.staticIdentity.hasIdentity,
+          netRx:=ambient.netRxSection}}) := by
+  cases has : d.staticIdentity.hasIdentity
+  all_goals simp [cookiePrecomputeDeviceKeys,getDev,device,modifyDev,
+    branch,AmbientM.branch,has,cookieKeysAfter]
+  all_goals rfl
+
+theorem setStaticIdentity_run (key : Key) (d : Device) (g : WGWorld) (ambient : Ambient)
+    (device : g.dev=some d) :
+    ((setStaticIdentityPrivateKey key).run g).run ambient =
+      .ok (((),{g with dev:=some {d with staticIdentity:=identityAfter key d.staticIdentity}}),
+        {ambient with steps:=ambient.steps.push {
+          decision:=.genPublicNullSecret,outcome:=key==nullPoint,
+          netRx:=ambient.netRxSection}}) := by
+  have idle (peers : List PeerId) :
+      List.foldlM (fun (_ : Unit) pid => requireNotPending pid "changing the device identity") () peers =
+        (pure () : WG.M Unit) := by
+    induction peers with
+    | nil => rfl
+    | cons pid peers ih => simpa only [List.foldlM_cons,requireNotPending,pure_bind] using ih
+  cases null : key==nullPoint
+  all_goals simp [setStaticIdentityPrivateKey,idle,getDev,device,generatePublic,
+    branch,AmbientM.branch,null,modifyDev,identityAfter]
+  all_goals rfl
+
 theorem cookiePrecompute_returns (d : Device) :
     Returns cookiePrecomputeDeviceKeys (fun g => g.dev = some d)
       (fun _ g => g.dev = some (cookieKeysAfter d)) := by
   intro g ambient device
-  let after := {ambient with steps := ambient.steps.push {
-    decision := .cookieDeviceHasIdentity, outcome := d.staticIdentity.hasIdentity,
-    netRx := ambient.netRxSection}}
-  refine ⟨(), {g with dev := some (cookieKeysAfter d)}, after, ?_, rfl⟩
-  cases has : d.staticIdentity.hasIdentity
-  all_goals simp [cookiePrecomputeDeviceKeys, getDev, device, modifyDev,
-    branch, AmbientM.branch, has, cookieKeysAfter, after]
-  all_goals rfl
+  exact ⟨(),_,_,cookiePrecompute_run d g ambient device,rfl⟩
 
 theorem setStaticIdentity_returns (key : Key) (d : Device) :
     Returns (setStaticIdentityPrivateKey key) (fun g => g.dev = some d)
       (fun _ g => g.dev = some { d with staticIdentity := identityAfter key d.staticIdentity }) := by
-  have idle (peers : List PeerId) :
-      List.foldlM (fun (_ : Unit) pid => requireNotPending pid "changing the device identity") () peers = (pure () : WG.M Unit) := by
-    induction peers with
-    | nil => rfl
-    | cons pid peers ih => simpa only [List.foldlM_cons, requireNotPending, pure_bind] using ih
   intro g ambient device
-  let after := {ambient with steps := ambient.steps.push {
-    decision := .genPublicNullSecret, outcome := key == nullPoint,
-    netRx := ambient.netRxSection}}
-  refine ⟨(), {g with dev := some {d with staticIdentity := identityAfter key d.staticIdentity}}, after, ?_, rfl⟩
-  cases null : key == nullPoint
-  all_goals simp [setStaticIdentityPrivateKey, idle, getDev, device, generatePublic,
-    branch, AmbientM.branch, null, modifyDev, identityAfter, after]
-  all_goals rfl
+  exact ⟨(),_,_,setStaticIdentity_run key d g ambient device,rfl⟩
 
 def privateKeyAttrs (d : Device) (key : Key) : DeviceAttrs :=
   { device := byIndex d, privateKey := some key }

@@ -1,3 +1,6 @@
+import Leanux.Proofs.WG.Config.UpdateOnlyClaims
+import Leanux.Proofs.WG.Config.KeyIdentityClaims
+import Leanux.Proofs.WG.Config.GetterContextClaims
 import Leanux.Proofs.WG.Config.RequestReadbackClaims
 import Leanux.Proofs.WG.Config.RequestMetadataClaims
 import Leanux.Proofs.WG.Config.KeyStageEntryClaims
@@ -2998,5 +3001,77 @@ theorem original_mixed_device_refusal_readback (attrs : DeviceAttrs) (d : Device
               RequestOrder.MixedRefusalReadback attrs d peers nodes sock pages
                 (.ok (mixedGetterJson (RequestOrder.prefixDevice attrs d) peers nodes)) final) :=
   RequestOrder.original_refusal_mixed_readback attrs d peers nodes sock residents readable ready headerFits fresh cursorData within idle emptyQueue
+
+
+/-- Every normal arbitrary setter preserves its optional device-associated socket and selector-table observation. -/
+theorem original_configuration_getter_context (attrs : DeviceAttrs) (initial : GetterContext.Context) :
+    Campaign2.Ensures (wgSetDevice attrs) (fun s=>GetterContext.observation s=initial)
+      (fun _ s=>GetterContext.observation s=initial) :=
+  GetterContext.original_request_context attrs initial
+
+/-- A normally returned arbitrary setter preserves device presence and the actual getter socket and selector table from a resident entry. -/
+theorem original_configuration_resident_getter_context (attrs : DeviceAttrs) (sock : NlSock)
+    (fixtures : FixtureDevices) :
+    Campaign2.Ensures (wgSetDevice attrs)
+      (fun s=>s.wg.device.isSome=true ∧ s.wg.nlSock7=sock ∧ s.wg.fixtureNetDevices=fixtures)
+      (fun _ s=>s.wg.device.isSome=true ∧ s.wg.nlSock7=sock ∧ s.wg.fixtureNetDevices=fixtures) :=
+  GetterContext.original_request_resident_context attrs sock fixtures
+
+/-- A same-request completed funded key stage determines the normal final identity after arbitrary later peer attributes, retaining the actual collision-removal baseline. -/
+theorem original_mixed_device_final_identity (cs : Queues.RxCredits.Ledger)
+    (loans : Queues.RxCredits.Reservations) (attrs : DeviceAttrs)
+    (initial : Campaign2.Snapshot) (result : RequestOrder.Inspection)
+    (certificate : RequestOrder.Certificate attrs initial result)
+    (pre : OwnerConfiguration.ProjectedEntry cs loans initial)
+    (ret : Int) (final : Campaign2.Snapshot) (normal : result.outcome=.ok (ret,final))
+    (r : RequestOrder.Receipt) (member : r∈result.receipts) (kind : r.kind=.keyStage) :
+    ∃ before after, r.before.wg.device=some before ∧ final.wg.device=some after ∧
+      KeyStage.IdentityEffect attrs before after.staticIdentity :=
+  KeyStage.certificate_final_identity cs loans attrs initial result certificate pre ret final normal r member kind
+
+/-- The final private key follows the actual unchanged-key guard or installation clamp, and survives later peer attributes. -/
+theorem original_mixed_device_final_private (cs : Queues.RxCredits.Ledger)
+    (loans : Queues.RxCredits.Reservations) (attrs : DeviceAttrs)
+    (initial : Campaign2.Snapshot) (result : RequestOrder.Inspection)
+    (certificate : RequestOrder.Certificate attrs initial result)
+    (pre : OwnerConfiguration.ProjectedEntry cs loans initial)
+    (ret : Int) (final : Campaign2.Snapshot) (normal : result.outcome=.ok (ret,final))
+    (r : RequestOrder.Receipt) (member : r∈result.receipts) (kind : r.kind=.keyStage)
+    (key : Key) (given : attrs.privateKey=some key) :
+    ∃ before after, r.before.wg.device=some before ∧ final.wg.device=some after ∧
+      after.staticIdentity.staticPrivate=
+        if before.staticIdentity.staticPrivate=key then key else clamp key :=
+  KeyStage.certificate_final_private cs loans attrs initial result certificate pre ret final normal r member kind key given
+
+/-- Toggling UPDATE_ONLY on an existing funded target preserves the whole original outcome, including Stops and logs; both requests explicitly supply flags. -/
+theorem original_update_only_existing (cs : Queues.RxCredits.Ledger) (loans : Queues.RxCredits.Reservations)
+    (attrs : PeerAttrs) (key : Key) (flags : UInt32) (pid : PeerId) (d : Device)
+    (pubkey : attrs.publicKey=some key)
+    (valid : flags &&& ~~~WGPEER_F_ALL=0)
+    (protocol : attrs.protocolVersion=none ∨ attrs.protocolVersion=some 1)
+    (found : d.peerHashtable.find? (·.1 == key)=some (key,pid)) :
+    Campaign2.AgreesOn (fun s=>OwnerConfiguration.ProjectedEntry cs loans s ∧ s.wg.device=some d)
+      (setPeerCmd {attrs with flags:=some (flags ||| WGPEER_F_UPDATE_ONLY)})
+      (setPeerCmd {attrs with flags:=some flags}) :=
+  UpdateOnly.original_existing cs loans attrs key flags pid d pubkey valid protocol found
+
+/-- A valid UPDATE_ONLY command without a public-key table match returns zero and preserves WG state regardless of later attributes. -/
+theorem original_update_only_absent (attrs : PeerAttrs) (key : Key) (flags : UInt32)
+    (initial : Campaign2.State) (d : Device)
+    (device : initial.device=some d)
+    (pubkey : attrs.publicKey=some key) (valid : flags &&& ~~~WGPEER_F_ALL=0)
+    (protocol : attrs.protocolVersion=none ∨ attrs.protocolVersion=some 1)
+    (missing : d.peerHashtable.find? (·.1 == key)=none) :
+    Campaign2.Returns
+      (setPeerCmd {attrs with flags:=some (flags ||| WGPEER_F_UPDATE_ONLY)})
+      (fun s=>s.wg=initial) (fun ret s=>ret=0 ∧ s.wg=initial) :=
+  UpdateOnly.original_absent attrs key flags initial d device pubkey valid protocol missing
+
+/-- The original peer command rejects missing public key, unsupported flags and unsupported protocol in that priority, preserving WG state. -/
+theorem original_peer_validation_refusal (attrs : PeerAttrs) (code : Int)
+    (refused : UpdateOnly.validationError attrs=some code) (initial : Campaign2.State) :
+    Campaign2.Returns (setPeerCmd attrs) (fun s=>s.wg=initial)
+      (fun ret s=>ret=code ∧ s.wg=initial) :=
+  UpdateOnly.original_validation attrs code refused initial
 
 end Leanux.Proofs.WG.Config

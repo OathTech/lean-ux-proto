@@ -5,9 +5,9 @@
 **Campaign-owned claims are current over main 783510e8.** The split-world
 projection remains the claim boundary. Campaign 1's validated GRO carry
 8ba82097 is incorporated unchanged, replacing the three inherited failing
-modules. The full combined proof gate passes: 2,669 build jobs and 1,453 terminal
+modules. The full combined proof gate passes: 2,680 build jobs and 1,460 terminal
 declarations, with standard axioms only. Fresh combined-root replay passes
-for funded key effects and arbitrary mixed refusal readback.
+for final identity, getter context and UPDATE_ONLY.
 Work has resumed with confirmation uniqueness stated over allocation internalId.
 The accepted raw store-ID recreation counterexample remains below. H1 is
 complete over normal accepted executions and the documented completed-call
@@ -21,14 +21,14 @@ H4–H6 remain in progress.
 | H1 Noise | 75 | 1590 | Full terminal closure, all seven whole-call tag maps, their actual finite mixed histories and session derivation-clock receipt current; direct helper reinstallation refutes unrestricted repeat-confirmation uniqueness; successful confirmation IDs for the tracked peer are distinct across actual finite histories of all four handshake create/consume calls, session installation/confirmation, clearing and expiry, including arbitrary-peer interleavings, under an explicit initial next/cursor bound; initial slot credits now imply recorded session success and fund the selected peer's final slots, with old-slot aliases allowed; the actual whole response sender now has exact creation/session receipt order, local edges and all-outcome erasure; role rejection and immediate recorded allocation refusal now have total false-return contracts; normal response receipts now derive initial consumed-initiation and actual created-response session-entry tags through timestamp and MAC framing; normal peer creation now initializes exactly the returned location to zero and preserves all other tags, including cursor overwrite; outgoing initiation and its worker now classify the actual initial rate guard and retain actual creator receipts with initial tag provenance; whole session finite evaluation covers every allocation mode and exact Stop; the whole zero-key worker now has exact final optional tags, deleting its caller exactly at entry refcount one and otherwise retaining its zero tag; actual clear dispatch now derives queue selection and carries that final effect; complete normal handshake reception now classifies the actual load/MAC dispatch and its ordered helper receipts; actual receiveStep now derives ring selection and preserves the full original result/Stop; the owned socket view now preserves every optional tag; initialized device recreation now demonstrates repeat raw store IDs with distinct allocation stamps (runtime finding); the response caller now links its last actual receipt to the final tag map using concrete timer/socket frames; uncached cookie replies also preserve every tag; actual consume observations retain the confirmation cut and allocation stamp, while the pending-ticket automaton proves distinctness conditional on its source transitions; normal initiation/worker and reception/receive-step final tag coverage is now complete; initialized consume occurrences derive actual internalId and ordered same-call confirmation observations; timer, staging, creation, clearing and release calls preserve pending tickets, and session/confirmation calls have explicit pending transitions; complete consume tails, session/handshake callers, actual poll/GRO/NAPI with original inner delivery, device controls, removal/flushes and send/clear dispatch now transport the supplied pending invariant; complete actual configuration, crypt/transmit, scheduler/deferred, traffic, dump and lifecycle/syscall composition now establishes distinct successful completed confirmation internalIds in the initialized runner, including recreation and prefixes before outer Stops; the actual birth, work-drain, timer-stop and stop/down observers now have normal tag coverage with all callback obligations discharged and exact original outcome agreement; actual mixed peer/device configuration, removal and destruction now have the same unconditional source coverage and exact outcome agreement; actual native data consume/transmit, all dumps, complete scheduler and every deferred constructor now have projected tag coverage with concrete poll/NAPI/Stack and worker callbacks; actual traffic/lifecycle, every concrete syscall and the initialized paired runner now close normal whole-driver tag coverage and the five-state tag invariant without supplied callback/invariant premises; H1 complete for normal accepted executions and documented completed-call observations, with internal-write/stopped-cut completeness explicitly outside this result. |
 | H2 Index | 162 | 1499 | Complete at normal initialized runner endpoints. Original index operations, collision retry and lookup contracts compose with reachable numeric/owner uniqueness, hashed-slot coverage, resident positive owners, store bounds and current-slot compatibility. Concrete ingress, poll/NAPI, crypt/TX, dump, configuration, lifecycle, scheduler/deferred, traffic and every syscall retain the same execution and its changing ledger. The projected initialized inspection preserves exact JSON/indexed Stops and derives Core plus its actual residual account without an invariant or callback premise. Earlier arbitrary-state counterexamples remain recorded; no initialized discrepancy is asserted. Final state on Stop and global termination are outside this H2 claim. Combined gate and fresh replay pass. |
 | H3 Roaming | 45 | 1290 | Complete within the documented committed-attempt and normal-final-destination scope. Initialized committed handshake setter attempts and every reached original data check carry actual prior authentication, including before indexed Stops. Both inspections preserve original outcomes and exact occurrence coverage. Normal initialized final remote destinations have their actual latest configuration or authenticated packet setter, excluding later setters/resets. No callback/invariant/success premise remains; cached local source/flowinfo, discarded consistency trials and stopped final states remain outside these claims. |
-| H4 Configuration | 158 | 1556 | Full terminal closure, actual mixed/key setter paginated readback with arbitrary endpoints, whole finite single-peer mixed-width getter and actual finite empty-IP peer getter and exact arbitrary-room empty-IP serializer/whole normal cursor callback and actual mixed/key setter composition with exact DATA/DONE count and arbitrary endpoints and arbitrary finite empty-IP multi-peer scalar, mixed fwmark/scalar and established-identity private-key set/get and actual endpoint set/weighted readback and local mixed-page serializer/cursor/coalescer support plus finite mixed-page planning, native callback, computed selection/reference support, finite receive budget, exact page content and complete finite mixed peer/allowed-IP getter and scalar, endpoint, fwmark/scalar and established-identity key set/get plus mixed port-refusal and all nonzero and zero port-only set/get outcomes and actual empty allowed-IP replacement/full mixed readback and initial-state flag-only replace-peers free/first-pass observations and general represented insertion/fresh-peer readback current; initialized routing, index and residual-account facts now share the same actual endpoint; allowed-IP insertion preserves configured and resident owners from initial ownership and listed residency. Actual complete peer removal preserves configured ownership through queued cleanup, and flag-only replacement derives an empty configured peer/public-key list and represented routes at normal completion from initial funding and coherence. The selected mixed allowed-IP/keepalive/staged-send tail now preserves configured ownership with the real account and pays its caller reference through normal early-error paths; exact representation uniqueness joins funding to resident owner/list coherence. Complete peer/device commands now preserve ownership with their actual account; queued flag-only replacement derives getter eligibility and exact empty-peer readback. Actual arbitrary-request certificates now retain completed-stage order, generation linkage and peer/error positions; whole queued REMOVE_ME derives configured list/table filtering and route-owner exclusion. Initialized parsed executions now derive configured/resident routing ownership from the same actual account; same-request refusal receipts fix exact normal final WG states and expose concrete port/source effects. Initial-to-port fields and normal refusal endpoints now derive from the original entry; all-branch key-stage effects, arbitrary peer-command metadata and initialized getter readability/freshness are checked. Outer key-stage funding, completed key/peer-to-final metadata, initialized native getter completion under static bounds, and arbitrary mixed refused-port setter/getter composition now check. Successful mixed peer fields and general readback remain open. |
+| H4 Configuration | 165 | 1608 | Full terminal closure, actual mixed/key setter paginated readback with arbitrary endpoints, whole finite single-peer mixed-width getter and actual finite empty-IP peer getter and exact arbitrary-room empty-IP serializer/whole normal cursor callback and actual mixed/key setter composition with exact DATA/DONE count and arbitrary endpoints and arbitrary finite empty-IP multi-peer scalar, mixed fwmark/scalar and established-identity private-key set/get and actual endpoint set/weighted readback and local mixed-page serializer/cursor/coalescer support plus finite mixed-page planning, native callback, computed selection/reference support, finite receive budget, exact page content and complete finite mixed peer/allowed-IP getter and scalar, endpoint, fwmark/scalar and established-identity key set/get plus mixed port-refusal and all nonzero and zero port-only set/get outcomes and actual empty allowed-IP replacement/full mixed readback and initial-state flag-only replace-peers free/first-pass observations and general represented insertion/fresh-peer readback current; initialized routing, index and residual-account facts now share the same actual endpoint; allowed-IP insertion preserves configured and resident owners from initial ownership and listed residency. Actual complete peer removal preserves configured ownership through queued cleanup, and flag-only replacement derives an empty configured peer/public-key list and represented routes at normal completion from initial funding and coherence. The selected mixed allowed-IP/keepalive/staged-send tail now preserves configured ownership with the real account and pays its caller reference through normal early-error paths; exact representation uniqueness joins funding to resident owner/list coherence. Complete peer/device commands now preserve ownership with their actual account; queued flag-only replacement derives getter eligibility and exact empty-peer readback. Actual arbitrary-request certificates now retain completed-stage order, generation linkage and peer/error positions; whole queued REMOVE_ME derives configured list/table filtering and route-owner exclusion. Initialized parsed executions now derive configured/resident routing ownership from the same actual account; same-request refusal receipts fix exact normal final WG states and expose concrete port/source effects. Initial-to-port fields and normal refusal endpoints now derive from the original entry; all-branch key-stage effects, arbitrary peer-command metadata and initialized getter readability/freshness are checked. Outer key-stage funding, completed key/peer-to-final metadata, initialized native getter completion under static bounds, and arbitrary mixed refused-port setter/getter composition now check. Final identity after later peer attributes, original-entry getter context and whole-command UPDATE_ONLY/validation behavior now check. Successful mixed peer fields and general readback remain open. |
 | H5 Progress | 53 | 349 | Full terminal closure, exact bounded outcomes and recorded batch, actual timer completion guards and recorded idle/post-advance wait completion and actual advance-syscall/runner linkage and send-worker completion guard and four final-idle syscall/runner receipts and exact all-mode finite allocation and successful modular-power evaluation bridges and actual activation-exit inspection current; global progress/coherent-ring adequacy open. |
 | H6 Timers | 65 | 502 | Full terminal closure, actual retry blocks and allocation-labelled guarded session-arm events with outgoing call-entry origin and initialized give-up runtime witness with checked concrete curve outputs and all five syntactic traversal call sites covered by six observer branches with all-mode immediate effects; upstream data authentication, broader caller histories and session-relative counts remain open. |
 
-The checked surface is 6,786 theorems and 558 headlines in 1,739
+The checked surface is 6,838 theorems and 565 headlines in 1,750
 campaign-owned modules. The completed retrofit accounts for 1,983:
 1,321 retyped, 244 explicitly corrected, 239 retained and 179 added
-support/finding declarations. Subsequent closed extensions add 4,803
+support/finding declarations. Subsequent closed extensions add 4,855
 theorems. Twenty-two baseline frames were deleted because types supply
 their facts; five false historical cookie supports were separately retired
 with checked refutations. All 258 original terminal names and order survive.
@@ -64,7 +64,7 @@ after the validated H3 closure.
 | H1 | 783510e8 | Current, complete; 75 headlines / 1590 theorems | Normal initialized whole-driver tag ownership and allocation-stamp confirmation uniqueness closed; internal-write traces and completed inner cuts of later-stopped callbacks are a separate stronger observer scope |
 | H2 | 783510e8 | Current, complete; 162 / 1499 | Normal initialized endpoint store, slot and owner coherence closed; original lookup/collision contracts retained; no internal failed-state or termination claim |
 | H3 | 783510e8 | Current, complete; 45 / 1290 | Initialized committed handshake/data attempt coverage and normal final latest-setter provenance closed |
-| H4 | 783510e8 | Current, in progress; 158 / 1556 | Successful mixed peer fields, ordered allowed-IP prefixes and general successful readback; funded key effects, final metadata linkage and arbitrary refusal readback now checked |
+| H4 | 783510e8 | Current, in progress; 165 / 1608 | Initial-to-key header continuity, mixed peer scalar/allowed-IP effects and general successful readback; final identity, getter context and whole-command UPDATE_ONLY now checked |
 | H5 | 783510e8 | Current, in progress; 53 / 349 | Whole-worker record decrease and global termination/progress |
 | H6 | 783510e8 | Current, in progress; 65 / 502 | Complete caller/scheduler coverage and session-relative counting |
 
@@ -84,6 +84,76 @@ LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env le
 
 
 
+
+## H4 final identity, getter context and UPDATE_ONLY, 2026-10-19
+
+Every normal arbitrary device setter preserves its optional device-associated
+getter socket and selector-table observation. A resident original entry gives
+final residency and exact socket/table equality, including errno returns.
+Absent observations make no independent socket assertion. The actual identity
+and cookie initialization spines are factored once into exact full execution
+equations; their old Returns headers remain unchanged adapters.
+
+The completed funded key stage now determines the normal final static identity
+after arbitrary later peer attributes. Existing pure key-peer observations
+preserve the header through precomputation, expiry and staged fallback, including
+the actual queue inspection. The identity relation retains the real
+post-collision-removal baseline. A null private key retains that baseline's
+public bytes while clearing identity presence; unchanged raw-key comparison is
+kept distinct from changed-key clamping. The private-key corollary states this
+exact guard/clamp formula. Its before-device is the actual key-stage entry,
+not yet the outer original request entry. No final state is asserted on Stop.
+
+UPDATE_ONLY now has whole-command contracts. On a funded existing target,
+toggling its bit preserves the complete original outcome, including overflow
+Stops and decision logs; both requests explicitly contain a flags attribute.
+On a valid command with no public-key table match, it returns zero with
+unchanged WG state despite arbitrary later attributes. Header refusals retain
+the actual validation priority: missing public key, unsupported flag bits,
+then unsupported protocol. Their normal decision logs remain visible; they
+do not classify later operational failures.
+
+**Files and counts.** GetterContextModel/Frames/Source/Claims separate the
+projection, physical equalities and original factory composition.
+KeyObservationFrames contains pure header preservation; KeyIdentityModel/
+Effects/Claims carry the installed identity relation, consequences and
+same-request final linkage. UpdateOnlyModel/Source/Claims separate flag algebra,
+actual source equality and projected contracts. Eleven modules and seven
+headlines add 52 theorems. H4 is 1,608/165/492; the campaign is
+6,838 theorems, 565 headlines and 1,750 modules. No frame deletion or shared/
+mirror change; the two owned PrivateKey legacy headers are unchanged.
+
+**Validation.** Context used four capped stdin probes: two clean and two
+corrected failures; all 21 audits (19 additions plus two adapters) are standard.
+The root identity work used seven probes: three failed drafts, three clean
+passes and one exit-zero audit with two deprecation warnings subsequently
+fixed; the final 13 audits are standard. A large definitional-equality proof
+was replaced by direct header simplification at the default limit rather than
+raising it. UPDATE_ONLY used ten probes: three clean and seven corrected
+failures, including two default-limit failures and a simplifier-step failure.
+One overbroad rename's diagnostic was tool-truncated; it was not rerun
+unchanged. All 13 audits are standard. These probes used stock limits.
+The existing PrivateKey file retains its pre-existing 800,000 heartbeat
+setting; no limit was increased.
+
+The first split build failed because the narrowed identity-model import did
+not provide an unused opened namespace. Removing that open fixed it; the
+corrected combined split passes 1,516 jobs; the terminal build passes 1,985.
+The full gate passes 2,680 jobs and 1,460 terminal declarations, standard
+axioms only. Fresh combined-root replay exits zero. Independent review found no semantic mismatch in the key identity
+or original context composition, and prompted a corrected module sentence
+distinguishing optional from resident context. Root source review of the
+UPDATE_ONLY comparison confirms actual lookup errors are retained and
+no absent-flags/log equivalence is asserted. No KILLED or guest run.
+
+During the next scalar-prefix draft, a probe encountered a dependency output
+being rebuilt. Its sole unchanged retry reached elaboration and failed;
+subsequent corrected proof drafts continue without another infrastructure
+retry. No evidence from a failed probe is counted as a proof.
+
+Remaining H4 scope is initial-to-key header continuity, ordered mixed peer
+scalar/allowed-IP effects and successful general readback. H5/H6 follow.
+No new semantic finding or mirror-team request.
 
 ## H4 funded key effects and arbitrary refusal readback, 2026-10-19
 
